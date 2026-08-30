@@ -9,18 +9,21 @@ export interface SpatialItem {
   width?: number;
   height?: number;
   radius?: number;
+  _gridQueryId?: number;
 }
 
 export class SpatialGrid<T extends SpatialItem> {
   private cellSize: number;
-  private grid: Map<string, T[]> = new Map();
+  private grid: Map<number, T[]> = new Map();
+  private currentQueryId: number = 0;
+  private reusableResult: T[] = [];
 
   constructor(cellSize: number = 200) {
     this.cellSize = cellSize;
   }
 
-  private getKey(cx: number, cy: number): string {
-    return `${cx},${cy}`;
+  private getKey(cx: number, cy: number): number {
+    return ((cx & 0xffff) << 16) | (cy & 0xffff);
   }
 
   public clear() {
@@ -31,8 +34,6 @@ export class SpatialGrid<T extends SpatialItem> {
     const w = item.width || (item.radius ? item.radius * 2 : 20);
     const h = item.height || (item.radius ? item.radius * 2 : 20);
     
-    // Check if item uses top-left bounding box or centered
-    // For buildings in our map, width/height are set and x/y is top-left
     const minX = Math.min(item.x, item.x - w / 2);
     const maxX = Math.max(item.x + w, item.x + w / 2);
     const minY = Math.min(item.y, item.y - h / 2);
@@ -62,21 +63,30 @@ export class SpatialGrid<T extends SpatialItem> {
     const minCy = Math.floor(y / this.cellSize);
     const maxCy = Math.floor((y + height) / this.cellSize);
 
-    const resultSet = new Set<T>();
+    this.currentQueryId++;
+    if (this.currentQueryId > 2000000000) this.currentQueryId = 1;
+    const qId = this.currentQueryId;
+
+    const result: T[] = [];
 
     for (let cx = minCx; cx <= maxCx; cx++) {
       for (let cy = minCy; cy <= maxCy; cy++) {
         const key = this.getKey(cx, cy);
         const cell = this.grid.get(key);
         if (cell) {
-          for (let i = 0; i < cell.length; i++) {
-            resultSet.add(cell[i]);
+          const len = cell.length;
+          for (let i = 0; i < len; i++) {
+            const item = cell[i];
+            if (item._gridQueryId !== qId) {
+              item._gridQueryId = qId;
+              result.push(item);
+            }
           }
         }
       }
     }
 
-    return Array.from(resultSet);
+    return result;
   }
 
   public queryRadius(x: number, y: number, radius: number): T[] {

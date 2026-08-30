@@ -1,7 +1,8 @@
 import { Building, CarType, GameWorld, Intersection, Pedestrian, RoadSegment, Vector2D, Vehicle } from './types';
-import { CAR_CONFIGS, createDefaultVehicleDamage } from './cityMap';
+import { CAR_CONFIGS, CAR_PALETTE, createDefaultVehicleDamage } from './cityMap';
 import { sound } from './audio';
 import { checkPedestrianBuildingCollision, getBuildingEntrancePos } from './physics';
+import { SpatialGrid } from './spatialGrid';
 
 // Helper: angle difference normalized to [-PI, PI]
 export function angleDiff(a: number, b: number): number {
@@ -199,7 +200,12 @@ function getLookaheadPointOnPolyline(
 }
 
 // AI Traffic Management System
-export function updateAITraffic(world: GameWorld, dt: number) {
+export function updateAITraffic(
+  world: GameWorld,
+  dt: number,
+  vehGrid?: SpatialGrid<Vehicle>,
+  pedGrid?: SpatialGrid<Pedestrian>
+) {
   let totalSpeed = 0;
   let movingCars = 0;
   let deadlockedCars = 0;
@@ -251,6 +257,8 @@ export function updateAITraffic(world: GameWorld, dt: number) {
     sound.stopSiren();
   }
 
+  const vehiclesToDespawn: string[] = [];
+
   for (const car of world.vehicles) {
     // Basic state updates for ALL vehicles (including player/parked)
     car.turnSignalTimer = (car.turnSignalTimer || 0) + dt;
@@ -259,10 +267,10 @@ export function updateAITraffic(world: GameWorld, dt: number) {
     if (car.isPlayerControlled || car.isParked) continue;
 
     // --- EMERGENCY YIELDING FOR AI CARS ---
-    // AI cars yield when police/ambulance siren is wailing nearby
     let isEmergencyYielding = false;
     if (activeSirenCount > 0) {
-      for (const eCar of world.vehicles) {
+      const nearbyForSiren = vehGrid ? vehGrid.queryRadius(car.x, car.y, 280) : world.vehicles;
+      for (const eCar of nearbyForSiren) {
         if (eCar.sirenOn && eCar.id !== car.id) {
           if (Math.hypot(eCar.x - car.x, eCar.y - car.y) < 280) {
             isEmergencyYielding = true;
@@ -276,18 +284,11 @@ export function updateAITraffic(world: GameWorld, dt: number) {
     }
 
     // --- OPTIMIZATION: DESPAWN / RECYCLE DISTANT CARS ---
-    // If an AI car moves further than 1600 units away from the player, despawn and respawn it on a nearby lane
     if (playerCar) {
       const distToPlayer = Math.hypot(car.x - playerCar.x, car.y - playerCar.y);
       if (distToPlayer > 1650) {
-        // Count how many AI cars are currently close to the player (< 1600px)
-        const nearbyCount = world.vehicles.filter(
-          (v) => !v.isPlayerControlled && !v.isParked && Math.hypot(v.x - playerCar.x, v.y - playerCar.y) < 1600
-        ).length;
-
-        if (nearbyCount > 35) {
-          // Permanently despawn/remove this car to keep performance smooth and roads clear
-          world.vehicles = world.vehicles.filter((v) => v.id !== car.id);
+        if (world.vehicles.length > 50) {
+          vehiclesToDespawn.push(car.id);
           continue;
         } else {
           respawnCarNearPlayer(car, playerCar, world);
@@ -469,7 +470,9 @@ export function updateAITraffic(world: GameWorld, dt: number) {
     const carCos = Math.cos(car.angle);
     const carSin = Math.sin(car.angle);
 
-    for (const other of world.vehicles) {
+    const nearbyVehicles = vehGrid ? vehGrid.queryRadius(car.x, car.y, 140) : world.vehicles;
+
+    for (const other of nearbyVehicles) {
       if (other.id === car.id || other.isParked) continue;
 
       const relX = other.x - car.x;
@@ -583,8 +586,9 @@ export function updateAITraffic(world: GameWorld, dt: number) {
     // Pedestrian obstacle detection (Wide & Forward Scanning)
     let pedObstacleDist = 999;
     const forwardLookahead = Math.max(85, car.speed * 1.3 + 45);
+    const nearbyPedestrians = pedGrid ? pedGrid.queryRadius(car.x, car.y, forwardLookahead + 25) : world.pedestrians;
 
-    for (const ped of world.pedestrians) {
+    for (const ped of nearbyPedestrians) {
       const relX = ped.x - car.x;
       const relY = ped.y - car.y;
       const distLong = relX * carCos + relY * carSin;
@@ -611,7 +615,7 @@ export function updateAITraffic(world: GameWorld, dt: number) {
           for (const cw of inter.crosswalks) {
             const distToCw = Math.hypot(cw.x - car.x, cw.y - car.y);
             if (distToCw < 85) {
-              const crossingPed = world.pedestrians.find(
+              const crossingPed = nearbyPedestrians.find(
                 (p) => (p.state === 'crossing' || p.isCrossingRoad) && p.targetCrosswalkId === cw.id
               );
               if (crossingPed) {
@@ -900,6 +904,11 @@ export function updateAITraffic(world: GameWorld, dt: number) {
     } else {
       car.stuckTimer = Math.max(0, car.stuckTimer - dt * 2.0);
     }
+  }
+
+  if (vehiclesToDespawn.length > 0) {
+    const despawnSet = new Set(vehiclesToDespawn);
+    world.vehicles = world.vehicles.filter((v) => !despawnSet.has(v.id));
   }
 
   // Update telemetry stats
@@ -1407,7 +1416,13 @@ function getCrosswalkEndpoints(
 }
 
 // Pedestrian AI & Navigation (Sidewalks, Crosswalks & Traffic Light Compliance)
-export function updatePedestrians(world: GameWorld, dt: number) {
+export function updatePedestrians(
+  world: GameWorld,
+  dt: number,
+  vehGrid?: SpatialGrid<Vehicle>,
+  pedGrid?: SpatialGrid<Pedestrian>,
+  bldGrid?: SpatialGrid<Building>
+) {
   const isRaining = world.weather === 'rain' || world.weather === 'storm';
   const UMBRELLA_COLORS = ['#ef4444', '#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899', '#06b6d4'];
 
@@ -1555,7 +1570,8 @@ export function updatePedestrians(world: GameWorld, dt: number) {
     if (ped.state === 'walking' && !ped.isCrossingRoad) {
       if (Math.random() < 0.002) {
         // Query nearby buildings with entrances
-        const nearbyBlds = world.buildings.filter((b) => {
+        const candidateBlds = bldGrid ? bldGrid.queryRadius(ped.x, ped.y, 120) : world.buildings;
+        const nearbyBlds = candidateBlds.filter((b) => {
           if (b.type === 'park_monument' || !b.entranceSide) return false;
           const dist = Math.hypot(b.x + b.width / 2 - ped.x, b.y + b.height / 2 - ped.y);
           return dist < 120; // must be nearby
@@ -1599,7 +1615,8 @@ export function updatePedestrians(world: GameWorld, dt: number) {
         ped.targetSpeed = 0;
       } else if (roll < 0.002) {
         // Look at nearest building
-        const nearbyBld = world.buildings.find(b => Math.hypot(b.x + b.width/2 - ped.x, b.y + b.height/2 - ped.y) < 60);
+        const candidateBlds = bldGrid ? bldGrid.queryRadius(ped.x, ped.y, 60) : world.buildings;
+        const nearbyBld = candidateBlds.find(b => Math.hypot(b.x + b.width/2 - ped.x, b.y + b.height/2 - ped.y) < 60);
         if (nearbyBld) {
           ped.state = 'idle_window';
           ped.behaviorTimer = 4 + Math.random() * 6;
@@ -1621,7 +1638,8 @@ export function updatePedestrians(world: GameWorld, dt: number) {
 
     // 0b. Social interaction: Greeting nearby pedestrians
     if (ped.state === 'walking' && !ped.isCrossingRoad && Math.random() < 0.01) {
-      const otherPed = world.pedestrians.find(p => p.id !== ped.id && p.state === 'walking' && Math.hypot(p.x - ped.x, p.y - ped.y) < 40);
+      const candidatePeds = pedGrid ? pedGrid.queryRadius(ped.x, ped.y, 40) : world.pedestrians;
+      const otherPed = candidatePeds.find(p => p.id !== ped.id && p.state === 'walking' && Math.hypot(p.x - ped.x, p.y - ped.y) < 40);
       if (otherPed && !otherPed.alertBubbleText) {
         ped.state = 'greeting';
         ped.behaviorTimer = 1.5;
@@ -1640,7 +1658,8 @@ export function updatePedestrians(world: GameWorld, dt: number) {
     }
 
     // 0c. Reaction to Car Horns
-    const honkingCar = world.vehicles.find(v => v.isHonking && Math.hypot(v.x - ped.x, v.y - ped.y) < 150);
+    const candidateVehicles = vehGrid ? vehGrid.queryRadius(ped.x, ped.y, 150) : world.vehicles;
+    const honkingCar = candidateVehicles.find(v => v.isHonking && Math.hypot(v.x - ped.x, v.y - ped.y) < 150);
     if (honkingCar && !ped.alertBubbleText) {
       const reactions = ["Watch it!", "Hey!", "Quiet!", "Relax!", "!", "?", "Slow down!"];
       ped.alertBubbleText = reactions[Math.floor(Math.random() * reactions.length)];
@@ -1653,7 +1672,8 @@ export function updatePedestrians(world: GameWorld, dt: number) {
 
     // 1. Panic Detection: Speeding vehicle directly bearing down (< 36px)
     let dangerFound = false;
-    for (const car of world.vehicles) {
+    const dangerCandidates = vehGrid ? vehGrid.queryRadius(ped.x, ped.y, 50) : world.vehicles;
+    for (const car of dangerCandidates) {
       if (Math.abs(car.speed) > 65) {
         const dx = ped.x - car.x;
         const dy = ped.y - car.y;
@@ -1940,12 +1960,6 @@ export function updatePedestrians(world: GameWorld, dt: number) {
 }
 
 // Despawn distant car and place it on a road lane around the player (750px - 1200px distance)
-const CAR_PALETTE = [
-  '#dc2626', '#2563eb', '#16a34a', '#d97706', '#9333ea', 
-  '#0891b2', '#e11d48', '#4b5563', '#1e293b', '#f8fafc',
-  '#f59e0b', '#059669', '#3b82f6', '#6366f1', '#84cc16'
-];
-
 function isSpawnPositionClear(x: number, y: number, world: GameWorld): boolean {
   for (const v of world.vehicles) {
     const dist = Math.hypot(v.x - x, v.y - y);
@@ -2009,11 +2023,23 @@ function respawnCarNearPlayer(car: Vehicle, player: Vehicle, world: GameWorld) {
 
 // Spawns a brand new AI vehicle dynamically near the player to keep the traffic density alive
 export function spawnNewCarNearPlayer(player: Vehicle, world: GameWorld) {
-  const carTypes: CarType[] = ['sedan', 'hatchback', 'pickup', 'sports', 'suv', 'taxi', 'police'];
+  const carTypes: CarType[] = [
+    'sedan', 'hatchback', 'pickup', 'sports', 'suv', 'taxi', 'police', 
+    'bus', 'van', 'muscle', 'ambulance', 'truck_box', 'truck_dump', 
+    'truck_tanker', 'truck_flatbed', 'cement_mixer', 'garbage_truck'
+  ];
   const cType = carTypes[Math.floor(Math.random() * carTypes.length)];
   const cfg = CAR_CONFIGS[cType];
-  const color = cType === 'taxi' ? '#eab308' : (cType === 'police' ? '#0f172a' : CAR_PALETTE[Math.floor(Math.random() * CAR_PALETTE.length)]);
-  const roofColor = cType === 'police' ? '#f8fafc' : color;
+  const color = cType === 'taxi' ? '#eab308' : 
+                (cType === 'police' ? '#0f172a' : 
+                (cType === 'ambulance' ? '#f8fafc' : 
+                (cType === 'garbage_truck' ? '#16a34a' : 
+                (cType === 'truck_dump' ? '#d97706' : 
+                (cType === 'cement_mixer' ? '#2563eb' : 
+                (cType === 'truck_box' ? '#3b82f6' : 
+                (cType === 'truck_tanker' ? '#0284c7' : 
+                CAR_PALETTE[Math.floor(Math.random() * CAR_PALETTE.length)])))))));
+  const roofColor = cType === 'police' || cType === 'ambulance' ? '#f8fafc' : color;
 
   const candidateLanes: { lane: RoadSegment['lanePaths'][0]; wpIdx: number; dist: number }[] = [];
   for (const road of world.roads) {

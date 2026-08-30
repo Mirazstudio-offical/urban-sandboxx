@@ -192,10 +192,208 @@ export const CAR_CONFIGS: Record<CarType, CarConfig> = {
     grip: 0.988,
     driftGrip: 0.40,
     name: 'Interceptor Cruiser'
+  },
+  fire_engine: {
+    type: 'fire_engine',
+    width: 26,
+    length: 64,
+    wheelBase: 40,
+    mass: 3500,
+    maxSpeed: 160,
+    reverseMaxSpeed: 50,
+    acceleration: 80,
+    brakingForce: 280,
+    friction: 0.985,
+    turnSpeed: 3.0,
+    maxSteerAngle: 0.60,
+    minSteerAngle: 0.10,
+    grip: 0.97,
+    driftGrip: 0.30,
+    name: 'ZIL-130 Fire Engine (ЗиЛ-130 Пожарный)'
+  },
+  bus: {
+    type: 'bus',
+    width: 28,
+    length: 72,
+    wheelBase: 46,
+    mass: 4200,
+    maxSpeed: 150,
+    reverseMaxSpeed: 45,
+    acceleration: 70,
+    brakingForce: 260,
+    friction: 0.985,
+    turnSpeed: 2.8,
+    maxSteerAngle: 0.55,
+    minSteerAngle: 0.08,
+    grip: 0.97,
+    driftGrip: 0.28,
+    name: 'PAZ-3205 City Bus (ПАЗ-3205 Автобус)'
+  },
+  van: {
+    type: 'van',
+    width: 22,
+    length: 46,
+    wheelBase: 28,
+    mass: 1700,
+    maxSpeed: 180,
+    reverseMaxSpeed: 65,
+    acceleration: 100,
+    brakingForce: 230,
+    friction: 0.986,
+    turnSpeed: 3.8,
+    maxSteerAngle: 0.70,
+    minSteerAngle: 0.12,
+    grip: 0.98,
+    driftGrip: 0.35,
+    name: 'UAZ-452 Bukhanka (УАЗ-452 Буханка)'
+  },
+  muscle: {
+    type: 'muscle',
+    width: 21,
+    length: 46,
+    wheelBase: 29,
+    mass: 1450,
+    maxSpeed: 210,
+    reverseMaxSpeed: 80,
+    acceleration: 120,
+    brakingForce: 240,
+    friction: 0.988,
+    turnSpeed: 4.2,
+    maxSteerAngle: 0.75,
+    minSteerAngle: 0.14,
+    grip: 0.982,
+    driftGrip: 0.42,
+    name: 'GAZ-24 Volga Classic (ГАЗ-24 Волга)'
+  },
+  ambulance: {
+    type: 'ambulance',
+    width: 21,
+    length: 46,
+    wheelBase: 28,
+    mass: 1550,
+    maxSpeed: 215,
+    reverseMaxSpeed: 85,
+    acceleration: 130,
+    brakingForce: 260,
+    friction: 0.988,
+    turnSpeed: 4.3,
+    maxSteerAngle: 0.74,
+    minSteerAngle: 0.13,
+    grip: 0.985,
+    driftGrip: 0.38,
+    name: 'RAF-2203 Ambulance (РАФ Скорая Помощь)'
+  },
+  truck_box: {
+    type: 'truck_box',
+    width: 27,
+    length: 70,
+    wheelBase: 44,
+    mass: 4800,
+    maxSpeed: 155,
+    reverseMaxSpeed: 45,
+    acceleration: 75,
+    brakingForce: 270,
+    friction: 0.984,
+    turnSpeed: 2.7,
+    maxSteerAngle: 0.52,
+    minSteerAngle: 0.08,
+    grip: 0.965,
+    driftGrip: 0.28,
+    name: 'KamAZ-5320 Box Cargo (КамАЗ Фургон)'
+  },
+  truck_dump: {
+    type: 'truck_dump',
+    width: 28,
+    length: 68,
+    wheelBase: 42,
+    mass: 5500,
+    maxSpeed: 145,
+    reverseMaxSpeed: 40,
+    acceleration: 70,
+    brakingForce: 285,
+    friction: 0.983,
+    turnSpeed: 2.6,
+    maxSteerAngle: 0.50,
+    minSteerAngle: 0.08,
+    grip: 0.960,
+    driftGrip: 0.26,
+    name: 'MAZ-5551 Heavy Tipper (МАЗ Самосвал)'
+  },
+  truck_tanker: {
+    type: 'truck_tanker',
+    width: 27,
+    length: 74,
+    wheelBase: 47,
+    mass: 5200,
+    maxSpeed: 150,
+    reverseMaxSpeed: 40,
+    acceleration: 68,
+    brakingForce: 275,
+    friction: 0.984,
+    turnSpeed: 2.5,
+    maxSteerAngle: 0.48,
+    minSteerAngle: 0.07,
+    grip: 0.955,
+    driftGrip: 0.25,
+    name: 'Ural-4320 Fuel Tanker (Урал Автоцистерна)'
+  },
+  truck_flatbed: {
+    type: 'truck_flatbed',
+    width: 27,
+    length: 68,
+    wheelBase: 43,
+    mass: 4500,
+    maxSpeed: 160,
+    reverseMaxSpeed: 50,
+    acceleration: 80,
+    brakingForce: 270,
+    friction: 0.985,
+    turnSpeed: 2.8,
+    maxSteerAngle: 0.54,
+    minSteerAngle: 0.09,
+    grip: 0.970,
+    driftGrip: 0.30,
+    name: 'ZIL-133 Flatbed Cargo (ЗиЛ Бортовой)'
+  },
+  cement_mixer: {
+    type: 'cement_mixer',
+    width: 28,
+    length: 72,
+    wheelBase: 45,
+    mass: 5800,
+    maxSpeed: 140,
+    reverseMaxSpeed: 38,
+    acceleration: 65,
+    brakingForce: 290,
+    friction: 0.982,
+    turnSpeed: 2.4,
+    maxSteerAngle: 0.48,
+    minSteerAngle: 0.07,
+    grip: 0.950,
+    driftGrip: 0.24,
+    name: 'KamAZ Concrete Mixer (КамАЗ Автобетономешалка)'
+  },
+  garbage_truck: {
+    type: 'garbage_truck',
+    width: 28,
+    length: 68,
+    wheelBase: 43,
+    mass: 5100,
+    maxSpeed: 145,
+    reverseMaxSpeed: 42,
+    acceleration: 72,
+    brakingForce: 280,
+    friction: 0.984,
+    turnSpeed: 2.6,
+    maxSteerAngle: 0.50,
+    minSteerAngle: 0.08,
+    grip: 0.965,
+    driftGrip: 0.27,
+    name: 'KO-440 Municipal Compactor (КО-440 Мусоровоз)'
   }
 };
 
-const CAR_PALETTE = [
+export const CAR_PALETTE = [
   '#dc2626', '#2563eb', '#16a34a', '#d97706', '#9333ea', 
   '#0891b2', '#e11d48', '#4b5563', '#1e293b', '#f8fafc',
   '#f59e0b', '#059669', '#3b82f6', '#6366f1', '#84cc16'
@@ -370,7 +568,8 @@ export function generateCityWorld(): GameWorld {
           { nsState: 'red_yellow', ewState: 'red', duration: 1.5 }
         ],
         stopLines,
-        crosswalks
+        crosswalks,
+        isDirt: cx <= 3200 && cy <= 3200
       });
 
       // Generate 4 breakable traffic light props at the corners of this intersection (only if it has lights!)
@@ -1170,13 +1369,14 @@ export function generateCityWorld(): GameWorld {
           windows: []
         });
 
-        for (let tx = blockX + 50; tx < blockX + blockW - 50; tx += 65) {
-          for (let ty = blockY + 50; ty < blockY + blockH - 50; ty += 65) {
-            if (Math.hypot(tx - cx, ty - cy) > 75 && Math.random() > 0.3) {
+        // Lush park greenery & pathways
+        for (let tx = blockX + 45; tx < blockX + blockW - 45; tx += 55) {
+          for (let ty = blockY + 45; ty < blockY + blockH - 45; ty += 55) {
+            if (Math.hypot(tx - cx, ty - cy) > 70 && Math.random() > 0.25) {
               trees.push({
                 id: `tree_${tx}_${ty}`,
-                x: tx + (Math.random() * 16 - 8),
-                y: ty + (Math.random() * 16 - 8),
+                x: tx + (Math.random() * 14 - 7),
+                y: ty + (Math.random() * 14 - 7),
                 radius: 14 + Math.random() * 10,
                 color: Math.random() > 0.5 ? '#15803d' : '#166534',
                 shadowOffset: 6
@@ -1185,11 +1385,41 @@ export function generateCityWorld(): GameWorld {
           }
         }
 
+        // Promenade benches, stainless trash urns, flowerbeds, and lighting
         props.push(
-          { id: `bench_${bx}_${by}_1`, x: cx - 90, y: cy, type: 'bench', angle: 0 },
-          { id: `bench_${bx}_${by}_2`, x: cx + 90, y: cy, type: 'bench', angle: Math.PI },
+          // Fountain square seating & amenities
+          { id: `bench_${bx}_${by}_1`, x: cx - 85, y: cy - 20, type: 'bench', angle: 0 },
+          { id: `urn_${bx}_${by}_1`, x: cx - 85, y: cy - 35, type: 'trash_can', angle: 0 },
+          { id: `flower_${bx}_${by}_1`, x: cx - 85, y: cy + 15, type: 'flowerbed', angle: 0 },
+
+          { id: `bench_${bx}_${by}_2`, x: cx + 85, y: cy - 20, type: 'bench', angle: Math.PI },
+          { id: `urn_${bx}_${by}_2`, x: cx + 85, y: cy - 35, type: 'trash_can', angle: Math.PI },
+          { id: `flower_${bx}_${by}_2`, x: cx + 85, y: cy + 15, type: 'flowerbed', angle: 0 },
+
+          { id: `bench_${bx}_${by}_3`, x: cx - 20, y: cy - 85, type: 'bench', angle: Math.PI / 2 },
+          { id: `urn_${bx}_${by}_3`, x: cx - 35, y: cy - 85, type: 'trash_can', angle: Math.PI / 2 },
+          { id: `flower_${bx}_${by}_3`, x: cx + 20, y: cy - 85, type: 'flowerbed', angle: 0 },
+
+          { id: `bench_${bx}_${by}_4`, x: cx - 20, y: cy + 85, type: 'bench', angle: -Math.PI / 2 },
+          { id: `urn_${bx}_${by}_4`, x: cx - 35, y: cy + 85, type: 'trash_can', angle: -Math.PI / 2 },
+          { id: `flower_${bx}_${by}_4`, x: cx + 20, y: cy + 85, type: 'flowerbed', angle: 0 },
+
+          // Park perimeter walkways
+          { id: `bench_${bx}_${by}_5`, x: blockX + 70, y: blockY + 50, type: 'bench', angle: 0 },
+          { id: `urn_${bx}_${by}_5`, x: blockX + 70, y: blockY + 36, type: 'trash_can', angle: 0 },
+          { id: `bench_${bx}_${by}_6`, x: blockX + blockW - 70, y: blockY + 50, type: 'bench', angle: Math.PI },
+          { id: `urn_${bx}_${by}_6`, x: blockX + blockW - 70, y: blockY + 36, type: 'trash_can', angle: Math.PI },
+
+          { id: `bench_${bx}_${by}_7`, x: blockX + 70, y: blockY + blockH - 50, type: 'bench', angle: 0 },
+          { id: `urn_${bx}_${by}_7`, x: blockX + 70, y: blockY + blockH - 36, type: 'trash_can', angle: 0 },
+          { id: `bench_${bx}_${by}_8`, x: blockX + blockW - 70, y: blockY + blockH - 50, type: 'bench', angle: Math.PI },
+          { id: `urn_${bx}_${by}_8`, x: blockX + blockW - 70, y: blockY + blockH - 36, type: 'trash_can', angle: Math.PI },
+
+          // Illumination and kiosks
           { id: `lamp_${bx}_${by}_1`, x: cx - 70, y: cy - 70, type: 'lamp', angle: 0 },
           { id: `lamp_${bx}_${by}_2`, x: cx + 70, y: cy + 70, type: 'lamp', angle: 0 },
+          { id: `lamp_${bx}_${by}_3`, x: cx + 70, y: cy - 70, type: 'lamp', angle: 0 },
+          { id: `lamp_${bx}_${by}_4`, x: cx - 70, y: cy + 70, type: 'lamp', angle: 0 },
           { id: `hydrant_${bx}_${by}_park`, x: cx - 110, y: cy - 30, type: 'hydrant', angle: 0 },
           { id: `kiosk_${bx}_${by}_park`, x: cx + 110, y: cy - 30, type: 'kiosk', angle: 0 }
         );
@@ -1197,7 +1427,7 @@ export function generateCityWorld(): GameWorld {
       }
 
       // --- 3. DEDICATED OPEN-AIR PARKING PLAZAS (NO BUILDINGS INSIDE) ---
-      const isDedicatedParking = (bx === 4 && by === 2) || (bx === 6 && by === 4) || (bx === 3 && by === 5) || (bx === 2 && by === 7);
+      const isDedicatedParking = (bx === 4 && by === 2) || (bx === 6 && by === 4) || (bx === 3 && by === 5) || (bx === 2 && by === 7) || (bx === 5 && by === 4);
       if (isDedicatedParking) {
         const pkX = blockX + sidewalkWidth + 10;
         const pkY = blockY + sidewalkWidth + 10;
@@ -1213,14 +1443,14 @@ export function generateCityWorld(): GameWorld {
             x: pkX + 45,
             y: sy,
             angle: 0,
-            occupied: Math.random() > 0.3
+            occupied: Math.random() > 0.25
           });
           // Right stall row
           spots.push({
             x: pkX + parkW - 45,
             y: sy,
             angle: Math.PI,
-            occupied: Math.random() > 0.3
+            occupied: Math.random() > 0.25
           });
         }
 
@@ -1233,12 +1463,30 @@ export function generateCityWorld(): GameWorld {
           spots
         });
 
-        // Add parking lighting fixtures and perimeter planters
+        // Add parking lighting fixtures, bollards, waste enclosure, benches, and perimeter planters
         props.push(
           { id: `pk_lamp_${bx}_${by}_1`, x: pkX + 20, y: pkY + 15, type: 'lamp', angle: 0 },
           { id: `pk_lamp_${bx}_${by}_2`, x: pkX + parkW - 20, y: pkY + 15, type: 'lamp', angle: 0 },
           { id: `pk_lamp_${bx}_${by}_3`, x: pkX + 20, y: pkY + parkH - 15, type: 'lamp', angle: 0 },
-          { id: `pk_lamp_${bx}_${by}_4`, x: pkX + parkW - 20, y: pkY + parkH - 15, type: 'lamp', angle: 0 }
+          { id: `pk_lamp_${bx}_${by}_4`, x: pkX + parkW - 20, y: pkY + parkH - 15, type: 'lamp', angle: 0 },
+          
+          // Dumpster station for the parking plaza
+          { id: `pk_dump_${bx}_${by}_1`, x: pkX + 22, y: pkY + parkH / 2 - 12, type: 'dumpster', angle: 0 },
+          { id: `pk_dump_${bx}_${by}_2`, x: pkX + 22, y: pkY + parkH / 2 + 12, type: 'dumpster', angle: 0 },
+          { id: `pk_urn_${bx}_${by}_1`, x: pkX + 22, y: pkY + parkH / 2 + 30, type: 'trash_can', angle: 0 },
+
+          // Waiting benches with trash cans & decorative flowerbeds
+          { id: `pk_bench_${bx}_${by}_1`, x: pkX + parkW / 2 - 25, y: pkY + 14, type: 'bench', angle: Math.PI / 2 },
+          { id: `pk_urn_${bx}_${by}_2`, x: pkX + parkW / 2 - 40, y: pkY + 14, type: 'trash_can', angle: 0 },
+          { id: `pk_flower_${bx}_${by}_1`, x: pkX + parkW / 2 + 25, y: pkY + 14, type: 'flowerbed', angle: 0 },
+
+          { id: `pk_bench_${bx}_${by}_2`, x: pkX + parkW / 2 - 25, y: pkY + parkH - 14, type: 'bench', angle: -Math.PI / 2 },
+          { id: `pk_urn_${bx}_${by}_3`, x: pkX + parkW / 2 - 40, y: pkY + parkH - 14, type: 'trash_can', angle: 0 },
+          { id: `pk_flower_${bx}_${by}_2`, x: pkX + parkW / 2 + 25, y: pkY + parkH - 14, type: 'flowerbed', angle: 0 },
+
+          // Safety bollards along parking entrance
+          { id: `pk_boll_${bx}_${by}_1`, x: pkX + parkW / 2 - 22, y: pkY + parkH / 2, type: 'bollard', angle: 0 },
+          { id: `pk_boll_${bx}_${by}_2`, x: pkX + parkW / 2 + 22, y: pkY + parkH / 2, type: 'bollard', angle: 0 }
         );
 
         trees.push(
@@ -1246,11 +1494,178 @@ export function generateCityWorld(): GameWorld {
           { id: `pk_tree_${bx}_${by}_2`, x: pkX + parkW / 2, y: pkY + parkH - 15, radius: 12, color: '#15803d', shadowOffset: 4 }
         );
 
-        // Crucial: continue ensures no buildings are placed in this parking lot block!
         continue;
       }
 
-      // --- 4. COZY VILLAGE ZONE (South-East) ---
+      // --- 4. COZY RESIDENTIAL COURTYARD BLOCKS (ДВОРЫ С ПАРКОВКАМИ И ЗОНАМИ ОТДЫХА) ---
+      const isCourtyardBlock = (bx === 2 && by === 3) || (bx === 3 && by === 3) || (bx === 4 && by === 4) || 
+                               (bx === 5 && by === 5) || (bx === 3 && by === 6) || (bx === 6 && by === 3) || 
+                               (bx === 4 && by === 6) || (bx === 5 && by === 2);
+
+      if (isCourtyardBlock) {
+        const innerX = blockX + sidewalkWidth + 10;
+        const innerY = blockY + sidewalkWidth + 10;
+        const innerW = blockW - (sidewalkWidth * 2 + 20);
+        const innerH = blockH - (sidewalkWidth * 2 + 20);
+
+        // 3-Wing Perimeter U-Shaped Residential Apartment Complex
+        // 1. North Wing (Horizontal apartment block)
+        const northW = innerW - 10;
+        const northH = 55;
+        buildings.push({
+          id: `court_bld_n_${bx}_${by}`,
+          x: innerX + 5,
+          y: innerY + 5,
+          width: northW,
+          height: northH,
+          type: 'residential',
+          color: '#475569',
+          roofColor: '#334155',
+          accentColor: '#f59e0b',
+          windows: [],
+          balconies: [
+            { side: 'south', offset: 0.2, length: 16, depth: 6 },
+            { side: 'south', offset: 0.5, length: 16, depth: 6 },
+            { side: 'south', offset: 0.8, length: 16, depth: 6 }
+          ],
+          fireEscapes: [{ side: 'north', offset: 0.5, length: 20, depth: 5 }],
+          entranceSide: 'south',
+          roofDetails: [{ type: 'ac', rx: 0.3, ry: 0.3, rw: 0.15, rh: 0.4 }]
+        });
+
+        // 2. West Wing (Vertical apartment block)
+        const westW = 55;
+        const westH = innerH - 75;
+        buildings.push({
+          id: `court_bld_w_${bx}_${by}`,
+          x: innerX + 5,
+          y: innerY + 68,
+          width: westW,
+          height: westH,
+          type: 'residential',
+          color: '#334155',
+          roofColor: '#1e293b',
+          accentColor: '#38bdf8',
+          windows: [],
+          balconies: [
+            { side: 'east', offset: 0.3, length: 16, depth: 6 },
+            { side: 'east', offset: 0.7, length: 16, depth: 6 }
+          ],
+          fireEscapes: [{ side: 'west', offset: 0.5, length: 20, depth: 5 }],
+          entranceSide: 'east',
+          roofDetails: []
+        });
+
+        // 3. East Wing (Shorter vertical block leaving driveway entrance on South-East)
+        const eastW = 55;
+        const eastH = innerH - 110;
+        buildings.push({
+          id: `court_bld_e_${bx}_${by}`,
+          x: innerX + innerW - 60,
+          y: innerY + 68,
+          width: eastW,
+          height: eastH,
+          type: 'residential',
+          color: '#52525b',
+          roofColor: '#3f3f46',
+          accentColor: '#10b981',
+          windows: [],
+          balconies: [
+            { side: 'west', offset: 0.4, length: 16, depth: 6 }
+          ],
+          fireEscapes: [{ side: 'east', offset: 0.5, length: 20, depth: 5 }],
+          entranceSide: 'west',
+          roofDetails: []
+        });
+
+        // --- COURTYARD INTERIOR AMENITIES (ДВОРОВАЯ ТЕРРИТОРИЯ) ---
+        const courtLeft = innerX + 70;
+        const courtTop = innerY + 70;
+        const courtW = innerW - 140;
+        const courtH = innerH - 85;
+
+        // Courtyard Residential Parking Lot (Парковка во дворе)
+        const courtPkW = courtW * 0.48;
+        const courtPkH = courtH - 20;
+        const courtPkX = courtLeft + courtW - courtPkW;
+        const courtPkY = courtTop + 10;
+
+        const courtSpots: ParkingArea['spots'] = [];
+        const numCourtRows = Math.floor(courtPkH / 42);
+        for (let cs = 0; cs < numCourtRows; cs++) {
+          courtSpots.push({
+            x: courtPkX + courtPkW / 2,
+            y: courtPkY + 18 + cs * 42,
+            angle: 0,
+            occupied: Math.random() > 0.25
+          });
+        }
+
+        parkings.push({
+          id: `court_parking_${bx}_${by}`,
+          x: courtPkX,
+          y: courtPkY,
+          width: courtPkW,
+          height: courtPkH,
+          spots: courtSpots
+        });
+
+        // Green Courtyard Garden / Leisure Zone (Зона отдыха, лавочки, урны, клумбы)
+        const gardenX = courtLeft + 5;
+        const gardenY = courtTop + 10;
+        const gardenW = courtW * 0.45;
+        const gardenH = courtH - 20;
+
+        // Courtyard Trees
+        trees.push(
+          { id: `court_tree_${bx}_${by}_1`, x: gardenX + gardenW * 0.35, y: gardenY + gardenH * 0.3, radius: 13, color: '#15803d', shadowOffset: 4 },
+          { id: `court_tree_${bx}_${by}_2`, x: gardenX + gardenW * 0.65, y: gardenY + gardenH * 0.7, radius: 12, color: '#166534', shadowOffset: 4 }
+        );
+
+        // Benches and Trash Cans around the courtyard garden & entrances
+        props.push(
+          // Benches facing the garden lawn
+          { id: `court_bench_${bx}_${by}_1`, x: gardenX + 18, y: gardenY + 25, type: 'bench', angle: 0 },
+          { id: `court_urn_${bx}_${by}_1`, x: gardenX + 18, y: gardenY + 12, type: 'trash_can', angle: 0 },
+          { id: `court_flower_${bx}_${by}_1`, x: gardenX + 18, y: gardenY + 40, type: 'flowerbed', angle: 0 },
+
+          { id: `court_bench_${bx}_${by}_2`, x: gardenX + gardenW - 18, y: gardenY + 25, type: 'bench', angle: Math.PI },
+          { id: `court_urn_${bx}_${by}_2`, x: gardenX + gardenW - 18, y: gardenY + 12, type: 'trash_can', angle: Math.PI },
+          { id: `court_flower_${bx}_${by}_2`, x: gardenX + gardenW - 18, y: gardenY + 40, type: 'flowerbed', angle: 0 },
+
+          { id: `court_bench_${bx}_${by}_3`, x: gardenX + gardenW / 2, y: gardenY + gardenH - 18, type: 'bench', angle: -Math.PI / 2 },
+          { id: `court_urn_${bx}_${by}_3`, x: gardenX + gardenW / 2 - 16, y: gardenY + gardenH - 18, type: 'trash_can', angle: -Math.PI / 2 },
+          { id: `court_flower_${bx}_${by}_3`, x: gardenX + gardenW / 2 + 18, y: gardenY + gardenH - 18, type: 'flowerbed', angle: 0 },
+
+          // Waste Disposal Area (Контейнерная площадка / Мусорные баки)
+          { id: `court_dump_${bx}_${by}_1`, x: courtPkX + courtPkW - 15, y: courtPkY + courtPkH - 24, type: 'dumpster', angle: Math.PI / 2 },
+          { id: `court_dump_${bx}_${by}_2`, x: courtPkX + courtPkW - 15, y: courtPkY + courtPkH - 6, type: 'dumpster', angle: Math.PI / 2 },
+          { id: `court_urn_${bx}_${by}_4`, x: courtPkX + courtPkW - 15, y: courtPkY + courtPkH + 10, type: 'trash_can', angle: 0 },
+
+          // Cast-iron safety bollards separating parking from pedestrian walkway
+          { id: `court_boll_${bx}_${by}_1`, x: courtPkX - 6, y: gardenY + 25, type: 'bollard', angle: 0 },
+          { id: `court_boll_${bx}_${by}_2`, x: courtPkX - 6, y: gardenY + gardenH / 2, type: 'bollard', angle: 0 },
+          { id: `court_boll_${bx}_${by}_3`, x: courtPkX - 6, y: gardenY + gardenH - 25, type: 'bollard', angle: 0 },
+
+          // Entrance benches & urns for residents
+          { id: `court_bench_${bx}_${by}_ent_n`, x: innerX + northW * 0.5, y: innerY + northH + 10, type: 'bench', angle: -Math.PI / 2 },
+          { id: `court_urn_${bx}_${by}_ent_n`, x: innerX + northW * 0.5 + 16, y: innerY + northH + 10, type: 'trash_can', angle: 0 },
+
+          // Night illumination lamps
+          { id: `court_lamp_${bx}_${by}_1`, x: gardenX + 15, y: gardenY + gardenH / 2, type: 'lamp', angle: 0 },
+          { id: `court_lamp_${bx}_${by}_2`, x: courtPkX + courtPkW / 2, y: courtPkY + 6, type: 'lamp', angle: 0 },
+
+          // Outer sidewalk street furniture along the block edge
+          { id: `sw_bench_${bx}_${by}_1`, x: blockX + 25, y: blockY + sidewalkWidth / 2, type: 'bench', angle: 0 },
+          { id: `sw_urn_${bx}_${by}_1`, x: blockX + 40, y: blockY + sidewalkWidth / 2, type: 'trash_can', angle: 0 },
+          { id: `sw_bench_${bx}_${by}_2`, x: blockX + blockW - 35, y: blockY + sidewalkWidth / 2, type: 'bench', angle: 0 },
+          { id: `sw_urn_${bx}_${by}_2`, x: blockX + blockW - 20, y: blockY + sidewalkWidth / 2, type: 'trash_can', angle: 0 }
+        );
+
+        continue;
+      }
+
+      // --- 5. COZY VILLAGE ZONE (South-East) ---
       if (isVillage) {
         const cW = 60 + Math.random() * 15;
         const cH = 60 + Math.random() * 15;
@@ -1289,7 +1704,7 @@ export function generateCityWorld(): GameWorld {
           });
         }
 
-        // Populate beautiful village orchard gardens
+        // Populate beautiful village orchard gardens & rustic benches
         for (let tx = blockX + sidewalkWidth + 10; tx < blockX + blockW - sidewalkWidth - 10; tx += 45) {
           for (let ty = blockY + sidewalkWidth + 10; ty < blockY + blockH - sidewalkWidth - 10; ty += 45) {
             if (tx < blockX + sidewalkWidth + cW + 35 && ty < blockY + sidewalkWidth + cH + 35) continue;
@@ -1307,10 +1722,16 @@ export function generateCityWorld(): GameWorld {
             }
           }
         }
+
+        props.push(
+          { id: `v_bench_${bx}_${by}_1`, x: blockX + sidewalkWidth + cW + 25, y: blockY + sidewalkWidth + 25, type: 'bench', angle: 0 },
+          { id: `v_urn_${bx}_${by}_1`, x: blockX + sidewalkWidth + cW + 40, y: blockY + sidewalkWidth + 25, type: 'trash_can', angle: 0 },
+          { id: `v_flower_${bx}_${by}_1`, x: blockX + sidewalkWidth + cW + 25, y: blockY + sidewalkWidth + 42, type: 'flowerbed', angle: 0 }
+        );
         continue;
       }
 
-      // --- 5. URBAN DOWNTOWN & COMMERCIAL SKYSCRAPERS ---
+      // --- 6. URBAN DOWNTOWN & COMMERCIAL SKYSCRAPERS ---
       const innerX = blockX + sidewalkWidth + 12;
       const innerY = blockY + sidewalkWidth + 12;
       const innerW = blockW - (sidewalkWidth * 2 + 24);
@@ -1407,7 +1828,7 @@ export function generateCityWorld(): GameWorld {
           });
 
           // Sidewalk trees
-          if (Math.random() > 0.45) {
+          if (Math.random() > 0.4) {
             trees.push({
               id: `tree_${bxLocal}_${byLocal}`,
               x: bxLocal + bWidth / 2 + (Math.random() * 10 - 5),
@@ -1418,13 +1839,55 @@ export function generateCityWorld(): GameWorld {
             });
           }
 
-          // Scattered urban sidewalk lamps and street amenities
+          // Dense sidewalk amenities: benches, trash urns, street lamps, and planters
+          props.push({
+            id: `sw_bench_${bxLocal}_${byLocal}`,
+            x: bxLocal + bWidth * 0.3,
+            y: byLocal + bHeight + 8,
+            type: 'bench',
+            angle: 0
+          });
+          props.push({
+            id: `sw_urn_${bxLocal}_${byLocal}`,
+            x: bxLocal + bWidth * 0.3 + 16,
+            y: byLocal + bHeight + 8,
+            type: 'trash_can',
+            angle: 0
+          });
+
           if (Math.random() > 0.5) {
             props.push({
               id: `lamp_${bxLocal}_${byLocal}`,
               x: bxLocal + bWidth + 12,
               y: byLocal + bHeight + 12,
               type: 'lamp',
+              angle: 0
+            });
+          }
+
+          if (bType === 'shop' || bType === 'office') {
+            props.push({
+              id: `flower_${bxLocal}_${byLocal}`,
+              x: bxLocal + bWidth * 0.75,
+              y: byLocal + bHeight + 8,
+              type: 'flowerbed',
+              angle: 0
+            });
+            props.push({
+              id: `boll_${bxLocal}_${byLocal}`,
+              x: bxLocal + bWidth + 6,
+              y: byLocal + bHeight + 8,
+              type: 'bollard',
+              angle: 0
+            });
+          }
+
+          if (bType === 'industrial') {
+            props.push({
+              id: `dump_${bxLocal}_${byLocal}`,
+              x: bxLocal + bWidth - 12,
+              y: byLocal - 10,
+              type: 'dumpster',
               angle: 0
             });
           }
@@ -1443,15 +1906,15 @@ export function generateCityWorld(): GameWorld {
     }
   }
 
-  // Spawn the Player's Starting Off-Road Pickup Truck nearby!
+  // Spawn the Player's Starting Off-Road Pickup Truck and Showcased Heavy Trucks at Central Park Promenade!
   vehicles.push({
     id: `veh_player_starter`,
     type: 'pickup',
-    x: 550,
-    y: 550,
+    x: 4430,
+    y: 2800,
     vx: 0,
     vy: 0,
-    angle: 0.8, // facing the trail
+    angle: 0, // facing East along the Promenade
     steerAngle: 0,
     targetSteerAngle: 0,
     speed: 0,
@@ -1471,7 +1934,7 @@ export function generateCityWorld(): GameWorld {
     isReversing: false,
     turnSignal: 'none',
     turnSignalTimer: 0,
-    damage: createDefaultVehicleDamage(),
+    damage: createDefaultVehicleDamage(CAR_CONFIGS['pickup'].length, CAR_CONFIGS['pickup'].width),
     isPlayerControlled: false,
     isParked: true,
     targetSpeed: 0,
@@ -1488,8 +1951,101 @@ export function generateCityWorld(): GameWorld {
   });
 
   // 4. SPAWN INITIAL VEHICLES (Moving AI vehicles + parked vehicles)
-  const carTypes: CarType[] = ['sedan', 'hatchback', 'pickup', 'sports', 'suv', 'taxi', 'police'];
+  const carTypes: CarType[] = [
+    'sedan', 'hatchback', 'pickup', 'sports', 'suv', 'taxi', 'police', 
+    'fire_engine', 'bus', 'van', 'muscle', 'ambulance',
+    'truck_box', 'truck_dump', 'truck_tanker', 'truck_flatbed', 'cement_mixer', 'garbage_truck'
+  ];
   let vehicleCounter = 0;
+
+  // Place a showcased heavy KamAZ-5320 Box Truck and Heavy Tipper right next to Central Park Promenade!
+  const starterBoxTruckCfg = CAR_CONFIGS['truck_box'];
+  vehicles.push({
+    id: `veh_showcase_truck_box`,
+    type: 'truck_box',
+    x: 4490,
+    y: 2840,
+    vx: 0,
+    vy: 0,
+    angle: 0,
+    steerAngle: 0,
+    targetSteerAngle: 0,
+    speed: 0,
+    lateralVelocity: 0,
+    angularVelocity: 0,
+    isDrifting: false,
+    driftFactor: 0,
+    mass: starterBoxTruckCfg.mass,
+    width: starterBoxTruckCfg.width,
+    length: starterBoxTruckCfg.length,
+    wheelBase: starterBoxTruckCfg.wheelBase,
+    color: '#0284c7', // vibrant transport blue cab
+    roofColor: '#0284c7',
+    headlightsOn: false,
+    headlightMode: 'off',
+    brakeLightsOn: false,
+    isReversing: false,
+    turnSignal: 'none',
+    turnSignalTimer: 0,
+    damage: createDefaultVehicleDamage(starterBoxTruckCfg.length, starterBoxTruckCfg.width),
+    isPlayerControlled: false,
+    isParked: true,
+    targetSpeed: 0,
+    currentLaneId: null,
+    targetWaypointIndex: 0,
+    routeWaypoints: [],
+    aiState: 'parked',
+    inIntersection: false,
+    plannedTurn: 'straight',
+    stuckTimer: 0,
+    honkTimer: 0,
+    isHonking: false,
+    hornEffectTimer: 0
+  });
+
+  const starterTipperCfg = CAR_CONFIGS['truck_dump'];
+  vehicles.push({
+    id: `veh_showcase_truck_dump`,
+    type: 'truck_dump',
+    x: 4490,
+    y: 2760,
+    vx: 0,
+    vy: 0,
+    angle: 0,
+    steerAngle: 0,
+    targetSteerAngle: 0,
+    speed: 0,
+    lateralVelocity: 0,
+    angularVelocity: 0,
+    isDrifting: false,
+    driftFactor: 0,
+    mass: starterTipperCfg.mass,
+    width: starterTipperCfg.width,
+    length: starterTipperCfg.length,
+    wheelBase: starterTipperCfg.wheelBase,
+    color: '#d97706', // industrial ochre/orange tipper cab
+    roofColor: '#d97706',
+    headlightsOn: false,
+    headlightMode: 'off',
+    brakeLightsOn: false,
+    isReversing: false,
+    turnSignal: 'none',
+    turnSignalTimer: 0,
+    damage: createDefaultVehicleDamage(starterTipperCfg.length, starterTipperCfg.width),
+    isPlayerControlled: false,
+    isParked: true,
+    targetSpeed: 0,
+    currentLaneId: null,
+    targetWaypointIndex: 0,
+    routeWaypoints: [],
+    aiState: 'parked',
+    inIntersection: false,
+    plannedTurn: 'straight',
+    stuckTimer: 0,
+    honkTimer: 0,
+    isHonking: false,
+    hornEffectTimer: 0
+  });
 
   roads.forEach((road) => {
     road.lanePaths.forEach((lane) => {
@@ -1508,8 +2064,21 @@ export function generateCityWorld(): GameWorld {
 
       const cType = carTypes[vehicleCounter % carTypes.length];
       const cfg = CAR_CONFIGS[cType];
-      const color = cType === 'taxi' ? '#eab308' : (cType === 'police' ? '#0f172a' : CAR_PALETTE[vehicleCounter % CAR_PALETTE.length]);
-      const roofColor = cType === 'police' ? '#f8fafc' : color;
+      const color = cType === 'taxi' ? '#eab308' : 
+                    (cType === 'police' ? '#0f172a' : 
+                    (cType === 'fire_engine' ? '#cc2222' : 
+                    (cType === 'bus' ? '#eab308' : 
+                    (cType === 'ambulance' ? '#f8fafc' : 
+                    (cType === 'van' ? '#6ee7b7' : 
+                    (cType === 'muscle' ? '#991b1b' : 
+                    (cType === 'garbage_truck' ? '#16a34a' : 
+                    (cType === 'truck_dump' ? '#d97706' : 
+                    (cType === 'cement_mixer' ? '#2563eb' : 
+                    (cType === 'truck_box' ? '#0284c7' : 
+                    (cType === 'truck_tanker' ? '#0369a1' : 
+                    (cType === 'truck_flatbed' ? '#475569' : 
+                    CAR_PALETTE[vehicleCounter % CAR_PALETTE.length]))))))))))));
+      const roofColor = cType === 'police' || cType === 'ambulance' ? '#f8fafc' : (cType === 'fire_engine' ? '#ffffff' : color);
 
       vehicles.push({
         id: `veh_traffic_${vehicleCounter++}`,
@@ -1538,7 +2107,7 @@ export function generateCityWorld(): GameWorld {
         isReversing: false,
         turnSignal: 'none',
         turnSignalTimer: 0,
-        damage: createDefaultVehicleDamage(),
+        damage: createDefaultVehicleDamage(cfg.length, cfg.width),
         isPlayerControlled: false,
         isParked: false,
         targetSpeed: 110 + Math.random() * 35,
@@ -1596,7 +2165,7 @@ export function generateCityWorld(): GameWorld {
           isReversing: false,
           turnSignal: 'none',
           turnSignalTimer: 0,
-          damage: createDefaultVehicleDamage(),
+          damage: createDefaultVehicleDamage(cfg.length, cfg.width),
           isPlayerControlled: false,
           isParked: true,
           targetSpeed: 0,

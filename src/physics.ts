@@ -1026,7 +1026,9 @@ export function updateSkidMarksAndParticles(world: GameWorld, dt: number) {
   }
 }
 
-export function updateBreakablePropsAndLivingWorld(world: GameWorld, player: Player, dt: number) {
+const scratchVehicleSet = new Set<Vehicle>();
+
+export function updateBreakablePropsAndLivingWorld(world: GameWorld, player: Player, dt: number, vehGrid?: any) {
   const isRaining = world.weather === 'rain' || world.weather === 'storm';
 
   // 1. UPDATE BREAKABLE PROPS & WATER FOUNTAINS
@@ -1065,8 +1067,9 @@ export function updateBreakablePropsAndLivingWorld(world: GameWorld, player: Pla
       continue;
     }
 
+    const vehiclesToCheck = vehGrid ? vehGrid.queryRadius(prop.x, prop.y, 40, scratchVehicleSet) : world.vehicles;
     // Check prop collision against vehicles (using mathematically accurate OBB collision check)
-    for (const veh of world.vehicles) {
+    for (const veh of vehiclesToCheck) {
       if (Math.abs(veh.speed) < 12) continue;
 
       // Local transformed coordinates relative to vehicle center & rotation
@@ -1151,7 +1154,8 @@ export function updateBreakablePropsAndLivingWorld(world: GameWorld, player: Pla
       if (distToPlayer < 65) scare = true;
 
       if (!scare) {
-        for (const veh of world.vehicles) {
+        const vehiclesToCheck = vehGrid ? vehGrid.queryRadius(bird.x, bird.y, 80, scratchVehicleSet) : world.vehicles;
+        for (const veh of vehiclesToCheck) {
           if (Math.abs(veh.speed) > 10 && Math.hypot(veh.x - bird.x, veh.y - bird.y) < 80) {
             scare = true;
             break;

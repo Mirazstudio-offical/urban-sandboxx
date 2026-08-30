@@ -6,7 +6,10 @@ import {
   InputState, 
   Pedestrian, 
   Player, 
+  SidewalkBlock,
+  StreetProp,
   TimeOfDay, 
+  Tree,
   Vehicle,
   WeatherType 
 } from './types';
@@ -26,21 +29,92 @@ import {
   AlertTriangle,
   ArrowLeft,
   ArrowRight,
+  Check,
   Cloud,
   CloudLightning,
   CloudRain,
   Compass, 
   Eye, 
   Gauge, 
+  MapPin,
   Moon, 
+  Navigation,
   RotateCcw,
   Sun, 
   Sunrise, 
   Terminal,
   Volume2, 
   VolumeX, 
+  X,
   Zap 
 } from 'lucide-react';
+
+export interface SpawnLocation {
+  id: string;
+  name: string;
+  nameRu: string;
+  x: number;
+  y: number;
+  description: string;
+  icon: string;
+}
+
+export const SPAWN_LOCATIONS: SpawnLocation[] = [
+  {
+    id: 'central_park',
+    name: 'Central Park Promenade',
+    nameRu: 'Центральный Парк (Фонтан & Сквер)',
+    x: 4400,
+    y: 2800,
+    description: 'Парковый фонтан, аллеи со скамейками, грузовики и прогулочные зоны',
+    icon: '🌳'
+  },
+  {
+    id: 'downtown_plaza',
+    name: 'Downtown Commercial Plaza',
+    nameRu: 'Центр Города (Парковка & Небоскребы)',
+    x: 4350,
+    y: 2000,
+    description: 'Оживленный перекрёсток проспектов, высотные офисы и парковочный комплекс',
+    icon: '🏙️'
+  },
+  {
+    id: 'residential_courtyard',
+    name: 'Residential Courtyard',
+    nameRu: 'Жилой Двор (Многоэтажки & Дворовая парковка)',
+    x: 2750,
+    y: 2750,
+    description: 'Уютный закрытый двор, подъезды, скамейки, урны, баки и припаркованные авто',
+    icon: '🏢'
+  },
+  {
+    id: 'industrial_district',
+    name: 'Freight Logistics Yard',
+    nameRu: 'Промзона (Грузовая база & Склады)',
+    x: 5200,
+    y: 4400,
+    description: 'Логистический хаб, стоянки спецтехники, грузовые терминалы и ангары',
+    icon: '🚛'
+  },
+  {
+    id: 'pine_forest',
+    name: 'Pine Ridge Outpost',
+    nameRu: 'Лесной Заповедник (Грунтовые тропы)',
+    x: 550,
+    y: 550,
+    description: 'Извилистые лесные тропы, сосновый бор, пруды и бездорожье для пикапа',
+    icon: '🌲'
+  },
+  {
+    id: 'highway_junction',
+    name: 'Silicon Highway Express',
+    nameRu: 'Скоростное Шоссе (4-полосная магистраль)',
+    x: 4000,
+    y: 4000,
+    description: 'Широкая магистраль с непрерывным плотным потоком AI-трафика и светофорами',
+    icon: '🛣️'
+  }
+];
 
 export default function App() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -80,6 +154,8 @@ export default function App() {
   const [pedCount, setPedCount] = useState<number>(0);
   const [isMinimapExpanded, setIsMinimapExpanded] = useState<boolean>(false);
   const [isConsoleOpen, setIsConsoleOpen] = useState<boolean>(false);
+  const [isSpawnMenuOpen, setIsSpawnMenuOpen] = useState<boolean>(false);
+  const [currentSpawnId, setCurrentSpawnId] = useState<string>('central_park');
 
   // Engine Refs (persistent across renders)
   const timeHourRef = useRef<number>(10.0);
@@ -133,8 +209,8 @@ export default function App() {
 
   const worldRef = useRef<GameWorld | null>(null);
   const playerRef = useRef<Player>({
-    x: 520,
-    y: 530,
+    x: 4400,
+    y: 2800,
     vx: 0,
     vy: 0,
     angle: 0,
@@ -149,14 +225,14 @@ export default function App() {
   });
 
   const cameraRef = useRef<Camera>({
-    x: 520,
-    y: 530,
+    x: 4400,
+    y: 2800,
     angle: 0,
     targetAngle: 0,
     zoom: 1.15,
     targetZoom: 1.15,
-    targetX: 520,
-    targetY: 530,
+    targetX: 4400,
+    targetY: 2800,
     shakeTimer: 0,
     shakeIntensity: 0
   });
@@ -189,9 +265,13 @@ export default function App() {
   const spatialGridBuildingsRef = useRef<SpatialGrid<Building>>(new SpatialGrid<Building>(250));
   const spatialGridVehiclesRef = useRef<SpatialGrid<Vehicle>>(new SpatialGrid<Vehicle>(200));
   const spatialGridPedestriansRef = useRef<SpatialGrid<Pedestrian>>(new SpatialGrid<Pedestrian>(150));
+  const spatialGridTreesRef = useRef<SpatialGrid<Tree>>(new SpatialGrid<Tree>(250));
+  const spatialGridPropsRef = useRef<SpatialGrid<StreetProp>>(new SpatialGrid<StreetProp>(200));
+  const spatialGridSidewalksRef = useRef<SpatialGrid<SidewalkBlock>>(new SpatialGrid<SidewalkBlock>(300));
 
   // Turn signal audio tick timer
   const turnTickTimerRef = useRef<number>(0);
+  const hudUpdateTimerRef = useRef<number>(0);
 
   // Initialize Game World (Runs ONCE on mount, NEVER resets when toggling day/night)
   useEffect(() => {
@@ -199,10 +279,22 @@ export default function App() {
     const world = generateCityWorld();
     worldRef.current = world;
 
-    // Index static buildings into spatial grid
+    // Index static entities into spatial grids
     const bldGrid = spatialGridBuildingsRef.current;
     bldGrid.clear();
     world.buildings.forEach((b) => bldGrid.insert(b));
+
+    const treeGrid = spatialGridTreesRef.current;
+    treeGrid.clear();
+    world.trees.forEach((t) => treeGrid.insert(t));
+
+    const propGrid = spatialGridPropsRef.current;
+    propGrid.clear();
+    world.props.forEach((p) => propGrid.insert(p));
+
+    const swGrid = spatialGridSidewalksRef.current;
+    swGrid.clear();
+    (world.sidewalks || []).forEach((sw) => swGrid.insert(sw));
 
     setTrafficCount(world.vehicles.length);
     setPedCount(world.pedestrians.length);
@@ -351,16 +443,7 @@ export default function App() {
         const camera = cameraRef.current;
         const input = inputRef.current;
 
-        // 1. Update Traffic Lights
-        updateTrafficLights(world.intersections, dt);
-
-        // 2. Update AI Traffic
-        updateAITraffic(world, dt);
-
-        // 3. Update Pedestrians
-        updatePedestrians(world, dt);
-
-        // 4. Update Dynamic Spatial Grids
+        // 1. Update Dynamic Spatial Grids (done early so AI & physics use current frame positions)
         const vehGrid = spatialGridVehiclesRef.current;
         vehGrid.clear();
         world.vehicles.forEach((v) => vehGrid.insert(v));
@@ -369,8 +452,19 @@ export default function App() {
         pedGrid.clear();
         world.pedestrians.forEach((p) => pedGrid.insert(p));
 
+        const bldGrid = spatialGridBuildingsRef.current;
+
+        // 2. Update Traffic Lights
+        updateTrafficLights(world.intersections, dt);
+
+        // 3. Update AI Traffic (using spatial grids)
+        updateAITraffic(world, dt, vehGrid, pedGrid);
+
+        // 4. Update Pedestrians (using spatial grids)
+        updatePedestrians(world, dt, vehGrid, pedGrid, bldGrid);
+
         // 5. Update Player & Vehicles Physics
-        const playerNearbyBuildings = spatialGridBuildingsRef.current.queryRadius(
+        const playerNearbyBuildings = bldGrid.queryRadius(
           player.x,
           player.y,
           300
@@ -388,19 +482,21 @@ export default function App() {
         }
 
         // Update all vehicles (both AI and player car)
+        let playerCar: Vehicle | null = null;
         for (const veh of world.vehicles) {
-          const vehNearbyBuildings = spatialGridBuildingsRef.current.queryRadius(
+          const vehNearbyBuildings = bldGrid.queryRadius(
             veh.x,
             veh.y,
             250
           );
-          const vehNearbyCars = spatialGridVehiclesRef.current.queryRadius(
+          const vehNearbyCars = vehGrid.queryRadius(
             veh.x,
             veh.y,
             180
           );
 
           if (veh.isPlayerControlled) {
+            playerCar = veh;
             veh.turnSignalTimer += dt;
             // Play ticking sound for player turn signals
             if (veh.turnSignal !== 'none') {
@@ -431,74 +527,92 @@ export default function App() {
             // Dynamic camera zoom: speed zoom out
             const speedRatio = Math.min(1.0, Math.abs(veh.speed) / 500);
             camera.targetZoom = (1.05 - speedRatio * 0.35) * userZoomFactorRef.current;
+          }
+        }
 
-            // HUD State Updates
-            const currentSpeedKmh = Math.round(Math.abs(veh.speed) * 0.36);
+        // 6. Throttled HUD State Updates (Run at ~12.5 Hz to prevent React re-render lag)
+        hudUpdateTimerRef.current += dt;
+        if (hudUpdateTimerRef.current >= 0.08) {
+          hudUpdateTimerRef.current = 0;
+
+          if (playerCar) {
+            const currentSpeedKmh = Math.round(Math.abs(playerCar.speed) * 0.36);
             setSpeedKmh(currentSpeedKmh);
-            setIsDrifting(veh.isDrifting);
-            setPlayerTurnSignal(veh.turnSignal);
-            if (veh.damage) {
-              setCarHealth(Math.round(veh.damage.health));
+            setIsDrifting(playerCar.isDrifting);
+            setPlayerTurnSignal(playerCar.turnSignal);
+            if (playerCar.damage) {
+              setCarHealth(Math.round(playerCar.damage.health));
               setDamageDetails({
-                engineSmoking: !!veh.damage.engineSmoking,
-                engineFire: !!veh.damage.engineFire,
-                windshieldCracked: !!veh.damage.windshieldCracked,
-                hoodBuckled: !!veh.damage.hoodBuckled,
+                engineSmoking: !!playerCar.damage.engineSmoking,
+                engineFire: !!playerCar.damage.engineFire,
+                windshieldCracked: !!playerCar.damage.windshieldCracked,
+                hoodBuckled: !!playerCar.damage.hoodBuckled,
                 lightsBroken: !!(
-                  veh.damage.leftHeadlightBroken || 
-                  veh.damage.rightHeadlightBroken || 
-                  veh.damage.leftTaillightBroken || 
-                  veh.damage.rightTaillightBroken
+                  playerCar.damage.leftHeadlightBroken || 
+                  playerCar.damage.rightHeadlightBroken || 
+                  playerCar.damage.leftTaillightBroken || 
+                  playerCar.damage.rightTaillightBroken
                 )
               });
             }
 
-            if (veh.speed > 5) setGear('D');
-            else if (veh.speed < -5) setGear('R');
+            if (playerCar.speed > 5) setGear('D');
+            else if (playerCar.speed < -5) setGear('R');
             else setGear('P');
           }
-        }
 
-        // Determine current street name
-        let currentStreet = 'Grand Boulevard';
-        for (const road of world.roads) {
-          const isHoriz = road.direction === 'horizontal';
-          if (isHoriz && Math.abs(player.y - road.y1) < road.width / 2 + 20) {
-            currentStreet = road.name;
-            break;
-          } else if (!isHoriz && Math.abs(player.x - road.x1) < road.width / 2 + 20) {
-            currentStreet = road.name;
-            break;
-          }
-        }
-        setStreetName(currentStreet);
-
-        // Check for nearby car if walking on foot
-        if (!player.isInVehicle) {
-          let foundNearbyCar: Vehicle | null = null;
-          for (const veh of world.vehicles) {
-            const dist = Math.hypot(veh.x - player.x, veh.y - player.y);
-            if (dist < 75) {
-              foundNearbyCar = veh;
+          // Determine current street name
+          let currentStreet = 'Grand Boulevard';
+          for (const road of world.roads) {
+            const isHoriz = road.direction === 'horizontal';
+            if (isHoriz && Math.abs(player.y - road.y1) < road.width / 2 + 20) {
+              currentStreet = road.name;
+              break;
+            } else if (!isHoriz && Math.abs(player.x - road.x1) < road.width / 2 + 20) {
+              currentStreet = road.name;
               break;
             }
           }
-          if (foundNearbyCar) {
-            const cfg = CAR_CONFIGS[foundNearbyCar.type];
-            setNearbyCarPrompt(`[E] Drive ${cfg.name}`);
+          setStreetName(currentStreet);
+
+          // Check for nearby car if walking on foot
+          if (!player.isInVehicle) {
+            let foundNearbyCar: Vehicle | null = null;
+            const nearbyVehicles = vehGrid.queryRadius(player.x, player.y, 80);
+            for (const veh of nearbyVehicles) {
+              const dist = Math.hypot(veh.x - player.x, veh.y - player.y);
+              if (dist < 75) {
+                foundNearbyCar = veh;
+                break;
+              }
+            }
+            if (foundNearbyCar) {
+              const cfg = CAR_CONFIGS[foundNearbyCar.type];
+              setNearbyCarPrompt(`[E] Drive ${cfg.name}`);
+            } else {
+              setNearbyCarPrompt(null);
+            }
           } else {
-            setNearbyCarPrompt(null);
+            setNearbyCarPrompt('[E] Exit Vehicle');
           }
-        } else {
-          setNearbyCarPrompt('[E] Exit Vehicle');
+
+          setTrafficCount(world.vehicles.length);
+          setPedCount(world.pedestrians.length);
+
+          if (isTimeAutoCyclingRef.current) {
+            setTimeHour(timeHourRef.current);
+          }
+          if (weatherTransitionRef.current < 1.0) {
+            setWeatherTransition(weatherTransitionRef.current);
+          }
         }
 
-        // 6. Update Skid marks, Particles & Breakables / Living World
+        // 7. Update Skid marks, Particles & Breakables / Living World
         world.weather = weatherRef.current;
         updateSkidMarksAndParticles(world, dt);
-        updateBreakablePropsAndLivingWorld(world, player, dt);
+        updateBreakablePropsAndLivingWorld(world, player, dt, vehGrid);
 
-        // 7. Smooth Camera Lerp
+        // 8. Smooth Camera Lerp
         camera.x += (camera.targetX - camera.x) * 6 * dt;
         camera.y += (camera.targetY - camera.y) * 6 * dt;
         camera.zoom += (camera.targetZoom - camera.zoom) * 4 * dt;
@@ -510,38 +624,55 @@ export default function App() {
         const rotSpeed = player.isInVehicle ? 3.0 : 1.5;
         camera.angle += angleDiff * Math.min(1.0, rotSpeed * dt);
 
-        // 8. Query objects in Camera Viewport for rendering (using diagonal margin for rotated view)
+        // 9. Query objects in Camera Viewport for high-performance rendering
         const vpMargin = Math.hypot(window.innerWidth, window.innerHeight) / (2 * Math.max(0.4, camera.zoom)) + 150;
-        const vpBuildings = spatialGridBuildingsRef.current.queryRect(
+        const vpBuildings = bldGrid.queryRect(
           camera.x - vpMargin,
           camera.y - vpMargin,
           vpMargin * 2,
           vpMargin * 2
         );
-        const vpVehicles = spatialGridVehiclesRef.current.queryRect(
+        const vpVehicles = vehGrid.queryRect(
           camera.x - vpMargin,
           camera.y - vpMargin,
           vpMargin * 2,
           vpMargin * 2
         );
-        const vpPedestrians = spatialGridPedestriansRef.current.queryRect(
+        const vpPedestrians = pedGrid.queryRect(
+          camera.x - vpMargin,
+          camera.y - vpMargin,
+          vpMargin * 2,
+          vpMargin * 2
+        );
+        const vpTrees = spatialGridTreesRef.current.queryRect(
+          camera.x - vpMargin,
+          camera.y - vpMargin,
+          vpMargin * 2,
+          vpMargin * 2
+        );
+        const vpProps = spatialGridPropsRef.current.queryRect(
+          camera.x - vpMargin,
+          camera.y - vpMargin,
+          vpMargin * 2,
+          vpMargin * 2
+        );
+        const vpSidewalks = spatialGridSidewalksRef.current.queryRect(
           camera.x - vpMargin,
           camera.y - vpMargin,
           vpMargin * 2,
           vpMargin * 2
         );
 
-        // 9. Render Scene
+        // Advance simulation time
         if (isTimeAutoCyclingRef.current) {
           timeHourRef.current = (timeHourRef.current + dt * 0.12) % 24;
-          setTimeHour(timeHourRef.current);
         }
 
         if (weatherTransitionRef.current < 1.0) {
           weatherTransitionRef.current = Math.min(1.0, weatherTransitionRef.current + dt * 0.5);
-          setWeatherTransition(weatherTransitionRef.current);
         }
 
+        // 10. Render Scene with pre-culled viewport entities
         rendererRef.current.render(
           world,
           player,
@@ -550,10 +681,13 @@ export default function App() {
           weatherTransitionRef.current,
           vpBuildings,
           vpVehicles,
-          vpPedestrians
+          vpPedestrians,
+          vpTrees,
+          vpProps,
+          vpSidewalks
         );
 
-        // 10. Render Minimap
+        // 11. Render Minimap
         renderMinimap(world, player, camera, isMinimapExpandedRef.current);
       }
 
@@ -696,6 +830,47 @@ export default function App() {
         sound.playCarDoor();
       }
     }
+  };
+
+  // Teleport player and vehicle (if driving) to a chosen spawn location
+  const handleTeleportToLocation = (loc: SpawnLocation) => {
+    const world = worldRef.current;
+    const player = playerRef.current;
+    const camera = cameraRef.current;
+    if (!world) return;
+
+    setCurrentSpawnId(loc.id);
+    setIsSpawnMenuOpen(false);
+
+    if (player.isInVehicle && player.currentVehicleId) {
+      const veh = world.vehicles.find((v) => v.id === player.currentVehicleId);
+      if (veh) {
+        veh.x = loc.x;
+        veh.y = loc.y;
+        veh.vx = 0;
+        veh.vy = 0;
+        veh.speed = 0;
+        veh.angularVelocity = 0;
+        veh.lateralVelocity = 0;
+        veh.isDrifting = false;
+        veh.damage = createDefaultVehicleDamage();
+        setCarHealth(100);
+      }
+    }
+
+    player.x = loc.x;
+    player.y = loc.y;
+    player.vx = 0;
+    player.vy = 0;
+    player.speed = 0;
+
+    camera.x = loc.x;
+    camera.y = loc.y;
+    camera.targetX = loc.x;
+    camera.targetY = loc.y;
+    camera.targetZoom = 1.15;
+
+    sound.playCarDoor();
   };
 
   // --- MINIMAP RENDERER ---
@@ -903,6 +1078,16 @@ export default function App() {
           >
             <Eye className="w-3.5 h-3.5 text-indigo-400" />
             <span>Zoom</span>
+          </button>
+
+          <button
+            id="spawn-point-btn"
+            onClick={() => setIsSpawnMenuOpen((prev) => !prev)}
+            className="bg-emerald-950/90 hover:bg-emerald-900 border border-emerald-500/50 rounded-lg px-3 py-1.5 text-xs text-emerald-200 flex items-center gap-1.5 shadow-lg transition-all"
+            title="Выбрать точку спавна / Телепортация по районам"
+          >
+            <MapPin className="w-3.5 h-3.5 text-emerald-400" />
+            <span>Точка спавна</span>
           </button>
 
           <button
@@ -1185,6 +1370,87 @@ export default function App() {
           setIsConsoleOpen(false);
         }}
       />
+
+      {/* SPAWN LOCATION SELECTION MODAL */}
+      {isSpawnMenuOpen && (
+        <div 
+          id="spawn-modal-overlay"
+          className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-200"
+          onClick={() => setIsSpawnMenuOpen(false)}
+        >
+          <div 
+            id="spawn-modal-content"
+            className="bg-slate-900 border border-slate-700/80 rounded-2xl shadow-2xl w-full max-w-xl overflow-hidden flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-800 bg-slate-900/90">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 rounded-xl bg-emerald-500/20 border border-emerald-500/30 text-emerald-400">
+                  <MapPin className="w-5 h-5" />
+                </div>
+                <div>
+                  <h2 className="text-white font-bold text-base">Точка спавна и быстрый переезд</h2>
+                  <p className="text-slate-400 text-xs">Выберите район города для мгновенного перемещения игрока и машины</p>
+                </div>
+              </div>
+              <button
+                id="btn-close-spawn-modal"
+                onClick={() => setIsSpawnMenuOpen(false)}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-all"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* List of Locations */}
+            <div className="p-4 grid grid-cols-1 gap-2.5 max-h-[70vh] overflow-y-auto">
+              {SPAWN_LOCATIONS.map((loc) => {
+                const isCurrent = currentSpawnId === loc.id;
+                return (
+                  <button
+                    key={loc.id}
+                    id={`spawn-loc-${loc.id}`}
+                    onClick={() => handleTeleportToLocation(loc)}
+                    className={`flex items-start gap-3.5 p-3.5 rounded-xl border text-left transition-all ${
+                      isCurrent
+                        ? 'bg-emerald-950/50 border-emerald-500/80 text-emerald-100 shadow-md shadow-emerald-950/50'
+                        : 'bg-slate-800/60 hover:bg-slate-800 border-slate-700/60 hover:border-slate-600 text-slate-200'
+                    }`}
+                  >
+                    <span className="text-2xl pt-0.5 select-none">{loc.icon}</span>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between">
+                        <div className="font-bold text-sm text-white flex items-center gap-2">
+                          <span>{loc.nameRu}</span>
+                          {isCurrent && (
+                            <span className="bg-emerald-500/20 text-emerald-300 text-[10px] font-semibold px-2 py-0.5 rounded-full border border-emerald-500/30">
+                              Текущая точка
+                            </span>
+                          )}
+                        </div>
+                        <span className="text-[11px] font-mono text-slate-500">[{loc.x}, {loc.y}]</span>
+                      </div>
+                      <p className="text-xs text-slate-400 mt-0.5 leading-relaxed">{loc.description}</p>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Footer */}
+            <div className="px-6 py-3 border-t border-slate-800 bg-slate-950/60 flex items-center justify-between text-xs text-slate-400">
+              <span>💡 Перемещение сохраняет текущий автомобиль игрока и чинит его</span>
+              <button
+                onClick={() => setIsSpawnMenuOpen(false)}
+                className="px-4 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-white font-semibold transition-all"
+              >
+                Закрыть
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -9,6 +9,7 @@ import {
   SidewalkBlock,
   StreetProp, 
   TimeOfDay, 
+  Tree,
   Vehicle 
 } from './types';
 import { trafficDiagnostics } from './aiTraffic';
@@ -44,7 +45,10 @@ export class GameRenderer {
     weatherTransition: number,
     visibleBuildings: Building[],
     visibleVehicles: Vehicle[],
-    visiblePedestrians: Pedestrian[]
+    visiblePedestrians: Pedestrian[],
+    visibleTrees?: Tree[],
+    visibleProps?: StreetProp[],
+    visibleSidewalks?: SidewalkBlock[]
   ) {
     const ctx = this.ctx;
 
@@ -87,12 +91,16 @@ export class GameRenderer {
       const p = (timeHour - 5) / 3;
       nightAlpha = (1 - p) * 0.45;
     }
+    
+    const vpProps = visibleProps || world.props.filter(p => p.x >= minX - 120 && p.x <= maxX + 120 && p.y >= minY - 120 && p.y <= maxY + 120);
+    const vpTrees = visibleTrees || world.trees.filter(t => t.x >= minX - 120 && t.x <= maxX + 120 && t.y >= minY - 120 && t.y <= maxY + 120);
+    const vpSidewalks = visibleSidewalks || world.sidewalks || [];
 
     // 3. Ground / Grass / Terrain Base
     this.renderGround(world, minX, minY, maxX, maxY);
 
     // 3b. Paved Sidewalk Walkways, Curbs & Block Courtyards
-    this.renderSidewalks(world.sidewalks || [], minX, minY, maxX, maxY);
+    this.renderSidewalks(vpSidewalks, minX, minY, maxX, maxY);
 
     // 4. Roads, Intersections, Crosswalks & Markings
     this.renderRoadsAndMarkings(world, minX, minY, maxX, maxY);
@@ -113,10 +121,10 @@ export class GameRenderer {
     this.renderLitter(world.litter, minX, minY, maxX, maxY);
 
     // 9. Ground-level Props (Benches, Hydrants, Kiosks, Cones, Trash Cans, Mailboxes, and BROKEN lampposts!)
-    this.renderGroundProps(world.props, minX, minY, maxX, maxY);
+    this.renderGroundProps(vpProps, minX, minY, maxX, maxY);
 
     // 9b. Broken Traffic Lights (lying flat on the ground!)
-    this.renderTrafficLights(world.intersections, world.props.filter((p) => p.isBroken), minX, minY, maxX, maxY);
+    this.renderTrafficLights(world.intersections, vpProps.filter((p) => p.isBroken), minX, minY, maxX, maxY);
 
     // 10. Birds on the ground
     this.renderBirds(world.birds.filter((b) => b.state === 'ground'), minX, minY, maxX, maxY);
@@ -139,7 +147,7 @@ export class GameRenderer {
       timeHour, 
       weatherTransition,
       visibleVehicles, 
-      world.props, 
+      vpProps, 
       minX, minY, maxX, maxY
     );
 
@@ -147,10 +155,10 @@ export class GameRenderer {
     this.renderBuildingRoofsAndCanopies(visibleBuildings, nightAlpha);
 
     // 16b. Tall Intact Props (Intact trees, and intact lampposts!)
-    this.renderTreesAndTallProps(world.trees, world.props, minX, minY, maxX, maxY, nightAlpha);
+    this.renderTreesAndTallProps(vpTrees, vpProps, minX, minY, maxX, maxY, nightAlpha);
 
     // 16c. Intact Traffic Light Posts
-    this.renderTrafficLights(world.intersections, world.props.filter((p) => !p.isBroken), minX, minY, maxX, maxY, nightAlpha);
+    this.renderTrafficLights(world.intersections, vpProps.filter((p) => !p.isBroken), minX, minY, maxX, maxY, nightAlpha);
 
     // 16d. Flying Birds
     this.renderBirds(world.birds.filter((b) => b.state === 'flying'), minX, minY, maxX, maxY, nightAlpha);
@@ -294,7 +302,7 @@ export class GameRenderer {
       ctx.fillRect(inter.x - inter.width / 2, inter.y - inter.height / 2, inter.width, inter.height);
     }
 
-    // Road Markings
+    // Road Markings (Clean standard road paint: double yellow lines, dashed lane dividers, edge lines)
     for (const road of roads) {
       // Dirt roads have absolutely no paint markings
       if (road.isDirt) continue;
@@ -303,6 +311,7 @@ export class GameRenderer {
       const halfW = road.width / 2;
 
       ctx.save();
+
       if (isHoriz) {
         // Double Yellow Center Line (for standard roads only, gravel gets single grey line)
         if (road.lanes >= 2) {
@@ -405,16 +414,33 @@ export class GameRenderer {
       if (inter.x + inter.width / 2 < minX || inter.x - inter.width / 2 > maxX ||
           inter.y + inter.height / 2 < minY || inter.y - inter.height / 2 > maxY) continue;
 
-      // Crosswalks (Zebras removed per user request)
+      if (!inter.isDirt) {
+        // Crosswalks (Zebras) on paved roads
+        for (const cw of inter.crosswalks) {
+          ctx.fillStyle = '#f8fafc';
+          const isHoriz = cw.width > cw.height;
+          if (isHoriz) {
+            const numStripes = Math.floor(cw.width / 14);
+            for (let s = 0; s < numStripes; s++) {
+              ctx.fillRect(cw.x + s * 14 + 3, cw.y + 2, 8, cw.height - 4);
+            }
+          } else {
+            const numStripes = Math.floor(cw.height / 14);
+            for (let s = 0; s < numStripes; s++) {
+              ctx.fillRect(cw.x + 2, cw.y + s * 14 + 3, cw.width - 4, 8);
+            }
+          }
+        }
 
-      // Stop Lines (Solid White)
-      for (const sl of inter.stopLines) {
-        ctx.strokeStyle = '#f8fafc';
-        ctx.lineWidth = 3;
-        ctx.beginPath();
-        ctx.moveTo(sl.x1, sl.y1);
-        ctx.lineTo(sl.x2, sl.y2);
-        ctx.stroke();
+        // Stop Lines (Solid White) on paved roads
+        for (const sl of inter.stopLines) {
+          ctx.strokeStyle = '#f8fafc';
+          ctx.lineWidth = 3;
+          ctx.beginPath();
+          ctx.moveTo(sl.x1, sl.y1);
+          ctx.lineTo(sl.x2, sl.y2);
+          ctx.stroke();
+        }
       }
     }
   }
@@ -1258,21 +1284,176 @@ export class GameRenderer {
         ctx.fill();
       } else if (prop.type === 'bench') {
         // Shadow
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
-        ctx.fillRect(-9, -4, 18, 8);
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
+        ctx.fillRect(-10, -4, 20, 9);
 
-        // Cast Iron frame ends & armrests
+        // Cast Iron frame ends & ornate armrests
         ctx.fillStyle = '#0f172a';
-        ctx.fillRect(-9, -5, 3, 10);
-        ctx.fillRect(6, -5, 3, 10);
+        ctx.fillRect(-10, -6, 3, 12);
+        ctx.fillRect(7, -6, 3, 12);
 
-        // Wood slats with rich polished grain color
+        // Wood slats with rich polished teak/mahogany grain color
         ctx.fillStyle = '#78350f';
-        ctx.fillRect(-7, -4, 14, 2);
+        ctx.fillRect(-8, -5, 16, 2.2);
         ctx.fillStyle = '#92400e';
-        ctx.fillRect(-7, -1, 14, 2);
+        ctx.fillRect(-8, -2, 16, 2.2);
         ctx.fillStyle = '#b45309';
-        ctx.fillRect(-7, 2, 14, 2);
+        ctx.fillRect(-8, 1, 16, 2.2);
+        ctx.fillStyle = '#d97706';
+        ctx.fillRect(-8, 4, 16, 1.8);
+
+        // Iron connecting bolts
+        ctx.fillStyle = '#94a3b8';
+        ctx.fillRect(-8.5, -4.5, 1, 1);
+        ctx.fillRect(7.5, -4.5, 1, 1);
+        ctx.fillRect(-8.5, 3.5, 1, 1);
+        ctx.fillRect(7.5, 3.5, 1, 1);
+
+      } else if (prop.type === 'dumpster') {
+        // Large Municipal Waste Container (Контейнер ТБО / Мусорный бак)
+        // Shadow
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
+        ctx.fillRect(-15, -11, 30, 22);
+
+        // 4 Caster Wheels
+        ctx.fillStyle = '#0f172a';
+        ctx.fillRect(-14, -10, 3, 3);
+        ctx.fillRect(11, -10, 3, 3);
+        ctx.fillRect(-14, 7, 3, 3);
+        ctx.fillRect(11, 7, 3, 3);
+
+        // Main Container Body (Galvanized / Dark Green Metal)
+        ctx.fillStyle = '#15803d'; // Municipal emerald green
+        ctx.fillRect(-13, -9, 26, 18);
+        ctx.strokeStyle = '#166534';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(-13, -9, 26, 18);
+
+        // Side Lifting Pocket Bars (for garbage truck forks)
+        ctx.fillStyle = '#334155';
+        ctx.fillRect(-14, -3, 2, 6);
+        ctx.fillRect(12, -3, 2, 6);
+
+        // Split Plastic Lids (Top and Bottom hinged)
+        ctx.fillStyle = '#1e293b';
+        ctx.fillRect(-12, -8, 24, 7.5);
+        ctx.fillRect(-12, 0.5, 24, 7.5);
+
+        // Lid Handles
+        ctx.fillStyle = '#64748b';
+        ctx.fillRect(-4, -6.5, 8, 1.5);
+        ctx.fillRect(-4, 2, 8, 1.5);
+
+        // Yellow Warning Hazard Triangle
+        ctx.fillStyle = '#f59e0b';
+        ctx.beginPath();
+        ctx.moveTo(0, -2);
+        ctx.lineTo(-2.5, 2);
+        ctx.lineTo(2.5, 2);
+        ctx.closePath();
+        ctx.fill();
+
+      } else if (prop.type === 'flowerbed') {
+        // Decorative Urban Flowerbed (Клумба с цветами)
+        // Shadow
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+        ctx.fillRect(-13, -9, 26, 18);
+
+        // Stone / Concrete Curb Border
+        ctx.fillStyle = '#94a3b8';
+        ctx.fillRect(-12, -8, 24, 16);
+        ctx.fillStyle = '#cbd5e1';
+        ctx.strokeRect(-12, -8, 24, 16);
+
+        // Fertile Dark Soil
+        ctx.fillStyle = '#3e2723';
+        ctx.fillRect(-10, -6, 20, 12);
+
+        // Lush Green Foliage Bush
+        ctx.fillStyle = '#16a34a';
+        ctx.beginPath();
+        ctx.arc(-5, -2, 4.5, 0, Math.PI * 2);
+        ctx.arc(5, -2, 4.5, 0, Math.PI * 2);
+        ctx.arc(0, 2, 5, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = '#22c55e';
+        ctx.beginPath();
+        ctx.arc(-2, -1, 3.5, 0, Math.PI * 2);
+        ctx.arc(3, 1, 3.5, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Colorful Blossom Dots (Tulips / Marigolds / Petunias)
+        const flowerColors = ['#ef4444', '#f59e0b', '#ec4899', '#a855f7', '#ffffff', '#e11d48'];
+        for (let fi = 0; fi < 8; fi++) {
+          const fx = -7 + (fi % 4) * 4.5;
+          const fy = -4 + Math.floor(fi / 4) * 6;
+          ctx.fillStyle = flowerColors[fi % flowerColors.length];
+          ctx.beginPath();
+          ctx.arc(fx, fy, 1.6, 0, Math.PI * 2);
+          ctx.fill();
+        }
+
+      } else if (prop.type === 'bollard') {
+        // Cast-Iron Sidewalk Safety Bollard (Столбик ограждения)
+        // Shadow
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.38)';
+        ctx.beginPath();
+        ctx.arc(2, 2, 4, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Flanged base
+        ctx.fillStyle = '#1e293b';
+        ctx.beginPath();
+        ctx.arc(0, 0, 3.5, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Cylindrical main post
+        ctx.fillStyle = '#334155';
+        ctx.beginPath();
+        ctx.arc(0, 0, 2.5, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Reflective white top band
+        ctx.fillStyle = '#f8fafc';
+        ctx.beginPath();
+        ctx.arc(0, 0, 1.6, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Domed top cap
+        ctx.fillStyle = '#0f172a';
+        ctx.beginPath();
+        ctx.arc(0, 0, 0.9, 0, Math.PI * 2);
+        ctx.fill();
+
+      } else if (prop.type === 'manhole') {
+        // Standalone Manhole Cover
+        ctx.fillStyle = '#0f172a';
+        ctx.beginPath();
+        ctx.arc(0, 0, 6, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = '#334155';
+        ctx.beginPath();
+        ctx.arc(0, 0, 5, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.strokeStyle = '#1e293b';
+        ctx.lineWidth = 0.8;
+        ctx.beginPath();
+        ctx.arc(0, 0, 3, 0, Math.PI * 2);
+        ctx.moveTo(-4, 0); ctx.lineTo(4, 0);
+        ctx.moveTo(0, -4); ctx.lineTo(0, 4);
+        ctx.stroke();
+
+      } else if (prop.type === 'drain_grate') {
+        // Storm drain grate
+        ctx.fillStyle = '#0f172a';
+        ctx.fillRect(-6, -4, 12, 8);
+        ctx.fillStyle = '#475569';
+        for (let b = -4.5; b <= 4.5; b += 2.2) {
+          ctx.fillRect(b, -4, 1.2, 8);
+        }
       } else if (prop.type === 'hydrant') {
         // Shadow
         ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
@@ -2167,28 +2348,34 @@ export class GameRenderer {
       const rld = Math.min(8, dmg.rearLeftDent || 0);
       const rrd = Math.min(8, dmg.rearRightDent || 0);
 
-      let bodyPoly = [];
+      const basePoly = [
+        { x: halfL - fc, y: 0 },
+        { x: halfL - fc - 0.5, y: halfW * 0.5 },
+        { x: halfL - frd - 2.5, y: halfW - frd * 0.35 - 1.5 },
+        { x: halfL * 0.5, y: halfW - rd * 0.35 },
+        { x: 0, y: halfW - rd },
+        { x: -halfL * 0.5, y: halfW - rd * 0.35 },
+        { x: -halfL + rrd + 2.5, y: halfW - rrd * 0.35 - 1.5 },
+        { x: -halfL + rc + 0.5, y: halfW * 0.5 },
+        { x: -halfL + rc, y: 0 },
+        { x: -halfL + rc + 0.5, y: -halfW * 0.5 },
+        { x: -halfL + rld + 2.5, y: -halfW + rld * 0.35 + 1.5 },
+        { x: -halfL * 0.5, y: -halfW + ld * 0.35 },
+        { x: 0, y: -halfW + ld },
+        { x: halfL * 0.5, y: -halfW + ld * 0.35 },
+        { x: halfL - fld - 2.5, y: -halfW + fld * 0.35 + 1.5 },
+        { x: halfL - fc - 0.5, y: -halfW * 0.5 }
+      ];
+
+      let bodyPoly = basePoly;
       if (dmg.deformedVertices && dmg.deformedVertices.length === 16) {
-        bodyPoly = dmg.deformedVertices.map(v => ({ x: v.localX + v.offsetX, y: v.localY + v.offsetY }));
-      } else {
-        bodyPoly = [
-          { x: halfL - fc, y: 0 },
-          { x: halfL - fc - 0.5, y: halfW * 0.5 },
-          { x: halfL - frd - 2.5, y: halfW - frd * 0.35 - 1.5 },
-          { x: halfL * 0.5, y: halfW - rd * 0.35 },
-          { x: 0, y: halfW - rd },
-          { x: -halfL * 0.5, y: halfW - rd * 0.35 },
-          { x: -halfL + rrd + 2.5, y: halfW - rrd * 0.35 - 1.5 },
-          { x: -halfL + rc + 0.5, y: halfW * 0.5 },
-          { x: -halfL + rc, y: 0 },
-          { x: -halfL + rc + 0.5, y: -halfW * 0.5 },
-          { x: -halfL + rld + 2.5, y: -halfW + rld * 0.35 + 1.5 },
-          { x: -halfL * 0.5, y: -halfW + ld * 0.35 },
-          { x: 0, y: -halfW + ld },
-          { x: halfL * 0.5, y: -halfW + ld * 0.35 },
-          { x: halfL - fld - 2.5, y: -halfW + fld * 0.35 + 1.5 },
-          { x: halfL - fc - 0.5, y: -halfW * 0.5 }
-        ];
+        bodyPoly = basePoly.map((bv, idx) => {
+          const dv = dmg.deformedVertices![idx];
+          return {
+            x: bv.x + (dv.offsetX || 0),
+            y: bv.y + (dv.offsetY || 0)
+          };
+        });
       }
 
       ctx.fillStyle = car.color;
@@ -2277,7 +2464,15 @@ export class GameRenderer {
       let cabinW = Math.max(8, car.width * 0.8 - (ld + rd) * 0.3);
       let cabinX = -car.length * 0.05;
 
-      if (car.type === 'sports') {
+      const isHeavyTruck = car.type === 'truck_box' || car.type === 'truck_dump' || 
+                           car.type === 'truck_tanker' || car.type === 'truck_flatbed' || 
+                           car.type === 'cement_mixer' || car.type === 'garbage_truck';
+
+      if (isHeavyTruck) {
+        cabinL = car.length * 0.28;
+        cabinW = car.width * 0.88;
+        cabinX = car.length * 0.30;
+      } else if (car.type === 'sports') {
         cabinL = car.length * 0.45;
         cabinW = car.width * 0.74;
         cabinX = -car.length * 0.08;
@@ -2485,6 +2680,342 @@ export class GameRenderer {
         ctx.moveTo(-halfL + rc, halfW - 1.2); ctx.lineTo(halfL - fc, halfW - 1.2);
         ctx.stroke();
         ctx.restore();
+      } else if (car.type === 'fire_engine') {
+        // ZIL-130 Fire Truck details: Ladder rack on roof, water hose reel
+        ctx.fillStyle = '#cbd5e1';
+        ctx.fillRect(-cabinL * 0.4, -cabinW * 0.35, cabinL * 0.8, cabinW * 0.7);
+        ctx.fillStyle = '#94a3b8';
+        ctx.fillRect(-cabinL * 0.35, -2, cabinL * 0.7, 4);
+        // White grille front
+        ctx.fillStyle = '#f8fafc';
+        ctx.fillRect(halfL - fc - 2, -halfW + 4, 2, halfW * 2 - 8);
+
+      } else if (car.type === 'bus') {
+        // PAZ City Bus: multiple side passenger windows
+        ctx.fillStyle = '#93c5fd';
+        for (let wx = -cabinL * 0.4; wx < cabinL * 0.4; wx += 12) {
+          ctx.fillRect(wx, -cabinW * 0.44, 8, cabinW * 0.88);
+        }
+
+      } else if (car.type === 'van') {
+        // UAZ Bukhanka: utility boxy cargo van stripes
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(-halfL + rc + 4, -1.5, car.length - fc - rc - 8, 3);
+
+      } else if (car.type === 'muscle') {
+        // GAZ-24 Volga: Chrome bumpers and retro grille
+        ctx.fillStyle = '#cbd5e1';
+        ctx.fillRect(halfL - fc - 1.5, -halfW + 3, 2, halfW * 2 - 6);
+        ctx.fillRect(-halfL + rc, -halfW + 3, 2, halfW * 2 - 6);
+        // Dual racing line
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
+        ctx.fillRect(-halfL + rc, -1.5, car.length - fc - rc, 1);
+
+      } else if (car.type === 'ambulance') {
+        // RAF / UAZ Ambulance: Red cross on sides
+        ctx.fillStyle = '#ef4444';
+        ctx.fillRect(-4, -2.5, 8, 5);
+        ctx.fillRect(-2.5, -4, 5, 8);
+
+      } else if (car.type === 'truck_box') {
+        // --- KamAZ-5320 / Commercial Box Truck (Фургон) ---
+        // 1. Aerodynamic Roof Wind Deflector Spoiler over Cab
+        ctx.fillStyle = car.color;
+        ctx.beginPath();
+        ctx.moveTo(cabinX + cabinL * 0.45, -cabinW * 0.45);
+        ctx.lineTo(cabinX - cabinL * 0.3, -cabinW * 0.42);
+        ctx.lineTo(cabinX - cabinL * 0.45, 0);
+        ctx.lineTo(cabinX - cabinL * 0.3, cabinW * 0.42);
+        ctx.lineTo(cabinX + cabinL * 0.45, cabinW * 0.45);
+        ctx.closePath();
+        ctx.fill();
+        ctx.strokeStyle = '#0f172a';
+        ctx.lineWidth = 0.8;
+        ctx.stroke();
+
+        // Amber roof clearance marker lights (Автопоезд)
+        ctx.fillStyle = '#f59e0b';
+        ctx.fillRect(cabinX + cabinL * 0.42, -cabinW * 0.35, 1.5, 2);
+        ctx.fillRect(cabinX + cabinL * 0.44, -1, 1.5, 2);
+        ctx.fillRect(cabinX + cabinL * 0.42, cabinW * 0.35 - 2, 1.5, 2);
+
+        // 2. Large Corrugated Box Body
+        const boxX1 = -halfL + rc + 2;
+        const boxX2 = cabinX - cabinL / 2 - 1.5;
+        const boxW = halfW * 2 - 1.5;
+        ctx.fillStyle = '#f1f5f9'; // Clean white/silver insulated panel
+        ctx.fillRect(boxX1, -boxW / 2, boxX2 - boxX1, boxW);
+        ctx.strokeStyle = '#94a3b8';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(boxX1, -boxW / 2, boxX2 - boxX1, boxW);
+
+        // Corrugated vertical panel seams
+        ctx.strokeStyle = '#cbd5e1';
+        ctx.lineWidth = 0.8;
+        ctx.beginPath();
+        for (let bx = boxX1 + 6; bx < boxX2 - 4; bx += 6) {
+          ctx.moveTo(bx, -boxW / 2 + 1); ctx.lineTo(bx, boxW / 2 - 1);
+        }
+        ctx.stroke();
+
+        // Rear Rollup Door Frame & Locking Hardware
+        ctx.fillStyle = '#64748b';
+        ctx.fillRect(boxX1, -boxW / 2 + 2, 2, boxW - 4);
+        ctx.fillStyle = '#0f172a';
+        ctx.fillRect(boxX1, -3, 2.5, 6); // Door locking latch
+
+        // Rear Underrun Protection Bumper with Hazard Chevrons
+        ctx.fillStyle = '#ef4444';
+        ctx.fillRect(boxX1 - 1.5, -halfW + 2, 1.5, halfW * 2 - 4);
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(boxX1 - 1.5, -halfW + 5, 1.5, 3);
+        ctx.fillRect(boxX1 - 1.5, 0, 1.5, 3);
+        ctx.fillRect(boxX1 - 1.5, halfW - 8, 1.5, 3);
+
+        // Flank Fuel Tank & Battery Case
+        ctx.fillStyle = '#475569';
+        ctx.fillRect(boxX2 - 12, -halfW - 1.2, 10, 2);
+        ctx.fillRect(boxX2 - 12, halfW - 0.8, 10, 2);
+
+      } else if (car.type === 'truck_dump') {
+        // --- MAZ / Heavy Tipper Truck (Самосвал) ---
+        // 1. Protective Cab-Over Rock Shield (Козырек над кабиной)
+        ctx.fillStyle = '#1e293b';
+        ctx.fillRect(cabinX - cabinL * 0.2, -cabinW * 0.48, cabinL * 0.65, cabinW * 0.96);
+        ctx.strokeStyle = '#f59e0b';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(cabinX - cabinL * 0.2, -cabinW * 0.48, cabinL * 0.65, cabinW * 0.96);
+
+        // Flashing amber strobe beacon on cab
+        ctx.fillStyle = '#f59e0b';
+        ctx.beginPath();
+        ctx.arc(cabinX, 0, 2.5, 0, Math.PI * 2);
+        ctx.fill();
+
+        // 2. Heavy-Duty Ribbed Tipper Bucket
+        const dumpX1 = -halfL + rc + 2;
+        const dumpX2 = cabinX - cabinL / 2 - 1;
+        const dumpW = halfW * 2 - 1;
+        ctx.fillStyle = '#d97706'; // Industrial ochre/orange steel
+        ctx.fillRect(dumpX1, -dumpW / 2, dumpX2 - dumpX1, dumpW);
+        ctx.strokeStyle = '#78350f';
+        ctx.lineWidth = 1.2;
+        ctx.strokeRect(dumpX1, -dumpW / 2, dumpX2 - dumpX1, dumpW);
+
+        // Exterior stiffening ribs
+        ctx.strokeStyle = '#b45309';
+        ctx.lineWidth = 1.2;
+        ctx.beginPath();
+        for (let rx = dumpX1 + 5; rx < dumpX2 - 4; rx += 7) {
+          ctx.moveTo(rx, -dumpW / 2); ctx.lineTo(rx, dumpW / 2);
+        }
+        ctx.stroke();
+
+        // Granular Stone / Gravel Cargo inside tipper
+        ctx.fillStyle = '#64748b'; // Crushed granite rock
+        ctx.fillRect(dumpX1 + 3, -dumpW / 2 + 2.5, dumpX2 - dumpX1 - 6, dumpW - 5);
+        ctx.fillStyle = '#94a3b8';
+        for (let gi = 0; gi < 14; gi++) {
+          const gx = dumpX1 + 5 + (gi % 5) * 6;
+          const gy = -dumpW / 2 + 4 + Math.floor(gi / 5) * 6;
+          ctx.beginPath();
+          ctx.arc(gx, gy, 1.8, 0, Math.PI * 2);
+          ctx.fill();
+        }
+
+        // Hydraulic Cylinder Sleeve between cab and bucket
+        ctx.fillStyle = '#cbd5e1';
+        ctx.fillRect(dumpX2, -2, 2, 4);
+
+      } else if (car.type === 'truck_tanker') {
+        // --- Ural / Tanker Truck (Автоцистерна) ---
+        // 1. Cab Clearance Lights
+        ctx.fillStyle = '#f59e0b';
+        ctx.fillRect(cabinX + cabinL * 0.4, -cabinW * 0.35, 1.5, 2);
+        ctx.fillRect(cabinX + cabinL * 0.4, cabinW * 0.35 - 2, 1.5, 2);
+
+        // 2. Polished Cylindrical Liquid Tank
+        const tankX1 = -halfL + rc + 3;
+        const tankX2 = cabinX - cabinL / 2 - 2;
+        const tankW = halfW * 2 - 2;
+
+        // Cylindrical gradient fill
+        const tankGrad = ctx.createLinearGradient(0, -tankW / 2, 0, tankW / 2);
+        tankGrad.addColorStop(0, '#94a3b8');
+        tankGrad.addColorStop(0.2, '#f8fafc');
+        tankGrad.addColorStop(0.5, '#cbd5e1');
+        tankGrad.addColorStop(0.8, '#64748b');
+        tankGrad.addColorStop(1, '#334155');
+        ctx.fillStyle = tankGrad;
+        ctx.beginPath();
+        ctx.roundRect(tankX1, -tankW / 2, tankX2 - tankX1, tankW, 6);
+        ctx.fill();
+        ctx.strokeStyle = '#475569';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+
+        // Top Catwalk Walkway Platform with Anti-Slip Grate
+        ctx.fillStyle = '#334155';
+        ctx.fillRect(tankX1 + 4, -3, tankX2 - tankX1 - 8, 6);
+        ctx.strokeStyle = '#94a3b8';
+        ctx.lineWidth = 0.6;
+        ctx.beginPath();
+        for (let gx = tankX1 + 6; gx < tankX2 - 6; gx += 4) {
+          ctx.moveTo(gx, -3); ctx.lineTo(gx, 3);
+        }
+        ctx.stroke();
+
+        // 2 Dome Inspection Manhole Hatches
+        const hatch1X = tankX1 + (tankX2 - tankX1) * 0.32;
+        const hatch2X = tankX1 + (tankX2 - tankX1) * 0.68;
+        ctx.fillStyle = '#0f172a';
+        ctx.beginPath(); ctx.arc(hatch1X, 0, 3.2, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.arc(hatch2X, 0, 3.2, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = '#e2e8f0';
+        ctx.beginPath(); ctx.arc(hatch1X, 0, 2, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.arc(hatch2X, 0, 2, 0, Math.PI * 2); ctx.fill();
+
+        // ADR Hazard Diamond Placard ("Flammable Liquid" / "ОГНЕОПАСНО")
+        ctx.fillStyle = '#dc2626'; // Red ADR diamond
+        ctx.save();
+        ctx.translate(tankX1 - 1, 0);
+        ctx.rotate(Math.PI / 4);
+        ctx.fillRect(-2, -2, 4, 4);
+        ctx.restore();
+
+        // Side Hose Storage Tubes
+        ctx.fillStyle = '#1e293b';
+        ctx.fillRect(tankX1 + 2, -halfW - 0.8, tankX2 - tankX1 - 4, 1.8);
+        ctx.fillRect(tankX1 + 2, halfW - 1.0, tankX2 - tankX1 - 4, 1.8);
+
+      } else if (car.type === 'truck_flatbed') {
+        // --- ZIL-133 / Heavy Flatbed Cargo (Бортовой) ---
+        // 1. Cab Headache Rack (Headboard safety steel mesh)
+        ctx.fillStyle = '#0f172a';
+        ctx.fillRect(cabinX - cabinL / 2 - 2, -halfW + 1, 2, halfW * 2 - 2);
+
+        // 2. Heavy Timber / Steel Deck Bed
+        const flatX1 = -halfL + rc + 2;
+        const flatX2 = cabinX - cabinL / 2 - 2;
+        const flatW = halfW * 2 - 2;
+        ctx.fillStyle = '#78350f'; // Dark wood decking
+        ctx.fillRect(flatX1, -flatW / 2, flatX2 - flatX1, flatW);
+
+        // Metal Drop-Down Perimeter Sideboards
+        ctx.strokeStyle = car.color;
+        ctx.lineWidth = 1.6;
+        ctx.strokeRect(flatX1, -flatW / 2, flatX2 - flatX1, flatW);
+
+        // Cargo Load: Wooden Crates & Heavy Industrial Pipe Tubes
+        // Crate 1
+        ctx.fillStyle = '#d97706';
+        ctx.fillRect(flatX1 + 4, -flatW / 2 + 3, 14, 10);
+        ctx.strokeStyle = '#92400e';
+        ctx.lineWidth = 0.8;
+        ctx.strokeRect(flatX1 + 4, -flatW / 2 + 3, 14, 10);
+        ctx.beginPath();
+        ctx.moveTo(flatX1 + 4, -flatW / 2 + 3); ctx.lineTo(flatX1 + 18, -flatW / 2 + 13);
+        ctx.moveTo(flatX1 + 18, -flatW / 2 + 3); ctx.lineTo(flatX1 + 4, -flatW / 2 + 13);
+        ctx.stroke();
+
+        // Heavy Steel Pipe Bundles
+        ctx.fillStyle = '#475569';
+        ctx.fillRect(flatX1 + 21, -flatW / 2 + 3, flatX2 - flatX1 - 25, 4);
+        ctx.fillRect(flatX1 + 21, -flatW / 2 + 8, flatX2 - flatX1 - 25, 4);
+        ctx.fillRect(flatX1 + 21, -flatW / 2 + 13, flatX2 - flatX1 - 25, 4);
+
+        // Bright Orange Ratchet Tie-Down Straps
+        ctx.strokeStyle = '#ea580c';
+        ctx.lineWidth = 1.2;
+        ctx.beginPath();
+        ctx.moveTo(flatX1 + 10, -flatW / 2); ctx.lineTo(flatX1 + 10, flatW / 2);
+        ctx.moveTo(flatX1 + 28, -flatW / 2); ctx.lineTo(flatX1 + 28, flatW / 2);
+        ctx.stroke();
+
+      } else if (car.type === 'cement_mixer') {
+        // --- KamAZ / Concrete Mixer Truck (Автобетономешалка) ---
+        // 1. Water Wash Tank behind Cabin
+        ctx.fillStyle = '#0284c7';
+        ctx.fillRect(cabinX - cabinL / 2 - 3, -halfW * 0.6, 2.5, halfW * 1.2);
+
+        // 2. Concrete Mixer Rotating Drum Barrel
+        const drumX1 = -halfL + rc + 6;
+        const drumX2 = cabinX - cabinL / 2 - 4;
+        const drumW = halfW * 2 - 2;
+
+        ctx.fillStyle = '#f8fafc'; // White / Light Grey Drum
+        ctx.beginPath();
+        ctx.moveTo(drumX2, -drumW * 0.28);
+        ctx.lineTo(drumX1 + (drumX2 - drumX1) * 0.5, -drumW * 0.5);
+        ctx.lineTo(drumX1, -drumW * 0.32);
+        ctx.lineTo(drumX1, drumW * 0.32);
+        ctx.lineTo(drumX1 + (drumX2 - drumX1) * 0.5, drumW * 0.5);
+        ctx.lineTo(drumX2, drumW * 0.28);
+        ctx.closePath();
+        ctx.fill();
+        ctx.strokeStyle = '#64748b';
+        ctx.lineWidth = 1.2;
+        ctx.stroke();
+
+        // Spiral Helical Flight Mixing Stripes (Distinct yellow/orange stripes)
+        ctx.strokeStyle = '#ea580c';
+        ctx.lineWidth = 2.4;
+        ctx.beginPath();
+        const drumMid = (drumX1 + drumX2) / 2;
+        ctx.moveTo(drumX2 - 2, -drumW * 0.22);
+        ctx.quadraticCurveTo(drumMid + 4, 0, drumX1 + 8, drumW * 0.26);
+        ctx.moveTo(drumX2 - 8, -drumW * 0.28);
+        ctx.quadraticCurveTo(drumMid - 2, 0, drumX1 + 3, drumW * 0.24);
+        ctx.stroke();
+
+        // 3. Rear Discharge Hopper & Swivel Chute
+        ctx.fillStyle = '#475569';
+        ctx.fillRect(drumX1 - 4, -halfW * 0.35, 4, halfW * 0.7); // Collection funnel
+        ctx.fillStyle = '#cbd5e1';
+        ctx.fillRect(drumX1 - 7, -2.5, 3.5, 5); // Pivoting chute extension
+
+      } else if (car.type === 'garbage_truck') {
+        // --- KO-440 / Municipal Waste Compactor Truck (Мусоровоз) ---
+        // 1. Flashing Amber Municipal Beacons on Cab
+        ctx.fillStyle = '#f59e0b';
+        ctx.beginPath();
+        ctx.arc(cabinX, -cabinW * 0.35, 2.2, 0, Math.PI * 2);
+        ctx.arc(cabinX, cabinW * 0.35, 2.2, 0, Math.PI * 2);
+        ctx.fill();
+
+        // 2. Main High-Capacity Compactor Body
+        const compX1 = -halfL + rc + 6;
+        const compX2 = cabinX - cabinL / 2 - 1.5;
+        const compW = halfW * 2 - 1.5;
+
+        ctx.fillStyle = '#16a34a'; // Vibrant municipal environmental green
+        ctx.fillRect(compX1, -compW / 2, compX2 - compX1, compW);
+        ctx.strokeStyle = '#14532d';
+        ctx.lineWidth = 1.2;
+        ctx.strokeRect(compX1, -compW / 2, compX2 - compX1, compW);
+
+        // Side Structural Ribs & Hydraulic Lift Cylinder Arms
+        ctx.fillStyle = '#e2e8f0';
+        ctx.fillRect(compX1 + 4, -compW / 2 - 1, compX2 - compX1 - 8, 1.2);
+        ctx.fillRect(compX1 + 4, compW / 2 - 0.2, compX2 - compX1 - 8, 1.2);
+
+        // White Recycling Eco Emblem
+        ctx.fillStyle = '#ffffff';
+        ctx.beginPath();
+        const compMidX = (compX1 + compX2) / 2;
+        ctx.arc(compMidX, 0, 3.8, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#16a34a';
+        ctx.beginPath();
+        ctx.arc(compMidX, 0, 2.4, 0, Math.PI * 2);
+        ctx.fill();
+
+        // 3. Rear Compaction Tailgate & Loading Hopper
+        ctx.fillStyle = '#1e293b';
+        ctx.fillRect(-halfL + rc, -compW / 2 + 1, 6, compW - 2);
+        ctx.fillStyle = '#ef4444'; // Rear safety reflector chevrons
+        ctx.fillRect(-halfL + rc, -compW / 2 + 2, 1.5, 3);
+        ctx.fillRect(-halfL + rc, compW / 2 - 5, 1.5, 3);
       }
 
       // 7. Headlights (Symmetrical & inset to guarantee they are 100% inside body)
@@ -2584,15 +3115,18 @@ export class GameRenderer {
         }
       }
 
-      // 10. Flashing roof sirens for police cars
-      if (car.type === 'police') {
+      // 10. Flashing roof sirens for emergency vehicles (police, fire_engine, ambulance)
+      if (car.type === 'police' || car.type === 'fire_engine' || car.type === 'ambulance') {
         const strobe = Math.floor(Date.now() / 90) % 4;
         ctx.fillStyle = '#0f172a';
         ctx.fillRect(cabinX - 1.5, -cabinW * 0.45, 3, cabinW * 0.9);
         
-        ctx.fillStyle = (strobe === 0 || strobe === 1) ? '#3b82f6' : '#1e3a8a';
+        const primaryColor = car.type === 'fire_engine' ? '#ef4444' : (car.type === 'ambulance' ? '#3b82f6' : '#3b82f6');
+        const secondaryColor = car.type === 'fire_engine' ? '#3b82f6' : '#ef4444';
+
+        ctx.fillStyle = (strobe === 0 || strobe === 1) ? primaryColor : '#1e3a8a';
         ctx.fillRect(cabinX - 1, -cabinW * 0.4, 2, cabinW * 0.35);
-        ctx.fillStyle = (strobe === 2 || strobe === 3) ? '#ef4444' : '#7f1d1d';
+        ctx.fillStyle = (strobe === 2 || strobe === 3) ? secondaryColor : '#7f1d1d';
         ctx.fillRect(cabinX - 1, cabinW * 0.05, 2, cabinW * 0.35);
         ctx.fillStyle = '#ffffff';
         ctx.fillRect(cabinX - 1.2, -1, 2.4, 2);

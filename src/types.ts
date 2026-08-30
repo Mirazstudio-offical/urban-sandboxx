@@ -6,7 +6,25 @@ export interface Vector2D {
   y: number;
 }
 
-export type CarType = 'sedan' | 'hatchback' | 'pickup' | 'sports' | 'suv' | 'taxi' | 'police';
+export type CarType = 
+  | 'sedan' 
+  | 'hatchback' 
+  | 'pickup' 
+  | 'sports' 
+  | 'suv' 
+  | 'taxi' 
+  | 'police' 
+  | 'fire_engine' 
+  | 'bus' 
+  | 'van' 
+  | 'muscle' 
+  | 'ambulance'
+  | 'truck_box'
+  | 'truck_dump'
+  | 'truck_tanker'
+  | 'truck_flatbed'
+  | 'cement_mixer'
+  | 'garbage_truck';
 
 export interface CarConfig {
   type: CarType;
@@ -240,6 +258,7 @@ export interface Intersection {
     height: number;
     pedestrianSignal: 'walk' | 'wait';
   }[];
+  isDirt?: boolean;
 }
 
 export interface RoadSegment {
@@ -335,7 +354,21 @@ export interface StreetProp {
   id: string;
   x: number;
   y: number;
-  type: 'bench' | 'lamp' | 'hydrant' | 'trash_can' | 'bus_stop' | 'cone' | 'kiosk' | 'mailbox' | 'traffic_light';
+  type: 
+    | 'bench' 
+    | 'lamp' 
+    | 'hydrant' 
+    | 'trash_can' 
+    | 'bus_stop' 
+    | 'cone' 
+    | 'kiosk' 
+    | 'mailbox' 
+    | 'traffic_light'
+    | 'dumpster'
+    | 'flowerbed'
+    | 'bollard'
+    | 'manhole'
+    | 'drain_grate';
   angle: number;
   intersectionId?: string;
   direction?: 'north' | 'south' | 'east' | 'west';
