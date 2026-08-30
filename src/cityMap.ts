@@ -10,6 +10,7 @@ import {
   Pedestrian, 
   Puddle,
   RoadSegment, 
+  SidewalkBlock,
   StreetProp, 
   Tree, 
   Vector2D, 
@@ -252,12 +253,13 @@ export function generateTurnaroundArc(
 export function generateCityWorld(): GameWorld {
   const WORLD_SIZE = 8000;
   
-  // 9x9 grid coordinates creating potential intersections
+  // 9x9 grid coordinates creating complete interconnected city network
   const vertRoadXs = [800, 1600, 2400, 3200, 4000, 4800, 5600, 6400, 7200];
   const horizRoadYs = [800, 1600, 2400, 3200, 4000, 4800, 5600, 6400, 7200];
   
   const roads: RoadSegment[] = [];
   const intersections: Intersection[] = [];
+  const sidewalks: SidewalkBlock[] = [];
   const buildings: Building[] = [];
   const parkings: ParkingArea[] = [];
   const trees: Tree[] = [];
@@ -281,55 +283,13 @@ export function generateCityWorld(): GameWorld {
     return rowIsAvenue ? 144 : 84;
   };
 
-  // Organic layout layout checks to break grid patterns into forest trails & country lanes
-  const shouldRoadExist = (type: 'h' | 'v', lineIdx: number, segIdx: number): boolean => {
-    if (type === 'h') {
-      const r = lineIdx;
-      const c = segIdx;
-      
-      // Forest Winding Trail segments
-      if (r === 0 && c === 1) return true;
-      if (r === 1 && c === 1) return true;
-      if (r === 1 && c === 2) return true;
-      
-      // Standard horizontal segments
-      if (r === 0) return c >= 4; // Downtown
-      if (r === 1) return c >= 4; // Downtown
-      if (r === 2) return c >= 1; // Major artery Grand Boulevard (reaches Forest edge)
-      if (r === 3) return c >= 3; // Downtown transition
-      if (r === 4) return true;   // Central Avenue (everywhere)
-      if (r === 5) return c <= 6; // West/Center connection
-      if (r === 6) return c >= 2; // Southern connection / Village
-      if (r === 7) return c >= 5; // Village
-      if (r === 8) return c >= 4; // Village bottom
-      return false;
-    } else {
-      const c = lineIdx;
-      const r = segIdx;
-      
-      // Forest Winding Trail segments
-      if (c === 1 && (r === 0 || r === 1)) return true;
-      
-      // Standard vertical segments
-      if (c === 0) return r >= 2 && r <= 6; // West boundary highway
-      if (c === 1) return r >= 4;           // Southwest country connection
-      if (c === 2) return r >= 1 && r <= 8; // Mid-West corridor
-      if (c === 3) return r >= 2 && r <= 7; // Mid-West transition
-      if (c === 4) return true;             // Silicon Highway (everywhere)
-      if (c === 5) return r >= 1 && r <= 8; // Downtown/Village
-      if (c === 6) return r >= 0 && r <= 8; // Downtown/Village
-      if (c === 7) return r >= 1 && r <= 9; // Downtown/Village
-      if (c === 8) return r >= 0 && r <= 8; // Downtown/Village
-      return false;
-    }
+  // Complete, fully-connected road network across all rows and columns
+  const shouldRoadExist = (_type: 'h' | 'v', _lineIdx: number, _segIdx: number): boolean => {
+    return true;
   };
 
-  const shouldIntersectionExist = (r: number, c: number): boolean => {
-    const west = shouldRoadExist('h', r, c);
-    const east = shouldRoadExist('h', r, c + 1);
-    const north = shouldRoadExist('v', c, r);
-    const south = shouldRoadExist('v', c, r + 1);
-    return west || east || north || south;
+  const shouldIntersectionExist = (_r: number, _c: number): boolean => {
+    return true;
   };
 
   const hRoadNames = [
@@ -1076,6 +1036,7 @@ export function generateCityWorld(): GameWorld {
   }
 
   // 3. GENERATE SIDEWALK WALKWAYS & BUILDINGS WITHIN BLOCKS
+  // 3. GENERATE SIDEWALK WALKWAYS, PARKING PLAZAS & BUILDINGS WITHIN BLOCKS
   const allXBounds = [0, ...vertRoadXs, WORLD_SIZE];
   const allYBounds = [0, ...horizRoadYs, WORLD_SIZE];
 
@@ -1086,10 +1047,10 @@ export function generateCityWorld(): GameWorld {
       const minY = allYBounds[by];
       const maxY = allYBounds[by + 1];
 
-      const padLeft = (bx === 0 ? 55 : getRoadWidthAtCol(bx - 1) / 2 + 45);
-      const padRight = (bx === allXBounds.length - 2 ? 55 : getRoadWidthAtCol(bx) / 2 + 45);
-      const padTop = (by === 0 ? 55 : getRoadWidthAtRow(by - 1) / 2 + 45);
-      const padBottom = (by === allYBounds.length - 2 ? 55 : getRoadWidthAtRow(by) / 2 + 45);
+      const padLeft = (bx === 0 ? 30 : getRoadWidthAtCol(bx - 1) / 2 + 10);
+      const padRight = (bx === allXBounds.length - 2 ? 30 : getRoadWidthAtCol(bx) / 2 + 10);
+      const padTop = (by === 0 ? 30 : getRoadWidthAtRow(by - 1) / 2 + 10);
+      const padBottom = (by === allYBounds.length - 2 ? 30 : getRoadWidthAtRow(by) / 2 + 10);
 
       const blockX = minX + padLeft;
       const blockY = minY + padTop;
@@ -1098,35 +1059,60 @@ export function generateCityWorld(): GameWorld {
 
       if (blockW < 80 || blockH < 80) continue;
 
-      const sidewalkOffset = 18;
-      const swX1 = blockX - sidewalkOffset;
-      const swY1 = blockY - sidewalkOffset;
-      const swX2 = blockX + blockW + sidewalkOffset;
-      const swY2 = blockY + blockH + sidewalkOffset;
+      const sidewalkWidth = 32;
+      const isForest = bx < 3 && by < 3;
+      const isVillage = bx >= 6 && by >= 6;
+      const isCentralPark = bx === 5 && by === 3;
+      const isCommercial = bx >= 3 && bx <= 6 && by >= 2 && by <= 5;
 
-      // --- FOREST ZONE (North-West) ---
-      if (bx < 4 && by < 4) {
-        // Populated with dense, rich natural tree canopies instead of roads or buildings
-        const treeSpacing = 42;
-        for (let tx = minX + 25; tx < maxX - 25; tx += treeSpacing) {
-          for (let ty = minY + 25; ty < maxY - 25; ty += treeSpacing) {
-            // Ensure trees do not overlap with active road segments
-            let tooCloseToRoad = false;
-            for (const r of roads) {
-              const isH = r.direction === 'horizontal';
-              if (isH) {
-                if (tx >= r.x1 - 10 && tx <= r.x2 + 10 && Math.abs(ty - r.y1) < r.width / 2 + 35) tooCloseToRoad = true;
-              } else {
-                if (ty >= r.y1 - 10 && ty <= r.y2 + 10 && Math.abs(tx - r.x1) < r.width / 2 + 35) tooCloseToRoad = true;
-              }
-            }
-            if (tooCloseToRoad) continue;
+      let swStyle: SidewalkBlock['style'] = 'urban';
+      if (isForest) swStyle = 'park';
+      else if (isVillage) swStyle = 'village';
+      else if (isCentralPark) swStyle = 'park';
+      else if (isCommercial) swStyle = 'commercial';
 
-            if (Math.random() > 0.15) {
+      // Register Sidewalk geometry for this block (only outside forest zone)
+      if (!isForest) {
+        sidewalks.push({
+          id: `sidewalk_${bx}_${by}`,
+          x: blockX,
+          y: blockY,
+          width: blockW,
+          height: blockH,
+          sidewalkWidth,
+          style: swStyle,
+          innerLawnColor: isForest ? '#14532d' : (isVillage ? '#16a34a' : '#15803d')
+        });
+
+        // Pedestrian navigation path runs down the centerline of the paved sidewalk corridor
+        const swWalkCenter = sidewalkWidth / 2;
+        const swX1 = blockX + swWalkCenter;
+        const swY1 = blockY + swWalkCenter;
+        const swX2 = blockX + blockW - swWalkCenter;
+        const swY2 = blockY + blockH - swWalkCenter;
+
+        pedestrianPaths.push({
+          id: `sidewalk_block_${bx}_${by}`,
+          waypoints: [
+            { x: swX1, y: swY1 },
+            { x: swX2, y: swY1 },
+            { x: swX2, y: swY2 },
+            { x: swX1, y: swY2 },
+            { x: swX1, y: swY1 }
+          ]
+        });
+      }
+
+      // --- 1. FOREST ZONE (North-West) ---
+      if (isForest) {
+        // Populated with natural tree canopies, ponds, and clearings
+        const treeSpacing = 44;
+        for (let tx = blockX + 20; tx < blockX + blockW - 20; tx += treeSpacing) {
+          for (let ty = blockY + 20; ty < blockY + blockH - 20; ty += treeSpacing) {
+            if (Math.random() > 0.2) {
               const rRad = 15 + Math.random() * 15;
               const rX = tx + (Math.random() * 12 - 6);
               const rY = ty + (Math.random() * 12 - 6);
-              // Multi-colored forest trees (shades of dark greens and golds)
               const rCol = Math.random() < 0.4 ? '#14532d' : (Math.random() < 0.75 ? '#166534' : (Math.random() < 0.9 ? '#15803d' : '#854d0e'));
               trees.push({
                 id: `tree_forest_${rX.toFixed(0)}_${rY.toFixed(0)}`,
@@ -1140,8 +1126,7 @@ export function generateCityWorld(): GameWorld {
           }
         }
 
-        // Add scenic clearings with campsite features in specific blocks
-        if ((bx === 1 && by === 1) || (bx === 2 && by === 1)) {
+        if (bx === 1 && by === 1) {
           const clX = blockX + blockW / 2;
           const clY = blockY + blockH / 2;
           props.push(
@@ -1150,7 +1135,6 @@ export function generateCityWorld(): GameWorld {
           );
         }
 
-        // Add majestic wildlife ponds deep in the woods
         if (bx === 1 && by === 2) {
           const cx = blockX + blockW / 2;
           const cy = blockY + blockH / 2;
@@ -1167,93 +1151,8 @@ export function generateCityWorld(): GameWorld {
         continue;
       }
 
-      // --- COZY VILLAGE ZONE (South-East) ---
-      if (bx >= 5 && by >= 6) {
-        pedestrianPaths.push({
-          id: `sidewalk_block_${bx}_${by}`,
-          waypoints: [
-            { x: swX1, y: swY1 },
-            { x: swX2, y: swY1 },
-            { x: swX2, y: swY2 },
-            { x: swX1, y: swY2 },
-            { x: swX1, y: swY1 }
-          ]
-        });
-
-        // Cozy rustic cottage houses nestled with orchards & gardens
-        const cW = 55 + Math.random() * 15;
-        const cH = 55 + Math.random() * 15;
-
-        // Cottage 1: Top-Left
-        buildings.push({
-          id: `cottage_${bx}_${by}_1`,
-          x: blockX + 20,
-          y: blockY + 20,
-          width: cW,
-          height: cH,
-          type: 'suburban',
-          color: '#fafaf9',
-          roofColor: '#b91c1c',
-          accentColor: '#f59e0b',
-          windows: [],
-          roofDetails: [],
-          entranceSide: 'south'
-        });
-
-        // Cottage 2: Bottom-Right (Only if block is big enough)
-        if (blockW > 160 && blockH > 160) {
-          buildings.push({
-            id: `cottage_${bx}_${by}_2`,
-            x: blockX + blockW - cW - 20,
-            y: blockY + blockH - cH - 20,
-            width: cW,
-            height: cH,
-            type: 'suburban',
-            color: '#7c2d12', // wood logs color
-            roofColor: '#451a03',
-            accentColor: '#d97706',
-            windows: [],
-            roofDetails: [],
-            entranceSide: 'north'
-          });
-        }
-
-        // Populate beautiful village orchard gardens
-        for (let tx = blockX + 15; tx < blockX + blockW - 15; tx += 45) {
-          for (let ty = blockY + 15; ty < blockY + blockH - 15; ty += 45) {
-            // Don't overlap with cottages
-            if (tx < blockX + cW + 40 && ty < blockY + cH + 40) continue;
-            if (tx > blockX + blockW - cW - 45 && ty > blockY + blockH - cH - 45) continue;
-
-            if (Math.random() > 0.4) {
-              trees.push({
-                id: `village_tree_${tx}_${ty}`,
-                x: tx + (Math.random() * 10 - 5),
-                y: ty + (Math.random() * 10 - 5),
-                radius: 12 + Math.random() * 6,
-                color: Math.random() > 0.5 ? '#22c55e' : '#15803d',
-                shadowOffset: 5
-              });
-            }
-          }
-        }
-        continue;
-      }
-
-      // --- MODERN DOWNTOWN ZONE (All other blocks) ---
-      pedestrianPaths.push({
-        id: `sidewalk_block_${bx}_${by}`,
-        waypoints: [
-          { x: swX1, y: swY1 },
-          { x: swX2, y: swY1 },
-          { x: swX2, y: swY2 },
-          { x: swX1, y: swY2 },
-          { x: swX1, y: swY1 }
-        ]
-      });
-
-      // Majestic Central Plaza Park located in the middle of Downtown
-      if (bx === 5 && by === 3) {
+      // --- 2. CENTRAL PARK PROMENADE ---
+      if (isCentralPark) {
         const cx = blockX + blockW / 2;
         const cy = blockY + blockH / 2;
 
@@ -1271,10 +1170,9 @@ export function generateCityWorld(): GameWorld {
           windows: []
         });
 
-        // Rows of park trees
-        for (let tx = blockX + 40; tx < blockX + blockW - 40; tx += 60) {
-          for (let ty = blockY + 40; ty < blockY + blockH - 40; ty += 60) {
-            if (Math.hypot(tx - cx, ty - cy) > 70 && Math.random() > 0.3) {
+        for (let tx = blockX + 50; tx < blockX + blockW - 50; tx += 65) {
+          for (let ty = blockY + 50; ty < blockY + blockH - 50; ty += 65) {
+            if (Math.hypot(tx - cx, ty - cy) > 75 && Math.random() > 0.3) {
               trees.push({
                 id: `tree_${tx}_${ty}`,
                 x: tx + (Math.random() * 16 - 8),
@@ -1298,28 +1196,31 @@ export function generateCityWorld(): GameWorld {
         continue;
       }
 
-      // Parking plazas next to commercial skyscraper clusters
-      if ((bx === 4 && by === 2) || (bx === 6 && by === 4)) {
-        const parkW = blockW * 0.45;
-        const parkH = blockH * 0.8;
-        const pkX = blockX + 20;
-        const pkY = blockY + 20;
+      // --- 3. DEDICATED OPEN-AIR PARKING PLAZAS (NO BUILDINGS INSIDE) ---
+      const isDedicatedParking = (bx === 4 && by === 2) || (bx === 6 && by === 4) || (bx === 3 && by === 5) || (bx === 2 && by === 7);
+      if (isDedicatedParking) {
+        const pkX = blockX + sidewalkWidth + 10;
+        const pkY = blockY + sidewalkWidth + 10;
+        const parkW = blockW - (sidewalkWidth * 2 + 20);
+        const parkH = blockH - (sidewalkWidth * 2 + 20);
 
         const spots: ParkingArea['spots'] = [];
-        const numSpots = Math.floor(parkH / 45);
-        for (let s = 0; s < numSpots; s++) {
-          const sy = pkY + 25 + s * 40;
+        const numRows = Math.floor((parkH - 30) / 48);
+        for (let s = 0; s < numRows; s++) {
+          const sy = pkY + 28 + s * 48;
+          // Left stall row
           spots.push({
-            x: pkX + 35,
+            x: pkX + 45,
             y: sy,
             angle: 0,
-            occupied: Math.random() > 0.35
+            occupied: Math.random() > 0.3
           });
+          // Right stall row
           spots.push({
-            x: pkX + parkW - 35,
+            x: pkX + parkW - 45,
             y: sy,
             angle: Math.PI,
-            occupied: Math.random() > 0.35
+            occupied: Math.random() > 0.3
           });
         }
 
@@ -1331,34 +1232,103 @@ export function generateCityWorld(): GameWorld {
           height: parkH,
           spots
         });
+
+        // Add parking lighting fixtures and perimeter planters
+        props.push(
+          { id: `pk_lamp_${bx}_${by}_1`, x: pkX + 20, y: pkY + 15, type: 'lamp', angle: 0 },
+          { id: `pk_lamp_${bx}_${by}_2`, x: pkX + parkW - 20, y: pkY + 15, type: 'lamp', angle: 0 },
+          { id: `pk_lamp_${bx}_${by}_3`, x: pkX + 20, y: pkY + parkH - 15, type: 'lamp', angle: 0 },
+          { id: `pk_lamp_${bx}_${by}_4`, x: pkX + parkW - 20, y: pkY + parkH - 15, type: 'lamp', angle: 0 }
+        );
+
+        trees.push(
+          { id: `pk_tree_${bx}_${by}_1`, x: pkX + parkW / 2, y: pkY + 15, radius: 12, color: '#15803d', shadowOffset: 4 },
+          { id: `pk_tree_${bx}_${by}_2`, x: pkX + parkW / 2, y: pkY + parkH - 15, radius: 12, color: '#15803d', shadowOffset: 4 }
+        );
+
+        // Crucial: continue ensures no buildings are placed in this parking lot block!
+        continue;
       }
 
-      // Tall high-density Downtown skyscrapers (Office, Commercial Shop, Residential, Industrial)
+      // --- 4. COZY VILLAGE ZONE (South-East) ---
+      if (isVillage) {
+        const cW = 60 + Math.random() * 15;
+        const cH = 60 + Math.random() * 15;
+
+        // Cottage 1: Top-Left
+        buildings.push({
+          id: `cottage_${bx}_${by}_1`,
+          x: blockX + sidewalkWidth + 15,
+          y: blockY + sidewalkWidth + 15,
+          width: cW,
+          height: cH,
+          type: 'suburban',
+          color: '#fafaf9',
+          roofColor: '#b91c1c',
+          accentColor: '#f59e0b',
+          windows: [],
+          roofDetails: [],
+          entranceSide: 'south'
+        });
+
+        // Cottage 2: Bottom-Right
+        if (blockW > 180 && blockH > 180) {
+          buildings.push({
+            id: `cottage_${bx}_${by}_2`,
+            x: blockX + blockW - sidewalkWidth - cW - 15,
+            y: blockY + blockH - sidewalkWidth - cH - 15,
+            width: cW,
+            height: cH,
+            type: 'suburban',
+            color: '#7c2d12',
+            roofColor: '#451a03',
+            accentColor: '#d97706',
+            windows: [],
+            roofDetails: [],
+            entranceSide: 'north'
+          });
+        }
+
+        // Populate beautiful village orchard gardens
+        for (let tx = blockX + sidewalkWidth + 10; tx < blockX + blockW - sidewalkWidth - 10; tx += 45) {
+          for (let ty = blockY + sidewalkWidth + 10; ty < blockY + blockH - sidewalkWidth - 10; ty += 45) {
+            if (tx < blockX + sidewalkWidth + cW + 35 && ty < blockY + sidewalkWidth + cH + 35) continue;
+            if (tx > blockX + blockW - sidewalkWidth - cW - 35 && ty > blockY + blockH - sidewalkWidth - cH - 35) continue;
+
+            if (Math.random() > 0.4) {
+              trees.push({
+                id: `village_tree_${tx}_${ty}`,
+                x: tx + (Math.random() * 10 - 5),
+                y: ty + (Math.random() * 10 - 5),
+                radius: 12 + Math.random() * 6,
+                color: Math.random() > 0.5 ? '#22c55e' : '#15803d',
+                shadowOffset: 5
+              });
+            }
+          }
+        }
+        continue;
+      }
+
+      // --- 5. URBAN DOWNTOWN & COMMERCIAL SKYSCRAPERS ---
+      const innerX = blockX + sidewalkWidth + 12;
+      const innerY = blockY + sidewalkWidth + 12;
+      const innerW = blockW - (sidewalkWidth * 2 + 24);
+      const innerH = blockH - (sidewalkWidth * 2 + 24);
+
       const bCols = 2;
       const bRows = 2;
-      const bSlotW = blockW / bCols;
-      const bSlotH = blockH / bRows;
+      const bSlotW = innerW / bCols;
+      const bSlotH = innerH / bRows;
 
       for (let r = 0; r < bRows; r++) {
         for (let c = 0; c < bCols; c++) {
-          let bxLocal = 0;
-          let byLocal = 0;
-          const bWidth = bSlotW - 28;
-          const bHeight = bSlotH - 28;
+          const bWidth = bSlotW - 20;
+          const bHeight = bSlotH - 20;
+          const bxLocal = innerX + c * bSlotW + 10;
+          const byLocal = innerY + r * bSlotH + 10;
 
-          if (c === 0) {
-            bxLocal = blockX + 10;
-          } else {
-            bxLocal = blockX + bSlotW + 18;
-          }
-
-          if (r === 0) {
-            byLocal = blockY + 10;
-          } else {
-            byLocal = blockY + bSlotH + 18;
-          }
-
-          if (bWidth < 50 || bHeight < 50) continue;
+          if (bWidth < 45 || bHeight < 45) continue;
 
           let bType: Building['type'] = 'residential';
           let color = '#334155';
@@ -1429,11 +1399,11 @@ export function generateCityWorld(): GameWorld {
             color,
             roofColor,
             accentColor: accent,
-            windows: [], // generated dynamically inside renderer
+            windows: [],
             balconies,
             fireEscapes,
             entranceSide: entSide,
-            roofDetails: [] // filled dynamically with AC units/water towers in renderer
+            roofDetails: []
           });
 
           // Sidewalk trees
@@ -1441,19 +1411,19 @@ export function generateCityWorld(): GameWorld {
             trees.push({
               id: `tree_${bxLocal}_${byLocal}`,
               x: bxLocal + bWidth / 2 + (Math.random() * 10 - 5),
-              y: byLocal + bHeight + 12,
+              y: byLocal + bHeight + 14,
               radius: 11 + Math.random() * 5,
               color: '#15803d',
               shadowOffset: 4
             });
           }
 
-          // Scattered urban sidewalk elements
+          // Scattered urban sidewalk lamps and street amenities
           if (Math.random() > 0.5) {
             props.push({
               id: `lamp_${bxLocal}_${byLocal}`,
-              x: bxLocal + bWidth + 10,
-              y: byLocal + bHeight + 10,
+              x: bxLocal + bWidth + 12,
+              y: byLocal + bHeight + 12,
               type: 'lamp',
               angle: 0
             });
@@ -1813,6 +1783,7 @@ export function generateCityWorld(): GameWorld {
     height: WORLD_SIZE,
     roads,
     intersections,
+    sidewalks,
     buildings,
     parkings,
     trees,

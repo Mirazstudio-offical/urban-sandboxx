@@ -187,9 +187,6 @@ export interface Pedestrian {
 
   // Social & Variety
   isChild?: boolean;
-  isCyclist?: boolean;
-  isScooter?: boolean;
-  hasDog?: boolean;
   stuckTimer?: number;
   socialTargetId?: string | null;
   hasBackpack?: boolean;
@@ -432,11 +429,23 @@ export interface Player {
   insideBuildingId?: string | null;
 }
 
+export interface SidewalkBlock {
+  id: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  sidewalkWidth: number; // width of the perimeter walkway band
+  style: 'urban' | 'commercial' | 'village' | 'park';
+  innerLawnColor?: string;
+}
+
 export interface GameWorld {
   width: number;
   height: number;
   roads: RoadSegment[];
   intersections: Intersection[];
+  sidewalks?: SidewalkBlock[];
   buildings: Building[];
   parkings: ParkingArea[];
   trees: Tree[];

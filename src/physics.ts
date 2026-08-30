@@ -510,7 +510,9 @@ export function updatePlayerPedestrianPhysics(
   input: InputState,
   buildings: Building[],
   dt: number,
-  cameraAngle: number = 0
+  cameraAngle: number = 0,
+  worldWidth: number = 8000,
+  worldHeight: number = 8000
 ) {
   if (player.isInVehicle) return;
 
@@ -560,9 +562,9 @@ export function updatePlayerPedestrianPhysics(
     }
   }
 
-  // World bounds clamp
-  player.x = Math.max(20, Math.min(3580, newX));
-  player.y = Math.max(20, Math.min(3580, newY));
+  // World bounds clamp (full world size)
+  player.x = Math.max(20, Math.min(worldWidth - 20, newX));
+  player.y = Math.max(20, Math.min(worldHeight - 20, newY));
 }
 
 export function updateVehiclePhysics(

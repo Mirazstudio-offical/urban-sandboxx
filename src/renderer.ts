@@ -6,6 +6,7 @@ import {
   Pedestrian, 
   Player, 
   Puddle,
+  SidewalkBlock,
   StreetProp, 
   TimeOfDay, 
   Vehicle 
@@ -89,6 +90,9 @@ export class GameRenderer {
 
     // 3. Ground / Grass / Terrain Base
     this.renderGround(world, minX, minY, maxX, maxY);
+
+    // 3b. Paved Sidewalk Walkways, Curbs & Block Courtyards
+    this.renderSidewalks(world.sidewalks || [], minX, minY, maxX, maxY);
 
     // 4. Roads, Intersections, Crosswalks & Markings
     this.renderRoadsAndMarkings(world, minX, minY, maxX, maxY);
@@ -239,10 +243,38 @@ export class GameRenderer {
         const top = road.y1 - road.width / 2;
         if (road.x2 < minX || road.x1 > maxX || top + road.width < minY || top > maxY) continue;
         ctx.fillRect(road.x1, top, road.x2 - road.x1, road.width);
+
+        // Detailed realistic dirt road texturing (center packed track & tire ruts)
+        if (road.isDirt) {
+          ctx.fillStyle = '#854d0e';
+          ctx.fillRect(road.x1, road.y1 - 6, road.x2 - road.x1, 12);
+          ctx.strokeStyle = 'rgba(45, 15, 5, 0.45)';
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.moveTo(road.x1, road.y1 - road.width / 4);
+          ctx.lineTo(road.x2, road.y1 - road.width / 4);
+          ctx.moveTo(road.x1, road.y1 + road.width / 4);
+          ctx.lineTo(road.x2, road.y1 + road.width / 4);
+          ctx.stroke();
+        }
       } else {
         const left = road.x1 - road.width / 2;
         if (left + road.width < minX || left > maxX || road.y2 < minY || road.y1 > maxY) continue;
         ctx.fillRect(left, road.y1, road.width, road.y2 - road.y1);
+
+        // Detailed realistic dirt road texturing (vertical)
+        if (road.isDirt) {
+          ctx.fillStyle = '#854d0e';
+          ctx.fillRect(road.x1 - 6, road.y1, 12, road.y2 - road.y1);
+          ctx.strokeStyle = 'rgba(45, 15, 5, 0.45)';
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.moveTo(road.x1 - road.width / 4, road.y1);
+          ctx.lineTo(road.x1 - road.width / 4, road.y2);
+          ctx.moveTo(road.x1 + road.width / 4, road.y1);
+          ctx.lineTo(road.x1 + road.width / 4, road.y2);
+          ctx.stroke();
+        }
       }
     }
 
@@ -373,22 +405,7 @@ export class GameRenderer {
       if (inter.x + inter.width / 2 < minX || inter.x - inter.width / 2 > maxX ||
           inter.y + inter.height / 2 < minY || inter.y - inter.height / 2 > maxY) continue;
 
-      // Crosswalks (Zebras)
-      for (const cw of inter.crosswalks) {
-        ctx.fillStyle = '#f8fafc';
-        const isHoriz = cw.width > cw.height;
-        if (isHoriz) {
-          const numStripes = Math.floor(cw.width / 14);
-          for (let s = 0; s < numStripes; s++) {
-            ctx.fillRect(cw.x + s * 14 + 3, cw.y + 2, 8, cw.height - 4);
-          }
-        } else {
-          const numStripes = Math.floor(cw.height / 14);
-          for (let s = 0; s < numStripes; s++) {
-            ctx.fillRect(cw.x + 2, cw.y + s * 14 + 3, cw.width - 4, 8);
-          }
-        }
-      }
+      // Crosswalks (Zebras removed per user request)
 
       // Stop Lines (Solid White)
       for (const sl of inter.stopLines) {
@@ -421,23 +438,163 @@ export class GameRenderer {
     ctx.restore();
   }
 
+  // --- PAVED SIDEWALKS, CURB STONES & BLOCK COURTYARDS ---
+  private renderSidewalks(
+    sidewalks: SidewalkBlock[],
+    minX: number,
+    minY: number,
+    maxX: number,
+    maxY: number
+  ) {
+    const ctx = this.ctx;
+
+    for (const sw of sidewalks) {
+      if (sw.x + sw.width < minX || sw.x > maxX || sw.y + sw.height < minY || sw.y > maxY) {
+        continue;
+      }
+
+      // 1. Concrete Paving Slab Base
+      let paveColor = '#64748b'; // standard urban concrete
+      let curbHighlight = '#94a3b8';
+      let curbDark = '#334155';
+
+      if (sw.style === 'commercial') {
+        paveColor = '#94a3b8';
+        curbHighlight = '#cbd5e1';
+        curbDark = '#475569';
+      } else if (sw.style === 'village') {
+        paveColor = '#78716c'; // warm stone pavement
+        curbHighlight = '#a8a29e';
+        curbDark = '#44403c';
+      } else if (sw.style === 'park') {
+        paveColor = '#6b7280';
+        curbHighlight = '#9ca3af';
+        curbDark = '#374151';
+      }
+
+      // Outer sidewalk footprint
+      ctx.fillStyle = paveColor;
+      ctx.fillRect(sw.x, sw.y, sw.width, sw.height);
+
+      // 2. Concrete slab expansion joint lines (tile grid texture on walkway)
+      ctx.strokeStyle = 'rgba(15, 23, 42, 0.20)';
+      ctx.lineWidth = 1;
+      const tileStep = 32;
+
+      ctx.beginPath();
+      // Top & bottom horizontal sidewalk corridors
+      for (let tx = sw.x; tx <= sw.x + sw.width; tx += tileStep) {
+        ctx.moveTo(tx, sw.y);
+        ctx.lineTo(tx, sw.y + sw.sidewalkWidth);
+        ctx.moveTo(tx, sw.y + sw.height - sw.sidewalkWidth);
+        ctx.lineTo(tx, sw.y + sw.height);
+      }
+      // Left & right vertical sidewalk corridors
+      for (let ty = sw.y; ty <= sw.y + sw.height; ty += tileStep) {
+        ctx.moveTo(sw.x, ty);
+        ctx.lineTo(sw.x + sw.sidewalkWidth, ty);
+        ctx.moveTo(sw.x + sw.width - sw.sidewalkWidth, ty);
+        ctx.lineTo(sw.x + sw.width, ty);
+      }
+      ctx.stroke();
+
+      // 3. Raised Curb Outer Bevel
+      ctx.strokeStyle = curbHighlight;
+      ctx.lineWidth = 2.5;
+      ctx.strokeRect(sw.x + 1, sw.y + 1, sw.width - 2, sw.height - 2);
+
+      ctx.strokeStyle = curbDark;
+      ctx.lineWidth = 1.5;
+      ctx.strokeRect(sw.x, sw.y, sw.width, sw.height);
+
+      // 4. Inner Lawn / Courtyard Garden (inside the sidewalk corridor)
+      const innerX = sw.x + sw.sidewalkWidth;
+      const innerY = sw.y + sw.sidewalkWidth;
+      const innerW = sw.width - sw.sidewalkWidth * 2;
+      const innerH = sw.height - sw.sidewalkWidth * 2;
+
+      if (innerW > 0 && innerH > 0) {
+        // Inner grass lawn
+        ctx.fillStyle = sw.innerLawnColor || '#15803d';
+        ctx.fillRect(innerX, innerY, innerW, innerH);
+
+        // Lawn edging curb stone
+        ctx.strokeStyle = 'rgba(15, 23, 42, 0.35)';
+        ctx.lineWidth = 1.5;
+        ctx.strokeRect(innerX, innerY, innerW, innerH);
+      }
+
+      // 5. Tactile Safety Paving (Yellow ribbed pads at sidewalk corners facing crosswalks)
+      ctx.fillStyle = '#f59e0b';
+      const padSize = 14;
+      // Top-Left corner pads
+      ctx.fillRect(sw.x + 4, sw.y + 4, padSize, padSize);
+      // Top-Right corner pads
+      ctx.fillRect(sw.x + sw.width - padSize - 4, sw.y + 4, padSize, padSize);
+      // Bottom-Left corner pads
+      ctx.fillRect(sw.x + 4, sw.y + sw.height - padSize - 4, padSize, padSize);
+      // Bottom-Right corner pads
+      ctx.fillRect(sw.x + sw.width - padSize - 4, sw.y + sw.height - padSize - 4, padSize, padSize);
+    }
+  }
+
   // --- PARKING LOTS ---
   private renderParkings(parkings: GameWorld['parkings'], minX: number, minY: number, maxX: number, maxY: number) {
     const ctx = this.ctx;
     for (const pk of parkings) {
       if (pk.x + pk.width < minX || pk.x > maxX || pk.y + pk.height < minY || pk.y > maxY) continue;
 
-      ctx.fillStyle = '#1e293b';
+      // 1. Asphalt Surface with Curb Trim
+      ctx.fillStyle = '#1e293b'; // deep clean dark asphalt
       ctx.fillRect(pk.x, pk.y, pk.width, pk.height);
+
       ctx.strokeStyle = '#475569';
-      ctx.lineWidth = 2;
+      ctx.lineWidth = 3;
       ctx.strokeRect(pk.x, pk.y, pk.width, pk.height);
 
-      // Parking bays
-      ctx.strokeStyle = '#f8fafc';
-      ctx.lineWidth = 1.5;
-      for (const spot of pk.spots) {
-        ctx.strokeRect(spot.x - 14, spot.y - 18, 28, 36);
+      // 2. Central Driving Lane Direction Arrows
+      ctx.fillStyle = '#64748b';
+      const arrowCenterX = pk.x + pk.width / 2;
+      for (let ay = pk.y + 40; ay < pk.y + pk.height - 40; ay += 90) {
+        ctx.beginPath();
+        ctx.moveTo(arrowCenterX, ay - 12);
+        ctx.lineTo(arrowCenterX - 7, ay + 6);
+        ctx.lineTo(arrowCenterX - 3, ay + 6);
+        ctx.lineTo(arrowCenterX - 3, ay + 14);
+        ctx.lineTo(arrowCenterX + 3, ay + 14);
+        ctx.lineTo(arrowCenterX + 3, ay + 6);
+        ctx.lineTo(arrowCenterX + 7, ay + 6);
+        ctx.closePath();
+        ctx.fill();
+      }
+
+      // 3. Parking Bays with Crisp White Stall Lines and Wheel Stops
+      for (let idx = 0; idx < pk.spots.length; idx++) {
+        const spot = pk.spots[idx];
+        const isHandicap = idx === 0 || idx === 1;
+
+        // Stall line box
+        ctx.strokeStyle = isHandicap ? '#38bdf8' : '#f8fafc';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(spot.x - 16, spot.y - 20, 32, 40);
+
+        // Concrete Wheel Stop (Parking curb bumper)
+        ctx.fillStyle = '#94a3b8';
+        const bumperX = spot.angle === 0 ? spot.x - 12 : spot.x + 6;
+        ctx.fillRect(bumperX, spot.y - 12, 6, 24);
+
+        // Handicap Accessible Icon
+        if (isHandicap) {
+          ctx.fillStyle = 'rgba(56, 189, 248, 0.25)';
+          ctx.fillRect(spot.x - 14, spot.y - 18, 28, 36);
+
+          ctx.fillStyle = '#38bdf8';
+          ctx.beginPath();
+          ctx.arc(spot.x, spot.y - 5, 3, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.fillRect(spot.x - 1.5, spot.y - 1, 3, 8);
+          ctx.fillRect(spot.x - 1.5, spot.y + 4, 6, 3);
+        }
       }
     }
   }

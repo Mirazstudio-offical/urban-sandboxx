@@ -377,7 +377,7 @@ export default function App() {
         );
 
         if (!player.isInVehicle) {
-          updatePlayerPedestrianPhysics(player, input, playerNearbyBuildings, dt, camera.angle);
+          updatePlayerPedestrianPhysics(player, input, playerNearbyBuildings, dt, camera.angle, world.width, world.height);
           camera.targetX = player.x;
           camera.targetY = player.y;
           // Only align camera target angle with pedestrian movement when actually walking
