@@ -1,0 +1,6 @@
+{
+  "name": "Top-Down City Simulator",
+  "description": "A fully-featured, high-performance 2D top-down open world city simulator with realistic car physics, intelligent AI traffic and pedestrians, dynamic traffic lights, interactive driving, and day/night cycle.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
