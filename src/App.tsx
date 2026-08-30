@@ -23,8 +23,12 @@ import {
   updateVehiclePhysics 
 } from './physics';
 import { GameRenderer } from './renderer';
+import { calculateGpsRoute } from './navigation';
 import { sound } from './audio';
 import { TrafficConsole } from './components/TrafficConsole';
+import { FullScreenMap } from './components/FullScreenMap';
+import { LandscapeGuard } from './components/LandscapeGuard';
+import { MobileTouchControls } from './components/MobileTouchControls';
 import { 
   AlertTriangle,
   ArrowLeft,
@@ -37,9 +41,12 @@ import {
   Eye, 
   Gauge, 
   MapPin,
+  Maximize2,
   Moon, 
   Navigation,
   RotateCcw,
+  Settings,
+  Smartphone,
   Sun, 
   Sunrise, 
   Terminal,
@@ -125,6 +132,10 @@ export default function App() {
   const [isInVehicle, setIsInVehicle] = useState<boolean>(false);
   const [activeCarName, setActiveCarName] = useState<string>('');
   const [gear, setGear] = useState<'P' | 'D' | 'R'>('P');
+  const [isMobileTouch, setIsMobileTouch] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false;
+    return 'ontouchstart' in window || navigator.maxTouchPoints > 0 || window.innerWidth <= 900;
+  });
   const [timeHour, setTimeHour] = useState<number>(10.0); // 0 to 24 hours
   const [isTimeAutoCycling, setIsTimeAutoCycling] = useState<boolean>(true);
   const [weather, setWeather] = useState<WeatherType>('clear');
@@ -153,6 +164,26 @@ export default function App() {
   const [trafficCount, setTrafficCount] = useState<number>(0);
   const [pedCount, setPedCount] = useState<number>(0);
   const [isMinimapExpanded, setIsMinimapExpanded] = useState<boolean>(false);
+  const [isFullMapOpen, setIsFullMapOpen] = useState<boolean>(false);
+  const [gpsDestination, setGpsDestination] = useState<{ x: number; y: number; name?: string } | null>(null);
+
+  const handleSetGpsTarget = (target: { x: number; y: number; name?: string } | null) => {
+    setGpsDestination(target);
+    if (worldRef.current) {
+      if (!target) {
+        worldRef.current.gpsDestination = null;
+        worldRef.current.gpsPath = null;
+      } else {
+        worldRef.current.gpsDestination = target;
+        worldRef.current.gpsPath = calculateGpsRoute(
+          worldRef.current,
+          { x: playerRef.current.x, y: playerRef.current.y },
+          { x: target.x, y: target.y }
+        );
+      }
+    }
+  };
+  const [isQuickMenuOpen, setIsQuickMenuOpen] = useState<boolean>(false);
   const [isConsoleOpen, setIsConsoleOpen] = useState<boolean>(false);
   const [isSpawnMenuOpen, setIsSpawnMenuOpen] = useState<boolean>(false);
   const [currentSpawnId, setCurrentSpawnId] = useState<string>('central_park');
@@ -333,19 +364,19 @@ export default function App() {
       if (code === 'ShiftLeft' || code === 'ShiftRight') inputRef.current.sprint = true;
       if (code === 'KeyH') inputRef.current.hornH = true;
 
-      // Turn Signals
+      // Turn Signals (Q = Left, E = Right, Z = Hazard)
       if (code === 'KeyQ') {
         toggleTurnSignal('left');
       }
-      if (code === 'KeyZ') {
+      if (code === 'KeyE') {
         toggleTurnSignal('right');
       }
-      if (code === 'KeyX') {
+      if (code === 'KeyZ') {
         toggleTurnSignal('hazard');
       }
 
-      // Enter/Exit Vehicle
-      if (code === 'KeyE') {
+      // Enter/Exit Vehicle (F key)
+      if (code === 'KeyF') {
         handleEnterExitVehicle();
       }
 
@@ -356,6 +387,8 @@ export default function App() {
       }
       if (code === 'Escape') {
         setIsConsoleOpen(false);
+        setIsFullMapOpen(false);
+        setIsSpawnMenuOpen(false);
       }
 
       // Time toggle (cycle presets)
@@ -365,8 +398,9 @@ export default function App() {
       if (code === 'KeyC') {
         cameraRef.current.targetZoom = cameraRef.current.targetZoom < 1.0 ? 1.3 : 0.85;
       }
+      // Interactive Fullscreen Map toggle (M key)
       if (code === 'KeyM') {
-        setIsMinimapExpanded((prev) => !prev);
+        setIsFullMapOpen((prev) => !prev);
       }
       if (code === 'KeyR') {
         handleResetVehicle();
@@ -399,7 +433,7 @@ export default function App() {
         const screenDx = e.clientX - screenCenterX;
         const screenDy = e.clientY - screenCenterY;
         const camAngle = cameraRef.current.angle;
-        player.angle = Math.atan2(screenDy, screenDx) + camAngle + Math.PI / 2;
+        player.aimAngle = Math.atan2(screenDy, screenDx) + camAngle + Math.PI / 2;
       }
     };
 
@@ -457,11 +491,11 @@ export default function App() {
         // 2. Update Traffic Lights
         updateTrafficLights(world.intersections, dt);
 
-        // 3. Update AI Traffic (using spatial grids)
-        updateAITraffic(world, dt, vehGrid, pedGrid);
+        // 3. Update AI Traffic (using spatial grids and player position)
+        updateAITraffic(world, dt, vehGrid, pedGrid, { x: player.x, y: player.y });
 
-        // 4. Update Pedestrians (using spatial grids)
-        updatePedestrians(world, dt, vehGrid, pedGrid, bldGrid);
+        // 4. Update Pedestrians (using spatial grids and player position)
+        updatePedestrians(world, dt, vehGrid, pedGrid, bldGrid, { x: player.x, y: player.y });
 
         // 5. Update Player & Vehicles Physics
         const playerNearbyBuildings = bldGrid.queryRadius(
@@ -471,14 +505,12 @@ export default function App() {
         );
 
         if (!player.isInVehicle) {
-          updatePlayerPedestrianPhysics(player, input, playerNearbyBuildings, dt, camera.angle, world.width, world.height);
+          updatePlayerPedestrianPhysics(player, input, playerNearbyBuildings, dt, camera.angle, world.width, world.height, world);
           camera.targetX = player.x;
           camera.targetY = player.y;
-          // Only align camera target angle with pedestrian movement when actually walking
-          if (Math.hypot(player.vx, player.vy) > 10) {
-            camera.targetAngle = Math.atan2(player.vy, player.vx);
-          }
-          camera.targetZoom = 1.2 * userZoomFactorRef.current;
+          // Fixed North-Up camera for pedestrian mode prevents spinning camera loops
+          camera.targetAngle = 0;
+          camera.targetZoom = 1.3 * userZoomFactorRef.current;
         }
 
         // Update all vehicles (both AI and player car)
@@ -587,13 +619,31 @@ export default function App() {
               }
             }
             if (foundNearbyCar) {
-              const cfg = CAR_CONFIGS[foundNearbyCar.type];
-              setNearbyCarPrompt(`[E] Drive ${cfg.name}`);
+              setNearbyCarPrompt('[F] Войти в автомобиль');
             } else {
               setNearbyCarPrompt(null);
             }
           } else {
-            setNearbyCarPrompt('[E] Exit Vehicle');
+            setNearbyCarPrompt(null);
+          }
+
+          // GPS Navigation Route recalculation & Arrival check
+          if (world.gpsDestination) {
+            const distToDest = Math.hypot(world.gpsDestination.x - player.x, world.gpsDestination.y - player.y);
+            if (distToDest < 60) {
+              world.gpsDestination = null;
+              world.gpsPath = null;
+              setGpsDestination(null);
+              sound.playHorn('sedan');
+            } else if (!world.gpsPath || Math.random() < 0.05) {
+              world.gpsPath = calculateGpsRoute(
+                world,
+                { x: player.x, y: player.y },
+                { x: world.gpsDestination.x, y: world.gpsDestination.y }
+              );
+            }
+          } else {
+            world.gpsPath = null;
           }
 
           setTrafficCount(world.vehicles.length);
@@ -903,6 +953,27 @@ export default function App() {
         }
       }
 
+      // GPS Route on Overview Minimap
+      if (world.gpsPath && world.gpsPath.length > 1) {
+        ctx.strokeStyle = '#22d3ee';
+        ctx.lineWidth = 18;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.beginPath();
+        ctx.moveTo(world.gpsPath[0].x, world.gpsPath[0].y);
+        for (let i = 1; i < world.gpsPath.length; i++) {
+          ctx.lineTo(world.gpsPath[i].x, world.gpsPath[i].y);
+        }
+        ctx.stroke();
+      }
+
+      if (world.gpsDestination) {
+        ctx.fillStyle = '#ef4444';
+        ctx.beginPath();
+        ctx.arc(world.gpsDestination.x, world.gpsDestination.y, 24, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
       // Traffic Lights
       for (const inter of world.intersections) {
         const phase = inter.phases[inter.currentPhaseIndex];
@@ -945,6 +1016,41 @@ export default function App() {
         } else {
           ctx.fillRect(road.x1 - road.width / 2, road.y1, road.width, road.y2 - road.y1);
         }
+      }
+
+      // GPS Route Line on Radar
+      if (world.gpsPath && world.gpsPath.length > 1) {
+        ctx.strokeStyle = '#06b6d4'; // Glowing cyan
+        ctx.lineWidth = 14;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.beginPath();
+        ctx.moveTo(world.gpsPath[0].x, world.gpsPath[0].y);
+        for (let i = 1; i < world.gpsPath.length; i++) {
+          ctx.lineTo(world.gpsPath[i].x, world.gpsPath[i].y);
+        }
+        ctx.stroke();
+
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 4;
+        ctx.setLineDash([12, 12]);
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
+
+      // GPS Destination Flag Marker on Radar
+      if (world.gpsDestination) {
+        const dest = world.gpsDestination;
+        ctx.save();
+        ctx.translate(dest.x, dest.y);
+        ctx.fillStyle = '#ef4444';
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.arc(0, 0, 16, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+        ctx.restore();
       }
 
       // Intersections & Lights
@@ -1027,334 +1133,346 @@ export default function App() {
           <div className="text-xs text-slate-400">
             {trafficCount} Cars · {pedCount} Peds
           </div>
-        </div>
 
-        {/* Quick Mode Controls */}
-        <div className="flex items-center gap-2 pointer-events-auto">
+          <div className="h-4 w-px bg-slate-700" />
+          {/* Menu dropdown trigger */}
           <button
-            id="time-toggle-btn"
-            onClick={cycleTimePreset}
-            className="bg-slate-900/80 hover:bg-slate-800 backdrop-blur-md border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-slate-200 flex items-center gap-1.5 shadow-lg transition-all"
-            title="Cycle Time of Day / Auto-Cycle (T)"
+            id="quick-settings-toggle-btn"
+            onClick={() => setIsQuickMenuOpen((prev) => !prev)}
+            className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white transition-all"
+            title="Настройки среды / Городское меню"
           >
-            {getTimeLabelName(timeHour) === 'Morning' && <Sunrise className="w-3.5 h-3.5 text-amber-400" />}
-            {getTimeLabelName(timeHour) === 'Day' && <Sun className="w-3.5 h-3.5 text-amber-300" />}
-            {getTimeLabelName(timeHour) === 'Sunset' && <Sunrise className="w-3.5 h-3.5 text-orange-400" />}
-            {getTimeLabelName(timeHour) === 'Night' && <Moon className="w-3.5 h-3.5 text-sky-300" />}
-            <span className="capitalize">{getTimeLabelName(timeHour)} ({Math.floor(timeHour)}:00)</span>
-            {!isTimeAutoCycling && <span className="text-[9px] text-amber-400 font-bold ml-0.5">⏸</span>}
-          </button>
-
-          <button
-            id="weather-toggle-btn"
-            onClick={cycleWeather}
-            className="bg-slate-900/80 hover:bg-slate-800 backdrop-blur-md border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-slate-200 flex items-center gap-1.5 shadow-lg transition-all"
-            title="Cycle Weather Effects"
-          >
-            {weather === 'clear' && <Sun className="w-3.5 h-3.5 text-amber-300" />}
-            {weather === 'rain' && <CloudRain className="w-3.5 h-3.5 text-blue-400 animate-bounce" />}
-            {weather === 'fog' && <Cloud className="w-3.5 h-3.5 text-slate-300" />}
-            {weather === 'storm' && <CloudLightning className="w-3.5 h-3.5 text-purple-400 animate-pulse" />}
-            <span className="capitalize">{weather}</span>
-          </button>
-
-          <button
-            id="sound-toggle-btn"
-            onClick={toggleSoundMute}
-            className="bg-slate-900/80 hover:bg-slate-800 backdrop-blur-md border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-slate-200 flex items-center gap-1.5 shadow-lg transition-all"
-            title="Toggle Sound Effects"
-          >
-            {isMuted ? <VolumeX className="w-3.5 h-3.5 text-rose-400" /> : <Volume2 className="w-3.5 h-3.5 text-emerald-400" />}
-            <span>{isMuted ? 'Muted' : 'Audio ON'}</span>
-          </button>
-
-          <button
-            id="camera-zoom-btn"
-            onClick={() => {
-              cameraRef.current.targetZoom = cameraRef.current.targetZoom < 1.0 ? 1.3 : 0.85;
-            }}
-            className="bg-slate-900/80 hover:bg-slate-800 backdrop-blur-md border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-slate-200 flex items-center gap-1.5 shadow-lg transition-all"
-            title="Toggle Camera Zoom (C)"
-          >
-            <Eye className="w-3.5 h-3.5 text-indigo-400" />
-            <span>Zoom</span>
-          </button>
-
-          <button
-            id="spawn-point-btn"
-            onClick={() => setIsSpawnMenuOpen((prev) => !prev)}
-            className="bg-emerald-950/90 hover:bg-emerald-900 border border-emerald-500/50 rounded-lg px-3 py-1.5 text-xs text-emerald-200 flex items-center gap-1.5 shadow-lg transition-all"
-            title="Выбрать точку спавна / Телепортация по районам"
-          >
-            <MapPin className="w-3.5 h-3.5 text-emerald-400" />
-            <span>Точка спавна</span>
-          </button>
-
-          <button
-            id="open-ai-console-btn"
-            onClick={() => setIsConsoleOpen(true)}
-            className="bg-indigo-950/90 hover:bg-indigo-900 border border-indigo-500/40 rounded-lg px-3 py-1.5 text-xs text-indigo-200 flex items-center gap-1.5 shadow-lg transition-all"
-            title="Open Traffic AI Diagnostics & Console (~ / F1)"
-          >
-            <Terminal className="w-3.5 h-3.5 text-indigo-400" />
-            <span>AI Console [~]</span>
+            <Settings className="w-4 h-4" />
           </button>
         </div>
+
+        {/* Quick Settings Dropdown */}
+        {isQuickMenuOpen && (
+          <div className="bg-slate-900/95 backdrop-blur-md border border-slate-700 rounded-xl p-2.5 shadow-2xl flex flex-wrap gap-2 pointer-events-auto animate-in fade-in slide-in-from-top-2 duration-150 max-w-sm">
+            <button
+              id="time-toggle-btn"
+              onClick={cycleTimePreset}
+              className="bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 flex items-center gap-1.5 transition-all"
+              title="Переключить время суток (T)"
+            >
+              {getTimeLabelName(timeHour) === 'Morning' && <Sunrise className="w-3.5 h-3.5 text-amber-400" />}
+              {getTimeLabelName(timeHour) === 'Day' && <Sun className="w-3.5 h-3.5 text-amber-300" />}
+              {getTimeLabelName(timeHour) === 'Sunset' && <Sunrise className="w-3.5 h-3.5 text-orange-400" />}
+              {getTimeLabelName(timeHour) === 'Night' && <Moon className="w-3.5 h-3.5 text-sky-300" />}
+              <span className="capitalize">{getTimeLabelName(timeHour)}</span>
+            </button>
+
+            <button
+              id="weather-toggle-btn"
+              onClick={cycleWeather}
+              className="bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 flex items-center gap-1.5 transition-all"
+              title="Переключить погоду"
+            >
+              {weather === 'clear' && <Sun className="w-3.5 h-3.5 text-amber-300" />}
+              {weather === 'rain' && <CloudRain className="w-3.5 h-3.5 text-blue-400" />}
+              {weather === 'fog' && <Cloud className="w-3.5 h-3.5 text-slate-300" />}
+              {weather === 'storm' && <CloudLightning className="w-3.5 h-3.5 text-purple-400" />}
+              <span className="capitalize">{weather}</span>
+            </button>
+
+            <button
+              id="sound-toggle-btn"
+              onClick={toggleSoundMute}
+              className="bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 flex items-center gap-1.5 transition-all"
+            >
+              {isMuted ? <VolumeX className="w-3.5 h-3.5 text-rose-400" /> : <Volume2 className="w-3.5 h-3.5 text-emerald-400" />}
+              <span>{isMuted ? 'Mute' : 'Звук'}</span>
+            </button>
+
+            <button
+              id="touch-toggle-btn"
+              onClick={() => setIsMobileTouch((prev) => !prev)}
+              className={`border rounded-lg px-2.5 py-1.5 text-xs flex items-center gap-1.5 transition-all ${
+                isMobileTouch
+                  ? 'bg-sky-950/80 border-sky-500/40 text-sky-200'
+                  : 'bg-slate-800 border-slate-700 text-slate-400'
+              }`}
+              title="Переключить сенсорный интерфейс"
+            >
+              <Smartphone className="w-3.5 h-3.5" />
+              <span>Тач {isMobileTouch ? 'ВКЛ' : 'ВЫКЛ'}</span>
+            </button>
+
+            <button
+              id="spawn-point-btn"
+              onClick={() => {
+                setIsSpawnMenuOpen(true);
+                setIsQuickMenuOpen(false);
+              }}
+              className="bg-emerald-950/80 hover:bg-emerald-900 border border-emerald-500/40 rounded-lg px-2.5 py-1.5 text-xs text-emerald-200 flex items-center gap-1.5 transition-all"
+            >
+              <MapPin className="w-3.5 h-3.5 text-emerald-400" />
+              <span>Спавн</span>
+            </button>
+
+            <button
+              id="open-ai-console-btn"
+              onClick={() => {
+                setIsConsoleOpen(true);
+                setIsQuickMenuOpen(false);
+              }}
+              className="bg-indigo-950/80 hover:bg-indigo-900 border border-indigo-500/40 rounded-lg px-2.5 py-1.5 text-xs text-indigo-200 flex items-center gap-1.5 transition-all"
+            >
+              <Terminal className="w-3.5 h-3.5 text-indigo-400" />
+              <span>AI Console</span>
+            </button>
+          </div>
+        )}
       </div>
 
-      {/* TOP-RIGHT: RADAR MINIMAP */}
+      {/* TOP-RIGHT: RADAR MINIMAP & FULLSCREEN MAP TRIGGER */}
       <div id="hud-top-right" className="absolute top-4 right-4 z-20 flex flex-col items-end gap-2">
-        <div className="bg-slate-900/90 backdrop-blur-md border border-slate-700 rounded-2xl p-2 shadow-2xl overflow-hidden relative">
+        <div 
+          className="bg-slate-900/90 backdrop-blur-md border border-slate-700 rounded-2xl p-2 shadow-2xl overflow-hidden relative group cursor-pointer"
+          onClick={() => setIsFullMapOpen(true)}
+        >
           <canvas
             id="minimap-canvas"
             ref={minimapCanvasRef}
-            width={isMinimapExpanded ? 240 : 140}
-            height={isMinimapExpanded ? 240 : 140}
+            width={140}
+            height={140}
             className="rounded-xl block"
           />
           <button
             id="minimap-toggle-btn"
-            onClick={() => setIsMinimapExpanded((prev) => !prev)}
-            className="absolute bottom-3 right-3 bg-slate-950/80 hover:bg-slate-800 border border-slate-700 text-[10px] text-slate-300 px-2 py-0.5 rounded-md shadow"
+            onClick={(e) => {
+              e.stopPropagation();
+              setIsFullMapOpen(true);
+            }}
+            className="absolute bottom-3 right-3 bg-slate-950/80 group-hover:bg-sky-600 border border-slate-700 group-hover:border-sky-400 text-[10px] text-slate-300 group-hover:text-white px-2 py-0.5 rounded-md shadow flex items-center gap-1 transition-all"
           >
-            {isMinimapExpanded ? 'Radar' : 'Full Map'} [M]
+            <Maximize2 className="w-3 h-3" />
+            <span>Карта [M]</span>
           </button>
         </div>
       </div>
 
-      {/* CENTER-BOTTOM: FLOATING INTERACTION PROMPT */}
+      {/* CENTER-BOTTOM: CLEAN IN-WORLD INTERACTION PROMPT */}
       {nearbyCarPrompt && (
         <div id="interaction-prompt" className="absolute bottom-28 left-1/2 -translate-x-1/2 z-30 pointer-events-none">
-          <div className="bg-sky-500/90 border border-sky-300 text-white font-semibold px-5 py-2 rounded-full shadow-2xl flex items-center gap-2 animate-bounce text-sm">
-            <Zap className="w-4 h-4 text-amber-300 fill-amber-300" />
-            <span>{nearbyCarPrompt}</span>
+          <div className="bg-slate-900/95 border border-sky-400/60 text-white font-semibold px-4 py-2 rounded-xl shadow-2xl flex items-center gap-2 text-xs backdrop-blur-md">
+            <span className="bg-sky-500 text-white px-2 py-0.5 rounded font-mono font-bold">F</span>
+            <span>Войти в автомобиль</span>
           </div>
         </div>
       )}
 
-      {/* BOTTOM-RIGHT: VEHICLE DASHBOARD & TURN SIGNALS (WHEN DRIVING) */}
+      {/* BOTTOM-RIGHT: SLEEK & REALISTIC SPEEDOMETER DASHBOARD (WHEN DRIVING) */}
       {isInVehicle && (
         <div id="speedometer-container" className="absolute bottom-4 right-4 z-20 pointer-events-auto">
-          <div className="bg-slate-900/90 backdrop-blur-md border border-slate-700 rounded-2xl p-4 shadow-2xl text-white flex flex-col gap-3 min-w-[240px]">
-            <div className="flex items-center gap-4">
-              <div className="relative w-20 h-20 flex items-center justify-center">
-                <Gauge className="w-20 h-20 text-slate-700" />
-                {/* Radial speed indicator */}
-                <div className="absolute inset-0 flex flex-col items-center justify-center">
-                  <span className="text-2xl font-black tracking-tighter text-sky-400">{speedKmh}</span>
-                  <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">KM/H</span>
+          <div className="bg-slate-900/90 backdrop-blur-md border border-slate-700/80 rounded-2xl p-4 shadow-2xl text-white flex flex-col gap-3 min-w-[210px]">
+            {/* Digital Speedometer & Gear */}
+            <div className="flex items-center justify-between gap-4">
+              <div className="flex flex-col">
+                <div className="flex items-baseline gap-1">
+                  <span className="text-3xl font-black tracking-tight text-sky-400 font-mono">{speedKmh}</span>
+                  <span className="text-[10px] text-slate-400 font-bold tracking-wider uppercase">КМ/Ч</span>
                 </div>
               </div>
 
-              <div className="flex flex-col gap-1 flex-1">
-                <div className="text-xs font-semibold text-slate-200 truncate max-w-[120px]">{activeCarName}</div>
-                <div className="flex items-center gap-2 text-xs">
-                  <span className="text-slate-400">Gear:</span>
-                  <span className={`font-black px-1.5 py-0.5 rounded ${gear === 'D' ? 'bg-emerald-500/20 text-emerald-400' : gear === 'R' ? 'bg-amber-500/20 text-amber-400' : 'bg-slate-700 text-slate-300'}`}>
-                    {gear}
-                  </span>
-                </div>
+              <div className="flex items-center gap-2">
+                <span className={`text-xs font-black px-2.5 py-1 rounded-lg border ${
+                  gear === 'D' 
+                    ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-400' 
+                    : gear === 'R' 
+                    ? 'bg-amber-500/20 border-amber-500/40 text-amber-400' 
+                    : 'bg-slate-800 border-slate-700 text-slate-400'
+                }`}>
+                  {gear}
+                </span>
+
                 {isDrifting && (
-                  <div className="text-[11px] font-bold text-amber-400 animate-pulse tracking-wide">
+                  <span className="text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30 px-2 py-0.5 rounded-md animate-pulse">
                     DRIFT 💨
-                  </div>
+                  </span>
                 )}
               </div>
             </div>
 
-            {/* Vehicle Damage / Structural Health State */}
-            <div className="flex flex-col gap-1.5 px-1 py-2 border-t border-slate-800">
-              <div className="flex items-center justify-between text-xs">
-                <span className="text-slate-400 font-medium">🔧 Condition:</span>
-                <span className={`font-bold ${carHealth > 65 ? 'text-emerald-400' : carHealth > 30 ? 'text-amber-400' : 'text-rose-500 animate-pulse'}`}>
-                  {carHealth}%
-                </span>
-              </div>
-              <div className="w-full bg-slate-800 rounded-full h-2 overflow-hidden border border-slate-700/50">
-                <div 
-                  className={`h-full transition-all duration-300 ${carHealth > 65 ? 'bg-emerald-500' : carHealth > 30 ? 'bg-amber-500' : 'bg-rose-500 animate-pulse'}`}
-                  style={{ width: `${carHealth}%` }}
-                />
-              </div>
-
-              {/* Active Damage Alerts list */}
-              {(damageDetails.engineSmoking || damageDetails.engineFire || damageDetails.windshieldCracked || damageDetails.hoodBuckled || damageDetails.lightsBroken) && (
-                <div className="flex flex-wrap gap-1 mt-1 text-[9px] font-bold uppercase tracking-wider">
-                  {damageDetails.engineFire && (
-                    <span className="bg-rose-950/80 text-rose-400 border border-rose-500/30 px-1.5 py-0.5 rounded animate-pulse">🔥 Engine Fire</span>
-                  )}
-                  {damageDetails.engineSmoking && !damageDetails.engineFire && (
-                    <span className="bg-slate-800 text-slate-300 border border-slate-600 px-1.5 py-0.5 rounded">💨 Engine Smoke</span>
-                  )}
-                  {damageDetails.windshieldCracked && (
-                    <span className="bg-sky-950/80 text-sky-300 border border-sky-500/30 px-1.5 py-0.5 rounded">🕸️ Glass Cracked</span>
-                  )}
-                  {damageDetails.hoodBuckled && (
-                    <span className="bg-amber-950/80 text-amber-300 border border-amber-500/30 px-1.5 py-0.5 rounded">💥 Hood Buckled</span>
-                  )}
-                  {damageDetails.lightsBroken && (
-                    <span className="bg-stone-800 text-stone-300 border border-stone-600 px-1.5 py-0.5 rounded">💡 Broken Lights</span>
-                  )}
-                </div>
-              )}
-
-              {/* Repair Option */}
-              <div className="flex justify-end mt-1">
-                <button
-                  id="btn-repair-car"
-                  onClick={handleResetVehicle}
-                  className="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 border border-slate-700 hover:border-slate-600 text-[10px] font-bold text-slate-300 hover:text-white flex items-center gap-1 transition-all"
-                  title="Repair & Reset Vehicle (R)"
-                >
-                  <RotateCcw className="w-3 h-3 text-sky-400" />
-                  <span>Repair Car [R]</span>
-                </button>
-              </div>
-            </div>
-
-            {/* Headlights Mode Indicator & Control (Ближний / Дальний / Выкл) */}
-            <div className="flex items-center justify-between px-1 py-1 border-t border-slate-800 text-xs">
-              <span className="text-slate-400">Headlights:</span>
-              <button
-                id="btn-headlights-toggle"
-                onClick={toggleHeadlights}
-                className={`px-2.5 py-1 rounded-lg border text-[11px] font-bold flex items-center gap-1.5 transition-all ${
-                  playerHeadlightMode === 'high'
-                    ? 'bg-blue-600/30 border-blue-400 text-blue-300 shadow-sm shadow-blue-500/20'
-                    : playerHeadlightMode === 'low'
-                    ? 'bg-emerald-600/30 border-emerald-400 text-emerald-300 shadow-sm shadow-emerald-500/20'
-                    : 'bg-slate-800 border-slate-700 text-slate-400 hover:text-white'
-                }`}
-                title="Toggle Headlights: Low / High / Off (L)"
-              >
-                <span>
-                  {playerHeadlightMode === 'high'
-                    ? '🔵 Дальний [L]'
-                    : playerHeadlightMode === 'low'
-                    ? '🟢 Ближний [L]'
-                    : '⚪ Выкл [L]'}
-                </span>
-              </button>
-            </div>
-
-            {/* Turn Signals Controls & Blinking Dashboard Status */}
-            <div className="flex items-center justify-between pt-1">
+            {/* Turn Signals & Lights Control Bar */}
+            <div className="flex items-center justify-between pt-2 border-t border-slate-800/80 gap-1.5">
+              {/* Left Signal (Q) */}
               <button
                 id="btn-signal-left"
                 onClick={() => toggleTurnSignal('left')}
-                className={`p-2 rounded-lg border transition-all flex items-center gap-1 text-xs font-bold ${
+                className={`flex-1 py-1.5 rounded-lg border text-xs font-bold flex items-center justify-center gap-1 transition-all ${
                   playerTurnSignal === 'left' || playerTurnSignal === 'hazard'
                     ? 'bg-amber-500/30 border-amber-400 text-amber-300 animate-pulse'
-                    : 'bg-slate-800 border-slate-700 text-slate-400 hover:text-white'
+                    : 'bg-slate-800/80 border-slate-700 text-slate-400 hover:text-white'
                 }`}
-                title="Left Turn Signal (Q)"
+                title="Левый поворотник [Q]"
               >
-                <ArrowLeft className="w-4 h-4" />
+                <ArrowLeft className="w-3.5 h-3.5" />
                 <span>Q</span>
               </button>
 
+              {/* Hazard Lights (Z) */}
               <button
                 id="btn-signal-hazard"
                 onClick={() => toggleTurnSignal('hazard')}
-                className={`p-2 rounded-lg border transition-all flex items-center gap-1 text-xs font-bold ${
+                className={`py-1.5 px-2.5 rounded-lg border text-xs font-bold flex items-center justify-center gap-1 transition-all ${
                   playerTurnSignal === 'hazard'
                     ? 'bg-rose-500/30 border-rose-400 text-rose-300 animate-pulse'
-                    : 'bg-slate-800 border-slate-700 text-slate-400 hover:text-white'
+                    : 'bg-slate-800/80 border-slate-700 text-slate-400 hover:text-white'
                 }`}
-                title="Hazard Warning Lights (X)"
+                title="Аварийка [Z]"
               >
-                <AlertTriangle className="w-4 h-4" />
-                <span>X</span>
+                <AlertTriangle className="w-3.5 h-3.5" />
+                <span>Z</span>
               </button>
 
+              {/* Right Signal (E) */}
               <button
                 id="btn-signal-right"
                 onClick={() => toggleTurnSignal('right')}
-                className={`p-2 rounded-lg border transition-all flex items-center gap-1 text-xs font-bold ${
+                className={`flex-1 py-1.5 rounded-lg border text-xs font-bold flex items-center justify-center gap-1 transition-all ${
                   playerTurnSignal === 'right' || playerTurnSignal === 'hazard'
                     ? 'bg-amber-500/30 border-amber-400 text-amber-300 animate-pulse'
-                    : 'bg-slate-800 border-slate-700 text-slate-400 hover:text-white'
+                    : 'bg-slate-800/80 border-slate-700 text-slate-400 hover:text-white'
                 }`}
-                title="Right Turn Signal (Z)"
+                title="Правый поворотник [E]"
               >
-                <span>Z</span>
-                <ArrowRight className="w-4 h-4" />
+                <span>E</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </button>
+
+              {/* Headlights Toggle (L) */}
+              <button
+                id="btn-headlights-toggle"
+                onClick={toggleHeadlights}
+                className={`py-1.5 px-2.5 rounded-lg border text-xs font-bold flex items-center justify-center transition-all ${
+                  playerHeadlightMode === 'high'
+                    ? 'bg-blue-600/30 border-blue-400 text-blue-300'
+                    : playerHeadlightMode === 'low'
+                    ? 'bg-emerald-600/30 border-emerald-400 text-emerald-300'
+                    : 'bg-slate-800/80 border-slate-700 text-slate-500 hover:text-white'
+                }`}
+                title="Фары: Ближний / Дальний / Выкл [L]"
+              >
+                <span>L</span>
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* BOTTOM-LEFT: CONTROLS & SHORTCUTS GUIDE */}
-      <div id="hud-bottom-left" className="absolute bottom-4 left-4 z-20 pointer-events-none hidden sm:block">
-        <div className="bg-slate-900/85 backdrop-blur-md border border-slate-700/80 rounded-xl px-4 py-3 shadow-xl text-slate-300 text-xs flex flex-col gap-1.5">
-          <div className="font-semibold text-white flex items-center gap-1.5">
-            <span>🎮 Controls</span>
-          </div>
-          <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-[11px]">
-            <div><kbd className="bg-slate-800 px-1.5 py-0.5 rounded text-sky-400 font-mono">WASD / ↑←↓→</kbd> Realistic Steering</div>
-            <div><kbd className="bg-slate-800 px-1.5 py-0.5 rounded text-sky-400 font-mono">E</kbd> Enter / Exit Car</div>
-            <div><kbd className="bg-slate-800 px-1.5 py-0.5 rounded text-sky-400 font-mono">Q / Z</kbd> Turn Signals (L / R)</div>
-            <div><kbd className="bg-slate-800 px-1.5 py-0.5 rounded text-sky-400 font-mono">X</kbd> Hazard Lights</div>
-            <div><kbd className="bg-slate-800 px-1.5 py-0.5 rounded text-sky-400 font-mono">SPACE</kbd> Handbrake / Drift</div>
-            <div><kbd className="bg-slate-800 px-1.5 py-0.5 rounded text-sky-400 font-mono">H</kbd> Car Horn</div>
-            <div><kbd className="bg-slate-800 px-1.5 py-0.5 rounded text-sky-400 font-mono">L</kbd> Lights (Low/High/Off)</div>
-            <div><kbd className="bg-slate-800 px-1.5 py-0.5 rounded text-sky-400 font-mono">T</kbd> Day / Night Cycle</div>
+      {/* BOTTOM-RIGHT: PEDESTRIAN HUD CARD (WHEN ON FOOT) */}
+      {!isInVehicle && (
+        <div id="pedestrian-hud-container" className="absolute bottom-4 right-4 z-20 pointer-events-auto">
+          <div className="bg-slate-900/90 backdrop-blur-md border border-slate-700/80 rounded-2xl p-3.5 shadow-2xl text-white flex flex-col gap-2 min-w-[220px]">
+            <div className="flex items-center justify-between border-b border-slate-800/80 pb-2">
+              <div className="flex items-center gap-2">
+                <span className="w-2.5 h-2.5 rounded-full bg-sky-400 animate-pulse" />
+                <span className="text-xs font-bold uppercase tracking-wider text-sky-400">Режим пешехода</span>
+              </div>
+              <span className="text-[10px] text-slate-400 font-mono">Пешком</span>
+            </div>
+
+            <div className="grid grid-cols-2 gap-1.5 text-[11px] pt-0.5">
+              <div className="flex items-center gap-1.5 text-slate-300">
+                <span className="px-1.5 py-0.5 bg-slate-800 border border-slate-700 rounded font-mono font-bold text-[10px] text-sky-300">WASD</span>
+                <span>Движение</span>
+              </div>
+              <div className="flex items-center gap-1.5 text-slate-300">
+                <span className="px-1.5 py-0.5 bg-slate-800 border border-slate-700 rounded font-mono font-bold text-[10px] text-amber-300">Shift</span>
+                <span>Бег</span>
+              </div>
+              <div className="flex items-center gap-1.5 text-slate-300">
+                <span className="px-1.5 py-0.5 bg-slate-800 border border-slate-700 rounded font-mono font-bold text-[10px] text-emerald-300">Space</span>
+                <span>Перекат</span>
+              </div>
+              <div className="flex items-center gap-1.5 text-slate-300">
+                <span className="px-1.5 py-0.5 bg-slate-800 border border-slate-700 rounded font-mono font-bold text-[10px] text-purple-300">F / E</span>
+                <span>В авто</span>
+              </div>
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
-      {/* ON-SCREEN MOBILE / TOUCH BUTTONS */}
-      <div id="touch-controls" className="absolute bottom-6 left-6 z-30 flex sm:hidden flex-col gap-2">
-        <div className="flex gap-2">
-          <button
-            onTouchStart={() => (inputRef.current.left = true)}
-            onTouchEnd={() => (inputRef.current.left = false)}
-            className="w-12 h-12 bg-slate-800/90 text-white rounded-xl active:bg-sky-600 flex items-center justify-center font-bold text-lg shadow-lg border border-slate-700"
-          >
-            ←
-          </button>
-          <div className="flex flex-col gap-2">
+      {/* MOBILE ORIENTATION GUARD */}
+      <LandscapeGuard />
+
+      {/* ADVANCED MOBILE DUAL-ZONE TOUCH CONTROLS */}
+      {isMobileTouch && (
+        <MobileTouchControls
+          inputRef={inputRef}
+          isInVehicle={isInVehicle}
+          onEnterExitVehicle={handleEnterExitVehicle}
+          onResetVehicle={handleResetVehicle}
+          onOpenMap={() => setIsFullMapOpen(true)}
+          onOpenSpawnMenu={() => setIsSpawnMenuOpen(true)}
+          onToggleConsole={() => setIsConsoleOpen(true)}
+          onZoomIn={() => {
+            userZoomFactorRef.current = Math.min(3.0, userZoomFactorRef.current + 0.15);
+          }}
+          onZoomOut={() => {
+            userZoomFactorRef.current = Math.max(0.4, userZoomFactorRef.current - 0.15);
+          }}
+          onToggleHeadlights={toggleHeadlights}
+          onToggleSiren={() => {
+            const world = worldRef.current;
+            const player = playerRef.current;
+            if (world && player.isInVehicle && player.currentVehicleId) {
+              const veh = world.vehicles.find((v) => v.id === player.currentVehicleId);
+              if (veh) {
+                veh.sirenOn = !veh.sirenOn;
+                if (veh.sirenOn) sound.playHorn('police');
+                else sound.stopHorn();
+              }
+            }
+          }}
+          activeCarName={activeCarName}
+          speedKmh={speedKmh}
+          activeTurnSignal={playerTurnSignal}
+          onToggleTurnSignal={toggleTurnSignal}
+        />
+      )}
+
+      {/* FLOATING GPS NAVIGATION HUD BANNER */}
+      {gpsDestination && (
+        <div id="gps-hud-banner" className="absolute top-4 left-1/2 -translate-x-1/2 z-30 pointer-events-auto">
+          <div className="bg-slate-900/95 backdrop-blur-md border border-sky-400/60 rounded-2xl px-4 py-2 shadow-2xl flex items-center gap-3 text-white text-xs">
+            <div className="bg-sky-500/20 p-2 rounded-xl border border-sky-400/40 text-sky-300 animate-pulse flex items-center justify-center">
+              <Navigation className="w-4 h-4" />
+            </div>
+            <div className="flex flex-col">
+              <div className="flex items-center gap-1.5">
+                <span className="font-bold text-sky-200">{gpsDestination.name || 'Точка на карте'}</span>
+                <span className="bg-sky-500/20 text-sky-300 text-[10px] font-bold px-1.5 py-0.2 rounded border border-sky-500/30">GPS</span>
+              </div>
+              <span className="text-[11px] text-slate-300 font-mono">
+                {Math.round(Math.hypot(gpsDestination.x - playerRef.current.x, gpsDestination.y - playerRef.current.y))} м до цели
+              </span>
+            </div>
             <button
-              onTouchStart={() => (inputRef.current.forward = true)}
-              onTouchEnd={() => (inputRef.current.forward = false)}
-              className="w-12 h-12 bg-slate-800/90 text-white rounded-xl active:bg-sky-600 flex items-center justify-center font-bold text-lg shadow-lg border border-slate-700"
+              id="btn-cancel-gps"
+              onClick={() => handleSetGpsTarget(null)}
+              className="p-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition-all ml-1.5"
+              title="Отменить маршрут"
             >
-              ↑
-            </button>
-            <button
-              onTouchStart={() => (inputRef.current.backward = true)}
-              onTouchEnd={() => (inputRef.current.backward = false)}
-              className="w-12 h-12 bg-slate-800/90 text-white rounded-xl active:bg-sky-600 flex items-center justify-center font-bold text-lg shadow-lg border border-slate-700"
-            >
-              ↓
+              <X className="w-4 h-4" />
             </button>
           </div>
-          <button
-            onTouchStart={() => (inputRef.current.right = true)}
-            onTouchEnd={() => (inputRef.current.right = false)}
-            className="w-12 h-12 bg-slate-800/90 text-white rounded-xl active:bg-sky-600 flex items-center justify-center font-bold text-lg shadow-lg border border-slate-700"
-          >
-            →
-          </button>
         </div>
-      </div>
+      )}
 
-      <div id="touch-action-buttons" className="absolute bottom-6 right-6 z-30 flex sm:hidden gap-2">
-        <button
-          onClick={handleEnterExitVehicle}
-          className="w-14 h-14 bg-sky-600 text-white rounded-2xl active:bg-sky-700 flex items-center justify-center font-bold shadow-xl border border-sky-400"
-        >
-          [E]
-        </button>
-        <button
-          onTouchStart={() => (inputRef.current.handbrake = true)}
-          onTouchEnd={() => (inputRef.current.handbrake = false)}
-          className="w-14 h-14 bg-rose-600 text-white rounded-2xl active:bg-rose-700 flex items-center justify-center font-bold shadow-xl border border-rose-400"
-        >
-          DRIFT
-        </button>
-      </div>
+      {/* FULL-SCREEN INTERACTIVE MAP MODAL (M key) */}
+      <FullScreenMap
+        world={worldRef.current}
+        player={playerRef.current}
+        camera={cameraRef.current}
+        isOpen={isFullMapOpen}
+        onClose={() => setIsFullMapOpen(false)}
+        onTeleport={handleTeleportToLocation}
+        onSetGpsTarget={handleSetGpsTarget}
+        streetName={streetName}
+      />
 
       {/* Traffic Diagnostics & AI Console */}
       <TrafficConsole

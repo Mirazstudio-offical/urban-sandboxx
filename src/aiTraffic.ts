@@ -204,21 +204,29 @@ export function updateAITraffic(
   world: GameWorld,
   dt: number,
   vehGrid?: SpatialGrid<Vehicle>,
-  pedGrid?: SpatialGrid<Pedestrian>
+  pedGrid?: SpatialGrid<Pedestrian>,
+  playerPos?: Vector2D
 ) {
   let totalSpeed = 0;
   let movingCars = 0;
   let deadlockedCars = 0;
 
   const playerCar = world.vehicles.find((v) => v.isPlayerControlled);
+  const targetPos: Vector2D = playerPos || (playerCar ? { x: playerCar.x, y: playerCar.y } : { x: 4400, y: 2800 });
+
+  // Filter active AI driving vehicles (excluding parked cars and player car)
+  const activeAICars = world.vehicles.filter((v) => !v.isPlayerControlled && !v.isParked);
+  const totalActiveCount = activeAICars.length;
 
   // Maintain natural vehicle density around the player dynamically
-  if (playerCar) {
-    const nearbyCount = world.vehicles.filter(
-      (v) => !v.isPlayerControlled && !v.isParked && Math.hypot(v.x - playerCar.x, v.y - playerCar.y) < 1600
-    ).length;
-    if (nearbyCount < 28 && world.vehicles.length < 150) {
-      spawnNewCarNearPlayer(playerCar, world);
+  const nearbyActiveCount = activeAICars.filter(
+    (v) => Math.hypot(v.x - targetPos.x, v.y - targetPos.y) < 1600
+  ).length;
+
+  if (nearbyActiveCount < 30 && totalActiveCount < 70) {
+    const toSpawn = Math.min(3, 30 - nearbyActiveCount);
+    for (let s = 0; s < toSpawn; s++) {
+      spawnNewCarNearPlayer(targetPos, world);
     }
   }
 
@@ -284,16 +292,14 @@ export function updateAITraffic(
     }
 
     // --- OPTIMIZATION: DESPAWN / RECYCLE DISTANT CARS ---
-    if (playerCar) {
-      const distToPlayer = Math.hypot(car.x - playerCar.x, car.y - playerCar.y);
-      if (distToPlayer > 1650) {
-        if (world.vehicles.length > 50) {
-          vehiclesToDespawn.push(car.id);
-          continue;
-        } else {
-          respawnCarNearPlayer(car, playerCar, world);
-          continue;
-        }
+    const distToPlayer = Math.hypot(car.x - targetPos.x, car.y - targetPos.y);
+    if (distToPlayer > 1650) {
+      if (totalActiveCount > 40) {
+        vehiclesToDespawn.push(car.id);
+        continue;
+      } else {
+        respawnCarNearPlayer(car, targetPos, world);
+        continue;
       }
     }
 
@@ -1329,53 +1335,26 @@ export function flushCityGridlocks(world: GameWorld) {
 }
 
 // Respawn Stalled Traffic to outer lanes
-export function respawnStalledVehicles(world: GameWorld) {
+export function respawnStalledVehicles(world: GameWorld, playerPos?: Vector2D) {
   let respawned = 0;
-  const outerLanes: RoadSegment['lanePaths'][0][] = [];
-  for (const road of world.roads) {
-    for (const lane of road.lanePaths) {
-      if (lane.waypoints.length >= 2) outerLanes.push(lane);
-    }
-  }
+  const pPos = playerPos || { x: 4400, y: 2800 };
 
   for (const car of world.vehicles) {
     if (car.isPlayerControlled || car.isParked) continue;
-    // Genuinely stuck for more than 7.0 seconds (excludes temporary red light stops or short yields)
-    if (car.stuckTimer > 7.0) {
-      // Find a random lane and a clear spawn position
-      let foundLane = false;
-      for (let attempts = 0; attempts < 15; attempts++) {
-        const randomLane = outerLanes[Math.floor(Math.random() * outerLanes.length)];
-        if (randomLane && randomLane.waypoints.length >= 2) {
-          const wp1 = randomLane.waypoints[0];
-          const wp2 = randomLane.waypoints[1];
-          const progress = 0.1 + Math.random() * 0.7;
-          const spawnX = wp1.x + (wp2.x - wp1.x) * progress;
-          const spawnY = wp1.y + (wp2.y - wp1.y) * progress;
-
-          if (isSpawnPositionClear(spawnX, spawnY, world)) {
-            car.x = spawnX;
-            car.y = spawnY;
-            car.angle = randomLane.direction;
-            car.speed = 35;
-            car.vx = Math.cos(car.angle) * car.speed;
-            car.vy = Math.sin(car.angle) * car.speed;
-            car.currentLaneId = randomLane.laneId;
-            car.routeWaypoints = [...randomLane.waypoints];
-            car.targetWaypointIndex = 1;
-            car.currentConnection = null;
-            car.aiState = 'driving';
-            car.stuckTimer = 0;
-            car.damage = createDefaultVehicleDamage(car.length, car.width);
-            respawned++;
-            foundLane = true;
-            break;
-          }
-        }
+    // Genuinely stuck for more than 6.0 seconds
+    if (car.stuckTimer > 6.0) {
+      if (respawnCarNearPlayer(car, pPos, world)) {
+        respawned++;
+      } else {
+        car.stuckTimer = 0;
+        car.speed = 35;
+        car.aiState = 'driving';
       }
     }
   }
-  trafficDiagnostics.log('info', `Respawned ${respawned} stalled vehicles to open highways`);
+  if (respawned > 0) {
+    trafficDiagnostics.log('info', `Respawned ${respawned} stalled vehicles to open roads`);
+  }
 }
 
 // Helper to compute crosswalk curb endpoints
@@ -1415,18 +1394,71 @@ function getCrosswalkEndpoints(
   }
 }
 
+// Respawn / recycle a pedestrian to a sidewalk path near the player
+function respawnPedestrianNearPlayer(ped: Pedestrian, targetPos: Vector2D, world: GameWorld) {
+  if (!world.pedestrianPaths || world.pedestrianPaths.length === 0) return;
+
+  // Filter paths with waypoints between 250px and 850px from player position
+  const nearbyPaths = world.pedestrianPaths.filter((path) => {
+    const wp = path.waypoints[0];
+    if (!wp) return false;
+    const d = Math.hypot(wp.x - targetPos.x, wp.y - targetPos.y);
+    return d >= 250 && d <= 850;
+  });
+
+  const chosenPath = nearbyPaths.length > 0
+    ? nearbyPaths[Math.floor(Math.random() * nearbyPaths.length)]
+    : world.pedestrianPaths[Math.floor(Math.random() * world.pedestrianPaths.length)];
+
+  if (!chosenPath || chosenPath.waypoints.length < 2) return;
+
+  const wpIdx = Math.floor(Math.random() * (chosenPath.waypoints.length - 1));
+  const wp1 = chosenPath.waypoints[wpIdx];
+  const wp2 = chosenPath.waypoints[wpIdx + 1];
+  const prog = Math.random();
+  ped.x = wp1.x + (wp2.x - wp1.x) * prog;
+  ped.y = wp1.y + (wp2.y - wp1.y) * prog;
+  ped.angle = Math.atan2(wp2.y - wp1.y, wp2.x - wp1.x);
+
+  const baseSpeed = ped.isCyclist ? 110 : (ped.isScooter ? 90 : (ped.isChild ? 30 : 40));
+  ped.vx = Math.cos(ped.angle) * baseSpeed;
+  ped.vy = Math.sin(ped.angle) * baseSpeed;
+  ped.speed = baseSpeed;
+  ped.targetSpeed = baseSpeed;
+  ped.state = 'walking';
+  ped.isCrossingRoad = false;
+  ped.waitingAtCurb = false;
+  ped.isInsideBuilding = false;
+  ped.targetPathId = chosenPath.id;
+  ped.targetWaypointIndex = wpIdx + 1;
+  ped.routeWaypoints = chosenPath.waypoints;
+  ped.crosswalkCooldownTimer = 8;
+  ped.alertBubbleText = null;
+  ped.alertBubbleTimer = 0;
+}
+
 // Pedestrian AI & Navigation (Sidewalks, Crosswalks & Traffic Light Compliance)
 export function updatePedestrians(
   world: GameWorld,
   dt: number,
   vehGrid?: SpatialGrid<Vehicle>,
   pedGrid?: SpatialGrid<Pedestrian>,
-  bldGrid?: SpatialGrid<Building>
+  bldGrid?: SpatialGrid<Building>,
+  playerPos?: Vector2D
 ) {
   const isRaining = world.weather === 'rain' || world.weather === 'storm';
   const UMBRELLA_COLORS = ['#ef4444', '#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899', '#06b6d4'];
 
+  const playerCar = world.vehicles.find((v) => v.isPlayerControlled);
+  const targetPos: Vector2D = playerPos || (playerCar ? { x: playerCar.x, y: playerCar.y } : { x: 4400, y: 2800 });
+
   for (const ped of world.pedestrians) {
+    // Keep pedestrians focused around the player's active area
+    const distToPlayer = Math.hypot(ped.x - targetPos.x, ped.y - targetPos.y);
+    if (distToPlayer > 1200) {
+      respawnPedestrianNearPlayer(ped, targetPos, world);
+      continue;
+    }
     // A. Handle Inside Building state
     if (ped.isInsideBuilding) {
       ped.insideBuildingTimer = (ped.insideBuildingTimer ?? 0) - dt;
@@ -1959,70 +1991,107 @@ export function updatePedestrians(
   }
 }
 
-// Despawn distant car and place it on a road lane around the player (750px - 1200px distance)
+interface CandidateSpawn {
+  lane: RoadSegment['lanePaths'][0];
+  spawnX: number;
+  spawnY: number;
+  targetWpIndex: number;
+  angle: number;
+}
+
+function getCandidateSpawnPoints(
+  playerPos: Vector2D,
+  world: GameWorld,
+  minRadius = 600,
+  maxRadius = 1400
+): CandidateSpawn[] {
+  const candidates: CandidateSpawn[] = [];
+
+  for (const road of world.roads) {
+    for (const lane of road.lanePaths) {
+      if (lane.waypoints.length < 2) continue;
+      const firstWp = lane.waypoints[0];
+      const isForest = firstWp.x < 3800 && firstWp.y < 3800;
+      if (isForest && Math.random() > 0.15) continue;
+
+      for (let i = 0; i < lane.waypoints.length - 1; i++) {
+        const wp1 = lane.waypoints[i];
+        const wp2 = lane.waypoints[i + 1];
+        const segDx = wp2.x - wp1.x;
+        const segDy = wp2.y - wp1.y;
+        const segLen = Math.hypot(segDx, segDy);
+        if (segLen < 10) continue;
+
+        const samples = [0.2, 0.5, 0.8];
+        for (const prog of samples) {
+          const px = wp1.x + segDx * prog;
+          const py = wp1.y + segDy * prog;
+          const dist = Math.hypot(px - playerPos.x, py - playerPos.y);
+
+          if (dist >= minRadius && dist <= maxRadius) {
+            candidates.push({
+              lane,
+              spawnX: px,
+              spawnY: py,
+              targetWpIndex: i + 1,
+              angle: Math.atan2(segDy, segDx)
+            });
+          }
+        }
+      }
+    }
+  }
+
+  return candidates;
+}
+
 function isSpawnPositionClear(x: number, y: number, world: GameWorld): boolean {
   for (const v of world.vehicles) {
     const dist = Math.hypot(v.x - x, v.y - y);
-    if (dist < 110) {
-      return false; // too close to another vehicle
+    const requiredDist = v.isParked ? 35 : 65;
+    if (dist < requiredDist) {
+      return false;
     }
   }
   return true;
 }
 
-function respawnCarNearPlayer(car: Vehicle, player: Vehicle, world: GameWorld) {
-  const candidateLanes: { lane: RoadSegment['lanePaths'][0]; wpIdx: number; dist: number }[] = [];
+function respawnCarNearPlayer(car: Vehicle, playerPos: Vector2D, world: GameWorld): boolean {
+  const candidates = getCandidateSpawnPoints(playerPos, world, 600, 1400);
 
-  for (const road of world.roads) {
-    for (const lane of road.lanePaths) {
-      if (lane.waypoints.length < 2) continue;
-      const startWp = lane.waypoints[0];
-      const isForest = startWp.x < 3800 && startWp.y < 3800;
-      if (isForest && Math.random() > 0.05) continue; // 95% reduction in forest traffic respawns
-      const d = Math.hypot(startWp.x - player.x, startWp.y - player.y);
-      if (d >= 650 && d <= 1300) {
-        candidateLanes.push({ lane, wpIdx: 0, dist: d });
-      }
-    }
-  }
+  if (candidates.length > 0) {
+    for (let attempts = 0; attempts < 15; attempts++) {
+      const chosen = candidates[Math.floor(Math.random() * candidates.length)];
 
-  if (candidateLanes.length > 0) {
-    for (let attempts = 0; attempts < 10; attempts++) {
-      const chosen = candidateLanes[Math.floor(Math.random() * candidateLanes.length)];
-      const lane = chosen.lane;
-      const startWp = lane.waypoints[0];
-      const nextWp = lane.waypoints[1];
-
-      // Randomize progress along first segment to distribute cars elegantly
-      const progress = 0.1 + Math.random() * 0.7;
-      const spawnX = startWp.x + (nextWp.x - startWp.x) * progress;
-      const spawnY = startWp.y + (nextWp.y - startWp.y) * progress;
-
-      if (isSpawnPositionClear(spawnX, spawnY, world)) {
-        car.x = spawnX;
-        car.y = spawnY;
-        car.angle = Math.atan2(nextWp.y - startWp.y, nextWp.x - startWp.x);
-        car.speed = 30 + Math.random() * 20;
+      if (isSpawnPositionClear(chosen.spawnX, chosen.spawnY, world)) {
+        car.x = chosen.spawnX;
+        car.y = chosen.spawnY;
+        car.angle = chosen.angle;
+        car.speed = 30 + Math.random() * 25;
         car.vx = Math.cos(car.angle) * car.speed;
         car.vy = Math.sin(car.angle) * car.speed;
         car.steerAngle = 0;
-        car.currentLaneId = lane.laneId;
-        car.routeWaypoints = [...lane.waypoints];
-        car.targetWaypointIndex = 1;
+        car.currentLaneId = chosen.lane.laneId;
+        car.routeWaypoints = [...chosen.lane.waypoints];
+        car.targetWaypointIndex = chosen.targetWpIndex;
         car.currentConnection = null;
         car.inIntersection = false;
         car.aiState = 'driving';
         car.stuckTimer = 0;
         car.ghostingAlpha = 1.0;
         car.damage = createDefaultVehicleDamage(car.length, car.width);
-        return;
+        return true;
       }
     }
   }
+  return false;
 }
 
 // Spawns a brand new AI vehicle dynamically near the player to keep the traffic density alive
-export function spawnNewCarNearPlayer(player: Vehicle, world: GameWorld) {
+export function spawnNewCarNearPlayer(playerPos: Vector2D, world: GameWorld): boolean {
+  const candidates = getCandidateSpawnPoints(playerPos, world, 600, 1400);
+  if (candidates.length === 0) return false;
+
   const carTypes: CarType[] = [
     'sedan', 'hatchback', 'pickup', 'sports', 'suv', 'taxi', 'police', 
     'bus', 'van', 'muscle', 'ambulance', 'truck_box', 'truck_dump', 
@@ -2041,84 +2110,61 @@ export function spawnNewCarNearPlayer(player: Vehicle, world: GameWorld) {
                 CAR_PALETTE[Math.floor(Math.random() * CAR_PALETTE.length)])))))));
   const roofColor = cType === 'police' || cType === 'ambulance' ? '#f8fafc' : color;
 
-  const candidateLanes: { lane: RoadSegment['lanePaths'][0]; wpIdx: number; dist: number }[] = [];
-  for (const road of world.roads) {
-    for (const lane of road.lanePaths) {
-      if (lane.waypoints.length < 2) continue;
-      const startWp = lane.waypoints[0];
-      const isForest = startWp.x < 3800 && startWp.y < 3800;
-      if (isForest && Math.random() > 0.05) continue;
-      const d = Math.hypot(startWp.x - player.x, startWp.y - player.y);
-      if (d >= 650 && d <= 1300) {
-        candidateLanes.push({ lane, wpIdx: 0, dist: d });
-      }
+  for (let attempts = 0; attempts < 15; attempts++) {
+    const chosen = candidates[Math.floor(Math.random() * candidates.length)];
+
+    if (isSpawnPositionClear(chosen.spawnX, chosen.spawnY, world)) {
+      const id = `veh_dynamic_${Date.now()}_${Math.floor(Math.random() * 10000)}`;
+      const speedVal = 30 + Math.random() * 25;
+
+      world.vehicles.push({
+        id,
+        type: cType,
+        x: chosen.spawnX,
+        y: chosen.spawnY,
+        vx: Math.cos(chosen.angle) * speedVal,
+        vy: Math.sin(chosen.angle) * speedVal,
+        angle: chosen.angle,
+        steerAngle: 0,
+        targetSteerAngle: 0,
+        speed: speedVal,
+        lateralVelocity: 0,
+        angularVelocity: 0,
+        isDrifting: false,
+        driftFactor: 0,
+        mass: cfg.mass,
+        width: cfg.width,
+        length: cfg.length,
+        wheelBase: cfg.wheelBase,
+        color,
+        roofColor,
+        headlightsOn: true,
+        headlightMode: 'low',
+        brakeLightsOn: false,
+        isReversing: false,
+        turnSignal: 'none',
+        turnSignalTimer: 0,
+        isParked: false,
+        isPlayerControlled: false,
+        targetSpeed: speedVal,
+        currentLaneId: chosen.lane.laneId,
+        targetWaypointIndex: chosen.targetWpIndex,
+        routeWaypoints: [...chosen.lane.waypoints],
+        currentConnection: null,
+        inIntersection: false,
+        plannedTurn: 'straight',
+        aiState: 'driving',
+        stuckTimer: 0,
+        reverseTimer: 0,
+        targetChaseVehicleId: null,
+        ghostingAlpha: 1.0,
+        honkTimer: 0,
+        isHonking: false,
+        hornEffectTimer: 0,
+        damage: createDefaultVehicleDamage(cfg.length, cfg.width)
+      });
+      return true;
     }
   }
-
-  if (candidateLanes.length > 0) {
-    for (let attempts = 0; attempts < 10; attempts++) {
-      const chosen = candidateLanes[Math.floor(Math.random() * candidateLanes.length)];
-      const lane = chosen.lane;
-      const startWp = lane.waypoints[0];
-      const nextWp = lane.waypoints[1];
-
-      const progress = 0.1 + Math.random() * 0.7;
-      const spawnX = startWp.x + (nextWp.x - startWp.x) * progress;
-      const spawnY = startWp.y + (nextWp.y - startWp.y) * progress;
-
-      if (isSpawnPositionClear(spawnX, spawnY, world)) {
-        const id = `veh_dynamic_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
-        const speedVal = 30 + Math.random() * 20;
-        const angleVal = Math.atan2(nextWp.y - startWp.y, nextWp.x - startWp.x);
-
-        world.vehicles.push({
-          id,
-          type: cType,
-          x: spawnX,
-          y: spawnY,
-          vx: Math.cos(angleVal) * speedVal,
-          vy: Math.sin(angleVal) * speedVal,
-          angle: angleVal,
-          steerAngle: 0,
-          targetSteerAngle: 0,
-          speed: speedVal,
-          lateralVelocity: 0,
-          angularVelocity: 0,
-          isDrifting: false,
-          driftFactor: 0,
-          mass: cfg.mass,
-          width: cfg.width,
-          length: cfg.length,
-          wheelBase: cfg.wheelBase,
-          color,
-          roofColor,
-          headlightsOn: true,
-          headlightMode: 'low',
-          brakeLightsOn: false,
-          isReversing: false,
-          turnSignal: 'none',
-          turnSignalTimer: 0,
-          isParked: false,
-          isPlayerControlled: false,
-          targetSpeed: speedVal,
-          currentLaneId: lane.laneId,
-          targetWaypointIndex: 1,
-          routeWaypoints: [...lane.waypoints],
-          currentConnection: null,
-          inIntersection: false,
-          plannedTurn: 'straight',
-          aiState: 'driving',
-          stuckTimer: 0,
-          reverseTimer: 0,
-          targetChaseVehicleId: null,
-          ghostingAlpha: 1.0,
-          honkTimer: 0,
-          isHonking: false,
-          hornEffectTimer: 0,
-          damage: createDefaultVehicleDamage(cfg.length, cfg.width)
-        });
-        return;
-      }
-    }
-  }
+  return false;
 }

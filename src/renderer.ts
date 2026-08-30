@@ -2001,7 +2001,7 @@ export class GameRenderer {
       if (b.state === 'flying') {
         ctx.fillStyle = 'rgba(0, 0, 0, 0.25)';
         ctx.beginPath();
-        ctx.ellipse(b.x, b.y + b.altitude * 0.5, 4, 2, 0, 0, Math.PI * 2);
+        ctx.ellipse(b.x, b.y + b.altitude * 0.4, 1.4, 0.8, 0, 0, Math.PI * 2);
         ctx.fill();
 
         // Position bird in sky
@@ -2019,28 +2019,28 @@ export class GameRenderer {
         ctx.fillStyle = baseBirdColor;
       }
       ctx.beginPath();
-      ctx.ellipse(0, 0, 4, 2.5, 0, 0, Math.PI * 2);
+      ctx.ellipse(0, 0, 1.4, 0.9, 0, 0, Math.PI * 2);
       ctx.fill();
 
       // Head
       ctx.fillStyle = b.type === 'pigeon' ? '#475569' : '#78350f';
       ctx.beginPath();
-      ctx.arc(3, 0, 1.8, 0, Math.PI * 2);
+      ctx.arc(1.1, 0, 0.7, 0, Math.PI * 2);
       ctx.fill();
 
       // Beak
       ctx.fillStyle = '#f59e0b';
       ctx.beginPath();
-      ctx.moveTo(4.5, -0.5);
-      ctx.lineTo(6, 0);
-      ctx.lineTo(4.5, 0.5);
+      ctx.moveTo(1.7, -0.3);
+      ctx.lineTo(2.3, 0);
+      ctx.lineTo(1.7, 0.3);
       ctx.fill();
 
       // Wings (Flapping if flying)
       if (b.state === 'flying') {
-        const wingSpan = 6 + Math.sin(b.wingCycle) * 4;
+        const wingSpan = 2.2 + Math.sin(b.wingCycle) * 1.3;
         ctx.strokeStyle = b.type === 'pigeon' ? '#334155' : '#451a03';
-        ctx.lineWidth = 1.5;
+        ctx.lineWidth = 0.8;
         ctx.beginPath();
         ctx.moveTo(0, -wingSpan);
         ctx.lineTo(0, wingSpan);
@@ -2246,42 +2246,92 @@ export class GameRenderer {
   // --- PLAYER ON FOOT ---
   private renderPlayerPedestrian(player: Player) {
     const ctx = this.ctx;
+
     ctx.save();
     ctx.translate(player.x, player.y);
+
+    // Ground Directional Indicator Ring
+    ctx.strokeStyle = 'rgba(56, 189, 248, 0.4)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.arc(0, 0, 10, 0, Math.PI * 2);
+    ctx.stroke();
+
+    ctx.save();
     ctx.rotate(player.angle);
+
+    // Directional facing dot on ground
+    ctx.fillStyle = '#38bdf8';
+    ctx.beginPath();
+    ctx.arc(12, 0, 2.2, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Dodge Roll Motion Trail
+    if (player.isDashing) {
+      ctx.fillStyle = 'rgba(56, 189, 248, 0.25)';
+      ctx.beginPath();
+      ctx.arc(-8, 0, 7, 0, Math.PI * 2);
+      ctx.arc(-16, 0, 5, 0, Math.PI * 2);
+      ctx.fill();
+    }
 
     // Shadow
     ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
     ctx.beginPath();
-    ctx.ellipse(2, 2.5, 6, 4.2, 0, 0, Math.PI * 2);
+    ctx.ellipse(1.5, 2, 5.2, 3.8, 0, 0, Math.PI * 2);
     ctx.fill();
 
     const legSwing = Math.sin(player.walkCycle) * 3.2;
 
+    // Shoes
+    ctx.fillStyle = '#0f172a';
+    ctx.fillRect(-2, -legSwing - 4.2, 2.2, 1.6);
+    ctx.fillRect(-2, legSwing + 2.6, 2.2, 1.6);
+
     // Pants
     ctx.fillStyle = player.pantsColor;
-    ctx.fillRect(-2, -legSwing - 4, 3.8, 3.8);
-    ctx.fillRect(-2, legSwing + 0.5, 3.8, 3.8);
+    ctx.fillRect(-1.5, -legSwing - 3.8, 3, 3.2);
+    ctx.fillRect(-1.5, legSwing + 0.5, 3, 3.2);
 
-    // Jacket / Shirt
+    // Torso / Jacket
     ctx.fillStyle = player.shirtColor;
     ctx.beginPath();
-    ctx.ellipse(0, 0, 4.8, 6.8, 0, 0, Math.PI * 2);
+    ctx.ellipse(0, 0, 4.5, 6.0, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Backpack
+    ctx.fillStyle = '#0f172a';
+    ctx.fillRect(-4.5, -3, 2.5, 6);
+
+    // Arms swinging with walk cycle
+    const armSwing = Math.sin(player.walkCycle) * 2.8;
+    ctx.fillStyle = player.shirtColor;
+    ctx.beginPath();
+    ctx.arc(armSwing, -5.2, 1.8, 0, Math.PI * 2);
+    ctx.arc(-armSwing, 5.2, 1.8, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Hands
+    ctx.fillStyle = player.skinColor;
+    ctx.beginPath();
+    ctx.arc(armSwing + 1, -5.2, 1.2, 0, Math.PI * 2);
+    ctx.arc(-armSwing + 1, 5.2, 1.2, 0, Math.PI * 2);
     ctx.fill();
 
     // Head
     ctx.fillStyle = player.skinColor;
     ctx.beginPath();
-    ctx.arc(2, 0, 3.8, 0, Math.PI * 2);
+    ctx.arc(1.8, 0, 3.4, 0, Math.PI * 2);
     ctx.fill();
 
     // Hair
     ctx.fillStyle = player.hairColor;
     ctx.beginPath();
-    ctx.arc(0.8, 0, 3.6, Math.PI * 0.5, Math.PI * 1.5);
+    ctx.arc(0.6, 0, 3.2, Math.PI * 0.5, Math.PI * 1.5);
     ctx.fill();
 
-    ctx.restore();
+    ctx.restore(); // end rotated part
+    ctx.restore(); // end translate
   }
 
   // --- VEHICLES ---
@@ -2301,19 +2351,37 @@ export class GameRenderer {
       ctx.fillRect(-halfL + 3, -halfW + 4, car.length, car.width);
 
       // 2. Wheels - Tucked realistically inside wheel wells
-      const wheelL = 10;
-      const wheelW = car.type === 'sports' ? 5.5 : 4.2;
-      const frontAxleX = halfL * 0.65;
-      const rearAxleX = -halfL * 0.65;
+      const isThreeAxle = car.type === 'truck_box' || car.type === 'truck_tanker' || 
+                          car.type === 'truck_flatbed' || car.type === 'cement_mixer' ||
+                          car.type === 'fire_engine' || car.type === 'truck_dump' || 
+                          car.type === 'garbage_truck';
+      const isHeavyTruck = isThreeAxle;
+
+      const wheelL = isHeavyTruck ? 11.5 : (car.type === 'sports' ? 10 : 9.5);
+      const wheelW = isHeavyTruck ? 5.2 : (car.type === 'sports' ? 5.5 : 4.2);
+      const frontAxleX = isHeavyTruck ? halfL * 0.72 : halfL * 0.65;
       const trackY = halfW - 0.8; // Tucked slightly inside halfW
 
-      // Rear wheels (fixed)
-      ctx.fillStyle = '#0f172a'; // Tire
-      ctx.fillRect(rearAxleX - wheelL / 2, -trackY, wheelL, wheelW);
-      ctx.fillRect(rearAxleX - wheelL / 2, trackY - wheelW, wheelL, wheelW);
-      ctx.fillStyle = '#64748b'; // Rims
-      ctx.fillRect(rearAxleX - wheelL / 2 + 2, -trackY + 0.8, wheelL - 4, wheelW - 1.6);
-      ctx.fillRect(rearAxleX - wheelL / 2 + 2, trackY - wheelW + 0.8, wheelL - 4, wheelW - 1.6);
+      const renderFixedWheel = (wx: number, wy: number) => {
+        ctx.fillStyle = '#0f172a'; // Tire
+        ctx.fillRect(wx - wheelL / 2, wy, wheelL, wheelW);
+        ctx.fillStyle = '#64748b'; // Rims
+        ctx.fillRect(wx - wheelL / 2 + 2, wy + 0.8, wheelL - 4, wheelW - 1.6);
+      };
+
+      if (isThreeAxle) {
+        // Dual tandem rear axles (6x4 / 6x6)
+        const rearAxle1X = -halfL * 0.36;
+        const rearAxle2X = -halfL * 0.74;
+        renderFixedWheel(rearAxle1X, -trackY);
+        renderFixedWheel(rearAxle1X, trackY - wheelW);
+        renderFixedWheel(rearAxle2X, -trackY);
+        renderFixedWheel(rearAxle2X, trackY - wheelW);
+      } else {
+        const rearAxleX = -halfL * 0.65;
+        renderFixedWheel(rearAxleX, -trackY);
+        renderFixedWheel(rearAxleX, trackY - wheelW);
+      }
 
       // Front wheels (steered)
       const renderSteeredWheel = (wx: number, wy: number) => {
@@ -2339,14 +2407,14 @@ export class GameRenderer {
         engineSmoking: false, engineFire: false, scratches: []
       };
 
-      const fc = Math.min(14, dmg.frontCrumple || 0);
-      const rc = Math.min(12, dmg.rearCrumple || 0);
-      const ld = Math.min(7, dmg.leftDent || 0);
-      const rd = Math.min(7, dmg.rightDent || 0);
-      const fld = Math.min(9, dmg.frontLeftDent || 0);
-      const frd = Math.min(9, dmg.frontRightDent || 0);
-      const rld = Math.min(8, dmg.rearLeftDent || 0);
-      const rrd = Math.min(8, dmg.rearRightDent || 0);
+      const fc = Math.min(halfL * 0.55, dmg.frontCrumple || 0);
+      const rc = Math.min(halfL * 0.45, dmg.rearCrumple || 0);
+      const ld = Math.min(halfW * 0.75, dmg.leftDent || 0);
+      const rd = Math.min(halfW * 0.75, dmg.rightDent || 0);
+      const fld = Math.min(halfL * 0.4, dmg.frontLeftDent || 0);
+      const frd = Math.min(halfL * 0.4, dmg.frontRightDent || 0);
+      const rld = Math.min(halfL * 0.35, dmg.rearLeftDent || 0);
+      const rrd = Math.min(halfL * 0.35, dmg.rearRightDent || 0);
 
       const basePoly = [
         { x: halfL - fc, y: 0 },
@@ -2464,14 +2532,33 @@ export class GameRenderer {
       let cabinW = Math.max(8, car.width * 0.8 - (ld + rd) * 0.3);
       let cabinX = -car.length * 0.05;
 
-      const isHeavyTruck = car.type === 'truck_box' || car.type === 'truck_dump' || 
-                           car.type === 'truck_tanker' || car.type === 'truck_flatbed' || 
-                           car.type === 'cement_mixer' || car.type === 'garbage_truck';
+      const isCabOverTruck = car.type === 'truck_box' || car.type === 'truck_dump' || 
+                             car.type === 'cement_mixer' || car.type === 'garbage_truck';
 
-      if (isHeavyTruck) {
-        cabinL = car.length * 0.28;
+      if (isCabOverTruck) {
+        cabinL = car.length * 0.18;
         cabinW = car.width * 0.88;
-        cabinX = car.length * 0.30;
+        cabinX = halfL - cabinL / 2 - 2; // Right at the front nose of truck
+      } else if (car.type === 'fire_engine') { // Heavy Double-Cab Fire Truck
+        cabinL = car.length * 0.28;
+        cabinW = car.width * 0.90;
+        cabinX = halfL - cabinL / 2 - 2; // Front double crew cabin
+      } else if (car.type === 'truck_flatbed') { // Hooded / bonneted truck
+        cabinL = car.length * 0.18;
+        cabinW = car.width * 0.86;
+        cabinX = halfL - cabinL * 1.35; // Hood in front, cab right behind
+      } else if (car.type === 'truck_tanker') { // Hooded Ural fuel tanker
+        cabinL = car.length * 0.18;
+        cabinW = car.width * 0.86;
+        cabinX = halfL - cabinL * 1.35; // Hood in front, cab right behind
+      } else if (car.type === 'van') { // UAZ-452 Bukhanka rounded cab-forward
+        cabinL = car.length * 0.58;
+        cabinW = car.width * 0.84;
+        cabinX = -car.length * 0.02;
+      } else if (car.type === 'muscle') { // GAZ-24 Volga classic sedan
+        cabinL = car.length * 0.48;
+        cabinW = car.width * 0.78;
+        cabinX = -car.length * 0.04;
       } else if (car.type === 'sports') {
         cabinL = car.length * 0.45;
         cabinW = car.width * 0.74;
@@ -2481,7 +2568,7 @@ export class GameRenderer {
         cabinW = car.width * 0.78;
         cabinX = -car.length * 0.12;
       } else if (car.type === 'suv') {
-        cabinL = car.length * 0.58;
+        cabinL = car.length * 0.56;
         cabinW = car.width * 0.82;
         cabinX = -car.length * 0.05;
       } else if (car.type === 'pickup') {
@@ -2596,9 +2683,9 @@ export class GameRenderer {
         ctx.restore();
       }
 
-      // 6. Distinct Car Type Additions
+      // 6. Distinct Car Type Additions & Iconic Model Details
       if (car.type === 'sports') {
-        // Large Carbon Fiber Rear Wing Spoiler
+        // Lada Raven / Sport: Carbon fiber spoiler & hood intake
         ctx.fillStyle = '#0a0f1d';
         ctx.fillRect(-halfL + rc + 1, -halfW * 0.45, 1.8, 1);
         ctx.fillRect(-halfL + rc + 1, halfW * 0.35, 1.8, 1);
@@ -2607,22 +2694,18 @@ export class GameRenderer {
         ctx.fillRect(-halfL + rc - 1.8, -halfW * 0.82 - 0.5, 3.8, 1);
         ctx.fillRect(-halfL + rc - 1.8, halfW * 0.82 - 0.5, 3.8, 1);
 
-        // Hood Intakes & Double racing stripes
         ctx.fillStyle = '#0f172a';
         ctx.fillRect(halfL * 0.38, -halfW * 0.32, 5, 2.2);
         ctx.fillRect(halfL * 0.38, halfW * 0.18, 5, 2.2);
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
-        ctx.fillRect(-halfL + rc, -2.5, car.length - fc - rc, 1.2);
-        ctx.fillRect(-halfL + rc, 1.3, car.length - fc - rc, 1.2);
 
       } else if (car.type === 'pickup') {
-        // Open Truck Bed with Tailgate
+        // GAZelle Cargo: Wood/Steel Flatbed with Drop Sides
         const bedX1 = -halfL + rc + 3;
         const bedX2 = cabinX - cabinL / 2;
         const bedW = halfW * 2 - 3.2;
-        ctx.fillStyle = '#111827'; // bed liner
+        ctx.fillStyle = '#1e293b';
         ctx.fillRect(bedX1, -bedW / 2, bedX2 - bedX1, bedW);
-        ctx.strokeStyle = '#1e293b'; // ribs
+        ctx.strokeStyle = '#475569';
         ctx.lineWidth = 0.8;
         ctx.beginPath();
         for (let ry = -bedW / 2 + 2.5; ry < bedW / 2; ry += 2.5) {
@@ -2630,30 +2713,21 @@ export class GameRenderer {
         }
         ctx.stroke();
 
-        // Bed Cargo (Wooden box & spare wheel)
+        // Cargo load: Wooden box crate
         ctx.fillStyle = '#92400e';
-        ctx.fillRect(bedX1 + 2.5, -bedW / 2 + 2, 7.5, 6);
-        ctx.fillStyle = '#0f172a';
-        ctx.beginPath(); ctx.arc(bedX2 - 5, bedW / 2 - 4.2, 3.8, 0, Math.PI * 2); ctx.fill();
-        ctx.fillStyle = '#64748b';
-        ctx.beginPath(); ctx.arc(bedX2 - 5, bedW / 2 - 4.2, 1.8, 0, Math.PI * 2); ctx.fill();
+        ctx.fillRect(bedX1 + 2.5, -bedW / 2 + 2, 8, 7);
 
       } else if (car.type === 'suv') {
-        // Roof cross rails & spare tire mounted on back tailgate
-        ctx.strokeStyle = '#94a3b8';
-        ctx.lineWidth = 1.2;
-        ctx.beginPath();
-        ctx.moveTo(cabinX - cabinL * 0.35, -cabinW * 0.43); ctx.lineTo(cabinX + cabinL * 0.35, -cabinW * 0.43);
-        ctx.moveTo(cabinX - cabinL * 0.35, cabinW * 0.43); ctx.lineTo(cabinX + cabinL * 0.35, cabinW * 0.43);
-        ctx.stroke();
-
+        // VAZ-2121 Niva 4x4: Hood air scoop & rear spare wheel
         ctx.fillStyle = '#0f172a';
-        ctx.beginPath(); ctx.arc(-halfL, 0, 4.4, 0, Math.PI * 2); ctx.fill();
+        ctx.fillRect(halfL * 0.2, -4, 4, 8); // Hood scoop
+        ctx.fillStyle = '#334155';
+        ctx.beginPath(); ctx.arc(-halfL, 0, 4.2, 0, Math.PI * 2); ctx.fill();
         ctx.fillStyle = car.color;
-        ctx.beginPath(); ctx.arc(-halfL, 0, 2.5, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.arc(-halfL, 0, 2.4, 0, Math.PI * 2); ctx.fill();
 
       } else if (car.type === 'taxi') {
-        // Taxi sign with amber glow
+        // GAZ-24 Volga Taxi: Amber roof taxi light & checkers stripe
         ctx.fillStyle = '#0f172a';
         ctx.fillRect(cabinX - 1.5, -5.5, 3, 11);
         ctx.fillStyle = '#f59e0b';
@@ -2670,7 +2744,6 @@ export class GameRenderer {
           ctx.restore();
         }
 
-        // Side checkerboard decals
         ctx.strokeStyle = '#000000';
         ctx.lineWidth = 0.5;
         ctx.save();
@@ -2680,73 +2753,209 @@ export class GameRenderer {
         ctx.moveTo(-halfL + rc, halfW - 1.2); ctx.lineTo(halfL - fc, halfW - 1.2);
         ctx.stroke();
         ctx.restore();
+
       } else if (car.type === 'fire_engine') {
-        // ZIL-130 Fire Truck details: Ladder rack on roof, water hose reel
+        // --- Heavy Double-Cab Fire Truck (Пожарный Автомобиль) ---
+        // 1. Heavy Chrome Front Bumper & Towing Hooks
+        const bumpX = halfL - fc;
         ctx.fillStyle = '#cbd5e1';
-        ctx.fillRect(-cabinL * 0.4, -cabinW * 0.35, cabinL * 0.8, cabinW * 0.7);
-        ctx.fillStyle = '#94a3b8';
-        ctx.fillRect(-cabinL * 0.35, -2, cabinL * 0.7, 4);
-        // White grille front
-        ctx.fillStyle = '#f8fafc';
-        ctx.fillRect(halfL - fc - 2, -halfW + 4, 2, halfW * 2 - 8);
+        ctx.fillRect(bumpX - 1, -halfW - 0.5, 3.5, halfW * 2 + 1);
+        ctx.fillStyle = '#0f172a';
+        ctx.fillRect(bumpX - 0.5, -halfW * 0.6, 2, 3);
+        ctx.fillRect(bumpX - 0.5, halfW * 0.6 - 3, 2, 3);
+
+        // 2. Heavy Double Crew Cabin (Front Section)
+        const cabBackX = cabinX - cabinL / 2;
+        ctx.fillStyle = '#b91c1c'; // Deep Red cab body
+        ctx.fillRect(cabBackX, -halfW + 0.5, cabinL, halfW * 2 - 1);
+
+        // Rear windows for crew in double cab
+        ctx.fillStyle = '#0f172a';
+        ctx.fillRect(cabinX - cabinL * 0.25, -halfW + 1, 4, 1.8);
+        ctx.fillRect(cabinX - cabinL * 0.25, halfW - 2.8, 4, 1.8);
+
+        // Large Side Mirrors on brackets
+        ctx.fillStyle = '#334155';
+        ctx.fillRect(cabinX + cabinL * 0.3, -halfW - 3, 2, 3.5);
+        ctx.fillRect(cabinX + cabinL * 0.3, halfW - 0.5, 2, 3.5);
+
+        // 3. Equipment Superstructure (Box Body with Rolling Shutter Doors)
+        const bodyX1 = -halfL + rc + 2;
+        const bodyX2 = cabBackX - 1;
+        const bodyW = halfW * 2 - 1.5;
+        
+        // Main Red Superstructure Box
+        ctx.fillStyle = '#dc2626';
+        ctx.fillRect(bodyX1, -bodyW / 2, bodyX2 - bodyX1, bodyW);
+        ctx.strokeStyle = '#991b1b';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(bodyX1, -bodyW / 2, bodyX2 - bodyX1, bodyW);
+
+        // Metallic Rolling Shutter Compartment Doors (Silver Shutters) on both sides
+        const shutterCount = 3;
+        const shutterSpan = (bodyX2 - bodyX1 - 4) / shutterCount;
+        ctx.fillStyle = '#e2e8f0'; // Metallic silver shutter
+        ctx.strokeStyle = '#64748b';
+        ctx.lineWidth = 0.6;
+        for (let s = 0; s < shutterCount; s++) {
+          const sx = bodyX1 + 2 + s * shutterSpan;
+          const sw = shutterSpan - 2;
+          // Left side shutter door
+          ctx.fillRect(sx, -bodyW / 2 + 0.5, sw, 3.5);
+          ctx.strokeRect(sx, -bodyW / 2 + 0.5, sw, 3.5);
+          // Right side shutter door
+          ctx.fillRect(sx, bodyW / 2 - 4, sw, 3.5);
+          ctx.strokeRect(sx, bodyW / 2 - 4, sw, 3.5);
+
+          // Shutter horizontal lines
+          ctx.beginPath();
+          ctx.moveTo(sx + 1, -bodyW / 2 + 2); ctx.lineTo(sx + sw - 1, -bodyW / 2 + 2);
+          ctx.moveTo(sx + 1, bodyW / 2 - 2);  ctx.lineTo(sx + sw - 1, bodyW / 2 - 2);
+          ctx.stroke();
+        }
+
+        // Pump Control Panel & Pressure Gauges (Center Right side)
+        ctx.fillStyle = '#0f172a';
+        ctx.fillRect(bodyX1 + (bodyX2 - bodyX1) * 0.45, -2, 7, 4);
+        ctx.fillStyle = '#38bdf8'; // Blue gauge dials
+        ctx.fillRect(bodyX1 + (bodyX2 - bodyX1) * 0.45 + 1.5, -1.2, 1.8, 1.2);
+        ctx.fillRect(bodyX1 + (bodyX2 - bodyX1) * 0.45 + 3.8, -1.2, 1.8, 1.2);
+
+        // 4. White Contrast Safety Side Stripes
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(bodyX1, -bodyW / 2 + 4.5, bodyX2 - bodyX1, 1.8);
+        ctx.fillRect(bodyX1, bodyW / 2 - 6.3, bodyX2 - bodyX1, 1.8);
+        ctx.fillRect(cabBackX, -halfW + 2, cabinL, 1.5);
+        ctx.fillRect(cabBackX, halfW - 3.5, cabinL, 1.5);
+
+        // 5. Rear Safety Chevron Stripes (Alternating Red and White)
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(bodyX1 - 0.5, -bodyW / 2, 3, bodyW);
+        ctx.clip();
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(bodyX1 - 1, -bodyW / 2, 4, bodyW);
+        ctx.fillStyle = '#dc2626';
+        for (let cy = -bodyW / 2 - 5; cy < bodyW / 2 + 5; cy += 6) {
+          ctx.beginPath();
+          ctx.moveTo(bodyX1 - 2, cy);
+          ctx.lineTo(bodyX1 + 4, cy + 5);
+          ctx.lineTo(bodyX1 + 4, cy + 8);
+          ctx.lineTo(bodyX1 - 2, cy + 3);
+          ctx.fill();
+        }
+        ctx.restore();
+
+        // 6. Roof Equipment: Heavy Extension Ladder & Water Monitor Deck Gun
+        const ladderX1 = bodyX1 + 2;
+        const ladderW = 6.5;
+        const ladderL = car.length * 0.52;
+        ctx.fillStyle = '#cbd5e1';
+        ctx.fillRect(ladderX1, -ladderW / 2, ladderL, 1.2);
+        ctx.fillRect(ladderX1, ladderW / 2 - 1.2, ladderL, 1.2);
+        ctx.strokeStyle = '#475569';
+        ctx.lineWidth = 0.8;
+        ctx.beginPath();
+        for (let lx = ladderX1 + 3; lx < ladderX1 + ladderL - 2; lx += 4) {
+          ctx.moveTo(lx, -ladderW / 2); ctx.lineTo(lx, ladderW / 2);
+        }
+        ctx.stroke();
+
+        // Water Cannon / Deck Gun (Turret nozzle on roof)
+        const cannonX = cabinX - 2;
+        ctx.fillStyle = '#334155';
+        ctx.beginPath(); ctx.arc(cannonX, 0, 3.5, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = '#94a3b8'; // Chrome nozzle barrel
+        ctx.fillRect(cannonX, -1, 7, 2);
+        ctx.fillStyle = '#ef4444';
+        ctx.beginPath(); ctx.arc(cannonX - 1, 0, 1.5, 0, Math.PI * 2); ctx.fill();
+
+        // Suction Hoses along side edges
+        ctx.fillStyle = '#1e293b';
+        ctx.fillRect(bodyX1 + 4, -halfW - 0.8, bodyX2 - bodyX1 - 8, 1.4);
+        ctx.fillRect(bodyX1 + 4, halfW - 0.6, bodyX2 - bodyX1 - 8, 1.4);
 
       } else if (car.type === 'bus') {
-        // PAZ City Bus: multiple side passenger windows
+        // PAZ-3205 Bus: Passenger side window panes
         ctx.fillStyle = '#93c5fd';
         for (let wx = -cabinL * 0.4; wx < cabinL * 0.4; wx += 12) {
           ctx.fillRect(wx, -cabinW * 0.44, 8, cabinW * 0.88);
         }
 
       } else if (car.type === 'van') {
-        // UAZ Bukhanka: utility boxy cargo van stripes
-        ctx.fillStyle = '#ffffff';
-        ctx.fillRect(-halfL + rc + 4, -1.5, car.length - fc - rc - 8, 3);
-
-      } else if (car.type === 'muscle') {
-        // GAZ-24 Volga: Chrome bumpers and retro grille
-        ctx.fillStyle = '#cbd5e1';
-        ctx.fillRect(halfL - fc - 1.5, -halfW + 3, 2, halfW * 2 - 6);
-        ctx.fillRect(-halfL + rc, -halfW + 3, 2, halfW * 2 - 6);
-        // Dual racing line
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
-        ctx.fillRect(-halfL + rc, -1.5, car.length - fc - rc, 1);
-
-      } else if (car.type === 'ambulance') {
-        // RAF / UAZ Ambulance: Red cross on sides
-        ctx.fillStyle = '#ef4444';
-        ctx.fillRect(-4, -2.5, 8, 5);
-        ctx.fillRect(-2.5, -4, 5, 8);
-
-      } else if (car.type === 'truck_box') {
-        // --- KamAZ-5320 / Commercial Box Truck (Фургон) ---
-        // 1. Aerodynamic Roof Wind Deflector Spoiler over Cab
-        ctx.fillStyle = car.color;
-        ctx.beginPath();
-        ctx.moveTo(cabinX + cabinL * 0.45, -cabinW * 0.45);
-        ctx.lineTo(cabinX - cabinL * 0.3, -cabinW * 0.42);
-        ctx.lineTo(cabinX - cabinL * 0.45, 0);
-        ctx.lineTo(cabinX - cabinL * 0.3, cabinW * 0.42);
-        ctx.lineTo(cabinX + cabinL * 0.45, cabinW * 0.45);
-        ctx.closePath();
-        ctx.fill();
-        ctx.strokeStyle = '#0f172a';
+        // --- UAZ-452 Bukhanka (УАЗ-452 Буханка) ---
+        // Rounded front nose details & roof strengthening ribs
+        ctx.strokeStyle = 'rgba(15, 23, 42, 0.35)';
         ctx.lineWidth = 0.8;
+        ctx.beginPath();
+        ctx.moveTo(-halfL + rc + 4, -4); ctx.lineTo(halfL - fc - 4, -4);
+        ctx.moveTo(-halfL + rc + 4, 0);  ctx.lineTo(halfL - fc - 4, 0);
+        ctx.moveTo(-halfL + rc + 4, 4);  ctx.lineTo(halfL - fc - 4, 4);
         ctx.stroke();
 
-        // Amber roof clearance marker lights (Автопоезд)
-        ctx.fillStyle = '#f59e0b';
-        ctx.fillRect(cabinX + cabinL * 0.42, -cabinW * 0.35, 1.5, 2);
-        ctx.fillRect(cabinX + cabinL * 0.44, -1, 1.5, 2);
-        ctx.fillRect(cabinX + cabinL * 0.42, cabinW * 0.35 - 2, 1.5, 2);
+        // Front rounded radiator snout slots below windshield
+        ctx.fillStyle = '#1e293b';
+        ctx.fillRect(halfL - fc - 3, -4, 1.8, 8);
 
-        // 2. Large Corrugated Box Body
-        const boxX1 = -halfL + rc + 2;
-        const boxX2 = cabinX - cabinL / 2 - 1.5;
-        const boxW = halfW * 2 - 1.5;
-        ctx.fillStyle = '#f1f5f9'; // Clean white/silver insulated panel
+      } else if (car.type === 'muscle') {
+        // --- GAZ-24 Volga Classic (ГАЗ-24 Волга) ---
+        // 1. Chrome Front Bumper & Vertical Radiator Grille ("Китовый ус")
+        ctx.fillStyle = '#cbd5e1'; // Chrome front bumper
+        ctx.fillRect(halfL - fc - 1.8, -halfW + 2, 2.2, halfW * 2 - 4);
+        ctx.fillRect(-halfL + rc - 0.4, -halfW + 2, 2.2, halfW * 2 - 4); // Rear bumper
+
+        // Vertical Chrome Grille ("Китовый ус")
+        ctx.fillStyle = '#1e293b';
+        ctx.fillRect(halfL - fc - 1.5, -halfW * 0.45, 1.5, halfW * 0.9);
+        ctx.strokeStyle = '#e2e8f0';
+        ctx.lineWidth = 0.6;
+        ctx.beginPath();
+        for (let gy = -halfW * 0.4; gy < halfW * 0.4; gy += 2) {
+          ctx.moveTo(halfL - fc - 1.5, gy); ctx.lineTo(halfL - fc, gy);
+        }
+        ctx.stroke();
+
+        // Hood subtle crease lines
+        ctx.strokeStyle = 'rgba(15, 23, 42, 0.25)';
+        ctx.lineWidth = 0.8;
+        ctx.beginPath();
+        ctx.moveTo(halfL - fc - 2, -halfW * 0.3); ctx.lineTo(cabinX + cabinL / 2, -halfW * 0.25);
+        ctx.moveTo(halfL - fc - 2, halfW * 0.3);  ctx.lineTo(cabinX + cabinL / 2, halfW * 0.25);
+        ctx.stroke();
+
+      } else if (car.type === 'ambulance') {
+        // --- RAF-2203 / UAZ Ambulance (РАФ / УАЗ Скорая Помощь) ---
+        // White vehicle body with broad Red Side Stripe & Red Cross roof icon
+        ctx.fillStyle = '#dc2626'; // Red longitudinal side stripe
+        ctx.fillRect(-halfL + rc + 2, -halfW + 0.5, car.length - fc - rc - 4, 2);
+        ctx.fillRect(-halfL + rc + 2, halfW - 2.5, car.length - fc - rc - 4, 2);
+
+        // Red Cross in white circle on roof
+        ctx.fillStyle = '#ffffff';
+        ctx.beginPath(); ctx.arc(cabinX, 0, 4.2, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = '#dc2626';
+        ctx.fillRect(cabinX - 2.8, -0.9, 5.6, 1.8);
+        ctx.fillRect(cabinX - 0.9, -2.8, 1.8, 5.6);
+
+      } else if (car.type === 'truck_box') {
+        // --- Heavy Commercial Cargo Box Truck (Грузовой Фургон) ---
+        // 1. Cab Front Facia Grille & 3 Amber Roof Lights
+        ctx.fillStyle = '#0f172a';
+        ctx.fillRect(halfL - fc - 2, -halfW + 3, 2, halfW * 2 - 6);
+
+        ctx.fillStyle = '#f59e0b';
+        ctx.fillRect(cabinX + cabinL * 0.35, -4, 1.5, 2);
+        ctx.fillRect(cabinX + cabinL * 0.35, -1, 1.5, 2);
+        ctx.fillRect(cabinX + cabinL * 0.35, 2, 1.5, 2);
+
+        // 2. Large Corrugated Cargo Box Body (Spanning ~75% of truck length)
+        const boxX1 = -halfL + rc + 3;
+        const boxX2 = cabinX - cabinL / 2 - 1;
+        const boxW = halfW * 2 - 1.2;
+        ctx.fillStyle = '#f8fafc';
         ctx.fillRect(boxX1, -boxW / 2, boxX2 - boxX1, boxW);
         ctx.strokeStyle = '#94a3b8';
-        ctx.lineWidth = 1;
+        ctx.lineWidth = 1.2;
         ctx.strokeRect(boxX1, -boxW / 2, boxX2 - boxX1, boxW);
 
         // Corrugated vertical panel seams
@@ -2758,88 +2967,71 @@ export class GameRenderer {
         }
         ctx.stroke();
 
-        // Rear Rollup Door Frame & Locking Hardware
+        // Double Rear Doors & Chrome Lock Rods
         ctx.fillStyle = '#64748b';
         ctx.fillRect(boxX1, -boxW / 2 + 2, 2, boxW - 4);
-        ctx.fillStyle = '#0f172a';
-        ctx.fillRect(boxX1, -3, 2.5, 6); // Door locking latch
+        ctx.fillStyle = '#cbd5e1';
+        ctx.fillRect(boxX1 - 0.5, -boxW / 4, 1.2, 1);
+        ctx.fillRect(boxX1 - 0.5, boxW / 4, 1.2, 1);
 
-        // Rear Underrun Protection Bumper with Hazard Chevrons
-        ctx.fillStyle = '#ef4444';
-        ctx.fillRect(boxX1 - 1.5, -halfW + 2, 1.5, halfW * 2 - 4);
-        ctx.fillStyle = '#ffffff';
-        ctx.fillRect(boxX1 - 1.5, -halfW + 5, 1.5, 3);
-        ctx.fillRect(boxX1 - 1.5, 0, 1.5, 3);
-        ctx.fillRect(boxX1 - 1.5, halfW - 8, 1.5, 3);
-
-        // Flank Fuel Tank & Battery Case
-        ctx.fillStyle = '#475569';
-        ctx.fillRect(boxX2 - 12, -halfW - 1.2, 10, 2);
-        ctx.fillRect(boxX2 - 12, halfW - 0.8, 10, 2);
+        // Chassis Side Fuel Tank & Battery Box underneath
+        ctx.fillStyle = '#334155';
+        ctx.fillRect(boxX1 + 8, -halfW - 1.2, 14, 2);
+        ctx.fillRect(boxX1 + 8, halfW - 0.8, 14, 2);
 
       } else if (car.type === 'truck_dump') {
-        // --- MAZ / Heavy Tipper Truck (Самосвал) ---
-        // 1. Protective Cab-Over Rock Shield (Козырек над кабиной)
-        ctx.fillStyle = '#1e293b';
-        ctx.fillRect(cabinX - cabinL * 0.2, -cabinW * 0.48, cabinL * 0.65, cabinW * 0.96);
-        ctx.strokeStyle = '#f59e0b';
-        ctx.lineWidth = 1;
-        ctx.strokeRect(cabinX - cabinL * 0.2, -cabinW * 0.48, cabinL * 0.65, cabinW * 0.96);
-
-        // Flashing amber strobe beacon on cab
-        ctx.fillStyle = '#f59e0b';
-        ctx.beginPath();
-        ctx.arc(cabinX, 0, 2.5, 0, Math.PI * 2);
-        ctx.fill();
-
-        // 2. Heavy-Duty Ribbed Tipper Bucket
-        const dumpX1 = -halfL + rc + 2;
+        // --- Heavy Tipper Dump Truck (Самосвал) ---
+        // 1. Protective Steel Canopy Overhang over Cab Roof (Козырек над кабиной)
+        const dumpX1 = -halfL + rc + 3;
         const dumpX2 = cabinX - cabinL / 2 - 1;
         const dumpW = halfW * 2 - 1;
-        ctx.fillStyle = '#d97706'; // Industrial ochre/orange steel
-        ctx.fillRect(dumpX1, -dumpW / 2, dumpX2 - dumpX1, dumpW);
+
+        // Rock shield canopy extending OVER cab roof
+        ctx.fillStyle = '#d97706'; // Heavy industrial steel tipper
+        ctx.fillRect(dumpX1, -dumpW / 2, dumpX2 - dumpX1 + cabinL * 0.6, dumpW);
         ctx.strokeStyle = '#78350f';
         ctx.lineWidth = 1.2;
-        ctx.strokeRect(dumpX1, -dumpW / 2, dumpX2 - dumpX1, dumpW);
+        ctx.strokeRect(dumpX1, -dumpW / 2, dumpX2 - dumpX1 + cabinL * 0.6, dumpW);
 
-        // Exterior stiffening ribs
+        // Tipper exterior stiffening ribs
         ctx.strokeStyle = '#b45309';
         ctx.lineWidth = 1.2;
         ctx.beginPath();
-        for (let rx = dumpX1 + 5; rx < dumpX2 - 4; rx += 7) {
+        for (let rx = dumpX1 + 6; rx < dumpX2 + cabinL * 0.4; rx += 7) {
           ctx.moveTo(rx, -dumpW / 2); ctx.lineTo(rx, dumpW / 2);
         }
         ctx.stroke();
 
-        // Granular Stone / Gravel Cargo inside tipper
-        ctx.fillStyle = '#64748b'; // Crushed granite rock
-        ctx.fillRect(dumpX1 + 3, -dumpW / 2 + 2.5, dumpX2 - dumpX1 - 6, dumpW - 5);
+        // Stone/Gravel Cargo inside tipper bucket
+        ctx.fillStyle = '#64748b';
+        ctx.fillRect(dumpX1 + 3, -dumpW / 2 + 2.5, dumpX2 - dumpX1 - 3, dumpW - 5);
         ctx.fillStyle = '#94a3b8';
-        for (let gi = 0; gi < 14; gi++) {
+        for (let gi = 0; gi < 16; gi++) {
           const gx = dumpX1 + 5 + (gi % 5) * 6;
-          const gy = -dumpW / 2 + 4 + Math.floor(gi / 5) * 6;
-          ctx.beginPath();
-          ctx.arc(gx, gy, 1.8, 0, Math.PI * 2);
-          ctx.fill();
+          const gy = -dumpW / 2 + 4 + Math.floor(gi / 5) * 5;
+          ctx.beginPath(); ctx.arc(gx, gy, 1.8, 0, Math.PI * 2); ctx.fill();
         }
 
-        // Hydraulic Cylinder Sleeve between cab and bucket
-        ctx.fillStyle = '#cbd5e1';
-        ctx.fillRect(dumpX2, -2, 2, 4);
+        // Heavy Front Grille
+        ctx.fillStyle = '#0f172a';
+        ctx.fillRect(halfL - fc - 2, -halfW + 3, 2, halfW * 2 - 6);
 
       } else if (car.type === 'truck_tanker') {
-        // --- Ural / Tanker Truck (Автоцистерна) ---
-        // 1. Cab Clearance Lights
-        ctx.fillStyle = '#f59e0b';
-        ctx.fillRect(cabinX + cabinL * 0.4, -cabinW * 0.35, 1.5, 2);
-        ctx.fillRect(cabinX + cabinL * 0.4, cabinW * 0.35 - 2, 1.5, 2);
+        // --- Heavy Fuel Tanker Truck (Автоцистерна) ---
+        // 1. Engine Hood & Front Winch / Bumper
+        const hoodX1 = cabinX + cabinL / 2;
+        const hoodX2 = halfL - fc;
+        ctx.fillStyle = car.color;
+        ctx.fillRect(hoodX1, -halfW + 3, hoodX2 - hoodX1, halfW * 2 - 6);
 
-        // 2. Polished Cylindrical Liquid Tank
+        ctx.fillStyle = '#1e293b';
+        ctx.fillRect(hoodX2 - 2, -halfW + 1, 2.5, halfW * 2 - 2);
+
+        // 2. Polished Cylindrical Fuel Tank (Spanning ~70% of length)
         const tankX1 = -halfL + rc + 3;
-        const tankX2 = cabinX - cabinL / 2 - 2;
+        const tankX2 = cabinX - cabinL / 2 - 1;
         const tankW = halfW * 2 - 2;
 
-        // Cylindrical gradient fill
         const tankGrad = ctx.createLinearGradient(0, -tankW / 2, 0, tankW / 2);
         tankGrad.addColorStop(0, '#94a3b8');
         tankGrad.addColorStop(0.2, '#f8fafc');
@@ -2854,96 +3046,88 @@ export class GameRenderer {
         ctx.lineWidth = 1;
         ctx.stroke();
 
-        // Top Catwalk Walkway Platform with Anti-Slip Grate
+        // Top Catwalk & Manhole Hatches
         ctx.fillStyle = '#334155';
         ctx.fillRect(tankX1 + 4, -3, tankX2 - tankX1 - 8, 6);
-        ctx.strokeStyle = '#94a3b8';
-        ctx.lineWidth = 0.6;
-        ctx.beginPath();
-        for (let gx = tankX1 + 6; gx < tankX2 - 6; gx += 4) {
-          ctx.moveTo(gx, -3); ctx.lineTo(gx, 3);
-        }
-        ctx.stroke();
-
-        // 2 Dome Inspection Manhole Hatches
-        const hatch1X = tankX1 + (tankX2 - tankX1) * 0.32;
-        const hatch2X = tankX1 + (tankX2 - tankX1) * 0.68;
+        const hatch1X = tankX1 + (tankX2 - tankX1) * 0.3;
+        const hatch2X = tankX1 + (tankX2 - tankX1) * 0.7;
         ctx.fillStyle = '#0f172a';
-        ctx.beginPath(); ctx.arc(hatch1X, 0, 3.2, 0, Math.PI * 2); ctx.fill();
-        ctx.beginPath(); ctx.arc(hatch2X, 0, 3.2, 0, Math.PI * 2); ctx.fill();
-        ctx.fillStyle = '#e2e8f0';
-        ctx.beginPath(); ctx.arc(hatch1X, 0, 2, 0, Math.PI * 2); ctx.fill();
-        ctx.beginPath(); ctx.arc(hatch2X, 0, 2, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.arc(hatch1X, 0, 3, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.arc(hatch2X, 0, 3, 0, Math.PI * 2); ctx.fill();
 
-        // ADR Hazard Diamond Placard ("Flammable Liquid" / "ОГНЕОПАСНО")
-        ctx.fillStyle = '#dc2626'; // Red ADR diamond
+        // Red ADR Hazard Diamond ("ОГНЕОПАСНО")
+        ctx.fillStyle = '#dc2626';
         ctx.save();
         ctx.translate(tankX1 - 1, 0);
         ctx.rotate(Math.PI / 4);
         ctx.fillRect(-2, -2, 4, 4);
         ctx.restore();
 
-        // Side Hose Storage Tubes
-        ctx.fillStyle = '#1e293b';
-        ctx.fillRect(tankX1 + 2, -halfW - 0.8, tankX2 - tankX1 - 4, 1.8);
-        ctx.fillRect(tankX1 + 2, halfW - 1.0, tankX2 - tankX1 - 4, 1.8);
-
       } else if (car.type === 'truck_flatbed') {
-        // --- ZIL-133 / Heavy Flatbed Cargo (Бортовой) ---
-        // 1. Cab Headache Rack (Headboard safety steel mesh)
+        // --- Heavy Flatbed Truck with Crane Manipulator (Бортовой с КМУ) ---
+        // 1. Engine Hood & Radiator Grille
+        const hoodX1 = cabinX + cabinL / 2;
+        const hoodX2 = halfL - fc;
+        ctx.fillStyle = car.color || '#0284c7';
+        ctx.fillRect(hoodX1, -halfW + 2, hoodX2 - hoodX1, halfW * 2 - 4);
+
+        ctx.fillStyle = '#f8fafc';
+        ctx.fillRect(hoodX2 - 3.5, -halfW + 3, 3.5, halfW * 2 - 6);
+
+        // 2. Hydraulic Crane Manipulator (КМУ) behind Cab
+        const craneX = cabinX - cabinL / 2 - 3;
+        ctx.fillStyle = '#0284c7'; // Crane boom base
+        ctx.fillRect(craneX - 3, -halfW + 2, 5, halfW * 2 - 4);
         ctx.fillStyle = '#0f172a';
-        ctx.fillRect(cabinX - cabinL / 2 - 2, -halfW + 1, 2, halfW * 2 - 2);
+        ctx.fillRect(craneX - 2, -3, 3, 6); // Turret center
+        ctx.fillStyle = '#f59e0b'; // Yellow crane boom arm
+        ctx.fillRect(craneX - 1, -1.5, 7, 3);
 
-        // 2. Heavy Timber / Steel Deck Bed
-        const flatX1 = -halfL + rc + 2;
-        const flatX2 = cabinX - cabinL / 2 - 2;
+        // 3. Long Timber Deck Bed with Cargo Load (Crates, Steel Pipes & Straps)
+        const flatX1 = -halfL + rc + 3;
+        const flatX2 = craneX - 4;
         const flatW = halfW * 2 - 2;
-        ctx.fillStyle = '#78350f'; // Dark wood decking
+        ctx.fillStyle = '#78350f'; // Wood plank deck
         ctx.fillRect(flatX1, -flatW / 2, flatX2 - flatX1, flatW);
-
-        // Metal Drop-Down Perimeter Sideboards
-        ctx.strokeStyle = car.color;
-        ctx.lineWidth = 1.6;
+        ctx.strokeStyle = '#451a03';
+        ctx.lineWidth = 1.4;
         ctx.strokeRect(flatX1, -flatW / 2, flatX2 - flatX1, flatW);
 
-        // Cargo Load: Wooden Crates & Heavy Industrial Pipe Tubes
-        // Crate 1
+        // Wooden Cargo Crates & Steel Pipes
         ctx.fillStyle = '#d97706';
-        ctx.fillRect(flatX1 + 4, -flatW / 2 + 3, 14, 10);
-        ctx.strokeStyle = '#92400e';
-        ctx.lineWidth = 0.8;
-        ctx.strokeRect(flatX1 + 4, -flatW / 2 + 3, 14, 10);
-        ctx.beginPath();
-        ctx.moveTo(flatX1 + 4, -flatW / 2 + 3); ctx.lineTo(flatX1 + 18, -flatW / 2 + 13);
-        ctx.moveTo(flatX1 + 18, -flatW / 2 + 3); ctx.lineTo(flatX1 + 4, -flatW / 2 + 13);
-        ctx.stroke();
-
-        // Heavy Steel Pipe Bundles
+        ctx.fillRect(flatX1 + 4, -flatW / 2 + 3, 16, 10);
         ctx.fillStyle = '#475569';
-        ctx.fillRect(flatX1 + 21, -flatW / 2 + 3, flatX2 - flatX1 - 25, 4);
-        ctx.fillRect(flatX1 + 21, -flatW / 2 + 8, flatX2 - flatX1 - 25, 4);
-        ctx.fillRect(flatX1 + 21, -flatW / 2 + 13, flatX2 - flatX1 - 25, 4);
+        ctx.fillRect(flatX1 + 24, -flatW / 2 + 3, flatX2 - flatX1 - 28, 4);
+        ctx.fillRect(flatX1 + 24, -flatW / 2 + 8, flatX2 - flatX1 - 28, 4);
 
-        // Bright Orange Ratchet Tie-Down Straps
+        // Bright Orange Ratchet Straps
         ctx.strokeStyle = '#ea580c';
-        ctx.lineWidth = 1.2;
+        ctx.lineWidth = 1.4;
         ctx.beginPath();
-        ctx.moveTo(flatX1 + 10, -flatW / 2); ctx.lineTo(flatX1 + 10, flatW / 2);
-        ctx.moveTo(flatX1 + 28, -flatW / 2); ctx.lineTo(flatX1 + 28, flatW / 2);
+        ctx.moveTo(flatX1 + 12, -flatW / 2); ctx.lineTo(flatX1 + 12, flatW / 2);
+        ctx.moveTo(flatX1 + 32, -flatW / 2); ctx.lineTo(flatX1 + 32, flatW / 2);
         ctx.stroke();
 
       } else if (car.type === 'cement_mixer') {
-        // --- KamAZ / Concrete Mixer Truck (Автобетономешалка) ---
-        // 1. Water Wash Tank behind Cabin
-        ctx.fillStyle = '#0284c7';
-        ctx.fillRect(cabinX - cabinL / 2 - 3, -halfW * 0.6, 2.5, halfW * 1.2);
+        // --- Heavy Concrete Mixer Truck (Автобетономешалка) ---
+        // 1. Front Grille & 3 Amber Roof Lights
+        ctx.fillStyle = '#0f172a';
+        ctx.fillRect(halfL - fc - 2, -halfW + 3, 2, halfW * 2 - 6);
+        ctx.fillStyle = '#f59e0b';
+        ctx.fillRect(cabinX + cabinL * 0.35, -4, 1.5, 2);
+        ctx.fillRect(cabinX + cabinL * 0.35, -1, 1.5, 2);
+        ctx.fillRect(cabinX + cabinL * 0.35, 2, 1.5, 2);
 
-        // 2. Concrete Mixer Rotating Drum Barrel
-        const drumX1 = -halfL + rc + 6;
+        // Water tank behind cab
+        ctx.fillStyle = '#38bdf8';
+        ctx.fillRect(cabinX - cabinL / 2 - 3, -halfW + 2, 3, halfW * 2 - 4);
+
+        // 2. Large Rotating Drum Barrel with Spiral Helical Flight Stripes
+        const drumX1 = -halfL + rc + 8;
         const drumX2 = cabinX - cabinL / 2 - 4;
         const drumW = halfW * 2 - 2;
 
-        ctx.fillStyle = '#f8fafc'; // White / Light Grey Drum
+        ctx.fillStyle = '#f8fafc';
         ctx.beginPath();
         ctx.moveTo(drumX2, -drumW * 0.28);
         ctx.lineTo(drumX1 + (drumX2 - drumX1) * 0.5, -drumW * 0.5);
@@ -2957,7 +3141,7 @@ export class GameRenderer {
         ctx.lineWidth = 1.2;
         ctx.stroke();
 
-        // Spiral Helical Flight Mixing Stripes (Distinct yellow/orange stripes)
+        // Spiral orange flight stripes
         ctx.strokeStyle = '#ea580c';
         ctx.lineWidth = 2.4;
         ctx.beginPath();
@@ -2968,54 +3152,54 @@ export class GameRenderer {
         ctx.quadraticCurveTo(drumMid - 2, 0, drumX1 + 3, drumW * 0.24);
         ctx.stroke();
 
-        // 3. Rear Discharge Hopper & Swivel Chute
+        // Rear Swivel Discharge Chute (Лоток)
         ctx.fillStyle = '#475569';
-        ctx.fillRect(drumX1 - 4, -halfW * 0.35, 4, halfW * 0.7); // Collection funnel
-        ctx.fillStyle = '#cbd5e1';
-        ctx.fillRect(drumX1 - 7, -2.5, 3.5, 5); // Pivoting chute extension
+        ctx.fillRect(drumX1 - 5, -2, 6, 4);
 
       } else if (car.type === 'garbage_truck') {
-        // --- KO-440 / Municipal Waste Compactor Truck (Мусоровоз) ---
-        // 1. Flashing Amber Municipal Beacons on Cab
+        // --- Heavy Municipal Waste Compactor Truck (Мусоровоз) ---
+        // 1. Amber Municipal Beacons on Roof
         ctx.fillStyle = '#f59e0b';
         ctx.beginPath();
         ctx.arc(cabinX, -cabinW * 0.35, 2.2, 0, Math.PI * 2);
         ctx.arc(cabinX, cabinW * 0.35, 2.2, 0, Math.PI * 2);
         ctx.fill();
 
-        // 2. Main High-Capacity Compactor Body
-        const compX1 = -halfL + rc + 6;
+        // 2. High-Volume Compactor Body (Green/Orange)
+        const compX1 = -halfL + rc + 7;
         const compX2 = cabinX - cabinL / 2 - 1.5;
         const compW = halfW * 2 - 1.5;
 
-        ctx.fillStyle = '#16a34a'; // Vibrant municipal environmental green
+        ctx.fillStyle = '#16a34a'; // Eco green compactor body
         ctx.fillRect(compX1, -compW / 2, compX2 - compX1, compW);
         ctx.strokeStyle = '#14532d';
         ctx.lineWidth = 1.2;
         ctx.strokeRect(compX1, -compW / 2, compX2 - compX1, compW);
 
-        // Side Structural Ribs & Hydraulic Lift Cylinder Arms
-        ctx.fillStyle = '#e2e8f0';
-        ctx.fillRect(compX1 + 4, -compW / 2 - 1, compX2 - compX1 - 8, 1.2);
-        ctx.fillRect(compX1 + 4, compW / 2 - 0.2, compX2 - compX1 - 8, 1.2);
+        // Vertical panel stiffening ribs
+        ctx.strokeStyle = '#15803d';
+        ctx.lineWidth = 1.2;
+        ctx.beginPath();
+        for (let rx = compX1 + 6; rx < compX2 - 4; rx += 7) {
+          ctx.moveTo(rx, -compW / 2); ctx.lineTo(rx, compW / 2);
+        }
+        ctx.stroke();
 
-        // White Recycling Eco Emblem
+        // Rear Dumpster Loading Hopper & Mechanical Lift Arms
+        ctx.fillStyle = '#0f172a';
+        ctx.fillRect(compX1 - 4, -compW / 2 - 0.5, 4, compW + 1);
+        ctx.fillStyle = '#f59e0b'; // Hydraulic dumpster grab arm
+        ctx.fillRect(compX1 - 5, -compW / 2 + 2, 2, 3);
+        ctx.fillRect(compX1 - 5, compW / 2 - 5, 2, 3);
+
+        // Eco Recycling emblem
         ctx.fillStyle = '#ffffff';
         ctx.beginPath();
         const compMidX = (compX1 + compX2) / 2;
-        ctx.arc(compMidX, 0, 3.8, 0, Math.PI * 2);
-        ctx.fill();
+        ctx.arc(compMidX, 0, 4, 0, Math.PI * 2); ctx.fill();
         ctx.fillStyle = '#16a34a';
         ctx.beginPath();
-        ctx.arc(compMidX, 0, 2.4, 0, Math.PI * 2);
-        ctx.fill();
-
-        // 3. Rear Compaction Tailgate & Loading Hopper
-        ctx.fillStyle = '#1e293b';
-        ctx.fillRect(-halfL + rc, -compW / 2 + 1, 6, compW - 2);
-        ctx.fillStyle = '#ef4444'; // Rear safety reflector chevrons
-        ctx.fillRect(-halfL + rc, -compW / 2 + 2, 1.5, 3);
-        ctx.fillRect(-halfL + rc, compW / 2 - 5, 1.5, 3);
+        ctx.arc(compMidX, 0, 2.5, 0, Math.PI * 2); ctx.fill();
       }
 
       // 7. Headlights (Symmetrical & inset to guarantee they are 100% inside body)
@@ -3755,5 +3939,72 @@ export class GameRenderer {
       ctx.fillText(labelText, 0, 0);
       ctx.restore();
     }
+  }
+
+  private renderGpsRoute(world: GameWorld, player: Player) {
+    if (!world.gpsPath || world.gpsPath.length < 2 || !world.gpsDestination) return;
+    const ctx = this.ctx;
+    const path = world.gpsPath;
+
+    ctx.save();
+
+    // 1. Draw glowing neon cyan route path on road surface
+    ctx.strokeStyle = '#06b6d4'; // Cyan
+    ctx.lineWidth = 14;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.shadowColor = '#22d3ee';
+    ctx.shadowBlur = 15;
+    ctx.globalAlpha = 0.65;
+
+    ctx.beginPath();
+    ctx.moveTo(path[0].x, path[0].y);
+    for (let i = 1; i < path.length; i++) {
+      ctx.lineTo(path[i].x, path[i].y);
+    }
+    ctx.stroke();
+
+    // Inner animated white dashed centerline
+    const dashOffset = (Date.now() / 20) % 30;
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 5;
+    ctx.setLineDash([16, 14]);
+    ctx.lineDashOffset = -dashOffset;
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.shadowBlur = 0;
+    ctx.globalAlpha = 1.0;
+
+    // 2. Render Destination Flag Pin at target
+    const dest = world.gpsDestination;
+    const pulse = (Date.now() % 1200) / 1200;
+
+    ctx.save();
+    ctx.translate(dest.x, dest.y);
+
+    // Target ground ring
+    ctx.strokeStyle = '#22d3ee';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.arc(0, 0, 25 + pulse * 20, 0, Math.PI * 2);
+    ctx.stroke();
+
+    // Floating pin
+    ctx.fillStyle = '#0284c7';
+    ctx.strokeStyle = '#38bdf8';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(0, 0, 22, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 22px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('🚩', 0, -1);
+
+    ctx.restore();
+    ctx.restore();
   }
 }

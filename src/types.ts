@@ -124,6 +124,12 @@ export interface Vehicle {
   damage: VehicleDamage;
   lastDamageTime?: number;
 
+  // Physical Knockback Impulse & Physics State
+  knockbackVx?: number;
+  knockbackVy?: number;
+  knockbackSpin?: number;
+  stunnedTimer?: number;
+
   // AI & State
   isPlayerControlled: boolean;
   isParked: boolean;
@@ -460,6 +466,12 @@ export interface Player {
   hairColor: string;
   isInsideBuilding?: boolean;
   insideBuildingId?: string | null;
+  
+  // Human Mode Enhancements: Dodge roll, quick dash & aim
+  isDashing?: boolean;
+  dashTimer?: number;
+  dashAngle?: number;
+  aimAngle?: number;
 }
 
 export interface SidewalkBlock {
@@ -471,6 +483,12 @@ export interface SidewalkBlock {
   sidewalkWidth: number; // width of the perimeter walkway band
   style: 'urban' | 'commercial' | 'village' | 'park';
   innerLawnColor?: string;
+}
+
+export interface GpsDestination {
+  x: number;
+  y: number;
+  name?: string;
 }
 
 export interface GameWorld {
@@ -492,6 +510,8 @@ export interface GameWorld {
   particles: Particle[];
   weather: WeatherType;
   lightningFlashTimer?: number;
+  gpsDestination?: GpsDestination | null;
+  gpsPath?: Vector2D[] | null;
   pedestrianPaths: {
     id: string;
     waypoints: Vector2D[];

@@ -173,7 +173,7 @@ class SoundEngine {
   }
 
   // --- CAR HORN ---
-  public playHorn() {
+  public playHorn(carType?: string) {
     if (!this.ctx || this.isMuted || this.isHornPlaying) return;
     try {
       this.hornOsc1 = this.ctx.createOscillator();

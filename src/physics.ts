@@ -256,7 +256,9 @@ export function applyVehicleDamageAndDeformation(
   contactY: number,
   impactSpeed: number,
   scrapeSpeed: number,
-  world: GameWorld
+  world: GameWorld,
+  strikerMass: number = 1400,
+  isNarrowImpact: boolean = false
 ) {
   if (!car.damage) {
     car.damage = {
@@ -285,10 +287,9 @@ export function applyVehicleDamageAndDeformation(
   const now = performance.now() / 1000;
 
   // Real-world automobile safety threshold: Modern polyurethane/foam bumpers absorb low-speed impacts
-  // (< 52 px/s ~ 18 km/h / 11 mph) completely without structural metal crumple, health loss, or vertex deformation.
-  if (impactSpeed < 52 && scrapeSpeed < 45) {
-    // At low bumper contact speeds, only allow minor surface paint scuffs if actively scraping
-    if (scrapeSpeed > 24 && car.damage.scratches.length < 10) {
+  // (< 55 px/s ~ 20 km/h) completely without structural metal crumple, health loss, or vertex deformation.
+  if (impactSpeed < 55 && scrapeSpeed < 45) {
+    if (scrapeSpeed > 25 && car.damage.scratches.length < 10) {
       const dx = contactX - car.x;
       const dy = contactY - car.y;
       const cosA = Math.cos(car.angle);
@@ -308,8 +309,8 @@ export function applyVehicleDamageAndDeformation(
     return;
   }
 
-  // Damage Cooldown Protection (prevents 60-frame per second continuous damage stacking during sustained contact)
-  if (car.lastDamageTime && now - car.lastDamageTime < 0.4) {
+  // Damage Cooldown Protection
+  if (car.lastDamageTime && now - car.lastDamageTime < 0.25) {
     return;
   }
   car.lastDamageTime = now;
@@ -330,56 +331,86 @@ export function applyVehicleDamageAndDeformation(
   const normX = Math.max(-1, Math.min(1, localX / halfL));
   const normY = Math.max(-1, Math.min(1, localY / halfW));
 
-  // Realistic Impact Severity calculation (0 to 1 scale starting at real crash speeds > 52 px/s ~18 km/h)
-  const severity = Math.min(1.0, Math.max(0, impactSpeed - 50) / 130);
+  // Dynamic Mass & Kinetic Momentum Factor (Stiffer body response)
+  const massRatio = Math.max(0.5, Math.min(3.5, strikerMass / car.mass));
+  const effectiveSpeed = impactSpeed * Math.sqrt(massRatio);
 
-  // 1. Realistic Health Deduction (Scaled realistically, requiring significant speed/force for substantial damage)
-  const healthLoss = severity * (1.5 + severity * 7.0);
+  // Realistic Impact Severity calculation
+  const severity = Math.min(1.0, Math.max(0, effectiveSpeed - 50) / 130);
+
+  // 1. Stiffer Health Deduction
+  const healthLoss = severity * (1.0 + severity * 5.0) * Math.sqrt(massRatio);
   dmg.health = Math.max(0, dmg.health - healthLoss);
 
-  // 2. Localized Dynamic Vertex Deformation (Requires > 65 px/s ~ 24 km/h crash)
-  if (dmg.deformedVertices && impactSpeed > 65) {
-    const pushStrength = Math.min(7.0, (impactSpeed / 130) * 6.0);
-    const dentRadius = 18;
-    
+  // 2. Dynamic Vertex Deformation (Stiffer metal sheet, controlled displacement)
+  if (dmg.deformedVertices && impactSpeed > 55) {
+    const pushStrength = Math.min(10.0, (effectiveSpeed / 110) * 4.5 * Math.sqrt(massRatio));
+    const dentRadius = isNarrowImpact ? 16 : 20 * Math.min(1.3, Math.sqrt(massRatio));
+
     for (const v of dmg.deformedVertices) {
       const curX = v.localX + v.offsetX;
       const curY = v.localY + v.offsetY;
       const dist = Math.hypot(curX - localX, curY - localY);
-      
+
       if (dist < dentRadius) {
-        const falloff = (dentRadius - dist) / dentRadius;
         const len = Math.hypot(v.localX, v.localY);
         if (len > 0.001) {
           const dirX = -v.localX / len;
           const dirY = -v.localY / len;
-          const maxDent = len * 0.35;
-          const currentOffsetLen = Math.hypot(v.offsetX + dirX * pushStrength * falloff, v.offsetY + dirY * pushStrength * falloff);
-          
-          if (currentOffsetLen < maxDent) {
-            v.offsetX += dirX * pushStrength * falloff;
-            v.offsetY += dirY * pushStrength * falloff;
+          const maxDent = len * Math.min(0.48, 0.20 + severity * 0.28 * Math.sqrt(massRatio));
+
+          let falloff = 0;
+          if (isNarrowImpact) {
+            // TRIANGULAR / V-SHAPED WEDGE DENT (for poles, hydrants, building corners):
+            const contactNormX = localX / (halfL || 1);
+            const contactNormY = localY / (halfW || 1);
+            const contactLen = Math.hypot(contactNormX, contactNormY) || 1;
+            const impactLineX = -contactNormX / contactLen;
+            const impactLineY = -contactNormY / contactLen;
+            const tangentX = -impactLineY;
+            const tangentY = impactLineX;
+
+            const perpDist = Math.abs((curX - localX) * tangentX + (curY - localY) * tangentY);
+            const wedgeWidth = 12.0;
+            if (perpDist < wedgeWidth) {
+              const vWedge = 1.0 - (perpDist / wedgeWidth);
+              falloff = Math.pow(vWedge, 1.8);
+            }
+          } else {
+            // Broad circular/elliptical dent
+            falloff = Math.pow((dentRadius - dist) / dentRadius, 1.2);
+          }
+
+          if (falloff > 0) {
+            const addedPush = pushStrength * falloff;
+            const currentOffsetLen = Math.hypot(v.offsetX + dirX * addedPush, v.offsetY + dirY * addedPush);
+
+            if (currentOffsetLen < maxDent) {
+              v.offsetX += dirX * addedPush;
+              v.offsetY += dirY * addedPush;
+            }
           }
         }
       }
     }
   }
 
-  // 3. Structural crumple & component damage logic (Requires real crash speed > 60 px/s ~ 22 km/h)
-  if (normX > 0.3 && impactSpeed > 60) {
+  // 3. Structural crumple & component damage logic (Stiffer threshold & realistic caps)
+  const crushFactor = severity * (1.0 + severity * 3.0) * Math.sqrt(massRatio);
+
+  if (normX > 0.3 && impactSpeed > 55) {
     // --- FRONTAL COLLISION ---
-    const crushAmount = severity * (1.5 + severity * 3.5);
-    dmg.frontCrumple = Math.min(15, dmg.frontCrumple + crushAmount);
+    const maxFrontCrush = halfL * 0.45;
+    dmg.frontCrumple = Math.min(maxFrontCrush, dmg.frontCrumple + crushFactor);
 
     if (normY < -0.25) {
-      dmg.frontLeftDent = Math.min(10, dmg.frontLeftDent + crushAmount * 0.8);
+      dmg.frontLeftDent = Math.min(maxFrontCrush * 0.7, dmg.frontLeftDent + crushFactor * 0.8);
       if (severity > 0.4) dmg.leftHeadlightBroken = true;
     } else if (normY > 0.25) {
-      dmg.frontRightDent = Math.min(10, dmg.frontRightDent + crushAmount * 0.8);
+      dmg.frontRightDent = Math.min(maxFrontCrush * 0.7, dmg.frontRightDent + crushFactor * 0.8);
       if (severity > 0.4) dmg.rightHeadlightBroken = true;
     } else {
-      dmg.frontLeftDent = Math.min(8, dmg.frontLeftDent + crushAmount * 0.5);
-      dmg.frontRightDent = Math.min(8, dmg.frontRightDent + crushAmount * 0.5);
+      dmg.frontLeftDent = Math.min(maxFrontCrush * 0.6, dmg.frontLeftDent + crushFactor * 0.5);
       if (severity > 0.5) {
         dmg.leftHeadlightBroken = true;
         dmg.rightHeadlightBroken = true;
@@ -389,19 +420,19 @@ export function applyVehicleDamageAndDeformation(
     if (severity > 0.5 || dmg.frontCrumple > 8) {
       dmg.hoodBuckled = true;
     }
-    if (severity > 0.7 || dmg.frontCrumple > 11) {
+    if (severity > 0.7 || dmg.frontCrumple > 12) {
       dmg.windshieldCracked = true;
     }
-  } else if (normX < -0.3 && impactSpeed > 60) {
+  } else if (normX < -0.3 && impactSpeed > 55) {
     // --- REAR IMPACT ---
-    const rearCrush = severity * (1.5 + severity * 3.5);
-    dmg.rearCrumple = Math.min(12, dmg.rearCrumple + rearCrush);
+    const maxRearCrush = halfL * 0.35;
+    dmg.rearCrumple = Math.min(maxRearCrush, dmg.rearCrumple + crushFactor);
 
     if (normY < -0.25) {
-      dmg.rearLeftDent = Math.min(8, dmg.rearLeftDent + rearCrush * 0.8);
+      dmg.rearLeftDent = Math.min(maxRearCrush * 0.7, dmg.rearLeftDent + crushFactor * 0.8);
       if (severity > 0.45) dmg.leftTaillightBroken = true;
     } else if (normY > 0.25) {
-      dmg.rearRightDent = Math.min(8, dmg.rearRightDent + rearCrush * 0.8);
+      dmg.rearRightDent = Math.min(maxRearCrush * 0.7, dmg.rearRightDent + crushFactor * 0.8);
       if (severity > 0.45) dmg.rightTaillightBroken = true;
     } else {
       if (severity > 0.55) {
@@ -413,13 +444,15 @@ export function applyVehicleDamageAndDeformation(
     if (severity > 0.65) {
       dmg.rearGlassCracked = true;
     }
-  } else if (impactSpeed > 60) {
+  } else if (impactSpeed > 55) {
     // --- SIDE IMPACT / T-BONE ---
-    const sideDent = severity * (1.5 + severity * 3.5);
+    const maxSideDent = halfW * 0.55; // Stiffer side panels
+    const sideDent = crushFactor * 0.9;
+
     if (normY < 0) {
-      dmg.leftDent = Math.min(8, dmg.leftDent + sideDent);
+      dmg.leftDent = Math.min(maxSideDent, dmg.leftDent + sideDent);
     } else {
-      dmg.rightDent = Math.min(8, dmg.rightDent + sideDent);
+      dmg.rightDent = Math.min(maxSideDent, dmg.rightDent + sideDent);
     }
     if (severity > 0.6) {
       dmg.windshieldCracked = true;
@@ -512,40 +545,139 @@ export function updatePlayerPedestrianPhysics(
   dt: number,
   cameraAngle: number = 0,
   worldWidth: number = 8000,
-  worldHeight: number = 8000
+  worldHeight: number = 8000,
+  world?: GameWorld
 ) {
   if (player.isInVehicle) return;
 
-  let moveX = 0;
-  let moveY = 0;
-  if (input.forward) moveY -= 1;
-  if (input.backward) moveY += 1;
-  if (input.left) moveX -= 1;
-  if (input.right) moveX += 1;
+  // Dodge Roll / Quick Dash Trigger (Space key on foot)
+  if (input.handbrake && !player.isDashing && (player.dashTimer || 0) <= 0) {
+    player.isDashing = true;
+    player.dashTimer = 0.28; // Roll duration in seconds
 
-  const len = Math.hypot(moveX, moveY);
-  const baseSpeed = input.sprint ? 140 : 80;
+    // Roll in current input direction if WASD pressed, or facing direction
+    let inputX = 0;
+    let inputY = 0;
+    if (input.forward) inputY -= 1;
+    if (input.backward) inputY += 1;
+    if (input.left) inputX -= 1;
+    if (input.right) inputX += 1;
 
-  if (len > 0.01) {
-    moveX /= len;
-    moveY /= len;
-    
-    // Convert screen WASD vector to world coordinates based on camera angle
-    const moveAngle = cameraAngle + Math.PI / 2;
-    const cosM = Math.cos(moveAngle);
-    const sinM = Math.sin(moveAngle);
-    const worldMoveX = moveX * cosM - moveY * sinM;
-    const worldMoveY = moveX * sinM + moveY * cosM;
+    let rollAngle = player.angle;
+    if (Math.hypot(inputX, inputY) > 0.01) {
+      const len = Math.hypot(inputX, inputY);
+      inputX /= len;
+      inputY /= len;
+      const rotAngle = cameraAngle + Math.PI / 2;
+      const cosM = Math.cos(rotAngle);
+      const sinM = Math.sin(rotAngle);
+      const worldRollX = inputX * cosM - inputY * sinM;
+      const worldRollY = inputX * sinM + inputY * cosM;
+      rollAngle = Math.atan2(worldRollY, worldRollX);
+    }
 
-    player.vx = worldMoveX * baseSpeed;
-    player.vy = worldMoveY * baseSpeed;
-    player.angle = Math.atan2(worldMoveY, worldMoveX);
-    player.walkCycle += dt * (input.sprint ? 16 : 9);
-    player.speed = baseSpeed;
+    player.dashAngle = rollAngle;
+    player.angle = rollAngle;
+    sound.resume();
+  }
+
+  if (player.isDashing) {
+    player.dashTimer = (player.dashTimer || 0) - dt;
+    const dashSpeed = 260; // Energetic quick dash
+    const dAngle = player.dashAngle ?? player.angle;
+    player.vx = Math.cos(dAngle) * dashSpeed;
+    player.vy = Math.sin(dAngle) * dashSpeed;
+    player.speed = dashSpeed;
+    player.walkCycle += dt * 26;
+
+    // Dust particles on dodge roll
+    if (world && Math.random() < 0.65) {
+      world.particles.push({
+        x: player.x + (Math.random() * 8 - 4),
+        y: player.y + (Math.random() * 8 - 4),
+        vx: -Math.cos(dAngle) * 35 + (Math.random() * 20 - 10),
+        vy: -Math.sin(dAngle) * 35 + (Math.random() * 20 - 10),
+        radius: 2.5 + Math.random() * 2.5,
+        color: '#cbd5e1',
+        alpha: 0.6,
+        life: 0,
+        maxLife: 0.3,
+        type: 'tire_smoke'
+      });
+    }
+
+    if ((player.dashTimer || 0) <= 0) {
+      player.isDashing = false;
+      player.dashTimer = 0.32; // Brief cooldown before next dodge roll
+    }
   } else {
-    player.vx *= 0.75;
-    player.vy *= 0.75;
-    player.speed = Math.hypot(player.vx, player.vy);
+    if (player.dashTimer && player.dashTimer > 0) {
+      player.dashTimer -= dt;
+    }
+
+    let moveX = 0;
+    let moveY = 0;
+    if (input.forward) moveY -= 1;
+    if (input.backward) moveY += 1;
+    if (input.left) moveX -= 1;
+    if (input.right) moveX += 1;
+
+    const len = Math.hypot(moveX, moveY);
+    const targetSpeed = input.sprint ? 175 : 95; // Walk (95 px/s) vs Sprint (175 px/s)
+
+    if (len > 0.01) {
+      moveX /= len;
+      moveY /= len;
+
+      // Transform screen WASD input directly into world space relative to camera orientation
+      const rotAngle = cameraAngle + Math.PI / 2;
+      const cosM = Math.cos(rotAngle);
+      const sinM = Math.sin(rotAngle);
+      const worldMoveX = moveX * cosM - moveY * sinM;
+      const worldMoveY = moveX * sinM + moveY * cosM;
+
+      // Responsive acceleration lerp
+      const targetVx = worldMoveX * targetSpeed;
+      const targetVy = worldMoveY * targetSpeed;
+      player.vx += (targetVx - player.vx) * Math.min(1.0, 18 * dt);
+      player.vy += (targetVy - player.vy) * Math.min(1.0, 18 * dt);
+
+      // Smooth body rotation lerp towards movement direction
+      const targetAngle = Math.atan2(worldMoveY, worldMoveX);
+      let angleDiff = (targetAngle - player.angle) % (Math.PI * 2);
+      if (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
+      if (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
+      player.angle += angleDiff * Math.min(1.0, 20 * dt);
+
+      player.walkCycle += dt * (input.sprint ? 18 : 10);
+      player.speed = Math.hypot(player.vx, player.vy);
+
+      // Footstep dust particles when sprinting
+      if (input.sprint && world && Math.random() < 0.25) {
+        world.particles.push({
+          x: player.x,
+          y: player.y,
+          vx: (Math.random() * 16 - 8),
+          vy: (Math.random() * 16 - 8),
+          radius: 1.8 + Math.random() * 1.5,
+          color: '#94a3b8',
+          alpha: 0.35,
+          life: 0,
+          maxLife: 0.25,
+          type: 'tire_smoke'
+        });
+      }
+    } else {
+      // Snappy deceleration when input released
+      player.vx *= Math.pow(0.001, dt);
+      player.vy *= Math.pow(0.001, dt);
+      player.speed = Math.hypot(player.vx, player.vy);
+      if (player.speed < 1.0) {
+        player.vx = 0;
+        player.vy = 0;
+        player.speed = 0;
+      }
+    }
   }
 
   let newX = player.x + player.vx * dt;
@@ -764,7 +896,10 @@ export function updateVehiclePhysics(
     const accelRate = 90; // px/s^2 (no rapid jerking or shoving)
     const brakeRate = 180; // px/s^2
 
-    if (vehicle.aiState === 'reversing') {
+    if (vehicle.stunnedTimer && vehicle.stunnedTimer > 0) {
+      // AI is temporarily stunned/recoiling from severe impact momentum
+      vehicle.speed = Math.hypot(vehicle.vx, vehicle.vy) * Math.sign(vehicle.speed || 1);
+    } else if (vehicle.aiState === 'reversing') {
       // Smoothly reverse
       if (vehicle.speed > vehicle.targetSpeed) {
         vehicle.speed = Math.max(vehicle.targetSpeed, vehicle.speed - accelRate * 1.2 * dt);
@@ -790,9 +925,30 @@ export function updateVehiclePhysics(
     vehicle.vy = Math.sin(vehicle.angle) * vehicle.speed;
   }
 
-  // Update position
-  vehicle.x += vehicle.vx * dt;
-  vehicle.y += vehicle.vy * dt;
+  // Update position with combined engine velocity and physical knockback momentum
+  const totalVx = vehicle.vx + (vehicle.knockbackVx || 0);
+  const totalVy = vehicle.vy + (vehicle.knockbackVy || 0);
+  vehicle.x += totalVx * dt;
+  vehicle.y += totalVy * dt;
+
+  // Smooth exponential decay of physics knockback & spin recoil (Heavy tire friction dampening)
+  if (vehicle.knockbackVx || vehicle.knockbackVy) {
+    const kDecay = Math.pow(0.0001, dt);
+    vehicle.knockbackVx = (vehicle.knockbackVx || 0) * kDecay;
+    vehicle.knockbackVy = (vehicle.knockbackVy || 0) * kDecay;
+    if (Math.abs(vehicle.knockbackVx) < 0.1) vehicle.knockbackVx = 0;
+    if (Math.abs(vehicle.knockbackVy) < 0.1) vehicle.knockbackVy = 0;
+  }
+  if (vehicle.knockbackSpin) {
+    const spinDecay = Math.pow(0.0005, dt);
+    vehicle.angle += (vehicle.knockbackSpin || 0) * dt;
+    vehicle.knockbackSpin = (vehicle.knockbackSpin || 0) * spinDecay;
+    if (Math.abs(vehicle.knockbackSpin) < 0.01) vehicle.knockbackSpin = 0;
+  }
+  if (vehicle.stunnedTimer && vehicle.stunnedTimer > 0) {
+    vehicle.stunnedTimer -= dt;
+    if (vehicle.stunnedTimer <= 0) vehicle.stunnedTimer = 0;
+  }
 
   // --- VEHICLE-TO-VEHICLE COLLISION RESOLUTION ---
   for (const other of nearbyVehicles) {
@@ -817,58 +973,65 @@ export function updateVehiclePhysics(
 
       if (isPlayerInvolved) {
         // Player involved: full physics impulse, separation, deformation, and torque
-        const sepPush = 1.02;
+        const sepPush = 1.01;
         vehicle.x -= col.normalX * col.overlap * ratioSelf * sepPush;
         vehicle.y -= col.normalY * col.overlap * ratioSelf * sepPush;
         other.x += col.normalX * col.overlap * ratioOther * sepPush;
         other.y += col.normalY * col.overlap * ratioOther * sepPush;
 
-        const relVx = other.vx - vehicle.vx;
-        const relVy = other.vy - vehicle.vy;
+        const relVx = (other.vx + (other.knockbackVx || 0)) - (vehicle.vx + (vehicle.knockbackVx || 0));
+        const relVy = (other.vy + (other.knockbackVy || 0)) - (vehicle.vy + (vehicle.knockbackVy || 0));
         const velAlongNormal = relVx * col.normalX + relVy * col.normalY;
 
         if (velAlongNormal < 0) {
-          const restitution = 0.22;
+          const restitution = 0.10; // Realistic low inelastic rebound for vehicle bodies
           const impulseMagnitude = -(1 + restitution) * velAlongNormal / (1 / vehicle.mass + 1 / other.mass);
-          const impulseX = impulseMagnitude * col.normalX;
-          const impulseY = impulseMagnitude * col.normalY;
+          
+          // Controlled knockback factor: zero knockback for light touches (< 30 px/s), damped scale for moderate hits
+          const knockbackScale = Math.min(1.0, Math.max(0, (Math.abs(velAlongNormal) - 30) / 80)) * 0.22;
+          const impulseX = impulseMagnitude * col.normalX * knockbackScale;
+          const impulseY = impulseMagnitude * col.normalY * knockbackScale;
 
-          vehicle.vx -= impulseX / vehicle.mass;
-          vehicle.vy -= impulseY / vehicle.mass;
-          other.vx += impulseX / other.mass;
-          other.vy += impulseY / other.mass;
+          vehicle.knockbackVx = (vehicle.knockbackVx || 0) - impulseX / vehicle.mass;
+          vehicle.knockbackVy = (vehicle.knockbackVy || 0) - impulseY / vehicle.mass;
+          other.knockbackVx = (other.knockbackVx || 0) + impulseX / other.mass;
+          other.knockbackVy = (other.knockbackVy || 0) + impulseY / other.mass;
 
           if (vehicle.isPlayerControlled) {
-            vehicle.speed = Math.hypot(vehicle.vx, vehicle.vy) * Math.sign(vehicle.speed || 1);
+            vehicle.speed = Math.hypot(vehicle.vx + (vehicle.knockbackVx || 0), vehicle.vy + (vehicle.knockbackVy || 0)) * Math.sign(vehicle.speed || 1);
           } else {
-            vehicle.speed = Math.max(-20, Math.min(vehicle.speed * 0.5, 40));
+            vehicle.speed = Math.hypot(vehicle.vx + (vehicle.knockbackVx || 0), vehicle.vy + (vehicle.knockbackVy || 0));
+            if (impulseMagnitude / vehicle.mass > 40) {
+              vehicle.stunnedTimer = Math.min(0.8, (impulseMagnitude / vehicle.mass) / 80);
+            }
           }
 
           if (other.isPlayerControlled) {
-            other.speed = Math.hypot(other.vx, other.vy) * Math.sign(other.speed || 1);
+            other.speed = Math.hypot(other.vx + (other.knockbackVx || 0), other.vy + (other.knockbackVy || 0)) * Math.sign(other.speed || 1);
           } else {
-            other.speed = Math.max(-20, Math.min(other.speed * 0.5, 40));
+            other.speed = Math.hypot(other.vx + (other.knockbackVx || 0), other.vy + (other.knockbackVy || 0));
+            if (impulseMagnitude / other.mass > 40) {
+              other.stunnedTimer = Math.min(0.8, (impulseMagnitude / other.mass) / 80);
+            }
           }
 
           const impactSpeed = Math.abs(velAlongNormal);
           const scrapeSpeed = Math.abs(relVx * -col.normalY + relVy * col.normalX);
 
-          applyVehicleDamageAndDeformation(vehicle, col.contactX, col.contactY, impactSpeed, scrapeSpeed, world);
-          applyVehicleDamageAndDeformation(other, col.contactX, col.contactY, impactSpeed, scrapeSpeed, world);
+          applyVehicleDamageAndDeformation(vehicle, col.contactX, col.contactY, impactSpeed, scrapeSpeed, world, other.mass, false);
+          applyVehicleDamageAndDeformation(other, col.contactX, col.contactY, impactSpeed, scrapeSpeed, world, vehicle.mass, false);
 
           const rxVehicle = col.contactX - vehicle.x;
           const ryVehicle = col.contactY - vehicle.y;
           const rawTorqueV = (rxVehicle * impulseY - ryVehicle * impulseX);
-          const torqueV = Math.max(-1.5, Math.min(1.5, rawTorqueV / (vehicle.mass * 250)));
-          vehicle.angularVelocity = (vehicle.angularVelocity || 0) * 0.3 + torqueV;
-          vehicle.angle += vehicle.angularVelocity * dt * 0.3;
+          const torqueV = Math.max(-1.0, Math.min(1.0, rawTorqueV / (vehicle.mass * 450)));
+          vehicle.knockbackSpin = (vehicle.knockbackSpin || 0) + torqueV;
 
           const rxOther = col.contactX - other.x;
           const ryOther = col.contactY - other.y;
           const rawTorqueO = -(rxOther * impulseY - ryOther * impulseX);
-          const torqueO = Math.max(-1.5, Math.min(1.5, rawTorqueO / (other.mass * 250)));
-          other.angularVelocity = (other.angularVelocity || 0) * 0.3 + torqueO;
-          other.angle += other.angularVelocity * dt * 0.3;
+          const torqueO = Math.max(-1.0, Math.min(1.0, rawTorqueO / (other.mass * 450)));
+          other.knockbackSpin = (other.knockbackSpin || 0) + torqueO;
 
           const impactIntensity = Math.min(1.0, impactSpeed / 160);
           if (impactIntensity > 0.1) {
@@ -915,8 +1078,8 @@ export function updateVehiclePhysics(
         const impactSpeed = Math.hypot(relVx, relVy);
         if (impactSpeed > 18) {
           const scrapeSpeed = Math.abs(relVx * -col.normalY + relVy * col.normalX);
-          applyVehicleDamageAndDeformation(vehicle, col.contactX, col.contactY, impactSpeed, scrapeSpeed, world);
-          applyVehicleDamageAndDeformation(other, col.contactX, col.contactY, impactSpeed, scrapeSpeed, world);
+          applyVehicleDamageAndDeformation(vehicle, col.contactX, col.contactY, impactSpeed, scrapeSpeed, world, other.mass, false);
+          applyVehicleDamageAndDeformation(other, col.contactX, col.contactY, impactSpeed, scrapeSpeed, world, vehicle.mass, false);
         }
       }
     }
@@ -944,7 +1107,7 @@ export function updateVehiclePhysics(
       const contactX = vehicle.x - col.normalX * (vehicle.length / 2);
       const contactY = vehicle.y - col.normalY * (vehicle.width / 2);
 
-      applyVehicleDamageAndDeformation(vehicle, contactX, contactY, impactSpeed, 10, world);
+      applyVehicleDamageAndDeformation(vehicle, contactX, contactY, impactSpeed, 10, world, 12000, true);
 
       if (vehicle.isPlayerControlled) {
         sound.playCollision(Math.min(1.0, impactSpeed / 120));
@@ -1106,6 +1269,7 @@ export function updateBreakablePropsAndLivingWorld(world: GameWorld, player: Pla
         prop.breakSpin = (Math.random() - 0.5) * 10;
 
         sound.playPropBreak(prop.type);
+        applyVehicleDamageAndDeformation(veh, prop.x, prop.y, impactSpeed, 15, world, 600, true);
 
         if (prop.type === 'hydrant') {
           prop.waterFountainTimer = 35;

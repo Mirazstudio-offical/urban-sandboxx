@@ -73,9 +73,9 @@ export const CAR_CONFIGS: Record<CarType, CarConfig> = {
     length: 42,
     wheelBase: 26,
     mass: 1400,
-    maxSpeed: 210,
-    reverseMaxSpeed: 80,
-    acceleration: 115,
+    maxSpeed: 165,
+    reverseMaxSpeed: 60,
+    acceleration: 105,
     brakingForce: 240,
     friction: 0.988,
     turnSpeed: 4.2,
@@ -83,7 +83,7 @@ export const CAR_CONFIGS: Record<CarType, CarConfig> = {
     minSteerAngle: 0.14,
     grip: 0.985,
     driftGrip: 0.38,
-    name: 'Executive Sedan'
+    name: 'Седан'
   },
   hatchback: {
     type: 'hatchback',
@@ -91,9 +91,9 @@ export const CAR_CONFIGS: Record<CarType, CarConfig> = {
     length: 38,
     wheelBase: 23,
     mass: 1150,
-    maxSpeed: 200,
-    reverseMaxSpeed: 75,
-    acceleration: 125,
+    maxSpeed: 175,
+    reverseMaxSpeed: 65,
+    acceleration: 115,
     brakingForce: 250,
     friction: 0.988,
     turnSpeed: 4.5,
@@ -101,7 +101,7 @@ export const CAR_CONFIGS: Record<CarType, CarConfig> = {
     minSteerAngle: 0.15,
     grip: 0.988,
     driftGrip: 0.40,
-    name: 'Compact Hatch'
+    name: 'Хэтчбек'
   },
   pickup: {
     type: 'pickup',
@@ -109,9 +109,9 @@ export const CAR_CONFIGS: Record<CarType, CarConfig> = {
     length: 48,
     wheelBase: 30,
     mass: 2200,
-    maxSpeed: 185,
-    reverseMaxSpeed: 70,
-    acceleration: 95,
+    maxSpeed: 155,
+    reverseMaxSpeed: 55,
+    acceleration: 85,
     brakingForce: 220,
     friction: 0.985,
     turnSpeed: 3.6,
@@ -119,7 +119,7 @@ export const CAR_CONFIGS: Record<CarType, CarConfig> = {
     minSteerAngle: 0.12,
     grip: 0.975,
     driftGrip: 0.32,
-    name: 'Heavy Duty 4x4'
+    name: 'Пикап'
   },
   sports: {
     type: 'sports',
@@ -127,9 +127,9 @@ export const CAR_CONFIGS: Record<CarType, CarConfig> = {
     length: 44,
     wheelBase: 27,
     mass: 1320,
-    maxSpeed: 260,
-    reverseMaxSpeed: 95,
-    acceleration: 155,
+    maxSpeed: 240,
+    reverseMaxSpeed: 85,
+    acceleration: 145,
     brakingForce: 290,
     friction: 0.990,
     turnSpeed: 4.6,
@@ -137,35 +137,35 @@ export const CAR_CONFIGS: Record<CarType, CarConfig> = {
     minSteerAngle: 0.13,
     grip: 0.990,
     driftGrip: 0.44,
-    name: 'Apex GT Turbo'
+    name: 'Спорткар'
   },
   suv: {
     type: 'suv',
-    width: 22,
-    length: 46,
-    wheelBase: 28,
-    mass: 1950,
-    maxSpeed: 195,
-    reverseMaxSpeed: 75,
-    acceleration: 105,
-    brakingForce: 230,
-    friction: 0.986,
-    turnSpeed: 3.8,
-    maxSteerAngle: 0.70,
-    minSteerAngle: 0.13,
-    grip: 0.980,
-    driftGrip: 0.34,
-    name: 'Vanguard SUV'
-  },
-  taxi: {
-    type: 'taxi',
-    width: 20,
+    width: 21,
     length: 42,
     wheelBase: 26,
     mass: 1450,
-    maxSpeed: 205,
-    reverseMaxSpeed: 80,
-    acceleration: 120,
+    maxSpeed: 160,
+    reverseMaxSpeed: 60,
+    acceleration: 95,
+    brakingForce: 230,
+    friction: 0.986,
+    turnSpeed: 3.8,
+    maxSteerAngle: 0.72,
+    minSteerAngle: 0.13,
+    grip: 0.980,
+    driftGrip: 0.36,
+    name: 'Внедорожник'
+  },
+  taxi: {
+    type: 'taxi',
+    width: 21,
+    length: 46,
+    wheelBase: 28,
+    mass: 1450,
+    maxSpeed: 170,
+    reverseMaxSpeed: 65,
+    acceleration: 105,
     brakingForce: 245,
     friction: 0.988,
     turnSpeed: 4.2,
@@ -173,17 +173,17 @@ export const CAR_CONFIGS: Record<CarType, CarConfig> = {
     minSteerAngle: 0.14,
     grip: 0.985,
     driftGrip: 0.38,
-    name: 'City Yellow Cab'
+    name: 'Такси'
   },
   police: {
     type: 'police',
     width: 21,
-    length: 44,
-    wheelBase: 27,
-    mass: 1650,
-    maxSpeed: 245,
-    reverseMaxSpeed: 90,
-    acceleration: 140,
+    length: 46,
+    wheelBase: 28,
+    mass: 1550,
+    maxSpeed: 195,
+    reverseMaxSpeed: 75,
+    acceleration: 130,
     brakingForce: 275,
     friction: 0.989,
     turnSpeed: 4.4,
@@ -191,35 +191,35 @@ export const CAR_CONFIGS: Record<CarType, CarConfig> = {
     minSteerAngle: 0.13,
     grip: 0.988,
     driftGrip: 0.40,
-    name: 'Interceptor Cruiser'
+    name: 'Полицейский автомобиль'
   },
   fire_engine: {
     type: 'fire_engine',
-    width: 26,
-    length: 64,
-    wheelBase: 40,
-    mass: 3500,
-    maxSpeed: 160,
-    reverseMaxSpeed: 50,
-    acceleration: 80,
-    brakingForce: 280,
-    friction: 0.985,
-    turnSpeed: 3.0,
-    maxSteerAngle: 0.60,
-    minSteerAngle: 0.10,
+    width: 29,
+    length: 74,
+    wheelBase: 44,
+    mass: 5400,
+    maxSpeed: 145,
+    reverseMaxSpeed: 40,
+    acceleration: 70,
+    brakingForce: 290,
+    friction: 0.984,
+    turnSpeed: 2.7,
+    maxSteerAngle: 0.54,
+    minSteerAngle: 0.08,
     grip: 0.97,
-    driftGrip: 0.30,
-    name: 'ZIL-130 Fire Engine (ЗиЛ-130 Пожарный)'
+    driftGrip: 0.28,
+    name: 'Пожарный автомобиль'
   },
   bus: {
     type: 'bus',
     width: 28,
-    length: 72,
+    length: 74,
     wheelBase: 46,
-    mass: 4200,
-    maxSpeed: 150,
-    reverseMaxSpeed: 45,
-    acceleration: 70,
+    mass: 4600,
+    maxSpeed: 140,
+    reverseMaxSpeed: 40,
+    acceleration: 65,
     brakingForce: 260,
     friction: 0.985,
     turnSpeed: 2.8,
@@ -227,71 +227,71 @@ export const CAR_CONFIGS: Record<CarType, CarConfig> = {
     minSteerAngle: 0.08,
     grip: 0.97,
     driftGrip: 0.28,
-    name: 'PAZ-3205 City Bus (ПАЗ-3205 Автобус)'
+    name: 'Городской автобус'
   },
   van: {
     type: 'van',
-    width: 22,
-    length: 46,
-    wheelBase: 28,
-    mass: 1700,
-    maxSpeed: 180,
-    reverseMaxSpeed: 65,
-    acceleration: 100,
+    width: 21,
+    length: 44,
+    wheelBase: 27,
+    mass: 1720,
+    maxSpeed: 155,
+    reverseMaxSpeed: 55,
+    acceleration: 90,
     brakingForce: 230,
     friction: 0.986,
-    turnSpeed: 3.8,
-    maxSteerAngle: 0.70,
+    turnSpeed: 3.9,
+    maxSteerAngle: 0.72,
     minSteerAngle: 0.12,
     grip: 0.98,
     driftGrip: 0.35,
-    name: 'UAZ-452 Bukhanka (УАЗ-452 Буханка)'
+    name: 'Микроавтобус'
   },
   muscle: {
     type: 'muscle',
     width: 21,
     length: 46,
     wheelBase: 29,
-    mass: 1450,
-    maxSpeed: 210,
-    reverseMaxSpeed: 80,
-    acceleration: 120,
+    mass: 1420,
+    maxSpeed: 175,
+    reverseMaxSpeed: 65,
+    acceleration: 110,
     brakingForce: 240,
     friction: 0.988,
     turnSpeed: 4.2,
     maxSteerAngle: 0.75,
     minSteerAngle: 0.14,
     grip: 0.982,
-    driftGrip: 0.42,
-    name: 'GAZ-24 Volga Classic (ГАЗ-24 Волга)'
+    driftGrip: 0.40,
+    name: 'Классический седан'
   },
   ambulance: {
     type: 'ambulance',
     width: 21,
     length: 46,
     wheelBase: 28,
-    mass: 1550,
-    maxSpeed: 215,
-    reverseMaxSpeed: 85,
-    acceleration: 130,
+    mass: 1650,
+    maxSpeed: 175,
+    reverseMaxSpeed: 65,
+    acceleration: 115,
     brakingForce: 260,
     friction: 0.988,
-    turnSpeed: 4.3,
-    maxSteerAngle: 0.74,
-    minSteerAngle: 0.13,
+    turnSpeed: 4.1,
+    maxSteerAngle: 0.72,
+    minSteerAngle: 0.12,
     grip: 0.985,
-    driftGrip: 0.38,
-    name: 'RAF-2203 Ambulance (РАФ Скорая Помощь)'
+    driftGrip: 0.36,
+    name: 'Скорая помощь'
   },
   truck_box: {
     type: 'truck_box',
-    width: 27,
-    length: 70,
-    wheelBase: 44,
-    mass: 4800,
-    maxSpeed: 155,
-    reverseMaxSpeed: 45,
-    acceleration: 75,
+    width: 28,
+    length: 82,
+    wheelBase: 50,
+    mass: 5200,
+    maxSpeed: 145,
+    reverseMaxSpeed: 40,
+    acceleration: 70,
     brakingForce: 270,
     friction: 0.984,
     turnSpeed: 2.7,
@@ -299,17 +299,17 @@ export const CAR_CONFIGS: Record<CarType, CarConfig> = {
     minSteerAngle: 0.08,
     grip: 0.965,
     driftGrip: 0.28,
-    name: 'KamAZ-5320 Box Cargo (КамАЗ Фургон)'
+    name: 'Грузовой фургон'
   },
   truck_dump: {
     type: 'truck_dump',
-    width: 28,
-    length: 68,
-    wheelBase: 42,
-    mass: 5500,
-    maxSpeed: 145,
-    reverseMaxSpeed: 40,
-    acceleration: 70,
+    width: 29,
+    length: 78,
+    wheelBase: 48,
+    mass: 5600,
+    maxSpeed: 140,
+    reverseMaxSpeed: 38,
+    acceleration: 68,
     brakingForce: 285,
     friction: 0.983,
     turnSpeed: 2.6,
@@ -317,17 +317,17 @@ export const CAR_CONFIGS: Record<CarType, CarConfig> = {
     minSteerAngle: 0.08,
     grip: 0.960,
     driftGrip: 0.26,
-    name: 'MAZ-5551 Heavy Tipper (МАЗ Самосвал)'
+    name: 'Самосвал'
   },
   truck_tanker: {
     type: 'truck_tanker',
-    width: 27,
-    length: 74,
-    wheelBase: 47,
-    mass: 5200,
-    maxSpeed: 150,
-    reverseMaxSpeed: 40,
-    acceleration: 68,
+    width: 28,
+    length: 84,
+    wheelBase: 52,
+    mass: 5500,
+    maxSpeed: 145,
+    reverseMaxSpeed: 38,
+    acceleration: 65,
     brakingForce: 275,
     friction: 0.984,
     turnSpeed: 2.5,
@@ -335,35 +335,35 @@ export const CAR_CONFIGS: Record<CarType, CarConfig> = {
     minSteerAngle: 0.07,
     grip: 0.955,
     driftGrip: 0.25,
-    name: 'Ural-4320 Fuel Tanker (Урал Автоцистерна)'
+    name: 'Автоцистерна'
   },
   truck_flatbed: {
     type: 'truck_flatbed',
-    width: 27,
-    length: 68,
-    wheelBase: 43,
-    mass: 4500,
-    maxSpeed: 160,
-    reverseMaxSpeed: 50,
-    acceleration: 80,
+    width: 28,
+    length: 84,
+    wheelBase: 52,
+    mass: 4900,
+    maxSpeed: 150,
+    reverseMaxSpeed: 42,
+    acceleration: 75,
     brakingForce: 270,
     friction: 0.985,
-    turnSpeed: 2.8,
-    maxSteerAngle: 0.54,
-    minSteerAngle: 0.09,
+    turnSpeed: 2.7,
+    maxSteerAngle: 0.52,
+    minSteerAngle: 0.08,
     grip: 0.970,
-    driftGrip: 0.30,
-    name: 'ZIL-133 Flatbed Cargo (ЗиЛ Бортовой)'
+    driftGrip: 0.29,
+    name: 'Бортовой грузовик'
   },
   cement_mixer: {
     type: 'cement_mixer',
-    width: 28,
-    length: 72,
-    wheelBase: 45,
-    mass: 5800,
-    maxSpeed: 140,
-    reverseMaxSpeed: 38,
-    acceleration: 65,
+    width: 29,
+    length: 80,
+    wheelBase: 50,
+    mass: 5900,
+    maxSpeed: 135,
+    reverseMaxSpeed: 35,
+    acceleration: 62,
     brakingForce: 290,
     friction: 0.982,
     turnSpeed: 2.4,
@@ -371,17 +371,17 @@ export const CAR_CONFIGS: Record<CarType, CarConfig> = {
     minSteerAngle: 0.07,
     grip: 0.950,
     driftGrip: 0.24,
-    name: 'KamAZ Concrete Mixer (КамАЗ Автобетономешалка)'
+    name: 'Автобетономешалка'
   },
   garbage_truck: {
     type: 'garbage_truck',
-    width: 28,
-    length: 68,
-    wheelBase: 43,
-    mass: 5100,
-    maxSpeed: 145,
-    reverseMaxSpeed: 42,
-    acceleration: 72,
+    width: 29,
+    length: 78,
+    wheelBase: 48,
+    mass: 5200,
+    maxSpeed: 140,
+    reverseMaxSpeed: 40,
+    acceleration: 70,
     brakingForce: 280,
     friction: 0.984,
     turnSpeed: 2.6,
@@ -389,7 +389,7 @@ export const CAR_CONFIGS: Record<CarType, CarConfig> = {
     minSteerAngle: 0.08,
     grip: 0.965,
     driftGrip: 0.27,
-    name: 'KO-440 Municipal Compactor (КО-440 Мусоровоз)'
+    name: 'Мусоровоз'
   }
 };
 
@@ -1443,14 +1443,14 @@ export function generateCityWorld(): GameWorld {
             x: pkX + 45,
             y: sy,
             angle: 0,
-            occupied: Math.random() > 0.25
+            occupied: Math.random() < 0.0225
           });
           // Right stall row
           spots.push({
             x: pkX + parkW - 45,
             y: sy,
             angle: Math.PI,
-            occupied: Math.random() > 0.25
+            occupied: Math.random() < 0.0225
           });
         }
 
@@ -1597,7 +1597,7 @@ export function generateCityWorld(): GameWorld {
             x: courtPkX + courtPkW / 2,
             y: courtPkY + 18 + cs * 42,
             angle: 0,
-            occupied: Math.random() > 0.25
+            occupied: Math.random() < 0.0225
           });
         }
 
@@ -2187,7 +2187,9 @@ export function generateCityWorld(): GameWorld {
   // 5. SPAWN INITIAL PEDESTRIANS (on sidewalks)
   let pedCounter = 0;
   pedestrianPaths.forEach((path) => {
-    const numPeds = 2 + Math.floor(Math.random() * 2);
+    // Sparse initial spawn (spawns ~25-30 pedestrians across map, dynamically recycled around player)
+    if (Math.random() > 0.35) return;
+    const numPeds = 1;
     for (let p = 0; p < numPeds; p++) {
       const wpIdx = Math.floor(Math.random() * (path.waypoints.length - 1));
       const wp1 = path.waypoints[wpIdx];
