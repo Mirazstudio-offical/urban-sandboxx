@@ -15,13 +15,20 @@ export type CarType =
   | 'taxi' 
   | 'police' 
   | 'fire_engine' 
+  | 'fire_ladder'
+  | 'fire_rescue'
   | 'bus' 
+  | 'bus_articulated'
+  | 'bus_minibus'
   | 'van' 
   | 'muscle' 
   | 'ambulance'
+  | 'ambulance_van'
+  | 'ambulance_suv'
   | 'truck_box'
   | 'truck_dump'
   | 'truck_tanker'
+  | 'truck_water'
   | 'truck_flatbed'
   | 'cement_mixer'
   | 'garbage_truck';
@@ -187,10 +194,15 @@ export interface Pedestrian {
   
   gender?: 'male' | 'female';
   ageGroup?: 'child' | 'adult' | 'elderly';
-  hairStyle?: 'short' | 'long' | 'bald' | 'bun' | 'spiky' | 'ponytail';
+  clothingType?: 'tshirt' | 'button_shirt' | 'open_jacket' | 'hoodie' | 'dress' | 'suit' | 'vest';
+  jacketColor?: string;
+  innerShirtColor?: string;
+  hairStyle?: 'short' | 'long' | 'bald' | 'bun' | 'spiky' | 'ponytail' | 'curly' | 'afro';
   hasHat?: boolean;
   hatColor?: string;
-  hatType?: 'cap' | 'beanie' | 'sunhat';
+  hatType?: 'cap' | 'beanie' | 'sunhat' | 'fedora';
+  hasGlasses?: boolean;
+  hasHeadphones?: boolean;
   
   // Handheld props
   handheldProp?: 'phone' | 'coffee' | 'bag' | 'box' | null;
@@ -318,7 +330,7 @@ export interface Building {
   y: number;
   width: number;
   height: number;
-  type: 'office' | 'residential' | 'shop' | 'suburban' | 'industrial' | 'park_monument' | 'police_station' | 'fire_station' | 'hospital';
+  type: 'office' | 'residential' | 'shop' | 'commercial' | 'suburban' | 'industrial' | 'park_monument' | 'police_station' | 'fire_station' | 'hospital';
   color: string;
   roofColor: string;
   accentColor: string;
@@ -512,6 +524,21 @@ export interface SidewalkBlock {
     side: 'north' | 'south' | 'east' | 'west';
     offset: number;
     width: number;
+  }[];
+  walkways?: {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    style?: 'stone' | 'concrete' | 'cobblestone' | 'asphalt';
+  }[];
+  plazas?: {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    shape?: 'rect' | 'circle';
+    style?: 'stone' | 'tile' | 'cobblestone';
   }[];
 }
 

@@ -13,6 +13,7 @@ import {
   Vehicle 
 } from './types';
 import { trafficDiagnostics } from './aiTraffic';
+import { renderSpecializedVehicleAttachments } from './vehicleVisuals';
 
 const hashString = (str: string): number => {
   let hash = 0;
@@ -22,6 +23,101 @@ const hashString = (str: string): number => {
   }
   return (Math.abs(hash) % 1000) / 1000;
 };
+
+// --- SAFE CANVAS PRIMITIVES TO PREVENT IndexSizeError DOMExceptions ---
+function safeRoundRect(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  radius: number = 0
+) {
+  if (!isFinite(x) || !isFinite(y) || !isFinite(w) || !isFinite(h) || w <= 0 || h <= 0) return;
+  const r = Math.min(Math.max(0, isFinite(radius) ? radius : 0), w / 2, h / 2);
+  if (typeof ctx.roundRect === 'function') {
+    try {
+      ctx.roundRect(x, y, w, h, r);
+      return;
+    } catch {
+      // Fall through to path fallback if roundRect throws IndexSizeError
+    }
+  }
+  ctx.moveTo(x + r, y);
+  ctx.lineTo(x + w - r, y);
+  ctx.arcTo(x + w, y, x + w, y + r, r);
+  ctx.lineTo(x + w, y + h - r);
+  ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
+  ctx.lineTo(x + r, y + h);
+  ctx.arcTo(x, y + h, x, y + h - r, r);
+  ctx.lineTo(x, y + r);
+  ctx.arcTo(x, y, x + r, y, r);
+}
+
+function safeEllipse(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  radiusX: number,
+  radiusY: number,
+  rotation: number,
+  startAngle: number,
+  endAngle: number,
+  counterclockwise?: boolean
+) {
+  if (!isFinite(x) || !isFinite(y)) return;
+  const rx = Math.max(0.001, isFinite(radiusX) ? Math.abs(radiusX) : 0.001);
+  const ry = Math.max(0.001, isFinite(radiusY) ? Math.abs(radiusY) : 0.001);
+  const rot = isFinite(rotation) ? rotation : 0;
+  try {
+    ctx.ellipse(x, y, rx, ry, rot, startAngle, endAngle, counterclockwise);
+  } catch {
+    // Ignore invalid parameters safely
+  }
+}
+
+function safeArc(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  radius: number,
+  startAngle: number,
+  endAngle: number,
+  counterclockwise?: boolean
+) {
+  if (!isFinite(x) || !isFinite(y)) return;
+  const r = Math.max(0, isFinite(radius) ? radius : 0);
+  try {
+    ctx.arc(x, y, r, startAngle, endAngle, counterclockwise);
+  } catch {
+    // Ignore invalid parameters safely
+  }
+}
+
+function safeRadialGradient(
+  ctx: CanvasRenderingContext2D,
+  x0: number,
+  y0: number,
+  r0: number,
+  x1: number,
+  y1: number,
+  r1: number
+): CanvasGradient {
+  const safeX0 = isFinite(x0) ? x0 : 0;
+  const safeY0 = isFinite(y0) ? y0 : 0;
+  const safeX1 = isFinite(x1) ? x1 : 0;
+  const safeY1 = isFinite(y1) ? y1 : 0;
+  const safeR0 = Math.max(0, isFinite(r0) ? r0 : 0);
+  const safeR1 = Math.max(0, isFinite(r1) ? r1 : 0);
+  try {
+    return ctx.createRadialGradient(safeX0, safeY0, safeR0, safeX1, safeY1, safeR1);
+  } catch {
+    // Return dummy transparent gradient on failure
+    const dummy = ctx.createLinearGradient(0, 0, 1, 1);
+    dummy.addColorStop(0, 'rgba(0,0,0,0)');
+    return dummy;
+  }
+}
 
 export class GameRenderer {
   private ctx: CanvasRenderingContext2D;
@@ -136,7 +232,7 @@ export class GameRenderer {
     this.renderParkings(world, minX, minY, maxX, maxY);
 
     // 8. Buildings Base Structure & Entrances
-    this.renderBuildingBases(visibleBuildings);
+    this.renderBuildingBases(visibleBuildings, nightAlpha);
 
     // 8b. Street Litter & Flying Paper / Wind Debris
     this.renderLitter(world.litter, minX, minY, maxX, maxY, nightAlpha);
@@ -686,6 +782,160 @@ export class GameRenderer {
         ctx.strokeStyle = 'rgba(15, 23, 42, 0.35)';
         ctx.lineWidth = 1.5;
         ctx.strokeRect(innerX, innerY, innerW, innerH);
+
+        // 4a. Inner Paved Plazas & Gathering Squares (Paved gathering squares, Fountain plazas)
+        if (sw.plazas) {
+          for (const pl of sw.plazas) {
+            ctx.save();
+            const plX = pl.x;
+            const plY = pl.y;
+            const plW = pl.width;
+            const plH = pl.height;
+
+            let plazaPave = '#94a3b8';
+            let plazaBorder = '#cbd5e1';
+            let plazaJoint = 'rgba(15, 23, 42, 0.18)';
+
+            if (pl.style === 'cobblestone') {
+              plazaPave = '#64748b';
+              plazaBorder = '#94a3b8';
+              plazaJoint = 'rgba(15, 23, 42, 0.28)';
+            } else if (pl.style === 'tile') {
+              plazaPave = '#cbd5e1';
+              plazaBorder = '#f1f5f9';
+              plazaJoint = 'rgba(30, 41, 59, 0.22)';
+            } else if (pl.style === 'stone') {
+              plazaPave = '#78716c';
+              plazaBorder = '#a8a29e';
+              plazaJoint = 'rgba(28, 25, 23, 0.25)';
+            }
+
+            if (pl.shape === 'circle') {
+              const radius = plW / 2;
+              const cx = plX + radius;
+              const cy = plY + radius;
+
+              // Shadow / curb
+              ctx.fillStyle = 'rgba(15, 23, 42, 0.3)';
+              ctx.beginPath();
+              ctx.arc(cx + 2, cy + 2, radius + 2, 0, Math.PI * 2);
+              ctx.fill();
+
+              // Main circle fill
+              ctx.fillStyle = plazaPave;
+              ctx.beginPath();
+              ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+              ctx.fill();
+
+              // Outer curb
+              ctx.strokeStyle = plazaBorder;
+              ctx.lineWidth = 2.5;
+              ctx.beginPath();
+              ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+              ctx.stroke();
+
+              // Decorative concentric rings
+              ctx.strokeStyle = plazaJoint;
+              ctx.lineWidth = 1.2;
+              ctx.beginPath();
+              ctx.arc(cx, cy, radius * 0.65, 0, Math.PI * 2);
+              ctx.arc(cx, cy, radius * 0.35, 0, Math.PI * 2);
+              ctx.stroke();
+
+              // Radiating spoke joints
+              ctx.beginPath();
+              for (let a = 0; a < Math.PI * 2; a += Math.PI / 4) {
+                ctx.moveTo(cx + Math.cos(a) * (radius * 0.35), cy + Math.sin(a) * (radius * 0.35));
+                ctx.lineTo(cx + Math.cos(a) * radius, cy + Math.sin(a) * radius);
+              }
+              ctx.stroke();
+            } else {
+              // Rectangular plaza
+              ctx.fillStyle = 'rgba(15, 23, 42, 0.25)';
+              ctx.fillRect(plX + 2, plY + 2, plW, plH);
+
+              ctx.fillStyle = plazaPave;
+              ctx.fillRect(plX, plY, plW, plH);
+
+              // Grid joint lines
+              ctx.strokeStyle = plazaJoint;
+              ctx.lineWidth = 1;
+              ctx.beginPath();
+              const pTile = 24;
+              for (let px = plX; px <= plX + plW; px += pTile) {
+                ctx.moveTo(px, plY);
+                ctx.lineTo(px, plY + plH);
+              }
+              for (let py = plY; py <= plY + plH; py += pTile) {
+                ctx.moveTo(plX, py);
+                ctx.lineTo(plX + plW, py);
+              }
+              ctx.stroke();
+
+              // Outer curb border
+              ctx.strokeStyle = plazaBorder;
+              ctx.lineWidth = 2;
+              ctx.strokeRect(plX, plY, plW, plH);
+            }
+            ctx.restore();
+          }
+        }
+
+        // 4b. Inner Paved Walkways / Paths (Тротуары во дворах и парках)
+        if (sw.walkways) {
+          for (const wk of sw.walkways) {
+            ctx.save();
+            let pathColor = '#64748b'; // standard urban path
+            let pathBorder = '#94a3b8';
+            let pathJoint = 'rgba(15, 23, 42, 0.20)';
+
+            if (wk.style === 'stone') {
+              pathColor = '#78716c';
+              pathBorder = '#a8a29e';
+              pathJoint = 'rgba(28, 25, 23, 0.25)';
+            } else if (wk.style === 'cobblestone') {
+              pathColor = '#475569';
+              pathBorder = '#64748b';
+              pathJoint = 'rgba(15, 23, 42, 0.30)';
+            } else if (wk.style === 'asphalt') {
+              pathColor = '#334155';
+              pathBorder = '#475569';
+              pathJoint = 'transparent';
+            }
+
+            // Pavement base
+            ctx.fillStyle = pathColor;
+            ctx.fillRect(wk.x, wk.y, wk.width, wk.height);
+
+            // Sidewalk tile joint lines
+            if (pathJoint !== 'transparent') {
+              ctx.strokeStyle = pathJoint;
+              ctx.lineWidth = 1;
+              ctx.beginPath();
+              const wStep = Math.min(wk.width, wk.height) > 30 ? 24 : 18;
+              if (wk.width > wk.height) {
+                // Horizontal path: draw transverse joint lines
+                for (let px = wk.x; px <= wk.x + wk.width; px += wStep) {
+                  ctx.moveTo(px, wk.y);
+                  ctx.lineTo(px, wk.y + wk.height);
+                }
+              } else {
+                // Vertical path: draw transverse joint lines
+                for (let py = wk.y; py <= wk.y + wk.height; py += wStep) {
+                  ctx.moveTo(wk.x, py);
+                  ctx.lineTo(wk.x + wk.width, py);
+                }
+              }
+              ctx.stroke();
+            }
+
+            // Curb border edges
+            ctx.strokeStyle = pathBorder;
+            ctx.lineWidth = 1.5;
+            ctx.strokeRect(wk.x, wk.y, wk.width, wk.height);
+            ctx.restore();
+          }
+        }
       }
 
       // 4b. Draw Driveway Courtyard Entrances / Exits
@@ -896,26 +1146,12 @@ export class GameRenderer {
   }
 
   // --- BUILDINGS: BASE & ROOF SPLIT ENGINE ---
-  private renderBuildingBases(buildings: Building[]) {
+  private renderBuildingBases(buildings: Building[], nightAlpha: number = 0) {
     const ctx = this.ctx;
 
     for (const bld of buildings) {
       if (bld.type === 'park_monument') {
-        // Render Park / Fountain Base
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
-        ctx.fillRect(bld.x + 6, bld.y + 6, bld.width, bld.height);
-        ctx.fillStyle = bld.color;
-        ctx.fillRect(bld.x, bld.y, bld.width, bld.height);
-        ctx.strokeStyle = bld.accentColor;
-        ctx.lineWidth = 3;
-        ctx.strokeRect(bld.x, bld.y, bld.width, bld.height);
-        
-        // Water pool detail
-        ctx.fillStyle = '#0284c7';
-        ctx.fillRect(bld.x + 8, bld.y + 8, bld.width - 16, bld.height - 16);
-        ctx.strokeStyle = '#e0f2fe';
-        ctx.lineWidth = 2;
-        ctx.strokeRect(bld.x + 8, bld.y + 8, bld.width - 16, bld.height - 16);
+        this.renderParkFountainBase(bld, nightAlpha);
         continue;
       }
 
@@ -990,12 +1226,299 @@ export class GameRenderer {
     }
   }
 
+  // --- DETAILED GRAND CENTRAL FOUNTAIN BASE RENDERER ---
+  private renderParkFountainBase(bld: Building, nightAlpha: number = 0) {
+    const ctx = this.ctx;
+    const now = Date.now();
+    const cx = bld.x + bld.width / 2;
+    const cy = bld.y + bld.height / 2;
+    const outerR = bld.width / 2; // ~38px
+
+    // 1. Drop shadow of the grand stone basin onto park tiles
+    ctx.fillStyle = 'rgba(15, 23, 42, 0.45)';
+    ctx.beginPath();
+    ctx.arc(cx + 4, cy + 4, outerR + 2, 0, Math.PI * 2);
+    ctx.fill();
+
+    // 2. Base Tier: Outer Stepped Granite Plinth (Dark slate foundation)
+    ctx.fillStyle = '#334155';
+    ctx.beginPath();
+    ctx.arc(cx, cy, outerR + 2, 0, Math.PI * 2);
+    ctx.fill();
+
+    // 3. Classical Carved Granite/Marble Basin Rim
+    const stoneGradient = ctx.createLinearGradient(cx - outerR, cy - outerR, cx + outerR, cy + outerR);
+    stoneGradient.addColorStop(0, '#f1f5f9');
+    stoneGradient.addColorStop(0.4, '#cbd5e1');
+    stoneGradient.addColorStop(1, '#94a3b8');
+    ctx.fillStyle = stoneGradient;
+    ctx.beginPath();
+    ctx.arc(cx, cy, outerR, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Outer and Inner Stone Bevel Mouldings
+    ctx.strokeStyle = '#64748b';
+    ctx.lineWidth = 1.8;
+    ctx.stroke();
+
+    ctx.strokeStyle = '#475569';
+    ctx.lineWidth = 1.0;
+    ctx.beginPath();
+    ctx.arc(cx, cy, outerR - 4, 0, Math.PI * 2);
+    ctx.stroke();
+
+    // 4. 8 Carved Stone Rosettes & Bronze Nozzle Mounts around perimeter
+    for (let i = 0; i < 8; i++) {
+      const ang = (i * Math.PI) / 4;
+      const px = cx + Math.cos(ang) * (outerR - 2.5);
+      const py = cy + Math.sin(ang) * (outerR - 2.5);
+
+      // Stone Rosette block
+      ctx.fillStyle = '#f8fafc';
+      ctx.beginPath();
+      ctx.arc(px, py, 3.5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = '#475569';
+      ctx.lineWidth = 0.8;
+      ctx.stroke();
+
+      // Bronze/Gold Nozzle
+      ctx.fillStyle = '#ca8a04';
+      ctx.beginPath();
+      ctx.arc(px, py, 1.8, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // 5. Deep Basin Water Pool (Floor & Submerged Mosaic Pattern)
+    const poolR = outerR - 5;
+    const poolGrad = ctx.createRadialGradient(cx, cy, 2, cx, cy, poolR);
+    poolGrad.addColorStop(0, '#0284c7');  // Bright clear center
+    poolGrad.addColorStop(0.6, '#0369a1'); // Deep azure mid
+    poolGrad.addColorStop(1, '#082f49');  // Deep sapphire edge shadow
+    ctx.fillStyle = poolGrad;
+    ctx.beginPath();
+    ctx.arc(cx, cy, poolR, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Submerged Mosaic Star Medallion Inlay
+    ctx.strokeStyle = 'rgba(224, 242, 254, 0.22)';
+    ctx.lineWidth = 1.0;
+    ctx.beginPath();
+    for (let i = 0; i < 8; i++) {
+      const ang = (i * Math.PI) / 4;
+      ctx.moveTo(cx, cy);
+      ctx.lineTo(cx + Math.cos(ang) * (poolR - 4), cy + Math.sin(ang) * (poolR - 4));
+    }
+    ctx.stroke();
+
+    // 6. Translucent Caustic Water Shimmer & Concentric Ripples
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(cx, cy, poolR - 0.5, 0, Math.PI * 2);
+    ctx.clip();
+
+    // Animated water caustics wave ribbons
+    const waveOffset = now * 0.003;
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.12)';
+    for (let w = 0; w < 3; w++) {
+      const wAng = waveOffset + (w * Math.PI * 2) / 3;
+      const wx = cx + Math.cos(wAng) * 12;
+      const wy = cy + Math.sin(wAng) * 12;
+      ctx.beginPath();
+      ctx.arc(wx, wy, 16, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // Expanding Concentric Ripple Waves
+    for (let r = 0; r < 3; r++) {
+      const ripProgress = ((now * 0.015 + r * 10) % 28);
+      const ripR = ripProgress;
+      const ripAlpha = Math.max(0, 0.45 * (1 - ripR / 28));
+      ctx.strokeStyle = `rgba(224, 242, 254, ${ripAlpha.toFixed(2)})`;
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      ctx.arc(cx, cy, ripR, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+    ctx.restore();
+
+    // 7. Middle Elevated Stone Tier (Carved Chalice Bowl)
+    const midR = 17;
+    // Shadow of middle tier into pool
+    ctx.fillStyle = 'rgba(8, 47, 73, 0.55)';
+    ctx.beginPath();
+    ctx.arc(cx + 2, cy + 2, midR + 1, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Chalice Outer Stone Pedestal
+    const midStoneGrad = ctx.createLinearGradient(cx - midR, cy - midR, cx + midR, cy + midR);
+    midStoneGrad.addColorStop(0, '#f8fafc');
+    midStoneGrad.addColorStop(0.5, '#cbd5e1');
+    midStoneGrad.addColorStop(1, '#94a3b8');
+    ctx.fillStyle = midStoneGrad;
+    ctx.beginPath();
+    ctx.arc(cx, cy, midR, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = '#475569';
+    ctx.lineWidth = 1.2;
+    ctx.stroke();
+
+    // Middle Chalice Water Bowl
+    const midPoolR = midR - 3.5;
+    ctx.fillStyle = '#0ea5e9';
+    ctx.beginPath();
+    ctx.arc(cx, cy, midPoolR, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Overflowing Cascading Water Sheets (spilling over middle chalice into lower pool)
+    for (let i = 0; i < 4; i++) {
+      const ang = (i * Math.PI) / 2;
+      const sx = cx + Math.cos(ang) * (midR - 2);
+      const sy = cy + Math.sin(ang) * (midR - 2);
+      const ex = cx + Math.cos(ang) * (midR + 5);
+      const ey = cy + Math.sin(ang) * (midR + 5);
+
+      const spillGrad = ctx.createLinearGradient(sx, sy, ex, ey);
+      spillGrad.addColorStop(0, 'rgba(255, 255, 255, 0.9)');
+      spillGrad.addColorStop(1, 'rgba(186, 230, 253, 0.3)');
+      ctx.strokeStyle = spillGrad;
+      ctx.lineWidth = 3.5;
+      ctx.beginPath();
+      ctx.moveTo(sx, sy);
+      ctx.lineTo(ex, ey);
+      ctx.stroke();
+    }
+
+    // 8. Upper Pinnacle Tier & Bronze Finial Spire
+    const topR = 6.5;
+    ctx.fillStyle = '#e2e8f0';
+    ctx.beginPath();
+    ctx.arc(cx, cy, topR, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = '#475569';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
+    // Golden Bronze Central Nozzle Finial
+    ctx.fillStyle = '#eab308';
+    ctx.beginPath();
+    ctx.arc(cx, cy, 3.8, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = '#a16207';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
+    // 9. Atmospheric Underwater LED Illumination at Night
+    if (nightAlpha > 0.05) {
+      try {
+        const glowR = outerR + 25;
+        const ledGlow = ctx.createRadialGradient(cx, cy, 2, cx, cy, glowR);
+        ledGlow.addColorStop(0, `rgba(56, 189, 248, ${(0.42 * nightAlpha).toFixed(2)})`);
+        ledGlow.addColorStop(0.5, `rgba(14, 165, 233, ${(0.22 * nightAlpha).toFixed(2)})`);
+        ledGlow.addColorStop(1, 'rgba(2, 132, 199, 0)');
+        ctx.fillStyle = ledGlow;
+        ctx.beginPath();
+        ctx.arc(cx, cy, glowR, 0, Math.PI * 2);
+        ctx.fill();
+      } catch {}
+    }
+  }
+
+  // --- DETAILED GRAND CENTRAL FOUNTAIN SPRAY RENDERER (TOP PASS) ---
+  private renderParkFountainSpray(bld: Building, nightAlpha: number = 0) {
+    const ctx = this.ctx;
+    const now = Date.now();
+    const cx = bld.x + bld.width / 2;
+    const cy = bld.y + bld.height / 2;
+    const outerR = bld.width / 2;
+
+    // 1. Center Vertical Froth Geyser & Mist Plume
+    const plumePulse = Math.sin(now * 0.008) * 1.5 + 4.5;
+    
+    // Core white water bubbling froth
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
+    ctx.beginPath();
+    ctx.arc(cx, cy, plumePulse, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Sparkling mist halo
+    ctx.fillStyle = 'rgba(186, 230, 253, 0.55)';
+    ctx.beginPath();
+    ctx.arc(cx, cy, plumePulse + 3.5, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Leaping center spray droplets
+    for (let d = 0; d < 6; d++) {
+      const dropAng = (now * 0.004 + (d * Math.PI * 2) / 6);
+      const dropDist = 2 + ((now * 0.01 + d * 4) % 9);
+      const dx = cx + Math.cos(dropAng) * dropDist;
+      const dy = cy + Math.sin(dropAng) * dropDist;
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.arc(dx, dy, 1.2, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // 2. 8 Graceful Arched Water Jets (Shooting from outer perimeter inward towards middle chalice)
+    for (let i = 0; i < 8; i++) {
+      const ang = (i * Math.PI) / 4;
+      const startR = outerR - 4;
+      const endR = 14;
+
+      const sx = cx + Math.cos(ang) * startR;
+      const sy = cy + Math.sin(ang) * startR;
+      const ex = cx + Math.cos(ang) * endR;
+      const ey = cy + Math.sin(ang) * endR;
+
+      // Arched mid-point (raised apex)
+      const midDist = (startR + endR) / 2;
+      const mx = cx + Math.cos(ang) * midDist;
+      const my = cy + Math.sin(ang) * midDist - 7;
+
+      // Smooth parabolic water arc
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.85)';
+      ctx.lineWidth = 1.8;
+      ctx.beginPath();
+      ctx.moveTo(sx, sy);
+      ctx.quadraticCurveTo(mx, my, ex, ey);
+      ctx.stroke();
+
+      // Shimmering inner core arc
+      ctx.strokeStyle = 'rgba(186, 230, 253, 0.7)';
+      ctx.lineWidth = 1.0;
+      ctx.beginPath();
+      ctx.moveTo(sx, sy);
+      ctx.quadraticCurveTo(mx, my, ex, ey);
+      ctx.stroke();
+
+      // Animated traveling water bead along the arc
+      const t = ((now * 0.0028 + i * 0.125) % 1);
+      const oneMinusT = 1 - t;
+      const bx = oneMinusT * oneMinusT * sx + 2 * oneMinusT * t * mx + t * t * ex;
+      const by = oneMinusT * oneMinusT * sy + 2 * oneMinusT * t * my + t * t * ey;
+
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.arc(bx, by, 1.8, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Impact splash & foam bubble at landing point in the pool
+      const splashProgress = ((now * 0.012 + i * 2) % 6);
+      ctx.strokeStyle = `rgba(255, 255, 255, ${(0.85 * (1 - splashProgress / 6)).toFixed(2)})`;
+      ctx.lineWidth = 1.0;
+      ctx.beginPath();
+      ctx.arc(ex, ey, 1.5 + splashProgress, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+  }
+
   private renderBuildingRoofsAndCanopies(buildings: Building[], nightAlpha: number = 0) {
     const ctx = this.ctx;
     const now = Date.now();
 
     for (const bld of buildings) {
       if (bld.type === 'park_monument') {
+        this.renderParkFountainSpray(bld, nightAlpha);
         continue;
       }
 
@@ -1617,6 +2140,13 @@ export class GameRenderer {
         ctx.arc(0, 0, 2, 0, Math.PI * 2);
         ctx.fill();
       } else if (prop.type === 'bench') {
+        // Paved Concrete Foundation Pad (guarantees bench always rests on paved slab, never raw grass)
+        ctx.fillStyle = '#64748b';
+        ctx.fillRect(-13, -8, 26, 16);
+        ctx.strokeStyle = '#94a3b8';
+        ctx.lineWidth = 1.2;
+        ctx.strokeRect(-13, -8, 26, 16);
+
         // Shadow
         ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
         ctx.fillRect(-10, -4, 20, 9);
@@ -1644,6 +2174,13 @@ export class GameRenderer {
         ctx.fillRect(7.5, 3.5, 1, 1);
 
       } else if (prop.type === 'dumpster') {
+        // Concrete Waste Pad (площадка ТБО)
+        ctx.fillStyle = '#475569';
+        ctx.fillRect(-18, -13, 36, 26);
+        ctx.strokeStyle = '#94a3b8';
+        ctx.lineWidth = 1.5;
+        ctx.strokeRect(-18, -13, 36, 26);
+
         // Large Municipal Waste Container (Контейнер ТБО / Мусорный бак)
         // Shadow
         ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
@@ -2133,13 +2670,13 @@ export class GameRenderer {
         // Backboard
         ctx.fillStyle = '#0a0f1d';
         ctx.beginPath();
-        ctx.roundRect(-4.5, -7.5, 2.5, 15, 1);
+        safeRoundRect(ctx, -4.5, -7.5, 2.5, 15, 1);
         ctx.fill();
 
         // Housing
         ctx.fillStyle = '#1e293b';
         ctx.beginPath();
-        ctx.roundRect(-3.5, -4.5, 7, 9, 1.5);
+        safeRoundRect(ctx, -3.5, -4.5, 7, 9, 1.5);
         ctx.fill();
 
         // Broken, dark lens
@@ -2154,7 +2691,7 @@ export class GameRenderer {
         ctx.translate(10, 3);
         ctx.fillStyle = '#0f172a';
         ctx.beginPath();
-        ctx.roundRect(-2.5, -2.5, 5, 5, 1);
+        safeRoundRect(ctx, -2.5, -2.5, 5, 5, 1);
         ctx.fill();
         ctx.fillStyle = '#111827';
         ctx.beginPath();
@@ -2176,11 +2713,11 @@ export class GameRenderer {
         ctx.fill();
 
         ctx.beginPath();
-        ctx.roundRect(headX - 4 + 3, headY - 4 + 3, 8, 8, 2);
+        safeRoundRect(ctx, headX - 4 + 3, headY - 4 + 3, 8, 8, 2);
         ctx.fill();
 
         ctx.beginPath();
-        ctx.roundRect(pedHeadX - 2.5 + 2, pedHeadY - 2.5 + 2, 5, 5, 1);
+        safeRoundRect(ctx, pedHeadX - 2.5 + 2, pedHeadY - 2.5 + 2, 5, 5, 1);
         ctx.fill();
 
         ctx.strokeStyle = '#334155';
@@ -2247,7 +2784,7 @@ export class GameRenderer {
 
         ctx.fillStyle = '#0a0f1d';
         ctx.beginPath();
-        ctx.roundRect(-4.5, -7.5, 2.5, 15, 1);
+        safeRoundRect(ctx, -4.5, -7.5, 2.5, 15, 1);
         ctx.fill();
         ctx.strokeStyle = '#e2e8f0';
         ctx.lineWidth = 0.75;
@@ -2255,7 +2792,7 @@ export class GameRenderer {
 
         ctx.fillStyle = '#1e293b';
         ctx.beginPath();
-        ctx.roundRect(-3.5, -4.5, 7, 9, 1.5);
+        safeRoundRect(ctx, -3.5, -4.5, 7, 9, 1.5);
         ctx.fill();
         ctx.strokeStyle = '#0f172a';
         ctx.lineWidth = 0.75;
@@ -2324,7 +2861,7 @@ export class GameRenderer {
 
         ctx.fillStyle = '#0f172a';
         ctx.beginPath();
-        ctx.roundRect(-2.5, -2.5, 5, 5, 1);
+        safeRoundRect(ctx, -2.5, -2.5, 5, 5, 1);
         ctx.fill();
         ctx.strokeStyle = '#334155';
         ctx.lineWidth = 0.6;
@@ -2522,197 +3059,607 @@ export class GameRenderer {
       const legSwing = ped.state === 'walking' || ped.state === 'crossing' || ped.state === 'panicking' ? Math.sin(ped.walkCycle) * 2.8 : 0;
       const armSwing = ped.state === 'walking' || ped.state === 'crossing' || ped.state === 'panicking' ? Math.cos(ped.walkCycle) * 2.2 : 0;
 
-      // Legs / Pants
+      // 1. Legs / Pants / Shoes
       ctx.fillStyle = ped.pantsColor;
       if (!ped.isCyclist && !ped.isScooter) {
         ctx.fillRect(-1.5, -legSwing - 3.5, 3, 3);
         ctx.fillRect(-1.5, legSwing + 0.5, 3, 3);
+        // Shoes / Sneakers visible on feet during movement
+        ctx.fillStyle = '#0f172a';
+        ctx.fillRect(1.5, -legSwing - 3.5, 1.2, 3);
+        ctx.fillRect(1.5, legSwing + 0.5, 1.2, 3);
       } else {
         // Pedaling or standing on scooter
         ctx.fillRect(-1.5, -2.5, 3, 2);
         ctx.fillRect(-1.5, 0.5, 3, 2);
+        ctx.fillStyle = '#0f172a';
+        ctx.fillRect(1.5, -2.5, 1.2, 2);
+        ctx.fillRect(1.5, 0.5, 1.2, 2);
       }
 
-      // Torso / Shirt
-      ctx.fillStyle = ped.shirtColor;
-      ctx.beginPath();
-      ctx.ellipse(0, 0, 4, 5.5, 0, 0, Math.PI * 2);
-      ctx.fill();
+      // 2. Torso & Detailed Clothing (Top-Down Silhouette with Shoulders, Collars, Jackets & Dresses)
+      const clothType = ped.clothingType || 'tshirt';
+      const mainShirtColor = ped.shirtColor || '#3b82f6';
+      const jacketCol = ped.jacketColor || '#1e293b';
+      const innerCol = ped.innerShirtColor || '#ffffff';
+
+      // Base shoulder width & torso shape
+      if (clothType === 'open_jacket' || clothType === 'suit') {
+        // Open unbuttoned jacket or formal suit jacket
+        ctx.fillStyle = clothType === 'suit' ? '#0f172a' : jacketCol;
+        ctx.beginPath();
+        ctx.ellipse(0, 0, 4.2, 5.8, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Inner shirt V-opening down the chest center
+        ctx.fillStyle = innerCol;
+        ctx.beginPath();
+        ctx.moveTo(3.5, 0);
+        ctx.lineTo(-2.0, -1.8);
+        ctx.lineTo(-2.0, 1.8);
+        ctx.closePath();
+        ctx.fill();
+
+        if (clothType === 'suit') {
+          // Dark formal tie
+          ctx.fillStyle = '#ef4444';
+          ctx.beginPath();
+          ctx.moveTo(2.5, 0);
+          ctx.lineTo(0.5, -0.6);
+          ctx.lineTo(-1.5, 0);
+          ctx.lineTo(0.5, 0.6);
+          ctx.closePath();
+          ctx.fill();
+        } else {
+          // Open Jacket lapel collar edges
+          ctx.strokeStyle = 'rgba(255,255,255,0.25)';
+          ctx.lineWidth = 0.6;
+          ctx.beginPath();
+          ctx.moveTo(2.5, -2.2); ctx.lineTo(-1.0, -1.8);
+          ctx.moveTo(2.5, 2.2); ctx.lineTo(-1.0, 1.8);
+          ctx.stroke();
+        }
+      } else if (clothType === 'hoodie') {
+        // Hoodie sweatshirt
+        ctx.fillStyle = mainShirtColor;
+        ctx.beginPath();
+        ctx.ellipse(0.2, 0, 4.5, 5.8, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Bunched fabric hood behind the neck
+        ctx.fillStyle = 'rgba(0,0,0,0.2)';
+        ctx.beginPath();
+        ctx.arc(-2.6, 0, 2.6, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Drawstrings
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 0.5;
+        ctx.beginPath();
+        ctx.moveTo(1.2, -0.8); ctx.lineTo(2.8, -0.6);
+        ctx.moveTo(1.2, 0.8); ctx.lineTo(2.8, 0.6);
+        ctx.stroke();
+      } else if (clothType === 'dress') {
+        // Flowing dress / skirt top
+        ctx.fillStyle = mainShirtColor;
+        ctx.beginPath();
+        ctx.moveTo(-3.5, -5.8);
+        ctx.quadraticCurveTo(1.5, -5.0, 4.0, -2.2);
+        ctx.lineTo(4.0, 2.2);
+        ctx.quadraticCurveTo(1.5, 5.0, -3.5, 5.8);
+        ctx.closePath();
+        ctx.fill();
+
+        // Waist belt / accent ribbon
+        ctx.fillStyle = 'rgba(0,0,0,0.25)';
+        ctx.fillRect(-0.8, -4.8, 1.2, 9.6);
+      } else if (clothType === 'button_shirt') {
+        // Button-up collared shirt
+        ctx.fillStyle = mainShirtColor;
+        ctx.beginPath();
+        ctx.ellipse(0, 0, 4.0, 5.5, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Collar flaps at neck line
+        ctx.fillStyle = '#ffffff';
+        ctx.beginPath();
+        ctx.moveTo(1.8, -1.8); ctx.lineTo(3.2, -0.8); ctx.lineTo(1.8, 0);
+        ctx.moveTo(1.8, 1.8); ctx.lineTo(3.2, 0.8); ctx.lineTo(1.8, 0);
+        ctx.fill();
+
+        // Button placket line
+        ctx.strokeStyle = 'rgba(0,0,0,0.15)';
+        ctx.lineWidth = 0.6;
+        ctx.beginPath();
+        ctx.moveTo(-2.5, 0); ctx.lineTo(2.0, 0);
+        ctx.stroke();
+      } else {
+        // Standard T-shirt / Janitor / Vest
+        ctx.fillStyle = ped.isJanitor ? '#ca8a04' : mainShirtColor;
+        ctx.beginPath();
+        ctx.ellipse(0, 0, 4.0, 5.5, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // High-vis silver reflective stripes for janitors
+        if (ped.isJanitor) {
+          ctx.strokeStyle = '#f8fafc';
+          ctx.lineWidth = 1.0;
+          ctx.beginPath();
+          ctx.moveTo(-1.0, -4.5); ctx.lineTo(-1.0, 4.5);
+          ctx.moveTo(1.2, -4.5); ctx.lineTo(1.2, 4.5);
+          ctx.stroke();
+        } else {
+          // Curved t-shirt neck collar line revealing skin
+          ctx.fillStyle = ped.skinColor;
+          ctx.beginPath();
+          ctx.arc(1.8, 0, 1.4, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
 
       // Backpack
       if (ped.hasBackpack) {
         ctx.fillStyle = ped.backpackColor || '#1e293b';
-        ctx.fillRect(-5, -3.5, 3.5, 7);
-        ctx.strokeStyle = 'rgba(0,0,0,0.3)';
+        ctx.beginPath();
+        safeRoundRect(ctx, -5.2, -3.6, 3.8, 7.2, 0.8);
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(0,0,0,0.35)';
         ctx.lineWidth = 0.5;
-        ctx.strokeRect(-5, -3.5, 3.5, 7);
+        ctx.strokeRect(-5.2, -3.6, 3.8, 7.2);
+
+        // Shoulder straps over front shoulders
+        ctx.strokeStyle = 'rgba(0,0,0,0.4)';
+        ctx.lineWidth = 0.8;
+        ctx.beginPath();
+        ctx.moveTo(-1.5, -3.2); ctx.lineTo(1.5, -2.8);
+        ctx.moveTo(-1.5, 3.2); ctx.lineTo(1.5, 2.8);
+        ctx.stroke();
       }
 
-      // Arms
-      ctx.fillStyle = ped.skinColor;
-      if (ped.state === 'idle_phone') {
-        // Holding phone
-        ctx.fillRect(1, -2, 2.5, 2); // Left arm towards center
-        ctx.fillStyle = '#1e293b';
-        ctx.fillRect(3, -1.5, 2, 3); // Phone
-        ctx.fillStyle = '#38bdf8'; // Screen glow
-        ctx.fillRect(3.2, -1.2, 1.6, 2.4);
+      // Arms & Hand Posing
+      const sleeveColor = (clothType === 'open_jacket' ? jacketCol : mainShirtColor);
+      if (ped.state === 'idle_phone' || ped.handheldProp === 'phone') {
+        // Both arms extended forward holding phone in front of chest
+        ctx.fillStyle = sleeveColor;
+        ctx.fillRect(1.0, -4.2, 3.2, 2.0);  // Left sleeve
+        ctx.fillRect(1.0, 2.2, 3.2, 2.0);   // Right sleeve
+        ctx.fillStyle = ped.skinColor;
+        ctx.fillRect(3.8, -2.6, 2.0, 1.8);  // Left hand
+        ctx.fillRect(3.8, 0.8, 2.0, 1.8);   // Right hand
+      } else if (ped.handheldProp === 'box') {
+        // Holding box in front with both hands
+        ctx.fillStyle = sleeveColor;
+        ctx.fillRect(1.0, -4.8, 4.0, 2.0);  // Left sleeve
+        ctx.fillRect(1.0, 2.8, 4.0, 2.0);   // Right sleeve
+        ctx.fillStyle = ped.skinColor;
+        ctx.fillRect(4.8, -3.8, 1.8, 1.6);  // Left hand
+        ctx.fillRect(4.8, 2.2, 1.8, 1.6);   // Right hand
+      } else if (ped.hasBroom) {
+        // Janitor holding broom handle
+        ctx.fillStyle = ped.isJanitor ? '#ca8a04' : sleeveColor;
+        ctx.fillRect(1.0, -3.8, 3.5, 2.0);  // Left sleeve
+        ctx.fillRect(1.0, 2.0, 4.5, 2.0);   // Right sleeve
+        ctx.fillStyle = ped.skinColor;
+        ctx.fillRect(4.2, -2.2, 1.6, 1.6);  // Left hand
+        ctx.fillRect(5.2, 0.2, 1.8, 1.6);   // Right hand
+      } else if (ped.handheldProp === 'coffee') {
+        // Right arm extended forward holding coffee cup
+        ctx.fillStyle = sleeveColor;
+        ctx.fillRect(armSwing - 1.5, -4.8, 3, 2.2); // Left arm swinging
+        ctx.fillRect(1.0, 2.8, 3.5, 2.0);            // Right sleeve forward
+        ctx.fillStyle = ped.skinColor;
+        ctx.fillRect(4.2, 3.8, 1.6, 1.8);            // Right hand holding cup
+      } else if (ped.handheldProp === 'bag') {
+        // Right arm carrying shopping bag beside body
+        const bagArmSwing = Math.cos(ped.walkCycle) * 0.8;
+        ctx.fillStyle = sleeveColor;
+        ctx.fillRect(armSwing - 1.5, -4.8, 3, 2.2);      // Left arm swinging
+        ctx.fillRect(bagArmSwing - 0.5, 3.6, 2.8, 2.0);  // Right sleeve
+        ctx.fillStyle = ped.skinColor;
+        ctx.fillRect(bagArmSwing + 0.5, 5.8, 2.0, 2.0);  // Right hand holding bag handle
       } else if (ped.isCyclist || ped.isScooter) {
         // Holding handlebars
+        ctx.fillStyle = sleeveColor;
         ctx.fillRect(2, -4.5, 3, 2);
         ctx.fillRect(2, 2.5, 3, 2);
       } else {
+        ctx.fillStyle = sleeveColor;
         ctx.fillRect(armSwing - 1.5, -4.8, 3, 2.2);
         ctx.fillRect(-armSwing - 1.5, 2.6, 3, 2.2);
+        ctx.fillStyle = ped.skinColor;
+        ctx.fillRect(armSwing + 1.2, -4.8, 1.5, 2.2);
+        ctx.fillRect(-armSwing + 1.2, 2.6, 1.5, 2.2);
       }
 
-      // Head
+      // 3. Head & Facial Anatomy (Ears, Nose, Glasses)
+      // Ears on left and right side of head
       ctx.fillStyle = ped.skinColor;
       ctx.beginPath();
-      ctx.arc(1.5, 0, 3.2, 0, Math.PI * 2);
+      ctx.arc(1.5, -3.4, 0.9, 0, Math.PI * 2); // Left ear
+      ctx.arc(1.5, 3.4, 0.9, 0, Math.PI * 2);  // Right ear
       ctx.fill();
 
-      // Hair
-      if (ped.hairStyle !== 'bald' && !ped.hasHat) {
+      // Head Base
+      ctx.beginPath();
+      ctx.arc(1.5, 0, 3.3, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Subtle nose bump at front of face (+X)
+      ctx.beginPath();
+      ctx.arc(4.6, 0, 0.6, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Glasses / Sunglasses
+      if (ped.hasGlasses) {
+        ctx.fillStyle = '#0f172a';
+        ctx.fillRect(3.2, -2.4, 1.0, 1.8); // Left lens
+        ctx.fillRect(3.2, 0.6, 1.0, 1.8);  // Right lens
+        ctx.strokeStyle = '#0f172a';
+        ctx.lineWidth = 0.6;
+        ctx.beginPath();
+        ctx.moveTo(3.7, -0.6); ctx.lineTo(3.7, 0.6); // Bridge
+        ctx.moveTo(3.7, -2.4); ctx.lineTo(1.8, -3.4); // Ear stem L
+        ctx.moveTo(3.7, 2.4); ctx.lineTo(1.8, 3.4);   // Ear stem R
+        ctx.stroke();
+      }
+
+      // 4. Hairstyles (Deep Top-Down Detailing)
+      if (ped.hairStyle === 'bald') {
+        // Bald head shine highlight
+        ctx.fillStyle = 'rgba(255,255,255,0.35)';
+        ctx.beginPath();
+        ctx.arc(2.2, -0.8, 0.9, 0, Math.PI * 2);
+        ctx.fill();
+      } else if (!ped.hasHat) {
         ctx.fillStyle = ped.hairColor;
         ctx.beginPath();
         if (ped.hairStyle === 'short') {
-          ctx.arc(0.4, 0, 3.0, Math.PI * 0.5, Math.PI * 1.5);
+          // Neat short hair with crown texture & sideburns
+          ctx.arc(0.4, 0, 3.2, Math.PI * 0.45, Math.PI * 1.55);
+          ctx.fill();
+          // Hair parted crown highlight line
+          ctx.strokeStyle = 'rgba(255,255,255,0.2)';
+          ctx.lineWidth = 0.6;
+          ctx.beginPath();
+          ctx.moveTo(0.8, -1.5); ctx.lineTo(2.2, -0.2);
+          ctx.stroke();
         } else if (ped.hairStyle === 'long') {
-          ctx.arc(0, 0, 3.4, Math.PI * 0.4, Math.PI * 1.6);
-          ctx.ellipse(-1.5, -2, 2.5, 1.5, -Math.PI / 6, 0, Math.PI * 2);
-          ctx.ellipse(-1.5, 2, 2.5, 1.5, Math.PI / 6, 0, Math.PI * 2);
+          // Flowing long hair over shoulders
+          ctx.arc(0, 0, 3.5, Math.PI * 0.35, Math.PI * 1.65);
+          ctx.ellipse(-1.8, -2.8, 3.2, 1.8, -Math.PI / 5, 0, Math.PI * 2);
+          ctx.ellipse(-1.8, 2.8, 3.2, 1.8, Math.PI / 5, 0, Math.PI * 2);
+          ctx.fill();
+          // Hair strand highlights
+          ctx.strokeStyle = 'rgba(255,255,255,0.22)';
+          ctx.lineWidth = 0.5;
+          ctx.beginPath();
+          ctx.moveTo(-1.0, -3.5); ctx.lineTo(-3.2, -2.5);
+          ctx.moveTo(-1.0, 3.5); ctx.lineTo(-3.2, 2.5);
+          ctx.stroke();
         } else if (ped.hairStyle === 'bun') {
-          ctx.arc(0.4, 0, 3.0, Math.PI * 0.5, Math.PI * 1.5);
-          ctx.arc(-2.5, 0, 1.8, 0, Math.PI * 2);
+          // Smooth hair pulled into a voluminous bun
+          ctx.arc(0.4, 0, 3.1, Math.PI * 0.5, Math.PI * 1.5);
+          ctx.arc(-2.6, 0, 2.2, 0, Math.PI * 2);
+          ctx.fill();
+          // Bun hair tie ring
+          ctx.strokeStyle = 'rgba(255,255,255,0.4)';
+          ctx.lineWidth = 0.6;
+          ctx.stroke();
         } else if (ped.hairStyle === 'ponytail') {
-          ctx.arc(0.4, 0, 3.0, Math.PI * 0.5, Math.PI * 1.5);
-          ctx.ellipse(-3.5, 0, 3, 1, 0, 0, Math.PI * 2);
+          // Hair pulled back into a trailing ponytail
+          ctx.arc(0.4, 0, 3.1, Math.PI * 0.5, Math.PI * 1.5);
+          ctx.ellipse(-3.8, 0, 3.4, 1.3, 0, 0, Math.PI * 2);
+          ctx.fill();
         } else if (ped.hairStyle === 'spiky') {
-          ctx.moveTo(0.4, -3);
-          ctx.lineTo(2, -4); ctx.lineTo(1, -2);
-          ctx.lineTo(3, -1); ctx.lineTo(1.5, 0);
-          ctx.lineTo(3, 1); ctx.lineTo(1, 2);
-          ctx.lineTo(2, 4); ctx.lineTo(0.4, 3);
-          ctx.arc(0.4, 0, 3.0, Math.PI * 0.5, Math.PI * 1.5);
+          // Spiky hair locks
+          ctx.moveTo(0.4, -3.2);
+          ctx.lineTo(2.2, -4.2); ctx.lineTo(1.2, -2.2);
+          ctx.lineTo(3.2, -1.2); ctx.lineTo(1.8, 0);
+          ctx.lineTo(3.2, 1.2); ctx.lineTo(1.2, 2.2);
+          ctx.lineTo(2.2, 4.2); ctx.lineTo(0.4, 3.2);
+          ctx.arc(0.4, 0, 3.1, Math.PI * 0.5, Math.PI * 1.5);
+          ctx.fill();
+        } else if (ped.hairStyle === 'curly') {
+          // Curly hair ringlets around head
+          for (let angle = 0.5; angle < Math.PI * 1.8; angle += 0.45) {
+            const hx = 1.0 + Math.cos(angle) * 3.2;
+            const hy = Math.sin(angle) * 3.2;
+            ctx.arc(hx, hy, 1.3, 0, Math.PI * 2);
+          }
+          ctx.fill();
+        } else if (ped.hairStyle === 'afro') {
+          // Volumetric rounded afro
+          ctx.arc(0.2, 0, 4.5, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.strokeStyle = 'rgba(255,255,255,0.15)';
+          ctx.lineWidth = 0.5;
+          ctx.stroke();
         }
-        ctx.fill();
       }
 
-      // Hat
+      // 5. Headphones (Over-Ear)
+      if (ped.hasHeadphones && !ped.hasHat) {
+        ctx.strokeStyle = '#0f172a';
+        ctx.lineWidth = 1.0;
+        ctx.beginPath();
+        ctx.arc(1.5, 0, 3.6, -Math.PI * 0.4, Math.PI * 0.4); // Headband
+        ctx.stroke();
+        ctx.fillStyle = '#38bdf8'; // Earcups
+        ctx.fillRect(1.0, -4.2, 1.6, 1.2);
+        ctx.fillRect(1.0, 3.0, 1.6, 1.2);
+      }
+
+      // 6. Hats / Caps / Sunhats / Fedoras
       if (ped.hasHat) {
         ctx.fillStyle = ped.hatColor || '#1e293b';
         ctx.beginPath();
         if (ped.hatType === 'cap') {
-          ctx.arc(1, 0, 3.1, 0, Math.PI * 2);
-          ctx.fillRect(3, -1.8, 2.5, 3.6); // Bill
+          ctx.arc(0.8, 0, 3.2, 0, Math.PI * 2);
+          ctx.fillRect(3.0, -2.0, 3.2, 4.0); // Baseball cap visor bill
         } else if (ped.hatType === 'beanie') {
-          ctx.arc(0.8, 0, 3.3, 0, Math.PI * 2);
+          ctx.arc(0.6, 0, 3.5, 0, Math.PI * 2);
+          ctx.fill();
+          // Knit texture lines on beanie
+          ctx.strokeStyle = 'rgba(0,0,0,0.25)';
+          ctx.lineWidth = 0.6;
+          ctx.beginPath();
+          ctx.moveTo(-2.5, -2.0); ctx.lineTo(2.5, -2.0);
+          ctx.moveTo(-2.5, 0); ctx.lineTo(2.5, 0);
+          ctx.moveTo(-2.5, 2.0); ctx.lineTo(2.5, 2.0);
+          ctx.stroke();
         } else if (ped.hatType === 'sunhat') {
-          ctx.arc(1, 0, 5, 0, Math.PI * 2);
-          ctx.fillStyle = 'rgba(0,0,0,0.1)'; // Hat shadow/band
-          ctx.arc(1, 0, 3, 0, Math.PI * 2);
+          ctx.arc(1.0, 0, 5.8, 0, Math.PI * 2); // Wide brim
+          ctx.fill();
+          ctx.fillStyle = 'rgba(0,0,0,0.2)'; // Sunhat band
+          ctx.beginPath();
+          ctx.arc(1.0, 0, 3.2, 0, Math.PI * 2);
+        } else if (ped.hatType === 'fedora') {
+          ctx.arc(1.0, 0, 4.8, 0, Math.PI * 2); // Fedora brim
+          ctx.fill();
+          ctx.fillStyle = '#0f172a'; // Hat band
+          ctx.beginPath();
+          ctx.arc(1.0, 0, 3.2, 0, Math.PI * 2);
         }
         ctx.fill();
       }
 
-      // Handheld Prop (if not panicking or dropped)
-      if (ped.handheldProp && !ped.hasDroppedProp && ped.state !== 'panicking') {
-        const hSwing = ped.state === 'walking' || ped.state === 'crossing' ? Math.cos(ped.walkCycle) * 2.2 : 0;
+      // Handheld Prop (Top-down view, held in hands in front/side of character)
+      if ((ped.handheldProp || ped.state === 'idle_phone') && !ped.hasDroppedProp && ped.state !== 'panicking') {
+        const propType = ped.handheldProp || (ped.state === 'idle_phone' ? 'phone' : null);
         ctx.save();
-        // Position on right arm with slight elevation and drop shadow
-        ctx.translate(hSwing + 1.2, 3.8);
-        
-        // Prop Drop Shadow
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.25)';
-        ctx.fillRect(-2, 1, 6, 4);
 
-        if (ped.handheldProp === 'phone') {
-          // 3D Phone Body
-          ctx.fillStyle = '#0f172a';
-          ctx.fillRect(-1.8, -2.5, 3.2, 4.6);
-          ctx.fillStyle = '#334155';
-          ctx.fillRect(-1.5, -2.2, 2.6, 4.0);
-          // Glowing screen
-          ctx.fillStyle = '#38bdf8';
-          ctx.fillRect(-1.2, -1.9, 2.0, 3.4);
-          // Screen UI lines
-          ctx.fillStyle = '#ffffff';
-          ctx.fillRect(-0.8, -1.5, 1.2, 0.6);
-          ctx.fillRect(-0.8, -0.6, 1.2, 1.8);
-        } else if (ped.handheldProp === 'coffee') {
-          // 3D Coffee Cup
-          ctx.fillStyle = '#475569'; // Cup shadow
+        if (propType === 'phone') {
+          // Top-down Smartphone held in hands in front of chest at X = 6.0, Y = 0
+          ctx.translate(6.0, 0);
+
+          // Soft glowing screen cone projected on ground in front
+          const screenGlow = ctx.createRadialGradient(2, 0, 0.5, 2, 0, 7);
+          screenGlow.addColorStop(0, 'rgba(56, 189, 248, 0.35)');
+          screenGlow.addColorStop(1, 'rgba(56, 189, 248, 0.0)');
+          ctx.fillStyle = screenGlow;
           ctx.beginPath();
-          ctx.arc(0.5, 0.5, 1.8, 0, Math.PI * 2);
+          ctx.arc(2, 0, 7, -Math.PI * 0.4, Math.PI * 0.4);
           ctx.fill();
-          // Cup base
+
+          // Ground drop shadow under phone
+          ctx.fillStyle = 'rgba(0, 0, 0, 0.25)';
+          ctx.fillRect(-1.4, -1.2, 3.4, 2.8);
+
+          // Phone outer casing (sleek dark rounded rectangle)
+          ctx.fillStyle = '#0f172a';
+          ctx.beginPath();
+          safeRoundRect(ctx, -1.6, -1.4, 3.6, 2.8, 0.6);
+          ctx.fill();
+
+          // Phone metal bezel
+          ctx.fillStyle = '#334155';
+          ctx.beginPath();
+          safeRoundRect(ctx, -1.4, -1.2, 3.2, 2.4, 0.4);
+          ctx.fill();
+
+          // Top-down illuminated glass screen
+          ctx.fillStyle = '#38bdf8';
+          ctx.fillRect(-1.2, -1.0, 2.8, 2.0);
+
+          // Screen UI layout lines (top bar, content blocks viewed from top)
+          ctx.fillStyle = '#ffffff';
+          ctx.fillRect(-0.8, -0.7, 1.4, 0.4);
+          ctx.fillRect(-0.8, -0.1, 2.0, 0.4);
+          ctx.fillRect(-0.8, 0.4, 1.0, 0.4);
+
+          // Top-down skin thumbs/fingers gripping phone sides
+          ctx.fillStyle = ped.skinColor;
+          ctx.beginPath();
+          ctx.arc(-0.4, -1.4, 0.7, 0, Math.PI * 2);
+          ctx.arc(-0.4, 1.4, 0.7, 0, Math.PI * 2);
+          ctx.fill();
+        } else if (propType === 'coffee') {
+          // Top-down Coffee Cup held in right hand at X = 5.4, Y = 4.8
+          ctx.translate(5.4, 4.8);
+
+          // Ground shadow
+          ctx.fillStyle = 'rgba(0,0,0,0.22)';
+          ctx.beginPath();
+          ctx.arc(0.5, 0.5, 2.5, 0, Math.PI * 2);
+          ctx.fill();
+
+          // White takeaway cup outer rim (top-down circle)
           ctx.fillStyle = '#f8fafc';
           ctx.beginPath();
-          ctx.arc(0, 0, 1.8, 0, Math.PI * 2);
+          ctx.arc(0, 0, 2.4, 0, Math.PI * 2);
           ctx.fill();
-          // Kraft paper sleeve
+
+          // Kraft brown heat sleeve ring
           ctx.fillStyle = '#d97706';
+          ctx.beginPath();
+          ctx.arc(0, 0, 2.0, 0, Math.PI * 2);
+          ctx.fill();
+
+          // Dark plastic dome lid circle
+          ctx.fillStyle = '#1e293b';
           ctx.beginPath();
           ctx.arc(0, 0, 1.5, 0, Math.PI * 2);
           ctx.fill();
-          // Plastic lid
-          ctx.fillStyle = '#1e293b';
+
+          // Sip hole spout dot on lid
+          ctx.fillStyle = '#0f172a';
           ctx.beginPath();
-          ctx.arc(0, 0, 1.2, 0, Math.PI * 2);
+          ctx.arc(0.9, 0, 0.4, 0, Math.PI * 2);
           ctx.fill();
-        } else if (ped.handheldProp === 'box') {
-          // 3D Cardboard Box
+
+          // Skin fingers gripping cup edge
+          ctx.fillStyle = ped.skinColor;
+          ctx.beginPath();
+          ctx.arc(0, 2.2, 0.8, 0, Math.PI * 2);
+          ctx.fill();
+        } else if (propType === 'box') {
+          // Top-down Cardboard Box held in front of chest at X = 7.0, Y = 0
+          ctx.translate(7.0, 0);
+
+          // Ground shadow
+          ctx.fillStyle = 'rgba(0, 0, 0, 0.28)';
+          ctx.fillRect(-2.2, -3.2, 5.2, 7.2);
+
+          // Cardboard top surface
           ctx.fillStyle = '#b45309';
-          ctx.fillRect(-3, -3, 6, 6);
-          // Top flap / tape
-          ctx.fillStyle = '#d97706';
-          ctx.fillRect(-2.5, -2.5, 5, 5);
-          ctx.fillStyle = '#fef3c7'; // Packing tape strip down middle
-          ctx.fillRect(-0.8, -2.5, 1.6, 5);
+          ctx.fillRect(-2.6, -3.6, 5.2, 7.2);
+
+          // Box perimeter outline
           ctx.strokeStyle = '#78350f';
           ctx.lineWidth = 0.8;
-          ctx.strokeRect(-3, -3, 6, 6);
-        } else if (ped.handheldProp === 'bag') {
-          // 3D Shopping Bag
-          ctx.fillStyle = ped.propColor || '#e11d48';
-          ctx.fillRect(-2.5, -2, 5, 6);
-          // Bag gusset shading
-          ctx.fillStyle = 'rgba(0,0,0,0.2)';
-          ctx.fillRect(-2.5, -2, 1.2, 6);
-          // Looped handles
+          ctx.strokeRect(-2.6, -3.6, 5.2, 7.2);
+
+          // Center seam of top box flaps
+          ctx.strokeStyle = 'rgba(0,0,0,0.3)';
+          ctx.lineWidth = 0.6;
+          ctx.beginPath();
+          ctx.moveTo(0, -3.6);
+          ctx.lineTo(0, 3.6);
+          ctx.stroke();
+
+          // Beige packing tape strip across top flaps
+          ctx.fillStyle = '#fef3c7';
+          ctx.fillRect(-0.7, -3.6, 1.4, 7.2);
+
+          // Shipping label rectangle on box top
+          ctx.fillStyle = '#ffffff';
+          ctx.fillRect(-2.0, -2.6, 1.4, 2.0);
+
+          // Skin hands gripping left and right edges from top view
+          ctx.fillStyle = ped.skinColor;
+          ctx.beginPath();
+          ctx.arc(0, -3.6, 1.0, 0, Math.PI * 2);
+          ctx.arc(0, 3.6, 1.0, 0, Math.PI * 2);
+          ctx.fill();
+        } else if (propType === 'bag') {
+          // Top-down Shopping Bag held in right hand beside body at X = bagArmSwing + 1.2, Y = 7.2
+          const bagArmSwing = Math.cos(ped.walkCycle) * 0.8;
+          ctx.translate(bagArmSwing + 1.2, 7.2);
+
+          const bagColor = ped.propColor || '#e11d48';
+
+          // Ground shadow under bag
+          ctx.fillStyle = 'rgba(0, 0, 0, 0.25)';
+          ctx.beginPath();
+          safeEllipse(ctx, 0.5, 0.5, 3.8, 2.2, 0, 0, Math.PI * 2);
+          ctx.fill();
+
+          // Top-down bag body (open-top rectangular/elliptical tote bag)
+          ctx.fillStyle = bagColor;
+          ctx.beginPath();
+          safeRoundRect(ctx, -3.2, -1.8, 6.4, 3.6, 1.0);
+          ctx.fill();
+
+          // Bag top rim highlight/border
+          ctx.strokeStyle = 'rgba(255,255,255,0.3)';
+          ctx.lineWidth = 0.6;
+          ctx.strokeRect(-3.2, -1.8, 6.4, 3.6);
+
+          // Dark interior opening visible from top view
+          ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
+          ctx.beginPath();
+          ctx.ellipse(0, 0, 2.4, 1.0, 0, 0, Math.PI * 2);
+          ctx.fill();
+
+          // Bag handles going from inside bag rim to hand grip point
           ctx.strokeStyle = '#f8fafc';
           ctx.lineWidth = 0.8;
           ctx.beginPath();
-          ctx.moveTo(-1.8, -2);
-          ctx.lineTo(-1.8, -4);
-          ctx.lineTo(1.8, -4);
-          ctx.lineTo(1.8, -2);
+          ctx.moveTo(-1.8, -0.6);
+          ctx.lineTo(-0.6, -2.2);
+          ctx.moveTo(1.8, -0.6);
+          ctx.lineTo(0.6, -2.2);
           ctx.stroke();
+
+          // Skin hand fingers gripping handles
+          ctx.fillStyle = ped.skinColor;
+          ctx.beginPath();
+          ctx.arc(0, -2.2, 0.9, 0, Math.PI * 2);
+          ctx.fill();
         }
         ctx.restore();
       }
 
-      // Janitor Broom
+      // Janitor Broom (Pure Top-Down View: shaft extends forward from hands, broom head at front)
       if (ped.hasBroom) {
-        const hSwing = ped.state === 'walking' || ped.state === 'crossing' ? Math.cos(ped.walkCycle) * 2.2 : 0;
         ctx.save();
-        ctx.translate(hSwing + 1, 3.5);
-        ctx.rotate(-Math.PI / 4); // Hold diagonally
-        
-        // Handle
-        ctx.fillStyle = '#78350f'; // Wood handle
-        ctx.fillRect(-0.5, -8, 1, 12);
-        
-        // Broom head
-        ctx.fillStyle = '#fde047'; // Yellowish bristles
+
+        // Ground drop shadow under broom shaft and head
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.22)';
         ctx.beginPath();
-        ctx.moveTo(-2, 4);
-        ctx.lineTo(2, 4);
-        ctx.lineTo(3, 8);
-        ctx.lineTo(-3, 8);
+        ctx.fillRect(4.5, -0.5, 12.0, 1.2); // Shaft shadow
+        ctx.fillRect(16.0, -5.5, 2.8, 12.0); // Head shadow
         ctx.fill();
-        
+
+        // Broom Shaft: wooden pole extending forward from hands (X = 4.5 to 16.5)
+        ctx.strokeStyle = '#78350f';
+        ctx.lineWidth = 1.6;
+        ctx.lineCap = 'round';
+        ctx.beginPath();
+        ctx.moveTo(4.5, -1.0);
+        ctx.lineTo(16.5, 0.5);
+        ctx.stroke();
+
+        // Metallic collar where shaft joins broom head
+        ctx.fillStyle = '#94a3b8';
+        ctx.fillRect(15.2, -0.2, 1.4, 1.4);
+
+        // Broom Head (Transverse bar & dense sweeping bristles at X = 16.5)
+        ctx.save();
+        ctx.translate(16.5, 0.5);
+
+        // Transverse wooden head bar (top view perpendicular to handle)
+        ctx.fillStyle = '#571c05';
+        ctx.fillRect(-0.8, -5.0, 2.2, 10.0);
+
+        // Dense broom bristles spreading forward along +X axis from head bar
+        ctx.fillStyle = '#fde047';
+        ctx.beginPath();
+        ctx.moveTo(1.4, -5.0);
+        ctx.lineTo(6.0, -6.0);
+        ctx.lineTo(6.0, 6.0);
+        ctx.lineTo(1.4, 5.0);
+        ctx.fill();
+
+        // Bristle fiber texture lines
+        ctx.strokeStyle = '#eab308';
+        ctx.lineWidth = 0.6;
+        ctx.beginPath();
+        for (let y = -4.5; y <= 4.5; y += 1.5) {
+          ctx.moveTo(1.4, y);
+          ctx.lineTo(6.0, y * 1.15);
+        }
+        ctx.stroke();
+
+        ctx.restore(); // restore broom head translate
+
+        // Hands gripping handle in front of chest at X = 5.2 and X = 6.8
+        ctx.fillStyle = ped.skinColor;
+        ctx.beginPath();
+        ctx.arc(5.2, -0.9, 1.0, 0, Math.PI * 2);
+        ctx.arc(6.8, 0.5, 1.0, 0, Math.PI * 2);
+        ctx.fill();
+
         ctx.restore();
       }
 
@@ -2785,7 +3732,7 @@ export class GameRenderer {
         
         // Bubble body
         ctx.beginPath();
-        ctx.roundRect(-bw / 2, -bh, bw, bh, 6);
+        safeRoundRect(ctx, -bw / 2, -bh, bw, bh, 6);
         ctx.fill();
         ctx.strokeStyle = '#000000';
         ctx.lineWidth = 1;
@@ -3012,13 +3959,13 @@ export class GameRenderer {
       // 2. Wheels - Tucked realistically inside wheel wells & deformed organically
       const isThreeAxle = car.type === 'truck_box' || car.type === 'truck_tanker' || 
                           car.type === 'truck_flatbed' || car.type === 'cement_mixer' ||
-                          car.type === 'fire_engine' || car.type === 'truck_dump' || 
-                          car.type === 'garbage_truck';
-      const isHeavyTruck = isThreeAxle;
+                          car.type === 'truck_dump' || car.type === 'garbage_truck' ||
+                          car.type === 'fire_ladder' || car.type === 'bus_articulated';
+      const isHeavyTruck = isThreeAxle || car.type === 'truck_water' || car.type === 'fire_engine' || car.type === 'fire_rescue' || car.type === 'bus';
 
       const wheelL = isHeavyTruck ? 11.5 : (car.type === 'sports' ? 10 : 9.5);
       const wheelW = isHeavyTruck ? 5.2 : (car.type === 'sports' ? 5.5 : 4.2);
-      const frontAxleX = isHeavyTruck ? halfL * 0.72 : halfL * 0.65;
+      const frontAxleX = (isThreeAxle || isHeavyTruck) ? halfL * 0.72 : halfL * 0.65;
       const trackY = halfW - 0.8; // Tucked slightly inside halfW
 
       const renderFixedWheel = (wx: number, wy: number) => {
@@ -3030,7 +3977,15 @@ export class GameRenderer {
         ctx.fillRect(dwx - wheelL / 2 + 2, dwy - wheelW / 2 + 0.8, wheelL - 4, wheelW - 1.6);
       };
 
-      if (isThreeAxle) {
+      if (car.type === 'bus_articulated') {
+        // Articulated bus with middle axle and rear pusher axle
+        const midAxleX = -halfL * 0.05;
+        const rearAxleX = -halfL * 0.76;
+        renderFixedWheel(midAxleX, -trackY);
+        renderFixedWheel(midAxleX, trackY - wheelW);
+        renderFixedWheel(rearAxleX, -trackY);
+        renderFixedWheel(rearAxleX, trackY - wheelW);
+      } else if (isThreeAxle) {
         // Dual tandem rear axles (6x4 / 6x6)
         const rearAxle1X = -halfL * 0.36;
         const rearAxle2X = -halfL * 0.74;
@@ -3377,28 +4332,33 @@ export class GameRenderer {
       let cabinX = -car.length * 0.05;
 
       const isCabOverTruck = car.type === 'truck_box' || car.type === 'truck_dump' || 
-                             car.type === 'cement_mixer' || car.type === 'garbage_truck';
+                             car.type === 'cement_mixer' || car.type === 'garbage_truck' ||
+                             car.type === 'fire_ladder';
 
       if (isCabOverTruck) {
         cabinL = car.length * 0.18;
         cabinW = car.width * 0.88;
         cabinX = halfL - cabinL / 2 - 2;
-      } else if (car.type === 'fire_engine') {
+      } else if (car.type === 'fire_engine' || car.type === 'fire_rescue') {
         cabinL = car.length * 0.28;
         cabinW = car.width * 0.90;
         cabinX = halfL - cabinL / 2 - 2;
-      } else if (car.type === 'truck_flatbed') {
-        cabinL = car.length * 0.18;
+      } else if (car.type === 'truck_flatbed' || car.type === 'truck_tanker' || car.type === 'truck_water') {
+        cabinL = car.length * 0.20;
         cabinW = car.width * 0.86;
         cabinX = halfL - cabinL * 1.35;
-      } else if (car.type === 'truck_tanker') {
-        cabinL = car.length * 0.18;
-        cabinW = car.width * 0.86;
-        cabinX = halfL - cabinL * 1.35;
-      } else if (car.type === 'van') {
+      } else if (car.type === 'van' || car.type === 'ambulance_van') {
         cabinL = car.length * 0.58;
         cabinW = car.width * 0.84;
         cabinX = -car.length * 0.02;
+      } else if (car.type === 'bus_minibus') {
+        cabinL = car.length * 0.62;
+        cabinW = car.width * 0.84;
+        cabinX = -car.length * 0.02;
+      } else if (car.type === 'ambulance_suv') {
+        cabinL = car.length * 0.54;
+        cabinW = car.width * 0.80;
+        cabinX = -car.length * 0.04;
       } else if (car.type === 'muscle') {
         cabinL = car.length * 0.48;
         cabinW = car.width * 0.78;
@@ -3421,8 +4381,8 @@ export class GameRenderer {
         cabinX = car.length * 0.1;
       }
 
-      // Draw glass base and roofs
-      if (car.type !== 'bus' && car.type !== 'ambulance') {
+      // Draw glass base and roofs (custom full-body rendering vehicles excluded)
+      if (car.type !== 'bus' && car.type !== 'bus_articulated' && car.type !== 'ambulance' && car.type !== 'ambulance_van') {
         drawDeformedRect(cabinX - cabinL / 2, -cabinW / 2, cabinL, cabinW, '#0f172a');
 
         const roofL = cabinL * 0.66;
@@ -3536,448 +4496,25 @@ export class GameRenderer {
         }
         drawDeformedLine(-halfL + rc, -halfW + 1.2, halfL - fc, -halfW + 1.2, '#000000', 0.5, true);
         drawDeformedLine(-halfL + rc, halfW - 1.2, halfL - fc, halfW - 1.2, '#000000', 0.5, true);
-
-      } else if (car.type === 'fire_engine') {
-        const bumpX = halfL - fc;
-        drawDeformedRect(bumpX - 1, -halfW - 0.5, 3.5, halfW * 2 + 1, '#cbd5e1');
-        drawDeformedRect(bumpX - 0.5, -halfW * 0.6, 2, 3, '#0f172a');
-        drawDeformedRect(bumpX - 0.5, halfW * 0.6 - 3, 2, 3, '#0f172a');
-
-        const cabBackX = cabinX - cabinL / 2;
-        drawDeformedRect(cabBackX, -halfW + 0.5, cabinL, halfW * 2 - 1, '#b91c1c');
-        drawDeformedRect(cabinX - cabinL * 0.25, -halfW + 1, 4, 1.8, '#0f172a');
-        drawDeformedRect(cabinX - cabinL * 0.25, halfW - 2.8, 4, 1.8, '#0f172a');
-        drawDeformedRect(cabinX + cabinL * 0.3, -halfW - 3, 2, 3.5, '#334155');
-        drawDeformedRect(cabinX + cabinL * 0.3, halfW - 0.5, 2, 3.5, '#334155');
-
-        const bodyX1 = -halfL + rc + 2;
-        const bodyX2 = cabBackX - 1;
-        const bodyW = halfW * 2 - 1.5;
-        drawDeformedRect(bodyX1, -bodyW / 2, bodyX2 - bodyX1, bodyW, '#dc2626');
-        drawDeformedLine(bodyX1, -bodyW / 2, bodyX2, -bodyW / 2, '#991b1b', 1);
-        drawDeformedLine(bodyX2, -bodyW / 2, bodyX2, bodyW / 2, '#991b1b', 1);
-        drawDeformedLine(bodyX2, bodyW / 2, bodyX1, bodyW / 2, '#991b1b', 1);
-        drawDeformedLine(bodyX1, bodyW / 2, bodyX1, -bodyW / 2, '#991b1b', 1);
-
-        const shutterCount = 3;
-        const shutterSpan = (bodyX2 - bodyX1 - 4) / shutterCount;
-        for (let s = 0; s < shutterCount; s++) {
-          const sx = bodyX1 + 2 + s * shutterSpan;
-          const sw = shutterSpan - 2;
-          drawDeformedRect(sx, -bodyW / 2 + 0.5, sw, 3.5, '#e2e8f0');
-          drawDeformedRect(sx, bodyW / 2 - 4, sw, 3.5, '#e2e8f0');
-          drawDeformedLine(sx + 1, -bodyW / 2 + 2, sx + sw - 1, -bodyW / 2 + 2, '#64748b', 0.6);
-          drawDeformedLine(sx + 1, bodyW / 2 - 2, sx + sw - 1, bodyW / 2 - 2, '#64748b', 0.6);
-        }
-
-        drawDeformedRect(bodyX1 + (bodyX2 - bodyX1) * 0.45, -2, 7, 4, '#0f172a');
-        drawDeformedRect(bodyX1 + (bodyX2 - bodyX1) * 0.45 + 1.5, -1.2, 1.8, 1.2, '#38bdf8');
-        drawDeformedRect(bodyX1 + (bodyX2 - bodyX1) * 0.45 + 3.8, -1.2, 1.8, 1.2, '#38bdf8');
-
-        drawDeformedRect(bodyX1, -bodyW / 2 + 4.5, bodyX2 - bodyX1, 1.8, '#ffffff');
-        drawDeformedRect(bodyX1, bodyW / 2 - 6.3, bodyX2 - bodyX1, 1.8, '#ffffff');
-        drawDeformedRect(cabBackX, -halfW + 2, cabinL, 1.5, '#ffffff');
-        drawDeformedRect(cabBackX, halfW - 3.5, cabinL, 1.5, '#ffffff');
-
-        for (let cy = -bodyW / 2 + 1; cy <= bodyW / 2 - 4; cy += 6) {
-          const p1 = deform(bodyX1 - 1, cy);
-          const p2 = deform(bodyX1 + 2, cy + 5);
-          const p3 = deform(bodyX1 + 2, cy + 8);
-          const p4 = deform(bodyX1 - 1, cy + 3);
-          ctx.fillStyle = '#dc2626';
-          ctx.beginPath();
-          ctx.moveTo(p1[0], p1[1]); ctx.lineTo(p2[0], p2[1]); ctx.lineTo(p3[0], p3[1]); ctx.lineTo(p4[0], p4[1]);
-          ctx.closePath(); ctx.fill();
-        }
-
-        const ladderX1 = bodyX1 + 2;
-        const ladderW = 6.5;
-        const ladderL = car.length * 0.52;
-        drawDeformedRect(ladderX1, -ladderW / 2, ladderL, 1.2, '#cbd5e1');
-        drawDeformedRect(ladderX1, ladderW / 2 - 1.2, ladderL, 1.2, '#cbd5e1');
-        for (let lx = ladderX1 + 3; lx < ladderX1 + ladderL - 2; lx += 4) {
-          drawDeformedLine(lx, -ladderW / 2, lx, ladderW / 2, '#475569', 0.8);
-        }
-
-        const cannonX = cabinX - 2;
-        drawDeformedCircle(cannonX, 0, 3.5, '#334155');
-        drawDeformedRect(cannonX, -1, 7, 2, '#94a3b8');
-        drawDeformedCircle(cannonX - 1, 0, 1.5, '#ef4444');
-
-        drawDeformedRect(bodyX1 + 4, -halfW - 0.8, bodyX2 - bodyX1 - 8, 1.4, '#1e293b');
-        drawDeformedRect(bodyX1 + 4, halfW - 0.6, bodyX2 - bodyX1 - 8, 1.4, '#1e293b');
-
-      } else if (car.type === 'bus') {
-        const glassX1 = -halfL + 8;
-        const glassX2 = halfL - 10;
-        const glassW = halfW * 2 - 1.2;
-        drawDeformedRect(glassX1, -glassW / 2, glassX2 - glassX1, glassW, '#0f172a');
-
-        const busRoofW = halfW * 2 - 4.5;
-        drawDeformedRect(glassX1 + 1, -busRoofW / 2, glassX2 - glassX1 - 2, busRoofW, car.roofColor || car.color);
-
-        const winCount = 6;
-        const winSpan = (glassX2 - glassX1 - 8) / winCount;
-        for (let i = 0; i < winCount; i++) {
-          const wx = glassX1 + 4 + i * winSpan;
-          const ww = winSpan - 2;
-          drawDeformedRect(wx, -halfW + 0.5, ww, 2.2, 'rgba(56, 189, 248, 0.16)');
-          drawDeformedRect(wx, halfW - 2.7, ww, 2.2, 'rgba(56, 189, 248, 0.16)');
-        }
-
-        const fWindshieldX = halfL - 10;
-        const fWindshieldW = halfW * 2 - 2.5;
-        drawDeformedRect(fWindshieldX, -fWindshieldW / 2, 6, fWindshieldW, '#0f172a');
-        drawDeformedRect(fWindshieldX + 1.5, -fWindshieldW / 2 + 0.8, 3.8, fWindshieldW - 1.6, 'rgba(56, 189, 248, 0.22)');
-        drawDeformedLine(fWindshieldX + 2, -fWindshieldW / 3, fWindshieldX + 4.5, fWindshieldW / 3, 'rgba(255, 255, 255, 0.28)', 1);
-
-        drawDeformedRect(fWindshieldX - 2.5, -8, 2, 16, '#1e293b');
-        drawDeformedRect(fWindshieldX - 2, -6.5, 1.2, 13, '#f59e0b');
-
-        const rWindshieldX = -halfL + 3.5;
-        const rWindshieldW = halfW * 2 - 6;
-        drawDeformedRect(rWindshieldX, -rWindshieldW / 2, 3, rWindshieldW, '#0f172a');
-        drawDeformedRect(rWindshieldX + 0.5, -rWindshieldW / 2 + 0.5, 2, rWindshieldW - 1, 'rgba(56, 189, 248, 0.16)');
-
-        const doorW = 8.5;
-        const doorPositions = [glassX1 + (glassX2 - glassX1) * 0.18, glassX1 + (glassX2 - glassX1) * 0.72];
-        doorPositions.forEach(dx => {
-          drawDeformedRect(dx - doorW / 2, halfW - 2.2, doorW, 2.5, '#1e293b');
-          drawDeformedRect(dx - 0.4, halfW - 2.2, 0.8, 2.5, '#cbd5e1');
-          drawDeformedRect(dx - doorW / 2 + 1, halfW - 1.6, doorW / 2 - 1.8, 1.4, 'rgba(56, 189, 248, 0.22)');
-          drawDeformedRect(dx + 0.8, halfW - 1.6, doorW / 2 - 1.8, 1.4, 'rgba(56, 189, 248, 0.22)');
-        });
-
-        drawDeformedRect(halfL - 5, -halfW - 3.2, 1.8, 3.6, '#1e293b');
-        drawDeformedRect(halfL - 5, halfW - 0.4, 1.8, 3.6, '#1e293b');
-
-        const acX = 0;
-        const acL = 20;
-        const acW = 12;
-        drawDeformedRect(acX - acL / 2, -acW / 2, acL, acW, '#f8fafc');
-        drawDeformedLine(acX - acL / 2, -acW / 2, acX + acL / 2, -acW / 2, '#cbd5e1', 0.8);
-        drawDeformedLine(acX + acL / 2, -acW / 2, acX + acL / 2, acW / 2, '#cbd5e1', 0.8);
-        drawDeformedLine(acX + acL / 2, acW / 2, acX - acL / 2, acW / 2, '#cbd5e1', 0.8);
-        drawDeformedLine(acX - acL / 2, acW / 2, acX - acL / 2, -acW / 2, '#cbd5e1', 0.8);
-        drawDeformedCircle(acX - 4.5, 0, 2.6, '#475569');
-        drawDeformedCircle(acX + 4.5, 0, 2.6, '#475569');
-
-        drawDeformedRect(-halfL * 0.42 - 4.5, -4.5, 9, 9, '#f1f5f9');
-        drawDeformedRect(halfL * 0.42 - 4.5, -4.5, 9, 9, '#f1f5f9');
-        drawDeformedLine(-halfL * 0.42 - 4.5, -4.5, -halfL * 0.42 + 4.5, -4.5, '#cbd5e1', 0.6);
-        drawDeformedLine(-halfL * 0.42 + 4.5, -4.5, -halfL * 0.42 + 4.5, 4.5, '#cbd5e1', 0.6);
-        drawDeformedLine(-halfL * 0.42 + 4.5, 4.5, -halfL * 0.42 - 4.5, 4.5, '#cbd5e1', 0.6);
-        drawDeformedLine(-halfL * 0.42 - 4.5, 4.5, -halfL * 0.42 - 4.5, -4.5, '#cbd5e1', 0.6);
-        drawDeformedLine(halfL * 0.42 - 4.5, -4.5, halfL * 0.42 + 4.5, -4.5, '#cbd5e1', 0.6);
-        drawDeformedLine(halfL * 0.42 + 4.5, -4.5, halfL * 0.42 + 4.5, 4.5, '#cbd5e1', 0.6);
-        drawDeformedLine(halfL * 0.42 + 4.5, 4.5, halfL * 0.42 - 4.5, 4.5, '#cbd5e1', 0.6);
-        drawDeformedLine(halfL * 0.42 - 4.5, 4.5, halfL * 0.42 - 4.5, -4.5, '#cbd5e1', 0.6);
-
-      } else if (car.type === 'van') {
-        drawDeformedLine(-halfL + rc + 4, -4, halfL - fc - 4, -4, 'rgba(15, 23, 42, 0.35)', 0.8);
-        drawDeformedLine(-halfL + rc + 4, 0, halfL - fc - 4, 0, 'rgba(15, 23, 42, 0.35)', 0.8);
-        drawDeformedLine(-halfL + rc + 4, 4, halfL - fc - 4, 4, 'rgba(15, 23, 42, 0.35)', 0.8);
-        drawDeformedRect(halfL - fc - 3, -4, 1.8, 8, '#1e293b');
-
-      } else if (car.type === 'muscle') {
-        drawDeformedRect(halfL - fc - 1.8, -halfW + 2, 2.2, halfW * 2 - 4, '#cbd5e1');
-        drawDeformedRect(-halfL + rc - 0.4, -halfW + 2, 2.2, halfW * 2 - 4, '#cbd5e1');
-        drawDeformedRect(halfL - fc - 1.5, -halfW * 0.45, 1.5, halfW * 0.9, '#1e293b');
-        for (let gy = -halfW * 0.4; gy < halfW * 0.4; gy += 2) {
-          drawDeformedLine(halfL - fc - 1.5, gy, halfL - fc, gy, '#e2e8f0', 0.6);
-        }
-        drawDeformedLine(halfL - fc - 2, -halfW * 0.3, cabinX + cabinL / 2, -halfW * 0.25, 'rgba(15, 23, 42, 0.25)', 0.8);
-        drawDeformedLine(halfL - fc - 2, halfW * 0.3, cabinX + cabinL / 2, halfW * 0.25, 'rgba(15, 23, 42, 0.25)', 0.8);
-
-      } else if (car.type === 'ambulance') {
-        const cabL_amb = car.length * 0.28;
-        const cabX_amb = halfL - cabL_amb * 0.8;
-        const cabW_amb = halfW * 2 - 2;
-        drawDeformedRect(cabX_amb - cabL_amb / 2, -cabW_amb / 2, cabL_amb, cabW_amb, '#0f172a');
-        drawDeformedRect(cabX_amb - cabL_amb * 0.1, -cabW_amb * 0.38, cabL_amb * 0.55, cabW_amb * 0.76, '#ffffff');
-        drawDeformedRect(cabX_amb + cabL_amb * 0.22, -cabW_amb / 2 + 1, 3.2, cabW_amb - 2, 'rgba(56, 189, 248, 0.18)');
-        drawDeformedRect(cabX_amb - cabL_amb * 0.1, -cabW_amb / 2 + 0.5, cabL_amb * 0.28, 1.2, 'rgba(56, 189, 248, 0.18)');
-        drawDeformedRect(cabX_amb - cabL_amb * 0.1, cabW_amb / 2 - 1.7, cabL_amb * 0.28, 1.2, 'rgba(56, 189, 248, 0.18)');
-
-        const boxX1_amb = -halfL + rc + 3;
-        const boxX2_amb = cabX_amb - cabL_amb / 2 - 1;
-        const boxW_amb = halfW * 2 - 0.8;
-        drawDeformedRect(boxX1_amb, -boxW_amb / 2, boxX2_amb - boxX1_amb, boxW_amb, '#ffffff');
-        drawDeformedLine(boxX1_amb, -boxW_amb / 2, boxX2_amb, -boxW_amb / 2, '#cbd5e1', 1);
-        drawDeformedLine(boxX2_amb, -boxW_amb / 2, boxX2_amb, boxW_amb / 2, '#cbd5e1', 1);
-        drawDeformedLine(boxX2_amb, boxW_amb / 2, boxX1_amb, boxW_amb / 2, '#cbd5e1', 1);
-        drawDeformedLine(boxX1_amb, boxW_amb / 2, boxX1_amb, -boxW_amb / 2, '#cbd5e1', 1);
-
-        drawDeformedRect(boxX1_amb, -boxW_amb / 2 + 1, boxX2_amb - boxX1_amb, 2.5, '#ef4444');
-        drawDeformedRect(boxX1_amb, boxW_amb / 2 - 3.5, boxX2_amb - boxX1_amb, 2.5, '#ef4444');
-
-        const sideCircleX = boxX1_amb + (boxX2_amb - boxX1_amb) * 0.45;
-        drawDeformedCircle(sideCircleX, -boxW_amb / 2 + 3.8, 2.8, '#ffffff');
-        drawDeformedCircle(sideCircleX, boxW_amb / 2 - 3.8, 2.8, '#ffffff');
-        drawDeformedRect(sideCircleX - 1.5, -boxW_amb / 2 + 3.2, 3.0, 1.2, '#ef4444');
-        drawDeformedRect(sideCircleX - 0.5, -boxW_amb / 2 + 2.4, 1.0, 2.8, '#ef4444');
-        drawDeformedRect(sideCircleX - 1.5, boxW_amb / 2 - 4.4, 3.0, 1.2, '#ef4444');
-        drawDeformedRect(sideCircleX - 0.5, boxW_amb / 2 - 5.2, 1.0, 2.8, '#ef4444');
-
-        drawDeformedRect(boxX1_amb, -boxW_amb * 0.38, 1.8, boxW_amb * 0.76, '#cbd5e1');
-        drawDeformedRect(boxX1_amb + 0.4, -boxW_amb * 0.28, 1, boxW_amb * 0.20, '#1e293b');
-        drawDeformedRect(boxX1_amb + 0.4, boxW_amb * 0.08, 1, boxW_amb * 0.20, '#1e293b');
-
-        drawDeformedRect(boxX1_amb - 0.8, -boxW_amb / 2 + 1, 0.8, boxW_amb - 2, '#f59e0b');
-        drawDeformedRect(boxX1_amb - 0.8, -boxW_amb / 2 + 2, 0.8, 1.5, '#ef4444');
-        drawDeformedRect(boxX1_amb - 0.8, -boxW_amb / 4, 0.8, 1.5, '#ef4444');
-        drawDeformedRect(boxX1_amb - 0.8, boxW_amb / 4, 0.8, 1.5, '#ef4444');
-
-        const roofCircleX = boxX1_amb + (boxX2_amb - boxX1_amb) * 0.55;
-        drawDeformedCircle(roofCircleX, 0, 5.8, '#ffffff');
-        drawDeformedRect(roofCircleX - 4.2, -1.2, 8.4, 2.4, '#ef4444');
-        drawDeformedRect(roofCircleX - 1.2, -4.2, 2.4, 8.4, '#ef4444');
-
-        const ventX = boxX1_amb + (boxX2_amb - boxX1_amb) * 0.18;
-        drawDeformedCircle(ventX, 0, 3.2, '#e2e8f0');
-        drawDeformedRect(boxX2_amb - 4, -boxW_amb * 0.44, 2.5, boxW_amb * 0.88, '#cbd5e1');
-        drawDeformedRect(boxX2_amb - 4, -boxW_amb * 0.44 + 0.5, 2.5, 3.5, '#3b82f6');
-        drawDeformedRect(boxX2_amb - 4, boxW_amb * 0.44 - 4, 2.5, 3.5, '#ef4444');
-
-      } else if (car.type === 'truck_box') {
-        drawDeformedRect(halfL - fc - 2, -halfW + 3, 2, halfW * 2 - 6, '#0f172a');
-        drawDeformedRect(cabinX + cabinL * 0.35, -4, 1.5, 2, '#f59e0b');
-        drawDeformedRect(cabinX + cabinL * 0.35, -1, 1.5, 2, '#f59e0b');
-        drawDeformedRect(cabinX + cabinL * 0.35, 2, 1.5, 2, '#f59e0b');
-
-        const boxX1 = -halfL + rc + 3;
-        const boxX2 = cabinX - cabinL / 2 - 1;
-        const boxW = halfW * 2 - 1.2;
-        drawDeformedRect(boxX1, -boxW / 2, boxX2 - boxX1, boxW, '#f8fafc');
-        drawDeformedLine(boxX1, -boxW / 2, boxX2, -boxW / 2, '#94a3b8', 1.2);
-        drawDeformedLine(boxX2, -boxW / 2, boxX2, boxW / 2, '#94a3b8', 1.2);
-        drawDeformedLine(boxX2, boxW / 2, boxX1, boxW / 2, '#94a3b8', 1.2);
-        drawDeformedLine(boxX1, boxW / 2, boxX1, -boxW / 2, '#94a3b8', 1.2);
-
-        for (let bx = boxX1 + 6; bx < boxX2 - 4; bx += 6) {
-          drawDeformedLine(bx, -boxW / 2 + 1, bx, boxW / 2 - 1, '#cbd5e1', 0.8);
-        }
-
-        drawDeformedRect(boxX1, -boxW / 2 + 2, 2, boxW - 4, '#64748b');
-        drawDeformedRect(boxX1 - 0.5, -boxW / 4, 1.2, 1, '#cbd5e1');
-        drawDeformedRect(boxX1 - 0.5, boxW / 4, 1.2, 1, '#cbd5e1');
-        drawDeformedRect(boxX1 + 8, -halfW - 1.2, 14, 2, '#334155');
-        drawDeformedRect(boxX1 + 8, halfW - 0.8, 14, 2, '#334155');
-
-      } else if (car.type === 'truck_dump') {
-        const dumpX1 = -halfL + rc + 3;
-        const dumpX2 = cabinX - cabinL / 2 - 1;
-        const dumpW = halfW * 2 - 1;
-        drawDeformedRect(dumpX1, -dumpW / 2, dumpX2 - dumpX1 + cabinL * 0.6, dumpW, '#d97706');
-        drawDeformedLine(dumpX1, -dumpW / 2, dumpX2 + cabinL * 0.6, -dumpW / 2, '#78350f', 1.2);
-        drawDeformedLine(dumpX2 + cabinL * 0.6, -dumpW / 2, dumpX2 + cabinL * 0.6, dumpW / 2, '#78350f', 1.2);
-        drawDeformedLine(dumpX2 + cabinL * 0.6, dumpW / 2, dumpX1, dumpW / 2, '#78350f', 1.2);
-        drawDeformedLine(dumpX1, dumpW / 2, dumpX1, -dumpW / 2, '#78350f', 1.2);
-
-        for (let rx = dumpX1 + 6; rx < dumpX2 + cabinL * 0.4; rx += 7) {
-          drawDeformedLine(rx, -dumpW / 2, rx, dumpW / 2, '#b45309', 1.2);
-        }
-
-        drawDeformedRect(dumpX1 + 3, -dumpW / 2 + 2.5, dumpX2 - dumpX1 - 3, dumpW - 5, '#64748b');
-        for (let gi = 0; gi < 16; gi++) {
-          const gx = dumpX1 + 5 + (gi % 5) * 6;
-          const gy = -dumpW / 2 + 4 + Math.floor(gi / 5) * 5;
-          drawDeformedCircle(gx, gy, 1.8, '#94a3b8');
-        }
-        drawDeformedRect(halfL - fc - 2, -halfW + 3, 2, halfW * 2 - 6, '#0f172a');
-
-      } else if (car.type === 'truck_tanker') {
-        const hoodX1 = cabinX + cabinL / 2;
-        const hoodX2 = halfL - fc;
-        drawDeformedRect(hoodX1, -halfW + 3, hoodX2 - hoodX1, halfW * 2 - 6, car.color);
-        drawDeformedRect(hoodX2 - 2, -halfW + 1, 2.5, halfW * 2 - 2, '#1e293b');
-
-        const tankX1 = -halfL + rc + 3;
-        const tankX2 = cabinX - cabinL / 2 - 1;
-        const tankW = halfW * 2 - 2;
-        const tankGrad = ctx.createLinearGradient(0, -tankW / 2, 0, tankW / 2);
-        tankGrad.addColorStop(0, '#94a3b8');
-        tankGrad.addColorStop(0.2, '#f8fafc');
-        tankGrad.addColorStop(0.5, '#cbd5e1');
-        tankGrad.addColorStop(0.8, '#64748b');
-        tankGrad.addColorStop(1, '#334155');
-        drawDeformedRect(tankX1, -tankW / 2, tankX2 - tankX1, tankW, tankGrad);
-        drawDeformedLine(tankX1, -tankW / 2, tankX2, -tankW / 2, '#475569', 1);
-        drawDeformedLine(tankX2, -tankW / 2, tankX2, tankW / 2, '#475569', 1);
-        drawDeformedLine(tankX2, tankW / 2, tankX1, tankW / 2, '#475569', 1);
-        drawDeformedLine(tankX1, tankW / 2, tankX1, -tankW / 2, '#475569', 1);
-
-        drawDeformedRect(tankX1 + 4, -3, tankX2 - tankX1 - 8, 6, '#334155');
-        const hatch1X = tankX1 + (tankX2 - tankX1) * 0.3;
-        const hatch2X = tankX1 + (tankX2 - tankX1) * 0.7;
-        drawDeformedCircle(hatch1X, 0, 3, '#0f172a');
-        drawDeformedCircle(hatch2X, 0, 3, '#0f172a');
-
-        const dX = tankX1 - 1;
-        const dY = 0;
-        const dp1 = deform(dX, dY - 2.5);
-        const dp2 = deform(dX + 2.5, dY);
-        const dp3 = deform(dX, dY + 2.5);
-        const dp4 = deform(dX - 2.5, dY);
-        ctx.fillStyle = '#dc2626';
-        ctx.beginPath();
-        ctx.moveTo(dp1[0], dp1[1]); ctx.lineTo(dp2[0], dp2[1]); ctx.lineTo(dp3[0], dp3[1]); ctx.lineTo(dp4[0], dp4[1]);
-        ctx.closePath(); ctx.fill();
-
-      } else if (car.type === 'truck_flatbed') {
-        const hoodX1 = cabinX + cabinL / 2;
-        const hoodX2 = halfL - fc;
-        drawDeformedRect(hoodX1, -halfW + 2, hoodX2 - hoodX1, halfW * 2 - 4, car.color || '#0284c7');
-        drawDeformedRect(hoodX2 - 3.5, -halfW + 3, 3.5, halfW * 2 - 6, '#f8fafc');
-
-        const craneX = cabinX - cabinL / 2 - 3;
-        drawDeformedRect(craneX - 3, -halfW + 2, 5, halfW * 2 - 4, '#0284c7');
-        drawDeformedRect(craneX - 2, -3, 3, 6, '#0f172a');
-        drawDeformedRect(craneX - 1, -1.5, 7, 3, '#f59e0b');
-
-        const flatX1 = -halfL + rc + 3;
-        const flatX2 = craneX - 4;
-        const flatW = halfW * 2 - 2;
-        drawDeformedRect(flatX1, -flatW / 2, flatX2 - flatX1, flatW, '#78350f');
-        drawDeformedLine(flatX1, -flatW / 2, flatX2, -flatW / 2, '#451a03', 1.4);
-        drawDeformedLine(flatX2, -flatW / 2, flatX2, flatW / 2, '#451a03', 1.4);
-        drawDeformedLine(flatX2, flatW / 2, flatX1, flatW / 2, '#451a03', 1.4);
-        drawDeformedLine(flatX1, flatW / 2, flatX1, -flatW / 2, '#451a03', 1.4);
-
-        drawDeformedRect(flatX1 + 4, -flatW / 2 + 3, 16, 10, '#d97706');
-        drawDeformedRect(flatX1 + 24, -flatW / 2 + 3, flatX2 - flatX1 - 28, 4, '#475569');
-        drawDeformedRect(flatX1 + 24, -flatW / 2 + 8, flatX2 - flatX1 - 28, 4, '#475569');
-
-        drawDeformedLine(flatX1 + 12, -flatW / 2, flatX1 + 12, flatW / 2, '#ea580c', 1.4);
-        drawDeformedLine(flatX1 + 32, -flatW / 2, flatX1 + 32, flatW / 2, '#ea580c', 1.4);
-
-      } else if (car.type === 'cement_mixer') {
-        drawDeformedRect(halfL - fc - 2, -halfW + 3, 2, halfW * 2 - 6, '#0f172a');
-        drawDeformedRect(cabinX + cabinL * 0.35, -4, 1.5, 2, '#f59e0b');
-        drawDeformedRect(cabinX + cabinL * 0.35, -1, 1.5, 2, '#f59e0b');
-        drawDeformedRect(cabinX + cabinL * 0.35, 2, 1.5, 2, '#f59e0b');
-        drawDeformedRect(cabinX - cabinL / 2 - 3, -halfW + 2, 3, halfW * 2 - 4, '#38bdf8');
-
-        const drumX1 = -halfL + rc + 8;
-        const drumX2 = cabinX - cabinL / 2 - 4;
-        const drumW = halfW * 2 - 2;
-
-        const dp1 = deform(drumX2, -drumW * 0.28);
-        const dp2 = deform(drumX1 + (drumX2 - drumX1) * 0.5, -drumW * 0.5);
-        const dp3 = deform(drumX1, -drumW * 0.32);
-        const dp4 = deform(drumX1, drumW * 0.32);
-        const dp5 = deform(drumX1 + (drumX2 - drumX1) * 0.5, drumW * 0.5);
-        const dp6 = deform(drumX2, drumW * 0.28);
-        ctx.fillStyle = '#f8fafc';
-        ctx.beginPath();
-        ctx.moveTo(dp1[0], dp1[1]); ctx.lineTo(dp2[0], dp2[1]); ctx.lineTo(dp3[0], dp3[1]);
-        ctx.lineTo(dp4[0], dp4[1]); ctx.lineTo(dp5[0], dp5[1]); ctx.lineTo(dp6[0], dp6[1]);
-        ctx.closePath(); ctx.fill();
-        drawDeformedLine(drumX1, -drumW * 0.32, drumX1 + (drumX2 - drumX1) * 0.5, -drumW * 0.5, '#64748b', 1.2);
-        drawDeformedLine(drumX1 + (drumX2 - drumX1) * 0.5, -drumW * 0.5, drumX2, -drumW * 0.28, '#64748b', 1.2);
-        drawDeformedLine(drumX2, -drumW * 0.28, drumX2, drumW * 0.28, '#64748b', 1.2);
-        drawDeformedLine(drumX2, drumW * 0.28, drumX1 + (drumX2 - drumX1) * 0.5, drumW * 0.5, '#64748b', 1.2);
-        drawDeformedLine(drumX1 + (drumX2 - drumX1) * 0.5, drumW * 0.5, drumX1, drumW * 0.32, '#64748b', 1.2);
-        drawDeformedLine(drumX1, drumW * 0.32, drumX1, -drumW * 0.32, '#64748b', 1.2);
-
-        ctx.strokeStyle = '#ea580c';
-        ctx.lineWidth = 2.4;
-        ctx.beginPath();
-        const steps = 10;
-        for (let i = 0; i <= steps; i++) {
-          const t = i / steps;
-          const cx = drumX2 - 2 + (drumX1 + 8 - (drumX2 - 2)) * t;
-          const cy = -drumW * 0.22 * (1 - t) + drumW * 0.26 * t + 6 * t * (1 - t);
-          const [dcx, dcy] = deform(cx, cy);
-          if (i === 0) ctx.moveTo(dcx, dcy);
-          else ctx.lineTo(dcx, dcy);
-        }
-        ctx.stroke();
-
-        ctx.beginPath();
-        for (let i = 0; i <= steps; i++) {
-          const t = i / steps;
-          const cx = drumX2 - 8 + (drumX1 + 3 - (drumX2 - 8)) * t;
-          const cy = -drumW * 0.28 * (1 - t) + drumW * 0.24 * t + 8 * t * (1 - t);
-          const [dcx, dcy] = deform(cx, cy);
-          if (i === 0) ctx.moveTo(dcx, dcy);
-          else ctx.lineTo(dcx, dcy);
-        }
-        ctx.stroke();
-
-        drawDeformedRect(drumX1 - 5, -2, 6, 4, '#475569');
-
-      } else if (car.type === 'garbage_truck') {
-        drawDeformedCircle(cabinX, -cabinW * 0.35, 2.2, '#f59e0b');
-        drawDeformedCircle(cabinX, cabinW * 0.35, 2.2, '#f59e0b');
-
-        const compX1 = -halfL + rc + 7;
-        const compX2 = cabinX - cabinL / 2 - 1.5;
-        const compW = halfW * 2 - 1.5;
-        drawDeformedRect(compX1, -compW / 2, compX2 - compX1, compW, '#16a34a');
-        drawDeformedLine(compX1, -compW / 2, compX2, -compW / 2, '#14532d', 1.2);
-        drawDeformedLine(compX2, -compW / 2, compX2, compW / 2, '#14532d', 1.2);
-        drawDeformedLine(compX2, compW / 2, compX1, compW / 2, '#14532d', 1.2);
-        drawDeformedLine(compX1, compW / 2, compX1, -compW / 2, '#14532d', 1.2);
-
-        for (let rx = compX1 + 6; rx < compX2 - 4; rx += 7) {
-          drawDeformedLine(rx, -compW / 2, rx, compW / 2, '#15803d', 1.2);
-        }
-
-        drawDeformedRect(compX1 - 4, -compW / 2 - 0.5, 4, compW + 1, '#0f172a');
-        drawDeformedRect(compX1 - 5, -compW / 2 + 2, 2, 3, '#f59e0b');
-        drawDeformedRect(compX1 - 5, compW / 2 - 5, 2, 3, '#f59e0b');
-
-        const compMidX = compX1 + (compX2 - compX1) * 0.5;
-        drawDeformedCircle(compMidX, 0, 4, '#ffffff');
-        drawDeformedCircle(compMidX, 0, 2.5, '#16a34a');
       }
 
-      // Emergency roof sirens (strobe) with strict sirenOn check
-      if (car.type === 'police' || car.type === 'fire_engine' || car.type === 'ambulance') {
-        const isSirenActive = car.sirenOn === true;
-        const strobe = isSirenActive ? (Math.floor(Date.now() / 90) % 4) : -1;
-
-        drawDeformedRect(cabinX - 1.5, -cabinW * 0.45, 3, cabinW * 0.9, '#0f172a');
-
-        const primaryColor = car.type === 'fire_engine' ? '#ef4444' : '#3b82f6';
-        const secondaryColor = car.type === 'fire_engine' ? '#3b82f6' : '#ef4444';
-
-        if (strobe === 0 || strobe === 1) {
-          drawDeformedRect(cabinX - 1, -cabinW * 0.4, 2, cabinW * 0.35, primaryColor);
-        } else {
-          drawDeformedRect(cabinX - 1, -cabinW * 0.4, 2, cabinW * 0.35, isSirenActive ? '#1e3a8a' : '#1e293b');
-        }
-
-        if (strobe === 2 || strobe === 3) {
-          drawDeformedRect(cabinX - 1, cabinW * 0.05, 2, cabinW * 0.35, secondaryColor);
-        } else {
-          drawDeformedRect(cabinX - 1, cabinW * 0.05, 2, cabinW * 0.35, isSirenActive ? '#7f1d1d' : '#311010');
-        }
-
-        drawDeformedRect(cabinX - 1.2, -1, 2.4, 2, '#ffffff');
-
-        if (isSirenActive && nightAlpha > 0.05) {
-          ctx.save();
-          ctx.globalCompositeOperation = 'screen';
-
-          const [dcabinX, dcabinY1] = deform(cabinX, -cabinW * 0.3);
-          const [dcabinX2, dcabinY2] = deform(cabinX, cabinW * 0.3);
-
-          const leftGlow = ctx.createRadialGradient(dcabinX, dcabinY1, 1, dcabinX, dcabinY1, 22);
-          leftGlow.addColorStop(0, (strobe === 0 || strobe === 1) ? 'rgba(59, 130, 246, 0.45)' : 'rgba(59, 130, 246, 0.15)');
-          leftGlow.addColorStop(1, 'rgba(59, 130, 246, 0)');
-          ctx.fillStyle = leftGlow;
-          ctx.beginPath(); ctx.arc(dcabinX, dcabinY1, 22, 0, Math.PI * 2); ctx.fill();
-
-          const rightGlow = ctx.createRadialGradient(dcabinX2, dcabinY2, 1, dcabinX2, dcabinY2, 22);
-          rightGlow.addColorStop(0, (strobe === 2 || strobe === 3) ? 'rgba(239, 68, 68, 0.45)' : 'rgba(239, 68, 68, 0.15)');
-          rightGlow.addColorStop(1, 'rgba(239, 68, 68, 0)');
-          ctx.fillStyle = rightGlow;
-          ctx.beginPath(); ctx.arc(dcabinX2, dcabinY2, 22, 0, Math.PI * 2); ctx.fill();
-          ctx.restore();
-        }
-      }
+      // Specialized vehicle attachments, emergency sirens, cabins & equipment
+      renderSpecializedVehicleAttachments({
+        ctx,
+        car,
+        halfL,
+        halfW,
+        fc,
+        rc,
+        cabinX,
+        cabinL,
+        cabinW,
+        deform,
+        drawDeformedRect,
+        drawDeformedLine,
+        drawDeformedCircle,
+        nightAlpha,
+      });
 
       // Night/Weather Tint for the cabins (since drawn above lightmap)
       if (nightAlpha > 0.05) {
@@ -4771,7 +5308,7 @@ export class GameRenderer {
         const fy = minY + ((i + 0.5) / 5) * (maxY - minY) + driftY;
         
         ctx.beginPath();
-        ctx.ellipse(minX + (maxX - minX) * 0.5 + driftX, fy, (maxX - minX) * 0.7, (maxY - minY) * 0.25, Math.sin(time * 0.2 + i) * 0.1, 0, Math.PI * 2);
+        safeEllipse(ctx, minX + (maxX - minX) * 0.5 + driftX, fy, (maxX - minX) * 0.7, (maxY - minY) * 0.25, Math.sin(time * 0.2 + i) * 0.1, 0, Math.PI * 2);
         ctx.fill();
       }
     }
@@ -4964,7 +5501,7 @@ export class GameRenderer {
           shadow.y + shadow.size > minY && shadow.y - shadow.size < maxY) {
         
         ctx.beginPath();
-        ctx.ellipse(shadow.x, shadow.y, shadow.size, shadow.size * 0.6, Math.PI / 4, 0, Math.PI * 2);
+        safeEllipse(ctx, shadow.x, shadow.y, shadow.size, shadow.size * 0.6, Math.PI / 4, 0, Math.PI * 2);
         ctx.fill();
       }
     }

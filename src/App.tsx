@@ -165,6 +165,10 @@ export default function App() {
   const [isDrifting, setIsDrifting] = useState<boolean>(false);
   const [trafficCount, setTrafficCount] = useState<number>(0);
   const [pedCount, setPedCount] = useState<number>(0);
+  const [minimapRange, setMinimapRange] = useState<number>(550);
+  const minimapRangeRef = useRef<number>(550);
+  minimapRangeRef.current = minimapRange;
+
   const [isMinimapExpanded, setIsMinimapExpanded] = useState<boolean>(false);
   const [isFullMapOpen, setIsFullMapOpen] = useState<boolean>(false);
   const [isMainMenuOpen, setIsMainMenuOpen] = useState<boolean>(true);
@@ -548,47 +552,52 @@ export default function App() {
 
   // Initialize Game World (Runs ONCE on mount, NEVER resets when toggling day/night)
   useEffect(() => {
+    let isMounted = true;
+    let animationFrameId: number = 0;
+    let cleanupListeners: (() => void) | null = null;
+
     sound.init();
     loadMap().then((world) => {
-    worldRef.current = world;
+      if (!isMounted) return;
+      worldRef.current = world;
 
-    // Index static entities into spatial grids
-    const bldGrid = spatialGridBuildingsRef.current;
-    bldGrid.clear();
-    world.buildings.forEach((b) => bldGrid.insert(b));
+      // Index static entities into spatial grids
+      const bldGrid = spatialGridBuildingsRef.current;
+      bldGrid.clear();
+      world.buildings.forEach((b) => bldGrid.insert(b));
 
-    const treeGrid = spatialGridTreesRef.current;
-    treeGrid.clear();
-    world.trees.forEach((t) => treeGrid.insert(t));
+      const treeGrid = spatialGridTreesRef.current;
+      treeGrid.clear();
+      world.trees.forEach((t) => treeGrid.insert(t));
 
-    const propGrid = spatialGridPropsRef.current;
-    propGrid.clear();
-    world.props.forEach((p) => propGrid.insert(p));
+      const propGrid = spatialGridPropsRef.current;
+      propGrid.clear();
+      world.props.forEach((p) => propGrid.insert(p));
 
-    const swGrid = spatialGridSidewalksRef.current;
-    swGrid.clear();
-    (world.sidewalks || []).forEach((sw) => swGrid.insert(sw));
+      const swGrid = spatialGridSidewalksRef.current;
+      swGrid.clear();
+      (world.sidewalks || []).forEach((sw) => swGrid.insert(sw));
 
-    setTrafficCount(world.vehicles.length);
-    setPedCount(world.pedestrians.length);
+      setTrafficCount(world.vehicles.length);
+      setPedCount(world.pedestrians.length);
 
-    // Canvas setup
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d', { alpha: false });
-    if (!ctx) return;
+      // Canvas setup
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+      const ctx = canvas.getContext('2d', { alpha: false });
+      if (!ctx) return;
 
-    rendererRef.current = new GameRenderer(ctx);
+      rendererRef.current = new GameRenderer(ctx);
 
-    const handleResize = () => {
-      if (!canvas || !rendererRef.current) return;
-      canvas.width = window.innerWidth;
-      canvas.height = window.innerHeight;
-      rendererRef.current.resize(canvas.width, canvas.height);
-    };
+      const handleResize = () => {
+        if (!canvas || !rendererRef.current) return;
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+        rendererRef.current.resize(canvas.width, canvas.height);
+      };
 
-    window.addEventListener('resize', handleResize);
-    handleResize();
+      window.addEventListener('resize', handleResize);
+      handleResize();
 
     // --- KEYBOARD & MOUSE INPUT LISTENERS ---
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -711,11 +720,18 @@ export default function App() {
     window.addEventListener('mousemove', handleMouseMove);
     window.addEventListener('wheel', handleWheel, { passive: true });
 
+    cleanupListeners = () => {
+      window.removeEventListener('resize', handleResize);
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keyup', handleKeyUp);
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('wheel', handleWheel);
+    };
+
     // --- MAIN GAME ANIMATION LOOP ---
     let lastTime = performance.now();
     let frameCount = 0;
     let fpsTimer = 0;
-    let animationFrameId: number;
 
     const gameLoop = (now: number) => {
       const dt = Math.min((now - lastTime) / 1000, 0.05);
@@ -1003,16 +1019,13 @@ export default function App() {
     };
 
     animationFrameId = requestAnimationFrame(gameLoop);
+    }); // close loadMap().then()
 
     return () => {
-      cancelAnimationFrame(animationFrameId);
-      window.removeEventListener('resize', handleResize);
-      window.removeEventListener('keydown', handleKeyDown);
-      window.removeEventListener('keyup', handleKeyUp);
-      window.removeEventListener('mousemove', handleMouseMove);
-      window.removeEventListener('wheel', handleWheel);
+      isMounted = false;
+      if (animationFrameId) cancelAnimationFrame(animationFrameId);
+      if (cleanupListeners) cleanupListeners();
     };
-    }); // close loadMap().then()
   }, []); // Run only ONCE!
 
   // --- TOGGLE TURN SIGNAL ---
@@ -1192,18 +1205,31 @@ export default function App() {
     const w = canvas.width;
     const h = canvas.height;
 
-    ctx.fillStyle = '#0f172a';
+    ctx.fillStyle = '#060a12';
     ctx.fillRect(0, 0, w, h);
 
     ctx.save();
 
     if (expanded) {
-      // Whole City Map Overview
+      // Whole City Map Overview Mode
       const scale = w / world.width;
       ctx.scale(scale, scale);
 
+      // Terrain / Parks
+      ctx.fillStyle = '#064e3b30';
+      ctx.fillRect(100, 100, 2600, 2600); // Forest
+      ctx.fillRect(3700, 2100, 1400, 1400); // Central Park
+
+      // Buildings
+      ctx.fillStyle = '#1e293b70';
+      for (const bld of world.buildings) {
+        if (bld.type !== 'park_monument') {
+          ctx.fillRect(bld.x, bld.y, bld.width, bld.height);
+        }
+      }
+
       // Roads
-      ctx.fillStyle = '#475569';
+      ctx.fillStyle = '#334155';
       for (const road of world.roads) {
         if (road.direction === 'horizontal') {
           ctx.fillRect(road.x1, road.y1 - road.width / 2, road.x2 - road.x1, road.width);
@@ -1212,9 +1238,21 @@ export default function App() {
         }
       }
 
-      // GPS Route on Overview Minimap
+      // Parkings
+      ctx.fillStyle = 'rgba(30, 58, 138, 0.4)';
+      for (const pk of world.parkings) {
+        ctx.fillRect(pk.x, pk.y, pk.width, pk.height);
+      }
+
+      // Fountain
+      ctx.fillStyle = '#0284c7';
+      ctx.beginPath();
+      ctx.arc(4400, 2800, 45, 0, Math.PI * 2);
+      ctx.fill();
+
+      // GPS Route
       if (world.gpsPath && world.gpsPath.length > 1) {
-        ctx.strokeStyle = '#22d3ee';
+        ctx.strokeStyle = '#06b6d4';
         ctx.lineWidth = 18;
         ctx.lineCap = 'round';
         ctx.lineJoin = 'round';
@@ -1235,20 +1273,21 @@ export default function App() {
 
       // Traffic Lights
       for (const inter of world.intersections) {
-        const phase = inter.phases[inter.currentPhaseIndex];
-        ctx.fillStyle = (phase.nsState === 'green' || phase.nsState === 'green_flashing') ? '#22c55e' : '#ef4444';
+        const phase = inter.phases?.[inter.currentPhaseIndex] || inter.phases?.[0];
+        const isGreen = phase ? (phase.nsState === 'green' || phase.nsState === 'green_flashing') : false;
+        ctx.fillStyle = isGreen ? '#22c55e' : '#ef4444';
         ctx.beginPath();
-        ctx.arc(inter.x, inter.y, 16, 0, Math.PI * 2);
+        ctx.arc(inter.x, inter.y, 14, 0, Math.PI * 2);
         ctx.fill();
       }
 
       // Vehicles
       for (const veh of world.vehicles) {
-        ctx.fillStyle = veh.isPlayerControlled ? '#38bdf8' : '#eab308';
+        ctx.fillStyle = veh.isPlayerControlled ? '#38bdf8' : (veh.isParked ? '#64748b' : '#f59e0b');
         ctx.fillRect(veh.x - 12, veh.y - 12, 24, 24);
       }
 
-      // Player
+      // Player Point
       ctx.fillStyle = '#38bdf8';
       ctx.strokeStyle = '#ffffff';
       ctx.lineWidth = 4;
@@ -1258,8 +1297,8 @@ export default function App() {
       ctx.stroke();
 
     } else {
-      // Local Tactical Radar (Centered on Player, Rotated with Camera)
-      const radarRange = 600; // px
+      // Tactical Radar Minimap (Centered on Player, Rotated with Camera)
+      const radarRange = minimapRangeRef.current || 550;
       const scale = w / (radarRange * 2);
 
       ctx.translate(w / 2, h / 2);
@@ -1267,8 +1306,42 @@ export default function App() {
       ctx.scale(scale, scale);
       ctx.translate(-player.x, -player.y);
 
+      // Parks & Terrain
+      ctx.fillStyle = '#064e3b35';
+      ctx.fillRect(100, 100, 2600, 2600); // Forest
+      ctx.fillRect(3700, 2100, 1400, 1400); // Central Park
+
+      // Fountain
+      ctx.fillStyle = '#0284c7';
+      ctx.beginPath();
+      ctx.arc(4400, 2800, 38, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = '#bae6fd';
+      ctx.lineWidth = 3;
+      ctx.stroke();
+
+      // Buildings Footprints
+      ctx.fillStyle = '#1e293b80';
+      ctx.strokeStyle = '#334155';
+      ctx.lineWidth = 2;
+      for (const bld of world.buildings) {
+        if (bld.type !== 'park_monument') {
+          ctx.fillRect(bld.x, bld.y, bld.width, bld.height);
+          ctx.strokeRect(bld.x, bld.y, bld.width, bld.height);
+        }
+      }
+
+      // Parking Lots
+      ctx.fillStyle = 'rgba(30, 58, 138, 0.35)';
+      ctx.strokeStyle = 'rgba(59, 130, 246, 0.5)';
+      ctx.lineWidth = 2;
+      for (const pk of world.parkings) {
+        ctx.fillRect(pk.x, pk.y, pk.width, pk.height);
+        ctx.strokeRect(pk.x, pk.y, pk.width, pk.height);
+      }
+
       // Roads
-      ctx.fillStyle = '#475569';
+      ctx.fillStyle = '#334155';
       for (const road of world.roads) {
         if (road.direction === 'horizontal') {
           ctx.fillRect(road.x1, road.y1 - road.width / 2, road.x2 - road.x1, road.width);
@@ -1297,7 +1370,7 @@ export default function App() {
         ctx.setLineDash([]);
       }
 
-      // GPS Destination Flag Marker on Radar
+      // GPS Destination Flag
       if (world.gpsDestination) {
         const dest = world.gpsDestination;
         ctx.save();
@@ -1312,19 +1385,20 @@ export default function App() {
         ctx.restore();
       }
 
-      // Intersections & Lights
+      // Intersections & Traffic Lights
       for (const inter of world.intersections) {
-        const phase = inter.phases[inter.currentPhaseIndex];
-        ctx.fillStyle = (phase.nsState === 'green' || phase.nsState === 'green_flashing') ? '#22c55e' : '#ef4444';
+        const phase = inter.phases?.[inter.currentPhaseIndex] || inter.phases?.[0];
+        const isGreen = phase ? (phase.nsState === 'green' || phase.nsState === 'green_flashing') : false;
+        ctx.fillStyle = isGreen ? '#22c55e' : '#ef4444';
         ctx.beginPath();
         ctx.arc(inter.x, inter.y, 12, 0, Math.PI * 2);
         ctx.fill();
       }
 
-      // NPC Cars (Yellow dots)
-      ctx.fillStyle = '#eab308';
+      // NPC Cars (Yellow / Slate)
       for (const veh of world.vehicles) {
         if (!veh.isPlayerControlled) {
+          ctx.fillStyle = veh.isParked ? '#64748b' : '#f59e0b';
           ctx.beginPath();
           ctx.arc(veh.x, veh.y, 8, 0, Math.PI * 2);
           ctx.fill();
@@ -1332,28 +1406,28 @@ export default function App() {
       }
 
       // Pedestrians (Purple dots)
-      ctx.fillStyle = '#a855f7';
+      ctx.fillStyle = '#c084fc';
       for (const ped of world.pedestrians) {
         ctx.beginPath();
         ctx.arc(ped.x, ped.y, 4, 0, Math.PI * 2);
         ctx.fill();
       }
 
-      // Player Arrow
+      // Player Heading Direction Arrow
       ctx.save();
       ctx.translate(player.x, player.y);
       ctx.rotate(player.angle);
 
       ctx.fillStyle = '#38bdf8';
       ctx.beginPath();
-      ctx.moveTo(16, 0);
+      ctx.moveTo(18, 0);
       ctx.lineTo(-12, -10);
       ctx.lineTo(-6, 0);
       ctx.lineTo(-12, 10);
       ctx.closePath();
       ctx.fill();
       ctx.strokeStyle = '#ffffff';
-      ctx.lineWidth = 2;
+      ctx.lineWidth = 2.5;
       ctx.stroke();
 
       ctx.restore();
@@ -1485,10 +1559,14 @@ export default function App() {
       </div>
 
       {/* TOP-RIGHT: RADAR MINIMAP & FULLSCREEN MAP TRIGGER */}
-      <div id="hud-top-right" className="absolute top-4 right-4 z-20 flex flex-col items-end gap-2">
+      <div id="hud-top-right" className="absolute top-4 right-4 z-20 flex flex-col items-end gap-2 pointer-events-auto">
         <div 
-          className="bg-slate-900/90 backdrop-blur-md border border-slate-700 rounded-2xl p-2 shadow-2xl overflow-hidden relative group cursor-pointer"
+          className="bg-slate-900/95 backdrop-blur-md border border-slate-700/90 rounded-2xl p-2 shadow-2xl overflow-hidden relative group cursor-pointer active:scale-95 transition-transform"
           onClick={() => setIsFullMapOpen(true)}
+          onTouchEnd={(e) => {
+            e.preventDefault();
+            setIsFullMapOpen(true);
+          }}
         >
           <canvas
             id="minimap-canvas"
@@ -1503,11 +1581,43 @@ export default function App() {
               e.stopPropagation();
               setIsFullMapOpen(true);
             }}
-            className="absolute bottom-3 right-3 bg-slate-950/80 group-hover:bg-sky-600 border border-slate-700 group-hover:border-sky-400 text-[10px] text-slate-300 group-hover:text-white px-2 py-0.5 rounded-md shadow flex items-center gap-1 transition-all"
+            className="absolute bottom-3 right-3 bg-slate-950/90 group-hover:bg-sky-600 border border-slate-700 group-hover:border-sky-400 text-[10px] text-slate-200 group-hover:text-white px-2 py-0.5 rounded-md shadow flex items-center gap-1 transition-all"
           >
-            <Maximize2 className="w-3 h-3" />
+            <Maximize2 className="w-3 h-3 text-sky-400 group-hover:text-white" />
             <span>Карта [M]</span>
           </button>
+
+          {/* Radar Zoom Quick Toggle */}
+          <div className="absolute top-3 left-3 flex items-center gap-1">
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                setMinimapRange((r) => Math.max(300, r - 150));
+              }}
+              onTouchEnd={(e) => {
+                e.stopPropagation();
+                setMinimapRange((r) => Math.max(300, r - 150));
+              }}
+              className="w-5 h-5 bg-slate-950/80 hover:bg-slate-800 border border-slate-700 text-slate-300 rounded flex items-center justify-center text-xs font-bold"
+              title="Приблизить радаром"
+            >
+              +
+            </button>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                setMinimapRange((r) => Math.min(1000, r + 150));
+              }}
+              onTouchEnd={(e) => {
+                e.stopPropagation();
+                setMinimapRange((r) => Math.min(1000, r + 150));
+              }}
+              className="w-5 h-5 bg-slate-950/80 hover:bg-slate-800 border border-slate-700 text-slate-300 rounded flex items-center justify-center text-xs font-bold"
+              title="Отдалить радар"
+            >
+              -
+            </button>
+          </div>
         </div>
       </div>
 

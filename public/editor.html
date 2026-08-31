@@ -2,136 +2,1018 @@
 <html lang="ru">
 <head>
 <meta charset="UTF-8">
-<title>Urban Sandbox Map Editor</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pro City Map Editor - Top-Down City Simulator</title>
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
-body { font-family: 'Segoe UI', sans-serif; background: #1a1a2e; color: #e0e0e0; display: flex; height: 100vh; overflow: hidden; }
+:root {
+  --bg-dark: #0f172a;
+  --bg-panel: #1e293b;
+  --bg-card: #334155;
+  --border: #475569;
+  --accent: #38bdf8;
+  --accent-hover: #0ea5e9;
+  --accent-active: #0284c7;
+  --danger: #ef4444;
+  --success: #22c55e;
+  --warning: #f59e0b;
+  --text-main: #f8fafc;
+  --text-muted: #94a3b8;
+}
 
-#sidebar { width: 320px; background: #16213e; display: flex; flex-direction: column; border-right: 1px solid #0f3460; flex-shrink: 0; }
-#sidebar-header { padding: 12px; background: #0f3460; display: flex; gap: 6px; flex-wrap: wrap; }
-#sidebar-header button { padding: 6px 10px; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; background: #1a1a4e; color: #e0e0e0; }
-#sidebar-header button:hover { background: #e94560; }
-#sidebar-header button.active { background: #e94560; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  background: var(--bg-dark);
+  color: var(--text-main);
+  display: flex;
+  height: 100vh;
+  overflow: hidden;
+  user-select: none;
+}
 
-#filter-bar { padding: 8px 12px; background: #16213e; border-bottom: 1px solid #0f3460; }
-#filter-bar select { width: 100%; padding: 6px; background: #1a1a4e; color: #e0e0e0; border: 1px solid #0f3460; border-radius: 4px; }
-#search-bar { padding: 8px 12px; border-bottom: 1px solid #0f3460; }
-#search-bar input { width: 100%; padding: 6px; background: #1a1a4e; color: #e0e0e0; border: 1px solid #0f3460; border-radius: 4px; }
+/* TOP NAVBAR */
+#app-header {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 48px;
+  background: rgba(15, 23, 42, 0.95);
+  backdrop-filter: blur(8px);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 16px;
+  z-index: 100;
+}
 
-#entity-list { flex: 1; overflow-y: auto; padding: 4px; }
-.entity-item { padding: 8px 10px; margin: 2px 0; border-radius: 4px; cursor: pointer; font-size: 12px; background: #1a1a4e; border: 1px solid transparent; display: flex; justify-content: space-between; align-items: center; }
-.entity-item:hover { border-color: #e94560; }
-.entity-item.selected { background: #e94560; border-color: #e94560; color: white; }
-.entity-item .label { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.entity-item .coords { color: #888; font-size: 10px; margin-left: 6px; }
-.entity-item.selected .coords { color: #fcc; }
-.entity-item .delete-btn { background: none; border: none; color: #f66; cursor: pointer; font-size: 14px; padding: 0 4px; display: none; }
-.entity-item:hover .delete-btn { display: block; }
+.header-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 700;
+  font-size: 14px;
+  letter-spacing: 0.5px;
+}
+.brand-badge {
+  background: linear-gradient(135deg, #0284c7, #38bdf8);
+  color: #041325;
+  font-size: 10px;
+  font-weight: 800;
+  padding: 2px 6px;
+  border-radius: 4px;
+  text-transform: uppercase;
+}
 
-#props-panel { padding: 12px; background: #0f3460; border-top: 1px solid #1a1a4e; max-height: 45vh; overflow-y: auto; }
-#props-panel h3 { font-size: 13px; margin-bottom: 8px; color: #e94560; }
-.prop-row { display: flex; align-items: center; margin-bottom: 6px; gap: 6px; }
-.prop-row label { width: 80px; font-size: 11px; color: #aaa; flex-shrink: 0; }
-.prop-row input, .prop-row select { flex: 1; padding: 4px 6px; background: #1a1a4e; color: #e0e0e0; border: 1px solid #333; border-radius: 3px; font-size: 12px; }
-.prop-row input[type="color"] { padding: 2px; height: 28px; cursor: pointer; }
-.prop-row input[type="number"] { width: 80px; }
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
 
-#canvas-wrap { flex: 1; position: relative; overflow: hidden; }
-canvas { display: block; cursor: crosshair; }
-#coords-display { position: absolute; bottom: 8px; left: 8px; background: rgba(0,0,0,0.7); padding: 4px 10px; border-radius: 4px; font-size: 12px; font-family: monospace; pointer-events: none; }
-#zoom-display { position: absolute; bottom: 8px; right: 8px; background: rgba(0,0,0,0.7); padding: 4px 10px; border-radius: 4px; font-size: 12px; font-family: monospace; pointer-events: none; }
-#toolbar { position: absolute; top: 8px; left: 50%; transform: translateX(-50%); background: rgba(22,33,62,0.9); padding: 6px 12px; border-radius: 6px; display: flex; gap: 6px; border: 1px solid #0f3460; }
-#toolbar button { padding: 6px 12px; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; background: #1a1a4e; color: #e0e0e0; }
-#toolbar button:hover { background: #e94560; }
-#toolbar button.active { background: #e94560; }
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--bg-panel);
+  color: var(--text-main);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.btn:hover {
+  background: var(--bg-card);
+  border-color: var(--accent);
+}
+.btn.primary {
+  background: #0284c7;
+  border-color: #38bdf8;
+  color: #fff;
+}
+.btn.primary:hover {
+  background: #0369a1;
+}
+.btn.success {
+  background: #166534;
+  border-color: #22c55e;
+  color: #fff;
+}
+.btn.danger {
+  background: #991b1b;
+  border-color: #ef4444;
+  color: #fff;
+}
+.btn.icon-only {
+  padding: 6px 8px;
+}
+.btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  border-color: var(--border);
+}
 
-#add-menu { position: absolute; top: 50px; left: 50%; transform: translateX(-50%); background: rgba(22,33,62,0.95); padding: 12px; border-radius: 6px; border: 1px solid #0f3460; display: none; flex-wrap: wrap; gap: 6px; max-width: 500px; z-index: 10; }
-#add-menu button { padding: 6px 10px; border: none; border-radius: 4px; cursor: pointer; font-size: 11px; background: #1a1a4e; color: #e0e0e0; }
-#add-menu button:hover { background: #e94560; }
+/* MAIN LAYOUT */
+#main-container {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  padding-top: 48px;
+}
 
-#stats { padding: 8px 12px; font-size: 11px; color: #888; border-top: 1px solid #0f3460; background: #0a0a1a; }
-#toast { position: fixed; top: 20px; right: 20px; background: #e94560; color: white; padding: 10px 20px; border-radius: 6px; font-size: 13px; z-index: 999; display: none; }
+/* LEFT TOOLBAR */
+#left-toolbar {
+  width: 58px;
+  background: var(--bg-panel);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 10px 0;
+  gap: 6px;
+  z-index: 50;
+}
+
+.tool-btn {
+  width: 44px;
+  height: 44px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 18px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  position: relative;
+}
+.tool-btn:hover {
+  background: var(--bg-card);
+  color: var(--text-main);
+}
+.tool-btn.active {
+  background: #0284c7;
+  color: #fff;
+  border-color: #38bdf8;
+  box-shadow: 0 0 10px rgba(56, 189, 248, 0.3);
+}
+.tool-hotkey {
+  font-size: 8px;
+  opacity: 0.8;
+  margin-top: 1px;
+}
+
+.tool-separator {
+  width: 32px;
+  height: 1px;
+  background: var(--border);
+  margin: 4px 0;
+}
+
+/* CANVAS VIEWPORT */
+#canvas-viewport {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+  background: #090d16;
+}
+
+canvas#editorCanvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  cursor: crosshair;
+}
+
+/* FLOATING TOOL SETTINGS BAR (TOP CENTER) */
+#subtool-bar {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(30, 41, 59, 0.95);
+  backdrop-filter: blur(10px);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 6px 14px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 12px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+  z-index: 40;
+}
+
+.subtool-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.subtool-group label {
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+.subtool-group select, .subtool-group input[type="number"], .subtool-group input[type="range"] {
+  background: var(--bg-dark);
+  border: 1px solid var(--border);
+  color: var(--text-main);
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  outline: none;
+}
+.subtool-group select:focus, .subtool-group input:focus {
+  border-color: var(--accent);
+}
+
+/* FLOATING OVERLAYS (COORDS, ZOOM, SNAPPING) */
+#status-overlay {
+  position: absolute;
+  bottom: 12px;
+  left: 12px;
+  background: rgba(15, 23, 42, 0.85);
+  backdrop-filter: blur(6px);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 12px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  font-size: 11px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  color: var(--text-muted);
+  pointer-events: none;
+}
+#status-overlay span b {
+  color: var(--accent);
+}
+
+#snap-overlay {
+  position: absolute;
+  bottom: 12px;
+  right: 340px;
+  background: rgba(15, 23, 42, 0.85);
+  backdrop-filter: blur(6px);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 4px 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+}
+.toggle-chip {
+  padding: 4px 8px;
+  border-radius: 4px;
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 11px;
+}
+.toggle-chip.active {
+  background: #0369a1;
+  color: #fff;
+  border-color: #38bdf8;
+}
+
+/* RIGHT SIDEBAR (INSPECTOR & LAYERS) */
+#right-sidebar {
+  width: 320px;
+  background: var(--bg-panel);
+  border-left: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  z-index: 50;
+}
+
+.tab-headers {
+  display: flex;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-dark);
+}
+.tab-btn {
+  flex: 1;
+  padding: 10px;
+  text-align: center;
+  font-size: 12px;
+  font-weight: 600;
+  background: transparent;
+  color: var(--text-muted);
+  border: none;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  transition: all 0.15s;
+}
+.tab-btn.active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+  background: var(--bg-panel);
+}
+
+.tab-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px;
+  display: none;
+}
+.tab-content.active {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* INSPECTOR STYLING */
+.section-title {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  letter-spacing: 0.5px;
+  margin-bottom: 6px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.prop-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.prop-field {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 12px;
+}
+.prop-field label {
+  color: var(--text-muted);
+  width: 90px;
+  flex-shrink: 0;
+}
+.prop-field input[type="text"],
+.prop-field input[type="number"],
+.prop-field select {
+  flex: 1;
+  background: var(--bg-dark);
+  border: 1px solid var(--border);
+  color: var(--text-main);
+  padding: 5px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  outline: none;
+  min-width: 0;
+}
+.prop-field input[type="color"] {
+  width: 38px;
+  height: 28px;
+  padding: 2px;
+  background: var(--bg-dark);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  cursor: pointer;
+}
+.prop-field input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--accent);
+}
+
+.prop-grid-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+
+/* OUTLINER / ENTITY LIST */
+.search-box {
+  width: 100%;
+  background: var(--bg-dark);
+  border: 1px solid var(--border);
+  color: var(--text-main);
+  padding: 6px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  outline: none;
+  margin-bottom: 8px;
+}
+.search-box:focus {
+  border-color: var(--accent);
+}
+
+.entity-list-container {
+  flex: 1;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-dark);
+  max-height: 400px;
+}
+
+.layer-group-header {
+  padding: 6px 10px;
+  background: #182234;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--accent);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid rgba(255,255,255,0.05);
+}
+
+.entity-row {
+  padding: 6px 10px;
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
+  border-bottom: 1px solid rgba(255,255,255,0.03);
+  transition: background 0.1s;
+}
+.entity-row:hover {
+  background: rgba(56, 189, 248, 0.1);
+}
+.entity-row.selected {
+  background: #0284c7;
+  color: #fff;
+}
+.entity-row .entity-meta {
+  font-size: 10px;
+  color: var(--text-muted);
+  font-family: monospace;
+}
+.entity-row.selected .entity-meta {
+  color: #e0f2fe;
+}
+
+/* STATS BAR */
+#stats-footer {
+  padding: 8px 12px;
+  border-top: 1px solid var(--border);
+  background: var(--bg-dark);
+  font-size: 11px;
+  color: var(--text-muted);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+/* TOAST NOTIFICATION */
+#toast {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #0284c7;
+  color: #fff;
+  padding: 8px 18px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.4);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+  z-index: 1000;
+}
+#toast.show {
+  opacity: 1;
+  transform: translateX(-50%) translateY(-6px);
+}
+
+/* HOTKEY MODAL */
+#help-modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(6px);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+}
+.modal-card {
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  width: 540px;
+  max-width: 90vw;
+  padding: 24px;
+  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.6);
+}
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+.modal-header h2 {
+  font-size: 18px;
+  color: var(--accent);
+}
+.hotkey-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  font-size: 12px;
+  max-height: 60vh;
+  overflow-y: auto;
+}
+.hotkey-item {
+  display: flex;
+  justify-content: space-between;
+  background: var(--bg-dark);
+  padding: 6px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+}
+.key-badge {
+  background: var(--bg-card);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 700;
+  font-family: monospace;
+  color: var(--accent);
+}
+
+/* MINI-RADAR MAP */
+#minimap-box {
+  width: 100%;
+  height: 140px;
+  background: #0b1120;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  position: relative;
+  overflow: hidden;
+}
+#minimapCanvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
 </style>
 </head>
 <body>
 
-<div id="sidebar">
-  <div id="sidebar-header">
-    <button onclick="loadFile()">📂 Загрузить</button>
-    <button onclick="saveFile()">💾 Сохранить</button>
-    <button onclick="toggleAddMenu()">➕ Добавить</button>
-    <button onclick="centerView()">🎯 В центр</button>
-    <button id="btn-delete" onclick="deleteSelected()" style="display:none">🗑️ Удалить</button>
+<!-- TOP HEADER -->
+<header id="app-header">
+  <div class="header-brand">
+    <span>🏙️ РЕДАКТОР КАРТЫ ГОРОДА</span>
+    <span class="brand-badge">PRO v2.0</span>
   </div>
-  <div id="filter-bar">
-    <select id="layer-filter" onchange="applyFilter()">
-      <option value="all">Все слои</option>
-      <option value="roads">Дороги</option>
-      <option value="buildings">Здания</option>
-      <option value="intersections">Перекрёстки</option>
-      <option value="trees">Деревья</option>
-      <option value="props">Объекты</option>
-      <option value="sidewalks">Тротуары</option>
-      <option value="parkings">Парковки</option>
-      <option value="parkings">Парковки</option>
-    </select>
+
+  <div class="header-actions">
+    <button class="btn icon-only" title="Отменить (Ctrl+Z)" onclick="undo()" id="btn-undo">↩️</button>
+    <button class="btn icon-only" title="Повторить (Ctrl+Y)" onclick="redo()" id="btn-redo">↪️</button>
+    <div style="width: 1px; height: 20px; background: var(--border); margin: 0 4px;"></div>
+    <button class="btn" onclick="openLoadFileDialog()">📂 Загрузить JSON</button>
+    <button class="btn success" onclick="saveToFile()">💾 Экспорт в map.json</button>
+    <button class="btn primary" onclick="saveToLocalStorageAndPlay()">🚀 Сохранить и Тест игры</button>
+    <button class="btn" onclick="toggleHelpModal()">❓ Горячие клавиши</button>
   </div>
-  <div id="search-bar">
-    <input type="text" id="search-input" placeholder="Поиск по ID/имени..." oninput="applyFilter()">
+</header>
+
+<!-- MAIN APP BODY -->
+<div id="main-container">
+
+  <!-- LEFT TOOLBAR -->
+  <div id="left-toolbar">
+    <button class="tool-btn active" id="tool-select" onclick="setTool('select')" title="Выбор и перемещение [V]">
+      <span>👆</span>
+      <span class="tool-hotkey">V</span>
+    </button>
+    <button class="tool-btn" id="tool-road2p" onclick="setTool('road2p')" title="Прямая дорога по 2 точкам [R]">
+      <span>🛣️</span>
+      <span class="tool-hotkey">R</span>
+    </button>
+    <button class="tool-btn" id="tool-roadCurve" onclick="setTool('roadCurve')" title="Кривая/Дуговая дорога [C]">
+      <span>〰️</span>
+      <span class="tool-hotkey">C</span>
+    </button>
+    <button class="tool-btn" id="tool-lineBatch" onclick="setTool('lineBatch')" title="Авто-размещение в Линию (деревья/фонари/заборы) [L]">
+      <span>📏</span>
+      <span class="tool-hotkey">L</span>
+    </button>
+    <button class="tool-btn" id="tool-brushScatter" onclick="setTool('brushScatter')" title="Кисть / Размещение кучкой (лес/мусор/парк) [B]">
+      <span>🖌️</span>
+      <span class="tool-hotkey">B</span>
+    </button>
+
+    <div class="tool-separator"></div>
+
+    <button class="tool-btn" id="tool-building" onclick="setTool('building')" title="Здание (Прямоугольник) [U]">
+      <span>🏢</span>
+      <span class="tool-hotkey">U</span>
+    </button>
+    <button class="tool-btn" id="tool-tree" onclick="setTool('tree')" title="Дерево [T]">
+      <span>🌲</span>
+      <span class="tool-hotkey">T</span>
+    </button>
+    <button class="tool-btn" id="tool-prop" onclick="setTool('prop')" title="Городской объект (скамейки, фонари, гидранты) [P]">
+      <span>🪑</span>
+      <span class="tool-hotkey">P</span>
+    </button>
+    <button class="tool-btn" id="tool-sidewalk" onclick="setTool('sidewalk')" title="Тротуарный блок / Квартал [S]">
+      <span>🚶</span>
+      <span class="tool-hotkey">S</span>
+    </button>
+    <button class="tool-btn" id="tool-parking" onclick="setTool('parking')" title="Парковочный комплекс [K]">
+      <span>🅿️</span>
+      <span class="tool-hotkey">K</span>
+    </button>
+    <button class="tool-btn" id="tool-intersection" onclick="setTool('intersection')" title="Перекресток со светофорами [I]">
+      <span>🚦</span>
+      <span class="tool-hotkey">I</span>
+    </button>
+
+    <div class="tool-separator"></div>
+
+    <button class="tool-btn" id="tool-measure" onclick="setTool('measure')" title="Линейка расстояний [M]">
+      <span>📐</span>
+      <span class="tool-hotkey">M</span>
+    </button>
   </div>
-  <div id="entity-list"></div>
-  <div id="props-panel"></div>
-  <div id="stats"></div>
+
+  <!-- CANVAS VIEWPORT -->
+  <div id="canvas-viewport">
+    <canvas id="editorCanvas"></canvas>
+
+    <!-- CONTEXTUAL SUBTOOL BAR -->
+    <div id="subtool-bar">
+      <!-- Will be populated dynamically based on active tool -->
+    </div>
+
+    <!-- STATUS OVERLAY -->
+    <div id="status-overlay">
+      <span>X: <b id="stat-x">0</b></span>
+      <span>Y: <b id="stat-y">0</b></span>
+      <span>Масштаб: <b id="stat-zoom">100%</b></span>
+      <span>Выбрано: <b id="stat-selected">0</b></span>
+    </div>
+
+    <!-- SNAPPING CONTROLS -->
+    <div id="snap-overlay">
+      <button class="toggle-chip active" id="snap-grid-btn" onclick="toggleSnapGrid()">Сетка (20px)</button>
+      <button class="toggle-chip active" id="snap-road-btn" onclick="toggleSnapRoads()">Магнит к дорогам</button>
+      <button class="toggle-chip" id="snap-ortho-btn" onclick="toggleSnapOrtho()">Прямые углы [Shift]</button>
+    </div>
+  </div>
+
+  <!-- RIGHT SIDEBAR -->
+  <div id="right-sidebar">
+    <div class="tab-headers">
+      <button class="tab-btn active" onclick="switchTab('inspector')">⚙️ Свойства</button>
+      <button class="tab-btn" onclick="switchTab('outliner')">📑 Список объектов</button>
+      <button class="tab-btn" onclick="switchTab('presets')">⭐ Шаблоны</button>
+    </div>
+
+    <!-- TAB 1: INSPECTOR -->
+    <div class="tab-content active" id="tab-inspector">
+      <div id="inspector-empty" style="text-align: center; color: var(--text-muted); padding: 40px 10px; font-size: 13px;">
+        <div style="font-size: 32px; margin-bottom: 10px;">🖱️</div>
+        Выберите объект на карте для редактирования параметров или выберите инструмент слева.
+      </div>
+      <div id="inspector-content" style="display: none;"></div>
+    </div>
+
+    <!-- TAB 2: OUTLINER -->
+    <div class="tab-content" id="tab-outliner">
+      <input type="text" class="search-box" id="outliner-search" placeholder="Поиск объектов по ID/имени..." oninput="renderOutliner()">
+      <div class="prop-field" style="margin-bottom: 8px;">
+        <label style="width: auto;">Фильтр слоя:</label>
+        <select id="outliner-layer-filter" onchange="renderOutliner()">
+          <option value="all">Все слои</option>
+          <option value="roads">Дороги</option>
+          <option value="buildings">Здания</option>
+          <option value="intersections">Перекрестки</option>
+          <option value="trees">Деревья</option>
+          <option value="props">Объекты</option>
+          <option value="sidewalks">Тротуары</option>
+          <option value="parkings">Парковки</option>
+        </select>
+      </div>
+      <div class="entity-list-container" id="outliner-list"></div>
+    </div>
+
+    <!-- TAB 3: PRESETS -->
+    <div class="tab-content" id="tab-presets">
+      <div class="section-title">Быстрые городские шаблоны</div>
+      <div style="display: flex; flex-direction: column; gap: 8px;">
+        <button class="btn" onclick="insertPreset('residential_block')">🏘️ Жилой квартал (4 дома + двор + парковка)</button>
+        <button class="btn" onclick="insertPreset('park_fountain')">🌳 Парковая аллея со скамейками и деревьями</button>
+        <button class="btn" onclick="insertPreset('highway_clover')">🛣️ Скоростной 4-полосный перекресток</button>
+        <button class="btn" onclick="insertPreset('industrial_depot')">🚛 Промзона с ангарами и стоянкой</button>
+      </div>
+
+      <div class="section-title" style="margin-top: 16px;">Миникарта мира</div>
+      <div id="minimap-box">
+        <canvas id="minimapCanvas"></canvas>
+      </div>
+    </div>
+
+    <!-- STATS FOOTER -->
+    <div id="stats-footer">
+      <span id="footer-counts">Загрузка данных...</span>
+      <button class="btn icon-only" title="По центру карты [F]" onclick="centerCamera()">🎯</button>
+    </div>
+  </div>
+
 </div>
 
-<div id="canvas-wrap">
-  <canvas id="canvas"></canvas>
-  <div id="coords-display">0, 0</div>
-  <div id="zoom-display">1.0x</div>
-  <div id="toolbar">
-    <button id="tool-select" class="active" onclick="setTool('select')">👆 Выбор</button>
-    <button id="tool-pan" onclick="setTool('pan')">✋ Панорама</button>
-    <button id="tool-measure" onclick="setTool('measure')">📏 Замер</button>
-  </div>
-  <div id="add-menu"></div>
-</div>
+<!-- HIDDEN FILE INPUT -->
+<input type="file" id="file-loader" accept=".json" style="display:none;" onchange="handleFileSelected(event)">
 
-<div id="toast"></div>
-<input type="file" id="file-input" accept=".json" style="display:none" onchange="handleFile(event)">
+<!-- TOAST -->
+<div id="toast">Действие выполнено</div>
+
+<!-- HELP MODAL -->
+<div id="help-modal" onclick="if(event.target===this) toggleHelpModal()">
+  <div class="modal-card">
+    <div class="modal-header">
+      <h2>Горячие клавиши редактора</h2>
+      <button class="btn icon-only" onclick="toggleHelpModal()">✕</button>
+    </div>
+    <div class="hotkey-grid">
+      <div class="hotkey-item"><span>Выбор / Трансформ</span> <span class="key-badge">V</span></div>
+      <div class="hotkey-item"><span>Дорога по 2 точкам</span> <span class="key-badge">R</span></div>
+      <div class="hotkey-item"><span>Кривая / Дуга дорога</span> <span class="key-badge">C</span></div>
+      <div class="hotkey-item"><span>Авто-линия объектов</span> <span class="key-badge">L</span></div>
+      <div class="hotkey-item"><span>Кисть / Рассеивание</span> <span class="key-badge">B</span></div>
+      <div class="hotkey-item"><span>Здание</span> <span class="key-badge">U</span></div>
+      <div class="hotkey-item"><span>Дерево</span> <span class="key-badge">T</span></div>
+      <div class="hotkey-item"><span>Объект</span> <span class="key-badge">P</span></div>
+      <div class="hotkey-item"><span>Тротуар</span> <span class="key-badge">S</span></div>
+      <div class="hotkey-item"><span>Парковка</span> <span class="key-badge">K</span></div>
+      <div class="hotkey-item"><span>Панорама карты</span> <span class="key-badge">Пробел + Drag</span></div>
+      <div class="hotkey-item"><span>Масштаб (Зум)</span> <span class="key-badge">Колесо мыши</span></div>
+      <div class="hotkey-item"><span>Вращение объекта</span> <span class="key-badge">R при драге</span></div>
+      <div class="hotkey-item"><span>Дублировать объект</span> <span class="key-badge">Ctrl+D / Alt+Drag</span></div>
+      <div class="hotkey-item"><span>Удалить выбранное</span> <span class="key-badge">Del / Backspace</span></div>
+      <div class="hotkey-item"><span>Отмена / Повтор</span> <span class="key-badge">Ctrl+Z / Ctrl+Y</span></div>
+      <div class="hotkey-item"><span>Центрировать камеру</span> <span class="key-badge">F</span></div>
+    </div>
+  </div>
+</div>
 
 <script>
-const canvas = document.getElementById('canvas');
-const ctx = canvas.getContext('2d');
+/**
+ * ULTRA-PERFORMANT VECTOR MAP EDITOR FOR TOP-DOWN CITY SIMULATOR
+ * Features:
+ * - 60 FPS Canvas rendering with Viewport Culling and dirty flags
+ * - 2-Point Road Creation Tool
+ * - 3-Point Bezier/Arc Curved Road Creation Tool
+ * - Linear Batch Distribution Tool (Lines of trees, lights, benches, fences)
+ * - Area Cluster / Scatter Brush Tool
+ * - Visual Transform Gizmo (Drag, Rotate, Resize Handles)
+ * - Magnetic Road & Grid Snapping
+ * - Full Undo / Redo Stack
+ * - Multi-select and Batch Operations
+ */
 
-let mapData = null;
-let camera = { x: 4000, y: 4000, zoom: 0.15 };
-let tool = 'select';
-let selectedEntity = null;
-let selectedLayer = null;
-let isDragging = false;
-let isPanning = false;
-let dragStart = { x: 0, y: 0 };
-let cameraStart = { x: 0, y: 0 };
-let measureStart = null;
-let mouseWorld = { x: 0, y: 0 };
-
-const LAYER_COLORS = {
-  roads: { fill: '#555', stroke: '#888' },
-  buildings: { fill: 'rgba(100,140,200,0.5)', stroke: '#68c' },
-  intersections: { fill: 'rgba(200,180,80,0.3)', stroke: '#cc8' },
-  trees: { fill: 'rgba(40,160,60,0.6)', stroke: '#2a2' },
-  props: { fill: 'rgba(200,120,50,0.5)', stroke: '#c83' },
-  sidewalks: { fill: 'rgba(180,180,180,0.2)', stroke: '#aaa' },
-  parkings: { fill: 'rgba(80,80,100,0.4)', stroke: '#88a' }
+// Global State
+let mapData = {
+  width: 8000,
+  height: 8000,
+  roads: [],
+  intersections: [],
+  sidewalks: [],
+  buildings: [],
+  parkings: [],
+  trees: [],
+  props: [],
+  vehicles: [],
+  pedestrians: [],
+  birds: [],
+  puddles: [],
+  litter: [],
+  skidMarks: [],
+  particles: [],
+  weather: 'clear'
 };
 
-function resize() {
-  const wrap = document.getElementById('canvas-wrap');
-  canvas.width = wrap.clientWidth;
-  canvas.height = wrap.clientHeight;
-  render();
+/**
+ * High-Performance 2D Spatial Grid for Map Editor
+ * Provides O(1) viewport culling and O(1) hit testing across thousands of entities
+ */
+class EditorSpatialGrid {
+  constructor(cellSize = 200) {
+    this.cellSize = cellSize;
+    this.grid = new Map();
+    this.queryId = 0;
+  }
+
+  getKey(cx, cy) {
+    return ((cx & 0xffff) << 16) | (cy & 0xffff);
+  }
+
+  clear() {
+    this.grid.clear();
+  }
+
+  insert(item, layer) {
+    let minX, maxX, minY, maxY;
+    if (item.x !== undefined && item.y !== undefined) {
+      const w = item.width || (item.radius ? item.radius * 2 : 24);
+      const h = item.height || (item.radius ? item.radius * 2 : 24);
+      minX = item.x - (item.width ? 0 : w / 2);
+      maxX = item.x + (item.width ? item.width : w / 2);
+      minY = item.y - (item.height ? 0 : h / 2);
+      maxY = item.y + (item.height ? item.height : h / 2);
+    } else if (item.x1 !== undefined) {
+      const rw = item.width || 84;
+      minX = Math.min(item.x1, item.x2) - rw;
+      maxX = Math.max(item.x1, item.x2) + rw;
+      minY = Math.min(item.y1, item.y2) - rw;
+      maxY = Math.max(item.y1, item.y2) + rw;
+    } else {
+      return;
+    }
+
+    const minCx = Math.floor(minX / this.cellSize);
+    const maxCx = Math.floor(maxX / this.cellSize);
+    const minCy = Math.floor(minY / this.cellSize);
+    const maxCy = Math.floor(maxY / this.cellSize);
+
+    const entry = { entity: item, layer: layer };
+
+    for (let cx = minCx; cx <= maxCx; cx++) {
+      for (let cy = minCy; cy <= maxCy; cy++) {
+        const key = this.getKey(cx, cy);
+        let cell = this.grid.get(key);
+        if (!cell) {
+          cell = [];
+          this.grid.set(key, cell);
+        }
+        cell.push(entry);
+      }
+    }
+  }
+
+  queryRect(x, y, width, height) {
+    const minCx = Math.floor(x / this.cellSize);
+    const maxCx = Math.floor((x + width) / this.cellSize);
+    const minCy = Math.floor(y / this.cellSize);
+    const maxCy = Math.floor((y + height) / this.cellSize);
+
+    this.queryId++;
+    if (this.queryId > 2000000000) this.queryId = 1;
+    const qId = this.queryId;
+    const result = [];
+
+    for (let cx = minCx; cx <= maxCx; cx++) {
+      for (let cy = minCy; cy <= maxCy; cy++) {
+        const key = this.getKey(cx, cy);
+        const cell = this.grid.get(key);
+        if (cell) {
+          const len = cell.length;
+          for (let i = 0; i < len; i++) {
+            const item = cell[i];
+            if (item.entity._editorQId !== qId) {
+              item.entity._editorQId = qId;
+              result.push(item);
+            }
+          }
+        }
+      }
+    }
+    return result;
+  }
+
+  queryRadius(x, y, radius) {
+    return this.queryRect(x - radius, y - radius, radius * 2, radius * 2);
+  }
 }
 
+const spatialIndex = new EditorSpatialGrid(250);
+
+function rebuildSpatialIndex() {
+  if (!mapData) return;
+  spatialIndex.clear();
+  if (mapData.roads) mapData.roads.forEach(r => spatialIndex.insert(r, 'roads'));
+  if (mapData.buildings) mapData.buildings.forEach(b => spatialIndex.insert(b, 'buildings'));
+  if (mapData.intersections) mapData.intersections.forEach(i => spatialIndex.insert(i, 'intersections'));
+  if (mapData.trees) mapData.trees.forEach(t => spatialIndex.insert(t, 'trees'));
+  if (mapData.props) mapData.props.forEach(p => spatialIndex.insert(p, 'props'));
+  if (mapData.sidewalks) mapData.sidewalks.forEach(s => spatialIndex.insert(s, 'sidewalks'));
+  if (mapData.parkings) mapData.parkings.forEach(pk => spatialIndex.insert(pk, 'parkings'));
+}
+
+const canvas = document.getElementById('editorCanvas');
+const ctx = canvas.getContext('2d', { alpha: false });
+const minimapCanvas = document.getElementById('minimapCanvas');
+const minimapCtx = minimapCanvas ? minimapCanvas.getContext('2d') : null;
+
+let camera = { x: 4400, y: 2800, zoom: 0.25 };
+let currentTool = 'select';
+let selectedEntities = []; // Array of { entity, layer }
+
+// Snapping Options
+let snapSettings = {
+  grid: true,
+  gridSize: 20,
+  roads: true,
+  ortho: false
+};
+
+// Undo / Redo History
+const historyStack = [];
+let historyIndex = -1;
+const MAX_HISTORY = 40;
+
+// Mouse Interaction
+let mouseScreen = { x: 0, y: 0 };
+let mouseWorld = { x: 0, y: 0 };
+let isMouseDown = false;
+let isPanning = false;
+let panStart = { x: 0, y: 0 };
+let cameraStart = { x: 0, y: 0 };
+let dragStart = { x: 0, y: 0 };
+let activeHandle = null; // 'move', 'rotate', 'nw', 'ne', 'se', 'sw', 'p1', 'p2', 'control'
+
+// Multi-point Tool Workflows
+let toolStep = 0;
+let toolPoints = []; // [{x, y}, ...]
+let boxSelectStart = null;
+
+// Tool Config Options (subtool bar)
+const toolConfigs = {
+  road: { lanes: 2, isAvenue: false, type: 'asphalt', width: 84, name: 'New Road' },
+  curve: { lanes: 2, isAvenue: false, type: 'asphalt', width: 84, segments: 10, name: 'Curved Avenue' },
+  lineBatch: { count: 8, spacing: 60, entityType: 'trees', subType: 'tree', radius: 22, color: '#15803d' },
+  brushScatter: { radius: 120, density: 10, entityType: 'trees', subType: 'tree' },
+  building: { type: 'office', color: '#64748b', roofColor: '#334155', accentColor: '#475569', entranceSide: 'south' },
+  tree: { radius: 22, color: '#16a34a' },
+  prop: { type: 'bench', angle: 0 },
+  sidewalk: { sidewalkWidth: 32, style: 'urban' },
+  parking: { spotsCount: 6, angle: 0 },
+  intersection: { type: '4way', hasLights: true, isDirt: false }
+};
+
+// Layer Colors for Drawing
+const LAYER_COLORS = {
+  roads: { fill: '#1e293b', stroke: '#64748b', selected: '#38bdf8' },
+  buildings: { stroke: '#475569', selected: '#f43f5e' },
+  intersections: { fill: 'rgba(51, 65, 85, 0.9)', stroke: '#94a3b8', selected: '#38bdf8' },
+  trees: { fill: '#15803d', stroke: '#166534', selected: '#22c55e' },
+  props: { fill: '#f59e0b', stroke: '#d97706', selected: '#fbbf24' },
+  sidewalks: { fill: 'rgba(148, 163, 184, 0.15)', stroke: '#94a3b8', selected: '#38bdf8' },
+  parkings: { fill: 'rgba(71, 85, 105, 0.4)', stroke: '#64748b', selected: '#38bdf8' }
+};
+
+// --- INITIALIZATION ---
+window.addEventListener('DOMContentLoaded', async () => {
+  resizeCanvas();
+  window.addEventListener('resize', resizeCanvas);
+  
+  // Try loading default map.json
+  try {
+    const res = await fetch('/map.json');
+    if (res.ok) {
+      mapData = await res.json();
+      rebuildSpatialIndex();
+      pushHistory('Initial Map Loaded');
+      showToast('Карта города успешно загружена');
+    }
+  } catch (err) {
+    console.warn('Could not auto-load map.json, starting with empty base grid', err);
+    rebuildSpatialIndex();
+  }
+
+  updateSubtoolBar();
+  renderOutliner();
+  updateFooterCounts();
+  requestAnimationFrame(gameLoop);
+});
+
+function resizeCanvas() {
+  const vp = document.getElementById('canvas-viewport');
+  canvas.width = vp.clientWidth;
+  canvas.height = vp.clientHeight;
+  if (minimapCanvas) {
+    minimapCanvas.width = minimapCanvas.clientWidth;
+    minimapCanvas.height = minimapCanvas.clientHeight;
+  }
+}
+
+// --- COORDINATE CONVERSIONS ---
 function screenToWorld(sx, sy) {
   return {
     x: (sx - canvas.width / 2) / camera.zoom + camera.x,
@@ -146,608 +1028,1815 @@ function worldToScreen(wx, wy) {
   };
 }
 
-function render() {
-  if (!mapData) {
-    ctx.fillStyle = '#1a1a2e';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    ctx.fillStyle = '#666';
-    ctx.font = '18px sans-serif';
-    ctx.textAlign = 'center';
-    ctx.fillText('Нажмите "Загрузить" чтобы открыть map.json', canvas.width / 2, canvas.height / 2);
+// --- SNAPPING LOGIC ---
+function applySnapping(pos) {
+  let res = { x: pos.x, y: pos.y };
+
+  // 1. Magnetic Road Endpoint Snapping (Accelerated with Spatial Grid)
+  if (snapSettings.roads && mapData) {
+    const snapRadius = 35 / camera.zoom;
+    let closestDist = snapRadius;
+    let snapPt = null;
+
+    const nearby = spatialIndex.queryRadius(pos.x, pos.y, snapRadius * 1.5);
+    for (let i = 0; i < nearby.length; i++) {
+      const entry = nearby[i];
+      if (entry.layer === 'roads') {
+        const r = entry.entity;
+        const d1 = Math.hypot(pos.x - r.x1, pos.y - r.y1);
+        if (d1 < closestDist) { closestDist = d1; snapPt = { x: r.x1, y: r.y1 }; }
+        const d2 = Math.hypot(pos.x - r.x2, pos.y - r.y2);
+        if (d2 < closestDist) { closestDist = d2; snapPt = { x: r.x2, y: r.y2 }; }
+      } else if (entry.layer === 'intersections') {
+        const inter = entry.entity;
+        const d = Math.hypot(pos.x - inter.x, pos.y - inter.y);
+        if (d < closestDist) { closestDist = d; snapPt = { x: inter.x, y: inter.y }; }
+      }
+    }
+
+    if (snapPt) {
+      res.x = snapPt.x;
+      res.y = snapPt.y;
+      return res;
+    }
+  }
+
+  // 2. Grid Snapping
+  if (snapSettings.grid) {
+    const gs = snapSettings.gridSize;
+    res.x = Math.round(res.x / gs) * gs;
+    res.y = Math.round(res.y / gs) * gs;
+  }
+
+  return res;
+}
+
+// --- UNDO / REDO HISTORY ENGINE ---
+function pushHistory(actionName = 'Edit') {
+  // Update Spatial Index
+  rebuildSpatialIndex();
+
+  // Truncate future if branched
+  if (historyIndex < historyStack.length - 1) {
+    historyStack.splice(historyIndex + 1);
+  }
+
+  // Deep clone current map
+  historyStack.push(JSON.stringify(mapData));
+  if (historyStack.length > MAX_HISTORY) historyStack.shift();
+  historyIndex = historyStack.length - 1;
+
+  updateUndoRedoButtons();
+}
+
+function undo() {
+  if (historyIndex > 0) {
+    historyIndex--;
+    mapData = JSON.parse(historyStack[historyIndex]);
+    rebuildSpatialIndex();
+    selectedEntities = [];
+    updateInspector();
+    renderOutliner();
+    updateFooterCounts();
+    showToast('Отменено');
+    updateUndoRedoButtons();
+  }
+}
+
+function redo() {
+  if (historyIndex < historyStack.length - 1) {
+    historyIndex++;
+    mapData = JSON.parse(historyStack[historyIndex]);
+    rebuildSpatialIndex();
+    selectedEntities = [];
+    updateInspector();
+    renderOutliner();
+    updateFooterCounts();
+    showToast('Повторено');
+    updateUndoRedoButtons();
+  }
+}
+
+function updateUndoRedoButtons() {
+  const btnUndo = document.getElementById('btn-undo');
+  const btnRedo = document.getElementById('btn-redo');
+  if (btnUndo) btnUndo.disabled = historyIndex <= 0;
+  if (btnRedo) btnRedo.disabled = historyIndex >= historyStack.length - 1;
+}
+
+// --- TOOL SWITCHING & SUBTOOL CONTROLS ---
+function setTool(t) {
+  currentTool = t;
+  toolStep = 0;
+  toolPoints = [];
+
+  document.querySelectorAll('.tool-btn').forEach(btn => btn.classList.remove('active'));
+  const activeBtn = document.getElementById(`tool-${t}`);
+  if (activeBtn) activeBtn.classList.add('active');
+
+  updateSubtoolBar();
+  showToast(`Инструмент: ${getToolName(t)}`);
+}
+
+function getToolName(t) {
+  const names = {
+    select: 'Выбор и перемещение',
+    road2p: 'Прямая дорога (2 точки)',
+    roadCurve: 'Кривая дорога (3 точки)',
+    lineBatch: 'Линейное авто-размещение',
+    brushScatter: 'Кисть / Рассеивание кучкой',
+    building: 'Создание здания',
+    tree: 'Посадка деревьев',
+    prop: 'Городской декор',
+    sidewalk: 'Тротуарный блок',
+    parking: 'Парковка',
+    intersection: 'Перекресток',
+    measure: 'Линейка замера'
+  };
+  return names[t] || t;
+}
+
+function updateSubtoolBar() {
+  const bar = document.getElementById('subtool-bar');
+  if (!bar) return;
+
+  if (currentTool === 'select') {
+    bar.innerHTML = `
+      <span style="color:var(--text-muted);font-weight:600;">Режим: Клик — выбор | Shift+Клик — мульти-выбор | Drag — перемещение | Del — удалить</span>
+      <button class="btn danger" onclick="deleteSelected()" style="padding:2px 8px;font-size:11px;">🗑️ Удалить</button>
+      <button class="btn" onclick="duplicateSelected()" style="padding:2px 8px;font-size:11px;">📑 Дубликат</button>
+    `;
+  } else if (currentTool === 'road2p') {
+    bar.innerHTML = `
+      <div class="subtool-group">
+        <label>Тип:</label>
+        <select onchange="toolConfigs.road.type=this.value; toolConfigs.road.isAvenue=this.value==='avenue'; toolConfigs.road.lanes=this.value==='avenue'?4:2; toolConfigs.road.width=this.value==='avenue'?144:84;">
+          <option value="asphalt">Асфальт (2 полосы)</option>
+          <option value="avenue">Проспект (4 полосы)</option>
+          <option value="dirt">Грунтовка</option>
+          <option value="gravel">Гравий</option>
+        </select>
+      </div>
+      <div class="subtool-group">
+        <label>Ширина:</label>
+        <input type="number" value="${toolConfigs.road.width}" style="width:60px;" onchange="toolConfigs.road.width=parseInt(this.value)">
+      </div>
+      <span style="color:var(--accent);font-size:11px;">1. Кликните Начало -> 2. Кликните Конец дороги</span>
+    `;
+  } else if (currentTool === 'roadCurve') {
+    bar.innerHTML = `
+      <div class="subtool-group">
+        <label>Тип:</label>
+        <select onchange="toolConfigs.curve.type=this.value; toolConfigs.curve.isAvenue=this.value==='avenue'; toolConfigs.curve.lanes=this.value==='avenue'?4:2; toolConfigs.curve.width=this.value==='avenue'?144:84;">
+          <option value="asphalt">Асфальт (2 полосы)</option>
+          <option value="avenue">Проспект (4 полосы)</option>
+          <option value="dirt">Грунтовка</option>
+          <option value="gravel">Гравий</option>
+        </select>
+      </div>
+      <div class="subtool-group">
+        <label>Сегментов дуги:</label>
+        <input type="number" value="${toolConfigs.curve.segments}" min="4" max="24" style="width:50px;" onchange="toolConfigs.curve.segments=parseInt(this.value)">
+      </div>
+      <span style="color:var(--accent);font-size:11px;">1. Начало -> 2. Конец -> 3. Загните дугу кликом</span>
+    `;
+  } else if (currentTool === 'lineBatch') {
+    bar.innerHTML = `
+      <div class="subtool-group">
+        <label>Объект:</label>
+        <select onchange="toolConfigs.lineBatch.entityType=this.value;">
+          <option value="trees">Деревья (Аллея)</option>
+          <option value="lamps">Фонарные столбы</option>
+          <option value="benches">Скамейки</option>
+          <option value="bollards">Столбики ограждения</option>
+          <option value="cones">Дорожные конусы</option>
+          <option value="flowerbeds">Клумбы</option>
+        </select>
+      </div>
+      <div class="subtool-group">
+        <label>Количество:</label>
+        <input type="number" value="${toolConfigs.lineBatch.count}" min="2" max="50" style="width:50px;" onchange="toolConfigs.lineBatch.count=parseInt(this.value)">
+      </div>
+      <span style="color:var(--accent);font-size:11px;">Кликните и протяните линию для равномерной расстановки!</span>
+    `;
+  } else if (currentTool === 'brushScatter') {
+    bar.innerHTML = `
+      <div class="subtool-group">
+        <label>Тип кисти:</label>
+        <select onchange="toolConfigs.brushScatter.entityType=this.value;">
+          <option value="trees">Густой лес / Парк (Деревья)</option>
+          <option value="props">Уличный декор (Урны, гидранты, знаки)</option>
+          <option value="litter">Мусор и листья на асфальте</option>
+          <option value="puddles">Лужи и вода</option>
+        </select>
+      </div>
+      <div class="subtool-group">
+        <label>Радиус кисти:</label>
+        <input type="range" min="40" max="300" value="${toolConfigs.brushScatter.radius}" oninput="toolConfigs.brushScatter.radius=parseInt(this.value)">
+      </div>
+      <div class="subtool-group">
+        <label>Плотность (шт):</label>
+        <input type="number" min="1" max="40" value="${toolConfigs.brushScatter.density}" style="width:50px;" onchange="toolConfigs.brushScatter.density=parseInt(this.value)">
+      </div>
+      <span style="color:var(--accent);font-size:11px;">Кликните или зажмите в области для посадки кучки!</span>
+    `;
+  } else if (currentTool === 'building') {
+    bar.innerHTML = `
+      <div class="subtool-group">
+        <label>Тип здания:</label>
+        <select onchange="toolConfigs.building.type=this.value;">
+          <option value="office">Офисный центр</option>
+          <option value="residential">Жилой дом</option>
+          <option value="shop">Супермаркет / Магазин</option>
+          <option value="suburban">Коттедж</option>
+          <option value="industrial">Склад / Завод</option>
+          <option value="police_station">Полицейский участок</option>
+          <option value="fire_station">Пожарная станция</option>
+          <option value="hospital">Больница</option>
+        </select>
+      </div>
+      <span style="color:var(--text-muted);font-size:11px;">Кликните и растяните прямоугольник здания на карте</span>
+    `;
+  } else if (currentTool === 'prop') {
+    bar.innerHTML = `
+      <div class="subtool-group">
+        <label>Объект:</label>
+        <select onchange="toolConfigs.prop.type=this.value;">
+          <option value="bench">Скамейка</option>
+          <option value="lamp">Фонарь</option>
+          <option value="bus_stop">Автобусная остановка</option>
+          <option value="kiosk">Киоск / Ларек</option>
+          <option value="trash_can">Урна</option>
+          <option value="dumpster">Мусорный контейнер</option>
+          <option value="hydrant">Пожарный гидрант</option>
+          <option value="cone">Конус</option>
+          <option value="flowerbed">Клумба</option>
+          <option value="bollard">Столбик</option>
+          <option value="manhole">Люк</option>
+        </select>
+      </div>
+      <span style="color:var(--accent);font-size:11px;">Кликните в место размещения (Вращение колесиком мыши)</span>
+    `;
+  } else {
+    bar.innerHTML = `<span style="color:var(--text-muted);">Инструмент: ${getToolName(currentTool)}</span>`;
+  }
+}
+
+// --- HELPER GENERATORS ---
+function generateUniqueId(prefix) {
+  return `${prefix}_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
+}
+
+// Helper: Calculate road lanes and waypoints automatically
+function buildRoadLanePaths(x1, y1, x2, y2, lanes, isAvenue) {
+  const dx = x2 - x1;
+  const dy = y2 - y1;
+  const len = Math.hypot(dx, dy);
+  if (len < 1) return [];
+
+  const angle = Math.atan2(dy, dx);
+  const perpX = -Math.sin(angle);
+  const perpY = Math.cos(angle);
+
+  const totalWidth = isAvenue ? 144 : 84;
+  const halfWidth = totalWidth / 2;
+  const lanePaths = [];
+
+  const forwardLanes = Math.floor(lanes / 2);
+  const backwardLanes = lanes - forwardLanes;
+
+  // Forward direction lanes (right side)
+  for (let i = 0; i < forwardLanes; i++) {
+    const laneOffset = (i + 0.5) * (halfWidth / forwardLanes);
+    const startX = x1 + perpX * laneOffset;
+    const startY = y1 + perpY * laneOffset;
+    const endX = x2 + perpX * laneOffset;
+    const endY = y2 + perpY * laneOffset;
+
+    lanePaths.push({
+      laneId: generateUniqueId('lane_fwd'),
+      laneIndex: i,
+      direction: angle,
+      waypoints: [
+        { x: startX, y: startY },
+        { x: endX, y: endY }
+      ]
+    });
+  }
+
+  // Backward direction lanes (left side)
+  for (let i = 0; i < backwardLanes; i++) {
+    const laneOffset = -(i + 0.5) * (halfWidth / backwardLanes);
+    const startX = x2 + perpX * laneOffset;
+    const startY = y2 + perpY * laneOffset;
+    const endX = x1 + perpX * laneOffset;
+    const endY = y1 + perpY * laneOffset;
+
+    lanePaths.push({
+      laneId: generateUniqueId('lane_bwd'),
+      laneIndex: i,
+      direction: angle + Math.PI,
+      waypoints: [
+        { x: startX, y: startY },
+        { x: endX, y: endY }
+      ]
+    });
+  }
+
+  return lanePaths;
+}
+
+// --- MOUSE & INTERACTION HANDLING ---
+canvas.addEventListener('mousedown', (e) => {
+  const wp = screenToWorld(e.offsetX, e.offsetY);
+  mouseScreen = { x: e.offsetX, y: e.offsetY };
+  mouseWorld = wp;
+  isMouseDown = true;
+
+  // Middle Click or Space/Shift + Drag = PAN
+  if (e.button === 1 || e.button === 0 && e.spaceKey) {
+    isPanning = true;
+    panStart = { x: e.clientX, y: e.clientY };
+    cameraStart = { x: camera.x, y: camera.y };
+    canvas.style.cursor = 'grabbing';
     return;
   }
 
-  ctx.fillStyle = '#1a2a1a';
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  if (e.button !== 0) return;
 
-  ctx.save();
-  ctx.translate(canvas.width / 2, canvas.height / 2);
-  ctx.scale(camera.zoom, camera.zoom);
-  ctx.translate(-camera.x, -camera.y);
+  const snapped = applySnapping(wp);
 
-  const filter = document.getElementById('layer-filter').value;
-
-  // Ground
-  ctx.fillStyle = '#2a3a2a';
-  ctx.fillRect(0, 0, mapData.width, mapData.height);
-
-  // Sidewalks
-  if (filter === 'all' || filter === 'sidewalks') {
-    (mapData.sidewalks || []).forEach(sw => {
-      const isSelected = selectedEntity === sw;
-      ctx.fillStyle = isSelected ? 'rgba(255,100,100,0.3)' : 'rgba(180,180,180,0.15)';
-      ctx.fillRect(sw.x, sw.y, sw.width, sw.height);
-      ctx.strokeStyle = isSelected ? '#f66' : '#666';
-      ctx.lineWidth = isSelected ? 2 / camera.zoom : 1 / camera.zoom;
-      ctx.strokeRect(sw.x, sw.y, sw.width, sw.height);
-      if (sw.sidewalkWidth) {
-        ctx.strokeStyle = '#888';
-        ctx.lineWidth = 1 / camera.zoom;
-        ctx.strokeRect(sw.x + sw.sidewalkWidth, sw.y + sw.sidewalkWidth,
-          sw.width - sw.sidewalkWidth * 2, sw.height - sw.sidewalkWidth * 2);
+  // --- TOOL SPECIFIC ACTIONS ---
+  if (currentTool === 'select') {
+    // Check if clicked an active transform handle
+    if (selectedEntities.length === 1) {
+      const handle = checkGizmoHandleHit(wp.x, wp.y, selectedEntities[0].entity);
+      if (handle) {
+        activeHandle = handle;
+        dragStart = { x: wp.x, y: wp.y };
+        return;
       }
-    });
-  }
+    }
 
-  // Roads
-  if (filter === 'all' || filter === 'roads') {
-    mapData.roads.forEach(r => {
-      const isSelected = selectedEntity === r;
-      const col = r.isDirt ? '#6b4' : r.isGravel ? '#887' : '#444';
-      ctx.fillStyle = isSelected ? '#a33' : col;
-      if (r.direction === 'horizontal') {
-        ctx.fillRect(r.x1, r.y1 - r.width / 2, r.x2 - r.x1, r.width);
+    // Hit test an entity on the canvas
+    const hit = hitTestWorld(wp.x, wp.y);
+    if (hit) {
+      if (e.shiftKey || e.ctrlKey) {
+        // Toggle in multi-selection
+        const idx = selectedEntities.findIndex(s => s.entity === hit.entity);
+        if (idx >= 0) selectedEntities.splice(idx, 1);
+        else selectedEntities.push(hit);
       } else {
-        ctx.fillRect(r.x1 - r.width / 2, r.y1, r.width, r.y2 - r.y1);
+        // Single selection
+        selectedEntities = [hit];
       }
-      ctx.strokeStyle = isSelected ? '#f44' : '#666';
-      ctx.lineWidth = isSelected ? 2 / camera.zoom : 1 / camera.zoom;
-      if (r.direction === 'horizontal') {
-        ctx.beginPath(); ctx.moveTo(r.x1, r.y1); ctx.lineTo(r.x2, r.y1); ctx.stroke();
-      } else {
-        ctx.beginPath(); ctx.moveTo(r.x1, r.y1); ctx.lineTo(r.x1, r.y2); ctx.stroke();
+      activeHandle = 'move';
+      dragStart = { x: wp.x, y: wp.y };
+    } else {
+      if (!e.shiftKey && !e.ctrlKey) {
+        selectedEntities = [];
       }
-    });
+      // Start box selection
+      boxSelectStart = { x: wp.x, y: wp.y };
+    }
+    updateInspector();
+    renderOutliner();
   }
 
-  // Intersections
-  if (filter === 'all' || filter === 'intersections') {
-    mapData.intersections.forEach(inter => {
-      const isSelected = selectedEntity === inter;
-      ctx.fillStyle = isSelected ? 'rgba(255,100,100,0.4)' : 'rgba(200,180,80,0.25)';
-      ctx.fillRect(inter.x - inter.width / 2, inter.y - inter.height / 2, inter.width, inter.height);
-      ctx.strokeStyle = isSelected ? '#f44' : '#cc8';
-      ctx.lineWidth = isSelected ? 2 / camera.zoom : 1 / camera.zoom;
-      ctx.strokeRect(inter.x - inter.width / 2, inter.y - inter.height / 2, inter.width, inter.height);
-      // Traffic lights
-      if (inter.hasLights) {
-        ctx.fillStyle = '#0f0';
-        ctx.beginPath(); ctx.arc(inter.x, inter.y, 4 / camera.zoom, 0, Math.PI * 2); ctx.fill();
-      }
-    });
+  else if (currentTool === 'road2p') {
+    if (toolStep === 0) {
+      toolPoints = [snapped];
+      toolStep = 1;
+    } else if (toolStep === 1) {
+      // Complete 2-point road
+      const p1 = toolPoints[0];
+      const p2 = snapped;
+      const isHoriz = Math.abs(p2.x - p1.x) >= Math.abs(p2.y - p1.y);
+      const isAvenue = toolConfigs.road.isAvenue;
+      const lanes = toolConfigs.road.lanes;
+      const width = toolConfigs.road.width;
+      const isDirt = toolConfigs.road.type === 'dirt';
+      const isGravel = toolConfigs.road.type === 'gravel';
+
+      const newRoad = {
+        id: generateUniqueId('road'),
+        x1: p1.x,
+        y1: p1.y,
+        x2: p2.x,
+        y2: p2.y,
+        lanes: lanes,
+        width: width,
+        isAvenue: isAvenue,
+        isDirt: isDirt,
+        isGravel: isGravel,
+        direction: isHoriz ? 'horizontal' : 'vertical',
+        name: toolConfigs.road.name,
+        lanePaths: buildRoadLanePaths(p1.x, p1.y, p2.x, p2.y, lanes, isAvenue)
+      };
+
+      mapData.roads.push(newRoad);
+      pushHistory('Create Road');
+      showToast('Дорога создана!');
+      toolStep = 0;
+      toolPoints = [];
+      updateFooterCounts();
+    }
   }
 
-  // Parkings
-  if (filter === 'all' || filter === 'parkings') {
-    (mapData.parkings || []).forEach(p => {
-      const isSelected = selectedEntity === p;
-      ctx.fillStyle = isSelected ? 'rgba(255,100,100,0.3)' : 'rgba(80,80,100,0.3)';
-      ctx.fillRect(p.x, p.y, p.width, p.height);
-      ctx.strokeStyle = isSelected ? '#f44' : '#88a';
-      ctx.lineWidth = isSelected ? 2 / camera.zoom : 1 / camera.zoom;
-      ctx.strokeRect(p.x, p.y, p.width, p.height);
-      // Spot lines
-      ctx.strokeStyle = '#fff3';
-      (p.spots || []).forEach(s => {
-        const sw = 16, sh = 28;
-        ctx.save();
-        ctx.translate(s.x, s.y);
-        ctx.rotate(s.angle || 0);
-        ctx.strokeRect(-sw / 2, -sh / 2, sw, sh);
-        ctx.restore();
+  else if (currentTool === 'roadCurve') {
+    if (toolStep === 0) {
+      toolPoints = [snapped];
+      toolStep = 1;
+    } else if (toolStep === 1) {
+      toolPoints.push(snapped);
+      toolStep = 2; // Waiting for control midpoint
+    } else if (toolStep === 2) {
+      // Generate multi-segment curved road along quadratic bezier
+      const p0 = toolPoints[0];
+      const p2 = toolPoints[1];
+      const p1 = snapped; // Control point
+      const segCount = toolConfigs.curve.segments || 10;
+      const isAvenue = toolConfigs.curve.isAvenue;
+      const lanes = toolConfigs.curve.lanes;
+      const width = toolConfigs.curve.width;
+      const isDirt = toolConfigs.curve.type === 'dirt';
+      const isGravel = toolConfigs.curve.type === 'gravel';
+
+      const curvePoints = [];
+      for (let i = 0; i <= segCount; i++) {
+        const t = i / segCount;
+        const mt = 1 - t;
+        const x = mt * mt * p0.x + 2 * mt * t * p1.x + t * t * p2.x;
+        const y = mt * mt * p0.y + 2 * mt * t * p1.y + t * t * p2.y;
+        curvePoints.push({ x, y });
+      }
+
+      // Create sequence of connected road segments
+      for (let i = 0; i < curvePoints.length - 1; i++) {
+        const cp1 = curvePoints[i];
+        const cp2 = curvePoints[i+1];
+        const isHoriz = Math.abs(cp2.x - cp1.x) >= Math.abs(cp2.y - cp1.y);
+
+        mapData.roads.push({
+          id: generateUniqueId('road_curve_seg'),
+          x1: cp1.x,
+          y1: cp1.y,
+          x2: cp2.x,
+          y2: cp2.y,
+          lanes: lanes,
+          width: width,
+          isAvenue: isAvenue,
+          isDirt: isDirt,
+          isGravel: isGravel,
+          direction: isHoriz ? 'horizontal' : 'vertical',
+          name: toolConfigs.curve.name,
+          lanePaths: buildRoadLanePaths(cp1.x, cp1.y, cp2.x, cp2.y, lanes, isAvenue)
+        });
+      }
+
+      pushHistory('Create Curved Road');
+      showToast(`Создана кривая дорога из ${segCount} сегментов!`);
+      toolStep = 0;
+      toolPoints = [];
+      updateFooterCounts();
+    }
+  }
+
+  else if (currentTool === 'lineBatch') {
+    if (toolStep === 0) {
+      toolPoints = [snapped];
+      toolStep = 1;
+    } else if (toolStep === 1) {
+      const p1 = toolPoints[0];
+      const p2 = snapped;
+      const count = toolConfigs.lineBatch.count || 8;
+      const type = toolConfigs.lineBatch.entityType;
+
+      for (let i = 0; i < count; i++) {
+        const t = count === 1 ? 0.5 : i / (count - 1);
+        const px = p1.x + (p2.x - p1.x) * t;
+        const py = p1.y + (p2.y - p1.y) * t;
+
+        if (type === 'trees') {
+          mapData.trees.push({
+            id: generateUniqueId('tree'),
+            x: px,
+            y: py,
+            radius: 20 + Math.random() * 6,
+            color: '#16a34a',
+            shadowOffset: 6
+          });
+        } else {
+          // Props (lamp, bench, bollard, cone, flowerbed)
+          const propTypeMap = {
+            lamps: 'lamp',
+            benches: 'bench',
+            bollards: 'bollard',
+            cones: 'cone',
+            flowerbeds: 'flowerbed'
+          };
+          const propType = propTypeMap[type] || 'lamp';
+          const angle = Math.atan2(p2.y - p1.y, p2.x - p1.x);
+
+          mapData.props.push({
+            id: generateUniqueId('prop'),
+            x: px,
+            y: py,
+            type: propType,
+            angle: angle + Math.PI / 2
+          });
+        }
+      }
+
+      pushHistory(`Line Batch ${type}`);
+      showToast(`Размещено ${count} объектов в линию!`);
+      toolStep = 0;
+      toolPoints = [];
+      updateFooterCounts();
+    }
+  }
+
+  else if (currentTool === 'brushScatter') {
+    applyBrushScatter(snapped.x, snapped.y);
+  }
+
+  else if (currentTool === 'building') {
+    if (toolStep === 0) {
+      toolPoints = [snapped];
+      toolStep = 1;
+    } else if (toolStep === 1) {
+      const p1 = toolPoints[0];
+      const p2 = snapped;
+      const bx = Math.min(p1.x, p2.x);
+      const by = Math.min(p1.y, p2.y);
+      const bw = Math.max(40, Math.abs(p2.x - p1.x));
+      const bh = Math.max(40, Math.abs(p2.y - p1.y));
+
+      const newBld = {
+        id: generateUniqueId('bld'),
+        x: bx,
+        y: by,
+        width: bw,
+        height: bh,
+        type: toolConfigs.building.type,
+        color: toolConfigs.building.color,
+        roofColor: toolConfigs.building.roofColor,
+        accentColor: toolConfigs.building.accentColor,
+        entranceSide: toolConfigs.building.entranceSide,
+        roofDetails: [
+          { type: 'ac', rx: 0.2, ry: 0.2, rw: 16, rh: 16 },
+          { type: 'antenna', rx: 0.8, ry: 0.8, rw: 8, rh: 8 }
+        ],
+        windows: []
+      };
+
+      mapData.buildings.push(newBld);
+      pushHistory('Create Building');
+      showToast('Здание создано!');
+      toolStep = 0;
+      toolPoints = [];
+      selectedEntities = [{ entity: newBld, layer: 'buildings' }];
+      updateInspector();
+      updateFooterCounts();
+    }
+  }
+
+  else if (currentTool === 'tree') {
+    const newTree = {
+      id: generateUniqueId('tree'),
+      x: snapped.x,
+      y: snapped.y,
+      radius: toolConfigs.tree.radius + (Math.random() * 6 - 3),
+      color: toolConfigs.tree.color,
+      shadowOffset: 6
+    };
+    mapData.trees.push(newTree);
+    pushHistory('Add Tree');
+    showToast('Дерево посажено');
+    updateFooterCounts();
+  }
+
+  else if (currentTool === 'prop') {
+    const newProp = {
+      id: generateUniqueId('prop'),
+      x: snapped.x,
+      y: snapped.y,
+      type: toolConfigs.prop.type,
+      angle: toolConfigs.prop.angle || 0
+    };
+    mapData.props.push(newProp);
+    pushHistory('Add Prop');
+    showToast(`Объект добавлен: ${newProp.type}`);
+    updateFooterCounts();
+  }
+
+  else if (currentTool === 'sidewalk') {
+    if (toolStep === 0) {
+      toolPoints = [snapped];
+      toolStep = 1;
+    } else if (toolStep === 1) {
+      const p1 = toolPoints[0];
+      const p2 = snapped;
+      const sx = Math.min(p1.x, p2.x);
+      const sy = Math.min(p1.y, p2.y);
+      const sw = Math.max(80, Math.abs(p2.x - p1.x));
+      const sh = Math.max(80, Math.abs(p2.y - p1.y));
+
+      const newSw = {
+        id: generateUniqueId('sw'),
+        x: sx,
+        y: sy,
+        width: sw,
+        height: sh,
+        sidewalkWidth: toolConfigs.sidewalk.sidewalkWidth || 32,
+        style: toolConfigs.sidewalk.style || 'urban'
+      };
+
+      if (!mapData.sidewalks) mapData.sidewalks = [];
+      mapData.sidewalks.push(newSw);
+      pushHistory('Create Sidewalk');
+      showToast('Тротуарный квартал создан');
+      toolStep = 0;
+      toolPoints = [];
+      updateFooterCounts();
+    }
+  }
+
+  else if (currentTool === 'parking') {
+    if (toolStep === 0) {
+      toolPoints = [snapped];
+      toolStep = 1;
+    } else if (toolStep === 1) {
+      const p1 = toolPoints[0];
+      const p2 = snapped;
+      const px = Math.min(p1.x, p2.x);
+      const py = Math.min(p1.y, p2.y);
+      const pw = Math.max(100, Math.abs(p2.x - p1.x));
+      const ph = Math.max(80, Math.abs(p2.y - p1.y));
+
+      const spots = [];
+      const spotWidth = 24;
+      const spotHeight = 44;
+      const numCols = Math.floor(pw / (spotWidth + 8));
+
+      for (let c = 0; c < numCols; c++) {
+        spots.push({
+          x: px + 16 + c * (spotWidth + 8),
+          y: py + 26,
+          angle: 0,
+          occupied: Math.random() < 0.4
+        });
+      }
+
+      const newPark = {
+        id: generateUniqueId('park'),
+        x: px,
+        y: py,
+        width: pw,
+        height: ph,
+        spots: spots
+      };
+
+      if (!mapData.parkings) mapData.parkings = [];
+      mapData.parkings.push(newPark);
+      pushHistory('Create Parking');
+      showToast('Парковочный комплекс создан');
+      toolStep = 0;
+      toolPoints = [];
+      updateFooterCounts();
+    }
+  }
+
+  else if (currentTool === 'intersection') {
+    const interSize = 84;
+    const newInter = {
+      id: generateUniqueId('inter'),
+      x: snapped.x,
+      y: snapped.y,
+      width: interSize,
+      height: interSize,
+      type: toolConfigs.intersection.type || '4way',
+      hasLights: toolConfigs.intersection.hasLights !== false,
+      isDirt: !!toolConfigs.intersection.isDirt,
+      currentPhaseIndex: 0,
+      phaseTimer: 0,
+      phases: [
+        { nsState: 'green', ewState: 'red', duration: 15 },
+        { nsState: 'yellow', ewState: 'red', duration: 3 },
+        { nsState: 'red', ewState: 'green', duration: 15 },
+        { nsState: 'red', ewState: 'yellow', duration: 3 }
+      ],
+      stopLines: [],
+      crosswalks: []
+    };
+
+    mapData.intersections.push(newInter);
+    pushHistory('Add Intersection');
+    showToast('Перекресток добавлен');
+    updateFooterCounts();
+  }
+});
+
+canvas.addEventListener('mousemove', (e) => {
+  const wp = screenToWorld(e.offsetX, e.offsetY);
+  mouseScreen = { x: e.offsetX, y: e.offsetY };
+  mouseWorld = wp;
+
+  document.getElementById('stat-x').textContent = Math.round(wp.x);
+  document.getElementById('stat-y').textContent = Math.round(wp.y);
+
+  if (isPanning) {
+    camera.x = cameraStart.x - (e.clientX - panStart.x) / camera.zoom;
+    camera.y = cameraStart.y - (e.clientY - panStart.y) / camera.zoom;
+    return;
+  }
+
+  if (isMouseDown && currentTool === 'select' && activeHandle && selectedEntities.length > 0) {
+    const dx = wp.x - dragStart.x;
+    const dy = wp.y - dragStart.y;
+
+    if (activeHandle === 'move') {
+      for (const sel of selectedEntities) {
+        const ent = sel.entity;
+        if ('x' in ent && 'y' in ent) {
+          ent.x += dx;
+          ent.y += dy;
+        } else if ('x1' in ent) {
+          ent.x1 += dx; ent.x2 += dx;
+          ent.y1 += dy; ent.y2 += dy;
+          if (ent.lanePaths) {
+            for (const lp of ent.lanePaths) {
+              for (const pt of lp.waypoints) {
+                pt.x += dx; pt.y += dy;
+              }
+            }
+          }
+        }
+      }
+    } else if (activeHandle === 'rotate' && selectedEntities.length === 1) {
+      const ent = selectedEntities[0].entity;
+      const cx = ent.x !== undefined ? ent.x : (ent.x1 + ent.x2) / 2;
+      const cy = ent.y !== undefined ? ent.y : (ent.y1 + ent.y2) / 2;
+      ent.angle = Math.atan2(wp.y - cy, wp.x - cx);
+    } else if (activeHandle && selectedEntities.length === 1) {
+      // Resize handle for boxes (buildings, sidewalks, parkings)
+      const ent = selectedEntities[0].entity;
+      if ('width' in ent && 'height' in ent) {
+        if (activeHandle === 'se') {
+          ent.width = Math.max(20, wp.x - ent.x);
+          ent.height = Math.max(20, wp.y - ent.y);
+        } else if (activeHandle === 'ne') {
+          ent.width = Math.max(20, wp.x - ent.x);
+          const newY = Math.min(wp.y, ent.y + ent.height - 20);
+          ent.height += ent.y - newY;
+          ent.y = newY;
+        } else if (activeHandle === 'sw') {
+          const newX = Math.min(wp.x, ent.x + ent.width - 20);
+          ent.width += ent.x - newX;
+          ent.x = newX;
+          ent.height = Math.max(20, wp.y - ent.y);
+        } else if (activeHandle === 'nw') {
+          const newX = Math.min(wp.x, ent.x + ent.width - 20);
+          const newY = Math.min(wp.y, ent.y + ent.height - 20);
+          ent.width += ent.x - newX;
+          ent.height += ent.y - newY;
+          ent.x = newX;
+          ent.y = newY;
+        }
+      }
+    }
+
+    dragStart = { x: wp.x, y: wp.y };
+  }
+
+  // Brush scatter continuous dragging
+  if (isMouseDown && currentTool === 'brushScatter') {
+    applyBrushScatter(wp.x, wp.y);
+  }
+});
+
+canvas.addEventListener('mouseup', () => {
+  if (isPanning) {
+    isPanning = false;
+    canvas.style.cursor = 'crosshair';
+  }
+
+  if (currentTool === 'brushScatter') {
+    pushHistory('Brush Scatter');
+  }
+
+  if (activeHandle) {
+    pushHistory('Transform');
+    activeHandle = null;
+    updateInspector();
+  }
+
+  if (boxSelectStart) {
+    // Perform box selection via spatial query
+    const minX = Math.min(boxSelectStart.x, mouseWorld.x);
+    const maxX = Math.max(boxSelectStart.x, mouseWorld.x);
+    const minY = Math.min(boxSelectStart.y, mouseWorld.y);
+    const maxY = Math.max(boxSelectStart.y, mouseWorld.y);
+
+    selectedEntities = [];
+    const candidates = spatialIndex.queryRect(minX, minY, maxX - minX, maxY - minY);
+    for (let i = 0; i < candidates.length; i++) {
+      const entry = candidates[i];
+      const item = entry.entity;
+      const ix = item.x !== undefined ? item.x : (item.x1 + item.x2) / 2;
+      const iy = item.y !== undefined ? item.y : (item.y1 + item.y2) / 2;
+      if (ix >= minX && ix <= maxX && iy >= minY && iy <= maxY) {
+        selectedEntities.push({ entity: item, layer: entry.layer });
+      }
+    }
+
+    boxSelectStart = null;
+    updateInspector();
+    renderOutliner();
+  }
+
+  isMouseDown = false;
+});
+
+// Wheel Zoom
+canvas.addEventListener('wheel', (e) => {
+  e.preventDefault();
+  const zoomFactor = e.deltaY < 0 ? 1.15 : 0.87;
+  const wp = screenToWorld(e.offsetX, e.offsetY);
+
+  camera.zoom *= zoomFactor;
+  camera.zoom = Math.max(0.02, Math.min(6.0, camera.zoom));
+
+  const wpNew = screenToWorld(e.offsetX, e.offsetY);
+  camera.x -= (wpNew.x - wp.x);
+  camera.y -= (wpNew.y - wp.y);
+
+  document.getElementById('stat-zoom').textContent = `${Math.round(camera.zoom * 100)}%`;
+}, { passive: false });
+
+// Brush Scatter Tool Implementation
+let lastBrushTime = 0;
+function applyBrushScatter(cx, cy) {
+  const now = Date.now();
+  if (now - lastBrushTime < 60) return; // Throttle brush strokes to 60ms
+  lastBrushTime = now;
+
+  const rad = toolConfigs.brushScatter.radius || 120;
+  const count = Math.max(1, Math.floor(toolConfigs.brushScatter.density / 2));
+  const type = toolConfigs.brushScatter.entityType;
+
+  for (let i = 0; i < count; i++) {
+    const angle = Math.random() * Math.PI * 2;
+    const r = Math.sqrt(Math.random()) * rad;
+    const px = cx + Math.cos(angle) * r;
+    const py = cy + Math.sin(angle) * r;
+
+    if (type === 'trees') {
+      const tree = {
+        id: generateUniqueId('tree'),
+        x: px,
+        y: py,
+        radius: 18 + Math.random() * 10,
+        color: ['#166534', '#15803d', '#16a34a', '#14532d'][Math.floor(Math.random() * 4)],
+        shadowOffset: 6
+      };
+      mapData.trees.push(tree);
+      spatialIndex.insert(tree, 'trees');
+    } else if (type === 'props') {
+      const propTypes = ['trash_can', 'hydrant', 'cone', 'bollard', 'manhole'];
+      const prop = {
+        id: generateUniqueId('prop'),
+        x: px,
+        y: py,
+        type: propTypes[Math.floor(Math.random() * propTypes.length)],
+        angle: Math.random() * Math.PI * 2
+      };
+      mapData.props.push(prop);
+      spatialIndex.insert(prop, 'props');
+    } else if (type === 'litter') {
+      const litterTypes = ['paper', 'newspaper', 'cup', 'can', 'leaf', 'bottle'];
+      if (!mapData.litter) mapData.litter = [];
+      mapData.litter.push({
+        id: generateUniqueId('litter'),
+        x: px,
+        y: py,
+        vx: 0,
+        vy: 0,
+        angle: Math.random() * Math.PI * 2,
+        rotationSpeed: 0,
+        type: litterTypes[Math.floor(Math.random() * litterTypes.length)],
+        color: '#e2e8f0',
+        size: 3 + Math.random() * 4
       });
-    });
+    } else if (type === 'puddles') {
+      if (!mapData.puddles) mapData.puddles = [];
+      mapData.puddles.push({
+        id: generateUniqueId('puddle'),
+        x: px,
+        y: py,
+        radiusX: 15 + Math.random() * 20,
+        radiusY: 10 + Math.random() * 15,
+        angle: Math.random() * Math.PI * 2,
+        rippleTimer: 0
+      });
+    }
   }
 
-  // Buildings
-  if (filter === 'all' || filter === 'buildings') {
-    mapData.buildings.forEach(b => {
-      const isSelected = selectedEntity === b;
-      ctx.fillStyle = isSelected ? 'rgba(255,80,80,0.5)' : b.color;
-      ctx.fillRect(b.x, b.y, b.width, b.height);
-      ctx.strokeStyle = isSelected ? '#f44' : b.roofColor || '#333';
-      ctx.lineWidth = isSelected ? 2 / camera.zoom : 1 / camera.zoom;
-      ctx.strokeRect(b.x, b.y, b.width, b.height);
-      // Type label if zoomed in
-      if (camera.zoom > 0.3) {
-        ctx.fillStyle = '#fff8';
-        ctx.font = `${Math.max(8, 10 / camera.zoom)}px sans-serif`;
-        ctx.textAlign = 'center';
-        ctx.fillText(b.type, b.x + b.width / 2, b.y + b.height / 2 + 4 / camera.zoom);
-      }
-    });
-  }
-
-  // Trees
-  if (filter === 'all' || filter === 'trees') {
-    mapData.trees.forEach(t => {
-      const isSelected = selectedEntity === t;
-      ctx.fillStyle = isSelected ? '#f44' : t.color;
-      ctx.beginPath();
-      ctx.arc(t.x, t.y, t.radius, 0, Math.PI * 2);
-      ctx.fill();
-      if (isSelected) {
-        ctx.strokeStyle = '#f44';
-        ctx.lineWidth = 2 / camera.zoom;
-        ctx.stroke();
-      }
-    });
-  }
-
-  // Props
-  if (filter === 'all' || filter === 'props') {
-    mapData.props.forEach(p => {
-      const isSelected = selectedEntity === p;
-      const sz = p.type === 'kiosk' ? 12 : p.type === 'dumpster' ? 10 : 6;
-      ctx.fillStyle = isSelected ? '#f44' : '#c83';
-      ctx.fillRect(p.x - sz / 2, p.y - sz / 2, sz, sz);
-      if (isSelected) {
-        ctx.strokeStyle = '#f44';
-        ctx.lineWidth = 2 / camera.zoom;
-        ctx.strokeRect(p.x - sz / 2, p.y - sz / 2, sz, sz);
-      }
-      if (camera.zoom > 0.4) {
-        ctx.fillStyle = '#fff8';
-        ctx.font = `${Math.max(6, 8 / camera.zoom)}px sans-serif`;
-        ctx.textAlign = 'center';
-        ctx.fillText(p.type, p.x, p.y - sz / 2 - 3 / camera.zoom);
-      }
-    });
-  }
-
-  // Measure tool line
-  if (measureStart && tool === 'measure') {
-    ctx.strokeStyle = '#ff0';
-    ctx.lineWidth = 2 / camera.zoom;
-    ctx.setLineDash([6 / camera.zoom, 4 / camera.zoom]);
-    ctx.beginPath();
-    ctx.moveTo(measureStart.x, measureStart.y);
-    ctx.lineTo(mouseWorld.x, mouseWorld.y);
-    ctx.stroke();
-    ctx.setLineDash([]);
-    const dist = Math.hypot(mouseWorld.x - measureStart.x, mouseWorld.y - measureStart.y);
-    ctx.fillStyle = '#ff0';
-    ctx.font = `${14 / camera.zoom}px monospace`;
-    ctx.textAlign = 'center';
-    ctx.fillText(`${dist.toFixed(1)}px`, (measureStart.x + mouseWorld.x) / 2, (measureStart.y + mouseWorld.y) / 2 - 10 / camera.zoom);
-  }
-
-  ctx.restore();
-  updateStats();
+  updateFooterCounts();
 }
 
-function hitTest(wx, wy) {
+// --- HIT TESTING (ACCELERATED WITH SPATIAL GRID) ---
+function hitTestWorld(wx, wy) {
   if (!mapData) return null;
-  const filter = document.getElementById('layer-filter').value;
-  const tolerance = 8 / camera.zoom;
+  const tol = 14 / camera.zoom;
+  const searchRadius = 40 + tol;
 
-  const layers = [
-    { name: 'props', items: mapData.props, hit: (e) => wx > e.x - 8 && wx < e.x + 8 && wy > e.y - 8 && wy < e.y + 8 },
-    { name: 'trees', items: mapData.trees, hit: (e) => Math.hypot(wx - e.x, wy - e.y) < e.radius + 4 },
-    { name: 'buildings', items: mapData.buildings, hit: (e) => wx >= e.x && wx <= e.x + e.width && wy >= e.y && wy <= e.y + e.height },
-    { name: 'intersections', items: mapData.intersections, hit: (e) => wx >= e.x - e.width/2 - tolerance && wx <= e.x + e.width/2 + tolerance && wy >= e.y - e.height/2 - tolerance && wy <= e.y + e.height/2 + tolerance },
-    { name: 'roads', items: mapData.roads, hit: (e) => {
-      if (e.direction === 'horizontal') {
-        return wy >= e.y1 - e.width/2 - tolerance && wy <= e.y1 + e.width/2 + tolerance && wx >= Math.min(e.x1,e.x2) - tolerance && wx <= Math.max(e.x1,e.x2) + tolerance;
-      } else {
-        return wx >= e.x1 - e.width/2 - tolerance && wx <= e.x1 + e.width/2 + tolerance && wy >= Math.min(e.y1,e.y2) - tolerance && wy <= Math.max(e.y1,e.y2) + tolerance;
-      }
-    }},
-    { name: 'sidewalks', items: mapData.sidewalks || [], hit: (e) => wx >= e.x && wx <= e.x + e.width && wy >= e.y && wy <= e.y + e.height },
-    { name: 'parkings', items: mapData.parkings || [], hit: (e) => wx >= e.x && wx <= e.x + e.width && wy >= e.y && wy <= e.y + e.height }
-  ];
+  // Query only candidates in proximity
+  const nearby = spatialIndex.queryRadius(wx, wy, searchRadius);
+  if (!nearby || nearby.length === 0) return null;
 
-  for (const layer of layers) {
-    if (filter !== 'all' && filter !== layer.name) continue;
-    for (let i = layer.items.length - 1; i >= 0; i--) {
-      if (layer.hit(layer.items[i])) return { entity: layer.items[i], layer: layer.name };
+  // Check in reverse priority order: props, trees, buildings, intersections, roads, sidewalks, parkings
+  for (let i = nearby.length - 1; i >= 0; i--) {
+    const entry = nearby[i];
+    if (entry.layer === 'props') {
+      const p = entry.entity;
+      if (Math.hypot(wx - p.x, wy - p.y) < 16 + tol) return { entity: p, layer: 'props' };
     }
+  }
+
+  for (let i = nearby.length - 1; i >= 0; i--) {
+    const entry = nearby[i];
+    if (entry.layer === 'trees') {
+      const t = entry.entity;
+      if (Math.hypot(wx - t.x, wy - t.y) < t.radius + tol) return { entity: t, layer: 'trees' };
+    }
+  }
+
+  for (let i = nearby.length - 1; i >= 0; i--) {
+    const entry = nearby[i];
+    if (entry.layer === 'buildings') {
+      const b = entry.entity;
+      if (wx >= b.x && wx <= b.x + b.width && wy >= b.y && wy <= b.y + b.height) {
+        return { entity: b, layer: 'buildings' };
+      }
+    }
+  }
+
+  for (let i = nearby.length - 1; i >= 0; i--) {
+    const entry = nearby[i];
+    if (entry.layer === 'intersections') {
+      const inter = entry.entity;
+      if (Math.abs(wx - inter.x) <= inter.width / 2 + tol && Math.abs(wy - inter.y) <= inter.height / 2 + tol) {
+        return { entity: inter, layer: 'intersections' };
+      }
+    }
+  }
+
+  for (let i = nearby.length - 1; i >= 0; i--) {
+    const entry = nearby[i];
+    if (entry.layer === 'roads') {
+      const r = entry.entity;
+      const dist = distToSegment(wx, wy, r.x1, r.y1, r.x2, r.y2);
+      if (dist <= r.width / 2 + tol) {
+        return { entity: r, layer: 'roads' };
+      }
+    }
+  }
+
+  for (let i = nearby.length - 1; i >= 0; i--) {
+    const entry = nearby[i];
+    if (entry.layer === 'sidewalks') {
+      const sw = entry.entity;
+      if (wx >= sw.x && wx <= sw.x + sw.width && wy >= sw.y && wy <= sw.y + sw.height) {
+        return { entity: sw, layer: 'sidewalks' };
+      }
+    }
+  }
+
+  for (let i = nearby.length - 1; i >= 0; i--) {
+    const entry = nearby[i];
+    if (entry.layer === 'parkings') {
+      const p = entry.entity;
+      if (wx >= p.x && wx <= p.x + p.width && wy >= p.y && wy <= p.y + p.height) {
+        return { entity: p, layer: 'parkings' };
+      }
+    }
+  }
+
+  return null;
+}
+
+function distToSegment(px, py, x1, y1, x2, y2) {
+  const l2 = (x2 - x1) * (x2 - x1) + (y2 - y1) * (y2 - y1);
+  if (l2 === 0) return Math.hypot(px - x1, py - y1);
+  let t = ((px - x1) * (x2 - x1) + (py - y1) * (y2 - y1)) / l2;
+  t = Math.max(0, Math.min(1, t));
+  return Math.hypot(px - (x1 + t * (x2 - x1)), py - (y1 + t * (y2 - y1)));
+}
+
+function checkGizmoHandleHit(wx, wy, ent) {
+  const tol = 14 / camera.zoom;
+  if ('width' in ent && 'height' in ent) {
+    if (Math.hypot(wx - (ent.x + ent.width), wy - (ent.y + ent.height)) < tol) return 'se';
+    if (Math.hypot(wx - ent.x, wy - (ent.y + ent.height)) < tol) return 'sw';
+    if (Math.hypot(wx - (ent.x + ent.width), wy - ent.y) < tol) return 'ne';
+    if (Math.hypot(wx - ent.x, wy - ent.y) < tol) return 'nw';
   }
   return null;
 }
 
-function selectEntity(entity, layer) {
-  selectedEntity = entity;
-  selectedLayer = layer;
-  document.getElementById('btn-delete').style.display = entity ? 'block' : 'none';
-  updateEntityList();
-  updatePropsPanel();
+// Minimap throttle
+let minimapThrottleTimer = 0;
+
+// --- RENDERING LOOP (60 FPS WITH SPATIAL VIEWPORT CULLING) ---
+function gameLoop(now) {
   render();
+  requestAnimationFrame(gameLoop);
 }
 
-function updateEntityList() {
-  const list = document.getElementById('entity-list');
-  if (!mapData) { list.innerHTML = ''; return; }
+function render() {
+  const w = canvas.width;
+  const h = canvas.height;
 
-  const filter = document.getElementById('layer-filter').value;
-  const search = document.getElementById('search-input').value.toLowerCase();
-  let html = '';
+  // Clear Screen
+  ctx.fillStyle = '#090d16';
+  ctx.fillRect(0, 0, w, h);
 
-  const layers = [
-    { key: 'roads', label: 'Дороги', items: mapData.roads, nameKey: 'name' },
-    { key: 'buildings', label: 'Здания', items: mapData.buildings, nameKey: 'type' },
-    { key: 'intersections', label: 'Перекрёстки', items: mapData.intersections, nameKey: 'id' },
-    { key: 'trees', label: 'Деревья', items: mapData.trees, nameKey: 'color' },
-    { key: 'props', label: 'Объекты', items: mapData.props, nameKey: 'type' },
-    { key: 'sidewalks', label: 'Тротуары', items: mapData.sidewalks || [], nameKey: 'style' },
-    { key: 'parkings', label: 'Парковки', items: mapData.parkings || [], nameKey: 'id' }
-  ];
+  ctx.save();
+  ctx.translate(w / 2, h / 2);
+  ctx.scale(camera.zoom, camera.zoom);
+  ctx.translate(-camera.x, -camera.y);
 
-  for (const layer of layers) {
-    if (filter !== 'all' && filter !== layer.key) continue;
-    layer.items.forEach((item, i) => {
-      const label = item[layer.nameKey] || item.id || '';
-      const coordStr = item.x !== undefined ? `${Math.round(item.x)},${Math.round(item.y)}` : '';
-      const matchesSearch = !search || (item.id && item.id.toLowerCase().includes(search)) || (label && label.toLowerCase().includes(search));
-      if (!matchesSearch) return;
-      const isSelected = selectedEntity === item;
-      html += `<div class="entity-item ${isSelected ? 'selected' : ''}" onclick="selectByIndex('${layer.key}', ${i})">
-        <span class="label">${layer.label}: ${label}</span>
-        <span class="coords">${coordStr}</span>
-        <button class="delete-btn" onclick="event.stopPropagation(); deleteByIndex('${layer.key}', ${i})">✕</button>
-      </div>`;
-    });
+  // Viewport bounds in world coords for culling
+  const vDiag = Math.hypot(w, h) / (2 * camera.zoom) + 200;
+  const minX = camera.x - vDiag;
+  const maxX = camera.x + vDiag;
+  const minY = camera.y - vDiag;
+  const maxY = camera.y + vDiag;
+
+  // 1. World Base Grid & Boundary
+  ctx.fillStyle = '#1e293b';
+  ctx.fillRect(0, 0, mapData.width, mapData.height);
+
+  // Subtle Grid Lines
+  if (camera.zoom > 0.08) {
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.03)';
+    ctx.lineWidth = 1 / camera.zoom;
+    const step = 200;
+    const startX = Math.max(0, Math.floor(minX / step) * step);
+    const endX = Math.min(mapData.width, Math.ceil(maxX / step) * step);
+    const startY = Math.max(0, Math.floor(minY / step) * step);
+    const endY = Math.min(mapData.height, Math.ceil(maxY / step) * step);
+
+    ctx.beginPath();
+    for (let x = startX; x <= endX; x += step) {
+      ctx.moveTo(x, startY); ctx.lineTo(x, endY);
+    }
+    for (let y = startY; y <= endY; y += step) {
+      ctx.moveTo(startX, y); ctx.lineTo(endX, y);
+    }
+    ctx.stroke();
   }
-  list.innerHTML = html || '<div style="padding:20px;color:#666;text-align:center">Пусто</div>';
+
+  // Fast Spatial Viewport Query
+  const visibleEntities = spatialIndex.queryRect(minX, minY, maxX - minX, maxY - minY);
+
+  // 2. Sidewalks
+  for (let i = 0; i < visibleEntities.length; i++) {
+    const entry = visibleEntities[i];
+    if (entry.layer !== 'sidewalks') continue;
+    const sw = entry.entity;
+    const isSel = selectedEntities.some(s => s.entity === sw);
+    ctx.fillStyle = isSel ? 'rgba(56, 189, 248, 0.25)' : 'rgba(148, 163, 184, 0.15)';
+    ctx.fillRect(sw.x, sw.y, sw.width, sw.height);
+    ctx.strokeStyle = isSel ? '#38bdf8' : '#64748b';
+    ctx.lineWidth = isSel ? 2 / camera.zoom : 1 / camera.zoom;
+    ctx.strokeRect(sw.x, sw.y, sw.width, sw.height);
+  }
+
+  // 3. Roads
+  for (let i = 0; i < visibleEntities.length; i++) {
+    const entry = visibleEntities[i];
+    if (entry.layer !== 'roads') continue;
+    const r = entry.entity;
+    const isSel = selectedEntities.some(s => s.entity === r);
+    ctx.save();
+    ctx.strokeStyle = isSel ? '#38bdf8' : r.isDirt ? '#7c2d12' : r.isGravel ? '#475569' : '#1e293b';
+    ctx.lineWidth = r.width;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(r.x1, r.y1);
+    ctx.lineTo(r.x2, r.y2);
+    ctx.stroke();
+
+    // Road Markings (Yellow center line, dashed dividers)
+    if (!r.isDirt) {
+      ctx.strokeStyle = r.isGravel ? 'rgba(255,255,255,0.3)' : '#eab308';
+      ctx.lineWidth = 2 / camera.zoom;
+      ctx.setLineDash([]);
+      ctx.beginPath();
+      ctx.moveTo(r.x1, r.y1);
+      ctx.lineTo(r.x2, r.y2);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  // 4. Intersections
+  for (let i = 0; i < visibleEntities.length; i++) {
+    const entry = visibleEntities[i];
+    if (entry.layer !== 'intersections') continue;
+    const inter = entry.entity;
+    const isSel = selectedEntities.some(s => s.entity === inter);
+    ctx.fillStyle = isSel ? 'rgba(56, 189, 248, 0.4)' : '#1e293b';
+    ctx.fillRect(inter.x - inter.width / 2, inter.y - inter.height / 2, inter.width, inter.height);
+    ctx.strokeStyle = isSel ? '#38bdf8' : '#64748b';
+    ctx.lineWidth = isSel ? 2 / camera.zoom : 1 / camera.zoom;
+    ctx.strokeRect(inter.x - inter.width / 2, inter.y - inter.height / 2, inter.width, inter.height);
+
+    if (inter.hasLights) {
+      ctx.fillStyle = '#22c55e';
+      ctx.beginPath();
+      ctx.arc(inter.x, inter.y, 4 / camera.zoom, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  // 5. Parkings
+  for (let i = 0; i < visibleEntities.length; i++) {
+    const entry = visibleEntities[i];
+    if (entry.layer !== 'parkings') continue;
+    const p = entry.entity;
+    const isSel = selectedEntities.some(s => s.entity === p);
+    ctx.fillStyle = isSel ? 'rgba(56, 189, 248, 0.3)' : 'rgba(51, 65, 85, 0.4)';
+    ctx.fillRect(p.x, p.y, p.width, p.height);
+    ctx.strokeStyle = isSel ? '#38bdf8' : '#475569';
+    ctx.lineWidth = isSel ? 2 / camera.zoom : 1 / camera.zoom;
+    ctx.strokeRect(p.x, p.y, p.width, p.height);
+
+    // Draw Parking Spots
+    if (p.spots) {
+      for (let j = 0; j < p.spots.length; j++) {
+        const s = p.spots[j];
+        ctx.strokeStyle = 'rgba(255,255,255,0.25)';
+        ctx.strokeRect(s.x - 10, s.y - 20, 20, 40);
+      }
+    }
+  }
+
+  // 6. Buildings
+  for (let i = 0; i < visibleEntities.length; i++) {
+    const entry = visibleEntities[i];
+    if (entry.layer !== 'buildings') continue;
+    const b = entry.entity;
+    const isSel = selectedEntities.some(s => s.entity === b);
+    ctx.fillStyle = isSel ? 'rgba(244, 63, 94, 0.6)' : b.color || '#64748b';
+    ctx.fillRect(b.x, b.y, b.width, b.height);
+    ctx.strokeStyle = isSel ? '#f43f5e' : b.roofColor || '#334155';
+    ctx.lineWidth = isSel ? 3 / camera.zoom : 1 / camera.zoom;
+    ctx.strokeRect(b.x, b.y, b.width, b.height);
+
+    // Label if zoomed in
+    if (camera.zoom > 0.2) {
+      ctx.fillStyle = '#fff';
+      ctx.font = `${Math.max(10, 11 / camera.zoom)}px sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.fillText(b.type || 'Building', b.x + b.width / 2, b.y + b.height / 2 + 4 / camera.zoom);
+    }
+  }
+
+  // 7. Trees
+  for (let i = 0; i < visibleEntities.length; i++) {
+    const entry = visibleEntities[i];
+    if (entry.layer !== 'trees') continue;
+    const t = entry.entity;
+    const isSel = selectedEntities.some(s => s.entity === t);
+    ctx.fillStyle = isSel ? '#22c55e' : t.color || '#16a34a';
+    ctx.beginPath();
+    ctx.arc(t.x, t.y, t.radius, 0, Math.PI * 2);
+    ctx.fill();
+    if (isSel) {
+      ctx.strokeStyle = '#fff';
+      ctx.lineWidth = 2 / camera.zoom;
+      ctx.stroke();
+    }
+  }
+
+  // 8. Props
+  for (let i = 0; i < visibleEntities.length; i++) {
+    const entry = visibleEntities[i];
+    if (entry.layer !== 'props') continue;
+    const p = entry.entity;
+    const isSel = selectedEntities.some(s => s.entity === p);
+    ctx.save();
+    ctx.translate(p.x, p.y);
+    ctx.rotate(p.angle || 0);
+    ctx.fillStyle = isSel ? '#fbbf24' : '#f59e0b';
+    ctx.fillRect(-8, -8, 16, 16);
+    if (isSel) {
+      ctx.strokeStyle = '#fff';
+      ctx.lineWidth = 2 / camera.zoom;
+      ctx.strokeRect(-8, -8, 16, 16);
+    }
+    ctx.restore();
+  }
+
+  // 9. Tool Overlays & Live Previews
+  renderToolLivePreview(ctx);
+
+  // 10. Transform Gizmos for Selected Entities
+  renderTransformGizmos(ctx);
+
+  // 11. Box Selection Rectangle
+  if (boxSelectStart) {
+    const bx = Math.min(boxSelectStart.x, mouseWorld.x);
+    const by = Math.min(boxSelectStart.y, mouseWorld.y);
+    const bw = Math.abs(mouseWorld.x - boxSelectStart.x);
+    const bh = Math.abs(mouseWorld.y - boxSelectStart.y);
+    ctx.fillStyle = 'rgba(56, 189, 248, 0.15)';
+    ctx.fillRect(bx, by, bw, bh);
+    ctx.strokeStyle = '#38bdf8';
+    ctx.lineWidth = 1 / camera.zoom;
+    ctx.setLineDash([4 / camera.zoom, 4 / camera.zoom]);
+    ctx.strokeRect(bx, by, bw, bh);
+    ctx.setLineDash([]);
+  }
+
+  ctx.restore();
+
+  // Throttled Mini-map update (Runs every 10 frames to avoid performance drain)
+  minimapThrottleTimer++;
+  if (minimapThrottleTimer >= 10) {
+    minimapThrottleTimer = 0;
+    renderMinimap();
+  }
 }
 
-function selectByIndex(layerKey, index) {
-  const item = mapData[layerKey === 'sidewalks' ? 'sidewalks' : layerKey][index];
-  selectEntity(item, layerKey);
+// Live Visual Feedback for Creation Tools
+function renderToolLivePreview(ctx) {
+  const mp = applySnapping(mouseWorld);
+
+  if (currentTool === 'road2p' && toolStep === 1) {
+    const p1 = toolPoints[0];
+    const p2 = mp;
+    ctx.save();
+    ctx.strokeStyle = 'rgba(56, 189, 248, 0.7)';
+    ctx.lineWidth = toolConfigs.road.width;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(p1.x, p1.y);
+    ctx.lineTo(p2.x, p2.y);
+    ctx.stroke();
+
+    // Center line
+    ctx.strokeStyle = '#fff';
+    ctx.lineWidth = 2 / camera.zoom;
+    ctx.setLineDash([6 / camera.zoom, 6 / camera.zoom]);
+    ctx.beginPath();
+    ctx.moveTo(p1.x, p1.y);
+    ctx.lineTo(p2.x, p2.y);
+    ctx.stroke();
+
+    // Distance Label
+    const dist = Math.hypot(p2.x - p1.x, p2.y - p1.y);
+    ctx.fillStyle = '#38bdf8';
+    ctx.font = `bold ${13 / camera.zoom}px sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.fillText(`${Math.round(dist)} px`, (p1.x + p2.x) / 2, (p1.y + p2.y) / 2 - 14 / camera.zoom);
+    ctx.restore();
+  }
+
+  else if (currentTool === 'roadCurve') {
+    if (toolStep === 1) {
+      // Line from start to cursor
+      ctx.save();
+      ctx.strokeStyle = 'rgba(56, 189, 248, 0.5)';
+      ctx.lineWidth = 2 / camera.zoom;
+      ctx.beginPath();
+      ctx.moveTo(toolPoints[0].x, toolPoints[0].y);
+      ctx.lineTo(mp.x, mp.y);
+      ctx.stroke();
+      ctx.restore();
+    } else if (toolStep === 2) {
+      // Curved Preview
+      const p0 = toolPoints[0];
+      const p2 = toolPoints[1];
+      const p1 = mp; // Control point
+      ctx.save();
+      ctx.strokeStyle = '#38bdf8';
+      ctx.lineWidth = toolConfigs.curve.width;
+      ctx.beginPath();
+      ctx.moveTo(p0.x, p0.y);
+      ctx.quadraticCurveTo(p1.x, p1.y, p2.x, p2.y);
+      ctx.stroke();
+      ctx.restore();
+    }
+  }
+
+  else if (currentTool === 'lineBatch' && toolStep === 1) {
+    const p1 = toolPoints[0];
+    const p2 = mp;
+    const count = toolConfigs.lineBatch.count || 8;
+
+    ctx.save();
+    ctx.strokeStyle = 'rgba(56, 189, 248, 0.6)';
+    ctx.lineWidth = 2 / camera.zoom;
+    ctx.setLineDash([4 / camera.zoom, 4 / camera.zoom]);
+    ctx.beginPath();
+    ctx.moveTo(p1.x, p1.y);
+    ctx.lineTo(p2.x, p2.y);
+    ctx.stroke();
+
+    for (let i = 0; i < count; i++) {
+      const t = count === 1 ? 0.5 : i / (count - 1);
+      const px = p1.x + (p2.x - p1.x) * t;
+      const py = p1.y + (p2.y - p1.y) * t;
+      ctx.fillStyle = '#22c55e';
+      ctx.beginPath();
+      ctx.arc(px, py, 14, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  else if (currentTool === 'brushScatter') {
+    // Brush Circle
+    ctx.save();
+    ctx.strokeStyle = '#38bdf8';
+    ctx.lineWidth = 1.5 / camera.zoom;
+    ctx.setLineDash([4 / camera.zoom, 4 / camera.zoom]);
+    ctx.beginPath();
+    ctx.arc(mp.x, mp.y, toolConfigs.brushScatter.radius, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  else if (currentTool === 'building' && toolStep === 1) {
+    const p1 = toolPoints[0];
+    const bx = Math.min(p1.x, mp.x);
+    const by = Math.min(p1.y, mp.y);
+    const bw = Math.abs(mp.x - p1.x);
+    const bh = Math.abs(mp.y - p1.y);
+
+    ctx.save();
+    ctx.fillStyle = 'rgba(56, 189, 248, 0.3)';
+    ctx.fillRect(bx, by, bw, bh);
+    ctx.strokeStyle = '#38bdf8';
+    ctx.lineWidth = 2 / camera.zoom;
+    ctx.strokeRect(bx, by, bw, bh);
+    ctx.fillStyle = '#fff';
+    ctx.font = `${12 / camera.zoom}px sans-serif`;
+    ctx.fillText(`${Math.round(bw)} × ${Math.round(bh)}`, bx + bw / 2, by + bh / 2);
+    ctx.restore();
+  }
 }
 
-function deleteByIndex(layerKey, index) {
-  const arr = mapData[layerKey === 'sidewalks' ? 'sidewalks' : layerKey];
-  if (selectedEntity === arr[index]) selectEntity(null, null);
-  arr.splice(index, 1);
-  updateEntityList();
-  render();
-  toast('Удалено');
+// Render Handles and Bounding Boxes
+function renderTransformGizmos(ctx) {
+  if (selectedEntities.length === 0) return;
+  document.getElementById('stat-selected').textContent = selectedEntities.length;
+
+  selectedEntities.forEach(sel => {
+    const ent = sel.entity;
+    ctx.save();
+
+    if ('width' in ent && 'height' in ent) {
+      // Corner Resize Handles
+      const hs = 8 / camera.zoom;
+      ctx.fillStyle = '#38bdf8';
+      ctx.fillRect(ent.x - hs/2, ent.y - hs/2, hs, hs);
+      ctx.fillRect(ent.x + ent.width - hs/2, ent.y - hs/2, hs, hs);
+      ctx.fillRect(ent.x - hs/2, ent.y + ent.height - hs/2, hs, hs);
+      ctx.fillRect(ent.x + ent.width - hs/2, ent.y + ent.height - hs/2, hs, hs);
+    } else if ('x1' in ent) {
+      // Road Endpoints
+      const hs = 10 / camera.zoom;
+      ctx.fillStyle = '#38bdf8';
+      ctx.beginPath(); ctx.arc(ent.x1, ent.y1, hs/2, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(ent.x2, ent.y2, hs/2, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.restore();
+  });
+}
+
+// --- MINIMAP RENDERER ---
+function renderMinimap() {
+  if (!minimapCtx || !minimapCanvas) return;
+  const mw = minimapCanvas.width;
+  const mh = minimapCanvas.height;
+  const scale = mw / mapData.width;
+
+  minimapCtx.fillStyle = '#0f172a';
+  minimapCtx.fillRect(0, 0, mw, mh);
+
+  minimapCtx.fillStyle = '#475569';
+  (mapData.roads || []).forEach(r => {
+    minimapCtx.fillRect(r.x1 * scale, r.y1 * scale, Math.max(1, (r.x2 - r.x1) * scale), Math.max(1, r.width * scale));
+  });
+
+  minimapCtx.fillStyle = '#64748b';
+  (mapData.buildings || []).forEach(b => {
+    minimapCtx.fillRect(b.x * scale, b.y * scale, b.width * scale, b.height * scale);
+  });
+
+  // Camera viewport box on minimap
+  const cw = (canvas.width / camera.zoom) * scale;
+  const ch = (canvas.height / camera.zoom) * scale;
+  const cx = (camera.x * scale) - cw / 2;
+  const cy = (camera.y * scale) - ch / 2;
+  minimapCtx.strokeStyle = '#38bdf8';
+  minimapCtx.lineWidth = 1.5;
+  minimapCtx.strokeRect(cx, cy, cw, ch);
+}
+
+// --- INSPECTOR UI ---
+function updateInspector() {
+  const emptyView = document.getElementById('inspector-empty');
+  const contentView = document.getElementById('inspector-content');
+
+  if (selectedEntities.length === 0) {
+    emptyView.style.display = 'block';
+    contentView.style.display = 'none';
+    return;
+  }
+
+  emptyView.style.display = 'none';
+  contentView.style.display = 'flex';
+
+  if (selectedEntities.length > 1) {
+    contentView.innerHTML = `
+      <div class="prop-card">
+        <div style="font-weight:700;font-size:13px;color:var(--accent);">Множественный выбор</div>
+        <div style="font-size:12px;color:var(--text-muted);">Выбрано объектов: ${selectedEntities.length}</div>
+        <div class="prop-grid-2" style="margin-top:10px;">
+          <button class="btn danger" onclick="deleteSelected()">🗑️ Удалить все</button>
+          <button class="btn" onclick="duplicateSelected()">📑 Дублировать</button>
+        </div>
+      </div>
+    `;
+    return;
+  }
+
+  const sel = selectedEntities[0];
+  const e = sel.entity;
+  const layer = sel.layer;
+
+  let fieldsHtml = '';
+
+  if ('name' in e) {
+    fieldsHtml += `
+      <div class="prop-field">
+        <label>Имя:</label>
+        <input type="text" value="${e.name || ''}" oninput="updateEntityProp('name', this.value)">
+      </div>
+    `;
+  }
+  if ('x' in e && 'y' in e) {
+    fieldsHtml += `
+      <div class="prop-field">
+        <label>Координаты X, Y:</label>
+        <div class="prop-grid-2">
+          <input type="number" value="${Math.round(e.x)}" onchange="updateEntityProp('x', parseFloat(this.value))">
+          <input type="number" value="${Math.round(e.y)}" onchange="updateEntityProp('y', parseFloat(this.value))">
+        </div>
+      </div>
+    `;
+  }
+  if ('width' in e && 'height' in e) {
+    fieldsHtml += `
+      <div class="prop-field">
+        <label>Размеры W, H:</label>
+        <div class="prop-grid-2">
+          <input type="number" value="${Math.round(e.width)}" onchange="updateEntityProp('width', parseFloat(this.value))">
+          <input type="number" value="${Math.round(e.height)}" onchange="updateEntityProp('height', parseFloat(this.value))">
+        </div>
+      </div>
+    `;
+  }
+  if ('color' in e) {
+    fieldsHtml += `
+      <div class="prop-field">
+        <label>Основной цвет:</label>
+        <input type="color" value="${e.color || '#64748b'}" onchange="updateEntityProp('color', this.value)">
+      </div>
+    `;
+  }
+  if ('roofColor' in e) {
+    fieldsHtml += `
+      <div class="prop-field">
+        <label>Цвет крыши:</label>
+        <input type="color" value="${e.roofColor || '#334155'}" onchange="updateEntityProp('roofColor', this.value)">
+      </div>
+    `;
+  }
+  if ('lanes' in e) {
+    fieldsHtml += `
+      <div class="prop-field">
+        <label>Полос движения:</label>
+        <input type="number" min="1" max="8" value="${e.lanes}" onchange="updateEntityProp('lanes', parseInt(this.value))">
+      </div>
+    `;
+  }
+
+  contentView.innerHTML = `
+    <div class="prop-card">
+      <div style="font-weight:700;font-size:13px;color:var(--accent);">${layer.toUpperCase()}: ${e.id || ''}</div>
+      ${fieldsHtml}
+      <div class="prop-grid-2" style="margin-top:10px;">
+        <button class="btn danger" onclick="deleteSelected()">🗑️ Удалить</button>
+        <button class="btn" onclick="duplicateSelected()">📑 Дубликат</button>
+      </div>
+    </div>
+  `;
+}
+
+function updateEntityProp(prop, val) {
+  if (selectedEntities.length !== 1) return;
+  selectedEntities[0].entity[prop] = val;
+  pushHistory(`Edit ${prop}`);
 }
 
 function deleteSelected() {
-  if (!selectedEntity || !selectedLayer) return;
-  const arr = mapData[selectedLayer === 'sidewalks' ? 'sidewalks' : selectedLayer];
-  const idx = arr.indexOf(selectedEntity);
-  if (idx >= 0) arr.splice(idx, 1);
-  selectEntity(null, null);
-  render();
-  toast('Удалено');
+  if (selectedEntities.length === 0) return;
+  selectedEntities.forEach(sel => {
+    const list = mapData[sel.layer];
+    if (list) {
+      const idx = list.indexOf(sel.entity);
+      if (idx >= 0) list.splice(idx, 1);
+    }
+  });
+  selectedEntities = [];
+  pushHistory('Delete');
+  updateInspector();
+  renderOutliner();
+  updateFooterCounts();
+  showToast('Удалено');
 }
 
-function updatePropsPanel() {
-  const panel = document.getElementById('props-panel');
-  if (!selectedEntity) { panel.innerHTML = ''; return; }
+function duplicateSelected() {
+  if (selectedEntities.length === 0) return;
+  const newSelections = [];
 
-  const e = selectedEntity;
-  let html = `<h3>${selectedLayer}: ${e.id || e.type || e.name || ''}</h3>`;
+  selectedEntities.forEach(sel => {
+    const clone = JSON.parse(JSON.stringify(sel.entity));
+    clone.id = generateUniqueId(sel.layer);
+    if ('x' in clone) clone.x += 40;
+    if ('y' in clone) clone.y += 40;
+    if ('x1' in clone) { clone.x1 += 40; clone.x2 += 40; clone.y1 += 40; clone.y2 += 40; }
 
-  const editableFields = getEditableFields(e);
-  editableFields.forEach(f => {
-    const val = e[f.key];
-    if (val === undefined) return;
-    html += `<div class="prop-row">
-      <label>${f.label}</label>
-      ${f.type === 'color' ?
-        `<input type="color" value="${val}" onchange="updateProp('${f.key}', this.value)">` :
-      f.type === 'select' ?
-        `<select onchange="updateProp('${f.key}', this.value)">${f.options.map(o => `<option value="${o}" ${val === o ? 'selected' : ''}>${o}</option>`).join('')}</select>` :
-      f.type === 'number' ?
-        `<input type="number" value="${val}" step="${f.step || 1}" onchange="updateProp('${f.key}', parseFloat(this.value))">` :
-      f.type === 'boolean' ?
-        `<input type="checkbox" ${val ? 'checked' : ''} onchange="updateProp('${f.key}', this.checked)">` :
-        `<input type="text" value="${val}" onchange="updateProp('${f.key}', this.value)">`
-      }
-    </div>`;
+    const list = mapData[sel.layer];
+    if (list) {
+      list.push(clone);
+      newSelections.push({ entity: clone, layer: sel.layer });
+    }
   });
 
-  panel.innerHTML = html;
+  selectedEntities = newSelections;
+  pushHistory('Duplicate');
+  updateInspector();
+  renderOutliner();
+  updateFooterCounts();
+  showToast('Дублировано');
 }
 
-function getEditableFields(e) {
-  const fields = [];
-  const add = (key, label, type, extra) => fields.push({ key, label, type, ...extra });
+// --- OUTLINER / LIST RENDERING ---
+function renderOutliner() {
+  const listEl = document.getElementById('outliner-list');
+  if (!listEl) return;
 
-  if ('x' in e && 'y' in e) {
-    add('x', 'X', 'number', { step: 1 });
-    add('y', 'Y', 'number', { step: 1 });
-  }
-  if ('width' in e && 'height' in e) {
-    add('width', 'Ширина', 'number', { step: 1 });
-    add('height', 'Высота', 'number', { step: 1 });
-  }
+  const search = (document.getElementById('outliner-search')?.value || '').toLowerCase();
+  const filter = document.getElementById('outliner-layer-filter')?.value || 'all';
 
-  if (selectedLayer === 'roads') {
-    add('name', 'Имя', 'text');
-    add('lanes', 'Полосы', 'number', { step: 1 });
-    add('width', 'Ширина', 'number', { step: 1 });
-    add('direction', 'Направление', 'select', { options: ['horizontal', 'vertical'] });
-    add('isAvenue', 'Аллея', 'boolean');
-    add('isDirt', 'Грунтовка', 'boolean');
-    add('isGravel', 'Гравий', 'boolean');
-  }
-  if (selectedLayer === 'buildings') {
-    add('type', 'Тип', 'select', { options: ['office', 'residential', 'shop', 'suburban', 'industrial', 'park_monument', 'police_station', 'fire_station', 'hospital'] });
-    add('color', 'Цвет', 'color');
-    add('roofColor', 'Цвет крыши', 'color');
-    add('accentColor', 'Акцент', 'color');
-    add('entranceSide', 'Вход', 'select', { options: ['north', 'south', 'east', 'west'] });
-  }
-  if (selectedLayer === 'trees') {
-    add('radius', 'Радиус', 'number', { step: 1 });
-    add('color', 'Цвет', 'color');
-    add('shadowOffset', 'Тень', 'number', { step: 1 });
-  }
-  if (selectedLayer === 'props') {
-    add('type', 'Тип', 'select', { options: ['bench', 'lamp', 'hydrant', 'trash_can', 'bus_stop', 'cone', 'kiosk', 'mailbox', 'traffic_light', 'dumpster', 'flowerbed', 'bollard', 'manhole', 'drain_grate', 'tire_flowerbed', 'playground_swing', 'garage_door'] });
-    add('angle', 'Угол', 'number', { step: 0.1 });
-  }
-  if (selectedLayer === 'intersections') {
-    add('hasLights', 'Светофоры', 'boolean');
-    add('type', 'Тип', 'select', { options: ['4way', '3way_T_north', '3way_T_south', '3way_T_east', '3way_T_west'] });
-    add('isDirt', 'Грунтовка', 'boolean');
-  }
-  if (selectedLayer === 'sidewalks') {
-    add('sidewalkWidth', 'Ширина трот.', 'number', { step: 1 });
-    add('style', 'Стиль', 'select', { options: ['urban', 'commercial', 'village', 'park'] });
-    add('innerLawnColor', 'Цвет газона', 'color');
-  }
-  if (selectedLayer === 'parkings') {
-    add('width', 'Ширина', 'number', { step: 1 });
-    add('height', 'Высота', 'number', { step: 1 });
-  }
-
-  return fields;
-}
-
-function updateProp(key, value) {
-  if (!selectedEntity) return;
-  selectedEntity[key] = value;
-  updateEntityList();
-  render();
-}
-
-function updateStats() {
-  if (!mapData) { document.getElementById('stats').textContent = ''; return; }
-  const s = document.getElementById('stats');
-  s.textContent = `Дороги: ${mapData.roads.length} | Здания: ${mapData.buildings.length} | Перекрёстки: ${mapData.intersections.length} | Деревья: ${mapData.trees.length} | Объекты: ${mapData.props.length} | Парковки: ${(mapData.parkings||[]).length} | Тротуары: ${(mapData.sidewalks||[]).length}`;
-}
-
-function setTool(t) {
-  tool = t;
-  document.getElementById('tool-select').classList.toggle('active', t === 'select');
-  document.getElementById('tool-pan').classList.toggle('active', t === 'pan');
-  document.getElementById('tool-measure').classList.toggle('active', t === 'measure');
-  measureStart = null;
-  canvas.style.cursor = t === 'pan' ? 'grab' : t === 'measure' ? 'crosshair' : 'default';
-}
-
-function applyFilter() {
-  updateEntityList();
-  render();
-}
-
-function centerView() {
-  if (mapData) { camera.x = mapData.width / 2; camera.y = mapData.height / 2; }
-  camera.zoom = Math.min(canvas.width, canvas.height) / (mapData ? Math.max(mapData.width, mapData.height) * 1.2 : 8000);
-  render();
-}
-
-function toggleAddMenu() {
-  const menu = document.getElementById('add-menu');
-  if (menu.style.display === 'flex') { menu.style.display = 'none'; return; }
-
-  const items = [
-    { layer: 'roads', label: 'Дорога' },
-    { layer: 'buildings', label: 'Здание' },
-    { layer: 'trees', label: 'Дерево' },
-    { layer: 'props', label: 'Объект' },
-    { layer: 'sidewalks', label: 'Тротуар' },
-    { layer: 'parkings', label: 'Парковка' },
-    { layer: 'intersections', label: 'Перекрёсток' },
+  let html = '';
+  const layers = [
+    { key: 'roads', label: 'Дороги', items: mapData.roads },
+    { key: 'buildings', label: 'Здания', items: mapData.buildings },
+    { key: 'intersections', label: 'Перекрестки', items: mapData.intersections },
+    { key: 'trees', label: 'Деревья', items: mapData.trees },
+    { key: 'props', label: 'Объекты', items: mapData.props },
+    { key: 'sidewalks', label: 'Тротуары', items: mapData.sidewalks || [] },
+    { key: 'parkings', label: 'Парковки', items: mapData.parkings || [] }
   ];
 
-  menu.innerHTML = items.map(i =>
-    `<button onclick="addEntity('${i.layer}'); document.getElementById('add-menu').style.display='none'">${i.label}</button>`
-  ).join('');
-  menu.style.display = 'flex';
+  layers.forEach(l => {
+    if (filter !== 'all' && filter !== l.key) return;
+    if (!l.items || l.items.length === 0) return;
+
+    html += `<div class="layer-group-header"><span>${l.label} (${l.items.length})</span></div>`;
+
+    l.items.forEach(item => {
+      const title = item.name || item.type || item.id || 'Элемент';
+      if (search && !title.toLowerCase().includes(search) && !item.id.toLowerCase().includes(search)) return;
+
+      const isSel = selectedEntities.some(s => s.entity === item);
+      const coordStr = item.x !== undefined ? `${Math.round(item.x)}, ${Math.round(item.y)}` : `${Math.round(item.x1)}, ${Math.round(item.y1)}`;
+
+      html += `
+        <div class="entity-row ${isSel ? 'selected' : ''}" onclick="selectOutlinerEntity('${l.key}', '${item.id}')">
+          <span>${title}</span>
+          <span class="entity-meta">[${coordStr}]</span>
+        </div>
+      `;
+    });
+  });
+
+  listEl.innerHTML = html || '<div style="padding:20px;text-align:center;color:#64748b;">Ничего не найдено</div>';
 }
 
-function addEntity(layer) {
-  if (!mapData) return;
-  const cx = mouseWorld.x, cy = mouseWorld.y;
-  let entity;
-
-  switch (layer) {
-    case 'roads':
-      entity = { id: `road_${Date.now()}`, x1: cx - 400, y1: cy, x2: cx + 400, y2: cy, lanes: 2, width: 84, isAvenue: false, direction: 'horizontal', name: 'New Road', lanePaths: [] };
-      mapData.roads.push(entity);
-      break;
-    case 'buildings':
-      entity = { id: `bld_${Date.now()}`, x: cx - 80, y: cy - 60, width: 160, height: 120, type: 'office', color: '#667799', roofColor: '#334', accentColor: '#556', roofDetails: [], windows: [] };
-      mapData.buildings.push(entity);
-      break;
-    case 'trees':
-      entity = { id: `tree_${Date.now()}`, x: cx, y: cy, radius: 20, color: '#228833', shadowOffset: 5 };
-      mapData.trees.push(entity);
-      break;
-    case 'props':
-      entity = { id: `prop_${Date.now()}`, x: cx, y: cy, type: 'bench', angle: 0 };
-      mapData.props.push(entity);
-      break;
-    case 'sidewalks':
-      entity = { id: `sw_${Date.now()}`, x: cx - 200, y: cy - 200, width: 400, height: 400, sidewalkWidth: 32, style: 'urban' };
-      if (!mapData.sidewalks) mapData.sidewalks = [];
-      mapData.sidewalks.push(entity);
-      break;
-    case 'parkings':
-      entity = { id: `park_${Date.now()}`, x: cx - 100, y: cy - 60, width: 200, height: 120, spots: [] };
-      if (!mapData.parkings) mapData.parkings = [];
-      mapData.parkings.push(entity);
-      break;
-    case 'intersections':
-      entity = { id: `inter_${Date.now()}`, x: cx, y: cy, width: 84, height: 84, type: '4way', hasLights: true, currentPhaseIndex: 0, phaseTimer: 0, phases: [], stopLines: [], crosswalks: [] };
-      mapData.intersections.push(entity);
-      break;
-  }
-
-  if (entity) {
-    selectEntity(entity, layer);
-    toast(`Добавлено: ${layer}`);
+function selectOutlinerEntity(layerKey, id) {
+  const list = mapData[layerKey];
+  if (!list) return;
+  const item = list.find(it => it.id === id);
+  if (item) {
+    selectedEntities = [{ entity: item, layer: layerKey }];
+    // Move camera to entity
+    const cx = item.x !== undefined ? item.x : (item.x1 + item.x2) / 2;
+    const cy = item.y !== undefined ? item.y : (item.y1 + item.y2) / 2;
+    camera.x = cx;
+    camera.y = cy;
+    updateInspector();
+    renderOutliner();
   }
 }
 
-function loadFile() {
-  document.getElementById('file-input').click();
+// --- PRESETS ENGINE ---
+function insertPreset(name) {
+  const cx = camera.x;
+  const cy = camera.y;
+
+  if (name === 'residential_block') {
+    // 4 houses around a courtyard with trees, benches, parking
+    mapData.buildings.push(
+      { id: generateUniqueId('bld'), x: cx - 180, y: cy - 180, width: 120, height: 100, type: 'residential', color: '#64748b', roofColor: '#334155', accentColor: '#475569', entranceSide: 'south', roofDetails: [], windows: [] },
+      { id: generateUniqueId('bld'), x: cx + 60, y: cy - 180, width: 120, height: 100, type: 'residential', color: '#64748b', roofColor: '#334155', accentColor: '#475569', entranceSide: 'south', roofDetails: [], windows: [] },
+      { id: generateUniqueId('bld'), x: cx - 180, y: cy + 80, width: 120, height: 100, type: 'residential', color: '#64748b', roofColor: '#334155', accentColor: '#475569', entranceSide: 'north', roofDetails: [], windows: [] },
+      { id: generateUniqueId('bld'), x: cx + 60, y: cy + 80, width: 120, height: 100, type: 'residential', color: '#64748b', roofColor: '#334155', accentColor: '#475569', entranceSide: 'north', roofDetails: [], windows: [] }
+    );
+    // Trees and benches in center
+    mapData.trees.push(
+      { id: generateUniqueId('tree'), x: cx - 40, y: cy, radius: 24, color: '#16a34a', shadowOffset: 6 },
+      { id: generateUniqueId('tree'), x: cx + 40, y: cy, radius: 24, color: '#16a34a', shadowOffset: 6 }
+    );
+    mapData.props.push(
+      { id: generateUniqueId('prop'), x: cx, y: cy - 20, type: 'bench', angle: 0 },
+      { id: generateUniqueId('prop'), x: cx, y: cy + 20, type: 'bench', angle: Math.PI }
+    );
+    pushHistory('Insert Preset: Residential Block');
+    showToast('Шаблон "Жилой квартал" добавлен!');
+  } else if (name === 'park_fountain') {
+    mapData.props.push({ id: generateUniqueId('prop'), x: cx, y: cy, type: 'flowerbed', angle: 0 });
+    for (let a = 0; a < Math.PI * 2; a += Math.PI / 3) {
+      mapData.trees.push({
+        id: generateUniqueId('tree'),
+        x: cx + Math.cos(a) * 90,
+        y: cy + Math.sin(a) * 90,
+        radius: 22,
+        color: '#15803d',
+        shadowOffset: 6
+      });
+      mapData.props.push({
+        id: generateUniqueId('prop'),
+        x: cx + Math.cos(a) * 50,
+        y: cy + Math.sin(a) * 50,
+        type: 'bench',
+        angle: a + Math.PI / 2
+      });
+    }
+    pushHistory('Insert Preset: Park');
+    showToast('Парковая зона добавлена!');
+  }
+
+  updateFooterCounts();
 }
 
-function handleFile(event) {
-  const file = event.target.files[0];
+// --- FILE I/O ---
+function openLoadFileDialog() {
+  document.getElementById('file-loader').click();
+}
+
+function handleFileSelected(e) {
+  const file = e.target.files[0];
   if (!file) return;
   const reader = new FileReader();
-  reader.onload = (e) => {
+  reader.onload = (evt) => {
     try {
-      mapData = JSON.parse(e.target.result);
-      toast(`Загружено: ${file.name}`);
-      centerView();
-      updateEntityList();
-      render();
+      mapData = JSON.parse(evt.target.result);
+      pushHistory('Load JSON');
+      renderOutliner();
+      updateFooterCounts();
+      centerCamera();
+      showToast(`Карта "${file.name}" загружена!`);
     } catch (err) {
-      toast('Ошибка чтения JSON: ' + err.message);
+      alert('Ошибка чтения файла: ' + err.message);
     }
   };
   reader.readAsText(file);
-  event.target.value = '';
+  e.target.value = '';
 }
 
-function saveFile() {
-  if (!mapData) return;
-  const json = JSON.stringify(mapData);
-  const blob = new Blob([json], { type: 'application/json' });
+function saveToFile() {
+  const jsonStr = JSON.stringify(mapData, null, 2);
+  const blob = new Blob([jsonStr], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
   a.download = 'map.json';
   a.click();
   URL.revokeObjectURL(url);
-  toast('Файл сохранён');
+  showToast('Файл map.json скачан!');
 }
 
-function toast(msg) {
-  const t = document.getElementById('toast');
-  t.textContent = msg;
-  t.style.display = 'block';
-  setTimeout(() => t.style.display = 'none', 2000);
+function saveToLocalStorageAndPlay() {
+  try {
+    localStorage.setItem('neon_city_custom_map', JSON.stringify(mapData));
+    showToast('Сохранено в локальное хранилище игры! Переход в симулятор...');
+    setTimeout(() => {
+      window.location.href = '/';
+    }, 800);
+  } catch (err) {
+    alert('Карта слишком велика для localStorage, воспользуйтесь экспортом в map.json: ' + err.message);
+  }
 }
 
-// Mouse events
-canvas.addEventListener('mousedown', (e) => {
-  if (e.button === 1 || (e.button === 0 && (tool === 'pan' || e.shiftKey))) {
-    isPanning = true;
-    dragStart = { x: e.clientX, y: e.clientY };
-    cameraStart = { x: camera.x, y: camera.y };
-    canvas.style.cursor = 'grabbing';
-    return;
-  }
+// --- UTILITIES ---
+function switchTab(tabId) {
+  document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+  document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+  document.querySelector(`button[onclick="switchTab('${tabId}')"]`).classList.add('active');
+  document.getElementById(`tab-${tabId}`).classList.add('active');
+}
 
-  if (tool === 'measure') {
-    const wp = screenToWorld(e.offsetX, e.offsetY);
-    if (!measureStart) { measureStart = wp; }
-    else { measureStart = null; render(); }
-    return;
-  }
+function toggleSnapGrid() {
+  snapSettings.grid = !snapSettings.grid;
+  document.getElementById('snap-grid-btn').classList.toggle('active', snapSettings.grid);
+}
 
-  if (tool === 'select' && e.button === 0) {
-    const wp = screenToWorld(e.offsetX, e.offsetY);
-    const hit = hitTest(wp.x, wp.y);
-    if (hit) {
-      selectEntity(hit.entity, hit.layer);
-      isDragging = true;
-      dragStart = { x: wp.x, y: wp.y };
-    } else {
-      selectEntity(null, null);
-    }
-  }
-});
+function toggleSnapRoads() {
+  snapSettings.roads = !snapSettings.roads;
+  document.getElementById('snap-road-btn').classList.toggle('active', snapSettings.roads);
+}
 
-canvas.addEventListener('mousemove', (e) => {
-  const wp = screenToWorld(e.offsetX, e.offsetY);
-  mouseWorld = wp;
-  document.getElementById('coords-display').textContent = `${Math.round(wp.x)}, ${Math.round(wp.y)}`;
+function toggleSnapOrtho() {
+  snapSettings.ortho = !snapSettings.ortho;
+  document.getElementById('snap-ortho-btn').classList.toggle('active', snapSettings.ortho);
+}
 
-  if (isPanning) {
-    camera.x = cameraStart.x - (e.clientX - dragStart.x) / camera.zoom;
-    camera.y = cameraStart.y - (e.clientY - dragStart.y) / camera.zoom;
-    render();
-    return;
-  }
+function centerCamera() {
+  camera.x = mapData.width / 2;
+  camera.y = mapData.height / 2;
+  camera.zoom = Math.min(canvas.width, canvas.height) / (mapData.width * 1.1);
+  showToast('Камера центрирована');
+}
 
-  if (isDragging && selectedEntity) {
-    const dx = wp.x - dragStart.x;
-    const dy = wp.y - dragStart.y;
-    const e = selectedEntity;
-    if ('x1' in e && e.direction === 'horizontal') {
-      e.x1 += dx; e.x2 += dx; e.y1 += dy; e.y2 += dy;
-    } else if ('x1' in e && e.direction === 'vertical') {
-      e.x1 += dx; e.x2 += dx; e.y1 += dy; e.y2 += dy;
-    } else if ('x' in e && 'width' in e && selectedLayer !== 'intersections') {
-      e.x += dx; e.y += dy;
-    } else if ('x' in e && 'radius' in e) {
-      e.x += dx; e.y += dy;
-    }
-    dragStart = { x: wp.x, y: wp.y };
-    render();
-    updatePropsPanel();
-    updateEntityList();
-  }
+function showToast(msg) {
+  const toast = document.getElementById('toast');
+  if (!toast) return;
+  toast.textContent = msg;
+  toast.classList.add('show');
+  clearTimeout(toast._timer);
+  toast._timer = setTimeout(() => toast.classList.remove('show'), 2200);
+}
 
-  if (tool === 'measure' && measureStart) render();
-});
+function toggleHelpModal() {
+  const m = document.getElementById('help-modal');
+  m.style.display = m.style.display === 'flex' ? 'none' : 'flex';
+}
 
-canvas.addEventListener('mouseup', () => {
-  isPanning = false;
-  isDragging = false;
-  canvas.style.cursor = tool === 'pan' ? 'grab' : 'default';
-});
+function updateFooterCounts() {
+  const el = document.getElementById('footer-counts');
+  if (!el || !mapData) return;
+  el.textContent = `Дорог: ${mapData.roads.length} | Зданий: ${mapData.buildings.length} | Деревьев: ${mapData.trees.length} | Декора: ${mapData.props.length}`;
+}
 
-canvas.addEventListener('wheel', (e) => {
-  e.preventDefault();
-  const factor = e.deltaY > 0 ? 0.85 : 1.18;
-  const wp = screenToWorld(e.offsetX, e.offsetY);
-  camera.zoom *= factor;
-  camera.zoom = Math.max(0.01, Math.min(5, camera.zoom));
-  const wp2 = screenToWorld(e.offsetX, e.offsetY);
-  camera.x -= wp2.x - wp.x;
-  camera.y -= wp2.y - wp.y;
-  document.getElementById('zoom-display').textContent = `${camera.zoom.toFixed(2)}x`;
-  render();
-}, { passive: false });
-
-// Keyboard shortcuts
-document.addEventListener('keydown', (e) => {
+// --- GLOBAL KEYBOARD SHORTCUTS ---
+window.addEventListener('keydown', (e) => {
   if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
-  switch (e.key) {
-    case 'Delete': case 'Backspace': deleteSelected(); break;
-    case 'v': case 'м': setTool('select'); break;
-    case 'h': case 'р': setTool('pan'); break;
-    case 'm': case 'ь': setTool('measure'); break;
-    case 'Escape': selectEntity(null, null); document.getElementById('add-menu').style.display = 'none'; break;
-    case 'f': centerView(); break;
+
+  // Shortcuts
+  if (e.key === 'z' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); undo(); }
+  else if (e.key === 'y' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); redo(); }
+  else if (e.key === 'd' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); duplicateSelected(); }
+  else if (e.key === 'Delete' || e.key === 'Backspace') { deleteSelected(); }
+  else if (e.key === 'v' || e.key === 'м') { setTool('select'); }
+  else if (e.key === 'r' || e.key === 'к') { setTool('road2p'); }
+  else if (e.key === 'c' || e.key === 'с') { setTool('roadCurve'); }
+  else if (e.key === 'l' || e.key === 'д') { setTool('lineBatch'); }
+  else if (e.key === 'b' || e.key === 'и') { setTool('brushScatter'); }
+  else if (e.key === 'u' || e.key === 'г') { setTool('building'); }
+  else if (e.key === 't' || e.key === 'е') { setTool('tree'); }
+  else if (e.key === 'p' || e.key === 'з') { setTool('prop'); }
+  else if (e.key === 's' || e.key === 'ы') { setTool('sidewalk'); }
+  else if (e.key === 'k' || e.key === 'л') { setTool('parking'); }
+  else if (e.key === 'i' || e.key === 'ш') { setTool('intersection'); }
+  else if (e.key === 'm' || e.key === 'ь') { setTool('measure'); }
+  else if (e.key === 'f' || e.key === 'а') { centerCamera(); }
+  else if (e.key === 'Escape') {
+    selectedEntities = [];
+    toolStep = 0;
+    toolPoints = [];
+    updateInspector();
   }
 });
-
-window.addEventListener('resize', resize);
-resize();
 </script>
 </body>
 </html>

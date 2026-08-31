@@ -231,13 +231,13 @@ export function updateAITraffic(
   const activeAICars = world.vehicles.filter((v) => !v.isPlayerControlled && !v.isParked);
   const totalActiveCount = activeAICars.length;
 
-  // Maintain natural vehicle density around the player dynamically
+  // Maintain natural vehicle density around the player dynamically (balanced ~8-12 nearby, ~28 max active)
   const nearbyActiveCount = activeAICars.filter(
-    (v) => Math.hypot(v.x - targetPos.x, v.y - targetPos.y) < 1600
+    (v) => Math.hypot(v.x - targetPos.x, v.y - targetPos.y) < 1400
   ).length;
 
-  if (nearbyActiveCount < 30 && totalActiveCount < 70) {
-    const toSpawn = Math.min(3, 30 - nearbyActiveCount);
+  if (nearbyActiveCount < 10 && totalActiveCount < 28) {
+    const toSpawn = Math.min(1, 10 - nearbyActiveCount);
     for (let s = 0; s < toSpawn; s++) {
       spawnNewCarNearPlayer(targetPos, world);
     }
@@ -262,11 +262,11 @@ export function updateAITraffic(
           car.sirenOn = false;
           car.emergencyState = 'patrol';
         }
+      }
 
-        if (car.sirenOn) {
-          activeSirenCount++;
-          car.sirenStrobe = ((car.sirenStrobe || 0) + dt * 10) % (Math.PI * 2);
-        }
+      if (car.sirenOn) {
+        activeSirenCount++;
+        car.sirenStrobe = ((car.sirenStrobe || 0) + dt * 12) % (Math.PI * 2);
       }
     }
   }
@@ -306,8 +306,8 @@ export function updateAITraffic(
 
     // --- OPTIMIZATION: DESPAWN / RECYCLE DISTANT CARS ---
     const distToPlayer = Math.hypot(car.x - targetPos.x, car.y - targetPos.y);
-    if (distToPlayer > 1650) {
-      if (totalActiveCount > 40) {
+    if (distToPlayer > 1450) {
+      if (totalActiveCount > 28) {
         vehiclesToDespawn.push(car.id);
         continue;
       } else {
@@ -2124,7 +2124,33 @@ export function updatePedestrians(
       }
     }
 
-    // 5c. Slight wobbling / path variety
+    // 5c. Smooth Monument & Fountain Obstacle Avoidance (glide around circular basins)
+    const nearbyBldsForAvoidance = bldGrid ? bldGrid.queryRadius(ped.x, ped.y, 60) : world.buildings;
+    for (const bld of nearbyBldsForAvoidance) {
+      if (bld.type === 'park_monument') {
+        const cx = bld.x + bld.width / 2;
+        const cy = bld.y + bld.height / 2;
+        const fountainSafeR = bld.width / 2 + 10;
+        const dx = ped.x - cx;
+        const dy = ped.y - cy;
+        const dist = Math.hypot(dx, dy);
+        if (dist < fountainSafeR && dist > 0.001) {
+          const push = (1.0 - dist / fountainSafeR) * 60;
+          ped.vx += (dx / dist) * push;
+          ped.vy += (dy / dist) * push;
+
+          // Tangential glide around the perimeter
+          const perpX = -dy / dist;
+          const perpY = dx / dist;
+          const dot = ped.vx * perpX + ped.vy * perpY;
+          const sign = dot >= 0 ? 1 : -1;
+          ped.vx += perpX * sign * 25;
+          ped.vy += perpY * sign * 25;
+        }
+      }
+    }
+
+    // 5d. Slight wobbling / path variety
     if (ped.state === 'walking' || ped.state === 'crossing') {
       const wobble = Math.sin(ped.walkCycle * 0.5) * 5;
       const perpX = -Math.sin(ped.angle);
@@ -2295,21 +2321,30 @@ export function spawnNewCarNearPlayer(playerPos: Vector2D, world: GameWorld): bo
 
   const carTypes: CarType[] = [
     'sedan', 'hatchback', 'pickup', 'sports', 'suv', 'taxi', 'police', 
-    'bus', 'van', 'muscle', 'ambulance', 'truck_box', 'truck_dump', 
-    'truck_tanker', 'truck_flatbed', 'cement_mixer', 'garbage_truck'
+    'fire_engine', 'fire_ladder', 'fire_rescue',
+    'bus', 'bus_articulated', 'bus_minibus',
+    'van', 'muscle', 
+    'ambulance', 'ambulance_van', 'ambulance_suv',
+    'truck_box', 'truck_dump', 'truck_tanker', 'truck_water', 'truck_flatbed', 'cement_mixer', 'garbage_truck'
   ];
   const cType = carTypes[Math.floor(Math.random() * carTypes.length)];
   const cfg = CAR_CONFIGS[cType];
-  const color = cType === 'taxi' ? '#eab308' : 
-                (cType === 'police' ? '#0f172a' : 
-                (cType === 'ambulance' ? '#f8fafc' : 
-                (cType === 'garbage_truck' ? '#16a34a' : 
-                (cType === 'truck_dump' ? '#d97706' : 
-                (cType === 'cement_mixer' ? '#2563eb' : 
-                (cType === 'truck_box' ? '#3b82f6' : 
-                (cType === 'truck_tanker' ? '#0284c7' : 
-                CAR_PALETTE[Math.floor(Math.random() * CAR_PALETTE.length)])))))));
-  const roofColor = cType === 'police' || cType === 'ambulance' ? '#f8fafc' : color;
+  let color = CAR_PALETTE[Math.floor(Math.random() * CAR_PALETTE.length)];
+  if (cType === 'taxi') color = '#eab308';
+  else if (cType === 'police') color = '#0f172a';
+  else if (cType === 'fire_engine' || cType === 'fire_ladder' || cType === 'fire_rescue') color = '#dc2626';
+  else if (cType === 'bus' || cType === 'bus_articulated') color = '#eab308';
+  else if (cType === 'bus_minibus') color = '#f59e0b';
+  else if (cType === 'ambulance' || cType === 'ambulance_van' || cType === 'ambulance_suv') color = '#f8fafc';
+  else if (cType === 'garbage_truck') color = '#16a34a';
+  else if (cType === 'truck_dump') color = '#d97706';
+  else if (cType === 'cement_mixer') color = '#2563eb';
+  else if (cType === 'truck_box') color = '#0284c7';
+  else if (cType === 'truck_water') color = '#0284c7';
+  else if (cType === 'truck_tanker') color = '#0369a1';
+  else if (cType === 'truck_flatbed') color = '#475569';
+
+  const roofColor = (cType === 'police' || cType === 'ambulance' || cType === 'ambulance_van' || cType === 'ambulance_suv' || cType === 'fire_engine' || cType === 'fire_ladder' || cType === 'fire_rescue') ? '#f8fafc' : color;
 
   for (let attempts = 0; attempts < 15; attempts++) {
     const chosen = candidates[Math.floor(Math.random() * candidates.length)];

@@ -14,7 +14,9 @@ import {
   Check, 
   Info,
   Layers,
-  Compass
+  Compass,
+  MapPin,
+  Edit3
 } from 'lucide-react';
 
 export interface SaveSlot {
@@ -155,6 +157,23 @@ export const MainMenu: React.FC<MainMenuProps> = ({
               </div>
               <ChevronRight className="w-4 h-4 ml-auto text-slate-600 group-hover:text-white transition-colors" />
             </button>
+
+            {/* Map Editor Launch */}
+            <a
+              href="/editor.html"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="group flex items-center gap-4 px-5 py-3.5 bg-gradient-to-r from-sky-950/40 to-slate-800/60 hover:from-sky-900/60 hover:to-slate-800 border border-sky-800/40 hover:border-sky-500/60 rounded-xl transition-all active:scale-[0.99]"
+            >
+              <Edit3 className="w-5 h-5 text-sky-400 group-hover:scale-110 transition-transform" />
+              <div className="text-left">
+                <div className="font-bold text-sky-200 group-hover:text-white flex items-center gap-2">
+                  Редактор карты города <span className="text-[9px] bg-sky-500/20 text-sky-300 px-1.5 py-0.5 rounded uppercase font-extrabold tracking-wider">PRO</span>
+                </div>
+                <div className="text-[11px] text-slate-400">Создание дорог, кривых, зданий и расстановка объектов</div>
+              </div>
+              <ChevronRight className="w-4 h-4 ml-auto text-sky-500 group-hover:text-white transition-colors" />
+            </a>
 
             {/* Split row for Settings and Controls */}
             <div className="grid grid-cols-2 gap-3 mt-2">

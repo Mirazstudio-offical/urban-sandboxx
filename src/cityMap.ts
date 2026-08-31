@@ -209,7 +209,43 @@ export const CAR_CONFIGS: Record<CarType, CarConfig> = {
     minSteerAngle: 0.08,
     grip: 0.97,
     driftGrip: 0.28,
-    name: 'Пожарный автомобиль'
+    name: 'Пожарная автоцистерна'
+  },
+  fire_ladder: {
+    type: 'fire_ladder',
+    width: 30,
+    length: 86,
+    wheelBase: 54,
+    mass: 6400,
+    maxSpeed: 140,
+    reverseMaxSpeed: 38,
+    acceleration: 68,
+    brakingForce: 290,
+    friction: 0.983,
+    turnSpeed: 4.0,
+    maxSteerAngle: 1.18,
+    minSteerAngle: 0.08,
+    grip: 0.965,
+    driftGrip: 0.27,
+    name: 'Пожарная автолестница'
+  },
+  fire_rescue: {
+    type: 'fire_rescue',
+    width: 27,
+    length: 64,
+    wheelBase: 40,
+    mass: 4500,
+    maxSpeed: 160,
+    reverseMaxSpeed: 50,
+    acceleration: 88,
+    brakingForce: 285,
+    friction: 0.986,
+    turnSpeed: 4.2,
+    maxSteerAngle: 0.85,
+    minSteerAngle: 0.11,
+    grip: 0.975,
+    driftGrip: 0.32,
+    name: 'Пожарно-спасательный штаб'
   },
   bus: {
     type: 'bus',
@@ -228,6 +264,42 @@ export const CAR_CONFIGS: Record<CarType, CarConfig> = {
     grip: 0.97,
     driftGrip: 0.28,
     name: 'Городской автобус'
+  },
+  bus_articulated: {
+    type: 'bus_articulated',
+    width: 30,
+    length: 128,
+    wheelBase: 82,
+    mass: 11500,
+    maxSpeed: 105,
+    reverseMaxSpeed: 30,
+    acceleration: 50,
+    brakingForce: 280,
+    friction: 0.985,
+    turnSpeed: 3.8,
+    maxSteerAngle: 1.15,
+    minSteerAngle: 0.07,
+    grip: 0.965,
+    driftGrip: 0.25,
+    name: 'Сочленённый автобус «гармошка»'
+  },
+  bus_minibus: {
+    type: 'bus_minibus',
+    width: 21,
+    length: 42,
+    wheelBase: 26,
+    mass: 2100,
+    maxSpeed: 150,
+    reverseMaxSpeed: 55,
+    acceleration: 92,
+    brakingForce: 240,
+    friction: 0.986,
+    turnSpeed: 4.3,
+    maxSteerAngle: 0.76,
+    minSteerAngle: 0.13,
+    grip: 0.982,
+    driftGrip: 0.36,
+    name: 'Маршрутное такси (микроавтобус)'
   },
   van: {
     type: 'van',
@@ -283,6 +355,42 @@ export const CAR_CONFIGS: Record<CarType, CarConfig> = {
     driftGrip: 0.35,
     name: 'Скорая помощь'
   },
+  ambulance_van: {
+    type: 'ambulance_van',
+    width: 23,
+    length: 52,
+    wheelBase: 33,
+    mass: 2600,
+    maxSpeed: 170,
+    reverseMaxSpeed: 60,
+    acceleration: 108,
+    brakingForce: 280,
+    friction: 0.988,
+    turnSpeed: 4.0,
+    maxSteerAngle: 0.72,
+    minSteerAngle: 0.12,
+    grip: 0.985,
+    driftGrip: 0.35,
+    name: 'Реанимационный фургон'
+  },
+  ambulance_suv: {
+    type: 'ambulance_suv',
+    width: 21,
+    length: 46,
+    wheelBase: 28,
+    mass: 1950,
+    maxSpeed: 185,
+    reverseMaxSpeed: 70,
+    acceleration: 120,
+    brakingForce: 270,
+    friction: 0.988,
+    turnSpeed: 4.3,
+    maxSteerAngle: 0.74,
+    minSteerAngle: 0.13,
+    grip: 0.986,
+    driftGrip: 0.38,
+    name: 'Фельдшерский внедорожник'
+  },
   truck_box: {
     type: 'truck_box',
     width: 28,
@@ -306,18 +414,18 @@ export const CAR_CONFIGS: Record<CarType, CarConfig> = {
     width: 29,
     length: 78,
     wheelBase: 48,
-    mass: 5600,
+    mass: 5800,
     maxSpeed: 140,
     reverseMaxSpeed: 38,
-    acceleration: 68,
-    brakingForce: 285,
+    acceleration: 72,
+    brakingForce: 290,
     friction: 0.983,
     turnSpeed: 4.2,
     maxSteerAngle: 1.22,
     minSteerAngle: 0.08,
-    grip: 0.960,
+    grip: 0.965,
     driftGrip: 0.26,
-    name: 'Самосвал'
+    name: 'Карьерный самосвал'
   },
   truck_tanker: {
     type: 'truck_tanker',
@@ -336,6 +444,24 @@ export const CAR_CONFIGS: Record<CarType, CarConfig> = {
     grip: 0.955,
     driftGrip: 0.25,
     name: 'Автоцистерна'
+  },
+  truck_water: {
+    type: 'truck_water',
+    width: 27,
+    length: 68,
+    wheelBase: 42,
+    mass: 4600,
+    maxSpeed: 135,
+    reverseMaxSpeed: 38,
+    acceleration: 72,
+    brakingForce: 275,
+    friction: 0.984,
+    turnSpeed: 4.1,
+    maxSteerAngle: 1.10,
+    minSteerAngle: 0.09,
+    grip: 0.965,
+    driftGrip: 0.28,
+    name: 'Капотный водовоз «ВОДА»'
   },
   truck_flatbed: {
     type: 'truck_flatbed',
@@ -404,6 +530,9 @@ const PED_SHIRT_COLORS = ['#ef4444', '#3b82f6', '#10b981', '#f59e0b', '#8b5cf6',
 const PED_PANTS_COLORS = ['#1e293b', '#334155', '#1e3a8a', '#475569', '#78350f', '#0f172a', '#64748b', '#000000', '#f1f5f9', '#94a3b8'];
 const PED_HAIR_COLORS = ['#18181b', '#451a03', '#78350f', '#ca8a04', '#71717a', '#b45309', '#fef3c7', '#dc2626'];
 
+const JACKET_COLORS = ['#1e293b', '#334155', '#475569', '#78350f', '#0f172a', '#1e3a8a', '#14532d', '#701a75', '#312e81'];
+const INNER_SHIRT_COLORS = ['#ffffff', '#f8fafc', '#38bdf8', '#f43f5e', '#f59e0b', '#10b981', '#a855f7'];
+
 export function generateRandomPedestrianAppearance() {
   const gender = Math.random() < 0.5 ? 'male' : 'female';
   
@@ -412,27 +541,44 @@ export function generateRandomPedestrianAppearance() {
   if (ageRoll < 0.15) ageGroup = 'child';
   else if (ageRoll < 0.25) ageGroup = 'elderly';
   
-  const hairStylesMale = ['short', 'bald', 'spiky'];
-  const hairStylesFemale = ['short', 'long', 'bun', 'ponytail'];
-  const hairStyle = gender === 'male' ? hairStylesMale[Math.floor(Math.random() * hairStylesMale.length)] : hairStylesFemale[Math.floor(Math.random() * hairStylesFemale.length)];
+  const hairStylesMale = ['short', 'bald', 'spiky', 'curly', 'afro'];
+  const hairStylesFemale = ['short', 'long', 'bun', 'ponytail', 'curly', 'afro'];
+  const hairStyle = gender === 'male' 
+    ? hairStylesMale[Math.floor(Math.random() * hairStylesMale.length)] 
+    : hairStylesFemale[Math.floor(Math.random() * hairStylesFemale.length)];
   
-  const hasHat = Math.random() < 0.2;
-  const hatType = ['cap', 'beanie', 'sunhat'][Math.floor(Math.random() * 3)] as 'cap' | 'beanie' | 'sunhat';
+  const clothingTypes = ['tshirt', 'button_shirt', 'open_jacket', 'hoodie', 'suit', 'vest'];
+  if (gender === 'female') clothingTypes.push('dress');
+  const clothingType = clothingTypes[Math.floor(Math.random() * clothingTypes.length)] as 'tshirt' | 'button_shirt' | 'open_jacket' | 'hoodie' | 'dress' | 'suit' | 'vest';
+
+  const jacketColor = JACKET_COLORS[Math.floor(Math.random() * JACKET_COLORS.length)];
+  const innerShirtColor = INNER_SHIRT_COLORS[Math.floor(Math.random() * INNER_SHIRT_COLORS.length)];
+
+  const hasHat = Math.random() < 0.22;
+  const hatType = ['cap', 'beanie', 'sunhat', 'fedora'][Math.floor(Math.random() * 4)] as 'cap' | 'beanie' | 'sunhat' | 'fedora';
   
-  const handheldProps = ['phone', 'coffee', 'bag', 'box', null];
+  const hasGlasses = Math.random() < 0.25;
+  const hasHeadphones = Math.random() < 0.18;
+
+  const handheldProps = ['phone', 'coffee', 'bag', 'box', null, null];
   const handheldProp = handheldProps[Math.floor(Math.random() * handheldProps.length)] as 'phone' | 'coffee' | 'bag' | 'box' | null;
 
   return {
     gender: gender as 'male' | 'female',
     ageGroup,
+    clothingType,
+    jacketColor,
+    innerShirtColor,
     skinColor: PED_SKIN_COLORS[Math.floor(Math.random() * PED_SKIN_COLORS.length)],
     shirtColor: PED_SHIRT_COLORS[Math.floor(Math.random() * PED_SHIRT_COLORS.length)],
     pantsColor: PED_PANTS_COLORS[Math.floor(Math.random() * PED_PANTS_COLORS.length)],
     hairColor: PED_HAIR_COLORS[Math.floor(Math.random() * PED_HAIR_COLORS.length)],
-    hairStyle: hairStyle as 'short' | 'long' | 'bald' | 'bun' | 'spiky' | 'ponytail',
+    hairStyle: hairStyle as 'short' | 'long' | 'bald' | 'bun' | 'spiky' | 'ponytail' | 'curly' | 'afro',
     hasHat,
     hatColor: PED_SHIRT_COLORS[Math.floor(Math.random() * PED_SHIRT_COLORS.length)],
     hatType,
+    hasGlasses,
+    hasHeadphones,
     handheldProp,
     propColor: PED_SHIRT_COLORS[Math.floor(Math.random() * PED_SHIRT_COLORS.length)],
     hasDroppedProp: false
@@ -1271,8 +1417,7 @@ export function generateCityWorld(): GameWorld {
     }
   }
 
-  // 3. GENERATE SIDEWALK WALKWAYS & BUILDINGS WITHIN BLOCKS
-  // 3. GENERATE SIDEWALK WALKWAYS, PARKING PLAZAS & BUILDINGS WITHIN BLOCKS
+  // 3. GENERATE SIDEWALK WALKWAYS, PARKING PLAZAS, REALISTIC COURTYARDS & BUILDINGS WITHIN BLOCKS
   const allXBounds = [0, ...vertRoadXs, WORLD_SIZE];
   const allYBounds = [0, ...horizRoadYs, WORLD_SIZE];
 
@@ -1299,45 +1444,44 @@ export function generateCityWorld(): GameWorld {
       const isForest = bx < 3 && by < 3;
       const isVillage = bx >= 6 && by >= 6;
       const isCentralPark = bx === 5 && by === 3;
-      const isCommercial = bx >= 3 && bx <= 6 && by >= 2 && by <= 5;
-      const isDedicatedParking = (bx === 4 && by === 2) || (bx === 6 && by === 4) || (bx === 3 && by === 5) || (bx === 2 && by === 7) || (bx === 5 && by === 4);
+      const isAutoCenter = bx === 4 && by === 2;
+      const isPoliceStation = bx === 3 && by === 1;
+      const isHospital = bx === 4 && by === 1;
+      const isFireStation = bx === 5 && by === 1;
+      const isIndustrial = (bx < 3 && by >= 6) || (bx >= 7 && by < 4);
+      const isCommercialDowntown = (bx === 4 && by === 3) || (bx === 5 && by === 4) || (bx === 6 && by === 3) || (bx === 6 && by === 4) || (bx === 3 && by === 2);
       const isCourtyardBlock = (bx === 2 && by === 3) || (bx === 3 && by === 3) || (bx === 4 && by === 4) || 
-                               (bx === 5 && by === 5) || (bx === 3 && by === 6) || (bx === 6 && by === 3) || 
-                               (bx === 4 && by === 6) || (bx === 5 && by === 2);
+                               (bx === 5 && by === 5) || (bx === 3 && by === 5) || (bx === 5 && by === 2) || 
+                               (bx === 2 && by === 4) || (bx === 3 && by === 4) || (bx === 4 && by === 5) || 
+                               (bx === 2 && by === 6) || (bx === 3 && by === 6) || (bx === 4 && by === 6) || 
+                               (bx === 5 && by === 6);
 
       let swStyle: SidewalkBlock['style'] = 'urban';
       if (isForest) swStyle = 'park';
       else if (isVillage) swStyle = 'village';
       else if (isCentralPark) swStyle = 'park';
-      else if (isCommercial) swStyle = 'commercial';
+      else if (isCommercialDowntown || isAutoCenter) swStyle = 'commercial';
 
-      // Register Sidewalk geometry for this block (only outside forest zone)
+      const blockWalkways: SidewalkBlock['walkways'] = [];
+      const blockPlazas: SidewalkBlock['plazas'] = [];
+      const driveways: SidewalkBlock['driveways'] = [];
+
+      // Configure block driveways
+      if (isAutoCenter) {
+        driveways.push({ side: 'south', offset: Math.floor(blockW - 140), width: 60 });
+        driveways.push({ side: 'west', offset: Math.floor(blockH - 140), width: 60 });
+      } else if (isCourtyardBlock) {
+        driveways.push({ side: 'south', offset: Math.floor(blockW - 120), width: 60 });
+        driveways.push({ side: 'east', offset: Math.floor(blockH - 120), width: 60 });
+      } else if (isPoliceStation || isHospital || isFireStation) {
+        driveways.push({ side: 'south', offset: Math.floor(blockW / 2 - 30), width: 60 });
+      } else if (isIndustrial) {
+        driveways.push({ side: 'north', offset: 80, width: 70 });
+        driveways.push({ side: 'south', offset: Math.floor(blockW - 150), width: 70 });
+      }
+
+      // 1. Register outer perimeter Sidewalk block geometry
       if (!isForest) {
-        const driveways: SidewalkBlock['driveways'] = [];
-        if (isDedicatedParking) {
-          driveways.push({
-            side: 'north',
-            offset: Math.floor(blockW / 2 - 20),
-            width: 40
-          });
-          driveways.push({
-            side: 'south',
-            offset: Math.floor(blockW / 2 - 20),
-            width: 40
-          });
-        } else if (isCourtyardBlock) {
-          driveways.push({
-            side: 'south',
-            offset: Math.floor(blockW - 100),
-            width: 50
-          });
-          driveways.push({
-            side: 'east',
-            offset: Math.floor(blockH - 100),
-            width: 50
-          });
-        }
-
         sidewalks.push({
           id: `sidewalk_${bx}_${by}`,
           x: blockX,
@@ -1346,32 +1490,70 @@ export function generateCityWorld(): GameWorld {
           height: blockH,
           sidewalkWidth,
           style: swStyle,
-          innerLawnColor: isForest ? '#14532d' : (isVillage ? '#16a34a' : '#15803d'),
-          driveways
+          innerLawnColor: isVillage ? '#16a34a' : '#15803d',
+          driveways,
+          walkways: blockWalkways,
+          plazas: blockPlazas
         });
 
-        // Pedestrian navigation path runs down the centerline of the paved sidewalk corridor
+        // Outer perimeter pedestrian navigation path
         const swWalkCenter = sidewalkWidth / 2;
-        const swX1 = blockX + swWalkCenter;
-        const swY1 = blockY + swWalkCenter;
-        const swX2 = blockX + blockW - swWalkCenter;
-        const swY2 = blockY + blockH - swWalkCenter;
-
         pedestrianPaths.push({
           id: `sidewalk_block_${bx}_${by}`,
           waypoints: [
-            { x: swX1, y: swY1 },
-            { x: swX2, y: swY1 },
-            { x: swX2, y: swY2 },
-            { x: swX1, y: swY2 },
-            { x: swX1, y: swY1 }
+            { x: blockX + swWalkCenter, y: blockY + swWalkCenter },
+            { x: blockX + blockW - swWalkCenter, y: blockY + swWalkCenter },
+            { x: blockX + blockW - swWalkCenter, y: blockY + blockH - swWalkCenter },
+            { x: blockX + swWalkCenter, y: blockY + blockH - swWalkCenter },
+            { x: blockX + swWalkCenter, y: blockY + swWalkCenter }
           ]
         });
       }
 
+      // Add regular street lamps and perimeter sidewalk amenities (ensuring clear driveway margins)
+      if (!isForest) {
+        const lampSpacing = 95;
+        // North edge lamps
+        for (let lx = blockX + 45; lx < blockX + blockW - 40; lx += lampSpacing) {
+          props.push({ id: `lamp_n_${bx}_${by}_${lx.toFixed(0)}`, x: lx, y: blockY + sidewalkWidth / 2, type: 'lamp', angle: 0 });
+        }
+        // South edge lamps (skip driveway corridor)
+        for (let lx = blockX + 45; lx < blockX + blockW - 40; lx += lampSpacing) {
+          const isNearDriveway = driveways.some(d => d.side === 'south' && Math.abs(lx - (blockX + d.offset + d.width / 2)) < 55);
+          if (!isNearDriveway) {
+            props.push({ id: `lamp_s_${bx}_${by}_${lx.toFixed(0)}`, x: lx, y: blockY + blockH - sidewalkWidth / 2, type: 'lamp', angle: 0 });
+          }
+        }
+        // West edge lamps
+        for (let ly = blockY + 55; ly < blockY + blockH - 50; ly += lampSpacing) {
+          const isNearDriveway = driveways.some(d => d.side === 'west' && Math.abs(ly - (blockY + d.offset + d.width / 2)) < 55);
+          if (!isNearDriveway) {
+            props.push({ id: `lamp_w_${bx}_${by}_${ly.toFixed(0)}`, x: blockX + sidewalkWidth / 2, y: ly, type: 'lamp', angle: Math.PI / 2 });
+          }
+        }
+        // East edge lamps
+        for (let ly = blockY + 55; ly < blockY + blockH - 50; ly += lampSpacing) {
+          const isNearDriveway = driveways.some(d => d.side === 'east' && Math.abs(ly - (blockY + d.offset + d.width / 2)) < 55);
+          if (!isNearDriveway) {
+            props.push({ id: `lamp_e_${bx}_${by}_${ly.toFixed(0)}`, x: blockX + blockW - sidewalkWidth / 2, y: ly, type: 'lamp', angle: -Math.PI / 2 });
+          }
+        }
+
+        // Sidewalk resting benches (with trash cans) along outer sidewalks
+        if (blockW > 200) {
+          props.push(
+            { id: `sw_bench_${bx}_${by}_n`, x: blockX + 80, y: blockY + sidewalkWidth / 2, type: 'bench', angle: 0 },
+            { id: `sw_urn_${bx}_${by}_n`, x: blockX + 96, y: blockY + sidewalkWidth / 2, type: 'trash_can', angle: 0 },
+            { id: `sw_bench_${bx}_${by}_s`, x: blockX + 80, y: blockY + blockH - sidewalkWidth / 2, type: 'bench', angle: Math.PI },
+            { id: `sw_urn_${bx}_${by}_s`, x: blockX + 96, y: blockY + blockH - sidewalkWidth / 2, type: 'trash_can', angle: Math.PI }
+          );
+        }
+      }
+
+      // =========================================================================
       // --- 1. FOREST ZONE (North-West) ---
+      // =========================================================================
       if (isForest) {
-        // Populated with natural tree canopies, ponds, and clearings
         const treeSpacing = 44;
         for (let tx = blockX + 20; tx < blockX + blockW - 20; tx += treeSpacing) {
           for (let ty = blockY + 20; ty < blockY + blockH - 20; ty += treeSpacing) {
@@ -1397,7 +1579,9 @@ export function generateCityWorld(): GameWorld {
           const clY = blockY + blockH / 2;
           props.push(
             { id: `forest_bench_${bx}_${by}_1`, x: clX - 25, y: clY - 20, type: 'bench', angle: 0 },
-            { id: `forest_bench_${bx}_${by}_2`, x: clX + 25, y: clY + 20, type: 'bench', angle: Math.PI }
+            { id: `forest_urn_${bx}_${by}_1`, x: clX - 40, y: clY - 20, type: 'trash_can', angle: 0 },
+            { id: `forest_bench_${bx}_${by}_2`, x: clX + 25, y: clY + 20, type: 'bench', angle: Math.PI },
+            { id: `forest_urn_${bx}_${by}_2`, x: clX + 40, y: clY + 20, type: 'trash_can', angle: Math.PI }
           );
         }
 
@@ -1418,33 +1602,61 @@ export function generateCityWorld(): GameWorld {
         continue;
       }
 
-      // --- 2. CENTRAL PARK PROMENADE ---
+      // =========================================================================
+      // --- 2. CENTRAL PARK PROMENADE (NO CARS, COMPLETE PAVED WALKWAY NETWORK) ---
+      // =========================================================================
       if (isCentralPark) {
         const cx = blockX + blockW / 2;
         const cy = blockY + blockH / 2;
 
+        // Paved Central Fountain Plaza
+        blockPlazas.push(
+          { x: cx - 75, y: cy - 75, width: 150, height: 150, shape: 'circle', style: 'tile' },
+          { x: cx - 40, y: blockY + sidewalkWidth, width: 80, height: 35, shape: 'rect', style: 'stone' },
+          { x: cx - 40, y: blockY + blockH - sidewalkWidth - 35, width: 80, height: 35, shape: 'rect', style: 'stone' },
+          { x: blockX + sidewalkWidth, y: cy - 40, width: 35, height: 80, shape: 'rect', style: 'stone' },
+          { x: blockX + blockW - sidewalkWidth - 35, y: cy - 40, width: 35, height: 80, shape: 'rect', style: 'stone' }
+        );
+
+        // Paved Axial Promenades (Connecting all entrances to central fountain)
+        blockWalkways.push(
+          // North-South Central Promenade
+          { x: cx - 18, y: blockY + sidewalkWidth, width: 36, height: blockH - sidewalkWidth * 2, style: 'stone' },
+          // East-West Central Promenade
+          { x: blockX + sidewalkWidth, y: cy - 18, width: blockW - sidewalkWidth * 2, height: 36, style: 'stone' },
+          // Diagonal garden paths
+          { x: blockX + 60, y: blockY + 60, width: 120, height: 20, style: 'stone' },
+          { x: blockX + blockW - 180, y: blockY + 60, width: 120, height: 20, style: 'stone' },
+          { x: blockX + 60, y: blockY + blockH - 80, width: 120, height: 20, style: 'stone' },
+          { x: blockX + blockW - 180, y: blockY + blockH - 80, width: 120, height: 20, style: 'stone' }
+        );
+
+        // Grand Central Park Fountain
         buildings.push({
           id: `park_fountain_${bx}_${by}`,
-          x: cx - 40,
-          y: cy - 40,
-          width: 80,
-          height: 80,
+          x: cx - 38,
+          y: cy - 38,
+          width: 76,
+          height: 76,
           type: 'park_monument',
           color: '#38bdf8',
           roofColor: '#0284c7',
           accentColor: '#e0f2fe',
-          roofDetails: [{ type: 'pool', rx: 0.1, ry: 0.1, rw: 0.8, rh: 0.8 }],
+          roofDetails: [{ type: 'pool', rx: 0.12, ry: 0.12, rw: 0.76, rh: 0.76 }],
           windows: []
         });
 
-        // Lush park greenery & pathways
-        for (let tx = blockX + 45; tx < blockX + blockW - 45; tx += 55) {
-          for (let ty = blockY + 45; ty < blockY + blockH - 45; ty += 55) {
-            if (Math.hypot(tx - cx, ty - cy) > 70 && Math.random() > 0.25) {
+        // Lush trees planted strictly on garden lawn areas (away from promenades)
+        for (let tx = blockX + 50; tx < blockX + blockW - 50; tx += 60) {
+          for (let ty = blockY + 50; ty < blockY + blockH - 50; ty += 60) {
+            const distCenter = Math.hypot(tx - cx, ty - cy);
+            const isAxialX = Math.abs(tx - cx) < 35;
+            const isAxialY = Math.abs(ty - cy) < 35;
+            if (distCenter > 85 && !isAxialX && !isAxialY && Math.random() > 0.2) {
               trees.push({
-                id: `tree_${tx}_${ty}`,
-                x: tx + (Math.random() * 14 - 7),
-                y: ty + (Math.random() * 14 - 7),
+                id: `park_tree_${tx}_${ty}`,
+                x: tx + (Math.random() * 12 - 6),
+                y: ty + (Math.random() * 12 - 6),
                 radius: 14 + Math.random() * 10,
                 color: Math.random() > 0.5 ? '#15803d' : '#166534',
                 shadowOffset: 6
@@ -1453,128 +1665,341 @@ export function generateCityWorld(): GameWorld {
           }
         }
 
-        // Promenade benches, stainless trash urns, flowerbeds, and lighting
+        // Benches, Trash Cans, Flowerbeds & Street Lamps strictly along the paved promenades
+        // Central Fountain circular perimeter benches
         props.push(
-          // Fountain square seating & amenities
-          { id: `bench_${bx}_${by}_1`, x: cx - 85, y: cy - 20, type: 'bench', angle: 0 },
-          { id: `urn_${bx}_${by}_1`, x: cx - 85, y: cy - 35, type: 'trash_can', angle: 0 },
-          { id: `flower_${bx}_${by}_1`, x: cx - 85, y: cy + 15, type: 'flowerbed', angle: 0 },
+          { id: `pk_bench_c1`, x: cx - 85, y: cy - 20, type: 'bench', angle: 0 },
+          { id: `pk_urn_c1`, x: cx - 85, y: cy - 36, type: 'trash_can', angle: 0 },
+          { id: `pk_fl_c1`, x: cx - 85, y: cy + 18, type: 'flowerbed', angle: 0 },
 
-          { id: `bench_${bx}_${by}_2`, x: cx + 85, y: cy - 20, type: 'bench', angle: Math.PI },
-          { id: `urn_${bx}_${by}_2`, x: cx + 85, y: cy - 35, type: 'trash_can', angle: Math.PI },
-          { id: `flower_${bx}_${by}_2`, x: cx + 85, y: cy + 15, type: 'flowerbed', angle: 0 },
+          { id: `pk_bench_c2`, x: cx + 85, y: cy - 20, type: 'bench', angle: Math.PI },
+          { id: `pk_urn_c2`, x: cx + 85, y: cy - 36, type: 'trash_can', angle: Math.PI },
+          { id: `pk_fl_c2`, x: cx + 85, y: cy + 18, type: 'flowerbed', angle: 0 },
 
-          { id: `bench_${bx}_${by}_3`, x: cx - 20, y: cy - 85, type: 'bench', angle: Math.PI / 2 },
-          { id: `urn_${bx}_${by}_3`, x: cx - 35, y: cy - 85, type: 'trash_can', angle: Math.PI / 2 },
-          { id: `flower_${bx}_${by}_3`, x: cx + 20, y: cy - 85, type: 'flowerbed', angle: 0 },
+          { id: `pk_bench_c3`, x: cx - 20, y: cy - 85, type: 'bench', angle: Math.PI / 2 },
+          { id: `pk_urn_c3`, x: cx - 36, y: cy - 85, type: 'trash_can', angle: Math.PI / 2 },
+          { id: `pk_fl_c3`, x: cx + 18, y: cy - 85, type: 'flowerbed', angle: 0 },
 
-          { id: `bench_${bx}_${by}_4`, x: cx - 20, y: cy + 85, type: 'bench', angle: -Math.PI / 2 },
-          { id: `urn_${bx}_${by}_4`, x: cx - 35, y: cy + 85, type: 'trash_can', angle: -Math.PI / 2 },
-          { id: `flower_${bx}_${by}_4`, x: cx + 20, y: cy + 85, type: 'flowerbed', angle: 0 },
+          { id: `pk_bench_c4`, x: cx - 20, y: cy + 85, type: 'bench', angle: -Math.PI / 2 },
+          { id: `pk_urn_c4`, x: cx - 36, y: cy + 85, type: 'trash_can', angle: -Math.PI / 2 },
+          { id: `pk_fl_c4`, x: cx + 18, y: cy + 85, type: 'flowerbed', angle: 0 },
 
-          // Park perimeter walkways
-          { id: `bench_${bx}_${by}_5`, x: blockX + 70, y: blockY + 50, type: 'bench', angle: 0 },
-          { id: `urn_${bx}_${by}_5`, x: blockX + 70, y: blockY + 36, type: 'trash_can', angle: 0 },
-          { id: `bench_${bx}_${by}_6`, x: blockX + blockW - 70, y: blockY + 50, type: 'bench', angle: Math.PI },
-          { id: `urn_${bx}_${by}_6`, x: blockX + blockW - 70, y: blockY + 36, type: 'trash_can', angle: Math.PI },
+          // North Promenade Walkway Benches & Lamps
+          { id: `pk_bench_n1`, x: cx - 26, y: cy - 140, type: 'bench', angle: 0 },
+          { id: `pk_urn_n1`, x: cx - 26, y: cy - 156, type: 'trash_can', angle: 0 },
+          { id: `pk_lamp_n1`, x: cx + 24, y: cy - 140, type: 'lamp', angle: 0 },
 
-          { id: `bench_${bx}_${by}_7`, x: blockX + 70, y: blockY + blockH - 50, type: 'bench', angle: 0 },
-          { id: `urn_${bx}_${by}_7`, x: blockX + 70, y: blockY + blockH - 36, type: 'trash_can', angle: 0 },
-          { id: `bench_${bx}_${by}_8`, x: blockX + blockW - 70, y: blockY + blockH - 50, type: 'bench', angle: Math.PI },
-          { id: `urn_${bx}_${by}_8`, x: blockX + blockW - 70, y: blockY + blockH - 36, type: 'trash_can', angle: Math.PI },
+          // South Promenade Walkway Benches & Lamps
+          { id: `pk_bench_s1`, x: cx - 26, y: cy + 140, type: 'bench', angle: 0 },
+          { id: `pk_urn_s1`, x: cx - 26, y: cy + 156, type: 'trash_can', angle: 0 },
+          { id: `pk_lamp_s1`, x: cx + 24, y: cy + 140, type: 'lamp', angle: 0 },
 
-          // Illumination and kiosks
-          { id: `lamp_${bx}_${by}_1`, x: cx - 70, y: cy - 70, type: 'lamp', angle: 0 },
-          { id: `lamp_${bx}_${by}_2`, x: cx + 70, y: cy + 70, type: 'lamp', angle: 0 },
-          { id: `lamp_${bx}_${by}_3`, x: cx + 70, y: cy - 70, type: 'lamp', angle: 0 },
-          { id: `lamp_${bx}_${by}_4`, x: cx - 70, y: cy + 70, type: 'lamp', angle: 0 },
-          { id: `hydrant_${bx}_${by}_park`, x: cx - 110, y: cy - 30, type: 'hydrant', angle: 0 },
-          { id: `kiosk_${bx}_${by}_park`, x: cx + 110, y: cy - 30, type: 'kiosk', angle: 0 }
+          // West Promenade Walkway Benches & Lamps
+          { id: `pk_bench_w1`, x: cx - 140, y: cy - 26, type: 'bench', angle: Math.PI / 2 },
+          { id: `pk_urn_w1`, x: cx - 156, y: cy - 26, type: 'trash_can', angle: Math.PI / 2 },
+          { id: `pk_lamp_w1`, x: cx - 140, y: cy + 24, type: 'lamp', angle: 0 },
+
+          // East Promenade Walkway Benches & Lamps
+          { id: `pk_bench_e1`, x: cx + 140, y: cy - 26, type: 'bench', angle: -Math.PI / 2 },
+          { id: `pk_urn_e1`, x: cx + 156, y: cy - 26, type: 'trash_can', angle: -Math.PI / 2 },
+          { id: `pk_lamp_e1`, x: cx + 140, y: cy + 24, type: 'lamp', angle: 0 },
+
+          // Park Kiosks & Amenities on entry plazas
+          { id: `pk_kiosk_cafe`, x: cx + 55, y: blockY + sidewalkWidth + 18, type: 'kiosk', angle: Math.PI },
+          { id: `pk_kiosk_icecream`, x: blockX + sidewalkWidth + 18, y: cy + 55, type: 'kiosk', angle: -Math.PI / 2 }
         );
+
+        // Pedestrian navigation routes along the paved promenades (circling safely around the central fountain)
+        pedestrianPaths.push(
+          // North-South Promenade Route with Fountain Bypass
+          {
+            id: `park_path_ns_${bx}_${by}`,
+            waypoints: [
+              { x: cx, y: blockY + sidewalkWidth },
+              { x: cx, y: cy - 58 },
+              { x: cx + 41, y: cy - 41 },
+              { x: cx + 58, y: cy },
+              { x: cx + 41, y: cy + 41 },
+              { x: cx, y: cy + 58 },
+              { x: cx, y: blockY + blockH - sidewalkWidth },
+              { x: cx, y: cy + 58 },
+              { x: cx - 41, y: cy + 41 },
+              { x: cx - 58, y: cy },
+              { x: cx - 41, y: cy - 41 },
+              { x: cx, y: cy - 58 }
+            ]
+          },
+          // East-West Promenade Route with Fountain Bypass
+          {
+            id: `park_path_ew_${bx}_${by}`,
+            waypoints: [
+              { x: blockX + sidewalkWidth, y: cy },
+              { x: cx - 58, y: cy },
+              { x: cx - 41, y: cy + 41 },
+              { x: cx, y: cy + 58 },
+              { x: cx + 41, y: cy + 41 },
+              { x: cx + 58, y: cy },
+              { x: blockX + blockW - sidewalkWidth, y: cy },
+              { x: cx + 58, y: cy },
+              { x: cx + 41, y: cy - 41 },
+              { x: cx, y: cy - 58 },
+              { x: cx - 41, y: cy - 41 },
+              { x: cx - 58, y: cy }
+            ]
+          },
+          // Central Fountain Circular Plaza Ring Walkway
+          {
+            id: `park_path_ring_${bx}_${by}`,
+            waypoints: [
+              { x: cx, y: cy - 58 },
+              { x: cx + 41, y: cy - 41 },
+              { x: cx + 58, y: cy },
+              { x: cx + 41, y: cy + 41 },
+              { x: cx, y: cy + 58 },
+              { x: cx - 41, y: cy + 41 },
+              { x: cx - 58, y: cy },
+              { x: cx - 41, y: cy - 41 }
+            ]
+          },
+          // Diagonal Garden Promenade NW to SE
+          {
+            id: `park_path_diag1_${bx}_${by}`,
+            waypoints: [
+              { x: blockX + 70, y: blockY + 70 },
+              { x: cx - 41, y: cy - 41 },
+              { x: cx, y: cy - 58 },
+              { x: cx + 41, y: cy - 41 },
+              { x: cx + 58, y: cy },
+              { x: cx + 41, y: cy + 41 },
+              { x: blockX + blockW - 70, y: blockY + blockH - 70 }
+            ]
+          },
+          // Diagonal Garden Promenade NE to SW
+          {
+            id: `park_path_diag2_${bx}_${by}`,
+            waypoints: [
+              { x: blockX + blockW - 70, y: blockY + 70 },
+              { x: cx + 41, y: cy - 41 },
+              { x: cx + 58, y: cy },
+              { x: cx + 41, y: cy + 41 },
+              { x: cx, y: cy + 58 },
+              { x: cx - 41, y: cy + 41 },
+              { x: blockX + 70, y: blockY + blockH - 70 }
+            ]
+          }
+        );
+
         continue;
       }
 
-      // --- 3. DEDICATED OPEN-AIR PARKING PLAZAS (NO BUILDINGS INSIDE) ---
-      if (isDedicatedParking) {
-        const pkX = blockX + sidewalkWidth + 10;
-        const pkY = blockY + sidewalkWidth + 10;
-        const parkW = blockW - (sidewalkWidth * 2 + 20);
-        const parkH = blockH - (sidewalkWidth * 2 + 20);
+      // =========================================================================
+      // --- 3. CENTRAL AUTO DEALERSHIP & SHOWROOM PLAZA (bx: 4, by: 2) ---
+      // =========================================================================
+      if (isAutoCenter) {
+        const innerX = blockX + sidewalkWidth + 10;
+        const innerY = blockY + sidewalkWidth + 10;
+        const innerW = blockW - (sidewalkWidth * 2 + 20);
+        const innerH = blockH - (sidewalkWidth * 2 + 20);
 
-        const spots: ParkingArea['spots'] = [];
-        const numRows = Math.floor((parkH - 30) / 48);
+        // Modern Glass Showroom Building (North-West)
+        const showW = Math.min(260, innerW * 0.55);
+        const showH = 75;
+        buildings.push({
+          id: `auto_showroom_${bx}_${by}`,
+          x: innerX + 10,
+          y: innerY + 10,
+          width: showW,
+          height: showH,
+          type: 'shop',
+          color: '#1e293b',
+          roofColor: '#0f172a',
+          accentColor: '#38bdf8',
+          windows: [],
+          entranceSide: 'south',
+          roofDetails: [{ type: 'ac', rx: 0.2, ry: 0.2, rw: 0.15, rh: 0.4 }]
+        });
+
+        // Paved Dealership Entrance Plaza
+        blockPlazas.push({
+          x: innerX + 10,
+          y: innerY + 90,
+          width: showW,
+          height: 35,
+          shape: 'rect',
+          style: 'tile'
+        });
+
+        // Customer walkway from showroom to test drive lot
+        blockWalkways.push({
+          x: innerX + 20,
+          y: innerY + 125,
+          width: 24,
+          height: innerH - 145,
+          style: 'concrete'
+        });
+
+        // Large Organized Dealership Parking Lot (Stalls for Showcase Vehicles)
+        const pkX = innerX + showW + 20;
+        const pkY = innerY + 10;
+        const pkW = innerW - showW - 30;
+        const pkH = innerH - 20;
+
+        const autoSpots: ParkingArea['spots'] = [];
+        const numRows = Math.floor(pkH / 50);
         for (let s = 0; s < numRows; s++) {
-          const sy = pkY + 28 + s * 48;
-          // Left stall row
-          spots.push({
-            x: pkX + 45,
-            y: sy,
-            angle: 0,
-            occupied: Math.random() < 0.0225
-          });
-          // Right stall row
-          spots.push({
-            x: pkX + parkW - 45,
-            y: sy,
-            angle: Math.PI,
-            occupied: Math.random() < 0.0225
-          });
+          const sy = pkY + 25 + s * 50;
+          autoSpots.push(
+            { x: pkX + 45, y: sy, angle: 0, occupied: false },
+            { x: pkX + pkW - 45, y: sy, angle: Math.PI, occupied: false }
+          );
         }
 
         parkings.push({
-          id: `parking_${bx}_${by}`,
+          id: `dealership_parking_${bx}_${by}`,
           x: pkX,
           y: pkY,
-          width: parkW,
-          height: parkH,
-          spots
+          width: pkW,
+          height: pkH,
+          spots: autoSpots
         });
 
-        // Add parking lighting fixtures, bollards, waste enclosure, benches, and perimeter planters
+        // Dealership lighting, customer benches, urns & waste area
         props.push(
-          { id: `pk_lamp_${bx}_${by}_1`, x: pkX + 20, y: pkY + 15, type: 'lamp', angle: 0 },
-          { id: `pk_lamp_${bx}_${by}_2`, x: pkX + parkW - 20, y: pkY + 15, type: 'lamp', angle: 0 },
-          { id: `pk_lamp_${bx}_${by}_3`, x: pkX + 20, y: pkY + parkH - 15, type: 'lamp', angle: 0 },
-          { id: `pk_lamp_${bx}_${by}_4`, x: pkX + parkW - 20, y: pkY + parkH - 15, type: 'lamp', angle: 0 },
-          
-          // Dumpster station for the parking plaza
-          { id: `pk_dump_${bx}_${by}_1`, x: pkX + 22, y: pkY + parkH / 2 - 12, type: 'dumpster', angle: 0 },
-          { id: `pk_dump_${bx}_${by}_2`, x: pkX + 22, y: pkY + parkH / 2 + 12, type: 'dumpster', angle: 0 },
-          { id: `pk_urn_${bx}_${by}_1`, x: pkX + 22, y: pkY + parkH / 2 + 30, type: 'trash_can', angle: 0 },
+          { id: `dl_lamp_1`, x: pkX + 20, y: pkY + 15, type: 'lamp', angle: 0 },
+          { id: `dl_lamp_2`, x: pkX + pkW - 20, y: pkY + 15, type: 'lamp', angle: 0 },
+          { id: `dl_lamp_3`, x: pkX + 20, y: pkY + pkH - 20, type: 'lamp', angle: 0 },
+          { id: `dl_lamp_4`, x: pkX + pkW - 20, y: pkY + pkH - 20, type: 'lamp', angle: 0 },
 
-          // Waiting benches with trash cans & decorative flowerbeds
-          { id: `pk_bench_${bx}_${by}_1`, x: pkX + parkW / 2 - 25, y: pkY + 14, type: 'bench', angle: Math.PI / 2 },
-          { id: `pk_urn_${bx}_${by}_2`, x: pkX + parkW / 2 - 40, y: pkY + 14, type: 'trash_can', angle: 0 },
-          { id: `pk_flower_${bx}_${by}_1`, x: pkX + parkW / 2 + 25, y: pkY + 14, type: 'flowerbed', angle: 0 },
+          // Showroom customer entrance benches & urns
+          { id: `dl_bench_1`, x: innerX + 45, y: innerY + 105, type: 'bench', angle: -Math.PI / 2 },
+          { id: `dl_urn_1`, x: innerX + 65, y: innerY + 105, type: 'trash_can', angle: 0 },
+          { id: `dl_flower_1`, x: innerX + 90, y: innerY + 105, type: 'flowerbed', angle: 0 },
 
-          { id: `pk_bench_${bx}_${by}_2`, x: pkX + parkW / 2 - 25, y: pkY + parkH - 14, type: 'bench', angle: -Math.PI / 2 },
-          { id: `pk_urn_${bx}_${by}_3`, x: pkX + parkW / 2 - 40, y: pkY + parkH - 14, type: 'trash_can', angle: 0 },
-          { id: `pk_flower_${bx}_${by}_2`, x: pkX + parkW / 2 + 25, y: pkY + parkH - 14, type: 'flowerbed', angle: 0 },
-
-          // Safety bollards along parking entrance
-          { id: `pk_boll_${bx}_${by}_1`, x: pkX + parkW / 2 - 22, y: pkY + parkH / 2, type: 'bollard', angle: 0 },
-          { id: `pk_boll_${bx}_${by}_2`, x: pkX + parkW / 2 + 22, y: pkY + parkH / 2, type: 'bollard', angle: 0 }
+          // Dealership waste station (far corner, clear of driving path)
+          { id: `dl_dump_1`, x: innerX + showW - 20, y: innerY + innerH - 25, type: 'dumpster', angle: 0 },
+          { id: `dl_dump_2`, x: innerX + showW + 15, y: innerY + innerH - 25, type: 'dumpster', angle: 0 }
         );
 
-        trees.push(
-          { id: `pk_tree_${bx}_${by}_1`, x: pkX + parkW / 2, y: pkY + 15, radius: 12, color: '#15803d', shadowOffset: 4 },
-          { id: `pk_tree_${bx}_${by}_2`, x: pkX + parkW / 2, y: pkY + parkH - 15, radius: 12, color: '#15803d', shadowOffset: 4 }
-        );
+        // SPAWN THE PLAYER STARTER VEHICLE & SHOWCASE TEST-DRIVE VEHICLES HERE IN THE DEALERSHIP!
+        const starterTruckX = pkX + 45;
+        const starterTruckY = pkY + 25;
+
+        vehicles.push({
+          id: `veh_player_starter`,
+          type: 'pickup',
+          x: starterTruckX,
+          y: starterTruckY,
+          vx: 0,
+          vy: 0,
+          angle: 0,
+          steerAngle: 0,
+          targetSteerAngle: 0,
+          speed: 0,
+          lateralVelocity: 0,
+          angularVelocity: 0,
+          isDrifting: false,
+          driftFactor: 0,
+          mass: CAR_CONFIGS['pickup'].mass,
+          width: CAR_CONFIGS['pickup'].width,
+          length: CAR_CONFIGS['pickup'].length,
+          wheelBase: CAR_CONFIGS['pickup'].wheelBase,
+          color: '#b45309',
+          roofColor: '#b45309',
+          headlightsOn: false,
+          headlightMode: 'off',
+          brakeLightsOn: false,
+          isReversing: false,
+          turnSignal: 'none',
+          turnSignalTimer: 0,
+          damage: createDefaultVehicleDamage(CAR_CONFIGS['pickup'].length, CAR_CONFIGS['pickup'].width),
+          isPlayerControlled: false,
+          isParked: true,
+          targetSpeed: 0,
+          currentLaneId: null,
+          targetWaypointIndex: 0,
+          routeWaypoints: [],
+          aiState: 'parked',
+          inIntersection: false,
+          plannedTurn: 'straight',
+          stuckTimer: 0,
+          honkTimer: 0,
+          isHonking: false,
+          hornEffectTimer: 0
+        });
+
+        // Showcase Heavy Vehicles cleanly parked in dealership stalls
+        const showcaseVehiclesList: { type: CarType; color: string; roofColor: string }[] = [
+          { type: 'truck_box', color: '#0284c7', roofColor: '#0284c7' },
+          { type: 'truck_dump', color: '#d97706', roofColor: '#d97706' },
+          { type: 'truck_water', color: '#0284c7', roofColor: '#0284c7' },
+          { type: 'bus_articulated', color: '#eab308', roofColor: '#ffffff' },
+          { type: 'fire_ladder', color: '#dc2626', roofColor: '#ffffff' }
+        ];
+
+        showcaseVehiclesList.forEach((sc, idx) => {
+          const cfg = CAR_CONFIGS[sc.type];
+          const vy = pkY + 25 + (idx + 1) * 50;
+          if (vy < pkY + pkH - 20) {
+            vehicles.push({
+              id: `veh_showcase_${sc.type}`,
+              type: sc.type,
+              x: pkX + pkW - 45,
+              y: vy,
+              vx: 0,
+              vy: 0,
+              angle: Math.PI,
+              steerAngle: 0,
+              targetSteerAngle: 0,
+              speed: 0,
+              lateralVelocity: 0,
+              angularVelocity: 0,
+              isDrifting: false,
+              driftFactor: 0,
+              mass: cfg.mass,
+              width: cfg.width,
+              length: cfg.length,
+              wheelBase: cfg.wheelBase,
+              color: sc.color,
+              roofColor: sc.roofColor,
+              headlightsOn: false,
+              headlightMode: 'off',
+              brakeLightsOn: false,
+              isReversing: false,
+              turnSignal: 'none',
+              turnSignalTimer: 0,
+              damage: createDefaultVehicleDamage(cfg.length, cfg.width),
+              isPlayerControlled: false,
+              isParked: true,
+              targetSpeed: 0,
+              currentLaneId: null,
+              targetWaypointIndex: 0,
+              routeWaypoints: [],
+              aiState: 'parked',
+              inIntersection: false,
+              plannedTurn: 'straight',
+              stuckTimer: 0,
+              honkTimer: 0,
+              isHonking: false,
+              hornEffectTimer: 0
+            });
+          }
+        });
 
         continue;
       }
 
-      // --- 4. COZY RESIDENTIAL COURTYARD BLOCKS (ДВОРЫ С ПАРКОВКАМИ И ЗОНАМИ ОТДЫХА) ---
+      // =========================================================================
+      // --- 4. COZY RESIDENTIAL COURTYARD BLOCKS (ЖИЛЫЕ ДВОРЫ С ТРОТУАРАМИ) ---
+      // =========================================================================
       if (isCourtyardBlock) {
         const innerX = blockX + sidewalkWidth + 10;
         const innerY = blockY + sidewalkWidth + 10;
         const innerW = blockW - (sidewalkWidth * 2 + 20);
         const innerH = blockH - (sidewalkWidth * 2 + 20);
 
-        // 3-Wing Perimeter U-Shaped Residential Apartment Complex
-        // 1. North Wing (Horizontal apartment block)
-        const northW = innerW - 10;
-        const northH = 55;
+        // 1. North Residential Wing (Multi-entrance apartment block)
+        const northW = innerW - 90;
+        const northH = 60;
         buildings.push({
           id: `court_bld_n_${bx}_${by}`,
           x: innerX + 5,
@@ -1587,22 +2012,22 @@ export function generateCityWorld(): GameWorld {
           accentColor: '#f59e0b',
           windows: [],
           balconies: [
-            { side: 'south', offset: 0.2, length: 16, depth: 6 },
-            { side: 'south', offset: 0.5, length: 16, depth: 6 },
-            { side: 'south', offset: 0.8, length: 16, depth: 6 }
+            { side: 'south', offset: 0.2, length: 18, depth: 6 },
+            { side: 'south', offset: 0.5, length: 18, depth: 6 },
+            { side: 'south', offset: 0.8, length: 18, depth: 6 }
           ],
           fireEscapes: [{ side: 'north', offset: 0.5, length: 20, depth: 5 }],
           entranceSide: 'south',
           roofDetails: [{ type: 'ac', rx: 0.3, ry: 0.3, rw: 0.15, rh: 0.4 }]
         });
 
-        // 2. West Wing (Vertical apartment block)
-        const westW = 55;
-        const westH = innerH - 75;
+        // 2. West Residential Wing (Vertical apartment block)
+        const westW = 60;
+        const westH = innerH - 120;
         buildings.push({
           id: `court_bld_w_${bx}_${by}`,
           x: innerX + 5,
-          y: innerY + 68,
+          y: innerY + 75,
           width: westW,
           height: westH,
           type: 'residential',
@@ -1611,127 +2036,200 @@ export function generateCityWorld(): GameWorld {
           accentColor: '#38bdf8',
           windows: [],
           balconies: [
-            { side: 'east', offset: 0.3, length: 16, depth: 6 },
-            { side: 'east', offset: 0.7, length: 16, depth: 6 }
+            { side: 'east', offset: 0.3, length: 18, depth: 6 },
+            { side: 'east', offset: 0.7, length: 18, depth: 6 }
           ],
           fireEscapes: [{ side: 'west', offset: 0.5, length: 20, depth: 5 }],
           entranceSide: 'east',
           roofDetails: []
         });
 
-        // 3. East Wing (Shorter vertical block leaving driveway entrance on South-East)
-        const eastW = 55;
-        const eastH = innerH - 110;
-        buildings.push({
-          id: `court_bld_e_${bx}_${by}`,
-          x: innerX + innerW - 60,
-          y: innerY + 68,
-          width: eastW,
-          height: eastH,
-          type: 'residential',
-          color: '#52525b',
-          roofColor: '#3f3f46',
-          accentColor: '#10b981',
-          windows: [],
-          balconies: [
-            { side: 'west', offset: 0.4, length: 16, depth: 6 }
-          ],
-          fireEscapes: [{ side: 'east', offset: 0.5, length: 20, depth: 5 }],
-          entranceSide: 'west',
-          roofDetails: []
-        });
-
-        // --- COURTYARD INTERIOR AMENITIES (ДВОРОВАЯ ТЕРРИТОРИЯ) ---
-        const courtLeft = innerX + 70;
-        const courtTop = innerY + 70;
-        const courtW = innerW - 140;
+        // Courtyard Geometry Bounds
+        const courtLeft = innerX + 75;
+        const courtTop = innerY + 75;
+        const courtW = innerW - 90;
         const courtH = innerH - 85;
 
-        // Courtyard Residential Parking Lot (Парковка во дворе)
-        const courtPkW = courtW * 0.48;
-        const courtPkH = courtH - 20;
-        const courtPkX = courtLeft + courtW - courtPkW;
-        const courtPkY = courtTop + 10;
+        // Paved Walkways (Тротуары во дворе):
+        // Main corridor walkway linking North entrances, West entrances, recreation square and street sidewalk
+        blockWalkways.push(
+          // Paved walkway along North building entrances
+          { x: innerX + 5, y: innerY + northH + 5, width: northW, height: 18, style: 'concrete' },
+          // Paved walkway along West building entrances
+          { x: innerX + westW + 5, y: innerY + 75, width: 18, height: westH, style: 'concrete' },
+          // Transverse connecting walkway to courtyard center
+          { x: courtLeft, y: courtTop + 40, width: courtW - 130, height: 16, style: 'concrete' },
+          // Walkway connecting to South street sidewalk
+          { x: innerX + 30, y: innerY + 75 + westH, width: 18, height: innerH - (75 + westH), style: 'concrete' }
+        );
+
+        // Central Courtyard Recreation Plaza (Зона отдыха с плиткой, лавочками и клумбами)
+        const plazaW = 90;
+        const plazaH = 70;
+        const plazaX = courtLeft + 15;
+        const plazaY = courtTop + 15;
+        blockPlazas.push({
+          x: plazaX,
+          y: plazaY,
+          width: plazaW,
+          height: plazaH,
+          shape: 'rect',
+          style: 'tile'
+        });
+
+        // Courtyard Residential Parking Lot (Парковка во дворе со свободным въездом)
+        const pkW = 120;
+        const pkH = courtH - 20;
+        const pkX = innerX + innerW - pkW - 10;
+        const pkY = courtTop + 10;
 
         const courtSpots: ParkingArea['spots'] = [];
-        const numCourtRows = Math.floor(courtPkH / 42);
+        const numCourtRows = Math.floor(pkH / 44);
         for (let cs = 0; cs < numCourtRows; cs++) {
           courtSpots.push({
-            x: courtPkX + courtPkW / 2,
-            y: courtPkY + 18 + cs * 42,
+            x: pkX + pkW / 2,
+            y: pkY + 20 + cs * 44,
             angle: 0,
-            occupied: Math.random() < 0.0225
+            occupied: cs === 0 && (bx + by) % 3 === 0
           });
         }
 
         parkings.push({
           id: `court_parking_${bx}_${by}`,
-          x: courtPkX,
-          y: courtPkY,
-          width: courtPkW,
-          height: courtPkH,
+          x: pkX,
+          y: pkY,
+          width: pkW,
+          height: pkH,
           spots: courtSpots
         });
 
-        // Green Courtyard Garden / Leisure Zone (Зона отдыха, лавочки, урны, клумбы)
-        const gardenX = courtLeft + 5;
-        const gardenY = courtTop + 10;
-        const gardenW = courtW * 0.45;
-        const gardenH = courtH - 20;
-
-        // Courtyard Trees
+        // Courtyard Greenery Trees
         trees.push(
-          { id: `court_tree_${bx}_${by}_1`, x: gardenX + gardenW * 0.35, y: gardenY + gardenH * 0.3, radius: 13, color: '#15803d', shadowOffset: 4 },
-          { id: `court_tree_${bx}_${by}_2`, x: gardenX + gardenW * 0.65, y: gardenY + gardenH * 0.7, radius: 12, color: '#166534', shadowOffset: 4 }
+          { id: `court_tree_${bx}_${by}_1`, x: plazaX + plazaW / 2, y: plazaY - 20, radius: 13, color: '#15803d', shadowOffset: 4 },
+          { id: `court_tree_${bx}_${by}_2`, x: plazaX + plazaW / 2, y: plazaY + plazaH + 20, radius: 12, color: '#166534', shadowOffset: 4 }
         );
 
-        // Benches and Trash Cans around the courtyard garden & entrances
+        // Courtyard Amenities: Benches strictly on paved walkways, streetlamps, flowerbeds, and corner dumpster corral
         props.push(
-          // Benches facing the garden lawn
-          { id: `court_bench_${bx}_${by}_1`, x: gardenX + 18, y: gardenY + 25, type: 'bench', angle: 0 },
-          { id: `court_urn_${bx}_${by}_1`, x: gardenX + 18, y: gardenY + 12, type: 'trash_can', angle: 0 },
-          { id: `court_flower_${bx}_${by}_1`, x: gardenX + 18, y: gardenY + 40, type: 'flowerbed', angle: 0 },
+          // Benches & Urns on Central Recreation Plaza
+          { id: `c_bench_${bx}_${by}_1`, x: plazaX + 16, y: plazaY + 20, type: 'bench', angle: 0 },
+          { id: `c_urn_${bx}_${by}_1`, x: plazaX + 16, y: plazaY + 36, type: 'trash_can', angle: 0 },
+          { id: `c_flower_${bx}_${by}_1`, x: plazaX + 16, y: plazaY + 54, type: 'flowerbed', angle: 0 },
 
-          { id: `court_bench_${bx}_${by}_2`, x: gardenX + gardenW - 18, y: gardenY + 25, type: 'bench', angle: Math.PI },
-          { id: `court_urn_${bx}_${by}_2`, x: gardenX + gardenW - 18, y: gardenY + 12, type: 'trash_can', angle: Math.PI },
-          { id: `court_flower_${bx}_${by}_2`, x: gardenX + gardenW - 18, y: gardenY + 40, type: 'flowerbed', angle: 0 },
+          { id: `c_bench_${bx}_${by}_2`, x: plazaX + plazaW - 16, y: plazaY + 20, type: 'bench', angle: Math.PI },
+          { id: `c_urn_${bx}_${by}_2`, x: plazaX + plazaW - 16, y: plazaY + 36, type: 'trash_can', angle: Math.PI },
+          { id: `c_flower_${bx}_${by}_2`, x: plazaX + plazaW - 16, y: plazaY + 54, type: 'flowerbed', angle: 0 },
 
-          { id: `court_bench_${bx}_${by}_3`, x: gardenX + gardenW / 2, y: gardenY + gardenH - 18, type: 'bench', angle: -Math.PI / 2 },
-          { id: `court_urn_${bx}_${by}_3`, x: gardenX + gardenW / 2 - 16, y: gardenY + gardenH - 18, type: 'trash_can', angle: -Math.PI / 2 },
-          { id: `court_flower_${bx}_${by}_3`, x: gardenX + gardenW / 2 + 18, y: gardenY + gardenH - 18, type: 'flowerbed', angle: 0 },
+          // Entrance benches & urns for building residents (on concrete entrance walkway)
+          { id: `c_ent_bench_n`, x: innerX + northW * 0.35, y: innerY + northH + 12, type: 'bench', angle: -Math.PI / 2 },
+          { id: `c_ent_urn_n`, x: innerX + northW * 0.35 + 16, y: innerY + northH + 12, type: 'trash_can', angle: 0 },
 
-          // Waste Disposal Area (Контейнерная площадка / Мусорные баки)
-          { id: `court_dump_${bx}_${by}_1`, x: courtPkX + courtPkW - 15, y: courtPkY + courtPkH - 24, type: 'dumpster', angle: Math.PI / 2 },
-          { id: `court_dump_${bx}_${by}_2`, x: courtPkX + courtPkW - 15, y: courtPkY + courtPkH - 6, type: 'dumpster', angle: Math.PI / 2 },
-          { id: `court_urn_${bx}_${by}_4`, x: courtPkX + courtPkW - 15, y: courtPkY + courtPkH + 10, type: 'trash_can', angle: 0 },
+          { id: `c_ent_bench_w`, x: innerX + westW + 12, y: innerY + 75 + westH * 0.4, type: 'bench', angle: 0 },
+          { id: `c_ent_urn_w`, x: innerX + westW + 12, y: innerY + 75 + westH * 0.4 + 16, type: 'trash_can', angle: 0 },
 
-          // Cast-iron safety bollards separating parking from pedestrian walkway
-          { id: `court_boll_${bx}_${by}_1`, x: courtPkX - 6, y: gardenY + 25, type: 'bollard', angle: 0 },
-          { id: `court_boll_${bx}_${by}_2`, x: courtPkX - 6, y: gardenY + gardenH / 2, type: 'bollard', angle: 0 },
-          { id: `court_boll_${bx}_${by}_3`, x: courtPkX - 6, y: gardenY + gardenH - 25, type: 'bollard', angle: 0 },
+          // Courtyard Night Illumination Streetlamps
+          { id: `c_lamp_${bx}_${by}_1`, x: plazaX + plazaW / 2, y: plazaY + plazaH / 2, type: 'lamp', angle: 0 },
+          { id: `c_lamp_${bx}_${by}_2`, x: pkX - 12, y: pkY + 25, type: 'lamp', angle: 0 },
+          { id: `c_lamp_${bx}_${by}_3`, x: pkX - 12, y: pkY + pkH - 25, type: 'lamp', angle: 0 },
 
-          // Entrance benches & urns for residents
-          { id: `court_bench_${bx}_${by}_ent_n`, x: innerX + northW * 0.5, y: innerY + northH + 10, type: 'bench', angle: -Math.PI / 2 },
-          { id: `court_urn_${bx}_${by}_ent_n`, x: innerX + northW * 0.5 + 16, y: innerY + northH + 10, type: 'trash_can', angle: 0 },
-
-          // Night illumination lamps
-          { id: `court_lamp_${bx}_${by}_1`, x: gardenX + 15, y: gardenY + gardenH / 2, type: 'lamp', angle: 0 },
-          { id: `court_lamp_${bx}_${by}_2`, x: courtPkX + courtPkW / 2, y: courtPkY + 6, type: 'lamp', angle: 0 },
-
-          // Outer sidewalk street furniture along the block edge
-          { id: `sw_bench_${bx}_${by}_1`, x: blockX + 25, y: blockY + sidewalkWidth / 2, type: 'bench', angle: 0 },
-          { id: `sw_urn_${bx}_${by}_1`, x: blockX + 40, y: blockY + sidewalkWidth / 2, type: 'trash_can', angle: 0 },
-          { id: `sw_bench_${bx}_${by}_2`, x: blockX + blockW - 35, y: blockY + sidewalkWidth / 2, type: 'bench', angle: 0 },
-          { id: `sw_urn_${bx}_${by}_2`, x: blockX + blockW - 20, y: blockY + sidewalkWidth / 2, type: 'trash_can', angle: 0 }
+          // Waste Disposal Area (Площадка ТБО) strictly in far corner, 100% clear of all driveways!
+          { id: `c_dump_${bx}_${by}_1`, x: innerX + innerW - 35, y: innerY + 25, type: 'dumpster', angle: Math.PI / 2 },
+          { id: `c_dump_${bx}_${by}_2`, x: innerX + innerW - 35, y: innerY + 48, type: 'dumpster', angle: Math.PI / 2 },
+          { id: `c_dump_urn`, x: innerX + innerW - 35, y: innerY + 68, type: 'trash_can', angle: 0 }
         );
 
         continue;
       }
 
-      // --- 5. COZY VILLAGE ZONE (South-East) ---
+      // =========================================================================
+      // --- 5. PUBLIC SERVICES & MUNICIPAL BUILDINGS (POLICE, HOSPITAL, FIRE) ---
+      // =========================================================================
+      if (isPoliceStation || isHospital || isFireStation) {
+        const innerX = blockX + sidewalkWidth + 10;
+        const innerY = blockY + sidewalkWidth + 10;
+        const innerW = blockW - (sidewalkWidth * 2 + 20);
+        const innerH = blockH - (sidewalkWidth * 2 + 20);
+
+        let bType: Building['type'] = 'office';
+        let bColor = '#0f172a';
+        let bRoof = '#1e293b';
+        let bAccent = '#38bdf8';
+
+        if (isHospital) {
+          bColor = '#f8fafc';
+          bRoof = '#e2e8f0';
+          bAccent = '#ef4444';
+        } else if (isFireStation) {
+          bColor = '#7f1d1d';
+          bRoof = '#991b1b';
+          bAccent = '#f59e0b';
+        }
+
+        const bW = innerW - 140;
+        const bH = 80;
+        buildings.push({
+          id: `mun_bld_${bx}_${by}`,
+          x: innerX + 10,
+          y: innerY + 10,
+          width: bW,
+          height: bH,
+          type: bType,
+          color: bColor,
+          roofColor: bRoof,
+          accentColor: bAccent,
+          windows: [],
+          entranceSide: 'south',
+          roofDetails: isHospital ? [{ type: 'helipad', rx: 0.6, ry: 0.15, rw: 0.35, rh: 0.7 }] : []
+        });
+
+        // Entrance Plaza & Walkways
+        blockPlazas.push({
+          x: innerX + 10,
+          y: innerY + 95,
+          width: bW,
+          height: 35,
+          shape: 'rect',
+          style: 'tile'
+        });
+
+        // Emergency Parking Lot
+        const pkX = innerX + bW + 20;
+        const pkY = innerY + 10;
+        const pkW = innerW - bW - 30;
+        const pkH = innerH - 20;
+
+        const munSpots: ParkingArea['spots'] = [];
+        const numRows = Math.floor(pkH / 45);
+        for (let s = 0; s < numRows; s++) {
+          munSpots.push({ x: pkX + pkW / 2, y: pkY + 20 + s * 45, angle: 0, occupied: s === 0 && (bx + by) % 2 === 0 });
+        }
+
+        parkings.push({
+          id: `mun_parking_${bx}_${by}`,
+          x: pkX,
+          y: pkY,
+          width: pkW,
+          height: pkH,
+          spots: munSpots
+        });
+
+        props.push(
+          { id: `mun_lamp_1`, x: pkX + pkW / 2, y: pkY + 15, type: 'lamp', angle: 0 },
+          { id: `mun_lamp_2`, x: innerX + 35, y: innerY + 110, type: 'lamp', angle: 0 },
+          { id: `mun_bench_1`, x: innerX + 60, y: innerY + 110, type: 'bench', angle: -Math.PI / 2 },
+          { id: `mun_urn_1`, x: innerX + 76, y: innerY + 110, type: 'trash_can', angle: 0 },
+          { id: `mun_flower_1`, x: innerX + 105, y: innerY + 110, type: 'flowerbed', angle: 0 }
+        );
+
+        continue;
+      }
+
+      // =========================================================================
+      // --- 6. COZY SUBURBAN & VILLAGE ZONE (South-East) ---
+      // =========================================================================
       if (isVillage) {
-        const cW = 60 + Math.random() * 15;
-        const cH = 60 + Math.random() * 15;
+        const cW = 65 + Math.random() * 15;
+        const cH = 65 + Math.random() * 15;
 
         // Cottage 1: Top-Left
         buildings.push({
@@ -1767,9 +2265,18 @@ export function generateCityWorld(): GameWorld {
           });
         }
 
-        // Populate beautiful village orchard gardens & rustic benches
-        for (let tx = blockX + sidewalkWidth + 10; tx < blockX + blockW - sidewalkWidth - 10; tx += 45) {
-          for (let ty = blockY + sidewalkWidth + 10; ty < blockY + blockH - sidewalkWidth - 10; ty += 45) {
+        // Village Cobblestone Walkways
+        blockWalkways.push({
+          x: blockX + sidewalkWidth + cW + 15,
+          y: blockY + sidewalkWidth + 25,
+          width: blockW - sidewalkWidth * 2 - cW * 2 - 30,
+          height: 16,
+          style: 'cobblestone'
+        });
+
+        // Orchard gardens & rustic benches on stone pads
+        for (let tx = blockX + sidewalkWidth + 15; tx < blockX + blockW - sidewalkWidth - 15; tx += 45) {
+          for (let ty = blockY + sidewalkWidth + 15; ty < blockY + blockH - sidewalkWidth - 15; ty += 45) {
             if (tx < blockX + sidewalkWidth + cW + 35 && ty < blockY + sidewalkWidth + cH + 35) continue;
             if (tx > blockX + blockW - sidewalkWidth - cW - 35 && ty > blockY + blockH - sidewalkWidth - cH - 35) continue;
 
@@ -1789,12 +2296,82 @@ export function generateCityWorld(): GameWorld {
         props.push(
           { id: `v_bench_${bx}_${by}_1`, x: blockX + sidewalkWidth + cW + 25, y: blockY + sidewalkWidth + 25, type: 'bench', angle: 0 },
           { id: `v_urn_${bx}_${by}_1`, x: blockX + sidewalkWidth + cW + 40, y: blockY + sidewalkWidth + 25, type: 'trash_can', angle: 0 },
-          { id: `v_flower_${bx}_${by}_1`, x: blockX + sidewalkWidth + cW + 25, y: blockY + sidewalkWidth + 42, type: 'flowerbed', angle: 0 }
+          { id: `v_flower_${bx}_${by}_1`, x: blockX + sidewalkWidth + cW + 25, y: blockY + sidewalkWidth + 44, type: 'flowerbed', angle: 0 }
         );
         continue;
       }
 
-      // --- 6. URBAN DOWNTOWN & COMMERCIAL SKYSCRAPERS ---
+      // =========================================================================
+      // --- 7. INDUSTRIAL & LOGISTICS FLEET DEPOT ---
+      // =========================================================================
+      if (isIndustrial) {
+        const innerX = blockX + sidewalkWidth + 10;
+        const innerY = blockY + sidewalkWidth + 10;
+        const innerW = blockW - (sidewalkWidth * 2 + 20);
+        const innerH = blockH - (sidewalkWidth * 2 + 20);
+
+        // Logistics Warehouse
+        const wW = innerW - 120;
+        const wH = 75;
+        buildings.push({
+          id: `ind_wh_${bx}_${by}`,
+          x: innerX + 10,
+          y: innerY + 10,
+          width: wW,
+          height: wH,
+          type: 'industrial',
+          color: '#52525b',
+          roofColor: '#3f3f46',
+          accentColor: '#eab308',
+          windows: [],
+          entranceSide: 'south',
+          roofDetails: [{ type: 'ac', rx: 0.3, ry: 0.3, rw: 0.15, rh: 0.4 }]
+        });
+
+        // Industrial loading yard & truck staging parking
+        const pkX = innerX + wW + 20;
+        const pkY = innerY + 10;
+        const pkW = innerW - wW - 30;
+        const pkH = innerH - 20;
+
+        const indSpots: ParkingArea['spots'] = [];
+        const numRowsInd = Math.floor(pkH / 48);
+        for (let s = 0; s < numRowsInd; s++) {
+          indSpots.push({ x: pkX + pkW / 2, y: pkY + 22 + s * 48, angle: 0, occupied: s === 0 && bx % 2 === 0 });
+        }
+
+        parkings.push({
+          id: `ind_parking_${bx}_${by}`,
+          x: pkX,
+          y: pkY,
+          width: pkW,
+          height: pkH,
+          spots: indSpots
+        });
+
+        // Logistics walkways & heavy dumpsters
+        blockWalkways.push({
+          x: innerX + 10,
+          y: innerY + wH + 10,
+          width: wW,
+          height: 20,
+          style: 'asphalt'
+        });
+
+        props.push(
+          { id: `ind_dump_1`, x: innerX + 25, y: innerY + innerH - 25, type: 'dumpster', angle: 0 },
+          { id: `ind_dump_2`, x: innerX + 60, y: innerY + innerH - 25, type: 'dumpster', angle: 0 },
+          { id: `ind_lamp_1`, x: pkX + pkW / 2, y: pkY + 15, type: 'lamp', angle: 0 },
+          { id: `ind_lamp_2`, x: innerX + 25, y: innerY + wH + 20, type: 'lamp', angle: 0 },
+          { id: `ind_kiosk_guard`, x: innerX + wW - 25, y: innerY + wH + 20, type: 'kiosk', angle: 0 }
+        );
+
+        continue;
+      }
+
+      // =========================================================================
+      // --- 8. URBAN DOWNTOWN & HIGH-RISE COMMERCIAL SKYSCRAPERS ---
+      // =========================================================================
       const innerX = blockX + sidewalkWidth + 12;
       const innerY = blockY + sidewalkWidth + 12;
       const innerW = blockW - (sidewalkWidth * 2 + 24);
@@ -1805,41 +2382,46 @@ export function generateCityWorld(): GameWorld {
       const bSlotW = innerW / bCols;
       const bSlotH = innerH / bRows;
 
+      // Central Plaza connecting commercial towers
+      blockPlazas.push({
+        x: innerX + bSlotW - 25,
+        y: innerY + bSlotH - 25,
+        width: 50,
+        height: 50,
+        shape: 'rect',
+        style: 'tile'
+      });
+
       for (let r = 0; r < bRows; r++) {
         for (let c = 0; c < bCols; c++) {
-          const bWidth = bSlotW - 20;
-          const bHeight = bSlotH - 20;
-          const bxLocal = innerX + c * bSlotW + 10;
-          const byLocal = innerY + r * bSlotH + 10;
+          const bWidth = bSlotW - 24;
+          const bHeight = bSlotH - 24;
+          const bxLocal = innerX + c * bSlotW + 12;
+          const byLocal = innerY + r * bSlotH + 12;
 
           if (bWidth < 45 || bHeight < 45) continue;
 
-          let bType: Building['type'] = 'residential';
-          let color = '#334155';
-          let roofColor = '#1e293b';
-          let accent = '#94a3b8';
+          let bType: Building['type'] = 'office';
+          let color = '#1e293b';
+          let roofColor = '#0f172a';
+          let accent = '#38bdf8';
 
           const rand = Math.random();
-          if (rand < 0.3) {
+          if (rand < 0.45) {
             bType = 'office';
             color = '#1e293b';
             roofColor = '#0f172a';
             accent = '#38bdf8';
-          } else if (rand < 0.65) {
-            bType = 'residential';
-            color = '#475569';
-            roofColor = '#334155';
-            accent = '#f59e0b';
-          } else if (rand < 0.85) {
+          } else if (rand < 0.75) {
             bType = 'shop';
             color = '#3f3f46';
             roofColor = '#27272a';
             accent = '#ef4444';
           } else {
-            bType = 'industrial';
-            color = '#52525b';
-            roofColor = '#3f3f46';
-            accent = '#10b981';
+            bType = 'residential';
+            color = '#475569';
+            roofColor = '#334155';
+            accent = '#f59e0b';
           }
 
           let entSide: 'north' | 'south' | 'east' | 'west' = 'north';
@@ -1850,28 +2432,25 @@ export function generateCityWorld(): GameWorld {
 
           const balconies: Building['balconies'] = [];
           if (bType === 'residential') {
-            const balLength = Math.max(12, bWidth * 0.18);
             balconies.push(
-              { side: entSide, offset: 0.25, length: balLength, depth: 6 },
-              { side: entSide, offset: 0.75, length: balLength, depth: 6 }
+              { side: entSide, offset: 0.25, length: Math.max(14, bWidth * 0.2), depth: 6 },
+              { side: entSide, offset: 0.75, length: Math.max(14, bWidth * 0.2), depth: 6 }
             );
           }
 
           const fireEscapes: Building['fireEscapes'] = [];
-          if (bType === 'office' || bType === 'residential' || bType === 'industrial') {
-            let oppositeSide: 'north' | 'south' | 'east' | 'west' = 'south';
-            if (entSide === 'north') oppositeSide = 'south';
-            else if (entSide === 'south') oppositeSide = 'north';
-            else if (entSide === 'east') oppositeSide = 'west';
-            else if (entSide === 'west') oppositeSide = 'east';
+          let oppositeSide: 'north' | 'south' | 'east' | 'west' = 'south';
+          if (entSide === 'north') oppositeSide = 'south';
+          else if (entSide === 'south') oppositeSide = 'north';
+          else if (entSide === 'east') oppositeSide = 'west';
+          else if (entSide === 'west') oppositeSide = 'east';
 
-            fireEscapes.push({
-              side: oppositeSide,
-              offset: 0.5,
-              length: Math.max(14, bWidth * 0.2),
-              depth: 5
-            });
-          }
+          fireEscapes.push({
+            side: oppositeSide,
+            offset: 0.5,
+            length: Math.max(14, bWidth * 0.2),
+            depth: 5
+          });
 
           buildings.push({
             id: `bld_${bx}_${by}_${r}_${c}`,
@@ -1887,81 +2466,48 @@ export function generateCityWorld(): GameWorld {
             balconies,
             fireEscapes,
             entranceSide: entSide,
-            roofDetails: []
+            roofDetails: [{ type: 'ac', rx: 0.25, ry: 0.25, rw: 0.2, rh: 0.4 }]
           });
 
-          // Sidewalk trees
-          if (Math.random() > 0.4) {
-            trees.push({
-              id: `tree_${bxLocal}_${byLocal}`,
-              x: bxLocal + bWidth / 2 + (Math.random() * 10 - 5),
-              y: byLocal + bHeight + 14,
-              radius: 11 + Math.random() * 5,
-              color: '#15803d',
-              shadowOffset: 4
-            });
-          }
+          // Paved walkway to entrance
+          blockWalkways.push({
+            x: bxLocal,
+            y: byLocal + bHeight,
+            width: bWidth,
+            height: 14,
+            style: 'concrete'
+          });
 
-          // Dense sidewalk amenities: benches, trash urns, street lamps, and planters
+          // Commercial storefront benches, trash urns, flowerbeds & streetlamps
           props.push({
             id: `sw_bench_${bxLocal}_${byLocal}`,
-            x: bxLocal + bWidth * 0.3,
-            y: byLocal + bHeight + 8,
+            x: bxLocal + bWidth * 0.25,
+            y: byLocal + bHeight + 7,
             type: 'bench',
             angle: 0
           });
           props.push({
             id: `sw_urn_${bxLocal}_${byLocal}`,
-            x: bxLocal + bWidth * 0.3 + 16,
-            y: byLocal + bHeight + 8,
+            x: bxLocal + bWidth * 0.25 + 16,
+            y: byLocal + bHeight + 7,
             type: 'trash_can',
             angle: 0
           });
 
-          if (Math.random() > 0.5) {
-            props.push({
-              id: `lamp_${bxLocal}_${byLocal}`,
-              x: bxLocal + bWidth + 12,
-              y: byLocal + bHeight + 12,
-              type: 'lamp',
-              angle: 0
-            });
-          }
-
-          if (bType === 'shop' || bType === 'office') {
+          if (bType === 'shop') {
             props.push({
               id: `flower_${bxLocal}_${byLocal}`,
               x: bxLocal + bWidth * 0.75,
-              y: byLocal + bHeight + 8,
+              y: byLocal + bHeight + 7,
               type: 'flowerbed',
               angle: 0
             });
             props.push({
               id: `boll_${bxLocal}_${byLocal}`,
-              x: bxLocal + bWidth + 6,
-              y: byLocal + bHeight + 8,
+              x: bxLocal + bWidth + 5,
+              y: byLocal + bHeight + 7,
               type: 'bollard',
               angle: 0
-            });
-          }
-
-          if (bType === 'industrial') {
-            props.push({
-              id: `dump_${bxLocal}_${byLocal}`,
-              x: bxLocal + bWidth - 12,
-              y: byLocal - 10,
-              type: 'dumpster',
-              angle: 0
-            });
-          }
-
-          if (bType === 'shop' && c === 0 && r === 1) {
-            props.push({
-              id: `kiosk_${bxLocal}_${byLocal}`,
-              x: bxLocal - 22,
-              y: byLocal + 20,
-              type: 'kiosk',
-              angle: Math.PI / 2
             });
           }
         }
@@ -1969,156 +2515,29 @@ export function generateCityWorld(): GameWorld {
     }
   }
 
-  // Spawn the Player's Starting Off-Road Pickup Truck and Showcased Heavy Trucks at Central Park Promenade!
-  vehicles.push({
-    id: `veh_player_starter`,
-    type: 'pickup',
-    x: 4430,
-    y: 2800,
-    vx: 0,
-    vy: 0,
-    angle: 0, // facing East along the Promenade
-    steerAngle: 0,
-    targetSteerAngle: 0,
-    speed: 0,
-    lateralVelocity: 0,
-    angularVelocity: 0,
-    isDrifting: false,
-    driftFactor: 0,
-    mass: CAR_CONFIGS['pickup'].mass,
-    width: CAR_CONFIGS['pickup'].width,
-    length: CAR_CONFIGS['pickup'].length,
-    wheelBase: CAR_CONFIGS['pickup'].wheelBase,
-    color: '#b45309', // beautiful amber-orange earth tone
-    roofColor: '#b45309',
-    headlightsOn: false,
-    headlightMode: 'off',
-    brakeLightsOn: false,
-    isReversing: false,
-    turnSignal: 'none',
-    turnSignalTimer: 0,
-    damage: createDefaultVehicleDamage(CAR_CONFIGS['pickup'].length, CAR_CONFIGS['pickup'].width),
-    isPlayerControlled: false,
-    isParked: true,
-    targetSpeed: 0,
-    currentLaneId: null,
-    targetWaypointIndex: 0,
-    routeWaypoints: [],
-    aiState: 'parked',
-    inIntersection: false,
-    plannedTurn: 'straight',
-    stuckTimer: 0,
-    honkTimer: 0,
-    isHonking: false,
-    hornEffectTimer: 0
-  });
-
-  // 4. SPAWN INITIAL VEHICLES (Moving AI vehicles + parked vehicles)
+  // 4. SPAWN INITIAL MOVING AI TRAFFIC VEHICLES ON ROADS
   const carTypes: CarType[] = [
     'sedan', 'hatchback', 'pickup', 'sports', 'suv', 'taxi', 'police', 
-    'fire_engine', 'bus', 'van', 'muscle', 'ambulance',
-    'truck_box', 'truck_dump', 'truck_tanker', 'truck_flatbed', 'cement_mixer', 'garbage_truck'
+    'fire_engine', 'fire_ladder', 'fire_rescue',
+    'bus', 'bus_articulated', 'bus_minibus', 
+    'van', 'muscle', 
+    'ambulance', 'ambulance_van', 'ambulance_suv',
+    'truck_box', 'truck_dump', 'truck_tanker', 'truck_water', 'truck_flatbed', 'cement_mixer', 'garbage_truck'
   ];
   let vehicleCounter = 0;
 
-  // Place a showcased heavy KamAZ-5320 Box Truck and Heavy Tipper right next to Central Park Promenade!
-  const starterBoxTruckCfg = CAR_CONFIGS['truck_box'];
-  vehicles.push({
-    id: `veh_showcase_truck_box`,
-    type: 'truck_box',
-    x: 4490,
-    y: 2840,
-    vx: 0,
-    vy: 0,
-    angle: 0,
-    steerAngle: 0,
-    targetSteerAngle: 0,
-    speed: 0,
-    lateralVelocity: 0,
-    angularVelocity: 0,
-    isDrifting: false,
-    driftFactor: 0,
-    mass: starterBoxTruckCfg.mass,
-    width: starterBoxTruckCfg.width,
-    length: starterBoxTruckCfg.length,
-    wheelBase: starterBoxTruckCfg.wheelBase,
-    color: '#0284c7', // vibrant transport blue cab
-    roofColor: '#0284c7',
-    headlightsOn: false,
-    headlightMode: 'off',
-    brakeLightsOn: false,
-    isReversing: false,
-    turnSignal: 'none',
-    turnSignalTimer: 0,
-    damage: createDefaultVehicleDamage(starterBoxTruckCfg.length, starterBoxTruckCfg.width),
-    isPlayerControlled: false,
-    isParked: true,
-    targetSpeed: 0,
-    currentLaneId: null,
-    targetWaypointIndex: 0,
-    routeWaypoints: [],
-    aiState: 'parked',
-    inIntersection: false,
-    plannedTurn: 'straight',
-    stuckTimer: 0,
-    honkTimer: 0,
-    isHonking: false,
-    hornEffectTimer: 0
-  });
-
-  const starterTipperCfg = CAR_CONFIGS['truck_dump'];
-  vehicles.push({
-    id: `veh_showcase_truck_dump`,
-    type: 'truck_dump',
-    x: 4490,
-    y: 2760,
-    vx: 0,
-    vy: 0,
-    angle: 0,
-    steerAngle: 0,
-    targetSteerAngle: 0,
-    speed: 0,
-    lateralVelocity: 0,
-    angularVelocity: 0,
-    isDrifting: false,
-    driftFactor: 0,
-    mass: starterTipperCfg.mass,
-    width: starterTipperCfg.width,
-    length: starterTipperCfg.length,
-    wheelBase: starterTipperCfg.wheelBase,
-    color: '#d97706', // industrial ochre/orange tipper cab
-    roofColor: '#d97706',
-    headlightsOn: false,
-    headlightMode: 'off',
-    brakeLightsOn: false,
-    isReversing: false,
-    turnSignal: 'none',
-    turnSignalTimer: 0,
-    damage: createDefaultVehicleDamage(starterTipperCfg.length, starterTipperCfg.width),
-    isPlayerControlled: false,
-    isParked: true,
-    targetSpeed: 0,
-    currentLaneId: null,
-    targetWaypointIndex: 0,
-    routeWaypoints: [],
-    aiState: 'parked',
-    inIntersection: false,
-    plannedTurn: 'straight',
-    stuckTimer: 0,
-    honkTimer: 0,
-    isHonking: false,
-    hornEffectTimer: 0
-  });
-
-  roads.forEach((road) => {
-    road.lanePaths.forEach((lane) => {
+  roads.forEach((road, rIdx) => {
+    road.lanePaths.forEach((lane, lIdx) => {
       const wp1 = lane.waypoints[0];
       const isForest = wp1.x < 3800 && wp1.y < 3800;
       // Spawn vehicles with appropriate gaps to avoid crashes on spawn
       // Keep forest roads mostly peaceful by spawning very few cars there
-      const spawnChance = isForest ? 0.95 : 0.28;
-      const shouldSpawn = Math.random() > spawnChance;
-      if (!shouldSpawn) return;
+      if (isForest) {
+        if ((rIdx + lIdx) % 18 !== 0) return;
+      } else {
+        if ((rIdx * 3 + lIdx) % 14 !== 0) return;
+      }
+      if (vehicleCounter >= 26) return;
 
       const wp2 = lane.waypoints[1];
       const progress = 0.25 + Math.random() * 0.5;
@@ -2127,21 +2546,24 @@ export function generateCityWorld(): GameWorld {
 
       const cType = carTypes[vehicleCounter % carTypes.length];
       const cfg = CAR_CONFIGS[cType];
-      const color = cType === 'taxi' ? '#eab308' : 
-                    (cType === 'police' ? '#0f172a' : 
-                    (cType === 'fire_engine' ? '#cc2222' : 
-                    (cType === 'bus' ? '#eab308' : 
-                    (cType === 'ambulance' ? '#f8fafc' : 
-                    (cType === 'van' ? '#6ee7b7' : 
-                    (cType === 'muscle' ? '#991b1b' : 
-                    (cType === 'garbage_truck' ? '#16a34a' : 
-                    (cType === 'truck_dump' ? '#d97706' : 
-                    (cType === 'cement_mixer' ? '#2563eb' : 
-                    (cType === 'truck_box' ? '#0284c7' : 
-                    (cType === 'truck_tanker' ? '#0369a1' : 
-                    (cType === 'truck_flatbed' ? '#475569' : 
-                    CAR_PALETTE[vehicleCounter % CAR_PALETTE.length]))))))))))));
-      const roofColor = cType === 'police' || cType === 'ambulance' ? '#f8fafc' : (cType === 'fire_engine' ? '#ffffff' : color);
+      let color = CAR_PALETTE[vehicleCounter % CAR_PALETTE.length];
+      if (cType === 'taxi') color = '#eab308';
+      else if (cType === 'police') color = '#0f172a';
+      else if (cType === 'fire_engine' || cType === 'fire_ladder' || cType === 'fire_rescue') color = '#dc2626';
+      else if (cType === 'bus' || cType === 'bus_articulated') color = '#eab308';
+      else if (cType === 'bus_minibus') color = '#f59e0b';
+      else if (cType === 'ambulance' || cType === 'ambulance_van' || cType === 'ambulance_suv') color = '#f8fafc';
+      else if (cType === 'van') color = '#6ee7b7';
+      else if (cType === 'muscle') color = '#991b1b';
+      else if (cType === 'garbage_truck') color = '#16a34a';
+      else if (cType === 'truck_dump') color = '#d97706';
+      else if (cType === 'cement_mixer') color = '#2563eb';
+      else if (cType === 'truck_box') color = '#0284c7';
+      else if (cType === 'truck_water') color = '#0284c7';
+      else if (cType === 'truck_tanker') color = '#0369a1';
+      else if (cType === 'truck_flatbed') color = '#475569';
+
+      const roofColor = (cType === 'police' || cType === 'ambulance' || cType === 'ambulance_van' || cType === 'ambulance_suv' || cType === 'fire_engine' || cType === 'fire_ladder' || cType === 'fire_rescue') ? '#f8fafc' : color;
 
       vehicles.push({
         id: `veh_traffic_${vehicleCounter++}`,

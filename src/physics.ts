@@ -91,13 +91,41 @@ export function checkCarBuildingCollision(car: Vehicle, building: Building): Col
   };
 }
 
-// Circle-AABB collision for pedestrian against building
+// Circle-AABB / Circle-Circle collision for pedestrian against building
 export function checkPedestrianBuildingCollision(
   px: number,
   py: number,
   radius: number,
   building: Building
 ): { x: number; y: number; collided: boolean } {
+  if (building.type === 'park_monument') {
+    const cx = building.x + building.width / 2;
+    const cy = building.y + building.height / 2;
+    const fountainRadius = building.width / 2;
+    const dx = px - cx;
+    const dy = py - cy;
+    const distSq = dx * dx + dy * dy;
+    const minSafeDist = fountainRadius + radius;
+
+    if (distSq < minSafeDist * minSafeDist) {
+      const dist = Math.sqrt(distSq);
+      if (dist > 0.0001) {
+        return {
+          x: cx + (dx / dist) * minSafeDist,
+          y: cy + (dy / dist) * minSafeDist,
+          collided: true
+        };
+      } else {
+        return {
+          x: cx + minSafeDist,
+          y: cy,
+          collided: true
+        };
+      }
+    }
+    return { x: px, y: py, collided: false };
+  }
+
   const closestX = Math.max(building.x, Math.min(px, building.x + building.width));
   const closestY = Math.max(building.y, Math.min(py, building.y + building.height));
 
