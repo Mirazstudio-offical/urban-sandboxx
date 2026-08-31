@@ -249,39 +249,21 @@ export const CAR_CONFIGS: Record<CarType, CarConfig> = {
   },
   bus: {
     type: 'bus',
-    width: 30,
-    length: 92,
-    wheelBase: 58,
-    mass: 6800,
+    width: 27,
+    length: 72,
+    wheelBase: 44,
+    mass: 5800,
     maxSpeed: 110,
     reverseMaxSpeed: 35,
     acceleration: 55,
     brakingForce: 270,
     friction: 0.985,
     turnSpeed: 4.2,
-    maxSteerAngle: 1.22,
+    maxSteerAngle: 1.05,
     minSteerAngle: 0.08,
     grip: 0.97,
     driftGrip: 0.28,
     name: 'Городской автобус'
-  },
-  bus_articulated: {
-    type: 'bus_articulated',
-    width: 30,
-    length: 128,
-    wheelBase: 82,
-    mass: 11500,
-    maxSpeed: 105,
-    reverseMaxSpeed: 30,
-    acceleration: 50,
-    brakingForce: 280,
-    friction: 0.985,
-    turnSpeed: 3.8,
-    maxSteerAngle: 1.15,
-    minSteerAngle: 0.07,
-    grip: 0.965,
-    driftGrip: 0.25,
-    name: 'Сочленённый автобус «гармошка»'
   },
   bus_minibus: {
     type: 'bus_minibus',
@@ -393,17 +375,17 @@ export const CAR_CONFIGS: Record<CarType, CarConfig> = {
   },
   truck_box: {
     type: 'truck_box',
-    width: 28,
-    length: 82,
-    wheelBase: 50,
-    mass: 5200,
+    width: 26,
+    length: 68,
+    wheelBase: 42,
+    mass: 4800,
     maxSpeed: 145,
     reverseMaxSpeed: 40,
     acceleration: 70,
     brakingForce: 270,
     friction: 0.984,
     turnSpeed: 4.2,
-    maxSteerAngle: 1.22,
+    maxSteerAngle: 1.05,
     minSteerAngle: 0.08,
     grip: 0.965,
     driftGrip: 0.28,
@@ -411,17 +393,17 @@ export const CAR_CONFIGS: Record<CarType, CarConfig> = {
   },
   truck_dump: {
     type: 'truck_dump',
-    width: 29,
-    length: 78,
-    wheelBase: 48,
-    mass: 5800,
+    width: 26,
+    length: 66,
+    wheelBase: 42,
+    mass: 5200,
     maxSpeed: 140,
     reverseMaxSpeed: 38,
     acceleration: 72,
     brakingForce: 290,
     friction: 0.983,
     turnSpeed: 4.2,
-    maxSteerAngle: 1.22,
+    maxSteerAngle: 1.05,
     minSteerAngle: 0.08,
     grip: 0.965,
     driftGrip: 0.26,
@@ -429,53 +411,53 @@ export const CAR_CONFIGS: Record<CarType, CarConfig> = {
   },
   truck_tanker: {
     type: 'truck_tanker',
-    width: 28,
-    length: 84,
-    wheelBase: 52,
-    mass: 5500,
+    width: 26,
+    length: 68,
+    wheelBase: 42,
+    mass: 5000,
     maxSpeed: 145,
     reverseMaxSpeed: 38,
     acceleration: 65,
     brakingForce: 275,
     friction: 0.984,
     turnSpeed: 4.2,
-    maxSteerAngle: 1.22,
+    maxSteerAngle: 1.05,
     minSteerAngle: 0.07,
     grip: 0.955,
     driftGrip: 0.25,
-    name: 'Автоцистерна'
+    name: 'Автоцистерна (бензовоз)'
   },
   truck_water: {
     type: 'truck_water',
-    width: 27,
+    width: 26,
     length: 68,
     wheelBase: 42,
-    mass: 4600,
-    maxSpeed: 135,
+    mass: 4800,
+    maxSpeed: 140,
     reverseMaxSpeed: 38,
-    acceleration: 72,
+    acceleration: 68,
     brakingForce: 275,
     friction: 0.984,
-    turnSpeed: 4.1,
-    maxSteerAngle: 1.10,
-    minSteerAngle: 0.09,
-    grip: 0.965,
-    driftGrip: 0.28,
-    name: 'Капотный водовоз «ВОДА»'
+    turnSpeed: 4.2,
+    maxSteerAngle: 1.05,
+    minSteerAngle: 0.07,
+    grip: 0.955,
+    driftGrip: 0.25,
+    name: 'Водовоз «ВОДА»'
   },
   truck_flatbed: {
     type: 'truck_flatbed',
-    width: 28,
-    length: 84,
-    wheelBase: 52,
-    mass: 4900,
+    width: 26,
+    length: 68,
+    wheelBase: 42,
+    mass: 4600,
     maxSpeed: 150,
     reverseMaxSpeed: 42,
     acceleration: 75,
     brakingForce: 270,
     friction: 0.985,
     turnSpeed: 4.2,
-    maxSteerAngle: 1.22,
+    maxSteerAngle: 1.05,
     minSteerAngle: 0.08,
     grip: 0.970,
     driftGrip: 0.29,
@@ -483,17 +465,17 @@ export const CAR_CONFIGS: Record<CarType, CarConfig> = {
   },
   cement_mixer: {
     type: 'cement_mixer',
-    width: 29,
-    length: 80,
-    wheelBase: 50,
-    mass: 5900,
+    width: 26,
+    length: 66,
+    wheelBase: 42,
+    mass: 5400,
     maxSpeed: 135,
     reverseMaxSpeed: 35,
     acceleration: 62,
     brakingForce: 290,
     friction: 0.982,
     turnSpeed: 4.2,
-    maxSteerAngle: 1.22,
+    maxSteerAngle: 1.05,
     minSteerAngle: 0.07,
     grip: 0.950,
     driftGrip: 0.24,
@@ -501,17 +483,17 @@ export const CAR_CONFIGS: Record<CarType, CarConfig> = {
   },
   garbage_truck: {
     type: 'garbage_truck',
-    width: 29,
-    length: 78,
-    wheelBase: 48,
-    mass: 5200,
+    width: 26,
+    length: 66,
+    wheelBase: 42,
+    mass: 5000,
     maxSpeed: 140,
     reverseMaxSpeed: 40,
     acceleration: 70,
     brakingForce: 280,
     friction: 0.984,
     turnSpeed: 4.2,
-    maxSteerAngle: 1.22,
+    maxSteerAngle: 1.05,
     minSteerAngle: 0.08,
     grip: 0.965,
     driftGrip: 0.27,
@@ -1448,19 +1430,29 @@ export function generateCityWorld(): GameWorld {
       const isPoliceStation = bx === 3 && by === 1;
       const isHospital = bx === 4 && by === 1;
       const isFireStation = bx === 5 && by === 1;
-      const isIndustrial = (bx < 3 && by >= 6) || (bx >= 7 && by < 4);
-      const isCommercialDowntown = (bx === 4 && by === 3) || (bx === 5 && by === 4) || (bx === 6 && by === 3) || (bx === 6 && by === 4) || (bx === 3 && by === 2);
-      const isCourtyardBlock = (bx === 2 && by === 3) || (bx === 3 && by === 3) || (bx === 4 && by === 4) || 
+
+      // Unique South-West Landmark Districts
+      const isStadiumBlock = bx === 0 && by === 6;
+      const isTransitHubBlock = bx === 1 && by === 6;
+      const isCarDealershipBlock = bx === 0 && by === 7;
+      const isCulturalCenterBlock = bx === 1 && by === 7;
+
+      const isIndustrial = (bx === 2 && by === 7) || (bx >= 7 && by < 4);
+      const isSchoolBlock = bx === 2 && by === 5;
+      const isShoppingMallBlock = bx === 4 && by === 3;
+      const isBusinessCenterBlock = bx === 6 && by === 3;
+      const isCommercialDowntown = (bx === 5 && by === 4) || (bx === 6 && by === 4) || (bx === 3 && by === 2) || isShoppingMallBlock || isBusinessCenterBlock;
+      const isCourtyardBlock = ((bx === 2 && by === 3) || (bx === 3 && by === 3) || (bx === 4 && by === 4) || 
                                (bx === 5 && by === 5) || (bx === 3 && by === 5) || (bx === 5 && by === 2) || 
                                (bx === 2 && by === 4) || (bx === 3 && by === 4) || (bx === 4 && by === 5) || 
                                (bx === 2 && by === 6) || (bx === 3 && by === 6) || (bx === 4 && by === 6) || 
-                               (bx === 5 && by === 6);
+                               (bx === 5 && by === 6)) && !isSchoolBlock && !isStadiumBlock && !isTransitHubBlock && !isCarDealershipBlock && !isCulturalCenterBlock;
 
       let swStyle: SidewalkBlock['style'] = 'urban';
       if (isForest) swStyle = 'park';
       else if (isVillage) swStyle = 'village';
-      else if (isCentralPark) swStyle = 'park';
-      else if (isCommercialDowntown || isAutoCenter) swStyle = 'commercial';
+      else if (isCentralPark || isStadiumBlock || isCulturalCenterBlock) swStyle = 'park';
+      else if (isCommercialDowntown || isAutoCenter || isTransitHubBlock || isCarDealershipBlock) swStyle = 'commercial';
 
       const blockWalkways: SidewalkBlock['walkways'] = [];
       const blockPlazas: SidewalkBlock['plazas'] = [];
@@ -1473,8 +1465,15 @@ export function generateCityWorld(): GameWorld {
       } else if (isCourtyardBlock) {
         driveways.push({ side: 'south', offset: Math.floor(blockW - 120), width: 60 });
         driveways.push({ side: 'east', offset: Math.floor(blockH - 120), width: 60 });
-      } else if (isPoliceStation || isHospital || isFireStation) {
+      } else if (isPoliceStation || isHospital || isFireStation || isSchoolBlock || isStadiumBlock || isTransitHubBlock || isCulturalCenterBlock) {
         driveways.push({ side: 'south', offset: Math.floor(blockW / 2 - 30), width: 60 });
+      } else if (isCarDealershipBlock) {
+        driveways.push({ side: 'south', offset: Math.floor(blockW - 140), width: 60 });
+      } else if (isShoppingMallBlock) {
+        driveways.push({ side: 'south', offset: 80, width: 70 });
+        driveways.push({ side: 'south', offset: Math.floor(blockW - 150), width: 70 });
+      } else if (isBusinessCenterBlock) {
+        driveways.push({ side: 'east', offset: Math.floor(blockH / 2 - 30), width: 60 });
       } else if (isIndustrial) {
         driveways.push({ side: 'north', offset: 80, width: 70 });
         driveways.push({ side: 'south', offset: Math.floor(blockW - 150), width: 70 });
@@ -1932,7 +1931,7 @@ export function generateCityWorld(): GameWorld {
           { type: 'truck_box', color: '#0284c7', roofColor: '#0284c7' },
           { type: 'truck_dump', color: '#d97706', roofColor: '#d97706' },
           { type: 'truck_water', color: '#0284c7', roofColor: '#0284c7' },
-          { type: 'bus_articulated', color: '#eab308', roofColor: '#ffffff' },
+          { type: 'truck_tanker', color: '#0369a1', roofColor: '#0369a1' },
           { type: 'fire_ladder', color: '#dc2626', roofColor: '#ffffff' }
         ];
 
@@ -1989,7 +1988,7 @@ export function generateCityWorld(): GameWorld {
       }
 
       // =========================================================================
-      // --- 4. COZY RESIDENTIAL COURTYARD BLOCKS (ЖИЛЫЕ ДВОРЫ С ТРОТУАРАМИ) ---
+      // --- 4. COZY RESIDENTIAL COURTYARD BLOCKS (ЖИЛЫЕ ДВОРЫ С ТРОТУАРАМИ И ПОДЪЕЗДАМИ) ---
       // =========================================================================
       if (isCourtyardBlock) {
         const innerX = blockX + sidewalkWidth + 10;
@@ -1997,77 +1996,89 @@ export function generateCityWorld(): GameWorld {
         const innerW = blockW - (sidewalkWidth * 2 + 20);
         const innerH = blockH - (sidewalkWidth * 2 + 20);
 
-        // 1. North Residential Wing (Multi-entrance apartment block)
+        // Determine residential archetype based on block grid coordinates
+        const isPanelBlock = (bx + by) % 3 === 0;
+        const isBrickBlock = (bx + by) % 3 === 1;
+
+        // 1. North Residential Building
         const northW = innerW - 90;
-        const northH = 60;
+        const northH = 65;
         buildings.push({
           id: `court_bld_n_${bx}_${by}`,
           x: innerX + 5,
           y: innerY + 5,
           width: northW,
           height: northH,
-          type: 'residential',
-          color: '#475569',
-          roofColor: '#334155',
-          accentColor: '#f59e0b',
+          type: isPanelBlock ? 'panel_apartment' : (isBrickBlock ? 'brick_residential' : 'modern_residential'),
+          color: isPanelBlock ? '#e2e8f0' : (isBrickBlock ? '#9a3412' : '#1e293b'),
+          roofColor: isPanelBlock ? '#cbd5e1' : (isBrickBlock ? '#7c2d12' : '#0f172a'),
+          accentColor: isPanelBlock ? '#f59e0b' : (isBrickBlock ? '#d97706' : '#38bdf8'),
           windows: [],
           balconies: [
-            { side: 'south', offset: 0.2, length: 18, depth: 6 },
-            { side: 'south', offset: 0.5, length: 18, depth: 6 },
-            { side: 'south', offset: 0.8, length: 18, depth: 6 }
+            { side: 'south', offset: 0.2, length: 22, depth: 6, isGlazed: true },
+            { side: 'south', offset: 0.5, length: 22, depth: 6, isGlazed: isPanelBlock },
+            { side: 'south', offset: 0.8, length: 22, depth: 6, isGlazed: true },
+            { side: 'north', offset: 0.35, length: 20, depth: 6, isGlazed: false },
+            { side: 'north', offset: 0.65, length: 20, depth: 6, isGlazed: false }
           ],
-          fireEscapes: [{ side: 'north', offset: 0.5, length: 20, depth: 5 }],
-          entranceSide: 'south',
+          entrances: [
+            { side: 'south', offsetRatio: 0.25, number: 1 },
+            { side: 'south', offsetRatio: 0.50, number: 2 },
+            { side: 'south', offsetRatio: 0.75, number: 3 }
+          ],
           roofDetails: [{ type: 'ac', rx: 0.3, ry: 0.3, rw: 0.15, rh: 0.4 }]
         });
 
-        // 2. West Residential Wing (Vertical apartment block)
-        const westW = 60;
-        const westH = innerH - 120;
+        // 2. West Residential Building
+        const westW = 65;
+        const westH = innerH - 125;
         buildings.push({
           id: `court_bld_w_${bx}_${by}`,
           x: innerX + 5,
-          y: innerY + 75,
+          y: innerY + 80,
           width: westW,
           height: westH,
-          type: 'residential',
-          color: '#334155',
-          roofColor: '#1e293b',
-          accentColor: '#38bdf8',
+          type: isPanelBlock ? 'brick_residential' : 'panel_apartment',
+          color: isPanelBlock ? '#c2410c' : '#cbd5e1',
+          roofColor: isPanelBlock ? '#9a3412' : '#94a3b8',
+          accentColor: isPanelBlock ? '#f59e0b' : '#38bdf8',
           windows: [],
           balconies: [
-            { side: 'east', offset: 0.3, length: 18, depth: 6 },
-            { side: 'east', offset: 0.7, length: 18, depth: 6 }
+            { side: 'east', offset: 0.28, length: 20, depth: 6, isGlazed: true },
+            { side: 'east', offset: 0.72, length: 20, depth: 6, isGlazed: false },
+            { side: 'west', offset: 0.5, length: 22, depth: 6, isGlazed: true }
           ],
-          fireEscapes: [{ side: 'west', offset: 0.5, length: 20, depth: 5 }],
-          entranceSide: 'east',
+          entrances: [
+            { side: 'east', offsetRatio: 0.3, number: 1 },
+            { side: 'east', offsetRatio: 0.7, number: 2 }
+          ],
           roofDetails: []
         });
 
         // Courtyard Geometry Bounds
-        const courtLeft = innerX + 75;
-        const courtTop = innerY + 75;
-        const courtW = innerW - 90;
-        const courtH = innerH - 85;
+        const courtLeft = innerX + 80;
+        const courtTop = innerY + 80;
+        const courtW = innerW - 95;
+        const courtH = innerH - 90;
 
-        // Paved Walkways (Тротуары во дворе):
-        // Main corridor walkway linking North entrances, West entrances, recreation square and street sidewalk
+        // Paved Walkways & Access Driveways (Тротуары и внутридворовой проезд):
         blockWalkways.push(
-          // Paved walkway along North building entrances
-          { x: innerX + 5, y: innerY + northH + 5, width: northW, height: 18, style: 'concrete' },
-          // Paved walkway along West building entrances
-          { x: innerX + westW + 5, y: innerY + 75, width: 18, height: westH, style: 'concrete' },
-          // Transverse connecting walkway to courtyard center
-          { x: courtLeft, y: courtTop + 40, width: courtW - 130, height: 16, style: 'concrete' },
+          // Asphalt access road connecting South driveway to parking & entrance drop-off
+          { x: innerX + innerW - 120, y: innerY + innerH, width: 50, height: blockH - innerH, style: 'asphalt' },
+          { x: innerX + westW + 5, y: courtTop + 40, width: innerW - westW - 15, height: 28, style: 'asphalt' },
+          // Paved sidewalk along North building entrances
+          { x: innerX + 5, y: innerY + northH + 2, width: northW, height: 18, style: 'concrete' },
+          // Paved sidewalk along West building entrances
+          { x: innerX + westW + 2, y: innerY + 80, width: 18, height: westH, style: 'concrete' },
           // Walkway connecting to South street sidewalk
-          { x: innerX + 30, y: innerY + 75 + westH, width: 18, height: innerH - (75 + westH), style: 'concrete' }
+          { x: innerX + 25, y: innerY + 80 + westH, width: 18, height: innerH - (80 + westH), style: 'concrete' }
         );
 
-        // Central Courtyard Recreation Plaza (Зона отдыха с плиткой, лавочками и клумбами)
-        const plazaW = 90;
-        const plazaH = 70;
-        const plazaX = courtLeft + 15;
-        const plazaY = courtTop + 15;
+        // Central Courtyard Recreation Plaza (Зона отдыха с плиткой, лавочками и детской площадкой)
+        const plazaW = 95;
+        const plazaH = 75;
+        const plazaX = courtLeft + 10;
+        const plazaY = courtTop + 10;
         blockPlazas.push({
           x: plazaX,
           y: plazaY,
@@ -2105,8 +2116,8 @@ export function generateCityWorld(): GameWorld {
 
         // Courtyard Greenery Trees
         trees.push(
-          { id: `court_tree_${bx}_${by}_1`, x: plazaX + plazaW / 2, y: plazaY - 20, radius: 13, color: '#15803d', shadowOffset: 4 },
-          { id: `court_tree_${bx}_${by}_2`, x: plazaX + plazaW / 2, y: plazaY + plazaH + 20, radius: 12, color: '#166534', shadowOffset: 4 }
+          { id: `court_tree_${bx}_${by}_1`, x: plazaX + plazaW / 2, y: plazaY - 20, radius: 14, color: '#15803d', shadowOffset: 4 },
+          { id: `court_tree_${bx}_${by}_2`, x: plazaX + plazaW / 2, y: plazaY + plazaH + 20, radius: 13, color: '#166534', shadowOffset: 4 }
         );
 
         // Courtyard Amenities: Benches strictly on paved walkways, streetlamps, flowerbeds, and corner dumpster corral
@@ -2124,8 +2135,8 @@ export function generateCityWorld(): GameWorld {
           { id: `c_ent_bench_n`, x: innerX + northW * 0.35, y: innerY + northH + 12, type: 'bench', angle: -Math.PI / 2 },
           { id: `c_ent_urn_n`, x: innerX + northW * 0.35 + 16, y: innerY + northH + 12, type: 'trash_can', angle: 0 },
 
-          { id: `c_ent_bench_w`, x: innerX + westW + 12, y: innerY + 75 + westH * 0.4, type: 'bench', angle: 0 },
-          { id: `c_ent_urn_w`, x: innerX + westW + 12, y: innerY + 75 + westH * 0.4 + 16, type: 'trash_can', angle: 0 },
+          { id: `c_ent_bench_w`, x: innerX + westW + 12, y: innerY + 80 + westH * 0.4, type: 'bench', angle: 0 },
+          { id: `c_ent_urn_w`, x: innerX + westW + 12, y: innerY + 80 + westH * 0.4 + 16, type: 'trash_can', angle: 0 },
 
           // Courtyard Night Illumination Streetlamps
           { id: `c_lamp_${bx}_${by}_1`, x: plazaX + plazaW / 2, y: plazaY + plazaH / 2, type: 'lamp', angle: 0 },
@@ -2136,6 +2147,557 @@ export function generateCityWorld(): GameWorld {
           { id: `c_dump_${bx}_${by}_1`, x: innerX + innerW - 35, y: innerY + 25, type: 'dumpster', angle: Math.PI / 2 },
           { id: `c_dump_${bx}_${by}_2`, x: innerX + innerW - 35, y: innerY + 48, type: 'dumpster', angle: Math.PI / 2 },
           { id: `c_dump_urn`, x: innerX + innerW - 35, y: innerY + 68, type: 'trash_can', angle: 0 }
+        );
+
+        continue;
+      }
+
+      // =========================================================================
+      // --- 4.5 SCHOOL & KINDERGARTEN CAMPUS (ШКОЛА И ДЕТСКИЙ САД) ---
+      // =========================================================================
+      if (isSchoolBlock) {
+        const innerX = blockX + sidewalkWidth + 10;
+        const innerY = blockY + sidewalkWidth + 10;
+        const innerW = blockW - (sidewalkWidth * 2 + 20);
+        const innerH = blockH - (sidewalkWidth * 2 + 20);
+
+        // Main School Building (Classical 3-story brick/panel educational building)
+        const schW = innerW - 120;
+        const schH = 80;
+        buildings.push({
+          id: `sch_main_${bx}_${by}`,
+          x: innerX + 10,
+          y: innerY + 10,
+          width: schW,
+          height: schH,
+          type: 'school_kindergarten',
+          color: '#d97706',
+          roofColor: '#b45309',
+          accentColor: '#fef08a',
+          windows: [],
+          entrances: [{ side: 'south', offsetRatio: 0.5, number: 1 }],
+          roofDetails: [{ type: 'ac', rx: 0.4, ry: 0.3, rw: 0.2, rh: 0.4 }]
+        });
+
+        // Kindergarten extension building
+        const kgW = 90;
+        const kgH = 60;
+        buildings.push({
+          id: `sch_kg_${bx}_${by}`,
+          x: innerX + innerW - kgW - 10,
+          y: innerY + 10,
+          width: kgW,
+          height: kgH,
+          type: 'school_kindergarten',
+          color: '#0284c7',
+          roofColor: '#0369a1',
+          accentColor: '#bae6fd',
+          windows: [],
+          entrances: [{ side: 'south', offsetRatio: 0.5, number: 1 }],
+          roofDetails: []
+        });
+
+        // School Asphalt Driveway from South road to entrance drop-off loop
+        blockWalkways.push({
+          x: innerX + innerW / 2 - 25,
+          y: innerY + schH + 5,
+          width: 50,
+          height: innerH - schH - 5,
+          style: 'asphalt'
+        });
+
+        // School Sports Court / Basketball Yard Plaza
+        const sportsW = 120;
+        const sportsH = 80;
+        const sportsX = innerX + 20;
+        const sportsY = innerY + schH + 25;
+        blockPlazas.push({
+          x: sportsX,
+          y: sportsY,
+          width: sportsW,
+          height: sportsH,
+          shape: 'rect',
+          style: 'tile'
+        });
+
+        // School Yard Trees & Benches
+        trees.push(
+          { id: `sch_tree_1`, x: sportsX - 10, y: sportsY + sportsH / 2, radius: 14, color: '#15803d', shadowOffset: 4 },
+          { id: `sch_tree_2`, x: sportsX + sportsW + 15, y: sportsY + sportsH / 2, radius: 14, color: '#166534', shadowOffset: 4 }
+        );
+
+        props.push(
+          { id: `sch_bench_1`, x: sportsX + 15, y: sportsY - 12, type: 'bench', angle: 0 },
+          { id: `sch_urn_1`, x: sportsX + 32, y: sportsY - 12, type: 'trash_can', angle: 0 },
+          { id: `sch_bench_2`, x: sportsX + sportsW - 35, y: sportsY - 12, type: 'bench', angle: 0 },
+          { id: `sch_urn_2`, x: sportsX + sportsW - 18, y: sportsY - 12, type: 'trash_can', angle: 0 },
+          { id: `sch_lamp_1`, x: sportsX + sportsW / 2, y: sportsY - 12, type: 'lamp', angle: 0 }
+        );
+
+        continue;
+      }
+
+      // =========================================================================
+      // --- 4.6 GRAND SHOPPING MALL (ТРЦ "CITY PLAZA") ---
+      // =========================================================================
+      if (isShoppingMallBlock) {
+        const innerX = blockX + sidewalkWidth + 10;
+        const innerY = blockY + sidewalkWidth + 10;
+        const innerW = blockW - (sidewalkWidth * 2 + 20);
+        const innerH = blockH - (sidewalkWidth * 2 + 20);
+
+        // Shopping Mall Complex
+        const mallW = innerW - 20;
+        const mallH = 110;
+        buildings.push({
+          id: `mall_main_${bx}_${by}`,
+          x: innerX + 10,
+          y: innerY + 10,
+          width: mallW,
+          height: mallH,
+          type: 'shopping_mall',
+          color: '#1e293b',
+          roofColor: '#0f172a',
+          accentColor: '#38bdf8',
+          windows: [],
+          entrances: [
+            { side: 'south', offsetRatio: 0.3, number: 1 },
+            { side: 'south', offsetRatio: 0.7, number: 2 }
+          ],
+          roofDetails: [
+            { type: 'skylight', rx: 0.2, ry: 0.2, rw: 0.6, rh: 0.5 },
+            { type: 'ac', rx: 0.05, ry: 0.2, rw: 0.1, rh: 0.6 },
+            { type: 'ac', rx: 0.85, ry: 0.2, rw: 0.1, rh: 0.6 }
+          ]
+        });
+
+        // Entrance Plaza
+        blockPlazas.push({
+          x: innerX + 10,
+          y: innerY + mallH + 10,
+          width: mallW,
+          height: 35,
+          shape: 'rect',
+          style: 'tile'
+        });
+
+        // Mall Visitor Parking Lot
+        const pkX = innerX + 10;
+        const pkY = innerY + mallH + 50;
+        const pkW = mallW;
+        const pkH = innerH - (mallH + 60);
+
+        if (pkH > 40) {
+          const mallSpots: ParkingArea['spots'] = [];
+          const numCols = Math.floor(pkW / 50);
+          for (let col = 0; col < numCols; col++) {
+            mallSpots.push(
+              { x: pkX + 25 + col * 50, y: pkY + 20, angle: Math.PI / 2, occupied: col % 2 === 0 },
+              { x: pkX + 25 + col * 50, y: pkY + pkH - 20, angle: -Math.PI / 2, occupied: col % 3 === 0 }
+            );
+          }
+
+          parkings.push({
+            id: `mall_parking_${bx}_${by}`,
+            x: pkX,
+            y: pkY,
+            width: pkW,
+            height: pkH,
+            spots: mallSpots
+          });
+        }
+
+        props.push(
+          { id: `mall_bench_1`, x: innerX + 40, y: innerY + mallH + 25, type: 'bench', angle: 0 },
+          { id: `mall_urn_1`, x: innerX + 58, y: innerY + mallH + 25, type: 'trash_can', angle: 0 },
+          { id: `mall_bench_2`, x: innerX + mallW - 60, y: innerY + mallH + 25, type: 'bench', angle: 0 },
+          { id: `mall_urn_2`, x: innerX + mallW - 42, y: innerY + mallH + 25, type: 'trash_can', angle: 0 },
+          { id: `mall_lamp_1`, x: innerX + mallW / 2, y: innerY + mallH + 25, type: 'lamp', angle: 0 }
+        );
+
+        continue;
+      }
+
+      // =========================================================================
+      // --- 4.7 BUSINESS CENTER HIGH-RISE TOWER (БИЗНЕС-ЦЕНТР "SKYLINE") ---
+      // =========================================================================
+      if (isBusinessCenterBlock) {
+        const innerX = blockX + sidewalkWidth + 10;
+        const innerY = blockY + sidewalkWidth + 10;
+        const innerW = blockW - (sidewalkWidth * 2 + 20);
+        const innerH = blockH - (sidewalkWidth * 2 + 20);
+
+        const bcW = Math.min(220, innerW - 100);
+        const bcH = Math.min(140, innerH - 30);
+        buildings.push({
+          id: `bc_tower_${bx}_${by}`,
+          x: innerX + 10,
+          y: innerY + 10,
+          width: bcW,
+          height: bcH,
+          type: 'business_center',
+          color: '#0f172a',
+          roofColor: '#0284c7',
+          accentColor: '#38bdf8',
+          windows: [],
+          entrances: [{ side: 'east', offsetRatio: 0.5, number: 1 }],
+          roofDetails: [
+            { type: 'helipad', rx: 0.25, ry: 0.2, rw: 0.5, rh: 0.6 }
+          ]
+        });
+
+        // Entrance Plaza
+        blockPlazas.push({
+          x: innerX + bcW + 10,
+          y: innerY + 10,
+          width: innerW - bcW - 20,
+          height: bcH,
+          shape: 'rect',
+          style: 'tile'
+        });
+
+        props.push(
+          { id: `bc_bench_1`, x: innerX + bcW + 25, y: innerY + 30, type: 'bench', angle: Math.PI / 2 },
+          { id: `bc_urn_1`, x: innerX + bcW + 25, y: innerY + 48, type: 'trash_can', angle: 0 },
+          { id: `bc_lamp_1`, x: innerX + bcW + 25, y: innerY + bcH / 2, type: 'lamp', angle: 0 }
+        );
+
+        continue;
+      }
+
+      // =========================================================================
+      // --- 4.8 SPORTS STADIUM & ARENA QUARTER (СПОРТКОМПЛЕКС ARENA) ---
+      // =========================================================================
+      if (isStadiumBlock) {
+        const innerX = blockX + sidewalkWidth + 10;
+        const innerY = blockY + sidewalkWidth + 10;
+        const innerW = blockW - (sidewalkWidth * 2 + 20);
+        const innerH = blockH - (sidewalkWidth * 2 + 20);
+
+        const arenaW = innerW - 100;
+        const arenaH = 100;
+        buildings.push({
+          id: `stadium_main_${bx}_${by}`,
+          x: innerX + 10,
+          y: innerY + 10,
+          width: arenaW,
+          height: arenaH,
+          type: 'sports_stadium',
+          color: '#15803d',
+          roofColor: '#166534',
+          accentColor: '#86efac',
+          windows: [],
+          entrances: [{ side: 'south', offsetRatio: 0.5, number: 1 }],
+          roofDetails: [{ type: 'ac', rx: 0.1, ry: 0.2, rw: 0.1, rh: 0.6 }, { type: 'ac', rx: 0.8, ry: 0.2, rw: 0.1, rh: 0.6 }]
+        });
+
+        // Sports plaza & fan promenade
+        blockPlazas.push({
+          x: innerX + 10,
+          y: innerY + arenaH + 10,
+          width: arenaW,
+          height: 40,
+          shape: 'rect',
+          style: 'tile'
+        });
+
+        // Fan Parking
+        const pkX = innerX + arenaW + 20;
+        const pkY = innerY + 10;
+        const pkW = innerW - arenaW - 30;
+        const pkH = innerH - 20;
+        if (pkW > 40) {
+          const stadSpots: ParkingArea['spots'] = [];
+          const numRows = Math.floor(pkH / 40);
+          for (let s = 0; s < numRows; s++) {
+            stadSpots.push({ x: pkX + pkW / 2, y: pkY + 20 + s * 40, angle: 0, occupied: s % 2 === 0 });
+          }
+          parkings.push({
+            id: `stadium_parking_${bx}_${by}`,
+            x: pkX,
+            y: pkY,
+            width: pkW,
+            height: pkH,
+            spots: stadSpots
+          });
+        }
+
+        props.push(
+          { id: `st_bench_1`, x: innerX + 30, y: innerY + arenaH + 25, type: 'bench', angle: 0 },
+          { id: `st_urn_1`, x: innerX + 48, y: innerY + arenaH + 25, type: 'trash_can', angle: 0 },
+          { id: `st_bench_2`, x: innerX + arenaW - 50, y: innerY + arenaH + 25, type: 'bench', angle: 0 },
+          { id: `st_urn_2`, x: innerX + arenaW - 32, y: innerY + arenaH + 25, type: 'trash_can', angle: 0 },
+          { id: `st_lamp_1`, x: innerX + arenaW / 2, y: innerY + arenaH + 25, type: 'lamp', angle: 0 },
+          { id: `st_kiosk_ticket`, x: innerX + 10, y: innerY + arenaH + 25, type: 'kiosk', angle: 0 }
+        );
+
+        continue;
+      }
+
+      // =========================================================================
+      // --- 4.9 RAILWAY STATION & TRANSIT HUB (ВОКЗАЛ TERMINAL) ---
+      // =========================================================================
+      if (isTransitHubBlock) {
+        const innerX = blockX + sidewalkWidth + 10;
+        const innerY = blockY + sidewalkWidth + 10;
+        const innerW = blockW - (sidewalkWidth * 2 + 20);
+        const innerH = blockH - (sidewalkWidth * 2 + 20);
+
+        const hubW = innerW - 80;
+        const hubH = 90;
+        buildings.push({
+          id: `transit_main_${bx}_${by}`,
+          x: innerX + 10,
+          y: innerY + 10,
+          width: hubW,
+          height: hubH,
+          type: 'transit_hub',
+          color: '#1e293b',
+          roofColor: '#0f172a',
+          accentColor: '#f59e0b',
+          windows: [],
+          entrances: [{ side: 'south', offsetRatio: 0.5, number: 1 }],
+          roofDetails: [{ type: 'skylight', rx: 0.2, ry: 0.2, rw: 0.6, rh: 0.5 }]
+        });
+
+        // Passenger Drop-Off Asphalt Lane & Paved Station Square
+        blockWalkways.push({
+          x: innerX + 10,
+          y: innerY + hubH + 5,
+          width: hubW,
+          height: 25,
+          style: 'asphalt'
+        });
+
+        blockPlazas.push({
+          x: innerX + 10,
+          y: innerY + hubH + 32,
+          width: hubW,
+          height: 40,
+          shape: 'rect',
+          style: 'tile'
+        });
+
+        props.push(
+          { id: `hub_bench_1`, x: innerX + 30, y: innerY + hubH + 45, type: 'bench', angle: 0 },
+          { id: `hub_urn_1`, x: innerX + 48, y: innerY + hubH + 45, type: 'trash_can', angle: 0 },
+          { id: `hub_bench_2`, x: innerX + hubW - 50, y: innerY + hubH + 45, type: 'bench', angle: 0 },
+          { id: `hub_urn_2`, x: innerX + hubW - 32, y: innerY + hubH + 45, type: 'trash_can', angle: 0 },
+          { id: `hub_lamp_1`, x: innerX + hubW / 2, y: innerY + hubH + 45, type: 'lamp', angle: 0 },
+          { id: `hub_kiosk_news`, x: innerX + 15, y: innerY + hubH + 45, type: 'kiosk', angle: 0 },
+          { id: `hub_bus_stop`, x: innerX + hubW - 15, y: innerY + hubH + 15, type: 'bus_stop', angle: 0 }
+        );
+
+        continue;
+      }
+
+      // =========================================================================
+      // --- 4.10 CAR DEALERSHIP & AUTO SHOWROOM (АВТОСАЛОН MOTORS) ---
+      // =========================================================================
+      if (isCarDealershipBlock) {
+        const innerX = blockX + sidewalkWidth + 10;
+        const innerY = blockY + sidewalkWidth + 10;
+        const innerW = blockW - (sidewalkWidth * 2 + 20);
+        const innerH = blockH - (sidewalkWidth * 2 + 20);
+
+        const dealW = 150;
+        const dealH = 80;
+        buildings.push({
+          id: `deal_main_${bx}_${by}`,
+          x: innerX + 10,
+          y: innerY + 10,
+          width: dealW,
+          height: dealH,
+          type: 'car_dealership',
+          color: '#0284c7',
+          roofColor: '#0369a1',
+          accentColor: '#38bdf8',
+          windows: [],
+          entrances: [{ side: 'south', offsetRatio: 0.5, number: 1 }],
+          roofDetails: [{ type: 'ac', rx: 0.2, ry: 0.3, rw: 0.2, rh: 0.4 }]
+        });
+
+        // Display Pad Plaza for New Vehicles
+        const dispW = innerW - dealW - 30;
+        blockPlazas.push({
+          x: innerX + dealW + 20,
+          y: innerY + 10,
+          width: dispW,
+          height: dealH + 40,
+          shape: 'rect',
+          style: 'tile'
+        });
+
+        // Customer & Test-Drive Parking Lot
+        const pkX = innerX + 10;
+        const pkY = innerY + dealH + 20;
+        const pkW = dealW;
+        const pkH = innerH - dealH - 30;
+        if (pkH > 40) {
+          const dealSpots: ParkingArea['spots'] = [];
+          const numCols = Math.floor(pkW / 45);
+          for (let c = 0; c < numCols; c++) {
+            dealSpots.push({ x: pkX + 22 + c * 45, y: pkY + pkH / 2, angle: Math.PI / 2, occupied: true });
+          }
+          parkings.push({
+            id: `deal_parking_${bx}_${by}`,
+            x: pkX,
+            y: pkY,
+            width: pkW,
+            height: pkH,
+            spots: dealSpots
+          });
+        }
+
+        props.push(
+          { id: `deal_lamp_1`, x: innerX + dealW + 35, y: innerY + dealH + 20, type: 'lamp', angle: 0 },
+          { id: `deal_lamp_2`, x: innerX + dealW + dispW - 15, y: innerY + dealH + 20, type: 'lamp', angle: 0 }
+        );
+
+        continue;
+      }
+
+      // =========================================================================
+      // --- 4.11 CULTURAL CENTER & PALACE OF ARTS (ДВОРЕЦ КУЛЬТУРЫ) ---
+      // =========================================================================
+      if (isCulturalCenterBlock) {
+        const innerX = blockX + sidewalkWidth + 10;
+        const innerY = blockY + sidewalkWidth + 10;
+        const innerW = blockW - (sidewalkWidth * 2 + 20);
+        const innerH = blockH - (sidewalkWidth * 2 + 20);
+
+        const cultW = innerW - 60;
+        const cultH = 95;
+        buildings.push({
+          id: `cultural_main_${bx}_${by}`,
+          x: innerX + 30,
+          y: innerY + 10,
+          width: cultW,
+          height: cultH,
+          type: 'cultural_center',
+          color: '#7c2d12',
+          roofColor: '#451a03',
+          accentColor: '#fef08a',
+          windows: [],
+          entrances: [{ side: 'south', offsetRatio: 0.5, number: 1 }],
+          roofDetails: [{ type: 'skylight', rx: 0.3, ry: 0.2, rw: 0.4, rh: 0.5 }]
+        });
+
+        // Marble Plaza in front with Statue Monument
+        const plazaY = innerY + cultH + 15;
+        const plazaH = innerH - cultH - 25;
+        blockPlazas.push({
+          x: innerX + 20,
+          y: plazaY,
+          width: cultW + 20,
+          height: plazaH,
+          shape: 'rect',
+          style: 'tile'
+        });
+
+        // Monument prop in plaza center
+        props.push(
+          { id: `cult_monument`, x: innerX + 30 + cultW / 2, y: plazaY + plazaH / 2, type: 'flowerbed', angle: 0 },
+          { id: `cult_bench_1`, x: innerX + 40, y: plazaY + plazaH / 2, type: 'bench', angle: Math.PI / 2 },
+          { id: `cult_urn_1`, x: innerX + 40, y: plazaY + plazaH / 2 + 18, type: 'trash_can', angle: 0 },
+          { id: `cult_bench_2`, x: innerX + cultW + 10, y: plazaY + plazaH / 2, type: 'bench', angle: -Math.PI / 2 },
+          { id: `cult_urn_2`, x: innerX + cultW + 10, y: plazaY + plazaH / 2 + 18, type: 'trash_can', angle: 0 },
+          { id: `cult_lamp_1`, x: innerX + 40, y: plazaY + 15, type: 'lamp', angle: 0 },
+          { id: `cult_lamp_2`, x: innerX + cultW + 10, y: plazaY + 15, type: 'lamp', angle: 0 }
+        );
+
+        trees.push(
+          { id: `cult_tree_1`, x: innerX + 15, y: plazaY + plazaH / 2, radius: 13, color: '#15803d', shadowOffset: 4 },
+          { id: `cult_tree_2`, x: innerX + cultW + 35, y: plazaY + plazaH / 2, radius: 13, color: '#15803d', shadowOffset: 4 }
+        );
+
+        continue;
+      }
+
+      // =========================================================================
+      // --- 4.12 AUTO SERVICE & MOTOR REPAIR CENTER (АВТОТЕХЦЕНТР / СТО / MOТОРС) ---
+      // =========================================================================
+      if (isAutoCenter) {
+        const innerX = blockX + sidewalkWidth + 10;
+        const innerY = blockY + sidewalkWidth + 10;
+        const innerW = blockW - (sidewalkWidth * 2 + 20);
+        const innerH = blockH - (sidewalkWidth * 2 + 20);
+
+        // Main Service Workshop & Repair Bays
+        const repairW = 140;
+        const repairH = 75;
+        buildings.push({
+          id: `auto_service_${bx}_${by}`,
+          x: innerX + 10,
+          y: innerY + 10,
+          width: repairW,
+          height: repairH,
+          type: 'commercial',
+          color: '#334155',
+          roofColor: '#1e293b',
+          accentColor: '#f59e0b',
+          windows: [],
+          entrances: [
+            { side: 'south', offsetRatio: 0.3, number: 1 },
+            { side: 'south', offsetRatio: 0.7, number: 2 }
+          ],
+          roofDetails: [{ type: 'ac', rx: 0.2, ry: 0.2, rw: 0.2, rh: 0.5 }]
+        });
+
+        // Inspection Bay / Car Wash Annex
+        const washW = innerW - repairW - 30;
+        const washH = 55;
+        buildings.push({
+          id: `auto_wash_${bx}_${by}`,
+          x: innerX + repairW + 20,
+          y: innerY + 10,
+          width: washW,
+          height: washH,
+          type: 'commercial',
+          color: '#0284c7',
+          roofColor: '#0369a1',
+          accentColor: '#38bdf8',
+          windows: [],
+          entrances: [{ side: 'south', offsetRatio: 0.5, number: 1 }],
+          roofDetails: []
+        });
+
+        // Asphalt Maneuvering Yard
+        blockWalkways.push({
+          x: innerX + 10,
+          y: innerY + repairH + 10,
+          width: innerW - 20,
+          height: 25,
+          style: 'asphalt'
+        });
+
+        // Customer & Service Vehicle Parking Lot
+        const pkX = innerX + 10;
+        const pkY = innerY + repairH + 40;
+        const pkW = innerW - 20;
+        const pkH = innerH - repairH - 50;
+
+        if (pkH > 35) {
+          const autoSpots: ParkingArea['spots'] = [];
+          const numCols = Math.floor(pkW / 45);
+          for (let c = 0; c < numCols; c++) {
+            autoSpots.push({ x: pkX + 22 + c * 45, y: pkY + pkH / 2, angle: Math.PI / 2, occupied: c % 2 === 0 });
+          }
+          parkings.push({
+            id: `auto_parking_${bx}_${by}`,
+            x: pkX,
+            y: pkY,
+            width: pkW,
+            height: pkH,
+            spots: autoSpots
+          });
+        }
+
+        props.push(
+          { id: `auto_dump_1`, x: innerX + innerW - 30, y: innerY + repairH + 20, type: 'dumpster', angle: 0 },
+          { id: `auto_lamp_1`, x: innerX + 25, y: innerY + repairH + 20, type: 'lamp', angle: 0 },
+          { id: `auto_lamp_2`, x: innerX + repairW + 10, y: innerY + repairH + 20, type: 'lamp', angle: 0 },
+          { id: `auto_kiosk`, x: innerX + repairW - 20, y: innerY + repairH + 20, type: 'kiosk', angle: 0 }
         );
 
         continue;
@@ -2302,7 +2864,7 @@ export function generateCityWorld(): GameWorld {
       }
 
       // =========================================================================
-      // --- 7. INDUSTRIAL & LOGISTICS FLEET DEPOT ---
+      // --- 7. INDUSTRIAL & LOGISTICS FLEET DEPOT (РАЗНООБРАЗНЫЕ ЛОГИСТИЧЕСКИЕ ХАБЫ И ПРОМЗОНЫ) ---
       // =========================================================================
       if (isIndustrial) {
         const innerX = blockX + sidewalkWidth + 10;
@@ -2310,207 +2872,484 @@ export function generateCityWorld(): GameWorld {
         const innerW = blockW - (sidewalkWidth * 2 + 20);
         const innerH = blockH - (sidewalkWidth * 2 + 20);
 
-        // Logistics Warehouse
-        const wW = innerW - 120;
-        const wH = 75;
-        buildings.push({
-          id: `ind_wh_${bx}_${by}`,
-          x: innerX + 10,
-          y: innerY + 10,
-          width: wW,
-          height: wH,
-          type: 'industrial',
-          color: '#52525b',
-          roofColor: '#3f3f46',
-          accentColor: '#eab308',
-          windows: [],
-          entranceSide: 'south',
-          roofDetails: [{ type: 'ac', rx: 0.3, ry: 0.3, rw: 0.15, rh: 0.4 }]
-        });
+        const indVariant = (bx * 5 + by * 3) % 4;
 
-        // Industrial loading yard & truck staging parking
-        const pkX = innerX + wW + 20;
-        const pkY = innerY + 10;
-        const pkW = innerW - wW - 30;
-        const pkH = innerH - 20;
+        if (indVariant === 0) {
+          // --- VARIANT 0: HEAVY CARGO DISTRIBUTION HUB (КАРГО ТЕРМИНАЛ HANGAR & SORTING ANNEX) ---
+          const wW = innerW - 130;
+          const wH = 75;
+          buildings.push({
+            id: `ind_hub_main_${bx}_${by}`,
+            x: innerX + 10,
+            y: innerY + 10,
+            width: wW,
+            height: wH,
+            type: 'industrial',
+            color: '#52525b',
+            roofColor: '#3f3f46',
+            accentColor: '#eab308',
+            windows: [],
+            entrances: [{ side: 'south', offsetRatio: 0.5, number: 1 }],
+            roofDetails: [
+              { type: 'ac', rx: 0.2, ry: 0.3, rw: 0.15, rh: 0.4 },
+              { type: 'ac', rx: 0.7, ry: 0.3, rw: 0.15, rh: 0.4 }
+            ]
+          });
 
-        const indSpots: ParkingArea['spots'] = [];
-        const numRowsInd = Math.floor(pkH / 48);
-        for (let s = 0; s < numRowsInd; s++) {
-          indSpots.push({ x: pkX + pkW / 2, y: pkY + 22 + s * 48, angle: 0, occupied: s === 0 && bx % 2 === 0 });
+          const w2W = 110;
+          const w2H = 55;
+          buildings.push({
+            id: `ind_hub_annex_${bx}_${by}`,
+            x: innerX + 10,
+            y: innerY + 105,
+            width: w2W,
+            height: w2H,
+            type: 'industrial',
+            color: '#3f3f46',
+            roofColor: '#27272a',
+            accentColor: '#f59e0b',
+            windows: [],
+            entrances: [{ side: 'east', offsetRatio: 0.5, number: 1 }],
+            roofDetails: []
+          });
+
+          // Asphalt Maneuvering Yard & Loading Corridor
+          blockWalkways.push(
+            { x: innerX + 10, y: innerY + wH + 5, width: wW, height: 18, style: 'asphalt' },
+            { x: innerX + w2W + 5, y: innerY + 105, width: wW - w2W, height: w2H, style: 'asphalt' }
+          );
+
+          // Fleet Truck Staging Parking Lot
+          const pkX = innerX + wW + 20;
+          const pkY = innerY + 10;
+          const pkW = innerW - wW - 30;
+          const pkH = innerH - 20;
+
+          if (pkW > 40) {
+            const indSpots: ParkingArea['spots'] = [];
+            const numRowsInd = Math.floor(pkH / 48);
+            for (let s = 0; s < numRowsInd; s++) {
+              indSpots.push({ x: pkX + pkW / 2, y: pkY + 22 + s * 48, angle: 0, occupied: s % 2 === 0 });
+            }
+
+            parkings.push({
+              id: `ind_parking_${bx}_${by}`,
+              x: pkX,
+              y: pkY,
+              width: pkW,
+              height: pkH,
+              spots: indSpots
+            });
+          }
+
+          props.push(
+            { id: `ind_dump_0_1`, x: innerX + w2W + 20, y: innerY + 105 + w2H / 2, type: 'dumpster', angle: 0 },
+            { id: `ind_lamp_0_1`, x: pkX + pkW / 2, y: pkY + 15, type: 'lamp', angle: 0 },
+            { id: `ind_lamp_0_2`, x: innerX + 25, y: innerY + wH + 12, type: 'lamp', angle: 0 },
+            { id: `ind_kiosk_0`, x: innerX + wW - 25, y: innerY + wH + 12, type: 'kiosk', angle: 0 }
+          );
+        } else if (indVariant === 1) {
+          // --- VARIANT 1: INDUSTRIAL MANUFACTURING PLANT (ЗАВОДСКОЙ КОМПЛЕКС С ДВУМЯ КОРПУСАМИ) ---
+          const nW = innerW - 20;
+          const nH = 65;
+          buildings.push({
+            id: `ind_mfg_n_${bx}_${by}`,
+            x: innerX + 10,
+            y: innerY + 10,
+            width: nW,
+            height: nH,
+            type: 'industrial',
+            color: '#334155',
+            roofColor: '#1e293b',
+            accentColor: '#38bdf8',
+            windows: [],
+            entrances: [{ side: 'south', offsetRatio: 0.5, number: 1 }],
+            roofDetails: [{ type: 'skylight', rx: 0.2, ry: 0.2, rw: 0.6, rh: 0.5 }]
+          });
+
+          const sW = innerW - 120;
+          const sH = 65;
+          const sY = innerY + innerH - sH - 10;
+          buildings.push({
+            id: `ind_mfg_s_${bx}_${by}`,
+            x: innerX + 10,
+            y: sY,
+            width: sW,
+            height: sH,
+            type: 'industrial',
+            color: '#475569',
+            roofColor: '#334155',
+            accentColor: '#eab308',
+            windows: [],
+            entrances: [{ side: 'north', offsetRatio: 0.5, number: 1 }],
+            roofDetails: []
+          });
+
+          // Central Asphalt Transport Corridor
+          const blvdY = innerY + nH + 10;
+          const blvdH = sY - (innerY + nH + 10) - 10;
+          blockWalkways.push({
+            x: innerX + 10,
+            y: blvdY,
+            width: nW,
+            height: blvdH,
+            style: 'asphalt'
+          });
+
+          // Factory Delivery Truck Parking
+          const pkX = innerX + sW + 20;
+          const pkY = sY;
+          const pkW = innerW - sW - 30;
+          const pkH = sH;
+
+          if (pkW > 40) {
+            const mfgSpots: ParkingArea['spots'] = [];
+            mfgSpots.push(
+              { x: pkX + pkW / 2, y: pkY + 20, angle: 0, occupied: true },
+              { x: pkX + pkW / 2, y: pkY + pkH - 20, angle: 0, occupied: false }
+            );
+
+            parkings.push({
+              id: `ind_mfg_pk_${bx}_${by}`,
+              x: pkX,
+              y: pkY,
+              width: pkW,
+              height: pkH,
+              spots: mfgSpots
+            });
+          }
+
+          props.push(
+            { id: `ind_dump_1_1`, x: innerX + nW - 30, y: blvdY + 10, type: 'dumpster', angle: 0 },
+            { id: `ind_lamp_1_1`, x: innerX + nW / 2, y: blvdY + blvdH / 2, type: 'lamp', angle: 0 },
+            { id: `ind_kiosk_1`, x: innerX + 25, y: blvdY + 10, type: 'kiosk', angle: 0 }
+          );
+        } else if (indVariant === 2) {
+          // --- VARIANT 2: FLEET DEPOT & MOTOR TRANSPORT ENTERPRISE (АВТОТРАНСПОРТНОЕ ПРЕДПРИЯТИЕ АТП) ---
+          const atpW = 75;
+          const atpH = innerH - 20;
+          buildings.push({
+            id: `ind_atp_main_${bx}_${by}`,
+            x: innerX + 10,
+            y: innerY + 10,
+            width: atpW,
+            height: atpH,
+            type: 'industrial',
+            color: '#1e293b',
+            roofColor: '#0f172a',
+            accentColor: '#ef4444',
+            windows: [],
+            entrances: [{ side: 'east', offsetRatio: 0.5, number: 1 }],
+            roofDetails: [{ type: 'ac', rx: 0.3, ry: 0.2, rw: 0.4, rh: 0.6 }]
+          });
+
+          // Paved Entrance & Maneuvering Apron
+          blockWalkways.push({
+            x: innerX + atpW + 2,
+            y: innerY + 10,
+            width: 25,
+            height: atpH,
+            style: 'asphalt'
+          });
+
+          // Large Heavy Vehicle & Fleet Parking
+          const pkX = innerX + atpW + 35;
+          const pkY = innerY + 10;
+          const pkW = innerW - atpW - 45;
+          const pkH = innerH - 20;
+
+          if (pkW > 40) {
+            const atpSpots: ParkingArea['spots'] = [];
+            const numRows = Math.floor(pkH / 44);
+            for (let r = 0; r < numRows; r++) {
+              atpSpots.push({ x: pkX + pkW / 2, y: pkY + 20 + r * 44, angle: 0, occupied: r % 2 === 0 });
+            }
+
+            parkings.push({
+              id: `ind_atp_pk_${bx}_${by}`,
+              x: pkX,
+              y: pkY,
+              width: pkW,
+              height: pkH,
+              spots: atpSpots
+            });
+          }
+
+          props.push(
+            { id: `ind_dump_2_1`, x: innerX + atpW + 10, y: innerY + atpH - 25, type: 'dumpster', angle: Math.PI / 2 },
+            { id: `ind_lamp_2_1`, x: innerX + atpW + 10, y: innerY + 25, type: 'lamp', angle: 0 },
+            { id: `ind_kiosk_2`, x: innerX + atpW + 10, y: innerY + atpH / 2, type: 'kiosk', angle: 0 }
+          );
+        } else {
+          // --- VARIANT 3: CLASS-A LOGISTICS TERMINAL & DOCK GATE (СПО КЛАССА A) ---
+          const termW = innerW - 20;
+          const termH = 80;
+          buildings.push({
+            id: `ind_term_main_${bx}_${by}`,
+            x: innerX + 10,
+            y: innerY + 10,
+            width: termW,
+            height: termH,
+            type: 'industrial',
+            color: '#0f172a',
+            roofColor: '#1e293b',
+            accentColor: '#38bdf8',
+            windows: [],
+            entrances: [
+              { side: 'south', offsetRatio: 0.25, number: 1 },
+              { side: 'south', offsetRatio: 0.75, number: 2 }
+            ],
+            roofDetails: [
+              { type: 'skylight', rx: 0.15, ry: 0.2, rw: 0.7, rh: 0.5 }
+            ]
+          });
+
+          // Dock Ramps & Cargo Apron
+          blockWalkways.push({
+            x: innerX + 10,
+            y: innerY + termH + 5,
+            width: termW,
+            height: 30,
+            style: 'asphalt'
+          });
+
+          // Visitor & Delivery Truck Parking
+          const pkX = innerX + 10;
+          const pkY = innerY + termH + 45;
+          const pkW = termW;
+          const pkH = innerH - termH - 55;
+
+          if (pkH > 35) {
+            const termSpots: ParkingArea['spots'] = [];
+            const numCols = Math.floor(pkW / 50);
+            for (let col = 0; col < numCols; col++) {
+              termSpots.push({ x: pkX + 25 + col * 50, y: pkY + pkH / 2, angle: Math.PI / 2, occupied: col % 2 === 0 });
+            }
+
+            parkings.push({
+              id: `ind_term_pk_${bx}_${by}`,
+              x: pkX,
+              y: pkY,
+              width: pkW,
+              height: pkH,
+              spots: termSpots
+            });
+          }
+
+          props.push(
+            { id: `ind_dump_3_1`, x: innerX + termW - 20, y: innerY + termH + 20, type: 'dumpster', angle: 0 },
+            { id: `ind_lamp_3_1`, x: innerX + 30, y: innerY + termH + 20, type: 'lamp', angle: 0 },
+            { id: `ind_lamp_3_2`, x: innerX + termW - 50, y: innerY + termH + 20, type: 'lamp', angle: 0 },
+            { id: `ind_kiosk_3`, x: innerX + termW / 2, y: innerY + termH + 20, type: 'kiosk', angle: 0 }
+          );
         }
-
-        parkings.push({
-          id: `ind_parking_${bx}_${by}`,
-          x: pkX,
-          y: pkY,
-          width: pkW,
-          height: pkH,
-          spots: indSpots
-        });
-
-        // Logistics walkways & heavy dumpsters
-        blockWalkways.push({
-          x: innerX + 10,
-          y: innerY + wH + 10,
-          width: wW,
-          height: 20,
-          style: 'asphalt'
-        });
-
-        props.push(
-          { id: `ind_dump_1`, x: innerX + 25, y: innerY + innerH - 25, type: 'dumpster', angle: 0 },
-          { id: `ind_dump_2`, x: innerX + 60, y: innerY + innerH - 25, type: 'dumpster', angle: 0 },
-          { id: `ind_lamp_1`, x: pkX + pkW / 2, y: pkY + 15, type: 'lamp', angle: 0 },
-          { id: `ind_lamp_2`, x: innerX + 25, y: innerY + wH + 20, type: 'lamp', angle: 0 },
-          { id: `ind_kiosk_guard`, x: innerX + wW - 25, y: innerY + wH + 20, type: 'kiosk', angle: 0 }
-        );
 
         continue;
       }
 
       // =========================================================================
-      // --- 8. URBAN DOWNTOWN & HIGH-RISE COMMERCIAL SKYSCRAPERS ---
+      // --- 8. URBAN DOWNTOWN & VARIED ARCHITECTURAL BLOCK LAYOUTS ---
       // =========================================================================
       const innerX = blockX + sidewalkWidth + 12;
       const innerY = blockY + sidewalkWidth + 12;
       const innerW = blockW - (sidewalkWidth * 2 + 24);
       const innerH = blockH - (sidewalkWidth * 2 + 24);
 
-      const bCols = 2;
-      const bRows = 2;
-      const bSlotW = innerW / bCols;
-      const bSlotH = innerH / bRows;
+      const layoutVariant = (bx * 3 + by * 7) % 3;
 
-      // Central Plaza connecting commercial towers
-      blockPlazas.push({
-        x: innerX + bSlotW - 25,
-        y: innerY + bSlotH - 25,
-        width: 50,
-        height: 50,
-        shape: 'rect',
-        style: 'tile'
-      });
+      if (layoutVariant === 0) {
+        // --- LAYOUT 0: L-SHAPED CORNER ENSEMBLE WITH LARGE PAVED CORNER PLAZA ---
+        const nW = innerW - 70;
+        const nH = 65;
+        buildings.push({
+          id: `urb_l0_n_${bx}_${by}`,
+          x: innerX + 5,
+          y: innerY + 5,
+          width: nW,
+          height: nH,
+          type: 'business_center',
+          color: '#0f172a',
+          roofColor: '#0284c7',
+          accentColor: '#38bdf8',
+          windows: [],
+          entrances: [{ side: 'south', offsetRatio: 0.5, number: 1 }],
+          roofDetails: [{ type: 'helipad', rx: 0.2, ry: 0.2, rw: 0.4, rh: 0.6 }]
+        });
 
-      for (let r = 0; r < bRows; r++) {
-        for (let c = 0; c < bCols; c++) {
-          const bWidth = bSlotW - 24;
-          const bHeight = bSlotH - 24;
-          const bxLocal = innerX + c * bSlotW + 12;
-          const byLocal = innerY + r * bSlotH + 12;
+        const wW = 65;
+        const wH = innerH - 90;
+        buildings.push({
+          id: `urb_l0_w_${bx}_${by}`,
+          x: innerX + 5,
+          y: innerY + 80,
+          width: wW,
+          height: wH,
+          type: 'modern_residential',
+          color: '#1e293b',
+          roofColor: '#0f172a',
+          accentColor: '#f59e0b',
+          windows: [],
+          balconies: [
+            { side: 'east', offset: 0.3, length: 22, depth: 6, isGlazed: true },
+            { side: 'east', offset: 0.7, length: 22, depth: 6, isGlazed: true }
+          ],
+          entrances: [{ side: 'east', offsetRatio: 0.5, number: 1 }],
+          roofDetails: [{ type: 'ac', rx: 0.2, ry: 0.2, rw: 0.3, rh: 0.4 }]
+        });
 
-          if (bWidth < 45 || bHeight < 45) continue;
+        // Continuous paved walkway connecting entrances to corner plaza
+        blockWalkways.push(
+          { x: innerX + 5, y: innerY + nH + 2, width: nW, height: 18, style: 'concrete' },
+          { x: innerX + wW + 2, y: innerY + 80, width: 18, height: wH, style: 'concrete' }
+        );
 
-          let bType: Building['type'] = 'office';
-          let color = '#1e293b';
-          let roofColor = '#0f172a';
-          let accent = '#38bdf8';
+        // Large Paved Corner Plaza in SE
+        const plazaX = innerX + 80;
+        const plazaY = innerY + 80;
+        const plazaW = innerW - 85;
+        const plazaH = innerH - 85;
+        blockPlazas.push({
+          x: plazaX,
+          y: plazaY,
+          width: plazaW,
+          height: plazaH,
+          shape: 'rect',
+          style: 'tile'
+        });
 
-          const rand = Math.random();
-          if (rand < 0.45) {
-            bType = 'office';
-            color = '#1e293b';
-            roofColor = '#0f172a';
-            accent = '#38bdf8';
-          } else if (rand < 0.75) {
-            bType = 'shop';
-            color = '#3f3f46';
-            roofColor = '#27272a';
-            accent = '#ef4444';
-          } else {
-            bType = 'residential';
-            color = '#475569';
-            roofColor = '#334155';
-            accent = '#f59e0b';
+        // Props neatly placed ON paved walkways and plaza
+        props.push(
+          { id: `urb_bench_l0_1`, x: innerX + nW * 0.3, y: innerY + nH + 11, type: 'bench', angle: 0 },
+          { id: `urb_urn_l0_1`, x: innerX + nW * 0.3 + 18, y: innerY + nH + 11, type: 'trash_can', angle: 0 },
+          { id: `urb_bench_l0_2`, x: innerX + wW + 11, y: innerY + 80 + wH * 0.5, type: 'bench', angle: Math.PI / 2 },
+          { id: `urb_urn_l0_2`, x: innerX + wW + 11, y: innerY + 80 + wH * 0.5 + 18, type: 'trash_can', angle: 0 },
+          { id: `urb_flower_l0_1`, x: plazaX + plazaW / 2, y: plazaY + plazaH / 2, type: 'flowerbed', angle: 0 },
+          { id: `urb_lamp_l0_1`, x: plazaX + 15, y: plazaY + 15, type: 'lamp', angle: 0 },
+          { id: `urb_kiosk_l0_1`, x: plazaX + plazaW - 20, y: plazaY + 15, type: 'kiosk', angle: 0 }
+        );
+      } else if (layoutVariant === 1) {
+        // --- LAYOUT 1: CENTRAL PEDESTRIAN BOULEVARD & DUAL PARALLEL WINGS ---
+        const nW = innerW - 10;
+        const nH = 65;
+        buildings.push({
+          id: `urb_l1_n_${bx}_${by}`,
+          x: innerX + 5,
+          y: innerY + 5,
+          width: nW,
+          height: nH,
+          type: 'commercial',
+          color: '#3f3f46',
+          roofColor: '#27272a',
+          accentColor: '#38bdf8',
+          windows: [],
+          entrances: [{ side: 'south', offsetRatio: 0.5, number: 1 }],
+          roofDetails: [{ type: 'ac', rx: 0.2, ry: 0.3, rw: 0.15, rh: 0.4 }]
+        });
+
+        const sW = innerW - 10;
+        const sH = 65;
+        const sY = innerY + innerH - sH - 5;
+        buildings.push({
+          id: `urb_l1_s_${bx}_${by}`,
+          x: innerX + 5,
+          y: sY,
+          width: sW,
+          height: sH,
+          type: (bx + by) % 2 === 0 ? 'panel_apartment' : 'brick_residential',
+          color: (bx + by) % 2 === 0 ? '#e2e8f0' : '#9a3412',
+          roofColor: (bx + by) % 2 === 0 ? '#cbd5e1' : '#7c2d12',
+          accentColor: '#f59e0b',
+          windows: [],
+          balconies: [
+            { side: 'north', offset: 0.25, length: 22, depth: 6, isGlazed: true },
+            { side: 'north', offset: 0.75, length: 22, depth: 6, isGlazed: false }
+          ],
+          entrances: [{ side: 'north', offsetRatio: 0.5, number: 1 }],
+          roofDetails: []
+        });
+
+        // Wide Central Pedestrian Boulevard running East-West
+        const blvdY = innerY + nH + 10;
+        const blvdH = sY - (innerY + nH + 10) - 10;
+        blockWalkways.push({
+          x: innerX + 5,
+          y: blvdY,
+          width: nW,
+          height: blvdH,
+          style: 'concrete'
+        });
+
+        // Props on the central boulevard
+        props.push(
+          { id: `blvd_bench_1_${bx}_${by}`, x: innerX + nW * 0.25, y: blvdY + blvdH / 2 - 8, type: 'bench', angle: 0 },
+          { id: `blvd_urn_1_${bx}_${by}`, x: innerX + nW * 0.25 + 18, y: blvdY + blvdH / 2 - 8, type: 'trash_can', angle: 0 },
+          { id: `blvd_bench_2_${bx}_${by}`, x: innerX + nW * 0.75, y: blvdY + blvdH / 2 - 8, type: 'bench', angle: 0 },
+          { id: `blvd_urn_2_${bx}_${by}`, x: innerX + nW * 0.75 + 18, y: blvdY + blvdH / 2 - 8, type: 'trash_can', angle: 0 },
+          { id: `blvd_lamp_1_${bx}_${by}`, x: innerX + nW * 0.5, y: blvdY + blvdH / 2 - 8, type: 'lamp', angle: 0 },
+          { id: `blvd_flower_1_${bx}_${by}`, x: innerX + nW * 0.5 + 20, y: blvdY + blvdH / 2 - 8, type: 'flowerbed', angle: 0 }
+        );
+
+        trees.push({
+          id: `blvd_tree_1_${bx}_${by}`, x: innerX + 25, y: blvdY + blvdH / 2, radius: 12, color: '#15803d', shadowOffset: 4
+        }, {
+          id: `blvd_tree_2_${bx}_${by}`, x: innerX + nW - 25, y: blvdY + blvdH / 2, radius: 12, color: '#15803d', shadowOffset: 4
+        });
+      } else {
+        // --- LAYOUT 2: CENTERPIECE HIGH-RISE TOWER & LANDSCAPED QUAD WITH PARKING ---
+        const towerW = Math.min(200, innerW - 100);
+        const towerH = Math.min(130, innerH - 40);
+        buildings.push({
+          id: `urb_l2_main_${bx}_${by}`,
+          x: innerX + 5,
+          y: innerY + 5,
+          width: towerW,
+          height: towerH,
+          type: 'business_center',
+          color: '#0f172a',
+          roofColor: '#0284c7',
+          accentColor: '#38bdf8',
+          windows: [],
+          entrances: [{ side: 'east', offsetRatio: 0.5, number: 1 }],
+          roofDetails: [{ type: 'helipad', rx: 0.2, ry: 0.2, rw: 0.5, rh: 0.6 }]
+        });
+
+        // Landscaped Quad Plaza next to tower
+        const quadX = innerX + towerW + 15;
+        const quadW = innerW - towerW - 20;
+        blockPlazas.push({
+          x: quadX,
+          y: innerY + 5,
+          width: quadW,
+          height: towerH,
+          shape: 'rect',
+          style: 'tile'
+        });
+
+        // Visitor Parking below
+        const pkY = innerY + towerH + 15;
+        const pkH = innerH - towerH - 20;
+        if (pkH > 35) {
+          const quadSpots: ParkingArea['spots'] = [];
+          const numCols = Math.floor(innerW / 45);
+          for (let c = 0; c < numCols; c++) {
+            quadSpots.push({ x: innerX + 20 + c * 45, y: pkY + pkH / 2, angle: Math.PI / 2, occupied: c % 2 === 0 });
           }
-
-          let entSide: 'north' | 'south' | 'east' | 'west' = 'north';
-          if (r === 0 && c === 0) entSide = 'north';
-          else if (r === 0 && c === 1) entSide = 'east';
-          else if (r === 1 && c === 0) entSide = 'west';
-          else if (r === 1 && c === 1) entSide = 'south';
-
-          const balconies: Building['balconies'] = [];
-          if (bType === 'residential') {
-            balconies.push(
-              { side: entSide, offset: 0.25, length: Math.max(14, bWidth * 0.2), depth: 6 },
-              { side: entSide, offset: 0.75, length: Math.max(14, bWidth * 0.2), depth: 6 }
-            );
-          }
-
-          const fireEscapes: Building['fireEscapes'] = [];
-          let oppositeSide: 'north' | 'south' | 'east' | 'west' = 'south';
-          if (entSide === 'north') oppositeSide = 'south';
-          else if (entSide === 'south') oppositeSide = 'north';
-          else if (entSide === 'east') oppositeSide = 'west';
-          else if (entSide === 'west') oppositeSide = 'east';
-
-          fireEscapes.push({
-            side: oppositeSide,
-            offset: 0.5,
-            length: Math.max(14, bWidth * 0.2),
-            depth: 5
+          parkings.push({
+            id: `urb_parking_${bx}_${by}`,
+            x: innerX + 5,
+            y: pkY,
+            width: innerW - 10,
+            height: pkH,
+            spots: quadSpots
           });
-
-          buildings.push({
-            id: `bld_${bx}_${by}_${r}_${c}`,
-            x: bxLocal,
-            y: byLocal,
-            width: bWidth,
-            height: bHeight,
-            type: bType,
-            color,
-            roofColor,
-            accentColor: accent,
-            windows: [],
-            balconies,
-            fireEscapes,
-            entranceSide: entSide,
-            roofDetails: [{ type: 'ac', rx: 0.25, ry: 0.25, rw: 0.2, rh: 0.4 }]
-          });
-
-          // Paved walkway to entrance
-          blockWalkways.push({
-            x: bxLocal,
-            y: byLocal + bHeight,
-            width: bWidth,
-            height: 14,
-            style: 'concrete'
-          });
-
-          // Commercial storefront benches, trash urns, flowerbeds & streetlamps
-          props.push({
-            id: `sw_bench_${bxLocal}_${byLocal}`,
-            x: bxLocal + bWidth * 0.25,
-            y: byLocal + bHeight + 7,
-            type: 'bench',
-            angle: 0
-          });
-          props.push({
-            id: `sw_urn_${bxLocal}_${byLocal}`,
-            x: bxLocal + bWidth * 0.25 + 16,
-            y: byLocal + bHeight + 7,
-            type: 'trash_can',
-            angle: 0
-          });
-
-          if (bType === 'shop') {
-            props.push({
-              id: `flower_${bxLocal}_${byLocal}`,
-              x: bxLocal + bWidth * 0.75,
-              y: byLocal + bHeight + 7,
-              type: 'flowerbed',
-              angle: 0
-            });
-            props.push({
-              id: `boll_${bxLocal}_${byLocal}`,
-              x: bxLocal + bWidth + 5,
-              y: byLocal + bHeight + 7,
-              type: 'bollard',
-              angle: 0
-            });
-          }
         }
+
+        props.push(
+          { id: `quad_bench_1_${bx}_${by}`, x: quadX + 15, y: innerY + 25, type: 'bench', angle: Math.PI / 2 },
+          { id: `quad_urn_1_${bx}_${by}`, x: quadX + 15, y: innerY + 43, type: 'trash_can', angle: 0 },
+          { id: `quad_lamp_1_${bx}_${by}`, x: quadX + quadW / 2, y: innerY + towerH / 2, type: 'lamp', angle: 0 },
+          { id: `quad_kiosk_1_${bx}_${by}`, x: quadX + quadW - 20, y: innerY + 25, type: 'kiosk', angle: 0 }
+        );
       }
     }
   }
@@ -2519,7 +3358,7 @@ export function generateCityWorld(): GameWorld {
   const carTypes: CarType[] = [
     'sedan', 'hatchback', 'pickup', 'sports', 'suv', 'taxi', 'police', 
     'fire_engine', 'fire_ladder', 'fire_rescue',
-    'bus', 'bus_articulated', 'bus_minibus', 
+    'bus', 'bus_minibus', 
     'van', 'muscle', 
     'ambulance', 'ambulance_van', 'ambulance_suv',
     'truck_box', 'truck_dump', 'truck_tanker', 'truck_water', 'truck_flatbed', 'cement_mixer', 'garbage_truck'
@@ -2550,7 +3389,7 @@ export function generateCityWorld(): GameWorld {
       if (cType === 'taxi') color = '#eab308';
       else if (cType === 'police') color = '#0f172a';
       else if (cType === 'fire_engine' || cType === 'fire_ladder' || cType === 'fire_rescue') color = '#dc2626';
-      else if (cType === 'bus' || cType === 'bus_articulated') color = '#eab308';
+      else if (cType === 'bus') color = '#eab308';
       else if (cType === 'bus_minibus') color = '#f59e0b';
       else if (cType === 'ambulance' || cType === 'ambulance_van' || cType === 'ambulance_suv') color = '#f8fafc';
       else if (cType === 'van') color = '#6ee7b7';

@@ -14,6 +14,8 @@ import {
 } from './types';
 import { trafficDiagnostics } from './aiTraffic';
 import { renderSpecializedVehicleAttachments } from './vehicleVisuals';
+import { performanceConfig } from './performanceConfig';
+import { generateBuildingLayout, renderBuildingInterior } from './buildingInteriors';
 
 const hashString = (str: string): number => {
   let hash = 0;
@@ -162,25 +164,6 @@ export class GameRenderer {
   ) {
     const ctx = this.ctx;
 
-    // 1. Clear Screen
-    ctx.fillStyle = '#1e293b';
-    ctx.fillRect(0, 0, this.width, this.height);
-
-    ctx.save();
-
-    // 2. Camera Transformations (Center on camera target with smooth zoom & heading rotation)
-    ctx.translate(this.width / 2, this.height / 2);
-    ctx.scale(camera.zoom, camera.zoom);
-    ctx.rotate(-camera.angle - Math.PI / 2);
-    ctx.translate(-camera.x, -camera.y);
-
-    // Apply Camera Shake if any
-    if (camera.shakeTimer > 0) {
-      const shakeX = (Math.random() * 2 - 1) * camera.shakeIntensity;
-      const shakeY = (Math.random() * 2 - 1) * camera.shakeIntensity;
-      ctx.translate(shakeX, shakeY);
-    }
-
     // Viewport bounds in world coords (using diagonal distance to cover full screen when rotated)
     const viewDiag = (Math.hypot(this.width, this.height) / (2 * camera.zoom)) + 150;
     const minX = camera.x - viewDiag;
@@ -202,10 +185,178 @@ export class GameRenderer {
       // Smooth sunrise transition (04:00-08:00)
       nightAlpha = (1 - ((timeHour - 4) / 4)) * 0.82;
     }
-    
+
     const vpProps = visibleProps || world.props.filter(p => p.x >= minX - 120 && p.x <= maxX + 120 && p.y >= minY - 120 && p.y <= maxY + 120);
     const vpTrees = visibleTrees || world.trees.filter(t => t.x >= minX - 120 && t.x <= maxX + 120 && t.y >= minY - 120 && t.y <= maxY + 120);
     const vpSidewalks = visibleSidewalks || world.sidewalks || [];
+
+    // Early-out if inside a building (make the surrounding world pitch black except for window sight cones)
+    if (player && player.isInsideBuilding && player.insideBuildingId) {
+      // 1. Clear Screen to Pitch Black
+      ctx.fillStyle = '#000000';
+      ctx.fillRect(0, 0, this.width, this.height);
+
+      ctx.save();
+
+      // 2. Camera Transformations
+      ctx.translate(this.width / 2, this.height / 2);
+      ctx.scale(camera.zoom, camera.zoom);
+      ctx.rotate(-camera.angle - Math.PI / 2);
+      ctx.translate(-camera.x, -camera.y);
+
+      // Apply Camera Shake if any
+      if (camera.shakeTimer > 0) {
+        const shakeX = (Math.random() * 2 - 1) * camera.shakeIntensity;
+        const shakeY = (Math.random() * 2 - 1) * camera.shakeIntensity;
+        ctx.translate(shakeX, shakeY);
+      }
+
+      // Find the specific building and render its interior + outside world through windows
+      const bld = world.buildings.find(b => b.id === player.insideBuildingId);
+      if (bld) {
+        const windows: { x: number; y: number; side: 'top' | 'bottom' | 'left' | 'right' }[] = [];
+        for (let x = 30; x < bld.width - 30; x += 40) {
+          windows.push({ x, y: 0, side: 'top' });
+          windows.push({ x, y: bld.height, side: 'bottom' });
+        }
+        for (let y = 30; y < bld.height - 30; y += 40) {
+          windows.push({ x: 0, y, side: 'left' });
+          windows.push({ x: bld.width, y, side: 'right' });
+        }
+
+        // Filter windows: only show outside view when player approaches them and looks towards them
+        const activeWindows = windows.filter(win => {
+          const wx = bld.x + win.x;
+          const wy = bld.y + win.y;
+          const dist = Math.hypot(player.x - wx, player.y - wy);
+          if (dist > 180) return false;
+
+          // Check if player is facing towards the window
+          const dirX = wx - player.x;
+          const dirY = wy - player.y;
+          const len = Math.hypot(dirX, dirY) || 1;
+          const ndx = dirX / len;
+          const ndy = dirY / len;
+
+          const playerDirX = Math.cos(player.angle);
+          const playerDirY = Math.sin(player.angle);
+          const dot = playerDirX * ndx + playerDirY * ndy;
+          // dot > -0.3 means player is generally facing towards or near the window direction
+          return dot > -0.3;
+        });
+
+        ctx.save();
+        ctx.beginPath();
+        const viewDist = 450;
+        for (const win of activeWindows) {
+          const wx = bld.x + win.x;
+          const wy = bld.y + win.y;
+          let w1x = wx, w1y = wy, w2x = wx, w2y = wy;
+          if (win.side === 'top' || win.side === 'bottom') {
+            w1x = wx - 7;
+            w2x = wx + 7;
+          } else {
+            w1y = wy - 7;
+            w2y = wy + 7;
+          }
+
+          // Directional vectors from player's eyes to window outer corners
+          const dx1 = w1x - player.x;
+          const dy1 = w1y - player.y;
+          const dx2 = w2x - player.x;
+          const dy2 = w2y - player.y;
+
+          const len1 = Math.hypot(dx1, dy1) || 1;
+          const len2 = Math.hypot(dx2, dy2) || 1;
+
+          // Extend rays out into the world to construct the visibility cone
+          const o1x = w1x + (dx1 / len1) * viewDist;
+          const o1y = w1y + (dy1 / len1) * viewDist;
+          const o2x = w2x + (dx2 / len2) * viewDist;
+          const o2y = w2y + (dy2 / len2) * viewDist;
+
+          ctx.moveTo(w1x, w1y);
+          ctx.lineTo(o1x, o1y);
+          ctx.lineTo(o2x, o2y);
+          ctx.lineTo(w2x, w2y);
+          ctx.closePath();
+        }
+
+        if (activeWindows.length > 0) {
+          ctx.clip();
+
+          // Apply floor elevation height perspective (higher floors shift outside world down to simulate looking from a skyscraper)
+          const floor = player.currentFloor ?? 0;
+          ctx.save();
+          ctx.translate(0, floor * 24);
+
+          // Render only the visible portion of the outside world respecting current nightAlpha / timeHour & lights
+          this.renderGround(world, minX, minY, maxX, maxY);
+          this.renderSidewalks(vpSidewalks, minX, minY, maxX, maxY);
+          this.renderRoadsAndMarkings(world, minX, minY, maxX, maxY);
+          this.renderPostSovietAtmosphereAndSignage(world, minX, minY, maxX, maxY);
+          this.renderPuddles(world.puddles, minX, minY, maxX, maxY);
+          this.renderSkidMarks(world.skidMarks, minX, minY, maxX, maxY);
+          this.renderParkings(world, minX, minY, maxX, maxY);
+          this.renderBuildingBases(visibleBuildings, nightAlpha, player, timeHour);
+          this.renderLitter(world.litter, minX, minY, maxX, maxY, nightAlpha);
+          this.renderGroundProps(vpProps, minX, minY, maxX, maxY);
+          this.renderPedestrians(visiblePedestrians);
+          this.renderVehicles(visibleVehicles, nightAlpha);
+
+          // Render lightmap (street lights, car headlights, etc.) outside windows
+          this.renderLightmap(world, timeHour, weatherTransition, visibleVehicles, vpProps, minX, minY, maxX, maxY);
+
+          const isRaining = world.weather === 'rain' || world.weather === 'storm';
+          const isFog = world.weather === 'fog';
+          const effectiveAlpha = Math.max(nightAlpha, isRaining ? 0.35 * weatherTransition : 0, isFog ? 0.45 * weatherTransition : 0);
+          this.renderVehicleCabins(visibleVehicles, effectiveAlpha);
+          this.renderBuildingRoofsAndCanopies(visibleBuildings, nightAlpha, player);
+          this.renderTreesAndTallProps(vpTrees, vpProps, minX, minY, maxX, maxY, nightAlpha);
+          this.renderParticles(world.particles);
+
+          // Apply outdoor time darkness filter over the clipped window view so night/sunset is accurate
+          if (nightAlpha > 0) {
+            ctx.fillStyle = `rgba(15, 23, 42, ${nightAlpha})`;
+            ctx.fillRect(minX, minY, maxX - minX, maxY - minY);
+          }
+          ctx.restore();
+        }
+        ctx.restore();
+
+        // 2. Render building interior itself on top
+        const floor = player.currentFloor ?? 0;
+        const layout = generateBuildingLayout(bld, floor);
+        renderBuildingInterior(ctx, bld, layout, player, timeHour);
+      }
+
+      // Render player pedestrian inside
+      if (!player.isInVehicle) {
+        this.renderPlayerPedestrian(player);
+      }
+
+      ctx.restore();
+      return;
+    }
+
+    // 1. Clear Screen
+    ctx.fillStyle = '#1e293b';
+    ctx.fillRect(0, 0, this.width, this.height);
+
+    ctx.save();
+
+    // 2. Camera Transformations (Center on camera target with smooth zoom & heading rotation)
+    ctx.translate(this.width / 2, this.height / 2);
+    ctx.scale(camera.zoom, camera.zoom);
+    ctx.rotate(-camera.angle - Math.PI / 2);
+    ctx.translate(-camera.x, -camera.y);
+
+    // Apply Camera Shake if any
+    if (camera.shakeTimer > 0) {
+      const shakeX = (Math.random() * 2 - 1) * camera.shakeIntensity;
+      const shakeY = (Math.random() * 2 - 1) * camera.shakeIntensity;
+      ctx.translate(shakeX, shakeY);
+    }
 
     // 3. Ground / Grass / Terrain Base
     this.renderGround(world, minX, minY, maxX, maxY);
@@ -232,7 +383,7 @@ export class GameRenderer {
     this.renderParkings(world, minX, minY, maxX, maxY);
 
     // 8. Buildings Base Structure & Entrances
-    this.renderBuildingBases(visibleBuildings, nightAlpha);
+    this.renderBuildingBases(visibleBuildings, nightAlpha, player, timeHour);
 
     // 8b. Street Litter & Flying Paper / Wind Debris
     this.renderLitter(world.litter, minX, minY, maxX, maxY, nightAlpha);
@@ -249,8 +400,8 @@ export class GameRenderer {
     // 12. Pedestrians (with Umbrellas during Rain)
     this.renderPedestrians(visiblePedestrians);
 
-    // 13. Player on Foot (if not inside vehicle and not inside building)
-    if (!player.isInVehicle && !player.isInsideBuilding) {
+    // 13. Player on Foot (if not inside vehicle)
+    if (!player.isInVehicle) {
       this.renderPlayerPedestrian(player);
     }
 
@@ -276,7 +427,7 @@ export class GameRenderer {
     this.renderVehicleCabins(visibleVehicles, effectiveAlpha);
 
     // 16. Building Roofs, Canopies, Balconies & Fire Escapes
-    this.renderBuildingRoofsAndCanopies(visibleBuildings, nightAlpha);
+    this.renderBuildingRoofsAndCanopies(visibleBuildings, nightAlpha, player);
 
     // 16b. Tall Intact Props (Intact trees, and intact lampposts!)
     this.renderTreesAndTallProps(vpTrees, vpProps, minX, minY, maxX, maxY, nightAlpha);
@@ -629,8 +780,8 @@ export class GameRenderer {
       if (bld.x < minX - 120 || bld.x > maxX + 120 || bld.y < minY - 120 || bld.y > maxY + 120) continue;
 
       const cx = bld.x + bld.width / 2;
-      const cy = bld.y + bld.height / 2;
 
+      // Only draw storefront banners on retail/commercial shop facades (NEVER on residential building canopies or roofs!)
       if (bld.type === 'shop') {
         // Red backlit storefront awning & bright banner
         ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
@@ -647,7 +798,20 @@ export class GameRenderer {
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         ctx.fillText('ПРОДУКТЫ 24', cx, bld.y - 2);
-      } else if (bld.type === 'commercial' || bld.type === 'office') {
+      } else if (bld.type === 'shopping_mall') {
+        // Shopping mall atrium banner
+        ctx.fillStyle = '#0284c7';
+        ctx.fillRect(cx - 42, bld.y - 12, 84, 18);
+        ctx.strokeStyle = '#38bdf8';
+        ctx.lineWidth = 1.5;
+        ctx.strokeRect(cx - 42, bld.y - 12, 84, 18);
+
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 10px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('ТРЦ «МАРКЕТ»', cx, bld.y - 3);
+      } else if (bld.type === 'commercial') {
         // Universal store / Pharmacy banner
         ctx.fillStyle = '#0284c7';
         ctx.fillRect(cx - 36, bld.y - 10, 72, 16);
@@ -660,6 +824,19 @@ export class GameRenderer {
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         ctx.fillText('УНИВЕРМАГ • АПТЕКА', cx, bld.y - 2);
+      } else if (bld.type === 'business_center') {
+        // Business center modern entrance sign
+        ctx.fillStyle = '#0f172a';
+        ctx.fillRect(cx - 40, bld.y - 10, 80, 16);
+        ctx.strokeStyle = '#38bdf8';
+        ctx.lineWidth = 1.2;
+        ctx.strokeRect(cx - 40, bld.y - 10, 80, 16);
+
+        ctx.fillStyle = '#38bdf8';
+        ctx.font = 'bold 9px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('BUSINESS CENTER', cx, bld.y - 2);
       } else if (bld.type === 'industrial') {
         // Industrial warehouse / garage cooperative sign
         ctx.fillStyle = '#1e3a8a';
@@ -673,6 +850,54 @@ export class GameRenderer {
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         ctx.fillText('ГСК «МОТОР» / СКЛАД', cx, bld.y + 14);
+      } else if (bld.type === 'sports_stadium') {
+        ctx.fillStyle = '#15803d';
+        ctx.fillRect(cx - 45, bld.y - 12, 90, 18);
+        ctx.strokeStyle = '#86efac';
+        ctx.lineWidth = 1.5;
+        ctx.strokeRect(cx - 45, bld.y - 12, 90, 18);
+
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 10px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('СПОРТКОМПЛЕКС ARENA', cx, bld.y - 3);
+      } else if (bld.type === 'transit_hub') {
+        ctx.fillStyle = '#1e293b';
+        ctx.fillRect(cx - 45, bld.y - 12, 90, 18);
+        ctx.strokeStyle = '#f59e0b';
+        ctx.lineWidth = 1.5;
+        ctx.strokeRect(cx - 45, bld.y - 12, 90, 18);
+
+        ctx.fillStyle = '#f59e0b';
+        ctx.font = 'bold 10px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('ВОКЗАЛ • TERMINAL', cx, bld.y - 3);
+      } else if (bld.type === 'cultural_center') {
+        ctx.fillStyle = '#7c2d12';
+        ctx.fillRect(cx - 45, bld.y - 12, 90, 18);
+        ctx.strokeStyle = '#fef08a';
+        ctx.lineWidth = 1.5;
+        ctx.strokeRect(cx - 45, bld.y - 12, 90, 18);
+
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 10px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('ДВОРЕЦ КУЛЬТУРЫ', cx, bld.y - 3);
+      } else if (bld.type === 'car_dealership') {
+        ctx.fillStyle = '#0284c7';
+        ctx.fillRect(cx - 45, bld.y - 12, 90, 18);
+        ctx.strokeStyle = '#e0f2fe';
+        ctx.lineWidth = 1.5;
+        ctx.strokeRect(cx - 45, bld.y - 12, 90, 18);
+
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 10px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('АВТОСАЛОН • MOTORS', cx, bld.y - 3);
       }
     }
 
@@ -1146,7 +1371,7 @@ export class GameRenderer {
   }
 
   // --- BUILDINGS: BASE & ROOF SPLIT ENGINE ---
-  private renderBuildingBases(buildings: Building[], nightAlpha: number = 0) {
+  private renderBuildingBases(buildings: Building[], nightAlpha: number = 0, player?: Player, timeHour: number = 12) {
     const ctx = this.ctx;
 
     for (const bld of buildings) {
@@ -1155,73 +1380,204 @@ export class GameRenderer {
         continue;
       }
 
-      // 1. DROP SHADOW FOR BUILDING BLOCK
-      ctx.fillStyle = 'rgba(15, 23, 42, 0.42)';
-      ctx.fillRect(bld.x + 9, bld.y + 9, bld.width, bld.height);
+      // Render building interior if player is inside this specific building
+      if (player && player.isInsideBuilding && player.insideBuildingId === bld.id) {
+        const floor = player.currentFloor ?? 0;
+        const layout = generateBuildingLayout(bld, floor);
+        renderBuildingInterior(ctx, bld, layout, player, timeHour);
+        continue;
+      }
 
-      // 2. BASE WALL STRUCTURE
+      // 1. DROP SHADOW FOR BUILDING BLOCK
+      if (performanceConfig.enableShadows) {
+        ctx.fillStyle = 'rgba(15, 23, 42, 0.42)';
+        ctx.fillRect(bld.x + 9, bld.y + 9, bld.width, bld.height);
+      }
+
+      // 2. BASE WALL STRUCTURE & FACADE TEXTURE
       ctx.fillStyle = bld.color;
       ctx.fillRect(bld.x, bld.y, bld.width, bld.height);
 
-      // 3. BUILDING GROUND-LEVEL ENTRANCES & PORCH (Drawn before player so player steps on them)
-      if (bld.entranceSide) {
-        let ex = 0, ey = 0, ew = 0, eh = 0, doorX = 0, doorY = 0, doorW = 0, doorH = 0;
-        let lightCX = 0, lightCY = 0;
-        
-        const canopyDepth = 15; // Increased depth for player scale
-        const canopyWidth = 32; // Increased width for player scale
+      // Distinctive architectural facade textures
+      if (bld.type === 'panel_apartment') {
+        // Concrete panel seam grid lines (швы между панелями)
+        ctx.strokeStyle = 'rgba(15, 23, 42, 0.18)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        for (let px = bld.x + 20; px < bld.x + bld.width; px += 20) {
+          ctx.moveTo(px, bld.y);
+          ctx.lineTo(px, bld.y + bld.height);
+        }
+        for (let py = bld.y + 16; py < bld.y + bld.height; py += 16) {
+          ctx.moveTo(bld.x, py);
+          ctx.lineTo(bld.x + bld.width, py);
+        }
+        ctx.stroke();
 
-        if (bld.entranceSide === 'north') {
-          ex = bld.x + bld.width / 2 - canopyWidth / 2;
+        // Base plinth step
+        ctx.fillStyle = '#475569';
+        ctx.fillRect(bld.x, bld.y + bld.height - 3, bld.width, 3);
+      } else if (bld.type === 'brick_residential') {
+        // Red/Yellow brick mortar texture
+        ctx.strokeStyle = 'rgba(0, 0, 0, 0.12)';
+        ctx.lineWidth = 0.8;
+        ctx.beginPath();
+        for (let py = bld.y + 6; py < bld.y + bld.height; py += 6) {
+          ctx.moveTo(bld.x, py);
+          ctx.lineTo(bld.x + bld.width, py);
+        }
+        ctx.stroke();
+      } else if (bld.type === 'modern_residential') {
+        // Ventilated facade panels with vibrant accent bands
+        ctx.fillStyle = bld.accentColor;
+        if (bld.width > bld.height) {
+          ctx.fillRect(bld.x + 8, bld.y, 6, bld.height);
+          ctx.fillRect(bld.x + bld.width - 14, bld.y, 6, bld.height);
+        } else {
+          ctx.fillRect(bld.x, bld.y + 8, bld.width, 6);
+          ctx.fillRect(bld.x, bld.y + bld.height - 14, bld.width, 6);
+        }
+      } else if (bld.type === 'business_center') {
+        // Glass curtain wall vertical mullions
+        ctx.fillStyle = '#0f172a';
+        ctx.fillRect(bld.x, bld.y, bld.width, bld.height);
+        ctx.strokeStyle = 'rgba(56, 189, 248, 0.35)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        for (let gx = bld.x + 10; gx < bld.x + bld.width; gx += 10) {
+          ctx.moveTo(gx, bld.y);
+          ctx.lineTo(gx, bld.y + bld.height);
+        }
+        ctx.stroke();
+      }
+
+      // 3. BUILDING GROUND-LEVEL ENTRANCES & PORCH (ПОДЪЕЗДЫ)
+      // Collect all entrances (either bld.entrances array or fallback entranceSide)
+      const entranceList: { side: 'north' | 'south' | 'east' | 'west'; offsetRatio: number; number?: number }[] = [];
+      if (bld.entrances && bld.entrances.length > 0) {
+        entranceList.push(...bld.entrances);
+      } else if (bld.entranceSide) {
+        entranceList.push({ side: bld.entranceSide, offsetRatio: 0.5, number: 1 });
+      }
+
+      for (const ent of entranceList) {
+        let ex = 0, ey = 0, ew = 0, eh = 0;
+        let doorX = 0, doorY = 0, doorW = 0, doorH = 0;
+        let lightCX = 0, lightCY = 0;
+        let rampX = 0, rampY = 0, rampW = 0, rampH = 0;
+
+        const canopyDepth = 14;
+        const canopyWidth = 28;
+
+        if (ent.side === 'north') {
+          ex = bld.x + bld.width * ent.offsetRatio - canopyWidth / 2;
           ey = bld.y - canopyDepth;
           ew = canopyWidth;
           eh = canopyDepth;
-          doorX = ex + 6; doorY = bld.y; doorW = canopyWidth - 12; doorH = 2.5;
-          lightCX = bld.x + bld.width / 2; lightCY = bld.y - 6;
-        } else if (bld.entranceSide === 'south') {
-          ex = bld.x + bld.width / 2 - canopyWidth / 2;
+          doorX = ex + 5; doorY = bld.y; doorW = canopyWidth - 10; doorH = 2.5;
+          lightCX = ex + canopyWidth / 2; lightCY = bld.y - 6;
+          rampX = ex - 6; rampY = ey; rampW = 5; rampH = eh;
+        } else if (ent.side === 'south') {
+          ex = bld.x + bld.width * ent.offsetRatio - canopyWidth / 2;
           ey = bld.y + bld.height;
           ew = canopyWidth;
           eh = canopyDepth;
-          doorX = ex + 6; doorY = bld.y + bld.height - 2.5; doorW = canopyWidth - 12; doorH = 2.5;
-          lightCX = bld.x + bld.width / 2; lightCY = bld.y + bld.height + 6;
-        } else if (bld.entranceSide === 'west') {
+          doorX = ex + 5; doorY = bld.y + bld.height - 2.5; doorW = canopyWidth - 10; doorH = 2.5;
+          lightCX = ex + canopyWidth / 2; lightCY = bld.y + bld.height + 6;
+          rampX = ex + ew + 1; rampY = ey; rampW = 5; rampH = eh;
+        } else if (ent.side === 'west') {
           ex = bld.x - canopyDepth;
-          ey = bld.y + bld.height / 2 - canopyWidth / 2;
+          ey = bld.y + bld.height * ent.offsetRatio - canopyWidth / 2;
           ew = canopyDepth;
           eh = canopyWidth;
-          doorX = bld.x; doorY = ey + 6; doorW = 2.5; doorH = canopyWidth - 12;
-          lightCX = bld.x - 6; lightCY = bld.y + bld.height / 2;
-        } else if (bld.entranceSide === 'east') {
+          doorX = bld.x; doorY = ey + 5; doorW = 2.5; doorH = canopyWidth - 10;
+          lightCX = bld.x - 6; lightCY = ey + canopyWidth / 2;
+          rampX = ex; rampY = ey - 6; rampW = ew; rampH = 5;
+        } else if (ent.side === 'east') {
           ex = bld.x + bld.width;
-          ey = bld.y + bld.height / 2 - canopyWidth / 2;
+          ey = bld.y + bld.height * ent.offsetRatio - canopyWidth / 2;
           ew = canopyDepth;
           eh = canopyWidth;
-          doorX = bld.x + bld.width - 2.5; doorY = ey + 6; doorW = 2.5; doorH = canopyWidth - 12;
-          lightCX = bld.x + bld.width + 6; lightCY = bld.y + bld.height / 2;
+          doorX = bld.x + bld.width - 2.5; doorY = ey + 5; doorW = 2.5; doorH = canopyWidth - 10;
+          lightCX = bld.x + bld.width + 6; lightCY = ey + canopyWidth / 2;
+          rampX = ex; rampY = ey + eh + 1; rampW = ew; rampH = 5;
         }
 
-        // Entrance light radial cast on sidewalk ground (Highly atmospheric, softened!)
+        // A. Paved entrance path connecting entrance directly to ground/walkway
+        ctx.fillStyle = '#cbd5e1'; // Paved concrete walkway
+        if (ent.side === 'north') {
+          ctx.fillRect(ex, ey - 8, ew, 8);
+        } else if (ent.side === 'south') {
+          ctx.fillRect(ex, ey + eh, ew, 8);
+        } else if (ent.side === 'west') {
+          ctx.fillRect(ex - 8, ey, 8, eh);
+        } else if (ent.side === 'east') {
+          ctx.fillRect(ex + ew, ey, 8, eh);
+        }
+
+        // B. Entrance light radial cast on sidewalk ground
         try {
-          const entranceGlow = ctx.createRadialGradient(lightCX, lightCY, 1, lightCX, lightCY, 24);
-          entranceGlow.addColorStop(0, 'rgba(254, 240, 138, 0.40)');
-          entranceGlow.addColorStop(0.4, 'rgba(254, 240, 138, 0.15)');
+          const entranceGlow = ctx.createRadialGradient(lightCX, lightCY, 1, lightCX, lightCY, 22);
+          entranceGlow.addColorStop(0, 'rgba(254, 240, 138, 0.45)');
+          entranceGlow.addColorStop(0.5, 'rgba(254, 240, 138, 0.15)');
           entranceGlow.addColorStop(1, 'rgba(254, 240, 138, 0)');
           ctx.fillStyle = entranceGlow;
           ctx.beginPath();
-          ctx.arc(lightCX, lightCY, 24, 0, Math.PI * 2);
+          ctx.arc(lightCX, lightCY, 22, 0, Math.PI * 2);
           ctx.fill();
         } catch {}
 
-        // Entrance Concrete porch step
+        // C. Concrete Porch Step Slab (Крыльцо подъезда)
         ctx.fillStyle = '#cbd5e1';
-        ctx.fillRect(ex - 2, ey - (bld.entranceSide === 'north' || bld.entranceSide === 'south' ? 0 : 2), ew + 4, eh + (bld.entranceSide === 'north' || bld.entranceSide === 'south' ? 0 : 4));
+        ctx.fillRect(ex - 1, ey - (ent.side === 'north' || ent.side === 'south' ? 0 : 1), ew + 2, eh + (ent.side === 'north' || ent.side === 'south' ? 0 : 2));
+        ctx.strokeStyle = '#94a3b8';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(ex - 1, ey - (ent.side === 'north' || ent.side === 'south' ? 0 : 1), ew + 2, eh + (ent.side === 'north' || ent.side === 'south' ? 0 : 2));
 
-        // Glass Double Doors
-        ctx.fillStyle = '#1e293b';
+        // D. Stroller / Wheelchair Ramp (Пандус)
+        ctx.fillStyle = '#94a3b8';
+        ctx.fillRect(rampX, rampY, rampW, rampH);
+        ctx.strokeStyle = '#64748b';
+        ctx.lineWidth = 0.8;
+        ctx.strokeRect(rampX, rampY, rampW, rampH);
+
+        // E. Entrance Door Frame & Glass Intercom Door (Металлическая дверь с домофоном)
+        ctx.fillStyle = '#1e293b'; // Dark metal entrance door
         ctx.fillRect(doorX, doorY, doorW, doorH);
-        ctx.fillStyle = '#38bdf8'; // Glowing entry window glass
-        ctx.fillRect(doorX + 1, doorY + (bld.entranceSide === 'north' || bld.entranceSide === 'south' ? 0.5 : 1), doorW - 2, doorH - (bld.entranceSide === 'north' || bld.entranceSide === 'south' ? 1 : 2));
+
+        // Door Glass Panel / Intercom
+        ctx.fillStyle = '#38bdf8'; // Glowing entry glass window
+        ctx.fillRect(doorX + 1, doorY + (ent.side === 'north' || ent.side === 'south' ? 0.5 : 1), doorW - 2, doorH - (ent.side === 'north' || ent.side === 'south' ? 1 : 2));
+
+        // Red glowing intercom LED dot (Домофон)
+        ctx.fillStyle = '#ef4444';
+        if (ent.side === 'north' || ent.side === 'south') {
+          ctx.fillRect(doorX - 2, doorY, 1.5, 1.5);
+        } else {
+          ctx.fillRect(doorX, doorY - 2, 1.5, 1.5);
+        }
+
+        // F. Small Porch Bench (Скамейка) & Trash Urn (Урна) next to porch
+        if (ent.side === 'north' || ent.side === 'south') {
+          const benchX = ex + ew + 3;
+          const benchY = ey + 2;
+          ctx.fillStyle = '#b45309'; // Wood bench
+          ctx.fillRect(benchX, benchY, 10, 3);
+          ctx.fillStyle = '#1e293b'; // Bench legs
+          ctx.fillRect(benchX, benchY, 2, 3);
+          ctx.fillRect(benchX + 8, benchY, 2, 3);
+
+          // Trash urn
+          ctx.fillStyle = '#475569';
+          ctx.fillRect(ex - 6, ey + 4, 3.5, 3.5);
+        } else {
+          const benchX = ex + 2;
+          const benchY = ey + eh + 3;
+          ctx.fillStyle = '#b45309';
+          ctx.fillRect(benchX, benchY, 3, 10);
+          ctx.fillStyle = '#475569';
+          ctx.fillRect(ex + 4, ey - 6, 3.5, 3.5);
+        }
       }
     }
   }
@@ -1512,7 +1868,7 @@ export class GameRenderer {
     }
   }
 
-  private renderBuildingRoofsAndCanopies(buildings: Building[], nightAlpha: number = 0) {
+  private renderBuildingRoofsAndCanopies(buildings: Building[], nightAlpha: number = 0, player?: Player) {
     const ctx = this.ctx;
     const now = Date.now();
 
@@ -1522,9 +1878,14 @@ export class GameRenderer {
         continue;
       }
 
-      // 1. FACADE DETAILS (BALCONIES & FIRE ESCAPES) DRAWN ON TOP of ground level/player
-      // A. BALCONIES (Only for Residential/Apartment buildings, sticking out of walls)
-      if (bld.balconies) {
+      // Skip rendering the roof if the player is inside this specific building, so they can see the interior
+      if (player && player.isInsideBuilding && player.insideBuildingId === bld.id) {
+        continue;
+      }
+
+      // 1. FACADE DETAILS (BALCONIES & FIRE ESCAPES)
+      // A. BALCONIES (Only for Residential/Apartment buildings)
+      if (bld.balconies && performanceConfig.enableBalconyDetails) {
         for (const bal of bld.balconies) {
           let bx = 0, by = 0, bw = 0, bh = 0;
           if (bal.side === 'north') {
@@ -1551,44 +1912,79 @@ export class GameRenderer {
 
           // Balcony Shadow
           ctx.fillStyle = 'rgba(15, 23, 42, 0.35)';
-          ctx.fillRect(bx + 4, by + 4, bw, bh);
+          ctx.fillRect(bx + 3, by + 3, bw, bh);
 
-          // Balcony Concrete Slab Base
-          ctx.fillStyle = bld.accentColor;
+          // Balcony Concrete Base Slab
+          ctx.fillStyle = '#cbd5e1';
           ctx.fillRect(bx, by, bw, bh);
 
-          // Black Railing Border
-          ctx.strokeStyle = '#0f172a';
-          ctx.lineWidth = 1.2;
-          ctx.strokeRect(bx, by, bw, bh);
+          if (bal.isGlazed) {
+            // GLAZED BALCONY (Застекленный балкон с пластиковой рамой и отражением)
+            ctx.fillStyle = '#334155'; // Dark PVC frame
+            ctx.fillRect(bx, by, bw, bh);
 
-          // Railing vertical grilles
-          ctx.beginPath();
-          ctx.strokeStyle = 'rgba(15, 23, 42, 0.5)';
-          ctx.lineWidth = 0.8;
-          if (bal.side === 'north' || bal.side === 'south') {
-            for (let gx = bx + 3; gx < bx + bw; gx += 4) {
-              ctx.moveTo(gx, by);
-              ctx.lineTo(gx, by + bh);
+            // Tinted Glass Panes
+            ctx.fillStyle = 'rgba(56, 189, 248, 0.55)'; // Light cyan/blue glass
+            ctx.fillRect(bx + 1, by + 1, bw - 2, bh - 2);
+
+            // White PVC mullion grid
+            ctx.strokeStyle = '#f8fafc';
+            ctx.lineWidth = 0.8;
+            ctx.beginPath();
+            if (bal.side === 'north' || bal.side === 'south') {
+              const numPanes = Math.max(2, Math.floor(bw / 8));
+              for (let i = 1; i < numPanes; i++) {
+                const px = bx + (bw / numPanes) * i;
+                ctx.moveTo(px, by);
+                ctx.lineTo(px, by + bh);
+              }
+            } else {
+              const numPanes = Math.max(2, Math.floor(bh / 8));
+              for (let i = 1; i < numPanes; i++) {
+                const py = by + (bh / numPanes) * i;
+                ctx.moveTo(bx, py);
+                ctx.lineTo(bx + bw, py);
+              }
             }
+            ctx.stroke();
+
+            // Diagonal Gloss Reflection Sheen
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(bx + 2, by + bh - 2);
+            ctx.lineTo(bx + bw - 2, by + 2);
+            ctx.stroke();
           } else {
-            for (let gy = by + 3; gy < by + bh; gy += 4) {
-              ctx.moveTo(bx, gy);
-              ctx.lineTo(bx + bw, gy);
-            }
-          }
-          ctx.stroke();
+            // OPEN BALCONY WITH METAL RAILINGS (Открытый балкон с металической решеткой)
+            ctx.strokeStyle = '#0f172a';
+            ctx.lineWidth = 1.2;
+            ctx.strokeRect(bx, by, bw, bh);
 
-          // Sliding glass balcony door on main wall
-          ctx.fillStyle = '#06b6d4';
-          if (bal.side === 'north') {
-            ctx.fillRect(bx + 3, bld.y, bw - 6, 2.5);
-          } else if (bal.side === 'south') {
-            ctx.fillRect(bx + 3, bld.y + bld.height - 2.5, bw - 6, 2.5);
-          } else if (bal.side === 'west') {
-            ctx.fillRect(bld.x, by + 3, 2.5, bh - 6);
-          } else if (bal.side === 'east') {
-            ctx.fillRect(bld.x + bld.width - 2.5, by + 3, 2.5, bh - 6);
+            // Railing vertical bars
+            ctx.beginPath();
+            ctx.strokeStyle = 'rgba(15, 23, 42, 0.6)';
+            ctx.lineWidth = 0.8;
+            if (bal.side === 'north' || bal.side === 'south') {
+              for (let gx = bx + 3; gx < bx + bw; gx += 4) {
+                ctx.moveTo(gx, by);
+                ctx.lineTo(gx, by + bh);
+              }
+            } else {
+              for (let gy = by + 3; gy < by + bh; gy += 4) {
+                ctx.moveTo(bx, gy);
+                ctx.lineTo(bx + bw, gy);
+              }
+            }
+            ctx.stroke();
+
+            // Flower box / Laundry rack detail
+            ctx.fillStyle = '#b45309';
+            if (bal.side === 'north' || bal.side === 'south') {
+              ctx.fillRect(bx + 2, by + (bal.side === 'north' ? 0 : bh - 1.5), bw - 4, 1.5);
+            } else {
+              ctx.fillRect(bx + (bal.side === 'west' ? 0 : bw - 1.5), by + 2, 1.5, bh - 4);
+            }
           }
         }
       }
@@ -1639,7 +2035,6 @@ export class GameRenderer {
               ctx.moveTo(step, fey);
               ctx.lineTo(step, fey + feh);
             }
-            // Diagonal Stair support line
             ctx.moveTo(fex, fey);
             ctx.lineTo(fex + few, fey + feh);
           } else {
@@ -1647,7 +2042,6 @@ export class GameRenderer {
               ctx.moveTo(fex, step);
               ctx.lineTo(fex + few, step);
             }
-            // Diagonal Stair support line
             ctx.moveTo(fex, fey);
             ctx.lineTo(fex + few, fey + feh);
           }
@@ -1655,58 +2049,94 @@ export class GameRenderer {
         }
       }
 
-      // C. BUILDING CANOPY AWNING (Rendered on top of player!)
-      if (bld.entranceSide) {
+      // C. ENTRANCE CANOPIES (КОЗЫРЬКИ ПОДЪЕЗДОВ - Clean architectural canopies with brackets, NO TEXT!)
+      const entranceList: { side: 'north' | 'south' | 'east' | 'west'; offsetRatio: number; number?: number }[] = [];
+      if (bld.entrances && bld.entrances.length > 0) {
+        entranceList.push(...bld.entrances);
+      } else if (bld.entranceSide) {
+        entranceList.push({ side: bld.entranceSide, offsetRatio: 0.5, number: 1 });
+      }
+
+      for (let idx = 0; idx < entranceList.length; idx++) {
+        const ent = entranceList[idx];
         let ex = 0, ey = 0, ew = 0, eh = 0;
         
-        const canopyDepth = 15; // Increased depth for player scale
-        const canopyWidth = 32; // Increased width for player scale
+        const canopyDepth = 14;
+        const canopyWidth = 28;
 
-        if (bld.entranceSide === 'north') {
-          ex = bld.x + bld.width / 2 - canopyWidth / 2;
+        if (ent.side === 'north') {
+          ex = bld.x + bld.width * ent.offsetRatio - canopyWidth / 2;
           ey = bld.y - canopyDepth;
           ew = canopyWidth;
           eh = canopyDepth;
-        } else if (bld.entranceSide === 'south') {
-          ex = bld.x + bld.width / 2 - canopyWidth / 2;
+        } else if (ent.side === 'south') {
+          ex = bld.x + bld.width * ent.offsetRatio - canopyWidth / 2;
           ey = bld.y + bld.height;
           ew = canopyWidth;
           eh = canopyDepth;
-        } else if (bld.entranceSide === 'west') {
+        } else if (ent.side === 'west') {
           ex = bld.x - canopyDepth;
-          ey = bld.y + bld.height / 2 - canopyWidth / 2;
+          ey = bld.y + bld.height * ent.offsetRatio - canopyWidth / 2;
           ew = canopyDepth;
           eh = canopyWidth;
-        } else if (bld.entranceSide === 'east') {
+        } else if (ent.side === 'east') {
           ex = bld.x + bld.width;
-          ey = bld.y + bld.height / 2 - canopyWidth / 2;
+          ey = bld.y + bld.height * ent.offsetRatio - canopyWidth / 2;
           ew = canopyDepth;
           eh = canopyWidth;
         }
 
-        // Canopy Awning protruding
-        ctx.fillStyle = bld.accentColor;
+        // Canopy Concrete/Metal Slab Overhang (Козырек)
+        ctx.fillStyle = '#475569'; // Slate dark metal/concrete canopy
         ctx.fillRect(ex, ey, ew, eh);
+
+        // Canopy border & coping rim
         ctx.strokeStyle = '#0f172a';
         ctx.lineWidth = 1.2;
         ctx.strokeRect(ex, ey, ew, eh);
 
-        // Canopy stripes/details
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.25)';
+        // Corrugated metal ribs / subtle canopy texture
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
         ctx.lineWidth = 1;
         ctx.beginPath();
-        if (bld.entranceSide === 'north' || bld.entranceSide === 'south') {
-          for (let sx = ex + 4; sx < ex + ew; sx += 6) {
+        if (ent.side === 'north' || ent.side === 'south') {
+          for (let sx = ex + 4; sx < ex + ew; sx += 5) {
             ctx.moveTo(sx, ey);
             ctx.lineTo(sx, ey + eh);
           }
         } else {
-          for (let sy = ey + 4; sy < ey + eh; sy += 6) {
+          for (let sy = ey + 4; sy < ey + eh; sy += 5) {
             ctx.moveTo(ex, sy);
             ctx.lineTo(ex + ew, sy);
           }
         }
         ctx.stroke();
+
+        // Steel Support Brackets holding canopy to building wall
+        ctx.strokeStyle = '#0f172a';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        if (ent.side === 'north') {
+          ctx.moveTo(ex + 2, ey + eh); ctx.lineTo(ex + 2, ey + 3);
+          ctx.moveTo(ex + ew - 2, ey + eh); ctx.lineTo(ex + ew - 2, ey + 3);
+        } else if (ent.side === 'south') {
+          ctx.moveTo(ex + 2, ey); ctx.lineTo(ex + 2, ey + eh - 3);
+          ctx.moveTo(ex + ew - 2, ey); ctx.lineTo(ex + ew - 2, ey + eh - 3);
+        } else if (ent.side === 'west') {
+          ctx.moveTo(ex + ew, ey + 2); ctx.lineTo(ex + 3, ey + 2);
+          ctx.moveTo(ex + ew, ey + eh - 2); ctx.lineTo(ex + 3, ey + eh - 2);
+        } else if (ent.side === 'east') {
+          ctx.moveTo(ex, ey + 2); ctx.lineTo(ex + ew - 3, ey + 2);
+          ctx.moveTo(ex, ey + eh - 2); ctx.lineTo(ex + ew - 3, ey + eh - 2);
+        }
+        ctx.stroke();
+
+        // Small Entrance Plaque next to wall (e.g. "1" or "2" for entrance number)
+        const entranceNum = ent.number ?? (idx + 1);
+        ctx.fillStyle = '#0f172a';
+        if (ent.side === 'north' || ent.side === 'south') {
+          ctx.fillRect(ex + ew / 2 - 4, ent.side === 'north' ? bld.y - 1.5 : bld.y + bld.height, 8, 1.5);
+        }
       }
 
       // 2. PARAPET / ROOF RIDGE BORDER
@@ -1748,203 +2178,205 @@ export class GameRenderer {
       ctx.strokeRect(penX + 2, penY + 2, penW - 4, penH - 4);
 
       // 5. ROOF DETAILS (AC Units with spinning fans, Helipads with flashing beacons, solar panels, water towers)
-      for (const d of bld.roofDetails) {
-        const dx = bld.x + bld.width * d.rx;
-        const dy = bld.y + bld.height * d.ry;
+      if (!performanceConfig.lowQualityRendering) {
+        for (const d of bld.roofDetails) {
+          const dx = bld.x + bld.width * d.rx;
+          const dy = bld.y + bld.height * d.ry;
 
-        if (d.type === 'ac') {
-          // HVAC compressor block
-          ctx.fillStyle = '#475569';
-          ctx.fillRect(dx, dy, d.rw, d.rh);
-          ctx.strokeStyle = '#0f172a';
-          ctx.lineWidth = 1;
-          ctx.strokeRect(dx, dy, d.rw, d.rh);
-
-          // Circular fan exhaust ducts inside compressor plant
-          const numFans = d.rw > d.rh ? 2 : 1;
-          for (let f = 0; f < numFans; f++) {
-            const fx = dx + d.rw / (numFans * 2) + f * (d.rw / numFans);
-            const fy = dy + d.rh / 2;
-            const fr = Math.min(d.rw, d.rh) * 0.35;
-
-            // Exhaust circular well
-            ctx.fillStyle = '#0f172a';
-            ctx.beginPath();
-            ctx.arc(fx, fy, fr, 0, Math.PI * 2);
-            ctx.fill();
-
-            // Guard rails
-            ctx.strokeStyle = 'rgba(71, 85, 105, 0.8)';
-            ctx.lineWidth = 0.5;
-            ctx.stroke();
-
-            // Rotating fan blades!
-            ctx.strokeStyle = '#cbd5e1';
-            ctx.lineWidth = 0.8;
-            ctx.beginPath();
-            const angleOffset = (now * 0.007) + (f * Math.PI / 4);
-            for (let b = 0; b < 4; b++) {
-              const bAngle = angleOffset + b * (Math.PI / 2);
-              ctx.moveTo(fx - Math.cos(bAngle) * fr, fy - Math.sin(bAngle) * fr);
-              ctx.lineTo(fx + Math.cos(bAngle) * fr, fy + Math.sin(bAngle) * fr);
-            }
-            ctx.stroke();
-          }
-        } else if (d.type === 'helipad') {
-          // Standard Helipad Tarmac circle
-          ctx.fillStyle = '#1e293b';
-          ctx.beginPath();
-          ctx.arc(dx + d.rw / 2, dy + d.rh / 2, d.rw / 2, 0, Math.PI * 2);
-          ctx.fill();
-
-          // Yellow outer warning boundary circle
-          ctx.strokeStyle = '#eab308';
-          ctx.lineWidth = 2.5;
-          ctx.beginPath();
-          ctx.arc(dx + d.rw / 2, dy + d.rh / 2, d.rw / 2 - 1, 0, Math.PI * 2);
-          ctx.stroke();
-
-          // Target grid markings
-          ctx.strokeStyle = 'rgba(248, 250, 252, 0.3)';
-          ctx.lineWidth = 1;
-          ctx.beginPath();
-          ctx.moveTo(dx, dy + d.rh / 2);
-          ctx.lineTo(dx + d.rw, dy + d.rh / 2);
-          ctx.moveTo(dx + d.rw / 2, dy);
-          ctx.lineTo(dx + d.rw / 2, dy + d.rh);
-          ctx.stroke();
-
-          // Standard high-visibility helipad 'H' label
-          ctx.fillStyle = '#eab308';
-          ctx.font = 'bold 24px "Courier New", Courier, monospace';
-          ctx.textAlign = 'center';
-          ctx.textBaseline = 'middle';
-          ctx.fillText('H', dx + d.rw / 2, dy + d.rh / 2);
-
-          // Helipad flashing red tower corner lights (4 corner warning beacons)
-          const beaconLit = (now % 1000) > 500;
-          if (beaconLit) {
-            ctx.fillStyle = '#ef4444';
-            ctx.beginPath();
-            ctx.arc(dx + 4, dy + 4, 3, 0, Math.PI * 2);
-            ctx.arc(dx + d.rw - 4, dy + 4, 3, 0, Math.PI * 2);
-            ctx.arc(dx + 4, dy + d.rh - 4, 3, 0, Math.PI * 2);
-            ctx.arc(dx + d.rw - 4, dy + d.rh - 4, 3, 0, Math.PI * 2);
-            ctx.fill();
-          }
-        } else if (d.type === 'pool') {
-          ctx.fillStyle = '#0284c7';
-          ctx.fillRect(dx, dy, d.rw, d.rh);
-          ctx.strokeStyle = '#e0f2fe';
-          ctx.lineWidth = 2;
-          ctx.strokeRect(dx, dy, d.rw, d.rh);
-        } else if (d.type === 'solar') {
-          // Crystalline Blue Solar Silicon grid
-          ctx.fillStyle = '#1e3a8a';
-          ctx.fillRect(dx, dy, d.rw, d.rh);
-          ctx.strokeStyle = '#3b82f6';
-          ctx.lineWidth = 1;
-          ctx.strokeRect(dx, dy, d.rw, d.rh);
-
-          // Grid cell lines
-          ctx.strokeStyle = 'rgba(255, 255, 255, 0.28)';
-          ctx.lineWidth = 0.5;
-          ctx.beginPath();
-          for (let sx = dx + 4; sx < dx + d.rw; sx += 4) {
-            ctx.moveTo(sx, dy);
-            ctx.lineTo(sx, dy + d.rh);
-          }
-          for (let sy = dy + 4; sy < dy + d.rh; sy += 4) {
-            ctx.moveTo(dx, sy);
-            ctx.lineTo(dx + d.rw, sy);
-          }
-          ctx.stroke();
-        } else if (d.type === 'skylight') {
-          // Curved Glass panels with diagonal glare reflection sheen
-          ctx.fillStyle = 'rgba(14, 116, 144, 0.85)'; // Glazed cyan blue tint
-          ctx.fillRect(dx, dy, d.rw, d.rh);
-          ctx.strokeStyle = '#0891b2';
-          ctx.lineWidth = 1.5;
-          ctx.strokeRect(dx, dy, d.rw, d.rh);
-
-          // White gloss reflection streak
-          ctx.strokeStyle = 'rgba(255, 255, 255, 0.38)';
-          ctx.lineWidth = 1.2;
-          ctx.beginPath();
-          ctx.moveTo(dx, dy + d.rh);
-          ctx.lineTo(dx + d.rw, dy);
-          ctx.stroke();
-        } else if (d.type === 'antenna') {
-          // If Residential or Industrial, render a beautiful round Water Storage Tower Tower!
-          if (bld.type === 'residential' || bld.type === 'industrial') {
-            const rad = d.rw / 2;
-            const cx = dx + rad;
-            const cy = dy + rad;
-
-            // Wooden Water Tower structure shadows
-            ctx.fillStyle = 'rgba(15, 23, 42, 0.45)';
-            ctx.beginPath();
-            ctx.arc(cx + 4, cy + 4, rad, 0, Math.PI * 2);
-            ctx.fill();
-
-            // Structural support struts
-            ctx.strokeStyle = '#475569';
-            ctx.lineWidth = 1.5;
-            ctx.beginPath();
-            ctx.moveTo(cx - rad, cy - rad);
-            ctx.lineTo(cx + rad, cy + rad);
-            ctx.moveTo(cx + rad, cy - rad);
-            ctx.lineTo(cx - rad, cy + rad);
-            ctx.stroke();
-
-            // Cylinder tank body (Wood grain brown vs metal sheet paneling)
-            ctx.fillStyle = bld.type === 'residential' ? '#b45309' : '#64748b';
-            ctx.beginPath();
-            ctx.arc(cx, cy, rad, 0, Math.PI * 2);
-            ctx.fill();
+          if (d.type === 'ac') {
+            // HVAC compressor block
+            ctx.fillStyle = '#475569';
+            ctx.fillRect(dx, dy, d.rw, d.rh);
             ctx.strokeStyle = '#0f172a';
-            ctx.lineWidth = 1.5;
-            ctx.stroke();
+            ctx.lineWidth = 1;
+            ctx.strokeRect(dx, dy, d.rw, d.rh);
 
-            // Conical Roof lid
-            ctx.fillStyle = bld.type === 'residential' ? '#d97706' : '#94a3b8';
+            // Circular fan exhaust ducts inside compressor plant
+            const numFans = d.rw > d.rh ? 2 : 1;
+            for (let f = 0; f < numFans; f++) {
+              const fx = dx + d.rw / (numFans * 2) + f * (d.rw / numFans);
+              const fy = dy + d.rh / 2;
+              const fr = Math.min(d.rw, d.rh) * 0.35;
+
+              // Exhaust circular well
+              ctx.fillStyle = '#0f172a';
+              ctx.beginPath();
+              ctx.arc(fx, fy, fr, 0, Math.PI * 2);
+              ctx.fill();
+
+              // Guard rails
+              ctx.strokeStyle = 'rgba(71, 85, 105, 0.8)';
+              ctx.lineWidth = 0.5;
+              ctx.stroke();
+
+              // Rotating fan blades!
+              ctx.strokeStyle = '#cbd5e1';
+              ctx.lineWidth = 0.8;
+              ctx.beginPath();
+              const angleOffset = (now * 0.007) + (f * Math.PI / 4);
+              for (let b = 0; b < 4; b++) {
+                const bAngle = angleOffset + b * (Math.PI / 2);
+                ctx.moveTo(fx - Math.cos(bAngle) * fr, fy - Math.sin(bAngle) * fr);
+                ctx.lineTo(fx + Math.cos(bAngle) * fr, fy + Math.sin(bAngle) * fr);
+              }
+              ctx.stroke();
+            }
+          } else if (d.type === 'helipad') {
+            // Standard Helipad Tarmac circle
+            ctx.fillStyle = '#1e293b';
             ctx.beginPath();
-            ctx.arc(cx, cy, rad * 0.75, 0, Math.PI * 2);
+            ctx.arc(dx + d.rw / 2, dy + d.rh / 2, d.rw / 2, 0, Math.PI * 2);
             ctx.fill();
-            ctx.stroke();
-          } else {
-            // High metal transmission antenna mast with projection shadow
-            ctx.strokeStyle = 'rgba(15, 23, 42, 0.35)';
-            ctx.lineWidth = 1.5;
+
+            // Yellow outer warning boundary circle
+            ctx.strokeStyle = '#eab308';
+            ctx.lineWidth = 2.5;
             ctx.beginPath();
-            ctx.moveTo(dx + 2, dy + 2);
-            ctx.lineTo(dx + 16, dy - 12);
+            ctx.arc(dx + d.rw / 2, dy + d.rh / 2, d.rw / 2 - 1, 0, Math.PI * 2);
             ctx.stroke();
 
-            // Antenna steel stem
-            ctx.strokeStyle = '#cbd5e1';
-            ctx.lineWidth = 2;
-            ctx.beginPath();
-            ctx.moveTo(dx, dy);
-            ctx.lineTo(dx + 12, dy - 12);
-            ctx.stroke();
-
-            // Cross-beams
+            // Target grid markings
+            ctx.strokeStyle = 'rgba(248, 250, 252, 0.3)';
             ctx.lineWidth = 1;
             ctx.beginPath();
-            ctx.moveTo(dx + 3, dy - 3);
-            ctx.lineTo(dx + 7, dy - 7);
-            ctx.moveTo(dx + 6, dy - 6);
-            ctx.lineTo(dx + 10, dy - 10);
+            ctx.moveTo(dx, dy + d.rh / 2);
+            ctx.lineTo(dx + d.rw, dy + d.rh / 2);
+            ctx.moveTo(dx + d.rw / 2, dy);
+            ctx.lineTo(dx + d.rw / 2, dy + d.rh);
             ctx.stroke();
 
-            // Flashing obstruction warning red dot
-            const beaconLit = (now % 800) > 400;
+            // Standard high-visibility helipad 'H' label
+            ctx.fillStyle = '#eab308';
+            ctx.font = 'bold 24px "Courier New", Courier, monospace';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('H', dx + d.rw / 2, dy + d.rh / 2);
+
+            // Helipad flashing red tower corner lights (4 corner warning beacons)
+            const beaconLit = (now % 1000) > 500;
             if (beaconLit) {
               ctx.fillStyle = '#ef4444';
               ctx.beginPath();
-              ctx.arc(dx + 12, dy - 12, 2.5, 0, Math.PI * 2);
+              ctx.arc(dx + 4, dy + 4, 3, 0, Math.PI * 2);
+              ctx.arc(dx + d.rw - 4, dy + 4, 3, 0, Math.PI * 2);
+              ctx.arc(dx + 4, dy + d.rh - 4, 3, 0, Math.PI * 2);
+              ctx.arc(dx + d.rw - 4, dy + d.rh - 4, 3, 0, Math.PI * 2);
               ctx.fill();
+            }
+          } else if (d.type === 'pool') {
+            ctx.fillStyle = '#0284c7';
+            ctx.fillRect(dx, dy, d.rw, d.rh);
+            ctx.strokeStyle = '#e0f2fe';
+            ctx.lineWidth = 2;
+            ctx.strokeRect(dx, dy, d.rw, d.rh);
+          } else if (d.type === 'solar') {
+            // Crystalline Blue Solar Silicon grid
+            ctx.fillStyle = '#1e3a8a';
+            ctx.fillRect(dx, dy, d.rw, d.rh);
+            ctx.strokeStyle = '#3b82f6';
+            ctx.lineWidth = 1;
+            ctx.strokeRect(dx, dy, d.rw, d.rh);
+
+            // Grid cell lines
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.28)';
+            ctx.lineWidth = 0.5;
+            ctx.beginPath();
+            for (let sx = dx + 4; sx < dx + d.rw; sx += 4) {
+              ctx.moveTo(sx, dy);
+              ctx.lineTo(sx, dy + d.rh);
+            }
+            for (let sy = dy + 4; sy < dy + d.rh; sy += 4) {
+              ctx.moveTo(dx, sy);
+              ctx.lineTo(dx + d.rw, sy);
+            }
+            ctx.stroke();
+          } else if (d.type === 'skylight') {
+            // Curved Glass panels with diagonal glare reflection sheen
+            ctx.fillStyle = 'rgba(14, 116, 144, 0.85)'; // Glazed cyan blue tint
+            ctx.fillRect(dx, dy, d.rw, d.rh);
+            ctx.strokeStyle = '#0891b2';
+            ctx.lineWidth = 1.5;
+            ctx.strokeRect(dx, dy, d.rw, d.rh);
+
+            // White gloss reflection streak
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.38)';
+            ctx.lineWidth = 1.2;
+            ctx.beginPath();
+            ctx.moveTo(dx, dy + d.rh);
+            ctx.lineTo(dx + d.rw, dy);
+            ctx.stroke();
+          } else if (d.type === 'antenna') {
+            // If Residential or Industrial, render a beautiful round Water Storage Tower Tower!
+            if (bld.type === 'residential' || bld.type === 'industrial') {
+              const rad = d.rw / 2;
+              const cx = dx + rad;
+              const cy = dy + rad;
+
+              // Wooden Water Tower structure shadows
+              ctx.fillStyle = 'rgba(15, 23, 42, 0.45)';
+              ctx.beginPath();
+              ctx.arc(cx + 4, cy + 4, rad, 0, Math.PI * 2);
+              ctx.fill();
+
+              // Structural support struts
+              ctx.strokeStyle = '#475569';
+              ctx.lineWidth = 1.5;
+              ctx.beginPath();
+              ctx.moveTo(cx - rad, cy - rad);
+              ctx.lineTo(cx + rad, cy + rad);
+              ctx.moveTo(cx + rad, cy - rad);
+              ctx.lineTo(cx - rad, cy + rad);
+              ctx.stroke();
+
+              // Cylinder tank body (Wood grain brown vs metal sheet paneling)
+              ctx.fillStyle = bld.type === 'residential' ? '#b45309' : '#64748b';
+              ctx.beginPath();
+              ctx.arc(cx, cy, rad, 0, Math.PI * 2);
+              ctx.fill();
+              ctx.strokeStyle = '#0f172a';
+              ctx.lineWidth = 1.5;
+              ctx.stroke();
+
+              // Conical Roof lid
+              ctx.fillStyle = bld.type === 'residential' ? '#d97706' : '#94a3b8';
+              ctx.beginPath();
+              ctx.arc(cx, cy, rad * 0.75, 0, Math.PI * 2);
+              ctx.fill();
+              ctx.stroke();
+            } else {
+              // High metal transmission antenna mast with projection shadow
+              ctx.strokeStyle = 'rgba(15, 23, 42, 0.35)';
+              ctx.lineWidth = 1.5;
+              ctx.beginPath();
+              ctx.moveTo(dx + 2, dy + 2);
+              ctx.lineTo(dx + 16, dy - 12);
+              ctx.stroke();
+
+              // Antenna steel stem
+              ctx.strokeStyle = '#cbd5e1';
+              ctx.lineWidth = 2;
+              ctx.beginPath();
+              ctx.moveTo(dx, dy);
+              ctx.lineTo(dx + 12, dy - 12);
+              ctx.stroke();
+
+              // Cross-beams
+              ctx.lineWidth = 1;
+              ctx.beginPath();
+              ctx.moveTo(dx + 3, dy - 3);
+              ctx.lineTo(dx + 7, dy - 7);
+              ctx.moveTo(dx + 6, dy - 6);
+              ctx.lineTo(dx + 10, dy - 10);
+              ctx.stroke();
+
+              // Flashing obstruction warning red dot
+              const beaconLit = (now % 800) > 400;
+              if (beaconLit) {
+                ctx.fillStyle = '#ef4444';
+                ctx.beginPath();
+                ctx.arc(dx + 12, dy - 12, 2.5, 0, Math.PI * 2);
+                ctx.fill();
+              }
             }
           }
         }
@@ -2501,10 +2933,12 @@ export class GameRenderer {
           tree.y + tree.radius < minY || tree.y - tree.radius > maxY) continue;
 
       // Tree Shadow
-      ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
-      ctx.beginPath();
-      ctx.arc(tree.x + tree.shadowOffset, tree.y + tree.shadowOffset, tree.radius, 0, Math.PI * 2);
-      ctx.fill();
+      if (performanceConfig.enableShadows) {
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+        ctx.beginPath();
+        ctx.arc(tree.x + tree.shadowOffset, tree.y + tree.shadowOffset, tree.radius, 0, Math.PI * 2);
+        ctx.fill();
+      }
 
       // Tree Foliage
       ctx.fillStyle = tree.color;
@@ -2924,13 +3358,15 @@ export class GameRenderer {
       ctx.fill();
 
       // Animated water ripples
-      const rippleR = Math.abs((p.rippleTimer * 12) % rX);
-      const rippleRY = Math.abs(rippleR * (rY / rX));
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.25)';
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      ctx.ellipse(0, 0, rippleR, rippleRY, 0, 0, Math.PI * 2);
-      ctx.stroke();
+      if (performanceConfig.enableRainDroplets) {
+        const rippleR = Math.abs((p.rippleTimer * 12) % rX);
+        const rippleRY = Math.abs(rippleR * (rY / rX));
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.25)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.ellipse(0, 0, rippleR, rippleRY, 0, 0, Math.PI * 2);
+        ctx.stroke();
+      }
 
       ctx.restore();
     }
@@ -3960,7 +4396,7 @@ export class GameRenderer {
       const isThreeAxle = car.type === 'truck_box' || car.type === 'truck_tanker' || 
                           car.type === 'truck_flatbed' || car.type === 'cement_mixer' ||
                           car.type === 'truck_dump' || car.type === 'garbage_truck' ||
-                          car.type === 'fire_ladder' || car.type === 'bus_articulated';
+                          car.type === 'fire_ladder' || car.type === 'truck_water';
       const isHeavyTruck = isThreeAxle || car.type === 'truck_water' || car.type === 'fire_engine' || car.type === 'fire_rescue' || car.type === 'bus';
 
       const wheelL = isHeavyTruck ? 11.5 : (car.type === 'sports' ? 10 : 9.5);
@@ -3977,15 +4413,7 @@ export class GameRenderer {
         ctx.fillRect(dwx - wheelL / 2 + 2, dwy - wheelW / 2 + 0.8, wheelL - 4, wheelW - 1.6);
       };
 
-      if (car.type === 'bus_articulated') {
-        // Articulated bus with middle axle and rear pusher axle
-        const midAxleX = -halfL * 0.05;
-        const rearAxleX = -halfL * 0.76;
-        renderFixedWheel(midAxleX, -trackY);
-        renderFixedWheel(midAxleX, trackY - wheelW);
-        renderFixedWheel(rearAxleX, -trackY);
-        renderFixedWheel(rearAxleX, trackY - wheelW);
-      } else if (isThreeAxle) {
+      if (isThreeAxle) {
         // Dual tandem rear axles (6x4 / 6x6)
         const rearAxle1X = -halfL * 0.36;
         const rearAxle2X = -halfL * 0.74;
@@ -4382,7 +4810,7 @@ export class GameRenderer {
       }
 
       // Draw glass base and roofs (custom full-body rendering vehicles excluded)
-      if (car.type !== 'bus' && car.type !== 'bus_articulated' && car.type !== 'ambulance' && car.type !== 'ambulance_van') {
+      if (car.type !== 'bus' && car.type !== 'ambulance' && car.type !== 'ambulance_van') {
         drawDeformedRect(cabinX - cabinL / 2, -cabinW / 2, cabinL, cabinW, '#0f172a');
 
         const roofL = cabinL * 0.66;
@@ -4882,7 +5310,7 @@ export class GameRenderer {
       }
 
       // 2. Balcony Light Cutout
-      if (bld.balconies) {
+      if (bld.balconies && performanceConfig.enableBalconyDetails) {
         for (const bal of bld.balconies) {
           let cx = 0, cy = 0;
           if (bal.side === 'north') {
@@ -5215,7 +5643,7 @@ export class GameRenderer {
       }
 
       // 2. Balcony warm additive pool
-      if (bld.balconies) {
+      if (bld.balconies && performanceConfig.enableBalconyDetails) {
         for (const bal of bld.balconies) {
           let cx = 0, cy = 0;
           if (bal.side === 'north') {
@@ -5279,7 +5707,7 @@ export class GameRenderer {
 
     // 3. Weather Rain Streaks & Lightning
     ctx.globalCompositeOperation = 'source-over';
-    if (isRaining && weatherTransition > 0.05) {
+    if (isRaining && weatherTransition > 0.05 && performanceConfig.enableRainDroplets) {
       ctx.strokeStyle = `rgba(191, 219, 254, ${0.45 * weatherTransition})`;
       ctx.lineWidth = 1.2;
       ctx.beginPath();

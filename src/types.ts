@@ -18,7 +18,6 @@ export type CarType =
   | 'fire_ladder'
   | 'fire_rescue'
   | 'bus' 
-  | 'bus_articulated'
   | 'bus_minibus'
   | 'van' 
   | 'muscle' 
@@ -163,6 +162,7 @@ export interface Vehicle {
   } | null;
   stuckTimer: number;
   honkTimer: number;
+  idmAcceleration?: number;
 
   // Horn & Siren
   isHonking: boolean;
@@ -324,23 +324,55 @@ export interface RoadSegment {
   }[];
 }
 
+export interface BuildingEntrance {
+  side: 'north' | 'south' | 'east' | 'west';
+  offsetRatio: number; // relative position along wall (0 to 1)
+  number?: number; // e.g. Подъезд №1, 2...
+  hasCanopyLight?: boolean;
+}
+
+export interface BuildingBalcony {
+  side: 'north' | 'south' | 'east' | 'west';
+  offset: number; // relative coordinate along the side (0 to 1)
+  length: number;
+  depth: number;
+  isGlazed?: boolean; // застекленный балкон
+  floorsCount?: number;
+}
+
 export interface Building {
   id: string;
   x: number;
   y: number;
   width: number;
   height: number;
-  type: 'office' | 'residential' | 'shop' | 'commercial' | 'suburban' | 'industrial' | 'park_monument' | 'police_station' | 'fire_station' | 'hospital';
+  type: 
+    | 'office' 
+    | 'residential' 
+    | 'panel_apartment'
+    | 'brick_residential'
+    | 'modern_residential'
+    | 'shop' 
+    | 'shopping_mall'
+    | 'commercial' 
+    | 'business_center'
+    | 'school_kindergarten'
+    | 'suburban' 
+    | 'industrial' 
+    | 'park_monument' 
+    | 'police_station' 
+    | 'fire_station' 
+    | 'hospital'
+    | 'sports_stadium'
+    | 'transit_hub'
+    | 'cultural_center'
+    | 'car_dealership';
   color: string;
   roofColor: string;
   accentColor: string;
   entranceSide?: 'north' | 'south' | 'east' | 'west';
-  balconies?: {
-    side: 'north' | 'south' | 'east' | 'west';
-    offset: number; // relative coordinate along the side
-    length: number;
-    depth: number;
-  }[];
+  entrances?: BuildingEntrance[];
+  balconies?: BuildingBalcony[];
   fireEscapes?: {
     side: 'north' | 'south' | 'east' | 'west';
     offset: number; // relative coordinate along the side
@@ -503,6 +535,7 @@ export interface Player {
   hairColor: string;
   isInsideBuilding?: boolean;
   insideBuildingId?: string | null;
+  currentFloor?: number;
   
   // Human Mode Enhancements: Dodge roll, quick dash & aim
   isDashing?: boolean;

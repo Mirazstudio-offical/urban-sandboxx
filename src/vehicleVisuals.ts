@@ -280,80 +280,6 @@ export function renderSpecializedVehicleAttachments(vCtx: VehicleRenderContext):
     drawDeformedCircle(acX + 4.5, 0, 2.6, '#475569');
   }
 
-  // --- ARTICULATED BUS («ГАРМОШКА») ---
-  else if (car.type === 'bus_articulated') {
-    const glassX1 = -halfL + 6;
-    const glassX2 = halfL - 8;
-    const glassW = halfW * 2 - 1.2;
-    drawDeformedRect(glassX1, -glassW / 2, glassX2 - glassX1, glassW, '#0f172a');
-
-    const busRoofW = halfW * 2 - 4.5;
-    drawDeformedRect(glassX1 + 1, -busRoofW / 2, glassX2 - glassX1 - 2, busRoofW, car.roofColor || car.color);
-
-    // Windows along both cars
-    const winCount = 10;
-    const winSpan = (glassX2 - glassX1 - 14) / winCount;
-    for (let i = 0; i < winCount; i++) {
-      if (i === 4 || i === 5) continue; // Skip articulation joint
-      const wx = glassX1 + 4 + i * winSpan;
-      const ww = winSpan - 2;
-      drawDeformedRect(wx, -halfW + 0.5, ww, 2.2, 'rgba(56, 189, 248, 0.16)');
-      drawDeformedRect(wx, halfW - 2.7, ww, 2.2, 'rgba(56, 189, 248, 0.16)');
-    }
-
-    // Bellows articulation joint (гофра сочленения)
-    const bellowsX = -2;
-    const bellowsW = halfW * 2 + 0.5;
-    const bellowsL = 14;
-    drawDeformedRect(bellowsX - bellowsL / 2, -bellowsW / 2, bellowsL, bellowsW, '#0f172a');
-    for (let bx = bellowsX - bellowsL / 2 + 1.5; bx <= bellowsX + bellowsL / 2 - 1.5; bx += 2.2) {
-      drawDeformedLine(bx, -bellowsW / 2, bx, bellowsW / 2, '#334155', 1.4);
-    }
-    drawDeformedCircle(bellowsX, 0, 5, '#1e293b'); // Turntable ring
-
-    // Front windshield & LED route display
-    const fWindshieldX = halfL - 8;
-    const fWindshieldW = halfW * 2 - 2.5;
-    drawDeformedRect(fWindshieldX, -fWindshieldW / 2, 5.5, fWindshieldW, '#0f172a');
-    drawDeformedRect(fWindshieldX + 1.2, -fWindshieldW / 2 + 0.8, 3.5, fWindshieldW - 1.6, 'rgba(56, 189, 248, 0.22)');
-    drawDeformedRect(fWindshieldX - 2.5, -9, 2, 18, '#1e293b');
-    drawDeformedRect(fWindshieldX - 2, -7.5, 1.2, 15, '#f59e0b'); // Route board «101»
-
-    // Rear window
-    const rWindshieldX = -halfL + 3;
-    const rWindshieldW = halfW * 2 - 6;
-    drawDeformedRect(rWindshieldX, -rWindshieldW / 2, 3, rWindshieldW, '#0f172a');
-    drawDeformedRect(rWindshieldX + 0.5, -rWindshieldW / 2 + 0.5, 2, rWindshieldW - 1, 'rgba(56, 189, 248, 0.16)');
-
-    // 4 Double passenger doors (2 on front car, 2 on rear car)
-    const doorW = 7.5;
-    const doorPositions = [
-      halfL * 0.72,  // Front door
-      halfL * 0.18,  // Middle-front door
-      -halfL * 0.28, // Middle-rear door
-      -halfL * 0.75  // Rear door
-    ];
-    doorPositions.forEach(dx => {
-      drawDeformedRect(dx - doorW / 2, halfW - 2.2, doorW, 2.5, '#1e293b');
-      drawDeformedRect(dx - 0.4, halfW - 2.2, 0.8, 2.5, '#cbd5e1');
-      drawDeformedRect(dx - doorW / 2 + 0.8, halfW - 1.6, doorW / 2 - 1.4, 1.4, 'rgba(56, 189, 248, 0.22)');
-      drawDeformedRect(dx + 0.6, halfW - 1.6, doorW / 2 - 1.4, 1.4, 'rgba(56, 189, 248, 0.22)');
-    });
-
-    // Dual Rooftop Air Conditioning Units (Front and rear)
-    const acFrontX = halfL * 0.45;
-    const acRearX = -halfL * 0.52;
-    [acFrontX, acRearX].forEach(acX => {
-      drawDeformedRect(acX - 8, -5, 16, 10, '#f8fafc');
-      drawDeformedLine(acX - 8, -5, acX + 8, -5, '#cbd5e1', 0.8);
-      drawDeformedLine(acX + 8, -5, acX + 8, 5, '#cbd5e1', 0.8);
-      drawDeformedLine(acX + 8, 5, acX - 8, 5, '#cbd5e1', 0.8);
-      drawDeformedLine(acX - 8, 5, acX - 8, -5, '#cbd5e1', 0.8);
-      drawDeformedCircle(acX - 3.5, 0, 2, '#475569');
-      drawDeformedCircle(acX + 3.5, 0, 2, '#475569');
-    });
-  }
-
   // --- MINIBUS (МАРШРУТНОЕ ТАКСИ) ---
   else if (car.type === 'bus_minibus') {
     // Commercial minibus livery (amber/yellow)
@@ -558,105 +484,80 @@ export function renderSpecializedVehicleAttachments(vCtx: VehicleRenderContext):
     drawDeformedRect(dumpX1 - 1.5, dumpW / 2 - 4, 1.5, 3, '#0f172a');
   }
 
-  // --- TRUCK WATER (КАПОТНЫЙ 2-Х ОСНЫЙ ВОДОВОЗ СО СТАРОЙ ЖЁЛТОЙ БОЧКОЙ «ВОДА») ---
+  // --- TRUCK WATER (ВОДОВОЗ НА БАЗЕ АВТОЦИСТЕРНЫ С ЖЁЛТОЙ БОЧКОЙ «ВОДА») ---
   else if (car.type === 'truck_water') {
-    // 1. Classic bonneted front cab (ZIL-130 / GAZ-53 shape in retro turquoise/sky blue)
+    // Cab hood & front grille matching tanker truck chassis
     const hoodX1 = cabinX + cabinL / 2;
     const hoodX2 = halfL - fc;
-    const hoodW = halfW * 2 - 5;
+    drawDeformedRect(hoodX1, -halfW + 2.5, hoodX2 - hoodX1, halfW * 2 - 5, car.color || '#0284c7');
+    drawDeformedRect(hoodX2 - 2, -halfW + 1, 2.5, halfW * 2 - 2, '#0f172a');
+    drawDeformedRect(hoodX2 - 1.5, -halfW + 3, 1.5, halfW * 2 - 6, '#cbd5e1'); // Front chrome grille bar
 
-    // Rounded front hood
-    drawDeformedRect(hoodX1, -hoodW / 2, hoodX2 - hoodX1, hoodW, '#0284c7');
-    drawDeformedLine(hoodX1, -hoodW / 2, hoodX2, -hoodW / 2, '#0369a1', 1.2);
-    drawDeformedLine(hoodX2, -hoodW / 2, hoodX2, hoodW / 2, '#0369a1', 1.2);
-    drawDeformedLine(hoodX2, hoodW / 2, hoodX1, hoodW / 2, '#0369a1', 1.2);
+    // Side chassis frame steps & diesel tank / toolboxes behind cab
+    const frameX1 = -halfL + rc + 1;
+    const frameX2 = cabinX - cabinL / 2;
+    drawDeformedRect(frameX1, -halfW + 0.5, frameX2 - frameX1, 1.8, '#1e293b');
+    drawDeformedRect(frameX1, halfW - 2.3, frameX2 - frameX1, 1.8, '#1e293b');
 
-    // Front white radiator grille mask (характерная белая облицовка решетки)
-    drawDeformedRect(hoodX2 - 3, -hoodW / 2 + 1.5, 3, hoodW - 3, '#f8fafc');
-    drawDeformedRect(hoodX2 - 2.5, -hoodW * 0.3, 2, hoodW * 0.6, '#334155'); // Grille slats
-    drawDeformedCircle(hoodX2 - 1, -hoodW / 2 + 2.5, 1.5, '#fef08a'); // Headlights
-    drawDeformedCircle(hoodX2 - 1, hoodW / 2 - 2.5, 1.5, '#fef08a');
-    drawDeformedCircle(hoodX2 - 2, -hoodW / 2 + 0.8, 1.0, '#f59e0b'); // Amber turn blinkers
-    drawDeformedCircle(hoodX2 - 2, hoodW / 2 - 0.8, 1.0, '#f59e0b');
-
-    // Chrome round side mirrors on curved tubular brackets
-    drawDeformedRect(cabinX + cabinL * 0.3, -halfW - 2.5, 1.5, 2.5, '#cbd5e1');
-    drawDeformedRect(cabinX + cabinL * 0.3, halfW, 1.5, 2.5, '#cbd5e1');
-
-    // Spare wheel mounted on chassis between cab and tank
-    const spareX = cabinX - cabinL / 2 - 2.5;
-    drawDeformedRect(spareX - 2.5, -halfW + 2, 5, 2.8, '#0f172a');
-    drawDeformedRect(spareX - 1.5, -halfW + 2.5, 3, 1.8, '#64748b');
-
-    // 2. Old Weathered Yellow Water Tank (Старая жёлтая бочка для воды)
+    // Bright yellow cistern barrel body with metallic 3D cylinder gradient
     const tankX1 = -halfL + rc + 2;
-    const tankX2 = spareX - 2;
+    const tankX2 = cabinX - cabinL / 2 - 1;
     const tankW = halfW * 2 - 2;
-
-    // Tank body gradient (aged sun-bleached yellow with metallic curvature)
     const tankGrad = ctx.createLinearGradient(0, -tankW / 2, 0, tankW / 2);
     tankGrad.addColorStop(0, '#d97706');
-    tankGrad.addColorStop(0.2, '#fef08a');
+    tankGrad.addColorStop(0.18, '#fde047');
     tankGrad.addColorStop(0.5, '#eab308');
-    tankGrad.addColorStop(0.8, '#d97706');
+    tankGrad.addColorStop(0.82, '#d97706');
     tankGrad.addColorStop(1, '#b45309');
 
-    // Main cylindrical cistern body
     drawDeformedRect(tankX1, -tankW / 2, tankX2 - tankX1, tankW, tankGrad);
-    drawDeformedLine(tankX1, -tankW / 2, tankX2, -tankW / 2, '#78350f', 1.4);
-    drawDeformedLine(tankX2, -tankW / 2, tankX2, tankW / 2, '#78350f', 1.4);
-    drawDeformedLine(tankX2, tankW / 2, tankX1, tankW / 2, '#78350f', 1.4);
-    drawDeformedLine(tankX1, tankW / 2, tankX1, -tankW / 2, '#78350f', 1.4);
+    drawDeformedLine(tankX1, -tankW / 2, tankX2, -tankW / 2, '#92400e', 1.2);
+    drawDeformedLine(tankX2, -tankW / 2, tankX2, tankW / 2, '#92400e', 1.2);
+    drawDeformedLine(tankX2, tankW / 2, tankX1, tankW / 2, '#92400e', 1.2);
+    drawDeformedLine(tankX1, tankW / 2, tankX1, -tankW / 2, '#92400e', 1.2);
 
-    // Rounded spherical front and rear tank end caps
-    drawDeformedCircle(tankX1, 0, tankW * 0.45, '#d97706');
-    drawDeformedCircle(tankX2, 0, tankW * 0.45, '#eab308');
+    // Rounded tank end cap domes (front and rear)
+    drawDeformedCircle(tankX1, 0, tankW * 0.46, '#d97706');
+    drawDeformedCircle(tankX2, 0, tankW * 0.46, '#eab308');
 
-    // Black steel retention mounting bands (стяжные хомуты)
-    const band1X = tankX1 + (tankX2 - tankX1) * 0.28;
-    const band2X = tankX1 + (tankX2 - tankX1) * 0.72;
-    [band1X, band2X].forEach(bx => {
-      drawDeformedRect(bx - 1, -tankW / 2 - 0.5, 2, tankW + 1, '#1e293b');
-      drawDeformedCircle(bx, -tankW / 2 - 0.5, 1, '#cbd5e1'); // Tension bolt
-      drawDeformedCircle(bx, tankW / 2 + 0.5, 1, '#cbd5e1');
+    // Side hose storage canisters (длинные пеналы для рукавов/шлангов)
+    drawDeformedRect(tankX1 + 2, -halfW + 0.2, tankX2 - tankX1 - 4, 1.6, '#334155');
+    drawDeformedRect(tankX1 + 2, halfW - 1.8, tankX2 - tankX1 - 4, 1.6, '#334155');
+
+    // Black steel retention mounting straps with silver tensioning bolts
+    const band1X = tankX1 + (tankX2 - tankX1) * 0.25;
+    const band2X = tankX1 + (tankX2 - tankX1) * 0.50;
+    const band3X = tankX1 + (tankX2 - tankX1) * 0.75;
+    [band1X, band2X, band3X].forEach(bx => {
+      drawDeformedRect(bx - 1, -tankW / 2 - 0.5, 2, tankW + 1, '#0f172a');
+      drawDeformedCircle(bx, -tankW / 2 - 0.5, 1, '#f8fafc');
+      drawDeformedCircle(bx, tankW / 2 + 0.5, 1, '#f8fafc');
     });
 
-    // Cylindrical hose storage canisters (пеналы для рукавов) on both flanks
-    drawDeformedRect(tankX1 + 2, -tankW / 2 - 1.2, tankX2 - tankX1 - 4, 1.8, '#334155');
-    drawDeformedRect(tankX1 + 2, tankW / 2 - 0.6, tankX2 - tankX1 - 4, 1.8, '#334155');
+    // Top catwalk and dual fill hatches
+    drawDeformedRect(tankX1 + 4, -2.5, tankX2 - tankX1 - 8, 5, '#475569');
+    const hatch1X = tankX1 + (tankX2 - tankX1) * 0.35;
+    const hatch2X = tankX1 + (tankX2 - tankX1) * 0.65;
+    drawDeformedCircle(hatch1X, 0, 3.2, '#0f172a');
+    drawDeformedCircle(hatch1X, 0, 1.8, '#cbd5e1');
+    drawDeformedCircle(hatch2X, 0, 3.2, '#0f172a');
+    drawDeformedCircle(hatch2X, 0, 1.8, '#cbd5e1');
 
-    // Top diamond-plate service catwalk and inspection hatch with handwheel
-    const topCatwalkX1 = tankX1 + 5;
-    const topCatwalkX2 = tankX2 - 5;
-    drawDeformedRect(topCatwalkX1, -3, topCatwalkX2 - topCatwalkX1, 6, '#475569');
-    for (let cx = topCatwalkX1 + 2; cx < topCatwalkX2; cx += 3) {
-      drawDeformedLine(cx, -3, cx, 3, '#334155', 0.6);
-    }
+    // Rear water discharge tap & valve assembly
+    drawDeformedRect(tankX1 - 2.5, -3, 2.5, 6, '#334155');
+    drawDeformedCircle(tankX1 - 2.5, 0, 1.8, '#0284c7');
+    drawDeformedLine(tankX1 - 2.5, -4, tankX1 - 2.5, 4, '#38bdf8', 1.2);
 
-    // Top domed fill hatch (заливной люк)
-    const hatchX = tankX1 + (tankX2 - tankX1) * 0.5;
-    drawDeformedCircle(hatchX, 0, 3.6, '#1e293b');
-    drawDeformedCircle(hatchX, 0, 2.4, '#e2e8f0');
-    drawDeformedLine(hatchX - 2, 0, hatchX + 2, 0, '#0f172a', 1.0); // Handwheel cross
-
-    // Rear water discharge box / faucet & access ladder (задний кран слива воды и лестница)
-    drawDeformedRect(tankX1 - 3, -4, 3, 8, '#334155');
-    drawDeformedCircle(tankX1 - 3, 0, 1.5, '#0284c7'); // Water tap
-    drawDeformedLine(tankX1 - 2, -3, tankX1, -3, '#cbd5e1', 1.0); // Ladder rungs
-    drawDeformedLine(tankX1 - 2, 0, tankX1, 0, '#cbd5e1', 1.0);
-    drawDeformedLine(tankX1 - 2, 3, tankX1, 3, '#cbd5e1', 1.0);
-
-    // Iconic Cyrillic Stencil Inscription: « В О Д А »
+    // Cyrillic Stencil Inscription on both flanks: « В О Д А »
     ctx.save();
-    const [dTextX, dTextY] = deform(hatchX, 0);
     ctx.fillStyle = '#0f172a';
     ctx.font = 'bold 7px sans-serif';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    // Draw on left and right side of tank
-    const [dLX, dLY] = deform(hatchX, -tankW * 0.28);
+    const midX = tankX1 + (tankX2 - tankX1) * 0.5;
+    const [dLX, dLY] = deform(midX, -tankW * 0.28);
     ctx.fillText('В О Д А', dLX, dLY);
-    const [dRX, dRY] = deform(hatchX, tankW * 0.28);
+    const [dRX, dRY] = deform(midX, tankW * 0.28);
     ctx.fillText('В О Д А', dRX, dRY);
     ctx.restore();
   }

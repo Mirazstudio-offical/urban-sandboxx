@@ -1,7 +1,9 @@
 import { CAR_CONFIGS } from './cityMap';
 import { Building, GameWorld, InputState, Particle, Pedestrian, Player, SkidMark, Vehicle } from './types';
+import { generateBuildingLayout, constrainPlayerToInterior } from './buildingInteriors';
 import { sound } from './audio';
 import { trafficDiagnostics } from './aiTraffic';
+import { performanceConfig } from './performanceConfig';
 
 export interface CollisionResult {
   collided: boolean;
@@ -688,6 +690,56 @@ export function updatePlayerPedestrianPhysics(
 ) {
   if (player.isInVehicle) return;
 
+  // If player is inside a building, bypass standard physics and use interior constraints
+  if (player.isInsideBuilding && player.insideBuildingId && world) {
+    const bld = world.buildings.find(b => b.id === player.insideBuildingId);
+    if (bld) {
+      const floor = player.currentFloor ?? 0;
+      const layout = generateBuildingLayout(bld, floor);
+
+      // Handle standard movement WASD input inside the building
+      let moveX = 0;
+      let moveY = 0;
+      if (input.forward) moveY -= 1;
+      if (input.backward) moveY += 1;
+      if (input.left) moveX -= 1;
+      if (input.right) moveX += 1;
+
+      const len = Math.hypot(moveX, moveY);
+      const speed = input.sprint ? 140 : 80; // Slower, more controlled movement speed inside buildings
+
+      if (len > 0.01) {
+        moveX /= len;
+        moveY /= len;
+        
+        // Rotate input based on camera angle so WASD moves in screen coordinates
+        const rotAngle = cameraAngle + Math.PI / 2;
+        const cos = Math.cos(rotAngle);
+        const sin = Math.sin(rotAngle);
+        const worldMoveX = moveX * cos - moveY * sin;
+        const worldMoveY = moveX * sin + moveY * cos;
+
+        player.vx = worldMoveX * speed;
+        player.vy = worldMoveY * speed;
+        player.angle = Math.atan2(worldMoveY, worldMoveX);
+        player.walkCycle += dt * (input.sprint ? 14 : 8);
+        player.speed = speed;
+      } else {
+        player.vx = 0;
+        player.vy = 0;
+        player.speed = 0;
+      }
+
+      // Apply movement inside building
+      player.x += player.vx * dt;
+      player.y += player.vy * dt;
+
+      // Apply interior constraints
+      constrainPlayerToInterior(player, bld, layout, dt);
+      return;
+    }
+  }
+
   // Dodge Roll / Quick Dash Trigger (Space key on foot)
   if (input.handbrake && !player.isDashing && (player.dashTimer || 0) <= 0) {
     player.isDashing = true;
@@ -780,12 +832,12 @@ export function updatePlayerPedestrianPhysics(
       player.vx += (targetVx - player.vx) * Math.min(1.0, 10 * dt);
       player.vy += (targetVy - player.vy) * Math.min(1.0, 10 * dt);
 
-      // Smooth body rotation lerp towards movement direction
+      // Smooth body rotation lerp towards movement direction or aim angle
       const targetAngle = Math.atan2(worldMoveY, worldMoveX);
       let angleDiff = (targetAngle - player.angle) % (Math.PI * 2);
       if (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
       if (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
-      player.angle += angleDiff * Math.min(1.0, 20 * dt);
+      player.angle += angleDiff * Math.min(1.0, 25 * dt);
 
       player.walkCycle += dt * (input.sprint ? 18 : 10);
       player.speed = Math.hypot(player.vx, player.vy);
@@ -814,6 +866,14 @@ export function updatePlayerPedestrianPhysics(
         player.vx = 0;
         player.vy = 0;
         player.speed = 0;
+      }
+
+      // When standing still, smoothly rotate towards aimAngle (pointer / cursor direction)
+      if (player.aimAngle !== undefined) {
+        let angleDiff = (player.aimAngle - player.angle) % (Math.PI * 2);
+        if (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
+        if (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
+        player.angle += angleDiff * Math.min(1.0, 20 * dt);
       }
     }
   }
@@ -1093,19 +1153,40 @@ export function updateVehiclePhysics(
       vehicle.isReversing = true;
     } else {
       vehicle.isReversing = vehicle.speed < -2;
-      if (vehicle.speed < vehicle.targetSpeed) {
-        vehicle.speed = Math.min(vehicle.targetSpeed, vehicle.speed + accelRate * dt);
-        vehicle.brakeLightsOn = false;
-      } else if (vehicle.speed > vehicle.targetSpeed) {
-        vehicle.speed = Math.max(vehicle.targetSpeed, vehicle.speed - brakeRate * dt);
-        vehicle.brakeLightsOn = (vehicle.speed - vehicle.targetSpeed > 10) || (vehicle.targetSpeed < 5);
+      if (vehicle.idmAcceleration !== undefined) {
+        // IDM Controlled speed and brake lights
+        vehicle.speed = Math.max(0, vehicle.speed + vehicle.idmAcceleration * dt);
+        vehicle.brakeLightsOn = vehicle.idmAcceleration < -20 || vehicle.speed < 4;
       } else {
-        vehicle.brakeLightsOn = false;
+        if (vehicle.speed < vehicle.targetSpeed) {
+          vehicle.speed = Math.min(vehicle.targetSpeed, vehicle.speed + accelRate * dt);
+          vehicle.brakeLightsOn = false;
+        } else if (vehicle.speed > vehicle.targetSpeed) {
+          vehicle.speed = Math.max(vehicle.targetSpeed, vehicle.speed - brakeRate * dt);
+          vehicle.brakeLightsOn = (vehicle.speed - vehicle.targetSpeed > 10) || (vehicle.targetSpeed < 5);
+        } else {
+          vehicle.brakeLightsOn = false;
+        }
       }
     }
 
-    vehicle.vx = Math.cos(vehicle.angle) * vehicle.speed;
-    vehicle.vy = Math.sin(vehicle.angle) * vehicle.speed;
+    // Rear axle pivot kinematics for AI vehicle turning (front bumper swings outward)
+    const rearAxleDist = cfg.length * 0.35;
+    const wheelBase = cfg.wheelBase || 28;
+
+    if (Math.abs(vehicle.speed) > 0.5 && Math.abs(vehicle.steerAngle) > 0.005) {
+      const angularSpeed = (vehicle.speed / wheelBase) * Math.tan(vehicle.steerAngle);
+      const newCos = Math.cos(vehicle.angle);
+      const newSin = Math.sin(vehicle.angle);
+      const lateralSwingVx = -newSin * rearAxleDist * angularSpeed;
+      const lateralSwingVy = newCos * rearAxleDist * angularSpeed;
+
+      vehicle.vx = newCos * vehicle.speed + lateralSwingVx;
+      vehicle.vy = newSin * vehicle.speed + lateralSwingVy;
+    } else {
+      vehicle.vx = Math.cos(vehicle.angle) * vehicle.speed;
+      vehicle.vy = Math.sin(vehicle.angle) * vehicle.speed;
+    }
   }
 
   // Update position with combined engine velocity and physical knockback momentum
@@ -1338,6 +1419,10 @@ export function updateSkidMarksAndParticles(world: GameWorld, dt: number) {
   }
 
   // Particles
+  if (world.particles.length > performanceConfig.particleLimit) {
+    world.particles.splice(0, world.particles.length - performanceConfig.particleLimit);
+  }
+
   for (let i = world.particles.length - 1; i >= 0; i--) {
     const p = world.particles[i];
     p.life += dt;
@@ -1768,15 +1853,75 @@ export function updateBreakablePropsAndLivingWorld(world: GameWorld, player: Pla
   }
 }
 
-export function getBuildingEntrancePos(bld: Building): { x: number; y: number } {
-  if (bld.entranceSide === 'north') {
-    return { x: bld.x + bld.width / 2, y: bld.y };
-  } else if (bld.entranceSide === 'south') {
-    return { x: bld.x + bld.width / 2, y: bld.y + bld.height };
-  } else if (bld.entranceSide === 'west') {
-    return { x: bld.x, y: bld.y + bld.height / 2 };
-  } else if (bld.entranceSide === 'east') {
-    return { x: bld.x + bld.width, y: bld.y + bld.height / 2 };
+export interface BuildingEntranceInfo {
+  x: number;
+  y: number;
+  side: 'north' | 'south' | 'east' | 'west';
+  offsetRatio: number;
+  number: number;
+}
+
+export function getAllBuildingEntrances(bld: Building): BuildingEntranceInfo[] {
+  const result: BuildingEntranceInfo[] = [];
+  if (bld.entrances && bld.entrances.length > 0) {
+    for (let i = 0; i < bld.entrances.length; i++) {
+      const ent = bld.entrances[i];
+      let ex = bld.x + bld.width * ent.offsetRatio;
+      let ey = bld.y + bld.height;
+      if (ent.side === 'north') {
+        ex = bld.x + bld.width * ent.offsetRatio;
+        ey = bld.y;
+      } else if (ent.side === 'south') {
+        ex = bld.x + bld.width * ent.offsetRatio;
+        ey = bld.y + bld.height;
+      } else if (ent.side === 'west') {
+        ex = bld.x;
+        ey = bld.y + bld.height * ent.offsetRatio;
+      } else if (ent.side === 'east') {
+        ex = bld.x + bld.width;
+        ey = bld.y + bld.height * ent.offsetRatio;
+      }
+      result.push({
+        x: ex,
+        y: ey,
+        side: ent.side,
+        offsetRatio: ent.offsetRatio,
+        number: ent.number ?? (i + 1)
+      });
+    }
+  } else if (bld.entranceSide) {
+    let ex = bld.x + bld.width / 2;
+    let ey = bld.y + bld.height;
+    if (bld.entranceSide === 'north') {
+      ex = bld.x + bld.width / 2;
+      ey = bld.y;
+    } else if (bld.entranceSide === 'west') {
+      ex = bld.x;
+      ey = bld.y + bld.height / 2;
+    } else if (bld.entranceSide === 'east') {
+      ex = bld.x + bld.width;
+      ey = bld.y + bld.height / 2;
+    }
+    result.push({
+      x: ex,
+      y: ey,
+      side: bld.entranceSide,
+      offsetRatio: 0.5,
+      number: 1
+    });
+  } else {
+    result.push({
+      x: bld.x + bld.width / 2,
+      y: bld.y + bld.height,
+      side: 'south',
+      offsetRatio: 0.5,
+      number: 1
+    });
   }
-  return { x: bld.x + bld.width / 2, y: bld.y + bld.height / 2 };
+  return result;
+}
+
+export function getBuildingEntrancePos(bld: Building): { x: number; y: number } {
+  const ents = getAllBuildingEntrances(bld);
+  return { x: ents[0].x, y: ents[0].y };
 }

@@ -1,8 +1,9 @@
-import { Building, CarType, GameWorld, Intersection, Pedestrian, RoadSegment, Vector2D, Vehicle } from './types';
+import { Building, CarType, GameWorld, Intersection, Pedestrian, RoadSegment, Vector2D, Vehicle, StreetProp } from './types';
 import { CAR_CONFIGS, CAR_PALETTE, createDefaultVehicleDamage, generateRandomPedestrianAppearance } from './cityMap';
 import { sound } from './audio';
 import { checkPedestrianBuildingCollision, getBuildingEntrancePos, checkPedestrianVehicleCollision } from './physics';
 import { SpatialGrid } from './spatialGrid';
+import { performanceConfig } from './performanceConfig';
 
 // Helper: angle difference normalized to [-PI, PI]
 export function angleDiff(a: number, b: number): number {
@@ -17,6 +18,100 @@ function distSq(x1: number, y1: number, x2: number, y2: number): number {
   const dx = x1 - x2;
   const dy = y1 - y2;
   return dx * dx + dy * dy;
+}
+
+interface OBB {
+  x: number;
+  y: number;
+  hl: number; // half length
+  hw: number; // half width
+  cos: number;
+  sin: number;
+}
+
+function getOBB(car: Vehicle, safetyMargin: number = 0): OBB {
+  return {
+    x: car.x,
+    y: car.y,
+    hl: (car.length / 2) + safetyMargin,
+    hw: (car.width / 2) + safetyMargin,
+    cos: Math.cos(car.angle),
+    sin: Math.sin(car.angle)
+  };
+}
+
+function getOBBCorners(obb: OBB) {
+  const { x, y, hl, hw, cos, sin } = obb;
+  return [
+    { x: x + cos * hl - sin * hw, y: y + sin * hl + cos * hw },
+    { x: x + cos * hl + sin * hw, y: y + sin * hl - cos * hw },
+    { x: x - cos * hl + sin * hw, y: y - sin * hl - cos * hw },
+    { x: x - cos * hl - sin * hw, y: y - sin * hl + cos * hw }
+  ];
+}
+
+// Separating Axis Theorem (SAT)
+function isOBBOverlapping(obb1: OBB, obb2: OBB): boolean {
+  const axes = [
+    { x: obb1.cos, y: obb1.sin },
+    { x: -obb1.sin, y: obb1.cos },
+    { x: obb2.cos, y: obb2.sin },
+    { x: -obb2.sin, y: obb2.cos }
+  ];
+
+  const corners1 = getOBBCorners(obb1);
+  const corners2 = getOBBCorners(obb2);
+
+  for (const axis of axes) {
+    let min1 = Infinity, max1 = -Infinity;
+    for (const p of corners1) {
+      const proj = p.x * axis.x + p.y * axis.y;
+      if (proj < min1) min1 = proj;
+      if (proj > max1) max1 = proj;
+    }
+
+    let min2 = Infinity, max2 = -Infinity;
+    for (const p of corners2) {
+      const proj = p.x * axis.x + p.y * axis.y;
+      if (proj < min2) min2 = proj;
+      if (proj > max2) max2 = proj;
+    }
+
+    if (max1 < min2 || max2 < min1) {
+      return false; // Separating axis found
+    }
+  }
+
+  return true;
+}
+
+function isLineSegmentIntersecting(p1: {x: number, y: number}, p2: {x: number, y: number}, q1: {x: number, y: number}, q2: {x: number, y: number}): boolean {
+  const det = (p2.x - p1.x) * (q2.y - q1.y) - (q2.x - q1.x) * (p2.y - p1.y);
+  if (Math.abs(det) < 0.0001) return false;
+  
+  const lambda = ((q2.y - q1.y) * (q2.x - p1.x) + (q1.x - q2.x) * (q2.y - p1.y)) / det;
+  const gamma = ((p1.y - p2.y) * (q2.x - p1.x) + (p2.x - p1.x) * (q2.y - p1.y)) / det;
+  
+  return (0 <= lambda && lambda <= 1) && (0 <= gamma && gamma <= 1);
+}
+
+function isPointInsideOBB(pt: {x: number, y: number}, obb: OBB): boolean {
+  const dx = pt.x - obb.x;
+  const dy = pt.y - obb.y;
+  const localX = dx * obb.cos + dy * obb.sin;
+  const localY = -dx * obb.sin + dy * obb.cos;
+  return Math.abs(localX) <= obb.hl && Math.abs(localY) <= obb.hw;
+}
+
+function isRayIntersectingOBB(rayStart: {x: number, y: number}, rayEnd: {x: number, y: number}, obb: OBB): boolean {
+  const corners = getOBBCorners(obb);
+  for (let i = 0; i < 4; i++) {
+    const next = (i + 1) % 4;
+    if (isLineSegmentIntersecting(rayStart, rayEnd, corners[i], corners[next])) {
+      return true;
+    }
+  }
+  return isPointInsideOBB(rayStart, obb);
 }
 
 // --- TELEMETRY & DIAGNOSTICS LOG BUFFER ---
@@ -236,8 +331,8 @@ export function updateAITraffic(
     (v) => Math.hypot(v.x - targetPos.x, v.y - targetPos.y) < 1400
   ).length;
 
-  if (nearbyActiveCount < 10 && totalActiveCount < 28) {
-    const toSpawn = Math.min(1, 10 - nearbyActiveCount);
+  if (nearbyActiveCount < performanceConfig.nearbyVehiclesTarget && totalActiveCount < performanceConfig.maxVehicles) {
+    const toSpawn = Math.min(1, performanceConfig.nearbyVehiclesTarget - nearbyActiveCount);
     for (let s = 0; s < toSpawn; s++) {
       spawnNewCarNearPlayer(targetPos, world);
     }
@@ -306,8 +401,8 @@ export function updateAITraffic(
 
     // --- OPTIMIZATION: DESPAWN / RECYCLE DISTANT CARS ---
     const distToPlayer = Math.hypot(car.x - targetPos.x, car.y - targetPos.y);
-    if (distToPlayer > 1450) {
-      if (totalActiveCount > 28) {
+    if (distToPlayer > 1450 || (totalActiveCount > performanceConfig.maxVehicles && distToPlayer > 800)) {
+      if (totalActiveCount > performanceConfig.maxVehicles) {
         vehiclesToDespawn.push(car.id);
         continue;
       } else {
@@ -389,19 +484,25 @@ export function updateAITraffic(
     }
     car.inIntersection = insideIntersection !== null;
 
-    // 2. Waypoint Tracking & Critical-Damped Pure Pursuit (NO SNAKING / NO CTE OSCILLATIONS / NO ORBITING)
+    // --- REAR AXLE PIVOT REFERENCE (Swept Path Geometry) ---
+    // Vehicles turn around rear axle pivot point, front bumper swings outward!
+    const rearAxleDist = car.length * 0.35;
+    const rearX = car.x - Math.cos(car.angle) * rearAxleDist;
+    const rearY = car.y - Math.sin(car.angle) * rearAxleDist;
+
+    // 2. Waypoint Tracking & Critical-Damped Pure Pursuit from Rear Axle Pivot
     if (car.routeWaypoints && car.routeWaypoints.length > 0) {
       const targetWp = car.routeWaypoints[car.targetWaypointIndex];
       if (targetWp) {
-        const distToWp = Math.hypot(targetWp.x - car.x, targetWp.y - car.y);
+        const distToWp = Math.hypot(targetWp.x - rearX, targetWp.y - rearY);
 
-        // Vector math to check if the car has progressed along or passed the current segment
+        // Vector math to check if the car rear axle has passed the current segment
         const prevWp = car.routeWaypoints[Math.max(0, car.targetWaypointIndex - 1)];
         const segDx = targetWp.x - prevWp.x;
         const segDy = targetWp.y - prevWp.y;
         const segLenSq = segDx * segDx + segDy * segDy;
-        const toCarDx = car.x - prevWp.x;
-        const toCarDy = car.y - prevWp.y;
+        const toCarDx = rearX - prevWp.x;
+        const toCarDy = rearY - prevWp.y;
         const projRatio = segLenSq > 0 ? (toCarDx * segDx + toCarDy * segDy) / segLenSq : 1;
 
         // Calculate Cross-Track Error (lateral displacement from segment centerline)
@@ -409,18 +510,14 @@ export function updateAITraffic(
         const cte = segLen > 0 ? (toCarDx * segDy - toCarDy * segDx) / segLen : 0;
 
         // Check if target waypoint is behind the vehicle heading
-        const toWpDx = targetWp.x - car.x;
-        const toWpDy = targetWp.y - car.y;
+        const toWpDx = targetWp.x - rearX;
+        const toWpDy = targetWp.y - rearY;
         const wpAhead = toWpDx * Math.cos(car.angle) + toWpDy * Math.sin(car.angle);
 
         const isCurve = !!car.currentConnection;
-        const isBigVehicle = car.length > 65;
-        const advanceThreshold = isCurve ? (isBigVehicle ? 32 : 24) : 36;
+        const isHeavyVehicle = car.length > 52 || (car.wheelBase || 28) > 34;
+        const advanceThreshold = isCurve ? (isHeavyVehicle ? 32 : 24) : 36;
 
-        // Advance to next waypoint if:
-        // 1. Within advance radius
-        // 2. Projected past 85% of segment
-        // 3. Close to waypoint and waypoint is already behind the car's front bumper
         if (distToWp < advanceThreshold || projRatio >= 0.85 || (distToWp < 55 && wpAhead < -4)) {
           if (car.targetWaypointIndex < car.routeWaypoints.length - 1) {
             car.targetWaypointIndex++;
@@ -429,60 +526,61 @@ export function updateAITraffic(
           }
         }
 
-        // Pure pursuit dynamic lookahead distance (scaled with speed)
-        // Shorter lookahead on curves for tight, stable cornering
+        // Pure pursuit dynamic lookahead distance (scaled with speed and vehicle size)
         let lookaheadDist = isCurve
-          ? Math.max(18, Math.min(34, 14 + car.speed * 0.15))
+          ? Math.max(22, Math.min(38, 18 + car.speed * 0.15))
           : Math.max(38, Math.min(85, 24 + car.speed * 0.4));
 
+        if (isHeavyVehicle) {
+          lookaheadDist *= 1.25; // Longer lookahead for smooth heavy vehicle arcs
+        }
+
         const { point: lookaheadPt } = getLookaheadPointOnPolyline(
-          car.x,
-          car.y,
+          rearX,
+          rearY,
           car.routeWaypoints,
           car.targetWaypointIndex,
           lookaheadDist
         );
 
-        // Big vehicles "Swing Wide" logic for tight right turns
+        // Heavy vehicles "Swing Wide" (Swept Path) logic for tight turn connections
         let targetX = lookaheadPt.x;
         let targetY = lookaheadPt.y;
 
-        if (isBigVehicle && car.currentConnection?.turnType === 'right') {
-          // Increase lookahead for bigger arc
-          const wideLookaheadDist = lookaheadDist * 1.38;
-          
-          // Re-calculate lookahead point with increased distance
+        if (isHeavyVehicle && car.currentConnection && (car.currentConnection.turnType === 'right' || car.currentConnection.turnType === 'left')) {
+          const isRight = car.currentConnection.turnType === 'right';
+          const wideLookaheadDist = lookaheadDist * 1.35;
           const newLookahead = getLookaheadPointOnPolyline(
-            car.x,
-            car.y,
+            rearX,
+            rearY,
             car.routeWaypoints,
             car.targetWaypointIndex,
             wideLookaheadDist
           );
           
-          // Add lateral offset to swing the nose wide (away from the turn center)
-          const heading = Math.atan2(newLookahead.point.y - car.y, newLookahead.point.x - car.x);
-          const swingAmount = 12; // Reduced from 22 to prevent excessive swing
-          targetX = newLookahead.point.x + Math.cos(heading - Math.PI / 2) * swingAmount;
-          targetY = newLookahead.point.y + Math.sin(heading - Math.PI / 2) * swingAmount;
+          // Offset target outward to prevent rear inner wheels from cutting inner corners or clipping curbs
+          const heading = Math.atan2(newLookahead.point.y - rearY, newLookahead.point.x - rearX);
+          const swingDir = isRight ? -Math.PI / 2 : Math.PI / 2;
+          const swingAmount = isRight ? 14 : 10;
+          targetX = newLookahead.point.x + Math.cos(heading + swingDir) * swingAmount;
+          targetY = newLookahead.point.y + Math.sin(heading + swingDir) * swingAmount;
         }
 
-        const ldx = targetX - car.x;
-        const ldy = targetY - car.y;
+        const ldx = targetX - rearX;
+        const ldy = targetY - rearY;
         let alpha = angleDiff(Math.atan2(ldy, ldx), car.angle);
 
         // Active Cross-Track Error (CTE) Centering Bias
-        // Gently pulls vehicle back to exact center of lane if nudged laterally
         const cteCorrection = Math.atan2(cte * 0.8, Math.max(15, lookaheadDist));
         alpha += cteCorrection;
 
-        // Standard geometric pure pursuit formula: curvature = 2 * sin(alpha) / lookaheadDist
+        // Standard geometric pure pursuit formula around rear axle:
         const wheelBase = car.wheelBase || 28;
         const curvature = (2 * Math.sin(alpha)) / Math.max(8, lookaheadDist);
-        // Allow responsive steering up to ~50 degrees (0.85 rad) for smooth U-turns and 90-deg intersections
-        const desiredSteer = Math.max(-0.85, Math.min(0.85, Math.atan(curvature * wheelBase)));
+        const maxSteerLimit = CAR_CONFIGS[car.type]?.maxSteerAngle || 0.85;
+        const desiredSteer = Math.max(-maxSteerLimit, Math.min(maxSteerLimit, Math.atan(curvature * wheelBase)));
 
-        // Smooth critically-damped steering filter
+        // Smooth steering response
         car.steerAngle += (desiredSteer - car.steerAngle) * Math.min(1.0, 10.0 * dt);
 
         // Bicycle yaw kinematic update
@@ -506,14 +604,31 @@ export function updateAITraffic(
       reacquireClosestLane(car, world);
     }
 
-    // 3. Multi-Zone Intelligent Obstacle & Collision Avoidance
+    // 3. Multi-Zone Intelligent Obstacle & Collision Avoidance (OBB + Multi-Ray Sector)
     let minGapToLeadCar = 999;
     let leadCarSpeed = 0;
     let hasLeadCar = false;
 
     const carCos = Math.cos(car.angle);
     const carSin = Math.sin(car.angle);
+    const halfL = car.length / 2;
+    const halfW = car.width / 2;
 
+    const fx = car.x + carCos * halfL;
+    const fy = car.y + carSin * halfL;
+    const flx = car.x + carCos * halfL - carSin * halfW;
+    const fly = car.y + carSin * halfL + carCos * halfW;
+    const frx = car.x + carCos * halfL + carSin * halfW;
+    const fry = car.y + carSin * halfL - carCos * halfW;
+
+    const L_center = Math.max(70, 42 + car.speed * 1.3);
+    const L_side = Math.max(45, 25 + car.speed * 0.7);
+
+    const centralRayEnd = { x: fx + carCos * L_center, y: fy + carSin * L_center };
+    const leftRayEnd = { x: flx + Math.cos(car.angle - 0.22) * L_side, y: fly + Math.sin(car.angle - 0.22) * L_side };
+    const rightRayEnd = { x: frx + Math.cos(car.angle + 0.22) * L_side, y: fry + Math.sin(car.angle + 0.22) * L_side };
+
+    const carOBB = getOBB(car, 1);
     const nearbyVehicles = vehGrid ? vehGrid.queryRadius(car.x, car.y, 140) : world.vehicles;
 
     for (const other of nearbyVehicles) {
@@ -525,103 +640,85 @@ export function updateAITraffic(
 
       if (directDist > 140) continue;
 
-      // Longitudinal and lateral offsets relative to our heading
-      const distLong = relX * carCos + relY * carSin;
-      const distLat = Math.abs(relX * -carSin + relY * carCos);
       const aDiff = Math.abs(angleDiff(other.angle, car.angle));
 
-      // CASE A: Standard Straight Road Following
+      // Oncoming traffic on straight roads -> Ignore
       if (!car.currentConnection && !car.inIntersection && !other.currentConnection && !other.inIntersection) {
-        // Oncoming traffic is on opposite side of road -> Ignore
         if (aDiff > 1.6) continue;
+      }
 
-        // Same direction traffic ahead (check both same lane and lane-shifting/mismatched cars ahead)
-        // car.width is ~20px, so distLat < 22 ensures we detect any car physically overlapping or blocking our lane path
-        if (distLong > 0 && distLong < 140 && distLat < 22) {
-          const netGap = distLong - (car.length + other.length) / 2;
-          if (netGap < minGapToLeadCar) {
-            minGapToLeadCar = Math.max(0, netGap);
-            leadCarSpeed = Math.max(0, other.speed);
-            hasLeadCar = true;
+      // Check OBB intersection and Multi-Ray intersections
+      const otherOBB = getOBB(other, 2.5); // 2.5px safety buffer around other vehicle
+      const isOverlapping = isOBBOverlapping(carOBB, otherOBB);
+      const isCentralIntersect = isRayIntersectingOBB({ x: fx, y: fy }, centralRayEnd, otherOBB);
+      const isLeftIntersect = isRayIntersectingOBB({ x: flx, y: fly }, leftRayEnd, otherOBB);
+      const isRightIntersect = isRayIntersectingOBB({ x: frx, y: fry }, rightRayEnd, otherOBB);
+      const isRayIntersect = isCentralIntersect || isLeftIntersect || isRightIntersect;
+
+      // Trajectory overlap waypoint check
+      let isTrajectoryConflict = false;
+      if (car.routeWaypoints && car.routeWaypoints.length > 0) {
+        const checkEnd = Math.min(car.routeWaypoints.length, car.targetWaypointIndex + 4);
+        for (let wi = car.targetWaypointIndex; wi < checkEnd; wi++) {
+          const wp = car.routeWaypoints[wi];
+          if (Math.hypot(other.x - wp.x, other.y - wp.y) < 28) {
+            isTrajectoryConflict = true;
+            break;
           }
         }
-      } 
-      // CASE B: Intersection Crossing or Turning Maneuver
-      else {
-        // 1. Same route queueing (following car ahead on the same curve)
-        const isSameConnection = car.currentConnection && other.currentConnection && 
-          car.currentConnection.targetLaneId === other.currentConnection.targetLaneId;
+      }
 
-        if (isSameConnection) {
-          if (distLong > 0 && distLong < 100 && distLat < 18) {
-            const netGap = distLong - (car.length + other.length) / 2;
-            if (netGap < minGapToLeadCar) {
-              minGapToLeadCar = Math.max(0, netGap);
-              leadCarSpeed = Math.max(0, other.speed);
-              hasLeadCar = true;
-            }
-          }
-        } 
-        // 2. Conflicting cross-traffic or merging paths inside intersection
+      const isConflict = isOverlapping || isRayIntersect || isTrajectoryConflict;
+
+      if (isConflict) {
+        // STRICT DETERMINISTIC PRIORITY ARBITRATION
+        let weHavePriority = false;
+
+        // Rule 1: Car already inside intersection has priority over car still at stop line
+        if (car.inIntersection && !other.inIntersection) {
+          weHavePriority = true;
+        } else if (!car.inIntersection && other.inIntersection) {
+          weHavePriority = false;
+        }
+        // Rule 2: Straight maneuvers have right-of-way over left turns (ПДД)
+        else if (car.plannedTurn === 'straight' && other.plannedTurn === 'left') {
+          weHavePriority = true;
+        } else if (car.plannedTurn === 'left' && other.plannedTurn === 'straight') {
+          weHavePriority = false;
+        }
+        // Rule 3: Right turns have priority over left turns
+        else if (car.plannedTurn === 'right' && other.plannedTurn === 'left') {
+          weHavePriority = true;
+        } else if (car.plannedTurn === 'left' && other.plannedTurn === 'right') {
+          weHavePriority = false;
+        }
+        // Rule 4: Car closer to exiting the intersection has priority
+        else if ((car.targetWaypointIndex || 0) > (other.targetWaypointIndex || 0)) {
+          weHavePriority = true;
+        } else if ((other.targetWaypointIndex || 0) > (car.targetWaypointIndex || 0)) {
+          weHavePriority = false;
+        }
+        // Rule 5: Polite yielding and tie-breakers for deadlock resolution
         else {
-          // Check upcoming path waypoints for physical trajectory conflict
-          let isTrajectoryConflict = false;
-          if (car.routeWaypoints && car.routeWaypoints.length > 0) {
-            const checkEnd = Math.min(car.routeWaypoints.length, car.targetWaypointIndex + 4);
-            for (let wi = car.targetWaypointIndex; wi < checkEnd; wi++) {
-              const wp = car.routeWaypoints[wi];
-              if (Math.hypot(other.x - wp.x, other.y - wp.y) < 28) {
-                isTrajectoryConflict = true;
-                break;
-              }
-            }
+          if (car.stuckTimer > 3.0 && other.stuckTimer <= 3.0) {
+            weHavePriority = false; // Politely yield
+          } else if (other.stuckTimer > 3.0 && car.stuckTimer <= 3.0) {
+            weHavePriority = true; // Other yields to us
+          } else if (car.stuckTimer > 3.0 && other.stuckTimer > 3.0) {
+            // If both are stuck, the one stuck longer yields
+            weHavePriority = car.stuckTimer < other.stuckTimer;
+          } else {
+            weHavePriority = car.id < other.id;
           }
+        }
 
-          // Forward safety bubble (strictly ahead of our front bumper)
-          const inForwardCone = distLong > 4 && directDist < (car.length + other.length) * 0.45 + 10 && distLat < 24;
-
-          if (isTrajectoryConflict || inForwardCone) {
-            // STRICT DETERMINISTIC PRIORITY ARBITRATION
-            let weHavePriority = false;
-
-            // Rule 1: Car already inside intersection has priority over car still at stop line
-            if (car.inIntersection && !other.inIntersection) {
-              weHavePriority = true;
-            } else if (!car.inIntersection && other.inIntersection) {
-              weHavePriority = false;
-            }
-            // Rule 2: Straight maneuvers have right-of-way over left turns (ПДД)
-            else if (car.plannedTurn === 'straight' && other.plannedTurn === 'left') {
-              weHavePriority = true;
-            } else if (car.plannedTurn === 'left' && other.plannedTurn === 'straight') {
-              weHavePriority = false;
-            }
-            // Rule 3: Right turns have priority over left turns
-            else if (car.plannedTurn === 'right' && other.plannedTurn === 'left') {
-              weHavePriority = true;
-            } else if (car.plannedTurn === 'left' && other.plannedTurn === 'right') {
-              weHavePriority = false;
-            }
-            // Rule 4: Car closer to exiting the intersection has priority
-            else if ((car.targetWaypointIndex || 0) > (other.targetWaypointIndex || 0)) {
-              weHavePriority = true;
-            } else if ((other.targetWaypointIndex || 0) > (car.targetWaypointIndex || 0)) {
-              weHavePriority = false;
-            }
-            // Rule 5: Strict ID tie-breaker guarantees NO mutual deadlocks
-            else {
-              weHavePriority = car.id < other.id;
-            }
-
-            // If we do NOT have priority, yield to the passing car
-            if (!weHavePriority) {
-              const netGap = Math.max(0, directDist - (car.length + other.length) / 2);
-              if (netGap < minGapToLeadCar) {
-                minGapToLeadCar = netGap;
-                leadCarSpeed = Math.max(0, other.speed);
-                hasLeadCar = true;
-              }
-            }
+        // If we do NOT have priority, yield to the passing car
+        if (!weHavePriority) {
+          const netGap = Math.max(0, directDist - (car.length + other.length) / 2);
+          if (netGap < minGapToLeadCar) {
+            minGapToLeadCar = netGap;
+            leadCarSpeed = Math.max(0, other.speed);
+            hasLeadCar = true;
           }
         }
       }
@@ -756,40 +853,33 @@ export function updateAITraffic(
                     // B. Green Light Checks: "Don't Block The Box" & Left-Turn Yielding
                     if (inter.hasLights && (stopLine.lightState === 'green' || stopLine.lightState === 'green_flashing' || stopLine.lightState === 'yellow' || stopLine.lightState === 'off' || isLightBroken)) {
                       // Check 1: Anti-Gridlock ("Don't Block the Box")
-                      // Do not enter intersection if exit lane cannot receive vehicle
                       const targetLane = findLaneById(world, candidateConn.targetLaneId);
                       if (targetLane && targetLane.waypoints.length > 0) {
-                        const exitPt = targetLane.waypoints[0];
-                        for (const other of world.vehicles) {
-                          if (other.id === car.id || other.isParked) continue;
-                          if (Math.hypot(other.x - exitPt.x, other.y - exitPt.y) < 60 && other.speed < 8) {
-                            mustStopAtStopLine = true;
-                            stopLineDist = distToLine;
-                            car.aiState = 'yielding';
-                            break;
+                        const isHeavyVehicle = car.length > 52 || (car.wheelBase || 28) > 34;
+                        const checkWpCount = isHeavyVehicle ? 4 : 3;
+                        const safetyDist = isHeavyVehicle ? 95 : 65;
+                        
+                        for (let wi = 0; wi < Math.min(targetLane.waypoints.length, checkWpCount); wi++) {
+                          const exitPt = targetLane.waypoints[wi];
+                          const nearbyAtExit = vehGrid ? vehGrid.queryRadius(exitPt.x, exitPt.y, safetyDist) : world.vehicles;
+                          for (const other of nearbyAtExit) {
+                            if (other.id === car.id || other.isParked || other.inIntersection) continue;
+                            if (Math.hypot(other.x - exitPt.x, other.y - exitPt.y) < safetyDist && other.speed < 8) {
+                              mustStopAtStopLine = true;
+                              stopLineDist = distToLine;
+                              car.aiState = 'yielding';
+                              break;
+                            }
                           }
-                        }
-                      }
-                    }
-                    
-                    // Always perform Anti-Gridlock check for all intersections
-                    const targetLaneAll = findLaneById(world, candidateConn.targetLaneId);
-                    if (targetLaneAll && targetLaneAll.waypoints.length > 0) {
-                      const exitPt = targetLaneAll.waypoints[0];
-                      for (const other of world.vehicles) {
-                        if (other.id === car.id || other.isParked || other.inIntersection) continue; // Check for cars already in intersection
-                        if (Math.hypot(other.x - exitPt.x, other.y - exitPt.y) < 60 && other.speed < 8) {
-                          mustStopAtStopLine = true;
-                          stopLineDist = distToLine;
-                          car.aiState = 'yielding';
-                          break;
+                          if (mustStopAtStopLine) break;
                         }
                       }
                     }
 
                     // Check 2: Left-turn yielding to oncoming traffic (ПДД)
                     if (car.plannedTurn === 'left' && !mustStopAtStopLine) {
-                      for (const oncoming of world.vehicles) {
+                      const oncomingCandidates = vehGrid ? vehGrid.queryRadius(inter.x, inter.y, inter.width / 2 + 50) : world.vehicles;
+                      for (const oncoming of oncomingCandidates) {
                         if (oncoming.id === car.id || oncoming.isParked) continue;
                         const distToInter = Math.hypot(oncoming.x - inter.x, oncoming.y - inter.y);
                         if (distToInter < inter.width / 2 + 50) {
@@ -805,19 +895,26 @@ export function updateAITraffic(
                     }
 
                     // Check 3: Active Intersection Occupancy (Wait at stop line if conflicting vehicle is crossing)
-                    if (!mustStopAtStopLine && distToLine < 50) {
-                      for (const insideCar of world.vehicles) {
+                    if (!mustStopAtStopLine && distToLine < 65) {
+                      const insideCandidates = vehGrid ? vehGrid.queryRadius(inter.x, inter.y, inter.width * 0.6) : world.vehicles;
+                      for (const insideCar of insideCandidates) {
                         if (insideCar.id === car.id || insideCar.isParked || !insideCar.inIntersection) continue;
-                        const distToCenter = Math.hypot(insideCar.x - inter.x, insideCar.y - inter.y);
-                        if (distToCenter < inter.width * 0.45 && insideCar.speed < 25) {
-                          const headingDiff = Math.abs(angleDiff(insideCar.angle, car.angle));
-                          // If insideCar is crossing perpendicularly or turning across our path
-                          if (headingDiff > 0.45 && headingDiff < 2.7) {
-                            mustStopAtStopLine = true;
-                            stopLineDist = distToLine;
-                            car.aiState = 'yielding';
+                        
+                        const insideOBB = getOBB(insideCar, 3); // 3px safety margin
+                        let pathConflict = false;
+                        for (let pi = 0; pi < candidateConn.pathWaypoints.length; pi += 2) {
+                          const pt = candidateConn.pathWaypoints[pi];
+                          if (isPointInsideOBB(pt, insideOBB)) {
+                            pathConflict = true;
                             break;
                           }
+                        }
+                        
+                        if (pathConflict && insideCar.speed < 30) {
+                          mustStopAtStopLine = true;
+                          stopLineDist = distToLine;
+                          car.aiState = 'yielding';
+                          break;
                         }
                       }
                     }
@@ -868,60 +965,67 @@ export function updateAITraffic(
       }
     }
 
-    let stopLineTargetSpeed = v0;
+    // 5. Intelligent Driver Model (IDM) Acceleration computation
+    const a_max = 140; // Maximum acceleration (px/s^2)
+    const b_comf = 160; // Comfortable deceleration (px/s^2)
+    const delta_exp = 4; // Acceleration exponent
+    const s0 = 24; // Safe minimum distance buffer (px)
+    const T_headway = 1.0; // Safe time headway (seconds)
+
+    const v = Math.max(0, car.speed);
+    
+    // Free acceleration component
+    let idm_accel = a_max * (1 - Math.pow(v / Math.max(1, v0), delta_exp));
+
+    // Evaluate virtual static/moving obstacles to apply braking forces smoothly
+    const obstacles: { s: number; v_lead: number }[] = [];
+
     if (mustStopAtStopLine) {
-      if (stopLineDist < 35) {
-        stopLineTargetSpeed = 0;
-      } else {
-        const factor = Math.max(0, (stopLineDist - 28) / 80);
-        stopLineTargetSpeed = v0 * factor;
-      }
+      // Treat stop line as a static obstacle
+      const netGap = Math.max(0.1, stopLineDist - 25);
+      obstacles.push({ s: netGap, v_lead: 0 });
     }
 
-    let pedTargetSpeed = v0;
     if (pedObstacleDist < 999) {
-      if (pedObstacleDist < 46) {
-        pedTargetSpeed = 0;
-      } else {
-        const factor = Math.max(0, (pedObstacleDist - 40) / 60);
-        pedTargetSpeed = v0 * factor * factor;
-      }
+      // Treat pedestrian as a static obstacle
+      const netGap = Math.max(0.1, pedObstacleDist - 15);
+      obstacles.push({ s: netGap, v_lead: 0 });
     }
 
-    let leadCarTargetSpeed = v0;
     if (hasLeadCar) {
-      const s0 = 50; // Safe buffer gap (px) prevents bumper-to-bumper touching when queued
-      const s = minGapToLeadCar;
+      // Treat lead car as a moving obstacle
+      obstacles.push({ s: Math.max(0.1, minGapToLeadCar), v_lead: leadCarSpeed });
+    }
 
-      if (s < s0) {
-        if (car.inIntersection && car.stuckTimer > 1.2) {
-          leadCarTargetSpeed = 22;
-          car.ghostingAlpha = Math.max(0.4, (car.ghostingAlpha ?? 1.0) - dt * 0.6);
-        } else {
-          leadCarTargetSpeed = 0;
-        }
-      } else if (s < s0 + 60) {
-        const factor = Math.max(0, (s - s0) / 60);
-        leadCarTargetSpeed = Math.min(leadCarSpeed * 0.90 + 6 * factor, v0 * factor);
-      } else {
-        leadCarTargetSpeed = Math.min(v0, Math.max(leadCarSpeed, 45));
+    // Apply IDM deceleration term for each obstacle and find the minimum acceleration (safest option)
+    for (const obs of obstacles) {
+      const delta_v = v - obs.v_lead;
+      const s_star = s0 + v * T_headway + (v * delta_v) / (2 * Math.sqrt(a_max * b_comf));
+      const brake_term = Math.pow(Math.max(0, s_star) / obs.s, 2);
+      const obs_accel = a_max * (1 - Math.pow(v / Math.max(1, v0), delta_exp) - brake_term);
+      if (obs_accel < idm_accel) {
+        idm_accel = obs_accel;
       }
     }
 
-    // STRICT SAFETY CONSTRAINTS: Target speed is ALWAYS the minimum of all active restrictions!
-    const effectiveV0 = car.aiState === 'yielding' ? 15 : v0;
-    car.targetSpeed = Math.min(effectiveV0, stopLineTargetSpeed, pedTargetSpeed, leadCarTargetSpeed);
+    // Strict limits on deceleration/acceleration for stability
+    car.idmAcceleration = Math.max(-420, Math.min(a_max * 1.5, idm_accel));
 
-    if (pedObstacleDist < 42 && pedTargetSpeed === 0) {
+    // For backwards compatibility and high-level logic APIs, keep targetSpeed synced
+    const effectiveV0 = car.aiState === 'yielding' ? 15 : v0;
+    car.targetSpeed = effectiveV0;
+
+    // Hard emergency deceleration override if extremely close to obstacle or pedestrian
+    if (pedObstacleDist < 32 || (hasLeadCar && minGapToLeadCar < 15)) {
+      car.idmAcceleration = -380;
       car.speed = Math.max(0, car.speed - 380 * dt);
     }
 
-    if (mustStopAtStopLine || pedObstacleDist < 999 || hasLeadCar) {
-      if (hasLeadCar || pedObstacleDist < 999) {
-        car.aiState = 'stopping_obstacle';
-      } else if (mustStopAtStopLine) {
-        car.aiState = 'stopping_light';
-      }
+    // Update AI state
+    if (pedObstacleDist < 999 || hasLeadCar) {
+      car.aiState = 'stopping_obstacle';
+    } else if (mustStopAtStopLine) {
+      car.aiState = 'stopping_light';
     } else {
       if (!car.inIntersection) {
         car.aiState = 'driving';
@@ -1542,19 +1646,47 @@ export function updatePedestrians(
   vehGrid?: SpatialGrid<Vehicle>,
   pedGrid?: SpatialGrid<Pedestrian>,
   bldGrid?: SpatialGrid<Building>,
-  playerPos?: Vector2D
+  playerPos?: Vector2D,
+  propGrid?: SpatialGrid<StreetProp>
 ) {
   const isRaining = world.weather === 'rain' || world.weather === 'storm';
   const UMBRELLA_COLORS = ['#ef4444', '#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899', '#06b6d4'];
 
+  // Pre-build group cache to avoid O(N^2) filtering inside the main loop
+  const groupsMap = new Map<string, Pedestrian[]>();
+  for (const p of world.pedestrians) {
+    if (p.groupId) {
+      let list = groupsMap.get(p.groupId);
+      if (!list) {
+        list = [];
+        groupsMap.set(p.groupId, list);
+      }
+      list.push(p);
+    }
+  }
+
   const playerCar = world.vehicles.find((v) => v.isPlayerControlled);
   const targetPos: Vector2D = playerPos || (playerCar ? { x: playerCar.x, y: playerCar.y } : { x: 4400, y: 2800 });
 
+  let updatedPedCount = 0;
   for (const ped of world.pedestrians) {
     // Keep pedestrians focused around the player's active area
     const distToPlayer = Math.hypot(ped.x - targetPos.x, ped.y - targetPos.y);
     if (distToPlayer > 1200) {
-      respawnPedestrianNearPlayer(ped, targetPos, world);
+      if (updatedPedCount < performanceConfig.maxActivePedestrians) {
+        respawnPedestrianNearPlayer(ped, targetPos, world);
+      } else {
+        // Move extra pedestrians out of bounds to keep performance optimal
+        ped.x = -10000;
+        ped.y = -10000;
+      }
+      continue;
+    }
+
+    updatedPedCount++;
+    if (updatedPedCount > performanceConfig.maxActivePedestrians) {
+      ped.x = -10000;
+      ped.y = -10000;
       continue;
     }
     // A. Handle Inside Building state
@@ -2026,9 +2158,9 @@ export function updatePedestrians(
       if (ped.speed < ped.targetSpeed) ped.speed = ped.targetSpeed;
     }
     
-    // Group dynamics: if in a group and walking normally, adjust speed towards group mates
+    // Group dynamics: if in a group and walking normally, adjust speed towards group mates (Optimized with groupsMap cache)
     if (ped.groupId && ped.state === 'walking' && ped.targetSpeed > 0) {
-      const groupMates = world.pedestrians.filter(p => p.groupId === ped.groupId && p.id !== ped.id);
+      const groupMates = (groupsMap.get(ped.groupId) || []).filter(p => p.id !== ped.id);
       let avgSpeed = ped.speed;
       if (groupMates.length > 0) {
         let totalSpeed = ped.speed;
@@ -2110,8 +2242,9 @@ export function updatePedestrians(
     ped.vx += avoidForceX;
     ped.vy += avoidForceY;
 
-    // 5b. Social Repulsion: Avoid other pedestrians
-    for (const other of world.pedestrians) {
+    // 5b. Social Repulsion: Avoid other pedestrians (Optimized with pedGrid)
+    const nearbyPedsForRepulsion = pedGrid ? pedGrid.queryRadius(ped.x, ped.y, 25) : world.pedestrians;
+    for (const other of nearbyPedsForRepulsion) {
       if (other.id === ped.id || other.isInsideBuilding) continue;
       const dx = ped.x - other.x;
       const dy = ped.y - other.y;
@@ -2162,8 +2295,9 @@ export function updatePedestrians(
     let nextX = ped.x + ped.vx * dt;
     let nextY = ped.y + ped.vy * dt;
 
-    // 6. Robust vehicle physical separation
-    for (const car of world.vehicles) {
+    // 6. Robust vehicle physical separation (Optimized with vehGrid)
+    const nearbyCarsForCollision = vehGrid ? vehGrid.queryRadius(nextX, nextY, 40) : world.vehicles;
+    for (const car of nearbyCarsForCollision) {
       const res = checkPedestrianVehicleCollision(nextX, nextY, 7.0, car);
       if (res.collided) {
         nextX = res.x;
@@ -2171,10 +2305,11 @@ export function updatePedestrians(
       }
     }
 
-    // 7. Collision with Buildings (Only when not crossing)
+    // 7. Collision with Buildings (Only when not crossing - Optimized with bldGrid)
     if (!ped.isCrossingRoad) {
       const pedRadius = 6.0;
-      for (const bld of world.buildings) {
+      const nearbyBuildings = bldGrid ? bldGrid.queryRadius(nextX, nextY, 50) : world.buildings;
+      for (const bld of nearbyBuildings) {
         if (
           nextX + pedRadius > bld.x && nextX - pedRadius < bld.x + bld.width &&
           nextY + pedRadius > bld.y && nextY - pedRadius < bld.y + bld.height
@@ -2186,10 +2321,11 @@ export function updatePedestrians(
       }
     }
 
-    // 7b. Collision with and Avoidance of Street Props (excluding broken ones)
+    // 7b. Collision with and Avoidance of Street Props (excluding broken ones - Optimized with propGrid)
     {
       const pedRadius = 6.0;
-      for (const prop of world.props) {
+      const nearbyProps = propGrid ? propGrid.queryRadius(nextX, nextY, 40) : world.props;
+      for (const prop of nearbyProps) {
         if (prop.isBroken) continue;
 
         let propRadius = 5.0;
@@ -2322,7 +2458,7 @@ export function spawnNewCarNearPlayer(playerPos: Vector2D, world: GameWorld): bo
   const carTypes: CarType[] = [
     'sedan', 'hatchback', 'pickup', 'sports', 'suv', 'taxi', 'police', 
     'fire_engine', 'fire_ladder', 'fire_rescue',
-    'bus', 'bus_articulated', 'bus_minibus',
+    'bus', 'bus_minibus',
     'van', 'muscle', 
     'ambulance', 'ambulance_van', 'ambulance_suv',
     'truck_box', 'truck_dump', 'truck_tanker', 'truck_water', 'truck_flatbed', 'cement_mixer', 'garbage_truck'
@@ -2333,7 +2469,7 @@ export function spawnNewCarNearPlayer(playerPos: Vector2D, world: GameWorld): bo
   if (cType === 'taxi') color = '#eab308';
   else if (cType === 'police') color = '#0f172a';
   else if (cType === 'fire_engine' || cType === 'fire_ladder' || cType === 'fire_rescue') color = '#dc2626';
-  else if (cType === 'bus' || cType === 'bus_articulated') color = '#eab308';
+  else if (cType === 'bus') color = '#eab308';
   else if (cType === 'bus_minibus') color = '#f59e0b';
   else if (cType === 'ambulance' || cType === 'ambulance_van' || cType === 'ambulance_suv') color = '#f8fafc';
   else if (cType === 'garbage_truck') color = '#16a34a';

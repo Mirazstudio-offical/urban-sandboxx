@@ -18,12 +18,14 @@ import { loadMap } from './loadMap';
 import { SpatialGrid } from './spatialGrid';
 import { updateAITraffic, updatePedestrians, updateTrafficLights } from './aiTraffic';
 import { 
+  getAllBuildingEntrances,
   updateBreakablePropsAndLivingWorld,
   updatePlayerPedestrianPhysics, 
   updateSkidMarksAndParticles, 
   updateVehiclePhysics 
 } from './physics';
 import { GameRenderer } from './renderer';
+import { getBuildingFloorsCount, generateBuildingLayout } from './buildingInteriors';
 import { calculateGpsRoute } from './navigation';
 import { sound } from './audio';
 import { TrafficConsole } from './components/TrafficConsole';
@@ -31,6 +33,8 @@ import { FullScreenMap } from './components/FullScreenMap';
 import { LandscapeGuard } from './components/LandscapeGuard';
 import { MobileTouchControls } from './components/MobileTouchControls';
 import { MainMenu } from './components/MainMenu';
+import { PerformanceProfiler } from './components/PerformanceProfiler';
+import { performanceConfig } from './performanceConfig';
 import { 
   AlertTriangle,
   ArrowLeft,
@@ -157,6 +161,16 @@ export default function App() {
     lightsBroken: false,
   });
   const [playerTurnSignal, setPlayerTurnSignal] = useState<'none' | 'left' | 'right' | 'hazard'>('none');
+  const [canEnterBuilding, setCanEnterBuilding] = useState<Building | null>(null);
+  const [canExitBuilding, setCanExitBuilding] = useState<boolean>(false);
+  const [activeElevatorMenu, setActiveElevatorMenu] = useState<{
+    bldId: string;
+    bldName: string;
+    currentFloor: number;
+    maxFloors: number;
+    type: 'elevator' | 'stairs';
+  } | null>(null);
+  const [fadeActive, setFadeActive] = useState<boolean>(false);
   const [playerHeadlightMode, setPlayerHeadlightMode] = useState<'off' | 'low' | 'high'>('low');
   const [fps, setFps] = useState<number>(60);
   const [streetName, setStreetName] = useState<string>('Grand Boulevard');
@@ -192,6 +206,40 @@ export default function App() {
   };
   const [isQuickMenuOpen, setIsQuickMenuOpen] = useState<boolean>(false);
   const [isConsoleOpen, setIsConsoleOpen] = useState<boolean>(false);
+  const [isPerfConsoleOpen, setIsPerfConsoleOpen] = useState<boolean>(false);
+  const [currentPerfStats, setCurrentPerfStats] = useState({
+    fps: 60,
+    spatialGridTime: 0,
+    aiTrafficTime: 0,
+    pedestriansTime: 0,
+    physicsTime: 0,
+    viewportTime: 0,
+    renderTime: 0,
+    minimapTime: 0,
+    totalFrameTime: 0,
+    vehiclesTotal: 0,
+    vehiclesVisible: 0,
+    pedestriansTotal: 0,
+    pedestriansVisible: 0,
+    particlesTotal: 0
+  });
+  const perfHistoryRef = useRef<any[]>([]);
+  const performanceStatsRef = useRef({
+    fps: 60,
+    spatialGridTime: 0,
+    aiTrafficTime: 0,
+    pedestriansTime: 0,
+    physicsTime: 0,
+    viewportTime: 0,
+    renderTime: 0,
+    minimapTime: 0,
+    totalFrameTime: 0,
+    vehiclesTotal: 0,
+    vehiclesVisible: 0,
+    pedestriansTotal: 0,
+    pedestriansVisible: 0,
+    particlesTotal: 0
+  });
   const [isSpawnMenuOpen, setIsSpawnMenuOpen] = useState<boolean>(false);
   const [currentSpawnId, setCurrentSpawnId] = useState<string>('central_park');
 
@@ -549,6 +597,7 @@ export default function App() {
   // Turn signal audio tick timer
   const turnTickTimerRef = useRef<number>(0);
   const hudUpdateTimerRef = useRef<number>(0);
+  const perfUiTimerRef = useRef<number>(0);
 
   // Initialize Game World (Runs ONCE on mount, NEVER resets when toggling day/night)
   useEffect(() => {
@@ -648,14 +697,20 @@ export default function App() {
         toggleTurnSignal('hazard');
       }
 
-      // Enter/Exit Vehicle (F key)
+      // Interact/Enter/Exit Vehicle or Building (F key)
       if (code === 'KeyF') {
-        handleEnterExitVehicle();
+        handleInteract();
       }
 
       // AI Telemetry Console toggle
-      if (code === 'Backquote' || code === 'F1') {
+      if (code === 'F1') {
         setIsConsoleOpen((prev) => !prev);
+        e.preventDefault();
+      }
+
+      // Performance Profiler Console toggle
+      if (code === 'Backquote' || code === 'F2') {
+        setIsPerfConsoleOpen((prev) => !prev);
         e.preventDefault();
       }
 
@@ -715,9 +770,26 @@ export default function App() {
       }
     };
 
+    const handleTouchMove = (e: TouchEvent) => {
+      if (e.touches.length > 0 && canvas) {
+        const touch = e.touches[0];
+        const player = playerRef.current;
+        if (!player.isInVehicle) {
+          const screenCenterX = canvas.width / 2;
+          const screenCenterY = canvas.height / 2;
+          const screenDx = touch.clientX - screenCenterX;
+          const screenDy = touch.clientY - screenCenterY;
+          const camAngle = cameraRef.current.angle;
+          player.aimAngle = Math.atan2(screenDy, screenDx) + camAngle + Math.PI / 2;
+        }
+      }
+    };
+
     window.addEventListener('keydown', handleKeyDown);
     window.addEventListener('keyup', handleKeyUp);
     window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('touchmove', handleTouchMove, { passive: true });
+    window.addEventListener('touchstart', handleTouchMove, { passive: true });
     window.addEventListener('wheel', handleWheel, { passive: true });
 
     cleanupListeners = () => {
@@ -725,6 +797,8 @@ export default function App() {
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
       window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('touchmove', handleTouchMove);
+      window.removeEventListener('touchstart', handleTouchMove);
       window.removeEventListener('wheel', handleWheel);
     };
 
@@ -734,6 +808,7 @@ export default function App() {
     let fpsTimer = 0;
 
     const gameLoop = (now: number) => {
+      const frameStart = performance.now();
       const dt = Math.min((now - lastTime) / 1000, 0.05);
       lastTime = now;
 
@@ -753,6 +828,7 @@ export default function App() {
         const input = inputRef.current;
 
         // 1. Update Dynamic Spatial Grids (done early so AI & physics use current frame positions)
+        const tGridStart = performance.now();
         const vehGrid = spatialGridVehiclesRef.current;
         vehGrid.clear();
         world.vehicles.forEach((v) => vehGrid.insert(v));
@@ -762,17 +838,21 @@ export default function App() {
         world.pedestrians.forEach((p) => pedGrid.insert(p));
 
         const bldGrid = spatialGridBuildingsRef.current;
+        const tGridEnd = performance.now();
 
-        // 2. Update Traffic Lights
+        // 2 & 3. Update Traffic Lights & AI Traffic
+        const tAiStart = performance.now();
         updateTrafficLights(world.intersections, dt);
-
-        // 3. Update AI Traffic (using spatial grids and player position)
         updateAITraffic(world, dt, vehGrid, pedGrid, { x: player.x, y: player.y });
+        const tAiEnd = performance.now();
 
         // 4. Update Pedestrians (using spatial grids and player position)
-        updatePedestrians(world, dt, vehGrid, pedGrid, bldGrid, { x: player.x, y: player.y });
+        const tPedStart = performance.now();
+        updatePedestrians(world, dt, vehGrid, pedGrid, bldGrid, { x: player.x, y: player.y }, spatialGridPropsRef.current);
+        const tPedEnd = performance.now();
 
         // 5. Update Player & Vehicles Physics
+        const tPhysStart = performance.now();
         const playerNearbyBuildings = bldGrid.queryRadius(
           player.x,
           player.y,
@@ -783,9 +863,85 @@ export default function App() {
           updatePlayerPedestrianPhysics(player, input, playerNearbyBuildings, dt, camera.angle, world.width, world.height, world);
           camera.targetX = player.x;
           camera.targetY = player.y;
-          // Fixed North-Up camera for pedestrian mode prevents spinning camera loops
           camera.targetAngle = 0;
           camera.targetZoom = 1.3 * userZoomFactorRef.current;
+
+          // Check building interior zones if player is inside
+          if (player.isInsideBuilding && player.insideBuildingId) {
+            const bld = world.buildings.find(b => b.id === player.insideBuildingId);
+            if (bld) {
+              const currentFloor = player.currentFloor ?? 0;
+              const layout = generateBuildingLayout(bld, currentFloor);
+              const relX = player.x - bld.x;
+              const relY = player.y - bld.y;
+
+              const inElevator = relX >= layout.elevatorZone.x && relX <= layout.elevatorZone.x + layout.elevatorZone.width &&
+                                relY >= layout.elevatorZone.y && relY <= layout.elevatorZone.y + layout.elevatorZone.height;
+
+              const inStairs = relX >= layout.stairsZone.x && relX <= layout.stairsZone.x + layout.stairsZone.width &&
+                              relY >= layout.stairsZone.y && relY <= layout.stairsZone.y + layout.stairsZone.height;
+
+              const inExit = relX >= layout.exitZone.x && relX <= layout.exitZone.x + layout.exitZone.width &&
+                            relY >= layout.exitZone.y && relY <= layout.exitZone.y + layout.exitZone.height;
+
+              const maxFloors = getBuildingFloorsCount(bld);
+              const canGoUpOrDown = inElevator || inStairs;
+
+              if (canGoUpOrDown) {
+                setActiveElevatorMenu(prev => {
+                  if (!prev || prev.bldId !== bld.id || prev.currentFloor !== currentFloor || prev.type !== (inElevator ? 'elevator' : 'stairs')) {
+                    return {
+                      bldId: bld.id,
+                      bldName: bld.type.toUpperCase().replace('_', ' '),
+                      currentFloor: currentFloor,
+                      maxFloors: maxFloors,
+                      type: inElevator ? 'elevator' : 'stairs'
+                    };
+                  }
+                  return prev;
+                });
+              } else {
+                setActiveElevatorMenu(null);
+              }
+
+              setCanExitBuilding(inExit);
+              setCanEnterBuilding(null);
+            } else {
+              setActiveElevatorMenu(null);
+              setCanExitBuilding(false);
+              setCanEnterBuilding(null);
+            }
+          } else {
+            setActiveElevatorMenu(null);
+            setCanExitBuilding(false);
+
+            // Check if player is near any building entrance outside (checking all entrances)
+            let nearEntrance = false;
+            let bldNear: Building | null = null;
+            for (const bld of playerNearbyBuildings) {
+              if (bld.type === 'park_monument') continue;
+              const ents = getAllBuildingEntrances(bld);
+              for (const ent of ents) {
+                const dist = Math.hypot(player.x - ent.x, player.y - ent.y);
+                if (dist < 35) {
+                  nearEntrance = true;
+                  bldNear = bld;
+                  break;
+                }
+              }
+              if (nearEntrance) break;
+            }
+
+            if (nearEntrance && bldNear) {
+              setCanEnterBuilding(bldNear);
+            } else {
+              setCanEnterBuilding(null);
+            }
+          }
+        } else {
+          setActiveElevatorMenu(null);
+          setCanExitBuilding(false);
+          setCanEnterBuilding(null);
         }
 
         // Update all vehicles (both AI and player car)
@@ -947,8 +1103,10 @@ export default function App() {
         if (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
         const rotSpeed = player.isInVehicle ? 3.0 : 1.5;
         camera.angle += angleDiff * Math.min(1.0, rotSpeed * dt);
+        const tPhysEnd = performance.now();
 
         // 9. Query objects in Camera Viewport for high-performance rendering
+        const tVpStart = performance.now();
         const vpMargin = Math.hypot(window.innerWidth, window.innerHeight) / (2 * Math.max(0.4, camera.zoom)) + 150;
         const vpBuildings = bldGrid.queryRect(
           camera.x - vpMargin,
@@ -986,6 +1144,7 @@ export default function App() {
           vpMargin * 2,
           vpMargin * 2
         );
+        const tVpEnd = performance.now();
 
         // Advance simulation time
         if (isTimeAutoCyclingRef.current) {
@@ -997,6 +1156,7 @@ export default function App() {
         }
 
         // 10. Render Scene with pre-culled viewport entities
+        const tRenderStart = performance.now();
         rendererRef.current.render(
           world,
           player,
@@ -1010,9 +1170,55 @@ export default function App() {
           vpProps,
           vpSidewalks
         );
+        const tRenderEnd = performance.now();
 
         // 11. Render Minimap
-        renderMinimap(world, player, camera, isMinimapExpandedRef.current);
+        const tMinimapStart = performance.now();
+        if (performanceConfig.enableMinimap) {
+          renderMinimap(world, player, camera, isMinimapExpandedRef.current);
+        } else {
+          // Clear minimap canvas to prevent visual residues
+          const mCanvas = document.getElementById('minimap-canvas') as HTMLCanvasElement;
+          if (mCanvas) {
+            const mCtx = mCanvas.getContext('2d');
+            mCtx?.clearRect(0, 0, mCanvas.width, mCanvas.height);
+          }
+        }
+        const tMinimapEnd = performance.now();
+
+        // Calculate final performance stats
+        const totalFrameMs = performance.now() - frameStart;
+        const computedFps = Math.round(frameCount / (fpsTimer || 0.01)) || 60;
+
+        performanceStatsRef.current = {
+          fps: computedFps,
+          spatialGridTime: tGridEnd - tGridStart,
+          aiTrafficTime: tAiEnd - tAiStart,
+          pedestriansTime: tPedEnd - tPedStart,
+          physicsTime: tPhysEnd - tPhysStart,
+          viewportTime: tVpEnd - tVpStart,
+          renderTime: tRenderEnd - tRenderStart,
+          minimapTime: tMinimapEnd - tMinimapStart,
+          totalFrameTime: totalFrameMs,
+          vehiclesTotal: world.vehicles.length,
+          vehiclesVisible: vpVehicles.length,
+          pedestriansTotal: world.pedestrians.length,
+          pedestriansVisible: vpPedestrians.length,
+          particlesTotal: world.particles.length
+        };
+
+        // Push frame data to ring buffer
+        perfHistoryRef.current.push({ ...performanceStatsRef.current });
+        if (perfHistoryRef.current.length > 300) {
+          perfHistoryRef.current.shift();
+        }
+
+        // Trigger throttled state update for UI
+        perfUiTimerRef.current += dt;
+        if (perfUiTimerRef.current >= 0.15) {
+          perfUiTimerRef.current = 0;
+          setCurrentPerfStats({ ...performanceStatsRef.current });
+        }
       }
 
       animationFrameId = requestAnimationFrame(gameLoop);
@@ -1127,6 +1333,160 @@ export default function App() {
         sound.startEngine();
       }
     }
+  };
+
+  // --- INTERACT HANDLER (ENTER / EXIT VEHICLE OR BUILDING) ---
+  const handleInteract = () => {
+    const world = worldRef.current;
+    const player = playerRef.current;
+    if (!world) return;
+
+    if (player.isInsideBuilding) {
+      const bld = world.buildings.find(b => b.id === player.insideBuildingId);
+      if (bld) {
+        setFadeActive(true);
+        sound.playCarDoor();
+
+        setTimeout(() => {
+          let exitX = bld.x + bld.width / 2;
+          let exitY = bld.y + bld.height + 15;
+
+          if (bld.entranceSide === 'north') {
+            exitX = bld.x + bld.width / 2;
+            exitY = bld.y - 15;
+          } else if (bld.entranceSide === 'west') {
+            exitX = bld.x - 15;
+            exitY = bld.y + bld.height / 2;
+          } else if (bld.entranceSide === 'east') {
+            exitX = bld.x + bld.width + 15;
+            exitY = bld.y + bld.height / 2;
+          }
+
+          player.x = exitX;
+          player.y = exitY;
+          player.isInsideBuilding = false;
+          player.insideBuildingId = null;
+          player.currentFloor = 0;
+
+          cameraRef.current.x = exitX;
+          cameraRef.current.y = exitY;
+          cameraRef.current.targetX = exitX;
+          cameraRef.current.targetY = exitY;
+
+          setTimeout(() => {
+            setFadeActive(false);
+          }, 150);
+        }, 200);
+        return;
+      }
+    }
+
+    if (player.isInVehicle) {
+      handleEnterExitVehicle();
+      return;
+    }
+
+    // Outside, check near building entrance to enter
+    let closestBld: Building | null = null;
+    let minDist = 45;
+
+    for (const bld of world.buildings) {
+      if (bld.type === 'park_monument') continue;
+      const ents = getAllBuildingEntrances(bld);
+      for (const ent of ents) {
+        const dist = Math.hypot(player.x - ent.x, player.y - ent.y);
+        if (dist < minDist) {
+          minDist = dist;
+          closestBld = bld;
+        }
+      }
+    }
+
+    if (closestBld) {
+      const bld = closestBld;
+      setFadeActive(true);
+      sound.playCarDoor();
+
+      setTimeout(() => {
+        player.isInsideBuilding = true;
+        player.insideBuildingId = bld.id;
+        player.currentFloor = 0;
+
+        const ents = getAllBuildingEntrances(bld);
+        let closestEnt = ents[0];
+        let minEntDist = Infinity;
+        for (const ent of ents) {
+          const d = Math.hypot(player.x - ent.x, player.y - ent.y);
+          if (d < minEntDist) {
+            minEntDist = d;
+            closestEnt = ent;
+          }
+        }
+
+        let enterX = bld.width / 2;
+        let enterY = bld.height - 25;
+        if (closestEnt.side === 'north') {
+          enterX = bld.width * closestEnt.offsetRatio;
+          enterY = 25;
+        } else if (closestEnt.side === 'south') {
+          enterX = bld.width * closestEnt.offsetRatio;
+          enterY = bld.height - 25;
+        } else if (closestEnt.side === 'west') {
+          enterX = 25;
+          enterY = bld.height * closestEnt.offsetRatio;
+        } else if (closestEnt.side === 'east') {
+          enterX = bld.width - 25;
+          enterY = bld.height * closestEnt.offsetRatio;
+        }
+
+        const newPX = bld.x + enterX;
+        const newPY = bld.y + enterY;
+        player.x = newPX;
+        player.y = newPY;
+
+        cameraRef.current.x = newPX;
+        cameraRef.current.y = newPY;
+        cameraRef.current.targetX = newPX;
+        cameraRef.current.targetY = newPY;
+
+        setTimeout(() => {
+          setFadeActive(false);
+        }, 150);
+      }, 200);
+      return;
+    }
+
+    handleEnterExitVehicle();
+  };
+
+  const handleSelectFloor = (floor: number) => {
+    const player = playerRef.current;
+    const world = worldRef.current;
+    if (!player || !player.isInsideBuilding || !player.insideBuildingId || !world) return;
+
+    sound.playAlert();
+    setFadeActive(true);
+
+    setTimeout(() => {
+      player.currentFloor = floor;
+      const bld = world.buildings.find(b => b.id === player.insideBuildingId);
+      if (bld) {
+        const layout = generateBuildingLayout(bld, floor);
+        const destX = bld.x + layout.elevatorZone.x + layout.elevatorZone.width / 2;
+        const destY = bld.y + layout.elevatorZone.y + layout.elevatorZone.height / 2 + 15;
+        player.x = destX;
+        player.y = destY;
+
+        cameraRef.current.x = destX;
+        cameraRef.current.y = destY;
+        cameraRef.current.targetX = destX;
+        cameraRef.current.targetY = destY;
+      }
+
+      setTimeout(() => {
+        setFadeActive(false);
+      }, 150);
+    }, 250);
   };
 
   // Reset vehicle if flipped or stuck
@@ -1458,10 +1818,23 @@ export default function App() {
             <span className="font-semibold text-sm tracking-wide">{streetName}</span>
           </div>
           <div className="h-4 w-px bg-slate-700" />
-          <div className="flex items-center gap-1.5 text-xs text-slate-300">
-            <span className="w-2 h-2 rounded-full bg-emerald-400" />
+          <button
+            onClick={() => setIsPerfConsoleOpen((prev) => !prev)}
+            className={`flex items-center gap-1.5 text-xs rounded-lg px-2 py-1 transition-all duration-200 border cursor-pointer hover:scale-[1.03] ${
+              isPerfConsoleOpen
+                ? 'bg-indigo-950/80 border-indigo-500 text-indigo-400 font-semibold shadow-inner'
+                : 'bg-slate-800/40 border-slate-700 text-slate-300 hover:bg-slate-800/60 hover:text-white'
+            }`}
+            title="Профайлер нагрузки [~]"
+            id="perf-profiler-btn"
+          >
+            <span className={`w-2 h-2 rounded-full ${
+              fps >= 45 ? 'bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.5)]' :
+              fps >= 25 ? 'bg-amber-400 shadow-[0_0_8px_rgba(251,191,36,0.5)] animate-pulse' :
+              'bg-red-400 shadow-[0_0_8px_rgba(248,113,113,0.5)] animate-ping'
+            }`} />
             <span>{fps} FPS</span>
-          </div>
+          </button>
           <div className="h-4 w-px bg-slate-700" />
           <div className="text-xs text-slate-400">
             {trafficCount} Cars · {pedCount} Peds
@@ -1772,7 +2145,7 @@ export default function App() {
         <MobileTouchControls
           inputRef={inputRef}
           isInVehicle={isInVehicle}
-          onEnterExitVehicle={handleEnterExitVehicle}
+          onEnterExitVehicle={handleInteract}
           onResetVehicle={handleResetVehicle}
           onOpenMap={() => setIsFullMapOpen(true)}
           onOpenSpawnMenu={() => setIsSpawnMenuOpen(true)}
@@ -1858,6 +2231,19 @@ export default function App() {
         }}
       />
 
+      {/* Dynamic Performance Profiler Console */}
+      <PerformanceProfiler
+        isOpen={isPerfConsoleOpen}
+        onClose={() => setIsPerfConsoleOpen(false)}
+        stats={currentPerfStats}
+        history={perfHistoryRef.current}
+        onClearHistory={() => {
+          perfHistoryRef.current = [];
+        }}
+        isMuted={isMuted}
+        onToggleMute={toggleSoundMute}
+      />
+
       {/* SPAWN LOCATION SELECTION MODAL */}
       {isSpawnMenuOpen && (
         <div 
@@ -1938,6 +2324,77 @@ export default function App() {
           </div>
         </div>
       )}
+
+      {/* ENTER BUILDING PROMPT */}
+      {canEnterBuilding && !playerRef.current.isInsideBuilding && (
+        <div id="enter-building-prompt" className="absolute bottom-28 left-1/2 -translate-x-1/2 z-30 pointer-events-none">
+          <div className="bg-slate-900/95 border border-emerald-500/60 text-white font-semibold px-4 py-2.5 rounded-xl shadow-2xl flex items-center gap-2 text-xs backdrop-blur-md animate-bounce">
+            <span className="bg-emerald-500 text-white px-2 py-0.5 rounded font-mono font-bold">F</span>
+            <span>Войти в {canEnterBuilding.type === 'shop' ? 'Магазин' : canEnterBuilding.type === 'hospital' ? 'Больницу' : canEnterBuilding.type === 'police_station' ? 'Полицию' : 'Здание'}</span>
+          </div>
+        </div>
+      )}
+
+      {/* EXIT BUILDING PROMPT */}
+      {canExitBuilding && playerRef.current.isInsideBuilding && (
+        <div id="exit-building-prompt" className="absolute bottom-28 left-1/2 -translate-x-1/2 z-30 pointer-events-none">
+          <div className="bg-slate-900/95 border border-amber-500/60 text-white font-semibold px-4 py-2.5 rounded-xl shadow-2xl flex items-center gap-2 text-xs backdrop-blur-md animate-bounce">
+            <span className="bg-amber-500 text-white px-2 py-0.5 rounded font-mono font-bold">F</span>
+            <span>Выйти на улицу</span>
+          </div>
+        </div>
+      )}
+
+      {/* ELEVATOR / STAIRS FLOOR SELECTION MENU */}
+      {activeElevatorMenu && (
+        <div 
+          id="elevator-modal" 
+          className="absolute bottom-32 left-1/2 -translate-x-1/2 z-40 bg-slate-900/95 backdrop-blur-md border border-sky-500/50 rounded-2xl p-4 shadow-2xl text-white min-w-[280px] max-w-[320px] pointer-events-auto"
+        >
+          <div className="flex items-center gap-2 mb-3 pb-2 border-b border-slate-800">
+            <div className="p-1.5 rounded-lg bg-sky-500/20 border border-sky-500/30 text-sky-400">
+              {activeElevatorMenu.type === 'elevator' ? '🏢' : '🪜'}
+            </div>
+            <div>
+              <h3 className="font-bold text-xs text-slate-100">
+                {activeElevatorMenu.type === 'elevator' ? 'Лифт здания' : 'Лестничный марш'}
+              </h3>
+              <p className="text-[10px] text-slate-400">Выберите этаж для перемещения</p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-4 gap-1.5 max-h-[160px] overflow-y-auto pr-1">
+            {Array.from({ length: activeElevatorMenu.maxFloors }).map((_, fIdx) => {
+              const isCurrent = activeElevatorMenu.currentFloor === fIdx;
+              return (
+                <button
+                  key={fIdx}
+                  onClick={() => handleSelectFloor(fIdx)}
+                  className={`py-2 px-1 rounded-lg text-xs font-bold font-mono transition-all border ${
+                    isCurrent
+                      ? 'bg-sky-500 text-white border-sky-400 shadow-md shadow-sky-500/20'
+                      : 'bg-slate-800 hover:bg-slate-700 border-slate-700 text-slate-300'
+                  }`}
+                >
+                  {fIdx === 0 ? '1' : fIdx + 1}
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="text-[9px] text-slate-500 mt-2.5 text-center leading-normal">
+            Используйте ЛКМ на кнопках этажей
+          </div>
+        </div>
+      )}
+
+      {/* CINEMATIC TRANSITION OVERLAY */}
+      <div 
+        id="fade-transition-overlay"
+        className={`fixed inset-0 bg-slate-950 transition-opacity duration-200 z-[9999] pointer-events-none ${
+          fadeActive ? 'opacity-100' : 'opacity-0'
+        }`}
+      />
 
       {/* Main Menu Overlay */}
       {isMainMenuOpen && (
