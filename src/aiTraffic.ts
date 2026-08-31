@@ -754,14 +754,30 @@ export function updateAITraffic(
                       car.targetSpeed = Math.min(car.targetSpeed, 45);
                     } 
                     // B. Green Light Checks: "Don't Block The Box" & Left-Turn Yielding
-                    if (stopLine.lightState === 'green' || stopLine.lightState === 'green_flashing' || stopLine.lightState === 'yellow' || stopLine.lightState === 'off' || isLightBroken) {
+                    if (inter.hasLights && (stopLine.lightState === 'green' || stopLine.lightState === 'green_flashing' || stopLine.lightState === 'yellow' || stopLine.lightState === 'off' || isLightBroken)) {
                       // Check 1: Anti-Gridlock ("Don't Block the Box")
-                    // Do not enter intersection if exit lane cannot receive vehicle
-                    const targetLane = findLaneById(world, candidateConn.targetLaneId);
-                    if (targetLane && targetLane.waypoints.length > 0) {
-                      const exitPt = targetLane.waypoints[0];
+                      // Do not enter intersection if exit lane cannot receive vehicle
+                      const targetLane = findLaneById(world, candidateConn.targetLaneId);
+                      if (targetLane && targetLane.waypoints.length > 0) {
+                        const exitPt = targetLane.waypoints[0];
+                        for (const other of world.vehicles) {
+                          if (other.id === car.id || other.isParked) continue;
+                          if (Math.hypot(other.x - exitPt.x, other.y - exitPt.y) < 60 && other.speed < 8) {
+                            mustStopAtStopLine = true;
+                            stopLineDist = distToLine;
+                            car.aiState = 'yielding';
+                            break;
+                          }
+                        }
+                      }
+                    }
+                    
+                    // Always perform Anti-Gridlock check for all intersections
+                    const targetLaneAll = findLaneById(world, candidateConn.targetLaneId);
+                    if (targetLaneAll && targetLaneAll.waypoints.length > 0) {
+                      const exitPt = targetLaneAll.waypoints[0];
                       for (const other of world.vehicles) {
-                        if (other.id === car.id || other.isParked) continue;
+                        if (other.id === car.id || other.isParked || other.inIntersection) continue; // Check for cars already in intersection
                         if (Math.hypot(other.x - exitPt.x, other.y - exitPt.y) < 60 && other.speed < 8) {
                           mustStopAtStopLine = true;
                           stopLineDist = distToLine;
@@ -806,7 +822,6 @@ export function updateAITraffic(
                       }
                     }
                   }
-                  } // close the else { block that was added
                 }
               }
             }
