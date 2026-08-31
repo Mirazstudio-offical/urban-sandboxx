@@ -13,7 +13,8 @@ import {
   Vehicle,
   WeatherType 
 } from './types';
-import { CAR_CONFIGS, generateCityWorld, createDefaultVehicleDamage } from './cityMap';
+import { CAR_CONFIGS, createDefaultVehicleDamage } from './cityMap';
+import { loadMap } from './loadMap';
 import { SpatialGrid } from './spatialGrid';
 import { updateAITraffic, updatePedestrians, updateTrafficLights } from './aiTraffic';
 import { 
@@ -548,7 +549,7 @@ export default function App() {
   // Initialize Game World (Runs ONCE on mount, NEVER resets when toggling day/night)
   useEffect(() => {
     sound.init();
-    const world = generateCityWorld();
+    loadMap().then((world) => {
     worldRef.current = world;
 
     // Index static entities into spatial grids
@@ -1011,6 +1012,7 @@ export default function App() {
       window.removeEventListener('mousemove', handleMouseMove);
       window.removeEventListener('wheel', handleWheel);
     };
+    }); // close loadMap().then()
   }, []); // Run only ONCE!
 
   // --- TOGGLE TURN SIGNAL ---
