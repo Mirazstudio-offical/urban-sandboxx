@@ -198,7 +198,7 @@ export const FullScreenMap: React.FC<FullScreenMapProps> = ({
       // 4. Intersections & Traffic Lights
       world.intersections.forEach((inter) => {
         const phase = inter.phases[inter.currentPhaseIndex];
-        const isGreen = phase.nsState === 'green';
+        const isGreen = phase.nsState === 'green' || phase.nsState === 'green_flashing';
 
         ctx.fillStyle = '#1e293b';
         ctx.fillRect(inter.x - inter.width / 2, inter.y - inter.height / 2, inter.width, inter.height);

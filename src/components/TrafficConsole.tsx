@@ -528,7 +528,7 @@ export const TrafficConsole: React.FC<TrafficConsoleProps> = ({
                       <div className="p-2 rounded bg-slate-900 border border-slate-800">
                         <div className="text-slate-400 text-[10px]">North-South Signal</div>
                         <div className={`font-bold font-mono capitalize ${
-                          currentPhase?.nsState === 'green' ? 'text-emerald-400' :
+                          currentPhase?.nsState === 'green' || currentPhase?.nsState === 'green_flashing' ? 'text-emerald-400' :
                           currentPhase?.nsState === 'yellow' ? 'text-amber-400' : 'text-rose-400'
                         }`}>
                           {currentPhase?.nsState}
@@ -537,7 +537,7 @@ export const TrafficConsole: React.FC<TrafficConsoleProps> = ({
                       <div className="p-2 rounded bg-slate-900 border border-slate-800">
                         <div className="text-slate-400 text-[10px]">East-West Signal</div>
                         <div className={`font-bold font-mono capitalize ${
-                          currentPhase?.ewState === 'green' ? 'text-emerald-400' :
+                          currentPhase?.ewState === 'green' || currentPhase?.ewState === 'green_flashing' ? 'text-emerald-400' :
                           currentPhase?.ewState === 'yellow' ? 'text-amber-400' : 'text-rose-400'
                         }`}>
                           {currentPhase?.ewState}

@@ -204,8 +204,8 @@ export const CAR_CONFIGS: Record<CarType, CarConfig> = {
     acceleration: 70,
     brakingForce: 290,
     friction: 0.984,
-    turnSpeed: 2.7,
-    maxSteerAngle: 0.54,
+    turnSpeed: 4.2,
+    maxSteerAngle: 1.22,
     minSteerAngle: 0.08,
     grip: 0.97,
     driftGrip: 0.28,
@@ -213,17 +213,17 @@ export const CAR_CONFIGS: Record<CarType, CarConfig> = {
   },
   bus: {
     type: 'bus',
-    width: 28,
-    length: 74,
-    wheelBase: 46,
-    mass: 4600,
-    maxSpeed: 140,
-    reverseMaxSpeed: 40,
-    acceleration: 65,
-    brakingForce: 260,
+    width: 30,
+    length: 92,
+    wheelBase: 58,
+    mass: 6800,
+    maxSpeed: 110,
+    reverseMaxSpeed: 35,
+    acceleration: 55,
+    brakingForce: 270,
     friction: 0.985,
-    turnSpeed: 2.8,
-    maxSteerAngle: 0.55,
+    turnSpeed: 4.2,
+    maxSteerAngle: 1.22,
     minSteerAngle: 0.08,
     grip: 0.97,
     driftGrip: 0.28,
@@ -267,20 +267,20 @@ export const CAR_CONFIGS: Record<CarType, CarConfig> = {
   },
   ambulance: {
     type: 'ambulance',
-    width: 21,
-    length: 46,
-    wheelBase: 28,
-    mass: 1650,
-    maxSpeed: 175,
-    reverseMaxSpeed: 65,
-    acceleration: 115,
-    brakingForce: 260,
+    width: 23,
+    length: 54,
+    wheelBase: 34,
+    mass: 2400,
+    maxSpeed: 165,
+    reverseMaxSpeed: 60,
+    acceleration: 105,
+    brakingForce: 280,
     friction: 0.988,
-    turnSpeed: 4.1,
-    maxSteerAngle: 0.72,
-    minSteerAngle: 0.12,
+    turnSpeed: 3.7,
+    maxSteerAngle: 0.68,
+    minSteerAngle: 0.11,
     grip: 0.985,
-    driftGrip: 0.36,
+    driftGrip: 0.35,
     name: 'Скорая помощь'
   },
   truck_box: {
@@ -294,8 +294,8 @@ export const CAR_CONFIGS: Record<CarType, CarConfig> = {
     acceleration: 70,
     brakingForce: 270,
     friction: 0.984,
-    turnSpeed: 2.7,
-    maxSteerAngle: 0.52,
+    turnSpeed: 4.2,
+    maxSteerAngle: 1.22,
     minSteerAngle: 0.08,
     grip: 0.965,
     driftGrip: 0.28,
@@ -312,8 +312,8 @@ export const CAR_CONFIGS: Record<CarType, CarConfig> = {
     acceleration: 68,
     brakingForce: 285,
     friction: 0.983,
-    turnSpeed: 2.6,
-    maxSteerAngle: 0.50,
+    turnSpeed: 4.2,
+    maxSteerAngle: 1.22,
     minSteerAngle: 0.08,
     grip: 0.960,
     driftGrip: 0.26,
@@ -330,8 +330,8 @@ export const CAR_CONFIGS: Record<CarType, CarConfig> = {
     acceleration: 65,
     brakingForce: 275,
     friction: 0.984,
-    turnSpeed: 2.5,
-    maxSteerAngle: 0.48,
+    turnSpeed: 4.2,
+    maxSteerAngle: 1.22,
     minSteerAngle: 0.07,
     grip: 0.955,
     driftGrip: 0.25,
@@ -348,8 +348,8 @@ export const CAR_CONFIGS: Record<CarType, CarConfig> = {
     acceleration: 75,
     brakingForce: 270,
     friction: 0.985,
-    turnSpeed: 2.7,
-    maxSteerAngle: 0.52,
+    turnSpeed: 4.2,
+    maxSteerAngle: 1.22,
     minSteerAngle: 0.08,
     grip: 0.970,
     driftGrip: 0.29,
@@ -366,8 +366,8 @@ export const CAR_CONFIGS: Record<CarType, CarConfig> = {
     acceleration: 62,
     brakingForce: 290,
     friction: 0.982,
-    turnSpeed: 2.4,
-    maxSteerAngle: 0.48,
+    turnSpeed: 4.2,
+    maxSteerAngle: 1.22,
     minSteerAngle: 0.07,
     grip: 0.950,
     driftGrip: 0.24,
@@ -384,8 +384,8 @@ export const CAR_CONFIGS: Record<CarType, CarConfig> = {
     acceleration: 70,
     brakingForce: 280,
     friction: 0.984,
-    turnSpeed: 2.6,
-    maxSteerAngle: 0.50,
+    turnSpeed: 4.2,
+    maxSteerAngle: 1.22,
     minSteerAngle: 0.08,
     grip: 0.965,
     driftGrip: 0.27,
@@ -400,9 +400,44 @@ export const CAR_PALETTE = [
 ];
 
 const PED_SKIN_COLORS = ['#ffd1b3', '#fcd5b5', '#e0ac69', '#c68642', '#8d5524', '#59381e'];
-const PED_SHIRT_COLORS = ['#ef4444', '#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899', '#64748b', '#14b8a6', '#ffffff', '#1e293b'];
-const PED_PANTS_COLORS = ['#1e293b', '#334155', '#1e3a8a', '#475569', '#78350f', '#0f172a'];
-const PED_HAIR_COLORS = ['#18181b', '#451a03', '#78350f', '#ca8a04', '#71717a', '#b45309'];
+const PED_SHIRT_COLORS = ['#ef4444', '#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899', '#64748b', '#14b8a6', '#ffffff', '#1e293b', '#22c55e', '#a855f7', '#fb923c'];
+const PED_PANTS_COLORS = ['#1e293b', '#334155', '#1e3a8a', '#475569', '#78350f', '#0f172a', '#64748b', '#000000', '#f1f5f9', '#94a3b8'];
+const PED_HAIR_COLORS = ['#18181b', '#451a03', '#78350f', '#ca8a04', '#71717a', '#b45309', '#fef3c7', '#dc2626'];
+
+export function generateRandomPedestrianAppearance() {
+  const gender = Math.random() < 0.5 ? 'male' : 'female';
+  
+  const ageRoll = Math.random();
+  let ageGroup: 'child' | 'adult' | 'elderly' = 'adult';
+  if (ageRoll < 0.15) ageGroup = 'child';
+  else if (ageRoll < 0.25) ageGroup = 'elderly';
+  
+  const hairStylesMale = ['short', 'bald', 'spiky'];
+  const hairStylesFemale = ['short', 'long', 'bun', 'ponytail'];
+  const hairStyle = gender === 'male' ? hairStylesMale[Math.floor(Math.random() * hairStylesMale.length)] : hairStylesFemale[Math.floor(Math.random() * hairStylesFemale.length)];
+  
+  const hasHat = Math.random() < 0.2;
+  const hatType = ['cap', 'beanie', 'sunhat'][Math.floor(Math.random() * 3)] as 'cap' | 'beanie' | 'sunhat';
+  
+  const handheldProps = ['phone', 'coffee', 'bag', 'box', null];
+  const handheldProp = handheldProps[Math.floor(Math.random() * handheldProps.length)] as 'phone' | 'coffee' | 'bag' | 'box' | null;
+
+  return {
+    gender: gender as 'male' | 'female',
+    ageGroup,
+    skinColor: PED_SKIN_COLORS[Math.floor(Math.random() * PED_SKIN_COLORS.length)],
+    shirtColor: PED_SHIRT_COLORS[Math.floor(Math.random() * PED_SHIRT_COLORS.length)],
+    pantsColor: PED_PANTS_COLORS[Math.floor(Math.random() * PED_PANTS_COLORS.length)],
+    hairColor: PED_HAIR_COLORS[Math.floor(Math.random() * PED_HAIR_COLORS.length)],
+    hairStyle: hairStyle as 'short' | 'long' | 'bald' | 'bun' | 'spiky' | 'ponytail',
+    hasHat,
+    hatColor: PED_SHIRT_COLORS[Math.floor(Math.random() * PED_SHIRT_COLORS.length)],
+    hatType,
+    handheldProp,
+    propColor: PED_SHIRT_COLORS[Math.floor(Math.random() * PED_SHIRT_COLORS.length)],
+    hasDroppedProp: false
+  };
+}
 
 // Helper: Cubic Bezier curve generator
 export function generateBezierCurve(
@@ -530,8 +565,8 @@ export function generateCityWorld(): GameWorld {
       
       const halfW = width / 2;
       const halfH = height / 2;
-      const stopLineOffset = 18;
       const crosswalkWidth = 22;
+      const stopLineOffset = crosswalkWidth + 12; // 34 - safely behind the crosswalk
 
       const stopLines: Intersection['stopLines'] = [
         { direction: 'north', x1: cx - halfW, y1: cy - halfH - stopLineOffset, x2: cx, y2: cy - halfH - stopLineOffset, lightState: 'green' },
@@ -560,10 +595,12 @@ export function generateCityWorld(): GameWorld {
         currentPhaseIndex: initialPhaseIndex,
         phaseTimer: Math.random() * 4,
         phases: [
-          { nsState: 'green', ewState: 'red', duration: 10.0 },
+          { nsState: 'green', ewState: 'red', duration: 8.0 },
+          { nsState: 'green_flashing', ewState: 'red', duration: 3.0 },
           { nsState: 'yellow', ewState: 'red', duration: 3.0 },
           { nsState: 'red', ewState: 'red_yellow', duration: 1.5 },
-          { nsState: 'red', ewState: 'green', duration: 10.0 },
+          { nsState: 'red', ewState: 'green', duration: 8.0 },
+          { nsState: 'red', ewState: 'green_flashing', duration: 3.0 },
           { nsState: 'red', ewState: 'yellow', duration: 3.0 },
           { nsState: 'red_yellow', ewState: 'red', duration: 1.5 }
         ],
@@ -575,10 +612,10 @@ export function generateCityWorld(): GameWorld {
       // Generate 4 breakable traffic light props at the corners of this intersection (only if it has lights!)
       if (!((cx < 3800 && cy < 3800) || (cx > 3800 && cy > 3800))) {
         props.push(
-          { id: `traffic_light_${intersectionId}_north`, x: cx - halfW - 6, y: cy - halfH - 6, type: 'traffic_light', angle: -Math.PI / 2, intersectionId, direction: 'north' },
-          { id: `traffic_light_${intersectionId}_south`, x: cx + halfW + 6, y: cy + halfH + 6, type: 'traffic_light', angle: Math.PI / 2, intersectionId, direction: 'south' },
-          { id: `traffic_light_${intersectionId}_east`, x: cx + halfW + 6, y: cy - halfH - 6, type: 'traffic_light', angle: 0, intersectionId, direction: 'east' },
-          { id: `traffic_light_${intersectionId}_west`, x: cx - halfW - 6, y: cy + halfH + 6, type: 'traffic_light', angle: Math.PI, intersectionId, direction: 'west' }
+          { id: `traffic_light_${intersectionId}_north`, x: cx - halfW - 20, y: cy - halfH - 20, type: 'traffic_light', angle: -Math.PI / 2, intersectionId, direction: 'north', isMasterLight: true },
+          { id: `traffic_light_${intersectionId}_south`, x: cx + halfW + 20, y: cy + halfH + 20, type: 'traffic_light', angle: Math.PI / 2, intersectionId, direction: 'south' },
+          { id: `traffic_light_${intersectionId}_east`, x: cx + halfW + 20, y: cy - halfH - 20, type: 'traffic_light', angle: 0, intersectionId, direction: 'east' },
+          { id: `traffic_light_${intersectionId}_west`, x: cx - halfW - 20, y: cy + halfH + 20, type: 'traffic_light', angle: Math.PI, intersectionId, direction: 'west' }
         );
       }
     }
@@ -1263,6 +1300,10 @@ export function generateCityWorld(): GameWorld {
       const isVillage = bx >= 6 && by >= 6;
       const isCentralPark = bx === 5 && by === 3;
       const isCommercial = bx >= 3 && bx <= 6 && by >= 2 && by <= 5;
+      const isDedicatedParking = (bx === 4 && by === 2) || (bx === 6 && by === 4) || (bx === 3 && by === 5) || (bx === 2 && by === 7) || (bx === 5 && by === 4);
+      const isCourtyardBlock = (bx === 2 && by === 3) || (bx === 3 && by === 3) || (bx === 4 && by === 4) || 
+                               (bx === 5 && by === 5) || (bx === 3 && by === 6) || (bx === 6 && by === 3) || 
+                               (bx === 4 && by === 6) || (bx === 5 && by === 2);
 
       let swStyle: SidewalkBlock['style'] = 'urban';
       if (isForest) swStyle = 'park';
@@ -1272,6 +1313,31 @@ export function generateCityWorld(): GameWorld {
 
       // Register Sidewalk geometry for this block (only outside forest zone)
       if (!isForest) {
+        const driveways: SidewalkBlock['driveways'] = [];
+        if (isDedicatedParking) {
+          driveways.push({
+            side: 'north',
+            offset: Math.floor(blockW / 2 - 20),
+            width: 40
+          });
+          driveways.push({
+            side: 'south',
+            offset: Math.floor(blockW / 2 - 20),
+            width: 40
+          });
+        } else if (isCourtyardBlock) {
+          driveways.push({
+            side: 'south',
+            offset: Math.floor(blockW - 100),
+            width: 50
+          });
+          driveways.push({
+            side: 'east',
+            offset: Math.floor(blockH - 100),
+            width: 50
+          });
+        }
+
         sidewalks.push({
           id: `sidewalk_${bx}_${by}`,
           x: blockX,
@@ -1280,7 +1346,8 @@ export function generateCityWorld(): GameWorld {
           height: blockH,
           sidewalkWidth,
           style: swStyle,
-          innerLawnColor: isForest ? '#14532d' : (isVillage ? '#16a34a' : '#15803d')
+          innerLawnColor: isForest ? '#14532d' : (isVillage ? '#16a34a' : '#15803d'),
+          driveways
         });
 
         // Pedestrian navigation path runs down the centerline of the paved sidewalk corridor
@@ -1344,7 +1411,8 @@ export function generateCityWorld(): GameWorld {
             radiusX: 85 + Math.random() * 20,
             radiusY: 55 + Math.random() * 15,
             angle: Math.random() * Math.PI,
-            rippleTimer: Math.random() * 10
+            rippleTimer: Math.random() * 10,
+            isPond: true
           });
         }
         continue;
@@ -1427,7 +1495,6 @@ export function generateCityWorld(): GameWorld {
       }
 
       // --- 3. DEDICATED OPEN-AIR PARKING PLAZAS (NO BUILDINGS INSIDE) ---
-      const isDedicatedParking = (bx === 4 && by === 2) || (bx === 6 && by === 4) || (bx === 3 && by === 5) || (bx === 2 && by === 7) || (bx === 5 && by === 4);
       if (isDedicatedParking) {
         const pkX = blockX + sidewalkWidth + 10;
         const pkY = blockY + sidewalkWidth + 10;
@@ -1498,10 +1565,6 @@ export function generateCityWorld(): GameWorld {
       }
 
       // --- 4. COZY RESIDENTIAL COURTYARD BLOCKS (ДВОРЫ С ПАРКОВКАМИ И ЗОНАМИ ОТДЫХА) ---
-      const isCourtyardBlock = (bx === 2 && by === 3) || (bx === 3 && by === 3) || (bx === 4 && by === 4) || 
-                               (bx === 5 && by === 5) || (bx === 3 && by === 6) || (bx === 6 && by === 3) || 
-                               (bx === 4 && by === 6) || (bx === 5 && by === 2);
-
       if (isCourtyardBlock) {
         const innerX = blockX + sidewalkWidth + 10;
         const innerY = blockY + sidewalkWidth + 10;
@@ -2187,38 +2250,70 @@ export function generateCityWorld(): GameWorld {
   // 5. SPAWN INITIAL PEDESTRIANS (on sidewalks)
   let pedCounter = 0;
   pedestrianPaths.forEach((path) => {
-    // Sparse initial spawn (spawns ~25-30 pedestrians across map, dynamically recycled around player)
     if (Math.random() > 0.35) return;
-    const numPeds = 1;
-    for (let p = 0; p < numPeds; p++) {
-      const wpIdx = Math.floor(Math.random() * (path.waypoints.length - 1));
-      const wp1 = path.waypoints[wpIdx];
-      const wp2 = path.waypoints[wpIdx + 1];
-      const prog = Math.random();
-      const px = wp1.x + (wp2.x - wp1.x) * prog;
-      const py = wp1.y + (wp2.y - wp1.y) * prog;
-      const angle = Math.atan2(wp2.y - wp1.y, wp2.x - wp1.x);
+    
+    // Sometimes spawn a group (family, friends)
+    const isGroup = Math.random() < 0.3;
+    const groupSize = isGroup ? Math.floor(Math.random() * 3) + 2 : 1;
+    const groupId = isGroup ? `group_${pedCounter}` : undefined;
+    
+    const wpIdx = Math.floor(Math.random() * (path.waypoints.length - 1));
+    const wp1 = path.waypoints[wpIdx];
+    const wp2 = path.waypoints[wpIdx + 1];
+    const prog = Math.random();
+    const basePathX = wp1.x + (wp2.x - wp1.x) * prog;
+    const basePathY = wp1.y + (wp2.y - wp1.y) * prog;
+    const baseAngle = Math.atan2(wp2.y - wp1.y, wp2.x - wp1.x);
 
-      const isCyclist = Math.random() < 0.08;
+    // Give the group a shared base speed, except bikes which are usually solo or group bikes
+    const isCyclistGroup = Math.random() < 0.1;
+    const groupSpeed = isCyclistGroup ? 110 + Math.random() * 20 : 35 + Math.random() * 15;
+
+    for (let p = 0; p < groupSize; p++) {
+      const isCyclist = isCyclistGroup;
       const isScooter = !isCyclist && Math.random() < 0.06;
+      
+      const app = generateRandomPedestrianAppearance();
+      
+      // If it's a family group, make sure at least one is adult and some might be children
+      if (isGroup && groupSize >= 2) {
+        if (p === 0) app.ageGroup = 'adult';
+        else if (p > 0 && Math.random() < 0.5) app.ageGroup = 'child';
+      }
+
       const hasDog = !isCyclist && !isScooter && Math.random() < 0.07;
-      const isChild = !isCyclist && !isScooter && Math.random() < 0.12;
+      const isChild = app.ageGroup === 'child';
+      const isElderly = app.ageGroup === 'elderly';
       const hasBackpack = Math.random() < 0.3;
-      const baseSpeed = isCyclist ? 110 : (isScooter ? 90 : (isChild ? 30 : 40));
+      
+      const isJanitor = !isGroup && !isCyclist && !isScooter && !isChild && !isElderly && Math.random() < 0.05;
+      const hasBroom = isJanitor;
+      
+      if (isJanitor) {
+        app.shirtColor = '#ca8a04'; // Yellowish janitor vest
+        app.pantsColor = '#1e3a8a'; // Blue overalls/pants
+        app.handheldProp = null; // Hold broom instead
+      }
+      
+      let individualSpeed = groupSpeed;
+      if (!isGroup) {
+        individualSpeed = isCyclist ? 110 + Math.random() * 20 : (isScooter ? 90 : (isChild ? 35 : (isElderly ? 25 : (isJanitor ? 20 : 40 + Math.random() * 10))));
+      }
+      
+      // Add slight offset for group members
+      const offsetX = isGroup ? (Math.random() * 15 - 7.5) : 0;
+      const offsetY = isGroup ? (Math.random() * 15 - 7.5) : 0;
 
       pedestrians.push({
         id: `ped_${pedCounter++}`,
-        x: px,
-        y: py,
-        vx: Math.cos(angle) * baseSpeed,
-        vy: Math.sin(angle) * baseSpeed,
-        angle,
-        speed: baseSpeed + Math.random() * 10,
-        targetSpeed: baseSpeed + Math.random() * 15,
-        skinColor: PED_SKIN_COLORS[Math.floor(Math.random() * PED_SKIN_COLORS.length)],
-        shirtColor: PED_SHIRT_COLORS[Math.floor(Math.random() * PED_SHIRT_COLORS.length)],
-        pantsColor: PED_PANTS_COLORS[Math.floor(Math.random() * PED_PANTS_COLORS.length)],
-        hairColor: PED_HAIR_COLORS[Math.floor(Math.random() * PED_HAIR_COLORS.length)],
+        x: basePathX + offsetX,
+        y: basePathY + offsetY,
+        vx: Math.cos(baseAngle) * individualSpeed,
+        vy: Math.sin(baseAngle) * individualSpeed,
+        angle: baseAngle,
+        speed: individualSpeed,
+        targetSpeed: individualSpeed,
+        ...app,
         walkCycle: Math.random() * Math.PI * 2,
         targetPathId: path.id,
         targetWaypointIndex: wpIdx + 1,
@@ -2237,6 +2332,7 @@ export function generateCityWorld(): GameWorld {
         isScooter,
         hasDog,
         isChild,
+        groupId,
         hasBackpack,
         backpackColor: PED_SHIRT_COLORS[Math.floor(Math.random() * PED_SHIRT_COLORS.length)]
       });
@@ -2245,53 +2341,53 @@ export function generateCityWorld(): GameWorld {
 
   // 6. SPAWN INITIAL BIRDS (Pigeons & Sparrows nesting in gardens, lawns, and clearings)
   const birds: Bird[] = [];
-  const parkCx = 4600;
-  const parkCy = 2200;
-  for (let b = 0; b < 40; b++) {
-    // Some near Downtown Park, some near the village and forest camps
-    const isForestBird = b % 3 === 0;
-    const isVillageBird = b % 3 === 1;
-    let rx = parkCx + (Math.random() * 600 - 300);
-    let ry = parkCy + (Math.random() * 600 - 300);
+  const birdGroups = 15;
+  let bCounter = 0;
+
+  for (let g = 0; g < birdGroups; g++) {
+    // Determine group location: 30% park, 30% near props (trash cans/dumpsters), 40% random
+    let cx = 0;
+    let cy = 0;
+    const r = Math.random();
     
-    if (isForestBird) {
-      rx = 1800 + (Math.random() * 1000 - 500);
-      ry = 1800 + (Math.random() * 1000 - 500);
-    } else if (isVillageBird) {
-      rx = 6200 + (Math.random() * 800 - 400);
-      ry = 6200 + (Math.random() * 800 - 400);
+    if (r < 0.3) {
+      // Park
+      cx = 4600 + (Math.random() * 600 - 300);
+      cy = 2200 + (Math.random() * 600 - 300);
+    } else if (r < 0.6 && props.length > 0) {
+      // Near a prop (preferably a trash can, dumpster, or bench)
+      const targetProps = props.filter(p => ['trash_can', 'dumpster', 'bench'].includes(p.type));
+      const p = targetProps.length > 0 ? targetProps[Math.floor(Math.random() * targetProps.length)] : props[Math.floor(Math.random() * props.length)];
+      cx = p.x + (Math.random() * 60 - 30);
+      cy = p.y + (Math.random() * 60 - 30);
+    } else {
+      // Random
+      cx = Math.random() * WORLD_SIZE;
+      cy = Math.random() * WORLD_SIZE;
     }
 
-    birds.push({
-      id: `bird_${b}`,
-      x: rx,
-      y: ry,
-      type: b % 2 === 0 ? 'pigeon' : 'sparrow',
-      angle: Math.random() * Math.PI * 2,
-      state: 'ground',
-      altitude: 0,
-      flyVX: 0,
-      flyVY: 0,
-      wingCycle: Math.random() * Math.PI * 2
-    });
-  }
-
-  // 7. SPAWN ROAD PUDDLES
-  roads.forEach((road, rIdx) => {
-    if (rIdx % 2 === 0) {
-      const px = road.direction === 'horizontal' ? (road.x1 + road.x2) / 2 + (Math.random() * 200 - 100) : road.x1;
-      const py = road.direction === 'vertical' ? (road.y1 + road.y2) / 2 + (Math.random() * 200 - 100) : road.y1;
-      puddles.push({
-        id: `puddle_${rIdx}`,
-        x: px,
-        y: py,
-        radiusX: 18 + Math.random() * 14,
-        radiusY: 10 + Math.random() * 8,
-        angle: Math.random() * Math.PI,
-        rippleTimer: 0
+    const groupSize = 2 + Math.floor(Math.random() * 6);
+    const groupId = `birdGroup_${g}`;
+    const groupType = Math.random() < 0.5 ? 'pigeon' : 'sparrow'; // Groups tend to be same species
+    
+    for (let i = 0; i < groupSize; i++) {
+      birds.push({
+        id: `bird_${bCounter++}`,
+        x: cx + (Math.random() * 40 - 20),
+        y: cy + (Math.random() * 40 - 20),
+        type: groupType,
+        angle: Math.random() * Math.PI * 2,
+        state: 'ground',
+        altitude: 0,
+        flyVX: 0,
+        flyVY: 0,
+        wingCycle: Math.random() * Math.PI * 2,
+        walkTimer: Math.random() * 5,
+        groupId
       });
     }
-  });
+  }
+
 
   // 8. SPAWN STREET LITTER & WIND DEBRIS
   const litter: LitterItem[] = [];
@@ -2300,9 +2396,13 @@ export function generateCityWorld(): GameWorld {
   // Scatter litter around buildings
   buildings.forEach((bld) => {
     for (let l = 0; l < 2; l++) {
-      const lType: LitterItem['type'] = Math.random() < 0.35 ? 'paper' : 
-                                       (Math.random() < 0.65 ? 'newspaper' : 
-                                       (Math.random() < 0.8 ? 'cup' : 'can'));
+      const lType: LitterItem['type'] = Math.random() < 0.25 ? 'paper' : 
+                                       (Math.random() < 0.45 ? 'newspaper' : 
+                                       (Math.random() < 0.6 ? 'cup' : 
+                                       (Math.random() < 0.75 ? 'can' : 
+                                       (Math.random() < 0.85 ? 'bottle' : 
+                                       (Math.random() < 0.9 ? 'wrapper' : 
+                                       (Math.random() < 0.95 ? 'mask' : 'butt'))))));
       const lx = bld.x + Math.random() * (bld.width + 40) - 20;
       const ly = bld.y + bld.height + 15 + Math.random() * 20;
 
@@ -2322,6 +2422,37 @@ export function generateCityWorld(): GameWorld {
         altitude: 0
       });
     }
+  });
+
+  // Spawn litter on roads
+  roads.forEach((road) => {
+      if (Math.random() < 0.3) {
+          const lType: LitterItem['type'] = Math.random() < 0.2 ? 'paper' : 
+                                         (Math.random() < 0.4 ? 'newspaper' : 
+                                         (Math.random() < 0.55 ? 'cup' : 
+                                         (Math.random() < 0.7 ? 'can' : 
+                                         (Math.random() < 0.8 ? 'bottle' : 
+                                         (Math.random() < 0.85 ? 'wrapper' : 
+                                         (Math.random() < 0.9 ? 'mask' : 'butt'))))));
+          const lx = (road.x1 + road.x2) / 2 + (Math.random() * road.width - road.width / 2);
+          const ly = (road.y1 + road.y2) / 2 + (Math.random() * road.width - road.width / 2);
+
+          litter.push({
+              id: `litter_road_${litterId++}`,
+              x: lx,
+              y: ly,
+              vx: (Math.random() - 0.5) * 5,
+              vy: (Math.random() - 0.5) * 5,
+              angle: Math.random() * Math.PI * 2,
+              rotationSpeed: (Math.random() - 0.5) * 2,
+              type: lType,
+              color: lType === 'newspaper' ? '#f1f5f9' : (lType === 'cup' ? '#ef4444' : (lType === 'can' ? '#2563eb' : '#ffffff')),
+              size: lType === 'newspaper' ? 8 : (lType === 'paper' ? 6 : 4),
+              isAirborne: false,
+              airborneTimer: 0,
+              altitude: 0
+          });
+      }
   });
 
   // Swirling autumn leaves all over the Forest zone & Central Park

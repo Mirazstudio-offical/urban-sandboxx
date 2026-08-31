@@ -1,7 +1,7 @@
 import { Building, CarType, GameWorld, Intersection, Pedestrian, RoadSegment, Vector2D, Vehicle } from './types';
-import { CAR_CONFIGS, CAR_PALETTE, createDefaultVehicleDamage } from './cityMap';
+import { CAR_CONFIGS, CAR_PALETTE, createDefaultVehicleDamage, generateRandomPedestrianAppearance } from './cityMap';
 import { sound } from './audio';
-import { checkPedestrianBuildingCollision, getBuildingEntrancePos } from './physics';
+import { checkPedestrianBuildingCollision, getBuildingEntrancePos, checkPedestrianVehicleCollision } from './physics';
 import { SpatialGrid } from './spatialGrid';
 
 // Helper: angle difference normalized to [-PI, PI]
@@ -88,6 +88,19 @@ export function updateTrafficLights(intersections: Intersection[], dt: number) {
     inter.phaseTimer += dt;
     const currentPhase = inter.phases[inter.currentPhaseIndex];
 
+    // Handle Signal Lost (Flashing Yellow Mode)
+    if (inter.isSignalLost) {
+      const isFlashOn = Math.floor(performance.now() / 500) % 2 === 0;
+      const flashState = isFlashOn ? 'yellow' : 'off';
+      for (const line of inter.stopLines) {
+        line.lightState = flashState;
+      }
+      for (const cw of inter.crosswalks) {
+        cw.pedestrianSignal = 'wait';
+      }
+      continue;
+    }
+
     if (inter.phaseTimer >= currentPhase.duration) {
       inter.phaseTimer = 0;
       inter.currentPhaseIndex = (inter.currentPhaseIndex + 1) % inter.phases.length;
@@ -116,9 +129,9 @@ export function updateTrafficLights(intersections: Intersection[], dt: number) {
     // - West & East crosswalks cross the East-West road -> SAFE to cross ONLY when EW vehicles have RED (NS is green)
     for (const cw of inter.crosswalks) {
       if (cw.direction === 'north' || cw.direction === 'south') {
-        cw.pedestrianSignal = phase.nsState === 'red' && phase.ewState === 'green' ? 'walk' : 'wait';
+        cw.pedestrianSignal = phase.nsState === 'red' && (phase.ewState === 'green' || phase.ewState === 'green_flashing') ? 'walk' : 'wait';
       } else {
-        cw.pedestrianSignal = phase.ewState === 'red' && phase.nsState === 'green' ? 'walk' : 'wait';
+        cw.pedestrianSignal = phase.ewState === 'red' && (phase.nsState === 'green' || phase.nsState === 'green_flashing') ? 'walk' : 'wait';
       }
     }
   }
@@ -401,7 +414,8 @@ export function updateAITraffic(
         const wpAhead = toWpDx * Math.cos(car.angle) + toWpDy * Math.sin(car.angle);
 
         const isCurve = !!car.currentConnection;
-        const advanceThreshold = isCurve ? 24 : 36;
+        const isBigVehicle = car.length > 65;
+        const advanceThreshold = isCurve ? (isBigVehicle ? 32 : 24) : 36;
 
         // Advance to next waypoint if:
         // 1. Within advance radius
@@ -417,7 +431,7 @@ export function updateAITraffic(
 
         // Pure pursuit dynamic lookahead distance (scaled with speed)
         // Shorter lookahead on curves for tight, stable cornering
-        const lookaheadDist = isCurve
+        let lookaheadDist = isCurve
           ? Math.max(18, Math.min(34, 14 + car.speed * 0.15))
           : Math.max(38, Math.min(85, 24 + car.speed * 0.4));
 
@@ -429,8 +443,32 @@ export function updateAITraffic(
           lookaheadDist
         );
 
-        const ldx = lookaheadPt.x - car.x;
-        const ldy = lookaheadPt.y - car.y;
+        // Big vehicles "Swing Wide" logic for tight right turns
+        let targetX = lookaheadPt.x;
+        let targetY = lookaheadPt.y;
+
+        if (isBigVehicle && car.currentConnection?.turnType === 'right') {
+          // Increase lookahead for bigger arc
+          const wideLookaheadDist = lookaheadDist * 1.38;
+          
+          // Re-calculate lookahead point with increased distance
+          const newLookahead = getLookaheadPointOnPolyline(
+            car.x,
+            car.y,
+            car.routeWaypoints,
+            car.targetWaypointIndex,
+            wideLookaheadDist
+          );
+          
+          // Add lateral offset to swing the nose wide (away from the turn center)
+          const heading = Math.atan2(newLookahead.point.y - car.y, newLookahead.point.x - car.x);
+          const swingAmount = 12; // Reduced from 22 to prevent excessive swing
+          targetX = newLookahead.point.x + Math.cos(heading - Math.PI / 2) * swingAmount;
+          targetY = newLookahead.point.y + Math.sin(heading - Math.PI / 2) * swingAmount;
+        }
+
+        const ldx = targetX - car.x;
+        const ldy = targetY - car.y;
         let alpha = angleDiff(Math.atan2(ldy, ldx), car.angle);
 
         // Active Cross-Track Error (CTE) Centering Bias
@@ -699,7 +737,7 @@ export function updateAITraffic(
                 const headingToLine = Math.atan2(dy, dx);
                 if (Math.abs(angleDiff(headingToLine, car.angle)) < 0.6) {
                   // A. Red / Yellow Light (Only if the traffic light prop is NOT broken!)
-                  const isLightBroken = world.props.some(
+                  const isLightBroken = inter.isSignalLost || world.props.some(
                     (p) => p.type === 'traffic_light' &&
                            p.intersectionId === inter.id &&
                            p.direction === candidateConn.stopLineDirection &&
@@ -710,13 +748,14 @@ export function updateAITraffic(
                     mustStopAtStopLine = true;
                     stopLineDist = distToLine;
                     car.aiState = 'stopping_light';
-                  } else if (isLightBroken) {
-                    // Slow down slightly for broken light intersection cautious crossing
-                    car.targetSpeed = Math.min(car.targetSpeed, 45);
-                  } 
-                  // B. Green Light Checks: "Don't Block The Box" & Left-Turn Yielding
-                  else if (stopLine.lightState === 'green') {
-                    // Check 1: Anti-Gridlock ("Don't Block the Box")
+                  } else {
+                    if (isLightBroken) {
+                      // Slow down slightly for broken light intersection cautious crossing
+                      car.targetSpeed = Math.min(car.targetSpeed, 45);
+                    } 
+                    // B. Green Light Checks: "Don't Block The Box" & Left-Turn Yielding
+                    if (stopLine.lightState === 'green' || stopLine.lightState === 'green_flashing' || stopLine.lightState === 'yellow' || stopLine.lightState === 'off' || isLightBroken) {
+                      // Check 1: Anti-Gridlock ("Don't Block the Box")
                     // Do not enter intersection if exit lane cannot receive vehicle
                     const targetLane = findLaneById(world, candidateConn.targetLaneId);
                     if (targetLane && targetLane.waypoints.length > 0) {
@@ -767,6 +806,7 @@ export function updateAITraffic(
                       }
                     }
                   }
+                  } // close the else { block that was added
                 }
               }
             }
@@ -891,21 +931,36 @@ export function updateAITraffic(
         car.aiState = 'driving';
       }
 
-      // Threshold for hard reverse escape
+      // Threshold for hard reverse escape & smart detour
       const deadlockThreshold = car.inIntersection ? 2.5 : 3.0;
       if (car.stuckTimer > deadlockThreshold) {
         deadlockedCars++;
         car.isHonking = true;
         car.hornEffectTimer = 0.3;
 
+        // Smart Detour evaluation: check left vs right clearance around car
+        let leftClearance = 100;
+        let rightClearance = 100;
+        const checkObstacles = vehGrid ? vehGrid.queryRadius(car.x, car.y, 85) : world.vehicles;
+        for (const obs of checkObstacles) {
+          if (obs.id === car.id) continue;
+          const d = Math.hypot(obs.x - car.x, obs.y - car.y);
+          const ang = Math.atan2(obs.y - car.y, obs.x - car.x);
+          const diff = angleDiff(ang, car.angle);
+          if (diff > 0 && d < leftClearance) leftClearance = d;
+          if (diff < 0 && d < rightClearance) rightClearance = d;
+        }
+
+        const escapeDir = leftClearance >= rightClearance ? 1 : -1;
+
         car.aiState = 'reversing';
-        car.reverseTimer = 1.5;
-        car.recoveryTargetAngle = car.angle + (Math.random() > 0.5 ? 1 : -1) * (Math.PI / 4);
+        car.reverseTimer = 1.6;
+        car.recoveryTargetAngle = car.angle + escapeDir * (Math.PI / 2.5);
         car.recoverySteer = 0;
         car.stuckTimer = 0;
         car.ghostingAlpha = 0.5;
-        car.speed = -30;
-        trafficDiagnostics.log('deadlock', `Anti-Deadlock: Car #${car.id.slice(-4)} reversing to clear space`, car.id);
+        car.speed = -32;
+        trafficDiagnostics.log('deadlock', `Smart Detour: Car #${car.id.slice(-4)} evaluating bypass (${leftClearance >= rightClearance ? 'Left' : 'Right'} open)`, car.id);
       }
     } else {
       car.stuckTimer = Math.max(0, car.stuckTimer - dt * 2.0);
@@ -1111,7 +1166,14 @@ function advanceCarRoute(car: Vehicle, world: GameWorld) {
           }
         }
         
-        if (!isPastLine && stopLine && (stopLine.lightState === 'red' || stopLine.lightState === 'yellow' || stopLine.lightState === 'red_yellow' || car.aiState === 'yielding')) {
+        const isLightBroken = inter.isSignalLost || world.props.some(
+          (p) => p.type === 'traffic_light' &&
+                 p.intersectionId === inter.id &&
+                 p.direction === selectedConn.stopLineDirection &&
+                 p.isBroken
+        );
+
+        if (!isPastLine && stopLine && !isLightBroken && (stopLine.lightState === 'red' || stopLine.lightState === 'yellow' || stopLine.lightState === 'red_yellow' || car.aiState === 'yielding')) {
           // Do not enter yet: hold at current stop line waypoint
           car.targetWaypointIndex = car.routeWaypoints.length - 1;
           car.speed = Math.max(0, car.speed * 0.5);
@@ -1420,7 +1482,28 @@ function respawnPedestrianNearPlayer(ped: Pedestrian, targetPos: Vector2D, world
   ped.y = wp1.y + (wp2.y - wp1.y) * prog;
   ped.angle = Math.atan2(wp2.y - wp1.y, wp2.x - wp1.x);
 
-  const baseSpeed = ped.isCyclist ? 110 : (ped.isScooter ? 90 : (ped.isChild ? 30 : 40));
+  // Generate new identity
+  const app = generateRandomPedestrianAppearance();
+  Object.assign(ped, app);
+  
+  ped.isCyclist = Math.random() < 0.08;
+  ped.isScooter = !ped.isCyclist && Math.random() < 0.06;
+  ped.hasDog = !ped.isCyclist && !ped.isScooter && Math.random() < 0.07;
+  ped.isChild = ped.ageGroup === 'child';
+  const isElderly = ped.ageGroup === 'elderly';
+  ped.hasBackpack = Math.random() < 0.3;
+  ped.backpackColor = app.shirtColor; // Or any random color
+  
+  ped.isJanitor = !ped.isCyclist && !ped.isScooter && !ped.isChild && !isElderly && Math.random() < 0.05;
+  ped.hasBroom = ped.isJanitor;
+  
+  if (ped.isJanitor) {
+    ped.shirtColor = '#ca8a04';
+    ped.pantsColor = '#1e3a8a';
+    ped.handheldProp = null;
+  }
+  
+  const baseSpeed = ped.isCyclist ? 110 + Math.random() * 20 : (ped.isScooter ? 90 : (ped.isChild ? 35 : (isElderly ? 25 : (ped.isJanitor ? 20 : 40 + Math.random() * 10))));
   ped.vx = Math.cos(ped.angle) * baseSpeed;
   ped.vy = Math.sin(ped.angle) * baseSpeed;
   ped.speed = baseSpeed;
@@ -1670,18 +1753,25 @@ export function updatePedestrians(
 
     // 0b. Social interaction: Greeting nearby pedestrians
     if (ped.state === 'walking' && !ped.isCrossingRoad && Math.random() < 0.01) {
+      if (!ped.greetedIds) ped.greetedIds = [];
       const candidatePeds = pedGrid ? pedGrid.queryRadius(ped.x, ped.y, 40) : world.pedestrians;
-      const otherPed = candidatePeds.find(p => p.id !== ped.id && p.state === 'walking' && Math.hypot(p.x - ped.x, p.y - ped.y) < 40);
+      const otherPed = candidatePeds.find(p => p.id !== ped.id && p.state === 'walking' && !ped.greetedIds!.includes(p.id) && Math.hypot(p.x - ped.x, p.y - ped.y) < 40);
       if (otherPed && !otherPed.alertBubbleText) {
+        if (!otherPed.greetedIds) otherPed.greetedIds = [];
+        
         ped.state = 'greeting';
-        ped.behaviorTimer = 1.5;
-        ped.alertBubbleText = Math.random() > 0.5 ? "Hello!" : "Hi there!";
-        ped.alertBubbleTimer = 1.5;
+        ped.behaviorTimer = 2.0;
+        const greetings = ["Morning!", "Hi!", "Hello!", "Hey, how's it going?", "Nice day!", "Long time no see!"];
+        ped.alertBubbleText = greetings[Math.floor(Math.random() * greetings.length)];
+        ped.alertBubbleTimer = 2.0;
+        ped.greetedIds.push(otherPed.id);
         
         otherPed.state = 'greeting';
-        otherPed.behaviorTimer = 1.5;
-        otherPed.alertBubbleText = Math.random() > 0.5 ? "Hey!" : "Good day!";
-        otherPed.alertBubbleTimer = 1.5;
+        otherPed.behaviorTimer = 2.0;
+        const responses = ["Hey!", "Good day!", "Oh, hi!", "Doing well, thanks!", "Beautiful weather!"];
+        otherPed.alertBubbleText = responses[Math.floor(Math.random() * responses.length)];
+        otherPed.alertBubbleTimer = 2.0;
+        otherPed.greetedIds.push(ped.id);
         
         // Face each other
         ped.angle = Math.atan2(otherPed.y - ped.y, otherPed.x - ped.x);
@@ -1759,10 +1849,10 @@ export function updatePedestrians(
             const dot = toCurbDx * pedCos + toCurbDy * pedSin;
 
             if (dot >= -5) {
-              // 35% chance to cross the street; otherwise stay on the block's sidewalk
-              if (Math.random() < 0.35) {
+              // 15% chance to cross the street; otherwise stay on the block's sidewalk
+              if (Math.random() < 0.15) {
                 ped.targetCrosswalkId = cw.id;
-                ped.crosswalkCooldownTimer = 25.0;
+                ped.crosswalkCooldownTimer = 75.0;
                 const aimAngle = Math.atan2(endCurb.y - startCurb.y, endCurb.x - startCurb.x);
 
                 if (cw.pedestrianSignal === 'wait') {
@@ -1778,7 +1868,7 @@ export function updatePedestrians(
                   ped.state = 'crossing';
                   ped.isCrossingRoad = true;
                   ped.waitingAtCurb = false;
-                  ped.targetSpeed = 44 + Math.random() * 8;
+                  ped.targetSpeed = 48 + Math.random() * 6;
                   ped.routeWaypoints = [startCurb, endCurb];
                   ped.targetWaypointIndex = 1;
                   ped.angle = aimAngle;
@@ -1786,7 +1876,7 @@ export function updatePedestrians(
                 break;
               } else {
                 // Decided to stay on current sidewalk: cooldown to avoid re-triggering immediately
-                ped.crosswalkCooldownTimer = 12.0;
+                ped.crosswalkCooldownTimer = 25.0;
               }
             }
           }
@@ -1841,7 +1931,12 @@ export function updatePedestrians(
         const dy = dest.y - ped.y;
         const dist = Math.hypot(dx, dy);
 
-        ped.angle = Math.atan2(dy, dx);
+        const targetAngle = Math.atan2(dy, dx);
+        let aDiff = (targetAngle - ped.angle) % (Math.PI * 2);
+        if (aDiff < -Math.PI) aDiff += Math.PI * 2;
+        if (aDiff > Math.PI) aDiff -= Math.PI * 2;
+        ped.angle += aDiff * Math.min(1.0, 7.0 * dt);
+
         ped.targetSpeed = 45 + Math.random() * 6;
 
         if (dist < 16) {
@@ -1892,7 +1987,11 @@ export function updatePedestrians(
           const dy = wp.y - ped.y;
           const dist = Math.hypot(dx, dy);
 
-          ped.angle = Math.atan2(dy, dx);
+          const targetAngle = Math.atan2(dy, dx);
+          let aDiff = (targetAngle - ped.angle) % (Math.PI * 2);
+          if (aDiff < -Math.PI) aDiff += Math.PI * 2;
+          if (aDiff > Math.PI) aDiff -= Math.PI * 2;
+          ped.angle += aDiff * Math.min(1.0, 7.0 * dt);
 
           if (dist < 18) {
             ped.targetWaypointIndex = (ped.targetWaypointIndex + 1) % ped.routeWaypoints.length;
@@ -1901,10 +2000,100 @@ export function updatePedestrians(
       }
     }
 
-    // Apply movement
-    ped.speed = ped.targetSpeed;
+    // Apply movement with smooth acceleration/deceleration (inertia)
+    const accelRate = ped.isCyclist ? 60 : 80;
+    const decelRate = ped.isCyclist ? 80 : 150; // Cyclists take longer to stop
+    if (ped.speed < ped.targetSpeed) {
+      ped.speed += accelRate * dt;
+      if (ped.speed > ped.targetSpeed) ped.speed = ped.targetSpeed;
+    } else if (ped.speed > ped.targetSpeed) {
+      ped.speed -= decelRate * dt;
+      if (ped.speed < ped.targetSpeed) ped.speed = ped.targetSpeed;
+    }
+    
+    // Group dynamics: if in a group and walking normally, adjust speed towards group mates
+    if (ped.groupId && ped.state === 'walking' && ped.targetSpeed > 0) {
+      const groupMates = world.pedestrians.filter(p => p.groupId === ped.groupId && p.id !== ped.id);
+      let avgSpeed = ped.speed;
+      if (groupMates.length > 0) {
+        let totalSpeed = ped.speed;
+        let count = 1;
+        for (const mate of groupMates) {
+          totalSpeed += mate.speed;
+          count++;
+          // If a mate is falling behind, slow down a bit
+          const distToMate = Math.hypot(mate.x - ped.x, mate.y - ped.y);
+          if (distToMate > 40 && mate.speed < ped.speed) {
+            ped.speed -= 20 * dt;
+          }
+        }
+        // Slightly blend speed
+        ped.speed = ped.speed * 0.95 + (totalSpeed / count) * 0.05;
+      }
+    }
+
     ped.vx = Math.cos(ped.angle) * ped.speed;
     ped.vy = Math.sin(ped.angle) * ped.speed;
+
+    // Drop items if panicking
+    if (ped.state === 'panicking' && ped.handheldProp && !ped.hasDroppedProp) {
+      ped.hasDroppedProp = true;
+      world.litter.push({
+        id: `dropped_prop_${ped.id}_${Date.now()}`,
+        x: ped.x,
+        y: ped.y,
+        vx: ped.vx * 0.5 + (Math.random() - 0.5) * 50,
+        vy: ped.vy * 0.5 + (Math.random() - 0.5) * 50,
+        angle: Math.random() * Math.PI * 2,
+        rotationSpeed: (Math.random() - 0.5) * 10,
+        type: ped.handheldProp,
+        color: ped.propColor || '#ffffff',
+        size: ped.handheldProp === 'box' ? 12 : (ped.handheldProp === 'phone' ? 4 : 6),
+        isAirborne: true,
+        airborneTimer: 0.5 + Math.random() * 0.5,
+        altitude: 15,
+        isGlowing: ped.handheldProp === 'phone'
+      });
+      // Remove prop from hand
+      ped.handheldProp = null;
+    }
+
+    // Local Vehicle Avoidance
+    let avoidForceX = 0;
+    let avoidForceY = 0;
+    if (ped.state === 'walking' || ped.state === 'crossing') {
+      const lookaheadDist = 40;
+      const lookaheadX = ped.x + Math.cos(ped.angle) * lookaheadDist;
+      const lookaheadY = ped.y + Math.sin(ped.angle) * lookaheadDist;
+
+      const nearbyCarsForAvoidance = vehGrid ? vehGrid.queryRadius(ped.x, ped.y, 60) : world.vehicles;
+      for (const car of nearbyCarsForAvoidance) {
+        if (car.isParked) continue;
+        const dx = lookaheadX - car.x;
+        const dy = lookaheadY - car.y;
+        const dist = Math.hypot(dx, dy);
+
+        const carHalfW = car.width / 2 + 10;
+        const carHalfL = car.length / 2 + 10;
+        const safetyDist = Math.hypot(carHalfL, carHalfW);
+        if (dist < safetyDist) {
+          const perpX = -Math.sin(ped.angle);
+          const perpY = Math.cos(ped.angle);
+
+          const carToPedDx = ped.x - car.x;
+          const carToPedDy = ped.y - car.y;
+          const sideDot = carToPedDx * perpX + carToPedDy * perpY;
+          const steerDir = sideDot >= 0 ? 1 : -1;
+
+          const strength = (1.0 - dist / safetyDist) * 45;
+          avoidForceX += perpX * steerDir * strength;
+          avoidForceY += perpY * steerDir * strength;
+          break;
+        }
+      }
+    }
+    ped.vx += avoidForceX;
+    ped.vy += avoidForceY;
 
     // 5b. Social Repulsion: Avoid other pedestrians
     for (const other of world.pedestrians) {
@@ -1932,15 +2121,12 @@ export function updatePedestrians(
     let nextX = ped.x + ped.vx * dt;
     let nextY = ped.y + ped.vy * dt;
 
-    // 6. Gentle vehicle physical separation
+    // 6. Robust vehicle physical separation
     for (const car of world.vehicles) {
-      const cdx = nextX - car.x;
-      const cdy = nextY - car.y;
-      const cDist = Math.hypot(cdx, cdy);
-      if (cDist < 12 && cDist > 0.001) {
-        const pushDist = (12 - cDist) * 1.2;
-        nextX += (cdx / cDist) * pushDist;
-        nextY += (cdy / cDist) * pushDist;
+      const res = checkPedestrianVehicleCollision(nextX, nextY, 7.0, car);
+      if (res.collided) {
+        nextX = res.x;
+        nextY = res.y;
       }
     }
 

@@ -1,6 +1,7 @@
 import { CAR_CONFIGS } from './cityMap';
 import { Building, GameWorld, InputState, Particle, Pedestrian, Player, SkidMark, Vehicle } from './types';
 import { sound } from './audio';
+import { trafficDiagnostics } from './aiTraffic';
 
 export interface CollisionResult {
   collided: boolean;
@@ -9,7 +10,7 @@ export interface CollisionResult {
   depth: number;
 }
 
-// Check intersection between rotated car box and AABB building
+// Check intersection between rotated car box and AABB building using SAT
 export function checkCarBuildingCollision(car: Vehicle, building: Building): CollisionResult {
   const halfL = car.length / 2;
   const halfW = car.width / 2;
@@ -17,48 +18,76 @@ export function checkCarBuildingCollision(car: Vehicle, building: Building): Col
   const cosA = Math.cos(car.angle);
   const sinA = Math.sin(car.angle);
 
-  // 4 corner points in world coordinates
-  const corners = [
+  // 4 corner points of car in world coordinates
+  const cornersA = [
     { x: car.x + cosA * halfL - sinA * halfW, y: car.y + sinA * halfL + cosA * halfW },
     { x: car.x + cosA * halfL + sinA * halfW, y: car.y + sinA * halfL - cosA * halfW },
     { x: car.x - cosA * halfL + sinA * halfW, y: car.y - sinA * halfL - cosA * halfW },
     { x: car.x - cosA * halfL - sinA * halfW, y: car.y - sinA * halfL + cosA * halfW }
   ];
 
-  const bMinX = building.x;
-  const bMaxX = building.x + building.width;
-  const bMinY = building.y;
-  const bMaxY = building.y + building.height;
+  const cornersB = [
+    { x: building.x, y: building.y },
+    { x: building.x + building.width, y: building.y },
+    { x: building.x + building.width, y: building.y + building.height },
+    { x: building.x, y: building.y + building.height }
+  ];
 
-  let maxPenetration = 0;
-  let normalX = 0;
-  let normalY = 0;
-  let hasCollision = false;
+  const axes = [
+    { x: cosA, y: sinA },   // Car longitudinal
+    { x: -sinA, y: cosA },  // Car lateral
+    { x: 1, y: 0 },         // Building horizontal
+    { x: 0, y: 1 }          // Building vertical
+  ];
 
-  for (const p of corners) {
-    if (p.x >= bMinX && p.x <= bMaxX && p.y >= bMinY && p.y <= bMaxY) {
-      hasCollision = true;
-      const distLeft = p.x - bMinX;
-      const distRight = bMaxX - p.x;
-      const distTop = p.y - bMinY;
-      const distBottom = bMaxY - p.y;
+  let minOverlap = 999999;
+  let smallestAxisX = 0;
+  let smallestAxisY = 0;
 
-      const minDist = Math.min(distLeft, distRight, distTop, distBottom);
-      if (minDist > maxPenetration) {
-        maxPenetration = minDist;
-        if (minDist === distLeft) { normalX = -1; normalY = 0; }
-        else if (minDist === distRight) { normalX = 1; normalY = 0; }
-        else if (minDist === distTop) { normalX = 0; normalY = -1; }
-        else { normalX = 0; normalY = 1; }
-      }
+  for (const axis of axes) {
+    let minA = 999999;
+    let maxA = -999999;
+    for (const p of cornersA) {
+      const proj = p.x * axis.x + p.y * axis.y;
+      if (proj < minA) minA = proj;
+      if (proj > maxA) maxA = proj;
+    }
+
+    let minB = 999999;
+    let maxB = -999999;
+    for (const p of cornersB) {
+      const proj = p.x * axis.x + p.y * axis.y;
+      if (proj < minB) minB = proj;
+      if (proj > maxB) maxB = proj;
+    }
+
+    const overlap = Math.min(maxA, maxB) - Math.max(minA, minB);
+    if (overlap <= 0) {
+      return { collided: false, normalX: 0, normalY: 0, depth: 0 };
+    }
+
+    if (overlap < minOverlap) {
+      minOverlap = overlap;
+      smallestAxisX = axis.x;
+      smallestAxisY = axis.y;
     }
   }
 
+  // Ensure normal points from building to car (away from building center)
+  const bCenterX = building.x + building.width / 2;
+  const bCenterY = building.y + building.height / 2;
+  const dirX = car.x - bCenterX;
+  const dirY = car.y - bCenterY;
+  if (dirX * smallestAxisX + dirY * smallestAxisY < 0) {
+    smallestAxisX = -smallestAxisX;
+    smallestAxisY = -smallestAxisY;
+  }
+
   return {
-    collided: hasCollision,
-    normalX,
-    normalY,
-    depth: maxPenetration
+    collided: true,
+    normalX: smallestAxisX,
+    normalY: smallestAxisY,
+    depth: minOverlap
   };
 }
 
@@ -97,6 +126,87 @@ export function checkPedestrianBuildingCollision(
     if (minD === dRight) return { x: building.x + building.width + radius, y: py, collided: true };
     if (minD === dTop) return { x: px, y: building.y - radius, collided: true };
     return { x: px, y: building.y + building.height + radius, collided: true };
+  }
+
+  return { x: px, y: py, collided: false };
+}
+
+// Circle-OBB (Oriented Bounding Box) collision for pedestrian against vehicle
+export function checkPedestrianVehicleCollision(
+  px: number,
+  py: number,
+  radius: number,
+  car: Vehicle
+): { x: number; y: number; collided: boolean } {
+  // Translate pedestrian position to vehicle's local coordinate system
+  const dx = px - car.x;
+  const dy = py - car.y;
+
+  const cosA = Math.cos(car.angle);
+  const sinA = Math.sin(car.angle);
+
+  // Local coordinates of pedestrian relative to car center
+  const localX = dx * cosA + dy * sinA;
+  const localY = -dx * sinA + dy * cosA;
+
+  const halfL = car.length / 2;
+  const halfW = car.width / 2;
+
+  // Find the closest point on the car's OBB to the pedestrian in local space
+  const closestX = Math.max(-halfL, Math.min(localX, halfL));
+  const closestY = Math.max(-halfW, Math.min(localY, halfW));
+
+  // Distance from local closest point to local pedestrian coordinates
+  const diffX = localX - closestX;
+  const diffY = localY - closestY;
+  const distSq = diffX * diffX + diffY * diffY;
+
+  if (distSq < radius * radius && distSq > 0.0001) {
+    const dist = Math.sqrt(distSq);
+    const overlap = radius - dist;
+
+    // Push vector in local coordinates
+    const localPushX = (diffX / dist) * overlap;
+    const localPushY = (diffY / dist) * overlap;
+
+    // Convert back to world coordinates
+    const pushX = localPushX * cosA - localPushY * sinA;
+    const pushY = localPushX * sinA + localPushY * cosA;
+
+    return {
+      x: px + pushX,
+      y: py + pushY,
+      collided: true
+    };
+  } else if (distSq <= 0.0001) {
+    // Exactly inside vehicle center, push out along local axis
+    const dLeft = localX + halfL;
+    const dRight = halfL - localX;
+    const dTop = localY + halfW;
+    const dBottom = halfW - localY;
+    const minD = Math.min(dLeft, dRight, dTop, dBottom);
+
+    let localPushX = 0;
+    let localPushY = 0;
+
+    if (minD === dLeft) {
+      localPushX = -(radius + dLeft);
+    } else if (minD === dRight) {
+      localPushX = radius + dRight;
+    } else if (minD === dTop) {
+      localPushY = -(radius + dTop);
+    } else {
+      localPushY = radius + dBottom;
+    }
+
+    const pushX = localPushX * cosA - localPushY * sinA;
+    const pushY = localPushX * sinA + localPushY * cosA;
+
+    return {
+      x: px + pushX,
+      y: py + pushY,
+      collided: true
+    };
   }
 
   return { x: px, y: py, collided: false };
@@ -344,7 +454,7 @@ export function applyVehicleDamageAndDeformation(
 
   // 2. Dynamic Vertex Deformation (Stiffer metal sheet, controlled displacement)
   if (dmg.deformedVertices && impactSpeed > 55) {
-    const pushStrength = Math.min(10.0, (effectiveSpeed / 110) * 4.5 * Math.sqrt(massRatio));
+    const pushStrength = Math.min(4.0, (effectiveSpeed / 110) * 1.8 * Math.sqrt(massRatio));
     const dentRadius = isNarrowImpact ? 16 : 20 * Math.min(1.3, Math.sqrt(massRatio));
 
     for (const v of dmg.deformedVertices) {
@@ -357,7 +467,7 @@ export function applyVehicleDamageAndDeformation(
         if (len > 0.001) {
           const dirX = -v.localX / len;
           const dirY = -v.localY / len;
-          const maxDent = len * Math.min(0.48, 0.20 + severity * 0.28 * Math.sqrt(massRatio));
+          const maxDent = len * Math.min(0.18, 0.08 + severity * 0.10 * Math.sqrt(massRatio));
 
           let falloff = 0;
           if (isNarrowImpact) {
@@ -396,11 +506,11 @@ export function applyVehicleDamageAndDeformation(
   }
 
   // 3. Structural crumple & component damage logic (Stiffer threshold & realistic caps)
-  const crushFactor = severity * (1.0 + severity * 3.0) * Math.sqrt(massRatio);
+  const crushFactor = severity * (1.0 + severity * 1.5) * Math.sqrt(massRatio) * 0.35;
 
   if (normX > 0.3 && impactSpeed > 55) {
     // --- FRONTAL COLLISION ---
-    const maxFrontCrush = halfL * 0.45;
+    const maxFrontCrush = halfL * 0.22; // Engine block restricts crumpling
     dmg.frontCrumple = Math.min(maxFrontCrush, dmg.frontCrumple + crushFactor);
 
     if (normY < -0.25) {
@@ -425,7 +535,7 @@ export function applyVehicleDamageAndDeformation(
     }
   } else if (normX < -0.3 && impactSpeed > 55) {
     // --- REAR IMPACT ---
-    const maxRearCrush = halfL * 0.35;
+    const maxRearCrush = halfL * 0.20; // Fuel tank & subframe restrict rear crumpling
     dmg.rearCrumple = Math.min(maxRearCrush, dmg.rearCrumple + crushFactor);
 
     if (normY < -0.25) {
@@ -446,7 +556,7 @@ export function applyVehicleDamageAndDeformation(
     }
   } else if (impactSpeed > 55) {
     // --- SIDE IMPACT / T-BONE ---
-    const maxSideDent = halfW * 0.55; // Stiffer side panels
+    const maxSideDent = halfW * 0.18; // Side door impact bars restrict intrusion
     const sideDent = crushFactor * 0.9;
 
     if (normY < 0) {
@@ -639,8 +749,8 @@ export function updatePlayerPedestrianPhysics(
       // Responsive acceleration lerp
       const targetVx = worldMoveX * targetSpeed;
       const targetVy = worldMoveY * targetSpeed;
-      player.vx += (targetVx - player.vx) * Math.min(1.0, 18 * dt);
-      player.vy += (targetVy - player.vy) * Math.min(1.0, 18 * dt);
+      player.vx += (targetVx - player.vx) * Math.min(1.0, 10 * dt);
+      player.vy += (targetVy - player.vy) * Math.min(1.0, 10 * dt);
 
       // Smooth body rotation lerp towards movement direction
       const targetAngle = Math.atan2(worldMoveY, worldMoveX);
@@ -668,11 +778,11 @@ export function updatePlayerPedestrianPhysics(
         });
       }
     } else {
-      // Snappy deceleration when input released
-      player.vx *= Math.pow(0.001, dt);
-      player.vy *= Math.pow(0.001, dt);
+      // Smooth deceleration with natural inertia
+      player.vx += (0 - player.vx) * Math.min(1.0, 8 * dt);
+      player.vy += (0 - player.vy) * Math.min(1.0, 8 * dt);
       player.speed = Math.hypot(player.vx, player.vy);
-      if (player.speed < 1.0) {
+      if (player.speed < 1.5) {
         player.vx = 0;
         player.vy = 0;
         player.speed = 0;
@@ -691,6 +801,51 @@ export function updatePlayerPedestrianPhysics(
       const res = checkPedestrianBuildingCollision(newX, newY, pedRadius, bld);
       newX = res.x;
       newY = res.y;
+    }
+  }
+
+  // Collision with vehicles
+  if (world) {
+    for (const car of world.vehicles) {
+      const res = checkPedestrianVehicleCollision(newX, newY, pedRadius, car);
+      if (res.collided) {
+        newX = res.x;
+        newY = res.y;
+      }
+    }
+  }
+
+  // Collision with props (streetlamps, trash cans, benches, etc.)
+  if (world) {
+    for (const prop of world.props) {
+      if (prop.isBroken) continue;
+
+      let propRadius = 3.0;
+      if (prop.type === 'bench') propRadius = 5.0;
+      else if (prop.type === 'kiosk') propRadius = 12.0;
+      else if (prop.type === 'mailbox') propRadius = 4.5;
+      else if (prop.type === 'cone') propRadius = 2.5;
+      else if (prop.type === 'trash_can') propRadius = 4.0;
+      else if (prop.type === 'bus_stop') propRadius = 10.0;
+      else if (prop.type === 'hydrant') propRadius = 3.5;
+      else if (prop.type === 'traffic_light') propRadius = 3.0;
+      else if (prop.type === 'lamp') propRadius = 3.0;
+
+      const dx = newX - prop.x;
+      const dy = newY - prop.y;
+      const distSq = dx * dx + dy * dy;
+      const minDist = pedRadius + propRadius;
+
+      if (distSq < minDist * minDist) {
+        const dist = Math.sqrt(distSq);
+        const overlap = minDist - dist;
+        if (dist > 0.0001) {
+          newX += (dx / dist) * overlap;
+          newY += (dy / dist) * overlap;
+        } else {
+          newX += minDist;
+        }
+      }
     }
   }
 
@@ -939,12 +1094,6 @@ export function updateVehiclePhysics(
     if (Math.abs(vehicle.knockbackVx) < 0.1) vehicle.knockbackVx = 0;
     if (Math.abs(vehicle.knockbackVy) < 0.1) vehicle.knockbackVy = 0;
   }
-  if (vehicle.knockbackSpin) {
-    const spinDecay = Math.pow(0.0005, dt);
-    vehicle.angle += (vehicle.knockbackSpin || 0) * dt;
-    vehicle.knockbackSpin = (vehicle.knockbackSpin || 0) * spinDecay;
-    if (Math.abs(vehicle.knockbackSpin) < 0.01) vehicle.knockbackSpin = 0;
-  }
   if (vehicle.stunnedTimer && vehicle.stunnedTimer > 0) {
     vehicle.stunnedTimer -= dt;
     if (vehicle.stunnedTimer <= 0) vehicle.stunnedTimer = 0;
@@ -984,11 +1133,11 @@ export function updateVehiclePhysics(
         const velAlongNormal = relVx * col.normalX + relVy * col.normalY;
 
         if (velAlongNormal < 0) {
-          const restitution = 0.10; // Realistic low inelastic rebound for vehicle bodies
+          const restitution = 0.18; // Slightly more elastic rebound for vehicle bodies
           const impulseMagnitude = -(1 + restitution) * velAlongNormal / (1 / vehicle.mass + 1 / other.mass);
           
-          // Controlled knockback factor: zero knockback for light touches (< 30 px/s), damped scale for moderate hits
-          const knockbackScale = Math.min(1.0, Math.max(0, (Math.abs(velAlongNormal) - 30) / 80)) * 0.22;
+          // Controlled knockback factor: slightly more responsive impulse application
+          const knockbackScale = Math.min(1.0, Math.max(0, (Math.abs(velAlongNormal) - 25) / 75)) * 0.28;
           const impulseX = impulseMagnitude * col.normalX * knockbackScale;
           const impulseY = impulseMagnitude * col.normalY * knockbackScale;
 
@@ -1020,18 +1169,6 @@ export function updateVehiclePhysics(
 
           applyVehicleDamageAndDeformation(vehicle, col.contactX, col.contactY, impactSpeed, scrapeSpeed, world, other.mass, false);
           applyVehicleDamageAndDeformation(other, col.contactX, col.contactY, impactSpeed, scrapeSpeed, world, vehicle.mass, false);
-
-          const rxVehicle = col.contactX - vehicle.x;
-          const ryVehicle = col.contactY - vehicle.y;
-          const rawTorqueV = (rxVehicle * impulseY - ryVehicle * impulseX);
-          const torqueV = Math.max(-1.0, Math.min(1.0, rawTorqueV / (vehicle.mass * 450)));
-          vehicle.knockbackSpin = (vehicle.knockbackSpin || 0) + torqueV;
-
-          const rxOther = col.contactX - other.x;
-          const ryOther = col.contactY - other.y;
-          const rawTorqueO = -(rxOther * impulseY - ryOther * impulseX);
-          const torqueO = Math.max(-1.0, Math.min(1.0, rawTorqueO / (other.mass * 450)));
-          other.knockbackSpin = (other.knockbackSpin || 0) + torqueO;
 
           const impactIntensity = Math.min(1.0, impactSpeed / 160);
           if (impactIntensity > 0.1) {
@@ -1194,6 +1331,39 @@ const scratchVehicleSet = new Set<Vehicle>();
 export function updateBreakablePropsAndLivingWorld(world: GameWorld, player: Player, dt: number, vehGrid?: any) {
   const isRaining = world.weather === 'rain' || world.weather === 'storm';
 
+  // Spawn new puddles dynamically if it's raining
+  if (isRaining) {
+    const nonPondPuddles = world.puddles.filter(p => !p.isPond);
+    if (nonPondPuddles.length < 50 && Math.random() < 0.05) { // Slow gradual puddle spawn up to 50 max
+      const roads = world.roads || [];
+      if (roads.length > 0) {
+        const road = roads[Math.floor(Math.random() * roads.length)];
+        const px = road.direction === 'horizontal' ? (road.x1 + road.x2) / 2 + (Math.random() * 200 - 100) : road.x1 + (Math.random() * road.width - road.width / 2);
+        const py = road.direction === 'vertical' ? (road.y1 + road.y2) / 2 + (Math.random() * 200 - 100) : road.y1 + (Math.random() * road.width - road.width / 2);
+        world.puddles.push({
+          id: `puddle_dynamic_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
+          x: px,
+          y: py,
+          radiusX: 18 + Math.random() * 14,
+          radiusY: 10 + Math.random() * 8,
+          angle: Math.random() * Math.PI,
+          rippleTimer: 0
+        });
+      } else {
+        // Fallback spawn near player
+        world.puddles.push({
+          id: `puddle_dynamic_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
+          x: player.x + (Math.random() * 800 - 400),
+          y: player.y + (Math.random() * 800 - 400),
+          radiusX: 18 + Math.random() * 14,
+          radiusY: 10 + Math.random() * 8,
+          angle: Math.random() * Math.PI,
+          rippleTimer: 0
+        });
+      }
+    }
+  }
+
   // 1. UPDATE BREAKABLE PROPS & WATER FOUNTAINS
   for (const prop of world.props) {
     if (prop.isBroken) {
@@ -1233,7 +1403,17 @@ export function updateBreakablePropsAndLivingWorld(world: GameWorld, player: Pla
     const vehiclesToCheck = vehGrid ? vehGrid.queryRadius(prop.x, prop.y, 40, scratchVehicleSet) : world.vehicles;
     // Check prop collision against vehicles (using mathematically accurate OBB collision check)
     for (const veh of vehiclesToCheck) {
-      if (Math.abs(veh.speed) < 12) continue;
+      // Define a custom physical radius/buffer for each prop type to determine collision intersection
+      let propRadius = 3.0;
+      if (prop.type === 'bench') propRadius = 5.0;
+      else if (prop.type === 'kiosk') propRadius = 12.0;
+      else if (prop.type === 'mailbox') propRadius = 4.5;
+      else if (prop.type === 'cone') propRadius = 2.5;
+      else if (prop.type === 'trash_can') propRadius = 4.0;
+      else if (prop.type === 'bus_stop') propRadius = 10.0;
+      else if (prop.type === 'hydrant') propRadius = 3.5;
+      else if (prop.type === 'traffic_light') propRadius = 3.0;
+      else if (prop.type === 'lamp') propRadius = 3.0;
 
       // Local transformed coordinates relative to vehicle center & rotation
       const dx = prop.x - veh.x;
@@ -1247,22 +1427,35 @@ export function updateBreakablePropsAndLivingWorld(world: GameWorld, player: Pla
       const halfL = veh.length / 2;
       const halfW = veh.width / 2;
 
-      // Define a custom physical radius/buffer for each prop type to determine collision intersection
-      let propRadius = 3.0;
-      if (prop.type === 'bench') propRadius = 5.0;
-      else if (prop.type === 'kiosk') propRadius = 12.0;
-      else if (prop.type === 'mailbox') propRadius = 4.5;
-      else if (prop.type === 'cone') propRadius = 2.5;
-      else if (prop.type === 'trash_can') propRadius = 4.0;
-      else if (prop.type === 'bus_stop') propRadius = 10.0;
-      else if (prop.type === 'hydrant') propRadius = 3.5;
-      else if (prop.type === 'traffic_light') propRadius = 3.0;
-      else if (prop.type === 'lamp') propRadius = 3.0;
-
       // If the prop's physical footprint overlaps the car's bounding box
       if (Math.abs(localX) <= (halfL + propRadius) && Math.abs(localY) <= (halfW + propRadius)) {
+        if (Math.abs(veh.speed) < 12) {
+          // Slow speed: push vehicle out of the prop so it cannot pass through it
+          const res = checkPedestrianVehicleCollision(prop.x, prop.y, propRadius, veh);
+          if (res.collided) {
+            const pushX = res.x - prop.x;
+            const pushY = res.y - prop.y;
+            veh.x -= pushX * 1.05;
+            veh.y -= pushY * 1.05;
+            veh.speed = 0;
+            veh.vx = 0;
+            veh.vy = 0;
+          }
+          continue;
+        }
+
         // Break prop!
         prop.isBroken = true;
+
+        // If this was a master traffic light, break the intersection signal!
+        if (prop.type === 'traffic_light' && prop.isMasterLight && prop.intersectionId) {
+          const inter = world.intersections.find(i => i.id === prop.intersectionId);
+          if (inter) {
+            inter.isSignalLost = true;
+            trafficDiagnostics.log('light', `SIGNAL LOST: Master control box destroyed at ${inter.id.toUpperCase()}`, undefined, inter.id);
+          }
+        }
+
         const impactSpeed = Math.max(40, Math.abs(veh.speed));
         prop.breakVX = Math.cos(veh.angle) * impactSpeed * 0.8;
         prop.breakVY = Math.sin(veh.angle) * impactSpeed * 0.8;
@@ -1333,6 +1526,51 @@ export function updateBreakablePropsAndLivingWorld(world: GameWorld, player: Pla
         bird.flyVX = Math.cos(escapeAngle) * (80 + Math.random() * 40);
         bird.flyVY = Math.sin(escapeAngle) * (80 + Math.random() * 40) - 30; // fly upward
         sound.playBirdFlap();
+      } else {
+        // Occasional walking
+        if (bird.walkTimer === undefined) bird.walkTimer = Math.random() * 5;
+        bird.walkTimer -= dt;
+        
+        if (bird.walkTimer <= 0) {
+          if (Math.random() < 0.4) {
+            // Take a few steps
+            bird.flyVX = (Math.random() - 0.5) * 20;
+            bird.flyVY = (Math.random() - 0.5) * 20;
+            if (bird.groupId) {
+              // Bias movement towards group center
+              const group = world.birds.filter(b => b.groupId === bird.groupId && b.state === 'ground');
+              if (group.length > 1) {
+                const cx = group.reduce((sum, b) => sum + b.x, 0) / group.length;
+                const cy = group.reduce((sum, b) => sum + b.y, 0) / group.length;
+                const distToCenter = Math.hypot(cx - bird.x, cy - bird.y);
+                if (distToCenter > 30) {
+                  bird.flyVX += (cx - bird.x) * 0.5;
+                  bird.flyVY += (cy - bird.y) * 0.5;
+                }
+              }
+            }
+            bird.angle = Math.atan2(bird.flyVY, bird.flyVX);
+            bird.walkTimer = 0.5 + Math.random() * 1.5;
+          } else {
+            // Stop and rest
+            bird.flyVX = 0;
+            bird.flyVY = 0;
+            bird.walkTimer = 2 + Math.random() * 4;
+          }
+        }
+        
+        if (bird.flyVX !== 0 || bird.flyVY !== 0) {
+          bird.x += bird.flyVX * dt;
+          bird.y += bird.flyVY * dt;
+          bird.wingCycle += dt * 15; // Fast leg/bob cycle when walking
+          // Friction
+          bird.flyVX *= (1 - dt * 5);
+          bird.flyVY *= (1 - dt * 5);
+          if (Math.abs(bird.flyVX) < 1 && Math.abs(bird.flyVY) < 1) {
+            bird.flyVX = 0;
+            bird.flyVY = 0;
+          }
+        }
       }
     } else {
       // Flying bird dynamics
@@ -1352,9 +1590,21 @@ export function updateBreakablePropsAndLivingWorld(world: GameWorld, player: Pla
     }
   }
 
-  // 3. PUDDLE SPLASHES
-  for (const puddle of world.puddles) {
+  // 3. PUDDLE SPLASHES & EVAPORATION
+  for (let i = world.puddles.length - 1; i >= 0; i--) {
+    const puddle = world.puddles[i];
     puddle.rippleTimer += dt;
+    
+    // Evaporation if not raining and not a pond
+    if (!isRaining && !puddle.isPond) {
+      puddle.radiusX -= dt * 0.5;
+      puddle.radiusY -= dt * 0.5;
+      if (puddle.radiusX <= 0 || puddle.radiusY <= 0) {
+        world.puddles.splice(i, 1);
+        continue;
+      }
+    }
+    
     for (const veh of world.vehicles) {
       if (Math.abs(veh.speed) > 25) {
         if (Math.hypot(veh.x - puddle.x, veh.y - puddle.y) < puddle.radiusX + 10) {
@@ -1372,6 +1622,20 @@ export function updateBreakablePropsAndLivingWorld(world: GameWorld, player: Pla
               type: 'water_splash'
             });
           }
+        }
+      }
+    }
+  }
+
+  // 3b. JANITOR CLEANUP
+  const janitors = world.pedestrians.filter(p => p.isJanitor && p.state === 'walking');
+  if (world.litter) {
+    for (let i = world.litter.length - 1; i >= 0; i--) {
+      const lit = world.litter[i];
+      for (const janitor of janitors) {
+        if (Math.hypot(janitor.x - lit.x, janitor.y - lit.y) < 30 && !lit.isAirborne) {
+          world.litter.splice(i, 1);
+          break; // Stop checking janitors for this litter piece
         }
       }
     }
@@ -1405,6 +1669,20 @@ export function updateBreakablePropsAndLivingWorld(world: GameWorld, player: Pla
               break;
             }
           }
+        }
+      }
+      
+      // COLLISION WITH VEHICLES/PLAYER
+      for (const veh of world.vehicles) {
+        const dist = Math.hypot(veh.x - lit.x, veh.y - lit.y);
+        const radius = 30;
+        
+        if (dist < radius) {
+          const pushAngle = Math.atan2(lit.y - veh.y, lit.x - veh.x);
+          const pushForce = Math.abs(veh.speed) * 0.5 + 10;
+          lit.vx = Math.cos(pushAngle) * pushForce;
+          lit.vy = Math.sin(pushAngle) * pushForce;
+          lit.rotationSpeed = (Math.random() - 0.5) * 4;
         }
       }
 

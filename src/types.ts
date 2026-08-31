@@ -185,6 +185,18 @@ export interface Pedestrian {
   hairColor: string;
   walkCycle: number;
   
+  gender?: 'male' | 'female';
+  ageGroup?: 'child' | 'adult' | 'elderly';
+  hairStyle?: 'short' | 'long' | 'bald' | 'bun' | 'spiky' | 'ponytail';
+  hasHat?: boolean;
+  hatColor?: string;
+  hatType?: 'cap' | 'beanie' | 'sunhat';
+  
+  // Handheld props
+  handheldProp?: 'phone' | 'coffee' | 'bag' | 'box' | null;
+  propColor?: string;
+  hasDroppedProp?: boolean;
+  
   // Pedestrian Type & Equipment
   isCyclist?: boolean;
   isScooter?: boolean;
@@ -211,8 +223,12 @@ export interface Pedestrian {
 
   // Social & Variety
   isChild?: boolean;
+  isJanitor?: boolean;
+  hasBroom?: boolean;
   stuckTimer?: number;
   socialTargetId?: string | null;
+  greetedIds?: string[];
+  groupId?: string; // Grouping ID for families walking together
   hasBackpack?: boolean;
   backpackColor?: string;
 
@@ -225,8 +241,8 @@ export interface Pedestrian {
 }
 
 export interface TrafficLightPhase {
-  nsState: 'green' | 'yellow' | 'red' | 'red_yellow';
-  ewState: 'green' | 'yellow' | 'red' | 'red_yellow';
+  nsState: 'green' | 'green_flashing' | 'yellow' | 'red' | 'red_yellow';
+  ewState: 'green' | 'green_flashing' | 'yellow' | 'red' | 'red_yellow';
   duration: number; // seconds
 }
 
@@ -251,7 +267,7 @@ export interface Intersection {
     y1: number;
     x2: number;
     y2: number;
-    lightState: 'green' | 'yellow' | 'red' | 'red_yellow';
+    lightState: 'green' | 'green_flashing' | 'yellow' | 'red' | 'red_yellow' | 'off';
   }[];
 
   // Crosswalks
@@ -264,6 +280,7 @@ export interface Intersection {
     height: number;
     pedestrianSignal: 'walk' | 'wait';
   }[];
+  isSignalLost?: boolean;
   isDirt?: boolean;
 }
 
@@ -301,7 +318,7 @@ export interface Building {
   y: number;
   width: number;
   height: number;
-  type: 'office' | 'residential' | 'shop' | 'suburban' | 'industrial' | 'park_monument';
+  type: 'office' | 'residential' | 'shop' | 'suburban' | 'industrial' | 'park_monument' | 'police_station' | 'fire_station' | 'hospital';
   color: string;
   roofColor: string;
   accentColor: string;
@@ -374,11 +391,15 @@ export interface StreetProp {
     | 'flowerbed'
     | 'bollard'
     | 'manhole'
-    | 'drain_grate';
+    | 'drain_grate'
+    | 'tire_flowerbed'
+    | 'playground_swing'
+    | 'garage_door';
   angle: number;
   intersectionId?: string;
   direction?: 'north' | 'south' | 'east' | 'west';
 
+  isMasterLight?: boolean;
   // Breakable Props Physics
   isBroken?: boolean;
   breakVX?: number;
@@ -396,12 +417,13 @@ export interface LitterItem {
   vy: number;
   angle: number;
   rotationSpeed: number;
-  type: 'paper' | 'newspaper' | 'cup' | 'can' | 'leaf';
+  type: 'paper' | 'newspaper' | 'cup' | 'can' | 'leaf' | 'phone' | 'coffee' | 'box' | 'bag' | 'bottle' | 'wrapper' | 'mask' | 'butt';
   color: string;
   size: number;
   isAirborne?: boolean;
   airborneTimer?: number;
   altitude?: number;
+  isGlowing?: boolean;
 }
 
 export interface Bird {
@@ -415,6 +437,8 @@ export interface Bird {
   flyVX: number;
   flyVY: number;
   wingCycle: number;
+  walkTimer?: number;
+  groupId?: string; // Birds sit in groups
 }
 
 export interface Puddle {
@@ -425,6 +449,7 @@ export interface Puddle {
   radiusY: number;
   angle: number;
   rippleTimer: number;
+  isPond?: boolean;
 }
 
 export interface SkidMark {
@@ -483,6 +508,11 @@ export interface SidewalkBlock {
   sidewalkWidth: number; // width of the perimeter walkway band
   style: 'urban' | 'commercial' | 'village' | 'park';
   innerLawnColor?: string;
+  driveways?: {
+    side: 'north' | 'south' | 'east' | 'west';
+    offset: number;
+    width: number;
+  }[];
 }
 
 export interface GpsDestination {

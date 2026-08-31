@@ -14,10 +14,20 @@ import {
 } from './types';
 import { trafficDiagnostics } from './aiTraffic';
 
+const hashString = (str: string): number => {
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    hash = (hash << 5) - hash + str.charCodeAt(i);
+    hash |= 0;
+  }
+  return (Math.abs(hash) % 1000) / 1000;
+};
+
 export class GameRenderer {
   private ctx: CanvasRenderingContext2D;
   private width: number = window.innerWidth;
   private height: number = window.innerHeight;
+  private cloudShadows: {x: number, y: number, size: number}[] = [];
 
   // Offscreen buffer for the Lightmap (prevents punching holes in the world)
   private lightmapCanvas: HTMLCanvasElement;
@@ -28,6 +38,10 @@ export class GameRenderer {
     this.lightmapCanvas = document.createElement('canvas');
     this.lightmapCtx = this.lightmapCanvas.getContext('2d')!;
     this.resize(this.width, this.height);
+    
+    for(let i=0; i<15; i++) {
+      this.cloudShadows.push({x: Math.random() * 8000, y: Math.random() * 8000, size: 100 + Math.random() * 200});
+    }
   }
 
   public resize(width: number, height: number) {
@@ -78,18 +92,19 @@ export class GameRenderer {
     const minY = camera.y - viewDiag;
     const maxY = camera.y + viewDiag;
 
-    // Calculate continuous nightAlpha from timeHour
+    // Calculate continuous nightAlpha from timeHour with smooth transitions
     let nightAlpha = 0;
     if (timeHour >= 8 && timeHour < 17) {
       nightAlpha = 0;
-    } else if (timeHour >= 17 && timeHour < 20) {
-      const p = (timeHour - 17) / 3;
-      nightAlpha = p * 0.45;
-    } else if (timeHour >= 20 || timeHour < 5) {
+    } else if (timeHour >= 17 && timeHour < 21) {
+      // Smooth sunset transition (17:00-21:00)
+      nightAlpha = ((timeHour - 17) / 4) * 0.82;
+    } else if (timeHour >= 21 || timeHour < 4) {
+      // Night (21:00-04:00)
       nightAlpha = 0.82;
-    } else if (timeHour >= 5 && timeHour < 8) {
-      const p = (timeHour - 5) / 3;
-      nightAlpha = (1 - p) * 0.45;
+    } else if (timeHour >= 4 && timeHour < 8) {
+      // Smooth sunrise transition (04:00-08:00)
+      nightAlpha = (1 - ((timeHour - 4) / 4)) * 0.82;
     }
     
     const vpProps = visibleProps || world.props.filter(p => p.x >= minX - 120 && p.x <= maxX + 120 && p.y >= minY - 120 && p.y <= maxY + 120);
@@ -99,11 +114,17 @@ export class GameRenderer {
     // 3. Ground / Grass / Terrain Base
     this.renderGround(world, minX, minY, maxX, maxY);
 
+    // 3a. Cloud Shadows (Atmosphere)
+    this.renderCloudShadows(minX, minY, maxX, maxY);
+
     // 3b. Paved Sidewalk Walkways, Curbs & Block Courtyards
     this.renderSidewalks(vpSidewalks, minX, minY, maxX, maxY);
 
     // 4. Roads, Intersections, Crosswalks & Markings
     this.renderRoadsAndMarkings(world, minX, minY, maxX, maxY);
+
+    // 4b. Post-Soviet Atmosphere & Cyrillic Signage
+    this.renderPostSovietAtmosphereAndSignage(world, minX, minY, maxX, maxY);
 
     // 5. Puddles (Road wet spots)
     this.renderPuddles(world.puddles, minX, minY, maxX, maxY);
@@ -112,13 +133,13 @@ export class GameRenderer {
     this.renderSkidMarks(world.skidMarks, minX, minY, maxX, maxY);
 
     // 7. Parking lots
-    this.renderParkings(world.parkings, minX, minY, maxX, maxY);
+    this.renderParkings(world, minX, minY, maxX, maxY);
 
     // 8. Buildings Base Structure & Entrances
     this.renderBuildingBases(visibleBuildings);
 
     // 8b. Street Litter & Flying Paper / Wind Debris
-    this.renderLitter(world.litter, minX, minY, maxX, maxY);
+    this.renderLitter(world.litter, minX, minY, maxX, maxY, nightAlpha);
 
     // 9. Ground-level Props (Benches, Hydrants, Kiosks, Cones, Trash Cans, Mailboxes, and BROKEN lampposts!)
     this.renderGroundProps(vpProps, minX, minY, maxX, maxY);
@@ -150,6 +171,13 @@ export class GameRenderer {
       vpProps, 
       minX, minY, maxX, maxY
     );
+
+    const isRaining = world.weather === 'rain' || world.weather === 'storm';
+    const isFog = world.weather === 'fog';
+    const effectiveAlpha = Math.max(nightAlpha, isRaining ? 0.35 * weatherTransition : 0, isFog ? 0.45 * weatherTransition : 0);
+
+    // 15b. Render Vehicle Cabins, Roofs, and Roof attachments (drawn ON TOP of lightmap to avoid headlight bleed)
+    this.renderVehicleCabins(visibleVehicles, effectiveAlpha);
 
     // 16. Building Roofs, Canopies, Balconies & Fire Escapes
     this.renderBuildingRoofsAndCanopies(visibleBuildings, nightAlpha);
@@ -445,6 +473,116 @@ export class GameRenderer {
     }
   }
 
+  // --- POST-SOVIET ATMOSPHERE & CYRILLIC SIGNAGE ---
+  private renderPostSovietAtmosphereAndSignage(world: GameWorld, minX: number, minY: number, maxX: number, maxY: number) {
+    const ctx = this.ctx;
+    ctx.save();
+
+    // 1. Upright 3D Standing Street Signposts at Intersections (Visible from Top-Down View)
+    for (const inter of world.intersections) {
+      if (inter.x < minX - 250 || inter.x > maxX + 250 || inter.y < minY - 250 || inter.y > maxY + 250) continue;
+
+      let hName = 'ул. Советская';
+      let vName = 'пр. Ленина';
+      for (const road of world.roads) {
+        if (road.direction === 'horizontal' && Math.abs(inter.y - road.y1) < 100) {
+          hName = road.name === 'Grand Boulevard' ? 'пр. Ленина' : (road.name === 'Central Avenue' ? 'ул. Гагарина' : road.name);
+        }
+        if (road.direction === 'vertical' && Math.abs(inter.x - road.x1) < 100) {
+          vName = road.name === 'Silicon Highway' ? 'шоссе Энтузиастов' : (road.name === 'Metro Avenue' ? 'ул. Строителей' : road.name);
+        }
+      }
+
+      const signX = inter.x + inter.width / 2 + 16;
+      const signY = inter.y - inter.height / 2 - 16;
+
+      // Base shadow on sidewalk
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
+      ctx.beginPath();
+      ctx.ellipse(signX, signY + 6, 5, 3, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Vertical metal pole (3D upright pillar)
+      ctx.fillStyle = '#334155';
+      ctx.fillRect(signX - 2, signY - 24, 4, 30);
+      ctx.fillStyle = '#64748b';
+      ctx.fillRect(signX - 1, signY - 24, 2, 30);
+
+      // Blue enamel sign board box (Elevated 3D sign)
+      ctx.fillStyle = '#1d4ed8'; // Post-Soviet blue enamel
+      ctx.fillRect(signX - 32, signY - 38, 64, 20);
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 1.2;
+      ctx.strokeRect(signX - 32, signY - 38, 64, 20);
+
+      // Inner white text line 1 (Horizontal street)
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 9px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(hName.slice(0, 14), signX, signY - 31);
+
+      // Inner light blue text line 2 (Vertical street)
+      ctx.fillStyle = '#bfdbfe';
+      ctx.font = '8px sans-serif';
+      ctx.fillText(vName.slice(0, 14), signX, signY - 21);
+    }
+
+    // 2. Highly Distinctive Shop Storefronts & Banners (ПРОДУКТЫ 24, УНИВЕРМАГ, АПТЕКА)
+    for (const bld of world.buildings) {
+      if (bld.x < minX - 120 || bld.x > maxX + 120 || bld.y < minY - 120 || bld.y > maxY + 120) continue;
+
+      const cx = bld.x + bld.width / 2;
+      const cy = bld.y + bld.height / 2;
+
+      if (bld.type === 'shop') {
+        // Red backlit storefront awning & bright banner
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
+        ctx.fillRect(cx - 32, bld.y - 12, 64, 18);
+
+        ctx.fillStyle = '#dc2626'; // Vibrant red retail sign
+        ctx.fillRect(cx - 30, bld.y - 10, 60, 16);
+        ctx.strokeStyle = '#f8fafc';
+        ctx.lineWidth = 1.5;
+        ctx.strokeRect(cx - 30, bld.y - 10, 60, 16);
+
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 10px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('ПРОДУКТЫ 24', cx, bld.y - 2);
+      } else if (bld.type === 'commercial' || bld.type === 'office') {
+        // Universal store / Pharmacy banner
+        ctx.fillStyle = '#0284c7';
+        ctx.fillRect(cx - 36, bld.y - 10, 72, 16);
+        ctx.strokeStyle = '#e0f2fe';
+        ctx.lineWidth = 1.2;
+        ctx.strokeRect(cx - 36, bld.y - 10, 72, 16);
+
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 9px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('УНИВЕРМАГ • АПТЕКА', cx, bld.y - 2);
+      } else if (bld.type === 'industrial') {
+        // Industrial warehouse / garage cooperative sign
+        ctx.fillStyle = '#1e3a8a';
+        ctx.fillRect(cx - 40, bld.y + 6, 80, 16);
+        ctx.strokeStyle = '#60a5fa';
+        ctx.lineWidth = 1.2;
+        ctx.strokeRect(cx - 40, bld.y + 6, 80, 16);
+
+        ctx.fillStyle = '#f8fafc';
+        ctx.font = 'bold 9px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('ГСК «МОТОР» / СКЛАД', cx, bld.y + 14);
+      }
+    }
+
+    ctx.restore();
+  }
+
   // --- SKID MARKS ---
   private renderSkidMarks(skidMarks: GameWorld['skidMarks'], minX: number, minY: number, maxX: number, maxY: number) {
     const ctx = this.ctx;
@@ -550,6 +688,86 @@ export class GameRenderer {
         ctx.strokeRect(innerX, innerY, innerW, innerH);
       }
 
+      // 4b. Draw Driveway Courtyard Entrances / Exits
+      if (sw.driveways) {
+        for (const dw of sw.driveways) {
+          ctx.save();
+          ctx.fillStyle = '#475569'; // dark slate asphalt/concrete for driveway ramp
+          ctx.strokeStyle = '#1e293b';
+          ctx.lineWidth = 1.5;
+
+          let rx = 0;
+          let ry = 0;
+          let rw = 0;
+          let rh = 0;
+
+          if (dw.side === 'north') {
+            rx = sw.x + dw.offset;
+            ry = sw.y;
+            rw = dw.width;
+            rh = sw.sidewalkWidth + 10;
+          } else if (dw.side === 'south') {
+            rx = sw.x + dw.offset;
+            ry = sw.y + sw.height - sw.sidewalkWidth - 10;
+            rw = dw.width;
+            rh = sw.sidewalkWidth + 10;
+          } else if (dw.side === 'west') {
+            rx = sw.x;
+            ry = sw.y + dw.offset;
+            rw = sw.sidewalkWidth + 10;
+            rh = dw.width;
+          } else if (dw.side === 'east') {
+            rx = sw.x + sw.width - sw.sidewalkWidth - 10;
+            ry = sw.y + dw.offset;
+            rw = sw.sidewalkWidth + 10;
+            rh = dw.width;
+          }
+
+          // Draw driveway asphalt ramp
+          ctx.fillRect(rx, ry, rw, rh);
+
+          // Draw subtle tire tread skidmarks on the driveway for added realism
+          ctx.strokeStyle = 'rgba(15, 23, 42, 0.4)';
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          if (dw.side === 'north' || dw.side === 'south') {
+            // Draw 2 vertical tire track lines
+            ctx.moveTo(rx + 8, ry);
+            ctx.lineTo(rx + 8, ry + rh);
+            ctx.moveTo(rx + rw - 8, ry);
+            ctx.lineTo(rx + rw - 8, ry + rh);
+          } else {
+            // Draw 2 horizontal tire track lines
+            ctx.moveTo(rx, ry + 8);
+            ctx.lineTo(rx + rw, ry + 8);
+            ctx.moveTo(rx, ry + rh - 8);
+            ctx.lineTo(rx + rw, ry + rh - 8);
+          }
+          ctx.stroke();
+
+          // Draw yellow dashed warning lines at the entry curb
+          ctx.strokeStyle = '#f59e0b';
+          ctx.lineWidth = 2.5;
+          ctx.setLineDash([4, 4]);
+          ctx.beginPath();
+          if (dw.side === 'north') {
+            ctx.moveTo(rx, ry);
+            ctx.lineTo(rx + rw, ry);
+          } else if (dw.side === 'south') {
+            ctx.moveTo(rx, ry + rh);
+            ctx.lineTo(rx + rw, ry + rh);
+          } else if (dw.side === 'west') {
+            ctx.moveTo(rx, ry);
+            ctx.lineTo(rx, ry + rh);
+          } else if (dw.side === 'east') {
+            ctx.moveTo(rx + rw, ry);
+            ctx.lineTo(rx + rw, ry + rh);
+          }
+          ctx.stroke();
+          ctx.restore();
+        }
+      }
+
       // 5. Tactile Safety Paving (Yellow ribbed pads at sidewalk corners facing crosswalks)
       ctx.fillStyle = '#f59e0b';
       const padSize = 14;
@@ -565,9 +783,9 @@ export class GameRenderer {
   }
 
   // --- PARKING LOTS ---
-  private renderParkings(parkings: GameWorld['parkings'], minX: number, minY: number, maxX: number, maxY: number) {
+  private renderParkings(world: GameWorld, minX: number, minY: number, maxX: number, maxY: number) {
     const ctx = this.ctx;
-    for (const pk of parkings) {
+    for (const pk of world.parkings) {
       if (pk.x + pk.width < minX || pk.x > maxX || pk.y + pk.height < minY || pk.y > maxY) continue;
 
       // 1. Asphalt Surface with Curb Trim
@@ -577,6 +795,58 @@ export class GameRenderer {
       ctx.strokeStyle = '#475569';
       ctx.lineWidth = 3;
       ctx.strokeRect(pk.x, pk.y, pk.width, pk.height);
+
+      // Draw driveway connecting asphalt paths for courtyard parking lots
+      if (pk.id.startsWith('court_parking_')) {
+        const parts = pk.id.split('_');
+        const bx = parseInt(parts[2]);
+        const by = parseInt(parts[3]);
+        const sw = world.sidewalks.find(s => s.id === `sidewalk_${bx}_${by}`);
+        if (sw && sw.driveways) {
+          ctx.fillStyle = '#1e293b'; // match the parking lot asphalt color perfectly
+          for (const dw of sw.driveways) {
+            if (dw.side === 'south') {
+              const rx = sw.x + dw.offset;
+              const ry = sw.y + sw.height - sw.sidewalkWidth - 10;
+              const rw = dw.width;
+              // Draw a connecting asphalt road from the south driveway to the bottom of the parking lot
+              const roadY = pk.y + pk.height;
+              const roadH = ry - roadY + 2;
+              if (roadH > 0) {
+                ctx.fillRect(rx, roadY, rw, roadH);
+                // Subtle road edges/curbs
+                ctx.strokeStyle = '#475569';
+                ctx.lineWidth = 1.5;
+                ctx.beginPath();
+                ctx.moveTo(rx, roadY);
+                ctx.lineTo(rx, ry);
+                ctx.moveTo(rx + rw, roadY);
+                ctx.lineTo(rx + rw, ry);
+                ctx.stroke();
+              }
+            } else if (dw.side === 'east') {
+              const rx = sw.x + sw.width - sw.sidewalkWidth - 10;
+              const ry = sw.y + dw.offset;
+              const rh = dw.width;
+              // Draw a connecting asphalt road from the east driveway to the right edge of the parking lot
+              const roadX = pk.x + pk.width;
+              const roadW = rx - roadX + 2;
+              if (roadW > 0) {
+                ctx.fillRect(roadX, ry, roadW, rh);
+                // Subtle road edges/curbs
+                ctx.strokeStyle = '#475569';
+                ctx.lineWidth = 1.5;
+                ctx.beginPath();
+                ctx.moveTo(roadX, ry);
+                ctx.lineTo(rx, ry);
+                ctx.moveTo(roadX, ry + rh);
+                ctx.lineTo(rx, ry + rh);
+                ctx.stroke();
+              }
+            }
+          }
+        }
+      }
 
       // 2. Central Driving Lane Direction Arrows
       ctx.fillStyle = '#64748b';
@@ -1168,7 +1438,7 @@ export class GameRenderer {
   }
 
   // --- STREET LITTER & FLYING DEBRIS ---
-  private renderLitter(litter: GameWorld['litter'], minX: number, minY: number, maxX: number, maxY: number) {
+  private renderLitter(litter: GameWorld['litter'], minX: number, minY: number, maxX: number, maxY: number, nightAlpha: number = 0) {
     if (!litter) return;
     const ctx = this.ctx;
 
@@ -1225,6 +1495,70 @@ export class GameRenderer {
         ctx.beginPath();
         ctx.arc(0, 0, lit.size / 2, 0, Math.PI * 2);
         ctx.fill();
+      } else if (lit.type === 'box') {
+        ctx.fillStyle = lit.color || '#d97706';
+        ctx.fillRect(-lit.size / 2, -lit.size / 2, lit.size, lit.size);
+        ctx.strokeStyle = '#92400e';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(-lit.size / 2, -lit.size / 2, lit.size, lit.size);
+      } else if (lit.type === 'bag') {
+        ctx.fillStyle = lit.color || '#e11d48';
+        ctx.fillRect(-lit.size / 2, -lit.size * 0.6, lit.size, lit.size * 1.2);
+        ctx.strokeStyle = '#000';
+        ctx.lineWidth = 0.5;
+        ctx.strokeRect(-lit.size / 2, -lit.size * 0.6, lit.size, lit.size * 1.2);
+      } else if (lit.type === 'coffee') {
+        ctx.fillStyle = '#f8fafc';
+        ctx.beginPath();
+        ctx.arc(0, 0, lit.size / 2, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#78350f'; // Coffee lid
+        ctx.beginPath();
+        ctx.arc(0, 0, lit.size / 3, 0, Math.PI * 2);
+        ctx.fill();
+      } else if (lit.type === 'phone') {
+        ctx.fillStyle = '#1e293b';
+        ctx.fillRect(-lit.size / 2, -lit.size * 0.8, lit.size, lit.size * 1.6);
+        // Screen
+        ctx.fillStyle = lit.isGlowing ? '#38bdf8' : '#0f172a';
+        ctx.fillRect(-lit.size / 2 + 0.5, -lit.size * 0.8 + 0.5, lit.size - 1, lit.size * 1.6 - 1);
+        
+        // Add a glow effect for the phone screen
+        if (lit.isGlowing && nightAlpha > 0.3) {
+          ctx.shadowColor = '#38bdf8';
+          ctx.shadowBlur = 15;
+          ctx.fillStyle = 'rgba(56, 189, 248, 0.4)';
+          ctx.fillRect(-lit.size / 2, -lit.size * 0.8, lit.size, lit.size * 1.6);
+          ctx.shadowBlur = 0; // Reset
+        }
+      } else if (lit.type === 'bottle') {
+        ctx.fillStyle = '#94a3b8';
+        ctx.fillRect(-lit.size / 3, -lit.size / 2, lit.size / 1.5, lit.size);
+        ctx.fillStyle = '#64748b'; // Cap
+        ctx.fillRect(-lit.size / 4, -lit.size / 2 - 1, lit.size / 2, 2);
+      } else if (lit.type === 'wrapper') {
+        ctx.fillStyle = '#f8fafc';
+        ctx.beginPath();
+        ctx.moveTo(-lit.size / 2, -lit.size / 2);
+        ctx.lineTo(lit.size / 2, -lit.size / 4);
+        ctx.lineTo(lit.size / 4, lit.size / 2);
+        ctx.lineTo(-lit.size / 4, lit.size / 2);
+        ctx.fill();
+      } else if (lit.type === 'mask') {
+        ctx.fillStyle = '#fff';
+        ctx.fillRect(-lit.size / 2, -lit.size / 4, lit.size, lit.size / 2);
+        ctx.strokeStyle = '#94a3b8';
+        ctx.beginPath();
+        ctx.arc(-lit.size / 2, 0, lit.size / 3, Math.PI / 2, -Math.PI / 2);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.arc(lit.size / 2, 0, lit.size / 3, -Math.PI / 2, Math.PI / 2);
+        ctx.stroke();
+      } else if (lit.type === 'butt') {
+        ctx.fillStyle = '#fff';
+        ctx.fillRect(-lit.size / 2, -lit.size / 8, lit.size, lit.size / 4);
+        ctx.fillStyle = '#d6d3d1'; // Filter
+        ctx.fillRect(-lit.size / 2, -lit.size / 8, lit.size / 4, lit.size / 4);
       }
 
       ctx.restore();
@@ -1492,31 +1826,51 @@ export class GameRenderer {
         ctx.beginPath();
         ctx.arc(0, 0, 1.8, 0, Math.PI * 2);
         ctx.fill();
-      } else if (prop.type === 'kiosk') {
-        // Shadow
+      } else if (prop.type === 'tire_flowerbed') {
+        // Post-Soviet Tire Flowerbed (Автомобильная клумба из покрышки)
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+        ctx.beginPath();
+        ctx.arc(2, 2, 8, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = '#64748b'; // Painted tire
+        ctx.beginPath();
+        ctx.arc(0, 0, 8, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#3e2723'; // Soil
+        ctx.beginPath();
+        ctx.arc(0, 0, 5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#ef4444'; // Red flowers
+        ctx.beginPath();
+        ctx.arc(-2, -2, 2, 0, Math.PI * 2);
+        ctx.arc(2, 2, 2, 0, Math.PI * 2);
+        ctx.fill();
+      } else if (prop.type === 'playground_swing') {
+        // Soviet Metal Playground Swings
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
+        ctx.fillRect(-12, -4, 24, 8);
+
+        ctx.strokeStyle = '#2563eb';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(-10, -6); ctx.lineTo(-4, 10);
+        ctx.moveTo(10, -6); ctx.lineTo(4, 10);
+        ctx.moveTo(-12, -4); ctx.lineTo(12, -4);
+        ctx.stroke();
+      } else if (prop.type === 'garage_door') {
+        // Garage Cooperative Metal Door
         ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
-        ctx.fillRect(-12, -9, 24, 18);
+        ctx.fillRect(-12, -8, 24, 16);
 
-        // Main kiosk body
-        ctx.fillStyle = '#1e3a8a';
-        ctx.fillRect(-11, -8, 22, 16);
+        ctx.fillStyle = '#64748b';
+        ctx.fillRect(-11, -7, 22, 14);
+        ctx.strokeStyle = '#334155';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(-11, -7, 22, 14);
 
-        // Striped awning canopy roof (Red & White)
-        ctx.fillStyle = '#dc2626';
-        ctx.fillRect(-11, -8, 22, 5);
-        ctx.fillStyle = '#f8fafc';
-        ctx.fillRect(-7, -8, 4, 5);
-        ctx.fillRect(3, -8, 4, 5);
-
-        // Display glass window showing magazine rack
-        ctx.fillStyle = '#93c5fd';
-        ctx.fillRect(-9, -2, 18, 8);
-        ctx.fillStyle = '#f59e0b';
-        ctx.fillRect(-7, 0, 4, 4);
-        ctx.fillStyle = '#10b981';
-        ctx.fillRect(-1, 0, 4, 4);
-        ctx.fillStyle = '#ef4444';
-        ctx.fillRect(4, 0, 4, 4);
+        ctx.fillStyle = '#0f172a';
+        ctx.fillRect(-2, -1, 4, 3);
       } else if (prop.type === 'cone') {
         // Shadow
         ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
@@ -1692,22 +2046,28 @@ export class GameRenderer {
       const isBroken = prop.isBroken;
 
       // Determine signal state from intersection
-      let lightState: 'red' | 'yellow' | 'green' | 'red_yellow' = 'red';
+      let lightState: 'red' | 'yellow' | 'green' | 'red_yellow' | 'green_flashing' | 'off' = 'red';
       let pedSignal: 'walk' | 'wait' = 'wait';
 
       if (inter && phase && prop.direction) {
-        if (prop.direction === 'north' || prop.direction === 'south') {
-          lightState = phase.nsState;
+        if (inter.isSignalLost) {
+          const isFlashOn = Math.floor(performance.now() / 500) % 2 === 0;
+          lightState = isFlashOn ? 'yellow' : 'off';
+          pedSignal = 'wait';
         } else {
-          lightState = phase.ewState;
+          if (prop.direction === 'north' || prop.direction === 'south') {
+            lightState = phase.nsState;
+          } else {
+            lightState = phase.ewState;
+          }
+          const cw = inter.crosswalks.find((c) => c.direction === prop.direction);
+          pedSignal = cw?.pedestrianSignal || 'wait';
         }
-        const cw = inter.crosswalks.find((c) => c.direction === prop.direction);
-        pedSignal = cw?.pedestrianSignal || 'wait';
       }
 
       const isRed = lightState === 'red' || lightState === 'red_yellow';
       const isYellow = lightState === 'yellow' || lightState === 'red_yellow';
-      const isGreen = lightState === 'green';
+      const isGreen = lightState === 'green' || (lightState === 'green_flashing' && Math.floor(Date.now() / 250) % 2 === 0);
 
       const facingAngle = prop.angle;
 
@@ -1745,6 +2105,25 @@ export class GameRenderer {
         ctx.beginPath();
         ctx.arc(0, 0, 4, 0, Math.PI * 2);
         ctx.fill();
+
+        // Master Control Box (Broken)
+        if (prop.isMasterLight) {
+          ctx.save();
+          // Positioned along the broken pole
+          ctx.translate(8, 0);
+          ctx.fillStyle = '#64748b';
+          ctx.fillRect(-3, -4, 6, 8);
+          ctx.strokeStyle = '#0f172a';
+          ctx.lineWidth = 1;
+          ctx.strokeRect(-3, -4, 6, 8);
+          
+          // Dead LED
+          ctx.fillStyle = '#1c1917';
+          ctx.beginPath();
+          ctx.arc(0, 0, 1.5, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.restore();
+        }
 
         // Non-working vehicle head at the end
         ctx.save();
@@ -1826,6 +2205,36 @@ export class GameRenderer {
         ctx.beginPath();
         ctx.arc(0, 0, 3.2, 0, Math.PI * 2);
         ctx.fill();
+
+        // Master Control Box
+        if (prop.isMasterLight) {
+          ctx.save();
+          ctx.rotate(facingAngle);
+          
+          // Draw a prominent silver/grey box attached to the back of the pole
+          ctx.fillStyle = '#94a3b8'; 
+          ctx.fillRect(-4.5, -6, 9, 6);
+          
+          ctx.strokeStyle = '#0f172a';
+          ctx.lineWidth = 1.5;
+          ctx.strokeRect(-4.5, -6, 9, 6);
+          
+          // Draw a bright glowing LED indicator on it
+          ctx.fillStyle = inter?.isSignalLost ? '#1c1917' : '#22c55e'; // Green if OK, dark if broken
+          ctx.beginPath();
+          ctx.arc(0, -3, 1.8, 0, Math.PI * 2);
+          ctx.fill();
+          
+          // Glow effect for the green LED
+          if (!inter?.isSignalLost) {
+            ctx.fillStyle = 'rgba(34, 197, 94, 0.4)';
+            ctx.beginPath();
+            ctx.arc(0, -3, 3.5, 0, Math.PI * 2);
+            ctx.fill();
+          }
+          
+          ctx.restore();
+        }
 
         ctx.fillStyle = '#94a3b8';
         ctx.beginPath();
@@ -2019,31 +2428,42 @@ export class GameRenderer {
         ctx.fillStyle = baseBirdColor;
       }
       ctx.beginPath();
-      ctx.ellipse(0, 0, 1.4, 0.9, 0, 0, Math.PI * 2);
+      ctx.ellipse(0, 0, 2.8, 1.8, 0, 0, Math.PI * 2);
       ctx.fill();
 
       // Head
       ctx.fillStyle = b.type === 'pigeon' ? '#475569' : '#78350f';
       ctx.beginPath();
-      ctx.arc(1.1, 0, 0.7, 0, Math.PI * 2);
+      ctx.arc(2.2, 0, 1.4, 0, Math.PI * 2);
       ctx.fill();
 
       // Beak
       ctx.fillStyle = '#f59e0b';
       ctx.beginPath();
-      ctx.moveTo(1.7, -0.3);
-      ctx.lineTo(2.3, 0);
-      ctx.lineTo(1.7, 0.3);
+      ctx.moveTo(3.4, -0.6);
+      ctx.lineTo(4.6, 0);
+      ctx.lineTo(3.4, 0.6);
       ctx.fill();
 
-      // Wings (Flapping if flying)
-      if (b.state === 'flying') {
-        const wingSpan = 2.2 + Math.sin(b.wingCycle) * 1.3;
+      // Wings
+      const isWalking = b.state === 'ground' && (Math.abs(b.flyVX) > 0.5 || Math.abs(b.flyVY) > 0.5);
+      if (b.state === 'flying' || isWalking) {
+        const wingSpan = b.state === 'flying' ? 4.4 + Math.sin(b.wingCycle) * 2.6 : 3.0 + Math.sin(b.wingCycle) * 1.0;
         ctx.strokeStyle = b.type === 'pigeon' ? '#334155' : '#451a03';
-        ctx.lineWidth = 0.8;
+        ctx.lineWidth = 1.6;
         ctx.beginPath();
         ctx.moveTo(0, -wingSpan);
         ctx.lineTo(0, wingSpan);
+        ctx.stroke();
+      } else {
+        // Folded wings
+        ctx.strokeStyle = b.type === 'pigeon' ? '#334155' : '#451a03';
+        ctx.lineWidth = 1.2;
+        ctx.beginPath();
+        ctx.moveTo(-1, -1.2);
+        ctx.lineTo(1.5, -0.5);
+        ctx.moveTo(-1, 1.2);
+        ctx.lineTo(1.5, 0.5);
         ctx.stroke();
       }
 
@@ -2146,16 +2566,155 @@ export class GameRenderer {
         ctx.fillRect(-armSwing - 1.5, 2.6, 3, 2.2);
       }
 
-      // Head & Hair
+      // Head
       ctx.fillStyle = ped.skinColor;
       ctx.beginPath();
       ctx.arc(1.5, 0, 3.2, 0, Math.PI * 2);
       ctx.fill();
 
-      ctx.fillStyle = ped.hairColor;
-      ctx.beginPath();
-      ctx.arc(0.4, 0, 3.0, Math.PI * 0.5, Math.PI * 1.5);
-      ctx.fill();
+      // Hair
+      if (ped.hairStyle !== 'bald' && !ped.hasHat) {
+        ctx.fillStyle = ped.hairColor;
+        ctx.beginPath();
+        if (ped.hairStyle === 'short') {
+          ctx.arc(0.4, 0, 3.0, Math.PI * 0.5, Math.PI * 1.5);
+        } else if (ped.hairStyle === 'long') {
+          ctx.arc(0, 0, 3.4, Math.PI * 0.4, Math.PI * 1.6);
+          ctx.ellipse(-1.5, -2, 2.5, 1.5, -Math.PI / 6, 0, Math.PI * 2);
+          ctx.ellipse(-1.5, 2, 2.5, 1.5, Math.PI / 6, 0, Math.PI * 2);
+        } else if (ped.hairStyle === 'bun') {
+          ctx.arc(0.4, 0, 3.0, Math.PI * 0.5, Math.PI * 1.5);
+          ctx.arc(-2.5, 0, 1.8, 0, Math.PI * 2);
+        } else if (ped.hairStyle === 'ponytail') {
+          ctx.arc(0.4, 0, 3.0, Math.PI * 0.5, Math.PI * 1.5);
+          ctx.ellipse(-3.5, 0, 3, 1, 0, 0, Math.PI * 2);
+        } else if (ped.hairStyle === 'spiky') {
+          ctx.moveTo(0.4, -3);
+          ctx.lineTo(2, -4); ctx.lineTo(1, -2);
+          ctx.lineTo(3, -1); ctx.lineTo(1.5, 0);
+          ctx.lineTo(3, 1); ctx.lineTo(1, 2);
+          ctx.lineTo(2, 4); ctx.lineTo(0.4, 3);
+          ctx.arc(0.4, 0, 3.0, Math.PI * 0.5, Math.PI * 1.5);
+        }
+        ctx.fill();
+      }
+
+      // Hat
+      if (ped.hasHat) {
+        ctx.fillStyle = ped.hatColor || '#1e293b';
+        ctx.beginPath();
+        if (ped.hatType === 'cap') {
+          ctx.arc(1, 0, 3.1, 0, Math.PI * 2);
+          ctx.fillRect(3, -1.8, 2.5, 3.6); // Bill
+        } else if (ped.hatType === 'beanie') {
+          ctx.arc(0.8, 0, 3.3, 0, Math.PI * 2);
+        } else if (ped.hatType === 'sunhat') {
+          ctx.arc(1, 0, 5, 0, Math.PI * 2);
+          ctx.fillStyle = 'rgba(0,0,0,0.1)'; // Hat shadow/band
+          ctx.arc(1, 0, 3, 0, Math.PI * 2);
+        }
+        ctx.fill();
+      }
+
+      // Handheld Prop (if not panicking or dropped)
+      if (ped.handheldProp && !ped.hasDroppedProp && ped.state !== 'panicking') {
+        const hSwing = ped.state === 'walking' || ped.state === 'crossing' ? Math.cos(ped.walkCycle) * 2.2 : 0;
+        ctx.save();
+        // Position on right arm with slight elevation and drop shadow
+        ctx.translate(hSwing + 1.2, 3.8);
+        
+        // Prop Drop Shadow
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.25)';
+        ctx.fillRect(-2, 1, 6, 4);
+
+        if (ped.handheldProp === 'phone') {
+          // 3D Phone Body
+          ctx.fillStyle = '#0f172a';
+          ctx.fillRect(-1.8, -2.5, 3.2, 4.6);
+          ctx.fillStyle = '#334155';
+          ctx.fillRect(-1.5, -2.2, 2.6, 4.0);
+          // Glowing screen
+          ctx.fillStyle = '#38bdf8';
+          ctx.fillRect(-1.2, -1.9, 2.0, 3.4);
+          // Screen UI lines
+          ctx.fillStyle = '#ffffff';
+          ctx.fillRect(-0.8, -1.5, 1.2, 0.6);
+          ctx.fillRect(-0.8, -0.6, 1.2, 1.8);
+        } else if (ped.handheldProp === 'coffee') {
+          // 3D Coffee Cup
+          ctx.fillStyle = '#475569'; // Cup shadow
+          ctx.beginPath();
+          ctx.arc(0.5, 0.5, 1.8, 0, Math.PI * 2);
+          ctx.fill();
+          // Cup base
+          ctx.fillStyle = '#f8fafc';
+          ctx.beginPath();
+          ctx.arc(0, 0, 1.8, 0, Math.PI * 2);
+          ctx.fill();
+          // Kraft paper sleeve
+          ctx.fillStyle = '#d97706';
+          ctx.beginPath();
+          ctx.arc(0, 0, 1.5, 0, Math.PI * 2);
+          ctx.fill();
+          // Plastic lid
+          ctx.fillStyle = '#1e293b';
+          ctx.beginPath();
+          ctx.arc(0, 0, 1.2, 0, Math.PI * 2);
+          ctx.fill();
+        } else if (ped.handheldProp === 'box') {
+          // 3D Cardboard Box
+          ctx.fillStyle = '#b45309';
+          ctx.fillRect(-3, -3, 6, 6);
+          // Top flap / tape
+          ctx.fillStyle = '#d97706';
+          ctx.fillRect(-2.5, -2.5, 5, 5);
+          ctx.fillStyle = '#fef3c7'; // Packing tape strip down middle
+          ctx.fillRect(-0.8, -2.5, 1.6, 5);
+          ctx.strokeStyle = '#78350f';
+          ctx.lineWidth = 0.8;
+          ctx.strokeRect(-3, -3, 6, 6);
+        } else if (ped.handheldProp === 'bag') {
+          // 3D Shopping Bag
+          ctx.fillStyle = ped.propColor || '#e11d48';
+          ctx.fillRect(-2.5, -2, 5, 6);
+          // Bag gusset shading
+          ctx.fillStyle = 'rgba(0,0,0,0.2)';
+          ctx.fillRect(-2.5, -2, 1.2, 6);
+          // Looped handles
+          ctx.strokeStyle = '#f8fafc';
+          ctx.lineWidth = 0.8;
+          ctx.beginPath();
+          ctx.moveTo(-1.8, -2);
+          ctx.lineTo(-1.8, -4);
+          ctx.lineTo(1.8, -4);
+          ctx.lineTo(1.8, -2);
+          ctx.stroke();
+        }
+        ctx.restore();
+      }
+
+      // Janitor Broom
+      if (ped.hasBroom) {
+        const hSwing = ped.state === 'walking' || ped.state === 'crossing' ? Math.cos(ped.walkCycle) * 2.2 : 0;
+        ctx.save();
+        ctx.translate(hSwing + 1, 3.5);
+        ctx.rotate(-Math.PI / 4); // Hold diagonally
+        
+        // Handle
+        ctx.fillStyle = '#78350f'; // Wood handle
+        ctx.fillRect(-0.5, -8, 1, 12);
+        
+        // Broom head
+        ctx.fillStyle = '#fde047'; // Yellowish bristles
+        ctx.beginPath();
+        ctx.moveTo(-2, 4);
+        ctx.lineTo(2, 4);
+        ctx.lineTo(3, 8);
+        ctx.lineTo(-3, 8);
+        ctx.fill();
+        
+        ctx.restore();
+      }
 
       // Rain Umbrella
       if (ped.hasUmbrella) {
@@ -2350,53 +2909,6 @@ export class GameRenderer {
       ctx.fillStyle = 'rgba(0, 0, 0, 0.38)';
       ctx.fillRect(-halfL + 3, -halfW + 4, car.length, car.width);
 
-      // 2. Wheels - Tucked realistically inside wheel wells
-      const isThreeAxle = car.type === 'truck_box' || car.type === 'truck_tanker' || 
-                          car.type === 'truck_flatbed' || car.type === 'cement_mixer' ||
-                          car.type === 'fire_engine' || car.type === 'truck_dump' || 
-                          car.type === 'garbage_truck';
-      const isHeavyTruck = isThreeAxle;
-
-      const wheelL = isHeavyTruck ? 11.5 : (car.type === 'sports' ? 10 : 9.5);
-      const wheelW = isHeavyTruck ? 5.2 : (car.type === 'sports' ? 5.5 : 4.2);
-      const frontAxleX = isHeavyTruck ? halfL * 0.72 : halfL * 0.65;
-      const trackY = halfW - 0.8; // Tucked slightly inside halfW
-
-      const renderFixedWheel = (wx: number, wy: number) => {
-        ctx.fillStyle = '#0f172a'; // Tire
-        ctx.fillRect(wx - wheelL / 2, wy, wheelL, wheelW);
-        ctx.fillStyle = '#64748b'; // Rims
-        ctx.fillRect(wx - wheelL / 2 + 2, wy + 0.8, wheelL - 4, wheelW - 1.6);
-      };
-
-      if (isThreeAxle) {
-        // Dual tandem rear axles (6x4 / 6x6)
-        const rearAxle1X = -halfL * 0.36;
-        const rearAxle2X = -halfL * 0.74;
-        renderFixedWheel(rearAxle1X, -trackY);
-        renderFixedWheel(rearAxle1X, trackY - wheelW);
-        renderFixedWheel(rearAxle2X, -trackY);
-        renderFixedWheel(rearAxle2X, trackY - wheelW);
-      } else {
-        const rearAxleX = -halfL * 0.65;
-        renderFixedWheel(rearAxleX, -trackY);
-        renderFixedWheel(rearAxleX, trackY - wheelW);
-      }
-
-      // Front wheels (steered)
-      const renderSteeredWheel = (wx: number, wy: number) => {
-        ctx.save();
-        ctx.translate(wx, wy);
-        ctx.rotate(car.steerAngle);
-        ctx.fillStyle = '#0f172a';
-        ctx.fillRect(-wheelL / 2, -wheelW / 2, wheelL, wheelW);
-        ctx.fillStyle = '#64748b';
-        ctx.fillRect(-wheelL / 2 + 2, -wheelW / 2 + 0.8, wheelL - 4, wheelW - 1.6);
-        ctx.restore();
-      };
-      renderSteeredWheel(frontAxleX, -trackY + wheelW / 2);
-      renderSteeredWheel(frontAxleX, trackY - wheelW / 2);
-
       // 3. Body Shell Contours (with Crumple/Dent deform calculations)
       const dmg = car.damage || {
         health: 100, frontCrumple: 0, rearCrumple: 0, leftDent: 0, rightDent: 0,
@@ -2446,6 +2958,108 @@ export class GameRenderer {
         });
       }
 
+      // 3b. Inverse Distance Weighting deformation function for car attachments
+      const deform = (px: number, py: number): [number, number] => {
+        let totalWeight = 0;
+        let dx = 0;
+        let dy = 0;
+        for (let i = 0; i < 16; i++) {
+          const bp = basePoly[i];
+          const bvp = bodyPoly[i];
+          const vx = bp.x;
+          const vy = bp.y;
+          const distSq = (px - vx) * (px - vx) + (py - vy) * (py - vy);
+          const weight = 1 / (distSq + 16);
+          totalWeight += weight;
+          dx += (bvp.x - bp.x) * weight;
+          dy += (bvp.y - bp.y) * weight;
+        }
+        if (totalWeight > 0) {
+          return [px + dx / totalWeight, py + dy / totalWeight];
+        }
+        return [px, py];
+      };
+
+      const drawDeformedRect = (rx: number, ry: number, rw: number, rh: number, fillStyle: string | CanvasGradient) => {
+        const p1 = deform(rx, ry);
+        const p2 = deform(rx + rw, ry);
+        const p3 = deform(rx + rw, ry + rh);
+        const p4 = deform(rx, ry + rh);
+        ctx.fillStyle = fillStyle;
+        ctx.beginPath();
+        ctx.moveTo(p1[0], p1[1]);
+        ctx.lineTo(p2[0], p2[1]);
+        ctx.lineTo(p3[0], p3[1]);
+        ctx.lineTo(p4[0], p4[1]);
+        ctx.closePath();
+        ctx.fill();
+      };
+
+      const drawDeformedLine = (x1: number, y1: number, x2: number, y2: number, strokeStyle: string, lineWidth: number, isDashed = false) => {
+        const p1 = deform(x1, y1);
+        const p2 = deform(x2, y2);
+        ctx.strokeStyle = strokeStyle;
+        ctx.lineWidth = lineWidth;
+        ctx.save();
+        if (isDashed) ctx.setLineDash([2, 2]);
+        ctx.beginPath();
+        ctx.moveTo(p1[0], p1[1]);
+        ctx.lineTo(p2[0], p2[1]);
+        ctx.stroke();
+        ctx.restore();
+      };
+
+      // 2. Wheels - Tucked realistically inside wheel wells & deformed organically
+      const isThreeAxle = car.type === 'truck_box' || car.type === 'truck_tanker' || 
+                          car.type === 'truck_flatbed' || car.type === 'cement_mixer' ||
+                          car.type === 'fire_engine' || car.type === 'truck_dump' || 
+                          car.type === 'garbage_truck';
+      const isHeavyTruck = isThreeAxle;
+
+      const wheelL = isHeavyTruck ? 11.5 : (car.type === 'sports' ? 10 : 9.5);
+      const wheelW = isHeavyTruck ? 5.2 : (car.type === 'sports' ? 5.5 : 4.2);
+      const frontAxleX = isHeavyTruck ? halfL * 0.72 : halfL * 0.65;
+      const trackY = halfW - 0.8; // Tucked slightly inside halfW
+
+      const renderFixedWheel = (wx: number, wy: number) => {
+        const cy = wy + wheelW / 2;
+        const [dwx, dwy] = deform(wx, cy);
+        ctx.fillStyle = '#0f172a'; // Tire
+        ctx.fillRect(dwx - wheelL / 2, dwy - wheelW / 2, wheelL, wheelW);
+        ctx.fillStyle = '#64748b'; // Rims
+        ctx.fillRect(dwx - wheelL / 2 + 2, dwy - wheelW / 2 + 0.8, wheelL - 4, wheelW - 1.6);
+      };
+
+      if (isThreeAxle) {
+        // Dual tandem rear axles (6x4 / 6x6)
+        const rearAxle1X = -halfL * 0.36;
+        const rearAxle2X = -halfL * 0.74;
+        renderFixedWheel(rearAxle1X, -trackY);
+        renderFixedWheel(rearAxle1X, trackY - wheelW);
+        renderFixedWheel(rearAxle2X, -trackY);
+        renderFixedWheel(rearAxle2X, trackY - wheelW);
+      } else {
+        const rearAxleX = -halfL * 0.65;
+        renderFixedWheel(rearAxleX, -trackY);
+        renderFixedWheel(rearAxleX, trackY - wheelW);
+      }
+
+      // Front wheels (steered)
+      const renderSteeredWheel = (wx: number, wy: number) => {
+        const [dwx, dwy] = deform(wx, wy);
+        ctx.save();
+        ctx.translate(dwx, dwy);
+        ctx.rotate(car.steerAngle);
+        ctx.fillStyle = '#0f172a';
+        ctx.fillRect(-wheelL / 2, -wheelW / 2, wheelL, wheelW);
+        ctx.fillStyle = '#64748b';
+        ctx.fillRect(-wheelL / 2 + 2, -wheelW / 2 + 0.8, wheelL - 4, wheelW - 1.6);
+        ctx.restore();
+      };
+      renderSteeredWheel(frontAxleX, -trackY + wheelW / 2);
+      renderSteeredWheel(frontAxleX, trackY - wheelW / 2);
+
+      // Now draw body shell
       ctx.fillStyle = car.color;
       ctx.beginPath();
       ctx.moveTo(bodyPoly[0].x, bodyPoly[0].y);
@@ -2527,680 +3141,7 @@ export class GameRenderer {
         ctx.restore();
       }
 
-      // 5. Procedural Cabin/Windows - Geometry alters dynamically per vehicle class
-      let cabinL = car.length * 0.52;
-      let cabinW = Math.max(8, car.width * 0.8 - (ld + rd) * 0.3);
-      let cabinX = -car.length * 0.05;
-
-      const isCabOverTruck = car.type === 'truck_box' || car.type === 'truck_dump' || 
-                             car.type === 'cement_mixer' || car.type === 'garbage_truck';
-
-      if (isCabOverTruck) {
-        cabinL = car.length * 0.18;
-        cabinW = car.width * 0.88;
-        cabinX = halfL - cabinL / 2 - 2; // Right at the front nose of truck
-      } else if (car.type === 'fire_engine') { // Heavy Double-Cab Fire Truck
-        cabinL = car.length * 0.28;
-        cabinW = car.width * 0.90;
-        cabinX = halfL - cabinL / 2 - 2; // Front double crew cabin
-      } else if (car.type === 'truck_flatbed') { // Hooded / bonneted truck
-        cabinL = car.length * 0.18;
-        cabinW = car.width * 0.86;
-        cabinX = halfL - cabinL * 1.35; // Hood in front, cab right behind
-      } else if (car.type === 'truck_tanker') { // Hooded Ural fuel tanker
-        cabinL = car.length * 0.18;
-        cabinW = car.width * 0.86;
-        cabinX = halfL - cabinL * 1.35; // Hood in front, cab right behind
-      } else if (car.type === 'van') { // UAZ-452 Bukhanka rounded cab-forward
-        cabinL = car.length * 0.58;
-        cabinW = car.width * 0.84;
-        cabinX = -car.length * 0.02;
-      } else if (car.type === 'muscle') { // GAZ-24 Volga classic sedan
-        cabinL = car.length * 0.48;
-        cabinW = car.width * 0.78;
-        cabinX = -car.length * 0.04;
-      } else if (car.type === 'sports') {
-        cabinL = car.length * 0.45;
-        cabinW = car.width * 0.74;
-        cabinX = -car.length * 0.08;
-      } else if (car.type === 'hatchback') {
-        cabinL = car.length * 0.56;
-        cabinW = car.width * 0.78;
-        cabinX = -car.length * 0.12;
-      } else if (car.type === 'suv') {
-        cabinL = car.length * 0.56;
-        cabinW = car.width * 0.82;
-        cabinX = -car.length * 0.05;
-      } else if (car.type === 'pickup') {
-        cabinL = car.length * 0.38;
-        cabinW = car.width * 0.82;
-        cabinX = car.length * 0.1;
-      }
-
-      // Glass base
-      ctx.fillStyle = '#0f172a';
-      ctx.fillRect(cabinX - cabinL / 2, -cabinW / 2, cabinL, cabinW);
-
-      // Roof paint
-      const roofL = cabinL * 0.66;
-      const roofW = cabinW * 0.80;
-      ctx.fillStyle = car.roofColor || car.color;
-      ctx.fillRect(cabinX - roofL / 2, -roofW / 2, roofL, roofW);
-
-      // Windshield glossy sky blue glaze & gloss streak
-      const fWsX1 = cabinX + roofL / 2;
-      const fWsX2 = cabinX + cabinL / 2;
-      ctx.fillStyle = 'rgba(56, 189, 248, 0.15)';
-      ctx.fillRect(fWsX1, -cabinW / 2 + 1, fWsX2 - fWsX1, cabinW - 2);
-
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.25)';
-      ctx.lineWidth = 1.2;
-      ctx.beginPath();
-      ctx.moveTo(fWsX1 + 1, -cabinW / 2 + 2);
-      ctx.lineTo(fWsX2 - 1, cabinW / 2 - 2);
-      ctx.stroke();
-
-      // Rear Glass reflection
-      const rWsX1 = cabinX - cabinL / 2;
-      const rWsX2 = cabinX - roofL / 2;
-      ctx.fillStyle = 'rgba(56, 189, 248, 0.12)';
-      ctx.fillRect(rWsX1, -cabinW / 2 + 1, rWsX2 - rWsX1, cabinW - 2);
-      ctx.beginPath();
-      ctx.moveTo(rWsX1 + 1, -cabinW / 4);
-      ctx.lineTo(rWsX2 - 1, cabinW / 4);
-      ctx.stroke();
-
-      // Side Windows reflections
-      ctx.fillStyle = 'rgba(56, 189, 248, 0.08)';
-      ctx.fillRect(cabinX - roofL / 2, -cabinW / 2 + 0.5, roofL, (cabinW - roofW) / 2 - 0.5);
-      ctx.fillRect(cabinX - roofL / 2, roofW / 2, roofL, (cabinW - roofW) / 2 - 0.5);
-
-      if (dmg.windshieldCracked) {
-        const wsMinX = fWsX1 + 1;
-        const wsMaxX = fWsX2 - 1;
-        const wsCenterX = wsMinX + (wsMaxX - wsMinX) * 0.5;
-        const wsCenterY = 0;
-        const wsHalfW = (wsMaxX - wsMinX) * 0.45;
-        const wsHalfH = (cabinW - 4) * 0.45;
-
-        // Clip to windshield bounds
-        ctx.save();
-        ctx.beginPath();
-        ctx.rect(wsMinX, -cabinW / 2 + 2, wsMaxX - wsMinX, cabinW - 4);
-        ctx.clip();
-
-        // Dark shattered core indentation at center of windshield
-        ctx.fillStyle = 'rgba(15, 23, 42, 0.85)';
-        ctx.beginPath();
-        ctx.arc(wsCenterX, wsCenterY, 1.8, 0, Math.PI * 2);
-        ctx.fill();
-
-        // Radiating spiderweb cracks & concentric fracture rings
-        ctx.strokeStyle = 'rgba(224, 242, 254, 0.95)';
-        ctx.lineWidth = 0.5;
-        ctx.beginPath();
-
-        const arms = 6;
-        for (let i = 0; i < arms; i++) {
-          const angle = (i / arms) * Math.PI * 2 + (i * 0.3);
-          const len = Math.min(wsHalfW, wsHalfH) * (0.5 + (i % 2) * 0.25);
-          const endX = wsCenterX + Math.cos(angle) * len;
-          const endY = wsCenterY + Math.sin(angle) * len;
-          ctx.moveTo(wsCenterX, wsCenterY);
-          ctx.lineTo(endX, endY);
-
-          // Sub-fracture branching
-          const branchAngle = angle + 0.6;
-          ctx.moveTo(endX * 0.7, endY * 0.7);
-          ctx.lineTo(endX + Math.cos(branchAngle) * 2, endY + Math.sin(branchAngle) * 2);
-        }
-
-        // Concentric spiderweb rings
-        for (let r = 1.2; r < Math.min(wsHalfW, wsHalfH); r += 1.8) {
-          ctx.moveTo(wsCenterX + r, wsCenterY);
-          ctx.arc(wsCenterX, wsCenterY, r, 0, Math.PI * 2);
-        }
-        ctx.stroke();
-
-        // Crystalline sparkle glints
-        ctx.fillStyle = '#ffffff';
-        ctx.beginPath();
-        ctx.arc(wsCenterX + 0.8, wsCenterY - 0.8, 0.6, 0, Math.PI * 2);
-        ctx.arc(wsCenterX - 1.2, wsCenterY + 1.0, 0.5, 0, Math.PI * 2);
-        ctx.fill();
-
-        ctx.restore();
-      }
-
-      // Interactive Windshield Wipers
-      if (car.wiperAngle !== undefined) {
-        ctx.strokeStyle = '#0f172a';
-        ctx.lineWidth = 0.8;
-        ctx.save();
-        ctx.translate(fWsX1, 0);
-        ctx.rotate(car.wiperAngle);
-        ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(cabinL * 0.12, 0); ctx.stroke();
-        ctx.restore();
-      }
-
-      // 6. Distinct Car Type Additions & Iconic Model Details
-      if (car.type === 'sports') {
-        // Lada Raven / Sport: Carbon fiber spoiler & hood intake
-        ctx.fillStyle = '#0a0f1d';
-        ctx.fillRect(-halfL + rc + 1, -halfW * 0.45, 1.8, 1);
-        ctx.fillRect(-halfL + rc + 1, halfW * 0.35, 1.8, 1);
-        ctx.fillRect(-halfL + rc - 1.5, -halfW * 0.82, 3.2, halfW * 1.64);
-        ctx.fillStyle = car.color;
-        ctx.fillRect(-halfL + rc - 1.8, -halfW * 0.82 - 0.5, 3.8, 1);
-        ctx.fillRect(-halfL + rc - 1.8, halfW * 0.82 - 0.5, 3.8, 1);
-
-        ctx.fillStyle = '#0f172a';
-        ctx.fillRect(halfL * 0.38, -halfW * 0.32, 5, 2.2);
-        ctx.fillRect(halfL * 0.38, halfW * 0.18, 5, 2.2);
-
-      } else if (car.type === 'pickup') {
-        // GAZelle Cargo: Wood/Steel Flatbed with Drop Sides
-        const bedX1 = -halfL + rc + 3;
-        const bedX2 = cabinX - cabinL / 2;
-        const bedW = halfW * 2 - 3.2;
-        ctx.fillStyle = '#1e293b';
-        ctx.fillRect(bedX1, -bedW / 2, bedX2 - bedX1, bedW);
-        ctx.strokeStyle = '#475569';
-        ctx.lineWidth = 0.8;
-        ctx.beginPath();
-        for (let ry = -bedW / 2 + 2.5; ry < bedW / 2; ry += 2.5) {
-          ctx.moveTo(bedX1 + 1, ry); ctx.lineTo(bedX2 - 1, ry);
-        }
-        ctx.stroke();
-
-        // Cargo load: Wooden box crate
-        ctx.fillStyle = '#92400e';
-        ctx.fillRect(bedX1 + 2.5, -bedW / 2 + 2, 8, 7);
-
-      } else if (car.type === 'suv') {
-        // VAZ-2121 Niva 4x4: Hood air scoop & rear spare wheel
-        ctx.fillStyle = '#0f172a';
-        ctx.fillRect(halfL * 0.2, -4, 4, 8); // Hood scoop
-        ctx.fillStyle = '#334155';
-        ctx.beginPath(); ctx.arc(-halfL, 0, 4.2, 0, Math.PI * 2); ctx.fill();
-        ctx.fillStyle = car.color;
-        ctx.beginPath(); ctx.arc(-halfL, 0, 2.4, 0, Math.PI * 2); ctx.fill();
-
-      } else if (car.type === 'taxi') {
-        // GAZ-24 Volga Taxi: Amber roof taxi light & checkers stripe
-        ctx.fillStyle = '#0f172a';
-        ctx.fillRect(cabinX - 1.5, -5.5, 3, 11);
-        ctx.fillStyle = '#f59e0b';
-        ctx.fillRect(cabinX - 1, -4.5, 2, 9);
-
-        if (nightAlpha > 0.05) {
-          ctx.save();
-          ctx.globalCompositeOperation = 'screen';
-          const signGlow = ctx.createRadialGradient(cabinX, 0, 1, cabinX, 0, 11);
-          signGlow.addColorStop(0, 'rgba(245, 158, 11, 0.45)');
-          signGlow.addColorStop(1, 'rgba(245, 158, 11, 0)');
-          ctx.fillStyle = signGlow;
-          ctx.beginPath(); ctx.arc(cabinX, 0, 11, 0, Math.PI * 2); ctx.fill();
-          ctx.restore();
-        }
-
-        ctx.strokeStyle = '#000000';
-        ctx.lineWidth = 0.5;
-        ctx.save();
-        ctx.setLineDash([2, 2]);
-        ctx.beginPath();
-        ctx.moveTo(-halfL + rc, -halfW + 1.2); ctx.lineTo(halfL - fc, -halfW + 1.2);
-        ctx.moveTo(-halfL + rc, halfW - 1.2); ctx.lineTo(halfL - fc, halfW - 1.2);
-        ctx.stroke();
-        ctx.restore();
-
-      } else if (car.type === 'fire_engine') {
-        // --- Heavy Double-Cab Fire Truck (Пожарный Автомобиль) ---
-        // 1. Heavy Chrome Front Bumper & Towing Hooks
-        const bumpX = halfL - fc;
-        ctx.fillStyle = '#cbd5e1';
-        ctx.fillRect(bumpX - 1, -halfW - 0.5, 3.5, halfW * 2 + 1);
-        ctx.fillStyle = '#0f172a';
-        ctx.fillRect(bumpX - 0.5, -halfW * 0.6, 2, 3);
-        ctx.fillRect(bumpX - 0.5, halfW * 0.6 - 3, 2, 3);
-
-        // 2. Heavy Double Crew Cabin (Front Section)
-        const cabBackX = cabinX - cabinL / 2;
-        ctx.fillStyle = '#b91c1c'; // Deep Red cab body
-        ctx.fillRect(cabBackX, -halfW + 0.5, cabinL, halfW * 2 - 1);
-
-        // Rear windows for crew in double cab
-        ctx.fillStyle = '#0f172a';
-        ctx.fillRect(cabinX - cabinL * 0.25, -halfW + 1, 4, 1.8);
-        ctx.fillRect(cabinX - cabinL * 0.25, halfW - 2.8, 4, 1.8);
-
-        // Large Side Mirrors on brackets
-        ctx.fillStyle = '#334155';
-        ctx.fillRect(cabinX + cabinL * 0.3, -halfW - 3, 2, 3.5);
-        ctx.fillRect(cabinX + cabinL * 0.3, halfW - 0.5, 2, 3.5);
-
-        // 3. Equipment Superstructure (Box Body with Rolling Shutter Doors)
-        const bodyX1 = -halfL + rc + 2;
-        const bodyX2 = cabBackX - 1;
-        const bodyW = halfW * 2 - 1.5;
-        
-        // Main Red Superstructure Box
-        ctx.fillStyle = '#dc2626';
-        ctx.fillRect(bodyX1, -bodyW / 2, bodyX2 - bodyX1, bodyW);
-        ctx.strokeStyle = '#991b1b';
-        ctx.lineWidth = 1;
-        ctx.strokeRect(bodyX1, -bodyW / 2, bodyX2 - bodyX1, bodyW);
-
-        // Metallic Rolling Shutter Compartment Doors (Silver Shutters) on both sides
-        const shutterCount = 3;
-        const shutterSpan = (bodyX2 - bodyX1 - 4) / shutterCount;
-        ctx.fillStyle = '#e2e8f0'; // Metallic silver shutter
-        ctx.strokeStyle = '#64748b';
-        ctx.lineWidth = 0.6;
-        for (let s = 0; s < shutterCount; s++) {
-          const sx = bodyX1 + 2 + s * shutterSpan;
-          const sw = shutterSpan - 2;
-          // Left side shutter door
-          ctx.fillRect(sx, -bodyW / 2 + 0.5, sw, 3.5);
-          ctx.strokeRect(sx, -bodyW / 2 + 0.5, sw, 3.5);
-          // Right side shutter door
-          ctx.fillRect(sx, bodyW / 2 - 4, sw, 3.5);
-          ctx.strokeRect(sx, bodyW / 2 - 4, sw, 3.5);
-
-          // Shutter horizontal lines
-          ctx.beginPath();
-          ctx.moveTo(sx + 1, -bodyW / 2 + 2); ctx.lineTo(sx + sw - 1, -bodyW / 2 + 2);
-          ctx.moveTo(sx + 1, bodyW / 2 - 2);  ctx.lineTo(sx + sw - 1, bodyW / 2 - 2);
-          ctx.stroke();
-        }
-
-        // Pump Control Panel & Pressure Gauges (Center Right side)
-        ctx.fillStyle = '#0f172a';
-        ctx.fillRect(bodyX1 + (bodyX2 - bodyX1) * 0.45, -2, 7, 4);
-        ctx.fillStyle = '#38bdf8'; // Blue gauge dials
-        ctx.fillRect(bodyX1 + (bodyX2 - bodyX1) * 0.45 + 1.5, -1.2, 1.8, 1.2);
-        ctx.fillRect(bodyX1 + (bodyX2 - bodyX1) * 0.45 + 3.8, -1.2, 1.8, 1.2);
-
-        // 4. White Contrast Safety Side Stripes
-        ctx.fillStyle = '#ffffff';
-        ctx.fillRect(bodyX1, -bodyW / 2 + 4.5, bodyX2 - bodyX1, 1.8);
-        ctx.fillRect(bodyX1, bodyW / 2 - 6.3, bodyX2 - bodyX1, 1.8);
-        ctx.fillRect(cabBackX, -halfW + 2, cabinL, 1.5);
-        ctx.fillRect(cabBackX, halfW - 3.5, cabinL, 1.5);
-
-        // 5. Rear Safety Chevron Stripes (Alternating Red and White)
-        ctx.save();
-        ctx.beginPath();
-        ctx.rect(bodyX1 - 0.5, -bodyW / 2, 3, bodyW);
-        ctx.clip();
-        ctx.fillStyle = '#ffffff';
-        ctx.fillRect(bodyX1 - 1, -bodyW / 2, 4, bodyW);
-        ctx.fillStyle = '#dc2626';
-        for (let cy = -bodyW / 2 - 5; cy < bodyW / 2 + 5; cy += 6) {
-          ctx.beginPath();
-          ctx.moveTo(bodyX1 - 2, cy);
-          ctx.lineTo(bodyX1 + 4, cy + 5);
-          ctx.lineTo(bodyX1 + 4, cy + 8);
-          ctx.lineTo(bodyX1 - 2, cy + 3);
-          ctx.fill();
-        }
-        ctx.restore();
-
-        // 6. Roof Equipment: Heavy Extension Ladder & Water Monitor Deck Gun
-        const ladderX1 = bodyX1 + 2;
-        const ladderW = 6.5;
-        const ladderL = car.length * 0.52;
-        ctx.fillStyle = '#cbd5e1';
-        ctx.fillRect(ladderX1, -ladderW / 2, ladderL, 1.2);
-        ctx.fillRect(ladderX1, ladderW / 2 - 1.2, ladderL, 1.2);
-        ctx.strokeStyle = '#475569';
-        ctx.lineWidth = 0.8;
-        ctx.beginPath();
-        for (let lx = ladderX1 + 3; lx < ladderX1 + ladderL - 2; lx += 4) {
-          ctx.moveTo(lx, -ladderW / 2); ctx.lineTo(lx, ladderW / 2);
-        }
-        ctx.stroke();
-
-        // Water Cannon / Deck Gun (Turret nozzle on roof)
-        const cannonX = cabinX - 2;
-        ctx.fillStyle = '#334155';
-        ctx.beginPath(); ctx.arc(cannonX, 0, 3.5, 0, Math.PI * 2); ctx.fill();
-        ctx.fillStyle = '#94a3b8'; // Chrome nozzle barrel
-        ctx.fillRect(cannonX, -1, 7, 2);
-        ctx.fillStyle = '#ef4444';
-        ctx.beginPath(); ctx.arc(cannonX - 1, 0, 1.5, 0, Math.PI * 2); ctx.fill();
-
-        // Suction Hoses along side edges
-        ctx.fillStyle = '#1e293b';
-        ctx.fillRect(bodyX1 + 4, -halfW - 0.8, bodyX2 - bodyX1 - 8, 1.4);
-        ctx.fillRect(bodyX1 + 4, halfW - 0.6, bodyX2 - bodyX1 - 8, 1.4);
-
-      } else if (car.type === 'bus') {
-        // PAZ-3205 Bus: Passenger side window panes
-        ctx.fillStyle = '#93c5fd';
-        for (let wx = -cabinL * 0.4; wx < cabinL * 0.4; wx += 12) {
-          ctx.fillRect(wx, -cabinW * 0.44, 8, cabinW * 0.88);
-        }
-
-      } else if (car.type === 'van') {
-        // --- UAZ-452 Bukhanka (УАЗ-452 Буханка) ---
-        // Rounded front nose details & roof strengthening ribs
-        ctx.strokeStyle = 'rgba(15, 23, 42, 0.35)';
-        ctx.lineWidth = 0.8;
-        ctx.beginPath();
-        ctx.moveTo(-halfL + rc + 4, -4); ctx.lineTo(halfL - fc - 4, -4);
-        ctx.moveTo(-halfL + rc + 4, 0);  ctx.lineTo(halfL - fc - 4, 0);
-        ctx.moveTo(-halfL + rc + 4, 4);  ctx.lineTo(halfL - fc - 4, 4);
-        ctx.stroke();
-
-        // Front rounded radiator snout slots below windshield
-        ctx.fillStyle = '#1e293b';
-        ctx.fillRect(halfL - fc - 3, -4, 1.8, 8);
-
-      } else if (car.type === 'muscle') {
-        // --- GAZ-24 Volga Classic (ГАЗ-24 Волга) ---
-        // 1. Chrome Front Bumper & Vertical Radiator Grille ("Китовый ус")
-        ctx.fillStyle = '#cbd5e1'; // Chrome front bumper
-        ctx.fillRect(halfL - fc - 1.8, -halfW + 2, 2.2, halfW * 2 - 4);
-        ctx.fillRect(-halfL + rc - 0.4, -halfW + 2, 2.2, halfW * 2 - 4); // Rear bumper
-
-        // Vertical Chrome Grille ("Китовый ус")
-        ctx.fillStyle = '#1e293b';
-        ctx.fillRect(halfL - fc - 1.5, -halfW * 0.45, 1.5, halfW * 0.9);
-        ctx.strokeStyle = '#e2e8f0';
-        ctx.lineWidth = 0.6;
-        ctx.beginPath();
-        for (let gy = -halfW * 0.4; gy < halfW * 0.4; gy += 2) {
-          ctx.moveTo(halfL - fc - 1.5, gy); ctx.lineTo(halfL - fc, gy);
-        }
-        ctx.stroke();
-
-        // Hood subtle crease lines
-        ctx.strokeStyle = 'rgba(15, 23, 42, 0.25)';
-        ctx.lineWidth = 0.8;
-        ctx.beginPath();
-        ctx.moveTo(halfL - fc - 2, -halfW * 0.3); ctx.lineTo(cabinX + cabinL / 2, -halfW * 0.25);
-        ctx.moveTo(halfL - fc - 2, halfW * 0.3);  ctx.lineTo(cabinX + cabinL / 2, halfW * 0.25);
-        ctx.stroke();
-
-      } else if (car.type === 'ambulance') {
-        // --- RAF-2203 / UAZ Ambulance (РАФ / УАЗ Скорая Помощь) ---
-        // White vehicle body with broad Red Side Stripe & Red Cross roof icon
-        ctx.fillStyle = '#dc2626'; // Red longitudinal side stripe
-        ctx.fillRect(-halfL + rc + 2, -halfW + 0.5, car.length - fc - rc - 4, 2);
-        ctx.fillRect(-halfL + rc + 2, halfW - 2.5, car.length - fc - rc - 4, 2);
-
-        // Red Cross in white circle on roof
-        ctx.fillStyle = '#ffffff';
-        ctx.beginPath(); ctx.arc(cabinX, 0, 4.2, 0, Math.PI * 2); ctx.fill();
-        ctx.fillStyle = '#dc2626';
-        ctx.fillRect(cabinX - 2.8, -0.9, 5.6, 1.8);
-        ctx.fillRect(cabinX - 0.9, -2.8, 1.8, 5.6);
-
-      } else if (car.type === 'truck_box') {
-        // --- Heavy Commercial Cargo Box Truck (Грузовой Фургон) ---
-        // 1. Cab Front Facia Grille & 3 Amber Roof Lights
-        ctx.fillStyle = '#0f172a';
-        ctx.fillRect(halfL - fc - 2, -halfW + 3, 2, halfW * 2 - 6);
-
-        ctx.fillStyle = '#f59e0b';
-        ctx.fillRect(cabinX + cabinL * 0.35, -4, 1.5, 2);
-        ctx.fillRect(cabinX + cabinL * 0.35, -1, 1.5, 2);
-        ctx.fillRect(cabinX + cabinL * 0.35, 2, 1.5, 2);
-
-        // 2. Large Corrugated Cargo Box Body (Spanning ~75% of truck length)
-        const boxX1 = -halfL + rc + 3;
-        const boxX2 = cabinX - cabinL / 2 - 1;
-        const boxW = halfW * 2 - 1.2;
-        ctx.fillStyle = '#f8fafc';
-        ctx.fillRect(boxX1, -boxW / 2, boxX2 - boxX1, boxW);
-        ctx.strokeStyle = '#94a3b8';
-        ctx.lineWidth = 1.2;
-        ctx.strokeRect(boxX1, -boxW / 2, boxX2 - boxX1, boxW);
-
-        // Corrugated vertical panel seams
-        ctx.strokeStyle = '#cbd5e1';
-        ctx.lineWidth = 0.8;
-        ctx.beginPath();
-        for (let bx = boxX1 + 6; bx < boxX2 - 4; bx += 6) {
-          ctx.moveTo(bx, -boxW / 2 + 1); ctx.lineTo(bx, boxW / 2 - 1);
-        }
-        ctx.stroke();
-
-        // Double Rear Doors & Chrome Lock Rods
-        ctx.fillStyle = '#64748b';
-        ctx.fillRect(boxX1, -boxW / 2 + 2, 2, boxW - 4);
-        ctx.fillStyle = '#cbd5e1';
-        ctx.fillRect(boxX1 - 0.5, -boxW / 4, 1.2, 1);
-        ctx.fillRect(boxX1 - 0.5, boxW / 4, 1.2, 1);
-
-        // Chassis Side Fuel Tank & Battery Box underneath
-        ctx.fillStyle = '#334155';
-        ctx.fillRect(boxX1 + 8, -halfW - 1.2, 14, 2);
-        ctx.fillRect(boxX1 + 8, halfW - 0.8, 14, 2);
-
-      } else if (car.type === 'truck_dump') {
-        // --- Heavy Tipper Dump Truck (Самосвал) ---
-        // 1. Protective Steel Canopy Overhang over Cab Roof (Козырек над кабиной)
-        const dumpX1 = -halfL + rc + 3;
-        const dumpX2 = cabinX - cabinL / 2 - 1;
-        const dumpW = halfW * 2 - 1;
-
-        // Rock shield canopy extending OVER cab roof
-        ctx.fillStyle = '#d97706'; // Heavy industrial steel tipper
-        ctx.fillRect(dumpX1, -dumpW / 2, dumpX2 - dumpX1 + cabinL * 0.6, dumpW);
-        ctx.strokeStyle = '#78350f';
-        ctx.lineWidth = 1.2;
-        ctx.strokeRect(dumpX1, -dumpW / 2, dumpX2 - dumpX1 + cabinL * 0.6, dumpW);
-
-        // Tipper exterior stiffening ribs
-        ctx.strokeStyle = '#b45309';
-        ctx.lineWidth = 1.2;
-        ctx.beginPath();
-        for (let rx = dumpX1 + 6; rx < dumpX2 + cabinL * 0.4; rx += 7) {
-          ctx.moveTo(rx, -dumpW / 2); ctx.lineTo(rx, dumpW / 2);
-        }
-        ctx.stroke();
-
-        // Stone/Gravel Cargo inside tipper bucket
-        ctx.fillStyle = '#64748b';
-        ctx.fillRect(dumpX1 + 3, -dumpW / 2 + 2.5, dumpX2 - dumpX1 - 3, dumpW - 5);
-        ctx.fillStyle = '#94a3b8';
-        for (let gi = 0; gi < 16; gi++) {
-          const gx = dumpX1 + 5 + (gi % 5) * 6;
-          const gy = -dumpW / 2 + 4 + Math.floor(gi / 5) * 5;
-          ctx.beginPath(); ctx.arc(gx, gy, 1.8, 0, Math.PI * 2); ctx.fill();
-        }
-
-        // Heavy Front Grille
-        ctx.fillStyle = '#0f172a';
-        ctx.fillRect(halfL - fc - 2, -halfW + 3, 2, halfW * 2 - 6);
-
-      } else if (car.type === 'truck_tanker') {
-        // --- Heavy Fuel Tanker Truck (Автоцистерна) ---
-        // 1. Engine Hood & Front Winch / Bumper
-        const hoodX1 = cabinX + cabinL / 2;
-        const hoodX2 = halfL - fc;
-        ctx.fillStyle = car.color;
-        ctx.fillRect(hoodX1, -halfW + 3, hoodX2 - hoodX1, halfW * 2 - 6);
-
-        ctx.fillStyle = '#1e293b';
-        ctx.fillRect(hoodX2 - 2, -halfW + 1, 2.5, halfW * 2 - 2);
-
-        // 2. Polished Cylindrical Fuel Tank (Spanning ~70% of length)
-        const tankX1 = -halfL + rc + 3;
-        const tankX2 = cabinX - cabinL / 2 - 1;
-        const tankW = halfW * 2 - 2;
-
-        const tankGrad = ctx.createLinearGradient(0, -tankW / 2, 0, tankW / 2);
-        tankGrad.addColorStop(0, '#94a3b8');
-        tankGrad.addColorStop(0.2, '#f8fafc');
-        tankGrad.addColorStop(0.5, '#cbd5e1');
-        tankGrad.addColorStop(0.8, '#64748b');
-        tankGrad.addColorStop(1, '#334155');
-        ctx.fillStyle = tankGrad;
-        ctx.beginPath();
-        ctx.roundRect(tankX1, -tankW / 2, tankX2 - tankX1, tankW, 6);
-        ctx.fill();
-        ctx.strokeStyle = '#475569';
-        ctx.lineWidth = 1;
-        ctx.stroke();
-
-        // Top Catwalk & Manhole Hatches
-        ctx.fillStyle = '#334155';
-        ctx.fillRect(tankX1 + 4, -3, tankX2 - tankX1 - 8, 6);
-        const hatch1X = tankX1 + (tankX2 - tankX1) * 0.3;
-        const hatch2X = tankX1 + (tankX2 - tankX1) * 0.7;
-        ctx.fillStyle = '#0f172a';
-        ctx.beginPath(); ctx.arc(hatch1X, 0, 3, 0, Math.PI * 2); ctx.fill();
-        ctx.beginPath(); ctx.arc(hatch2X, 0, 3, 0, Math.PI * 2); ctx.fill();
-
-        // Red ADR Hazard Diamond ("ОГНЕОПАСНО")
-        ctx.fillStyle = '#dc2626';
-        ctx.save();
-        ctx.translate(tankX1 - 1, 0);
-        ctx.rotate(Math.PI / 4);
-        ctx.fillRect(-2, -2, 4, 4);
-        ctx.restore();
-
-      } else if (car.type === 'truck_flatbed') {
-        // --- Heavy Flatbed Truck with Crane Manipulator (Бортовой с КМУ) ---
-        // 1. Engine Hood & Radiator Grille
-        const hoodX1 = cabinX + cabinL / 2;
-        const hoodX2 = halfL - fc;
-        ctx.fillStyle = car.color || '#0284c7';
-        ctx.fillRect(hoodX1, -halfW + 2, hoodX2 - hoodX1, halfW * 2 - 4);
-
-        ctx.fillStyle = '#f8fafc';
-        ctx.fillRect(hoodX2 - 3.5, -halfW + 3, 3.5, halfW * 2 - 6);
-
-        // 2. Hydraulic Crane Manipulator (КМУ) behind Cab
-        const craneX = cabinX - cabinL / 2 - 3;
-        ctx.fillStyle = '#0284c7'; // Crane boom base
-        ctx.fillRect(craneX - 3, -halfW + 2, 5, halfW * 2 - 4);
-        ctx.fillStyle = '#0f172a';
-        ctx.fillRect(craneX - 2, -3, 3, 6); // Turret center
-        ctx.fillStyle = '#f59e0b'; // Yellow crane boom arm
-        ctx.fillRect(craneX - 1, -1.5, 7, 3);
-
-        // 3. Long Timber Deck Bed with Cargo Load (Crates, Steel Pipes & Straps)
-        const flatX1 = -halfL + rc + 3;
-        const flatX2 = craneX - 4;
-        const flatW = halfW * 2 - 2;
-        ctx.fillStyle = '#78350f'; // Wood plank deck
-        ctx.fillRect(flatX1, -flatW / 2, flatX2 - flatX1, flatW);
-        ctx.strokeStyle = '#451a03';
-        ctx.lineWidth = 1.4;
-        ctx.strokeRect(flatX1, -flatW / 2, flatX2 - flatX1, flatW);
-
-        // Wooden Cargo Crates & Steel Pipes
-        ctx.fillStyle = '#d97706';
-        ctx.fillRect(flatX1 + 4, -flatW / 2 + 3, 16, 10);
-        ctx.fillStyle = '#475569';
-        ctx.fillRect(flatX1 + 24, -flatW / 2 + 3, flatX2 - flatX1 - 28, 4);
-        ctx.fillRect(flatX1 + 24, -flatW / 2 + 8, flatX2 - flatX1 - 28, 4);
-
-        // Bright Orange Ratchet Straps
-        ctx.strokeStyle = '#ea580c';
-        ctx.lineWidth = 1.4;
-        ctx.beginPath();
-        ctx.moveTo(flatX1 + 12, -flatW / 2); ctx.lineTo(flatX1 + 12, flatW / 2);
-        ctx.moveTo(flatX1 + 32, -flatW / 2); ctx.lineTo(flatX1 + 32, flatW / 2);
-        ctx.stroke();
-
-      } else if (car.type === 'cement_mixer') {
-        // --- Heavy Concrete Mixer Truck (Автобетономешалка) ---
-        // 1. Front Grille & 3 Amber Roof Lights
-        ctx.fillStyle = '#0f172a';
-        ctx.fillRect(halfL - fc - 2, -halfW + 3, 2, halfW * 2 - 6);
-        ctx.fillStyle = '#f59e0b';
-        ctx.fillRect(cabinX + cabinL * 0.35, -4, 1.5, 2);
-        ctx.fillRect(cabinX + cabinL * 0.35, -1, 1.5, 2);
-        ctx.fillRect(cabinX + cabinL * 0.35, 2, 1.5, 2);
-
-        // Water tank behind cab
-        ctx.fillStyle = '#38bdf8';
-        ctx.fillRect(cabinX - cabinL / 2 - 3, -halfW + 2, 3, halfW * 2 - 4);
-
-        // 2. Large Rotating Drum Barrel with Spiral Helical Flight Stripes
-        const drumX1 = -halfL + rc + 8;
-        const drumX2 = cabinX - cabinL / 2 - 4;
-        const drumW = halfW * 2 - 2;
-
-        ctx.fillStyle = '#f8fafc';
-        ctx.beginPath();
-        ctx.moveTo(drumX2, -drumW * 0.28);
-        ctx.lineTo(drumX1 + (drumX2 - drumX1) * 0.5, -drumW * 0.5);
-        ctx.lineTo(drumX1, -drumW * 0.32);
-        ctx.lineTo(drumX1, drumW * 0.32);
-        ctx.lineTo(drumX1 + (drumX2 - drumX1) * 0.5, drumW * 0.5);
-        ctx.lineTo(drumX2, drumW * 0.28);
-        ctx.closePath();
-        ctx.fill();
-        ctx.strokeStyle = '#64748b';
-        ctx.lineWidth = 1.2;
-        ctx.stroke();
-
-        // Spiral orange flight stripes
-        ctx.strokeStyle = '#ea580c';
-        ctx.lineWidth = 2.4;
-        ctx.beginPath();
-        const drumMid = (drumX1 + drumX2) / 2;
-        ctx.moveTo(drumX2 - 2, -drumW * 0.22);
-        ctx.quadraticCurveTo(drumMid + 4, 0, drumX1 + 8, drumW * 0.26);
-        ctx.moveTo(drumX2 - 8, -drumW * 0.28);
-        ctx.quadraticCurveTo(drumMid - 2, 0, drumX1 + 3, drumW * 0.24);
-        ctx.stroke();
-
-        // Rear Swivel Discharge Chute (Лоток)
-        ctx.fillStyle = '#475569';
-        ctx.fillRect(drumX1 - 5, -2, 6, 4);
-
-      } else if (car.type === 'garbage_truck') {
-        // --- Heavy Municipal Waste Compactor Truck (Мусоровоз) ---
-        // 1. Amber Municipal Beacons on Roof
-        ctx.fillStyle = '#f59e0b';
-        ctx.beginPath();
-        ctx.arc(cabinX, -cabinW * 0.35, 2.2, 0, Math.PI * 2);
-        ctx.arc(cabinX, cabinW * 0.35, 2.2, 0, Math.PI * 2);
-        ctx.fill();
-
-        // 2. High-Volume Compactor Body (Green/Orange)
-        const compX1 = -halfL + rc + 7;
-        const compX2 = cabinX - cabinL / 2 - 1.5;
-        const compW = halfW * 2 - 1.5;
-
-        ctx.fillStyle = '#16a34a'; // Eco green compactor body
-        ctx.fillRect(compX1, -compW / 2, compX2 - compX1, compW);
-        ctx.strokeStyle = '#14532d';
-        ctx.lineWidth = 1.2;
-        ctx.strokeRect(compX1, -compW / 2, compX2 - compX1, compW);
-
-        // Vertical panel stiffening ribs
-        ctx.strokeStyle = '#15803d';
-        ctx.lineWidth = 1.2;
-        ctx.beginPath();
-        for (let rx = compX1 + 6; rx < compX2 - 4; rx += 7) {
-          ctx.moveTo(rx, -compW / 2); ctx.lineTo(rx, compW / 2);
-        }
-        ctx.stroke();
-
-        // Rear Dumpster Loading Hopper & Mechanical Lift Arms
-        ctx.fillStyle = '#0f172a';
-        ctx.fillRect(compX1 - 4, -compW / 2 - 0.5, 4, compW + 1);
-        ctx.fillStyle = '#f59e0b'; // Hydraulic dumpster grab arm
-        ctx.fillRect(compX1 - 5, -compW / 2 + 2, 2, 3);
-        ctx.fillRect(compX1 - 5, compW / 2 - 5, 2, 3);
-
-        // Eco Recycling emblem
-        ctx.fillStyle = '#ffffff';
-        ctx.beginPath();
-        const compMidX = (compX1 + compX2) / 2;
-        ctx.arc(compMidX, 0, 4, 0, Math.PI * 2); ctx.fill();
-        ctx.fillStyle = '#16a34a';
-        ctx.beginPath();
-        ctx.arc(compMidX, 0, 2.5, 0, Math.PI * 2); ctx.fill();
-      }
+      // (Cabin, roof attachments and heavy utility compartments relocated to renderVehicleCabins)
 
       // 7. Headlights (Symmetrical & inset to guarantee they are 100% inside body)
       const isPlayer = car.isPlayerControlled;
@@ -3299,38 +3240,755 @@ export class GameRenderer {
         }
       }
 
-      // 10. Flashing roof sirens for emergency vehicles (police, fire_engine, ambulance)
-      if (car.type === 'police' || car.type === 'fire_engine' || car.type === 'ambulance') {
-        const strobe = Math.floor(Date.now() / 90) % 4;
-        ctx.fillStyle = '#0f172a';
-        ctx.fillRect(cabinX - 1.5, -cabinW * 0.45, 3, cabinW * 0.9);
-        
-        const primaryColor = car.type === 'fire_engine' ? '#ef4444' : (car.type === 'ambulance' ? '#3b82f6' : '#3b82f6');
-        const secondaryColor = car.type === 'fire_engine' ? '#3b82f6' : '#ef4444';
+      // (Roof sirens relocated to renderVehicleCabins)
 
-        ctx.fillStyle = (strobe === 0 || strobe === 1) ? primaryColor : '#1e3a8a';
-        ctx.fillRect(cabinX - 1, -cabinW * 0.4, 2, cabinW * 0.35);
-        ctx.fillStyle = (strobe === 2 || strobe === 3) ? secondaryColor : '#7f1d1d';
-        ctx.fillRect(cabinX - 1, cabinW * 0.05, 2, cabinW * 0.35);
-        ctx.fillStyle = '#ffffff';
-        ctx.fillRect(cabinX - 1.2, -1, 2.4, 2);
+      ctx.restore();
+    }
+  }
 
+  // --- VEHICLE CABINS, ROOFS & ROOF ATTACHMENTS (Drawn on top of lightmap) ---
+  private renderVehicleCabins(vehicles: Vehicle[], nightAlpha: number) {
+    const ctx = this.ctx;
+
+    for (const car of vehicles) {
+      ctx.save();
+      ctx.translate(car.x, car.y);
+      ctx.rotate(car.angle);
+
+      const halfL = car.length / 2;
+      const halfW = car.width / 2;
+
+      const dmg = car.damage || {
+        health: 100, frontCrumple: 0, rearCrumple: 0, leftDent: 0, rightDent: 0,
+        frontLeftDent: 0, frontRightDent: 0, rearLeftDent: 0, rearRightDent: 0,
+        hoodBuckled: false, windshieldCracked: false, rearGlassCracked: false,
+        leftHeadlightBroken: false, rightHeadlightBroken: false,
+        leftTaillightBroken: false, rightTaillightBroken: false,
+        engineSmoking: false, engineFire: false, scratches: []
+      };
+
+      const fc = Math.min(halfL * 0.55, dmg.frontCrumple || 0);
+      const rc = Math.min(halfL * 0.45, dmg.rearCrumple || 0);
+      const ld = Math.min(halfW * 0.75, dmg.leftDent || 0);
+      const rd = Math.min(halfW * 0.75, dmg.rightDent || 0);
+      const fld = Math.min(halfL * 0.4, dmg.frontLeftDent || 0);
+      const frd = Math.min(halfL * 0.4, dmg.frontRightDent || 0);
+      const rld = Math.min(halfL * 0.35, dmg.rearLeftDent || 0);
+      const rrd = Math.min(halfL * 0.35, dmg.rearRightDent || 0);
+
+      const basePoly = [
+        { x: halfL - fc, y: 0 },
+        { x: halfL - fc - 0.5, y: halfW * 0.5 },
+        { x: halfL - frd - 2.5, y: halfW - frd * 0.35 - 1.5 },
+        { x: halfL * 0.5, y: halfW - rd * 0.35 },
+        { x: 0, y: halfW - rd },
+        { x: -halfL * 0.5, y: halfW - rd * 0.35 },
+        { x: -halfL + rrd + 2.5, y: halfW - rrd * 0.35 - 1.5 },
+        { x: -halfL + rc + 0.5, y: halfW * 0.5 },
+        { x: -halfL + rc, y: 0 },
+        { x: -halfL + rc + 0.5, y: -halfW * 0.5 },
+        { x: -halfL + rld + 2.5, y: -halfW + rld * 0.35 + 1.5 },
+        { x: -halfL * 0.5, y: -halfW + ld * 0.35 },
+        { x: 0, y: -halfW + ld },
+        { x: halfL * 0.5, y: -halfW + ld * 0.35 },
+        { x: halfL - fld - 2.5, y: -halfW + fld * 0.35 + 1.5 },
+        { x: halfL - fc - 0.5, y: -halfW * 0.5 }
+      ];
+
+      let bodyPoly = basePoly;
+      if (dmg.deformedVertices && dmg.deformedVertices.length === 16) {
+        bodyPoly = basePoly.map((bv, idx) => {
+          const dv = dmg.deformedVertices![idx];
+          return {
+            x: bv.x + (dv.offsetX || 0),
+            y: bv.y + (dv.offsetY || 0)
+          };
+        });
+      }
+
+      const deform = (px: number, py: number): [number, number] => {
+        let totalWeight = 0;
+        let dx = 0;
+        let dy = 0;
+        for (let i = 0; i < 16; i++) {
+          const bp = basePoly[i];
+          const bvp = bodyPoly[i];
+          const vx = bp.x;
+          const vy = bp.y;
+          const distSq = (px - vx) * (px - vx) + (py - vy) * (py - vy);
+          const weight = 1 / (distSq + 16);
+          totalWeight += weight;
+          dx += (bvp.x - bp.x) * weight;
+          dy += (bvp.y - bp.y) * weight;
+        }
+        if (totalWeight > 0) {
+          return [px + dx / totalWeight, py + dy / totalWeight];
+        }
+        return [px, py];
+      };
+
+      const drawDeformedRect = (rx: number, ry: number, rw: number, rh: number, fillStyle: string | CanvasGradient) => {
+        const p1 = deform(rx, ry);
+        const p2 = deform(rx + rw, ry);
+        const p3 = deform(rx + rw, ry + rh);
+        const p4 = deform(rx, ry + rh);
+        ctx.fillStyle = fillStyle;
+        ctx.beginPath();
+        ctx.moveTo(p1[0], p1[1]);
+        ctx.lineTo(p2[0], p2[1]);
+        ctx.lineTo(p3[0], p3[1]);
+        ctx.lineTo(p4[0], p4[1]);
+        ctx.closePath();
+        ctx.fill();
+      };
+
+      const drawDeformedLine = (x1: number, y1: number, x2: number, y2: number, strokeStyle: string, lineWidth: number, isDashed = false) => {
+        const p1 = deform(x1, y1);
+        const p2 = deform(x2, y2);
+        ctx.strokeStyle = strokeStyle;
+        ctx.lineWidth = lineWidth;
+        ctx.save();
+        if (isDashed) ctx.setLineDash([2, 2]);
+        ctx.beginPath();
+        ctx.moveTo(p1[0], p1[1]);
+        ctx.lineTo(p2[0], p2[1]);
+        ctx.stroke();
+        ctx.restore();
+      };
+
+      const drawDeformedCircle = (cx: number, cy: number, r: number, color: string) => {
+        ctx.fillStyle = color;
+        ctx.beginPath();
+        const steps = 12;
+        for (let i = 0; i <= steps; i++) {
+          const angle = (i / steps) * Math.PI * 2;
+          const px = cx + Math.cos(angle) * r;
+          const py = cy + Math.sin(angle) * r;
+          const [dpx, dpy] = deform(px, py);
+          if (i === 0) ctx.moveTo(dpx, dpy);
+          else ctx.lineTo(dpx, dpy);
+        }
+        ctx.fill();
+      };
+
+      // Cabin dimensions setup
+      let cabinL = car.length * 0.52;
+      let cabinW = Math.max(8, car.width * 0.8 - (ld + rd) * 0.3);
+      let cabinX = -car.length * 0.05;
+
+      const isCabOverTruck = car.type === 'truck_box' || car.type === 'truck_dump' || 
+                             car.type === 'cement_mixer' || car.type === 'garbage_truck';
+
+      if (isCabOverTruck) {
+        cabinL = car.length * 0.18;
+        cabinW = car.width * 0.88;
+        cabinX = halfL - cabinL / 2 - 2;
+      } else if (car.type === 'fire_engine') {
+        cabinL = car.length * 0.28;
+        cabinW = car.width * 0.90;
+        cabinX = halfL - cabinL / 2 - 2;
+      } else if (car.type === 'truck_flatbed') {
+        cabinL = car.length * 0.18;
+        cabinW = car.width * 0.86;
+        cabinX = halfL - cabinL * 1.35;
+      } else if (car.type === 'truck_tanker') {
+        cabinL = car.length * 0.18;
+        cabinW = car.width * 0.86;
+        cabinX = halfL - cabinL * 1.35;
+      } else if (car.type === 'van') {
+        cabinL = car.length * 0.58;
+        cabinW = car.width * 0.84;
+        cabinX = -car.length * 0.02;
+      } else if (car.type === 'muscle') {
+        cabinL = car.length * 0.48;
+        cabinW = car.width * 0.78;
+        cabinX = -car.length * 0.04;
+      } else if (car.type === 'sports') {
+        cabinL = car.length * 0.45;
+        cabinW = car.width * 0.74;
+        cabinX = -car.length * 0.08;
+      } else if (car.type === 'hatchback') {
+        cabinL = car.length * 0.56;
+        cabinW = car.width * 0.78;
+        cabinX = -car.length * 0.12;
+      } else if (car.type === 'suv') {
+        cabinL = car.length * 0.56;
+        cabinW = car.width * 0.82;
+        cabinX = -car.length * 0.05;
+      } else if (car.type === 'pickup') {
+        cabinL = car.length * 0.38;
+        cabinW = car.width * 0.82;
+        cabinX = car.length * 0.1;
+      }
+
+      // Draw glass base and roofs
+      if (car.type !== 'bus' && car.type !== 'ambulance') {
+        drawDeformedRect(cabinX - cabinL / 2, -cabinW / 2, cabinL, cabinW, '#0f172a');
+
+        const roofL = cabinL * 0.66;
+        const roofW = cabinW * 0.80;
+        drawDeformedRect(cabinX - roofL / 2, -roofW / 2, roofL, roofW, car.roofColor || car.color);
+
+        const fWsX1 = cabinX + roofL / 2;
+        const fWsX2 = cabinX + cabinL / 2;
+        drawDeformedRect(fWsX1, -cabinW / 2 + 1, fWsX2 - fWsX1, cabinW - 2, 'rgba(56, 189, 248, 0.15)');
+        drawDeformedLine(fWsX1 + 1, -cabinW / 2 + 2, fWsX2 - 1, cabinW / 2 - 2, 'rgba(255, 255, 255, 0.25)', 1.2);
+
+        const rWsX1 = cabinX - cabinL / 2;
+        const rWsX2 = cabinX - roofL / 2;
+        drawDeformedRect(rWsX1, -cabinW / 2 + 1, rWsX2 - rWsX1, cabinW - 2, 'rgba(56, 189, 248, 0.12)');
+        drawDeformedLine(rWsX1 + 1, -cabinW / 4, rWsX2 - 1, cabinW / 4, 'rgba(255, 255, 255, 0.15)', 1.2);
+
+        drawDeformedRect(cabinX - roofL / 2, -cabinW / 2 + 0.5, roofL, (cabinW - roofW) / 2 - 0.5, 'rgba(56, 189, 248, 0.08)');
+        drawDeformedRect(cabinX - roofL / 2, roofW / 2, roofL, (cabinW - roofW) / 2 - 0.5, 'rgba(56, 189, 248, 0.08)');
+
+        if (dmg.windshieldCracked) {
+          const wsMinX = fWsX1 + 1;
+          const wsMaxX = fWsX2 - 1;
+          const wsCenterX = wsMinX + (wsMaxX - wsMinX) * 0.5;
+          const wsCenterY = 0;
+          const wsHalfW = (wsMaxX - wsMinX) * 0.45;
+          const wsHalfH = (cabinW - 4) * 0.45;
+
+          ctx.save();
+          const clipP1 = deform(wsMinX, -cabinW / 2 + 2);
+          const clipP2 = deform(wsMaxX, -cabinW / 2 + 2);
+          const clipP3 = deform(wsMaxX, cabinW / 2 - 2);
+          const clipP4 = deform(wsMinX, cabinW / 2 - 2);
+          ctx.beginPath();
+          ctx.moveTo(clipP1[0], clipP1[1]);
+          ctx.lineTo(clipP2[0], clipP2[1]);
+          ctx.lineTo(clipP3[0], clipP3[1]);
+          ctx.lineTo(clipP4[0], clipP4[1]);
+          ctx.closePath();
+          ctx.clip();
+
+          const [dcx, dcy] = deform(wsCenterX, wsCenterY);
+          ctx.fillStyle = 'rgba(15, 23, 42, 0.85)';
+          ctx.beginPath();
+          ctx.arc(dcx, dcy, 1.8, 0, Math.PI * 2);
+          ctx.fill();
+
+          ctx.strokeStyle = 'rgba(224, 242, 254, 0.95)';
+          ctx.lineWidth = 0.5;
+          ctx.beginPath();
+
+          const arms = 6;
+          for (let i = 0; i < arms; i++) {
+            const angle = (i / arms) * Math.PI * 2 + (i * 0.3);
+            const len = Math.min(wsHalfW, wsHalfH) * (0.5 + (i % 2) * 0.25);
+            const endX = wsCenterX + Math.cos(angle) * len;
+            const endY = wsCenterY + Math.sin(angle) * len;
+            const pStart = deform(wsCenterX, wsCenterY);
+            const pEnd = deform(endX, endY);
+            ctx.moveTo(pStart[0], pStart[1]);
+            ctx.lineTo(pEnd[0], pEnd[1]);
+          }
+          ctx.stroke();
+          ctx.restore();
+        }
+
+        if (car.wiperAngle !== undefined) {
+          const wx2 = fWsX1 + cabinL * 0.12 * Math.cos(car.wiperAngle);
+          const wy2 = cabinL * 0.12 * Math.sin(car.wiperAngle);
+          drawDeformedLine(fWsX1, 0, wx2, wy2, '#0f172a', 0.8);
+        }
+      }
+
+      // Distinct types accessories
+      if (car.type === 'sports') {
+        drawDeformedRect(-halfL + rc + 1, -halfW * 0.45, 1.8, 1, '#0a0f1d');
+        drawDeformedRect(-halfL + rc + 1, halfW * 0.35, 1.8, 1, '#0a0f1d');
+        drawDeformedRect(-halfL + rc - 1.5, -halfW * 0.82, 3.2, halfW * 1.64, '#0a0f1d');
+        drawDeformedRect(-halfL + rc - 1.8, -halfW * 0.82 - 0.5, 3.8, 1, car.color);
+        drawDeformedRect(-halfL + rc - 1.8, halfW * 0.82 - 0.5, 3.8, 1, car.color);
+        drawDeformedRect(halfL * 0.38, -halfW * 0.32, 5, 2.2, '#0f172a');
+        drawDeformedRect(halfL * 0.38, halfW * 0.18, 5, 2.2, '#0f172a');
+
+      } else if (car.type === 'pickup') {
+        const bedX1 = -halfL + rc + 3;
+        const bedX2 = cabinX - cabinL / 2;
+        const bedW = halfW * 2 - 3.2;
+        drawDeformedRect(bedX1, -bedW / 2, bedX2 - bedX1, bedW, '#1e293b');
+        for (let ry = -bedW / 2 + 2.5; ry < bedW / 2; ry += 2.5) {
+          drawDeformedLine(bedX1 + 1, ry, bedX2 - 1, ry, '#475569', 0.8);
+        }
+        drawDeformedRect(bedX1 + 2.5, -bedW / 2 + 2, 8, 7, '#92400e');
+
+      } else if (car.type === 'suv') {
+        drawDeformedRect(halfL * 0.2, -4, 4, 8, '#0f172a');
+        drawDeformedCircle(-halfL, 0, 4.2, '#334155');
+        drawDeformedCircle(-halfL, 0, 2.4, car.color);
+
+      } else if (car.type === 'taxi') {
+        drawDeformedRect(cabinX - 1.5, -5.5, 3, 11, '#0f172a');
+        drawDeformedRect(cabinX - 1, -4.5, 2, 9, '#f59e0b');
         if (nightAlpha > 0.05) {
           ctx.save();
           ctx.globalCompositeOperation = 'screen';
-          const leftGlow = ctx.createRadialGradient(cabinX, -cabinW * 0.3, 1, cabinX, -cabinW * 0.3, 22);
+          const [dcabinX, dcabinY] = deform(cabinX, 0);
+          const signGlow = ctx.createRadialGradient(dcabinX, dcabinY, 1, dcabinX, dcabinY, 11);
+          signGlow.addColorStop(0, 'rgba(245, 158, 11, 0.45)');
+          signGlow.addColorStop(1, 'rgba(245, 158, 11, 0)');
+          ctx.fillStyle = signGlow;
+          ctx.beginPath(); ctx.arc(dcabinX, dcabinY, 11, 0, Math.PI * 2); ctx.fill();
+          ctx.restore();
+        }
+        drawDeformedLine(-halfL + rc, -halfW + 1.2, halfL - fc, -halfW + 1.2, '#000000', 0.5, true);
+        drawDeformedLine(-halfL + rc, halfW - 1.2, halfL - fc, halfW - 1.2, '#000000', 0.5, true);
+
+      } else if (car.type === 'fire_engine') {
+        const bumpX = halfL - fc;
+        drawDeformedRect(bumpX - 1, -halfW - 0.5, 3.5, halfW * 2 + 1, '#cbd5e1');
+        drawDeformedRect(bumpX - 0.5, -halfW * 0.6, 2, 3, '#0f172a');
+        drawDeformedRect(bumpX - 0.5, halfW * 0.6 - 3, 2, 3, '#0f172a');
+
+        const cabBackX = cabinX - cabinL / 2;
+        drawDeformedRect(cabBackX, -halfW + 0.5, cabinL, halfW * 2 - 1, '#b91c1c');
+        drawDeformedRect(cabinX - cabinL * 0.25, -halfW + 1, 4, 1.8, '#0f172a');
+        drawDeformedRect(cabinX - cabinL * 0.25, halfW - 2.8, 4, 1.8, '#0f172a');
+        drawDeformedRect(cabinX + cabinL * 0.3, -halfW - 3, 2, 3.5, '#334155');
+        drawDeformedRect(cabinX + cabinL * 0.3, halfW - 0.5, 2, 3.5, '#334155');
+
+        const bodyX1 = -halfL + rc + 2;
+        const bodyX2 = cabBackX - 1;
+        const bodyW = halfW * 2 - 1.5;
+        drawDeformedRect(bodyX1, -bodyW / 2, bodyX2 - bodyX1, bodyW, '#dc2626');
+        drawDeformedLine(bodyX1, -bodyW / 2, bodyX2, -bodyW / 2, '#991b1b', 1);
+        drawDeformedLine(bodyX2, -bodyW / 2, bodyX2, bodyW / 2, '#991b1b', 1);
+        drawDeformedLine(bodyX2, bodyW / 2, bodyX1, bodyW / 2, '#991b1b', 1);
+        drawDeformedLine(bodyX1, bodyW / 2, bodyX1, -bodyW / 2, '#991b1b', 1);
+
+        const shutterCount = 3;
+        const shutterSpan = (bodyX2 - bodyX1 - 4) / shutterCount;
+        for (let s = 0; s < shutterCount; s++) {
+          const sx = bodyX1 + 2 + s * shutterSpan;
+          const sw = shutterSpan - 2;
+          drawDeformedRect(sx, -bodyW / 2 + 0.5, sw, 3.5, '#e2e8f0');
+          drawDeformedRect(sx, bodyW / 2 - 4, sw, 3.5, '#e2e8f0');
+          drawDeformedLine(sx + 1, -bodyW / 2 + 2, sx + sw - 1, -bodyW / 2 + 2, '#64748b', 0.6);
+          drawDeformedLine(sx + 1, bodyW / 2 - 2, sx + sw - 1, bodyW / 2 - 2, '#64748b', 0.6);
+        }
+
+        drawDeformedRect(bodyX1 + (bodyX2 - bodyX1) * 0.45, -2, 7, 4, '#0f172a');
+        drawDeformedRect(bodyX1 + (bodyX2 - bodyX1) * 0.45 + 1.5, -1.2, 1.8, 1.2, '#38bdf8');
+        drawDeformedRect(bodyX1 + (bodyX2 - bodyX1) * 0.45 + 3.8, -1.2, 1.8, 1.2, '#38bdf8');
+
+        drawDeformedRect(bodyX1, -bodyW / 2 + 4.5, bodyX2 - bodyX1, 1.8, '#ffffff');
+        drawDeformedRect(bodyX1, bodyW / 2 - 6.3, bodyX2 - bodyX1, 1.8, '#ffffff');
+        drawDeformedRect(cabBackX, -halfW + 2, cabinL, 1.5, '#ffffff');
+        drawDeformedRect(cabBackX, halfW - 3.5, cabinL, 1.5, '#ffffff');
+
+        for (let cy = -bodyW / 2 + 1; cy <= bodyW / 2 - 4; cy += 6) {
+          const p1 = deform(bodyX1 - 1, cy);
+          const p2 = deform(bodyX1 + 2, cy + 5);
+          const p3 = deform(bodyX1 + 2, cy + 8);
+          const p4 = deform(bodyX1 - 1, cy + 3);
+          ctx.fillStyle = '#dc2626';
+          ctx.beginPath();
+          ctx.moveTo(p1[0], p1[1]); ctx.lineTo(p2[0], p2[1]); ctx.lineTo(p3[0], p3[1]); ctx.lineTo(p4[0], p4[1]);
+          ctx.closePath(); ctx.fill();
+        }
+
+        const ladderX1 = bodyX1 + 2;
+        const ladderW = 6.5;
+        const ladderL = car.length * 0.52;
+        drawDeformedRect(ladderX1, -ladderW / 2, ladderL, 1.2, '#cbd5e1');
+        drawDeformedRect(ladderX1, ladderW / 2 - 1.2, ladderL, 1.2, '#cbd5e1');
+        for (let lx = ladderX1 + 3; lx < ladderX1 + ladderL - 2; lx += 4) {
+          drawDeformedLine(lx, -ladderW / 2, lx, ladderW / 2, '#475569', 0.8);
+        }
+
+        const cannonX = cabinX - 2;
+        drawDeformedCircle(cannonX, 0, 3.5, '#334155');
+        drawDeformedRect(cannonX, -1, 7, 2, '#94a3b8');
+        drawDeformedCircle(cannonX - 1, 0, 1.5, '#ef4444');
+
+        drawDeformedRect(bodyX1 + 4, -halfW - 0.8, bodyX2 - bodyX1 - 8, 1.4, '#1e293b');
+        drawDeformedRect(bodyX1 + 4, halfW - 0.6, bodyX2 - bodyX1 - 8, 1.4, '#1e293b');
+
+      } else if (car.type === 'bus') {
+        const glassX1 = -halfL + 8;
+        const glassX2 = halfL - 10;
+        const glassW = halfW * 2 - 1.2;
+        drawDeformedRect(glassX1, -glassW / 2, glassX2 - glassX1, glassW, '#0f172a');
+
+        const busRoofW = halfW * 2 - 4.5;
+        drawDeformedRect(glassX1 + 1, -busRoofW / 2, glassX2 - glassX1 - 2, busRoofW, car.roofColor || car.color);
+
+        const winCount = 6;
+        const winSpan = (glassX2 - glassX1 - 8) / winCount;
+        for (let i = 0; i < winCount; i++) {
+          const wx = glassX1 + 4 + i * winSpan;
+          const ww = winSpan - 2;
+          drawDeformedRect(wx, -halfW + 0.5, ww, 2.2, 'rgba(56, 189, 248, 0.16)');
+          drawDeformedRect(wx, halfW - 2.7, ww, 2.2, 'rgba(56, 189, 248, 0.16)');
+        }
+
+        const fWindshieldX = halfL - 10;
+        const fWindshieldW = halfW * 2 - 2.5;
+        drawDeformedRect(fWindshieldX, -fWindshieldW / 2, 6, fWindshieldW, '#0f172a');
+        drawDeformedRect(fWindshieldX + 1.5, -fWindshieldW / 2 + 0.8, 3.8, fWindshieldW - 1.6, 'rgba(56, 189, 248, 0.22)');
+        drawDeformedLine(fWindshieldX + 2, -fWindshieldW / 3, fWindshieldX + 4.5, fWindshieldW / 3, 'rgba(255, 255, 255, 0.28)', 1);
+
+        drawDeformedRect(fWindshieldX - 2.5, -8, 2, 16, '#1e293b');
+        drawDeformedRect(fWindshieldX - 2, -6.5, 1.2, 13, '#f59e0b');
+
+        const rWindshieldX = -halfL + 3.5;
+        const rWindshieldW = halfW * 2 - 6;
+        drawDeformedRect(rWindshieldX, -rWindshieldW / 2, 3, rWindshieldW, '#0f172a');
+        drawDeformedRect(rWindshieldX + 0.5, -rWindshieldW / 2 + 0.5, 2, rWindshieldW - 1, 'rgba(56, 189, 248, 0.16)');
+
+        const doorW = 8.5;
+        const doorPositions = [glassX1 + (glassX2 - glassX1) * 0.18, glassX1 + (glassX2 - glassX1) * 0.72];
+        doorPositions.forEach(dx => {
+          drawDeformedRect(dx - doorW / 2, halfW - 2.2, doorW, 2.5, '#1e293b');
+          drawDeformedRect(dx - 0.4, halfW - 2.2, 0.8, 2.5, '#cbd5e1');
+          drawDeformedRect(dx - doorW / 2 + 1, halfW - 1.6, doorW / 2 - 1.8, 1.4, 'rgba(56, 189, 248, 0.22)');
+          drawDeformedRect(dx + 0.8, halfW - 1.6, doorW / 2 - 1.8, 1.4, 'rgba(56, 189, 248, 0.22)');
+        });
+
+        drawDeformedRect(halfL - 5, -halfW - 3.2, 1.8, 3.6, '#1e293b');
+        drawDeformedRect(halfL - 5, halfW - 0.4, 1.8, 3.6, '#1e293b');
+
+        const acX = 0;
+        const acL = 20;
+        const acW = 12;
+        drawDeformedRect(acX - acL / 2, -acW / 2, acL, acW, '#f8fafc');
+        drawDeformedLine(acX - acL / 2, -acW / 2, acX + acL / 2, -acW / 2, '#cbd5e1', 0.8);
+        drawDeformedLine(acX + acL / 2, -acW / 2, acX + acL / 2, acW / 2, '#cbd5e1', 0.8);
+        drawDeformedLine(acX + acL / 2, acW / 2, acX - acL / 2, acW / 2, '#cbd5e1', 0.8);
+        drawDeformedLine(acX - acL / 2, acW / 2, acX - acL / 2, -acW / 2, '#cbd5e1', 0.8);
+        drawDeformedCircle(acX - 4.5, 0, 2.6, '#475569');
+        drawDeformedCircle(acX + 4.5, 0, 2.6, '#475569');
+
+        drawDeformedRect(-halfL * 0.42 - 4.5, -4.5, 9, 9, '#f1f5f9');
+        drawDeformedRect(halfL * 0.42 - 4.5, -4.5, 9, 9, '#f1f5f9');
+        drawDeformedLine(-halfL * 0.42 - 4.5, -4.5, -halfL * 0.42 + 4.5, -4.5, '#cbd5e1', 0.6);
+        drawDeformedLine(-halfL * 0.42 + 4.5, -4.5, -halfL * 0.42 + 4.5, 4.5, '#cbd5e1', 0.6);
+        drawDeformedLine(-halfL * 0.42 + 4.5, 4.5, -halfL * 0.42 - 4.5, 4.5, '#cbd5e1', 0.6);
+        drawDeformedLine(-halfL * 0.42 - 4.5, 4.5, -halfL * 0.42 - 4.5, -4.5, '#cbd5e1', 0.6);
+        drawDeformedLine(halfL * 0.42 - 4.5, -4.5, halfL * 0.42 + 4.5, -4.5, '#cbd5e1', 0.6);
+        drawDeformedLine(halfL * 0.42 + 4.5, -4.5, halfL * 0.42 + 4.5, 4.5, '#cbd5e1', 0.6);
+        drawDeformedLine(halfL * 0.42 + 4.5, 4.5, halfL * 0.42 - 4.5, 4.5, '#cbd5e1', 0.6);
+        drawDeformedLine(halfL * 0.42 - 4.5, 4.5, halfL * 0.42 - 4.5, -4.5, '#cbd5e1', 0.6);
+
+      } else if (car.type === 'van') {
+        drawDeformedLine(-halfL + rc + 4, -4, halfL - fc - 4, -4, 'rgba(15, 23, 42, 0.35)', 0.8);
+        drawDeformedLine(-halfL + rc + 4, 0, halfL - fc - 4, 0, 'rgba(15, 23, 42, 0.35)', 0.8);
+        drawDeformedLine(-halfL + rc + 4, 4, halfL - fc - 4, 4, 'rgba(15, 23, 42, 0.35)', 0.8);
+        drawDeformedRect(halfL - fc - 3, -4, 1.8, 8, '#1e293b');
+
+      } else if (car.type === 'muscle') {
+        drawDeformedRect(halfL - fc - 1.8, -halfW + 2, 2.2, halfW * 2 - 4, '#cbd5e1');
+        drawDeformedRect(-halfL + rc - 0.4, -halfW + 2, 2.2, halfW * 2 - 4, '#cbd5e1');
+        drawDeformedRect(halfL - fc - 1.5, -halfW * 0.45, 1.5, halfW * 0.9, '#1e293b');
+        for (let gy = -halfW * 0.4; gy < halfW * 0.4; gy += 2) {
+          drawDeformedLine(halfL - fc - 1.5, gy, halfL - fc, gy, '#e2e8f0', 0.6);
+        }
+        drawDeformedLine(halfL - fc - 2, -halfW * 0.3, cabinX + cabinL / 2, -halfW * 0.25, 'rgba(15, 23, 42, 0.25)', 0.8);
+        drawDeformedLine(halfL - fc - 2, halfW * 0.3, cabinX + cabinL / 2, halfW * 0.25, 'rgba(15, 23, 42, 0.25)', 0.8);
+
+      } else if (car.type === 'ambulance') {
+        const cabL_amb = car.length * 0.28;
+        const cabX_amb = halfL - cabL_amb * 0.8;
+        const cabW_amb = halfW * 2 - 2;
+        drawDeformedRect(cabX_amb - cabL_amb / 2, -cabW_amb / 2, cabL_amb, cabW_amb, '#0f172a');
+        drawDeformedRect(cabX_amb - cabL_amb * 0.1, -cabW_amb * 0.38, cabL_amb * 0.55, cabW_amb * 0.76, '#ffffff');
+        drawDeformedRect(cabX_amb + cabL_amb * 0.22, -cabW_amb / 2 + 1, 3.2, cabW_amb - 2, 'rgba(56, 189, 248, 0.18)');
+        drawDeformedRect(cabX_amb - cabL_amb * 0.1, -cabW_amb / 2 + 0.5, cabL_amb * 0.28, 1.2, 'rgba(56, 189, 248, 0.18)');
+        drawDeformedRect(cabX_amb - cabL_amb * 0.1, cabW_amb / 2 - 1.7, cabL_amb * 0.28, 1.2, 'rgba(56, 189, 248, 0.18)');
+
+        const boxX1_amb = -halfL + rc + 3;
+        const boxX2_amb = cabX_amb - cabL_amb / 2 - 1;
+        const boxW_amb = halfW * 2 - 0.8;
+        drawDeformedRect(boxX1_amb, -boxW_amb / 2, boxX2_amb - boxX1_amb, boxW_amb, '#ffffff');
+        drawDeformedLine(boxX1_amb, -boxW_amb / 2, boxX2_amb, -boxW_amb / 2, '#cbd5e1', 1);
+        drawDeformedLine(boxX2_amb, -boxW_amb / 2, boxX2_amb, boxW_amb / 2, '#cbd5e1', 1);
+        drawDeformedLine(boxX2_amb, boxW_amb / 2, boxX1_amb, boxW_amb / 2, '#cbd5e1', 1);
+        drawDeformedLine(boxX1_amb, boxW_amb / 2, boxX1_amb, -boxW_amb / 2, '#cbd5e1', 1);
+
+        drawDeformedRect(boxX1_amb, -boxW_amb / 2 + 1, boxX2_amb - boxX1_amb, 2.5, '#ef4444');
+        drawDeformedRect(boxX1_amb, boxW_amb / 2 - 3.5, boxX2_amb - boxX1_amb, 2.5, '#ef4444');
+
+        const sideCircleX = boxX1_amb + (boxX2_amb - boxX1_amb) * 0.45;
+        drawDeformedCircle(sideCircleX, -boxW_amb / 2 + 3.8, 2.8, '#ffffff');
+        drawDeformedCircle(sideCircleX, boxW_amb / 2 - 3.8, 2.8, '#ffffff');
+        drawDeformedRect(sideCircleX - 1.5, -boxW_amb / 2 + 3.2, 3.0, 1.2, '#ef4444');
+        drawDeformedRect(sideCircleX - 0.5, -boxW_amb / 2 + 2.4, 1.0, 2.8, '#ef4444');
+        drawDeformedRect(sideCircleX - 1.5, boxW_amb / 2 - 4.4, 3.0, 1.2, '#ef4444');
+        drawDeformedRect(sideCircleX - 0.5, boxW_amb / 2 - 5.2, 1.0, 2.8, '#ef4444');
+
+        drawDeformedRect(boxX1_amb, -boxW_amb * 0.38, 1.8, boxW_amb * 0.76, '#cbd5e1');
+        drawDeformedRect(boxX1_amb + 0.4, -boxW_amb * 0.28, 1, boxW_amb * 0.20, '#1e293b');
+        drawDeformedRect(boxX1_amb + 0.4, boxW_amb * 0.08, 1, boxW_amb * 0.20, '#1e293b');
+
+        drawDeformedRect(boxX1_amb - 0.8, -boxW_amb / 2 + 1, 0.8, boxW_amb - 2, '#f59e0b');
+        drawDeformedRect(boxX1_amb - 0.8, -boxW_amb / 2 + 2, 0.8, 1.5, '#ef4444');
+        drawDeformedRect(boxX1_amb - 0.8, -boxW_amb / 4, 0.8, 1.5, '#ef4444');
+        drawDeformedRect(boxX1_amb - 0.8, boxW_amb / 4, 0.8, 1.5, '#ef4444');
+
+        const roofCircleX = boxX1_amb + (boxX2_amb - boxX1_amb) * 0.55;
+        drawDeformedCircle(roofCircleX, 0, 5.8, '#ffffff');
+        drawDeformedRect(roofCircleX - 4.2, -1.2, 8.4, 2.4, '#ef4444');
+        drawDeformedRect(roofCircleX - 1.2, -4.2, 2.4, 8.4, '#ef4444');
+
+        const ventX = boxX1_amb + (boxX2_amb - boxX1_amb) * 0.18;
+        drawDeformedCircle(ventX, 0, 3.2, '#e2e8f0');
+        drawDeformedRect(boxX2_amb - 4, -boxW_amb * 0.44, 2.5, boxW_amb * 0.88, '#cbd5e1');
+        drawDeformedRect(boxX2_amb - 4, -boxW_amb * 0.44 + 0.5, 2.5, 3.5, '#3b82f6');
+        drawDeformedRect(boxX2_amb - 4, boxW_amb * 0.44 - 4, 2.5, 3.5, '#ef4444');
+
+      } else if (car.type === 'truck_box') {
+        drawDeformedRect(halfL - fc - 2, -halfW + 3, 2, halfW * 2 - 6, '#0f172a');
+        drawDeformedRect(cabinX + cabinL * 0.35, -4, 1.5, 2, '#f59e0b');
+        drawDeformedRect(cabinX + cabinL * 0.35, -1, 1.5, 2, '#f59e0b');
+        drawDeformedRect(cabinX + cabinL * 0.35, 2, 1.5, 2, '#f59e0b');
+
+        const boxX1 = -halfL + rc + 3;
+        const boxX2 = cabinX - cabinL / 2 - 1;
+        const boxW = halfW * 2 - 1.2;
+        drawDeformedRect(boxX1, -boxW / 2, boxX2 - boxX1, boxW, '#f8fafc');
+        drawDeformedLine(boxX1, -boxW / 2, boxX2, -boxW / 2, '#94a3b8', 1.2);
+        drawDeformedLine(boxX2, -boxW / 2, boxX2, boxW / 2, '#94a3b8', 1.2);
+        drawDeformedLine(boxX2, boxW / 2, boxX1, boxW / 2, '#94a3b8', 1.2);
+        drawDeformedLine(boxX1, boxW / 2, boxX1, -boxW / 2, '#94a3b8', 1.2);
+
+        for (let bx = boxX1 + 6; bx < boxX2 - 4; bx += 6) {
+          drawDeformedLine(bx, -boxW / 2 + 1, bx, boxW / 2 - 1, '#cbd5e1', 0.8);
+        }
+
+        drawDeformedRect(boxX1, -boxW / 2 + 2, 2, boxW - 4, '#64748b');
+        drawDeformedRect(boxX1 - 0.5, -boxW / 4, 1.2, 1, '#cbd5e1');
+        drawDeformedRect(boxX1 - 0.5, boxW / 4, 1.2, 1, '#cbd5e1');
+        drawDeformedRect(boxX1 + 8, -halfW - 1.2, 14, 2, '#334155');
+        drawDeformedRect(boxX1 + 8, halfW - 0.8, 14, 2, '#334155');
+
+      } else if (car.type === 'truck_dump') {
+        const dumpX1 = -halfL + rc + 3;
+        const dumpX2 = cabinX - cabinL / 2 - 1;
+        const dumpW = halfW * 2 - 1;
+        drawDeformedRect(dumpX1, -dumpW / 2, dumpX2 - dumpX1 + cabinL * 0.6, dumpW, '#d97706');
+        drawDeformedLine(dumpX1, -dumpW / 2, dumpX2 + cabinL * 0.6, -dumpW / 2, '#78350f', 1.2);
+        drawDeformedLine(dumpX2 + cabinL * 0.6, -dumpW / 2, dumpX2 + cabinL * 0.6, dumpW / 2, '#78350f', 1.2);
+        drawDeformedLine(dumpX2 + cabinL * 0.6, dumpW / 2, dumpX1, dumpW / 2, '#78350f', 1.2);
+        drawDeformedLine(dumpX1, dumpW / 2, dumpX1, -dumpW / 2, '#78350f', 1.2);
+
+        for (let rx = dumpX1 + 6; rx < dumpX2 + cabinL * 0.4; rx += 7) {
+          drawDeformedLine(rx, -dumpW / 2, rx, dumpW / 2, '#b45309', 1.2);
+        }
+
+        drawDeformedRect(dumpX1 + 3, -dumpW / 2 + 2.5, dumpX2 - dumpX1 - 3, dumpW - 5, '#64748b');
+        for (let gi = 0; gi < 16; gi++) {
+          const gx = dumpX1 + 5 + (gi % 5) * 6;
+          const gy = -dumpW / 2 + 4 + Math.floor(gi / 5) * 5;
+          drawDeformedCircle(gx, gy, 1.8, '#94a3b8');
+        }
+        drawDeformedRect(halfL - fc - 2, -halfW + 3, 2, halfW * 2 - 6, '#0f172a');
+
+      } else if (car.type === 'truck_tanker') {
+        const hoodX1 = cabinX + cabinL / 2;
+        const hoodX2 = halfL - fc;
+        drawDeformedRect(hoodX1, -halfW + 3, hoodX2 - hoodX1, halfW * 2 - 6, car.color);
+        drawDeformedRect(hoodX2 - 2, -halfW + 1, 2.5, halfW * 2 - 2, '#1e293b');
+
+        const tankX1 = -halfL + rc + 3;
+        const tankX2 = cabinX - cabinL / 2 - 1;
+        const tankW = halfW * 2 - 2;
+        const tankGrad = ctx.createLinearGradient(0, -tankW / 2, 0, tankW / 2);
+        tankGrad.addColorStop(0, '#94a3b8');
+        tankGrad.addColorStop(0.2, '#f8fafc');
+        tankGrad.addColorStop(0.5, '#cbd5e1');
+        tankGrad.addColorStop(0.8, '#64748b');
+        tankGrad.addColorStop(1, '#334155');
+        drawDeformedRect(tankX1, -tankW / 2, tankX2 - tankX1, tankW, tankGrad);
+        drawDeformedLine(tankX1, -tankW / 2, tankX2, -tankW / 2, '#475569', 1);
+        drawDeformedLine(tankX2, -tankW / 2, tankX2, tankW / 2, '#475569', 1);
+        drawDeformedLine(tankX2, tankW / 2, tankX1, tankW / 2, '#475569', 1);
+        drawDeformedLine(tankX1, tankW / 2, tankX1, -tankW / 2, '#475569', 1);
+
+        drawDeformedRect(tankX1 + 4, -3, tankX2 - tankX1 - 8, 6, '#334155');
+        const hatch1X = tankX1 + (tankX2 - tankX1) * 0.3;
+        const hatch2X = tankX1 + (tankX2 - tankX1) * 0.7;
+        drawDeformedCircle(hatch1X, 0, 3, '#0f172a');
+        drawDeformedCircle(hatch2X, 0, 3, '#0f172a');
+
+        const dX = tankX1 - 1;
+        const dY = 0;
+        const dp1 = deform(dX, dY - 2.5);
+        const dp2 = deform(dX + 2.5, dY);
+        const dp3 = deform(dX, dY + 2.5);
+        const dp4 = deform(dX - 2.5, dY);
+        ctx.fillStyle = '#dc2626';
+        ctx.beginPath();
+        ctx.moveTo(dp1[0], dp1[1]); ctx.lineTo(dp2[0], dp2[1]); ctx.lineTo(dp3[0], dp3[1]); ctx.lineTo(dp4[0], dp4[1]);
+        ctx.closePath(); ctx.fill();
+
+      } else if (car.type === 'truck_flatbed') {
+        const hoodX1 = cabinX + cabinL / 2;
+        const hoodX2 = halfL - fc;
+        drawDeformedRect(hoodX1, -halfW + 2, hoodX2 - hoodX1, halfW * 2 - 4, car.color || '#0284c7');
+        drawDeformedRect(hoodX2 - 3.5, -halfW + 3, 3.5, halfW * 2 - 6, '#f8fafc');
+
+        const craneX = cabinX - cabinL / 2 - 3;
+        drawDeformedRect(craneX - 3, -halfW + 2, 5, halfW * 2 - 4, '#0284c7');
+        drawDeformedRect(craneX - 2, -3, 3, 6, '#0f172a');
+        drawDeformedRect(craneX - 1, -1.5, 7, 3, '#f59e0b');
+
+        const flatX1 = -halfL + rc + 3;
+        const flatX2 = craneX - 4;
+        const flatW = halfW * 2 - 2;
+        drawDeformedRect(flatX1, -flatW / 2, flatX2 - flatX1, flatW, '#78350f');
+        drawDeformedLine(flatX1, -flatW / 2, flatX2, -flatW / 2, '#451a03', 1.4);
+        drawDeformedLine(flatX2, -flatW / 2, flatX2, flatW / 2, '#451a03', 1.4);
+        drawDeformedLine(flatX2, flatW / 2, flatX1, flatW / 2, '#451a03', 1.4);
+        drawDeformedLine(flatX1, flatW / 2, flatX1, -flatW / 2, '#451a03', 1.4);
+
+        drawDeformedRect(flatX1 + 4, -flatW / 2 + 3, 16, 10, '#d97706');
+        drawDeformedRect(flatX1 + 24, -flatW / 2 + 3, flatX2 - flatX1 - 28, 4, '#475569');
+        drawDeformedRect(flatX1 + 24, -flatW / 2 + 8, flatX2 - flatX1 - 28, 4, '#475569');
+
+        drawDeformedLine(flatX1 + 12, -flatW / 2, flatX1 + 12, flatW / 2, '#ea580c', 1.4);
+        drawDeformedLine(flatX1 + 32, -flatW / 2, flatX1 + 32, flatW / 2, '#ea580c', 1.4);
+
+      } else if (car.type === 'cement_mixer') {
+        drawDeformedRect(halfL - fc - 2, -halfW + 3, 2, halfW * 2 - 6, '#0f172a');
+        drawDeformedRect(cabinX + cabinL * 0.35, -4, 1.5, 2, '#f59e0b');
+        drawDeformedRect(cabinX + cabinL * 0.35, -1, 1.5, 2, '#f59e0b');
+        drawDeformedRect(cabinX + cabinL * 0.35, 2, 1.5, 2, '#f59e0b');
+        drawDeformedRect(cabinX - cabinL / 2 - 3, -halfW + 2, 3, halfW * 2 - 4, '#38bdf8');
+
+        const drumX1 = -halfL + rc + 8;
+        const drumX2 = cabinX - cabinL / 2 - 4;
+        const drumW = halfW * 2 - 2;
+
+        const dp1 = deform(drumX2, -drumW * 0.28);
+        const dp2 = deform(drumX1 + (drumX2 - drumX1) * 0.5, -drumW * 0.5);
+        const dp3 = deform(drumX1, -drumW * 0.32);
+        const dp4 = deform(drumX1, drumW * 0.32);
+        const dp5 = deform(drumX1 + (drumX2 - drumX1) * 0.5, drumW * 0.5);
+        const dp6 = deform(drumX2, drumW * 0.28);
+        ctx.fillStyle = '#f8fafc';
+        ctx.beginPath();
+        ctx.moveTo(dp1[0], dp1[1]); ctx.lineTo(dp2[0], dp2[1]); ctx.lineTo(dp3[0], dp3[1]);
+        ctx.lineTo(dp4[0], dp4[1]); ctx.lineTo(dp5[0], dp5[1]); ctx.lineTo(dp6[0], dp6[1]);
+        ctx.closePath(); ctx.fill();
+        drawDeformedLine(drumX1, -drumW * 0.32, drumX1 + (drumX2 - drumX1) * 0.5, -drumW * 0.5, '#64748b', 1.2);
+        drawDeformedLine(drumX1 + (drumX2 - drumX1) * 0.5, -drumW * 0.5, drumX2, -drumW * 0.28, '#64748b', 1.2);
+        drawDeformedLine(drumX2, -drumW * 0.28, drumX2, drumW * 0.28, '#64748b', 1.2);
+        drawDeformedLine(drumX2, drumW * 0.28, drumX1 + (drumX2 - drumX1) * 0.5, drumW * 0.5, '#64748b', 1.2);
+        drawDeformedLine(drumX1 + (drumX2 - drumX1) * 0.5, drumW * 0.5, drumX1, drumW * 0.32, '#64748b', 1.2);
+        drawDeformedLine(drumX1, drumW * 0.32, drumX1, -drumW * 0.32, '#64748b', 1.2);
+
+        ctx.strokeStyle = '#ea580c';
+        ctx.lineWidth = 2.4;
+        ctx.beginPath();
+        const steps = 10;
+        for (let i = 0; i <= steps; i++) {
+          const t = i / steps;
+          const cx = drumX2 - 2 + (drumX1 + 8 - (drumX2 - 2)) * t;
+          const cy = -drumW * 0.22 * (1 - t) + drumW * 0.26 * t + 6 * t * (1 - t);
+          const [dcx, dcy] = deform(cx, cy);
+          if (i === 0) ctx.moveTo(dcx, dcy);
+          else ctx.lineTo(dcx, dcy);
+        }
+        ctx.stroke();
+
+        ctx.beginPath();
+        for (let i = 0; i <= steps; i++) {
+          const t = i / steps;
+          const cx = drumX2 - 8 + (drumX1 + 3 - (drumX2 - 8)) * t;
+          const cy = -drumW * 0.28 * (1 - t) + drumW * 0.24 * t + 8 * t * (1 - t);
+          const [dcx, dcy] = deform(cx, cy);
+          if (i === 0) ctx.moveTo(dcx, dcy);
+          else ctx.lineTo(dcx, dcy);
+        }
+        ctx.stroke();
+
+        drawDeformedRect(drumX1 - 5, -2, 6, 4, '#475569');
+
+      } else if (car.type === 'garbage_truck') {
+        drawDeformedCircle(cabinX, -cabinW * 0.35, 2.2, '#f59e0b');
+        drawDeformedCircle(cabinX, cabinW * 0.35, 2.2, '#f59e0b');
+
+        const compX1 = -halfL + rc + 7;
+        const compX2 = cabinX - cabinL / 2 - 1.5;
+        const compW = halfW * 2 - 1.5;
+        drawDeformedRect(compX1, -compW / 2, compX2 - compX1, compW, '#16a34a');
+        drawDeformedLine(compX1, -compW / 2, compX2, -compW / 2, '#14532d', 1.2);
+        drawDeformedLine(compX2, -compW / 2, compX2, compW / 2, '#14532d', 1.2);
+        drawDeformedLine(compX2, compW / 2, compX1, compW / 2, '#14532d', 1.2);
+        drawDeformedLine(compX1, compW / 2, compX1, -compW / 2, '#14532d', 1.2);
+
+        for (let rx = compX1 + 6; rx < compX2 - 4; rx += 7) {
+          drawDeformedLine(rx, -compW / 2, rx, compW / 2, '#15803d', 1.2);
+        }
+
+        drawDeformedRect(compX1 - 4, -compW / 2 - 0.5, 4, compW + 1, '#0f172a');
+        drawDeformedRect(compX1 - 5, -compW / 2 + 2, 2, 3, '#f59e0b');
+        drawDeformedRect(compX1 - 5, compW / 2 - 5, 2, 3, '#f59e0b');
+
+        const compMidX = compX1 + (compX2 - compX1) * 0.5;
+        drawDeformedCircle(compMidX, 0, 4, '#ffffff');
+        drawDeformedCircle(compMidX, 0, 2.5, '#16a34a');
+      }
+
+      // Emergency roof sirens (strobe) with strict sirenOn check
+      if (car.type === 'police' || car.type === 'fire_engine' || car.type === 'ambulance') {
+        const isSirenActive = car.sirenOn === true;
+        const strobe = isSirenActive ? (Math.floor(Date.now() / 90) % 4) : -1;
+
+        drawDeformedRect(cabinX - 1.5, -cabinW * 0.45, 3, cabinW * 0.9, '#0f172a');
+
+        const primaryColor = car.type === 'fire_engine' ? '#ef4444' : '#3b82f6';
+        const secondaryColor = car.type === 'fire_engine' ? '#3b82f6' : '#ef4444';
+
+        if (strobe === 0 || strobe === 1) {
+          drawDeformedRect(cabinX - 1, -cabinW * 0.4, 2, cabinW * 0.35, primaryColor);
+        } else {
+          drawDeformedRect(cabinX - 1, -cabinW * 0.4, 2, cabinW * 0.35, isSirenActive ? '#1e3a8a' : '#1e293b');
+        }
+
+        if (strobe === 2 || strobe === 3) {
+          drawDeformedRect(cabinX - 1, cabinW * 0.05, 2, cabinW * 0.35, secondaryColor);
+        } else {
+          drawDeformedRect(cabinX - 1, cabinW * 0.05, 2, cabinW * 0.35, isSirenActive ? '#7f1d1d' : '#311010');
+        }
+
+        drawDeformedRect(cabinX - 1.2, -1, 2.4, 2, '#ffffff');
+
+        if (isSirenActive && nightAlpha > 0.05) {
+          ctx.save();
+          ctx.globalCompositeOperation = 'screen';
+
+          const [dcabinX, dcabinY1] = deform(cabinX, -cabinW * 0.3);
+          const [dcabinX2, dcabinY2] = deform(cabinX, cabinW * 0.3);
+
+          const leftGlow = ctx.createRadialGradient(dcabinX, dcabinY1, 1, dcabinX, dcabinY1, 22);
           leftGlow.addColorStop(0, (strobe === 0 || strobe === 1) ? 'rgba(59, 130, 246, 0.45)' : 'rgba(59, 130, 246, 0.15)');
           leftGlow.addColorStop(1, 'rgba(59, 130, 246, 0)');
           ctx.fillStyle = leftGlow;
-          ctx.beginPath(); ctx.arc(cabinX, -cabinW * 0.3, 22, 0, Math.PI * 2); ctx.fill();
+          ctx.beginPath(); ctx.arc(dcabinX, dcabinY1, 22, 0, Math.PI * 2); ctx.fill();
 
-          const rightGlow = ctx.createRadialGradient(cabinX, cabinW * 0.3, 1, cabinX, cabinW * 0.3, 22);
+          const rightGlow = ctx.createRadialGradient(dcabinX2, dcabinY2, 1, dcabinX2, dcabinY2, 22);
           rightGlow.addColorStop(0, (strobe === 2 || strobe === 3) ? 'rgba(239, 68, 68, 0.45)' : 'rgba(239, 68, 68, 0.15)');
           rightGlow.addColorStop(1, 'rgba(239, 68, 68, 0)');
           ctx.fillStyle = rightGlow;
-          ctx.beginPath(); ctx.arc(cabinX, cabinW * 0.3, 22, 0, Math.PI * 2); ctx.fill();
+          ctx.beginPath(); ctx.arc(dcabinX2, dcabinY2, 22, 0, Math.PI * 2); ctx.fill();
           ctx.restore();
         }
+      }
+
+      // Night/Weather Tint for the cabins (since drawn above lightmap)
+      if (nightAlpha > 0.05) {
+        ctx.fillStyle = `rgba(0, 0, 15, ${nightAlpha * 0.72})`;
+        ctx.beginPath();
+        ctx.moveTo(bodyPoly[0].x, bodyPoly[0].y);
+        for (let i = 1; i < bodyPoly.length; i++) {
+          ctx.lineTo(bodyPoly[i].x, bodyPoly[i].y);
+        }
+        ctx.closePath();
+        ctx.fill();
       }
 
       ctx.restore();
@@ -3434,6 +4092,8 @@ export class GameRenderer {
     const isFog = world.weather === 'fog';
     const effectiveAlpha = Math.max(nightAlpha, isRaining ? 0.35 * weatherTransition : 0, isFog ? 0.45 * weatherTransition : 0);
 
+    const fogFactor = isFog ? (1.0 - 0.55 * weatherTransition) : 1.0;
+
     if (effectiveAlpha <= 0.02 && !isRaining && !isFog && (world.lightningFlashTimer ?? 0) <= 0) {
       return;
     }
@@ -3452,23 +4112,57 @@ export class GameRenderer {
     lCtx.setTransform(ctx.getTransform());
     lCtx.globalCompositeOperation = 'destination-out';
 
+    const getStreetLampOn = (prop: StreetProp) => {
+      if (prop.type !== 'lamp' || prop.isBroken) return false;
+      const lampHash = Math.sin(prop.x * 12.9898 + prop.y * 78.233) * 43758.5453;
+      const randVal = lampHash - Math.floor(lampHash);
+      
+      const sunsetHour = 17.2 + randVal * 1.8; // Turn on between 17:12 and 19:00
+      const sunriseHour = 5.0 + randVal * 1.8; // Turn off between 05:00 and 06:48
+      
+      let on = false;
+      if (timeHour >= sunsetHour || timeHour < sunriseHour) {
+        on = true;
+      }
+      
+      const isTransitioning = Math.abs(timeHour - sunsetHour) < 0.04 || Math.abs(timeHour - sunriseHour) < 0.04;
+      if (isTransitioning && on) {
+        if (Math.sin(Date.now() * 0.04 + randVal * 20) > 0.25) {
+          on = false; // Flickering effect
+        }
+      }
+      return on;
+    };
+
+    const getVehicleHeadlightOn = (car: Vehicle) => {
+      if (car.isPlayerControlled) return car.headlightsOn;
+      if (car.headlightsOn) return true;
+      if (car.isParked) return false;
+      if (isRaining || isFog) return true;
+
+      // Dynamic sunset/sunrise headlights
+      const stringId = car.id || 'car';
+      let sum = 0;
+      for (let i = 0; i < stringId.length; i++) sum += stringId.charCodeAt(i);
+      const carHash = Math.sin(sum * 12.9898) * 43758.5453;
+      const randVal = carHash - Math.floor(carHash);
+
+      const sunsetHour = 17.0 + randVal * 1.6; // Turn on between 17:00 and 18:36
+      const sunriseHour = 5.2 + randVal * 1.6; // Turn off between 05:12 and 06:48
+
+      return (timeHour >= sunsetHour || timeHour < sunriseHour);
+    };
+
     // A. Headlight Cone Cutouts
     for (const car of nearbyVehicles) {
-      const isPlayer = car.isPlayerControlled;
-      const hasHeadlightsOn = isPlayer 
-        ? car.headlightsOn 
-        : (car.headlightsOn || (nightAlpha > 0.05 && !car.isParked) || isRaining);
-      
-      if (!hasHeadlightsOn) continue;
-
       const cosA = Math.cos(car.angle);
       const sinA = Math.sin(car.angle);
       const halfL = car.length / 2;
       const halfW = car.width / 2;
 
       const isHighBeam = car.headlightMode === 'high';
-      const beamLen = isHighBeam ? 350 : 220;
-      const beamSpread = isHighBeam ? 75 : 52;
+      const beamLen = (isHighBeam ? 350 : 220) * fogFactor;
+      const beamSpread = (isHighBeam ? 75 : 52) * fogFactor;
       const dmg = car.damage || { leftHeadlightBroken: false, rightHeadlightBroken: false, frontCrumple: 0, rearCrumple: 0, leftDent: 0, rightDent: 0, frontLeftDent: 0, frontRightDent: 0, rearLeftDent: 0, rearRightDent: 0 };
       
       const fc = Math.min(14, dmg.frontCrumple || 0);
@@ -3481,6 +4175,8 @@ export class GameRenderer {
       const leftLampLY = -halfW + 3.2 + ld * 0.15;
       const rightLampLX = halfL - Math.max(frd, fc) - 3.2;
       const rightLampLY = halfW - 3.2 - rd * 0.15;
+
+      const hasHeadlightsOn = getVehicleHeadlightOn(car);
 
       const cutHeadlightBeam = (lxOffset: number, lyOffset: number, broken: boolean) => {
         if (broken) return;
@@ -3515,8 +4211,10 @@ export class GameRenderer {
         lCtx.beginPath(); lCtx.arc(lx, ly, 3, 0, Math.PI * 2); lCtx.fill();
       };
 
-      cutHeadlightBeam(leftLampLX, leftLampLY, dmg.leftHeadlightBroken);
-      cutHeadlightBeam(rightLampLX, rightLampLY, dmg.rightHeadlightBroken);
+      if (hasHeadlightsOn) {
+        cutHeadlightBeam(leftLampLX, leftLampLY, dmg.leftHeadlightBroken);
+        cutHeadlightBeam(rightLampLX, rightLampLY, dmg.rightHeadlightBroken);
+      }
 
       // Rear Cutouts
       const rc = Math.min(12, dmg.rearCrumple || 0);
@@ -3534,13 +4232,14 @@ export class GameRenderer {
       const cutRadialLight = (rxOffset: number, ryOffset: number, radius: number) => {
         const rx = car.x + cosA * rxOffset - sinA * ryOffset;
         const ry = car.y + sinA * rxOffset + cosA * ryOffset;
-        const radGrad = lCtx.createRadialGradient(rx, ry, 0.5, rx, ry, radius);
+        const targetRadius = radius * fogFactor;
+        const radGrad = lCtx.createRadialGradient(rx, ry, 0.5, rx, ry, targetRadius);
         radGrad.addColorStop(0, 'rgba(0, 0, 0, 1.0)');
         radGrad.addColorStop(0.5, 'rgba(0, 0, 0, 0.4)');
         radGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
         lCtx.fillStyle = radGrad;
         lCtx.beginPath();
-        lCtx.arc(rx, ry, radius, 0, Math.PI * 2);
+        lCtx.arc(rx, ry, targetRadius, 0, Math.PI * 2);
         lCtx.fill();
       };
 
@@ -3556,12 +4255,13 @@ export class GameRenderer {
       }
 
       // Small ambient cutout for the car body to make it visible
-      const carGrad = lCtx.createRadialGradient(car.x, car.y, 2, car.x, car.y, 45);
+      const carGradRadius = 45 * fogFactor;
+      const carGrad = lCtx.createRadialGradient(car.x, car.y, 2, car.x, car.y, carGradRadius);
       carGrad.addColorStop(0, 'rgba(0, 0, 0, 0.4)');
       carGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
       lCtx.fillStyle = carGrad;
       lCtx.beginPath();
-      lCtx.arc(car.x, car.y, 45, 0, Math.PI * 2);
+      lCtx.arc(car.x, car.y, carGradRadius, 0, Math.PI * 2);
       lCtx.fill();
 
       // Turn signal cutouts
@@ -3585,14 +4285,15 @@ export class GameRenderer {
 
     // C. Street Lamp Cutouts
     for (const prop of props) {
-      if (prop.type === 'lamp' && !prop.isBroken && prop.x >= minX && prop.x <= maxX && prop.y >= minY && prop.y <= maxY) {
-        const lampGrad = lCtx.createRadialGradient(prop.x, prop.y, 5, prop.x, prop.y, 110);
+      if (getStreetLampOn(prop) && prop.x >= minX && prop.x <= maxX && prop.y >= minY && prop.y <= maxY) {
+        const lampRadius = 110 * fogFactor;
+        const lampGrad = lCtx.createRadialGradient(prop.x, prop.y, 5, prop.x, prop.y, lampRadius);
         lampGrad.addColorStop(0, 'rgba(0, 0, 0, 1.0)');
         lampGrad.addColorStop(0.5, 'rgba(0, 0, 0, 0.5)');
         lampGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
         lCtx.fillStyle = lampGrad;
         lCtx.beginPath();
-        lCtx.arc(prop.x, prop.y, 110, 0, Math.PI * 2);
+        lCtx.arc(prop.x, prop.y, lampRadius, 0, Math.PI * 2);
         lCtx.fill();
       }
     }
@@ -3600,13 +4301,107 @@ export class GameRenderer {
     // D. Traffic Light Cutouts
     for (const prop of props) {
       if (prop.type === 'traffic_light' && !prop.isBroken && prop.x >= minX - 60 && prop.x <= maxX + 60 && prop.y >= minY - 60 && prop.y <= maxY + 60) {
-        const tfGrad = lCtx.createRadialGradient(prop.x, prop.y, 2, prop.x, prop.y, 50);
+        const tfRadius = 50 * fogFactor;
+        const tfGrad = lCtx.createRadialGradient(prop.x, prop.y, 2, prop.x, prop.y, tfRadius);
         tfGrad.addColorStop(0, 'rgba(0, 0, 0, 0.8)');
         tfGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
         lCtx.fillStyle = tfGrad;
         lCtx.beginPath();
-        lCtx.arc(prop.x, prop.y, 50, 0, Math.PI * 2);
+        lCtx.arc(prop.x, prop.y, tfRadius, 0, Math.PI * 2);
         lCtx.fill();
+      }
+    }
+
+    // E. Building Entrance, Balcony, and Fire Escape Light Cutouts
+    for (const bld of world.buildings) {
+      if (bld.x + bld.width < minX || bld.x > maxX || bld.y + bld.height < minY || bld.y > maxY) continue;
+
+      // 1. Entrance Light Cutout
+      if (bld.entranceSide) {
+        let lightCX = 0, lightCY = 0;
+        if (bld.entranceSide === 'north') {
+          lightCX = bld.x + bld.width / 2;
+          lightCY = bld.y - 6;
+        } else if (bld.entranceSide === 'south') {
+          lightCX = bld.x + bld.width / 2;
+          lightCY = bld.y + bld.height + 6;
+        } else if (bld.entranceSide === 'west') {
+          lightCX = bld.x - 6;
+          lightCY = bld.y + bld.height / 2;
+        } else if (bld.entranceSide === 'east') {
+          lightCX = bld.x + bld.width + 6;
+          lightCY = bld.y + bld.height / 2;
+        }
+
+        const entRadius = 45 * fogFactor;
+        const entGrad = lCtx.createRadialGradient(lightCX, lightCY, 1, lightCX, lightCY, entRadius);
+        entGrad.addColorStop(0, 'rgba(0, 0, 0, 1.0)');
+        entGrad.addColorStop(0.5, 'rgba(0, 0, 0, 0.45)');
+        entGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+        lCtx.fillStyle = entGrad;
+        lCtx.beginPath();
+        lCtx.arc(lightCX, lightCY, entRadius, 0, Math.PI * 2);
+        lCtx.fill();
+      }
+
+      // 2. Balcony Light Cutout
+      if (bld.balconies) {
+        for (const bal of bld.balconies) {
+          let cx = 0, cy = 0;
+          if (bal.side === 'north') {
+            cx = bld.x + bld.width * bal.offset;
+            cy = bld.y - bal.depth / 2;
+          } else if (bal.side === 'south') {
+            cx = bld.x + bld.width * bal.offset;
+            cy = bld.y + bld.height + bal.depth / 2;
+          } else if (bal.side === 'west') {
+            cx = bld.x - bal.depth / 2;
+            cy = bld.y + bld.height * bal.offset;
+          } else if (bal.side === 'east') {
+            cx = bld.x + bld.width + bal.depth / 2;
+            cy = bld.y + bld.height * bal.offset;
+          }
+
+          const balRadius = 35 * fogFactor;
+          const balGrad = lCtx.createRadialGradient(cx, cy, 1, cx, cy, balRadius);
+          balGrad.addColorStop(0, 'rgba(0, 0, 0, 0.85)');
+          balGrad.addColorStop(0.5, 'rgba(0, 0, 0, 0.35)');
+          balGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+          lCtx.fillStyle = balGrad;
+          lCtx.beginPath();
+          lCtx.arc(cx, cy, balRadius, 0, Math.PI * 2);
+          lCtx.fill();
+        }
+      }
+
+      // 3. Fire Escape Light Cutout
+      if (bld.fireEscapes) {
+        for (const fe of bld.fireEscapes) {
+          let cx = 0, cy = 0;
+          if (fe.side === 'north') {
+            cx = bld.x + bld.width * fe.offset;
+            cy = bld.y - fe.depth / 2;
+          } else if (fe.side === 'south') {
+            cx = bld.x + bld.width * fe.offset;
+            cy = bld.y + bld.height + fe.depth / 2;
+          } else if (fe.side === 'west') {
+            cx = bld.x - fe.depth / 2;
+            cy = bld.y + bld.height * fe.offset;
+          } else if (fe.side === 'east') {
+            cx = bld.x + bld.width + fe.depth / 2;
+            cy = bld.y + bld.height * fe.offset;
+          }
+
+          const feRadius = 30 * fogFactor;
+          const feGrad = lCtx.createRadialGradient(cx, cy, 1, cx, cy, feRadius);
+          feGrad.addColorStop(0, 'rgba(0, 0, 0, 0.7)');
+          feGrad.addColorStop(0.5, 'rgba(0, 0, 0, 0.25)');
+          feGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+          lCtx.fillStyle = feGrad;
+          lCtx.beginPath();
+          lCtx.arc(cx, cy, feRadius, 0, Math.PI * 2);
+          lCtx.fill();
+        }
       }
     }
     lCtx.restore();
@@ -3623,44 +4418,39 @@ export class GameRenderer {
 
     // A. Street Lamp Additive Pools & Bulb Halos
     for (const prop of props) {
-      if (prop.type === 'lamp' && !prop.isBroken && prop.x >= minX && prop.x <= maxX && prop.y >= minY && prop.y <= maxY) {
-        const poolGrad = ctx.createRadialGradient(prop.x, prop.y, 4, prop.x, prop.y, 80);
-        poolGrad.addColorStop(0, 'rgba(255, 230, 150, 0.45)');
-        poolGrad.addColorStop(0.5, 'rgba(255, 200, 50, 0.15)');
+      if (getStreetLampOn(prop) && prop.x >= minX && prop.x <= maxX && prop.y >= minY && prop.y <= maxY) {
+        const poolRadius = 80 * fogFactor;
+        const poolGrad = ctx.createRadialGradient(prop.x, prop.y, 4, prop.x, prop.y, poolRadius);
+        poolGrad.addColorStop(0, `rgba(255, 230, 150, ${0.45 * fogFactor})`);
+        poolGrad.addColorStop(0.5, `rgba(255, 200, 50, ${0.15 * fogFactor})`);
         poolGrad.addColorStop(1, 'rgba(255, 200, 50, 0)');
         ctx.fillStyle = poolGrad;
         ctx.beginPath();
-        ctx.arc(prop.x, prop.y, 80, 0, Math.PI * 2);
+        ctx.arc(prop.x, prop.y, poolRadius, 0, Math.PI * 2);
         ctx.fill();
 
-        const bulbGlow = ctx.createRadialGradient(prop.x, prop.y, 1, prop.x, prop.y, 20);
-        bulbGlow.addColorStop(0, 'rgba(255, 255, 220, 0.9)');
-        bulbGlow.addColorStop(0.5, 'rgba(255, 220, 100, 0.5)');
+        const bulbRadius = 20 * fogFactor;
+        const bulbGlow = ctx.createRadialGradient(prop.x, prop.y, 1, prop.x, prop.y, bulbRadius);
+        bulbGlow.addColorStop(0, `rgba(255, 255, 220, ${0.9 * fogFactor})`);
+        bulbGlow.addColorStop(0.5, `rgba(255, 220, 100, ${0.5 * fogFactor})`);
         bulbGlow.addColorStop(1, 'rgba(255, 200, 50, 0)');
         ctx.fillStyle = bulbGlow;
         ctx.beginPath();
-        ctx.arc(prop.x, prop.y, 20, 0, Math.PI * 2);
+        ctx.arc(prop.x, prop.y, bulbRadius, 0, Math.PI * 2);
         ctx.fill();
       }
     }
 
     // B. Vehicle Headlight Beams (Additive)
     for (const car of nearbyVehicles) {
-      const isPlayer = car.isPlayerControlled;
-      const hasHeadlightsOn = isPlayer 
-        ? car.headlightsOn 
-        : (car.headlightsOn || (nightAlpha > 0.05 && !car.isParked) || isRaining);
-
-      if (!hasHeadlightsOn) continue;
-
       const cosA = Math.cos(car.angle);
       const sinA = Math.sin(car.angle);
       const halfL = car.length / 2;
       const halfW = car.width / 2;
 
       const isHighBeam = car.headlightMode === 'high';
-      const beamLen = isHighBeam ? 400 : 220;
-      const beamSpread = isHighBeam ? 85 : 55;
+      const beamLen = (isHighBeam ? 400 : 220) * fogFactor;
+      const beamSpread = (isHighBeam ? 85 : 55) * fogFactor;
       const dmg = car.damage || { leftHeadlightBroken: false, rightHeadlightBroken: false, frontCrumple: 0, rearCrumple: 0, leftDent: 0, rightDent: 0, frontLeftDent: 0, frontRightDent: 0, rearLeftDent: 0, rearRightDent: 0 };
       
       const fc = Math.min(14, dmg.frontCrumple || 0);
@@ -3674,6 +4464,8 @@ export class GameRenderer {
       const rightLampLX = halfL - Math.max(frd, fc) - 3.2;
       const rightLampLY = halfW - 3.2 - rd * 0.15;
 
+      const hasHeadlightsOn = getVehicleHeadlightOn(car);
+
       const drawHeadlightAdd = (lxOffset: number, lyOffset: number, broken: boolean) => {
         if (broken) return;
         const lx = car.x + cosA * lxOffset - sinA * lyOffset;
@@ -3681,7 +4473,7 @@ export class GameRenderer {
 
         // More balanced volumetric beam effect
         const hGlow = ctx.createRadialGradient(lx, ly, 2, lx + cosA * (beamLen * 0.45), ly + sinA * (beamLen * 0.45), beamLen);
-        const intensity = isHighBeam ? 0.65 : 0.42;
+        const intensity = (isHighBeam ? 0.65 : 0.42) * fogFactor;
         hGlow.addColorStop(0, `rgba(255, 255, ${isHighBeam ? '255' : '210'}, ${intensity})`);
         hGlow.addColorStop(0.4, `rgba(255, 255, 180, ${intensity * 0.4})`);
         hGlow.addColorStop(0.75, `rgba(255, 255, 140, ${intensity * 0.08})`);
@@ -3699,7 +4491,7 @@ export class GameRenderer {
         ctx.fill();
         
         // Lens Flare / Source Glow (Very compact source)
-        const flareSize = isHighBeam ? 6 : 4;
+        const flareSize = (isHighBeam ? 6 : 4) * fogFactor;
         const flare = ctx.createRadialGradient(lx, ly, 0, lx, ly, flareSize);
         flare.addColorStop(0, 'rgba(255, 255, 255, 1.0)');
         flare.addColorStop(1, 'rgba(255, 255, 255, 0)');
@@ -3707,8 +4499,10 @@ export class GameRenderer {
         ctx.beginPath(); ctx.arc(lx, ly, flareSize, 0, Math.PI * 2); ctx.fill();
       };
 
-      drawHeadlightAdd(leftLampLX, leftLampLY, dmg.leftHeadlightBroken);
-      drawHeadlightAdd(rightLampLX, rightLampLY, dmg.rightHeadlightBroken);
+      if (hasHeadlightsOn) {
+        drawHeadlightAdd(leftLampLX, leftLampLY, dmg.leftHeadlightBroken);
+        drawHeadlightAdd(rightLampLX, rightLampLY, dmg.rightHeadlightBroken);
+      }
 
       const rc = Math.min(12, dmg.rearCrumple || 0);
       const rld = Math.min(8, dmg.rearLeftDent || 0);
@@ -3725,11 +4519,12 @@ export class GameRenderer {
       const drawRadialAdditive = (rxOffset: number, ryOffset: number, radius: number, color: string) => {
         const rx = car.x + cosA * rxOffset - sinA * ryOffset;
         const ry = car.y + sinA * rxOffset + cosA * ryOffset;
-        const grad = ctx.createRadialGradient(0, 0, 0.5, 0, 0, radius);
+        const targetRadius = radius * fogFactor;
+        const grad = ctx.createRadialGradient(0, 0, 0.5, 0, 0, targetRadius);
         grad.addColorStop(0, color);
         grad.addColorStop(1, 'rgba(0, 0, 0, 0)');
         ctx.fillStyle = grad;
-        ctx.save(); ctx.translate(rx, ry); ctx.beginPath(); ctx.arc(0, 0, radius, 0, Math.PI * 2); ctx.fill(); ctx.restore();
+        ctx.save(); ctx.translate(rx, ry); ctx.beginPath(); ctx.arc(0, 0, targetRadius, 0, Math.PI * 2); ctx.fill(); ctx.restore();
       };
 
       if (isReversing) {
@@ -3774,9 +4569,27 @@ export class GameRenderer {
       const phase = inter.phases[inter.currentPhaseIndex];
       let lightColor = '';
       if (prop.direction === 'north' || prop.direction === 'south') {
-        lightColor = phase.nsState === 'green' ? 'rgba(34, 197, 94, 0.95)' : phase.nsState === 'yellow' ? 'rgba(234, 179, 8, 0.95)' : 'rgba(239, 68, 68, 0.95)';
+        const state = phase.nsState;
+        if (state === 'green') {
+          lightColor = 'rgba(34, 197, 94, 0.95)';
+        } else if (state === 'green_flashing') {
+          lightColor = Math.floor(Date.now() / 250) % 2 === 0 ? 'rgba(34, 197, 94, 0.95)' : 'rgba(0, 0, 0, 0)';
+        } else if (state === 'yellow') {
+          lightColor = 'rgba(234, 179, 8, 0.95)';
+        } else {
+          lightColor = 'rgba(239, 68, 68, 0.95)';
+        }
       } else {
-        lightColor = phase.ewState === 'green' ? 'rgba(34, 197, 94, 0.95)' : phase.ewState === 'yellow' ? 'rgba(234, 179, 8, 0.95)' : 'rgba(239, 68, 68, 0.95)';
+        const state = phase.ewState;
+        if (state === 'green') {
+          lightColor = 'rgba(34, 197, 94, 0.95)';
+        } else if (state === 'green_flashing') {
+          lightColor = Math.floor(Date.now() / 250) % 2 === 0 ? 'rgba(34, 197, 94, 0.95)' : 'rgba(0, 0, 0, 0)';
+        } else if (state === 'yellow') {
+          lightColor = 'rgba(234, 179, 8, 0.95)';
+        } else {
+          lightColor = 'rgba(239, 68, 68, 0.95)';
+        }
       }
 
       const cosFA = Math.cos(prop.angle);
@@ -3820,6 +4633,113 @@ export class GameRenderer {
       }
     }
 
+    // E. Building Entrance, Balcony, and Fire Escape Additive Glow Pools
+    for (const bld of world.buildings) {
+      if (bld.x + bld.width < minX || bld.x > maxX || bld.y + bld.height < minY || bld.y > maxY) continue;
+
+      // 1. Entrance warm additive pool and glow bulb
+      if (bld.entranceSide) {
+        let lightCX = 0, lightCY = 0;
+        if (bld.entranceSide === 'north') {
+          lightCX = bld.x + bld.width / 2;
+          lightCY = bld.y - 6;
+        } else if (bld.entranceSide === 'south') {
+          lightCX = bld.x + bld.width / 2;
+          lightCY = bld.y + bld.height + 6;
+        } else if (bld.entranceSide === 'west') {
+          lightCX = bld.x - 6;
+          lightCY = bld.y + bld.height / 2;
+        } else if (bld.entranceSide === 'east') {
+          lightCX = bld.x + bld.width + 6;
+          lightCY = bld.y + bld.height / 2;
+        }
+
+        const poolRadius = 35 * fogFactor;
+        const poolGrad = ctx.createRadialGradient(lightCX, lightCY, 2, lightCX, lightCY, poolRadius);
+        // Beautiful warm yellow-orange porch light glow!
+        poolGrad.addColorStop(0, `rgba(254, 240, 138, ${0.40 * fogFactor})`);
+        poolGrad.addColorStop(0.4, `rgba(251, 191, 36, ${0.15 * fogFactor})`);
+        poolGrad.addColorStop(1, 'rgba(251, 191, 36, 0)');
+        ctx.fillStyle = poolGrad;
+        ctx.beginPath();
+        ctx.arc(lightCX, lightCY, poolRadius, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Little glowing bulb core
+        const bulbRadius = 6 * fogFactor;
+        const bulbGrad = ctx.createRadialGradient(lightCX, lightCY, 0.5, lightCX, lightCY, bulbRadius);
+        bulbGrad.addColorStop(0, `rgba(255, 255, 255, ${0.9 * fogFactor})`);
+        bulbGrad.addColorStop(0.5, `rgba(254, 240, 138, ${0.6 * fogFactor})`);
+        bulbGrad.addColorStop(1, 'rgba(254, 240, 138, 0)');
+        ctx.fillStyle = bulbGrad;
+        ctx.beginPath();
+        ctx.arc(lightCX, lightCY, bulbRadius, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      // 2. Balcony warm additive pool
+      if (bld.balconies) {
+        for (const bal of bld.balconies) {
+          let cx = 0, cy = 0;
+          if (bal.side === 'north') {
+            cx = bld.x + bld.width * bal.offset;
+            cy = bld.y - bal.depth / 2;
+          } else if (bal.side === 'south') {
+            cx = bld.x + bld.width * bal.offset;
+            cy = bld.y + bld.height + bal.depth / 2;
+          } else if (bal.side === 'west') {
+            cx = bld.x - bal.depth / 2;
+            cy = bld.y + bld.height * bal.offset;
+          } else if (bal.side === 'east') {
+            cx = bld.x + bld.width + bal.depth / 2;
+            cy = bld.y + bld.height * bal.offset;
+          }
+
+          const poolRadius = 25 * fogFactor;
+          const poolGrad = ctx.createRadialGradient(cx, cy, 1, cx, cy, poolRadius);
+          // Soft cyan sliding door light bleed
+          poolGrad.addColorStop(0, `rgba(165, 243, 252, ${0.30 * fogFactor})`);
+          poolGrad.addColorStop(0.5, `rgba(56, 189, 248, ${0.10 * fogFactor})`);
+          poolGrad.addColorStop(1, 'rgba(56, 189, 248, 0)');
+          ctx.fillStyle = poolGrad;
+          ctx.beginPath();
+          ctx.arc(cx, cy, poolRadius, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+
+      // 3. Fire Escape soft orange security light pool
+      if (bld.fireEscapes) {
+        for (const fe of bld.fireEscapes) {
+          let cx = 0, cy = 0;
+          if (fe.side === 'north') {
+            cx = bld.x + bld.width * fe.offset;
+            cy = bld.y - fe.depth / 2;
+          } else if (fe.side === 'south') {
+            cx = bld.x + bld.width * fe.offset;
+            cy = bld.y + bld.height + fe.depth / 2;
+          } else if (fe.side === 'west') {
+            cx = bld.x - fe.depth / 2;
+            cy = bld.y + bld.height * fe.offset;
+          } else if (fe.side === 'east') {
+            cx = bld.x + bld.width + fe.depth / 2;
+            cy = bld.y + bld.height * fe.offset;
+          }
+
+          const poolRadius = 20 * fogFactor;
+          const poolGrad = ctx.createRadialGradient(cx, cy, 1, cx, cy, poolRadius);
+          // Soft orange security light
+          poolGrad.addColorStop(0, `rgba(253, 186, 116, ${0.25 * fogFactor})`);
+          poolGrad.addColorStop(0.6, `rgba(249, 115, 22, ${0.08 * fogFactor})`);
+          poolGrad.addColorStop(1, 'rgba(249, 115, 22, 0)');
+          ctx.fillStyle = poolGrad;
+          ctx.beginPath();
+          ctx.arc(cx, cy, poolRadius, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+    }
+
     // 3. Weather Rain Streaks & Lightning
     ctx.globalCompositeOperation = 'source-over';
     if (isRaining && weatherTransition > 0.05) {
@@ -3835,6 +4755,25 @@ export class GameRenderer {
         ctx.lineTo(rx - len * 0.3, ry + len);
       }
       ctx.stroke();
+    }
+
+    if (isFog && weatherTransition > 0.05) {
+      // Draw a soft, drifting smoke/fog pattern or a beautiful multi-layered misty fog overlay!
+      ctx.fillStyle = `rgba(226, 232, 240, ${0.35 * weatherTransition})`; // Soft slate-gray/white fog haze
+      ctx.fillRect(minX, minY, maxX - minX, maxY - minY);
+
+      // Add dynamic drifting fog bands
+      ctx.fillStyle = `rgba(241, 245, 249, ${0.12 * weatherTransition})`;
+      const time = Date.now() * 0.0003;
+      for (let i = 0; i < 5; i++) {
+        const driftX = Math.sin(time + i * 1.5) * 50;
+        const driftY = Math.cos(time * 0.7 + i * 2.1) * 30;
+        const fy = minY + ((i + 0.5) / 5) * (maxY - minY) + driftY;
+        
+        ctx.beginPath();
+        ctx.ellipse(minX + (maxX - minX) * 0.5 + driftX, fy, (maxX - minX) * 0.7, (maxY - minY) * 0.25, Math.sin(time * 0.2 + i) * 0.1, 0, Math.PI * 2);
+        ctx.fill();
+      }
     }
 
     if ((world.lightningFlashTimer ?? 0) > 0) {
@@ -4005,6 +4944,30 @@ export class GameRenderer {
     ctx.fillText('🚩', 0, -1);
 
     ctx.restore();
+    ctx.restore();
+  }
+
+  private renderCloudShadows(minX: number, minY: number, maxX: number, maxY: number) {
+    const ctx = this.ctx;
+    const time = Date.now() * 0.00005;
+    
+    ctx.save();
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.04)';
+    
+    for (const shadow of this.cloudShadows) {
+      // Move shadow
+      shadow.x = (shadow.x + time * 50) % 8000;
+      shadow.y = (shadow.y + time * 20) % 8000;
+      
+      // Draw if in view
+      if (shadow.x + shadow.size > minX && shadow.x - shadow.size < maxX &&
+          shadow.y + shadow.size > minY && shadow.y - shadow.size < maxY) {
+        
+        ctx.beginPath();
+        ctx.ellipse(shadow.x, shadow.y, shadow.size, shadow.size * 0.6, Math.PI / 4, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
     ctx.restore();
   }
 }

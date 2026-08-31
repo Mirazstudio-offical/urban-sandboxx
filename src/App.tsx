@@ -29,6 +29,7 @@ import { TrafficConsole } from './components/TrafficConsole';
 import { FullScreenMap } from './components/FullScreenMap';
 import { LandscapeGuard } from './components/LandscapeGuard';
 import { MobileTouchControls } from './components/MobileTouchControls';
+import { MainMenu } from './components/MainMenu';
 import { 
   AlertTriangle,
   ArrowLeft,
@@ -165,6 +166,7 @@ export default function App() {
   const [pedCount, setPedCount] = useState<number>(0);
   const [isMinimapExpanded, setIsMinimapExpanded] = useState<boolean>(false);
   const [isFullMapOpen, setIsFullMapOpen] = useState<boolean>(false);
+  const [isMainMenuOpen, setIsMainMenuOpen] = useState<boolean>(true);
   const [gpsDestination, setGpsDestination] = useState<{ x: number; y: number; name?: string } | null>(null);
 
   const handleSetGpsTarget = (target: { x: number; y: number; name?: string } | null) => {
@@ -204,6 +206,9 @@ export default function App() {
   const isMinimapExpandedRef = useRef<boolean>(false);
   isMinimapExpandedRef.current = isMinimapExpanded;
 
+  const isMainMenuOpenRef = useRef<boolean>(true);
+  isMainMenuOpenRef.current = isMainMenuOpen;
+
   // Time and Weather cycling functions
   const cycleTimePreset = () => {
     const current = timeHourRef.current;
@@ -237,6 +242,242 @@ export default function App() {
     if (h >= 17 && h < 20) return 'Sunset';
     return 'Night';
   };
+
+  // --- REAL SAVE & LOAD ENGINE ---
+  const [saves, setSaves] = useState<any[]>([]);
+  const savesRef = useRef<any[]>([]);
+  savesRef.current = saves;
+
+  // Load saves list from storage on mount
+  useEffect(() => {
+    const rawSaves = localStorage.getItem('neon_city_saves');
+    if (rawSaves) {
+      try {
+        const parsed = JSON.parse(rawSaves);
+        setSaves(parsed);
+      } catch (e) {
+        console.error('Error parsing saves list', e);
+      }
+    }
+  }, []);
+
+  const syncSavesToStorage = (updatedSaves: any[]) => {
+    setSaves(updatedSaves);
+    localStorage.setItem('neon_city_saves', JSON.stringify(updatedSaves));
+  };
+
+  const handleCreateSave = (customName?: string) => {
+    const world = worldRef.current;
+    const player = playerRef.current;
+    if (!world || !player) return;
+
+    // Get current street name
+    let currentStreet = 'Grand Boulevard';
+    for (const road of world.roads) {
+      const isHoriz = road.direction === 'horizontal';
+      if (isHoriz && Math.abs(player.y - road.y1) < road.width / 2 + 20) {
+        currentStreet = road.name;
+        break;
+      } else if (!isHoriz && Math.abs(player.x - road.x1) < road.width / 2 + 20) {
+        currentStreet = road.name;
+        break;
+      }
+    }
+
+    const timeString = new Date().toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+    const dateString = new Date().toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' });
+    
+    const saveName = customName || `Улица: ${currentStreet}`;
+
+    const newSave = {
+      id: Date.now().toString(),
+      name: saveName,
+      date: `${dateString} в ${timeString}`,
+      playerX: player.x,
+      playerY: player.y,
+      playerAngle: player.angle,
+      isInVehicle: player.isInVehicle,
+      currentVehicleId: player.currentVehicleId,
+      timeHour: timeHourRef.current,
+      weather: weatherRef.current,
+      streetName: currentStreet,
+      gpsDestination: gpsDestination
+    };
+
+    let updated = [...savesRef.current];
+    if (customName === 'Автосохранение') {
+      updated = updated.filter(s => s.name !== 'Автосохранение');
+    }
+    updated.unshift(newSave);
+    syncSavesToStorage(updated);
+  };
+
+  const handleLoadSave = (saveId: string) => {
+    const world = worldRef.current;
+    const player = playerRef.current;
+    const camera = cameraRef.current;
+    if (!world || !player) return;
+
+    const save = savesRef.current.find(s => s.id === saveId);
+    if (!save) return;
+
+    // Prevent stuck input keys
+    inputRef.current.forward = false;
+    inputRef.current.backward = false;
+    inputRef.current.left = false;
+    inputRef.current.right = false;
+    inputRef.current.handbrake = false;
+    inputRef.current.sprint = false;
+
+    // Restore environmental state
+    setTimeHour(save.timeHour);
+    timeHourRef.current = save.timeHour;
+    setWeather(save.weather);
+    weatherRef.current = save.weather;
+    handleSetGpsTarget(save.gpsDestination);
+
+    // Restore player status
+    player.x = save.playerX;
+    player.y = save.playerY;
+    player.angle = save.playerAngle;
+    player.vx = 0;
+    player.vy = 0;
+    player.speed = 0;
+    player.isInVehicle = save.isInVehicle;
+    player.currentVehicleId = save.currentVehicleId;
+
+    setIsInVehicle(save.isInVehicle);
+
+    if (save.isInVehicle && save.currentVehicleId) {
+      const veh = world.vehicles.find(v => v.id === save.currentVehicleId);
+      if (veh) {
+        veh.x = save.playerX;
+        veh.y = save.playerY;
+        veh.vx = 0;
+        veh.vy = 0;
+        veh.speed = 0;
+        veh.isPlayerControlled = true;
+        veh.isParked = false;
+        const cfg = CAR_CONFIGS[veh.type];
+        setActiveCarName(cfg?.name || 'Автомобиль');
+        sound.startEngine();
+      } else {
+        // Find closest vehicle to player
+        let closest: any = null;
+        let minDist = 300;
+        for (const v of world.vehicles) {
+          const dist = Math.hypot(v.x - save.playerX, v.y - save.playerY);
+          if (dist < minDist) {
+            minDist = dist;
+            closest = v;
+          }
+        }
+        if (closest) {
+          closest.x = save.playerX;
+          closest.y = save.playerY;
+          closest.vx = 0;
+          closest.vy = 0;
+          closest.speed = 0;
+          closest.isPlayerControlled = true;
+          closest.isParked = false;
+          player.currentVehicleId = closest.id;
+          const cfg = CAR_CONFIGS[closest.type];
+          setActiveCarName(cfg?.name || 'Автомобиль');
+          sound.startEngine();
+        } else {
+          player.isInVehicle = false;
+          player.currentVehicleId = null;
+          setIsInVehicle(false);
+          setActiveCarName('');
+        }
+      }
+    } else {
+      setIsInVehicle(false);
+      setActiveCarName('');
+      sound.stopEngine();
+    }
+
+    // Teleport camera
+    camera.x = save.playerX;
+    camera.y = save.playerY;
+    camera.targetX = save.playerX;
+    camera.targetY = save.playerY;
+    camera.targetZoom = 1.15;
+
+    setIsMainMenuOpen(false);
+  };
+
+  const handleDeleteSave = (saveId: string) => {
+    const updated = savesRef.current.filter(s => s.id !== saveId);
+    syncSavesToStorage(updated);
+  };
+
+  const handleNewGame = () => {
+    const world = worldRef.current;
+    const player = playerRef.current;
+    const camera = cameraRef.current;
+    if (!world || !player) return;
+
+    inputRef.current.forward = false;
+    inputRef.current.backward = false;
+    inputRef.current.left = false;
+    inputRef.current.right = false;
+    inputRef.current.handbrake = false;
+    inputRef.current.sprint = false;
+
+    const defaultSpawn = SPAWN_LOCATIONS[0]; // Central Park
+    setCurrentSpawnId(defaultSpawn.id);
+    setIsSpawnMenuOpen(false);
+
+    if (player.currentVehicleId) {
+      const veh = world.vehicles.find((v) => v.id === player.currentVehicleId);
+      if (veh) {
+        veh.isPlayerControlled = false;
+        veh.isParked = true;
+        veh.turnSignal = 'none';
+        veh.speed = 0;
+        veh.vx = 0;
+        veh.vy = 0;
+      }
+    }
+
+    player.x = defaultSpawn.x;
+    player.y = defaultSpawn.y;
+    player.vx = 0;
+    player.vy = 0;
+    player.speed = 0;
+    player.angle = 0;
+    player.isInVehicle = false;
+    player.currentVehicleId = null;
+
+    setIsInVehicle(false);
+    setActiveCarName('');
+    sound.stopEngine();
+
+    setTimeHour(10.0);
+    timeHourRef.current = 10.0;
+    setWeather('clear');
+    weatherRef.current = 'clear';
+    handleSetGpsTarget(null);
+
+    camera.x = defaultSpawn.x;
+    camera.y = defaultSpawn.y;
+    camera.targetX = defaultSpawn.x;
+    camera.targetY = defaultSpawn.y;
+    camera.targetZoom = 1.15;
+
+    setIsMainMenuOpen(false);
+  };
+
+  // Periodic autosave every 25 seconds
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (worldRef.current && playerRef.current && !isMainMenuOpenRef.current) {
+        handleCreateSave('Автосохранение');
+      }
+    }, 25000);
+    return () => clearInterval(interval);
+  }, []);
 
   const worldRef = useRef<GameWorld | null>(null);
   const playerRef = useRef<Player>({
@@ -353,6 +594,28 @@ export default function App() {
       sound.resume();
       const code = e.code;
 
+      if (code === 'Escape') {
+        setIsConsoleOpen(false);
+        setIsFullMapOpen(false);
+        setIsSpawnMenuOpen(false);
+        setIsQuickMenuOpen(false);
+        const nextState = !isMainMenuOpenRef.current;
+        setIsMainMenuOpen(nextState);
+        if (nextState) {
+          inputRef.current.forward = false;
+          inputRef.current.backward = false;
+          inputRef.current.left = false;
+          inputRef.current.right = false;
+          inputRef.current.handbrake = false;
+          inputRef.current.sprint = false;
+          // Trigger immediate autosave on pausing
+          handleCreateSave('Автосохранение');
+        }
+        return; // Prevents any other keys from executing on Escape
+      }
+
+      if (isMainMenuOpenRef.current) return;
+
       if (code === 'KeyW' || code === 'ArrowUp') inputRef.current.forward = true;
       if (code === 'KeyS' || code === 'ArrowDown') inputRef.current.backward = true;
       if (code === 'KeyA' || code === 'ArrowLeft') inputRef.current.left = true;
@@ -384,11 +647,6 @@ export default function App() {
       if (code === 'Backquote' || code === 'F1') {
         setIsConsoleOpen((prev) => !prev);
         e.preventDefault();
-      }
-      if (code === 'Escape') {
-        setIsConsoleOpen(false);
-        setIsFullMapOpen(false);
-        setIsSpawnMenuOpen(false);
       }
 
       // Time toggle (cycle presets)
@@ -529,7 +787,6 @@ export default function App() {
 
           if (veh.isPlayerControlled) {
             playerCar = veh;
-            veh.turnSignalTimer += dt;
             // Play ticking sound for player turn signals
             if (veh.turnSignal !== 'none') {
               turnTickTimerRef.current += dt;
@@ -977,7 +1234,7 @@ export default function App() {
       // Traffic Lights
       for (const inter of world.intersections) {
         const phase = inter.phases[inter.currentPhaseIndex];
-        ctx.fillStyle = phase.nsState === 'green' ? '#22c55e' : '#ef4444';
+        ctx.fillStyle = (phase.nsState === 'green' || phase.nsState === 'green_flashing') ? '#22c55e' : '#ef4444';
         ctx.beginPath();
         ctx.arc(inter.x, inter.y, 16, 0, Math.PI * 2);
         ctx.fill();
@@ -1056,7 +1313,7 @@ export default function App() {
       // Intersections & Lights
       for (const inter of world.intersections) {
         const phase = inter.phases[inter.currentPhaseIndex];
-        ctx.fillStyle = phase.nsState === 'green' ? '#22c55e' : '#ef4444';
+        ctx.fillStyle = (phase.nsState === 'green' || phase.nsState === 'green_flashing') ? '#22c55e' : '#ef4444';
         ctx.beginPath();
         ctx.arc(inter.x, inter.y, 12, 0, Math.PI * 2);
         ctx.fill();
@@ -1568,6 +1825,20 @@ export default function App() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Main Menu Overlay */}
+      {isMainMenuOpen && (
+        <MainMenu
+          onResume={() => setIsMainMenuOpen(false)}
+          onNewGame={handleNewGame}
+          saves={saves}
+          onLoadSave={handleLoadSave}
+          onDeleteSave={handleDeleteSave}
+          onCreateSave={handleCreateSave}
+          isMuted={isMuted}
+          onToggleMute={toggleSoundMute}
+        />
       )}
     </div>
   );
