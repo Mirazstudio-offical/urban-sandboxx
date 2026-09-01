@@ -37,6 +37,9 @@ export const PlayerNeedsHUD: React.FC<PlayerNeedsHUDProps> = ({
   const isCold = bs ? bs.temperature < 35.8 : false;
   const isPainful = bs ? bs.painLevel > 35 : false;
   const isExhausted = player.needs.energy < 20;
+  const isNauseous = (player.needs.nausea || 0) > 30;
+  const isStuffed = (player.needs.fullness || 0) > 90;
+  const isConsuming = !!player.consumption?.isConsuming;
 
   const hasLegInjury = bs?.bodyParts && (bs.bodyParts.leftLeg.some(i => !i.treated) || bs.bodyParts.rightLeg.some(i => !i.treated));
   const hasArmInjury = bs?.bodyParts && (bs.bodyParts.leftArm.some(i => !i.treated) || bs.bodyParts.rightArm.some(i => !i.treated));
@@ -177,6 +180,30 @@ export const PlayerNeedsHUD: React.FC<PlayerNeedsHUDProps> = ({
               <span>Усталость</span>
             </button>
           )}
+
+          {/* Nausea Badge */}
+          {isNauseous && (
+            <button
+              onClick={onOpenSelfInspection}
+              className={`flex items-center gap-1.5 px-2.5 py-1.5 bg-green-950/90 border border-green-600/80 rounded-xl text-xs font-semibold text-green-200 shadow-md ${(player.needs.nausea || 0) > 60 ? 'animate-pulse' : ''}`}
+              title="Тошнота — слишком много еды"
+            >
+              <span className="text-sm">🤢</span>
+              <span>Тошнота</span>
+            </button>
+          )}
+
+          {/* Stuffed Badge */}
+          {isStuffed && (
+            <button
+              onClick={onOpenSelfInspection}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 bg-orange-950/90 border border-orange-600/80 rounded-xl text-xs font-semibold text-orange-200 shadow-md"
+              title="Полный желудок — есть больше нельзя"
+            >
+              <span className="text-sm">🫃</span>
+              <span>Сытость</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -211,7 +238,28 @@ export const PlayerNeedsHUD: React.FC<PlayerNeedsHUDProps> = ({
         )}
       </div>
 
-      {/* 4. BOTTOM QUICK HOTBAR WITH PROCEDURAL 2D ITEM MODELS */}
+      {/* 4. CONSUMPTION PROGRESS BAR */}
+      {isConsuming && player.consumption && (
+        <div className="fixed bottom-20 left-1/2 -translate-x-1/2 z-40 pointer-events-none flex flex-col items-center gap-1">
+          <div className="px-3 py-1 bg-slate-900/90 border border-amber-600/60 rounded-xl text-xs font-semibold text-amber-200 shadow-lg backdrop-blur-md">
+            <span>{player.consumption.category === 'food' ? '🍽️' : '🥤'} {player.consumption.itemNameRu}</span>
+            {player.consumption.tasteMessage && (
+              <span className="ml-2 text-amber-300/80 italic">— {player.consumption.tasteMessage}</span>
+            )}
+          </div>
+          <div className="w-48 h-2 bg-slate-800 rounded-full overflow-hidden border border-slate-600">
+            <div 
+              className="h-full bg-gradient-to-r from-amber-500 to-orange-500 rounded-full transition-all duration-200"
+              style={{ width: `${((player.consumption.totalBites - player.consumption.bitesRemaining) / player.consumption.totalBites) * 100}%` }}
+            />
+          </div>
+          <div className="text-[10px] text-slate-400 font-mono">
+            {player.consumption.totalBites - player.consumption.bitesRemaining}/{player.consumption.totalBites} укусов
+          </div>
+        </div>
+      )}
+
+      {/* 5. BOTTOM QUICK HOTBAR WITH PROCEDURAL 2D ITEM MODELS */}
       <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-40 flex flex-col items-center gap-2 pointer-events-none">
         {isNearLitter && (
           <div 

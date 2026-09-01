@@ -21,6 +21,10 @@ export interface DetailedBodySensations {
   painSeverity: 'none' | 'mild' | 'moderate' | 'severe';
   energyText: string;
   energySeverity: 'fresh' | 'tiring' | 'exhausted';
+  fullnessText: string;
+  fullnessSeverity: 'empty' | 'light' | 'satisfied' | 'stuffed';
+  nauseaText: string;
+  nauseaSeverity: 'fine' | 'uneasy' | 'nauseous' | 'sick';
   
   parts: {
     head: BodyPartSensation;
@@ -331,6 +335,23 @@ export function getDetailedBodySensations(player?: Player): DetailedBodySensatio
     overallSensorySummary = activeSymptoms.map(s => `${s.label}: ${s.description}`).join('. ');
   }
 
+  // Fullness
+  const fullness = needs?.fullness ?? 0;
+  let fullnessText = 'Желудок пуст';
+  let fullnessSeverity: 'empty' | 'light' | 'satisfied' | 'stuffed' = 'empty';
+  if (fullness > 85) { fullnessText = 'Очень сытно, тяжесть в животе'; fullnessSeverity = 'stuffed'; }
+  else if (fullness > 60) { fullnessText = 'Сытно, хорошо'; fullnessSeverity = 'satisfied'; }
+  else if (fullness > 30) { fullnessText = 'Лёгкая сытость'; fullnessSeverity = 'light'; }
+  else if (fullness > 10) { fullnessText = 'Почти пусто'; fullnessSeverity = 'light'; }
+
+  // Nausea
+  const nausea = needs?.nausea ?? 0;
+  let nauseaText = 'Чувствуете себя нормально';
+  let nauseaSeverity: 'fine' | 'uneasy' | 'nauseous' | 'sick' = 'fine';
+  if (nausea > 70) { nauseaText = 'Сильная тошнота, готово вырвать!'; nauseaSeverity = 'sick'; }
+  else if (nausea > 40) { nauseaText = 'Тошнит, плохо себя чувствуете'; nauseaSeverity = 'nauseous'; }
+  else if (nausea > 15) { nauseaText = 'Лёгкая тошнота, дискомфорт'; nauseaSeverity = 'uneasy'; }
+
   return {
     healthText,
     overallSensorySummary,
@@ -344,6 +365,10 @@ export function getDetailedBodySensations(player?: Player): DetailedBodySensatio
     painSeverity,
     energyText,
     energySeverity,
+    fullnessText,
+    fullnessSeverity,
+    nauseaText,
+    nauseaSeverity,
     parts: partsResult,
     activeSymptoms
   };

@@ -1034,7 +1034,9 @@ export function updatePlayerNeedsAndVitals(
       hunger: 90,
       thirst: 85,
       energy: 100,
-      sleepiness: 15
+      sleepiness: 15,
+      fullness: 60,
+      nausea: 0
     };
   }
   if (!player.inventory) {
@@ -1186,6 +1188,22 @@ export function updatePlayerNeedsAndVitals(
   const isNight = timeHour >= 22 || timeHour < 6;
   const sleepinessRate = isNight ? 0.08 : 0.04;
   player.needs.sleepiness = Math.min(100, player.needs.sleepiness + sleepinessRate * dt);
+
+  // 4b. Fullness drain (Сытость - еда переваривается)
+  if ((player.needs.fullness || 0) > 0) {
+    const fullnessDrain = input.sprint ? 0.12 : 0.06;
+    player.needs.fullness = Math.max(0, player.needs.fullness! - fullnessDrain * dt);
+  }
+
+  // 4c. Nausea drain (Тошнота проходит со временем)
+  if ((player.needs.nausea || 0) > 0) {
+    player.needs.nausea = Math.max(0, player.needs.nausea! - 0.8 * dt);
+  }
+
+  // 4d. Nausea effects: if very nauseous, lose health
+  if ((player.needs.nausea || 0) > 80) {
+    player.needs.health = Math.max(0, player.needs.health - 1.5 * dt);
+  }
 
   // 5. Health & Survival Effects (Здоровье и Выживание)
   if (player.needs.hunger <= 0) {

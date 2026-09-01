@@ -32,6 +32,7 @@ import { sound } from './audio';
 import { 
   addItemToPlayer,
   addPlayerNotification,
+  cancelConsumption,
   createDefaultPlayerInventory, 
   createItem,
   deductPlayerCash,
@@ -40,6 +41,7 @@ import {
   pickupNearbyLitter,
   isPlayerNearTrashBin,
   seedInitialGroundItems, 
+  updateConsumption,
   useItemOnPlayer,
   ITEM_CATALOG
 } from './items';
@@ -606,16 +608,12 @@ export default function App() {
     hairColor: '#18181b',
     needs: {
       health: 100,
-      maxHealth: 100,
       hunger: 100,
-      maxHunger: 100,
       thirst: 100,
-      maxThirst: 100,
       energy: 100,
-      maxEnergy: 100,
       sleepiness: 0,
-      maxSleepiness: 100,
-      isSleeping: false
+      fullness: 60,
+      nausea: 0
     },
     inventory: createDefaultPlayerInventory(),
     maxInventorySlots: 18,
@@ -1214,6 +1212,9 @@ export default function App() {
 
         // Survival & Needs Simulation (Hunger, Thirst, Fatigue, Sleepiness, Health)
         updatePlayerNeedsAndVitals(player, world, dt, timeHourRef.current, input);
+
+        // Consumption timer (multi-step eating/drinking)
+        updateConsumption(player, dt);
 
         // 6. Throttled HUD State Updates (Run at ~12.5 Hz to prevent React re-render lag)
         hudUpdateTimerRef.current += dt;
