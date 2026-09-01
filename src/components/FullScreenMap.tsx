@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Camera, GameWorld, Player } from '../types';
 import { SPAWN_LOCATIONS, SpawnLocation } from '../App';
+import { CITY_SHOPS } from './ShopModal';
 import { 
   Compass, 
   Crosshair, 
@@ -138,7 +139,17 @@ export const REAL_LANDMARKS: CityLandmark[] = [
     y: 4000,
     icon: '🛣️',
     description: 'Четырехполосная скоростная магистраль с активным движением'
-  }
+  },
+  ...CITY_SHOPS.map((s) => ({
+    id: s.id,
+    name: s.nameRu,
+    nameRu: s.nameRu,
+    category: 'commercial' as const,
+    x: s.x,
+    y: s.y,
+    icon: s.icon,
+    description: s.description
+  }))
 ];
 
 export const FullScreenMap: React.FC<FullScreenMapProps> = ({

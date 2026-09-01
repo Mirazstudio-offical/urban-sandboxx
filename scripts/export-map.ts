@@ -10,7 +10,7 @@ console.log('Generating city world...');
 const world = generateCityWorld();
 
 const outPath = join(__dirname, '..', 'public', 'map.json');
-writeFileSync(outPath, JSON.stringify(world));
+writeFileSync(outPath, JSON.stringify(world, null, 2), 'utf-8');
 
 const sizeMB = (Buffer.byteLength(JSON.stringify(world)) / 1024 / 1024).toFixed(2);
 console.log(`Map saved to ${outPath} (${sizeMB} MB)`);

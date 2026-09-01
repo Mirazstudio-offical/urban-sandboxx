@@ -7,10 +7,11 @@
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
 :root {
-  --bg-dark: #0f172a;
-  --bg-panel: #1e293b;
-  --bg-card: #334155;
-  --border: #475569;
+  --bg-dark: #090d16;
+  --bg-panel: #111827;
+  --bg-card: #1f2937;
+  --bg-input: #0f172a;
+  --border: #374151;
   --accent: #38bdf8;
   --accent-hover: #0ea5e9;
   --accent-active: #0284c7;
@@ -18,7 +19,7 @@
   --success: #22c55e;
   --warning: #f59e0b;
   --text-main: #f8fafc;
-  --text-muted: #94a3b8;
+  --text-muted: #9ca3af;
 }
 
 body {
@@ -38,8 +39,8 @@ body {
   left: 0;
   right: 0;
   height: 48px;
-  background: rgba(15, 23, 42, 0.95);
-  backdrop-filter: blur(8px);
+  background: rgba(17, 24, 39, 0.95);
+  backdrop-filter: blur(10px);
   border-bottom: 1px solid var(--border);
   display: flex;
   align-items: center;
@@ -79,15 +80,16 @@ body {
   padding: 6px 12px;
   border-radius: 6px;
   border: 1px solid var(--border);
-  background: var(--bg-panel);
+  background: var(--bg-card);
   color: var(--text-main);
   font-size: 12px;
   font-weight: 600;
   cursor: pointer;
   transition: all 0.15s ease;
+  white-space: nowrap;
 }
 .btn:hover {
-  background: var(--bg-card);
+  background: #374151;
   border-color: var(--accent);
 }
 .btn.primary {
@@ -99,14 +101,20 @@ body {
   background: #0369a1;
 }
 .btn.success {
-  background: #166534;
+  background: #15803d;
   border-color: #22c55e;
   color: #fff;
+}
+.btn.success:hover {
+  background: #166534;
 }
 .btn.danger {
   background: #991b1b;
   border-color: #ef4444;
   color: #fff;
+}
+.btn.danger:hover {
+  background: #7f1d1d;
 }
 .btn.icon-only {
   padding: 6px 8px;
@@ -162,7 +170,7 @@ body {
   background: #0284c7;
   color: #fff;
   border-color: #38bdf8;
-  box-shadow: 0 0 10px rgba(56, 189, 248, 0.3);
+  box-shadow: 0 0 12px rgba(56, 189, 248, 0.35);
 }
 .tool-hotkey {
   font-size: 8px;
@@ -182,7 +190,7 @@ body {
   flex: 1;
   position: relative;
   overflow: hidden;
-  background: #090d16;
+  background: #060911;
 }
 
 canvas#editorCanvas {
@@ -198,7 +206,7 @@ canvas#editorCanvas {
   top: 12px;
   left: 50%;
   transform: translateX(-50%);
-  background: rgba(30, 41, 59, 0.95);
+  background: rgba(17, 24, 39, 0.95);
   backdrop-filter: blur(10px);
   border: 1px solid var(--border);
   border-radius: 8px;
@@ -207,7 +215,7 @@ canvas#editorCanvas {
   align-items: center;
   gap: 12px;
   font-size: 12px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
   z-index: 40;
 }
 
@@ -223,7 +231,7 @@ canvas#editorCanvas {
   text-transform: uppercase;
 }
 .subtool-group select, .subtool-group input[type="number"], .subtool-group input[type="range"] {
-  background: var(--bg-dark);
+  background: var(--bg-input);
   border: 1px solid var(--border);
   color: var(--text-main);
   padding: 4px 8px;
@@ -240,7 +248,7 @@ canvas#editorCanvas {
   position: absolute;
   bottom: 12px;
   left: 12px;
-  background: rgba(15, 23, 42, 0.85);
+  background: rgba(17, 24, 39, 0.88);
   backdrop-filter: blur(6px);
   border: 1px solid var(--border);
   border-radius: 6px;
@@ -261,7 +269,7 @@ canvas#editorCanvas {
   position: absolute;
   bottom: 12px;
   right: 340px;
-  background: rgba(15, 23, 42, 0.85);
+  background: rgba(17, 24, 39, 0.88);
   backdrop-filter: blur(6px);
   border: 1px solid var(--border);
   border-radius: 6px;
@@ -274,19 +282,24 @@ canvas#editorCanvas {
 .toggle-chip {
   padding: 4px 8px;
   border-radius: 4px;
-  background: var(--bg-panel);
+  background: var(--bg-card);
   border: 1px solid var(--border);
   color: var(--text-muted);
   cursor: pointer;
   font-size: 11px;
+  transition: all 0.15s;
+}
+.toggle-chip:hover {
+  background: #374151;
+  color: #fff;
 }
 .toggle-chip.active {
-  background: #0369a1;
+  background: #0284c7;
   color: #fff;
   border-color: #38bdf8;
 }
 
-/* RIGHT SIDEBAR (INSPECTOR & LAYERS) */
+/* RIGHT SIDEBAR (INSPECTOR, OUTLINER, PRESETS) */
 #right-sidebar {
   width: 320px;
   background: var(--bg-panel);
@@ -371,7 +384,7 @@ canvas#editorCanvas {
 .prop-field input[type="number"],
 .prop-field select {
   flex: 1;
-  background: var(--bg-dark);
+  background: var(--bg-input);
   border: 1px solid var(--border);
   color: var(--text-main);
   padding: 5px 8px;
@@ -384,7 +397,7 @@ canvas#editorCanvas {
   width: 38px;
   height: 28px;
   padding: 2px;
-  background: var(--bg-dark);
+  background: var(--bg-input);
   border: 1px solid var(--border);
   border-radius: 4px;
   cursor: pointer;
@@ -404,7 +417,7 @@ canvas#editorCanvas {
 /* OUTLINER / ENTITY LIST */
 .search-box {
   width: 100%;
-  background: var(--bg-dark);
+  background: var(--bg-input);
   border: 1px solid var(--border);
   color: var(--text-main);
   padding: 6px 10px;
@@ -422,20 +435,24 @@ canvas#editorCanvas {
   overflow-y: auto;
   border: 1px solid var(--border);
   border-radius: 6px;
-  background: var(--bg-dark);
-  max-height: 400px;
+  background: var(--bg-input);
+  max-height: 420px;
 }
 
 .layer-group-header {
-  padding: 6px 10px;
-  background: #182234;
+  padding: 8px 10px;
+  background: #1a2234;
   font-size: 11px;
   font-weight: 700;
   color: var(--accent);
   display: flex;
   justify-content: space-between;
   align-items: center;
-  border-bottom: 1px solid rgba(255,255,255,0.05);
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+  cursor: pointer;
+}
+.layer-group-header:hover {
+  background: #233148;
 }
 
 .entity-row {
@@ -449,7 +466,7 @@ canvas#editorCanvas {
   transition: background 0.1s;
 }
 .entity-row:hover {
-  background: rgba(56, 189, 248, 0.1);
+  background: rgba(56, 189, 248, 0.12);
 }
 .entity-row.selected {
   background: #0284c7;
@@ -462,6 +479,22 @@ canvas#editorCanvas {
 }
 .entity-row.selected .entity-meta {
   color: #e0f2fe;
+}
+
+/* MINIMAP CONTAINER */
+#minimap-box {
+  width: 100%;
+  height: 200px;
+  background: #060911;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+  position: relative;
+}
+#minimapCanvas {
+  width: 100%;
+  height: 100%;
+  display: block;
 }
 
 /* STATS BAR */
@@ -488,7 +521,7 @@ canvas#editorCanvas {
   border-radius: 8px;
   font-size: 13px;
   font-weight: 600;
-  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.4);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
   opacity: 0;
   pointer-events: none;
   transition: opacity 0.2s ease, transform 0.2s ease;
@@ -503,7 +536,7 @@ canvas#editorCanvas {
 #help-modal {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.7);
+  background: rgba(0, 0, 0, 0.75);
   backdrop-filter: blur(6px);
   display: none;
   align-items: center;
@@ -517,7 +550,7 @@ canvas#editorCanvas {
   width: 540px;
   max-width: 90vw;
   padding: 24px;
-  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.6);
+  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.7);
 }
 .modal-header {
   display: flex;
@@ -540,34 +573,18 @@ canvas#editorCanvas {
 .hotkey-item {
   display: flex;
   justify-content: space-between;
-  background: var(--bg-dark);
+  background: var(--bg-card);
   padding: 6px 10px;
   border-radius: 6px;
   border: 1px solid var(--border);
 }
 .key-badge {
-  background: var(--bg-card);
+  background: var(--bg-dark);
   padding: 2px 6px;
   border-radius: 4px;
   font-weight: 700;
   font-family: monospace;
   color: var(--accent);
-}
-
-/* MINI-RADAR MAP */
-#minimap-box {
-  width: 100%;
-  height: 140px;
-  background: #0b1120;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  position: relative;
-  overflow: hidden;
-}
-#minimapCanvas {
-  width: 100%;
-  height: 100%;
-  display: block;
 }
 </style>
 </head>
@@ -584,10 +601,12 @@ canvas#editorCanvas {
     <button class="btn icon-only" title="Отменить (Ctrl+Z)" onclick="undo()" id="btn-undo">↩️</button>
     <button class="btn icon-only" title="Повторить (Ctrl+Y)" onclick="redo()" id="btn-redo">↪️</button>
     <div style="width: 1px; height: 20px; background: var(--border); margin: 0 4px;"></div>
-    <button class="btn" onclick="openLoadFileDialog()">📂 Загрузить JSON</button>
-    <button class="btn success" onclick="saveToFile()">💾 Экспорт в map.json</button>
-    <button class="btn primary" onclick="saveToLocalStorageAndPlay()">🚀 Сохранить и Тест игры</button>
-    <button class="btn" onclick="toggleHelpModal()">❓ Горячие клавиши</button>
+    <button class="btn" title="Загрузить map.json с сервера" onclick="loadMapFileFromServer()">📥 Загрузить /map.json</button>
+    <button class="btn" onclick="openLoadFileDialog()">📂 Загрузить файл</button>
+    <button class="btn success" onclick="saveToFile()">💾 Скачать map.json</button>
+    <button class="btn primary" onclick="saveToLocalStorageAndPlay()">🚀 Сохранить и Играть</button>
+    <button class="btn danger" title="Очистить сохраненную карту из браузера" onclick="resetToDefaultMap()">🗑️ Сброс кэша</button>
+    <button class="btn" onclick="toggleHelpModal()">❓ Помощь</button>
   </div>
 </header>
 
@@ -657,16 +676,15 @@ canvas#editorCanvas {
     <canvas id="editorCanvas"></canvas>
 
     <!-- CONTEXTUAL SUBTOOL BAR -->
-    <div id="subtool-bar">
-      <!-- Will be populated dynamically based on active tool -->
-    </div>
+    <div id="subtool-bar"></div>
 
     <!-- STATUS OVERLAY -->
     <div id="status-overlay">
       <span>X: <b id="stat-x">0</b></span>
       <span>Y: <b id="stat-y">0</b></span>
-      <span>Масштаб: <b id="stat-zoom">100%</b></span>
+      <span>Масштаб: <b id="stat-zoom">25%</b></span>
       <span>Выбрано: <b id="stat-selected">0</b></span>
+      <span>FPS: <b id="stat-fps">60</b></span>
     </div>
 
     <!-- SNAPPING CONTROLS -->
@@ -681,7 +699,7 @@ canvas#editorCanvas {
   <div id="right-sidebar">
     <div class="tab-headers">
       <button class="tab-btn active" onclick="switchTab('inspector')">⚙️ Свойства</button>
-      <button class="tab-btn" onclick="switchTab('outliner')">📑 Список объектов</button>
+      <button class="tab-btn" onclick="switchTab('outliner')">📑 Объекты</button>
       <button class="tab-btn" onclick="switchTab('presets')">⭐ Шаблоны</button>
     </div>
 
@@ -689,12 +707,12 @@ canvas#editorCanvas {
     <div class="tab-content active" id="tab-inspector">
       <div id="inspector-empty" style="text-align: center; color: var(--text-muted); padding: 40px 10px; font-size: 13px;">
         <div style="font-size: 32px; margin-bottom: 10px;">🖱️</div>
-        Выберите объект на карте для редактирования параметров или выберите инструмент слева.
+        Кликните на любой объект на карте для редактирования параметров или выберите инструмент слева.
       </div>
       <div id="inspector-content" style="display: none;"></div>
     </div>
 
-    <!-- TAB 2: OUTLINER -->
+    <!-- TAB 2: OUTLINER (VIRTUALIZED & OPTIMIZED) -->
     <div class="tab-content" id="tab-outliner">
       <input type="text" class="search-box" id="outliner-search" placeholder="Поиск объектов по ID/имени..." oninput="renderOutliner()">
       <div class="prop-field" style="margin-bottom: 8px;">
@@ -723,10 +741,11 @@ canvas#editorCanvas {
         <button class="btn" onclick="insertPreset('industrial_depot')">🚛 Промзона с ангарами и стоянкой</button>
       </div>
 
-      <div class="section-title" style="margin-top: 16px;">Миникарта мира</div>
+      <div class="section-title" style="margin-top: 16px;">Миникарта мира (Быстрый предпросмотр)</div>
       <div id="minimap-box">
         <canvas id="minimapCanvas"></canvas>
       </div>
+      <button class="btn" style="margin-top: 8px;" onclick="centerCamera()">🎯 Центрировать камеру [F]</button>
     </div>
 
     <!-- STATS FOOTER -->
@@ -765,7 +784,7 @@ canvas#editorCanvas {
       <div class="hotkey-item"><span>Панорама карты</span> <span class="key-badge">Пробел + Drag</span></div>
       <div class="hotkey-item"><span>Масштаб (Зум)</span> <span class="key-badge">Колесо мыши</span></div>
       <div class="hotkey-item"><span>Вращение объекта</span> <span class="key-badge">R при драге</span></div>
-      <div class="hotkey-item"><span>Дублировать объект</span> <span class="key-badge">Ctrl+D / Alt+Drag</span></div>
+      <div class="hotkey-item"><span>Дублировать объект</span> <span class="key-badge">Ctrl+D</span></div>
       <div class="hotkey-item"><span>Удалить выбранное</span> <span class="key-badge">Del / Backspace</span></div>
       <div class="hotkey-item"><span>Отмена / Повтор</span> <span class="key-badge">Ctrl+Z / Ctrl+Y</span></div>
       <div class="hotkey-item"><span>Центрировать камеру</span> <span class="key-badge">F</span></div>
@@ -776,19 +795,15 @@ canvas#editorCanvas {
 <script>
 /**
  * ULTRA-PERFORMANT VECTOR MAP EDITOR FOR TOP-DOWN CITY SIMULATOR
- * Features:
- * - 60 FPS Canvas rendering with Viewport Culling and dirty flags
- * - 2-Point Road Creation Tool
- * - 3-Point Bezier/Arc Curved Road Creation Tool
- * - Linear Batch Distribution Tool (Lines of trees, lights, benches, fences)
- * - Area Cluster / Scatter Brush Tool
- * - Visual Transform Gizmo (Drag, Rotate, Resize Handles)
- * - Magnetic Road & Grid Snapping
- * - Full Undo / Redo Stack
- * - Multi-select and Batch Operations
+ * Key Optimizations:
+ * 1. Offscreen Cached Minimap: Rendered once on world change, 0ms blit during 60 FPS loop
+ * 2. O(1) Selection Set: Fast Set lookup during drawing avoiding O(N*S) scans
+ * 3. Spatial Viewport Culling & LOD: Microscopic props & text labels culled at low zoom
+ * 4. Virtualized Outliner: Accordion grouping with max 40 items per group to prevent DOM freezing
+ * 5. Throttled History & DOM UI updates to eliminate layout thrashing
  */
 
-// Global State
+// Global World State
 let mapData = {
   width: 8000,
   height: 8000,
@@ -809,12 +824,9 @@ let mapData = {
   weather: 'clear'
 };
 
-/**
- * High-Performance 2D Spatial Grid for Map Editor
- * Provides O(1) viewport culling and O(1) hit testing across thousands of entities
- */
+// Spatial Grid for O(1) culling
 class EditorSpatialGrid {
-  constructor(cellSize = 200) {
+  constructor(cellSize = 250) {
     this.cellSize = cellSize;
     this.grid = new Map();
     this.queryId = 0;
@@ -904,6 +916,17 @@ class EditorSpatialGrid {
 
 const spatialIndex = new EditorSpatialGrid(250);
 
+// Offscreen Minimap Canvas & Dirty Flag
+const offscreenMinimap = document.createElement('canvas');
+offscreenMinimap.width = 300;
+offscreenMinimap.height = 300;
+const offscreenMinimapCtx = offscreenMinimap.getContext('2d');
+let isMinimapDirty = true;
+
+function markMinimapDirty() {
+  isMinimapDirty = true;
+}
+
 function rebuildSpatialIndex() {
   if (!mapData) return;
   spatialIndex.clear();
@@ -914,6 +937,7 @@ function rebuildSpatialIndex() {
   if (mapData.props) mapData.props.forEach(p => spatialIndex.insert(p, 'props'));
   if (mapData.sidewalks) mapData.sidewalks.forEach(s => spatialIndex.insert(s, 'sidewalks'));
   if (mapData.parkings) mapData.parkings.forEach(pk => spatialIndex.insert(pk, 'parkings'));
+  markMinimapDirty();
 }
 
 const canvas = document.getElementById('editorCanvas');
@@ -924,6 +948,16 @@ const minimapCtx = minimapCanvas ? minimapCanvas.getContext('2d') : null;
 let camera = { x: 4400, y: 2800, zoom: 0.25 };
 let currentTool = 'select';
 let selectedEntities = []; // Array of { entity, layer }
+let selectedEntityIds = new Set(); // O(1) lookup in render loop
+
+function updateSelectionSet() {
+  selectedEntityIds.clear();
+  for (let i = 0; i < selectedEntities.length; i++) {
+    if (selectedEntities[i].entity && selectedEntities[i].entity.id) {
+      selectedEntityIds.add(selectedEntities[i].entity.id);
+    }
+  }
+}
 
 // Snapping Options
 let snapSettings = {
@@ -933,10 +967,10 @@ let snapSettings = {
   ortho: false
 };
 
-// Undo / Redo History
+// Undo / Redo History (Max 20 snapshots to preserve memory)
 const historyStack = [];
 let historyIndex = -1;
-const MAX_HISTORY = 40;
+const MAX_HISTORY = 20;
 
 // Mouse Interaction
 let mouseScreen = { x: 0, y: 0 };
@@ -946,17 +980,15 @@ let isPanning = false;
 let panStart = { x: 0, y: 0 };
 let cameraStart = { x: 0, y: 0 };
 let dragStart = { x: 0, y: 0 };
-let activeHandle = null; // 'move', 'rotate', 'nw', 'ne', 'se', 'sw', 'p1', 'p2', 'control'
-
-// Multi-point Tool Workflows
+let activeHandle = null;
 let toolStep = 0;
-let toolPoints = []; // [{x, y}, ...]
+let toolPoints = [];
 let boxSelectStart = null;
 
-// Tool Config Options (subtool bar)
+// Tool Config Options
 const toolConfigs = {
-  road: { lanes: 2, isAvenue: false, type: 'asphalt', width: 84, name: 'New Road' },
-  curve: { lanes: 2, isAvenue: false, type: 'asphalt', width: 84, segments: 10, name: 'Curved Avenue' },
+  road: { lanes: 2, isAvenue: false, type: 'asphalt', width: 84, name: 'Main Road' },
+  curve: { lanes: 2, isAvenue: false, type: 'asphalt', width: 84, segments: 10, name: 'Curved Road' },
   lineBatch: { count: 8, spacing: 60, entityType: 'trees', subType: 'tree', radius: 22, color: '#15803d' },
   brushScatter: { radius: 120, density: 10, entityType: 'trees', subType: 'tree' },
   building: { type: 'office', color: '#64748b', roofColor: '#334155', accentColor: '#475569', entranceSide: 'south' },
@@ -967,34 +999,29 @@ const toolConfigs = {
   intersection: { type: '4way', hasLights: true, isDirt: false }
 };
 
-// Layer Colors for Drawing
-const LAYER_COLORS = {
-  roads: { fill: '#1e293b', stroke: '#64748b', selected: '#38bdf8' },
-  buildings: { stroke: '#475569', selected: '#f43f5e' },
-  intersections: { fill: 'rgba(51, 65, 85, 0.9)', stroke: '#94a3b8', selected: '#38bdf8' },
-  trees: { fill: '#15803d', stroke: '#166534', selected: '#22c55e' },
-  props: { fill: '#f59e0b', stroke: '#d97706', selected: '#fbbf24' },
-  sidewalks: { fill: 'rgba(148, 163, 184, 0.15)', stroke: '#94a3b8', selected: '#38bdf8' },
-  parkings: { fill: 'rgba(71, 85, 105, 0.4)', stroke: '#64748b', selected: '#38bdf8' }
-};
+// FPS Counter
+let fpsCount = 0;
+let fpsTimer = performance.now();
 
 // --- INITIALIZATION ---
 window.addEventListener('DOMContentLoaded', async () => {
   resizeCanvas();
   window.addEventListener('resize', resizeCanvas);
   
-  // Try loading default map.json
-  try {
-    const res = await fetch('/map.json');
-    if (res.ok) {
-      mapData = await res.json();
+  // Try loading custom map from localStorage, or /map.json
+  const customMapRaw = localStorage.getItem('neon_city_custom_map');
+  if (customMapRaw) {
+    try {
+      mapData = JSON.parse(customMapRaw);
       rebuildSpatialIndex();
-      pushHistory('Initial Map Loaded');
-      showToast('Карта города успешно загружена');
+      pushHistory('Loaded Custom Map from localStorage');
+      showToast('Загружена сохраненная карта из браузера');
+    } catch (e) {
+      console.warn('Failed to parse localStorage map, fallback to /map.json');
+      await loadMapFileFromServer();
     }
-  } catch (err) {
-    console.warn('Could not auto-load map.json, starting with empty base grid', err);
-    rebuildSpatialIndex();
+  } else {
+    await loadMapFileFromServer();
   }
 
   updateSubtoolBar();
@@ -1003,13 +1030,46 @@ window.addEventListener('DOMContentLoaded', async () => {
   requestAnimationFrame(gameLoop);
 });
 
+async function loadMapFileFromServer() {
+  try {
+    const res = await fetch('/map.json', { cache: 'no-cache' });
+    if (res.ok) {
+      mapData = await res.json();
+      rebuildSpatialIndex();
+      historyStack.length = 0;
+      historyIndex = -1;
+      pushHistory('Initial map.json loaded');
+      renderOutliner();
+      updateFooterCounts();
+      centerCamera();
+      showToast('Файл /map.json успешно загружен!');
+    } else {
+      throw new Error(`HTTP ${res.status}`);
+    }
+  } catch (err) {
+    console.warn('Could not auto-load /map.json', err);
+    rebuildSpatialIndex();
+    showToast('Не удалось загрузить /map.json, создана пустая сетка');
+  }
+}
+
+function resetToDefaultMap() {
+  if (confirm('Сбросить карту к исходному файлу /map.json и удалить изменения в браузере?')) {
+    localStorage.removeItem('neon_city_custom_map');
+    loadMapFileFromServer();
+  }
+}
+
 function resizeCanvas() {
   const vp = document.getElementById('canvas-viewport');
   canvas.width = vp.clientWidth;
   canvas.height = vp.clientHeight;
   if (minimapCanvas) {
-    minimapCanvas.width = minimapCanvas.clientWidth;
-    minimapCanvas.height = minimapCanvas.clientHeight;
+    minimapCanvas.width = minimapCanvas.clientWidth || 280;
+    minimapCanvas.height = minimapCanvas.clientHeight || 180;
+    offscreenMinimap.width = minimapCanvas.width;
+    offscreenMinimap.height = minimapCanvas.height;
+    markMinimapDirty();
   }
 }
 
@@ -1032,7 +1092,6 @@ function worldToScreen(wx, wy) {
 function applySnapping(pos) {
   let res = { x: pos.x, y: pos.y };
 
-  // 1. Magnetic Road Endpoint Snapping (Accelerated with Spatial Grid)
   if (snapSettings.roads && mapData) {
     const snapRadius = 35 / camera.zoom;
     let closestDist = snapRadius;
@@ -1061,7 +1120,6 @@ function applySnapping(pos) {
     }
   }
 
-  // 2. Grid Snapping
   if (snapSettings.grid) {
     const gs = snapSettings.gridSize;
     res.x = Math.round(res.x / gs) * gs;
@@ -1073,15 +1131,12 @@ function applySnapping(pos) {
 
 // --- UNDO / REDO HISTORY ENGINE ---
 function pushHistory(actionName = 'Edit') {
-  // Update Spatial Index
   rebuildSpatialIndex();
 
-  // Truncate future if branched
   if (historyIndex < historyStack.length - 1) {
     historyStack.splice(historyIndex + 1);
   }
 
-  // Deep clone current map
   historyStack.push(JSON.stringify(mapData));
   if (historyStack.length > MAX_HISTORY) historyStack.shift();
   historyIndex = historyStack.length - 1;
@@ -1095,6 +1150,7 @@ function undo() {
     mapData = JSON.parse(historyStack[historyIndex]);
     rebuildSpatialIndex();
     selectedEntities = [];
+    updateSelectionSet();
     updateInspector();
     renderOutliner();
     updateFooterCounts();
@@ -1109,6 +1165,7 @@ function redo() {
     mapData = JSON.parse(historyStack[historyIndex]);
     rebuildSpatialIndex();
     selectedEntities = [];
+    updateSelectionSet();
     updateInspector();
     renderOutliner();
     updateFooterCounts();
@@ -1124,7 +1181,7 @@ function updateUndoRedoButtons() {
   if (btnRedo) btnRedo.disabled = historyIndex >= historyStack.length - 1;
 }
 
-// --- TOOL SWITCHING & SUBTOOL CONTROLS ---
+// --- TOOL SWITCHING ---
 function setTool(t) {
   currentTool = t;
   toolStep = 0;
@@ -1162,7 +1219,7 @@ function updateSubtoolBar() {
 
   if (currentTool === 'select') {
     bar.innerHTML = `
-      <span style="color:var(--text-muted);font-weight:600;">Режим: Клик — выбор | Shift+Клик — мульти-выбор | Drag — перемещение | Del — удалить</span>
+      <span style="color:var(--text-muted);font-weight:600;">Клик — выбор | Shift+Клик — мульти-выбор | Drag — перемещение | Del — удалить</span>
       <button class="btn danger" onclick="deleteSelected()" style="padding:2px 8px;font-size:11px;">🗑️ Удалить</button>
       <button class="btn" onclick="duplicateSelected()" style="padding:2px 8px;font-size:11px;">📑 Дубликат</button>
     `;
@@ -1217,7 +1274,7 @@ function updateSubtoolBar() {
         <label>Количество:</label>
         <input type="number" value="${toolConfigs.lineBatch.count}" min="2" max="50" style="width:50px;" onchange="toolConfigs.lineBatch.count=parseInt(this.value)">
       </div>
-      <span style="color:var(--accent);font-size:11px;">Кликните и протяните линию для равномерной расстановки!</span>
+      <span style="color:var(--accent);font-size:11px;">Кликните и протяните линию для расстановки</span>
     `;
   } else if (currentTool === 'brushScatter') {
     bar.innerHTML = `
@@ -1226,24 +1283,24 @@ function updateSubtoolBar() {
         <select onchange="toolConfigs.brushScatter.entityType=this.value;">
           <option value="trees">Густой лес / Парк (Деревья)</option>
           <option value="props">Уличный декор (Урны, гидранты, знаки)</option>
-          <option value="litter">Мусор и листья на асфальте</option>
+          <option value="litter">Мусор и листья</option>
           <option value="puddles">Лужи и вода</option>
         </select>
       </div>
       <div class="subtool-group">
-        <label>Радиус кисти:</label>
+        <label>Радиус:</label>
         <input type="range" min="40" max="300" value="${toolConfigs.brushScatter.radius}" oninput="toolConfigs.brushScatter.radius=parseInt(this.value)">
       </div>
       <div class="subtool-group">
-        <label>Плотность (шт):</label>
-        <input type="number" min="1" max="40" value="${toolConfigs.brushScatter.density}" style="width:50px;" onchange="toolConfigs.brushScatter.density=parseInt(this.value)">
+        <label>Плотность:</label>
+        <input type="number" min="1" max="30" value="${toolConfigs.brushScatter.density}" style="width:50px;" onchange="toolConfigs.brushScatter.density=parseInt(this.value)">
       </div>
-      <span style="color:var(--accent);font-size:11px;">Кликните или зажмите в области для посадки кучки!</span>
+      <span style="color:var(--accent);font-size:11px;">Зажмите мышь для нанесения объектов</span>
     `;
   } else if (currentTool === 'building') {
     bar.innerHTML = `
       <div class="subtool-group">
-        <label>Тип здания:</label>
+        <label>Тип:</label>
         <select onchange="toolConfigs.building.type=this.value;">
           <option value="office">Офисный центр</option>
           <option value="residential">Жилой дом</option>
@@ -1255,7 +1312,7 @@ function updateSubtoolBar() {
           <option value="hospital">Больница</option>
         </select>
       </div>
-      <span style="color:var(--text-muted);font-size:11px;">Кликните и растяните прямоугольник здания на карте</span>
+      <span style="color:var(--text-muted);font-size:11px;">Кликните и растяните прямоугольник здания</span>
     `;
   } else if (currentTool === 'prop') {
     bar.innerHTML = `
@@ -1275,19 +1332,17 @@ function updateSubtoolBar() {
           <option value="manhole">Люк</option>
         </select>
       </div>
-      <span style="color:var(--accent);font-size:11px;">Кликните в место размещения (Вращение колесиком мыши)</span>
+      <span style="color:var(--accent);font-size:11px;">Кликните в место размещения</span>
     `;
   } else {
     bar.innerHTML = `<span style="color:var(--text-muted);">Инструмент: ${getToolName(currentTool)}</span>`;
   }
 }
 
-// --- HELPER GENERATORS ---
 function generateUniqueId(prefix) {
   return `${prefix}_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
 }
 
-// Helper: Calculate road lanes and waypoints automatically
 function buildRoadLanePaths(x1, y1, x2, y2, lanes, isAvenue) {
   const dx = x2 - x1;
   const dy = y2 - y1;
@@ -1305,40 +1360,28 @@ function buildRoadLanePaths(x1, y1, x2, y2, lanes, isAvenue) {
   const forwardLanes = Math.floor(lanes / 2);
   const backwardLanes = lanes - forwardLanes;
 
-  // Forward direction lanes (right side)
   for (let i = 0; i < forwardLanes; i++) {
     const laneOffset = (i + 0.5) * (halfWidth / forwardLanes);
-    const startX = x1 + perpX * laneOffset;
-    const startY = y1 + perpY * laneOffset;
-    const endX = x2 + perpX * laneOffset;
-    const endY = y2 + perpY * laneOffset;
-
     lanePaths.push({
       laneId: generateUniqueId('lane_fwd'),
       laneIndex: i,
       direction: angle,
       waypoints: [
-        { x: startX, y: startY },
-        { x: endX, y: endY }
+        { x: x1 + perpX * laneOffset, y: y1 + perpY * laneOffset },
+        { x: x2 + perpX * laneOffset, y: y2 + perpY * laneOffset }
       ]
     });
   }
 
-  // Backward direction lanes (left side)
   for (let i = 0; i < backwardLanes; i++) {
     const laneOffset = -(i + 0.5) * (halfWidth / backwardLanes);
-    const startX = x2 + perpX * laneOffset;
-    const startY = y2 + perpY * laneOffset;
-    const endX = x1 + perpX * laneOffset;
-    const endY = y1 + perpY * laneOffset;
-
     lanePaths.push({
       laneId: generateUniqueId('lane_bwd'),
       laneIndex: i,
       direction: angle + Math.PI,
       waypoints: [
-        { x: startX, y: startY },
-        { x: endX, y: endY }
+        { x: x2 + perpX * laneOffset, y: y2 + perpY * laneOffset },
+        { x: x1 + perpX * laneOffset, y: y1 + perpY * laneOffset }
       ]
     });
   }
@@ -1353,8 +1396,7 @@ canvas.addEventListener('mousedown', (e) => {
   mouseWorld = wp;
   isMouseDown = true;
 
-  // Middle Click or Space/Shift + Drag = PAN
-  if (e.button === 1 || e.button === 0 && e.spaceKey) {
+  if (e.button === 1 || (e.button === 0 && e.spaceKey)) {
     isPanning = true;
     panStart = { x: e.clientX, y: e.clientY };
     cameraStart = { x: camera.x, y: camera.y };
@@ -1366,9 +1408,7 @@ canvas.addEventListener('mousedown', (e) => {
 
   const snapped = applySnapping(wp);
 
-  // --- TOOL SPECIFIC ACTIONS ---
   if (currentTool === 'select') {
-    // Check if clicked an active transform handle
     if (selectedEntities.length === 1) {
       const handle = checkGizmoHandleHit(wp.x, wp.y, selectedEntities[0].entity);
       if (handle) {
@@ -1378,16 +1418,13 @@ canvas.addEventListener('mousedown', (e) => {
       }
     }
 
-    // Hit test an entity on the canvas
     const hit = hitTestWorld(wp.x, wp.y);
     if (hit) {
       if (e.shiftKey || e.ctrlKey) {
-        // Toggle in multi-selection
         const idx = selectedEntities.findIndex(s => s.entity === hit.entity);
         if (idx >= 0) selectedEntities.splice(idx, 1);
         else selectedEntities.push(hit);
       } else {
-        // Single selection
         selectedEntities = [hit];
       }
       activeHandle = 'move';
@@ -1396,9 +1433,9 @@ canvas.addEventListener('mousedown', (e) => {
       if (!e.shiftKey && !e.ctrlKey) {
         selectedEntities = [];
       }
-      // Start box selection
       boxSelectStart = { x: wp.x, y: wp.y };
     }
+    updateSelectionSet();
     updateInspector();
     renderOutliner();
   }
@@ -1408,15 +1445,12 @@ canvas.addEventListener('mousedown', (e) => {
       toolPoints = [snapped];
       toolStep = 1;
     } else if (toolStep === 1) {
-      // Complete 2-point road
       const p1 = toolPoints[0];
       const p2 = snapped;
       const isHoriz = Math.abs(p2.x - p1.x) >= Math.abs(p2.y - p1.y);
       const isAvenue = toolConfigs.road.isAvenue;
       const lanes = toolConfigs.road.lanes;
       const width = toolConfigs.road.width;
-      const isDirt = toolConfigs.road.type === 'dirt';
-      const isGravel = toolConfigs.road.type === 'gravel';
 
       const newRoad = {
         id: generateUniqueId('road'),
@@ -1427,8 +1461,8 @@ canvas.addEventListener('mousedown', (e) => {
         lanes: lanes,
         width: width,
         isAvenue: isAvenue,
-        isDirt: isDirt,
-        isGravel: isGravel,
+        isDirt: toolConfigs.road.type === 'dirt',
+        isGravel: toolConfigs.road.type === 'gravel',
         direction: isHoriz ? 'horizontal' : 'vertical',
         name: toolConfigs.road.name,
         lanePaths: buildRoadLanePaths(p1.x, p1.y, p2.x, p2.y, lanes, isAvenue)
@@ -1449,18 +1483,15 @@ canvas.addEventListener('mousedown', (e) => {
       toolStep = 1;
     } else if (toolStep === 1) {
       toolPoints.push(snapped);
-      toolStep = 2; // Waiting for control midpoint
+      toolStep = 2;
     } else if (toolStep === 2) {
-      // Generate multi-segment curved road along quadratic bezier
       const p0 = toolPoints[0];
       const p2 = toolPoints[1];
-      const p1 = snapped; // Control point
+      const p1 = snapped;
       const segCount = toolConfigs.curve.segments || 10;
       const isAvenue = toolConfigs.curve.isAvenue;
       const lanes = toolConfigs.curve.lanes;
       const width = toolConfigs.curve.width;
-      const isDirt = toolConfigs.curve.type === 'dirt';
-      const isGravel = toolConfigs.curve.type === 'gravel';
 
       const curvePoints = [];
       for (let i = 0; i <= segCount; i++) {
@@ -1471,7 +1502,6 @@ canvas.addEventListener('mousedown', (e) => {
         curvePoints.push({ x, y });
       }
 
-      // Create sequence of connected road segments
       for (let i = 0; i < curvePoints.length - 1; i++) {
         const cp1 = curvePoints[i];
         const cp2 = curvePoints[i+1];
@@ -1486,8 +1516,8 @@ canvas.addEventListener('mousedown', (e) => {
           lanes: lanes,
           width: width,
           isAvenue: isAvenue,
-          isDirt: isDirt,
-          isGravel: isGravel,
+          isDirt: toolConfigs.curve.type === 'dirt',
+          isGravel: toolConfigs.curve.type === 'gravel',
           direction: isHoriz ? 'horizontal' : 'vertical',
           name: toolConfigs.curve.name,
           lanePaths: buildRoadLanePaths(cp1.x, cp1.y, cp2.x, cp2.y, lanes, isAvenue)
@@ -1495,7 +1525,7 @@ canvas.addEventListener('mousedown', (e) => {
       }
 
       pushHistory('Create Curved Road');
-      showToast(`Создана кривая дорога из ${segCount} сегментов!`);
+      showToast(`Создана кривая дорога (${segCount} сегментов)!`);
       toolStep = 0;
       toolPoints = [];
       updateFooterCounts();
@@ -1527,14 +1557,7 @@ canvas.addEventListener('mousedown', (e) => {
             shadowOffset: 6
           });
         } else {
-          // Props (lamp, bench, bollard, cone, flowerbed)
-          const propTypeMap = {
-            lamps: 'lamp',
-            benches: 'bench',
-            bollards: 'bollard',
-            cones: 'cone',
-            flowerbeds: 'flowerbed'
-          };
+          const propTypeMap = { lamps: 'lamp', benches: 'bench', bollards: 'bollard', cones: 'cone', flowerbeds: 'flowerbed' };
           const propType = propTypeMap[type] || 'lamp';
           const angle = Math.atan2(p2.y - p1.y, p2.x - p1.x);
 
@@ -1583,10 +1606,7 @@ canvas.addEventListener('mousedown', (e) => {
         roofColor: toolConfigs.building.roofColor,
         accentColor: toolConfigs.building.accentColor,
         entranceSide: toolConfigs.building.entranceSide,
-        roofDetails: [
-          { type: 'ac', rx: 0.2, ry: 0.2, rw: 16, rh: 16 },
-          { type: 'antenna', rx: 0.8, ry: 0.8, rw: 8, rh: 8 }
-        ],
+        roofDetails: [{ type: 'ac', rx: 0.2, ry: 0.2, rw: 16, rh: 16 }],
         windows: []
       };
 
@@ -1596,6 +1616,7 @@ canvas.addEventListener('mousedown', (e) => {
       toolStep = 0;
       toolPoints = [];
       selectedEntities = [{ entity: newBld, layer: 'buildings' }];
+      updateSelectionSet();
       updateInspector();
       updateFooterCounts();
     }
@@ -1675,13 +1696,10 @@ canvas.addEventListener('mousedown', (e) => {
       const ph = Math.max(80, Math.abs(p2.y - p1.y));
 
       const spots = [];
-      const spotWidth = 24;
-      const spotHeight = 44;
-      const numCols = Math.floor(pw / (spotWidth + 8));
-
+      const numCols = Math.floor(pw / 32);
       for (let c = 0; c < numCols; c++) {
         spots.push({
-          x: px + 16 + c * (spotWidth + 8),
+          x: px + 16 + c * 32,
           y: py + 26,
           angle: 0,
           occupied: Math.random() < 0.4
@@ -1742,9 +1760,6 @@ canvas.addEventListener('mousemove', (e) => {
   mouseScreen = { x: e.offsetX, y: e.offsetY };
   mouseWorld = wp;
 
-  document.getElementById('stat-x').textContent = Math.round(wp.x);
-  document.getElementById('stat-y').textContent = Math.round(wp.y);
-
   if (isPanning) {
     camera.x = cameraStart.x - (e.clientX - panStart.x) / camera.zoom;
     camera.y = cameraStart.y - (e.clientY - panStart.y) / camera.zoom;
@@ -1756,8 +1771,8 @@ canvas.addEventListener('mousemove', (e) => {
     const dy = wp.y - dragStart.y;
 
     if (activeHandle === 'move') {
-      for (const sel of selectedEntities) {
-        const ent = sel.entity;
+      for (let i = 0; i < selectedEntities.length; i++) {
+        const ent = selectedEntities[i].entity;
         if ('x' in ent && 'y' in ent) {
           ent.x += dx;
           ent.y += dy;
@@ -1779,7 +1794,6 @@ canvas.addEventListener('mousemove', (e) => {
       const cy = ent.y !== undefined ? ent.y : (ent.y1 + ent.y2) / 2;
       ent.angle = Math.atan2(wp.y - cy, wp.x - cx);
     } else if (activeHandle && selectedEntities.length === 1) {
-      // Resize handle for boxes (buildings, sidewalks, parkings)
       const ent = selectedEntities[0].entity;
       if ('width' in ent && 'height' in ent) {
         if (activeHandle === 'se') {
@@ -1805,11 +1819,9 @@ canvas.addEventListener('mousemove', (e) => {
         }
       }
     }
-
     dragStart = { x: wp.x, y: wp.y };
   }
 
-  // Brush scatter continuous dragging
   if (isMouseDown && currentTool === 'brushScatter') {
     applyBrushScatter(wp.x, wp.y);
   }
@@ -1832,7 +1844,6 @@ canvas.addEventListener('mouseup', () => {
   }
 
   if (boxSelectStart) {
-    // Perform box selection via spatial query
     const minX = Math.min(boxSelectStart.x, mouseWorld.x);
     const maxX = Math.max(boxSelectStart.x, mouseWorld.x);
     const minY = Math.min(boxSelectStart.y, mouseWorld.y);
@@ -1851,6 +1862,7 @@ canvas.addEventListener('mouseup', () => {
     }
 
     boxSelectStart = null;
+    updateSelectionSet();
     updateInspector();
     renderOutliner();
   }
@@ -1870,15 +1882,12 @@ canvas.addEventListener('wheel', (e) => {
   const wpNew = screenToWorld(e.offsetX, e.offsetY);
   camera.x -= (wpNew.x - wp.x);
   camera.y -= (wpNew.y - wp.y);
-
-  document.getElementById('stat-zoom').textContent = `${Math.round(camera.zoom * 100)}%`;
 }, { passive: false });
 
-// Brush Scatter Tool Implementation
 let lastBrushTime = 0;
 function applyBrushScatter(cx, cy) {
   const now = Date.now();
-  if (now - lastBrushTime < 60) return; // Throttle brush strokes to 60ms
+  if (now - lastBrushTime < 60) return;
   lastBrushTime = now;
 
   const rad = toolConfigs.brushScatter.radius || 120;
@@ -1913,49 +1922,22 @@ function applyBrushScatter(cx, cy) {
       };
       mapData.props.push(prop);
       spatialIndex.insert(prop, 'props');
-    } else if (type === 'litter') {
-      const litterTypes = ['paper', 'newspaper', 'cup', 'can', 'leaf', 'bottle'];
-      if (!mapData.litter) mapData.litter = [];
-      mapData.litter.push({
-        id: generateUniqueId('litter'),
-        x: px,
-        y: py,
-        vx: 0,
-        vy: 0,
-        angle: Math.random() * Math.PI * 2,
-        rotationSpeed: 0,
-        type: litterTypes[Math.floor(Math.random() * litterTypes.length)],
-        color: '#e2e8f0',
-        size: 3 + Math.random() * 4
-      });
-    } else if (type === 'puddles') {
-      if (!mapData.puddles) mapData.puddles = [];
-      mapData.puddles.push({
-        id: generateUniqueId('puddle'),
-        x: px,
-        y: py,
-        radiusX: 15 + Math.random() * 20,
-        radiusY: 10 + Math.random() * 15,
-        angle: Math.random() * Math.PI * 2,
-        rippleTimer: 0
-      });
     }
   }
 
+  markMinimapDirty();
   updateFooterCounts();
 }
 
-// --- HIT TESTING (ACCELERATED WITH SPATIAL GRID) ---
+// Hit Testing
 function hitTestWorld(wx, wy) {
   if (!mapData) return null;
   const tol = 14 / camera.zoom;
   const searchRadius = 40 + tol;
 
-  // Query only candidates in proximity
   const nearby = spatialIndex.queryRadius(wx, wy, searchRadius);
   if (!nearby || nearby.length === 0) return null;
 
-  // Check in reverse priority order: props, trees, buildings, intersections, roads, sidewalks, parkings
   for (let i = nearby.length - 1; i >= 0; i--) {
     const entry = nearby[i];
     if (entry.layer === 'props') {
@@ -2045,11 +2027,19 @@ function checkGizmoHandleHit(wx, wy, ent) {
   return null;
 }
 
-// Minimap throttle
-let minimapThrottleTimer = 0;
-
-// --- RENDERING LOOP (60 FPS WITH SPATIAL VIEWPORT CULLING) ---
+// --- RENDERING LOOP (60 FPS WITH SPATIAL VIEWPORT CULLING & CACHED MINIMAP) ---
 function gameLoop(now) {
+  fpsCount++;
+  if (now - fpsTimer >= 500) {
+    const fps = Math.round((fpsCount * 1000) / (now - fpsTimer));
+    document.getElementById('stat-fps').textContent = fps;
+    document.getElementById('stat-x').textContent = Math.round(mouseWorld.x);
+    document.getElementById('stat-y').textContent = Math.round(mouseWorld.y);
+    document.getElementById('stat-zoom').textContent = `${Math.round(camera.zoom * 100)}%`;
+    fpsCount = 0;
+    fpsTimer = now;
+  }
+
   render();
   requestAnimationFrame(gameLoop);
 }
@@ -2058,8 +2048,7 @@ function render() {
   const w = canvas.width;
   const h = canvas.height;
 
-  // Clear Screen
-  ctx.fillStyle = '#090d16';
+  ctx.fillStyle = '#060911';
   ctx.fillRect(0, 0, w, h);
 
   ctx.save();
@@ -2067,15 +2056,14 @@ function render() {
   ctx.scale(camera.zoom, camera.zoom);
   ctx.translate(-camera.x, -camera.y);
 
-  // Viewport bounds in world coords for culling
   const vDiag = Math.hypot(w, h) / (2 * camera.zoom) + 200;
   const minX = camera.x - vDiag;
   const maxX = camera.x + vDiag;
   const minY = camera.y - vDiag;
   const maxY = camera.y + vDiag;
 
-  // 1. World Base Grid & Boundary
-  ctx.fillStyle = '#1e293b';
+  // 1. World Canvas Background
+  ctx.fillStyle = '#111827';
   ctx.fillRect(0, 0, mapData.width, mapData.height);
 
   // Subtle Grid Lines
@@ -2100,17 +2088,18 @@ function render() {
 
   // Fast Spatial Viewport Query
   const visibleEntities = spatialIndex.queryRect(minX, minY, maxX - minX, maxY - minY);
+  const zoom = camera.zoom;
 
   // 2. Sidewalks
   for (let i = 0; i < visibleEntities.length; i++) {
     const entry = visibleEntities[i];
     if (entry.layer !== 'sidewalks') continue;
     const sw = entry.entity;
-    const isSel = selectedEntities.some(s => s.entity === sw);
+    const isSel = selectedEntityIds.has(sw.id);
     ctx.fillStyle = isSel ? 'rgba(56, 189, 248, 0.25)' : 'rgba(148, 163, 184, 0.15)';
     ctx.fillRect(sw.x, sw.y, sw.width, sw.height);
     ctx.strokeStyle = isSel ? '#38bdf8' : '#64748b';
-    ctx.lineWidth = isSel ? 2 / camera.zoom : 1 / camera.zoom;
+    ctx.lineWidth = isSel ? 2 / zoom : 1 / zoom;
     ctx.strokeRect(sw.x, sw.y, sw.width, sw.height);
   }
 
@@ -2119,7 +2108,7 @@ function render() {
     const entry = visibleEntities[i];
     if (entry.layer !== 'roads') continue;
     const r = entry.entity;
-    const isSel = selectedEntities.some(s => s.entity === r);
+    const isSel = selectedEntityIds.has(r.id);
     ctx.save();
     ctx.strokeStyle = isSel ? '#38bdf8' : r.isDirt ? '#7c2d12' : r.isGravel ? '#475569' : '#1e293b';
     ctx.lineWidth = r.width;
@@ -2129,11 +2118,9 @@ function render() {
     ctx.lineTo(r.x2, r.y2);
     ctx.stroke();
 
-    // Road Markings (Yellow center line, dashed dividers)
     if (!r.isDirt) {
       ctx.strokeStyle = r.isGravel ? 'rgba(255,255,255,0.3)' : '#eab308';
-      ctx.lineWidth = 2 / camera.zoom;
-      ctx.setLineDash([]);
+      ctx.lineWidth = 2 / zoom;
       ctx.beginPath();
       ctx.moveTo(r.x1, r.y1);
       ctx.lineTo(r.x2, r.y2);
@@ -2147,17 +2134,17 @@ function render() {
     const entry = visibleEntities[i];
     if (entry.layer !== 'intersections') continue;
     const inter = entry.entity;
-    const isSel = selectedEntities.some(s => s.entity === inter);
+    const isSel = selectedEntityIds.has(inter.id);
     ctx.fillStyle = isSel ? 'rgba(56, 189, 248, 0.4)' : '#1e293b';
     ctx.fillRect(inter.x - inter.width / 2, inter.y - inter.height / 2, inter.width, inter.height);
     ctx.strokeStyle = isSel ? '#38bdf8' : '#64748b';
-    ctx.lineWidth = isSel ? 2 / camera.zoom : 1 / camera.zoom;
+    ctx.lineWidth = isSel ? 2 / zoom : 1 / zoom;
     ctx.strokeRect(inter.x - inter.width / 2, inter.y - inter.height / 2, inter.width, inter.height);
 
-    if (inter.hasLights) {
+    if (inter.hasLights && zoom > 0.15) {
       ctx.fillStyle = '#22c55e';
       ctx.beginPath();
-      ctx.arc(inter.x, inter.y, 4 / camera.zoom, 0, Math.PI * 2);
+      ctx.arc(inter.x, inter.y, 4 / zoom, 0, Math.PI * 2);
       ctx.fill();
     }
   }
@@ -2167,21 +2154,12 @@ function render() {
     const entry = visibleEntities[i];
     if (entry.layer !== 'parkings') continue;
     const p = entry.entity;
-    const isSel = selectedEntities.some(s => s.entity === p);
+    const isSel = selectedEntityIds.has(p.id);
     ctx.fillStyle = isSel ? 'rgba(56, 189, 248, 0.3)' : 'rgba(51, 65, 85, 0.4)';
     ctx.fillRect(p.x, p.y, p.width, p.height);
     ctx.strokeStyle = isSel ? '#38bdf8' : '#475569';
-    ctx.lineWidth = isSel ? 2 / camera.zoom : 1 / camera.zoom;
+    ctx.lineWidth = isSel ? 2 / zoom : 1 / zoom;
     ctx.strokeRect(p.x, p.y, p.width, p.height);
-
-    // Draw Parking Spots
-    if (p.spots) {
-      for (let j = 0; j < p.spots.length; j++) {
-        const s = p.spots[j];
-        ctx.strokeStyle = 'rgba(255,255,255,0.25)';
-        ctx.strokeRect(s.x - 10, s.y - 20, 20, 40);
-      }
-    }
   }
 
   // 6. Buildings
@@ -2189,56 +2167,57 @@ function render() {
     const entry = visibleEntities[i];
     if (entry.layer !== 'buildings') continue;
     const b = entry.entity;
-    const isSel = selectedEntities.some(s => s.entity === b);
+    const isSel = selectedEntityIds.has(b.id);
     ctx.fillStyle = isSel ? 'rgba(244, 63, 94, 0.6)' : b.color || '#64748b';
     ctx.fillRect(b.x, b.y, b.width, b.height);
     ctx.strokeStyle = isSel ? '#f43f5e' : b.roofColor || '#334155';
-    ctx.lineWidth = isSel ? 3 / camera.zoom : 1 / camera.zoom;
+    ctx.lineWidth = isSel ? 3 / zoom : 1 / zoom;
     ctx.strokeRect(b.x, b.y, b.width, b.height);
 
-    // Label if zoomed in
-    if (camera.zoom > 0.2) {
+    if (zoom > 0.25) {
       ctx.fillStyle = '#fff';
-      ctx.font = `${Math.max(10, 11 / camera.zoom)}px sans-serif`;
+      ctx.font = `${Math.max(10, 11 / zoom)}px sans-serif`;
       ctx.textAlign = 'center';
-      ctx.fillText(b.type || 'Building', b.x + b.width / 2, b.y + b.height / 2 + 4 / camera.zoom);
+      ctx.fillText(b.type || 'Building', b.x + b.width / 2, b.y + b.height / 2 + 4 / zoom);
     }
   }
 
-  // 7. Trees
+  // 7. Trees (Optimized circle rendering)
   for (let i = 0; i < visibleEntities.length; i++) {
     const entry = visibleEntities[i];
     if (entry.layer !== 'trees') continue;
     const t = entry.entity;
-    const isSel = selectedEntities.some(s => s.entity === t);
+    const isSel = selectedEntityIds.has(t.id);
     ctx.fillStyle = isSel ? '#22c55e' : t.color || '#16a34a';
     ctx.beginPath();
     ctx.arc(t.x, t.y, t.radius, 0, Math.PI * 2);
     ctx.fill();
     if (isSel) {
       ctx.strokeStyle = '#fff';
-      ctx.lineWidth = 2 / camera.zoom;
+      ctx.lineWidth = 2 / zoom;
       ctx.stroke();
     }
   }
 
-  // 8. Props
-  for (let i = 0; i < visibleEntities.length; i++) {
-    const entry = visibleEntities[i];
-    if (entry.layer !== 'props') continue;
-    const p = entry.entity;
-    const isSel = selectedEntities.some(s => s.entity === p);
-    ctx.save();
-    ctx.translate(p.x, p.y);
-    ctx.rotate(p.angle || 0);
-    ctx.fillStyle = isSel ? '#fbbf24' : '#f59e0b';
-    ctx.fillRect(-8, -8, 16, 16);
-    if (isSel) {
-      ctx.strokeStyle = '#fff';
-      ctx.lineWidth = 2 / camera.zoom;
-      ctx.strokeRect(-8, -8, 16, 16);
+  // 8. Props (Skipped at very low zoom for speed)
+  if (zoom > 0.1) {
+    for (let i = 0; i < visibleEntities.length; i++) {
+      const entry = visibleEntities[i];
+      if (entry.layer !== 'props') continue;
+      const p = entry.entity;
+      const isSel = selectedEntityIds.has(p.id);
+      ctx.save();
+      ctx.translate(p.x, p.y);
+      ctx.rotate(p.angle || 0);
+      ctx.fillStyle = isSel ? '#fbbf24' : '#f59e0b';
+      ctx.fillRect(-8, -8, 16, 16);
+      if (isSel) {
+        ctx.strokeStyle = '#fff';
+        ctx.lineWidth = 2 / zoom;
+        ctx.strokeRect(-8, -8, 16, 16);
+      }
+      ctx.restore();
     }
-    ctx.restore();
   }
 
   // 9. Tool Overlays & Live Previews
@@ -2256,23 +2235,18 @@ function render() {
     ctx.fillStyle = 'rgba(56, 189, 248, 0.15)';
     ctx.fillRect(bx, by, bw, bh);
     ctx.strokeStyle = '#38bdf8';
-    ctx.lineWidth = 1 / camera.zoom;
-    ctx.setLineDash([4 / camera.zoom, 4 / camera.zoom]);
+    ctx.lineWidth = 1 / zoom;
+    ctx.setLineDash([4 / zoom, 4 / zoom]);
     ctx.strokeRect(bx, by, bw, bh);
     ctx.setLineDash([]);
   }
 
   ctx.restore();
 
-  // Throttled Mini-map update (Runs every 10 frames to avoid performance drain)
-  minimapThrottleTimer++;
-  if (minimapThrottleTimer >= 10) {
-    minimapThrottleTimer = 0;
-    renderMinimap();
-  }
+  // 12. Ultra-Fast Cached Minimap Blit
+  renderMinimap();
 }
 
-// Live Visual Feedback for Creation Tools
 function renderToolLivePreview(ctx) {
   const mp = applySnapping(mouseWorld);
 
@@ -2288,7 +2262,6 @@ function renderToolLivePreview(ctx) {
     ctx.lineTo(p2.x, p2.y);
     ctx.stroke();
 
-    // Center line
     ctx.strokeStyle = '#fff';
     ctx.lineWidth = 2 / camera.zoom;
     ctx.setLineDash([6 / camera.zoom, 6 / camera.zoom]);
@@ -2297,7 +2270,6 @@ function renderToolLivePreview(ctx) {
     ctx.lineTo(p2.x, p2.y);
     ctx.stroke();
 
-    // Distance Label
     const dist = Math.hypot(p2.x - p1.x, p2.y - p1.y);
     ctx.fillStyle = '#38bdf8';
     ctx.font = `bold ${13 / camera.zoom}px sans-serif`;
@@ -2308,7 +2280,6 @@ function renderToolLivePreview(ctx) {
 
   else if (currentTool === 'roadCurve') {
     if (toolStep === 1) {
-      // Line from start to cursor
       ctx.save();
       ctx.strokeStyle = 'rgba(56, 189, 248, 0.5)';
       ctx.lineWidth = 2 / camera.zoom;
@@ -2318,10 +2289,9 @@ function renderToolLivePreview(ctx) {
       ctx.stroke();
       ctx.restore();
     } else if (toolStep === 2) {
-      // Curved Preview
       const p0 = toolPoints[0];
       const p2 = toolPoints[1];
-      const p1 = mp; // Control point
+      const p1 = mp;
       ctx.save();
       ctx.strokeStyle = '#38bdf8';
       ctx.lineWidth = toolConfigs.curve.width;
@@ -2360,7 +2330,6 @@ function renderToolLivePreview(ctx) {
   }
 
   else if (currentTool === 'brushScatter') {
-    // Brush Circle
     ctx.save();
     ctx.strokeStyle = '#38bdf8';
     ctx.lineWidth = 1.5 / camera.zoom;
@@ -2391,17 +2360,15 @@ function renderToolLivePreview(ctx) {
   }
 }
 
-// Render Handles and Bounding Boxes
 function renderTransformGizmos(ctx) {
   if (selectedEntities.length === 0) return;
   document.getElementById('stat-selected').textContent = selectedEntities.length;
 
-  selectedEntities.forEach(sel => {
-    const ent = sel.entity;
+  for (let i = 0; i < selectedEntities.length; i++) {
+    const ent = selectedEntities[i].entity;
     ctx.save();
 
     if ('width' in ent && 'height' in ent) {
-      // Corner Resize Handles
       const hs = 8 / camera.zoom;
       ctx.fillStyle = '#38bdf8';
       ctx.fillRect(ent.x - hs/2, ent.y - hs/2, hs, hs);
@@ -2409,41 +2376,58 @@ function renderTransformGizmos(ctx) {
       ctx.fillRect(ent.x - hs/2, ent.y + ent.height - hs/2, hs, hs);
       ctx.fillRect(ent.x + ent.width - hs/2, ent.y + ent.height - hs/2, hs, hs);
     } else if ('x1' in ent) {
-      // Road Endpoints
       const hs = 10 / camera.zoom;
       ctx.fillStyle = '#38bdf8';
       ctx.beginPath(); ctx.arc(ent.x1, ent.y1, hs/2, 0, Math.PI * 2); ctx.fill();
       ctx.beginPath(); ctx.arc(ent.x2, ent.y2, hs/2, 0, Math.PI * 2); ctx.fill();
     }
     ctx.restore();
-  });
+  }
 }
 
-// --- MINIMAP RENDERER ---
+// Cached Minimap Offscreen Render
+function updateOffscreenMinimap() {
+  if (!offscreenMinimapCtx || !mapData) return;
+  const mw = offscreenMinimap.width;
+  const mh = offscreenMinimap.height;
+  const scale = mw / mapData.width;
+
+  offscreenMinimapCtx.fillStyle = '#0f172a';
+  offscreenMinimapCtx.fillRect(0, 0, mw, mh);
+
+  // Draw Roads
+  offscreenMinimapCtx.fillStyle = '#475569';
+  (mapData.roads || []).forEach(r => {
+    offscreenMinimapCtx.fillRect(r.x1 * scale, r.y1 * scale, Math.max(2, (r.x2 - r.x1) * scale), Math.max(2, r.width * scale));
+  });
+
+  // Draw Buildings
+  offscreenMinimapCtx.fillStyle = '#64748b';
+  (mapData.buildings || []).forEach(b => {
+    offscreenMinimapCtx.fillRect(b.x * scale, b.y * scale, Math.max(2, b.width * scale), Math.max(2, b.height * scale));
+  });
+
+  isMinimapDirty = false;
+}
+
 function renderMinimap() {
   if (!minimapCtx || !minimapCanvas) return;
+  if (isMinimapDirty) {
+    updateOffscreenMinimap();
+  }
+
+  minimapCtx.drawImage(offscreenMinimap, 0, 0);
+
+  // Camera viewport box
   const mw = minimapCanvas.width;
   const mh = minimapCanvas.height;
   const scale = mw / mapData.width;
 
-  minimapCtx.fillStyle = '#0f172a';
-  minimapCtx.fillRect(0, 0, mw, mh);
-
-  minimapCtx.fillStyle = '#475569';
-  (mapData.roads || []).forEach(r => {
-    minimapCtx.fillRect(r.x1 * scale, r.y1 * scale, Math.max(1, (r.x2 - r.x1) * scale), Math.max(1, r.width * scale));
-  });
-
-  minimapCtx.fillStyle = '#64748b';
-  (mapData.buildings || []).forEach(b => {
-    minimapCtx.fillRect(b.x * scale, b.y * scale, b.width * scale, b.height * scale);
-  });
-
-  // Camera viewport box on minimap
   const cw = (canvas.width / camera.zoom) * scale;
   const ch = (canvas.height / camera.zoom) * scale;
   const cx = (camera.x * scale) - cw / 2;
   const cy = (camera.y * scale) - ch / 2;
+
   minimapCtx.strokeStyle = '#38bdf8';
   minimapCtx.lineWidth = 1.5;
   minimapCtx.strokeRect(cx, cy, cw, ch);
@@ -2566,6 +2550,7 @@ function deleteSelected() {
     }
   });
   selectedEntities = [];
+  updateSelectionSet();
   pushHistory('Delete');
   updateInspector();
   renderOutliner();
@@ -2592,6 +2577,7 @@ function duplicateSelected() {
   });
 
   selectedEntities = newSelections;
+  updateSelectionSet();
   pushHistory('Duplicate');
   updateInspector();
   renderOutliner();
@@ -2599,12 +2585,12 @@ function duplicateSelected() {
   showToast('Дублировано');
 }
 
-// --- OUTLINER / LIST RENDERING ---
+// --- VIRTUALIZED / ACCORDION OUTLINER ---
 function renderOutliner() {
   const listEl = document.getElementById('outliner-list');
   if (!listEl) return;
 
-  const search = (document.getElementById('outliner-search')?.value || '').toLowerCase();
+  const search = (document.getElementById('outliner-search')?.value || '').toLowerCase().trim();
   const filter = document.getElementById('outliner-layer-filter')?.value || 'all';
 
   let html = '';
@@ -2612,23 +2598,37 @@ function renderOutliner() {
     { key: 'roads', label: 'Дороги', items: mapData.roads },
     { key: 'buildings', label: 'Здания', items: mapData.buildings },
     { key: 'intersections', label: 'Перекрестки', items: mapData.intersections },
-    { key: 'trees', label: 'Деревья', items: mapData.trees },
-    { key: 'props', label: 'Объекты', items: mapData.props },
+    { key: 'parkings', label: 'Парковки', items: mapData.parkings || [] },
     { key: 'sidewalks', label: 'Тротуары', items: mapData.sidewalks || [] },
-    { key: 'parkings', label: 'Парковки', items: mapData.parkings || [] }
+    { key: 'trees', label: 'Деревья', items: mapData.trees },
+    { key: 'props', label: 'Объекты', items: mapData.props }
   ];
 
   layers.forEach(l => {
     if (filter !== 'all' && filter !== l.key) return;
     if (!l.items || l.items.length === 0) return;
 
-    html += `<div class="layer-group-header"><span>${l.label} (${l.items.length})</span></div>`;
+    let matching = l.items;
+    if (search) {
+      matching = l.items.filter(item => {
+        const title = (item.name || item.type || item.id || '').toLowerCase();
+        return title.includes(search) || item.id.toLowerCase().includes(search);
+      });
+    }
 
-    l.items.forEach(item => {
+    if (matching.length === 0) return;
+
+    // Limit to top 40 items per group to prevent browser freeze
+    const displayItems = matching.slice(0, 40);
+
+    html += `<div class="layer-group-header">
+      <span>${l.label} (${matching.length})</span>
+      ${matching.length > 40 ? '<span style="font-size:10px;opacity:0.7;">топ-40</span>' : ''}
+    </div>`;
+
+    displayItems.forEach(item => {
       const title = item.name || item.type || item.id || 'Элемент';
-      if (search && !title.toLowerCase().includes(search) && !item.id.toLowerCase().includes(search)) return;
-
-      const isSel = selectedEntities.some(s => s.entity === item);
+      const isSel = selectedEntityIds.has(item.id);
       const coordStr = item.x !== undefined ? `${Math.round(item.x)}, ${Math.round(item.y)}` : `${Math.round(item.x1)}, ${Math.round(item.y1)}`;
 
       html += `
@@ -2649,7 +2649,7 @@ function selectOutlinerEntity(layerKey, id) {
   const item = list.find(it => it.id === id);
   if (item) {
     selectedEntities = [{ entity: item, layer: layerKey }];
-    // Move camera to entity
+    updateSelectionSet();
     const cx = item.x !== undefined ? item.x : (item.x1 + item.x2) / 2;
     const cy = item.y !== undefined ? item.y : (item.y1 + item.y2) / 2;
     camera.x = cx;
@@ -2665,14 +2665,12 @@ function insertPreset(name) {
   const cy = camera.y;
 
   if (name === 'residential_block') {
-    // 4 houses around a courtyard with trees, benches, parking
     mapData.buildings.push(
       { id: generateUniqueId('bld'), x: cx - 180, y: cy - 180, width: 120, height: 100, type: 'residential', color: '#64748b', roofColor: '#334155', accentColor: '#475569', entranceSide: 'south', roofDetails: [], windows: [] },
       { id: generateUniqueId('bld'), x: cx + 60, y: cy - 180, width: 120, height: 100, type: 'residential', color: '#64748b', roofColor: '#334155', accentColor: '#475569', entranceSide: 'south', roofDetails: [], windows: [] },
       { id: generateUniqueId('bld'), x: cx - 180, y: cy + 80, width: 120, height: 100, type: 'residential', color: '#64748b', roofColor: '#334155', accentColor: '#475569', entranceSide: 'north', roofDetails: [], windows: [] },
       { id: generateUniqueId('bld'), x: cx + 60, y: cy + 80, width: 120, height: 100, type: 'residential', color: '#64748b', roofColor: '#334155', accentColor: '#475569', entranceSide: 'north', roofDetails: [], windows: [] }
     );
-    // Trees and benches in center
     mapData.trees.push(
       { id: generateUniqueId('tree'), x: cx - 40, y: cy, radius: 24, color: '#16a34a', shadowOffset: 6 },
       { id: generateUniqueId('tree'), x: cx + 40, y: cy, radius: 24, color: '#16a34a', shadowOffset: 6 }
@@ -2709,7 +2707,7 @@ function insertPreset(name) {
   updateFooterCounts();
 }
 
-// --- FILE I/O ---
+// --- FILE I/O & SAVE ---
 function openLoadFileDialog() {
   document.getElementById('file-loader').click();
 }
@@ -2749,12 +2747,12 @@ function saveToFile() {
 function saveToLocalStorageAndPlay() {
   try {
     localStorage.setItem('neon_city_custom_map', JSON.stringify(mapData));
-    showToast('Сохранено в локальное хранилище игры! Переход в симулятор...');
+    showToast('Сохранено в хранилище игры! Переход в симулятор...');
     setTimeout(() => {
       window.location.href = '/';
-    }, 800);
+    }, 600);
   } catch (err) {
-    alert('Карта слишком велика для localStorage, воспользуйтесь экспортом в map.json: ' + err.message);
+    alert('Карта слишком велика для localStorage, скачайте map.json: ' + err.message);
   }
 }
 
@@ -2764,6 +2762,7 @@ function switchTab(tabId) {
   document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
   document.querySelector(`button[onclick="switchTab('${tabId}')"]`).classList.add('active');
   document.getElementById(`tab-${tabId}`).classList.add('active');
+  if (tabId === 'outliner') renderOutliner();
 }
 
 function toggleSnapGrid() {
@@ -2805,14 +2804,13 @@ function toggleHelpModal() {
 function updateFooterCounts() {
   const el = document.getElementById('footer-counts');
   if (!el || !mapData) return;
-  el.textContent = `Дорог: ${mapData.roads.length} | Зданий: ${mapData.buildings.length} | Деревьев: ${mapData.trees.length} | Декора: ${mapData.props.length}`;
+  el.textContent = `Дорог: ${mapData.roads?.length || 0} | Зданий: ${mapData.buildings?.length || 0} | Деревьев: ${mapData.trees?.length || 0} | Декора: ${mapData.props?.length || 0}`;
 }
 
 // --- GLOBAL KEYBOARD SHORTCUTS ---
 window.addEventListener('keydown', (e) => {
   if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
 
-  // Shortcuts
   if (e.key === 'z' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); undo(); }
   else if (e.key === 'y' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); redo(); }
   else if (e.key === 'd' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); duplicateSelected(); }
@@ -2832,6 +2830,7 @@ window.addEventListener('keydown', (e) => {
   else if (e.key === 'f' || e.key === 'а') { centerCamera(); }
   else if (e.key === 'Escape') {
     selectedEntities = [];
+    updateSelectionSet();
     toolStep = 0;
     toolPoints = [];
     updateInspector();

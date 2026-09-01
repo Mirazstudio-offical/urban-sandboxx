@@ -3,6 +3,7 @@ import {
   Building, 
   Camera, 
   GameWorld, 
+  GroundItem,
   Pedestrian, 
   Player, 
   Puddle,
@@ -16,6 +17,7 @@ import { trafficDiagnostics } from './aiTraffic';
 import { renderSpecializedVehicleAttachments } from './vehicleVisuals';
 import { performanceConfig } from './performanceConfig';
 import { generateBuildingLayout, renderBuildingInterior } from './buildingInteriors';
+import { drawItemModel2D } from './itemGraphic';
 
 const hashString = (str: string): number => {
   let hash = 0;
@@ -285,40 +287,52 @@ export class GameRenderer {
         if (activeWindows.length > 0) {
           ctx.clip();
 
-          // Apply floor elevation height perspective (higher floors shift outside world down to simulate looking from a skyscraper)
+          // Apply floor elevation height perspective (higher floors scale down the world to create height perspective / getting smaller, and render roofs instead of bases)
           const floor = player.currentFloor ?? 0;
           ctx.save();
-          ctx.translate(0, floor * 24);
+          const heightScale = Math.max(0.45, 1.0 - floor * 0.05);
+          const invScale = 1 / heightScale;
+          const sMinX = camera.x - (camera.x - minX) * invScale;
+          const sMaxX = camera.x + (maxX - camera.x) * invScale;
+          const sMinY = camera.y - (camera.y - minY) * invScale;
+          const sMaxY = camera.y + (maxY - camera.y) * invScale;
+
+          // Scale around player / camera position so world shrinks towards viewer and covers full view
+          ctx.translate(camera.x, camera.y);
+          ctx.scale(heightScale, heightScale);
+          ctx.translate(-camera.x, -camera.y);
 
           // Render only the visible portion of the outside world respecting current nightAlpha / timeHour & lights
-          this.renderGround(world, minX, minY, maxX, maxY);
-          this.renderSidewalks(vpSidewalks, minX, minY, maxX, maxY);
-          this.renderRoadsAndMarkings(world, minX, minY, maxX, maxY);
-          this.renderPostSovietAtmosphereAndSignage(world, minX, minY, maxX, maxY);
-          this.renderPuddles(world.puddles, minX, minY, maxX, maxY);
-          this.renderSkidMarks(world.skidMarks, minX, minY, maxX, maxY);
-          this.renderParkings(world, minX, minY, maxX, maxY);
-          this.renderBuildingBases(visibleBuildings, nightAlpha, player, timeHour);
-          this.renderLitter(world.litter, minX, minY, maxX, maxY, nightAlpha);
-          this.renderGroundProps(vpProps, minX, minY, maxX, maxY);
+          this.renderGround(world, sMinX, sMinY, sMaxX, sMaxY);
+          this.renderSidewalks(vpSidewalks, sMinX, sMinY, sMaxX, sMaxY);
+          this.renderRoadsAndMarkings(world, sMinX, sMinY, sMaxX, sMaxY);
+          this.renderPostSovietAtmosphereAndSignage(world, sMinX, sMinY, sMaxX, sMaxY);
+          this.renderPuddles(world.puddles, sMinX, sMinY, sMaxX, sMaxY);
+          this.renderSkidMarks(world.skidMarks, sMinX, sMinY, sMaxX, sMaxY);
+          this.renderParkings(world, sMinX, sMinY, sMaxX, sMaxY);
+          // Render building roofs/tops instead of ground bases when viewed from height
+          this.renderBuildingRoofsAndCanopies(visibleBuildings, nightAlpha, player);
+          this.renderLitter(world.litter, sMinX, sMinY, sMaxX, sMaxY, nightAlpha);
+          this.renderGroundItems(world.groundItems, player, sMinX, sMinY, sMaxX, sMaxY);
+          this.renderGroundProps(vpProps, sMinX, sMinY, sMaxX, sMaxY);
           this.renderPedestrians(visiblePedestrians);
           this.renderVehicles(visibleVehicles, nightAlpha);
 
           // Render lightmap (street lights, car headlights, etc.) outside windows
-          this.renderLightmap(world, timeHour, weatherTransition, visibleVehicles, vpProps, minX, minY, maxX, maxY);
+          this.renderLightmap(world, timeHour, weatherTransition, visibleVehicles, vpProps, sMinX, sMinY, sMaxX, sMaxY);
 
           const isRaining = world.weather === 'rain' || world.weather === 'storm';
           const isFog = world.weather === 'fog';
           const effectiveAlpha = Math.max(nightAlpha, isRaining ? 0.35 * weatherTransition : 0, isFog ? 0.45 * weatherTransition : 0);
           this.renderVehicleCabins(visibleVehicles, effectiveAlpha);
           this.renderBuildingRoofsAndCanopies(visibleBuildings, nightAlpha, player);
-          this.renderTreesAndTallProps(vpTrees, vpProps, minX, minY, maxX, maxY, nightAlpha);
+          this.renderTreesAndTallProps(vpTrees, vpProps, sMinX, sMinY, sMaxX, sMaxY, nightAlpha);
           this.renderParticles(world.particles);
 
           // Apply outdoor time darkness filter over the clipped window view so night/sunset is accurate
           if (nightAlpha > 0) {
             ctx.fillStyle = `rgba(15, 23, 42, ${nightAlpha})`;
-            ctx.fillRect(minX, minY, maxX - minX, maxY - minY);
+            ctx.fillRect(sMinX, sMinY, sMaxX - sMinX, sMaxY - sMinY);
           }
           ctx.restore();
         }
@@ -387,6 +401,9 @@ export class GameRenderer {
 
     // 8b. Street Litter & Flying Paper / Wind Debris
     this.renderLitter(world.litter, minX, minY, maxX, maxY, nightAlpha);
+
+    // 8c. Dropped / Collectible Ground Items
+    this.renderGroundItems(world.groundItems, player, minX, minY, maxX, maxY);
 
     // 9. Ground-level Props (Benches, Hydrants, Kiosks, Cones, Trash Cans, Mailboxes, and BROKEN lampposts!)
     this.renderGroundProps(vpProps, minX, minY, maxX, maxY);
@@ -775,131 +792,8 @@ export class GameRenderer {
       ctx.fillText(vName.slice(0, 14), signX, signY - 21);
     }
 
-    // 2. Highly Distinctive Shop Storefronts & Banners (ПРОДУКТЫ 24, УНИВЕРМАГ, АПТЕКА)
-    for (const bld of world.buildings) {
-      if (bld.x < minX - 120 || bld.x > maxX + 120 || bld.y < minY - 120 || bld.y > maxY + 120) continue;
-
-      const cx = bld.x + bld.width / 2;
-
-      // Only draw storefront banners on retail/commercial shop facades (NEVER on residential building canopies or roofs!)
-      if (bld.type === 'shop') {
-        // Red backlit storefront awning & bright banner
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
-        ctx.fillRect(cx - 32, bld.y - 12, 64, 18);
-
-        ctx.fillStyle = '#dc2626'; // Vibrant red retail sign
-        ctx.fillRect(cx - 30, bld.y - 10, 60, 16);
-        ctx.strokeStyle = '#f8fafc';
-        ctx.lineWidth = 1.5;
-        ctx.strokeRect(cx - 30, bld.y - 10, 60, 16);
-
-        ctx.fillStyle = '#ffffff';
-        ctx.font = 'bold 10px sans-serif';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText('ПРОДУКТЫ 24', cx, bld.y - 2);
-      } else if (bld.type === 'shopping_mall') {
-        // Shopping mall atrium banner
-        ctx.fillStyle = '#0284c7';
-        ctx.fillRect(cx - 42, bld.y - 12, 84, 18);
-        ctx.strokeStyle = '#38bdf8';
-        ctx.lineWidth = 1.5;
-        ctx.strokeRect(cx - 42, bld.y - 12, 84, 18);
-
-        ctx.fillStyle = '#ffffff';
-        ctx.font = 'bold 10px sans-serif';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText('ТРЦ «МАРКЕТ»', cx, bld.y - 3);
-      } else if (bld.type === 'commercial') {
-        // Universal store / Pharmacy banner
-        ctx.fillStyle = '#0284c7';
-        ctx.fillRect(cx - 36, bld.y - 10, 72, 16);
-        ctx.strokeStyle = '#e0f2fe';
-        ctx.lineWidth = 1.2;
-        ctx.strokeRect(cx - 36, bld.y - 10, 72, 16);
-
-        ctx.fillStyle = '#ffffff';
-        ctx.font = 'bold 9px sans-serif';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText('УНИВЕРМАГ • АПТЕКА', cx, bld.y - 2);
-      } else if (bld.type === 'business_center') {
-        // Business center modern entrance sign
-        ctx.fillStyle = '#0f172a';
-        ctx.fillRect(cx - 40, bld.y - 10, 80, 16);
-        ctx.strokeStyle = '#38bdf8';
-        ctx.lineWidth = 1.2;
-        ctx.strokeRect(cx - 40, bld.y - 10, 80, 16);
-
-        ctx.fillStyle = '#38bdf8';
-        ctx.font = 'bold 9px sans-serif';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText('BUSINESS CENTER', cx, bld.y - 2);
-      } else if (bld.type === 'industrial') {
-        // Industrial warehouse / garage cooperative sign
-        ctx.fillStyle = '#1e3a8a';
-        ctx.fillRect(cx - 40, bld.y + 6, 80, 16);
-        ctx.strokeStyle = '#60a5fa';
-        ctx.lineWidth = 1.2;
-        ctx.strokeRect(cx - 40, bld.y + 6, 80, 16);
-
-        ctx.fillStyle = '#f8fafc';
-        ctx.font = 'bold 9px sans-serif';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText('ГСК «МОТОР» / СКЛАД', cx, bld.y + 14);
-      } else if (bld.type === 'sports_stadium') {
-        ctx.fillStyle = '#15803d';
-        ctx.fillRect(cx - 45, bld.y - 12, 90, 18);
-        ctx.strokeStyle = '#86efac';
-        ctx.lineWidth = 1.5;
-        ctx.strokeRect(cx - 45, bld.y - 12, 90, 18);
-
-        ctx.fillStyle = '#ffffff';
-        ctx.font = 'bold 10px sans-serif';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText('СПОРТКОМПЛЕКС ARENA', cx, bld.y - 3);
-      } else if (bld.type === 'transit_hub') {
-        ctx.fillStyle = '#1e293b';
-        ctx.fillRect(cx - 45, bld.y - 12, 90, 18);
-        ctx.strokeStyle = '#f59e0b';
-        ctx.lineWidth = 1.5;
-        ctx.strokeRect(cx - 45, bld.y - 12, 90, 18);
-
-        ctx.fillStyle = '#f59e0b';
-        ctx.font = 'bold 10px sans-serif';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText('ВОКЗАЛ • TERMINAL', cx, bld.y - 3);
-      } else if (bld.type === 'cultural_center') {
-        ctx.fillStyle = '#7c2d12';
-        ctx.fillRect(cx - 45, bld.y - 12, 90, 18);
-        ctx.strokeStyle = '#fef08a';
-        ctx.lineWidth = 1.5;
-        ctx.strokeRect(cx - 45, bld.y - 12, 90, 18);
-
-        ctx.fillStyle = '#ffffff';
-        ctx.font = 'bold 10px sans-serif';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText('ДВОРЕЦ КУЛЬТУРЫ', cx, bld.y - 3);
-      } else if (bld.type === 'car_dealership') {
-        ctx.fillStyle = '#0284c7';
-        ctx.fillRect(cx - 45, bld.y - 12, 90, 18);
-        ctx.strokeStyle = '#e0f2fe';
-        ctx.lineWidth = 1.5;
-        ctx.strokeRect(cx - 45, bld.y - 12, 90, 18);
-
-        ctx.fillStyle = '#ffffff';
-        ctx.font = 'bold 10px sans-serif';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText('АВТОСАЛОН • MOTORS', cx, bld.y - 3);
-      }
-    }
+    // 2. Highly Distinctive Shop Storefronts & Banners (Removed per user request)
+    // No banners or text labels on building facades.
 
     ctx.restore();
   }
@@ -1449,6 +1343,85 @@ export class GameRenderer {
           ctx.lineTo(gx, bld.y + bld.height);
         }
         ctx.stroke();
+      } else if (bld.type === 'shopping_mall' || bld.type === 'commercial') {
+        // Modern glass curtain wall storefronts, colorful advertising billboards & neon marquee headers
+        // Draw decorative dark background panels
+        ctx.fillStyle = '#1e293b';
+        ctx.fillRect(bld.x, bld.y, bld.width, bld.height);
+
+        // Draw massive glass panes at the lower section (or across front facade)
+        ctx.fillStyle = 'rgba(14, 116, 144, 0.35)'; // Cyan-tinted shop glass
+        ctx.fillRect(bld.x + 15, bld.y + bld.height - 12, bld.width - 30, 9);
+
+        // Vertical glass mullions
+        ctx.strokeStyle = '#475569';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        for (let gx = bld.x + 30; gx < bld.x + bld.width - 15; gx += 20) {
+          ctx.moveTo(gx, bld.y + bld.height - 12);
+          ctx.lineTo(gx, bld.y + bld.height - 3);
+        }
+        ctx.stroke();
+
+        // Draw illuminated neon sign board or advertisement billboards on the facade
+        // Left billboard (Sports/Fashion)
+        if (bld.width > 120) {
+          ctx.fillStyle = '#3f3f46';
+          ctx.fillRect(bld.x + 20, bld.y + 15, 45, 25);
+          ctx.strokeStyle = '#ef4444'; // Red glowing neon frame
+          ctx.lineWidth = 1.2;
+          ctx.strokeRect(bld.x + 20, bld.y + 15, 45, 25);
+          
+          // Billboards drawing decoration (abstract brand shapes)
+          ctx.fillStyle = '#ef4444';
+          ctx.fillRect(bld.x + 25, bld.y + 20, 10, 15);
+          ctx.fillStyle = '#f8fafc';
+          ctx.font = 'bold 6px sans-serif';
+          ctx.fillText('MEGA', bld.x + 38, bld.y + 28);
+        }
+
+        // Right billboard (Electronics/Media)
+        if (bld.width > 180) {
+          const rx = bld.x + bld.width - 70;
+          ctx.fillStyle = '#3f3f46';
+          ctx.fillRect(rx, bld.y + 15, 50, 25);
+          ctx.strokeStyle = '#06b6d4'; // Cyan neon frame
+          ctx.lineWidth = 1.2;
+          ctx.strokeRect(rx, bld.y + 15, 50, 25);
+
+          ctx.fillStyle = '#06b6d4';
+          ctx.beginPath();
+          ctx.arc(rx + 15, bld.y + 27, 6, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.fillStyle = '#f8fafc';
+          ctx.font = 'bold 5px sans-serif';
+          ctx.fillText('SONY', rx + 28, bld.y + 29);
+        }
+
+        // Glowing center shopping center title marquee above entrance
+        if (bld.width > 240) {
+          const cx = bld.x + bld.width / 2;
+          ctx.fillStyle = '#0f172a';
+          ctx.fillRect(cx - 60, bld.y + 10, 120, 20);
+          ctx.strokeStyle = '#eab308'; // Glowing yellow/gold border
+          ctx.lineWidth = 1.5;
+          ctx.strokeRect(cx - 60, bld.y + 10, 120, 20);
+
+          // LED glow dots animation
+          const lit = (Date.now() % 800) > 400;
+          ctx.fillStyle = lit ? '#eab308' : '#71717a';
+          for (let gx = cx - 55; gx <= cx + 55; gx += 10) {
+            ctx.beginPath();
+            ctx.arc(gx, bld.y + 13, 1, 0, Math.PI * 2);
+            ctx.fill();
+          }
+
+          ctx.fillStyle = '#eab308';
+          ctx.font = 'bold 9px sans-serif';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(bld.type === 'shopping_mall' ? 'ТРЦ CITY PLAZA' : 'ТОРГОВЫЙ ЦЕНТР', cx, bld.y + 22);
+        }
       }
 
       // 3. BUILDING GROUND-LEVEL ENTRANCES & PORCH (ПОДЪЕЗДЫ)
@@ -2514,6 +2487,62 @@ export class GameRenderer {
         ctx.fillRect(-lit.size / 2, -lit.size / 8, lit.size, lit.size / 4);
         ctx.fillStyle = '#d6d3d1'; // Filter
         ctx.fillRect(-lit.size / 2, -lit.size / 8, lit.size / 4, lit.size / 4);
+      }
+
+      ctx.restore();
+    }
+  }
+
+  // --- DROPPED / COLLECTIBLE GROUND ITEMS ---
+  private renderGroundItems(
+    groundItems: GroundItem[] | undefined,
+    player: Player,
+    minX: number,
+    minY: number,
+    maxX: number,
+    maxY: number
+  ) {
+    if (!groundItems || groundItems.length === 0) return;
+    const ctx = this.ctx;
+    const now = Date.now();
+
+    for (const gi of groundItems) {
+      if (gi.x < minX - 30 || gi.x > maxX + 30 || gi.y < minY - 30 || gi.y > maxY + 30) continue;
+
+      const distToPlayer = Math.hypot(player.x - gi.x, player.y - gi.y);
+      const isNearby = distToPlayer < 40;
+
+      ctx.save();
+      ctx.translate(gi.x, gi.y);
+
+      // 1. Subtle, realistic flat shadow under the item
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.25)';
+      ctx.beginPath();
+      ctx.ellipse(0, 2, 6, 3, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // 2. Item 2D Procedural Model (Size 12 is realistic, sits flat on the ground)
+      drawItemModel2D(ctx, gi.item.itemId, 0, 0, 12);
+
+      // 3. If player is nearby, display compact tooltip pill above item
+      if (isNearby) {
+        const labelText = `${gi.item.nameRu} [E / Клик]`;
+        ctx.font = 'bold 9px system-ui, -apple-system, sans-serif';
+        const metrics = ctx.measureText(labelText);
+        const pillW = metrics.width + 12;
+        const pillH = 16;
+        const pillY = -14;
+
+        ctx.fillStyle = 'rgba(15, 23, 42, 0.9)';
+        ctx.strokeStyle = 'rgba(56, 189, 248, 0.6)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        safeRoundRect(ctx, -pillW / 2, pillY - pillH / 2, pillW, pillH, 4);
+        ctx.fill();
+        ctx.stroke();
+
+        ctx.fillStyle = '#f8fafc';
+        ctx.fillText(labelText, 0, pillY);
       }
 
       ctx.restore();
@@ -5741,6 +5770,88 @@ export class GameRenderer {
       }
     }
 
+    if ((world.lightningFlashTimer ?? 0) > 0) {
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
+      ctx.fillRect(minX, minY, maxX - minX, maxY - minY);
+    }
+
+    ctx.restore();
+
+    // Call dynamic weather overlay (Rain, drops, ripples, fog haze, storm lines)
+    this.renderWeatherOverlay(world, minX, minY, maxX, maxY);
+  }
+
+  private renderWeatherOverlay(world: GameWorld, minX: number, minY: number, maxX: number, maxY: number) {
+    const ctx = this.ctx;
+    const isRaining = world.weather === 'rain' || world.weather === 'storm';
+    const isStorm = world.weather === 'storm';
+    const isFog = world.weather === 'fog';
+
+    if (!isRaining && !isFog && (world.lightningFlashTimer ?? 0) <= 0) return;
+
+    ctx.save();
+    ctx.globalCompositeOperation = 'source-over';
+
+    if (isRaining && performanceConfig.enableRainDroplets) {
+      const time = Date.now() * 0.002;
+      const numDrops = isStorm ? 320 : 180;
+
+      // 1. Heavy dynamic rain droplets/streaks with wind tilt
+      ctx.strokeStyle = isStorm ? 'rgba(191, 219, 254, 0.65)' : 'rgba(191, 219, 254, 0.45)';
+      ctx.lineWidth = isStorm ? 1.6 : 1.2;
+      ctx.beginPath();
+
+      for (let r = 0; r < numDrops; r++) {
+        // Distribute rain across current camera view bounds
+        const seedX = (r * 137.5) % 1;
+        const seedY = (r * 241.3) % 1;
+        const rx = minX + seedX * (maxX - minX);
+        const ry = minY + ((seedY * (maxY - minY) + time * (isStorm ? 1400 : 900)) % (maxY - minY));
+        const len = isStorm ? 22 + (r % 10) * 1.5 : 12 + (r % 8) * 1.2;
+        const windTilt = isStorm ? 0.45 : 0.2;
+
+        ctx.moveTo(rx, ry);
+        ctx.lineTo(rx - len * windTilt, ry + len);
+      }
+      ctx.stroke();
+
+      // 2. Animated ground splash ripples
+      ctx.strokeStyle = 'rgba(224, 242, 254, 0.35)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      const numSplashes = isStorm ? 45 : 22;
+      for (let s = 0; s < numSplashes; s++) {
+        const sx = minX + ((s * 19.1) % 1) * (maxX - minX);
+        const sy = minY + (((s * 53.7 + time * 300) % 1) * (maxY - minY));
+        const splashR = 2 + ((s + Math.floor(time * 25)) % 5) * 1.5;
+        ctx.ellipse(sx, sy, splashR * 1.4, splashR * 0.7, 0, 0, Math.PI * 2);
+      }
+      ctx.stroke();
+
+      // 3. Storm dark atmospheric ambient & moisture overlay
+      if (isStorm) {
+        ctx.fillStyle = 'rgba(15, 23, 42, 0.18)';
+        ctx.fillRect(minX, minY, maxX - minX, maxY - minY);
+      }
+    }
+
+    if (isFog) {
+      ctx.fillStyle = 'rgba(226, 232, 240, 0.28)';
+      ctx.fillRect(minX, minY, maxX - minX, maxY - minY);
+
+      ctx.fillStyle = 'rgba(241, 245, 249, 0.12)';
+      const time = Date.now() * 0.0003;
+      for (let i = 0; i < 5; i++) {
+        const driftX = Math.sin(time + i * 1.5) * 50;
+        const driftY = Math.cos(time * 0.7 + i * 2.1) * 30;
+        const fy = minY + ((i + 0.5) / 5) * (maxY - minY) + driftY;
+        ctx.beginPath();
+        safeEllipse(ctx, minX + (maxX - minX) * 0.5 + driftX, fy, (maxX - minX) * 0.7, (maxY - minY) * 0.25, Math.sin(time * 0.2 + i) * 0.1, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+
+    // 4. Storm Lightning Screen Flash
     if ((world.lightningFlashTimer ?? 0) > 0) {
       ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
       ctx.fillRect(minX, minY, maxX - minX, maxY - minY);

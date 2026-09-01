@@ -162,6 +162,7 @@ export interface Vehicle {
   } | null;
   stuckTimer: number;
   honkTimer: number;
+  hasHeadOnConflict?: boolean;
   idmAcceleration?: number;
 
   // Horn & Siren
@@ -519,6 +520,85 @@ export interface Particle {
   type: 'tire_smoke' | 'spark' | 'exhaust' | 'engine_smoke' | 'glass_shard' | 'debris' | 'flame' | 'water_splash' | 'rain_drop' | 'water_fountain' | 'leaf' | 'feather';
 }
 
+export type ItemCategory = 'food' | 'drink' | 'med' | 'tool' | 'valuable' | 'misc';
+
+export interface InventoryItem {
+  id: string;
+  itemId: string;
+  name: string;
+  nameRu: string;
+  category: ItemCategory;
+  count: number;
+  maxStack: number;
+  icon: string;
+  description: string;
+  descriptionRu: string;
+  effects: {
+    health?: number;       // +/- HP (0-100)
+    hunger?: number;       // + Food satiety (0-100)
+    thirst?: number;       // + Hydration (0-100)
+    energy?: number;       // + Stamina/Energy (0-100)
+    sleepiness?: number;   // - Sleepiness reduction (e.g. -30 for coffee)
+  };
+  weight?: number;
+  usable: boolean;
+}
+
+export interface GroundItem {
+  id: string;
+  x: number;
+  y: number;
+  item: InventoryItem;
+  spawnTime?: number;
+}
+
+export type InjuryType = 'abrasion' | 'bruise' | 'sprain' | 'fracture' | 'bleeding';
+
+export interface Injury {
+  id: string;
+  type: InjuryType;
+  treated: boolean;
+}
+
+export interface BodyPartsMap {
+  head: Injury[];
+  torso: Injury[];
+  leftArm: Injury[];
+  rightArm: Injury[];
+  leftLeg: Injury[];
+  rightLeg: Injury[];
+}
+
+export interface BodyState {
+  hydration: number;    // 0 to 100 (%)
+  energy: number;       // 0 to 100 (%)
+  temperature: number;  // Body temperature in °C (normal ~36.6°C)
+  wetness: number;      // 0 to 100 (%)
+  painLevel: number;    // 0 to 100 (%)
+  bodyParts: BodyPartsMap;
+  coughTimer?: number;
+  groanTimer?: number;
+  heavyBreathTimer?: number;
+  shiverTimer?: number;
+  tinnitusTimer?: number;
+  impactFlashTimer?: number;
+}
+
+export interface PlayerNeeds {
+  health: number;      // 0 to 100
+  hunger: number;      // 0 (starving) to 100 (full)
+  thirst: number;      // 0 (dehydrated) to 100 (quenched)
+  energy: number;      // 0 (exhausted) to 100 (full stamina)
+  sleepiness: number;  // 0 (wide awake) to 100 (drowsy/collapsing)
+}
+
+export interface PlayerNotification {
+  id: string;
+  text: string;
+  type: 'heal' | 'food' | 'drink' | 'energy' | 'sleep' | 'warning' | 'pickup' | 'info';
+  timer: number;
+}
+
 export interface Player {
   x: number;
   y: number;
@@ -542,6 +622,23 @@ export interface Player {
   dashTimer?: number;
   dashAngle?: number;
   aimAngle?: number;
+
+  // Survival Needs & Vitals
+  needs: PlayerNeeds;
+  bodyState?: BodyState;
+  inventory: InventoryItem[];
+  maxInventorySlots: number;
+  selectedHotbarIndex: number;
+  heldItemId?: string | null;
+  lastHurtTime?: number;
+  isSleeping?: boolean;
+  sleepTimer?: number;
+  isFainting?: boolean;
+  faintTimer?: number;
+  isHospitalized?: boolean;
+  hospitalTimer?: number;
+  hospitalPhase?: number;
+  notifications: PlayerNotification[];
 }
 
 export interface SidewalkBlock {
@@ -596,6 +693,7 @@ export interface GameWorld {
   birds: Bird[];
   puddles: Puddle[];
   litter: LitterItem[];
+  groundItems?: GroundItem[];
   skidMarks: SkidMark[];
   particles: Particle[];
   weather: WeatherType;
@@ -640,6 +738,13 @@ export interface InputState {
   turnLeftQ: boolean;
   turnRightZ: boolean;
   hazardX: boolean;
+  inventoryI?: boolean;
+  hotbar1?: boolean;
+  hotbar2?: boolean;
+  hotbar3?: boolean;
+  hotbar4?: boolean;
+  hotbar5?: boolean;
+  hotbar6?: boolean;
   mouseX: number;
   mouseY: number;
   isMouseDown: boolean;

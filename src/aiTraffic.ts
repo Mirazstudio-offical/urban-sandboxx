@@ -604,10 +604,11 @@ export function updateAITraffic(
       reacquireClosestLane(car, world);
     }
 
-    // 3. Multi-Zone Intelligent Obstacle & Collision Avoidance (OBB + Multi-Ray Sector)
+    // 3. Multi-Zone Intelligent Obstacle & Collision Avoidance (Corridor + OBB + Multi-Ray + ПДД Right-of-Way)
     let minGapToLeadCar = 999;
     let leadCarSpeed = 0;
     let hasLeadCar = false;
+    car.hasHeadOnConflict = false;
 
     const carCos = Math.cos(car.angle);
     const carSin = Math.sin(car.angle);
@@ -621,30 +622,61 @@ export function updateAITraffic(
     const frx = car.x + carCos * halfL + carSin * halfW;
     const fry = car.y + carSin * halfL - carCos * halfW;
 
-    const L_center = Math.max(70, 42 + car.speed * 1.3);
-    const L_side = Math.max(45, 25 + car.speed * 0.7);
+    const forwardLookaheadDist = Math.max(85, 55 + car.speed * 1.5);
+    const L_center = forwardLookaheadDist;
+    const L_side = Math.max(48, 30 + car.speed * 0.9);
 
     const centralRayEnd = { x: fx + carCos * L_center, y: fy + carSin * L_center };
     const leftRayEnd = { x: flx + Math.cos(car.angle - 0.22) * L_side, y: fly + Math.sin(car.angle - 0.22) * L_side };
     const rightRayEnd = { x: frx + Math.cos(car.angle + 0.22) * L_side, y: fry + Math.sin(car.angle + 0.22) * L_side };
 
     const carOBB = getOBB(car, 1);
-    const nearbyVehicles = vehGrid ? vehGrid.queryRadius(car.x, car.y, 140) : world.vehicles;
+    const nearbyVehicles = vehGrid ? vehGrid.queryRadius(car.x, car.y, 160) : world.vehicles;
 
     for (const other of nearbyVehicles) {
       if (other.id === car.id || other.isParked) continue;
+
+      // If either car is actively in anti-deadlock ghosting mode, bypass obstacle avoidance so they can glide freely past each other
+      if ((car.ghostingAlpha !== undefined && car.ghostingAlpha < 0.9) ||
+          (other.ghostingAlpha !== undefined && other.ghostingAlpha < 0.9)) {
+        continue;
+      }
 
       const relX = other.x - car.x;
       const relY = other.y - car.y;
       const directDist = Math.hypot(relX, relY);
 
-      if (directDist > 140) continue;
+      if (directDist > 160) continue;
+
+      const distLong = relX * carCos + relY * carSin;
+      const distLat = Math.abs(relX * -carSin + relY * carCos);
+      const combinedHalfW = (car.width + other.width) * 0.5 + 4.5;
+      const combinedHalfL = (car.length + other.length) * 0.5;
 
       const aDiff = Math.abs(angleDiff(other.angle, car.angle));
 
-      // Oncoming traffic on straight roads -> Ignore
+      // Head-on encounter detection (facing each other nose-to-nose)
+      if (aDiff > 2.0 && directDist < 85 && distLong > -10) {
+        car.hasHeadOnConflict = true;
+      }
+
+      // Check 1: Direct in-lane corridor follower detection
+      // If 'other' is directly ahead of 'car' in the lane/heading corridor, 'car' is behind 'other' and MUST yield!
+      const isDirectlyAheadInCorridor = distLong > 0 && distLong < forwardLookaheadDist && distLat < combinedHalfW && aDiff < 1.4;
+
+      if (isDirectlyAheadInCorridor) {
+        const netGap = Math.max(0.1, distLong - combinedHalfL);
+        if (netGap < minGapToLeadCar) {
+          minGapToLeadCar = netGap;
+          leadCarSpeed = Math.max(0, other.speed);
+          hasLeadCar = true;
+        }
+        continue;
+      }
+
+      // Oncoming traffic on straight roads separated by lanes -> Ignore
       if (!car.currentConnection && !car.inIntersection && !other.currentConnection && !other.inIntersection) {
-        if (aDiff > 1.6) continue;
+        if (aDiff > 1.6 && distLat > 18) continue;
       }
 
       // Check OBB intersection and Multi-Ray intersections
@@ -655,13 +687,13 @@ export function updateAITraffic(
       const isRightIntersect = isRayIntersectingOBB({ x: frx, y: fry }, rightRayEnd, otherOBB);
       const isRayIntersect = isCentralIntersect || isLeftIntersect || isRightIntersect;
 
-      // Trajectory overlap waypoint check
+      // Trajectory overlap waypoint check along vehicle's planned path
       let isTrajectoryConflict = false;
       if (car.routeWaypoints && car.routeWaypoints.length > 0) {
-        const checkEnd = Math.min(car.routeWaypoints.length, car.targetWaypointIndex + 4);
+        const checkEnd = Math.min(car.routeWaypoints.length, car.targetWaypointIndex + 6);
         for (let wi = car.targetWaypointIndex; wi < checkEnd; wi++) {
           const wp = car.routeWaypoints[wi];
-          if (Math.hypot(other.x - wp.x, other.y - wp.y) < 28) {
+          if (Math.hypot(other.x - wp.x, other.y - wp.y) < (car.width + other.width) * 0.5 + 8) {
             isTrajectoryConflict = true;
             break;
           }
@@ -671,10 +703,10 @@ export function updateAITraffic(
       const isConflict = isOverlapping || isRayIntersect || isTrajectoryConflict;
 
       if (isConflict) {
-        // STRICT DETERMINISTIC PRIORITY ARBITRATION
+        // STRICT DETERMINISTIC ПДД PRIORITY ARBITRATION
         let weHavePriority = false;
 
-        // Rule 1: Car already inside intersection has priority over car still at stop line
+        // Rule 1: Car already inside intersection has absolute priority over car still at stop line/entrance
         if (car.inIntersection && !other.inIntersection) {
           weHavePriority = true;
         } else if (!car.inIntersection && other.inIntersection) {
@@ -692,29 +724,36 @@ export function updateAITraffic(
         } else if (car.plannedTurn === 'left' && other.plannedTurn === 'right') {
           weHavePriority = false;
         }
-        // Rule 4: Car closer to exiting the intersection has priority
-        else if ((car.targetWaypointIndex || 0) > (other.targetWaypointIndex || 0)) {
-          weHavePriority = true;
-        } else if ((other.targetWaypointIndex || 0) > (car.targetWaypointIndex || 0)) {
-          weHavePriority = false;
-        }
-        // Rule 5: Polite yielding and tie-breakers for deadlock resolution
+        // Rule 4: Right-Hand Rule ("Помеха справа" - ПДД) for equal-priority intersecting paths
         else {
-          if (car.stuckTimer > 3.0 && other.stuckTimer <= 3.0) {
-            weHavePriority = false; // Politely yield
-          } else if (other.stuckTimer > 3.0 && car.stuckTimer <= 3.0) {
-            weHavePriority = true; // Other yields to us
-          } else if (car.stuckTimer > 3.0 && other.stuckTimer > 3.0) {
-            // If both are stuck, the one stuck longer yields
-            weHavePriority = car.stuckTimer < other.stuckTimer;
+          const angleToOther = Math.atan2(other.y - car.y, other.x - car.x);
+          const relBearing = angleDiff(angleToOther, car.angle);
+
+          if (relBearing > 0.15 && relBearing < Math.PI - 0.15) {
+            // Other vehicle is to our RIGHT: other vehicle has priority!
+            weHavePriority = false;
+          } else if (relBearing < -0.15 && relBearing > -Math.PI + 0.15) {
+            // Other vehicle is to our LEFT: we have priority!
+            weHavePriority = true;
+          } else if ((car.targetWaypointIndex || 0) > (other.targetWaypointIndex || 0)) {
+            weHavePriority = true;
+          } else if ((other.targetWaypointIndex || 0) > (car.targetWaypointIndex || 0)) {
+            weHavePriority = false;
           } else {
-            weHavePriority = car.id < other.id;
+            // Tie-breaker: vehicle stuck longer yields
+            if (car.stuckTimer > 2.0 || other.stuckTimer > 2.0) {
+              weHavePriority = car.stuckTimer < other.stuckTimer;
+            } else {
+              weHavePriority = car.id < other.id;
+            }
           }
         }
 
-        // If we do NOT have priority, yield to the passing car
-        if (!weHavePriority) {
-          const netGap = Math.max(0, directDist - (car.length + other.length) / 2);
+        // CRITICAL FAILSAFE: Even if we have priority, if the other vehicle is already physically
+        // blocking our immediate path or overlapping, we MUST slow down/yield to avoid ramming into it!
+        const isPhysicallyObstructing = isOverlapping || (distLong > 0 && distLong < combinedHalfL + 12 && distLat < combinedHalfW + 6);
+        if (!weHavePriority || isPhysicallyObstructing) {
+          const netGap = Math.max(0.1, directDist - combinedHalfL);
           if (netGap < minGapToLeadCar) {
             minGapToLeadCar = netGap;
             leadCarSpeed = Math.max(0, other.speed);
@@ -1033,53 +1072,35 @@ export function updateAITraffic(
     }
 
     // 6. Anti-Deadlock & Autonomous Recovery
-    // Legitimate queues (waiting at red light, yielding to cross traffic, or in line) must NEVER trigger reverse escape!
-    const isNormalQueueing = (!car.inIntersection && hasLeadCar) || 
+    // Legitimate stops: Waiting at red light / stop line, waiting for pedestrian, or queuing behind a lead car going same direction
+    const isLegitimateStop = 
+      mustStopAtStopLine || 
       car.aiState === 'stopping_light' || 
-      car.aiState === 'yielding';
+      pedObstacleDist < 999 || 
+      (hasLeadCar && !car.hasHeadOnConflict);
 
-    if (isNormalQueueing) {
+    if (isLegitimateStop) {
       car.stuckTimer = 0;
     } else if (Math.abs(car.speed) < 3) {
       car.stuckTimer += dt;
 
-      // Inside intersection: if stalled for > 2.0s, softly enable ghosting and cruise out
-      if (car.inIntersection && car.stuckTimer > 2.0) {
-        car.ghostingAlpha = Math.max(0.4, (car.ghostingAlpha ?? 1.0) - dt * 0.8);
-        car.targetSpeed = 40;
+      // Inside intersection, on connection, or in head-on conflict: after 1.2s of stall, turn on ghosting and force drive through
+      if ((car.inIntersection || car.currentConnection || car.hasHeadOnConflict) && car.stuckTimer > 1.2) {
+        car.ghostingAlpha = Math.max(0.3, (car.ghostingAlpha ?? 1.0) - dt * 1.2);
+        car.targetSpeed = 45;
+        car.speed = Math.max(car.speed, 30);
         car.aiState = 'driving';
       }
 
-      // Threshold for hard reverse escape & smart detour
-      const deadlockThreshold = car.inIntersection ? 2.5 : 3.0;
-      if (car.stuckTimer > deadlockThreshold) {
-        deadlockedCars++;
-        car.isHonking = true;
-        car.hornEffectTimer = 0.3;
-
-        // Smart Detour evaluation: check left vs right clearance around car
-        let leftClearance = 100;
-        let rightClearance = 100;
-        const checkObstacles = vehGrid ? vehGrid.queryRadius(car.x, car.y, 85) : world.vehicles;
-        for (const obs of checkObstacles) {
-          if (obs.id === car.id) continue;
-          const d = Math.hypot(obs.x - car.x, obs.y - car.y);
-          const ang = Math.atan2(obs.y - car.y, obs.x - car.x);
-          const diff = angleDiff(ang, car.angle);
-          if (diff > 0 && d < leftClearance) leftClearance = d;
-          if (diff < 0 && d < rightClearance) rightClearance = d;
+      // Hard deadlock dissolution: after 3.0s of being stuck,
+      // instantly reposition the car to an open road to dissolve the jam without backing up into neighboring traffic!
+      if (car.stuckTimer > 3.0) {
+        const respawned = respawnCarNearPlayer(car, playerPos, world);
+        if (!respawned) {
+          vehiclesToDespawn.push(car.id);
         }
-
-        const escapeDir = leftClearance >= rightClearance ? 1 : -1;
-
-        car.aiState = 'reversing';
-        car.reverseTimer = 1.6;
-        car.recoveryTargetAngle = car.angle + escapeDir * (Math.PI / 2.5);
-        car.recoverySteer = 0;
-        car.stuckTimer = 0;
-        car.ghostingAlpha = 0.5;
-        car.speed = -32;
-        trafficDiagnostics.log('deadlock', `Smart Detour: Car #${car.id.slice(-4)} evaluating bypass (${leftClearance >= rightClearance ? 'Left' : 'Right'} open)`, car.id);
+        trafficDiagnostics.log('deadlock', `Gridlock Dissolution: Repositioned stalled Car #${car.id.slice(-4)}`, car.id);
+        continue;
       }
     } else {
       car.stuckTimer = Math.max(0, car.stuckTimer - dt * 2.0);
@@ -1292,12 +1313,25 @@ function advanceCarRoute(car: Vehicle, world: GameWorld) {
                  p.isBroken
         );
 
-        if (!isPastLine && stopLine && !isLightBroken && (stopLine.lightState === 'red' || stopLine.lightState === 'yellow' || stopLine.lightState === 'red_yellow' || car.aiState === 'yielding')) {
-          // Do not enter yet: hold at current stop line waypoint
+        const isRedOrYellow = inter.hasLights && !isLightBroken && (stopLine.lightState === 'red' || stopLine.lightState === 'yellow' || stopLine.lightState === 'red_yellow');
+        
+        // Anti-Gridlock: Check if destination lane or intersection box is blocked before committing
+        let isDestinationBlocked = false;
+        const targetLane = findLaneById(world, selectedConn.targetLaneId);
+        if (targetLane && targetLane.waypoints.length > 0) {
+          const exitPt = targetLane.waypoints[0];
+          const nearbyAtExit = world.vehicles.some(v => v.id !== car.id && !v.isParked && !v.inIntersection && Math.hypot(v.x - exitPt.x, v.y - exitPt.y) < 60 && v.speed < 8);
+          if (nearbyAtExit) {
+            isDestinationBlocked = true;
+          }
+        }
+
+        if (!isPastLine && (isRedOrYellow || isDestinationBlocked)) {
+          // Do not enter yet: hold safely at stop line waypoint
           car.targetWaypointIndex = car.routeWaypoints.length - 1;
-          car.speed = Math.max(0, car.speed * 0.5);
+          car.speed = 0;
           car.targetSpeed = 0;
-          car.aiState = stopLine.lightState === 'green' ? 'yielding' : 'stopping_light';
+          car.aiState = isRedOrYellow ? 'stopping_light' : 'yielding';
           return;
         }
       }
@@ -2452,6 +2486,7 @@ function respawnCarNearPlayer(car: Vehicle, playerPos: Vector2D, world: GameWorl
 
 // Spawns a brand new AI vehicle dynamically near the player to keep the traffic density alive
 export function spawnNewCarNearPlayer(playerPos: Vector2D, world: GameWorld): boolean {
+  if (world.vehicles.length >= 40) return false;
   const candidates = getCandidateSpawnPoints(playerPos, world, 600, 1400);
   if (candidates.length === 0) return false;
 

@@ -20,23 +20,43 @@ import { updateAITraffic, updatePedestrians, updateTrafficLights } from './aiTra
 import { 
   getAllBuildingEntrances,
   updateBreakablePropsAndLivingWorld,
+  updatePlayerNeedsAndVitals,
   updatePlayerPedestrianPhysics, 
   updateSkidMarksAndParticles, 
   updateVehiclePhysics 
 } from './physics';
 import { GameRenderer } from './renderer';
-import { getBuildingFloorsCount, generateBuildingLayout } from './buildingInteriors';
+import { getBuildingFloorsCount, generateBuildingLayout, constrainPlayerToInterior } from './buildingInteriors';
 import { calculateGpsRoute } from './navigation';
 import { sound } from './audio';
+import { 
+  addItemToPlayer,
+  addPlayerNotification,
+  createDefaultPlayerInventory, 
+  createItem,
+  deductPlayerCash,
+  getPlayerCash,
+  pickupGroundItem, 
+  pickupNearbyLitter,
+  isPlayerNearTrashBin,
+  seedInitialGroundItems, 
+  useItemOnPlayer,
+  ITEM_CATALOG
+} from './items';
 import { TrafficConsole } from './components/TrafficConsole';
 import { FullScreenMap } from './components/FullScreenMap';
 import { LandscapeGuard } from './components/LandscapeGuard';
 import { MobileTouchControls } from './components/MobileTouchControls';
 import { MainMenu } from './components/MainMenu';
+import { PlayerNeedsHUD } from './components/PlayerNeedsHUD';
+import { InventoryModal } from './components/InventoryModal';
+import { SelfInspectionModal } from './components/SelfInspectionModal';
+import { ShopModal, ShopItem, CITY_SHOPS, CityShop } from './components/ShopModal';
 import { PerformanceProfiler } from './components/PerformanceProfiler';
 import { performanceConfig } from './performanceConfig';
 import { 
   AlertTriangle,
+  Ambulance,
   ArrowLeft,
   ArrowRight,
   Check,
@@ -46,16 +66,19 @@ import {
   Compass, 
   Eye, 
   Gauge, 
+  Heart,
   MapPin,
   Maximize2,
   Moon, 
   Navigation,
   RotateCcw,
   Settings,
+  ShoppingBag,
   Smartphone,
   Sun, 
   Sunrise, 
   Terminal,
+  Thermometer,
   Volume2, 
   VolumeX, 
   X,
@@ -205,6 +228,16 @@ export default function App() {
     }
   };
   const [isQuickMenuOpen, setIsQuickMenuOpen] = useState<boolean>(false);
+  const [isInventoryOpen, setIsInventoryOpen] = useState<boolean>(false);
+  const [isInspectionOpen, setIsInspectionOpen] = useState<boolean>(false);
+  const [isShopOpen, setIsShopOpen] = useState<boolean>(false);
+  const [shopTitle, setShopTitle] = useState<string>('СУПЕРМАРКЕТ 24/7');
+  const [shopType, setShopType] = useState<'supermarket' | 'pharmacy' | 'auto_shop' | 'cafe' | 'gear_shop'>('supermarket');
+  const [nearShop, setNearShop] = useState<CityShop | null>(null);
+  const nearShopRef = useRef<CityShop | null>(null);
+  const [canRepairVehicle, setCanRepairVehicle] = useState<boolean>(false);
+  const [selectedHotbarIndex, setSelectedHotbarIndex] = useState<number>(0);
+  const [vitalsRefreshTick, setVitalsRefreshTick] = useState<number>(0);
   const [isConsoleOpen, setIsConsoleOpen] = useState<boolean>(false);
   const [isPerfConsoleOpen, setIsPerfConsoleOpen] = useState<boolean>(false);
   const [currentPerfStats, setCurrentPerfStats] = useState({
@@ -354,7 +387,9 @@ export default function App() {
       timeHour: timeHourRef.current,
       weather: weatherRef.current,
       streetName: currentStreet,
-      gpsDestination: gpsDestination
+      gpsDestination: gpsDestination,
+      needs: player.needs ? { ...player.needs } : undefined,
+      inventory: player.inventory ? JSON.parse(JSON.stringify(player.inventory)) : undefined
     };
 
     let updated = [...savesRef.current];
@@ -389,7 +424,7 @@ export default function App() {
     weatherRef.current = save.weather;
     handleSetGpsTarget(save.gpsDestination);
 
-    // Restore player status
+    // Restore player status & survival needs
     player.x = save.playerX;
     player.y = save.playerY;
     player.angle = save.playerAngle;
@@ -398,6 +433,13 @@ export default function App() {
     player.speed = 0;
     player.isInVehicle = save.isInVehicle;
     player.currentVehicleId = save.currentVehicleId;
+
+    if (save.needs && player.needs) {
+      player.needs = { ...player.needs, ...save.needs };
+    }
+    if (save.inventory) {
+      player.inventory = JSON.parse(JSON.stringify(save.inventory));
+    }
 
     setIsInVehicle(save.isInVehicle);
 
@@ -502,6 +544,21 @@ export default function App() {
     player.angle = 0;
     player.isInVehicle = false;
     player.currentVehicleId = null;
+    player.needs = {
+      health: 100,
+      maxHealth: 100,
+      hunger: 100,
+      maxHunger: 100,
+      thirst: 100,
+      maxThirst: 100,
+      energy: 100,
+      maxEnergy: 100,
+      sleepiness: 0,
+      maxSleepiness: 100,
+      isSleeping: false
+    };
+    player.inventory = createDefaultPlayerInventory();
+    player.notifications = [];
 
     setIsInVehicle(false);
     setActiveCarName('');
@@ -546,7 +603,23 @@ export default function App() {
     skinColor: '#ffd1b3',
     shirtColor: '#3b82f6',
     pantsColor: '#1e293b',
-    hairColor: '#18181b'
+    hairColor: '#18181b',
+    needs: {
+      health: 100,
+      maxHealth: 100,
+      hunger: 100,
+      maxHunger: 100,
+      thirst: 100,
+      maxThirst: 100,
+      energy: 100,
+      maxEnergy: 100,
+      sleepiness: 0,
+      maxSleepiness: 100,
+      isSleeping: false
+    },
+    inventory: createDefaultPlayerInventory(),
+    maxInventorySlots: 18,
+    notifications: []
   });
 
   const cameraRef = useRef<Camera>({
@@ -627,6 +700,8 @@ export default function App() {
       swGrid.clear();
       (world.sidewalks || []).forEach((sw) => swGrid.insert(sw));
 
+      seedInitialGroundItems(world);
+
       setTrafficCount(world.vehicles.length);
       setPedCount(world.pedestrians.length);
 
@@ -654,6 +729,8 @@ export default function App() {
       const code = e.code;
 
       if (code === 'Escape') {
+        setIsInventoryOpen(false);
+        setIsInspectionOpen(false);
         setIsConsoleOpen(false);
         setIsFullMapOpen(false);
         setIsSpawnMenuOpen(false);
@@ -675,6 +752,27 @@ export default function App() {
 
       if (isMainMenuOpenRef.current) return;
 
+      // Inventory Modal Toggle (I or Tab)
+      if (code === 'KeyI' || code === 'Tab') {
+        setIsInventoryOpen((prev) => !prev);
+        e.preventDefault();
+        return;
+      }
+
+      // Hotbar item usage (1 - 6)
+      if (code.startsWith('Digit')) {
+        const digit = parseInt(code.replace('Digit', ''), 10);
+        if (digit >= 1 && digit <= 6) {
+          const slotIdx = digit - 1;
+          setSelectedHotbarIndex(slotIdx);
+          const p = playerRef.current;
+          if (p && p.inventory && p.inventory[slotIdx]) {
+            useItemOnPlayer(p, slotIdx, worldRef.current || undefined);
+            sound.resume();
+          }
+        }
+      }
+
       if (code === 'KeyW' || code === 'ArrowUp') inputRef.current.forward = true;
       if (code === 'KeyS' || code === 'ArrowDown') inputRef.current.backward = true;
       if (code === 'KeyA' || code === 'ArrowLeft') inputRef.current.left = true;
@@ -686,12 +784,42 @@ export default function App() {
       if (code === 'ShiftLeft' || code === 'ShiftRight') inputRef.current.sprint = true;
       if (code === 'KeyH') inputRef.current.hornH = true;
 
-      // Turn Signals (Q = Left, E = Right, Z = Hazard)
+      // Turn Signals & Pickup (Q = Left, E = Right or Pickup on foot, Z = Hazard)
       if (code === 'KeyQ') {
         toggleTurnSignal('left');
       }
       if (code === 'KeyE') {
-        toggleTurnSignal('right');
+        if (playerRef.current.isInVehicle) {
+          toggleTurnSignal('right');
+        } else {
+          if (nearShopRef.current && playerRef.current.isInsideBuilding) {
+            setShopTitle(nearShopRef.current.nameRu);
+            setShopType(nearShopRef.current.type);
+            setIsShopOpen(true);
+            sound.playUseItem();
+          } else {
+            // On foot: Try to pick up nearest litter first, then ground items
+            const world = worldRef.current;
+            const player = playerRef.current;
+            
+            if (pickupNearbyLitter(player, world)) {
+              // Litter picked up successfully
+            } else if (world && world.groundItems && world.groundItems.length > 0) {
+              let closestGI = null;
+              let minDist = 75;
+              for (const gi of world.groundItems) {
+                const d = Math.hypot(player.x - gi.x, player.y - gi.y);
+                if (d < minDist) {
+                  minDist = d;
+                  closestGI = gi;
+                }
+              }
+              if (closestGI) {
+                pickupGroundItem(player, world, closestGI);
+              }
+            }
+          }
+        }
       }
       if (code === 'KeyZ') {
         toggleTurnSignal('hazard');
@@ -719,7 +847,8 @@ export default function App() {
         cycleTimePreset();
       }
       if (code === 'KeyC') {
-        cameraRef.current.targetZoom = cameraRef.current.targetZoom < 1.0 ? 1.3 : 0.85;
+        setIsInspectionOpen((prev) => !prev);
+        e.preventDefault();
       }
       // Interactive Fullscreen Map toggle (M key)
       if (code === 'KeyM') {
@@ -866,23 +995,38 @@ export default function App() {
           camera.targetAngle = 0;
           camera.targetZoom = 1.3 * userZoomFactorRef.current;
 
-          // Check building interior zones if player is inside
+          // Check building interior zones and constrain movement if player is inside
           if (player.isInsideBuilding && player.insideBuildingId) {
             const bld = world.buildings.find(b => b.id === player.insideBuildingId);
             if (bld) {
               const currentFloor = player.currentFloor ?? 0;
               const layout = generateBuildingLayout(bld, currentFloor);
+              
+              // Apply physical collisions with interior walls and furniture
+              constrainPlayerToInterior(player, bld, layout, dt);
+              camera.targetX = player.x;
+              camera.targetY = player.y;
+
               const relX = player.x - bld.x;
               const relY = player.y - bld.y;
 
-              const inElevator = relX >= layout.elevatorZone.x && relX <= layout.elevatorZone.x + layout.elevatorZone.width &&
-                                relY >= layout.elevatorZone.y && relY <= layout.elevatorZone.y + layout.elevatorZone.height;
+              // Check if player is standing in ANY elevator zone
+              const inElevator = (layout.elevators || [layout.elevatorZone]).some(el =>
+                relX >= el.x && relX <= el.x + el.width &&
+                relY >= el.y && relY <= el.y + el.height
+              );
 
-              const inStairs = relX >= layout.stairsZone.x && relX <= layout.stairsZone.x + layout.stairsZone.width &&
-                              relY >= layout.stairsZone.y && relY <= layout.stairsZone.y + layout.stairsZone.height;
+              // Check if player is standing in ANY stairs zone
+              const inStairs = (layout.stairs || [layout.stairsZone]).some(st =>
+                relX >= st.x && relX <= st.x + st.width &&
+                relY >= st.y && relY <= st.y + st.height
+              );
 
-              const inExit = relX >= layout.exitZone.x && relX <= layout.exitZone.x + layout.exitZone.width &&
-                            relY >= layout.exitZone.y && relY <= layout.exitZone.y + layout.exitZone.height;
+              // Check if player is standing in ANY exit zone
+              const inExit = (layout.exits || [layout.exitZone]).some(ex =>
+                relX >= ex.x && relX <= ex.x + ex.width &&
+                relY >= ex.y && relY <= ex.y + ex.height
+              );
 
               const maxFloors = getBuildingFloorsCount(bld);
               const canGoUpOrDown = inElevator || inStairs;
@@ -906,10 +1050,81 @@ export default function App() {
 
               setCanExitBuilding(inExit);
               setCanEnterBuilding(null);
+
+              // Check if player is inside a physical shop building or room
+
+              let currentRoomName = '';
+              for (const room of layout.rooms) {
+                if (relX >= room.x && relX <= room.x + room.width && relY >= room.y && relY <= room.y + room.height) {
+                  currentRoomName = room.name;
+                  break;
+                }
+              }
+
+              let shopType: CityShop['type'] = 'supermarket';
+              let shopIcon = '🛒';
+              let badgeColor = '#f59e0b';
+              let shopName = currentRoomName || bld.nameRu || 'Магазин';
+
+              if (currentRoomName.includes('Аптека') || currentRoomName.includes('Медпункт') || bld.type === 'hospital') {
+                shopType = 'pharmacy';
+                shopIcon = '💊';
+                badgeColor = '#10b981';
+                shopName = currentRoomName.includes('Аптека') ? currentRoomName : 'Аптека "36.6"';
+              } else if (currentRoomName.includes('Кофейня') || currentRoomName.includes('Бургерная') || currentRoomName.includes('Фуд-корт') || currentRoomName.includes('Кофе')) {
+                shopType = 'cafe';
+                shopIcon = '☕';
+                badgeColor = '#f97316';
+                shopName = currentRoomName;
+              } else if (currentRoomName.includes('Охотник') || currentRoomName.includes('Электроники') || currentRoomName.includes('Техника') || currentRoomName.includes('Салон')) {
+                shopType = 'gear_shop';
+                shopIcon = '🔦';
+                badgeColor = '#8b5cf6';
+                shopName = currentRoomName;
+              } else if (bld.type === 'police_station') {
+                shopType = 'gear_shop';
+                shopIcon = '🛡️';
+                badgeColor = '#1d4ed8';
+                shopName = 'Арсенал & Снаряжение полиции';
+              } else if (bld.type === 'car_dealership' || (bld.type === 'commercial' && currentRoomName.includes('Авто'))) {
+                shopType = 'auto_shop';
+                shopIcon = '🔧';
+                badgeColor = '#0284c7';
+                shopName = 'Автосервис & Запчасти "PIT-STOP"';
+              } else if (currentRoomName.includes('Супермаркет') || bld.type === 'shop') {
+                shopType = 'supermarket';
+                shopIcon = '🛒';
+                badgeColor = '#f59e0b';
+                shopName = currentRoomName.includes('Супермаркет') ? currentRoomName : 'Супермаркет 24/7';
+              } else {
+                shopType = 'supermarket';
+                shopIcon = '🏬';
+                badgeColor = '#f59e0b';
+                shopName = currentRoomName || 'Торговый отдел ТРЦ';
+              }
+
+              let shopFound: CityShop | null = {
+                id: `room_shop_${bld.id}_${currentFloor}_${Math.floor(relX)}_${Math.floor(relY)}`,
+                nameRu: shopName,
+                type: shopType,
+                x: bld.x + relX,
+                y: bld.y + relY,
+                icon: shopIcon,
+                badgeColor: badgeColor,
+                description: `Отдел: ${shopName}. Нажмите [E] для открытия каталога.`
+              };
+
+
+              nearShopRef.current = shopFound;
+              setNearShop(shopFound);
+              setCanRepairVehicle(shopFound?.type === 'auto_shop');
             } else {
               setActiveElevatorMenu(null);
               setCanExitBuilding(false);
               setCanEnterBuilding(null);
+              nearShopRef.current = null;
+              setNearShop(null);
+              setCanRepairVehicle(false);
             }
           } else {
             setActiveElevatorMenu(null);
@@ -937,6 +1152,11 @@ export default function App() {
             } else {
               setCanEnterBuilding(null);
             }
+
+            // Outside on roads/streets: no shop interaction prompt
+            nearShopRef.current = null;
+            setNearShop(null);
+            setCanRepairVehicle(player.isInVehicle);
           }
         } else {
           setActiveElevatorMenu(null);
@@ -992,10 +1212,14 @@ export default function App() {
           }
         }
 
+        // Survival & Needs Simulation (Hunger, Thirst, Fatigue, Sleepiness, Health)
+        updatePlayerNeedsAndVitals(player, world, dt, timeHourRef.current, input);
+
         // 6. Throttled HUD State Updates (Run at ~12.5 Hz to prevent React re-render lag)
         hudUpdateTimerRef.current += dt;
         if (hudUpdateTimerRef.current >= 0.08) {
           hudUpdateTimerRef.current = 0;
+          setVitalsRefreshTick((t) => t + 1);
 
           if (playerCar) {
             const currentSpeedKmh = Math.round(Math.abs(playerCar.speed) * 0.36);
@@ -1096,6 +1320,84 @@ export default function App() {
         camera.x += (camera.targetX - camera.x) * 6 * dt;
         camera.y += (camera.targetY - camera.y) * 6 * dt;
         camera.zoom += (camera.targetZoom - camera.zoom) * 4 * dt;
+
+        // 8.5. Fainting & Hospital Rehabilitation System
+        if (player.isFainting) {
+          player.faintTimer = (player.faintTimer || 0) + dt;
+          if (player.faintTimer >= 3.2) {
+            // Wake up in Hospital Bed
+            player.x = 3650;
+            player.y = 1420;
+            player.vx = 0;
+            player.vy = 0;
+            
+            player.isFainting = false;
+            player.faintTimer = 0;
+            player.isHospitalized = true;
+            player.hospitalTimer = 0;
+            player.hospitalPhase = 0;
+            
+            // Initial stabilization
+            player.needs.health = 15;
+            player.needs.hunger = 40;
+            player.needs.thirst = 40;
+            player.needs.energy = 50;
+            player.needs.sleepiness = 0;
+            
+            if (player.bodyState) {
+              player.bodyState.hydration = 40;
+              player.bodyState.energy = 50;
+              player.bodyState.temperature = 36.6;
+              player.bodyState.wetness = 0;
+              player.bodyState.painLevel = 85; // Wake up in pain
+              
+              // Partially treat injuries (stop bleeding, fix fractures, but don't erase them)
+              Object.keys(player.bodyState.bodyParts).forEach((k) => {
+                const part = (player.bodyState!.bodyParts as any)[k] as any[];
+                part.forEach(inj => {
+                  inj.treated = true;
+                });
+              });
+            }
+          }
+        }
+        
+        if (player.isHospitalized) {
+          player.hospitalTimer = (player.hospitalTimer || 0) + dt;
+          
+          if (player.hospitalTimer > 4 && player.hospitalPhase === 0) {
+            player.hospitalPhase = 1;
+            player.needs.health = 35;
+            if (player.bodyState) player.bodyState.painLevel = 60;
+          }
+          if (player.hospitalTimer > 9 && player.hospitalPhase === 1) {
+            player.hospitalPhase = 2;
+            player.needs.health = 60;
+            if (player.bodyState) player.bodyState.painLevel = 40;
+          }
+          if (player.hospitalTimer > 15) {
+            // Discharge
+            player.isHospitalized = false;
+            player.hospitalTimer = 0;
+            
+            // Calculate Bill (30% of cash or $1500)
+            const bill = Math.max(1500, Math.floor((player.cash || 0) * 0.3));
+            deductPlayerCash(player, bill);
+            
+            // Prescribe medicine
+            if (!player.inventory) player.inventory = [];
+            
+            // Add painkillers and bandages
+            for (let i = 0; i < 3; i++) {
+              player.inventory.push({ ...ITEM_CATALOG.painkillers, stack: 1 });
+            }
+            player.inventory.push({ ...ITEM_CATALOG.bandage, stack: 1 });
+            
+            sound.playUseItem();
+            addPlayerNotification(player, `🚑 Выписаны из Городской больницы №1. Выписан рецепт: Обезболивающее.`, 'heal');
+            addPlayerNotification(player, `💳 Медицинский счет оплачен: $${bill}`, 'warning');
+          }
+        }
 
         // Smooth camera rotation lerp with slight lag/delay
         let angleDiff = (camera.targetAngle - camera.angle) % (Math.PI * 2);
@@ -1348,18 +1650,50 @@ export default function App() {
         sound.playCarDoor();
 
         setTimeout(() => {
-          let exitX = bld.x + bld.width / 2;
-          let exitY = bld.y + bld.height + 15;
+          const currentFloor = player.currentFloor ?? 0;
+          const layout = generateBuildingLayout(bld, currentFloor);
+          const relX = player.x - bld.x;
+          const relY = player.y - bld.y;
 
-          if (bld.entranceSide === 'north') {
-            exitX = bld.x + bld.width / 2;
-            exitY = bld.y - 15;
-          } else if (bld.entranceSide === 'west') {
-            exitX = bld.x - 15;
-            exitY = bld.y + bld.height / 2;
-          } else if (bld.entranceSide === 'east') {
-            exitX = bld.x + bld.width + 15;
-            exitY = bld.y + bld.height / 2;
+          // Find the exit zone closest to the player's current position
+          let bestExit = layout.exits[0] || layout.exitZone;
+          let bestDist = Infinity;
+          for (const ex of (layout.exits || [layout.exitZone])) {
+            const d = Math.hypot(relX - (ex.x + ex.width / 2), relY - (ex.y + ex.height / 2));
+            if (d < bestDist) {
+              bestDist = d;
+              bestExit = ex;
+            }
+          }
+
+          const ents = getAllBuildingEntrances(bld);
+          let targetEnt = ents[0];
+          if (bestExit.entranceIndex !== undefined && ents[bestExit.entranceIndex]) {
+            targetEnt = ents[bestExit.entranceIndex];
+          } else {
+            // Find entrance closest to the exit zone
+            let minEntDist = Infinity;
+            for (const ent of ents) {
+              const d = Math.hypot((ent.x - bld.x) - (bestExit.x + bestExit.width / 2), (ent.y - bld.y) - (bestExit.y + bestExit.height / 2));
+              if (d < minEntDist) {
+                minEntDist = d;
+                targetEnt = ent;
+              }
+            }
+          }
+
+          let exitX = targetEnt.x;
+          let exitY = targetEnt.y + 14;
+          if (targetEnt.side === 'north') {
+            exitY = targetEnt.y - 14;
+          } else if (targetEnt.side === 'south') {
+            exitY = targetEnt.y + 14;
+          } else if (targetEnt.side === 'west') {
+            exitX = targetEnt.x - 14;
+            exitY = targetEnt.y;
+          } else if (targetEnt.side === 'east') {
+            exitX = targetEnt.x + 14;
+            exitY = targetEnt.y;
           }
 
           player.x = exitX;
@@ -1413,31 +1747,25 @@ export default function App() {
         player.currentFloor = 0;
 
         const ents = getAllBuildingEntrances(bld);
-        let closestEnt = ents[0];
+        let closestEntIndex = 0;
         let minEntDist = Infinity;
-        for (const ent of ents) {
+        for (let i = 0; i < ents.length; i++) {
+          const ent = ents[i];
           const d = Math.hypot(player.x - ent.x, player.y - ent.y);
           if (d < minEntDist) {
             minEntDist = d;
-            closestEnt = ent;
+            closestEntIndex = i;
           }
         }
 
-        let enterX = bld.width / 2;
-        let enterY = bld.height - 25;
-        if (closestEnt.side === 'north') {
-          enterX = bld.width * closestEnt.offsetRatio;
-          enterY = 25;
-        } else if (closestEnt.side === 'south') {
-          enterX = bld.width * closestEnt.offsetRatio;
-          enterY = bld.height - 25;
-        } else if (closestEnt.side === 'west') {
-          enterX = 25;
-          enterY = bld.height * closestEnt.offsetRatio;
-        } else if (closestEnt.side === 'east') {
-          enterX = bld.width - 25;
-          enterY = bld.height * closestEnt.offsetRatio;
-        }
+        const layout = generateBuildingLayout(bld, 0);
+        const exitZone = (layout.exits && layout.exits[closestEntIndex])
+          ? layout.exits[closestEntIndex]
+          : (layout.exits[0] || layout.exitZone);
+
+        // Place player just in front of that section's exit door inside the entrance vestibule
+        const enterX = exitZone.x + exitZone.width / 2;
+        const enterY = exitZone.y < bld.height / 2 ? exitZone.y + exitZone.height + 12 : exitZone.y - 12;
 
         const newPX = bld.x + enterX;
         const newPY = bld.y + enterY;
@@ -1472,8 +1800,22 @@ export default function App() {
       const bld = world.buildings.find(b => b.id === player.insideBuildingId);
       if (bld) {
         const layout = generateBuildingLayout(bld, floor);
-        const destX = bld.x + layout.elevatorZone.x + layout.elevatorZone.width / 2;
-        const destY = bld.y + layout.elevatorZone.y + layout.elevatorZone.height / 2 + 15;
+        const relX = player.x - bld.x;
+        const relY = player.y - bld.y;
+
+        // Find elevator zone in the target floor matching player's current section or position
+        let bestElevator = layout.elevators[0] || layout.elevatorZone;
+        let minElDist = Infinity;
+        for (const el of (layout.elevators || [layout.elevatorZone])) {
+          const d = Math.hypot(relX - (el.x + el.width / 2), relY - (el.y + el.height / 2));
+          if (d < minElDist) {
+            minElDist = d;
+            bestElevator = el;
+          }
+        }
+
+        const destX = bld.x + bestElevator.x + bestElevator.width / 2;
+        const destY = bld.y + (bestElevator.y < bld.height / 2 ? bestElevator.y + bestElevator.height + 12 : bestElevator.y - 12);
         player.x = destX;
         player.y = destY;
 
@@ -1755,6 +2097,22 @@ export default function App() {
         ctx.fill();
       }
 
+      // City Establishments & Shops (🛒 💊 🔧 ☕ 🔦)
+      for (const shop of CITY_SHOPS) {
+        ctx.fillStyle = shop.badgeColor;
+        ctx.beginPath();
+        ctx.arc(shop.x, shop.y, 18, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 2.5;
+        ctx.stroke();
+
+        ctx.font = 'bold 13px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(shop.icon, shop.x, shop.y);
+      }
+
       // NPC Cars (Yellow / Slate)
       for (const veh of world.vehicles) {
         if (!veh.isPlayerControlled) {
@@ -1934,6 +2292,7 @@ export default function App() {
       {/* TOP-RIGHT: RADAR MINIMAP & FULLSCREEN MAP TRIGGER */}
       <div id="hud-top-right" className="absolute top-4 right-4 z-20 flex flex-col items-end gap-2 pointer-events-auto">
         <div 
+          id="minimap-radar-container"
           className="bg-slate-900/95 backdrop-blur-md border border-slate-700/90 rounded-2xl p-2 shadow-2xl overflow-hidden relative group cursor-pointer active:scale-95 transition-transform"
           onClick={() => setIsFullMapOpen(true)}
           onTouchEnd={(e) => {
@@ -1960,28 +2319,20 @@ export default function App() {
             <span>Карта [M]</span>
           </button>
 
-          {/* Radar Zoom Quick Toggle */}
+          {/* Radar Zoom Controls */}
           <div className="absolute top-3 left-3 flex items-center gap-1">
             <button
               onClick={(e) => {
                 e.stopPropagation();
                 setMinimapRange((r) => Math.max(300, r - 150));
               }}
-              onTouchEnd={(e) => {
-                e.stopPropagation();
-                setMinimapRange((r) => Math.max(300, r - 150));
-              }}
               className="w-5 h-5 bg-slate-950/80 hover:bg-slate-800 border border-slate-700 text-slate-300 rounded flex items-center justify-center text-xs font-bold"
-              title="Приблизить радаром"
+              title="Приблизить радар"
             >
               +
             </button>
             <button
               onClick={(e) => {
-                e.stopPropagation();
-                setMinimapRange((r) => Math.min(1000, r + 150));
-              }}
-              onTouchEnd={(e) => {
                 e.stopPropagation();
                 setMinimapRange((r) => Math.min(1000, r + 150));
               }}
@@ -1994,7 +2345,28 @@ export default function App() {
         </div>
       </div>
 
-      {/* CENTER-BOTTOM: CLEAN IN-WORLD INTERACTION PROMPT */}
+      {/* CENTER-BOTTOM: IN-WORLD SHOP PROMPT (INSIDE SHOP) */}
+      {nearShop && playerRef.current?.isInsideBuilding && !isInVehicle && (
+        <div id="shop-entrance-prompt" className="absolute bottom-28 left-1/2 -translate-x-1/2 z-30 pointer-events-auto">
+          <button
+            onClick={() => {
+              setShopTitle(nearShop.nameRu);
+              setShopType(nearShop.type);
+              setIsShopOpen(true);
+              sound.playUseItem();
+            }}
+            className="bg-amber-950/90 hover:bg-amber-900 border-2 border-amber-500/80 text-amber-200 text-xs font-bold px-4 py-2.5 rounded-2xl shadow-2xl flex items-center gap-2 backdrop-blur-md transition-all active:scale-95 animate-bounce"
+          >
+            <span className="text-base">{nearShop.icon}</span>
+            <span>{nearShop.nameRu}</span>
+            <span className="px-1.5 py-0.5 bg-amber-500 text-slate-950 rounded text-[10px] font-black uppercase">
+              [E] Магазин
+            </span>
+          </button>
+        </div>
+      )}
+
+      {/* CENTER-BOTTOM: CLEAN IN-WORLD VEHICLE PROMPT */}
       {nearbyCarPrompt && (
         <div id="interaction-prompt" className="absolute bottom-28 left-1/2 -translate-x-1/2 z-30 pointer-events-none">
           <div className="bg-slate-900/95 border border-sky-400/60 text-white font-semibold px-4 py-2 rounded-xl shadow-2xl flex items-center gap-2 text-xs backdrop-blur-md">
@@ -2098,40 +2470,6 @@ export default function App() {
               >
                 <span>L</span>
               </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* BOTTOM-RIGHT: PEDESTRIAN HUD CARD (WHEN ON FOOT) */}
-      {!isInVehicle && (
-        <div id="pedestrian-hud-container" className="absolute bottom-4 right-4 z-20 pointer-events-auto">
-          <div className="bg-slate-900/90 backdrop-blur-md border border-slate-700/80 rounded-2xl p-3.5 shadow-2xl text-white flex flex-col gap-2 min-w-[220px]">
-            <div className="flex items-center justify-between border-b border-slate-800/80 pb-2">
-              <div className="flex items-center gap-2">
-                <span className="w-2.5 h-2.5 rounded-full bg-sky-400 animate-pulse" />
-                <span className="text-xs font-bold uppercase tracking-wider text-sky-400">Режим пешехода</span>
-              </div>
-              <span className="text-[10px] text-slate-400 font-mono">Пешком</span>
-            </div>
-
-            <div className="grid grid-cols-2 gap-1.5 text-[11px] pt-0.5">
-              <div className="flex items-center gap-1.5 text-slate-300">
-                <span className="px-1.5 py-0.5 bg-slate-800 border border-slate-700 rounded font-mono font-bold text-[10px] text-sky-300">WASD</span>
-                <span>Движение</span>
-              </div>
-              <div className="flex items-center gap-1.5 text-slate-300">
-                <span className="px-1.5 py-0.5 bg-slate-800 border border-slate-700 rounded font-mono font-bold text-[10px] text-amber-300">Shift</span>
-                <span>Бег</span>
-              </div>
-              <div className="flex items-center gap-1.5 text-slate-300">
-                <span className="px-1.5 py-0.5 bg-slate-800 border border-slate-700 rounded font-mono font-bold text-[10px] text-emerald-300">Space</span>
-                <span>Перекат</span>
-              </div>
-              <div className="flex items-center gap-1.5 text-slate-300">
-                <span className="px-1.5 py-0.5 bg-slate-800 border border-slate-700 rounded font-mono font-bold text-[10px] text-purple-300">F / E</span>
-                <span>В авто</span>
-              </div>
             </div>
           </div>
         </div>
@@ -2395,6 +2733,191 @@ export default function App() {
           fadeActive ? 'opacity-100' : 'opacity-0'
         }`}
       />
+
+      {/* SURVIVAL VITALS HUD & QUICK HOTBAR */}
+      <PlayerNeedsHUD
+        player={playerRef.current}
+        world={worldRef.current}
+        onOpenInventory={() => setIsInventoryOpen(true)}
+        onOpenSelfInspection={() => setIsInspectionOpen(true)}
+        onUseHotbarItem={(idx) => {
+          setSelectedHotbarIndex(idx);
+          const p = playerRef.current;
+          if (p && p.inventory && p.inventory[idx]) {
+            useItemOnPlayer(p, idx, worldRef.current || undefined);
+            sound.resume();
+          }
+        }}
+        selectedHotbarIndex={selectedHotbarIndex}
+      />
+
+      {/* SELF INSPECTION & BODY SENSATIONS MODAL */}
+      <SelfInspectionModal
+        isOpen={isInspectionOpen}
+        onClose={() => setIsInspectionOpen(false)}
+        player={playerRef.current}
+      />
+
+      {/* FULL INVENTORY & SURROUNDINGS MANAGEMENT MODAL */}
+      <InventoryModal
+        isOpen={isInventoryOpen}
+        onClose={() => setIsInventoryOpen(false)}
+        player={playerRef.current}
+        world={worldRef.current}
+        onSleepInBed={() => {
+          const p = playerRef.current;
+          if (p && p.needs) {
+            p.needs.isSleeping = true;
+            p.needs.sleepiness = 0;
+            p.needs.energy = 100;
+            p.needs.health = Math.min(100, p.needs.health + 20);
+            addPlayerNotification(p, 'Вы отдохнули и восстановили силы!', 'sleep');
+          }
+        }}
+      />
+
+      {/* SHOP & AUTO REPAIR MODAL */}
+      <ShopModal
+        isOpen={isShopOpen}
+        onClose={() => setIsShopOpen(false)}
+        player={playerRef.current}
+        shopTitle={shopTitle}
+        shopType={shopType}
+        canRepairVehicle={canRepairVehicle || playerRef.current?.isInVehicle}
+        onBuyItem={(item) => {
+          const p = playerRef.current;
+          if (!p) return;
+          const currentCash = getPlayerCash(p);
+          if (currentCash >= item.price) {
+            const success = deductPlayerCash(p, item.price);
+            if (success) {
+              const boughtItem = createItem(item.itemId, 1);
+              addItemToPlayer(p, boughtItem);
+              sound.playUseItem();
+              addPlayerNotification(p, `Приобретено: ${item.nameRu} (-$${item.price})`, 'pickup');
+              setVitalsRefreshTick((t) => t + 1);
+            }
+          } else {
+            addPlayerNotification(p, 'Недостаточно денег на балансе!', 'warning');
+          }
+        }}
+        onRepairVehicle={() => {
+          const p = playerRef.current;
+          const w = worldRef.current;
+          if (!p || !w) return;
+          const currentCash = getPlayerCash(p);
+          if (currentCash < 300) {
+            addPlayerNotification(p, 'Недостаточно денег для ремонта ($300)', 'warning');
+            return;
+          }
+          let targetCar: Vehicle | null = null;
+          if (p.isInVehicle && p.currentVehicleId) {
+            targetCar = w.vehicles.find((v) => v.id === p.currentVehicleId) || null;
+          } else {
+            targetCar = w.vehicles.find((v) => Math.hypot(v.x - p.x, v.y - p.y) < 100) || null;
+          }
+
+          if (targetCar) {
+            deductPlayerCash(p, 300);
+            targetCar.damage = createDefaultVehicleDamage(targetCar.length, targetCar.width);
+            sound.playUseItem();
+            addPlayerNotification(p, '🛠️ Автомобиль полностью отремонтирован и приведен в идеальное состояние! (-$300)', 'heal');
+            setVitalsRefreshTick((t) => t + 1);
+          } else {
+            addPlayerNotification(p, 'Поблизости не обнаружен автомобиль для ремонта', 'warning');
+          }
+        }}
+      />
+
+      {/* FAINTING & HOSPITAL RESCUE IMMERSION OVERLAY */}
+      {playerRef.current?.isFainting && (
+        <div 
+          id="fainting-overlay"
+          className="fixed inset-0 z-[10000] bg-slate-950/95 backdrop-blur-xl flex flex-col items-center justify-center p-6 text-white text-center animate-in fade-in duration-700"
+        >
+          <div className="relative flex flex-col items-center max-w-md">
+            <div className="w-20 h-20 rounded-full bg-rose-500/20 border-2 border-rose-500/60 flex items-center justify-center text-rose-500 mb-6 shadow-2xl shadow-rose-500/30">
+              <Heart className="w-10 h-10 animate-ping" />
+            </div>
+
+            <h1 className="text-2xl font-black mb-2 tracking-wide uppercase text-rose-400">
+              💔 ПОТЕРЯ СОЗНАНИЯ
+            </h1>
+
+            <p className="text-sm text-slate-300 mb-6 leading-relaxed">
+              Ваш организм полностью истощен. Вы потеряли сознание от травм или крайнего недомогания...
+            </p>
+
+            <div className="p-4 rounded-2xl bg-slate-900 border border-slate-800 w-full flex items-center gap-3 text-left mb-6 shadow-xl">
+              <div className="p-3 rounded-xl bg-sky-500/20 text-sky-400 border border-sky-500/30 shrink-0">
+                <Ambulance className="w-6 h-6 animate-bounce" />
+              </div>
+              <div>
+                <h3 className="text-xs font-bold text-sky-300">Городская служба скорой помощи</h3>
+                <p className="text-[11px] text-slate-400 mt-0.5">
+                  Скорая везет вас в Городскую Больницу №1...
+                </p>
+              </div>
+            </div>
+
+            <div className="w-full bg-slate-900 h-1.5 rounded-full overflow-hidden border border-slate-800">
+              <div className="bg-gradient-to-r from-rose-500 via-amber-500 to-emerald-500 h-full w-full animate-pulse" />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* HOSPITAL BED OVERLAY */}
+      {playerRef.current?.isHospitalized && (
+        <div 
+          id="hospital-overlay"
+          className="fixed inset-0 z-[10000] bg-slate-900/98 backdrop-blur-2xl flex flex-col items-center justify-center p-6 text-white text-center animate-in fade-in duration-1000"
+        >
+          <div className="relative flex flex-col items-center max-w-lg w-full">
+            <div className="w-16 h-16 rounded-full bg-sky-500/20 border border-sky-500/50 flex items-center justify-center text-sky-400 mb-6">
+              <Thermometer className="w-8 h-8" />
+            </div>
+
+            <h1 className="text-2xl font-black mb-1 tracking-wider text-slate-100 uppercase">
+              Палата интенсивной терапии
+            </h1>
+            <p className="text-sky-400/80 text-sm font-medium mb-8">Городская Больница №1</p>
+
+            <div className="flex flex-col gap-4 w-full text-left bg-slate-950/50 p-6 rounded-2xl border border-slate-800 shadow-xl">
+              <div className={`transition-opacity duration-700 ${playerRef.current.hospitalPhase! >= 0 ? 'opacity-100' : 'opacity-0'}`}>
+                <div className="text-xs font-bold text-rose-400 mb-1">ДЕНЬ 1: Реанимация</div>
+                <div className="text-sm text-slate-300 border-l-2 border-rose-500/50 pl-3 py-1">
+                  Вы очнулись на больничной койке. Тело пронзает жуткая боль, двигаться невозможно. Хирурги останавливают кровотечения и проводят экстренную операцию...
+                </div>
+              </div>
+              
+              <div className={`transition-opacity duration-700 ${playerRef.current.hospitalPhase! >= 1 ? 'opacity-100' : 'opacity-20'}`}>
+                <div className="text-xs font-bold text-amber-400 mb-1 mt-2">ДЕНЬ 3: Стабилизация</div>
+                <div className="text-sm text-slate-300 border-l-2 border-amber-500/50 pl-3 py-1">
+                  Состояние медленно улучшается. Кости зафиксированы в гипс и жесткие шины. Вас переводят в общую палату, ставят обезболивающие капельницы.
+                </div>
+              </div>
+
+              <div className={`transition-opacity duration-700 ${playerRef.current.hospitalPhase! >= 2 ? 'opacity-100' : 'opacity-20'}`}>
+                <div className="text-xs font-bold text-emerald-400 mb-1 mt-2">ДЕНЬ 7: Реабилитация</div>
+                <div className="text-sm text-slate-300 border-l-2 border-emerald-500/50 pl-3 py-1">
+                  Вы можете вставать и ходить, хотя боль все еще дает о себе знать. Лечащий врач выписывает вам рецепт на сильные анальгетики и готовит документы на выписку.
+                </div>
+              </div>
+            </div>
+
+            <div className="w-full bg-slate-900 h-2 rounded-full overflow-hidden border border-slate-800 mt-8">
+              <div 
+                className="bg-sky-500 h-full transition-all duration-300 ease-linear" 
+                style={{ width: `${Math.min(100, ((playerRef.current.hospitalTimer || 0) / 15) * 100)}%` }} 
+              />
+            </div>
+            <div className="text-[10px] text-slate-500 mt-3 uppercase tracking-widest animate-pulse">
+              Ожидание выписки...
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Main Menu Overlay */}
       {isMainMenuOpen && (

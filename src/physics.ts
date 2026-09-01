@@ -4,12 +4,21 @@ import { generateBuildingLayout, constrainPlayerToInterior } from './buildingInt
 import { sound } from './audio';
 import { trafficDiagnostics } from './aiTraffic';
 import { performanceConfig } from './performanceConfig';
+import { createDefaultPlayerInventory, addPlayerNotification } from './items';
+import { defaultBodyState } from './sensations';
 
 export interface CollisionResult {
   collided: boolean;
   normalX: number;
   normalY: number;
   depth: number;
+}
+
+function angleDiff(a: number, b: number): number {
+  let diff = (a - b) % (Math.PI * 2);
+  if (diff < -Math.PI) diff += Math.PI * 2;
+  if (diff > Math.PI) diff -= Math.PI * 2;
+  return diff;
 }
 
 // Check intersection between rotated car box and AABB building using SAT
@@ -689,6 +698,12 @@ export function updatePlayerPedestrianPhysics(
   world?: GameWorld
 ) {
   if (player.isInVehicle) return;
+  
+  if (player.isFainting || player.isHospitalized || player.isSleeping) {
+    player.vx = 0;
+    player.vy = 0;
+    return;
+  }
 
   // If player is inside a building, bypass standard physics and use interior constraints
   if (player.isInsideBuilding && player.insideBuildingId && world) {
@@ -740,10 +755,14 @@ export function updatePlayerPedestrianPhysics(
     }
   }
 
-  // Dodge Roll / Quick Dash Trigger (Space key on foot)
-  if (input.handbrake && !player.isDashing && (player.dashTimer || 0) <= 0) {
+  // Dodge Roll / Quick Dash Trigger (Space key on foot - requires at least 8 stamina)
+  const canRoll = !player.isDashing && (player.dashTimer || 0) <= 0 && (!player.needs || player.needs.energy >= 8);
+  if (input.handbrake && canRoll) {
     player.isDashing = true;
     player.dashTimer = 0.28; // Roll duration in seconds
+    if (player.needs) {
+      player.needs.energy = Math.max(0, player.needs.energy - 12);
+    }
 
     // Roll in current input direction if WASD pressed, or facing direction
     let inputX = 0;
@@ -813,7 +832,28 @@ export function updatePlayerPedestrianPhysics(
     if (input.right) moveX += 1;
 
     const len = Math.hypot(moveX, moveY);
-    const targetSpeed = input.sprint ? 175 : 95; // Walk (95 px/s) vs Sprint (175 px/s)
+
+    // Check leg injuries for speed penalties and limping
+    const hasFracture = player.bodyState?.bodyParts && (
+      player.bodyState.bodyParts.leftLeg.some(i => i.type === 'fracture' && !i.treated) ||
+      player.bodyState.bodyParts.rightLeg.some(i => i.type === 'fracture' && !i.treated)
+    );
+    const hasLegInjury = player.bodyState?.bodyParts && (
+      player.bodyState.bodyParts.leftLeg.some(i => !i.treated && i.type !== 'abrasion') ||
+      player.bodyState.bodyParts.rightLeg.some(i => !i.treated && i.type !== 'abrasion')
+    );
+    const legPenalty = hasFracture ? 0.18 : (hasLegInjury ? 0.55 : 1.0);
+
+    const canSprint = input.sprint && (!player.needs || player.needs.energy > 5) && !hasLegInjury;
+    let targetSpeed = (canSprint ? 175 : 95) * legPenalty;
+
+    // Authentic gait hitching / limping rhythm when walking with an injured leg or fracture
+    if (hasLegInjury && len > 0.01) {
+      const hitchRhythm = Math.sin(player.walkCycle * (hasFracture ? 3.5 : 2.2));
+      if (hitchRhythm > (hasFracture ? 0.2 : 0.55)) {
+        targetSpeed *= (hasFracture ? 0.25 : 0.4); // Severe pain hitch / limp step
+      }
+    }
 
     if (len > 0.01) {
       moveX /= len;
@@ -839,11 +879,11 @@ export function updatePlayerPedestrianPhysics(
       if (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
       player.angle += angleDiff * Math.min(1.0, 25 * dt);
 
-      player.walkCycle += dt * (input.sprint ? 18 : 10);
+      player.walkCycle += dt * (canSprint ? 18 : (hasLegInjury ? 7 : 10));
       player.speed = Math.hypot(player.vx, player.vy);
 
       // Footstep dust particles when sprinting
-      if (input.sprint && world && Math.random() < 0.25) {
+      if (canSprint && world && Math.random() < 0.25) {
         world.particles.push({
           x: player.x,
           y: player.y,
@@ -899,6 +939,44 @@ export function updatePlayerPedestrianPhysics(
       if (res.collided) {
         newX = res.x;
         newY = res.y;
+
+        // Apply hit damage if car is moving fast
+        if (car.speed > 22 && player.needs) {
+          const now = Date.now() / 1000;
+          if (!player.lastHurtTime || now - player.lastHurtTime > 0.6) {
+            player.lastHurtTime = now;
+            const isTruck = car.type.includes('truck') || car.type.includes('bus') || car.type.includes('cement') || car.type.includes('garbage');
+            const damageMultiplier = isTruck ? 1.4 : 0.6;
+            const hitDamage = Math.min(90, Math.round(car.speed * damageMultiplier));
+            player.needs.health = Math.max(0, player.needs.health - hitDamage);
+            sound.playHurt();
+            addPlayerNotification(player, `💥 ${isTruck ? 'Тяжелый наезд грузовика!' : 'Удар автомобилем!'} -${hitDamage} HP`, 'warning');
+
+            // Apply realistic bone fractures, severe trauma & ear ringing tinnitus
+            if (player.bodyState) {
+              player.bodyState.tinnitusTimer = isTruck ? 4.0 : 2.5;
+              player.bodyState.impactFlashTimer = isTruck ? 2.2 : 1.5;
+              sound.playTinnitus(isTruck ? 4.0 : 2.5);
+
+              const parts = player.bodyState.bodyParts;
+              const addInj = (part: any[], type: any) => part.push({ id: Math.random().toString(), type, treated: false });
+              
+              if (car.speed > 45 || isTruck) {
+                addInj(parts.leftLeg, 'fracture');
+                if (Math.random() < 0.6) addInj(parts.rightLeg, 'fracture');
+                else addInj(parts.rightLeg, 'sprain');
+                addInj(parts.torso, 'fracture');
+                addInj(parts.head, 'bruise');
+                if (isTruck || car.speed > 70) {
+                  addInj(parts.leftArm, 'fracture');
+                }
+              } else {
+                addInj(parts.leftLeg, parts.leftLeg.length === 0 ? 'sprain' : 'fracture');
+                addInj(parts.torso, 'bruise');
+              }
+            }
+          }
+        }
       }
     }
   }
@@ -940,6 +1018,213 @@ export function updatePlayerPedestrianPhysics(
   // World bounds clamp (full world size)
   player.x = Math.max(20, Math.min(worldWidth - 20, newX));
   player.y = Math.max(20, Math.min(worldHeight - 20, newY));
+}
+
+// === PLAYER SURVIVAL NEEDS & VITALS SIMULATION ===
+export function updatePlayerNeedsAndVitals(
+  player: Player,
+  world: GameWorld,
+  dt: number,
+  input: InputState,
+  timeHour: number
+) {
+  if (!player.needs) {
+    player.needs = {
+      health: 100,
+      hunger: 90,
+      thirst: 85,
+      energy: 100,
+      sleepiness: 15
+    };
+  }
+  if (!player.inventory) {
+    player.inventory = createDefaultPlayerInventory();
+  }
+  if (!player.notifications) {
+    player.notifications = [];
+  }
+  if (player.maxInventorySlots === undefined) {
+    player.maxInventorySlots = 18;
+  }
+  if (player.selectedHotbarIndex === undefined) {
+    player.selectedHotbarIndex = 0;
+  }
+  if (!player.bodyState) {
+    player.bodyState = defaultBodyState();
+  }
+
+  // --- BODY STATE & PHYSIOLOGICAL SIMULATION ---
+  const bs = player.bodyState;
+  const isRaining = world.weather === 'rain' || world.weather === 'storm';
+  const isExposedToRain = isRaining && !player.isInsideBuilding && !player.isInVehicle;
+
+  // 1. Wetness accumulation / drying
+  if (isExposedToRain) {
+    bs.wetness = Math.min(100, bs.wetness + 5.0 * dt);
+  } else {
+    const dryRate = player.isInsideBuilding ? 4.5 : (player.isInVehicle ? 3.0 : 2.0);
+    bs.wetness = Math.max(0, bs.wetness - dryRate * dt);
+  }
+
+  // 2. Body Temperature dynamics
+  if (bs.wetness > 50 && isExposedToRain) {
+    bs.temperature = Math.max(34.6, bs.temperature - 0.08 * dt);
+  } else if (!isExposedToRain && bs.temperature < 36.6) {
+    bs.temperature = Math.min(36.6, bs.temperature + 0.12 * dt);
+  }
+
+  // 3. Hydration & Energy sync
+  bs.hydration = player.needs.thirst;
+  bs.energy = player.needs.energy;
+
+  // 4. Pain Level calculation from body parts & health loss
+  let partPain = 0;
+  let hasBleeding = false;
+  for (const k in bs.bodyParts) {
+    const st = bs.bodyParts[k as keyof typeof bs.bodyParts];
+    if (st === 'bruised') partPain += 12;
+    if (st === 'sprained') partPain += 25;
+    if (st === 'bleeding') {
+      partPain += 40;
+      hasBleeding = true;
+    }
+  }
+  const hpLossPain = Math.max(0, (100 - player.needs.health) * 0.5);
+  bs.painLevel = Math.min(100, Math.round(partPain + hpLossPain));
+
+  // Bleeding health drain
+  if (hasBleeding) {
+    player.needs.health = Math.max(0, player.needs.health - 2.2 * dt);
+  }
+
+  // 5. Audio symptom triggers & timers
+  // Cold / Cough
+  if (bs.wetness > 60 || bs.temperature < 35.8) {
+    bs.coughTimer = (bs.coughTimer || 0) - dt;
+    if (bs.coughTimer <= 0) {
+      sound.playCough();
+      bs.coughTimer = 14 + Math.random() * 16;
+    }
+  }
+
+  // Pain / Leg injury groan
+  const hasLegInjury = bs.bodyParts.leftLeg !== 'healthy' || bs.bodyParts.rightLeg !== 'healthy';
+  if (bs.painLevel > 40 || hasLegInjury) {
+    bs.groanTimer = (bs.groanTimer || 0) - dt;
+    if (bs.groanTimer <= 0) {
+      sound.playGroan();
+      bs.groanTimer = 18 + Math.random() * 22;
+    }
+  }
+
+  // Dehydration / Exhaustion gasping
+  if (bs.hydration < 22 || bs.energy < 18) {
+    bs.heavyBreathTimer = (bs.heavyBreathTimer || 0) - dt;
+    if (bs.heavyBreathTimer <= 0) {
+      sound.playHeavyBreathing();
+      bs.heavyBreathTimer = 7 + Math.random() * 8;
+    }
+  }
+
+  // Timers countdown
+  if ((bs.tinnitusTimer || 0) > 0) bs.tinnitusTimer! -= dt;
+  if ((bs.impactFlashTimer || 0) > 0) bs.impactFlashTimer! -= dt;
+
+  // Handle sleeping state
+  if (player.isSleeping) {
+    player.sleepTimer = (player.sleepTimer || 0) - dt;
+    // Rapidly restore sleepiness and health during sleep
+    player.needs.sleepiness = Math.max(0, player.needs.sleepiness - 40 * dt);
+    player.needs.energy = Math.min(100, player.needs.energy + 35 * dt);
+    player.needs.health = Math.min(100, player.needs.health + 20 * dt);
+    
+    if (player.sleepTimer <= 0) {
+      player.isSleeping = false;
+      player.sleepTimer = 0;
+      player.needs.sleepiness = 0;
+      player.needs.energy = 100;
+      player.needs.health = 100;
+      // Slight hunger/thirst from sleeping hours
+      player.needs.hunger = Math.max(15, player.needs.hunger - 8);
+      player.needs.thirst = Math.max(15, player.needs.thirst - 12);
+      sound.playSleep();
+      addPlayerNotification(player, '😴 Вы отлично выспались! Здоровье и силы на максимуме.', 'sleep');
+    }
+    return;
+  }
+
+  // 1. Drain Hunger (Голод)
+  let hungerDrain = 0.06;
+  if (input.sprint && !player.isInVehicle && player.speed > 50) {
+    hungerDrain = 0.16;
+  }
+  player.needs.hunger = Math.max(0, player.needs.hunger - hungerDrain * dt);
+
+  // 2. Drain Thirst (Жажда)
+  let thirstDrain = 0.10;
+  if (input.sprint && !player.isInVehicle && player.speed > 50) {
+    thirstDrain = 0.24;
+  }
+  player.needs.thirst = Math.max(0, player.needs.thirst - thirstDrain * dt);
+
+  // 3. Energy / Stamina (Усталость / Выносливость)
+  const isDrowsy = player.needs.sleepiness > 75;
+  const maxEnergy = isDrowsy ? 70 : 100;
+
+  if (input.sprint && !player.isInVehicle && (input.forward || input.backward || input.left || input.right)) {
+    player.needs.energy = Math.max(0, player.needs.energy - 20 * dt);
+  } else if (player.isDashing) {
+    player.needs.energy = Math.max(0, player.needs.energy - 8 * dt);
+  } else {
+    const recoveryRate = isDrowsy ? 15 : 28;
+    if (player.needs.energy < maxEnergy) {
+      player.needs.energy = Math.min(maxEnergy, player.needs.energy + recoveryRate * dt);
+    }
+  }
+
+  // 4. Sleepiness (Сонливость)
+  const isNight = timeHour >= 22 || timeHour < 6;
+  const sleepinessRate = isNight ? 0.08 : 0.04;
+  player.needs.sleepiness = Math.min(100, player.needs.sleepiness + sleepinessRate * dt);
+
+  // 5. Health & Survival Effects (Здоровье и Выживание)
+  if (player.needs.hunger <= 0) {
+    player.needs.health = Math.max(0, player.needs.health - 2.5 * dt);
+  }
+  if (player.needs.thirst <= 0) {
+    player.needs.health = Math.max(0, player.needs.health - 3.5 * dt);
+  }
+  if (
+    player.needs.hunger > 65 &&
+    player.needs.thirst > 65 &&
+    player.needs.energy > 30 &&
+    player.needs.health < 100 &&
+    player.needs.health > 0
+  ) {
+    player.needs.health = Math.min(100, player.needs.health + 1.2 * dt);
+  }
+
+  // Hospital emergency revival if health <= 0
+  if (player.needs.health <= 0 && !player.isFainting) {
+    player.isFainting = true;
+    player.faintTimer = 0;
+    player.vx = 0;
+    player.vy = 0;
+    if (player.isInVehicle) {
+      player.isInVehicle = false;
+      player.currentVehicleId = null;
+    }
+    sound.playGroan();
+    addPlayerNotification(player, '💔 Вы теряете сознание...', 'warning');
+  }
+
+  // 6. Update Notification timers
+  for (let i = player.notifications.length - 1; i >= 0; i--) {
+    player.notifications[i].timer -= dt;
+    if (player.notifications[i].timer <= 0) {
+      player.notifications.splice(i, 1);
+    }
+  }
 }
 
 export function updateVehiclePhysics(
@@ -1285,8 +1570,8 @@ export function updateVehiclePhysics(
           }
         }
       } else {
-        // AI-to-AI Collision: Lane-Discipline Preserving Separation
-        // Prevent cars from shoving each other lateral across lane boundaries into 3-abreast jams!
+        // AI-to-AI Collision: Anti-Shove Separation & Lane-Discipline Preservation
+        // Prevent trailing cars from shoving lead/stopped cars forward into intersections or adjacent lanes!
         const headingCos = Math.cos(vehicle.angle);
         const headingSin = Math.sin(vehicle.angle);
 
@@ -1294,35 +1579,73 @@ export function updateVehiclePhysics(
         const dotLong = col.normalX * headingCos + col.normalY * headingSin;
         const dotLat = col.normalX * -headingSin + col.normalY * headingCos;
 
-        // Bounded lateral push (max 1.5px per tick) to prevent shoving into adjacent lanes
-        const latClamp = Math.max(-1.5, Math.min(1.5, dotLat * col.overlap));
-        const longPush = dotLong * col.overlap * 0.95;
+        // Bounded lateral push (max 1.2px per tick) to prevent shoving into adjacent lanes
+        const latClamp = Math.max(-1.2, Math.min(1.2, dotLat * col.overlap));
+        const longPush = dotLong * col.overlap;
 
-        const pushX = (headingCos * longPush - headingSin * latClamp) * ratioSelf;
-        const pushY = (headingSin * longPush + headingCos * latClamp) * ratioSelf;
+        const otherIsStoppedOrYielding = other.speed < 6 || other.aiState === 'stopping_light' || other.aiState === 'yielding' || other.aiState === 'stopping_obstacle';
+        const selfIsStoppedOrYielding = vehicle.speed < 6 || vehicle.aiState === 'stopping_light' || vehicle.aiState === 'yielding' || vehicle.aiState === 'stopping_obstacle';
 
-        vehicle.x -= pushX;
-        vehicle.y -= pushY;
-        other.x += pushX * (ratioOther / ratioSelf);
-        other.y += pushY * (ratioOther / ratioSelf);
+        if (dotLong < -0.2) {
+          // 'vehicle' is behind 'other' (vehicle bumped into other's rear/bumper):
+          // The trailing car MUST absorb 100% of the backward separation push!
+          // NEVER push the lead/stopped car forward across a stop line or red light!
+          const fullPushX = headingCos * (col.overlap + 0.5) - headingSin * latClamp;
+          const fullPushY = headingSin * (col.overlap + 0.5) + headingCos * latClamp;
 
-        // Smoothly adjust AI speeds so trailing car brakes cleanly rather than pushing lead car into intersection
-        if (dotLong < -0.3) {
-          // vehicle is behind other
-          vehicle.speed = Math.max(0, vehicle.speed * 0.85);
-        } else if (dotLong > 0.3) {
-          // other is behind vehicle
-          other.speed = Math.max(0, other.speed * 0.85);
+          vehicle.x -= fullPushX;
+          vehicle.y -= fullPushY;
+          vehicle.speed = Math.max(0, Math.min(vehicle.speed * 0.1, other.speed));
+          vehicle.vx = Math.cos(vehicle.angle) * vehicle.speed;
+          vehicle.vy = Math.sin(vehicle.angle) * vehicle.speed;
+
+          if (!otherIsStoppedOrYielding) {
+            other.x += headingCos * 0.1;
+            other.y += headingSin * 0.1;
+          }
+        } else if (dotLong > 0.2) {
+          // 'other' is behind 'vehicle' (other bumped into vehicle's rear):
+          // 'other' MUST absorb 100% of the backward separation push!
+          const fullPushX = headingCos * (col.overlap + 0.5) - headingSin * latClamp;
+          const fullPushY = headingSin * (col.overlap + 0.5) + headingCos * latClamp;
+
+          other.x += fullPushX;
+          other.y += fullPushY;
+          other.speed = Math.max(0, Math.min(other.speed * 0.1, vehicle.speed));
+          other.vx = Math.cos(other.angle) * other.speed;
+          other.vy = Math.sin(other.angle) * other.speed;
+
+          if (!selfIsStoppedOrYielding) {
+            vehicle.x -= headingCos * 0.1;
+            vehicle.y -= headingSin * 0.1;
+          }
         } else {
-          // Side-by-side rubbing: reduce speeds slightly to allow staggered single-file queuing
-          vehicle.speed *= 0.92;
-          other.speed *= 0.92;
+          // Side-by-side or glancing contact: distribute push evenly laterally
+          const pushX = (headingCos * longPush * 0.5 - headingSin * latClamp) * ratioSelf;
+          const pushY = (headingSin * longPush * 0.5 + headingCos * latClamp) * ratioSelf;
+
+          vehicle.x -= pushX;
+          vehicle.y -= pushY;
+          other.x += pushX * (ratioOther / ratioSelf);
+          other.y += pushY * (ratioOther / ratioSelf);
+
+          vehicle.speed = Math.max(0, vehicle.speed * 0.85);
+          other.speed = Math.max(0, other.speed * 0.85);
+        }
+
+        // Head-on contact detection: if facing opposite directions, both cars brake hard to prevent deadlock
+        const aDiff = Math.abs(angleDiff(vehicle.angle, other.angle));
+        if (aDiff > 2.2) {
+          vehicle.speed = Math.max(0, vehicle.speed * 0.5);
+          other.speed = Math.max(0, other.speed * 0.5);
         }
 
         const relVx = other.vx - vehicle.vx;
         const relVy = other.vy - vehicle.vy;
         const impactSpeed = Math.hypot(relVx, relVy);
-        if (impactSpeed > 18) {
+        // Only apply heavy deformation/damage if collision occurred at noticeable speed (>35px/s)
+        // This keeps low-speed queue touches smooth, damage-free, and avoids CPU particle spam on mobile!
+        if (impactSpeed > 35) {
           const scrapeSpeed = Math.abs(relVx * -col.normalY + relVy * col.normalX);
           applyVehicleDamageAndDeformation(vehicle, col.contactX, col.contactY, impactSpeed, scrapeSpeed, world, other.mass, false);
           applyVehicleDamageAndDeformation(other, col.contactX, col.contactY, impactSpeed, scrapeSpeed, world, vehicle.mass, false);
@@ -1925,3 +2248,5 @@ export function getBuildingEntrancePos(bld: Building): { x: number; y: number } 
   const ents = getAllBuildingEntrances(bld);
   return { x: ents[0].x, y: ents[0].y };
 }
+
+

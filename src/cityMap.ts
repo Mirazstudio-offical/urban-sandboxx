@@ -1792,7 +1792,7 @@ export function generateCityWorld(): GameWorld {
       }
 
       // =========================================================================
-      // --- 3. CENTRAL AUTO DEALERSHIP & SHOWROOM PLAZA (bx: 4, by: 2) ---
+      // --- 3. CENTRAL AUTO DEALERSHIP & AUTO SERVICE SECTOR (bx: 4, by: 2) ---
       // =========================================================================
       if (isAutoCenter) {
         const innerX = blockX + sidewalkWidth + 10;
@@ -1800,13 +1800,13 @@ export function generateCityWorld(): GameWorld {
         const innerW = blockW - (sidewalkWidth * 2 + 20);
         const innerH = blockH - (sidewalkWidth * 2 + 20);
 
-        // Modern Glass Showroom Building (North-West)
-        const showW = Math.min(260, innerW * 0.55);
-        const showH = 75;
+        // A. NORTH SECTION: AUTO SHOWROOM (MODERN GLASS COMPLEX - SQUARE FORMAT)
+        const showW = 180;
+        const showH = 140;
         buildings.push({
           id: `auto_showroom_${bx}_${by}`,
-          x: innerX + 10,
-          y: innerY + 10,
+          x: innerX + 15,
+          y: innerY + 15,
           width: showW,
           height: showH,
           type: 'shop',
@@ -1815,38 +1815,29 @@ export function generateCityWorld(): GameWorld {
           accentColor: '#38bdf8',
           windows: [],
           entranceSide: 'south',
-          roofDetails: [{ type: 'ac', rx: 0.2, ry: 0.2, rw: 0.15, rh: 0.4 }]
+          roofDetails: [{ type: 'ac', rx: 0.2, ry: 0.2, rw: 24, rh: 20 }]
         });
 
-        // Paved Dealership Entrance Plaza
+        // Showroom Tiled Entrance Plaza
         blockPlazas.push({
-          x: innerX + 10,
-          y: innerY + 90,
+          x: innerX + 15,
+          y: innerY + 15 + showH + 5,
           width: showW,
           height: 35,
           shape: 'rect',
           style: 'tile'
         });
 
-        // Customer walkway from showroom to test drive lot
-        blockWalkways.push({
-          x: innerX + 20,
-          y: innerY + 125,
-          width: 24,
-          height: innerH - 145,
-          style: 'concrete'
-        });
-
-        // Large Organized Dealership Parking Lot (Stalls for Showcase Vehicles)
-        const pkX = innerX + showW + 20;
-        const pkY = innerY + 10;
-        const pkW = innerW - showW - 30;
-        const pkH = innerH - 20;
+        // Showcase Vehicle Parking Lot (North-East)
+        const pkX = innerX + showW + 25;
+        const pkY = innerY + 15;
+        const pkW = innerW - showW - 40;
+        const pkH = showH;
 
         const autoSpots: ParkingArea['spots'] = [];
-        const numRows = Math.floor(pkH / 50);
-        for (let s = 0; s < numRows; s++) {
-          const sy = pkY + 25 + s * 50;
+        const numShowcaseRows = Math.floor(pkH / 45);
+        for (let s = 0; s < numShowcaseRows; s++) {
+          const sy = pkY + 25 + s * 45;
           autoSpots.push(
             { x: pkX + 45, y: sy, angle: 0, occupied: false },
             { x: pkX + pkW - 45, y: sy, angle: Math.PI, occupied: false }
@@ -1862,24 +1853,91 @@ export function generateCityWorld(): GameWorld {
           spots: autoSpots
         });
 
-        // Dealership lighting, customer benches, urns & waste area
+        // B. SOUTH SECTION: PIT-STOP AUTO SERVICE & CAR WASH
+        const repairW = 180;
+        const repairH = 140;
+        buildings.push({
+          id: `auto_service_${bx}_${by}`,
+          x: innerX + 15,
+          y: innerY + 300,
+          width: repairW,
+          height: repairH,
+          type: 'commercial',
+          color: '#334155',
+          roofColor: '#1e293b',
+          accentColor: '#f59e0b',
+          windows: [],
+          entrances: [
+            { side: 'south', offsetRatio: 0.3, number: 1 },
+            { side: 'south', offsetRatio: 0.7, number: 2 }
+          ],
+          roofDetails: [{ type: 'ac', rx: 0.2, ry: 0.2, rw: 24, rh: 24 }]
+        });
+
+        // Car Wash / Detail Bay (Slightly more square format)
+        const washW = 140;
+        const washH = 110;
+        buildings.push({
+          id: `auto_wash_${bx}_${by}`,
+          x: innerX + repairW + 25,
+          y: innerY + 300,
+          width: washW,
+          height: washH,
+          type: 'commercial',
+          color: '#0284c7',
+          roofColor: '#0369a1',
+          accentColor: '#38bdf8',
+          windows: [],
+          entrances: [{ side: 'south', offsetRatio: 0.5, number: 1 }],
+          roofDetails: []
+        });
+
+        // Asphalt Maneuvering Area & Driveways separating North & South
+        blockWalkways.push({
+          x: innerX + 15,
+          y: innerY + showH + 60,
+          width: innerW - 30,
+          height: 80,
+          style: 'asphalt'
+        });
+
+        // Service & Customer Parking Lot (South-East)
+        const spkX = innerX + repairW + washW + 35;
+        const spkY = innerY + 300;
+        const spkW = innerW - repairW - washW - 50;
+        const spkH = repairH;
+
+        if (spkW > 60) {
+          const serviceSpots: ParkingArea['spots'] = [];
+          const numServiceRows = Math.floor(spkH / 45);
+          for (let s = 0; s < numServiceRows; s++) {
+            const sy = spkY + 25 + s * 45;
+            serviceSpots.push({ x: spkX + spkW / 2, y: sy, angle: 0, occupied: s % 2 === 0 });
+          }
+          parkings.push({
+            id: `auto_service_parking_${bx}_${by}`,
+            x: spkX,
+            y: spkY,
+            width: spkW,
+            height: spkH,
+            spots: serviceSpots
+          });
+        }
+
+        // C. PROPS AND LANDSCAPING
         props.push(
           { id: `dl_lamp_1`, x: pkX + 20, y: pkY + 15, type: 'lamp', angle: 0 },
           { id: `dl_lamp_2`, x: pkX + pkW - 20, y: pkY + 15, type: 'lamp', angle: 0 },
-          { id: `dl_lamp_3`, x: pkX + 20, y: pkY + pkH - 20, type: 'lamp', angle: 0 },
-          { id: `dl_lamp_4`, x: pkX + pkW - 20, y: pkY + pkH - 20, type: 'lamp', angle: 0 },
-
-          // Showroom customer entrance benches & urns
-          { id: `dl_bench_1`, x: innerX + 45, y: innerY + 105, type: 'bench', angle: -Math.PI / 2 },
-          { id: `dl_urn_1`, x: innerX + 65, y: innerY + 105, type: 'trash_can', angle: 0 },
-          { id: `dl_flower_1`, x: innerX + 90, y: innerY + 105, type: 'flowerbed', angle: 0 },
-
-          // Dealership waste station (far corner, clear of driving path)
-          { id: `dl_dump_1`, x: innerX + showW - 20, y: innerY + innerH - 25, type: 'dumpster', angle: 0 },
-          { id: `dl_dump_2`, x: innerX + showW + 15, y: innerY + innerH - 25, type: 'dumpster', angle: 0 }
+          { id: `dl_lamp_3`, x: spkX + 15, y: spkY + 15, type: 'lamp', angle: 0 },
+          { id: `dl_lamp_4`, x: spkX + spkW - 15, y: spkY + spkH - 20, type: 'lamp', angle: 0 },
+          { id: `dl_bench_1`, x: innerX + 45, y: innerY + 165, type: 'bench', angle: -Math.PI / 2 },
+          { id: `dl_urn_1`, x: innerX + 65, y: innerY + 165, type: 'trash_can', angle: 0 },
+          { id: `dl_flower_1`, x: innerX + 90, y: innerY + 165, type: 'flowerbed', angle: 0 },
+          { id: `dl_dump_1`, x: innerX + innerW - 35, y: innerY + innerH - 25, type: 'dumpster', angle: 0 }
         );
 
-        // SPAWN THE PLAYER STARTER VEHICLE & SHOWCASE TEST-DRIVE VEHICLES HERE IN THE DEALERSHIP!
+        // D. SPAWN PLAYER STARTER PICKUP & SHOWCASE VEHICLES
+        // Starter pickup inside the main dealership slots
         const starterTruckX = pkX + 45;
         const starterTruckY = pkY + 25;
 
@@ -1926,19 +1984,18 @@ export function generateCityWorld(): GameWorld {
           hornEffectTimer: 0
         });
 
-        // Showcase Heavy Vehicles cleanly parked in dealership stalls
+        // Showcase vehicles parked in dealership slots
         const showcaseVehiclesList: { type: CarType; color: string; roofColor: string }[] = [
           { type: 'truck_box', color: '#0284c7', roofColor: '#0284c7' },
           { type: 'truck_dump', color: '#d97706', roofColor: '#d97706' },
           { type: 'truck_water', color: '#0284c7', roofColor: '#0284c7' },
-          { type: 'truck_tanker', color: '#0369a1', roofColor: '#0369a1' },
-          { type: 'fire_ladder', color: '#dc2626', roofColor: '#ffffff' }
+          { type: 'truck_tanker', color: '#0369a1', roofColor: '#0369a1' }
         ];
 
         showcaseVehiclesList.forEach((sc, idx) => {
           const cfg = CAR_CONFIGS[sc.type];
-          const vy = pkY + 25 + (idx + 1) * 50;
-          if (vy < pkY + pkH - 20) {
+          const vy = pkY + 25 + (idx + 1) * 45;
+          if (vy < pkY + pkH - 15) {
             vehicles.push({
               id: `veh_showcase_${sc.type}`,
               type: sc.type,
@@ -2002,7 +2059,7 @@ export function generateCityWorld(): GameWorld {
 
         // 1. North Residential Building
         const northW = innerW - 90;
-        const northH = 65;
+        const northH = 110;
         buildings.push({
           id: `court_bld_n_${bx}_${by}`,
           x: innerX + 5,
@@ -2030,8 +2087,8 @@ export function generateCityWorld(): GameWorld {
         });
 
         // 2. West Residential Building
-        const westW = 65;
-        const westH = innerH - 125;
+        const westW = 110;
+        const westH = innerH - 170;
         buildings.push({
           id: `court_bld_w_${bx}_${by}`,
           x: innerX + 5,
@@ -2246,9 +2303,9 @@ export function generateCityWorld(): GameWorld {
         const innerW = blockW - (sidewalkWidth * 2 + 20);
         const innerH = blockH - (sidewalkWidth * 2 + 20);
 
-        // Shopping Mall Complex
+        // Shopping Mall Complex (More square, majestic format)
         const mallW = innerW - 20;
-        const mallH = 110;
+        const mallH = 260;
         buildings.push({
           id: `mall_main_${bx}_${by}`,
           x: innerX + 10,
@@ -2614,94 +2671,7 @@ export function generateCityWorld(): GameWorld {
         continue;
       }
 
-      // =========================================================================
-      // --- 4.12 AUTO SERVICE & MOTOR REPAIR CENTER (АВТОТЕХЦЕНТР / СТО / MOТОРС) ---
-      // =========================================================================
-      if (isAutoCenter) {
-        const innerX = blockX + sidewalkWidth + 10;
-        const innerY = blockY + sidewalkWidth + 10;
-        const innerW = blockW - (sidewalkWidth * 2 + 20);
-        const innerH = blockH - (sidewalkWidth * 2 + 20);
-
-        // Main Service Workshop & Repair Bays
-        const repairW = 140;
-        const repairH = 75;
-        buildings.push({
-          id: `auto_service_${bx}_${by}`,
-          x: innerX + 10,
-          y: innerY + 10,
-          width: repairW,
-          height: repairH,
-          type: 'commercial',
-          color: '#334155',
-          roofColor: '#1e293b',
-          accentColor: '#f59e0b',
-          windows: [],
-          entrances: [
-            { side: 'south', offsetRatio: 0.3, number: 1 },
-            { side: 'south', offsetRatio: 0.7, number: 2 }
-          ],
-          roofDetails: [{ type: 'ac', rx: 0.2, ry: 0.2, rw: 0.2, rh: 0.5 }]
-        });
-
-        // Inspection Bay / Car Wash Annex
-        const washW = innerW - repairW - 30;
-        const washH = 55;
-        buildings.push({
-          id: `auto_wash_${bx}_${by}`,
-          x: innerX + repairW + 20,
-          y: innerY + 10,
-          width: washW,
-          height: washH,
-          type: 'commercial',
-          color: '#0284c7',
-          roofColor: '#0369a1',
-          accentColor: '#38bdf8',
-          windows: [],
-          entrances: [{ side: 'south', offsetRatio: 0.5, number: 1 }],
-          roofDetails: []
-        });
-
-        // Asphalt Maneuvering Yard
-        blockWalkways.push({
-          x: innerX + 10,
-          y: innerY + repairH + 10,
-          width: innerW - 20,
-          height: 25,
-          style: 'asphalt'
-        });
-
-        // Customer & Service Vehicle Parking Lot
-        const pkX = innerX + 10;
-        const pkY = innerY + repairH + 40;
-        const pkW = innerW - 20;
-        const pkH = innerH - repairH - 50;
-
-        if (pkH > 35) {
-          const autoSpots: ParkingArea['spots'] = [];
-          const numCols = Math.floor(pkW / 45);
-          for (let c = 0; c < numCols; c++) {
-            autoSpots.push({ x: pkX + 22 + c * 45, y: pkY + pkH / 2, angle: Math.PI / 2, occupied: c % 2 === 0 });
-          }
-          parkings.push({
-            id: `auto_parking_${bx}_${by}`,
-            x: pkX,
-            y: pkY,
-            width: pkW,
-            height: pkH,
-            spots: autoSpots
-          });
-        }
-
-        props.push(
-          { id: `auto_dump_1`, x: innerX + innerW - 30, y: innerY + repairH + 20, type: 'dumpster', angle: 0 },
-          { id: `auto_lamp_1`, x: innerX + 25, y: innerY + repairH + 20, type: 'lamp', angle: 0 },
-          { id: `auto_lamp_2`, x: innerX + repairW + 10, y: innerY + repairH + 20, type: 'lamp', angle: 0 },
-          { id: `auto_kiosk`, x: innerX + repairW - 20, y: innerY + repairH + 20, type: 'kiosk', angle: 0 }
-        );
-
-        continue;
-      }
+      // Block 4.12 is fully integrated into Block 3 (Central Dealership & Auto Service Plaza)
 
       // =========================================================================
       // --- 5. PUBLIC SERVICES & MUNICIPAL BUILDINGS (POLICE, HOSPITAL, FIRE) ---
@@ -2717,11 +2687,14 @@ export function generateCityWorld(): GameWorld {
         let bRoof = '#1e293b';
         let bAccent = '#38bdf8';
 
+        if (isPoliceStation) bType = 'police_station';
         if (isHospital) {
+          bType = 'hospital';
           bColor = '#f8fafc';
           bRoof = '#e2e8f0';
           bAccent = '#ef4444';
         } else if (isFireStation) {
+          bType = 'fire_station';
           bColor = '#7f1d1d';
           bRoof = '#991b1b';
           bAccent = '#f59e0b';
@@ -2790,8 +2763,8 @@ export function generateCityWorld(): GameWorld {
       // --- 6. COZY SUBURBAN & VILLAGE ZONE (South-East) ---
       // =========================================================================
       if (isVillage) {
-        const cW = 65 + Math.random() * 15;
-        const cH = 65 + Math.random() * 15;
+        const cW = 100 + Math.random() * 20;
+        const cH = 100 + Math.random() * 20;
 
         // Cottage 1: Top-Left
         buildings.push({
@@ -2877,7 +2850,7 @@ export function generateCityWorld(): GameWorld {
         if (indVariant === 0) {
           // --- VARIANT 0: HEAVY CARGO DISTRIBUTION HUB (КАРГО ТЕРМИНАЛ HANGAR & SORTING ANNEX) ---
           const wW = innerW - 130;
-          const wH = 75;
+          const wH = 120;
           buildings.push({
             id: `ind_hub_main_${bx}_${by}`,
             x: innerX + 10,
@@ -2951,7 +2924,7 @@ export function generateCityWorld(): GameWorld {
         } else if (indVariant === 1) {
           // --- VARIANT 1: INDUSTRIAL MANUFACTURING PLANT (ЗАВОДСКОЙ КОМПЛЕКС С ДВУМЯ КОРПУСАМИ) ---
           const nW = innerW - 20;
-          const nH = 65;
+          const nH = 110;
           buildings.push({
             id: `ind_mfg_n_${bx}_${by}`,
             x: innerX + 10,
@@ -2968,7 +2941,7 @@ export function generateCityWorld(): GameWorld {
           });
 
           const sW = innerW - 120;
-          const sH = 65;
+          const sH = 110;
           const sY = innerY + innerH - sH - 10;
           buildings.push({
             id: `ind_mfg_s_${bx}_${by}`,
@@ -3026,7 +2999,7 @@ export function generateCityWorld(): GameWorld {
           );
         } else if (indVariant === 2) {
           // --- VARIANT 2: FLEET DEPOT & MOTOR TRANSPORT ENTERPRISE (АВТОТРАНСПОРТНОЕ ПРЕДПРИЯТИЕ АТП) ---
-          const atpW = 75;
+          const atpW = 120;
           const atpH = innerH - 20;
           buildings.push({
             id: `ind_atp_main_${bx}_${by}`,
@@ -3160,7 +3133,7 @@ export function generateCityWorld(): GameWorld {
       if (layoutVariant === 0) {
         // --- LAYOUT 0: L-SHAPED CORNER ENSEMBLE WITH LARGE PAVED CORNER PLAZA ---
         const nW = innerW - 70;
-        const nH = 65;
+        const nH = 110;
         buildings.push({
           id: `urb_l0_n_${bx}_${by}`,
           x: innerX + 5,
@@ -3176,7 +3149,7 @@ export function generateCityWorld(): GameWorld {
           roofDetails: [{ type: 'helipad', rx: 0.2, ry: 0.2, rw: 0.4, rh: 0.6 }]
         });
 
-        const wW = 65;
+        const wW = 110;
         const wH = innerH - 90;
         buildings.push({
           id: `urb_l0_w_${bx}_${by}`,
@@ -3230,7 +3203,7 @@ export function generateCityWorld(): GameWorld {
       } else if (layoutVariant === 1) {
         // --- LAYOUT 1: CENTRAL PEDESTRIAN BOULEVARD & DUAL PARALLEL WINGS ---
         const nW = innerW - 10;
-        const nH = 65;
+        const nH = 110;
         buildings.push({
           id: `urb_l1_n_${bx}_${by}`,
           x: innerX + 5,
@@ -3247,7 +3220,7 @@ export function generateCityWorld(): GameWorld {
         });
 
         const sW = innerW - 10;
-        const sH = 65;
+        const sH = 110;
         const sY = innerY + innerH - sH - 5;
         buildings.push({
           id: `urb_l1_s_${bx}_${by}`,
@@ -3455,7 +3428,7 @@ export function generateCityWorld(): GameWorld {
   // Parked vehicles in parking lots
   parkings.forEach((parking) => {
     parking.spots.forEach((spot) => {
-      if (spot.occupied) {
+      if (spot.occupied && vehicleCounter < 35) {
         const cType = carTypes[Math.floor(Math.random() * (carTypes.length - 2))];
         const cfg = CAR_CONFIGS[cType];
         const color = CAR_PALETTE[Math.floor(Math.random() * CAR_PALETTE.length)];
@@ -3510,7 +3483,13 @@ export function generateCityWorld(): GameWorld {
 
   // 5. SPAWN INITIAL PEDESTRIANS (on sidewalks)
   let pedCounter = 0;
-  pedestrianPaths.forEach((path) => {
+  const MAX_PEDESTRIANS = 20;
+  
+  // Shuffle paths for variety so they aren't all clustered at the start of the array
+  const shuffledPaths = [...pedestrianPaths].sort(() => Math.random() - 0.5);
+  
+  shuffledPaths.forEach((path) => {
+    if (pedestrians.length >= MAX_PEDESTRIANS) return;
     if (Math.random() > 0.35) return;
     
     // Sometimes spawn a group (family, friends)
@@ -3531,6 +3510,8 @@ export function generateCityWorld(): GameWorld {
     const groupSpeed = isCyclistGroup ? 110 + Math.random() * 20 : 35 + Math.random() * 15;
 
     for (let p = 0; p < groupSize; p++) {
+      if (pedestrians.length >= MAX_PEDESTRIANS) break;
+      
       const isCyclist = isCyclistGroup;
       const isScooter = !isCyclist && Math.random() < 0.06;
       

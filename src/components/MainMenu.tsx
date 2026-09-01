@@ -25,11 +25,15 @@ export interface SaveSlot {
   date: string;
   playerX: number;
   playerY: number;
+  playerAngle?: number;
   isInVehicle: boolean;
   currentVehicleId: string | null;
   timeHour: number;
   weather: string;
   streetName: string;
+  gpsDestination?: any;
+  needs?: any;
+  inventory?: any;
 }
 
 interface MainMenuProps {
