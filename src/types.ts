@@ -590,6 +590,29 @@ export interface PlayerNeeds {
   thirst: number;      // 0 (dehydrated) to 100 (quenched)
   energy: number;      // 0 (exhausted) to 100 (full stamina)
   sleepiness: number;  // 0 (wide awake) to 100 (drowsy/collapsing)
+  fullness: number;    // 0 (empty stomach) to 100 (stuffed)
+  nausea: number;      // 0 (fine) to 100 (vomiting)
+}
+
+export interface ConsumptionState {
+  isConsuming: boolean;
+  itemId: string;
+  itemNameRu: string;
+  category: 'food' | 'drink';
+  totalBites: number;
+  bitesRemaining: number;
+  currentBiteTimer: number;    // seconds elapsed on current bite
+  biteDuration: number;        // seconds per bite
+  effectsPerBite: {
+    hunger?: number;
+    thirst?: number;
+    health?: number;
+    energy?: number;
+    sleepiness?: number;
+  };
+  leftoverId?: string;         // itemId of wrapper/plate/etc after finishing
+  leftoverNameRu?: string;
+  tasteMessage?: string;       // current taste sensation text
 }
 
 export interface PlayerNotification {
@@ -639,6 +662,7 @@ export interface Player {
   hospitalTimer?: number;
   hospitalPhase?: number;
   notifications: PlayerNotification[];
+  consumption?: ConsumptionState | null;
 }
 
 export interface SidewalkBlock {

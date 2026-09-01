@@ -19,6 +19,12 @@ export interface ItemDefinition {
   };
   weight: number;
   usable: boolean;
+  biteCount?: number;          // number of bites/sips to finish (multi-step consumption)
+  biteDuration?: number;       // seconds per bite
+  leftoverId?: string;         // item spawned after fully consumed (wrapper, plate, core...)
+  leftoverNameRu?: string;
+  tasteMessages?: string[];    // random taste sensations shown while eating
+  fullnessPerBite?: number;    // how much fullness each bite adds
 }
 
 export const ITEM_CATALOG: Record<string, ItemDefinition> = {
@@ -34,7 +40,13 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     descriptionRu: 'Свежий тост с копченой ветчиной, чеддером и зеленью. Утоляет голод и восстанавливает здоровье.',
     effects: { hunger: 40, health: 8, energy: 10 },
     weight: 0.25,
-    usable: true
+    usable: true,
+    biteCount: 4,
+    biteDuration: 1.2,
+    leftoverId: 'sandwich_bag',
+    leftoverNameRu: 'Пакет от сэндвича',
+    fullnessPerBite: 8,
+    tasteMessages: ['Хрустящий тост с ветчиной...', 'Сыр тает на языке...', 'Свежий хруст салата...', 'Копченая ветчина — классика!']
   },
   burger: {
     itemId: 'burger',
@@ -47,7 +59,13 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     descriptionRu: 'Сытная котлета из говядины на гриле с сыром, томатом и кунжутной булочкой. Высокая сытность.',
     effects: { hunger: 60, health: 12, energy: 15 },
     weight: 0.35,
-    usable: true
+    usable: true,
+    biteCount: 5,
+    biteDuration: 1.4,
+    leftoverId: 'burger_wrapper',
+    leftoverNameRu: 'Обёртка от бургера',
+    fullnessPerBite: 10,
+    tasteMessages: ['Сочная котлета с гриля...', 'Плавленый сыр стекает по булочке...', 'Хрустящий кунжут...', 'Свежий томат оттеняет мясо...', 'Баунти булочка — идеальна!']
   },
   pizza_slice: {
     itemId: 'pizza_slice',
@@ -60,7 +78,13 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     descriptionRu: 'Горячий кусок пиццы с хрустящей моцареллой и пикантной колбасой.',
     effects: { hunger: 35, health: 6, energy: 8 },
     weight: 0.2,
-    usable: true
+    usable: true,
+    biteCount: 3,
+    biteDuration: 1.1,
+    leftoverId: 'pizza_plate',
+    leftoverNameRu: 'Бумажная тарелка',
+    fullnessPerBite: 8,
+    tasteMessages: ['Тягучий сыр тянется за укусом...', 'Хрустящая корочка...', 'Пикантная пепперони!']
   },
   apple: {
     itemId: 'apple',
@@ -73,7 +97,13 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     descriptionRu: 'Сочный натуральный фрукт. Восстанавливает немного сытости и утоляет легкую жажду.',
     effects: { hunger: 18, thirst: 12, health: 4 },
     weight: 0.15,
-    usable: true
+    usable: true,
+    biteCount: 3,
+    biteDuration: 1.0,
+    leftoverId: 'apple_core',
+    leftoverNameRu: 'Огрызок яблока',
+    fullnessPerBite: 5,
+    tasteMessages: ['Хрустящее, сочное яблоко...', 'Сладкий натуральный вкус...', 'Кислинка освежает!']
   },
   chocolate: {
     itemId: 'chocolate',
@@ -86,7 +116,13 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     descriptionRu: 'Плитка шоколада. Дает быстрый прилив бодрости, энергии и калорий.',
     effects: { hunger: 22, energy: 25, sleepiness: -10 },
     weight: 0.1,
-    usable: true
+    usable: true,
+    biteCount: 3,
+    biteDuration: 0.9,
+    leftoverId: 'chocolate_wrapper',
+    leftoverNameRu: 'Фольга от шоколада',
+    fullnessPerBite: 6,
+    tasteMessages: ['Горьковатый какао тает во рту...', 'Нежный шоколадный вкус...', 'Прилив энергии от какао!']
   },
   chips: {
     itemId: 'chips',
@@ -99,7 +135,13 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     descriptionRu: 'Хрустящие соленые чипсы. Быстрый перекус, но слегка усиливает жажду.',
     effects: { hunger: 25, energy: 12, thirst: -8 },
     weight: 0.15,
-    usable: true
+    usable: true,
+    biteCount: 4,
+    biteDuration: 0.6,
+    leftoverId: 'chips_bag',
+    leftoverNameRu: 'Пустой пакет от чипсов',
+    fullnessPerBite: 5,
+    tasteMessages: ['Хруст! Солёные картофельные дольки...', 'Слишком много соли... жажда нарастает...', 'Легкий перекус, но аппетит растёт...']
   },
   canned_meat: {
     itemId: 'canned_meat',
@@ -112,7 +154,13 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     descriptionRu: 'Высококалорийные мясные консервы длительного хранения.',
     effects: { hunger: 70, health: 15, energy: 20 },
     weight: 0.5,
-    usable: true
+    usable: true,
+    biteCount: 5,
+    biteDuration: 1.5,
+    leftoverId: 'can_empty',
+    leftoverNameRu: 'Пустая жестяная банка',
+    fullnessPerBite: 12,
+    tasteMessages: ['Густой мясной бульон...', 'Нежное мясо тушёное...', 'Сытно и горячо...', 'Классическая армейская тушёнка!', 'Прямое тепло домашнего очага...']
   },
 
   // === DRINKS (НАПИТКИ) ===
@@ -127,7 +175,13 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     descriptionRu: 'Чистая родниковая вода. Главное средство от жажды и обезвоживания.',
     effects: { thirst: 50, health: 5, energy: 10 },
     weight: 0.5,
-    usable: true
+    usable: true,
+    biteCount: 4,
+    biteDuration: 0.8,
+    leftoverId: 'bottle_empty',
+    leftoverNameRu: 'Пустая пластиковая бутылка',
+    fullnessPerBite: 3,
+    tasteMessages: ['Чистая холодная вода...', 'Освежающий глоток...', 'Здорово утоляет жажду!', 'Прекрасный родниковый вкус...']
   },
   soda_can: {
     itemId: 'soda_can',
@@ -140,7 +194,13 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     descriptionRu: 'Освежающая газировка со сладким вкусом и легким тонизирующим эффектом.',
     effects: { thirst: 35, energy: 20, sleepiness: -8 },
     weight: 0.35,
-    usable: true
+    usable: true,
+    biteCount: 4,
+    biteDuration: 0.7,
+    leftoverId: 'can_empty',
+    leftoverNameRu: 'Пустая жестяная банка',
+    fullnessPerBite: 2,
+    tasteMessages: ['Шипение газировки...', 'Сладкий вкус колы...', 'Холодные пузырьки!', 'Кофейный послевкусие...']
   },
   hot_coffee: {
     itemId: 'hot_coffee',
@@ -153,7 +213,13 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     descriptionRu: 'Крепкий свежесваренный кофе. Эффективно снимает сонливость и возвращает бодрость.',
     effects: { thirst: 25, energy: 40, sleepiness: -40 },
     weight: 0.25,
-    usable: true
+    usable: true,
+    biteCount: 3,
+    biteDuration: 1.2,
+    leftoverId: 'cup_disposable',
+    leftoverNameRu: 'Одноразовый стаканчик',
+    fullnessPerBite: 2,
+    tasteMessages: ['Горьковатый аромат свежего эспрессо...', 'Крепкий кофейный вкус бодрит!', 'Тёплый глоток — и сонливость уходит...']
   },
   energy_drink: {
     itemId: 'energy_drink',
@@ -166,7 +232,13 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     descriptionRu: 'Мощный энергетик с таурином и кофеином для мгновенного снятия усталости.',
     effects: { thirst: 35, energy: 55, sleepiness: -50, health: -2 },
     weight: 0.35,
-    usable: true
+    usable: true,
+    biteCount: 3,
+    biteDuration: 0.8,
+    leftoverId: 'can_empty',
+    leftoverNameRu: 'Пустая жестяная банка',
+    fullnessPerBite: 2,
+    tasteMessages: ['Химический привкус таурина...', 'Мощный заряд энергии!', 'Кофеин врезает в мозг...']
   },
   fresh_juice: {
     itemId: 'fresh_juice',
@@ -179,7 +251,13 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     descriptionRu: 'Натуральный сок с витамином C. Отлично утоляет жажду и укрепляет здоровье.',
     effects: { thirst: 45, hunger: 15, health: 10, energy: 15 },
     weight: 0.35,
-    usable: true
+    usable: true,
+    biteCount: 3,
+    biteDuration: 0.9,
+    leftoverId: 'juice_box',
+    leftoverNameRu: 'Пустой пакетик от сока',
+    fullnessPerBite: 3,
+    tasteMessages: ['Свежий апельсиновый вкус!', 'Витамин C — это здорово...', 'Натуральная кислинка освежает...']
   },
 
   // === MEDICAL (МЕДИЦИНА) ===
@@ -220,7 +298,11 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     descriptionRu: 'Снимают болевой синдром при авариях и восстанавливают выносливость.',
     effects: { health: 15, energy: 30, sleepiness: 10 },
     weight: 0.05,
-    usable: true
+    usable: true,
+    biteCount: 1,
+    biteDuration: 0.5,
+    leftoverId: 'pill_pack',
+    leftoverNameRu: 'Блистер из-под таблеток'
   },
   vitamins: {
     itemId: 'vitamins',
@@ -352,7 +434,13 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     descriptionRu: 'Вкусный кофейный напиток со сливочной пенкой. Согревает и бодрит.',
     effects: { thirst: 30, energy: 30, sleepiness: -25 },
     weight: 0.3,
-    usable: true
+    usable: true,
+    biteCount: 3,
+    biteDuration: 1.1,
+    leftoverId: 'cup_disposable',
+    leftoverNameRu: 'Одноразовый стаканчик',
+    fullnessPerBite: 2,
+    tasteMessages: ['Нежная сливочная пенка...', 'Мягкий кофейный вкус...', 'Идеальное утреннее тепло...']
   },
   croissant: {
     itemId: 'croissant',
@@ -365,7 +453,13 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     descriptionRu: 'Хрустящая французская выпечка из слоеного теста.',
     effects: { hunger: 25, energy: 10 },
     weight: 0.1,
-    usable: true
+    usable: true,
+    biteCount: 3,
+    biteDuration: 0.8,
+    leftoverId: 'sandwich_bag',
+    leftoverNameRu: 'Пакет от выпечки',
+    fullnessPerBite: 6,
+    tasteMessages: ['Хрустящее слоёное тесто...', 'Масляный аромат...', 'Нежная начинка!']
   },
   soup: {
     itemId: 'soup',
@@ -378,8 +472,160 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     descriptionRu: 'Питательный домашний суп. Отлично согревает.',
     effects: { hunger: 45, thirst: 15, health: 10, energy: 15 },
     weight: 0.4,
-    usable: true
+    usable: true,
+    biteCount: 4,
+    biteDuration: 1.3,
+    leftoverId: 'pizza_plate',
+    leftoverNameRu: 'Пустая тарелка',
+    fullnessPerBite: 9,
+    tasteMessages: ['Горячий куриный бульон согревает...', 'Нежное куриное мясо...', 'Аромат домашнего супа...', 'Каждый глоток — как утешение...']
   },
+
+  // === LEFTOVERS (ОСТАТКИ ПОСЛЕ ЕДЫ) ===
+  apple_core: {
+    itemId: 'apple_core',
+    name: 'Apple Core',
+    nameRu: 'Огрызок яблока',
+    category: 'misc',
+    maxStack: 20,
+    icon: '🍎',
+    description: 'Brown oxidized apple core. Throw in trash.',
+    descriptionRu: 'Бурый окислившийся огрызок. Выбросьте в урну.',
+    effects: {},
+    weight: 0.02,
+    usable: false
+  },
+  burger_wrapper: {
+    itemId: 'burger_wrapper',
+    name: 'Burger Wrapper',
+    nameRu: 'Обёртка от бургера',
+    category: 'misc',
+    maxStack: 20,
+    icon: '🍔',
+    description: 'Greasy paper wrapper from a cheeseburger.',
+    descriptionRu: 'Жирная бумажная обёртка от чизбургера.',
+    effects: {},
+    weight: 0.01,
+    usable: false
+  },
+  pizza_plate: {
+    itemId: 'pizza_plate',
+    name: 'Paper Plate',
+    nameRu: 'Бумажная тарелка',
+    category: 'misc',
+    maxStack: 20,
+    icon: '🍽️',
+    description: 'Greasy paper plate with pizza crumbs.',
+    descriptionRu: 'Жирная бумажная тарелка с крошками пиццы.',
+    effects: {},
+    weight: 0.02,
+    usable: false
+  },
+  sandwich_bag: {
+    itemId: 'sandwich_bag',
+    name: 'Sandwich Bag',
+    nameRu: 'Пакет от сэндвича',
+    category: 'misc',
+    maxStack: 20,
+    icon: '🥪',
+    description: 'Empty plastic sandwich bag.',
+    descriptionRu: 'Пустой пластиковый пакет из-под сэндвича.',
+    effects: {},
+    weight: 0.005,
+    usable: false
+  },
+  chocolate_wrapper: {
+    itemId: 'chocolate_wrapper',
+    name: 'Chocolate Foil',
+    nameRu: 'Фольга от шоколада',
+    category: 'misc',
+    maxStack: 20,
+    icon: '🍫',
+    description: 'Torn foil wrapper from a chocolate bar.',
+    descriptionRu: 'Рваная фольга от шоколадного батончика.',
+    effects: {},
+    weight: 0.005,
+    usable: false
+  },
+  chips_bag: {
+    itemId: 'chips_bag',
+    name: 'Empty Chips Bag',
+    nameRu: 'Пустой пакет от чипсов',
+    category: 'misc',
+    maxStack: 20,
+    icon: '🥔',
+    description: 'Crinkled empty potato chips bag.',
+    descriptionRu: 'Мятый пустой пакет от картофельных чипсов.',
+    effects: {},
+    weight: 0.005,
+    usable: false
+  },
+  can_empty: {
+    itemId: 'can_empty',
+    name: 'Empty Can',
+    nameRu: 'Пустая жестяная банка',
+    category: 'misc',
+    maxStack: 20,
+    icon: '🥫',
+    description: 'Empty crushed tin can.',
+    descriptionRu: 'Пустая сплющенная жестяная банка.',
+    effects: {},
+    weight: 0.03,
+    usable: false
+  },
+  bottle_empty: {
+    itemId: 'bottle_empty',
+    name: 'Empty Bottle',
+    nameRu: 'Пустая пластиковая бутылка',
+    category: 'misc',
+    maxStack: 20,
+    icon: '💧',
+    description: 'Empty clear plastic water bottle.',
+    descriptionRu: 'Пустая прозрачная пластиковая бутылка.',
+    effects: {},
+    weight: 0.015,
+    usable: false
+  },
+  cup_disposable: {
+    itemId: 'cup_disposable',
+    name: 'Disposable Cup',
+    nameRu: 'Одноразовый стаканчик',
+    category: 'misc',
+    maxStack: 20,
+    icon: '☕',
+    description: 'Empty paper coffee cup.',
+    descriptionRu: 'Пустой бумажный стаканчик из-под кофе.',
+    effects: {},
+    weight: 0.01,
+    usable: false
+  },
+  juice_box: {
+    itemId: 'juice_box',
+    name: 'Empty Juice Box',
+    nameRu: 'Пустой пакетик от сока',
+    category: 'misc',
+    maxStack: 20,
+    icon: '🧃',
+    description: 'Empty tetra pak juice container.',
+    descriptionRu: 'Пустой тетрапак от апельсинового сока.',
+    effects: {},
+    weight: 0.01,
+    usable: false
+  },
+  pill_pack: {
+    itemId: 'pill_pack',
+    name: 'Blister Pack',
+    nameRu: 'Блистер из-под таблеток',
+    category: 'misc',
+    maxStack: 20,
+    icon: '💊',
+    description: 'Empty medicine blister pack.',
+    descriptionRu: 'Пустой блистер из-под лекарства.',
+    effects: {},
+    weight: 0.005,
+    usable: false
+  },
+
   pocket_knife: {
     itemId: 'pocket_knife',
     name: 'Folding Pocket Knife',
@@ -454,6 +700,211 @@ export function createItem(itemId: string, count: number = 1): InventoryItem {
     weight: def.weight,
     usable: def.usable
   };
+}
+
+// Start multi-step consumption (eating/drinking)
+export function startConsumption(
+  player: Player,
+  itemIndex: number
+): { success: boolean; message: string } {
+  if (!player.inventory || itemIndex < 0 || itemIndex >= player.inventory.length) {
+    return { success: false, message: 'Предмет не найден' };
+  }
+
+  const item = player.inventory[itemIndex];
+  if (!item.usable) {
+    return { success: false, message: 'Этот предмет нельзя использовать' };
+  }
+
+  // Already consuming something
+  if (player.consumption && player.consumption.isConsuming) {
+    return { success: false, message: 'Вы уже吃什么喝什么! Подождите...' };
+  }
+
+  // Too full - nausea blocks eating
+  if ((player.needs.fullness || 0) >= 95) {
+    addPlayerNotification(player, 'Вы слишком сыты! Подождите, пока переварится...', 'warning');
+    return { success: false, message: 'Слишком сытно' };
+  }
+
+  // Too nauseous - can't eat
+  if ((player.needs.nausea || 0) >= 60) {
+    addPlayerNotification(player, 'Вас тошнит! Нельзя есть.', 'warning');
+    return { success: false, message: 'Тошнит' };
+  }
+
+  // Non-food/non-med special items use instant mode
+  if (item.itemId === 'repair_kit' || item.itemId === 'flashlight' || item.category === 'tool') {
+    return useItemOnPlayer(player, itemIndex);
+  }
+
+  // Medical items are instant
+  if (item.category === 'med') {
+    return useItemOnPlayer(player, itemIndex);
+  }
+
+  const def = ITEM_CATALOG[item.itemId];
+  if (!def || !def.biteCount) {
+    // Fallback: instant consumption for items without biteCount
+    return useItemOnPlayer(player, itemIndex);
+  }
+
+  // Check fullness per bite would overfill
+  const fullnessGain = def.fullnessPerBite || 5;
+  if ((player.needs.fullness || 0) + fullnessGain > 100) {
+    addPlayerNotification(player, 'Стоп! Слишком много. Вы почувствовали тяжесть...', 'warning');
+    player.needs.nausea = Math.min(100, (player.needs.nausea || 0) + 15);
+    return { success: false, message: 'Слишком сытно для этого' };
+  }
+
+  // Start consumption
+  const effectsPerBite = {
+    hunger: def.effects.hunger ? Math.round(def.effects.hunger / def.biteCount) : 0,
+    thirst: def.effects.thirst ? Math.round(def.effects.thirst / def.biteCount) : 0,
+    health: def.effects.health ? Math.round(def.effects.health / def.biteCount) : 0,
+    energy: def.effects.energy ? Math.round(def.effects.energy / def.biteCount) : 0,
+    sleepiness: def.effects.sleepiness ? Math.round(def.effects.sleepiness / def.biteCount) : 0,
+  };
+
+  player.consumption = {
+    isConsuming: true,
+    itemId: item.itemId,
+    itemNameRu: item.nameRu,
+    category: item.category as 'food' | 'drink',
+    totalBites: def.biteCount,
+    bitesRemaining: def.biteCount,
+    currentBiteTimer: 0,
+    biteDuration: def.biteDuration || 1.0,
+    effectsPerBite,
+    leftoverId: def.leftoverId,
+    leftoverNameRu: def.leftoverNameRu,
+    tasteMessage: def.tasteMessages ? def.tasteMessages[Math.floor(Math.random() * def.tasteMessages.length)] : undefined,
+    fullnessPerBite: fullnessGain,
+  };
+
+  const firstTaste = def.tasteMessages ? def.tasteMessages[0] : 'Едите...';
+  addPlayerNotification(player, `${def.category === 'food' ? '🍽️' : '🥤'} ${firstTaste}`, 'food');
+  return { success: true, message: 'Начали есть' };
+}
+
+// Called each frame to advance consumption
+export function updateConsumption(player: Player, dt: number): void {
+  if (!player.consumption || !player.consumption.isConsuming) return;
+
+  const c = player.consumption;
+  c.currentBiteTimer += dt;
+
+  if (c.currentBiteTimer >= c.biteDuration) {
+    // Bite completed
+    c.currentBiteTimer = 0;
+    c.bitesRemaining--;
+
+    // Apply effects per bite
+    if (c.effectsPerBite.hunger) {
+      player.needs.hunger = Math.min(100, Math.max(0, player.needs.hunger + c.effectsPerBite.hunger));
+    }
+    if (c.effectsPerBite.thirst) {
+      player.needs.thirst = Math.min(100, Math.max(0, player.needs.thirst + c.effectsPerBite.thirst));
+      if (player.bodyState) {
+        player.bodyState.hydration = Math.min(100, player.bodyState.hydration + c.effectsPerBite.thirst);
+      }
+    }
+    if (c.effectsPerBite.health) {
+      player.needs.health = Math.min(100, Math.max(0, player.needs.health + c.effectsPerBite.health));
+    }
+    if (c.effectsPerBite.energy) {
+      player.needs.energy = Math.min(100, Math.max(0, player.needs.energy + c.effectsPerBite.energy));
+    }
+    if (c.effectsPerBite.sleepiness) {
+      player.needs.sleepiness = Math.min(100, Math.max(0, player.needs.sleepiness + c.effectsPerBite.sleepiness));
+    }
+
+    // Increase fullness
+    if (c.fullnessPerBite) {
+      player.needs.fullness = Math.min(100, (player.needs.fullness || 0) + c.fullnessPerBite);
+    }
+
+    // Nausea from eating too much
+    if ((player.needs.fullness || 0) > 85) {
+      player.needs.nausea = Math.min(100, (player.needs.nausea || 0) + 5);
+    }
+
+    // Pick next taste message
+    if (c.bitesRemaining > 0) {
+      const def = ITEM_CATALOG[c.itemId];
+      if (def && def.tasteMessages && def.tasteMessages.length > 0) {
+        c.tasteMessage = def.tasteMessages[Math.floor(Math.random() * def.tasteMessages.length)];
+      }
+      addPlayerNotification(player, `${c.tasteMessage || '...'} (${c.bitesRemaining} укусов осталось)`, 'food');
+    }
+
+    // Finished?
+    if (c.bitesRemaining <= 0) {
+      finishConsumption(player);
+    }
+  }
+}
+
+// Finish consumption: remove item, spawn leftover
+function finishConsumption(player: Player): void {
+  const c = player.consumption;
+  if (!c) return;
+
+  // Find the item in inventory and remove 1
+  const itemIdx = player.inventory.findIndex(i => i.itemId === c.itemId);
+  if (itemIdx >= 0) {
+    removeItemFromPlayer(player, itemIdx, 1);
+  }
+
+  // Spawn leftover if exists
+  if (c.leftoverId) {
+    const leftover = createItem(c.leftoverId, 1);
+    addItemToPlayer(player, leftover);
+    addPlayerNotification(player, `Осталось: ${c.leftoverNameRu || leftover.nameRu}`, 'info');
+  }
+
+  // Show satiety feedback
+  const fullness = player.needs.fullness || 0;
+  if (fullness > 90) {
+    addPlayerNotification(player, '🤢 Вы очень сыты! Больше есть не стоит...', 'warning');
+  } else if (fullness > 70) {
+    addPlayerNotification(player, '😊 Вы сыты.', 'food');
+  } else if (fullness > 40) {
+    addPlayerNotification(player, '👍 Голод утолён.', 'food');
+  }
+
+  // Play sound
+  if (c.category === 'food') {
+    sound.playEat();
+  } else {
+    sound.playDrink();
+  }
+
+  player.consumption = null;
+}
+
+// Cancel ongoing consumption (player pressed wrong key or moved)
+export function cancelConsumption(player: Player): void {
+  if (!player.consumption || !player.consumption.isConsuming) return;
+
+  const c = player.consumption;
+  const bitesEaten = c.totalBites - c.bitesRemaining;
+
+  // If they ate at least 1 bite, still give partial effects and leftover
+  if (bitesEaten > 0 && c.leftoverId) {
+    const leftover = createItem(c.leftoverId, 1);
+    addItemToPlayer(player, leftover);
+    addPlayerNotification(player, `Остановились. Осталось: ${c.leftoverNameRu || leftover.nameRu}`, 'info');
+  }
+
+  // Remove the partially eaten item
+  const itemIdx = player.inventory.findIndex(i => i.itemId === c.itemId);
+  if (itemIdx >= 0) {
+    removeItemFromPlayer(player, itemIdx, 1);
+  }
+
+  addPlayerNotification(player, 'Прекратили есть.', 'info');
+  player.consumption = null;
 }
 
 export function getPlayerCash(player: Player | null): number {
@@ -559,6 +1010,11 @@ export function useItemOnPlayer(
   const item = player.inventory[itemIndex];
   if (!item.usable) {
     return { success: false, message: 'Этот предмет нельзя использовать напрямую' };
+  }
+
+  // Food and drinks now use multi-step consumption
+  if ((item.category === 'food' || item.category === 'drink') && ITEM_CATALOG[item.itemId]?.biteCount) {
+    return startConsumption(player, itemIndex);
   }
 
   // Special repair tool usage
