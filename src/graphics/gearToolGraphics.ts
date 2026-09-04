@@ -29,11 +29,118 @@ export function drawGearToolItem(ctx: CanvasRenderingContext2D, itemId: string):
       ctx.ellipse(0, 0, 3.2, 2.4, 0, 0, Math.PI * 2);
       ctx.fill();
 
-      // Currency paper band strap ($100)
+      // Currency paper paper band strap ($100)
       ctx.fillStyle = '#fef08a';
       ctx.fillRect(-2, -5, 4, 10);
       ctx.fillStyle = '#b45309';
       ctx.fillRect(-1.5, -1, 3, 2);
+      return true;
+    }
+
+    case 'cash_5000': {
+      drawShadow(ctx, 8.5, 3.2, 7.5, 0.22);
+      ctx.fillStyle = '#7f1d1d'; // Rich red dark base
+      ctx.beginPath(); ctx.roundRect(-8.5, -5, 17, 10, 1.2); ctx.fill();
+      ctx.strokeStyle = '#fca5a5'; ctx.lineWidth = 0.8; ctx.strokeRect(-7.5, -4, 15, 8);
+      ctx.fillStyle = '#fca5a5'; ctx.beginPath(); ctx.ellipse(0, 0, 3, 2.2, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#fee2e2'; ctx.font = 'bold 4.5px monospace'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText('5000', 0, 0);
+      return true;
+    }
+
+    case 'cash_1000': {
+      drawShadow(ctx, 8.5, 3.2, 7.5, 0.22);
+      ctx.fillStyle = '#115e59'; // Rich teal dark base
+      ctx.beginPath(); ctx.roundRect(-8.5, -5, 17, 10, 1.2); ctx.fill();
+      ctx.strokeStyle = '#99f6e4'; ctx.lineWidth = 0.8; ctx.strokeRect(-7.5, -4, 15, 8);
+      ctx.fillStyle = '#2dd4bf'; ctx.beginPath(); ctx.ellipse(0, 0, 3, 2.2, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#ccfbf1'; ctx.font = 'bold 4.5px monospace'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText('1000', 0, 0);
+      return true;
+    }
+
+    case 'cash_500': {
+      drawShadow(ctx, 8.5, 3.2, 7.5, 0.22);
+      ctx.fillStyle = '#581c87'; // Violet purple base
+      ctx.beginPath(); ctx.roundRect(-8.5, -5, 17, 10, 1.2); ctx.fill();
+      ctx.strokeStyle = '#e9d5ff'; ctx.lineWidth = 0.8; ctx.strokeRect(-7.5, -4, 15, 8);
+      ctx.fillStyle = '#c084fc'; ctx.beginPath(); ctx.ellipse(0, 0, 3, 2.2, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#f3e8ff'; ctx.font = 'bold 4.5px monospace'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText('500', 0, 0);
+      return true;
+    }
+
+    case 'cash_100': {
+      drawShadow(ctx, 8.5, 3.2, 7.5, 0.22);
+      ctx.fillStyle = '#78350f'; // Olive brown base
+      ctx.beginPath(); ctx.roundRect(-8.5, -5, 17, 10, 1.2); ctx.fill();
+      ctx.strokeStyle = '#fde68a'; ctx.lineWidth = 0.8; ctx.strokeRect(-7.5, -4, 15, 8);
+      ctx.fillStyle = '#fbbf24'; ctx.beginPath(); ctx.ellipse(0, 0, 3, 2.2, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#fef3c7'; ctx.font = 'bold 4.5px monospace'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText('100', 0, 0);
+      return true;
+    }
+
+    case 'cash_50': {
+      drawShadow(ctx, 8.5, 3.2, 7.5, 0.22);
+      ctx.fillStyle = '#075985'; // Blue sky base
+      ctx.beginPath(); ctx.roundRect(-8.5, -5, 17, 10, 1.2); ctx.fill();
+      ctx.strokeStyle = '#bae6fd'; ctx.lineWidth = 0.8; ctx.strokeRect(-7.5, -4, 15, 8);
+      ctx.fillStyle = '#38bdf8'; ctx.beginPath(); ctx.ellipse(0, 0, 3, 2.2, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#e0f2fe'; ctx.font = 'bold 4.5px monospace'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText('50', 0, 0);
+      return true;
+    }
+
+    case 'cash_10': {
+      drawShadow(ctx, 8.5, 3.2, 7.5, 0.22);
+      ctx.fillStyle = '#451a03'; // Warm bronze-amber
+      ctx.beginPath(); ctx.roundRect(-8.5, -5, 17, 10, 1.2); ctx.fill();
+      ctx.strokeStyle = '#fef08a'; ctx.lineWidth = 0.8; ctx.strokeRect(-7.5, -4, 15, 8);
+      ctx.fillStyle = '#eab308'; ctx.beginPath(); ctx.ellipse(0, 0, 3, 2.2, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#fef9c3'; ctx.font = 'bold 4.5px monospace'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText('10', 0, 0);
+      return true;
+    }
+
+    case 'coin_10': {
+      drawShadow(ctx, 6, 2.5, 5, 0.22);
+      ctx.fillStyle = '#ca8a04'; // Deep gold ring
+      ctx.beginPath(); ctx.arc(0, 0, 6, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#cbd5e1'; // Silver core
+      ctx.beginPath(); ctx.arc(0, 0, 4, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#1e293b'; ctx.font = 'bold 5px monospace'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText('10', 0, 0);
+      return true;
+    }
+
+    case 'coin_5': {
+      drawShadow(ctx, 5.5, 2.3, 4.5, 0.22);
+      ctx.fillStyle = '#94a3b8'; // Silver Nickel alloy
+      ctx.beginPath(); ctx.arc(0, 0, 5.5, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = '#cbd5e1'; ctx.lineWidth = 0.8; ctx.stroke();
+      ctx.fillStyle = '#1e293b'; ctx.font = 'bold 4.5px monospace'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText('5', 0, 0);
+      return true;
+    }
+
+    case 'coin_2': {
+      drawShadow(ctx, 5, 2.1, 4, 0.22);
+      ctx.fillStyle = '#cbd5e1'; // Light silver
+      ctx.beginPath(); ctx.arc(0, 0, 5, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = '#f1f5f9'; ctx.lineWidth = 0.8; ctx.stroke();
+      ctx.fillStyle = '#1e293b'; ctx.font = 'bold 4.5px monospace'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText('2', 0, 0);
+      return true;
+    }
+
+    case 'coin_1': {
+      drawShadow(ctx, 4.5, 1.9, 3.5, 0.22);
+      ctx.fillStyle = '#b45309'; // Copper bronze
+      ctx.beginPath(); ctx.arc(0, 0, 4.5, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = '#f59e0b'; ctx.lineWidth = 0.6; ctx.stroke();
+      ctx.fillStyle = '#fef3c7'; ctx.font = 'bold 4.5px monospace'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText('1', 0, 0);
       return true;
     }
 

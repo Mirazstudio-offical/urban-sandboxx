@@ -3658,17 +3658,19 @@ export default function App() {
         shopTitle={shopTitle}
         shopType={shopType}
         canRepairVehicle={canRepairVehicle || playerRef.current?.isInVehicle}
-        onBuyItem={(item) => {
+        onBuyItems={(items, totalCost) => {
           const p = playerRef.current;
           if (!p) return;
           const currentCash = getPlayerCash(p);
-          if (currentCash >= item.price) {
-            const success = deductPlayerCash(p, item.price);
+          if (currentCash >= totalCost) {
+            const success = deductPlayerCash(p, totalCost);
             if (success) {
-              const boughtItem = createItem(item.itemId, 1);
-              addItemToPlayer(p, boughtItem);
+              items.forEach((item) => {
+                const boughtItem = createItem(item.itemId, 1);
+                addItemToPlayer(p, boughtItem);
+              });
               sound.playUseItem();
-              addPlayerNotification(p, `Приобретено: ${item.nameRu} (-$${item.price})`, 'pickup');
+              addPlayerNotification(p, `Приобретено товаров: ${items.length} (-$${totalCost})`, 'pickup');
               setVitalsRefreshTick((t) => t + 1);
             }
           } else {
@@ -4199,12 +4201,14 @@ export default function App() {
                   {[
                     { title: '🍔 Еда и напитки', cat: 'food_drink' },
                     { title: '💊 Медикаменты', cat: 'med' },
-                    { title: '🔧 Автоинструменты', cat: 'tool' }
+                    { title: '🔧 Автоинструменты', cat: 'tool' },
+                    { title: '💰 Ценности и валюта', cat: 'valuable' }
                   ].map((group) => {
                     const filteredItems = Object.entries(ITEM_CATALOG).filter(([key, item]) => {
                       const matchesCategory = 
                         group.cat === 'food_drink' ? (item.category === 'food' || item.category === 'drink') :
                         group.cat === 'med' ? (item.category === 'med') :
+                        group.cat === 'valuable' ? (item.category === 'valuable') :
                         (item.category === 'tool');
 
                       if (!matchesCategory) return false;

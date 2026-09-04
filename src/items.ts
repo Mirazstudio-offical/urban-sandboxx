@@ -555,6 +555,136 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     weight: 0.0,
     usable: false
   },
+  cash_5000: {
+    itemId: 'cash_5000',
+    name: 'Banknote $5000',
+    nameRu: 'Купюра $5000',
+    category: 'valuable',
+    maxStack: 100,
+    icon: '💵',
+    description: 'Large banknote of $5000. Double click or use to deposit into your cash wallet.',
+    descriptionRu: 'Крупная купюра номиналом в $5000. Используйте, чтобы положить её в кошелёк.',
+    effects: {},
+    weight: 0.001,
+    usable: true
+  },
+  cash_1000: {
+    itemId: 'cash_1000',
+    name: 'Banknote $1000',
+    nameRu: 'Купюра $1000',
+    category: 'valuable',
+    maxStack: 100,
+    icon: '💵',
+    description: 'Banknote of $1000. Double click or use to deposit into your cash wallet.',
+    descriptionRu: 'Купюра номиналом в $1000. Используйте, чтобы положить её в кошелёк.',
+    effects: {},
+    weight: 0.001,
+    usable: true
+  },
+  cash_500: {
+    itemId: 'cash_500',
+    name: 'Banknote $500',
+    nameRu: 'Купюра $500',
+    category: 'valuable',
+    maxStack: 100,
+    icon: '💵',
+    description: 'Banknote of $500. Double click or use to deposit into your cash wallet.',
+    descriptionRu: 'Купюра номиналом в $500. Используйте, чтобы положить её в кошелёк.',
+    effects: {},
+    weight: 0.001,
+    usable: true
+  },
+  cash_100: {
+    itemId: 'cash_100',
+    name: 'Banknote $100',
+    nameRu: 'Купюра $100',
+    category: 'valuable',
+    maxStack: 100,
+    icon: '💵',
+    description: 'Banknote of $100. Double click or use to deposit into your cash wallet.',
+    descriptionRu: 'Купюра номиналом в $100. Используйте, чтобы положить её в кошелёк.',
+    effects: {},
+    weight: 0.001,
+    usable: true
+  },
+  cash_50: {
+    itemId: 'cash_50',
+    name: 'Banknote $50',
+    nameRu: 'Купюра $50',
+    category: 'valuable',
+    maxStack: 100,
+    icon: '💵',
+    description: 'Banknote of $50. Double click or use to deposit into your cash wallet.',
+    descriptionRu: 'Купюра номиналом в $50. Используйте, чтобы положить её в кошелёк.',
+    effects: {},
+    weight: 0.001,
+    usable: true
+  },
+  cash_10: {
+    itemId: 'cash_10',
+    name: 'Banknote $10',
+    nameRu: 'Купюра $10',
+    category: 'valuable',
+    maxStack: 100,
+    icon: '💵',
+    description: 'Small banknote of $10. Double click or use to deposit into your cash wallet.',
+    descriptionRu: 'Купюра номиналом в $10. Используйте, чтобы положить её в кошелёк.',
+    effects: {},
+    weight: 0.001,
+    usable: true
+  },
+  coin_10: {
+    itemId: 'coin_10',
+    name: 'Coin $10',
+    nameRu: 'Монета $10',
+    category: 'valuable',
+    maxStack: 100,
+    icon: '🪙',
+    description: 'Heavy metallic coin of $10. Double click or use to deposit into your cash wallet.',
+    descriptionRu: 'Тяжелая металлическая монета номиналом в $10. Используйте, чтобы положить её в кошелёк.',
+    effects: {},
+    weight: 0.01,
+    usable: true
+  },
+  coin_5: {
+    itemId: 'coin_5',
+    name: 'Coin $5',
+    nameRu: 'Монета $5',
+    category: 'valuable',
+    maxStack: 100,
+    icon: '🪙',
+    description: 'Metallic coin of $5. Double click or use to deposit into your cash wallet.',
+    descriptionRu: 'Металлическая монета номиналом в $5. Используйте, чтобы положить её в кошелёк.',
+    effects: {},
+    weight: 0.008,
+    usable: true
+  },
+  coin_2: {
+    itemId: 'coin_2',
+    name: 'Coin $2',
+    nameRu: 'Монета $2',
+    category: 'valuable',
+    maxStack: 100,
+    icon: '🪙',
+    description: 'Metallic coin of $2. Double click or use to deposit into your cash wallet.',
+    descriptionRu: 'Металлическая монета номиналом в $2. Используйте, чтобы положить её в кошелёк.',
+    effects: {},
+    weight: 0.006,
+    usable: true
+  },
+  coin_1: {
+    itemId: 'coin_1',
+    name: 'Coin $1',
+    nameRu: 'Монета $1',
+    category: 'valuable',
+    maxStack: 100,
+    icon: '🪙',
+    description: 'Metallic coin of $1. Double click or use to deposit into your cash wallet.',
+    descriptionRu: 'Металлическая монета номиналом в $1. Используйте, чтобы положить её в кошелёк.',
+    effects: {},
+    weight: 0.005,
+    usable: true
+  },
   repair_kit: {
     itemId: 'repair_kit',
     name: 'Vehicle Repair Toolbox',
@@ -1861,9 +1991,21 @@ export function cancelConsumption(player: Player): void {
 
 export function getPlayerCash(player: Player | null): number {
   if (!player || !player.inventory) return 0;
-  return player.inventory
-    .filter(i => Boolean(i && i.itemId === 'cash'))
-    .reduce((sum, i) => sum + (i?.count || 0), 0);
+  return player.inventory.reduce((sum, i) => {
+    if (!i) return sum;
+    if (i.itemId === 'cash') return sum + i.count;
+    if (i.itemId === 'cash_5000') return sum + (5000 * i.count);
+    if (i.itemId === 'cash_1000') return sum + (1000 * i.count);
+    if (i.itemId === 'cash_500') return sum + (500 * i.count);
+    if (i.itemId === 'cash_100') return sum + (100 * i.count);
+    if (i.itemId === 'cash_50') return sum + (50 * i.count);
+    if (i.itemId === 'cash_10') return sum + (10 * i.count);
+    if (i.itemId === 'coin_10') return sum + (10 * i.count);
+    if (i.itemId === 'coin_5') return sum + (5 * i.count);
+    if (i.itemId === 'coin_2') return sum + (2 * i.count);
+    if (i.itemId === 'coin_1') return sum + (1 * i.count);
+    return sum;
+  }, 0);
 }
 
 export function deductPlayerCash(player: Player | null, amount: number): boolean {
@@ -1905,7 +2047,17 @@ export function createDefaultPlayerInventory(): InventoryItem[] {
     createItem('zippo_lighter', 1),
     createItem('extinguisher', 1),
     createItem('fuel_canister', 1),
-    createItem('cash', 9999)
+    createItem('cash_5000', 1),
+    createItem('cash_1000', 2),
+    createItem('cash_500', 2),
+    createItem('cash_100', 5),
+    createItem('cash_50', 5),
+    createItem('cash_10', 10),
+    createItem('coin_10', 5),
+    createItem('coin_5', 5),
+    createItem('coin_2', 5),
+    createItem('coin_1', 10),
+    createItem('cash', 5000) // Lowered starting general cash slightly to account for the physical pile
   ];
 }
 
@@ -2012,6 +2164,30 @@ export function useItemOnPlayer(
   const item = player.inventory[itemIndex];
   if (!item || !item.usable) {
     return { success: false, message: 'Этот предмет нельзя использовать напрямую' };
+  }
+
+  // Physical banknotes & coins deposits
+  if (item.itemId.startsWith('cash_') || item.itemId.startsWith('coin_')) {
+    let value = 0;
+    if (item.itemId === 'cash_5000') value = 5000;
+    else if (item.itemId === 'cash_1000') value = 1000;
+    else if (item.itemId === 'cash_500') value = 500;
+    else if (item.itemId === 'cash_100') value = 100;
+    else if (item.itemId === 'cash_50') value = 50;
+    else if (item.itemId === 'cash_10') value = 10;
+    else if (item.itemId === 'coin_10') value = 10;
+    else if (item.itemId === 'coin_5') value = 5;
+    else if (item.itemId === 'coin_2') value = 2;
+    else if (item.itemId === 'coin_1') value = 1;
+
+    if (value > 0) {
+      const count = item.count;
+      addPlayerCash(player, value * count);
+      removeItemFromPlayer(player, itemIndex, count);
+      sound.playPickup();
+      addPlayerNotification(player, `Зачислено в кошелёк: +$${value * count}`, 'pickup');
+      return { success: true, message: `Зачислено в кошелёк: +$${value * count}` };
+    }
   }
 
   const def = ITEM_CATALOG[item.itemId];
