@@ -3,6 +3,8 @@ import {
   Building, 
   CarConfig,
   CarType, 
+  EngineState,
+  FuelSystem,
   GameWorld, 
   Intersection, 
   LitterItem,
@@ -17,6 +19,87 @@ import {
   Vehicle,
   VehicleDamage 
 } from './types';
+
+export function createDefaultEngineState(
+  type: CarType = 'sedan',
+  isDrivingTraffic: boolean = false, 
+  isParkedOnStreet: boolean = false
+): EngineState {
+  const radiatorWater = isParkedOnStreet ? Math.round(75 + Math.random() * 25) : 100;
+  const oilLevel = isParkedOnStreet ? Math.round(65 + Math.random() * 35) : 100;
+  const batteryCharge = isParkedOnStreet ? Math.round(80 + Math.random() * 20) : 100;
+  const temperature = isDrivingTraffic ? Math.round(82 + Math.random() * 10) : 20;
+  const engineRunning = isDrivingTraffic;
+  const engineRPM = isDrivingTraffic ? 850 : 0;
+
+  const configTransmission = CAR_CONFIGS[type]?.transmission;
+  const isManual = configTransmission ? configTransmission === 'MANUAL' : [
+    'hatchback', 'pickup', 'wagon_classic', 'sedan_classic', 'sedan_compact',
+    'hatch_hot', 'micro_car', 'classic_compact', 'retro_bubble', 'offroad_hardcore',
+    'suv_classic_box', 'muscle_classic', 'van_camper', 'van_cargo_old', 'truck_tow',
+    'delivery_truck', 'truck_box', 'truck_dump', 'truck_tanker', 'truck_water',
+    'truck_flatbed', 'cement_mixer', 'garbage_truck', 'bus'
+  ].includes(type);
+  const transmissionType: 'MANUAL' | 'AUTO' = configTransmission || (isManual ? 'MANUAL' : 'AUTO');
+
+  return {
+    radiatorWater,
+    radiatorPunctured: false,
+    oilLevel,
+    oilPunctured: false,
+    oilPressure: engineRunning ? oilLevel : 0,
+    batteryCharge,
+    starterWorking: true,
+    temperature,
+    engineRunning,
+    engineKnocking: false,
+    engineStalled: false,
+    overheatingSteam: false,
+    engineRPM,
+    transmissionType,
+    autoGearMode: transmissionType === 'AUTO' ? (isParkedOnStreet ? 'P' : 'D') : undefined,
+    currentGear: transmissionType === 'AUTO' ? (engineRunning ? 1 : 0) : (engineRunning ? 1 : 0),
+    gearRatios: [-3.5, 0, 3.6, 2.1, 1.4, 1.0, 0.8],
+    finalDriveRatio: 3.9,
+    clutchPedal: 1.0,
+    isStalled: false,
+    engineHealth: 100,
+    isSeized: false,
+    transmissionHealth: 100,
+    transmissionJammed: false
+  };
+}
+
+export function createDefaultFuelSystem(type: CarType = 'sedan', isParkedOnStreet: boolean = false): FuelSystem {
+  const isDiesel = [
+    'bus', 'fire_engine', 'fire_ladder', 'truck_box', 'truck_dump', 'truck_tanker', 
+    'truck_water', 'truck_flatbed', 'cement_mixer', 'garbage_truck', 'pickup_heavy', 
+    'truck_tow', 'truck_armored', 'delivery_truck', 'van_camper'
+  ].includes(type);
+  const isVintage92 = [
+    'wagon_classic', 'sedan_classic', 'classic_compact', 'retro_bubble', 
+    'van_cargo_old', 'muscle_classic'
+  ].includes(type);
+
+  // Realistic random tank level if parked on street (15% to 85%), else 100% (or 35%-95% for traffic)
+  let tankLevel = 100;
+  if (isParkedOnStreet) {
+    tankLevel = Math.round(15 + Math.random() * 70);
+  } else if (Math.random() < 0.9) { // Driving traffic
+    // Some traffic vehicles might have less fuel, but mostly healthy
+    tankLevel = Math.round(35 + Math.random() * 55);
+  }
+
+  return {
+    fuelType: isDiesel ? 'diesel' : (isVintage92 ? 'ai92' : 'ai95'),
+    tankLevel,
+    tankCapacity: isDiesel ? 120 : (['supercar', 'suv_luxury', 'pickup_heavy', 'offroad_hardcore'].includes(type) ? 80 : 55),
+    tankPunctured: false,
+    fuelQuality: 100,
+    detonation: false,
+    octaneNumber: isDiesel ? 45 : (isVintage92 ? 92 : 95)
+  };
+}
 
 export function createDefaultVehicleDamage(length: number = 42, width: number = 20): VehicleDamage {
   const halfL = length / 2;
@@ -43,7 +126,6 @@ export function createDefaultVehicleDamage(length: number = 42, width: number = 
   ];
 
   return {
-    health: 100,
     frontCrumple: 0,
     rearCrumple: 0,
     leftDent: 0,
@@ -52,6 +134,12 @@ export function createDefaultVehicleDamage(length: number = 42, width: number = 
     frontRightDent: 0,
     rearLeftDent: 0,
     rearRightDent: 0,
+    frontLeftSuspensionDamage: 0,
+    frontRightSuspensionDamage: 0,
+    rearLeftSuspensionDamage: 0,
+    rearRightSuspensionDamage: 0,
+    steeringDrift: 0,
+    wheelRubResistance: 0,
     hoodBuckled: false,
     windshieldCracked: false,
     rearGlassCracked: false,
@@ -60,7 +148,17 @@ export function createDefaultVehicleDamage(length: number = 42, width: number = 
     leftTaillightBroken: false,
     rightTaillightBroken: false,
     engineSmoking: false,
+    underHoodSmolder: false,
     engineFire: false,
+    fuelTankFire: false,
+    cabinFire: false,
+    fireOrigin: 'front',
+    fireProgress: 0,
+    fireIntensity: 0,
+    fireTimer: 0,
+    groundPuddleIgnited: false,
+    fuelTankBurntThrough: false,
+    isFullyBurnt: false,
     scratches: [],
     deformedVertices
   };
@@ -83,7 +181,8 @@ export const CAR_CONFIGS: Record<CarType, CarConfig> = {
     minSteerAngle: 0.14,
     grip: 0.985,
     driftGrip: 0.38,
-    name: 'Седан'
+    name: 'Седан',
+    transmission: 'AUTO'
   },
   hatchback: {
     type: 'hatchback',
@@ -101,7 +200,8 @@ export const CAR_CONFIGS: Record<CarType, CarConfig> = {
     minSteerAngle: 0.15,
     grip: 0.988,
     driftGrip: 0.40,
-    name: 'Хэтчбек'
+    name: 'Хэтчбек',
+    transmission: 'MANUAL'
   },
   pickup: {
     type: 'pickup',
@@ -119,7 +219,8 @@ export const CAR_CONFIGS: Record<CarType, CarConfig> = {
     minSteerAngle: 0.12,
     grip: 0.975,
     driftGrip: 0.32,
-    name: 'Пикап'
+    name: 'Пикап',
+    transmission: 'MANUAL'
   },
   sports: {
     type: 'sports',
@@ -137,7 +238,8 @@ export const CAR_CONFIGS: Record<CarType, CarConfig> = {
     minSteerAngle: 0.13,
     grip: 0.990,
     driftGrip: 0.44,
-    name: 'Спорткар'
+    name: 'Спорткар',
+    transmission: 'AUTO'
   },
   suv: {
     type: 'suv',
@@ -155,7 +257,8 @@ export const CAR_CONFIGS: Record<CarType, CarConfig> = {
     minSteerAngle: 0.13,
     grip: 0.980,
     driftGrip: 0.36,
-    name: 'Внедорожник'
+    name: 'Внедорожник',
+    transmission: 'AUTO'
   },
   taxi: {
     type: 'taxi',
@@ -173,7 +276,8 @@ export const CAR_CONFIGS: Record<CarType, CarConfig> = {
     minSteerAngle: 0.14,
     grip: 0.985,
     driftGrip: 0.38,
-    name: 'Такси'
+    name: 'Такси',
+    transmission: 'AUTO'
   },
   police: {
     type: 'police',
@@ -191,7 +295,8 @@ export const CAR_CONFIGS: Record<CarType, CarConfig> = {
     minSteerAngle: 0.13,
     grip: 0.988,
     driftGrip: 0.40,
-    name: 'Полицейский автомобиль'
+    name: 'Полицейский автомобиль',
+    transmission: 'AUTO'
   },
   fire_engine: {
     type: 'fire_engine',
@@ -209,7 +314,8 @@ export const CAR_CONFIGS: Record<CarType, CarConfig> = {
     minSteerAngle: 0.08,
     grip: 0.97,
     driftGrip: 0.28,
-    name: 'Пожарная автоцистерна'
+    name: 'Пожарная автоцистерна',
+    transmission: 'AUTO'
   },
   fire_ladder: {
     type: 'fire_ladder',
@@ -227,7 +333,8 @@ export const CAR_CONFIGS: Record<CarType, CarConfig> = {
     minSteerAngle: 0.08,
     grip: 0.965,
     driftGrip: 0.27,
-    name: 'Пожарная автолестница'
+    name: 'Пожарная автолестница',
+    transmission: 'AUTO'
   },
   fire_rescue: {
     type: 'fire_rescue',
@@ -245,7 +352,8 @@ export const CAR_CONFIGS: Record<CarType, CarConfig> = {
     minSteerAngle: 0.11,
     grip: 0.975,
     driftGrip: 0.32,
-    name: 'Пожарно-спасательный штаб'
+    name: 'Пожарно-спасательный штаб',
+    transmission: 'AUTO'
   },
   bus: {
     type: 'bus',
@@ -263,7 +371,8 @@ export const CAR_CONFIGS: Record<CarType, CarConfig> = {
     minSteerAngle: 0.08,
     grip: 0.97,
     driftGrip: 0.28,
-    name: 'Городской автобус'
+    name: 'Городской автобус',
+    transmission: 'MANUAL'
   },
   bus_minibus: {
     type: 'bus_minibus',
@@ -281,7 +390,8 @@ export const CAR_CONFIGS: Record<CarType, CarConfig> = {
     minSteerAngle: 0.13,
     grip: 0.982,
     driftGrip: 0.36,
-    name: 'Маршрутное такси (микроавтобус)'
+    name: 'Маршрутное такси (микроавтобус)',
+    transmission: 'AUTO'
   },
   van: {
     type: 'van',
@@ -299,7 +409,8 @@ export const CAR_CONFIGS: Record<CarType, CarConfig> = {
     minSteerAngle: 0.12,
     grip: 0.98,
     driftGrip: 0.35,
-    name: 'Микроавтобус'
+    name: 'Микроавтобус',
+    transmission: 'AUTO'
   },
   muscle: {
     type: 'muscle',
@@ -317,7 +428,8 @@ export const CAR_CONFIGS: Record<CarType, CarConfig> = {
     minSteerAngle: 0.14,
     grip: 0.982,
     driftGrip: 0.40,
-    name: 'Классический седан'
+    name: 'Классический седан',
+    transmission: 'AUTO'
   },
   ambulance: {
     type: 'ambulance',
@@ -335,7 +447,8 @@ export const CAR_CONFIGS: Record<CarType, CarConfig> = {
     minSteerAngle: 0.11,
     grip: 0.985,
     driftGrip: 0.35,
-    name: 'Скорая помощь'
+    name: 'Скорая помощь',
+    transmission: 'AUTO'
   },
   ambulance_van: {
     type: 'ambulance_van',
@@ -353,7 +466,8 @@ export const CAR_CONFIGS: Record<CarType, CarConfig> = {
     minSteerAngle: 0.12,
     grip: 0.985,
     driftGrip: 0.35,
-    name: 'Реанимационный фургон'
+    name: 'Реанимационный фургон',
+    transmission: 'AUTO'
   },
   ambulance_suv: {
     type: 'ambulance_suv',
@@ -371,7 +485,8 @@ export const CAR_CONFIGS: Record<CarType, CarConfig> = {
     minSteerAngle: 0.13,
     grip: 0.986,
     driftGrip: 0.38,
-    name: 'Фельдшерский внедорожник'
+    name: 'Фельдшерский внедорожник',
+    transmission: 'AUTO'
   },
   truck_box: {
     type: 'truck_box',
@@ -389,7 +504,8 @@ export const CAR_CONFIGS: Record<CarType, CarConfig> = {
     minSteerAngle: 0.08,
     grip: 0.965,
     driftGrip: 0.28,
-    name: 'Грузовой фургон'
+    name: 'Грузовой фургон',
+    transmission: 'MANUAL'
   },
   truck_dump: {
     type: 'truck_dump',
@@ -407,7 +523,8 @@ export const CAR_CONFIGS: Record<CarType, CarConfig> = {
     minSteerAngle: 0.08,
     grip: 0.965,
     driftGrip: 0.26,
-    name: 'Карьерный самосвал'
+    name: 'Карьерный самосвал',
+    transmission: 'MANUAL'
   },
   truck_tanker: {
     type: 'truck_tanker',
@@ -425,7 +542,8 @@ export const CAR_CONFIGS: Record<CarType, CarConfig> = {
     minSteerAngle: 0.07,
     grip: 0.955,
     driftGrip: 0.25,
-    name: 'Автоцистерна (бензовоз)'
+    name: 'Автоцистерна (бензовоз)',
+    transmission: 'MANUAL'
   },
   truck_water: {
     type: 'truck_water',
@@ -443,7 +561,8 @@ export const CAR_CONFIGS: Record<CarType, CarConfig> = {
     minSteerAngle: 0.07,
     grip: 0.955,
     driftGrip: 0.25,
-    name: 'Водовоз «ВОДА»'
+    name: 'Водовоз «ВОДА»',
+    transmission: 'MANUAL'
   },
   truck_flatbed: {
     type: 'truck_flatbed',
@@ -461,7 +580,8 @@ export const CAR_CONFIGS: Record<CarType, CarConfig> = {
     minSteerAngle: 0.08,
     grip: 0.970,
     driftGrip: 0.29,
-    name: 'Бортовой грузовик'
+    name: 'Бортовой грузовик',
+    transmission: 'MANUAL'
   },
   cement_mixer: {
     type: 'cement_mixer',
@@ -479,7 +599,8 @@ export const CAR_CONFIGS: Record<CarType, CarConfig> = {
     minSteerAngle: 0.07,
     grip: 0.950,
     driftGrip: 0.24,
-    name: 'Автобетономешалка'
+    name: 'Автобетономешалка',
+    transmission: 'MANUAL'
   },
   garbage_truck: {
     type: 'garbage_truck',
@@ -497,9 +618,468 @@ export const CAR_CONFIGS: Record<CarType, CarConfig> = {
     minSteerAngle: 0.08,
     grip: 0.965,
     driftGrip: 0.27,
-    name: 'Мусоровоз'
+    name: 'Мусоровоз',
+    transmission: 'MANUAL'
+  },
+  wagon_classic: {
+    type: 'wagon_classic',
+    width: 20,
+    length: 44,
+    wheelBase: 26,
+    mass: 1180,
+    maxSpeed: 148,
+    reverseMaxSpeed: 52,
+    acceleration: 88,
+    brakingForce: 215,
+    friction: 0.987,
+    turnSpeed: 4.1,
+    maxSteerAngle: 0.74,
+    minSteerAngle: 0.14,
+    grip: 0.976,
+    driftGrip: 0.38,
+    name: 'Классический универсал (ВАЗ-2104)',
+    transmission: 'MANUAL'
+  },
+  wagon_modern: {
+    type: 'wagon_modern',
+    width: 21,
+    length: 47,
+    wheelBase: 29,
+    mass: 1550,
+    maxSpeed: 210,
+    reverseMaxSpeed: 75,
+    acceleration: 125,
+    brakingForce: 275,
+    friction: 0.989,
+    turnSpeed: 4.4,
+    maxSteerAngle: 0.73,
+    minSteerAngle: 0.13,
+    grip: 0.988,
+    driftGrip: 0.40,
+    name: 'Современный универсал (Touring)',
+    transmission: 'AUTO'
+  },
+  wagon_allroad: {
+    type: 'wagon_allroad',
+    width: 22,
+    length: 47,
+    wheelBase: 29,
+    mass: 1680,
+    maxSpeed: 195,
+    reverseMaxSpeed: 70,
+    acceleration: 115,
+    brakingForce: 265,
+    friction: 0.988,
+    turnSpeed: 4.2,
+    maxSteerAngle: 0.72,
+    minSteerAngle: 0.13,
+    grip: 0.984,
+    driftGrip: 0.37,
+    name: 'Внедорожный универсал (Cross Country)',
+    transmission: 'AUTO'
+  },
+  sedan_classic: {
+    type: 'sedan_classic',
+    width: 20,
+    length: 43,
+    wheelBase: 26,
+    mass: 1100,
+    maxSpeed: 152,
+    reverseMaxSpeed: 52,
+    acceleration: 92,
+    brakingForce: 220,
+    friction: 0.987,
+    turnSpeed: 4.2,
+    maxSteerAngle: 0.75,
+    minSteerAngle: 0.14,
+    grip: 0.975,
+    driftGrip: 0.39,
+    name: 'Ретро-седан (Жигули / ВАЗ-2106)',
+    transmission: 'MANUAL'
+  },
+  sedan_luxury: {
+    type: 'sedan_luxury',
+    width: 22,
+    length: 52,
+    wheelBase: 33,
+    mass: 2100,
+    maxSpeed: 235,
+    reverseMaxSpeed: 80,
+    acceleration: 135,
+    brakingForce: 285,
+    friction: 0.990,
+    turnSpeed: 4.1,
+    maxSteerAngle: 0.70,
+    minSteerAngle: 0.12,
+    grip: 0.990,
+    driftGrip: 0.36,
+    name: 'Представительский седан (Executive L)',
+    transmission: 'AUTO'
+  },
+  sedan_compact: {
+    type: 'sedan_compact',
+    width: 20,
+    length: 43,
+    wheelBase: 26,
+    mass: 1220,
+    maxSpeed: 175,
+    reverseMaxSpeed: 65,
+    acceleration: 110,
+    brakingForce: 250,
+    friction: 0.988,
+    turnSpeed: 4.3,
+    maxSteerAngle: 0.76,
+    minSteerAngle: 0.14,
+    grip: 0.985,
+    driftGrip: 0.38,
+    name: 'Городской компакт-седан',
+    transmission: 'MANUAL'
+  },
+  hatch_hot: {
+    type: 'hatch_hot',
+    width: 21,
+    length: 39,
+    wheelBase: 24,
+    mass: 1280,
+    maxSpeed: 235,
+    reverseMaxSpeed: 80,
+    acceleration: 145,
+    brakingForce: 285,
+    friction: 0.990,
+    turnSpeed: 4.7,
+    maxSteerAngle: 0.78,
+    minSteerAngle: 0.14,
+    grip: 0.992,
+    driftGrip: 0.44,
+    name: 'Спортивный хот-хэтч (Hot Hatch)',
+    transmission: 'MANUAL'
+  },
+  micro_car: {
+    type: 'micro_car',
+    width: 17,
+    length: 28,
+    wheelBase: 18,
+    mass: 820,
+    maxSpeed: 140,
+    reverseMaxSpeed: 50,
+    acceleration: 98,
+    brakingForce: 235,
+    friction: 0.987,
+    turnSpeed: 5.2,
+    maxSteerAngle: 0.88,
+    minSteerAngle: 0.16,
+    grip: 0.980,
+    driftGrip: 0.35,
+    name: 'Микрокар (City Smart)',
+    transmission: 'MANUAL'
+  },
+  classic_compact: {
+    type: 'classic_compact',
+    width: 19,
+    length: 41,
+    wheelBase: 25,
+    mass: 1040,
+    maxSpeed: 142,
+    reverseMaxSpeed: 48,
+    acceleration: 85,
+    brakingForce: 205,
+    friction: 0.987,
+    turnSpeed: 4.1,
+    maxSteerAngle: 0.75,
+    minSteerAngle: 0.14,
+    grip: 0.970,
+    driftGrip: 0.40,
+    name: 'Винтажная малолитражка («Копейка» / ВАЗ-2101)',
+    transmission: 'MANUAL'
+  },
+  retro_bubble: {
+    type: 'retro_bubble',
+    width: 18,
+    length: 34,
+    wheelBase: 21,
+    mass: 760,
+    maxSpeed: 125,
+    reverseMaxSpeed: 45,
+    acceleration: 78,
+    brakingForce: 195,
+    friction: 0.986,
+    turnSpeed: 4.6,
+    maxSteerAngle: 0.82,
+    minSteerAngle: 0.15,
+    grip: 0.965,
+    driftGrip: 0.42,
+    name: 'Ретро-микрокар («Горбатый» ЗАЗ-965)',
+    transmission: 'MANUAL'
+  },
+  suv_luxury: {
+    type: 'suv_luxury',
+    width: 23,
+    length: 50,
+    wheelBase: 31,
+    mass: 2450,
+    maxSpeed: 220,
+    reverseMaxSpeed: 75,
+    acceleration: 130,
+    brakingForce: 280,
+    friction: 0.988,
+    turnSpeed: 4.0,
+    maxSteerAngle: 0.70,
+    minSteerAngle: 0.12,
+    grip: 0.986,
+    driftGrip: 0.36,
+    name: 'Премиальный внедорожник (Luxury 4x4)',
+    transmission: 'AUTO'
+  },
+  offroad_hardcore: {
+    type: 'offroad_hardcore',
+    width: 23,
+    length: 49,
+    wheelBase: 29,
+    mass: 2350,
+    maxSpeed: 150,
+    reverseMaxSpeed: 55,
+    acceleration: 95,
+    brakingForce: 245,
+    friction: 0.985,
+    turnSpeed: 3.8,
+    maxSteerAngle: 0.72,
+    minSteerAngle: 0.12,
+    grip: 0.980,
+    driftGrip: 0.34,
+    name: 'Экспедиционный внедорожник (Expedition 4x4)',
+    transmission: 'MANUAL'
+  },
+  crossover_compact: {
+    type: 'crossover_compact',
+    width: 21,
+    length: 44,
+    wheelBase: 27,
+    mass: 1460,
+    maxSpeed: 180,
+    reverseMaxSpeed: 65,
+    acceleration: 108,
+    brakingForce: 255,
+    friction: 0.988,
+    turnSpeed: 4.2,
+    maxSteerAngle: 0.74,
+    minSteerAngle: 0.13,
+    grip: 0.985,
+    driftGrip: 0.37,
+    name: 'Городской кроссовер',
+    transmission: 'AUTO'
+  },
+  suv_classic_box: {
+    type: 'suv_classic_box',
+    width: 22,
+    length: 47,
+    wheelBase: 28,
+    mass: 2550,
+    maxSpeed: 190,
+    reverseMaxSpeed: 65,
+    acceleration: 118,
+    brakingForce: 265,
+    friction: 0.987,
+    turnSpeed: 3.9,
+    maxSteerAngle: 0.71,
+    minSteerAngle: 0.12,
+    grip: 0.982,
+    driftGrip: 0.35,
+    name: 'Легендарный рамный внедорожник («Гелик»)',
+    transmission: 'MANUAL'
+  },
+  supercar: {
+    type: 'supercar',
+    width: 23,
+    length: 46,
+    wheelBase: 28,
+    mass: 1380,
+    maxSpeed: 285,
+    reverseMaxSpeed: 95,
+    acceleration: 175,
+    brakingForce: 330,
+    friction: 0.992,
+    turnSpeed: 4.9,
+    maxSteerAngle: 0.72,
+    minSteerAngle: 0.12,
+    grip: 0.995,
+    driftGrip: 0.48,
+    name: 'Гиперкар (Exotic Supercar)',
+    transmission: 'AUTO'
+  },
+  muscle_classic: {
+    type: 'muscle_classic',
+    width: 22,
+    length: 48,
+    wheelBase: 29,
+    mass: 1580,
+    maxSpeed: 205,
+    reverseMaxSpeed: 70,
+    acceleration: 138,
+    brakingForce: 235,
+    friction: 0.988,
+    turnSpeed: 4.0,
+    maxSteerAngle: 0.73,
+    minSteerAngle: 0.13,
+    grip: 0.978,
+    driftGrip: 0.46,
+    name: 'Винтажный маслкар 1969 (Blower SS)',
+    transmission: 'MANUAL'
+  },
+  coupe_gt: {
+    type: 'coupe_gt',
+    width: 21,
+    length: 47,
+    wheelBase: 28,
+    mass: 1620,
+    maxSpeed: 250,
+    reverseMaxSpeed: 85,
+    acceleration: 150,
+    brakingForce: 300,
+    friction: 0.991,
+    turnSpeed: 4.5,
+    maxSteerAngle: 0.73,
+    minSteerAngle: 0.13,
+    grip: 0.992,
+    driftGrip: 0.42,
+    name: 'Спорт-купе Gran Turismo',
+    transmission: 'AUTO'
+  },
+  pickup_heavy: {
+    type: 'pickup_heavy',
+    width: 25,
+    length: 58,
+    wheelBase: 37,
+    mass: 3400,
+    maxSpeed: 160,
+    reverseMaxSpeed: 55,
+    acceleration: 90,
+    brakingForce: 260,
+    friction: 0.985,
+    turnSpeed: 3.4,
+    maxSteerAngle: 0.65,
+    minSteerAngle: 0.10,
+    grip: 0.978,
+    driftGrip: 0.30,
+    name: 'Тяжёлый пикап (Heavy Duty Dually 4x4)',
+    transmission: 'AUTO'
+  },
+  van_camper: {
+    type: 'van_camper',
+    width: 23,
+    length: 54,
+    wheelBase: 34,
+    mass: 2800,
+    maxSpeed: 145,
+    reverseMaxSpeed: 50,
+    acceleration: 82,
+    brakingForce: 240,
+    friction: 0.985,
+    turnSpeed: 3.7,
+    maxSteerAngle: 0.70,
+    minSteerAngle: 0.11,
+    grip: 0.978,
+    driftGrip: 0.33,
+    name: 'Кемпер / Автодом (Campervan)',
+    transmission: 'MANUAL'
+  },
+  van_cargo_old: {
+    type: 'van_cargo_old',
+    width: 21,
+    length: 44,
+    wheelBase: 26,
+    mass: 1850,
+    maxSpeed: 125,
+    reverseMaxSpeed: 45,
+    acceleration: 75,
+    brakingForce: 215,
+    friction: 0.985,
+    turnSpeed: 4.0,
+    maxSteerAngle: 0.74,
+    minSteerAngle: 0.13,
+    grip: 0.972,
+    driftGrip: 0.35,
+    name: 'Ретро-микроавтобус («Буханка»)',
+    transmission: 'MANUAL'
+  },
+  truck_tow: {
+    type: 'truck_tow',
+    width: 24,
+    length: 56,
+    wheelBase: 36,
+    mass: 3600,
+    maxSpeed: 140,
+    reverseMaxSpeed: 45,
+    acceleration: 78,
+    brakingForce: 260,
+    friction: 0.984,
+    turnSpeed: 3.6,
+    maxSteerAngle: 0.68,
+    minSteerAngle: 0.10,
+    grip: 0.972,
+    driftGrip: 0.30,
+    name: 'Эвакуатор (Tow Truck)',
+    transmission: 'MANUAL'
+  },
+  truck_armored: {
+    type: 'truck_armored',
+    width: 24,
+    length: 52,
+    wheelBase: 32,
+    mass: 4500,
+    maxSpeed: 145,
+    reverseMaxSpeed: 50,
+    acceleration: 85,
+    brakingForce: 275,
+    friction: 0.985,
+    turnSpeed: 3.7,
+    maxSteerAngle: 0.68,
+    minSteerAngle: 0.11,
+    grip: 0.980,
+    driftGrip: 0.31,
+    name: 'Инкассаторский броневик (Armored Bank Transit)',
+    transmission: 'AUTO'
+  },
+  delivery_truck: {
+    type: 'delivery_truck',
+    width: 24,
+    length: 56,
+    wheelBase: 35,
+    mass: 3100,
+    maxSpeed: 135,
+    reverseMaxSpeed: 48,
+    acceleration: 80,
+    brakingForce: 250,
+    friction: 0.984,
+    turnSpeed: 3.8,
+    maxSteerAngle: 0.72,
+    minSteerAngle: 0.11,
+    grip: 0.975,
+    driftGrip: 0.32,
+    name: 'Фургон экспресс-доставки (Delivery Stepvan)',
+    transmission: 'MANUAL'
   }
 };
+
+// Programmatically scale up vehicle performance for realistic, dynamic driving speeds (realistic km/h representation)
+Object.keys(CAR_CONFIGS).forEach((key) => {
+  const cfg = CAR_CONFIGS[key as CarType];
+  if (cfg) {
+    const isSports = cfg.type === 'sports' || cfg.type === 'supercar' || cfg.type === 'police';
+    const isHeavy = cfg.type && (cfg.type.includes('truck') || cfg.type.includes('bus') || cfg.type === 'cement_mixer' || cfg.type === 'garbage_truck' || cfg.type.includes('fire_'));
+    const scaleFactor = isSports ? 2.1 : (isHeavy ? 1.6 : 1.85);
+    
+    cfg.maxSpeed = Math.round(cfg.maxSpeed * scaleFactor);
+    cfg.reverseMaxSpeed = Math.round(cfg.reverseMaxSpeed * scaleFactor);
+    
+    // Scale acceleration and braking to keep up with the increased velocity bounds
+    cfg.acceleration = Math.round(cfg.acceleration * (isSports ? 2.2 : (isHeavy ? 1.5 : 1.9)));
+    cfg.brakingForce = Math.round(cfg.brakingForce * (isSports ? 2.4 : (isHeavy ? 1.6 : 2.1)));
+    
+    // Smooth high speed handling: scale turn speed slightly and bump lateral grip to prevent ice-sliding at 150+ km/h
+    cfg.turnSpeed = cfg.turnSpeed * (isSports ? 1.15 : 1.1);
+    cfg.grip = Math.min(0.993, cfg.grip * 1.006);
+  }
+});
 
 export const CAR_PALETTE = [
   '#dc2626', '#2563eb', '#16a34a', '#d97706', '#9333ea', 
@@ -1805,6 +2385,7 @@ export function generateCityWorld(): GameWorld {
         const showH = 140;
         buildings.push({
           id: `auto_showroom_${bx}_${by}`,
+          nameRu: 'Автосалон "Центральный"',
           x: innerX + 15,
           y: innerY + 15,
           width: showW,
@@ -1858,14 +2439,16 @@ export function generateCityWorld(): GameWorld {
         const repairH = 140;
         buildings.push({
           id: `auto_service_${bx}_${by}`,
+          nameRu: 'Автомастерская & Сервис "PIT-STOP"',
+          shopBrand: 'pitstop_service',
           x: innerX + 15,
           y: innerY + 300,
           width: repairW,
           height: repairH,
-          type: 'commercial',
-          color: '#334155',
-          roofColor: '#1e293b',
-          accentColor: '#f59e0b',
+          type: 'auto_service_center',
+          color: '#1e293b',
+          roofColor: '#0f172a',
+          accentColor: '#0284c7',
           windows: [],
           entrances: [
             { side: 'south', offsetRatio: 0.3, number: 1 },
@@ -1879,11 +2462,12 @@ export function generateCityWorld(): GameWorld {
         const washH = 110;
         buildings.push({
           id: `auto_wash_${bx}_${by}`,
+          nameRu: 'Автомойка & Детейлинг 24/7',
           x: innerX + repairW + 25,
           y: innerY + 300,
           width: washW,
           height: washH,
-          type: 'commercial',
+          type: 'car_wash_station',
           color: '#0284c7',
           roofColor: '#0369a1',
           accentColor: '#38bdf8',
@@ -1926,10 +2510,10 @@ export function generateCityWorld(): GameWorld {
 
         // C. PROPS AND LANDSCAPING
         props.push(
-          { id: `dl_lamp_1`, x: pkX + 20, y: pkY + 15, type: 'lamp', angle: 0 },
-          { id: `dl_lamp_2`, x: pkX + pkW - 20, y: pkY + 15, type: 'lamp', angle: 0 },
-          { id: `dl_lamp_3`, x: spkX + 15, y: spkY + 15, type: 'lamp', angle: 0 },
-          { id: `dl_lamp_4`, x: spkX + spkW - 15, y: spkY + spkH - 20, type: 'lamp', angle: 0 },
+          { id: `dl_lamp_1`, x: pkX + 5, y: pkY - 8, type: 'lamp', angle: 0 },
+          { id: `dl_lamp_2`, x: pkX + pkW - 5, y: pkY - 8, type: 'lamp', angle: 0 },
+          { id: `dl_lamp_3`, x: spkX + 5, y: spkY - 8, type: 'lamp', angle: 0 },
+          { id: `dl_lamp_4`, x: spkX + spkW - 5, y: spkY + spkH + 8, type: 'lamp', angle: 0 },
           { id: `dl_bench_1`, x: innerX + 45, y: innerY + 165, type: 'bench', angle: -Math.PI / 2 },
           { id: `dl_urn_1`, x: innerX + 65, y: innerY + 165, type: 'trash_can', angle: 0 },
           { id: `dl_flower_1`, x: innerX + 90, y: innerY + 165, type: 'flowerbed', angle: 0 },
@@ -1968,6 +2552,9 @@ export function generateCityWorld(): GameWorld {
           isReversing: false,
           turnSignal: 'none',
           turnSignalTimer: 0,
+          requiredFuel: createDefaultFuelSystem('pickup').fuelType === 'diesel' ? 'diesel' : (createDefaultFuelSystem('pickup').octaneNumber === 92 ? 'ai92' : 'ai95'),
+          engineState: createDefaultEngineState('pickup', false, true),
+          fuelSystem: createDefaultFuelSystem('pickup'),
           damage: createDefaultVehicleDamage(CAR_CONFIGS['pickup'].length, CAR_CONFIGS['pickup'].width),
           isPlayerControlled: false,
           isParked: true,
@@ -2023,6 +2610,9 @@ export function generateCityWorld(): GameWorld {
               isReversing: false,
               turnSignal: 'none',
               turnSignalTimer: 0,
+              requiredFuel: createDefaultFuelSystem(sc.type).fuelType === 'diesel' ? 'diesel' : (createDefaultFuelSystem(sc.type).octaneNumber === 92 ? 'ai92' : 'ai95'),
+              engineState: createDefaultEngineState(sc.type, false, true),
+              fuelSystem: createDefaultFuelSystem(sc.type),
               damage: createDefaultVehicleDamage(cfg.length, cfg.width),
               isPlayerControlled: false,
               isParked: true,
@@ -2088,11 +2678,12 @@ export function generateCityWorld(): GameWorld {
 
         // 2. West Residential Building
         const westW = 110;
-        const westH = innerH - 170;
+        const westY = innerY + northH + 15;
+        const westH = innerH - (northH + 25);
         buildings.push({
           id: `court_bld_w_${bx}_${by}`,
           x: innerX + 5,
-          y: innerY + 80,
+          y: westY,
           width: westW,
           height: westH,
           type: isPanelBlock ? 'brick_residential' : 'panel_apartment',
@@ -2113,27 +2704,27 @@ export function generateCityWorld(): GameWorld {
         });
 
         // Courtyard Geometry Bounds
-        const courtLeft = innerX + 80;
-        const courtTop = innerY + 80;
-        const courtW = innerW - 95;
-        const courtH = innerH - 90;
+        const courtLeft = innerX + westW + 20;
+        const courtTop = innerY + northH + 20;
+        const courtW = innerW - westW - 35;
+        const courtH = innerH - northH - 35;
 
         // Paved Walkways & Access Driveways (Тротуары и внутридворовой проезд):
         blockWalkways.push(
           // Asphalt access road connecting South driveway to parking & entrance drop-off
           { x: innerX + innerW - 120, y: innerY + innerH, width: 50, height: blockH - innerH, style: 'asphalt' },
-          { x: innerX + westW + 5, y: courtTop + 40, width: innerW - westW - 15, height: 28, style: 'asphalt' },
+          { x: courtLeft, y: courtTop + 40, width: courtW, height: 28, style: 'asphalt' },
           // Paved sidewalk along North building entrances
           { x: innerX + 5, y: innerY + northH + 2, width: northW, height: 18, style: 'concrete' },
           // Paved sidewalk along West building entrances
-          { x: innerX + westW + 2, y: innerY + 80, width: 18, height: westH, style: 'concrete' },
+          { x: innerX + westW + 2, y: westY, width: 18, height: westH, style: 'concrete' },
           // Walkway connecting to South street sidewalk
-          { x: innerX + 25, y: innerY + 80 + westH, width: 18, height: innerH - (80 + westH), style: 'concrete' }
+          { x: innerX + 25, y: westY + westH, width: 18, height: Math.max(10, innerH - (westY - innerY + westH)), style: 'concrete' }
         );
 
         // Central Courtyard Recreation Plaza (Зона отдыха с плиткой, лавочками и детской площадкой)
-        const plazaW = 95;
-        const plazaH = 75;
+        const plazaW = Math.min(100, Math.max(70, courtW - 140));
+        const plazaH = Math.min(80, Math.max(60, courtH - 30));
         const plazaX = courtLeft + 10;
         const plazaY = courtTop + 10;
         blockPlazas.push({
@@ -2146,7 +2737,7 @@ export function generateCityWorld(): GameWorld {
         });
 
         // Courtyard Residential Parking Lot (Парковка во дворе со свободным въездом)
-        const pkW = 120;
+        const pkW = Math.min(120, courtW - plazaW - 30);
         const pkH = courtH - 20;
         const pkX = innerX + innerW - pkW - 10;
         const pkY = courtTop + 10;
@@ -2173,8 +2764,8 @@ export function generateCityWorld(): GameWorld {
 
         // Courtyard Greenery Trees
         trees.push(
-          { id: `court_tree_${bx}_${by}_1`, x: plazaX + plazaW / 2, y: plazaY - 20, radius: 14, color: '#15803d', shadowOffset: 4 },
-          { id: `court_tree_${bx}_${by}_2`, x: plazaX + plazaW / 2, y: plazaY + plazaH + 20, radius: 13, color: '#166534', shadowOffset: 4 }
+          { id: `court_tree_${bx}_${by}_1`, x: plazaX + plazaW / 2, y: plazaY + plazaH + 18, radius: 14, color: '#15803d', shadowOffset: 4 },
+          { id: `court_tree_${bx}_${by}_2`, x: plazaX + plazaW + 18, y: plazaY + plazaH / 2, radius: 13, color: '#166534', shadowOffset: 4 }
         );
 
         // Courtyard Amenities: Benches strictly on paved walkways, streetlamps, flowerbeds, and corner dumpster corral
@@ -2189,11 +2780,11 @@ export function generateCityWorld(): GameWorld {
           { id: `c_flower_${bx}_${by}_2`, x: plazaX + plazaW - 16, y: plazaY + 54, type: 'flowerbed', angle: 0 },
 
           // Entrance benches & urns for building residents (on concrete entrance walkway)
-          { id: `c_ent_bench_n`, x: innerX + northW * 0.35, y: innerY + northH + 12, type: 'bench', angle: -Math.PI / 2 },
-          { id: `c_ent_urn_n`, x: innerX + northW * 0.35 + 16, y: innerY + northH + 12, type: 'trash_can', angle: 0 },
+          { id: `c_ent_bench_${bx}_${by}_n`, x: innerX + northW * 0.35, y: innerY + northH + 11, type: 'bench', angle: -Math.PI / 2 },
+          { id: `c_ent_urn_${bx}_${by}_n`, x: innerX + northW * 0.35 + 16, y: innerY + northH + 11, type: 'trash_can', angle: 0 },
 
-          { id: `c_ent_bench_w`, x: innerX + westW + 12, y: innerY + 80 + westH * 0.4, type: 'bench', angle: 0 },
-          { id: `c_ent_urn_w`, x: innerX + westW + 12, y: innerY + 80 + westH * 0.4 + 16, type: 'trash_can', angle: 0 },
+          { id: `c_ent_bench_${bx}_${by}_w`, x: innerX + westW + 11, y: westY + westH * 0.4, type: 'bench', angle: 0 },
+          { id: `c_ent_urn_${bx}_${by}_w`, x: innerX + westW + 11, y: westY + westH * 0.4 + 16, type: 'trash_can', angle: 0 },
 
           // Courtyard Night Illumination Streetlamps
           { id: `c_lamp_${bx}_${by}_1`, x: plazaX + plazaW / 2, y: plazaY + plazaH / 2, type: 'lamp', angle: 0 },
@@ -2203,7 +2794,7 @@ export function generateCityWorld(): GameWorld {
           // Waste Disposal Area (Площадка ТБО) strictly in far corner, 100% clear of all driveways!
           { id: `c_dump_${bx}_${by}_1`, x: innerX + innerW - 35, y: innerY + 25, type: 'dumpster', angle: Math.PI / 2 },
           { id: `c_dump_${bx}_${by}_2`, x: innerX + innerW - 35, y: innerY + 48, type: 'dumpster', angle: Math.PI / 2 },
-          { id: `c_dump_urn`, x: innerX + innerW - 35, y: innerY + 68, type: 'trash_can', angle: 0 }
+          { id: `c_dump_urn_${bx}_${by}`, x: innerX + innerW - 35, y: innerY + 68, type: 'trash_can', angle: 0 }
         );
 
         continue;
@@ -2267,7 +2858,7 @@ export function generateCityWorld(): GameWorld {
         const sportsW = 120;
         const sportsH = 80;
         const sportsX = innerX + 20;
-        const sportsY = innerY + schH + 25;
+        const sportsY = innerY + schH + 35;
         blockPlazas.push({
           x: sportsX,
           y: sportsY,
@@ -2284,18 +2875,18 @@ export function generateCityWorld(): GameWorld {
         );
 
         props.push(
-          { id: `sch_bench_1`, x: sportsX + 15, y: sportsY - 12, type: 'bench', angle: 0 },
-          { id: `sch_urn_1`, x: sportsX + 32, y: sportsY - 12, type: 'trash_can', angle: 0 },
-          { id: `sch_bench_2`, x: sportsX + sportsW - 35, y: sportsY - 12, type: 'bench', angle: 0 },
-          { id: `sch_urn_2`, x: sportsX + sportsW - 18, y: sportsY - 12, type: 'trash_can', angle: 0 },
-          { id: `sch_lamp_1`, x: sportsX + sportsW / 2, y: sportsY - 12, type: 'lamp', angle: 0 }
+          { id: `sch_bench_1`, x: sportsX + 15, y: sportsY + 15, type: 'bench', angle: 0 },
+          { id: `sch_urn_1`, x: sportsX + 32, y: sportsY + 15, type: 'trash_can', angle: 0 },
+          { id: `sch_bench_2`, x: sportsX + sportsW - 35, y: sportsY + 15, type: 'bench', angle: 0 },
+          { id: `sch_urn_2`, x: sportsX + sportsW - 18, y: sportsY + 15, type: 'trash_can', angle: 0 },
+          { id: `sch_lamp_1`, x: sportsX + sportsW / 2, y: sportsY + 15, type: 'lamp', angle: 0 }
         );
 
         continue;
       }
 
       // =========================================================================
-      // --- 4.6 GRAND SHOPPING MALL (ТРЦ "CITY PLAZA") ---
+      // --- 4.6 COMMERCIAL PROMENADE DISTRICT (STANDALONE FLAGSHIP STORES) ---
       // =========================================================================
       if (isShoppingMallBlock) {
         const innerX = blockX + sidewalkWidth + 10;
@@ -2303,73 +2894,118 @@ export function generateCityWorld(): GameWorld {
         const innerW = blockW - (sidewalkWidth * 2 + 20);
         const innerH = blockH - (sidewalkWidth * 2 + 20);
 
-        // Shopping Mall Complex (More square, majestic format)
-        const mallW = innerW - 20;
-        const mallH = 260;
+        const bldW1 = Math.floor((innerW - 30) / 2);
+        const bldW2 = innerW - bldW1 - 30;
+        const bldH = Math.min(125, Math.floor((innerH - 70) / 2));
+
+        // 1. Supermarket "Perekrestok 24/7" (North-West)
         buildings.push({
-          id: `mall_main_${bx}_${by}`,
+          id: `perekrestok_main_${bx}_${by}`,
+          nameRu: 'Супермаркет "Перекрёсток 24/7"',
+          shopBrand: 'perekrestok',
           x: innerX + 10,
           y: innerY + 10,
-          width: mallW,
-          height: mallH,
-          type: 'shopping_mall',
-          color: '#1e293b',
-          roofColor: '#0f172a',
-          accentColor: '#38bdf8',
+          width: bldW1,
+          height: bldH,
+          type: 'supermarket_store',
+          color: '#14532d',
+          roofColor: '#052e16',
+          accentColor: '#22c55e',
           windows: [],
-          entrances: [
-            { side: 'south', offsetRatio: 0.3, number: 1 },
-            { side: 'south', offsetRatio: 0.7, number: 2 }
-          ],
+          entrances: [{ side: 'south', offsetRatio: 0.5, number: 1 }],
           roofDetails: [
-            { type: 'skylight', rx: 0.2, ry: 0.2, rw: 0.6, rh: 0.5 },
-            { type: 'ac', rx: 0.05, ry: 0.2, rw: 0.1, rh: 0.6 },
-            { type: 'ac', rx: 0.85, ry: 0.2, rw: 0.1, rh: 0.6 }
+            { type: 'ac', rx: 0.15, ry: 0.25, rw: 0.2, rh: 0.5 },
+            { type: 'ac', rx: 0.65, ry: 0.25, rw: 0.2, rh: 0.5 }
           ]
         });
 
-        // Entrance Plaza
+        // 2. Pizzeria "Dodo Pizza" (North-East)
+        buildings.push({
+          id: `dodo_main_${bx}_${by}`,
+          nameRu: 'Пиццерия "Додо Пицца"',
+          shopBrand: 'dodo_pizza',
+          x: innerX + bldW1 + 20,
+          y: innerY + 10,
+          width: bldW2,
+          height: bldH,
+          type: 'pizzeria_restaurant',
+          color: '#7c2d12',
+          roofColor: '#431407',
+          accentColor: '#ea580c',
+          windows: [],
+          entrances: [{ side: 'south', offsetRatio: 0.5, number: 1 }],
+          roofDetails: [
+            { type: 'ac', rx: 0.2, ry: 0.3, rw: 0.25, rh: 0.4 }
+          ]
+        });
+
+        // Central Pedestrian Promenade & Plaza
+        const plazaY = innerY + bldH + 12;
+        const plazaH = Math.max(36, innerH - (bldH * 2 + 24));
         blockPlazas.push({
           x: innerX + 10,
-          y: innerY + mallH + 10,
-          width: mallW,
-          height: 35,
+          y: plazaY,
+          width: innerW - 20,
+          height: plazaH,
           shape: 'rect',
           style: 'tile'
         });
 
-        // Mall Visitor Parking Lot
-        const pkX = innerX + 10;
-        const pkY = innerY + mallH + 50;
-        const pkW = mallW;
-        const pkH = innerH - (mallH + 60);
+        // 3. Electronics Flagship "M.Video" (South-West)
+        const row2Y = plazaY + plazaH + 12;
+        buildings.push({
+          id: `mvideo_main_${bx}_${by}`,
+          nameRu: 'Гипермаркет электроники "М.Видео"',
+          shopBrand: 'mvideo',
+          x: innerX + 10,
+          y: row2Y,
+          width: bldW1,
+          height: bldH,
+          type: 'electronics_store',
+          color: '#1e3a8a',
+          roofColor: '#0f172a',
+          accentColor: '#ef4444',
+          windows: [],
+          entrances: [{ side: 'north', offsetRatio: 0.5, number: 1 }],
+          roofDetails: [
+            { type: 'ac', rx: 0.2, ry: 0.3, rw: 0.3, rh: 0.4 }
+          ]
+        });
 
-        if (pkH > 40) {
-          const mallSpots: ParkingArea['spots'] = [];
-          const numCols = Math.floor(pkW / 50);
-          for (let col = 0; col < numCols; col++) {
-            mallSpots.push(
-              { x: pkX + 25 + col * 50, y: pkY + 20, angle: Math.PI / 2, occupied: col % 2 === 0 },
-              { x: pkX + 25 + col * 50, y: pkY + pkH - 20, angle: -Math.PI / 2, occupied: col % 3 === 0 }
-            );
-          }
+        // 4. Restaurant "Vkusno — i tochka" (South-East)
+        buildings.push({
+          id: `vkusno_main_${bx}_${by}`,
+          nameRu: 'Ресторан "Вкусно — и точка"',
+          shopBrand: 'vkusno_tochka',
+          x: innerX + bldW1 + 20,
+          y: row2Y,
+          width: bldW2,
+          height: bldH,
+          type: 'fast_food_restaurant',
+          color: '#7f1d1d',
+          roofColor: '#450a0a',
+          accentColor: '#eab308',
+          windows: [],
+          entrances: [{ side: 'north', offsetRatio: 0.5, number: 1 }],
+          roofDetails: [
+            { type: 'ac', rx: 0.3, ry: 0.25, rw: 0.3, rh: 0.5 }
+          ]
+        });
 
-          parkings.push({
-            id: `mall_parking_${bx}_${by}`,
-            x: pkX,
-            y: pkY,
-            width: pkW,
-            height: pkH,
-            spots: mallSpots
-          });
-        }
-
+        // Street furniture, lamps, and trees on the central promenade
         props.push(
-          { id: `mall_bench_1`, x: innerX + 40, y: innerY + mallH + 25, type: 'bench', angle: 0 },
-          { id: `mall_urn_1`, x: innerX + 58, y: innerY + mallH + 25, type: 'trash_can', angle: 0 },
-          { id: `mall_bench_2`, x: innerX + mallW - 60, y: innerY + mallH + 25, type: 'bench', angle: 0 },
-          { id: `mall_urn_2`, x: innerX + mallW - 42, y: innerY + mallH + 25, type: 'trash_can', angle: 0 },
-          { id: `mall_lamp_1`, x: innerX + mallW / 2, y: innerY + mallH + 25, type: 'lamp', angle: 0 }
+          { id: `comm_bench_1`, x: innerX + 30, y: plazaY + plazaH / 2 - 8, type: 'bench', angle: 0 },
+          { id: `comm_urn_1`, x: innerX + 48, y: plazaY + plazaH / 2 - 8, type: 'trash_can', angle: 0 },
+          { id: `comm_bench_2`, x: innerX + innerW - 50, y: plazaY + plazaH / 2 - 8, type: 'bench', angle: 0 },
+          { id: `comm_urn_2`, x: innerX + innerW - 32, y: plazaY + plazaH / 2 - 8, type: 'trash_can', angle: 0 },
+          { id: `comm_lamp_1`, x: innerX + innerW / 2 - 40, y: plazaY + plazaH / 2 - 8, type: 'lamp', angle: 0 },
+          { id: `comm_lamp_2`, x: innerX + innerW / 2 + 40, y: plazaY + plazaH / 2 - 8, type: 'lamp', angle: 0 },
+          { id: `comm_flower_1`, x: innerX + innerW / 2, y: plazaY + plazaH / 2 - 8, type: 'flowerbed', angle: 0 }
+        );
+
+        trees.push(
+          { id: `comm_tree_1`, x: innerX + bldW1 / 2, y: plazaY + plazaH / 2, radius: 12, color: '#16a34a', shadowOffset: 4 },
+          { id: `comm_tree_2`, x: innerX + bldW1 + 20 + bldW2 / 2, y: plazaY + plazaH / 2, radius: 12, color: '#16a34a', shadowOffset: 4 }
         );
 
         continue;
@@ -2561,6 +3197,8 @@ export function generateCityWorld(): GameWorld {
         const dealH = 80;
         buildings.push({
           id: `deal_main_${bx}_${by}`,
+          nameRu: 'Автосалон & PIT-STOP',
+          shopBrand: 'pitstop_service',
           x: innerX + 10,
           y: innerY + 10,
           width: dealW,
@@ -2688,12 +3326,15 @@ export function generateCityWorld(): GameWorld {
         let bAccent = '#38bdf8';
 
         if (isPoliceStation) bType = 'police_station';
+        if (isPoliceStation) bType = 'police_station';
         if (isHospital) {
+          bType = 'hospital';
           bType = 'hospital';
           bColor = '#f8fafc';
           bRoof = '#e2e8f0';
           bAccent = '#ef4444';
         } else if (isFireStation) {
+          bType = 'fire_station';
           bType = 'fire_station';
           bColor = '#7f1d1d';
           bRoof = '#991b1b';
@@ -2870,11 +3511,12 @@ export function generateCityWorld(): GameWorld {
           });
 
           const w2W = 110;
-          const w2H = 55;
+          const w2H = 75;
+          const w2Y = innerY + wH + 25;
           buildings.push({
             id: `ind_hub_annex_${bx}_${by}`,
             x: innerX + 10,
-            y: innerY + 105,
+            y: w2Y,
             width: w2W,
             height: w2H,
             type: 'industrial',
@@ -2889,7 +3531,7 @@ export function generateCityWorld(): GameWorld {
           // Asphalt Maneuvering Yard & Loading Corridor
           blockWalkways.push(
             { x: innerX + 10, y: innerY + wH + 5, width: wW, height: 18, style: 'asphalt' },
-            { x: innerX + w2W + 5, y: innerY + 105, width: wW - w2W, height: w2H, style: 'asphalt' }
+            { x: innerX + w2W + 5, y: w2Y, width: wW - w2W, height: w2H, style: 'asphalt' }
           );
 
           // Fleet Truck Staging Parking Lot
@@ -2916,10 +3558,10 @@ export function generateCityWorld(): GameWorld {
           }
 
           props.push(
-            { id: `ind_dump_0_1`, x: innerX + w2W + 20, y: innerY + 105 + w2H / 2, type: 'dumpster', angle: 0 },
-            { id: `ind_lamp_0_1`, x: pkX + pkW / 2, y: pkY + 15, type: 'lamp', angle: 0 },
-            { id: `ind_lamp_0_2`, x: innerX + 25, y: innerY + wH + 12, type: 'lamp', angle: 0 },
-            { id: `ind_kiosk_0`, x: innerX + wW - 25, y: innerY + wH + 12, type: 'kiosk', angle: 0 }
+            { id: `ind_dump_0_${bx}_${by}_1`, x: innerX + w2W + 25, y: w2Y + w2H / 2, type: 'dumpster', angle: 0 },
+            { id: `ind_lamp_0_${bx}_${by}_1`, x: pkX + pkW / 2, y: pkY + 15, type: 'lamp', angle: 0 },
+            { id: `ind_lamp_0_${bx}_${by}_2`, x: pkX + 10, y: pkY + pkH - 25, type: 'lamp', angle: 0 },
+            { id: `ind_kiosk_0_${bx}_${by}`, x: pkX + 10, y: pkY + 35, type: 'kiosk', angle: 0 }
           );
         } else if (indVariant === 1) {
           // --- VARIANT 1: INDUSTRIAL MANUFACTURING PLANT (ЗАВОДСКОЙ КОМПЛЕКС С ДВУМЯ КОРПУСАМИ) ---
@@ -2993,9 +3635,9 @@ export function generateCityWorld(): GameWorld {
           }
 
           props.push(
-            { id: `ind_dump_1_1`, x: innerX + nW - 30, y: blvdY + 10, type: 'dumpster', angle: 0 },
-            { id: `ind_lamp_1_1`, x: innerX + nW / 2, y: blvdY + blvdH / 2, type: 'lamp', angle: 0 },
-            { id: `ind_kiosk_1`, x: innerX + 25, y: blvdY + 10, type: 'kiosk', angle: 0 }
+            { id: `ind_dump_1_${bx}_${by}_1`, x: innerX + nW - 30, y: blvdY + 10, type: 'dumpster', angle: 0 },
+            { id: `ind_lamp_1_${bx}_${by}_1`, x: innerX + nW / 2, y: blvdY + blvdH / 2, type: 'lamp', angle: 0 },
+            { id: `ind_kiosk_1_${bx}_${by}`, x: innerX + 25, y: blvdY + 10, type: 'kiosk', angle: 0 }
           );
         } else if (indVariant === 2) {
           // --- VARIANT 2: FLEET DEPOT & MOTOR TRANSPORT ENTERPRISE (АВТОТРАНСПОРТНОЕ ПРЕДПРИЯТИЕ АТП) ---
@@ -3020,7 +3662,7 @@ export function generateCityWorld(): GameWorld {
           blockWalkways.push({
             x: innerX + atpW + 2,
             y: innerY + 10,
-            width: 25,
+            width: 30,
             height: atpH,
             style: 'asphalt'
           });
@@ -3049,9 +3691,9 @@ export function generateCityWorld(): GameWorld {
           }
 
           props.push(
-            { id: `ind_dump_2_1`, x: innerX + atpW + 10, y: innerY + atpH - 25, type: 'dumpster', angle: Math.PI / 2 },
-            { id: `ind_lamp_2_1`, x: innerX + atpW + 10, y: innerY + 25, type: 'lamp', angle: 0 },
-            { id: `ind_kiosk_2`, x: innerX + atpW + 10, y: innerY + atpH / 2, type: 'kiosk', angle: 0 }
+            { id: `ind_dump_2_${bx}_${by}_1`, x: innerX + atpW + 22, y: innerY + atpH - 25, type: 'dumpster', angle: Math.PI / 2 },
+            { id: `ind_lamp_2_${bx}_${by}_1`, x: innerX + atpW + 22, y: innerY + 25, type: 'lamp', angle: 0 },
+            { id: `ind_kiosk_2_${bx}_${by}`, x: innerX + atpW + 22, y: innerY + atpH / 2, type: 'kiosk', angle: 0 }
           );
         } else {
           // --- VARIANT 3: CLASS-A LOGISTICS TERMINAL & DOCK GATE (СПО КЛАССА A) ---
@@ -3150,11 +3792,12 @@ export function generateCityWorld(): GameWorld {
         });
 
         const wW = 110;
-        const wH = innerH - 90;
+        const wY = innerY + nH + 15;
+        const wH = innerH - (nH + 25);
         buildings.push({
           id: `urb_l0_w_${bx}_${by}`,
           x: innerX + 5,
-          y: innerY + 80,
+          y: wY,
           width: wW,
           height: wH,
           type: 'modern_residential',
@@ -3173,14 +3816,14 @@ export function generateCityWorld(): GameWorld {
         // Continuous paved walkway connecting entrances to corner plaza
         blockWalkways.push(
           { x: innerX + 5, y: innerY + nH + 2, width: nW, height: 18, style: 'concrete' },
-          { x: innerX + wW + 2, y: innerY + 80, width: 18, height: wH, style: 'concrete' }
+          { x: innerX + wW + 2, y: wY, width: 18, height: wH, style: 'concrete' }
         );
 
         // Large Paved Corner Plaza in SE
-        const plazaX = innerX + 80;
-        const plazaY = innerY + 80;
-        const plazaW = innerW - 85;
-        const plazaH = innerH - 85;
+        const plazaX = innerX + wW + 20;
+        const plazaY = innerY + nH + 20;
+        const plazaW = innerW - wW - 35;
+        const plazaH = innerH - nH - 35;
         blockPlazas.push({
           x: plazaX,
           y: plazaY,
@@ -3192,28 +3835,109 @@ export function generateCityWorld(): GameWorld {
 
         // Props neatly placed ON paved walkways and plaza
         props.push(
-          { id: `urb_bench_l0_1`, x: innerX + nW * 0.3, y: innerY + nH + 11, type: 'bench', angle: 0 },
-          { id: `urb_urn_l0_1`, x: innerX + nW * 0.3 + 18, y: innerY + nH + 11, type: 'trash_can', angle: 0 },
-          { id: `urb_bench_l0_2`, x: innerX + wW + 11, y: innerY + 80 + wH * 0.5, type: 'bench', angle: Math.PI / 2 },
-          { id: `urb_urn_l0_2`, x: innerX + wW + 11, y: innerY + 80 + wH * 0.5 + 18, type: 'trash_can', angle: 0 },
-          { id: `urb_flower_l0_1`, x: plazaX + plazaW / 2, y: plazaY + plazaH / 2, type: 'flowerbed', angle: 0 },
-          { id: `urb_lamp_l0_1`, x: plazaX + 15, y: plazaY + 15, type: 'lamp', angle: 0 },
-          { id: `urb_kiosk_l0_1`, x: plazaX + plazaW - 20, y: plazaY + 15, type: 'kiosk', angle: 0 }
+          { id: `urb_bench_l0_${bx}_${by}_1`, x: innerX + nW * 0.3, y: innerY + nH + 11, type: 'bench', angle: 0 },
+          { id: `urb_urn_l0_${bx}_${by}_1`, x: innerX + nW * 0.3 + 18, y: innerY + nH + 11, type: 'trash_can', angle: 0 },
+          { id: `urb_bench_l0_${bx}_${by}_2`, x: innerX + wW + 11, y: wY + wH * 0.5, type: 'bench', angle: Math.PI / 2 },
+          { id: `urb_urn_l0_${bx}_${by}_2`, x: innerX + wW + 11, y: wY + wH * 0.5 + 18, type: 'trash_can', angle: 0 },
+          { id: `urb_flower_l0_${bx}_${by}_1`, x: plazaX + plazaW / 2, y: plazaY + plazaH / 2, type: 'flowerbed', angle: 0 },
+          { id: `urb_lamp_l0_${bx}_${by}_1`, x: plazaX + 25, y: plazaY + 25, type: 'lamp', angle: 0 },
+          { id: `urb_kiosk_l0_${bx}_${by}_1`, x: plazaX + plazaW - 25, y: plazaY + 25, type: 'kiosk', angle: 0 }
         );
       } else if (layoutVariant === 1) {
         // --- LAYOUT 1: CENTRAL PEDESTRIAN BOULEVARD & DUAL PARALLEL WINGS ---
+        let shopBrand: Building['shopBrand'] = undefined;
+        let bldNameRu = 'Коммерческий пассаж';
+        let bldColor = '#3f3f46';
+        let bldRoofColor = '#27272a';
+        let bldAccentColor = '#38bdf8';
+        let bldType: Building['type'] = 'commercial_gallery';
+
+        if (bx === 0 && by === 4) {
+          shopBrand = 'bean_bistro';
+          bldNameRu = 'Кафе & Кофейня "Bean & Bistro"';
+          bldColor = '#78350f';
+          bldRoofColor = '#451a03';
+          bldAccentColor = '#f59e0b';
+          bldType = 'coffee_bistro';
+        } else if (bx === 1 && by === 4) {
+          shopBrand = 'pharmacy_36_6';
+          bldNameRu = 'Аптека "36.6" (Западный филиал)';
+          bldColor = '#065f46';
+          bldRoofColor = '#022c22';
+          bldAccentColor = '#10b981';
+          bldType = 'pharmacy_store';
+        } else if (bx === 5 && by === 4) {
+          shopBrand = 'cofix_bakery';
+          bldNameRu = 'Кафе & Пекарня "Cofix & Bakery"';
+          bldColor = '#18181b';
+          bldRoofColor = '#09090b';
+          bldAccentColor = '#ea580c';
+          bldType = 'bakery_cafe';
+        } else if (bx === 7 && by === 4) {
+          shopBrand = 'pharmacy_36_6';
+          bldNameRu = 'Аптека "36.6" (Восточный филиал)';
+          bldColor = '#065f46';
+          bldRoofColor = '#022c22';
+          bldAccentColor = '#10b981';
+          bldType = 'pharmacy_store';
+        } else if (bx === 9 && by === 4) {
+          shopBrand = 'pyaterochka';
+          bldNameRu = 'Супермаркет "Пятёрочка 24/7"';
+          bldColor = '#15803d';
+          bldRoofColor = '#14532d';
+          bldAccentColor = '#dc2626';
+          bldType = 'supermarket_store';
+        } else if (bx === 3 && by === 7) {
+          shopBrand = 'pharmacy_36_6';
+          bldNameRu = 'Аптека "36.6" (Южный филиал)';
+          bldColor = '#065f46';
+          bldRoofColor = '#022c22';
+          bldAccentColor = '#10b981';
+          bldType = 'pharmacy_store';
+        } else if (bx === 6 && by === 4) {
+          shopBrand = 'splav_gear';
+          bldNameRu = 'Магазин "Охота & Туризм Сплав"';
+          bldColor = '#365314';
+          bldRoofColor = '#1a2e05';
+          bldAccentColor = '#84cc16';
+          bldType = 'tactical_store';
+        } else if (bx === 8 && by === 4) {
+          shopBrand = 'cofix_bakery';
+          bldNameRu = 'Кафе & Пекарня "Cofix"';
+          bldColor = '#18181b';
+          bldRoofColor = '#09090b';
+          bldAccentColor = '#ea580c';
+          bldType = 'bakery_cafe';
+        } else if (bx === 4 && by === 7) {
+          shopBrand = 'pyaterochka';
+          bldNameRu = 'Супермаркет "Пятёрочка" (Южный)';
+          bldColor = '#15803d';
+          bldRoofColor = '#14532d';
+          bldAccentColor = '#dc2626';
+          bldType = 'supermarket_store';
+        } else if (bx === 5 && by === 7) {
+          shopBrand = 'bean_bistro';
+          bldNameRu = 'Кафе "Bean & Bistro"';
+          bldColor = '#78350f';
+          bldRoofColor = '#451a03';
+          bldAccentColor = '#f59e0b';
+          bldType = 'coffee_bistro';
+        }
+
         const nW = innerW - 10;
         const nH = 110;
         buildings.push({
           id: `urb_l1_n_${bx}_${by}`,
+          nameRu: bldNameRu,
+          shopBrand: shopBrand,
           x: innerX + 5,
           y: innerY + 5,
           width: nW,
           height: nH,
-          type: 'commercial',
-          color: '#3f3f46',
-          roofColor: '#27272a',
-          accentColor: '#38bdf8',
+          type: bldType,
+          color: bldColor,
+          roofColor: bldRoofColor,
+          accentColor: bldAccentColor,
           windows: [],
           entrances: [{ side: 'south', offsetRatio: 0.5, number: 1 }],
           roofDetails: [{ type: 'ac', rx: 0.2, ry: 0.3, rw: 0.15, rh: 0.4 }]
@@ -3269,18 +3993,35 @@ export function generateCityWorld(): GameWorld {
         });
       } else {
         // --- LAYOUT 2: CENTERPIECE HIGH-RISE TOWER & LANDSCAPED QUAD WITH PARKING ---
+        let l2Brand: Building['shopBrand'] = undefined;
+        let l2NameRu = 'Деловой центр';
+        let l2Color = '#0f172a';
+        let l2RoofColor = '#0284c7';
+        let l2AccentColor = '#38bdf8';
+        let l2Type: Building['type'] = 'business_center';
+        if (bx === 3 && by === 2) {
+          l2Brand = 'splav_gear';
+          l2NameRu = 'Магазин "Охота & Туризм Сплав"';
+          l2Color = '#365314';
+          l2RoofColor = '#1a2e05';
+          l2AccentColor = '#84cc16';
+          l2Type = 'tactical_store';
+        }
+
         const towerW = Math.min(200, innerW - 100);
         const towerH = Math.min(130, innerH - 40);
         buildings.push({
           id: `urb_l2_main_${bx}_${by}`,
+          nameRu: l2NameRu,
+          shopBrand: l2Brand,
           x: innerX + 5,
           y: innerY + 5,
           width: towerW,
           height: towerH,
-          type: 'business_center',
-          color: '#0f172a',
-          roofColor: '#0284c7',
-          accentColor: '#38bdf8',
+          type: l2Type,
+          color: l2Color,
+          roofColor: l2RoofColor,
+          accentColor: l2AccentColor,
           windows: [],
           entrances: [{ side: 'east', offsetRatio: 0.5, number: 1 }],
           roofDetails: [{ type: 'helipad', rx: 0.2, ry: 0.2, rw: 0.5, rh: 0.6 }]
@@ -3329,11 +4070,23 @@ export function generateCityWorld(): GameWorld {
 
   // 4. SPAWN INITIAL MOVING AI TRAFFIC VEHICLES ON ROADS
   const carTypes: CarType[] = [
-    'sedan', 'hatchback', 'pickup', 'sports', 'suv', 'taxi', 'police', 
-    'fire_engine', 'fire_ladder', 'fire_rescue',
-    'bus', 'bus_minibus', 
-    'van', 'muscle', 
+    // Standard civilian & everyday
+    'sedan', 'sedan_compact', 'sedan_luxury', 'sedan_classic', 'classic_compact',
+    'hatchback', 'hatch_hot', 'micro_car', 'retro_bubble',
+    'wagon_classic', 'wagon_modern', 'wagon_allroad',
+    // Crossovers & SUVs
+    'suv', 'suv_luxury', 'suv_classic_box', 'offroad_hardcore', 'crossover_compact',
+    // Performance & Muscle
+    'sports', 'supercar', 'muscle', 'muscle_classic', 'coupe_gt',
+    // Pickups & Vans
+    'pickup', 'pickup_heavy', 'van', 'van_camper', 'van_cargo_old',
+    // Public & City services
+    'taxi', 'bus', 'bus_minibus',
+    // Emergency services
+    'police', 'fire_engine', 'fire_ladder', 'fire_rescue',
     'ambulance', 'ambulance_van', 'ambulance_suv',
+    // Commercial & Heavy trucks
+    'delivery_truck', 'truck_tow', 'truck_armored',
     'truck_box', 'truck_dump', 'truck_tanker', 'truck_water', 'truck_flatbed', 'cement_mixer', 'garbage_truck'
   ];
   let vehicleCounter = 0;
@@ -3347,9 +4100,9 @@ export function generateCityWorld(): GameWorld {
       if (isForest) {
         if ((rIdx + lIdx) % 18 !== 0) return;
       } else {
-        if ((rIdx * 3 + lIdx) % 14 !== 0) return;
+        if ((rIdx * 3 + lIdx) % 10 !== 0) return;
       }
-      if (vehicleCounter >= 26) return;
+      if (vehicleCounter >= 42) return;
 
       const wp2 = lane.waypoints[1];
       const progress = 0.25 + Math.random() * 0.5;
@@ -3366,7 +4119,9 @@ export function generateCityWorld(): GameWorld {
       else if (cType === 'bus_minibus') color = '#f59e0b';
       else if (cType === 'ambulance' || cType === 'ambulance_van' || cType === 'ambulance_suv') color = '#f8fafc';
       else if (cType === 'van') color = '#6ee7b7';
-      else if (cType === 'muscle') color = '#991b1b';
+      else if (cType === 'van_camper') color = '#fef08a';
+      else if (cType === 'van_cargo_old') color = '#94a3b8';
+      else if (cType === 'muscle' || cType === 'muscle_classic') color = '#991b1b';
       else if (cType === 'garbage_truck') color = '#16a34a';
       else if (cType === 'truck_dump') color = '#d97706';
       else if (cType === 'cement_mixer') color = '#2563eb';
@@ -3374,8 +4129,20 @@ export function generateCityWorld(): GameWorld {
       else if (cType === 'truck_water') color = '#0284c7';
       else if (cType === 'truck_tanker') color = '#0369a1';
       else if (cType === 'truck_flatbed') color = '#475569';
+      else if (cType === 'truck_tow') color = '#eab308';
+      else if (cType === 'truck_armored') color = '#334155';
+      else if (cType === 'delivery_truck') color = '#78350f';
+      else if (cType === 'supercar') color = '#ef4444';
+      else if (cType === 'retro_bubble') color = '#38bdf8';
+      else if (cType === 'sedan_luxury') color = '#1e293b';
 
-      const roofColor = (cType === 'police' || cType === 'ambulance' || cType === 'ambulance_van' || cType === 'ambulance_suv' || cType === 'fire_engine' || cType === 'fire_ladder' || cType === 'fire_rescue') ? '#f8fafc' : color;
+      const isEmergency = cType === 'police' || cType === 'ambulance' || cType === 'ambulance_van' || 
+                          cType === 'ambulance_suv' || cType === 'fire_engine' || cType === 'fire_ladder' || 
+                          cType === 'fire_rescue';
+      let roofColor = isEmergency ? '#f8fafc' : color;
+      if (cType === 'suv_classic_box') roofColor = '#ffffff';
+      if (cType === 'classic_compact') roofColor = '#f1f5f9';
+      if (cType === 'wagon_allroad') roofColor = '#0f172a';
 
       vehicles.push({
         id: `veh_traffic_${vehicleCounter++}`,
@@ -3404,6 +4171,9 @@ export function generateCityWorld(): GameWorld {
         isReversing: false,
         turnSignal: 'none',
         turnSignalTimer: 0,
+        requiredFuel: createDefaultFuelSystem(cType).fuelType === 'diesel' ? 'diesel' : (createDefaultFuelSystem(cType).octaneNumber === 92 ? 'ai92' : 'ai95'),
+        engineState: createDefaultEngineState(cType, true, false),
+        fuelSystem: createDefaultFuelSystem(cType, false),
         damage: createDefaultVehicleDamage(cfg.length, cfg.width),
         isPlayerControlled: false,
         isParked: false,
@@ -3426,12 +4196,34 @@ export function generateCityWorld(): GameWorld {
   });
 
   // Parked vehicles in parking lots
+  const parkableCarTypes: CarType[] = [
+    'sedan', 'sedan_compact', 'sedan_luxury', 'sedan_classic', 'classic_compact',
+    'hatchback', 'hatch_hot', 'micro_car', 'retro_bubble',
+    'wagon_classic', 'wagon_modern', 'wagon_allroad',
+    'suv', 'suv_luxury', 'suv_classic_box', 'offroad_hardcore', 'crossover_compact',
+    'sports', 'supercar', 'muscle', 'muscle_classic', 'coupe_gt',
+    'pickup', 'pickup_heavy', 'van', 'van_camper', 'van_cargo_old',
+    'taxi'
+  ];
+
   parkings.forEach((parking) => {
     parking.spots.forEach((spot) => {
-      if (spot.occupied && vehicleCounter < 35) {
-        const cType = carTypes[Math.floor(Math.random() * (carTypes.length - 2))];
+      if (spot.occupied && vehicleCounter < 68) {
+        const cType = parkableCarTypes[Math.floor(Math.random() * parkableCarTypes.length)];
         const cfg = CAR_CONFIGS[cType];
-        const color = CAR_PALETTE[Math.floor(Math.random() * CAR_PALETTE.length)];
+        let color = CAR_PALETTE[Math.floor(Math.random() * CAR_PALETTE.length)];
+        if (cType === 'taxi') color = '#eab308';
+        else if (cType === 'van_camper') color = '#fef08a';
+        else if (cType === 'retro_bubble') color = '#38bdf8';
+        else if (cType === 'supercar') color = '#ef4444';
+        else if (cType === 'sedan_luxury') color = '#1e293b';
+        else if (cType === 'muscle_classic') color = '#b91c1c';
+
+        let roofColor = color;
+        if (cType === 'suv_classic_box') roofColor = '#ffffff';
+        if (cType === 'classic_compact') roofColor = '#f1f5f9';
+        if (cType === 'wagon_allroad') roofColor = '#0f172a';
+
         const vehId = `veh_parked_${vehicleCounter++}`;
         spot.vehicleId = vehId;
 
@@ -3455,13 +4247,16 @@ export function generateCityWorld(): GameWorld {
           length: cfg.length,
           wheelBase: cfg.wheelBase,
           color,
-          roofColor: color,
+          roofColor,
           headlightsOn: false,
           headlightMode: 'off',
           brakeLightsOn: false,
           isReversing: false,
           turnSignal: 'none',
           turnSignalTimer: 0,
+          requiredFuel: createDefaultFuelSystem(cType, true).fuelType === 'diesel' ? 'diesel' : (createDefaultFuelSystem(cType, true).octaneNumber === 92 ? 'ai92' : 'ai95'),
+          engineState: createDefaultEngineState(cType, false, true),
+          fuelSystem: createDefaultFuelSystem(cType, true),
           damage: createDefaultVehicleDamage(cfg.length, cfg.width),
           isPlayerControlled: false,
           isParked: true,
@@ -3738,6 +4533,7 @@ export function generateCityWorld(): GameWorld {
     puddles,
     litter,
     skidMarks: [],
+    stains: [],
     particles: [],
     weather: 'clear',
     pedestrianPaths

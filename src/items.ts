@@ -1,5 +1,24 @@
 import { GameWorld, GroundItem, InventoryItem, ItemCategory, Player } from './types';
 import { sound } from './audio';
+import {
+  administerMedication,
+  applySplint,
+  applyBandage,
+  applyMedkit,
+  applyMedicalPatch,
+  applyAntiseptic,
+  applyPanthenolSpray,
+  applySpasatelOintment,
+  applyZelenka,
+  applyIodine,
+  applyDiclofenacGel,
+  applyHydrogenPeroxide,
+  applyAmmoniaSpirit,
+  applyBalmStar,
+  applyActivatedCharcoal,
+  applyValerianDrops
+} from './medicineSystem';
+import { soothePanic } from './bodySystem';
 
 export interface ItemDefinition {
   itemId: string;
@@ -41,12 +60,12 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     effects: { hunger: 40, health: 8, energy: 10 },
     weight: 0.25,
     usable: true,
-    biteCount: 4,
-    biteDuration: 1.2,
+    biteCount: 8,
+    biteDuration: 1.0,
     leftoverId: 'sandwich_bag',
     leftoverNameRu: 'Пакет от сэндвича',
-    fullnessPerBite: 8,
-    tasteMessages: ['Хрустящий тост с ветчиной...', 'Сыр тает на языке...', 'Свежий хруст салата...', 'Копченая ветчина — классика!']
+    fullnessPerBite: 4,
+    tasteMessages: ['Хрустящий тост с ветчиной...', 'Сыр тает на языке...', 'Свежий хруст салата...', 'Копченая ветчина — классика!', 'Приятный хрустящий кусочек...', 'Сливочный соус и зелень...', 'Вкусно и сытно...', 'Последний сытный кусочек сэндвича!']
   },
   burger: {
     itemId: 'burger',
@@ -60,12 +79,12 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     effects: { hunger: 60, health: 12, energy: 15 },
     weight: 0.35,
     usable: true,
-    biteCount: 5,
-    biteDuration: 1.4,
+    biteCount: 10,
+    biteDuration: 1.0,
     leftoverId: 'burger_wrapper',
     leftoverNameRu: 'Обёртка от бургера',
-    fullnessPerBite: 10,
-    tasteMessages: ['Сочная котлета с гриля...', 'Плавленый сыр стекает по булочке...', 'Хрустящий кунжут...', 'Свежий томат оттеняет мясо...', 'Баунти булочка — идеальна!']
+    fullnessPerBite: 5,
+    tasteMessages: ['Сочный укус котлеты с гриля...', 'Плавленый сыр чеддер...', 'Хрустящий маринованный огурчик...', 'Свежий томат оттеняет мясо...', 'Ароматная булочка с кунжутом...', 'Пряный фирменный соус...', 'Мясистый сытный укус...', 'Сок течет по пальцам...', 'Насыщенный вкус говядины...', 'Финальный сытный укус бургера!']
   },
   pizza_slice: {
     itemId: 'pizza_slice',
@@ -79,12 +98,12 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     effects: { hunger: 35, health: 6, energy: 8 },
     weight: 0.2,
     usable: true,
-    biteCount: 3,
-    biteDuration: 1.1,
+    biteCount: 6,
+    biteDuration: 0.9,
     leftoverId: 'pizza_plate',
-    leftoverNameRu: 'Бумажная тарелка',
-    fullnessPerBite: 8,
-    tasteMessages: ['Тягучий сыр тянется за укусом...', 'Хрустящая корочка...', 'Пикантная пепперони!']
+    leftoverNameRu: 'Тарелка от пиццы',
+    fullnessPerBite: 4,
+    tasteMessages: ['Тягучий сыр моцарелла...', 'Пикантная пепперони с перчинкой...', 'Хрустящая корочка теста...', 'Сочный томатный соус...', 'Ароматные орегано и базилик...', 'Хрустящий бортик пиццы!']
   },
   apple: {
     itemId: 'apple',
@@ -98,12 +117,12 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     effects: { hunger: 18, thirst: 12, health: 4 },
     weight: 0.15,
     usable: true,
-    biteCount: 3,
-    biteDuration: 1.0,
+    biteCount: 8,
+    biteDuration: 0.8,
     leftoverId: 'apple_core',
     leftoverNameRu: 'Огрызок яблока',
-    fullnessPerBite: 5,
-    tasteMessages: ['Хрустящее, сочное яблоко...', 'Сладкий натуральный вкус...', 'Кислинка освежает!']
+    fullnessPerBite: 2,
+    tasteMessages: ['Хрустящий сладкий укус...', 'Сок брызжет при укусе...', 'Сладкий натуральный вкус...', 'Кислинка освежает рецепторы...', 'Сочная мякоть яблока...', 'Хруст свежести...', 'Приятная сладость...', 'Остался только огрызок!']
   },
   chocolate: {
     itemId: 'chocolate',
@@ -117,12 +136,12 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     effects: { hunger: 22, energy: 25, sleepiness: -10 },
     weight: 0.1,
     usable: true,
-    biteCount: 3,
-    biteDuration: 0.9,
+    biteCount: 10,
+    biteDuration: 0.7,
     leftoverId: 'chocolate_wrapper',
     leftoverNameRu: 'Фольга от шоколада',
-    fullnessPerBite: 6,
-    tasteMessages: ['Горьковатый какао тает во рту...', 'Нежный шоколадный вкус...', 'Прилив энергии от какао!']
+    fullnessPerBite: 2,
+    tasteMessages: ['Долька шоколада тает во рту...', 'Глубокий вкус какао...', 'Сладкая бодрость...', 'Нежная шоколадная текстура...', 'Прилив энергии от какао-бобов...', 'Приятное сладкое послевкусие...']
   },
   chips: {
     itemId: 'chips',
@@ -136,12 +155,12 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     effects: { hunger: 25, energy: 12, thirst: -8 },
     weight: 0.15,
     usable: true,
-    biteCount: 4,
-    biteDuration: 0.6,
+    biteCount: 15,
+    biteDuration: 0.5,
     leftoverId: 'chips_bag',
     leftoverNameRu: 'Пустой пакет от чипсов',
-    fullnessPerBite: 5,
-    tasteMessages: ['Хруст! Солёные картофельные дольки...', 'Слишком много соли... жажда нарастает...', 'Легкий перекус, но аппетит растёт...']
+    fullnessPerBite: 2,
+    tasteMessages: ['Хрустящий ломтик с солью...', 'Золотистая картофельная чипсина...', 'Аппетитный хруст...', 'Соль щиплет язык, хочется пить...', 'Хруст-хруст! Вкус паприки...', 'Еще горсточка чипсов...']
   },
   canned_meat: {
     itemId: 'canned_meat',
@@ -155,12 +174,12 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     effects: { hunger: 70, health: 15, energy: 20 },
     weight: 0.5,
     usable: true,
-    biteCount: 5,
-    biteDuration: 1.5,
-    leftoverId: 'can_empty',
-    leftoverNameRu: 'Пустая жестяная банка',
-    fullnessPerBite: 12,
-    tasteMessages: ['Густой мясной бульон...', 'Нежное мясо тушёное...', 'Сытно и горячо...', 'Классическая армейская тушёнка!', 'Прямое тепло домашнего очага...']
+    biteCount: 12,
+    biteDuration: 1.0,
+    leftoverId: 'tin_can_empty',
+    leftoverNameRu: 'Банка из-под тушёнки',
+    fullnessPerBite: 5,
+    tasteMessages: ['Густой мясной бульон...', 'Нежная тушеная говядина...', 'Пряный лавровый лист и перец...', 'Сытный кусок мяса...', 'Классическая армейская тушёнка!', 'Очень сытно и калорийно...']
   },
 
   // === DRINKS (НАПИТКИ) ===
@@ -172,16 +191,16 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     maxStack: 10,
     icon: '💧',
     description: 'Clean pure spring water. Essential for hydration and survival.',
-    descriptionRu: 'Чистая родниковая вода. Главное средство от жажды и обезвоживания.',
+    descriptionRu: 'Чистая родниковая вода (0.5 л). Главное средство от жажды и обезвоживания.',
     effects: { thirst: 50, health: 5, energy: 10 },
     weight: 0.5,
     usable: true,
-    biteCount: 4,
-    biteDuration: 0.8,
+    biteCount: 12,
+    biteDuration: 0.6,
     leftoverId: 'bottle_empty',
     leftoverNameRu: 'Пустая пластиковая бутылка',
-    fullnessPerBite: 3,
-    tasteMessages: ['Чистая холодная вода...', 'Освежающий глоток...', 'Здорово утоляет жажду!', 'Прекрасный родниковый вкус...']
+    fullnessPerBite: 1,
+    tasteMessages: ['Чистый прохладный глоток воды...', 'Освежающая минеральная влага...', 'Жажда постепенно отступает...', 'Родниковая свежесть...', 'Приятная прохлада в горле...', 'Бодрящий глоток чистоты...']
   },
   soda_can: {
     itemId: 'soda_can',
@@ -195,12 +214,12 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     effects: { thirst: 35, energy: 20, sleepiness: -8 },
     weight: 0.35,
     usable: true,
-    biteCount: 4,
-    biteDuration: 0.7,
+    biteCount: 10,
+    biteDuration: 0.6,
     leftoverId: 'can_empty',
     leftoverNameRu: 'Пустая жестяная банка',
-    fullnessPerBite: 2,
-    tasteMessages: ['Шипение газировки...', 'Сладкий вкус колы...', 'Холодные пузырьки!', 'Кофейный послевкусие...']
+    fullnessPerBite: 1,
+    tasteMessages: ['Шипящие сладкие пузырьки колы...', 'Холодный карамельный вкус...', 'Бодрящий сладкий глоток...', 'Газировка приятно покалывает язык...']
   },
   hot_coffee: {
     itemId: 'hot_coffee',
@@ -214,12 +233,12 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     effects: { thirst: 25, energy: 40, sleepiness: -40 },
     weight: 0.25,
     usable: true,
-    biteCount: 3,
-    biteDuration: 1.2,
+    biteCount: 8,
+    biteDuration: 0.8,
     leftoverId: 'cup_disposable',
     leftoverNameRu: 'Одноразовый стаканчик',
-    fullnessPerBite: 2,
-    tasteMessages: ['Горьковатый аромат свежего эспрессо...', 'Крепкий кофейный вкус бодрит!', 'Тёплый глоток — и сонливость уходит...']
+    fullnessPerBite: 1,
+    tasteMessages: ['Ароматный горячий глоток эспрессо...', 'Крепкий кофе разгоняет сонливость...', 'Тёплый глоток — и голова проясняется...', 'Насыщенный вкус свежей арабики...']
   },
   energy_drink: {
     itemId: 'energy_drink',
@@ -233,12 +252,12 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     effects: { thirst: 35, energy: 55, sleepiness: -50, health: -2 },
     weight: 0.35,
     usable: true,
-    biteCount: 3,
-    biteDuration: 0.8,
-    leftoverId: 'can_empty',
-    leftoverNameRu: 'Пустая жестяная банка',
-    fullnessPerBite: 2,
-    tasteMessages: ['Химический привкус таурина...', 'Мощный заряд энергии!', 'Кофеин врезает в мозг...']
+    biteCount: 10,
+    biteDuration: 0.6,
+    leftoverId: 'energy_can_empty',
+    leftoverNameRu: 'Смятая банка энергетика',
+    fullnessPerBite: 1,
+    tasteMessages: ['Кислый бодрящий вкус таурина...', 'Мощный всплеск кофеина в крови!', 'Взрыв энергии и учащение пульса...', 'Усталость отступает на второй план!']
   },
   fresh_juice: {
     itemId: 'fresh_juice',
@@ -252,12 +271,12 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     effects: { thirst: 45, hunger: 15, health: 10, energy: 15 },
     weight: 0.35,
     usable: true,
-    biteCount: 3,
-    biteDuration: 0.9,
+    biteCount: 10,
+    biteDuration: 0.7,
     leftoverId: 'juice_box',
     leftoverNameRu: 'Пустой пакетик от сока',
-    fullnessPerBite: 3,
-    tasteMessages: ['Свежий апельсиновый вкус!', 'Витамин C — это здорово...', 'Натуральная кислинка освежает...']
+    fullnessPerBite: 1,
+    tasteMessages: ['Свежевыжатый цитрусовый вкус!', 'Витамин C бодрит тело...', 'Натуральная сладкая кислинка сока...']
   },
 
   // === MEDICAL (МЕДИЦИНА) ===
@@ -272,7 +291,10 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     descriptionRu: 'Комплект первой помощи: бинты, антисептик, жгут и обеззараживатель.',
     effects: { health: 65, energy: 20 },
     weight: 0.8,
-    usable: true
+    usable: true,
+    biteCount: 4,
+    leftoverId: 'medkit_empty',
+    leftoverNameRu: 'Пустая коробка аптечки'
   },
   bandage: {
     itemId: 'bandage',
@@ -285,7 +307,8 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     descriptionRu: 'Быстрая повязка для остановки кровотечения и лечения ушибов.',
     effects: { health: 25 },
     weight: 0.1,
-    usable: true
+    usable: true,
+    biteCount: 4
   },
   painkillers: {
     itemId: 'painkillers',
@@ -295,14 +318,15 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     maxStack: 10,
     icon: '💊',
     description: 'Alleviates pain and fatigue, helping restore mobility.',
-    descriptionRu: 'Снимают болевой синдром при авариях и восстанавливают выносливость.',
-    effects: { health: 15, energy: 30, sleepiness: 10 },
+    descriptionRu: 'Снимают болевой синдром при авариях и восстанавливают выносливость (10 таблеток в блистере).',
+    effects: { health: 20, energy: 30, sleepiness: 10 },
     weight: 0.05,
     usable: true,
-    biteCount: 1,
-    biteDuration: 0.5,
+    biteCount: 10,
+    biteDuration: 0.4,
     leftoverId: 'pill_pack',
-    leftoverNameRu: 'Блистер из-под таблеток'
+    leftoverNameRu: 'Пустой блистер из-под таблеток',
+    tasteMessages: ['Таблетка обезболивающего запита водой...', 'Боль постепенно притупляется...', 'Мышечный спазм отпускает...', 'Лекарство начинает действовать...']
   },
   vitamins: {
     itemId: 'vitamins',
@@ -312,10 +336,15 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     maxStack: 10,
     icon: '🧪',
     description: 'Daily essential micronutrients. Improves metabolism and natural healing.',
-    descriptionRu: 'Комплекс микроэлементов. Улучшает самочувствие и бодрость.',
-    effects: { health: 10, energy: 20, sleepiness: -15 },
+    descriptionRu: 'Комплекс микроэлементов (12 драже в баночке). Улучшает самочувствие и бодрость.',
+    effects: { health: 15, energy: 24, sleepiness: -15 },
     weight: 0.05,
-    usable: true
+    usable: true,
+    biteCount: 12,
+    biteDuration: 0.4,
+    leftoverId: 'pill_bottle_empty',
+    leftoverNameRu: 'Пустая баночка от витаминов',
+    tasteMessages: ['Принята витаминка с цитрусовым вкусом...', 'Прилив микроэлементов и тонуса...', 'Иммунитет укрепляется...']
   },
   splint: {
     itemId: 'splint',
@@ -328,7 +357,188 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     descriptionRu: 'Жесткая медицинская шина для фиксации и лечения переломов костей.',
     effects: { health: 10 },
     weight: 0.4,
-    usable: true
+    usable: true,
+    biteCount: 1
+  },
+  panthenol_spray: {
+    itemId: 'panthenol_spray',
+    name: 'Panthenol Aerosol Foam Spray',
+    nameRu: 'Аэрозоль Пантенол от ожогов',
+    category: 'med',
+    maxStack: 6,
+    icon: '🧴',
+    description: 'Specialized burn foam with D-panthenol. Stimulates rapid epidermal regeneration and relieves severe burn pain (10 doses).',
+    descriptionRu: 'Специализированная регенерирующая пена при термических ожогах 1-3 степени. Ускоряет заживление и мгновенно охлаждает (10 применений).',
+    effects: { health: 30 },
+    weight: 0.18,
+    usable: true,
+    biteCount: 10,
+    biteDuration: 0.6,
+    leftoverId: 'panthenol_empty',
+    leftoverNameRu: 'Пустой баллончик Пантенола',
+    tasteMessages: ['Охлаждающая пена Пантенола покрыла ожог...', 'Боль и саднящее жжение быстро отступают...', 'Защитная пена ускоряет регенерацию кожи...']
+  },
+  spasatel_ointment: {
+    itemId: 'spasatel_ointment',
+    name: 'Rescuer Healing Balm',
+    nameRu: 'Бальзам «Спасатель»',
+    category: 'med',
+    maxStack: 8,
+    icon: '🧪',
+    description: 'Natural regenerative balm based on sea buckthorn and propolis for treating burns, wounds and bruises (8 doses).',
+    descriptionRu: 'Натуральный регенерирующий бальзам на основе облепихи и прополиса для ожогов, ран и глубоких ссадин (туба на 8 нанесений).',
+    effects: { health: 25 },
+    weight: 0.08,
+    usable: true,
+    biteCount: 8,
+    biteDuration: 0.6,
+    leftoverId: 'ointment_tube_empty',
+    leftoverNameRu: 'Пустой тюбик «Спасателя»',
+    tasteMessages: ['Маслянистый бальзам нанесен на поврежденное место...', 'Натуральный прополис и облепиха затягивают рану...']
+  },
+  zelenka: {
+    itemId: 'zelenka',
+    name: 'Brilliant Green Solution (Zelenka)',
+    nameRu: 'Раствор бриллиантового зелёного (Зелёнка)',
+    category: 'med',
+    maxStack: 12,
+    icon: '🟢',
+    description: 'Classic pharmacy antiseptic. Dries and sterilizes abrasions and edges of wounds (15 doses).',
+    descriptionRu: 'Народный аптечный антисептик. Прижигает и дезинфицирует раны, ссадины и ожоги (флакон на 15 обработок).',
+    effects: { health: 18 },
+    weight: 0.05,
+    usable: true,
+    biteCount: 15,
+    biteDuration: 0.4,
+    leftoverId: 'zelenka_bottle_empty',
+    leftoverNameRu: 'Пустой пузырек из-под зелёнки',
+    tasteMessages: ['Зелёнка щиплет рану, образуя зеленый защитный слой...', 'Антисептическая дезинфекция завершена...']
+  },
+  iodine: {
+    itemId: 'iodine',
+    name: 'Iodine Tincture 5%',
+    nameRu: 'Раствор йода спиртовой 5%',
+    category: 'med',
+    maxStack: 12,
+    icon: '🟤',
+    description: 'Iodine antiseptic. Warms deep bruises and sprains through iodine grid, disinfects cuts (15 doses).',
+    descriptionRu: 'Спиртовой раствор йода. Йодная сетка снимает отек при ушибах и растяжениях, дезинфицирует ссадины (15 применений).',
+    effects: { health: 18 },
+    weight: 0.05,
+    usable: true,
+    biteCount: 15,
+    biteDuration: 0.4,
+    leftoverId: 'iodine_bottle_empty',
+    leftoverNameRu: 'Пустой пузырек из-под йода',
+    tasteMessages: ['Йодная сетка нанесена на место ушиба...', 'Глубокое согревающее действие снимает воспаление...']
+  },
+  diclofenac_gel: {
+    itemId: 'diclofenac_gel',
+    name: 'Diclofenac Anti-Inflammatory Gel',
+    nameRu: 'Гель Диклофенак 5%',
+    category: 'med',
+    maxStack: 8,
+    icon: '🧴',
+    description: 'Potent NSAID gel for joint sprains, tendon injuries and muscular pain from impacts (10 doses).',
+    descriptionRu: 'Сильное обезболивающее и противовоспалительное средство при растяжениях связок и ушибах суставов (10 доз).',
+    effects: { health: 20 },
+    weight: 0.09,
+    usable: true,
+    biteCount: 10,
+    biteDuration: 0.5,
+    leftoverId: 'diclofenac_tube_empty',
+    leftoverNameRu: 'Пустой тюбик Диклофенака',
+    tasteMessages: ['Гель Диклофенак втерт в растянутую связку...', 'Отек и скованность в суставе заметно уменьшаются...']
+  },
+  hydrogen_peroxide: {
+    itemId: 'hydrogen_peroxide',
+    name: 'Hydrogen Peroxide 3%',
+    nameRu: 'Перекись водорода 3%',
+    category: 'med',
+    maxStack: 10,
+    icon: '💧',
+    description: 'Foaming hemostatic antiseptic. Cleans wounds and halts capillary bleeding (12 doses).',
+    descriptionRu: 'Пенообразующий антисептик. Останавливает капиллярное кровотечение и механически вымывает грязь (12 доз).',
+    effects: { health: 22 },
+    weight: 0.1,
+    usable: true,
+    biteCount: 12,
+    biteDuration: 0.5,
+    leftoverId: 'peroxide_bottle_empty',
+    leftoverNameRu: 'Пустой флакон от перекиси',
+    tasteMessages: ['Перекись зашипела и обильно запенилась на ране...', 'Пена смыла загрязнения и остановила кровь!']
+  },
+  ammonia_spirit: {
+    itemId: 'ammonia_spirit',
+    name: 'Ammonia Spirit 10%',
+    nameRu: 'Нашатырный спирт (Аммиак 10%)',
+    category: 'med',
+    maxStack: 10,
+    icon: '🧪',
+    description: 'Pungent smelling salts. Instantly stimulates the respiratory center, preventing syncope and shock (20 uses).',
+    descriptionRu: 'Резкий раствор для вдыхания. Мгновенно выводит из полуобморока, снимает шок и сонливость (20 применений).',
+    effects: { energy: 35, sleepiness: -40 },
+    weight: 0.05,
+    usable: true,
+    biteCount: 20,
+    biteDuration: 0.3,
+    leftoverId: 'ammonia_bottle_empty',
+    leftoverNameRu: 'Пустой флакон от нашатыря',
+    tasteMessages: ['Резкий запах аммиака ударил в нос!', 'Дыхание перехватило, зрение мгновенно прояснилось!']
+  },
+  balm_star: {
+    itemId: 'balm_star',
+    name: 'Golden Star Balm (Zvezdochka)',
+    nameRu: 'Бальзам «Золотая Звезда» (Звёздочка)',
+    category: 'med',
+    maxStack: 15,
+    icon: '⭐',
+    description: 'Legendary Vietnamese aromatic balm with essential oils. Relieves headaches, clears mind and reduces panic (25 uses).',
+    descriptionRu: 'Легендарный аптечный бальзам с маслами мяты, гвоздики и корицы. Снимает головную боль и успокаивает (25 применений).',
+    effects: { energy: 20, sleepiness: -25 },
+    weight: 0.02,
+    usable: true,
+    biteCount: 25,
+    biteDuration: 0.3,
+    leftoverId: 'star_tin_empty',
+    leftoverNameRu: 'Пустая металлическая баночка «Звёздочки»',
+    tasteMessages: ['Ментол и гвоздика нанесены на виски...', 'Освежающий холодок снимает спазм и головную боль...']
+  },
+  activated_charcoal: {
+    itemId: 'activated_charcoal',
+    name: 'Activated Charcoal Tablets',
+    nameRu: 'Активированный уголь',
+    category: 'med',
+    maxStack: 15,
+    icon: '⬛',
+    description: 'Natural enterosorbent. Absorbs stomach toxins, eliminates nausea and indigestion (10 tablets).',
+    descriptionRu: 'Природный сорбент. Связывает токсины в желудочно-кишечном тракте, снимает тошноту и отравление (10 таблеток).',
+    effects: { health: 15 },
+    weight: 0.03,
+    usable: true,
+    biteCount: 10,
+    biteDuration: 0.4,
+    leftoverId: 'pill_pack',
+    leftoverNameRu: 'Пустой блистер угля',
+    tasteMessages: ['Таблетки черного угля запиты водой...', 'Тошнота и дискомфорт в животе проходят...']
+  },
+  valerian_drops: {
+    itemId: 'valerian_drops',
+    name: 'Valerian Tincture Drops',
+    nameRu: 'Капли настойки валерианы',
+    category: 'med',
+    maxStack: 10,
+    icon: '🌿',
+    description: 'Natural sedative tincture. Rapidly lowers heart rate, panic, fear and physical tremor (15 doses).',
+    descriptionRu: 'Натуральное седативное средство. Успокаивает учащенный пульс, снимает страх и панику после аварии (15 доз).',
+    effects: { sleepiness: 15 },
+    weight: 0.05,
+    usable: true,
+    biteCount: 15,
+    biteDuration: 0.4,
+    leftoverId: 'valerian_bottle_empty',
+    leftoverNameRu: 'Пустой флакон от валерианы',
+    tasteMessages: ['Приняты капли валерианы с характерным травяным вкусом...', 'Пульс замедляется, дыхание становится ровным...']
   },
 
   // === TOOLS & VALUABLES (ИНСТРУМЕНТЫ И ЦЕННОСТИ) ===
@@ -378,11 +588,15 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     category: 'med',
     maxStack: 12,
     icon: '🧴',
-    description: 'Disinfects deep cuts and scrapes to prevent infection.',
-    descriptionRu: 'Обеззараживает глубокие царапины и предотвращает инфекцию.',
+    description: 'Disinfects deep cuts and scrapes to prevent infection (8 doses).',
+    descriptionRu: 'Обеззараживает глубокие царапины и предотвращает инфекцию (флакон на 8 обработок).',
     effects: { health: 15 },
     weight: 0.1,
-    usable: true
+    usable: true,
+    biteCount: 8,
+    biteDuration: 0.5,
+    leftoverId: 'antiseptic_empty',
+    leftoverNameRu: 'Пустой флакон антисептика'
   },
   motor_oil: {
     itemId: 'motor_oil',
@@ -417,11 +631,28 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     category: 'tool',
     maxStack: 2,
     icon: '🧯',
-    description: 'Compact dry chemical fire extinguisher for emergency safety.',
-    descriptionRu: 'Компактный порошковый огнетушитель для экстренных ситуаций.',
+    description: 'Dry chemical foam extinguisher (100 foam charges). Hold down use/attack button to spray a continuous foam stream to extinguish fires.',
+    descriptionRu: 'Порошковый автоогнетушитель (100 зарядов пены). Удерживайте кнопку применения/атаки для непрерывной струи пены и тушения огня.',
     effects: {},
     weight: 2.0,
-    usable: true
+    usable: true,
+    biteCount: 100,
+    biteDuration: 0.1,
+    leftoverId: 'extinguisher_empty',
+    leftoverNameRu: 'Пустой огнетушитель'
+  },
+  extinguisher_empty: {
+    itemId: 'extinguisher_empty',
+    name: 'Empty Fire Extinguisher',
+    nameRu: 'Пустой огнетушитель',
+    category: 'misc',
+    maxStack: 2,
+    icon: '🧯',
+    description: 'Depleted steel fire extinguisher cylinder.',
+    descriptionRu: 'Пустой стальной баллон из-под огнетушителя.',
+    effects: {},
+    weight: 1.2,
+    usable: false
   },
   cappuccino: {
     itemId: 'cappuccino',
@@ -435,12 +666,12 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     effects: { thirst: 30, energy: 30, sleepiness: -25 },
     weight: 0.3,
     usable: true,
-    biteCount: 3,
-    biteDuration: 1.1,
+    biteCount: 8,
+    biteDuration: 0.8,
     leftoverId: 'cup_disposable',
     leftoverNameRu: 'Одноразовый стаканчик',
-    fullnessPerBite: 2,
-    tasteMessages: ['Нежная сливочная пенка...', 'Мягкий кофейный вкус...', 'Идеальное утреннее тепло...']
+    fullnessPerBite: 1,
+    tasteMessages: ['Нежная сливочная пенка...', 'Мягкий кофейный вкус...', 'Идеальное утреннее тепло...', 'Сладковатый кофейный аромат...']
   },
   croissant: {
     itemId: 'croissant',
@@ -454,12 +685,10 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     effects: { hunger: 25, energy: 10 },
     weight: 0.1,
     usable: true,
-    biteCount: 3,
-    biteDuration: 0.8,
-    leftoverId: 'sandwich_bag',
-    leftoverNameRu: 'Пакет от выпечки',
-    fullnessPerBite: 6,
-    tasteMessages: ['Хрустящее слоёное тесто...', 'Масляный аромат...', 'Нежная начинка!']
+    biteCount: 6,
+    biteDuration: 0.7,
+    fullnessPerBite: 3,
+    tasteMessages: ['Хрустящее слоёное тесто...', 'Масляный аромат выпечки...', 'Нежная мягкая серединка!', 'Золотистая корочка круассана...']
   },
   soup: {
     itemId: 'soup',
@@ -473,15 +702,715 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     effects: { hunger: 45, thirst: 15, health: 10, energy: 15 },
     weight: 0.4,
     usable: true,
-    biteCount: 4,
-    biteDuration: 1.3,
-    leftoverId: 'pizza_plate',
-    leftoverNameRu: 'Пустая тарелка',
-    fullnessPerBite: 9,
-    tasteMessages: ['Горячий куриный бульон согревает...', 'Нежное куриное мясо...', 'Аромат домашнего супа...', 'Каждый глоток — как утешение...']
+    biteCount: 12,
+    biteDuration: 0.9,
+    leftoverId: 'soup_bowl_empty',
+    leftoverNameRu: 'Пустая тарелка из-под супа',
+    fullnessPerBite: 3,
+    tasteMessages: ['Горячий куриный бульон согревает...', 'Нежное куриное мясо...', 'Аромат домашней зелени...', 'Ложка наваристого супа...']
+  },
+
+  // === NEW FAST FOOD & RESTAURANT ITEMS ===
+  french_fries: {
+    itemId: 'french_fries',
+    name: 'Crispy French Fries',
+    nameRu: 'Картофель фри',
+    category: 'food',
+    maxStack: 10,
+    icon: '🍟',
+    description: 'Golden crispy potato fries with sea salt.',
+    descriptionRu: 'Хрустящий золотистый картофель фри с морской солью.',
+    effects: { hunger: 30, energy: 15 },
+    weight: 0.15,
+    usable: true,
+    biteCount: 10,
+    biteDuration: 0.5,
+    leftoverId: 'fries_box',
+    leftoverNameRu: 'Пустая коробочка от фри',
+    fullnessPerBite: 2,
+    tasteMessages: ['Хрустящая картофельная соломка...', 'Горячая соленая корочка...', 'Аромат жареного картофеля...', 'Вкусная порция фри!']
+  },
+  nuggets: {
+    itemId: 'nuggets',
+    name: 'Crispy Chicken Nuggets',
+    nameRu: 'Куриные наггетсы (6 шт)',
+    category: 'food',
+    maxStack: 10,
+    icon: '🍗',
+    description: 'Tender chicken nuggets in crispy batter.',
+    descriptionRu: 'Нежное куриное филе в хрустящей золотистой панировке.',
+    effects: { hunger: 35, energy: 20 },
+    weight: 0.2,
+    usable: true,
+    biteCount: 6,
+    biteDuration: 0.6,
+    leftoverId: 'fries_box',
+    leftoverNameRu: 'Пустая коробка из-под наггетсов',
+    fullnessPerBite: 3,
+    tasteMessages: ['Хрустящий сочный наггетс...', 'Нежное куриное мясо...', 'Горячая золотистая панировка...']
+  },
+  hot_dog: {
+    itemId: 'hot_dog',
+    name: 'Classic Hot Dog',
+    nameRu: 'Датский хот-дог',
+    category: 'food',
+    maxStack: 10,
+    icon: '🌭',
+    description: 'Juicy sausage in a toasted bun with mustard and crispy onions.',
+    descriptionRu: 'Сочная сосиска в булочке с горчицей, кетчупом и хрустящим луком.',
+    effects: { hunger: 40, energy: 20 },
+    weight: 0.22,
+    usable: true,
+    biteCount: 8,
+    biteDuration: 0.8,
+    leftoverId: 'hot_dog_wrapper',
+    leftoverNameRu: 'Обёртка от хот-дога',
+    fullnessPerBite: 3,
+    tasteMessages: ['Сочная поджаристая сосиска...', 'Хрустящий жареный лук и горчица...', 'Теплая мягкая булочка...', 'Сытный укус хот-дога!']
+  },
+  cola_zero: {
+    itemId: 'cola_zero',
+    name: 'Cola Zero (Can)',
+    nameRu: 'Кола Зеро (0.33L)',
+    category: 'food',
+    maxStack: 15,
+    icon: '🥤',
+    description: 'Sugar-free refreshing iced cola soda.',
+    descriptionRu: 'Освежающая газировка без сахара со льдом.',
+    effects: { thirst: 28, energy: 15 },
+    weight: 0.35,
+    usable: true,
+    biteCount: 7,
+    biteDuration: 0.5,
+    leftoverId: 'cola_zero_empty',
+    leftoverNameRu: 'Смятая банка Колы Зеро',
+    fullnessPerBite: 1,
+    tasteMessages: ['Освежающие шипящие пузырьки...', 'Ледяной вкус Колы...', 'Приятная бодрость без сахара...']
+  },
+  milkshake: {
+    itemId: 'milkshake',
+    name: 'Vanilla Milkshake',
+    nameRu: 'Ванильный милкшейк',
+    category: 'food',
+    maxStack: 10,
+    icon: '🍦',
+    description: 'Thick cold milkshake with real vanilla ice cream.',
+    descriptionRu: 'Густой молочный коктейль с натуральным пломбиром и сливками.',
+    effects: { thirst: 35, hunger: 20, energy: 25 },
+    weight: 0.4,
+    usable: true,
+    biteCount: 10,
+    biteDuration: 0.6,
+    leftoverId: 'shake_cup',
+    leftoverNameRu: 'Пустой стакан с соломинкой',
+    fullnessPerBite: 2,
+    tasteMessages: ['Густой сливочно-ванильный глоток...', 'Холодный сладкий пломбир...', 'Нежнейший молочный шейк!']
+  },
+  tea_green: {
+    itemId: 'tea_green',
+    name: 'Green Sencha Tea',
+    nameRu: 'Зеленый чай Сенча',
+    category: 'food',
+    maxStack: 12,
+    icon: '🍵',
+    description: 'Hot fragrant green tea with antioxidants.',
+    descriptionRu: 'Горячий зеленый чай с антиоксидантами. Снимает стресс и бодрит.',
+    effects: { thirst: 35, energy: 15, health: 5 },
+    weight: 0.3,
+    usable: true,
+    biteCount: 8,
+    biteDuration: 0.7,
+    leftoverId: 'cup_disposable',
+    leftoverNameRu: 'Бумажный стаканчик',
+    fullnessPerBite: 1,
+    tasteMessages: ['Теплый травяной вкус...', 'Тонкий аромат зеленого чая...', 'Умиротворяющее тепло...']
+  },
+  donut: {
+    itemId: 'donut',
+    name: 'Pink Glazed Donut',
+    nameRu: 'Пончик с розовой глазурью',
+    category: 'food',
+    maxStack: 15,
+    icon: '🍩',
+    description: 'Fresh donut with sweet strawberry glaze and sprinkles.',
+    descriptionRu: 'Пышный пончик с клубничной глазурью и цветной посыпкой.',
+    effects: { hunger: 25, energy: 20 },
+    weight: 0.1,
+    usable: true,
+    biteCount: 5,
+    biteDuration: 0.6,
+    leftoverId: 'sandwich_bag',
+    leftoverNameRu: 'Пакетик от пончика',
+    fullnessPerBite: 2,
+    tasteMessages: ['Сладкая клубничная глазурь...', 'Нежное воздушное тесто...', 'Хрустящая сладкая посыпка!']
+  },
+  sushi_set: {
+    itemId: 'sushi_set',
+    name: 'Philadelphia Rolls Set',
+    nameRu: 'Сет роллов Филадельфия',
+    category: 'food',
+    maxStack: 5,
+    icon: '🍣',
+    description: 'Fresh Atlantic salmon, cream cheese, sushi rice and avocado.',
+    descriptionRu: 'Свежий атлантический лосось, сливочный сыр и рис. Соевый соус и имбирь.',
+    effects: { hunger: 55, thirst: 10, health: 15, energy: 25 },
+    weight: 0.35,
+    usable: true,
+    biteCount: 8,
+    biteDuration: 0.8,
+    leftoverId: 'sushi_tray_empty',
+    leftoverNameRu: 'Пустой лоток от суши',
+    fullnessPerBite: 3,
+    tasteMessages: ['Нежный свежий лосось...', 'Сливочный сыр с рисом...', 'Пикантный соевый соус с васаби!']
+  },
+  wok_box: {
+    itemId: 'wok_box',
+    name: 'Teriyaki Chicken WOK',
+    nameRu: 'WOK-лапша с курицей Терияки',
+    category: 'food',
+    maxStack: 5,
+    icon: '🥡',
+    description: 'Stir-fried egg noodles with vegetables, tender chicken and sweet soy glaze.',
+    descriptionRu: 'Яичная лапша вок с овощами, куриным филе и сладковатым соусом терияки.',
+    effects: { hunger: 60, thirst: 10, energy: 30 },
+    weight: 0.45,
+    usable: true,
+    biteCount: 12,
+    biteDuration: 0.8,
+    leftoverId: 'wok_box_empty',
+    leftoverNameRu: 'Пустая вок-коробочка',
+    fullnessPerBite: 3,
+    tasteMessages: ['Ароматная горячая лапша...', 'Нежная курица в соусе терияки...', 'Хрустящие овощи вок!']
+  },
+  banana: {
+    itemId: 'banana',
+    name: 'Fresh Banana',
+    nameRu: 'Спелый банан',
+    category: 'food',
+    maxStack: 20,
+    icon: '🍌',
+    description: 'Rich in potassium and natural energy.',
+    descriptionRu: 'Сладкий спелый банан. Быстро насыщает организм калием и энергией.',
+    effects: { hunger: 20, energy: 15 },
+    weight: 0.15,
+    usable: true,
+    biteCount: 5,
+    biteDuration: 0.6,
+    leftoverId: 'banana_peel',
+    leftoverNameRu: 'Банановая кожура',
+    fullnessPerBite: 2,
+    tasteMessages: ['Сладкая банановая мякоть...', 'Мягкий питательный фрукт...']
+  },
+  bread_loaf: {
+    itemId: 'bread_loaf',
+    name: 'Fresh Bakery Loaf',
+    nameRu: 'Батон нарезной',
+    category: 'food',
+    maxStack: 10,
+    icon: '🍞',
+    description: 'Crusty loaf of white bakery bread.',
+    descriptionRu: 'Свежий мягкий белый хлеб с хрустящей корочкой.',
+    effects: { hunger: 35, energy: 15 },
+    weight: 0.4,
+    usable: true,
+    biteCount: 10,
+    biteDuration: 0.7,
+    leftoverId: 'sandwich_bag',
+    leftoverNameRu: 'Пакет от хлеба',
+    fullnessPerBite: 3,
+    tasteMessages: ['Хрустящая корочка свежего хлеба...', 'Мягкий теплый мякиш...']
+  },
+  cookie_pack: {
+    itemId: 'cookie_pack',
+    name: 'Chocolate Chip Cookies',
+    nameRu: 'Печенье с шоколадной крошкой',
+    category: 'food',
+    maxStack: 15,
+    icon: '🍪',
+    description: 'Sweet cookies with rich Belgian chocolate drops.',
+    descriptionRu: 'Хрустящее печенье с кусочками темного шоколада.',
+    effects: { hunger: 25, energy: 20 },
+    weight: 0.2,
+    usable: true,
+    biteCount: 6,
+    biteDuration: 0.6,
+    leftoverId: 'chips_bag',
+    leftoverNameRu: 'Упаковка от печенья',
+    fullnessPerBite: 2,
+    tasteMessages: ['Хрустящее сладкое печенье...', 'Тающие кусочки шоколада...']
+  },
+  popcorn_caramel: {
+    itemId: 'popcorn_caramel',
+    name: 'Caramel Cinema Popcorn',
+    nameRu: 'Карамельный попкорн',
+    category: 'food',
+    maxStack: 8,
+    icon: '🍿',
+    description: 'Crispy sweet popcorn bucket from cinema snack bar.',
+    descriptionRu: 'Большое ведерко сладкого попкорна в золотистой карамели.',
+    effects: { hunger: 25, energy: 18 },
+    weight: 0.2,
+    usable: true,
+    biteCount: 12,
+    biteDuration: 0.4,
+    leftoverId: 'popcorn_bucket',
+    leftoverNameRu: 'Пустое ведерко из-под попкорна',
+    fullnessPerBite: 1,
+    tasteMessages: ['Хрустящие карамельные зерна...', 'Сладкий кинотеатральный вкус!']
+  },
+  nachos: {
+    itemId: 'nachos',
+    name: 'Cheese Nachos',
+    nameRu: 'Начос с сырным соусом',
+    category: 'food',
+    maxStack: 8,
+    icon: '🧀',
+    description: 'Crispy Mexican corn tortilla chips with warm cheddar dip.',
+    descriptionRu: 'Хрустящие кукурузные чипсы начос с теплым сырным соусом чеддер.',
+    effects: { hunger: 32, energy: 15 },
+    weight: 0.25,
+    usable: true,
+    biteCount: 10,
+    biteDuration: 0.5,
+    leftoverId: 'nachos_tray_empty',
+    leftoverNameRu: 'Лоток из-под начос',
+    fullnessPerBite: 2,
+    tasteMessages: ['Хрустящий кукурузный начос...', 'Пикантный сырный соус чеддер!']
+  },
+
+  // === NEW PHARMACY ITEMS ===
+  antipyretic: {
+    itemId: 'antipyretic',
+    name: 'Antipyretic Fever Reducer',
+    nameRu: 'Жаропонижающее "Парацетамол"',
+    category: 'medical',
+    maxStack: 10,
+    icon: '🌡️',
+    description: 'Reduces fever and stabilizes core body temperature.',
+    descriptionRu: 'Снижает температуру, устраняет озноб и жар при простуде.',
+    effects: { health: 15 },
+    weight: 0.05,
+    usable: true,
+    biteCount: 6,
+    biteDuration: 0.5,
+    leftoverId: 'pill_pack',
+    leftoverNameRu: 'Пустой блистер жаропонижающего',
+    fullnessPerBite: 0,
+    tasteMessages: ['Таблетка жаропонижающего снижает температуру...']
+  },
+  eye_drops: {
+    itemId: 'eye_drops',
+    name: 'Moisturizing Eye Drops',
+    nameRu: 'Глазные капли "Чистый Взор"',
+    category: 'medical',
+    maxStack: 5,
+    icon: '👁️',
+    description: 'Relieves eye strain and clears vision fatigue.',
+    descriptionRu: 'Снимает сухость и усталость глаз, восстанавливает четкость зрения.',
+    effects: { energy: 10, health: 5 },
+    weight: 0.04,
+    usable: true,
+    biteCount: 8,
+    biteDuration: 0.4,
+    fullnessPerBite: 0,
+    tasteMessages: ['Капли увлажняют глаза, зрение становится кристально четким!']
+  },
+  medical_patch: {
+    itemId: 'medical_patch',
+    name: 'Adhesive Plaster Pack',
+    nameRu: 'Набор бактерицидных пластырей',
+    category: 'medical',
+    maxStack: 20,
+    icon: '🩹',
+    description: 'Protective plaster for small scratches and blisters.',
+    descriptionRu: 'Быстро заклеивает порезы и царапины, предотвращая попадание грязи.',
+    effects: { health: 10 },
+    weight: 0.02,
+    usable: true,
+    biteCount: 5,
+    biteDuration: 0.5,
+    fullnessPerBite: 0,
+    tasteMessages: ['Пластырь надежно защищает поврежденную кожу.']
+  },
+  thermometer: {
+    itemId: 'thermometer',
+    name: 'Digital Medical Thermometer',
+    nameRu: 'Электронный термометр',
+    category: 'medical',
+    maxStack: 2,
+    icon: '🌡️',
+    description: 'Accurately measures body temperature in Celsius.',
+    descriptionRu: 'Быстро измеряет точную температуру тела.',
+    effects: {},
+    weight: 0.05,
+    usable: false
+  },
+
+  // === NEW ELECTRONICS & GADGETS ===
+  powerbank: {
+    itemId: 'powerbank',
+    name: '20000mAh Power Bank',
+    nameRu: 'Повербанк 20 000 мАч',
+    category: 'tool',
+    maxStack: 2,
+    icon: '🔋',
+    description: 'High capacity battery for charging portable devices.',
+    descriptionRu: 'Портативный аккумулятор высокой емкости с быстрой зарядкой.',
+    effects: {},
+    weight: 0.4,
+    usable: false
+  },
+  smart_watch: {
+    itemId: 'smart_watch',
+    name: 'Smart Tactical Watch',
+    nameRu: 'Тактические смарт-часы',
+    category: 'tool',
+    maxStack: 1,
+    icon: '⌚',
+    description: 'Waterproof watch tracking pulse, steps, and ambient temperature.',
+    descriptionRu: 'Ударопрочные часы с датчиками пульса, температуры и шагомером.',
+    effects: {},
+    weight: 0.1,
+    usable: false
+  },
+  walkie_talkie: {
+    itemId: 'walkie_talkie',
+    name: 'Long-Range Walkie Talkie',
+    nameRu: 'Рация дальнего действия',
+    category: 'tool',
+    maxStack: 4,
+    icon: '📻',
+    description: 'Two-way radio for shortwave city communications.',
+    descriptionRu: 'Портативная рация с чистым сигналом на расстоянии до 5 км.',
+    effects: {},
+    weight: 0.25,
+    usable: false
+  },
+  headphones: {
+    itemId: 'headphones',
+    name: 'Wireless ANC Headphones',
+    nameRu: 'Беспроводные наушники ANC',
+    category: 'misc',
+    maxStack: 1,
+    icon: '🎧',
+    description: 'High-fidelity audio with active noise cancellation.',
+    descriptionRu: 'Накладные наушники с активным шумоподавлением и чистым звуком.',
+    effects: {},
+    weight: 0.25,
+    usable: false
+  },
+
+  // === NEW CLOTHING & GEAR ===
+  sneakers: {
+    itemId: 'sneakers',
+    name: 'Athletic Running Sneakers',
+    nameRu: 'Кроссовки "Urban Sprint"',
+    category: 'misc',
+    maxStack: 1,
+    icon: '👟',
+    description: 'Lightweight cushioned shoes for fast sprinting and comfort.',
+    descriptionRu: 'Легкие кроссовки с амортизацией для быстрого бега по асфальту.',
+    effects: {},
+    weight: 0.6,
+    usable: false
+  },
+  sunglasses: {
+    itemId: 'sunglasses',
+    name: 'Polarized Sunglasses',
+    nameRu: 'Поляризационные очки',
+    category: 'misc',
+    maxStack: 2,
+    icon: '🕶️',
+    description: 'Protects vision from harsh sunlight and glare.',
+    descriptionRu: 'Стильные темные очки с защитой от ультрафиолета и бликов.',
+    effects: {},
+    weight: 0.05,
+    usable: false
+  },
+  backpack_travel: {
+    itemId: 'backpack_travel',
+    name: 'Urban Tactical Backpack',
+    nameRu: 'Городской рюкзак (35L)',
+    category: 'misc',
+    maxStack: 1,
+    icon: '🎒',
+    description: 'Heavy duty waterproof backpack with reinforced straps.',
+    descriptionRu: 'Вместительный прочный рюкзак с водоотталкивающей пропиткой.',
+    effects: {},
+    weight: 0.8,
+    usable: false
+  },
+  military_ration: {
+    itemId: 'military_ration',
+    name: 'Army Combat Ration (MRE)',
+    nameRu: 'Армейский сухпай (ИРП)',
+    category: 'food',
+    maxStack: 4,
+    icon: '🍱',
+    description: 'Complete balanced combat ration with entrees, crackers and sweets.',
+    descriptionRu: 'Сбалансированный армейский рацион питания: тушеное мясо, галеты, чай и джем.',
+    effects: { hunger: 85, thirst: 30, health: 20, energy: 50 },
+    weight: 1.2,
+    usable: true,
+    biteCount: 16,
+    biteDuration: 0.9,
+    leftoverId: 'ration_box',
+    leftoverNameRu: 'Пустая коробка от сухпайка',
+    fullnessPerBite: 3,
+    tasteMessages: ['Питательное армейское рагу...', 'Хрустящие армейские галеты...', 'Густой сладкий джем...']
+  },
+  zippo_lighter: {
+    itemId: 'zippo_lighter',
+    name: 'Windproof Brass Lighter',
+    nameRu: 'Бензиновая зажигалка Zippo',
+    category: 'tool',
+    maxStack: 2,
+    icon: '🔥',
+    description: 'Reliable windproof flint lighter with metal flip top. Can ignite fuel, oil puddles or leaks (30 uses).',
+    descriptionRu: 'Надежная бензиновая зажигалка (30 использования). Позволяет поджигать пролитый бензин, масло и горючие подтёки.',
+    effects: {},
+    weight: 0.08,
+    usable: true,
+    biteCount: 30,
+    biteDuration: 0.3,
+    leftoverId: 'zippo_empty',
+    leftoverNameRu: 'Пустая зажигалка Zippo'
+  },
+  zippo_empty: {
+    itemId: 'zippo_empty',
+    name: 'Empty Zippo Lighter',
+    nameRu: 'Пустая зажигалка Zippo',
+    category: 'misc',
+    maxStack: 5,
+    icon: '🔥',
+    description: 'Zippo lighter out of fuel and flint.',
+    descriptionRu: 'Пустая зажигалка Zippo без бензина и кремня.',
+    effects: {},
+    weight: 0.08,
+    usable: false
+  },
+  fuel_canister: {
+    itemId: 'fuel_canister',
+    name: 'Gasoline Canister (20L)',
+    nameRu: 'Канистра с бензином (20л)',
+    category: 'tool',
+    maxStack: 2,
+    icon: '⛽',
+    description: 'Metal canister filled with A-95 gasoline (20 portions). Use to pour fuel puddles or refuel vehicles.',
+    descriptionRu: 'Металлическая канистра с бензином АИ-95 (20 порций/литров). Разливает лужи бензина на землю или заправляет автомобили.',
+    effects: {},
+    weight: 15.0,
+    usable: true,
+    biteCount: 20,
+    biteDuration: 0.3,
+    leftoverId: 'canister_empty',
+    leftoverNameRu: 'Пустая канистра (20л)'
+  },
+  canister_empty: {
+    itemId: 'canister_empty',
+    name: 'Empty Canister (20L)',
+    nameRu: 'Пустая канистра (20л)',
+    category: 'misc',
+    maxStack: 4,
+    icon: '🛢️',
+    description: 'Empty metal fuel canister.',
+    descriptionRu: 'Пустая металлическая канистра из-под бензина.',
+    effects: {},
+    weight: 2.5,
+    usable: false
+  },
+  camp_flask: {
+    itemId: 'camp_flask',
+    name: 'Stainless Steel Flask',
+    nameRu: 'Стальная фляга (0.75L)',
+    category: 'food',
+    maxStack: 2,
+    icon: '🍶',
+    description: 'Durable metal flask filled with pure mountain water.',
+    descriptionRu: 'Надежная металлическая фляга с чистой родниковой водой.',
+    effects: { thirst: 50, energy: 10 },
+    weight: 0.85,
+    usable: true,
+    biteCount: 12,
+    biteDuration: 0.5,
+    leftoverId: 'camp_flask_empty',
+    leftoverNameRu: 'Пустая стальная фляга',
+    fullnessPerBite: 1,
+    tasteMessages: ['Глоток ледяной чистой воды из стальной фляги...', 'Освежающая влага утоляет жажду!']
+  },
+  compass: {
+    itemId: 'compass',
+    name: 'Military Magnetic Compass',
+    nameRu: 'Тактический компас',
+    category: 'tool',
+    maxStack: 2,
+    icon: '🧭',
+    description: 'Liquid-filled compass for precise geographic navigation.',
+    descriptionRu: 'Жидкостный компас для точного ориентирования на местности.',
+    effects: {},
+    weight: 0.08,
+    usable: false
+  },
+  sleeping_bag: {
+    itemId: 'sleeping_bag',
+    name: 'Thermal Sleeping Bag',
+    nameRu: 'Спальный мешок (-15°C)',
+    category: 'misc',
+    maxStack: 1,
+    icon: '🛌',
+    description: 'Compact roll-up sleeping bag for cold weather shelter.',
+    descriptionRu: 'Теплый походный спальник с защитой от сырости и заморозков.',
+    effects: {},
+    weight: 1.4,
+    usable: false
+  },
+  city_guide: {
+    itemId: 'city_guide',
+    name: 'Illustrated City Guide',
+    nameRu: 'Путеводитель по городу',
+    category: 'misc',
+    maxStack: 5,
+    icon: '📖',
+    description: 'Detailed tourist handbook with city landmarks and streets.',
+    descriptionRu: 'Глянцевый справочник с картой ключевых мест и описанием кварталов.',
+    effects: {},
+    weight: 0.2,
+    usable: false
+  },
+  notebook: {
+    itemId: 'notebook',
+    name: 'Leatherbound Notebook',
+    nameRu: 'Блокнот для заметок',
+    category: 'misc',
+    maxStack: 10,
+    icon: '📓',
+    description: 'Blank lined paper notebook for journal records.',
+    descriptionRu: 'Компактный блокнот в плотной обложке для записей.',
+    effects: {},
+    weight: 0.15,
+    usable: false
+  },
+  pen_stationery: {
+    itemId: 'pen_stationery',
+    name: 'Ballpoint Pen',
+    nameRu: 'Шариковая ручка',
+    category: 'misc',
+    maxStack: 20,
+    icon: '🖊️',
+    description: 'Blue ink smooth ballpoint pen.',
+    descriptionRu: 'Классическая шариковая ручка с синей пастой.',
+    effects: {},
+    weight: 0.01,
+    usable: false
+  },
+
+  // === NEW AUTO GOODS ===
+  antifreeze: {
+    itemId: 'antifreeze',
+    name: 'G12+ Coolant Antifreeze (5L)',
+    nameRu: 'Канистра антифриза G12+',
+    category: 'auto',
+    maxStack: 2,
+    icon: '🛢️',
+    description: 'High performance engine coolant prevents overheating and freezing.',
+    descriptionRu: 'Охлаждающая жидкость для радиатора. Предотвращает перегрев двигателя.',
+    effects: {},
+    weight: 5.2,
+    usable: false
+  },
+  tow_rope: {
+    itemId: 'tow_rope',
+    name: 'Reinforced Towing Rope (5T)',
+    nameRu: 'Буксировочный трос 5т',
+    category: 'tool',
+    maxStack: 2,
+    icon: '🪢',
+    description: 'Heavy duty strap with steel carabiners for emergency vehicle recovery.',
+    descriptionRu: 'Прочный капроновый трос со стальными крюками для эвакуации авто.',
+    effects: {},
+    weight: 0.9,
+    usable: false
   },
 
   // === LEFTOVERS (ОСТАТКИ ПОСЛЕ ЕДЫ) ===
+  banana_peel: {
+    itemId: 'banana_peel',
+    name: 'Banana Peel',
+    nameRu: 'Банановая кожура',
+    category: 'misc',
+    maxStack: 20,
+    icon: '🍌',
+    description: 'Slippery yellow banana peel. Throw into trash bin.',
+    descriptionRu: 'Скользкая банановая кожура. Выбросьте в урну.',
+    effects: {},
+    weight: 0.03,
+    usable: false
+  },
+  fries_box: {
+    itemId: 'fries_box',
+    name: 'Empty Fries Box',
+    nameRu: 'Коробочка от картошки фри',
+    category: 'misc',
+    maxStack: 20,
+    icon: '🍟',
+    description: 'Red cardboard fries container.',
+    descriptionRu: 'Пустая красная картонная коробочка от картофеля фри.',
+    effects: {},
+    weight: 0.01,
+    usable: false
+  },
+  shake_cup: {
+    itemId: 'shake_cup',
+    name: 'Empty Milkshake Cup',
+    nameRu: 'Пустой стакан от коктейля',
+    category: 'misc',
+    maxStack: 20,
+    icon: '🥤',
+    description: 'Clear plastic cup with domed lid and straw.',
+    descriptionRu: 'Прозрачный пластиковый стаканчик с купольной крышкой и соломинкой.',
+    effects: {},
+    weight: 0.015,
+    usable: false
+  },
+  popcorn_bucket: {
+    itemId: 'popcorn_bucket',
+    name: 'Empty Popcorn Bucket',
+    nameRu: 'Ведерко от попкорна',
+    category: 'misc',
+    maxStack: 20,
+    icon: '🍿',
+    description: 'Striped cardboard cinema popcorn bucket.',
+    descriptionRu: 'Полосатое картонное ведерко из-под попкорна.',
+    effects: {},
+    weight: 0.02,
+    usable: false
+  },
+  wok_box_empty: {
+    itemId: 'wok_box_empty',
+    name: 'Empty WOK Container',
+    nameRu: 'Пустая коробочка ВОК',
+    category: 'misc',
+    maxStack: 20,
+    icon: '🥡',
+    description: 'Empty Chinese food container with wooden chopsticks.',
+    descriptionRu: 'Пустая картонная коробочка вок с деревянными палочками.',
+    effects: {},
+    weight: 0.02,
+    usable: false
+  },
+  ration_box: {
+    itemId: 'ration_box',
+    name: 'Empty MRE Packaging',
+    nameRu: 'Пустая упаковка сухпайка',
+    category: 'misc',
+    maxStack: 10,
+    icon: '🍱',
+    description: 'Discarded green military ration container.',
+    descriptionRu: 'Пустая зеленая полимерная упаковка от армейского сухого пайка.',
+    effects: {},
+    weight: 0.05,
+    usable: false
+  },
   apple_core: {
     itemId: 'apple_core',
     name: 'Apple Core',
@@ -625,6 +1554,149 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     weight: 0.005,
     usable: false
   },
+  tin_can_empty: {
+    itemId: 'tin_can_empty',
+    name: 'Empty Stew Can',
+    nameRu: 'Банка из-под тушёнки',
+    category: 'misc',
+    maxStack: 20,
+    icon: '🥫',
+    description: 'Empty tin can with curled lid.',
+    descriptionRu: 'Пустая жестяная консервная банка с отогнутой крышкой.',
+    effects: {},
+    weight: 0.04,
+    usable: false
+  },
+  cola_zero_empty: {
+    itemId: 'cola_zero_empty',
+    name: 'Crushed Cola Zero Can',
+    nameRu: 'Смятая банка Колы Зеро',
+    category: 'misc',
+    maxStack: 20,
+    icon: '🥤',
+    description: 'Crushed black aluminum cola can.',
+    descriptionRu: 'Смятая черная алюминиевая банка из-под диетической колы.',
+    effects: {},
+    weight: 0.015,
+    usable: false
+  },
+  energy_can_empty: {
+    itemId: 'energy_can_empty',
+    name: 'Crushed Energy Drink Can',
+    nameRu: 'Смятая банка энергетика',
+    category: 'misc',
+    maxStack: 20,
+    icon: '⚡',
+    description: 'Crushed navy energy drink can with open pull tab.',
+    descriptionRu: 'Смятая синяя банка из-под энергетического напитка.',
+    effects: {},
+    weight: 0.015,
+    usable: false
+  },
+  camp_flask_empty: {
+    itemId: 'camp_flask_empty',
+    name: 'Empty Steel Flask',
+    nameRu: 'Пустая стальная фляга',
+    category: 'misc',
+    maxStack: 5,
+    icon: '🍶',
+    description: 'Empty stainless steel hip flask with dangling cap.',
+    descriptionRu: 'Пустая походная металлическая фляга с отвинченной крышкой.',
+    effects: {},
+    weight: 0.25,
+    usable: false
+  },
+  soup_bowl_empty: {
+    itemId: 'soup_bowl_empty',
+    name: 'Empty Soup Bowl',
+    nameRu: 'Пустая суповая тарелка',
+    category: 'misc',
+    maxStack: 10,
+    icon: '🥣',
+    description: 'Empty ceramic bowl with spoon and broth sheen.',
+    descriptionRu: 'Пустая глубокая тарелка из-под горячего бульона с ложкой.',
+    effects: {},
+    weight: 0.15,
+    usable: false
+  },
+  hot_dog_wrapper: {
+    itemId: 'hot_dog_wrapper',
+    name: 'Hot Dog Paper Tray',
+    nameRu: 'Обёртка от хот-дога',
+    category: 'misc',
+    maxStack: 20,
+    icon: '🌭',
+    description: 'Paper food boat with mustard smear.',
+    descriptionRu: 'Бумажный лоток из-под хот-дога со следами горчицы.',
+    effects: {},
+    weight: 0.01,
+    usable: false
+  },
+  sushi_tray_empty: {
+    itemId: 'sushi_tray_empty',
+    name: 'Empty Bento Sushi Tray',
+    nameRu: 'Пустой лоток от суши',
+    category: 'misc',
+    maxStack: 15,
+    icon: '🍱',
+    description: 'Black sushi bento tray with decorative grass divider.',
+    descriptionRu: 'Черный лоток из-под роллов с зеленой перегородкой и следами соевого соуса.',
+    effects: {},
+    weight: 0.02,
+    usable: false
+  },
+  nachos_tray_empty: {
+    itemId: 'nachos_tray_empty',
+    name: 'Empty Nachos Boat',
+    nameRu: 'Лоток из-под начос',
+    category: 'misc',
+    maxStack: 20,
+    icon: '🧀',
+    description: 'Cardboard boat with cheese dip residue.',
+    descriptionRu: 'Картонный лоток из-под чипсов начос с пустым соусником.',
+    effects: {},
+    weight: 0.015,
+    usable: false
+  },
+  pill_bottle_empty: {
+    itemId: 'pill_bottle_empty',
+    name: 'Empty Vitamin Bottle',
+    nameRu: 'Пустая баночка от витаминов',
+    category: 'misc',
+    maxStack: 20,
+    icon: '🧪',
+    description: 'Empty amber pill bottle with open cap.',
+    descriptionRu: 'Пустая янтарная пластиковая баночка из-под поливитаминов.',
+    effects: {},
+    weight: 0.02,
+    usable: false
+  },
+  antiseptic_empty: {
+    itemId: 'antiseptic_empty',
+    name: 'Empty Antiseptic Spray',
+    nameRu: 'Пустой флакон антисептика',
+    category: 'misc',
+    maxStack: 20,
+    icon: '🧴',
+    description: 'Depleted green antiseptic spray bottle.',
+    descriptionRu: 'Пустой зеленый флакон с распылителем от антисептика.',
+    effects: {},
+    weight: 0.02,
+    usable: false
+  },
+  medkit_empty: {
+    itemId: 'medkit_empty',
+    name: 'Empty First Aid Box',
+    nameRu: 'Пустая коробка аптечки',
+    category: 'misc',
+    maxStack: 6,
+    icon: '🧰',
+    description: 'Open plastic medical emergency case with empty compartments.',
+    descriptionRu: 'Пустой красный пластиковый кейс автомобильной аптечки.',
+    effects: {},
+    weight: 0.2,
+    usable: false
+  },
 
   pocket_knife: {
     itemId: 'pocket_knife',
@@ -682,9 +1754,11 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
 
 let itemCounter = 100;
 
-export function createItem(itemId: string, count: number = 1): InventoryItem {
+export function createItem(itemId: string, count: number = 1, initialPortions?: number): InventoryItem {
   const def = ITEM_CATALOG[itemId] || ITEM_CATALOG.water_bottle;
   itemCounter++;
+  const maxPortions = def.biteCount || 1;
+  const portions = initialPortions !== undefined ? initialPortions : maxPortions;
   return {
     id: `item_${itemId}_${Date.now()}_${itemCounter}`,
     itemId: def.itemId,
@@ -698,96 +1772,21 @@ export function createItem(itemId: string, count: number = 1): InventoryItem {
     descriptionRu: def.descriptionRu,
     effects: { ...def.effects },
     weight: def.weight,
-    usable: def.usable
+    usable: def.usable,
+    portions: portions,
+    maxPortions: maxPortions
   };
 }
 
-// Start multi-step consumption (eating/drinking)
+// Start multi-step consumption (eating/drinking) - kept for backward compatibility if used
 export function startConsumption(
   player: Player,
   itemIndex: number
 ): { success: boolean; message: string } {
-  if (!player.inventory || itemIndex < 0 || itemIndex >= player.inventory.length) {
-    return { success: false, message: 'Предмет не найден' };
-  }
-
-  const item = player.inventory[itemIndex];
-  if (!item.usable) {
-    return { success: false, message: 'Этот предмет нельзя использовать' };
-  }
-
-  // Already consuming something
-  if (player.consumption && player.consumption.isConsuming) {
-    return { success: false, message: 'Вы уже吃什么喝什么! Подождите...' };
-  }
-
-  // Too full - nausea blocks eating
-  if ((player.needs.fullness || 0) >= 95) {
-    addPlayerNotification(player, 'Вы слишком сыты! Подождите, пока переварится...', 'warning');
-    return { success: false, message: 'Слишком сытно' };
-  }
-
-  // Too nauseous - can't eat
-  if ((player.needs.nausea || 0) >= 60) {
-    addPlayerNotification(player, 'Вас тошнит! Нельзя есть.', 'warning');
-    return { success: false, message: 'Тошнит' };
-  }
-
-  // Non-food/non-med special items use instant mode
-  if (item.itemId === 'repair_kit' || item.itemId === 'flashlight' || item.category === 'tool') {
-    return useItemOnPlayer(player, itemIndex);
-  }
-
-  // Medical items are instant
-  if (item.category === 'med') {
-    return useItemOnPlayer(player, itemIndex);
-  }
-
-  const def = ITEM_CATALOG[item.itemId];
-  if (!def || !def.biteCount) {
-    // Fallback: instant consumption for items without biteCount
-    return useItemOnPlayer(player, itemIndex);
-  }
-
-  // Check fullness per bite would overfill
-  const fullnessGain = def.fullnessPerBite || 5;
-  if ((player.needs.fullness || 0) + fullnessGain > 100) {
-    addPlayerNotification(player, 'Стоп! Слишком много. Вы почувствовали тяжесть...', 'warning');
-    player.needs.nausea = Math.min(100, (player.needs.nausea || 0) + 15);
-    return { success: false, message: 'Слишком сытно для этого' };
-  }
-
-  // Start consumption
-  const effectsPerBite = {
-    hunger: def.effects.hunger ? Math.round(def.effects.hunger / def.biteCount) : 0,
-    thirst: def.effects.thirst ? Math.round(def.effects.thirst / def.biteCount) : 0,
-    health: def.effects.health ? Math.round(def.effects.health / def.biteCount) : 0,
-    energy: def.effects.energy ? Math.round(def.effects.energy / def.biteCount) : 0,
-    sleepiness: def.effects.sleepiness ? Math.round(def.effects.sleepiness / def.biteCount) : 0,
-  };
-
-  player.consumption = {
-    isConsuming: true,
-    itemId: item.itemId,
-    itemNameRu: item.nameRu,
-    category: item.category as 'food' | 'drink',
-    totalBites: def.biteCount,
-    bitesRemaining: def.biteCount,
-    currentBiteTimer: 0,
-    biteDuration: def.biteDuration || 1.0,
-    effectsPerBite,
-    leftoverId: def.leftoverId,
-    leftoverNameRu: def.leftoverNameRu,
-    tasteMessage: def.tasteMessages ? def.tasteMessages[Math.floor(Math.random() * def.tasteMessages.length)] : undefined,
-    fullnessPerBite: fullnessGain,
-  };
-
-  const firstTaste = def.tasteMessages ? def.tasteMessages[0] : 'Едите...';
-  addPlayerNotification(player, `${def.category === 'food' ? '🍽️' : '🥤'} ${firstTaste}`, 'food');
-  return { success: true, message: 'Начали есть' };
+  return useItemOnPlayer(player, itemIndex);
 }
 
-// Called each frame to advance consumption
+// Called each frame to advance consumption (if any continuous consumption state active)
 export function updateConsumption(player: Player, dt: number): void {
   if (!player.consumption || !player.consumption.isConsuming) return;
 
@@ -795,7 +1794,6 @@ export function updateConsumption(player: Player, dt: number): void {
   c.currentBiteTimer += dt;
 
   if (c.currentBiteTimer >= c.biteDuration) {
-    // Bite completed
     c.currentBiteTimer = 0;
     c.bitesRemaining--;
 
@@ -819,26 +1817,10 @@ export function updateConsumption(player: Player, dt: number): void {
       player.needs.sleepiness = Math.min(100, Math.max(0, player.needs.sleepiness + c.effectsPerBite.sleepiness));
     }
 
-    // Increase fullness
     if (c.fullnessPerBite) {
       player.needs.fullness = Math.min(100, (player.needs.fullness || 0) + c.fullnessPerBite);
     }
 
-    // Nausea from eating too much
-    if ((player.needs.fullness || 0) > 85) {
-      player.needs.nausea = Math.min(100, (player.needs.nausea || 0) + 5);
-    }
-
-    // Pick next taste message
-    if (c.bitesRemaining > 0) {
-      const def = ITEM_CATALOG[c.itemId];
-      if (def && def.tasteMessages && def.tasteMessages.length > 0) {
-        c.tasteMessage = def.tasteMessages[Math.floor(Math.random() * def.tasteMessages.length)];
-      }
-      addPlayerNotification(player, `${c.tasteMessage || '...'} (${c.bitesRemaining} укусов осталось)`, 'food');
-    }
-
-    // Finished?
     if (c.bitesRemaining <= 0) {
       finishConsumption(player);
     }
@@ -850,30 +1832,17 @@ function finishConsumption(player: Player): void {
   const c = player.consumption;
   if (!c) return;
 
-  // Find the item in inventory and remove 1
-  const itemIdx = player.inventory.findIndex(i => i.itemId === c.itemId);
+  const itemIdx = player.inventory.findIndex(i => i && i.itemId === c.itemId);
   if (itemIdx >= 0) {
     removeItemFromPlayer(player, itemIdx, 1);
   }
 
-  // Spawn leftover if exists
   if (c.leftoverId) {
     const leftover = createItem(c.leftoverId, 1);
     addItemToPlayer(player, leftover);
-    addPlayerNotification(player, `Осталось: ${c.leftoverNameRu || leftover.nameRu}`, 'info');
+    addPlayerNotification(player, `Осталась пустая тара: ${c.leftoverNameRu || leftover.nameRu}`, 'info');
   }
 
-  // Show satiety feedback
-  const fullness = player.needs.fullness || 0;
-  if (fullness > 90) {
-    addPlayerNotification(player, '🤢 Вы очень сыты! Больше есть не стоит...', 'warning');
-  } else if (fullness > 70) {
-    addPlayerNotification(player, '😊 Вы сыты.', 'food');
-  } else if (fullness > 40) {
-    addPlayerNotification(player, '👍 Голод утолён.', 'food');
-  }
-
-  // Play sound
   if (c.category === 'food') {
     sound.playEat();
   } else {
@@ -883,35 +1852,18 @@ function finishConsumption(player: Player): void {
   player.consumption = null;
 }
 
-// Cancel ongoing consumption (player pressed wrong key or moved)
+// Cancel ongoing consumption
 export function cancelConsumption(player: Player): void {
   if (!player.consumption || !player.consumption.isConsuming) return;
-
-  const c = player.consumption;
-  const bitesEaten = c.totalBites - c.bitesRemaining;
-
-  // If they ate at least 1 bite, still give partial effects and leftover
-  if (bitesEaten > 0 && c.leftoverId) {
-    const leftover = createItem(c.leftoverId, 1);
-    addItemToPlayer(player, leftover);
-    addPlayerNotification(player, `Остановились. Осталось: ${c.leftoverNameRu || leftover.nameRu}`, 'info');
-  }
-
-  // Remove the partially eaten item
-  const itemIdx = player.inventory.findIndex(i => i.itemId === c.itemId);
-  if (itemIdx >= 0) {
-    removeItemFromPlayer(player, itemIdx, 1);
-  }
-
-  addPlayerNotification(player, 'Прекратили есть.', 'info');
   player.consumption = null;
+  addPlayerNotification(player, 'Прекратили употребление.', 'info');
 }
 
 export function getPlayerCash(player: Player | null): number {
   if (!player || !player.inventory) return 0;
   return player.inventory
-    .filter(i => i.itemId === 'cash')
-    .reduce((sum, i) => sum + i.count, 0);
+    .filter(i => Boolean(i && i.itemId === 'cash'))
+    .reduce((sum, i) => sum + (i?.count || 0), 0);
 }
 
 export function deductPlayerCash(player: Player | null, amount: number): boolean {
@@ -921,12 +1873,13 @@ export function deductPlayerCash(player: Player | null, amount: number): boolean
 
   let remaining = amount;
   for (let i = player.inventory.length - 1; i >= 0; i--) {
-    if (player.inventory[i].itemId === 'cash') {
-      if (player.inventory[i].count <= remaining) {
-        remaining -= player.inventory[i].count;
+    const item = player.inventory[i];
+    if (item && item.itemId === 'cash') {
+      if (item.count <= remaining) {
+        remaining -= item.count;
         player.inventory.splice(i, 1);
       } else {
-        player.inventory[i].count -= remaining;
+        item.count -= remaining;
         remaining = 0;
       }
       if (remaining <= 0) break;
@@ -949,7 +1902,10 @@ export function createDefaultPlayerInventory(): InventoryItem[] {
     createItem('medkit', 1),
     createItem('splint', 1),
     createItem('chocolate', 2),
-    createItem('cash', 150)
+    createItem('zippo_lighter', 1),
+    createItem('extinguisher', 1),
+    createItem('fuel_canister', 1),
+    createItem('cash', 9999)
   ];
 }
 
@@ -957,9 +1913,10 @@ export function addItemToPlayer(player: Player, itemToAdd: InventoryItem): boole
   if (!player.inventory) {
     player.inventory = [];
   }
+  const maxSlots = player.maxInventorySlots || 18;
 
   // 1. Try to stack onto existing item of same itemId
-  const existing = player.inventory.find(i => i.itemId === itemToAdd.itemId && i.count < i.maxStack);
+  const existing = player.inventory.find(i => i && i.itemId === itemToAdd.itemId && i.count < i.maxStack);
   if (existing) {
     const space = existing.maxStack - existing.count;
     const addCount = Math.min(space, itemToAdd.count);
@@ -971,8 +1928,16 @@ export function addItemToPlayer(player: Player, itemToAdd: InventoryItem): boole
     }
   }
 
-  // 2. Add as new inventory slot if space permits
-  const maxSlots = player.maxInventorySlots || 18;
+  // 2. Find first empty slot from 0 to maxSlots - 1
+  for (let i = 0; i < maxSlots; i++) {
+    if (!player.inventory[i]) {
+      player.inventory[i] = itemToAdd;
+      addPlayerNotification(player, `Подобрано: ${itemToAdd.nameRu} (x${itemToAdd.count})`, 'pickup');
+      return true;
+    }
+  }
+
+  // 3. Push if array length < maxSlots
   if (player.inventory.length < maxSlots) {
     player.inventory.push(itemToAdd);
     addPlayerNotification(player, `Подобрано: ${itemToAdd.nameRu} (x${itemToAdd.count})`, 'pickup');
@@ -983,11 +1948,48 @@ export function addItemToPlayer(player: Player, itemToAdd: InventoryItem): boole
   return false;
 }
 
+export function moveInventoryItem(player: Player, fromIdx: number, toIdx: number): boolean {
+  if (!player.inventory) player.inventory = [];
+  const maxSlots = player.maxInventorySlots || 18;
+  if (fromIdx < 0 || toIdx < 0 || fromIdx >= maxSlots || toIdx >= maxSlots) {
+    return false;
+  }
+
+  while (player.inventory.length < maxSlots) {
+    player.inventory.push(undefined as any);
+  }
+
+  const itemFrom = player.inventory[fromIdx];
+  const itemTo = player.inventory[toIdx];
+
+  if (!itemFrom) return false;
+
+  if (itemTo && itemTo.itemId === itemFrom.itemId && itemTo.maxStack > 1 && itemTo.count < itemTo.maxStack) {
+    const spaceLeft = itemTo.maxStack - itemTo.count;
+    const transferCount = Math.min(spaceLeft, itemFrom.count);
+    itemTo.count += transferCount;
+    itemFrom.count -= transferCount;
+    if (itemFrom.count <= 0) {
+      player.inventory[fromIdx] = undefined as any;
+    }
+  } else {
+    player.inventory[fromIdx] = itemTo;
+    player.inventory[toIdx] = itemFrom;
+  }
+
+  while (player.inventory.length > 0 && player.inventory[player.inventory.length - 1] === undefined) {
+    player.inventory.pop();
+  }
+
+  return true;
+}
+
 export function removeItemFromPlayer(player: Player, itemIndex: number, count: number = 1): InventoryItem | null {
   if (!player.inventory || itemIndex < 0 || itemIndex >= player.inventory.length) {
     return null;
   }
   const item = player.inventory[itemIndex];
+  if (!item) return null;
   if (item.count <= count) {
     player.inventory.splice(itemIndex, 1);
     return item;
@@ -1008,32 +2010,67 @@ export function useItemOnPlayer(
   }
 
   const item = player.inventory[itemIndex];
-  if (!item.usable) {
+  if (!item || !item.usable) {
     return { success: false, message: 'Этот предмет нельзя использовать напрямую' };
   }
 
-  // Food and drinks now use multi-step consumption
-  if ((item.category === 'food' || item.category === 'drink') && ITEM_CATALOG[item.itemId]?.biteCount) {
-    return startConsumption(player, itemIndex);
-  }
+  const def = ITEM_CATALOG[item.itemId];
 
   // Special repair tool usage
   if (item.itemId === 'repair_kit') {
     if (player.isInVehicle && player.currentVehicleId && world) {
       const veh = world.vehicles.find(v => v.id === player.currentVehicleId);
-      if (veh && veh.damage) {
-        veh.damage.health = 100;
-        veh.damage.engineSmoking = false;
-        veh.damage.engineFire = false;
-        veh.damage.frontCrumple = 0;
-        veh.damage.rearCrumple = 0;
-        veh.damage.leftDent = 0;
-        veh.damage.rightDent = 0;
-        veh.damage.windshieldCracked = false;
-        veh.damage.hoodBuckled = false;
+      if (veh) {
+        if (veh.damage) {
+          veh.damage.engineSmoking = false;
+          veh.damage.underHoodSmolder = false;
+          veh.damage.engineFire = false;
+          veh.damage.fuelTankFire = false;
+          veh.damage.fuelTankBurntThrough = false;
+          veh.damage.cabinFire = false;
+          veh.damage.fireTimer = 0;
+          veh.damage.fireProgress = 0;
+          veh.damage.fireIntensity = 0;
+          veh.damage.groundPuddleIgnited = false;
+          veh.cabinSmoke = 0;
+          veh.damage.frontCrumple = 0;
+          veh.damage.rearCrumple = 0;
+          veh.damage.leftDent = 0;
+          veh.damage.rightDent = 0;
+          veh.damage.frontLeftDent = 0;
+          veh.damage.frontRightDent = 0;
+          veh.damage.rearLeftDent = 0;
+          veh.damage.rearRightDent = 0;
+          veh.damage.frontLeftSuspensionDamage = 0;
+          veh.damage.frontRightSuspensionDamage = 0;
+          veh.damage.rearLeftSuspensionDamage = 0;
+          veh.damage.rearRightSuspensionDamage = 0;
+          veh.damage.steeringDrift = 0;
+          veh.damage.wheelRubResistance = 0;
+          veh.damage.windshieldCracked = false;
+          veh.damage.rearGlassCracked = false;
+          veh.damage.hoodBuckled = false;
+          veh.damage.scratches = [];
+        }
+        if (veh.engineState) {
+          veh.engineState.radiatorWater = 100;
+          veh.engineState.radiatorPunctured = false;
+          veh.engineState.oilLevel = 100;
+          veh.engineState.oilPunctured = false;
+          veh.engineState.oilPressure = 100;
+          veh.engineState.batteryCharge = 100;
+          veh.engineState.starterWorking = true;
+          veh.engineState.temperature = 88;
+          veh.engineState.engineKnocking = false;
+          veh.engineState.engineStalled = false;
+          veh.engineState.overheatingSteam = false;
+        }
+        if (veh.fuelSystem) {
+          veh.fuelSystem.tankPunctured = false;
+        }
         removeItemFromPlayer(player, itemIndex, 1);
         sound.playPropBreak('hydrant');
-        addPlayerNotification(player, '🔧 Автомобиль полностью отремонтирован!', 'heal');
+        addPlayerNotification(player, '🔧 Узлы двигателя, подвеска и кузов автомобиля полностью отремонтированы!', 'heal');
         return { success: true, message: 'Автомобиль отремонтирован' };
       }
     } else {
@@ -1042,12 +2079,453 @@ export function useItemOnPlayer(
     }
   }
 
+  // Gasoline Canister usage (spills fuel puddles on ground or refuels nearby vehicle)
+  if (item.itemId === 'fuel_canister') {
+    const maxPortions = item.maxPortions || def?.biteCount || 20;
+    const currentPortions = item.portions !== undefined ? item.portions : maxPortions;
+
+    sound.playWaterSpray();
+
+    let refueledVehicleName: string | null = null;
+
+    if (world) {
+      // 1. Check if standing near/in a vehicle needing fuel
+      for (const veh of world.vehicles) {
+        const dist = Math.hypot(veh.x - player.x, veh.y - player.y);
+        if (dist < 100 || (player.isInVehicle && player.currentVehicleId === veh.id)) {
+          if (veh.fuelSystem && veh.fuelSystem.tankLevel < 100) {
+            const capacity = veh.fuelSystem.tankCapacity || 50;
+            const currentLiters = (veh.fuelSystem.tankLevel / 100) * capacity;
+            const newLiters = Math.min(capacity, currentLiters + 5); // add 5 liters
+            veh.fuelSystem.tankLevel = Math.min(100, (newLiters / capacity) * 100);
+            refueledVehicleName = veh.type ? `автомобиль (${veh.type.toUpperCase()})` : 'автомобиль';
+            break;
+          }
+        }
+      }
+
+      // 2. If not refueling a car, spill a fuel puddle (FluidStain) on ground
+      if (!refueledVehicleName) {
+        const angle = player.aimAngle !== undefined ? player.aimAngle : player.angle;
+        const stainX = player.x + Math.cos(angle) * 22;
+        const stainY = player.y + Math.sin(angle) * 22;
+
+        if (!world.stains) world.stains = [];
+
+        // Check if expanding an existing nearby fuel stain
+        let existingStain = world.stains.find(st => st.type === 'fuel' && Math.hypot(st.x - stainX, st.y - stainY) < 45);
+        if (existingStain) {
+          existingStain.radius = Math.min(90, existingStain.radius + 15);
+          existingStain.life = 0; // reset decay timer
+        } else {
+          world.stains.push({
+            id: `stain_fuel_${Date.now()}_${Math.random()}`,
+            x: stainX,
+            y: stainY,
+            radius: 24,
+            maxRadius: 75,
+            type: 'fuel',
+            alpha: 0.85,
+            life: 0,
+            maxLife: 600,
+            onFire: false,
+            fireIntensity: 0
+          });
+        }
+
+        // Spawn splash golden fuel droplets
+        for (let i = 0; i < 12; i++) {
+          const pAngle = angle + (Math.random() * 0.9 - 0.45);
+          const pSpeed = 35 + Math.random() * 55;
+          world.particles.push({
+            x: player.x,
+            y: player.y,
+            vx: Math.cos(pAngle) * pSpeed,
+            vy: Math.sin(pAngle) * pSpeed,
+            radius: 2 + Math.random() * 3,
+            color: Math.random() < 0.7 ? '#eab308' : '#ca8a04',
+            alpha: 0.95,
+            life: 0,
+            maxLife: 0.35,
+            type: 'debris'
+          });
+        }
+      }
+    }
+
+    const remaining = currentPortions - 1;
+    item.portions = remaining;
+    item.maxPortions = maxPortions;
+
+    if (remaining % 5 === 0 || remaining === maxPortions - 1) {
+      if (refueledVehicleName) {
+        addPlayerNotification(player, `⛽ Вы заправили ${refueledVehicleName}! (Осталось: ${remaining}/${maxPortions}л)`, 'heal');
+      } else {
+        addPlayerNotification(player, `⛽ Вы разлили бензин на землю! (Осталось: ${remaining}/${maxPortions}л)`, 'info');
+      }
+    }
+
+    if (remaining <= 0) {
+      if (item.count > 1) {
+        item.count -= 1;
+        item.portions = maxPortions;
+      } else {
+        removeItemFromPlayer(player, itemIndex, 1);
+      }
+      const leftover = createItem('canister_empty', 1);
+      addItemToPlayer(player, leftover);
+      addPlayerNotification(player, '🛢️ В канистре полностью закончился бензин!', 'warning');
+    }
+
+    return { success: true, message: 'Бензин залит/разлит' };
+  }
+
+  // Zippo Lighter usage (finite charges, ignites puddles & leaks)
+  if (item.itemId === 'zippo_lighter') {
+    const maxPortions = item.maxPortions || def?.biteCount || 10;
+    const currentPortions = item.portions !== undefined ? item.portions : maxPortions;
+
+    // Spawn sparks / flame particles
+    if (world) {
+      for (let i = 0; i < 10; i++) {
+        const pAngle = Math.random() * Math.PI * 2;
+        const pSpeed = 15 + Math.random() * 40;
+        world.particles.push({
+          x: player.x + (Math.random() * 10 - 5),
+          y: player.y + (Math.random() * 10 - 5),
+          vx: Math.cos(pAngle) * pSpeed,
+          vy: Math.sin(pAngle) * pSpeed - 15,
+          radius: 2 + Math.random() * 3,
+          color: Math.random() < 0.6 ? '#f97316' : '#ef4444',
+          alpha: 0.95,
+          life: 0,
+          maxLife: 0.25 + Math.random() * 0.2,
+          type: 'flame'
+        });
+      }
+    }
+
+    sound.playPropBreak('fire');
+
+    let ignitedStainsCount = 0;
+    let ignitedCarFuel = false;
+
+    if (world) {
+      // 1. Check unignited stains nearby (oil / fuel)
+      if (world.stains) {
+        for (const st of world.stains) {
+          if (!st.onFire && Math.hypot(st.x - player.x, st.y - player.y) < 120) {
+            if (st.type === 'fuel' || st.type === 'oil') {
+              st.onFire = true;
+              st.fireIntensity = 1.0;
+              ignitedStainsCount++;
+
+              // Burst of flames
+              for (let f = 0; f < 12; f++) {
+                world.particles.push({
+                  x: st.x + (Math.random() * st.radius - st.radius / 2),
+                  y: st.y + (Math.random() * st.radius - st.radius / 2),
+                  vx: (Math.random() - 0.5) * 35,
+                  vy: -25 - Math.random() * 35,
+                  radius: 3 + Math.random() * 4,
+                  color: '#f97316',
+                  alpha: 0.9,
+                  life: 0,
+                  maxLife: 0.45,
+                  type: 'flame'
+                });
+              }
+            }
+          }
+        }
+      }
+
+      // 2. Check nearby vehicles with fuel/oil leaks
+      for (const veh of world.vehicles) {
+        const dist = Math.hypot(veh.x - player.x, veh.y - player.y);
+        if (dist < 120 || (player.isInVehicle && player.currentVehicleId === veh.id)) {
+          if (veh.damage) {
+            const hasLeak = veh.fuelSystem?.tankPunctured || veh.engineState?.oilPunctured || veh.damage.underHoodSmolder;
+            if (hasLeak && !veh.damage.fuelTankFire && !veh.damage.engineFire) {
+              veh.damage.fuelTankFire = true;
+              veh.damage.engineFire = true;
+              veh.damage.fireIntensity = 0.8;
+              veh.damage.fireProgress = 0.2;
+              veh.damage.groundPuddleIgnited = true;
+              ignitedCarFuel = true;
+            }
+          }
+        }
+      }
+    }
+
+    const remaining = currentPortions - 1;
+    item.portions = remaining;
+    item.maxPortions = maxPortions;
+
+    let msg = '';
+    if (ignitedCarFuel) {
+      msg = `🔥 Вы поджгли вытекающее топливо автомобиля! (Осталось зажиганий: ${remaining}/${maxPortions})`;
+      addPlayerNotification(player, msg, 'warning');
+    } else if (ignitedStainsCount > 0) {
+      msg = `🔥 Вы поджгли лужу бензина/масла! (Осталось зажиганий: ${remaining}/${maxPortions})`;
+      addPlayerNotification(player, msg, 'warning');
+    } else {
+      msg = `🔥 Вспышка Zippo! Поблизости нет горючих жидкостей. (Осталось зажиганий: ${remaining}/${maxPortions})`;
+      addPlayerNotification(player, msg, 'info');
+    }
+
+    if (remaining <= 0) {
+      if (item.count > 1) {
+        item.count -= 1;
+        item.portions = maxPortions;
+      } else {
+        removeItemFromPlayer(player, itemIndex, 1);
+      }
+      const leftover = createItem('zippo_empty', 1);
+      addItemToPlayer(player, leftover);
+      addPlayerNotification(player, '🔥 В зажигалке Zippo закончился бензин и кремень!', 'warning');
+    }
+
+    return { success: true, message: 'Зажигалка Zippo использована' };
+  }
+
+  // Fire extinguisher usage (volume/capacity, foam spray, gradual/partial fire suppression)
+  if (item.itemId === 'extinguisher') {
+    const maxPortions = item.maxPortions || def?.biteCount || 10;
+    const currentPortions = item.portions !== undefined ? item.portions : maxPortions;
+
+    // Spawn foam powder stream particles
+    if (world) {
+      const sprayAngle = player.aimAngle !== undefined ? player.aimAngle : player.angle;
+      for (let i = 0; i < 7; i++) {
+        const pAngle = sprayAngle + (Math.random() * 0.7 - 0.35);
+        const pSpeed = 80 + Math.random() * 120;
+        world.particles.push({
+          x: player.x + Math.cos(sprayAngle) * 16,
+          y: player.y + Math.sin(sprayAngle) * 16,
+          vx: Math.cos(pAngle) * pSpeed,
+          vy: Math.sin(pAngle) * pSpeed,
+          radius: 4 + Math.random() * 3,
+          color: '#f8fafc',
+          alpha: 0.85,
+          life: 0,
+          maxLife: 0.35 + Math.random() * 0.25,
+          type: 'tire_smoke'
+        });
+      }
+    }
+
+    sound.playPropBreak('hydrant');
+
+    let extinguishedStainsCount = 0;
+    let carFireReduced = false;
+    let carFireExtinguished = false;
+
+    if (world) {
+      // 1. Extinguish ground stains nearby (small ground fires put out easily)
+      if (world.stains) {
+        for (const st of world.stains) {
+          if (st.onFire && Math.hypot(st.x - player.x, st.y - player.y) < 130) {
+            st.onFire = false;
+            st.fireIntensity = 0;
+            extinguishedStainsCount++;
+          }
+        }
+      }
+
+      // 2. Reduce or extinguish vehicle fires nearby
+      for (const veh of world.vehicles) {
+        const dist = Math.hypot(veh.x - player.x, veh.y - player.y);
+        if (dist < 130 || (player.isInVehicle && player.currentVehicleId === veh.id)) {
+          if (veh.damage && (veh.damage.engineFire || veh.damage.fuelTankFire || veh.damage.cabinFire || veh.damage.underHoodSmolder || (veh.damage.fireIntensity || 0) > 0)) {
+            veh.damage.fireIntensity = Math.max(0, (veh.damage.fireIntensity || 1.0) - 0.35);
+            veh.damage.fireProgress = Math.max(0, (veh.damage.fireProgress || 1.0) - 0.25);
+            if (veh.cabinSmoke) {
+              veh.cabinSmoke = Math.max(0, veh.cabinSmoke - 35);
+            }
+
+            if (veh.damage.fireIntensity <= 0 && veh.damage.fireProgress <= 0) {
+              veh.damage.engineFire = false;
+              veh.damage.fuelTankFire = false;
+              veh.damage.cabinFire = false;
+              veh.damage.underHoodSmolder = false;
+              veh.damage.engineSmoking = false;
+              veh.damage.fireTimer = 0;
+              veh.damage.fireProgress = 0;
+              veh.damage.fireIntensity = 0;
+              veh.damage.groundPuddleIgnited = false;
+              carFireExtinguished = true;
+            } else {
+              carFireReduced = true;
+            }
+          }
+        }
+      }
+    }
+
+    const remaining = currentPortions - 1;
+    item.portions = remaining;
+    item.maxPortions = maxPortions;
+
+    let msg = '';
+    if (carFireExtinguished) {
+      msg = `🧯 Пожар автомобиля полностью потушен! (Осталось пены: ${remaining}/${maxPortions})`;
+      addPlayerNotification(player, msg, 'heal');
+    } else if (carFireReduced) {
+      msg = `🧯 Вы сбили пламя пеной, но машина всё ещё пылает! Потребуется ещё пена. (${remaining}/${maxPortions})`;
+      addPlayerNotification(player, msg, 'warning');
+    } else if (extinguishedStainsCount > 0) {
+      msg = `🧯 Затушено горевших луж: ${extinguishedStainsCount}. (${remaining}/${maxPortions})`;
+      addPlayerNotification(player, msg, 'heal');
+    } else {
+      msg = `🧯 Выпустили струю пены. Поблизости нет огня. (${remaining}/${maxPortions})`;
+      addPlayerNotification(player, msg, 'info');
+    }
+
+    if (remaining <= 0) {
+      if (item.count > 1) {
+        item.count -= 1;
+        item.portions = maxPortions;
+      } else {
+        removeItemFromPlayer(player, itemIndex, 1);
+      }
+      const leftover = createItem('extinguisher_empty', 1);
+      addItemToPlayer(player, leftover);
+      addPlayerNotification(player, '🧯 В огнетушителе закончился заряд пены!', 'warning');
+    }
+
+    return { success: true, message: 'Огнетушитель использован' };
+  }
+
   // Flashlight toggle
   if (item.itemId === 'flashlight') {
     player.heldItemId = player.heldItemId === 'flashlight' ? null : 'flashlight';
     sound.playAlert();
     addPlayerNotification(player, player.heldItemId ? '🔦 Фонарик включен' : '🔦 Фонарик выключен', 'info');
     return { success: true, message: 'Фонарик переключен' };
+  }
+
+  // Multi-portion / Bite-by-Bite logic for consumables (food, drink, medicine with multiple doses)
+  const maxPortions = item.maxPortions || def?.biteCount || 1;
+  const currentPortions = item.portions !== undefined ? item.portions : maxPortions;
+
+  if (maxPortions > 1) {
+    // Check fullness & nausea
+    if (item.category === 'food' && (player.needs.fullness || 0) >= 98) {
+      addPlayerNotification(player, 'Вы слишком сыты! Подождите, пока переварится...', 'warning');
+      return { success: false, message: 'Слишком сытно' };
+    }
+    if ((player.needs.nausea || 0) >= 65) {
+      addPlayerNotification(player, 'Вас тошнит! Нельзя есть или пить.', 'warning');
+      return { success: false, message: 'Тошнит' };
+    }
+
+    const ratio = 1 / maxPortions;
+    const hungerGain = item.effects.hunger ? Math.round((item.effects.hunger * ratio) * 10) / 10 : 0;
+    const thirstGain = item.effects.thirst ? Math.round((item.effects.thirst * ratio) * 10) / 10 : 0;
+    const healthGain = item.effects.health ? Math.round((item.effects.health * ratio) * 10) / 10 : 0;
+    const energyGain = item.effects.energy ? Math.round((item.effects.energy * ratio) * 10) / 10 : 0;
+    const sleepinessGain = item.effects.sleepiness ? Math.round((item.effects.sleepiness * ratio) * 10) / 10 : 0;
+
+    if (hungerGain) player.needs.hunger = Math.min(100, Math.max(0, player.needs.hunger + hungerGain));
+    if (thirstGain) {
+      player.needs.thirst = Math.min(100, Math.max(0, player.needs.thirst + thirstGain));
+      if (player.bodyState) player.bodyState.hydration = Math.min(100, player.bodyState.hydration + thirstGain);
+    }
+    if (healthGain) player.needs.health = Math.min(100, Math.max(0, player.needs.health + healthGain));
+    if (energyGain) player.needs.energy = Math.min(100, Math.max(0, player.needs.energy + energyGain));
+    if (sleepinessGain) player.needs.sleepiness = Math.min(100, Math.max(0, player.needs.sleepiness + sleepinessGain));
+
+    const fGain = def?.fullnessPerBite !== undefined ? def.fullnessPerBite : (item.category === 'food' ? 3 : 1);
+    player.needs.fullness = Math.min(100, (player.needs.fullness || 0) + fGain);
+    if ((player.needs.fullness || 0) > 88) {
+      player.needs.nausea = Math.min(100, (player.needs.nausea || 0) + 4);
+    }
+
+    // Specific item effects
+    if (item.itemId === 'painkillers' || item.itemId === 'morphine') {
+      administerMedication(player, item.itemId);
+    } else if (item.itemId === 'vitamins') {
+      player.needs.energy = Math.min(100, player.needs.energy + 4);
+      administerMedication(player, 'vitamins');
+    } else if (item.itemId === 'panthenol_spray') {
+      applyPanthenolSpray(player, targetInjuryId);
+    } else if (item.itemId === 'spasatel_ointment') {
+      applySpasatelOintment(player, targetInjuryId);
+    } else if (item.itemId === 'zelenka') {
+      applyZelenka(player, targetInjuryId);
+    } else if (item.itemId === 'iodine') {
+      applyIodine(player, targetInjuryId);
+    } else if (item.itemId === 'diclofenac_gel') {
+      applyDiclofenacGel(player, targetInjuryId);
+    } else if (item.itemId === 'hydrogen_peroxide') {
+      applyHydrogenPeroxide(player, targetInjuryId);
+    } else if (item.itemId === 'ammonia_spirit') {
+      applyAmmoniaSpirit(player);
+    } else if (item.itemId === 'balm_star') {
+      applyBalmStar(player);
+    } else if (item.itemId === 'activated_charcoal') {
+      applyActivatedCharcoal(player);
+    } else if (item.itemId === 'valerian_drops') {
+      applyValerianDrops(player);
+    } else if (item.itemId === 'antiseptic' && player.bodyState) {
+      applyAntiseptic(player, targetInjuryId);
+    }
+
+    // Soothe panic & fear when eating, drinking, or taking medicine
+    if (item.category === 'food') soothePanic(player, 18);
+    else if (item.category === 'drink') soothePanic(player, 25);
+    else soothePanic(player, 35);
+
+    // Play sound
+    if (item.category === 'food') {
+      sound.playEat();
+    } else if (item.category === 'drink') {
+      sound.playDrink();
+    } else {
+      sound.playUseItem();
+    }
+
+    const remaining = currentPortions - 1;
+    item.portions = remaining;
+    item.maxPortions = maxPortions;
+
+    let taste = '';
+    if (def?.tasteMessages && def.tasteMessages.length > 0) {
+      taste = def.tasteMessages[Math.floor(Math.random() * def.tasteMessages.length)];
+    }
+
+    const unitLabel = item.category === 'drink' ? 'глотков' : item.category === 'food' ? 'укусов' : (item.itemId === 'painkillers' || item.itemId === 'vitamins' ? 'таблеток' : 'применений');
+
+    if (remaining <= 0) {
+      // Completely finished!
+      if (item.count > 1) {
+        item.count -= 1;
+        item.portions = maxPortions;
+      } else {
+        removeItemFromPlayer(player, itemIndex, 1);
+      }
+
+      if (def?.leftoverId) {
+        const leftover = createItem(def.leftoverId, 1);
+        addItemToPlayer(player, leftover);
+        addPlayerNotification(player, `🗑️ Вы закончили ${item.nameRu}. Осталась упаковка: ${def.leftoverNameRu || leftover.nameRu}`, 'info');
+      } else {
+        addPlayerNotification(player, `✅ ${item.nameRu} полностью закончен!`, 'food');
+      }
+    } else {
+      // Throttle notifications for high-charge rapid items (e.g. extinguisher)
+      if (item.itemId !== 'extinguisher' || remaining % 10 === 0 || remaining === maxPortions - 1) {
+        addPlayerNotification(
+          player,
+          `${item.category === 'drink' ? '🥤' : item.category === 'food' ? '🍽️' : '🧯'} ${taste || item.nameRu} (${remaining}/${maxPortions} ${unitLabel})`,
+          item.category === 'drink' ? 'drink' : item.category === 'food' ? 'food' : 'heal'
+        );
+      }
+    }
+
+    return { success: true, message: `Использовано: ${item.nameRu}` };
   }
 
   const fx = item.effects;
@@ -1076,68 +2554,50 @@ export function useItemOnPlayer(
 
   // Body State medical treatment
   if (player.bodyState && item.category === 'med') {
-    const parts = player.bodyState.bodyParts;
     if (item.itemId === 'bandage') {
-      // Bandage stops bleeding, treats bruises, abrasions
-      let treated = false;
-      for (const k in parts) {
-        const key = k as keyof typeof parts;
-        const part = parts[key] as any[]; // Injury[]
-        const injuryToTreat = targetInjuryId 
-          ? part.find(i => i.id === targetInjuryId && !i.treated && (i.type === 'bleeding' || i.type === 'bruise' || i.type === 'abrasion'))
-          : part.find(i => !i.treated && (i.type === 'bleeding' || i.type === 'bruise' || i.type === 'abrasion'));
-        
-        if (injuryToTreat) {
-          injuryToTreat.treated = true;
-          treated = true;
-          addPlayerNotification(player, `🩹 Обработана рана (${injuryToTreat.type})`, 'heal');
-          break;
-        }
-      }
-      if (!treated) {
-        if (targetInjuryId) return { success: false, message: 'Этот бинт нельзя применить к этой травме' };
-        addPlayerNotification(player, 'Нет кровотечений или ушибов для бинта (Откройте меню осмотра для точного применения)', 'info');
+      const res = applyBandage(player, targetInjuryId);
+      if (!res && targetInjuryId) {
+        return { success: false, message: 'Этот бинт нельзя применить к этой травме' };
       }
     } else if (item.itemId === 'splint') {
-      // Splint immobilizes bone fractures
-      let fixed = false;
-      for (const k in parts) {
-        const key = k as keyof typeof parts;
-        const part = parts[key] as any[];
-        const fractureToFix = targetInjuryId
-          ? part.find(i => i.id === targetInjuryId && !i.treated && i.type === 'fracture')
-          : part.find(i => !i.treated && i.type === 'fracture');
-          
-        if (fractureToFix) {
-          fractureToFix.treated = true;
-          fixed = true;
-          addPlayerNotification(player, '🪵 Шина наложена, перелом зафиксирован', 'heal');
-          break;
-        }
+      const res = applySplint(player, targetInjuryId);
+      if (!res && targetInjuryId) {
+        return { success: false, message: 'Шину можно наложить только на свежий перелом' };
       }
-      if (!fixed) {
-        if (targetInjuryId) return { success: false, message: 'Шину можно наложить только на свежий перелом' };
-        addPlayerNotification(player, 'Нет переломов, требующих шины', 'info');
+    } else if (item.itemId === 'medical_patch') {
+      const res = applyMedicalPatch(player, targetInjuryId);
+      if (!res && targetInjuryId) {
+        return { success: false, message: 'Пластырь не подходит для этой травмы' };
       }
+    } else if (item.itemId === 'antiseptic') {
+      const res = applyAntiseptic(player, targetInjuryId);
+      if (!res && targetInjuryId) {
+        return { success: false, message: 'Антисептик не подходит для этой травмы' };
+      }
+    } else if (item.itemId === 'panthenol_spray') {
+      applyPanthenolSpray(player, targetInjuryId);
+    } else if (item.itemId === 'spasatel_ointment') {
+      applySpasatelOintment(player, targetInjuryId);
+    } else if (item.itemId === 'zelenka') {
+      applyZelenka(player, targetInjuryId);
+    } else if (item.itemId === 'iodine') {
+      applyIodine(player, targetInjuryId);
+    } else if (item.itemId === 'diclofenac_gel') {
+      applyDiclofenacGel(player, targetInjuryId);
+    } else if (item.itemId === 'hydrogen_peroxide') {
+      applyHydrogenPeroxide(player, targetInjuryId);
+    } else if (item.itemId === 'ammonia_spirit') {
+      applyAmmoniaSpirit(player);
+    } else if (item.itemId === 'balm_star') {
+      applyBalmStar(player);
+    } else if (item.itemId === 'activated_charcoal') {
+      applyActivatedCharcoal(player);
+    } else if (item.itemId === 'valerian_drops') {
+      applyValerianDrops(player);
     } else if (item.itemId === 'medkit') {
-      // Medkit restores health and stabilizes injuries (stops bleeding, treats bruises)
-      player.needs.health = Math.min(100, player.needs.health + 45);
-      for (const k in parts) {
-        const key = k as keyof typeof parts;
-        const part = parts[key] as any[];
-        part.forEach(injury => {
-          if (injury.type === 'bleeding' || injury.type === 'bruise' || injury.type === 'abrasion' || injury.type === 'sprain') {
-            injury.treated = true;
-          }
-        });
-      }
-      player.bodyState.temperature = 36.6;
-      player.bodyState.wetness = Math.max(0, player.bodyState.wetness - 30);
-      addPlayerNotification(player, '🧰 Аптечка применена: здоровье восстановлено, раны обработаны', 'heal');
-    } else if (item.itemId === 'painkillers') {
-      // Painkillers temporarily suppress pain
-      player.bodyState.painLevel = Math.max(0, player.bodyState.painLevel - 50);
-      addPlayerNotification(player, '💊 Обезболивающее принято, боль утихла', 'info');
+      applyMedkit(player);
+    } else if (item.itemId === 'painkillers' || item.itemId === 'morphine') {
+      administerMedication(player, item.itemId);
     }
   }
 
@@ -1153,16 +2613,15 @@ export function useItemOnPlayer(
     appliedSomething = true;
   }
 
+  // Soothe panic & fear when consuming single portion items
+  if (item.category === 'food') soothePanic(player, 30);
+  else if (item.category === 'drink') soothePanic(player, 40);
+  else soothePanic(player, 50);
+
   // Play appropriate procedural sound
-  if (item.category === 'food') {
-    sound.playEat();
-    addPlayerNotification(player, `Съедено: ${item.nameRu} (+${fx.hunger || 0}% сытости)`, 'food');
-  } else if (item.category === 'drink') {
-    sound.playDrink();
-    addPlayerNotification(player, `Выпито: ${item.nameRu} (+${fx.thirst || 0}% жажды)`, 'drink');
-  } else if (item.category === 'med') {
+  if (item.category === 'med') {
     sound.playUseItem();
-    addPlayerNotification(player, `Использовано: ${item.nameRu} (+${fx.health || 0} HP)`, 'heal');
+    addPlayerNotification(player, `Использовано: ${item.nameRu}`, 'heal');
   }
 
   // Consume 1 item from stack
@@ -1272,24 +2731,11 @@ export function seedInitialGroundItems(world: GameWorld) {
 }
 
 export function addPlayerNotification(
-  player: Player,
-  text: string,
-  type: 'heal' | 'food' | 'drink' | 'energy' | 'sleep' | 'warning' | 'pickup' | 'info' = 'info'
+  _player: Player,
+  _text: string,
+  _type: 'heal' | 'food' | 'drink' | 'energy' | 'sleep' | 'warning' | 'pickup' | 'info' = 'info'
 ) {
-  if (!player.notifications) {
-    player.notifications = [];
-  }
-  player.notifications.push({
-    id: `notif_${Date.now()}_${Math.random()}`,
-    text,
-    type,
-    timer: 3.2 // Display for 3.2 seconds
-  });
-
-  // Cap at 4 simultaneous notifications
-  if (player.notifications.length > 4) {
-    player.notifications.shift();
-  }
+  // Notifications removed per user request
 }
 
 export function isPlayerNearTrashBin(player: Player, world: GameWorld): boolean {
@@ -1361,6 +2807,7 @@ export function disposeTrashInBin(player: Player, world: GameWorld, targetItemId
   // If specific item index provided
   if (targetItemIdx !== undefined && targetItemIdx >= 0 && targetItemIdx < player.inventory.length) {
     const item = player.inventory[targetItemIdx];
+    if (!item) return false;
     const count = item.count;
     const isLitter = item.itemId === 'litter_trash';
     const cashReward = (isEco && isLitter) ? count * 5 : 0;
@@ -1383,8 +2830,9 @@ export function disposeTrashInBin(player: Player, world: GameWorld, targetItemId
   let totalReward = 0;
   let discardedCount = 0;
   for (let i = player.inventory.length - 1; i >= 0; i--) {
-    if (player.inventory[i].itemId === 'litter_trash') {
-      const count = player.inventory[i].count;
+    const item = player.inventory[i];
+    if (item && item.itemId === 'litter_trash') {
+      const count = item.count;
       removeItemFromPlayer(player, i, count);
       if (isEco) {
         totalReward += count * 5;

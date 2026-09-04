@@ -84,7 +84,7 @@ export const MainMenu: React.FC<MainMenuProps> = ({
     <div className="absolute inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-md text-slate-100 font-sans select-none animate-in fade-in duration-300">
       
       {/* Decorative Warm Sunset Background Flare */}
-      <div className="absolute inset-0 bg-gradient-to-tr from-slate-950 via-slate-900/90 to-amber-950/20 pointer-events-none z-0" />
+      <div className="absolute inset-0 bg-slate-950 pointer-events-none z-0" />
       <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-sky-500/10 rounded-full blur-3xl pointer-events-none z-0" />
       <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-amber-500/10 rounded-full blur-3xl pointer-events-none z-0" />
 
@@ -96,7 +96,7 @@ export const MainMenu: React.FC<MainMenuProps> = ({
           <div className="inline-flex items-center gap-2 px-3 py-1 bg-amber-500/10 border border-amber-500/20 rounded-full text-amber-400 text-xs font-bold tracking-widest uppercase mb-3">
             <Compass className="w-3.5 h-3.5" /> Симулятор Вождения
           </div>
-          <h1 className="text-4xl md:text-5xl font-extrabold tracking-tight text-white mb-1.5 bg-clip-text text-transparent bg-gradient-to-b from-white to-slate-200">
+          <h1 className="text-4xl md:text-5xl font-extrabold tracking-tight text-white mb-1.5 text-white">
             NEON CITY
           </h1>
           <p className="text-xs text-slate-400 tracking-wider">
@@ -167,7 +167,7 @@ export const MainMenu: React.FC<MainMenuProps> = ({
               href="/editor.html"
               target="_blank"
               rel="noopener noreferrer"
-              className="group flex items-center gap-4 px-5 py-3.5 bg-gradient-to-r from-sky-950/40 to-slate-800/60 hover:from-sky-900/60 hover:to-slate-800 border border-sky-800/40 hover:border-sky-500/60 rounded-xl transition-all active:scale-[0.99]"
+              className="group flex items-center gap-4 px-5 py-3.5 bg-slate-800 hover:bg-slate-700 border border-slate-600 rounded-xl transition-all active:scale-[0.99]"
             >
               <Edit3 className="w-5 h-5 text-sky-400 group-hover:scale-110 transition-transform" />
               <div className="text-left">

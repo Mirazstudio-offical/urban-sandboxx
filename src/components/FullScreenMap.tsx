@@ -1,13 +1,21 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Camera, GameWorld, Player } from '../types';
 import { SPAWN_LOCATIONS, SpawnLocation } from '../App';
+import { isVehicleInAccident } from '../navigation';
 import { CITY_SHOPS } from './ShopModal';
 import { 
+  TreePine, 
+  Building2, 
+  Briefcase, 
+  Home, 
+  Truck, 
+  Map, 
+  Navigation, 
+  ShoppingCart, 
   Compass, 
   Crosshair, 
   MapPin, 
   Minus, 
-  Navigation, 
   Plus, 
   RotateCcw, 
   X,
@@ -64,7 +72,7 @@ export interface CityLandmark {
   category: 'park' | 'commercial' | 'residential' | 'industrial' | 'nature' | 'parking';
   x: number;
   y: number;
-  icon: string;
+  icon: React.ReactNode;
   description: string;
 }
 
@@ -77,7 +85,7 @@ export const REAL_LANDMARKS: CityLandmark[] = [
     category: 'park',
     x: 4400,
     y: 2800,
-    icon: '⛲',
+    icon: <TreePine className="w-5 h-5 text-emerald-400" />,
     description: 'Каскадный гранитный фонтан, аллеи со скамейками и сквер'
   },
   {
@@ -87,7 +95,7 @@ export const REAL_LANDMARKS: CityLandmark[] = [
     category: 'commercial',
     x: 4350,
     y: 2000,
-    icon: '🏙️',
+    icon: <Building2 className="w-5 h-5 text-slate-400" />,
     description: 'Оживленный перекрёсток проспектов, высотные офисы и парковка'
   },
   {
@@ -97,7 +105,7 @@ export const REAL_LANDMARKS: CityLandmark[] = [
     category: 'commercial',
     x: 3200,
     y: 2000,
-    icon: '🏬',
+    icon: <Briefcase className="w-5 h-5 text-sky-400" />,
     description: 'Автомобильный выставочный комплекс и торговый центр'
   },
   {
@@ -107,7 +115,7 @@ export const REAL_LANDMARKS: CityLandmark[] = [
     category: 'residential',
     x: 2750,
     y: 2750,
-    icon: '🏢',
+    icon: <Home className="w-5 h-5 text-amber-400" />,
     description: 'Многоэтажные дома, закрытый двор со скамейками и парковкой'
   },
   {
@@ -117,7 +125,7 @@ export const REAL_LANDMARKS: CityLandmark[] = [
     category: 'industrial',
     x: 5200,
     y: 4400,
-    icon: '🚛',
+    icon: <Truck className="w-5 h-5 text-stone-400" />,
     description: 'Грузовые ангары, склады, стоянки спецтехники и терминалы'
   },
   {
@@ -127,7 +135,7 @@ export const REAL_LANDMARKS: CityLandmark[] = [
     category: 'nature',
     x: 550,
     y: 550,
-    icon: '🌲',
+    icon: <Map className="w-5 h-5 text-emerald-600" />,
     description: 'Сосновый бор, извилистые грунтовые тропы, пруды и бездорожье'
   },
   {
@@ -137,7 +145,7 @@ export const REAL_LANDMARKS: CityLandmark[] = [
     category: 'commercial',
     x: 4000,
     y: 4000,
-    icon: '🛣️',
+    icon: <Navigation className="w-5 h-5 text-sky-400" />,
     description: 'Четырехполосная скоростная магистраль с активным движением'
   },
   ...CITY_SHOPS.map((s) => ({
@@ -147,7 +155,7 @@ export const REAL_LANDMARKS: CityLandmark[] = [
     category: 'commercial' as const,
     x: s.x,
     y: s.y,
-    icon: s.icon,
+    icon: <ShoppingCart className="w-5 h-5 text-amber-400" />,
     description: s.description
   }))
 ];
@@ -504,13 +512,36 @@ export const FullScreenMap: React.FC<FullScreenMapProps> = ({
       // 8. AI Traffic Vehicles & Pedestrians (Crisp Vector Dots)
       world.vehicles.forEach((veh) => {
         if (veh.isPlayerControlled) return;
+        const inAccident = isVehicleInAccident(veh);
+        const inJam = !inAccident && !veh.isParked && (Math.abs(veh.speed) < 15 || veh.aiState === 'stopping_obstacle');
+
         ctx.save();
         ctx.translate(veh.x, veh.y);
+
+        if (inAccident) {
+          // Warning pulse ring for accident
+          const pulse = (Date.now() % 1000) / 1000;
+          ctx.strokeStyle = `rgba(239, 68, 68, ${0.8 - pulse * 0.7})`;
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.arc(0, 0, 14 + pulse * 12, 0, Math.PI * 2);
+          ctx.stroke();
+        }
+
         ctx.rotate(veh.angle);
         
-        ctx.fillStyle = veh.isParked ? '#64748b' : '#f59e0b';
+        if (inAccident) {
+          ctx.fillStyle = '#ef4444'; // Red for crash/accident
+        } else if (inJam) {
+          ctx.fillStyle = '#dc2626'; // Dark red for traffic jam / blocked car
+        } else if (veh.isParked) {
+          ctx.fillStyle = '#64748b';
+        } else {
+          ctx.fillStyle = '#f59e0b';
+        }
+
         ctx.fillRect(-10, -5, 20, 10);
-        ctx.strokeStyle = '#ffffff';
+        ctx.strokeStyle = inAccident ? '#fecaca' : '#ffffff';
         ctx.lineWidth = 1;
         ctx.strokeRect(-10, -5, 20, 10);
         ctx.restore();
@@ -538,11 +569,7 @@ export const FullScreenMap: React.FC<FullScreenMapProps> = ({
         ctx.fill();
         ctx.stroke();
 
-        // Landmark Icon
-        ctx.font = '24px sans-serif';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText(lm.icon, lm.x, lm.y - 4);
+        // Landmark icon removed on canvas per user request
 
         // Landmark Label Pill
         ctx.font = 'bold 13px sans-serif';
@@ -842,7 +869,7 @@ export const FullScreenMap: React.FC<FullScreenMapProps> = ({
         <div className="flex items-center gap-2 pointer-events-auto">
           {world?.gpsDestination && (
             <div className="bg-sky-950/95 backdrop-blur-md border border-sky-400/60 rounded-2xl px-3 py-1.5 shadow-2xl flex items-center gap-2 text-white text-xs">
-              <span className="text-base">🚩</span>
+              <MapPin className="w-4 h-4 text-rose-400" />
               <div className="hidden sm:flex flex-col">
                 <span className="font-bold text-sky-300 truncate max-w-[120px]">
                   {world.gpsDestination.name || 'Маршрут'}
@@ -972,15 +999,15 @@ export const FullScreenMap: React.FC<FullScreenMapProps> = ({
                 <span>Светофоры</span>
               </div>
               <div className="flex items-center gap-1.5">
-                <span>🅿️</span>
+                <span className="w-2.5 h-2.5 rounded bg-amber-500 font-mono text-[8px] text-black flex items-center justify-center font-bold">P</span>
                 <span>Парковки</span>
               </div>
               <div className="flex items-center gap-1.5">
-                <span>⛲</span>
+                <span className="w-2.5 h-2.5 rounded bg-emerald-500 font-mono text-[8px] text-black flex items-center justify-center font-bold">П</span>
                 <span>Фонтан & Парк</span>
               </div>
               <div className="flex items-center gap-1.5">
-                <span>🚩</span>
+                <span className="w-2.5 h-2.5 rounded bg-rose-500 font-mono text-[8px] text-black flex items-center justify-center font-bold">G</span>
                 <span>GPS Маршрут</span>
               </div>
             </div>

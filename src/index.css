@@ -1,1 +1,116 @@
 @import "tailwindcss";
+
+@layer base {
+  body {
+    background-color: #0b0d10;
+    color: #cbd5e1;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    user-select: none;
+    -webkit-font-smoothing: antialiased;
+  }
+}
+
+/* ==========================================================================
+   TACTILE INDUSTRIAL / POST-SOVIET INSTRUMENT PANEL DESIGN SYSTEM
+   ========================================================================== */
+
+/* Dark matte torpedo panel container */
+.industrial-panel {
+  background-color: #12151a;
+  background-image: radial-gradient(rgba(255, 255, 255, 0.02) 1px, transparent 0);
+  background-size: 8px 8px;
+  border: 1px solid #2d3748;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05), 0 10px 30px rgba(0, 0, 0, 0.85);
+  border-radius: 4px;
+}
+
+/* Tactile physical rocker switch / keycap button style */
+.industrial-btn {
+  background: linear-gradient(180deg, #1f2733 0%, #161b22 100%);
+  border: 1px solid #374151;
+  color: #cbd5e1;
+  font-family: ui-monospace, SFMono-Regular, monospace;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border-radius: 3px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 2px 4px rgba(0, 0, 0, 0.6);
+  transition: all 0.05s ease-in-out;
+  cursor: pointer;
+}
+
+.industrial-btn:hover {
+  background: linear-gradient(180deg, #2a3444 0%, #1e2530 100%);
+  border-color: #4b5563;
+  color: #f1f5f9;
+}
+
+.industrial-btn:active {
+  transform: translateY(1px);
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.9);
+  background: #11151c;
+}
+
+.industrial-btn-amber {
+  background: linear-gradient(180deg, #3a2203 0%, #241401 100%);
+  border: 1px solid #b45309;
+  color: #f59e0b;
+}
+.industrial-btn-amber:hover {
+  background: linear-gradient(180deg, #4d2d04 0%, #311c02 100%);
+  border-color: #f59e0b;
+  color: #fbbf24;
+}
+
+.industrial-btn-green {
+  background: linear-gradient(180deg, #063726 0%, #032117 100%);
+  border: 1px solid #047857;
+  color: #10b981;
+}
+.industrial-btn-green:hover {
+  background: linear-gradient(180deg, #094a34 0%, #052e20 100%);
+  border-color: #10b981;
+  color: #34d399;
+}
+
+.industrial-btn-red {
+  background: linear-gradient(180deg, #3f0f0f 0%, #280808 100%);
+  border: 1px solid #b91c1c;
+  color: #ef4444;
+}
+.industrial-btn-red:hover {
+  background: linear-gradient(180deg, #531414 0%, #350b0b 100%);
+  border-color: #ef4444;
+  color: #fca5a5;
+}
+
+/* Tell-tale indicator lamps */
+.telltale-box {
+  width: 24px;
+  height: 18px;
+  border-radius: 2px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 8px;
+  font-weight: 800;
+  font-family: ui-monospace, monospace;
+}
+
+/* Custom industrial scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #0d1014;
+  border-left: 1px solid #1f2937;
+}
+::-webkit-scrollbar-thumb {
+  background: #27303f;
+  border: 1px solid #374151;
+  border-radius: 2px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #374151;
+}

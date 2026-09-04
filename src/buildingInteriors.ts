@@ -1,5 +1,27 @@
 import { Building, Player } from './types';
 import { sound } from './audio';
+import {
+  generateHorizontalApartmentInterior,
+  generateVerticalApartmentInterior
+} from './interiorGenerators';
+import {
+  buildOfficeInterior,
+  buildSupermarketInterior,
+  buildHospitalInterior,
+  buildPoliceStationInterior,
+  buildSchoolInterior,
+  buildIndustrialInterior,
+  buildPharmacyInterior,
+  buildCafeInterior,
+  buildAutoServiceInterior,
+  buildGearShopInterior,
+  buildPizzeriaInterior,
+  buildFastFoodInterior,
+  buildElectronicsInterior,
+  buildSportsStoreInterior,
+  buildCarWashInterior,
+  buildGalleryInterior
+} from './interiorSpecialized';
 
 export interface InteriorWall {
   x1: number;
@@ -38,11 +60,22 @@ export interface InteriorFurniture {
     | 'nightstand'
     | 'bookshelf'
     | 'blackboard'
+    | 'whiteboard'
     | 'kids_table'
     | 'kids_bed'
     | 'toy_chest'
     | 'bench'
-    | 'trash_can';
+    | 'trash_can'
+    | 'mailbox_bank'
+    | 'radiator'
+    | 'atm'
+    | 'cash_register'
+    | 'freezer_display'
+    | 'pallet_stack'
+    | 'file_cabinet'
+    | 'server_rack'
+    | 'exam_table'
+    | 'lockers';
   x: number; // relative X
   y: number; // relative Y
   width: number;
@@ -67,7 +100,7 @@ export interface InteriorRoom {
   width: number;
   height: number;
   color: string;
-  floorStyle?: 'parquet' | 'tile' | 'wood' | 'linoleum' | 'carpet' | 'playmat';
+  floorStyle?: 'parquet' | 'tile' | 'wood' | 'linoleum' | 'carpet' | 'playmat' | 'concrete';
 }
 
 export interface BuildingLayout {
@@ -129,8 +162,8 @@ export function getBuildingFloorsCount(bld: Building): number {
 
 export function generateBuildingLayout(bld: Building, floor: number): BuildingLayout {
   const rand = createSeededRandom(`${bld.id}_floor_${floor}`);
-  const W = Math.max(40, bld.width);
-  const H = Math.max(30, bld.height);
+  const W = bld.width;
+  const H = bld.height;
 
   const rooms: InteriorRoom[] = [];
   const walls: InteriorWall[] = [];
@@ -139,1229 +172,542 @@ export function generateBuildingLayout(bld: Building, floor: number): BuildingLa
   const stairs: InteriorZone[] = [];
   const exits: InteriorZone[] = [];
 
-  const isResidential = ['residential', 'panel_apartment', 'brick_residential', 'modern_residential', 'suburban'].includes(bld.type);
+  // Default fallback Elevator & Stairs & Exit positions
+  const entSide = bld.entranceSide || 'south';
+  let elX = W / 2 - 14;
+  let elY = 6;
+  let stX = W / 2 + 14;
+  let stY = 6;
+
+  if (entSide === 'north') {
+    elY = H - 22; stY = H - 22;
+  } else if (entSide === 'west') {
+    elX = W - 22; elY = H / 2 - 14;
+    stX = W - 22; stY = H / 2 + 14;
+  } else if (entSide === 'east') {
+    elX = 6; elY = H / 2 - 14;
+    stX = 6; stY = H / 2 + 14;
+  }
+
+  const elevatorZone = { x: elX, y: elY, width: 20, height: 16 };
+  const stairsZone = { x: stX, y: stY, width: 20, height: 16 };
+
+  let exX = W / 2 - 12;
+  let exY = H - 8;
+  const primaryEnt = (bld.entrances && bld.entrances.length > 0) ? bld.entrances[0] : { side: entSide, offsetRatio: 0.5 };
+  if (primaryEnt.side === 'north') {
+    exX = W * primaryEnt.offsetRatio - 12; exY = 0;
+  } else if (primaryEnt.side === 'south') {
+    exX = W * primaryEnt.offsetRatio - 12; exY = H - 8;
+  } else if (primaryEnt.side === 'west') {
+    exX = 0; exY = H * primaryEnt.offsetRatio - 12;
+  } else if (primaryEnt.side === 'east') {
+    exX = W - 8; exY = H * primaryEnt.offsetRatio - 12;
+  }
+  const exitZone = { x: exX, y: exY, width: 24, height: 8 };
+
+  const isResidential = ['residential', 'panel_apartment', 'brick_residential', 'modern_residential'].includes(bld.type);
+  const isSuburban = bld.type === 'suburban';
   const isOffice = ['office', 'business_center'].includes(bld.type);
   const isShop = ['shop', 'shopping_mall', 'commercial'].includes(bld.type);
 
-  const rawEntrances = (bld.entrances && bld.entrances.length > 0)
-    ? bld.entrances
-    : [{ side: bld.entranceSide || 'south', offsetRatio: 0.5, number: 1 }];
-
   if (isResidential) {
-    // =========================================================================
-    // --- RESIDENTIAL BUILDINGS: DISTINCT ПОДЪЕЗДЫ WITH 2 APARTMENTS EACH ---
-    // =========================================================================
-    const numSections = Math.max(1, rawEntrances.length);
-    const totalFloors = getBuildingFloorsCount(bld);
-    const isHorizontalLayout = W >= H;
+    const rawEntrances = (bld.entrances && bld.entrances.length > 0)
+      ? bld.entrances
+      : [{ side: bld.entranceSide || 'south', offsetRatio: 0.5, number: 1 }];
+    const numSections = rawEntrances.length;
+    const DOOR_WIDTH = 33; // Strict 33px apartment entrance requirement
 
-    for (let k = 0; k < numSections; k++) {
-      const ent = rawEntrances[k] || { side: 'south', offsetRatio: 0.5, number: k + 1 };
-      
-      let secX = 6;
-      let secY = 6;
-      let secW = W - 12;
-      let secH = H - 12;
+    // Check primary orientation of building entrances (Horizontal vs Vertical)
+    const isVerticalLayout = (rawEntrances[0].side === 'west' || rawEntrances[0].side === 'east') && H > W;
 
-      if (isHorizontalLayout) {
-        // Divide building horizontally into independent vertical section columns (подъезды)
-        const sliceW = (W - 12) / numSections;
-        secX = 6 + k * sliceW;
-        secW = sliceW;
-        secY = 6;
-        secH = H - 12;
+    if (!isVerticalLayout) {
+      // --- HORIZONTAL RESIDENTIAL LAYOUT (South / North entrances) ---
+      const totalWidth = W - 12;
+      const sectionW = totalWidth / numSections;
 
-        // Solid dividing partition wall between adjacent подъезды (no passage between them!)
-        if (k > 0) {
-          walls.push({ x1: secX, y1: 6, x2: secX, y2: H - 6 });
-        }
-      } else {
-        // Divide building vertically into independent horizontal section rows
-        const sliceH = (H - 12) / numSections;
-        secX = 6;
-        secW = W - 12;
-        secY = 6 + k * sliceH;
-        secH = sliceH;
+      for (let s = 0; s < numSections; s++) {
+        const ent = rawEntrances[s];
+        const isNorthEnt = ent.side === 'north';
+        const secX0 = 6 + s * sectionW;
+        const secX1 = 6 + (s + 1) * sectionW;
+        const secW = secX1 - secX0;
+        const secY0 = 6;
+        const secY1 = H - 6;
+        const secH = secY1 - secY0;
 
-        if (k > 0) {
-          walls.push({ x1: 6, y1: secY, x2: W - 6, y2: secY });
-        }
-      }
-
-      // Inside section k: Create central entrance vestibule & elevator hall (Лифтовой холл / лестничная площадка)
-      const entSide = ent.side || 'south';
-      const hallW = Math.min(48, Math.max(34, secW * 0.32));
-      const hallX = secX + (secW - hallW) / 2;
-      const hallY = secY;
-      const hallH = secH;
-
-      rooms.push({
-        name: `Подъезд №${ent.number ?? (k + 1)}`,
-        x: hallX,
-        y: hallY,
-        width: hallW,
-        height: hallH,
-        color: '#334155',
-        floorStyle: 'tile'
-      });
-
-      // Position Elevator & Stairs inside this specific section's hall
-      let elX = hallX + 3;
-      let elY = hallY + 3;
-      let stX = hallX + hallW - 21;
-      let stY = hallY + 3;
-      let exX = hallX + (hallW - 22) / 2;
-      let exY = hallY + hallH - 10;
-
-      if (entSide === 'north') {
-        elY = hallY + hallH - 18;
-        stY = hallY + hallH - 18;
-        exY = hallY + 2;
-      } else if (entSide === 'west') {
-        elX = hallX + hallW - 21;
-        stX = hallX + hallW - 21;
-        elY = hallY + 3;
-        stY = hallY + 21;
-        exX = hallX + 2;
-        exY = hallY + (hallH - 10) / 2;
-      } else if (entSide === 'east') {
-        elX = hallX + 3;
-        stX = hallX + 3;
-        elY = hallY + 3;
-        stY = hallY + 21;
-        exX = hallX + hallW - 24;
-        exY = hallY + (hallH - 10) / 2;
-      }
-
-      const secElevator: InteriorZone = { x: elX, y: elY, width: 18, height: 15, entranceIndex: k, sectionIndex: k };
-      const secStairs: InteriorZone = { x: stX, y: stY, width: 18, height: 15, entranceIndex: k, sectionIndex: k };
-      const secExit: InteriorZone = { x: exX, y: exY, width: 22, height: 8, entranceIndex: k, sectionIndex: k };
-
-      elevators.push(secElevator);
-      stairs.push(secStairs);
-      exits.push(secExit);
-
-      // Section hall decorative furniture (Mailboxes, Notice board, plant)
-      furniture.push({
-        type: 'shelf',
-        x: hallX + 3,
-        y: (entSide === 'north' ? hallY + hallH - 32 : hallY + 20),
-        width: 14,
-        height: 6,
-        angle: 0,
-        color: '#475569' // Mailbox bank (почтовые ящики)
-      });
-
-      // Vestibule partition walls with 2 open doorways into Left & Right apartments
-      const doorW = 20;
-      const doorY = hallY + hallH / 2 - doorW / 2;
-
-      // Left Hall Wall (with doorway)
-      walls.push({ x1: hallX, y1: hallY, x2: hallX, y2: doorY });
-      walls.push({ x1: hallX, y1: doorY + doorW, x2: hallX, y2: hallY + hallH });
-
-      // Right Hall Wall (with doorway)
-      walls.push({ x1: hallX + hallW, y1: hallY, x2: hallX + hallW, y2: doorY });
-      walls.push({ x1: hallX + hallW, y1: doorY + doorW, x2: hallX + hallW, y2: hallY + hallH });
-
-      // -----------------------------------------------------------------------
-      // APARTMENT 1 (LEFT APARTMENT)
-      // -----------------------------------------------------------------------
-      const ap1W = hallX - secX;
-      const ap1H = secH;
-      const ap1Num = k * totalFloors * 2 + floor * 2 + 1;
-
-      if (ap1W > 25) {
-        // Living room / main area
-        const ap1LivW = ap1W;
-        const ap1LivH = ap1H > 65 ? ap1H * 0.55 : ap1H;
-        rooms.push({
-          name: `Кв. ${ap1Num}`,
-          x: secX,
-          y: secY,
-          width: ap1LivW,
-          height: ap1LivH,
-          color: '#1e293b',
-          floorStyle: 'parquet'
-        });
-
-        // Carpet in living area
-        furniture.push({
-          type: 'carpet',
-          x: secX + 6,
-          y: secY + 6,
-          width: ap1LivW - 12,
-          height: ap1LivH - 12,
-          angle: 0,
-          color: '#334155'
-        });
-
-        // Sofa along left wall
-        furniture.push({
-          type: 'sofa',
-          x: secX + 4,
-          y: secY + 8,
-          width: Math.min(26, ap1LivW - 8),
-          height: 10,
-          angle: 0,
-          color: '#0284c7'
-        });
-
-        // TV Stand + TV opposite sofa
-        if (ap1LivH > 35) {
-          furniture.push({
-            type: 'tv_cabinet',
-            x: secX + 4,
-            y: secY + ap1LivH - 12,
-            width: Math.min(22, ap1LivW - 8),
-            height: 5,
-            angle: 0,
-            color: '#78350f'
-          });
-          furniture.push({
-            type: 'tv',
-            x: secX + 6,
-            y: secY + ap1LivH - 11,
-            width: Math.min(16, ap1LivW - 12),
-            height: 2,
-            angle: 0,
-            color: '#000000'
-          });
+        // Solid Inter-Section Dividing Wall (Completely isolate this entrance section from others)
+        if (s < numSections - 1) {
+          walls.push({ x1: secX1, y1: secY0, x2: secX1, y2: secY1 });
         }
 
-        // House plant
-        furniture.push({
-          type: 'plant',
-          x: secX + ap1LivW - 9,
-          y: secY + 8,
-          width: 6,
-          height: 6,
-          angle: 0,
-          color: '#16a34a'
-        });
-
-        // Bookshelf
-        furniture.push({
-          type: 'bookshelf',
-          x: secX + ap1LivW - 10,
-          y: secY + ap1LivH - 12,
-          width: 8,
-          height: 5,
-          angle: 0,
-          color: '#a16207'
-        });
-
-        // Subdivided Bedroom & Kitchen/Bathroom if height permits
-        if (ap1H > 65) {
-          const ap1BedH = ap1H - ap1LivH;
-          const ap1BedY = secY + ap1LivH;
-          const ap1BedW = ap1W * 0.55;
-          const ap1KitW = ap1W - ap1BedW;
-
-          // Wall separating living from lower rooms (with doorway)
-          walls.push({ x1: secX, y1: ap1BedY, x2: secX + ap1W * 0.4, y2: ap1BedY });
-          walls.push({ x1: secX + ap1W * 0.7, y1: ap1BedY, x2: secX + ap1W, y2: ap1BedY });
-
-          // Bedroom
-          rooms.push({
-            name: 'Спальня',
-            x: secX,
-            y: ap1BedY,
-            width: ap1BedW,
-            height: ap1BedH,
-            color: '#0f172a',
-            floorStyle: 'wood'
-          });
-
-          // Bed
-          furniture.push({
-            type: 'bed',
-            x: secX + 4,
-            y: ap1BedY + 4,
-            width: Math.min(22, ap1BedW - 8),
-            height: Math.min(24, ap1BedH - 8),
-            angle: 0,
-            color: '#e11d48'
-          });
-
-          // Wardrobe
-          furniture.push({
-            type: 'wardrobe',
-            x: secX + 4,
-            y: ap1BedY + ap1BedH - 8,
-            width: Math.min(18, ap1BedW - 8),
-            height: 5,
-            angle: 0,
-            color: '#b45309'
-          });
-
-          // Kitchen & Bathroom
-          rooms.push({
-            name: 'Кухня',
-            x: secX + ap1BedW,
-            y: ap1BedY,
-            width: ap1KitW,
-            height: ap1BedH,
-            color: '#1e293b',
-            floorStyle: 'tile'
-          });
-
-          // Dividing wall between bed and kitchen
-          walls.push({ x1: secX + ap1BedW, y1: ap1BedY, x2: secX + ap1BedW, y2: secY + ap1H });
-
-          // Kitchen countertop
-          furniture.push({
-            type: 'kitchen_counter',
-            x: secX + ap1BedW + 2,
-            y: ap1BedY + 3,
-            width: ap1KitW - 4,
-            height: 8,
-            angle: 0,
-            color: '#475569'
-          });
-
-          // Fridge
-          furniture.push({
-            type: 'fridge',
-            x: secX + ap1W - 8,
-            y: ap1BedY + ap1BedH - 9,
-            width: 6,
-            height: 6,
-            angle: 0,
-            color: '#e2e8f0'
-          });
-
-          // Dining Table + Chairs
-          furniture.push({
-            type: 'table',
-            x: secX + ap1BedW + 4,
-            y: ap1BedY + ap1BedH - 12,
-            width: 12,
-            height: 8,
-            angle: 0,
-            color: '#b45309'
-          });
-          furniture.push({
-            type: 'chair',
-            x: secX + ap1BedW + 8,
-            y: ap1BedY + ap1BedH - 15,
-            width: 4,
-            height: 3,
-            angle: 0,
-            color: '#64748b'
-          });
-        }
-      }
-
-      // -----------------------------------------------------------------------
-      // APARTMENT 2 (RIGHT APARTMENT)
-      // -----------------------------------------------------------------------
-      const ap2X = hallX + hallW;
-      const ap2W = secX + secW - ap2X;
-      const ap2H = secH;
-      const ap2Num = k * totalFloors * 2 + floor * 2 + 2;
-
-      if (ap2W > 25) {
-        const ap2LivW = ap2W;
-        const ap2LivH = ap2H > 65 ? ap2H * 0.55 : ap2H;
+        // Central Hallway / Lobby / Elevator Core (Подъездный холл)
+        const hallW = Math.max(46, Math.min(secW * 0.28, 54));
+        const hallX = secX0 + (secW - hallW) / 2;
+        const hallY = secY0;
+        const hallH = secH;
+        const hallCenterX = hallX + hallW / 2;
 
         rooms.push({
-          name: `Кв. ${ap2Num}`,
-          x: ap2X,
-          y: secY,
-          width: ap2LivW,
-          height: ap2LivH,
-          color: '#1e293b',
-          floorStyle: 'parquet'
+          name: `Подъезд ${ent.number || (s + 1)}`,
+          x: hallX,
+          y: hallY,
+          width: hallW,
+          height: hallH,
+          color: '#334155',
+          floorStyle: 'tile'
         });
 
-        furniture.push({
-          type: 'carpet',
-          x: ap2X + 6,
-          y: secY + 6,
-          width: ap2LivW - 12,
-          height: ap2LivH - 12,
-          angle: 0,
-          color: '#1e1b4b'
-        });
+        // Dedicated Elevator & Stairs & Exit for this entrance section
+        let secElevator: InteriorZone;
+        let secStairs: InteriorZone;
+        let secExit: InteriorZone;
 
-        // Sofa along right wall
-        furniture.push({
-          type: 'sofa',
-          x: ap2X + ap2LivW - Math.min(26, ap2LivW - 8) - 4,
-          y: secY + 8,
-          width: Math.min(26, ap2LivW - 8),
-          height: 10,
-          angle: 0,
-          color: '#8b5cf6'
-        });
-
-        // TV Stand + TV opposite sofa
-        if (ap2LivH > 35) {
-          furniture.push({
-            type: 'tv_cabinet',
-            x: ap2X + ap2LivW - Math.min(22, ap2LivW - 8) - 4,
-            y: secY + ap2LivH - 12,
-            width: Math.min(22, ap2LivW - 8),
-            height: 5,
-            angle: 0,
-            color: '#78350f'
-          });
-          furniture.push({
-            type: 'tv',
-            x: ap2X + ap2LivW - Math.min(16, ap2LivW - 12) - 6,
-            y: secY + ap2LivH - 11,
-            width: Math.min(16, ap2LivW - 12),
-            height: 2,
-            angle: 0,
-            color: '#000000'
-          });
+        if (isNorthEnt) {
+          // Entrance at North (top), elevator and stairs at South (bottom)
+          secExit = { x: hallCenterX - 13, y: secY0, width: 26, height: 10, entranceIndex: s, sectionIndex: s };
+          secElevator = { x: hallX + 3, y: secY1 - 20, width: 20, height: 18, entranceIndex: s, sectionIndex: s };
+          secStairs = { x: hallX + hallW - 23, y: secY1 - 20, width: 20, height: 18, entranceIndex: s, sectionIndex: s };
+        } else {
+          // Entrance at South (bottom), elevator and stairs at North (top)
+          secExit = { x: hallCenterX - 13, y: secY1 - 10, width: 26, height: 10, entranceIndex: s, sectionIndex: s };
+          secElevator = { x: hallX + 3, y: secY0 + 2, width: 20, height: 18, entranceIndex: s, sectionIndex: s };
+          secStairs = { x: hallX + hallW - 23, y: secY0 + 2, width: 20, height: 18, entranceIndex: s, sectionIndex: s };
         }
 
-        furniture.push({
-          type: 'plant',
-          x: ap2X + 4,
-          y: secY + 8,
-          width: 6,
-          height: 6,
-          angle: 0,
-          color: '#16a34a'
-        });
+        elevators.push(secElevator);
+        stairs.push(secStairs);
+        exits.push(secExit);
 
-        furniture.push({
-          type: 'bookshelf',
-          x: ap2X + 4,
-          y: secY + ap2LivH - 12,
-          width: 8,
-          height: 5,
-          angle: 0,
-          color: '#a16207'
-        });
-
-        if (ap2H > 65) {
-          const ap2BedH = ap2H - ap2LivH;
-          const ap2BedY = secY + ap2LivH;
-          const ap2BedW = ap2W * 0.55;
-          const ap2KitW = ap2W - ap2BedW;
-
-          walls.push({ x1: ap2X, y1: ap2BedY, x2: ap2X + ap2W * 0.3, y2: ap2BedY });
-          walls.push({ x1: ap2X + ap2W * 0.6, y1: ap2BedY, x2: ap2X + ap2W, y2: ap2BedY });
-
-          // Kitchen & Bathroom
-          rooms.push({
-            name: 'Кухня',
-            x: ap2X,
-            y: ap2BedY,
-            width: ap2KitW,
-            height: ap2BedH,
-            color: '#1e293b',
-            floorStyle: 'tile'
-          });
-
-          // Dividing wall between kitchen and bedroom
-          walls.push({ x1: ap2X + ap2KitW, y1: ap2BedY, x2: ap2X + ap2KitW, y2: secY + ap2H });
-
+        // Hallway decor: Mailbox bank & Cast-iron radiator along hallway wall
+        if (isNorthEnt) {
           furniture.push({
-            type: 'kitchen_counter',
-            x: ap2X + 2,
-            y: ap2BedY + 3,
-            width: ap2KitW - 4,
-            height: 8,
-            angle: 0,
-            color: '#475569'
-          });
-
-          furniture.push({
-            type: 'fridge',
-            x: ap2X + 2,
-            y: ap2BedY + ap2BedH - 9,
-            width: 6,
-            height: 6,
-            angle: 0,
-            color: '#e2e8f0'
-          });
-
-          furniture.push({
-            type: 'table',
-            x: ap2X + 10,
-            y: ap2BedY + ap2BedH - 12,
-            width: 12,
-            height: 8,
-            angle: 0,
-            color: '#b45309'
-          });
-          furniture.push({
-            type: 'chair',
-            x: ap2X + 14,
-            y: ap2BedY + ap2BedH - 15,
-            width: 4,
-            height: 3,
-            angle: 0,
-            color: '#64748b'
-          });
-
-          // Bedroom
-          rooms.push({
-            name: 'Спальня',
-            x: ap2X + ap2KitW,
-            y: ap2BedY,
-            width: ap2BedW,
-            height: ap2BedH,
-            color: '#0f172a',
-            floorStyle: 'wood'
-          });
-
-          furniture.push({
-            type: 'bed',
-            x: ap2X + ap2KitW + ap2BedW - Math.min(22, ap2BedW - 8) - 4,
-            y: ap2BedY + 4,
-            width: Math.min(22, ap2BedW - 8),
-            height: Math.min(24, ap2BedH - 8),
-            angle: 0,
-            color: '#3b82f6'
-          });
-
-          furniture.push({
-            type: 'wardrobe',
-            x: ap2X + ap2KitW + 4,
-            y: ap2BedY + ap2BedH - 8,
-            width: Math.min(18, ap2BedW - 8),
-            height: 5,
-            angle: 0,
-            color: '#b45309'
-          });
-        }
-      }
-    }
-
-  } else if (bld.type === 'school_kindergarten') {
-    // =========================================================================
-    // --- SCHOOL & KINDERGARTEN (MATHEMATICALLY CLAMPED TO BUILDING BOUNDS) ---
-    // =========================================================================
-    const entSide = rawEntrances[0]?.side || 'south';
-    const isSmallKindergarten = W < 110 || H < 75;
-
-    // Outer zones
-    const exX = W / 2 - 12;
-    const exY = entSide === 'north' ? 6 : H - 14;
-    const elX = W / 2 - 20;
-    const elY = entSide === 'north' ? H - 22 : 6;
-    const stX = W / 2 + 4;
-    const stY = entSide === 'north' ? H - 22 : 6;
-
-    elevators.push({ x: elX, y: elY, width: 16, height: 14 });
-    stairs.push({ x: stX, y: stY, width: 16, height: 14 });
-    exits.push({ x: exX, y: exY, width: 24, height: 8 });
-
-    if (isSmallKindergarten) {
-      // Small cozy Kindergarten layout (Раздевалка, Игровая комната, Спальня, Буфет)
-      const corrW = Math.min(28, W * 0.28);
-      const corrX = (W - corrW) / 2;
-
-      // Central Corridor / Cloakroom (Раздевалка с детскими шкафчиками)
-      rooms.push({
-        name: 'Раздевалка / Холл',
-        x: corrX,
-        y: 6,
-        width: corrW,
-        height: H - 12,
-        color: '#334155',
-        floorStyle: 'linoleum'
-      });
-
-      // Child lockers in hallway
-      furniture.push({
-        type: 'shelf',
-        x: corrX + 2,
-        y: 22,
-        width: corrW - 4,
-        height: 5,
-        angle: 0,
-        color: '#f59e0b'
-      });
-
-      const roomW = corrX - 6;
-      const roomH = H - 12;
-
-      // Left: Group Playroom (Игровая комната)
-      rooms.push({
-        name: 'Игровая комната',
-        x: 6,
-        y: 6,
-        width: roomW,
-        height: roomH,
-        color: '#1e293b',
-        floorStyle: 'playmat'
-      });
-
-      // Colorful play mat
-      furniture.push({
-        type: 'carpet',
-        x: 10,
-        y: 10,
-        width: roomW - 8,
-        height: roomH - 20,
-        angle: 0,
-        color: '#0284c7'
-      });
-
-      // Kids tables & chairs
-      const tableSpacingX = Math.min(18, (roomW - 14) / 2);
-      furniture.push({
-        type: 'kids_table',
-        x: 12,
-        y: 14,
-        width: 12,
-        height: 10,
-        angle: 0,
-        color: '#eab308'
-      });
-      furniture.push({
-        type: 'kids_table',
-        x: 12 + tableSpacingX,
-        y: 14,
-        width: 12,
-        height: 10,
-        angle: 0,
-        color: '#22c55e'
-      });
-
-      // Toy chest & shelves
-      furniture.push({
-        type: 'toy_chest',
-        x: 10,
-        y: roomH - 10,
-        width: 14,
-        height: 6,
-        angle: 0,
-        color: '#ef4444'
-      });
-      furniture.push({
-        type: 'blackboard',
-        x: 8,
-        y: 7,
-        width: Math.min(20, roomW - 10),
-        height: 3,
-        angle: 0,
-        color: '#15803d'
-      });
-
-      // Right: Nap Bedroom (Спальная комната)
-      const rightX = corrX + corrW;
-      const rightW = W - 6 - rightX;
-      rooms.push({
-        name: 'Детская спальня',
-        x: rightX,
-        y: 6,
-        width: rightW,
-        height: roomH,
-        color: '#0f172a',
-        floorStyle: 'wood'
-      });
-
-      // Rows of cute small children cots strictly bounded inside the room
-      const cotCols = Math.max(1, Math.floor((rightW - 10) / 16));
-      const cotRows = Math.max(1, Math.floor((roomH - 20) / 18));
-      const cotColors = ['#38bdf8', '#f472b6', '#4ade80', '#fbbf24'];
-
-      for (let c = 0; c < cotCols; c++) {
-        for (let r = 0; r < cotRows; r++) {
-          furniture.push({
-            type: 'kids_bed',
-            x: rightX + 6 + c * 16,
-            y: 12 + r * 18,
-            width: 11,
+            type: 'mailbox_bank',
+            x: hallX + 3,
+            y: secY1 - 38,
+            width: 8,
             height: 14,
             angle: 0,
-            color: cotColors[(c + r) % cotColors.length]
+            color: '#64748b'
+          });
+          furniture.push({
+            type: 'radiator',
+            x: hallX + hallW - 7,
+            y: secY1 - 38,
+            width: 4,
+            height: 12,
+            angle: 0,
+            color: '#cbd5e1'
+          });
+        } else {
+          furniture.push({
+            type: 'mailbox_bank',
+            x: hallX + 3,
+            y: secY0 + 24,
+            width: 8,
+            height: 14,
+            angle: 0,
+            color: '#64748b'
+          });
+          furniture.push({
+            type: 'radiator',
+            x: hallX + hallW - 7,
+            y: secY0 + 24,
+            width: 4,
+            height: 12,
+            angle: 0,
+            color: '#cbd5e1'
           });
         }
+
+        // Doorway vertical positioning in hallway walls (safely centered away from elevator & exit)
+        const doorY = Math.round(secY0 + 24 + (secH - 48 - DOOR_WIDTH) / 2);
+
+        // Left dividing wall with exactly 33px doorway into Left Apartment
+        walls.push({ x1: hallX, y1: secY0, x2: hallX, y2: doorY });
+        walls.push({ x1: hallX, y1: doorY + DOOR_WIDTH, x2: hallX, y2: secY1 });
+
+        // Right dividing wall with exactly 33px doorway into Right Apartment
+        walls.push({ x1: hallX + hallW, y1: secY0, x2: hallX + hallW, y2: doorY });
+        walls.push({ x1: hallX + hallW, y1: doorY + DOOR_WIDTH, x2: hallX + hallW, y2: secY1 });
+
+        // --- APARTMENT 1: LEFT (Квартира слева) ---
+        const aptLeftW = hallX - secX0;
+        const aptLeftH = secH;
+        const aptLeftNum = floor * (numSections * 2) + s * 2 + 1;
+        const leftThemeIndex = (aptLeftNum + floor * 3 + s * 2) % 6;
+
+        rooms.push({
+          name: `Кв. ${aptLeftNum}`,
+          x: secX0,
+          y: secY0,
+          width: aptLeftW,
+          height: aptLeftH,
+          color: '#1e293b',
+          floorStyle: leftThemeIndex === 4 ? 'wood' : (leftThemeIndex === 5 ? 'parquet' : 'parquet')
+        });
+
+        generateHorizontalApartmentInterior(
+          furniture,
+          aptLeftNum,
+          leftThemeIndex,
+          secX0,
+          secX1,
+          secY0,
+          secY1,
+          hallX,
+          hallW,
+          true,
+          doorY,
+          DOOR_WIDTH
+        );
+
+        // --- APARTMENT 2: RIGHT (Квартира справа) ---
+        const aptRightX = hallX + hallW;
+        const aptRightW = secX1 - aptRightX;
+        const aptRightH = secH;
+        const aptRightNum = floor * (numSections * 2) + s * 2 + 2;
+        const rightThemeIndex = (aptRightNum + floor * 3 + s * 2) % 6;
+
+        rooms.push({
+          name: `Кв. ${aptRightNum}`,
+          x: aptRightX,
+          y: secY0,
+          width: aptRightW,
+          height: aptRightH,
+          color: '#1e293b',
+          floorStyle: rightThemeIndex === 4 ? 'wood' : (rightThemeIndex === 5 ? 'parquet' : 'parquet')
+        });
+
+        generateHorizontalApartmentInterior(
+          furniture,
+          aptRightNum,
+          rightThemeIndex,
+          secX0,
+          secX1,
+          secY0,
+          secY1,
+          hallX,
+          hallW,
+          false,
+          doorY,
+          DOOR_WIDTH
+        );
       }
-
-      // Walls with doorways into corridor
-      walls.push({ x1: corrX, y1: 6, x2: corrX, y2: H / 2 - 8 });
-      walls.push({ x1: corrX, y1: H / 2 + 8, x2: corrX, y2: H - 6 });
-
-      walls.push({ x1: rightX, y1: 6, x2: rightX, y2: H / 2 - 8 });
-      walls.push({ x1: rightX, y1: H / 2 + 8, x2: rightX, y2: H - 6 });
-
     } else {
-      // Larger School Building
-      const corrH = 20;
-      const corrY = H / 2 - corrH / 2;
+      // --- VERTICAL RESIDENTIAL LAYOUT (West / East entrances) ---
+      const totalHeight = H - 12;
+      const sectionH = totalHeight / numSections;
 
-      rooms.push({
-        name: 'Школьный коридор',
-        x: 6,
-        y: corrY,
-        width: W - 12,
-        height: corrH,
-        color: '#334155',
-        floorStyle: 'tile'
-      });
+      for (let s = 0; s < numSections; s++) {
+        const ent = rawEntrances[s];
+        const isEastEnt = ent.side === 'east';
+        const secY0 = 6 + s * sectionH;
+        const secY1 = 6 + (s + 1) * sectionH;
+        const secH = secY1 - secY0;
+        const secX0 = 6;
+        const secX1 = W - 6;
+        const secW = secX1 - secX0;
 
-      const classW = (W - 24) / 2;
-      const topH = corrY - 6;
-      const botH = H - 6 - (corrY + corrH);
-
-      // Classroom 1 (Top Left)
-      rooms.push({
-        name: 'Класс математики',
-        x: 6,
-        y: 6,
-        width: classW,
-        height: topH,
-        color: '#1e293b',
-        floorStyle: 'parquet'
-      });
-      // Classroom 2 (Top Right)
-      rooms.push({
-        name: 'Класс физики',
-        x: 18 + classW,
-        y: 6,
-        width: classW,
-        height: topH,
-        color: '#1e293b',
-        floorStyle: 'parquet'
-      });
-
-      // Classroom 3 (Bottom Left)
-      rooms.push({
-        name: 'Класс литературы',
-        x: 6,
-        y: corrY + corrH,
-        width: classW,
-        height: botH,
-        color: '#1e293b',
-        floorStyle: 'parquet'
-      });
-      // Teachers room / Library (Bottom Right)
-      rooms.push({
-        name: 'Учительская / Библиотека',
-        x: 18 + classW,
-        y: corrY + corrH,
-        width: classW,
-        height: botH,
-        color: '#0f172a',
-        floorStyle: 'wood'
-      });
-
-      // Chalkboards
-      furniture.push({ type: 'blackboard', x: 12, y: 7, width: 28, height: 3, angle: 0, color: '#15803d' });
-      furniture.push({ type: 'blackboard', x: 24 + classW, y: 7, width: 28, height: 3, angle: 0, color: '#15803d' });
-
-      // Student Desks properly spaced
-      const deskCols = Math.min(3, Math.floor((classW - 16) / 16));
-      const deskRows = Math.min(3, Math.floor((topH - 18) / 14));
-
-      for (let dc = 0; dc < deskCols; dc++) {
-        for (let dr = 0; dr < deskRows; dr++) {
-          furniture.push({
-            type: 'desk',
-            x: 12 + dc * 16,
-            y: 14 + dr * 14,
-            width: 10,
-            height: 6,
-            angle: 0,
-            color: '#a16207'
-          });
-          furniture.push({
-            type: 'desk',
-            x: 24 + classW + dc * 16,
-            y: 14 + dr * 14,
-            width: 10,
-            height: 6,
-            angle: 0,
-            color: '#a16207'
-          });
+        // Solid Inter-Section Dividing Wall
+        if (s < numSections - 1) {
+          walls.push({ x1: secX0, y1: secY1, x2: secX1, y2: secY1 });
         }
+
+        // Central Hallway / Lobby / Elevator Core
+        const hallH = Math.max(46, Math.min(secH * 0.28, 54));
+        const hallY = secY0 + (secH - hallH) / 2;
+        const hallX = secX0;
+        const hallW = secW;
+        const hallCenterY = hallY + hallH / 2;
+
+        rooms.push({
+          name: `Подъезд ${ent.number || (s + 1)}`,
+          x: hallX,
+          y: hallY,
+          width: hallW,
+          height: hallH,
+          color: '#334155',
+          floorStyle: 'tile'
+        });
+
+        let secElevator: InteriorZone;
+        let secStairs: InteriorZone;
+        let secExit: InteriorZone;
+
+        if (isEastEnt) {
+          secExit = { x: secX1 - 10, y: hallCenterY - 13, width: 10, height: 26, entranceIndex: s, sectionIndex: s };
+          secElevator = { x: secX0 + 2, y: hallY + 3, width: 18, height: 20, entranceIndex: s, sectionIndex: s };
+          secStairs = { x: secX0 + 2, y: hallY + hallH - 23, width: 18, height: 20, entranceIndex: s, sectionIndex: s };
+        } else {
+          secExit = { x: secX0, y: hallCenterY - 13, width: 10, height: 26, entranceIndex: s, sectionIndex: s };
+          secElevator = { x: secX1 - 20, y: hallY + 3, width: 18, height: 20, entranceIndex: s, sectionIndex: s };
+          secStairs = { x: secX1 - 20, y: hallY + hallH - 23, width: 18, height: 20, entranceIndex: s, sectionIndex: s };
+        }
+
+        elevators.push(secElevator);
+        stairs.push(secStairs);
+        exits.push(secExit);
+
+        // Hallway decor
+        furniture.push({
+          type: 'mailbox_bank',
+          x: isEastEnt ? secX0 + 22 : secX1 - 30,
+          y: hallY + 3,
+          width: 8,
+          height: 14,
+          angle: 0,
+          color: '#64748b'
+        });
+
+        const doorX = Math.round(secX0 + 24 + (secW - 48 - DOOR_WIDTH) / 2);
+
+        // Top dividing wall with 33px doorway
+        walls.push({ x1: secX0, y1: hallY, x2: doorX, y2: hallY });
+        walls.push({ x1: doorX + DOOR_WIDTH, y1: hallY, x2: secX1, y2: hallY });
+
+        // Bottom dividing wall with 33px doorway
+        walls.push({ x1: secX0, y1: hallY + hallH, x2: doorX, y2: hallY + hallH });
+        walls.push({ x1: doorX + DOOR_WIDTH, y1: hallY + hallH, x2: secX1, y2: hallY + hallH });
+
+        // --- APARTMENT 1: TOP (Квартира сверху) ---
+        const aptTopH = hallY - secY0;
+        const aptTopNum = floor * (numSections * 2) + s * 2 + 1;
+        const topThemeIndex = (aptTopNum + floor * 3 + s * 2) % 4;
+
+        rooms.push({
+          name: `Кв. ${aptTopNum}`,
+          x: secX0,
+          y: secY0,
+          width: secW,
+          height: aptTopH,
+          color: '#1e293b',
+          floorStyle: 'parquet'
+        });
+
+        generateVerticalApartmentInterior(
+          furniture,
+          aptTopNum,
+          topThemeIndex,
+          secX0,
+          secX1,
+          secY0,
+          secY1,
+          hallY,
+          hallH,
+          true,
+          doorX,
+          DOOR_WIDTH
+        );
+
+        // --- APARTMENT 2: BOTTOM (Квартира снизу) ---
+        const aptBottomY = hallY + hallH;
+        const aptBottomH = secY1 - aptBottomY;
+        const aptBottomNum = floor * (numSections * 2) + s * 2 + 2;
+        const botThemeIndex = (aptBottomNum + floor * 3 + s * 2) % 4;
+
+        rooms.push({
+          name: `Кв. ${aptBottomNum}`,
+          x: secX0,
+          y: aptBottomY,
+          width: secW,
+          height: aptBottomH,
+          color: '#1e293b',
+          floorStyle: 'parquet'
+        });
+
+        generateVerticalApartmentInterior(
+          furniture,
+          aptBottomNum,
+          botThemeIndex,
+          secX0,
+          secX1,
+          secY0,
+          secY1,
+          hallY,
+          hallH,
+          false,
+          doorX,
+          DOOR_WIDTH
+        );
       }
-
-      // Corridor walls with doorways
-      walls.push({ x1: 6, y1: corrY, x2: classW * 0.4, y2: corrY });
-      walls.push({ x1: classW * 0.6, y1: corrY, x2: 18 + classW * 1.4, y2: corrY });
-      walls.push({ x1: 18 + classW * 1.6, y1: corrY, x2: W - 6, y2: corrY });
-
-      walls.push({ x1: 6, y1: corrY + corrH, x2: classW * 0.4, y2: corrY + corrH });
-      walls.push({ x1: classW * 0.6, y1: corrY + corrH, x2: 18 + classW * 1.4, y2: corrY + corrH });
-      walls.push({ x1: 18 + classW * 1.6, y1: corrY + corrH, x2: W - 6, y2: corrY + corrH });
     }
+  } else if (isSuburban) {
+    // --- COZY 2-STORY SUBURBAN COTTAGE (Загородный коттедж) ---
+    const DOOR_WIDTH = 33;
+    const subExit = { x: W / 2 - 13, y: H - 10, width: 26, height: 10, entranceIndex: 0, sectionIndex: 0 };
+    const subStairs = { x: W - 26, y: 8, width: 20, height: 20, entranceIndex: 0, sectionIndex: 0 };
+    exits.push(subExit);
+    stairs.push(subStairs);
 
+    if (floor === 0) {
+      // Ground Floor: Hallway, Spacious Living Room with Fireplace / TV, and Kitchen
+      const hallH = 34;
+      const hallY = H - hallH - 6;
+      rooms.push({ name: 'Прихожая коттеджа', x: 6, y: hallY, width: W - 12, height: hallH, color: '#334155', floorStyle: 'tile' });
+      
+      const mainW = (W - 12) * 0.58;
+      const kitW = W - 12 - mainW;
+      rooms.push({ name: 'Гостиная с камином', x: 6, y: 6, width: mainW, height: hallY - 6, color: '#1e293b', floorStyle: 'parquet' });
+      rooms.push({ name: 'Кухня-Столовая', x: 6 + mainW, y: 6, width: kitW, height: hallY - 6, color: '#0f172a', floorStyle: 'tile' });
+
+      // Dividing wall between living room and kitchen with 33px door
+      const kitDoorY = Math.round(6 + (hallY - 12 - DOOR_WIDTH) / 2);
+      walls.push({ x1: 6 + mainW, y1: 6, x2: 6 + mainW, y2: kitDoorY });
+      walls.push({ x1: 6 + mainW, y1: kitDoorY + DOOR_WIDTH, x2: 6 + mainW, y2: hallY });
+
+      // Dividing wall between hallway and living room with 33px door
+      const hallDoorX = Math.round(6 + (mainW - DOOR_WIDTH) / 2);
+      walls.push({ x1: 6, y1: hallY, x2: hallDoorX, y2: hallY });
+      walls.push({ x1: hallDoorX + DOOR_WIDTH, y1: hallY, x2: W - 6, y2: hallY });
+
+      // Furniture
+      furniture.push({ type: 'carpet', x: 12, y: 12, width: mainW - 12, height: hallY - 24, angle: 0, color: '#7c2d12' });
+      furniture.push({ type: 'sofa', x: 12, y: 12, width: 28, height: 12, angle: 0, color: '#38bdf8' });
+      furniture.push({ type: 'tv_cabinet', x: 12, y: hallY - 12, width: 22, height: 5, angle: 0, color: '#78350f' });
+      furniture.push({ type: 'tv', x: 14, y: hallY - 11, width: 18, height: 2, angle: 0, color: '#000000' });
+      furniture.push({ type: 'kitchen_counter', x: W - 28, y: hallY - 14, width: 22, height: 8, angle: 0, color: '#0284c7' });
+      furniture.push({ type: 'fridge', x: W - 14, y: 12, width: 8, height: 8, angle: 0, color: '#cbd5e1' });
+    } else {
+      // 1st Floor: Master Bedroom, Children's Room, and Bathroom
+      const halfW = (W - 12) / 2;
+      rooms.push({ name: 'Холл 2 этажа', x: 6, y: H / 2 - 16, width: W - 12, height: 32, color: '#334155', floorStyle: 'parquet' });
+      rooms.push({ name: 'Спальня хозяев', x: 6, y: 6, width: halfW, height: H / 2 - 22, color: '#0f172a', floorStyle: 'wood' });
+      rooms.push({ name: 'Детская комната', x: 6, y: H / 2 + 16, width: halfW, height: H / 2 - 22, color: '#1e293b', floorStyle: 'wood' });
+      rooms.push({ name: 'Ванная комната', x: 6 + halfW, y: H / 2 + 16, width: halfW, height: H / 2 - 22, color: '#0369a1', floorStyle: 'tile' });
+
+      // Walls & 33px Doors
+      walls.push({ x1: 6, y1: H / 2 - 16, x2: 18, y2: H / 2 - 16 });
+      walls.push({ x1: 18 + DOOR_WIDTH, y1: H / 2 - 16, x2: 6 + halfW, y2: H / 2 - 16 });
+
+      walls.push({ x1: 6, y1: H / 2 + 16, x2: 18, y2: H / 2 + 16 });
+      walls.push({ x1: 18 + DOOR_WIDTH, y1: H / 2 + 16, x2: 6 + halfW, y2: H / 2 + 16 });
+
+      // Furniture
+      furniture.push({ type: 'bed', x: 10, y: 10, width: 22, height: 24, angle: 0, color: '#f43f5e' });
+      furniture.push({ type: 'wardrobe', x: halfW - 14, y: 10, width: 14, height: 8, angle: 0, color: '#451a03' });
+      furniture.push({ type: 'kids_bed', x: 10, y: H - 28, width: 18, height: 20, angle: 0, color: '#38bdf8' });
+      furniture.push({ type: 'bath', x: W - 26, y: H - 24, width: 20, height: 14, angle: 0, color: '#cbd5e1' });
+      furniture.push({ type: 'toilet', x: W - 14, y: H / 2 + 20, width: 8, height: 8, angle: 0, color: '#f1f5f9' });
+    }
   } else if (isOffice) {
-    // =========================================================================
-    // --- OFFICE & BUSINESS CENTER ---
-    // =========================================================================
-    const exX = W / 2 - 12;
-    const exY = H - 12;
-    const elX = W / 2 - 18;
-    const elY = 6;
-    const stX = W / 2 + 4;
-    const stY = 6;
-
-    elevators.push({ x: elX, y: elY, width: 16, height: 14 });
-    stairs.push({ x: stX, y: stY, width: 16, height: 14 });
-    exits.push({ x: exX, y: exY, width: 24, height: 8 });
-
-    if (floor === 0) {
-      rooms.push({ name: 'Главный Вестибюль', x: 6, y: 6, width: W - 12, height: H - 12, color: '#334155', floorStyle: 'tile' });
-      furniture.push({ type: 'desk_reception', x: W / 2 - 24, y: H / 2 - 6, width: 48, height: 10, angle: 0, color: '#f59e0b' });
-      furniture.push({ type: 'computer', x: W / 2 - 12, y: H / 2 - 4, width: 6, height: 4, angle: 0, color: '#1e293b' });
-      furniture.push({ type: 'computer', x: W / 2 + 6, y: H / 2 - 4, width: 6, height: 4, angle: 0, color: '#1e293b' });
-      furniture.push({ type: 'sofa', x: 12, y: H - 24, width: 32, height: 10, angle: 0, color: '#64748b' });
-      furniture.push({ type: 'sofa', x: W - 44, y: H - 24, width: 32, height: 10, angle: 0, color: '#64748b' });
-      furniture.push({ type: 'cooler', x: W - 20, y: 14, width: 8, height: 8, angle: 0, color: '#0284c7' });
-      furniture.push({ type: 'plant', x: 10, y: H - 36, width: 10, height: 10, angle: 0, color: '#15803d' });
-    } else {
-      const hallwayY = H / 2 - 10;
-      rooms.push({ name: 'Коридор', x: 6, y: hallwayY, width: W - 12, height: 20, color: '#475569', floorStyle: 'tile' });
-      
-      const offW = W / 2 - 26;
-      const offH = hallwayY - 6;
-      rooms.push({ name: `Офис ${floor * 10 + 1}`, x: 6, y: 6, width: offW, height: offH, color: '#1e293b', floorStyle: 'wood' });
-      rooms.push({ name: `Офис ${floor * 10 + 2}`, x: W / 2 + 20, y: 6, width: offW, height: offH, color: '#1e293b', floorStyle: 'wood' });
-
-      furniture.push({ type: 'desk', x: 12, y: 12, width: 16, height: 10, angle: 0, color: '#a16207' });
-      furniture.push({ type: 'computer', x: 17, y: 13, width: 6, height: 4, angle: 0, color: '#000000' });
-      furniture.push({ type: 'chair', x: 18, y: 8, width: 4, height: 4, angle: 0, color: '#1e293b' });
-
-      furniture.push({ type: 'desk', x: W - 28, y: 12, width: 16, height: 10, angle: 0, color: '#a16207' });
-      furniture.push({ type: 'computer', x: W - 23, y: 13, width: 6, height: 4, angle: 0, color: '#000000' });
-      furniture.push({ type: 'chair', x: W - 22, y: 8, width: 4, height: 4, angle: 0, color: '#1e293b' });
-    }
-
-  } else if (isShop) {
-    // =========================================================================
-    // --- SHOPS, COMMERCIAL STRIPS & GRAND SHOPPING MALLS ---
-    // =========================================================================
-    if (bld.type === 'shopping_mall' || (bld.type === 'commercial' && W >= 280)) {
-      // --- GRAND SHOPPING MALL (ТРЦ) MULTI-ZONE LAYOUT ---
-      const atriumY = Math.floor(H / 2 - 12);
-      const atriumH = 24;
-
-      // Exits matching the actual building entrances
-      for (const ent of rawEntrances) {
-        const entSide = ent.side || 'south';
-        const offsetRatio = ent.offsetRatio || 0.5;
-        const entX = Math.floor(W * offsetRatio - 12);
-        if (entSide === 'south') {
-          exits.push({ x: entX, y: H - 12, width: 24, height: 8 });
-        } else if (entSide === 'north') {
-          exits.push({ x: entX, y: 4, width: 24, height: 8 });
-        } else if (entSide === 'west') {
-          exits.push({ x: 4, y: Math.floor(H * offsetRatio - 12), width: 8, height: 24 });
-        } else if (entSide === 'east') {
-          exits.push({ x: W - 12, y: Math.floor(H * offsetRatio - 12), width: 8, height: 24 });
-        }
-      }
-
-      // Add elevator and stairs in the central atrium
-      elevators.push({ x: Math.floor(W * 0.45), y: atriumY + 5, width: 14, height: 10 });
-      stairs.push({ x: Math.floor(W * 0.55), y: atriumY + 5, width: 14, height: 10 });
-
-      // Central Atrium (Main Corridor)
-      rooms.push({
-        name: floor === 0 ? 'Главный Атриум ТРЦ' : 'Галерея 2-го этажа',
-        x: 6,
-        y: atriumY,
-        width: W - 12,
-        height: atriumH,
-        color: '#1e293b',
-        floorStyle: 'tile'
-      });
-
-      // Atrium Benches, Trash cans & Plants
-      const numAtriumProps = Math.floor(W / 120);
-      for (let i = 0; i < numAtriumProps; i++) {
-        const px = 40 + i * 110;
-        if (Math.abs(px - W * 0.5) > 40) { // Keep elevator/stairs area clear
-          furniture.push({ type: 'bench', x: px, y: atriumY + 14, width: 14, height: 6, angle: 0, color: '#475569' });
-          furniture.push({ type: 'plant', x: px + 22, y: atriumY + 14, width: 6, height: 6, angle: 0, color: '#10b981' });
-          furniture.push({ type: 'trash_can', x: px - 10, y: atriumY + 14, width: 4, height: 4, angle: 0, color: '#334155' });
-        }
-      }
-
-      // Food court dining area in the right side of the Atrium
-      const foodCourtX = Math.floor(W * 0.72);
-      rooms.push({
-        name: 'Фуд-корт',
-        x: foodCourtX,
-        y: atriumY,
-        width: W - 6 - foodCourtX,
-        height: atriumH,
-        color: '#0f172a',
-        floorStyle: 'tile'
-      });
-      // Food court furniture
-      for (let f = 0; f < 3; f++) {
-        const fx = foodCourtX + 12 + f * 24;
-        furniture.push({ type: 'table', x: fx, y: atriumY + 10, width: 8, height: 8, angle: 0, color: '#d97706' });
-        furniture.push({ type: 'chair', x: fx - 6, y: atriumY + 12, width: 4, height: 4, angle: 0, color: '#334155' });
-        furniture.push({ type: 'chair', x: fx + 10, y: atriumY + 12, width: 4, height: 4, angle: 0, color: '#334155' });
-      }
-
-      // NORTH SIDE SHOPS (divided horizontally)
-      const shopW = Math.floor((W - 12) / 4);
-      
-      // Shop 1: Supermarket "Пятёрочка" (North-West)
-      rooms.push({
-        name: 'Супермаркет "Пятёрочка"',
-        x: 6,
-        y: 6,
-        width: shopW - 4,
-        height: atriumY - 6,
-        color: '#14532d',
-        floorStyle: 'tile'
-      });
-      // Entrance from atrium to Supermarket
-      const ctr1 = Math.floor(6 + shopW / 2);
-      walls.push(
-        { x1: 6, y1: atriumY, x2: ctr1 - 12, y2: atriumY },
-        { x1: ctr1 + 12, y1: atriumY, x2: shopW - 2, y2: atriumY }
-      );
-      // Partition wall between Shop 1 and Shop 2
-      walls.push({ x1: shopW - 2, y1: 6, x2: shopW - 2, y2: atriumY });
-      // Supermarket items
-      for (let r = 0; r < 2; r++) {
-        furniture.push({ type: 'shelf', x: 18 + r * 20, y: 12, width: 6, height: atriumY - 24, angle: 0, color: '#22c55e' });
-      }
-      furniture.push({ type: 'counter', x: shopW - 22, y: atriumY - 14, width: 14, height: 6, angle: 0, color: '#ef4444' });
-      furniture.push({ type: 'computer', x: shopW - 18, y: atriumY - 13, width: 4, height: 3, angle: 0, color: '#000000' });
-      furniture.push({ type: 'vending_machine', x: 12, y: atriumY - 14, width: 8, height: 6, angle: 0, color: '#eab308' });
-
-      // Shop 2: Pharmacy "36.6" (North-Center-West)
-      rooms.push({
-        name: 'Аптека "36.6"',
-        x: shopW + 2,
-        y: 6,
-        width: shopW - 4,
-        height: atriumY - 6,
-        color: '#064e3b',
-        floorStyle: 'tile'
-      });
-      // Entrance to Pharmacy
-      const ctr2 = Math.floor((shopW + 2 + shopW * 2 - 2) / 2);
-      walls.push(
-        { x1: shopW + 2, y1: atriumY, x2: ctr2 - 12, y2: atriumY },
-        { x1: ctr2 + 12, y1: atriumY, x2: shopW * 2 - 2, y2: atriumY }
-      );
-      // Partition wall between Shop 2 and Shop 3
-      walls.push({ x1: shopW * 2 - 2, y1: 6, x2: shopW * 2 - 2, y2: atriumY });
-      // Pharmacy items
-      furniture.push({ type: 'shelf', x: shopW + 12, y: 12, width: shopW - 24, height: 6, angle: 0, color: '#10b981' });
-      furniture.push({ type: 'counter', x: shopW + 12, y: atriumY - 14, width: 20, height: 6, angle: 0, color: '#34d399' });
-      furniture.push({ type: 'computer', x: shopW + 20, y: atriumY - 13, width: 4, height: 3, angle: 0, color: '#000000' });
-      furniture.push({ type: 'chair', x: shopW * 2 - 14, y: atriumY - 12, width: 5, height: 5, angle: 0, color: '#047857' });
-
-      // Shop 3: Clothes & Boutique (North-Center-East)
-      rooms.push({
-        name: 'Салон Электроники & Одежды',
-        x: shopW * 2 + 2,
-        y: 6,
-        width: shopW - 4,
-        height: atriumY - 6,
-        color: '#1e1b4b',
-        floorStyle: 'carpet'
-      });
-      // Entrance to Boutique
-      const ctr3 = Math.floor((shopW * 2 + 2 + shopW * 3 - 2) / 2);
-      walls.push(
-        { x1: shopW * 2 + 2, y1: atriumY, x2: ctr3 - 12, y2: atriumY },
-        { x1: ctr3 + 12, y1: atriumY, x2: shopW * 3 - 2, y2: atriumY }
-      );
-      // Partition wall between Shop 3 and Shop 4 (Food court prep)
-      walls.push({ x1: shopW * 3 - 2, y1: 6, x2: shopW * 3 - 2, y2: atriumY });
-      // Boutique items
-      furniture.push({ type: 'sofa', x: shopW * 2 + 10, y: 14, width: 14, height: 6, angle: 0, color: '#a78bfa' });
-      furniture.push({ type: 'table', x: shopW * 2 + Math.floor(shopW / 2) - 10, y: atriumY - 16, width: 16, height: 6, angle: 0, color: '#f59e0b' });
-      furniture.push({ type: 'plant', x: shopW * 3 - 12, y: 12, width: 6, height: 6, angle: 0, color: '#10b981' });
-
-      // Shop 4: Fast Food / Burger Kitchen (North-East)
-      rooms.push({
-        name: 'Бургерная & Кофе',
-        x: shopW * 3 + 2,
-        y: 6,
-        width: W - 6 - (shopW * 3 + 2),
-        height: atriumY - 6,
-        color: '#451a03',
-        floorStyle: 'tile'
-      });
-      // Entrance to Fast Food
-      const ctr4 = Math.floor((shopW * 3 + 2 + W - 6) / 2);
-      walls.push(
-        { x1: shopW * 3 + 2, y1: atriumY, x2: ctr4 - 12, y2: atriumY },
-        { x1: ctr4 + 12, y1: atriumY, x2: W - 6, y2: atriumY }
-      );
-      // Kitchen counters and equipment
-      furniture.push({ type: 'kitchen_counter', x: shopW * 3 + 12, y: 12, width: 40, height: 6, angle: 0, color: '#78350f' });
-      furniture.push({ type: 'fridge', x: W - 18, y: 12, width: 8, height: 8, angle: 0, color: '#94a3b8' });
-      furniture.push({ type: 'counter', x: shopW * 3 + 12, y: atriumY - 14, width: 24, height: 6, angle: 0, color: '#ea580c' });
-      furniture.push({ type: 'computer', x: shopW * 3 + 18, y: atriumY - 13, width: 4, height: 3, angle: 0, color: '#000000' });
-
-
-      // SOUTH SIDE SHOPS (divided horizontally)
-      const southShopY = atriumY + atriumH;
-      const southShopH = H - 6 - southShopY;
-
-      // Shop 5: Cafe & Bistro (South-West)
-      rooms.push({
-        name: 'Кофейня "Bean & Bistro"',
-        x: 6,
-        y: southShopY,
-        width: shopW - 4,
-        height: southShopH,
-        color: '#2d1a12',
-        floorStyle: 'wood'
-      });
-      // Entrance to Cafe
-      const ctr5 = Math.floor(6 + shopW / 2);
-      walls.push(
-        { x1: 6, y1: southShopY, x2: ctr5 - 12, y2: southShopY },
-        { x1: ctr5 + 12, y1: southShopY, x2: shopW - 2, y2: southShopY }
-      );
-      // Partition wall between Shop 5 and Shop 6
-      walls.push({ x1: shopW - 2, y1: southShopY, x2: shopW - 2, y2: H - 6 });
-      // Cafe items
-      furniture.push({ type: 'kitchen_counter', x: 12, y: H - 14, width: 24, height: 6, angle: 0, color: '#1e1b4b' });
-      furniture.push({ type: 'table', x: shopW - 24, y: southShopY + 10, width: 8, height: 8, angle: 0, color: '#b45309' });
-      furniture.push({ type: 'chair', x: shopW - 30, y: southShopY + 12, width: 4, height: 4, angle: 0, color: '#d97706' });
-      furniture.push({ type: 'chair', x: shopW - 14, y: southShopY + 12, width: 4, height: 4, angle: 0, color: '#d97706' });
-
-      // Shop 6: Weapons & Hunt Gear "Охотник" (South-Center-West)
-      rooms.push({
-        name: 'Магазин "Охотник"',
-        x: shopW + 2,
-        y: southShopY,
-        width: shopW - 4,
-        height: southShopH,
-        color: '#14532d',
-        floorStyle: 'wood'
-      });
-      // Entrance to Hunters Shop
-      const ctr6 = Math.floor((shopW + 2 + shopW * 2 - 2) / 2);
-      walls.push(
-        { x1: shopW + 2, y1: southShopY, x2: ctr6 - 12, y2: southShopY },
-        { x1: ctr6 + 12, y1: southShopY, x2: shopW * 2 - 2, y2: southShopY }
-      );
-      // Partition wall between Shop 6 and Shop 7
-      walls.push({ x1: shopW * 2 - 2, y1: southShopY, x2: shopW * 2 - 2, y2: H - 6 });
-      // Hunters items
-      furniture.push({ type: 'shelf', x: shopW + 12, y: H - 14, width: shopW - 24, height: 6, angle: 0, color: '#065f46' });
-      furniture.push({ type: 'counter', x: shopW + 12, y: southShopY + 10, width: 20, height: 6, angle: 0, color: '#047857' });
-      furniture.push({ type: 'computer', x: shopW + 18, y: southShopY + 11, width: 4, height: 3, angle: 0, color: '#000000' });
-      furniture.push({ type: 'plant', x: shopW * 2 - 12, y: H - 14, width: 6, height: 6, angle: 0, color: '#10b981' });
-
-      // Shop 7: Electronics / Appliances (South-Center-East)
-      rooms.push({
-        name: 'Техника & Электроника',
-        x: shopW * 2 + 2,
-        y: southShopY,
-        width: shopW - 4,
-        height: southShopH,
-        color: '#0f172a',
-        floorStyle: 'tile'
-      });
-      // Entrance to Electronics
-      const ctr7 = Math.floor((shopW * 2 + 2 + shopW * 3 - 2) / 2);
-      walls.push(
-        { x1: shopW * 2 + 2, y1: southShopY, x2: ctr7 - 12, y2: southShopY },
-        { x1: ctr7 + 12, y1: southShopY, x2: shopW * 3 - 2, y2: southShopY }
-      );
-      // Partition wall between Shop 7 and South Atrium Area
-      walls.push({ x1: shopW * 3 - 2, y1: southShopY, x2: shopW * 3 - 2, y2: H - 6 });
-      // Electronics items
-      for (let r = 0; r < 2; r++) {
-        furniture.push({ type: 'shelf', x: shopW * 2 + 14 + r * 18, y: southShopY + 10, width: 6, height: southShopH - 20, angle: 0, color: '#334155' });
-      }
-      furniture.push({ type: 'counter', x: shopW * 3 - 22, y: H - 14, width: 14, height: 6, angle: 0, color: '#38bdf8' });
-
-      // Area 8: Administrative Offices / Storage (South-East)
-      rooms.push({
-        name: 'Администрация / Склад',
-        x: shopW * 3 + 2,
-        y: southShopY,
-        width: W - 6 - (shopW * 3 + 2),
-        height: southShopH,
-        color: '#1e293b',
-        floorStyle: 'linoleum'
-      });
-      // Entrance to Administration
-      const ctr8 = Math.floor((shopW * 3 + 2 + W - 6) / 2);
-      walls.push(
-        { x1: shopW * 3 + 2, y1: southShopY, x2: ctr8 - 12, y2: southShopY },
-        { x1: ctr8 + 12, y1: southShopY, x2: W - 6, y2: southShopY }
-      );
-      furniture.push({ type: 'desk', x: shopW * 3 + 12, y: H - 14, width: 14, height: 6, angle: 0, color: '#64748b' });
-      furniture.push({ type: 'computer', x: shopW * 3 + 16, y: H - 13, width: 4, height: 3, angle: 0, color: '#000000' });
-      furniture.push({ type: 'chair', x: shopW * 3 + 17, y: H - 8, width: 4, height: 4, angle: 0, color: '#0284c7' });
-      furniture.push({ type: 'wardrobe', x: W - 18, y: southShopY + 10, width: 10, height: 6, angle: 0, color: '#475569' });
-
-      // Main Outer boundary walls for Mall (except openings)
-      walls.push(
-        { x1: 6, y1: 6, x2: W - 6, y2: 6 }, // North boundary
-        { x1: 6, y1: 6, x2: 6, y2: H - 6 }, // West boundary
-        { x1: W - 6, y1: 6, x2: W - 6, y2: H - 6 } // East boundary
-      );
-      // South boundary wall with entrance doors
-      const entS1X = Math.floor(W * 0.3);
-      const entS2X = Math.floor(W * 0.7);
-      walls.push(
-        { x1: 6, y1: H - 6, x2: entS1X - 12, y2: H - 6 },
-        { x1: entS1X + 12, y1: H - 6, x2: entS2X - 12, y2: H - 6 },
-        { x1: entS2X + 12, y1: H - 6, x2: W - 6, y2: H - 6 }
-      );
-
-    } else {
-      // --- PARTITIONED SHOP / BOUTIQUE LAYOUT (For standalone shops & small commercial buildings) ---
-      const exX = W / 2 - 12;
-      const exY = H - 12;
-      elevators.push({ x: W / 2 - 16, y: 6, width: 16, height: 14 });
-      stairs.push({ x: W / 2 + 4, y: 6, width: 16, height: 14 });
-      exits.push({ x: exX, y: exY, width: 24, height: 8 });
-
-      const splitX = Math.floor(W * 0.68);
-
-      // 1. MAIN SHOPPING FLOOR (Торговый Зал)
-      rooms.push({
-        name: floor === 0 ? 'Торговый Зал' : 'Выставочный Зал',
-        x: 6,
-        y: 6,
-        width: splitX - 8,
-        height: H - 12,
-        color: '#1e293b',
-        floorStyle: 'tile'
-      });
-
-      // 2. BACKROOM / STOCKROOM (Склад / Подсобка)
-      rooms.push({
-        name: 'Склад / Подсобка',
-        x: splitX + 2,
-        y: 6,
-        width: W - 6 - (splitX + 2),
-        height: H - 12,
-        color: '#0f172a',
-        floorStyle: 'linoleum'
-      });
-
-      // Separation Wall with a doorway/archway in the center
-      walls.push(
-        { x1: splitX, y1: 6, x2: splitX, y2: Math.floor(H / 2 - 10) },
-        { x1: splitX, y1: Math.floor(H / 2 + 10), x2: splitX, y2: H - 6 }
-      );
-
-      // Furniture in the main Shopping Hall
-      const numShelfRows = W > H ? 3 : 2;
-      const shelfSpacing = (splitX - 32) / numShelfRows;
-      for (let r = 0; r < numShelfRows; r++) {
-        const sx = 16 + r * shelfSpacing;
-        furniture.push({ type: 'shelf', x: sx, y: 16, width: 8, height: H - 40, angle: 0, color: '#3f3f46' });
-      }
-
-      // Checkout counter
-      furniture.push({ type: 'counter', x: 12, y: H - 22, width: 24, height: 10, angle: 0, color: '#4b5563' });
-      furniture.push({ type: 'computer', x: 18, y: H - 20, width: 6, height: 4, angle: 0, color: '#000000' });
-      furniture.push({ type: 'vending_machine', x: splitX - 22, y: H - 24, width: 12, height: 10, angle: 0, color: '#0284c7' });
-      furniture.push({ type: 'plant', x: 12, y: 12, width: 6, height: 6, angle: 0, color: '#10b981' });
-
-      // Furniture in the back stockroom
-      furniture.push({ type: 'shelf', x: splitX + 10, y: 12, width: W - splitX - 22, height: 8, angle: 0, color: '#1e293b' });
-      furniture.push({ type: 'wardrobe', x: W - 20, y: H - 24, width: 12, height: 10, angle: 0, color: '#57534e' });
-      furniture.push({ type: 'cooler', x: splitX + 10, y: H - 24, width: 8, height: 8, angle: 0, color: '#06b6d4' });
-    }
-
+    buildOfficeInterior({ bld, floor, W, H, rooms, walls, furniture, elevators, stairs, exits, elevatorZone, stairsZone, exitZone });
+  } else if (bld.type === 'tactical_store' || bld.shopBrand === 'splav_gear') {
+    buildGearShopInterior({ bld, floor, W, H, rooms, walls, furniture, elevators, stairs, exits, elevatorZone, stairsZone, exitZone });
+  } else if (bld.type === 'auto_service_center' || bld.shopBrand === 'pitstop_service') {
+    buildAutoServiceInterior({ bld, floor, W, H, rooms, walls, furniture, elevators, stairs, exits, elevatorZone, stairsZone, exitZone });
+  } else if (bld.type === 'car_wash_station') {
+    buildCarWashInterior({ bld, floor, W, H, rooms, walls, furniture, elevators, stairs, exits, elevatorZone, stairsZone, exitZone });
+  } else if (bld.type === 'pharmacy_store' || bld.shopBrand === 'pharmacy_36_6') {
+    buildPharmacyInterior({ bld, floor, W, H, rooms, walls, furniture, elevators, stairs, exits, elevatorZone, stairsZone, exitZone });
+  } else if (bld.type === 'supermarket_store' || bld.shopBrand === 'pyaterochka' || bld.shopBrand === 'perekrestok') {
+    buildSupermarketInterior({ bld, floor, W, H, rooms, walls, furniture, elevators, stairs, exits, elevatorZone, stairsZone, exitZone });
+  } else if (bld.type === 'pizzeria_restaurant' || bld.shopBrand === 'dodo_pizza') {
+    buildPizzeriaInterior({ bld, floor, W, H, rooms, walls, furniture, elevators, stairs, exits, elevatorZone, stairsZone, exitZone });
+  } else if (bld.type === 'fast_food_restaurant' || bld.shopBrand === 'vkusno_tochka') {
+    buildFastFoodInterior({ bld, floor, W, H, rooms, walls, furniture, elevators, stairs, exits, elevatorZone, stairsZone, exitZone });
+  } else if (bld.type === 'electronics_store' || bld.shopBrand === 'mvideo') {
+    buildElectronicsInterior({ bld, floor, W, H, rooms, walls, furniture, elevators, stairs, exits, elevatorZone, stairsZone, exitZone });
+  } else if (bld.type === 'sports_store' || bld.shopBrand === 'sportmaster') {
+    buildSportsStoreInterior({ bld, floor, W, H, rooms, walls, furniture, elevators, stairs, exits, elevatorZone, stairsZone, exitZone });
+  } else if (bld.type === 'bakery_cafe' || bld.shopBrand === 'cofix_bakery') {
+    buildCafeInterior({ bld, floor, W, H, rooms, walls, furniture, elevators, stairs, exits, elevatorZone, stairsZone, exitZone }, 'Кафе & Пекарня "Cofix"');
+  } else if (bld.type === 'coffee_bistro' || bld.shopBrand === 'bean_bistro') {
+    buildCafeInterior({ bld, floor, W, H, rooms, walls, furniture, elevators, stairs, exits, elevatorZone, stairsZone, exitZone }, 'Кафе & Кофейня "Bean & Bistro"');
+  } else if (bld.type === 'commercial_gallery') {
+    buildGalleryInterior({ bld, floor, W, H, rooms, walls, furniture, elevators, stairs, exits, elevatorZone, stairsZone, exitZone });
+  } else if (bld.type === 'commercial' || bld.type === 'shop' || isShop) {
+    buildSupermarketInterior({ bld, floor, W, H, rooms, walls, furniture, elevators, stairs, exits, elevatorZone, stairsZone, exitZone });
   } else if (bld.type === 'hospital') {
-    // =========================================================================
-    // --- HOSPITAL ---
-    // =========================================================================
-    const exX = W / 2 - 12;
-    const exY = H - 12;
-    elevators.push({ x: W / 2 - 18, y: 6, width: 16, height: 14 });
-    stairs.push({ x: W / 2 + 4, y: 6, width: 16, height: 14 });
-    exits.push({ x: exX, y: exY, width: 24, height: 8 });
+    buildHospitalInterior({ bld, floor, W, H, rooms, walls, furniture, elevators, stairs, exits, elevatorZone, stairsZone, exitZone });
+  } else if (bld.type === 'police_station') {
+    buildPoliceStationInterior({ bld, floor, W, H, rooms, walls, furniture, elevators, stairs, exits, elevatorZone, stairsZone, exitZone });
+  } else if (bld.type === 'fire_station') {
+    elevators.push(elevatorZone);
+    stairs.push(stairsZone);
+    exits.push(exitZone);
 
     if (floor === 0) {
-      rooms.push({ name: 'Регистратура и Лобби', x: 6, y: 6, width: W - 12, height: H - 12, color: '#0f172a', floorStyle: 'tile' });
-      furniture.push({ type: 'desk_reception', x: W / 2 - 20, y: H / 2 - 6, width: 40, height: 10, angle: 0, color: '#10b981' });
-      for (let i = 0; i < 4; i++) {
-        furniture.push({ type: 'chair', x: 12 + i * 8, y: H - 20, width: 6, height: 6, angle: 0, color: '#3b82f6' });
-        furniture.push({ type: 'chair', x: W - 40 + i * 8, y: H - 20, width: 6, height: 6, angle: 0, color: '#3b82f6' });
-      }
+      rooms.push({ name: 'Пожарное Депо & Гаражный бокс', x: 6, y: 6, width: W - 12, height: H - 12, color: '#18181b', floorStyle: 'concrete' });
+      furniture.push({ type: 'fire_rack', x: 14, y: 16, width: 16, height: 8, angle: 0, color: '#ef4444' });
+      furniture.push({ type: 'fire_rack', x: W - 30, y: 16, width: 16, height: 8, angle: 0, color: '#ef4444' });
+      furniture.push({ type: 'desk_reception', x: 14, y: H - 24, width: 28, height: 10, angle: 0, color: '#dc2626' });
     } else {
-      rooms.push({ name: 'Коридор', x: 6, y: H / 2 - 8, width: W - 12, height: 16, color: '#1e293b', floorStyle: 'tile' });
-      const wWidth = W / 2 - 26;
-      const wHeight = H / 2 - 14;
-      rooms.push({ name: `Палата ${floor * 100 + 1}`, x: 6, y: 6, width: wWidth, height: wHeight, color: '#042f2e', floorStyle: 'tile' });
-      furniture.push({ type: 'bed_hospital', x: 12, y: 12, width: 14, height: 22, angle: 0, color: '#f8fafc' });
-      rooms.push({ name: `Палата ${floor * 100 + 2}`, x: W / 2 + 20, y: 6, width: wWidth, height: wHeight, color: '#042f2e', floorStyle: 'tile' });
-      furniture.push({ type: 'bed_hospital', x: W - 26, y: 12, width: 14, height: 22, angle: 0, color: '#f8fafc' });
+      rooms.push({ name: 'Комната отдыха пожарной бригады', x: 6, y: 6, width: W - 12, height: H - 12, color: '#27272a', floorStyle: 'wood' });
+      furniture.push({ type: 'bed', x: 12, y: 12, width: 20, height: 22, angle: 0, color: '#ef4444' });
+      furniture.push({ type: 'bed', x: 36, y: 12, width: 20, height: 22, angle: 0, color: '#ef4444' });
+      furniture.push({ type: 'sofa', x: 12, y: H - 22, width: 26, height: 10, angle: 0, color: '#3b82f6' });
+      furniture.push({ type: 'tv_cabinet', x: 42, y: H - 16, width: 16, height: 4, angle: 0, color: '#1e293b' });
+      furniture.push({ type: 'tv', x: 43, y: H - 15, width: 14, height: 2, angle: 0, color: '#000000' });
     }
-
-  } else if (bld.type === 'police_station') {
-    // =========================================================================
-    // --- POLICE STATION ---
-    // =========================================================================
-    const exX = W / 2 - 12;
-    const exY = H - 12;
-    elevators.push({ x: W / 2 - 16, y: 6, width: 16, height: 14 });
-    stairs.push({ x: W / 2 + 4, y: 6, width: 16, height: 14 });
-    exits.push({ x: exX, y: exY, width: 24, height: 8 });
-
-    rooms.push({ name: 'Дежурная часть / Офисы', x: 6, y: 6, width: W - 12, height: H - 12, color: '#1e293b', floorStyle: 'tile' });
-    const cellW = 35;
-    const cellH = H - 40;
-    rooms.push({ name: 'Камера Временного Содержания', x: W - cellW - 6, y: 6, width: cellW, height: cellH, color: '#0f172a', floorStyle: 'tile' });
-    walls.push({ x1: W - cellW - 6, y1: 18, x2: W - 6, y2: 18, isJailBars: true });
-    walls.push({ x1: W - cellW - 6, y1: 6, x2: W - cellW - 6, y2: cellH + 6 });
-    furniture.push({ type: 'jail_cot', x: W - cellW + 2, y: 8, width: 10, height: 20, angle: 0, color: '#78350f' });
-    furniture.push({ type: 'toilet', x: W - 14, y: cellH - 4, width: 6, height: 6, angle: 0, color: '#ffffff' });
-    furniture.push({ type: 'desk_reception', x: 12, y: H / 2 - 5, width: 32, height: 10, angle: 0, color: '#1d4ed8' });
-
-  } else if (bld.type === 'fire_station') {
-    const exX = W / 2 - 12;
-    const exY = H - 12;
-    elevators.push({ x: W / 2 - 16, y: 6, width: 16, height: 14 });
-    stairs.push({ x: W / 2 + 4, y: 6, width: 16, height: 14 });
-    exits.push({ x: exX, y: exY, width: 24, height: 8 });
-
-    rooms.push({ name: 'Пожарное Депо', x: 6, y: 6, width: W - 12, height: H - 12, color: '#18181b', floorStyle: 'tile' });
-    furniture.push({ type: 'fire_rack', x: 12, y: 16, width: 14, height: 8, angle: 0, color: '#ef4444' });
-    furniture.push({ type: 'fire_rack', x: W - 26, y: 16, width: 14, height: 8, angle: 0, color: '#ef4444' });
-
+  } else if (bld.type === 'school_kindergarten') {
+    buildSchoolInterior({ bld, floor, W, H, rooms, walls, furniture, elevators, stairs, exits, elevatorZone, stairsZone, exitZone });
   } else if (bld.type === 'transit_hub') {
-    const exX = W / 2 - 12;
-    const exY = H - 12;
-    elevators.push({ x: W / 2 - 16, y: 6, width: 16, height: 14 });
-    stairs.push({ x: W / 2 + 4, y: 6, width: 16, height: 14 });
-    exits.push({ x: exX, y: exY, width: 24, height: 8 });
+    elevators.push(elevatorZone);
+    stairs.push(stairsZone);
+    exits.push(exitZone);
 
-    rooms.push({ name: 'Зал Ожидания', x: 6, y: 6, width: W - 12, height: H - 12, color: '#1e293b', floorStyle: 'tile' });
+    rooms.push({ name: 'Центральный Зал Ожидания Вокзала', x: 6, y: 6, width: W - 12, height: H - 12, color: '#1e293b', floorStyle: 'tile' });
     furniture.push({ type: 'desk_reception', x: W / 2 - 30, y: 12, width: 60, height: 10, angle: 0, color: '#0369a1' });
+    
+    // Ticket Machines & ATM
+    furniture.push({ type: 'atm', x: 14, y: 12, width: 8, height: 8, angle: 0, color: '#0284c7' });
+    furniture.push({ type: 'vending_machine', x: 26, y: 12, width: 10, height: 8, angle: 0, color: '#475569' });
+    furniture.push({ type: 'lockers', x: W - 32, y: 12, width: 18, height: 8, angle: 0, color: '#64748b' });
+
+    // Passenger Seating Benches
     for (let i = 0; i < 6; i++) {
-      furniture.push({ type: 'chair', x: W / 2 - 24 + i * 8, y: H / 2, width: 6, height: 6, angle: Math.PI, color: '#e2e8f0' });
-      furniture.push({ type: 'chair', x: W / 2 - 24 + i * 8, y: H / 2 + 8, width: 6, height: 6, angle: 0, color: '#e2e8f0' });
+      furniture.push({ type: 'chair', x: W / 2 - 24 + i * 8, y: H / 2 - 2, width: 6, height: 6, angle: Math.PI, color: '#e2e8f0' });
+      furniture.push({ type: 'chair', x: W / 2 - 24 + i * 8, y: H / 2 + 6, width: 6, height: 6, angle: 0, color: '#e2e8f0' });
     }
+  } else if (bld.type === 'cultural_center') {
+    elevators.push(elevatorZone);
+    stairs.push(stairsZone);
+    exits.push(exitZone);
 
+    rooms.push({ name: 'Музей & Художественная Галерея', x: 6, y: 6, width: W - 12, height: H - 12, color: '#0f172a', floorStyle: 'parquet' });
+    furniture.push({ type: 'carpet', x: W / 2 - 20, y: H / 2 - 20, width: 40, height: 40, angle: 0, color: '#7f1d1d' });
+    furniture.push({ type: 'table', x: W / 2 - 6, y: H / 2 - 6, width: 12, height: 12, angle: 0, color: '#fcd34d' });
+    furniture.push({ type: 'bookshelf', x: 14, y: 14, width: 24, height: 6, angle: 0, color: '#78350f' });
+    furniture.push({ type: 'bookshelf', x: W - 38, y: 14, width: 24, height: 6, angle: 0, color: '#78350f' });
+  } else if (bld.type === 'industrial') {
+    buildIndustrialInterior({ bld, floor, W, H, rooms, walls, furniture, elevators, stairs, exits, elevatorZone, stairsZone, exitZone });
+  } else if (bld.type === 'car_dealership') {
+    elevators.push(elevatorZone);
+    stairs.push(stairsZone);
+    exits.push(exitZone);
+
+    rooms.push({ name: 'Автосалон "Премиум Авто"', x: 6, y: 6, width: W - 12, height: H - 12, color: '#e2e8f0', floorStyle: 'tile' });
+    furniture.push({ type: 'carpet', x: 16, y: 16, width: 44, height: 32, angle: 0, color: '#1e293b' });
+    if (W > 110) {
+      furniture.push({ type: 'carpet', x: W - 60, y: 16, width: 44, height: 32, angle: 0, color: '#1e293b' });
+    }
+    furniture.push({ type: 'desk_reception', x: W / 2 - 18, y: H - 22, width: 36, height: 10, angle: 0, color: '#0284c7' });
+    furniture.push({ type: 'sofa', x: 16, y: H - 22, width: 24, height: 10, angle: 0, color: '#64748b' });
+  } else if (bld.type === 'sports_stadium') {
+    elevators.push(elevatorZone);
+    stairs.push(stairsZone);
+    exits.push(exitZone);
+
+    rooms.push({ name: 'Спортивный Комплекс', x: 6, y: 6, width: W - 12, height: H - 12, color: '#d97706', floorStyle: 'wood' });
+    furniture.push({ type: 'carpet', x: W / 2 - 36, y: H / 2 - 24, width: 72, height: 48, angle: 0, color: '#15803d' });
+    furniture.push({ type: 'lockers', x: 14, y: 14, width: 24, height: 8, angle: 0, color: '#0284c7' });
+    furniture.push({ type: 'bench', x: 14, y: 26, width: 20, height: 6, angle: 0, color: '#78350f' });
   } else {
-    // Default fallback interior layout
-    const exX = W / 2 - 12;
-    const exY = H - 12;
-    elevators.push({ x: W / 2 - 16, y: 6, width: 16, height: 14 });
-    stairs.push({ x: W / 2 + 4, y: 6, width: 16, height: 14 });
-    exits.push({ x: exX, y: exY, width: 24, height: 8 });
+    elevators.push(elevatorZone);
+    stairs.push(stairsZone);
+    exits.push(exitZone);
 
-    rooms.push({ name: 'Помещение', x: 6, y: 6, width: W - 12, height: H - 12, color: '#1e293b', floorStyle: 'wood' });
+    rooms.push({ name: 'Помещение', x: 6, y: 6, width: W - 12, height: H - 12, color: '#1e293b' });
     furniture.push({ type: 'table', x: W / 2 - 10, y: H / 2 - 8, width: 20, height: 16, angle: 0, color: '#a16207' });
     furniture.push({ type: 'chair', x: W / 2 - 8, y: H / 2 - 14, width: 4, height: 4, angle: 0, color: '#451a03' });
   }
 
-  // Outer perimeter structural walls
+  // Outer Building Boundary Walls
   walls.push({ x1: 6, y1: 6, x2: W - 6, y2: 6 });
   walls.push({ x1: W - 6, y1: 6, x2: W - 6, y2: H - 6 });
   walls.push({ x1: W - 6, y1: H - 6, x2: 6, y2: H - 6 });
   walls.push({ x1: 6, y1: H - 6, x2: 6, y2: 6 });
-
-  const primaryElevator = elevators[0] || { x: W / 2 - 14, y: 6, width: 20, height: 16 };
-  const primaryStairs = stairs[0] || { x: W / 2 + 14, y: 6, width: 20, height: 16 };
-  const primaryExit = exits[0] || { x: W / 2 - 12, y: H - 8, width: 24, height: 8 };
 
   return {
     buildingId: bld.id,
@@ -1371,12 +717,12 @@ export function generateBuildingLayout(bld: Building, floor: number): BuildingLa
     rooms,
     walls,
     furniture,
-    elevatorZone: primaryElevator,
-    stairsZone: primaryStairs,
-    exitZone: primaryExit,
-    elevators,
-    stairs,
-    exits
+    elevatorZone: elevators[0] || elevatorZone,
+    stairsZone: stairs[0] || stairsZone,
+    exitZone: exits[0] || exitZone,
+    elevators: elevators.length > 0 ? elevators : [elevatorZone],
+    stairs: stairs.length > 0 ? stairs : [stairsZone],
+    exits: exits.length > 0 ? exits : [exitZone]
   };
 }
 
@@ -1972,6 +1318,134 @@ export function renderBuildingInterior(
         ctx.strokeStyle = '#78350f';
         ctx.lineWidth = 0.8;
         ctx.strokeRect(-halfW, -halfH, f.width, f.height);
+        break;
+
+      case 'server_rack':
+        ctx.fillStyle = '#0f172a';
+        ctx.fillRect(-halfW, -halfH, f.width, f.height);
+        ctx.strokeStyle = '#334155';
+        ctx.lineWidth = 0.8;
+        ctx.strokeRect(-halfW, -halfH, f.width, f.height);
+        // Server status LEDs
+        for (let y = -halfH + 2; y < halfH - 2; y += 3) {
+          ctx.fillStyle = '#22c55e';
+          ctx.fillRect(-halfW + 2, y, 1.5, 1.5);
+          ctx.fillStyle = '#38bdf8';
+          ctx.fillRect(-halfW + 4.5, y, 1.5, 1.5);
+          ctx.fillStyle = '#64748b';
+          ctx.fillRect(-halfW + 7, y, f.width - 9, 1);
+        }
+        break;
+
+      case 'whiteboard':
+        ctx.fillStyle = '#f8fafc';
+        ctx.fillRect(-halfW, -halfH, f.width, f.height);
+        ctx.strokeStyle = '#64748b';
+        ctx.lineWidth = 0.8;
+        ctx.strokeRect(-halfW, -halfH, f.width, f.height);
+        // Marker tray
+        ctx.fillStyle = '#0284c7';
+        ctx.fillRect(-halfW + 2, halfH - 1, 4, 1);
+        break;
+
+      case 'file_cabinet':
+        ctx.fillStyle = f.color || '#475569';
+        ctx.fillRect(-halfW, -halfH, f.width, f.height);
+        ctx.strokeStyle = '#334155';
+        ctx.lineWidth = 0.8;
+        ctx.strokeRect(-halfW, -halfH, f.width, f.height);
+        ctx.fillStyle = '#94a3b8';
+        ctx.fillRect(-2, -halfH + 2, 4, 1.5);
+        ctx.fillRect(-2, 0, 4, 1.5);
+        break;
+
+      case 'lockers':
+        ctx.fillStyle = f.color || '#0284c7';
+        ctx.fillRect(-halfW, -halfH, f.width, f.height);
+        ctx.strokeStyle = '#0f172a';
+        ctx.lineWidth = 0.8;
+        ctx.strokeRect(-halfW, -halfH, f.width, f.height);
+        // Locker dividers
+        for (let x = -halfW + 6; x < halfW; x += 6) {
+          ctx.beginPath();
+          ctx.moveTo(x, -halfH);
+          ctx.lineTo(x, halfH);
+          ctx.stroke();
+        }
+        break;
+
+      case 'atm':
+        ctx.fillStyle = '#0284c7';
+        ctx.fillRect(-halfW, -halfH, f.width, f.height);
+        ctx.fillStyle = '#38bdf8'; // Glowing screen
+        ctx.fillRect(-halfW + 1.5, -halfH + 1.5, f.width - 3, 2.5);
+        ctx.fillStyle = '#0f172a'; // Card slot / keypad
+        ctx.fillRect(-halfW + 2, 0, f.width - 4, 2);
+        break;
+
+      case 'cash_register':
+        ctx.fillStyle = '#0f172a';
+        ctx.fillRect(-halfW, -halfH, f.width, f.height);
+        ctx.fillStyle = '#22c55e'; // Screen display
+        ctx.fillRect(-halfW + 1, -halfH + 1, f.width - 2, 1.2);
+        break;
+
+      case 'freezer_display':
+        ctx.fillStyle = '#0284c7';
+        ctx.fillRect(-halfW, -halfH, f.width, f.height);
+        ctx.fillStyle = 'rgba(255,255,255,0.4)'; // Glass top
+        ctx.fillRect(-halfW + 1.5, -halfH + 1.5, f.width - 3, f.height - 3);
+        break;
+
+      case 'pallet_stack':
+        ctx.fillStyle = '#b45309';
+        ctx.fillRect(-halfW, -halfH, f.width, f.height);
+        ctx.strokeStyle = '#78350f';
+        ctx.lineWidth = 0.8;
+        ctx.strokeRect(-halfW, -halfH, f.width, f.height);
+        // Cross slats
+        ctx.beginPath();
+        ctx.moveTo(-halfW, -halfH);
+        ctx.lineTo(halfW, halfH);
+        ctx.moveTo(halfW, -halfH);
+        ctx.lineTo(-halfW, halfH);
+        ctx.stroke();
+        break;
+
+      case 'sink':
+        ctx.fillStyle = '#cbd5e1';
+        ctx.fillRect(-halfW, -halfH, f.width, f.height);
+        ctx.fillStyle = '#94a3b8'; // Basin
+        ctx.fillRect(-halfW + 1, -halfH + 1, f.width - 2, f.height - 2);
+        ctx.fillStyle = '#64748b'; // Faucet
+        ctx.fillRect(-1, -halfH, 2, 2);
+        break;
+
+      case 'exam_table':
+        ctx.fillStyle = '#f8fafc';
+        ctx.fillRect(-halfW, -halfH, f.width, f.height);
+        ctx.strokeStyle = '#cbd5e1';
+        ctx.lineWidth = 0.8;
+        ctx.strokeRect(-halfW, -halfH, f.width, f.height);
+        ctx.fillStyle = '#38bdf8'; // Pillow headrest
+        ctx.fillRect(-halfW + 1, -halfH + 1, 4, f.height - 2);
+        break;
+
+      case 'jail_cot':
+        ctx.fillStyle = '#78350f';
+        ctx.fillRect(-halfW, -halfH, f.width, f.height);
+        ctx.fillStyle = '#a1a1aa'; // Coarse blanket
+        ctx.fillRect(-halfW + 1, -halfH + 4, f.width - 2, f.height - 5);
+        break;
+
+      case 'fire_rack':
+        ctx.fillStyle = '#ef4444';
+        ctx.fillRect(-halfW, -halfH, f.width, f.height);
+        ctx.strokeStyle = '#991b1b';
+        ctx.lineWidth = 0.8;
+        ctx.strokeRect(-halfW, -halfH, f.width, f.height);
+        ctx.fillStyle = '#fef08a'; // Yellow reflective stripes
+        ctx.fillRect(-halfW + 2, -1, f.width - 4, 2);
         break;
 
       default:

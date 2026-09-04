@@ -13,7 +13,8 @@ import {
   Check, 
   Activity, 
   Trash2,
-  Sparkles
+  Sparkles,
+  AlertCircle
 } from 'lucide-react';
 import { PerformanceConfig, DEFAULT_CONFIG, savePerformanceConfig, performanceConfig } from '../performanceConfig';
 
@@ -297,7 +298,9 @@ export function PerformanceProfiler({
                       {stats.totalFrameTime <= 16.6 ? (
                         <span className="text-emerald-400 flex items-center gap-0.5 text-sm font-bold">✓ Норма</span>
                       ) : (
-                        <span className="text-red-400 flex items-center gap-0.5 text-sm font-bold">⚠️ Превышен</span>
+                        <span className="text-red-400 flex items-center gap-1 text-sm font-bold">
+                          <AlertCircle className="w-4 h-4 text-red-400" /> Превышен
+                        </span>
                       )}
                     </div>
                   </div>

@@ -30,7 +30,30 @@ export type CarType =
   | 'truck_water'
   | 'truck_flatbed'
   | 'cement_mixer'
-  | 'garbage_truck';
+  | 'garbage_truck'
+  | 'wagon_classic'
+  | 'wagon_modern'
+  | 'wagon_allroad'
+  | 'sedan_classic'
+  | 'sedan_luxury'
+  | 'sedan_compact'
+  | 'hatch_hot'
+  | 'micro_car'
+  | 'classic_compact'
+  | 'retro_bubble'
+  | 'suv_luxury'
+  | 'offroad_hardcore'
+  | 'crossover_compact'
+  | 'suv_classic_box'
+  | 'supercar'
+  | 'muscle_classic'
+  | 'coupe_gt'
+  | 'pickup_heavy'
+  | 'van_camper'
+  | 'van_cargo_old'
+  | 'truck_tow'
+  | 'truck_armored'
+  | 'delivery_truck';
 
 export interface CarConfig {
   type: CarType;
@@ -49,6 +72,7 @@ export interface CarConfig {
   grip: number;          // lateral tire grip factor
   driftGrip: number;     // lateral tire grip when drifting / handbraking
   name: string;
+  transmission?: 'AUTO' | 'MANUAL';
 }
 
 export interface DeformVertex {
@@ -66,8 +90,49 @@ export interface ScratchMark {
   depth: number;
 }
 
+export interface EngineState {
+  radiatorWater: number;        // 0 to 100 (coolant level)
+  radiatorPunctured: boolean;   // if punctured, coolant leaks out
+  oilLevel: number;             // 0 to 100 (engine oil)
+  oilPunctured: boolean;        // if oil pan/filter punctured, oil leaks out
+  oilPressure: number;          // 0 to 100
+  batteryCharge: number;        // 0 to 100
+  starterWorking: boolean;      // starter motor state
+  temperature: number;          // Engine temperature in °C (normal ~85-90°C)
+  engineRunning: boolean;       // whether engine is currently running
+  engineKnocking: boolean;      // knock/detonation due to low oil or bad fuel
+  engineStalled: boolean;       // engine stalled
+  overheatingSteam: boolean;    // thick white steam pouring out from radiator
+  
+  // Powertrain & Transmission
+  engineRPM: number;
+  transmissionType: 'MANUAL' | 'AUTO';
+  autoGearMode?: 'P' | 'R' | 'N' | 'D';
+  currentGear: number;
+  gearRatios: number[];
+  finalDriveRatio: number;
+  clutchPedal: number;
+  isStalled: boolean;
+  shiftCooldown?: number;
+
+  // Mechanical Integrity & Damage States
+  engineHealth: number;         // 0 to 100 (%) health of engine block, pistons, head gasket
+  isSeized: boolean;            // engine seized from impact or overheating/oil starvation (will not run or crank)
+  transmissionHealth: number;   // 0 to 100 (%) gearbox health
+  transmissionJammed: boolean;  // gearbox jammed from impact or stripped gears (cannot shift, gear stuck)
+}
+
+export interface FuelSystem {
+  fuelType: 'ai92' | 'ai95' | 'diesel';
+  tankLevel: number;            // 0 to 100 (%)
+  tankCapacity: number;         // Liters (e.g. 50L)
+  tankPunctured: boolean;       // fuel leaking on ground
+  fuelQuality: number;          // 0 to 100 (100 = clean, <50 = bad quality/diluted)
+  detonation: boolean;          // engine knocking/detonation from bad fuel
+  octaneNumber: number;
+}
+
 export interface VehicleDamage {
-  health: number; // 0 (wrecked) to 100 (pristine)
   // Localized deformation depth in pixels
   frontCrumple: number;     // 0 to 15 px (hood & front bumper crushed inward)
   rearCrumple: number;      // 0 to 12 px (trunk & rear bumper crushed inward)
@@ -78,6 +143,14 @@ export interface VehicleDamage {
   rearLeftDent: number;     // 0 to 8 px
   rearRightDent: number;    // 0 to 8 px
 
+  // Suspension & Steering damage
+  frontLeftSuspensionDamage: number;  // 0 to 1
+  frontRightSuspensionDamage: number; // 0 to 1
+  rearLeftSuspensionDamage: number;   // 0 to 1
+  rearRightSuspensionDamage: number;  // 0 to 1
+  steeringDrift: number;              // -1 (pulls strongly left) to +1 (pulls right)
+  wheelRubResistance: number;         // extra rolling resistance from metal pressed to tire
+
   // Structural and visual components
   hoodBuckled: boolean;
   windshieldCracked: boolean;
@@ -86,12 +159,24 @@ export interface VehicleDamage {
   rightHeadlightBroken: boolean;
   leftTaillightBroken: boolean;
   rightTaillightBroken: boolean;
-  engineSmoking: boolean;
-  engineFire: boolean;
 
   // Scraped paint & scratches
   scratches: ScratchMark[];
   
+  // Engine smoke and fire states
+  engineSmoking?: boolean;
+  underHoodSmolder?: boolean;   // Phase 1: smoldering under hood, grey smoke only
+  engineFire?: boolean;         // Open flame in engine bay (frontal collision fire)
+  fuelTankFire?: boolean;       // Open flame in rear / fuel tank / undercarriage (rear/fuel tank hit)
+  cabinFire?: boolean;          // Fire breaks into passenger cabin
+  fireOrigin?: 'front' | 'rear';// Origin point of the fire ('front' = engine bay, 'rear' = fuel tank/puddle)
+  fireProgress?: number;        // 0.0 to 1.0 (fire spreading across vehicle)
+  fireIntensity?: number;       // 0.0 to 1.0
+  fireTimer?: number;           // Seconds elapsed since fire ignition/smoldering
+  groundPuddleIgnited?: boolean;// Fire transferred to fuel puddle under vehicle
+  fuelTankBurntThrough?: boolean;// Fuel tank melted/ruptured from fire, dumping fuel onto ground
+  isFullyBurnt?: boolean;       // vehicle completely scorched/burnt out
+
   // Dynamic 3D/2D mesh vertices for organic deformation
   deformedVertices?: DeformVertex[];
 }
@@ -125,6 +210,11 @@ export interface Vehicle {
   isReversing?: boolean;
   turnSignal: 'none' | 'left' | 'right' | 'hazard';
   turnSignalTimer: number;
+
+  // Modular Physics, Engine & Fuel Systems
+  requiredFuel: 'ai92' | 'ai95' | 'diesel';
+  engineState?: EngineState;
+  fuelSystem?: FuelSystem;
 
   // Damage & Deformation
   damage: VehicleDamage;
@@ -164,6 +254,8 @@ export interface Vehicle {
   honkTimer: number;
   hasHeadOnConflict?: boolean;
   idmAcceleration?: number;
+  intersectionWaitTimer?: number;
+  intersectionReservationId?: string | null;
 
   // Horn & Siren
   isHonking: boolean;
@@ -176,6 +268,17 @@ export interface Vehicle {
   targetChaseVehicleId?: string | null;
   wiperAngle?: number;
   wiperDir?: number;
+  wipersOn?: boolean;
+  heaterMode?: 'off' | 'low' | 'med' | 'high';
+  heaterTemp?: number;
+  engineTemp?: number;
+  windowOpen?: boolean;
+  cabinHumidity?: number;
+  fogLevel?: number; // 0.0 (clear) to 1.0 (completely fogged)
+  windshieldRainLevel?: number;
+  cabinSmoke?: number; // 0 to 100% toxic smoke concentration inside vehicle cabin
+  externalHeatTimer?: number; // continuous seconds exposed to adjacent fire torch (< 1.5m)
+  adjacentFireSourceId?: string | null;
 }
 
 export interface Pedestrian {
@@ -343,6 +446,19 @@ export interface BuildingBalcony {
 
 export interface Building {
   id: string;
+  nameRu?: string;
+  shopBrand?: 
+    | 'pyaterochka' 
+    | 'perekrestok'
+    | 'pharmacy_36_6' 
+    | 'cofix_bakery' 
+    | 'bean_bistro' 
+    | 'dodo_pizza'
+    | 'vkusno_tochka'
+    | 'mvideo'
+    | 'sportmaster'
+    | 'splav_gear' 
+    | 'pitstop_service';
   x: number;
   y: number;
   width: number;
@@ -367,7 +483,19 @@ export interface Building {
     | 'sports_stadium'
     | 'transit_hub'
     | 'cultural_center'
-    | 'car_dealership';
+    | 'car_dealership'
+    | 'tactical_store'
+    | 'auto_service_center'
+    | 'car_wash_station'
+    | 'pharmacy_store'
+    | 'supermarket_store'
+    | 'bakery_cafe'
+    | 'coffee_bistro'
+    | 'electronics_store'
+    | 'sports_store'
+    | 'fast_food_restaurant'
+    | 'pizzeria_restaurant'
+    | 'commercial_gallery';
   color: string;
   roofColor: string;
   accentColor: string;
@@ -507,6 +635,20 @@ export interface SkidMark {
   width: number;
 }
 
+export interface FluidStain {
+  id: string;
+  x: number;
+  y: number;
+  radius: number;
+  maxRadius: number;
+  type: 'oil' | 'coolant' | 'fuel';
+  alpha: number;
+  life: number;
+  maxLife: number;
+  onFire?: boolean;
+  fireIntensity?: number;
+}
+
 export interface Particle {
   x: number;
   y: number;
@@ -520,7 +662,7 @@ export interface Particle {
   type: 'tire_smoke' | 'spark' | 'exhaust' | 'engine_smoke' | 'glass_shard' | 'debris' | 'flame' | 'water_splash' | 'rain_drop' | 'water_fountain' | 'leaf' | 'feather';
 }
 
-export type ItemCategory = 'food' | 'drink' | 'med' | 'tool' | 'valuable' | 'misc';
+export type ItemCategory = 'food' | 'drink' | 'med' | 'medical' | 'tool' | 'auto' | 'valuable' | 'clothing' | 'misc';
 
 export interface InventoryItem {
   id: string;
@@ -542,6 +684,8 @@ export interface InventoryItem {
   };
   weight?: number;
   usable: boolean;
+  portions?: number;       // Current remaining bites/sips/doses in this unit
+  maxPortions?: number;    // Maximum/initial bites/sips/doses
 }
 
 export interface GroundItem {
@@ -552,12 +696,28 @@ export interface GroundItem {
   spawnTime?: number;
 }
 
-export type InjuryType = 'abrasion' | 'bruise' | 'sprain' | 'fracture' | 'bleeding';
+export type InjuryType = 'abrasion' | 'bruise' | 'sprain' | 'fracture' | 'bleeding' | 'burn';
 
 export interface Injury {
   id: string;
   type: InjuryType;
   treated: boolean;
+  severity?: number;      // 0 to 100 severity
+  pain?: number;          // 0 to 100 pain generated by this injury
+  treatedTimer?: number;  // Seconds since treatment began
+  bleedingRate?: number;  // 0 to 100 current bleeding speed
+  burnDegree?: 1 | 2 | 3; // 1 = erythema/redness, 2 = blisters/dermis, 3 = deep necrotic tissue damage
+}
+
+export interface BodyPartState {
+  id: 'head' | 'torso' | 'leftArm' | 'rightArm' | 'leftLeg' | 'rightLeg';
+  nameRu: string;
+  injuries: Injury[];
+  fracture: boolean;
+  fractureTreated: boolean;
+  bruise: number;         // 0 to 100
+  bleeding: number;       // 0 to 100 rate
+  pain: number;           // 0 to 100
 }
 
 export interface BodyPartsMap {
@@ -569,13 +729,43 @@ export interface BodyPartsMap {
   rightLeg: Injury[];
 }
 
+export type MedicationPhase = 'absorption' | 'peak' | 'action' | 'decay';
+
+export interface ActiveMedication {
+  id: string;
+  itemId: string;
+  nameRu: string;
+  type: 'analgesic' | 'antibiotic' | 'stimulant' | 'antiseptic' | 'sedative';
+  phase: MedicationPhase;
+  timer: number;               // Seconds in current phase
+  totalTimer: number;          // Total elapsed seconds
+  absorptionDuration: number;  // e.g. 30s
+  peakDuration: number;        // e.g. 20s
+  actionDuration: number;      // e.g. 180s - 300s
+  decayDuration: number;       // e.g. 60s
+  maxPainkillerPower: number;  // 0.0 to 1.0 (pain reduction ratio)
+  currentEffectiveness: number;// 0.0 to 1.0 calculated curve
+  doseCount?: number;
+}
+
 export interface BodyState {
-  hydration: number;    // 0 to 100 (%)
-  energy: number;       // 0 to 100 (%)
-  temperature: number;  // Body temperature in °C (normal ~36.6°C)
-  wetness: number;      // 0 to 100 (%)
-  painLevel: number;    // 0 to 100 (%)
+  hydration: number;           // 0 to 100 (%)
+  energy: number;              // 0 to 100 (%)
+  temperature: number;         // Body temperature in °C (normal ~36.6°C)
+  wetness: number;             // 0 to 100 (%)
+  painLevel: number;           // Base raw cumulative pain (0 to 100)
+  effectivePain?: number;      // Perceived pain after pharmacokinetics & movement spikes (0 to 100)
+  painPulse?: number;          // Rhythmic heartbeat/breathing wave (-1.0 to 1.0)
+  heartRate?: number;          // Heart rate in BPM (60 to 180)
+  bloodLoss?: number;          // Cumulative blood loss (0 to 100)
+  shockLevel?: number;         // Shock level from trauma/blood loss (0 to 100)
+  panicLevel?: number;         // Panic & fear level from trauma/pain (0 to 100)
+  activeMedications?: ActiveMedication[];
+  shiverIntensity?: number;    // Cold shivering camera jitter intensity (0 to 1)
   bodyParts: BodyPartsMap;
+  coPoisoning?: number;        // 0 to 100% carbon monoxide poisoning (hypoxia)
+  dizziness?: number;          // 0 to 100% dizziness / vertigo from hypoxia & trauma
+  suffocationLevel?: number;   // 0 to 100% respiratory distress & choking
   coughTimer?: number;
   groanTimer?: number;
   heavyBreathTimer?: number;
@@ -594,6 +784,8 @@ export interface PlayerNeeds {
   nausea: number;      // 0 (fine) to 100 (vomiting)
 }
 
+export type BodyPartStatus = string;
+
 export interface ConsumptionState {
   isConsuming: boolean;
   itemId: string;
@@ -610,6 +802,7 @@ export interface ConsumptionState {
     energy?: number;
     sleepiness?: number;
   };
+  fullnessPerBite?: number;
   leftoverId?: string;         // itemId of wrapper/plate/etc after finishing
   leftoverNameRu?: string;
   tasteMessage?: string;       // current taste sensation text
@@ -620,6 +813,15 @@ export interface PlayerNotification {
   text: string;
   type: 'heal' | 'food' | 'drink' | 'energy' | 'sleep' | 'warning' | 'pickup' | 'info';
   timer: number;
+}
+
+export interface ActivePlacement {
+  type: 'vehicle' | 'prop' | 'item';
+  id: string;        // vehicle type, prop type, or itemId
+  nameRu: string;
+  angle: number;     // in radians
+  color?: string;    // vehicle color hex
+  count?: number;    // item stack count
 }
 
 export interface Player {
@@ -640,6 +842,11 @@ export interface Player {
   insideBuildingId?: string | null;
   currentFloor?: number;
   
+  // Creative / Sandbox Mode
+  isCreativeMode?: boolean;
+  isFlying?: boolean;
+  isInvincible?: boolean;
+  
   // Human Mode Enhancements: Dodge roll, quick dash & aim
   isDashing?: boolean;
   dashTimer?: number;
@@ -658,8 +865,23 @@ export interface Player {
   sleepTimer?: number;
   isFainting?: boolean;
   faintTimer?: number;
+  needsHospitalEvacuation?: boolean;
+  hospitalEvacTimer?: number;
+  evacCause?: 'fire_burns' | 'fractures_shock' | 'blood_loss' | 'hypothermia' | 'starvation' | 'general';
+  evacPhase?: 'dispatch' | 'ambulance_to_player' | 'return_dark' | 'hospital_bed';
+  evacAmbulanceId?: string | null;
+  evacStartPos?: { x: number; y: number };
+  evacDiagnosis?: {
+    causeName: string;
+    description: string;
+    treatmentsApplied: string[];
+    prescriptionsGiven: string[];
+    billAmount: number;
+  };
   isHospitalized?: boolean;
   hospitalTimer?: number;
+  hospitalTreatmentProgress?: number;
+  hospitalTreatmentStage?: number;
   hospitalPhase?: number;
   notifications: PlayerNotification[];
   consumption?: ConsumptionState | null;
@@ -719,9 +941,20 @@ export interface GameWorld {
   litter: LitterItem[];
   groundItems?: GroundItem[];
   skidMarks: SkidMark[];
+  stains: FluidStain[];
   particles: Particle[];
   weather: WeatherType;
+  outsideTemp?: number;
+  humidity?: number;
   lightningFlashTimer?: number;
+  lightningStrike?: {
+    startX: number;
+    startY: number;
+    endX: number;
+    endY: number;
+    seed: number;
+    intensity: number;
+  } | null;
   gpsDestination?: GpsDestination | null;
   gpsPath?: Vector2D[] | null;
   pedestrianPaths: {
@@ -761,6 +994,8 @@ export interface InputState {
   resetR: boolean;
   turnLeftQ: boolean;
   turnRightZ: boolean;
+  shiftUp: boolean;
+  shiftDown: boolean;
   hazardX: boolean;
   inventoryI?: boolean;
   hotbar1?: boolean;

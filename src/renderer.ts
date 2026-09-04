@@ -1,4 +1,5 @@
 import { 
+  ActivePlacement,
   Bird,
   Building, 
   Camera, 
@@ -11,13 +12,20 @@ import {
   StreetProp, 
   TimeOfDay, 
   Tree,
-  Vehicle 
+  Vehicle,
+  VehicleDamage
 } from './types';
 import { trafficDiagnostics } from './aiTraffic';
-import { renderSpecializedVehicleAttachments } from './vehicleVisuals';
+import {
+  renderSpecializedVehicleAttachments,
+  getVehicleBasePolygon,
+  getVehicleCabinDimensions,
+  renderVehicleGreenhouseAndBodyPanels
+} from './vehicleVisuals';
 import { performanceConfig } from './performanceConfig';
 import { generateBuildingLayout, renderBuildingInterior } from './buildingInteriors';
 import { drawItemModel2D } from './itemGraphic';
+import { screenEffectsSystem } from './screenEffects';
 
 const hashString = (str: string): number => {
   let hash = 0;
@@ -133,6 +141,10 @@ export class GameRenderer {
   private lightmapCanvas: HTMLCanvasElement;
   private lightmapCtx: CanvasRenderingContext2D;
 
+  // Offscreen Chunk Cache for static world geometry (Ground, Sidewalks, Roads, Parkings)
+  private chunkCache = new Map<string, HTMLCanvasElement>();
+  private chunkSize: number = 1000;
+
   constructor(ctx: CanvasRenderingContext2D) {
     this.ctx = ctx;
     this.lightmapCanvas = document.createElement('canvas');
@@ -142,6 +154,55 @@ export class GameRenderer {
     for(let i=0; i<15; i++) {
       this.cloudShadows.push({x: Math.random() * 8000, y: Math.random() * 8000, size: 100 + Math.random() * 200});
     }
+  }
+
+  private renderChunkStatic(
+    chunkCtx: CanvasRenderingContext2D,
+    cx: number,
+    cy: number,
+    world: GameWorld
+  ) {
+    const chunkX = cx * this.chunkSize;
+    const chunkY = cy * this.chunkSize;
+    const minX = chunkX;
+    const minY = chunkY;
+    const maxX = chunkX + this.chunkSize;
+    const maxY = chunkY + this.chunkSize;
+
+    chunkCtx.save();
+    // Translate standard world coordinates so standard draw functions draw directly into chunk canvas
+    chunkCtx.translate(-chunkX, -chunkY);
+
+    // 1. Terrain Base
+    this.renderGround(chunkCtx, world, minX, minY, maxX, maxY);
+
+    // 2. Sidewalks intersecting this chunk
+    const chunkSidewalks = world.sidewalks.filter(sw => 
+      sw.x + sw.width >= minX && sw.x <= maxX && sw.y + sw.height >= minY && sw.y <= maxY
+    );
+    this.renderSidewalks(chunkCtx, chunkSidewalks, minX, minY, maxX, maxY);
+
+    // 3. Roads & Markings
+    this.renderRoadsAndMarkings(chunkCtx, world, minX, minY, maxX, maxY);
+
+    // 4. Parking lots
+    this.renderParkings(chunkCtx, world, minX, minY, maxX, maxY);
+
+    chunkCtx.restore();
+  }
+
+  private getChunkCanvas(cx: number, cy: number, world: GameWorld): HTMLCanvasElement {
+    const key = `${cx},${cy}`;
+    let canvas = this.chunkCache.get(key);
+    if (!canvas) {
+      canvas = document.createElement('canvas');
+      canvas.width = this.chunkSize;
+      canvas.height = this.chunkSize;
+      const chunkCtx = canvas.getContext('2d', { alpha: false })!;
+      this.renderChunkStatic(chunkCtx, cx, cy, world);
+      this.chunkCache.set(key, canvas);
+    }
+    return canvas;
   }
 
   public resize(width: number, height: number) {
@@ -162,9 +223,14 @@ export class GameRenderer {
     visiblePedestrians: Pedestrian[],
     visibleTrees?: Tree[],
     visibleProps?: StreetProp[],
-    visibleSidewalks?: SidewalkBlock[]
+    visibleSidewalks?: SidewalkBlock[],
+    activePlacement?: ActivePlacement | null,
+    mouseWorldPos?: { x: number; y: number } | null
   ) {
     const ctx = this.ctx;
+
+    // Apply pre-render physiological camera micro-jitter (cold shivering, shock tremors)
+    screenEffectsSystem.applyPreRenderCameraModifiers(camera, player, 0.016);
 
     // Viewport bounds in world coords (using diagonal distance to cover full screen when rotated)
     const viewDiag = (Math.hypot(this.width, this.height) / (2 * camera.zoom)) + 150;
@@ -302,14 +368,23 @@ export class GameRenderer {
           ctx.scale(heightScale, heightScale);
           ctx.translate(-camera.x, -camera.y);
 
-          // Render only the visible portion of the outside world respecting current nightAlpha / timeHour & lights
-          this.renderGround(world, sMinX, sMinY, sMaxX, sMaxY);
-          this.renderSidewalks(vpSidewalks, sMinX, sMinY, sMaxX, sMaxY);
-          this.renderRoadsAndMarkings(world, sMinX, sMinY, sMaxX, sMaxY);
+          // Render Ground, Sidewalks, Roads, and Parkings via cached chunks for window outside view
+          const sStartChunkX = Math.floor(Math.max(0, sMinX) / this.chunkSize);
+          const sEndChunkX = Math.floor(Math.min(8000, sMaxX) / this.chunkSize);
+          const sStartChunkY = Math.floor(Math.max(0, sMinY) / this.chunkSize);
+          const sEndChunkY = Math.floor(Math.min(8000, sMaxY) / this.chunkSize);
+
+          for (let cx = sStartChunkX; cx <= sEndChunkX; cx++) {
+            for (let cy = sStartChunkY; cy <= sEndChunkY; cy++) {
+              const chunkCanvas = this.getChunkCanvas(cx, cy, world);
+              ctx.drawImage(chunkCanvas, cx * this.chunkSize, cy * this.chunkSize);
+            }
+          }
+
           this.renderPostSovietAtmosphereAndSignage(world, sMinX, sMinY, sMaxX, sMaxY);
           this.renderPuddles(world.puddles, sMinX, sMinY, sMaxX, sMaxY);
           this.renderSkidMarks(world.skidMarks, sMinX, sMinY, sMaxX, sMaxY);
-          this.renderParkings(world, sMinX, sMinY, sMaxX, sMaxY);
+          this.renderStains(world.stains, sMinX, sMinY, sMaxX, sMaxY);
           // Render building roofs/tops instead of ground bases when viewed from height
           this.renderBuildingRoofsAndCanopies(visibleBuildings, nightAlpha, player);
           this.renderLitter(world.litter, sMinX, sMinY, sMaxX, sMaxY, nightAlpha);
@@ -350,6 +425,9 @@ export class GameRenderer {
       }
 
       ctx.restore();
+
+      // Render full physiological screen effects pass (Pain vignette, Shock desaturation, Frost cyan, Amber wave)
+      screenEffectsSystem.render(ctx, this.width, this.height, player, world);
       return;
     }
 
@@ -372,17 +450,21 @@ export class GameRenderer {
       ctx.translate(shakeX, shakeY);
     }
 
-    // 3. Ground / Grass / Terrain Base
-    this.renderGround(world, minX, minY, maxX, maxY);
+    // 3. Render Ground, Sidewalks, Roads, and Parkings via cached chunks
+    const startChunkX = Math.floor(Math.max(0, minX) / this.chunkSize);
+    const endChunkX = Math.floor(Math.min(8000, maxX) / this.chunkSize);
+    const startChunkY = Math.floor(Math.max(0, minY) / this.chunkSize);
+    const endChunkY = Math.floor(Math.min(8000, maxY) / this.chunkSize);
+
+    for (let cx = startChunkX; cx <= endChunkX; cx++) {
+      for (let cy = startChunkY; cy <= endChunkY; cy++) {
+        const chunkCanvas = this.getChunkCanvas(cx, cy, world);
+        ctx.drawImage(chunkCanvas, cx * this.chunkSize, cy * this.chunkSize);
+      }
+    }
 
     // 3a. Cloud Shadows (Atmosphere)
     this.renderCloudShadows(minX, minY, maxX, maxY);
-
-    // 3b. Paved Sidewalk Walkways, Curbs & Block Courtyards
-    this.renderSidewalks(vpSidewalks, minX, minY, maxX, maxY);
-
-    // 4. Roads, Intersections, Crosswalks & Markings
-    this.renderRoadsAndMarkings(world, minX, minY, maxX, maxY);
 
     // 4b. Post-Soviet Atmosphere & Cyrillic Signage
     this.renderPostSovietAtmosphereAndSignage(world, minX, minY, maxX, maxY);
@@ -393,8 +475,8 @@ export class GameRenderer {
     // 6. Skid Marks
     this.renderSkidMarks(world.skidMarks, minX, minY, maxX, maxY);
 
-    // 7. Parking lots
-    this.renderParkings(world, minX, minY, maxX, maxY);
+    // 6b. Fluid Stains (Oil, Coolant, Fuel on road surface - Layer 0)
+    this.renderStains(world.stains, minX, minY, maxX, maxY);
 
     // 8. Buildings Base Structure & Entrances
     this.renderBuildingBases(visibleBuildings, nightAlpha, player, timeHour);
@@ -463,12 +545,19 @@ export class GameRenderer {
       this.renderAIDebugOverlay(world, visibleVehicles);
     }
 
+    // 19. Creative Mode Active Placement Preview
+    if (activePlacement && mouseWorldPos) {
+      this.renderPlacementPreview(activePlacement, mouseWorldPos);
+    }
+
     ctx.restore();
+
+    // Render full physiological screen effects pass (Pain vignette, Shock desaturation, Frost cyan, Amber wave)
+    screenEffectsSystem.render(ctx, this.width, this.height, player, world);
   }
 
   // --- GROUND & BASE TERRAIN ---
-  private renderGround(world: GameWorld, minX: number, minY: number, maxX: number, maxY: number) {
-    const ctx = this.ctx;
+  private renderGround(ctx: CanvasRenderingContext2D, world: GameWorld, minX: number, minY: number, maxX: number, maxY: number) {
     
     // Default urban concrete floor color
     ctx.fillStyle = '#334155';
@@ -521,10 +610,10 @@ export class GameRenderer {
 
   // --- ROADS, MARKINGS & CROSSWALKS ---
   private renderRoadsAndMarkings(
+    ctx: CanvasRenderingContext2D,
     world: GameWorld,
     minX: number, minY: number, maxX: number, maxY: number
   ) {
-    const ctx = this.ctx;
     const { roads, intersections } = world;
 
     // Asphalt, Dirt or Gravel Surfaces
@@ -817,15 +906,131 @@ export class GameRenderer {
     ctx.restore();
   }
 
+  // --- ORGANIC BLOB PATH HELPER ---
+  private drawOrganicBlob(ctx: CanvasRenderingContext2D, rx: number, ry: number, seed: number) {
+    ctx.beginPath();
+    const numPoints = 16;
+    for (let i = 0; i <= numPoints; i++) {
+      const angle = (i / numPoints) * Math.PI * 2;
+      const wave1 = Math.sin(angle * 3 + seed * 10) * 0.15;
+      const wave2 = Math.cos(angle * 5 + seed * 17) * 0.08;
+      const rScale = 1 + wave1 + wave2;
+      const x = Math.cos(angle) * rx * rScale;
+      const y = Math.sin(angle) * ry * rScale;
+      if (i === 0) {
+        ctx.moveTo(x, y);
+      } else {
+        ctx.lineTo(x, y);
+      }
+    }
+    ctx.closePath();
+  }
+
+  // --- FLUID STAINS (OIL, COOLANT, FUEL ON ROAD SURFACE) ---
+  private renderStains(stains: GameWorld['stains'], minX: number, minY: number, maxX: number, maxY: number) {
+    if (!stains || stains.length === 0) return;
+    const ctx = this.ctx;
+
+    for (const stain of stains) {
+      if (stain.x < minX - 30 || stain.x > maxX + 30 || stain.y < minY - 30 || stain.y > maxY + 30) continue;
+      if (stain.alpha <= 0.01) continue;
+
+      ctx.save();
+      ctx.translate(stain.x, stain.y);
+
+      const rx = Math.max(0.1, stain.radius);
+      const ry = rx * 0.85;
+      const seed = hashString(stain.id);
+
+      if (stain.type === 'oil') {
+        // Realistic dark oil stain with metallic gloss & amber rim
+        const grad = safeRadialGradient(ctx, -rx * 0.15, -ry * 0.15, 0, 0, 0, rx);
+        grad.addColorStop(0, `rgba(2, 6, 23, ${stain.alpha * 0.98})`); // Heavy black core
+        grad.addColorStop(0.4, `rgba(15, 23, 42, ${stain.alpha * 0.92})`); // Dark viscous body
+        grad.addColorStop(0.75, `rgba(120, 53, 4, ${stain.alpha * 0.75})`); // Golden/amber outer ring
+        grad.addColorStop(0.9, `rgba(56, 189, 248, ${stain.alpha * 0.4})`); // Iridescent metallic sky sheen at edge
+        grad.addColorStop(1, `rgba(56, 189, 248, 0)`);
+
+        ctx.fillStyle = grad;
+        this.drawOrganicBlob(ctx, rx, ry, seed);
+        ctx.fill();
+
+        // High gloss wet specular highlight
+        ctx.fillStyle = `rgba(255, 255, 255, ${stain.alpha * 0.45})`;
+        ctx.beginPath();
+        safeEllipse(ctx, -rx * 0.22, -ry * 0.22, rx * 0.25, ry * 0.12, -0.12, 0, Math.PI * 2);
+        ctx.fill();
+
+      } else if (stain.type === 'coolant') {
+        // Bright fluorescent neon antifreeze puddle
+        const grad = safeRadialGradient(ctx, -rx * 0.1, -ry * 0.1, 0, 0, 0, rx);
+        grad.addColorStop(0, `rgba(34, 197, 94, ${stain.alpha * 0.95})`); // Bright fluorescent green core
+        grad.addColorStop(0.55, `rgba(132, 204, 22, ${stain.alpha * 0.75})`); // Lime neon green
+        grad.addColorStop(0.85, `rgba(234, 179, 8, ${stain.alpha * 0.4})`); // Subtle yellowish tint at the boundary
+        grad.addColorStop(1, `rgba(234, 179, 8, 0)`);
+
+        ctx.fillStyle = grad;
+        this.drawOrganicBlob(ctx, rx, ry, seed);
+        ctx.fill();
+
+        // Wet specular shine
+        ctx.fillStyle = `rgba(255, 255, 255, ${stain.alpha * 0.4})`;
+        ctx.beginPath();
+        safeEllipse(ctx, -rx * 0.25, -ry * 0.2, rx * 0.2, ry * 0.1, -0.15, 0, Math.PI * 2);
+        ctx.fill();
+
+      } else if (stain.type === 'fuel') {
+        // Highly realistic gasoline spill: amber iridescent thin-film interference rainbow pattern
+        const grad = safeRadialGradient(ctx, -rx * 0.15, -ry * 0.15, 0, 0, 0, rx);
+        grad.addColorStop(0, `rgba(15, 23, 42, ${stain.alpha * 0.3})`); // center thin wet film
+        grad.addColorStop(0.18, `rgba(239, 68, 68, ${stain.alpha * 0.65})`); // Red ring
+        grad.addColorStop(0.32, `rgba(234, 179, 8, ${stain.alpha * 0.6})`);  // Yellow ring
+        grad.addColorStop(0.48, `rgba(34, 197, 94, ${stain.alpha * 0.65})`); // Green ring
+        grad.addColorStop(0.65, `rgba(6, 182, 212, ${stain.alpha * 0.7})`);  // Cyan/blue ring
+        grad.addColorStop(0.82, `rgba(168, 85, 247, ${stain.alpha * 0.65})`); // Purple/magenta outer ring
+        grad.addColorStop(0.95, `rgba(236, 72, 153, ${stain.alpha * 0.35})`); // Pink edge
+        grad.addColorStop(1, `rgba(236, 72, 153, 0)`);
+
+        ctx.fillStyle = grad;
+        this.drawOrganicBlob(ctx, rx, ry, seed);
+        ctx.fill();
+
+        // Soft sky sheen reflection on gasoline surface
+        ctx.fillStyle = `rgba(255, 255, 255, ${stain.alpha * 0.35})`;
+        ctx.beginPath();
+        safeEllipse(ctx, -rx * 0.25, -ry * 0.22, rx * 0.3, ry * 0.15, -0.2, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      if ((stain as any).onFire) {
+        // Draw an intense flickering ground ember layer on top of the fluid surface
+        const fireInt = (stain as any).fireIntensity || 0.1;
+        const flicker = 1.0 + Math.sin(Date.now() * 0.022 + rx) * 0.12;
+        const glowRad = rx * 1.1 * flicker;
+        const glowGrad = safeRadialGradient(ctx, 0, 0, 0, 0, 0, glowRad);
+        glowGrad.addColorStop(0, `rgba(254, 240, 138, ${stain.alpha * 0.95 * fireInt})`); // Bright yellow core
+        glowGrad.addColorStop(0.25, `rgba(249, 115, 22, ${stain.alpha * 0.8 * fireInt})`); // Bright orange
+        glowGrad.addColorStop(0.65, `rgba(220, 38, 38, ${stain.alpha * 0.45 * fireInt})`); // Deep red rim
+        glowGrad.addColorStop(1.0, `rgba(220, 38, 38, 0)`);
+
+        ctx.fillStyle = glowGrad;
+        this.drawOrganicBlob(ctx, glowRad, glowRad * 0.85, seed + 1);
+        ctx.fill();
+      }
+
+      ctx.restore();
+    }
+  }
+
   // --- PAVED SIDEWALKS, CURB STONES & BLOCK COURTYARDS ---
   private renderSidewalks(
+    ctx: CanvasRenderingContext2D,
     sidewalks: SidewalkBlock[],
     minX: number,
     minY: number,
     maxX: number,
     maxY: number
   ) {
-    const ctx = this.ctx;
 
     for (const sw of sidewalks) {
       if (sw.x + sw.width < minX || sw.x > maxX || sw.y + sw.height < minY || sw.y > maxY) {
@@ -1152,8 +1357,7 @@ export class GameRenderer {
   }
 
   // --- PARKING LOTS ---
-  private renderParkings(world: GameWorld, minX: number, minY: number, maxX: number, maxY: number) {
-    const ctx = this.ctx;
+  private renderParkings(ctx: CanvasRenderingContext2D, world: GameWorld, minX: number, minY: number, maxX: number, maxY: number) {
     for (const pk of world.parkings) {
       if (pk.x + pk.width < minX || pk.x > maxX || pk.y + pk.height < minY || pk.y > maxY) continue;
 
@@ -1343,84 +1547,484 @@ export class GameRenderer {
           ctx.lineTo(gx, bld.y + bld.height);
         }
         ctx.stroke();
-      } else if (bld.type === 'shopping_mall' || bld.type === 'commercial') {
-        // Modern glass curtain wall storefronts, colorful advertising billboards & neon marquee headers
-        // Draw decorative dark background panels
-        ctx.fillStyle = '#1e293b';
-        ctx.fillRect(bld.x, bld.y, bld.width, bld.height);
-
-        // Draw massive glass panes at the lower section (or across front facade)
-        ctx.fillStyle = 'rgba(14, 116, 144, 0.35)'; // Cyan-tinted shop glass
-        ctx.fillRect(bld.x + 15, bld.y + bld.height - 12, bld.width - 30, 9);
-
-        // Vertical glass mullions
-        ctx.strokeStyle = '#475569';
-        ctx.lineWidth = 1;
-        ctx.beginPath();
-        for (let gx = bld.x + 30; gx < bld.x + bld.width - 15; gx += 20) {
-          ctx.moveTo(gx, bld.y + bld.height - 12);
-          ctx.lineTo(gx, bld.y + bld.height - 3);
-        }
-        ctx.stroke();
-
-        // Draw illuminated neon sign board or advertisement billboards on the facade
-        // Left billboard (Sports/Fashion)
-        if (bld.width > 120) {
-          ctx.fillStyle = '#3f3f46';
-          ctx.fillRect(bld.x + 20, bld.y + 15, 45, 25);
-          ctx.strokeStyle = '#ef4444'; // Red glowing neon frame
-          ctx.lineWidth = 1.2;
-          ctx.strokeRect(bld.x + 20, bld.y + 15, 45, 25);
-          
-          // Billboards drawing decoration (abstract brand shapes)
-          ctx.fillStyle = '#ef4444';
-          ctx.fillRect(bld.x + 25, bld.y + 20, 10, 15);
+      } else if (bld.type === 'shopping_mall' || bld.type === 'commercial' || bld.type === 'shop' || bld.type === 'tactical_store' || bld.type === 'auto_service_center' || bld.type === 'car_wash_station' || bld.type === 'pharmacy_store' || bld.type === 'supermarket_store' || bld.type === 'bakery_cafe' || bld.type === 'coffee_bistro' || bld.type === 'electronics_store' || bld.type === 'sports_store' || bld.type === 'fast_food_restaurant' || bld.type === 'pizzeria_restaurant' || bld.type === 'commercial_gallery' || bld.shopBrand !== undefined) {
+        if (bld.shopBrand === 'pharmacy_36_6' || bld.type === 'pharmacy_store') {
+          // --- АПТЕКА 36.6: MODERN PHARMACEUTICAL CLINICAL FACADE ---
           ctx.fillStyle = '#f8fafc';
-          ctx.font = 'bold 6px sans-serif';
-          ctx.fillText('MEGA', bld.x + 38, bld.y + 28);
-        }
+          ctx.fillRect(bld.x, bld.y, bld.width, bld.height);
 
-        // Right billboard (Electronics/Media)
-        if (bld.width > 180) {
-          const rx = bld.x + bld.width - 70;
-          ctx.fillStyle = '#3f3f46';
-          ctx.fillRect(rx, bld.y + 15, 50, 25);
-          ctx.strokeStyle = '#06b6d4'; // Cyan neon frame
-          ctx.lineWidth = 1.2;
-          ctx.strokeRect(rx, bld.y + 15, 50, 25);
+          // Top emerald green brand band
+          ctx.fillStyle = '#065f46';
+          ctx.fillRect(bld.x, bld.y, bld.width, 18);
 
-          ctx.fillStyle = '#06b6d4';
-          ctx.beginPath();
-          ctx.arc(rx + 15, bld.y + 27, 6, 0, Math.PI * 2);
-          ctx.fill();
-          ctx.fillStyle = '#f8fafc';
-          ctx.font = 'bold 5px sans-serif';
-          ctx.fillText('SONY', rx + 28, bld.y + 29);
-        }
+          // Glass showcase windows at bottom with medicine displays
+          ctx.fillStyle = 'rgba(16, 185, 129, 0.22)';
+          ctx.fillRect(bld.x + 12, bld.y + bld.height - 18, bld.width - 24, 15);
+          ctx.strokeStyle = '#059669';
+          ctx.lineWidth = 1;
+          ctx.strokeRect(bld.x + 12, bld.y + bld.height - 18, bld.width - 24, 15);
 
-        // Glowing center shopping center title marquee above entrance
-        if (bld.width > 240) {
-          const cx = bld.x + bld.width / 2;
-          ctx.fillStyle = '#0f172a';
-          ctx.fillRect(cx - 60, bld.y + 10, 120, 20);
-          ctx.strokeStyle = '#eab308'; // Glowing yellow/gold border
-          ctx.lineWidth = 1.5;
-          ctx.strokeRect(cx - 60, bld.y + 10, 120, 20);
-
-          // LED glow dots animation
-          const lit = (Date.now() % 800) > 400;
-          ctx.fillStyle = lit ? '#eab308' : '#71717a';
-          for (let gx = cx - 55; gx <= cx + 55; gx += 10) {
+          // Animated pulsing green medical cross on the left & right
+          const crossPulse = 0.7 + 0.3 * Math.sin(Date.now() / 300);
+          const crossSize = 10;
+          [bld.x + 22, bld.x + bld.width - 22].forEach(cx => {
+            ctx.fillStyle = `rgba(16, 185, 129, ${0.4 * crossPulse})`;
             ctx.beginPath();
-            ctx.arc(gx, bld.y + 13, 1, 0, Math.PI * 2);
+            ctx.arc(cx, bld.y + 9, 8, 0, Math.PI * 2);
             ctx.fill();
-          }
 
-          ctx.fillStyle = '#eab308';
+            ctx.fillStyle = '#10b981';
+            ctx.fillRect(cx - 2.5, bld.y + 9 - crossSize / 2, 5, crossSize);
+            ctx.fillRect(cx - crossSize / 2, bld.y + 9 - 2.5, crossSize, 5);
+
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(cx - 1, bld.y + 9 - crossSize / 2 + 1.5, 2, crossSize - 3);
+            ctx.fillRect(cx - crossSize / 2 + 1.5, bld.y + 9 - 1, crossSize - 3, 2);
+          });
+
+          // Central Signboard
+          const signW = Math.min(220, bld.width - 64);
+          const signX = bld.x + (bld.width - signW) / 2;
+          ctx.fillStyle = '#022c22';
+          ctx.fillRect(signX, bld.y + 2, signW, 14);
+          ctx.strokeStyle = '#10b981';
+          ctx.lineWidth = 1.2;
+          ctx.strokeRect(signX, bld.y + 2, signW, 14);
+
+          ctx.fillStyle = '#10b981';
+          ctx.font = 'bold 8px sans-serif';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText('АПТЕКА 36.6 • МЕДИКАМЕНТЫ 24/7', signX + signW / 2, bld.y + 9);
+        } else if (bld.shopBrand === 'pyaterochka') {
+          // --- СУПЕРМАРКЕТ "ПЯТЁРОЧКА 24/7": SIGNATURE RED & GREEN GROCERY ---
+          ctx.fillStyle = '#15803d';
+          ctx.fillRect(bld.x, bld.y, bld.width, bld.height);
+
+          // Vibrant Red brand header
+          ctx.fillStyle = '#dc2626';
+          ctx.fillRect(bld.x, bld.y, bld.width, 22);
+
+          // Glass showcase lower wall
+          ctx.fillStyle = 'rgba(254, 240, 138, 0.28)';
+          ctx.fillRect(bld.x + 15, bld.y + bld.height - 20, bld.width - 30, 17);
+          ctx.strokeStyle = '#166534';
+          ctx.lineWidth = 1.2;
+          ctx.strokeRect(bld.x + 15, bld.y + bld.height - 20, bld.width - 30, 17);
+
+          // Red Round Emblem with Green Leaf & "5"
+          const emblemX = bld.x + 24;
+          const emblemY = bld.y + 11;
+          ctx.fillStyle = '#ffffff';
+          ctx.beginPath();
+          ctx.arc(emblemX, emblemY, 9, 0, Math.PI * 2);
+          ctx.fill();
+
+          ctx.fillStyle = '#dc2626';
+          ctx.beginPath();
+          ctx.arc(emblemX, emblemY, 7.5, 0, Math.PI * 2);
+          ctx.fill();
+
+          // Green leaf on top of emblem
+          ctx.fillStyle = '#15803d';
+          ctx.beginPath();
+          ctx.ellipse(emblemX + 3, emblemY - 6, 3, 1.8, Math.PI / 4, 0, Math.PI * 2);
+          ctx.fill();
+
+          // White "5" inside emblem
+          ctx.fillStyle = '#ffffff';
           ctx.font = 'bold 9px sans-serif';
           ctx.textAlign = 'center';
           ctx.textBaseline = 'middle';
-          ctx.fillText(bld.type === 'shopping_mall' ? 'ТРЦ CITY PLAZA' : 'ТОРГОВЫЙ ЦЕНТР', cx, bld.y + 22);
+          ctx.fillText('5', emblemX, emblemY + 1);
+
+          // Signboard Text
+          const pSignW = Math.min(240, bld.width - 65);
+          const pSignX = bld.x + (bld.width - pSignW) / 2;
+          ctx.fillStyle = '#991b1b';
+          ctx.fillRect(pSignX, bld.y + 3, pSignW, 16);
+          ctx.strokeStyle = '#facc15';
+          ctx.lineWidth = 1.2;
+          ctx.strokeRect(pSignX, bld.y + 3, pSignW, 16);
+
+          ctx.fillStyle = '#ffffff';
+          ctx.font = 'bold 9px sans-serif';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText('ПЯТЁРОЧКА 24/7 • ПРОДУКТЫ У ДОМА', pSignX + pSignW / 2, bld.y + 11);
+        } else if (bld.shopBrand === 'cofix_bakery') {
+          // --- КАФЕ & ПЕКАРНЯ "COFIX": MATTE BLACK & ORANGE URBAN AESTHETIC ---
+          ctx.fillStyle = '#18181b';
+          ctx.fillRect(bld.x, bld.y, bld.width, bld.height);
+
+          // Vertical natural wood slats texture
+          ctx.strokeStyle = 'rgba(180, 83, 9, 0.45)';
+          ctx.lineWidth = 1.2;
+          ctx.beginPath();
+          for (let wx = bld.x + 8; wx < bld.x + bld.width - 8; wx += 8) {
+            ctx.moveTo(wx, bld.y);
+            ctx.lineTo(wx, bld.y + bld.height);
+          }
+          ctx.stroke();
+
+          // Bakery Warm Amber Glass Storefront
+          ctx.fillStyle = 'rgba(251, 146, 60, 0.3)';
+          ctx.fillRect(bld.x + 12, bld.y + bld.height - 20, bld.width - 24, 16);
+          ctx.strokeStyle = '#ea580c';
+          ctx.lineWidth = 1;
+          ctx.strokeRect(bld.x + 12, bld.y + bld.height - 20, bld.width - 24, 16);
+
+          // Orange Neon Sign
+          const cSignW = Math.min(230, bld.width - 50);
+          const cSignX = bld.x + (bld.width - cSignW) / 2;
+          ctx.fillStyle = '#09090b';
+          ctx.fillRect(cSignX, bld.y + 3, cSignW, 16);
+          ctx.strokeStyle = '#ea580c';
+          ctx.lineWidth = 1.5;
+          ctx.strokeRect(cSignX, bld.y + 3, cSignW, 16);
+
+          ctx.fillStyle = '#ea580c';
+          ctx.font = 'bold 8.5px sans-serif';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText('COFIX & BAKERY • СВЕЖИЙ КОФЕ И ВЫПЕЧКА', cSignX + cSignW / 2, bld.y + 11);
+        } else if (bld.shopBrand === 'bean_bistro') {
+          // --- КАФЕ & КОФЕЙНЯ "BEAN & BISTRO": COZY ROAST MAHOGANY & TERRACOTTA ---
+          ctx.fillStyle = '#451a03';
+          ctx.fillRect(bld.x, bld.y, bld.width, bld.height);
+
+          // Terrace Awning over storefront
+          ctx.fillStyle = '#78350f';
+          ctx.fillRect(bld.x + 10, bld.y + bld.height - 18, bld.width - 20, 15);
+          ctx.strokeStyle = '#f59e0b';
+          ctx.lineWidth = 1;
+          ctx.strokeRect(bld.x + 10, bld.y + bld.height - 18, bld.width - 20, 15);
+
+          // Golden Neon Sign
+          const bSignW = Math.min(230, bld.width - 50);
+          const bSignX = bld.x + (bld.width - bSignW) / 2;
+          ctx.fillStyle = '#1c1917';
+          ctx.fillRect(bSignX, bld.y + 3, bSignW, 16);
+          ctx.strokeStyle = '#f59e0b';
+          ctx.lineWidth = 1.5;
+          ctx.strokeRect(bSignX, bld.y + 3, bSignW, 16);
+
+          ctx.fillStyle = '#f59e0b';
+          ctx.font = 'bold 8.5px sans-serif';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText('BEAN & BISTRO • SPECIALTY COFFEE & BRUNCH', bSignX + bSignW / 2, bld.y + 11);
+        } else if (bld.shopBrand === 'pitstop_service') {
+          // --- АВТОМАСТЕРСКАЯ "PIT-STOP": INDUSTRIAL STEEL & RACING GARAGE BAYS ---
+          ctx.fillStyle = '#1e293b';
+          ctx.fillRect(bld.x, bld.y, bld.width, bld.height);
+
+          // Racing Blue & Yellow hazard warning band
+          ctx.fillStyle = '#0284c7';
+          ctx.fillRect(bld.x, bld.y, bld.width, 18);
+
+          // Yellow caution hazard chevron lines
+          ctx.strokeStyle = '#facc15';
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          for (let hx = bld.x + 10; hx < bld.x + bld.width; hx += 16) {
+            ctx.moveTo(hx, bld.y);
+            ctx.lineTo(hx + 8, bld.y + 18);
+          }
+          ctx.stroke();
+
+          // Overhead roll-up garage sectional doors
+          const numBays = Math.max(1, Math.floor((bld.width - 30) / 50));
+          const baySpacing = (bld.width - 20) / numBays;
+          for (let b = 0; b < numBays; b++) {
+            const gbx = bld.x + 10 + b * baySpacing + 4;
+            const gbw = baySpacing - 8;
+            const gby = bld.y + bld.height - 24;
+            const gbh = 22;
+
+            ctx.fillStyle = '#334155';
+            ctx.fillRect(gbx, gby, gbw, gbh);
+            ctx.strokeStyle = '#0f172a';
+            ctx.lineWidth = 1;
+            ctx.strokeRect(gbx, gby, gbw, gbh);
+
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
+            ctx.beginPath();
+            for (let sy = gby + 4; sy < gby + gbh; sy += 4) {
+              ctx.moveTo(gbx, sy);
+              ctx.lineTo(gbx + gbw, sy);
+            }
+            ctx.stroke();
+
+            // Vision panel
+            ctx.fillStyle = 'rgba(56, 189, 248, 0.4)';
+            ctx.fillRect(gbx + 4, gby + 4, gbw - 8, 4);
+          }
+
+          // Center Signboard
+          const pitSignW = Math.min(230, bld.width - 40);
+          const pitSignX = bld.x + (bld.width - pitSignW) / 2;
+          ctx.fillStyle = '#0f172a';
+          ctx.fillRect(pitSignX, bld.y + 2, pitSignW, 14);
+          ctx.strokeStyle = '#0284c7';
+          ctx.lineWidth = 1.5;
+          ctx.strokeRect(pitSignX, bld.y + 2, pitSignW, 14);
+
+          ctx.fillStyle = '#38bdf8';
+          ctx.font = 'bold 8.5px sans-serif';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText('PIT-STOP • АВТОСЕРВИС & ЗАПЧАСТИ', pitSignX + pitSignW / 2, bld.y + 9);
+        } else if (bld.shopBrand === 'splav_gear' || bld.type === 'tactical_store') {
+          // --- СПЛАВ: TACTICAL MILITARY OLIVE & OUTDOOR EXPEDITION STORE ---
+          ctx.fillStyle = '#365314';
+          ctx.fillRect(bld.x, bld.y, bld.width, bld.height);
+
+          // Tactical graphite header
+          ctx.fillStyle = '#1e293b';
+          ctx.fillRect(bld.x + 8, bld.y + 4, bld.width - 16, 16);
+          ctx.strokeStyle = '#84cc16';
+          ctx.lineWidth = 1.2;
+          ctx.strokeRect(bld.x + 8, bld.y + 4, bld.width - 16, 16);
+
+          // Storefront gear displays
+          ctx.fillStyle = 'rgba(132, 204, 22, 0.25)';
+          ctx.fillRect(bld.x + 12, bld.y + bld.height - 18, bld.width - 24, 15);
+          ctx.strokeStyle = '#4d7c0f';
+          ctx.lineWidth = 1;
+          ctx.strokeRect(bld.x + 12, bld.y + bld.height - 18, bld.width - 24, 15);
+
+          // Signboard Text
+          ctx.fillStyle = '#84cc16';
+          ctx.font = 'bold 8.5px sans-serif';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText('СПЛАВ • ТУРИЗМ, ОХОТА & ЭКИПИРОВКА', bld.x + bld.width / 2, bld.y + 12);
+        } else if (bld.shopBrand === 'perekrestok') {
+          // --- СУПЕРМАРКЕТ "ПЕРЕКРЁСТОК 24/7": MODERN DEEP GREEN & FRESH PRODUCE ---
+          ctx.fillStyle = '#14532d';
+          ctx.fillRect(bld.x, bld.y, bld.width, bld.height);
+
+          // Emerald brand header band
+          ctx.fillStyle = '#166534';
+          ctx.fillRect(bld.x, bld.y, bld.width, 22);
+
+          // Lower panoramic glass storefront
+          ctx.fillStyle = 'rgba(34, 197, 94, 0.22)';
+          ctx.fillRect(bld.x + 12, bld.y + bld.height - 20, bld.width - 24, 17);
+          ctx.strokeStyle = '#22c55e';
+          ctx.lineWidth = 1.2;
+          ctx.strokeRect(bld.x + 12, bld.y + bld.height - 20, bld.width - 24, 17);
+
+          // Clover 4-leaf brand emblem
+          const emblemX = bld.x + 22;
+          const emblemY = bld.y + 11;
+          ctx.fillStyle = '#22c55e';
+          ctx.beginPath();
+          ctx.arc(emblemX - 3, emblemY - 3, 3.5, 0, Math.PI * 2);
+          ctx.arc(emblemX + 3, emblemY - 3, 3.5, 0, Math.PI * 2);
+          ctx.arc(emblemX - 3, emblemY + 3, 3.5, 0, Math.PI * 2);
+          ctx.arc(emblemX + 3, emblemY + 3, 3.5, 0, Math.PI * 2);
+          ctx.fill();
+
+          // Signboard Text
+          const pSignW = Math.min(260, bld.width - 60);
+          const pSignX = bld.x + (bld.width - pSignW) / 2;
+          ctx.fillStyle = '#052e16';
+          ctx.fillRect(pSignX, bld.y + 3, pSignW, 16);
+          ctx.strokeStyle = '#22c55e';
+          ctx.lineWidth = 1.2;
+          ctx.strokeRect(pSignX, bld.y + 3, pSignW, 16);
+
+          ctx.fillStyle = '#ffffff';
+          ctx.font = 'bold 9px sans-serif';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText('ПЕРЕКРЁСТОК 24/7 • СУПЕРМАРКЕТ', pSignX + pSignW / 2, bld.y + 11);
+        } else if (bld.shopBrand === 'dodo_pizza') {
+          // --- ПИЦЦЕРИЯ "ДОДО ПИЦЦА": VIBRANT ORANGE & TERRACOTTA BRICK ---
+          ctx.fillStyle = '#7c2d12';
+          ctx.fillRect(bld.x, bld.y, bld.width, bld.height);
+
+          // Bright orange brand band
+          ctx.fillStyle = '#ea580c';
+          ctx.fillRect(bld.x, bld.y, bld.width, 22);
+
+          // Warm illuminated pizzeria glass front
+          ctx.fillStyle = 'rgba(249, 115, 22, 0.28)';
+          ctx.fillRect(bld.x + 12, bld.y + bld.height - 20, bld.width - 24, 17);
+          ctx.strokeStyle = '#ea580c';
+          ctx.lineWidth = 1.2;
+          ctx.strokeRect(bld.x + 12, bld.y + bld.height - 20, bld.width - 24, 17);
+
+          // Round Dodo bird emblem
+          const emblemX = bld.x + 22;
+          const emblemY = bld.y + 11;
+          ctx.fillStyle = '#ffffff';
+          ctx.beginPath();
+          ctx.arc(emblemX, emblemY, 8, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.fillStyle = '#ea580c';
+          ctx.beginPath();
+          ctx.arc(emblemX, emblemY, 6.5, 0, Math.PI * 2);
+          ctx.fill();
+
+          // Signboard Text
+          const dSignW = Math.min(250, bld.width - 60);
+          const dSignX = bld.x + (bld.width - dSignW) / 2;
+          ctx.fillStyle = '#431407';
+          ctx.fillRect(dSignX, bld.y + 3, dSignW, 16);
+          ctx.strokeStyle = '#ea580c';
+          ctx.lineWidth = 1.2;
+          ctx.strokeRect(dSignX, bld.y + 3, dSignW, 16);
+
+          ctx.fillStyle = '#ffffff';
+          ctx.font = 'bold 9px sans-serif';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText('ДОДО ПИЦЦА • ПИЦЦЕРИЯ & ДОСТАВКА', dSignX + dSignW / 2, bld.y + 11);
+        } else if (bld.shopBrand === 'vkusno_tochka') {
+          // --- РЕСТОРАН "ВКУСНО — И ТОЧКА": BURGUNDY & WARM MUSTARD ---
+          ctx.fillStyle = '#7f1d1d';
+          ctx.fillRect(bld.x, bld.y, bld.width, bld.height);
+
+          // Deep red brand header
+          ctx.fillStyle = '#991b1b';
+          ctx.fillRect(bld.x, bld.y, bld.width, 22);
+
+          // Glass front
+          ctx.fillStyle = 'rgba(234, 179, 8, 0.25)';
+          ctx.fillRect(bld.x + 12, bld.y + bld.height - 20, bld.width - 24, 17);
+          ctx.strokeStyle = '#eab308';
+          ctx.lineWidth = 1.2;
+          ctx.strokeRect(bld.x + 12, bld.y + bld.height - 20, bld.width - 24, 17);
+
+          // Emblem: Two orange fries & green circle
+          const emblemX = bld.x + 22;
+          const emblemY = bld.y + 11;
+          ctx.fillStyle = '#ea580c';
+          ctx.beginPath();
+          ctx.rect(emblemX - 5, emblemY - 5, 3, 10);
+          ctx.rect(emblemX, emblemY - 5, 3, 10);
+          ctx.fill();
+          ctx.fillStyle = '#22c55e';
+          ctx.beginPath();
+          ctx.arc(emblemX + 7, emblemY + 1, 3.5, 0, Math.PI * 2);
+          ctx.fill();
+
+          // Signboard Text
+          const vSignW = Math.min(260, bld.width - 60);
+          const vSignX = bld.x + (bld.width - vSignW) / 2;
+          ctx.fillStyle = '#450a0a';
+          ctx.fillRect(vSignX, bld.y + 3, vSignW, 16);
+          ctx.strokeStyle = '#eab308';
+          ctx.lineWidth = 1.2;
+          ctx.strokeRect(vSignX, bld.y + 3, vSignW, 16);
+
+          ctx.fillStyle = '#ffffff';
+          ctx.font = 'bold 9px sans-serif';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText('ВКУСНО — И ТОЧКА • РЕСТОРАН', vSignX + vSignW / 2, bld.y + 11);
+        } else if (bld.shopBrand === 'mvideo') {
+          // --- ЭЛЕКТРОНИКА "М.ВИДЕО": ROYAL BLUE & CRIMSON LOGO ---
+          ctx.fillStyle = '#1e3a8a';
+          ctx.fillRect(bld.x, bld.y, bld.width, bld.height);
+
+          // Red brand ribbon
+          ctx.fillStyle = '#dc2626';
+          ctx.fillRect(bld.x, bld.y, bld.width, 22);
+
+          // Showcase glass with tech glow
+          ctx.fillStyle = 'rgba(56, 189, 248, 0.25)';
+          ctx.fillRect(bld.x + 12, bld.y + bld.height - 20, bld.width - 24, 17);
+          ctx.strokeStyle = '#38bdf8';
+          ctx.lineWidth = 1.2;
+          ctx.strokeRect(bld.x + 12, bld.y + bld.height - 20, bld.width - 24, 17);
+
+          // Red badge with cursive 'М'
+          const emblemX = bld.x + 22;
+          const emblemY = bld.y + 11;
+          ctx.fillStyle = '#ffffff';
+          ctx.beginPath();
+          ctx.arc(emblemX, emblemY, 8, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.fillStyle = '#dc2626';
+          ctx.font = 'bold 9px sans-serif';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText('М', emblemX, emblemY + 1);
+
+          // Signboard Text
+          const mSignW = Math.min(260, bld.width - 60);
+          const mSignX = bld.x + (bld.width - mSignW) / 2;
+          ctx.fillStyle = '#0f172a';
+          ctx.fillRect(mSignX, bld.y + 3, mSignW, 16);
+          ctx.strokeStyle = '#ef4444';
+          ctx.lineWidth = 1.2;
+          ctx.strokeRect(mSignX, bld.y + 3, mSignW, 16);
+
+          ctx.fillStyle = '#ffffff';
+          ctx.font = 'bold 9px sans-serif';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText('М.ВИДЕО • ГИПЕРМАРКЕТ ЭЛЕКТРОНИКИ', mSignX + mSignW / 2, bld.y + 11);
+        } else if (bld.shopBrand === 'sportmaster') {
+          // --- СПОРТТОВАРЫ "СПОРТМАСТЕР": BLUE & TRI-COLOR CHEVRONS ---
+          ctx.fillStyle = '#0369a1';
+          ctx.fillRect(bld.x, bld.y, bld.width, bld.height);
+
+          // Blue brand header
+          ctx.fillStyle = '#0284c7';
+          ctx.fillRect(bld.x, bld.y, bld.width, 22);
+
+          // Storefront glass
+          ctx.fillStyle = 'rgba(14, 165, 233, 0.25)';
+          ctx.fillRect(bld.x + 12, bld.y + bld.height - 20, bld.width - 24, 17);
+          ctx.strokeStyle = '#38bdf8';
+          ctx.lineWidth = 1.2;
+          ctx.strokeRect(bld.x + 12, bld.y + bld.height - 20, bld.width - 24, 17);
+
+          // Signboard Text
+          const sSignW = Math.min(260, bld.width - 60);
+          const sSignX = bld.x + (bld.width - sSignW) / 2;
+          ctx.fillStyle = '#082f49';
+          ctx.fillRect(sSignX, bld.y + 3, sSignW, 16);
+          ctx.strokeStyle = '#38bdf8';
+          ctx.lineWidth = 1.2;
+          ctx.strokeRect(sSignX, bld.y + 3, sSignW, 16);
+
+          ctx.fillStyle = '#ffffff';
+          ctx.font = 'bold 9px sans-serif';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText('СПОРТМАСТЕР • СПОРТИВНЫЙ МАГАЗИН', sSignX + sSignW / 2, bld.y + 11);
+        } else {
+          // --- STANDALONE LOCAL RETAIL STORE / CAFE ---
+          ctx.fillStyle = '#1e293b';
+          ctx.fillRect(bld.x, bld.y, bld.width, bld.height);
+
+          // Clean modern glass storefront
+          ctx.fillStyle = 'rgba(56, 189, 248, 0.2)';
+          ctx.fillRect(bld.x + 12, bld.y + bld.height - 18, bld.width - 24, 15);
+          ctx.strokeStyle = '#38bdf8';
+          ctx.lineWidth = 1;
+          ctx.strokeRect(bld.x + 12, bld.y + bld.height - 18, bld.width - 24, 15);
+
+          // Signboard with real building name
+          const signW = Math.min(220, bld.width - 40);
+          const signX = bld.x + (bld.width - signW) / 2;
+          ctx.fillStyle = '#0f172a';
+          ctx.fillRect(signX, bld.y + 3, signW, 16);
+          ctx.strokeStyle = '#64748b';
+          ctx.lineWidth = 1;
+          ctx.strokeRect(signX, bld.y + 3, signW, 16);
+
+          ctx.fillStyle = '#f8fafc';
+          ctx.font = 'bold 8.5px sans-serif';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText((bld.nameRu || 'МАГАЗИН').toUpperCase(), signX + signW / 2, bld.y + 11);
         }
       }
 
@@ -2022,7 +2626,8 @@ export class GameRenderer {
         }
       }
 
-      // C. ENTRANCE CANOPIES (КОЗЫРЬКИ ПОДЪЕЗДОВ - Clean architectural canopies with brackets, NO TEXT!)
+      // C. ENTRANCE CANOPIES & COMMERCIAL MARQUEES
+      const isCommercial = bld.shopBrand !== undefined || bld.type === 'commercial' || bld.type === 'shop' || bld.type === 'shopping_mall';
       const entranceList: { side: 'north' | 'south' | 'east' | 'west'; offsetRatio: number; number?: number }[] = [];
       if (bld.entrances && bld.entrances.length > 0) {
         entranceList.push(...bld.entrances);
@@ -2034,8 +2639,8 @@ export class GameRenderer {
         const ent = entranceList[idx];
         let ex = 0, ey = 0, ew = 0, eh = 0;
         
-        const canopyDepth = 14;
-        const canopyWidth = 28;
+        const canopyDepth = isCommercial ? 18 : 14;
+        const canopyWidth = isCommercial ? 44 : 28;
 
         if (ent.side === 'north') {
           ex = bld.x + bld.width * ent.offsetRatio - canopyWidth / 2;
@@ -2059,56 +2664,288 @@ export class GameRenderer {
           eh = canopyWidth;
         }
 
-        // Canopy Concrete/Metal Slab Overhang (Козырек)
-        ctx.fillStyle = '#475569'; // Slate dark metal/concrete canopy
-        ctx.fillRect(ex, ey, ew, eh);
+        if (isCommercial) {
+          // --- REALISTIC COMMERCIAL ENTRANCE & GROUND-LEVEL FACADE DETAILS ---
+          let marqueeColor = bld.accentColor || '#f97316';
+          let marqueeBorder = '#ffffff';
 
-        // Canopy border & coping rim
-        ctx.strokeStyle = '#0f172a';
-        ctx.lineWidth = 1.2;
-        ctx.strokeRect(ex, ey, ew, eh);
+          if (bld.shopBrand === 'cofix_bakery') {
+            marqueeColor = '#ea580c';
+            marqueeBorder = '#fed7aa';
+          } else if (bld.shopBrand === 'bean_bistro') {
+            marqueeColor = '#d97706';
+            marqueeBorder = '#fef3c7';
+          } else if (bld.shopBrand === 'pharmacy_36_6') {
+            marqueeColor = '#059669';
+            marqueeBorder = '#a7f3d0';
+          } else if (bld.shopBrand === 'pyaterochka') {
+            marqueeColor = '#dc2626';
+            marqueeBorder = '#fef08a';
+          } else if (bld.shopBrand === 'perekrestok') {
+            marqueeColor = '#16a34a';
+            marqueeBorder = '#bbf7d0';
+          } else if (bld.shopBrand === 'dodo_pizza') {
+            marqueeColor = '#f97316';
+            marqueeBorder = '#ffedd5';
+          } else if (bld.shopBrand === 'vkusno_tochka') {
+            marqueeColor = '#991b1b';
+            marqueeBorder = '#fef08a';
+          } else if (bld.shopBrand === 'mvideo') {
+            marqueeColor = '#2563eb';
+            marqueeBorder = '#fca5a5';
+          } else if (bld.shopBrand === 'sportmaster') {
+            marqueeColor = '#0284c7';
+            marqueeBorder = '#bae6fd';
+          } else if (bld.shopBrand === 'pitstop_service') {
+            marqueeColor = '#0369a1';
+            marqueeBorder = '#38bdf8';
+          } else if (bld.shopBrand === 'splav_gear') {
+            marqueeColor = '#4d7c0f';
+            marqueeBorder = '#bef264';
+          }
 
-        // Corrugated metal ribs / subtle canopy texture
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
-        ctx.lineWidth = 1;
-        ctx.beginPath();
-        if (ent.side === 'north' || ent.side === 'south') {
-          for (let sx = ex + 4; sx < ex + ew; sx += 5) {
-            ctx.moveTo(sx, ey);
-            ctx.lineTo(sx, ey + eh);
+          // Illuminated Canopy Glow onto sidewalk
+          ctx.fillStyle = marqueeColor;
+          ctx.globalAlpha = 0.25;
+          ctx.fillRect(ex - 4, ey - 4, ew + 8, eh + 8);
+          ctx.globalAlpha = 1.0;
+
+          // Awning canopy body
+          ctx.fillStyle = marqueeColor;
+          ctx.fillRect(ex, ey, ew, eh);
+
+          // Illuminated trim border
+          ctx.strokeStyle = marqueeBorder;
+          ctx.lineWidth = 1.5;
+          ctx.strokeRect(ex, ey, ew, eh);
+
+          // Corrugated awning ribs
+          ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          if (ent.side === 'north' || ent.side === 'south') {
+            for (let sx = ex + 4; sx < ex + ew; sx += 6) {
+              ctx.moveTo(sx, ey); ctx.lineTo(sx, ey + eh);
+            }
+          } else {
+            for (let sy = ey + 4; sy < ey + eh; sy += 6) {
+              ctx.moveTo(ex, sy); ctx.lineTo(ex + ew, sy);
+            }
+          }
+          ctx.stroke();
+
+          // --- PROCEDURAL ARCHITECTURAL & TERRAIN FEATURES PER SHOP TYPE ---
+          if (bld.shopBrand === 'pharmacy_36_6') {
+            // A. PHARMACY: MOUNTED GREEN LED CROSS SIGN (ЗЕЛЁНЫЙ АПТЕЧНЫЙ КРЕСТ)
+            const cx = ex + (ent.side === 'east' ? ew + 6 : (ent.side === 'west' ? -12 : ew + 4));
+            const cy = ey + (ent.side === 'north' ? -4 : (ent.side === 'south' ? eh + 4 : eh / 2 - 6));
+            
+            // Iron Bracket Mount
+            ctx.strokeStyle = '#334155';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(ex + ew / 2, ey + eh / 2);
+            ctx.lineTo(cx + 6, cy + 6);
+            ctx.stroke();
+
+            // Green Neon Pulse Glow
+            ctx.fillStyle = '#10b981';
+            ctx.globalAlpha = 0.4;
+            ctx.beginPath();
+            ctx.arc(cx + 6, cy + 6, 12, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.globalAlpha = 1.0;
+
+            // Green Medical Cross Shape
+            ctx.fillStyle = '#059669';
+            ctx.fillRect(cx + 4, cy + 1, 4, 10);
+            ctx.fillRect(cx + 1, cy + 4, 10, 4);
+            ctx.fillStyle = '#34d399';
+            ctx.fillRect(cx + 5, cy + 2, 2, 8);
+            ctx.fillRect(cx + 2, cy + 5, 8, 2);
+
+            // Clean white marble entrance path
+            ctx.fillStyle = 'rgba(241, 245, 249, 0.6)';
+            ctx.fillRect(ex - 2, ey + eh, ew + 4, 6);
+          } else if (bld.shopBrand === 'cofix_bakery' || bld.shopBrand === 'bean_bistro') {
+            // B. CAFE: OUTDOOR SUMMER TERRACE DECK (ЛЕТНЯЯ ВЕРАНДА С ЗОНТИКАМИ И СТОЛИКАМИ)
+            const deckW = 42;
+            const deckH = 26;
+            const deckX = ex - (deckW - ew) / 2;
+            const deckY = ent.side === 'south' ? ey + eh + 2 : ey - deckH - 2;
+
+            // Teak Wood Patio Deck Floor
+            ctx.fillStyle = '#78350f';
+            ctx.fillRect(deckX, deckY, deckW, deckH);
+            ctx.strokeStyle = '#451a03';
+            ctx.lineWidth = 1;
+            ctx.strokeRect(deckX, deckY, deckW, deckH);
+
+            // Wood Planks Texture
+            ctx.strokeStyle = 'rgba(0,0,0,0.2)';
+            for (let py = deckY + 4; py < deckY + deckH; py += 5) {
+              ctx.beginPath(); ctx.moveTo(deckX, py); ctx.lineTo(deckX + deckW, py); ctx.stroke();
+            }
+
+            // Patio Cafe Tables (2 Round Tables)
+            for (let t = 0; t < 2; t++) {
+              const tx = deckX + 11 + t * 20;
+              const ty = deckY + deckH / 2;
+
+              // Woven Chairs around table
+              ctx.fillStyle = '#1e293b';
+              ctx.fillRect(tx - 6, ty - 2, 3, 4);
+              ctx.fillRect(tx + 3, ty - 2, 3, 4);
+
+              // White Tabletop
+              ctx.fillStyle = '#f8fafc';
+              ctx.beginPath(); ctx.arc(tx, ty, 5, 0, Math.PI * 2); ctx.fill();
+              ctx.strokeStyle = '#cbd5e1'; ctx.lineWidth = 1; ctx.stroke();
+
+              // Coffee Cup on table
+              ctx.fillStyle = '#451a03';
+              ctx.beginPath(); ctx.arc(tx + 1, ty - 1, 1.5, 0, Math.PI * 2); ctx.fill();
+            }
+
+            // Big Colorful Cafe Umbrella / Parasol
+            const umbColor = bld.shopBrand === 'cofix_bakery' ? '#ea580c' : '#f59e0b';
+            const ux = deckX + deckW / 2;
+            const uy = deckY + deckH / 2;
+            ctx.fillStyle = umbColor;
+            ctx.beginPath(); ctx.arc(ux, uy, 10, 0, Math.PI * 2); ctx.fill();
+            ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 1.2; ctx.stroke();
+
+            // Chalkboard Menu Sign on Sidewalk (Меловой штендер)
+            ctx.fillStyle = '#1e293b';
+            ctx.fillRect(deckX - 8, deckY + 4, 5, 8);
+            ctx.strokeStyle = '#78350f'; ctx.lineWidth = 1; ctx.strokeRect(deckX - 8, deckY + 4, 5, 8);
+            ctx.fillStyle = '#ffffff'; ctx.fillRect(deckX - 7, deckY + 6, 3, 1);
+            ctx.fillRect(deckX - 7, deckY + 8, 2, 1);
+          } else if (bld.shopBrand === 'pitstop_service' || bld.type === 'car_dealership') {
+            // C. AUTO REPAIR "PIT-STOP": GARAGE ROLLER DOORS, CAR LIFT & TIRE STACKS
+            const garageW = bld.width * 0.7;
+            const garageX = bld.x + (bld.width - garageW) / 2;
+            const garageY = bld.y + bld.height;
+
+            // Pavement Oil Stains & Skid Marks
+            ctx.fillStyle = 'rgba(15, 23, 42, 0.5)';
+            ctx.beginPath();
+            ctx.ellipse(garageX + 20, garageY + 12, 12, 6, 0, 0, Math.PI * 2);
+            ctx.ellipse(garageX + garageW - 20, garageY + 16, 16, 8, 0, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Yellow/Black Hazard Warning Safety Stripes (Зебра безопасности)
+            ctx.fillStyle = '#eab308';
+            ctx.fillRect(garageX, garageY - 2, garageW, 4);
+            ctx.fillStyle = '#0f172a';
+            for (let sz = garageX; sz < garageX + garageW; sz += 8) {
+              ctx.beginPath();
+              ctx.moveTo(sz, garageY - 2);
+              ctx.lineTo(sz + 4, garageY + 2);
+              ctx.lineTo(sz + 2, garageY + 2);
+              ctx.lineTo(sz - 2, garageY - 2);
+              ctx.fill();
+            }
+
+            // Outdoor Hydraulic Two-Post Car Lift (Автоподъёмник)
+            const liftX = garageX + 15;
+            const liftY = garageY + 18;
+            ctx.fillStyle = '#0284c7';
+            ctx.fillRect(liftX - 12, liftY - 2, 4, 16); // Left post
+            ctx.fillRect(liftX + 8, liftY - 2, 4, 16);  // Right post
+            ctx.strokeStyle = '#64748b'; ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(liftX - 8, liftY + 6); ctx.lineTo(liftX + 8, liftY + 6); // Support arms
+            ctx.stroke();
+
+            // Stacks of Rubber Car Tires (Покрышки)
+            for (let tr = 0; tr < 3; tr++) {
+              ctx.fillStyle = '#0f172a';
+              ctx.beginPath(); ctx.arc(garageX + garageW - 12 + (tr % 2) * 5, garageY + 10 + Math.floor(tr / 2) * 6, 4, 0, Math.PI * 2); ctx.fill();
+              ctx.fillStyle = '#475569';
+              ctx.beginPath(); ctx.arc(garageX + garageW - 12 + (tr % 2) * 5, garageY + 10 + Math.floor(tr / 2) * 6, 1.8, 0, Math.PI * 2); ctx.fill();
+            }
+
+            // Red Mechanic Tool Cart & Blue Oil Barrel
+            ctx.fillStyle = '#dc2626'; ctx.fillRect(garageX + garageW - 28, garageY + 18, 7, 5); // Tool cart
+            ctx.fillStyle = '#0369a1'; ctx.beginPath(); ctx.arc(garageX + garageW - 36, garageY + 20, 3.5, 0, Math.PI * 2); ctx.fill(); // Barrel
+          } else if (bld.shopBrand === 'dodo_pizza') {
+            // D. DODO PIZZA: PATIO & DELIVERY SCOOTERS
+            const px = ex - 10;
+            const py = ey + eh + 4;
+            // Delivery Moped / Scooter
+            ctx.fillStyle = '#dc2626'; ctx.fillRect(px, py, 10, 4); // Scooter body
+            ctx.fillStyle = '#0f172a'; ctx.beginPath(); ctx.arc(px + 2, py + 2, 2, 0, Math.PI * 2); ctx.arc(px + 8, py + 2, 2, 0, Math.PI * 2); ctx.fill(); // Wheels
+            ctx.fillStyle = '#ea580c'; ctx.fillRect(px - 3, py - 1, 4, 4); // Dodo Delivery Trunk Box
+          } else if (bld.shopBrand === 'pyaterochka' || bld.shopBrand === 'perekrestok') {
+            // E. SUPERMARKET: SHOPPING CART CORRAL (ЗАГОН ДЛЯ ТЕЛЕЖЕК)
+            const cx = ex + ew + 6;
+            const cy = ey + 2;
+            ctx.strokeStyle = '#94a3b8'; ctx.lineWidth = 1.5;
+            ctx.strokeRect(cx, cy, 18, 10);
+            for (let cart = 0; cart < 3; cart++) {
+              ctx.fillStyle = '#cbd5e1';
+              ctx.fillRect(cx + 2 + cart * 5, cy + 2, 4, 6);
+              ctx.fillStyle = bld.shopBrand === 'pyaterochka' ? '#dc2626' : '#16a34a';
+              ctx.fillRect(cx + 2 + cart * 5, cy + 1, 4, 1.5); // Handlebar
+            }
+          } else if (bld.shopBrand === 'splav_gear') {
+            // F. SPLAV GEAR: OUTSIDE CAMO TENT & WOODEN CRATES
+            const tx = ex - 22;
+            const ty = ey + 2;
+            ctx.fillStyle = '#365314'; // Camo Tent
+            ctx.beginPath(); ctx.moveTo(tx, ty + 10); ctx.lineTo(tx + 8, ty); ctx.lineTo(tx + 16, ty + 10); ctx.closePath(); ctx.fill();
+            ctx.fillStyle = '#78350f'; ctx.fillRect(tx + 18, ty + 4, 6, 6); // Supply crate
           }
         } else {
-          for (let sy = ey + 4; sy < ey + eh; sy += 5) {
-            ctx.moveTo(ex, sy);
-            ctx.lineTo(ex + ew, sy);
+          // Standard Residential Canopy
+          ctx.fillStyle = '#475569';
+          ctx.fillRect(ex, ey, ew, eh);
+
+          ctx.strokeStyle = '#0f172a';
+          ctx.lineWidth = 1.2;
+          ctx.strokeRect(ex, ey, ew, eh);
+
+          ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          if (ent.side === 'north' || ent.side === 'south') {
+            for (let sx = ex + 4; sx < ex + ew; sx += 5) {
+              ctx.moveTo(sx, ey);
+              ctx.lineTo(sx, ey + eh);
+            }
+          } else {
+            for (let sy = ey + 4; sy < ey + eh; sy += 5) {
+              ctx.moveTo(ex, sy);
+              ctx.lineTo(ex + ew, sy);
+            }
           }
-        }
-        ctx.stroke();
+          ctx.stroke();
 
-        // Steel Support Brackets holding canopy to building wall
-        ctx.strokeStyle = '#0f172a';
-        ctx.lineWidth = 1.5;
-        ctx.beginPath();
-        if (ent.side === 'north') {
-          ctx.moveTo(ex + 2, ey + eh); ctx.lineTo(ex + 2, ey + 3);
-          ctx.moveTo(ex + ew - 2, ey + eh); ctx.lineTo(ex + ew - 2, ey + 3);
-        } else if (ent.side === 'south') {
-          ctx.moveTo(ex + 2, ey); ctx.lineTo(ex + 2, ey + eh - 3);
-          ctx.moveTo(ex + ew - 2, ey); ctx.lineTo(ex + ew - 2, ey + eh - 3);
-        } else if (ent.side === 'west') {
-          ctx.moveTo(ex + ew, ey + 2); ctx.lineTo(ex + 3, ey + 2);
-          ctx.moveTo(ex + ew, ey + eh - 2); ctx.lineTo(ex + 3, ey + eh - 2);
-        } else if (ent.side === 'east') {
-          ctx.moveTo(ex, ey + 2); ctx.lineTo(ex + ew - 3, ey + 2);
-          ctx.moveTo(ex, ey + eh - 2); ctx.lineTo(ex + ew - 3, ey + eh - 2);
-        }
-        ctx.stroke();
+          // Steel Support Brackets
+          ctx.strokeStyle = '#0f172a';
+          ctx.lineWidth = 1.5;
+          ctx.beginPath();
+          if (ent.side === 'north') {
+            ctx.moveTo(ex + 2, ey + eh); ctx.lineTo(ex + 2, ey + 3);
+            ctx.moveTo(ex + ew - 2, ey + eh); ctx.lineTo(ex + ew - 2, ey + 3);
+          } else if (ent.side === 'south') {
+            ctx.moveTo(ex + 2, ey); ctx.lineTo(ex + 2, ey + eh - 3);
+            ctx.moveTo(ex + ew - 2, ey); ctx.lineTo(ex + ew - 2, ey + eh - 3);
+          } else if (ent.side === 'west') {
+            ctx.moveTo(ex + ew, ey + 2); ctx.lineTo(ex + 3, ey + 2);
+            ctx.moveTo(ex + ew, ey + eh - 2); ctx.lineTo(ex + 3, ey + eh - 2);
+          } else if (ent.side === 'east') {
+            ctx.moveTo(ex, ey + 2); ctx.lineTo(ex + ew - 3, ey + 2);
+            ctx.moveTo(ex, ey + eh - 2); ctx.lineTo(ex + ew - 3, ey + eh - 2);
+          }
+          ctx.stroke();
 
-        // Small Entrance Plaque next to wall (e.g. "1" or "2" for entrance number)
-        const entranceNum = ent.number ?? (idx + 1);
-        ctx.fillStyle = '#0f172a';
-        if (ent.side === 'north' || ent.side === 'south') {
-          ctx.fillRect(ex + ew / 2 - 4, ent.side === 'north' ? bld.y - 1.5 : bld.y + bld.height, 8, 1.5);
+          // Small Entrance Plaque next to wall
+          ctx.fillStyle = '#0f172a';
+          if (ent.side === 'north' || ent.side === 'south') {
+            ctx.fillRect(ex + ew / 2 - 4, ent.side === 'north' ? bld.y - 1.5 : bld.y + bld.height, 8, 1.5);
+          }
         }
       }
 
@@ -2118,37 +2955,76 @@ export class GameRenderer {
 
       // Accent Coping Line on Parapet Edge
       ctx.strokeStyle = bld.accentColor;
-      ctx.lineWidth = 2.2;
+      ctx.lineWidth = isCommercial ? 3.0 : 2.2;
       ctx.strokeRect(bld.x + 4, bld.y + 4, bld.width - 8, bld.height - 8);
 
-      // 3. INNER ROOF BED (Gravel / Asphalt texture)
+      // 3. INNER ROOF BED (Gravel / Asphalt / Commercial Membrane)
       const rx = bld.x + 6;
       const ry = bld.y + 6;
       const rw = bld.width - 12;
       const rh = bld.height - 12;
-      ctx.fillStyle = '#1e293b'; // Tarmac / dark gravel composite
+      ctx.fillStyle = isCommercial ? '#1e293b' : '#1e293b';
       ctx.fillRect(rx, ry, rw, rh);
 
-      // 4. MULTI-TIER MECHANICAL ROOM PENTHOUSE (Raise roof height profile)
-      const penW = Math.max(18, rw * 0.28);
-      const penH = Math.max(18, rh * 0.28);
-      const penX = rx + (rw - penW) / 2;
-      const penY = ry + (rh - penH) / 2;
+      if (isCommercial) {
+        // --- REALISTIC INDUSTRIAL ROOF EQUIPMENT (NO ROOFTOP TEXT BANNERS) ---
+        // Industrial HVAC Chiller Unit
+        const hvacW = Math.min(32, rw * 0.35);
+        const hvacH = Math.min(20, rh * 0.35);
+        const hvacX = rx + (rw - hvacW) / 2;
+        const hvacY = ry + (rh - hvacH) / 2;
 
-      // Penthouse structure drop shadow
-      ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
-      ctx.fillRect(penX + 4, penY + 4, penW, penH);
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
+        ctx.fillRect(hvacX + 2, hvacY + 2, hvacW, hvacH); // Drop shadow
 
-      // Penthouse base wall
-      ctx.fillStyle = bld.color;
-      ctx.fillRect(penX, penY, penW, penH);
+        ctx.fillStyle = '#334155';
+        ctx.fillRect(hvacX, hvacY, hvacW, hvacH); // Body
+        ctx.strokeStyle = '#0f172a';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(hvacX, hvacY, hvacW, hvacH);
 
-      // Penthouse flat roof deck
-      ctx.fillStyle = bld.roofColor;
-      ctx.fillRect(penX + 2, penY + 2, penW - 4, penH - 4);
-      ctx.strokeStyle = bld.accentColor;
-      ctx.lineWidth = 1;
-      ctx.strokeRect(penX + 2, penY + 2, penW - 4, penH - 4);
+        // Chiller Fan Grills
+        ctx.fillStyle = '#1e293b';
+        ctx.beginPath(); ctx.arc(hvacX + hvacW * 0.3, hvacY + hvacH / 2, 4, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.arc(hvacX + hvacW * 0.7, hvacY + hvacH / 2, 4, 0, Math.PI * 2); ctx.fill();
+
+        // Roof Skylight Panels
+        const skylightW = Math.min(30, (rw - hvacW) / 2 - 8);
+        if (skylightW > 12) {
+          ctx.fillStyle = 'rgba(56, 189, 248, 0.35)';
+          ctx.fillRect(rx + 6, ry + 6, skylightW, rh - 12);
+          ctx.strokeStyle = '#38bdf8';
+          ctx.lineWidth = 1;
+          ctx.strokeRect(rx + 6, ry + 6, skylightW, rh - 12);
+
+          ctx.fillStyle = 'rgba(56, 189, 248, 0.35)';
+          ctx.fillRect(rx + rw - skylightW - 6, ry + 6, skylightW, rh - 12);
+          ctx.strokeStyle = '#38bdf8';
+          ctx.lineWidth = 1;
+          ctx.strokeRect(rx + rw - skylightW - 6, ry + 6, skylightW, rh - 12);
+        }
+      } else {
+        // 4. MULTI-TIER MECHANICAL ROOM PENTHOUSE (Only for Residential/Office buildings)
+        const penW = Math.max(18, rw * 0.28);
+        const penH = Math.max(18, rh * 0.28);
+        const penX = rx + (rw - penW) / 2;
+        const penY = ry + (rh - penH) / 2;
+
+        // Penthouse structure drop shadow
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
+        ctx.fillRect(penX + 4, penY + 4, penW, penH);
+
+        // Penthouse base wall
+        ctx.fillStyle = bld.color;
+        ctx.fillRect(penX, penY, penW, penH);
+
+        // Penthouse flat roof deck
+        ctx.fillStyle = bld.roofColor;
+        ctx.fillRect(penX + 2, penY + 2, penW - 4, penH - 4);
+        ctx.strokeStyle = bld.accentColor;
+        ctx.lineWidth = 1;
+        ctx.strokeRect(penX + 2, penY + 2, penW - 4, penH - 4);
+      }
 
       // 5. ROOF DETAILS (AC Units with spinning fans, Helipads with flashing beacons, solar panels, water towers)
       if (!performanceConfig.lowQualityRendering) {
@@ -2354,6 +3230,107 @@ export class GameRenderer {
           }
         }
       }
+
+      // 6. SPECIALIZED ROOFTOP BRAND LOGOS & SIGNAGE (Top-down visual identification)
+      if (bld.shopBrand) {
+        const signCx = bld.x + bld.width / 2;
+        const signCy = bld.y + Math.min(30, bld.height * 0.35);
+
+        if (bld.shopBrand === 'pharmacy_36_6') {
+          const rsw = Math.min(140, bld.width - 20);
+          ctx.fillStyle = '#065f46';
+          ctx.fillRect(signCx - rsw / 2, signCy - 8, rsw, 16);
+          ctx.strokeStyle = '#10b981';
+          ctx.lineWidth = 1.5;
+          ctx.strokeRect(signCx - rsw / 2, signCy - 8, rsw, 16);
+
+          // Pulsing green cross
+          const cp = (now % 600) > 300;
+          ctx.fillStyle = cp ? '#34d399' : '#10b981';
+          ctx.fillRect(signCx - rsw / 2 + 6, signCy - 5, 3, 10);
+          ctx.fillRect(signCx - rsw / 2 + 2.5, signCy - 1.5, 10, 3);
+
+          ctx.fillStyle = '#ffffff';
+          ctx.font = 'bold 8px sans-serif';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText('АПТЕКА 36.6', signCx + 4, signCy);
+        } else if (bld.shopBrand === 'pyaterochka') {
+          const rsw = Math.min(150, bld.width - 20);
+          ctx.fillStyle = '#dc2626';
+          ctx.fillRect(signCx - rsw / 2, signCy - 8, rsw, 16);
+          ctx.strokeStyle = '#facc15';
+          ctx.lineWidth = 1.5;
+          ctx.strokeRect(signCx - rsw / 2, signCy - 8, rsw, 16);
+
+          // "5" emblem
+          ctx.fillStyle = '#ffffff';
+          ctx.beginPath();
+          ctx.arc(signCx - rsw / 2 + 10, signCy, 6, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.fillStyle = '#dc2626';
+          ctx.font = 'bold 7px sans-serif';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText('5', signCx - rsw / 2 + 10, signCy + 0.5);
+
+          ctx.fillStyle = '#ffffff';
+          ctx.font = 'bold 8px sans-serif';
+          ctx.fillText('ПЯТЁРОЧКА', signCx + 6, signCy);
+        } else if (bld.shopBrand === 'cofix_bakery') {
+          const rsw = Math.min(140, bld.width - 20);
+          ctx.fillStyle = '#18181b';
+          ctx.fillRect(signCx - rsw / 2, signCy - 8, rsw, 16);
+          ctx.strokeStyle = '#ea580c';
+          ctx.lineWidth = 1.5;
+          ctx.strokeRect(signCx - rsw / 2, signCy - 8, rsw, 16);
+
+          ctx.fillStyle = '#ea580c';
+          ctx.font = 'bold 8px sans-serif';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText('COFIX & BAKERY', signCx, signCy);
+        } else if (bld.shopBrand === 'bean_bistro') {
+          const rsw = Math.min(140, bld.width - 20);
+          ctx.fillStyle = '#291104';
+          ctx.fillRect(signCx - rsw / 2, signCy - 8, rsw, 16);
+          ctx.strokeStyle = '#f59e0b';
+          ctx.lineWidth = 1.5;
+          ctx.strokeRect(signCx - rsw / 2, signCy - 8, rsw, 16);
+
+          ctx.fillStyle = '#f59e0b';
+          ctx.font = 'bold 8px sans-serif';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText('BEAN & BISTRO', signCx, signCy);
+        } else if (bld.shopBrand === 'pitstop_service') {
+          const rsw = Math.min(150, bld.width - 20);
+          ctx.fillStyle = '#0f172a';
+          ctx.fillRect(signCx - rsw / 2, signCy - 8, rsw, 16);
+          ctx.strokeStyle = '#0284c7';
+          ctx.lineWidth = 1.5;
+          ctx.strokeRect(signCx - rsw / 2, signCy - 8, rsw, 16);
+
+          ctx.fillStyle = '#38bdf8';
+          ctx.font = 'bold 8px sans-serif';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText('PIT-STOP SERVICE', signCx, signCy);
+        } else if (bld.shopBrand === 'splav_gear') {
+          const rsw = Math.min(140, bld.width - 20);
+          ctx.fillStyle = '#1e293b';
+          ctx.fillRect(signCx - rsw / 2, signCy - 8, rsw, 16);
+          ctx.strokeStyle = '#84cc16';
+          ctx.lineWidth = 1.5;
+          ctx.strokeRect(signCx - rsw / 2, signCy - 8, rsw, 16);
+
+          ctx.fillStyle = '#84cc16';
+          ctx.font = 'bold 8px sans-serif';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText('СПЛАВ ТУРИЗМ', signCx, signCy);
+        }
+      }
     }
 
     // Night Tint for the buildings (since drawn above lightmap)
@@ -2521,29 +3498,17 @@ export class GameRenderer {
       ctx.ellipse(0, 2, 6, 3, 0, 0, Math.PI * 2);
       ctx.fill();
 
-      // 2. Item 2D Procedural Model (Size 12 is realistic, sits flat on the ground)
-      drawItemModel2D(ctx, gi.item.itemId, 0, 0, 12);
-
-      // 3. If player is nearby, display compact tooltip pill above item
-      if (isNearby) {
-        const labelText = `${gi.item.nameRu} [E / Клик]`;
-        ctx.font = 'bold 9px system-ui, -apple-system, sans-serif';
-        const metrics = ctx.measureText(labelText);
-        const pillW = metrics.width + 12;
-        const pillH = 16;
-        const pillY = -14;
-
-        ctx.fillStyle = 'rgba(15, 23, 42, 0.9)';
-        ctx.strokeStyle = 'rgba(56, 189, 248, 0.6)';
-        ctx.lineWidth = 1;
-        ctx.beginPath();
-        safeRoundRect(ctx, -pillW / 2, pillY - pillH / 2, pillW, pillH, 4);
-        ctx.fill();
-        ctx.stroke();
-
-        ctx.fillStyle = '#f8fafc';
-        ctx.fillText(labelText, 0, pillY);
+      if (!gi.item) {
+        ctx.restore();
+        continue;
       }
+
+      // 2. Item 2D Procedural Model (Size 12 is realistic, sits flat on the ground)
+      if (gi.item.itemId) {
+        drawItemModel2D(ctx, gi.item.itemId, 0, 0, 12);
+      }
+
+      // 3. Tooltip pill above item removed per user request
 
       ctx.restore();
     }
@@ -3372,28 +4337,38 @@ export class GameRenderer {
       ctx.translate(p.x, p.y);
       ctx.rotate(p.angle);
 
-      // Water body
-      ctx.fillStyle = 'rgba(59, 130, 246, 0.28)';
-      ctx.beginPath();
       const rX = Math.max(0.1, p.radiusX);
       const rY = Math.max(0.1, p.radiusY);
-      ctx.ellipse(0, 0, rX, rY, 0, 0, Math.PI * 2);
+      const seed = hashString(p.id);
+
+      // Deep sky reflection body with wet border transition
+      const grad = safeRadialGradient(ctx, -rX * 0.1, -rY * 0.1, 0, 0, 0, rX);
+      grad.addColorStop(0, 'rgba(56, 189, 248, 0.25)'); // Sky-blue reflection core
+      grad.addColorStop(0.55, 'rgba(30, 41, 59, 0.38)'); // Dark asphalt wet surface visible through water
+      grad.addColorStop(0.92, 'rgba(15, 23, 42, 0.52)'); // Edge refraction ring
+      grad.addColorStop(1, 'rgba(15, 23, 42, 0)');
+
+      ctx.fillStyle = grad;
+      this.drawOrganicBlob(ctx, rX, rY, seed);
       ctx.fill();
 
-      // Sky reflection highlight
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.35)';
-      ctx.beginPath();
-      ctx.ellipse(-rX * 0.3, -rY * 0.2, rX * 0.4, rY * 0.3, 0, 0, Math.PI * 2);
+      // Sky reflection of dynamic cloud outline
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.22)';
+      ctx.save();
+      ctx.translate(-rX * 0.25, -rY * 0.2);
+      this.drawOrganicBlob(ctx, rX * 0.45, rY * 0.32, seed + 1);
       ctx.fill();
+      ctx.restore();
 
-      // Animated water ripples
+      // Animated realistic organic water ripples
       if (performanceConfig.enableRainDroplets) {
         const rippleR = Math.abs((p.rippleTimer * 12) % rX);
         const rippleRY = Math.abs(rippleR * (rY / rX));
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.25)';
+        const alpha = Math.max(0, 0.35 * (1 - rippleR / rX));
+        ctx.strokeStyle = `rgba(255, 255, 255, ${alpha})`;
         ctx.lineWidth = 1;
         ctx.beginPath();
-        ctx.ellipse(0, 0, rippleR, rippleRY, 0, 0, Math.PI * 2);
+        this.drawOrganicBlob(ctx, rippleR, rippleRY, seed + p.rippleTimer);
         ctx.stroke();
       }
 
@@ -4302,7 +5277,146 @@ export class GameRenderer {
     ctx.fill();
 
     ctx.restore(); // end rotated part
+
+    // Flying levitation aura & indicator
+    if (player.isFlying) {
+      const flyPulse = Math.sin(Date.now() * 0.008) * 3;
+      ctx.strokeStyle = '#06b6d4';
+      ctx.lineWidth = 1.8;
+      ctx.beginPath();
+      ctx.arc(0, 0, 16 + flyPulse, 0, Math.PI * 2);
+      ctx.stroke();
+
+      ctx.strokeStyle = 'rgba(165, 243, 252, 0.5)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.arc(0, 0, 22 + flyPulse, 0, Math.PI * 2);
+      ctx.stroke();
+
+      // Badge above head
+      ctx.font = 'bold 11px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillStyle = '#0f172a';
+      safeRoundRect(ctx, -28, -28, 56, 18, 9);
+      ctx.fill();
+      ctx.strokeStyle = '#06b6d4';
+      ctx.lineWidth = 1;
+      safeRoundRect(ctx, -28, -28, 56, 18, 9);
+      ctx.stroke();
+
+      ctx.fillStyle = '#22d3ee';
+      ctx.fillText('✈️ ФЛАЙ', 0, -15);
+    }
+
     ctx.restore(); // end translate
+  }
+
+  /**
+   * Renders the ghost/placement preview for Creative Mode object spawning.
+   */
+  private renderPlacementPreview(placement: ActivePlacement, pos: { x: number; y: number }) {
+    const ctx = this.ctx;
+    ctx.save();
+    ctx.translate(pos.x, pos.y);
+
+    const now = Date.now();
+    const pulse = Math.sin(now * 0.008) * 0.15 + 0.85;
+
+    // 1. Placement ring on ground
+    ctx.strokeStyle = '#22c55e'; // Vibrant Green
+    ctx.lineWidth = 2;
+    ctx.setLineDash([6, 4]);
+    ctx.beginPath();
+    ctx.arc(0, 0, 28, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Crosshair lines
+    ctx.strokeStyle = 'rgba(34, 197, 94, 0.6)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(-16, 0); ctx.lineTo(16, 0);
+    ctx.moveTo(0, -16); ctx.lineTo(0, 16);
+    ctx.stroke();
+
+    // 2. Rotated Entity Shape Preview
+    ctx.save();
+    ctx.rotate(placement.angle);
+
+    ctx.fillStyle = 'rgba(34, 197, 94, 0.28)';
+    ctx.strokeStyle = '#22c55e';
+    ctx.lineWidth = 2.5;
+
+    if (placement.type === 'vehicle') {
+      const w = 48;
+      const h = 24;
+      ctx.beginPath();
+      safeRoundRect(ctx, -w / 2, -h / 2, w, h, 6);
+      ctx.fill();
+      ctx.stroke();
+
+      // Front windshield & headlight direction marker
+      ctx.fillStyle = '#4ade80';
+      ctx.beginPath();
+      ctx.fillRect(w / 4, -h / 2 + 3, 6, h - 6);
+
+      // Direction arrow pointing forward (+X)
+      ctx.fillStyle = '#22c55e';
+      ctx.beginPath();
+      ctx.moveTo(w / 2 + 12, 0);
+      ctx.lineTo(w / 2 + 2, -8);
+      ctx.lineTo(w / 2 + 2, 8);
+      ctx.closePath();
+      ctx.fill();
+    } else if (placement.type === 'prop') {
+      const size = 22;
+      ctx.beginPath();
+      safeRoundRect(ctx, -size / 2, -size / 2, size, size, 4);
+      ctx.fill();
+      ctx.stroke();
+
+      ctx.fillStyle = '#22c55e';
+      ctx.beginPath();
+      ctx.moveTo(size / 2 + 10, 0);
+      ctx.lineTo(size / 2, -6);
+      ctx.lineTo(size / 2, 6);
+      ctx.closePath();
+      ctx.fill();
+    } else {
+      ctx.beginPath();
+      ctx.arc(0, 0, 14, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+    }
+    ctx.restore(); // end rotated entity preview
+
+    // 3. Name & Angle Badge
+    const deg = Math.round((((placement.angle * 180) / Math.PI) % 360 + 360) % 360);
+    ctx.font = 'bold 12px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+
+    const text = `${placement.nameRu} (${deg}°)`;
+    const tw = ctx.measureText(text).width;
+    const padW = tw + 20;
+
+    ctx.fillStyle = 'rgba(15, 23, 42, 0.88)';
+    safeRoundRect(ctx, -padW / 2, -48, padW, 22, 11);
+    ctx.fill();
+    ctx.strokeStyle = '#22c55e';
+    ctx.lineWidth = 1.2;
+    safeRoundRect(ctx, -padW / 2, -48, padW, 22, 11);
+    ctx.stroke();
+
+    ctx.fillStyle = '#4ade80';
+    ctx.fillText(text, 0, -37);
+
+    // Tip line
+    ctx.font = '10px sans-serif';
+    ctx.fillStyle = '#cbd5e1';
+    ctx.fillText('R — повернуть | Клик — спавн | Esc — отмена', 0, 42);
+
+    ctx.restore();
   }
 
   // --- VEHICLES ---
@@ -4322,14 +5436,15 @@ export class GameRenderer {
       ctx.fillRect(-halfL + 3, -halfW + 4, car.length, car.width);
 
       // 3. Body Shell Contours (with Crumple/Dent deform calculations)
-      const dmg = car.damage || {
+      const dmg: VehicleDamage = car.damage || ({
         health: 100, frontCrumple: 0, rearCrumple: 0, leftDent: 0, rightDent: 0,
         frontLeftDent: 0, frontRightDent: 0, rearLeftDent: 0, rearRightDent: 0,
         hoodBuckled: false, windshieldCracked: false, rearGlassCracked: false,
         leftHeadlightBroken: false, rightHeadlightBroken: false,
         leftTaillightBroken: false, rightTaillightBroken: false,
-        engineSmoking: false, engineFire: false, scratches: []
-      };
+        engineSmoking: false, underHoodSmolder: false, engineFire: false, cabinFire: false,
+        fireProgress: 0, fireIntensity: 0, isFullyBurnt: false, scratches: [], deformedVertices: []
+      } as unknown as VehicleDamage);
 
       const fc = Math.min(halfL * 0.55, dmg.frontCrumple || 0);
       const rc = Math.min(halfL * 0.45, dmg.rearCrumple || 0);
@@ -4340,24 +5455,7 @@ export class GameRenderer {
       const rld = Math.min(halfL * 0.35, dmg.rearLeftDent || 0);
       const rrd = Math.min(halfL * 0.35, dmg.rearRightDent || 0);
 
-      const basePoly = [
-        { x: halfL - fc, y: 0 },
-        { x: halfL - fc - 0.5, y: halfW * 0.5 },
-        { x: halfL - frd - 2.5, y: halfW - frd * 0.35 - 1.5 },
-        { x: halfL * 0.5, y: halfW - rd * 0.35 },
-        { x: 0, y: halfW - rd },
-        { x: -halfL * 0.5, y: halfW - rd * 0.35 },
-        { x: -halfL + rrd + 2.5, y: halfW - rrd * 0.35 - 1.5 },
-        { x: -halfL + rc + 0.5, y: halfW * 0.5 },
-        { x: -halfL + rc, y: 0 },
-        { x: -halfL + rc + 0.5, y: -halfW * 0.5 },
-        { x: -halfL + rld + 2.5, y: -halfW + rld * 0.35 + 1.5 },
-        { x: -halfL * 0.5, y: -halfW + ld * 0.35 },
-        { x: 0, y: -halfW + ld },
-        { x: halfL * 0.5, y: -halfW + ld * 0.35 },
-        { x: halfL - fld - 2.5, y: -halfW + fld * 0.35 + 1.5 },
-        { x: halfL - fc - 0.5, y: -halfW * 0.5 }
-      ];
+      const basePoly = getVehicleBasePolygon(car, halfL, halfW, fc, rc, ld, rd, fld, frd, rld, rrd);
 
       let bodyPoly = basePoly;
       if (dmg.deformedVertices && dmg.deformedVertices.length === 16) {
@@ -4426,11 +5524,18 @@ export class GameRenderer {
                           car.type === 'truck_flatbed' || car.type === 'cement_mixer' ||
                           car.type === 'truck_dump' || car.type === 'garbage_truck' ||
                           car.type === 'fire_ladder' || car.type === 'truck_water';
-      const isHeavyTruck = isThreeAxle || car.type === 'truck_water' || car.type === 'fire_engine' || car.type === 'fire_rescue' || car.type === 'bus';
+      const isHeavyTruck = isThreeAxle || car.type === 'truck_water' || car.type === 'fire_engine' || 
+                           car.type === 'fire_rescue' || car.type === 'bus' || car.type === 'truck_tow' || 
+                           car.type === 'truck_armored' || car.type === 'delivery_truck' || car.type === 'pickup_heavy';
 
-      const wheelL = isHeavyTruck ? 11.5 : (car.type === 'sports' ? 10 : 9.5);
-      const wheelW = isHeavyTruck ? 5.2 : (car.type === 'sports' ? 5.5 : 4.2);
-      const frontAxleX = (isThreeAxle || isHeavyTruck) ? halfL * 0.72 : halfL * 0.65;
+      const isDually = car.type === 'pickup_heavy';
+      const isSport = car.type === 'sports' || car.type === 'supercar' || car.type === 'coupe_gt' || car.type === 'hatch_hot';
+      const isMicro = car.type === 'micro_car' || car.type === 'retro_bubble';
+      const isOffroadHeavy = car.type === 'offroad_hardcore' || car.type === 'suv_classic_box';
+
+      const wheelL = isHeavyTruck ? 11.5 : (isSport ? 10.5 : (isMicro ? 7.6 : 9.5));
+      const wheelW = isHeavyTruck ? 5.2 : (isSport ? 5.8 : (isMicro ? 3.4 : (isOffroadHeavy ? 4.8 : 4.2)));
+      const frontAxleX = (isThreeAxle || isHeavyTruck) ? halfL * 0.72 : (car.type === 'supercar' ? halfL * 0.68 : halfL * 0.65);
       const trackY = halfW - 0.8; // Tucked slightly inside halfW
 
       const renderFixedWheel = (wx: number, wy: number) => {
@@ -4438,7 +5543,7 @@ export class GameRenderer {
         const [dwx, dwy] = deform(wx, cy);
         ctx.fillStyle = '#0f172a'; // Tire
         ctx.fillRect(dwx - wheelL / 2, dwy - wheelW / 2, wheelL, wheelW);
-        ctx.fillStyle = '#64748b'; // Rims
+        ctx.fillStyle = isSport ? '#cbd5e1' : '#64748b'; // Rims
         ctx.fillRect(dwx - wheelL / 2 + 2, dwy - wheelW / 2 + 0.8, wheelL - 4, wheelW - 1.6);
       };
 
@@ -4450,6 +5555,13 @@ export class GameRenderer {
         renderFixedWheel(rearAxle1X, trackY - wheelW);
         renderFixedWheel(rearAxle2X, -trackY);
         renderFixedWheel(rearAxle2X, trackY - wheelW);
+      } else if (isDually) {
+        // Dually pickup truck (dual rear tires)
+        const rearAxleX = -halfL * 0.62;
+        renderFixedWheel(rearAxleX, -trackY);
+        renderFixedWheel(rearAxleX, -trackY + wheelW + 0.6);
+        renderFixedWheel(rearAxleX, trackY - wheelW);
+        renderFixedWheel(rearAxleX, trackY - wheelW * 2 - 0.6);
       } else {
         const rearAxleX = -halfL * 0.65;
         renderFixedWheel(rearAxleX, -trackY);
@@ -4464,7 +5576,7 @@ export class GameRenderer {
         ctx.rotate(car.steerAngle);
         ctx.fillStyle = '#0f172a';
         ctx.fillRect(-wheelL / 2, -wheelW / 2, wheelL, wheelW);
-        ctx.fillStyle = '#64748b';
+        ctx.fillStyle = isSport ? '#cbd5e1' : '#64748b';
         ctx.fillRect(-wheelL / 2 + 2, -wheelW / 2 + 0.8, wheelL - 4, wheelW - 1.6);
         ctx.restore();
       };
@@ -4480,6 +5592,41 @@ export class GameRenderer {
       }
       ctx.closePath();
       ctx.fill();
+
+      // Soot charring & fire heat glow overlays
+      const fireProg = dmg.fireProgress || (dmg.isFullyBurnt ? 1.0 : (dmg.cabinFire ? 0.65 : ((dmg.engineFire || dmg.fuelTankFire) ? 0.28 : (dmg.underHoodSmolder ? 0.08 : 0))));
+      if (fireProg > 0 || dmg.isFullyBurnt) {
+        const charAlpha = Math.min(0.92, fireProg * 0.85 + (dmg.isFullyBurnt ? 0.90 : 0));
+        ctx.fillStyle = `rgba(15, 23, 42, ${charAlpha})`;
+        ctx.beginPath();
+        ctx.moveTo(bodyPoly[0].x, bodyPoly[0].y);
+        for (let i = 1; i < bodyPoly.length; i++) {
+          ctx.lineTo(bodyPoly[i].x, bodyPoly[i].y);
+        }
+        ctx.closePath();
+        ctx.fill();
+
+        // Fire heat glow flicker on vehicle
+        if ((dmg.engineFire || dmg.fuelTankFire || dmg.cabinFire) && !dmg.isFullyBurnt) {
+          const glowPulse = 0.6 + Math.sin(Date.now() * 0.012) * 0.4;
+          const isRearOnly = dmg.fuelTankFire && !dmg.cabinFire && !dmg.engineFire;
+          const glowCenter = dmg.cabinFire ? 0 : (isRearOnly ? -halfL * 0.35 : halfL * 0.22);
+          const glowRadius = dmg.cabinFire ? halfL * 0.95 : halfL * 0.75;
+          const fireGlowGrad = ctx.createRadialGradient(glowCenter, 0, 2, glowCenter, 0, glowRadius);
+          fireGlowGrad.addColorStop(0, `rgba(254, 240, 138, ${0.9 * glowPulse})`);
+          fireGlowGrad.addColorStop(0.4, `rgba(249, 115, 22, ${0.75 * glowPulse})`);
+          fireGlowGrad.addColorStop(1, 'rgba(239, 68, 68, 0)');
+          ctx.fillStyle = fireGlowGrad;
+          ctx.beginPath();
+          ctx.moveTo(bodyPoly[0].x, bodyPoly[0].y);
+          for (let i = 1; i < bodyPoly.length; i++) {
+            ctx.lineTo(bodyPoly[i].x, bodyPoly[i].y);
+          }
+          ctx.closePath();
+          ctx.fill();
+        }
+      }
+
       ctx.strokeStyle = 'rgba(0, 0, 0, 0.42)';
       ctx.lineWidth = 1.2;
       ctx.stroke();
@@ -4670,14 +5817,15 @@ export class GameRenderer {
       const halfL = car.length / 2;
       const halfW = car.width / 2;
 
-      const dmg = car.damage || {
+      const dmg: VehicleDamage = car.damage || ({
         health: 100, frontCrumple: 0, rearCrumple: 0, leftDent: 0, rightDent: 0,
         frontLeftDent: 0, frontRightDent: 0, rearLeftDent: 0, rearRightDent: 0,
         hoodBuckled: false, windshieldCracked: false, rearGlassCracked: false,
         leftHeadlightBroken: false, rightHeadlightBroken: false,
         leftTaillightBroken: false, rightTaillightBroken: false,
-        engineSmoking: false, engineFire: false, scratches: []
-      };
+        engineSmoking: false, underHoodSmolder: false, engineFire: false, cabinFire: false,
+        fireProgress: 0, fireIntensity: 0, isFullyBurnt: false, scratches: [], deformedVertices: []
+      } as unknown as VehicleDamage);
 
       const fc = Math.min(halfL * 0.55, dmg.frontCrumple || 0);
       const rc = Math.min(halfL * 0.45, dmg.rearCrumple || 0);
@@ -4688,24 +5836,7 @@ export class GameRenderer {
       const rld = Math.min(halfL * 0.35, dmg.rearLeftDent || 0);
       const rrd = Math.min(halfL * 0.35, dmg.rearRightDent || 0);
 
-      const basePoly = [
-        { x: halfL - fc, y: 0 },
-        { x: halfL - fc - 0.5, y: halfW * 0.5 },
-        { x: halfL - frd - 2.5, y: halfW - frd * 0.35 - 1.5 },
-        { x: halfL * 0.5, y: halfW - rd * 0.35 },
-        { x: 0, y: halfW - rd },
-        { x: -halfL * 0.5, y: halfW - rd * 0.35 },
-        { x: -halfL + rrd + 2.5, y: halfW - rrd * 0.35 - 1.5 },
-        { x: -halfL + rc + 0.5, y: halfW * 0.5 },
-        { x: -halfL + rc, y: 0 },
-        { x: -halfL + rc + 0.5, y: -halfW * 0.5 },
-        { x: -halfL + rld + 2.5, y: -halfW + rld * 0.35 + 1.5 },
-        { x: -halfL * 0.5, y: -halfW + ld * 0.35 },
-        { x: 0, y: -halfW + ld },
-        { x: halfL * 0.5, y: -halfW + ld * 0.35 },
-        { x: halfL - fld - 2.5, y: -halfW + fld * 0.35 + 1.5 },
-        { x: halfL - fc - 0.5, y: -halfW * 0.5 }
-      ];
+      const basePoly = getVehicleBasePolygon(car, halfL, halfW, fc, rc, ld, rd, fld, frd, rld, rrd);
 
       let bodyPoly = basePoly;
       if (dmg.deformedVertices && dmg.deformedVertices.length === 16) {
@@ -4768,7 +5899,7 @@ export class GameRenderer {
         ctx.restore();
       };
 
-      const drawDeformedCircle = (cx: number, cy: number, r: number, color: string) => {
+      const drawDeformedCircle = (cx: number, cy: number, r: number, color: string, strokeColor?: string, lineWidth?: number) => {
         ctx.fillStyle = color;
         ctx.beginPath();
         const steps = 12;
@@ -4781,87 +5912,94 @@ export class GameRenderer {
           else ctx.lineTo(dpx, dpy);
         }
         ctx.fill();
+        if (strokeColor) {
+          ctx.strokeStyle = strokeColor;
+          ctx.lineWidth = lineWidth || 1.0;
+          ctx.stroke();
+        }
       };
 
       // Cabin dimensions setup
-      let cabinL = car.length * 0.52;
-      let cabinW = Math.max(8, car.width * 0.8 - (ld + rd) * 0.3);
-      let cabinX = -car.length * 0.05;
+      const { cabinL, cabinW, cabinX } = getVehicleCabinDimensions(car, halfL, halfW, ld, rd);
 
-      const isCabOverTruck = car.type === 'truck_box' || car.type === 'truck_dump' || 
-                             car.type === 'cement_mixer' || car.type === 'garbage_truck' ||
-                             car.type === 'fire_ladder';
+      const vCtx = {
+        ctx,
+        car,
+        halfL,
+        halfW,
+        fc,
+        rc,
+        cabinX,
+        cabinL,
+        cabinW,
+        deform,
+        drawDeformedRect,
+        drawDeformedLine,
+        drawDeformedCircle,
+        nightAlpha,
+      };
 
-      if (isCabOverTruck) {
-        cabinL = car.length * 0.18;
-        cabinW = car.width * 0.88;
-        cabinX = halfL - cabinL / 2 - 2;
-      } else if (car.type === 'fire_engine' || car.type === 'fire_rescue') {
-        cabinL = car.length * 0.28;
-        cabinW = car.width * 0.90;
-        cabinX = halfL - cabinL / 2 - 2;
-      } else if (car.type === 'truck_flatbed' || car.type === 'truck_tanker' || car.type === 'truck_water') {
-        cabinL = car.length * 0.20;
-        cabinW = car.width * 0.86;
-        cabinX = halfL - cabinL * 1.35;
-      } else if (car.type === 'van' || car.type === 'ambulance_van') {
-        cabinL = car.length * 0.58;
-        cabinW = car.width * 0.84;
-        cabinX = -car.length * 0.02;
-      } else if (car.type === 'bus_minibus') {
-        cabinL = car.length * 0.62;
-        cabinW = car.width * 0.84;
-        cabinX = -car.length * 0.02;
-      } else if (car.type === 'ambulance_suv') {
-        cabinL = car.length * 0.54;
-        cabinW = car.width * 0.80;
-        cabinX = -car.length * 0.04;
-      } else if (car.type === 'muscle') {
-        cabinL = car.length * 0.48;
-        cabinW = car.width * 0.78;
-        cabinX = -car.length * 0.04;
-      } else if (car.type === 'sports') {
-        cabinL = car.length * 0.45;
-        cabinW = car.width * 0.74;
-        cabinX = -car.length * 0.08;
-      } else if (car.type === 'hatchback') {
-        cabinL = car.length * 0.56;
-        cabinW = car.width * 0.78;
-        cabinX = -car.length * 0.12;
-      } else if (car.type === 'suv') {
-        cabinL = car.length * 0.56;
-        cabinW = car.width * 0.82;
-        cabinX = -car.length * 0.05;
-      } else if (car.type === 'pickup') {
-        cabinL = car.length * 0.38;
-        cabinW = car.width * 0.82;
-        cabinX = car.length * 0.1;
-      }
+      // Accurate greenhouse (windshield, roof, side glass, pillars, sedan trunk deck, wagon roof, pickup bed, supercar mid-engine, etc.)
+      renderVehicleGreenhouseAndBodyPanels(vCtx);
 
-      // Draw glass base and roofs (custom full-body rendering vehicles excluded)
+      // Glass crack damage effect if windshield is broken
       if (car.type !== 'bus' && car.type !== 'ambulance' && car.type !== 'ambulance_van') {
-        drawDeformedRect(cabinX - cabinL / 2, -cabinW / 2, cabinL, cabinW, '#0f172a');
-
         const roofL = cabinL * 0.66;
-        const roofW = cabinW * 0.80;
-        drawDeformedRect(cabinX - roofL / 2, -roofW / 2, roofL, roofW, car.roofColor || car.color);
-
         const fWsX1 = cabinX + roofL / 2;
         const fWsX2 = cabinX + cabinL / 2;
-        drawDeformedRect(fWsX1, -cabinW / 2 + 1, fWsX2 - fWsX1, cabinW - 2, 'rgba(56, 189, 248, 0.15)');
-        drawDeformedLine(fWsX1 + 1, -cabinW / 2 + 2, fWsX2 - 1, cabinW / 2 - 2, 'rgba(255, 255, 255, 0.25)', 1.2);
-
-        const rWsX1 = cabinX - cabinL / 2;
-        const rWsX2 = cabinX - roofL / 2;
-        drawDeformedRect(rWsX1, -cabinW / 2 + 1, rWsX2 - rWsX1, cabinW - 2, 'rgba(56, 189, 248, 0.12)');
-        drawDeformedLine(rWsX1 + 1, -cabinW / 4, rWsX2 - 1, cabinW / 4, 'rgba(255, 255, 255, 0.15)', 1.2);
-
-        drawDeformedRect(cabinX - roofL / 2, -cabinW / 2 + 0.5, roofL, (cabinW - roofW) / 2 - 0.5, 'rgba(56, 189, 248, 0.08)');
-        drawDeformedRect(cabinX - roofL / 2, roofW / 2, roofL, (cabinW - roofW) / 2 - 0.5, 'rgba(56, 189, 248, 0.08)');
 
         if (dmg.windshieldCracked) {
           const wsMinX = fWsX1 + 1;
           const wsMaxX = fWsX2 - 1;
+          const wsCenterX = wsMinX + (wsMaxX - wsMinX) * 0.5;
+          const wsCenterY = 0;
+          const wsHalfW = (wsMaxX - wsMinX) * 0.45;
+          const wsHalfH = (cabinW - 4) * 0.45;
+
+          ctx.save();
+          const clipP1 = deform(wsMinX, -cabinW / 2 + 2);
+          const clipP2 = deform(wsMaxX, -cabinW / 2 + 2);
+          const clipP3 = deform(wsMaxX, cabinW / 2 - 2);
+          const clipP4 = deform(wsMinX, cabinW / 2 - 2);
+          ctx.beginPath();
+          ctx.moveTo(clipP1[0], clipP1[1]);
+          ctx.lineTo(clipP2[0], clipP2[1]);
+          ctx.lineTo(clipP3[0], clipP3[1]);
+          ctx.lineTo(clipP4[0], clipP4[1]);
+          ctx.closePath();
+          ctx.clip();
+
+          const [dcx, dcy] = deform(wsCenterX, wsCenterY);
+          ctx.fillStyle = 'rgba(15, 23, 42, 0.85)';
+          ctx.beginPath();
+          ctx.arc(dcx, dcy, 1.8, 0, Math.PI * 2);
+          ctx.fill();
+
+          ctx.strokeStyle = 'rgba(224, 242, 254, 0.95)';
+          ctx.lineWidth = 0.5;
+          ctx.beginPath();
+
+          const arms = 6;
+          for (let i = 0; i < arms; i++) {
+            const angle = (i / arms) * Math.PI * 2 + (i * 0.3);
+            const len = Math.min(wsHalfW, wsHalfH) * (0.5 + (i % 2) * 0.25);
+            const endX = wsCenterX + Math.cos(angle) * len;
+            const endY = wsCenterY + Math.sin(angle) * len;
+            const pStart = deform(wsCenterX, wsCenterY);
+            const pEnd = deform(endX, endY);
+            ctx.moveTo(pStart[0], pStart[1]);
+            ctx.lineTo(pEnd[0], pEnd[1]);
+          }
+          ctx.stroke();
+          ctx.restore();
+        }
+
+        // Spiderweb crack damage effect if rear glass is broken
+        if (dmg.rearGlassCracked) {
+          const rWsX1 = cabinX - roofL / 2;
+          const rWsX2 = cabinX - cabinL / 2;
+          const wsMinX = rWsX2 + 1;
+          const wsMaxX = rWsX1 - 1;
           const wsCenterX = wsMinX + (wsMaxX - wsMinX) * 0.5;
           const wsCenterY = 0;
           const wsHalfW = (wsMaxX - wsMinX) * 0.45;
@@ -4912,66 +6050,8 @@ export class GameRenderer {
         }
       }
 
-      // Distinct types accessories
-      if (car.type === 'sports') {
-        drawDeformedRect(-halfL + rc + 1, -halfW * 0.45, 1.8, 1, '#0a0f1d');
-        drawDeformedRect(-halfL + rc + 1, halfW * 0.35, 1.8, 1, '#0a0f1d');
-        drawDeformedRect(-halfL + rc - 1.5, -halfW * 0.82, 3.2, halfW * 1.64, '#0a0f1d');
-        drawDeformedRect(-halfL + rc - 1.8, -halfW * 0.82 - 0.5, 3.8, 1, car.color);
-        drawDeformedRect(-halfL + rc - 1.8, halfW * 0.82 - 0.5, 3.8, 1, car.color);
-        drawDeformedRect(halfL * 0.38, -halfW * 0.32, 5, 2.2, '#0f172a');
-        drawDeformedRect(halfL * 0.38, halfW * 0.18, 5, 2.2, '#0f172a');
-
-      } else if (car.type === 'pickup') {
-        const bedX1 = -halfL + rc + 3;
-        const bedX2 = cabinX - cabinL / 2;
-        const bedW = halfW * 2 - 3.2;
-        drawDeformedRect(bedX1, -bedW / 2, bedX2 - bedX1, bedW, '#1e293b');
-        for (let ry = -bedW / 2 + 2.5; ry < bedW / 2; ry += 2.5) {
-          drawDeformedLine(bedX1 + 1, ry, bedX2 - 1, ry, '#475569', 0.8);
-        }
-        drawDeformedRect(bedX1 + 2.5, -bedW / 2 + 2, 8, 7, '#92400e');
-
-      } else if (car.type === 'suv') {
-        drawDeformedRect(halfL * 0.2, -4, 4, 8, '#0f172a');
-        drawDeformedCircle(-halfL, 0, 4.2, '#334155');
-        drawDeformedCircle(-halfL, 0, 2.4, car.color);
-
-      } else if (car.type === 'taxi') {
-        drawDeformedRect(cabinX - 1.5, -5.5, 3, 11, '#0f172a');
-        drawDeformedRect(cabinX - 1, -4.5, 2, 9, '#f59e0b');
-        if (nightAlpha > 0.05) {
-          ctx.save();
-          ctx.globalCompositeOperation = 'screen';
-          const [dcabinX, dcabinY] = deform(cabinX, 0);
-          const signGlow = ctx.createRadialGradient(dcabinX, dcabinY, 1, dcabinX, dcabinY, 11);
-          signGlow.addColorStop(0, 'rgba(245, 158, 11, 0.45)');
-          signGlow.addColorStop(1, 'rgba(245, 158, 11, 0)');
-          ctx.fillStyle = signGlow;
-          ctx.beginPath(); ctx.arc(dcabinX, dcabinY, 11, 0, Math.PI * 2); ctx.fill();
-          ctx.restore();
-        }
-        drawDeformedLine(-halfL + rc, -halfW + 1.2, halfL - fc, -halfW + 1.2, '#000000', 0.5, true);
-        drawDeformedLine(-halfL + rc, halfW - 1.2, halfL - fc, halfW - 1.2, '#000000', 0.5, true);
-      }
-
       // Specialized vehicle attachments, emergency sirens, cabins & equipment
-      renderSpecializedVehicleAttachments({
-        ctx,
-        car,
-        halfL,
-        halfW,
-        fc,
-        rc,
-        cabinX,
-        cabinL,
-        cabinW,
-        deform,
-        drawDeformedRect,
-        drawDeformedLine,
-        drawDeformedCircle,
-        nightAlpha,
-      });
+      renderSpecializedVehicleAttachments(vCtx);
 
       // Night/Weather Tint for the cabins (since drawn above lightmap)
       if (nightAlpha > 0.05) {
@@ -4991,12 +6071,48 @@ export class GameRenderer {
 
   // --- PARTICLES ---
   private renderParticles(particles: GameWorld['particles']) {
-    const ctx = this.ctx;
-    for (const p of particles) {
-      ctx.save();
-      ctx.globalAlpha = Math.max(0, Math.min(1.0, p.alpha));
+    const len = particles.length;
+    if (len === 0) return;
 
+    const smoke: typeof particles = [];
+    const neutral: typeof particles = [];
+    const flames: typeof particles = [];
+    const sparks: typeof particles = [];
+
+    // O(N) single-pass categorization to avoid multiple array scans
+    for (let i = 0; i < len; i++) {
+      const p = particles[i];
+      const t = p.type;
+      if (t === 'engine_smoke' || t === 'tire_smoke' || t === 'exhaust') {
+        smoke.push(p);
+      } else if (t === 'flame') {
+        flames.push(p);
+      } else if (t === 'spark') {
+        sparks.push(p);
+      } else {
+        neutral.push(p);
+      }
+    }
+
+    const ctx = this.ctx;
+
+    // Pass 1: Render thick background smoke (engine smoke, tire smoke, exhaust)
+    // Completely bypass ctx.save() / ctx.restore() to avoid expensive matrix allocations!
+    for (let i = 0; i < smoke.length; i++) {
+      const p = smoke[i];
+      ctx.globalAlpha = Math.max(0, Math.min(1.0, p.alpha));
+      ctx.fillStyle = p.color;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // Pass 2: Render neutral physics elements (glass shards, debris, water, etc.)
+    for (let i = 0; i < neutral.length; i++) {
+      const p = neutral[i];
+      ctx.globalAlpha = Math.max(0, Math.min(1.0, p.alpha));
       if (p.type === 'glass_shard') {
+        // Shards require translate and rotate, so they still need save/restore
         ctx.save();
         ctx.translate(p.x, p.y);
         ctx.rotate((p.x + p.y) * 0.1);
@@ -5024,18 +6140,35 @@ export class GameRenderer {
       } else if (p.type === 'debris') {
         ctx.fillStyle = p.color;
         ctx.fillRect(p.x - p.radius * 0.5, p.y - p.radius * 0.5, p.radius, p.radius);
-      } else if (p.type === 'spark') {
+      } else {
+        // Other neutral (water splash, rain droplets, water fountains, etc.)
         ctx.fillStyle = p.color;
         ctx.beginPath();
         ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
         ctx.fill();
-        // Inner hot core
-        ctx.fillStyle = '#ffffff';
+      }
+    }
+
+    // Pass 3: Render glowing flames on top of smoke and debris
+    const isLowQuality = performanceConfig.lowQualityRendering;
+    for (let i = 0; i < flames.length; i++) {
+      const p = flames[i];
+      ctx.globalAlpha = Math.max(0, Math.min(1.0, p.alpha));
+      const rad = p.radius;
+
+      if (isLowQuality) {
+        // High-performance double-circle approach bypasses CPU-heavy radial gradients completely
+        ctx.fillStyle = '#ef4444';
         ctx.beginPath();
-        ctx.arc(p.x, p.y, p.radius * 0.5, 0, Math.PI * 2);
+        ctx.arc(p.x, p.y, rad, 0, Math.PI * 2);
         ctx.fill();
-      } else if (p.type === 'flame') {
-        const rad = p.radius;
+
+        ctx.fillStyle = '#f59e0b';
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, rad * 0.5, 0, Math.PI * 2);
+        ctx.fill();
+      } else {
+        // Standard high-quality radial gradient
         const grad = ctx.createRadialGradient(p.x, p.y, rad * 0.2, p.x, p.y, rad);
         grad.addColorStop(0, '#fef08a');
         grad.addColorStop(0.4, '#f97316');
@@ -5044,16 +6177,27 @@ export class GameRenderer {
         ctx.beginPath();
         ctx.arc(p.x, p.y, rad, 0, Math.PI * 2);
         ctx.fill();
-      } else {
-        // Smoke / Exhaust / Dust
-        ctx.fillStyle = p.color;
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
-        ctx.fill();
       }
-
-      ctx.restore();
     }
+
+    // Pass 4: Render bright flying sparks/embers on the absolute top layer
+    for (let i = 0; i < sparks.length; i++) {
+      const p = sparks[i];
+      ctx.globalAlpha = Math.max(0, Math.min(1.0, p.alpha));
+      ctx.fillStyle = p.color;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Inner hot core
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.radius * 0.5, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // Safely restore global alpha
+    ctx.globalAlpha = 1.0;
   }
 
   // --- PROFESSIONAL TWO-PASS LIGHTMAP SYSTEM ---
@@ -5734,50 +6878,9 @@ export class GameRenderer {
       }
     }
 
-    // 3. Weather Rain Streaks & Lightning
-    ctx.globalCompositeOperation = 'source-over';
-    if (isRaining && weatherTransition > 0.05 && performanceConfig.enableRainDroplets) {
-      ctx.strokeStyle = `rgba(191, 219, 254, ${0.45 * weatherTransition})`;
-      ctx.lineWidth = 1.2;
-      ctx.beginPath();
-      const numDrops = world.weather === 'storm' ? Math.round(140 * weatherTransition) : Math.round(80 * weatherTransition);
-      for (let r = 0; r < numDrops; r++) {
-        const rx = minX + Math.random() * (maxX - minX);
-        const ry = minY + Math.random() * (maxY - minY);
-        const len = 14 + Math.random() * 10;
-        ctx.moveTo(rx, ry);
-        ctx.lineTo(rx - len * 0.3, ry + len);
-      }
-      ctx.stroke();
-    }
-
-    if (isFog && weatherTransition > 0.05) {
-      // Draw a soft, drifting smoke/fog pattern or a beautiful multi-layered misty fog overlay!
-      ctx.fillStyle = `rgba(226, 232, 240, ${0.35 * weatherTransition})`; // Soft slate-gray/white fog haze
-      ctx.fillRect(minX, minY, maxX - minX, maxY - minY);
-
-      // Add dynamic drifting fog bands
-      ctx.fillStyle = `rgba(241, 245, 249, ${0.12 * weatherTransition})`;
-      const time = Date.now() * 0.0003;
-      for (let i = 0; i < 5; i++) {
-        const driftX = Math.sin(time + i * 1.5) * 50;
-        const driftY = Math.cos(time * 0.7 + i * 2.1) * 30;
-        const fy = minY + ((i + 0.5) / 5) * (maxY - minY) + driftY;
-        
-        ctx.beginPath();
-        safeEllipse(ctx, minX + (maxX - minX) * 0.5 + driftX, fy, (maxX - minX) * 0.7, (maxY - minY) * 0.25, Math.sin(time * 0.2 + i) * 0.1, 0, Math.PI * 2);
-        ctx.fill();
-      }
-    }
-
-    if ((world.lightningFlashTimer ?? 0) > 0) {
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
-      ctx.fillRect(minX, minY, maxX - minX, maxY - minY);
-    }
-
     ctx.restore();
 
-    // Call dynamic weather overlay (Rain, drops, ripples, fog haze, storm lines)
+    // Call dynamic weather overlay (Rain drops, ground ripples, volumetric fog, lightning bolts)
     this.renderWeatherOverlay(world, minX, minY, maxX, maxY);
   }
 
@@ -5786,76 +6889,309 @@ export class GameRenderer {
     const isRaining = world.weather === 'rain' || world.weather === 'storm';
     const isStorm = world.weather === 'storm';
     const isFog = world.weather === 'fog';
+    const hasLightning = (world.lightningFlashTimer ?? 0) > 0;
 
-    if (!isRaining && !isFog && (world.lightningFlashTimer ?? 0) <= 0) return;
+    if (!isRaining && !isFog && !hasLightning) return;
 
     ctx.save();
     ctx.globalCompositeOperation = 'source-over';
 
-    if (isRaining && performanceConfig.enableRainDroplets) {
-      const time = Date.now() * 0.002;
-      const numDrops = isStorm ? 320 : 180;
+    const now = performance.now();
+    const timeSec = now * 0.001;
+    const viewW = Math.max(100, maxX - minX);
+    const viewH = Math.max(100, maxY - minY);
 
-      // 1. Heavy dynamic rain droplets/streaks with wind tilt
-      ctx.strokeStyle = isStorm ? 'rgba(191, 219, 254, 0.65)' : 'rgba(191, 219, 254, 0.45)';
-      ctx.lineWidth = isStorm ? 1.6 : 1.2;
+    // =========================================================================
+    // 1. RAIN & STORM (TOP-DOWN REALISTIC PRECIPITATION & GROUND RIPPLES)
+    // =========================================================================
+    if (isRaining && performanceConfig.enableRainDroplets) {
+      // Atmospheric overcast ambient tint
+      ctx.fillStyle = isStorm ? 'rgba(10, 15, 30, 0.28)' : 'rgba(15, 23, 42, 0.14)';
+      ctx.fillRect(minX, minY, viewW, viewH);
+
+      // Wind gust calculation
+      const windAngle = isStorm ? (0.24 + Math.sin(timeSec * 2.8) * 0.09) : 0.12;
+
+      // --- A. Ground Impact Splashes & Puddle Ripples ---
+      // In a top-down game, impact ripples on the asphalt and ground define the rain!
+      const numRipples = isStorm ? 55 : 28;
+      ctx.lineWidth = 1.0;
+
+      for (let s = 0; s < numRipples; s++) {
+        // Deterministic pseudo-random seed per ripple
+        const seedX = ((s * 47.382) % 1);
+        const seedY = ((s * 91.137) % 1);
+        const speed = 1.2 + ((s * 13.7) % 1) * 0.8; // cycle frequency
+        const phase = (timeSec * speed + (s * 0.23)) % 1.0;
+
+        const rx = minX + seedX * viewW;
+        const ry = minY + seedY * viewH;
+        const maxR = isStorm ? 14 : 10;
+        const r = 1.5 + phase * maxR;
+        const alpha = Math.max(0, (1.0 - phase) * (isStorm ? 0.42 : 0.28));
+
+        ctx.strokeStyle = `rgba(224, 242, 254, ${alpha})`;
+        ctx.beginPath();
+        // Top-down perspective aspect ratio 1.5 : 0.85
+        safeEllipse(ctx, rx, ry, r * 1.3, r * 0.72, 0, 0, Math.PI * 2);
+        ctx.stroke();
+
+        // Fresh impact micro-splash droplets (during initial 25% of ripple cycle)
+        if (phase < 0.25) {
+          const splashAlpha = (1.0 - phase / 0.25) * 0.55;
+          ctx.fillStyle = `rgba(240, 249, 255, ${splashAlpha})`;
+          const sparkDist = phase * 6.0;
+          ctx.fillRect(rx - sparkDist, ry - sparkDist * 0.6, 1.2, 1.2);
+          ctx.fillRect(rx + sparkDist, ry - sparkDist * 0.4, 1.2, 1.2);
+        }
+      }
+
+      // --- B. Fast Aerodynamic Falling Micro-Drops (No platformer sticks!) ---
+      // Top-down droplets fall rapidly through the camera frame: short streaks 4-8px
+      const numDrops = isStorm ? 280 : 160;
+      ctx.strokeStyle = isStorm ? 'rgba(219, 234, 254, 0.48)' : 'rgba(224, 242, 254, 0.32)';
+      ctx.lineWidth = isStorm ? 1.3 : 1.0;
       ctx.beginPath();
 
+      const fallSpeed = isStorm ? 1300 : 950;
       for (let r = 0; r < numDrops; r++) {
-        // Distribute rain across current camera view bounds
-        const seedX = (r * 137.5) % 1;
-        const seedY = (r * 241.3) % 1;
-        const rx = minX + seedX * (maxX - minX);
-        const ry = minY + ((seedY * (maxY - minY) + time * (isStorm ? 1400 : 900)) % (maxY - minY));
-        const len = isStorm ? 22 + (r % 10) * 1.5 : 12 + (r % 8) * 1.2;
-        const windTilt = isStorm ? 0.45 : 0.2;
+        const seedX = ((r * 157.61) % 1);
+        const seedY = ((r * 283.47) % 1);
+        const rx = minX + seedX * viewW;
+        const ry = minY + ((seedY * viewH + timeSec * fallSpeed) % viewH);
+        
+        // Fast, short aerodynamic streak (4 to 9px)
+        const len = isStorm ? (6 + (r % 5) * 0.9) : (4 + (r % 4) * 0.8);
+        const dx = len * windAngle;
+        const dy = len * 0.95;
 
         ctx.moveTo(rx, ry);
-        ctx.lineTo(rx - len * windTilt, ry + len);
+        ctx.lineTo(rx - dx, ry + dy);
       }
       ctx.stroke();
 
-      // 2. Animated ground splash ripples
-      ctx.strokeStyle = 'rgba(224, 242, 254, 0.35)';
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      const numSplashes = isStorm ? 45 : 22;
-      for (let s = 0; s < numSplashes; s++) {
-        const sx = minX + ((s * 19.1) % 1) * (maxX - minX);
-        const sy = minY + (((s * 53.7 + time * 300) % 1) * (maxY - minY));
-        const splashR = 2 + ((s + Math.floor(time * 25)) % 5) * 1.5;
-        ctx.ellipse(sx, sy, splashR * 1.4, splashR * 0.7, 0, 0, Math.PI * 2);
-      }
-      ctx.stroke();
-
-      // 3. Storm dark atmospheric ambient & moisture overlay
-      if (isStorm) {
-        ctx.fillStyle = 'rgba(15, 23, 42, 0.18)';
-        ctx.fillRect(minX, minY, maxX - minX, maxY - minY);
-      }
-    }
-
-    if (isFog) {
-      ctx.fillStyle = 'rgba(226, 232, 240, 0.28)';
-      ctx.fillRect(minX, minY, maxX - minX, maxY - minY);
-
-      ctx.fillStyle = 'rgba(241, 245, 249, 0.12)';
-      const time = Date.now() * 0.0003;
-      for (let i = 0; i < 5; i++) {
-        const driftX = Math.sin(time + i * 1.5) * 50;
-        const driftY = Math.cos(time * 0.7 + i * 2.1) * 30;
-        const fy = minY + ((i + 0.5) / 5) * (maxY - minY) + driftY;
+      // --- C. Wind-Blown Rain Mist Sheets ---
+      // Fine vapor drifting across the streets during rain
+      ctx.fillStyle = isStorm ? 'rgba(224, 242, 254, 0.055)' : 'rgba(224, 242, 254, 0.03)';
+      for (let m = 0; m < 3; m++) {
+        const mistOffset = (timeSec * (isStorm ? 120 : 60) + m * 400) % (viewW + 600) - 300;
+        const mistY = minY + ((m + 0.5) / 3) * viewH + Math.sin(timeSec * 0.8 + m) * 40;
         ctx.beginPath();
-        safeEllipse(ctx, minX + (maxX - minX) * 0.5 + driftX, fy, (maxX - minX) * 0.7, (maxY - minY) * 0.25, Math.sin(time * 0.2 + i) * 0.1, 0, Math.PI * 2);
+        safeEllipse(ctx, minX + mistOffset, mistY, viewW * 0.6, 60, windAngle * 0.3, 0, Math.PI * 2);
         ctx.fill();
       }
     }
 
-    // 4. Storm Lightning Screen Flash
-    if ((world.lightningFlashTimer ?? 0) > 0) {
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
-      ctx.fillRect(minX, minY, maxX - minX, maxY - minY);
+    // =========================================================================
+    // 2. VOLUMETRIC LAYERED FOG (ORGANIC DRIFTING VAPOR CLOUDS & LIGHT HALOS)
+    // =========================================================================
+    if (isFog) {
+      // Atmospheric cool-slate desaturating base
+      ctx.fillStyle = 'rgba(203, 213, 225, 0.22)';
+      ctx.fillRect(minX, minY, viewW, viewH);
+
+      // Layer 1: Soft rolling ground mist banks
+      const fogClusters = 8;
+      for (let f = 0; f < fogClusters; f++) {
+        const seedX = ((f * 37.19) % 1);
+        const seedY = ((f * 73.82) % 1);
+        const driftSpeed = 18 + (f % 3) * 8;
+        
+        const fcx = minX + ((seedX * viewW + timeSec * driftSpeed) % (viewW + 400)) - 200;
+        const fcy = minY + ((seedY * viewH + Math.sin(timeSec * 0.4 + f) * 60) % viewH);
+        const radius = 160 + (f % 4) * 40;
+
+        const fogGrad = ctx.createRadialGradient(fcx, fcy, 0, fcx, fcy, radius);
+        fogGrad.addColorStop(0, 'rgba(241, 245, 249, 0.20)');
+        fogGrad.addColorStop(0.5, 'rgba(226, 232, 240, 0.10)');
+        fogGrad.addColorStop(1, 'rgba(226, 232, 240, 0)');
+
+        ctx.fillStyle = fogGrad;
+        ctx.beginPath();
+        ctx.arc(fcx, fcy, radius, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      // Layer 2: Fast swirling wisps
+      for (let w = 0; w < 4; w++) {
+        const wcx = minX + ((timeSec * 35 + w * 320) % (viewW + 300)) - 150;
+        const wcy = minY + ((w + 0.5) / 4) * viewH + Math.cos(timeSec * 0.5 + w) * 35;
+        const wRad = 90 + w * 20;
+
+        const wispGrad = ctx.createRadialGradient(wcx, wcy, 0, wcx, wcy, wRad);
+        wispGrad.addColorStop(0, 'rgba(248, 250, 252, 0.12)');
+        wispGrad.addColorStop(1, 'rgba(248, 250, 252, 0)');
+        ctx.fillStyle = wispGrad;
+        ctx.beginPath();
+        safeEllipse(ctx, wcx, wcy, wRad * 1.5, wRad * 0.7, 0.15, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      // Layer 3: Headlight volumetric halos through fog
+      for (const veh of world.vehicles) {
+        if (!veh.headlightsOn) continue;
+        const vx = veh.x;
+        const vy = veh.y;
+        if (vx < minX - 100 || vx > maxX + 100 || vy < minY - 100 || vy > maxY + 100) continue;
+
+        // Soft luminous diffusion halo in front of vehicle
+        const forwardX = vx + Math.cos(veh.angle) * 35;
+        const forwardY = vy + Math.sin(veh.angle) * 35;
+        const haloGrad = ctx.createRadialGradient(forwardX, forwardY, 5, forwardX, forwardY, 65);
+        haloGrad.addColorStop(0, 'rgba(254, 243, 199, 0.22)');
+        haloGrad.addColorStop(0.6, 'rgba(253, 230, 138, 0.08)');
+        haloGrad.addColorStop(1, 'rgba(253, 230, 138, 0)');
+        ctx.fillStyle = haloGrad;
+        ctx.beginPath();
+        ctx.arc(forwardX, forwardY, 65, 0, Math.PI * 2);
+        ctx.fill();
+      }
     }
+
+    // =========================================================================
+    // 3. STORM LIGHTNING (PROCEDURAL BRANCHING BOLTS & REALISTIC STROBE FLASH)
+    // =========================================================================
+    if (hasLightning) {
+      const strikeTimer = world.lightningFlashTimer ?? 0;
+      const progress = Math.max(0, Math.min(1.0, 1.0 - (strikeTimer / 0.38)));
+
+      // Realistic double-pulse strobe curve (pre-flash -> return stroke peak -> exponential afterglow)
+      let flashAlpha = 0;
+      if (progress < 0.12) {
+        flashAlpha = progress / 0.12 * 0.85; // Initial spike
+      } else if (progress < 0.24) {
+        flashAlpha = 0.25; // Brief return stroke lull
+      } else if (progress < 0.45) {
+        flashAlpha = 0.95 - (progress - 0.24) * 1.2; // Main return stroke blast
+      } else {
+        flashAlpha = Math.max(0, 0.45 * (1.0 - (progress - 0.45) / 0.55)); // Decaying sky glow
+      }
+
+      // Sky illumination flash
+      if (flashAlpha > 0.02) {
+        ctx.fillStyle = `rgba(224, 242, 254, ${flashAlpha * 0.65})`;
+        ctx.fillRect(minX, minY, viewW, viewH);
+      }
+
+      // Draw procedural branching lightning bolt if strike data exists
+      if (world.lightningStrike && flashAlpha > 0.1) {
+        this.renderLightningBolt(
+          ctx,
+          world.lightningStrike.startX,
+          world.lightningStrike.startY,
+          world.lightningStrike.endX,
+          world.lightningStrike.endY,
+          world.lightningStrike.seed,
+          flashAlpha
+        );
+      }
+    }
+
+    ctx.restore();
+  }
+
+  // --- PROCEDURAL BRANCHING LIGHTNING BOLT ---
+  private renderLightningBolt(
+    ctx: CanvasRenderingContext2D,
+    startX: number,
+    startY: number,
+    endX: number,
+    endY: number,
+    seed: number,
+    alpha: number
+  ) {
+    const safeAlpha = Number.isFinite(alpha) ? Math.max(0, Math.min(1, alpha)) : 0;
+    const segments = 12;
+    const points: { x: number; y: number }[] = [{ x: startX, y: startY }];
+
+    let s = (seed * 1000 + 123) % 233280;
+    const rnd = () => {
+      s = (s * 9301 + 49297) % 233280;
+      return s / 233280;
+    };
+
+    const branches: { start: { x: number; y: number }; pts: { x: number; y: number }[] }[] = [];
+
+    for (let i = 1; i <= segments; i++) {
+      const t = i / segments;
+      const baseX = startX + (endX - startX) * t;
+      const baseY = startY + (endY - startY) * t;
+      const jitterAmount = (1 - Math.abs(t - 0.5) * 0.7) * 55;
+      const jx = (rnd() - 0.5) * jitterAmount * 2;
+      const jy = (rnd() - 0.5) * 20;
+      const pt = { x: baseX + jx, y: baseY + jy };
+      points.push(pt);
+
+      // Branching fork chances
+      if (i === 4 || i === 7) {
+        const bPts: { x: number; y: number }[] = [pt];
+        const bAngle = (rnd() - 0.5) * 1.3 + (endX > startX ? 0.35 : -0.35);
+        let curBx = pt.x;
+        let curBy = pt.y;
+        for (let b = 0; b < 4; b++) {
+          curBx += Math.sin(bAngle) * (26 + rnd() * 22) + (rnd() - 0.5) * 16;
+          curBy += Math.cos(bAngle) * (22 + rnd() * 18);
+          bPts.push({ x: curBx, y: curBy });
+        }
+        branches.push({ start: pt, pts: bPts });
+      }
+    }
+
+    ctx.save();
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+
+    // 1. Broad outer electric cyan halo
+    ctx.strokeStyle = `rgba(147, 197, 253, ${safeAlpha * 0.35})`;
+    ctx.lineWidth = 14;
+    ctx.beginPath();
+    ctx.moveTo(points[0].x, points[0].y);
+    for (let i = 1; i < points.length; i++) ctx.lineTo(points[i].x, points[i].y);
+    ctx.stroke();
+
+    // 2. Mid ionized cyan glow
+    ctx.strokeStyle = `rgba(186, 230, 253, ${safeAlpha * 0.75})`;
+    ctx.lineWidth = 5;
+    ctx.beginPath();
+    ctx.moveTo(points[0].x, points[0].y);
+    for (let i = 1; i < points.length; i++) ctx.lineTo(points[i].x, points[i].y);
+    ctx.stroke();
+
+    // 3. Core hot white lightning arc
+    ctx.strokeStyle = `rgba(255, 255, 255, ${safeAlpha * 0.98})`;
+    ctx.lineWidth = 2.0;
+    ctx.beginPath();
+    ctx.moveTo(points[0].x, points[0].y);
+    for (let i = 1; i < points.length; i++) ctx.lineTo(points[i].x, points[i].y);
+    ctx.stroke();
+
+    // Render branch forks
+    for (const br of branches) {
+      ctx.strokeStyle = `rgba(186, 230, 253, ${safeAlpha * 0.5})`;
+      ctx.lineWidth = 3.0;
+      ctx.beginPath();
+      ctx.moveTo(br.start.x, br.start.y);
+      for (const p of br.pts) ctx.lineTo(p.x, p.y);
+      ctx.stroke();
+
+      ctx.strokeStyle = `rgba(255, 255, 255, ${safeAlpha * 0.85})`;
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      ctx.moveTo(br.start.x, br.start.y);
+      for (const p of br.pts) ctx.lineTo(p.x, p.y);
+      ctx.stroke();
+    }
+
+    // Ground strike impact flash
+    const endPt = points[points.length - 1];
+    const burstGrad = ctx.createRadialGradient(endPt.x, endPt.y, 2, endPt.x, endPt.y, 50);
+    burstGrad.addColorStop(0, `rgba(255, 255, 255, ${safeAlpha * 0.95})`);
+    burstGrad.addColorStop(0.3, `rgba(186, 230, 253, ${safeAlpha * 0.6})`);
+    burstGrad.addColorStop(1, 'rgba(186, 230, 253, 0)');
+    ctx.fillStyle = burstGrad;
+    ctx.beginPath();
+    ctx.arc(endPt.x, endPt.y, 50, 0, Math.PI * 2);
+    ctx.fill();
 
     ctx.restore();
   }
@@ -6014,10 +7350,9 @@ export class GameRenderer {
     ctx.stroke();
 
     ctx.fillStyle = '#ffffff';
-    ctx.font = 'bold 22px sans-serif';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText('🚩', 0, -1);
+    ctx.beginPath();
+    ctx.arc(0, 0, 8, 0, Math.PI * 2);
+    ctx.fill();
 
     ctx.restore();
     ctx.restore();

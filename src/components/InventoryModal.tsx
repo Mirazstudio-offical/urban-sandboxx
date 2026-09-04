@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Player, InventoryItem, ItemCategory, GameWorld, GroundItem } from '../types';
-import { useItemOnPlayer, dropItemFromPlayer, addItemToPlayer, ITEM_CATALOG, isPlayerNearTrashBin, disposeTrashInBin, pickupNearbyLitter } from '../items';
+import { useItemOnPlayer, dropItemFromPlayer, addItemToPlayer, moveInventoryItem, ITEM_CATALOG, isPlayerNearTrashBin, disposeTrashInBin, pickupNearbyLitter } from '../items';
 import { ItemIconCanvas } from './ItemIconCanvas';
 import { sound } from '../audio';
 import { 
@@ -29,6 +29,7 @@ interface InventoryModalProps {
   player: Player | null;
   world: GameWorld | null;
   onSleepInBed?: () => void;
+  onRequestLimbTreatment?: (itemIndex: number, item: InventoryItem) => void;
 }
 
 export const InventoryModal: React.FC<InventoryModalProps> = ({
@@ -36,35 +37,47 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
   onClose,
   player,
   world,
-  onSleepInBed
+  onSleepInBed,
+  onRequestLimbTreatment
 }) => {
   const [selectedCategory, setSelectedCategory] = useState<ItemCategory | 'all'>('all');
   const [selectedIndex, setSelectedIndex] = useState<number>(0);
   const [activeTab, setActiveTab] = useState<'inventory' | 'surroundings'>('inventory');
+  const [, forceRender] = useState(0);
 
   if (!isOpen || !player) return null;
 
   const inventory = player.inventory || [];
   const maxSlots = player.maxInventorySlots || 18;
 
-  // Filter items by category
-  const filteredItemsWithIndices = inventory
-    .map((item, originalIndex) => ({ item, originalIndex }))
-    .filter(({ item }) => selectedCategory === 'all' || item.category === selectedCategory);
+  // Category filter check
+  const matchesFilter = (item: InventoryItem | undefined) => {
+    if (selectedCategory === 'all') return true;
+    if (!item) return false;
+    return item.category === selectedCategory;
+  };
 
   const selectedEntry = inventory[selectedIndex] ? { item: inventory[selectedIndex], originalIndex: selectedIndex } : null;
 
   // Handle Using Item
   const handleUseItem = (idx: number) => {
     if (!player) return;
+    const item = player.inventory?.[idx];
+    const TOPICAL_ITEMS = ['bandage', 'splint', 'medical_patch', 'antiseptic', 'panthenol_spray', 'spasatel_ointment', 'zelenka', 'iodine', 'diclofenac_gel', 'hydrogen_peroxide'];
+    if (item && item.category === 'med' && TOPICAL_ITEMS.includes(item.itemId)) {
+      onRequestLimbTreatment?.(idx, item);
+      return;
+    }
     useItemOnPlayer(player, idx, world || undefined);
     sound.resume();
+    forceRender(n => n + 1);
   };
 
   // Handle Dropping Item
   const handleDropItem = (idx: number) => {
     if (!player || !world) return;
     dropItemFromPlayer(player, idx, world, 1);
+    forceRender(n => n + 1);
   };
 
   // Handle Quick Pickup from Nearby items
@@ -79,6 +92,7 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
     if (added) {
       sound.playPickup();
       world.groundItems = (world.groundItems || []).filter(item => item.id !== gi.id);
+      forceRender(n => n + 1);
     }
   };
 
@@ -204,11 +218,31 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
                     const item = inventory[slotIdx];
                     const isSelected = selectedIndex === slotIdx;
                     const isHotbar = slotIdx < 6;
+                    const isMatch = matchesFilter(item);
+                    const isDimmed = selectedCategory !== 'all' && item && !isMatch;
 
                     return (
                       <div
                         key={slotIdx}
                         id={`inventory-slot-${slotIdx}`}
+                        draggable={!!item}
+                        onDragStart={(e) => {
+                          if (item) {
+                            e.dataTransfer.setData('text/plain', slotIdx.toString());
+                          }
+                        }}
+                        onDragOver={(e) => {
+                          e.preventDefault();
+                        }}
+                        onDrop={(e) => {
+                          e.preventDefault();
+                          const fromIdxStr = e.dataTransfer.getData('text/plain');
+                          const fromIdx = parseInt(fromIdxStr, 10);
+                          if (!isNaN(fromIdx) && fromIdx !== slotIdx) {
+                            moveInventoryItem(player, fromIdx, slotIdx);
+                            forceRender(n => n + 1);
+                          }
+                        }}
                         onClick={() => {
                           if (item) setSelectedIndex(slotIdx);
                         }}
@@ -216,6 +250,8 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
                           if (item) handleUseItem(slotIdx);
                         }}
                         className={`relative aspect-square rounded-2xl border flex flex-col items-center justify-center cursor-pointer transition-all ${
+                          isDimmed ? 'opacity-25 grayscale' : ''
+                        } ${
                           isSelected && item
                             ? 'border-sky-400 bg-sky-950/60 shadow-lg ring-2 ring-sky-400/40 scale-105'
                             : item
@@ -234,9 +270,22 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
                           <>
                             <ItemIconCanvas itemId={item.itemId} size={38} className="transform hover:scale-110 transition" />
                             {item.count > 1 && (
-                              <span className="absolute bottom-1 right-1 px-1.5 py-0.2 bg-slate-900/90 border border-slate-700 rounded-md text-[10px] font-mono font-bold text-slate-200">
+                              <span className="absolute top-1 right-1 px-1.5 py-0.2 bg-slate-900/90 border border-slate-700 rounded-md text-[10px] font-mono font-bold text-slate-200">
                                 {item.count}
                               </span>
+                            )}
+                            {item.maxPortions && item.maxPortions > 1 && (
+                              <div className="absolute bottom-1 left-1.5 right-1.5 flex flex-col items-center gap-0.5 pointer-events-none">
+                                <div className="w-full bg-slate-950/90 h-1 rounded-full overflow-hidden border border-slate-700/80">
+                                  <div 
+                                    className="h-full bg-sky-400 rounded-full transition-all"
+                                    style={{ width: `${Math.max(0, Math.min(100, ((item.portions ?? item.maxPortions) / item.maxPortions) * 100))}%` }}
+                                  />
+                                </div>
+                                <span className="text-[7.5px] font-mono font-bold text-sky-300 leading-none">
+                                  {item.portions ?? item.maxPortions}/{item.maxPortions}
+                                </span>
+                              </div>
                             )}
                           </>
                         ) : (
@@ -296,9 +345,38 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
                       {selectedEntry.item.descriptionRu}
                     </div>
 
+                    {/* Portions / Bites remaining meter */}
+                    {selectedEntry.item.maxPortions && selectedEntry.item.maxPortions > 1 && (
+                      <div className="p-3 bg-slate-900/90 border border-slate-800 rounded-xl flex flex-col gap-2">
+                        <div className="flex justify-between items-center text-xs">
+                          <span className="text-slate-400 font-semibold flex items-center gap-1.5">
+                            <Utensils className="w-3.5 h-3.5 text-sky-400" />
+                            {selectedEntry.item.category === 'food' ? 'Осталось укусов:' :
+                             selectedEntry.item.category === 'drink' ? 'Осталось глотков:' : 'Осталось доз/таблеток:'}
+                          </span>
+                          <span className="font-mono font-bold text-sky-300 text-sm">
+                            {selectedEntry.item.portions ?? selectedEntry.item.maxPortions} / {selectedEntry.item.maxPortions}
+                          </span>
+                        </div>
+                        <div className="w-full bg-slate-950 h-2 rounded-full overflow-hidden border border-slate-800">
+                          <div 
+                            className="h-full bg-emerald-500 rounded-full transition-all duration-300"
+                            style={{ 
+                              width: `${Math.max(0, Math.min(100, (((selectedEntry.item.portions ?? selectedEntry.item.maxPortions)) / selectedEntry.item.maxPortions) * 100))}%` 
+                            }}
+                          />
+                        </div>
+                        <span className="text-[10px] text-slate-500">
+                          Каждое употребление отнимает 1 порцию. Предмет расходуется постепенно.
+                        </span>
+                      </div>
+                    )}
+
                     {/* Effects Breakdown */}
                     <div className="flex flex-col gap-1.5">
-                      <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Эффекты при использовании:</span>
+                      <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">
+                        {selectedEntry.item.maxPortions && selectedEntry.item.maxPortions > 1 ? 'Эффект за 1 порцию (укус/глоток):' : 'Эффекты при использовании:'}
+                      </span>
                       <div className="grid grid-cols-2 gap-2">
                         {selectedEntry.item.effects.health !== undefined && (
                           <div className="flex items-center gap-2 p-2 bg-rose-950/30 border border-rose-800/40 rounded-lg text-xs font-semibold text-rose-300">
@@ -339,13 +417,23 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
                         <button
                           id="btn-use-selected-item"
                           onClick={() => handleUseItem(selectedEntry.originalIndex)}
-                          className="w-full py-3 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 active:scale-98 text-white font-bold rounded-xl border border-emerald-400/40 shadow-lg flex items-center justify-center gap-2 text-sm transition"
+                          className="w-full py-3 bg-emerald-600 hover:bg-emerald-500 active:scale-98 text-white font-bold rounded-xl border border-emerald-400/40 shadow-lg flex items-center justify-center gap-2 text-sm transition"
                         >
                           <Utensils className="w-4 h-4" />
                           <span>
-                            {selectedEntry.item.category === 'food' ? 'Съесть (Eat)' :
-                             selectedEntry.item.category === 'drink' ? 'Выпить (Drink)' :
-                             selectedEntry.item.category === 'med' ? 'Применить лечение' : 'Использовать'}
+                            {selectedEntry.item.category === 'food' 
+                              ? (selectedEntry.item.maxPortions && selectedEntry.item.maxPortions > 1 
+                                  ? `Сделать укус (${selectedEntry.item.portions ?? selectedEntry.item.maxPortions}/${selectedEntry.item.maxPortions})` 
+                                  : 'Съесть (Eat)')
+                              : selectedEntry.item.category === 'drink' 
+                              ? (selectedEntry.item.maxPortions && selectedEntry.item.maxPortions > 1 
+                                  ? `Сделать глоток (${selectedEntry.item.portions ?? selectedEntry.item.maxPortions}/${selectedEntry.item.maxPortions})` 
+                                  : 'Выпить (Drink)')
+                              : selectedEntry.item.category === 'med' 
+                              ? (selectedEntry.item.maxPortions && selectedEntry.item.maxPortions > 1 
+                                  ? `Принять дозу/таблетку (${selectedEntry.item.portions ?? selectedEntry.item.maxPortions}/${selectedEntry.item.maxPortions})` 
+                                  : 'Применить лечение')
+                              : 'Использовать'}
                           </span>
                         </button>
                       )}
@@ -365,6 +453,7 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
                           id="btn-dispose-in-trash-bin"
                           onClick={() => {
                             disposeTrashInBin(player, world, selectedEntry.originalIndex);
+                            forceRender(n => n + 1);
                           }}
                           className="w-full py-2.5 bg-emerald-950/80 hover:bg-emerald-900 active:scale-98 text-emerald-300 font-bold rounded-xl border border-emerald-600/60 shadow flex items-center justify-center gap-2 text-xs transition"
                         >
@@ -398,8 +487,8 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
                       className="flex items-center justify-between p-3.5 bg-slate-950/60 border border-slate-800 rounded-2xl hover:border-slate-700 transition"
                     >
                       <div className="flex items-center gap-3">
-                        <div className="w-12 h-12 rounded-xl bg-slate-800 border border-slate-700 flex items-center justify-center text-2xl">
-                          {gi.item.icon}
+                        <div className="w-12 h-12 rounded-xl bg-slate-800 border border-slate-700 flex items-center justify-center">
+                          <ItemIconCanvas itemId={gi.item.itemId} size={32} />
                         </div>
                         <div>
                           <h4 className="text-sm font-bold text-white">{gi.item.nameRu}</h4>

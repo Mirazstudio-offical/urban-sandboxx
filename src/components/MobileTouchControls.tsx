@@ -16,12 +16,17 @@ import {
   ZoomOut,
   RotateCcw,
   Zap,
-  AlertTriangle
+  AlertTriangle,
+  Gauge,
+  ChevronUp,
+  ChevronDown,
+  Power
 } from 'lucide-react';
 
 interface MobileTouchControlsProps {
   inputRef: React.MutableRefObject<InputState>;
   isInVehicle: boolean;
+  isNearVehicle?: boolean;
   onEnterExitVehicle: () => void;
   onResetVehicle: () => void;
   onOpenMap: () => void;
@@ -29,12 +34,19 @@ interface MobileTouchControlsProps {
   onToggleConsole: () => void;
   onZoomIn: () => void;
   onZoomOut: () => void;
-  onToggleHeadlights: () => void;
-  onToggleSiren: () => void;
+  onOpenRadialMenu?: () => void;
   activeCarName?: string;
   speedKmh?: number;
   activeTurnSignal?: 'none' | 'left' | 'right' | 'hazard';
   onToggleTurnSignal?: (signal: 'left' | 'right' | 'hazard') => void;
+  gear?: string;
+  transmissionType?: 'AUTO' | 'MANUAL';
+  onSelectGear?: (gear: 'P' | 'R' | 'N' | 'D' | number | string) => void;
+  onToggleEngine?: () => void;
+  isEngineRunning?: boolean;
+  onInteractE?: () => void;
+  canInteractF?: boolean;
+  canInteractE?: boolean;
 }
 
 const triggerHaptic = (ms: number = 10) => {
@@ -129,6 +141,7 @@ const TouchButton: React.FC<TouchButtonProps> = ({
 export const MobileTouchControls: React.FC<MobileTouchControlsProps> = ({
   inputRef,
   isInVehicle,
+  isNearVehicle,
   onEnterExitVehicle,
   onResetVehicle,
   onOpenMap,
@@ -136,12 +149,19 @@ export const MobileTouchControls: React.FC<MobileTouchControlsProps> = ({
   onToggleConsole,
   onZoomIn,
   onZoomOut,
-  onToggleHeadlights,
-  onToggleSiren,
+  onOpenRadialMenu,
   activeCarName,
   speedKmh = 0,
   activeTurnSignal = 'none',
   onToggleTurnSignal,
+  gear = 'D',
+  transmissionType = 'AUTO',
+  onSelectGear,
+  onToggleEngine,
+  isEngineRunning = true,
+  onInteractE,
+  canInteractF = false,
+  canInteractE = false,
 }) => {
   // Joystick State (Used for Pedestrian Walking)
   const [joystickActive, setJoystickActive] = useState<boolean>(false);
@@ -221,134 +241,155 @@ export const MobileTouchControls: React.FC<MobileTouchControlsProps> = ({
   };
 
   return (
-    <div id="mobile-touch-overlay" className="fixed inset-0 pointer-events-none z-30 select-none overflow-hidden touch-none">
+    <div id="mobile-touch-overlay" className="fixed inset-0 pointer-events-none z-30 select-none overflow-hidden touch-none font-mono">
       
       {/* TOP FLOATING TOUCH TOOLBAR */}
       <div className="absolute top-3 left-3 right-3 flex items-center justify-between pointer-events-auto z-40">
-        {/* Left Toolbar: Quick Actions */}
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={onOpenMap}
-            className="h-10 px-3 bg-slate-900/90 backdrop-blur-md border border-slate-700/80 rounded-xl text-sky-400 active:bg-sky-600 active:text-white flex items-center gap-1.5 shadow-lg font-bold text-xs transition-all"
-          >
-            <Navigation className="w-4 h-4" />
-            <span>Карта</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={onOpenSpawnMenu}
-            className="h-10 px-3 bg-slate-900/90 backdrop-blur-md border border-slate-700/80 rounded-xl text-emerald-400 active:bg-emerald-600 active:text-white flex items-center gap-1.5 shadow-lg font-bold text-xs transition-all"
-          >
-            <MapPin className="w-4 h-4" />
-            <span className="hidden xs:inline">Спавн</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={onResetVehicle}
-            className="h-10 w-10 bg-slate-900/90 backdrop-blur-md border border-slate-700/80 rounded-xl text-amber-400 active:bg-amber-600 active:text-white flex items-center justify-center shadow-lg transition-all"
-            title="Перевернуть / Сбросить авто"
-          >
-            <RotateCcw className="w-4 h-4" />
-          </button>
-        </div>
+        {/* Left Toolbar is empty now to keep corners clean */}
+        <div />
 
         {/* Right Toolbar: Zoom & Options */}
-        <div className="flex items-center gap-2">
-          <div className="flex bg-slate-900/90 backdrop-blur-md border border-slate-700/80 rounded-xl p-0.5 shadow-lg">
+        <div className="flex items-center gap-1.5">
+          <div className="flex bg-slate-950/95 backdrop-blur-md border border-slate-700/80 rounded-lg p-0.5 shadow-lg">
             <button
               type="button"
               onClick={onZoomIn}
-              className="w-9 h-9 flex items-center justify-center text-slate-200 active:bg-slate-700 rounded-lg transition-all"
+              className="w-8 h-8 flex items-center justify-center text-slate-300 active:bg-slate-800 rounded transition-all"
             >
-              <ZoomIn className="w-4 h-4" />
+              <ZoomIn className="w-3.5 h-3.5" />
             </button>
             <div className="w-[1px] bg-slate-800 my-1" />
             <button
               type="button"
               onClick={onZoomOut}
-              className="w-9 h-9 flex items-center justify-center text-slate-200 active:bg-slate-700 rounded-lg transition-all"
+              className="w-8 h-8 flex items-center justify-center text-slate-300 active:bg-slate-800 rounded transition-all"
             >
-              <ZoomOut className="w-4 h-4" />
+              <ZoomOut className="w-3.5 h-3.5" />
             </button>
           </div>
 
           <button
             type="button"
             onClick={onToggleConsole}
-            className="h-10 w-10 bg-slate-900/90 backdrop-blur-md border border-slate-700/80 rounded-xl text-purple-400 active:bg-purple-600 active:text-white flex items-center justify-center shadow-lg transition-all"
+            className="h-9 w-9 bg-slate-950/95 backdrop-blur-md border border-slate-700/80 rounded-lg text-slate-300 active:bg-slate-800 active:text-white flex items-center justify-center shadow-lg transition-all"
           >
-            <Zap className="w-4 h-4" />
+            <Zap className="w-3.5 h-3.5" />
           </button>
         </div>
+      </div>
+
+      {/* LEFT SIDE ACTION BUTTONS (F & E) ALWAYS UNDER THE HUD-TOP-LEFT, ABOVE MOVEMENT */}
+      <div className="absolute top-[84px] left-4 flex flex-col gap-3 pointer-events-auto z-50">
+        {/* Unified F Button (Enter/Exit/Doors) */}
+        <button
+          type="button"
+          disabled={!canInteractF}
+          onClick={() => {
+            triggerHaptic(20);
+            onEnterExitVehicle();
+          }}
+          className={`w-14 h-14 rounded-full border flex flex-col items-center justify-center shadow-2xl transition-all active:scale-90 ${
+            canInteractF
+              ? 'bg-[#ccff00] text-black border-[#ccff00] shadow-[0_0_15px_rgba(204,255,0,0.5)] font-black scale-100'
+              : 'bg-slate-950/40 text-slate-600 border-slate-800/60 opacity-30 cursor-not-allowed'
+          }`}
+          title="Действие F (Вход/Выход)"
+        >
+          <span className="text-base font-black tracking-tighter leading-none">F</span>
+          <span className="text-[9px] font-bold text-black uppercase mt-0.5">Вход/Выход</span>
+        </button>
+
+        {/* Unified E Button (Use/Interact/Pickup/Shop) */}
+        <button
+          type="button"
+          disabled={!canInteractE}
+          onPointerDown={() => {
+            triggerHaptic(15);
+            inputRef.current.actionE = true;
+            onInteractE?.();
+          }}
+          onPointerUp={() => {
+            inputRef.current.actionE = false;
+          }}
+          onPointerCancel={() => {
+            inputRef.current.actionE = false;
+          }}
+          className={`w-14 h-14 rounded-full border flex flex-col items-center justify-center shadow-2xl transition-all active:scale-90 ${
+            canInteractE
+              ? 'bg-sky-500 text-white border-sky-400 shadow-[0_0_15px_rgba(14,165,233,0.5)] font-black scale-100'
+              : 'bg-slate-950/40 text-slate-600 border-slate-800/60 opacity-30 cursor-not-allowed'
+          }`}
+          title="Действие E (Взаимодействие)"
+        >
+          <span className="text-base font-black tracking-tighter leading-none">E</span>
+          <span className="text-[9px] font-bold text-sky-100 uppercase mt-0.5">Применить</span>
+        </button>
       </div>
 
       {/* LEFT BOTTOM ZONE: STEERING BUTTONS (IN CAR) OR VIRTUAL JOYSTICK (ON FOOT) */}
       {isInVehicle ? (
         <>
           {/* TURN SIGNAL / INDICATORS BAR ABOVE STEERING */}
-          <div id="touch-turn-signals" className="absolute bottom-[124px] left-5 pointer-events-auto flex items-center gap-2.5 z-40">
+          <div id="touch-turn-signals" className="absolute bottom-[112px] left-4 pointer-events-auto flex items-center gap-2 z-40">
             <button
               type="button"
               onClick={() => { triggerHaptic(12); onToggleTurnSignal?.('left'); }}
-              className={`w-11 h-11 backdrop-blur-md border-2 rounded-xl flex items-center justify-center shadow-lg transition-all ${
+              className={`w-10 h-10 backdrop-blur-md border rounded-lg flex items-center justify-center shadow-lg transition-all ${
                 activeTurnSignal === 'left'
-                  ? 'bg-amber-500 text-slate-950 border-amber-300 font-bold scale-95 animate-pulse'
-                  : 'bg-slate-900/95 text-amber-400 border-amber-500/40 hover:border-amber-400'
+                  ? 'bg-slate-200 text-slate-950 border-white font-bold scale-95'
+                  : 'bg-slate-950/95 text-slate-300 border-slate-700 hover:border-slate-500'
               }`}
             >
-              <ChevronLeft className="w-6 h-6 stroke-[3]" />
+              <ChevronLeft className="w-5 h-5 stroke-[2.5]" />
             </button>
             
             <button
               type="button"
               onClick={() => { triggerHaptic(15); onToggleTurnSignal?.('hazard'); }}
-              className={`w-11 h-11 backdrop-blur-md border-2 rounded-xl flex items-center justify-center shadow-lg transition-all ${
+              className={`w-10 h-10 backdrop-blur-md border rounded-lg flex items-center justify-center shadow-lg transition-all ${
                 activeTurnSignal === 'hazard'
-                  ? 'bg-red-600 text-white border-red-400 font-bold scale-95 animate-pulse'
-                  : 'bg-slate-900/95 text-red-500 border-red-500/40 hover:border-red-400'
+                  ? 'bg-rose-950 text-rose-300 border-rose-600 font-bold scale-95'
+                  : 'bg-slate-950/95 text-slate-400 border-slate-700 hover:border-slate-500'
               }`}
             >
-              <AlertTriangle className="w-5 h-5" />
+              <AlertTriangle className="w-4 h-4" />
             </button>
 
             <button
               type="button"
               onClick={() => { triggerHaptic(12); onToggleTurnSignal?.('right'); }}
-              className={`w-11 h-11 backdrop-blur-md border-2 rounded-xl flex items-center justify-center shadow-lg transition-all ${
+              className={`w-10 h-10 backdrop-blur-md border rounded-lg flex items-center justify-center shadow-lg transition-all ${
                 activeTurnSignal === 'right'
-                  ? 'bg-amber-500 text-slate-950 border-amber-300 font-bold scale-95 animate-pulse'
-                  : 'bg-slate-900/95 text-amber-400 border-amber-500/40 hover:border-amber-400'
+                  ? 'bg-slate-200 text-slate-950 border-white font-bold scale-95'
+                  : 'bg-slate-950/95 text-slate-300 border-slate-700 hover:border-slate-500'
               }`}
             >
-              <ChevronRight className="w-6 h-6 stroke-[3]" />
+              <ChevronRight className="w-5 h-5 stroke-[2.5]" />
             </button>
           </div>
 
-          /* IN VEHICLE: ERGONOMIC STEERING ARROWS (LEFT & RIGHT) */
-          <div id="touch-steering-zone" className="absolute bottom-5 left-5 pointer-events-auto flex items-center gap-3 z-40 touch-none">
+          {/* IN VEHICLE: ERGONOMIC STEERING ARROWS (LEFT & RIGHT) */}
+          <div id="touch-steering-zone" className="absolute bottom-4 left-4 pointer-events-auto flex items-center gap-2.5 z-40 touch-none">
             <TouchButton
               inputKey="left"
               inputRef={inputRef}
               hapticMs={15}
-              className="w-24 h-24 bg-slate-900/90 backdrop-blur-md border-2 border-sky-500/80 text-sky-300 rounded-2xl flex flex-col items-center justify-center shadow-2xl"
-              activeClassName="ring-4 ring-sky-400/50 bg-sky-600 text-white"
+              className="w-20 h-20 bg-slate-950/95 backdrop-blur-md border border-slate-700 text-slate-200 rounded-xl flex flex-col items-center justify-center shadow-2xl"
+              activeClassName="bg-slate-800 text-white border-slate-500"
             >
-              <ChevronLeft className="w-10 h-10 -ml-1 stroke-[2.5]" />
-              <span className="text-xs font-black uppercase tracking-wider">ЛЕВО</span>
+              <ChevronLeft className="w-8 h-8 -ml-0.5 stroke-[2]" />
+              <span className="text-[10px] font-bold tracking-widest text-slate-400">ЛЕВО</span>
             </TouchButton>
 
             <TouchButton
               inputKey="right"
               inputRef={inputRef}
               hapticMs={15}
-              className="w-24 h-24 bg-slate-900/90 backdrop-blur-md border-2 border-sky-500/80 text-sky-300 rounded-2xl flex flex-col items-center justify-center shadow-2xl"
-              activeClassName="ring-4 ring-sky-400/50 bg-sky-600 text-white"
+              className="w-20 h-20 bg-slate-950/95 backdrop-blur-md border border-slate-700 text-slate-200 rounded-xl flex flex-col items-center justify-center shadow-2xl"
+              activeClassName="bg-slate-800 text-white border-slate-500"
             >
-              <ChevronRight className="w-10 h-10 -mr-1 stroke-[2.5]" />
-              <span className="text-xs font-black uppercase tracking-wider">ПРАВО</span>
+              <ChevronRight className="w-8 h-8 -mr-0.5 stroke-[2]" />
+              <span className="text-[10px] font-bold tracking-widest text-slate-400">ПРАВО</span>
             </TouchButton>
           </div>
         </>
@@ -364,104 +405,158 @@ export const MobileTouchControls: React.FC<MobileTouchControlsProps> = ({
         >
           {joystickActive ? (
             <div
-              className="absolute -translate-x-1/2 -translate-y-1/2 w-28 h-28 rounded-full border-2 border-sky-400/80 bg-slate-950/70 backdrop-blur-md flex items-center justify-center shadow-2xl pointer-events-none"
+              className="absolute -translate-x-1/2 -translate-y-1/2 w-28 h-28 rounded-full border border-slate-600 bg-slate-950/80 backdrop-blur-md flex items-center justify-center shadow-2xl pointer-events-none"
               style={{ left: joystickCenter.x, top: joystickCenter.y }}
             >
               <div
-                className="w-12 h-12 rounded-full bg-gradient-to-tr from-sky-500 to-cyan-400 border border-sky-200 shadow-lg shadow-sky-500/50 transition-transform duration-75"
+                className="w-12 h-12 rounded-full bg-slate-800 border border-slate-600 shadow-lg transition-transform duration-75"
                 style={{
                   transform: `translate(${joystickKnob.x}px, ${joystickKnob.y}px)`,
                 }}
               />
             </div>
           ) : (
-            <div className="absolute bottom-10 left-10 w-24 h-24 rounded-full border border-slate-700/60 bg-slate-900/30 flex items-center justify-center pointer-events-none opacity-40">
-              <div className="w-8 h-8 rounded-full bg-slate-700/60" />
-              <span className="absolute bottom-2 text-[10px] text-slate-400 font-bold uppercase tracking-wider">Джойстик</span>
+            <div className="absolute bottom-8 left-8 w-20 h-20 rounded-full border border-slate-800 bg-slate-950/40 flex items-center justify-center pointer-events-none opacity-40">
+              <div className="w-6 h-6 rounded-full bg-slate-800" />
+              <span className="absolute bottom-1 text-[9px] text-slate-500 font-bold uppercase tracking-wider">Движение</span>
             </div>
           )}
         </div>
       )}
 
       {/* RIGHT BOTTOM ZONE: ERGONOMIC ACTION BUTTONS */}
-      <div id="touch-actions-zone" className="absolute bottom-4 right-4 pointer-events-auto flex flex-col items-end gap-3 z-40 touch-none">
+      <div id="touch-actions-zone" className="absolute bottom-4 right-4 pointer-events-auto flex flex-col items-end gap-2.5 z-40 touch-none">
         
         {/* TOP ROW OF AUXILIARY ACTIONS (SIREN / LIGHTS / HORN / ENTER-EXIT) */}
-        <div className="flex items-center gap-2.5">
+        <div className="flex items-center gap-2">
           {isInVehicle && (
             <>
               <button
                 type="button"
-                onClick={onToggleSiren}
-                className="w-11 h-11 bg-slate-900/90 border border-rose-500/60 text-rose-400 active:bg-rose-600 active:text-white rounded-xl flex items-center justify-center shadow-lg font-bold transition-all"
+                onClick={() => { triggerHaptic(15); onOpenRadialMenu?.(); }}
+                className="px-3 h-10 bg-slate-950/95 border border-slate-700 text-slate-300 active:bg-slate-800 active:text-white rounded-lg flex items-center justify-center gap-1.5 shadow-lg font-bold transition-all text-xs"
+                title="Приборы"
               >
-                <ShieldAlert className="w-5 h-5" />
-              </button>
-
-              <button
-                type="button"
-                onClick={onToggleHeadlights}
-                className="w-11 h-11 bg-slate-900/90 border border-amber-500/60 text-amber-400 active:bg-amber-600 active:text-white rounded-xl flex items-center justify-center shadow-lg font-bold transition-all"
-              >
-                <Lightbulb className="w-5 h-5" />
+                <Gauge className="w-4 h-4 text-emerald-400" />
+                <span>МЕНЮ</span>
               </button>
 
               <TouchButton
                 inputKey="hornH"
                 inputRef={inputRef}
                 hapticMs={15}
-                className="w-11 h-11 bg-slate-900/90 border border-slate-700 text-slate-200 rounded-xl flex items-center justify-center shadow-lg font-bold"
-                activeClassName="bg-sky-600 text-white"
+                className="w-10 h-10 bg-slate-950/95 border border-slate-700 text-slate-300 rounded-lg flex items-center justify-center shadow-lg font-bold"
+                activeClassName="bg-slate-800 text-white"
               >
-                <Volume2 className="w-5 h-5" />
+                <Volume2 className="w-4 h-4 text-slate-400" />
               </TouchButton>
             </>
           )}
 
-          {/* VEHICLE ENTER / EXIT (F) */}
-          <button
-            type="button"
-            onClick={() => {
-              triggerHaptic(20);
-              onEnterExitVehicle();
-            }}
-            className={`h-12 px-4 rounded-2xl flex items-center gap-2 font-extrabold text-xs shadow-2xl border transition-all ${
-              isInVehicle
-                ? 'bg-gradient-to-r from-rose-600 to-red-500 text-white border-rose-400 active:scale-95'
-                : 'bg-gradient-to-r from-sky-500 to-blue-600 text-white border-sky-300 active:scale-95'
-            }`}
-          >
-            <Car className="w-5 h-5" />
-            <span>{isInVehicle ? 'ВЫЙТИ' : 'СЕСТЬ В АВТО'}</span>
-          </button>
+          {/* ENGINE IGNITION (START / STOP) */}
+          {isInVehicle && (
+            <button
+              type="button"
+              onClick={() => {
+                triggerHaptic(20);
+                onToggleEngine?.();
+              }}
+              className={`h-10 px-3 rounded-lg flex items-center gap-1.5 font-bold text-xs shadow-xl border transition-all active:scale-95 ${
+                isEngineRunning
+                  ? 'bg-emerald-950/90 border-emerald-500 text-emerald-300 shadow-[0_0_10px_rgba(16,185,129,0.3)]'
+                  : 'bg-rose-950/90 border-rose-600 text-rose-300 animate-pulse'
+              }`}
+              title="Запустить/заглушить двигатель"
+            >
+              <Power className="w-4 h-4" />
+              <span>{isEngineRunning ? 'МОТОР' : 'СТАРТ'}</span>
+            </button>
+          )}
+
+
         </div>
 
         {/* PRIMARY CONTROLS BLOCK */}
         {isInVehicle ? (
           /* VEHICLE DRIVING PEDALS & HANDBRAKE */
-          <div className="flex items-end gap-2.5">
+          <div className="flex items-end gap-1.5 sm:gap-2">
+            {/* PRND OR MANUAL GEAR SELECTOR */}
+            {transmissionType === 'AUTO' ? (
+              <div className="flex flex-col gap-1 mr-1 mb-0.5">
+                {(['P', 'R', 'N', 'D'] as const).map((mode) => {
+                  const isSelected = (gear || 'D').toUpperCase().startsWith(mode);
+                  const colorClass = {
+                    P: isSelected ? 'bg-red-600 text-white font-black shadow-[0_0_10px_rgba(239,68,68,0.7)] border-red-400' : 'bg-slate-950/90 text-slate-400 border-slate-700 active:bg-slate-800',
+                    R: isSelected ? 'bg-amber-500 text-black font-black shadow-[0_0_10px_rgba(245,158,11,0.7)] border-amber-300' : 'bg-slate-950/90 text-slate-400 border-slate-700 active:bg-slate-800',
+                    N: isSelected ? 'bg-slate-200 text-slate-950 font-black shadow-[0_0_8px_rgba(255,255,255,0.6)] border-slate-300' : 'bg-slate-950/90 text-slate-400 border-slate-700 active:bg-slate-800',
+                    D: isSelected ? 'bg-sky-500 text-white font-black shadow-[0_0_10px_rgba(14,165,233,0.7)] border-sky-300' : 'bg-slate-950/90 text-slate-400 border-slate-700 active:bg-slate-800',
+                  }[mode];
+
+                  return (
+                    <button
+                      key={mode}
+                      type="button"
+                      onPointerDown={(e) => {
+                        e.preventDefault();
+                        triggerHaptic(20);
+                        onSelectGear?.(mode);
+                      }}
+                      className={`w-10 h-8 rounded-lg border flex items-center justify-center text-xs font-mono font-bold transition-all active:scale-95 ${colorClass}`}
+                      title={`Режим ${mode}`}
+                    >
+                      {mode}
+                    </button>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="flex flex-col gap-1.5 mr-1 mb-1">
+                <TouchButton
+                  inputKey="shiftUp"
+                  inputRef={inputRef}
+                  hapticMs={15}
+                  className="w-12 h-10 bg-slate-950/95 border border-slate-700 text-slate-300 rounded-lg flex items-center justify-center shadow-xl active:bg-slate-800"
+                  activeClassName="bg-slate-800 text-white border-slate-500"
+                >
+                  <ChevronUp className="w-5 h-5 text-slate-400" />
+                </TouchButton>
+                <div className="text-center font-mono text-[11px] font-bold text-sky-400">
+                  {gear || '1'}
+                </div>
+                <TouchButton
+                  inputKey="shiftDown"
+                  inputRef={inputRef}
+                  hapticMs={15}
+                  className="w-12 h-10 bg-slate-950/95 border border-slate-700 text-slate-300 rounded-lg flex items-center justify-center shadow-xl active:bg-slate-800"
+                  activeClassName="bg-slate-800 text-white border-slate-500"
+                >
+                  <ChevronDown className="w-5 h-5 text-slate-400" />
+                </TouchButton>
+              </div>
+            )}
+
             {/* DRIFT / HANDBRAKE */}
             <TouchButton
               inputKey="handbrake"
               inputRef={inputRef}
               hapticMs={20}
-              className="w-16 h-16 bg-gradient-to-tr from-amber-600 to-yellow-500 border-2 border-amber-300 text-slate-950 rounded-2xl flex flex-col items-center justify-center shadow-xl font-black text-xs leading-none"
-              activeClassName="ring-4 ring-amber-300/60"
+              className="w-13 h-14 bg-slate-950/95 border border-slate-700 text-slate-300 rounded-xl flex flex-col items-center justify-center shadow-xl font-bold text-[9px] leading-tight"
+              activeClassName="bg-slate-800 text-white border-slate-500"
             >
-              <Flame className="w-5 h-5 mb-0.5 text-slate-950" />
-              <span>ДРИФТ</span>
+              <Flame className="w-4 h-4 mb-0.5 text-slate-400" />
+              <span>РУЧНИК</span>
             </TouchButton>
 
-            {/* BRAKE / REVERSE PEDAL */}
+            {/* BRAKE PEDAL */}
             <TouchButton
               inputKey="backward"
               inputRef={inputRef}
               hapticMs={15}
-              className="w-18 h-24 bg-gradient-to-b from-rose-600 to-red-700 border-2 border-rose-400 text-white rounded-2xl flex flex-col items-center justify-center shadow-2xl"
-              activeClassName="ring-4 ring-rose-400/60"
+              className="w-16 h-22 bg-slate-950/95 border border-slate-700 text-slate-200 rounded-xl flex flex-col items-center justify-center shadow-2xl"
+              activeClassName="bg-slate-800 text-white border-slate-500"
             >
-              <span className="text-sm font-black uppercase tracking-wider mb-1">ТОРМОЗ</span>
-              <span className="text-[10px] text-rose-200 font-mono">НАЗАД</span>
+              <span className="text-[11px] font-bold uppercase tracking-wider mb-1 text-slate-300">СТОП</span>
+              <span className="text-[9px] text-slate-400 font-mono">ТОРМОЗ</span>
             </TouchButton>
 
             {/* ACCELERATOR PEDAL (GAS) */}
@@ -469,25 +564,27 @@ export const MobileTouchControls: React.FC<MobileTouchControlsProps> = ({
               inputKey="forward"
               inputRef={inputRef}
               hapticMs={15}
-              className="w-20 h-28 bg-gradient-to-b from-emerald-500 to-green-600 border-2 border-emerald-300 text-slate-950 rounded-2xl flex flex-col items-center justify-center shadow-2xl"
-              activeClassName="ring-4 ring-emerald-300/60"
+              className="w-18 h-26 bg-slate-950/95 border border-slate-600 text-slate-100 rounded-xl flex flex-col items-center justify-center shadow-2xl"
+              activeClassName="bg-slate-800 text-white border-slate-400"
             >
-              <span className="text-base font-black uppercase tracking-wider mb-1 text-slate-950">ГАЗ</span>
-              <span className="text-[10px] text-slate-900 font-bold font-mono">ВПЕРЕД</span>
+              <span className="text-xs font-bold uppercase tracking-wider mb-1 text-slate-200">ГАЗ</span>
+              <span className="text-[9px] text-slate-400 font-mono">
+                {gear === 'R' ? 'НАЗАД' : gear === 'P' || gear === 'N' ? 'ОБОРОТЫ' : 'ВПЕРЕД'}
+              </span>
             </TouchButton>
           </div>
         ) : (
           /* PEDESTRIAN ACTION BUTTONS */
-          <div className="flex items-end gap-3">
+          <div className="flex items-end gap-2.5">
             {/* DODGE ROLL / QUICK DASH (SPACE) */}
             <TouchButton
               inputKey="handbrake"
               inputRef={inputRef}
               hapticMs={20}
-              className="w-18 h-18 bg-gradient-to-tr from-emerald-600 to-teal-500 border-2 border-emerald-300 text-white rounded-2xl flex flex-col items-center justify-center shadow-xl font-black text-xs leading-none"
-              activeClassName="ring-4 ring-emerald-300/60"
+              className="w-16 h-16 bg-slate-950/95 border border-slate-700 text-slate-300 rounded-xl flex flex-col items-center justify-center shadow-xl font-bold text-[10px] leading-tight"
+              activeClassName="bg-slate-800 text-white border-slate-500"
             >
-              <RotateCcw className="w-6 h-6 mb-1 text-emerald-100" />
+              <RotateCcw className="w-4 h-4 mb-0.5 text-slate-400" />
               <span>РЫВОК</span>
             </TouchButton>
 
@@ -496,10 +593,10 @@ export const MobileTouchControls: React.FC<MobileTouchControlsProps> = ({
               inputKey="sprint"
               inputRef={inputRef}
               hapticMs={20}
-              className="w-22 h-22 bg-gradient-to-tr from-amber-500 to-orange-600 border-2 border-amber-300 text-slate-950 rounded-2xl flex flex-col items-center justify-center shadow-2xl font-black text-sm leading-none"
-              activeClassName="ring-4 ring-amber-300/60"
+              className="w-20 h-20 bg-slate-950/95 border border-slate-700 text-slate-200 rounded-xl flex flex-col items-center justify-center shadow-2xl font-bold text-xs leading-tight"
+              activeClassName="bg-slate-800 text-white border-slate-500"
             >
-              <Zap className="w-7 h-7 mb-1 text-slate-950" />
+              <Zap className="w-5 h-5 mb-0.5 text-slate-400" />
               <span>БЕГ</span>
             </TouchButton>
           </div>

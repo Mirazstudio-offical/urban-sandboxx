@@ -20,15 +20,21 @@ export const ItemIconCanvas: React.FC<ItemIconCanvasProps> = ({
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width = Math.round(size * dpr);
+    canvas.height = Math.round(size * dpr);
+
+    ctx.save();
+    ctx.scale(dpr, dpr);
     ctx.clearRect(0, 0, size, size);
-    drawItemModel2D(ctx, itemId, size / 2, size / 2, size * 0.75);
+    drawItemModel2D(ctx, itemId, size / 2, size / 2, size * 0.78);
+    ctx.restore();
   }, [itemId, size]);
 
   return (
     <canvas
       ref={canvasRef}
-      width={size}
-      height={size}
+      style={{ width: `${size}px`, height: `${size}px` }}
       className={`inline-block pointer-events-none ${className}`}
     />
   );

@@ -1,9 +1,10 @@
 import { Building, CarType, GameWorld, Intersection, Pedestrian, RoadSegment, Vector2D, Vehicle, StreetProp } from './types';
-import { CAR_CONFIGS, CAR_PALETTE, createDefaultVehicleDamage, generateRandomPedestrianAppearance } from './cityMap';
+import { CAR_CONFIGS, CAR_PALETTE, createDefaultVehicleDamage, generateRandomPedestrianAppearance, createDefaultFuelSystem, createDefaultEngineState } from './cityMap';
 import { sound } from './audio';
 import { checkPedestrianBuildingCollision, getBuildingEntrancePos, checkPedestrianVehicleCollision } from './physics';
 import { SpatialGrid } from './spatialGrid';
 import { performanceConfig } from './performanceConfig';
+import { isRoadSegmentBlocked } from './navigation';
 
 // Helper: angle difference normalized to [-PI, PI]
 export function angleDiff(a: number, b: number): number {
@@ -154,6 +155,267 @@ class TrafficDiagnostics {
 }
 
 export const trafficDiagnostics = new TrafficDiagnostics();
+
+export interface IntersectionReservation {
+  vehicleId: string;
+  intersectionId: string;
+  entryTime: number;
+  pathWaypoints: Vector2D[];
+  turnType: 'straight' | 'left' | 'right' | 'turnaround';
+  stopLineDirection?: 'north' | 'south' | 'east' | 'west';
+}
+
+export interface WaitingQueueEntry {
+  vehicleId: string;
+  intersectionId: string;
+  stopLineDirection?: 'north' | 'south' | 'east' | 'west';
+  turnType: 'straight' | 'left' | 'right' | 'turnaround';
+  pathWaypoints: Vector2D[];
+  targetLaneId: string;
+  waitTime: number;
+}
+
+export function doPathsIntersectOrConflict(pathA: Vector2D[], pathB: Vector2D[], safeMargin: number = 28): boolean {
+  if (!pathA || !pathB || pathA.length === 0 || pathB.length === 0) return false;
+  const safeMarginSq = safeMargin * safeMargin;
+  for (let i = 0; i < pathA.length; i += 2) {
+    const ptA = pathA[i];
+    for (let j = 0; j < pathB.length; j += 2) {
+      const ptB = pathB[j];
+      const dx = ptA.x - ptB.x;
+      const dy = ptA.y - ptB.y;
+      if (dx * dx + dy * dy < safeMarginSq) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+export class IntersectionReservationManager {
+  public reservations: Map<string, IntersectionReservation[]> = new Map();
+  public waitingMap: Map<string, WaitingQueueEntry[]> = new Map();
+  public electedPriority: Map<string, { vehicleId: string; expiry: number }> = new Map();
+
+  public update(dt: number, world: GameWorld) {
+    const now = performance.now() / 1000;
+    const livingVehicleIds = new Set(world.vehicles.map((v) => v.id));
+
+    // 1. Clean up stale/invalid active reservations
+    for (const [interId, resList] of this.reservations.entries()) {
+      const valid = resList.filter((r) => {
+        if (!livingVehicleIds.has(r.vehicleId)) return false;
+        if (now - r.entryTime > 7.0) return false;
+        const v = world.vehicles.find((veh) => veh.id === r.vehicleId);
+        if (!v) return false;
+        if (!v.inIntersection && !v.currentConnection) return false;
+        return true;
+      });
+      if (valid.length === 0) {
+        this.reservations.delete(interId);
+      } else {
+        this.reservations.set(interId, valid);
+      }
+    }
+
+    // 2. Update waiting entries and resolve deadlocks
+    for (const [interId, waitList] of this.waitingMap.entries()) {
+      const validWait = waitList.filter((w) => livingVehicleIds.has(w.vehicleId));
+      for (const w of validWait) {
+        w.waitTime += dt;
+        const v = world.vehicles.find((veh) => veh.id === w.vehicleId);
+        if (v) {
+          v.intersectionWaitTimer = w.waitTime;
+        }
+      }
+
+      // SYMMETRY BREAKER: If multiple vehicles are waiting and longest wait > 1.8s
+      // Grant elected priority pass to dissolve polite deadlocks cleanly
+      if (validWait.length > 0) {
+        const elected = this.electedPriority.get(interId);
+        if (!elected || now > elected.expiry || !livingVehicleIds.has(elected.vehicleId)) {
+          let longestWait = validWait[0];
+          for (let i = 1; i < validWait.length; i++) {
+            if (validWait[i].waitTime > longestWait.waitTime) {
+              longestWait = validWait[i];
+            }
+          }
+          if (longestWait && longestWait.waitTime > 1.8) {
+            this.electedPriority.set(interId, {
+              vehicleId: longestWait.vehicleId,
+              expiry: now + 3.0
+            });
+            trafficDiagnostics.log(
+              'info',
+              `Intersection #${interId.slice(-4)} elected priority for Car #${longestWait.vehicleId.slice(-4)} (stalled ${longestWait.waitTime.toFixed(1)}s)`,
+              longestWait.vehicleId,
+              interId
+            );
+          }
+        }
+      }
+
+      this.waitingMap.set(interId, validWait);
+    }
+  }
+
+  public hasReservation(vehicleId: string, intersectionId: string): boolean {
+    const list = this.reservations.get(intersectionId);
+    if (!list) return false;
+    return list.some((r) => r.vehicleId === vehicleId);
+  }
+
+  public requestReservation(
+    car: Vehicle,
+    intersectionId: string,
+    conn: {
+      targetLaneId: string;
+      turnType: 'straight' | 'left' | 'right' | 'turnaround';
+      pathWaypoints: Vector2D[];
+      stopLineDirection?: 'north' | 'south' | 'east' | 'west';
+    },
+    world: GameWorld
+  ): { granted: boolean; reason: string } {
+    const now = performance.now() / 1000;
+
+    // 1. If car already holds reservation, grant
+    if (this.hasReservation(car.id, intersectionId)) {
+      return { granted: true, reason: 'existing' };
+    }
+
+    // 2. Anti-Gridlock ("Don't Block the Box" rule)
+    const targetLane = findLaneById(world, conn.targetLaneId);
+    if (targetLane && targetLane.waypoints.length > 0) {
+      const exitPt = targetLane.waypoints[0];
+      const nearbyAtExit = world.vehicles.filter(
+        (v) => v.id !== car.id && !v.isParked && !v.inIntersection && Math.hypot(v.x - exitPt.x, v.y - exitPt.y) < 52
+      );
+      if (nearbyAtExit.some((v) => v.speed < 4)) {
+        this.registerWaiting(car, intersectionId, conn);
+        return { granted: false, reason: 'exit_blocked' };
+      }
+    }
+
+    // 3. Check conflicting active reservations in intersection
+    const activeRes = this.reservations.get(intersectionId) || [];
+    for (const otherRes of activeRes) {
+      if (otherRes.vehicleId === car.id) continue;
+      if (doPathsIntersectOrConflict(conn.pathWaypoints, otherRes.pathWaypoints, 28)) {
+        this.registerWaiting(car, intersectionId, conn);
+        return { granted: false, reason: 'path_conflict_active' };
+      }
+    }
+
+    // 4. Check Symmetry Breaker / Waiting Queue Election
+    const elected = this.electedPriority.get(intersectionId);
+    if (elected && now < elected.expiry && elected.vehicleId !== car.id) {
+      const waitingList = this.waitingMap.get(intersectionId) || [];
+      const electedEntry = waitingList.find((w) => w.vehicleId === elected.vehicleId);
+      if (electedEntry && doPathsIntersectOrConflict(conn.pathWaypoints, electedEntry.pathWaypoints, 28)) {
+        this.registerWaiting(car, intersectionId, conn);
+        return { granted: false, reason: 'yielding_to_elected' };
+      }
+    }
+
+    // 5. Grant reservation!
+    const newRes: IntersectionReservation = {
+      vehicleId: car.id,
+      intersectionId,
+      entryTime: now,
+      pathWaypoints: [...conn.pathWaypoints],
+      turnType: conn.turnType,
+      stopLineDirection: conn.stopLineDirection
+    };
+
+    if (!this.reservations.has(intersectionId)) {
+      this.reservations.set(intersectionId, []);
+    }
+    this.reservations.get(intersectionId)!.push(newRes);
+    car.intersectionReservationId = intersectionId;
+
+    this.removeWaiting(car.id, intersectionId);
+
+    if (elected && elected.vehicleId === car.id) {
+      this.electedPriority.delete(intersectionId);
+    }
+
+    return { granted: true, reason: 'granted' };
+  }
+
+  public registerWaiting(
+    car: Vehicle,
+    intersectionId: string,
+    conn: {
+      targetLaneId: string;
+      turnType: 'straight' | 'left' | 'right' | 'turnaround';
+      pathWaypoints: Vector2D[];
+      stopLineDirection?: 'north' | 'south' | 'east' | 'west';
+    }
+  ) {
+    let list = this.waitingMap.get(intersectionId);
+    if (!list) {
+      list = [];
+      this.waitingMap.set(intersectionId, list);
+    }
+    const existing = list.find((w) => w.vehicleId === car.id);
+    if (existing) {
+      existing.pathWaypoints = conn.pathWaypoints;
+      existing.turnType = conn.turnType;
+      existing.targetLaneId = conn.targetLaneId;
+    } else {
+      list.push({
+        vehicleId: car.id,
+        intersectionId,
+        stopLineDirection: conn.stopLineDirection,
+        turnType: conn.turnType,
+        pathWaypoints: [...conn.pathWaypoints],
+        targetLaneId: conn.targetLaneId,
+        waitTime: 0
+      });
+    }
+  }
+
+  public removeWaiting(vehicleId: string, intersectionId?: string) {
+    if (intersectionId) {
+      const list = this.waitingMap.get(intersectionId);
+      if (list) {
+        this.waitingMap.set(
+          intersectionId,
+          list.filter((w) => w.vehicleId !== vehicleId)
+        );
+      }
+    } else {
+      for (const [id, list] of this.waitingMap.entries()) {
+        this.waitingMap.set(
+          id,
+          list.filter((w) => w.vehicleId !== vehicleId)
+        );
+      }
+    }
+  }
+
+  public releaseReservation(vehicleId: string, intersectionId?: string) {
+    if (intersectionId) {
+      const list = this.reservations.get(intersectionId);
+      if (list) {
+        this.reservations.set(
+          intersectionId,
+          list.filter((r) => r.vehicleId !== vehicleId)
+        );
+      }
+    } else {
+      for (const [id, list] of this.reservations.entries()) {
+        this.reservations.set(
+          id,
+          list.filter((r) => r.vehicleId !== vehicleId)
+        );
+      }
+    }
+    this.removeWaiting(vehicleId, intersectionId);
+  }
+}
+
+export const intersectionArbiter = new IntersectionReservationManager();
 
 // Find lane object by ID
 export function findLaneById(world: GameWorld, laneId: string | null): RoadSegment['lanePaths'][0] | null {
@@ -308,6 +570,32 @@ function getLookaheadPointOnPolyline(
 }
 
 // AI Traffic Management System
+export function isVehicleDisabledOrCrashed(car: Vehicle): boolean {
+  if (car.isPlayerControlled || car.isParked || car.id === 'evac_ambulance_special') {
+    return false;
+  }
+  const dmg = car.damage;
+  const eng = car.engineState;
+
+  if (!dmg) return false;
+
+  return (
+    dmg.isFullyBurnt ||
+    !!dmg.engineFire ||
+    !!dmg.fuelTankFire ||
+    !!dmg.cabinFire ||
+    !!dmg.underHoodSmolder ||
+    !!dmg.engineSmoking ||
+    dmg.frontCrumple > 1.8 ||
+    dmg.rearCrumple > 1.8 ||
+    dmg.leftDent > 1.8 ||
+    dmg.rightDent > 1.8 ||
+    dmg.frontLeftDent > 1.8 ||
+    dmg.frontRightDent > 1.8 ||
+    (eng ? (eng.isSeized || eng.transmissionJammed || eng.engineHealth <= 15) : false)
+  );
+}
+
 export function updateAITraffic(
   world: GameWorld,
   dt: number,
@@ -319,11 +607,14 @@ export function updateAITraffic(
   let movingCars = 0;
   let deadlockedCars = 0;
 
+  // Update intersection reservation arbiter (tokens, waiting queue, symmetry breaker)
+  intersectionArbiter.update(dt, world);
+
   const playerCar = world.vehicles.find((v) => v.isPlayerControlled);
   const targetPos: Vector2D = playerPos || (playerCar ? { x: playerCar.x, y: playerCar.y } : { x: 4400, y: 2800 });
 
-  // Filter active AI driving vehicles (excluding parked cars and player car)
-  const activeAICars = world.vehicles.filter((v) => !v.isPlayerControlled && !v.isParked);
+  // Filter active AI driving vehicles (excluding parked cars, player car, and special evacuation ambulance)
+  const activeAICars = world.vehicles.filter((v) => !v.isPlayerControlled && !v.isParked && v.id !== 'evac_ambulance_special');
   const totalActiveCount = activeAICars.length;
 
   // Maintain natural vehicle density around the player dynamically (balanced ~8-12 nearby, ~28 max active)
@@ -380,7 +671,7 @@ export function updateAITraffic(
     car.turnSignalTimer = (car.turnSignalTimer || 0) + dt;
     car.angle = ((car.angle + Math.PI) % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI) - Math.PI;
 
-    if (car.isPlayerControlled || car.isParked) continue;
+    if (car.isPlayerControlled || car.isParked || car.id === 'evac_ambulance_special') continue;
 
     // --- EMERGENCY YIELDING FOR AI CARS ---
     let isEmergencyYielding = false;
@@ -402,6 +693,8 @@ export function updateAITraffic(
     // --- OPTIMIZATION: DESPAWN / RECYCLE DISTANT CARS ---
     const distToPlayer = Math.hypot(car.x - targetPos.x, car.y - targetPos.y);
     if (distToPlayer > 1450 || (totalActiveCount > performanceConfig.maxVehicles && distToPlayer > 800)) {
+      intersectionArbiter.releaseReservation(car.id);
+      car.intersectionReservationId = null;
       if (totalActiveCount > performanceConfig.maxVehicles) {
         vehiclesToDespawn.push(car.id);
         continue;
@@ -409,6 +702,28 @@ export function updateAITraffic(
         respawnCarNearPlayer(car, targetPos, world);
         continue;
       }
+    }
+
+    // --- ACCIDENT / CRASHED / BROKEN-DOWN VEHICLE STATE HANDLER ---
+    if (isVehicleDisabledOrCrashed(car)) {
+      car.turnSignal = 'hazard';
+      car.brakeLightsOn = true;
+      car.targetSpeed = 0;
+      car.idmAcceleration = -450;
+      if (car.speed !== 0) {
+        const stopDecel = 400 * dt;
+        if (Math.abs(car.speed) <= stopDecel) {
+          car.speed = 0;
+        } else {
+          car.speed -= Math.sign(car.speed) * stopDecel;
+        }
+      }
+      car.aiState = 'stopping_obstacle';
+      if (car.engineState) {
+        car.engineState.engineRunning = false;
+        car.engineState.engineRPM = 0;
+      }
+      continue;
     }
 
     totalSpeed += car.speed;
@@ -849,7 +1164,7 @@ export function updateAITraffic(
     // 3.5 Pre-plan turn signal & intent ahead of intersection (ПДД)
     updateTurnSignalAndIntent(car, world);
 
-    // 4. Traffic Light & Intersection Yielding Rules (ПДД + Anti-Gridlock)
+    // 4. Traffic Light & Intersection Reservation & Yielding Rules (ПДД + Arbiter)
     let mustStopAtStopLine = false;
     let stopLineDist = 999;
 
@@ -869,10 +1184,10 @@ export function updateAITraffic(
               const distToLine = Math.hypot(dx, dy);
 
               const longitudinalDist = dx * carCos + dy * carSin;
-              if (distToLine < 110 && longitudinalDist >= -25) {
+              if (distToLine < 120 && longitudinalDist >= -20) {
                 const headingToLine = Math.atan2(dy, dx);
-                if (Math.abs(angleDiff(headingToLine, car.angle)) < 0.6) {
-                  // A. Red / Yellow Light (Only if the traffic light prop is NOT broken!)
+                if (Math.abs(angleDiff(headingToLine, car.angle)) < 0.7) {
+                  // A. Traffic Light Check
                   const isLightBroken = inter.isSignalLost || world.props.some(
                     (p) => p.type === 'traffic_light' &&
                            p.intersectionId === inter.id &&
@@ -880,81 +1195,27 @@ export function updateAITraffic(
                            p.isBroken
                   );
 
-                  if (inter.hasLights && (stopLine.lightState === 'red' || stopLine.lightState === 'yellow' || stopLine.lightState === 'red_yellow') && !isLightBroken) {
+                  const isRedOrYellow = inter.hasLights && !isLightBroken && (
+                    stopLine.lightState === 'red' || 
+                    stopLine.lightState === 'yellow' || 
+                    stopLine.lightState === 'red_yellow'
+                  );
+
+                  if (isRedOrYellow) {
                     mustStopAtStopLine = true;
                     stopLineDist = distToLine;
                     car.aiState = 'stopping_light';
+                    intersectionArbiter.registerWaiting(car, inter.id, candidateConn);
                   } else {
-                    if (isLightBroken) {
-                      // Slow down slightly for broken light intersection cautious crossing
-                      car.targetSpeed = Math.min(car.targetSpeed, 45);
-                    } 
-                    // B. Green Light Checks: "Don't Block The Box" & Left-Turn Yielding
-                    if (inter.hasLights && (stopLine.lightState === 'green' || stopLine.lightState === 'green_flashing' || stopLine.lightState === 'yellow' || stopLine.lightState === 'off' || isLightBroken)) {
-                      // Check 1: Anti-Gridlock ("Don't Block the Box")
-                      const targetLane = findLaneById(world, candidateConn.targetLaneId);
-                      if (targetLane && targetLane.waypoints.length > 0) {
-                        const isHeavyVehicle = car.length > 52 || (car.wheelBase || 28) > 34;
-                        const checkWpCount = isHeavyVehicle ? 4 : 3;
-                        const safetyDist = isHeavyVehicle ? 95 : 65;
-                        
-                        for (let wi = 0; wi < Math.min(targetLane.waypoints.length, checkWpCount); wi++) {
-                          const exitPt = targetLane.waypoints[wi];
-                          const nearbyAtExit = vehGrid ? vehGrid.queryRadius(exitPt.x, exitPt.y, safetyDist) : world.vehicles;
-                          for (const other of nearbyAtExit) {
-                            if (other.id === car.id || other.isParked || other.inIntersection) continue;
-                            if (Math.hypot(other.x - exitPt.x, other.y - exitPt.y) < safetyDist && other.speed < 8) {
-                              mustStopAtStopLine = true;
-                              stopLineDist = distToLine;
-                              car.aiState = 'yielding';
-                              break;
-                            }
-                          }
-                          if (mustStopAtStopLine) break;
-                        }
-                      }
-                    }
-
-                    // Check 2: Left-turn yielding to oncoming traffic (ПДД)
-                    if (car.plannedTurn === 'left' && !mustStopAtStopLine) {
-                      const oncomingCandidates = vehGrid ? vehGrid.queryRadius(inter.x, inter.y, inter.width / 2 + 50) : world.vehicles;
-                      for (const oncoming of oncomingCandidates) {
-                        if (oncoming.id === car.id || oncoming.isParked) continue;
-                        const distToInter = Math.hypot(oncoming.x - inter.x, oncoming.y - inter.y);
-                        if (distToInter < inter.width / 2 + 50) {
-                          const angDiff = Math.abs(angleDiff(oncoming.angle, car.angle));
-                          if (angDiff > 2.2 && oncoming.plannedTurn === 'straight' && oncoming.speed > 16) {
-                            mustStopAtStopLine = true;
-                            stopLineDist = distToLine;
-                            car.aiState = 'yielding';
-                            break;
-                          }
-                        }
-                      }
-                    }
-
-                    // Check 3: Active Intersection Occupancy (Wait at stop line if conflicting vehicle is crossing)
-                    if (!mustStopAtStopLine && distToLine < 65) {
-                      const insideCandidates = vehGrid ? vehGrid.queryRadius(inter.x, inter.y, inter.width * 0.6) : world.vehicles;
-                      for (const insideCar of insideCandidates) {
-                        if (insideCar.id === car.id || insideCar.isParked || !insideCar.inIntersection) continue;
-                        
-                        const insideOBB = getOBB(insideCar, 3); // 3px safety margin
-                        let pathConflict = false;
-                        for (let pi = 0; pi < candidateConn.pathWaypoints.length; pi += 2) {
-                          const pt = candidateConn.pathWaypoints[pi];
-                          if (isPointInsideOBB(pt, insideOBB)) {
-                            pathConflict = true;
-                            break;
-                          }
-                        }
-                        
-                        if (pathConflict && insideCar.speed < 30) {
-                          mustStopAtStopLine = true;
-                          stopLineDist = distToLine;
-                          car.aiState = 'yielding';
-                          break;
-                        }
+                    // B. Request Reservation from Arbiter
+                    const reservation = intersectionArbiter.requestReservation(car, inter.id, candidateConn, world);
+                    if (!reservation.granted) {
+                      mustStopAtStopLine = true;
+                      stopLineDist = distToLine;
+                      car.aiState = 'yielding';
+                    } else {
+                      if (distToLine < 45) {
+                        car.aiState = 'driving';
                       }
                     }
                   }
@@ -969,11 +1230,11 @@ export function updateAITraffic(
     }
 
     // 5. Intelligent Driver Model (IDM) Target Speed Calculation
-    const defaultCruiseSpeed = 100 + (car.type === 'sports' ? 25 : 0) + (car.type === 'taxi' ? 10 : 0);
+    const defaultCruiseSpeed = 155 + (car.type === 'sports' ? 45 : 0) + (car.type === 'taxi' ? 15 : 0);
     // Smooth realistic urban turning speeds: prevents wide-swinging into building corners
     const turnMaxSpeed = car.currentConnection?.turnType === 'turnaround'
-      ? 30
-      : (car.type === 'sports' ? 36 : (car.type === 'suv' || car.type === 'pickup' ? 28 : 32));
+      ? 45
+      : (car.type === 'sports' ? 55 : (car.type === 'suv' || car.type === 'pickup' ? 42 : 48));
     const v0 = (car.inIntersection || car.currentConnection || car.plannedTurn !== 'straight') ? turnMaxSpeed : defaultCruiseSpeed;
 
     // Ghosting recovery alpha handling
@@ -984,7 +1245,7 @@ export function updateAITraffic(
     // Auto-maintenance: if AI vehicle is driving smoothly without recent crash, restore minor bumper dents
     const nowSec = performance.now() / 1000;
     if (car.damage && car.speed > 15 && (!car.lastDamageTime || nowSec - car.lastDamageTime > 12)) {
-      if (car.damage.health >= 85) {
+      if (car.engineState && !car.engineState.radiatorPunctured && !car.engineState.oilPunctured) {
         car.damage.frontCrumple = Math.max(0, car.damage.frontCrumple - dt * 1.5);
         car.damage.rearCrumple = Math.max(0, car.damage.rearCrumple - dt * 1.5);
         car.damage.frontLeftDent = Math.max(0, car.damage.frontLeftDent - dt * 1.2);
@@ -1095,6 +1356,8 @@ export function updateAITraffic(
       // Hard deadlock dissolution: after 3.0s of being stuck,
       // instantly reposition the car to an open road to dissolve the jam without backing up into neighboring traffic!
       if (car.stuckTimer > 3.0) {
+        intersectionArbiter.releaseReservation(car.id);
+        car.intersectionReservationId = null;
         const respawned = respawnCarNearPlayer(car, playerPos, world);
         if (!respawned) {
           vehiclesToDespawn.push(car.id);
@@ -1119,6 +1382,9 @@ export function updateAITraffic(
 
 // Update turn signal indicator and pre-planned turn when approaching intersections or standing at red lights (ПДД)
 function updateTurnSignalAndIntent(car: Vehicle, world: GameWorld) {
+  if (car.turnSignal === 'hazard' && isVehicleDisabledOrCrashed(car)) {
+    return;
+  }
   // If actively on a connection / in intersection
   if (car.currentConnection) {
     if (car.currentConnection.turnType === 'left' || car.currentConnection.turnType === 'turnaround') {
@@ -1150,18 +1416,43 @@ function updateTurnSignalAndIntent(car: Vehicle, world: GameWorld) {
       const conn = currentLane.connections[0];
       car.plannedTurn = conn.turnType === 'turnaround' ? 'left' : conn.turnType;
     } else if (car.plannedTurn === 'straight') {
-      // Pick based on car ID and lane properties
-      const idNum = parseInt(car.id.replace(/\D/g, ''), 10) || 0;
-      const seed = (idNum + Math.floor(endWp.x * 0.05 + endWp.y * 0.05)) % 10;
+      // Avoid straight if the target road has an accident or traffic jam
+      const straightConn = currentLane.connections.find((c) => c.turnType === 'straight');
+      let straightBlocked = false;
+      if (straightConn) {
+        const tLane = findLaneById(world, straightConn.targetLaneId);
+        if (tLane && tLane.waypoints.length >= 2) {
+          const w1 = tLane.waypoints[0];
+          const w2 = tLane.waypoints[tLane.waypoints.length - 1];
+          straightBlocked = isRoadSegmentBlocked(world, w1.x, w1.y, w2.x, w2.y).isBlocked;
+        }
+      }
+
       const leftConn = currentLane.connections.find((c) => c.turnType === 'left');
       const rightConn = currentLane.connections.find((c) => c.turnType === 'right');
-      
-      if (rightConn && seed < 3) {
-        car.plannedTurn = 'right';
-      } else if (leftConn && seed >= 3 && seed < 6) {
-        car.plannedTurn = 'left';
+
+      if (straightBlocked) {
+        if (rightConn && leftConn) {
+          car.plannedTurn = Math.random() > 0.5 ? 'right' : 'left';
+        } else if (rightConn) {
+          car.plannedTurn = 'right';
+        } else if (leftConn) {
+          car.plannedTurn = 'left';
+        } else {
+          car.plannedTurn = 'straight';
+        }
       } else {
-        car.plannedTurn = 'straight';
+        // Pick based on car ID and lane properties
+        const idNum = parseInt(car.id.replace(/\D/g, ''), 10) || 0;
+        const seed = (idNum + Math.floor(endWp.x * 0.05 + endWp.y * 0.05)) % 10;
+        
+        if (rightConn && seed < 3) {
+          car.plannedTurn = 'right';
+        } else if (leftConn && seed >= 3 && seed < 6) {
+          car.plannedTurn = 'left';
+        } else {
+          car.plannedTurn = 'straight';
+        }
       }
     }
 
@@ -1183,6 +1474,10 @@ function updateTurnSignalAndIntent(car: Vehicle, world: GameWorld) {
 function advanceCarRoute(car: Vehicle, world: GameWorld) {
   // Case A: Finished an intersection connection or turnaround curve -> Enter target lane
   if (car.currentConnection) {
+    // Release any active intersection reservation
+    intersectionArbiter.releaseReservation(car.id);
+    car.intersectionReservationId = null;
+
     const targetLane = findLaneById(world, car.currentConnection.targetLaneId);
     if (targetLane) {
       car.currentLaneId = targetLane.laneId;
@@ -1274,21 +1569,38 @@ function advanceCarRoute(car: Vehicle, world: GameWorld) {
         if (carsOnTargetLane >= 2) weight *= 0.3;
         if (carsOnTargetLane >= 4) weight *= 0.02;
 
-        return { conn, weight: Math.max(0.01, weight) };
+        // Accident (Авария) & Traffic Jam (Затор) Avoidance Rule:
+        // Strictly avoid routing into road segments with an accident or traffic jam in either direction!
+        const targetLane = findLaneById(world, conn.targetLaneId);
+        if (targetLane && targetLane.waypoints.length >= 2) {
+          const wpFirst = targetLane.waypoints[0];
+          const wpLast = targetLane.waypoints[targetLane.waypoints.length - 1];
+          const blockInfo = isRoadSegmentBlocked(world, wpFirst.x, wpFirst.y, wpLast.x, wpLast.y);
+          if (blockInfo.isBlocked) {
+            weight = 0.0;
+          }
+        }
+
+        return { conn, weight };
       });
 
       const totalWeight = scored.reduce((sum, s) => sum + s.weight, 0);
-      let r = Math.random() * totalWeight;
-      for (const s of scored) {
-        if (r < s.weight) {
-          selectedConn = s.conn;
-          break;
+      if (totalWeight > 0) {
+        let r = Math.random() * totalWeight;
+        for (const s of scored) {
+          if (r < s.weight) {
+            selectedConn = s.conn;
+            break;
+          }
+          r -= s.weight;
         }
-        r -= s.weight;
+      } else {
+        // If all connections lead to blocked roads, fallback to the first connection
+        selectedConn = scored[0].conn;
       }
     }
 
-    // Stop Line Verification before stepping onto intersection connection
+    // Stop Line & Arbiter Verification before stepping onto intersection connection
     if (selectedConn.intersectionId && selectedConn.stopLineDirection) {
       const inter = world.intersections.find((i) => i.id === selectedConn.intersectionId);
       if (inter) {
@@ -1315,18 +1627,14 @@ function advanceCarRoute(car: Vehicle, world: GameWorld) {
 
         const isRedOrYellow = inter.hasLights && !isLightBroken && (stopLine.lightState === 'red' || stopLine.lightState === 'yellow' || stopLine.lightState === 'red_yellow');
         
-        // Anti-Gridlock: Check if destination lane or intersection box is blocked before committing
-        let isDestinationBlocked = false;
-        const targetLane = findLaneById(world, selectedConn.targetLaneId);
-        if (targetLane && targetLane.waypoints.length > 0) {
-          const exitPt = targetLane.waypoints[0];
-          const nearbyAtExit = world.vehicles.some(v => v.id !== car.id && !v.isParked && !v.inIntersection && Math.hypot(v.x - exitPt.x, v.y - exitPt.y) < 60 && v.speed < 8);
-          if (nearbyAtExit) {
-            isDestinationBlocked = true;
-          }
+        // Check reservation with arbiter
+        let reservationGranted = true;
+        if (!isRedOrYellow) {
+          const res = intersectionArbiter.requestReservation(car, selectedConn.intersectionId, selectedConn, world);
+          reservationGranted = res.granted;
         }
 
-        if (!isPastLine && (isRedOrYellow || isDestinationBlocked)) {
+        if (!isPastLine && (isRedOrYellow || !reservationGranted)) {
           // Do not enter yet: hold safely at stop line waypoint
           car.targetWaypointIndex = car.routeWaypoints.length - 1;
           car.speed = 0;
@@ -2408,6 +2716,13 @@ function getCandidateSpawnPoints(
     for (const lane of road.lanePaths) {
       if (lane.waypoints.length < 2) continue;
       const firstWp = lane.waypoints[0];
+      const lastWp = lane.waypoints[lane.waypoints.length - 1];
+
+      // Never spawn new traffic on road segments with an accident or traffic jam in either direction
+      if (isRoadSegmentBlocked(world, firstWp.x, firstWp.y, lastWp.x, lastWp.y).isBlocked) {
+        continue;
+      }
+
       const isForest = firstWp.x < 3800 && firstWp.y < 3800;
       if (isForest && Math.random() > 0.15) continue;
 
@@ -2468,6 +2783,7 @@ function respawnCarNearPlayer(car: Vehicle, playerPos: Vector2D, world: GameWorl
         car.vx = Math.cos(car.angle) * car.speed;
         car.vy = Math.sin(car.angle) * car.speed;
         car.steerAngle = 0;
+        car.targetSteerAngle = 0;
         car.currentLaneId = chosen.lane.laneId;
         car.routeWaypoints = [...chosen.lane.waypoints];
         car.targetWaypointIndex = chosen.targetWpIndex;
@@ -2475,8 +2791,16 @@ function respawnCarNearPlayer(car: Vehicle, playerPos: Vector2D, world: GameWorl
         car.inIntersection = false;
         car.aiState = 'driving';
         car.stuckTimer = 0;
+        car.reverseTimer = 0;
+        car.targetSpeed = 100 + Math.random() * 35;
+        car.idmAcceleration = 0;
+        car.turnSignal = 'none';
+        car.turnSignalTimer = 0;
+        car.brakeLightsOn = false;
         car.ghostingAlpha = 1.0;
         car.damage = createDefaultVehicleDamage(car.length, car.width);
+        car.engineState = createDefaultEngineState(car.type, true, false);
+        car.fuelSystem = createDefaultFuelSystem(car.type, false);
         return true;
       }
     }
@@ -2486,16 +2810,28 @@ function respawnCarNearPlayer(car: Vehicle, playerPos: Vector2D, world: GameWorl
 
 // Spawns a brand new AI vehicle dynamically near the player to keep the traffic density alive
 export function spawnNewCarNearPlayer(playerPos: Vector2D, world: GameWorld): boolean {
-  if (world.vehicles.length >= 40) return false;
+  if (world.vehicles.length >= 48) return false;
   const candidates = getCandidateSpawnPoints(playerPos, world, 600, 1400);
   if (candidates.length === 0) return false;
 
   const carTypes: CarType[] = [
-    'sedan', 'hatchback', 'pickup', 'sports', 'suv', 'taxi', 'police', 
-    'fire_engine', 'fire_ladder', 'fire_rescue',
-    'bus', 'bus_minibus',
-    'van', 'muscle', 
+    // Standard civilian & everyday
+    'sedan', 'sedan_compact', 'sedan_luxury', 'sedan_classic', 'classic_compact',
+    'hatchback', 'hatch_hot', 'micro_car', 'retro_bubble',
+    'wagon_classic', 'wagon_modern', 'wagon_allroad',
+    // Crossovers & SUVs
+    'suv', 'suv_luxury', 'suv_classic_box', 'offroad_hardcore', 'crossover_compact',
+    // Performance & Muscle
+    'sports', 'supercar', 'muscle', 'muscle_classic', 'coupe_gt',
+    // Pickups & Vans
+    'pickup', 'pickup_heavy', 'van', 'van_camper', 'van_cargo_old',
+    // Public & City services
+    'taxi', 'bus', 'bus_minibus',
+    // Emergency services
+    'police', 'fire_engine', 'fire_ladder', 'fire_rescue',
     'ambulance', 'ambulance_van', 'ambulance_suv',
+    // Commercial & Heavy trucks
+    'delivery_truck', 'truck_tow', 'truck_armored',
     'truck_box', 'truck_dump', 'truck_tanker', 'truck_water', 'truck_flatbed', 'cement_mixer', 'garbage_truck'
   ];
   const cType = carTypes[Math.floor(Math.random() * carTypes.length)];
@@ -2507,6 +2843,9 @@ export function spawnNewCarNearPlayer(playerPos: Vector2D, world: GameWorld): bo
   else if (cType === 'bus') color = '#eab308';
   else if (cType === 'bus_minibus') color = '#f59e0b';
   else if (cType === 'ambulance' || cType === 'ambulance_van' || cType === 'ambulance_suv') color = '#f8fafc';
+  else if (cType === 'van_camper') color = '#fef08a';
+  else if (cType === 'van_cargo_old') color = '#94a3b8';
+  else if (cType === 'muscle' || cType === 'muscle_classic') color = '#991b1b';
   else if (cType === 'garbage_truck') color = '#16a34a';
   else if (cType === 'truck_dump') color = '#d97706';
   else if (cType === 'cement_mixer') color = '#2563eb';
@@ -2514,8 +2853,20 @@ export function spawnNewCarNearPlayer(playerPos: Vector2D, world: GameWorld): bo
   else if (cType === 'truck_water') color = '#0284c7';
   else if (cType === 'truck_tanker') color = '#0369a1';
   else if (cType === 'truck_flatbed') color = '#475569';
+  else if (cType === 'truck_tow') color = '#eab308';
+  else if (cType === 'truck_armored') color = '#334155';
+  else if (cType === 'delivery_truck') color = '#78350f';
+  else if (cType === 'supercar') color = '#ef4444';
+  else if (cType === 'retro_bubble') color = '#38bdf8';
+  else if (cType === 'sedan_luxury') color = '#1e293b';
 
-  const roofColor = (cType === 'police' || cType === 'ambulance' || cType === 'ambulance_van' || cType === 'ambulance_suv' || cType === 'fire_engine' || cType === 'fire_ladder' || cType === 'fire_rescue') ? '#f8fafc' : color;
+  const isEmergency = cType === 'police' || cType === 'ambulance' || cType === 'ambulance_van' || 
+                      cType === 'ambulance_suv' || cType === 'fire_engine' || cType === 'fire_ladder' || 
+                      cType === 'fire_rescue';
+  let roofColor = isEmergency ? '#f8fafc' : color;
+  if (cType === 'suv_classic_box') roofColor = '#ffffff';
+  if (cType === 'classic_compact') roofColor = '#f1f5f9';
+  if (cType === 'wagon_allroad') roofColor = '#0f172a';
 
   for (let attempts = 0; attempts < 15; attempts++) {
     const chosen = candidates[Math.floor(Math.random() * candidates.length)];
@@ -2553,6 +2904,9 @@ export function spawnNewCarNearPlayer(playerPos: Vector2D, world: GameWorld): bo
         turnSignalTimer: 0,
         isParked: false,
         isPlayerControlled: false,
+        requiredFuel: createDefaultFuelSystem(cType).fuelType === 'diesel' ? 'diesel' : (createDefaultFuelSystem(cType).octaneNumber === 92 ? 'ai92' : 'ai95'),
+        engineState: createDefaultEngineState(cType, true, false),
+        fuelSystem: createDefaultFuelSystem(cType, false),
         targetSpeed: speedVal,
         currentLaneId: chosen.lane.laneId,
         targetWaypointIndex: chosen.targetWpIndex,

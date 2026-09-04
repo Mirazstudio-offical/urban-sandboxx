@@ -60,6 +60,7 @@ export function normalizeWorld(parsed: any): GameWorld {
     puddles: Array.isArray(parsed.puddles) ? parsed.puddles : [],
     litter: Array.isArray(parsed.litter) ? parsed.litter : [],
     skidMarks: Array.isArray(parsed.skidMarks) ? parsed.skidMarks : [],
+    stains: Array.isArray(parsed.stains) ? parsed.stains : [],
     particles: Array.isArray(parsed.particles) ? parsed.particles : [],
     weather: parsed.weather || 'clear',
     pedestrianPaths: Array.isArray(parsed.pedestrianPaths) ? parsed.pedestrianPaths : [],
