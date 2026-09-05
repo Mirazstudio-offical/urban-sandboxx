@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Player, InventoryItem, ItemCategory, GameWorld, GroundItem } from '../types';
-import { useItemOnPlayer, dropItemFromPlayer, addItemToPlayer, moveInventoryItem, ITEM_CATALOG, isPlayerNearTrashBin, disposeTrashInBin, pickupNearbyLitter } from '../items';
+import { useItemOnPlayer, dropItemFromPlayer, addItemToPlayer, moveInventoryItem, ITEM_CATALOG, isPlayerNearTrashBin, disposeTrashInBin, pickupNearbyLitter, equipClothing, unequipClothing } from '../items';
 import { ItemIconCanvas } from './ItemIconCanvas';
 import { sound } from '../audio';
 import { 
@@ -20,7 +20,8 @@ import {
   Bed,
   Refrigerator,
   Coffee,
-  Coins
+  Coins,
+  Shirt
 } from 'lucide-react';
 
 interface InventoryModalProps {
@@ -42,7 +43,7 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
 }) => {
   const [selectedCategory, setSelectedCategory] = useState<ItemCategory | 'all'>('all');
   const [selectedIndex, setSelectedIndex] = useState<number>(0);
-  const [activeTab, setActiveTab] = useState<'inventory' | 'surroundings'>('inventory');
+  const [activeTab, setActiveTab] = useState<'inventory' | 'surroundings' | 'clothing'>('inventory');
   const [, forceRender] = useState(0);
 
   if (!isOpen || !player) return null;
@@ -60,6 +61,18 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
   const selectedEntry = inventory[selectedIndex] ? { item: inventory[selectedIndex], originalIndex: selectedIndex } : null;
 
   // Handle Using Item
+
+  const handleEquipItem = (idx: number) => {
+    if (!player) return;
+    equipClothing(player, idx);
+    forceRender(n => n + 1);
+  };
+  const handleUnequipItem = (slot: any, layer: any) => {
+    if (!player) return;
+    unequipClothing(player, slot, layer);
+    forceRender(n => n + 1);
+  };
+
   const handleUseItem = (idx: number) => {
     if (!player) return;
     const item = player.inventory?.[idx];
@@ -168,6 +181,19 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
               <Sparkles className="w-3.5 h-3.5" />
               <span>Вокруг вас ({nearbyGroundItems.length})</span>
             </button>
+            <button
+              id="tab-clothing-btn"
+              onClick={() => setActiveTab('clothing')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition ${
+                activeTab === 'clothing' 
+                  ? 'bg-sky-600 text-white shadow' 
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <Shirt className="w-3.5 h-3.5" />
+              <span>Одежда</span>
+            </button>
+
           </div>
 
           {/* Category Filter Pills (if on inventory tab) */}
@@ -204,7 +230,7 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
 
         {/* MAIN BODY: 2-COLUMN GRID (SLOTS + DETAILS) */}
         <div className="flex-1 overflow-y-auto p-6 grid grid-cols-1 lg:grid-cols-12 gap-6">
-          {activeTab === 'inventory' ? (
+          {activeTab === 'inventory' && (
             <>
               {/* LEFT: SLOTS GRID (8 cols) */}
               <div className="lg:col-span-7 flex flex-col gap-3">
@@ -413,7 +439,15 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
 
                     {/* ACTION BUTTONS */}
                     <div className="flex flex-col gap-2 mt-2">
-                      {selectedEntry.item.usable && (
+                      {selectedEntry.item.clothingStats ? (
+                        <button
+                          id="btn-equip-selected-item"
+                          onClick={() => handleEquipItem(selectedEntry.originalIndex)}
+                          className="w-full py-3 bg-blue-600 hover:bg-blue-500 active:scale-98 text-white font-bold rounded-xl border border-blue-400/40 shadow-lg flex items-center justify-center gap-2 text-sm transition"
+                        >
+                          <span>Надеть / Экипировать</span>
+                        </button>
+                      ) : selectedEntry.item.usable && (
                         <button
                           id="btn-use-selected-item"
                           onClick={() => handleUseItem(selectedEntry.originalIndex)}
@@ -472,8 +506,8 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
                 )}
               </div>
             </>
-          ) : (
-            /* SURROUNDINGS / WORLD INTERACTION TAB */
+          )}
+          {activeTab === 'surroundings' && (
             <div className="lg:col-span-12 flex flex-col gap-4">
               <h3 className="text-sm font-bold text-slate-200">
                 Предметы и объекты поблизости
@@ -513,6 +547,33 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
                   <p className="text-xs text-slate-600 mt-1">Вы можете находить еду, напитки и медикаменты на улицах и в зданиях</p>
                 </div>
               )}
+            </div>
+
+          )}
+          {activeTab === 'clothing' && (
+            <div className="lg:col-span-12 flex flex-col gap-4 text-white">
+              <h3 className="text-lg font-semibold text-sky-400">Надетая одежда</h3>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                {Object.entries(player.equippedClothing || {}).map(([slot, layers]) => (
+                  <div key={slot} className="bg-slate-900 border border-slate-700 p-4 rounded-xl">
+                    <div className="text-sm font-bold text-slate-400 uppercase mb-2">{slot}</div>
+                    {Object.entries(layers).map(([layer, item]) => (
+                      <div key={layer} className="flex items-center gap-2 mb-2 p-2 bg-slate-800 rounded">
+                        <ItemIconCanvas itemId={item.itemId} size={32} className="rounded-lg bg-slate-950 border border-slate-700 p-0.5 flex-shrink-0" />
+
+                        <div className="flex-1">
+                          <div className="text-sm font-medium">{item.nameRu}</div>
+                          <div className="text-xs text-slate-400">Слой: {layer}</div>
+                        </div>
+                        <button onClick={() => handleUnequipItem(slot, layer)} className="px-3 py-1 bg-red-900/50 hover:bg-red-800 text-red-200 text-xs rounded transition">
+                          Снять
+                        </button>
+
+                      </div>
+                    ))}
+                  </div>
+                ))}
+              </div>
             </div>
           )}
         </div>

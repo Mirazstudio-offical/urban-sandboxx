@@ -169,9 +169,14 @@ export function distributeImpactDamage(
   // Trigger traumatic shock, panic attack & potential fainting on heavy impact
   bs.shockLevel = Math.min(100, bs.shockLevel + impactForce * 1.2);
   bs.panicLevel = Math.min(100, (bs.panicLevel || 0) + impactForce * 1.8);
-  if (impactForce > 32 || bs.shockLevel > 70) {
+  
+  // Fainting from impact is now less frequent and much more realistic.
+  // Moderate impacts have a low probability of causing loss of consciousness,
+  // and guaranteed unconsciousness is reserved for extreme impacts (>70 force).
+  const shouldFaint = (impactForce > 45 && Math.random() < 0.20) || (impactForce > 70) || (bs.shockLevel > 88 && Math.random() < 0.4);
+  if (shouldFaint) {
     player.isFainting = true;
-    player.faintTimer = Math.min(12, Math.max(3, Math.round(impactForce * 0.12)));
+    player.faintTimer = Math.min(10, Math.max(3, Math.round(impactForce * 0.08)));
     bs.impactFlashTimer = 2.0;
     bs.tinnitusTimer = 3.5;
     sound.playTinnitus(3.5);

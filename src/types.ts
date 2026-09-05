@@ -130,6 +130,8 @@ export interface FuelSystem {
   fuelQuality: number;          // 0 to 100 (100 = clean, <50 = bad quality/diluted)
   detonation: boolean;          // engine knocking/detonation from bad fuel
   octaneNumber: number;
+  engineFuelLeaked?: number;    // amount leaked from engine in liters (max 0.5-1.0L)
+  fuelRailBroken?: boolean;     // fuel line/rail broken in frontal crash
 }
 
 export interface VehicleDamage {
@@ -243,6 +245,8 @@ export interface Vehicle {
   justTurnedAround?: boolean;
   visitedIntersections?: { id: string; time: number }[];
   ghostingAlpha?: number;
+  driverExitedForFire?: boolean;
+  fireExtinguisherDriverId?: string;
   currentConnection?: {
     targetLaneId: string;
     turnType: 'straight' | 'left' | 'right' | 'turnaround';
@@ -309,9 +313,10 @@ export interface Pedestrian {
   hasHeadphones?: boolean;
   
   // Handheld props
-  handheldProp?: 'phone' | 'coffee' | 'bag' | 'box' | null;
+  handheldProp?: 'phone' | 'coffee' | 'bag' | 'box' | 'extinguisher' | null;
   propColor?: string;
   hasDroppedProp?: boolean;
+  extinguisherCharges?: number;
   
   // Pedestrian Type & Equipment
   isCyclist?: boolean;
@@ -331,7 +336,7 @@ export interface Pedestrian {
   targetCrosswalkId?: string | null;
   
   // State & Panic
-  state: 'walking' | 'waiting_light' | 'waiting_traffic' | 'crossing' | 'panicking' | 'waiting_taxi' | 'entering_building' | 'exiting_building' | 'idle_phone' | 'idle_window' | 'greeting';
+  state: 'walking' | 'waiting_light' | 'waiting_traffic' | 'crossing' | 'panicking' | 'waiting_taxi' | 'entering_building' | 'exiting_building' | 'idle_phone' | 'idle_window' | 'greeting' | 'extinguishing_fire';
   panicTimer: number;
   behaviorTimer: number; // For idle states
   alertBubbleText: string | null;
@@ -662,6 +667,27 @@ export interface Particle {
   type: 'tire_smoke' | 'spark' | 'exhaust' | 'engine_smoke' | 'glass_shard' | 'debris' | 'flame' | 'water_splash' | 'rain_drop' | 'water_fountain' | 'leaf' | 'feather';
 }
 
+export type ClothingLayer = 'skin' | 'underwear' | 'shirt' | 'jacket' | 'outerwear';
+export type ClothingSlot = 'head' | 'face' | 'torso' | 'legs' | 'feet' | 'hands' | 'back';
+
+export interface ClothingStats {
+  insulation: number;       // 0 to 100 (warmth)
+  windResistance: number;   // 0 to 100
+  waterResistance: number;  // 0 to 100
+  breathability: number;    // 0 to 100 (how well sweat evaporates)
+  mobilityPenalty: number;  // 0 to 100 (how heavy/restrictive it is)
+  slot: ClothingSlot;
+  layer: ClothingLayer;
+  color?: string;           // Primary color for rendering
+  secondaryColor?: string;  // Secondary color
+}
+
+export type EquippedClothing = {
+  [slot in ClothingSlot]?: {
+    [layer in ClothingLayer]?: InventoryItem;
+  };
+};
+
 export type ItemCategory = 'food' | 'drink' | 'med' | 'medical' | 'tool' | 'auto' | 'valuable' | 'clothing' | 'misc';
 
 export interface InventoryItem {
@@ -684,6 +710,7 @@ export interface InventoryItem {
   };
   weight?: number;
   usable: boolean;
+  clothingStats?: ClothingStats;
   portions?: number;       // Current remaining bites/sips/doses in this unit
   maxPortions?: number;    // Maximum/initial bites/sips/doses
 }
@@ -856,6 +883,7 @@ export interface Player {
   // Survival Needs & Vitals
   needs: PlayerNeeds;
   bodyState?: BodyState;
+  equippedClothing: EquippedClothing;
   inventory: InventoryItem[];
   maxInventorySlots: number;
   selectedHotbarIndex: number;

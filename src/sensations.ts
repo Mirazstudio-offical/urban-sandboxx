@@ -429,11 +429,11 @@ export function getDetailedBodySensations(player?: Player): DetailedBodySensatio
 
   // 7. Drowsiness / Sleepiness
   const currentSleepiness = needs?.sleepiness ?? 0;
-  if (currentSleepiness > 35) {
+  if (currentSleepiness > 15) {
     activeSymptoms.push({
       id: 'drowsiness_symptom',
       label: 'Сонливость',
-      description: currentSleepiness > 70 ? 'Глаза слипаются, туман перед глазами, предобморочная дремота' : 'Тяжесть в веках и вялость реакций',
+      description: currentSleepiness > 70 ? 'Глаза слипаются, туман перед глазами, предобморочная дремота' : currentSleepiness > 35 ? 'Тяжесть в веках и вялость реакций' : 'Лёгкая усталость, хочется присесть',
       severity: currentSleepiness > 70 ? 'danger' : 'warning',
       iconType: 'energy'
     });
@@ -441,11 +441,11 @@ export function getDetailedBodySensations(player?: Player): DetailedBodySensatio
 
   // 8. Hunger
   const currentHunger = needs?.hunger ?? 100;
-  if (currentHunger < 40) {
+  if (currentHunger < 75) {
     activeSymptoms.push({
       id: 'hunger_symptom',
       label: 'Голод',
-      description: currentHunger < 15 ? 'Сильное истощение от голода, спазмы желудка' : 'Острый голод и урчание в животе',
+      description: currentHunger < 15 ? 'Сильное истощение от голода, спазмы желудка' : currentHunger < 40 ? 'Острый голод и урчание в животе' : 'Лёгкий голод, хочется перекусить',
       severity: currentHunger < 15 ? 'danger' : 'warning',
       iconType: 'cough'
     });
@@ -453,11 +453,11 @@ export function getDetailedBodySensations(player?: Player): DetailedBodySensatio
 
   // 9. Thirst / Dehydration
   const currentThirst = needs?.thirst ?? 100;
-  if (currentThirst < 40 || hydr < 40) {
+  if (currentThirst < 85 || hydr < 85) {
     activeSymptoms.push({
       id: 'thirst_symptom',
       label: 'Жажда',
-      description: currentThirst < 15 ? 'Мучительное обезвоживание, сухой язык, падение зрения' : 'Сухость во рту и потрескавшиеся губы',
+      description: currentThirst < 15 ? 'Мучительное обезвоживание, сухой язык, падение зрения' : currentThirst < 40 ? 'Сухость во рту и потрескавшиеся губы' : 'Лёгкая жажда, пересохло во рту',
       severity: currentThirst < 15 ? 'danger' : 'warning',
       iconType: 'drop'
     });

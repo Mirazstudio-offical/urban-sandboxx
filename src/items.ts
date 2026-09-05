@@ -1867,6 +1867,324 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     weight: 0.15,
     usable: true
   },
+  
+  // === CLOTHING (ОДЕЖДА) ===
+  // HEAD
+  
+  backpack: {
+    itemId: 'backpack',
+    name: 'Canvas Backpack',
+    nameRu: 'Брезентовый рюкзак',
+    category: 'clothing',
+    maxStack: 1,
+    icon: '🎒',
+    description: 'Increases inventory space.',
+    descriptionRu: 'Увеличивает вместимость инвентаря.',
+    effects: {},
+    weight: 0.5,
+    usable: true,
+  },
+  beanie_black: {
+    itemId: 'beanie_black',
+    name: 'Black Beanie',
+    nameRu: 'Черная шапка',
+    category: 'clothing',
+    maxStack: 1,
+    icon: '🧢',
+    description: 'A warm woolen black beanie.',
+    descriptionRu: 'Теплая шерстяная черная шапка.',
+    effects: {},
+    weight: 0.1,
+    usable: true,
+  },
+  cap_red: {
+    itemId: 'cap_red',
+    name: 'Red Cap',
+    nameRu: 'Красная кепка',
+    category: 'clothing',
+    maxStack: 1,
+    icon: '🧢',
+    description: 'A simple red baseball cap. Protects from the sun.',
+    descriptionRu: 'Простая красная бейсболка. Защищает от солнца.',
+    effects: {},
+    weight: 0.1,
+    usable: true,
+  },
+  ushanka_hat: {
+    itemId: 'ushanka_hat',
+    name: 'Ushanka Hat',
+    nameRu: 'Шапка-ушанка',
+    category: 'clothing',
+    maxStack: 1,
+    icon: '🎩',
+    description: 'Very warm fur hat for severe frosts.',
+    descriptionRu: 'Очень теплая меховая шапка для суровых морозов.',
+    effects: {},
+    weight: 0.3,
+    usable: true,
+  },
+
+  // FACE
+  scarf_blue: {
+    itemId: 'scarf_blue',
+    name: 'Blue Scarf',
+    nameRu: 'Синий шарф',
+    category: 'clothing',
+    maxStack: 1,
+    icon: '🧣',
+    description: 'Knitted warm blue scarf.',
+    descriptionRu: 'Вязаный теплый синий шарф.',
+    effects: {},
+    weight: 0.15,
+    usable: true,
+  },
+
+  // UNDERWEAR
+  tshirt_white: {
+    itemId: 'tshirt_white',
+    name: 'White T-Shirt',
+    nameRu: 'Белая футболка',
+    category: 'clothing',
+    maxStack: 1,
+    icon: '👕',
+    description: 'Light breathable cotton t-shirt.',
+    descriptionRu: 'Легкая дышащая хлопковая футболка.',
+    effects: {},
+    weight: 0.1,
+    usable: true,
+  },
+  tshirt_black: {
+    itemId: 'tshirt_black',
+    name: 'Black T-Shirt',
+    nameRu: 'Черная футболка',
+    category: 'clothing',
+    maxStack: 1,
+    icon: '👕',
+    description: 'Simple black cotton t-shirt.',
+    descriptionRu: 'Простая черная хлопковая футболка.',
+    effects: {},
+    weight: 0.1,
+    usable: true,
+  },
+  long_johns: {
+    itemId: 'long_johns',
+    name: 'Thermal Underwear',
+    nameRu: 'Термобелье',
+    category: 'clothing',
+    maxStack: 1,
+    icon: '🩲',
+    description: 'Warm base layer for cold weather.',
+    descriptionRu: 'Теплый базовый слой для холодной погоды.',
+    effects: {},
+    weight: 0.2,
+    usable: true,
+  },
+
+  // SHIRTS
+  sweater_blue: {
+    itemId: 'sweater_blue',
+    name: 'Blue Sweater',
+    nameRu: 'Синяя кофта',
+    category: 'clothing',
+    maxStack: 1,
+    icon: '🧥',
+    description: 'Comfortable blue knitted sweater.',
+    descriptionRu: 'Удобная синяя вязаная кофта.',
+    effects: {},
+    weight: 0.4,
+    usable: true,
+  },
+  plaid_shirt: {
+    itemId: 'plaid_shirt',
+    name: 'Plaid Shirt',
+    nameRu: 'Клетчатая рубашка',
+    category: 'clothing',
+    maxStack: 1,
+    icon: '👔',
+    description: 'Flannel plaid shirt. Classic.',
+    descriptionRu: 'Фланелевая клетчатая рубашка. Классика.',
+    effects: {},
+    weight: 0.3,
+    usable: true,
+  },
+
+  // JACKETS
+  leather_jacket: {
+    itemId: 'leather_jacket',
+    name: 'Leather Jacket',
+    nameRu: 'Кожаная куртка',
+    category: 'clothing',
+    maxStack: 1,
+    icon: '🧥',
+    description: 'Tough leather jacket. Good wind protection.',
+    descriptionRu: 'Прочная кожаная куртка. Хорошо защищает от ветра.',
+    effects: {},
+    weight: 1.2,
+    usable: true,
+  },
+  winter_jacket: {
+    itemId: 'winter_jacket',
+    name: 'Winter Down Jacket',
+    nameRu: 'Зимний пуховик',
+    category: 'clothing',
+    maxStack: 1,
+    icon: '🧥',
+    description: 'Heavy insulated jacket for extreme cold.',
+    descriptionRu: 'Тяжелая утепленная куртка для сильных морозов.',
+    effects: {},
+    weight: 1.5,
+    usable: true,
+  },
+  raincoat_yellow: {
+    itemId: 'raincoat_yellow',
+    name: 'Yellow Raincoat',
+    nameRu: 'Желтый дождевик',
+    category: 'clothing',
+    maxStack: 1,
+    icon: '🧥',
+    description: 'Waterproof raincoat. Keeps you dry but not very breathable.',
+    descriptionRu: 'Водонепроницаемый плащ. Сохранит сухим, но почти не дышит.',
+    effects: {},
+    weight: 0.3,
+    usable: true,
+  },
+
+  // LEGS
+  jeans_blue: {
+    itemId: 'jeans_blue',
+    name: 'Blue Jeans',
+    nameRu: 'Синие джинсы',
+    category: 'clothing',
+    maxStack: 1,
+    icon: '👖',
+    description: 'Classic durable denim jeans.',
+    descriptionRu: 'Классические прочные джинсы.',
+    effects: {},
+    weight: 0.6,
+    usable: true,
+  },
+  cargo_pants: {
+    itemId: 'cargo_pants',
+    name: 'Cargo Pants',
+    nameRu: 'Штаны карго',
+    category: 'clothing',
+    maxStack: 1,
+    icon: '👖',
+    description: 'Practical pants with many pockets.',
+    descriptionRu: 'Практичные штаны с множеством карманов.',
+    effects: {},
+    weight: 0.7,
+    usable: true,
+  },
+  shorts_khaki: {
+    itemId: 'shorts_khaki',
+    name: 'Khaki Shorts',
+    nameRu: 'Шорты хаки',
+    category: 'clothing',
+    maxStack: 1,
+    icon: '🩳',
+    description: 'Lightweight shorts for hot weather.',
+    descriptionRu: 'Легкие шорты для жаркой погоды.',
+    effects: {},
+    weight: 0.2,
+    usable: true,
+  },
+
+  // FEET
+  sneakers_white: {
+    itemId: 'sneakers_white',
+    name: 'White Sneakers',
+    nameRu: 'Белые кроссовки',
+    category: 'clothing',
+    maxStack: 1,
+    icon: '👟',
+    description: 'Comfortable sports shoes.',
+    descriptionRu: 'Удобная спортивная обувь.',
+    effects: {},
+    weight: 0.5,
+    usable: true,
+  },
+  work_boots: {
+    itemId: 'work_boots',
+    name: 'Work Boots',
+    nameRu: 'Рабочие ботинки',
+    category: 'clothing',
+    maxStack: 1,
+    icon: '👢',
+    description: 'Heavy duty leather boots.',
+    descriptionRu: 'Тяжелые кожаные рабочие ботинки.',
+    effects: {},
+    weight: 1.2,
+    usable: true,
+  },
+  winter_boots: {
+    itemId: 'winter_boots',
+    name: 'Winter Boots',
+    nameRu: 'Зимние ботинки',
+    category: 'clothing',
+    maxStack: 1,
+    icon: '👢',
+    description: 'Insulated boots for snow.',
+    descriptionRu: 'Утепленные ботинки для снега.',
+    effects: {},
+    weight: 1.5,
+    usable: true,
+  },
+  socks_white: {
+    itemId: 'socks_white',
+    name: 'Cotton Socks',
+    nameRu: 'Хлопковые носки',
+    category: 'clothing',
+    maxStack: 1,
+    icon: '🧦',
+    description: 'Simple white socks.',
+    descriptionRu: 'Простые белые носки.',
+    effects: {},
+    weight: 0.05,
+    usable: true,
+  },
+  socks_wool: {
+    itemId: 'socks_wool',
+    name: 'Woolen Socks',
+    nameRu: 'Шерстяные носки',
+    category: 'clothing',
+    maxStack: 1,
+    icon: '🧦',
+    description: 'Warm thick knitted socks.',
+    descriptionRu: 'Теплые толстые вязаные носки.',
+    effects: {},
+    weight: 0.1,
+    usable: true,
+  },
+
+  // HANDS
+  gloves_leather: {
+    itemId: 'gloves_leather',
+    name: 'Leather Gloves',
+    nameRu: 'Кожаные перчатки',
+    category: 'clothing',
+    maxStack: 1,
+    icon: '🧤',
+    description: 'Protects hands from cold and scratches.',
+    descriptionRu: 'Защищают руки от холода и царапин.',
+    effects: {},
+    weight: 0.1,
+    usable: true,
+  },
+  gloves_winter: {
+    itemId: 'gloves_winter',
+    name: 'Winter Gloves',
+    nameRu: 'Зимние перчатки',
+    category: 'clothing',
+    maxStack: 1,
+    icon: '🧤',
+    description: 'Thick insulated gloves.',
+    descriptionRu: 'Толстые утепленные перчатки.',
+    effects: {},
+    weight: 0.2,
+    usable: true,
+  },
+
   litter_trash: {
     itemId: 'litter_trash',
     name: 'Recyclable Street Litter',
@@ -1884,11 +2202,48 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
 
 let itemCounter = 100;
 
+
+export const CLOTHING_STATS: Record<string, import('./types').ClothingStats> = {
+  
+  backpack: { slot: 'back', layer: 'outerwear', insulation: 5, windResistance: 5, waterResistance: 5, breathability: 90, mobilityPenalty: 2, color: '#4a5568' },
+  beanie_black: { slot: 'head', layer: 'outerwear', insulation: 30, windResistance: 20, waterResistance: 10, breathability: 40, mobilityPenalty: 2, color: '#222' },
+  cap_red: { slot: 'head', layer: 'outerwear', insulation: 5, windResistance: 5, waterResistance: 5, breathability: 60, mobilityPenalty: 0, color: '#e53e3e' },
+  ushanka_hat: { slot: 'head', layer: 'outerwear', insulation: 70, windResistance: 80, waterResistance: 30, breathability: 20, mobilityPenalty: 5, color: '#5a4d41' },
+
+  sunglasses: { slot: 'face', layer: 'outerwear', insulation: 0, windResistance: 5, waterResistance: 0, breathability: 100, mobilityPenalty: 0, color: '#111' },
+  scarf_blue: { slot: 'face', layer: 'outerwear', insulation: 20, windResistance: 30, waterResistance: 10, breathability: 50, mobilityPenalty: 2, color: '#3182ce' },
+
+  tshirt_white: { slot: 'torso', layer: 'underwear', insulation: 10, windResistance: 5, waterResistance: 0, breathability: 80, mobilityPenalty: 1, color: '#f8fafc' },
+  tshirt_black: { slot: 'torso', layer: 'underwear', insulation: 10, windResistance: 5, waterResistance: 0, breathability: 80, mobilityPenalty: 1, color: '#1a202c' },
+  long_johns: { slot: 'legs', layer: 'underwear', insulation: 40, windResistance: 10, waterResistance: 5, breathability: 60, mobilityPenalty: 3, color: '#e2e8f0' },
+
+  sweater_blue: { slot: 'torso', layer: 'shirt', insulation: 45, windResistance: 15, waterResistance: 10, breathability: 40, mobilityPenalty: 5, color: '#2b6cb0' },
+  plaid_shirt: { slot: 'torso', layer: 'shirt', insulation: 20, windResistance: 10, waterResistance: 5, breathability: 60, mobilityPenalty: 2, color: '#c53030', secondaryColor: '#2d3748' },
+
+  leather_jacket: { slot: 'torso', layer: 'jacket', insulation: 30, windResistance: 90, waterResistance: 60, breathability: 15, mobilityPenalty: 10, color: '#4a3f35' },
+  winter_jacket: { slot: 'torso', layer: 'jacket', insulation: 90, windResistance: 80, waterResistance: 70, breathability: 20, mobilityPenalty: 20, color: '#2b6cb0' },
+  raincoat_yellow: { slot: 'torso', layer: 'outerwear', insulation: 10, windResistance: 100, waterResistance: 100, breathability: 5, mobilityPenalty: 5, color: '#ecc94b' },
+
+  jeans_blue: { slot: 'legs', layer: 'shirt', insulation: 20, windResistance: 30, waterResistance: 10, breathability: 50, mobilityPenalty: 5, color: '#2b6cb0' },
+  cargo_pants: { slot: 'legs', layer: 'shirt', insulation: 25, windResistance: 40, waterResistance: 20, breathability: 45, mobilityPenalty: 6, color: '#718096' },
+  shorts_khaki: { slot: 'legs', layer: 'shirt', insulation: 5, windResistance: 5, waterResistance: 5, breathability: 90, mobilityPenalty: 0, color: '#d6bcfa' }, // wait khaki color
+  
+  sneakers_white: { slot: 'feet', layer: 'outerwear', insulation: 15, windResistance: 20, waterResistance: 15, breathability: 60, mobilityPenalty: 2, color: '#f8fafc' },
+  work_boots: { slot: 'feet', layer: 'outerwear', insulation: 30, windResistance: 50, waterResistance: 60, breathability: 30, mobilityPenalty: 12, color: '#7b341e' },
+  winter_boots: { slot: 'feet', layer: 'outerwear', insulation: 80, windResistance: 70, waterResistance: 80, breathability: 20, mobilityPenalty: 15, color: '#4a5568' },
+  socks_white: { slot: 'feet', layer: 'underwear', insulation: 10, windResistance: 5, waterResistance: 0, breathability: 70, mobilityPenalty: 1, color: '#f8fafc' },
+  socks_wool: { slot: 'feet', layer: 'underwear', insulation: 40, windResistance: 10, waterResistance: 10, breathability: 40, mobilityPenalty: 2, color: '#a0aec0' },
+
+  gloves_leather: { slot: 'hands', layer: 'outerwear', insulation: 20, windResistance: 60, waterResistance: 40, breathability: 30, mobilityPenalty: 5, color: '#4a3f35' },
+  gloves_winter: { slot: 'hands', layer: 'outerwear', insulation: 60, windResistance: 50, waterResistance: 50, breathability: 20, mobilityPenalty: 10, color: '#2d3748' },
+};
+
 export function createItem(itemId: string, count: number = 1, initialPortions?: number): InventoryItem {
   const def = ITEM_CATALOG[itemId] || ITEM_CATALOG.water_bottle;
   itemCounter++;
   const maxPortions = def.biteCount || 1;
   const portions = initialPortions !== undefined ? initialPortions : maxPortions;
+  const stats = CLOTHING_STATS[def.itemId];
   return {
     id: `item_${itemId}_${Date.now()}_${itemCounter}`,
     itemId: def.itemId,
@@ -1902,6 +2257,7 @@ export function createItem(itemId: string, count: number = 1, initialPortions?: 
     descriptionRu: def.descriptionRu,
     effects: { ...def.effects },
     weight: def.weight,
+    clothingStats: stats,
     usable: def.usable,
     portions: portions,
     maxPortions: maxPortions
@@ -2586,16 +2942,22 @@ export function useItemOnPlayer(
   const maxPortions = item.maxPortions || def?.biteCount || 1;
   const currentPortions = item.portions !== undefined ? item.portions : maxPortions;
 
-  if (maxPortions > 1) {
-    // Check fullness & nausea
-    if (item.category === 'food' && (player.needs.fullness || 0) >= 98) {
+  // Check fullness & nausea
+  if ((item.category === 'food' || item.category === 'drink') && (player.needs.fullness || 0) >= 98) {
+    if (item.category === 'food') {
       addPlayerNotification(player, 'Вы слишком сыты! Подождите, пока переварится...', 'warning');
       return { success: false, message: 'Слишком сытно' };
+    } else {
+      addPlayerNotification(player, 'Желудок полон! Больше не лезет...', 'warning');
+      return { success: false, message: 'Желудок полон' };
     }
-    if ((player.needs.nausea || 0) >= 65) {
-      addPlayerNotification(player, 'Вас тошнит! Нельзя есть или пить.', 'warning');
-      return { success: false, message: 'Тошнит' };
-    }
+  }
+  if ((player.needs.nausea || 0) >= 65) {
+    addPlayerNotification(player, 'Вас тошнит! Нельзя есть или пить.', 'warning');
+    return { success: false, message: 'Тошнит' };
+  }
+
+  if (maxPortions > 1) {
 
     const ratio = 1 / maxPortions;
     const hungerGain = item.effects.hunger ? Math.round((item.effects.hunger * ratio) * 10) / 10 : 0;
@@ -2726,6 +3088,15 @@ export function useItemOnPlayer(
       player.bodyState.hydration = Math.min(100, player.bodyState.hydration + fx.thirst);
     }
     appliedSomething = true;
+  }
+
+  // Apply Fullness for single portion items
+  if (item.category === 'food' || item.category === 'drink') {
+    const fGain = def?.fullnessPerBite !== undefined ? def.fullnessPerBite : (item.category === 'food' ? 20 : 15);
+    player.needs.fullness = Math.min(100, (player.needs.fullness || 0) + fGain);
+    if ((player.needs.fullness || 0) > 88) {
+      player.needs.nausea = Math.min(100, (player.needs.nausea || 0) + 4);
+    }
   }
 
   // Body State medical treatment
@@ -3034,3 +3405,39 @@ export function disposeTrashInBin(player: Player, world: GameWorld, targetItemId
   }
 }
 
+
+
+export function equipClothing(player: Player, inventoryIndex: number) {
+  const item = player.inventory[inventoryIndex];
+  if (!item || !item.clothingStats) return { success: false, message: 'Это не одежда' };
+  
+  const stats = item.clothingStats;
+  player.equippedClothing = player.equippedClothing || {};
+  player.equippedClothing[stats.slot] = player.equippedClothing[stats.slot] || {};
+  
+  // If there is already something in this layer, we should probably swap it, 
+  // but for now let's just unequip it and put it in inventory
+  if (player.equippedClothing[stats.slot]![stats.layer]) {
+    const existing = player.equippedClothing[stats.slot]![stats.layer]!;
+    player.inventory[inventoryIndex] = existing;
+  } else {
+    // Remove from inventory
+    player.inventory.splice(inventoryIndex, 1);
+  }
+  player.equippedClothing[stats.slot]![stats.layer] = item;
+  return { success: true, message: 'Одежда надета' };
+}
+
+export function unequipClothing(player: Player, slot: import('./types').ClothingSlot, layer: import('./types').ClothingLayer) {
+  if (!player.equippedClothing || !player.equippedClothing[slot] || !player.equippedClothing[slot]![layer]) return { success: false };
+  
+  const item = player.equippedClothing[slot]![layer]!;
+  
+  if (player.inventory.length >= player.maxInventorySlots) {
+    return { success: false, message: 'Инвентарь полон' };
+  }
+  
+  player.inventory.push(item);
+  delete player.equippedClothing[slot]![layer];
+  return { success: true, message: 'Одежда снята' };
+}

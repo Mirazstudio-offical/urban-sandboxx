@@ -690,6 +690,95 @@ export function updateAITraffic(
       }
     }
 
+    // --- NPC FIRE FIGHTING REACTION ---
+    if (!car.driverExitedForFire) {
+      let nearestFirePos: Vector2D | null = null;
+      let targetCar: Vehicle | null = null;
+      let targetStain: any = null;
+
+      const nearbyVehs = vehGrid ? vehGrid.queryRadius(car.x, car.y, 300) : world.vehicles;
+      for (const otherCar of nearbyVehs) {
+        if (otherCar !== car && otherCar.damage && !otherCar.damage.isFullyBurnt) {
+          const hasFire = otherCar.damage.engineFire || otherCar.damage.fuelTankFire || otherCar.damage.cabinFire || otherCar.damage.underHoodSmolder || (otherCar.damage.fireIntensity || 0) > 0;
+          if (hasFire) {
+            nearestFirePos = { x: otherCar.x, y: otherCar.y };
+            targetCar = otherCar;
+            break;
+          }
+        }
+      }
+
+      if (!nearestFirePos && world.stains) {
+        for (const st of world.stains) {
+          if (st.onFire && (st.fireIntensity || 0) > 0) {
+            if (Math.hypot(st.x - car.x, st.y - car.y) < 300) {
+              nearestFirePos = { x: st.x, y: st.y };
+              targetStain = st;
+              break;
+            }
+          }
+        }
+      }
+
+      if (nearestFirePos) {
+        car.driverExitedForFire = true;
+        if (Math.random() < 0.7) {
+          car.targetSpeed = 0;
+          car.speed = 0;
+          car.aiState = 'parked';
+          car.turnSignal = 'hazard';
+
+          const side = Math.random() < 0.5 ? 1 : -1;
+          const doorX = car.x - Math.sin(car.angle) * (car.width / 2 + 12) * side;
+          const doorY = car.y + Math.cos(car.angle) * (car.width / 2 + 12) * side;
+
+          const skinColors = ['#ffd1b3', '#fcd5b5', '#e0ac69', '#c68642', '#8d5524', '#59381e'];
+          const shirtColors = ['#ef4444', '#f97316', '#f59e0b', '#10b981', '#06b6d4', '#3b82f6', '#6366f1', '#ec4899', '#ffffff', '#1e293b'];
+          const pantsColors = ['#1e293b', '#334155', '#475569', '#172554', '#14532d', '#78350f'];
+          const hairColors = ['#1c1917', '#78350f', '#b45309', '#d97706', '#94a3b8', '#f8fafc'];
+
+          const driverPed: Pedestrian = {
+            id: 'driver_ext_' + Math.random().toString(36).substring(2, 9),
+            x: doorX,
+            y: doorY,
+            vx: 0,
+            vy: 0,
+            angle: car.angle,
+            speed: 0,
+            targetSpeed: 60,
+            skinColor: skinColors[Math.floor(Math.random() * skinColors.length)],
+            shirtColor: shirtColors[Math.floor(Math.random() * shirtColors.length)],
+            pantsColor: pantsColors[Math.floor(Math.random() * pantsColors.length)],
+            hairColor: hairColors[Math.floor(Math.random() * hairColors.length)],
+            walkCycle: 0,
+            handheldProp: 'extinguisher',
+            extinguisherCharges: 100,
+            targetPathId: null,
+            targetWaypointIndex: 0,
+            routeWaypoints: [],
+            isCrossingRoad: false,
+            waitingAtCurb: false,
+            crosswalkWaitTimer: 0,
+            crosswalkCooldownTimer: 0,
+            state: 'extinguishing_fire',
+            panicTimer: 0,
+            behaviorTimer: 0,
+            alertBubbleText: '🧯 Иду тушить!',
+            alertBubbleTimer: 2.5
+          };
+
+          if (targetCar) {
+            (driverPed as any).targetFireCarId = targetCar.id;
+          } else if (targetStain) {
+            (driverPed as any).targetFireStainId = targetStain.id;
+          }
+
+          world.pedestrians.push(driverPed);
+          car.fireExtinguisherDriverId = driverPed.id;
+        }
+      }
+    }
+
     // --- OPTIMIZATION: DESPAWN / RECYCLE DISTANT CARS ---
     const distToPlayer = Math.hypot(car.x - targetPos.x, car.y - targetPos.y);
     if (distToPlayer > 1450 || (totalActiveCount > performanceConfig.maxVehicles && distToPlayer > 800)) {
@@ -2031,6 +2120,129 @@ export function updatePedestrians(
       ped.y = -10000;
       continue;
     }
+
+    // A1. Handle Extinguishing Fire state
+    if (ped.state === 'extinguishing_fire') {
+      let targetX = ped.x;
+      let targetY = ped.y;
+      let fireExists = false;
+
+      const targetCarId = (ped as any).targetFireCarId;
+      const targetStainId = (ped as any).targetFireStainId;
+
+      let targetCar = targetCarId ? world.vehicles.find((v) => v.id === targetCarId) : null;
+      let targetStain = targetStainId ? world.stains?.find((s) => (s as any).id === targetStainId || Math.hypot(s.x - ped.x, s.y - ped.y) < 180) : null;
+
+      if (targetCar && targetCar.damage && !targetCar.damage.isFullyBurnt) {
+        const hasFire = targetCar.damage.engineFire || targetCar.damage.fuelTankFire || targetCar.damage.cabinFire || targetCar.damage.underHoodSmolder || (targetCar.damage.fireIntensity || 0) > 0;
+        if (hasFire) {
+          targetX = targetCar.x;
+          targetY = targetCar.y;
+          fireExists = true;
+        }
+      } else if (targetStain && targetStain.onFire && (targetStain.fireIntensity || 0) > 0) {
+        targetX = targetStain.x;
+        targetY = targetStain.y;
+        fireExists = true;
+      } else {
+        for (const v of world.vehicles) {
+          if (v.damage && !v.damage.isFullyBurnt && (v.damage.engineFire || v.damage.fuelTankFire || v.damage.cabinFire || v.damage.underHoodSmolder || (v.damage.fireIntensity || 0) > 0)) {
+            targetCar = v;
+            targetX = v.x;
+            targetY = v.y;
+            fireExists = true;
+            break;
+          }
+        }
+        if (!fireExists && world.stains) {
+          for (const s of world.stains) {
+            if (s.onFire && (s.fireIntensity || 0) > 0) {
+              targetStain = s;
+              targetX = s.x;
+              targetY = s.y;
+              fireExists = true;
+              break;
+            }
+          }
+        }
+      }
+
+      if (!fireExists || (ped.extinguisherCharges !== undefined && ped.extinguisherCharges <= 0)) {
+        ped.state = 'walking';
+        ped.handheldProp = null;
+        ped.alertBubbleText = ped.extinguisherCharges !== undefined && ped.extinguisherCharges <= 0 ? '❌ Пена кончилась!' : '✨ Пожар потушен!';
+        ped.alertBubbleTimer = 2.0;
+        continue;
+      }
+
+      const dx = targetX - ped.x;
+      const dy = targetY - ped.y;
+      const dist = Math.hypot(dx, dy);
+      ped.angle = Math.atan2(dy, dx);
+
+      if (dist > 70) {
+        ped.targetSpeed = 65;
+        ped.walkCycle += dt * 9;
+        ped.speed = ped.targetSpeed;
+        ped.vx = Math.cos(ped.angle) * ped.speed;
+        ped.vy = Math.sin(ped.angle) * ped.speed;
+        ped.x += ped.vx * dt;
+        ped.y += ped.vy * dt;
+      } else {
+        ped.targetSpeed = 0;
+        ped.speed = 0;
+        ped.vx = 0;
+        ped.vy = 0;
+
+        if (ped.extinguisherCharges !== undefined) {
+          ped.extinguisherCharges = Math.max(0, ped.extinguisherCharges - 18 * dt);
+        }
+
+        if (Math.random() < 18.0 * dt) {
+          world.particles.push({
+            x: ped.x + Math.cos(ped.angle) * 12 + (Math.random() * 8 - 4),
+            y: ped.y + Math.sin(ped.angle) * 12 + (Math.random() * 8 - 4),
+            vx: Math.cos(ped.angle) * (60 + Math.random() * 40),
+            vy: Math.sin(ped.angle) * (60 + Math.random() * 40),
+            radius: 3 + Math.random() * 4,
+            color: '#f8fafc',
+            alpha: 0.85,
+            life: 0,
+            maxLife: 0.25 + Math.random() * 0.2,
+            type: 'spark'
+          });
+        }
+
+        if (targetCar && targetCar.damage) {
+          targetCar.damage.fireTimer = Math.max(0, (targetCar.damage.fireTimer || 0) - dt * 35.0);
+          targetCar.damage.fireIntensity = Math.max(0, (targetCar.damage.fireIntensity || 1.0) - 0.75 * dt);
+          targetCar.damage.fireProgress = Math.max(0, (targetCar.damage.fireProgress || 1.0) - 0.60 * dt);
+          if ((targetCar.damage.fireIntensity <= 0.05 && targetCar.damage.fireProgress <= 0.05) || (targetCar.damage.fireTimer || 0) <= 2.0) {
+            targetCar.damage.engineFire = false;
+            targetCar.damage.fuelTankFire = false;
+            targetCar.damage.cabinFire = false;
+            targetCar.damage.underHoodSmolder = false;
+            targetCar.damage.engineSmoking = false;
+            targetCar.damage.fireIntensity = 0;
+            targetCar.damage.fireProgress = 0;
+            targetCar.damage.fireTimer = 0;
+            targetCar.damage.groundPuddleIgnited = false;
+          }
+        }
+        if (targetStain) {
+          targetStain.fireIntensity = Math.max(0, (targetStain.fireIntensity || 1.0) - 1.2 * dt);
+          if (targetStain.fireIntensity <= 0.05) {
+            targetStain.onFire = false;
+            targetStain.fireIntensity = 0;
+          }
+        }
+      }
+
+      ped.x = Math.max(15, Math.min(world.width - 15, ped.x));
+      ped.y = Math.max(15, Math.min(world.height - 15, ped.y));
+      continue;
+    }
+
     // A. Handle Inside Building state
     if (ped.isInsideBuilding) {
       ped.insideBuildingTimer = (ped.insideBuildingTimer ?? 0) - dt;
@@ -2535,7 +2747,7 @@ export function updatePedestrians(
         vy: ped.vy * 0.5 + (Math.random() - 0.5) * 50,
         angle: Math.random() * Math.PI * 2,
         rotationSpeed: (Math.random() - 0.5) * 10,
-        type: ped.handheldProp,
+        type: (ped.handheldProp === 'extinguisher' ? 'can' : ped.handheldProp) as any,
         color: ped.propColor || '#ffffff',
         size: ped.handheldProp === 'box' ? 12 : (ped.handheldProp === 'phone' ? 4 : 6),
         isAirborne: true,

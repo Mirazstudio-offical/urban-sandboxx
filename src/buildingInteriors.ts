@@ -614,7 +614,7 @@ export function generateBuildingLayout(bld: Building, floor: number): BuildingLa
     buildCafeInterior({ bld, floor, W, H, rooms, walls, furniture, elevators, stairs, exits, elevatorZone, stairsZone, exitZone }, 'Кафе & Пекарня "Cofix"');
   } else if (bld.type === 'coffee_bistro' || bld.shopBrand === 'bean_bistro') {
     buildCafeInterior({ bld, floor, W, H, rooms, walls, furniture, elevators, stairs, exits, elevatorZone, stairsZone, exitZone }, 'Кафе & Кофейня "Bean & Bistro"');
-  } else if (bld.type === 'commercial_gallery') {
+  } else if (bld.type === 'commercial_gallery' || bld.type === 'shopping_mall') {
     buildGalleryInterior({ bld, floor, W, H, rooms, walls, furniture, elevators, stairs, exits, elevatorZone, stairsZone, exitZone });
   } else if (bld.type === 'commercial' || bld.type === 'shop' || isShop) {
     buildSupermarketInterior({ bld, floor, W, H, rooms, walls, furniture, elevators, stairs, exits, elevatorZone, stairsZone, exitZone });

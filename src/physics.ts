@@ -696,13 +696,20 @@ export function applyVehicleDamageAndDeformation(
   }
   const isEngineHot = (eng.temperature ?? 20) > 85;
 
+  if (normX > 0.15 && impactSpeed > 22) {
+    const isFrontFuelRailBroken = (dmg.frontCrumple ?? 0) > 2.2 || severity > 0.38;
+    if (isFrontFuelRailBroken) {
+      fuel.fuelRailBroken = true;
+    }
+  }
+
   if (!dmg.isFullyBurnt && !dmg.engineFire && !dmg.cabinFire && !dmg.underHoodSmolder && !dmg.fuelTankFire) {
     // Check FRONTAL collision ignition (Engine Bay fire)
     // Occurs when the front end strikes at high speed / severe crumple:
     // High-pressure fuel rail / lines shear, 12V battery shorts with electric arcing, fuel sprays on hot manifold
     if (normX > 0.15 && impactSpeed > 22) {
       const isFrontFuelRailBroken = (dmg.frontCrumple ?? 0) > 2.2 || severity > 0.38;
-      if (isFrontFuelRailBroken && (isEngineHot || severity > 0.52 || eng.radiatorPunctured)) {
+      if (isFrontFuelRailBroken && (isEngineHot || severity > 0.52 || eng.radiatorPunctured) && Math.random() < 0.04) {
         dmg.fireOrigin = 'front';
         dmg.underHoodSmolder = true;
         dmg.fireTimer = 0;
@@ -722,7 +729,7 @@ export function applyVehicleDamageAndDeformation(
     // Tank / filler neck punctures, gasoline leaks and flashes from metal friction sparks or hot exhaust
     else if (normX <= 0.15 && fuel.tankPunctured) {
       const hasIgnitionSource = (scrapeSpeed > 14 || impactSpeed > 30 || severity > 0.44 || isEngineHot);
-      if (hasIgnitionSource) {
+      if (hasIgnitionSource && Math.random() < 0.04) {
         dmg.fireOrigin = 'rear';
         dmg.fuelTankFire = true;
         dmg.fireTimer = 0;
@@ -1138,6 +1145,28 @@ export function updateVehicleSystems(car: Vehicle, dt: number, world: GameWorld)
 
   if (isTankerHeavilyDamaged && !fuel.tankPunctured) {
     fuel.tankPunctured = true;
+  }
+
+  // 4a. Engine fuel rail/line leak (at most 0.5 - 1.0 liters in a head-on collision)
+  if (fuel.fuelRailBroken && !fuel.tankPunctured) {
+    if (fuel.engineFuelLeaked === undefined) {
+      fuel.engineFuelLeaked = 0;
+    }
+    const maxEngineLeak = 0.5 + ((car.mass ?? 1400) % 500) / 1000; // deterministic range 0.5 - 1.0L
+    if (fuel.engineFuelLeaked < maxEngineLeak && fuel.tankLevel > 0) {
+      const leakRateSec = 0.08; // leak 0.08L per second
+      const leakLiters = Math.min(leakRateSec * dt, maxEngineLeak - fuel.engineFuelLeaked);
+      fuel.engineFuelLeaked += leakLiters;
+
+      // Convert liters to percentage of fuel tank capacity (usually 55L)
+      const leakPercent = (leakLiters / (fuel.tankCapacity || 55)) * 100;
+      fuel.tankLevel = Math.max(0, fuel.tankLevel - leakPercent);
+
+      // Periodically spawn small fuel stain under the engine/radiator anchor
+      if (Math.random() < 3.0 * dt) {
+        addOrGrowFluidStain(world, radAnchor.x + (Math.random() * 4 - 2), radAnchor.y + (Math.random() * 4 - 2), 'fuel');
+      }
+    }
   }
 
   if (fuel.tankPunctured) {
@@ -1705,7 +1734,18 @@ export function updatePlayerPedestrianPhysics(
     const legPenalty = isDoubleFracture ? 0.07 : (hasFracture ? 0.18 : (hasLegInjury ? 0.55 : 1.0));
 
     const canSprint = input.sprint && (!player.needs || player.needs.energy > 5) && !hasLegInjury;
-    let targetSpeed = (canSprint ? 175 : 95) * legPenalty;
+    
+    let mPenalty = 0;
+    if (player.equippedClothing) {
+      for (const slot of Object.values(player.equippedClothing)) {
+        for (const item of Object.values(slot || {})) {
+          if (item && item.clothingStats) mPenalty += item.clothingStats.mobilityPenalty || 0;
+        }
+      }
+    }
+    const mobilityFactor = Math.max(0.2, 1.0 - (mPenalty * 0.01));
+    let targetSpeed = (canSprint ? 175 : 95) * legPenalty * mobilityFactor;
+
 
     // Authentic gait hitching / limping rhythm when walking with an injured leg or fracture
     if (hasLegInjury && len > 0.01) {
@@ -2273,9 +2313,30 @@ export function updatePlayerNeedsAndVitals(
     updateFog(curVehicle, player, world, dt, timeHour);
   }
 
+
+  // Calculate clothing stats
+  let totalInsulation = 0;
+  let totalWaterResist = 0;
+  let totalBreathability = 0;
+  let totalMobilityPenalty = 0;
+  
+  if (player.equippedClothing) {
+    for (const slot of Object.values(player.equippedClothing)) {
+      for (const item of Object.values(slot || {})) {
+        if (item && item.clothingStats) {
+          totalInsulation += item.clothingStats.insulation || 0;
+          totalWaterResist += item.clothingStats.waterResistance || 0;
+          totalBreathability += item.clothingStats.breathability || 0;
+          totalMobilityPenalty += item.clothingStats.mobilityPenalty || 0;
+        }
+      }
+    }
+  }
+
   // 1. Wetness accumulation / drying
   if (isExposedToRain) {
-    bs.wetness = Math.min(100, bs.wetness + 5.0 * dt);
+    const wetRate = Math.max(0, 5.0 - (totalWaterResist * 0.05));
+    bs.wetness = Math.min(100, bs.wetness + wetRate * dt);
   } else {
     // In heated cabin/building, clothes dry much faster
     const cabinWarmth = curVehicle ? Math.max(0, (curVehicle.heaterTemp ?? 18) - 18) * 0.4 : 0;
@@ -2322,7 +2383,23 @@ export function updatePlayerNeedsAndVitals(
     }
   }
 
-  if (ambientTemp < 18.0) {
+  
+  // Adjust ambient temp based on clothes
+  // If cold outside, clothes keep you warm (increases effective ambient temp)
+  const effectiveAmbientTemp = ambientTemp < 18.0 ? ambientTemp + (totalInsulation * 0.25) : ambientTemp;
+  const isTooHotClothes = ambientTemp >= 25.0 && totalInsulation > 30;
+
+  if (isTooHotClothes && !player.isInVehicle) {
+      // Hot day in heavy clothes
+      const sweatRate = Math.max(0, (totalInsulation * 0.05) - (totalBreathability * 0.02));
+      player.needs.thirst = Math.max(0, player.needs.thirst - sweatRate * dt);
+      player.needs.energy = Math.max(0, player.needs.energy - (totalMobilityPenalty * 0.05) * dt);
+      bs.temperature = Math.min(38.5, bs.temperature + (sweatRate * 0.01) * dt);
+  }
+
+  if (effectiveAmbientTemp < 18.0) {
+    ambientTemp = effectiveAmbientTemp; // Use effective temp for the rest of the cold calculation
+
     // Player is exposed to cold (whether in cold unheated car, open window, or outside)
     const coldDeficit = (18.0 - ambientTemp) / 10; // e.g. 1.0 at 8°C, 1.4 at 4°C
     const wetMultiplier = 1.0 + (bs.wetness / 100) * 3.0; // wet clothes cause severe evaporative cooling
@@ -2606,7 +2683,17 @@ export function updatePlayerNeedsAndVitals(
   const maxEnergy = isDrowsy ? 70 : 100;
 
   if (input.sprint && !player.isInVehicle && (input.forward || input.backward || input.left || input.right)) {
-    player.needs.energy = Math.max(0, player.needs.energy - 20 * dt);
+    
+    let mPenalty = 0;
+    if (player.equippedClothing) {
+      for (const slot of Object.values(player.equippedClothing)) {
+        for (const item of Object.values(slot || {})) {
+          if (item && item.clothingStats) mPenalty += item.clothingStats.mobilityPenalty || 0;
+        }
+      }
+    }
+    player.needs.energy = Math.max(0, player.needs.energy - (20 + mPenalty * 0.4) * dt);
+  
   } else if (player.isDashing) {
     player.needs.energy = Math.max(0, player.needs.energy - 8 * dt);
   } else {

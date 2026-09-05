@@ -772,6 +772,12 @@ export default function App() {
       fullness: 60,
       nausea: 0
     },
+    equippedClothing: {
+      torso: { shirt: createItem('sweater_blue', 1) },
+      legs: { shirt: createItem('jeans_blue', 1) },
+      feet: { outerwear: createItem('work_boots', 1) },
+      back: { outerwear: createItem('backpack', 1) }
+    },
     inventory: createDefaultPlayerInventory(),
     maxInventorySlots: 18,
     notifications: []
@@ -2533,6 +2539,7 @@ export default function App() {
       if (p.isInsideBuilding) {
         // Resolve building directly to guarantee 100% correct shop catalog
         const bld = world?.buildings.find(b => b.id === p.currentBuildingId);
+        let hasStandaloneShop = false;
         let resolvedType: CityShop['type'] = 'supermarket';
         let resolvedTitle = 'Супермаркет "Пятёрочка 24/7"';
 
@@ -2540,52 +2547,91 @@ export default function App() {
           if (bld.shopBrand === 'pharmacy_36_6' || bld.type === 'hospital') {
             resolvedType = 'pharmacy';
             resolvedTitle = bld.nameRu || 'Аптека "36.6"';
+            hasStandaloneShop = true;
           } else if (bld.shopBrand === 'cofix_bakery') {
             resolvedType = 'cafe';
             resolvedTitle = bld.nameRu || 'Кафе & Пекарня "Cofix & Bakery"';
+            hasStandaloneShop = true;
           } else if (bld.shopBrand === 'bean_bistro') {
             resolvedType = 'cafe';
             resolvedTitle = bld.nameRu || 'Кафе & Кофейня "Bean & Bistro"';
+            hasStandaloneShop = true;
           } else if (bld.shopBrand === 'pitstop_service' || bld.type === 'car_dealership') {
             resolvedType = 'auto_shop';
             resolvedTitle = bld.nameRu || 'Автомастерская & Сервис "PIT-STOP"';
+            hasStandaloneShop = true;
           } else if (bld.shopBrand === 'splav_gear') {
             resolvedType = 'gear_shop';
             resolvedTitle = bld.nameRu || 'Магазин "Охота & Туризм Сплав"';
+            hasStandaloneShop = true;
           } else if (bld.shopBrand === 'dodo_pizza') {
             resolvedType = 'pizzeria';
             resolvedTitle = bld.nameRu || 'Пиццерия "Додо Пицца"';
+            hasStandaloneShop = true;
           } else if (bld.shopBrand === 'perekrestok') {
             resolvedType = 'supermarket';
             resolvedTitle = bld.nameRu || 'Супермаркет "Перекрёсток 24/7"';
+            hasStandaloneShop = true;
           } else if (bld.shopBrand === 'pyaterochka') {
             resolvedType = 'supermarket';
             resolvedTitle = bld.nameRu || 'Супермаркет "Пятёрочка 24/7"';
+            hasStandaloneShop = true;
           } else if (bld.shopBrand === 'vkusno_tochka') {
             resolvedType = 'fast_food';
             resolvedTitle = bld.nameRu || 'Ресторан "Вкусно — и точка"';
+            hasStandaloneShop = true;
           } else if (bld.shopBrand === 'mvideo') {
             resolvedType = 'electronics';
             resolvedTitle = bld.nameRu || 'Гипермаркет электроники "М.Видео"';
+            hasStandaloneShop = true;
           } else if (bld.shopBrand === 'sportmaster') {
             resolvedType = 'sports_shop';
             resolvedTitle = bld.nameRu || 'Спортивный гипермаркет "Спортмастер"';
+            hasStandaloneShop = true;
           } else if (bld.type === 'police_station') {
             resolvedType = 'gear_shop';
             resolvedTitle = 'Арсенал & Снаряжение полиции';
+            hasStandaloneShop = true;
           } else if (nearShopRef.current) {
             resolvedType = nearShopRef.current.type;
             resolvedTitle = nearShopRef.current.nameRu;
+            hasStandaloneShop = true;
           }
         } else if (nearShopRef.current) {
           resolvedType = nearShopRef.current.type;
           resolvedTitle = nearShopRef.current.nameRu;
+          hasStandaloneShop = true;
         }
 
-        setShopTitle(resolvedTitle);
-        setShopType(resolvedType);
-        setIsShopOpen(true);
-        sound.playUseItem();
+        if (hasStandaloneShop) {
+          setShopTitle(resolvedTitle);
+          setShopType(resolvedType);
+          setIsShopOpen(true);
+          sound.playUseItem();
+        } else if (selectedItem && selectedItem.usable) {
+          // E key uses/takes a bite/sip/pill from the selected hotbar item
+          useItemOnPlayer(p, currentSlot, world || undefined);
+          sound.resume();
+          setVitalsRefreshTick(t => t + 1);
+        } else {
+          // Fallback: Try to pick up nearest litter first, then ground items
+          if (pickupNearbyLitter(p, world)) {
+            // Litter picked up successfully
+          } else if (world && world.groundItems && world.groundItems.length > 0) {
+            let closestGI = null;
+            let minDist = 75;
+            for (const gi of world.groundItems) {
+              const d = Math.hypot(p.x - gi.x, p.y - gi.y);
+              if (d < minDist) {
+                minDist = d;
+                closestGI = gi;
+              }
+            }
+            if (closestGI) {
+              pickupGroundItem(p, world, closestGI);
+            }
+          }
+        }
       } else if (nearShopRef.current) {
         setShopTitle(nearShopRef.current.nameRu);
         setShopType(nearShopRef.current.type);
