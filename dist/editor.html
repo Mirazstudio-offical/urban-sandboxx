@@ -1,0 +1,4723 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pro City Map Editor - Top-Down City Simulator</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+:root {
+  --bg-dark: #090d16;
+  --bg-panel: #111827;
+  --bg-card: #1f2937;
+  --bg-input: #0f172a;
+  --border: #374151;
+  --accent: #38bdf8;
+  --accent-hover: #0ea5e9;
+  --accent-active: #0284c7;
+  --danger: #ef4444;
+  --success: #22c55e;
+  --warning: #f59e0b;
+  --text-main: #f8fafc;
+  --text-muted: #9ca3af;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  background: var(--bg-dark);
+  color: var(--text-main);
+  display: flex;
+  height: 100vh;
+  overflow: hidden;
+  user-select: none;
+}
+
+/* TOP NAVBAR */
+#app-header {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 48px;
+  background: rgba(17, 24, 39, 0.95);
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 16px;
+  z-index: 100;
+}
+
+.header-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 700;
+  font-size: 14px;
+  letter-spacing: 0.5px;
+}
+.brand-badge {
+  background: linear-gradient(135deg, #0284c7, #38bdf8);
+  color: #041325;
+  font-size: 10px;
+  font-weight: 800;
+  padding: 2px 6px;
+  border-radius: 4px;
+  text-transform: uppercase;
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--bg-card);
+  color: var(--text-main);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+.btn:hover {
+  background: #374151;
+  border-color: var(--accent);
+}
+.btn.primary {
+  background: #0284c7;
+  border-color: #38bdf8;
+  color: #fff;
+}
+.btn.primary:hover {
+  background: #0369a1;
+}
+.btn.success {
+  background: #15803d;
+  border-color: #22c55e;
+  color: #fff;
+}
+.btn.success:hover {
+  background: #166534;
+}
+.btn.danger {
+  background: #991b1b;
+  border-color: #ef4444;
+  color: #fff;
+}
+.btn.danger:hover {
+  background: #7f1d1d;
+}
+.btn.icon-only {
+  padding: 6px 8px;
+}
+.btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  border-color: var(--border);
+}
+
+/* MAIN LAYOUT */
+#main-container {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  padding-top: 48px;
+}
+
+/* LEFT TOOLBAR */
+#left-toolbar {
+  width: 58px;
+  background: var(--bg-panel);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 10px 0;
+  gap: 6px;
+  z-index: 50;
+}
+
+.tool-btn {
+  width: 44px;
+  height: 44px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 18px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  position: relative;
+}
+.tool-btn:hover {
+  background: var(--bg-card);
+  color: var(--text-main);
+}
+.tool-btn.active {
+  background: #0284c7;
+  color: #fff;
+  border-color: #38bdf8;
+  box-shadow: 0 0 12px rgba(56, 189, 248, 0.35);
+}
+.tool-hotkey {
+  font-size: 8px;
+  opacity: 0.8;
+  margin-top: 1px;
+}
+
+.tool-separator {
+  width: 32px;
+  height: 1px;
+  background: var(--border);
+  margin: 4px 0;
+}
+
+/* CANVAS VIEWPORT */
+#canvas-viewport {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+  background: #060911;
+}
+
+canvas#editorCanvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  cursor: crosshair;
+}
+
+/* FLOATING TOOL SETTINGS BAR (TOP CENTER) */
+#subtool-bar {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(17, 24, 39, 0.95);
+  backdrop-filter: blur(10px);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 6px 14px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 12px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
+  z-index: 40;
+}
+
+.subtool-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.subtool-group label {
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+.subtool-group select, .subtool-group input[type="number"], .subtool-group input[type="range"] {
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  color: var(--text-main);
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  outline: none;
+}
+.subtool-group select:focus, .subtool-group input:focus {
+  border-color: var(--accent);
+}
+
+/* FLOATING OVERLAYS (COORDS, ZOOM, SNAPPING) */
+#status-overlay {
+  position: absolute;
+  bottom: 12px;
+  left: 12px;
+  background: rgba(17, 24, 39, 0.88);
+  backdrop-filter: blur(6px);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 12px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  font-size: 11px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  color: var(--text-muted);
+  pointer-events: none;
+}
+#status-overlay span b {
+  color: var(--accent);
+}
+
+#snap-overlay {
+  position: absolute;
+  bottom: 12px;
+  right: 340px;
+  background: rgba(17, 24, 39, 0.88);
+  backdrop-filter: blur(6px);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 4px 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+}
+.toggle-chip {
+  padding: 4px 8px;
+  border-radius: 4px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 11px;
+  transition: all 0.15s;
+}
+.toggle-chip:hover {
+  background: #374151;
+  color: #fff;
+}
+.toggle-chip.active {
+  background: #0284c7;
+  color: #fff;
+  border-color: #38bdf8;
+}
+
+/* RIGHT SIDEBAR (INSPECTOR, OUTLINER, PRESETS) */
+#right-sidebar {
+  width: 320px;
+  background: var(--bg-panel);
+  border-left: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  z-index: 50;
+}
+
+.tab-headers {
+  display: flex;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-dark);
+}
+.tab-btn {
+  flex: 1;
+  padding: 10px;
+  text-align: center;
+  font-size: 12px;
+  font-weight: 600;
+  background: transparent;
+  color: var(--text-muted);
+  border: none;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  transition: all 0.15s;
+}
+.tab-btn.active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+  background: var(--bg-panel);
+}
+
+.tab-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px;
+  display: none;
+}
+.tab-content.active {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* INSPECTOR STYLING */
+.section-title {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  letter-spacing: 0.5px;
+  margin-bottom: 6px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.prop-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.prop-field {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 12px;
+}
+.prop-field label {
+  color: var(--text-muted);
+  width: 90px;
+  flex-shrink: 0;
+}
+.prop-field input[type="text"],
+.prop-field input[type="number"],
+.prop-field select {
+  flex: 1;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  color: var(--text-main);
+  padding: 5px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  outline: none;
+  min-width: 0;
+}
+.prop-field input[type="color"] {
+  width: 38px;
+  height: 28px;
+  padding: 2px;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  cursor: pointer;
+}
+.prop-field input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--accent);
+}
+
+.prop-grid-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+
+/* OUTLINER / ENTITY LIST */
+.search-box {
+  width: 100%;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  color: var(--text-main);
+  padding: 6px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  outline: none;
+  margin-bottom: 8px;
+}
+.search-box:focus {
+  border-color: var(--accent);
+}
+
+.entity-list-container {
+  flex: 1;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-input);
+  max-height: 420px;
+}
+
+.layer-group-header {
+  padding: 8px 10px;
+  background: #1a2234;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--accent);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+  cursor: pointer;
+}
+.layer-group-header:hover {
+  background: #233148;
+}
+
+.entity-row {
+  padding: 6px 10px;
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
+  border-bottom: 1px solid rgba(255,255,255,0.03);
+  transition: background 0.1s;
+}
+.entity-row:hover {
+  background: rgba(56, 189, 248, 0.12);
+}
+.entity-row.selected {
+  background: #0284c7;
+  color: #fff;
+}
+.entity-row .entity-meta {
+  font-size: 10px;
+  color: var(--text-muted);
+  font-family: monospace;
+}
+.entity-row.selected .entity-meta {
+  color: #e0f2fe;
+}
+
+/* MINIMAP CONTAINER */
+#minimap-box {
+  width: 100%;
+  height: 200px;
+  background: #060911;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+  position: relative;
+}
+#minimapCanvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+/* STATS BAR */
+#stats-footer {
+  padding: 8px 12px;
+  border-top: 1px solid var(--border);
+  background: var(--bg-dark);
+  font-size: 11px;
+  color: var(--text-muted);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+/* TOAST NOTIFICATION */
+#toast {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #0284c7;
+  color: #fff;
+  padding: 8px 18px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+  z-index: 1000;
+}
+#toast.show {
+  opacity: 1;
+  transform: translateX(-50%) translateY(-6px);
+}
+
+/* HOTKEY MODAL */
+#help-modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.75);
+  backdrop-filter: blur(6px);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+}
+.modal-card {
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  width: 540px;
+  max-width: 90vw;
+  padding: 24px;
+  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.7);
+}
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+.modal-header h2 {
+  font-size: 18px;
+  color: var(--accent);
+}
+.hotkey-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  font-size: 12px;
+  max-height: 60vh;
+  overflow-y: auto;
+}
+.hotkey-item {
+  display: flex;
+  justify-content: space-between;
+  background: var(--bg-card);
+  padding: 6px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+}
+.key-badge {
+  background: var(--bg-dark);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 700;
+  font-family: monospace;
+  color: var(--accent);
+}
+
+/* --- INTERIOR STUDIO MODAL & COMPONENTS --- */
+#interior-studio-modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(4, 7, 13, 0.95);
+  backdrop-filter: blur(8px);
+  display: none;
+  flex-direction: column;
+  z-index: 3000;
+  color: var(--text-main);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  user-select: none;
+}
+.is-header {
+  height: 52px;
+  background: var(--bg-panel);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 16px;
+  gap: 16px;
+  flex-shrink: 0;
+}
+.is-bld-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  font-weight: 600;
+}
+.is-bld-badge {
+  background: rgba(56, 189, 248, 0.15);
+  color: var(--accent);
+  padding: 3px 8px;
+  border-radius: 6px;
+  font-size: 12px;
+  border: 1px solid rgba(56, 189, 248, 0.3);
+}
+.is-floor-tabs-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  overflow-x: auto;
+  padding: 4px 0;
+}
+.is-floor-tab {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  padding: 4px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s ease;
+}
+.is-floor-tab:hover {
+  background: var(--bg-hover);
+  color: var(--text-main);
+}
+.is-floor-tab.active {
+  background: var(--accent);
+  color: #030712;
+  border-color: var(--accent);
+  font-weight: 700;
+}
+.is-body {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+  position: relative;
+}
+.is-left-panel {
+  width: 280px;
+  background: var(--bg-panel);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+.is-tools-tabs {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  background: var(--bg-dark);
+  border-bottom: 1px solid var(--border);
+  padding: 4px;
+  gap: 4px;
+}
+.is-tool-tab-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  padding: 6px 2px;
+  border-radius: 4px;
+  font-size: 11px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  cursor: pointer;
+}
+.is-tool-tab-btn.active {
+  background: var(--bg-card);
+  color: var(--accent);
+  font-weight: 600;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.4);
+}
+.is-tool-options {
+  padding: 12px;
+  overflow-y: auto;
+  flex: 1;
+}
+.is-furniture-search {
+  width: 100%;
+  margin-bottom: 8px;
+  background: var(--bg-dark);
+  border: 1px solid var(--border);
+  color: var(--text-main);
+  padding: 6px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+}
+.is-cat-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 10px;
+}
+.is-cat-chip {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  padding: 2px 7px;
+  border-radius: 4px;
+  font-size: 10px;
+  cursor: pointer;
+}
+.is-cat-chip.active {
+  background: rgba(56, 189, 248, 0.2);
+  color: var(--accent);
+  border-color: var(--accent);
+  font-weight: 600;
+}
+.is-furniture-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  max-height: calc(100vh - 270px);
+  overflow-y: auto;
+  padding-right: 4px;
+}
+.is-furniture-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 6px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  font-size: 11px;
+}
+.is-furniture-card:hover {
+  background: var(--bg-hover);
+  border-color: var(--accent);
+  transform: translateY(-1px);
+}
+.is-furniture-card.active {
+  border-color: var(--accent);
+  background: rgba(56, 189, 248, 0.15);
+}
+.is-furniture-preview {
+  width: 32px;
+  height: 32px;
+  margin-bottom: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.is-center-canvas-wrap {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  background: #020617;
+  position: relative;
+  overflow: hidden;
+}
+.is-canvas-toolbar {
+  height: 38px;
+  background: rgba(15, 23, 42, 0.85);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 12px;
+  font-size: 12px;
+  z-index: 10;
+}
+.is-canvas-container {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+}
+#interior-canvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+}
+.is-statusbar {
+  height: 24px;
+  background: var(--bg-panel);
+  border-top: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 12px;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+.is-right-panel {
+  width: 260px;
+  background: var(--bg-panel);
+  border-left: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  padding: 12px;
+  flex-shrink: 0;
+}
+.is-right-panel h4 {
+  font-size: 13px;
+  color: var(--accent);
+  margin-bottom: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+</style>
+</head>
+<body>
+
+<!-- TOP HEADER -->
+<header id="app-header">
+  <div class="header-brand">
+    <span>🏙️ РЕДАКТОР КАРТЫ ГОРОДА</span>
+    <span class="brand-badge">PRO v2.0</span>
+  </div>
+
+  <div class="header-actions">
+    <button class="btn icon-only" title="Отменить (Ctrl+Z)" onclick="undo()" id="btn-undo">↩️</button>
+    <button class="btn icon-only" title="Повторить (Ctrl+Y)" onclick="redo()" id="btn-redo">↪️</button>
+    <div style="width: 1px; height: 20px; background: var(--border); margin: 0 4px;"></div>
+    <button class="btn" title="Загрузить map.json с сервера" onclick="loadMapFileFromServer()">📥 Загрузить /map.json</button>
+    <button class="btn" onclick="openLoadFileDialog()">📂 Загрузить файл</button>
+    <button class="btn success" onclick="saveToFile()">💾 Скачать map.json</button>
+    <button class="btn primary" onclick="saveToLocalStorageAndPlay()">🚀 Сохранить и Играть</button>
+    <button class="btn danger" title="Очистить сохраненную карту из браузера" onclick="resetToDefaultMap()">🗑️ Сброс кэша</button>
+    <button class="btn" onclick="toggleHelpModal()">❓ Помощь</button>
+  </div>
+</header>
+
+<!-- MAIN APP BODY -->
+<div id="main-container">
+
+  <!-- LEFT TOOLBAR -->
+  <div id="left-toolbar">
+    <button class="tool-btn active" id="tool-select" onclick="setTool('select')" title="Выбор и перемещение [V]">
+      <span>👆</span>
+      <span class="tool-hotkey">V</span>
+    </button>
+    <button class="tool-btn" id="tool-road2p" onclick="setTool('road2p')" title="Прямая дорога по 2 точкам [R]">
+      <span>🛣️</span>
+      <span class="tool-hotkey">R</span>
+    </button>
+    <button class="tool-btn" id="tool-roadCurve" onclick="setTool('roadCurve')" title="Кривая/Дуговая дорога [C]">
+      <span>〰️</span>
+      <span class="tool-hotkey">C</span>
+    </button>
+    <button class="tool-btn" id="tool-lineBatch" onclick="setTool('lineBatch')" title="Авто-размещение в Линию (деревья/фонари/заборы) [L]">
+      <span>📏</span>
+      <span class="tool-hotkey">L</span>
+    </button>
+    <button class="tool-btn" id="tool-brushScatter" onclick="setTool('brushScatter')" title="Кисть / Размещение кучкой (лес/мусор/парк) [B]">
+      <span>🖌️</span>
+      <span class="tool-hotkey">B</span>
+    </button>
+
+    <div class="tool-separator"></div>
+
+    <button class="tool-btn" id="tool-building" onclick="setTool('building')" title="Здание (Прямоугольник) [U]">
+      <span>🏢</span>
+      <span class="tool-hotkey">U</span>
+    </button>
+    <button class="tool-btn" id="tool-tree" onclick="setTool('tree')" title="Дерево [T]">
+      <span>🌲</span>
+      <span class="tool-hotkey">T</span>
+    </button>
+    <button class="tool-btn" id="tool-prop" onclick="setTool('prop')" title="Городской объект (скамейки, фонари, гидранты) [P]">
+      <span>🪑</span>
+      <span class="tool-hotkey">P</span>
+    </button>
+    <button class="tool-btn" id="tool-sidewalk" onclick="setTool('sidewalk')" title="Тротуарный блок / Квартал [S]">
+      <span>🚶</span>
+      <span class="tool-hotkey">S</span>
+    </button>
+    <button class="tool-btn" id="tool-parking" onclick="setTool('parking')" title="Парковочный комплекс [K]">
+      <span>🅿️</span>
+      <span class="tool-hotkey">K</span>
+    </button>
+    <button class="tool-btn" id="tool-intersection" onclick="setTool('intersection')" title="Перекресток со светофорами [I]">
+      <span>🚦</span>
+      <span class="tool-hotkey">I</span>
+    </button>
+    <button class="tool-btn" id="tool-interior-btn" onclick="openInteriorStudioFromSelection()" title="Редактор интерьеров здания [E]">
+      <span>🛋️</span>
+      <span class="tool-hotkey">E</span>
+    </button>
+
+    <div class="tool-separator"></div>
+
+    <button class="tool-btn" id="tool-measure" onclick="setTool('measure')" title="Линейка расстояний [M]">
+      <span>📐</span>
+      <span class="tool-hotkey">M</span>
+    </button>
+  </div>
+
+  <!-- CANVAS VIEWPORT -->
+  <div id="canvas-viewport">
+    <canvas id="editorCanvas"></canvas>
+
+    <!-- CONTEXTUAL SUBTOOL BAR -->
+    <div id="subtool-bar"></div>
+
+    <!-- STATUS OVERLAY -->
+    <div id="status-overlay">
+      <span>X: <b id="stat-x">0</b></span>
+      <span>Y: <b id="stat-y">0</b></span>
+      <span>Масштаб: <b id="stat-zoom">25%</b></span>
+      <span>Выбрано: <b id="stat-selected">0</b></span>
+      <span>FPS: <b id="stat-fps">60</b></span>
+    </div>
+
+    <!-- SNAPPING CONTROLS -->
+    <div id="snap-overlay">
+      <button class="toggle-chip active" id="snap-grid-btn" onclick="toggleSnapGrid()">Сетка (20px)</button>
+      <button class="toggle-chip active" id="snap-road-btn" onclick="toggleSnapRoads()">Магнит к дорогам</button>
+      <button class="toggle-chip" id="snap-ortho-btn" onclick="toggleSnapOrtho()">Прямые углы [Shift]</button>
+    </div>
+  </div>
+
+  <!-- RIGHT SIDEBAR -->
+  <div id="right-sidebar">
+    <div class="tab-headers">
+      <button class="tab-btn active" onclick="switchTab('inspector')">⚙️ Свойства</button>
+      <button class="tab-btn" onclick="switchTab('outliner')">📑 Объекты</button>
+      <button class="tab-btn" onclick="switchTab('presets')">⭐ Шаблоны</button>
+    </div>
+
+    <!-- TAB 1: INSPECTOR -->
+    <div class="tab-content active" id="tab-inspector">
+      <div id="inspector-empty" style="text-align: center; color: var(--text-muted); padding: 40px 10px; font-size: 13px;">
+        <div style="font-size: 32px; margin-bottom: 10px;">🖱️</div>
+        Кликните на любой объект на карте для редактирования параметров или выберите инструмент слева.
+      </div>
+      <div id="inspector-content" style="display: none;"></div>
+    </div>
+
+    <!-- TAB 2: OUTLINER (VIRTUALIZED & OPTIMIZED) -->
+    <div class="tab-content" id="tab-outliner">
+      <input type="text" class="search-box" id="outliner-search" placeholder="Поиск объектов по ID/имени..." oninput="renderOutliner()">
+      <div class="prop-field" style="margin-bottom: 8px;">
+        <label style="width: auto;">Фильтр слоя:</label>
+        <select id="outliner-layer-filter" onchange="renderOutliner()">
+          <option value="all">Все слои</option>
+          <option value="roads">Дороги</option>
+          <option value="buildings">Здания</option>
+          <option value="intersections">Перекрестки</option>
+          <option value="trees">Деревья</option>
+          <option value="props">Объекты</option>
+          <option value="sidewalks">Тротуары</option>
+          <option value="parkings">Парковки</option>
+        </select>
+      </div>
+      <div class="entity-list-container" id="outliner-list"></div>
+    </div>
+
+    <!-- TAB 3: PRESETS -->
+    <div class="tab-content" id="tab-presets">
+      <div class="section-title">Быстрые городские шаблоны</div>
+      <div style="display: flex; flex-direction: column; gap: 8px;">
+        <button class="btn" onclick="insertPreset('residential_block')">🏘️ Жилой квартал (4 дома + двор + парковка)</button>
+        <button class="btn" onclick="insertPreset('park_fountain')">🌳 Парковая аллея со скамейками и деревьями</button>
+        <button class="btn" onclick="insertPreset('highway_clover')">🛣️ Скоростной 4-полосный перекресток</button>
+        <button class="btn" onclick="insertPreset('industrial_depot')">🚛 Промзона с ангарами и стоянкой</button>
+      </div>
+
+      <div class="section-title" style="margin-top: 16px;">Миникарта мира (Быстрый предпросмотр)</div>
+      <div id="minimap-box">
+        <canvas id="minimapCanvas"></canvas>
+      </div>
+      <button class="btn" style="margin-top: 8px;" onclick="centerCamera()">🎯 Центрировать камеру [F]</button>
+    </div>
+
+    <!-- STATS FOOTER -->
+    <div id="stats-footer">
+      <span id="footer-counts">Загрузка данных...</span>
+      <button class="btn icon-only" title="По центру карты [F]" onclick="centerCamera()">🎯</button>
+    </div>
+  </div>
+
+</div>
+
+<!-- HIDDEN FILE INPUT -->
+<input type="file" id="file-loader" accept=".json" style="display:none;" onchange="handleFileSelected(event)">
+
+<!-- TOAST -->
+<div id="toast">Действие выполнено</div>
+
+<!-- HELP MODAL -->
+
+<!-- INTERIOR STUDIO MODAL -->
+<div id="interior-studio-modal">
+  <!-- Top Header -->
+  <div class="is-header">
+    <div class="is-bld-info">
+      <span>🏢</span>
+      <span id="is-bld-title">Здание</span>
+      <span class="is-bld-badge" id="is-bld-type-badge">residential</span>
+      <span style="color:var(--text-muted);font-size:11px;" id="is-bld-size-label">120x80 м</span>
+    </div>
+
+    <!-- Floor switcher tabs -->
+    <div class="is-floor-tabs-bar" id="is-floor-tabs"></div>
+
+    <div style="display:flex;align-items:center;gap:8px;">
+      <button class="btn sm" onclick="isAddFloor()" title="Добавить новый этаж">+ Этаж</button>
+      <button class="btn sm" onclick="isDuplicateCurrentFloor()" title="Дублировать текущий этаж на новый">📑 Копия</button>
+      <button class="btn sm danger" onclick="isDeleteCurrentFloor()" title="Удалить текущий этаж">🗑️</button>
+      <div style="width:1px;height:24px;background:var(--border);margin:0 4px;"></div>
+      <button class="btn primary sm" onclick="saveAndCloseInteriorStudio()">💾 Сохранить</button>
+      <button class="btn icon-only sm" onclick="closeInteriorStudio()">✕</button>
+    </div>
+  </div>
+
+  <!-- Main Body -->
+  <div class="is-body">
+    <!-- Left Sidebar: Tools & Catalog -->
+    <div class="is-left-panel">
+      <div class="is-tools-tabs">
+        <button class="is-tool-tab-btn active" id="is-tab-select" onclick="isSetTool('select')">
+          <span>👆</span><span>Выбор</span>
+        </button>
+        <button class="is-tool-tab-btn" id="is-tab-wall" onclick="isSetTool('wall')">
+          <span>🧱</span><span>Стена</span>
+        </button>
+        <button class="is-tool-tab-btn" id="is-tab-room" onclick="isSetTool('room')">
+          <span>📐</span><span>Комната</span>
+        </button>
+        <button class="is-tool-tab-btn" id="is-tab-zone" onclick="isSetTool('zone')">
+          <span>🚪</span><span>Зоны</span>
+        </button>
+        <button class="is-tool-tab-btn" id="is-tab-furniture" onclick="isSetTool('furniture')">
+          <span>🛋️</span><span>Мебель</span>
+        </button>
+      </div>
+
+      <div class="is-tool-options" id="is-tool-options-panel">
+        <!-- Dynamic options for selected tool injected by JS -->
+      </div>
+    </div>
+
+    <!-- Center Canvas Viewport -->
+    <div class="is-center-canvas-wrap">
+      <div class="is-canvas-toolbar">
+        <div style="display:flex;align-items:center;gap:6px;">
+          <button class="btn sm icon-only" onclick="isZoomStep(-0.25)">−</button>
+          <span id="is-zoom-label" style="min-width:44px;text-align:center;">100%</span>
+          <button class="btn sm icon-only" onclick="isZoomStep(0.25)">+</button>
+          <button class="btn sm" onclick="isResetView()">🎯 Центр</button>
+        </div>
+
+        <div style="display:flex;align-items:center;gap:8px;">
+          <label style="display:flex;align-items:center;gap:4px;cursor:pointer;">
+            <input type="checkbox" id="is-grid-snap" checked onchange="isToggleSnap(this.checked)">
+            <span>Сетка 2м</span>
+          </label>
+          <button class="btn sm" onclick="isClearFloor()">🧹 Очистить</button>
+          <button class="btn sm" onclick="isExportFloorJson()">📋 Экспорт</button>
+          <button class="btn sm" onclick="isImportFloorJson()">📥 Импорт</button>
+        </div>
+      </div>
+
+      <div class="is-canvas-container" id="is-canvas-container">
+        <canvas id="interior-canvas"></canvas>
+      </div>
+
+      <div class="is-statusbar">
+        <span id="is-cursor-pos">X: 0 | Y: 0</span>
+        <span id="is-status-msg">Инструмент: Выбор (клик для выбора, drag для перемещения, R для поворота, Del для удаления)</span>
+      </div>
+    </div>
+
+    <!-- Right Sidebar: Properties Inspector -->
+    <div class="is-right-panel" id="is-right-inspector">
+      <!-- Injected by JS -->
+    </div>
+  </div>
+</div>
+
+<div id="help-modal" onclick="if(event.target===this) toggleHelpModal()">
+  <div class="modal-card">
+    <div class="modal-header">
+      <h2>Горячие клавиши редактора</h2>
+      <button class="btn icon-only" onclick="toggleHelpModal()">✕</button>
+    </div>
+    <div class="hotkey-grid">
+      <div class="hotkey-item"><span>Выбор / Трансформ</span> <span class="key-badge">V</span></div>
+      <div class="hotkey-item"><span>Дорога по 2 точкам</span> <span class="key-badge">R</span></div>
+      <div class="hotkey-item"><span>Кривая / Дуга дорога</span> <span class="key-badge">C</span></div>
+      <div class="hotkey-item"><span>Авто-линия объектов</span> <span class="key-badge">L</span></div>
+      <div class="hotkey-item"><span>Кисть / Рассеивание</span> <span class="key-badge">B</span></div>
+      <div class="hotkey-item"><span>Здание</span> <span class="key-badge">U</span></div>
+      <div class="hotkey-item"><span>Дерево</span> <span class="key-badge">T</span></div>
+      <div class="hotkey-item"><span>Объект</span> <span class="key-badge">P</span></div>
+      <div class="hotkey-item"><span>Тротуар</span> <span class="key-badge">S</span></div>
+      <div class="hotkey-item"><span>Парковка</span> <span class="key-badge">K</span></div>
+      <div class="hotkey-item"><span>Панорама карты</span> <span class="key-badge">Пробел + Drag</span></div>
+      <div class="hotkey-item"><span>Масштаб (Зум)</span> <span class="key-badge">Колесо мыши</span></div>
+      <div class="hotkey-item"><span>Вращение объекта</span> <span class="key-badge">R при драге</span></div>
+      <div class="hotkey-item"><span>Дублировать объект</span> <span class="key-badge">Ctrl+D</span></div>
+      <div class="hotkey-item"><span>Удалить выбранное</span> <span class="key-badge">Del / Backspace</span></div>
+      <div class="hotkey-item"><span>Отмена / Повтор</span> <span class="key-badge">Ctrl+Z / Ctrl+Y</span></div>
+      <div class="hotkey-item"><span>Центрировать камеру</span> <span class="key-badge">F</span></div>
+    </div>
+  </div>
+</div>
+
+<script>
+/**
+ * ULTRA-PERFORMANT VECTOR MAP EDITOR FOR TOP-DOWN CITY SIMULATOR
+ * Key Optimizations:
+ * 1. Offscreen Cached Minimap: Rendered once on world change, 0ms blit during 60 FPS loop
+ * 2. O(1) Selection Set: Fast Set lookup during drawing avoiding O(N*S) scans
+ * 3. Spatial Viewport Culling & LOD: Microscopic props & text labels culled at low zoom
+ * 4. Virtualized Outliner: Accordion grouping with max 40 items per group to prevent DOM freezing
+ * 5. Throttled History & DOM UI updates to eliminate layout thrashing
+ */
+
+// Global World State
+let mapData = {
+  width: 8000,
+  height: 8000,
+  roads: [],
+  intersections: [],
+  sidewalks: [],
+  buildings: [],
+  parkings: [],
+  trees: [],
+  props: [],
+  vehicles: [],
+  pedestrians: [],
+  birds: [],
+  puddles: [],
+  litter: [],
+  skidMarks: [],
+  particles: [],
+  weather: 'clear'
+};
+
+// Spatial Grid for O(1) culling
+class EditorSpatialGrid {
+  constructor(cellSize = 250) {
+    this.cellSize = cellSize;
+    this.grid = new Map();
+    this.queryId = 0;
+  }
+
+  getKey(cx, cy) {
+    return ((cx & 0xffff) << 16) | (cy & 0xffff);
+  }
+
+  clear() {
+    this.grid.clear();
+  }
+
+  insert(item, layer) {
+    let minX, maxX, minY, maxY;
+    if (item.x !== undefined && item.y !== undefined) {
+      const w = item.width || (item.radius ? item.radius * 2 : 24);
+      const h = item.height || (item.radius ? item.radius * 2 : 24);
+      minX = item.x - (item.width ? 0 : w / 2);
+      maxX = item.x + (item.width ? item.width : w / 2);
+      minY = item.y - (item.height ? 0 : h / 2);
+      maxY = item.y + (item.height ? item.height : h / 2);
+    } else if (item.x1 !== undefined) {
+      const rw = item.width || 84;
+      minX = Math.min(item.x1, item.x2) - rw;
+      maxX = Math.max(item.x1, item.x2) + rw;
+      minY = Math.min(item.y1, item.y2) - rw;
+      maxY = Math.max(item.y1, item.y2) + rw;
+    } else {
+      return;
+    }
+
+    const minCx = Math.floor(minX / this.cellSize);
+    const maxCx = Math.floor(maxX / this.cellSize);
+    const minCy = Math.floor(minY / this.cellSize);
+    const maxCy = Math.floor(maxY / this.cellSize);
+
+    const entry = { entity: item, layer: layer };
+
+    for (let cx = minCx; cx <= maxCx; cx++) {
+      for (let cy = minCy; cy <= maxCy; cy++) {
+        const key = this.getKey(cx, cy);
+        let cell = this.grid.get(key);
+        if (!cell) {
+          cell = [];
+          this.grid.set(key, cell);
+        }
+        cell.push(entry);
+      }
+    }
+  }
+
+  queryRect(x, y, width, height) {
+    const minCx = Math.floor(x / this.cellSize);
+    const maxCx = Math.floor((x + width) / this.cellSize);
+    const minCy = Math.floor(y / this.cellSize);
+    const maxCy = Math.floor((y + height) / this.cellSize);
+
+    this.queryId++;
+    if (this.queryId > 2000000000) this.queryId = 1;
+    const qId = this.queryId;
+    const result = [];
+
+    for (let cx = minCx; cx <= maxCx; cx++) {
+      for (let cy = minCy; cy <= maxCy; cy++) {
+        const key = this.getKey(cx, cy);
+        const cell = this.grid.get(key);
+        if (cell) {
+          const len = cell.length;
+          for (let i = 0; i < len; i++) {
+            const item = cell[i];
+            if (item.entity._editorQId !== qId) {
+              item.entity._editorQId = qId;
+              result.push(item);
+            }
+          }
+        }
+      }
+    }
+    return result;
+  }
+
+  queryRadius(x, y, radius) {
+    return this.queryRect(x - radius, y - radius, radius * 2, radius * 2);
+  }
+}
+
+const spatialIndex = new EditorSpatialGrid(250);
+
+// Offscreen Minimap Canvas & Dirty Flag
+const offscreenMinimap = document.createElement('canvas');
+offscreenMinimap.width = 300;
+offscreenMinimap.height = 300;
+const offscreenMinimapCtx = offscreenMinimap.getContext('2d');
+let isMinimapDirty = true;
+
+function markMinimapDirty() {
+  isMinimapDirty = true;
+}
+
+function rebuildSpatialIndex() {
+  if (!mapData) return;
+  spatialIndex.clear();
+  if (mapData.roads) mapData.roads.forEach(r => spatialIndex.insert(r, 'roads'));
+  if (mapData.buildings) mapData.buildings.forEach(b => spatialIndex.insert(b, 'buildings'));
+  if (mapData.intersections) mapData.intersections.forEach(i => spatialIndex.insert(i, 'intersections'));
+  if (mapData.trees) mapData.trees.forEach(t => spatialIndex.insert(t, 'trees'));
+  if (mapData.props) mapData.props.forEach(p => spatialIndex.insert(p, 'props'));
+  if (mapData.sidewalks) mapData.sidewalks.forEach(s => spatialIndex.insert(s, 'sidewalks'));
+  if (mapData.parkings) mapData.parkings.forEach(pk => spatialIndex.insert(pk, 'parkings'));
+  markMinimapDirty();
+}
+
+const canvas = document.getElementById('editorCanvas');
+const ctx = canvas.getContext('2d', { alpha: false });
+const minimapCanvas = document.getElementById('minimapCanvas');
+const minimapCtx = minimapCanvas ? minimapCanvas.getContext('2d') : null;
+
+let camera = { x: 4400, y: 2800, zoom: 0.25 };
+let currentTool = 'select';
+let selectedEntities = []; // Array of { entity, layer }
+let selectedEntityIds = new Set(); // O(1) lookup in render loop
+
+function updateSelectionSet() {
+  selectedEntityIds.clear();
+  for (let i = 0; i < selectedEntities.length; i++) {
+    if (selectedEntities[i].entity && selectedEntities[i].entity.id) {
+      selectedEntityIds.add(selectedEntities[i].entity.id);
+    }
+  }
+}
+
+// Snapping Options
+let snapSettings = {
+  grid: true,
+  gridSize: 20,
+  roads: true,
+  ortho: false
+};
+
+// Undo / Redo History (Max 20 snapshots to preserve memory)
+const historyStack = [];
+let historyIndex = -1;
+const MAX_HISTORY = 20;
+
+// Mouse Interaction
+let mouseScreen = { x: 0, y: 0 };
+let mouseWorld = { x: 0, y: 0 };
+let isMouseDown = false;
+let isPanning = false;
+let panStart = { x: 0, y: 0 };
+let cameraStart = { x: 0, y: 0 };
+let dragStart = { x: 0, y: 0 };
+let activeHandle = null;
+let toolStep = 0;
+let toolPoints = [];
+let boxSelectStart = null;
+
+// Tool Config Options
+const toolConfigs = {
+  road: { lanes: 2, isAvenue: false, type: 'asphalt', width: 84, name: 'Main Road' },
+  curve: { lanes: 2, isAvenue: false, type: 'asphalt', width: 84, segments: 10, name: 'Curved Road' },
+  lineBatch: { count: 8, spacing: 60, entityType: 'trees', subType: 'tree', radius: 22, color: '#15803d' },
+  brushScatter: { radius: 120, density: 10, entityType: 'trees', subType: 'tree' },
+  building: { type: 'office', color: '#64748b', roofColor: '#334155', accentColor: '#475569', entranceSide: 'south' },
+  tree: { radius: 22, color: '#16a34a' },
+  prop: { type: 'bench', angle: 0 },
+  sidewalk: { sidewalkWidth: 32, style: 'urban' },
+  parking: { spotsCount: 6, angle: 0 },
+  intersection: { type: '4way', hasLights: true, isDirt: false }
+};
+
+// FPS Counter
+let fpsCount = 0;
+let fpsTimer = performance.now();
+
+// --- INITIALIZATION ---
+window.addEventListener('DOMContentLoaded', async () => {
+  resizeCanvas();
+  window.addEventListener('resize', resizeCanvas);
+  
+  // Try loading custom map from localStorage, or /map.json
+  const customMapRaw = localStorage.getItem('neon_city_custom_map');
+  if (customMapRaw) {
+    try {
+      mapData = JSON.parse(customMapRaw);
+      rebuildSpatialIndex();
+      pushHistory('Loaded Custom Map from localStorage');
+      showToast('Загружена сохраненная карта из браузера');
+    } catch (e) {
+      console.warn('Failed to parse localStorage map, fallback to /map.json');
+      await loadMapFileFromServer();
+    }
+  } else {
+    await loadMapFileFromServer();
+  }
+
+  updateSubtoolBar();
+  renderOutliner();
+  updateFooterCounts();
+  requestAnimationFrame(gameLoop);
+});
+
+async function loadMapFileFromServer() {
+  try {
+    const res = await fetch('/map.json', { cache: 'no-cache' });
+    if (res.ok) {
+      mapData = await res.json();
+      rebuildSpatialIndex();
+      historyStack.length = 0;
+      historyIndex = -1;
+      pushHistory('Initial map.json loaded');
+      renderOutliner();
+      updateFooterCounts();
+      centerCamera();
+      showToast('Файл /map.json успешно загружен!');
+    } else {
+      throw new Error(`HTTP ${res.status}`);
+    }
+  } catch (err) {
+    console.warn('Could not auto-load /map.json', err);
+    rebuildSpatialIndex();
+    showToast('Не удалось загрузить /map.json, создана пустая сетка');
+  }
+}
+
+function resetToDefaultMap() {
+  if (confirm('Сбросить карту к исходному файлу /map.json и удалить изменения в браузере?')) {
+    localStorage.removeItem('neon_city_custom_map');
+    loadMapFileFromServer();
+  }
+}
+
+function resizeCanvas() {
+  const vp = document.getElementById('canvas-viewport');
+  canvas.width = vp.clientWidth;
+  canvas.height = vp.clientHeight;
+  if (minimapCanvas) {
+    minimapCanvas.width = minimapCanvas.clientWidth || 280;
+    minimapCanvas.height = minimapCanvas.clientHeight || 180;
+    offscreenMinimap.width = minimapCanvas.width;
+    offscreenMinimap.height = minimapCanvas.height;
+    markMinimapDirty();
+  }
+}
+
+// --- COORDINATE CONVERSIONS ---
+function screenToWorld(sx, sy) {
+  return {
+    x: (sx - canvas.width / 2) / camera.zoom + camera.x,
+    y: (sy - canvas.height / 2) / camera.zoom + camera.y
+  };
+}
+
+function worldToScreen(wx, wy) {
+  return {
+    x: (wx - camera.x) * camera.zoom + canvas.width / 2,
+    y: (wy - camera.y) * camera.zoom + canvas.height / 2
+  };
+}
+
+// --- SNAPPING LOGIC ---
+function applySnapping(pos) {
+  let res = { x: pos.x, y: pos.y };
+
+  if (snapSettings.roads && mapData) {
+    const snapRadius = 35 / camera.zoom;
+    let closestDist = snapRadius;
+    let snapPt = null;
+
+    const nearby = spatialIndex.queryRadius(pos.x, pos.y, snapRadius * 1.5);
+    for (let i = 0; i < nearby.length; i++) {
+      const entry = nearby[i];
+      if (entry.layer === 'roads') {
+        const r = entry.entity;
+        const d1 = Math.hypot(pos.x - r.x1, pos.y - r.y1);
+        if (d1 < closestDist) { closestDist = d1; snapPt = { x: r.x1, y: r.y1 }; }
+        const d2 = Math.hypot(pos.x - r.x2, pos.y - r.y2);
+        if (d2 < closestDist) { closestDist = d2; snapPt = { x: r.x2, y: r.y2 }; }
+      } else if (entry.layer === 'intersections') {
+        const inter = entry.entity;
+        const d = Math.hypot(pos.x - inter.x, pos.y - inter.y);
+        if (d < closestDist) { closestDist = d; snapPt = { x: inter.x, y: inter.y }; }
+      }
+    }
+
+    if (snapPt) {
+      res.x = snapPt.x;
+      res.y = snapPt.y;
+      return res;
+    }
+  }
+
+  if (snapSettings.grid) {
+    const gs = snapSettings.gridSize;
+    res.x = Math.round(res.x / gs) * gs;
+    res.y = Math.round(res.y / gs) * gs;
+  }
+
+  return res;
+}
+
+// --- UNDO / REDO HISTORY ENGINE ---
+function pushHistory(actionName = 'Edit') {
+  rebuildSpatialIndex();
+
+  if (historyIndex < historyStack.length - 1) {
+    historyStack.splice(historyIndex + 1);
+  }
+
+  historyStack.push(JSON.stringify(mapData));
+  if (historyStack.length > MAX_HISTORY) historyStack.shift();
+  historyIndex = historyStack.length - 1;
+
+  updateUndoRedoButtons();
+}
+
+function undo() {
+  if (historyIndex > 0) {
+    historyIndex--;
+    mapData = JSON.parse(historyStack[historyIndex]);
+    rebuildSpatialIndex();
+    selectedEntities = [];
+    updateSelectionSet();
+    updateInspector();
+    renderOutliner();
+    updateFooterCounts();
+    showToast('Отменено');
+    updateUndoRedoButtons();
+  }
+}
+
+function redo() {
+  if (historyIndex < historyStack.length - 1) {
+    historyIndex++;
+    mapData = JSON.parse(historyStack[historyIndex]);
+    rebuildSpatialIndex();
+    selectedEntities = [];
+    updateSelectionSet();
+    updateInspector();
+    renderOutliner();
+    updateFooterCounts();
+    showToast('Повторено');
+    updateUndoRedoButtons();
+  }
+}
+
+function updateUndoRedoButtons() {
+  const btnUndo = document.getElementById('btn-undo');
+  const btnRedo = document.getElementById('btn-redo');
+  if (btnUndo) btnUndo.disabled = historyIndex <= 0;
+  if (btnRedo) btnRedo.disabled = historyIndex >= historyStack.length - 1;
+}
+
+// --- TOOL SWITCHING ---
+function setTool(t) {
+  currentTool = t;
+  toolStep = 0;
+  toolPoints = [];
+
+  document.querySelectorAll('.tool-btn').forEach(btn => btn.classList.remove('active'));
+  const activeBtn = document.getElementById(`tool-${t}`);
+  if (activeBtn) activeBtn.classList.add('active');
+
+  updateSubtoolBar();
+  showToast(`Инструмент: ${getToolName(t)}`);
+}
+
+function getToolName(t) {
+  const names = {
+    select: 'Выбор и перемещение',
+    road2p: 'Прямая дорога (2 точки)',
+    roadCurve: 'Кривая дорога (3 точки)',
+    lineBatch: 'Линейное авто-размещение',
+    brushScatter: 'Кисть / Рассеивание кучкой',
+    building: 'Создание здания',
+    tree: 'Посадка деревьев',
+    prop: 'Городской декор',
+    sidewalk: 'Тротуарный блок',
+    parking: 'Парковка',
+    intersection: 'Перекресток',
+    measure: 'Линейка замера'
+  };
+  return names[t] || t;
+}
+
+function updateSubtoolBar() {
+  const bar = document.getElementById('subtool-bar');
+  if (!bar) return;
+
+  if (currentTool === 'select') {
+    bar.innerHTML = `
+      <span style="color:var(--text-muted);font-weight:600;">Клик — выбор | Shift+Клик — мульти-выбор | Drag — перемещение | Del — удалить</span>
+      <button class="btn danger" onclick="deleteSelected()" style="padding:2px 8px;font-size:11px;">🗑️ Удалить</button>
+      <button class="btn" onclick="duplicateSelected()" style="padding:2px 8px;font-size:11px;">📑 Дубликат</button>
+    `;
+  } else if (currentTool === 'road2p') {
+    bar.innerHTML = `
+      <div class="subtool-group">
+        <label>Тип:</label>
+        <select onchange="toolConfigs.road.type=this.value; toolConfigs.road.isAvenue=this.value==='avenue'; toolConfigs.road.lanes=this.value==='avenue'?4:2; toolConfigs.road.width=this.value==='avenue'?144:84;">
+          <option value="asphalt">Асфальт (2 полосы)</option>
+          <option value="avenue">Проспект (4 полосы)</option>
+          <option value="dirt">Грунтовка</option>
+          <option value="gravel">Гравий</option>
+        </select>
+      </div>
+      <div class="subtool-group">
+        <label>Ширина:</label>
+        <input type="number" value="${toolConfigs.road.width}" style="width:60px;" onchange="toolConfigs.road.width=parseInt(this.value)">
+      </div>
+      <span style="color:var(--accent);font-size:11px;">1. Кликните Начало -> 2. Кликните Конец дороги</span>
+    `;
+  } else if (currentTool === 'roadCurve') {
+    bar.innerHTML = `
+      <div class="subtool-group">
+        <label>Тип:</label>
+        <select onchange="toolConfigs.curve.type=this.value; toolConfigs.curve.isAvenue=this.value==='avenue'; toolConfigs.curve.lanes=this.value==='avenue'?4:2; toolConfigs.curve.width=this.value==='avenue'?144:84;">
+          <option value="asphalt">Асфальт (2 полосы)</option>
+          <option value="avenue">Проспект (4 полосы)</option>
+          <option value="dirt">Грунтовка</option>
+          <option value="gravel">Гравий</option>
+        </select>
+      </div>
+      <div class="subtool-group">
+        <label>Сегментов дуги:</label>
+        <input type="number" value="${toolConfigs.curve.segments}" min="4" max="24" style="width:50px;" onchange="toolConfigs.curve.segments=parseInt(this.value)">
+      </div>
+      <span style="color:var(--accent);font-size:11px;">1. Начало -> 2. Конец -> 3. Загните дугу кликом</span>
+    `;
+  } else if (currentTool === 'lineBatch') {
+    bar.innerHTML = `
+      <div class="subtool-group">
+        <label>Объект:</label>
+        <select onchange="toolConfigs.lineBatch.entityType=this.value;">
+          <option value="trees">Деревья (Аллея)</option>
+          <option value="lamps">Фонарные столбы</option>
+          <option value="benches">Скамейки</option>
+          <option value="bollards">Столбики ограждения</option>
+          <option value="cones">Дорожные конусы</option>
+          <option value="flowerbeds">Клумбы</option>
+        </select>
+      </div>
+      <div class="subtool-group">
+        <label>Количество:</label>
+        <input type="number" value="${toolConfigs.lineBatch.count}" min="2" max="50" style="width:50px;" onchange="toolConfigs.lineBatch.count=parseInt(this.value)">
+      </div>
+      <span style="color:var(--accent);font-size:11px;">Кликните и протяните линию для расстановки</span>
+    `;
+  } else if (currentTool === 'brushScatter') {
+    bar.innerHTML = `
+      <div class="subtool-group">
+        <label>Тип кисти:</label>
+        <select onchange="toolConfigs.brushScatter.entityType=this.value;">
+          <option value="trees">Густой лес / Парк (Деревья)</option>
+          <option value="props">Уличный декор (Урны, гидранты, знаки)</option>
+          <option value="litter">Мусор и листья</option>
+          <option value="puddles">Лужи и вода</option>
+        </select>
+      </div>
+      <div class="subtool-group">
+        <label>Радиус:</label>
+        <input type="range" min="40" max="300" value="${toolConfigs.brushScatter.radius}" oninput="toolConfigs.brushScatter.radius=parseInt(this.value)">
+      </div>
+      <div class="subtool-group">
+        <label>Плотность:</label>
+        <input type="number" min="1" max="30" value="${toolConfigs.brushScatter.density}" style="width:50px;" onchange="toolConfigs.brushScatter.density=parseInt(this.value)">
+      </div>
+      <span style="color:var(--accent);font-size:11px;">Зажмите мышь для нанесения объектов</span>
+    `;
+  } else if (currentTool === 'building') {
+    bar.innerHTML = `
+      <div class="subtool-group">
+        <label>Тип:</label>
+        <select onchange="toolConfigs.building.type=this.value;">
+          <option value="office">Офисный центр</option>
+          <option value="residential">Жилой дом</option>
+          <option value="shop">Супермаркет / Магазин</option>
+          <option value="suburban">Коттедж</option>
+          <option value="industrial">Склад / Завод</option>
+          <option value="police_station">Полицейский участок</option>
+          <option value="fire_station">Пожарная станция</option>
+          <option value="hospital">Больница</option>
+        </select>
+      </div>
+      <span style="color:var(--text-muted);font-size:11px;">Кликните и растяните прямоугольник здания</span>
+    `;
+  } else if (currentTool === 'prop') {
+    bar.innerHTML = `
+      <div class="subtool-group">
+        <label>Объект:</label>
+        <select onchange="toolConfigs.prop.type=this.value;">
+          <option value="bench">Скамейка</option>
+          <option value="lamp_highway">Автомобильный фонарь (с выносом)</option>
+          <option value="lamp_concrete">Старый бетонный столб (несбиваемый)</option>
+          <option value="lamp">Парковый фонарь</option>
+          <option value="bus_stop">Автобусная остановка</option>
+          <option value="kiosk">Киоск / Ларек</option>
+          <option value="trash_can">Урна</option>
+          <option value="dumpster">Мусорный контейнер</option>
+          <option value="hydrant">Пожарный гидрант</option>
+          <option value="cone">Конус</option>
+          <option value="flowerbed">Клумба</option>
+          <option value="bollard">Столбик</option>
+          <option value="manhole">Люк</option>
+        </select>
+      </div>
+      <span style="color:var(--accent);font-size:11px;">Кликните в место размещения</span>
+    `;
+  } else {
+    bar.innerHTML = `<span style="color:var(--text-muted);">Инструмент: ${getToolName(currentTool)}</span>`;
+  }
+}
+
+function generateUniqueId(prefix) {
+  return `${prefix}_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
+}
+
+function buildRoadLanePaths(x1, y1, x2, y2, lanes, isAvenue) {
+  const dx = x2 - x1;
+  const dy = y2 - y1;
+  const len = Math.hypot(dx, dy);
+  if (len < 1) return [];
+
+  const angle = Math.atan2(dy, dx);
+  const perpX = -Math.sin(angle);
+  const perpY = Math.cos(angle);
+
+  const totalWidth = isAvenue ? 144 : 84;
+  const halfWidth = totalWidth / 2;
+  const lanePaths = [];
+
+  const forwardLanes = Math.floor(lanes / 2);
+  const backwardLanes = lanes - forwardLanes;
+
+  for (let i = 0; i < forwardLanes; i++) {
+    const laneOffset = (i + 0.5) * (halfWidth / forwardLanes);
+    lanePaths.push({
+      laneId: generateUniqueId('lane_fwd'),
+      laneIndex: i,
+      direction: angle,
+      waypoints: [
+        { x: x1 + perpX * laneOffset, y: y1 + perpY * laneOffset },
+        { x: x2 + perpX * laneOffset, y: y2 + perpY * laneOffset }
+      ]
+    });
+  }
+
+  for (let i = 0; i < backwardLanes; i++) {
+    const laneOffset = -(i + 0.5) * (halfWidth / backwardLanes);
+    lanePaths.push({
+      laneId: generateUniqueId('lane_bwd'),
+      laneIndex: i,
+      direction: angle + Math.PI,
+      waypoints: [
+        { x: x2 + perpX * laneOffset, y: y2 + perpY * laneOffset },
+        { x: x1 + perpX * laneOffset, y: y1 + perpY * laneOffset }
+      ]
+    });
+  }
+
+  return lanePaths;
+}
+
+// --- MOUSE & INTERACTION HANDLING ---
+canvas.addEventListener('mousedown', (e) => {
+  const wp = screenToWorld(e.offsetX, e.offsetY);
+  mouseScreen = { x: e.offsetX, y: e.offsetY };
+  mouseWorld = wp;
+  isMouseDown = true;
+
+  if (e.button === 1 || (e.button === 0 && e.spaceKey)) {
+    isPanning = true;
+    panStart = { x: e.clientX, y: e.clientY };
+    cameraStart = { x: camera.x, y: camera.y };
+    canvas.style.cursor = 'grabbing';
+    return;
+  }
+
+  if (e.button !== 0) return;
+
+  const snapped = applySnapping(wp);
+
+  if (currentTool === 'select') {
+    if (selectedEntities.length === 1) {
+      const handle = checkGizmoHandleHit(wp.x, wp.y, selectedEntities[0].entity);
+      if (handle) {
+        activeHandle = handle;
+        dragStart = { x: wp.x, y: wp.y };
+        return;
+      }
+    }
+
+    const hit = hitTestWorld(wp.x, wp.y);
+    if (hit) {
+      if (e.shiftKey || e.ctrlKey) {
+        const idx = selectedEntities.findIndex(s => s.entity === hit.entity);
+        if (idx >= 0) selectedEntities.splice(idx, 1);
+        else selectedEntities.push(hit);
+      } else {
+        selectedEntities = [hit];
+      }
+      activeHandle = 'move';
+      dragStart = { x: wp.x, y: wp.y };
+    } else {
+      if (!e.shiftKey && !e.ctrlKey) {
+        selectedEntities = [];
+      }
+      boxSelectStart = { x: wp.x, y: wp.y };
+    }
+    updateSelectionSet();
+    updateInspector();
+    renderOutliner();
+  }
+
+  else if (currentTool === 'road2p') {
+    if (toolStep === 0) {
+      toolPoints = [snapped];
+      toolStep = 1;
+    } else if (toolStep === 1) {
+      const p1 = toolPoints[0];
+      const p2 = snapped;
+      const isHoriz = Math.abs(p2.x - p1.x) >= Math.abs(p2.y - p1.y);
+      const isAvenue = toolConfigs.road.isAvenue;
+      const lanes = toolConfigs.road.lanes;
+      const width = toolConfigs.road.width;
+
+      const newRoad = {
+        id: generateUniqueId('road'),
+        x1: p1.x,
+        y1: p1.y,
+        x2: p2.x,
+        y2: p2.y,
+        lanes: lanes,
+        width: width,
+        isAvenue: isAvenue,
+        isDirt: toolConfigs.road.type === 'dirt',
+        isGravel: toolConfigs.road.type === 'gravel',
+        direction: isHoriz ? 'horizontal' : 'vertical',
+        name: toolConfigs.road.name,
+        lanePaths: buildRoadLanePaths(p1.x, p1.y, p2.x, p2.y, lanes, isAvenue)
+      };
+
+      mapData.roads.push(newRoad);
+      pushHistory('Create Road');
+      showToast('Дорога создана!');
+      toolStep = 0;
+      toolPoints = [];
+      updateFooterCounts();
+    }
+  }
+
+  else if (currentTool === 'roadCurve') {
+    if (toolStep === 0) {
+      toolPoints = [snapped];
+      toolStep = 1;
+    } else if (toolStep === 1) {
+      toolPoints.push(snapped);
+      toolStep = 2;
+    } else if (toolStep === 2) {
+      const p0 = toolPoints[0];
+      const p2 = toolPoints[1];
+      const p1 = snapped;
+      const segCount = toolConfigs.curve.segments || 10;
+      const isAvenue = toolConfigs.curve.isAvenue;
+      const lanes = toolConfigs.curve.lanes;
+      const width = toolConfigs.curve.width;
+
+      const curvePoints = [];
+      for (let i = 0; i <= segCount; i++) {
+        const t = i / segCount;
+        const mt = 1 - t;
+        const x = mt * mt * p0.x + 2 * mt * t * p1.x + t * t * p2.x;
+        const y = mt * mt * p0.y + 2 * mt * t * p1.y + t * t * p2.y;
+        curvePoints.push({ x, y });
+      }
+
+      for (let i = 0; i < curvePoints.length - 1; i++) {
+        const cp1 = curvePoints[i];
+        const cp2 = curvePoints[i+1];
+        const isHoriz = Math.abs(cp2.x - cp1.x) >= Math.abs(cp2.y - cp1.y);
+
+        mapData.roads.push({
+          id: generateUniqueId('road_curve_seg'),
+          x1: cp1.x,
+          y1: cp1.y,
+          x2: cp2.x,
+          y2: cp2.y,
+          lanes: lanes,
+          width: width,
+          isAvenue: isAvenue,
+          isDirt: toolConfigs.curve.type === 'dirt',
+          isGravel: toolConfigs.curve.type === 'gravel',
+          direction: isHoriz ? 'horizontal' : 'vertical',
+          name: toolConfigs.curve.name,
+          lanePaths: buildRoadLanePaths(cp1.x, cp1.y, cp2.x, cp2.y, lanes, isAvenue)
+        });
+      }
+
+      pushHistory('Create Curved Road');
+      showToast(`Создана кривая дорога (${segCount} сегментов)!`);
+      toolStep = 0;
+      toolPoints = [];
+      updateFooterCounts();
+    }
+  }
+
+  else if (currentTool === 'lineBatch') {
+    if (toolStep === 0) {
+      toolPoints = [snapped];
+      toolStep = 1;
+    } else if (toolStep === 1) {
+      const p1 = toolPoints[0];
+      const p2 = snapped;
+      const count = toolConfigs.lineBatch.count || 8;
+      const type = toolConfigs.lineBatch.entityType;
+
+      for (let i = 0; i < count; i++) {
+        const t = count === 1 ? 0.5 : i / (count - 1);
+        const px = p1.x + (p2.x - p1.x) * t;
+        const py = p1.y + (p2.y - p1.y) * t;
+
+        if (type === 'trees') {
+          mapData.trees.push({
+            id: generateUniqueId('tree'),
+            x: px,
+            y: py,
+            radius: 20 + Math.random() * 6,
+            color: '#16a34a',
+            shadowOffset: 6
+          });
+        } else {
+          const propTypeMap = { lamps: 'lamp', benches: 'bench', bollards: 'bollard', cones: 'cone', flowerbeds: 'flowerbed' };
+          const propType = propTypeMap[type] || 'lamp';
+          const angle = Math.atan2(p2.y - p1.y, p2.x - p1.x);
+
+          mapData.props.push({
+            id: generateUniqueId('prop'),
+            x: px,
+            y: py,
+            type: propType,
+            angle: angle + Math.PI / 2
+          });
+        }
+      }
+
+      pushHistory(`Line Batch ${type}`);
+      showToast(`Размещено ${count} объектов в линию!`);
+      toolStep = 0;
+      toolPoints = [];
+      updateFooterCounts();
+    }
+  }
+
+  else if (currentTool === 'brushScatter') {
+    applyBrushScatter(snapped.x, snapped.y);
+  }
+
+  else if (currentTool === 'building') {
+    if (toolStep === 0) {
+      toolPoints = [snapped];
+      toolStep = 1;
+    } else if (toolStep === 1) {
+      const p1 = toolPoints[0];
+      const p2 = snapped;
+      const bx = Math.min(p1.x, p2.x);
+      const by = Math.min(p1.y, p2.y);
+      const bw = Math.max(40, Math.abs(p2.x - p1.x));
+      const bh = Math.max(40, Math.abs(p2.y - p1.y));
+
+      const newBld = {
+        id: generateUniqueId('bld'),
+        x: bx,
+        y: by,
+        width: bw,
+        height: bh,
+        type: toolConfigs.building.type,
+        color: toolConfigs.building.color,
+        roofColor: toolConfigs.building.roofColor,
+        accentColor: toolConfigs.building.accentColor,
+        entranceSide: toolConfigs.building.entranceSide,
+        roofDetails: [{ type: 'ac', rx: 0.2, ry: 0.2, rw: 16, rh: 16 }],
+        windows: []
+      };
+
+      mapData.buildings.push(newBld);
+      pushHistory('Create Building');
+      showToast('Здание создано!');
+      toolStep = 0;
+      toolPoints = [];
+      selectedEntities = [{ entity: newBld, layer: 'buildings' }];
+      updateSelectionSet();
+      updateInspector();
+      updateFooterCounts();
+    }
+  }
+
+  else if (currentTool === 'tree') {
+    const newTree = {
+      id: generateUniqueId('tree'),
+      x: snapped.x,
+      y: snapped.y,
+      radius: toolConfigs.tree.radius + (Math.random() * 6 - 3),
+      color: toolConfigs.tree.color,
+      shadowOffset: 6
+    };
+    mapData.trees.push(newTree);
+    pushHistory('Add Tree');
+    showToast('Дерево посажено');
+    updateFooterCounts();
+  }
+
+  else if (currentTool === 'prop') {
+    const newProp = {
+      id: generateUniqueId('prop'),
+      x: snapped.x,
+      y: snapped.y,
+      type: toolConfigs.prop.type,
+      angle: toolConfigs.prop.angle || 0
+    };
+    mapData.props.push(newProp);
+    pushHistory('Add Prop');
+    showToast(`Объект добавлен: ${newProp.type}`);
+    updateFooterCounts();
+  }
+
+  else if (currentTool === 'sidewalk') {
+    if (toolStep === 0) {
+      toolPoints = [snapped];
+      toolStep = 1;
+    } else if (toolStep === 1) {
+      const p1 = toolPoints[0];
+      const p2 = snapped;
+      const sx = Math.min(p1.x, p2.x);
+      const sy = Math.min(p1.y, p2.y);
+      const sw = Math.max(80, Math.abs(p2.x - p1.x));
+      const sh = Math.max(80, Math.abs(p2.y - p1.y));
+
+      const newSw = {
+        id: generateUniqueId('sw'),
+        x: sx,
+        y: sy,
+        width: sw,
+        height: sh,
+        sidewalkWidth: toolConfigs.sidewalk.sidewalkWidth || 32,
+        style: toolConfigs.sidewalk.style || 'urban'
+      };
+
+      if (!mapData.sidewalks) mapData.sidewalks = [];
+      mapData.sidewalks.push(newSw);
+      pushHistory('Create Sidewalk');
+      showToast('Тротуарный квартал создан');
+      toolStep = 0;
+      toolPoints = [];
+      updateFooterCounts();
+    }
+  }
+
+  else if (currentTool === 'parking') {
+    if (toolStep === 0) {
+      toolPoints = [snapped];
+      toolStep = 1;
+    } else if (toolStep === 1) {
+      const p1 = toolPoints[0];
+      const p2 = snapped;
+      const px = Math.min(p1.x, p2.x);
+      const py = Math.min(p1.y, p2.y);
+      const pw = Math.max(100, Math.abs(p2.x - p1.x));
+      const ph = Math.max(80, Math.abs(p2.y - p1.y));
+
+      const spots = [];
+      const numCols = Math.floor(pw / 32);
+      for (let c = 0; c < numCols; c++) {
+        spots.push({
+          x: px + 16 + c * 32,
+          y: py + 26,
+          angle: 0,
+          occupied: Math.random() < 0.4
+        });
+      }
+
+      const newPark = {
+        id: generateUniqueId('park'),
+        x: px,
+        y: py,
+        width: pw,
+        height: ph,
+        spots: spots
+      };
+
+      if (!mapData.parkings) mapData.parkings = [];
+      mapData.parkings.push(newPark);
+      pushHistory('Create Parking');
+      showToast('Парковочный комплекс создан');
+      toolStep = 0;
+      toolPoints = [];
+      updateFooterCounts();
+    }
+  }
+
+  else if (currentTool === 'intersection') {
+    const interSize = 84;
+    const newInter = {
+      id: generateUniqueId('inter'),
+      x: snapped.x,
+      y: snapped.y,
+      width: interSize,
+      height: interSize,
+      type: toolConfigs.intersection.type || '4way',
+      hasLights: toolConfigs.intersection.hasLights !== false,
+      isDirt: !!toolConfigs.intersection.isDirt,
+      currentPhaseIndex: 0,
+      phaseTimer: 0,
+      phases: [
+        { nsState: 'green', ewState: 'red', duration: 15 },
+        { nsState: 'yellow', ewState: 'red', duration: 3 },
+        { nsState: 'red', ewState: 'green', duration: 15 },
+        { nsState: 'red', ewState: 'yellow', duration: 3 }
+      ],
+      stopLines: [],
+      crosswalks: []
+    };
+
+    mapData.intersections.push(newInter);
+    pushHistory('Add Intersection');
+    showToast('Перекресток добавлен');
+    updateFooterCounts();
+  }
+});
+
+canvas.addEventListener('mousemove', (e) => {
+  const wp = screenToWorld(e.offsetX, e.offsetY);
+  mouseScreen = { x: e.offsetX, y: e.offsetY };
+  mouseWorld = wp;
+
+  if (isPanning) {
+    camera.x = cameraStart.x - (e.clientX - panStart.x) / camera.zoom;
+    camera.y = cameraStart.y - (e.clientY - panStart.y) / camera.zoom;
+    return;
+  }
+
+  if (isMouseDown && currentTool === 'select' && activeHandle && selectedEntities.length > 0) {
+    const dx = wp.x - dragStart.x;
+    const dy = wp.y - dragStart.y;
+
+    if (activeHandle === 'move') {
+      for (let i = 0; i < selectedEntities.length; i++) {
+        const ent = selectedEntities[i].entity;
+        if ('x' in ent && 'y' in ent) {
+          ent.x += dx;
+          ent.y += dy;
+        } else if ('x1' in ent) {
+          ent.x1 += dx; ent.x2 += dx;
+          ent.y1 += dy; ent.y2 += dy;
+          if (ent.lanePaths) {
+            for (const lp of ent.lanePaths) {
+              for (const pt of lp.waypoints) {
+                pt.x += dx; pt.y += dy;
+              }
+            }
+          }
+        }
+      }
+    } else if (activeHandle === 'rotate' && selectedEntities.length === 1) {
+      const ent = selectedEntities[0].entity;
+      const cx = ent.x !== undefined ? ent.x : (ent.x1 + ent.x2) / 2;
+      const cy = ent.y !== undefined ? ent.y : (ent.y1 + ent.y2) / 2;
+      ent.angle = Math.atan2(wp.y - cy, wp.x - cx);
+    } else if (activeHandle && selectedEntities.length === 1) {
+      const ent = selectedEntities[0].entity;
+      if ('width' in ent && 'height' in ent) {
+        if (activeHandle === 'se') {
+          ent.width = Math.max(20, wp.x - ent.x);
+          ent.height = Math.max(20, wp.y - ent.y);
+        } else if (activeHandle === 'ne') {
+          ent.width = Math.max(20, wp.x - ent.x);
+          const newY = Math.min(wp.y, ent.y + ent.height - 20);
+          ent.height += ent.y - newY;
+          ent.y = newY;
+        } else if (activeHandle === 'sw') {
+          const newX = Math.min(wp.x, ent.x + ent.width - 20);
+          ent.width += ent.x - newX;
+          ent.x = newX;
+          ent.height = Math.max(20, wp.y - ent.y);
+        } else if (activeHandle === 'nw') {
+          const newX = Math.min(wp.x, ent.x + ent.width - 20);
+          const newY = Math.min(wp.y, ent.y + ent.height - 20);
+          ent.width += ent.x - newX;
+          ent.height += ent.y - newY;
+          ent.x = newX;
+          ent.y = newY;
+        }
+      }
+    }
+    dragStart = { x: wp.x, y: wp.y };
+  }
+
+  if (isMouseDown && currentTool === 'brushScatter') {
+    applyBrushScatter(wp.x, wp.y);
+  }
+});
+
+canvas.addEventListener('mouseup', () => {
+  if (isPanning) {
+    isPanning = false;
+    canvas.style.cursor = 'crosshair';
+  }
+
+  if (currentTool === 'brushScatter') {
+    pushHistory('Brush Scatter');
+  }
+
+  if (activeHandle) {
+    pushHistory('Transform');
+    activeHandle = null;
+    updateInspector();
+  }
+
+  if (boxSelectStart) {
+    const minX = Math.min(boxSelectStart.x, mouseWorld.x);
+    const maxX = Math.max(boxSelectStart.x, mouseWorld.x);
+    const minY = Math.min(boxSelectStart.y, mouseWorld.y);
+    const maxY = Math.max(boxSelectStart.y, mouseWorld.y);
+
+    selectedEntities = [];
+    const candidates = spatialIndex.queryRect(minX, minY, maxX - minX, maxY - minY);
+    for (let i = 0; i < candidates.length; i++) {
+      const entry = candidates[i];
+      const item = entry.entity;
+      const ix = item.x !== undefined ? item.x : (item.x1 + item.x2) / 2;
+      const iy = item.y !== undefined ? item.y : (item.y1 + item.y2) / 2;
+      if (ix >= minX && ix <= maxX && iy >= minY && iy <= maxY) {
+        selectedEntities.push({ entity: item, layer: entry.layer });
+      }
+    }
+
+    boxSelectStart = null;
+    updateSelectionSet();
+    updateInspector();
+    renderOutliner();
+  }
+
+  isMouseDown = false;
+});
+
+// Wheel Zoom
+canvas.addEventListener('wheel', (e) => {
+  e.preventDefault();
+  const zoomFactor = e.deltaY < 0 ? 1.15 : 0.87;
+  const wp = screenToWorld(e.offsetX, e.offsetY);
+
+  camera.zoom *= zoomFactor;
+  camera.zoom = Math.max(0.02, Math.min(6.0, camera.zoom));
+
+  const wpNew = screenToWorld(e.offsetX, e.offsetY);
+  camera.x -= (wpNew.x - wp.x);
+  camera.y -= (wpNew.y - wp.y);
+}, { passive: false });
+
+let lastBrushTime = 0;
+function applyBrushScatter(cx, cy) {
+  const now = Date.now();
+  if (now - lastBrushTime < 60) return;
+  lastBrushTime = now;
+
+  const rad = toolConfigs.brushScatter.radius || 120;
+  const count = Math.max(1, Math.floor(toolConfigs.brushScatter.density / 2));
+  const type = toolConfigs.brushScatter.entityType;
+
+  for (let i = 0; i < count; i++) {
+    const angle = Math.random() * Math.PI * 2;
+    const r = Math.sqrt(Math.random()) * rad;
+    const px = cx + Math.cos(angle) * r;
+    const py = cy + Math.sin(angle) * r;
+
+    if (type === 'trees') {
+      const tree = {
+        id: generateUniqueId('tree'),
+        x: px,
+        y: py,
+        radius: 18 + Math.random() * 10,
+        color: ['#166534', '#15803d', '#16a34a', '#14532d'][Math.floor(Math.random() * 4)],
+        shadowOffset: 6
+      };
+      mapData.trees.push(tree);
+      spatialIndex.insert(tree, 'trees');
+    } else if (type === 'props') {
+      const propTypes = ['trash_can', 'hydrant', 'cone', 'bollard', 'manhole'];
+      const prop = {
+        id: generateUniqueId('prop'),
+        x: px,
+        y: py,
+        type: propTypes[Math.floor(Math.random() * propTypes.length)],
+        angle: Math.random() * Math.PI * 2
+      };
+      mapData.props.push(prop);
+      spatialIndex.insert(prop, 'props');
+    }
+  }
+
+  markMinimapDirty();
+  updateFooterCounts();
+}
+
+// Hit Testing
+function hitTestWorld(wx, wy) {
+  if (!mapData) return null;
+  const tol = 14 / camera.zoom;
+  const searchRadius = 40 + tol;
+
+  const nearby = spatialIndex.queryRadius(wx, wy, searchRadius);
+  if (!nearby || nearby.length === 0) return null;
+
+  for (let i = nearby.length - 1; i >= 0; i--) {
+    const entry = nearby[i];
+    if (entry.layer === 'props') {
+      const p = entry.entity;
+      if (Math.hypot(wx - p.x, wy - p.y) < 16 + tol) return { entity: p, layer: 'props' };
+    }
+  }
+
+  for (let i = nearby.length - 1; i >= 0; i--) {
+    const entry = nearby[i];
+    if (entry.layer === 'trees') {
+      const t = entry.entity;
+      if (Math.hypot(wx - t.x, wy - t.y) < t.radius + tol) return { entity: t, layer: 'trees' };
+    }
+  }
+
+  for (let i = nearby.length - 1; i >= 0; i--) {
+    const entry = nearby[i];
+    if (entry.layer === 'buildings') {
+      const b = entry.entity;
+      if (wx >= b.x && wx <= b.x + b.width && wy >= b.y && wy <= b.y + b.height) {
+        return { entity: b, layer: 'buildings' };
+      }
+    }
+  }
+
+  for (let i = nearby.length - 1; i >= 0; i--) {
+    const entry = nearby[i];
+    if (entry.layer === 'intersections') {
+      const inter = entry.entity;
+      if (Math.abs(wx - inter.x) <= inter.width / 2 + tol && Math.abs(wy - inter.y) <= inter.height / 2 + tol) {
+        return { entity: inter, layer: 'intersections' };
+      }
+    }
+  }
+
+  for (let i = nearby.length - 1; i >= 0; i--) {
+    const entry = nearby[i];
+    if (entry.layer === 'roads') {
+      const r = entry.entity;
+      const dist = distToSegment(wx, wy, r.x1, r.y1, r.x2, r.y2);
+      if (dist <= r.width / 2 + tol) {
+        return { entity: r, layer: 'roads' };
+      }
+    }
+  }
+
+  for (let i = nearby.length - 1; i >= 0; i--) {
+    const entry = nearby[i];
+    if (entry.layer === 'sidewalks') {
+      const sw = entry.entity;
+      if (wx >= sw.x && wx <= sw.x + sw.width && wy >= sw.y && wy <= sw.y + sw.height) {
+        return { entity: sw, layer: 'sidewalks' };
+      }
+    }
+  }
+
+  for (let i = nearby.length - 1; i >= 0; i--) {
+    const entry = nearby[i];
+    if (entry.layer === 'parkings') {
+      const p = entry.entity;
+      if (wx >= p.x && wx <= p.x + p.width && wy >= p.y && wy <= p.y + p.height) {
+        return { entity: p, layer: 'parkings' };
+      }
+    }
+  }
+
+  return null;
+}
+
+function distToSegment(px, py, x1, y1, x2, y2) {
+  const l2 = (x2 - x1) * (x2 - x1) + (y2 - y1) * (y2 - y1);
+  if (l2 === 0) return Math.hypot(px - x1, py - y1);
+  let t = ((px - x1) * (x2 - x1) + (py - y1) * (y2 - y1)) / l2;
+  t = Math.max(0, Math.min(1, t));
+  return Math.hypot(px - (x1 + t * (x2 - x1)), py - (y1 + t * (y2 - y1)));
+}
+
+function checkGizmoHandleHit(wx, wy, ent) {
+  const tol = 14 / camera.zoom;
+  if ('width' in ent && 'height' in ent) {
+    if (Math.hypot(wx - (ent.x + ent.width), wy - (ent.y + ent.height)) < tol) return 'se';
+    if (Math.hypot(wx - ent.x, wy - (ent.y + ent.height)) < tol) return 'sw';
+    if (Math.hypot(wx - (ent.x + ent.width), wy - ent.y) < tol) return 'ne';
+    if (Math.hypot(wx - ent.x, wy - ent.y) < tol) return 'nw';
+  }
+  return null;
+}
+
+// --- RENDERING LOOP (60 FPS WITH SPATIAL VIEWPORT CULLING & CACHED MINIMAP) ---
+function gameLoop(now) {
+  fpsCount++;
+  if (now - fpsTimer >= 500) {
+    const fps = Math.round((fpsCount * 1000) / (now - fpsTimer));
+    document.getElementById('stat-fps').textContent = fps;
+    document.getElementById('stat-x').textContent = Math.round(mouseWorld.x);
+    document.getElementById('stat-y').textContent = Math.round(mouseWorld.y);
+    document.getElementById('stat-zoom').textContent = `${Math.round(camera.zoom * 100)}%`;
+    fpsCount = 0;
+    fpsTimer = now;
+  }
+
+  render();
+  requestAnimationFrame(gameLoop);
+}
+
+function render() {
+  const w = canvas.width;
+  const h = canvas.height;
+
+  ctx.fillStyle = '#060911';
+  ctx.fillRect(0, 0, w, h);
+
+  ctx.save();
+  ctx.translate(w / 2, h / 2);
+  ctx.scale(camera.zoom, camera.zoom);
+  ctx.translate(-camera.x, -camera.y);
+
+  const vDiag = Math.hypot(w, h) / (2 * camera.zoom) + 200;
+  const minX = camera.x - vDiag;
+  const maxX = camera.x + vDiag;
+  const minY = camera.y - vDiag;
+  const maxY = camera.y + vDiag;
+
+  // 1. World Canvas Background
+  ctx.fillStyle = '#111827';
+  ctx.fillRect(0, 0, mapData.width, mapData.height);
+
+  // Subtle Grid Lines
+  if (camera.zoom > 0.08) {
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.03)';
+    ctx.lineWidth = 1 / camera.zoom;
+    const step = 200;
+    const startX = Math.max(0, Math.floor(minX / step) * step);
+    const endX = Math.min(mapData.width, Math.ceil(maxX / step) * step);
+    const startY = Math.max(0, Math.floor(minY / step) * step);
+    const endY = Math.min(mapData.height, Math.ceil(maxY / step) * step);
+
+    ctx.beginPath();
+    for (let x = startX; x <= endX; x += step) {
+      ctx.moveTo(x, startY); ctx.lineTo(x, endY);
+    }
+    for (let y = startY; y <= endY; y += step) {
+      ctx.moveTo(startX, y); ctx.lineTo(endX, y);
+    }
+    ctx.stroke();
+  }
+
+  // Fast Spatial Viewport Query
+  const visibleEntities = spatialIndex.queryRect(minX, minY, maxX - minX, maxY - minY);
+  const zoom = camera.zoom;
+
+  // 2. Sidewalks
+  for (let i = 0; i < visibleEntities.length; i++) {
+    const entry = visibleEntities[i];
+    if (entry.layer !== 'sidewalks') continue;
+    const sw = entry.entity;
+    const isSel = selectedEntityIds.has(sw.id);
+    ctx.fillStyle = isSel ? 'rgba(56, 189, 248, 0.25)' : 'rgba(148, 163, 184, 0.15)';
+    ctx.fillRect(sw.x, sw.y, sw.width, sw.height);
+    ctx.strokeStyle = isSel ? '#38bdf8' : '#64748b';
+    ctx.lineWidth = isSel ? 2 / zoom : 1 / zoom;
+    ctx.strokeRect(sw.x, sw.y, sw.width, sw.height);
+  }
+
+  // 3. Roads
+  for (let i = 0; i < visibleEntities.length; i++) {
+    const entry = visibleEntities[i];
+    if (entry.layer !== 'roads') continue;
+    const r = entry.entity;
+    const isSel = selectedEntityIds.has(r.id);
+    ctx.save();
+    ctx.strokeStyle = isSel ? '#38bdf8' : r.isDirt ? '#7c2d12' : r.isGravel ? '#475569' : '#1e293b';
+    ctx.lineWidth = r.width;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(r.x1, r.y1);
+    ctx.lineTo(r.x2, r.y2);
+    ctx.stroke();
+
+    if (!r.isDirt) {
+      ctx.strokeStyle = r.isGravel ? 'rgba(255,255,255,0.3)' : '#eab308';
+      ctx.lineWidth = 2 / zoom;
+      ctx.beginPath();
+      ctx.moveTo(r.x1, r.y1);
+      ctx.lineTo(r.x2, r.y2);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  // 4. Intersections
+  for (let i = 0; i < visibleEntities.length; i++) {
+    const entry = visibleEntities[i];
+    if (entry.layer !== 'intersections') continue;
+    const inter = entry.entity;
+    const isSel = selectedEntityIds.has(inter.id);
+    ctx.fillStyle = isSel ? 'rgba(56, 189, 248, 0.4)' : '#1e293b';
+    ctx.fillRect(inter.x - inter.width / 2, inter.y - inter.height / 2, inter.width, inter.height);
+    ctx.strokeStyle = isSel ? '#38bdf8' : '#64748b';
+    ctx.lineWidth = isSel ? 2 / zoom : 1 / zoom;
+    ctx.strokeRect(inter.x - inter.width / 2, inter.y - inter.height / 2, inter.width, inter.height);
+
+    if (inter.hasLights && zoom > 0.15) {
+      ctx.fillStyle = '#22c55e';
+      ctx.beginPath();
+      ctx.arc(inter.x, inter.y, 4 / zoom, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  // 5. Parkings
+  for (let i = 0; i < visibleEntities.length; i++) {
+    const entry = visibleEntities[i];
+    if (entry.layer !== 'parkings') continue;
+    const p = entry.entity;
+    const isSel = selectedEntityIds.has(p.id);
+    ctx.fillStyle = isSel ? 'rgba(56, 189, 248, 0.3)' : 'rgba(51, 65, 85, 0.4)';
+    ctx.fillRect(p.x, p.y, p.width, p.height);
+    ctx.strokeStyle = isSel ? '#38bdf8' : '#475569';
+    ctx.lineWidth = isSel ? 2 / zoom : 1 / zoom;
+    ctx.strokeRect(p.x, p.y, p.width, p.height);
+  }
+
+  // 6. Buildings
+  for (let i = 0; i < visibleEntities.length; i++) {
+    const entry = visibleEntities[i];
+    if (entry.layer !== 'buildings') continue;
+    const b = entry.entity;
+    const isSel = selectedEntityIds.has(b.id);
+    ctx.fillStyle = isSel ? 'rgba(244, 63, 94, 0.6)' : b.color || '#64748b';
+    ctx.fillRect(b.x, b.y, b.width, b.height);
+    ctx.strokeStyle = isSel ? '#f43f5e' : b.roofColor || '#334155';
+    ctx.lineWidth = isSel ? 3 / zoom : 1 / zoom;
+    ctx.strokeRect(b.x, b.y, b.width, b.height);
+
+    if (zoom > 0.25) {
+      ctx.fillStyle = '#fff';
+      ctx.font = `${Math.max(10, 11 / zoom)}px sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.fillText(b.type || 'Building', b.x + b.width / 2, b.y + b.height / 2 + 4 / zoom);
+    }
+  }
+
+  // 7. Trees (Optimized circle rendering)
+  for (let i = 0; i < visibleEntities.length; i++) {
+    const entry = visibleEntities[i];
+    if (entry.layer !== 'trees') continue;
+    const t = entry.entity;
+    const isSel = selectedEntityIds.has(t.id);
+    ctx.fillStyle = isSel ? '#22c55e' : t.color || '#16a34a';
+    ctx.beginPath();
+    ctx.arc(t.x, t.y, t.radius, 0, Math.PI * 2);
+    ctx.fill();
+    if (isSel) {
+      ctx.strokeStyle = '#fff';
+      ctx.lineWidth = 2 / zoom;
+      ctx.stroke();
+    }
+  }
+
+  // 8. Props (Skipped at very low zoom for speed)
+  if (zoom > 0.1) {
+    for (let i = 0; i < visibleEntities.length; i++) {
+      const entry = visibleEntities[i];
+      if (entry.layer !== 'props') continue;
+      const p = entry.entity;
+      const isSel = selectedEntityIds.has(p.id);
+      ctx.save();
+      ctx.translate(p.x, p.y);
+      ctx.rotate(p.angle || 0);
+      ctx.fillStyle = isSel ? '#fbbf24' : '#f59e0b';
+      ctx.fillRect(-8, -8, 16, 16);
+      if (isSel) {
+        ctx.strokeStyle = '#fff';
+        ctx.lineWidth = 2 / zoom;
+        ctx.strokeRect(-8, -8, 16, 16);
+      }
+      ctx.restore();
+    }
+  }
+
+  // 9. Tool Overlays & Live Previews
+  renderToolLivePreview(ctx);
+
+  // 10. Transform Gizmos for Selected Entities
+  renderTransformGizmos(ctx);
+
+  // 11. Box Selection Rectangle
+  if (boxSelectStart) {
+    const bx = Math.min(boxSelectStart.x, mouseWorld.x);
+    const by = Math.min(boxSelectStart.y, mouseWorld.y);
+    const bw = Math.abs(mouseWorld.x - boxSelectStart.x);
+    const bh = Math.abs(mouseWorld.y - boxSelectStart.y);
+    ctx.fillStyle = 'rgba(56, 189, 248, 0.15)';
+    ctx.fillRect(bx, by, bw, bh);
+    ctx.strokeStyle = '#38bdf8';
+    ctx.lineWidth = 1 / zoom;
+    ctx.setLineDash([4 / zoom, 4 / zoom]);
+    ctx.strokeRect(bx, by, bw, bh);
+    ctx.setLineDash([]);
+  }
+
+  ctx.restore();
+
+  // 12. Ultra-Fast Cached Minimap Blit
+  renderMinimap();
+}
+
+function renderToolLivePreview(ctx) {
+  const mp = applySnapping(mouseWorld);
+
+  if (currentTool === 'road2p' && toolStep === 1) {
+    const p1 = toolPoints[0];
+    const p2 = mp;
+    ctx.save();
+    ctx.strokeStyle = 'rgba(56, 189, 248, 0.7)';
+    ctx.lineWidth = toolConfigs.road.width;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(p1.x, p1.y);
+    ctx.lineTo(p2.x, p2.y);
+    ctx.stroke();
+
+    ctx.strokeStyle = '#fff';
+    ctx.lineWidth = 2 / camera.zoom;
+    ctx.setLineDash([6 / camera.zoom, 6 / camera.zoom]);
+    ctx.beginPath();
+    ctx.moveTo(p1.x, p1.y);
+    ctx.lineTo(p2.x, p2.y);
+    ctx.stroke();
+
+    const dist = Math.hypot(p2.x - p1.x, p2.y - p1.y);
+    ctx.fillStyle = '#38bdf8';
+    ctx.font = `bold ${13 / camera.zoom}px sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.fillText(`${Math.round(dist)} px`, (p1.x + p2.x) / 2, (p1.y + p2.y) / 2 - 14 / camera.zoom);
+    ctx.restore();
+  }
+
+  else if (currentTool === 'roadCurve') {
+    if (toolStep === 1) {
+      ctx.save();
+      ctx.strokeStyle = 'rgba(56, 189, 248, 0.5)';
+      ctx.lineWidth = 2 / camera.zoom;
+      ctx.beginPath();
+      ctx.moveTo(toolPoints[0].x, toolPoints[0].y);
+      ctx.lineTo(mp.x, mp.y);
+      ctx.stroke();
+      ctx.restore();
+    } else if (toolStep === 2) {
+      const p0 = toolPoints[0];
+      const p2 = toolPoints[1];
+      const p1 = mp;
+      ctx.save();
+      ctx.strokeStyle = '#38bdf8';
+      ctx.lineWidth = toolConfigs.curve.width;
+      ctx.beginPath();
+      ctx.moveTo(p0.x, p0.y);
+      ctx.quadraticCurveTo(p1.x, p1.y, p2.x, p2.y);
+      ctx.stroke();
+      ctx.restore();
+    }
+  }
+
+  else if (currentTool === 'lineBatch' && toolStep === 1) {
+    const p1 = toolPoints[0];
+    const p2 = mp;
+    const count = toolConfigs.lineBatch.count || 8;
+
+    ctx.save();
+    ctx.strokeStyle = 'rgba(56, 189, 248, 0.6)';
+    ctx.lineWidth = 2 / camera.zoom;
+    ctx.setLineDash([4 / camera.zoom, 4 / camera.zoom]);
+    ctx.beginPath();
+    ctx.moveTo(p1.x, p1.y);
+    ctx.lineTo(p2.x, p2.y);
+    ctx.stroke();
+
+    for (let i = 0; i < count; i++) {
+      const t = count === 1 ? 0.5 : i / (count - 1);
+      const px = p1.x + (p2.x - p1.x) * t;
+      const py = p1.y + (p2.y - p1.y) * t;
+      ctx.fillStyle = '#22c55e';
+      ctx.beginPath();
+      ctx.arc(px, py, 14, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  else if (currentTool === 'brushScatter') {
+    ctx.save();
+    ctx.strokeStyle = '#38bdf8';
+    ctx.lineWidth = 1.5 / camera.zoom;
+    ctx.setLineDash([4 / camera.zoom, 4 / camera.zoom]);
+    ctx.beginPath();
+    ctx.arc(mp.x, mp.y, toolConfigs.brushScatter.radius, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  else if (currentTool === 'building' && toolStep === 1) {
+    const p1 = toolPoints[0];
+    const bx = Math.min(p1.x, mp.x);
+    const by = Math.min(p1.y, mp.y);
+    const bw = Math.abs(mp.x - p1.x);
+    const bh = Math.abs(mp.y - p1.y);
+
+    ctx.save();
+    ctx.fillStyle = 'rgba(56, 189, 248, 0.3)';
+    ctx.fillRect(bx, by, bw, bh);
+    ctx.strokeStyle = '#38bdf8';
+    ctx.lineWidth = 2 / camera.zoom;
+    ctx.strokeRect(bx, by, bw, bh);
+    ctx.fillStyle = '#fff';
+    ctx.font = `${12 / camera.zoom}px sans-serif`;
+    ctx.fillText(`${Math.round(bw)} × ${Math.round(bh)}`, bx + bw / 2, by + bh / 2);
+    ctx.restore();
+  }
+}
+
+function renderTransformGizmos(ctx) {
+  if (selectedEntities.length === 0) return;
+  document.getElementById('stat-selected').textContent = selectedEntities.length;
+
+  for (let i = 0; i < selectedEntities.length; i++) {
+    const ent = selectedEntities[i].entity;
+    ctx.save();
+
+    if ('width' in ent && 'height' in ent) {
+      const hs = 8 / camera.zoom;
+      ctx.fillStyle = '#38bdf8';
+      ctx.fillRect(ent.x - hs/2, ent.y - hs/2, hs, hs);
+      ctx.fillRect(ent.x + ent.width - hs/2, ent.y - hs/2, hs, hs);
+      ctx.fillRect(ent.x - hs/2, ent.y + ent.height - hs/2, hs, hs);
+      ctx.fillRect(ent.x + ent.width - hs/2, ent.y + ent.height - hs/2, hs, hs);
+    } else if ('x1' in ent) {
+      const hs = 10 / camera.zoom;
+      ctx.fillStyle = '#38bdf8';
+      ctx.beginPath(); ctx.arc(ent.x1, ent.y1, hs/2, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(ent.x2, ent.y2, hs/2, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.restore();
+  }
+}
+
+// Cached Minimap Offscreen Render
+function updateOffscreenMinimap() {
+  if (!offscreenMinimapCtx || !mapData) return;
+  const mw = offscreenMinimap.width;
+  const mh = offscreenMinimap.height;
+  const scale = mw / mapData.width;
+
+  offscreenMinimapCtx.fillStyle = '#0f172a';
+  offscreenMinimapCtx.fillRect(0, 0, mw, mh);
+
+  // Draw Roads
+  offscreenMinimapCtx.fillStyle = '#475569';
+  (mapData.roads || []).forEach(r => {
+    offscreenMinimapCtx.fillRect(r.x1 * scale, r.y1 * scale, Math.max(2, (r.x2 - r.x1) * scale), Math.max(2, r.width * scale));
+  });
+
+  // Draw Buildings
+  offscreenMinimapCtx.fillStyle = '#64748b';
+  (mapData.buildings || []).forEach(b => {
+    offscreenMinimapCtx.fillRect(b.x * scale, b.y * scale, Math.max(2, b.width * scale), Math.max(2, b.height * scale));
+  });
+
+  isMinimapDirty = false;
+}
+
+function renderMinimap() {
+  if (!minimapCtx || !minimapCanvas) return;
+  if (isMinimapDirty) {
+    updateOffscreenMinimap();
+  }
+
+  minimapCtx.drawImage(offscreenMinimap, 0, 0);
+
+  // Camera viewport box
+  const mw = minimapCanvas.width;
+  const mh = minimapCanvas.height;
+  const scale = mw / mapData.width;
+
+  const cw = (canvas.width / camera.zoom) * scale;
+  const ch = (canvas.height / camera.zoom) * scale;
+  const cx = (camera.x * scale) - cw / 2;
+  const cy = (camera.y * scale) - ch / 2;
+
+  minimapCtx.strokeStyle = '#38bdf8';
+  minimapCtx.lineWidth = 1.5;
+  minimapCtx.strokeRect(cx, cy, cw, ch);
+}
+
+// --- INSPECTOR UI ---
+function updateInspector() {
+  const emptyView = document.getElementById('inspector-empty');
+  const contentView = document.getElementById('inspector-content');
+
+  if (selectedEntities.length === 0) {
+    emptyView.style.display = 'block';
+    contentView.style.display = 'none';
+    return;
+  }
+
+  emptyView.style.display = 'none';
+  contentView.style.display = 'flex';
+
+  if (selectedEntities.length > 1) {
+    contentView.innerHTML = `
+      <div class="prop-card">
+        <div style="font-weight:700;font-size:13px;color:var(--accent);">Множественный выбор</div>
+        <div style="font-size:12px;color:var(--text-muted);">Выбрано объектов: ${selectedEntities.length}</div>
+        <div class="prop-grid-2" style="margin-top:10px;">
+          <button class="btn danger" onclick="deleteSelected()">🗑️ Удалить все</button>
+          <button class="btn" onclick="duplicateSelected()">📑 Дублировать</button>
+        </div>
+      </div>
+    `;
+    return;
+  }
+
+  const sel = selectedEntities[0];
+  const e = sel.entity;
+  const layer = sel.layer;
+
+  let fieldsHtml = '';
+
+  if ('name' in e) {
+    fieldsHtml += `
+      <div class="prop-field">
+        <label>Имя:</label>
+        <input type="text" value="${e.name || ''}" oninput="updateEntityProp('name', this.value)">
+      </div>
+    `;
+  }
+  if ('x' in e && 'y' in e) {
+    fieldsHtml += `
+      <div class="prop-field">
+        <label>Координаты X, Y:</label>
+        <div class="prop-grid-2">
+          <input type="number" value="${Math.round(e.x)}" onchange="updateEntityProp('x', parseFloat(this.value))">
+          <input type="number" value="${Math.round(e.y)}" onchange="updateEntityProp('y', parseFloat(this.value))">
+        </div>
+      </div>
+    `;
+  }
+  if ('width' in e && 'height' in e) {
+    fieldsHtml += `
+      <div class="prop-field">
+        <label>Размеры W, H:</label>
+        <div class="prop-grid-2">
+          <input type="number" value="${Math.round(e.width)}" onchange="updateEntityProp('width', parseFloat(this.value))">
+          <input type="number" value="${Math.round(e.height)}" onchange="updateEntityProp('height', parseFloat(this.value))">
+        </div>
+      </div>
+    `;
+  }
+  if ('color' in e) {
+    fieldsHtml += `
+      <div class="prop-field">
+        <label>Основной цвет:</label>
+        <input type="color" value="${e.color || '#64748b'}" onchange="updateEntityProp('color', this.value)">
+      </div>
+    `;
+  }
+  if ('roofColor' in e) {
+    fieldsHtml += `
+      <div class="prop-field">
+        <label>Цвет крыши:</label>
+        <input type="color" value="${e.roofColor || '#334155'}" onchange="updateEntityProp('roofColor', this.value)">
+      </div>
+    `;
+  }
+  if ('lanes' in e) {
+    fieldsHtml += `
+      <div class="prop-field">
+        <label>Полос движения:</label>
+        <input type="number" min="1" max="8" value="${e.lanes}" onchange="updateEntityProp('lanes', parseInt(this.value))">
+      </div>
+    `;
+  }
+  if (layer === 'buildings') {
+    const floors = e.floorsCount || (e.interiors ? Object.keys(e.interiors).length : 1);
+    fieldsHtml += `
+      <div class="prop-field">
+        <label>Этажность здания:</label>
+        <input type="number" min="1" max="50" value="${floors}" onchange="updateBuildingFloorsCount(parseInt(this.value))">
+      </div>
+      <div style="margin-top: 12px; margin-bottom: 8px;">
+        <button class="btn primary" style="width: 100%; justify-content: center; padding: 10px; font-size: 13px; font-weight: 600; gap: 8px;" onclick="openInteriorStudioForBuilding('${e.id}')">
+          🛋️ Редактор интерьера (${floors} эт.)
+        </button>
+      </div>
+    `;
+  }
+
+  contentView.innerHTML = `
+    <div class="prop-card">
+      <div style="font-weight:700;font-size:13px;color:var(--accent);">${layer.toUpperCase()}: ${e.id || ''}</div>
+      ${fieldsHtml}
+      <div class="prop-grid-2" style="margin-top:10px;">
+        <button class="btn danger" onclick="deleteSelected()">🗑️ Удалить</button>
+        <button class="btn" onclick="duplicateSelected()">📑 Дубликат</button>
+      </div>
+    </div>
+  `;
+}
+
+function updateEntityProp(prop, val) {
+  if (selectedEntities.length !== 1) return;
+  selectedEntities[0].entity[prop] = val;
+  pushHistory(`Edit ${prop}`);
+}
+
+function deleteSelected() {
+  if (selectedEntities.length === 0) return;
+  selectedEntities.forEach(sel => {
+    const list = mapData[sel.layer];
+    if (list) {
+      const idx = list.indexOf(sel.entity);
+      if (idx >= 0) list.splice(idx, 1);
+    }
+  });
+  selectedEntities = [];
+  updateSelectionSet();
+  pushHistory('Delete');
+  updateInspector();
+  renderOutliner();
+  updateFooterCounts();
+  showToast('Удалено');
+}
+
+function duplicateSelected() {
+  if (selectedEntities.length === 0) return;
+  const newSelections = [];
+
+  selectedEntities.forEach(sel => {
+    const clone = JSON.parse(JSON.stringify(sel.entity));
+    clone.id = generateUniqueId(sel.layer);
+    if ('x' in clone) clone.x += 40;
+    if ('y' in clone) clone.y += 40;
+    if ('x1' in clone) { clone.x1 += 40; clone.x2 += 40; clone.y1 += 40; clone.y2 += 40; }
+
+    const list = mapData[sel.layer];
+    if (list) {
+      list.push(clone);
+      newSelections.push({ entity: clone, layer: sel.layer });
+    }
+  });
+
+  selectedEntities = newSelections;
+  updateSelectionSet();
+  pushHistory('Duplicate');
+  updateInspector();
+  renderOutliner();
+  updateFooterCounts();
+  showToast('Дублировано');
+}
+
+// --- VIRTUALIZED / ACCORDION OUTLINER ---
+function renderOutliner() {
+  const listEl = document.getElementById('outliner-list');
+  if (!listEl) return;
+
+  const search = (document.getElementById('outliner-search')?.value || '').toLowerCase().trim();
+  const filter = document.getElementById('outliner-layer-filter')?.value || 'all';
+
+  let html = '';
+  const layers = [
+    { key: 'roads', label: 'Дороги', items: mapData.roads },
+    { key: 'buildings', label: 'Здания', items: mapData.buildings },
+    { key: 'intersections', label: 'Перекрестки', items: mapData.intersections },
+    { key: 'parkings', label: 'Парковки', items: mapData.parkings || [] },
+    { key: 'sidewalks', label: 'Тротуары', items: mapData.sidewalks || [] },
+    { key: 'trees', label: 'Деревья', items: mapData.trees },
+    { key: 'props', label: 'Объекты', items: mapData.props }
+  ];
+
+  layers.forEach(l => {
+    if (filter !== 'all' && filter !== l.key) return;
+    if (!l.items || l.items.length === 0) return;
+
+    let matching = l.items;
+    if (search) {
+      matching = l.items.filter(item => {
+        const title = (item.name || item.type || item.id || '').toLowerCase();
+        return title.includes(search) || item.id.toLowerCase().includes(search);
+      });
+    }
+
+    if (matching.length === 0) return;
+
+    // Limit to top 40 items per group to prevent browser freeze
+    const displayItems = matching.slice(0, 40);
+
+    html += `<div class="layer-group-header">
+      <span>${l.label} (${matching.length})</span>
+      ${matching.length > 40 ? '<span style="font-size:10px;opacity:0.7;">топ-40</span>' : ''}
+    </div>`;
+
+    displayItems.forEach(item => {
+      const title = item.name || item.type || item.id || 'Элемент';
+      const isSel = selectedEntityIds.has(item.id);
+      const coordStr = item.x !== undefined ? `${Math.round(item.x)}, ${Math.round(item.y)}` : `${Math.round(item.x1)}, ${Math.round(item.y1)}`;
+
+      html += `
+        <div class="entity-row ${isSel ? 'selected' : ''}" onclick="selectOutlinerEntity('${l.key}', '${item.id}')">
+          <span>${title}</span>
+          <span class="entity-meta">[${coordStr}]</span>
+        </div>
+      `;
+    });
+  });
+
+  listEl.innerHTML = html || '<div style="padding:20px;text-align:center;color:#64748b;">Ничего не найдено</div>';
+}
+
+function selectOutlinerEntity(layerKey, id) {
+  const list = mapData[layerKey];
+  if (!list) return;
+  const item = list.find(it => it.id === id);
+  if (item) {
+    selectedEntities = [{ entity: item, layer: layerKey }];
+    updateSelectionSet();
+    const cx = item.x !== undefined ? item.x : (item.x1 + item.x2) / 2;
+    const cy = item.y !== undefined ? item.y : (item.y1 + item.y2) / 2;
+    camera.x = cx;
+    camera.y = cy;
+    updateInspector();
+    renderOutliner();
+  }
+}
+
+// --- PRESETS ENGINE ---
+function insertPreset(name) {
+  const cx = camera.x;
+  const cy = camera.y;
+
+  if (name === 'residential_block') {
+    mapData.buildings.push(
+      { id: generateUniqueId('bld'), x: cx - 180, y: cy - 180, width: 120, height: 100, type: 'residential', color: '#64748b', roofColor: '#334155', accentColor: '#475569', entranceSide: 'south', roofDetails: [], windows: [] },
+      { id: generateUniqueId('bld'), x: cx + 60, y: cy - 180, width: 120, height: 100, type: 'residential', color: '#64748b', roofColor: '#334155', accentColor: '#475569', entranceSide: 'south', roofDetails: [], windows: [] },
+      { id: generateUniqueId('bld'), x: cx - 180, y: cy + 80, width: 120, height: 100, type: 'residential', color: '#64748b', roofColor: '#334155', accentColor: '#475569', entranceSide: 'north', roofDetails: [], windows: [] },
+      { id: generateUniqueId('bld'), x: cx + 60, y: cy + 80, width: 120, height: 100, type: 'residential', color: '#64748b', roofColor: '#334155', accentColor: '#475569', entranceSide: 'north', roofDetails: [], windows: [] }
+    );
+    mapData.trees.push(
+      { id: generateUniqueId('tree'), x: cx - 40, y: cy, radius: 24, color: '#16a34a', shadowOffset: 6 },
+      { id: generateUniqueId('tree'), x: cx + 40, y: cy, radius: 24, color: '#16a34a', shadowOffset: 6 }
+    );
+    mapData.props.push(
+      { id: generateUniqueId('prop'), x: cx, y: cy - 20, type: 'bench', angle: 0 },
+      { id: generateUniqueId('prop'), x: cx, y: cy + 20, type: 'bench', angle: Math.PI }
+    );
+    pushHistory('Insert Preset: Residential Block');
+    showToast('Шаблон "Жилой квартал" добавлен!');
+  } else if (name === 'park_fountain') {
+    mapData.props.push({ id: generateUniqueId('prop'), x: cx, y: cy, type: 'flowerbed', angle: 0 });
+    for (let a = 0; a < Math.PI * 2; a += Math.PI / 3) {
+      mapData.trees.push({
+        id: generateUniqueId('tree'),
+        x: cx + Math.cos(a) * 90,
+        y: cy + Math.sin(a) * 90,
+        radius: 22,
+        color: '#15803d',
+        shadowOffset: 6
+      });
+      mapData.props.push({
+        id: generateUniqueId('prop'),
+        x: cx + Math.cos(a) * 50,
+        y: cy + Math.sin(a) * 50,
+        type: 'bench',
+        angle: a + Math.PI / 2
+      });
+    }
+    pushHistory('Insert Preset: Park');
+    showToast('Парковая зона добавлена!');
+  }
+
+  updateFooterCounts();
+}
+
+// --- FILE I/O & SAVE ---
+function openLoadFileDialog() {
+  document.getElementById('file-loader').click();
+}
+
+function handleFileSelected(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (evt) => {
+    try {
+      mapData = JSON.parse(evt.target.result);
+      pushHistory('Load JSON');
+      renderOutliner();
+      updateFooterCounts();
+      centerCamera();
+      showToast(`Карта "${file.name}" загружена!`);
+    } catch (err) {
+      alert('Ошибка чтения файла: ' + err.message);
+    }
+  };
+  reader.readAsText(file);
+  e.target.value = '';
+}
+
+function saveToFile() {
+  const jsonStr = JSON.stringify(mapData, null, 2);
+  const blob = new Blob([jsonStr], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'map.json';
+  a.click();
+  URL.revokeObjectURL(url);
+  showToast('Файл map.json скачан!');
+}
+
+async function saveToLocalStorageAndPlay() {
+  try {
+    await saveCustomMapToStorage(mapData);
+    showToast('Сохранено в хранилище игры! Переход в симулятор...');
+    setTimeout(() => {
+      window.location.href = '/';
+    }, 600);
+  } catch (err) {
+    alert('Ошибка сохранения карты: ' + err.message);
+  }
+}
+
+// --- UTILITIES ---
+function switchTab(tabId) {
+  document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+  document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+  document.querySelector(`button[onclick="switchTab('${tabId}')"]`).classList.add('active');
+  document.getElementById(`tab-${tabId}`).classList.add('active');
+  if (tabId === 'outliner') renderOutliner();
+}
+
+function toggleSnapGrid() {
+  snapSettings.grid = !snapSettings.grid;
+  document.getElementById('snap-grid-btn').classList.toggle('active', snapSettings.grid);
+}
+
+function toggleSnapRoads() {
+  snapSettings.roads = !snapSettings.roads;
+  document.getElementById('snap-road-btn').classList.toggle('active', snapSettings.roads);
+}
+
+function toggleSnapOrtho() {
+  snapSettings.ortho = !snapSettings.ortho;
+  document.getElementById('snap-ortho-btn').classList.toggle('active', snapSettings.ortho);
+}
+
+function centerCamera() {
+  camera.x = mapData.width / 2;
+  camera.y = mapData.height / 2;
+  camera.zoom = Math.min(canvas.width, canvas.height) / (mapData.width * 1.1);
+  showToast('Камера центрирована');
+}
+
+function showToast(msg) {
+  const toast = document.getElementById('toast');
+  if (!toast) return;
+  toast.textContent = msg;
+  toast.classList.add('show');
+  clearTimeout(toast._timer);
+  toast._timer = setTimeout(() => toast.classList.remove('show'), 2200);
+}
+
+function toggleHelpModal() {
+  const m = document.getElementById('help-modal');
+  m.style.display = m.style.display === 'flex' ? 'none' : 'flex';
+}
+
+function updateFooterCounts() {
+  const el = document.getElementById('footer-counts');
+  if (!el || !mapData) return;
+  el.textContent = `Дорог: ${mapData.roads?.length || 0} | Зданий: ${mapData.buildings?.length || 0} | Деревьев: ${mapData.trees?.length || 0} | Декора: ${mapData.props?.length || 0}`;
+}
+
+// --- GLOBAL KEYBOARD SHORTCUTS ---
+window.addEventListener('keydown', (e) => {
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
+
+  if (e.key === 'z' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); undo(); }
+  else if (e.key === 'y' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); redo(); }
+  else if (e.key === 'd' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); duplicateSelected(); }
+  else if (e.key === 'Delete' || e.key === 'Backspace') { deleteSelected(); }
+  else if (e.key === 'v' || e.key === 'м') { setTool('select'); }
+  else if (e.key === 'r' || e.key === 'к') { setTool('road2p'); }
+  else if (e.key === 'c' || e.key === 'с') { setTool('roadCurve'); }
+  else if (e.key === 'l' || e.key === 'д') { setTool('lineBatch'); }
+  else if (e.key === 'b' || e.key === 'и') { setTool('brushScatter'); }
+  else if (e.key === 'u' || e.key === 'г') { setTool('building'); }
+  else if (e.key === 't' || e.key === 'е') { setTool('tree'); }
+  else if (e.key === 'p' || e.key === 'з') { setTool('prop'); }
+  else if (e.key === 's' || e.key === 'ы') { setTool('sidewalk'); }
+  else if (e.key === 'k' || e.key === 'л') { setTool('parking'); }
+  else if (e.key === 'i' || e.key === 'ш') { setTool('intersection'); }
+  else if (e.key === 'e' || e.key === 'у') { openInteriorStudioFromSelection(); }
+  else if (e.key === 'm' || e.key === 'ь') { setTool('measure'); }
+  else if (e.key === 'f' || e.key === 'а') { centerCamera(); }
+  else if (e.key === 'Escape') {
+    selectedEntities = [];
+    updateSelectionSet();
+    toolStep = 0;
+    toolPoints = [];
+    updateInspector();
+  }
+});
+
+// =======================================================
+// INTERIOR STUDIO MODULE FOR MAP EDITOR
+// =======================================================
+let isBuilding = null;
+let isFloor = 0;
+let isLayout = null;
+let isTool = 'select'; // 'select' | 'wall' | 'room' | 'zone' | 'furniture'
+let isSelectedItem = null; // { type: 'furniture'|'wall'|'room'|'zone', index: number }
+let isHoveredItem = null;
+let isPan = { x: 50, y: 50 };
+let isZoom = 2.5; // Scale factor
+let isIsDragging = false;
+let isDragStart = { x: 0, y: 0 };
+let isDragItemStart = { x: 0, y: 0 };
+let isToolDrawing = false;
+let isDrawStart = { x: 0, y: 0 };
+let isDrawCurrent = { x: 0, y: 0 };
+let isSnapGrid = true;
+let isGridSize = 2; // 2 meters grid snap
+let isSelectedFurnitureDef = null;
+let isFurnitureCategory = 'all';
+let isFurnitureSearchQuery = '';
+let isHistory = [];
+let isHistoryIndex = -1;
+
+const IS_FURNITURE_CATALOG = [
+  // Спальня
+  { type: 'bed', name: 'Двуспальная кровать', width: 24, height: 24, color: '#f43f5e', category: 'bedroom', icon: '🛏️' },
+  { type: 'kids_bed', name: 'Детская кровать', width: 18, height: 20, color: '#38bdf8', category: 'bedroom', icon: '🛏️' },
+  { type: 'wardrobe', name: 'Шкаф платяной', width: 18, height: 9, color: '#451a03', category: 'bedroom', icon: '🚪' },
+  { type: 'nightstand', name: 'Тумбочка прикроватная', width: 6, height: 6, color: '#78350f', category: 'bedroom', icon: '📦' },
+  { type: 'bookshelf', name: 'Книжный шкаф', width: 18, height: 6, color: '#7c2d12', category: 'bedroom', icon: '📚' },
+
+  // Гостиная
+  { type: 'sofa', name: 'Мягкий диван', width: 24, height: 10, color: '#475569', category: 'living', icon: '🛋️' },
+  { type: 'tv_cabinet', name: 'Тумба под ТВ', width: 18, height: 6, color: '#1e293b', category: 'living', icon: '📺' },
+  { type: 'tv', name: 'Телевизор плазма', width: 14, height: 3, color: '#0f172a', category: 'living', icon: '🖥️' },
+  { type: 'carpet', name: 'Ковер напольный', width: 32, height: 22, color: '#991b1b', category: 'living', icon: '🧶' },
+  { type: 'plant', name: 'Комнатный фикус', width: 6, height: 6, color: '#15803d', category: 'living', icon: '🪴' },
+  { type: 'bench', name: 'Скамья со спинкой', width: 16, height: 6, color: '#334155', category: 'living', icon: '🪑' },
+
+  // Офис и кабинет
+  { type: 'desk', name: 'Письменный стол', width: 18, height: 10, color: '#334155', category: 'office', icon: '🪵' },
+  { type: 'desk_reception', name: 'Стойка ресепшн', width: 28, height: 10, color: '#1d4ed8', category: 'office', icon: '🏢' },
+  { type: 'computer', name: 'Компьютер / Монитор', width: 7, height: 5, color: '#0f172a', category: 'office', icon: '💻' },
+  { type: 'chair', name: 'Офисное кресло', width: 6, height: 6, color: '#1e293b', category: 'office', icon: '💺' },
+  { type: 'cooler', name: 'Кулер с водой', width: 6, height: 6, color: '#e2e8f0', category: 'office', icon: '💧' },
+  { type: 'server_rack', name: 'Серверная стойка', width: 12, height: 8, color: '#020617', category: 'office', icon: '🖲️' },
+  { type: 'blackboard', name: 'Школьная доска', width: 24, height: 4, color: '#14532d', category: 'office', icon: '📋' },
+  { type: 'whiteboard', name: 'Маркерная доска', width: 20, height: 4, color: '#f8fafc', category: 'office', icon: '📝' },
+  { type: 'trash_can', name: 'Корзина для мусора', width: 5, height: 5, color: '#64748b', category: 'office', icon: '🗑️' },
+  { type: 'mailbox_bank', name: 'Почтовые ячейки', width: 20, height: 5, color: '#475569', category: 'office', icon: '📬' },
+  { type: 'atm', name: 'Банкомат', width: 8, height: 7, color: '#15803d', category: 'office', icon: '🏧' },
+
+  // Кухня
+  { type: 'kitchen_counter', name: 'Кухонный гарнитур', width: 26, height: 9, color: '#0f172a', category: 'kitchen', icon: '🍳' },
+  { type: 'table', name: 'Обеденный стол', width: 16, height: 12, color: '#78350f', category: 'kitchen', icon: '🪑' },
+  { type: 'fridge', name: 'Холодильник', width: 9, height: 9, color: '#e2e8f0', category: 'kitchen', icon: '🧊' },
+  { type: 'vending_machine', name: 'Автомат со снеками', width: 10, height: 8, color: '#dc2626', category: 'kitchen', icon: '🥤' },
+
+  // Ванная комната (без унитазов)
+  { type: 'bath', name: 'Ванна акриловая', width: 20, height: 12, color: '#cbd5e1', category: 'bathroom', icon: '🛁' },
+  { type: 'sink', name: 'Раковина / Умывальник', width: 10, height: 7, color: '#cbd5e1', category: 'bathroom', icon: '🚰' },
+
+  // Магазин
+  { type: 'shelf', name: 'Торговый стеллаж', width: 24, height: 7, color: '#475569', category: 'shop', icon: '🛒' },
+  { type: 'counter', name: 'Прилавок кассовый', width: 22, height: 8, color: '#1e293b', category: 'shop', icon: '🏬' },
+  { type: 'cash_register', name: 'Кассовый аппарат', width: 7, height: 6, color: '#334155', category: 'shop', icon: '📠' },
+  { type: 'freezer_display', name: 'Морозильный ларь', width: 20, height: 10, color: '#94a3b8', category: 'shop', icon: '❄️' },
+
+  // Склад и спец.
+  { type: 'pallet_stack', name: 'Паллета с ящиками', width: 14, height: 14, color: '#b45309', category: 'storage', icon: '📦' },
+  { type: 'radiator', name: 'Батарея отопления', width: 12, height: 3, color: '#e2e8f0', category: 'storage', icon: '♨️' },
+  { type: 'fire_rack', name: 'Пожарный щит', width: 12, height: 4, color: '#dc2626', category: 'storage', icon: '🧯' },
+  { type: 'lockers', name: 'Шкафчики раздевалки', width: 20, height: 6, color: '#475569', category: 'storage', icon: '🗄️' },
+  { type: 'bed_hospital', name: 'Медицинская койка', width: 22, height: 12, color: '#38bdf8', category: 'special', icon: '🏥' },
+  { type: 'exam_table', name: 'Смотровой стол', width: 18, height: 10, color: '#0284c7', category: 'special', icon: '🩺' },
+  { type: 'jail_cot', name: 'Тюремные нары', width: 18, height: 10, color: '#78350f', category: 'special', icon: '⛓️' }
+];
+
+function updateBuildingFloorsCount(count) {
+  if (selectedEntities.length !== 1 || selectedEntities[0].layer !== 'buildings') return;
+  const bld = selectedEntities[0].entity;
+  const oldFloors = bld.floorsCount || (bld.interiors ? Object.keys(bld.interiors).length : 1);
+  const newFloors = Math.max(1, Math.min(50, count));
+  bld.floorsCount = newFloors;
+  if (!bld.interiors) bld.interiors = {};
+
+  // Ensure layouts exist for each floor
+  for (let f = 0; f < newFloors; f++) {
+    if (!bld.interiors[f] && !bld.interiors[String(f)]) {
+      bld.interiors[f] = isCreateDefaultFloorLayout(bld, f);
+    }
+  }
+  pushHistory('Update Building Floors Count');
+  updateInspector();
+  showToast('Этажность здания установлена: ' + newFloors);
+}
+
+function openInteriorStudioFromSelection() {
+  if (selectedEntities.length === 1 && selectedEntities[0].layer === 'buildings') {
+    openInteriorStudioForBuilding(selectedEntities[0].entity.id);
+  } else {
+    showToast('Сначала выберите здание на карте [кликните по нему]', true);
+  }
+}
+
+function openInteriorStudioForBuilding(bldId) {
+  const bld = mapData.buildings.find(b => b.id === bldId);
+  if (!bld) {
+    showToast('Здание не найдено!', true);
+    return;
+  }
+
+  isBuilding = bld;
+  if (!isBuilding.interiors) isBuilding.interiors = {};
+  if (!isBuilding.floorsCount) {
+    isBuilding.floorsCount = Object.keys(isBuilding.interiors).length || 1;
+  }
+
+  isFloor = 0;
+  isLoadFloorLayout(isFloor);
+
+  // Setup UI elements
+  document.getElementById('is-bld-title').textContent = bld.name || bld.id;
+  document.getElementById('is-bld-type-badge').textContent = bld.type || 'standard';
+  document.getElementById('is-bld-size-label').textContent = Math.round(bld.width) + 'x' + Math.round(bld.height) + ' м';
+
+  document.getElementById('interior-studio-modal').style.display = 'flex';
+  isInitCanvas();
+  isResetView();
+  isRenderFloorTabs();
+  isSetTool('select');
+  isPushHistory('Open Floor');
+}
+
+function closeInteriorStudio() {
+  document.getElementById('interior-studio-modal').style.display = 'none';
+  isBuilding = null;
+  isLayout = null;
+  isSelectedItem = null;
+}
+
+function saveAndCloseInteriorStudio() {
+  if (!isBuilding || !isLayout) return;
+  isSaveCurrentFloorToBuilding();
+  pushHistory('Edit Building Interior');
+  closeInteriorStudio();
+  showToast('Интерьер здания успешно сохранен!');
+}
+
+function isSaveCurrentFloorToBuilding() {
+  if (!isBuilding || !isLayout) return;
+  if (!isBuilding.interiors) isBuilding.interiors = {};
+  isBuilding.interiors[isFloor] = JSON.parse(JSON.stringify(isLayout));
+  isBuilding.floorsCount = Math.max(isBuilding.floorsCount || 1, Object.keys(isBuilding.interiors).length);
+}
+
+function isCreateDefaultFloorLayout(bld, floor) {
+  const W = Math.round(bld.width);
+  const H = Math.round(bld.height);
+  const exitZone = { x: Math.max(6, Math.round(W / 2 - 12)), y: H - 18, width: 24, height: 18 };
+  const stairsZone = { x: 10, y: 10, width: 20, height: 20 };
+  const elevatorZone = { x: W - 30, y: 10, width: 20, height: 20 };
+
+  return {
+    buildingId: bld.id,
+    floor: floor,
+    width: W,
+    height: H,
+    rooms: [
+      {
+        name: floor === 0 ? 'Основной Холл' : 'Этаж ' + (floor + 1),
+        x: 6,
+        y: 6,
+        width: W - 12,
+        height: H - 12,
+        color: '#1e293b',
+        floorStyle: (bld.type && bld.type.includes('residential')) ? 'parquet' : 'tile'
+      }
+    ],
+    walls: [
+      { x1: 6, y1: 6, x2: W - 6, y2: 6 },
+      { x1: W - 6, y1: 6, x2: W - 6, y2: H - 6 },
+      { x1: W - 6, y1: H - 6, x2: 6, y2: H - 6 },
+      { x1: 6, y1: H - 6, x2: 6, y2: 6 }
+    ],
+    furniture: [],
+    exitZone: exitZone,
+    stairsZone: stairsZone,
+    elevatorZone: elevatorZone,
+    exits: floor === 0 ? [exitZone] : [],
+    stairs: [stairsZone],
+    elevators: [elevatorZone]
+  };
+}
+
+function isLoadFloorLayout(floor) {
+  isFloor = floor;
+  if (isBuilding.interiors && isBuilding.interiors[floor]) {
+    isLayout = JSON.parse(JSON.stringify(isBuilding.interiors[floor]));
+  } else if (isBuilding.interiors && isBuilding.interiors[String(floor)]) {
+    isLayout = JSON.parse(JSON.stringify(isBuilding.interiors[String(floor)]));
+  } else {
+    isLayout = isCreateDefaultFloorLayout(isBuilding, floor);
+  }
+
+  // Ensure all arrays exist
+  if (!isLayout.rooms) isLayout.rooms = [];
+  if (!isLayout.walls) isLayout.walls = [];
+  if (!isLayout.furniture) isLayout.furniture = [];
+  if (!isLayout.stairs) isLayout.stairs = isLayout.stairsZone ? [isLayout.stairsZone] : [];
+  if (!isLayout.elevators) isLayout.elevators = isLayout.elevatorZone ? [isLayout.elevatorZone] : [];
+  if (!isLayout.exits) isLayout.exits = isLayout.exitZone ? [isLayout.exitZone] : [];
+
+  isSelectedItem = null;
+  isHoveredItem = null;
+  isRenderFloorTabs();
+  isUpdateRightInspector();
+  isRenderCanvas();
+}
+
+function isRenderFloorTabs() {
+  const container = document.getElementById('is-floor-tabs');
+  if (!container || !isBuilding) return;
+
+  const count = Math.max(1, isBuilding.floorsCount || Object.keys(isBuilding.interiors || {}).length || 1);
+  let html = '';
+  for (let f = 0; f < count; f++) {
+    const active = f === isFloor ? 'active' : '';
+    html += '<button class="is-floor-tab ' + active + '" onclick="isSwitchFloor(' + f + ')">Этаж ' + (f + 1) + '</button>';
+  }
+  container.innerHTML = html;
+}
+
+function isSwitchFloor(f) {
+  isSaveCurrentFloorToBuilding();
+  isLoadFloorLayout(f);
+  isPushHistory('Switch Floor ' + (f + 1));
+}
+
+function isAddFloor() {
+  isSaveCurrentFloorToBuilding();
+  const nextFloor = isBuilding.floorsCount || Object.keys(isBuilding.interiors || {}).length;
+  isBuilding.floorsCount = nextFloor + 1;
+  if (!isBuilding.interiors) isBuilding.interiors = {};
+  isBuilding.interiors[nextFloor] = isCreateDefaultFloorLayout(isBuilding, nextFloor);
+  isLoadFloorLayout(nextFloor);
+  showToast('Добавлен этаж ' + (nextFloor + 1));
+}
+
+function isDuplicateCurrentFloor() {
+  isSaveCurrentFloorToBuilding();
+  const nextFloor = isBuilding.floorsCount || Object.keys(isBuilding.interiors || {}).length;
+  isBuilding.floorsCount = nextFloor + 1;
+  if (!isBuilding.interiors) isBuilding.interiors = {};
+  const copy = JSON.parse(JSON.stringify(isLayout));
+  copy.floor = nextFloor;
+  if (nextFloor > 0) {
+    copy.exits = []; // Exits to street only on ground floor
+  }
+  isBuilding.interiors[nextFloor] = copy;
+  isLoadFloorLayout(nextFloor);
+  showToast('Этаж дублирован на этаж ' + (nextFloor + 1));
+}
+
+function isDeleteCurrentFloor() {
+  if (isBuilding.floorsCount <= 1) {
+    showToast('Нельзя удалить единственный этаж!', true);
+    return;
+  }
+  if (!confirm('Удалить текущий этаж ' + (isFloor + 1) + '?')) return;
+
+  delete isBuilding.interiors[isFloor];
+  delete isBuilding.interiors[String(isFloor)];
+
+  // Reindex remaining floors
+  const keys = Object.keys(isBuilding.interiors).map(Number).sort((a,b) => a - b);
+  const newInteriors = {};
+  keys.forEach((oldF, idx) => {
+    newInteriors[idx] = isBuilding.interiors[oldF];
+    newInteriors[idx].floor = idx;
+  });
+  isBuilding.interiors = newInteriors;
+  isBuilding.floorsCount = Object.keys(newInteriors).length;
+
+  const targetFloor = Math.max(0, isFloor - 1);
+  isLoadFloorLayout(targetFloor);
+  showToast('Этаж удален');
+}
+
+function isClearFloor() {
+  if (!confirm('Очистить всю мебель, внутренние стены и комнаты на этом этаже?')) return;
+  isLayout = isCreateDefaultFloorLayout(isBuilding, isFloor);
+  isPushHistory('Clear Floor');
+  isUpdateRightInspector();
+  isRenderCanvas();
+  showToast('Этаж очищен');
+}
+
+function isExportFloorJson() {
+  const json = JSON.stringify(isLayout, null, 2);
+  navigator.clipboard.writeText(json).then(() => {
+    showToast('JSON текущего этажа скопирован в буфер обмена!');
+  }).catch(() => {
+    prompt('Скопируйте JSON этажа:', json);
+  });
+}
+
+function isImportFloorJson() {
+  const input = prompt('Вставьте JSON этажа (BuildingLayout):');
+  if (!input) return;
+  try {
+    const parsed = JSON.parse(input);
+    if (!parsed.rooms || !parsed.walls) throw new Error('Некорректная структура BuildingLayout');
+    isLayout = parsed;
+    isPushHistory('Import Floor JSON');
+    isUpdateRightInspector();
+    isRenderCanvas();
+    showToast('Интерьер успешно импортирован!');
+  } catch (err) {
+    alert('Ошибка импорта: ' + err.message);
+  }
+}
+
+// ==========================================
+// TOOL SWITCHING & OPTIONS IN LEFT SIDEBAR
+// ==========================================
+function isSetTool(tool) {
+  isTool = tool;
+  document.querySelectorAll('.is-tool-tab-btn').forEach(btn => btn.classList.remove('active'));
+  const activeBtn = document.getElementById('is-tab-' + tool);
+  if (activeBtn) activeBtn.classList.add('active');
+
+  const panel = document.getElementById('is-tool-options-panel');
+  if (!panel) return;
+
+  const msgEl = document.getElementById('is-status-msg');
+
+  if (tool === 'select') {
+    if (msgEl) msgEl.textContent = 'Инструмент: Выбор (клик для выбора, drag для перемещения, R для поворота, Del для удаления)';
+    panel.innerHTML = `
+      <div style="font-size:12px;color:var(--text-muted);line-height:1.5;">
+        <div style="font-weight:700;color:var(--text-main);margin-bottom:8px;">👆 Режим выбора и трансформации</div>
+        <p>• Кликните по предмету мебели, стене, комнате или зоне для выбора.</p>
+        <p>• Зажмите ЛКМ и тяните для перемещения.</p>
+        <p>• Клавиша <kbd style="background:var(--bg-card);padding:2px 4px;border-radius:4px;border:1px solid var(--border);">R</kbd> поворачивает выбранный предмет на 90°.</p>
+        <p>• Клавиша <kbd style="background:var(--bg-card);padding:2px 4px;border-radius:4px;border:1px solid var(--border);">Del</kbd> удаляет выбранное.</p>
+        <p>• Клавиша <kbd style="background:var(--bg-card);padding:2px 4px;border-radius:4px;border:1px solid var(--border);">Ctrl+D</kbd> создает дубликат.</p>
+      </div>
+    `;
+  } else if (tool === 'wall') {
+    if (msgEl) msgEl.textContent = 'Инструмент: Стена (зажмите ЛКМ и тяните линию между двумя точками)';
+    panel.innerHTML = `
+      <div style="font-size:12px;">
+        <div style="font-weight:700;color:var(--accent);margin-bottom:10px;">🧱 Новая стена / перегородка</div>
+        <div class="prop-field">
+          <label>Тип стены:</label>
+          <select id="is-wall-type" class="is-furniture-search">
+            <option value="normal">Стандартная стена (бетон/гипс)</option>
+            <option value="bars">Решетка КПЗ / Тюрьмы</option>
+          </select>
+        </div>
+        <p style="color:var(--text-muted);font-size:11px;margin-top:12px;">
+          Зажмите левую кнопку мыши и протяните стену. Сетка привязки помогает создавать ровные перпендикулярные углы.
+        </p>
+      </div>
+    `;
+  } else if (tool === 'room') {
+    if (msgEl) msgEl.textContent = 'Инструмент: Комната (зажмите ЛКМ и растяните прямоугольник комнаты)';
+    panel.innerHTML = `
+      <div style="font-size:12px;">
+        <div style="font-weight:700;color:var(--accent);margin-bottom:10px;">📐 Новая комната / зона пола</div>
+        <div class="prop-field">
+          <label>Название комнаты:</label>
+          <input type="text" id="is-room-name" value="Комната" class="is-furniture-search" list="is-room-presets">
+          <datalist id="is-room-presets">
+            <option value="Прихожая / Холл">
+            <option value="Гостиная">
+            <option value="Спальня">
+            <option value="Кухня">
+            <option value="Ванная">
+            <option value="Кабинет">
+            <option value="Офис">
+            <option value="Коридор">
+            <option value="Склад">
+            <option value="Торговый зал">
+          </datalist>
+        </div>
+        <div class="prop-field">
+          <label>Тип покрытия пола:</label>
+          <select id="is-room-floor-style" class="is-furniture-search">
+            <option value="parquet">Паркет (дерево)</option>
+            <option value="tile">Керамическая плитка</option>
+            <option value="wood">Доска массивная</option>
+            <option value="linoleum">Линолеум</option>
+            <option value="carpet">Ковролин</option>
+            <option value="concrete">Бетон шлифованный</option>
+          </select>
+        </div>
+        <div class="prop-field">
+          <label>Цвет пола:</label>
+          <input type="color" id="is-room-color" value="#1e293b" style="width:100%;height:32px;background:none;border:none;cursor:pointer;">
+        </div>
+      </div>
+    `;
+  } else if (tool === 'zone') {
+    if (msgEl) msgEl.textContent = 'Инструмент: Зона перехода (кликните или протяните прямоугольник для размещения)';
+    panel.innerHTML = `
+      <div style="font-size:12px;">
+        <div style="font-weight:700;color:var(--accent);margin-bottom:10px;">🚪 Зоны перемещения</div>
+        <div class="prop-field">
+          <label>Тип зоны:</label>
+          <select id="is-zone-type" class="is-furniture-search">
+            <option value="exit">🚪 Выход на улицу (только 1 этаж)</option>
+            <option value="stairs">🪜 Лестничный пролет</option>
+            <option value="elevator">🛗 Шахта лифта</option>
+          </select>
+        </div>
+        <p style="color:var(--text-muted);font-size:11px;margin-top:12px;">
+          Кликните на пол для размещения типовой зоны 20x20м или растяните прямоугольник нужного размера.
+        </p>
+      </div>
+    `;
+  } else if (tool === 'furniture') {
+    if (msgEl) msgEl.textContent = 'Инструмент: Мебель (выберите предмет в каталоге и кликните на холсте)';
+    isRenderFurnitureCatalogPanel(panel);
+  }
+
+  isRenderCanvas();
+}
+
+function isRenderFurnitureCatalogPanel(panel) {
+  let categories = [
+    { id: 'all', label: 'Все' },
+    { id: 'bedroom', label: '🛏️ Спальня' },
+    { id: 'living', label: '🛋️ Гостиная' },
+    { id: 'office', label: '💼 Офис' },
+    { id: 'kitchen', label: '🍽️ Кухня' },
+    { id: 'bathroom', label: '🚿 Ванная' },
+    { id: 'shop', label: '🛒 Торговля' },
+    { id: 'storage', label: '📦 Склад' },
+    { id: 'special', label: '🏥 Спец.' }
+  ];
+
+  let chipsHtml = categories.map(c => `
+    <div class="is-cat-chip ${isFurnitureCategory === c.id ? 'active' : ''}" onclick="isSetFurnitureCategory('${c.id}')">
+      ${c.label}
+    </div>
+  `).join('');
+
+  const filtered = IS_FURNITURE_CATALOG.filter(item => {
+    if (isFurnitureCategory !== 'all' && item.category !== isFurnitureCategory) return false;
+    if (isFurnitureSearchQuery && !item.name.toLowerCase().includes(isFurnitureSearchQuery.toLowerCase())) return false;
+    return true;
+  });
+
+  let cardsHtml = filtered.map(item => {
+    const isSelected = isSelectedFurnitureDef && isSelectedFurnitureDef.type === item.type;
+    return `
+      <div class="is-furniture-card ${isSelected ? 'active' : ''}" onclick="isSelectFurnitureDef('${item.type}')">
+        <div class="is-furniture-preview" style="font-size:22px;">${item.icon || '🪑'}</div>
+        <div style="font-weight:600;line-height:1.2;margin-bottom:2px;">${item.name}</div>
+        <div style="font-size:10px;color:var(--text-muted);">${item.width}x${item.height} м</div>
+      </div>
+    `;
+  }).join('');
+
+  panel.innerHTML = `
+    <input type="text" class="is-furniture-search" placeholder="🔍 Поиск мебели..." value="${isFurnitureSearchQuery}" oninput="isFilterFurniture(this.value)">
+    <div class="is-cat-chips">${chipsHtml}</div>
+    <div class="is-furniture-grid">${cardsHtml}</div>
+  `;
+}
+
+function isSetFurnitureCategory(cat) {
+  isFurnitureCategory = cat;
+  const panel = document.getElementById('is-tool-options-panel');
+  if (panel && isTool === 'furniture') isRenderFurnitureCatalogPanel(panel);
+}
+
+function isFilterFurniture(query) {
+  isFurnitureSearchQuery = query;
+  const panel = document.getElementById('is-tool-options-panel');
+  if (panel && isTool === 'furniture') isRenderFurnitureCatalogPanel(panel);
+}
+
+function isSelectFurnitureDef(type) {
+  const def = IS_FURNITURE_CATALOG.find(i => i.type === type);
+  if (!def) return;
+  isSelectedFurnitureDef = def;
+  const panel = document.getElementById('is-tool-options-panel');
+  if (panel && isTool === 'furniture') isRenderFurnitureCatalogPanel(panel);
+  showToast('Выбрано: ' + def.name + ' (кликните на полу для установки)');
+}
+
+// ==========================================
+// INTERACTIVE CANVAS ENGINE & RENDERING
+// ==========================================
+let isCanvas = null;
+let isCtx = null;
+
+function isInitCanvas() {
+  isCanvas = document.getElementById('interior-canvas');
+  if (!isCanvas) return;
+  isCtx = isCanvas.getContext('2d');
+
+  // Resize canvas to container
+  const container = document.getElementById('is-canvas-container');
+  isCanvas.width = container.clientWidth;
+  isCanvas.height = container.clientHeight;
+
+  // Add event listeners
+  isCanvas.onmousedown = isHandleMouseDown;
+  window.onmousemove = isHandleMouseMove;
+  window.onmouseup = isHandleMouseUp;
+  isCanvas.onwheel = isHandleWheel;
+  isCanvas.oncontextmenu = (e) => e.preventDefault();
+}
+
+function isResetView() {
+  if (!isCanvas || !isBuilding) return;
+  const container = document.getElementById('is-canvas-container');
+  const cw = container.clientWidth;
+  const ch = container.clientHeight;
+
+  const bw = isBuilding.width;
+  const bh = isBuilding.height;
+
+  isZoom = Math.min((cw - 80) / bw, (ch - 80) / bh);
+  isZoom = Math.max(0.8, Math.min(8.0, isZoom));
+
+  isPan.x = (cw - bw * isZoom) / 2;
+  isPan.y = (ch - bh * isZoom) / 2;
+
+  document.getElementById('is-zoom-label').textContent = Math.round(isZoom * 100) + '%';
+  isRenderCanvas();
+}
+
+function isZoomStep(delta) {
+  isZoom = Math.max(0.5, Math.min(10.0, isZoom + delta));
+  document.getElementById('is-zoom-label').textContent = Math.round(isZoom * 100) + '%';
+  isRenderCanvas();
+}
+
+function isToggleSnap(val) {
+  isSnapGrid = val;
+  showToast(isSnapGrid ? 'Привязка к сетке (2м) включена' : 'Свободное перемещение');
+}
+
+function isWorldToScreen(x, y) {
+  return {
+    x: isPan.x + x * isZoom,
+    y: isPan.y + y * isZoom
+  };
+}
+
+function isScreenToWorld(sx, sy) {
+  let wx = (sx - isPan.x) / isZoom;
+  let wy = (sy - isPan.y) / isZoom;
+  if (isSnapGrid) {
+    wx = Math.round(wx / isGridSize) * isGridSize;
+    wy = Math.round(wy / isGridSize) * isGridSize;
+  }
+  return { x: wx, y: wy };
+}
+
+// ------------------------------------------
+// MOUSE EVENT HANDLERS
+// ------------------------------------------
+let isSpacePanning = false;
+
+window.addEventListener('keydown', (e) => {
+  const modal = document.getElementById('interior-studio-modal');
+  if (!modal || modal.style.display !== 'flex') return;
+
+  if (e.code === 'Space') {
+    isSpacePanning = true;
+  } else if (e.key === 'r' || e.key === 'к') {
+    isRotateSelectedItem();
+  } else if (e.key === 'Delete' || e.key === 'Backspace') {
+    if (document.activeElement && (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'SELECT')) return;
+    isDeleteSelectedItem();
+  } else if ((e.ctrlKey || e.metaKey) && (e.key === 'd' || e.key === 'в')) {
+    e.preventDefault();
+    isDuplicateSelectedItem();
+  } else if ((e.ctrlKey || e.metaKey) && (e.key === 'z' || e.key === 'я')) {
+    e.preventDefault();
+    isUndo();
+  } else if (e.key === 'Escape') {
+    isSelectedItem = null;
+    isUpdateRightInspector();
+    isRenderCanvas();
+  }
+});
+
+window.addEventListener('keyup', (e) => {
+  if (e.code === 'Space') isSpacePanning = false;
+});
+
+function isHandleWheel(e) {
+  e.preventDefault();
+  const rect = isCanvas.getBoundingClientRect();
+  const mx = e.clientX - rect.left;
+  const my = e.clientY - rect.top;
+
+  const worldBefore = {
+    x: (mx - isPan.x) / isZoom,
+    y: (my - isPan.y) / isZoom
+  };
+
+  const factor = e.deltaY < 0 ? 1.15 : 0.85;
+  isZoom = Math.max(0.4, Math.min(12.0, isZoom * factor));
+
+  isPan.x = mx - worldBefore.x * isZoom;
+  isPan.y = my - worldBefore.y * isZoom;
+
+  document.getElementById('is-zoom-label').textContent = Math.round(isZoom * 100) + '%';
+  isRenderCanvas();
+}
+
+function isHandleMouseDown(e) {
+  const rect = isCanvas.getBoundingClientRect();
+  const sx = e.clientX - rect.left;
+  const sy = e.clientY - rect.top;
+
+  // Middle mouse or space+LMB = pan
+  if (e.button === 1 || isSpacePanning || (e.button === 0 && e.altKey)) {
+    isIsDragging = true;
+    isDragStart = { x: sx - isPan.x, y: sy - isPan.y };
+    return;
+  }
+
+  const wPos = isScreenToWorld(sx, sy);
+
+  if (isTool === 'select') {
+    // Check if clicked an item
+    const hit = isHitTest(wPos.x, wPos.y);
+    if (hit) {
+      isSelectedItem = hit;
+      isIsDragging = true;
+      isDragStart = { x: wPos.x, y: wPos.y };
+      const item = isGetItemByRef(hit);
+      if (item) {
+        if ('x' in item && 'y' in item) {
+          isDragItemStart = { x: item.x, y: item.y };
+        } else if ('x1' in item) {
+          isDragItemStart = { x1: item.x1, y1: item.y1, x2: item.x2, y2: item.y2 };
+        }
+      }
+    } else {
+      isSelectedItem = null;
+    }
+    isUpdateRightInspector();
+    isRenderCanvas();
+  } else if (isTool === 'wall') {
+    isToolDrawing = true;
+    isDrawStart = wPos;
+    isDrawCurrent = wPos;
+  } else if (isTool === 'room') {
+    isToolDrawing = true;
+    isDrawStart = wPos;
+    isDrawCurrent = wPos;
+  } else if (isTool === 'zone') {
+    isToolDrawing = true;
+    isDrawStart = wPos;
+    isDrawCurrent = wPos;
+  } else if (isTool === 'furniture') {
+    if (isSelectedFurnitureDef) {
+      const newF = {
+        type: isSelectedFurnitureDef.type,
+        x: Math.round(wPos.x - isSelectedFurnitureDef.width / 2),
+        y: Math.round(wPos.y - isSelectedFurnitureDef.height / 2),
+        width: isSelectedFurnitureDef.width,
+        height: isSelectedFurnitureDef.height,
+        angle: 0,
+        color: isSelectedFurnitureDef.color
+      };
+      isLayout.furniture.push(newF);
+      isSelectedItem = { type: 'furniture', index: isLayout.furniture.length - 1 };
+      isSetTool('select');
+      isPushHistory('Add ' + isSelectedFurnitureDef.name);
+      isUpdateRightInspector();
+      isRenderCanvas();
+    }
+  }
+}
+
+function isHandleMouseMove(e) {
+  if (!isCanvas) return;
+  const rect = isCanvas.getBoundingClientRect();
+  const sx = e.clientX - rect.left;
+  const sy = e.clientY - rect.top;
+
+  if (sx < 0 || sy < 0 || sx > isCanvas.width || sy > isCanvas.height) return;
+
+  const wPos = isScreenToWorld(sx, sy);
+  const curPosEl = document.getElementById('is-cursor-pos');
+  if (curPosEl) curPosEl.textContent = 'X: ' + Math.round(wPos.x) + ' | Y: ' + Math.round(wPos.y);
+
+  if (isIsDragging) {
+    if (isSpacePanning || e.buttons === 4 || e.altKey) {
+      isPan.x = sx - isDragStart.x;
+      isPan.y = sy - isDragStart.y;
+      isRenderCanvas();
+      return;
+    }
+
+    if (isSelectedItem) {
+      const dx = wPos.x - isDragStart.x;
+      const dy = wPos.y - isDragStart.y;
+      const item = isGetItemByRef(isSelectedItem);
+      if (item) {
+        if ('x' in item && 'y' in item) {
+          item.x = Math.round(isDragItemStart.x + dx);
+          item.y = Math.round(isDragItemStart.y + dy);
+        } else if ('x1' in item) {
+          item.x1 = Math.round(isDragItemStart.x1 + dx);
+          item.y1 = Math.round(isDragItemStart.y1 + dy);
+          item.x2 = Math.round(isDragItemStart.x2 + dx);
+          item.y2 = Math.round(isDragItemStart.y2 + dy);
+        }
+        isUpdateRightInspector();
+        isRenderCanvas();
+      }
+    }
+  } else if (isToolDrawing) {
+    isDrawCurrent = wPos;
+    isRenderCanvas();
+  } else {
+    // Hover hit test
+    const hit = isHitTest(wPos.x, wPos.y);
+    if (hit !== isHoveredItem) {
+      isHoveredItem = hit;
+      isRenderCanvas();
+    }
+  }
+}
+
+function isHandleMouseUp(e) {
+  if (isIsDragging) {
+    isIsDragging = false;
+    if (isSelectedItem) {
+      isPushHistory('Move Item');
+    }
+    isRenderCanvas();
+  } else if (isToolDrawing) {
+    isToolDrawing = false;
+    const p1 = isDrawStart;
+    const p2 = isDrawCurrent;
+
+    if (isTool === 'wall') {
+      const dist = Math.hypot(p2.x - p1.x, p2.y - p1.y);
+      if (dist >= 3) {
+        const wallType = document.getElementById('is-wall-type')?.value || 'normal';
+        const newWall = {
+          x1: Math.round(p1.x),
+          y1: Math.round(p1.y),
+          x2: Math.round(p2.x),
+          y2: Math.round(p2.y),
+          isJailBars: wallType === 'bars'
+        };
+        isLayout.walls.push(newWall);
+        isSelectedItem = { type: 'wall', index: isLayout.walls.length - 1 };
+        isPushHistory('Add Wall');
+      }
+    } else if (isTool === 'room') {
+      const rx = Math.min(p1.x, p2.x);
+      const ry = Math.min(p1.y, p2.y);
+      const rw = Math.max(p1.x, p2.x) - rx;
+      const rh = Math.max(p1.y, p2.y) - ry;
+      if (rw >= 6 && rh >= 6) {
+        const name = document.getElementById('is-room-name')?.value || 'Комната';
+        const floorStyle = document.getElementById('is-room-floor-style')?.value || 'parquet';
+        const color = document.getElementById('is-room-color')?.value || '#1e293b';
+
+        const newRoom = {
+          name: name,
+          x: Math.round(rx),
+          y: Math.round(ry),
+          width: Math.round(rw),
+          height: Math.round(rh),
+          color: color,
+          floorStyle: floorStyle
+        };
+        isLayout.rooms.push(newRoom);
+        isSelectedItem = { type: 'room', index: isLayout.rooms.length - 1 };
+        isPushHistory('Add Room');
+      }
+    } else if (isTool === 'zone') {
+      const zType = document.getElementById('is-zone-type')?.value || 'exit';
+      const rx = Math.min(p1.x, p2.x);
+      const ry = Math.min(p1.y, p2.y);
+      let rw = Math.max(p1.x, p2.x) - rx;
+      let rh = Math.max(p1.y, p2.y) - ry;
+      if (rw < 8 || rh < 8) {
+        rw = 20; rh = 20;
+      }
+      const newZone = {
+        x: Math.round(rx),
+        y: Math.round(ry),
+        width: Math.round(rw),
+        height: Math.round(rh)
+      };
+      if (zType === 'exit') {
+        if (!isLayout.exits) isLayout.exits = [];
+        isLayout.exits.push(newZone);
+        isSelectedItem = { type: 'zone', subType: 'exit', index: isLayout.exits.length - 1 };
+      } else if (zType === 'stairs') {
+        if (!isLayout.stairs) isLayout.stairs = [];
+        isLayout.stairs.push(newZone);
+        isSelectedItem = { type: 'zone', subType: 'stairs', index: isLayout.stairs.length - 1 };
+      } else if (zType === 'elevator') {
+        if (!isLayout.elevators) isLayout.elevators = [];
+        isLayout.elevators.push(newZone);
+        isSelectedItem = { type: 'zone', subType: 'elevator', index: isLayout.elevators.length - 1 };
+      }
+      isPushHistory('Add ' + zType + ' Zone');
+    }
+
+    isSetTool('select');
+    isUpdateRightInspector();
+    isRenderCanvas();
+  }
+}
+
+// ------------------------------------------
+// HIT TESTING & ITEM ACCESS
+// ------------------------------------------
+function isGetItemByRef(ref) {
+  if (!ref || !isLayout) return null;
+  if (ref.type === 'furniture') return isLayout.furniture[ref.index];
+  if (ref.type === 'wall') return isLayout.walls[ref.index];
+  if (ref.type === 'room') return isLayout.rooms[ref.index];
+  if (ref.type === 'zone') {
+    if (ref.subType === 'exit') return isLayout.exits ? isLayout.exits[ref.index] : null;
+    if (ref.subType === 'stairs') return isLayout.stairs ? isLayout.stairs[ref.index] : null;
+    if (ref.subType === 'elevator') return isLayout.elevators ? isLayout.elevators[ref.index] : null;
+  }
+  return null;
+}
+
+function isHitTest(wx, wy) {
+  if (!isLayout) return null;
+
+  // 1. Check furniture first (highest priority)
+  for (let i = isLayout.furniture.length - 1; i >= 0; i--) {
+    const f = isLayout.furniture[i];
+    const hw = f.width / 2;
+    const hh = f.height / 2;
+    const cx = f.x + hw;
+    const cy = f.y + hh;
+    const cos = Math.cos(-(f.angle || 0));
+    const sin = Math.sin(-(f.angle || 0));
+    const dx = wx - cx;
+    const dy = wy - cy;
+    const lx = dx * cos - dy * sin;
+    const ly = dx * sin + dy * cos;
+    if (Math.abs(lx) <= hw + 2 && Math.abs(ly) <= hh + 2) {
+      return { type: 'furniture', index: i };
+    }
+  }
+
+  // 2. Check walls
+  for (let i = isLayout.walls.length - 1; i >= 0; i--) {
+    const w = isLayout.walls[i];
+    const dist = isDistToSegment(wx, wy, w.x1, w.y1, w.x2, w.y2);
+    if (dist <= 4.0) {
+      return { type: 'wall', index: i };
+    }
+  }
+
+  // 3. Check zones
+  if (isLayout.exits) {
+    for (let i = isLayout.exits.length - 1; i >= 0; i--) {
+      const z = isLayout.exits[i];
+      if (wx >= z.x && wx <= z.x + z.width && wy >= z.y && wy <= z.y + z.height) {
+        return { type: 'zone', subType: 'exit', index: i };
+      }
+    }
+  }
+  if (isLayout.stairs) {
+    for (let i = isLayout.stairs.length - 1; i >= 0; i--) {
+      const z = isLayout.stairs[i];
+      if (wx >= z.x && wx <= z.x + z.width && wy >= z.y && wy <= z.y + z.height) {
+        return { type: 'zone', subType: 'stairs', index: i };
+      }
+    }
+  }
+  if (isLayout.elevators) {
+    for (let i = isLayout.elevators.length - 1; i >= 0; i--) {
+      const z = isLayout.elevators[i];
+      if (wx >= z.x && wx <= z.x + z.width && wy >= z.y && wy <= z.y + z.height) {
+        return { type: 'zone', subType: 'elevator', index: i };
+      }
+    }
+  }
+
+  // 4. Check rooms
+  for (let i = isLayout.rooms.length - 1; i >= 0; i--) {
+    const r = isLayout.rooms[i];
+    if (wx >= r.x && wx <= r.x + r.width && wy >= r.y && wy <= r.y + r.height) {
+      return { type: 'room', index: i };
+    }
+  }
+
+  return null;
+}
+
+function isDistToSegment(px, py, x1, y1, x2, y2) {
+  const l2 = (x2 - x1) * (x2 - x1) + (y2 - y1) * (y2 - y1);
+  if (l2 === 0) return Math.hypot(px - x1, py - y1);
+  let t = ((px - x1) * (x2 - x1) + (py - y1) * (y2 - y1)) / l2;
+  t = Math.max(0, Math.min(1, t));
+  return Math.hypot(px - (x1 + t * (x2 - x1)), py - (y1 + t * (y2 - y1)));
+}
+
+// ------------------------------------------
+// CANVAS RENDERING CORE
+// ------------------------------------------
+function isRenderCanvas() {
+  if (!isCanvas || !isCtx || !isBuilding || !isLayout) return;
+  const ctx = isCtx;
+  const W = isCanvas.width;
+  const H = isCanvas.height;
+
+  ctx.clearRect(0, 0, W, H);
+
+  // Background blueprint grid
+  ctx.fillStyle = '#060a17';
+  ctx.fillRect(0, 0, W, H);
+
+  // Subtle coordinate grid
+  ctx.strokeStyle = '#0f172a';
+  ctx.lineWidth = 1;
+  const gridStep = isGridSize * 5 * isZoom;
+  if (gridStep > 8) {
+    ctx.beginPath();
+    for (let x = isPan.x % gridStep; x < W; x += gridStep) {
+      ctx.moveTo(x, 0); ctx.lineTo(x, H);
+    }
+    for (let y = isPan.y % gridStep; y < H; y += gridStep) {
+      ctx.moveTo(0, y); ctx.lineTo(W, y);
+    }
+    ctx.stroke();
+  }
+
+  ctx.save();
+  ctx.translate(isPan.x, isPan.y);
+  ctx.scale(isZoom, isZoom);
+
+  const BW = isBuilding.width;
+  const BH = isBuilding.height;
+
+  // 1. Building base floor plate & perimeter shadow
+  ctx.fillStyle = 'rgba(2, 6, 23, 0.9)';
+  ctx.fillRect(-2, -2, BW + 4, BH + 4);
+
+  // 2. Render Rooms
+  isLayout.rooms.forEach((r, idx) => {
+    isDrawRoom(ctx, r, isSelectedItem && isSelectedItem.type === 'room' && isSelectedItem.index === idx);
+  });
+
+  // 3. Render Zones (Exit, Stairs, Elevator)
+  if (isLayout.exits) {
+    isLayout.exits.forEach((z, idx) => {
+      isDrawZone(ctx, z, 'exit', isSelectedItem && isSelectedItem.type === 'zone' && isSelectedItem.subType === 'exit' && isSelectedItem.index === idx);
+    });
+  }
+  if (isLayout.stairs) {
+    isLayout.stairs.forEach((z, idx) => {
+      isDrawZone(ctx, z, 'stairs', isSelectedItem && isSelectedItem.type === 'zone' && isSelectedItem.subType === 'stairs' && isSelectedItem.index === idx);
+    });
+  }
+  if (isLayout.elevators) {
+    isLayout.elevators.forEach((z, idx) => {
+      isDrawZone(ctx, z, 'elevator', isSelectedItem && isSelectedItem.type === 'zone' && isSelectedItem.subType === 'elevator' && isSelectedItem.index === idx);
+    });
+  }
+
+  // 4. Render Internal Walls
+  isLayout.walls.forEach((w, idx) => {
+    isDrawWall(ctx, w, isSelectedItem && isSelectedItem.type === 'wall' && isSelectedItem.index === idx);
+  });
+
+  // 5. Render Outer Building Walls
+  ctx.strokeStyle = '#0284c7';
+  ctx.lineWidth = 4;
+  ctx.strokeRect(0, 0, BW, BH);
+
+  // 6. Render Furniture
+  isLayout.furniture.forEach((f, idx) => {
+    isDrawFurniture(ctx, f, isSelectedItem && isSelectedItem.type === 'furniture' && isSelectedItem.index === idx);
+  });
+
+  // 7. Live preview while drawing tool is active
+  if (isToolDrawing) {
+    ctx.save();
+    if (isTool === 'wall') {
+      ctx.strokeStyle = '#38bdf8';
+      ctx.lineWidth = 3;
+      ctx.setLineDash([4, 4]);
+      ctx.beginPath();
+      ctx.moveTo(isDrawStart.x, isDrawStart.y);
+      ctx.lineTo(isDrawCurrent.x, isDrawCurrent.y);
+      ctx.stroke();
+    } else if (isTool === 'room' || isTool === 'zone') {
+      const rx = Math.min(isDrawStart.x, isDrawCurrent.x);
+      const ry = Math.min(isDrawStart.y, isDrawCurrent.y);
+      const rw = Math.abs(isDrawCurrent.x - isDrawStart.x);
+      const rh = Math.abs(isDrawCurrent.y - isDrawStart.y);
+      ctx.fillStyle = 'rgba(56, 189, 248, 0.2)';
+      ctx.strokeStyle = '#38bdf8';
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([4, 4]);
+      ctx.fillRect(rx, ry, rw, rh);
+      ctx.strokeRect(rx, ry, rw, rh);
+    }
+    ctx.restore();
+  }
+
+  ctx.restore();
+}
+
+function isDrawRoom(ctx, r, isSelected) {
+  ctx.save();
+  ctx.fillStyle = r.color || '#1e293b';
+  ctx.fillRect(r.x, r.y, r.width, r.height);
+
+  // Floor patterns
+  if (r.floorStyle === 'tile') {
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.08)';
+    ctx.lineWidth = 0.5;
+    for (let x = r.x; x < r.x + r.width; x += 6) {
+      ctx.beginPath(); ctx.moveTo(x, r.y); ctx.lineTo(x, r.y + r.height); ctx.stroke();
+    }
+    for (let y = r.y; y < r.y + r.height; y += 6) {
+      ctx.beginPath(); ctx.moveTo(r.x, y); ctx.lineTo(r.x + r.width, y); ctx.stroke();
+    }
+  } else if (r.floorStyle === 'parquet' || r.floorStyle === 'wood') {
+    ctx.strokeStyle = 'rgba(0, 0, 0, 0.15)';
+    ctx.lineWidth = 0.8;
+    for (let y = r.y; y < r.y + r.height; y += 4) {
+      ctx.beginPath(); ctx.moveTo(r.x, y); ctx.lineTo(r.x + r.width, y); ctx.stroke();
+    }
+  }
+
+  // Room name tag
+  if (r.name && r.width >= 16 && r.height >= 12) {
+    ctx.fillStyle = 'rgba(15, 23, 42, 0.6)';
+    const textWidth = ctx.measureText(r.name).width;
+    ctx.fillRect(r.x + r.width / 2 - textWidth / 2 - 4, r.y + r.height / 2 - 6, textWidth + 8, 12);
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
+    ctx.font = '8px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(r.name, r.x + r.width / 2, r.y + r.height / 2);
+  }
+
+  if (isSelected) {
+    ctx.strokeStyle = '#38bdf8';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([4, 4]);
+    ctx.strokeRect(r.x, r.y, r.width, r.height);
+  }
+  ctx.restore();
+}
+
+function isDrawWall(ctx, w, isSelected) {
+  ctx.save();
+  ctx.beginPath();
+  ctx.moveTo(w.x1, w.y1);
+  ctx.lineTo(w.x2, w.y2);
+
+  if (w.isJailBars) {
+    ctx.strokeStyle = '#475569';
+    ctx.lineWidth = 2.5;
+    ctx.stroke();
+    // Draw cross ticks
+    const dx = w.x2 - w.x1;
+    const dy = w.y2 - w.y1;
+    const len = Math.hypot(dx, dy);
+    if (len > 0) {
+      const nx = -dy / len * 3;
+      const ny = dx / len * 3;
+      ctx.strokeStyle = '#94a3b8';
+      ctx.lineWidth = 1;
+      for (let s = 3; s < len; s += 4) {
+        const px = w.x1 + (dx / len) * s;
+        const py = w.y1 + (dy / len) * s;
+        ctx.beginPath();
+        ctx.moveTo(px - nx, py - ny);
+        ctx.lineTo(px + nx, py + ny);
+        ctx.stroke();
+      }
+    }
+  } else {
+    ctx.strokeStyle = isSelected ? '#38bdf8' : '#94a3b8';
+    ctx.lineWidth = 3.5;
+    ctx.lineCap = 'round';
+    ctx.stroke();
+  }
+
+  if (isSelected) {
+    ctx.fillStyle = '#38bdf8';
+    ctx.beginPath(); ctx.arc(w.x1, w.y1, 3, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(w.x2, w.y2, 3, 0, Math.PI * 2); ctx.fill();
+  }
+  ctx.restore();
+}
+
+function isDrawZone(ctx, z, type, isSelected) {
+  ctx.save();
+  let bg = 'rgba(22, 163, 74, 0.2)';
+  let border = '#22c55e';
+  let label = '🚪 Выход';
+
+  if (type === 'stairs') {
+    bg = 'rgba(234, 179, 8, 0.2)';
+    border = '#eab308';
+    label = '🪜 Лестница';
+  } else if (type === 'elevator') {
+    bg = 'rgba(56, 189, 248, 0.2)';
+    border = '#38bdf8';
+    label = '🛗 Лифт';
+  }
+
+  ctx.fillStyle = bg;
+  ctx.fillRect(z.x, z.y, z.width, z.height);
+
+  ctx.strokeStyle = isSelected ? '#ffffff' : border;
+  ctx.lineWidth = isSelected ? 2.5 : 1.5;
+  ctx.setLineDash([3, 3]);
+  ctx.strokeRect(z.x, z.y, z.width, z.height);
+
+  // Center text
+  ctx.fillStyle = '#f8fafc';
+  ctx.font = '7px sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(label, z.x + z.width / 2, z.y + z.height / 2);
+
+  ctx.restore();
+}
+
+function isDrawFurniture(ctx, f, isSelected) {
+  ctx.save();
+  const cx = f.x + f.width / 2;
+  const cy = f.y + f.height / 2;
+
+  ctx.translate(cx, cy);
+  if (f.angle) ctx.rotate(f.angle);
+
+  const hw = f.width / 2;
+  const hh = f.height / 2;
+
+  // Render furniture body
+  ctx.fillStyle = f.color || '#475569';
+  ctx.fillRect(-hw, -hh, f.width, f.height);
+
+  // Border
+  ctx.strokeStyle = isSelected ? '#38bdf8' : 'rgba(0,0,0,0.4)';
+  ctx.lineWidth = isSelected ? 2 : 1;
+  ctx.strokeRect(-hw, -hh, f.width, f.height);
+
+  // Detail decoration
+  if (f.type.includes('bed')) {
+    // Pillows & blanket
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(-hw + 2, -hh + 2, f.width - 4, hh - 2);
+    ctx.fillStyle = 'rgba(0,0,0,0.15)';
+    ctx.fillRect(-hw + 2, 0, f.width - 4, hh - 2);
+  } else if (f.type === 'sofa') {
+    // Backrest & armrests
+    ctx.fillStyle = 'rgba(0,0,0,0.2)';
+    ctx.fillRect(-hw, -hh, f.width, 3);
+    ctx.fillRect(-hw, -hh, 3, f.height);
+    ctx.fillRect(hw - 3, -hh, 3, f.height);
+  } else if (f.type === 'desk') {
+    // Keyboard & monitor
+    ctx.fillStyle = '#0f172a';
+    ctx.fillRect(-4, -hh + 1, 8, 2);
+  } else if (f.type === 'plant') {
+    // Green circle foliage
+    ctx.fillStyle = '#15803d';
+    ctx.beginPath();
+    ctx.arc(0, 0, Math.min(hw, hh) - 1, 0, Math.PI * 2);
+    ctx.fill();
+  } else if (f.type === 'bath') {
+    // Tub interior curve
+    ctx.fillStyle = '#f8fafc';
+    ctx.fillRect(-hw + 2, -hh + 2, f.width - 4, f.height - 4);
+    ctx.fillStyle = '#38bdf8';
+    ctx.fillRect(-hw + 4, -hh + 4, f.width - 8, f.height - 8);
+  } else if (f.type === 'sink') {
+    // Sink basin
+    ctx.fillStyle = '#f8fafc';
+    ctx.beginPath();
+    ctx.ellipse(0, 0, hw - 2, hh - 2, 0, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  if (isSelected) {
+    ctx.strokeStyle = '#38bdf8';
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([3, 3]);
+    ctx.strokeRect(-hw - 3, -hh - 3, f.width + 6, f.height + 6);
+    // Angle indicator handle
+    ctx.fillStyle = '#38bdf8';
+    ctx.beginPath();
+    ctx.arc(0, -hh - 8, 3.5, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  ctx.restore();
+}
+
+// ==========================================
+// RIGHT SIDEBAR INSPECTOR
+// ==========================================
+function isUpdateRightInspector() {
+  const panel = document.getElementById('is-right-inspector');
+  if (!panel) return;
+
+  if (!isSelectedItem) {
+    const furnCount = isLayout ? isLayout.furniture.length : 0;
+    const wallCount = isLayout ? isLayout.walls.length : 0;
+    const roomCount = isLayout ? isLayout.rooms.length : 0;
+    const zoneCount = isLayout ? ((isLayout.exits?.length || 0) + (isLayout.stairs?.length || 0) + (isLayout.elevators?.length || 0)) : 0;
+
+    panel.innerHTML = `
+      <h4>Свойства объекта</h4>
+      <div style="font-size:12px;color:var(--text-muted);margin-bottom:16px;">
+        Выберите объект на холсте для редактирования его координат, размеров, цвета и угла.
+      </div>
+
+      <h4>Статистика этажа ${isFloor + 1}</h4>
+      <div style="font-size:12px;display:flex;flex-direction:column;gap:6px;background:var(--bg-dark);padding:10px;border-radius:6px;border:1px solid var(--border);">
+        <div>🛋️ Мебели: <b>${furnCount}</b></div>
+        <div>🧱 Стен: <b>${wallCount}</b></div>
+        <div>📐 Комнат: <b>${roomCount}</b></div>
+        <div>🚪 Зон перехода: <b>${zoneCount}</b></div>
+      </div>
+    `;
+    return;
+  }
+
+  const item = isGetItemByRef(isSelectedItem);
+  if (!item) return;
+
+  let fieldsHtml = '';
+
+  if (isSelectedItem.type === 'furniture') {
+    const def = IS_FURNITURE_CATALOG.find(c => c.type === item.type);
+    fieldsHtml = `
+      <h4>${def?.name || item.type}</h4>
+      <div class="prop-field">
+        <label>Тип:</label>
+        <span style="font-size:11px;color:var(--accent);">${item.type}</span>
+      </div>
+      <div class="prop-field">
+        <label>Позиция X, Y:</label>
+        <div class="prop-grid-2">
+          <input type="number" value="${Math.round(item.x)}" onchange="isUpdateItemProp('x', parseFloat(this.value))">
+          <input type="number" value="${Math.round(item.y)}" onchange="isUpdateItemProp('y', parseFloat(this.value))">
+        </div>
+      </div>
+      <div class="prop-field">
+        <label>Размеры W, H:</label>
+        <div class="prop-grid-2">
+          <input type="number" value="${Math.round(item.width)}" onchange="isUpdateItemProp('width', parseFloat(this.value))">
+          <input type="number" value="${Math.round(item.height)}" onchange="isUpdateItemProp('height', parseFloat(this.value))">
+        </div>
+      </div>
+      <div class="prop-field">
+        <label>Угол поворота:</label>
+        <div style="display:flex;gap:4px;margin-bottom:6px;">
+          <button class="btn sm" onclick="isSetItemAngle(0)">0°</button>
+          <button class="btn sm" onclick="isSetItemAngle(Math.PI/2)">90°</button>
+          <button class="btn sm" onclick="isSetItemAngle(Math.PI)">180°</button>
+          <button class="btn sm" onclick="isSetItemAngle(Math.PI*1.5)">270°</button>
+        </div>
+      </div>
+      <div class="prop-field">
+        <label>Цвет:</label>
+        <input type="color" value="${item.color || '#475569'}" onchange="isUpdateItemProp('color', this.value)" style="width:100%;height:32px;background:none;border:none;cursor:pointer;">
+      </div>
+    `;
+  } else if (isSelectedItem.type === 'wall') {
+    fieldsHtml = `
+      <h4>Стена</h4>
+      <div class="prop-field">
+        <label>Точка 1 (X1, Y1):</label>
+        <div class="prop-grid-2">
+          <input type="number" value="${Math.round(item.x1)}" onchange="isUpdateItemProp('x1', parseFloat(this.value))">
+          <input type="number" value="${Math.round(item.y1)}" onchange="isUpdateItemProp('y1', parseFloat(this.value))">
+        </div>
+      </div>
+      <div class="prop-field">
+        <label>Точка 2 (X2, Y2):</label>
+        <div class="prop-grid-2">
+          <input type="number" value="${Math.round(item.x2)}" onchange="isUpdateItemProp('x2', parseFloat(this.value))">
+          <input type="number" value="${Math.round(item.y2)}" onchange="isUpdateItemProp('y2', parseFloat(this.value))">
+        </div>
+      </div>
+      <div class="prop-field">
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;">
+          <input type="checkbox" ${item.isJailBars ? 'checked' : ''} onchange="isUpdateItemProp('isJailBars', this.checked)">
+          <span>Решетка КПЗ</span>
+        </label>
+      </div>
+    `;
+  } else if (isSelectedItem.type === 'room') {
+    fieldsHtml = `
+      <h4>Комната</h4>
+      <div class="prop-field">
+        <label>Название:</label>
+        <input type="text" value="${item.name || ''}" onchange="isUpdateItemProp('name', this.value)">
+      </div>
+      <div class="prop-field">
+        <label>Позиция X, Y:</label>
+        <div class="prop-grid-2">
+          <input type="number" value="${Math.round(item.x)}" onchange="isUpdateItemProp('x', parseFloat(this.value))">
+          <input type="number" value="${Math.round(item.y)}" onchange="isUpdateItemProp('y', parseFloat(this.value))">
+        </div>
+      </div>
+      <div class="prop-field">
+        <label>Размеры W, H:</label>
+        <div class="prop-grid-2">
+          <input type="number" value="${Math.round(item.width)}" onchange="isUpdateItemProp('width', parseFloat(this.value))">
+          <input type="number" value="${Math.round(item.height)}" onchange="isUpdateItemProp('height', parseFloat(this.value))">
+        </div>
+      </div>
+      <div class="prop-field">
+        <label>Стиль пола:</label>
+        <select onchange="isUpdateItemProp('floorStyle', this.value)">
+          <option value="parquet" ${item.floorStyle === 'parquet' ? 'selected' : ''}>Паркет</option>
+          <option value="tile" ${item.floorStyle === 'tile' ? 'selected' : ''}>Плитка</option>
+          <option value="wood" ${item.floorStyle === 'wood' ? 'selected' : ''}>Доска</option>
+          <option value="linoleum" ${item.floorStyle === 'linoleum' ? 'selected' : ''}>Линолеум</option>
+          <option value="carpet" ${item.floorStyle === 'carpet' ? 'selected' : ''}>Ковролин</option>
+          <option value="concrete" ${item.floorStyle === 'concrete' ? 'selected' : ''}>Бетон</option>
+        </select>
+      </div>
+      <div class="prop-field">
+        <label>Цвет пола:</label>
+        <input type="color" value="${item.color || '#1e293b'}" onchange="isUpdateItemProp('color', this.value)" style="width:100%;height:32px;background:none;border:none;cursor:pointer;">
+      </div>
+    `;
+  } else if (isSelectedItem.type === 'zone') {
+    fieldsHtml = `
+      <h4>Зона перехода (${isSelectedItem.subType})</h4>
+      <div class="prop-field">
+        <label>Позиция X, Y:</label>
+        <div class="prop-grid-2">
+          <input type="number" value="${Math.round(item.x)}" onchange="isUpdateItemProp('x', parseFloat(this.value))">
+          <input type="number" value="${Math.round(item.y)}" onchange="isUpdateItemProp('y', parseFloat(this.value))">
+        </div>
+      </div>
+      <div class="prop-field">
+        <label>Размеры W, H:</label>
+        <div class="prop-grid-2">
+          <input type="number" value="${Math.round(item.width)}" onchange="isUpdateItemProp('width', parseFloat(this.value))">
+          <input type="number" value="${Math.round(item.height)}" onchange="isUpdateItemProp('height', parseFloat(this.value))">
+        </div>
+      </div>
+    `;
+  }
+
+  panel.innerHTML = `
+    ${fieldsHtml}
+    <div style="margin-top:16px;display:flex;flex-direction:column;gap:6px;">
+      <button class="btn sm" onclick="isDuplicateSelectedItem()">📑 Дублировать (Ctrl+D)</button>
+      <button class="btn sm danger" onclick="isDeleteSelectedItem()">🗑️ Удалить (Del)</button>
+    </div>
+  `;
+}
+
+function isUpdateItemProp(prop, val) {
+  const item = isGetItemByRef(isSelectedItem);
+  if (!item) return;
+  item[prop] = val;
+  isPushHistory('Change ' + prop);
+  isRenderCanvas();
+}
+
+function isSetItemAngle(rad) {
+  const item = isGetItemByRef(isSelectedItem);
+  if (!item || isSelectedItem.type !== 'furniture') return;
+  item.angle = rad;
+  isPushHistory('Rotate Furniture');
+  isUpdateRightInspector();
+  isRenderCanvas();
+}
+
+function isRotateSelectedItem() {
+  const item = isGetItemByRef(isSelectedItem);
+  if (!item || isSelectedItem.type !== 'furniture') return;
+  item.angle = ((item.angle || 0) + Math.PI / 2) % (Math.PI * 2);
+  isPushHistory('Rotate Furniture');
+  isUpdateRightInspector();
+  isRenderCanvas();
+}
+
+function isDeleteSelectedItem() {
+  if (!isSelectedItem || !isLayout) return;
+  if (isSelectedItem.type === 'furniture') {
+    isLayout.furniture.splice(isSelectedItem.index, 1);
+  } else if (isSelectedItem.type === 'wall') {
+    isLayout.walls.splice(isSelectedItem.index, 1);
+  } else if (isSelectedItem.type === 'room') {
+    isLayout.rooms.splice(isSelectedItem.index, 1);
+  } else if (isSelectedItem.type === 'zone') {
+    if (isSelectedItem.subType === 'exit') isLayout.exits.splice(isSelectedItem.index, 1);
+    else if (isSelectedItem.subType === 'stairs') isLayout.stairs.splice(isSelectedItem.index, 1);
+    else if (isSelectedItem.subType === 'elevator') isLayout.elevators.splice(isSelectedItem.index, 1);
+  }
+  isSelectedItem = null;
+  isPushHistory('Delete Item');
+  isUpdateRightInspector();
+  isRenderCanvas();
+  showToast('Объект удален');
+}
+
+function isDuplicateSelectedItem() {
+  if (!isSelectedItem || !isLayout) return;
+  const item = isGetItemByRef(isSelectedItem);
+  if (!item) return;
+
+  const copy = JSON.parse(JSON.stringify(item));
+  if ('x' in copy) copy.x += 4;
+  if ('y' in copy) copy.y += 4;
+  if ('x1' in copy) {
+    copy.x1 += 4; copy.y1 += 4;
+    copy.x2 += 4; copy.y2 += 4;
+  }
+
+  if (isSelectedItem.type === 'furniture') {
+    isLayout.furniture.push(copy);
+    isSelectedItem = { type: 'furniture', index: isLayout.furniture.length - 1 };
+  } else if (isSelectedItem.type === 'wall') {
+    isLayout.walls.push(copy);
+    isSelectedItem = { type: 'wall', index: isLayout.walls.length - 1 };
+  } else if (isSelectedItem.type === 'room') {
+    isLayout.rooms.push(copy);
+    isSelectedItem = { type: 'room', index: isLayout.rooms.length - 1 };
+  } else if (isSelectedItem.type === 'zone') {
+    if (isSelectedItem.subType === 'exit') {
+      isLayout.exits.push(copy);
+      isSelectedItem = { type: 'zone', subType: 'exit', index: isLayout.exits.length - 1 };
+    } else if (isSelectedItem.subType === 'stairs') {
+      isLayout.stairs.push(copy);
+      isSelectedItem = { type: 'zone', subType: 'stairs', index: isLayout.stairs.length - 1 };
+    } else if (isSelectedItem.subType === 'elevator') {
+      isLayout.elevators.push(copy);
+      isSelectedItem = { type: 'zone', subType: 'elevator', index: isLayout.elevators.length - 1 };
+    }
+  }
+
+  isPushHistory('Duplicate Item');
+  isUpdateRightInspector();
+  isRenderCanvas();
+  showToast('Создан дубликат');
+}
+
+// ------------------------------------------
+// UNDO / REDO FOR INTERIOR STUDIO
+// ------------------------------------------
+function isPushHistory(actionName) {
+  if (!isLayout) return;
+  if (isHistoryIndex < isHistory.length - 1) {
+    isHistory = isHistory.slice(0, isHistoryIndex + 1);
+  }
+  isHistory.push(JSON.stringify(isLayout));
+  if (isHistory.length > 30) isHistory.shift();
+  isHistoryIndex = isHistory.length - 1;
+}
+
+function isUndo() {
+  if (isHistoryIndex > 0) {
+    isHistoryIndex--;
+    isLayout = JSON.parse(isHistory[isHistoryIndex]);
+    isSelectedItem = null;
+    isUpdateRightInspector();
+    isRenderCanvas();
+    showToast('Отмена действия в интерьере');
+  }
+}
+
+// =======================================================
+// INDEXED DB INTEGRATION FOR HUGE MAP SAVE & PLAY
+// =======================================================
+function openMapDB() {
+  return new Promise((resolve, reject) => {
+    try {
+      const req = indexedDB.open('NeonCityDB', 1);
+      req.onupgradeneeded = (e) => {
+        e.target.result.createObjectStore('maps');
+      };
+      req.onsuccess = (e) => resolve(e.target.result);
+      req.onerror = (e) => reject(e.target.error);
+    } catch (err) {
+      reject(err);
+    }
+  });
+}
+
+async function saveCustomMapToStorage(data) {
+  try {
+    localStorage.setItem('neon_city_custom_map', JSON.stringify(data));
+    localStorage.removeItem('neon_city_custom_map_indexeddb');
+  } catch (e) {
+    console.warn('LocalStorage limit exceeded, falling back to IndexedDB...', e);
+    const db = await openMapDB();
+    await new Promise((resolve, reject) => {
+      const tx = db.transaction('maps', 'readwrite');
+      tx.objectStore('maps').put(data, 'custom_map');
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+    localStorage.setItem('neon_city_custom_map_indexeddb', 'true');
+    localStorage.removeItem('neon_city_custom_map');
+  }
+}
+
+</script>
+</body>
+</html>
