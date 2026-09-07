@@ -22,10 +22,18 @@ import {
   getVehicleCabinDimensions,
   renderVehicleGreenhouseAndBodyPanels
 } from './vehicleVisuals';
+import {
+  traceSoftbodyPath,
+  renderSoftbodyStressLines,
+  renderBuckledHoodOverlay,
+  renderSaggingBumpers
+} from './softbodyVisuals';
 import { performanceConfig } from './performanceConfig';
-import { generateBuildingLayout, renderBuildingInterior } from './buildingInteriors';
+import { getBuildingLayout, renderBuildingInterior } from './buildingInteriors';
 import { drawItemModel2D } from './itemGraphic';
 import { screenEffectsSystem } from './screenEffects';
+import { renderStreetProp, renderTallStreetProp } from './propRenderer';
+import { GasStationRenderer } from './gasStationRenderer';
 
 const hashString = (str: string): number => {
   let hash = 0;
@@ -370,9 +378,9 @@ export class GameRenderer {
 
           // Render Ground, Sidewalks, Roads, and Parkings via cached chunks for window outside view
           const sStartChunkX = Math.floor(Math.max(0, sMinX) / this.chunkSize);
-          const sEndChunkX = Math.floor(Math.min(8000, sMaxX) / this.chunkSize);
+          const sEndChunkX = Math.floor(Math.min(world.width || 8200, sMaxX) / this.chunkSize);
           const sStartChunkY = Math.floor(Math.max(0, sMinY) / this.chunkSize);
-          const sEndChunkY = Math.floor(Math.min(8000, sMaxY) / this.chunkSize);
+          const sEndChunkY = Math.floor(Math.min(world.height || 8200, sMaxY) / this.chunkSize);
 
           for (let cx = sStartChunkX; cx <= sEndChunkX; cx++) {
             for (let cy = sStartChunkY; cy <= sEndChunkY; cy++) {
@@ -386,12 +394,12 @@ export class GameRenderer {
           this.renderSkidMarks(world.skidMarks, sMinX, sMinY, sMaxX, sMaxY);
           this.renderStains(world.stains, sMinX, sMinY, sMaxX, sMaxY);
           // Render building roofs/tops instead of ground bases when viewed from height
-          this.renderBuildingRoofsAndCanopies(visibleBuildings, nightAlpha, player);
+          this.renderBuildingRoofsAndCanopies(visibleBuildings, nightAlpha, player, world);
           this.renderLitter(world.litter, sMinX, sMinY, sMaxX, sMaxY, nightAlpha);
           this.renderGroundItems(world.groundItems, player, sMinX, sMinY, sMaxX, sMaxY);
           this.renderGroundProps(vpProps, sMinX, sMinY, sMaxX, sMaxY);
-          this.renderPedestrians(visiblePedestrians);
-          this.renderVehicles(visibleVehicles, nightAlpha);
+          this.renderPedestrians(visiblePedestrians, world);
+          this.renderVehicles(visibleVehicles, nightAlpha, camera.gridMode);
 
           // Render lightmap (street lights, car headlights, etc.) outside windows
           this.renderLightmap(world, timeHour, weatherTransition, visibleVehicles, vpProps, sMinX, sMinY, sMaxX, sMaxY);
@@ -400,7 +408,7 @@ export class GameRenderer {
           const isFog = world.weather === 'fog';
           const effectiveAlpha = Math.max(nightAlpha, isRaining ? 0.35 * weatherTransition : 0, isFog ? 0.45 * weatherTransition : 0);
           this.renderVehicleCabins(visibleVehicles, effectiveAlpha);
-          this.renderBuildingRoofsAndCanopies(visibleBuildings, nightAlpha, player);
+          this.renderBuildingRoofsAndCanopies(visibleBuildings, nightAlpha, player, world);
           this.renderTreesAndTallProps(vpTrees, vpProps, sMinX, sMinY, sMaxX, sMaxY, nightAlpha);
           this.renderParticles(world.particles);
 
@@ -415,7 +423,7 @@ export class GameRenderer {
 
         // 2. Render building interior itself on top
         const floor = player.currentFloor ?? 0;
-        const layout = generateBuildingLayout(bld, floor);
+        const layout = getBuildingLayout(bld, floor);
         renderBuildingInterior(ctx, bld, layout, player, timeHour);
       }
 
@@ -452,9 +460,9 @@ export class GameRenderer {
 
     // 3. Render Ground, Sidewalks, Roads, and Parkings via cached chunks
     const startChunkX = Math.floor(Math.max(0, minX) / this.chunkSize);
-    const endChunkX = Math.floor(Math.min(8000, maxX) / this.chunkSize);
+    const endChunkX = Math.floor(Math.min(world.width || 8200, maxX) / this.chunkSize);
     const startChunkY = Math.floor(Math.max(0, minY) / this.chunkSize);
-    const endChunkY = Math.floor(Math.min(8000, maxY) / this.chunkSize);
+    const endChunkY = Math.floor(Math.min(world.height || 8200, maxY) / this.chunkSize);
 
     for (let cx = startChunkX; cx <= endChunkX; cx++) {
       for (let cy = startChunkY; cy <= endChunkY; cy++) {
@@ -462,6 +470,9 @@ export class GameRenderer {
         ctx.drawImage(chunkCanvas, cx * this.chunkSize, cy * this.chunkSize);
       }
     }
+
+    // 3. Gas Station Full Heavy-Duty Asphalt Apron & Paved Driveways
+    GasStationRenderer.renderGroundApron(this.ctx, world, minX, minY, maxX, maxY, nightAlpha);
 
     // 3a. Cloud Shadows (Atmosphere)
     this.renderCloudShadows(minX, minY, maxX, maxY);
@@ -490,6 +501,9 @@ export class GameRenderer {
     // 9. Ground-level Props (Benches, Hydrants, Kiosks, Cones, Trash Cans, Mailboxes, and BROKEN lampposts!)
     this.renderGroundProps(vpProps, minX, minY, maxX, maxY);
 
+    // 9a. Gas Station Pump Islands & Dispensers
+    GasStationRenderer.renderGroundPumpsAndIslands(this.ctx, world, player, nightAlpha);
+
     // 9b. Broken Traffic Lights (lying flat on the ground!)
     this.renderTrafficLights(world.intersections, vpProps.filter((p) => p.isBroken), minX, minY, maxX, maxY);
 
@@ -497,7 +511,7 @@ export class GameRenderer {
     this.renderBirds(world.birds.filter((b) => b.state === 'ground'), minX, minY, maxX, maxY);
 
     // 12. Pedestrians (with Umbrellas during Rain)
-    this.renderPedestrians(visiblePedestrians);
+    this.renderPedestrians(visiblePedestrians, world);
 
     // 13. Player on Foot (if not inside vehicle)
     if (!player.isInVehicle) {
@@ -505,7 +519,10 @@ export class GameRenderer {
     }
 
     // 14. Vehicles (Cars with dynamic wheels, lights & wipers)
-    this.renderVehicles(visibleVehicles, nightAlpha);
+    this.renderVehicles(visibleVehicles, nightAlpha, camera.gridMode);
+
+    // 14b. Gas Station Fuel Hoses (connected to hands or vehicle filler caps)
+    GasStationRenderer.renderFuelHoses(this.ctx, world, player);
 
     // 15. Professional Two-Pass 2D Lightmap System
     // Moved up to be BELOW roofs/trees so lights don't "draw" on top of foliage/buildings
@@ -526,7 +543,7 @@ export class GameRenderer {
     this.renderVehicleCabins(visibleVehicles, effectiveAlpha);
 
     // 16. Building Roofs, Canopies, Balconies & Fire Escapes
-    this.renderBuildingRoofsAndCanopies(visibleBuildings, nightAlpha, player);
+    this.renderBuildingRoofsAndCanopies(visibleBuildings, nightAlpha, player, world);
 
     // 16b. Tall Intact Props (Intact trees, and intact lampposts!)
     this.renderTreesAndTallProps(vpTrees, vpProps, minX, minY, maxX, maxY, nightAlpha);
@@ -575,23 +592,23 @@ export class GameRenderer {
     }
 
     // --- COZY VILLAGE / MEADOWS ZONE (Meadows grass floor) ---
-    // South-East area (3800 to 8000, 3800 to 8000)
+    // South-East area (3800 to end, 3800 to end)
     ctx.fillStyle = '#16a34a'; // Vibrant meadow green
     const villageX1 = Math.max(minX, 3800);
     const villageY1 = Math.max(minY, 3800);
-    const villageX2 = Math.min(maxX, 8000);
-    const villageY2 = Math.min(maxY, 8000);
+    const villageX2 = Math.min(maxX, world.width || 8200);
+    const villageY2 = Math.min(maxY, world.height || 8200);
     if (villageX2 > villageX1 && villageY2 > villageY1) {
       ctx.fillRect(villageX1, villageY1, villageX2 - villageX1, villageY2 - villageY1);
     }
 
     // --- WEST SCENIC GREEN BUFFER ---
-    // Southwest area (0 to 2000, 3800 to 8000)
+    // Southwest area (0 to 2000, 3800 to end)
     ctx.fillStyle = '#15803d'; // Green buffer
     const countryX1 = Math.max(minX, 0);
     const countryY1 = Math.max(minY, 3800);
     const countryX2 = Math.min(maxX, 2000);
-    const countryY2 = Math.min(maxY, 8000);
+    const countryY2 = Math.min(maxY, world.height || 8200);
     if (countryX2 > countryX1 && countryY2 > countryY1) {
       ctx.fillRect(countryX1, countryY1, countryX2 - countryX1, countryY2 - countryY1);
     }
@@ -667,20 +684,74 @@ export class GameRenderer {
       }
     }
 
-    // Intersections Surfaces (Colored matching connecting roads or default asphalt)
+    // Intersections Surfaces (Colored matching connecting roads or default asphalt with rounded corner fillets)
     for (const inter of intersections) {
       if (inter.x + inter.width / 2 < minX || inter.x - inter.width / 2 > maxX ||
           inter.y + inter.height / 2 < minY || inter.y - inter.height / 2 > maxY) continue;
       
-      // Let's check if it's in the forest or village to color match!
-      if (inter.x < 3800 && inter.y < 3800) {
+      if (inter.isDirt) {
         ctx.fillStyle = '#7c2d12'; // Dirt intersection
-      } else if (inter.x > 3800 && inter.y > 3800) {
+      } else if (inter.isGravel) {
         ctx.fillStyle = '#475569'; // Gravel intersection
+      } else if (inter.x < 3800 && inter.y < 3800) {
+        ctx.fillStyle = '#7c2d12'; // Dirt intersection in forest zone
+      } else if (inter.x > 3800 && inter.y > 3800) {
+        ctx.fillStyle = '#475569'; // Gravel intersection in village zone
       } else {
         ctx.fillStyle = '#1e293b'; // Standard asphalt
       }
-      ctx.fillRect(inter.x - inter.width / 2, inter.y - inter.height / 2, inter.width, inter.height);
+
+      // Main intersection box
+      const halfW = inter.width / 2;
+      const halfH = inter.height / 2;
+      ctx.fillRect(inter.x - halfW, inter.y - halfH, inter.width, inter.height);
+
+      // Realistic rounded intersection corner fillets (curb returns)
+      const R = 20;
+      const xTL = inter.x - halfW;
+      const yTL = inter.y - halfH;
+      const xTR = inter.x + halfW;
+      const yTR = inter.y - halfH;
+      const xBL = inter.x - halfW;
+      const yBL = inter.y + halfH;
+      const xBR = inter.x + halfW;
+      const yBR = inter.y + halfH;
+
+      // Top-Left corner fillet
+      ctx.beginPath();
+      ctx.moveTo(xTL, yTL);
+      ctx.lineTo(xTL - R, yTL);
+      ctx.arc(xTL - R, yTL - R, R, Math.PI / 2, 0, true);
+      ctx.lineTo(xTL, yTL);
+      ctx.closePath();
+      ctx.fill();
+
+      // Top-Right corner fillet
+      ctx.beginPath();
+      ctx.moveTo(xTR, yTR);
+      ctx.lineTo(xTR, yTR - R);
+      ctx.arc(xTR + R, yTR - R, R, Math.PI, Math.PI / 2, true);
+      ctx.lineTo(xTR, yTR);
+      ctx.closePath();
+      ctx.fill();
+
+      // Bottom-Left corner fillet
+      ctx.beginPath();
+      ctx.moveTo(xBL, yBL);
+      ctx.lineTo(xBL, yBL + R);
+      ctx.arc(xBL - R, yBL + R, R, 0, -Math.PI / 2, true);
+      ctx.lineTo(xBL, yBL);
+      ctx.closePath();
+      ctx.fill();
+
+      // Bottom-Right corner fillet
+      ctx.beginPath();
+      ctx.moveTo(xBR, yBR);
+      ctx.lineTo(xBR + R, yBR);
+      ctx.arc(xBR + R, yBR + R, R, -Math.PI / 2, -Math.PI, true);
+      ctx.lineTo(xBR, yBR);
+      ctx.closePath();
+      ctx.fill();
     }
 
     // Road Markings (Clean standard road paint: double yellow lines, dashed lane dividers, edge lines)
@@ -795,7 +866,7 @@ export class GameRenderer {
       if (inter.x + inter.width / 2 < minX || inter.x - inter.width / 2 > maxX ||
           inter.y + inter.height / 2 < minY || inter.y - inter.height / 2 > maxY) continue;
 
-      if (!inter.isDirt) {
+      if (!inter.isDirt && !inter.isGravel) {
         // Crosswalks (Zebras) on paved roads
         for (const cw of inter.crosswalks) {
           ctx.fillStyle = '#f8fafc';
@@ -933,7 +1004,8 @@ export class GameRenderer {
 
     for (const stain of stains) {
       if (stain.x < minX - 30 || stain.x > maxX + 30 || stain.y < minY - 30 || stain.y > maxY + 30) continue;
-      if (stain.alpha <= 0.01) continue;
+      const stainAlpha = typeof stain.alpha === 'number' && isFinite(stain.alpha) ? Math.max(0, Math.min(1, stain.alpha)) : 0.85;
+      if (stainAlpha <= 0.01) continue;
 
       ctx.save();
       ctx.translate(stain.x, stain.y);
@@ -945,10 +1017,10 @@ export class GameRenderer {
       if (stain.type === 'oil') {
         // Realistic dark oil stain with metallic gloss & amber rim
         const grad = safeRadialGradient(ctx, -rx * 0.15, -ry * 0.15, 0, 0, 0, rx);
-        grad.addColorStop(0, `rgba(2, 6, 23, ${stain.alpha * 0.98})`); // Heavy black core
-        grad.addColorStop(0.4, `rgba(15, 23, 42, ${stain.alpha * 0.92})`); // Dark viscous body
-        grad.addColorStop(0.75, `rgba(120, 53, 4, ${stain.alpha * 0.75})`); // Golden/amber outer ring
-        grad.addColorStop(0.9, `rgba(56, 189, 248, ${stain.alpha * 0.4})`); // Iridescent metallic sky sheen at edge
+        grad.addColorStop(0, `rgba(2, 6, 23, ${stainAlpha * 0.98})`); // Heavy black core
+        grad.addColorStop(0.4, `rgba(15, 23, 42, ${stainAlpha * 0.92})`); // Dark viscous body
+        grad.addColorStop(0.75, `rgba(120, 53, 4, ${stainAlpha * 0.75})`); // Golden/amber outer ring
+        grad.addColorStop(0.9, `rgba(56, 189, 248, ${stainAlpha * 0.4})`); // Iridescent metallic sky sheen at edge
         grad.addColorStop(1, `rgba(56, 189, 248, 0)`);
 
         ctx.fillStyle = grad;
@@ -956,7 +1028,7 @@ export class GameRenderer {
         ctx.fill();
 
         // High gloss wet specular highlight
-        ctx.fillStyle = `rgba(255, 255, 255, ${stain.alpha * 0.45})`;
+        ctx.fillStyle = `rgba(255, 255, 255, ${stainAlpha * 0.45})`;
         ctx.beginPath();
         safeEllipse(ctx, -rx * 0.22, -ry * 0.22, rx * 0.25, ry * 0.12, -0.12, 0, Math.PI * 2);
         ctx.fill();
@@ -964,9 +1036,9 @@ export class GameRenderer {
       } else if (stain.type === 'coolant') {
         // Bright fluorescent neon antifreeze puddle
         const grad = safeRadialGradient(ctx, -rx * 0.1, -ry * 0.1, 0, 0, 0, rx);
-        grad.addColorStop(0, `rgba(34, 197, 94, ${stain.alpha * 0.95})`); // Bright fluorescent green core
-        grad.addColorStop(0.55, `rgba(132, 204, 22, ${stain.alpha * 0.75})`); // Lime neon green
-        grad.addColorStop(0.85, `rgba(234, 179, 8, ${stain.alpha * 0.4})`); // Subtle yellowish tint at the boundary
+        grad.addColorStop(0, `rgba(34, 197, 94, ${stainAlpha * 0.95})`); // Bright fluorescent green core
+        grad.addColorStop(0.55, `rgba(132, 204, 22, ${stainAlpha * 0.75})`); // Lime neon green
+        grad.addColorStop(0.85, `rgba(234, 179, 8, ${stainAlpha * 0.4})`); // Subtle yellowish tint at the boundary
         grad.addColorStop(1, `rgba(234, 179, 8, 0)`);
 
         ctx.fillStyle = grad;
@@ -974,7 +1046,7 @@ export class GameRenderer {
         ctx.fill();
 
         // Wet specular shine
-        ctx.fillStyle = `rgba(255, 255, 255, ${stain.alpha * 0.4})`;
+        ctx.fillStyle = `rgba(255, 255, 255, ${stainAlpha * 0.4})`;
         ctx.beginPath();
         safeEllipse(ctx, -rx * 0.25, -ry * 0.2, rx * 0.2, ry * 0.1, -0.15, 0, Math.PI * 2);
         ctx.fill();
@@ -982,13 +1054,13 @@ export class GameRenderer {
       } else if (stain.type === 'fuel') {
         // Highly realistic gasoline spill: amber iridescent thin-film interference rainbow pattern
         const grad = safeRadialGradient(ctx, -rx * 0.15, -ry * 0.15, 0, 0, 0, rx);
-        grad.addColorStop(0, `rgba(15, 23, 42, ${stain.alpha * 0.3})`); // center thin wet film
-        grad.addColorStop(0.18, `rgba(239, 68, 68, ${stain.alpha * 0.65})`); // Red ring
-        grad.addColorStop(0.32, `rgba(234, 179, 8, ${stain.alpha * 0.6})`);  // Yellow ring
-        grad.addColorStop(0.48, `rgba(34, 197, 94, ${stain.alpha * 0.65})`); // Green ring
-        grad.addColorStop(0.65, `rgba(6, 182, 212, ${stain.alpha * 0.7})`);  // Cyan/blue ring
-        grad.addColorStop(0.82, `rgba(168, 85, 247, ${stain.alpha * 0.65})`); // Purple/magenta outer ring
-        grad.addColorStop(0.95, `rgba(236, 72, 153, ${stain.alpha * 0.35})`); // Pink edge
+        grad.addColorStop(0, `rgba(15, 23, 42, ${stainAlpha * 0.3})`); // center thin wet film
+        grad.addColorStop(0.18, `rgba(239, 68, 68, ${stainAlpha * 0.65})`); // Red ring
+        grad.addColorStop(0.32, `rgba(234, 179, 8, ${stainAlpha * 0.6})`);  // Yellow ring
+        grad.addColorStop(0.48, `rgba(34, 197, 94, ${stainAlpha * 0.65})`); // Green ring
+        grad.addColorStop(0.65, `rgba(6, 182, 212, ${stainAlpha * 0.7})`);  // Cyan/blue ring
+        grad.addColorStop(0.82, `rgba(168, 85, 247, ${stainAlpha * 0.65})`); // Purple/magenta outer ring
+        grad.addColorStop(0.95, `rgba(236, 72, 153, ${stainAlpha * 0.35})`); // Pink edge
         grad.addColorStop(1, `rgba(236, 72, 153, 0)`);
 
         ctx.fillStyle = grad;
@@ -996,10 +1068,32 @@ export class GameRenderer {
         ctx.fill();
 
         // Soft sky sheen reflection on gasoline surface
-        ctx.fillStyle = `rgba(255, 255, 255, ${stain.alpha * 0.35})`;
+        ctx.fillStyle = `rgba(255, 255, 255, ${stainAlpha * 0.35})`;
         ctx.beginPath();
         safeEllipse(ctx, -rx * 0.25, -ry * 0.22, rx * 0.3, ry * 0.15, -0.2, 0, Math.PI * 2);
         ctx.fill();
+
+      } else if (stain.type === 'sand') {
+        // Realistic silica sand mound / absorbent layer on asphalt
+        const grad = safeRadialGradient(ctx, -rx * 0.1, -ry * 0.1, 0, 0, 0, rx);
+        grad.addColorStop(0, `rgba(217, 119, 6, ${stainAlpha * 0.95})`); // Dense warm tan-amber core
+        grad.addColorStop(0.5, `rgba(234, 179, 8, ${stainAlpha * 0.85})`); // Silica yellow-golden body
+        grad.addColorStop(0.8, `rgba(254, 240, 138, ${stainAlpha * 0.5})`); // Fine sand dusting rim
+        grad.addColorStop(1, `rgba(254, 240, 138, 0)`);
+
+        ctx.fillStyle = grad;
+        this.drawOrganicBlob(ctx, rx, ry, seed);
+        ctx.fill();
+
+        // Subtle grainy texture speckles
+        ctx.fillStyle = `rgba(180, 83, 9, ${stainAlpha * 0.4})`;
+        for (let s = 0; s < 14; s++) {
+          const angle = (s * 2.39996) + seed;
+          const rDist = (Math.sin(s * 1.7 + seed) * 0.4 + 0.5) * rx * 0.7;
+          const sx = Math.cos(angle) * rDist;
+          const sy = Math.sin(angle) * rDist;
+          ctx.fillRect(sx - 1, sy - 1, 2, 2);
+        }
       }
 
       if ((stain as any).onFire) {
@@ -1008,9 +1102,9 @@ export class GameRenderer {
         const flicker = 1.0 + Math.sin(Date.now() * 0.022 + rx) * 0.12;
         const glowRad = rx * 1.1 * flicker;
         const glowGrad = safeRadialGradient(ctx, 0, 0, 0, 0, 0, glowRad);
-        glowGrad.addColorStop(0, `rgba(254, 240, 138, ${stain.alpha * 0.95 * fireInt})`); // Bright yellow core
-        glowGrad.addColorStop(0.25, `rgba(249, 115, 22, ${stain.alpha * 0.8 * fireInt})`); // Bright orange
-        glowGrad.addColorStop(0.65, `rgba(220, 38, 38, ${stain.alpha * 0.45 * fireInt})`); // Deep red rim
+        glowGrad.addColorStop(0, `rgba(254, 240, 138, ${stainAlpha * 0.95 * fireInt})`); // Bright yellow core
+        glowGrad.addColorStop(0.25, `rgba(249, 115, 22, ${stainAlpha * 0.8 * fireInt})`); // Bright orange
+        glowGrad.addColorStop(0.65, `rgba(220, 38, 38, ${stainAlpha * 0.45 * fireInt})`); // Deep red rim
         glowGrad.addColorStop(1.0, `rgba(220, 38, 38, 0)`);
 
         ctx.fillStyle = glowGrad;
@@ -1056,9 +1150,16 @@ export class GameRenderer {
         curbDark = '#374151';
       }
 
-      // Outer sidewalk footprint
+      // Outer sidewalk footprint with rounded corners (curb returns)
+      const swRadius = 20;
       ctx.fillStyle = paveColor;
-      ctx.fillRect(sw.x, sw.y, sw.width, sw.height);
+      ctx.beginPath();
+      if (ctx.roundRect) {
+        ctx.roundRect(sw.x, sw.y, sw.width, sw.height, swRadius);
+      } else {
+        ctx.rect(sw.x, sw.y, sw.width, sw.height);
+      }
+      ctx.fill();
 
       // 2. Concrete slab expansion joint lines (tile grid texture on walkway)
       ctx.strokeStyle = 'rgba(15, 23, 42, 0.20)';
@@ -1082,14 +1183,26 @@ export class GameRenderer {
       }
       ctx.stroke();
 
-      // 3. Raised Curb Outer Bevel
+      // 3. Raised Curb Outer Bevel with rounded corners
       ctx.strokeStyle = curbHighlight;
       ctx.lineWidth = 2.5;
-      ctx.strokeRect(sw.x + 1, sw.y + 1, sw.width - 2, sw.height - 2);
+      ctx.beginPath();
+      if (ctx.roundRect) {
+        ctx.roundRect(sw.x + 1, sw.y + 1, sw.width - 2, sw.height - 2, Math.max(0, swRadius - 1));
+      } else {
+        ctx.rect(sw.x + 1, sw.y + 1, sw.width - 2, sw.height - 2);
+      }
+      ctx.stroke();
 
       ctx.strokeStyle = curbDark;
       ctx.lineWidth = 1.5;
-      ctx.strokeRect(sw.x, sw.y, sw.width, sw.height);
+      ctx.beginPath();
+      if (ctx.roundRect) {
+        ctx.roundRect(sw.x, sw.y, sw.width, sw.height, swRadius);
+      } else {
+        ctx.rect(sw.x, sw.y, sw.width, sw.height);
+      }
+      ctx.stroke();
 
       // 4. Inner Lawn / Courtyard Garden (inside the sidewalk corridor)
       const innerX = sw.x + sw.sidewalkWidth;
@@ -1098,14 +1211,27 @@ export class GameRenderer {
       const innerH = sw.height - sw.sidewalkWidth * 2;
 
       if (innerW > 0 && innerH > 0) {
+        const innerRadius = Math.max(4, swRadius - sw.sidewalkWidth * 0.4);
         // Inner grass lawn
         ctx.fillStyle = sw.innerLawnColor || '#15803d';
-        ctx.fillRect(innerX, innerY, innerW, innerH);
+        ctx.beginPath();
+        if (ctx.roundRect) {
+          ctx.roundRect(innerX, innerY, innerW, innerH, innerRadius);
+        } else {
+          ctx.rect(innerX, innerY, innerW, innerH);
+        }
+        ctx.fill();
 
         // Lawn edging curb stone
         ctx.strokeStyle = 'rgba(15, 23, 42, 0.35)';
         ctx.lineWidth = 1.5;
-        ctx.strokeRect(innerX, innerY, innerW, innerH);
+        ctx.beginPath();
+        if (ctx.roundRect) {
+          ctx.roundRect(innerX, innerY, innerW, innerH, innerRadius);
+        } else {
+          ctx.rect(innerX, innerY, innerW, innerH);
+        }
+        ctx.stroke();
 
         // 4a. Inner Paved Plazas & Gathering Squares (Paved gathering squares, Fountain plazas)
         if (sw.plazas) {
@@ -1473,6 +1599,10 @@ export class GameRenderer {
     const ctx = this.ctx;
 
     for (const bld of buildings) {
+      if (bld.type === 'gas_station_canopy') {
+        // Open drive-through canopy: no solid base walls
+        continue;
+      }
       if (bld.type === 'park_monument') {
         this.renderParkFountainBase(bld, nightAlpha);
         continue;
@@ -1481,7 +1611,7 @@ export class GameRenderer {
       // Render building interior if player is inside this specific building
       if (player && player.isInsideBuilding && player.insideBuildingId === bld.id) {
         const floor = player.currentFloor ?? 0;
-        const layout = generateBuildingLayout(bld, floor);
+        const layout = getBuildingLayout(bld, floor);
         renderBuildingInterior(ctx, bld, layout, player, timeHour);
         continue;
       }
@@ -2445,18 +2575,32 @@ export class GameRenderer {
     }
   }
 
-  private renderBuildingRoofsAndCanopies(buildings: Building[], nightAlpha: number = 0, player?: Player) {
+  private renderBuildingRoofsAndCanopies(
+    buildings: Building[],
+    nightAlpha: number = 0,
+    player?: Player,
+    world?: GameWorld
+  ) {
     const ctx = this.ctx;
     const now = Date.now();
 
     for (const bld of buildings) {
+      if (bld.type === 'gas_station_canopy') {
+        GasStationRenderer.renderCanopyRoof(ctx, nightAlpha, player, world);
+        continue;
+      }
       if (bld.type === 'park_monument') {
         this.renderParkFountainSpray(bld, nightAlpha);
         continue;
       }
 
       // Skip rendering the roof if the player is inside this specific building, so they can see the interior
-      if (player && player.isInsideBuilding && player.insideBuildingId === bld.id) {
+      const isPlayerInside = player && (
+        (player.isInsideBuilding && player.insideBuildingId === bld.id) ||
+        (player.x >= bld.x - 4 && player.x <= bld.x + bld.width + 4 &&
+         player.y >= bld.y - 4 && player.y <= bld.y + bld.height + 4)
+      );
+      if (isPlayerInside) {
         continue;
       }
 
@@ -2704,11 +2848,17 @@ export class GameRenderer {
             marqueeBorder = '#bef264';
           }
 
+          // Check if player stands under entrance canopy
+          const isPlayerUnderEntrance = player && (
+            player.x >= ex - 4 && player.x <= ex + ew + 4 &&
+            player.y >= ey - 4 && player.y <= ey + eh + 4
+          );
+
           // Illuminated Canopy Glow onto sidewalk
           ctx.fillStyle = marqueeColor;
           ctx.globalAlpha = 0.25;
           ctx.fillRect(ex - 4, ey - 4, ew + 8, eh + 8);
-          ctx.globalAlpha = 1.0;
+          ctx.globalAlpha = isPlayerUnderEntrance ? 0.2 : 1.0;
 
           // Awning canopy body
           ctx.fillStyle = marqueeColor;
@@ -2733,6 +2883,7 @@ export class GameRenderer {
             }
           }
           ctx.stroke();
+          ctx.globalAlpha = 1.0;
 
           // --- PROCEDURAL ARCHITECTURAL & TERRAIN FEATURES PER SHOP TYPE ---
           if (bld.shopBrand === 'pharmacy_36_6') {
@@ -2899,6 +3050,14 @@ export class GameRenderer {
           }
         } else {
           // Standard Residential Canopy
+          const isPlayerUnderResCanopy = player && (
+            player.x >= ex - 4 && player.x <= ex + ew + 4 &&
+            player.y >= ey - 4 && player.y <= ey + eh + 4
+          );
+          if (isPlayerUnderResCanopy) {
+            ctx.globalAlpha = 0.2;
+          }
+
           ctx.fillStyle = '#475569';
           ctx.fillRect(ex, ey, ew, eh);
 
@@ -2940,6 +3099,8 @@ export class GameRenderer {
             ctx.moveTo(ex, ey + eh - 2); ctx.lineTo(ex + ew - 3, ey + eh - 2);
           }
           ctx.stroke();
+
+          ctx.globalAlpha = 1.0;
 
           // Small Entrance Plaque next to wall
           ctx.fillStyle = '#0f172a';
@@ -3521,393 +3682,23 @@ export class GameRenderer {
   ) {
     const ctx = this.ctx;
 
-    // Street Props (High-Detail Vector Rendering)
+    // Street Props (High-Detail Vector Rendering & Authentic Damage Textures)
     for (const prop of props) {
-      if (prop.type === 'lamp' && !prop.isBroken) continue;
+      if ((prop.type === 'lamp' || prop.type === 'lamp_highway' || prop.type === 'lamp_concrete') && !prop.isBroken) continue;
       if (prop.type === 'traffic_light') continue;
 
-      if (prop.x < minX || prop.x > maxX || prop.y < minY || prop.y > maxY) continue;
+      if (prop.x < minX - 30 || prop.x > maxX + 30 || prop.y < minY - 30 || prop.y > maxY + 30) continue;
 
       ctx.save();
       ctx.translate(prop.x, prop.y);
 
-      if (prop.isBroken) {
-        // Drop shadow for broken prop body on ground
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
-        ctx.beginPath();
-        ctx.ellipse(6, 6, 8, 5, prop.angle || 0.5, 0, Math.PI * 2);
-        ctx.fill();
-
+      if (prop.angle && !prop.isBroken) {
+        ctx.rotate(prop.angle);
+      } else if (prop.isBroken && prop.type !== 'lamp_highway' && prop.type !== 'lamp' && prop.type !== 'lamp_concrete') {
         ctx.rotate(prop.angle || 0.8);
       }
 
-      if (prop.type === 'lamp') {
-        // Shadow
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
-        ctx.beginPath();
-        ctx.arc(3, 3, 5, 0, Math.PI * 2);
-        ctx.fill();
-
-        // Pole Base
-        ctx.fillStyle = '#334155';
-        ctx.beginPath();
-        ctx.arc(0, 0, 4.5, 0, Math.PI * 2);
-        ctx.fill();
-
-        // Inner collar
-        ctx.fillStyle = '#475569';
-        ctx.beginPath();
-        ctx.arc(0, 0, 3, 0, Math.PI * 2);
-        ctx.fill();
-
-        // Glowing luminaire lens
-        ctx.fillStyle = '#475569';
-        ctx.beginPath();
-        ctx.arc(0, 0, 2, 0, Math.PI * 2);
-        ctx.fill();
-      } else if (prop.type === 'bench') {
-        // Paved Concrete Foundation Pad (guarantees bench always rests on paved slab, never raw grass)
-        ctx.fillStyle = '#64748b';
-        ctx.fillRect(-13, -8, 26, 16);
-        ctx.strokeStyle = '#94a3b8';
-        ctx.lineWidth = 1.2;
-        ctx.strokeRect(-13, -8, 26, 16);
-
-        // Shadow
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
-        ctx.fillRect(-10, -4, 20, 9);
-
-        // Cast Iron frame ends & ornate armrests
-        ctx.fillStyle = '#0f172a';
-        ctx.fillRect(-10, -6, 3, 12);
-        ctx.fillRect(7, -6, 3, 12);
-
-        // Wood slats with rich polished teak/mahogany grain color
-        ctx.fillStyle = '#78350f';
-        ctx.fillRect(-8, -5, 16, 2.2);
-        ctx.fillStyle = '#92400e';
-        ctx.fillRect(-8, -2, 16, 2.2);
-        ctx.fillStyle = '#b45309';
-        ctx.fillRect(-8, 1, 16, 2.2);
-        ctx.fillStyle = '#d97706';
-        ctx.fillRect(-8, 4, 16, 1.8);
-
-        // Iron connecting bolts
-        ctx.fillStyle = '#94a3b8';
-        ctx.fillRect(-8.5, -4.5, 1, 1);
-        ctx.fillRect(7.5, -4.5, 1, 1);
-        ctx.fillRect(-8.5, 3.5, 1, 1);
-        ctx.fillRect(7.5, 3.5, 1, 1);
-
-      } else if (prop.type === 'dumpster') {
-        // Concrete Waste Pad (площадка ТБО)
-        ctx.fillStyle = '#475569';
-        ctx.fillRect(-18, -13, 36, 26);
-        ctx.strokeStyle = '#94a3b8';
-        ctx.lineWidth = 1.5;
-        ctx.strokeRect(-18, -13, 36, 26);
-
-        // Large Municipal Waste Container (Контейнер ТБО / Мусорный бак)
-        // Shadow
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
-        ctx.fillRect(-15, -11, 30, 22);
-
-        // 4 Caster Wheels
-        ctx.fillStyle = '#0f172a';
-        ctx.fillRect(-14, -10, 3, 3);
-        ctx.fillRect(11, -10, 3, 3);
-        ctx.fillRect(-14, 7, 3, 3);
-        ctx.fillRect(11, 7, 3, 3);
-
-        // Main Container Body (Galvanized / Dark Green Metal)
-        ctx.fillStyle = '#15803d'; // Municipal emerald green
-        ctx.fillRect(-13, -9, 26, 18);
-        ctx.strokeStyle = '#166534';
-        ctx.lineWidth = 1;
-        ctx.strokeRect(-13, -9, 26, 18);
-
-        // Side Lifting Pocket Bars (for garbage truck forks)
-        ctx.fillStyle = '#334155';
-        ctx.fillRect(-14, -3, 2, 6);
-        ctx.fillRect(12, -3, 2, 6);
-
-        // Split Plastic Lids (Top and Bottom hinged)
-        ctx.fillStyle = '#1e293b';
-        ctx.fillRect(-12, -8, 24, 7.5);
-        ctx.fillRect(-12, 0.5, 24, 7.5);
-
-        // Lid Handles
-        ctx.fillStyle = '#64748b';
-        ctx.fillRect(-4, -6.5, 8, 1.5);
-        ctx.fillRect(-4, 2, 8, 1.5);
-
-        // Yellow Warning Hazard Triangle
-        ctx.fillStyle = '#f59e0b';
-        ctx.beginPath();
-        ctx.moveTo(0, -2);
-        ctx.lineTo(-2.5, 2);
-        ctx.lineTo(2.5, 2);
-        ctx.closePath();
-        ctx.fill();
-
-      } else if (prop.type === 'flowerbed') {
-        // Decorative Urban Flowerbed (Клумба с цветами)
-        // Shadow
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
-        ctx.fillRect(-13, -9, 26, 18);
-
-        // Stone / Concrete Curb Border
-        ctx.fillStyle = '#94a3b8';
-        ctx.fillRect(-12, -8, 24, 16);
-        ctx.fillStyle = '#cbd5e1';
-        ctx.strokeRect(-12, -8, 24, 16);
-
-        // Fertile Dark Soil
-        ctx.fillStyle = '#3e2723';
-        ctx.fillRect(-10, -6, 20, 12);
-
-        // Lush Green Foliage Bush
-        ctx.fillStyle = '#16a34a';
-        ctx.beginPath();
-        ctx.arc(-5, -2, 4.5, 0, Math.PI * 2);
-        ctx.arc(5, -2, 4.5, 0, Math.PI * 2);
-        ctx.arc(0, 2, 5, 0, Math.PI * 2);
-        ctx.fill();
-
-        ctx.fillStyle = '#22c55e';
-        ctx.beginPath();
-        ctx.arc(-2, -1, 3.5, 0, Math.PI * 2);
-        ctx.arc(3, 1, 3.5, 0, Math.PI * 2);
-        ctx.fill();
-
-        // Colorful Blossom Dots (Tulips / Marigolds / Petunias)
-        const flowerColors = ['#ef4444', '#f59e0b', '#ec4899', '#a855f7', '#ffffff', '#e11d48'];
-        for (let fi = 0; fi < 8; fi++) {
-          const fx = -7 + (fi % 4) * 4.5;
-          const fy = -4 + Math.floor(fi / 4) * 6;
-          ctx.fillStyle = flowerColors[fi % flowerColors.length];
-          ctx.beginPath();
-          ctx.arc(fx, fy, 1.6, 0, Math.PI * 2);
-          ctx.fill();
-        }
-
-      } else if (prop.type === 'bollard') {
-        // Cast-Iron Sidewalk Safety Bollard (Столбик ограждения)
-        // Shadow
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.38)';
-        ctx.beginPath();
-        ctx.arc(2, 2, 4, 0, Math.PI * 2);
-        ctx.fill();
-
-        // Flanged base
-        ctx.fillStyle = '#1e293b';
-        ctx.beginPath();
-        ctx.arc(0, 0, 3.5, 0, Math.PI * 2);
-        ctx.fill();
-
-        // Cylindrical main post
-        ctx.fillStyle = '#334155';
-        ctx.beginPath();
-        ctx.arc(0, 0, 2.5, 0, Math.PI * 2);
-        ctx.fill();
-
-        // Reflective white top band
-        ctx.fillStyle = '#f8fafc';
-        ctx.beginPath();
-        ctx.arc(0, 0, 1.6, 0, Math.PI * 2);
-        ctx.fill();
-
-        // Domed top cap
-        ctx.fillStyle = '#0f172a';
-        ctx.beginPath();
-        ctx.arc(0, 0, 0.9, 0, Math.PI * 2);
-        ctx.fill();
-
-      } else if (prop.type === 'manhole') {
-        // Standalone Manhole Cover
-        ctx.fillStyle = '#0f172a';
-        ctx.beginPath();
-        ctx.arc(0, 0, 6, 0, Math.PI * 2);
-        ctx.fill();
-
-        ctx.fillStyle = '#334155';
-        ctx.beginPath();
-        ctx.arc(0, 0, 5, 0, Math.PI * 2);
-        ctx.fill();
-
-        ctx.strokeStyle = '#1e293b';
-        ctx.lineWidth = 0.8;
-        ctx.beginPath();
-        ctx.arc(0, 0, 3, 0, Math.PI * 2);
-        ctx.moveTo(-4, 0); ctx.lineTo(4, 0);
-        ctx.moveTo(0, -4); ctx.lineTo(0, 4);
-        ctx.stroke();
-
-      } else if (prop.type === 'drain_grate') {
-        // Storm drain grate
-        ctx.fillStyle = '#0f172a';
-        ctx.fillRect(-6, -4, 12, 8);
-        ctx.fillStyle = '#475569';
-        for (let b = -4.5; b <= 4.5; b += 2.2) {
-          ctx.fillRect(b, -4, 1.2, 8);
-        }
-      } else if (prop.type === 'hydrant') {
-        // Shadow
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
-        ctx.beginPath();
-        ctx.arc(2, 3, 6, 0, Math.PI * 2);
-        ctx.fill();
-
-        // Flange ring base
-        ctx.fillStyle = prop.isBroken ? '#7f1d1d' : '#991b1b';
-        ctx.beginPath();
-        ctx.arc(0, 0, 5.5, 0, Math.PI * 2);
-        ctx.fill();
-
-        // Octagonal main red body
-        ctx.fillStyle = prop.isBroken ? '#991b1b' : '#dc2626';
-        ctx.beginPath();
-        ctx.arc(0, 0, 4.5, 0, Math.PI * 2);
-        ctx.fill();
-
-        // Brass side outlet caps
-        ctx.fillStyle = '#f59e0b';
-        ctx.fillRect(-6.5, -1.5, 2, 3);
-        ctx.fillRect(4.5, -1.5, 2, 3);
-        ctx.fillStyle = '#78350f';
-        ctx.fillRect(-7, -0.8, 1, 1.6);
-        ctx.fillRect(6, -0.8, 1, 1.6);
-
-        // White safety collar
-        ctx.fillStyle = '#ffffff';
-        ctx.beginPath();
-        ctx.arc(0, 0, 3, 0, Math.PI * 2);
-        ctx.fill();
-
-        // Top silver pentagon bolt
-        ctx.fillStyle = '#cbd5e1';
-        ctx.beginPath();
-        ctx.arc(0, 0, 1.8, 0, Math.PI * 2);
-        ctx.fill();
-      } else if (prop.type === 'tire_flowerbed') {
-        // Post-Soviet Tire Flowerbed (Автомобильная клумба из покрышки)
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
-        ctx.beginPath();
-        ctx.arc(2, 2, 8, 0, Math.PI * 2);
-        ctx.fill();
-
-        ctx.fillStyle = '#64748b'; // Painted tire
-        ctx.beginPath();
-        ctx.arc(0, 0, 8, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.fillStyle = '#3e2723'; // Soil
-        ctx.beginPath();
-        ctx.arc(0, 0, 5, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.fillStyle = '#ef4444'; // Red flowers
-        ctx.beginPath();
-        ctx.arc(-2, -2, 2, 0, Math.PI * 2);
-        ctx.arc(2, 2, 2, 0, Math.PI * 2);
-        ctx.fill();
-      } else if (prop.type === 'playground_swing') {
-        // Soviet Metal Playground Swings
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
-        ctx.fillRect(-12, -4, 24, 8);
-
-        ctx.strokeStyle = '#2563eb';
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.moveTo(-10, -6); ctx.lineTo(-4, 10);
-        ctx.moveTo(10, -6); ctx.lineTo(4, 10);
-        ctx.moveTo(-12, -4); ctx.lineTo(12, -4);
-        ctx.stroke();
-      } else if (prop.type === 'garage_door') {
-        // Garage Cooperative Metal Door
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
-        ctx.fillRect(-12, -8, 24, 16);
-
-        ctx.fillStyle = '#64748b';
-        ctx.fillRect(-11, -7, 22, 14);
-        ctx.strokeStyle = '#334155';
-        ctx.lineWidth = 1;
-        ctx.strokeRect(-11, -7, 22, 14);
-
-        ctx.fillStyle = '#0f172a';
-        ctx.fillRect(-2, -1, 4, 3);
-      } else if (prop.type === 'cone') {
-        // Shadow
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
-        ctx.beginPath();
-        ctx.arc(2, 2, 4.5, 0, Math.PI * 2);
-        ctx.fill();
-
-        // Square rubber base
-        ctx.fillStyle = '#c2410c';
-        ctx.fillRect(-4, -4, 8, 8);
-
-        // Cone body
-        ctx.fillStyle = '#ea580c';
-        ctx.beginPath();
-        ctx.arc(0, 0, 3.2, 0, Math.PI * 2);
-        ctx.fill();
-
-        // Reflective white stripe
-        ctx.fillStyle = '#f8fafc';
-        ctx.beginPath();
-        ctx.arc(0, 0, 2, 0, Math.PI * 2);
-        ctx.fill();
-
-        // Top cap
-        ctx.fillStyle = '#f97316';
-        ctx.beginPath();
-        ctx.arc(0, 0, 1, 0, Math.PI * 2);
-        ctx.fill();
-      } else if (prop.type === 'trash_can') {
-        // Shadow
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
-        ctx.beginPath();
-        ctx.arc(2, 3, 6, 0, Math.PI * 2);
-        ctx.fill();
-
-        // Outer metal cylinder
-        ctx.fillStyle = '#334155';
-        ctx.beginPath();
-        ctx.arc(0, 0, 5.5, 0, Math.PI * 2);
-        ctx.fill();
-
-        // Silver rim
-        ctx.strokeStyle = '#94a3b8';
-        ctx.lineWidth = 1;
-        ctx.stroke();
-
-        // Dark opening lid
-        ctx.fillStyle = '#0f172a';
-        ctx.beginPath();
-        ctx.arc(0, 0, 3.5, 0, Math.PI * 2);
-        ctx.fill();
-
-        // Recycling green icon dot
-        ctx.fillStyle = '#22c55e';
-        ctx.beginPath();
-        ctx.arc(0, 0, 1.2, 0, Math.PI * 2);
-        ctx.fill();
-      } else if (prop.type === 'mailbox') {
-        // Shadow
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
-        ctx.fillRect(-6, -5, 12, 10);
-
-        // Mailbox body
-        ctx.fillStyle = '#1d4ed8';
-        ctx.fillRect(-5, -5, 10, 10);
-
-        // White drop slot
-        ctx.fillStyle = '#f8fafc';
-        ctx.fillRect(-3, -3, 6, 1.5);
-
-        // Red flag on side
-        ctx.fillStyle = '#ef4444';
-        ctx.fillRect(4, -2, 2, 4);
-      }
+      renderStreetProp(ctx, prop);
 
       ctx.restore();
     }
@@ -3957,36 +3748,12 @@ export class GameRenderer {
 
     // Tall Intact Lampposts
     for (const prop of props) {
-      if (prop.type !== 'lamp' || prop.isBroken) continue;
-      if (prop.x < minX || prop.x > maxX || prop.y < minY || prop.y > maxY) continue;
+      if ((prop.type !== 'lamp' && prop.type !== 'lamp_highway' && prop.type !== 'lamp_concrete') || prop.isBroken) continue;
+      if (prop.x < minX - 30 || prop.x > maxX + 30 || prop.y < minY - 30 || prop.y > maxY + 30) continue;
 
       ctx.save();
       ctx.translate(prop.x, prop.y);
-
-      // Shadow
-      ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
-      ctx.beginPath();
-      ctx.arc(3, 3, 5, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Pole Base
-      ctx.fillStyle = '#0f172a';
-      ctx.beginPath();
-      ctx.arc(0, 0, 4.5, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Inner collar
-      ctx.fillStyle = '#475569';
-      ctx.beginPath();
-      ctx.arc(0, 0, 3, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Glowing luminaire lens
-      ctx.fillStyle = '#fef08a';
-      ctx.beginPath();
-      ctx.arc(0, 0, 2, 0, Math.PI * 2);
-      ctx.fill();
-
+      renderTallStreetProp(ctx, prop);
       ctx.restore();
     }
   }
@@ -4095,35 +3862,63 @@ export class GameRenderer {
         ctx.translate(18, 0);
         ctx.rotate(-Math.PI / 2);
 
-        // Backboard
-        ctx.fillStyle = '#0a0f1d';
-        ctx.beginPath();
-        safeRoundRect(ctx, -4.5, -7.5, 2.5, 15, 1);
-        ctx.fill();
+        // Mounting bracket connector (вынос)
+        ctx.fillStyle = '#475569';
+        ctx.fillRect(-5.2, -0.8, 5.2, 1.6);
 
-        // Housing
+        // Housing box (корпус светоблоков) - restored depth 3.0, 2x narrower width (6.5)
         ctx.fillStyle = '#1e293b';
         ctx.beginPath();
-        safeRoundRect(ctx, -3.5, -4.5, 7, 9, 1.5);
+        safeRoundRect(ctx, -3.0, -3.25, 3.0, 6.5, 0.8);
         ctx.fill();
+        ctx.strokeStyle = '#0f172a';
+        ctx.lineWidth = 0.5;
+        ctx.stroke();
 
-        // Broken, dark lens
+        // Backboard (Flat panel with white border containing the signal lens)
+        ctx.fillStyle = '#0a0f1d';
+        ctx.beginPath();
+        safeRoundRect(ctx, 0, -7.5, 1.8, 15, 1);
+        ctx.fill();
+        ctx.strokeStyle = '#e2e8f0';
+        ctx.lineWidth = 0.75;
+        ctx.stroke();
+
+        // Broken, dark lens (Directly on the flat board)
         ctx.fillStyle = '#111827';
         ctx.beginPath();
-        ctx.arc(3.2, 0, 1.6, 0, Math.PI * 2);
+        ctx.arc(0.9, 0, 1.6, -Math.PI * 0.35, Math.PI * 0.35);
         ctx.fill();
         ctx.restore();
 
-        // Non-working side pedestrian head
+        // Non-working side pedestrian head (Flat panel with white border)
         ctx.save();
         ctx.translate(10, 3);
-        ctx.fillStyle = '#0f172a';
+
+        // Mounting bracket connector (вынос)
+        ctx.fillStyle = '#475569';
+        ctx.fillRect(-3.8, -0.6, 3.8, 1.2);
+
+        // Housing box (корпус светоблоков) - restored depth 2.0, 2x narrower width (3.8)
+        ctx.fillStyle = '#1e293b';
         ctx.beginPath();
-        safeRoundRect(ctx, -2.5, -2.5, 5, 5, 1);
+        safeRoundRect(ctx, -2.0, -1.9, 2.0, 3.8, 0.6);
         ctx.fill();
+        ctx.strokeStyle = '#0f172a';
+        ctx.lineWidth = 0.4;
+        ctx.stroke();
+
+        ctx.fillStyle = '#0a0f1d';
+        ctx.beginPath();
+        safeRoundRect(ctx, 0, -4.5, 1.8, 9, 1);
+        ctx.fill();
+        ctx.strokeStyle = '#e2e8f0';
+        ctx.lineWidth = 0.6;
+        ctx.stroke();
+
         ctx.fillStyle = '#111827';
         ctx.beginPath();
-        ctx.arc(1.5, 0, 1.2, 0, Math.PI * 2);
+        ctx.arc(0.9, 0, 1.2, -Math.PI * 0.35, Math.PI * 0.35);
         ctx.fill();
         ctx.restore();
 
@@ -4210,39 +4005,45 @@ export class GameRenderer {
         ctx.translate(headX, headY);
         ctx.rotate(facingAngle);
 
+        // Mounting bracket connector (вынос)
+        ctx.fillStyle = '#475569';
+        ctx.fillRect(-5.2, -0.8, 5.2, 1.6);
+
+        // Housing box (корпус светоблоков) - restored depth 3.0, 2x narrower width (6.5)
+        ctx.fillStyle = '#1e293b';
+        ctx.beginPath();
+        safeRoundRect(ctx, -3.0, -3.25, 3.0, 6.5, 0.8);
+        ctx.fill();
+        ctx.strokeStyle = '#0f172a';
+        ctx.lineWidth = 0.5;
+        ctx.stroke();
+
+        // Flat backing board (plate)
         ctx.fillStyle = '#0a0f1d';
         ctx.beginPath();
-        safeRoundRect(ctx, -4.5, -7.5, 2.5, 15, 1);
+        safeRoundRect(ctx, 0, -7.5, 1.8, 15, 1);
         ctx.fill();
         ctx.strokeStyle = '#e2e8f0';
         ctx.lineWidth = 0.75;
         ctx.stroke();
 
-        ctx.fillStyle = '#1e293b';
-        ctx.beginPath();
-        safeRoundRect(ctx, -3.5, -4.5, 7, 9, 1.5);
-        ctx.fill();
-        ctx.strokeStyle = '#0f172a';
-        ctx.lineWidth = 0.75;
-        ctx.stroke();
-
         ctx.fillStyle = '#334155';
         ctx.beginPath();
-        ctx.arc(0, 0, 1.5, 0, Math.PI * 2);
+        ctx.arc(0.9, 0, 1.5, -Math.PI * 0.35, Math.PI * 0.35); // Masked dark lens background
         ctx.fill();
 
         ctx.fillStyle = '#020617';
         ctx.strokeStyle = '#475569';
         ctx.lineWidth = 1;
         ctx.beginPath();
-        ctx.arc(2.5, 0, 4.2, -Math.PI * 0.45, Math.PI * 0.45);
+        ctx.arc(0.9, 0, 2.2, -Math.PI * 0.45, Math.PI * 0.45);
         ctx.stroke();
 
         ctx.strokeStyle = '#090d16';
         ctx.lineWidth = 1.2;
         ctx.beginPath();
-        ctx.moveTo(3.5, -3.2);
-        ctx.quadraticCurveTo(6.8, 0, 3.5, 3.2);
+        ctx.moveTo(0.9, -3.2);
+        ctx.quadraticCurveTo(2.9, 0, 0.9, 3.2);
         ctx.stroke();
 
         let activeColor = '';
@@ -4264,21 +4065,21 @@ export class GameRenderer {
         }
 
         if (activeColor) {
-          const auraGrad = ctx.createRadialGradient(3.5, 0, 1, 6, 0, 16);
+          const auraGrad = ctx.createRadialGradient(0.9, 0, 1, 3.7, 0, 16);
           auraGrad.addColorStop(0, auraColorInner);
           auraGrad.addColorStop(0.5, auraColorInner.replace('0.45', '0.2'));
           auraGrad.addColorStop(1, auraColorOuter);
 
           ctx.fillStyle = auraGrad;
           ctx.beginPath();
-          ctx.moveTo(3.5, 0);
-          ctx.arc(3.5, 0, 16, -Math.PI * 0.42, Math.PI * 0.42);
+          ctx.moveTo(0.9, 0);
+          ctx.arc(0.9, 0, 16, -Math.PI * 0.42, Math.PI * 0.42);
           ctx.closePath();
           ctx.fill();
 
           ctx.fillStyle = activeColor;
           ctx.beginPath();
-          ctx.arc(3.2, 0, 1.6, -Math.PI * 0.35, Math.PI * 0.35);
+          ctx.arc(0.9, 0, 1.6, -Math.PI * 0.35, Math.PI * 0.35);
           ctx.fill();
         }
         ctx.restore();
@@ -4287,18 +4088,32 @@ export class GameRenderer {
         ctx.translate(pedHeadX, pedHeadY);
         ctx.rotate(pedFacingAngle);
 
-        ctx.fillStyle = '#0f172a';
+        // Mounting bracket connector (вынос)
+        ctx.fillStyle = '#475569';
+        ctx.fillRect(-3.8, -0.6, 3.8, 1.2);
+
+        // Housing box (корпус светоблоков) - restored depth 2.0, 2x narrower width (3.8)
+        ctx.fillStyle = '#1e293b';
         ctx.beginPath();
-        safeRoundRect(ctx, -2.5, -2.5, 5, 5, 1);
+        safeRoundRect(ctx, -2.0, -1.9, 2.0, 3.8, 0.6);
         ctx.fill();
-        ctx.strokeStyle = '#334155';
+        ctx.strokeStyle = '#0f172a';
+        ctx.lineWidth = 0.4;
+        ctx.stroke();
+
+        // Flat backing board (plate)
+        ctx.fillStyle = '#0a0f1d';
+        ctx.beginPath();
+        safeRoundRect(ctx, 0, -4.5, 1.8, 9, 1);
+        ctx.fill();
+        ctx.strokeStyle = '#e2e8f0';
         ctx.lineWidth = 0.6;
         ctx.stroke();
 
         ctx.strokeStyle = '#020617';
         ctx.lineWidth = 1;
         ctx.beginPath();
-        ctx.arc(1.5, 0, 2.5, -Math.PI * 0.4, Math.PI * 0.4);
+        ctx.arc(0.9, 0, 2.0, -Math.PI * 0.4, Math.PI * 0.4);
         ctx.stroke();
 
         const isPedWalk = pedSignal === 'walk';
@@ -4306,20 +4121,20 @@ export class GameRenderer {
         const pedAuraInner = isPedWalk ? 'rgba(34, 197, 94, 0.5)' : 'rgba(239, 68, 68, 0.5)';
         const pedAuraOuter = isPedWalk ? 'rgba(34, 197, 94, 0)' : 'rgba(239, 68, 68, 0)';
 
-        const pedAuraGrad = ctx.createRadialGradient(2, 0, 0.5, 4, 0, 10);
+        const pedAuraGrad = ctx.createRadialGradient(0.9, 0, 0.5, 2.5, 0, 10);
         pedAuraGrad.addColorStop(0, pedAuraInner);
         pedAuraGrad.addColorStop(1, pedAuraOuter);
 
         ctx.fillStyle = pedAuraGrad;
         ctx.beginPath();
-        ctx.moveTo(2, 0);
-        ctx.arc(2, 0, 10, -Math.PI * 0.38, Math.PI * 0.38);
+        ctx.moveTo(0.9, 0);
+        ctx.arc(0.9, 0, 10, -Math.PI * 0.38, Math.PI * 0.38);
         ctx.closePath();
         ctx.fill();
 
         ctx.fillStyle = pedColor;
         ctx.beginPath();
-        ctx.arc(1.8, 0, 1.2, 0, Math.PI * 2);
+        ctx.arc(0.9, 0, 1.2, -Math.PI * 0.35, Math.PI * 0.35); // Masked pedestrian signal!
         ctx.fill();
         ctx.restore();
       }
@@ -4449,14 +4264,57 @@ export class GameRenderer {
   }
 
   // --- PEDESTRIANS ---
-  private renderPedestrians(pedestrians: Pedestrian[]) {
+  private renderPedestrians(pedestrians: Pedestrian[], world?: GameWorld) {
     const ctx = this.ctx;
 
     for (const ped of pedestrians) {
       if (ped.isInsideBuilding) continue;
 
+      // Draw fire hose from the truck to the firefighter in world coordinates!
+      if (world && (ped as any).isFirefighter && ['going_to_fire', 'extinguishing', 'returning_to_truck'].includes((ped as any).firefighterState || '')) {
+        const parentCar = world.vehicles.find(v => v.id === (ped as any).parentVehicleId);
+        if (parentCar) {
+          const rearX = parentCar.x - Math.cos(parentCar.angle) * (parentCar.length * 0.45);
+          const rearY = parentCar.y - Math.sin(parentCar.angle) * (parentCar.length * 0.45);
+
+          ctx.save();
+          // Shadow of the hose
+          ctx.strokeStyle = 'rgba(0,0,0,0.2)';
+          ctx.lineWidth = 2.0;
+          ctx.lineCap = 'round';
+          ctx.lineJoin = 'round';
+          ctx.beginPath();
+          ctx.moveTo(rearX + 1.5, rearY + 2);
+          const midX = (rearX + ped.x) / 2;
+          const midY = (rearY + ped.y) / 2 + 15; // sag downwards slightly
+          ctx.quadraticCurveTo(midX, midY, ped.x + 1.5, ped.y + 2);
+          ctx.stroke();
+
+          // The main hose (thick protective gray-white)
+          ctx.strokeStyle = '#cbd5e1';
+          ctx.lineWidth = 2.0;
+          ctx.beginPath();
+          ctx.moveTo(rearX, rearY);
+          ctx.quadraticCurveTo(midX, midY - 2, ped.x, ped.y);
+          ctx.stroke();
+
+          // A bright red/orange line on the hose (water indicator/stripe)
+          ctx.strokeStyle = '#ef4444';
+          ctx.lineWidth = 0.5;
+          ctx.setLineDash([4, 4]);
+          ctx.beginPath();
+          ctx.moveTo(rearX, rearY);
+          ctx.quadraticCurveTo(midX, midY - 2, ped.x, ped.y);
+          ctx.stroke();
+          ctx.setLineDash([]); // Reset
+          ctx.restore();
+        }
+      }
+
       ctx.save();
       ctx.translate(ped.x, ped.y);
+      
+      const isFirefighter = (ped as any).isFirefighter;
       
       // Scale down if child
       if (ped.isChild) {
@@ -4500,21 +4358,41 @@ export class GameRenderer {
       const armSwing = ped.state === 'walking' || ped.state === 'crossing' || ped.state === 'panicking' ? Math.cos(ped.walkCycle) * 2.2 : 0;
 
       // 1. Legs / Pants / Shoes
-      ctx.fillStyle = ped.pantsColor;
-      if (!ped.isCyclist && !ped.isScooter) {
+      if (isFirefighter) {
+        // Heavy duty navy/charcoal firefighter trousers
+        ctx.fillStyle = '#0f172a';
         ctx.fillRect(-1.5, -legSwing - 3.5, 3, 3);
         ctx.fillRect(-1.5, legSwing + 0.5, 3, 3);
-        // Shoes / Sneakers visible on feet during movement
-        ctx.fillStyle = '#0f172a';
-        ctx.fillRect(1.5, -legSwing - 3.5, 1.2, 3);
-        ctx.fillRect(1.5, legSwing + 0.5, 1.2, 3);
+
+        // Bright high-vis reflective band on ankles (Neon yellow/lime + silver)
+        ctx.fillStyle = '#a3e635'; // Lime
+        ctx.fillRect(-0.4, -legSwing - 3.5, 0.9, 3);
+        ctx.fillRect(-0.4, legSwing + 0.5, 0.9, 3);
+        ctx.fillStyle = '#f8fafc'; // Silver
+        ctx.fillRect(-0.1, -legSwing - 3.5, 0.3, 3);
+        ctx.fillRect(-0.1, legSwing + 0.5, 0.3, 3);
+
+        // Heavy fireman boots
+        ctx.fillStyle = '#020617';
+        ctx.fillRect(1.5, -legSwing - 3.5, 1.3, 3);
+        ctx.fillRect(1.5, legSwing + 0.5, 1.3, 3);
       } else {
-        // Pedaling or standing on scooter
-        ctx.fillRect(-1.5, -2.5, 3, 2);
-        ctx.fillRect(-1.5, 0.5, 3, 2);
-        ctx.fillStyle = '#0f172a';
-        ctx.fillRect(1.5, -2.5, 1.2, 2);
-        ctx.fillRect(1.5, 0.5, 1.2, 2);
+        ctx.fillStyle = ped.pantsColor;
+        if (!ped.isCyclist && !ped.isScooter) {
+          ctx.fillRect(-1.5, -legSwing - 3.5, 3, 3);
+          ctx.fillRect(-1.5, legSwing + 0.5, 3, 3);
+          // Shoes / Sneakers visible on feet during movement
+          ctx.fillStyle = '#0f172a';
+          ctx.fillRect(1.5, -legSwing - 3.5, 1.2, 3);
+          ctx.fillRect(1.5, legSwing + 0.5, 1.2, 3);
+        } else {
+          // Pedaling or standing on scooter
+          ctx.fillRect(-1.5, -2.5, 3, 2);
+          ctx.fillRect(-1.5, 0.5, 3, 2);
+          ctx.fillStyle = '#0f172a';
+          ctx.fillRect(1.5, -2.5, 1.2, 2);
+          ctx.fillRect(1.5, 0.5, 1.2, 2);
+        }
       }
 
       // 2. Torso & Detailed Clothing (Top-Down Silhouette with Shoulders, Collars, Jackets & Dresses)
@@ -4524,7 +4402,35 @@ export class GameRenderer {
       const innerCol = ped.innerShirtColor || '#ffffff';
 
       // Base shoulder width & torso shape
-      if (clothType === 'open_jacket' || clothType === 'suit') {
+      if (isFirefighter) {
+        // Heavy duty fire-resistant charcoal turnout coat
+        ctx.fillStyle = '#0f172a';
+        ctx.beginPath();
+        ctx.ellipse(0, 0, 4.3, 5.9, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // High-vis lime-green reflective safety harness stripes across shoulders/chest
+        ctx.strokeStyle = '#a3e635'; // Neon lime
+        ctx.lineWidth = 1.0;
+        ctx.beginPath();
+        // Left and right vertical shoulder stripes
+        ctx.moveTo(-1.2, -4.5); ctx.lineTo(-1.2, 4.5);
+        ctx.moveTo(1.4, -4.5); ctx.lineTo(1.4, 4.5);
+        // Horizontal stripes across torso
+        ctx.moveTo(-3.5, -2.0); ctx.lineTo(3.5, -2.0);
+        ctx.moveTo(-3.5, 2.0); ctx.lineTo(3.5, 2.0);
+        ctx.stroke();
+
+        // Silver inner reflective core stripe
+        ctx.strokeStyle = '#f8fafc'; // Silver
+        ctx.lineWidth = 0.4;
+        ctx.beginPath();
+        ctx.moveTo(-1.2, -4.5); ctx.lineTo(-1.2, 4.5);
+        ctx.moveTo(1.4, -4.5); ctx.lineTo(1.4, 4.5);
+        ctx.moveTo(-3.5, -2.0); ctx.lineTo(3.5, -2.0);
+        ctx.moveTo(-3.5, 2.0); ctx.lineTo(3.5, 2.0);
+        ctx.stroke();
+      } else if (clothType === 'open_jacket' || clothType === 'suit') {
         // Open unbuttoned jacket or formal suit jacket
         ctx.fillStyle = clothType === 'suit' ? '#0f172a' : jacketCol;
         ctx.beginPath();
@@ -4657,13 +4563,31 @@ export class GameRenderer {
       }
 
       // Arms & Hand Posing
-      const sleeveColor = (clothType === 'open_jacket' ? jacketCol : mainShirtColor);
-      if (ped.state === 'idle_phone' || ped.handheldProp === 'phone') {
+      const sleeveColor = isFirefighter ? '#0f172a' : (clothType === 'open_jacket' ? jacketCol : mainShirtColor);
+      const handSkinColor = isFirefighter ? '#d97706' : ped.skinColor;
+      if (isFirefighter) {
+        // Firefighters extend both arms forward to firmly hold the high-pressure brass hose nozzle
+        ctx.fillStyle = sleeveColor;
+        ctx.fillRect(1.0, -4.0, 3.8, 2.0);  // Left sleeve extended forward
+        ctx.fillRect(1.0, 2.0, 3.8, 2.0);   // Right sleeve extended forward
+
+        // Tan protective heavy duty fire gloves
+        ctx.fillStyle = '#d97706';
+        ctx.fillRect(4.5, -3.2, 1.8, 1.6);  // Left glove
+        ctx.fillRect(4.5, 1.6, 1.8, 1.6);   // Right glove
+
+        // Custom brass high-pressure hose nozzle (ствол пожарного рукава)
+        ctx.fillStyle = '#b45309'; // Rich brass/bronze color
+        ctx.fillRect(4.8, -1.2, 3.6, 2.4);  // Main nozzle cylinder
+        ctx.fillStyle = '#475569'; // Dark metal handle / tip
+        ctx.fillRect(8.0, -0.6, 1.2, 1.2);  // High-pressure tip
+        ctx.fillRect(5.5, 0.8, 0.8, 1.5);   // Under-nozzle support handle
+      } else if (ped.state === 'idle_phone' || ped.handheldProp === 'phone') {
         // Both arms extended forward holding phone in front of chest
         ctx.fillStyle = sleeveColor;
         ctx.fillRect(1.0, -4.2, 3.2, 2.0);  // Left sleeve
         ctx.fillRect(1.0, 2.2, 3.2, 2.0);   // Right sleeve
-        ctx.fillStyle = ped.skinColor;
+        ctx.fillStyle = handSkinColor;
         ctx.fillRect(3.8, -2.6, 2.0, 1.8);  // Left hand
         ctx.fillRect(3.8, 0.8, 2.0, 1.8);   // Right hand
       } else if (ped.handheldProp === 'box') {
@@ -4671,7 +4595,7 @@ export class GameRenderer {
         ctx.fillStyle = sleeveColor;
         ctx.fillRect(1.0, -4.8, 4.0, 2.0);  // Left sleeve
         ctx.fillRect(1.0, 2.8, 4.0, 2.0);   // Right sleeve
-        ctx.fillStyle = ped.skinColor;
+        ctx.fillStyle = handSkinColor;
         ctx.fillRect(4.8, -3.8, 1.8, 1.6);  // Left hand
         ctx.fillRect(4.8, 2.2, 1.8, 1.6);   // Right hand
       } else if (ped.hasBroom) {
@@ -4679,7 +4603,7 @@ export class GameRenderer {
         ctx.fillStyle = ped.isJanitor ? '#ca8a04' : sleeveColor;
         ctx.fillRect(1.0, -3.8, 3.5, 2.0);  // Left sleeve
         ctx.fillRect(1.0, 2.0, 4.5, 2.0);   // Right sleeve
-        ctx.fillStyle = ped.skinColor;
+        ctx.fillStyle = handSkinColor;
         ctx.fillRect(4.2, -2.2, 1.6, 1.6);  // Left hand
         ctx.fillRect(5.2, 0.2, 1.8, 1.6);   // Right hand
       } else if (ped.handheldProp === 'coffee') {
@@ -4687,7 +4611,7 @@ export class GameRenderer {
         ctx.fillStyle = sleeveColor;
         ctx.fillRect(armSwing - 1.5, -4.8, 3, 2.2); // Left arm swinging
         ctx.fillRect(1.0, 2.8, 3.5, 2.0);            // Right sleeve forward
-        ctx.fillStyle = ped.skinColor;
+        ctx.fillStyle = handSkinColor;
         ctx.fillRect(4.2, 3.8, 1.6, 1.8);            // Right hand holding cup
       } else if (ped.handheldProp === 'bag') {
         // Right arm carrying shopping bag beside body
@@ -4695,7 +4619,7 @@ export class GameRenderer {
         ctx.fillStyle = sleeveColor;
         ctx.fillRect(armSwing - 1.5, -4.8, 3, 2.2);      // Left arm swinging
         ctx.fillRect(bagArmSwing - 0.5, 3.6, 2.8, 2.0);  // Right sleeve
-        ctx.fillStyle = ped.skinColor;
+        ctx.fillStyle = handSkinColor;
         ctx.fillRect(bagArmSwing + 0.5, 5.8, 2.0, 2.0);  // Right hand holding bag handle
       } else if (ped.isCyclist || ped.isScooter) {
         // Holding handlebars
@@ -4706,7 +4630,7 @@ export class GameRenderer {
         ctx.fillStyle = sleeveColor;
         ctx.fillRect(armSwing - 1.5, -4.8, 3, 2.2);
         ctx.fillRect(-armSwing - 1.5, 2.6, 3, 2.2);
-        ctx.fillStyle = ped.skinColor;
+        ctx.fillStyle = handSkinColor;
         ctx.fillRect(armSwing + 1.2, -4.8, 1.5, 2.2);
         ctx.fillRect(-armSwing + 1.2, 2.6, 1.5, 2.2);
       }
@@ -4744,7 +4668,9 @@ export class GameRenderer {
       }
 
       // 4. Hairstyles (Deep Top-Down Detailing)
-      if (ped.hairStyle === 'bald') {
+      if (isFirefighter) {
+        // Skip hair, helmet handles head protection!
+      } else if (ped.hairStyle === 'bald') {
         // Bald head shine highlight
         ctx.fillStyle = 'rgba(255,255,255,0.35)';
         ctx.beginPath();
@@ -4830,7 +4756,54 @@ export class GameRenderer {
       }
 
       // 6. Hats / Caps / Sunhats / Fedoras
-      if (ped.hasHat) {
+      if (isFirefighter) {
+        // Draw standard modern firefighter helmet (Gallet F1 style)
+        // Main helmet shell: brilliant high-gloss yellow-orange
+        ctx.fillStyle = '#f97316'; // Vivid orange-yellow
+        ctx.beginPath();
+        ctx.arc(1.5, 0, 4.2, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Thick black protective brim trim running around sides & back
+        ctx.strokeStyle = '#020617';
+        ctx.lineWidth = 1.0;
+        ctx.beginPath();
+        ctx.arc(1.5, 0, 4.2, -Math.PI * 0.95, Math.PI * 0.95);
+        ctx.stroke();
+
+        // High-vis silver reflective helmet stripes
+        ctx.strokeStyle = '#cbd5e1'; // Silver
+        ctx.lineWidth = 0.6;
+        ctx.beginPath();
+        ctx.arc(1.5, 0, 3.4, -Math.PI * 0.35, Math.PI * 0.35); // Curved crest highlight
+        ctx.stroke();
+
+        // Red central crest badge on front
+        ctx.fillStyle = '#ef4444'; // Red
+        ctx.beginPath();
+        ctx.moveTo(4.6, -1.0);
+        ctx.lineTo(5.8, 0);
+        ctx.lineTo(4.6, 1.0);
+        ctx.closePath();
+        ctx.fill();
+
+        // Red crest stripe running from front to back along center
+        ctx.fillStyle = '#dc2626';
+        ctx.fillRect(-2.5, -0.6, 6.8, 1.2);
+
+        // Glossy dark protective visor extending in front of eyes
+        ctx.fillStyle = 'rgba(15, 23, 42, 0.85)'; // Visor glass
+        ctx.beginPath();
+        ctx.arc(1.5, 0, 4.4, -Math.PI * 0.22, Math.PI * 0.22);
+        ctx.lineTo(3.2, 0);
+        ctx.closePath();
+        ctx.fill();
+        
+        // Visor gold-tinted reflective edge line
+        ctx.strokeStyle = '#fbbf24';
+        ctx.lineWidth = 0.5;
+        ctx.stroke();
+      } else if (ped.hasHat) {
         ctx.fillStyle = ped.hatColor || '#1e293b';
         ctx.beginPath();
         if (ped.hatType === 'cap') {
@@ -5321,6 +5294,14 @@ export class GameRenderer {
     ctx.arc(-armSwing + 1, 5.2, 1.2, 0, Math.PI * 2);
     ctx.fill();
 
+    // Render items held in hands
+    if (player.leftHandItem) {
+      drawItemModel2D(ctx, player.leftHandItem.itemId, armSwing + 2.5, -6.5, 9);
+    }
+    if (player.rightHandItem) {
+      drawItemModel2D(ctx, player.rightHandItem.itemId, -armSwing + 2.5, 6.5, 9);
+    }
+
     // Head
     ctx.fillStyle = cSkin;
     ctx.beginPath();
@@ -5484,11 +5465,14 @@ export class GameRenderer {
   }
 
   // --- VEHICLES ---
-  private renderVehicles(vehicles: Vehicle[], nightAlpha: number) {
+  private renderVehicles(vehicles: Vehicle[], nightAlpha: number, gridMode?: boolean) {
     const ctx = this.ctx;
 
     for (const car of vehicles) {
       ctx.save();
+      if (car.ghostingAlpha !== undefined) {
+        ctx.globalAlpha = car.ghostingAlpha;
+      }
       ctx.translate(car.x, car.y);
       ctx.rotate(car.angle);
 
@@ -5522,12 +5506,17 @@ export class GameRenderer {
       const basePoly = getVehicleBasePolygon(car, halfL, halfW, fc, rc, ld, rd, fld, frd, rld, rrd);
 
       let bodyPoly = basePoly;
-      if (dmg.deformedVertices && dmg.deformedVertices.length === 16) {
+      if (dmg.deformedVertices && dmg.deformedVertices.length >= basePoly.length) {
         bodyPoly = basePoly.map((bv, idx) => {
           const dv = dmg.deformedVertices![idx];
+          if (!dv) return bv;
+          const ox = isFinite(dv.offsetX) ? dv.offsetX : 0;
+          const oy = isFinite(dv.offsetY) ? dv.offsetY : 0;
+          const ex = isFinite(dv.elasticX) ? dv.elasticX : 0;
+          const ey = isFinite(dv.elasticY) ? dv.elasticY : 0;
           return {
-            x: bv.x + (dv.offsetX || 0),
-            y: bv.y + (dv.offsetY || 0)
+            x: bv.x + ox + ex,
+            y: bv.y + oy + ey
           };
         });
       }
@@ -5537,7 +5526,7 @@ export class GameRenderer {
         let totalWeight = 0;
         let dx = 0;
         let dy = 0;
-        for (let i = 0; i < 16; i++) {
+        for (let i = 0; i < 20; i++) {
           const bp = basePoly[i];
           const bvp = bodyPoly[i];
           const vx = bp.x;
@@ -5647,13 +5636,10 @@ export class GameRenderer {
       renderSteeredWheel(frontAxleX, -trackY + wheelW / 2);
       renderSteeredWheel(frontAxleX, trackY - wheelW / 2);
 
-      // Now draw body shell
+      // Now draw body shell with high-fidelity softbody spline contour
       ctx.fillStyle = car.color;
       ctx.beginPath();
-      ctx.moveTo(bodyPoly[0].x, bodyPoly[0].y);
-      for (let i = 1; i < bodyPoly.length; i++) {
-        ctx.lineTo(bodyPoly[i].x, bodyPoly[i].y);
-      }
+      traceSoftbodyPath(ctx, bodyPoly, dmg.deformedVertices);
       ctx.closePath();
       ctx.fill();
 
@@ -5663,10 +5649,7 @@ export class GameRenderer {
         const charAlpha = Math.min(0.92, fireProg * 0.85 + (dmg.isFullyBurnt ? 0.90 : 0));
         ctx.fillStyle = `rgba(15, 23, 42, ${charAlpha})`;
         ctx.beginPath();
-        ctx.moveTo(bodyPoly[0].x, bodyPoly[0].y);
-        for (let i = 1; i < bodyPoly.length; i++) {
-          ctx.lineTo(bodyPoly[i].x, bodyPoly[i].y);
-        }
+        traceSoftbodyPath(ctx, bodyPoly, dmg.deformedVertices);
         ctx.closePath();
         ctx.fill();
 
@@ -5682,10 +5665,7 @@ export class GameRenderer {
           fireGlowGrad.addColorStop(1, 'rgba(239, 68, 68, 0)');
           ctx.fillStyle = fireGlowGrad;
           ctx.beginPath();
-          ctx.moveTo(bodyPoly[0].x, bodyPoly[0].y);
-          for (let i = 1; i < bodyPoly.length; i++) {
-            ctx.lineTo(bodyPoly[i].x, bodyPoly[i].y);
-          }
+          traceSoftbodyPath(ctx, bodyPoly, dmg.deformedVertices);
           ctx.closePath();
           ctx.fill();
         }
@@ -5694,6 +5674,102 @@ export class GameRenderer {
       ctx.strokeStyle = 'rgba(0, 0, 0, 0.42)';
       ctx.lineWidth = 1.2;
       ctx.stroke();
+
+      // Softbody metallic stress highlights and ambient crease shadow lines
+      renderSoftbodyStressLines(ctx, bodyPoly, dmg.deformedVertices);
+
+      // Grid Mode Mesh Visualization (BeamNG-style)
+      if (gridMode && dmg.deformedVertices && dmg.deformedVertices.length > 0) {
+        ctx.save();
+        ctx.strokeStyle = 'rgba(0, 255, 128, 0.7)';
+        ctx.lineWidth = 1;
+        
+        const perimPoints = bodyPoly;
+        const internalPoints = [];
+        for (let i = 20; i < dmg.deformedVertices.length; i++) {
+          const dv = dmg.deformedVertices[i];
+          if (!dv) continue;
+          internalPoints.push({
+            x: dv.localX + (dv.offsetX || 0) + (dv.elasticX || 0),
+            y: dv.localY + (dv.offsetY || 0) + (dv.elasticY || 0)
+          });
+        }
+
+        ctx.beginPath();
+        for (let i = 0; i < perimPoints.length; i++) {
+          const p = perimPoints[i];
+          const nextP = perimPoints[(i + 1) % perimPoints.length];
+          ctx.moveTo(p.x, p.y);
+          ctx.lineTo(nextP.x, nextP.y);
+        }
+
+        // Internal roof / cabin / glass / hood wireframe connections
+        if (internalPoints.length >= 8 && perimPoints.length >= 20) {
+          const hC = internalPoints[0]; // 20: Hood center
+          const wT = internalPoints[1]; // 21: Windshield top
+          const rC = internalPoints[2]; // 22: Roof center
+          const rL = internalPoints[3]; // 23: Roof left
+          const rR = internalPoints[4]; // 24: Roof right
+          const rW = internalPoints[5]; // 25: Rear window top
+          const tC = internalPoints[6]; // 26: Trunk center
+          const cC = internalPoints[7]; // 27: Cabin center
+
+          ctx.moveTo(hC.x, hC.y); ctx.lineTo(perimPoints[0].x, perimPoints[0].y);
+          ctx.moveTo(hC.x, hC.y); ctx.lineTo(wT.x, wT.y);
+          ctx.moveTo(wT.x, wT.y); ctx.lineTo(rC.x, rC.y);
+
+          ctx.moveTo(rC.x, rC.y); ctx.lineTo(rL.x, rL.y);
+          ctx.moveTo(rC.x, rC.y); ctx.lineTo(rR.x, rR.y);
+          ctx.moveTo(rL.x, rL.y); ctx.lineTo(rR.x, rR.y);
+          ctx.moveTo(rL.x, rL.y); ctx.lineTo(cC.x, cC.y);
+          ctx.moveTo(rR.x, rR.y); ctx.lineTo(cC.x, cC.y);
+
+          ctx.moveTo(wT.x, wT.y); ctx.lineTo(rL.x, rL.y);
+          ctx.moveTo(wT.x, wT.y); ctx.lineTo(rR.x, rR.y);
+          ctx.moveTo(rW.x, rW.y); ctx.lineTo(rL.x, rL.y);
+          ctx.moveTo(rW.x, rW.y); ctx.lineTo(rR.x, rR.y);
+
+          ctx.moveTo(rW.x, rW.y); ctx.lineTo(tC.x, tC.y);
+          ctx.moveTo(tC.x, tC.y); ctx.lineTo(perimPoints[10].x, perimPoints[10].y);
+        }
+        ctx.stroke();
+
+        // Draw node points (perimeter)
+        ctx.fillStyle = '#00ff80';
+        for (const p of perimPoints) {
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, 1.5, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        // Draw internal nodes (roof, glass, windshield)
+        ctx.fillStyle = '#38bdf8';
+        for (const p of internalPoints) {
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, 2.0, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        
+        // Draw elastic displacement vectors if active
+        ctx.strokeStyle = 'rgba(255, 0, 0, 0.8)';
+        ctx.beginPath();
+        for (let i = 0; i < dmg.deformedVertices.length; i++) {
+          const dv = dmg.deformedVertices[i];
+          if (!dv) continue;
+          const x = dv.localX + (dv.offsetX || 0);
+          const y = dv.localY + (dv.offsetY || 0);
+          if (Math.abs(dv.elasticX || 0) > 0.1 || Math.abs(dv.elasticY || 0) > 0.1) {
+            ctx.moveTo(x, y);
+            ctx.lineTo(x + (dv.elasticX || 0) * 2, y + (dv.elasticY || 0) * 2);
+          }
+        }
+        ctx.stroke();
+        
+        ctx.restore();
+      }
+
+      // 2.5D buckled hood and sagging bumper attachments
+      renderBuckledHoodOverlay(ctx, car, bodyPoly, halfL, halfW);
+      renderSaggingBumpers(ctx, car, bodyPoly, halfL, halfW);
 
       // Police Car Dual-Tone Paint Layout
       if (car.type === 'police') {
@@ -5740,12 +5816,9 @@ export class GameRenderer {
       }
       if (dmg.scratches && dmg.scratches.length > 0) {
         ctx.save();
-        // Create clipping path matching the car body polygon to prevent scratches from sticking out
+        // Create clipping path matching the softbody car body polygon
         ctx.beginPath();
-        ctx.moveTo(bodyPoly[0].x, bodyPoly[0].y);
-        for (let i = 1; i < bodyPoly.length; i++) {
-          ctx.lineTo(bodyPoly[i].x, bodyPoly[i].y);
-        }
+        traceSoftbodyPath(ctx, bodyPoly, dmg.deformedVertices);
         ctx.closePath();
         ctx.clip();
 
@@ -5875,6 +5948,9 @@ export class GameRenderer {
 
     for (const car of vehicles) {
       ctx.save();
+      if (car.ghostingAlpha !== undefined) {
+        ctx.globalAlpha = car.ghostingAlpha;
+      }
       ctx.translate(car.x, car.y);
       ctx.rotate(car.angle);
 
@@ -5903,12 +5979,17 @@ export class GameRenderer {
       const basePoly = getVehicleBasePolygon(car, halfL, halfW, fc, rc, ld, rd, fld, frd, rld, rrd);
 
       let bodyPoly = basePoly;
-      if (dmg.deformedVertices && dmg.deformedVertices.length === 16) {
+      if (dmg.deformedVertices && dmg.deformedVertices.length >= basePoly.length) {
         bodyPoly = basePoly.map((bv, idx) => {
           const dv = dmg.deformedVertices![idx];
+          if (!dv) return bv;
+          const ox = isFinite(dv.offsetX) ? dv.offsetX : 0;
+          const oy = isFinite(dv.offsetY) ? dv.offsetY : 0;
+          const ex = isFinite(dv.elasticX) ? dv.elasticX : 0;
+          const ey = isFinite(dv.elasticY) ? dv.elasticY : 0;
           return {
-            x: bv.x + (dv.offsetX || 0),
-            y: bv.y + (dv.offsetY || 0)
+            x: bv.x + ox + ex,
+            y: bv.y + oy + ey
           };
         });
       }
@@ -5917,7 +5998,7 @@ export class GameRenderer {
         let totalWeight = 0;
         let dx = 0;
         let dy = 0;
-        for (let i = 0; i < 16; i++) {
+        for (let i = 0; i < 20; i++) {
           const bp = basePoly[i];
           const bvp = bodyPoly[i];
           const vx = bp.x;
@@ -6315,7 +6396,7 @@ export class GameRenderer {
     lCtx.globalCompositeOperation = 'destination-out';
 
     const getStreetLampOn = (prop: StreetProp) => {
-      if (prop.type !== 'lamp' || prop.isBroken) return false;
+      if ((prop.type !== 'lamp' && prop.type !== 'lamp_highway' && prop.type !== 'lamp_concrete') || prop.isBroken) return false;
       const lampHash = Math.sin(prop.x * 12.9898 + prop.y * 78.233) * 43758.5453;
       const randVal = lampHash - Math.floor(lampHash);
       
@@ -6487,16 +6568,52 @@ export class GameRenderer {
 
     // C. Street Lamp Cutouts
     for (const prop of props) {
-      if (getStreetLampOn(prop) && prop.x >= minX && prop.x <= maxX && prop.y >= minY && prop.y <= maxY) {
-        const lampRadius = 110 * fogFactor;
-        const lampGrad = lCtx.createRadialGradient(prop.x, prop.y, 5, prop.x, prop.y, lampRadius);
-        lampGrad.addColorStop(0, 'rgba(0, 0, 0, 1.0)');
-        lampGrad.addColorStop(0.5, 'rgba(0, 0, 0, 0.5)');
-        lampGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
-        lCtx.fillStyle = lampGrad;
-        lCtx.beginPath();
-        lCtx.arc(prop.x, prop.y, lampRadius, 0, Math.PI * 2);
-        lCtx.fill();
+      if (getStreetLampOn(prop) && prop.x >= minX - 40 && prop.x <= maxX + 40 && prop.y >= minY - 40 && prop.y <= maxY + 40) {
+        if (prop.type === 'lamp_highway') {
+          // Luminaire hangs 22px out along the cantilever arm over the driving lane
+          const angle = prop.angle || 0;
+          const lx = prop.x + Math.cos(angle) * 22;
+          const ly = prop.y + Math.sin(angle) * 22;
+
+          // Powerful wide beam covering highway traffic lane
+          const lampRadius = 140 * fogFactor;
+          const lampGrad = lCtx.createRadialGradient(lx, ly, 6, lx, ly, lampRadius);
+          lampGrad.addColorStop(0, 'rgba(0, 0, 0, 1.0)');
+          lampGrad.addColorStop(0.35, 'rgba(0, 0, 0, 0.75)');
+          lampGrad.addColorStop(0.7, 'rgba(0, 0, 0, 0.3)');
+          lampGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+          lCtx.fillStyle = lampGrad;
+          lCtx.beginPath();
+          lCtx.arc(lx, ly, lampRadius, 0, Math.PI * 2);
+          lCtx.fill();
+        } else if (prop.type === 'lamp_concrete') {
+          // Classic incandescent/sodium light centered near the vintage bell fixture
+          const angle = prop.angle || 0;
+          const lx = prop.x + Math.cos(angle) * 9;
+          const ly = prop.y + Math.sin(angle) * 9;
+
+          const lampRadius = 115 * fogFactor;
+          const lampGrad = lCtx.createRadialGradient(lx, ly, 4, lx, ly, lampRadius);
+          lampGrad.addColorStop(0, 'rgba(0, 0, 0, 0.95)');
+          lampGrad.addColorStop(0.4, 'rgba(0, 0, 0, 0.6)');
+          lampGrad.addColorStop(0.8, 'rgba(0, 0, 0, 0.2)');
+          lampGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+          lCtx.fillStyle = lampGrad;
+          lCtx.beginPath();
+          lCtx.arc(lx, ly, lampRadius, 0, Math.PI * 2);
+          lCtx.fill();
+        } else {
+          // Standard park/promenade lamp
+          const lampRadius = 110 * fogFactor;
+          const lampGrad = lCtx.createRadialGradient(prop.x, prop.y, 5, prop.x, prop.y, lampRadius);
+          lampGrad.addColorStop(0, 'rgba(0, 0, 0, 1.0)');
+          lampGrad.addColorStop(0.5, 'rgba(0, 0, 0, 0.5)');
+          lampGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+          lCtx.fillStyle = lampGrad;
+          lCtx.beginPath();
+          lCtx.arc(prop.x, prop.y, lampRadius, 0, Math.PI * 2);
+          lCtx.fill();
+        }
       }
     }
 
@@ -6606,6 +6723,12 @@ export class GameRenderer {
         }
       }
     }
+
+    // F. Gas Station Nighttime Light Cutouts
+    if (maxX >= 4800 && minX <= 5520 && maxY >= 4800 && minY <= 5520) {
+      GasStationRenderer.renderLightmapCutouts(lCtx, nightAlpha, fogFactor);
+    }
+
     lCtx.restore();
 
     // --- Apply Lightmap to Main Canvas ---
@@ -6940,6 +7063,11 @@ export class GameRenderer {
           ctx.fill();
         }
       }
+    }
+
+    // F. Gas Station Additive Glow & Optics
+    if (maxX >= 4800 && minX <= 5520 && maxY >= 4800 && minY <= 5520) {
+      GasStationRenderer.renderAdditiveGlow(ctx, nightAlpha, fogFactor);
     }
 
     ctx.restore();

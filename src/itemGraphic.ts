@@ -4,6 +4,7 @@ import { drawDrinkItem } from './graphics/drinkGraphics';
 import { drawMedicalItem } from './graphics/medicalGraphics';
 import { drawGearToolItem } from './graphics/gearToolGraphics';
 import { drawLeftoverItem } from './graphics/leftoverGraphics';
+import { drawClothingItem } from './graphics/clothingGraphics';
 import { drawShadow } from './graphics/itemGraphicShared';
 
 export function drawItemModel2D(
@@ -24,6 +25,7 @@ export function drawItemModel2D(
     drawDrinkItem(ctx, itemId) ||
     drawMedicalItem(ctx, itemId) ||
     drawGearToolItem(ctx, itemId) ||
+    drawClothingItem(ctx, itemId) ||
     drawLeftoverItem(ctx, itemId);
 
   if (!drawn) {

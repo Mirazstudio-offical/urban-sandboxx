@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { InputState } from '../types';
+import { sound } from '../audio';
 import { 
   ArrowLeft,
   ArrowRight,
@@ -138,6 +139,334 @@ const TouchButton: React.FC<TouchButtonProps> = ({
   );
 };
 
+/* Premium Compact Luxury Gear Stick Lever for Mobile Controls */
+interface GearStickLeverProps {
+  gear?: string;
+  transmissionType?: 'AUTO' | 'MANUAL';
+  onSelectGear?: (gear: 'P' | 'R' | 'N' | 'D' | number | string) => void;
+}
+
+const GearStickLever: React.FC<GearStickLeverProps> = ({
+  gear = 'D',
+  transmissionType = 'AUTO',
+  onSelectGear,
+}) => {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [isDragging, setIsDragging] = useState<boolean>(false);
+  const [dragY, setDragY] = useState<number>(0);
+  const [dragX, setDragX] = useState<number>(0);
+  const touchIdRef = useRef<number | null>(null);
+
+  const isAuto = transmissionType === 'AUTO';
+  const rawGearStr = String(gear || (isAuto ? 'D' : '1')).toUpperCase();
+
+  let currentGearKey = isAuto ? 'D' : '1';
+  if (isAuto) {
+    if (rawGearStr.startsWith('P')) currentGearKey = 'P';
+    else if (rawGearStr.startsWith('R')) currentGearKey = 'R';
+    else if (rawGearStr.startsWith('N')) currentGearKey = 'N';
+    else currentGearKey = 'D';
+  } else {
+    if (rawGearStr === 'R' || rawGearStr === '-1') currentGearKey = 'R';
+    else if (rawGearStr === 'N' || rawGearStr === '0') currentGearKey = 'N';
+    else if (['1', '2', '3', '4', '5'].includes(rawGearStr)) currentGearKey = rawGearStr;
+    else currentGearKey = '1';
+  }
+
+  const activeGearRef = useRef<string>(currentGearKey);
+
+  // Discrete notch offsets along Y-axis for Automatic (strictly dx = 0)
+  const AUTO_NOTCHES: Record<string, number> = {
+    P: -32,
+    R: -11,
+    N: 11,
+    D: 32,
+  };
+
+  // Discrete notch offsets for Manual (1, 2, 3, 4, 5, R, N)
+  const MANUAL_NOTCHES: Record<string, { x: number; y: number }> = {
+    '1': { x: -20, y: -24 },
+    '2': { x: -20, y: 24 },
+    '3': { x: 0, y: -24 },
+    '4': { x: 0, y: 24 },
+    '5': { x: 20, y: -24 },
+    'R': { x: 20, y: 24 },
+    'N': { x: 0, y: 0 },
+  };
+
+  const restingOffset = isAuto
+    ? { x: 0, y: AUTO_NOTCHES[currentGearKey] ?? 32 }
+    : (MANUAL_NOTCHES[currentGearKey] ?? { x: 0, y: 0 });
+
+  const currentOffset = isDragging
+    ? { x: isAuto ? 0 : dragX, y: dragY }
+    : restingOffset;
+
+  // Process touch / drag movement
+  const processMove = (clientX: number, clientY: number) => {
+    if (!containerRef.current) return;
+    const rect = containerRef.current.getBoundingClientRect();
+    const centerY = rect.top + rect.height / 2;
+    const centerX = rect.left + rect.width / 2;
+
+    const rawDY = clientY - centerY;
+    const rawDX = clientX - centerX;
+
+    if (isAuto) {
+      // AUTOMATIC: STRICTLY ZERO SIDEWAYS DRIFT (dx = 0)
+      // Step through discrete notch positions with mechanical clicks
+      let detectedNotch = 'D';
+      if (rawDY < -21) detectedNotch = 'P';
+      else if (rawDY < 0) detectedNotch = 'R';
+      else if (rawDY < 21) detectedNotch = 'N';
+      else detectedNotch = 'D';
+
+      setDragX(0);
+      setDragY(AUTO_NOTCHES[detectedNotch]);
+
+      if (detectedNotch !== activeGearRef.current) {
+        activeGearRef.current = detectedNotch;
+        triggerHaptic(25);
+        sound.playGearShift();
+        onSelectGear?.(detectedNotch);
+      }
+    } else {
+      // MANUAL: H-GATE GUIDED MOVEMENT
+      let clampedX = Math.max(-22, Math.min(22, rawDX));
+      let clampedY = Math.max(-26, Math.min(26, rawDY));
+
+      if (Math.abs(clampedY) > 8) {
+        if (clampedX < -10) clampedX = -20;
+        else if (clampedX > 10) clampedX = 20;
+        else clampedX = 0;
+      }
+
+      setDragX(clampedX);
+      setDragY(clampedY);
+
+      let detectedNotch = 'N';
+      if (Math.hypot(clampedX, clampedY) < 10) {
+        detectedNotch = 'N';
+      } else if (clampedX < -10) {
+        detectedNotch = clampedY < 0 ? '1' : '2';
+      } else if (clampedX > 10) {
+        detectedNotch = clampedY < 0 ? '5' : 'R';
+      } else {
+        detectedNotch = clampedY < 0 ? '3' : '4';
+      }
+
+      if (detectedNotch !== activeGearRef.current) {
+        activeGearRef.current = detectedNotch;
+        triggerHaptic(22);
+        sound.playGearShift();
+        if (onSelectGear) {
+          if (detectedNotch === 'R') onSelectGear('R');
+          else if (detectedNotch === 'N') onSelectGear('N');
+          else onSelectGear(Number(detectedNotch));
+        }
+      }
+    }
+  };
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    e.preventDefault();
+    if (touchIdRef.current !== null) return;
+    const touch = e.changedTouches[0];
+    touchIdRef.current = touch.identifier;
+    setIsDragging(true);
+    triggerHaptic(15);
+    processMove(touch.clientX, touch.clientY);
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    e.preventDefault();
+    if (touchIdRef.current === null) return;
+    for (let i = 0; i < e.changedTouches.length; i++) {
+      if (e.changedTouches[i].identifier === touchIdRef.current) {
+        processMove(e.changedTouches[i].clientX, e.changedTouches[i].clientY);
+        break;
+      }
+    }
+  };
+
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    e.preventDefault();
+    if (touchIdRef.current === null) return;
+    for (let i = 0; i < e.changedTouches.length; i++) {
+      if (e.changedTouches[i].identifier === touchIdRef.current) {
+        touchIdRef.current = null;
+        setIsDragging(false);
+        triggerHaptic(10);
+        break;
+      }
+    }
+  };
+
+  const handleMouseDown = (e: React.MouseEvent) => {
+    e.preventDefault();
+    setIsDragging(true);
+    triggerHaptic(15);
+    processMove(e.clientX, e.clientY);
+
+    const handleMouseMove = (me: MouseEvent) => {
+      processMove(me.clientX, me.clientY);
+    };
+
+    const handleMouseUp = () => {
+      setIsDragging(false);
+      triggerHaptic(10);
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+  };
+
+  // Dimensions for compact luxury console
+  const boxW = 84;
+  const boxH = 120;
+  const cx = boxW / 2;
+  const cy = boxH / 2;
+
+  const knobX = cx + currentOffset.x;
+  const knobY = cy + currentOffset.y;
+
+  const tiltY = (-currentOffset.y / 32) * 28;
+  const tiltX = (currentOffset.x / 22) * 22;
+
+  return (
+    <div
+      ref={containerRef}
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
+      onTouchEnd={handleTouchEnd}
+      onTouchCancel={handleTouchEnd}
+      onMouseDown={handleMouseDown}
+      className="relative w-[72px] h-[110px] bg-transparent select-none touch-none flex items-center justify-center pointer-events-auto cursor-grab active:cursor-grabbing shrink-0 my-auto"
+      title="Ручка КПП (переключайте режимы свайпом)"
+    >
+      {/* AUTOMATIC OR MANUAL FLOATING GUIDE SLOTS */}
+      {isAuto ? (
+        /* AUTOMATIC VERTICAL GUIDE LINE & SUBTLE LED DOTS */
+        <div className="absolute inset-y-3 w-0.5 bg-slate-800/60 rounded-full flex flex-col justify-between items-center py-1.5 pointer-events-none">
+          <div className={`w-1.5 h-1.5 rounded-full transition-all ${currentGearKey === 'P' ? 'bg-red-500 shadow-[0_0_8px_#ef4444] scale-125' : 'bg-slate-700/60'}`} />
+          <div className={`w-1.5 h-1.5 rounded-full transition-all ${currentGearKey === 'R' ? 'bg-amber-400 shadow-[0_0_8px_#f59e0b] scale-125' : 'bg-slate-700/60'}`} />
+          <div className={`w-1.5 h-1.5 rounded-full transition-all ${currentGearKey === 'N' ? 'bg-slate-200 shadow-[0_0_8px_#ffffff] scale-125' : 'bg-slate-700/60'}`} />
+          <div className={`w-1.5 h-1.5 rounded-full transition-all ${currentGearKey === 'D' ? 'bg-sky-400 shadow-[0_0_8px_#38bdf8] scale-125' : 'bg-slate-700/60'}`} />
+        </div>
+      ) : (
+        /* MANUAL SUBTLE H-GATE GUIDE LINES */
+        <svg className="absolute inset-0 w-full h-full pointer-events-none opacity-30">
+          <line x1={cx - 20} y1={cy - 24} x2={cx - 20} y2={cy + 24} stroke="#cbd5e1" strokeWidth="1.5" strokeDasharray="2 2" strokeLinecap="round" />
+          <line x1={cx} y1={cy - 24} x2={cx} y2={cy + 24} stroke="#cbd5e1" strokeWidth="1.5" strokeDasharray="2 2" strokeLinecap="round" />
+          <line x1={cx + 20} y1={cy - 24} x2={cx + 20} y2={cy + 24} stroke="#cbd5e1" strokeWidth="1.5" strokeDasharray="2 2" strokeLinecap="round" />
+          <line x1={cx - 20} y1={cy} x2={cx + 20} y2={cy} stroke="#cbd5e1" strokeWidth="1.5" strokeDasharray="2 2" strokeLinecap="round" />
+        </svg>
+      )}
+
+      {/* METALLIC SHAFT & ROUND LEATHER BASE GAITER COLLAR */}
+      <svg className="absolute inset-0 w-full h-full pointer-events-none z-10 overflow-visible">
+        <defs>
+          <linearGradient id="chromeShaft_v2" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stopColor="#cbd5e1" />
+            <stop offset="35%" stopColor="#ffffff" />
+            <stop offset="65%" stopColor="#475569" />
+            <stop offset="100%" stopColor="#0f172a" />
+          </linearGradient>
+
+          <radialGradient id="gaiterShadow" cx="50%" cy="50%" r="50%">
+            <stop offset="0%" stopColor="#0f172a" stopOpacity="0.95" />
+            <stop offset="70%" stopColor="#020617" stopOpacity="0.8" />
+            <stop offset="100%" stopColor="#000000" stopOpacity="0" />
+          </radialGradient>
+        </defs>
+
+        {/* Circular Leather Gaiter Base Collar */}
+        <ellipse cx={cx} cy={cy} rx={18} ry={12} fill="url(#gaiterShadow)" stroke="#334155" strokeWidth="1.2" />
+        <ellipse cx={cx} cy={cy} rx={12} ry={8} fill="#0f172a" stroke="#1e293b" strokeWidth="1" />
+
+        {/* Solid Chrome Rod from Pivot (cx, cy) to Knob Base (knobX, knobY) */}
+        <line
+          x1={cx}
+          y1={cy}
+          x2={knobX}
+          y2={knobY}
+          stroke="url(#chromeShaft_v2)"
+          strokeWidth="7"
+          strokeLinecap="round"
+        />
+        <line
+          x1={cx}
+          y1={cy}
+          x2={knobX}
+          y2={knobY}
+          stroke="#ffffff"
+          strokeWidth="1.8"
+          strokeLinecap="round"
+          opacity="0.9"
+        />
+      </svg>
+
+      {/* REALISTIC LUXURY SHIFT KNOB / HANDLE WITH ENGRAVED DIAGRAM */}
+      <div
+        className="absolute z-20 pointer-events-none"
+        style={{
+          left: `${knobX}px`,
+          top: `${knobY}px`,
+          transform: `translate(-50%, -50%) perspective(260px) rotateX(${tiltY}deg) rotateY(${tiltX}deg)`,
+          transition: isDragging ? 'none' : 'transform 0.18s cubic-bezier(0.175, 0.885, 0.32, 1.25), left 0.18s cubic-bezier(0.175, 0.885, 0.32, 1.25), top 0.18s cubic-bezier(0.175, 0.885, 0.32, 1.25)',
+        }}
+      >
+        {/* Ergonomic Leather Shift Knob Body */}
+        <div className="w-13 h-13 rounded-full bg-slate-950 border-2 border-slate-400 shadow-[0_8px_22px_rgba(0,0,0,0.95)] flex items-center justify-center relative overflow-hidden bg-gradient-to-br from-slate-800 via-slate-900 to-black">
+          
+          {/* Perforated Leather Grip Texture & Stitching Details */}
+          <div className="absolute inset-0 rounded-full opacity-40 bg-[radial-gradient(#ffffff_0.8px,transparent_0.8px)] [background-size:5px_5px] pointer-events-none" />
+          <div className="absolute inset-0.5 rounded-full border border-dashed border-slate-500/50 pointer-events-none" />
+
+          {/* Brushed Chrome / Metallic Top Cap Insert */}
+          <div className="w-9 h-9 rounded-full bg-gradient-to-b from-slate-200 via-slate-400 to-slate-800 p-0.5 border border-slate-300 shadow-md flex items-center justify-center">
+            <div className="w-full h-full rounded-full bg-slate-950 flex flex-col items-center justify-center relative overflow-hidden p-0.5">
+              
+              {/* ENGRAVED GEAR SHIFT DIAGRAM ON TOP OF KNOB */}
+              {isAuto ? (
+                /* AUTOMATIC: VERTICAL ENGRAVED PRND SCHEMA ON KNOB CAP */
+                <div className="flex flex-col items-center justify-center leading-none tracking-tighter font-mono text-[8px] font-black py-0.5">
+                  <span className={currentGearKey === 'P' ? 'text-red-500 scale-125 font-black drop-shadow-[0_0_4px_#ef4444]' : 'text-slate-500'}>P</span>
+                  <span className={currentGearKey === 'R' ? 'text-amber-400 scale-125 font-black drop-shadow-[0_0_4px_#f59e0b]' : 'text-slate-500'}>R</span>
+                  <span className={currentGearKey === 'N' ? 'text-slate-100 scale-125 font-black drop-shadow-[0_0_4px_#ffffff]' : 'text-slate-500'}>N</span>
+                  <span className={currentGearKey === 'D' ? 'text-sky-400 scale-125 font-black drop-shadow-[0_0_4px_#38bdf8]' : 'text-slate-500'}>D</span>
+                </div>
+              ) : (
+                /* MANUAL: ETCHED H-PATTERN SHIFT DIAGRAM ON KNOB CAP */
+                <div className="flex flex-col items-center justify-center w-full h-full text-[7px] font-mono font-black text-slate-400 leading-none py-0.5">
+                  <div className="flex justify-between w-full px-1">
+                    <span className={currentGearKey === '1' ? 'text-sky-400 font-black scale-125' : ''}>1</span>
+                    <span className={currentGearKey === '3' ? 'text-sky-400 font-black scale-125' : ''}>3</span>
+                    <span className={currentGearKey === '5' ? 'text-sky-400 font-black scale-125' : ''}>5</span>
+                  </div>
+                  <div className="w-full my-[1px] flex items-center justify-center">
+                    <div className="w-5 h-[1px] bg-slate-500/80" />
+                  </div>
+                  <div className="flex justify-between w-full px-1">
+                    <span className={currentGearKey === '2' ? 'text-sky-400 font-black scale-125' : ''}>2</span>
+                    <span className={currentGearKey === '4' ? 'text-sky-400 font-black scale-125' : ''}>4</span>
+                    <span className={currentGearKey === 'R' ? 'text-amber-400 font-black scale-125' : ''}>R</span>
+                  </div>
+                </div>
+              )}
+
+              {/* Glossy Curved Glass Lens Reflection */}
+              <div className="absolute top-0 left-0 right-0 h-1/2 bg-gradient-to-b from-white/35 to-transparent rounded-t-full pointer-events-none" />
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 export const MobileTouchControls: React.FC<MobileTouchControlsProps> = ({
   inputRef,
   isInVehicle,
@@ -243,66 +572,29 @@ export const MobileTouchControls: React.FC<MobileTouchControlsProps> = ({
   return (
     <div id="mobile-touch-overlay" className="fixed inset-0 pointer-events-none z-30 select-none overflow-hidden touch-none font-mono">
       
-      {/* TOP FLOATING TOUCH TOOLBAR */}
-      <div className="absolute top-3 left-3 right-3 flex items-center justify-between pointer-events-auto z-40">
-        {/* Left Toolbar is empty now to keep corners clean */}
-        <div />
-
-        {/* Right Toolbar: Zoom & Options */}
-        <div className="flex items-center gap-1.5">
-          <div className="flex bg-slate-950/95 backdrop-blur-md border border-slate-700/80 rounded-lg p-0.5 shadow-lg">
-            <button
-              type="button"
-              onClick={onZoomIn}
-              className="w-8 h-8 flex items-center justify-center text-slate-300 active:bg-slate-800 rounded transition-all"
-            >
-              <ZoomIn className="w-3.5 h-3.5" />
-            </button>
-            <div className="w-[1px] bg-slate-800 my-1" />
-            <button
-              type="button"
-              onClick={onZoomOut}
-              className="w-8 h-8 flex items-center justify-center text-slate-300 active:bg-slate-800 rounded transition-all"
-            >
-              <ZoomOut className="w-3.5 h-3.5" />
-            </button>
-          </div>
-
-          <button
-            type="button"
-            onClick={onToggleConsole}
-            className="h-9 w-9 bg-slate-950/95 backdrop-blur-md border border-slate-700/80 rounded-lg text-slate-300 active:bg-slate-800 active:text-white flex items-center justify-center shadow-lg transition-all"
-          >
-            <Zap className="w-3.5 h-3.5" />
-          </button>
-        </div>
-      </div>
-
-      {/* LEFT SIDE ACTION BUTTONS (F & E) ALWAYS UNDER THE HUD-TOP-LEFT, ABOVE MOVEMENT */}
-      <div className="absolute top-[84px] left-4 flex flex-col gap-3 pointer-events-auto z-50">
+      {/* LEFT SIDE ACTION BUTTONS (F & E) SAFELY BELOW TOP-LEFT HUD */}
+      <div className="absolute top-[60px] left-3 flex flex-col gap-2 pointer-events-auto z-30">
         {/* Unified F Button (Enter/Exit/Doors) */}
         <button
           type="button"
-          disabled={!canInteractF}
           onClick={() => {
             triggerHaptic(20);
             onEnterExitVehicle();
           }}
-          className={`w-14 h-14 rounded-full border flex flex-col items-center justify-center shadow-2xl transition-all active:scale-90 ${
+          className={`w-12 h-12 rounded-2xl border flex flex-col items-center justify-center shadow-xl transition-all active:scale-90 cursor-pointer ${
             canInteractF
-              ? 'bg-[#ccff00] text-black border-[#ccff00] shadow-[0_0_15px_rgba(204,255,0,0.5)] font-black scale-100'
-              : 'bg-slate-950/40 text-slate-600 border-slate-800/60 opacity-30 cursor-not-allowed'
+              ? 'bg-[#ccff00] text-black border-[#ccff00] shadow-[0_0_15px_rgba(204,255,0,0.4)] font-black'
+              : 'bg-slate-900/80 text-slate-400 border-slate-700/80 hover:border-slate-500'
           }`}
-          title="Действие F (Вход/Выход)"
+          title="Действие F (Вход/Выход из транспорта или здания)"
         >
-          <span className="text-base font-black tracking-tighter leading-none">F</span>
-          <span className="text-[9px] font-bold text-black uppercase mt-0.5">Вход/Выход</span>
+          <span className="text-sm font-black tracking-tighter leading-none">F</span>
+          <span className="text-[8px] font-bold uppercase mt-0.5 opacity-90">Вход</span>
         </button>
 
         {/* Unified E Button (Use/Interact/Pickup/Shop) */}
         <button
           type="button"
-          disabled={!canInteractE}
           onPointerDown={() => {
             triggerHaptic(15);
             inputRef.current.actionE = true;
@@ -314,15 +606,20 @@ export const MobileTouchControls: React.FC<MobileTouchControlsProps> = ({
           onPointerCancel={() => {
             inputRef.current.actionE = false;
           }}
-          className={`w-14 h-14 rounded-full border flex flex-col items-center justify-center shadow-2xl transition-all active:scale-90 ${
+          onTouchEnd={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            inputRef.current.actionE = false;
+          }}
+          className={`w-12 h-12 rounded-2xl border flex flex-col items-center justify-center shadow-xl transition-all active:scale-90 cursor-pointer ${
             canInteractE
-              ? 'bg-sky-500 text-white border-sky-400 shadow-[0_0_15px_rgba(14,165,233,0.5)] font-black scale-100'
-              : 'bg-slate-950/40 text-slate-600 border-slate-800/60 opacity-30 cursor-not-allowed'
+              ? 'bg-sky-500 text-white border-sky-400 shadow-[0_0_15px_rgba(14,165,233,0.4)] font-black'
+              : 'bg-slate-900/80 text-slate-400 border-slate-700/80 hover:border-slate-500'
           }`}
-          title="Действие E (Взаимодействие)"
+          title="Действие E (Взаимодействие / Использовать предмет)"
         >
-          <span className="text-base font-black tracking-tighter leading-none">E</span>
-          <span className="text-[9px] font-bold text-sky-100 uppercase mt-0.5">Применить</span>
+          <span className="text-sm font-black tracking-tighter leading-none">E</span>
+          <span className="text-[8px] font-bold uppercase mt-0.5 opacity-90">Действие</span>
         </button>
       </div>
 
@@ -480,60 +777,12 @@ export const MobileTouchControls: React.FC<MobileTouchControlsProps> = ({
         {isInVehicle ? (
           /* VEHICLE DRIVING PEDALS & HANDBRAKE */
           <div className="flex items-end gap-1.5 sm:gap-2">
-            {/* PRND OR MANUAL GEAR SELECTOR */}
-            {transmissionType === 'AUTO' ? (
-              <div className="flex flex-col gap-1 mr-1 mb-0.5">
-                {(['P', 'R', 'N', 'D'] as const).map((mode) => {
-                  const isSelected = (gear || 'D').toUpperCase().startsWith(mode);
-                  const colorClass = {
-                    P: isSelected ? 'bg-red-600 text-white font-black shadow-[0_0_10px_rgba(239,68,68,0.7)] border-red-400' : 'bg-slate-950/90 text-slate-400 border-slate-700 active:bg-slate-800',
-                    R: isSelected ? 'bg-amber-500 text-black font-black shadow-[0_0_10px_rgba(245,158,11,0.7)] border-amber-300' : 'bg-slate-950/90 text-slate-400 border-slate-700 active:bg-slate-800',
-                    N: isSelected ? 'bg-slate-200 text-slate-950 font-black shadow-[0_0_8px_rgba(255,255,255,0.6)] border-slate-300' : 'bg-slate-950/90 text-slate-400 border-slate-700 active:bg-slate-800',
-                    D: isSelected ? 'bg-sky-500 text-white font-black shadow-[0_0_10px_rgba(14,165,233,0.7)] border-sky-300' : 'bg-slate-950/90 text-slate-400 border-slate-700 active:bg-slate-800',
-                  }[mode];
-
-                  return (
-                    <button
-                      key={mode}
-                      type="button"
-                      onPointerDown={(e) => {
-                        e.preventDefault();
-                        triggerHaptic(20);
-                        onSelectGear?.(mode);
-                      }}
-                      className={`w-10 h-8 rounded-lg border flex items-center justify-center text-xs font-mono font-bold transition-all active:scale-95 ${colorClass}`}
-                      title={`Режим ${mode}`}
-                    >
-                      {mode}
-                    </button>
-                  );
-                })}
-              </div>
-            ) : (
-              <div className="flex flex-col gap-1.5 mr-1 mb-1">
-                <TouchButton
-                  inputKey="shiftUp"
-                  inputRef={inputRef}
-                  hapticMs={15}
-                  className="w-12 h-10 bg-slate-950/95 border border-slate-700 text-slate-300 rounded-lg flex items-center justify-center shadow-xl active:bg-slate-800"
-                  activeClassName="bg-slate-800 text-white border-slate-500"
-                >
-                  <ChevronUp className="w-5 h-5 text-slate-400" />
-                </TouchButton>
-                <div className="text-center font-mono text-[11px] font-bold text-sky-400">
-                  {gear || '1'}
-                </div>
-                <TouchButton
-                  inputKey="shiftDown"
-                  inputRef={inputRef}
-                  hapticMs={15}
-                  className="w-12 h-10 bg-slate-950/95 border border-slate-700 text-slate-300 rounded-lg flex items-center justify-center shadow-xl active:bg-slate-800"
-                  activeClassName="bg-slate-800 text-white border-slate-500"
-                >
-                  <ChevronDown className="w-5 h-5 text-slate-400" />
-                </TouchButton>
-              </div>
-            )}
+            {/* PHYSICAL TILTING GEAR STICK LEVER */}
+            <GearStickLever
+              gear={gear}
+              transmissionType={transmissionType}
+              onSelectGear={onSelectGear}
+            />
 
             {/* DRIFT / HANDBRAKE */}
             <TouchButton

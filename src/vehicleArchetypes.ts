@@ -23,7 +23,7 @@ export interface VehicleRenderContext {
  * Supercar with wedge nose & wide hips, Muscle car with broad front & flared rear quarters,
  * Boxy 4x4, Van, Microcar, etc.)
  */
-export function getVehicleBasePolygon(
+function getVehicleBasePolygonRaw(
   car: Vehicle,
   halfL: number,
   halfW: number,
@@ -707,4 +707,20 @@ export function renderVehicleGreenhouseAndBodyPanels(vCtx: VehicleRenderContext)
   const sideWinH = (cabinW - roofW) / 2 - 0.5;
   drawDeformedRect(roofX - roofL / 2, -cabinW / 2 + 0.5, roofL, sideWinH, 'rgba(56, 189, 248, 0.08)');
   drawDeformedRect(roofX - roofL / 2, roofW / 2, roofL, sideWinH, 'rgba(56, 189, 248, 0.08)');
+}
+
+export function getVehicleBasePolygon(car: Vehicle, halfL: number, halfW: number, fc: number, rc: number, ld: number, rd: number, fld: number, frd: number, rld: number, rrd: number): { x: number; y: number }[] {
+  const poly = getVehicleBasePolygonRaw(car, halfL, halfW, fc, rc, ld, rd, fld, frd, rld, rrd);
+  const newPoly: {x: number, y: number}[] = [];
+  for (let i = 0; i < poly.length; i++) {
+    newPoly.push(poly[i]);
+    if (i === 15 || i === 0 || i === 7 || i === 8) {
+      const nextIdx = (i + 1) % poly.length;
+      newPoly.push({
+        x: (poly[i].x + poly[nextIdx].x) / 2,
+        y: (poly[i].y + poly[nextIdx].y) / 2
+      });
+    }
+  }
+  return newPoly;
 }

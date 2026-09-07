@@ -37,6 +37,7 @@ export interface ItemDefinition {
     sleepiness?: number;
   };
   weight: number;
+  volume?: number;             // Physical volume in Liters (L)
   usable: boolean;
   biteCount?: number;          // number of bites/sips to finish (multi-step consumption)
   biteDuration?: number;       // seconds per bite
@@ -44,6 +45,11 @@ export interface ItemDefinition {
   leftoverNameRu?: string;
   tasteMessages?: string[];    // random taste sensations shown while eating
   fullnessPerBite?: number;    // how much fullness each bite adds
+  isContainer?: boolean;
+  containerCapacityL?: number;
+  maxContainedItemVolumeL?: number;
+  maxContainedWeightKg?: number;
+  allowedItemCategories?: ItemCategory[];
 }
 
 export const ITEM_CATALOG: Record<string, ItemDefinition> = {
@@ -328,6 +334,24 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     leftoverNameRu: 'Пустой блистер из-под таблеток',
     tasteMessages: ['Таблетка обезболивающего запита водой...', 'Боль постепенно притупляется...', 'Мышечный спазм отпускает...', 'Лекарство начинает действовать...']
   },
+  morphine: {
+    itemId: 'morphine',
+    name: 'Morphine Ampoule',
+    nameRu: 'Ампула с морфином',
+    category: 'med',
+    maxStack: 5,
+    icon: '💉',
+    description: 'Powerful clinical analgesic for extreme pain, fractures, and severe trauma.',
+    descriptionRu: 'Сильнодействующий рецептурный анальгетик для купирования острой боли, переломов и тяжелых травм.',
+    effects: { health: 30, energy: 20, sleepiness: 15 },
+    weight: 0.05,
+    usable: true,
+    biteCount: 1,
+    biteDuration: 1.2,
+    leftoverId: 'pill_pack',
+    leftoverNameRu: 'Пустая ампула от анальгетика',
+    tasteMessages: ['Введение сильнодействующего анальгетика...', 'Острая боль стремительно угасает...', 'Тепло разливается по телу, снимая болевой шок...']
+  },
   vitamins: {
     itemId: 'vitamins',
     name: 'Multivitamin Complex',
@@ -542,6 +566,43 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
   },
 
   // === TOOLS & VALUABLES (ИНСТРУМЕНТЫ И ЦЕННОСТИ) ===
+  wallet: {
+    itemId: 'wallet',
+    name: 'Leather Wallet',
+    nameRu: 'Кожаный бумажник',
+    category: 'valuable',
+    maxStack: 1,
+    icon: '👛',
+    description: 'Bifold leather wallet. Stores banknotes, coins, and small papers without cluttering pockets.',
+    descriptionRu: 'Компактный кожаный кошелек. Вмещает банкноты, монеты и мелочь, освобождая карманы.',
+    effects: {},
+    weight: 0.12,
+    volume: 0.35,
+    usable: false,
+    isContainer: true,
+    containerCapacityL: 0.8,
+    maxContainedItemVolumeL: 0.1,
+    maxContainedWeightKg: 2.5,
+    allowedItemCategories: ['valuable', 'misc']
+  },
+  plastic_bag: {
+    itemId: 'plastic_bag',
+    name: 'Plastic Shopping Bag',
+    nameRu: 'Пакет "Майка"',
+    category: 'misc',
+    maxStack: 1,
+    icon: '🛍️',
+    description: 'Durable white plastic bag for carrying bulky groceries, auto parts and supplies.',
+    descriptionRu: 'Белый полиэтиленовый пакет "майка" с ручками для покупок и габаритных предметов.',
+    effects: {},
+    weight: 0.02,
+    volume: 0.08,
+    usable: false,
+    isContainer: true,
+    containerCapacityL: 18.0,
+    maxContainedItemVolumeL: 14.0,
+    maxContainedWeightKg: 12.0
+  },
   cash: {
     itemId: 'cash',
     name: 'Banknotes Cash ($)',
@@ -1235,14 +1296,14 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     itemId: 'sneakers',
     name: 'Athletic Running Sneakers',
     nameRu: 'Кроссовки "Urban Sprint"',
-    category: 'misc',
+    category: 'clothing',
     maxStack: 1,
     icon: '👟',
     description: 'Lightweight cushioned shoes for fast sprinting and comfort.',
     descriptionRu: 'Легкие кроссовки с амортизацией для быстрого бега по асфальту.',
     effects: {},
     weight: 0.6,
-    usable: false
+    usable: true
   },
   sunglasses: {
     itemId: 'sunglasses',
@@ -1261,14 +1322,19 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     itemId: 'backpack_travel',
     name: 'Urban Tactical Backpack',
     nameRu: 'Городской рюкзак (35L)',
-    category: 'misc',
+    category: 'clothing',
     maxStack: 1,
     icon: '🎒',
     description: 'Heavy duty waterproof backpack with reinforced straps.',
     descriptionRu: 'Вместительный прочный рюкзак с водоотталкивающей пропиткой.',
     effects: {},
     weight: 0.8,
-    usable: false
+    volume: 3.0,
+    usable: true,
+    isContainer: true,
+    containerCapacityL: 35.0,
+    maxContainedItemVolumeL: 22.0,
+    maxContainedWeightKg: 30.0
   },
   military_ration: {
     itemId: 'military_ration',
@@ -1324,12 +1390,13 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     name: 'Gasoline Canister (20L)',
     nameRu: 'Канистра с бензином (20л)',
     category: 'tool',
-    maxStack: 2,
+    maxStack: 1,
     icon: '⛽',
-    description: 'Metal canister filled with A-95 gasoline (20 portions). Use to pour fuel puddles or refuel vehicles.',
-    descriptionRu: 'Металлическая канистра с бензином АИ-95 (20 порций/литров). Разливает лужи бензина на землю или заправляет автомобили.',
+    description: 'Heavy metal canister filled with A-95 gasoline (20L). Heavy and bulky: must be carried in hand or vehicle trunk.',
+    descriptionRu: 'Тяжелая металлическая канистра с бензином АИ-95 (20л). Слишком крупная для рюкзака — переносится в руке.',
     effects: {},
-    weight: 15.0,
+    weight: 16.5,
+    volume: 20.0,
     usable: true,
     biteCount: 20,
     biteDuration: 0.3,
@@ -1341,12 +1408,43 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     name: 'Empty Canister (20L)',
     nameRu: 'Пустая канистра (20л)',
     category: 'misc',
-    maxStack: 4,
+    maxStack: 1,
     icon: '🛢️',
-    description: 'Empty metal fuel canister.',
-    descriptionRu: 'Пустая металлическая канистра из-под бензина.',
+    description: 'Empty 20-liter metal canister. Bulky item carried in hand.',
+    descriptionRu: 'Пустая металлическая 20-литровая канистра. Переносится в руках.',
     effects: {},
     weight: 2.5,
+    volume: 20.0,
+    usable: false
+  },
+  sandbag: {
+    itemId: 'sandbag',
+    name: 'Bag of Sand (1kg)',
+    nameRu: 'Мешок песка (1 кг)',
+    category: 'tool',
+    maxStack: 5,
+    icon: '⏳',
+    description: 'Burlap sack with 1 kg of silica sand. Extinguishes small flames and absorbs fuel, oil, and antifreeze spills.',
+    descriptionRu: 'Мешок с просеянным песком (1 кг). При активации рассыпает песок перед собой, высушивая пятна бензина, масла, антифриза и туша пламя.',
+    effects: {},
+    weight: 1.0,
+    volume: 0.8,
+    usable: true,
+    leftoverId: 'sack_empty',
+    leftoverNameRu: 'Пустой мешок'
+  },
+  sack_empty: {
+    itemId: 'sack_empty',
+    name: 'Empty Sack',
+    nameRu: 'Пустой мешок',
+    category: 'tool',
+    maxStack: 10,
+    icon: '🎒',
+    description: 'Empty heavy canvas burlap bag. Light and durable. Used for storage or as scrap canvas.',
+    descriptionRu: 'Прочный пустой мешок из сурового брезента. Легкий и надежный.',
+    effects: {},
+    weight: 0.15,
+    volume: 0.3,
     usable: false
   },
   camp_flask: {
@@ -1446,6 +1544,32 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     descriptionRu: 'Охлаждающая жидкость для радиатора. Предотвращает перегрев двигателя.',
     effects: {},
     weight: 5.2,
+    usable: false
+  },
+  antifreeze_empty: {
+    itemId: 'antifreeze_empty',
+    name: 'Empty Coolant Canister',
+    nameRu: 'Пустая канистра от антифриза',
+    category: 'misc',
+    maxStack: 4,
+    icon: '🛢️',
+    description: 'Empty plastic canister for G12+ antifreeze.',
+    descriptionRu: 'Пустая пластиковая канистра из-под антифриза.',
+    effects: {},
+    weight: 0.3,
+    usable: false
+  },
+  motor_oil_empty: {
+    itemId: 'motor_oil_empty',
+    name: 'Empty Oil Canister',
+    nameRu: 'Пустая канистра из-под масла',
+    category: 'misc',
+    maxStack: 4,
+    icon: '🛢️',
+    description: 'Empty plastic canister from engine oil.',
+    descriptionRu: 'Пустая пластиковая канистра из-под моторного масла.',
+    effects: {},
+    weight: 0.25,
     usable: false
   },
   tow_rope: {
@@ -1845,14 +1969,14 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     itemId: 'thermal_coat',
     name: 'Thermal Coat',
     nameRu: 'Термокуртка "Arctix"',
-    category: 'misc',
+    category: 'clothing',
     maxStack: 1,
     icon: '🧥',
     description: 'Heavy duty windproof and insulated coat to keep you warm.',
     descriptionRu: 'Плотная ветрозащитная куртка с утеплителем для защиты от холода.',
     effects: {},
     weight: 1.5,
-    usable: false
+    usable: true
   },
   duct_tape: {
     itemId: 'duct_tape',
@@ -1878,11 +2002,16 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     category: 'clothing',
     maxStack: 1,
     icon: '🎒',
-    description: 'Increases inventory space.',
-    descriptionRu: 'Увеличивает вместимость инвентаря.',
+    description: 'Rugged canvas backpack (28L capacity). Carries large and bulky items.',
+    descriptionRu: 'Вместительный брезентовый рюкзак на 28 литров для переноски вещей и припасов.',
     effects: {},
-    weight: 0.5,
+    weight: 0.8,
+    volume: 2.5,
     usable: true,
+    isContainer: true,
+    containerCapacityL: 28.0,
+    maxContainedItemVolumeL: 18.0,
+    maxContainedWeightKg: 25.0
   },
   beanie_black: {
     itemId: 'beanie_black',
@@ -2205,7 +2334,7 @@ let itemCounter = 100;
 
 export const CLOTHING_STATS: Record<string, import('./types').ClothingStats> = {
   
-  backpack: { slot: 'back', layer: 'outerwear', insulation: 5, windResistance: 5, waterResistance: 5, breathability: 90, mobilityPenalty: 2, color: '#4a5568' },
+  backpack: { slot: 'back', layer: 'outerwear', insulation: 5, windResistance: 5, waterResistance: 5, breathability: 90, mobilityPenalty: 2, color: '#4a5568', pocketCapacityL: 28.0, maxPocketItemVolumeL: 18.0, maxPocketWeightKg: 25.0 },
   beanie_black: { slot: 'head', layer: 'outerwear', insulation: 30, windResistance: 20, waterResistance: 10, breathability: 40, mobilityPenalty: 2, color: '#222' },
   cap_red: { slot: 'head', layer: 'outerwear', insulation: 5, windResistance: 5, waterResistance: 5, breathability: 60, mobilityPenalty: 0, color: '#e53e3e' },
   ushanka_hat: { slot: 'head', layer: 'outerwear', insulation: 70, windResistance: 80, waterResistance: 30, breathability: 20, mobilityPenalty: 5, color: '#5a4d41' },
@@ -2217,16 +2346,16 @@ export const CLOTHING_STATS: Record<string, import('./types').ClothingStats> = {
   tshirt_black: { slot: 'torso', layer: 'underwear', insulation: 10, windResistance: 5, waterResistance: 0, breathability: 80, mobilityPenalty: 1, color: '#1a202c' },
   long_johns: { slot: 'legs', layer: 'underwear', insulation: 40, windResistance: 10, waterResistance: 5, breathability: 60, mobilityPenalty: 3, color: '#e2e8f0' },
 
-  sweater_blue: { slot: 'torso', layer: 'shirt', insulation: 45, windResistance: 15, waterResistance: 10, breathability: 40, mobilityPenalty: 5, color: '#2b6cb0' },
-  plaid_shirt: { slot: 'torso', layer: 'shirt', insulation: 20, windResistance: 10, waterResistance: 5, breathability: 60, mobilityPenalty: 2, color: '#c53030', secondaryColor: '#2d3748' },
+  sweater_blue: { slot: 'torso', layer: 'shirt', insulation: 45, windResistance: 15, waterResistance: 10, breathability: 40, mobilityPenalty: 5, color: '#2b6cb0', pocketCapacityL: 1.2, maxPocketItemVolumeL: 0.4, maxPocketWeightKg: 1.5 },
+  plaid_shirt: { slot: 'torso', layer: 'shirt', insulation: 20, windResistance: 10, waterResistance: 5, breathability: 60, mobilityPenalty: 2, color: '#c53030', secondaryColor: '#2d3748', pocketCapacityL: 0.5, maxPocketItemVolumeL: 0.25, maxPocketWeightKg: 0.8 },
 
-  leather_jacket: { slot: 'torso', layer: 'jacket', insulation: 30, windResistance: 90, waterResistance: 60, breathability: 15, mobilityPenalty: 10, color: '#4a3f35' },
-  winter_jacket: { slot: 'torso', layer: 'jacket', insulation: 90, windResistance: 80, waterResistance: 70, breathability: 20, mobilityPenalty: 20, color: '#2b6cb0' },
-  raincoat_yellow: { slot: 'torso', layer: 'outerwear', insulation: 10, windResistance: 100, waterResistance: 100, breathability: 5, mobilityPenalty: 5, color: '#ecc94b' },
+  leather_jacket: { slot: 'torso', layer: 'jacket', insulation: 30, windResistance: 90, waterResistance: 60, breathability: 15, mobilityPenalty: 10, color: '#4a3f35', pocketCapacityL: 3.5, maxPocketItemVolumeL: 0.8, maxPocketWeightKg: 4.0 },
+  winter_jacket: { slot: 'torso', layer: 'jacket', insulation: 90, windResistance: 80, waterResistance: 70, breathability: 20, mobilityPenalty: 20, color: '#2b6cb0', pocketCapacityL: 4.5, maxPocketItemVolumeL: 1.0, maxPocketWeightKg: 5.0 },
+  raincoat_yellow: { slot: 'torso', layer: 'outerwear', insulation: 10, windResistance: 100, waterResistance: 100, breathability: 5, mobilityPenalty: 5, color: '#ecc94b', pocketCapacityL: 2.0, maxPocketItemVolumeL: 0.6, maxPocketWeightKg: 2.5 },
 
-  jeans_blue: { slot: 'legs', layer: 'shirt', insulation: 20, windResistance: 30, waterResistance: 10, breathability: 50, mobilityPenalty: 5, color: '#2b6cb0' },
-  cargo_pants: { slot: 'legs', layer: 'shirt', insulation: 25, windResistance: 40, waterResistance: 20, breathability: 45, mobilityPenalty: 6, color: '#718096' },
-  shorts_khaki: { slot: 'legs', layer: 'shirt', insulation: 5, windResistance: 5, waterResistance: 5, breathability: 90, mobilityPenalty: 0, color: '#d6bcfa' }, // wait khaki color
+  jeans_blue: { slot: 'legs', layer: 'shirt', insulation: 20, windResistance: 30, waterResistance: 10, breathability: 50, mobilityPenalty: 5, color: '#2b6cb0', pocketCapacityL: 1.8, maxPocketItemVolumeL: 0.5, maxPocketWeightKg: 3.0 },
+  cargo_pants: { slot: 'legs', layer: 'shirt', insulation: 25, windResistance: 40, waterResistance: 20, breathability: 45, mobilityPenalty: 6, color: '#718096', pocketCapacityL: 4.5, maxPocketItemVolumeL: 1.0, maxPocketWeightKg: 6.0 },
+  shorts_khaki: { slot: 'legs', layer: 'shirt', insulation: 5, windResistance: 5, waterResistance: 5, breathability: 90, mobilityPenalty: 0, color: '#d6bcfa', pocketCapacityL: 1.2, maxPocketItemVolumeL: 0.4, maxPocketWeightKg: 2.0 },
   
   sneakers_white: { slot: 'feet', layer: 'outerwear', insulation: 15, windResistance: 20, waterResistance: 15, breathability: 60, mobilityPenalty: 2, color: '#f8fafc' },
   work_boots: { slot: 'feet', layer: 'outerwear', insulation: 30, windResistance: 50, waterResistance: 60, breathability: 30, mobilityPenalty: 12, color: '#7b341e' },
@@ -2236,6 +2365,10 @@ export const CLOTHING_STATS: Record<string, import('./types').ClothingStats> = {
 
   gloves_leather: { slot: 'hands', layer: 'outerwear', insulation: 20, windResistance: 60, waterResistance: 40, breathability: 30, mobilityPenalty: 5, color: '#4a3f35' },
   gloves_winter: { slot: 'hands', layer: 'outerwear', insulation: 60, windResistance: 50, waterResistance: 50, breathability: 20, mobilityPenalty: 10, color: '#2d3748' },
+
+  sneakers: { slot: 'feet', layer: 'outerwear', insulation: 18, windResistance: 25, waterResistance: 20, breathability: 70, mobilityPenalty: 1, color: '#2b6cb0' },
+  backpack_travel: { slot: 'back', layer: 'outerwear', insulation: 5, windResistance: 10, waterResistance: 25, breathability: 80, mobilityPenalty: 2, color: '#3182ce', pocketCapacityL: 35.0, maxPocketItemVolumeL: 22.0, maxPocketWeightKg: 30.0 },
+  thermal_coat: { slot: 'torso', layer: 'jacket', insulation: 85, windResistance: 85, waterResistance: 75, breathability: 25, mobilityPenalty: 12, color: '#2d3748', pocketCapacityL: 4.0, maxPocketItemVolumeL: 1.0, maxPocketWeightKg: 4.5 },
 };
 
 export function createItem(itemId: string, count: number = 1, initialPortions?: number): InventoryItem {
@@ -2244,6 +2377,29 @@ export function createItem(itemId: string, count: number = 1, initialPortions?: 
   const maxPortions = def.biteCount || 1;
   const portions = initialPortions !== undefined ? initialPortions : maxPortions;
   const stats = CLOTHING_STATS[def.itemId];
+  const isContainer = !!def.isContainer || (!!stats && !!stats.pocketCapacityL && stats.pocketCapacityL > 0);
+  const containerCap = def.containerCapacityL || stats?.pocketCapacityL;
+  const maxContainedVol = def.maxContainedItemVolumeL || stats?.maxPocketItemVolumeL;
+  const maxContainedWt = def.maxContainedWeightKg || stats?.maxPocketWeightKg;
+
+  // Approximate realistic volume (L) if not explicitly set
+  let baseVolume = def.volume;
+  if (baseVolume === undefined) {
+    if (def.category === 'valuable' && (itemId.startsWith('cash') || itemId.startsWith('coin'))) {
+      baseVolume = 0.001;
+    } else if (def.category === 'drink') {
+      baseVolume = Math.max(0.25, (def.weight || 0.35));
+    } else if (def.category === 'food') {
+      baseVolume = Math.max(0.15, (def.weight || 0.25) * 1.2);
+    } else if (def.category === 'med') {
+      baseVolume = itemId === 'medkit' ? 3.0 : 0.15;
+    } else if (def.category === 'clothing') {
+      baseVolume = itemId === 'backpack' ? 2.5 : Math.max(0.5, (def.weight || 0.4) * 2.0);
+    } else {
+      baseVolume = Math.max(0.05, (def.weight || 0.2) * 1.2);
+    }
+  }
+
   return {
     id: `item_${itemId}_${Date.now()}_${itemCounter}`,
     itemId: def.itemId,
@@ -2257,10 +2413,21 @@ export function createItem(itemId: string, count: number = 1, initialPortions?: 
     descriptionRu: def.descriptionRu,
     effects: { ...def.effects },
     weight: def.weight,
+    volume: baseVolume,
     clothingStats: stats,
-    usable: def.usable,
+    usable: isContainer ? false : def.usable,
     portions: portions,
-    maxPortions: maxPortions
+    maxPortions: maxPortions,
+    isContainer,
+    contents: isContainer ? [] : undefined,
+    containerCapacityL: containerCap,
+    maxContainedItemVolumeL: maxContainedVol,
+    maxContainedWeightKg: maxContainedWt,
+    allowedItemCategories: def.allowedItemCategories,
+    batteryCharge: def.itemId === 'car_battery' ? 100 : undefined,
+    fluidLiters: def.itemId === 'antifreeze' ? 5.0 : def.itemId === 'motor_oil' ? 4.0 : undefined,
+    maxFluidLiters: def.itemId === 'antifreeze' ? 5.0 : def.itemId === 'motor_oil' ? 4.0 : undefined,
+    fluidType: def.itemId === 'antifreeze' ? 'coolant' : def.itemId === 'motor_oil' ? 'oil' : undefined
   };
 }
 
@@ -2345,9 +2512,49 @@ export function cancelConsumption(player: Player): void {
   addPlayerNotification(player, 'Прекратили употребление.', 'info');
 }
 
+// Helper to recursively collect all items currently on player (inventory, hands, clothing pockets, container contents)
+export function getAllPlayerItemsFlat(player: Player | null): InventoryItem[] {
+  if (!player) return [];
+  const list: InventoryItem[] = [];
+
+  function collectFrom(item: InventoryItem | null | undefined) {
+    if (!item) return;
+    list.push(item);
+    if (item.contents && item.contents.length > 0) {
+      for (const sub of item.contents) {
+        collectFrom(sub);
+      }
+    }
+  }
+
+  // 1. Inventory
+  if (player.inventory) {
+    for (const it of player.inventory) {
+      collectFrom(it);
+    }
+  }
+  // 2. Hands
+  collectFrom(player.leftHandItem);
+  collectFrom(player.rightHandItem);
+
+  // 3. Equipped clothing
+  if (player.equippedClothing) {
+    for (const slotKey of Object.keys(player.equippedClothing) as (keyof typeof player.equippedClothing)[]) {
+      const slot = player.equippedClothing[slotKey];
+      if (!slot) continue;
+      for (const layerKey of Object.keys(slot) as (keyof typeof slot)[]) {
+        collectFrom(slot[layerKey]);
+      }
+    }
+  }
+
+  return list;
+}
+
 export function getPlayerCash(player: Player | null): number {
-  if (!player || !player.inventory) return 0;
-  return player.inventory.reduce((sum, i) => {
+  if (!player) return 0;
+  const allItems = getAllPlayerItemsFlat(player);
+  return allItems.reduce((sum, i) => {
     if (!i) return sum;
     if (i.itemId === 'cash') return sum + i.count;
     if (i.itemId === 'cash_5000') return sum + (5000 * i.count);
@@ -2364,45 +2571,482 @@ export function getPlayerCash(player: Player | null): number {
   }, 0);
 }
 
+// Find primary wallet container on the player
+export function findPrimaryWallet(player: Player | null): InventoryItem | null {
+  if (!player) return null;
+  const allContainers = getAllPlayerItemsFlat(player).filter(i => i && i.isContainer && i.itemId === 'wallet');
+  return allContainers[0] || null;
+}
+
+// Decompose money into realistic banknotes and coins
+export function createChangeItems(amount: number): InventoryItem[] {
+  const items: InventoryItem[] = [];
+  const denoms: { id: string; val: number }[] = [
+    { id: 'cash_5000', val: 5000 },
+    { id: 'cash_1000', val: 1000 },
+    { id: 'cash_500', val: 500 },
+    { id: 'cash_100', val: 100 },
+    { id: 'cash_50', val: 50 },
+    { id: 'cash_10', val: 10 },
+    { id: 'coin_10', val: 10 },
+    { id: 'coin_5', val: 5 },
+    { id: 'coin_2', val: 2 },
+    { id: 'coin_1', val: 1 }
+  ];
+
+  let rem = Math.floor(amount);
+  for (const d of denoms) {
+    if (rem <= 0) break;
+    const count = Math.floor(rem / d.val);
+    if (count > 0) {
+      items.push(createItem(d.id, count));
+      rem -= count * d.val;
+    }
+  }
+  if (rem > 0) {
+    items.push(createItem('cash', rem));
+  }
+  return items;
+}
+
+// Deposit change or earned cash directly into wallet if available, otherwise pockets/hands
+export function depositChangeToPlayer(player: Player, changeAmount: number): void {
+  if (changeAmount <= 0) return;
+  const changeItems = createChangeItems(changeAmount);
+  const wallet = findPrimaryWallet(player);
+
+  for (const item of changeItems) {
+    if (wallet) {
+      if (!wallet.contents) wallet.contents = [];
+      const existing = wallet.contents.find(i => i && i.itemId === item.itemId);
+      if (existing) {
+        existing.count += item.count;
+      } else {
+        wallet.contents.push(item);
+      }
+    } else {
+      addItemToPlayer(player, item);
+    }
+  }
+}
+
 export function deductPlayerCash(player: Player | null, amount: number): boolean {
-  if (!player || !player.inventory) return false;
+  if (!player || amount <= 0) return true;
   const currentCash = getPlayerCash(player);
   if (currentCash < amount) return false;
 
-  let remaining = amount;
-  for (let i = player.inventory.length - 1; i >= 0; i--) {
-    const item = player.inventory[i];
-    if (item && item.itemId === 'cash') {
-      if (item.count <= remaining) {
-        remaining -= item.count;
-        player.inventory.splice(i, 1);
-      } else {
-        item.count -= remaining;
-        remaining = 0;
-      }
-      if (remaining <= 0) break;
+  const DENOM_VALUES: Record<string, number> = {
+    cash_5000: 5000,
+    cash_1000: 1000,
+    cash_500: 500,
+    cash_100: 100,
+    cash_50: 50,
+    cash_10: 10,
+    coin_10: 10,
+    coin_5: 5,
+    coin_2: 2,
+    coin_1: 1,
+    cash: 1
+  };
+
+  interface CurrencyItemRef {
+    item: InventoryItem;
+    val: number;
+  }
+
+  const currencyList: CurrencyItemRef[] = [];
+  const allItems = getAllPlayerItemsFlat(player);
+
+  for (const it of allItems) {
+    if (!it) continue;
+    const val = DENOM_VALUES[it.itemId];
+    if (val && it.count > 0) {
+      currencyList.push({ item: it, val });
     }
   }
+
+  // Sort ascending by value to spend exact/smaller currency first
+  currencyList.sort((a, b) => a.val - b.val);
+
+  let paidTotal = 0;
+  let remainingNeeded = amount;
+
+  // 1. Try to pay using exact or smaller bills first
+  for (const cur of currencyList) {
+    if (remainingNeeded <= 0) break;
+    if (cur.item.count <= 0) continue;
+
+    if (cur.val <= remainingNeeded) {
+      const takeCount = Math.min(cur.item.count, Math.floor(remainingNeeded / cur.val));
+      if (takeCount > 0) {
+        cur.item.count -= takeCount;
+        const takenAmount = takeCount * cur.val;
+        paidTotal += takenAmount;
+        remainingNeeded -= takenAmount;
+      }
+    }
+  }
+
+  // 2. If still remaining needed, break the next available note
+  if (remainingNeeded > 0) {
+    for (const cur of currencyList) {
+      if (cur.item.count > 0 && cur.val > 0) {
+        cur.item.count -= 1;
+        paidTotal += cur.val;
+        remainingNeeded -= cur.val;
+        if (remainingNeeded <= 0) break;
+      }
+    }
+  }
+
+  // Calculate change and deposit back to wallet
+  const change = paidTotal - amount;
+  if (change > 0) {
+    depositChangeToPlayer(player, change);
+  }
+
+  // Cleanup items with 0 count in player inventory
+  if (player.inventory) {
+    player.inventory = player.inventory.filter(i => i && i.count > 0);
+  }
+  // Cleanup items with 0 count in all containers
+  for (const it of allItems) {
+    if (it.contents) {
+      it.contents = it.contents.filter(c => c && c.count > 0);
+    }
+  }
+
   return true;
 }
 
 export function addPlayerCash(player: Player | null, amount: number): boolean {
-  if (!player) return false;
-  const cashItem = createItem('cash', amount);
-  return addItemToPlayer(player, cashItem);
+  if (!player || amount <= 0) return false;
+  depositChangeToPlayer(player, amount);
+  return true;
 }
 
-export function createDefaultPlayerInventory(): InventoryItem[] {
-  return [
-    createItem('water_bottle', 2),
-    createItem('sandwich', 2),
-    createItem('hot_coffee', 1),
-    createItem('medkit', 1),
-    createItem('splint', 1),
-    createItem('chocolate', 2),
-    createItem('zippo_lighter', 1),
-    createItem('extinguisher', 1),
-    createItem('fuel_canister', 1),
+// Calculate recursive unit weight of item (including its contents)
+export function getItemTotalWeight(item: InventoryItem | null | undefined): number {
+  if (!item) return 0;
+  const count = item.count || 1;
+  const unitWeight = item.weight || 0;
+  let total = unitWeight * count;
+  if (item.contents && item.contents.length > 0) {
+    for (const child of item.contents) {
+      total += getItemTotalWeight(child);
+    }
+  }
+  return Number(total.toFixed(3));
+}
+
+// Calculate recursive volume of item (including its contents)
+// "Кстати, не забывай что предмет(пакет, рюкзак, кошель и тп) в виде предмета занимает в другом инвентаре столько сколько сам и его содержимое"
+export function getItemTotalVolume(item: InventoryItem | null | undefined): number {
+  if (!item) return 0;
+  const count = item.count || 1;
+  const baseVolume = item.volume !== undefined ? item.volume : Math.max(0.01, (item.weight || 0.1) * 1.0);
+  let total = baseVolume * count;
+  if (item.contents && item.contents.length > 0) {
+    for (const child of item.contents) {
+      total += getItemTotalVolume(child);
+    }
+  }
+  return Number(total.toFixed(3));
+}
+
+// Get player's pocket capacity calculated from all worn clothing
+export function getPlayerPocketCapacity(player: Player): {
+  totalCapacityL: number;
+  maxItemVolumeL: number;
+  maxWeightKg: number;
+  usedVolumeL: number;
+  usedWeightKg: number;
+} {
+  // Baseline capacity for hands / inner pocket if wearing basic clothes
+  let totalCapacityL = 0.6;
+  let maxItemVolumeL = 0.35;
+  let maxWeightKg = 1.5;
+
+  if (player.equippedClothing) {
+    for (const slotKey of Object.keys(player.equippedClothing) as (keyof typeof player.equippedClothing)[]) {
+      const slot = player.equippedClothing[slotKey];
+      if (!slot) continue;
+      for (const layerKey of Object.keys(slot) as (keyof typeof slot)[]) {
+        const cloth = slot[layerKey];
+        if (cloth && cloth.clothingStats) {
+          const stats = cloth.clothingStats;
+          if (stats.pocketCapacityL) {
+            totalCapacityL += stats.pocketCapacityL;
+          }
+          if (stats.maxPocketItemVolumeL && stats.maxPocketItemVolumeL > maxItemVolumeL) {
+            maxItemVolumeL = stats.maxPocketItemVolumeL;
+          }
+          if (stats.maxPocketWeightKg) {
+            maxWeightKg += stats.maxPocketWeightKg;
+          }
+        }
+      }
+    }
+  }
+
+  // Calculate used volume & weight in player.inventory
+  let usedVolumeL = 0;
+  let usedWeightKg = 0;
+  if (player.inventory) {
+    for (const item of player.inventory) {
+      if (item) {
+        usedVolumeL += getItemTotalVolume(item);
+        usedWeightKg += getItemTotalWeight(item);
+      }
+    }
+  }
+
+  return {
+    totalCapacityL: Number(totalCapacityL.toFixed(2)),
+    maxItemVolumeL: Number(maxItemVolumeL.toFixed(2)),
+    maxWeightKg: Number(maxWeightKg.toFixed(2)),
+    usedVolumeL: Number(usedVolumeL.toFixed(2)),
+    usedWeightKg: Number(usedWeightKg.toFixed(2))
+  };
+}
+
+// Calculate total carried weight across ALL locations (inventory, hands, equipped clothes and all their contents)
+export function getPlayerTotalCarriedWeight(player: Player): number {
+  let total = 0;
+  if (player.inventory) {
+    for (const item of player.inventory) {
+      total += getItemTotalWeight(item);
+    }
+  }
+  if (player.leftHandItem) {
+    total += getItemTotalWeight(player.leftHandItem);
+  }
+  if (player.rightHandItem) {
+    total += getItemTotalWeight(player.rightHandItem);
+  }
+  if (player.equippedClothing) {
+    for (const slotKey of Object.keys(player.equippedClothing) as (keyof typeof player.equippedClothing)[]) {
+      const slot = player.equippedClothing[slotKey];
+      if (!slot) continue;
+      for (const layerKey of Object.keys(slot) as (keyof typeof slot)[]) {
+        const cloth = slot[layerKey];
+        if (cloth) {
+          total += getItemTotalWeight(cloth);
+        }
+      }
+    }
+  }
+  return Number(total.toFixed(2));
+}
+
+// Check if an item can fit in pockets
+export function canItemFitInPockets(player: Player, item: InventoryItem): { fits: boolean; reason?: string } {
+  const cap = getPlayerPocketCapacity(player);
+  const itemVol = getItemTotalVolume(item);
+  const itemWt = getItemTotalWeight(item);
+
+  // Check single item volume limit for pockets
+  const singleUnitVol = getItemTotalVolume({ ...item, count: 1 });
+  if (singleUnitVol > cap.maxItemVolumeL) {
+    return {
+      fits: false,
+      reason: `Предмет слишком громоздкий для карманов (${singleUnitVol}л > макс. ${cap.maxItemVolumeL}л). Возьмите в руку, положите в рюкзак или пакет.`
+    };
+  }
+
+  if (cap.usedVolumeL + itemVol > cap.totalCapacityL) {
+    return {
+      fits: false,
+      reason: `В карманах недостаточно места (${(cap.totalCapacityL - cap.usedVolumeL).toFixed(1)}л свободно, нужно ${itemVol.toFixed(1)}л).`
+    };
+  }
+
+  if (cap.usedWeightKg + itemWt > cap.maxWeightKg) {
+    return {
+      fits: false,
+      reason: `Карманы перегружены по весу (${(cap.maxWeightKg - cap.usedWeightKg).toFixed(1)}кг свободно, нужно ${itemWt.toFixed(1)}кг).`
+    };
+  }
+
+  return { fits: true };
+}
+
+// Check if an item can fit inside a container
+export function canItemFitInContainer(container: InventoryItem, item: InventoryItem): { fits: boolean; reason?: string } {
+  if (!container.isContainer) {
+    return { fits: false, reason: 'Этот предмет не является контейнером' };
+  }
+
+  if (container.allowedItemCategories && container.allowedItemCategories.length > 0) {
+    if (!container.allowedItemCategories.includes(item.category)) {
+      return { fits: false, reason: `${container.nameRu} не предназначен для предметов этого типа (${item.category}).` };
+    }
+  }
+
+  if (container.id === item.id) {
+    return { fits: false, reason: 'Нельзя поместить контейнер внутрь самого себя.' };
+  }
+
+  const containerCapL = container.containerCapacityL || 5.0;
+  const maxContainedVolL = container.maxContainedItemVolumeL || containerCapL;
+  const maxContainedWtKg = container.maxContainedWeightKg || 25.0;
+
+  const itemTotalVol = getItemTotalVolume(item);
+  const itemTotalWt = getItemTotalWeight(item);
+  const singleUnitVol = getItemTotalVolume({ ...item, count: 1 });
+
+  if (singleUnitVol > maxContainedVolL) {
+    return {
+      fits: false,
+      reason: `Предмет не помещается по габаритам в ${container.nameRu} (${singleUnitVol}л > макс. ${maxContainedVolL}л).`
+    };
+  }
+
+  let currentContentsVol = 0;
+  let currentContentsWt = 0;
+  if (container.contents) {
+    for (const c of container.contents) {
+      currentContentsVol += getItemTotalVolume(c);
+      currentContentsWt += getItemTotalWeight(c);
+    }
+  }
+
+  if (currentContentsVol + itemTotalVol > containerCapL) {
+    return {
+      fits: false,
+      reason: `Недостаточно места в ${container.nameRu} (свободно ${(containerCapL - currentContentsVol).toFixed(1)}л, нужно ${itemTotalVol.toFixed(1)}л).`
+    };
+  }
+
+  if (currentContentsWt + itemTotalWt > maxContainedWtKg) {
+    return {
+      fits: false,
+      reason: `Перегрузка по весу в ${container.nameRu} (свободно ${(maxContainedWtKg - currentContentsWt).toFixed(1)}кг, нужно ${itemTotalWt.toFixed(1)}кг).`
+    };
+  }
+
+  return { fits: true };
+}
+
+// Add item to container contents
+export function addItemToContainer(container: InventoryItem, itemToAdd: InventoryItem): { success: boolean; message: string } {
+  const check = canItemFitInContainer(container, itemToAdd);
+  if (!check.fits) {
+    return { success: false, message: check.reason || 'Не помещается' };
+  }
+  if (!container.contents) {
+    container.contents = [];
+  }
+  // Try stacking if stackable
+  const existing = container.contents.find(i => i.itemId === itemToAdd.itemId && i.count < i.maxStack);
+  if (existing) {
+    const space = existing.maxStack - existing.count;
+    const addCount = Math.min(space, itemToAdd.count);
+    existing.count += addCount;
+    itemToAdd.count -= addCount;
+    if (itemToAdd.count <= 0) {
+      return { success: true, message: `Помещено в ${container.nameRu}: ${existing.nameRu} (+${addCount})` };
+    }
+  }
+  container.contents.push(itemToAdd);
+  return { success: true, message: `Помещено в ${container.nameRu}: ${itemToAdd.nameRu} (x${itemToAdd.count})` };
+}
+
+// Remove item from container contents
+export function removeItemFromContainer(container: InventoryItem, contentIndex: number, count: number = 1): InventoryItem | null {
+  if (!container.contents || contentIndex < 0 || contentIndex >= container.contents.length) return null;
+  const item = container.contents[contentIndex];
+  if (!item) return null;
+
+  if (item.count <= count) {
+    container.contents.splice(contentIndex, 1);
+    return item;
+  } else {
+    item.count -= count;
+    return { ...item, count };
+  }
+}
+
+// Put item into left or right hand
+export function putItemInHand(player: Player, hand: 'left' | 'right', item: InventoryItem): { success: boolean; message: string } {
+  const currentHandItem = hand === 'left' ? player.leftHandItem : player.rightHandItem;
+  if (currentHandItem) {
+    return { success: false, message: `${hand === 'left' ? 'Левая' : 'Правая'} рука уже занята (${currentHandItem.nameRu})!` };
+  }
+  if (hand === 'left') {
+    player.leftHandItem = item;
+  } else {
+    player.rightHandItem = item;
+  }
+  return { success: true, message: `Взято в ${hand === 'left' ? 'левую' : 'правую'} руку: ${item.nameRu}` };
+}
+
+// Take item out of hand
+export function takeItemFromHand(player: Player, hand: 'left' | 'right'): InventoryItem | null {
+  const item = hand === 'left' ? player.leftHandItem : player.rightHandItem;
+  if (!item) return null;
+  if (hand === 'left') {
+    player.leftHandItem = null;
+  } else {
+    player.rightHandItem = null;
+  }
+  return item;
+}
+
+// Stow item from hand directly into player pockets (inventory) without loss
+export function stowItemFromHandToPockets(player: Player, hand: 'left' | 'right'): { success: boolean; message: string } {
+  const item = hand === 'left' ? player.leftHandItem : player.rightHandItem;
+  if (!item) return { success: false, message: 'В этой руке ничего нет' };
+
+  if (!player.inventory) player.inventory = [];
+  const maxSlots = player.maxInventorySlots || 24;
+
+  // Stacking onto existing slot with same itemId
+  if (item.maxStack > 1) {
+    for (let i = 0; i < player.inventory.length; i++) {
+      const exist = player.inventory[i];
+      if (exist && exist.itemId === item.itemId && exist.count < exist.maxStack) {
+        const canAdd = Math.min(exist.maxStack - exist.count, item.count);
+        exist.count += canAdd;
+        item.count -= canAdd;
+        if (item.count <= 0) {
+          takeItemFromHand(player, hand);
+          addPlayerNotification(player, `Убрано в карман: ${exist.nameRu} (+${canAdd})`, 'pickup');
+          return { success: true, message: `Убрано в карман: ${exist.nameRu}` };
+        }
+      }
+    }
+  }
+
+  // Find empty slot or push
+  const emptyIdx = player.inventory.findIndex(slot => !slot);
+  if (emptyIdx !== -1) {
+    takeItemFromHand(player, hand);
+    player.inventory[emptyIdx] = item;
+    addPlayerNotification(player, `Убрано в карман: ${item.nameRu}`, 'pickup');
+    return { success: true, message: `Убрано в карман: ${item.nameRu}` };
+  } else if (player.inventory.length < maxSlots) {
+    takeItemFromHand(player, hand);
+    player.inventory.push(item);
+    addPlayerNotification(player, `Убрано в карман: ${item.nameRu}`, 'pickup');
+    return { success: true, message: `Убрано в карман: ${item.nameRu}` };
+  }
+
+  addPlayerNotification(player, 'Карманы переполнены! Освободите место в инвентаре.', 'warning');
+  return { success: false, message: 'Карманы переполнены!' };
+}
+
+// Swap items between left and right hand
+export function swapPlayerHands(player: Player): { success: boolean } {
+  const temp = player.leftHandItem || null;
+  player.leftHandItem = player.rightHandItem || null;
+  player.rightHandItem = temp;
+  return { success: true };
+}
+
+export function createStarterWallet(): InventoryItem {
+  const wallet = createItem('wallet', 1);
+  wallet.contents = [
     createItem('cash_5000', 1),
     createItem('cash_1000', 2),
     createItem('cash_500', 2),
@@ -2413,7 +3057,54 @@ export function createDefaultPlayerInventory(): InventoryItem[] {
     createItem('coin_5', 5),
     createItem('coin_2', 5),
     createItem('coin_1', 10),
-    createItem('cash', 5000) // Lowered starting general cash slightly to account for the physical pile
+    createItem('cash', 1500)
+  ];
+  return wallet;
+}
+
+export function restoreStarterContainers(player: Player): { restoredWallet: boolean; restoredBag: boolean } {
+  let restoredWallet = false;
+  let restoredBag = false;
+
+  const hasWallet = (player.inventory && player.inventory.some(i => i && i.itemId === 'wallet')) ||
+    player.leftHandItem?.itemId === 'wallet' ||
+    player.rightHandItem?.itemId === 'wallet';
+
+  if (!hasWallet) {
+    const newWallet = createStarterWallet();
+    addItemToPlayer(player, newWallet);
+    restoredWallet = true;
+  }
+
+  const hasBag = (player.inventory && player.inventory.some(i => i && i.itemId === 'plastic_bag')) ||
+    player.leftHandItem?.itemId === 'plastic_bag' ||
+    player.rightHandItem?.itemId === 'plastic_bag';
+
+  if (!hasBag) {
+    const newBag = createItem('plastic_bag', 1);
+    addItemToPlayer(player, newBag);
+    restoredBag = true;
+  }
+
+  if (restoredWallet || restoredBag) {
+    addPlayerNotification(player, '👛 Восстановлен кошелек и пакет со стартовыми средствами!', 'heal');
+  }
+
+  return { restoredWallet, restoredBag };
+}
+
+export function createDefaultPlayerInventory(): InventoryItem[] {
+  const wallet = createStarterWallet();
+  const plasticBag = createItem('plastic_bag', 1);
+
+  return [
+    wallet,
+    plasticBag,
+    createItem('water_bottle', 1),
+    createItem('sandwich', 1),
+    createItem('hot_coffee', 1),
+    createItem('chocolate', 1),
+    createItem('zippo_lighter', 1)
   ];
 }
 
@@ -2421,38 +3112,95 @@ export function addItemToPlayer(player: Player, itemToAdd: InventoryItem): boole
   if (!player.inventory) {
     player.inventory = [];
   }
-  const maxSlots = player.maxInventorySlots || 18;
 
-  // 1. Try to stack onto existing item of same itemId
+  // 1. Auto-store currency/coins into leather wallet if player has one with space
+  const isCurrency = itemToAdd.category === 'valuable' && (itemToAdd.itemId.startsWith('cash') || itemToAdd.itemId.startsWith('coin'));
+  if (isCurrency) {
+    const allContainers = getAllPlayerItemsFlat(player).filter(i => i && i.isContainer && i.itemId === 'wallet');
+    for (const w of allContainers) {
+      const check = canItemFitInContainer(w, itemToAdd);
+      if (check.fits) {
+        addItemToContainer(w, itemToAdd);
+        addPlayerNotification(player, `Убрано в кошелёк: ${itemToAdd.nameRu} (x${itemToAdd.count})`, 'pickup');
+        return true;
+      }
+    }
+  }
+
+  // 2. PRIMARY PHYSICAL RULE: Pick up into FREE HAND first!
+  const activeHand = player.activeHand || 'right';
+  if (activeHand === 'left' && !player.leftHandItem) {
+    player.leftHandItem = itemToAdd;
+    addPlayerNotification(player, `Взято в левую руку: ${itemToAdd.nameRu} (x${itemToAdd.count})`, 'pickup');
+    return true;
+  } else if (activeHand === 'right' && !player.rightHandItem) {
+    player.rightHandItem = itemToAdd;
+    addPlayerNotification(player, `Взято в правую руку: ${itemToAdd.nameRu} (x${itemToAdd.count})`, 'pickup');
+    return true;
+  } else if (!player.rightHandItem) {
+    player.rightHandItem = itemToAdd;
+    addPlayerNotification(player, `Взято в правую руку: ${itemToAdd.nameRu} (x${itemToAdd.count})`, 'pickup');
+    return true;
+  } else if (!player.leftHandItem) {
+    player.leftHandItem = itemToAdd;
+    addPlayerNotification(player, `Взято в левую руку: ${itemToAdd.nameRu} (x${itemToAdd.count})`, 'pickup');
+    return true;
+  }
+
+  // 3. If both hands are full, try to stack onto existing item of same itemId in pockets
   const existing = player.inventory.find(i => i && i.itemId === itemToAdd.itemId && i.count < i.maxStack);
   if (existing) {
     const space = existing.maxStack - existing.count;
     const addCount = Math.min(space, itemToAdd.count);
-    existing.count += addCount;
-    itemToAdd.count -= addCount;
-    if (itemToAdd.count <= 0) {
-      addPlayerNotification(player, `+${addCount} ${itemToAdd.nameRu}`, 'pickup');
+    const addedItem = { ...itemToAdd, count: addCount };
+    const check = canItemFitInPockets(player, addedItem);
+    if (check.fits) {
+      existing.count += addCount;
+      itemToAdd.count -= addCount;
+      if (itemToAdd.count <= 0) {
+        addPlayerNotification(player, `+${addCount} ${itemToAdd.nameRu}`, 'pickup');
+        return true;
+      }
+    }
+  }
+
+  // 4. Try to put into worn backpack if player has one
+  const wornBackpack = player.equippedClothing?.back?.outerwear;
+  if (wornBackpack && wornBackpack.isContainer) {
+    const checkBackpack = canItemFitInContainer(wornBackpack, itemToAdd);
+    if (checkBackpack.fits) {
+      addItemToContainer(wornBackpack, itemToAdd);
+      addPlayerNotification(player, `Положено в рюкзак: ${itemToAdd.nameRu} (x${itemToAdd.count})`, 'pickup');
       return true;
     }
   }
 
-  // 2. Find first empty slot from 0 to maxSlots - 1
-  for (let i = 0; i < maxSlots; i++) {
-    if (!player.inventory[i]) {
-      player.inventory[i] = itemToAdd;
-      addPlayerNotification(player, `Подобрано: ${itemToAdd.nameRu} (x${itemToAdd.count})`, 'pickup');
+  // 5. Try to put into clothing pockets (player.inventory)
+  const pocketCheck = canItemFitInPockets(player, itemToAdd);
+  if (pocketCheck.fits) {
+    // Find empty slot or push
+    const maxSlots = 36; // flexible slots for realistic physical pocket storage
+    let placed = false;
+    for (let i = 0; i < player.inventory.length; i++) {
+      if (!player.inventory[i]) {
+        player.inventory[i] = itemToAdd;
+        placed = true;
+        break;
+      }
+    }
+    if (!placed && player.inventory.length < maxSlots) {
+      player.inventory.push(itemToAdd);
+      placed = true;
+    }
+    if (placed) {
+      addPlayerNotification(player, `Подобрано в карман: ${itemToAdd.nameRu} (x${itemToAdd.count})`, 'pickup');
       return true;
     }
   }
 
-  // 3. Push if array length < maxSlots
-  if (player.inventory.length < maxSlots) {
-    player.inventory.push(itemToAdd);
-    addPlayerNotification(player, `Подобрано: ${itemToAdd.nameRu} (x${itemToAdd.count})`, 'pickup');
-    return true;
-  }
-
-  addPlayerNotification(player, 'Инвентарь полон!', 'warning');
+  // 6. No space anywhere
+  const reason = pocketCheck.reason || 'Нет места в карманах, рюкзаке и обе руки заняты!';
+  addPlayerNotification(player, reason, 'warning');
   return false;
 }
 
@@ -2520,6 +3268,11 @@ export function useItemOnPlayer(
   const item = player.inventory[itemIndex];
   if (!item || !item.usable) {
     return { success: false, message: 'Этот предмет нельзя использовать напрямую' };
+  }
+
+  // Safety: Containers must NEVER be consumed or deleted on use
+  if (item.isContainer) {
+    return { success: false, message: 'Это контейнер: откройте его, чтобы положить или достать вещи' };
   }
 
   // Physical banknotes & coins deposits
@@ -2822,6 +3575,132 @@ export function useItemOnPlayer(
     return { success: true, message: 'Зажигалка Zippo использована' };
   }
 
+  // Sandbag usage (pours 1 kg sand at a distance, extinguishing fires and drying/absorbing oil, fuel, and antifreeze spills)
+  if (item.itemId === 'sandbag') {
+    sound.playWaterSpray();
+
+    const angle = player.aimAngle !== undefined ? player.aimAngle : (player.angle || 0);
+    const distance = 40; // Pour sand ~40 units in front of player
+    const sandX = player.x + Math.cos(angle) * distance;
+    const sandY = player.y + Math.sin(angle) * distance;
+
+    let driedSpillsCount = 0;
+    let extinguishedFiresCount = 0;
+
+    if (world) {
+      if (!world.stains) world.stains = [];
+
+      // 1. Spawn flying arc sand particles from player towards sandX, sandY
+      for (let i = 0; i < 28; i++) {
+        const pAngle = angle + (Math.random() * 0.8 - 0.4);
+        const pSpeed = 30 + Math.random() * 60;
+        const colors = ['#eab308', '#d97706', '#fef08a', '#b45309', '#a16207'];
+        world.particles.push({
+          x: player.x,
+          y: player.y,
+          vx: Math.cos(pAngle) * pSpeed,
+          vy: Math.sin(pAngle) * pSpeed,
+          radius: 1.8 + Math.random() * 2.5,
+          color: colors[Math.floor(Math.random() * colors.length)],
+          alpha: 0.95,
+          life: 0,
+          maxLife: 0.4 + Math.random() * 0.2,
+          type: 'debris'
+        });
+      }
+
+      // 2. Create/expand a sand mound/stain on ground
+      let existingSand = world.stains.find(st => st.type === 'sand' && Math.hypot(st.x - sandX, st.y - sandY) < 40);
+      if (existingSand) {
+        existingSand.radius = Math.min(85, existingSand.radius + 20);
+        existingSand.alpha = Math.min(1.0, existingSand.alpha + 0.3);
+        existingSand.life = 0;
+      } else {
+        world.stains.push({
+          id: `stain_sand_${Date.now()}_${Math.random()}`,
+          x: sandX,
+          y: sandY,
+          radius: 36,
+          maxRadius: 80,
+          type: 'sand',
+          alpha: 0.95,
+          life: 0,
+          maxLife: 1200,
+          onFire: false,
+          fireIntensity: 0
+        });
+      }
+
+      // 3. Dry up fluid spills (fuel, oil, coolant/antifreeze) and extinguish burning stains in ~75px radius
+      for (let i = world.stains.length - 1; i >= 0; i--) {
+        const st = world.stains[i];
+        if (st.type === 'sand') continue;
+        const dist = Math.hypot(st.x - sandX, st.y - sandY);
+        if (dist <= 75) {
+          if (st.onFire) {
+            st.onFire = false;
+            st.fireIntensity = 0;
+            extinguishedFiresCount++;
+          }
+          st.alpha -= 0.7;
+          st.radius -= 22;
+          if (st.alpha <= 0.05 || st.radius <= 4) {
+            world.stains.splice(i, 1);
+          }
+          driedSpillsCount++;
+        }
+      }
+
+      // 4. Extinguish nearby vehicle fires if sand lands on burning engine / fuel tank
+      for (const veh of world.vehicles) {
+        const dist = Math.hypot(veh.x - sandX, veh.y - sandY);
+        if (dist <= 85) {
+          if (veh.damage) {
+            if (veh.damage.engineFire || veh.damage.fuelTankFire || veh.damage.underHoodSmolder || veh.damage.cabinFire) {
+              veh.damage.engineFire = false;
+              veh.damage.fuelTankFire = false;
+              veh.damage.underHoodSmolder = false;
+              veh.damage.cabinFire = false;
+              veh.damage.groundPuddleIgnited = false;
+              veh.damage.fireProgress = Math.max(0, (veh.damage.fireProgress || 0) - 0.6);
+              veh.damage.fireIntensity = 0;
+              extinguishedFiresCount++;
+            }
+          }
+        }
+      }
+    }
+
+    // Remove 1 sandbag and grant 1 empty sack
+    removeItemFromPlayer(player, itemIndex, 1);
+    const emptySack = createItem('sack_empty', 1);
+    const added = addItemToPlayer(player, emptySack);
+    if (!added && world) {
+      if (!world.groundItems) world.groundItems = [];
+      world.groundItems.push({
+        id: `ground_sack_empty_${Date.now()}`,
+        x: player.x,
+        y: player.y,
+        item: emptySack,
+        spawnTime: Date.now()
+      });
+    }
+
+    let resultMsg = '⏳ Вы рассыпали 1 кг песка!';
+    if (extinguishedFiresCount > 0 && driedSpillsCount > 0) {
+      resultMsg = `⏳ Вы рассыпали 1 кг песка! Очаг огня потушен, а пятна масел/топлива впитаны.`;
+    } else if (extinguishedFiresCount > 0) {
+      resultMsg = `⏳ Вы рассыпали 1 кг песка и затушили очаг возгорания!`;
+    } else if (driedSpillsCount > 0) {
+      resultMsg = `⏳ Вы рассыпали 1 кг песка, осушив пятна бензина, масла и антифриза!`;
+    }
+
+    addPlayerNotification(player, resultMsg, 'heal');
+    return { success: true, message: resultMsg };
+  }
+
+
+
   // Fire extinguisher usage (volume/capacity, foam spray, gradual/partial fire suppression)
   if (item.itemId === 'extinguisher') {
     const maxPortions = item.maxPortions || def?.biteCount || 10;
@@ -2987,6 +3866,14 @@ export function useItemOnPlayer(
     } else if (item.itemId === 'vitamins') {
       player.needs.energy = Math.min(100, player.needs.energy + 4);
       administerMedication(player, 'vitamins');
+    } else if (item.itemId === 'bandage') {
+      applyBandage(player, targetInjuryId);
+    } else if (item.itemId === 'splint') {
+      applySplint(player, targetInjuryId);
+    } else if (item.itemId === 'medical_patch') {
+      applyMedicalPatch(player, targetInjuryId);
+    } else if (item.itemId === 'medkit') {
+      applyMedkit(player);
     } else if (item.itemId === 'panthenol_spray') {
       applyPanthenolSpray(player, targetInjuryId);
     } else if (item.itemId === 'spasatel_ointment') {
@@ -3177,6 +4064,777 @@ export function useItemOnPlayer(
   return { success: true, message: `Использовано: ${item.nameRu}` };
 }
 
+export function useHandItemOnPlayer(
+  player: Player,
+  hand: 'left' | 'right',
+  world?: GameWorld,
+  targetInjuryId?: string
+): { success: boolean; message: string } {
+  const item = hand === 'left' ? player.leftHandItem : player.rightHandItem;
+  if (!item) {
+    return { success: false, message: 'В выбранной руке ничего нет' };
+  }
+
+  if (!item.usable) {
+    return { success: false, message: 'Этот предмет нельзя использовать напрямую' };
+  }
+
+  if (item.isContainer) {
+    return { success: false, message: 'Это контейнер: откройте его, чтобы достать или положить вещи' };
+  }
+
+  // Currency deposit
+  if (item.itemId.startsWith('cash_') || item.itemId.startsWith('coin_')) {
+    let value = 0;
+    if (item.itemId === 'cash_5000') value = 5000;
+    else if (item.itemId === 'cash_1000') value = 1000;
+    else if (item.itemId === 'cash_500') value = 500;
+    else if (item.itemId === 'cash_100') value = 100;
+    else if (item.itemId === 'cash_50') value = 50;
+    else if (item.itemId === 'cash_10') value = 10;
+    else if (item.itemId === 'coin_10') value = 10;
+    else if (item.itemId === 'coin_5') value = 5;
+    else if (item.itemId === 'coin_2') value = 2;
+    else if (item.itemId === 'coin_1') value = 1;
+
+    if (value > 0) {
+      const count = item.count;
+      addPlayerCash(player, value * count);
+      takeItemFromHand(player, hand);
+      sound.playPickup();
+      addPlayerNotification(player, `Зачислено в кошелёк: +$${value * count}`, 'pickup');
+      return { success: true, message: `Зачислено в кошелёк: +$${value * count}` };
+    }
+  }
+
+  const def = ITEM_CATALOG[item.itemId];
+
+  // Repair kit
+  if (item.itemId === 'repair_kit') {
+    if (player.isInVehicle && player.currentVehicleId && world) {
+      const veh = world.vehicles.find(v => v.id === player.currentVehicleId);
+      if (veh) {
+        if (veh.damage) {
+          veh.damage.engineSmoking = false;
+          veh.damage.underHoodSmolder = false;
+          veh.damage.engineFire = false;
+          veh.damage.fuelTankFire = false;
+          veh.damage.fuelTankBurntThrough = false;
+          veh.damage.cabinFire = false;
+          veh.damage.fireTimer = 0;
+          veh.damage.fireProgress = 0;
+          veh.damage.fireIntensity = 0;
+          veh.damage.groundPuddleIgnited = false;
+          veh.cabinSmoke = 0;
+          veh.damage.frontCrumple = 0;
+          veh.damage.rearCrumple = 0;
+          veh.damage.leftDent = 0;
+          veh.damage.rightDent = 0;
+          veh.damage.frontLeftDent = 0;
+          veh.damage.frontRightDent = 0;
+          veh.damage.rearLeftDent = 0;
+          veh.damage.rearRightDent = 0;
+          veh.damage.frontLeftSuspensionDamage = 0;
+          veh.damage.frontRightSuspensionDamage = 0;
+          veh.damage.rearLeftSuspensionDamage = 0;
+          veh.damage.rearRightSuspensionDamage = 0;
+          veh.damage.steeringDrift = 0;
+          veh.damage.wheelRubResistance = 0;
+          veh.damage.windshieldCracked = false;
+          veh.damage.rearGlassCracked = false;
+          veh.damage.hoodBuckled = false;
+          veh.damage.scratches = [];
+        }
+        if (veh.engineState) {
+          veh.engineState.radiatorWater = 100;
+          veh.engineState.radiatorPunctured = false;
+          veh.engineState.oilLevel = 100;
+          veh.engineState.oilPunctured = false;
+          veh.engineState.oilPressure = 100;
+          veh.engineState.batteryCharge = 100;
+          veh.engineState.starterWorking = true;
+          veh.engineState.temperature = 88;
+          veh.engineState.engineKnocking = false;
+          veh.engineState.engineStalled = false;
+          veh.engineState.overheatingSteam = false;
+        }
+        if (veh.fuelSystem) {
+          veh.fuelSystem.tankPunctured = false;
+        }
+        if (item.count > 1) {
+          item.count -= 1;
+        } else {
+          takeItemFromHand(player, hand);
+        }
+        sound.playPropBreak('hydrant');
+        addPlayerNotification(player, '🔧 Узлы двигателя, подвеска и кузов автомобиля полностью отремонтированы!', 'heal');
+        return { success: true, message: 'Автомобиль отремонтирован' };
+      }
+    } else {
+      addPlayerNotification(player, 'Сядьте в поврежденный автомобиль для ремонта!', 'warning');
+      return { success: false, message: 'Нужно быть в авто' };
+    }
+  }
+
+  // Flashlight toggle
+  if (item.itemId === 'flashlight') {
+    player.heldItemId = player.heldItemId === 'flashlight' ? null : 'flashlight';
+    sound.playAlert();
+    addPlayerNotification(player, player.heldItemId ? '🔦 Фонарик включен' : '🔦 Фонарик выключен', 'info');
+    return { success: true, message: 'Фонарик переключен' };
+  }
+
+  // Gasoline Canister usage (spills fuel puddles on ground or refuels nearby vehicle)
+  if (item.itemId === 'fuel_canister') {
+    const maxPortions = item.maxPortions || def?.biteCount || 20;
+    const currentPortions = item.portions !== undefined ? item.portions : maxPortions;
+
+    sound.playWaterSpray();
+
+    let refueledVehicleName: string | null = null;
+
+    if (world) {
+      // 1. Check if standing near/in a vehicle needing fuel
+      for (const veh of world.vehicles) {
+        const dist = Math.hypot(veh.x - player.x, veh.y - player.y);
+        if (dist < 100 || (player.isInVehicle && player.currentVehicleId === veh.id)) {
+          if (veh.fuelSystem && veh.fuelSystem.tankLevel < 100) {
+            const capacity = veh.fuelSystem.tankCapacity || 50;
+            const currentLiters = (veh.fuelSystem.tankLevel / 100) * capacity;
+            const newLiters = Math.min(capacity, currentLiters + 5); // add 5 liters
+            veh.fuelSystem.tankLevel = Math.min(100, (newLiters / capacity) * 100);
+            refueledVehicleName = veh.type ? `автомобиль (${veh.type.toUpperCase()})` : 'автомобиль';
+            break;
+          }
+        }
+      }
+
+      // 2. If not refueling a car, spill a fuel puddle (FluidStain) on ground
+      if (!refueledVehicleName) {
+        const angle = player.aimAngle !== undefined ? player.aimAngle : player.angle;
+        const stainX = player.x + Math.cos(angle) * 22;
+        const stainY = player.y + Math.sin(angle) * 22;
+
+        if (!world.stains) world.stains = [];
+
+        // Check if expanding an existing nearby fuel stain
+        let existingStain = world.stains.find(st => st.type === 'fuel' && Math.hypot(st.x - stainX, st.y - stainY) < 45);
+        if (existingStain) {
+          existingStain.radius = Math.min(90, existingStain.radius + 15);
+          existingStain.life = 0; // reset decay timer
+        } else {
+          world.stains.push({
+            id: `stain_fuel_${Date.now()}_${Math.random()}`,
+            x: stainX,
+            y: stainY,
+            radius: 24,
+            maxRadius: 75,
+            type: 'fuel',
+            alpha: 0.85,
+            life: 0,
+            maxLife: 600,
+            onFire: false,
+            fireIntensity: 0
+          });
+        }
+
+        // Spawn splash golden fuel droplets
+        for (let i = 0; i < 12; i++) {
+          const pAngle = angle + (Math.random() * 0.9 - 0.45);
+          const pSpeed = 35 + Math.random() * 55;
+          world.particles.push({
+            x: player.x,
+            y: player.y,
+            vx: Math.cos(pAngle) * pSpeed,
+            vy: Math.sin(pAngle) * pSpeed,
+            radius: 2 + Math.random() * 3,
+            color: Math.random() < 0.7 ? '#eab308' : '#ca8a04',
+            alpha: 0.95,
+            life: 0,
+            maxLife: 0.35,
+            type: 'debris'
+          });
+        }
+      }
+    }
+
+    const remaining = currentPortions - 1;
+    item.portions = remaining;
+    item.maxPortions = maxPortions;
+
+    if (remaining % 5 === 0 || remaining === maxPortions - 1) {
+      if (refueledVehicleName) {
+        addPlayerNotification(player, `⛽ Вы заправили ${refueledVehicleName}! (Осталось: ${remaining}/${maxPortions}л)`, 'heal');
+      } else {
+        addPlayerNotification(player, `⛽ Вы разлили бензин на землю! (Осталось: ${remaining}/${maxPortions}л)`, 'info');
+      }
+    }
+
+    if (remaining <= 0) {
+      if (item.count > 1) {
+        item.count -= 1;
+        item.portions = maxPortions;
+      } else {
+        takeItemFromHand(player, hand);
+      }
+      const leftover = createItem('canister_empty', 1);
+      if (hand === 'left' && !player.leftHandItem) {
+        player.leftHandItem = leftover;
+      } else if (hand === 'right' && !player.rightHandItem) {
+        player.rightHandItem = leftover;
+      } else {
+        addItemToPlayer(player, leftover);
+      }
+      addPlayerNotification(player, '🛢️ В канистре полностью закончился бензин!', 'warning');
+    }
+
+    return { success: true, message: 'Бензин залит/разлит' };
+  }
+
+  // Zippo Lighter usage (finite charges, ignites puddles & leaks)
+  if (item.itemId === 'zippo_lighter') {
+    const maxPortions = item.maxPortions || def?.biteCount || 10;
+    const currentPortions = item.portions !== undefined ? item.portions : maxPortions;
+
+    // Spawn sparks / flame particles
+    if (world) {
+      for (let i = 0; i < 10; i++) {
+        const pAngle = Math.random() * Math.PI * 2;
+        const pSpeed = 15 + Math.random() * 40;
+        world.particles.push({
+          x: player.x + (Math.random() * 10 - 5),
+          y: player.y + (Math.random() * 10 - 5),
+          vx: Math.cos(pAngle) * pSpeed,
+          vy: Math.sin(pAngle) * pSpeed - 15,
+          radius: 2 + Math.random() * 3,
+          color: Math.random() < 0.6 ? '#f97316' : '#ef4444',
+          alpha: 0.95,
+          life: 0,
+          maxLife: 0.25 + Math.random() * 0.2,
+          type: 'flame'
+        });
+      }
+    }
+
+    sound.playPropBreak('fire');
+
+    let ignitedStainsCount = 0;
+    let ignitedCarFuel = false;
+
+    if (world) {
+      // 1. Check unignited stains nearby (oil / fuel)
+      if (world.stains) {
+        for (const st of world.stains) {
+          if (!st.onFire && Math.hypot(st.x - player.x, st.y - player.y) < 120) {
+            if (st.type === 'fuel' || st.type === 'oil') {
+              st.onFire = true;
+              st.fireIntensity = 1.0;
+              ignitedStainsCount++;
+
+              // Burst of flames
+              for (let f = 0; f < 12; f++) {
+                world.particles.push({
+                  x: st.x + (Math.random() * st.radius - st.radius / 2),
+                  y: st.y + (Math.random() * st.radius - st.radius / 2),
+                  vx: (Math.random() - 0.5) * 35,
+                  vy: -25 - Math.random() * 35,
+                  radius: 3 + Math.random() * 4,
+                  color: '#f97316',
+                  alpha: 0.9,
+                  life: 0,
+                  maxLife: 0.45,
+                  type: 'flame'
+                });
+              }
+            }
+          }
+        }
+      }
+
+      // 2. Check nearby vehicles with fuel/oil leaks
+      for (const veh of world.vehicles) {
+        const dist = Math.hypot(veh.x - player.x, veh.y - player.y);
+        if (dist < 120 || (player.isInVehicle && player.currentVehicleId === veh.id)) {
+          if (veh.damage) {
+            const hasLeak = veh.fuelSystem?.tankPunctured || veh.engineState?.oilPunctured || veh.damage.underHoodSmolder;
+            if (hasLeak && !veh.damage.fuelTankFire && !veh.damage.engineFire) {
+              veh.damage.fuelTankFire = true;
+              veh.damage.engineFire = true;
+              veh.damage.fireIntensity = 0.8;
+              veh.damage.fireProgress = 0.2;
+              veh.damage.groundPuddleIgnited = true;
+              ignitedCarFuel = true;
+            }
+          }
+        }
+      }
+    }
+
+    const remaining = currentPortions - 1;
+    item.portions = remaining;
+    item.maxPortions = maxPortions;
+
+    let msg = '';
+    if (ignitedCarFuel) {
+      msg = `🔥 Вы поджгли вытекающее топливо автомобиля! (Осталось зажиганий: ${remaining}/${maxPortions})`;
+      addPlayerNotification(player, msg, 'warning');
+    } else if (ignitedStainsCount > 0) {
+      msg = `🔥 Вы поджгли лужу бензина/масла! (Осталось зажиганий: ${remaining}/${maxPortions})`;
+      addPlayerNotification(player, msg, 'warning');
+    } else {
+      msg = `🔥 Вспышка Zippo! Поблизости нет горючих жидкостей. (Осталось зажиганий: ${remaining}/${maxPortions})`;
+      addPlayerNotification(player, msg, 'info');
+    }
+
+    if (remaining <= 0) {
+      if (item.count > 1) {
+        item.count -= 1;
+        item.portions = maxPortions;
+      } else {
+        takeItemFromHand(player, hand);
+      }
+      const leftover = createItem('zippo_empty', 1);
+      if (hand === 'left' && !player.leftHandItem) {
+        player.leftHandItem = leftover;
+      } else if (hand === 'right' && !player.rightHandItem) {
+        player.rightHandItem = leftover;
+      } else {
+        addItemToPlayer(player, leftover);
+      }
+      addPlayerNotification(player, '🔥 В зажигалке Zippo закончился бензин и кремень!', 'warning');
+    }
+
+    return { success: true, message: 'Зажигалка Zippo использована' };
+  }
+
+  // Fire extinguisher usage (volume/capacity, foam spray, gradual/partial fire suppression)
+  if (item.itemId === 'extinguisher') {
+    const maxPortions = item.maxPortions || def?.biteCount || 10;
+    const currentPortions = item.portions !== undefined ? item.portions : maxPortions;
+
+    // Spawn foam powder stream particles
+    if (world) {
+      const sprayAngle = player.aimAngle !== undefined ? player.aimAngle : player.angle;
+      for (let i = 0; i < 7; i++) {
+        const pAngle = sprayAngle + (Math.random() * 0.7 - 0.35);
+        const pSpeed = 80 + Math.random() * 120;
+        world.particles.push({
+          x: player.x + Math.cos(sprayAngle) * 16,
+          y: player.y + Math.sin(sprayAngle) * 16,
+          vx: Math.cos(pAngle) * pSpeed,
+          vy: Math.sin(pAngle) * pSpeed,
+          radius: 4 + Math.random() * 3,
+          color: '#f8fafc',
+          alpha: 0.85,
+          life: 0,
+          maxLife: 0.35 + Math.random() * 0.25,
+          type: 'tire_smoke'
+        });
+      }
+    }
+
+    sound.playPropBreak('hydrant');
+
+    let extinguishedStainsCount = 0;
+    let carFireReduced = false;
+    let carFireExtinguished = false;
+
+    if (world) {
+      // 1. Extinguish ground stains nearby (small ground fires put out easily)
+      if (world.stains) {
+        for (const st of world.stains) {
+          if (st.onFire && Math.hypot(st.x - player.x, st.y - player.y) < 130) {
+            st.onFire = false;
+            st.fireIntensity = 0;
+            extinguishedStainsCount++;
+          }
+        }
+      }
+
+      // 2. Reduce or extinguish vehicle fires nearby
+      for (const veh of world.vehicles) {
+        const dist = Math.hypot(veh.x - player.x, veh.y - player.y);
+        if (dist < 130 || (player.isInVehicle && player.currentVehicleId === veh.id)) {
+          if (veh.damage && (veh.damage.engineFire || veh.damage.fuelTankFire || veh.damage.cabinFire || veh.damage.underHoodSmolder || (veh.damage.fireIntensity || 0) > 0)) {
+            veh.damage.fireIntensity = Math.max(0, (veh.damage.fireIntensity || 1.0) - 0.35);
+            veh.damage.fireProgress = Math.max(0, (veh.damage.fireProgress || 1.0) - 0.25);
+            if (veh.cabinSmoke) {
+              veh.cabinSmoke = Math.max(0, veh.cabinSmoke - 35);
+            }
+
+            if (veh.damage.fireIntensity <= 0 && veh.damage.fireProgress <= 0) {
+              veh.damage.engineFire = false;
+              veh.damage.fuelTankFire = false;
+              veh.damage.cabinFire = false;
+              veh.damage.underHoodSmolder = false;
+              veh.damage.engineSmoking = false;
+              veh.damage.fireTimer = 0;
+              veh.damage.fireProgress = 0;
+              veh.damage.fireIntensity = 0;
+              veh.damage.groundPuddleIgnited = false;
+              carFireExtinguished = true;
+            } else {
+              carFireReduced = true;
+            }
+          }
+        }
+      }
+    }
+
+    const remaining = currentPortions - 1;
+    item.portions = remaining;
+    item.maxPortions = maxPortions;
+
+    let msg = '';
+    if (carFireExtinguished) {
+      msg = `🧯 Пожар автомобиля полностью потушен! (Осталось пены: ${remaining}/${maxPortions})`;
+      addPlayerNotification(player, msg, 'heal');
+    } else if (carFireReduced) {
+      msg = `🧯 Вы сбили пламя пеной, но машина всё ещё пылает! Потребуется ещё пена. (${remaining}/${maxPortions})`;
+      addPlayerNotification(player, msg, 'warning');
+    } else if (extinguishedStainsCount > 0) {
+      msg = `🧯 Затушено горевших луж: ${extinguishedStainsCount}. (${remaining}/${maxPortions})`;
+      addPlayerNotification(player, msg, 'heal');
+    } else {
+      msg = `🧯 Выпустили струю пены. Поблизости нет огня. (${remaining}/${maxPortions})`;
+      addPlayerNotification(player, msg, 'info');
+    }
+
+    if (remaining <= 0) {
+      if (item.count > 1) {
+        item.count -= 1;
+        item.portions = maxPortions;
+      } else {
+        takeItemFromHand(player, hand);
+      }
+      const leftover = createItem('extinguisher_empty', 1);
+      if (hand === 'left' && !player.leftHandItem) {
+        player.leftHandItem = leftover;
+      } else if (hand === 'right' && !player.rightHandItem) {
+        player.rightHandItem = leftover;
+      } else {
+        addItemToPlayer(player, leftover);
+      }
+      addPlayerNotification(player, '🧯 В огнетушителе закончился заряд пены!', 'warning');
+    }
+
+    return { success: true, message: 'Огнетушитель использован' };
+  }
+
+  // Sandbag usage in hand (pours 1 kg sand at a distance, extinguishing fires and drying/absorbing oil, fuel, and antifreeze spills)
+  if (item.itemId === 'sandbag') {
+    sound.playWaterSpray();
+
+    const angle = player.aimAngle !== undefined ? player.aimAngle : (player.angle || 0);
+    const distance = 40; // Pour sand ~40 units in front of player
+    const sandX = player.x + Math.cos(angle) * distance;
+    const sandY = player.y + Math.sin(angle) * distance;
+
+    let driedSpillsCount = 0;
+    let extinguishedFiresCount = 0;
+
+    if (world) {
+      if (!world.stains) world.stains = [];
+
+      // 1. Spawn flying arc sand particles from player towards sandX, sandY
+      for (let i = 0; i < 28; i++) {
+        const pAngle = angle + (Math.random() * 0.8 - 0.4);
+        const pSpeed = 30 + Math.random() * 60;
+        const colors = ['#eab308', '#d97706', '#fef08a', '#b45309', '#a16207'];
+        world.particles.push({
+          x: player.x,
+          y: player.y,
+          vx: Math.cos(pAngle) * pSpeed,
+          vy: Math.sin(pAngle) * pSpeed,
+          radius: 1.8 + Math.random() * 2.5,
+          color: colors[Math.floor(Math.random() * colors.length)],
+          alpha: 0.95,
+          life: 0,
+          maxLife: 0.4 + Math.random() * 0.2,
+          type: 'debris'
+        });
+      }
+
+      // 2. Create/expand a sand mound/stain on ground
+      let existingSand = world.stains.find(st => st.type === 'sand' && Math.hypot(st.x - sandX, st.y - sandY) < 40);
+      if (existingSand) {
+        existingSand.radius = Math.min(85, existingSand.radius + 20);
+        existingSand.alpha = Math.min(1.0, existingSand.alpha + 0.3);
+        existingSand.life = 0;
+      } else {
+        world.stains.push({
+          id: `stain_sand_${Date.now()}_${Math.random()}`,
+          x: sandX,
+          y: sandY,
+          radius: 36,
+          maxRadius: 80,
+          type: 'sand',
+          alpha: 0.95,
+          life: 0,
+          maxLife: 1200,
+          onFire: false,
+          fireIntensity: 0
+        });
+      }
+
+      // 3. Dry up fluid spills (fuel, oil, coolant/antifreeze) and extinguish burning stains in ~75px radius
+      for (let i = world.stains.length - 1; i >= 0; i--) {
+        const st = world.stains[i];
+        if (st.type === 'sand') continue;
+        const dist = Math.hypot(st.x - sandX, st.y - sandY);
+        if (dist <= 75) {
+          if (st.onFire) {
+            st.onFire = false;
+            st.fireIntensity = 0;
+            extinguishedFiresCount++;
+          }
+          st.alpha -= 0.7;
+          st.radius -= 22;
+          if (st.alpha <= 0.05 || st.radius <= 4) {
+            world.stains.splice(i, 1);
+          }
+          driedSpillsCount++;
+        }
+      }
+
+      // 4. Extinguish nearby vehicle fires if sand lands on burning engine / fuel tank
+      for (const veh of world.vehicles) {
+        const dist = Math.hypot(veh.x - sandX, veh.y - sandY);
+        if (dist <= 85) {
+          if (veh.damage) {
+            if (veh.damage.engineFire || veh.damage.fuelTankFire || veh.damage.underHoodSmolder || veh.damage.cabinFire) {
+              veh.damage.engineFire = false;
+              veh.damage.fuelTankFire = false;
+              veh.damage.underHoodSmolder = false;
+              veh.damage.cabinFire = false;
+              veh.damage.groundPuddleIgnited = false;
+              veh.damage.fireProgress = Math.max(0, (veh.damage.fireProgress || 0) - 0.6);
+              veh.damage.fireIntensity = 0;
+              extinguishedFiresCount++;
+            }
+          }
+        }
+      }
+    }
+
+    // Handle item in hand -> replace with empty sack
+    if (item.count > 1) {
+      item.count -= 1;
+      const emptySack = createItem('sack_empty', 1);
+      addItemToPlayer(player, emptySack);
+    } else {
+      takeItemFromHand(player, hand);
+      const emptySack = createItem('sack_empty', 1);
+      if (hand === 'left') {
+        player.leftHandItem = emptySack;
+      } else {
+        player.rightHandItem = emptySack;
+      }
+    }
+
+    let resultMsg = '⏳ Вы рассыпали 1 кг песка!';
+    if (extinguishedFiresCount > 0 && driedSpillsCount > 0) {
+      resultMsg = `⏳ Вы рассыпали 1 кг песка! Очаг огня потушен, а пятна масел/топлива впитаны.`;
+    } else if (extinguishedFiresCount > 0) {
+      resultMsg = `⏳ Вы рассыпали 1 кг песка и затушили очаг возгорания!`;
+    } else if (driedSpillsCount > 0) {
+      resultMsg = `⏳ Вы рассыпали 1 кг песка, осушив пятна бензина, масла и антифриза!`;
+    }
+
+    addPlayerNotification(player, resultMsg, 'heal');
+    return { success: true, message: resultMsg };
+  }
+
+
+
+  // Check fullness & nausea
+  if ((item.category === 'food' || item.category === 'drink') && (player.needs.fullness || 0) >= 98) {
+    if (item.category === 'food') {
+      addPlayerNotification(player, 'Вы слишком сыты! Подождите, пока переварится...', 'warning');
+      return { success: false, message: 'Слишком сытно' };
+    } else {
+      addPlayerNotification(player, 'Желудок полон! Больше не лезет...', 'warning');
+      return { success: false, message: 'Желудок полон' };
+    }
+  }
+  if ((player.needs.nausea || 0) >= 65) {
+    addPlayerNotification(player, 'Вас тошнит! Нельзя есть или пить.', 'warning');
+    return { success: false, message: 'Тошнит' };
+  }
+
+  // Multi-portion / Bite-by-Bite logic
+  const maxPortions = item.maxPortions || def?.biteCount || 1;
+  const currentPortions = item.portions !== undefined ? item.portions : maxPortions;
+
+  if (maxPortions > 1) {
+    const ratio = 1 / maxPortions;
+    const hungerGain = item.effects.hunger ? Math.round((item.effects.hunger * ratio) * 10) / 10 : 0;
+    const thirstGain = item.effects.thirst ? Math.round((item.effects.thirst * ratio) * 10) / 10 : 0;
+    const healthGain = item.effects.health ? Math.round((item.effects.health * ratio) * 10) / 10 : 0;
+    const energyGain = item.effects.energy ? Math.round((item.effects.energy * ratio) * 10) / 10 : 0;
+    const sleepinessGain = item.effects.sleepiness ? Math.round((item.effects.sleepiness * ratio) * 10) / 10 : 0;
+
+    if (hungerGain) player.needs.hunger = Math.min(100, Math.max(0, player.needs.hunger + hungerGain));
+    if (thirstGain) {
+      player.needs.thirst = Math.min(100, Math.max(0, player.needs.thirst + thirstGain));
+      if (player.bodyState) player.bodyState.hydration = Math.min(100, player.bodyState.hydration + thirstGain);
+    }
+    if (healthGain) player.needs.health = Math.min(100, Math.max(0, player.needs.health + healthGain));
+    if (energyGain) player.needs.energy = Math.min(100, Math.max(0, player.needs.energy + energyGain));
+    if (sleepinessGain) player.needs.sleepiness = Math.min(100, Math.max(0, player.needs.sleepiness + sleepinessGain));
+
+    const fGain = def?.fullnessPerBite !== undefined ? def.fullnessPerBite : (item.category === 'food' ? 3 : 1);
+    player.needs.fullness = Math.min(100, (player.needs.fullness || 0) + fGain);
+    if ((player.needs.fullness || 0) > 88) {
+      player.needs.nausea = Math.min(100, (player.needs.nausea || 0) + 4);
+    }
+
+    // Specific item effects
+    if (item.itemId === 'painkillers' || item.itemId === 'morphine') {
+      administerMedication(player, item.itemId);
+    } else if (item.itemId === 'vitamins') {
+      player.needs.energy = Math.min(100, player.needs.energy + 4);
+      administerMedication(player, 'vitamins');
+    } else if (item.itemId === 'bandage') {
+      applyBandage(player, targetInjuryId);
+    } else if (item.itemId === 'splint') {
+      applySplint(player, targetInjuryId);
+    } else if (item.itemId === 'medical_patch') {
+      applyMedicalPatch(player, targetInjuryId);
+    } else if (item.itemId === 'medkit') {
+      applyMedkit(player);
+    } else if (item.itemId === 'panthenol_spray') {
+      applyPanthenolSpray(player, targetInjuryId);
+    } else if (item.itemId === 'spasatel_ointment') {
+      applySpasatelOintment(player, targetInjuryId);
+    } else if (item.itemId === 'zelenka') {
+      applyZelenka(player, targetInjuryId);
+    } else if (item.itemId === 'iodine') {
+      applyIodine(player, targetInjuryId);
+    } else if (item.itemId === 'diclofenac_gel') {
+      applyDiclofenacGel(player, targetInjuryId);
+    } else if (item.itemId === 'hydrogen_peroxide') {
+      applyHydrogenPeroxide(player, targetInjuryId);
+    } else if (item.itemId === 'ammonia_spirit') {
+      applyAmmoniaSpirit(player);
+    } else if (item.itemId === 'balm_star') {
+      applyBalmStar(player);
+    } else if (item.itemId === 'activated_charcoal') {
+      applyActivatedCharcoal(player);
+    } else if (item.itemId === 'valerian_drops') {
+      applyValerianDrops(player);
+    } else if (item.itemId === 'antiseptic' && player.bodyState) {
+      applyAntiseptic(player, targetInjuryId);
+    }
+
+    if (item.category === 'food') soothePanic(player, 18);
+    else if (item.category === 'drink') soothePanic(player, 25);
+    else soothePanic(player, 35);
+
+    if (item.category === 'food') sound.playEat();
+    else if (item.category === 'drink') sound.playDrink();
+    else sound.playUseItem();
+
+    const remaining = currentPortions - 1;
+    item.portions = remaining;
+    item.maxPortions = maxPortions;
+
+    let taste = '';
+    if (def?.tasteMessages && def.tasteMessages.length > 0) {
+      taste = def.tasteMessages[Math.floor(Math.random() * def.tasteMessages.length)];
+    }
+
+    const unitLabel = item.category === 'drink' ? 'глотков' : item.category === 'food' ? 'укусов' : (item.itemId === 'painkillers' || item.itemId === 'vitamins' ? 'таблеток' : 'применений');
+
+    if (remaining <= 0) {
+      if (item.count > 1) {
+        item.count -= 1;
+        item.portions = maxPortions;
+      } else {
+        takeItemFromHand(player, hand);
+      }
+
+      if (def?.leftoverId) {
+        const leftover = createItem(def.leftoverId, 1);
+        if (hand === 'left' && !player.leftHandItem) {
+          player.leftHandItem = leftover;
+        } else if (hand === 'right' && !player.rightHandItem) {
+          player.rightHandItem = leftover;
+        } else {
+          stowItemFromHandToPockets(player, hand);
+        }
+        addPlayerNotification(player, `🗑️ Вы закончили ${item.nameRu}. В руке осталась упаковка: ${def.leftoverNameRu || leftover.nameRu}`, 'info');
+      } else {
+        addPlayerNotification(player, `✅ ${item.nameRu} полностью закончен!`, 'food');
+      }
+    } else {
+      addPlayerNotification(
+        player,
+        `${item.category === 'drink' ? '🥤' : item.category === 'food' ? '🍽️' : '🧯'} ${taste || item.nameRu} (${remaining}/${maxPortions} ${unitLabel})`,
+        item.category === 'drink' ? 'drink' : item.category === 'food' ? 'food' : 'heal'
+      );
+    }
+
+    return { success: true, message: `Использовано: ${item.nameRu}` };
+  }
+
+  // Single portion items
+  const fx = item.effects;
+  if (fx.health) player.needs.health = Math.min(100, Math.max(0, player.needs.health + fx.health));
+  if (fx.hunger) player.needs.hunger = Math.min(100, Math.max(0, player.needs.hunger + fx.hunger));
+  if (fx.thirst) {
+    player.needs.thirst = Math.min(100, Math.max(0, player.needs.thirst + fx.thirst));
+    if (player.bodyState) player.bodyState.hydration = Math.min(100, player.bodyState.hydration + fx.thirst);
+  }
+  if (fx.energy) player.needs.energy = Math.min(100, Math.max(0, player.needs.energy + fx.energy));
+  if (fx.sleepiness) player.needs.sleepiness = Math.min(100, Math.max(0, player.needs.sleepiness + fx.sleepiness));
+
+  if (item.category === 'food' || item.category === 'drink') {
+    const fGain = def?.fullnessPerBite !== undefined ? def.fullnessPerBite : (item.category === 'food' ? 20 : 15);
+    player.needs.fullness = Math.min(100, (player.needs.fullness || 0) + fGain);
+    if ((player.needs.fullness || 0) > 88) {
+      player.needs.nausea = Math.min(100, (player.needs.nausea || 0) + 4);
+    }
+  }
+
+  // Medical treatments
+  if (player.bodyState && item.category === 'med') {
+    if (item.itemId === 'bandage') applyBandage(player, targetInjuryId);
+    else if (item.itemId === 'splint') applySplint(player, targetInjuryId);
+    else if (item.itemId === 'medical_patch') applyMedicalPatch(player, targetInjuryId);
+    else if (item.itemId === 'antiseptic') applyAntiseptic(player, targetInjuryId);
+    else if (item.itemId === 'panthenol_spray') applyPanthenolSpray(player, targetInjuryId);
+    else if (item.itemId === 'spasatel_ointment') applySpasatelOintment(player, targetInjuryId);
+    else if (item.itemId === 'zelenka') applyZelenka(player, targetInjuryId);
+    else if (item.itemId === 'iodine') applyIodine(player, targetInjuryId);
+    else if (item.itemId === 'diclofenac_gel') applyDiclofenacGel(player, targetInjuryId);
+    else if (item.itemId === 'hydrogen_peroxide') applyHydrogenPeroxide(player, targetInjuryId);
+    else if (item.itemId === 'ammonia_spirit') applyAmmoniaSpirit(player);
+    else if (item.itemId === 'balm_star') applyBalmStar(player);
+    else if (item.itemId === 'activated_charcoal') applyActivatedCharcoal(player);
+    else if (item.itemId === 'valerian_drops') applyValerianDrops(player);
+    else if (item.itemId === 'medkit') applyMedkit(player);
+    else if (item.itemId === 'painkillers' || item.itemId === 'morphine') administerMedication(player, item.itemId);
+  }
+
+  if (item.category === 'food') soothePanic(player, 30);
+  else if (item.category === 'drink') soothePanic(player, 40);
+  else soothePanic(player, 50);
+
+  if (item.category === 'med') {
+    sound.playUseItem();
+    addPlayerNotification(player, `Использовано: ${item.nameRu}`, 'heal');
+  }
+
+  if (item.count > 1) {
+    item.count -= 1;
+  } else {
+    takeItemFromHand(player, hand);
+  }
+
+  return { success: true, message: `Использовано: ${item.nameRu}` };
+}
+
 export function dropItemFromPlayer(
   player: Player,
   itemIndex: number,
@@ -3278,11 +4936,32 @@ export function seedInitialGroundItems(world: GameWorld) {
 }
 
 export function addPlayerNotification(
-  _player: Player,
-  _text: string,
-  _type: 'heal' | 'food' | 'drink' | 'energy' | 'sleep' | 'warning' | 'pickup' | 'info' = 'info'
+  player: Player | null | undefined,
+  text: string,
+  type: 'heal' | 'food' | 'drink' | 'energy' | 'sleep' | 'warning' | 'pickup' | 'info' = 'info'
 ) {
-  // Notifications removed per user request
+  if (!player || !text) return;
+  if (!player.notifications) player.notifications = [];
+
+  const colorMap: Record<string, string> = {
+    warning: '#ef4444',
+    heal: '#22c55e',
+    food: '#f59e0b',
+    drink: '#38bdf8',
+    pickup: '#a855f7',
+    info: '#38bdf8'
+  };
+
+  player.notifications.push({
+    id: `notif_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+    text,
+    color: colorMap[type] || '#e2e8f0',
+    timer: 3.2
+  });
+
+  if (player.notifications.length > 7) {
+    player.notifications.shift();
+  }
 }
 
 export function isPlayerNearTrashBin(player: Player, world: GameWorld): boolean {

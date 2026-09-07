@@ -3,6 +3,7 @@ import {
   Building, 
   Camera, 
   GameWorld, 
+  GroundItem,
   InputState, 
   InventoryItem,
   Pedestrian, 
@@ -13,10 +14,12 @@ import {
   Tree,
   Vehicle,
   WeatherType,
-  ActivePlacement
+  ActivePlacement,
+  FuelType,
+  GasPumpDispenser
 } from './types';
-import { CAR_CONFIGS, createDefaultEngineState, createDefaultFuelSystem, createDefaultVehicleDamage } from './cityMap';
-import { loadMap } from './loadMap';
+import { CAR_CONFIGS, createDefaultEngineState, createDefaultFuelSystem, createDefaultVehicleDamage, ensureVehicleDamage } from './vehicleHelpers';
+import { loadMap, sanitizeWorldVehicles } from './loadMap';
 import { SpatialGrid } from './spatialGrid';
 import { updateAITraffic, updatePedestrians, updateTrafficLights } from './aiTraffic';
 import { 
@@ -28,7 +31,7 @@ import {
   updateVehiclePhysics 
 } from './physics';
 import { GameRenderer } from './renderer';
-import { getBuildingFloorsCount, generateBuildingLayout, constrainPlayerToInterior } from './buildingInteriors';
+import { getBuildingFloorsCount, getBuildingLayout, constrainPlayerToInterior } from './buildingInteriors';
 import { calculateGpsRoute } from './navigation';
 import { sound } from './audio';
 import { 
@@ -45,6 +48,9 @@ import {
   seedInitialGroundItems, 
   updateConsumption,
   useItemOnPlayer,
+  useHandItemOnPlayer,
+  stowItemFromHandToPockets,
+  swapPlayerHands,
   ITEM_CATALOG,
   addPlayerCash
 } from './items';
@@ -54,6 +60,7 @@ import { FullScreenMap } from './components/FullScreenMap';
 import { LandscapeGuard } from './components/LandscapeGuard';
 import { MobileTouchControls } from './components/MobileTouchControls';
 import { MainMenu } from './components/MainMenu';
+import { PauseMenu } from './components/PauseMenu';
 import { PlayerNeedsHUD } from './components/PlayerNeedsHUD';
 import { InventoryModal } from './components/InventoryModal';
 import { SelfInspectionModal } from './components/SelfInspectionModal';
@@ -63,6 +70,21 @@ import { RadialMenu } from './components/RadialMenu';
 import { SpeedometerHUD } from './components/SpeedometerHUD';
 import { PerformanceProfiler } from './components/PerformanceProfiler';
 import { performanceConfig } from './performanceConfig';
+import { FuelNozzleSelectorModal } from './components/FuelNozzleSelectorModal';
+import { GasStationCashierModal } from './components/GasStationCashierModal';
+import { EngineBayModal } from './components/EngineBayModal';
+import { 
+  getNearbyGasPump, 
+  getNearbyVehicleForFueling, 
+  takePumpNozzle, 
+  insertNozzleIntoVehicle, 
+  removeNozzleFromVehicle, 
+  returnNozzleToPump, 
+  startGasPumpFueling, 
+  updateGasPumps, 
+  isPlayerNearGasStationCashier, 
+  FUEL_GRADES 
+} from './gasStationSystem';
 import { 
   Activity,
   AlertTriangle,
@@ -75,6 +97,7 @@ import {
   CloudRain,
   Compass, 
   Eye, 
+  Fuel,
   Gauge, 
   Heart,
   TreePine,
@@ -83,6 +106,7 @@ import {
   Truck,
   Map,
   Maximize2,
+  Minimize2,
   Moon, 
   Navigation,
   RotateCcw,
@@ -99,6 +123,8 @@ import {
   Wrench,
   X,
   Zap,
+  ZoomIn,
+  ZoomOut,
   MapPin,
   Sparkles,
   Plane,
@@ -190,6 +216,7 @@ export default function App() {
     if (typeof window === 'undefined') return false;
     return 'ontouchstart' in window || navigator.maxTouchPoints > 0 || window.innerWidth <= 900;
   });
+  const [isMinimapCollapsed, setIsMinimapCollapsed] = useState<boolean>(false);
   const [timeHour, setTimeHour] = useState<number>(10.0); // 0 to 24 hours
   const [isTimeAutoCycling, setIsTimeAutoCycling] = useState<boolean>(true);
   const [weather, setWeather] = useState<WeatherType>('clear');
@@ -223,6 +250,14 @@ export default function App() {
   const [streetName, setStreetName] = useState<string>('Grand Boulevard');
   const [nearbyCarPrompt, setNearbyCarPrompt] = useState<string | null>(null);
   const [isMuted, setIsMuted] = useState<boolean>(false);
+
+  // Gas Station System States
+  const [isFuelNozzleModalOpen, setIsFuelNozzleModalOpen] = useState<boolean>(false);
+  const [activeGasPump, setActiveGasPump] = useState<GasPumpDispenser | null>(null);
+  const [isGasStationCashierModalOpen, setIsGasStationCashierModalOpen] = useState<boolean>(false);
+  const [isEngineBayOpen, setIsEngineBayOpen] = useState<boolean>(false);
+  const [engineBayVehicle, setEngineBayVehicle] = useState<Vehicle | null>(null);
+  const [gasStationPrompt, setGasStationPrompt] = useState<string | null>(null);
   const [isDrifting, setIsDrifting] = useState<boolean>(false);
   const [trafficCount, setTrafficCount] = useState<number>(0);
   const [pedCount, setPedCount] = useState<number>(0);
@@ -233,6 +268,17 @@ export default function App() {
   const [isMinimapExpanded, setIsMinimapExpanded] = useState<boolean>(false);
   const [isFullMapOpen, setIsFullMapOpen] = useState<boolean>(false);
   const [isMainMenuOpen, setIsMainMenuOpen] = useState<boolean>(true);
+  const [isPauseMenuOpen, setIsPauseMenuOpen] = useState<boolean>(false);
+  const isPauseMenuOpenRef = useRef<boolean>(false);
+  isPauseMenuOpenRef.current = isPauseMenuOpen;
+
+  const [settings, setSettings] = useState({
+    fpsLimit: 60,
+    autoSaveInterval: 25,
+    timeAutoCycle: true,
+    mouseSensitivity: 1.0
+  });
+
   const [gpsDestination, setGpsDestination] = useState<{ x: number; y: number; name?: string } | null>(null);
 
   const handleSetGpsTarget = (target: { x: number; y: number; name?: string } | null) => {
@@ -421,8 +467,16 @@ export default function App() {
       }
     }
 
-    const timeString = new Date().toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
-    const dateString = new Date().toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' });
+    let timeString = '12:00';
+    let dateString = '01.01.2026';
+    try {
+      timeString = new Date().toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+      dateString = new Date().toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' });
+    } catch (err) {
+      const now = new Date();
+      timeString = now.toTimeString().slice(0, 5);
+      dateString = now.toISOString().slice(0, 10).split('-').reverse().join('.');
+    }
     
     const saveName = customName || `Улица: ${currentStreet}`;
 
@@ -439,8 +493,29 @@ export default function App() {
       weather: weatherRef.current,
       streetName: currentStreet,
       gpsDestination: gpsDestination,
-      needs: player.needs ? { ...player.needs } : undefined,
-      inventory: player.inventory ? JSON.parse(JSON.stringify(player.inventory)) : undefined
+      needs: player.needs ? JSON.parse(JSON.stringify(player.needs)) : undefined,
+      bodyState: player.bodyState ? JSON.parse(JSON.stringify(player.bodyState)) : undefined,
+      inventory: player.inventory ? JSON.parse(JSON.stringify(player.inventory)) : undefined,
+      equippedClothing: player.equippedClothing ? JSON.parse(JSON.stringify(player.equippedClothing)) : undefined,
+      cash: player.cash || 0,
+      selectedHotbarIndex: player.selectedHotbarIndex || 0,
+      vehicles: world.vehicles.map(v => ({
+        id: v.id,
+        type: v.type,
+        x: v.x,
+        y: v.y,
+        angle: v.angle,
+        speed: v.speed,
+        color: v.color,
+        roofColor: v.roofColor,
+        hasGBO: v.hasGBO,
+        hasHeavySuspension: (v as any).hasHeavySuspension,
+        hasChiptuning: (v as any).hasChiptuning,
+        fuelSystem: v.fuelSystem ? { ...v.fuelSystem } : undefined,
+        engineState: v.engineState ? { ...v.engineState } : undefined,
+        damage: v.damage ? { ...v.damage } : undefined,
+        isParked: v.isParked
+      }))
     };
 
     let updated = [...savesRef.current];
@@ -478,18 +553,96 @@ export default function App() {
     // Restore player status & survival needs
     player.x = save.playerX;
     player.y = save.playerY;
-    player.angle = save.playerAngle;
+    player.angle = save.playerAngle || 0;
     player.vx = 0;
     player.vy = 0;
     player.speed = 0;
     player.isInVehicle = save.isInVehicle;
     player.currentVehicleId = save.currentVehicleId;
+    if (save.cash !== undefined) player.cash = save.cash;
+    if (save.selectedHotbarIndex !== undefined) {
+      player.selectedHotbarIndex = save.selectedHotbarIndex;
+      setSelectedHotbarIndex(save.selectedHotbarIndex);
+    }
 
     if (save.needs && player.needs) {
       player.needs = { ...player.needs, ...save.needs };
     }
+    if (save.bodyState && player.bodyState) {
+      player.bodyState = JSON.parse(JSON.stringify(save.bodyState));
+    }
     if (save.inventory) {
       player.inventory = JSON.parse(JSON.stringify(save.inventory));
+    }
+    if (save.equippedClothing) {
+      player.equippedClothing = JSON.parse(JSON.stringify(save.equippedClothing));
+    }
+
+    if (save.vehicles && Array.isArray(save.vehicles)) {
+      save.vehicles.forEach((sv: any) => {
+        const v = world.vehicles.find(item => item.id === sv.id);
+        if (v) {
+          v.x = sv.x;
+          v.y = sv.y;
+          v.angle = sv.angle;
+          
+          const isPlayerCar = save.isInVehicle && save.currentVehicleId === v.id;
+          if (isPlayerCar) {
+            v.speed = 0;
+          } else {
+            v.speed = 0; // Zero speed on load for AI traffic to prevent post-load pileups
+          }
+
+          v.vx = 0;
+          v.vy = 0;
+          v.angularVelocity = 0;
+          v.steerAngle = 0;
+          v.aiState = v.isParked ? 'parked' : 'driving';
+          v.targetWaypointIndex = 0;
+          v.routeWaypoints = [];
+          v.currentConnection = undefined;
+          v.knockbackVx = 0;
+          v.knockbackVy = 0;
+          v.knockbackSpin = 0;
+          v.stunnedTimer = 2.0; // 2 seconds stabilization / collision grace period
+          v.ghostingAlpha = 0.3; // temporary ghosting so they don't collide immediately on load
+
+           if (sv.color) v.color = sv.color;
+          if (sv.roofColor) v.roofColor = sv.roofColor;
+          if (sv.hasGBO !== undefined) v.hasGBO = sv.hasGBO;
+
+          if (sv.hasHeavySuspension !== undefined) (v as any).hasHeavySuspension = sv.hasHeavySuspension;
+          if (sv.hasChiptuning !== undefined) (v as any).hasChiptuning = sv.hasChiptuning;
+
+          if (sv.fuelSystem) v.fuelSystem = { ...sv.fuelSystem };
+          if (sv.engineState) v.engineState = { ...sv.engineState };
+          if (sv.damage) {
+            v.damage = ensureVehicleDamage({ length: v.length, width: v.width, damage: sv.damage });
+          }
+          v.isParked = sv.isParked;
+        }
+      });
+
+      // Anti-overlap separation pass on load
+      if (world.vehicles && world.vehicles.length > 1) {
+        for (let i = 0; i < world.vehicles.length; i++) {
+          for (let j = i + 1; j < world.vehicles.length; j++) {
+            const c1 = world.vehicles[i];
+            const c2 = world.vehicles[j];
+            const dx = c2.x - c1.x;
+            const dy = c2.y - c1.y;
+            const dist = Math.hypot(dx, dy);
+            const minDist = (c1.width + c2.width) * 0.75;
+            if (dist < minDist && dist > 0.001) {
+              const overlap = (minDist - dist) / 2;
+              c1.x -= (dx / dist) * overlap;
+              c1.y -= (dy / dist) * overlap;
+              c2.x += (dx / dist) * overlap;
+              c2.y += (dy / dist) * overlap;
+            }
+          }
+        }
+      }
     }
 
     setIsInVehicle(save.isInVehicle);
@@ -504,38 +657,14 @@ export default function App() {
         veh.speed = 0;
         veh.isPlayerControlled = true;
         veh.isParked = false;
-        const cfg = CAR_CONFIGS[veh.type];
+        const cfg = CAR_CONFIGS[veh.type] || CAR_CONFIGS.sedan;
         setActiveCarName(cfg?.name || 'Автомобиль');
         sound.startEngine();
       } else {
-        // Find closest vehicle to player
-        let closest: any = null;
-        let minDist = 300;
-        for (const v of world.vehicles) {
-          const dist = Math.hypot(v.x - save.playerX, v.y - save.playerY);
-          if (dist < minDist) {
-            minDist = dist;
-            closest = v;
-          }
-        }
-        if (closest) {
-          closest.x = save.playerX;
-          closest.y = save.playerY;
-          closest.vx = 0;
-          closest.vy = 0;
-          closest.speed = 0;
-          closest.isPlayerControlled = true;
-          closest.isParked = false;
-          player.currentVehicleId = closest.id;
-          const cfg = CAR_CONFIGS[closest.type];
-          setActiveCarName(cfg?.name || 'Автомобиль');
-          sound.startEngine();
-        } else {
-          player.isInVehicle = false;
-          player.currentVehicleId = null;
-          setIsInVehicle(false);
-          setActiveCarName('');
-        }
+        player.isInVehicle = false;
+        player.currentVehicleId = null;
+        setIsInVehicle(false);
+        setActiveCarName('');
       }
     } else {
       setIsInVehicle(false);
@@ -551,6 +680,7 @@ export default function App() {
     camera.targetZoom = 1.15;
 
     setIsMainMenuOpen(false);
+    setIsPauseMenuOpen(false);
   };
 
   const handleDeleteSave = (saveId: string) => {
@@ -558,7 +688,7 @@ export default function App() {
     syncSavesToStorage(updated);
   };
 
-  const handleNewGame = () => {
+  const handleNewGame = (spawnId?: string) => {
     const world = worldRef.current;
     const player = playerRef.current;
     const camera = cameraRef.current;
@@ -571,8 +701,8 @@ export default function App() {
     inputRef.current.handbrake = false;
     inputRef.current.sprint = false;
 
-    const defaultSpawn = SPAWN_LOCATIONS[0]; // Central Park
-    setCurrentSpawnId(defaultSpawn.id);
+    const spawnLoc = SPAWN_LOCATIONS.find(s => s.id === spawnId) || SPAWN_LOCATIONS[0];
+    setCurrentSpawnId(spawnLoc.id);
     setIsSpawnMenuOpen(false);
 
     if (player.currentVehicleId) {
@@ -587,8 +717,8 @@ export default function App() {
       }
     }
 
-    player.x = defaultSpawn.x;
-    player.y = defaultSpawn.y;
+    player.x = spawnLoc.x;
+    player.y = spawnLoc.y;
     player.vx = 0;
     player.vy = 0;
     player.speed = 0;
@@ -621,10 +751,10 @@ export default function App() {
     weatherRef.current = 'clear';
     handleSetGpsTarget(null);
 
-    camera.x = defaultSpawn.x;
-    camera.y = defaultSpawn.y;
-    camera.targetX = defaultSpawn.x;
-    camera.targetY = defaultSpawn.y;
+    camera.x = spawnLoc.x;
+    camera.y = spawnLoc.y;
+    camera.targetX = spawnLoc.x;
+    camera.targetY = spawnLoc.y;
     camera.targetZoom = 1.15;
 
     setIsMainMenuOpen(false);
@@ -699,6 +829,7 @@ export default function App() {
         turnSignal: 'none',
         turnSignalTimer: 0,
         requiredFuel: fs.fuelType === 'diesel' ? 'diesel' : (fs.octaneNumber === 92 ? 'ai92' : 'ai95'),
+        hasGBO: ['sedan_classic', 'wagon_classic', 'taxi_yellow', 'delivery_truck', 'van_cargo_old'].includes(placement.id) ? Math.random() < 0.4 : false,
         engineState: createDefaultEngineState(placement.id as any, false, false),
         fuelSystem: fs,
         damage: createDefaultVehicleDamage(config.length, config.width),
@@ -738,15 +869,16 @@ export default function App() {
     }
   };
 
-  // Periodic autosave every 25 seconds
+  // Periodic autosave based on settings.autoSaveInterval
   useEffect(() => {
+    if (settings.autoSaveInterval <= 0) return;
     const interval = setInterval(() => {
-      if (worldRef.current && playerRef.current && !isMainMenuOpenRef.current) {
+      if (worldRef.current && playerRef.current && !isMainMenuOpenRef.current && !isPauseMenuOpenRef.current) {
         handleCreateSave('Автосохранение');
       }
-    }, 25000);
+    }, settings.autoSaveInterval * 1000);
     return () => clearInterval(interval);
-  }, []);
+  }, [settings.autoSaveInterval]);
 
   const worldRef = useRef<GameWorld | null>(null);
   const playerRef = useRef<Player>({
@@ -842,9 +974,15 @@ export default function App() {
     let cleanupListeners: (() => void) | null = null;
 
     sound.init();
-    loadMap().then((world) => {
-      if (!isMounted) return;
-      worldRef.current = world;
+    loadMap()
+      .catch((err) => {
+        console.error('[App] Ошибка загрузки карты из map.json:', err);
+        return null;
+      })
+      .then((world) => {
+        if (!world) return;
+        if (!isMounted) return;
+        worldRef.current = world;
 
       // Index static entities into spatial grids
       const bldGrid = spatialGridBuildingsRef.current;
@@ -907,28 +1045,34 @@ export default function App() {
           e.preventDefault();
           return;
         }
-        setIsInventoryOpen(false);
-        setIsInspectionOpen(false);
-        setIsConsoleOpen(false);
-        setIsFullMapOpen(false);
-        setIsSpawnMenuOpen(false);
-        setIsQuickMenuOpen(false);
-        const nextState = !isMainMenuOpenRef.current;
-        setIsMainMenuOpen(nextState);
-        if (nextState) {
+        if (isInventoryOpen || isInspectionOpen || isConsoleOpen || isFullMapOpen || isSpawnMenuOpen || isQuickMenuOpen) {
+          setIsInventoryOpen(false);
+          setIsInspectionOpen(false);
+          setIsConsoleOpen(false);
+          setIsFullMapOpen(false);
+          setIsSpawnMenuOpen(false);
+          setIsQuickMenuOpen(false);
+          e.preventDefault();
+          return;
+        }
+        if (isMainMenuOpenRef.current) {
+          return;
+        }
+        const nextPause = !isPauseMenuOpenRef.current;
+        setIsPauseMenuOpen(nextPause);
+        if (nextPause) {
           inputRef.current.forward = false;
           inputRef.current.backward = false;
           inputRef.current.left = false;
           inputRef.current.right = false;
           inputRef.current.handbrake = false;
           inputRef.current.sprint = false;
-          // Trigger immediate autosave on pausing
-          handleCreateSave('Автосохранение');
         }
-        return; // Prevents any other keys from executing on Escape
+        e.preventDefault();
+        return;
       }
 
-      if (isMainMenuOpenRef.current) return;
+      if (isMainMenuOpenRef.current || isPauseMenuOpenRef.current) return;
 
       // Inventory Modal Toggle (I or Tab)
       if (code === 'KeyI' || code === 'Tab') {
@@ -937,19 +1081,21 @@ export default function App() {
         return;
       }
 
-      // Hotbar item selection (1 - 6 and Numpad 1 - 6)
-      if (code.startsWith('Digit') || code.startsWith('Numpad')) {
-        const digitStr = code.replace('Digit', '').replace('Numpad', '');
-        const digit = parseInt(digitStr, 10);
-        if (digit >= 1 && digit <= 6) {
-          const slotIdx = digit - 1;
-          setSelectedHotbarIndex(slotIdx);
-          selectedHotbarIndexRef.current = slotIdx;
-          const p = playerRef.current;
-          if (p) {
-            p.selectedHotbarIndex = slotIdx;
-          }
-          sound.resume();
+      // Hand selection (1 = Left hand, 2 = Right hand)
+      if (code === 'Digit1' || code === 'Numpad1') {
+        const p = playerRef.current;
+        if (p && !p.isInVehicle) {
+          p.activeHand = 'left';
+          sound.playUseItem();
+          setVitalsRefreshTick((t) => t + 1);
+        }
+      }
+      if (code === 'Digit2' || code === 'Numpad2') {
+        const p = playerRef.current;
+        if (p && !p.isInVehicle) {
+          p.activeHand = 'right';
+          sound.playUseItem();
+          setVitalsRefreshTick((t) => t + 1);
         }
       }
 
@@ -966,9 +1112,16 @@ export default function App() {
       if (code === 'ShiftLeft' || code === 'ShiftRight') inputRef.current.sprint = true;
       if (code === 'KeyH') inputRef.current.hornH = true;
 
-      // Turn Signals & Interaction / Consumption (Q = Left, E = Right in car or Use Selected Hotbar Item / Pickup on foot, Z = Hazard)
+      // Turn Signals & Interaction / Consumption (Q = Left turn signal in car or Swap / Toggle Active Hand on foot, E = Interact / Use in active hand, Z = Hazard)
       if (code === 'KeyQ') {
-        toggleTurnSignal('left');
+        const p = playerRef.current;
+        if (p && p.isInVehicle) {
+          toggleTurnSignal('left');
+        } else if (p) {
+          p.activeHand = p.activeHand === 'left' ? 'right' : 'left';
+          sound.playUseItem();
+          setVitalsRefreshTick((t) => t + 1);
+        }
       }
       if (code === 'KeyE') {
         handleInteractE();
@@ -985,6 +1138,13 @@ export default function App() {
       // Window Open / Close toggle (O key)
       if (code === 'KeyO') {
         handleToggleWindow();
+      }
+
+      // Grid Mode Toggle (G key)
+      if (code === 'KeyG') {
+        const cam = cameraRef.current;
+        cam.gridMode = !cam.gridMode;
+        addPlayerNotification(playerRef.current, `Режим сетки (Grid Mode) ${cam.gridMode ? 'ВКЛ' : 'ВЫКЛ'}`, 'info');
       }
 
       // Interact/Enter/Exit Vehicle or Building (F key)
@@ -1133,6 +1293,11 @@ export default function App() {
     let fpsTimer = 0;
 
     const gameLoop = (now: number) => {
+      if (isMainMenuOpenRef.current || isPauseMenuOpenRef.current) {
+        animationFrameId = requestAnimationFrame(gameLoop);
+        return;
+      }
+
       const frameStart = performance.now();
       const dt = Math.min((now - lastTime) / 1000, 0.05);
       lastTime = now;
@@ -1168,12 +1333,12 @@ export default function App() {
         // 2 & 3. Update Traffic Lights & AI Traffic
         const tAiStart = performance.now();
         updateTrafficLights(world.intersections, dt);
-        updateAITraffic(world, dt, vehGrid, pedGrid, { x: player.x, y: player.y });
+        updateAITraffic(world, dt, vehGrid, pedGrid, { x: player.x, y: player.y }, player);
         const tAiEnd = performance.now();
 
         // 4. Update Pedestrians (using spatial grids and player position)
         const tPedStart = performance.now();
-        updatePedestrians(world, dt, vehGrid, pedGrid, bldGrid, { x: player.x, y: player.y }, spatialGridPropsRef.current);
+        updatePedestrians(world, dt, vehGrid, pedGrid, bldGrid, { x: player.x, y: player.y }, spatialGridPropsRef.current, player);
         const tPedEnd = performance.now();
 
         // 5. Update Player & Vehicles Physics
@@ -1259,7 +1424,7 @@ export default function App() {
             const bld = world.buildings.find(b => b.id === player.insideBuildingId);
             if (bld) {
               const currentFloor = player.currentFloor ?? 0;
-              const layout = generateBuildingLayout(bld, currentFloor);
+              const layout = getBuildingLayout(bld, currentFloor);
               
               // Apply physical collisions with interior walls and furniture
               constrainPlayerToInterior(player, bld, layout, dt);
@@ -1325,63 +1490,63 @@ export default function App() {
               let shopType: CityShop['type'] | null = null;
               let shopIcon = '[ТОРГ]';
               let badgeColor = '#f59e0b';
-              let shopName = bld.nameRu || currentRoomName || 'Магазин';
+              let shopName = currentRoomName || bld.nameRu || 'Магазин';
 
               if (bld.shopBrand === 'pharmacy_36_6' || currentRoomName.includes('Аптека') || currentRoomName.includes('36.6') || currentRoomName.includes('Медпункт') || bld.type === 'hospital') {
                 shopType = 'pharmacy';
                 shopIcon = '[МЕД]';
                 badgeColor = '#10b981';
-                shopName = bld.nameRu || (currentRoomName.includes('Аптека') ? currentRoomName : 'Аптека "36.6"');
+                shopName = currentRoomName || bld.nameRu || 'Аптека "36.6"';
               } else if (bld.shopBrand === 'cofix_bakery' || currentRoomName.includes('Cofix') || currentRoomName.includes('Пекарня')) {
                 shopType = 'cafe';
                 shopIcon = '[КАФЕ]';
                 badgeColor = '#ea580c';
-                shopName = bld.nameRu || currentRoomName || 'Кафе & Пекарня "Cofix & Bakery"';
+                shopName = currentRoomName || bld.nameRu || 'Каফে & Пекарня "Cofix & Bakery"';
               } else if (bld.shopBrand === 'bean_bistro' || currentRoomName.includes('Bean & Bistro') || currentRoomName.includes('Кофейня') || currentRoomName.includes('Кафе')) {
                 shopType = 'cafe';
                 shopIcon = '[КАФЕ]';
                 badgeColor = '#f59e0b';
-                shopName = bld.nameRu || currentRoomName || 'Кафе & Кофейня "Bean & Bistro"';
+                shopName = currentRoomName || bld.nameRu || 'Каফে & Кофейня "Bean & Bistro"';
               } else if (bld.shopBrand === 'dodo_pizza' || currentRoomName.includes('Пиццерия') || currentRoomName.includes('Додо') || currentRoomName.includes('Пицца')) {
                 shopType = 'pizzeria';
                 shopIcon = '[ПИЦЦА]';
                 badgeColor = '#f97316';
-                shopName = bld.nameRu || currentRoomName || 'Пиццерия "Додо Пицца"';
+                shopName = currentRoomName || bld.nameRu || 'Пиццерия "Додо Пицца"';
               } else if (bld.shopBrand === 'vkusno_tochka' || currentRoomName.includes('Вкусно — и точка') || currentRoomName.includes('Бургерная') || currentRoomName.includes('Вкусно и Точка') || currentRoomName.includes('Фастфуд')) {
                 shopType = 'fast_food';
                 shopIcon = '[ЕДА]';
                 badgeColor = '#ef4444';
-                shopName = bld.nameRu || currentRoomName || 'Ресторан "Вкусно — и точка"';
+                shopName = currentRoomName || bld.nameRu || 'Ресторан "Вкусно — и точка"';
               } else if (bld.shopBrand === 'mvideo' || currentRoomName.includes('М.Видео') || currentRoomName.includes('Электроника') || currentRoomName.includes('Гаджет')) {
                 shopType = 'electronics';
                 shopIcon = '[ТЕХ]';
                 badgeColor = '#3b82f6';
-                shopName = bld.nameRu || currentRoomName || 'Гипермаркет электроники "М.Видео"';
+                shopName = currentRoomName || bld.nameRu || 'Гипермаркет электроники "М.Видео"';
               } else if (bld.shopBrand === 'sportmaster' || currentRoomName.includes('Спортмастер') || currentRoomName.includes('Спорт')) {
                 shopType = 'sports_shop';
                 shopIcon = '[СПОРТ]';
                 badgeColor = '#0ea5e9';
-                shopName = bld.nameRu || currentRoomName || 'Спортивный гипермаркет "Спортмастер"';
+                shopName = currentRoomName || bld.nameRu || 'Спортивный гипермаркет "Спортмастер"';
               } else if (bld.shopBrand === 'pitstop_service' || bld.type === 'car_dealership' || currentRoomName.includes('PIT-STOP') || currentRoomName.includes('Авто')) {
                 shopType = 'auto_shop';
                 shopIcon = '[АВТО]';
                 badgeColor = '#0284c7';
-                shopName = bld.nameRu || 'Автомастерская & Сервис "PIT-STOP"';
+                shopName = currentRoomName || bld.nameRu || 'Автомастерская & Сервис "PIT-STOP"';
               } else if (bld.shopBrand === 'splav_gear' || currentRoomName.includes('Сплав') || currentRoomName.includes('Туризм') || currentRoomName.includes('Охота') || currentRoomName.includes('Снаряжение')) {
                 shopType = 'gear_shop';
                 shopIcon = '[ТУРИЗМ]';
                 badgeColor = '#84cc16';
-                shopName = bld.nameRu || 'Магазин "Охота & Туризм Сплав"';
+                shopName = currentRoomName || bld.nameRu || 'Магазин "Охота & Туризм Сплав"';
               } else if (bld.shopBrand === 'perekrestok' || currentRoomName.includes('Перекрёсток')) {
                 shopType = 'supermarket';
                 shopIcon = '[ТОРГ]';
                 badgeColor = '#16a34a';
-                shopName = bld.nameRu || 'Супермаркет "Перекрёсток 24/7"';
+                shopName = currentRoomName || bld.nameRu || 'Супермаркет "Перекрёсток 24/7"';
               } else if (bld.shopBrand === 'pyaterochka' || currentRoomName.includes('Пятёрочка')) {
                 shopType = 'supermarket';
                 shopIcon = '[ТОРГ]';
                 badgeColor = '#dc2626';
-                shopName = bld.nameRu || 'Супермаркет "Пятёрочка 24/7"';
+                shopName = currentRoomName || bld.nameRu || 'Супермаркет "Пятёрочка 24/7"';
               } else if (currentRoomName.includes('Суши') || currentRoomName.includes('WOK') || currentRoomName.includes('Якитория')) {
                 shopType = 'sushi_asian';
                 shopIcon = '[СУШИ]';
@@ -1411,7 +1576,7 @@ export default function App() {
                 shopType = 'supermarket';
                 shopIcon = '[ТОРГ]';
                 badgeColor = '#f59e0b';
-                shopName = bld.nameRu || currentRoomName || 'Торговый отдел';
+                shopName = currentRoomName || bld.nameRu || 'Торговый отдел';
               }
 
               let shopFound: CityShop | null = null;
@@ -1529,6 +1694,14 @@ export default function App() {
         // Survival & Needs Simulation (Hunger, Thirst, Fatigue, Sleepiness, Health)
         updatePlayerNeedsAndVitals(player, world, dt, input, timeHourRef.current);
 
+        // Update Gas Station Pump Dispenser Fuel Flow & Sounds
+        updateGasPumps(world, dt, (pump, veh) => {
+          sound.playBuySell();
+          if (player) {
+            addPlayerNotification(player, `Заправка на колонке №${pump.pumpNumber} завершена (${pump.displayLiters?.toFixed(1)} л)! Извлеките пистолет.`, 'info');
+          }
+        });
+
         if (isInvincibleRef.current || isCreativeModeRef.current) {
           player.needs.health = 100;
           player.needs.hunger = 100;
@@ -1625,6 +1798,69 @@ export default function App() {
           } else {
             setNearbyCarPrompt(null);
           }
+
+          // Gas Station Prompt Calculation
+          let gasPrompt: string | null = null;
+          if (!player.isInVehicle) {
+            if (player.heldFuelNozzle) {
+              const nearbyVeh = getNearbyVehicleForFueling(player.x, player.y, world);
+              if (nearbyVeh) {
+                const grade = FUEL_GRADES[player.heldFuelNozzle.fuelType];
+                const vehName = CAR_CONFIGS[nearbyVeh.type]?.name || nearbyVeh.type;
+                gasPrompt = `[E] Вставить пистолет [${grade?.nameRu || ''}] в бак (${vehName})`;
+              } else {
+                const nearPump = getNearbyGasPump(player.x, player.y, world);
+                if (nearPump) {
+                  gasPrompt = `[E] Повесить пистолет на колонку №${nearPump.pumpNumber}`;
+                } else {
+                  gasPrompt = `Поднесите пистолет к бензобаку авто [E]`;
+                }
+              }
+            } else {
+              // Check if near a vehicle with inserted nozzle
+              if (world.vehicles) {
+                for (const v of world.vehicles) {
+                  if (v.fuelingState?.nozzleInTank) {
+                    const capOffsetDist = -v.length * 0.35;
+                    const capOffsetSide = v.width * 0.45;
+                    const capX = v.x + Math.cos(v.angle) * capOffsetDist - Math.sin(v.angle) * capOffsetSide;
+                    const capY = v.y + Math.sin(v.angle) * capOffsetDist + Math.cos(v.angle) * capOffsetSide;
+                    const d = Math.hypot(capX - player.x, capY - player.y);
+                    if (d < 75) {
+                      const pump = world.gasPumps?.find(p => p.id === v.fuelingState?.pumpId);
+                      const vehName = CAR_CONFIGS[v.type]?.name || v.type;
+                      if (pump?.isPumping) {
+                        gasPrompt = `⚡ Заправка... ${pump.displayLiters?.toFixed(1)} / ${pump.targetLiters} л`;
+                      } else {
+                        gasPrompt = `[E] Извлечь пистолет из бензобака (${vehName})`;
+                      }
+                      break;
+                    }
+                  }
+                }
+              }
+
+              if (!gasPrompt) {
+                const nearPump = getNearbyGasPump(player.x, player.y, world);
+                if (nearPump) {
+                  gasPrompt = `[E] Взять топливный пистолет (Колонка №${nearPump.pumpNumber})`;
+                } else if (isPlayerNearGasStationCashier(player, world)) {
+                  gasPrompt = `[E] Касса АЗС / Оплата топлива ("Нефть-Магистраль")`;
+                } else if (world.vehicles) {
+                  for (const v of world.vehicles) {
+                    const cfg = CAR_CONFIGS[v.type] || CAR_CONFIGS.sedan;
+                    const frontX = v.x + Math.cos(v.angle) * (cfg.length * 0.42);
+                    const frontY = v.y + Math.sin(v.angle) * (cfg.length * 0.42);
+                    if (Math.hypot(player.x - frontX, player.y - frontY) < 55) {
+                      gasPrompt = `[E] Открыть капот (${cfg.name})`;
+                      break;
+                    }
+                  }
+                }
+              }
+            }
+          }
+          setGasStationPrompt(gasPrompt);
 
           // GPS Navigation Route recalculation & Arrival check
           if (world.gpsDestination) {
@@ -2071,6 +2307,9 @@ export default function App() {
     };
 
     animationFrameId = requestAnimationFrame(gameLoop);
+    })
+    .catch((err) => {
+      console.error('[App] Unhandled error during game initialization:', err);
     }); // close loadMap().then()
 
     return () => {
@@ -2177,6 +2416,12 @@ export default function App() {
         sound.playCollision(0.1);
         if (!player.notifications) player.notifications = [];
         player.notifications.push({ id: 'eng_starter_' + Date.now(), text: '⚡ Стартер разбит или поврежден!', color: '#ef4444', timer: 3.0 });
+      } else if (eng.batteryInstalled === false) {
+        if (!player.notifications) player.notifications = [];
+        player.notifications.push({ id: 'eng_nobat_' + Date.now(), text: '❌ В машине отсутствует аккумулятор!', color: '#ef4444', timer: 3.0 });
+      } else if (eng.batteryPosConnected === false || eng.batteryNegConnected === false) {
+        if (!player.notifications) player.notifications = [];
+        player.notifications.push({ id: 'eng_term_' + Date.now(), text: '⚡ Клеммы аккумулятора отсоединены!', color: '#ef4444', timer: 3.0 });
       } else if (eng.batteryCharge <= 5) {
         if (!player.notifications) player.notifications = [];
         player.notifications.push({ id: 'eng_batt_' + Date.now(), text: '🔋 Аккумулятор разряжен в 0%!', color: '#ef4444', timer: 3.0 });
@@ -2289,7 +2534,6 @@ export default function App() {
       if (veh) {
         veh.isPlayerControlled = false;
         veh.isParked = true;
-        veh.turnSignal = 'none';
         veh.speed = 0;
         veh.vx = 0;
         veh.vy = 0;
@@ -2329,7 +2573,8 @@ export default function App() {
       if (closestVeh) {
         closestVeh.isPlayerControlled = true;
         closestVeh.isParked = false;
-        closestVeh.headlightsOn = true;
+        setPlayerHeadlightMode(closestVeh.headlightMode || 'off');
+        setPlayerTurnSignal(closestVeh.turnSignal || 'none');
         closestVeh.aiState = 'driving';
         if (closestVeh.engineState) {
           closestVeh.engineState.engineRunning = true;
@@ -2358,8 +2603,8 @@ export default function App() {
         player.y = closestVeh.y;
 
         setIsInVehicle(true);
-        const cfg = CAR_CONFIGS[closestVeh.type];
-        setActiveCarName(cfg.name);
+        const cfg = CAR_CONFIGS[closestVeh.type] || CAR_CONFIGS.sedan;
+        setActiveCarName(cfg?.name || 'Автомобиль');
         sound.playCarDoor();
         sound.startEngine();
       }
@@ -2380,7 +2625,7 @@ export default function App() {
 
         setTimeout(() => {
           const currentFloor = player.currentFloor ?? 0;
-          const layout = generateBuildingLayout(bld, currentFloor);
+          const layout = getBuildingLayout(bld, currentFloor);
           const relX = player.x - bld.x;
           const relY = player.y - bld.y;
 
@@ -2487,7 +2732,7 @@ export default function App() {
           }
         }
 
-        const layout = generateBuildingLayout(bld, 0);
+        const layout = getBuildingLayout(bld, 0);
         const exitZone = (layout.exits && layout.exits[closestEntIndex])
           ? layout.exits[closestEntIndex]
           : (layout.exits[0] || layout.exitZone);
@@ -2532,134 +2777,279 @@ export default function App() {
 
     if (p.isInVehicle) {
       setIsRadialMenuOpen(prev => !prev);
-    } else {
-      const currentSlot = selectedHotbarIndexRef.current ?? 0;
-      const selectedItem = p?.inventory?.[currentSlot];
+      return;
+    }
 
-      if (p.isInsideBuilding) {
-        // Resolve building directly to guarantee 100% correct shop catalog
-        const bld = world?.buildings.find(b => b.id === p.currentBuildingId);
-        let hasStandaloneShop = false;
-        let resolvedType: CityShop['type'] = 'supermarket';
-        let resolvedTitle = 'Супермаркет "Пятёрочка 24/7"';
-
-        if (bld) {
-          if (bld.shopBrand === 'pharmacy_36_6' || bld.type === 'hospital') {
-            resolvedType = 'pharmacy';
-            resolvedTitle = bld.nameRu || 'Аптека "36.6"';
-            hasStandaloneShop = true;
-          } else if (bld.shopBrand === 'cofix_bakery') {
-            resolvedType = 'cafe';
-            resolvedTitle = bld.nameRu || 'Кафе & Пекарня "Cofix & Bakery"';
-            hasStandaloneShop = true;
-          } else if (bld.shopBrand === 'bean_bistro') {
-            resolvedType = 'cafe';
-            resolvedTitle = bld.nameRu || 'Кафе & Кофейня "Bean & Bistro"';
-            hasStandaloneShop = true;
-          } else if (bld.shopBrand === 'pitstop_service' || bld.type === 'car_dealership') {
-            resolvedType = 'auto_shop';
-            resolvedTitle = bld.nameRu || 'Автомастерская & Сервис "PIT-STOP"';
-            hasStandaloneShop = true;
-          } else if (bld.shopBrand === 'splav_gear') {
-            resolvedType = 'gear_shop';
-            resolvedTitle = bld.nameRu || 'Магазин "Охота & Туризм Сплав"';
-            hasStandaloneShop = true;
-          } else if (bld.shopBrand === 'dodo_pizza') {
-            resolvedType = 'pizzeria';
-            resolvedTitle = bld.nameRu || 'Пиццерия "Додо Пицца"';
-            hasStandaloneShop = true;
-          } else if (bld.shopBrand === 'perekrestok') {
-            resolvedType = 'supermarket';
-            resolvedTitle = bld.nameRu || 'Супермаркет "Перекрёсток 24/7"';
-            hasStandaloneShop = true;
-          } else if (bld.shopBrand === 'pyaterochka') {
-            resolvedType = 'supermarket';
-            resolvedTitle = bld.nameRu || 'Супермаркет "Пятёрочка 24/7"';
-            hasStandaloneShop = true;
-          } else if (bld.shopBrand === 'vkusno_tochka') {
-            resolvedType = 'fast_food';
-            resolvedTitle = bld.nameRu || 'Ресторан "Вкусно — и точка"';
-            hasStandaloneShop = true;
-          } else if (bld.shopBrand === 'mvideo') {
-            resolvedType = 'electronics';
-            resolvedTitle = bld.nameRu || 'Гипермаркет электроники "М.Видео"';
-            hasStandaloneShop = true;
-          } else if (bld.shopBrand === 'sportmaster') {
-            resolvedType = 'sports_shop';
-            resolvedTitle = bld.nameRu || 'Спортивный гипермаркет "Спортмастер"';
-            hasStandaloneShop = true;
-          } else if (bld.type === 'police_station') {
-            resolvedType = 'gear_shop';
-            resolvedTitle = 'Арсенал & Снаряжение полиции';
-            hasStandaloneShop = true;
-          } else if (nearShopRef.current) {
-            resolvedType = nearShopRef.current.type;
-            resolvedTitle = nearShopRef.current.nameRu;
-            hasStandaloneShop = true;
+    // 0. HIGH-DETAIL GAS STATION MECHANICS (Nozzle pickup, Vehicle insert, Cashier payment)
+    if (world) {
+      // 0a. Player holding a fuel nozzle
+      if (p.heldFuelNozzle) {
+        const nearbyVeh = getNearbyVehicleForFueling(p.x, p.y, world);
+        const pump = world.gasPumps?.find(gp => gp.id === p.heldFuelNozzle?.pumpId);
+        if (nearbyVeh && pump) {
+          const nozzleFuelType = p.heldFuelNozzle.fuelType;
+          const success = insertNozzleIntoVehicle(p, nearbyVeh, pump, world);
+          if (success) {
+            const grade = FUEL_GRADES[nozzleFuelType];
+            const vehName = CAR_CONFIGS[nearbyVeh.type]?.name || nearbyVeh.type;
+            addPlayerNotification(p, `Топливный пистолет [${grade?.nameRu || ''}] вставлен в бак (${vehName}). Пройдите в кассу АЗС для оплаты.`, 'info');
+            sound.playUseItem();
+            setVitalsRefreshTick(t => t + 1);
+            return;
           }
+        }
+
+        if (pump) {
+          const nearPump = getNearbyGasPump(p.x, p.y, world);
+          if (nearPump && nearPump.id === pump.id) {
+            returnNozzleToPump(p, pump);
+            addPlayerNotification(p, `Топливный пистолет возвращен на колонку №${pump.pumpNumber}.`, 'info');
+            sound.playUseItem();
+            setVitalsRefreshTick(t => t + 1);
+            return;
+          }
+        }
+      }
+
+      // 0b. Near a vehicle that has an inserted nozzle
+      if (world.vehicles) {
+        for (const v of world.vehicles) {
+          if (v.fuelingState?.nozzleInTank) {
+            const capOffsetDist = -v.length * 0.35;
+            const capOffsetSide = v.width * 0.45;
+            const capX = v.x + Math.cos(v.angle) * capOffsetDist - Math.sin(v.angle) * capOffsetSide;
+            const capY = v.y + Math.sin(v.angle) * capOffsetDist + Math.cos(v.angle) * capOffsetSide;
+            const d = Math.hypot(capX - p.x, capY - p.y);
+            if (d < 75) {
+              const pump = world.gasPumps?.find(gp => gp.id === v.fuelingState?.pumpId);
+              if (pump) {
+                if (pump.isPumping) {
+                  addPlayerNotification(p, 'Идет процесс подачи топлива! Дождитесь окончания заправки.', 'warning');
+                  return;
+                }
+                removeNozzleFromVehicle(p, v, pump, world);
+                addPlayerNotification(p, `Топливный пистолет извлечен из бака. Повесьте его обратно на колонку №${pump.pumpNumber}.`, 'info');
+                sound.playUseItem();
+                setVitalsRefreshTick(t => t + 1);
+                return;
+              }
+            }
+          }
+        }
+      }
+
+      // 0c. Near a Gas Pump Dispenser
+      const nearPump = getNearbyGasPump(p.x, p.y, world);
+      if (nearPump) {
+        if (nearPump.isPumping) {
+          addPlayerNotification(p, `Колонка №${nearPump.pumpNumber} в процессе подачи топлива.`, 'info');
+          return;
+        }
+        setActiveGasPump(nearPump);
+        setIsFuelNozzleModalOpen(true);
+        sound.playUseItem();
+        return;
+      }
+
+      // 0d. Near Gas Station Cashier Terminal / Counter
+      if (isPlayerNearGasStationCashier(p, world)) {
+        setShopType('gas_station_shop');
+        setShopTitle('АЗС «НЕФТЬМАГИСТРАЛЬ» 24/7');
+        setIsShopOpen(true);
+        sound.playUseItem();
+        return;
+      }
+
+      // 0e. Near Front Hood of a Vehicle
+      if (world.vehicles) {
+        for (const v of world.vehicles) {
+          const cfg = CAR_CONFIGS[v.type] || CAR_CONFIGS.sedan;
+          const frontX = v.x + Math.cos(v.angle) * (cfg.length * 0.42);
+          const frontY = v.y + Math.sin(v.angle) * (cfg.length * 0.42);
+          const distToFront = Math.hypot(p.x - frontX, p.y - frontY);
+
+          if (distToFront < 55) {
+            v.engineState.hoodOpen = true;
+            setEngineBayVehicle(v);
+            setIsEngineBayOpen(true);
+            sound.playUseItem();
+            addPlayerNotification(p, `Открыт капот (${cfg.name})`, 'info');
+            setVitalsRefreshTick(t => t + 1);
+            return;
+          }
+        }
+      }
+    }
+
+    const activeHand = p.activeHand || 'right';
+    let currentHand = activeHand;
+    let handItem = currentHand === 'left' ? p.leftHandItem : p.rightHandItem;
+
+    // If active hand is empty, check if other hand holds something
+    if (!handItem) {
+      const otherHand = activeHand === 'left' ? 'right' : 'left';
+      const otherHandItem = otherHand === 'left' ? p.leftHandItem : p.rightHandItem;
+      if (otherHandItem) {
+        currentHand = otherHand;
+        handItem = otherHandItem;
+        p.activeHand = otherHand;
+      }
+    }
+
+    // 1. PRIMARY: If player has an item in hand, use or open it!
+    if (handItem) {
+      if (handItem.isContainer || handItem.itemId === 'wallet' || handItem.itemId === 'plastic_bag') {
+        setIsInventoryOpen(true);
+        sound.playUseItem();
+        addPlayerNotification(p, `Открыт контейнер: ${handItem.nameRu}`, 'info');
+        return;
+      }
+
+      const TOPICAL_ITEMS = ['bandage', 'splint', 'medical_patch', 'antiseptic', 'panthenol_spray', 'spasatel_ointment', 'zelenka', 'iodine', 'diclofenac_gel', 'hydrogen_peroxide'];
+      if ((handItem.category === 'med' && TOPICAL_ITEMS.includes(handItem.itemId)) || handItem.requiresLimbSelection) {
+        setTreatmentModalItem({ index: -1, item: handItem });
+        sound.playUseItem();
+        return;
+      }
+
+      if (handItem.usable) {
+        useHandItemOnPlayer(p, currentHand, world || undefined);
+        sound.resume();
+        setVitalsRefreshTick(t => t + 1);
+        return;
+      }
+
+      addPlayerNotification(p, `Предмет "${handItem.nameRu}" в руке нельзя активировать напрямую`, 'info');
+      return;
+    }
+
+    // 2. SECONDARY: Pick up nearby ground items if any within reaching distance (~65px)
+    if (world && world.groundItems && world.groundItems.length > 0) {
+      let closestGI: GroundItem | null = null;
+      let minDist = 65;
+      for (const gi of world.groundItems) {
+        const d = Math.hypot(p.x - gi.x, p.y - gi.y);
+        if (d < minDist) {
+          minDist = d;
+          closestGI = gi;
+        }
+      }
+      if (closestGI) {
+        pickupGroundItem(p, world, closestGI);
+        setVitalsRefreshTick(t => t + 1);
+        return;
+      }
+    }
+
+    // 3. Pick up nearby litter
+    if (pickupNearbyLitter(p, world)) {
+      setVitalsRefreshTick(t => t + 1);
+      return;
+    }
+
+    // 4. Shop Interaction (when near a shop zone or inside a store)
+    let hasStandaloneShop = false;
+    let resolvedType: CityShop['type'] = 'supermarket';
+    let resolvedTitle = 'Супермаркет "Пятёрочка 24/7"';
+
+    if (p.isInsideBuilding && p.insideBuildingId) {
+      const bld = world?.buildings.find(b => b.id === p.insideBuildingId);
+      if (bld) {
+        if (bld.shopBrand === 'pharmacy_36_6' || bld.type === 'hospital') {
+          resolvedType = 'pharmacy';
+          resolvedTitle = bld.nameRu || 'Аптека "36.6"';
+          hasStandaloneShop = true;
+        } else if (bld.shopBrand === 'cofix_bakery') {
+          resolvedType = 'cafe';
+          resolvedTitle = bld.nameRu || 'Кафе & Пекарня "Cofix & Bakery"';
+          hasStandaloneShop = true;
+        } else if (bld.shopBrand === 'bean_bistro') {
+          resolvedType = 'cafe';
+          resolvedTitle = bld.nameRu || 'Кафе & Кофейня "Bean & Bistro"';
+          hasStandaloneShop = true;
+        } else if (bld.shopBrand === 'pitstop_service' || bld.type === 'car_dealership') {
+          resolvedType = 'auto_shop';
+          resolvedTitle = bld.nameRu || 'Автомастерская & Сервис "PIT-STOP"';
+          hasStandaloneShop = true;
+        } else if (bld.shopBrand === 'splav_gear') {
+          resolvedType = 'gear_shop';
+          resolvedTitle = bld.nameRu || 'Магазин "Охота & Туризм Сплав"';
+          hasStandaloneShop = true;
+        } else if (bld.shopBrand === 'dodo_pizza') {
+          resolvedType = 'pizzeria';
+          resolvedTitle = bld.nameRu || 'Пиццерия "Додо Пицца"';
+          hasStandaloneShop = true;
+        } else if (bld.shopBrand === 'perekrestok') {
+          resolvedType = 'supermarket';
+          resolvedTitle = bld.nameRu || 'Супермаркет "Перекрёсток 24/7"';
+          hasStandaloneShop = true;
+        } else if (bld.shopBrand === 'pyaterochka') {
+          resolvedType = 'supermarket';
+          resolvedTitle = bld.nameRu || 'Супермаркет "Пятёрочка 24/7"';
+          hasStandaloneShop = true;
+        } else if (bld.shopBrand === 'vkusno_tochka') {
+          resolvedType = 'fast_food';
+          resolvedTitle = bld.nameRu || 'Ресторан "Вкусно — и точка"';
+          hasStandaloneShop = true;
+        } else if (bld.shopBrand === 'mvideo') {
+          resolvedType = 'electronics';
+          resolvedTitle = bld.nameRu || 'Гипермаркет электроники "М.Видео"';
+          hasStandaloneShop = true;
+        } else if (bld.shopBrand === 'sportmaster') {
+          resolvedType = 'sports_shop';
+          resolvedTitle = bld.nameRu || 'Спортивный гипермаркет "Спортмастер"';
+          hasStandaloneShop = true;
+        } else if (bld.type === 'police_station') {
+          resolvedType = 'gear_shop';
+          resolvedTitle = 'Арсенал & Снаряжение полиции';
+          hasStandaloneShop = true;
         } else if (nearShopRef.current) {
           resolvedType = nearShopRef.current.type;
           resolvedTitle = nearShopRef.current.nameRu;
           hasStandaloneShop = true;
         }
-
-        if (hasStandaloneShop) {
-          setShopTitle(resolvedTitle);
-          setShopType(resolvedType);
-          setIsShopOpen(true);
-          sound.playUseItem();
-        } else if (selectedItem && selectedItem.usable) {
-          // E key uses/takes a bite/sip/pill from the selected hotbar item
-          useItemOnPlayer(p, currentSlot, world || undefined);
-          sound.resume();
-          setVitalsRefreshTick(t => t + 1);
-        } else {
-          // Fallback: Try to pick up nearest litter first, then ground items
-          if (pickupNearbyLitter(p, world)) {
-            // Litter picked up successfully
-          } else if (world && world.groundItems && world.groundItems.length > 0) {
-            let closestGI = null;
-            let minDist = 75;
-            for (const gi of world.groundItems) {
-              const d = Math.hypot(p.x - gi.x, p.y - gi.y);
-              if (d < minDist) {
-                minDist = d;
-                closestGI = gi;
-              }
-            }
-            if (closestGI) {
-              pickupGroundItem(p, world, closestGI);
-            }
-          }
-        }
       } else if (nearShopRef.current) {
-        setShopTitle(nearShopRef.current.nameRu);
-        setShopType(nearShopRef.current.type);
-        setIsShopOpen(true);
+        resolvedType = nearShopRef.current.type;
+        resolvedTitle = nearShopRef.current.nameRu;
+        hasStandaloneShop = true;
+      }
+    } else if (nearShopRef.current) {
+      resolvedType = nearShopRef.current.type;
+      resolvedTitle = nearShopRef.current.nameRu;
+      hasStandaloneShop = true;
+    }
+
+    if (hasStandaloneShop) {
+      setShopTitle(resolvedTitle);
+      setShopType(resolvedType);
+      setIsShopOpen(true);
+      sound.playUseItem();
+      return;
+    }
+
+    // 5. Pocket Consumables: Use selected slot or first usable item in pockets
+    const currentSlot = selectedHotbarIndexRef.current ?? 0;
+    const selectedPocketItem = p?.inventory?.[currentSlot];
+
+    if (selectedPocketItem && selectedPocketItem.usable) {
+      const TOPICAL_ITEMS = ['bandage', 'splint', 'medical_patch', 'antiseptic', 'panthenol_spray', 'spasatel_ointment', 'zelenka', 'iodine', 'diclofenac_gel', 'hydrogen_peroxide'];
+      if (selectedPocketItem.category === 'med' && TOPICAL_ITEMS.includes(selectedPocketItem.itemId)) {
+        setTreatmentModalItem({ index: currentSlot, item: selectedPocketItem });
+        return;
+      }
+      useItemOnPlayer(p, currentSlot, world || undefined);
+      sound.resume();
+      setVitalsRefreshTick(t => t + 1);
+      return;
+    }
+
+    // Check if wallet or container is in inventory
+    if (p.inventory && p.inventory.length > 0) {
+      const containerItem = p.inventory.find(it => it && (it.isContainer || it.itemId === 'wallet' || it.itemId === 'plastic_bag'));
+      if (containerItem) {
+        setIsInventoryOpen(true);
         sound.playUseItem();
-      } else if (selectedItem && selectedItem.usable) {
-        // E key uses/takes a bite/sip/pill from the selected hotbar item
-        useItemOnPlayer(p, currentSlot, world || undefined);
-        sound.resume();
-        setVitalsRefreshTick(t => t + 1);
-      } else {
-        // Fallback: Try to pick up nearest litter first, then ground items
-        if (pickupNearbyLitter(p, world)) {
-          // Litter picked up successfully
-        } else if (world && world.groundItems && world.groundItems.length > 0) {
-          let closestGI = null;
-          let minDist = 75;
-          for (const gi of world.groundItems) {
-            const d = Math.hypot(p.x - gi.x, p.y - gi.y);
-            if (d < minDist) {
-              minDist = d;
-              closestGI = gi;
-            }
-          }
-          if (closestGI) {
-            pickupGroundItem(p, world, closestGI);
-          }
-        }
+        return;
       }
     }
   };
@@ -2676,7 +3066,7 @@ export default function App() {
       player.currentFloor = floor;
       const bld = world.buildings.find(b => b.id === player.insideBuildingId);
       if (bld) {
-        const layout = generateBuildingLayout(bld, floor);
+        const layout = getBuildingLayout(bld, floor);
         const relX = player.x - bld.x;
         const relY = player.y - bld.y;
 
@@ -3088,16 +3478,21 @@ export default function App() {
       />
 
       {/* TOP-LEFT: CITY HUD & ATMOSPHERE */}
-      <div id="hud-top-left" className="absolute top-4 left-4 z-20 flex flex-col gap-2 pointer-events-none">
-        <div className="bg-slate-900/85 backdrop-blur-md border border-slate-700/80 rounded-xl px-4 py-2.5 shadow-xl text-white flex items-center gap-3 pointer-events-auto">
-          <div className="flex items-center gap-2">
-            <Compass className="w-5 h-5 text-sky-400 animate-pulse" />
-            <span className="font-semibold text-sm tracking-wide">{streetName}</span>
+      <div id="hud-top-left" className="absolute top-3 left-3 sm:top-4 sm:left-4 z-50 flex flex-col gap-2 pointer-events-none select-none">
+        <div className="bg-slate-900/90 backdrop-blur-md border border-slate-700/80 rounded-xl px-2.5 py-1.5 sm:px-4 sm:py-2.5 shadow-xl text-white flex items-center gap-2 sm:gap-3 pointer-events-auto">
+          <div className="flex items-center gap-1.5 sm:gap-2">
+            <Compass className="w-4 h-4 sm:w-5 sm:h-5 text-sky-400 animate-pulse" />
+            <span className="font-semibold text-xs sm:text-sm tracking-wide line-clamp-1 max-w-[110px] sm:max-w-[180px]">{streetName}</span>
           </div>
           <div className="h-4 w-px bg-slate-700" />
           <button
             onClick={() => setIsPerfConsoleOpen((prev) => !prev)}
-            className={`flex items-center gap-1.5 text-xs rounded-lg px-2 py-1 transition-all duration-200 border cursor-pointer hover:scale-[1.03] ${
+            onTouchEnd={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              setIsPerfConsoleOpen((prev) => !prev);
+            }}
+            className={`flex items-center gap-1 sm:gap-1.5 text-[11px] sm:text-xs rounded-lg px-2 py-1 transition-all duration-200 border cursor-pointer active:scale-95 ${
               isPerfConsoleOpen
                 ? 'bg-indigo-950/80 border-indigo-500 text-indigo-400 font-semibold shadow-inner'
                 : 'bg-slate-800/40 border-slate-700 text-slate-300 hover:bg-slate-800/60 hover:text-white'
@@ -3112,8 +3507,8 @@ export default function App() {
             }`} />
             <span>{fps} FPS</span>
           </button>
-          <div className="h-4 w-px bg-slate-700" />
-          <div className="text-xs text-slate-400">
+          <div className="hidden md:block h-4 w-px bg-slate-700" />
+          <div className="hidden md:block text-xs text-slate-400">
             {trafficCount} Cars · {pedCount} Peds
           </div>
 
@@ -3121,21 +3516,34 @@ export default function App() {
           {/* Menu dropdown trigger */}
           <button
             id="quick-settings-toggle-btn"
-            onClick={() => setIsQuickMenuOpen((prev) => !prev)}
-            className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white transition-all"
-            title="Настройки среды / Городское меню"
+            onClick={(e) => {
+              e.stopPropagation();
+              setIsQuickMenuOpen((prev) => !prev);
+            }}
+            onTouchEnd={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              setIsQuickMenuOpen((prev) => !prev);
+            }}
+            className="w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 active:bg-slate-600 text-slate-200 hover:text-white transition-all flex items-center justify-center cursor-pointer shadow active:scale-95"
+            title="Настройки среды / Чит-меню"
           >
-            <Settings className="w-4 h-4" />
+            <Settings className="w-4 h-4 text-slate-200" />
           </button>
         </div>
 
         {/* Quick Settings Dropdown */}
         {isQuickMenuOpen && (
-          <div className="bg-slate-900/95 backdrop-blur-md border border-slate-700 rounded-xl p-2.5 shadow-2xl flex flex-wrap gap-2 pointer-events-auto animate-in fade-in slide-in-from-top-2 duration-150 max-w-sm">
+          <div className="bg-slate-900/95 backdrop-blur-md border border-slate-700 rounded-xl p-2.5 shadow-2xl flex flex-wrap gap-2 pointer-events-auto animate-in fade-in slide-in-from-top-2 duration-150 max-w-xs sm:max-w-sm max-h-[75vh] overflow-y-auto z-50">
             <button
               id="time-toggle-btn"
               onClick={cycleTimePreset}
-              className="bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 flex items-center gap-1.5 transition-all"
+              onTouchEnd={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                cycleTimePreset();
+              }}
+              className="bg-slate-800 hover:bg-slate-700 active:bg-slate-600 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer"
               title="Переключить время суток (T)"
             >
               {getTimeLabelName(timeHour) === 'Morning' && <Sunrise className="w-3.5 h-3.5 text-amber-400" />}
@@ -3148,7 +3556,12 @@ export default function App() {
             <button
               id="weather-toggle-btn"
               onClick={cycleWeather}
-              className="bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 flex items-center gap-1.5 transition-all"
+              onTouchEnd={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                cycleWeather();
+              }}
+              className="bg-slate-800 hover:bg-slate-700 active:bg-slate-600 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer"
               title="Переключить погоду"
             >
               {weather === 'clear' && <Sun className="w-3.5 h-3.5 text-amber-300" />}
@@ -3161,7 +3574,12 @@ export default function App() {
             <button
               id="sound-toggle-btn"
               onClick={toggleSoundMute}
-              className="bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 flex items-center gap-1.5 transition-all"
+              onTouchEnd={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                toggleSoundMute();
+              }}
+              className="bg-slate-800 hover:bg-slate-700 active:bg-slate-600 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer"
             >
               {isMuted ? <VolumeX className="w-3.5 h-3.5 text-rose-400" /> : <Volume2 className="w-3.5 h-3.5 text-emerald-400" />}
               <span>{isMuted ? 'Mute' : 'Звук'}</span>
@@ -3170,7 +3588,12 @@ export default function App() {
             <button
               id="touch-toggle-btn"
               onClick={() => setIsMobileTouch((prev) => !prev)}
-              className={`border rounded-lg px-2.5 py-1.5 text-xs flex items-center gap-1.5 transition-all ${
+              onTouchEnd={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                setIsMobileTouch((prev) => !prev);
+              }}
+              className={`border rounded-lg px-2.5 py-1.5 text-xs flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer ${
                 isMobileTouch
                   ? 'bg-sky-950/80 border-sky-500/40 text-sky-200'
                   : 'bg-slate-800 border-slate-700 text-slate-400'
@@ -3187,7 +3610,13 @@ export default function App() {
                 setIsSpawnMenuOpen(true);
                 setIsQuickMenuOpen(false);
               }}
-              className="bg-emerald-950/80 hover:bg-emerald-900 border border-emerald-500/40 rounded-lg px-2.5 py-1.5 text-xs text-emerald-200 flex items-center gap-1.5 transition-all"
+              onTouchEnd={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                setIsSpawnMenuOpen(true);
+                setIsQuickMenuOpen(false);
+              }}
+              className="bg-emerald-950/80 hover:bg-emerald-900 active:bg-emerald-800 border border-emerald-500/40 rounded-lg px-2.5 py-1.5 text-xs text-emerald-200 flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer"
             >
               <MapPin className="w-3.5 h-3.5 text-emerald-400" />
               <span>Спавн</span>
@@ -3199,7 +3628,13 @@ export default function App() {
                 setIsConsoleOpen(true);
                 setIsQuickMenuOpen(false);
               }}
-              className="bg-indigo-950/80 hover:bg-indigo-900 border border-indigo-500/40 rounded-lg px-2.5 py-1.5 text-xs text-indigo-200 flex items-center gap-1.5 transition-all"
+              onTouchEnd={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                setIsConsoleOpen(true);
+                setIsQuickMenuOpen(false);
+              }}
+              className="bg-indigo-950/80 hover:bg-indigo-900 active:bg-indigo-800 border border-indigo-500/40 rounded-lg px-2.5 py-1.5 text-xs text-indigo-200 flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer"
             >
               <Terminal className="w-3.5 h-3.5 text-indigo-400" />
               <span>AI Console</span>
@@ -3208,7 +3643,12 @@ export default function App() {
             <button
               id="reset-all-damage-btn"
               onClick={handleResetAllVehiclesDamage}
-              className="bg-rose-950/80 hover:bg-rose-900 border border-rose-500/40 rounded-lg px-2.5 py-1.5 text-xs text-rose-200 flex items-center gap-1.5 transition-all"
+              onTouchEnd={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                handleResetAllVehiclesDamage();
+              }}
+              className="bg-rose-950/80 hover:bg-rose-900 active:bg-rose-800 border border-rose-500/40 rounded-lg px-2.5 py-1.5 text-xs text-rose-200 flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer"
               title="Сбросить повреждения всех транспортных средств"
             >
               <Wrench className="w-3.5 h-3.5 text-rose-400" />
@@ -3218,7 +3658,12 @@ export default function App() {
             <button
               id="reset-player-injuries-btn"
               onClick={handleResetPlayerInjuries}
-              className="bg-emerald-950/80 hover:bg-emerald-900 border border-emerald-500/40 rounded-lg px-2.5 py-1.5 text-xs text-emerald-200 flex items-center gap-1.5 transition-all"
+              onTouchEnd={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                handleResetPlayerInjuries();
+              }}
+              className="bg-emerald-950/80 hover:bg-emerald-900 active:bg-emerald-800 border border-emerald-500/40 rounded-lg px-2.5 py-1.5 text-xs text-emerald-200 flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer"
               title="Вылечить все травмы и переломы персонажа"
             >
               <Heart className="w-3.5 h-3.5 text-emerald-400 fill-emerald-400/20" />
@@ -3245,7 +3690,27 @@ export default function App() {
                   );
                 }
               }}
-              className={`border rounded-lg px-2.5 py-1.5 text-xs flex items-center gap-1.5 transition-all cursor-pointer ${
+              onTouchEnd={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                const newVal = !isCreativeMode;
+                setIsCreativeMode(newVal);
+                setIsFlying(newVal);
+                setIsInvincible(newVal);
+                if (!newVal) {
+                  setActivePlacement(null);
+                  activePlacementRef.current = null;
+                }
+                const player = playerRef.current;
+                if (player) {
+                  addPlayerNotification(
+                    player, 
+                    newVal ? 'Режим Творчества ВКЛЮЧЕН! Открыта панель управления.' : 'Режим Творчества ВЫКЛЮЧЕН.', 
+                    newVal ? 'info' : 'warning'
+                  );
+                }
+              }}
+              className={`border rounded-lg px-2.5 py-1.5 text-xs flex items-center gap-1.5 transition-all cursor-pointer active:scale-95 ${
                 isCreativeMode
                   ? 'bg-amber-950/80 border-amber-500 text-amber-200'
                   : 'bg-slate-800 border-slate-700 text-slate-400 hover:text-white'
@@ -3259,60 +3724,138 @@ export default function App() {
         )}
       </div>
 
-      {/* TOP-RIGHT: RADAR MINIMAP & FULLSCREEN MAP TRIGGER */}
-      <div id="hud-top-right" className="absolute top-4 right-4 z-20 flex flex-col items-end gap-2 pointer-events-auto">
-        <div 
-          id="minimap-radar-container"
-          className="bg-slate-900/95 backdrop-blur-md border border-slate-700/90 rounded-2xl p-2 shadow-2xl overflow-hidden relative group cursor-pointer active:scale-95 transition-transform"
-          onClick={() => setIsFullMapOpen(true)}
-          onTouchEnd={(e) => {
-            e.preventDefault();
-            setIsFullMapOpen(true);
-          }}
-        >
-          <canvas
-            id="minimap-canvas"
-            ref={minimapCanvasRef}
-            width={140}
-            height={140}
-            className="rounded-xl block"
-          />
-          <button
-            id="minimap-toggle-btn"
-            onClick={(e) => {
-              e.stopPropagation();
-              setIsFullMapOpen(true);
-            }}
-            className="absolute bottom-3 right-3 bg-slate-950/90 group-hover:bg-sky-600 border border-slate-700 group-hover:border-sky-400 text-[10px] text-slate-200 group-hover:text-white px-2 py-0.5 rounded-md shadow flex items-center gap-1 transition-all"
-          >
-            <Maximize2 className="w-3 h-3 text-sky-400 group-hover:text-white" />
-            <span>Карта [M]</span>
-          </button>
+      {/* TOP-RIGHT: GPS NAVIGATOR MINIMAP */}
+      <div id="hud-top-right" className="absolute top-3 right-3 sm:top-4 sm:right-4 z-40 flex flex-col items-end gap-1.5 pointer-events-auto select-none">
+        {isMinimapCollapsed ? (
+          <div className="flex items-center gap-1.5">
+            {/* Zoom Controls */}
+            <div className="flex flex-col bg-slate-900/90 backdrop-blur-md border border-slate-700/80 rounded-xl p-0.5 shadow-xl">
+              <button
+                type="button"
+                onClick={() => {
+                  userZoomFactorRef.current = Math.min(3.0, userZoomFactorRef.current + 0.15);
+                }}
+                onTouchEnd={(e) => {
+                  e.preventDefault();
+                  userZoomFactorRef.current = Math.min(3.0, userZoomFactorRef.current + 0.15);
+                }}
+                className="w-7 h-7 flex items-center justify-center text-slate-300 hover:text-white active:bg-slate-800 rounded-lg transition"
+                title="Приблизить камеру"
+              >
+                <ZoomIn className="w-3.5 h-3.5" />
+              </button>
+              <div className="h-px bg-slate-800 my-0.5" />
+              <button
+                type="button"
+                onClick={() => {
+                  userZoomFactorRef.current = Math.max(0.4, userZoomFactorRef.current - 0.15);
+                }}
+                onTouchEnd={(e) => {
+                  e.preventDefault();
+                  userZoomFactorRef.current = Math.max(0.4, userZoomFactorRef.current - 0.15);
+                }}
+                className="w-7 h-7 flex items-center justify-center text-slate-300 hover:text-white active:bg-slate-800 rounded-lg transition"
+                title="Отдалить камеру"
+              >
+                <ZoomOut className="w-3.5 h-3.5" />
+              </button>
+            </div>
 
-          {/* Radar Zoom Controls */}
-          <div className="absolute top-3 left-3 flex items-center gap-1">
+            {/* Expand Minimap Button */}
             <button
-              onClick={(e) => {
-                e.stopPropagation();
-                setMinimapRange((r) => Math.max(300, r - 150));
+              id="expand-minimap-btn"
+              onClick={() => setIsMinimapCollapsed(false)}
+              onTouchEnd={(e) => {
+                e.preventDefault();
+                setIsMinimapCollapsed(false);
               }}
-              className="w-5 h-5 bg-slate-950/80 hover:bg-slate-800 border border-slate-700 text-slate-300 rounded flex items-center justify-center text-xs font-bold"
-              title="Приблизить радар"
+              className="w-9 h-9 sm:w-10 sm:h-10 bg-slate-900/95 backdrop-blur-xl border border-sky-500/40 rounded-xl shadow-xl flex items-center justify-center text-sky-400 hover:text-sky-300 active:scale-95 transition"
+              title="Развернуть миникарту [M]"
             >
-              +
-            </button>
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                setMinimapRange((r) => Math.min(1000, r + 150));
-              }}
-              className="w-5 h-5 bg-slate-950/80 hover:bg-slate-800 border border-slate-700 text-slate-300 rounded flex items-center justify-center text-xs font-bold"
-              title="Отдалить радар"
-            >
-              -
+              <Map className="w-4 h-4 sm:w-5 sm:h-5" />
             </button>
           </div>
-        </div>
+        ) : (
+          <div className="flex items-start gap-1.5">
+            {/* Quick Zoom Buttons alongside minimap */}
+            <div className="flex flex-col bg-slate-900/90 backdrop-blur-md border border-slate-700/80 rounded-xl p-0.5 shadow-xl">
+              <button
+                type="button"
+                onClick={() => {
+                  userZoomFactorRef.current = Math.min(3.0, userZoomFactorRef.current + 0.15);
+                }}
+                onTouchEnd={(e) => {
+                  e.preventDefault();
+                  userZoomFactorRef.current = Math.min(3.0, userZoomFactorRef.current + 0.15);
+                }}
+                className="w-6 h-6 sm:w-7 sm:h-7 flex items-center justify-center text-slate-300 hover:text-white active:bg-slate-800 rounded-lg transition"
+                title="Приблизить камеру"
+              >
+                <ZoomIn className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
+              </button>
+              <div className="h-px bg-slate-800 my-0.5" />
+              <button
+                type="button"
+                onClick={() => {
+                  userZoomFactorRef.current = Math.max(0.4, userZoomFactorRef.current - 0.15);
+                }}
+                onTouchEnd={(e) => {
+                  e.preventDefault();
+                  userZoomFactorRef.current = Math.max(0.4, userZoomFactorRef.current - 0.15);
+                }}
+                className="w-6 h-6 sm:w-7 sm:h-7 flex items-center justify-center text-slate-300 hover:text-white active:bg-slate-800 rounded-lg transition"
+                title="Отдалить камеру"
+              >
+                <ZoomOut className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
+              </button>
+            </div>
+
+            {/* Radar Minimap Box (Compact & Elegant) */}
+            <div 
+              id="minimap-radar-container"
+              className="w-[84px] h-[84px] sm:w-[130px] sm:h-[130px] bg-slate-950/90 backdrop-blur-xl border border-white/15 rounded-xl p-1 shadow-2xl overflow-hidden relative group cursor-pointer active:scale-95 transition-all hover:border-sky-500/40"
+              onClick={() => setIsFullMapOpen(true)}
+              onTouchEnd={(e) => {
+                e.preventDefault();
+                setIsFullMapOpen(true);
+              }}
+              title="Нажмите для открытия карты города на весь экран"
+            >
+              <canvas
+                id="minimap-canvas"
+                ref={minimapCanvasRef}
+                width={200}
+                height={200}
+                className="w-full h-full rounded-lg block pointer-events-none"
+              />
+              {/* Top Buttons: Collapse & GPS label */}
+              <div className="absolute top-1.5 right-1.5 flex items-center gap-1">
+                <button
+                  id="collapse-minimap-btn"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setIsMinimapCollapsed(true);
+                  }}
+                  onTouchEnd={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setIsMinimapCollapsed(true);
+                  }}
+                  className="w-5 h-5 bg-slate-900/80 hover:bg-slate-800 text-slate-300 hover:text-white rounded flex items-center justify-center border border-white/10 active:scale-90 transition"
+                  title="Свернуть миникарту"
+                >
+                  <Minimize2 className="w-2.5 h-2.5 sm:w-3 sm:h-3" />
+                </button>
+              </div>
+
+              {/* Bottom indicator badge */}
+              <div className="absolute bottom-1.5 left-1.5 bg-slate-900/80 backdrop-blur-md border border-white/10 text-sky-400 text-[8px] sm:text-[9px] font-bold px-1 py-0.5 rounded shadow pointer-events-none flex items-center gap-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
+                <span>GPS</span>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
 
@@ -3611,8 +4154,28 @@ export default function App() {
       <PlayerNeedsHUD
         player={playerRef.current}
         world={worldRef.current}
+        isMobileTouch={isMobileTouch}
         onOpenInventory={() => setIsInventoryOpen(true)}
         onOpenSelfInspection={() => setIsInspectionOpen(true)}
+        onToggleActiveHand={() => {
+          const p = playerRef.current;
+          if (p) {
+            p.activeHand = p.activeHand === 'left' ? 'right' : 'left';
+            sound.playUseItem();
+            setVitalsRefreshTick((t) => t + 1);
+          }
+        }}
+        onSelectActiveHand={(hand) => {
+          const p = playerRef.current;
+          if (p) {
+            p.activeHand = hand;
+            sound.playUseItem();
+            setVitalsRefreshTick((t) => t + 1);
+          }
+        }}
+        onUseActiveHandItem={() => {
+          handleInteractE();
+        }}
         onSelectHotbarItem={(idx) => {
           setSelectedHotbarIndex(idx);
           selectedHotbarIndexRef.current = idx;
@@ -3659,7 +4222,12 @@ export default function App() {
           onApplyTreatment={(idx, injuryId) => {
             const p = playerRef.current;
             if (p) {
-              useItemOnPlayer(p, idx, worldRef.current || undefined, injuryId);
+              if (idx < 0) {
+                const activeHand = p.activeHand || 'right';
+                useHandItemOnPlayer(p, activeHand, worldRef.current || undefined, injuryId);
+              } else {
+                useItemOnPlayer(p, idx, worldRef.current || undefined, injuryId);
+              }
               sound.resume();
               setVitalsRefreshTick((t) => t + 1);
             }
@@ -3703,20 +4271,53 @@ export default function App() {
         player={playerRef.current}
         shopTitle={shopTitle}
         shopType={shopType}
+        gasPumps={worldRef.current?.gasPumps || []}
+        vehicles={worldRef.current?.vehicles || []}
         canRepairVehicle={canRepairVehicle || playerRef.current?.isInVehicle}
         onBuyItems={(items, totalCost) => {
           const p = playerRef.current;
-          if (!p) return;
+          const w = worldRef.current;
+          if (!p || !w) return;
           const currentCash = getPlayerCash(p);
           if (currentCash >= totalCost) {
             const success = deductPlayerCash(p, totalCost);
             if (success) {
-              items.forEach((item) => {
-                const boughtItem = createItem(item.itemId, 1);
-                addItemToPlayer(p, boughtItem);
+              if (!w.groundItems) w.groundItems = [];
+
+              let regularItemsCount = 0;
+
+              items.forEach((item, idx) => {
+                if (item.fuelPumpId || item.itemId === 'fuel_order') {
+                  const pump = w.gasPumps?.find((gp) => gp.id === item.fuelPumpId) || w.gasPumps?.[0];
+                  if (pump) {
+                    const car = pump.connectedVehicleId ? w.vehicles.find((v) => v.id === pump.connectedVehicleId) : null;
+                    startGasPumpFueling(pump, item.fuelLiters || 30, item.fuelType || 'ai95', car);
+                    const grade = FUEL_GRADES[item.fuelType || 'ai95'];
+                    addPlayerNotification(
+                      p,
+                      `⛽ Заправка [${grade?.nameRu || ''}] (${item.fuelLiters || 30} л) на ТРК №${pump.pumpNumber} успешно оплачена! Подача топлива включена.`,
+                      'pickup'
+                    );
+                  }
+                } else {
+                  regularItemsCount++;
+                  const boughtItem = createItem(item.itemId, 1);
+                  const angle = (p.angle || 0) + (Math.random() * 0.9 - 0.45);
+                  const dist = 28 + (idx * 14) % 40;
+                  w.groundItems.push({
+                    id: `ground_bought_${Date.now()}_${idx}_${Math.random().toString(36).substring(2, 7)}`,
+                    x: p.x + Math.cos(angle) * dist,
+                    y: p.y + Math.sin(angle) * dist,
+                    item: boughtItem,
+                    spawnTime: Date.now()
+                  });
+                }
               });
+
               sound.playUseItem();
-              addPlayerNotification(p, `Приобретено товаров: ${items.length} (-$${totalCost})`, 'pickup');
+              if (regularItemsCount > 0) {
+                addPlayerNotification(p, `🛍️ Куплено: ${regularItemsCount} поз. (-$${totalCost}). Товары выложены на прилавок!`, 'pickup');
+              }
               setVitalsRefreshTick((t) => t + 1);
             }
           } else {
@@ -3732,21 +4333,46 @@ export default function App() {
             addPlayerNotification(p, 'Недостаточно денег для ремонта ($300)', 'warning');
             return;
           }
+
+          // Find PIT-STOP repair bays / platforms
+          const pitstopBuildings = w.buildings.filter(
+            (bld) => bld.shopBrand === 'pitstop_service' || bld.type === 'car_dealership'
+          );
+
           let targetCar: Vehicle | null = null;
-          if (p.isInVehicle && p.currentVehicleId) {
-            targetCar = w.vehicles.find((v) => v.id === p.currentVehicleId) || null;
-          } else {
-            targetCar = w.vehicles.find((v) => Math.hypot(v.x - p.x, v.y - p.y) < 100) || null;
+
+          for (const bld of pitstopBuildings) {
+            const bayX = bld.x + bld.width / 2;
+            const bayY = bld.y + bld.height + 25;
+            // Check if any vehicle is parked on this repair platform (within 40 units)
+            const parkedCar = w.vehicles.find((v) => Math.hypot(v.x - bayX, v.y - bayY) < 40);
+            if (parkedCar) {
+              targetCar = parkedCar;
+              break;
+            }
+          }
+
+          // Fallback if player is sitting in a vehicle parked near any PIT-STOP
+          if (!targetCar && p.isInVehicle && p.currentVehicleId) {
+            const currentCar = w.vehicles.find((v) => v.id === p.currentVehicleId);
+            if (currentCar) {
+              const nearService = pitstopBuildings.some((bld) => 
+                Math.hypot(currentCar.x - (bld.x + bld.width / 2), currentCar.y - (bld.y + bld.height / 2)) < 80
+              );
+              if (nearService) {
+                targetCar = currentCar;
+              }
+            }
           }
 
           if (targetCar) {
             deductPlayerCash(p, 300);
             targetCar.damage = createDefaultVehicleDamage(targetCar.length, targetCar.width);
             sound.playUseItem();
-            addPlayerNotification(p, '🛠️ Автомобиль полностью отремонтирован и приведен в идеальное состояние! (-$300)', 'heal');
+            addPlayerNotification(p, '🛠️ Автомобиль успешно отремонтирован на подъемнике PIT-STOP! (-$300)', 'heal');
             setVitalsRefreshTick((t) => t + 1);
           } else {
-            addPlayerNotification(p, 'Поблизости не обнаружен автомобиль для ремонта', 'warning');
+            addPlayerNotification(p, '⚠️ Загоните автомобиль на специальную ремонтную площадку (подъёмник) автосервиса PIT-STOP!', 'warning');
           }
         }}
       />
@@ -3765,6 +4391,102 @@ export default function App() {
         onToggleEngine={handleToggleEngine}
         onToggleWindow={handleToggleWindow}
       />
+
+      {/* GAS STATION: FUEL NOZZLE SELECTOR MODAL */}
+      <FuelNozzleSelectorModal
+        isOpen={isFuelNozzleModalOpen}
+        onClose={() => setIsFuelNozzleModalOpen(false)}
+        pump={activeGasPump}
+        onSelectNozzle={(fuelType) => {
+          const p = playerRef.current;
+          if (p && activeGasPump) {
+            takePumpNozzle(p, activeGasPump, fuelType);
+            const grade = FUEL_GRADES[fuelType];
+            addPlayerNotification(
+              p,
+              `Взят пистолет [${grade.nameRu}]. Подойдите к лючку бензобака автомобиля и нажмите [E].`,
+              'info'
+            );
+            setIsFuelNozzleModalOpen(false);
+            setVitalsRefreshTick((t) => t + 1);
+          }
+        }}
+      />
+
+      {/* GAS STATION: CASHIER POS TERMINAL MODAL */}
+      {worldRef.current && playerRef.current && (
+        <GasStationCashierModal
+          isOpen={isGasStationCashierModalOpen}
+          onClose={() => setIsGasStationCashierModalOpen(false)}
+          world={worldRef.current}
+          player={playerRef.current}
+          onPayAndFuel={(pumpId, liters, fuelType, totalCost) => {
+            const p = playerRef.current;
+            const w = worldRef.current;
+            if (!p || !w) return;
+
+            const pump = w.gasPumps?.find((gp) => gp.id === pumpId);
+            if (!pump) return;
+
+            const veh = w.vehicles?.find((v) => v.id === pump.connectedVehicleId);
+            const success = deductPlayerCash(p, totalCost);
+            if (!success) {
+              addPlayerNotification(p, 'Недостаточно денег для оплаты топлива!', 'warning');
+              return;
+            }
+
+            const grade = FUEL_GRADES[fuelType];
+            startGasPumpFueling(pump, liters, fuelType, veh);
+            addPlayerNotification(
+              p,
+              `💳 Оплачено ${totalCost.toLocaleString()} ₽. Заправка ${liters} л [${grade.nameRu}] на колонке №${pump.pumpNumber} началась!`,
+              'info'
+            );
+            setVitalsRefreshTick((t) => t + 1);
+          }}
+        />
+      )}
+
+      {/* UNDER-HOOD ENGINE BAY INSPECTION MODAL */}
+      {isEngineBayOpen && engineBayVehicle && playerRef.current && worldRef.current && (
+        <EngineBayModal
+          isOpen={isEngineBayOpen}
+          onClose={() => setIsEngineBayOpen(false)}
+          vehicle={engineBayVehicle}
+          player={playerRef.current}
+          groundItems={worldRef.current.groundItems || []}
+          onUpdateVehicle={(updatedV) => {
+            const idx = worldRef.current?.vehicles?.findIndex((v) => v.id === updatedV.id);
+            if (idx !== undefined && idx >= 0 && worldRef.current?.vehicles) {
+              worldRef.current.vehicles[idx] = updatedV;
+            }
+            setEngineBayVehicle({ ...updatedV });
+            setVitalsRefreshTick((t) => t + 1);
+          }}
+          onUpdatePlayer={(updatedP) => {
+            playerRef.current = updatedP;
+            setVitalsRefreshTick((t) => t + 1);
+          }}
+          addNotification={(text, type) => {
+            if (playerRef.current) {
+              addPlayerNotification(playerRef.current, text, type);
+              setVitalsRefreshTick((t) => t + 1);
+            }
+          }}
+        />
+      )}
+
+      {/* GAS STATION INTERACTION HUD BANNER */}
+      {gasStationPrompt && (
+        <div id="gas-station-hud-prompt" className="absolute bottom-24 left-1/2 -translate-x-1/2 z-40 pointer-events-none animate-bounce">
+          <div className="bg-emerald-950/95 backdrop-blur-md border border-emerald-400/80 rounded-2xl px-5 py-2.5 shadow-2xl flex items-center gap-3 text-white text-xs font-semibold">
+            <div className="bg-emerald-500/20 p-1.5 rounded-lg border border-emerald-400/40 text-emerald-300">
+              <Fuel className="w-4 h-4" />
+            </div>
+            <span>{gasStationPrompt}</span>
+          </div>
+        </div>
+      )}
 
       {/* FAINTING & CONCUSSION OVERLAY (Only for non-evacuation faints) */}
       {playerRef.current?.isFainting && !playerRef.current?.needsHospitalEvacuation && (
@@ -4198,7 +4920,9 @@ export default function App() {
                     { id: 'dumpster', label: 'Мусорный контейнер 🗄️' },
                     { id: 'hydrant', label: 'Пожарный гидрант 💧' },
                     { id: 'mailbox', label: 'Почтовый ящик 📬' },
-                    { id: 'lamp', label: 'Уличный фонарь 💡' },
+                    { id: 'lamp_highway', label: 'Автомобильный фонарь (с выносом) 🛣️' },
+                    { id: 'lamp_concrete', label: 'Старый бетонный столб (несбиваемый) 🏛️' },
+                    { id: 'lamp', label: 'Парковый фонарь 💡' },
                     { id: 'bus_stop', label: 'Автобусная остановка 🚌' },
                     { id: 'kiosk', label: 'Газетный киоск 🏪' },
                     { id: 'flowerbed', label: 'Клумба с цветами 🌸' },
@@ -4499,17 +5223,46 @@ export default function App() {
         </div>
       )}
 
+      {/* Pause Menu Overlay */}
+      {isPauseMenuOpen && !isMainMenuOpen && (
+        <PauseMenu
+          onResume={() => setIsPauseMenuOpen(false)}
+          onSave={() => {
+            handleCreateSave();
+            const p = playerRef.current;
+            if (p) addPlayerNotification(p, 'Игра успешно сохранена!', 'info');
+          }}
+          onOpenSettings={() => {
+            setIsPauseMenuOpen(false);
+            setIsMainMenuOpen(true);
+          }}
+          onExitToMainMenu={() => {
+            setIsPauseMenuOpen(false);
+            setIsMainMenuOpen(true);
+            sound.stopEngine();
+          }}
+        />
+      )}
+
       {/* Main Menu Overlay */}
       {isMainMenuOpen && (
         <MainMenu
           onResume={() => setIsMainMenuOpen(false)}
-          onNewGame={handleNewGame}
+          onNewGame={(saveName, spawnId) => {
+            handleNewGame(spawnId);
+            setTimeout(() => {
+              handleCreateSave(saveName);
+            }, 50);
+          }}
           saves={saves}
           onLoadSave={handleLoadSave}
           onDeleteSave={handleDeleteSave}
           onCreateSave={handleCreateSave}
           isMuted={isMuted}
           onToggleMute={toggleSoundMute}
+          settings={settings}
+          onUpdateSettings={setSettings}
+          spawnLocations={SPAWN_LOCATIONS}
         />
       )}
     </div>

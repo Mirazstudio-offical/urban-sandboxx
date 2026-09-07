@@ -80,6 +80,14 @@ export interface DeformVertex {
   localY: number;
   offsetX: number;
   offsetY: number;
+
+  // Realistic Softbody Physics properties
+  plasticStrain?: number;  // 0.0 to 1.0+ accumulated plastic deformation severity (metal yielding)
+  elasticX?: number;       // Transient elastic jiggle displacement X (decays rapidly on impact)
+  elasticY?: number;       // Transient elastic jiggle displacement Y (decays rapidly on impact)
+  velX?: number;           // Transient elastic velocity X
+  velY?: number;           // Transient elastic velocity Y
+  structuralType?: 'bumper' | 'fender' | 'door' | 'quarter' | 'pillar' | 'hood';
 }
 
 export interface ScratchMark {
@@ -120,10 +128,54 @@ export interface EngineState {
   isSeized: boolean;            // engine seized from impact or overheating/oil starvation (will not run or crank)
   transmissionHealth: number;   // 0 to 100 (%) gearbox health
   transmissionJammed: boolean;  // gearbox jammed from impact or stripped gears (cannot shift, gear stuck)
+
+  // Interactive Under-Hood Engine Bay States
+  hoodOpen?: boolean;
+  batteryInstalled?: boolean;        // default true
+  batteryPosConnected?: boolean;     // default true (+)
+  batteryNegConnected?: boolean;     // default true (-)
+  radiatorCapOpen?: boolean;         // default false
+  oilCapOpen?: boolean;              // default false
+  dipstickPulled?: boolean;          // default false
+}
+
+export type FuelType = 'ai92' | 'ai95' | 'ai98' | 'ai100' | 'diesel' | 'lpg';
+
+export interface GasPumpNozzle {
+  fuelType: FuelType;
+  nameRu: string;
+  color: string;
+  octane: number;
+  pricePerLiter: number;
+  description: string;
+  badgeText: string;
+}
+
+export interface GasPumpDispenser {
+  id: string;
+  pumpNumber: number;
+  islandIndex?: number;
+  x: number;
+  y: number;
+  angle: number;
+  nozzles: GasPumpNozzle[];
+  nozzleTaken: FuelType | null;
+  connectedVehicleId: string | null;
+  connectedFuelType: FuelType | null;
+  isPumping: boolean;
+  targetLiters: number;
+  currentPumpedLiters: number;
+  pricePerLiter: number;
+  totalPaid: number;
+  status: 'idle' | 'nozzle_held' | 'inserted' | 'pumping' | 'completed';
+  pumpingTimer?: number;
+  displayLiters?: number;
+  displayCost?: number;
+  hoseOrigin: { x: number; y: number };
 }
 
 export interface FuelSystem {
-  fuelType: 'ai92' | 'ai95' | 'diesel';
+  fuelType: FuelType;
   tankLevel: number;            // 0 to 100 (%)
   tankCapacity: number;         // Liters (e.g. 50L)
   tankPunctured: boolean;       // fuel leaking on ground
@@ -168,6 +220,8 @@ export interface VehicleDamage {
   // Engine smoke and fire states
   engineSmoking?: boolean;
   underHoodSmolder?: boolean;   // Phase 1: smoldering under hood, grey smoke only
+  underHoodSteam?: 'thin' | 'dense' | 'geyser' | 'none'; // Custom detailed steam types
+  underHoodSmoke?: 'none' | 'oil_blue' | 'oil_gray_wiring_black'; // Custom detailed smoke types
   engineFire?: boolean;         // Open flame in engine bay (frontal collision fire)
   fuelTankFire?: boolean;       // Open flame in rear / fuel tank / undercarriage (rear/fuel tank hit)
   cabinFire?: boolean;          // Fire breaks into passenger cabin
@@ -181,6 +235,12 @@ export interface VehicleDamage {
 
   // Dynamic 3D/2D mesh vertices for organic deformation
   deformedVertices?: DeformVertex[];
+
+  // Realistic Softbody Frame Alignment & Visual Mechanics
+  frameBentAngle?: number;    // Frame twist angle drift (radians) from asymmetric impact
+  hoodRaisedAmount?: number;  // 0.0 to 1.0 buckled 2.5D hood height for rendering fold shadows
+  bumperSagLeft?: number;     // 0.0 to 1.0 sagging front-left bumper corner
+  bumperSagRight?: number;    // 0.0 to 1.0 sagging front-right bumper corner
 }
 
 export interface Vehicle {
@@ -215,6 +275,7 @@ export interface Vehicle {
 
   // Modular Physics, Engine & Fuel Systems
   requiredFuel: 'ai92' | 'ai95' | 'diesel';
+  hasGBO?: boolean;
   engineState?: EngineState;
   fuelSystem?: FuelSystem;
 
@@ -283,6 +344,14 @@ export interface Vehicle {
   cabinSmoke?: number; // 0 to 100% toxic smoke concentration inside vehicle cabin
   externalHeatTimer?: number; // continuous seconds exposed to adjacent fire torch (< 1.5m)
   adjacentFireSourceId?: string | null;
+
+  // Gas Station & Fueling connection
+  fuelingState?: {
+    pumpId: string;
+    fuelType: FuelType;
+    nozzleInTank: boolean;
+    hoseOrigin: { x: number; y: number };
+  } | null;
 }
 
 export interface Pedestrian {
@@ -403,6 +472,7 @@ export interface Intersection {
   }[];
   isSignalLost?: boolean;
   isDirt?: boolean;
+  isGravel?: boolean;
 }
 
 export interface RoadSegment {
@@ -463,7 +533,8 @@ export interface Building {
     | 'mvideo'
     | 'sportmaster'
     | 'splav_gear' 
-    | 'pitstop_service';
+    | 'pitstop_service'
+    | 'gas_station_shop';
   x: number;
   y: number;
   width: number;
@@ -500,7 +571,9 @@ export interface Building {
     | 'sports_store'
     | 'fast_food_restaurant'
     | 'pizzeria_restaurant'
-    | 'commercial_gallery';
+    | 'commercial_gallery'
+    | 'gas_station_shop'
+    | 'gas_station_canopy';
   color: string;
   roofColor: string;
   accentColor: string;
@@ -525,6 +598,8 @@ export interface Building {
     y: number;
     lit: boolean;
   }[];
+  floorsCount?: number;
+  interiors?: Record<number, any>;
 }
 
 export interface ParkingArea {
@@ -558,6 +633,8 @@ export interface StreetProp {
   type: 
     | 'bench' 
     | 'lamp' 
+    | 'lamp_highway'
+    | 'lamp_concrete'
     | 'hydrant' 
     | 'trash_can' 
     | 'bus_stop' 
@@ -646,7 +723,7 @@ export interface FluidStain {
   y: number;
   radius: number;
   maxRadius: number;
-  type: 'oil' | 'coolant' | 'fuel';
+  type: 'oil' | 'coolant' | 'fuel' | 'sand';
   alpha: number;
   life: number;
   maxLife: number;
@@ -680,6 +757,9 @@ export interface ClothingStats {
   layer: ClothingLayer;
   color?: string;           // Primary color for rendering
   secondaryColor?: string;  // Secondary color
+  pocketCapacityL?: number; // Volume capacity of pockets in Liters (e.g. 2.5L for jacket, 1.4L for jeans)
+  maxPocketItemVolumeL?: number; // Max size of a single item that fits through pocket opening (e.g. 0.45L)
+  maxPocketWeightKg?: number; // Max load capacity of pockets in kg (e.g. 3.0 kg)
 }
 
 export type EquippedClothing = {
@@ -708,11 +788,24 @@ export interface InventoryItem {
     energy?: number;       // + Stamina/Energy (0-100)
     sleepiness?: number;   // - Sleepiness reduction (e.g. -30 for coffee)
   };
-  weight?: number;
+  weight?: number;         // Unit weight in kg
+  volume?: number;         // Unit volume in Liters (L)
   usable: boolean;
   clothingStats?: ClothingStats;
   portions?: number;       // Current remaining bites/sips/doses in this unit
   maxPortions?: number;    // Maximum/initial bites/sips/doses
+  // Fluid & Energy metadata
+  batteryCharge?: number;   // Battery charge level 0 to 100 (%)
+  fluidLiters?: number;     // Remaining fluid volume in liters (L)
+  maxFluidLiters?: number;  // Maximum fluid capacity in liters (L)
+  fluidType?: 'coolant' | 'oil' | 'fuel';
+  // Container properties (recursive containers: backpack, wallet, plastic bag, pockets, etc.)
+  isContainer?: boolean;
+  containerCapacityL?: number;      // Total internal volume capacity in Liters
+  maxContainedItemVolumeL?: number; // Max single item volume that fits in this container
+  maxContainedWeightKg?: number;    // Max total weight of contained items in kg
+  allowedItemCategories?: ItemCategory[]; // Optional category filter (e.g. wallet only for money/valuable)
+  contents?: InventoryItem[];       // Items stored inside this container
 }
 
 export interface GroundItem {
@@ -838,7 +931,8 @@ export interface ConsumptionState {
 export interface PlayerNotification {
   id: string;
   text: string;
-  type: 'heal' | 'food' | 'drink' | 'energy' | 'sleep' | 'warning' | 'pickup' | 'info';
+  type?: 'heal' | 'food' | 'drink' | 'energy' | 'sleep' | 'warning' | 'pickup' | 'info';
+  color?: string;
   timer: number;
 }
 
@@ -888,6 +982,9 @@ export interface Player {
   maxInventorySlots: number;
   selectedHotbarIndex: number;
   heldItemId?: string | null;
+  leftHandItem?: InventoryItem | null;
+  rightHandItem?: InventoryItem | null;
+  activeHand?: 'left' | 'right';
   lastHurtTime?: number;
   isSleeping?: boolean;
   sleepTimer?: number;
@@ -913,6 +1010,16 @@ export interface Player {
   hospitalPhase?: number;
   notifications: PlayerNotification[];
   consumption?: ConsumptionState | null;
+
+  // Gas Station interaction state
+  heldFuelNozzle?: {
+    pumpId: string;
+    fuelType: FuelType;
+    color: string;
+    nameRu: string;
+    pricePerLiter: number;
+    hoseOrigin: { x: number; y: number };
+  } | null;
 }
 
 export interface SidewalkBlock {
@@ -974,6 +1081,7 @@ export interface GameWorld {
   weather: WeatherType;
   outsideTemp?: number;
   humidity?: number;
+  gasPumps?: GasPumpDispenser[];
   lightningFlashTimer?: number;
   lightningStrike?: {
     startX: number;
@@ -1004,6 +1112,7 @@ export interface Camera {
   targetY: number;
   shakeTimer: number;
   shakeIntensity: number;
+  gridMode?: boolean;
 }
 
 export interface InputState {

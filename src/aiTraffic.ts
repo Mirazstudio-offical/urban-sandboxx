@@ -1,10 +1,10 @@
 import { Building, CarType, GameWorld, Intersection, Pedestrian, RoadSegment, Vector2D, Vehicle, StreetProp } from './types';
-import { CAR_CONFIGS, CAR_PALETTE, createDefaultVehicleDamage, generateRandomPedestrianAppearance, createDefaultFuelSystem, createDefaultEngineState } from './cityMap';
+import { CAR_CONFIGS, CAR_PALETTE, createDefaultVehicleDamage, generateRandomPedestrianAppearance, createDefaultFuelSystem, createDefaultEngineState } from './vehicleHelpers';
 import { sound } from './audio';
 import { checkPedestrianBuildingCollision, getBuildingEntrancePos, checkPedestrianVehicleCollision } from './physics';
 import { SpatialGrid } from './spatialGrid';
 import { performanceConfig } from './performanceConfig';
-import { isRoadSegmentBlocked } from './navigation';
+import { isRoadSegmentBlocked, calculateGpsRoute } from './navigation';
 
 // Helper: angle difference normalized to [-PI, PI]
 export function angleDiff(a: number, b: number): number {
@@ -230,27 +230,35 @@ export class IntersectionReservationManager {
       }
 
       // SYMMETRY BREAKER: If multiple vehicles are waiting and longest wait > 1.8s
-      // Grant elected priority pass to dissolve polite deadlocks cleanly
+      // Grant elected priority pass to dissolve polite deadlocks cleanly.
+      // Crucial: Only elect vehicles that are actually ready to go, not those stopped at a red light!
       if (validWait.length > 0) {
         const elected = this.electedPriority.get(interId);
         if (!elected || now > elected.expiry || !livingVehicleIds.has(elected.vehicleId)) {
-          let longestWait = validWait[0];
-          for (let i = 1; i < validWait.length; i++) {
-            if (validWait[i].waitTime > longestWait.waitTime) {
-              longestWait = validWait[i];
+          const activeYieldingWait = validWait.filter((w) => {
+            const v = world.vehicles.find((veh) => veh.id === w.vehicleId);
+            return v && v.aiState !== 'stopping_light';
+          });
+
+          if (activeYieldingWait.length > 0) {
+            let longestWait = activeYieldingWait[0];
+            for (let i = 1; i < activeYieldingWait.length; i++) {
+              if (activeYieldingWait[i].waitTime > longestWait.waitTime) {
+                longestWait = activeYieldingWait[i];
+              }
             }
-          }
-          if (longestWait && longestWait.waitTime > 1.8) {
-            this.electedPriority.set(interId, {
-              vehicleId: longestWait.vehicleId,
-              expiry: now + 3.0
-            });
-            trafficDiagnostics.log(
-              'info',
-              `Intersection #${interId.slice(-4)} elected priority for Car #${longestWait.vehicleId.slice(-4)} (stalled ${longestWait.waitTime.toFixed(1)}s)`,
-              longestWait.vehicleId,
-              interId
-            );
+            if (longestWait && longestWait.waitTime > 1.8) {
+              this.electedPriority.set(interId, {
+                vehicleId: longestWait.vehicleId,
+                expiry: now + 3.0
+              });
+              trafficDiagnostics.log(
+                'info',
+                `Intersection #${interId.slice(-4)} elected priority for Car #${longestWait.vehicleId.slice(-4)} (stalled ${longestWait.waitTime.toFixed(1)}s)`,
+                longestWait.vehicleId,
+                interId
+              );
+            }
           }
         }
       }
@@ -287,8 +295,9 @@ export class IntersectionReservationManager {
     const targetLane = findLaneById(world, conn.targetLaneId);
     if (targetLane && targetLane.waypoints.length > 0) {
       const exitPt = targetLane.waypoints[0];
+      const requiredClearDist = Math.max(55, car.length + 18);
       const nearbyAtExit = world.vehicles.filter(
-        (v) => v.id !== car.id && !v.isParked && !v.inIntersection && Math.hypot(v.x - exitPt.x, v.y - exitPt.y) < 52
+        (v) => v.id !== car.id && !v.isParked && !v.inIntersection && Math.hypot(v.x - exitPt.x, v.y - exitPt.y) < requiredClearDist
       );
       if (nearbyAtExit.some((v) => v.speed < 4)) {
         this.registerWaiting(car, intersectionId, conn);
@@ -300,7 +309,11 @@ export class IntersectionReservationManager {
     const activeRes = this.reservations.get(intersectionId) || [];
     for (const otherRes of activeRes) {
       if (otherRes.vehicleId === car.id) continue;
-      if (doPathsIntersectOrConflict(conn.pathWaypoints, otherRes.pathWaypoints, 28)) {
+      const otherCar = world.vehicles.find((v) => v.id === otherRes.vehicleId);
+      const isCarHeavy = car.length > 52 || (car.wheelBase || 28) > 34;
+      const isOtherHeavy = otherCar ? (otherCar.length > 52 || (otherCar.wheelBase || 28) > 34) : false;
+      const customMargin = (isCarHeavy || isOtherHeavy) ? 46 : 28; // Large safety margin for heavy sweeps
+      if (doPathsIntersectOrConflict(conn.pathWaypoints, otherRes.pathWaypoints, customMargin)) {
         this.registerWaiting(car, intersectionId, conn);
         return { granted: false, reason: 'path_conflict_active' };
       }
@@ -309,11 +322,20 @@ export class IntersectionReservationManager {
     // 4. Check Symmetry Breaker / Waiting Queue Election
     const elected = this.electedPriority.get(intersectionId);
     if (elected && now < elected.expiry && elected.vehicleId !== car.id) {
-      const waitingList = this.waitingMap.get(intersectionId) || [];
-      const electedEntry = waitingList.find((w) => w.vehicleId === elected.vehicleId);
-      if (electedEntry && doPathsIntersectOrConflict(conn.pathWaypoints, electedEntry.pathWaypoints, 28)) {
-        this.registerWaiting(car, intersectionId, conn);
-        return { granted: false, reason: 'yielding_to_elected' };
+      const electedCar = world.vehicles.find((v) => v.id === elected.vehicleId);
+      // If the elected vehicle is now stopped at a red light or invalid, ignore its priority to prevent green-light deadlocks
+      if (electedCar && electedCar.aiState !== 'stopping_light') {
+        const waitingList = this.waitingMap.get(intersectionId) || [];
+        const electedEntry = waitingList.find((w) => w.vehicleId === elected.vehicleId);
+        if (electedEntry) {
+          const isCarHeavy = car.length > 52 || (car.wheelBase || 28) > 34;
+          const isElectedHeavy = (electedCar.length > 52 || (electedCar.wheelBase || 28) > 34);
+          const customMargin = (isCarHeavy || isElectedHeavy) ? 46 : 28;
+          if (doPathsIntersectOrConflict(conn.pathWaypoints, electedEntry.pathWaypoints, customMargin)) {
+            this.registerWaiting(car, intersectionId, conn);
+            return { granted: false, reason: 'yielding_to_elected' };
+          }
+        }
       }
     }
 
@@ -571,7 +593,7 @@ function getLookaheadPointOnPolyline(
 
 // AI Traffic Management System
 export function isVehicleDisabledOrCrashed(car: Vehicle): boolean {
-  if (car.isPlayerControlled || car.isParked || car.id === 'evac_ambulance_special') {
+  if (car.isPlayerControlled || car.isParked || car.id === 'evac_ambulance_special' || (car as any).isFireDispatch) {
     return false;
   }
   const dmg = car.damage;
@@ -601,7 +623,8 @@ export function updateAITraffic(
   dt: number,
   vehGrid?: SpatialGrid<Vehicle>,
   pedGrid?: SpatialGrid<Pedestrian>,
-  playerPos?: Vector2D
+  playerPos?: Vector2D,
+  player?: any
 ) {
   let totalSpeed = 0;
   let movingCars = 0;
@@ -671,22 +694,197 @@ export function updateAITraffic(
     car.turnSignalTimer = (car.turnSignalTimer || 0) + dt;
     car.angle = ((car.angle + Math.PI) % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI) - Math.PI;
 
+    // --- PASSING FIRE VEHICLE FIRE SPOTTING ---
+    const isAnyFireVehicle = car.type === 'fire_engine' || car.type === 'fire_ladder' || car.type === 'fire_rescue' || car.type.startsWith('fire_');
+    if (isAnyFireVehicle && !(car as any).isFireDispatch && !car.isParked && !car.isPlayerControlled) {
+      let nearestFirePos: Vector2D | null = null;
+
+      // 1. Check vehicles on fire
+      for (const otherCar of world.vehicles) {
+        if (otherCar.damage && !otherCar.damage.isFullyBurnt) {
+          const hasFire = otherCar.damage.engineFire || otherCar.damage.fuelTankFire || otherCar.damage.cabinFire || otherCar.damage.underHoodSmolder || (otherCar.damage.fireIntensity || 0) > 0;
+          if (hasFire) {
+            const dist = Math.hypot(otherCar.x - car.x, otherCar.y - car.y);
+            if (dist < 350) {
+              nearestFirePos = { x: otherCar.x, y: otherCar.y };
+              break;
+            }
+          }
+        }
+      }
+
+      // 2. Check stains/puddles on fire
+      if (!nearestFirePos && world.stains) {
+        for (const st of world.stains) {
+          if (st.onFire && (st.fireIntensity || 0) > 0) {
+            const dist = Math.hypot(st.x - car.x, st.y - car.y);
+            if (dist < 350) {
+              nearestFirePos = { x: st.x, y: st.y };
+              break;
+            }
+          }
+        }
+      }
+
+      if (nearestFirePos) {
+        // Upgrade this passing fire vehicle to a DISPATCHED state!
+        (car as any).isFireDispatch = true;
+        (car as any).targetFireX = nearestFirePos.x;
+        (car as any).targetFireY = nearestFirePos.y;
+        (car as any).firefighterSpawned = false;
+        car.sirenOn = true;
+        car.turnSignal = 'hazard';
+        
+        // Recalculate route waypoints to lead straight to the fire
+        const startPoint = { x: car.x, y: car.y };
+        car.routeWaypoints = calculateGpsRoute(world, startPoint, nearestFirePos, true);
+        car.targetWaypointIndex = 1;
+        car.aiState = 'driving';
+        
+        if (player) {
+          if (!player.notifications) player.notifications = [];
+          player.notifications.push({
+            id: 'passing_fire_spotted_' + Date.now(),
+            text: '🧑‍🚒 Проезжающая мимо пожарная машина заметила огонь и поспешила на помощь!',
+            color: '#ef4444',
+            timer: 4.5
+          });
+        }
+      }
+    }
+
+    // --- SPECIAL DISPATCHED FIRE ENGINE HANDLING ---
+    if ((car as any).isFireDispatch && !car.isParked) {
+      car.sirenOn = true;
+      car.headlightMode = 'high';
+      car.targetSpeed = 100; // Drive fast but controllable for GPS pathfinding
+
+      // Fire engine proactive self-ghosting when close to other cars or obstacles to seamlessly glide through them!
+      const nearbyCars = vehGrid ? vehGrid.queryRadius(car.x, car.y, 115) : world.vehicles;
+      let isNearOtherCar = false;
+      for (const other of nearbyCars) {
+        if (other.id !== car.id && !other.isParked && other.id !== 'evac_ambulance_special') {
+          const dist = Math.hypot(other.x - car.x, other.y - car.y);
+          if (dist < 115) {
+            isNearOtherCar = true;
+            break;
+          }
+        }
+      }
+      if (isNearOtherCar) {
+        car.ghostingAlpha = Math.max(0.32, (car.ghostingAlpha ?? 1.0) - dt * 3.5);
+      } else {
+        car.ghostingAlpha = Math.min(1.0, (car.ghostingAlpha ?? 1.0) + dt * 1.5);
+      }
+
+      const targetFireX = (car as any).targetFireX;
+      const targetFireY = (car as any).targetFireY;
+      const distToFire = Math.hypot(car.x - targetFireX, car.y - targetFireY);
+
+      // If we are extremely close to the fire or near the end of our path, OR if we are blocked/stopped near the fire
+      const isNearEnd = car.routeWaypoints && (car.targetWaypointIndex >= car.routeWaypoints.length - 1);
+      const arrivedAtFire = distToFire < 160 || 
+                           (isNearEnd && distToFire < 450) || 
+                           (distToFire < 450 && Math.abs(car.speed) < 3);
+
+      if (arrivedAtFire) {
+        // Stop, park, and turn off siren (sound), but keep strobes flashing
+        car.speed = 0;
+        car.targetSpeed = 0;
+        car.vx = 0;
+        car.vy = 0;
+        car.aiState = 'parked';
+        car.isParked = true;
+        car.turnSignal = 'hazard';
+        
+        // Spawn firefighters if not already spawned!
+        if (!(car as any).firefighterSpawned) {
+          (car as any).firefighterSpawned = true;
+          
+          const ffCount = 2 + Math.floor(Math.random() * 2); // 2 or 3 firefighters
+          for (let f = 0; f < ffCount; f++) {
+            const side = f % 2 === 0 ? 1 : -1;
+            // Spawn next to the cabin/doors initially, then they walk to the rear of the truck
+            const exitX = car.x - Math.sin(car.angle) * (car.width / 2 + 10) * side;
+            const exitY = car.y + Math.cos(car.angle) * (car.width / 2 + 10) * side;
+
+            const firefighter: Pedestrian = {
+              id: `firefighter_${car.id}_${f}_${Date.now()}`,
+              x: exitX,
+              y: exitY,
+              vx: 0,
+              vy: 0,
+              angle: car.angle,
+              speed: 0,
+              targetSpeed: 60,
+              skinColor: '#ffd1b3', // standard
+              shirtColor: '#1e293b', // navy
+              pantsColor: '#1e293b', // navy
+              hairColor: '#0f172a',
+              walkCycle: 0,
+              targetPathId: null,
+              targetWaypointIndex: 0,
+              routeWaypoints: [],
+              isCrossingRoad: false,
+              waitingAtCurb: false,
+              crosswalkWaitTimer: 0,
+              crosswalkCooldownTimer: 0,
+              state: 'walking',
+              panicTimer: 0,
+              behaviorTimer: 0,
+              alertBubbleText: '🧑‍🚒 На вызов!',
+              alertBubbleTimer: 3.5
+            };
+
+            (firefighter as any).isFirefighter = true;
+            (firefighter as any).parentVehicleId = car.id;
+            (firefighter as any).firefighterState = 'going_to_truck';
+            (firefighter as any).targetFireX = targetFireX;
+            (firefighter as any).targetFireY = targetFireY;
+
+            world.pedestrians.push(firefighter);
+          }
+
+          if (player) {
+            if (!player.notifications) player.notifications = [];
+            player.notifications.push({
+              id: 'firefighters_arrived_' + Date.now(),
+              text: '🧑‍🚒 Пожарный расчет прибыл на место пожара!',
+              color: '#10b981',
+              timer: 3.5
+            });
+          }
+        }
+      }
+    }
+
     if (car.isPlayerControlled || car.isParked || car.id === 'evac_ambulance_special') continue;
 
-    // --- EMERGENCY YIELDING FOR AI CARS ---
+     // --- EMERGENCY YIELDING FOR AI CARS ---
     let isEmergencyYielding = false;
-    if (activeSirenCount > 0) {
+    let nearbySirenCar: Vehicle | null = null;
+    if (activeSirenCount > 0 && !(car as any).isFireDispatch) {
       const nearbyForSiren = vehGrid ? vehGrid.queryRadius(car.x, car.y, 280) : world.vehicles;
       for (const eCar of nearbyForSiren) {
         if (eCar.sirenOn && eCar.id !== car.id) {
-          if (Math.hypot(eCar.x - car.x, eCar.y - car.y) < 280) {
+          const distToSiren = Math.hypot(eCar.x - car.x, eCar.y - car.y);
+          if (distToSiren < 280) {
             isEmergencyYielding = true;
+            nearbySirenCar = eCar;
             break;
           }
         }
       }
       if (isEmergencyYielding) {
         car.aiState = 'yielding';
+        car.turnSignal = 'hazard'; // Turn on hazards to show they are pulling over
+      }
+      if (car.ghostingAlpha !== undefined && !(car as any).isFireDispatch && car.type !== 'fire_engine' && car.type !== 'fire_ladder' && car.type !== 'fire_rescue' && !car.type.startsWith('fire_')) {
+        car.ghostingAlpha = Math.min(1.0, car.ghostingAlpha + dt * 1.5);
+      }
+    } else {
+      if (car.ghostingAlpha !== undefined && !(car as any).isFireDispatch && car.type !== 'fire_engine' && car.type !== 'fire_ladder' && car.type !== 'fire_rescue' && !car.type.startsWith('fire_')) {
+        car.ghostingAlpha = Math.min(1.0, car.ghostingAlpha + dt * 1.5);
       }
     }
 
@@ -721,6 +919,18 @@ export function updateAITraffic(
       }
 
       if (nearestFirePos) {
+        // Driver spots the fire!
+        // 90% chance to report the fire to 112 emergency services!
+        const fireSource: any = targetCar || targetStain;
+        if (fireSource && !isFireEngineDispatchedFor(world, nearestFirePos.x, nearestFirePos.y)) {
+          if (Math.random() < 0.90) {
+            const spawned = dispatchFireEngine(world, targetPos, nearestFirePos.x, nearestFirePos.y, player);
+            if (spawned) {
+              fireSource.fireCallMade = true;
+            }
+          }
+        }
+
         car.driverExitedForFire = true;
         if (Math.random() < 0.7) {
           car.targetSpeed = 0;
@@ -888,25 +1098,22 @@ export function updateAITraffic(
     }
     car.inIntersection = insideIntersection !== null;
 
-    // --- REAR AXLE PIVOT REFERENCE (Swept Path Geometry) ---
-    // Vehicles turn around rear axle pivot point, front bumper swings outward!
-    const rearAxleDist = car.length * 0.35;
-    const rearX = car.x - Math.cos(car.angle) * rearAxleDist;
-    const rearY = car.y - Math.sin(car.angle) * rearAxleDist;
+    // 2. Direct Waypoint Tracking & Pure Pursuit
+    const carX = car.x;
+    const carY = car.y;
 
-    // 2. Waypoint Tracking & Critical-Damped Pure Pursuit from Rear Axle Pivot
     if (car.routeWaypoints && car.routeWaypoints.length > 0) {
       const targetWp = car.routeWaypoints[car.targetWaypointIndex];
       if (targetWp) {
-        const distToWp = Math.hypot(targetWp.x - rearX, targetWp.y - rearY);
+        const distToWp = Math.hypot(targetWp.x - carX, targetWp.y - carY);
 
-        // Vector math to check if the car rear axle has passed the current segment
+        // Vector math to check if the car has passed the current segment
         const prevWp = car.routeWaypoints[Math.max(0, car.targetWaypointIndex - 1)];
         const segDx = targetWp.x - prevWp.x;
         const segDy = targetWp.y - prevWp.y;
         const segLenSq = segDx * segDx + segDy * segDy;
-        const toCarDx = rearX - prevWp.x;
-        const toCarDy = rearY - prevWp.y;
+        const toCarDx = carX - prevWp.x;
+        const toCarDy = carY - prevWp.y;
         const projRatio = segLenSq > 0 ? (toCarDx * segDx + toCarDy * segDy) / segLenSq : 1;
 
         // Calculate Cross-Track Error (lateral displacement from segment centerline)
@@ -914,13 +1121,20 @@ export function updateAITraffic(
         const cte = segLen > 0 ? (toCarDx * segDy - toCarDy * segDx) / segLen : 0;
 
         // Check if target waypoint is behind the vehicle heading
-        const toWpDx = targetWp.x - rearX;
-        const toWpDy = targetWp.y - rearY;
+        const toWpDx = targetWp.x - carX;
+        const toWpDy = targetWp.y - carY;
         const wpAhead = toWpDx * Math.cos(car.angle) + toWpDy * Math.sin(car.angle);
 
         const isCurve = !!car.currentConnection;
         const isHeavyVehicle = car.length > 52 || (car.wheelBase || 28) > 34;
-        const advanceThreshold = isCurve ? (isHeavyVehicle ? 32 : 24) : 36;
+        const isRightTurn = car.currentConnection?.turnType === 'right' || car.plannedTurn === 'right';
+
+        // Advance threshold on curves and straights
+        const advanceThreshold = isCurve 
+          ? (isHeavyVehicle 
+              ? (isRightTurn ? 16 : 22) 
+              : (isRightTurn ? 12 : 16)) 
+          : 36;
 
         if (distToWp < advanceThreshold || projRatio >= 0.85 || (distToWp < 55 && wpAhead < -4)) {
           if (car.targetWaypointIndex < car.routeWaypoints.length - 1) {
@@ -930,48 +1144,52 @@ export function updateAITraffic(
           }
         }
 
+        // Keep a curve-like tight lookahead if we recently exited a connection and are still aligning (heading difference > 0.12 rad)
+        let isAligning = false;
+        if (!isCurve && car.targetWaypointIndex === 1 && car.routeWaypoints.length > 1) {
+          const laneDir = Math.atan2(car.routeWaypoints[1].y - car.routeWaypoints[0].y, car.routeWaypoints[1].x - car.routeWaypoints[0].x);
+          if (Math.abs(angleDiff(laneDir, car.angle)) > 0.12) {
+            isAligning = true;
+          }
+        }
+        const isTightTracking = isCurve || isAligning;
+
         // Pure pursuit dynamic lookahead distance (scaled with speed and vehicle size)
-        let lookaheadDist = isCurve
-          ? Math.max(22, Math.min(38, 18 + car.speed * 0.15))
+        let lookaheadDist = isTightTracking
+          ? Math.max(18, Math.min(30, 14 + car.speed * 0.12)) // Tighter, more precise lookahead to stay in lane
           : Math.max(38, Math.min(85, 24 + car.speed * 0.4));
 
         if (isHeavyVehicle) {
-          lookaheadDist *= 1.25; // Longer lookahead for smooth heavy vehicle arcs
+          lookaheadDist = isTightTracking
+            ? Math.max(15, Math.min(22, 13 + car.speed * 0.08)) // Extremely precise lookahead for heavy trucks
+            : Math.max(45, Math.min(95, 30 + car.speed * 0.4));
         }
 
         const { point: lookaheadPt } = getLookaheadPointOnPolyline(
-          rearX,
-          rearY,
+          carX,
+          carY,
           car.routeWaypoints,
           car.targetWaypointIndex,
           lookaheadDist
         );
 
-        // Heavy vehicles "Swing Wide" (Swept Path) logic for tight turn connections
+        // Pure pursuit target directly follows the lane connection curve.
+        // On connection exit, smoothly anchor target to destination lane centerline to prevent overshooting into oncoming traffic.
         let targetX = lookaheadPt.x;
         let targetY = lookaheadPt.y;
 
-        if (isHeavyVehicle && car.currentConnection && (car.currentConnection.turnType === 'right' || car.currentConnection.turnType === 'left')) {
-          const isRight = car.currentConnection.turnType === 'right';
-          const wideLookaheadDist = lookaheadDist * 1.35;
-          const newLookahead = getLookaheadPointOnPolyline(
-            rearX,
-            rearY,
-            car.routeWaypoints,
-            car.targetWaypointIndex,
-            wideLookaheadDist
-          );
-          
-          // Offset target outward to prevent rear inner wheels from cutting inner corners or clipping curbs
-          const heading = Math.atan2(newLookahead.point.y - rearY, newLookahead.point.x - rearX);
-          const swingDir = isRight ? -Math.PI / 2 : Math.PI / 2;
-          const swingAmount = isRight ? 14 : 10;
-          targetX = newLookahead.point.x + Math.cos(heading + swingDir) * swingAmount;
-          targetY = newLookahead.point.y + Math.sin(heading + swingDir) * swingAmount;
+        if (car.currentConnection && car.targetWaypointIndex >= car.routeWaypoints.length - 2) {
+          const destLane = findLaneById(world, car.currentConnection.targetLaneId);
+          if (destLane && destLane.waypoints.length > 0) {
+            const exitAnchor = destLane.waypoints[0];
+            const blendFactor = 0.6;
+            targetX = targetX * (1 - blendFactor) + exitAnchor.x * blendFactor;
+            targetY = targetY * (1 - blendFactor) + exitAnchor.y * blendFactor;
+          }
         }
 
-        const ldx = targetX - rearX;
-        const ldy = targetY - rearY;
+        const ldx = targetX - carX;
+        const ldy = targetY - carY;
         let alpha = angleDiff(Math.atan2(ldy, ldx), car.angle);
 
         // Active Cross-Track Error (CTE) Centering Bias
@@ -981,11 +1199,21 @@ export function updateAITraffic(
         // Standard geometric pure pursuit formula around rear axle:
         const wheelBase = car.wheelBase || 28;
         const curvature = (2 * Math.sin(alpha)) / Math.max(8, lookaheadDist);
-        const maxSteerLimit = CAR_CONFIGS[car.type]?.maxSteerAngle || 0.85;
+        let maxSteerLimit = CAR_CONFIGS[car.type]?.maxSteerAngle || 0.85;
+        if (isHeavyVehicle && isTightTracking) {
+          maxSteerLimit = Math.max(maxSteerLimit, 1.30); // 74.5 deg steering lock for heavy vehicles on turns
+        }
+        if (car.plannedTurn === 'right' || car.currentConnection?.turnType === 'right') {
+          maxSteerLimit = Math.max(maxSteerLimit, 1.32); // 75.6 deg steering lock for right turns
+        }
+        if ((car as any).isFireDispatch) {
+          maxSteerLimit = 1.35; // Emergency steering boost for sharp turns
+        }
         const desiredSteer = Math.max(-maxSteerLimit, Math.min(maxSteerLimit, Math.atan(curvature * wheelBase)));
 
-        // Smooth steering response
-        car.steerAngle += (desiredSteer - car.steerAngle) * Math.min(1.0, 10.0 * dt);
+        // Smooth steering response (responsive steering for heavy vehicle low-speed turns)
+        const steerSpeed = (car as any).isFireDispatch ? 20.0 : (isHeavyVehicle ? 16.0 : 12.0);
+        car.steerAngle += (desiredSteer - car.steerAngle) * Math.min(1.0, steerSpeed * dt);
 
         // Bicycle yaw kinematic update
         if (Math.abs(car.speed) > 0.5) {
@@ -1084,7 +1312,16 @@ export function updateAITraffic(
       }
 
       // Check OBB intersection and Multi-Ray intersections
-      const otherOBB = getOBB(other, 2.5); // 2.5px safety buffer around other vehicle
+      const isCarHeavy = car.length > 52 || (car.wheelBase || 28) > 34;
+      const isOtherHeavy = other.length > 52 || (other.wheelBase || 28) > 34;
+      let safetyBuffer = 2.5;
+      
+      // Dynamic large safety buffer for heavy vehicles turning on curves
+      if ((isCarHeavy && car.currentConnection) || (isOtherHeavy && other.currentConnection)) {
+        safetyBuffer = 14.5; // Smooth yielding corridor
+      }
+      
+      const otherOBB = getOBB(other, safetyBuffer); // safety buffer around other vehicle
       const isOverlapping = isOBBOverlapping(carOBB, otherOBB);
       const isCentralIntersect = isRayIntersectingOBB({ x: fx, y: fy }, centralRayEnd, otherOBB);
       const isLeftIntersect = isRayIntersectingOBB({ x: flx, y: fly }, leftRayEnd, otherOBB);
@@ -1094,12 +1331,16 @@ export function updateAITraffic(
       // Trajectory overlap waypoint check along vehicle's planned path
       let isTrajectoryConflict = false;
       if (car.routeWaypoints && car.routeWaypoints.length > 0) {
-        const checkEnd = Math.min(car.routeWaypoints.length, car.targetWaypointIndex + 6);
-        for (let wi = car.targetWaypointIndex; wi < checkEnd; wi++) {
-          const wp = car.routeWaypoints[wi];
-          if (Math.hypot(other.x - wp.x, other.y - wp.y) < (car.width + other.width) * 0.5 + 8) {
-            isTrajectoryConflict = true;
-            break;
+        // Ignore trajectory conflicts with stationary vehicles that are not in the intersection (e.g., parked or waiting at their own stop line)
+        const isOtherStationaryOutside = Math.abs(other.speed) < 2.0 && !other.inIntersection && !other.currentConnection;
+        if (!isOtherStationaryOutside && !other.isParked) {
+          const checkEnd = Math.min(car.routeWaypoints.length, car.targetWaypointIndex + 6);
+          for (let wi = car.targetWaypointIndex; wi < checkEnd; wi++) {
+            const wp = car.routeWaypoints[wi];
+            if (Math.hypot(other.x - wp.x, other.y - wp.y) < (car.width + other.width) * 0.5 + 8) {
+              isTrajectoryConflict = true;
+              break;
+            }
           }
         }
       }
@@ -1238,7 +1479,7 @@ export function updateAITraffic(
       }
     }
 
-    if (buildingObstacleDist < 999) {
+    if (buildingObstacleDist < 999 && !(car as any).isFireDispatch) {
       if (buildingObstacleDist < 38 && Math.abs(car.speed) < 18) {
         // Car is right at a building wall at low speed -> Initiate smart reverse turn!
         car.aiState = 'reversing';
@@ -1320,10 +1561,18 @@ export function updateAITraffic(
 
     // 5. Intelligent Driver Model (IDM) Target Speed Calculation
     const defaultCruiseSpeed = 155 + (car.type === 'sports' ? 45 : 0) + (car.type === 'taxi' ? 15 : 0);
-    // Smooth realistic urban turning speeds: prevents wide-swinging into building corners
+    // Smooth realistic urban turning speeds: prevents overshooting and wide swinging into oncoming lanes
+    const isHeavyCar = car.length > 52 || (car.wheelBase || 28) > 34;
+    const isRightTurn = car.currentConnection?.turnType === 'right' || car.plannedTurn === 'right';
+
+    // Right turns are extremely tight and require much lower speeds to prevent lateral overshoot.
     const turnMaxSpeed = car.currentConnection?.turnType === 'turnaround'
-      ? 45
-      : (car.type === 'sports' ? 55 : (car.type === 'suv' || car.type === 'pickup' ? 42 : 48));
+      ? 36
+      : (isHeavyCar 
+          ? (isRightTurn ? 20 : 28) 
+          : (isRightTurn 
+              ? (car.type === 'sports' ? 38 : (car.type === 'suv' || car.type === 'pickup' ? 30 : 34)) 
+              : (car.type === 'sports' ? 55 : (car.type === 'suv' || car.type === 'pickup' ? 40 : 44))));
     const v0 = (car.inIntersection || car.currentConnection || car.plannedTurn !== 'straight') ? turnMaxSpeed : defaultCruiseSpeed;
 
     // Ghosting recovery alpha handling
@@ -1400,8 +1649,8 @@ export function updateAITraffic(
     // Strict limits on deceleration/acceleration for stability
     car.idmAcceleration = Math.max(-420, Math.min(a_max * 1.5, idm_accel));
 
-    // For backwards compatibility and high-level logic APIs, keep targetSpeed synced
-    const effectiveV0 = car.aiState === 'yielding' ? 15 : v0;
+    // If yielding to emergency vehicles, stop completely (effectiveV0 = 0) so the fire engine has room to pass!
+    const effectiveV0 = car.aiState === 'yielding' ? 0 : v0;
     car.targetSpeed = effectiveV0;
 
     // Hard emergency deceleration override if extremely close to obstacle or pedestrian
@@ -1431,8 +1680,19 @@ export function updateAITraffic(
 
     if (isLegitimateStop) {
       car.stuckTimer = 0;
+      if ((car as any).isFireDispatch) {
+        car.ghostingAlpha = Math.min(1.0, (car.ghostingAlpha ?? 1.0) + dt * 1.5);
+      }
     } else if (Math.abs(car.speed) < 3) {
       car.stuckTimer += dt;
+
+      // Dispatched fire engine self-ghosting when stuck/blocked
+      if ((car as any).isFireDispatch && car.stuckTimer > 0.8) {
+        car.ghostingAlpha = Math.max(0.35, (car.ghostingAlpha ?? 1.0) - dt * 2.0);
+        car.targetSpeed = 100;
+        car.speed = Math.max(car.speed, 35);
+        car.aiState = 'driving';
+      }
 
       // Inside intersection, on connection, or in head-on conflict: after 1.2s of stall, turn on ghosting and force drive through
       if ((car.inIntersection || car.currentConnection || car.hasHeadOnConflict) && car.stuckTimer > 1.2) {
@@ -1444,7 +1704,7 @@ export function updateAITraffic(
 
       // Hard deadlock dissolution: after 3.0s of being stuck,
       // instantly reposition the car to an open road to dissolve the jam without backing up into neighboring traffic!
-      if (car.stuckTimer > 3.0) {
+      if (car.stuckTimer > 3.0 && !(car as any).isFireDispatch) {
         intersectionArbiter.releaseReservation(car.id);
         car.intersectionReservationId = null;
         const respawned = respawnCarNearPlayer(car, playerPos, world);
@@ -1456,6 +1716,13 @@ export function updateAITraffic(
       }
     } else {
       car.stuckTimer = Math.max(0, car.stuckTimer - dt * 2.0);
+      if ((car as any).isFireDispatch && car.ghostingAlpha !== undefined) {
+        // Handled proactively by fire engine proximity logic
+      }
+      if (car.ghostingAlpha !== undefined && car.ghostingAlpha < 1.0) {
+        // Restore opacity smoothly once the car is moving normally
+        car.ghostingAlpha = Math.min(1.0, car.ghostingAlpha + dt * 0.8);
+      }
     }
   }
 
@@ -2010,10 +2277,11 @@ function getCrosswalkEndpoints(
 function respawnPedestrianNearPlayer(ped: Pedestrian, targetPos: Vector2D, world: GameWorld) {
   if (!world.pedestrianPaths || world.pedestrianPaths.length === 0) return;
 
-  // Filter paths with waypoints between 250px and 850px from player position
+  // Filter paths with waypoints between 250px and 850px from player position (excluding gas station inner lot)
   const nearbyPaths = world.pedestrianPaths.filter((path) => {
     const wp = path.waypoints[0];
     if (!wp) return false;
+    if (wp.x >= 4920 && wp.x <= 5480 && wp.y >= 4890 && wp.y <= 5490) return false;
     const d = Math.hypot(wp.x - targetPos.x, wp.y - targetPos.y);
     return d >= 250 && d <= 850;
   });
@@ -2078,7 +2346,8 @@ export function updatePedestrians(
   pedGrid?: SpatialGrid<Pedestrian>,
   bldGrid?: SpatialGrid<Building>,
   playerPos?: Vector2D,
-  propGrid?: SpatialGrid<StreetProp>
+  propGrid?: SpatialGrid<StreetProp>,
+  player?: any
 ) {
   const isRaining = world.weather === 'rain' || world.weather === 'storm';
   const UMBRELLA_COLORS = ['#ef4444', '#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899', '#06b6d4'];
@@ -2101,9 +2370,15 @@ export function updatePedestrians(
 
   let updatedPedCount = 0;
   for (const ped of world.pedestrians) {
+    // Keep AI pedestrians off the private gas station fueling lot
+    if (ped.x >= 4920 && ped.x <= 5480 && ped.y >= 4890 && ped.y <= 5490 && !(ped as any).isPlayerControlled && !(ped as any).isFirefighter) {
+      respawnPedestrianNearPlayer(ped, targetPos, world);
+      continue;
+    }
+
     // Keep pedestrians focused around the player's active area
     const distToPlayer = Math.hypot(ped.x - targetPos.x, ped.y - targetPos.y);
-    if (distToPlayer > 1200) {
+    if (distToPlayer > 1200 && !(ped as any).isFirefighter) {
       if (updatedPedCount < performanceConfig.maxActivePedestrians) {
         respawnPedestrianNearPlayer(ped, targetPos, world);
       } else {
@@ -2114,8 +2389,318 @@ export function updatePedestrians(
       continue;
     }
 
+    // --- SPECIAL FIREFIGHTER BEHAVIOR ---
+    if ((ped as any).isFirefighter) {
+      const parentVehicleId = (ped as any).parentVehicleId;
+      const parentCar = world.vehicles.find(v => v.id === parentVehicleId);
+      const ffState = (ped as any).firefighterState;
+
+      if (!parentCar) {
+        // Despawn safely
+        ped.x = -10000;
+        ped.y = -10000;
+        (ped as any).firefighterState = 'completed';
+        continue;
+      }
+
+      if (ffState === 'going_to_truck') {
+        // Walk to the rear of the fire engine to grab a hose!
+        const rearX = parentCar.x - Math.cos(parentCar.angle) * (parentCar.length * 0.45);
+        const rearY = parentCar.y - Math.sin(parentCar.angle) * (parentCar.length * 0.45);
+
+        const dx = rearX - ped.x;
+        const dy = rearY - ped.y;
+        const dist = Math.hypot(dx, dy);
+
+        if (dist > 15) {
+          ped.angle = Math.atan2(dy, dx);
+          ped.targetSpeed = 55;
+          ped.speed = ped.targetSpeed;
+          ped.walkCycle += dt * 7.5;
+          ped.vx = Math.cos(ped.angle) * ped.speed;
+          ped.vy = Math.sin(ped.angle) * ped.speed;
+          ped.x += ped.vx * dt;
+          ped.y += ped.vy * dt;
+        } else {
+          (ped as any).firefighterState = 'taking_hose';
+          ped.alertBubbleText = '🧑‍🚒 Взял рукав!';
+          ped.alertBubbleTimer = 2.0;
+          ped.handheldProp = 'extinguisher'; // Use visual extinguisher pose
+          ped.behaviorTimer = 0;
+        }
+      } 
+      else if (ffState === 'taking_hose') {
+        ped.targetSpeed = 0;
+        ped.speed = 0;
+        ped.vx = 0;
+        ped.vy = 0;
+        ped.behaviorTimer = (ped.behaviorTimer ?? 0) + dt;
+        if (ped.behaviorTimer > 1.5) {
+          (ped as any).firefighterState = 'going_to_fire';
+          ped.behaviorTimer = 0;
+        }
+      } 
+      else if (ffState === 'going_to_fire') {
+        let targetX = (ped as any).targetFireX;
+        let targetY = (ped as any).targetFireY;
+        let fireExists = false;
+
+        let targetCar = world.vehicles.find(v => {
+          if (!v.damage || v.damage.isFullyBurnt) return false;
+          return v.damage.engineFire || v.damage.fuelTankFire || v.damage.cabinFire || v.damage.underHoodSmolder || (v.damage.fireIntensity || 0) > 0;
+        });
+
+        let targetStain = world.stains?.find(s => s.onFire && (s.fireIntensity || 0) > 0);
+
+        if (targetCar) {
+          targetX = targetCar.x;
+          targetY = targetCar.y;
+          fireExists = true;
+        } else if (targetStain) {
+          targetX = targetStain.x;
+          targetY = targetStain.y;
+          fireExists = true;
+        }
+
+        if (!fireExists) {
+          ped.alertBubbleText = '✨ Пожар ликвидирован!';
+          ped.alertBubbleTimer = 2.5;
+          (ped as any).firefighterState = 'returning_to_truck';
+          continue;
+        }
+
+        const dx = targetX - ped.x;
+        const dy = targetY - ped.y;
+        const dist = Math.hypot(dx, dy);
+
+        ped.angle = Math.atan2(dy, dx);
+
+        if (dist > 75) {
+          ped.targetSpeed = 50;
+          ped.speed = ped.targetSpeed;
+          ped.walkCycle += dt * 7.5;
+          ped.vx = Math.cos(ped.angle) * ped.speed;
+          ped.vy = Math.sin(ped.angle) * ped.speed;
+          ped.x += ped.vx * dt;
+          ped.y += ped.vy * dt;
+        } else {
+          (ped as any).firefighterState = 'extinguishing';
+        }
+      } 
+      else if (ffState === 'extinguishing') {
+        let targetX = (ped as any).targetFireX;
+        let targetY = (ped as any).targetFireY;
+        let fireExists = false;
+
+        let targetCar = world.vehicles.find(v => {
+          if (!v.damage || v.damage.isFullyBurnt) return false;
+          return v.damage.engineFire || v.damage.fuelTankFire || v.damage.cabinFire || v.damage.underHoodSmolder || (v.damage.fireIntensity || 0) > 0;
+        });
+
+        let targetStain = world.stains?.find(s => s.onFire && (s.fireIntensity || 0) > 0);
+
+        if (targetCar) {
+          targetX = targetCar.x;
+          targetY = targetCar.y;
+          fireExists = true;
+        } else if (targetStain) {
+          targetX = targetStain.x;
+          targetY = targetStain.y;
+          fireExists = true;
+        }
+
+        if (!fireExists) {
+          ped.alertBubbleText = '✨ Пожар потушен!';
+          ped.alertBubbleTimer = 2.0;
+          (ped as any).firefighterState = 'returning_to_truck';
+          continue;
+        }
+
+        const dx = targetX - ped.x;
+        const dy = targetY - ped.y;
+        const dist = Math.hypot(dx, dy);
+
+        ped.angle = Math.atan2(dy, dx);
+
+        if (dist > 85) {
+          ped.targetSpeed = 35;
+          ped.speed = ped.targetSpeed;
+          ped.vx = Math.cos(ped.angle) * ped.speed;
+          ped.vy = Math.sin(ped.angle) * ped.speed;
+          ped.x += ped.vx * dt;
+          ped.y += ped.vy * dt;
+          ped.walkCycle += dt * 5;
+        } else if (dist < 50) {
+          ped.targetSpeed = -25;
+          ped.speed = ped.targetSpeed;
+          ped.vx = Math.cos(ped.angle) * ped.speed;
+          ped.vy = Math.sin(ped.angle) * ped.speed;
+          ped.x += ped.vx * dt;
+          ped.y += ped.vy * dt;
+          ped.walkCycle += dt * 4;
+        } else {
+          ped.targetSpeed = 0;
+          ped.speed = 0;
+          ped.vx = 0;
+          ped.vy = 0;
+        }
+
+        // Spray water-foam particles (водно-пенная смесь)
+        if (Math.random() < 30.0 * dt) {
+          for (let p = 0; p < 2; p++) {
+            const spreadAngle = ped.angle + (Math.random() * 0.3 - 0.15);
+            const pSpeed = 160 + Math.random() * 110;
+            world.particles.push({
+              x: ped.x + Math.cos(ped.angle) * 12 + (Math.random() * 6 - 3),
+              y: ped.y + Math.sin(ped.angle) * 12 + (Math.random() * 6 - 3),
+              vx: Math.cos(spreadAngle) * pSpeed,
+              vy: Math.sin(spreadAngle) * pSpeed,
+              radius: 4 + Math.random() * 5, // larger bubbles for water-foam
+              color: '#e0f2fe',
+              alpha: 0.9,
+              life: 0,
+              maxLife: 0.35 + Math.random() * 0.25,
+              type: 'spark'
+            });
+          }
+        }
+
+        // 3.5x-4x more powerful extinguishing rate!
+        const foamPower = 4.0;
+        if (targetCar && targetCar.damage) {
+          targetCar.damage.fireTimer = Math.max(0, (targetCar.damage.fireTimer || 0) - dt * 35.0 * foamPower);
+          targetCar.damage.fireIntensity = Math.max(0, (targetCar.damage.fireIntensity || 1.0) - 0.75 * dt * foamPower);
+          targetCar.damage.fireProgress = Math.max(0, (targetCar.damage.fireProgress || 1.0) - 0.60 * dt * foamPower);
+          if ((targetCar.damage.fireIntensity <= 0.05 && targetCar.damage.fireProgress <= 0.05) || (targetCar.damage.fireTimer || 0) <= 2.0) {
+            targetCar.damage.engineFire = false;
+            targetCar.damage.fuelTankFire = false;
+            targetCar.damage.cabinFire = false;
+            targetCar.damage.underHoodSmolder = false;
+            targetCar.damage.engineSmoking = false;
+            targetCar.damage.fireIntensity = 0;
+            targetCar.damage.fireProgress = 0;
+            targetCar.damage.fireTimer = 0;
+            targetCar.damage.groundPuddleIgnited = false;
+          }
+        }
+        if (targetStain) {
+          targetStain.fireIntensity = Math.max(0, (targetStain.fireIntensity || 1.0) - 1.2 * dt * foamPower);
+          if (targetStain.fireIntensity <= 0.05) {
+            targetStain.onFire = false;
+            targetStain.fireIntensity = 0;
+          }
+        }
+      }
+      else if (ffState === 'returning_to_truck') {
+        const rearX = parentCar.x - Math.cos(parentCar.angle) * (parentCar.length * 0.45);
+        const rearY = parentCar.y - Math.sin(parentCar.angle) * (parentCar.length * 0.45);
+
+        const dx = rearX - ped.x;
+        const dy = rearY - ped.y;
+        const dist = Math.hypot(dx, dy);
+
+        if (dist > 15) {
+          ped.angle = Math.atan2(dy, dx);
+          ped.targetSpeed = 45;
+          ped.speed = ped.targetSpeed;
+          ped.walkCycle += dt * 6.5;
+          ped.vx = Math.cos(ped.angle) * ped.speed;
+          ped.vy = Math.sin(ped.angle) * ped.speed;
+          ped.x += ped.vx * dt;
+          ped.y += ped.vy * dt;
+        } else {
+          ped.alertBubbleText = '🧑‍🚒 Работа закончена!';
+          ped.alertBubbleTimer = 2.0;
+          (ped as any).firefighterState = 'completed';
+          
+          ped.x = -10000;
+          ped.y = -10000;
+          ped.vx = 0;
+          ped.vy = 0;
+
+          const otherFFs = world.pedestrians.filter(p => (p as any).isFirefighter && (p as any).parentVehicleId === parentCar.id && (p as any).firefighterState !== 'completed');
+          if (otherFFs.length === 0) {
+            (parentCar as any).isFireDispatch = false;
+            parentCar.isParked = false;
+            parentCar.sirenOn = false;
+            parentCar.turnSignal = 'none';
+            parentCar.aiState = 'driving';
+            parentCar.targetSpeed = 40;
+            reacquireClosestLane(parentCar, world);
+          }
+        }
+      }
+
+      ped.x = Math.max(15, Math.min(world.width - 15, ped.x));
+      ped.y = Math.max(15, Math.min(world.height - 15, ped.y));
+      continue;
+    }
+
+    // --- PEDESTRIAN FIRE DETECTION & CALL ---
+    if (!ped.isInsideBuilding && !(ped as any).isFirefighter && ped.state !== 'extinguishing_fire' && ped.x > 0) {
+      let nearestFirePos: Vector2D | null = null;
+      let targetCar: Vehicle | null = null;
+      let targetStain: any = null;
+
+      const nearbyVehs = vehGrid ? vehGrid.queryRadius(ped.x, ped.y, 300) : world.vehicles;
+      for (const otherCar of nearbyVehs) {
+        if (otherCar.damage && !otherCar.damage.isFullyBurnt) {
+          const hasFire = otherCar.damage.engineFire || otherCar.damage.fuelTankFire || otherCar.damage.cabinFire || otherCar.damage.underHoodSmolder || (otherCar.damage.fireIntensity || 0) > 0;
+          if (hasFire) {
+            nearestFirePos = { x: otherCar.x, y: otherCar.y };
+            targetCar = otherCar;
+            break;
+          }
+        }
+      }
+
+      if (!nearestFirePos && world.stains) {
+        const nearbyStains = world.stains.filter(s => Math.hypot(s.x - ped.x, s.y - ped.y) < 300);
+        for (const st of nearbyStains) {
+          if (st.onFire && (st.fireIntensity || 0) > 0) {
+            nearestFirePos = { x: st.x, y: st.y };
+            targetStain = st;
+            break;
+          }
+        }
+      }
+
+      if (nearestFirePos) {
+        const fireSource: any = targetCar || targetStain;
+        if (fireSource && !isFireEngineDispatchedFor(world, nearestFirePos.x, nearestFirePos.y)) {
+          if (Math.random() < 0.90) {
+            const spawned = dispatchFireEngine(world, targetPos, nearestFirePos.x, nearestFirePos.y, player);
+            if (spawned) {
+              fireSource.fireCallMade = true;
+              ped.alertBubbleText = '📞 Вызываю пожарных!';
+              ped.alertBubbleTimer = 3.5;
+            } else {
+              ped.state = 'panicking';
+              ped.panicTimer = 2.0;
+              ped.alertBubbleText = '😱 Спасите! Пожар!';
+              ped.alertBubbleTimer = 2.5;
+            }
+          } else {
+            ped.state = 'panicking';
+            ped.panicTimer = 3.0;
+            ped.alertBubbleText = '🔥 ПОЖАР!!!';
+            ped.alertBubbleTimer = 2.5;
+          }
+        } else if (Math.random() < 0.006) {
+          // Fire engine already on its way - scream in natural intervals!
+          ped.state = 'panicking';
+          ped.panicTimer = 2.0;
+          if (!ped.alertBubbleText || ped.alertBubbleTimer <= 0) {
+            const screams = ['😱 Спасите!', '🔥 Горит!', '🧑‍🚒 Помогите!'];
+            ped.alertBubbleText = screams[Math.floor(Math.random() * screams.length)];
+            ped.alertBubbleTimer = 2.0;
+          }
+        }
+      }
+    }
+
     updatedPedCount++;
-    if (updatedPedCount > performanceConfig.maxActivePedestrians) {
+    if (updatedPedCount > performanceConfig.maxActivePedestrians && !(ped as any).isFirefighter) {
       ped.x = -10000;
       ped.y = -10000;
       continue;
@@ -2882,13 +3467,20 @@ export function updatePedestrians(
       for (const prop of nearbyProps) {
         if (prop.isBroken) continue;
 
+        if (prop.type === 'manhole' || prop.type === 'drain_grate') continue;
+
         let propRadius = 5.0;
         if (prop.type === 'bench') propRadius = 9.0;
         else if (prop.type === 'kiosk') propRadius = 16.0;
         else if (prop.type === 'mailbox') propRadius = 7.0;
         else if (prop.type === 'cone') propRadius = 4.0;
         else if (prop.type === 'trash_can') propRadius = 6.0;
-        else if (prop.type === 'bus_stop') propRadius = 15.0;
+        else if (prop.type === 'bus_stop') propRadius = 16.0;
+        else if (prop.type === 'dumpster') propRadius = 14.0;
+        else if (prop.type === 'flowerbed') propRadius = 12.0;
+        else if (prop.type === 'tire_flowerbed') propRadius = 9.0;
+        else if (prop.type === 'lamp_concrete') propRadius = 7.0;
+        else if (prop.type === 'playground_swing') propRadius = 12.0;
 
         const dx = nextX - prop.x;
         const dy = nextY - prop.y;
@@ -3012,9 +3604,127 @@ function respawnCarNearPlayer(car: Vehicle, playerPos: Vector2D, world: GameWorl
         car.ghostingAlpha = 1.0;
         car.damage = createDefaultVehicleDamage(car.length, car.width);
         car.engineState = createDefaultEngineState(car.type, true, false);
+        car.hasGBO = ['sedan_classic', 'wagon_classic', 'taxi_yellow', 'delivery_truck', 'van_cargo_old'].includes(car.type) ? Math.random() < 0.4 : false;
         car.fuelSystem = createDefaultFuelSystem(car.type, false);
         return true;
       }
+    }
+  }
+  return false;
+}
+
+// Checks if an active fire engine is already dispatched for a specific fire coordinate
+export function isFireEngineDispatchedFor(world: GameWorld, fireX: number, fireY: number): boolean {
+  return world.vehicles.some(v => 
+    (v as any).isFireDispatch && 
+    (!v.damage || !v.damage.isFullyBurnt) && 
+    Math.hypot((v as any).targetFireX - fireX, (v as any).targetFireY - fireY) < 180
+  );
+}
+
+// Spawns and dispatches a fire engine to drive to the given fire location using pathfinding
+export function dispatchFireEngine(world: GameWorld, targetPos: Vector2D, fireX: number, fireY: number, player?: any): boolean {
+  let candidates = getCandidateSpawnPoints(targetPos, world, 500, 1150);
+  if (candidates.length === 0) {
+    // Fallback: wider range to guarantee candidate points are found
+    candidates = getCandidateSpawnPoints(targetPos, world, 300, 2500);
+  }
+  if (candidates.length === 0) return false;
+
+  const cType = 'fire_engine';
+  const cfg = CAR_CONFIGS[cType] || CAR_CONFIGS.sedan;
+  const color = '#dc2626';
+  const roofColor = '#f8fafc';
+
+  for (let attempts = 0; attempts < 15; attempts++) {
+    const chosen = candidates[Math.floor(Math.random() * candidates.length)];
+
+    // Force spawn on later attempts to guarantee fire engine dispatch even under dense traffic conditions
+    if (attempts >= 8 || isSpawnPositionClear(chosen.spawnX, chosen.spawnY, world)) {
+      const id = `fire_engine_dispatch_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
+      const speedVal = 100; // Fast but controllable for GPS pathfinding
+
+      const startPoint = { x: chosen.spawnX, y: chosen.spawnY };
+      const endPoint = { x: fireX, y: fireY };
+      const gpsPath = calculateGpsRoute(world, startPoint, endPoint, true);
+
+      const fireEngine: Vehicle = {
+        id,
+        type: cType,
+        x: chosen.spawnX,
+        y: chosen.spawnY,
+        vx: Math.cos(chosen.angle) * speedVal,
+        vy: Math.sin(chosen.angle) * speedVal,
+        angle: chosen.angle,
+        steerAngle: 0,
+        targetSteerAngle: 0,
+        speed: speedVal,
+        lateralVelocity: 0,
+        angularVelocity: 0,
+        isDrifting: false,
+        driftFactor: 0,
+        mass: cfg.mass,
+        width: cfg.width,
+        length: cfg.length,
+        wheelBase: cfg.wheelBase,
+        color,
+        roofColor,
+        headlightsOn: true,
+        headlightMode: 'high',
+        brakeLightsOn: false,
+        isReversing: false,
+        turnSignal: 'hazard',
+        turnSignalTimer: 0,
+        isParked: false,
+        isPlayerControlled: false,
+        requiredFuel: 'diesel',
+        engineState: createDefaultEngineState(cType, true, false),
+        fuelSystem: createDefaultFuelSystem(cType, false),
+        targetSpeed: speedVal,
+        currentLaneId: chosen.lane.laneId,
+        targetWaypointIndex: 1,
+        routeWaypoints: gpsPath,
+        currentConnection: null,
+        inIntersection: false,
+        plannedTurn: 'straight',
+        aiState: 'driving',
+        stuckTimer: 0,
+        reverseTimer: 0,
+        targetChaseVehicleId: null,
+        ghostingAlpha: 1.0,
+        honkTimer: 0,
+        isHonking: false,
+        hornEffectTimer: 0,
+        sirenOn: true,
+        sirenStrobe: 0,
+        damage: createDefaultVehicleDamage(cfg.length, cfg.width)
+      };
+
+      (fireEngine as any).isFireDispatch = true;
+      (fireEngine as any).targetFireX = fireX;
+      (fireEngine as any).targetFireY = fireY;
+      (fireEngine as any).firefighterSpawned = false;
+
+      world.vehicles.push(fireEngine);
+
+      try {
+        if (sound && typeof sound.startSiren === 'function') {
+          sound.startSiren();
+        }
+      } catch (e) {
+        console.error(e);
+      }
+
+      if (player) {
+        if (!player.notifications) player.notifications = [];
+        player.notifications.push({
+          id: 'fire_dispatch_' + Date.now(),
+          text: '📞 Очевидец сообщил о пожаре! Пожарная машина выехала.',
+          color: '#ef4444',
+          timer: 5.0
+        });
+      }
+      return true;
     }
   }
   return false;
@@ -3028,26 +3738,25 @@ export function spawnNewCarNearPlayer(playerPos: Vector2D, world: GameWorld): bo
 
   const carTypes: CarType[] = [
     // Standard civilian & everyday
-    'sedan', 'sedan_compact', 'sedan_luxury', 'sedan_classic', 'classic_compact',
+    'sedan', 'sedan_compact', 'sedan_classic', 'classic_compact',
     'hatchback', 'hatch_hot', 'micro_car', 'retro_bubble',
-    'wagon_classic', 'wagon_modern', 'wagon_allroad',
+    'wagon_classic',
     // Crossovers & SUVs
-    'suv', 'suv_luxury', 'suv_classic_box', 'offroad_hardcore', 'crossover_compact',
+    'suv', 'suv_luxury', 'suv_classic_box', 'offroad_hardcore',
     // Performance & Muscle
-    'sports', 'supercar', 'muscle', 'muscle_classic', 'coupe_gt',
+    'sports', 'supercar', 'muscle_classic', 'coupe_gt',
     // Pickups & Vans
     'pickup', 'pickup_heavy', 'van', 'van_camper', 'van_cargo_old',
     // Public & City services
-    'taxi', 'bus', 'bus_minibus',
+    'taxi', 'bus',
     // Emergency services
-    'police', 'fire_engine', 'fire_ladder', 'fire_rescue',
-    'ambulance', 'ambulance_van', 'ambulance_suv',
+    'police', 'fire_engine', 'fire_ladder', 'ambulance',
     // Commercial & Heavy trucks
     'delivery_truck', 'truck_tow', 'truck_armored',
     'truck_box', 'truck_dump', 'truck_tanker', 'truck_water', 'truck_flatbed', 'cement_mixer', 'garbage_truck'
   ];
   const cType = carTypes[Math.floor(Math.random() * carTypes.length)];
-  const cfg = CAR_CONFIGS[cType];
+  const cfg = CAR_CONFIGS[cType] || CAR_CONFIGS.sedan;
   let color = CAR_PALETTE[Math.floor(Math.random() * CAR_PALETTE.length)];
   if (cType === 'taxi') color = '#eab308';
   else if (cType === 'police') color = '#0f172a';
@@ -3117,6 +3826,7 @@ export function spawnNewCarNearPlayer(playerPos: Vector2D, world: GameWorld): bo
         isParked: false,
         isPlayerControlled: false,
         requiredFuel: createDefaultFuelSystem(cType).fuelType === 'diesel' ? 'diesel' : (createDefaultFuelSystem(cType).octaneNumber === 92 ? 'ai92' : 'ai95'),
+        hasGBO: ['sedan_classic', 'wagon_classic', 'taxi_yellow', 'delivery_truck', 'van_cargo_old'].includes(cType) ? Math.random() < 0.4 : false,
         engineState: createDefaultEngineState(cType, true, false),
         fuelSystem: createDefaultFuelSystem(cType, false),
         targetSpeed: speedVal,

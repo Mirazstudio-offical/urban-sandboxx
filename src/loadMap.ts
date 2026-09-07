@@ -1,5 +1,7 @@
 import { GameWorld } from './types';
-import { CAR_CONFIGS, generateCityWorld } from './cityMap';
+import { CAR_CONFIGS, ensureVehicleDamage } from './vehicleHelpers';
+import { ensureWorldGasStation } from './gasStationSystem';
+import defaultMapData from '../public/map.json';
 
 export interface LoadedMapResult {
   world: GameWorld;
@@ -18,6 +20,7 @@ export function sanitizeWorldVehicles(world: GameWorld): GameWorld {
       veh.width = cfg.width;
       veh.mass = cfg.mass;
       veh.wheelBase = cfg.wheelBase;
+      veh.damage = ensureVehicleDamage(veh);
     });
 
     // Cap vehicles to at most 32 vehicles max across the city for optimal performance
@@ -44,7 +47,7 @@ export function normalizeWorld(parsed: any): GameWorld {
     pedestrians = [...pedestrians].sort(() => Math.random() - 0.5).slice(0, 20);
   }
 
-  return {
+  const world: GameWorld = {
     width: typeof parsed.width === 'number' ? parsed.width : 8000,
     height: typeof parsed.height === 'number' ? parsed.height : 8000,
     roads: Array.isArray(parsed.roads) ? parsed.roads : [],
@@ -65,21 +68,73 @@ export function normalizeWorld(parsed: any): GameWorld {
     weather: parsed.weather || 'clear',
     pedestrianPaths: Array.isArray(parsed.pedestrianPaths) ? parsed.pedestrianPaths : [],
   };
+
+  ensureWorldGasStation(world);
+  return world;
 }
 
 export function clearCustomMapStorage(): void {
   localStorage.removeItem('neon_city_custom_map');
+  localStorage.removeItem('neon_city_custom_map_indexeddb');
+  try {
+    const req = indexedDB.open('NeonCityDB', 1);
+    req.onsuccess = (e: any) => {
+      const db = e.target.result;
+      if (db.objectStoreNames.contains('maps')) {
+        const tx = db.transaction('maps', 'readwrite');
+        tx.objectStore('maps').delete('custom_map');
+      }
+    };
+  } catch {}
 }
 
 export function hasCustomSavedMap(): boolean {
-  return !!localStorage.getItem('neon_city_custom_map');
+  return !!localStorage.getItem('neon_city_custom_map') || !!localStorage.getItem('neon_city_custom_map_indexeddb');
+}
+
+function getMapFromIndexedDB(): Promise<any> {
+  return new Promise((resolve) => {
+    try {
+      const req = indexedDB.open('NeonCityDB', 1);
+      req.onupgradeneeded = (e: any) => {
+        e.target.result.createObjectStore('maps');
+      };
+      req.onsuccess = (e: any) => {
+        const db = e.target.result;
+        if (!db.objectStoreNames.contains('maps')) {
+          resolve(null);
+          return;
+        }
+        const tx = db.transaction('maps', 'readonly');
+        const getReq = tx.objectStore('maps').get('custom_map');
+        getReq.onsuccess = () => resolve(getReq.result || null);
+        getReq.onerror = () => resolve(null);
+      };
+      req.onerror = () => resolve(null);
+    } catch {
+      resolve(null);
+    }
+  });
 }
 
 /**
- * Loads the game world from public/map.json (or custom map saved from the editor in localStorage).
- * This preserves the file-based map loading mechanism while ensuring map.json contains the latest updates from cityMap.ts.
+ * Loads the game world from public/map.json (or custom map saved from the editor in localStorage/IndexedDB).
  */
 export async function loadMap(): Promise<GameWorld> {
+  // Check IndexedDB first if flagged
+  if (localStorage.getItem('neon_city_custom_map_indexeddb') === 'true') {
+    try {
+      const idbMap = await getMapFromIndexedDB();
+      if (idbMap && Array.isArray(idbMap.roads) && idbMap.roads.length > 0) {
+        console.log('[MapLoader] Загружена пользовательская карта из Редактора (IndexedDB)');
+        const world = normalizeWorld(idbMap);
+        return sanitizeWorldVehicles(world);
+      }
+    } catch (e) {
+      console.warn('[MapLoader] Ошибка загрузки из IndexedDB:', e);
+    }
+  }
+
   const customMapRaw = localStorage.getItem('neon_city_custom_map');
   if (customMapRaw) {
     try {
@@ -122,8 +177,14 @@ export async function loadMap(): Promise<GameWorld> {
     const world = normalizeWorld(parsed);
     return sanitizeWorldVehicles(world);
   } catch (err: any) {
-    console.error('[MapLoader] Ошибка загрузки файла карты:', err);
-    throw new Error(`Не удалось загрузить карту города из файла "${url}": ${err.message || err}`);
+    console.warn(`[MapLoader] Сетевая загрузка "${url}" не удалась (${err.message || err}). Загрузка из вшитой карты map.json...`);
+    if (defaultMapData && Array.isArray((defaultMapData as any).roads) && (defaultMapData as any).roads.length > 0) {
+      console.log(`[MapLoader] Успешно загружена карта из вшитого файла map.json (Дорог: ${(defaultMapData as any).roads.length}, Зданий: ${(defaultMapData as any).buildings?.length || 0})`);
+      const world = normalizeWorld(defaultMapData);
+      return sanitizeWorldVehicles(world);
+    }
+    
+    throw new Error(`Ошибка загрузки карты из map.json: ${err.message || err}`);
   }
 }
 

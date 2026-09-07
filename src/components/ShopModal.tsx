@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Player } from '../types';
+import { Player, GasPumpDispenser, FuelType, Vehicle } from '../types';
 import { ItemIconCanvas } from './ItemIconCanvas';
 import { 
   ShoppingBag, 
@@ -14,10 +14,19 @@ import {
   Trash2, 
   Coins, 
   Sparkles, 
-  Info 
+  Info,
+  Fuel,
+  Flame,
+  Zap,
+  Droplets,
+  Activity,
+  Gauge,
+  Palette
 } from 'lucide-react';
 import { sound } from '../audio';
-import { getPlayerCash } from '../items';
+import { getPlayerCash, getAllPlayerItemsFlat, deductPlayerCash } from '../items';
+import { FUEL_GRADES } from '../gasStationSystem';
+import { createDefaultVehicleDamage } from '../vehicleHelpers';
 
 export interface ShopItem {
   id: string;
@@ -27,6 +36,9 @@ export interface ShopItem {
   description: string;
   category: 'food' | 'medical' | 'auto';
   effectText: string;
+  fuelPumpId?: string;
+  fuelLiters?: number;
+  fuelType?: FuelType;
 }
 
 export interface CityShop {
@@ -45,7 +57,8 @@ export interface CityShop {
     | 'electronics'
     | 'clothing'
     | 'bookstore'
-    | 'sports_shop';
+    | 'sports_shop'
+    | 'gas_station_shop';
   x: number;
   y: number;
   icon: string;
@@ -243,10 +256,38 @@ export const CITY_SHOPS: CityShop[] = [
     icon: '[ТУРИЗМ]',
     badgeColor: '#8b5cf6',
     description: 'Тактические фонари, ножи, сухпайки, спальники и походная экипировка.'
+  },
+  {
+    id: 'shop_gas_station',
+    nameRu: 'АЗС "Нефть-Магистраль 24/7" (Касса & Минимаркет)',
+    type: 'gas_station_shop',
+    x: 5260,
+    y: 5025,
+    icon: '[АЗС]',
+    badgeColor: '#16a34a',
+    description: 'Круглосуточный комплекс: оплата 5 видов топлива на ТРК №1-4, автотовары, канистры, масла, хот-доги, кофе и снеки.'
   }
 ];
 
 export const SHOP_CATALOGS: Record<string, ShopItem[]> = {
+  gas_station_shop: [
+    { id: 'gas_canister_full', itemId: 'fuel_canister', nameRu: 'Канистра с бензином (20л)', price: 450, description: 'Стальная канистра, заправленная бензином АИ-95.', category: 'auto', effectText: 'Заправка авто / 20L' },
+    { id: 'gas_canister_empty', itemId: 'canister_empty', nameRu: 'Пустая канистра (20л)', price: 180, description: 'Металлическая канистра для набора топлива на АЗС.', category: 'auto', effectText: 'Емкость 20L' },
+    { id: 'gas_oil', itemId: 'motor_oil', nameRu: 'Моторное масло 5W-40 (4L)', price: 110, description: 'Синтетическое масло высокой вязкости для защиты двигателя.', category: 'auto', effectText: 'Защита двигателя' },
+    { id: 'gas_antifreeze', itemId: 'antifreeze', nameRu: 'Канистра антифриза G12+ (5L)', price: 140, description: 'Охлаждающая жидкость для радиатора.', category: 'auto', effectText: 'Охлаждение двигателя' },
+    { id: 'gas_battery', itemId: 'car_battery', nameRu: 'Запасной аккумулятор 12V', price: 180, description: 'Свинцово-кислотная батарея высокой пусковой мощности.', category: 'auto', effectText: 'Питание авто' },
+    { id: 'gas_repair_kit', itemId: 'repair_kit', nameRu: 'Набор автоинструментов', price: 220, description: 'Тяжелый кейс: ключи, головки, отвертки.', category: 'auto', effectText: 'Ремонт авто' },
+    { id: 'gas_rope', itemId: 'tow_rope', nameRu: 'Буксировочный трос 5т', price: 95, description: 'Прочный капроновый трос для буксировки.', category: 'auto', effectText: 'Буксировка' },
+    { id: 'gas_extinguisher', itemId: 'extinguisher', nameRu: 'Автоогнетушитель', price: 130, description: 'Красный металлический баллон с чекой и манометром.', category: 'auto', effectText: 'Безопасность' },
+    { id: 'gas_tape', itemId: 'duct_tape', nameRu: 'Армированный скотч', price: 40, description: 'Влагостойкая клейкая лента повышенной прочности.', category: 'auto', effectText: 'Быстрый ремонт' },
+    { id: 'gas_hotdog', itemId: 'hot_dog', nameRu: 'Датский хот-дог АЗС', price: 65, description: 'Хрустящая булка, поджаристая сосиска, кетчуп и горчица.', category: 'food', effectText: '+40% Сытость' },
+    { id: 'gas_cappuccino', itemId: 'cappuccino', nameRu: 'Кофе Капучино АЗС', price: 65, description: 'Свежесваренный зерновой кофе с плотной молочной пенкой.', category: 'food', effectText: '+20% Гидратация, +20% Бодрость' },
+    { id: 'gas_espresso', itemId: 'hot_coffee', nameRu: 'Горячий Эспрессо', price: 50, description: 'Крепкий бодрящий согревающий напиток.', category: 'food', effectText: '+5°C Тепло, +25% Бодрость' },
+    { id: 'gas_energy', itemId: 'energy_drink', nameRu: 'Энергетик Red Bull / Flash', price: 65, description: 'Банка ледяного энергетика с таурином и кофеином.', category: 'food', effectText: '+35% Энергия' },
+    { id: 'gas_water', itemId: 'water_bottle', nameRu: 'Минеральная вода (0.5L)', price: 30, description: 'Чистая питьевая вода в пластиковой бутылке.', category: 'food', effectText: '+40% Гидратация' },
+    { id: 'gas_chips', itemId: 'chips', nameRu: 'Картофельные чипсы', price: 40, description: 'Хрустящие чипсы с паприкой.', category: 'food', effectText: '+20% Сытость' },
+    { id: 'gas_chocolate', itemId: 'chocolate', nameRu: 'Шоколадный батончик', price: 30, description: 'Батончик с карамелью и арахисом.', category: 'food', effectText: '+20% Энергия' }
+  ],
   supermarket: [
     { id: 'sup_water', itemId: 'water_bottle', nameRu: 'Минеральная вода (0.5L)', price: 30, description: 'Чистая питьевая вода в пластиковой бутылке.', category: 'food', effectText: '+40% Гидратация' },
     { id: 'sup_bread', itemId: 'bread_loaf', nameRu: 'Батон нарезной', price: 35, description: 'Свежий белый хлеб, упакован в хрустящий целлофан.', category: 'food', effectText: '+35% Сытость' },
@@ -291,10 +332,46 @@ export const SHOP_CATALOGS: Record<string, ShopItem[]> = {
     { id: 'elec_flash', itemId: 'flashlight', nameRu: 'LED-фонарь со стробоскопом', price: 160, description: 'Металлический тактический фонарик в пластиковом боксе.', category: 'auto', effectText: 'Освещение в темноте' },
   ],
   clothing: [
-    { id: 'clo_coat', itemId: 'thermal_coat', nameRu: 'Термокуртка "Arctix"', price: 350, description: 'Фирменная куртка на вешалке с мембраной и гусиным пухом.', category: 'auto', effectText: 'Защита от холода (-15°C)' },
-    { id: 'clo_sneakers', itemId: 'sneakers', nameRu: 'Кроссовки "Urban Sprint"', price: 280, description: 'Коробка с кроссовками: текстильная сетка, пенная подошва.', category: 'auto', effectText: '+20% Скорость бега' },
+    // Головные уборы
+    { id: 'clo_beanie', itemId: 'beanie_black', nameRu: 'Черная шапка', price: 120, description: 'Теплая шерстяная черная шапка.', category: 'auto', effectText: 'Теплоизоляция +30%' },
+    { id: 'clo_cap', itemId: 'cap_red', nameRu: 'Красная кепка', price: 80, description: 'Простая красная бейсболка. Защищает от солнца.', category: 'auto', effectText: 'Защита от солнца' },
+    { id: 'clo_ushanka', itemId: 'ushanka_hat', nameRu: 'Шапка-ушанка', price: 250, description: 'Очень теплая меховая шапка для суровых морозов.', category: 'auto', effectText: 'Теплоизоляция +70%' },
+
+    // Лицо
     { id: 'clo_glasses', itemId: 'sunglasses', nameRu: 'Поляризационные очки', price: 110, description: 'Черный футляр с очками против ультрафиолета и бликов.', category: 'auto', effectText: 'Защита зрения' },
-    { id: 'clo_pack', itemId: 'backpack_travel', nameRu: 'Городской рюкзак (35L)', price: 240, description: 'Плотный нейлоновый рюкзак с защищенным отсеком под ноутбук.', category: 'auto', effectText: '+Слоты инвентаря' },
+    { id: 'clo_scarf', itemId: 'scarf_blue', nameRu: 'Синий шарф', price: 130, description: 'Вязаный теплый синий шарф.', category: 'auto', effectText: 'Теплоизоляция +20%' },
+
+    // Верх и белье
+    { id: 'clo_twhite', itemId: 'tshirt_white', nameRu: 'Белая футболка', price: 90, description: 'Легкая дышащая хлопковая футболка.', category: 'auto', effectText: 'Дыхание +80%' },
+    { id: 'clo_tblack', itemId: 'tshirt_black', nameRu: 'Черная футболка', price: 90, description: 'Простая черная хлопковая футболка.', category: 'auto', effectText: 'Дыхание +80%' },
+    { id: 'clo_ljohns', itemId: 'long_johns', nameRu: 'Термобелье', price: 220, description: 'Теплый базовый слой для холодной погоды.', category: 'auto', effectText: 'Теплоизоляция +40%' },
+    { id: 'clo_sweater', itemId: 'sweater_blue', nameRu: 'Синяя кофта', price: 250, description: 'Удобная синяя вязаная кофта.', category: 'auto', effectText: 'Теплоизоляция +45%' },
+    { id: 'clo_plaid', itemId: 'plaid_shirt', nameRu: 'Клетчатая рубашка', price: 180, description: 'Фланелевая клетчатая рубашка. Классика.', category: 'auto', effectText: 'Теплоизоляция +20%' },
+    { id: 'clo_leather', itemId: 'leather_jacket', nameRu: 'Кожаная куртка', price: 450, description: 'Прочная кожаная куртка. Хорошо защищает от ветра.', category: 'auto', effectText: 'Ветрозащита +90%' },
+    { id: 'clo_winter', itemId: 'winter_jacket', nameRu: 'Зимний пуховик', price: 500, description: 'Тяжелая утепленная куртка для сильных морозов.', category: 'auto', effectText: 'Теплоизоляция +90%' },
+    { id: 'clo_raincoat', itemId: 'raincoat_yellow', nameRu: 'Желтый дождевик', price: 200, description: 'Водонепроницаемый плащ. Сохранит сухим.', category: 'auto', effectText: 'Влагозащита 100%' },
+    { id: 'clo_coat', itemId: 'thermal_coat', nameRu: 'Термокуртка "Arctix"', price: 350, description: 'Фирменная куртка на вешалке с мембраной и гусиным пухом.', category: 'auto', effectText: 'Защита от холода (-15°C)' },
+
+    // Штаны
+    { id: 'clo_jeans', itemId: 'jeans_blue', nameRu: 'Синие джинсы', price: 280, description: 'Классические прочные джинсы.', category: 'auto', effectText: 'Вместительные карманы' },
+    { id: 'clo_cargo', itemId: 'cargo_pants', nameRu: 'Штаны карго', price: 320, description: 'Практичные штаны с множеством карманов.', category: 'auto', effectText: 'Карманы 4.5L' },
+    { id: 'clo_shorts', itemId: 'shorts_khaki', nameRu: 'Шорты хаки', price: 150, description: 'Легкие шорты для жаркой погоды.', category: 'auto', effectText: 'Дыхание +90%' },
+
+    // Обувь и носки
+    { id: 'clo_socks_w', itemId: 'socks_white', nameRu: 'Хлопковые носки', price: 30, description: 'Простые белые носки.', category: 'auto', effectText: 'Базовый слой' },
+    { id: 'clo_socks_wool', itemId: 'socks_wool', nameRu: 'Шерстяные носки', price: 60, description: 'Теплые толстые вязаные носки.', category: 'auto', effectText: 'Теплоизоляция +40%' },
+    { id: 'clo_sneakers_w', itemId: 'sneakers_white', nameRu: 'Белые кроссовки', price: 250, description: 'Удобная спортивная обувь.', category: 'auto', effectText: 'Легкая обувь' },
+    { id: 'clo_sneakers', itemId: 'sneakers', nameRu: 'Кроссовки "Urban Sprint"', price: 280, description: 'Коробка с кроссовками: текстильная сетка, пенная подошва.', category: 'auto', effectText: '+20% Скорость бега' },
+    { id: 'clo_work_boots', itemId: 'work_boots', nameRu: 'Рабочие ботинки', price: 380, description: 'Тяжелые кожаные рабочие ботинки.', category: 'auto', effectText: 'Влагозащита +60%' },
+    { id: 'clo_winter_boots', itemId: 'winter_boots', nameRu: 'Зимние ботинки', price: 420, description: 'Утепленные ботинки для снега.', category: 'auto', effectText: 'Теплоизоляция +80%' },
+
+    // Перчатки
+    { id: 'clo_gloves_l', itemId: 'gloves_leather', nameRu: 'Кожаные перчатки', price: 160, description: 'Защищают руки от холода и царапин.', category: 'auto', effectText: 'Ветрозащита +60%' },
+    { id: 'clo_gloves_w', itemId: 'gloves_winter', nameRu: 'Зимние перчатки', price: 220, description: 'Толстые утепленные перчатки.', category: 'auto', effectText: 'Теплоизоляция +60%' },
+
+    // Рюкзаки
+    { id: 'clo_pack_canvas', itemId: 'backpack', nameRu: 'Брезентовый рюкзак (28L)', price: 180, description: 'Простой брезентовый походный рюкзак.', category: 'auto', effectText: 'Емкость 28L' },
+    { id: 'clo_pack', itemId: 'backpack_travel', nameRu: 'Городской рюкзак (35L)', price: 240, description: 'Плотный нейлоновый рюкзак с защищенным отсеком под ноутбук.', category: 'auto', effectText: 'Емкость 35L' },
   ],
   bookstore: [
     { id: 'bk_guide', itemId: 'city_guide', nameRu: 'Путеводитель по городу', price: 60, description: 'Глянцевая книжка карманного формата с подробной картой кварталов.', category: 'auto', effectText: 'Знание города' },
@@ -304,6 +381,11 @@ export const SHOP_CATALOGS: Record<string, ShopItem[]> = {
   ],
   sports_shop: [
     { id: 'spt_sneakers', itemId: 'sneakers', nameRu: 'Беговые кроссовки', price: 280, description: 'Эргономичная обувь для фитнеса с гелевыми амортизаторами.', category: 'auto', effectText: '+20% Скорость' },
+    { id: 'spt_sneakers_w', itemId: 'sneakers_white', nameRu: 'Белые кроссовки', price: 250, description: 'Удобная спортивная обувь.', category: 'auto', effectText: 'Легкая обувь' },
+    { id: 'spt_cap', itemId: 'cap_red', nameRu: 'Красная кепка', price: 80, description: 'Простая спортивная бейсболка.', category: 'auto', effectText: 'Защита от солнца' },
+    { id: 'spt_tshirt', itemId: 'tshirt_white', nameRu: 'Белая спортивная футболка', price: 90, description: 'Дышащая хлопковая футболка.', category: 'auto', effectText: 'Дыхание +80%' },
+    { id: 'spt_shorts', itemId: 'shorts_khaki', nameRu: 'Шорты хаки', price: 150, description: 'Легкие шорты для спорта и тренингов.', category: 'auto', effectText: 'Дыхание +90%' },
+    { id: 'spt_ljohns', itemId: 'long_johns', nameRu: 'Термобелье', price: 220, description: 'Теплый базовый спортивный слой.', category: 'auto', effectText: 'Теплоизоляция +40%' },
     { id: 'spt_flask', itemId: 'camp_flask', nameRu: 'Стальная фляга (0.75L)', price: 90, description: 'Питьевая фляжка из пищевой стали, закручивающаяся пробка.', category: 'food', effectText: '+50% Гидратация' },
     { id: 'spt_bag', itemId: 'backpack_travel', nameRu: 'Спортивный рюкзак', price: 240, description: 'Влагозащитный рюкзак со свистком на нагрудной стяжке.', category: 'auto', effectText: '+Слоты инвентаря' },
     { id: 'spt_energy', itemId: 'energy_drink', nameRu: 'Изотоник Flash', price: 65, description: 'Бутылочка спортивного энергетика с электролитами и таурином.', category: 'food', effectText: '+35% Энергия' },
@@ -336,6 +418,8 @@ export const SHOP_CATALOGS: Record<string, ShopItem[]> = {
     { id: 'aut_rope', itemId: 'tow_rope', nameRu: 'Буксировочный трос 5т', price: 95, description: 'Оранжевая капроновая лента с массивными стальными крюками.', category: 'auto', effectText: 'Буксировка' },
     { id: 'aut_battery', itemId: 'car_battery', nameRu: 'Запасной аккумулятор', price: 180, description: 'Свинцово-кислотная герметичная батарея высокой пусковой мощности.', category: 'auto', effectText: 'Питание электроники' },
     { id: 'aut_extinguisher', itemId: 'extinguisher', nameRu: 'Автоогнетушитель', price: 130, description: 'Красный металлический баллон с чекой и манометром.', category: 'auto', effectText: 'Безопасность' },
+    { id: 'aut_sandbag', itemId: 'sandbag', nameRu: 'Мешок песка (1 кг)', price: 30, description: 'Мешок с песком для тушения огня и впитывания топлива/масла/антифриза.', category: 'auto', effectText: 'Тушение & Впитывание' },
+    { id: 'aut_sack_empty', itemId: 'sack_empty', nameRu: 'Пустой брезентовый мешок', price: 15, description: 'Прочный пустой мешок для наполнения песком или хранения вещей.', category: 'auto', effectText: 'Контейнер/Песок' },
     { id: 'aut_tape', itemId: 'duct_tape', nameRu: 'Армированный скотч', price: 40, description: 'Широкая клейкая лента с тканевым армированием.', category: 'auto', effectText: 'Починка' },
   ],
   cafe: [
@@ -352,9 +436,15 @@ export const SHOP_CATALOGS: Record<string, ShopItem[]> = {
     { id: 'gea_flashlight', itemId: 'flashlight', nameRu: 'Яркий LED-фонарь', price: 160, description: 'Алюминиевый герметичный фонарь с зубчатой короной линзы.', category: 'auto', effectText: 'Освещение в темноте' },
     { id: 'gea_knife', itemId: 'pocket_knife', nameRu: 'Туристический нож', price: 200, description: 'Черная рукоять со стеклобоем, клинок с серрейтором.', category: 'auto', effectText: 'Инструмент' },
     { id: 'gea_coat', itemId: 'thermal_coat', nameRu: 'Термокуртка "Arctix"', price: 350, description: 'Плотная горная парка со штормовым капюшоном.', category: 'auto', effectText: 'Защита от холода' },
+    { id: 'gea_raincoat', itemId: 'raincoat_yellow', nameRu: 'Штормовой дождевик', price: 200, description: 'Плотный непромокаемый плащ для походов.', category: 'auto', effectText: 'Влагозащита 100%' },
+    { id: 'gea_ushanka', itemId: 'ushanka_hat', nameRu: 'Тактическая шапка-ушанка', price: 250, description: 'Очень теплая меховая шапка.', category: 'auto', effectText: 'Теплоизоляция +70%' },
+    { id: 'gea_cargo', itemId: 'cargo_pants', nameRu: 'Штаны карго', price: 320, description: 'Прочные полевые штаны с карманами.', category: 'auto', effectText: 'Карманы 4.5L' },
+    { id: 'gea_wboots', itemId: 'winter_boots', nameRu: 'Зимние походные ботинки', price: 420, description: 'Тяжелые утепленные ботинки.', category: 'auto', effectText: 'Теплоизоляция +80%' },
+    { id: 'gea_gloves_w', itemId: 'gloves_winter', nameRu: 'Зимние тактические перчатки', price: 220, description: 'Утепленные прочные перчатки.', category: 'auto', effectText: 'Теплоизоляция +60%' },
     { id: 'gea_sleep', itemId: 'sleeping_bag', nameRu: 'Спальный мешок (-15°C)', price: 260, description: 'Компрессионный чехол с теплым туристическим коконом.', category: 'auto', effectText: 'Ночлег на природе' },
     { id: 'gea_zippo', itemId: 'zippo_lighter', nameRu: 'Зажигалка Zippo', price: 80, description: 'Хромированный металлический бензиновый девайс с характерным щелчком.', category: 'auto', effectText: 'Розжиг огня' },
     { id: 'gea_compass', itemId: 'compass', nameRu: 'Тактический компас', price: 75, description: 'Металлический корпус с визиром и светящейся шкалой.', category: 'auto', effectText: 'Навигация' },
+    { id: 'gea_pack_canvas', itemId: 'backpack', nameRu: 'Брезентовый походный рюкзак (28L)', price: 180, description: 'Надежный брезентовый рюкзак.', category: 'auto', effectText: 'Емкость 28L' },
     { id: 'gea_pack', itemId: 'backpack_travel', nameRu: 'Тактический рюкзак (35L)', price: 240, description: 'Рюкзак из плотной ткани Cordura с системой крепления итогов.', category: 'auto', effectText: '+Слоты инвентаря' },
   ]
 };
@@ -475,12 +565,13 @@ interface PhysicalMoney {
 // Decomposition of cash balance into detailed physical bills/coins
 function decomposeWallet(player: Player | null): PhysicalMoney[] {
   const result: PhysicalMoney[] = [];
-  if (!player || !player.inventory) return result;
+  if (!player) return result;
 
   let itemCount = 0;
+  const allItems = getAllPlayerItemsFlat(player);
 
-  // 1. First, find all explicit physical currency items in their inventory and add them exactly!
-  for (const item of player.inventory) {
+  // 1. First, find all explicit physical currency items across inventory, wallet contents, hands and add them exactly!
+  for (const item of allItems) {
     if (!item) continue;
     if (item.itemId.startsWith('cash_') || item.itemId.startsWith('coin_')) {
       const isCoin = item.itemId.startsWith('coin_');
@@ -511,9 +602,13 @@ function decomposeWallet(player: Player | null): PhysicalMoney[] {
     }
   }
 
-  // 2. Now, take the general unified 'cash' item from their inventory and decompose it into a lovely mix!
-  const generalCashItem = player.inventory.find(i => i && i.itemId === 'cash');
-  let remaining = generalCashItem ? generalCashItem.count : 0;
+  // 2. Now, collect all general unified 'cash' items and decompose them
+  let remaining = 0;
+  for (const item of allItems) {
+    if (item && item.itemId === 'cash') {
+      remaining += item.count;
+    }
+  }
 
   if (remaining > 0) {
     const denominations = [
@@ -745,7 +840,10 @@ interface ShopModalProps {
     | 'electronics'
     | 'clothing'
     | 'bookstore'
-    | 'sports_shop';
+    | 'sports_shop'
+    | 'gas_station_shop';
+  gasPumps?: GasPumpDispenser[];
+  vehicles?: Vehicle[];
   onBuyItems: (items: ShopItem[], totalCost: number) => void;
   onRepairVehicle?: () => void;
   canRepairVehicle?: boolean;
@@ -757,44 +855,240 @@ export const ShopModal: React.FC<ShopModalProps> = ({
   player,
   shopTitle = 'СУПЕРМАРКЕТ 24/7',
   shopType = 'supermarket',
+  gasPumps = [],
+  vehicles = [],
   onBuyItems,
   onRepairVehicle,
   canRepairVehicle = false
 }) => {
   // Shopping Cart & Buying Flow States
   const [cart, setCart] = useState<Record<string, number>>({});
+  const [customCartItems, setCustomCartItems] = useState<Record<string, { item: ShopItem; quantity: number }>>({});
   const [activeTab, setActiveTab] = useState<'shelf' | 'cart'>('shelf'); // Mobile responsiveness
   const [view, setView] = useState<'catalog' | 'checkout'>('catalog');
+
+  // Gas Station Specific States
+  const [gasSubTab, setGasSubTab] = useState<'shelves' | 'pumps'>('pumps');
+  const [selectedPumpId, setSelectedPumpId] = useState<string>('gas_pump_1');
+  const [fuelLiters, setFuelLiters] = useState<number>(30);
+  const [selectedFuelType, setSelectedFuelType] = useState<FuelType>('ai95');
+
+  // Auto Shop / Workshop Specific States
+  const [autoSubTab, setAutoSubTab] = useState<'parts' | 'workshop'>('workshop');
+  const [workshopSubTab, setWorkshopSubTab] = useState<'diagnostics' | 'repair' | 'paint' | 'lpg' | 'tuning'>('diagnostics');
+  const [isInspecting, setIsInspecting] = useState<boolean>(false);
+  const [inspectionProgress, setInspectionProgress] = useState<number>(0);
+  const [inspectionStepText, setInspectionStepText] = useState<string>('');
+  const [hasInspectedVehicleId, setHasInspectedVehicleId] = useState<string | null>(null);
+  const [isRepairing, setIsRepairing] = useState<boolean>(false);
+  const [repairProgress, setRepairProgress] = useState<number>(0);
+  const [repairStepText, setRepairStepText] = useState<string>('');
+  
+  // Paint shop states
+  const [paintType, setPaintType] = useState<'standard' | 'premium' | 'custom'>('standard');
+  const [selectedPaintColor, setSelectedPaintColor] = useState<string>('#991b1b');
+  const [paintTarget, setPaintTarget] = useState<'body' | 'roof'>('body');
+  const [isPainting, setIsPainting] = useState<boolean>(false);
+  const [paintProgress, setPaintProgress] = useState<number>(0);
+  const [paintStepText, setPaintStepText] = useState<string>('');
+
+  // Tuning/Upgrades interactive states
+  const [tuningAction, setTuningAction] = useState<string | null>(null);
+  const [tuningProgress, setTuningProgress] = useState<number>(0);
+  const [tuningStepText, setTuningStepText] = useState<string>('');
 
   // Checkout Interactive States
   const [wallet, setWallet] = useState<PhysicalMoney[]>([]);
   const [trayItems, setTrayItems] = useState<PhysicalMoney[]>([]);
   const [paymentPhase, setPaymentPhase] = useState<'paying' | 'change' | 'complete'>('paying');
   const [checkoutTotal, setCheckoutTotal] = useState<number>(0);
+  const [pendingWorkshopService, setPendingWorkshopService] = useState<{
+    action: string;
+    cost: number;
+    title: string;
+  } | null>(null);
+
+  const handleWorkshopCheckout = (action: string, cost: number, title: string) => {
+    setPendingWorkshopService({ action, cost, title });
+    setCheckoutTotal(cost);
+    setCustomCartItems({
+      'workshop_service': {
+        item: {
+          id: 'workshop_service',
+          itemId: 'service_fee',
+          nameRu: title,
+          price: cost,
+          description: 'Услуга автомастерской PIT-STOP',
+          category: 'auto',
+          effectText: 'Ремонт / Обслуживание'
+        },
+        quantity: 1
+      }
+    });
+    setView('checkout');
+    setWallet(decomposeWallet(player));
+    setTrayItems([]);
+    setPaymentPhase('paying');
+    playTerminalBeep();
+  };
+
+  // Progress timers useEffects
+  useEffect(() => {
+    let timer: any;
+    if (isInspecting) {
+      timer = setInterval(() => {
+        setInspectionProgress((prev) => {
+          if (prev >= 100) {
+            clearInterval(timer);
+            setIsInspecting(false);
+            const cur = getNearbyOrActiveVehicle();
+            if (cur) setHasInspectedVehicleId(cur.id);
+            playCashRegister();
+            return 100;
+          }
+          const next = prev + 25;
+          if (next === 25) setInspectionStepText("📊 Опрос блоков ЭБУ, датчиков ABS и впрыска...");
+          else if (next === 50) setInspectionStepText("🔍 Сканирование геометрии кузова и подвески...");
+          else if (next === 75) setInspectionStepText("📋 Формирование итоговой диагностической карты...");
+          return next;
+        });
+      }, 400);
+    }
+    return () => clearInterval(timer);
+  }, [isInspecting]);
+
+  useEffect(() => {
+    let timer: any;
+    if (isRepairing) {
+      timer = setInterval(() => {
+        setRepairProgress((prev) => {
+          if (prev >= 100) {
+            clearInterval(timer);
+            setIsRepairing(false);
+            if (onRepairVehicle) onRepairVehicle();
+            playCashRegister();
+            return 100;
+          }
+          const next = prev + 20;
+          if (next === 20) setRepairStepText("🔨 Стапельные работы: выравнивание геометрии кузова...");
+          else if (next === 40) setRepairStepText("⚙️ Замена изношенных рычагов и узлов подвески...");
+          else if (next === 60) setRepairStepText("🛡️ Установка новых стекол, фар и рихтовка крыльев...");
+          else if (next === 80) setRepairStepText("🔧 Финальная регулировка схода-развала и тестирование ДВС...");
+          return next;
+        });
+      }, 400);
+    }
+    return () => clearInterval(timer);
+  }, [isRepairing]);
+
+  useEffect(() => {
+    let timer: any;
+    if (isPainting) {
+      timer = setInterval(() => {
+        setPaintProgress((prev) => {
+          if (prev >= 100) {
+            clearInterval(timer);
+            setIsPainting(false);
+            playCashRegister();
+            return 100;
+          }
+          const next = prev + 25;
+          if (next === 25) setPaintStepText("🧼 Обезжиривание и абразивная подготовка поверхности кузова...");
+          else if (next === 50) setPaintStepText("🎨 Нанесение грунтовочного антикоррозийного слоя...");
+          else if (next === 75) setPaintStepText("🖌️ Покраска в покрасочной камере под давлением...");
+          return next;
+        });
+      }, 400);
+    }
+    return () => clearInterval(timer);
+  }, [isPainting]);
+
+  useEffect(() => {
+    let timer: any;
+    if (tuningAction) {
+      timer = setInterval(() => {
+        setTuningProgress((prev) => {
+          if (prev >= 100) {
+            clearInterval(timer);
+            setTuningAction(null);
+            playCashRegister();
+            return 100;
+          }
+          const next = prev + 33;
+          if (next === 33) setTuningStepText("⚙️ Демонтаж старых компонентов и установка тюнинг-комплекта...");
+          else if (next === 66) setTuningStepText("🔌 Калибровка ЭБУ и проверка герметичности магистралей...");
+          return next;
+        });
+      }, 400);
+    }
+    return () => clearInterval(timer);
+  }, [tuningAction]);
 
   // If closed, return state
   useEffect(() => {
     if (!isOpen) {
       setCart({});
+      setCustomCartItems({});
       setView('catalog');
       setTrayItems([]);
       setWallet([]);
       setPaymentPhase('paying');
+      setIsInspecting(false);
+      setInspectionProgress(0);
+      setInspectionStepText('');
+      setIsRepairing(false);
+      setRepairProgress(0);
+      setRepairStepText('');
+      setIsPainting(false);
+      setPaintProgress(0);
+      setPaintStepText('');
+      setTuningAction(null);
+      setTuningProgress(0);
+      setTuningStepText('');
     }
   }, [isOpen]);
+
+  // Sync selected pump defaults if a nozzle is inserted into a car
+  useEffect(() => {
+    if (isOpen && gasPumps.length > 0) {
+      const activePump = gasPumps.find(p => p.hasNozzleTaken || p.connectedVehicleId);
+      if (activePump) {
+        setSelectedPumpId(activePump.id);
+        if (activePump.selectedFuelType) {
+          setSelectedFuelType(activePump.selectedFuelType);
+        }
+      }
+    }
+  }, [isOpen, gasPumps]);
 
   if (!isOpen || !player) return null;
 
   const playerCash = getPlayerCash(player);
+
+  const getNearbyOrActiveVehicle = (): Vehicle | null => {
+    if (!player) return null;
+    if (player.isInVehicle && player.currentVehicleId) {
+      const activeCar = vehicles.find((v) => v.id === player.currentVehicleId);
+      if (activeCar) return activeCar;
+    }
+    const closestCar = vehicles
+      .filter((v) => Math.hypot(v.x - player.x, v.y - player.y) < 120)
+      .sort((a, b) => Math.hypot(a.x - player.x, a.y - player.y) - Math.hypot(b.x - player.x, b.y - player.y))[0];
+    return closestCar || null;
+  };
+
   const currentCatalog = SHOP_CATALOGS[shopType] || SHOP_CATALOGS.supermarket;
 
-  // Derive cart contents
-  const cartItemsList = Object.entries(cart)
-    .map(([id, quantity]) => {
-      const item = currentCatalog.find((x) => x.id === id);
-      return item ? { item, quantity } : null;
-    })
-    .filter((x): x is { item: ShopItem; quantity: number } => x !== null);
+  // Derive cart contents combining shelf catalog and custom fuel orders
+  const cartItemsList: { item: ShopItem; quantity: number }[] = [
+    ...Object.entries(cart)
+      .map(([id, quantity]) => {
+        const item = currentCatalog.find((x) => x.id === id);
+        return item ? { item, quantity } : null;
+      })
+      .filter((x): x is { item: ShopItem; quantity: number } => x !== null),
+    ...(Object.values(customCartItems) as { item: ShopItem; quantity: number }[])
+  ];
 
   const cartTotalItemsCount = cartItemsList.reduce((acc, curr) => acc + curr.quantity, 0);
 
@@ -808,6 +1102,16 @@ export const ShopModal: React.FC<ShopModalProps> = ({
   };
 
   const handleRemoveFromCart = (item: ShopItem) => {
+    if (customCartItems[item.id]) {
+      setCustomCartItems((prev) => {
+        const copy = { ...prev };
+        delete copy[item.id];
+        return copy;
+      });
+      sound.playPickup();
+      return;
+    }
+
     setCart((prev) => {
       const copy = { ...prev };
       if (copy[item.id] <= 1) {
@@ -822,6 +1126,35 @@ export const ShopModal: React.FC<ShopModalProps> = ({
 
   const handleClearCart = () => {
     setCart({});
+    setCustomCartItems({});
+  };
+
+  // Add Fuel Pump Order to Cart
+  const handleAddFuelToCart = () => {
+    const pump = gasPumps.find(p => p.id === selectedPumpId) || gasPumps[0];
+    const grade = FUEL_GRADES[selectedFuelType];
+    const pumpNum = pump ? pump.pumpNumber : 1;
+    const totalCost = Math.round(fuelLiters * grade.pricePerLiter);
+
+    const fuelOrderItem: ShopItem = {
+      id: `fuel_order_${pump ? pump.id : 'p1'}_${Date.now()}`,
+      itemId: 'fuel_order',
+      nameRu: `Заправка ТРК №${pumpNum} (${grade.nameRu}, ${fuelLiters.toFixed(1)} л)`,
+      price: totalCost,
+      description: `Подача топлива ${grade.nameRu} (${grade.octane}) на колонке №${pumpNum}`,
+      category: 'auto',
+      effectText: `Заправка ${fuelLiters.toFixed(1)}L`,
+      fuelPumpId: pump ? pump.id : selectedPumpId,
+      fuelLiters: fuelLiters,
+      fuelType: selectedFuelType
+    };
+
+    setCustomCartItems(prev => ({
+      ...prev,
+      [fuelOrderItem.id]: { item: fuelOrderItem, quantity: 1 }
+    }));
+
+    sound.playPickup();
   };
 
   // Switch to POS Payment view
@@ -1014,6 +1347,41 @@ export const ShopModal: React.FC<ShopModalProps> = ({
     playCashRegister();
     const changeAmount = totalPaid - checkoutTotal;
 
+    if (pendingWorkshopService) {
+      const action = pendingWorkshopService.action;
+      setPendingWorkshopService(null);
+      const finalItemsList: ShopItem[] = [];
+      cartItemsList.forEach(({ item, quantity }) => {
+        for (let i = 0; i < quantity; i++) {
+          finalItemsList.push(item);
+        }
+      });
+      onBuyItems(finalItemsList, checkoutTotal);
+      setCart({});
+      setCustomCartItems({});
+      setView('catalog');
+      setAutoSubTab('workshop');
+
+      if (action === 'diagnostics') {
+        setIsInspecting(true);
+        setInspectionProgress(0);
+        setInspectionStepText("🔌 Подключение диагностического сканера OBD-II...");
+      } else if (action === 'repair') {
+        setIsRepairing(true);
+        setRepairProgress(0);
+        setRepairStepText("🔨 Стапельные работы: выравнивание геометрии кузова...");
+      } else if (action === 'paint') {
+        setIsPainting(true);
+        setPaintProgress(0);
+        setPaintStepText("🧼 Обезжиривание и подготовка поверхности кузова...");
+      } else {
+        setTuningAction(action);
+        setTuningProgress(0);
+        setTuningStepText("⚙️ Подготовка посадочных мест и монтаж узлов...");
+      }
+      return;
+    }
+
     if (changeAmount > 0) {
       setPaymentPhase('change');
       const changeParts = getDiverseChange(changeAmount);
@@ -1064,6 +1432,35 @@ export const ShopModal: React.FC<ShopModalProps> = ({
         finalItemsList.push(item);
       }
     });
+
+    if (pendingWorkshopService) {
+      const action = pendingWorkshopService.action;
+      setPendingWorkshopService(null);
+      onBuyItems(finalItemsList, checkoutTotal);
+      setCart({});
+      setCustomCartItems({});
+      setView('catalog');
+      setAutoSubTab('workshop');
+
+      if (action === 'diagnostics') {
+        setIsInspecting(true);
+        setInspectionProgress(0);
+        setInspectionStepText("🔌 Подключение диагностического сканера OBD-II...");
+      } else if (action === 'repair') {
+        setIsRepairing(true);
+        setRepairProgress(0);
+        setRepairStepText("🔨 Стапельные работы: выравнивание геометрии кузова...");
+      } else if (action === 'paint') {
+        setIsPainting(true);
+        setPaintProgress(0);
+        setPaintStepText("🧼 Обезжиривание и подготовка поверхности кузова...");
+      } else {
+        setTuningAction(action);
+        setTuningProgress(0);
+        setTuningStepText("⚙️ Подготовка посадочных мест и монтаж узлов...");
+      }
+      return;
+    }
 
     onBuyItems(finalItemsList, checkoutTotal);
     setCart({});
@@ -1155,80 +1552,1286 @@ export const ShopModal: React.FC<ShopModalProps> = ({
                 </button>
               </div>
 
+              {/* Sub tabs for Gas Station Shop */}
+              {shopType === 'gas_station_shop' && (
+                <div className="flex bg-slate-950 p-1 rounded-xl mb-4 border border-slate-800">
+                  <button
+                    onClick={() => setGasSubTab('pumps')}
+                    className={`flex-1 py-2 text-xs font-bold rounded-lg transition flex items-center justify-center gap-2 ${
+                      gasSubTab === 'pumps'
+                        ? 'bg-emerald-600 text-white shadow-md'
+                        : 'text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    <Fuel className="w-4 h-4" />
+                    <span>Заправка ТРК №1–4</span>
+                  </button>
+                  <button
+                    onClick={() => setGasSubTab('shelves')}
+                    className={`flex-1 py-2 text-xs font-bold rounded-lg transition flex items-center justify-center gap-2 ${
+                      gasSubTab === 'shelves'
+                        ? 'bg-slate-800 text-white shadow-md'
+                        : 'text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    <ShoppingBag className="w-4 h-4" />
+                    <span>Минимаркет и Автотовары</span>
+                  </button>
+                </div>
+              )}
+
               {/* Shelf Tab content */}
               <div className={`${activeTab === 'shelf' ? 'block' : 'hidden md:block'} space-y-4`}>
-                {/* Vehicle Repair Option (If in auto shop or near car) */}
-                {(canRepairVehicle || shopType === 'auto_shop') && onRepairVehicle && (
-                  <div className="p-4 bg-slate-800 border border-slate-700/80 rounded-xl flex items-center justify-between gap-4 shadow-sm">
-                    <div className="flex items-center gap-3">
-                      <div className="p-2.5 bg-sky-500/20 rounded-xl border border-sky-400/40 text-sky-300">
-                        <Wrench className="w-6 h-6" />
-                      </div>
-                      <div>
-                        <h3 className="text-white font-bold text-sm">Полный автосервис и ремонт</h3>
-                        <p className="text-sky-200/80 text-xs">Восстановление кузова, двигателя, колес и стекол машины</p>
-                      </div>
+                {/* Gas Station Pumps Management Panel */}
+                {shopType === 'gas_station_shop' && gasSubTab === 'pumps' ? (
+                  <div className="space-y-4">
+                    {/* Pump Selector Cards (ТРК №1-4) */}
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                      {(gasPumps.length > 0 ? gasPumps : [
+                        { id: 'gas_pump_1', pumpNumber: 1, hasNozzleTaken: false },
+                        { id: 'gas_pump_2', pumpNumber: 2, hasNozzleTaken: false },
+                        { id: 'gas_pump_3', pumpNumber: 3, hasNozzleTaken: false },
+                        { id: 'gas_pump_4', pumpNumber: 4, hasNozzleTaken: false }
+                      ]).map((pump: any) => {
+                        const isSelected = selectedPumpId === pump.id;
+                        const connectedCar = pump.connectedVehicleId 
+                          ? vehicles.find(v => v.id === pump.connectedVehicleId) 
+                          : null;
+                        const isDispensing = pump.isFueling;
+
+                        return (
+                          <button
+                            key={pump.id}
+                            onClick={() => {
+                              setSelectedPumpId(pump.id);
+                              if (pump.selectedFuelType) {
+                                setSelectedFuelType(pump.selectedFuelType);
+                              }
+                              sound.playPickup();
+                            }}
+                            className={`p-3 rounded-xl border text-left transition relative flex flex-col justify-between ${
+                              isSelected
+                                ? 'bg-emerald-950/70 border-emerald-500 shadow-lg shadow-emerald-950/50 text-white ring-2 ring-emerald-500/40'
+                                : 'bg-slate-850/70 border-slate-800 hover:border-slate-700 text-slate-300'
+                            }`}
+                          >
+                            <div className="flex items-center justify-between">
+                              <span className="font-bold text-sm">ТРК №{pump.pumpNumber}</span>
+                              <span className={`w-2.5 h-2.5 rounded-full ${
+                                isDispensing 
+                                  ? 'bg-amber-400 animate-ping' 
+                                  : pump.hasNozzleTaken 
+                                    ? 'bg-sky-400' 
+                                    : 'bg-emerald-400'
+                              }`} />
+                            </div>
+
+                            <div className="mt-2 text-[11px]">
+                              {isDispensing ? (
+                                <span className="text-amber-300 font-semibold flex items-center gap-1">
+                                  <span>Идет подача...</span>
+                                </span>
+                              ) : connectedCar ? (
+                                <span className="text-sky-300 font-medium truncate block">
+                                  🚗 {connectedCar.nameRu || 'Автомобиль'}
+                                </span>
+                              ) : pump.hasNozzleTaken ? (
+                                <span className="text-amber-200">Пистолет в руках</span>
+                              ) : (
+                                <span className="text-slate-400">Готова к заправке</span>
+                              )}
+                            </div>
+                          </button>
+                        );
+                      })}
                     </div>
 
-                    <button
-                      onClick={onRepairVehicle}
-                      disabled={playerCash < 300}
-                      className={`px-4 py-2.5 rounded-xl font-bold text-xs transition flex items-center gap-2 shadow-md ${
-                        playerCash >= 300
-                          ? 'bg-sky-600 hover:bg-sky-500 text-white active:scale-95 border border-sky-400/40'
-                          : 'bg-slate-800 text-slate-500 border border-slate-700 cursor-not-allowed'
-                      }`}
-                    >
-                      <span>Отремонтировать</span>
-                      <span className="font-mono text-amber-300">$300</span>
-                    </button>
-                  </div>
-                )}
+                    {/* Active Selected Pump Configurator Box */}
+                    {(() => {
+                      const curPump = gasPumps.find(p => p.id === selectedPumpId) || gasPumps[0];
+                      const curCar = curPump?.connectedVehicleId 
+                        ? vehicles.find(v => v.id === curPump.connectedVehicleId) 
+                        : null;
+                      const fuelGrade = FUEL_GRADES[selectedFuelType];
+                      const totalRub = Math.round(fuelLiters * fuelGrade.pricePerLiter);
 
-                {/* Item Catalog Shelf Grid */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  {currentCatalog.map((item) => {
-                    const quantityInCart = cart[item.id] || 0;
+                      // Max tank space
+                      const tankMax = curCar ? (curCar.fuelCapacity || 55) : 60;
+                      const tankCurrent = curCar ? (curCar.fuel || 0) : 0;
+                      const tankRemaining = Math.max(0, tankMax - tankCurrent);
 
-                    return (
-                      <div
-                        key={item.id}
-                        className="p-3 bg-slate-850/80 border border-slate-800 rounded-xl flex items-center justify-between gap-3 hover:border-slate-700 transition"
-                      >
-                        <div className="flex items-center gap-3 min-w-0">
-                          <div className="w-12 h-12 rounded-xl bg-slate-950 border border-slate-800 flex items-center justify-center shrink-0 p-1 shadow-inner">
-                            <ItemIconCanvas itemId={item.itemId} size={36} />
-                          </div>
+                      return (
+                        <div className="p-4 bg-slate-950/80 border border-slate-800 rounded-2xl space-y-4 shadow-xl">
+                          {/* Selected Pump Header */}
+                          <div className="flex items-center justify-between pb-3 border-b border-slate-800/80">
+                            <div className="flex items-center gap-3">
+                              <div className="w-10 h-10 rounded-xl bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
+                                <Fuel className="w-5 h-5" />
+                              </div>
+                              <div>
+                                <h3 className="text-white font-bold text-base">
+                                  Настройка заправки: ТРК №{curPump ? curPump.pumpNumber : 1}
+                                </h3>
+                                <p className="text-xs text-slate-400">
+                                  {curCar 
+                                    ? `Подключен автомобиль: ${curCar.nameRu || 'Авто'} (В баке: ${tankCurrent.toFixed(1)} / ${tankMax.toFixed(1)} л)` 
+                                    : 'Пистолет можно вставить в автомобиль до или после оплаты'}
+                                </p>
+                              </div>
+                            </div>
 
-                          <div className="min-w-0">
-                            <span className="font-bold text-xs text-slate-100 truncate block">{item.nameRu}</span>
-                            <p className="text-[11px] text-slate-400 line-clamp-2 leading-snug mt-1 font-sans">{item.description}</p>
-                          </div>
-                        </div>
-
-                        <div className="flex flex-col items-end gap-1.5 shrink-0">
-                          {/* Price Tag styled as realistic retail shelf label */}
-                          <div className="px-2 py-0.5 bg-amber-500/10 border border-amber-500/20 text-amber-400 font-mono text-[11px] font-bold rounded">
-                            ${item.price}
-                          </div>
-
-                          <button
-                            onClick={() => handleAddToCart(item)}
-                            className="px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-bold rounded-lg transition shadow-sm active:scale-95 flex items-center gap-1"
-                          >
-                            <Plus className="w-3 h-3" />
-                            <span>В корзину</span>
-                            {quantityInCart > 0 && (
-                              <span className="ml-1 px-1 bg-white text-emerald-700 rounded-full font-sans text-[9px]">
-                                {quantityInCart}
+                            <div className="text-right">
+                              <span className="text-[10px] text-slate-400 uppercase tracking-wider block">Тариф</span>
+                              <span className="font-mono font-bold text-sm text-amber-300">
+                                {fuelGrade.pricePerLiter.toFixed(2)} ₽ / л
                               </span>
-                            )}
-                          </button>
+                            </div>
+                          </div>
+
+                          {/* 1. Fuel Type Selector */}
+                          <div>
+                            <label className="text-xs font-semibold text-slate-300 mb-2 block">
+                              Выберите вид топлива:
+                            </label>
+                            <div className="grid grid-cols-2 sm:grid-cols-6 gap-2">
+                              {(['ai92', 'ai95', 'ai98', 'ai100', 'diesel', 'lpg'] as FuelType[]).map((fType) => {
+                                const gr = FUEL_GRADES[fType];
+                                const isSel = selectedFuelType === fType;
+                                return (
+                                  <button
+                                    key={fType}
+                                    onClick={() => {
+                                      setSelectedFuelType(fType);
+                                      sound.playPickup();
+                                    }}
+                                    className={`p-2.5 rounded-xl border text-center transition flex flex-col items-center gap-1 ${
+                                      isSel
+                                        ? 'bg-slate-800 border-emerald-500 text-white ring-2 ring-emerald-500/30 shadow-md'
+                                        : 'bg-slate-900 border-slate-800 hover:border-slate-700 text-slate-400 hover:text-white'
+                                    }`}
+                                  >
+                                    <span className="font-bold text-xs">{gr.nameRu}</span>
+                                    <span className="font-mono text-[11px] text-amber-300 font-semibold">{gr.pricePerLiter.toFixed(2)} ₽</span>
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+
+                          {/* 2. Fuel Liters Selector */}
+                          <div>
+                            <div className="flex items-center justify-between mb-2">
+                              <label className="text-xs font-semibold text-slate-300">
+                                Объем топлива:
+                              </label>
+                              <span className="font-mono font-bold text-sm text-emerald-400">
+                                {fuelLiters.toFixed(1)} л
+                              </span>
+                            </div>
+
+                            {/* Quick Liters Buttons */}
+                            <div className="flex flex-wrap gap-2 mb-3">
+                              {[10, 20, 30, 40, 50].map((l) => (
+                                <button
+                                  key={l}
+                                  onClick={() => {
+                                    setFuelLiters(l);
+                                    sound.playPickup();
+                                  }}
+                                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold font-mono border transition ${
+                                    fuelLiters === l
+                                      ? 'bg-emerald-600 text-white border-emerald-500'
+                                      : 'bg-slate-900 text-slate-300 border-slate-800 hover:bg-slate-800'
+                                  }`}
+                                >
+                                  +{l} л
+                                </button>
+                              ))}
+                              {curCar && tankRemaining > 0 && (
+                                <button
+                                  onClick={() => {
+                                    setFuelLiters(Math.round(tankRemaining));
+                                    sound.playPickup();
+                                  }}
+                                  className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-sky-950/80 text-sky-300 border border-sky-600/50 hover:bg-sky-900 transition"
+                                >
+                                  Полный бак ({Math.round(tankRemaining)} л)
+                                </button>
+                              )}
+                            </div>
+
+                            {/* Stepper + Range Slider */}
+                            <div className="flex items-center gap-3">
+                              <button
+                                onClick={() => setFuelLiters(prev => Math.max(1, prev - 5))}
+                                className="p-2 rounded-lg bg-slate-900 border border-slate-800 hover:bg-slate-800 text-slate-300 active:scale-95"
+                              >
+                                <Minus className="w-4 h-4" />
+                              </button>
+                              <input
+                                type="range"
+                                min="1"
+                                max="80"
+                                step="1"
+                                value={fuelLiters}
+                                onChange={(e) => setFuelLiters(parseFloat(e.target.value))}
+                                className="flex-1 accent-emerald-500 h-2 bg-slate-800 rounded-lg cursor-pointer"
+                              />
+                              <button
+                                onClick={() => setFuelLiters(prev => Math.min(80, prev + 5))}
+                                className="p-2 rounded-lg bg-slate-900 border border-slate-800 hover:bg-slate-800 text-slate-300 active:scale-95"
+                              >
+                                <Plus className="w-4 h-4" />
+                              </button>
+                            </div>
+                          </div>
+
+                          {/* 3. Add to Cart / Check Action Button */}
+                          <div className="pt-3 border-t border-slate-800 flex items-center justify-between gap-4">
+                            <div>
+                              <span className="text-[11px] text-slate-400 block">Итоговая стоимость топлива:</span>
+                              <span className="font-mono font-bold text-xl text-amber-300">
+                                {totalRub.toLocaleString()} ₽
+                              </span>
+                            </div>
+
+                            <button
+                              onClick={handleAddFuelToCart}
+                              className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white font-bold text-xs rounded-xl shadow-lg shadow-emerald-950/60 border border-emerald-400/40 transition flex items-center gap-2"
+                            >
+                              <ShoppingCart className="w-4 h-4" />
+                              <span>Добавить заправку ТРК №{curPump ? curPump.pumpNumber : 1} в чек</span>
+                            </button>
+                          </div>
                         </div>
+                      );
+                    })()}
+                  </div>
+                ) : (
+                  <>
+                    {/* Auto Shop Tab Selector (If in auto shop) */}
+                    {shopType === 'auto_shop' && (
+                      <div className="flex bg-slate-950 p-1 rounded-xl mb-4 border border-slate-850">
+                        <button
+                          onClick={() => {
+                            setAutoSubTab('workshop');
+                            sound.playButtonPress();
+                          }}
+                          className={`flex-1 py-2.5 text-xs font-bold rounded-lg transition flex items-center justify-center gap-2 ${
+                            autoSubTab === 'workshop'
+                              ? 'bg-sky-600 text-white shadow-md'
+                              : 'text-slate-400 hover:text-white hover:bg-slate-900/30'
+                          }`}
+                        >
+                          <Wrench className="w-4 h-4" />
+                          <span>🔧 Автомастерская PIT-STOP</span>
+                        </button>
+                        <button
+                          onClick={() => {
+                            setAutoSubTab('parts');
+                            sound.playButtonPress();
+                          }}
+                          className={`flex-1 py-2.5 text-xs font-bold rounded-lg transition flex items-center justify-center gap-2 ${
+                            autoSubTab === 'parts'
+                              ? 'bg-slate-800 text-white shadow-md'
+                              : 'text-slate-400 hover:text-white hover:bg-slate-900/30'
+                          }`}
+                        >
+                          <ShoppingBag className="w-4 h-4" />
+                          <span>🛒 Автотовары & Запчасти</span>
+                        </button>
                       </div>
-                    );
-                  })}
-                </div>
+                    )}
+
+                    {/* Workshop Area Rendering */}
+                    {shopType === 'auto_shop' && autoSubTab === 'workshop' ? (() => {
+                      const curCar = getNearbyOrActiveVehicle();
+                      
+                      if (!curCar) {
+                        return (
+                          <div className="p-8 text-center bg-slate-900/60 border border-slate-800 rounded-2xl space-y-4 shadow-inner">
+                            <div className="w-16 h-16 mx-auto rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center text-slate-500 animate-pulse">
+                              <Wrench className="w-8 h-8" />
+                            </div>
+                            <div className="max-w-md mx-auto space-y-2">
+                              <h3 className="text-white font-bold text-lg">Автомобиль не обнаружен</h3>
+                              <p className="text-slate-400 text-sm leading-relaxed">
+                                Загоните ваш автомобиль на подъемник или припаркуйте его непосредственно у ворот мастерской PIT-STOP. Сервисная система сможет подключиться к блоку управления автомобилем по беспроводному каналу, как только он окажется в зоне обслуживания.
+                              </p>
+                            </div>
+                          </div>
+                        );
+                      }
+
+                      // Define Russian brand names helper
+                      const getCarNameRu = (type: string): string => {
+                        switch (type) {
+                          case 'sedan_vaz2101': return 'ВАЗ-2101 "Жигули"';
+                          case 'sedan_vaz2107': return 'ВАЗ-2107 "Семерка"';
+                          case 'hatchback_granta': return 'Lada Granta';
+                          case 'van_gazel': return 'ГАЗель 3302';
+                          case 'truck_tanker': return 'Топливозаправщик ГАЗ-3307';
+                          case 'classic_black': return 'ГАЗ-24 "Волга"';
+                          default: return 'Легковой автомобиль';
+                        }
+                      };
+
+                      // Dynamic damage percentages
+                      const frontBumperDeform = curCar.damage ? Math.round((curCar.damage.frontCrumple / 15) * 100) : 0;
+                      const rearBumperDeform = curCar.damage ? Math.round((curCar.damage.rearCrumple / 12) * 100) : 0;
+                      const leftSideDeform = curCar.damage ? Math.round((curCar.damage.leftDent / 10) * 100) : 0;
+                      const rightSideDeform = curCar.damage ? Math.round((curCar.damage.rightDent / 10) * 100) : 0;
+                      const bodyPanelsDeform = Math.min(100, Math.max(frontBumperDeform, rearBumperDeform, leftSideDeform, rightSideDeform));
+                      
+                      const suspensionDeform = curCar.damage 
+                        ? Math.round(((curCar.damage.frontLeftSuspensionDamage + curCar.damage.frontRightSuspensionDamage + curCar.damage.rearLeftSuspensionDamage + curCar.damage.rearRightSuspensionDamage) / 4) * 100)
+                        : 0;
+
+                      // Diagnostic cost
+                      const DIAGNOSTIC_COST = 50;
+
+                      // Repair cost calculation
+                      const calculateRepairCost = (car: Vehicle): number => {
+                        let cost = 0;
+                        const dmg = car.damage;
+                        if (!dmg) return 0;
+                        
+                        // Body crumples/dents
+                        cost += Math.round((dmg.frontCrumple || 0) * 20);
+                        cost += Math.round((dmg.rearCrumple || 0) * 20);
+                        cost += Math.round(((dmg.leftDent || 0) + (dmg.rightDent || 0)) * 15);
+                        cost += Math.round(((dmg.frontLeftDent || 0) + (dmg.frontRightDent || 0) + (dmg.rearLeftDent || 0) + (dmg.rearRightDent || 0)) * 12);
+                        
+                        // Suspension
+                        cost += Math.round(((dmg.frontLeftSuspensionDamage || 0) + (dmg.frontRightSuspensionDamage || 0) + (dmg.rearLeftSuspensionDamage || 0) + (dmg.rearRightSuspensionDamage || 0)) * 250);
+                        
+                        // Glass and Lights
+                        if (dmg.windshieldCracked) cost += 250;
+                        if (dmg.rearGlassCracked) cost += 150;
+                        if (dmg.leftHeadlightBroken) cost += 80;
+                        if (dmg.rightHeadlightBroken) cost += 80;
+                        if (dmg.leftTaillightBroken) cost += 60;
+                        if (dmg.rightTaillightBroken) cost += 60;
+                        
+                        // Engine & Fluids
+                        if (dmg.engineFire || dmg.fuelTankFire) cost += 600;
+                        if (dmg.engineSmoking || dmg.underHoodSmolder) cost += 300;
+                        if (car.engineState && car.engineState.oilPunctured) cost += 200;
+                        if (car.engineState && car.engineState.radiatorPunctured) cost += 180;
+                        
+                        if (cost > 0) {
+                          cost = Math.max(100, cost); // min repair fee
+                        }
+                        
+                        return cost;
+                      };
+
+                      const repairCost = calculateRepairCost(curCar);
+
+                      // Start interactive inspection
+                      const handleStartInspection = () => {
+                        if (playerCash < DIAGNOSTIC_COST) {
+                          sound.playHurt();
+                          return;
+                        }
+                        handleWorkshopCheckout('diagnostics', DIAGNOSTIC_COST, 'Компьютерный техосмотр OBD-II');
+                      };
+
+                      // Start interactive repair
+                      const handleStartRepair = () => {
+                        if (playerCash < repairCost) {
+                          sound.playHurt();
+                          return;
+                        }
+                        handleWorkshopCheckout('repair', repairCost, 'Капитальный ремонт кузова и подвески');
+                      };
+
+                      // Paint costs
+                      const getPaintPrice = (): number => {
+                        switch (paintType) {
+                          case 'standard': return 150;
+                          case 'premium': return 350;
+                          case 'custom': return 950;
+                        }
+                      };
+                      const paintPrice = getPaintPrice();
+
+                      // Start interactive paint job
+                      const handleStartPaint = () => {
+                        if (playerCash < paintPrice) {
+                          sound.playHurt();
+                          return;
+                        }
+                        handleWorkshopCheckout('paint', paintPrice, `Покраска кузова (${paintType === 'standard' ? 'Акрил' : paintType === 'premium' ? 'Металлик' : 'Кастом'})`);
+                      };
+
+                      // Start generic tuning actions
+                      const handleStartTuning = (action: string, price: number, title?: string) => {
+                        if (playerCash < price) {
+                          sound.playHurt();
+                          return;
+                        }
+                        const serviceTitle = title || (
+                          action === 'gbo_install' ? 'Установка ГБО Lovato 4' :
+                          action === 'gbo_remove' ? 'Демонтаж ГБО' :
+                          action === 'alignment' ? 'Сход-развал 3D' :
+                          action === 'suspension' ? 'Усиленная подвеска Bilstein' :
+                          action === 'chiptuning' ? 'Чип-тюнинг ECU Stage 1' : 'Тюнинг автомобиля'
+                        );
+                        handleWorkshopCheckout(action, price, serviceTitle);
+                      };
+
+                      return (
+                        <div className="space-y-4">
+                          {/* Active Vehicle Status Card */}
+                          <div className="p-4 bg-slate-900 border border-slate-800 rounded-xl flex flex-wrap sm:flex-nowrap justify-between items-center gap-4 shadow-md">
+                            <div className="flex items-center gap-3">
+                              <div className="p-3 bg-sky-500/10 border border-sky-500/20 text-sky-400 rounded-xl">
+                                <Activity className="w-6 h-6 animate-pulse" />
+                              </div>
+                              <div>
+                                <h4 className="text-white font-bold text-sm flex items-center gap-2">
+                                  <span>🚗 {getCarNameRu(curCar.type)}</span>
+                                  {curCar.hasGBO && (
+                                    <span className="px-1.5 py-0.5 bg-emerald-500/20 text-emerald-300 text-[10px] rounded font-bold border border-emerald-400/20">
+                                      ГБО LPG
+                                    </span>
+                                  )}
+                                  {(curCar as any).hasChiptuning && (
+                                    <span className="px-1.5 py-0.5 bg-purple-500/20 text-purple-300 text-[10px] rounded font-bold border border-purple-400/20">
+                                      Stage 1
+                                    </span>
+                                  )}
+                                </h4>
+                                <p className="text-slate-400 text-xs mt-0.5 flex items-center gap-2">
+                                  <span>Топливный бак: {curCar.fuelSystem ? Math.round(curCar.fuelSystem.tankLevel) : 0}%</span>
+                                  <span>•</span>
+                                  <span className="flex items-center gap-1">
+                                    Цвет: 
+                                    <span 
+                                      className="inline-block w-3 h-3 rounded-full border border-white/20"
+                                      style={{ backgroundColor: curCar.color || '#991b1b' }}
+                                    />
+                                  </span>
+                                </p>
+                              </div>
+                            </div>
+                            <div className="text-right sm:text-right text-xs bg-slate-950/80 px-3 py-1.5 rounded-lg border border-slate-850">
+                              <div className="text-slate-500">Система самодиагностики ЭБУ:</div>
+                              <div className={`font-bold mt-0.5 ${repairCost > 0 ? 'text-amber-400' : 'text-emerald-400'}`}>
+                                {repairCost > 0 ? '⚠️ Требуется обслуживание' : '🟢 Ошибок не обнаружено'}
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Interactive Workshop Inner Navigation */}
+                          <div className="grid grid-cols-5 gap-1 p-1 bg-slate-950 rounded-xl border border-slate-850 text-[11px] font-bold">
+                            <button
+                              onClick={() => {
+                                setWorkshopSubTab('diagnostics');
+                                sound.playButtonPress();
+                              }}
+                              className={`py-2 rounded-lg transition flex flex-col sm:flex-row items-center justify-center gap-1 ${
+                                workshopSubTab === 'diagnostics' ? 'bg-sky-600 text-white shadow' : 'text-slate-400 hover:text-white'
+                              }`}
+                            >
+                              <Activity className="w-3.5 h-3.5" />
+                              <span className="hidden md:inline">Техосмотр</span>
+                            </button>
+                            <button
+                              onClick={() => {
+                                setWorkshopSubTab('repair');
+                                sound.playButtonPress();
+                              }}
+                              className={`py-2 rounded-lg transition flex flex-col sm:flex-row items-center justify-center gap-1 ${
+                                workshopSubTab === 'repair' ? 'bg-sky-600 text-white shadow' : 'text-slate-400 hover:text-white'
+                              }`}
+                            >
+                              <Wrench className="w-3.5 h-3.5" />
+                              <span className="hidden md:inline">Ремонт</span>
+                            </button>
+                            <button
+                              onClick={() => {
+                                setWorkshopSubTab('paint');
+                                sound.playButtonPress();
+                              }}
+                              className={`py-2 rounded-lg transition flex flex-col sm:flex-row items-center justify-center gap-1 ${
+                                workshopSubTab === 'paint' ? 'bg-sky-600 text-white shadow' : 'text-slate-400 hover:text-white'
+                              }`}
+                            >
+                              <Palette className="w-3.5 h-3.5" />
+                              <span className="hidden md:inline">Покраска</span>
+                            </button>
+                            <button
+                              onClick={() => {
+                                setWorkshopSubTab('lpg');
+                                sound.playButtonPress();
+                              }}
+                              className={`py-2 rounded-lg transition flex flex-col sm:flex-row items-center justify-center gap-1 ${
+                                workshopSubTab === 'lpg' ? 'bg-sky-600 text-white shadow' : 'text-slate-400 hover:text-white'
+                              }`}
+                            >
+                              <Fuel className="w-3.5 h-3.5" />
+                              <span className="hidden md:inline">Установка ГБО</span>
+                            </button>
+                            <button
+                              onClick={() => {
+                                setWorkshopSubTab('tuning');
+                                sound.playButtonPress();
+                              }}
+                              className={`py-2 rounded-lg transition flex flex-col sm:flex-row items-center justify-center gap-1 ${
+                                workshopSubTab === 'tuning' ? 'bg-sky-600 text-white shadow' : 'text-slate-400 hover:text-white'
+                              }`}
+                            >
+                              <Gauge className="w-3.5 h-3.5" />
+                              <span className="hidden md:inline">Тюнинг</span>
+                            </button>
+                          </div>
+
+                          {/* Tab Content Display Area */}
+                          <div className="p-4 bg-slate-900 border border-slate-800/80 rounded-xl min-h-[220px] flex flex-col justify-center">
+                            
+                            {/* TAB 1: DIAGNOSTICS */}
+                            {workshopSubTab === 'diagnostics' && (
+                              isInspecting ? (
+                                <div className="space-y-4 py-6 text-center w-full">
+                                  <div className="flex justify-between items-center text-xs font-semibold text-slate-400 max-w-md mx-auto">
+                                    <span>{inspectionStepText}</span>
+                                    <span className="font-mono text-sky-400">{inspectionProgress}%</span>
+                                  </div>
+                                  <div className="w-full max-w-md mx-auto bg-slate-950 h-3 rounded-full overflow-hidden border border-slate-800">
+                                    <div 
+                                      className="bg-sky-500 h-full transition-all duration-100 ease-out shadow-[0_0_8px_#0ea5e9]"
+                                      style={{ width: `${inspectionProgress}%` }}
+                                    />
+                                  </div>
+                                  <div className="text-[10px] text-slate-500 animate-pulse">Идет сканирование диагностических шин и датчиков...</div>
+                                </div>
+                              ) : hasInspectedVehicleId === curCar.id ? (
+                                <div className="space-y-4 w-full">
+                                  <div className="flex items-center justify-between">
+                                    <h5 className="text-white font-bold text-xs flex items-center gap-1.5">
+                                      <Activity className="w-4 h-4 text-emerald-400" />
+                                      <span>Диагностическая карта PIT-STOP</span>
+                                    </h5>
+                                    <span className="px-2 py-0.5 bg-emerald-500/10 text-emerald-400 text-[10px] font-bold rounded border border-emerald-400/20">
+                                      Техосмотр пройден
+                                    </span>
+                                  </div>
+
+                                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs text-slate-300">
+                                    <div className="bg-slate-950 p-2.5 rounded-lg border border-slate-850 space-y-1.5">
+                                      <div className="font-semibold text-slate-400 border-b border-slate-800 pb-1 mb-1 flex justify-between">
+                                        <span>Кузовное состояние:</span>
+                                        <span className={bodyPanelsDeform > 0 ? 'text-amber-400' : 'text-emerald-400'}>
+                                          {bodyPanelsDeform > 0 ? '⚠️ Нарушена геометрия' : '🟢 В идеале'}
+                                        </span>
+                                      </div>
+                                      <div className="flex justify-between font-mono">
+                                        <span>• Передний бампер / Капот:</span>
+                                        <span className={frontBumperDeform > 0 ? 'text-amber-400' : 'text-slate-500'}>
+                                          {frontBumperDeform > 0 ? `Деформация ${frontBumperDeform}%` : '🟢 Без дефектов'}
+                                        </span>
+                                      </div>
+                                      <div className="flex justify-between font-mono">
+                                        <span>• Задний бампер / Багажник:</span>
+                                        <span className={rearBumperDeform > 0 ? 'text-amber-400' : 'text-slate-500'}>
+                                          {rearBumperDeform > 0 ? `Деформация ${rearBumperDeform}%` : '🟢 Без дефектов'}
+                                        </span>
+                                      </div>
+                                      <div className="flex justify-between font-mono">
+                                        <span>• Лобовое стекло:</span>
+                                        <span className={curCar.damage?.windshieldCracked ? 'text-rose-400 font-bold' : 'text-slate-500'}>
+                                          {curCar.damage?.windshieldCracked ? '🔴 Трещины (Замена)' : '🟢 Целое'}
+                                        </span>
+                                      </div>
+                                    </div>
+
+                                    <div className="bg-slate-950 p-2.5 rounded-lg border border-slate-850 space-y-1.5">
+                                      <div className="font-semibold text-slate-400 border-b border-slate-800 pb-1 mb-1 flex justify-between">
+                                        <span>Ходовая и Моторный отсек:</span>
+                                        <span className={(suspensionDeform > 0 || (curCar.damage?.steeringDrift && Math.abs(curCar.damage.steeringDrift) > 0.05)) ? 'text-amber-400' : 'text-emerald-400'}>
+                                          {(suspensionDeform > 0 || (curCar.damage?.steeringDrift && Math.abs(curCar.damage.steeringDrift) > 0.05)) ? '⚠️ Требует ремонта' : '🟢 Норма'}
+                                        </span>
+                                      </div>
+                                      <div className="flex justify-between font-mono">
+                                        <span>• Сход-развал колес:</span>
+                                        <span className={(curCar.damage?.steeringDrift && Math.abs(curCar.damage.steeringDrift) > 0.05) ? 'text-amber-400' : 'text-slate-500'}>
+                                          {(curCar.damage?.steeringDrift && Math.abs(curCar.damage.steeringDrift) > 0.05) ? '🔴 Нарушен (Увод в сторону)' : '🟢 Норма'}
+                                        </span>
+                                      </div>
+                                      <div className="flex justify-between font-mono">
+                                        <span>• Подвеска / Рычаги:</span>
+                                        <span className={suspensionDeform > 0 ? 'text-amber-400' : 'text-slate-500'}>
+                                          {suspensionDeform > 0 ? `Деструкция ${suspensionDeform}%` : '🟢 Без дефектов'}
+                                        </span>
+                                      </div>
+                                      <div className="flex justify-between font-mono">
+                                        <span>• Герметичность ДВС:</span>
+                                        <span className={curCar.engineState?.oilPunctured ? 'text-rose-400 font-bold' : 'text-slate-500'}>
+                                          {curCar.engineState?.oilPunctured ? '🔴 Пробит картер (Течь масла)' : '🟢 Герметично'}
+                                        </span>
+                                      </div>
+                                    </div>
+                                  </div>
+
+                                  <div className="flex justify-between items-center bg-slate-950/60 p-2.5 rounded-lg border border-slate-850 text-[11px]">
+                                    <p className="text-slate-400">
+                                      Диагностический отчет сохранен в локальном блоке ЭБУ. Вы можете перейти к вкладке <strong>Ремонт</strong> для проведения всех необходимых процедур.
+                                    </p>
+                                    <button 
+                                      onClick={handleStartInspection}
+                                      disabled={playerCash < DIAGNOSTIC_COST}
+                                      className="ml-3 px-3 py-1.5 bg-slate-800 text-slate-300 rounded font-bold hover:bg-slate-700 hover:text-white transition whitespace-nowrap"
+                                    >
+                                      Перепроверить (50 ₽)
+                                    </button>
+                                  </div>
+                                </div>
+                              ) : (
+                                <div className="text-center space-y-4 py-4 max-w-md mx-auto">
+                                  <Activity className="w-12 h-12 text-slate-500 mx-auto animate-pulse" />
+                                  <div className="space-y-1">
+                                    <h5 className="text-white font-bold text-sm">Полный техосмотр</h5>
+                                    <p className="text-slate-400 text-xs leading-relaxed">
+                                      Электронная диагностика кузовных повреждений, степени износа подвески, амортизаторов, а также опрос внутренней памяти ошибок ЭБУ OBD-II. 
+                                      <br />
+                                      <span className="text-amber-400/90 mt-1 inline-block font-semibold">После прохождения откроется автоматический расчет стоимости ремонта.</span>
+                                    </p>
+                                  </div>
+                                  <button
+                                    onClick={handleStartInspection}
+                                    disabled={playerCash < DIAGNOSTIC_COST}
+                                    className={`w-full py-2.5 rounded-xl font-bold text-xs transition flex items-center justify-center gap-2 shadow-md ${
+                                      playerCash >= DIAGNOSTIC_COST
+                                        ? 'bg-sky-600 hover:bg-sky-500 text-white active:scale-95 border border-sky-400/40'
+                                        : 'bg-slate-800 text-slate-500 border border-slate-700 cursor-not-allowed'
+                                    }`}
+                                  >
+                                    <span>Запустить техосмотр и диагностику</span>
+                                    <span className="font-mono text-amber-300">50 ₽</span>
+                                  </button>
+                                </div>
+                              )
+                            )}
+
+                            {/* TAB 2: REPAIR */}
+                            {workshopSubTab === 'repair' && (
+                              isRepairing ? (
+                                <div className="space-y-4 py-6 text-center w-full">
+                                  <div className="flex justify-between items-center text-xs font-semibold text-slate-400 max-w-md mx-auto">
+                                    <span>{repairStepText}</span>
+                                    <span className="font-mono text-sky-400">{repairProgress}%</span>
+                                  </div>
+                                  <div className="w-full max-w-md mx-auto bg-slate-950 h-3 rounded-full overflow-hidden border border-slate-800">
+                                    <div 
+                                      className="bg-sky-500 h-full transition-all duration-100 ease-out shadow-[0_0_8px_#0ea5e9]"
+                                      style={{ width: `${repairProgress}%` }}
+                                    />
+                                  </div>
+                                  <div className="text-[10px] text-slate-500 animate-pulse">Работают стапельные роботы и автослесари...</div>
+                                </div>
+                              ) : hasInspectedVehicleId !== curCar.id ? (
+                                <div className="text-center space-y-3 py-6 max-w-md mx-auto">
+                                  <Info className="w-10 h-10 text-amber-500 mx-auto" />
+                                  <h5 className="text-white font-bold text-sm">Сначала пройдите Техосмотр!</h5>
+                                  <p className="text-slate-400 text-xs leading-relaxed">
+                                    Автоматическая система PIT-STOP не может оценить степень внутренних дефектов без предварительной дефектовки. Пожалуйста, запустите техосмотр на первой вкладке.
+                                  </p>
+                                  <button
+                                    onClick={() => setWorkshopSubTab('diagnostics')}
+                                    className="px-4 py-2 bg-sky-600 hover:bg-sky-500 text-white font-bold text-xs rounded-xl transition"
+                                  >
+                                    Перейти к техосмотру
+                                  </button>
+                                </div>
+                              ) : repairCost === 0 ? (
+                                <div className="text-center space-y-3 py-6 max-w-md mx-auto">
+                                  <div className="w-12 h-12 bg-emerald-500/10 text-emerald-400 border border-emerald-500/25 rounded-full flex items-center justify-center mx-auto text-xl font-bold">✓</div>
+                                  <h5 className="text-white font-bold text-sm">Автомобиль полностью исправен</h5>
+                                  <p className="text-slate-400 text-xs">
+                                    Диагностика не выявила никаких дефектов кузова, оптики, стекол или ходовой части. Ремонтные работы не требуются!
+                                  </p>
+                                </div>
+                              ) : (
+                                <div className="space-y-4 w-full">
+                                  <h5 className="text-white font-bold text-xs flex items-center gap-1.5">
+                                    <Wrench className="w-4 h-4 text-sky-400" />
+                                    <span>Дефектная ведомость и расчет стоимости ремонта</span>
+                                  </h5>
+
+                                  <div className="bg-slate-950 p-3 rounded-lg border border-slate-850 space-y-2 text-xs max-h-[140px] overflow-y-auto font-mono scrollbar-thin">
+                                    {curCar.damage?.frontCrumple > 0.05 && (
+                                      <div className="flex justify-between text-slate-300">
+                                        <span>• Геометрия передка и моторный щит</span>
+                                        <span>{Math.round(curCar.damage.frontCrumple * 20)} ₽</span>
+                                      </div>
+                                    )}
+                                    {curCar.damage?.rearCrumple > 0.05 && (
+                                      <div className="flex justify-between text-slate-300">
+                                        <span>• Рихтовка кормы и силовой балки</span>
+                                        <span>{Math.round(curCar.damage.rearCrumple * 20)} ₽</span>
+                                      </div>
+                                    )}
+                                    {((curCar.damage?.leftDent || 0) + (curCar.damage?.rightDent || 0)) > 0.05 && (
+                                      <div className="flex justify-between text-slate-300">
+                                        <span>• Вытягивание вмятин боковых бортов</span>
+                                        <span>{Math.round(((curCar.damage.leftDent || 0) + (curCar.damage.rightDent || 0)) * 15)} ₽</span>
+                                      </div>
+                                    )}
+                                    {suspensionDeform > 0 && (
+                                      <div className="flex justify-between text-slate-300">
+                                        <span>• Стендовая переборка рычагов подвески</span>
+                                        <span>{Math.round((curCar.damage.frontLeftSuspensionDamage + curCar.damage.frontRightSuspensionDamage + curCar.damage.rearLeftSuspensionDamage + curCar.damage.rearRightSuspensionDamage) * 250)} ₽</span>
+                                      </div>
+                                    )}
+                                    {curCar.damage?.windshieldCracked && (
+                                      <div className="flex justify-between text-slate-300">
+                                        <span>• Новое лобовое триплекс-стекло с установкой</span>
+                                        <span>250 ₽</span>
+                                      </div>
+                                    )}
+                                    {curCar.damage?.leftHeadlightBroken && (
+                                      <div className="flex justify-between text-slate-300">
+                                        <span>• Новая фара ближнего света (левая)</span>
+                                        <span>80 ₽</span>
+                                      </div>
+                                    )}
+                                    {curCar.damage?.rightHeadlightBroken && (
+                                      <div className="flex justify-between text-slate-300">
+                                        <span>• Новая фара ближнего света (правая)</span>
+                                        <span>80 ₽</span>
+                                      </div>
+                                    )}
+                                    {curCar.engineState?.oilPunctured && (
+                                      <div className="flex justify-between text-slate-300">
+                                        <span>• Заварка аргоном трещины поддона картера</span>
+                                        <span>200 ₽</span>
+                                      </div>
+                                    )}
+                                  </div>
+
+                                  <div className="flex flex-wrap sm:flex-nowrap justify-between items-center gap-3 bg-slate-950/60 p-3 rounded-xl border border-slate-850">
+                                    <div>
+                                      <div className="text-[10px] text-slate-500">ИТОГО К ОПЛАТЕ:</div>
+                                      <div className="text-xl font-mono font-bold text-amber-300">{repairCost} ₽</div>
+                                    </div>
+                                    <button
+                                      onClick={handleStartRepair}
+                                      disabled={playerCash < repairCost}
+                                      className={`px-6 py-2.5 rounded-xl font-bold text-xs transition flex items-center gap-2 shadow-md ${
+                                        playerCash >= repairCost
+                                          ? 'bg-emerald-600 hover:bg-emerald-500 text-white active:scale-95 border border-emerald-400/40'
+                                          : 'bg-slate-800 text-slate-500 border border-slate-700 cursor-not-allowed'
+                                      }`}
+                                    >
+                                      <span>Оплатить и начать ремонт</span>
+                                    </button>
+                                  </div>
+                                </div>
+                              )
+                            )}
+
+                            {/* TAB 3: PAINTING */}
+                            {workshopSubTab === 'paint' && (
+                              isPainting ? (
+                                <div className="space-y-4 py-6 text-center w-full">
+                                  <div className="flex justify-between items-center text-xs font-semibold text-slate-400 max-w-md mx-auto">
+                                    <span>{paintStepText}</span>
+                                    <span className="font-mono text-sky-400">{paintProgress}%</span>
+                                  </div>
+                                  <div className="w-full max-w-md mx-auto bg-slate-950 h-3 rounded-full overflow-hidden border border-slate-800">
+                                    <div 
+                                      className="bg-emerald-500 h-full transition-all duration-100 ease-out"
+                                      style={{ width: `${paintProgress}%` }}
+                                    />
+                                  </div>
+                                  <div className="text-[10px] text-slate-500 animate-pulse">Работает покрасочная камера избыточного давления...</div>
+                                </div>
+                              ) : (
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 w-full text-xs">
+                                  <div className="space-y-3">
+                                    {/* Paint Target Selector */}
+                                    <div>
+                                      <span className="text-slate-400 font-semibold block mb-1.5">Зона окраски:</span>
+                                      <div className="flex gap-2">
+                                        <button
+                                          onClick={() => {
+                                            setPaintTarget('body');
+                                            sound.playButtonPress();
+                                          }}
+                                          className={`flex-1 py-1.5 rounded-lg border text-xs font-semibold transition ${
+                                            paintTarget === 'body'
+                                              ? 'bg-sky-600/25 border-sky-500 text-sky-300'
+                                              : 'bg-slate-950 border-slate-800 text-slate-400 hover:text-white'
+                                          }`}
+                                        >
+                                          🚗 Кузов целиком
+                                        </button>
+                                        <button
+                                          onClick={() => {
+                                            setPaintTarget('roof');
+                                            sound.playButtonPress();
+                                          }}
+                                          className={`flex-1 py-1.5 rounded-lg border text-xs font-semibold transition ${
+                                            paintTarget === 'roof'
+                                              ? 'bg-sky-600/25 border-sky-500 text-sky-300'
+                                              : 'bg-slate-950 border-slate-800 text-slate-400 hover:text-white'
+                                          }`}
+                                        >
+                                          📐 Только крыша
+                                        </button>
+                                      </div>
+                                    </div>
+
+                                    {/* Paint Quality Tier Selector */}
+                                    <div>
+                                      <span className="text-slate-400 font-semibold block mb-1.5">Класс покрытия и пигмента:</span>
+                                      <div className="flex flex-col gap-1.5">
+                                        <button
+                                          onClick={() => {
+                                            setPaintType('standard');
+                                            sound.playButtonPress();
+                                          }}
+                                          className={`p-2 rounded-lg border text-left transition flex justify-between items-center ${
+                                            paintType === 'standard'
+                                              ? 'bg-slate-950 border-sky-500 text-white'
+                                              : 'bg-slate-950/60 border-slate-850 text-slate-400 hover:text-white'
+                                          }`}
+                                        >
+                                          <div>
+                                            <div className="font-bold">Стандартная автоэмаль</div>
+                                            <div className="text-[10px] text-slate-500">Глянцевый однотонный акрил</div>
+                                          </div>
+                                          <span className="font-mono text-amber-400 font-bold">150 ₽</span>
+                                        </button>
+
+                                        <button
+                                          onClick={() => {
+                                            setPaintType('premium');
+                                            sound.playButtonPress();
+                                          }}
+                                          className={`p-2 rounded-lg border text-left transition flex justify-between items-center ${
+                                            paintType === 'premium'
+                                              ? 'bg-slate-950 border-sky-500 text-white'
+                                              : 'bg-slate-950/60 border-slate-850 text-slate-400 hover:text-white'
+                                          }`}
+                                        >
+                                          <div>
+                                            <div className="font-bold">Перламутр / Металлик</div>
+                                            <div className="text-[10px] text-slate-500">Сложное двухслойное покрытие со слюдой</div>
+                                          </div>
+                                          <span className="font-mono text-amber-400 font-bold">350 ₽</span>
+                                        </button>
+
+                                        <button
+                                          onClick={() => {
+                                            setPaintType('custom');
+                                            sound.playButtonPress();
+                                          }}
+                                          className={`p-2 rounded-lg border text-left transition flex justify-between items-center ${
+                                            paintType === 'custom'
+                                              ? 'bg-slate-950 border-sky-500 text-white'
+                                              : 'bg-slate-950/60 border-slate-850 text-slate-400 hover:text-white'
+                                          }`}
+                                        >
+                                          <div>
+                                            <div className="font-bold">Кастомный подбор колера</div>
+                                            <div className="text-[10px] text-slate-500">Ручное смешивание пигментов, любой RGB спектр</div>
+                                          </div>
+                                          <span className="font-mono text-amber-400 font-bold">950 ₽</span>
+                                        </button>
+                                      </div>
+                                    </div>
+                                  </div>
+
+                                  <div className="space-y-3 flex flex-col justify-between">
+                                    {/* Interactive Color Selection */}
+                                    <div>
+                                      <span className="text-slate-400 font-semibold block mb-1.5">Выберите цвет автоэмали:</span>
+                                      
+                                      {paintType === 'custom' ? (
+                                        <div className="p-3 bg-slate-950 border border-slate-850 rounded-xl space-y-2">
+                                          <div className="flex items-center gap-3">
+                                            <input 
+                                              type="color" 
+                                              value={selectedPaintColor} 
+                                              onChange={(e) => setSelectedPaintColor(e.target.value)} 
+                                              className="w-12 h-10 bg-transparent border-0 cursor-pointer rounded overflow-hidden"
+                                            />
+                                            <div>
+                                              <div className="font-mono font-bold text-white uppercase">{selectedPaintColor}</div>
+                                              <div className="text-[10px] text-slate-500">Тонкий подбор колера по шкале Pantone</div>
+                                            </div>
+                                          </div>
+                                        </div>
+                                      ) : paintType === 'premium' ? (
+                                        <div className="flex flex-wrap gap-2">
+                                          {[
+                                            { name: 'Midnight Purple', hex: '#3b0764' },
+                                            { name: 'Nardo Gray', hex: '#4b5563' },
+                                            { name: 'Liquid Gold', hex: '#ca8a04' },
+                                            { name: 'Cherry Metallic', hex: '#881337' },
+                                            { name: 'Pearl Aqua', hex: '#0d9488' }
+                                          ].map((c) => (
+                                            <button
+                                              key={c.hex}
+                                              onClick={() => {
+                                                setSelectedPaintColor(c.hex);
+                                                sound.playButtonPress();
+                                              }}
+                                              className={`w-8 h-8 rounded-full border-2 transition relative ${
+                                                selectedPaintColor === c.hex ? 'border-sky-400 scale-110 shadow' : 'border-transparent hover:scale-105'
+                                              }`}
+                                              style={{ backgroundColor: c.hex }}
+                                              title={c.name}
+                                            >
+                                              {selectedPaintColor === c.hex && (
+                                                <span className="absolute inset-0 flex items-center justify-center text-[10px] font-bold text-white shadow-sm drop-shadow-md">✓</span>
+                                              )}
+                                            </button>
+                                          ))}
+                                        </div>
+                                      ) : (
+                                        <div className="flex flex-wrap gap-2">
+                                          {[
+                                            { name: 'Crimson Red', hex: '#991b1b' },
+                                            { name: 'Alpine White', hex: '#f8fafc' },
+                                            { name: 'Deep Onyx', hex: '#111827' },
+                                            { name: 'Navy Blue', hex: '#1e3a8a' },
+                                            { name: 'Forest Green', hex: '#064e3b' },
+                                            { name: 'Sunflower Yellow', hex: '#eab308' }
+                                          ].map((c) => (
+                                            <button
+                                              key={c.hex}
+                                              onClick={() => {
+                                                setSelectedPaintColor(c.hex);
+                                                sound.playButtonPress();
+                                              }}
+                                              className={`w-8 h-8 rounded-full border-2 transition relative ${
+                                                selectedPaintColor === c.hex ? 'border-sky-400 scale-110 shadow' : 'border-transparent hover:scale-105'
+                                              }`}
+                                              style={{ backgroundColor: c.hex }}
+                                              title={c.name}
+                                            >
+                                              {selectedPaintColor === c.hex && (
+                                                <span className="absolute inset-0 flex items-center justify-center text-[10px] font-bold text-white shadow-sm drop-shadow-md">✓</span>
+                                              )}
+                                            </button>
+                                          ))}
+                                        </div>
+                                      )}
+                                    </div>
+
+                                    {/* Preview & Spray Trigger */}
+                                    <div className="p-3 bg-slate-950 border border-slate-850 rounded-xl space-y-3">
+                                      <div className="flex justify-between items-center">
+                                        <span className="text-slate-500 text-[10px]">Превью пигмента:</span>
+                                        <div className="flex items-center gap-2">
+                                          <div 
+                                            className="w-14 h-5 rounded-md border border-white/10 transition-all duration-300"
+                                            style={{ backgroundColor: selectedPaintColor }}
+                                          />
+                                          <span className="text-[10px] font-mono font-bold text-slate-300 uppercase">{selectedPaintColor}</span>
+                                        </div>
+                                      </div>
+
+                                      <button
+                                        onClick={handleStartPaint}
+                                        disabled={playerCash < paintPrice}
+                                        className={`w-full py-2 rounded-lg font-bold text-xs transition flex items-center justify-center gap-2 shadow ${
+                                          playerCash >= paintPrice
+                                            ? 'bg-emerald-600 hover:bg-emerald-500 text-white active:scale-95 border border-emerald-400/20'
+                                            : 'bg-slate-800 text-slate-500 border border-slate-750 cursor-not-allowed'
+                                        }`}
+                                      >
+                                        <span>Начать окраску</span>
+                                        <span className="font-mono text-amber-300">{paintPrice} ₽</span>
+                                      </button>
+                                    </div>
+                                  </div>
+                                </div>
+                              )
+                            )}
+
+                            {/* TAB 4: LPG Retrofitting */}
+                            {workshopSubTab === 'lpg' && (
+                              tuningAction === 'gbo_install' || tuningAction === 'gbo_remove' ? (
+                                <div className="space-y-4 py-6 text-center w-full">
+                                  <div className="flex justify-between items-center text-xs font-semibold text-slate-400 max-w-md mx-auto">
+                                    <span>{tuningStepText}</span>
+                                    <span className="font-mono text-sky-400">{tuningProgress}%</span>
+                                  </div>
+                                  <div className="w-full max-w-md mx-auto bg-slate-950 h-3 rounded-full overflow-hidden border border-slate-800">
+                                    <div 
+                                      className="bg-sky-500 h-full transition-all duration-100 ease-out"
+                                      style={{ width: `${tuningProgress}%` }}
+                                    />
+                                  </div>
+                                  <div className="text-[10px] text-slate-500 animate-pulse">Идет монтаж редуктора Lovato и прокладка магистралей...</div>
+                                </div>
+                              ) : curCar.hasGBO ? (
+                                <div className="text-center space-y-4 py-4 max-w-md mx-auto">
+                                  <div className="w-12 h-12 bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 rounded-full flex items-center justify-center mx-auto text-xl">⛽</div>
+                                  <div className="space-y-1">
+                                    <h5 className="text-white font-bold text-sm">ГБО 4-го поколения уже установлено!</h5>
+                                    <p className="text-slate-400 text-xs leading-relaxed">
+                                      Ваш автомобиль успешно переоборудован на пропан-бутановую смесь Lovato Easy Fast. Заправка газом LPG производится на старой ТРК №5 (по сниженному тарифу). 
+                                      Бензин сохранен как резервное топливо.
+                                    </p>
+                                  </div>
+                                  <div className="p-3 bg-slate-950 rounded-xl border border-slate-850 flex items-center justify-between">
+                                    <div className="text-left">
+                                      <div className="font-bold text-xs text-white">Вам больше не нужно ГБО?</div>
+                                      <div className="text-[10px] text-slate-500">Снятие бака и восстановление форсунок</div>
+                                    </div>
+                                    <button
+                                      onClick={() => handleStartTuning('gbo_remove', 100)}
+                                      disabled={playerCash < 100}
+                                      className="px-3 py-1.5 bg-rose-950/80 hover:bg-rose-900 border border-rose-500/30 text-rose-300 text-xs font-bold rounded-lg transition"
+                                    >
+                                      Демонтировать (100 ₽)
+                                    </button>
+                                  </div>
+                                </div>
+                              ) : (
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 w-full text-xs">
+                                  <div className="space-y-3">
+                                    <h5 className="text-white font-bold text-sm flex items-center gap-1.5">
+                                      <Fuel className="w-4 h-4 text-emerald-400" />
+                                      <span>Преимущества перехода на ГБО Lovato:</span>
+                                    </h5>
+                                    <ul className="space-y-2 text-slate-300">
+                                      <li className="flex gap-2">
+                                        <span className="text-emerald-400 font-bold">✓</span>
+                                        <span><strong>Экономия 50%:</strong> Стоимость LPG пропан-бутана всего около 28 ₽/литр против 58 ₽ за бензин.</span>
+                                      </li>
+                                      <li className="flex gap-2">
+                                        <span className="text-emerald-400 font-bold">✓</span>
+                                        <span><strong>Антидетонация:</strong> Октановое число газа — 105-110, двигатель работает мягче, исключен износ клапанов.</span>
+                                      </li>
+                                      <li className="flex gap-2">
+                                        <span className="text-emerald-400 font-bold">✓</span>
+                                        <span><strong>Двухтопливность:</strong> Переключение бензин / газ по одной кнопке в салоне.</span>
+                                      </li>
+                                    </ul>
+                                  </div>
+
+                                  <div className="bg-slate-950 p-4 border border-slate-850 rounded-xl flex flex-col justify-between">
+                                    <div className="space-y-1.5">
+                                      <div className="font-bold text-white text-xs">Комплект ГБО Digitronic/Lovato 4</div>
+                                      <p className="text-slate-500 text-[11px] leading-relaxed">
+                                        Включает тороидальный баллон 42л на место запаски, электромагнитный редуктор, рампу скоростных форсунок и ЭБУ газового впрыска.
+                                      </p>
+                                    </div>
+
+                                    <div className="mt-4 pt-3 border-t border-slate-850/60 flex items-center justify-between">
+                                      <div>
+                                        <span className="text-[9px] text-slate-500 block">СТОИМОСТЬ ПОД КЛЮЧ:</span>
+                                        <span className="font-mono text-xl font-bold text-amber-300">1200 ₽</span>
+                                      </div>
+                                      <button
+                                        onClick={() => handleStartTuning('gbo_install', 1200)}
+                                        disabled={playerCash < 1200}
+                                        className={`px-5 py-2 rounded-xl font-bold text-xs transition shadow ${
+                                          playerCash >= 1200
+                                            ? 'bg-emerald-600 hover:bg-emerald-500 text-white active:scale-95 border border-emerald-400/20'
+                                            : 'bg-slate-800 text-slate-500 border border-slate-750 cursor-not-allowed'
+                                        }`}
+                                      >
+                                        Установить ГБО
+                                      </button>
+                                    </div>
+                                  </div>
+                                </div>
+                              )
+                            )}
+
+                            {/* TAB 5: REALISTIC TUNING */}
+                            {workshopSubTab === 'tuning' && (
+                              tuningAction && tuningAction !== 'gbo_install' && tuningAction !== 'gbo_remove' ? (
+                                <div className="space-y-4 py-6 text-center w-full">
+                                  <div className="flex justify-between items-center text-xs font-semibold text-slate-400 max-w-md mx-auto">
+                                    <span>{tuningStepText}</span>
+                                    <span className="font-mono text-sky-400">{tuningProgress}%</span>
+                                  </div>
+                                  <div className="w-full max-w-md mx-auto bg-slate-950 h-3 rounded-full overflow-hidden border border-slate-800">
+                                    <div 
+                                      className="bg-sky-500 h-full transition-all duration-100 ease-out"
+                                      style={{ width: `${tuningProgress}%` }}
+                                    />
+                                  </div>
+                                  <div className="text-[10px] text-slate-500 animate-pulse">Калибровка систем на мощностном стенде...</div>
+                                </div>
+                              ) : (
+                                <div className="space-y-3 w-full text-xs">
+                                  <h5 className="text-white font-bold text-xs flex items-center gap-1.5 border-b border-slate-850 pb-1.5">
+                                    <Gauge className="w-4 h-4 text-purple-400 animate-spin-slow" />
+                                    <span>Высокотехнологичный тюнинг автомобиля (Non-Arcade)</span>
+                                  </h5>
+
+                                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                                    {/* 1. Alignment */}
+                                    <div className="bg-slate-950 p-3 rounded-xl border border-slate-850 flex flex-col justify-between">
+                                      <div className="space-y-1">
+                                        <div className="font-bold text-white flex justify-between">
+                                          <span>Сход-развал 3D</span>
+                                          <span className="text-emerald-400 font-mono">80 ₽</span>
+                                        </div>
+                                        <p className="text-slate-500 text-[10px] leading-relaxed">
+                                          Коррекция углов кастера и схождения. Полностью убирает увод машины вбок при езде и нормализует износ шин.
+                                        </p>
+                                      </div>
+                                      <button
+                                        onClick={() => handleStartTuning('alignment', 80)}
+                                        disabled={playerCash < 80}
+                                        className="mt-3 w-full py-1.5 bg-slate-800 hover:bg-slate-700 text-white font-bold text-[10px] rounded-lg transition"
+                                      >
+                                        Отрегулировать
+                                      </button>
+                                    </div>
+
+                                    {/* 2. Heavy Suspension */}
+                                    <div className="bg-slate-950 p-3 rounded-xl border border-slate-850 flex flex-col justify-between">
+                                      <div className="space-y-1">
+                                        <div className="font-bold text-white flex justify-between">
+                                          <span>Усиленная подвеска</span>
+                                          {(curCar as any).hasHeavySuspension ? (
+                                            <span className="text-sky-400 text-[9px] bg-sky-500/10 px-1 rounded border border-sky-400/20 font-bold">АКТИВНО</span>
+                                          ) : (
+                                            <span className="text-amber-400 font-mono">450 ₽</span>
+                                          )}
+                                        </div>
+                                        <p className="text-slate-500 text-[10px] leading-relaxed">
+                                          Комплект Bilstein Heavy Duty. Повышает прочность рычагов и пружин, снижая урон от бордюров и камней на 40%!
+                                        </p>
+                                      </div>
+                                      <button
+                                        onClick={() => handleStartTuning('suspension', 450)}
+                                        disabled={playerCash < 450 || (curCar as any).hasHeavySuspension}
+                                        className={`mt-3 w-full py-1.5 font-bold text-[10px] rounded-lg transition ${
+                                          (curCar as any).hasHeavySuspension
+                                            ? 'bg-slate-900 text-slate-600 border border-slate-850 cursor-not-allowed'
+                                            : 'bg-slate-800 hover:bg-slate-700 text-white'
+                                        }`}
+                                      >
+                                        {(curCar as any).hasHeavySuspension ? 'Уже установлено' : 'Установить'}
+                                      </button>
+                                    </div>
+
+                                    {/* 3. Chiptuning ECU */}
+                                    <div className="bg-slate-950 p-3 rounded-xl border border-slate-850 flex flex-col justify-between">
+                                      <div className="space-y-1">
+                                        <div className="font-bold text-white flex justify-between">
+                                          <span>Чип ДВС Stage 1</span>
+                                          {(curCar as any).hasChiptuning ? (
+                                            <span className="text-purple-400 text-[9px] bg-purple-500/10 px-1 rounded border border-purple-400/20 font-bold">АКТИВНО</span>
+                                          ) : (
+                                            <span className="text-amber-400 font-mono">600 ₽</span>
+                                          )}
+                                        </div>
+                                        <p className="text-slate-500 text-[10px] leading-relaxed">
+                                          Программная перепрошивка карт впрыска. Снижает расход топлива (включая LPG) на 15% за счет оптимизации AFR.
+                                        </p>
+                                      </div>
+                                      <button
+                                        onClick={() => handleStartTuning('chiptuning', 600)}
+                                        disabled={playerCash < 600 || (curCar as any).hasChiptuning}
+                                        className={`mt-3 w-full py-1.5 font-bold text-[10px] rounded-lg transition ${
+                                          (curCar as any).hasChiptuning
+                                            ? 'bg-slate-900 text-slate-600 border border-slate-850 cursor-not-allowed'
+                                            : 'bg-slate-800 hover:bg-slate-700 text-white'
+                                        }`}
+                                      >
+                                        {(curCar as any).hasChiptuning ? 'Уже установлено' : 'Прошить ЭБУ'}
+                                      </button>
+                                    </div>
+                                  </div>
+                                </div>
+                              )
+                            )}
+
+                          </div>
+                        </div>
+                      );
+                    })() : (
+                      <>
+                        {/* Normal / Non-Auto shop quick repair block if canRepairVehicle is true */}
+                        {(canRepairVehicle || shopType === 'auto_shop') && onRepairVehicle && (
+                          <div className="p-4 bg-slate-800 border border-slate-700/80 rounded-xl flex items-center justify-between gap-4 shadow-sm mb-4">
+                            <div className="flex items-center gap-3">
+                              <div className="p-2.5 bg-sky-500/20 rounded-xl border border-sky-400/40 text-sky-300">
+                                <Wrench className="w-6 h-6" />
+                              </div>
+                              <div>
+                                <h3 className="text-white font-bold text-sm">Полный автосервис и ремонт</h3>
+                                <p className="text-sky-200/80 text-xs">Восстановление кузова, двигателя, колес и стекол машины</p>
+                              </div>
+                            </div>
+
+                            <button
+                              onClick={onRepairVehicle}
+                              disabled={playerCash < 300}
+                              className={`px-4 py-2.5 rounded-xl font-bold text-xs transition flex items-center gap-2 shadow-md ${
+                                playerCash >= 300
+                                  ? 'bg-sky-600 hover:bg-sky-500 text-white active:scale-95 border border-sky-400/40'
+                                  : 'bg-slate-800 text-slate-500 border border-slate-700 cursor-not-allowed'
+                              }`}
+                            >
+                              <span>Отремонтировать</span>
+                              <span className="font-mono text-amber-300">$300</span>
+                            </button>
+                          </div>
+                        )}
+
+                        {/* Item Catalog Shelf Grid */}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      {currentCatalog.map((item) => {
+                        const quantityInCart = cart[item.id] || 0;
+
+                        return (
+                          <div
+                            key={item.id}
+                            className="p-3 bg-slate-850/80 border border-slate-800 rounded-xl flex items-center justify-between gap-3 hover:border-slate-700 transition"
+                          >
+                            <div className="flex items-center gap-3 min-w-0">
+                              <div className="w-12 h-12 rounded-xl bg-slate-950 border border-slate-800 flex items-center justify-center shrink-0 p-1 shadow-inner">
+                                <ItemIconCanvas itemId={item.itemId} size={36} />
+                              </div>
+
+                              <div className="min-w-0">
+                                <span className="font-bold text-xs text-slate-100 truncate block">{item.nameRu}</span>
+                                <p className="text-[11px] text-slate-400 line-clamp-2 leading-snug mt-1 font-sans">{item.description}</p>
+                              </div>
+                            </div>
+
+                            <div className="flex flex-col items-end gap-1.5 shrink-0">
+                              {/* Price Tag styled as realistic retail shelf label */}
+                              <div className="px-2 py-0.5 bg-amber-500/10 border border-amber-500/20 text-amber-400 font-mono text-[11px] font-bold rounded">
+                                ${item.price}
+                              </div>
+
+                              <button
+                                onClick={() => handleAddToCart(item)}
+                                className="px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-bold rounded-lg transition shadow-sm active:scale-95 flex items-center gap-1"
+                              >
+                                <Plus className="w-3 h-3" />
+                                <span>В корзину</span>
+                                {quantityInCart > 0 && (
+                                  <span className="ml-1 px-1 bg-white text-emerald-700 rounded-full font-sans text-[9px]">
+                                    {quantityInCart}
+                                  </span>
+                                )}
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </>
+                )}
+              </>
+            )}
               </div>
 
               {/* Cart Tab content on mobile */}
@@ -1280,12 +2883,18 @@ export const ShopModal: React.FC<ShopModalProps> = ({
                       className="p-2.5 bg-slate-850/60 border border-slate-800 rounded-xl flex items-center justify-between gap-2 shadow-sm hover:bg-slate-800/50 transition"
                     >
                       <div className="flex items-center gap-2 min-w-0">
-                        <div className="w-9 h-9 rounded-lg bg-slate-900 border border-slate-800 flex items-center justify-center shrink-0 p-0.5">
-                          <ItemIconCanvas itemId={item.itemId} size={28} />
+                        <div className="w-9 h-9 rounded-lg bg-slate-900 border border-slate-800 flex items-center justify-center shrink-0 p-0.5 text-emerald-400">
+                          {item.itemId === 'fuel_order' ? (
+                            <Fuel className="w-5 h-5 text-emerald-400" />
+                          ) : (
+                            <ItemIconCanvas itemId={item.itemId} size={28} />
+                          )}
                         </div>
                         <div className="min-w-0">
                           <span className="text-slate-100 font-medium text-xs truncate block">{item.nameRu}</span>
-                          <span className="text-[10px] text-slate-500 uppercase font-mono tracking-wider">Товар</span>
+                          <span className="text-[10px] text-emerald-400/80 uppercase font-mono tracking-wider">
+                            {item.itemId === 'fuel_order' ? '⛽ Топливо ТРК' : 'Товар'}
+                          </span>
                         </div>
                       </div>
 
@@ -1871,8 +3480,12 @@ const MobileCartPanel: React.FC<MobileCartPanelProps> = ({
               className="p-2 bg-slate-800 border border-slate-700 rounded-xl flex items-center justify-between gap-2"
             >
               <div className="flex items-center gap-2 min-w-0">
-                <div className="w-8 h-8 rounded-lg bg-slate-950 flex items-center justify-center p-0.5">
-                  <ItemIconCanvas itemId={item.itemId} size={24} />
+                <div className="w-8 h-8 rounded-lg bg-slate-950 flex items-center justify-center p-0.5 text-emerald-400 shrink-0">
+                  {item.itemId === 'fuel_order' ? (
+                    <Fuel className="w-4 h-4 text-emerald-400" />
+                  ) : (
+                    <ItemIconCanvas itemId={item.itemId} size={24} />
+                  )}
                 </div>
                 <span className="text-slate-100 text-xs truncate font-medium">{item.nameRu}</span>
               </div>

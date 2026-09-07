@@ -1,6 +1,6 @@
 {
-  "name": "Top-Down City Simulator",
-  "description": "A fully-featured, high-performance 2D top-down open world city simulator with realistic car physics, intelligent AI traffic, building interiors, player survival mechanics (health, hunger, thirst, fatigue, sleepiness), and rich interactive inventory.",
+  "name": "Metropolis 2D: Open World City Simulator",
+  "description": "A fully-featured, high-performance 2D top-down open world city simulator with realistic car physics, intelligent AI traffic, building interiors, player survival mechanics, and rich interactive inventory.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

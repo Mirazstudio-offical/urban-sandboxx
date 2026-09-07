@@ -1,10 +1,10 @@
-import { CAR_CONFIGS, createDefaultEngineState, createDefaultFuelSystem, createDefaultVehicleDamage } from './cityMap';
-import { Building, GameWorld, InputState, Particle, Pedestrian, Player, SkidMark, Vehicle } from './types';
-import { generateBuildingLayout, constrainPlayerToInterior } from './buildingInteriors';
+import { CAR_CONFIGS, createDefaultEngineState, createDefaultFuelSystem, createDefaultVehicleDamage, ensureVehicleDamage } from './vehicleHelpers';
+import { Building, GameWorld, InputState, Particle, Pedestrian, Player, SkidMark, Vehicle, StreetProp } from './types';
+import { getBuildingLayout, constrainPlayerToInterior } from './buildingInteriors';
 import { sound } from './audio';
 import { trafficDiagnostics, isVehicleDisabledOrCrashed } from './aiTraffic';
 import { performanceConfig } from './performanceConfig';
-import { createDefaultPlayerInventory, addPlayerNotification } from './items';
+import { createDefaultPlayerInventory, addPlayerNotification, getPlayerTotalCarriedWeight } from './items';
 import { defaultBodyState } from './sensations';
 import { updateBodySystem, distributeImpactDamage, applyDriverVehicleCrashTrauma, addInjuryToPart } from './bodySystem';
 import { updateMedicineSystem } from './medicineSystem';
@@ -23,8 +23,19 @@ function angleDiff(a: number, b: number): number {
   return diff;
 }
 
-// Check intersection between rotated car box and AABB building using SAT
-export function checkCarBuildingCollision(car: Vehicle, building: Building): CollisionResult {
+const GAS_STATION_STRUCTURAL_SUB_BOXES = [
+  // Island 0 (West fuel island, pumps & support pillars)
+  { x: 5003, y: 5190, width: 34, height: 180 },
+  // Island 1 (East fuel island, pumps & support pillars)
+  { x: 5143, y: 5190, width: 34, height: 180 },
+  // Price Totem on corner lawn
+  { x: 4872, y: 4872, width: 16, height: 16 }
+];
+
+export function checkCarBoxCollision(
+  car: Vehicle,
+  box: { x: number; y: number; width: number; height: number }
+): CollisionResult {
   const effL = car.length - (car.damage ? (car.damage.frontCrumple + car.damage.rearCrumple) / 2 : 0);
   const effW = car.width - (car.damage ? (car.damage.leftDent + car.damage.rightDent) / 2 : 0);
   const halfL = effL / 2;
@@ -33,7 +44,6 @@ export function checkCarBuildingCollision(car: Vehicle, building: Building): Col
   const cosA = Math.cos(car.angle);
   const sinA = Math.sin(car.angle);
 
-  // 4 corner points of car in world coordinates
   const cornersA = [
     { x: car.x + cosA * halfL - sinA * halfW, y: car.y + sinA * halfL + cosA * halfW },
     { x: car.x + cosA * halfL + sinA * halfW, y: car.y + sinA * halfL - cosA * halfW },
@@ -42,10 +52,10 @@ export function checkCarBuildingCollision(car: Vehicle, building: Building): Col
   ];
 
   const cornersB = [
-    { x: building.x, y: building.y },
-    { x: building.x + building.width, y: building.y },
-    { x: building.x + building.width, y: building.y + building.height },
-    { x: building.x, y: building.y + building.height }
+    { x: box.x, y: box.y },
+    { x: box.x + box.width, y: box.y },
+    { x: box.x + box.width, y: box.y + box.height },
+    { x: box.x, y: box.y + box.height }
   ];
 
   const axes = [
@@ -89,8 +99,8 @@ export function checkCarBuildingCollision(car: Vehicle, building: Building): Col
   }
 
   // Ensure normal points from building to car (away from building center)
-  const bCenterX = building.x + building.width / 2;
-  const bCenterY = building.y + building.height / 2;
+  const bCenterX = box.x + box.width / 2;
+  const bCenterY = box.y + box.height / 2;
   const dirX = car.x - bCenterX;
   const dirY = car.y - bCenterY;
   if (dirX * smallestAxisX + dirY * smallestAxisY < 0) {
@@ -106,6 +116,60 @@ export function checkCarBuildingCollision(car: Vehicle, building: Building): Col
   };
 }
 
+// Check intersection between rotated car box and AABB building using SAT
+export function checkCarBuildingCollision(car: Vehicle, building: Building): CollisionResult {
+  if (building.type === 'gas_station_canopy') {
+    for (const sub of GAS_STATION_STRUCTURAL_SUB_BOXES) {
+      const res = checkCarBoxCollision(car, sub);
+      if (res.collided) {
+        return res;
+      }
+    }
+    return { collided: false, normalX: 0, normalY: 0, depth: 0 };
+  }
+
+  return checkCarBoxCollision(car, building);
+}
+
+export function checkPedestrianBoxCollision(
+  px: number,
+  py: number,
+  radius: number,
+  box: { x: number; y: number; width: number; height: number }
+): { x: number; y: number; collided: boolean } {
+  const closestX = Math.max(box.x, Math.min(px, box.x + box.width));
+  const closestY = Math.max(box.y, Math.min(py, box.y + box.height));
+
+  const distX = px - closestX;
+  const distY = py - closestY;
+  const distSq = distX * distX + distY * distY;
+
+  if (distSq < radius * radius && distSq > 0.0001) {
+    const dist = Math.sqrt(distSq);
+    const overlap = radius - dist;
+    const nx = distX / dist;
+    const ny = distY / dist;
+    return {
+      x: px + nx * overlap,
+      y: py + ny * overlap,
+      collided: true
+    };
+  } else if (distSq <= 0.0001) {
+    // Inside box, push out towards nearest edge
+    const dLeft = px - box.x;
+    const dRight = (box.x + box.width) - px;
+    const dTop = py - box.y;
+    const dBottom = (box.y + box.height) - py;
+    const minD = Math.min(dLeft, dRight, dTop, dBottom);
+    if (minD === dLeft) return { x: box.x - radius, y: py, collided: true };
+    if (minD === dRight) return { x: box.x + box.width + radius, y: py, collided: true };
+    if (minD === dTop) return { x: px, y: box.y - radius, collided: true };
+    return { x: px, y: box.y + box.height + radius, collided: true };
+  }
+
+  return { x: px, y: py, collided: false };
+}
+
 // Circle-AABB / Circle-Circle collision for pedestrian against building
 export function checkPedestrianBuildingCollision(
   px: number,
@@ -113,6 +177,21 @@ export function checkPedestrianBuildingCollision(
   radius: number,
   building: Building
 ): { x: number; y: number; collided: boolean } {
+  if (building.type === 'gas_station_canopy') {
+    let currentX = px;
+    let currentY = py;
+    let collidedAny = false;
+    for (const sub of GAS_STATION_STRUCTURAL_SUB_BOXES) {
+      const res = checkPedestrianBoxCollision(currentX, currentY, radius, sub);
+      if (res.collided) {
+        currentX = res.x;
+        currentY = res.y;
+        collidedAny = true;
+      }
+    }
+    return { x: currentX, y: currentY, collided: collidedAny };
+  }
+
   if (building.type === 'park_monument') {
     const cx = building.x + building.width / 2;
     const cy = building.y + building.height / 2;
@@ -411,6 +490,173 @@ export function checkVehicleVehicleCollision(carA: Vehicle, carB: Vehicle): Vehi
   };
 }
 
+// --- STREET PROP HITBOX & COLLISION SYSTEM ---
+export interface PropHitbox {
+  shape: 'circle' | 'box' | 'none';
+  radius?: number;
+  halfWidth?: number;  // extent along prop.angle (local X)
+  halfHeight?: number; // extent perpendicular to prop.angle (local Y)
+  isIndestructible?: boolean;
+  resistance: number;
+  displayNameRu: string;
+}
+
+export function getPropHitbox(prop: StreetProp): PropHitbox {
+  switch (prop.type) {
+    case 'bench':
+      return { shape: 'box', halfWidth: 11, halfHeight: 5, resistance: 0.06, displayNameRu: 'скамейка' };
+    case 'dumpster':
+      return { shape: 'box', halfWidth: 14, halfHeight: 10, resistance: 0.28, displayNameRu: 'мусорный контейнер' };
+    case 'flowerbed':
+      return { shape: 'box', halfWidth: 12, halfHeight: 8, resistance: 0.12, displayNameRu: 'клумба' };
+    case 'bus_stop':
+      return { shape: 'box', halfWidth: 19, halfHeight: 11, resistance: 0.24, displayNameRu: 'автобусная остановка' };
+    case 'kiosk':
+      return { shape: 'box', halfWidth: 13, halfHeight: 13, resistance: 0.38, displayNameRu: 'киоск' };
+    case 'mailbox':
+      return { shape: 'box', halfWidth: 5, halfHeight: 5, resistance: 0.06, displayNameRu: 'почтовый ящик' };
+    case 'playground_swing':
+      return { shape: 'box', halfWidth: 12, halfHeight: 6, resistance: 0.15, displayNameRu: 'детские качели' };
+    case 'garage_door':
+      return { shape: 'box', halfWidth: 11, halfHeight: 5, resistance: 10.0, isIndestructible: true, displayNameRu: 'гаражные ворота' };
+    case 'lamp':
+      return { shape: 'circle', radius: 3.5, resistance: 0.10, displayNameRu: 'парковый фонарь' };
+    case 'lamp_highway':
+      return { shape: 'circle', radius: 3.8, resistance: 0.04, displayNameRu: 'автодорожный фонарь' };
+    case 'lamp_concrete':
+      return { shape: 'box', halfWidth: 4.5, halfHeight: 4.5, resistance: 10.0, isIndestructible: true, displayNameRu: 'старый бетонный столб' };
+    case 'hydrant':
+      return { shape: 'circle', radius: 4.2, resistance: 0.22, displayNameRu: 'пожарный гидрант' };
+    case 'trash_can':
+      return { shape: 'circle', radius: 4.0, resistance: 0.05, displayNameRu: 'урна' };
+    case 'bollard':
+      return { shape: 'circle', radius: 2.8, resistance: 0.03, displayNameRu: 'столбик ограждения' };
+    case 'cone':
+      return { shape: 'circle', radius: 3.0, resistance: 0.01, displayNameRu: 'дорожный конус' };
+    case 'tire_flowerbed':
+      return { shape: 'circle', radius: 7.5, resistance: 0.04, displayNameRu: 'клумба из покрышки' };
+    case 'traffic_light':
+      return { shape: 'circle', radius: 3.2, resistance: 0.08, displayNameRu: 'светофор' };
+    case 'manhole':
+      return { shape: 'none', resistance: 0, displayNameRu: 'канализационный люк' };
+    case 'drain_grate':
+      return { shape: 'none', resistance: 0, displayNameRu: 'ливневая решётка' };
+    default:
+      return { shape: 'circle', radius: 3.0, resistance: 0.05, displayNameRu: 'уличный объект' };
+  }
+}
+
+export function checkPropVehicleCollision(
+  prop: StreetProp,
+  veh: Vehicle
+): { collided: boolean; pushX: number; pushY: number; contactX: number; contactY: number; overlap: number } {
+  const hitbox = getPropHitbox(prop);
+  if (hitbox.shape === 'none') {
+    return { collided: false, pushX: 0, pushY: 0, contactX: prop.x, contactY: prop.y, overlap: 0 };
+  }
+
+  if (hitbox.shape === 'circle') {
+    const res = checkPedestrianVehicleCollision(prop.x, prop.y, hitbox.radius!, veh);
+    if (res.collided) {
+      const pushX = res.x - prop.x;
+      const pushY = res.y - prop.y;
+      const overlap = Math.hypot(pushX, pushY);
+      return {
+        collided: true,
+        pushX,
+        pushY,
+        contactX: (prop.x + res.x) / 2,
+        contactY: (prop.y + res.y) / 2,
+        overlap
+      };
+    }
+    return { collided: false, pushX: 0, pushY: 0, contactX: prop.x, contactY: prop.y, overlap: 0 };
+  }
+
+  // Box hitbox vs Vehicle OBB using 2D Separating Axis Theorem (SAT)
+  const halfHW = hitbox.halfWidth!;
+  const halfHH = hitbox.halfHeight!;
+  const pAngle = prop.angle || 0;
+  const cosP = Math.cos(pAngle);
+  const sinP = Math.sin(pAngle);
+
+  // Broadphase radius check
+  const propRad = Math.hypot(halfHW, halfHH);
+  const vehRad = Math.hypot(veh.length / 2, veh.width / 2);
+  const cdx = veh.x - prop.x;
+  const cdy = veh.y - prop.y;
+  if (cdx * cdx + cdy * cdy > (propRad + vehRad) * (propRad + vehRad)) {
+    return { collided: false, pushX: 0, pushY: 0, contactX: prop.x, contactY: prop.y, overlap: 0 };
+  }
+
+  // 4 corners of prop in world space
+  const propCorners = [
+    { x: prop.x + cosP * halfHW - sinP * halfHH, y: prop.y + sinP * halfHW + cosP * halfHH },
+    { x: prop.x + cosP * halfHW + sinP * halfHH, y: prop.y + sinP * halfHW - cosP * halfHH },
+    { x: prop.x - cosP * halfHW + sinP * halfHH, y: prop.y - sinP * halfHW - cosP * halfHH },
+    { x: prop.x - cosP * halfHW - sinP * halfHH, y: prop.y - sinP * halfHW + cosP * halfHH }
+  ];
+
+  const vehCorners = getCarCorners(veh, 0.6);
+
+  const cosV = Math.cos(veh.angle);
+  const sinV = Math.sin(veh.angle);
+
+  const testAxes = [
+    { x: cosV, y: sinV },
+    { x: -sinV, y: cosV },
+    { x: cosP, y: sinP },
+    { x: -sinP, y: cosP }
+  ];
+
+  let minOverlap = Infinity;
+  let normalX = 0;
+  let normalY = 0;
+
+  for (const axis of testAxes) {
+    let minA = Infinity, maxA = -Infinity;
+    for (const c of propCorners) {
+      const proj = c.x * axis.x + c.y * axis.y;
+      if (proj < minA) minA = proj;
+      if (proj > maxA) maxA = proj;
+    }
+
+    let minB = Infinity, maxB = -Infinity;
+    for (const c of vehCorners) {
+      const proj = c.x * axis.x + c.y * axis.y;
+      if (proj < minB) minB = proj;
+      if (proj > maxB) maxB = proj;
+    }
+
+    const overlap = Math.min(maxA, maxB) - Math.max(minA, minB);
+    if (overlap <= 0) {
+      return { collided: false, pushX: 0, pushY: 0, contactX: prop.x, contactY: prop.y, overlap: 0 };
+    }
+
+    if (overlap < minOverlap) {
+      minOverlap = overlap;
+      normalX = axis.x;
+      normalY = axis.y;
+    }
+  }
+
+  // Ensure normal points from prop toward vehicle
+  const dirDot = cdx * normalX + cdy * normalY;
+  if (dirDot < 0) {
+    normalX = -normalX;
+    normalY = -normalY;
+  }
+
+  return {
+    collided: true,
+    pushX: normalX * minOverlap,
+    pushY: normalY * minOverlap,
+    contactX: prop.x + normalX * (halfHW + halfHH) * 0.4,
+    contactY: prop.y + normalY * (halfHW + halfHH) * 0.4,
+    overlap: minOverlap
+  };
+}
+
 // --- DYNAMIC DAMAGE & DEFORMATION APPLICATION ---
 export function applyVehicleDamageAndDeformation(
   car: Vehicle,
@@ -422,9 +668,7 @@ export function applyVehicleDamageAndDeformation(
   strikerMass: number = 1400,
   isNarrowImpact: boolean = false
 ) {
-  if (!car.damage) {
-    car.damage = createDefaultVehicleDamage(car.length, car.width);
-  }
+  car.damage = ensureVehicleDamage(car);
   if (!car.engineState) {
     car.engineState = createDefaultEngineState(car.type);
   }
@@ -487,59 +731,158 @@ export function applyVehicleDamageAndDeformation(
 
   // Realistic Impact Severity calculation:
   // Starts scaling from 18 px/s (~20 km/h) up to 105 px/s (~110 km/h total loss)
-  const severity = Math.min(1.0, Math.max(0, effectiveSpeed - 16) / 92);
+  let severity = Math.min(1.0, Math.max(0, effectiveSpeed - 16) / 92);
+  if ((car as any).hasHeavySuspension) {
+    severity *= 0.6; // Heavy-duty Bilstein suspension absorbs 40% of the shock energy!
+  }
 
-  // 1. Dynamic Vertex Deformation (Stiffer metal sheet, controlled displacement)
-  if (dmg.deformedVertices && impactSpeed > 20) {
-    const pushStrength = Math.min(4.5, (effectiveSpeed / 75) * 2.0 * Math.sqrt(massRatio));
-    const dentRadius = isNarrowImpact ? 16 : 22 * Math.min(1.3, Math.sqrt(massRatio));
+  // 1. Realistic Directional Softbody Mass-Spring Network with Plastic Strain & Poisson Wrinkling
+  if (dmg.deformedVertices && impactSpeed > 18) {
+    const pushStrength = Math.min(6.5, (effectiveSpeed / 60) * 2.8 * Math.sqrt(massRatio));
+    
+    // Determine local impact vector in car local coordinates
+    const contactDist = Math.hypot(localX, localY) || 1;
+    let impulseX = -localX / contactDist;
+    let impulseY = -localY / contactDist;
 
-    for (const v of dmg.deformedVertices) {
+    // Add tangential scrape component if scraping along surface
+    if (scrapeSpeed > 12) {
+      const tangentX = -impulseY;
+      const tangentY = impulseX;
+      impulseX = impulseX * 0.7 + tangentX * 0.35;
+      impulseY = impulseY * 0.7 + tangentY * 0.35;
+      const impLen = Math.hypot(impulseX, impulseY) || 1;
+      impulseX /= impLen;
+      impulseY /= impLen;
+    }
+
+    // Find closest vertex node index
+    let closestIdx = 0;
+    let minNodeDist = 999999;
+    const totalNodes = dmg.deformedVertices.length;
+    for (let i = 0; i < totalNodes; i++) {
+      const v = dmg.deformedVertices[i];
       const curX = v.localX + v.offsetX;
       const curY = v.localY + v.offsetY;
       const dist = Math.hypot(curX - localX, curY - localY);
-
-      if (dist < dentRadius) {
-        const len = Math.hypot(v.localX, v.localY);
-        if (len > 0.001) {
-          const dirX = -v.localX / len;
-          const dirY = -v.localY / len;
-          const maxDent = len * Math.min(0.22, 0.06 + severity * 0.16 * Math.sqrt(massRatio));
-
-          let falloff = 0;
-          if (isNarrowImpact) {
-            // TRIANGULAR / V-SHAPED WEDGE DENT (for poles, hydrants, building corners):
-            const contactNormX = localX / (halfL || 1);
-            const contactNormY = localY / (halfW || 1);
-            const contactLen = Math.hypot(contactNormX, contactNormY) || 1;
-            const impactLineX = -contactNormX / contactLen;
-            const impactLineY = -contactNormY / contactLen;
-            const tangentX = -impactLineY;
-            const tangentY = impactLineX;
-
-            const perpDist = Math.abs((curX - localX) * tangentX + (curY - localY) * tangentY);
-            const wedgeWidth = 14.0;
-            if (perpDist < wedgeWidth) {
-              const vWedge = 1.0 - (perpDist / wedgeWidth);
-              falloff = Math.pow(vWedge, 1.8);
-            }
-          } else {
-            // Broad circular/elliptical dent
-            falloff = Math.pow((dentRadius - dist) / dentRadius, 1.2);
-          }
-
-          if (falloff > 0) {
-            const addedPush = pushStrength * falloff;
-            const currentOffsetLen = Math.hypot(v.offsetX + dirX * addedPush, v.offsetY + dirY * addedPush);
-
-            if (currentOffsetLen < maxDent) {
-              v.offsetX += dirX * addedPush;
-              v.offsetY += dirY * addedPush;
-            }
-          }
-        }
+      if (dist < minNodeDist) {
+        minNodeDist = dist;
+        closestIdx = i;
       }
     }
+
+    // Propagate plastic strain and elastic jiggle through softbody node lattice
+    for (let offset = -4; offset <= 4; offset++) {
+      const idx = (closestIdx + offset + totalNodes) % totalNodes;
+      const v = dmg.deformedVertices[idx];
+      const len = Math.hypot(v.localX, v.localY) || 1;
+      
+      // Node structural stiffness resistance multiplier based on panel type
+      const structStiffness = v.structuralType === 'door' ? 0.75 :
+                              (v.structuralType === 'quarter' ? 0.85 :
+                              (v.structuralType === 'fender' ? 1.0 : 1.25));
+
+      const absOffset = Math.abs(offset);
+      let weight = 0;
+      let isPoissonBulge = false;
+
+      if (absOffset === 0) {
+        weight = 1.0;
+      } else if (absOffset === 1) {
+        weight = 0.65 * structStiffness;
+      } else if (absOffset === 2) {
+        weight = 0.30 * structStiffness;
+      } else if (absOffset === 3 || absOffset === 4) {
+        // POISSON OUTWARD METAL WRINKLE / BULGE: Metal volume is conserved!
+        weight = 0.18 * severity; 
+        isPoissonBulge = true;
+      }
+
+      if (weight !== 0) {
+        let nodeImpulseX = impulseX;
+        let nodeImpulseY = impulseY;
+
+        if (isPoissonBulge) {
+          const outNormX = v.localX / len;
+          const outNormY = v.localY / len;
+          nodeImpulseX = outNormX;
+          nodeImpulseY = outNormY;
+        }
+
+        const deltaPush = pushStrength * weight;
+        const maxOffset = len * Math.min(0.38, 0.08 + severity * 0.28 * Math.sqrt(massRatio));
+
+        // Apply permanent plastic offset
+        const newOffsetX = v.offsetX + nodeImpulseX * deltaPush;
+        const newOffsetY = v.offsetY + nodeImpulseY * deltaPush;
+        const newLen = Math.hypot(newOffsetX, newOffsetY);
+
+        if (newLen < maxOffset || isPoissonBulge) {
+          v.offsetX = newOffsetX;
+          v.offsetY = newOffsetY;
+        }
+
+        // Accumulate plastic strain (metal yield & crease severity)
+        const strainAdd = Math.abs(deltaPush) / (len * 0.25);
+        v.plasticStrain = Math.min(1.5, (v.plasticStrain || 0) + strainAdd);
+
+        // Inject transient elastic jiggle velocity impulse
+        const jiggleStrength = Math.min(12.0, severity * 14.0 * Math.abs(weight));
+        v.velX = Math.max(-20, Math.min(20, (v.velX || 0) + nodeImpulseX * jiggleStrength));
+        v.velY = Math.max(-20, Math.min(20, (v.velY || 0) + nodeImpulseY * jiggleStrength));
+
+        if (!isFinite(v.offsetX)) v.offsetX = 0;
+        if (!isFinite(v.offsetY)) v.offsetY = 0;
+      }
+    }
+
+    // Calculate asymmetric plastic strain & update softbody frame mechanics
+    let strainFL = 0, strainFR = 0, strainRL = 0, strainRR = 0;
+    for (let i = 0; i < totalNodes; i++) {
+      const st = dmg.deformedVertices[i]?.plasticStrain || 0;
+      if (i >= 14 || i <= 1) strainFR += st;
+      else if (i >= 2 && i <= 5) strainFL += st;
+      else if (i >= 6 && i <= 9) strainRL += st;
+      else strainRR += st;
+    }
+
+    // Frame twist angle drift
+    const frontAsym = (strainFL - strainFR);
+    if (Math.abs(frontAsym) > 0.12) {
+      dmg.steeringDrift = Math.max(-1.0, Math.min(1.0, dmg.steeringDrift + frontAsym * 0.4));
+      dmg.frameBentAngle = (dmg.frameBentAngle || 0) + frontAsym * 0.08;
+    }
+
+    // Buckled hood elevation
+    // Safe index access for polygon vertices
+    const frontTotalStrain = 
+      (dmg.deformedVertices[0]?.plasticStrain || 0) + 
+      (dmg.deformedVertices[1]?.plasticStrain || 0) + 
+      (dmg.deformedVertices[2]?.plasticStrain || 0) + 
+      (dmg.deformedVertices[18]?.plasticStrain || 0) + 
+      (dmg.deformedVertices[19]?.plasticStrain || 0);
+    if (frontTotalStrain > 0.25) {
+      dmg.hoodBuckled = true;
+      dmg.hoodRaisedAmount = Math.min(1.0, frontTotalStrain * 0.65);
+    }
+
+    // Sagging bumper corners
+    if ((dmg.deformedVertices[3]?.plasticStrain || 0) > 0.4) dmg.bumperSagLeft = Math.min(1.0, (dmg.deformedVertices[3]?.plasticStrain || 0) * 0.8);
+    if ((dmg.deformedVertices[17]?.plasticStrain || 0) > 0.4) dmg.bumperSagRight = Math.min(1.0, (dmg.deformedVertices[17]?.plasticStrain || 0) * 0.8);
+
+    // Wheel well clearance check & wheel rub resistance
+    const checkWheelRub = (nodeIdx: number) => {
+      const v = dmg.deformedVertices?.[nodeIdx];
+      if (!v) return;
+      const offsetMag = Math.hypot(v.offsetX || 0, v.offsetY || 0);
+      if (offsetMag > 3.5) {
+        dmg.wheelRubResistance += (offsetMag - 3.5) * 4.0;
+      }
+    };
+    checkWheelRub(3);  // Front-Left wheel well
+    checkWheelRub(17); // Front-Right wheel well
+    checkWheelRub(7);  // Rear-Left wheel well
+    checkWheelRub(13); // Rear-Right wheel well
   }
 
   // 2. Structural crumple & component damage logic (Radiator, Oil pan, Fuel tank, Suspension, Engine & Transmission)
@@ -693,23 +1036,72 @@ export function applyVehicleDamageAndDeformation(
   // 3. Engine smoke & differentiated fire ignition conditions (Frontal Engine Fire vs. Rear Fuel Tank Fire)
   if (eng.radiatorPunctured || eng.oilPunctured || eng.overheatingSteam) {
     dmg.engineSmoking = true;
+    if (eng.radiatorPunctured || eng.overheatingSteam) {
+      if (!dmg.underHoodSteam || dmg.underHoodSteam === 'none') {
+        dmg.underHoodSteam = 'thin';
+      }
+    }
+    if (eng.oilPunctured) {
+      if (!dmg.underHoodSmoke || dmg.underHoodSmoke === 'none') {
+        dmg.underHoodSmoke = 'oil_blue';
+      }
+    }
   }
   const isEngineHot = (eng.temperature ?? 20) > 85;
 
-  if (normX > 0.15 && impactSpeed > 22) {
+  if (normX > 0.15 && impactSpeed > 10) {
     const isFrontFuelRailBroken = (dmg.frontCrumple ?? 0) > 2.2 || severity > 0.38;
     if (isFrontFuelRailBroken) {
       fuel.fuelRailBroken = true;
     }
-  }
 
-  if (!dmg.isFullyBurnt && !dmg.engineFire && !dmg.cabinFire && !dmg.underHoodSmolder && !dmg.fuelTankFire) {
-    // Check FRONTAL collision ignition (Engine Bay fire)
-    // Occurs when the front end strikes at high speed / severe crumple:
-    // High-pressure fuel rail / lines shear, 12V battery shorts with electric arcing, fuel sprays on hot manifold
-    if (normX > 0.15 && impactSpeed > 22) {
-      const isFrontFuelRailBroken = (dmg.frontCrumple ?? 0) > 2.2 || severity > 0.38;
-      if (isFrontFuelRailBroken && (isEngineHot || severity > 0.52 || eng.radiatorPunctured) && Math.random() < 0.04) {
+    // Detailed collision probability calculation (Kmh based)
+    const impactKmh = impactSpeed * 0.36;
+    if (!dmg.underHoodSteam) dmg.underHoodSteam = 'none';
+    if (!dmg.underHoodSmoke) dmg.underHoodSmoke = 'none';
+
+    if (impactKmh >= 25 && impactKmh <= 45) {
+      // Легкий удар (25–45 км/ч / бампер и радиатор):
+      // Шанс пара: 10% (тонкая белая струйка, если треснул бачок).
+      // Шанс дыма: 0%.
+      if (Math.random() < 0.10) {
+        dmg.underHoodSteam = 'thin';
+        dmg.engineSmoking = true;
+      }
+    } else if (impactKmh > 45 && impactKmh <= 75) {
+      // Средний удар (45–75 км/ч / замятие капота):
+      // Шанс пара: 40% (плотное облако).
+      // Шанс сизого масляного дыма: 15%.
+      if (Math.random() < 0.40) {
+        dmg.underHoodSteam = 'dense';
+        dmg.engineSmoking = true;
+      } else if (Math.random() < 0.30) {
+        dmg.underHoodSteam = 'thin';
+        dmg.engineSmoking = true;
+      }
+      
+      if (Math.random() < 0.15) {
+        dmg.underHoodSmoke = 'oil_blue';
+        dmg.engineSmoking = true;
+      }
+    } else if (impactKmh > 75) {
+      // Тяжелый удар (75+ км/ч / двигатель ушел назад):
+      // Шанс пара: 70% (гейзер или плотный).
+      // Шанс дыма: 40% (густой серый дым масла + черный дым проводки).
+      // Шанс открытого пламени: 3%!
+      if (Math.random() < 0.30) {
+        dmg.underHoodSteam = 'geyser';
+        dmg.engineSmoking = true;
+      } else if (Math.random() < 0.80) {
+        dmg.underHoodSteam = 'dense';
+        dmg.engineSmoking = true;
+      }
+      
+      if (Math.random() < 0.40) {
+        dmg.underHoodSmoke = 'oil_gray_wiring_black';
+        dmg.engineSmoking = true;
+      }
+      if (Math.random() < 0.03 && !dmg.isFullyBurnt && !dmg.engineFire && !dmg.cabinFire && !dmg.underHoodSmolder && !dmg.fuelTankFire) {
         dmg.fireOrigin = 'front';
         dmg.underHoodSmolder = true;
         dmg.fireTimer = 0;
@@ -719,15 +1111,19 @@ export function applyVehicleDamageAndDeformation(
         dmg.cabinFire = false;
         dmg.fireProgress = 0;
         dmg.fireIntensity = 0;
+        dmg.underHoodSmoke = 'oil_gray_wiring_black';
         if (car.isPlayerControlled && (world as any).player) {
           addPlayerNotification((world as any).player, '⚠️ Из-под капота повалил едкий серый дым! Повреждена топливная рампа, тление в моторном отсеке!', 'warning');
         }
       }
     }
+  }
+
+  if (!dmg.isFullyBurnt && !dmg.engineFire && !dmg.cabinFire && !dmg.underHoodSmolder && !dmg.fuelTankFire) {
     // Check REAR or TANK AREA collision ignition (Fuel Tank / Puddle fire)
     // Occurs when the rear or side near the fuel tank is crushed:
     // Tank / filler neck punctures, gasoline leaks and flashes from metal friction sparks or hot exhaust
-    else if (normX <= 0.15 && fuel.tankPunctured) {
+    if (normX <= 0.15 && fuel.tankPunctured) {
       const hasIgnitionSource = (scrapeSpeed > 14 || impactSpeed > 30 || severity > 0.44 || isEngineHot);
       if (hasIgnitionSource && Math.random() < 0.04) {
         dmg.fireOrigin = 'rear';
@@ -963,13 +1359,62 @@ export function updateVehicleSystems(car: Vehicle, dt: number, world: GameWorld)
   if (!car.fuelSystem) {
     car.fuelSystem = createDefaultFuelSystem(car.type, !!car.isParked);
   }
-  if (!car.damage) {
-    car.damage = createDefaultVehicleDamage(car.length, car.width);
-  }
+  car.damage = ensureVehicleDamage(car);
 
   const eng = car.engineState;
   const fuel = car.fuelSystem;
   const dmg = car.damage;
+
+  // Step transient softbody elastic jiggle & vibration dynamics
+  if (dmg.deformedVertices) {
+    const kSpring = 160;  // Spring stiffness
+    const cDamping = 18;  // Damping factor
+    const clampedDt = Math.min(0.05, Math.max(0.001, dt));
+
+    for (const v of dmg.deformedVertices) {
+      if (!v) continue;
+      if (v.velX !== undefined && v.velY !== undefined) {
+        let elX = v.elasticX || 0;
+        let elY = v.elasticY || 0;
+        let vx = v.velX;
+        let vy = v.velY;
+
+        if (Math.abs(vx) > 0.01 || Math.abs(vy) > 0.01 || Math.abs(elX) > 0.01 || Math.abs(elY) > 0.01) {
+          // Spring force acceleration: a = -k * x - c * v
+          const accX = -kSpring * elX - cDamping * vx;
+          const accY = -kSpring * elY - cDamping * vy;
+
+          vx += accX * clampedDt;
+          vy += accY * clampedDt;
+
+          elX += vx * clampedDt;
+          elY += vy * clampedDt;
+
+          // Clamp max elastic displacement to 6.0px so it can never blow up
+          elX = Math.max(-6.0, Math.min(6.0, elX));
+          elY = Math.max(-6.0, Math.min(6.0, elY));
+
+          // Heavy velocity damping clamp
+          vx = Math.max(-30.0, Math.min(30.0, vx));
+          vy = Math.max(-30.0, Math.min(30.0, vy));
+
+          if (Math.hypot(elX, elY) < 0.02 && Math.hypot(vx, vy) < 0.02) {
+            elX = 0; elY = 0; vx = 0; vy = 0;
+          }
+
+          if (!isFinite(elX)) elX = 0;
+          if (!isFinite(elY)) elY = 0;
+          if (!isFinite(vx)) vx = 0;
+          if (!isFinite(vy)) vy = 0;
+
+          v.elasticX = elX;
+          v.elasticY = elY;
+          v.velX = vx;
+          v.velY = vy;
+        }
+      }
+    }
+  }
 
   const cosA = Math.cos(car.angle);
   const sinA = Math.sin(car.angle);
@@ -1110,6 +1555,24 @@ export function updateVehicleSystems(car: Vehicle, dt: number, world: GameWorld)
       eng.isSeized = true;
       eng.starterWorking = false;
       eng.engineRPM = 0;
+    }
+  }
+  
+  // --- REALISTIC DRIVING FUEL CONSUMPTION (Influenced by Chip Tuning) ---
+  if (eng.engineRunning && fuel) {
+    let consumptionRate = 0.0003 + (eng.engineRPM / 3000) * 0.0012; // liters per second
+    if ((car as any).hasChiptuning) {
+      consumptionRate *= 0.85; // 15% fuel economy from optimized timing & AFR
+    }
+    const consumedLiters = consumptionRate * dt;
+    const consumedPercent = (consumedLiters / (fuel.tankCapacity || 55)) * 100;
+    fuel.tankLevel = Math.max(0, fuel.tankLevel - consumedPercent);
+    
+    if (fuel.tankLevel <= 0) {
+      fuel.tankLevel = 0;
+      eng.engineRunning = false;
+      eng.engineRPM = 0;
+      eng.engineStalled = true;
     }
   }
   
@@ -1597,7 +2060,7 @@ export function updatePlayerPedestrianPhysics(
     const bld = world.buildings.find(b => b.id === player.insideBuildingId);
     if (bld) {
       const floor = player.currentFloor ?? 0;
-      const layout = generateBuildingLayout(bld, floor);
+      const layout = getBuildingLayout(bld, floor);
 
       // Handle standard movement WASD input inside the building
       let moveX = 0;
@@ -1733,7 +2196,32 @@ export function updatePlayerPedestrianPhysics(
     );
     const legPenalty = isDoubleFracture ? 0.07 : (hasFracture ? 0.18 : (hasLegInjury ? 0.55 : 1.0));
 
-    const canSprint = input.sprint && (!player.needs || player.needs.energy > 5) && !hasLegInjury;
+    // Calculate realistic carried weight and bulky hands penalty
+    const carriedWeight = getPlayerTotalCarriedWeight(player);
+    const leftBulky = !!(player.leftHandItem && (player.leftHandItem.volume || 0) >= 10);
+    const rightBulky = !!(player.rightHandItem && (player.rightHandItem.volume || 0) >= 10);
+    const isCarryingBulky = leftBulky || rightBulky;
+
+    // Weight penalty:
+    // 0 - 8 kg: 1.0 (light, no penalty)
+    // 8 - 25 kg: scales down from 1.0 to 0.75
+    // 25 - 45 kg: scales down from 0.75 to 0.45
+    // 45+ kg: heavily encumbered, scales down to 0.25
+    let weightPenalty = 1.0;
+    if (carriedWeight > 8) {
+      if (carriedWeight <= 25) {
+        weightPenalty = 1.0 - ((carriedWeight - 8) / 17) * 0.25;
+      } else if (carriedWeight <= 45) {
+        weightPenalty = 0.75 - ((carriedWeight - 25) / 20) * 0.30;
+      } else {
+        weightPenalty = Math.max(0.25, 0.45 - ((carriedWeight - 45) / 25) * 0.20);
+      }
+    }
+    if (isCarryingBulky) {
+      weightPenalty *= 0.82; // Holding a big 20L canister or bulky bag slows your stride
+    }
+
+    const canSprint = input.sprint && (!player.needs || player.needs.energy > 5) && !hasLegInjury && carriedWeight < 40 && !isCarryingBulky;
     
     let mPenalty = 0;
     if (player.equippedClothing) {
@@ -1743,7 +2231,7 @@ export function updatePlayerPedestrianPhysics(
         }
       }
     }
-    const mobilityFactor = Math.max(0.2, 1.0 - (mPenalty * 0.01));
+    const mobilityFactor = Math.max(0.2, 1.0 - (mPenalty * 0.01)) * weightPenalty;
     let targetSpeed = (canSprint ? 175 : 95) * legPenalty * mobilityFactor;
 
 
@@ -1929,31 +2417,70 @@ export function updatePlayerPedestrianPhysics(
   if (world) {
     for (const prop of world.props) {
       if (prop.isBroken) continue;
+      const hitbox = getPropHitbox(prop);
+      if (hitbox.shape === 'none') continue;
 
-      let propRadius = 3.0;
-      if (prop.type === 'bench') propRadius = 5.0;
-      else if (prop.type === 'kiosk') propRadius = 12.0;
-      else if (prop.type === 'mailbox') propRadius = 4.5;
-      else if (prop.type === 'cone') propRadius = 2.5;
-      else if (prop.type === 'trash_can') propRadius = 4.0;
-      else if (prop.type === 'bus_stop') propRadius = 10.0;
-      else if (prop.type === 'hydrant') propRadius = 3.5;
-      else if (prop.type === 'traffic_light') propRadius = 3.0;
-      else if (prop.type === 'lamp') propRadius = 3.0;
+      if (hitbox.shape === 'circle') {
+        const propRadius = hitbox.radius!;
+        const dx = newX - prop.x;
+        const dy = newY - prop.y;
+        const distSq = dx * dx + dy * dy;
+        const minDist = pedRadius + propRadius;
 
-      const dx = newX - prop.x;
-      const dy = newY - prop.y;
-      const distSq = dx * dx + dy * dy;
-      const minDist = pedRadius + propRadius;
+        if (distSq < minDist * minDist) {
+          const dist = Math.sqrt(distSq);
+          const overlap = minDist - dist;
+          if (dist > 0.0001) {
+            newX += (dx / dist) * overlap;
+            newY += (dy / dist) * overlap;
+          } else {
+            newX += minDist;
+          }
+        }
+      } else if (hitbox.shape === 'box') {
+        const dx = newX - prop.x;
+        const dy = newY - prop.y;
+        const pAngle = prop.angle || 0;
+        const cosP = Math.cos(pAngle);
+        const sinP = Math.sin(pAngle);
 
-      if (distSq < minDist * minDist) {
-        const dist = Math.sqrt(distSq);
-        const overlap = minDist - dist;
-        if (dist > 0.0001) {
-          newX += (dx / dist) * overlap;
-          newY += (dy / dist) * overlap;
-        } else {
-          newX += minDist;
+        // Pedestrian position in prop's local coordinates
+        const localX = dx * cosP + dy * sinP;
+        const localY = -dx * sinP + dy * cosP;
+
+        const hw = hitbox.halfWidth!;
+        const hh = hitbox.halfHeight!;
+
+        // Closest point on the prop box
+        const closestX = Math.max(-hw, Math.min(localX, hw));
+        const closestY = Math.max(-hh, Math.min(localY, hh));
+
+        const diffX = localX - closestX;
+        const diffY = localY - closestY;
+        const distSq = diffX * diffX + diffY * diffY;
+
+        if (distSq < pedRadius * pedRadius && distSq > 0.0001) {
+          const dist = Math.sqrt(distSq);
+          const overlap = pedRadius - dist;
+          const localPushX = (diffX / dist) * overlap;
+          const localPushY = (diffY / dist) * overlap;
+          newX += localPushX * cosP - localPushY * sinP;
+          newY += localPushX * sinP + localPushY * cosP;
+        } else if (distSq <= 0.0001) {
+          // Inside prop box: push out along closest edge
+          const dLeft = localX + hw;
+          const dRight = hw - localX;
+          const dTop = localY + hh;
+          const dBottom = hh - localY;
+          const minD = Math.min(dLeft, dRight, dTop, dBottom);
+          let localPushX = 0;
+          let localPushY = 0;
+          if (minD === dLeft) localPushX = -(dLeft + pedRadius);
+          else if (minD === dRight) localPushX = (dRight + pedRadius);
+          else if (minD === dTop) localPushY = -(dTop + pedRadius);
+          else localPushY = (dBottom + pedRadius);
+          newX += localPushX * cosP - localPushY * sinP;
+          newY += localPushX * sinP + localPushY * cosP;
         }
       }
     }
@@ -2960,10 +3487,13 @@ export function updateVehiclePhysics(
       const gearRatio = Math.abs(currentGearRatio);
       const v_speed = Math.abs(vehicle.speed);
       
+      const maxSpeedPx = cfg.maxSpeed * 2.7778;
+      const reverseMaxSpeedPx = cfg.reverseMaxSpeed * 2.7778;
+
       // Speed corresponding to redline in current gear
       const speedAtRedline = eng.currentGear === -1 
-        ? cfg.reverseMaxSpeed 
-        : (cfg.maxSpeed * (0.8 / Math.max(0.3, gearRatio))) * 1.05;
+        ? reverseMaxSpeedPx 
+        : (maxSpeedPx * (0.8 / Math.max(0.3, gearRatio))) * 1.05;
 
       const wheelDrivenRPM = idleRPM + (v_speed / Math.max(1, speedAtRedline)) * (redlineRPM - idleRPM);
 
@@ -3140,9 +3670,21 @@ export function updateVehiclePhysics(
     // Apply engine acceleration
     vehicle.speed += engineAccel * dt;
 
+    const maxSpeedPx = cfg.maxSpeed * 2.7778;
+    const reverseMaxSpeedPx = cfg.reverseMaxSpeed * 2.7778;
+
+    // Gear speed limit (cannot exceed max speed of current gear)
+    if (eng && eng.engineRunning && eng.currentGear > 0) {
+      const currentGearRatio = eng.gearRatios[eng.currentGear + 1] !== undefined ? eng.gearRatios[eng.currentGear + 1] : 0.8;
+      const gearMaxSpeedPx = maxSpeedPx * (0.8 / Math.max(0.3, Math.abs(currentGearRatio))) * 1.05;
+      if (vehicle.speed > gearMaxSpeedPx) {
+        vehicle.speed = gearMaxSpeedPx;
+      }
+    }
+
     // Hard speed limits
-    if (vehicle.speed > cfg.maxSpeed) vehicle.speed = cfg.maxSpeed;
-    if (vehicle.speed < -cfg.reverseMaxSpeed) vehicle.speed = -cfg.reverseMaxSpeed;
+    if (vehicle.speed > maxSpeedPx) vehicle.speed = maxSpeedPx;
+    if (vehicle.speed < -reverseMaxSpeedPx) vehicle.speed = -reverseMaxSpeedPx;
     if (Math.abs(vehicle.speed) < 2 && !input.forward && !input.backward) {
       vehicle.speed = 0;
     }
@@ -3302,23 +3844,9 @@ export function updateVehiclePhysics(
       }
     }
 
-    // Rear axle pivot kinematics for AI vehicle turning (front bumper swings outward)
-    const rearAxleDist = cfg.length * 0.35;
-    const wheelBase = cfg.wheelBase || 28;
-
-    if (Math.abs(vehicle.speed) > 0.5 && Math.abs(vehicle.steerAngle) > 0.005) {
-      const angularSpeed = (vehicle.speed / wheelBase) * Math.tan(vehicle.steerAngle);
-      const newCos = Math.cos(vehicle.angle);
-      const newSin = Math.sin(vehicle.angle);
-      const lateralSwingVx = -newSin * rearAxleDist * angularSpeed;
-      const lateralSwingVy = newCos * rearAxleDist * angularSpeed;
-
-      vehicle.vx = newCos * vehicle.speed + lateralSwingVx;
-      vehicle.vy = newSin * vehicle.speed + lateralSwingVy;
-    } else {
-      vehicle.vx = Math.cos(vehicle.angle) * vehicle.speed;
-      vehicle.vy = Math.sin(vehicle.angle) * vehicle.speed;
-    }
+    // Direct linear velocity aligned with vehicle heading (no artificial counter-swerving)
+    vehicle.vx = Math.cos(vehicle.angle) * vehicle.speed;
+    vehicle.vy = Math.sin(vehicle.angle) * vehicle.speed;
   }
 
   // Update position with combined engine velocity and physical knockback momentum
@@ -3630,8 +4158,9 @@ export function updateSkidMarksAndParticles(world: GameWorld, player: Player, dt
           st.radius = Math.max(0.1, st.radius - dt * 1.0); // shrink as oil is consumed
         }
       } else {
-        // coolant cannot burn, put out fire if set
+        // coolant and sand cannot burn, put out fire if set
         st.onFire = false;
+        st.fireIntensity = 0;
       }
 
       // Spawn flame and smoke particles (throttled/scaled with dt to prevent pool saturation)
@@ -3738,6 +4267,10 @@ export function updateSkidMarksAndParticles(world: GameWorld, player: Player, dt
       st.life += dt;
     }
 
+    if (typeof st.alpha !== 'number' || !isFinite(st.alpha)) {
+      st.alpha = st.type === 'oil' ? 0.75 : (st.type === 'coolant' ? 0.65 : 0.45);
+    }
+
     const fadeStart = Math.max(0, st.maxLife - 60);
     if (st.life > fadeStart) {
       st.alpha = Math.max(0, (1 - (st.life - fadeStart) / 60) * (st.type === 'oil' ? 0.75 : (st.type === 'coolant' ? 0.65 : 0.45)));
@@ -3835,34 +4368,133 @@ export function updateSkidMarksAndParticles(world: GameWorld, player: Player, dt
               type: 'spark'
             });
           }
-        } else if (car.damage.underHoodSmolder) {
-          // Phase 1: Smoldering under hood — acrid grey smoke billows up, no open flames!
-          world.particles.push({
-            x: hoodX + (Math.random() * 8 - 4),
-            y: hoodY + (Math.random() * 8 - 4),
-            vx: -cosA * 8 + (Math.random() * 14 - 7),
-            vy: -sinA * 8 - 22 + (Math.random() * 14 - 7),
-            radius: 4.5 + Math.random() * 5.5,
-            color: Math.random() < 0.6 ? '#64748b' : '#94a3b8',
-            alpha: 0.78,
-            life: 0,
-            maxLife: 0.75 + Math.random() * 0.45,
-            type: 'engine_smoke'
-          });
         } else {
-          // Normal steam / engine radiator vapor
-          world.particles.push({
-            x: hoodX + (Math.random() * 6 - 3),
-            y: hoodY + (Math.random() * 6 - 3),
-            vx: -cosA * 15 + (Math.random() * 20 - 10),
-            vy: -sinA * 15 + (Math.random() * 20 - 10),
-            radius: 3 + Math.random() * 4,
-            color: '#94a3b8',
-            alpha: 0.60,
-            life: 0,
-            maxLife: 0.6 + Math.random() * 0.4,
-            type: 'engine_smoke'
-          });
+          // Detailed under-hood steam and smoke rendering
+          const steamType = car.damage.underHoodSteam || 'none';
+          const smokeType = car.damage.underHoodSmolder ? 'oil_gray_wiring_black' : (car.damage.underHoodSmoke || 'none');
+
+          let hasRenderedSteam = false;
+          let hasRenderedSmoke = false;
+
+          // 1. STEAM GENERATION
+          if (steamType === 'thin') {
+            hasRenderedSteam = true;
+            if (Math.random() < 0.45) {
+              world.particles.push({
+                x: hoodX + (Math.random() * 2 - 1),
+                y: hoodY + (Math.random() * 2 - 1),
+                vx: -cosA * 4 + (Math.random() * 4 - 2),
+                vy: -sinA * 4 - 18 + (Math.random() * 4 - 2), // rising thin stream
+                radius: 1.8 + Math.random() * 2.2,
+                color: '#f8fafc',
+                alpha: 0.45,
+                life: 0,
+                maxLife: 0.5 + Math.random() * 0.3,
+                type: 'engine_smoke'
+              });
+            }
+          } else if (steamType === 'dense') {
+            hasRenderedSteam = true;
+            if (Math.random() < 0.85) {
+              world.particles.push({
+                x: hoodX + (Math.random() * 6 - 3),
+                y: hoodY + (Math.random() * 6 - 3),
+                vx: -cosA * 6 + (Math.random() * 10 - 5),
+                vy: -sinA * 6 - 15 + (Math.random() * 8 - 4),
+                radius: 7 + Math.random() * 6,
+                color: '#f8fafc', // specified dense white steam color
+                alpha: 0.72,
+                life: 0,
+                maxLife: 0.9 + Math.random() * 0.5,
+                type: 'engine_smoke'
+              });
+            }
+          } else if (steamType === 'geyser') {
+            hasRenderedSteam = true;
+            const geyserCount = Math.floor(Math.random() * 2) + 1;
+            for (let g = 0; g < geyserCount; g++) {
+              world.particles.push({
+                x: hoodX + (Math.random() * 4 - 2),
+                y: hoodY + (Math.random() * 4 - 2),
+                vx: -cosA * 12 + (Math.random() * 8 - 4),
+                vy: -sinA * 12 - 40 - Math.random() * 20, // powerful geyser upwards blast
+                radius: 5 + Math.random() * 5,
+                color: '#f8fafc',
+                alpha: 0.85,
+                life: 0,
+                maxLife: 0.4 + Math.random() * 0.3,
+                type: 'engine_smoke'
+              });
+            }
+          }
+
+          // 2. SMOKE GENERATION
+          if (smokeType === 'oil_blue') {
+            hasRenderedSmoke = true;
+            if (Math.random() < 0.60) {
+              world.particles.push({
+                x: hoodX + (Math.random() * 6 - 3),
+                y: hoodY + (Math.random() * 6 - 3),
+                vx: -cosA * 5 + (Math.random() * 12 - 6),
+                vy: -sinA * 5 - 12 + (Math.random() * 10 - 5),
+                radius: 6 + Math.random() * 5,
+                color: '#64748b', // specified blue-gray oil smoke color
+                alpha: 0.65,
+                life: 0,
+                maxLife: 0.8 + Math.random() * 0.4,
+                type: 'engine_smoke'
+              });
+            }
+          } else if (smokeType === 'oil_gray_wiring_black') {
+            hasRenderedSmoke = true;
+            if (Math.random() < 0.75) {
+              // Thick gray oil smoke
+              world.particles.push({
+                x: hoodX + (Math.random() * 8 - 4),
+                y: hoodY + (Math.random() * 8 - 4),
+                vx: -cosA * 6 + (Math.random() * 16 - 8),
+                vy: -sinA * 6 - 22 + (Math.random() * 14 - 7),
+                radius: 8 + Math.random() * 7,
+                color: '#475569', // thick gray oil smoke
+                alpha: 0.80,
+                life: 0,
+                maxLife: 1.1 + Math.random() * 0.5,
+                type: 'engine_smoke'
+              });
+            }
+            if (Math.random() < 0.55) {
+              // Acrid black wiring smoke
+              world.particles.push({
+                x: hoodX + (Math.random() * 6 - 3),
+                y: hoodY + (Math.random() * 6 - 3),
+                vx: -cosA * 4 + (Math.random() * 12 - 6),
+                vy: -sinA * 4 - 28 + (Math.random() * 12 - 6),
+                radius: 5 + Math.random() * 6,
+                color: '#0f172a', // black wiring color
+                alpha: 0.88,
+                life: 0,
+                maxLife: 0.9 + Math.random() * 0.4,
+                type: 'engine_smoke'
+              });
+            }
+          }
+
+          // Fallback to standard white radiator steam if no other smoke/steam generated but smoking flag is set
+          if (!hasRenderedSteam && !hasRenderedSmoke) {
+            const fallbackColor = (car.engineState?.overheatingSteam) ? '#f8fafc' : '#94a3b8';
+            world.particles.push({
+              x: hoodX + (Math.random() * 6 - 3),
+              y: hoodY + (Math.random() * 6 - 3),
+              vx: -cosA * 15 + (Math.random() * 20 - 10),
+              vy: -sinA * 15 + (Math.random() * 20 - 10),
+              radius: 3 + Math.random() * 4,
+              color: fallbackColor,
+              alpha: 0.60,
+              life: 0,
+              maxLife: 0.6 + Math.random() * 0.4,
+              type: 'engine_smoke'
+            });
+          }
         }
       }
     }
@@ -4001,132 +4633,193 @@ export function updateBreakablePropsAndLivingWorld(world: GameWorld, player: Pla
       continue;
     }
 
-    const vehiclesToCheck = vehGrid ? vehGrid.queryRadius(prop.x, prop.y, 40, scratchVehicleSet) : world.vehicles;
-    // Check prop collision against vehicles (using mathematically accurate OBB collision check)
+    const vehiclesToCheck = vehGrid ? vehGrid.queryRadius(prop.x, prop.y, 45, scratchVehicleSet) : world.vehicles;
+    // Check prop collision against vehicles using exact OBB & Circle Hitbox detection
     for (const veh of vehiclesToCheck) {
-      // Define a custom physical radius/buffer for each prop type to determine collision intersection
-      let propRadius = 3.0;
-      if (prop.type === 'bench') propRadius = 5.0;
-      else if (prop.type === 'kiosk') propRadius = 12.0;
-      else if (prop.type === 'mailbox') propRadius = 4.5;
-      else if (prop.type === 'cone') propRadius = 2.5;
-      else if (prop.type === 'trash_can') propRadius = 4.0;
-      else if (prop.type === 'bus_stop') propRadius = 10.0;
-      else if (prop.type === 'hydrant') propRadius = 3.5;
-      else if (prop.type === 'traffic_light') propRadius = 3.0;
-      else if (prop.type === 'lamp') propRadius = 3.0;
-
-      // Local transformed coordinates relative to vehicle center & rotation
-      const dx = prop.x - veh.x;
-      const dy = prop.y - veh.y;
-      const cosA = Math.cos(veh.angle);
-      const sinA = Math.sin(veh.angle);
-
-      const localX = dx * cosA + dy * sinA;
-      const localY = -dx * sinA + dy * cosA;
-
-      const halfL = veh.length / 2;
-      const halfW = veh.width / 2;
-
-      // If the prop's physical footprint overlaps the car's bounding box
-      if (Math.abs(localX) <= (halfL + propRadius) && Math.abs(localY) <= (halfW + propRadius)) {
-        if (Math.abs(veh.speed) < 12) {
-          // Slow speed: push vehicle out of the prop so it cannot pass through it
-          const res = checkPedestrianVehicleCollision(prop.x, prop.y, propRadius, veh);
-          if (res.collided) {
-            const pushX = res.x - prop.x;
-            const pushY = res.y - prop.y;
-            veh.x -= pushX * 1.02;
-            veh.y -= pushY * 1.02;
-            
-            // Only stop velocity moving towards the prop; allow driving away freely
-            const pushLen = Math.hypot(pushX, pushY) || 1;
-            const nx = pushX / pushLen;
-            const ny = pushY / pushLen;
-            const velInto = veh.vx * -nx + veh.vy * -ny;
-            if (velInto > 0) {
-              veh.vx += nx * velInto;
-              veh.vy += ny * velInto;
-              veh.speed = Math.hypot(veh.vx, veh.vy) * Math.sign(veh.speed || 1);
-            }
-          }
-          continue;
-        }
-
-        // Break prop!
-        prop.isBroken = true;
-
-        // If this was a master traffic light, break the intersection signal!
-        if (prop.type === 'traffic_light' && prop.isMasterLight && prop.intersectionId) {
-          const inter = world.intersections.find(i => i.id === prop.intersectionId);
-          if (inter) {
-            inter.isSignalLost = true;
-            trafficDiagnostics.log('light', `SIGNAL LOST: Master control box destroyed at ${inter.id.toUpperCase()}`, undefined, inter.id);
+      const hitbox = getPropHitbox(prop);
+      if (hitbox.shape === 'none') {
+        // Non-blocking flush surface props (manhole, drain grate)
+        if (prop.type === 'manhole') {
+          const dx = veh.x - prop.x;
+          const dy = veh.y - prop.y;
+          if (dx * dx + dy * dy < 144 && Math.abs(veh.speed) > 18) {
+            sound.playManholeClank();
           }
         }
+        continue;
+      }
 
-        const rawImpactSpeed = Math.abs(veh.speed);
-        const pType = prop.type as string;
+      const col = checkPropVehicleCollision(prop, veh);
+      if (!col.collided) continue;
 
-        // Determine frangibility & physical resistance factor for this prop
-        let propResistance = 0.12; // Default for breakable urban props
-        if (pType === 'kiosk') propResistance = 0.35;
-        else if (pType === 'bus_stop') propResistance = 0.22;
-        else if (pType === 'hydrant') propResistance = 0.22;
-        else if (pType === 'traffic_light') propResistance = 0.08; // Frangible breakaway aluminum traffic light
-        else if (pType === 'lamp') propResistance = 0.12; // Frangible breakaway lamp post
-        else if (pType === 'bench' || pType === 'trash_can' || pType === 'mailbox') propResistance = 0.06;
-        else if (pType === 'cone' || pType === 'bollard' || pType === 'flowerbed') propResistance = 0.01;
+      // Special case: indestructible props (e.g. old concrete lamppost, garage doors)
+      if (hitbox.isIndestructible) {
+        veh.x += col.pushX * 1.05;
+        veh.y += col.pushY * 1.05;
 
-        prop.breakVX = Math.cos(veh.angle) * Math.max(35, rawImpactSpeed) * 0.8;
-        prop.breakVY = Math.sin(veh.angle) * Math.max(35, rawImpactSpeed) * 0.8;
-        prop.breakSpin = (Math.random() - 0.5) * 10;
+        const impactSpeed = Math.hypot(veh.vx, veh.vy);
 
-        sound.playPropBreak(prop.type);
+        // Hard bounce back from immovable reinforced concrete or steel post
+        veh.vx = -veh.vx * 0.22;
+        veh.vy = -veh.vy * 0.22;
+        veh.speed = -veh.speed * 0.22;
 
-        // Vehicle damage & deformation scaled by prop resistance
-        applyVehicleDamageAndDeformation(veh, prop.x, prop.y, rawImpactSpeed * propResistance, 15, world, 120, true);
+        const contactX = col.contactX;
+        const contactY = col.contactY;
+
+        // Heavy vehicle damage & deformation proportional to impact speed
+        applyVehicleDamageAndDeformation(veh, contactX, contactY, impactSpeed, 12, world, 14000, true);
+
+        sound.playCollision(Math.min(1.0, impactSpeed / 80));
 
         if (player && (veh.isPlayerControlled || (player.isInVehicle && player.currentVehicleId === veh.id))) {
-          const propNameRu = pType === 'traffic_light' ? 'светофор' : (pType === 'lamp' ? 'фонарный столб' : (pType === 'kiosk' ? 'киоск' : 'городской объект'));
-          applyDriverVehicleCrashTrauma(player, rawImpactSpeed, propNameRu, propResistance, veh);
+          applyDriverVehicleCrashTrauma(player, impactSpeed, hitbox.displayNameRu, 1.2, veh);
+        } else {
+          if (isVehicleDisabledOrCrashed(veh)) {
+            veh.turnSignal = 'hazard';
+            veh.brakeLightsOn = true;
+            veh.targetSpeed = 0;
+            veh.speed = 0;
+            veh.aiState = 'stopping_obstacle';
+          } else {
+            veh.aiState = 'reversing';
+          }
         }
 
-        if (prop.type === 'hydrant') {
-          prop.waterFountainTimer = 35;
-          sound.playWaterSpray();
-          // Create puddle under hydrant
-          world.puddles.push({
-            id: `puddle_hydrant_${Date.now()}`,
-            x: prop.x,
-            y: prop.y,
-            radiusX: 25,
-            radiusY: 18,
-            angle: 0,
-            rippleTimer: 0
-          });
-        }
-
-        // Spawn debris particles
-        const particleColor = prop.type === 'hydrant' ? '#ef4444' : (prop.type === 'bench' ? '#b45309' : '#64748b');
-        for (let d = 0; d < 8; d++) {
+        // Concrete chip dust debris
+        for (let d = 0; d < 6; d++) {
           const dAngle = Math.random() * Math.PI * 2;
-          const dSpeed = 40 + Math.random() * 80;
+          const dSpeed = 25 + Math.random() * 60;
           world.particles.push({
-            x: prop.x,
-            y: prop.y,
+            x: contactX,
+            y: contactY,
             vx: Math.cos(dAngle) * dSpeed,
             vy: Math.sin(dAngle) * dSpeed,
-            radius: 2 + Math.random() * 3,
-            color: particleColor,
-            alpha: 0.9,
+            radius: 1.5 + Math.random() * 2,
+            color: '#a8a29e',
+            alpha: 0.85,
             life: 0,
-            maxLife: 0.4 + Math.random() * 0.4,
+            maxLife: 0.35 + Math.random() * 0.3,
             type: 'debris'
           });
         }
-        break;
+        continue; // Indestructible: remains standing and intact
       }
+
+      if (Math.abs(veh.speed) < 12) {
+        // Slow speed: push vehicle out of the prop so it cannot pass through it
+        veh.x += col.pushX * 1.02;
+        veh.y += col.pushY * 1.02;
+        
+        const pushLen = Math.hypot(col.pushX, col.pushY) || 1;
+        const nx = col.pushX / pushLen;
+        const ny = col.pushY / pushLen;
+        const velInto = veh.vx * -nx + veh.vy * -ny;
+        if (velInto > 0) {
+          veh.vx += nx * velInto;
+          veh.vy += ny * velInto;
+          veh.speed = Math.hypot(veh.vx, veh.vy) * Math.sign(veh.speed || 1);
+        }
+        continue;
+      }
+
+      // Break prop!
+      prop.isBroken = true;
+
+      // If this was a master traffic light, break the intersection signal!
+      if (prop.type === 'traffic_light' && prop.isMasterLight && prop.intersectionId) {
+        const inter = world.intersections.find(i => i.id === prop.intersectionId);
+        if (inter) {
+          inter.isSignalLost = true;
+          trafficDiagnostics.log('light', `SIGNAL LOST: Master control box destroyed at ${inter.id.toUpperCase()}`, undefined, inter.id);
+        }
+      }
+
+      const rawImpactSpeed = Math.abs(veh.speed);
+      const propResistance = hitbox.resistance;
+
+      prop.breakVX = Math.cos(veh.angle) * Math.max(35, rawImpactSpeed) * 0.8;
+      prop.breakVY = Math.sin(veh.angle) * Math.max(35, rawImpactSpeed) * 0.8;
+      prop.breakAngle = veh.angle + (Math.random() - 0.5) * 0.4;
+      prop.breakSpin = (Math.random() - 0.5) * 10;
+
+      sound.playPropBreak(prop.type);
+
+      // Vehicle damage & deformation scaled by prop resistance
+      applyVehicleDamageAndDeformation(veh, col.contactX, col.contactY, rawImpactSpeed * propResistance, 15, world, 120, true);
+
+      if (player && (veh.isPlayerControlled || (player.isInVehicle && player.currentVehicleId === veh.id))) {
+        applyDriverVehicleCrashTrauma(player, rawImpactSpeed, hitbox.displayNameRu, propResistance, veh);
+      }
+
+      if (prop.type === 'hydrant') {
+        prop.waterFountainTimer = 35;
+        sound.playWaterSpray();
+        // Create puddle under hydrant
+        world.puddles.push({
+          id: `puddle_hydrant_${Date.now()}`,
+          x: prop.x,
+          y: prop.y,
+          radiusX: 25,
+          radiusY: 18,
+          angle: 0,
+          rippleTimer: 0
+        });
+      }
+
+      // Spawn tailored debris particles
+      let debrisColor = '#64748b';
+      let debrisCount = 8;
+      if (prop.type === 'hydrant') { debrisColor = '#ef4444'; debrisCount = 10; }
+      else if (prop.type === 'bench') { debrisColor = '#b45309'; debrisCount = 10; }
+      else if (prop.type === 'bus_stop') { debrisColor = '#bae6fd'; debrisCount = 14; }
+      else if (prop.type === 'dumpster') { debrisColor = '#15803d'; debrisCount = 12; }
+      else if (prop.type === 'trash_can') { debrisColor = '#475569'; debrisCount = 8; }
+      else if (prop.type === 'kiosk') { debrisColor = '#0284c7'; debrisCount = 14; }
+      else if (prop.type === 'mailbox') { debrisColor = '#2563eb'; debrisCount = 8; }
+      else if (prop.type === 'flowerbed') { debrisColor = '#15803d'; debrisCount = 10; }
+      else if (prop.type === 'tire_flowerbed') { debrisColor = '#1e293b'; debrisCount = 10; }
+      else if (prop.type === 'cone') { debrisColor = '#ea580c'; debrisCount = 6; }
+      else if (prop.type === 'bollard') { debrisColor = '#334155'; debrisCount = 6; }
+      else if (prop.type === 'traffic_light') { debrisColor = '#eab308'; debrisCount = 10; }
+      else if (prop.type === 'lamp_highway' || prop.type === 'lamp') { debrisColor = '#94a3b8'; debrisCount = 10; }
+
+      for (let d = 0; d < debrisCount; d++) {
+        const dAngle = Math.random() * Math.PI * 2;
+        const dSpeed = 40 + Math.random() * 80;
+        world.particles.push({
+          x: col.contactX,
+          y: col.contactY,
+          vx: Math.cos(dAngle) * dSpeed,
+          vy: Math.sin(dAngle) * dSpeed,
+          radius: 1.5 + Math.random() * 2.8,
+          color: debrisColor,
+          alpha: 0.9,
+          life: 0,
+          maxLife: 0.4 + Math.random() * 0.4,
+          type: 'debris'
+        });
+      }
+
+      if (prop.type === 'lamp_highway' || prop.type === 'lamp' || prop.type === 'traffic_light') {
+        for (let g = 0; g < 5; g++) {
+          const gAngle = Math.random() * Math.PI * 2;
+          const gSpeed = 30 + Math.random() * 55;
+          world.particles.push({
+            x: prop.x,
+            y: prop.y,
+            vx: Math.cos(gAngle) * gSpeed,
+            vy: Math.sin(gAngle) * gSpeed,
+            radius: 1.2 + Math.random() * 1.5,
+            color: '#fef08a',
+            alpha: 0.95,
+            life: 0,
+            maxLife: 0.4 + Math.random() * 0.3,
+            type: 'debris'
+          });
+        }
+      }
+      break;
     }
   }
 

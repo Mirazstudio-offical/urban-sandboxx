@@ -370,6 +370,76 @@ export function drawGearToolItem(ctx: CanvasRenderingContext2D, itemId: string):
       return true;
     }
 
+    case 'extinguisher_empty': {
+      drawShadow(ctx, 6.8, 2.6, 7.8, 0.22);
+
+      // Red steel cylinder body with scuffed/faded finish
+      ctx.fillStyle = '#dc2626';
+      ctx.beginPath();
+      ctx.roundRect(-4.5, -4.5, 9, 12.5, 2);
+      ctx.fill();
+
+      // Specular highlight band
+      drawGlossBand(ctx, -3.2, -4.5, 1.5, 12.5, 0.25);
+
+      // White specification label (scuffed/discharged)
+      ctx.fillStyle = '#f1f5f9';
+      ctx.fillRect(-4.5, -0.5, 9, 5);
+      ctx.fillStyle = '#475569';
+      ctx.fillRect(-3.5, 0.5, 7, 1);
+      ctx.fillRect(-3.5, 2.2, 4.5, 0.8);
+      // Red DISCHARGED / EMPTY diagonal stamp
+      ctx.fillStyle = '#ef4444';
+      ctx.fillRect(-4, 1.8, 8, 0.6);
+
+      // Top valve neck
+      ctx.fillStyle = '#94a3b8';
+      ctx.fillRect(-1.5, -6.5, 3, 2);
+
+      // Depressed black discharge lever (flat against handle - fully squeezed)
+      ctx.fillStyle = '#18181b';
+      ctx.fillRect(-1.2, -6.8, 5, 1.4);
+
+      // Empty pressure gauge with needle in the far RED left empty zone
+      ctx.fillStyle = '#cbd5e1';
+      ctx.beginPath();
+      ctx.arc(-2.5, -5.8, 1.4, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#ef4444'; // Red empty zone
+      ctx.beginPath();
+      ctx.arc(-2.5, -5.8, 0.9, 0, Math.PI * 2);
+      ctx.fill();
+      // Needle pointing left to 0 psi
+      ctx.strokeStyle = '#0f172a';
+      ctx.lineWidth = 0.5;
+      ctx.beginPath();
+      ctx.moveTo(-2.5, -5.8);
+      ctx.lineTo(-3.1, -5.8);
+      ctx.stroke();
+
+      // Broken yellow plastic inspection tamper seal dangling
+      ctx.fillStyle = '#f59e0b';
+      ctx.fillRect(0.5, -5.8, 1, 2.2);
+
+      // Drooping flexible discharge hose
+      ctx.strokeStyle = '#18181b';
+      ctx.lineWidth = 1.4;
+      ctx.beginPath();
+      ctx.moveTo(1, -6);
+      ctx.quadraticCurveTo(6, -2, 3, 5);
+      ctx.stroke();
+
+      // White dry powder retardant residue dusting around the nozzle tip
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
+      ctx.beginPath();
+      ctx.arc(3, 5, 1.3, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(3.6, 5.8, 0.7, 0, Math.PI * 2);
+      ctx.fill();
+      return true;
+    }
+
     case 'pocket_knife': {
       drawShadow(ctx, 8.5, 2.8, 7.5, 0.22);
 
@@ -811,6 +881,60 @@ export function drawGearToolItem(ctx: CanvasRenderingContext2D, itemId: string):
       return true;
     }
 
+    case 'zippo_empty': {
+      drawShadow(ctx, 6.8, 2.6, 7.5, 0.22);
+
+      // Brushed brass casing body
+      ctx.fillStyle = '#b45309';
+      ctx.beginPath();
+      ctx.roundRect(-4.5, -1, 9, 8.5, 1);
+      ctx.fill();
+      ctx.fillStyle = '#d97706';
+      ctx.beginPath();
+      ctx.roundRect(-4, -0.5, 8, 7.5, 0.8);
+      ctx.fill();
+
+      // Open hinged lid tilted left
+      ctx.fillStyle = '#d97706';
+      ctx.beginPath();
+      ctx.moveTo(-4.5, -1);
+      ctx.lineTo(-8.5, -6.5);
+      ctx.lineTo(-4.5, -8.5);
+      ctx.lineTo(-1, -3);
+      ctx.closePath();
+      ctx.fill();
+
+      // Perforated steel chimney
+      ctx.fillStyle = '#94a3b8';
+      ctx.fillRect(-2, -5, 4.5, 4);
+      // Holes
+      ctx.fillStyle = '#18181b';
+      ctx.beginPath();
+      ctx.arc(0, -3, 0.6, 0, Math.PI * 2);
+      ctx.arc(1.5, -3, 0.6, 0, Math.PI * 2);
+      ctx.arc(0, -4.2, 0.6, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Serrated spark flint wheel
+      ctx.fillStyle = '#475569';
+      ctx.beginPath();
+      ctx.arc(2.8, -3.8, 1.2, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Dry, charred black wick with frayed tip (NO FLAME - fluid exhausted)
+      ctx.strokeStyle = '#18181b';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(0.5, -4.5);
+      ctx.lineTo(0.5, -6.5);
+      ctx.stroke();
+
+      // Charred frayed cotton fibers
+      ctx.fillStyle = '#52525b';
+      ctx.fillRect(0, -7, 1.2, 0.8);
+      return true;
+    }
+
     case 'compass': {
       drawShadow(ctx, 7.5, 2.8, 7.5, 0.22);
 
@@ -1040,6 +1164,385 @@ export function drawGearToolItem(ctx: CanvasRenderingContext2D, itemId: string):
       // Hook eye & spring latch
       ctx.fillStyle = '#f59e0b';
       ctx.fillRect(7.2, -4, 1.2, 3);
+      return true;
+    }
+
+    case 'fuel_canister': {
+      drawShadow(ctx, 8.5, 3.2, 7.8, 0.25);
+
+      // Stamped steel 20L military Jerrycan body (olive drab)
+      ctx.fillStyle = '#3f4f2c';
+      ctx.beginPath();
+      ctx.roundRect(-7, -5, 14, 12, 2.5);
+      ctx.fill();
+
+      // Recessed stamped structural X-rib indentations on side panel
+      ctx.strokeStyle = '#2d381f';
+      ctx.lineWidth = 1.4;
+      ctx.beginPath();
+      ctx.moveTo(-5, -3); ctx.lineTo(5, 5);
+      ctx.moveTo(5, -3);  ctx.lineTo(-5, 5);
+      ctx.stroke();
+
+      // Highlight inner bevel for pressed steel ribs
+      ctx.strokeStyle = '#4d6036';
+      ctx.lineWidth = 0.7;
+      ctx.beginPath();
+      ctx.moveTo(-4.5, -3); ctx.lineTo(4.5, 5);
+      ctx.moveTo(4.5, -3);  ctx.lineTo(-4.5, 5);
+      ctx.stroke();
+
+      // Triple tube carry handle on top (classic 3-handle Jerrycan design)
+      ctx.fillStyle = '#2d381f';
+      ctx.beginPath();
+      // Outer carry frame
+      ctx.roundRect(-5.5, -8, 11, 3.5, 1.2);
+      ctx.fill();
+      // Handle cutouts (dual grip slots)
+      ctx.fillStyle = 'rgba(15, 23, 42, 0.85)';
+      ctx.fillRect(-4.5, -7, 3.2, 1.8);
+      ctx.fillRect(1.3, -7, 3.2, 1.8);
+      // Three distinct round handle bars
+      ctx.fillStyle = '#4d6036';
+      ctx.fillRect(-5.2, -8, 1.4, 3.2);
+      ctx.fillRect(-0.7, -8, 1.4, 3.2);
+      ctx.fillRect(3.8, -8, 1.4, 3.2);
+
+      // Offset spout neck with heavy cam-lock sealed cap
+      ctx.fillStyle = '#1c1917';
+      ctx.fillRect(4, -8.5, 2.8, 2);
+      ctx.fillStyle = '#ca8a04'; // Brass lock cap
+      ctx.fillRect(3.6, -9.2, 3.6, 1.2);
+
+      // Retention chain & cotter pin
+      ctx.strokeStyle = '#cbd5e1';
+      ctx.lineWidth = 0.7;
+      ctx.beginPath();
+      ctx.moveTo(3.6, -8.6);
+      ctx.quadraticCurveTo(2.5, -7.5, 3.2, -6.5);
+      ctx.stroke();
+
+      // Stenciled white text and hazard markings
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+      ctx.font = 'bold 3.2px monospace';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('20L', -0.5, 1);
+
+      // Flammable diamond hazard badge (Red)
+      ctx.fillStyle = '#dc2626';
+      ctx.beginPath();
+      ctx.moveTo(-0.5, -2);
+      ctx.lineTo(1.2, -0.5);
+      ctx.lineTo(-0.5, 1);
+      ctx.lineTo(-2.2, -0.5);
+      ctx.closePath();
+      ctx.fill();
+
+      // Steel gloss reflection band
+      drawGlossBand(ctx, -6, -5, 1.4, 12, 0.28);
+      return true;
+    }
+
+    case 'canister_empty': {
+      drawShadow(ctx, 8.5, 3.2, 7.8, 0.22);
+
+      // Stamped steel 20L military Jerrycan body (scuffed olive drab)
+      ctx.fillStyle = '#3f4f2c';
+      ctx.beginPath();
+      ctx.roundRect(-7, -5, 14, 12, 2.5);
+      ctx.fill();
+
+      // Structural X-rib indentations
+      ctx.strokeStyle = '#2d381f';
+      ctx.lineWidth = 1.4;
+      ctx.beginPath();
+      ctx.moveTo(-5, -3); ctx.lineTo(5, 5);
+      ctx.moveTo(5, -3);  ctx.lineTo(-5, 5);
+      ctx.stroke();
+
+      // Three carry handles on top
+      ctx.fillStyle = '#2d381f';
+      ctx.beginPath();
+      ctx.roundRect(-5.5, -8, 11, 3.5, 1.2);
+      ctx.fill();
+      ctx.fillStyle = 'rgba(15, 23, 42, 0.85)';
+      ctx.fillRect(-4.5, -7, 3.2, 1.8);
+      ctx.fillRect(1.3, -7, 3.2, 1.8);
+      ctx.fillStyle = '#4d6036';
+      ctx.fillRect(-5.2, -8, 1.4, 3.2);
+      ctx.fillRect(-0.7, -8, 1.4, 3.2);
+      ctx.fillRect(3.8, -8, 1.4, 3.2);
+
+      // Open, unscrewed spout neck (dark hollow opening)
+      ctx.fillStyle = '#1c1917';
+      ctx.fillRect(4, -8.5, 2.8, 2.2);
+      ctx.fillStyle = '#0f172a'; // Deep empty hollow hole
+      ctx.beginPath();
+      ctx.ellipse(5.4, -8.5, 1.2, 0.6, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Brass cap dangling open on its retention chain
+      ctx.strokeStyle = '#cbd5e1';
+      ctx.lineWidth = 0.7;
+      ctx.beginPath();
+      ctx.moveTo(4, -8);
+      ctx.quadraticCurveTo(2.5, -7, 2, -5.5);
+      ctx.stroke();
+      ctx.fillStyle = '#ca8a04'; // Open dangling cap
+      ctx.beginPath();
+      ctx.roundRect(1.2, -6, 1.8, 2.5, 0.6);
+      ctx.fill();
+
+      // Dried fuel drip stain running down beneath the spout
+      ctx.fillStyle = 'rgba(28, 25, 23, 0.35)';
+      ctx.beginPath();
+      ctx.moveTo(4.5, -5);
+      ctx.lineTo(6, -5);
+      ctx.lineTo(5.5, 0);
+      ctx.lineTo(4.8, 2);
+      ctx.closePath();
+      ctx.fill();
+
+      // Bare metal paint scratch wear along bottom rim
+      ctx.fillStyle = '#94a3b8';
+      ctx.fillRect(-6.5, 6, 2, 0.8);
+      ctx.fillRect(2, 6, 3, 0.8);
+
+      // Faded stenciled 20L marking
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
+      ctx.font = 'bold 3.2px monospace';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('20L', -0.5, 1);
+      return true;
+    }
+
+    case 'wallet': {
+      drawShadow(ctx, 8.5, 3.5, 7.5, 0.24);
+
+      // Outer rich textured leather (dark chestnut brown)
+      ctx.fillStyle = '#3e2723';
+      ctx.beginPath();
+      ctx.roundRect(-7.5, -5.5, 15, 11, 1.8);
+      ctx.fill();
+
+      // Leather edge perimeter stitching
+      ctx.strokeStyle = '#8d6e63';
+      ctx.lineWidth = 0.6;
+      ctx.setLineDash([1.2, 0.8]);
+      ctx.strokeRect(-6.8, -4.8, 13.6, 9.6);
+      ctx.setLineDash([]);
+
+      // Center bi-fold vertical spine indent
+      ctx.strokeStyle = '#1b0000';
+      ctx.lineWidth = 1.0;
+      ctx.beginPath();
+      ctx.moveTo(0, -5.5);
+      ctx.lineTo(0, 5.5);
+      ctx.stroke();
+
+      // Banknote peeking out from the top bill compartment
+      ctx.fillStyle = '#166534';
+      ctx.beginPath();
+      ctx.roundRect(-6, -7, 12, 2.5, 0.6);
+      ctx.fill();
+      ctx.fillStyle = '#4ade80';
+      ctx.fillRect(-4.5, -6.6, 9, 0.8);
+
+      // Gold metal snap button / emblem on right fold
+      ctx.fillStyle = '#f59e0b';
+      ctx.beginPath();
+      ctx.arc(3.8, 0, 1.3, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#fef3c7';
+      ctx.beginPath();
+      ctx.arc(3.5, -0.3, 0.5, 0, Math.PI * 2);
+      ctx.fill();
+      return true;
+    }
+
+    case 'plastic_bag': {
+      drawShadow(ctx, 8.5, 3.8, 8, 0.18);
+
+      // Thin crinkled plastic handles on top
+      ctx.fillStyle = 'rgba(241, 245, 249, 0.9)';
+      ctx.strokeStyle = '#cbd5e1';
+      ctx.lineWidth = 0.7;
+
+      // Left handle loop
+      ctx.beginPath();
+      ctx.roundRect(-6, -9, 3.2, 7, 1.2);
+      ctx.fill();
+      ctx.stroke();
+      ctx.clearRect(-4.8, -7.5, 1.2, 4.5);
+
+      // Right handle loop
+      ctx.beginPath();
+      ctx.roundRect(2.8, -9, 3.2, 7, 1.2);
+      ctx.fill();
+      ctx.stroke();
+      ctx.clearRect(3.6, -7.5, 1.2, 4.5);
+
+      // Main plastic bag body (white grocery sack with crinkles)
+      ctx.fillStyle = '#f8fafc';
+      ctx.beginPath();
+      ctx.moveTo(-6.5, -3);
+      ctx.lineTo(6.5, -3);
+      ctx.quadraticCurveTo(7.5, 4, 6.8, 7.5);
+      ctx.quadraticCurveTo(0, 8.5, -6.8, 7.5);
+      ctx.quadraticCurveTo(-7.5, 4, -6.5, -3);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+
+      // Fold crinkle shading
+      ctx.strokeStyle = 'rgba(148, 163, 184, 0.5)';
+      ctx.lineWidth = 0.7;
+      ctx.beginPath();
+      ctx.moveTo(-4, -1); ctx.lineTo(-1, 5);
+      ctx.moveTo(3, -2); ctx.lineTo(1, 4);
+      ctx.stroke();
+
+      // Store print logo (cheerful supermarket basket / stripes)
+      ctx.fillStyle = '#0284c7';
+      ctx.beginPath();
+      ctx.roundRect(-3.5, 0.5, 7, 3, 0.8);
+      ctx.fill();
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(-2.5, 1.5, 5, 0.9);
+      return true;
+    }
+
+    case 'sandbag': {
+      drawShadow(ctx, 8.5, 4.5, 7.5, 0.25);
+
+      // Main burlap canvas sandbag body (bulging, heavy 3D shape)
+      const grad = ctx.createLinearGradient(-8, -7, 8, 8);
+      grad.addColorStop(0, '#d97706'); // Warm canvas amber top highlight
+      grad.addColorStop(0.35, '#b45309'); // Rich burlap body
+      grad.addColorStop(0.75, '#92400e'); // Shaded canvas base
+      grad.addColorStop(1, '#78350f');   // Deep bottom shadow
+
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.moveTo(-3, -7.5); // Cinched neck top
+      ctx.quadraticCurveTo(-6.5, -6, -8, -1);
+      ctx.quadraticCurveTo(-9, 4, -7, 7.5);
+      ctx.quadraticCurveTo(0, 9.5, 7, 7.5);
+      ctx.quadraticCurveTo(9, 4, 8, -1);
+      ctx.quadraticCurveTo(6.5, -6, 3, -7.5);
+      ctx.quadraticCurveTo(0, -8.2, -3, -7.5);
+      ctx.closePath();
+      ctx.fill();
+
+      // Burlap woven texture lines (fine cross-hatching)
+      ctx.strokeStyle = 'rgba(69, 26, 3, 0.25)';
+      ctx.lineWidth = 0.6;
+      ctx.beginPath();
+      // Vertical fabric weave curves
+      for (let x = -6; x <= 6; x += 3) {
+        ctx.moveTo(x, -5);
+        ctx.quadraticCurveTo(x * 1.15, 1, x * 0.9, 7);
+      }
+      // Horizontal fabric weave curves
+      for (let y = -4; y <= 6; y += 2.5) {
+        ctx.moveTo(-7, y);
+        ctx.quadraticCurveTo(0, y + 1.2, 7, y);
+      }
+      ctx.stroke();
+
+      // Flared ruffled top canvas mouth above neck tie
+      ctx.fillStyle = '#d9a05b';
+      ctx.beginPath();
+      ctx.moveTo(-3, -7.5);
+      ctx.quadraticCurveTo(-4.5, -10.5, -3.5, -11.5);
+      ctx.quadraticCurveTo(0, -9.5, 3.5, -11.5);
+      ctx.quadraticCurveTo(4.5, -10.5, 3, -7.5);
+      ctx.closePath();
+      ctx.fill();
+
+      // Heavy twined rope/cord neck tie
+      ctx.fillStyle = '#fef08a';
+      ctx.strokeStyle = '#78350f';
+      ctx.lineWidth = 0.8;
+      ctx.beginPath();
+      ctx.roundRect(-3.5, -8, 7, 2.2, 0.8);
+      ctx.fill();
+      ctx.stroke();
+
+      // Cord knot details
+      ctx.fillStyle = '#eab308';
+      ctx.beginPath();
+      ctx.arc(0, -6.9, 1.2, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Stencil stamp label on burlap "ПЕСОК 1KG"
+      ctx.fillStyle = 'rgba(69, 26, 3, 0.85)';
+      ctx.font = 'bold 3.2px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('ПЕСОК', 0, 0);
+      ctx.font = 'bold 2.8px monospace';
+      ctx.fillText('1 KG', 0, 3.5);
+
+      // Leaking fine golden sand grain speckles at seam
+      ctx.fillStyle = '#fef08a';
+      ctx.beginPath();
+      ctx.arc(4.5, 6, 0.8, 0, Math.PI * 2);
+      ctx.arc(6, 7.2, 0.6, 0, Math.PI * 2);
+      ctx.arc(-5, 6.8, 0.7, 0, Math.PI * 2);
+      ctx.fill();
+
+      return true;
+    }
+
+    case 'sack_empty': {
+      drawShadow(ctx, 8, 3.5, 6, 0.18);
+
+      // Folded/flat empty burlap canvas bag
+      const grad = ctx.createLinearGradient(-7, -5, 7, 6);
+      grad.addColorStop(0, '#d9a05b'); // Light empty canvas
+      grad.addColorStop(0.5, '#b45309');
+      grad.addColorStop(1, '#78350f');
+
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.moveTo(-6.5, -5);
+      ctx.lineTo(6.5, -5);
+      ctx.quadraticCurveTo(7.5, 2, 6.5, 6.5);
+      ctx.quadraticCurveTo(0, 7.8, -6.5, 6.5);
+      ctx.quadraticCurveTo(-7.5, 2, -6.5, -5);
+      ctx.closePath();
+      ctx.fill();
+
+      // Dark open hollow bag mouth at top
+      ctx.fillStyle = '#451a03';
+      ctx.beginPath();
+      ctx.ellipse(0, -5, 5.5, 1.8, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Inner shadow inside mouth
+      ctx.fillStyle = '#1c0a00';
+      ctx.beginPath();
+      ctx.ellipse(0, -5, 4.2, 1.2, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Burlap cloth fold lines & edge stitching
+      ctx.strokeStyle = '#78350f';
+      ctx.lineWidth = 0.7;
+      ctx.beginPath();
+      ctx.moveTo(-5, -3); ctx.lineTo(-2, 4);
+      ctx.moveTo(4, -3); ctx.lineTo(1, 5);
+      ctx.stroke();
+
+      // Perimeter seam stitching
+      ctx.strokeStyle = '#fef08a';
+      ctx.lineWidth = 0.5;
+      ctx.setLineDash([1.2, 1.2]);
+      ctx.strokeRect(-5.8, -4, 11.6, 10);
+      ctx.setLineDash([]);
+
       return true;
     }
 

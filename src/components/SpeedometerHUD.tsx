@@ -661,6 +661,12 @@ export const SpeedometerHUD: React.FC<SpeedometerHUDProps> = ({
                   {/* Icon */}
                   <text x="0" y="16" textAnchor="middle" fontSize="6.5" fill={isLowFuel ? '#f59e0b' : '#64748b'} fontFamily="monospace" fontWeight="bold">БАК</text>
                   {isLowFuel && <circle cx="12" cy="-12" r="2" fill="#f59e0b" className="animate-ping" />}
+                  {vehicle?.hasGBO && (
+                    <g transform="translate(14, 11)">
+                      <rect x="-8" y="-4" width="16" height="8" rx="1.5" fill="#0f766e" stroke="#22d3ee" strokeWidth="0.6" />
+                      <text x="0" y="1.5" textAnchor="middle" fontSize="4.5" fill="#e0f2fe" fontWeight="black" fontFamily="sans-serif">GBO</text>
+                    </g>
+                  )}
                 </g>
 
                 {/* TELL-TALE WARNING LIGHTS IN CENTER BOTTOM */}

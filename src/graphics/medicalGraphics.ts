@@ -744,6 +744,66 @@ export function drawMedicalItem(ctx: CanvasRenderingContext2D, itemId: string): 
       return true;
     }
 
+    case 'morphine': {
+      drawShadow(ctx, 6.5, 2.5, 7.5, 0.2);
+
+      // Glass ampoule body outline
+      ctx.fillStyle = 'rgba(241, 245, 249, 0.85)';
+      ctx.beginPath();
+      ctx.roundRect(-4.5, -3, 9, 11, 2);
+      ctx.fill();
+
+      // Liquid chamber filled with amber analgesic solution
+      ctx.fillStyle = '#f59e0b';
+      ctx.beginPath();
+      ctx.roundRect(-3.8, -1.5, 7.6, 9, 1.2);
+      ctx.fill();
+
+      // Deeper golden meniscus curve at top of liquid
+      ctx.fillStyle = '#d97706';
+      ctx.beginPath();
+      ctx.ellipse(0, -1.5, 3.8, 1, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // White pharmaceutical paper label
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(-4, 0.5, 8, 5.5);
+
+      // Red Rx medical cross & dosage lines on label
+      drawMedicalCross(ctx, -2, 3.2, 2.6, '#dc2626');
+      ctx.fillStyle = '#18181b';
+      ctx.fillRect(0.5, 2.2, 2.8, 0.7);
+      ctx.fillRect(0.5, 3.6, 2.2, 0.6);
+
+      // Narrow tapered neck of ampoule
+      ctx.fillStyle = 'rgba(241, 245, 249, 0.9)';
+      ctx.beginPath();
+      ctx.moveTo(-2.5, -3);
+      ctx.lineTo(-1.2, -5.5);
+      ctx.lineTo(1.2, -5.5);
+      ctx.lineTo(2.5, -3);
+      ctx.closePath();
+      ctx.fill();
+
+      // Snap-off break ceramic score ring (white / cyan)
+      ctx.fillStyle = '#38bdf8';
+      ctx.fillRect(-1.5, -5.8, 3, 0.8);
+
+      // Melted sealed glass bulb tip on top
+      ctx.fillStyle = 'rgba(241, 245, 249, 0.95)';
+      ctx.beginPath();
+      ctx.moveTo(-1.2, -5.8);
+      ctx.lineTo(-2, -7.5);
+      ctx.quadraticCurveTo(0, -9.5, 2, -7.5);
+      ctx.lineTo(1.2, -5.8);
+      ctx.closePath();
+      ctx.fill();
+
+      // Glass specular reflection band
+      drawGlossBand(ctx, -3.5, -2.5, 1.2, 10, 0.45);
+      return true;
+    }
+
     default:
       return false;
   }

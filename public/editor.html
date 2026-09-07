@@ -586,6 +586,251 @@ canvas#editorCanvas {
   font-family: monospace;
   color: var(--accent);
 }
+
+/* --- INTERIOR STUDIO MODAL & COMPONENTS --- */
+#interior-studio-modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(4, 7, 13, 0.95);
+  backdrop-filter: blur(8px);
+  display: none;
+  flex-direction: column;
+  z-index: 3000;
+  color: var(--text-main);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  user-select: none;
+}
+.is-header {
+  height: 52px;
+  background: var(--bg-panel);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 16px;
+  gap: 16px;
+  flex-shrink: 0;
+}
+.is-bld-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  font-weight: 600;
+}
+.is-bld-badge {
+  background: rgba(56, 189, 248, 0.15);
+  color: var(--accent);
+  padding: 3px 8px;
+  border-radius: 6px;
+  font-size: 12px;
+  border: 1px solid rgba(56, 189, 248, 0.3);
+}
+.is-floor-tabs-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  overflow-x: auto;
+  padding: 4px 0;
+}
+.is-floor-tab {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  padding: 4px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s ease;
+}
+.is-floor-tab:hover {
+  background: var(--bg-hover);
+  color: var(--text-main);
+}
+.is-floor-tab.active {
+  background: var(--accent);
+  color: #030712;
+  border-color: var(--accent);
+  font-weight: 700;
+}
+.is-body {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+  position: relative;
+}
+.is-left-panel {
+  width: 280px;
+  background: var(--bg-panel);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+.is-tools-tabs {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  background: var(--bg-dark);
+  border-bottom: 1px solid var(--border);
+  padding: 4px;
+  gap: 4px;
+}
+.is-tool-tab-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  padding: 6px 2px;
+  border-radius: 4px;
+  font-size: 11px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  cursor: pointer;
+}
+.is-tool-tab-btn.active {
+  background: var(--bg-card);
+  color: var(--accent);
+  font-weight: 600;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.4);
+}
+.is-tool-options {
+  padding: 12px;
+  overflow-y: auto;
+  flex: 1;
+}
+.is-furniture-search {
+  width: 100%;
+  margin-bottom: 8px;
+  background: var(--bg-dark);
+  border: 1px solid var(--border);
+  color: var(--text-main);
+  padding: 6px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+}
+.is-cat-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 10px;
+}
+.is-cat-chip {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  padding: 2px 7px;
+  border-radius: 4px;
+  font-size: 10px;
+  cursor: pointer;
+}
+.is-cat-chip.active {
+  background: rgba(56, 189, 248, 0.2);
+  color: var(--accent);
+  border-color: var(--accent);
+  font-weight: 600;
+}
+.is-furniture-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  max-height: calc(100vh - 270px);
+  overflow-y: auto;
+  padding-right: 4px;
+}
+.is-furniture-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 6px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  font-size: 11px;
+}
+.is-furniture-card:hover {
+  background: var(--bg-hover);
+  border-color: var(--accent);
+  transform: translateY(-1px);
+}
+.is-furniture-card.active {
+  border-color: var(--accent);
+  background: rgba(56, 189, 248, 0.15);
+}
+.is-furniture-preview {
+  width: 32px;
+  height: 32px;
+  margin-bottom: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.is-center-canvas-wrap {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  background: #020617;
+  position: relative;
+  overflow: hidden;
+}
+.is-canvas-toolbar {
+  height: 38px;
+  background: rgba(15, 23, 42, 0.85);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 12px;
+  font-size: 12px;
+  z-index: 10;
+}
+.is-canvas-container {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+}
+#interior-canvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+}
+.is-statusbar {
+  height: 24px;
+  background: var(--bg-panel);
+  border-top: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 12px;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+.is-right-panel {
+  width: 260px;
+  background: var(--bg-panel);
+  border-left: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  padding: 12px;
+  flex-shrink: 0;
+}
+.is-right-panel h4 {
+  font-size: 13px;
+  color: var(--accent);
+  margin-bottom: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
 </style>
 </head>
 <body>
@@ -661,6 +906,10 @@ canvas#editorCanvas {
     <button class="tool-btn" id="tool-intersection" onclick="setTool('intersection')" title="Перекресток со светофорами [I]">
       <span>🚦</span>
       <span class="tool-hotkey">I</span>
+    </button>
+    <button class="tool-btn" id="tool-interior-btn" onclick="openInteriorStudioFromSelection()" title="Редактор интерьеров здания [E]">
+      <span>🛋️</span>
+      <span class="tool-hotkey">E</span>
     </button>
 
     <div class="tool-separator"></div>
@@ -764,6 +1013,96 @@ canvas#editorCanvas {
 <div id="toast">Действие выполнено</div>
 
 <!-- HELP MODAL -->
+
+<!-- INTERIOR STUDIO MODAL -->
+<div id="interior-studio-modal">
+  <!-- Top Header -->
+  <div class="is-header">
+    <div class="is-bld-info">
+      <span>🏢</span>
+      <span id="is-bld-title">Здание</span>
+      <span class="is-bld-badge" id="is-bld-type-badge">residential</span>
+      <span style="color:var(--text-muted);font-size:11px;" id="is-bld-size-label">120x80 м</span>
+    </div>
+
+    <!-- Floor switcher tabs -->
+    <div class="is-floor-tabs-bar" id="is-floor-tabs"></div>
+
+    <div style="display:flex;align-items:center;gap:8px;">
+      <button class="btn sm" onclick="isAddFloor()" title="Добавить новый этаж">+ Этаж</button>
+      <button class="btn sm" onclick="isDuplicateCurrentFloor()" title="Дублировать текущий этаж на новый">📑 Копия</button>
+      <button class="btn sm danger" onclick="isDeleteCurrentFloor()" title="Удалить текущий этаж">🗑️</button>
+      <div style="width:1px;height:24px;background:var(--border);margin:0 4px;"></div>
+      <button class="btn primary sm" onclick="saveAndCloseInteriorStudio()">💾 Сохранить</button>
+      <button class="btn icon-only sm" onclick="closeInteriorStudio()">✕</button>
+    </div>
+  </div>
+
+  <!-- Main Body -->
+  <div class="is-body">
+    <!-- Left Sidebar: Tools & Catalog -->
+    <div class="is-left-panel">
+      <div class="is-tools-tabs">
+        <button class="is-tool-tab-btn active" id="is-tab-select" onclick="isSetTool('select')">
+          <span>👆</span><span>Выбор</span>
+        </button>
+        <button class="is-tool-tab-btn" id="is-tab-wall" onclick="isSetTool('wall')">
+          <span>🧱</span><span>Стена</span>
+        </button>
+        <button class="is-tool-tab-btn" id="is-tab-room" onclick="isSetTool('room')">
+          <span>📐</span><span>Комната</span>
+        </button>
+        <button class="is-tool-tab-btn" id="is-tab-zone" onclick="isSetTool('zone')">
+          <span>🚪</span><span>Зоны</span>
+        </button>
+        <button class="is-tool-tab-btn" id="is-tab-furniture" onclick="isSetTool('furniture')">
+          <span>🛋️</span><span>Мебель</span>
+        </button>
+      </div>
+
+      <div class="is-tool-options" id="is-tool-options-panel">
+        <!-- Dynamic options for selected tool injected by JS -->
+      </div>
+    </div>
+
+    <!-- Center Canvas Viewport -->
+    <div class="is-center-canvas-wrap">
+      <div class="is-canvas-toolbar">
+        <div style="display:flex;align-items:center;gap:6px;">
+          <button class="btn sm icon-only" onclick="isZoomStep(-0.25)">−</button>
+          <span id="is-zoom-label" style="min-width:44px;text-align:center;">100%</span>
+          <button class="btn sm icon-only" onclick="isZoomStep(0.25)">+</button>
+          <button class="btn sm" onclick="isResetView()">🎯 Центр</button>
+        </div>
+
+        <div style="display:flex;align-items:center;gap:8px;">
+          <label style="display:flex;align-items:center;gap:4px;cursor:pointer;">
+            <input type="checkbox" id="is-grid-snap" checked onchange="isToggleSnap(this.checked)">
+            <span>Сетка 2м</span>
+          </label>
+          <button class="btn sm" onclick="isClearFloor()">🧹 Очистить</button>
+          <button class="btn sm" onclick="isExportFloorJson()">📋 Экспорт</button>
+          <button class="btn sm" onclick="isImportFloorJson()">📥 Импорт</button>
+        </div>
+      </div>
+
+      <div class="is-canvas-container" id="is-canvas-container">
+        <canvas id="interior-canvas"></canvas>
+      </div>
+
+      <div class="is-statusbar">
+        <span id="is-cursor-pos">X: 0 | Y: 0</span>
+        <span id="is-status-msg">Инструмент: Выбор (клик для выбора, drag для перемещения, R для поворота, Del для удаления)</span>
+      </div>
+    </div>
+
+    <!-- Right Sidebar: Properties Inspector -->
+    <div class="is-right-panel" id="is-right-inspector">
+      <!-- Injected by JS -->
+    </div>
+  </div>
+</div>
+
 <div id="help-modal" onclick="if(event.target===this) toggleHelpModal()">
   <div class="modal-card">
     <div class="modal-header">
@@ -1320,7 +1659,9 @@ function updateSubtoolBar() {
         <label>Объект:</label>
         <select onchange="toolConfigs.prop.type=this.value;">
           <option value="bench">Скамейка</option>
-          <option value="lamp">Фонарь</option>
+          <option value="lamp_highway">Автомобильный фонарь (с выносом)</option>
+          <option value="lamp_concrete">Старый бетонный столб (несбиваемый)</option>
+          <option value="lamp">Парковый фонарь</option>
           <option value="bus_stop">Автобусная остановка</option>
           <option value="kiosk">Киоск / Ларек</option>
           <option value="trash_can">Урна</option>
@@ -2521,6 +2862,20 @@ function updateInspector() {
       </div>
     `;
   }
+  if (layer === 'buildings') {
+    const floors = e.floorsCount || (e.interiors ? Object.keys(e.interiors).length : 1);
+    fieldsHtml += `
+      <div class="prop-field">
+        <label>Этажность здания:</label>
+        <input type="number" min="1" max="50" value="${floors}" onchange="updateBuildingFloorsCount(parseInt(this.value))">
+      </div>
+      <div style="margin-top: 12px; margin-bottom: 8px;">
+        <button class="btn primary" style="width: 100%; justify-content: center; padding: 10px; font-size: 13px; font-weight: 600; gap: 8px;" onclick="openInteriorStudioForBuilding('${e.id}')">
+          🛋️ Редактор интерьера (${floors} эт.)
+        </button>
+      </div>
+    `;
+  }
 
   contentView.innerHTML = `
     <div class="prop-card">
@@ -2744,15 +3099,15 @@ function saveToFile() {
   showToast('Файл map.json скачан!');
 }
 
-function saveToLocalStorageAndPlay() {
+async function saveToLocalStorageAndPlay() {
   try {
-    localStorage.setItem('neon_city_custom_map', JSON.stringify(mapData));
+    await saveCustomMapToStorage(mapData);
     showToast('Сохранено в хранилище игры! Переход в симулятор...');
     setTimeout(() => {
       window.location.href = '/';
     }, 600);
   } catch (err) {
-    alert('Карта слишком велика для localStorage, скачайте map.json: ' + err.message);
+    alert('Ошибка сохранения карты: ' + err.message);
   }
 }
 
@@ -2826,6 +3181,7 @@ window.addEventListener('keydown', (e) => {
   else if (e.key === 's' || e.key === 'ы') { setTool('sidewalk'); }
   else if (e.key === 'k' || e.key === 'л') { setTool('parking'); }
   else if (e.key === 'i' || e.key === 'ш') { setTool('intersection'); }
+  else if (e.key === 'e' || e.key === 'у') { openInteriorStudioFromSelection(); }
   else if (e.key === 'm' || e.key === 'ь') { setTool('measure'); }
   else if (e.key === 'f' || e.key === 'а') { centerCamera(); }
   else if (e.key === 'Escape') {
@@ -2836,6 +3192,1532 @@ window.addEventListener('keydown', (e) => {
     updateInspector();
   }
 });
+
+// =======================================================
+// INTERIOR STUDIO MODULE FOR MAP EDITOR
+// =======================================================
+let isBuilding = null;
+let isFloor = 0;
+let isLayout = null;
+let isTool = 'select'; // 'select' | 'wall' | 'room' | 'zone' | 'furniture'
+let isSelectedItem = null; // { type: 'furniture'|'wall'|'room'|'zone', index: number }
+let isHoveredItem = null;
+let isPan = { x: 50, y: 50 };
+let isZoom = 2.5; // Scale factor
+let isIsDragging = false;
+let isDragStart = { x: 0, y: 0 };
+let isDragItemStart = { x: 0, y: 0 };
+let isToolDrawing = false;
+let isDrawStart = { x: 0, y: 0 };
+let isDrawCurrent = { x: 0, y: 0 };
+let isSnapGrid = true;
+let isGridSize = 2; // 2 meters grid snap
+let isSelectedFurnitureDef = null;
+let isFurnitureCategory = 'all';
+let isFurnitureSearchQuery = '';
+let isHistory = [];
+let isHistoryIndex = -1;
+
+const IS_FURNITURE_CATALOG = [
+  // Спальня
+  { type: 'bed', name: 'Двуспальная кровать', width: 24, height: 24, color: '#f43f5e', category: 'bedroom', icon: '🛏️' },
+  { type: 'kids_bed', name: 'Детская кровать', width: 18, height: 20, color: '#38bdf8', category: 'bedroom', icon: '🛏️' },
+  { type: 'wardrobe', name: 'Шкаф платяной', width: 18, height: 9, color: '#451a03', category: 'bedroom', icon: '🚪' },
+  { type: 'nightstand', name: 'Тумбочка прикроватная', width: 6, height: 6, color: '#78350f', category: 'bedroom', icon: '📦' },
+  { type: 'bookshelf', name: 'Книжный шкаф', width: 18, height: 6, color: '#7c2d12', category: 'bedroom', icon: '📚' },
+
+  // Гостиная
+  { type: 'sofa', name: 'Мягкий диван', width: 24, height: 10, color: '#475569', category: 'living', icon: '🛋️' },
+  { type: 'tv_cabinet', name: 'Тумба под ТВ', width: 18, height: 6, color: '#1e293b', category: 'living', icon: '📺' },
+  { type: 'tv', name: 'Телевизор плазма', width: 14, height: 3, color: '#0f172a', category: 'living', icon: '🖥️' },
+  { type: 'carpet', name: 'Ковер напольный', width: 32, height: 22, color: '#991b1b', category: 'living', icon: '🧶' },
+  { type: 'plant', name: 'Комнатный фикус', width: 6, height: 6, color: '#15803d', category: 'living', icon: '🪴' },
+  { type: 'bench', name: 'Скамья со спинкой', width: 16, height: 6, color: '#334155', category: 'living', icon: '🪑' },
+
+  // Офис и кабинет
+  { type: 'desk', name: 'Письменный стол', width: 18, height: 10, color: '#334155', category: 'office', icon: '🪵' },
+  { type: 'desk_reception', name: 'Стойка ресепшн', width: 28, height: 10, color: '#1d4ed8', category: 'office', icon: '🏢' },
+  { type: 'computer', name: 'Компьютер / Монитор', width: 7, height: 5, color: '#0f172a', category: 'office', icon: '💻' },
+  { type: 'chair', name: 'Офисное кресло', width: 6, height: 6, color: '#1e293b', category: 'office', icon: '💺' },
+  { type: 'cooler', name: 'Кулер с водой', width: 6, height: 6, color: '#e2e8f0', category: 'office', icon: '💧' },
+  { type: 'server_rack', name: 'Серверная стойка', width: 12, height: 8, color: '#020617', category: 'office', icon: '🖲️' },
+  { type: 'blackboard', name: 'Школьная доска', width: 24, height: 4, color: '#14532d', category: 'office', icon: '📋' },
+  { type: 'whiteboard', name: 'Маркерная доска', width: 20, height: 4, color: '#f8fafc', category: 'office', icon: '📝' },
+  { type: 'trash_can', name: 'Корзина для мусора', width: 5, height: 5, color: '#64748b', category: 'office', icon: '🗑️' },
+  { type: 'mailbox_bank', name: 'Почтовые ячейки', width: 20, height: 5, color: '#475569', category: 'office', icon: '📬' },
+  { type: 'atm', name: 'Банкомат', width: 8, height: 7, color: '#15803d', category: 'office', icon: '🏧' },
+
+  // Кухня
+  { type: 'kitchen_counter', name: 'Кухонный гарнитур', width: 26, height: 9, color: '#0f172a', category: 'kitchen', icon: '🍳' },
+  { type: 'table', name: 'Обеденный стол', width: 16, height: 12, color: '#78350f', category: 'kitchen', icon: '🪑' },
+  { type: 'fridge', name: 'Холодильник', width: 9, height: 9, color: '#e2e8f0', category: 'kitchen', icon: '🧊' },
+  { type: 'vending_machine', name: 'Автомат со снеками', width: 10, height: 8, color: '#dc2626', category: 'kitchen', icon: '🥤' },
+
+  // Ванная комната (без унитазов)
+  { type: 'bath', name: 'Ванна акриловая', width: 20, height: 12, color: '#cbd5e1', category: 'bathroom', icon: '🛁' },
+  { type: 'sink', name: 'Раковина / Умывальник', width: 10, height: 7, color: '#cbd5e1', category: 'bathroom', icon: '🚰' },
+
+  // Магазин
+  { type: 'shelf', name: 'Торговый стеллаж', width: 24, height: 7, color: '#475569', category: 'shop', icon: '🛒' },
+  { type: 'counter', name: 'Прилавок кассовый', width: 22, height: 8, color: '#1e293b', category: 'shop', icon: '🏬' },
+  { type: 'cash_register', name: 'Кассовый аппарат', width: 7, height: 6, color: '#334155', category: 'shop', icon: '📠' },
+  { type: 'freezer_display', name: 'Морозильный ларь', width: 20, height: 10, color: '#94a3b8', category: 'shop', icon: '❄️' },
+
+  // Склад и спец.
+  { type: 'pallet_stack', name: 'Паллета с ящиками', width: 14, height: 14, color: '#b45309', category: 'storage', icon: '📦' },
+  { type: 'radiator', name: 'Батарея отопления', width: 12, height: 3, color: '#e2e8f0', category: 'storage', icon: '♨️' },
+  { type: 'fire_rack', name: 'Пожарный щит', width: 12, height: 4, color: '#dc2626', category: 'storage', icon: '🧯' },
+  { type: 'lockers', name: 'Шкафчики раздевалки', width: 20, height: 6, color: '#475569', category: 'storage', icon: '🗄️' },
+  { type: 'bed_hospital', name: 'Медицинская койка', width: 22, height: 12, color: '#38bdf8', category: 'special', icon: '🏥' },
+  { type: 'exam_table', name: 'Смотровой стол', width: 18, height: 10, color: '#0284c7', category: 'special', icon: '🩺' },
+  { type: 'jail_cot', name: 'Тюремные нары', width: 18, height: 10, color: '#78350f', category: 'special', icon: '⛓️' }
+];
+
+function updateBuildingFloorsCount(count) {
+  if (selectedEntities.length !== 1 || selectedEntities[0].layer !== 'buildings') return;
+  const bld = selectedEntities[0].entity;
+  const oldFloors = bld.floorsCount || (bld.interiors ? Object.keys(bld.interiors).length : 1);
+  const newFloors = Math.max(1, Math.min(50, count));
+  bld.floorsCount = newFloors;
+  if (!bld.interiors) bld.interiors = {};
+
+  // Ensure layouts exist for each floor
+  for (let f = 0; f < newFloors; f++) {
+    if (!bld.interiors[f] && !bld.interiors[String(f)]) {
+      bld.interiors[f] = isCreateDefaultFloorLayout(bld, f);
+    }
+  }
+  pushHistory('Update Building Floors Count');
+  updateInspector();
+  showToast('Этажность здания установлена: ' + newFloors);
+}
+
+function openInteriorStudioFromSelection() {
+  if (selectedEntities.length === 1 && selectedEntities[0].layer === 'buildings') {
+    openInteriorStudioForBuilding(selectedEntities[0].entity.id);
+  } else {
+    showToast('Сначала выберите здание на карте [кликните по нему]', true);
+  }
+}
+
+function openInteriorStudioForBuilding(bldId) {
+  const bld = mapData.buildings.find(b => b.id === bldId);
+  if (!bld) {
+    showToast('Здание не найдено!', true);
+    return;
+  }
+
+  isBuilding = bld;
+  if (!isBuilding.interiors) isBuilding.interiors = {};
+  if (!isBuilding.floorsCount) {
+    isBuilding.floorsCount = Object.keys(isBuilding.interiors).length || 1;
+  }
+
+  isFloor = 0;
+  isLoadFloorLayout(isFloor);
+
+  // Setup UI elements
+  document.getElementById('is-bld-title').textContent = bld.name || bld.id;
+  document.getElementById('is-bld-type-badge').textContent = bld.type || 'standard';
+  document.getElementById('is-bld-size-label').textContent = Math.round(bld.width) + 'x' + Math.round(bld.height) + ' м';
+
+  document.getElementById('interior-studio-modal').style.display = 'flex';
+  isInitCanvas();
+  isResetView();
+  isRenderFloorTabs();
+  isSetTool('select');
+  isPushHistory('Open Floor');
+}
+
+function closeInteriorStudio() {
+  document.getElementById('interior-studio-modal').style.display = 'none';
+  isBuilding = null;
+  isLayout = null;
+  isSelectedItem = null;
+}
+
+function saveAndCloseInteriorStudio() {
+  if (!isBuilding || !isLayout) return;
+  isSaveCurrentFloorToBuilding();
+  pushHistory('Edit Building Interior');
+  closeInteriorStudio();
+  showToast('Интерьер здания успешно сохранен!');
+}
+
+function isSaveCurrentFloorToBuilding() {
+  if (!isBuilding || !isLayout) return;
+  if (!isBuilding.interiors) isBuilding.interiors = {};
+  isBuilding.interiors[isFloor] = JSON.parse(JSON.stringify(isLayout));
+  isBuilding.floorsCount = Math.max(isBuilding.floorsCount || 1, Object.keys(isBuilding.interiors).length);
+}
+
+function isCreateDefaultFloorLayout(bld, floor) {
+  const W = Math.round(bld.width);
+  const H = Math.round(bld.height);
+  const exitZone = { x: Math.max(6, Math.round(W / 2 - 12)), y: H - 18, width: 24, height: 18 };
+  const stairsZone = { x: 10, y: 10, width: 20, height: 20 };
+  const elevatorZone = { x: W - 30, y: 10, width: 20, height: 20 };
+
+  return {
+    buildingId: bld.id,
+    floor: floor,
+    width: W,
+    height: H,
+    rooms: [
+      {
+        name: floor === 0 ? 'Основной Холл' : 'Этаж ' + (floor + 1),
+        x: 6,
+        y: 6,
+        width: W - 12,
+        height: H - 12,
+        color: '#1e293b',
+        floorStyle: (bld.type && bld.type.includes('residential')) ? 'parquet' : 'tile'
+      }
+    ],
+    walls: [
+      { x1: 6, y1: 6, x2: W - 6, y2: 6 },
+      { x1: W - 6, y1: 6, x2: W - 6, y2: H - 6 },
+      { x1: W - 6, y1: H - 6, x2: 6, y2: H - 6 },
+      { x1: 6, y1: H - 6, x2: 6, y2: 6 }
+    ],
+    furniture: [],
+    exitZone: exitZone,
+    stairsZone: stairsZone,
+    elevatorZone: elevatorZone,
+    exits: floor === 0 ? [exitZone] : [],
+    stairs: [stairsZone],
+    elevators: [elevatorZone]
+  };
+}
+
+function isLoadFloorLayout(floor) {
+  isFloor = floor;
+  if (isBuilding.interiors && isBuilding.interiors[floor]) {
+    isLayout = JSON.parse(JSON.stringify(isBuilding.interiors[floor]));
+  } else if (isBuilding.interiors && isBuilding.interiors[String(floor)]) {
+    isLayout = JSON.parse(JSON.stringify(isBuilding.interiors[String(floor)]));
+  } else {
+    isLayout = isCreateDefaultFloorLayout(isBuilding, floor);
+  }
+
+  // Ensure all arrays exist
+  if (!isLayout.rooms) isLayout.rooms = [];
+  if (!isLayout.walls) isLayout.walls = [];
+  if (!isLayout.furniture) isLayout.furniture = [];
+  if (!isLayout.stairs) isLayout.stairs = isLayout.stairsZone ? [isLayout.stairsZone] : [];
+  if (!isLayout.elevators) isLayout.elevators = isLayout.elevatorZone ? [isLayout.elevatorZone] : [];
+  if (!isLayout.exits) isLayout.exits = isLayout.exitZone ? [isLayout.exitZone] : [];
+
+  isSelectedItem = null;
+  isHoveredItem = null;
+  isRenderFloorTabs();
+  isUpdateRightInspector();
+  isRenderCanvas();
+}
+
+function isRenderFloorTabs() {
+  const container = document.getElementById('is-floor-tabs');
+  if (!container || !isBuilding) return;
+
+  const count = Math.max(1, isBuilding.floorsCount || Object.keys(isBuilding.interiors || {}).length || 1);
+  let html = '';
+  for (let f = 0; f < count; f++) {
+    const active = f === isFloor ? 'active' : '';
+    html += '<button class="is-floor-tab ' + active + '" onclick="isSwitchFloor(' + f + ')">Этаж ' + (f + 1) + '</button>';
+  }
+  container.innerHTML = html;
+}
+
+function isSwitchFloor(f) {
+  isSaveCurrentFloorToBuilding();
+  isLoadFloorLayout(f);
+  isPushHistory('Switch Floor ' + (f + 1));
+}
+
+function isAddFloor() {
+  isSaveCurrentFloorToBuilding();
+  const nextFloor = isBuilding.floorsCount || Object.keys(isBuilding.interiors || {}).length;
+  isBuilding.floorsCount = nextFloor + 1;
+  if (!isBuilding.interiors) isBuilding.interiors = {};
+  isBuilding.interiors[nextFloor] = isCreateDefaultFloorLayout(isBuilding, nextFloor);
+  isLoadFloorLayout(nextFloor);
+  showToast('Добавлен этаж ' + (nextFloor + 1));
+}
+
+function isDuplicateCurrentFloor() {
+  isSaveCurrentFloorToBuilding();
+  const nextFloor = isBuilding.floorsCount || Object.keys(isBuilding.interiors || {}).length;
+  isBuilding.floorsCount = nextFloor + 1;
+  if (!isBuilding.interiors) isBuilding.interiors = {};
+  const copy = JSON.parse(JSON.stringify(isLayout));
+  copy.floor = nextFloor;
+  if (nextFloor > 0) {
+    copy.exits = []; // Exits to street only on ground floor
+  }
+  isBuilding.interiors[nextFloor] = copy;
+  isLoadFloorLayout(nextFloor);
+  showToast('Этаж дублирован на этаж ' + (nextFloor + 1));
+}
+
+function isDeleteCurrentFloor() {
+  if (isBuilding.floorsCount <= 1) {
+    showToast('Нельзя удалить единственный этаж!', true);
+    return;
+  }
+  if (!confirm('Удалить текущий этаж ' + (isFloor + 1) + '?')) return;
+
+  delete isBuilding.interiors[isFloor];
+  delete isBuilding.interiors[String(isFloor)];
+
+  // Reindex remaining floors
+  const keys = Object.keys(isBuilding.interiors).map(Number).sort((a,b) => a - b);
+  const newInteriors = {};
+  keys.forEach((oldF, idx) => {
+    newInteriors[idx] = isBuilding.interiors[oldF];
+    newInteriors[idx].floor = idx;
+  });
+  isBuilding.interiors = newInteriors;
+  isBuilding.floorsCount = Object.keys(newInteriors).length;
+
+  const targetFloor = Math.max(0, isFloor - 1);
+  isLoadFloorLayout(targetFloor);
+  showToast('Этаж удален');
+}
+
+function isClearFloor() {
+  if (!confirm('Очистить всю мебель, внутренние стены и комнаты на этом этаже?')) return;
+  isLayout = isCreateDefaultFloorLayout(isBuilding, isFloor);
+  isPushHistory('Clear Floor');
+  isUpdateRightInspector();
+  isRenderCanvas();
+  showToast('Этаж очищен');
+}
+
+function isExportFloorJson() {
+  const json = JSON.stringify(isLayout, null, 2);
+  navigator.clipboard.writeText(json).then(() => {
+    showToast('JSON текущего этажа скопирован в буфер обмена!');
+  }).catch(() => {
+    prompt('Скопируйте JSON этажа:', json);
+  });
+}
+
+function isImportFloorJson() {
+  const input = prompt('Вставьте JSON этажа (BuildingLayout):');
+  if (!input) return;
+  try {
+    const parsed = JSON.parse(input);
+    if (!parsed.rooms || !parsed.walls) throw new Error('Некорректная структура BuildingLayout');
+    isLayout = parsed;
+    isPushHistory('Import Floor JSON');
+    isUpdateRightInspector();
+    isRenderCanvas();
+    showToast('Интерьер успешно импортирован!');
+  } catch (err) {
+    alert('Ошибка импорта: ' + err.message);
+  }
+}
+
+// ==========================================
+// TOOL SWITCHING & OPTIONS IN LEFT SIDEBAR
+// ==========================================
+function isSetTool(tool) {
+  isTool = tool;
+  document.querySelectorAll('.is-tool-tab-btn').forEach(btn => btn.classList.remove('active'));
+  const activeBtn = document.getElementById('is-tab-' + tool);
+  if (activeBtn) activeBtn.classList.add('active');
+
+  const panel = document.getElementById('is-tool-options-panel');
+  if (!panel) return;
+
+  const msgEl = document.getElementById('is-status-msg');
+
+  if (tool === 'select') {
+    if (msgEl) msgEl.textContent = 'Инструмент: Выбор (клик для выбора, drag для перемещения, R для поворота, Del для удаления)';
+    panel.innerHTML = `
+      <div style="font-size:12px;color:var(--text-muted);line-height:1.5;">
+        <div style="font-weight:700;color:var(--text-main);margin-bottom:8px;">👆 Режим выбора и трансформации</div>
+        <p>• Кликните по предмету мебели, стене, комнате или зоне для выбора.</p>
+        <p>• Зажмите ЛКМ и тяните для перемещения.</p>
+        <p>• Клавиша <kbd style="background:var(--bg-card);padding:2px 4px;border-radius:4px;border:1px solid var(--border);">R</kbd> поворачивает выбранный предмет на 90°.</p>
+        <p>• Клавиша <kbd style="background:var(--bg-card);padding:2px 4px;border-radius:4px;border:1px solid var(--border);">Del</kbd> удаляет выбранное.</p>
+        <p>• Клавиша <kbd style="background:var(--bg-card);padding:2px 4px;border-radius:4px;border:1px solid var(--border);">Ctrl+D</kbd> создает дубликат.</p>
+      </div>
+    `;
+  } else if (tool === 'wall') {
+    if (msgEl) msgEl.textContent = 'Инструмент: Стена (зажмите ЛКМ и тяните линию между двумя точками)';
+    panel.innerHTML = `
+      <div style="font-size:12px;">
+        <div style="font-weight:700;color:var(--accent);margin-bottom:10px;">🧱 Новая стена / перегородка</div>
+        <div class="prop-field">
+          <label>Тип стены:</label>
+          <select id="is-wall-type" class="is-furniture-search">
+            <option value="normal">Стандартная стена (бетон/гипс)</option>
+            <option value="bars">Решетка КПЗ / Тюрьмы</option>
+          </select>
+        </div>
+        <p style="color:var(--text-muted);font-size:11px;margin-top:12px;">
+          Зажмите левую кнопку мыши и протяните стену. Сетка привязки помогает создавать ровные перпендикулярные углы.
+        </p>
+      </div>
+    `;
+  } else if (tool === 'room') {
+    if (msgEl) msgEl.textContent = 'Инструмент: Комната (зажмите ЛКМ и растяните прямоугольник комнаты)';
+    panel.innerHTML = `
+      <div style="font-size:12px;">
+        <div style="font-weight:700;color:var(--accent);margin-bottom:10px;">📐 Новая комната / зона пола</div>
+        <div class="prop-field">
+          <label>Название комнаты:</label>
+          <input type="text" id="is-room-name" value="Комната" class="is-furniture-search" list="is-room-presets">
+          <datalist id="is-room-presets">
+            <option value="Прихожая / Холл">
+            <option value="Гостиная">
+            <option value="Спальня">
+            <option value="Кухня">
+            <option value="Ванная">
+            <option value="Кабинет">
+            <option value="Офис">
+            <option value="Коридор">
+            <option value="Склад">
+            <option value="Торговый зал">
+          </datalist>
+        </div>
+        <div class="prop-field">
+          <label>Тип покрытия пола:</label>
+          <select id="is-room-floor-style" class="is-furniture-search">
+            <option value="parquet">Паркет (дерево)</option>
+            <option value="tile">Керамическая плитка</option>
+            <option value="wood">Доска массивная</option>
+            <option value="linoleum">Линолеум</option>
+            <option value="carpet">Ковролин</option>
+            <option value="concrete">Бетон шлифованный</option>
+          </select>
+        </div>
+        <div class="prop-field">
+          <label>Цвет пола:</label>
+          <input type="color" id="is-room-color" value="#1e293b" style="width:100%;height:32px;background:none;border:none;cursor:pointer;">
+        </div>
+      </div>
+    `;
+  } else if (tool === 'zone') {
+    if (msgEl) msgEl.textContent = 'Инструмент: Зона перехода (кликните или протяните прямоугольник для размещения)';
+    panel.innerHTML = `
+      <div style="font-size:12px;">
+        <div style="font-weight:700;color:var(--accent);margin-bottom:10px;">🚪 Зоны перемещения</div>
+        <div class="prop-field">
+          <label>Тип зоны:</label>
+          <select id="is-zone-type" class="is-furniture-search">
+            <option value="exit">🚪 Выход на улицу (только 1 этаж)</option>
+            <option value="stairs">🪜 Лестничный пролет</option>
+            <option value="elevator">🛗 Шахта лифта</option>
+          </select>
+        </div>
+        <p style="color:var(--text-muted);font-size:11px;margin-top:12px;">
+          Кликните на пол для размещения типовой зоны 20x20м или растяните прямоугольник нужного размера.
+        </p>
+      </div>
+    `;
+  } else if (tool === 'furniture') {
+    if (msgEl) msgEl.textContent = 'Инструмент: Мебель (выберите предмет в каталоге и кликните на холсте)';
+    isRenderFurnitureCatalogPanel(panel);
+  }
+
+  isRenderCanvas();
+}
+
+function isRenderFurnitureCatalogPanel(panel) {
+  let categories = [
+    { id: 'all', label: 'Все' },
+    { id: 'bedroom', label: '🛏️ Спальня' },
+    { id: 'living', label: '🛋️ Гостиная' },
+    { id: 'office', label: '💼 Офис' },
+    { id: 'kitchen', label: '🍽️ Кухня' },
+    { id: 'bathroom', label: '🚿 Ванная' },
+    { id: 'shop', label: '🛒 Торговля' },
+    { id: 'storage', label: '📦 Склад' },
+    { id: 'special', label: '🏥 Спец.' }
+  ];
+
+  let chipsHtml = categories.map(c => `
+    <div class="is-cat-chip ${isFurnitureCategory === c.id ? 'active' : ''}" onclick="isSetFurnitureCategory('${c.id}')">
+      ${c.label}
+    </div>
+  `).join('');
+
+  const filtered = IS_FURNITURE_CATALOG.filter(item => {
+    if (isFurnitureCategory !== 'all' && item.category !== isFurnitureCategory) return false;
+    if (isFurnitureSearchQuery && !item.name.toLowerCase().includes(isFurnitureSearchQuery.toLowerCase())) return false;
+    return true;
+  });
+
+  let cardsHtml = filtered.map(item => {
+    const isSelected = isSelectedFurnitureDef && isSelectedFurnitureDef.type === item.type;
+    return `
+      <div class="is-furniture-card ${isSelected ? 'active' : ''}" onclick="isSelectFurnitureDef('${item.type}')">
+        <div class="is-furniture-preview" style="font-size:22px;">${item.icon || '🪑'}</div>
+        <div style="font-weight:600;line-height:1.2;margin-bottom:2px;">${item.name}</div>
+        <div style="font-size:10px;color:var(--text-muted);">${item.width}x${item.height} м</div>
+      </div>
+    `;
+  }).join('');
+
+  panel.innerHTML = `
+    <input type="text" class="is-furniture-search" placeholder="🔍 Поиск мебели..." value="${isFurnitureSearchQuery}" oninput="isFilterFurniture(this.value)">
+    <div class="is-cat-chips">${chipsHtml}</div>
+    <div class="is-furniture-grid">${cardsHtml}</div>
+  `;
+}
+
+function isSetFurnitureCategory(cat) {
+  isFurnitureCategory = cat;
+  const panel = document.getElementById('is-tool-options-panel');
+  if (panel && isTool === 'furniture') isRenderFurnitureCatalogPanel(panel);
+}
+
+function isFilterFurniture(query) {
+  isFurnitureSearchQuery = query;
+  const panel = document.getElementById('is-tool-options-panel');
+  if (panel && isTool === 'furniture') isRenderFurnitureCatalogPanel(panel);
+}
+
+function isSelectFurnitureDef(type) {
+  const def = IS_FURNITURE_CATALOG.find(i => i.type === type);
+  if (!def) return;
+  isSelectedFurnitureDef = def;
+  const panel = document.getElementById('is-tool-options-panel');
+  if (panel && isTool === 'furniture') isRenderFurnitureCatalogPanel(panel);
+  showToast('Выбрано: ' + def.name + ' (кликните на полу для установки)');
+}
+
+// ==========================================
+// INTERACTIVE CANVAS ENGINE & RENDERING
+// ==========================================
+let isCanvas = null;
+let isCtx = null;
+
+function isInitCanvas() {
+  isCanvas = document.getElementById('interior-canvas');
+  if (!isCanvas) return;
+  isCtx = isCanvas.getContext('2d');
+
+  // Resize canvas to container
+  const container = document.getElementById('is-canvas-container');
+  isCanvas.width = container.clientWidth;
+  isCanvas.height = container.clientHeight;
+
+  // Add event listeners
+  isCanvas.onmousedown = isHandleMouseDown;
+  window.onmousemove = isHandleMouseMove;
+  window.onmouseup = isHandleMouseUp;
+  isCanvas.onwheel = isHandleWheel;
+  isCanvas.oncontextmenu = (e) => e.preventDefault();
+}
+
+function isResetView() {
+  if (!isCanvas || !isBuilding) return;
+  const container = document.getElementById('is-canvas-container');
+  const cw = container.clientWidth;
+  const ch = container.clientHeight;
+
+  const bw = isBuilding.width;
+  const bh = isBuilding.height;
+
+  isZoom = Math.min((cw - 80) / bw, (ch - 80) / bh);
+  isZoom = Math.max(0.8, Math.min(8.0, isZoom));
+
+  isPan.x = (cw - bw * isZoom) / 2;
+  isPan.y = (ch - bh * isZoom) / 2;
+
+  document.getElementById('is-zoom-label').textContent = Math.round(isZoom * 100) + '%';
+  isRenderCanvas();
+}
+
+function isZoomStep(delta) {
+  isZoom = Math.max(0.5, Math.min(10.0, isZoom + delta));
+  document.getElementById('is-zoom-label').textContent = Math.round(isZoom * 100) + '%';
+  isRenderCanvas();
+}
+
+function isToggleSnap(val) {
+  isSnapGrid = val;
+  showToast(isSnapGrid ? 'Привязка к сетке (2м) включена' : 'Свободное перемещение');
+}
+
+function isWorldToScreen(x, y) {
+  return {
+    x: isPan.x + x * isZoom,
+    y: isPan.y + y * isZoom
+  };
+}
+
+function isScreenToWorld(sx, sy) {
+  let wx = (sx - isPan.x) / isZoom;
+  let wy = (sy - isPan.y) / isZoom;
+  if (isSnapGrid) {
+    wx = Math.round(wx / isGridSize) * isGridSize;
+    wy = Math.round(wy / isGridSize) * isGridSize;
+  }
+  return { x: wx, y: wy };
+}
+
+// ------------------------------------------
+// MOUSE EVENT HANDLERS
+// ------------------------------------------
+let isSpacePanning = false;
+
+window.addEventListener('keydown', (e) => {
+  const modal = document.getElementById('interior-studio-modal');
+  if (!modal || modal.style.display !== 'flex') return;
+
+  if (e.code === 'Space') {
+    isSpacePanning = true;
+  } else if (e.key === 'r' || e.key === 'к') {
+    isRotateSelectedItem();
+  } else if (e.key === 'Delete' || e.key === 'Backspace') {
+    if (document.activeElement && (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'SELECT')) return;
+    isDeleteSelectedItem();
+  } else if ((e.ctrlKey || e.metaKey) && (e.key === 'd' || e.key === 'в')) {
+    e.preventDefault();
+    isDuplicateSelectedItem();
+  } else if ((e.ctrlKey || e.metaKey) && (e.key === 'z' || e.key === 'я')) {
+    e.preventDefault();
+    isUndo();
+  } else if (e.key === 'Escape') {
+    isSelectedItem = null;
+    isUpdateRightInspector();
+    isRenderCanvas();
+  }
+});
+
+window.addEventListener('keyup', (e) => {
+  if (e.code === 'Space') isSpacePanning = false;
+});
+
+function isHandleWheel(e) {
+  e.preventDefault();
+  const rect = isCanvas.getBoundingClientRect();
+  const mx = e.clientX - rect.left;
+  const my = e.clientY - rect.top;
+
+  const worldBefore = {
+    x: (mx - isPan.x) / isZoom,
+    y: (my - isPan.y) / isZoom
+  };
+
+  const factor = e.deltaY < 0 ? 1.15 : 0.85;
+  isZoom = Math.max(0.4, Math.min(12.0, isZoom * factor));
+
+  isPan.x = mx - worldBefore.x * isZoom;
+  isPan.y = my - worldBefore.y * isZoom;
+
+  document.getElementById('is-zoom-label').textContent = Math.round(isZoom * 100) + '%';
+  isRenderCanvas();
+}
+
+function isHandleMouseDown(e) {
+  const rect = isCanvas.getBoundingClientRect();
+  const sx = e.clientX - rect.left;
+  const sy = e.clientY - rect.top;
+
+  // Middle mouse or space+LMB = pan
+  if (e.button === 1 || isSpacePanning || (e.button === 0 && e.altKey)) {
+    isIsDragging = true;
+    isDragStart = { x: sx - isPan.x, y: sy - isPan.y };
+    return;
+  }
+
+  const wPos = isScreenToWorld(sx, sy);
+
+  if (isTool === 'select') {
+    // Check if clicked an item
+    const hit = isHitTest(wPos.x, wPos.y);
+    if (hit) {
+      isSelectedItem = hit;
+      isIsDragging = true;
+      isDragStart = { x: wPos.x, y: wPos.y };
+      const item = isGetItemByRef(hit);
+      if (item) {
+        if ('x' in item && 'y' in item) {
+          isDragItemStart = { x: item.x, y: item.y };
+        } else if ('x1' in item) {
+          isDragItemStart = { x1: item.x1, y1: item.y1, x2: item.x2, y2: item.y2 };
+        }
+      }
+    } else {
+      isSelectedItem = null;
+    }
+    isUpdateRightInspector();
+    isRenderCanvas();
+  } else if (isTool === 'wall') {
+    isToolDrawing = true;
+    isDrawStart = wPos;
+    isDrawCurrent = wPos;
+  } else if (isTool === 'room') {
+    isToolDrawing = true;
+    isDrawStart = wPos;
+    isDrawCurrent = wPos;
+  } else if (isTool === 'zone') {
+    isToolDrawing = true;
+    isDrawStart = wPos;
+    isDrawCurrent = wPos;
+  } else if (isTool === 'furniture') {
+    if (isSelectedFurnitureDef) {
+      const newF = {
+        type: isSelectedFurnitureDef.type,
+        x: Math.round(wPos.x - isSelectedFurnitureDef.width / 2),
+        y: Math.round(wPos.y - isSelectedFurnitureDef.height / 2),
+        width: isSelectedFurnitureDef.width,
+        height: isSelectedFurnitureDef.height,
+        angle: 0,
+        color: isSelectedFurnitureDef.color
+      };
+      isLayout.furniture.push(newF);
+      isSelectedItem = { type: 'furniture', index: isLayout.furniture.length - 1 };
+      isSetTool('select');
+      isPushHistory('Add ' + isSelectedFurnitureDef.name);
+      isUpdateRightInspector();
+      isRenderCanvas();
+    }
+  }
+}
+
+function isHandleMouseMove(e) {
+  if (!isCanvas) return;
+  const rect = isCanvas.getBoundingClientRect();
+  const sx = e.clientX - rect.left;
+  const sy = e.clientY - rect.top;
+
+  if (sx < 0 || sy < 0 || sx > isCanvas.width || sy > isCanvas.height) return;
+
+  const wPos = isScreenToWorld(sx, sy);
+  const curPosEl = document.getElementById('is-cursor-pos');
+  if (curPosEl) curPosEl.textContent = 'X: ' + Math.round(wPos.x) + ' | Y: ' + Math.round(wPos.y);
+
+  if (isIsDragging) {
+    if (isSpacePanning || e.buttons === 4 || e.altKey) {
+      isPan.x = sx - isDragStart.x;
+      isPan.y = sy - isDragStart.y;
+      isRenderCanvas();
+      return;
+    }
+
+    if (isSelectedItem) {
+      const dx = wPos.x - isDragStart.x;
+      const dy = wPos.y - isDragStart.y;
+      const item = isGetItemByRef(isSelectedItem);
+      if (item) {
+        if ('x' in item && 'y' in item) {
+          item.x = Math.round(isDragItemStart.x + dx);
+          item.y = Math.round(isDragItemStart.y + dy);
+        } else if ('x1' in item) {
+          item.x1 = Math.round(isDragItemStart.x1 + dx);
+          item.y1 = Math.round(isDragItemStart.y1 + dy);
+          item.x2 = Math.round(isDragItemStart.x2 + dx);
+          item.y2 = Math.round(isDragItemStart.y2 + dy);
+        }
+        isUpdateRightInspector();
+        isRenderCanvas();
+      }
+    }
+  } else if (isToolDrawing) {
+    isDrawCurrent = wPos;
+    isRenderCanvas();
+  } else {
+    // Hover hit test
+    const hit = isHitTest(wPos.x, wPos.y);
+    if (hit !== isHoveredItem) {
+      isHoveredItem = hit;
+      isRenderCanvas();
+    }
+  }
+}
+
+function isHandleMouseUp(e) {
+  if (isIsDragging) {
+    isIsDragging = false;
+    if (isSelectedItem) {
+      isPushHistory('Move Item');
+    }
+    isRenderCanvas();
+  } else if (isToolDrawing) {
+    isToolDrawing = false;
+    const p1 = isDrawStart;
+    const p2 = isDrawCurrent;
+
+    if (isTool === 'wall') {
+      const dist = Math.hypot(p2.x - p1.x, p2.y - p1.y);
+      if (dist >= 3) {
+        const wallType = document.getElementById('is-wall-type')?.value || 'normal';
+        const newWall = {
+          x1: Math.round(p1.x),
+          y1: Math.round(p1.y),
+          x2: Math.round(p2.x),
+          y2: Math.round(p2.y),
+          isJailBars: wallType === 'bars'
+        };
+        isLayout.walls.push(newWall);
+        isSelectedItem = { type: 'wall', index: isLayout.walls.length - 1 };
+        isPushHistory('Add Wall');
+      }
+    } else if (isTool === 'room') {
+      const rx = Math.min(p1.x, p2.x);
+      const ry = Math.min(p1.y, p2.y);
+      const rw = Math.max(p1.x, p2.x) - rx;
+      const rh = Math.max(p1.y, p2.y) - ry;
+      if (rw >= 6 && rh >= 6) {
+        const name = document.getElementById('is-room-name')?.value || 'Комната';
+        const floorStyle = document.getElementById('is-room-floor-style')?.value || 'parquet';
+        const color = document.getElementById('is-room-color')?.value || '#1e293b';
+
+        const newRoom = {
+          name: name,
+          x: Math.round(rx),
+          y: Math.round(ry),
+          width: Math.round(rw),
+          height: Math.round(rh),
+          color: color,
+          floorStyle: floorStyle
+        };
+        isLayout.rooms.push(newRoom);
+        isSelectedItem = { type: 'room', index: isLayout.rooms.length - 1 };
+        isPushHistory('Add Room');
+      }
+    } else if (isTool === 'zone') {
+      const zType = document.getElementById('is-zone-type')?.value || 'exit';
+      const rx = Math.min(p1.x, p2.x);
+      const ry = Math.min(p1.y, p2.y);
+      let rw = Math.max(p1.x, p2.x) - rx;
+      let rh = Math.max(p1.y, p2.y) - ry;
+      if (rw < 8 || rh < 8) {
+        rw = 20; rh = 20;
+      }
+      const newZone = {
+        x: Math.round(rx),
+        y: Math.round(ry),
+        width: Math.round(rw),
+        height: Math.round(rh)
+      };
+      if (zType === 'exit') {
+        if (!isLayout.exits) isLayout.exits = [];
+        isLayout.exits.push(newZone);
+        isSelectedItem = { type: 'zone', subType: 'exit', index: isLayout.exits.length - 1 };
+      } else if (zType === 'stairs') {
+        if (!isLayout.stairs) isLayout.stairs = [];
+        isLayout.stairs.push(newZone);
+        isSelectedItem = { type: 'zone', subType: 'stairs', index: isLayout.stairs.length - 1 };
+      } else if (zType === 'elevator') {
+        if (!isLayout.elevators) isLayout.elevators = [];
+        isLayout.elevators.push(newZone);
+        isSelectedItem = { type: 'zone', subType: 'elevator', index: isLayout.elevators.length - 1 };
+      }
+      isPushHistory('Add ' + zType + ' Zone');
+    }
+
+    isSetTool('select');
+    isUpdateRightInspector();
+    isRenderCanvas();
+  }
+}
+
+// ------------------------------------------
+// HIT TESTING & ITEM ACCESS
+// ------------------------------------------
+function isGetItemByRef(ref) {
+  if (!ref || !isLayout) return null;
+  if (ref.type === 'furniture') return isLayout.furniture[ref.index];
+  if (ref.type === 'wall') return isLayout.walls[ref.index];
+  if (ref.type === 'room') return isLayout.rooms[ref.index];
+  if (ref.type === 'zone') {
+    if (ref.subType === 'exit') return isLayout.exits ? isLayout.exits[ref.index] : null;
+    if (ref.subType === 'stairs') return isLayout.stairs ? isLayout.stairs[ref.index] : null;
+    if (ref.subType === 'elevator') return isLayout.elevators ? isLayout.elevators[ref.index] : null;
+  }
+  return null;
+}
+
+function isHitTest(wx, wy) {
+  if (!isLayout) return null;
+
+  // 1. Check furniture first (highest priority)
+  for (let i = isLayout.furniture.length - 1; i >= 0; i--) {
+    const f = isLayout.furniture[i];
+    const hw = f.width / 2;
+    const hh = f.height / 2;
+    const cx = f.x + hw;
+    const cy = f.y + hh;
+    const cos = Math.cos(-(f.angle || 0));
+    const sin = Math.sin(-(f.angle || 0));
+    const dx = wx - cx;
+    const dy = wy - cy;
+    const lx = dx * cos - dy * sin;
+    const ly = dx * sin + dy * cos;
+    if (Math.abs(lx) <= hw + 2 && Math.abs(ly) <= hh + 2) {
+      return { type: 'furniture', index: i };
+    }
+  }
+
+  // 2. Check walls
+  for (let i = isLayout.walls.length - 1; i >= 0; i--) {
+    const w = isLayout.walls[i];
+    const dist = isDistToSegment(wx, wy, w.x1, w.y1, w.x2, w.y2);
+    if (dist <= 4.0) {
+      return { type: 'wall', index: i };
+    }
+  }
+
+  // 3. Check zones
+  if (isLayout.exits) {
+    for (let i = isLayout.exits.length - 1; i >= 0; i--) {
+      const z = isLayout.exits[i];
+      if (wx >= z.x && wx <= z.x + z.width && wy >= z.y && wy <= z.y + z.height) {
+        return { type: 'zone', subType: 'exit', index: i };
+      }
+    }
+  }
+  if (isLayout.stairs) {
+    for (let i = isLayout.stairs.length - 1; i >= 0; i--) {
+      const z = isLayout.stairs[i];
+      if (wx >= z.x && wx <= z.x + z.width && wy >= z.y && wy <= z.y + z.height) {
+        return { type: 'zone', subType: 'stairs', index: i };
+      }
+    }
+  }
+  if (isLayout.elevators) {
+    for (let i = isLayout.elevators.length - 1; i >= 0; i--) {
+      const z = isLayout.elevators[i];
+      if (wx >= z.x && wx <= z.x + z.width && wy >= z.y && wy <= z.y + z.height) {
+        return { type: 'zone', subType: 'elevator', index: i };
+      }
+    }
+  }
+
+  // 4. Check rooms
+  for (let i = isLayout.rooms.length - 1; i >= 0; i--) {
+    const r = isLayout.rooms[i];
+    if (wx >= r.x && wx <= r.x + r.width && wy >= r.y && wy <= r.y + r.height) {
+      return { type: 'room', index: i };
+    }
+  }
+
+  return null;
+}
+
+function isDistToSegment(px, py, x1, y1, x2, y2) {
+  const l2 = (x2 - x1) * (x2 - x1) + (y2 - y1) * (y2 - y1);
+  if (l2 === 0) return Math.hypot(px - x1, py - y1);
+  let t = ((px - x1) * (x2 - x1) + (py - y1) * (y2 - y1)) / l2;
+  t = Math.max(0, Math.min(1, t));
+  return Math.hypot(px - (x1 + t * (x2 - x1)), py - (y1 + t * (y2 - y1)));
+}
+
+// ------------------------------------------
+// CANVAS RENDERING CORE
+// ------------------------------------------
+function isRenderCanvas() {
+  if (!isCanvas || !isCtx || !isBuilding || !isLayout) return;
+  const ctx = isCtx;
+  const W = isCanvas.width;
+  const H = isCanvas.height;
+
+  ctx.clearRect(0, 0, W, H);
+
+  // Background blueprint grid
+  ctx.fillStyle = '#060a17';
+  ctx.fillRect(0, 0, W, H);
+
+  // Subtle coordinate grid
+  ctx.strokeStyle = '#0f172a';
+  ctx.lineWidth = 1;
+  const gridStep = isGridSize * 5 * isZoom;
+  if (gridStep > 8) {
+    ctx.beginPath();
+    for (let x = isPan.x % gridStep; x < W; x += gridStep) {
+      ctx.moveTo(x, 0); ctx.lineTo(x, H);
+    }
+    for (let y = isPan.y % gridStep; y < H; y += gridStep) {
+      ctx.moveTo(0, y); ctx.lineTo(W, y);
+    }
+    ctx.stroke();
+  }
+
+  ctx.save();
+  ctx.translate(isPan.x, isPan.y);
+  ctx.scale(isZoom, isZoom);
+
+  const BW = isBuilding.width;
+  const BH = isBuilding.height;
+
+  // 1. Building base floor plate & perimeter shadow
+  ctx.fillStyle = 'rgba(2, 6, 23, 0.9)';
+  ctx.fillRect(-2, -2, BW + 4, BH + 4);
+
+  // 2. Render Rooms
+  isLayout.rooms.forEach((r, idx) => {
+    isDrawRoom(ctx, r, isSelectedItem && isSelectedItem.type === 'room' && isSelectedItem.index === idx);
+  });
+
+  // 3. Render Zones (Exit, Stairs, Elevator)
+  if (isLayout.exits) {
+    isLayout.exits.forEach((z, idx) => {
+      isDrawZone(ctx, z, 'exit', isSelectedItem && isSelectedItem.type === 'zone' && isSelectedItem.subType === 'exit' && isSelectedItem.index === idx);
+    });
+  }
+  if (isLayout.stairs) {
+    isLayout.stairs.forEach((z, idx) => {
+      isDrawZone(ctx, z, 'stairs', isSelectedItem && isSelectedItem.type === 'zone' && isSelectedItem.subType === 'stairs' && isSelectedItem.index === idx);
+    });
+  }
+  if (isLayout.elevators) {
+    isLayout.elevators.forEach((z, idx) => {
+      isDrawZone(ctx, z, 'elevator', isSelectedItem && isSelectedItem.type === 'zone' && isSelectedItem.subType === 'elevator' && isSelectedItem.index === idx);
+    });
+  }
+
+  // 4. Render Internal Walls
+  isLayout.walls.forEach((w, idx) => {
+    isDrawWall(ctx, w, isSelectedItem && isSelectedItem.type === 'wall' && isSelectedItem.index === idx);
+  });
+
+  // 5. Render Outer Building Walls
+  ctx.strokeStyle = '#0284c7';
+  ctx.lineWidth = 4;
+  ctx.strokeRect(0, 0, BW, BH);
+
+  // 6. Render Furniture
+  isLayout.furniture.forEach((f, idx) => {
+    isDrawFurniture(ctx, f, isSelectedItem && isSelectedItem.type === 'furniture' && isSelectedItem.index === idx);
+  });
+
+  // 7. Live preview while drawing tool is active
+  if (isToolDrawing) {
+    ctx.save();
+    if (isTool === 'wall') {
+      ctx.strokeStyle = '#38bdf8';
+      ctx.lineWidth = 3;
+      ctx.setLineDash([4, 4]);
+      ctx.beginPath();
+      ctx.moveTo(isDrawStart.x, isDrawStart.y);
+      ctx.lineTo(isDrawCurrent.x, isDrawCurrent.y);
+      ctx.stroke();
+    } else if (isTool === 'room' || isTool === 'zone') {
+      const rx = Math.min(isDrawStart.x, isDrawCurrent.x);
+      const ry = Math.min(isDrawStart.y, isDrawCurrent.y);
+      const rw = Math.abs(isDrawCurrent.x - isDrawStart.x);
+      const rh = Math.abs(isDrawCurrent.y - isDrawStart.y);
+      ctx.fillStyle = 'rgba(56, 189, 248, 0.2)';
+      ctx.strokeStyle = '#38bdf8';
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([4, 4]);
+      ctx.fillRect(rx, ry, rw, rh);
+      ctx.strokeRect(rx, ry, rw, rh);
+    }
+    ctx.restore();
+  }
+
+  ctx.restore();
+}
+
+function isDrawRoom(ctx, r, isSelected) {
+  ctx.save();
+  ctx.fillStyle = r.color || '#1e293b';
+  ctx.fillRect(r.x, r.y, r.width, r.height);
+
+  // Floor patterns
+  if (r.floorStyle === 'tile') {
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.08)';
+    ctx.lineWidth = 0.5;
+    for (let x = r.x; x < r.x + r.width; x += 6) {
+      ctx.beginPath(); ctx.moveTo(x, r.y); ctx.lineTo(x, r.y + r.height); ctx.stroke();
+    }
+    for (let y = r.y; y < r.y + r.height; y += 6) {
+      ctx.beginPath(); ctx.moveTo(r.x, y); ctx.lineTo(r.x + r.width, y); ctx.stroke();
+    }
+  } else if (r.floorStyle === 'parquet' || r.floorStyle === 'wood') {
+    ctx.strokeStyle = 'rgba(0, 0, 0, 0.15)';
+    ctx.lineWidth = 0.8;
+    for (let y = r.y; y < r.y + r.height; y += 4) {
+      ctx.beginPath(); ctx.moveTo(r.x, y); ctx.lineTo(r.x + r.width, y); ctx.stroke();
+    }
+  }
+
+  // Room name tag
+  if (r.name && r.width >= 16 && r.height >= 12) {
+    ctx.fillStyle = 'rgba(15, 23, 42, 0.6)';
+    const textWidth = ctx.measureText(r.name).width;
+    ctx.fillRect(r.x + r.width / 2 - textWidth / 2 - 4, r.y + r.height / 2 - 6, textWidth + 8, 12);
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
+    ctx.font = '8px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(r.name, r.x + r.width / 2, r.y + r.height / 2);
+  }
+
+  if (isSelected) {
+    ctx.strokeStyle = '#38bdf8';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([4, 4]);
+    ctx.strokeRect(r.x, r.y, r.width, r.height);
+  }
+  ctx.restore();
+}
+
+function isDrawWall(ctx, w, isSelected) {
+  ctx.save();
+  ctx.beginPath();
+  ctx.moveTo(w.x1, w.y1);
+  ctx.lineTo(w.x2, w.y2);
+
+  if (w.isJailBars) {
+    ctx.strokeStyle = '#475569';
+    ctx.lineWidth = 2.5;
+    ctx.stroke();
+    // Draw cross ticks
+    const dx = w.x2 - w.x1;
+    const dy = w.y2 - w.y1;
+    const len = Math.hypot(dx, dy);
+    if (len > 0) {
+      const nx = -dy / len * 3;
+      const ny = dx / len * 3;
+      ctx.strokeStyle = '#94a3b8';
+      ctx.lineWidth = 1;
+      for (let s = 3; s < len; s += 4) {
+        const px = w.x1 + (dx / len) * s;
+        const py = w.y1 + (dy / len) * s;
+        ctx.beginPath();
+        ctx.moveTo(px - nx, py - ny);
+        ctx.lineTo(px + nx, py + ny);
+        ctx.stroke();
+      }
+    }
+  } else {
+    ctx.strokeStyle = isSelected ? '#38bdf8' : '#94a3b8';
+    ctx.lineWidth = 3.5;
+    ctx.lineCap = 'round';
+    ctx.stroke();
+  }
+
+  if (isSelected) {
+    ctx.fillStyle = '#38bdf8';
+    ctx.beginPath(); ctx.arc(w.x1, w.y1, 3, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(w.x2, w.y2, 3, 0, Math.PI * 2); ctx.fill();
+  }
+  ctx.restore();
+}
+
+function isDrawZone(ctx, z, type, isSelected) {
+  ctx.save();
+  let bg = 'rgba(22, 163, 74, 0.2)';
+  let border = '#22c55e';
+  let label = '🚪 Выход';
+
+  if (type === 'stairs') {
+    bg = 'rgba(234, 179, 8, 0.2)';
+    border = '#eab308';
+    label = '🪜 Лестница';
+  } else if (type === 'elevator') {
+    bg = 'rgba(56, 189, 248, 0.2)';
+    border = '#38bdf8';
+    label = '🛗 Лифт';
+  }
+
+  ctx.fillStyle = bg;
+  ctx.fillRect(z.x, z.y, z.width, z.height);
+
+  ctx.strokeStyle = isSelected ? '#ffffff' : border;
+  ctx.lineWidth = isSelected ? 2.5 : 1.5;
+  ctx.setLineDash([3, 3]);
+  ctx.strokeRect(z.x, z.y, z.width, z.height);
+
+  // Center text
+  ctx.fillStyle = '#f8fafc';
+  ctx.font = '7px sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(label, z.x + z.width / 2, z.y + z.height / 2);
+
+  ctx.restore();
+}
+
+function isDrawFurniture(ctx, f, isSelected) {
+  ctx.save();
+  const cx = f.x + f.width / 2;
+  const cy = f.y + f.height / 2;
+
+  ctx.translate(cx, cy);
+  if (f.angle) ctx.rotate(f.angle);
+
+  const hw = f.width / 2;
+  const hh = f.height / 2;
+
+  // Render furniture body
+  ctx.fillStyle = f.color || '#475569';
+  ctx.fillRect(-hw, -hh, f.width, f.height);
+
+  // Border
+  ctx.strokeStyle = isSelected ? '#38bdf8' : 'rgba(0,0,0,0.4)';
+  ctx.lineWidth = isSelected ? 2 : 1;
+  ctx.strokeRect(-hw, -hh, f.width, f.height);
+
+  // Detail decoration
+  if (f.type.includes('bed')) {
+    // Pillows & blanket
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(-hw + 2, -hh + 2, f.width - 4, hh - 2);
+    ctx.fillStyle = 'rgba(0,0,0,0.15)';
+    ctx.fillRect(-hw + 2, 0, f.width - 4, hh - 2);
+  } else if (f.type === 'sofa') {
+    // Backrest & armrests
+    ctx.fillStyle = 'rgba(0,0,0,0.2)';
+    ctx.fillRect(-hw, -hh, f.width, 3);
+    ctx.fillRect(-hw, -hh, 3, f.height);
+    ctx.fillRect(hw - 3, -hh, 3, f.height);
+  } else if (f.type === 'desk') {
+    // Keyboard & monitor
+    ctx.fillStyle = '#0f172a';
+    ctx.fillRect(-4, -hh + 1, 8, 2);
+  } else if (f.type === 'plant') {
+    // Green circle foliage
+    ctx.fillStyle = '#15803d';
+    ctx.beginPath();
+    ctx.arc(0, 0, Math.min(hw, hh) - 1, 0, Math.PI * 2);
+    ctx.fill();
+  } else if (f.type === 'bath') {
+    // Tub interior curve
+    ctx.fillStyle = '#f8fafc';
+    ctx.fillRect(-hw + 2, -hh + 2, f.width - 4, f.height - 4);
+    ctx.fillStyle = '#38bdf8';
+    ctx.fillRect(-hw + 4, -hh + 4, f.width - 8, f.height - 8);
+  } else if (f.type === 'sink') {
+    // Sink basin
+    ctx.fillStyle = '#f8fafc';
+    ctx.beginPath();
+    ctx.ellipse(0, 0, hw - 2, hh - 2, 0, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  if (isSelected) {
+    ctx.strokeStyle = '#38bdf8';
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([3, 3]);
+    ctx.strokeRect(-hw - 3, -hh - 3, f.width + 6, f.height + 6);
+    // Angle indicator handle
+    ctx.fillStyle = '#38bdf8';
+    ctx.beginPath();
+    ctx.arc(0, -hh - 8, 3.5, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  ctx.restore();
+}
+
+// ==========================================
+// RIGHT SIDEBAR INSPECTOR
+// ==========================================
+function isUpdateRightInspector() {
+  const panel = document.getElementById('is-right-inspector');
+  if (!panel) return;
+
+  if (!isSelectedItem) {
+    const furnCount = isLayout ? isLayout.furniture.length : 0;
+    const wallCount = isLayout ? isLayout.walls.length : 0;
+    const roomCount = isLayout ? isLayout.rooms.length : 0;
+    const zoneCount = isLayout ? ((isLayout.exits?.length || 0) + (isLayout.stairs?.length || 0) + (isLayout.elevators?.length || 0)) : 0;
+
+    panel.innerHTML = `
+      <h4>Свойства объекта</h4>
+      <div style="font-size:12px;color:var(--text-muted);margin-bottom:16px;">
+        Выберите объект на холсте для редактирования его координат, размеров, цвета и угла.
+      </div>
+
+      <h4>Статистика этажа ${isFloor + 1}</h4>
+      <div style="font-size:12px;display:flex;flex-direction:column;gap:6px;background:var(--bg-dark);padding:10px;border-radius:6px;border:1px solid var(--border);">
+        <div>🛋️ Мебели: <b>${furnCount}</b></div>
+        <div>🧱 Стен: <b>${wallCount}</b></div>
+        <div>📐 Комнат: <b>${roomCount}</b></div>
+        <div>🚪 Зон перехода: <b>${zoneCount}</b></div>
+      </div>
+    `;
+    return;
+  }
+
+  const item = isGetItemByRef(isSelectedItem);
+  if (!item) return;
+
+  let fieldsHtml = '';
+
+  if (isSelectedItem.type === 'furniture') {
+    const def = IS_FURNITURE_CATALOG.find(c => c.type === item.type);
+    fieldsHtml = `
+      <h4>${def?.name || item.type}</h4>
+      <div class="prop-field">
+        <label>Тип:</label>
+        <span style="font-size:11px;color:var(--accent);">${item.type}</span>
+      </div>
+      <div class="prop-field">
+        <label>Позиция X, Y:</label>
+        <div class="prop-grid-2">
+          <input type="number" value="${Math.round(item.x)}" onchange="isUpdateItemProp('x', parseFloat(this.value))">
+          <input type="number" value="${Math.round(item.y)}" onchange="isUpdateItemProp('y', parseFloat(this.value))">
+        </div>
+      </div>
+      <div class="prop-field">
+        <label>Размеры W, H:</label>
+        <div class="prop-grid-2">
+          <input type="number" value="${Math.round(item.width)}" onchange="isUpdateItemProp('width', parseFloat(this.value))">
+          <input type="number" value="${Math.round(item.height)}" onchange="isUpdateItemProp('height', parseFloat(this.value))">
+        </div>
+      </div>
+      <div class="prop-field">
+        <label>Угол поворота:</label>
+        <div style="display:flex;gap:4px;margin-bottom:6px;">
+          <button class="btn sm" onclick="isSetItemAngle(0)">0°</button>
+          <button class="btn sm" onclick="isSetItemAngle(Math.PI/2)">90°</button>
+          <button class="btn sm" onclick="isSetItemAngle(Math.PI)">180°</button>
+          <button class="btn sm" onclick="isSetItemAngle(Math.PI*1.5)">270°</button>
+        </div>
+      </div>
+      <div class="prop-field">
+        <label>Цвет:</label>
+        <input type="color" value="${item.color || '#475569'}" onchange="isUpdateItemProp('color', this.value)" style="width:100%;height:32px;background:none;border:none;cursor:pointer;">
+      </div>
+    `;
+  } else if (isSelectedItem.type === 'wall') {
+    fieldsHtml = `
+      <h4>Стена</h4>
+      <div class="prop-field">
+        <label>Точка 1 (X1, Y1):</label>
+        <div class="prop-grid-2">
+          <input type="number" value="${Math.round(item.x1)}" onchange="isUpdateItemProp('x1', parseFloat(this.value))">
+          <input type="number" value="${Math.round(item.y1)}" onchange="isUpdateItemProp('y1', parseFloat(this.value))">
+        </div>
+      </div>
+      <div class="prop-field">
+        <label>Точка 2 (X2, Y2):</label>
+        <div class="prop-grid-2">
+          <input type="number" value="${Math.round(item.x2)}" onchange="isUpdateItemProp('x2', parseFloat(this.value))">
+          <input type="number" value="${Math.round(item.y2)}" onchange="isUpdateItemProp('y2', parseFloat(this.value))">
+        </div>
+      </div>
+      <div class="prop-field">
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;">
+          <input type="checkbox" ${item.isJailBars ? 'checked' : ''} onchange="isUpdateItemProp('isJailBars', this.checked)">
+          <span>Решетка КПЗ</span>
+        </label>
+      </div>
+    `;
+  } else if (isSelectedItem.type === 'room') {
+    fieldsHtml = `
+      <h4>Комната</h4>
+      <div class="prop-field">
+        <label>Название:</label>
+        <input type="text" value="${item.name || ''}" onchange="isUpdateItemProp('name', this.value)">
+      </div>
+      <div class="prop-field">
+        <label>Позиция X, Y:</label>
+        <div class="prop-grid-2">
+          <input type="number" value="${Math.round(item.x)}" onchange="isUpdateItemProp('x', parseFloat(this.value))">
+          <input type="number" value="${Math.round(item.y)}" onchange="isUpdateItemProp('y', parseFloat(this.value))">
+        </div>
+      </div>
+      <div class="prop-field">
+        <label>Размеры W, H:</label>
+        <div class="prop-grid-2">
+          <input type="number" value="${Math.round(item.width)}" onchange="isUpdateItemProp('width', parseFloat(this.value))">
+          <input type="number" value="${Math.round(item.height)}" onchange="isUpdateItemProp('height', parseFloat(this.value))">
+        </div>
+      </div>
+      <div class="prop-field">
+        <label>Стиль пола:</label>
+        <select onchange="isUpdateItemProp('floorStyle', this.value)">
+          <option value="parquet" ${item.floorStyle === 'parquet' ? 'selected' : ''}>Паркет</option>
+          <option value="tile" ${item.floorStyle === 'tile' ? 'selected' : ''}>Плитка</option>
+          <option value="wood" ${item.floorStyle === 'wood' ? 'selected' : ''}>Доска</option>
+          <option value="linoleum" ${item.floorStyle === 'linoleum' ? 'selected' : ''}>Линолеум</option>
+          <option value="carpet" ${item.floorStyle === 'carpet' ? 'selected' : ''}>Ковролин</option>
+          <option value="concrete" ${item.floorStyle === 'concrete' ? 'selected' : ''}>Бетон</option>
+        </select>
+      </div>
+      <div class="prop-field">
+        <label>Цвет пола:</label>
+        <input type="color" value="${item.color || '#1e293b'}" onchange="isUpdateItemProp('color', this.value)" style="width:100%;height:32px;background:none;border:none;cursor:pointer;">
+      </div>
+    `;
+  } else if (isSelectedItem.type === 'zone') {
+    fieldsHtml = `
+      <h4>Зона перехода (${isSelectedItem.subType})</h4>
+      <div class="prop-field">
+        <label>Позиция X, Y:</label>
+        <div class="prop-grid-2">
+          <input type="number" value="${Math.round(item.x)}" onchange="isUpdateItemProp('x', parseFloat(this.value))">
+          <input type="number" value="${Math.round(item.y)}" onchange="isUpdateItemProp('y', parseFloat(this.value))">
+        </div>
+      </div>
+      <div class="prop-field">
+        <label>Размеры W, H:</label>
+        <div class="prop-grid-2">
+          <input type="number" value="${Math.round(item.width)}" onchange="isUpdateItemProp('width', parseFloat(this.value))">
+          <input type="number" value="${Math.round(item.height)}" onchange="isUpdateItemProp('height', parseFloat(this.value))">
+        </div>
+      </div>
+    `;
+  }
+
+  panel.innerHTML = `
+    ${fieldsHtml}
+    <div style="margin-top:16px;display:flex;flex-direction:column;gap:6px;">
+      <button class="btn sm" onclick="isDuplicateSelectedItem()">📑 Дублировать (Ctrl+D)</button>
+      <button class="btn sm danger" onclick="isDeleteSelectedItem()">🗑️ Удалить (Del)</button>
+    </div>
+  `;
+}
+
+function isUpdateItemProp(prop, val) {
+  const item = isGetItemByRef(isSelectedItem);
+  if (!item) return;
+  item[prop] = val;
+  isPushHistory('Change ' + prop);
+  isRenderCanvas();
+}
+
+function isSetItemAngle(rad) {
+  const item = isGetItemByRef(isSelectedItem);
+  if (!item || isSelectedItem.type !== 'furniture') return;
+  item.angle = rad;
+  isPushHistory('Rotate Furniture');
+  isUpdateRightInspector();
+  isRenderCanvas();
+}
+
+function isRotateSelectedItem() {
+  const item = isGetItemByRef(isSelectedItem);
+  if (!item || isSelectedItem.type !== 'furniture') return;
+  item.angle = ((item.angle || 0) + Math.PI / 2) % (Math.PI * 2);
+  isPushHistory('Rotate Furniture');
+  isUpdateRightInspector();
+  isRenderCanvas();
+}
+
+function isDeleteSelectedItem() {
+  if (!isSelectedItem || !isLayout) return;
+  if (isSelectedItem.type === 'furniture') {
+    isLayout.furniture.splice(isSelectedItem.index, 1);
+  } else if (isSelectedItem.type === 'wall') {
+    isLayout.walls.splice(isSelectedItem.index, 1);
+  } else if (isSelectedItem.type === 'room') {
+    isLayout.rooms.splice(isSelectedItem.index, 1);
+  } else if (isSelectedItem.type === 'zone') {
+    if (isSelectedItem.subType === 'exit') isLayout.exits.splice(isSelectedItem.index, 1);
+    else if (isSelectedItem.subType === 'stairs') isLayout.stairs.splice(isSelectedItem.index, 1);
+    else if (isSelectedItem.subType === 'elevator') isLayout.elevators.splice(isSelectedItem.index, 1);
+  }
+  isSelectedItem = null;
+  isPushHistory('Delete Item');
+  isUpdateRightInspector();
+  isRenderCanvas();
+  showToast('Объект удален');
+}
+
+function isDuplicateSelectedItem() {
+  if (!isSelectedItem || !isLayout) return;
+  const item = isGetItemByRef(isSelectedItem);
+  if (!item) return;
+
+  const copy = JSON.parse(JSON.stringify(item));
+  if ('x' in copy) copy.x += 4;
+  if ('y' in copy) copy.y += 4;
+  if ('x1' in copy) {
+    copy.x1 += 4; copy.y1 += 4;
+    copy.x2 += 4; copy.y2 += 4;
+  }
+
+  if (isSelectedItem.type === 'furniture') {
+    isLayout.furniture.push(copy);
+    isSelectedItem = { type: 'furniture', index: isLayout.furniture.length - 1 };
+  } else if (isSelectedItem.type === 'wall') {
+    isLayout.walls.push(copy);
+    isSelectedItem = { type: 'wall', index: isLayout.walls.length - 1 };
+  } else if (isSelectedItem.type === 'room') {
+    isLayout.rooms.push(copy);
+    isSelectedItem = { type: 'room', index: isLayout.rooms.length - 1 };
+  } else if (isSelectedItem.type === 'zone') {
+    if (isSelectedItem.subType === 'exit') {
+      isLayout.exits.push(copy);
+      isSelectedItem = { type: 'zone', subType: 'exit', index: isLayout.exits.length - 1 };
+    } else if (isSelectedItem.subType === 'stairs') {
+      isLayout.stairs.push(copy);
+      isSelectedItem = { type: 'zone', subType: 'stairs', index: isLayout.stairs.length - 1 };
+    } else if (isSelectedItem.subType === 'elevator') {
+      isLayout.elevators.push(copy);
+      isSelectedItem = { type: 'zone', subType: 'elevator', index: isLayout.elevators.length - 1 };
+    }
+  }
+
+  isPushHistory('Duplicate Item');
+  isUpdateRightInspector();
+  isRenderCanvas();
+  showToast('Создан дубликат');
+}
+
+// ------------------------------------------
+// UNDO / REDO FOR INTERIOR STUDIO
+// ------------------------------------------
+function isPushHistory(actionName) {
+  if (!isLayout) return;
+  if (isHistoryIndex < isHistory.length - 1) {
+    isHistory = isHistory.slice(0, isHistoryIndex + 1);
+  }
+  isHistory.push(JSON.stringify(isLayout));
+  if (isHistory.length > 30) isHistory.shift();
+  isHistoryIndex = isHistory.length - 1;
+}
+
+function isUndo() {
+  if (isHistoryIndex > 0) {
+    isHistoryIndex--;
+    isLayout = JSON.parse(isHistory[isHistoryIndex]);
+    isSelectedItem = null;
+    isUpdateRightInspector();
+    isRenderCanvas();
+    showToast('Отмена действия в интерьере');
+  }
+}
+
+// =======================================================
+// INDEXED DB INTEGRATION FOR HUGE MAP SAVE & PLAY
+// =======================================================
+function openMapDB() {
+  return new Promise((resolve, reject) => {
+    try {
+      const req = indexedDB.open('NeonCityDB', 1);
+      req.onupgradeneeded = (e) => {
+        e.target.result.createObjectStore('maps');
+      };
+      req.onsuccess = (e) => resolve(e.target.result);
+      req.onerror = (e) => reject(e.target.error);
+    } catch (err) {
+      reject(err);
+    }
+  });
+}
+
+async function saveCustomMapToStorage(data) {
+  try {
+    localStorage.setItem('neon_city_custom_map', JSON.stringify(data));
+    localStorage.removeItem('neon_city_custom_map_indexeddb');
+  } catch (e) {
+    console.warn('LocalStorage limit exceeded, falling back to IndexedDB...', e);
+    const db = await openMapDB();
+    await new Promise((resolve, reject) => {
+      const tx = db.transaction('maps', 'readwrite');
+      tx.objectStore('maps').put(data, 'custom_map');
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+    localStorage.setItem('neon_city_custom_map_indexeddb', 'true');
+    localStorage.removeItem('neon_city_custom_map');
+  }
+}
+
 </script>
 </body>
 </html>

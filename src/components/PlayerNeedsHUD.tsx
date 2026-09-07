@@ -1,19 +1,39 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { Player, InventoryItem, GameWorld } from '../types';
-import { isPlayerNearTrashBin, isPlayerNearEcoVending } from '../items';
-import { getDetailedBodySensations, getBodyPartLabel, getBodyPartStatusText } from '../sensations';
+import { isPlayerNearTrashBin, isPlayerNearEcoVending, stowItemFromHandToPockets, swapPlayerHands } from '../items';
+import { getDetailedBodySensations } from '../sensations';
 import { ItemIconCanvas } from './ItemIconCanvas';
-import { Package, Heart, Sparkles, AlertCircle, Eye, Activity, Droplet, CloudRain, Thermometer, Zap, BatteryLow, Volume2, Trash2 } from 'lucide-react';
+import { 
+  Package, 
+  Heart, 
+  Sparkles, 
+  AlertCircle, 
+  Activity, 
+  Droplet, 
+  CloudRain, 
+  Thermometer, 
+  Zap, 
+  BatteryLow, 
+  Volume2, 
+  Trash2,
+  Hand,
+  ArrowLeftRight,
+  ArrowDownToLine
+} from 'lucide-react';
 
 interface PlayerNeedsHUDProps {
   player: Player | null;
   world?: GameWorld | null;
   onOpenInventory: () => void;
   onOpenSelfInspection: () => void;
+  onToggleActiveHand?: () => void;
+  onSelectActiveHand?: (hand: 'left' | 'right') => void;
+  onUseActiveHandItem?: () => void;
   onSelectHotbarItem?: (index: number) => void;
   onSelectHotbarIndex?: (index: number) => void;
   onUseHotbarItem?: (index: number) => void;
-  selectedHotbarIndex: number;
+  selectedHotbarIndex?: number;
+  isMobileTouch?: boolean;
 }
 
 export const PlayerNeedsHUD: React.FC<PlayerNeedsHUDProps> = ({
@@ -21,19 +41,38 @@ export const PlayerNeedsHUD: React.FC<PlayerNeedsHUDProps> = ({
   world,
   onOpenInventory,
   onOpenSelfInspection,
-  onSelectHotbarItem,
-  onSelectHotbarIndex,
-  onUseHotbarItem,
-  selectedHotbarIndex
+  onToggleActiveHand,
+  onSelectActiveHand,
+  onUseActiveHandItem,
+  isMobileTouch = false
 }) => {
   if (!player || !player.needs) return null;
 
-  const handleSelectSlot = (idx: number) => {
-    onSelectHotbarItem?.(idx);
-    onSelectHotbarIndex?.(idx);
+  const activeHand = player.activeHand || 'right';
+  const leftItem = player.leftHandItem;
+  const rightItem = player.rightHandItem;
+  const activeHandItem = activeHand === 'left' ? leftItem : rightItem;
+
+  const handleHandClick = (hand: 'left' | 'right') => {
+    if (onSelectActiveHand) {
+      onSelectActiveHand(hand);
+    } else {
+      player.activeHand = hand;
+    }
   };
 
-  const selectedItem: InventoryItem | undefined = player.inventory?.[selectedHotbarIndex];
+  const handleSwapHands = () => {
+    if (onToggleActiveHand) {
+      onToggleActiveHand();
+    } else {
+      swapPlayerHands(player);
+    }
+  };
+
+  const handleStowHand = (e: React.MouseEvent, hand: 'left' | 'right') => {
+    e.stopPropagation();
+    stowItemFromHandToPockets(player, hand);
+  };
 
   const bs = player.bodyState;
   const detailed = getDetailedBodySensations(player);
@@ -42,26 +81,48 @@ export const PlayerNeedsHUD: React.FC<PlayerNeedsHUDProps> = ({
   const isNearTrash = world ? isPlayerNearTrashBin(player, world) : false;
   const isNearEco = world ? isPlayerNearEcoVending(player, world) : false;
 
-  const isCritical = player.needs.health < 30 || bs?.painLevel! > 60;
-  const isDehydrated = player.needs.thirst < 25;
-  const isWet = bs ? bs.wetness > 50 : false;
-  const isCold = bs ? bs.temperature < 35.8 : false;
-  const isPainful = bs ? bs.painLevel > 35 : false;
-  const isExhausted = player.needs.energy < 20;
-  const isNauseous = (player.needs.nausea || 0) > 30;
-  const isStuffed = (player.needs.fullness || 0) > 90;
+  const isCritical = player.needs.health < 30 || (bs?.painLevel ?? 0) > 60;
   const isConsuming = !!player.consumption?.isConsuming;
-
-  const hasLegInjury = bs?.bodyParts && (bs.bodyParts.leftLeg.some(i => !i.treated) || bs.bodyParts.rightLeg.some(i => !i.treated));
-  const hasArmInjury = bs?.bodyParts && (bs.bodyParts.leftArm.some(i => !i.treated) || bs.bodyParts.rightArm.some(i => !i.treated));
-
   const tinnitusActive = (bs?.tinnitusTimer || 0) > 0;
-  const impactFlashActive = (bs?.impactFlashTimer || 0) > 0;
+
+  // Determine prompt label for key [E]
+  const getPromptLabel = () => {
+    if (activeHandItem) {
+      if (activeHandItem.isContainer) {
+        return `Открыть: ${activeHandItem.nameRu}`;
+      }
+      if (activeHandItem.category === 'food') {
+        const hasPortions = activeHandItem.maxPortions && activeHandItem.maxPortions > 1;
+        return hasPortions
+          ? `Сделать укус (${activeHandItem.portions ?? activeHandItem.maxPortions}/${activeHandItem.maxPortions}): ${activeHandItem.nameRu}`
+          : `Съесть: ${activeHandItem.nameRu}`;
+      }
+      if (activeHandItem.category === 'drink') {
+        const hasPortions = activeHandItem.maxPortions && activeHandItem.maxPortions > 1;
+        return hasPortions
+          ? `Сделать глоток (${activeHandItem.portions ?? activeHandItem.maxPortions}/${activeHandItem.maxPortions}): ${activeHandItem.nameRu}`
+          : `Выпить: ${activeHandItem.nameRu}`;
+      }
+      if (activeHandItem.category === 'med') {
+        const hasPortions = activeHandItem.maxPortions && activeHandItem.maxPortions > 1;
+        return hasPortions
+          ? `Принять дозу (${activeHandItem.portions ?? activeHandItem.maxPortions}/${activeHandItem.maxPortions}): ${activeHandItem.nameRu}`
+          : `Применить: ${activeHandItem.nameRu}`;
+      }
+      if (activeHandItem.usable) {
+        return `Использовать: ${activeHandItem.nameRu}`;
+      }
+      return `В руке: ${activeHandItem.nameRu}`;
+    }
+
+    return null;
+  };
+
+  const actionPrompt = getPromptLabel();
 
   return (
     <>
       {/* 1. SENSORY ALERTS & TINNITUS */}
-      {/* Tinnitus Sound Indication Overlay */}
       {tinnitusActive && (
         <div className="fixed top-4 left-1/2 -translate-x-1/2 pointer-events-none z-50 px-4 py-1.5 rounded-full bg-amber-500/20 border border-amber-400/40 backdrop-blur-md text-amber-200 text-xs font-bold flex items-center gap-2 animate-bounce">
           <Volume2 className="w-4 h-4 animate-spin" />
@@ -69,45 +130,57 @@ export const PlayerNeedsHUD: React.FC<PlayerNeedsHUDProps> = ({
         </div>
       )}
 
-      {/* 2. BODY SENSATIONS & INSPECTION HUD PANEL (Positioned bottom-right on foot, moved under minimap when driving) */}
+      {/* 2. BODY SENSATIONS & INSPECTION HUD PANEL */}
       <div 
         id="bottom-right-symptoms-bar"
-        className={`fixed z-40 flex flex-col items-end gap-1.5 pointer-events-auto transition-all duration-300 ${
-          player.isInVehicle 
-            ? 'top-[160px] right-4' 
-            : 'bottom-4 right-4'
+        className={`fixed z-30 flex flex-col items-end gap-1.5 pointer-events-auto transition-all duration-200 ${
+          isMobileTouch 
+            ? 'top-[92px] sm:top-[140px] right-3 max-w-[200px]' 
+            : 'bottom-4 right-4 max-w-[320px]'
         }`}
       >
         {/* Inspection Button Trigger (Key [C]) */}
         <button
           id="hud-self-inspection-btn"
           onClick={onOpenSelfInspection}
-          className="flex items-center gap-2.5 px-3.5 py-2 bg-slate-950/95 hover:bg-slate-900 active:scale-95 border border-slate-700 rounded-lg shadow-2xl text-slate-200 transition font-mono"
+          onTouchEnd={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            onOpenSelfInspection();
+          }}
+          className={`flex items-center gap-2 ${
+            isMobileTouch ? 'px-2.5 py-1.5' : 'px-3.5 py-2'
+          } bg-slate-950/95 hover:bg-slate-900 active:scale-95 border border-slate-700/90 rounded-xl shadow-2xl text-slate-200 transition font-mono`}
           title="Открыть самоосмотр организма (Клавиша C)"
         >
           <div className={`p-1 rounded bg-slate-900 ${isCritical ? 'text-rose-400' : 'text-slate-300'}`}>
-            <Activity className="w-4 h-4" />
+            <Activity className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
           </div>
           <div className="text-left">
             <div className="text-[9px] font-bold tracking-widest uppercase text-slate-400 flex items-center gap-1.5">
               <span>СОСТОЯНИЕ</span>
               <span className="px-1 bg-slate-900 rounded text-[9px] font-mono border border-slate-700 text-slate-300">C</span>
             </div>
-            <div className="text-xs font-medium text-slate-200 line-clamp-1 max-w-[150px]">
+            <div className="text-[11px] sm:text-xs font-medium text-slate-200 line-clamp-1 max-w-[120px] sm:max-w-[150px]">
               {detailed.healthText}
             </div>
           </div>
         </button>
 
         {/* Dynamic Symptom Badges */}
-        <div className="flex flex-wrap justify-end gap-1 max-w-[320px]">
+        <div className="flex flex-wrap justify-end gap-1 max-w-[220px] sm:max-w-[320px]">
           {detailed.activeSymptoms.map((symptom) => {
             const isDanger = symptom.severity === 'danger';
             return (
               <button
                 key={symptom.id}
                 onClick={onOpenSelfInspection}
-                className={`flex items-center gap-1.5 px-2 py-1 border rounded text-[11px] font-mono shadow backdrop-blur-sm transition ${
+                onTouchEnd={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  onOpenSelfInspection();
+                }}
+                className={`flex items-center gap-1.5 px-2 py-0.5 sm:py-1 border rounded-lg text-[10px] sm:text-[11px] font-mono shadow backdrop-blur-sm transition active:scale-95 ${
                   isDanger 
                     ? 'bg-rose-950/90 border-rose-700 text-rose-200 animate-pulse' 
                     : 'bg-slate-950/95 border-slate-700 text-slate-200 hover:border-slate-500'
@@ -130,19 +203,19 @@ export const PlayerNeedsHUD: React.FC<PlayerNeedsHUDProps> = ({
         </div>
       </div>
 
-      {/* 4. CONSUMPTION PROGRESS BAR */}
+      {/* 3. CONSUMPTION PROGRESS BAR */}
       {isConsuming && player.consumption && (
-        <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-40 pointer-events-none flex flex-col items-center gap-1">
-          <div className="px-3 py-1 bg-slate-950/95 border border-slate-700 rounded text-xs font-mono text-slate-200 shadow-lg flex items-center gap-1.5">
-            <Package className="w-3.5 h-3.5 text-amber-400" />
-            <span>{player.consumption.itemNameRu}</span>
+        <div className="fixed bottom-28 left-1/2 -translate-x-1/2 z-40 pointer-events-none flex flex-col items-center gap-1">
+          <div className="px-3.5 py-1.5 bg-slate-950/95 border border-slate-700 rounded-xl text-xs font-mono text-slate-200 shadow-xl flex items-center gap-2">
+            <Package className="w-4 h-4 text-amber-400" />
+            <span className="font-bold">{player.consumption.itemNameRu}</span>
             {player.consumption.tasteMessage && (
-              <span className="ml-2 text-slate-400 italic">— {player.consumption.tasteMessage}</span>
+              <span className="text-slate-400 italic">— {player.consumption.tasteMessage}</span>
             )}
           </div>
-          <div className="w-48 h-1.5 bg-slate-900 rounded-none overflow-hidden border border-slate-700">
+          <div className="w-52 h-2 bg-slate-900 rounded-full overflow-hidden border border-slate-700">
             <div 
-              className="h-full bg-slate-300 rounded-none transition-all duration-200"
+              className="h-full bg-amber-400 rounded-full transition-all duration-200"
               style={{ width: `${((player.consumption.totalBites - player.consumption.bitesRemaining) / player.consumption.totalBites) * 100}%` }}
             />
           </div>
@@ -152,151 +225,209 @@ export const PlayerNeedsHUD: React.FC<PlayerNeedsHUDProps> = ({
         </div>
       )}
 
-      {/* 5. BOTTOM QUICK HOTBAR & INTERACTION PROMPTS */}
-      <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-40 flex flex-col items-center gap-2 pointer-events-none">
-        {/* Active Hotbar Selected Item Interaction Prompt [E] */}
-        {!player.isInVehicle && selectedItem && selectedItem.usable && (
-          <div 
-            id="hud-hotbar-use-prompt"
-            onClick={() => onUseHotbarItem?.(selectedHotbarIndex)}
-            className="px-4 py-2 bg-slate-950/95 border border-emerald-500/60 rounded-lg shadow-2xl text-emerald-300 text-xs font-mono uppercase tracking-wider flex items-center gap-2.5 pointer-events-auto cursor-pointer hover:bg-slate-900 active:scale-95 transition animate-fadeIn backdrop-blur-md"
-            title="Нажмите E или кликните здесь для использования"
-          >
-            <span className="px-1.5 py-0.5 bg-emerald-950/90 border border-emerald-500/50 rounded text-[10px] font-bold text-emerald-300">
-              E
-            </span>
-            <span>
-              {selectedItem.category === 'food' 
-                ? (selectedItem.maxPortions && selectedItem.maxPortions > 1 
-                    ? `Сделать укус (${selectedItem.portions ?? selectedItem.maxPortions}/${selectedItem.maxPortions}): ${selectedItem.nameRu}`
-                    : `Съесть: ${selectedItem.nameRu}`)
-                : selectedItem.category === 'drink'
-                ? (selectedItem.maxPortions && selectedItem.maxPortions > 1
-                    ? `Сделать глоток (${selectedItem.portions ?? selectedItem.maxPortions}/${selectedItem.maxPortions}): ${selectedItem.nameRu}`
-                    : `Выпить: ${selectedItem.nameRu}`)
-                : selectedItem.category === 'med'
-                ? (selectedItem.maxPortions && selectedItem.maxPortions > 1
-                    ? `Принять дозу (${selectedItem.portions ?? selectedItem.maxPortions}/${selectedItem.maxPortions}): ${selectedItem.nameRu}`
-                    : `Применить: ${selectedItem.nameRu}`)
-                : `Использовать: ${selectedItem.nameRu}`}
-            </span>
-          </div>
-        )}
-
-        {isNearLitter && (
-          <div 
-            onClick={() => {
-              if (world && player) {
-                const worldObj = world;
-                const playerObj = player;
-                import('../items').then(mod => {
-                  mod.pickupNearbyLitter(playerObj, worldObj);
-                });
-              }
-            }}
-            className="px-4 py-2 bg-slate-950/95 border border-slate-600 rounded-lg shadow-xl text-slate-200 text-xs font-mono uppercase tracking-wider flex items-center gap-2 pointer-events-auto cursor-pointer hover:bg-slate-900 transition"
-          >
-            <Sparkles className="w-4 h-4 text-slate-400" />
-            <span>[ТАП] ПОДОБРАТЬ ВТОРСЫРЬЕ</span>
-          </div>
-        )}
-        {isNearEco && (
-          <div 
-            onClick={onOpenInventory}
-            className="px-4 py-2 bg-slate-950/95 border border-slate-600 rounded-lg shadow-xl text-slate-200 text-xs font-mono uppercase tracking-wider flex items-center gap-2 pointer-events-auto cursor-pointer hover:bg-slate-900 transition"
-          >
-            <Trash2 className="w-4 h-4 text-slate-400" />
-            <span>[I] ЭКО-ФАНТОМАТ: СДАТЬ ТАРУ (+$5)</span>
-          </div>
-        )}
-        {isNearTrash && !isNearEco && (
-          <div 
-            onClick={onOpenInventory}
-            className="px-4 py-2 bg-slate-950/95 border border-slate-600 rounded-lg shadow-xl text-slate-200 text-xs font-mono uppercase tracking-wider flex items-center gap-2 pointer-events-auto cursor-pointer hover:bg-slate-900 transition"
-          >
-            <Trash2 className="w-4 h-4 text-slate-400" />
-            <span>[I] УРНА: ВЫБРОСИТЬ ПРЕДМЕТ</span>
-          </div>
-        )}
-      </div>
-
+      {/* 4. BOTTOM DUAL HANDS & POCKETS HUD */}
       {!player.isInVehicle && (
-        <div 
-          id="player-quick-hotbar"
-          className="fixed bottom-4 left-1/2 -translate-x-1/2 z-40 pointer-events-auto flex items-center gap-1.5 bg-slate-950/95 backdrop-blur-md border border-slate-800 p-2 rounded-xl shadow-2xl"
-        >
-          {[0, 1, 2, 3, 4, 5].map((slotIdx) => {
-            const item: InventoryItem | undefined = player.inventory?.[slotIdx];
-            const isSelected = selectedHotbarIndex === slotIdx;
-            const hasPortions = item && item.maxPortions && item.maxPortions > 1;
-            const remainingPortions = item ? (item.portions ?? item.maxPortions ?? 1) : 0;
-            const maxPortions = item?.maxPortions || 1;
+        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-40 flex flex-col items-center gap-2 pointer-events-auto">
+          {/* Active Hand Action Prompt [E] */}
+          {actionPrompt && (
+            <div 
+              id="hud-active-hand-use-prompt"
+              onClick={() => onUseActiveHandItem?.()}
+              className="px-4 py-2 bg-slate-950/95 border border-sky-500/70 rounded-xl shadow-2xl text-sky-200 text-xs font-mono uppercase tracking-wider flex items-center gap-2.5 pointer-events-auto cursor-pointer hover:bg-slate-900 active:scale-95 transition animate-fadeIn backdrop-blur-md"
+              title="Нажмите E для активации предмета в активной руке"
+            >
+              <span className="px-2 py-0.5 bg-sky-950 border border-sky-500/60 rounded-md text-[11px] font-bold text-sky-300">
+                E
+              </span>
+              <span className="font-semibold">{actionPrompt}</span>
+              <span className="text-[10px] text-slate-400 lowercase">
+                ({activeHand === 'left' ? 'лев. рука' : 'прав. рука'})
+              </span>
+            </div>
+          )}
 
-            return (
-              <button
-                key={slotIdx}
-                id={`hotbar-slot-${slotIdx + 1}`}
-                onClick={() => handleSelectSlot(slotIdx)}
-                onDoubleClick={() => onUseHotbarItem?.(slotIdx)}
-                title={
-                  item 
-                    ? `${item.nameRu}${hasPortions ? ` (${remainingPortions}/${maxPortions} ост.)` : ''} [Клавиша ${slotIdx + 1}]` 
-                    : `Пустой слот [${slotIdx + 1}]`
+          {/* Quick World Interactions: Trash / Eco / Litter */}
+          {isNearLitter && !actionPrompt && (
+            <div 
+              onClick={() => {
+                if (world && player) {
+                  import('../items').then(mod => {
+                    mod.pickupNearbyLitter(player, world);
+                  });
                 }
-                className={`relative w-12 h-12 md:w-14 md:h-14 rounded-lg border flex flex-col items-center justify-center transition-all ${
-                  isSelected 
-                    ? 'border-sky-400 bg-sky-950/60 shadow-lg ring-2 ring-sky-400/40 scale-105' 
-                    : item
-                    ? 'border-slate-700 bg-slate-900/80 hover:bg-slate-800 hover:border-slate-500'
-                    : 'border-slate-800/80 bg-slate-950 hover:border-slate-700'
+              }}
+              className="px-3.5 py-1.5 bg-slate-950/95 border border-slate-700 rounded-xl shadow-xl text-slate-200 text-xs font-mono uppercase tracking-wider flex items-center gap-2 pointer-events-auto cursor-pointer hover:bg-slate-900 transition"
+            >
+              <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+              <span>[E] Подобрать вторсырье</span>
+            </div>
+          )}
+          {isNearEco && (
+            <div 
+              onClick={onOpenInventory}
+              className="px-3.5 py-1.5 bg-slate-950/95 border border-emerald-600/60 rounded-xl shadow-xl text-emerald-300 text-xs font-mono uppercase tracking-wider flex items-center gap-2 pointer-events-auto cursor-pointer hover:bg-slate-900 transition"
+            >
+              <Trash2 className="w-3.5 h-3.5 text-emerald-400" />
+              <span>[I] Эко-фандомат: сдать тару (+$5)</span>
+            </div>
+          )}
+          {isNearTrash && !isNearEco && (
+            <div 
+              onClick={onOpenInventory}
+              className="px-3.5 py-1.5 bg-slate-950/95 border border-slate-700 rounded-xl shadow-xl text-slate-300 text-xs font-mono uppercase tracking-wider flex items-center gap-2 pointer-events-auto cursor-pointer hover:bg-slate-900 transition"
+            >
+              <Trash2 className="w-3.5 h-3.5 text-slate-400" />
+              <span>[I] Урна: выбросить мусор</span>
+            </div>
+          )}
+
+          {/* MAIN INTERFACE ROW: LEFT HAND | SWAP | RIGHT HAND | DIVIDER | POCKETS 1-6 | INVENTORY BUTTON */}
+          <div 
+            id="player-dual-hands-hotbar"
+            className="flex items-center gap-2 bg-slate-950/95 backdrop-blur-md border border-slate-800 p-2.5 rounded-2xl shadow-2xl"
+          >
+            {/* --- HANDS SECTION --- */}
+            <div className="flex items-center gap-1.5 bg-slate-900/90 p-1 rounded-xl border border-slate-800/80">
+              {/* LEFT HAND */}
+              <div 
+                id="hud-left-hand-slot"
+                onClick={() => handleHandClick('left')}
+                onDoubleClick={() => onUseActiveHandItem?.()}
+                title={leftItem ? `Левая рука: ${leftItem.nameRu} [Клик - выбрать, Даблклик - использовать]` : 'Левая рука (Свободна) [Клик для выбора]'}
+                className={`relative w-14 h-14 rounded-xl border flex flex-col items-center justify-center transition-all cursor-pointer select-none ${
+                  activeHand === 'left'
+                    ? 'border-sky-400 bg-sky-950/70 shadow-lg ring-2 ring-sky-400/50 scale-105 z-10'
+                    : 'border-slate-800 bg-slate-950/80 hover:border-slate-600 hover:bg-slate-900'
                 }`}
               >
-                <span className="absolute top-1 left-1.5 text-[9px] font-mono font-bold text-slate-500">
-                  {slotIdx + 1}
-                </span>
+                <div className="absolute top-1 left-1.5 text-[8px] font-mono font-bold tracking-tight text-slate-400 uppercase">
+                  ЛЕВ
+                </div>
+                {activeHand === 'left' && (
+                  <span className="absolute -top-1.5 -right-1.5 px-1 py-0.2 bg-sky-500 text-slate-950 text-[8px] font-mono font-extrabold rounded-full shadow">
+                    АКТИВ
+                  </span>
+                )}
 
-                {item ? (
+                {leftItem ? (
                   <>
-                    <ItemIconCanvas itemId={item.itemId} size={28} />
-                    
-                    {/* Item count badge (if > 1) */}
-                    {item.count > 1 && (
-                      <span className="absolute top-1 right-1 px-1 bg-slate-950 border border-slate-700 rounded text-[9px] font-mono font-bold text-slate-300">
-                        {item.count}
-                      </span>
-                    )}
-
-                    {/* Portions gauge / label */}
-                    {hasPortions && (
-                      <div className="absolute bottom-0.5 left-1 right-1 flex flex-col items-center gap-0.5 pointer-events-none">
-                        <div className="w-full bg-slate-950/90 h-1 rounded-full overflow-hidden border border-slate-700/80">
+                    <ItemIconCanvas itemId={leftItem.itemId} size={28} />
+                    {/* Portion indicator if multi-portion */}
+                    {leftItem.maxPortions && leftItem.maxPortions > 1 && (
+                      <>
+                        <span className="absolute top-1 right-1.5 px-1 py-0.2 bg-slate-950/90 border border-slate-700/80 rounded text-[8px] font-mono font-bold text-sky-300">
+                          {leftItem.portions ?? leftItem.maxPortions}/{leftItem.maxPortions}
+                        </span>
+                        <div className="absolute bottom-0.5 left-1 right-1 h-1 bg-slate-950/90 rounded-full overflow-hidden border border-slate-700/80">
                           <div 
                             className="h-full bg-sky-400 rounded-full transition-all"
-                            style={{ width: `${Math.max(0, Math.min(100, (remainingPortions / maxPortions) * 100))}%` }}
+                            style={{ width: `${Math.max(0, Math.min(100, ((leftItem.portions ?? leftItem.maxPortions) / leftItem.maxPortions) * 100))}%` }}
                           />
                         </div>
-                        <span className="text-[7.5px] font-mono font-bold text-sky-300 leading-none">
-                          {remainingPortions}/{maxPortions}
-                        </span>
-                      </div>
+                      </>
                     )}
+                    {leftItem.count > 1 && (
+                      <span className="absolute bottom-1 right-1 px-1 bg-slate-950 border border-slate-700 rounded text-[9px] font-mono font-bold text-slate-300">
+                        x{leftItem.count}
+                      </span>
+                    )}
+                    {/* Quick stow icon button */}
+                    <button
+                      onClick={(e) => handleStowHand(e, 'left')}
+                      className="absolute bottom-1 left-1 p-0.5 rounded bg-slate-900/80 hover:bg-sky-600 text-slate-400 hover:text-white transition z-10"
+                      title="Убрать в карман"
+                    >
+                      <ArrowDownToLine className="w-2.5 h-2.5" />
+                    </button>
                   </>
                 ) : (
-                  <div className="w-1.5 h-1.5 rounded-none bg-slate-800" />
+                  <Hand className="w-5 h-5 text-slate-700 stroke-[1.5]" />
                 )}
-              </button>
-            );
-          })}
+              </div>
 
-          {/* Dedicated Inventory Button */}
-          <button
-            id="hotbar-bag-toggle-btn"
-            onClick={onOpenInventory}
-            className="ml-1.5 px-3.5 h-12 md:h-14 bg-slate-900 hover:bg-slate-800 active:scale-95 text-slate-200 font-mono font-bold rounded-lg border border-slate-700 shadow-lg flex flex-col items-center justify-center gap-0.5 transition"
-          >
-            <Package className="w-4 h-4 md:w-5 md:h-5 text-slate-300" />
-            <span className="text-[9px] tracking-widest uppercase">РЮКЗАК</span>
-          </button>
+              {/* SWAP / TOGGLE HANDS BUTTON */}
+              <button
+                id="hud-swap-hands-btn"
+                onClick={handleSwapHands}
+                className="px-1.5 h-14 bg-slate-950 hover:bg-slate-800 active:scale-95 border border-slate-800 rounded-lg text-slate-400 hover:text-sky-300 flex flex-col items-center justify-center gap-0.5 transition"
+                title="Переключить / Поменять руки местами (Клавиша Q)"
+              >
+                <ArrowLeftRight className="w-3.5 h-3.5" />
+                <span className="text-[8px] font-mono font-bold">Q</span>
+              </button>
+
+              {/* RIGHT HAND */}
+              <div 
+                id="hud-right-hand-slot"
+                onClick={() => handleHandClick('right')}
+                onDoubleClick={() => onUseActiveHandItem?.()}
+                title={rightItem ? `Правая рука: ${rightItem.nameRu} [Клик - выбрать, Даблклик - использовать]` : 'Правая рука (Свободна) [Клик для выбора]'}
+                className={`relative w-14 h-14 rounded-xl border flex flex-col items-center justify-center transition-all cursor-pointer select-none ${
+                  activeHand === 'right'
+                    ? 'border-sky-400 bg-sky-950/70 shadow-lg ring-2 ring-sky-400/50 scale-105 z-10'
+                    : 'border-slate-800 bg-slate-950/80 hover:border-slate-600 hover:bg-slate-900'
+                }`}
+              >
+                <div className="absolute top-1 left-1.5 text-[8px] font-mono font-bold tracking-tight text-slate-400 uppercase">
+                  ПРАВ
+                </div>
+                {activeHand === 'right' && (
+                  <span className="absolute -top-1.5 -right-1.5 px-1 py-0.2 bg-sky-500 text-slate-950 text-[8px] font-mono font-extrabold rounded-full shadow">
+                    АКТИВ
+                  </span>
+                )}
+
+                {rightItem ? (
+                  <>
+                    <ItemIconCanvas itemId={rightItem.itemId} size={28} />
+                    {/* Portion indicator if multi-portion */}
+                    {rightItem.maxPortions && rightItem.maxPortions > 1 && (
+                      <>
+                        <span className="absolute top-1 right-1.5 px-1 py-0.2 bg-slate-950/90 border border-slate-700/80 rounded text-[8px] font-mono font-bold text-sky-300">
+                          {rightItem.portions ?? rightItem.maxPortions}/{rightItem.maxPortions}
+                        </span>
+                        <div className="absolute bottom-0.5 left-1 right-1 h-1 bg-slate-950/90 rounded-full overflow-hidden border border-slate-700/80">
+                          <div 
+                            className="h-full bg-sky-400 rounded-full transition-all"
+                            style={{ width: `${Math.max(0, Math.min(100, ((rightItem.portions ?? rightItem.maxPortions) / rightItem.maxPortions) * 100))}%` }}
+                          />
+                        </div>
+                      </>
+                    )}
+                    {rightItem.count > 1 && (
+                      <span className="absolute bottom-1 right-1 px-1 bg-slate-950 border border-slate-700 rounded text-[9px] font-mono font-bold text-slate-300">
+                        x{rightItem.count}
+                      </span>
+                    )}
+                    {/* Quick stow icon button */}
+                    <button
+                      onClick={(e) => handleStowHand(e, 'right')}
+                      className="absolute bottom-1 left-1 p-0.5 rounded bg-slate-900/80 hover:bg-sky-600 text-slate-400 hover:text-white transition z-10"
+                      title="Убрать в карман"
+                    >
+                      <ArrowDownToLine className="w-2.5 h-2.5" />
+                    </button>
+                  </>
+                ) : (
+                  <Hand className="w-5 h-5 text-slate-700 stroke-[1.5]" />
+                )}
+              </div>
+            </div>
+
+            {/* SEPARATOR */}
+            <div className="h-10 w-px bg-slate-800" />
+
+            {/* Dedicated Inventory Button */}
+            <button
+              id="hotbar-bag-toggle-btn"
+              onClick={onOpenInventory}
+              className="px-3.5 h-14 bg-slate-900/90 hover:bg-slate-800 active:scale-95 text-slate-200 font-mono font-bold rounded-xl border border-slate-700/80 shadow-lg flex flex-col items-center justify-center gap-1 transition"
+              title="Открыть полный инвентарь (Клавиша I или Tab)"
+            >
+              <Package className="w-5 h-5 text-slate-300" />
+              <span className="text-[8px] tracking-widest uppercase text-slate-400">РЮКЗАК [I]</span>
+            </button>
+          </div>
         </div>
       )}
     </>

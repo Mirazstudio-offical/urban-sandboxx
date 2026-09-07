@@ -104,6 +104,36 @@ if (typeof CanvasRenderingContext2D.prototype.roundRect === 'function') {
   };
 }
 
+// Global protection for CanvasGradient.prototype.addColorStop to prevent WebKit SyntaxError: The string did not match the expected pattern
+if (typeof CanvasGradient !== 'undefined' && CanvasGradient.prototype) {
+  const originalAddColorStop = CanvasGradient.prototype.addColorStop;
+  CanvasGradient.prototype.addColorStop = function(offset: number, color: string) {
+    const safeOffset = offset < 0 ? 0 : offset > 1 ? 1 : (isFinite(offset) ? offset : 0);
+    let safeColor = color;
+    if (typeof safeColor !== 'string' || safeColor.includes('NaN') || safeColor.includes('undefined')) {
+      safeColor = 'rgba(0, 0, 0, 0)';
+    }
+    try {
+      originalAddColorStop.call(this, safeOffset, safeColor);
+    } catch {
+      try {
+        originalAddColorStop.call(this, safeOffset, 'rgba(0, 0, 0, 0)');
+      } catch {}
+    }
+  };
+}
+
+if (typeof CanvasRenderingContext2D.prototype.setLineDash === 'function') {
+  const originalSetLineDash = CanvasRenderingContext2D.prototype.setLineDash;
+  CanvasRenderingContext2D.prototype.setLineDash = function(segments: number[]) {
+    if (!Array.isArray(segments)) return;
+    const safeSegments = segments.map(s => (isFinite(s) && s >= 0 ? s : 0));
+    try {
+      originalSetLineDash.call(this, safeSegments);
+    } catch {}
+  };
+}
+
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <App />

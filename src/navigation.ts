@@ -230,7 +230,7 @@ function getIntersectionNeighbors(
 }
 
 // A* algorithm to compute path over intersection nodes avoiding traffic jams and accidents in either direction
-export function calculateGpsRoute(world: GameWorld, start: Vector2D, end: Vector2D): Vector2D[] {
+export function calculateGpsRoute(world: GameWorld, start: Vector2D, end: Vector2D, ignoreBlocks: boolean = false): Vector2D[] {
   const directDist = getDistance(start, end);
 
   // If destination is very close (within 250px), direct line
@@ -297,7 +297,7 @@ export function calculateGpsRoute(world: GameWorld, start: Vector2D, end: Vector
       // Check if this road segment in EITHER direction has an accident (авария) or traffic jam (затор)
       const roadBlock = isRoadSegmentBlocked(world, currentInter.x, currentInter.y, neighbor.x, neighbor.y);
       // Heavy penalty (500,000) guarantees A* completely routes cars around the accident/jam
-      const blockPenalty = roadBlock.isBlocked ? 500000 : 0;
+      const blockPenalty = (roadBlock.isBlocked && !ignoreBlocks) ? 500000 : 0;
 
       const tentativeG = (gScore.get(currentId) ?? Infinity) + dist + blockPenalty;
 
