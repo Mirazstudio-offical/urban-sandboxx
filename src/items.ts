@@ -19,6 +19,7 @@ import {
   applyValerianDrops
 } from './medicineSystem';
 import { soothePanic } from './bodySystem';
+import { isTrailerVehicle } from './vehicleHelpers';
 
 export interface ItemDefinition {
   itemId: string;
@@ -746,6 +747,47 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     weight: 0.005,
     usable: true
   },
+  // === AUTOMOTIVE KEYS & DOCUMENTS ===
+  car_key: {
+    itemId: 'car_key',
+    name: 'Car Key Fob',
+    nameRu: 'Ключ от автомобиля',
+    category: 'auto',
+    maxStack: 1,
+    icon: '🔑',
+    description: 'Remote key fob for locking and unlocking your personal vehicle. Press E while holding in hands or use from inventory near car.',
+    descriptionRu: 'Электронный ключ с пультом сигнализации. Нажмите [E] с ключом в руках или активируйте из инвентаря рядом с авто для отпирания/запирания дверей.',
+    effects: {},
+    weight: 0.1,
+    usable: true
+  },
+  car_pts: {
+    itemId: 'car_pts',
+    name: 'Vehicle Title (PTS)',
+    nameRu: 'Паспорт ТС (ПТС)',
+    category: 'auto',
+    maxStack: 1,
+    icon: '📄',
+    description: 'Official Passport of Vehicle Construction proving vehicle registration and factory specifications.',
+    descriptionRu: 'Официальный паспорт транспортного средства (ПТС) с указанием параметров, VIN-кода и права собственности.',
+    effects: {},
+    weight: 0.05,
+    usable: false
+  },
+  car_tech_passport: {
+    itemId: 'car_tech_passport',
+    name: 'Vehicle Registration Card (STS)',
+    nameRu: 'Техпаспорт (СТС)',
+    category: 'auto',
+    maxStack: 1,
+    icon: '💳',
+    description: 'Laminated Certificate of Vehicle Registration required for lawful driving in the city.',
+    descriptionRu: 'Свидетельство о регистрации ТС (Техпаспорт / СТС). Содержит госномер, данные владельца и параметры авто.',
+    effects: {},
+    weight: 0.03,
+    usable: false
+  },
+
   repair_kit: {
     itemId: 'repair_kit',
     name: 'Vehicle Repair Toolbox',
@@ -1410,12 +1452,12 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     category: 'misc',
     maxStack: 1,
     icon: '🛢️',
-    description: 'Empty 20-liter metal canister. Bulky item carried in hand.',
-    descriptionRu: 'Пустая металлическая 20-литровая канистра. Переносится в руках.',
+    description: 'Empty 20-liter metal canister. Bulky item carried in hand. Can be filled from cisterns or fuel tanks.',
+    descriptionRu: 'Пустая металлическая 20-литровая канистра. Можно наполнить из цистерны или бака.',
     effects: {},
     weight: 2.5,
     volume: 20.0,
-    usable: false
+    usable: true
   },
   sandbag: {
     itemId: 'sandbag',
@@ -3255,6 +3297,61 @@ export function removeItemFromPlayer(player: Player, itemIndex: number, count: n
   }
 }
 
+export function handleCarKeyActivation(
+  player: Player,
+  keyItem: InventoryItem,
+  world?: GameWorld
+): { success: boolean; message: string } {
+  if (!world || !world.vehicles || world.vehicles.length === 0) {
+    sound.playAlert();
+    addPlayerNotification(player, '🔑 Брелок ключа пикнул, но поблизости нет автомобилей.', 'warning');
+    return { success: false, message: 'Автомобиль не найден' };
+  }
+
+  // Find target vehicle matching custom vehicleId or closest within 180px
+  let targetVeh = keyItem.vehicleId ? world.vehicles.find(v => v.id === keyItem.vehicleId) : null;
+
+  if (!targetVeh) {
+    let minDist = 180;
+    for (const v of world.vehicles) {
+      const d = Math.hypot(v.x - player.x, v.y - player.y);
+      if (d < minDist) {
+        minDist = d;
+        targetVeh = v;
+      }
+    }
+  }
+
+  if (!targetVeh) {
+    sound.playAlert();
+    addPlayerNotification(player, '🔑 Автомобиль находится слишком далеко для сигнала ключа!', 'warning');
+    return { success: false, message: 'Слишком далеко' };
+  }
+
+  const dist = Math.hypot(targetVeh.x - player.x, targetVeh.y - player.y);
+  if (dist > 220 && !player.isInVehicle) {
+    sound.playAlert();
+    addPlayerNotification(player, '🔑 Вы слишком далеко от авто для работы центрального замка.', 'warning');
+    return { success: false, message: 'Слишком далеко' };
+  }
+
+  // Toggle lock state
+  targetVeh.isLocked = !targetVeh.isLocked;
+  targetVeh.turnSignal = 'hazard';
+  setTimeout(() => {
+    if (targetVeh) targetVeh.turnSignal = 'none';
+  }, 1200);
+
+  sound.playPickup();
+  const carName = keyItem.carName || targetVeh.type?.toUpperCase() || 'Автомобиль';
+  const statusMsg = targetVeh.isLocked
+    ? `🔒 Пик-пик! ЦЗ заблокирован: ${carName}`
+    : `🔓 Пик-пик! ЦЗ разблокирован: ${carName}`;
+
+  addPlayerNotification(player, statusMsg, targetVeh.isLocked ? 'warning' : 'heal');
+  return { success: true, message: statusMsg };
+}
+
 export function useItemOnPlayer(
   player: Player,
   itemIndex: number,
@@ -3301,23 +3398,21 @@ export function useItemOnPlayer(
 
   const def = ITEM_CATALOG[item.itemId];
 
+  // Automotive Key Fob usage
+  if (item.itemId === 'car_key') {
+    return handleCarKeyActivation(player, item, world);
+  }
+
   // Special repair tool usage
   if (item.itemId === 'repair_kit') {
-    if (player.isInVehicle && player.currentVehicleId && world) {
-      const veh = world.vehicles.find(v => v.id === player.currentVehicleId);
+    if (world) {
+      let veh = player.isInVehicle && player.currentVehicleId ? world.vehicles.find(v => v.id === player.currentVehicleId) : null;
+      if (!veh) {
+        // Find nearby car or trailer needing repair
+        veh = world.vehicles.find(v => Math.hypot(v.x - player.x, v.y - player.y) < 120);
+      }
       if (veh) {
         if (veh.damage) {
-          veh.damage.engineSmoking = false;
-          veh.damage.underHoodSmolder = false;
-          veh.damage.engineFire = false;
-          veh.damage.fuelTankFire = false;
-          veh.damage.fuelTankBurntThrough = false;
-          veh.damage.cabinFire = false;
-          veh.damage.fireTimer = 0;
-          veh.damage.fireProgress = 0;
-          veh.damage.fireIntensity = 0;
-          veh.damage.groundPuddleIgnited = false;
-          veh.cabinSmoke = 0;
           veh.damage.frontCrumple = 0;
           veh.damage.rearCrumple = 0;
           veh.damage.leftDent = 0;
@@ -3336,31 +3431,49 @@ export function useItemOnPlayer(
           veh.damage.rearGlassCracked = false;
           veh.damage.hoodBuckled = false;
           veh.damage.scratches = [];
+          if (!isTrailerVehicle(veh)) {
+            veh.damage.engineSmoking = false;
+            veh.damage.underHoodSmolder = false;
+            veh.damage.engineFire = false;
+            veh.damage.fuelTankFire = false;
+            veh.damage.fuelTankBurntThrough = false;
+            veh.damage.cabinFire = false;
+            veh.damage.fireTimer = 0;
+            veh.damage.fireProgress = 0;
+            veh.damage.fireIntensity = 0;
+            veh.damage.groundPuddleIgnited = false;
+            veh.cabinSmoke = 0;
+          }
         }
-        if (veh.engineState) {
-          veh.engineState.radiatorWater = 100;
-          veh.engineState.radiatorPunctured = false;
-          veh.engineState.oilLevel = 100;
-          veh.engineState.oilPunctured = false;
-          veh.engineState.oilPressure = 100;
-          veh.engineState.batteryCharge = 100;
-          veh.engineState.starterWorking = true;
-          veh.engineState.temperature = 88;
-          veh.engineState.engineKnocking = false;
-          veh.engineState.engineStalled = false;
-          veh.engineState.overheatingSteam = false;
-        }
-        if (veh.fuelSystem) {
-          veh.fuelSystem.tankPunctured = false;
+        if (!isTrailerVehicle(veh)) {
+          if (veh.engineState) {
+            veh.engineState.radiatorWater = 100;
+            veh.engineState.radiatorPunctured = false;
+            veh.engineState.oilLevel = 100;
+            veh.engineState.oilPunctured = false;
+            veh.engineState.oilPressure = 100;
+            veh.engineState.batteryCharge = 100;
+            veh.engineState.starterWorking = true;
+            veh.engineState.temperature = 88;
+            veh.engineState.engineKnocking = false;
+            veh.engineState.engineStalled = false;
+            veh.engineState.overheatingSteam = false;
+          }
+          if (veh.fuelSystem) {
+            veh.fuelSystem.tankPunctured = false;
+          }
         }
         removeItemFromPlayer(player, itemIndex, 1);
         sound.playPropBreak('hydrant');
-        addPlayerNotification(player, '🔧 Узлы двигателя, подвеска и кузов автомобиля полностью отремонтированы!', 'heal');
-        return { success: true, message: 'Автомобиль отремонтирован' };
+        const msg = isTrailerVehicle(veh)
+          ? '🔧 Кузов, рама и подвеска прицепа полностью отремонтированы!'
+          : '🔧 Узлы двигателя, подвеска и кузов автомобиля полностью отремонтированы!';
+        addPlayerNotification(player, msg, 'heal');
+        return { success: true, message: 'Техника отремонтирована' };
+      } else {
+        addPlayerNotification(player, 'Подойдите к поврежденному авто/прицепу или сядьте в него для ремонта!', 'warning');
+        return { success: false, message: 'Нужно быть рядом с техникой' };
       }
-    } else {
-      addPlayerNotification(player, 'Сядьте в поврежденный автомобиль для ремонта!', 'warning');
-      return { success: false, message: 'Нужно быть в авто' };
     }
   }
 
@@ -3374,10 +3487,23 @@ export function useItemOnPlayer(
     let refueledVehicleName: string | null = null;
 
     if (world) {
-      // 1. Check if standing near/in a vehicle needing fuel
+      // 1. Check if standing near/in a vehicle needing fuel or cistern
       for (const veh of world.vehicles) {
         const dist = Math.hypot(veh.x - player.x, veh.y - player.y);
-        if (dist < 100 || (player.isInVehicle && player.currentVehicleId === veh.id)) {
+        if (dist < 105 || (player.isInVehicle && player.currentVehicleId === veh.id)) {
+          // Check if vehicle has a fluid storage tank (cistern / tanker / barrel)
+          if (veh.fluidTank && veh.fluidTank.currentVolume < veh.fluidTank.capacity) {
+            if (veh.fluidTank.currentVolume <= 0) {
+              veh.fluidTank.liquidType = 'fuel_ai95';
+            }
+            const addLiters = Math.min(5, veh.fluidTank.capacity - veh.fluidTank.currentVolume);
+            veh.fluidTank.currentVolume += addLiters;
+            const tankName = veh.type === 'truck_tanker' ? 'бензовоз' : (veh.type === 'truck_water' ? 'водовоз' : (veh.type === 'trailer_barrel' ? 'бочку' : 'цистерну'));
+            refueledVehicleName = `${tankName} (залито 5л АИ-95)`;
+            break;
+          }
+
+          if (isTrailerVehicle(veh)) continue; // Standard non-tank trailers do not have fuel tanks
           if (veh.fuelSystem && veh.fuelSystem.tankLevel < 100) {
             const capacity = veh.fuelSystem.tankCapacity || 50;
             const currentLiters = (veh.fuelSystem.tankLevel / 100) * capacity;
@@ -3463,6 +3589,42 @@ export function useItemOnPlayer(
     }
 
     return { success: true, message: 'Бензин залит/разлит' };
+  }
+
+  // Empty Canister usage (draws liquid from cistern, tanker, or barrel)
+  if (item.itemId === 'canister_empty') {
+    if (world) {
+      for (const veh of world.vehicles) {
+        const dist = Math.hypot(veh.x - player.x, veh.y - player.y);
+        if (dist < 115 || (player.isInVehicle && player.currentVehicleId === veh.id)) {
+          if (veh.fluidTank && veh.fluidTank.currentVolume >= 5) {
+            const drawVol = Math.min(20, veh.fluidTank.currentVolume);
+            veh.fluidTank.currentVolume = Math.max(0, veh.fluidTank.currentVolume - drawVol);
+            sound.playWaterSpray();
+
+            removeItemFromPlayer(player, itemIndex, 1);
+            const filled = createItem('fuel_canister', 1);
+            filled.portions = Math.round(drawVol);
+            filled.maxPortions = 20;
+
+            if (veh.fluidTank.liquidType === 'water') {
+              filled.name = 'Canister with Water (20L)';
+              filled.nameRu = 'Канистра с водой (20л)';
+              addItemToPlayer(player, filled);
+              addPlayerNotification(player, `💧 Набрано ${Math.round(drawVol)}л чистой воды из цистерны!`, 'heal');
+            } else {
+              const lName = veh.fluidTank.liquidType === 'fuel_ai95' ? 'Бензин АИ-95' : (veh.fluidTank.liquidType === 'diesel' ? 'Дизель' : 'Топливо');
+              filled.nameRu = `Канистра (${lName} 20л)`;
+              addItemToPlayer(player, filled);
+              addPlayerNotification(player, `⛽ Набрано ${Math.round(drawVol)}л ${lName} из цистерны!`, 'heal');
+            }
+            return { success: true, message: 'Канистра наполнена' };
+          }
+        }
+      }
+    }
+    addPlayerNotification(player, '🛢️ Канистра пуста. Подойдите к цистерне, водовозу или бочке чтобы набрать жидкость.', 'info');
+    return { success: false, message: 'Канистра пуста' };
   }
 
   // Zippo Lighter usage (finite charges, ignites puddles & leaks)
@@ -4109,23 +4271,21 @@ export function useHandItemOnPlayer(
 
   const def = ITEM_CATALOG[item.itemId];
 
+  // Automotive Key Fob usage (triggers when held in active hand and pressing E)
+  if (item.itemId === 'car_key') {
+    return handleCarKeyActivation(player, item, world);
+  }
+
   // Repair kit
   if (item.itemId === 'repair_kit') {
-    if (player.isInVehicle && player.currentVehicleId && world) {
-      const veh = world.vehicles.find(v => v.id === player.currentVehicleId);
+    if (world) {
+      let veh = player.isInVehicle && player.currentVehicleId ? world.vehicles.find(v => v.id === player.currentVehicleId) : null;
+      if (!veh) {
+        // Find nearby car or trailer needing repair
+        veh = world.vehicles.find(v => Math.hypot(v.x - player.x, v.y - player.y) < 120);
+      }
       if (veh) {
         if (veh.damage) {
-          veh.damage.engineSmoking = false;
-          veh.damage.underHoodSmolder = false;
-          veh.damage.engineFire = false;
-          veh.damage.fuelTankFire = false;
-          veh.damage.fuelTankBurntThrough = false;
-          veh.damage.cabinFire = false;
-          veh.damage.fireTimer = 0;
-          veh.damage.fireProgress = 0;
-          veh.damage.fireIntensity = 0;
-          veh.damage.groundPuddleIgnited = false;
-          veh.cabinSmoke = 0;
           veh.damage.frontCrumple = 0;
           veh.damage.rearCrumple = 0;
           veh.damage.leftDent = 0;
@@ -4144,22 +4304,37 @@ export function useHandItemOnPlayer(
           veh.damage.rearGlassCracked = false;
           veh.damage.hoodBuckled = false;
           veh.damage.scratches = [];
+          if (!isTrailerVehicle(veh)) {
+            veh.damage.engineSmoking = false;
+            veh.damage.underHoodSmolder = false;
+            veh.damage.engineFire = false;
+            veh.damage.fuelTankFire = false;
+            veh.damage.fuelTankBurntThrough = false;
+            veh.damage.cabinFire = false;
+            veh.damage.fireTimer = 0;
+            veh.damage.fireProgress = 0;
+            veh.damage.fireIntensity = 0;
+            veh.damage.groundPuddleIgnited = false;
+            veh.cabinSmoke = 0;
+          }
         }
-        if (veh.engineState) {
-          veh.engineState.radiatorWater = 100;
-          veh.engineState.radiatorPunctured = false;
-          veh.engineState.oilLevel = 100;
-          veh.engineState.oilPunctured = false;
-          veh.engineState.oilPressure = 100;
-          veh.engineState.batteryCharge = 100;
-          veh.engineState.starterWorking = true;
-          veh.engineState.temperature = 88;
-          veh.engineState.engineKnocking = false;
-          veh.engineState.engineStalled = false;
-          veh.engineState.overheatingSteam = false;
-        }
-        if (veh.fuelSystem) {
-          veh.fuelSystem.tankPunctured = false;
+        if (!isTrailerVehicle(veh)) {
+          if (veh.engineState) {
+            veh.engineState.radiatorWater = 100;
+            veh.engineState.radiatorPunctured = false;
+            veh.engineState.oilLevel = 100;
+            veh.engineState.oilPunctured = false;
+            veh.engineState.oilPressure = 100;
+            veh.engineState.batteryCharge = 100;
+            veh.engineState.starterWorking = true;
+            veh.engineState.temperature = 88;
+            veh.engineState.engineKnocking = false;
+            veh.engineState.engineStalled = false;
+            veh.engineState.overheatingSteam = false;
+          }
+          if (veh.fuelSystem) {
+            veh.fuelSystem.tankPunctured = false;
+          }
         }
         if (item.count > 1) {
           item.count -= 1;
@@ -4167,12 +4342,15 @@ export function useHandItemOnPlayer(
           takeItemFromHand(player, hand);
         }
         sound.playPropBreak('hydrant');
-        addPlayerNotification(player, '🔧 Узлы двигателя, подвеска и кузов автомобиля полностью отремонтированы!', 'heal');
-        return { success: true, message: 'Автомобиль отремонтирован' };
+        const msg = isTrailerVehicle(veh)
+          ? '🔧 Кузов, рама и подвеска прицепа полностью отремонтированы!'
+          : '🔧 Узлы двигателя, подвеска и кузов автомобиля полностью отремонтированы!';
+        addPlayerNotification(player, msg, 'heal');
+        return { success: true, message: 'Техника отремонтирована' };
+      } else {
+        addPlayerNotification(player, 'Подойдите к поврежденному авто/прицепу или сядьте в него для ремонта!', 'warning');
+        return { success: false, message: 'Нужно быть рядом с техникой' };
       }
-    } else {
-      addPlayerNotification(player, 'Сядьте в поврежденный автомобиль для ремонта!', 'warning');
-      return { success: false, message: 'Нужно быть в авто' };
     }
   }
 
@@ -4194,10 +4372,23 @@ export function useHandItemOnPlayer(
     let refueledVehicleName: string | null = null;
 
     if (world) {
-      // 1. Check if standing near/in a vehicle needing fuel
+      // 1. Check if standing near/in a vehicle needing fuel or cistern
       for (const veh of world.vehicles) {
         const dist = Math.hypot(veh.x - player.x, veh.y - player.y);
-        if (dist < 100 || (player.isInVehicle && player.currentVehicleId === veh.id)) {
+        if (dist < 105 || (player.isInVehicle && player.currentVehicleId === veh.id)) {
+          // Check if vehicle has a fluid storage tank (cistern / tanker / barrel)
+          if (veh.fluidTank && veh.fluidTank.currentVolume < veh.fluidTank.capacity) {
+            if (veh.fluidTank.currentVolume <= 0) {
+              veh.fluidTank.liquidType = 'fuel_ai95';
+            }
+            const addLiters = Math.min(5, veh.fluidTank.capacity - veh.fluidTank.currentVolume);
+            veh.fluidTank.currentVolume += addLiters;
+            const tankName = veh.type === 'truck_tanker' ? 'бензовоз' : (veh.type === 'truck_water' ? 'водовоз' : (veh.type === 'trailer_barrel' ? 'бочку' : 'цистерну'));
+            refueledVehicleName = `${tankName} (залито 5л АИ-95)`;
+            break;
+          }
+
+          if (isTrailerVehicle(veh)) continue; // Standard non-tank trailers do not have fuel tanks
           if (veh.fuelSystem && veh.fuelSystem.tankLevel < 100) {
             const capacity = veh.fuelSystem.tankCapacity || 50;
             const currentLiters = (veh.fuelSystem.tankLevel / 100) * capacity;
@@ -4289,6 +4480,57 @@ export function useHandItemOnPlayer(
     }
 
     return { success: true, message: 'Бензин залит/разлит' };
+  }
+
+  // Empty Canister usage in hands (draws liquid from cistern, tanker, or barrel)
+  if (item.itemId === 'canister_empty') {
+    if (world) {
+      for (const veh of world.vehicles) {
+        const dist = Math.hypot(veh.x - player.x, veh.y - player.y);
+        if (dist < 115 || (player.isInVehicle && player.currentVehicleId === veh.id)) {
+          if (veh.fluidTank && veh.fluidTank.currentVolume >= 5) {
+            const drawVol = Math.min(20, veh.fluidTank.currentVolume);
+            veh.fluidTank.currentVolume = Math.max(0, veh.fluidTank.currentVolume - drawVol);
+            sound.playWaterSpray();
+
+            if (item.count > 1) {
+              item.count -= 1;
+            } else {
+              takeItemFromHand(player, hand);
+            }
+
+            const filled = createItem('fuel_canister', 1);
+            filled.portions = Math.round(drawVol);
+            filled.maxPortions = 20;
+
+            if (veh.fluidTank.liquidType === 'water') {
+              filled.name = 'Canister with Water (20L)';
+              filled.nameRu = 'Канистра с водой (20л)';
+            } else {
+              const lName = veh.fluidTank.liquidType === 'fuel_ai95' ? 'Бензин АИ-95' : (veh.fluidTank.liquidType === 'diesel' ? 'Дизель' : 'Топливо');
+              filled.nameRu = `Канистра (${lName} 20л)`;
+            }
+
+            if (hand === 'left' && !player.leftHandItem) {
+              player.leftHandItem = filled;
+            } else if (hand === 'right' && !player.rightHandItem) {
+              player.rightHandItem = filled;
+            } else {
+              addItemToPlayer(player, filled);
+            }
+
+            if (veh.fluidTank.liquidType === 'water') {
+              addPlayerNotification(player, `💧 Набрано ${Math.round(drawVol)}л чистой воды из цистерны!`, 'heal');
+            } else {
+              addPlayerNotification(player, `⛽ Набрано ${Math.round(drawVol)}л топлива из цистерны!`, 'heal');
+            }
+            return { success: true, message: 'Канистра наполнена' };
+          }
+        }
+      }
+    }
+    addPlayerNotification(player, '🛢️ Канистра пуста. Подойдите к цистерне, водовозу или бочке чтобы набрать жидкость.', 'info');
+    return { success: false, message: 'Канистра пуста' };
   }
 
   // Zippo Lighter usage (finite charges, ignites puddles & leaks)
@@ -4621,7 +4863,17 @@ export function useHandItemOnPlayer(
     if (item.count > 1) {
       item.count -= 1;
       const emptySack = createItem('sack_empty', 1);
-      addItemToPlayer(player, emptySack);
+      const added = addItemToPlayer(player, emptySack);
+      if (!added && world) {
+        if (!world.groundItems) world.groundItems = [];
+        world.groundItems.push({
+          id: `ground_sack_empty_${Date.now()}_${Math.random()}`,
+          x: player.x,
+          y: player.y,
+          item: emptySack,
+          spawnTime: Date.now()
+        });
+      }
     } else {
       takeItemFromHand(player, hand);
       const emptySack = createItem('sack_empty', 1);

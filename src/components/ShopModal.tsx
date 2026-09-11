@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Player, GasPumpDispenser, FuelType, Vehicle } from '../types';
 import { ItemIconCanvas } from './ItemIconCanvas';
 import { 
@@ -26,7 +26,7 @@ import {
 import { sound } from '../audio';
 import { getPlayerCash, getAllPlayerItemsFlat, deductPlayerCash } from '../items';
 import { FUEL_GRADES } from '../gasStationSystem';
-import { createDefaultVehicleDamage } from '../vehicleHelpers';
+import { createDefaultVehicleDamage, isTrailerVehicle } from '../vehicleHelpers';
 
 export interface ShopItem {
   id: string;
@@ -58,6 +58,7 @@ export interface CityShop {
     | 'clothing'
     | 'bookstore'
     | 'sports_shop'
+    | 'car_dealership'
     | 'gas_station_shop';
   x: number;
   y: number;
@@ -845,8 +846,9 @@ interface ShopModalProps {
   gasPumps?: GasPumpDispenser[];
   vehicles?: Vehicle[];
   onBuyItems: (items: ShopItem[], totalCost: number) => void;
-  onRepairVehicle?: () => void;
+  onRepairVehicle?: (alreadyPaid?: boolean) => void;
   canRepairVehicle?: boolean;
+  onTuningVehicle?: (action: string, metadata?: any) => void;
 }
 
 export const ShopModal: React.FC<ShopModalProps> = ({
@@ -859,8 +861,16 @@ export const ShopModal: React.FC<ShopModalProps> = ({
   vehicles = [],
   onBuyItems,
   onRepairVehicle,
-  canRepairVehicle = false
+  canRepairVehicle = false,
+  onTuningVehicle
 }) => {
+  // Stable refs to prevent parent closures from restarting/clearing interval timers
+  const onRepairVehicleRef = useRef(onRepairVehicle);
+  onRepairVehicleRef.current = onRepairVehicle;
+
+  const onTuningVehicleRef = useRef(onTuningVehicle);
+  onTuningVehicleRef.current = onTuningVehicle;
+
   // Shopping Cart & Buying Flow States
   const [cart, setCart] = useState<Record<string, number>>({});
   const [customCartItems, setCustomCartItems] = useState<Record<string, { item: ShopItem; quantity: number }>>({});
@@ -937,92 +947,111 @@ export const ShopModal: React.FC<ShopModalProps> = ({
     let timer: any;
     if (isInspecting) {
       timer = setInterval(() => {
-        setInspectionProgress((prev) => {
-          if (prev >= 100) {
-            clearInterval(timer);
-            setIsInspecting(false);
-            const cur = getNearbyOrActiveVehicle();
-            if (cur) setHasInspectedVehicleId(cur.id);
-            playCashRegister();
-            return 100;
-          }
-          const next = prev + 25;
-          if (next === 25) setInspectionStepText("📊 Опрос блоков ЭБУ, датчиков ABS и впрыска...");
-          else if (next === 50) setInspectionStepText("🔍 Сканирование геометрии кузова и подвески...");
-          else if (next === 75) setInspectionStepText("📋 Формирование итоговой диагностической карты...");
-          return next;
-        });
+        setInspectionProgress((prev) => Math.min(100, prev + 25));
       }, 400);
     }
     return () => clearInterval(timer);
   }, [isInspecting]);
 
   useEffect(() => {
+    if (isInspecting) {
+      if (inspectionProgress >= 100) {
+        setIsInspecting(false);
+        const cur = getNearbyOrActiveVehicle();
+        if (cur) setHasInspectedVehicleId(cur.id);
+        playCashRegister();
+      } else if (inspectionProgress === 25) {
+        setInspectionStepText("📊 Опрос блоков ЭБУ, датчиков ABS и впрыска...");
+      } else if (inspectionProgress === 50) {
+        setInspectionStepText("🔍 Сканирование геометрии кузова и подвески...");
+      } else if (inspectionProgress === 75) {
+        setInspectionStepText("📋 Формирование итоговой диагностической карты...");
+      }
+    }
+  }, [inspectionProgress, isInspecting]);
+
+  useEffect(() => {
     let timer: any;
     if (isRepairing) {
       timer = setInterval(() => {
-        setRepairProgress((prev) => {
-          if (prev >= 100) {
-            clearInterval(timer);
-            setIsRepairing(false);
-            if (onRepairVehicle) onRepairVehicle();
-            playCashRegister();
-            return 100;
-          }
-          const next = prev + 20;
-          if (next === 20) setRepairStepText("🔨 Стапельные работы: выравнивание геометрии кузова...");
-          else if (next === 40) setRepairStepText("⚙️ Замена изношенных рычагов и узлов подвески...");
-          else if (next === 60) setRepairStepText("🛡️ Установка новых стекол, фар и рихтовка крыльев...");
-          else if (next === 80) setRepairStepText("🔧 Финальная регулировка схода-развала и тестирование ДВС...");
-          return next;
-        });
+        setRepairProgress((prev) => Math.min(100, prev + 20));
       }, 400);
     }
     return () => clearInterval(timer);
   }, [isRepairing]);
 
   useEffect(() => {
+    if (isRepairing) {
+      if (repairProgress >= 100) {
+        setIsRepairing(false);
+        if (onRepairVehicleRef.current) onRepairVehicleRef.current(true);
+        playCashRegister();
+      } else if (repairProgress === 20) {
+        setRepairStepText("🔨 Стапельные работы: выравнивание геометрии кузова...");
+      } else if (repairProgress === 40) {
+        setRepairStepText("⚙️ Замена изношенных рычагов и узлов подвески...");
+      } else if (repairProgress === 60) {
+        setRepairStepText("🛡️ Установка новых стекол, фар и рихтовка крыльев...");
+      } else if (repairProgress === 80) {
+        setRepairStepText("🔧 Финальная регулировка схода-развала и тестирование ДВС...");
+      }
+    }
+  }, [repairProgress, isRepairing]);
+
+  useEffect(() => {
     let timer: any;
     if (isPainting) {
       timer = setInterval(() => {
-        setPaintProgress((prev) => {
-          if (prev >= 100) {
-            clearInterval(timer);
-            setIsPainting(false);
-            playCashRegister();
-            return 100;
-          }
-          const next = prev + 25;
-          if (next === 25) setPaintStepText("🧼 Обезжиривание и абразивная подготовка поверхности кузова...");
-          else if (next === 50) setPaintStepText("🎨 Нанесение грунтовочного антикоррозийного слоя...");
-          else if (next === 75) setPaintStepText("🖌️ Покраска в покрасочной камере под давлением...");
-          return next;
-        });
+        setPaintProgress((prev) => Math.min(100, prev + 25));
       }, 400);
     }
     return () => clearInterval(timer);
   }, [isPainting]);
 
   useEffect(() => {
+    if (isPainting) {
+      if (paintProgress >= 100) {
+        setIsPainting(false);
+        if (onTuningVehicleRef.current) {
+          onTuningVehicleRef.current('paint', { paintTarget, color: selectedPaintColor });
+        }
+        playCashRegister();
+      } else if (paintProgress === 25) {
+        setPaintStepText("🧼 Обезжиривание и абразивная подготовка поверхности кузова...");
+      } else if (paintProgress === 50) {
+        setPaintStepText("🎨 Нанесение грунтовочного антикоррозийного слоя...");
+      } else if (paintProgress === 75) {
+        setPaintStepText("🖌️ Покраска в покрасочной камере под давлением...");
+      }
+    }
+  }, [paintProgress, isPainting, paintTarget, selectedPaintColor]);
+
+  useEffect(() => {
     let timer: any;
     if (tuningAction) {
       timer = setInterval(() => {
-        setTuningProgress((prev) => {
-          if (prev >= 100) {
-            clearInterval(timer);
-            setTuningAction(null);
-            playCashRegister();
-            return 100;
-          }
-          const next = prev + 33;
-          if (next === 33) setTuningStepText("⚙️ Демонтаж старых компонентов и установка тюнинг-комплекта...");
-          else if (next === 66) setTuningStepText("🔌 Калибровка ЭБУ и проверка герметичности магистралей...");
-          return next;
-        });
+        setTuningProgress((prev) => Math.min(100, prev + 33));
       }, 400);
     }
     return () => clearInterval(timer);
   }, [tuningAction]);
+
+  useEffect(() => {
+    if (tuningAction) {
+      if (tuningProgress >= 100) {
+        const action = tuningAction;
+        setTuningAction(null);
+        if (onTuningVehicleRef.current && action) {
+          onTuningVehicleRef.current(action);
+        }
+        playCashRegister();
+      } else if (tuningProgress === 33) {
+        setTuningStepText("⚙️ Демонтаж старых компонентов и установка тюнинг-комплекта...");
+      } else if (tuningProgress === 66) {
+        setTuningStepText("🔌 Калибровка ЭБУ и проверка герметичности магистралей...");
+      }
+    }
+  }, [tuningProgress, tuningAction]);
 
   // If closed, return state
   useEffect(() => {
@@ -1872,7 +1901,10 @@ export const ShopModal: React.FC<ShopModalProps> = ({
                           case 'van_gazel': return 'ГАЗель 3302';
                           case 'truck_tanker': return 'Топливозаправщик ГАЗ-3307';
                           case 'classic_black': return 'ГАЗ-24 "Волга"';
-                          default: return 'Легковой автомобиль';
+                          case 'trailer_flatbed_2axle': return 'Двухосный прицеп 2-ПТС-4';
+                          case 'trailer_cargo': return 'Грузовой бортовой прицеп';
+                          case 'trailer_box': return 'Прицеп-фургон';
+                          default: return type.includes('trailer') ? 'Прицеп' : 'Легковой автомобиль';
                         }
                       };
 
@@ -1991,20 +2023,24 @@ export const ShopModal: React.FC<ShopModalProps> = ({
                               </div>
                               <div>
                                 <h4 className="text-white font-bold text-sm flex items-center gap-2">
-                                  <span>🚗 {getCarNameRu(curCar.type)}</span>
-                                  {curCar.hasGBO && (
+                                  <span>{isTrailerVehicle(curCar) ? '🚜' : '🚗'} {getCarNameRu(curCar.type)}</span>
+                                  {!isTrailerVehicle(curCar) && curCar.hasGBO && (
                                     <span className="px-1.5 py-0.5 bg-emerald-500/20 text-emerald-300 text-[10px] rounded font-bold border border-emerald-400/20">
                                       ГБО LPG
                                     </span>
                                   )}
-                                  {(curCar as any).hasChiptuning && (
+                                  {!isTrailerVehicle(curCar) && (curCar as any).hasChiptuning && (
                                     <span className="px-1.5 py-0.5 bg-purple-500/20 text-purple-300 text-[10px] rounded font-bold border border-purple-400/20">
                                       Stage 1
                                     </span>
                                   )}
                                 </h4>
                                 <p className="text-slate-400 text-xs mt-0.5 flex items-center gap-2">
-                                  <span>Топливный бак: {curCar.fuelSystem ? Math.round(curCar.fuelSystem.tankLevel) : 0}%</span>
+                                  {isTrailerVehicle(curCar) ? (
+                                    <span>Сцепное устройство: Поворотное дышло / Фаркоп</span>
+                                  ) : (
+                                    <span>Топливный бак: {curCar.fuelSystem ? Math.round(curCar.fuelSystem.tankLevel) : 0}%</span>
+                                  )}
                                   <span>•</span>
                                   <span className="flex items-center gap-1">
                                     Цвет: 
@@ -2017,7 +2053,7 @@ export const ShopModal: React.FC<ShopModalProps> = ({
                               </div>
                             </div>
                             <div className="text-right sm:text-right text-xs bg-slate-950/80 px-3 py-1.5 rounded-lg border border-slate-850">
-                              <div className="text-slate-500">Система самодиагностики ЭБУ:</div>
+                              <div className="text-slate-500">{isTrailerVehicle(curCar) ? 'Состояние узлов и рамы:' : 'Система самодиагностики ЭБУ:'}</div>
                               <div className={`font-bold mt-0.5 ${repairCost > 0 ? 'text-amber-400' : 'text-emerald-400'}`}>
                                 {repairCost > 0 ? '⚠️ Требуется обслуживание' : '🟢 Ошибок не обнаружено'}
                               </div>
@@ -2150,8 +2186,8 @@ export const ShopModal: React.FC<ShopModalProps> = ({
                                     <div className="bg-slate-950 p-2.5 rounded-lg border border-slate-850 space-y-1.5">
                                       <div className="font-semibold text-slate-400 border-b border-slate-800 pb-1 mb-1 flex justify-between">
                                         <span>Ходовая и Моторный отсек:</span>
-                                        <span className={(suspensionDeform > 0 || (curCar.damage?.steeringDrift && Math.abs(curCar.damage.steeringDrift) > 0.05)) ? 'text-amber-400' : 'text-emerald-400'}>
-                                          {(suspensionDeform > 0 || (curCar.damage?.steeringDrift && Math.abs(curCar.damage.steeringDrift) > 0.05)) ? '⚠️ Требует ремонта' : '🟢 Норма'}
+                                        <span className={(suspensionDeform > 0 || (curCar.damage?.steeringDrift && Math.abs(curCar.damage.steeringDrift) > 0.05) || curCar.engineState?.oilPunctured || curCar.engineState?.radiatorPunctured) ? 'text-amber-400' : 'text-emerald-400'}>
+                                          {(suspensionDeform > 0 || (curCar.damage?.steeringDrift && Math.abs(curCar.damage.steeringDrift) > 0.05) || curCar.engineState?.oilPunctured || curCar.engineState?.radiatorPunctured) ? '⚠️ Требует ремонта' : '🟢 Норма'}
                                         </span>
                                       </div>
                                       <div className="flex justify-between font-mono">
@@ -2167,9 +2203,15 @@ export const ShopModal: React.FC<ShopModalProps> = ({
                                         </span>
                                       </div>
                                       <div className="flex justify-between font-mono">
-                                        <span>• Герметичность ДВС:</span>
+                                        <span>• Герметичность ДВС (Масло):</span>
                                         <span className={curCar.engineState?.oilPunctured ? 'text-rose-400 font-bold' : 'text-slate-500'}>
                                           {curCar.engineState?.oilPunctured ? '🔴 Пробит картер (Течь масла)' : '🟢 Герметично'}
+                                        </span>
+                                      </div>
+                                      <div className="flex justify-between font-mono">
+                                        <span>• Радиатор охлаждения (ОЖ):</span>
+                                        <span className={curCar.engineState?.radiatorPunctured ? 'text-rose-400 font-bold' : 'text-slate-500'}>
+                                          {curCar.engineState?.radiatorPunctured ? '🔴 Пробит радиатор (Течь ОЖ)' : '🟢 Герметично'}
                                         </span>
                                       </div>
                                     </div>

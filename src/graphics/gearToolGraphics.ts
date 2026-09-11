@@ -3,6 +3,129 @@ import { drawShadow, drawGlossBand } from './itemGraphicShared';
 
 export function drawGearToolItem(ctx: CanvasRenderingContext2D, itemId: string): boolean {
   switch (itemId) {
+    case 'car_key': {
+      drawShadow(ctx, 8, 8, 7, 0.3);
+
+      // Key ring at bottom
+      ctx.strokeStyle = '#94a3b8';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.arc(0, 9, 3.5, 0, Math.PI * 2);
+      ctx.stroke();
+
+      // Metallic silver key blade extending from top
+      ctx.fillStyle = '#cbd5e1';
+      ctx.fillRect(-1.5, -11, 3, 8);
+      ctx.fillStyle = '#64748b';
+      ctx.fillRect(-1.5, -9, 1, 2);
+      ctx.fillRect(0.5, -7, 1, 2);
+
+      // Sleek premium key fob body (Dark Glossy Finish)
+      ctx.fillStyle = '#0f172a';
+      ctx.beginPath();
+      ctx.roundRect(-6, -4, 12, 12, 3);
+      ctx.fill();
+
+      // Chrome metallic side bevels
+      ctx.strokeStyle = '#cbd5e1';
+      ctx.lineWidth = 0.8;
+      ctx.strokeRect(-5.5, -3.5, 11, 11);
+
+      // Lock button (Upper)
+      ctx.fillStyle = '#1e293b';
+      ctx.beginPath();
+      ctx.arc(0, -1, 2.2, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = '#38bdf8';
+      ctx.lineWidth = 0.8;
+      ctx.stroke();
+
+      // Unlock button (Lower)
+      ctx.fillStyle = '#1e293b';
+      ctx.beginPath();
+      ctx.arc(0, 4, 2.2, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = '#34d399';
+      ctx.lineWidth = 0.8;
+      ctx.stroke();
+
+      // Red Panic/Trunk accent dot
+      ctx.fillStyle = '#f43f5e';
+      ctx.beginPath();
+      ctx.arc(0, 6.8, 0.8, 0, Math.PI * 2);
+      ctx.fill();
+
+      drawGlossBand(ctx, -5, -3, 3, 10);
+      return true;
+    }
+
+    case 'car_pts': {
+      drawShadow(ctx, 8, 10, 8, 0.25);
+
+      // Deep Blue PTS Document Booklet Base
+      ctx.fillStyle = '#1e3a8a';
+      ctx.beginPath();
+      ctx.roundRect(-8, -10, 16, 20, 1.2);
+      ctx.fill();
+
+      // Gold Security Border & Guilloche Frame
+      ctx.strokeStyle = '#f59e0b';
+      ctx.lineWidth = 0.8;
+      ctx.strokeRect(-7, -9, 14, 18);
+
+      // Russian Crest Emblem (Golden Seal)
+      ctx.fillStyle = '#fbbf24';
+      ctx.beginPath();
+      ctx.arc(0, -3, 3, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Text Header Lines (ПТС)
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 3.5px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('ПТС', 0, 4);
+
+      ctx.fillStyle = '#93c5fd';
+      ctx.fillRect(-5, 6, 10, 0.8);
+      ctx.fillRect(-5, 8, 10, 0.8);
+      return true;
+    }
+
+    case 'car_tech_passport': {
+      drawShadow(ctx, 9, 6, 7, 0.25);
+
+      // Laminated Pink/Burgundy STS Card
+      ctx.fillStyle = '#9d174d';
+      ctx.beginPath();
+      ctx.roundRect(-9, -6, 18, 12, 1.5);
+      ctx.fill();
+
+      // Holographic Security Margin
+      ctx.strokeStyle = '#f472b6';
+      ctx.lineWidth = 0.8;
+      ctx.strokeRect(-8, -5, 16, 10);
+
+      // Yellow Microchip
+      ctx.fillStyle = '#fbbf24';
+      ctx.fillRect(-6.5, -3, 3, 2.5);
+      ctx.strokeStyle = '#d97706';
+      ctx.lineWidth = 0.5;
+      ctx.strokeRect(-6.5, -3, 3, 2.5);
+
+      // Text "СТС" & Details
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 3.5px sans-serif';
+      ctx.textAlign = 'right';
+      ctx.fillText('СТС', 7, -1);
+
+      // Barcode lines at bottom
+      ctx.fillStyle = '#fbcfe8';
+      for (let x = -6; x <= 6; x += 1.2) {
+        ctx.fillRect(x, 2, 0.6, 2.5);
+      }
+      return true;
+    }
+
     case 'cash': {
       drawShadow(ctx, 8.5, 3.2, 7.5, 0.22);
 

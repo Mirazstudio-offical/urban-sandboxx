@@ -15,7 +15,7 @@ import {
   Receipt,
   RotateCcw
 } from 'lucide-react';
-import { FuelType, GameWorld, GasPumpDispenser, Player, Vehicle } from '../types';
+import { FuelType, GameWorld, GasPumpDispenser, GasPumpNozzle, Player, Vehicle } from '../types';
 import { FUEL_GRADES, GAS_STATION_NOZZLES } from '../gasStationSystem';
 import { CAR_CONFIGS } from '../vehicleHelpers';
 import { sound } from '../audio';
@@ -61,6 +61,11 @@ export const GasStationCashierModal: React.FC<GasStationCashierModalProps> = ({
       }
     } else if (world.gasPumps.length > 0) {
       setSelectedPumpId(world.gasPumps[0].id);
+      if (world.gasPumps[0].connectedFuelType) {
+        setSelectedFuelType(world.gasPumps[0].connectedFuelType);
+      } else if (world.gasPumps[0].nozzles && world.gasPumps[0].nozzles.length > 0) {
+        setSelectedFuelType(world.gasPumps[0].nozzles[0].fuelType);
+      }
     }
   }, [isOpen, world]);
 
@@ -68,7 +73,30 @@ export const GasStationCashierModal: React.FC<GasStationCashierModalProps> = ({
 
   const currentPump = world.gasPumps.find(p => p.id === selectedPumpId) || world.gasPumps[0];
   const connectedVehicle = world.vehicles?.find(v => v.id === currentPump?.connectedVehicleId);
-  const grade = FUEL_GRADES[selectedFuelType] || FUEL_GRADES.ai95;
+
+  const availableNozzles: GasPumpNozzle[] = (currentPump?.nozzles && currentPump.nozzles.length > 0)
+    ? currentPump.nozzles
+    : (currentPump?.id === 'gas_pump_5_lpg'
+        ? [
+            {
+              fuelType: 'lpg',
+              nameRu: FUEL_GRADES.lpg.nameRu,
+              color: FUEL_GRADES.lpg.color,
+              octane: 105,
+              pricePerLiter: FUEL_GRADES.lpg.pricePerLiter,
+              description: FUEL_GRADES.lpg.description,
+              badgeText: 'ГАЗ'
+            }
+          ]
+        : GAS_STATION_NOZZLES);
+
+  // Ensure selectedFuelType is valid for this pump
+  const isSelectedTypeValid = availableNozzles.some(n => n.fuelType === selectedFuelType);
+  const activeFuelType = isSelectedTypeValid 
+    ? selectedFuelType 
+    : (currentPump?.connectedFuelType || availableNozzles[0]?.fuelType || 'ai95');
+
+  const grade = FUEL_GRADES[activeFuelType] || FUEL_GRADES.ai95;
 
   const totalCost = Math.round(liters * grade.pricePerLiter);
 
@@ -89,8 +117,14 @@ export const GasStationCashierModal: React.FC<GasStationCashierModalProps> = ({
 
   const handleSelectPump = (pump: GasPumpDispenser) => {
     setSelectedPumpId(pump.id);
-    if (pump.connectedFuelType) {
+    const pumpNozzles = pump.nozzles && pump.nozzles.length > 0 
+      ? pump.nozzles 
+      : (pump.id === 'gas_pump_5_lpg' ? [{ fuelType: 'lpg' }] : GAS_STATION_NOZZLES);
+
+    if (pump.connectedFuelType && pumpNozzles.some(n => n.fuelType === pump.connectedFuelType)) {
       setSelectedFuelType(pump.connectedFuelType);
+    } else if (!pumpNozzles.some(n => n.fuelType === selectedFuelType)) {
+      setSelectedFuelType((pumpNozzles[0] as GasPumpNozzle).fuelType);
     }
     sound.playUseItem();
   };
@@ -118,7 +152,7 @@ export const GasStationCashierModal: React.FC<GasStationCashierModalProps> = ({
     setPaymentDone(true);
 
     setTimeout(() => {
-      onPayAndFuel(currentPump.id, liters, selectedFuelType, totalCost);
+      onPayAndFuel(currentPump.id, liters, activeFuelType, totalCost);
       onClose();
     }, 1200);
   };
@@ -291,10 +325,10 @@ export const GasStationCashierModal: React.FC<GasStationCashierModalProps> = ({
                   </span>
                 </div>
 
-                <div className="grid grid-cols-3 sm:grid-cols-5 gap-2.5">
-                  {GAS_STATION_NOZZLES.map((noz) => {
-                    const isSelected = selectedFuelType === noz.fuelType;
-                    const fGrade = FUEL_GRADES[noz.fuelType];
+                <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5">
+                  {availableNozzles.map((noz) => {
+                    const isSelected = activeFuelType === noz.fuelType;
+                    const fGrade = FUEL_GRADES[noz.fuelType] || FUEL_GRADES.ai95;
 
                     return (
                       <button
@@ -320,7 +354,7 @@ export const GasStationCashierModal: React.FC<GasStationCashierModalProps> = ({
                         >
                           {noz.badgeText}
                         </div>
-                        <div className="font-bold text-xs text-white leading-tight">{noz.badgeText}</div>
+                        <div className="font-bold text-xs text-white leading-tight">{noz.nameRu || noz.badgeText}</div>
                         <div className="text-[11px] font-semibold text-emerald-400 mt-1">
                           {noz.pricePerLiter.toFixed(2)} ₽
                         </div>

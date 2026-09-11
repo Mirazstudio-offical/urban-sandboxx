@@ -53,7 +53,18 @@ export type CarType =
   | 'van_cargo_old'
   | 'truck_tow'
   | 'truck_armored'
-  | 'delivery_truck';
+  | 'delivery_truck'
+  | 'tractor_mtz82'
+  | 'tractor_mtz80'
+  | 'tractor_mtz80_old'
+  | 'moto_izh_jupiter'
+  | 'moto_ural_sidecar'
+  | 'moto_jawa350'
+  | 'moto_sport'
+  | 'moto_chopper'
+  | 'moped_soviet'
+  | 'trailer_barrel'
+  | 'trailer_flatbed_2axle';
 
 export interface CarConfig {
   type: CarType;
@@ -82,6 +93,8 @@ export interface DeformVertex {
   offsetY: number;
 
   // Realistic Softbody Physics properties
+  targetOffsetX?: number;  // Target plastic crumple offset X (progressive multi-frame crumple)
+  targetOffsetY?: number;  // Target plastic crumple offset Y
   plasticStrain?: number;  // 0.0 to 1.0+ accumulated plastic deformation severity (metal yielding)
   elasticX?: number;       // Transient elastic jiggle displacement X (decays rapidly on impact)
   elasticY?: number;       // Transient elastic jiggle displacement Y (decays rapidly on impact)
@@ -122,6 +135,8 @@ export interface EngineState {
   clutchPedal: number;
   isStalled: boolean;
   shiftCooldown?: number;
+  revLimiterTimer?: number;
+  starterOverloadCount?: number;
 
   // Mechanical Integrity & Damage States
   engineHealth: number;         // 0 to 100 (%) health of engine block, pistons, head gasket
@@ -184,6 +199,57 @@ export interface FuelSystem {
   octaneNumber: number;
   engineFuelLeaked?: number;    // amount leaked from engine in liters (max 0.5-1.0L)
   fuelRailBroken?: boolean;     // fuel line/rail broken in frontal crash
+}
+
+export type StoredLiquidType = 
+  | 'water' 
+  | 'fuel_ai95' 
+  | 'fuel_ai92' 
+  | 'fuel_ai98' 
+  | 'fuel_ai100' 
+  | 'diesel' 
+  | 'oil' 
+  | 'coolant';
+
+export interface HoseLeakPoint {
+  segmentIndex: number; // which segment node has the puncture
+  flowIntensity: number; // 0..1 leak squirt power
+}
+
+export interface HoseSegmentNode {
+  x: number;
+  y: number;
+  oldX: number;
+  oldY: number;
+}
+
+export interface HeldWaterHose {
+  vehicleId: string;
+  sourceType: 'truck_water' | 'trailer_barrel';
+  maxLength: number;            // max physical uncoiled length in pixels (e.g. 250 px, ~16m)
+  segments: HoseSegmentNode[];   // Verlet physical nodes
+  segmentLength: number;         // distance constraint per segment
+  leaks: HoseLeakPoint[];        // micro-holes along the hose that drip/squirt
+  isSpraying: boolean;           // actively shooting water stream
+  isPressurized?: boolean;       // true if high pressure pump running (e.g. truck engine on), false if natural gravity trickle
+  sprayCooldown?: number;        // audio / particle timer
+}
+
+export interface FluidStorageTank {
+  capacity: number;              // Maximum volume in liters (L)
+  currentVolume: number;         // Current volume in liters (L)
+  currentAmount?: number;        // Backward compatibility alias (prevents NaN)
+  liquidType: StoredLiquidType;  // Stored liquid type
+  isHermetic: boolean;           // True for fuel tanker (airtight), false for water truck / barrel trailer (leaky)
+  leakProbabilityPerSec?: number;// Chance to drip per second during idle/slow motion
+  dripRatePerSec?: number;       // Drip flow rate in L/s when leaking
+  isPunctured?: boolean;         // Ruptured / pierced tank from heavy damage
+  punctureRatePerSec?: number;   // Rapid leak rate in L/s when punctured
+  drainValveOpen?: boolean;      // Drain valve opened (spilling to ground)
+  idleLeakTimer?: number;        // Timer accumulator for drip timings
+  _lastLeakAnchor?: { x: number; y: number } | null;
+  hasWaterHose?: boolean;        // Vehicle is equipped with water hose reel or discharge spigot
+  isWaterHoseDeployed?: boolean; // Hose is currently taken off the reel/bracket
 }
 
 export interface VehicleDamage {
@@ -260,6 +326,10 @@ export interface Vehicle {
   driftFactor: number;
   mass: number;
   
+  // Ownership & Security
+  ownerId?: string;
+  isLocked?: boolean;
+
   // Physical dimensions & config
   width: number;
   length: number;
@@ -278,6 +348,7 @@ export interface Vehicle {
   hasGBO?: boolean;
   engineState?: EngineState;
   fuelSystem?: FuelSystem;
+  fluidTank?: FluidStorageTank;
 
   // Damage & Deformation
   damage: VehicleDamage;
@@ -288,6 +359,18 @@ export interface Vehicle {
   knockbackVy?: number;
   knockbackSpin?: number;
   stunnedTimer?: number;
+
+  // Progressive Softbody Impact Cushioning (multi-frame crumple zone dynamics)
+  activeCrumple?: {
+    timer: number;            // seconds remaining in crumple phase
+    totalDuration: number;    // total duration of deceleration/absorption phase
+    normalX: number;          // impact collision normal X
+    normalY: number;          // impact collision normal Y
+    initialSpeed: number;     // speed at impact onset
+    reboundSpeed: number;     // gentle restitution bounce speed
+    contactX: number;
+    contactY: number;
+  };
 
   // AI & State
   isPlayerControlled: boolean;
@@ -352,6 +435,20 @@ export interface Vehicle {
     nozzleInTank: boolean;
     hoseOrigin: { x: number; y: number };
   } | null;
+
+  // Trailer & Towing Hitch System
+  isTrailer?: boolean;
+  trailerId?: string | null;        // ID of hitched trailer behind this vehicle
+  towedById?: string | null;        // ID of vehicle towing this trailer
+  trailerDollyAngle?: number;       // For 2-axle steerable turntable dolly (e.g. 2-PTS-4)
+  trailerDollyX?: number;           // For 2-axle dolly x coordinate to decouple physics feedback
+  trailerDollyY?: number;           // For 2-axle dolly y coordinate to decouple physics feedback
+  trailerRearX?: number;            // For 2-axle trailer rear axle x coordinate (tractrix stabilization)
+  trailerRearY?: number;            // For 2-axle trailer rear axle y coordinate (tractrix stabilization)
+  drawbarLength?: number;          // Rigid tongue/drawbar length (px)
+  hitchOffset?: number;            // Local X offset to rear tow hitch ball/clevis (typically -halfL - 2)
+  couplerOffset?: number;          // Local X offset to front hitch loop
+  trailerType?: 'single_axle_drawbar' | 'turntable_dolly_2axle';
 }
 
 export interface Pedestrian {
@@ -486,6 +583,7 @@ export interface RoadSegment {
   isAvenue: boolean;
   isDirt?: boolean;
   isGravel?: boolean;
+  isRoundabout?: boolean;
   direction: 'horizontal' | 'vertical';
   name: string;
   lanePaths: {
@@ -521,6 +619,7 @@ export interface BuildingBalcony {
 
 export interface Building {
   id: string;
+  name?: string;
   nameRu?: string;
   shopBrand?: 
     | 'pyaterochka' 
@@ -573,7 +672,8 @@ export interface Building {
     | 'pizzeria_restaurant'
     | 'commercial_gallery'
     | 'gas_station_shop'
-    | 'gas_station_canopy';
+    | 'gas_station_canopy'
+    | 'gas_station_island';
   color: string;
   roofColor: string;
   accentColor: string;
@@ -602,19 +702,43 @@ export interface Building {
   interiors?: Record<number, any>;
 }
 
+export interface ParkingSpot {
+  id?: string;
+  x: number;
+  y: number;
+  angle: number;
+  width?: number;
+  length?: number;
+  openSide?: 'north' | 'south' | 'east' | 'west';
+  isHandicap?: boolean;
+  occupied: boolean;
+  vehicleId?: string;
+}
+
+export interface ParkingArrow {
+  x: number;
+  y: number;
+  angle: number;
+  type?: 'straight' | 'turn_left' | 'turn_right';
+}
+
 export interface ParkingArea {
   id: string;
   x: number;
   y: number;
   width: number;
   height: number;
-  spots: {
-    x: number;
-    y: number;
-    angle: number;
-    occupied: boolean;
-    vehicleId?: string;
-  }[];
+  spots: ParkingSpot[];
+  arrows?: ParkingArrow[];
+}
+
+export interface StaticDriveway {
+  id: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  type: 'ramp' | 'connection' | 'dirt' | 'gravel';
 }
 
 export interface Tree {
@@ -624,6 +748,7 @@ export interface Tree {
   radius: number;
   color: string;
   shadowOffset: number;
+  type?: 'deciduous' | 'pine' | 'birch';
 }
 
 export interface StreetProp {
@@ -649,7 +774,32 @@ export interface StreetProp {
     | 'drain_grate'
     | 'tire_flowerbed'
     | 'playground_swing'
-    | 'garage_door';
+    | 'garage_door'
+    | 'village_well'
+    | 'village_sign'
+    | 'haystack'
+    | 'woodpile'
+    | 'rustic_car_wreck'
+    | 'concrete_barrier'
+    | 'concrete_fence_po2'
+    | 'power_pole'
+    | 'shipping_container'
+    | 'pallet_stack'
+    | 'industrial_tank'
+    | 'silo_tank'
+    | 'cable_spool'
+    | 'security_barrier'
+    | 'industrial_floodlight'
+    | 'industrial_tires'
+    | 'scrap_pile'
+    | 'industrial_sign'
+    | 'industrial_pipe'
+    | 'industrial_gate'
+    | 'fence_wood_vertical'
+    | 'fence_metal_vertical'
+    | 'wicket_gate'
+    | 'cottage_gate'
+    | 'garden_path_tile';
   angle: number;
   intersectionId?: string;
   direction?: 'north' | 'south' | 'east' | 'west';
@@ -717,13 +867,15 @@ export interface SkidMark {
   width: number;
 }
 
+export type FluidStainType = 'oil' | 'coolant' | 'fuel' | 'sand' | 'water';
+
 export interface FluidStain {
   id: string;
   x: number;
   y: number;
   radius: number;
   maxRadius: number;
-  type: 'oil' | 'coolant' | 'fuel' | 'sand';
+  type: FluidStainType;
   alpha: number;
   life: number;
   maxLife: number;
@@ -806,6 +958,10 @@ export interface InventoryItem {
   maxContainedWeightKg?: number;    // Max total weight of contained items in kg
   allowedItemCategories?: ItemCategory[]; // Optional category filter (e.g. wallet only for money/valuable)
   contents?: InventoryItem[];       // Items stored inside this container
+  // Car key and document metadata
+  vehicleId?: string;
+  carName?: string;
+  carColor?: string;
 }
 
 export interface GroundItem {
@@ -954,6 +1110,7 @@ export interface Player {
   speed: number;
   isInVehicle: boolean;
   currentVehicleId: string | null;
+  vehicleId?: string | null;
   walkCycle: number;
   skinColor: string;
   shirtColor: string;
@@ -967,6 +1124,7 @@ export interface Player {
   isCreativeMode?: boolean;
   isFlying?: boolean;
   isInvincible?: boolean;
+  isCleanMode?: boolean;
   
   // Human Mode Enhancements: Dodge roll, quick dash & aim
   isDashing?: boolean;
@@ -1020,6 +1178,9 @@ export interface Player {
     pricePerLiter: number;
     hoseOrigin: { x: number; y: number };
   } | null;
+
+  // Water hose equipped in hands (connected to truck_water or trailer_barrel)
+  heldWaterHose?: HeldWaterHose | null;
 }
 
 export interface SidewalkBlock {
@@ -1059,14 +1220,25 @@ export interface GpsDestination {
   name?: string;
 }
 
+export interface Roundabout {
+  id: string;
+  x: number;
+  y: number;
+  radius: number;
+  innerRadius: number;
+  name?: string;
+}
+
 export interface GameWorld {
   width: number;
   height: number;
   roads: RoadSegment[];
   intersections: Intersection[];
+  roundabouts?: Roundabout[];
   sidewalks?: SidewalkBlock[];
   buildings: Building[];
   parkings: ParkingArea[];
+  driveways?: StaticDriveway[];
   trees: Tree[];
   props: StreetProp[];
   vehicles: Vehicle[];
@@ -1079,6 +1251,7 @@ export interface GameWorld {
   stains: FluidStain[];
   particles: Particle[];
   weather: WeatherType;
+  cleanMode?: boolean;
   outsideTemp?: number;
   humidity?: number;
   gasPumps?: GasPumpDispenser[];

@@ -21,17 +21,32 @@ export function sanitizeWorldVehicles(world: GameWorld): GameWorld {
       veh.mass = cfg.mass;
       veh.wheelBase = cfg.wheelBase;
       veh.damage = ensureVehicleDamage(veh);
+
+      // Guarantee non-NaN numeric fields
+      veh.steerAngle = typeof veh.steerAngle === 'number' && Number.isFinite(veh.steerAngle) ? veh.steerAngle : 0;
+      veh.angle = typeof veh.angle === 'number' && Number.isFinite(veh.angle) ? veh.angle : 0;
+      veh.speed = typeof veh.speed === 'number' && Number.isFinite(veh.speed) ? veh.speed : 0;
+      veh.vx = typeof veh.vx === 'number' && Number.isFinite(veh.vx) ? veh.vx : 0;
+      veh.vy = typeof veh.vy === 'number' && Number.isFinite(veh.vy) ? veh.vy : 0;
+      veh.x = typeof veh.x === 'number' && Number.isFinite(veh.x) ? veh.x : 0;
+      veh.y = typeof veh.y === 'number' && Number.isFinite(veh.y) ? veh.y : 0;
     });
 
-    // Cap vehicles to at most 32 vehicles max across the city for optimal performance
-    if (world.vehicles.length > 32) {
-      const specialVehicles = world.vehicles.filter(
-        v => v.id.includes('starter') || v.id.includes('showcase') || v.isPlayerControlled
-      );
-      const ordinaryVehicles = world.vehicles.filter(
-        v => !v.id.includes('starter') && !v.id.includes('showcase') && !v.isPlayerControlled
-      );
-      const remainingSlots = Math.max(0, 32 - specialVehicles.length);
+    // Cap vehicles to at most 30 vehicles max across the city for optimal mobile performance
+    if (world.vehicles.length > 30) {
+      const isSpecial = (v: any) => 
+        v.id.includes('starter') || 
+        v.id.includes('showcase') || 
+        v.isPlayerControlled || 
+        v.id.includes('mup_') || 
+        v.type.startsWith('tractor_') || 
+        v.type.startsWith('trailer_') || 
+        v.type.startsWith('truck_') ||
+        v.type === 'garbage_truck';
+
+      const specialVehicles = world.vehicles.filter(isSpecial);
+      const ordinaryVehicles = world.vehicles.filter(v => !isSpecial(v));
+      const remainingSlots = Math.max(0, 30 - specialVehicles.length);
       world.vehicles = [...specialVehicles, ...ordinaryVehicles.slice(0, remainingSlots)];
     }
   }
@@ -52,9 +67,11 @@ export function normalizeWorld(parsed: any): GameWorld {
     height: typeof parsed.height === 'number' ? parsed.height : 8000,
     roads: Array.isArray(parsed.roads) ? parsed.roads : [],
     intersections: Array.isArray(parsed.intersections) ? parsed.intersections : [],
+    roundabouts: Array.isArray(parsed.roundabouts) ? parsed.roundabouts : [],
     sidewalks: Array.isArray(parsed.sidewalks) ? parsed.sidewalks : [],
     buildings: Array.isArray(parsed.buildings) ? parsed.buildings : [],
     parkings: Array.isArray(parsed.parkings) ? parsed.parkings : [],
+    driveways: Array.isArray(parsed.driveways) ? parsed.driveways : [],
     trees: Array.isArray(parsed.trees) ? parsed.trees : [],
     props: Array.isArray(parsed.props) ? parsed.props : [],
     vehicles: Array.isArray(parsed.vehicles) ? parsed.vehicles : [],
@@ -70,7 +87,91 @@ export function normalizeWorld(parsed: any): GameWorld {
   };
 
   ensureWorldGasStation(world);
+  ensureTrailers(world);
   return world;
+}
+
+export function ensureTrailers(world: GameWorld): void {
+  if (!world.vehicles) world.vehicles = [];
+
+  let spawnX = 5960;
+  let spawnY = 1020;
+  const tractor = world.vehicles.find(v => v.type.startsWith('tractor_'));
+  if (tractor) {
+    spawnX = tractor.x;
+    spawnY = tractor.y;
+  } else if ((world as any).gasStation) {
+    spawnX = (world as any).gasStation.x + 130;
+    spawnY = (world as any).gasStation.y + 85;
+  }
+
+  const hasBarrel = world.vehicles.some(v => v.type === 'trailer_barrel');
+  if (!hasBarrel) {
+    const barrelTrailer: any = {
+      id: `mup_trailer_barrel_${Date.now()}`,
+      type: 'trailer_barrel',
+      x: spawnX + 180,
+      y: spawnY,
+      angle: 0,
+      speed: 0,
+      vx: 0,
+      vy: 0,
+      steerAngle: 0,
+      length: 36,
+      width: 22,
+      mass: 1400,
+      wheelBase: 16,
+      color: '#0284c7',
+      isParked: true,
+      isTrailer: true,
+      couplerOffset: 26,
+      damage: ensureVehicleDamage({ type: 'trailer_barrel' } as any)
+    };
+    world.vehicles.push(barrelTrailer);
+  }
+
+  const hasFlatbed = world.vehicles.some(v => v.type === 'trailer_flatbed_2axle');
+  if (!hasFlatbed) {
+    const flatbedTrailer: any = {
+      id: `mup_trailer_flatbed_${Date.now()}`,
+      type: 'trailer_flatbed_2axle',
+      x: spawnX + 110,
+      y: spawnY + 80,
+      angle: 0,
+      speed: 0,
+      vx: 0,
+      vy: 0,
+      steerAngle: 0,
+      trailerDollyAngle: 0,
+      length: 68,
+      width: 26,
+      mass: 2400,
+      wheelBase: 38,
+      color: '#3e5443',
+      isParked: true,
+      isTrailer: true,
+      couplerOffset: 42,
+      drawbarLength: 20,
+      trailerType: 'turntable_dolly_2axle',
+      damage: ensureVehicleDamage({ type: 'trailer_flatbed_2axle' } as any)
+    };
+    world.vehicles.push(flatbedTrailer);
+  } else {
+    // Update existing flatbed trailer instances to the correct proportions and weathered patina color
+    world.vehicles.forEach(v => {
+      if (v.type === 'trailer_flatbed_2axle') {
+        v.length = 68;
+        v.width = 26;
+        v.wheelBase = 38;
+        v.drawbarLength = 20;
+        v.couplerOffset = 42;
+        v.mass = 2400;
+        if (!v.color || v.color === '#15803d') {
+          v.color = '#3e5443';
+        }
+      }
+    });
+  }
 }
 
 export function clearCustomMapStorage(): void {

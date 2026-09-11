@@ -546,8 +546,8 @@ export const TrafficConsole: React.FC<TrafficConsoleProps> = ({
                     </div>
 
                     <div className="text-[10px] text-slate-500 flex justify-between">
-                      <span>Phase time: {inter.phaseTimer.toFixed(1)}s / {currentPhase?.duration}s</span>
-                      <span>Stop lines: {inter.stopLines.length}</span>
+                      <span>Phase time: {(inter.phaseTimer || 0).toFixed(1)}s / {currentPhase?.duration || 0}s</span>
+                      <span>Stop lines: {inter.stopLines?.length || 0}</span>
                     </div>
                   </div>
                 );

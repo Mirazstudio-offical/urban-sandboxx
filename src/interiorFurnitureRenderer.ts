@@ -64,11 +64,6 @@ export function renderInteriorFurniture(
   f: InteriorFurniture,
   timeHour: number
 ) {
-  // If a legacy toilet is encountered, do not render it
-  if ((f.type as string) === 'toilet') {
-    return;
-  }
-
   const halfW = f.width / 2;
   const halfH = f.height / 2;
 
@@ -188,41 +183,71 @@ export function renderInteriorFurniture(
     }
 
     // ==========================================
-    // 3. HOSPITAL BED
+    // 3. HOSPITAL BED (Medical Patient Bed)
     // ==========================================
     case 'bed_hospital': {
       // Chrome tubular frame with 4 corner bumper discs
-      ctx.fillStyle = '#64748b';
+      ctx.fillStyle = '#475569';
       ctx.fillRect(-halfW, -halfH, f.width, f.height);
-      // Corner bumper rollers
-      ctx.fillStyle = '#334155';
+      drawBevelFrame(ctx, -halfW, -halfH, f.width, f.height, '#94a3b8', '#334155', 0.8);
+
+      // 4 Corner bumper roller wheels
+      const bumperR = Math.min(2.5, Math.min(f.width, f.height) * 0.1);
+      ctx.fillStyle = '#1e293b';
       ctx.beginPath();
-      ctx.arc(-halfW, -halfH, 1.5, 0, Math.PI * 2);
-      ctx.arc(halfW, -halfH, 1.5, 0, Math.PI * 2);
-      ctx.arc(-halfW, halfH, 1.5, 0, Math.PI * 2);
-      ctx.arc(halfW, halfH, 1.5, 0, Math.PI * 2);
+      ctx.arc(-halfW + bumperR, -halfH + bumperR, bumperR, 0, Math.PI * 2);
+      ctx.arc(halfW - bumperR, -halfH + bumperR, bumperR, 0, Math.PI * 2);
+      ctx.arc(-halfW + bumperR, halfH - bumperR, bumperR, 0, Math.PI * 2);
+      ctx.arc(halfW - bumperR, halfH - bumperR, bumperR, 0, Math.PI * 2);
       ctx.fill();
 
-      // Clinical hygienic mattress (white)
+      // Clinical hygienic mattress (white/pale grey)
+      const mPad = Math.max(1.5, f.width * 0.08);
       ctx.fillStyle = '#f8fafc';
-      ctx.fillRect(-halfW + 1.2, -halfH + 1.5, f.width - 2.4, f.height - 3);
+      ctx.fillRect(-halfW + mPad, -halfH + 2, f.width - mPad * 2, f.height - 4);
 
-      // Pillow with antiseptic vinyl cover
+      // Pillow with antiseptic vinyl cover at top
+      const pillowH = Math.max(4, f.height * 0.2);
+      const pillowW = f.width - mPad * 2 - 4;
       ctx.fillStyle = '#e2e8f0';
-      ctx.fillRect(-halfW + 2, -halfH + 2.5, f.width - 4, 4.5);
-      drawBevelFrame(ctx, -halfW + 2, -halfH + 2.5, f.width - 4, 4.5, '#ffffff', '#cbd5e1');
+      ctx.fillRect(-pillowW / 2, -halfH + 3, pillowW, pillowH);
+      drawBevelFrame(ctx, -pillowW / 2, -halfH + 3, pillowW, pillowH, '#ffffff', '#cbd5e1', 0.6);
 
-      // Clinical cyan/mint sterile sheet
+      // Clinical cyan/mint sterile folded blanket (bottom 55% of the bed)
+      const blanketH = (f.height - 4) * 0.58;
+      const blanketY = halfH - 2 - blanketH;
+      ctx.fillStyle = f.color && f.color !== '#f8fafc' ? f.color : '#0284c7';
+      ctx.fillRect(-halfW + mPad, blanketY, f.width - mPad * 2, blanketH);
+      // Clean white sheet fold crease
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(-halfW + mPad, blanketY, f.width - mPad * 2, Math.max(2, f.height * 0.06));
       ctx.fillStyle = '#38bdf8';
-      ctx.fillRect(-halfW + 1.2, halfH - 12, f.width - 2.4, 11);
-      ctx.fillStyle = '#0284c7';
-      ctx.fillRect(-halfW + 1.2, halfH - 12, f.width - 2.4, 2); // Fold crease
+      ctx.fillRect(-halfW + mPad, blanketY + Math.max(2, f.height * 0.06), f.width - mPad * 2, 1.2);
+
+      // Chrome side safety rails
+      ctx.fillStyle = '#cbd5e1';
+      ctx.fillRect(-halfW + 0.5, -halfH + pillowH + 2, 1.5, f.height * 0.45);
+      ctx.fillRect(halfW - 2.0, -halfH + pillowH + 2, 1.5, f.height * 0.45);
 
       // Patient clipboard holder at foot of bed
+      const clipW = Math.min(10, f.width * 0.4);
       ctx.fillStyle = '#b45309';
-      ctx.fillRect(-3, halfH - 2, 6, 2);
+      ctx.fillRect(-clipW / 2, halfH - 3, clipW, 2.5);
       ctx.fillStyle = '#ffffff';
-      ctx.fillRect(-2, halfH - 2, 4, 1.5);
+      ctx.fillRect(-clipW / 2 + 1, halfH - 2.5, clipW - 2, 1.5);
+
+      // IV drip pole (стойка капельницы) at top-right corner
+      const ivX = halfW - 2;
+      const ivY = -halfH + 2;
+      ctx.fillStyle = '#94a3b8';
+      ctx.beginPath();
+      ctx.arc(ivX, ivY, 2, 0, Math.PI * 2);
+      ctx.fill();
+      // IV infusion bag
+      ctx.fillStyle = '#38bdf8';
+      ctx.fillRect(ivX - 1.2, ivY + 1.5, 2.4, 3.5);
+      ctx.fillStyle = 'rgba(255,255,255,0.7)';
+      ctx.fillRect(ivX - 0.8, ivY + 2, 1.6, 1.5);
       break;
     }
 
@@ -256,30 +281,42 @@ export function renderInteriorFurniture(
     // ==========================================
     case 'exam_table': {
       // Chrome/enameled clinical pedestal
-      ctx.fillStyle = '#e2e8f0';
-      ctx.fillRect(-halfW, -halfH, f.width, f.height);
-      drawBevelFrame(ctx, -halfW, -halfH, f.width, f.height, '#ffffff', '#94a3b8');
-
-      // Padded examination surface
-      ctx.fillStyle = '#0284c7';
-      ctx.fillRect(-halfW + 1.2, -halfH + 1.2, f.width - 2.4, f.height - 2.4);
-
-      // White sanitary paper roll & strip
-      ctx.fillStyle = '#ffffff';
-      ctx.fillRect(-halfW + 2.5, -halfH + 1.2, f.width - 5, f.height - 2.4);
-      // Paper roll at the head
       ctx.fillStyle = '#cbd5e1';
-      ctx.fillRect(-halfW + 2, -halfH + 1.2, 3, f.height - 2.4);
+      ctx.fillRect(-halfW, -halfH, f.width, f.height);
+      drawBevelFrame(ctx, -halfW, -halfH, f.width, f.height, '#ffffff', '#64748b', 0.8);
 
-      // Perforation lines
-      ctx.strokeStyle = '#94a3b8';
-      ctx.lineWidth = 0.5;
-      ctx.setLineDash([1, 1]);
-      ctx.beginPath();
-      ctx.moveTo(halfW - 4, -halfH + 1.5);
-      ctx.lineTo(halfW - 4, halfH - 1.5);
-      ctx.stroke();
-      ctx.setLineDash([]);
+      // Padded examination surface (leatherette)
+      ctx.fillStyle = f.color && f.color !== '#f8fafc' ? f.color : '#0284c7';
+      ctx.fillRect(-halfW + 1.5, -halfH + 1.5, f.width - 3, f.height - 3);
+
+      const isVertical = f.height > f.width;
+      if (isVertical) {
+        // Vertical examination couch: head at top
+        const headH = f.height * 0.3;
+        ctx.fillStyle = 'rgba(0,0,0,0.15)';
+        ctx.fillRect(-halfW + 1.5, -halfH + headH, f.width - 3, 1.5);
+
+        // White sanitary paper runner down the middle
+        const paperW = Math.max(8, f.width * 0.65);
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(-paperW / 2, -halfH + 1.5, paperW, f.height - 3);
+        // Paper roll at the head
+        ctx.fillStyle = '#e2e8f0';
+        ctx.fillRect(-paperW / 2 - 1, -halfH + 1.5, paperW + 2, 3);
+      } else {
+        // Horizontal examination couch: head at left
+        const headW = f.width * 0.3;
+        ctx.fillStyle = 'rgba(0,0,0,0.15)';
+        ctx.fillRect(-halfW + headW, -halfH + 1.5, 1.5, f.height - 3);
+
+        // White sanitary paper runner across the table
+        const paperH = Math.max(8, f.height * 0.65);
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(-halfW + 1.5, -paperH / 2, f.width - 3, paperH);
+        // Paper roll at the left
+        ctx.fillStyle = '#e2e8f0';
+        ctx.fillRect(-halfW + 1.5, -paperH / 2 - 1, 3, paperH + 2);
+      }
       break;
     }
 
@@ -481,6 +518,41 @@ export function renderInteriorFurniture(
     // 11. DESK (Office & Study Desk)
     // ==========================================
     case 'desk': {
+      const isMedical = f.color === '#f8fafc' || f.color === '#e2e8f0' || f.color === '#ffffff';
+      if (isMedical) {
+        // Clean white/grey medical laminate desk
+        ctx.fillStyle = '#f8fafc';
+        ctx.fillRect(-halfW, -halfH, f.width, f.height);
+        drawBevelFrame(ctx, -halfW, -halfH, f.width, f.height, '#ffffff', '#cbd5e1', 0.8);
+
+        // Stainless steel drawer pedestal
+        ctx.fillStyle = '#e2e8f0';
+        ctx.fillRect(halfW - 6, -halfH + 1, 5, f.height - 2);
+        ctx.fillStyle = '#94a3b8';
+        ctx.fillRect(halfW - 4, -1, 1.5, 0.8); // Handle
+
+        // Medical patient chart folder (blue/cyan)
+        ctx.fillStyle = '#0284c7';
+        ctx.fillRect(-halfW + 2, -halfH + 2, 4.5, 5);
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(-halfW + 2.5, -halfH + 2.5, 3.5, 4);
+
+        // Medical desk pad
+        const padW = Math.min(f.width * 0.45, 14);
+        const padH = Math.min(f.height * 0.55, 7);
+        ctx.fillStyle = '#e2e8f0';
+        ctx.fillRect(-padW / 2, halfH - padH - 1, padW, padH);
+        drawBevelFrame(ctx, -padW / 2, halfH - padH - 1, padW, padH, '#ffffff', '#94a3b8', 0.4);
+
+        // Pen & prescription pad
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(-halfW + 2, halfH - 4.5, 3.5, 3.5);
+        ctx.fillStyle = '#ef4444'; // Red cross on prescription pad
+        ctx.fillRect(-halfW + 3.2, halfH - 3.8, 1.1, 0.4);
+        ctx.fillRect(-halfW + 3.55, halfH - 4.15, 0.4, 1.1);
+        break;
+      }
+
       const deskColor = f.color || '#451a03';
 
       // Desktop surface
@@ -709,6 +781,67 @@ export function renderInteriorFurniture(
     }
 
     // ==========================================
+    // 16b. TOILET (Ceramic Restroom Water Closet)
+    // ==========================================
+    case 'toilet': {
+      // Porcelain water tank / cistern at the rear (-halfH)
+      const tankH = Math.max(3, f.height * 0.34);
+      const tankW = f.width - 1.2;
+      ctx.fillStyle = '#f8fafc';
+      ctx.fillRect(-tankW / 2, -halfH, tankW, tankH);
+      drawBevelFrame(ctx, -tankW / 2, -halfH, tankW, tankH, '#ffffff', '#cbd5e1', 0.6);
+
+      // Dual-flush chrome button on top of tank
+      ctx.fillStyle = '#94a3b8';
+      ctx.beginPath();
+      ctx.arc(0, -halfH + tankH / 2, 1.2, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#38bdf8';
+      ctx.beginPath();
+      ctx.arc(0, -halfH + tankH / 2, 0.6, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Toilet bowl base (oval extending forward)
+      const bowlCenterY = -halfH + tankH + (f.height - tankH) / 2;
+      const bowlRadiusX = Math.max(2.5, f.width * 0.38);
+      const bowlRadiusY = Math.max(3.5, (f.height - tankH) * 0.48);
+
+      // Outer porcelain rim
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.ellipse(0, bowlCenterY, bowlRadiusX, bowlRadiusY, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = '#cbd5e1';
+      ctx.lineWidth = 0.8;
+      ctx.stroke();
+
+      // Toilet seat ring / lid hinge
+      ctx.strokeStyle = '#94a3b8';
+      ctx.lineWidth = 0.6;
+      ctx.beginPath();
+      ctx.ellipse(0, bowlCenterY, bowlRadiusX - 0.8, bowlRadiusY - 0.8, 0, 0, Math.PI * 2);
+      ctx.stroke();
+
+      // Inner water cavity with clear water tint
+      ctx.fillStyle = '#e2e8f0';
+      ctx.beginPath();
+      ctx.ellipse(0, bowlCenterY + 0.5, bowlRadiusX - 1.8, bowlRadiusY - 1.8, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.fillStyle = '#38bdf8';
+      ctx.beginPath();
+      ctx.ellipse(0, bowlCenterY + 1.0, bowlRadiusX - 2.5, bowlRadiusY - 2.8, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Toilet paper roll dispenser on side
+      ctx.fillStyle = '#cbd5e1';
+      ctx.fillRect(-halfW - 1.5, bowlCenterY - 2, 1.2, 3.5);
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(-halfW - 2.5, bowlCenterY - 1.5, 1.5, 2.5);
+      break;
+    }
+
+    // ==========================================
     // 17. FRIDGE (Refrigerator)
     // ==========================================
     case 'fridge': {
@@ -805,7 +938,53 @@ export function renderInteriorFurniture(
     // ==========================================
     case 'bookshelf':
     case 'shelf': {
-      // Shelf timber or steel structure
+      const isMedical = f.color === '#f8fafc' || f.color === '#e2e8f0' || f.color === '#ffffff';
+      if (isMedical) {
+        // Enamel / stainless medical cabinet with glass shelves & vials
+        ctx.fillStyle = '#f8fafc';
+        ctx.fillRect(-halfW, -halfH, f.width, f.height);
+        drawBevelFrame(ctx, -halfW, -halfH, f.width, f.height, '#ffffff', '#94a3b8', 0.8);
+
+        // Glass shelf reflection
+        ctx.fillStyle = 'rgba(56, 189, 248, 0.15)';
+        ctx.fillRect(-halfW + 1.2, -halfH + 1.2, f.width - 2.4, f.height - 2.4);
+
+        // Red cross badge on center top
+        ctx.fillStyle = '#ef4444';
+        ctx.fillRect(-1.5, -halfH + 1.5, 3, 0.8);
+        ctx.fillRect(-0.4, -halfH + 0.4, 0.8, 3);
+
+        // Medicine bottles / ampoules / pill boxes
+        const medColors = ['#0284c7', '#10b981', '#ef4444', '#f59e0b', '#ffffff', '#38bdf8'];
+        const isWide = f.width >= f.height;
+        if (isWide) {
+          let curX = -halfW + 2;
+          let mIdx = 0;
+          while (curX < halfW - 3) {
+            const vialW = 1.8;
+            ctx.fillStyle = medColors[mIdx % medColors.length];
+            ctx.fillRect(curX, -halfH + 2.5, vialW, f.height - 4);
+            // White cap
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(curX + 0.2, -halfH + 1.5, vialW - 0.4, 1);
+            curX += vialW + 1.2;
+            mIdx++;
+          }
+        } else {
+          let curY = -halfH + 3;
+          let mIdx = 0;
+          while (curY < halfH - 3) {
+            const boxH = 2.2;
+            ctx.fillStyle = medColors[mIdx % medColors.length];
+            ctx.fillRect(-halfW + 2, curY, f.width - 4, boxH);
+            curY += boxH + 1.4;
+            mIdx++;
+          }
+        }
+        break;
+      }
+
+      // Standard Shelf timber or steel structure
       ctx.fillStyle = f.color || '#334155';
       ctx.fillRect(-halfW, -halfH, f.width, f.height);
       drawBevelFrame(ctx, -halfW, -halfH, f.width, f.height, 'rgba(255,255,255,0.2)', 'rgba(0,0,0,0.4)');
@@ -1031,6 +1210,171 @@ export function renderInteriorFurniture(
         ctx.closePath();
         ctx.stroke();
       }
+      break;
+    }
+
+    // ==========================================
+    // 25b. CAR PODIUM (Luxury Showroom Display Vehicle)
+    // ==========================================
+    case 'car_podium': {
+      // 1. Ambient floor LED halo underglow
+      ctx.fillStyle = 'rgba(56, 189, 248, 0.18)';
+      ctx.fillRect(-halfW - 2.5, -halfH - 2.5, f.width + 5, f.height + 5);
+
+      // 2. Elevated octagonal / beveled showroom turntable platform
+      ctx.fillStyle = '#09090b';
+      ctx.fillRect(-halfW, -halfH, f.width, f.height);
+      drawBevelFrame(ctx, -halfW, -halfH, f.width, f.height, '#38bdf8', '#0284c7', 1.4);
+
+      // Turntable rotating disc ring
+      ctx.strokeStyle = 'rgba(56, 189, 248, 0.35)';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(-halfW + 2, -halfH + 2, f.width - 4, f.height - 4);
+
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.12)';
+      ctx.lineWidth = 0.8;
+      ctx.beginPath();
+      ctx.arc(0, 0, Math.min(halfW, halfH) * 0.78, 0, Math.PI * 2);
+      ctx.stroke();
+
+      // Four corner recessed spotlight pucks
+      const spotOffsets = [
+        [-halfW + 3, -halfH + 3],
+        [halfW - 3, -halfH + 3],
+        [-halfW + 3, halfH - 3],
+        [halfW - 3, halfH - 3]
+      ];
+      for (const [sx, sy] of spotOffsets) {
+        ctx.fillStyle = '#fef08a';
+        ctx.beginPath();
+        ctx.arc(sx, sy, 1.2, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = 'rgba(254, 240, 138, 0.2)';
+        ctx.beginPath();
+        ctx.arc(sx, sy, 3, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      // 3. Top-down Showroom Display Vehicle
+      const carW = Math.max(16, f.height * 0.58);
+      const carL = Math.max(28, f.width * 0.72);
+      const halfCarW = carW / 2;
+      const halfCarL = carL / 2;
+      const bodyColor = f.color || '#dc2626';
+
+      // Tires / Wheels
+      ctx.fillStyle = '#0f172a';
+      const tireW = 2.8;
+      const tireL = 5.5;
+      // Front Left
+      ctx.fillRect(-halfCarL + 4, -halfCarW - 1, tireL, tireW);
+      // Front Right
+      ctx.fillRect(-halfCarL + 4, halfCarW - 1.8, tireL, tireW);
+      // Rear Left
+      ctx.fillRect(halfCarL - 9.5, -halfCarW - 1, tireL, tireW);
+      // Rear Right
+      ctx.fillRect(halfCarL - 9.5, halfCarW - 1.8, tireL, tireW);
+
+      // Car Body Silhouette
+      ctx.fillStyle = bodyColor;
+      ctx.beginPath();
+      // Start front nose center
+      ctx.moveTo(-halfCarL, 0);
+      // Front left bumper & wheel arch
+      ctx.lineTo(-halfCarL + 2, -halfCarW + 1);
+      ctx.lineTo(-halfCarL + 4, -halfCarW);
+      ctx.lineTo(-halfCarL + 10, -halfCarW);
+      ctx.lineTo(-halfCarL + 12, -halfCarW + 1);
+      // Left cabin flank
+      ctx.lineTo(halfCarL - 12, -halfCarW + 1);
+      // Rear left arch
+      ctx.lineTo(halfCarL - 10, -halfCarW);
+      ctx.lineTo(halfCarL - 4, -halfCarW);
+      ctx.lineTo(halfCarL - 2, -halfCarW + 1.2);
+      // Rear bumper
+      ctx.lineTo(halfCarL, -halfCarW + 2);
+      ctx.lineTo(halfCarL, halfCarW - 2);
+      // Rear right arch
+      ctx.lineTo(halfCarL - 2, halfCarW - 1.2);
+      ctx.lineTo(halfCarL - 4, halfCarW);
+      ctx.lineTo(halfCarL - 10, halfCarW);
+      ctx.lineTo(halfCarL - 12, halfCarW - 1);
+      // Right cabin flank
+      ctx.lineTo(-halfCarL + 12, halfCarW - 1);
+      // Front right arch
+      ctx.lineTo(-halfCarL + 10, halfCarW);
+      ctx.lineTo(-halfCarL + 4, halfCarW);
+      ctx.lineTo(-halfCarL + 2, halfCarW - 1);
+      ctx.closePath();
+      ctx.fill();
+
+      // Body Bevel Edge Highlight
+      drawBevelFrame(ctx, -halfCarL, -halfCarW, carL, carW, 'rgba(255,255,255,0.4)', 'rgba(0,0,0,0.45)', 0.6);
+
+      // Hood Contours & Center Spine
+      ctx.strokeStyle = 'rgba(255,255,255,0.3)';
+      ctx.lineWidth = 0.7;
+      ctx.beginPath();
+      ctx.moveTo(-halfCarL + 2, 0);
+      ctx.lineTo(-halfCarL + 12, 0);
+      ctx.stroke();
+
+      // Aerodynamic Front Splitter (Carbon fiber)
+      ctx.fillStyle = '#0f172a';
+      ctx.fillRect(-halfCarL - 1, -halfCarW + 3, 1.5, carW - 6);
+
+      // Front Headlights (Bright Xenon/LED with bloom)
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(-halfCarL + 0.5, -halfCarW + 1.8, 2.5, 2.2);
+      ctx.fillRect(-halfCarL + 0.5, halfCarW - 4, 2.5, 2.2);
+
+      ctx.fillStyle = 'rgba(56, 189, 248, 0.45)';
+      ctx.beginPath();
+      ctx.arc(-halfCarL + 1, -halfCarW + 2.9, 3.5, 0, Math.PI * 2);
+      ctx.arc(-halfCarL + 1, halfCarW - 2.9, 3.5, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Tinted Glass Canopy (Windshield, Roof, Rear Glass)
+      const cabinX = -halfCarL + 13;
+      const cabinW = carL * 0.44;
+      const cabinH = carW * 0.76;
+
+      // Dark tinted glass base
+      ctx.fillStyle = '#09090b';
+      ctx.fillRect(cabinX, -cabinH / 2, cabinW, cabinH);
+
+      // Windshield curved gradient / reflection
+      ctx.fillStyle = 'rgba(56, 189, 248, 0.4)';
+      ctx.beginPath();
+      ctx.moveTo(cabinX, -cabinH / 2 + 1);
+      ctx.lineTo(cabinX + 4, -cabinH / 2 + 1);
+      ctx.lineTo(cabinX + 2, cabinH / 2 - 1);
+      ctx.lineTo(cabinX, cabinH / 2 - 1);
+      ctx.closePath();
+      ctx.fill();
+
+      // Body Roof Cap
+      ctx.fillStyle = bodyColor;
+      ctx.fillRect(cabinX + 4, -cabinH / 2 + 1.5, cabinW - 8, cabinH - 3);
+      drawBevelFrame(ctx, cabinX + 4, -cabinH / 2 + 1.5, cabinW - 8, cabinH - 3, 'rgba(255,255,255,0.3)', 'rgba(0,0,0,0.3)', 0.5);
+
+      // Rear Spoiler / Taillight bar
+      ctx.fillStyle = '#ef4444';
+      ctx.fillRect(halfCarL - 2.5, -halfCarW + 2.5, 1.8, carW - 5);
+      ctx.fillStyle = '#0f172a';
+      ctx.fillRect(halfCarL - 1, -halfCarW + 3, 1, carW - 6);
+
+      // 4. Specification Plaque / Price Stand on Podium Corner
+      ctx.fillStyle = '#1e293b';
+      ctx.fillRect(-halfW + 4, halfH - 6.5, 10, 4.5);
+      ctx.strokeStyle = '#38bdf8';
+      ctx.lineWidth = 0.5;
+      ctx.strokeRect(-halfW + 4, halfH - 6.5, 10, 4.5);
+      ctx.fillStyle = '#38bdf8';
+      ctx.fillRect(-halfW + 5, halfH - 5.5, 4, 0.8);
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(-halfW + 5, halfH - 4.2, 7, 0.6);
+      ctx.fillRect(-halfW + 5, halfH - 3.2, 5, 0.6);
       break;
     }
 

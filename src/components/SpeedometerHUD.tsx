@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Vehicle, CarType } from '../types';
+import { Vehicle, CarType, WeatherType } from '../types';
 import { 
   Fuel, 
   Thermometer, 
@@ -13,11 +13,16 @@ import {
   ChevronUp,
   Gauge,
   Zap,
-  ShieldAlert
+  ShieldAlert,
+  Clock,
+  Compass,
+  Activity
 } from 'lucide-react';
 import { sound } from '../audio';
 
 export type DashboardTheme = 'sport' | 'truck' | 'retro' | 'emergency' | 'luxury';
+
+export type TripComputerMode = 'eco' | 'range' | 'trip' | 'sys' | 'tank';
 
 export function getVehicleDashboardTheme(type?: CarType): DashboardTheme {
   if (!type) return 'luxury';
@@ -29,6 +34,7 @@ export function getVehicleDashboardTheme(type?: CarType): DashboardTheme {
     case 'muscle_classic':
     case 'hatch_hot':
     case 'coupe_gt':
+    case 'moto_sport':
       return 'sport';
 
     case 'truck_box':
@@ -45,6 +51,9 @@ export function getVehicleDashboardTheme(type?: CarType): DashboardTheme {
     case 'bus_minibus':
     case 'pickup':
     case 'offroad_hardcore':
+    case 'tractor_mtz82':
+    case 'tractor_mtz80':
+    case 'tractor_mtz80_old':
       return 'truck';
 
     case 'retro_bubble':
@@ -52,6 +61,11 @@ export function getVehicleDashboardTheme(type?: CarType): DashboardTheme {
     case 'micro_car':
     case 'sedan_classic':
     case 'wagon_classic':
+    case 'moto_izh_jupiter':
+    case 'moto_ural_sidecar':
+    case 'moto_jawa350':
+    case 'moto_chopper':
+    case 'moped_soviet':
       return 'retro';
 
     case 'police':
@@ -90,6 +104,8 @@ interface SpeedometerHUDProps {
   isHandbraking?: boolean;
   playerTurnSignal?: 'none' | 'left' | 'right' | 'hazard';
   playerHeadlightMode?: 'off' | 'low' | 'high';
+  timeHour?: number;
+  weather?: WeatherType;
   onToggleTurnSignal?: (signal: 'left' | 'right' | 'hazard') => void;
   onToggleHeadlights?: () => void;
   onToggleEngine?: () => void;
@@ -105,6 +121,8 @@ export const SpeedometerHUD: React.FC<SpeedometerHUDProps> = ({
   isHandbraking = false,
   playerTurnSignal = 'none',
   playerHeadlightMode = 'off',
+  timeHour = 12.0,
+  weather = 'clear',
   onToggleTurnSignal,
   onToggleHeadlights,
   onToggleEngine,
@@ -112,6 +130,7 @@ export const SpeedometerHUD: React.FC<SpeedometerHUDProps> = ({
   onSelectGear,
 }) => {
   const [isMinimized, setIsMinimized] = useState<boolean>(false);
+  const [tripMode, setTripMode] = useState<TripComputerMode>('eco');
 
   if (!vehicle) return null;
 
@@ -128,6 +147,86 @@ export const SpeedometerHUD: React.FC<SpeedometerHUDProps> = ({
   const isEngineRunning = !!eng?.engineRunning;
   const isStalled = !!eng?.isStalled || !!eng?.engineStalled;
   const batteryCharge = Math.round(eng?.batteryCharge ?? 100);
+
+  // Modern On-Board Computer (Trip Computer / БК) Calculations
+  let tankCapacityLiters = 55;
+  let baseAvgConsumption = 7.8; // L/100km
+  if (theme === 'sport') {
+    tankCapacityLiters = 68;
+    baseAvgConsumption = 12.5;
+  } else if (theme === 'truck') {
+    tankCapacityLiters = 180;
+    baseAvgConsumption = 26.0;
+  } else if (theme === 'retro') {
+    tankCapacityLiters = 45;
+    baseAvgConsumption = 8.5;
+  }
+
+  const remainingFuelLiters = ((fuelLevel / 100) * tankCapacityLiters).toFixed(1);
+
+  // Compass Heading from vehicle angle
+  const headingDeg = (((vehicle.angle * 180) / Math.PI) % 360 + 360) % 360;
+  const compassHeadings = ['E', 'SE', 'S', 'SW', 'W', 'NW', 'N', 'NE'];
+  const headingIndex = Math.round(headingDeg / 45) % 8;
+  const compassHeading = compassHeadings[headingIndex];
+
+  // In-Game Clock calculation
+  const safeTimeHour = ((timeHour % 24) + 24) % 24;
+  const gameHours = Math.floor(safeTimeHour);
+  const gameMinutes = Math.floor((safeTimeHour % 1) * 60);
+  const gameTimeStr = `${String(gameHours).padStart(2, '0')}:${String(gameMinutes).padStart(2, '0')}`;
+
+  // In-Game Ambient Temperature calculation based on time of day and weather
+  const baseTemp = 18 + 7 * Math.sin(((safeTimeHour - 8) / 24) * 2 * Math.PI);
+  let weatherDelta = 0;
+  if (weather === 'rain') weatherDelta = -4;
+  else if (weather === 'storm') weatherDelta = -6;
+  else if (weather === 'fog') weatherDelta = -2;
+  const currentTempC = Math.round(baseTemp + weatherDelta);
+  const ambientTempStr = `${currentTempC >= 0 ? '+' : ''}${currentTempC}°C`;
+
+  // Instant fuel consumption logic (л/100км в движении, л/ч на холостом ходу, 0.0 при торможении двигателем ПХХ)
+  let instantConsumptionText = '0.0 L/100';
+  let instantConsumptionShort = '0.0 L/100';
+  let ecoBarRatio = 0; // 0 to 1
+
+  if (!isEngineRunning) {
+    instantConsumptionText = '0.0 L/h';
+    instantConsumptionShort = '0.0 L/h';
+    ecoBarRatio = 0;
+  } else if (speedKmh < 2) {
+    const idleFlow = 0.8 + (currentRPM > 950 ? ((currentRPM - 950) / 1000) * 1.6 : 0);
+    instantConsumptionText = `${idleFlow.toFixed(1)} L/h`;
+    instantConsumptionShort = `${idleFlow.toFixed(1)} L/h`;
+    ecoBarRatio = Math.min(1, idleFlow / 3.5);
+  } else {
+    // Check fuel cutoff (ПХХ) when coasting in gear with zero throttle
+    const isDecelCutoff = speedKmh > 18 && (eng?.currentGear && eng.currentGear > 0) && currentRPM > 1300 && (!eng?.clutchPedal || eng.clutchPedal < 0.2);
+    if (isDecelCutoff) {
+      instantConsumptionText = '0.0 L/100';
+      instantConsumptionShort = '0.0 L/100 (CUT)';
+      ecoBarRatio = 0.05;
+    } else {
+      const loadRatio = Math.max(0.35, currentRPM / 2800);
+      const calculatedL100 = baseAvgConsumption * loadRatio * (1 + Math.max(0, (speedKmh - 100) / 100) * 0.4);
+      const clampedL100 = Math.min(39.9, Math.max(1.8, calculatedL100));
+      instantConsumptionText = `${clampedL100.toFixed(1)} L/100`;
+      instantConsumptionShort = `${clampedL100.toFixed(1)} L/100`;
+      ecoBarRatio = Math.min(1, clampedL100 / 22);
+    }
+  }
+
+  // Distance to empty (Запас хода)
+  const estimatedRangeKm = Math.max(0, Math.round((Number(remainingFuelLiters) / baseAvgConsumption) * 100));
+
+  // Vehicle on-board electrical system voltage
+  const sysVoltageStr = isEngineRunning
+    ? (14.0 + (batteryCharge / 100) * 0.4).toFixed(1)
+    : (11.8 + (batteryCharge / 100) * 0.8).toFixed(1);
+
+  // Odometer & Trip distance
+  const totalOdoStr = '014829';
+  const tripOdoKm = (((vehicle.distanceTraveled ?? 0) / 1000) % 1000).toFixed(1);
 
   // Transmission & Gear display
   let currentGearLabel = String(gear);
@@ -381,7 +480,7 @@ export const SpeedometerHUD: React.FC<SpeedometerHUDProps> = ({
         title="Свернуть / Развернуть приборную панель"
       >
         <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-        <span className="uppercase font-bold tracking-wider">{vehicle.type.replace('_', ' ')}</span>
+        <span className="uppercase font-bold tracking-wider">ПРИБОРНАЯ ПАНЕЛЬ</span>
         {isMinimized ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
       </button>
 
@@ -420,117 +519,84 @@ export const SpeedometerHUD: React.FC<SpeedometerHUDProps> = ({
           className={`relative rounded-2xl border-2 p-2.5 md:p-3 shadow-2xl backdrop-blur-xl ${themeStyles.casingBg} ${themeStyles.border} flex flex-col items-center gap-2`}
         >
           {/* TOP ANNUNCIATOR STRIP & SHIFT LIGHTS */}
-          <div className="w-full flex items-center justify-between px-2 text-[10px] font-mono border-b border-slate-800/80 pb-1.5">
-            {/* Left Signal Indicator */}
+          <div className="w-full flex items-center justify-between px-2 text-[10px] font-mono border-b border-slate-800/80 pb-1.5 gap-2">
+            {/* Left: Signal & In-Game Telemetry (Time, Outside Temp, Compass) */}
             <div className="flex items-center gap-1.5">
               <span className={`p-1 rounded ${playerTurnSignal === 'left' || playerTurnSignal === 'hazard' ? 'bg-emerald-500/30 text-emerald-400 animate-pulse' : 'text-slate-600'}`}>
                 <ArrowLeft className="w-3.5 h-3.5" />
               </span>
-              <span className={`px-1.5 py-0.5 rounded text-[8px] font-bold uppercase tracking-wider border ${themeStyles.accentBadge}`}>
-                {themeStyles.title}
-              </span>
+
+              {/* In-Game Time, Outside Temp & Compass chips */}
+              <div className="flex items-center gap-1.5 text-[9px] font-mono text-slate-400 bg-slate-900/90 px-2 py-0.5 rounded border border-slate-800">
+                <span className="flex items-center gap-1 text-slate-200 font-bold" title="Игровое время">
+                  <Clock className="w-2.5 h-2.5 text-sky-400" />
+                  {gameTimeStr}
+                </span>
+                <span className="text-slate-600">|</span>
+                <span className="flex items-center gap-1 text-slate-200 font-bold" title="Температура за бортом">
+                  <Thermometer className="w-2.5 h-2.5 text-amber-400" />
+                  {ambientTempStr}
+                </span>
+                <span className="text-slate-600">|</span>
+                <span className="flex items-center gap-1 text-emerald-400 font-bold" title="Компас / Курс">
+                  <Compass className="w-2.5 h-2.5" />
+                  {compassHeading}
+                </span>
+              </div>
             </div>
 
-            {/* Sport RPM Shift Lights or Truck Air Indicator */}
-            {theme === 'sport' ? (
-              <div className="flex items-center gap-1">
-                {[0.6, 0.7, 0.8, 0.88, 0.95].map((thresh, idx) => {
-                  const active = rpmRatio >= thresh;
-                  let dotColor = 'bg-emerald-500';
-                  if (idx >= 2) dotColor = 'bg-amber-500';
-                  if (idx >= 3) dotColor = 'bg-rose-500';
-                  return (
-                    <span
-                      key={idx}
-                      className={`w-2.5 h-1.5 rounded-sm transition-all ${active ? `${dotColor} shadow-[0_0_8px_currentColor] animate-pulse` : 'bg-slate-800'}`}
-                    />
-                  );
-                })}
-              </div>
-            ) : (
-              <div className="flex items-center gap-1.5 text-slate-400 font-mono text-[9px] flex-wrap justify-center">
-                {/* Fixed Transmission Type Badge (non-toggleable, archetype fixed) */}
-                <div
-                  className="select-none px-1.5 py-0.5 rounded bg-slate-900 border border-slate-700/80 font-bold flex items-center gap-1"
-                  title={`Тип трансмиссии автомобиля: ${eng?.transmissionType === 'MANUAL' ? 'Механическая (МКПП)' : 'Автоматическая (АКПП)'}`}
-                >
-                  <span className={eng?.transmissionType === 'MANUAL' ? 'text-amber-400 font-black' : 'text-sky-400 font-black'}>
-                    {eng?.transmissionType === 'MANUAL' ? 'МКПП' : 'АКПП'}
+            {/* Right / Center: Sport RPM Shift Lights or Range & Consumption + Engine State */}
+            <div className="flex items-center gap-2">
+              {theme === 'sport' ? (
+                <div className="flex items-center gap-1">
+                  {[0.6, 0.7, 0.8, 0.88, 0.95].map((thresh, idx) => {
+                    const active = rpmRatio >= thresh;
+                    let dotColor = 'bg-emerald-500';
+                    if (idx >= 2) dotColor = 'bg-amber-500';
+                    if (idx >= 3) dotColor = 'bg-rose-500';
+                    return (
+                      <span
+                        key={idx}
+                        className={`w-2.5 h-1.5 rounded-sm transition-all ${active ? `${dotColor} shadow-[0_0_8px_currentColor] animate-pulse` : 'bg-slate-800'}`}
+                      />
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="hidden sm:flex items-center gap-1.5 bg-slate-900/90 px-2 py-0.5 rounded border border-slate-800 text-[9px] font-mono">
+                  <span className="flex items-center gap-1 text-amber-300 font-semibold" title="Запас хода">
+                    <Fuel className="w-2.5 h-2.5 text-amber-400" />
+                    {estimatedRangeKm} км
+                  </span>
+                  <span className="text-slate-600">|</span>
+                  <span className="flex items-center gap-1 text-sky-300 font-semibold" title="Мгновенный расход">
+                    <Droplet className="w-2.5 h-2.5 text-sky-400" />
+                    {instantConsumptionShort}
                   </span>
                 </div>
+              )}
 
-                {/* PRND AUTO SELECTOR BUTTONS / MANUAL GEAR BUTTONS */}
-                {eng?.transmissionType === 'AUTO' ? (
-                  <div className="flex items-center gap-1 bg-slate-950/90 px-1 py-0.5 rounded border border-slate-800">
-                    {(['P', 'R', 'N', 'D'] as const).map((mode) => {
-                      const activeMode = eng?.autoGearMode || gear;
-                      const isSelected = activeMode === mode;
-                      const colorClass = {
-                        P: isSelected ? 'bg-red-600 text-white shadow-[0_0_8px_rgba(239,68,68,0.7)] font-black' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800',
-                        R: isSelected ? 'bg-amber-500 text-black shadow-[0_0_8px_rgba(245,158,11,0.7)] font-black' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800',
-                        N: isSelected ? 'bg-slate-200 text-slate-900 shadow-[0_0_8px_rgba(255,255,255,0.6)] font-black' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800',
-                        D: isSelected ? 'bg-sky-500 text-white shadow-[0_0_8px_rgba(14,165,233,0.7)] font-black' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800',
-                      }[mode];
+              <span className={`text-[9px] font-mono font-bold px-1.5 py-0.5 rounded ${
+                isEngineRunning 
+                  ? 'text-emerald-400 bg-emerald-950/40 border border-emerald-500/30' 
+                  : isStalled 
+                  ? 'text-amber-400 bg-amber-950/40 border border-amber-500/30 animate-pulse' 
+                  : 'text-rose-400 bg-rose-950/40 border border-rose-500/30'
+              }`}>
+                {isEngineRunning ? 'МОТОР ВКЛ' : isStalled ? 'ЗАГЛОХ' : 'МОТОР ВЫКЛ'}
+              </span>
 
-                      return (
-                        <button
-                          key={mode}
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onSelectGear?.(mode);
-                          }}
-                          className={`w-5 h-4 rounded text-[10px] flex items-center justify-center transition-all cursor-pointer ${colorClass}`}
-                          title={`Включить режим ${mode}`}
-                        >
-                          {mode}
-                        </button>
-                      );
-                    })}
-                  </div>
-                ) : (
-                  <div className="flex items-center gap-0.5 bg-slate-950/90 px-1 py-0.5 rounded border border-slate-800">
-                    {(['R', 'N', '1', '2', '3', '4', '5'] as const).map((g) => {
-                      const curG = eng?.currentGear === -1 ? 'R' : eng?.currentGear === 0 ? 'N' : String(eng?.currentGear || 1);
-                      const isSelected = curG === g;
-                      return (
-                        <button
-                          key={g}
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onSelectGear?.(g === 'R' ? 'R' : g === 'N' ? 'N' : Number(g));
-                          }}
-                          className={`w-4 h-4 rounded text-[9px] font-bold flex items-center justify-center transition-all cursor-pointer ${
-                            isSelected
-                              ? 'bg-sky-500 text-white shadow-[0_0_6px_rgba(14,165,233,0.6)]'
-                              : 'text-slate-400 hover:text-slate-200'
-                          }`}
-                          title={`Передача ${g}`}
-                        >
-                          {g}
-                        </button>
-                      );
-                    })}
-                  </div>
+              {/* Headlights and Right Signal Indicator */}
+              <div className="flex items-center gap-1.5">
+                {playerHeadlightMode !== 'off' && (
+                  <span className={`p-0.5 rounded ${playerHeadlightMode === 'high' ? 'text-sky-400' : 'text-emerald-400'}`}>
+                    <Lightbulb className="w-3.5 h-3.5" />
+                  </span>
                 )}
-
-                <span className={isEngineRunning ? 'text-emerald-400 font-bold' : isStalled ? 'text-amber-400 font-bold' : 'text-rose-400 font-bold'}>
-                  {isEngineRunning ? 'МОТОР ВКЛ' : isStalled ? 'ЗАГЛОХ' : 'МОТОР ВЫКЛ'}
+                <span className={`p-1 rounded ${playerTurnSignal === 'right' || playerTurnSignal === 'hazard' ? 'bg-emerald-500/30 text-emerald-400 animate-pulse' : 'text-slate-600'}`}>
+                  <ArrowRight className="w-3.5 h-3.5" />
                 </span>
               </div>
-            )}
-
-            {/* Right Signal Indicator */}
-            <div className="flex items-center gap-1.5">
-              {playerHeadlightMode !== 'off' && (
-                <span className={`p-0.5 rounded ${playerHeadlightMode === 'high' ? 'text-sky-400' : 'text-emerald-400'}`}>
-                  <Lightbulb className="w-3.5 h-3.5" />
-                </span>
-              )}
-              <span className={`p-1 rounded ${playerTurnSignal === 'right' || playerTurnSignal === 'hazard' ? 'bg-emerald-500/30 text-emerald-400 animate-pulse' : 'text-slate-600'}`}>
-                <ArrowRight className="w-3.5 h-3.5" />
-              </span>
             </div>
           </div>
 
@@ -619,91 +685,450 @@ export const SpeedometerHUD: React.FC<SpeedometerHUDProps> = ({
                 </g>
               </g>
 
-              {/* ================= CENTER CLUSTER: AUX GAUGES (OIL, TEMP, FUEL) ================= */}
+              {/* ================= CENTER CLUSTER: AUX GAUGES & MULTI-FUNCTION DISPLAY ================= */}
               <g id="aux-gauges" transform="translate(150, 0)">
                 {/* 1. OIL PRESSURE / LEVEL GAUGE (LEFT AUX) */}
-                <g transform="translate(25, 36)">
-                  <circle cx="0" cy="0" r="23" fill="url(#dialGrad)" stroke="#1e293b" strokeWidth="1.5" />
-                  {renderSmallDialTicks(0, 0, 21, 'L', 'NORM', 'H', false)}
+                <g transform="translate(25, 23)">
+                  <circle cx="0" cy="0" r="18" fill="url(#dialGrad)" stroke="#1e293b" strokeWidth="1.2" />
+                  {renderSmallDialTicks(0, 0, 16, 'L', 'NORM', 'H', false)}
                   {/* Rotating Needle */}
                   <g transform={`rotate(${oilAngle} 0 0)`}>
-                    <line x1="0" y1="4" x2="0" y2="-17" stroke={themeStyles.needleColor} strokeWidth="1.8" strokeLinecap="round" />
-                    <circle cx="0" cy="0" r="3.5" fill={themeStyles.hubColor} stroke={themeStyles.hubBorder} strokeWidth="1" />
+                    <line x1="0" y1="3" x2="0" y2="-13" stroke={themeStyles.needleColor} strokeWidth="1.5" strokeLinecap="round" />
+                    <circle cx="0" cy="0" r="2.8" fill={themeStyles.hubColor} stroke={themeStyles.hubBorder} strokeWidth="0.8" />
                   </g>
-                  {/* Icon */}
-                  <text x="0" y="16" textAnchor="middle" fontSize="6.5" fill={isLowOil ? '#ef4444' : '#64748b'} fontFamily="monospace" fontWeight="bold">МАСЛО</text>
-                  {isLowOil && <circle cx="12" cy="-12" r="2" fill="#ef4444" className="animate-ping" />}
+                  {/* Oil Can Vector Icon */}
+                  <g transform="translate(0, 10) scale(0.8)">
+                    <path
+                      d="M-5,1 C-5,-1 -2.5,-2 0,-2 C2.5,-2 5,-1 5,1 C5,3 3,4 0,4 C-3,4 -5,3 -5,1 Z M-5,0 L-7,-1.5 L-7,1.5 L-5,0.5 M5,0 L7.5,-2.5"
+                      fill="none"
+                      stroke={isLowOil ? '#ef4444' : '#64748b'}
+                      strokeWidth="1.1"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                    <circle cx="8" cy="-1.5" r="0.7" fill={isLowOil ? '#ef4444' : '#64748b'} />
+                  </g>
+                  {isLowOil && <circle cx="9" cy="-9" r="1.8" fill="#ef4444" className="animate-ping" />}
                 </g>
 
                 {/* 2. COOLANT TEMPERATURE GAUGE (CENTER AUX) */}
-                <g transform="translate(80, 36)">
-                  <circle cx="0" cy="0" r="23" fill="url(#dialGrad)" stroke="#1e293b" strokeWidth="1.5" />
-                  {renderSmallDialTicks(0, 0, 21, '40°', '90°', '130°', true)}
+                <g transform="translate(80, 23)">
+                  <circle cx="0" cy="0" r="18" fill="url(#dialGrad)" stroke="#1e293b" strokeWidth="1.2" />
+                  {renderSmallDialTicks(0, 0, 16, '40°', '90°', '130°', true)}
                   {/* Rotating Needle */}
                   <g transform={`rotate(${tempAngle} 0 0)`}>
-                    <line x1="0" y1="4" x2="0" y2="-17" stroke={themeStyles.needleColor} strokeWidth="1.8" strokeLinecap="round" />
-                    <circle cx="0" cy="0" r="3.5" fill={themeStyles.hubColor} stroke={themeStyles.hubBorder} strokeWidth="1" />
+                    <line x1="0" y1="3" x2="0" y2="-13" stroke={themeStyles.needleColor} strokeWidth="1.5" strokeLinecap="round" />
+                    <circle cx="0" cy="0" r="2.8" fill={themeStyles.hubColor} stroke={themeStyles.hubBorder} strokeWidth="0.8" />
                   </g>
-                  {/* Icon */}
-                  <text x="0" y="16" textAnchor="middle" fontSize="6.5" fill={isOverheating ? '#ef4444' : '#64748b'} fontFamily="monospace" fontWeight="bold">ТЕМП</text>
-                  {isOverheating && <circle cx="12" cy="-12" r="2" fill="#ef4444" className="animate-ping" />}
-                </g>
-
-                {/* 3. FUEL LEVEL GAUGE (RIGHT AUX) */}
-                <g transform="translate(135, 36)">
-                  <circle cx="0" cy="0" r="23" fill="url(#dialGrad)" stroke="#1e293b" strokeWidth="1.5" />
-                  {renderSmallDialTicks(0, 0, 21, 'E', '1/2', 'F', false)}
-                  {/* Rotating Needle */}
-                  <g transform={`rotate(${fuelAngle} 0 0)`}>
-                    <line x1="0" y1="4" x2="0" y2="-17" stroke={themeStyles.needleColor} strokeWidth="1.8" strokeLinecap="round" />
-                    <circle cx="0" cy="0" r="3.5" fill={themeStyles.hubColor} stroke={themeStyles.hubBorder} strokeWidth="1" />
+                  {/* Coolant Thermometer Vector Icon */}
+                  <g transform="translate(0, 10) scale(0.8)">
+                    <path
+                      d="M-1,-5.5 L1,-5.5 L1,-0.8 C2,0 2.6,1.2 2.6,2.3 C2.6,3.8 1.4,5 0,5 C-1.4,5 -2.6,3.8 -2.6,2.3 C-2.6,1.2 -2,0 -1,-0.8 Z"
+                      fill={isOverheating ? '#ef4444' : '#64748b'}
+                    />
+                    <line x1="-5" y1="3.5" x2="-3.5" y2="3.5" stroke={isOverheating ? '#ef4444' : '#64748b'} strokeWidth="1" strokeLinecap="round" />
+                    <line x1="3.5" y1="3.5" x2="5" y2="3.5" stroke={isOverheating ? '#ef4444' : '#64748b'} strokeWidth="1" strokeLinecap="round" />
+                    <line x1="-5" y1="0.5" x2="-3.5" y2="0.5" stroke={isOverheating ? '#ef4444' : '#64748b'} strokeWidth="1" strokeLinecap="round" />
+                    <line x1="3.5" y1="0.5" x2="5" y2="0.5" stroke={isOverheating ? '#ef4444' : '#64748b'} strokeWidth="1" strokeLinecap="round" />
                   </g>
-                  {/* Icon */}
-                  <text x="0" y="16" textAnchor="middle" fontSize="6.5" fill={isLowFuel ? '#f59e0b' : '#64748b'} fontFamily="monospace" fontWeight="bold">БАК</text>
-                  {isLowFuel && <circle cx="12" cy="-12" r="2" fill="#f59e0b" className="animate-ping" />}
-                  {vehicle?.hasGBO && (
-                    <g transform="translate(14, 11)">
-                      <rect x="-8" y="-4" width="16" height="8" rx="1.5" fill="#0f766e" stroke="#22d3ee" strokeWidth="0.6" />
-                      <text x="0" y="1.5" textAnchor="middle" fontSize="4.5" fill="#e0f2fe" fontWeight="black" fontFamily="sans-serif">GBO</text>
+                  {isOverheating && <circle cx="9" cy="-9" r="1.8" fill="#ef4444" className="animate-ping" />}
+                  {isEngineRunning && coolantTemp < 55 && (
+                    <g transform="translate(-10, -10)">
+                      <circle cx="0" cy="0" r="2.5" fill="#0284c7" stroke="#38bdf8" strokeWidth="0.6" />
+                      <text x="0" y="1.2" textAnchor="middle" fontSize="3.8" fill="#f0f9ff" fontWeight="bold">C</text>
                     </g>
                   )}
                 </g>
 
+                {/* 3. FUEL LEVEL GAUGE (RIGHT AUX) */}
+                <g transform="translate(135, 23)">
+                  <circle cx="0" cy="0" r="18" fill="url(#dialGrad)" stroke="#1e293b" strokeWidth="1.2" />
+                  {renderSmallDialTicks(0, 0, 16, 'E', '1/2', 'F', false)}
+                  {/* Rotating Needle */}
+                  <g transform={`rotate(${fuelAngle} 0 0)`}>
+                    <line x1="0" y1="3" x2="0" y2="-13" stroke={themeStyles.needleColor} strokeWidth="1.5" strokeLinecap="round" />
+                    <circle cx="0" cy="0" r="2.8" fill={themeStyles.hubColor} stroke={themeStyles.hubBorder} strokeWidth="0.8" />
+                  </g>
+                  {/* Fuel Pump Vector Icon */}
+                  <g transform="translate(0, 10) scale(0.8)">
+                    <rect x="-4.5" y="-5" width="6" height="9.5" rx="1" fill="none" stroke={isLowFuel ? '#f59e0b' : '#64748b'} strokeWidth="1.1" />
+                    <rect x="-3.2" y="-3.5" width="3.4" height="3" fill={isLowFuel ? '#f59e0b' : '#64748b'} />
+                    <path d="M1.5,-2 L3.5,-2 C4.5,-2 5,-1.2 5,0.5 L5,2.5 C5,3.5 4,4 3.5,4 L3,4 L3,1.5" fill="none" stroke={isLowFuel ? '#f59e0b' : '#64748b'} strokeWidth="0.9" strokeLinecap="round" />
+                  </g>
+                  {isLowFuel && <circle cx="9" cy="-9" r="1.8" fill="#f59e0b" className="animate-ping" />}
+                  {vehicle?.hasGBO && (
+                    <g transform="translate(12, 9)">
+                      <rect x="-6" y="-3" width="12" height="6" rx="1" fill="#0f766e" stroke="#22d3ee" strokeWidth="0.5" />
+                      <text x="0" y="1.2" textAnchor="middle" fontSize="3.5" fill="#e0f2fe" fontWeight="black" fontFamily="sans-serif">GBO</text>
+                    </g>
+                  )}
+                </g>
+
+                {/* DIGITAL MULTI-FUNCTION DISPLAY SCREEN (MFD / БОРТОВОЙ КОМПЬЮТЕР) */}
+                <g id="mfd-screen" transform="translate(16, 45)">
+                  {/* Screen Glass Outer Frame */}
+                  <rect
+                    x="0"
+                    y="0"
+                    width="128"
+                    height="38"
+                    rx="3"
+                    fill="#020617"
+                    stroke="#1e293b"
+                    strokeWidth="1.2"
+                  />
+                  <rect
+                    x="1"
+                    y="1"
+                    width="126"
+                    height="36"
+                    rx="2"
+                    fill="#030712"
+                    stroke="#0f172a"
+                    strokeWidth="0.8"
+                  />
+
+                  {/* LCD Top Telemetry Header Bar: Clock | Outside Temp | Compass */}
+                  <g transform="translate(4, 7)">
+                    <text x="0" y="0" fontSize="5" fill="#38bdf8" fontWeight="bold" fontFamily="monospace">
+                      {gameTimeStr}
+                    </text>
+                    <text x="60" y="0" textAnchor="middle" fontSize="5" fill="#f59e0b" fontWeight="bold" fontFamily="monospace">
+                      {ambientTempStr}
+                    </text>
+                    <text x="120" y="0" textAnchor="end" fontSize="5" fill="#10b981" fontWeight="black" fontFamily="monospace">
+                      {compassHeading}
+                    </text>
+                    <line x1="0" y1="2" x2="120" y2="2" stroke="#1e293b" strokeWidth="0.6" />
+                  </g>
+
+                  {/* LCD Mode Tabs: [ECO] [RANGE] [TRIP] [SYS] (and [TANK] for tanker/water/barrel) */}
+                  {(() => {
+                    const availableModes: TripComputerMode[] = (vehicle.fluidTank && vehicle.fluidTank.capacity > 0)
+                      ? ['eco', 'range', 'trip', 'sys', 'tank']
+                      : ['eco', 'range', 'trip', 'sys'];
+                    const tabWidth = availableModes.length === 5 ? 22 : 28;
+                    const tabStep = availableModes.length === 5 ? 24.2 : 30.5;
+
+                    return (
+                      <g transform="translate(4, 16)">
+                        {availableModes.map((m, idx) => {
+                          const isSelected = tripMode === m;
+                          const tabX = idx * tabStep;
+                          const label = m.toUpperCase();
+                          return (
+                            <g
+                              key={m}
+                              transform={`translate(${tabX}, 0)`}
+                              className="cursor-pointer"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setTripMode(m);
+                                try { sound.click(); } catch {}
+                              }}
+                            >
+                              <rect
+                                x="0"
+                                y="-4"
+                                width={tabWidth}
+                                height="7.5"
+                                rx="1.5"
+                                fill={isSelected ? '#0369a1' : '#0f172a'}
+                                stroke={isSelected ? '#38bdf8' : '#1e293b'}
+                                strokeWidth="0.6"
+                              />
+                              <text
+                                x={tabWidth / 2}
+                                y="1.2"
+                                textAnchor="middle"
+                                fontSize={availableModes.length === 5 ? "3.8" : "4.2"}
+                                fontWeight="bold"
+                                fontFamily="monospace"
+                                fill={isSelected ? '#f0f9ff' : '#64748b'}
+                              >
+                                {label}
+                              </text>
+                            </g>
+                          );
+                        })}
+                      </g>
+                    );
+                  })()}
+
+                  {/* LCD Main Telemetry Content based on Selected Tab */}
+                  <g transform="translate(6, 29)">
+                    {tripMode === 'eco' && (
+                      <>
+                        <text x="0" y="0" fontSize="5.5" fill="#38bdf8" fontWeight="bold" fontFamily="monospace">
+                          INSTANT
+                        </text>
+                        <text x="116" y="0" textAnchor="end" fontSize="6.5" fill="#f8fafc" fontWeight="900" fontFamily="monospace">
+                          {instantConsumptionText}
+                        </text>
+                        {/* Dynamic ECO Consumption Meter Bar */}
+                        <g transform="translate(0, 3)">
+                          <rect x="0" y="0" width="116" height="2.5" rx="1" fill="#0f172a" stroke="#1e293b" strokeWidth="0.5" />
+                          <rect
+                            x="0.5"
+                            y="0.5"
+                            width={Math.max(2, 115 * Math.min(1, ecoBarRatio))}
+                            height="1.5"
+                            rx="0.7"
+                            fill={ecoBarRatio > 0.75 ? '#ef4444' : ecoBarRatio > 0.45 ? '#f59e0b' : '#10b981'}
+                          />
+                        </g>
+                      </>
+                    )}
+
+                    {tripMode === 'range' && (
+                      <>
+                        <text x="0" y="0" fontSize="5.5" fill="#f59e0b" fontWeight="bold" fontFamily="monospace">
+                          RANGE
+                        </text>
+                        <text x="116" y="0" textAnchor="end" fontSize="6.5" fill="#f8fafc" fontWeight="900" fontFamily="monospace">
+                          {estimatedRangeKm} KM
+                        </text>
+                        <text x="58" y="5" textAnchor="middle" fontSize="4.2" fill="#94a3b8" fontFamily="monospace">
+                          FUEL: {remainingFuelLiters} L / {tankCapacityLiters} L
+                        </text>
+                      </>
+                    )}
+
+                    {tripMode === 'trip' && (
+                      <>
+                        <text x="0" y="0" fontSize="5.5" fill="#10b981" fontWeight="bold" fontFamily="monospace">
+                          TRIP A
+                        </text>
+                        <text x="116" y="0" textAnchor="end" fontSize="6.5" fill="#f8fafc" fontWeight="900" fontFamily="monospace">
+                          {tripOdoKm} KM
+                        </text>
+                        <text x="58" y="5" textAnchor="middle" fontSize="4.2" fill="#94a3b8" fontFamily="monospace">
+                          AVG: {baseAvgConsumption.toFixed(1)} L/100
+                        </text>
+                      </>
+                    )}
+
+                    {tripMode === 'sys' && (
+                      <>
+                        <text x="0" y="0" fontSize="5.5" fill="#a855f7" fontWeight="bold" fontFamily="monospace">
+                          SYS VOLT
+                        </text>
+                        <text x="116" y="0" textAnchor="end" fontSize="6.5" fill="#f8fafc" fontWeight="900" fontFamily="monospace">
+                          {sysVoltageStr} V
+                        </text>
+                        <text x="58" y="5" textAnchor="middle" fontSize="4.2" fill="#94a3b8" fontFamily="monospace">
+                          BATTERY HEALTH: {batteryCharge}%
+                        </text>
+                      </>
+                    )}
+
+                    {tripMode === 'tank' && vehicle.fluidTank && (
+                      <>
+                        <text x="0" y="0" fontSize="5.5" fill="#38bdf8" fontWeight="bold" fontFamily="monospace">
+                          TANK: {vehicle.fluidTank.liquidType.toUpperCase()}
+                        </text>
+                        <text x="116" y="0" textAnchor="end" fontSize="6.5" fill={vehicle.fluidTank.isPunctured ? '#ef4444' : '#f8fafc'} fontWeight="900" fontFamily="monospace">
+                          {Math.round(vehicle.fluidTank.currentVolume ?? vehicle.fluidTank.currentAmount ?? 0)} L
+                        </text>
+                        <text x="58" y="5" textAnchor="middle" fontSize="4.2" fill={vehicle.fluidTank.drainValveOpen ? '#f59e0b' : vehicle.fluidTank.isPunctured ? '#ef4444' : '#94a3b8'} fontFamily="monospace">
+                          {vehicle.fluidTank.drainValveOpen ? 'СЛИВНОЙ КЛАПАН ОТКРЫТ' : vehicle.fluidTank.isPunctured ? 'ПРОБОИНА ЦИСТЕРНЫ!' : `ВМЕСТИМОСТЬ: ${vehicle.fluidTank.capacity} L`}
+                        </text>
+                      </>
+                    )}
+                  </g>
+                </g>
+
                 {/* TELL-TALE WARNING LIGHTS IN CENTER BOTTOM */}
                 <g transform="translate(80, 96)">
-                  {/* Check Engine Light */}
                   {(() => {
-                    const isCheckEngine = isStalled || !isEngineRunning || eng?.engineKnocking || eng?.isSeized || (eng?.engineHealth ?? 100) < 60 || eng?.radiatorPunctured || eng?.oilPunctured || (eng?.temperature ?? 0) > 105;
-                    const isTransWarn = eng?.transmissionJammed || (eng?.transmissionHealth ?? 100) < 60;
+                    // 1. Check Engine (MIL) logic:
+                    // - Bulb check when ignition ON / engine OFF: Solid Amber
+                    // - Engine Seized: Red KLIN
+                    // - Misfire / Detonation / Knocking: Flashing Amber (OBD-II standard)
+                    // - DTC Fault (Overheating, Low Oil/Coolant leak, Bad Fuel, damaged block): Solid Amber
+                    const isSeized = !!eng?.isSeized || (eng?.engineHealth ?? 100) <= 10;
+                    const isBlinkingCheck = isEngineRunning && (eng?.engineKnocking || fuel?.detonation);
+                    const isDtcFault = isEngineRunning && (
+                      coolantTemp > 105 ||
+                      (eng?.engineHealth ?? 100) < 65 ||
+                      eng?.radiatorPunctured ||
+                      eng?.oilPunctured ||
+                      (fuel && (fuel.fuelQuality < 50 || (vehicle.requiredFuel === 'ai95' && fuel.octaneNumber === 92)))
+                    );
+                    const isCheckEngine = !isEngineRunning || isSeized || isBlinkingCheck || isDtcFault;
+
+                    // 2. Battery Lamp (BATT):
+                    // - Ignition ON / engine OFF: Red (Alternator not turning)
+                    // - Engine ON: Red only if battery disconnected or discharged < 20%
+                    const isBattLit = !isEngineRunning || batteryCharge < 20 || eng?.batteryInstalled === false || eng?.batteryPosConnected === false || eng?.batteryNegConnected === false;
+
+                    // 3. Transmission Lamp (TRANS):
+                    const isTransWarn = (eng?.transmissionJammed || (eng?.transmissionHealth ?? 100) < 60);
+
+                    // 4. Oil Pressure Lamp (OIL):
+                    // - Ignition ON / engine OFF: Red (Zero oil pressure from stationary oil pump)
+                    // - Engine ON: Red only if oil pressure or oil level is critically low (<20)
+                    const isOilLit = !isEngineRunning || isLowOil;
+
+                    // 5. Handbrake / Park Lamp:
+                    const isParkBrakeLit = isHandbraking || (eng?.transmissionType === 'AUTO' && eng?.autoGearMode === 'P');
+
                     return (
                       <>
+                        {/* Check Engine Light */}
                         <g transform="translate(-54, 0)">
-                          <rect x="-10" y="-8" width="20" height="15" rx="3" fill={isCheckEngine ? (eng?.isSeized ? '#7f1d1d' : '#78350f') : '#0f172a'} stroke={isCheckEngine ? (eng?.isSeized ? '#ef4444' : '#f59e0b') : '#334155'} strokeWidth="1" />
-                          <text x="0" y="2" textAnchor="middle" fontSize="6.5" fill={isCheckEngine ? (eng?.isSeized ? '#fca5a5' : '#f59e0b') : '#475569'} fontWeight="bold">
-                            {eng?.isSeized ? 'KLIN' : 'CHECK'}
-                          </text>
+                          <rect
+                            x="-10"
+                            y="-8"
+                            width="20"
+                            height="15"
+                            rx="3"
+                            fill={
+                              isCheckEngine
+                                ? isSeized
+                                  ? '#7f1d1d'
+                                  : isBlinkingCheck
+                                  ? '#b45309'
+                                  : '#78350f'
+                                : '#0f172a'
+                            }
+                            stroke={
+                              isCheckEngine
+                                ? isSeized
+                                  ? '#ef4444'
+                                  : isBlinkingCheck
+                                  ? '#fbbf24'
+                                  : '#f59e0b'
+                                : '#334155'
+                            }
+                            strokeWidth="1"
+                            className={isBlinkingCheck ? 'animate-pulse' : ''}
+                          />
+                          <g transform="translate(0, -0.5) scale(0.85)">
+                            <path
+                              d="M-5.5,-1.5 L-3.5,-1.5 L-3.5,-3.5 L-1.5,-3.5 L-1.5,-1.5 L1.5,-1.5 L1.5,-3.5 L3.5,-3.5 L3.5,-1.5 L5.5,-1.5 C6,-1.5 6.5,-1 6.5,-0.5 L6.5,3 C6.5,3.5 6,4 5.5,4 L4,4 L4,5 L1.5,5 L1.5,4 L-4,4 L-4,2 L-5.5,2 C-6,2 -6.5,1.5 -6.5,1 L-6.5,-0.5 C-6.5,-1 -6,-1.5 -5.5,-1.5 Z"
+                              fill="none"
+                              stroke={
+                                isCheckEngine
+                                  ? isSeized
+                                    ? '#fca5a5'
+                                    : isBlinkingCheck
+                                    ? '#fef08a'
+                                    : '#f59e0b'
+                                  : '#475569'
+                              }
+                              strokeWidth="1.1"
+                              strokeLinejoin="round"
+                            />
+                            <circle
+                              cx="4"
+                              cy="1.2"
+                              r="0.7"
+                              fill={
+                                isCheckEngine
+                                  ? isSeized
+                                    ? '#fca5a5'
+                                    : isBlinkingCheck
+                                    ? '#fef08a'
+                                    : '#f59e0b'
+                                  : '#475569'
+                              }
+                            />
+                          </g>
                         </g>
-                        {/* Battery Light */}
+
+                        {/* Battery Light (BATT) */}
                         <g transform="translate(-27, 0)">
-                          <rect x="-10" y="-8" width="20" height="15" rx="3" fill={isBatteryLow ? '#7f1d1d' : '#0f172a'} stroke={isBatteryLow ? '#ef4444' : '#334155'} strokeWidth="1" />
-                          <text x="0" y="2" textAnchor="middle" fontSize="7" fill={isBatteryLow ? '#ef4444' : '#475569'} fontWeight="bold">BATT</text>
+                          <rect
+                            x="-10"
+                            y="-8"
+                            width="20"
+                            height="15"
+                            rx="3"
+                            fill={isBattLit ? '#7f1d1d' : '#0f172a'}
+                            stroke={isBattLit ? '#ef4444' : '#334155'}
+                            strokeWidth="1"
+                          />
+                          <g transform="translate(0, -0.5) scale(0.85)">
+                            <rect x="-6" y="-3.2" width="12" height="7.5" rx="1.2" fill="none" stroke={isBattLit ? '#ef4444' : '#475569'} strokeWidth="1.1" />
+                            <rect x="-4.5" y="-4.8" width="2.2" height="1.6" fill={isBattLit ? '#ef4444' : '#475569'} />
+                            <line x1="-3.5" y1="0.5" x2="-1.5" y2="0.5" stroke={isBattLit ? '#ef4444' : '#475569'} strokeWidth="1" strokeLinecap="round" />
+                            <rect x="2.3" y="-4.8" width="2.2" height="1.6" fill={isBattLit ? '#ef4444' : '#475569'} />
+                            <line x1="2.4" y1="0.5" x2="4.4" y2="0.5" stroke={isBattLit ? '#ef4444' : '#475569'} strokeWidth="1" strokeLinecap="round" />
+                            <line x1="3.4" y1="-0.5" x2="3.4" y2="1.5" stroke={isBattLit ? '#ef4444' : '#475569'} strokeWidth="1" strokeLinecap="round" />
+                          </g>
                         </g>
+
                         {/* Transmission Warning Light */}
                         <g transform="translate(0, 0)">
-                          <rect x="-10" y="-8" width="20" height="15" rx="3" fill={isTransWarn ? '#7f1d1d' : '#0f172a'} stroke={isTransWarn ? '#ef4444' : '#334155'} strokeWidth="1" />
-                          <text x="0" y="2" textAnchor="middle" fontSize="6.5" fill={isTransWarn ? '#ef4444' : '#475569'} fontWeight="bold">
-                            {eng?.transmissionJammed ? 'JAM' : 'TRANS'}
-                          </text>
+                          <rect
+                            x="-10"
+                            y="-8"
+                            width="20"
+                            height="15"
+                            rx="3"
+                            fill={isTransWarn ? '#7f1d1d' : '#0f172a'}
+                            stroke={isTransWarn ? '#ef4444' : '#334155'}
+                            strokeWidth="1"
+                          />
+                          <g transform="translate(0, -0.5) scale(0.85)">
+                            <path
+                              d="M-1.8,-5 L1.8,-5 L2.2,-3.5 L4.2,-2.5 L5.5,-3 L6.5,-1 L5,0.5 L5,2 L6.5,3.5 L5.5,5.5 L4.2,5 L2.2,6 L1.8,7.5 L-1.8,7.5 L-2.2,6 L-4.2,5 L-5.5,5.5 L-6.5,3.5 L-5,2 L-5,0.5 L-6.5,-1 L-5.5,-3 L-4.2,-2.5 L-2.2,-3.5 Z"
+                              fill="none"
+                              stroke={isTransWarn ? '#ef4444' : '#475569'}
+                              strokeWidth="1"
+                              strokeLinejoin="round"
+                            />
+                            <line x1="0" y1="-1" x2="0" y2="1.8" stroke={isTransWarn ? '#ef4444' : '#475569'} strokeWidth="1.2" strokeLinecap="round" />
+                            <circle cx="0" cy="3.5" r="0.6" fill={isTransWarn ? '#ef4444' : '#475569'} />
+                          </g>
                         </g>
-                        {/* Oil Lamp */}
+
+                        {/* Oil Pressure Lamp (OIL) */}
                         <g transform="translate(27, 0)">
-                          <rect x="-10" y="-8" width="20" height="15" rx="3" fill={isLowOil ? '#7f1d1d' : '#0f172a'} stroke={isLowOil ? '#ef4444' : '#334155'} strokeWidth="1" />
-                          <text x="0" y="2" textAnchor="middle" fontSize="7" fill={isLowOil ? '#ef4444' : '#475569'} fontWeight="bold">OIL</text>
+                          <rect
+                            x="-10"
+                            y="-8"
+                            width="20"
+                            height="15"
+                            rx="3"
+                            fill={isOilLit ? '#7f1d1d' : '#0f172a'}
+                            stroke={isOilLit ? '#ef4444' : '#334155'}
+                            strokeWidth="1"
+                          />
+                          <g transform="translate(0, -0.5) scale(0.85)">
+                            <path
+                              d="M-5,1 C-5,-1 -2.5,-2 0,-2 C2.5,-2 5,-1 5,1 C5,3 3,4 0,4 C-3,4 -5,3 -5,1 Z M-5,0 L-7,-1.5 L-7,1.5 L-5,0.5 M5,0 L7.5,-2.5"
+                              fill="none"
+                              stroke={isOilLit ? '#ef4444' : '#475569'}
+                              strokeWidth="1.1"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                            />
+                            <circle cx="8" cy="-1.5" r="0.7" fill={isOilLit ? '#ef4444' : '#475569'} />
+                          </g>
                         </g>
-                        {/* Handbrake / Park Lamp */}
+
+                        {/* Handbrake / Park Lamp (P) */}
                         <g transform="translate(54, 0)">
-                          <rect x="-10" y="-8" width="20" height="15" rx="3" fill={isHandbraking ? '#7f1d1d' : '#0f172a'} stroke={isHandbraking ? '#ef4444' : '#334155'} strokeWidth="1" />
-                          <text x="0" y="2" textAnchor="middle" fontSize="7" fill={isHandbraking ? '#ef4444' : '#475569'} fontWeight="bold">( P )</text>
+                          <rect
+                            x="-10"
+                            y="-8"
+                            width="20"
+                            height="15"
+                            rx="3"
+                            fill={isParkBrakeLit ? '#7f1d1d' : '#0f172a'}
+                            stroke={isParkBrakeLit ? '#ef4444' : '#334155'}
+                            strokeWidth="1"
+                          />
+                          <g transform="translate(0, -0.5) scale(0.85)">
+                            <circle cx="0" cy="0" r="4.3" fill="none" stroke={isParkBrakeLit ? '#ef4444' : '#475569'} strokeWidth="1" />
+                            <path d="M-6.2,-3.2 C-7.5,-1.2 -7.5,1.2 -6.2,3.2" fill="none" stroke={isParkBrakeLit ? '#ef4444' : '#475569'} strokeWidth="1.1" strokeLinecap="round" />
+                            <path d="M6.2,-3.2 C7.5,-1.2 7.5,1.2 6.2,3.2" fill="none" stroke={isParkBrakeLit ? '#ef4444' : '#475569'} strokeWidth="1.1" strokeLinecap="round" />
+                            <text x="0" y="2.2" textAnchor="middle" fontSize="5.5" fill={isParkBrakeLit ? '#ef4444' : '#475569'} fontWeight="bold" fontFamily="sans-serif">
+                              P
+                            </text>
+                          </g>
                         </g>
                       </>
                     );

@@ -35,10 +35,10 @@ export const EngineBayModal: React.FC<EngineBayModalProps> = ({
 
   // Determine engine bay category
   const getEngineCategory = (type: CarType): 'classic' | 'modern' | 'heavy' | 'sports' => {
-    if (['sports', 'supercar', 'muscle', 'muscle_classic', 'coupe_gt', 'hatch_hot'].includes(type)) {
+    if (['sports', 'supercar', 'muscle', 'muscle_classic', 'coupe_gt', 'hatch_hot', 'moto_sport'].includes(type)) {
       return 'sports';
     }
-    if (['truck_box', 'truck_dump', 'truck_tanker', 'truck_water', 'truck_flatbed', 'cement_mixer', 'garbage_truck', 'pickup_heavy', 'pickup', 'bus', 'fire_engine', 'offroad_hardcore', 'truck_armored', 'truck_tow'].includes(type)) {
+    if (['truck_box', 'truck_dump', 'truck_tanker', 'truck_water', 'truck_flatbed', 'cement_mixer', 'garbage_truck', 'pickup_heavy', 'pickup', 'bus', 'fire_engine', 'offroad_hardcore', 'truck_armored', 'truck_tow', 'tractor_mtz82', 'tractor_mtz80', 'tractor_mtz80_old'].includes(type)) {
       return 'heavy';
     }
     if (['suv_luxury', 'crossover_compact', 'sedan_luxury', 'sedan_compact', 'wagon_modern', 'wagon_allroad', 'ambulance_suv', 'van_camper', 'bus_minibus'].includes(type)) {

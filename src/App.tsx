@@ -18,7 +18,7 @@ import {
   FuelType,
   GasPumpDispenser
 } from './types';
-import { CAR_CONFIGS, createDefaultEngineState, createDefaultFuelSystem, createDefaultVehicleDamage, ensureVehicleDamage } from './vehicleHelpers';
+import { CAR_CONFIGS, createDefaultEngineState, createDefaultFuelSystem, createDefaultVehicleDamage, ensureVehicleDamage, getVehicleFuelCapPosition, isTrailerVehicle } from './vehicleHelpers';
 import { loadMap, sanitizeWorldVehicles } from './loadMap';
 import { SpatialGrid } from './spatialGrid';
 import { updateAITraffic, updatePedestrians, updateTrafficLights } from './aiTraffic';
@@ -28,7 +28,8 @@ import {
   updatePlayerNeedsAndVitals,
   updatePlayerPedestrianPhysics, 
   updateSkidMarksAndParticles, 
-  updateVehiclePhysics 
+  updateVehiclePhysics,
+  toggleTrailerHitch
 } from './physics';
 import { GameRenderer } from './renderer';
 import { getBuildingFloorsCount, getBuildingLayout, constrainPlayerToInterior } from './buildingInteriors';
@@ -66,6 +67,7 @@ import { InventoryModal } from './components/InventoryModal';
 import { SelfInspectionModal } from './components/SelfInspectionModal';
 import { LimbTreatmentModal } from './components/LimbTreatmentModal';
 import { ShopModal, ShopItem, CITY_SHOPS, CityShop } from './components/ShopModal';
+import { CarDealershipModal } from './components/CarDealershipModal';
 import { RadialMenu } from './components/RadialMenu';
 import { SpeedometerHUD } from './components/SpeedometerHUD';
 import { PerformanceProfiler } from './components/PerformanceProfiler';
@@ -73,6 +75,9 @@ import { performanceConfig } from './performanceConfig';
 import { FuelNozzleSelectorModal } from './components/FuelNozzleSelectorModal';
 import { GasStationCashierModal } from './components/GasStationCashierModal';
 import { EngineBayModal } from './components/EngineBayModal';
+import { OnlineModal } from './components/OnlineModal';
+import { ChatOverlay } from './components/ChatOverlay';
+import { onlineManager, OnlineStatus } from './onlineSystem';
 import { 
   getNearbyGasPump, 
   getNearbyVehicleForFueling, 
@@ -86,11 +91,18 @@ import {
   FUEL_GRADES 
 } from './gasStationSystem';
 import { 
+  getNearbyWaterVehicle, 
+  takeWaterHose, 
+  stowWaterHose, 
+  updateWaterHosePhysics 
+} from './waterHoseSystem';
+import { 
   Activity,
   AlertTriangle,
   Ambulance,
   ArrowLeft,
   ArrowRight,
+  Briefcase,
   Check,
   Cloud,
   CloudLightning,
@@ -99,6 +111,7 @@ import {
   Eye, 
   Fuel,
   Gauge, 
+  Grid,
   Heart,
   TreePine,
   Home,
@@ -133,7 +146,11 @@ import {
   Coins,
   Wand2,
   RotateCw,
-  Search
+  Search,
+  Radio,
+  Users,
+  Globe,
+  MessageSquare
 } from 'lucide-react';
 
 export interface SpawnLocation {
@@ -147,6 +164,15 @@ export interface SpawnLocation {
 }
 
 export const SPAWN_LOCATIONS: SpawnLocation[] = [
+  {
+    id: 'car_dealership_loc',
+    name: 'Car Dealership & Showroom',
+    nameRu: 'Автосалон (Продажа Машин & Шоурум)',
+    x: 252,
+    y: 5910,
+    description: 'Официальный автосалон: выставка авто, выбор цвета и КПП, покупка с ПТС и ключом',
+    icon: <Briefcase className="w-8 h-8 text-amber-400" />
+  },
   {
     id: 'central_park',
     name: 'Central Park Promenade',
@@ -178,8 +204,8 @@ export const SPAWN_LOCATIONS: SpawnLocation[] = [
     id: 'industrial_district',
     name: 'Freight Logistics Yard',
     nameRu: 'Промзона (Грузовая база & Склады)',
-    x: 5200,
-    y: 4400,
+    x: 6530,
+    y: 1030,
     description: 'Логистический хаб, стоянки спецтехники, грузовые терминалы и ангары',
     icon: <Truck className="w-8 h-8 text-stone-400" />
   },
@@ -200,6 +226,24 @@ export const SPAWN_LOCATIONS: SpawnLocation[] = [
     y: 4000,
     description: 'Широкая магистраль с непрерывным плотным потоком AI-трафика и светофорами',
     icon: <Navigation className="w-8 h-8 text-sky-400" />
+  },
+  {
+    id: 'steppe_highway',
+    name: 'Steppe Express Highway',
+    nameRu: 'Степное Шоссе (Магистраль 110 км/ч)',
+    x: 9500,
+    y: 4000,
+    description: 'Скоростная 4-полосная магистраль через дикую степь с плавным разворотом на 6-м километре',
+    icon: <Navigation className="w-8 h-8 text-amber-500" />
+  },
+  {
+    id: 'steppe_village',
+    name: 'Village Polynovka',
+    nameRu: 'Деревня Полыновка (Полузаброшенная)',
+    x: 11480,
+    y: 2500,
+    description: 'Атмосферная глухая деревня: деревянные избы, колодец с журавлём, заброшенный клуб, сады и советские реликвии',
+    icon: <Home className="w-8 h-8 text-emerald-500" />
   }
 ];
 
@@ -267,6 +311,25 @@ export default function App() {
 
   const [isMinimapExpanded, setIsMinimapExpanded] = useState<boolean>(false);
   const [isFullMapOpen, setIsFullMapOpen] = useState<boolean>(false);
+  const [isOnlineModalOpen, setIsOnlineModalOpen] = useState<boolean>(false);
+  const isOnlineModalOpenRef = useRef<boolean>(false);
+  isOnlineModalOpenRef.current = isOnlineModalOpen;
+
+  const [isChatFocused, setIsChatFocused] = useState<boolean>(false);
+  const [onlineStatus, setOnlineStatus] = useState<OnlineStatus>(onlineManager.status);
+  const [onlinePlayerCount, setOnlinePlayerCount] = useState<number>(0);
+  const onlineSyncTimerRef = useRef<number>(0);
+
+  useEffect(() => {
+    const unsub = onlineManager.subscribe(() => {
+      setOnlineStatus(onlineManager.status);
+      setOnlinePlayerCount(
+        onlineManager.getRemotePlayersArray().length + (onlineManager.status === 'connected' ? 1 : 0)
+      );
+    });
+    return unsub;
+  }, []);
+
   const [isMainMenuOpen, setIsMainMenuOpen] = useState<boolean>(true);
   const [isPauseMenuOpen, setIsPauseMenuOpen] = useState<boolean>(false);
   const isPauseMenuOpenRef = useRef<boolean>(false);
@@ -303,6 +366,7 @@ export default function App() {
   const [isRadialMenuOpen, setIsRadialMenuOpen] = useState<boolean>(false);
   const [treatmentModalItem, setTreatmentModalItem] = useState<{ index: number; item: InventoryItem } | null>(null);
   const [isShopOpen, setIsShopOpen] = useState<boolean>(false);
+  const [isDealershipOpen, setIsDealershipOpen] = useState<boolean>(false);
   const [shopTitle, setShopTitle] = useState<string>('СУПЕРМАРКЕТ 24/7');
   const [shopType, setShopType] = useState<CityShop['type']>('supermarket');
   const [nearShop, setNearShop] = useState<CityShop | null>(null);
@@ -363,6 +427,12 @@ export default function App() {
   const [isInvincible, setIsInvincible] = useState<boolean>(false);
   const isInvincibleRef = useRef<boolean>(false);
   isInvincibleRef.current = isInvincible;
+
+  const [isGridMode, setIsGridMode] = useState<boolean>(false);
+
+  const [isCleanMode, setIsCleanMode] = useState<boolean>(false);
+  const isCleanModeRef = useRef<boolean>(false);
+  isCleanModeRef.current = isCleanMode;
 
   const [activePlacement, setActivePlacement] = useState<ActivePlacement | null>(null);
   const activePlacementRef = useRef<ActivePlacement | null>(null);
@@ -1029,6 +1099,16 @@ export default function App() {
       sound.resume();
       const code = e.code;
 
+      // When typing in text input or textarea, skip game controls and allow Escape to blur
+      if (document.activeElement?.tagName === 'INPUT' || document.activeElement?.tagName === 'TEXTAREA') {
+        if (code === 'Escape') {
+          (document.activeElement as HTMLElement).blur();
+          setIsChatFocused(false);
+          e.preventDefault();
+        }
+        return;
+      }
+
       if (code === 'KeyR' && activePlacementRef.current) {
         setActivePlacement((prev) => {
           if (!prev) return null;
@@ -1042,6 +1122,11 @@ export default function App() {
         if (activePlacementRef.current) {
           setActivePlacement(null);
           activePlacementRef.current = null;
+          e.preventDefault();
+          return;
+        }
+        if (isOnlineModalOpenRef.current) {
+          setIsOnlineModalOpen(false);
           e.preventDefault();
           return;
         }
@@ -1077,6 +1162,21 @@ export default function App() {
       // Inventory Modal Toggle (I or Tab)
       if (code === 'KeyI' || code === 'Tab') {
         setIsInventoryOpen((prev) => !prev);
+        e.preventDefault();
+        return;
+      }
+
+      // Online Multiplayer Room Modal (O)
+      if (code === 'KeyO') {
+        sound.playButtonPress();
+        setIsOnlineModalOpen((prev) => !prev);
+        e.preventDefault();
+        return;
+      }
+
+      // In-game chat focus (Enter)
+      if (code === 'Enter') {
+        setIsChatFocused(true);
         e.preventDefault();
         return;
       }
@@ -1144,6 +1244,7 @@ export default function App() {
       if (code === 'KeyG') {
         const cam = cameraRef.current;
         cam.gridMode = !cam.gridMode;
+        setIsGridMode(!!cam.gridMode);
         addPlayerNotification(playerRef.current, `Режим сетки (Grid Mode) ${cam.gridMode ? 'ВКЛ' : 'ВЫКЛ'}`, 'info');
       }
 
@@ -1233,6 +1334,9 @@ export default function App() {
     };
 
     const handleMouseDown = (e: MouseEvent) => {
+      if (e.button === 0) {
+        inputRef.current.isMouseDown = true;
+      }
       if (activePlacementRef.current) {
         if (e.button === 0) {
           handleExecutePlacement();
@@ -1242,6 +1346,12 @@ export default function App() {
           activePlacementRef.current = null;
           e.preventDefault();
         }
+      }
+    };
+
+    const handleMouseUp = (e: MouseEvent) => {
+      if (e.button === 0) {
+        inputRef.current.isMouseDown = false;
       }
     };
 
@@ -1273,6 +1383,7 @@ export default function App() {
     window.addEventListener('touchstart', handleTouchMove, { passive: true });
     window.addEventListener('wheel', handleWheel, { passive: false });
     window.addEventListener('mousedown', handleMouseDown);
+    window.addEventListener('mouseup', handleMouseUp);
     window.addEventListener('contextmenu', handleContextMenu);
 
     cleanupListeners = () => {
@@ -1284,6 +1395,7 @@ export default function App() {
       window.removeEventListener('touchstart', handleTouchMove);
       window.removeEventListener('wheel', handleWheel);
       window.removeEventListener('mousedown', handleMouseDown);
+      window.removeEventListener('mouseup', handleMouseUp);
       window.removeEventListener('contextmenu', handleContextMenu);
     };
 
@@ -1316,6 +1428,14 @@ export default function App() {
         const player = playerRef.current;
         const camera = cameraRef.current;
         const input = inputRef.current;
+
+        // 0. Update Online Multiplayer Network State & Synchronize Entities
+        onlineManager.update(dt, world);
+        onlineSyncTimerRef.current += dt;
+        if (onlineSyncTimerRef.current >= 0.04) {
+          onlineSyncTimerRef.current = 0;
+          onlineManager.broadcastLocalState(player, world);
+        }
 
         // 1. Update Dynamic Spatial Grids (done early so AI & physics use current frame positions)
         const tGridStart = performance.now();
@@ -1401,6 +1521,15 @@ export default function App() {
             }
           }
 
+          // Water Hose Simulation (Verlet physics, finite length constraint, micro-leaks, and high pressure water spray)
+          if (player.heldWaterHose) {
+            if (player.isInVehicle) {
+              stowWaterHose(player, world);
+            } else {
+              updateWaterHosePhysics(player, world, dt, !!(input.isMouseDown || input.actionE));
+            }
+          }
+
           // Continuous Hold Item Usage (e.g. Fire Extinguisher, Zippo Lighter)
           if (input.isMouseDown || input.actionE) {
             const currentSlot = selectedHotbarIndexRef.current ?? 0;
@@ -1419,15 +1548,13 @@ export default function App() {
             continuousUseTimerRef.current = 0;
           }
 
-          // Check building interior zones and constrain movement if player is inside
+          // Check building interior zones if player is inside
           if (player.isInsideBuilding && player.insideBuildingId) {
             const bld = world.buildings.find(b => b.id === player.insideBuildingId);
             if (bld) {
               const currentFloor = player.currentFloor ?? 0;
               const layout = getBuildingLayout(bld, currentFloor);
               
-              // Apply physical collisions with interior walls and furniture
-              constrainPlayerToInterior(player, bld, layout, dt);
               if (!player.needsHospitalEvacuation) {
                 camera.targetX = player.x;
                 camera.targetY = player.y;
@@ -1437,20 +1564,25 @@ export default function App() {
               const relY = player.y - bld.y;
 
               // Check if player is standing in ANY elevator zone
-              const inElevator = (layout.elevators || [layout.elevatorZone]).some(el =>
+              const elevators = (layout.elevators && layout.elevators.length > 0) ? layout.elevators : (layout.elevatorZone ? [layout.elevatorZone] : []);
+              const inElevator = elevators.some(el =>
+                el &&
                 relX >= el.x && relX <= el.x + el.width &&
                 relY >= el.y && relY <= el.y + el.height
               );
 
               // Check if player is standing in ANY stairs zone
-              const inStairs = (layout.stairs || [layout.stairsZone]).some(st =>
+              const stairsList = (layout.stairs && layout.stairs.length > 0) ? layout.stairs : (layout.stairsZone ? [layout.stairsZone] : []);
+              const inStairs = stairsList.some(st =>
+                st &&
                 relX >= st.x && relX <= st.x + st.width &&
                 relY >= st.y && relY <= st.y + st.height
               );
 
               // Check if player is standing in ANY exit zone or near doors on floor 0
-              const exits = layout.exits || (layout.exitZone ? [layout.exitZone] : []);
+              const exits = (layout.exits && layout.exits.length > 0) ? layout.exits : (layout.exitZone ? [layout.exitZone] : []);
               const inExit = exits.some(ex =>
+                ex &&
                 relX >= ex.x - 35 && relX <= ex.x + ex.width + 35 &&
                 relY >= ex.y - 35 && relY <= ex.y + ex.height + 35
               ) || (currentFloor === 0 && (relY <= 50 || relY >= bld.height - 50 || relX <= 50 || relX >= bld.width - 50));
@@ -1527,7 +1659,12 @@ export default function App() {
                 shopIcon = '[СПОРТ]';
                 badgeColor = '#0ea5e9';
                 shopName = currentRoomName || bld.nameRu || 'Спортивный гипермаркет "Спортмастер"';
-              } else if (bld.shopBrand === 'pitstop_service' || bld.type === 'car_dealership' || currentRoomName.includes('PIT-STOP') || currentRoomName.includes('Авто')) {
+              } else if (bld.type === 'car_dealership' || currentRoomName.includes('Автосалон') || currentRoomName.includes('Шоурум')) {
+                shopType = 'car_dealership';
+                shopIcon = '🚘 [АВТОСАЛОН]';
+                badgeColor = '#eab308';
+                shopName = currentRoomName || bld.nameRu || 'Автосалон "Премиум Авто"';
+              } else if (bld.shopBrand === 'pitstop_service' || currentRoomName.includes('PIT-STOP') || currentRoomName.includes('Авто')) {
                 shopType = 'auto_shop';
                 shopIcon = '[АВТО]';
                 badgeColor = '#0284c7';
@@ -1702,12 +1839,13 @@ export default function App() {
           }
         });
 
-        if (isInvincibleRef.current || isCreativeModeRef.current) {
+        if (isInvincibleRef.current || isCreativeModeRef.current || isCleanModeRef.current) {
           player.needs.health = 100;
           player.needs.hunger = 100;
           player.needs.thirst = 100;
           player.needs.energy = 100;
           player.needs.sleepiness = 0;
+          player.isCleanMode = isCleanModeRef.current;
           if (player.bodyState) {
             player.bodyState.painLevel = 0;
             player.bodyState.bloodLoss = 0;
@@ -1799,10 +1937,17 @@ export default function App() {
             setNearbyCarPrompt(null);
           }
 
-          // Gas Station Prompt Calculation
+          // Gas Station & Water Hose Prompt Calculation
           let gasPrompt: string | null = null;
           if (!player.isInVehicle) {
-            if (player.heldFuelNozzle) {
+            if (player.heldWaterHose) {
+              const nearWaterVeh = getNearbyWaterVehicle(player.x, player.y, world);
+              if (nearWaterVeh && nearWaterVeh.vehicle.id === player.heldWaterHose.vehicleId) {
+                gasPrompt = `[E] Смотать шланг на место | [Зажать ЛКМ / E] Полив`;
+              } else {
+                gasPrompt = `[Зажать ЛКМ / E] Полив / Тушение | Для сматывания вернитесь к бочке`;
+              }
+            } else if (player.heldFuelNozzle) {
               const nearbyVeh = getNearbyVehicleForFueling(player.x, player.y, world);
               if (nearbyVeh) {
                 const grade = FUEL_GRADES[player.heldFuelNozzle.fuelType];
@@ -1817,15 +1962,24 @@ export default function App() {
                 }
               }
             } else {
+              // Check if near water truck or barrel trailer
+              const nearWaterVeh = getNearbyWaterVehicle(player.x, player.y, world);
+              if (nearWaterVeh) {
+                const veh = nearWaterVeh.vehicle;
+                const vol = Math.round(veh.fluidTank?.currentVolume ?? veh.fluidTank?.currentAmount ?? 0);
+                if (veh.type === 'truck_water') {
+                  gasPrompt = `[E] Взять шланг с насосной станции водовоза (Вода: ${vol} л)`;
+                } else {
+                  gasPrompt = `[E] Взять шланг с крана бочки-цистерны (Вода: ${vol} л)`;
+                }
+              }
+
               // Check if near a vehicle with inserted nozzle
-              if (world.vehicles) {
+              if (!gasPrompt && world.vehicles) {
                 for (const v of world.vehicles) {
                   if (v.fuelingState?.nozzleInTank) {
-                    const capOffsetDist = -v.length * 0.35;
-                    const capOffsetSide = v.width * 0.45;
-                    const capX = v.x + Math.cos(v.angle) * capOffsetDist - Math.sin(v.angle) * capOffsetSide;
-                    const capY = v.y + Math.sin(v.angle) * capOffsetDist + Math.cos(v.angle) * capOffsetSide;
-                    const d = Math.hypot(capX - player.x, capY - player.y);
+                    const capPos = getVehicleFuelCapPosition(v);
+                    const d = Math.hypot(capPos.x - player.x, capPos.y - player.y);
                     if (d < 75) {
                       const pump = world.gasPumps?.find(p => p.id === v.fuelingState?.pumpId);
                       const vehName = CAR_CONFIGS[v.type]?.name || v.type;
@@ -2250,7 +2404,9 @@ export default function App() {
           vpProps,
           vpSidewalks,
           activePlacementRef.current,
-          currentMouseWorldPos
+          currentMouseWorldPos,
+          onlineManager.getRemotePlayersArray(),
+          onlineManager.getSpeechBubbles()
         );
         const tRenderEnd = performance.now();
 
@@ -2425,7 +2581,76 @@ export default function App() {
       } else if (eng.batteryCharge <= 5) {
         if (!player.notifications) player.notifications = [];
         player.notifications.push({ id: 'eng_batt_' + Date.now(), text: '🔋 Аккумулятор разряжен в 0%!', color: '#ef4444', timer: 3.0 });
+      } else if (eng.transmissionType === 'AUTO' && eng.autoGearMode !== 'P' && eng.autoGearMode !== 'N') {
+        sound.playButtonPress();
+        if (!player.notifications) player.notifications = [];
+        player.notifications.push({
+          id: 'eng_inhibitor_' + Date.now(),
+          text: '🚫 Блокиратор стартера (АКПП)! Запуск разрешён только в режиме P (Паркинг) или N (Нейтраль).',
+          color: '#f59e0b',
+          timer: 3.5
+        });
+      } else if (eng.transmissionType === 'MANUAL' && eng.currentGear !== 0 && eng.clutchPedal > 0.45) {
+        // Heavy drain on battery when cranking drivetrain on gear
+        eng.batteryCharge = Math.max(0, (eng.batteryCharge ?? 100) - 12);
+        if (eng.batteryCharge <= 5) {
+          sound.playCollision(0.1);
+          if (!player.notifications) player.notifications = [];
+          player.notifications.push({
+            id: 'eng_lowbat_lurch_' + Date.now(),
+            text: '⚡ Не хватает заряда разряженного аккумулятора прокрутить трансмиссию на передаче!',
+            color: '#ef4444',
+            timer: 3.5
+          });
+          return;
+        }
+
+        // Starter overload check: spamming starter on gear burns out starter motor
+        eng.starterOverloadCount = (eng.starterOverloadCount || 0) + 1;
+        if (eng.starterOverloadCount >= 4) {
+          eng.starterWorking = false;
+          sound.playCollision(0.75);
+          if (!player.notifications) player.notifications = [];
+          player.notifications.push({
+            id: 'eng_starter_burn_' + Date.now(),
+            text: '💥 СТАРТЕР СГОРЕЛ! Перегрузка электромотора при попытке ехать на стартере на передаче!',
+            color: '#ef4444',
+            timer: 4.5
+          });
+          return;
+        }
+
+        // Starter motor physics: can only lurch a stationary car up to ~3.6 km/h (10 px/s) max.
+        // Cannot accelerate a moving car or provide unlimited speed.
+        const jerkDir = eng.currentGear === -1 ? -1 : 1;
+        const currentSpeedInJerkDir = veh.speed * jerkDir;
+        const maxStarterLurchSpeed = 10.0; // Max speed starter can ever push
+
+        if (currentSpeedInJerkDir < maxStarterLurchSpeed) {
+          const newSpeedAlongDir = Math.min(maxStarterLurchSpeed, currentSpeedInJerkDir + 5.0);
+          veh.speed = newSpeedAlongDir * jerkDir;
+        } else {
+          // If already moving faster than starter lurch speed, mechanical drag slows down the car!
+          veh.speed *= 0.65;
+        }
+        veh.vx = Math.cos(veh.angle) * veh.speed;
+        veh.vy = Math.sin(veh.angle) * veh.speed;
+
+        eng.engineRunning = false;
+        eng.isStalled = true;
+        eng.engineStalled = true;
+        eng.engineRPM = 0;
+        sound.playCollision(0.35);
+        sound.playEngineStall();
+        if (!player.notifications) player.notifications = [];
+        player.notifications.push({
+          id: 'eng_lurch_' + Date.now(),
+          text: `💥 Рывок на передаче! (${eng.starterOverloadCount}/4) Сцепление не выжато — машина дернулась на стартере и заглохла!`,
+          color: '#ef4444',
+          timer: 3.5
+        });
       } else {
+        eng.starterOverloadCount = 0; // Reset overload count on clean start
         eng.engineRunning = true;
         eng.engineStalled = false;
         eng.isStalled = false;
@@ -2455,6 +2680,18 @@ export default function App() {
       text: msg,
       color: '#38bdf8',
       timer: 2.5
+    });
+    setVitalsRefreshTick(t => t + 1);
+  };
+
+  const handleToggleTrailerHitch = () => {
+    const world = worldRef.current;
+    const player = playerRef.current;
+    if (!world || !player.isInVehicle || !player.currentVehicleId) return;
+    const veh = world.vehicles.find((v) => v.id === player.currentVehicleId);
+    if (!veh) return;
+    toggleTrailerHitch(veh, world, {
+      add: (msg: string, type: 'info' | 'warning' | 'success') => addPlayerNotification(player, msg, type === 'success' ? 'info' : type)
     });
     setVitalsRefreshTick(t => t + 1);
   };
@@ -2571,11 +2808,34 @@ export default function App() {
       }
 
       if (closestVeh) {
+        if (closestVeh.type.startsWith('trailer_') || closestVeh.isTrailer) {
+          sound.playAlert();
+          addPlayerNotification(player, '❌ Прицеп не имеет двигателя или кабины! Подцепите его к трактору или фаркопу машины.', 'warning');
+          return;
+        }
+
+        if (closestVeh.isLocked) {
+          sound.playAlert();
+          addPlayerNotification(player, '🔒 Двери автомобиля заперты! Используйте ключ от машины [E] или отмычку.', 'warning');
+          return;
+        }
+
+        closestVeh.steerAngle = typeof closestVeh.steerAngle === 'number' && Number.isFinite(closestVeh.steerAngle) ? closestVeh.steerAngle : 0;
+        closestVeh.angle = typeof closestVeh.angle === 'number' && Number.isFinite(closestVeh.angle) ? closestVeh.angle : 0;
+        closestVeh.speed = typeof closestVeh.speed === 'number' && Number.isFinite(closestVeh.speed) ? closestVeh.speed : 0;
+        closestVeh.vx = typeof closestVeh.vx === 'number' && Number.isFinite(closestVeh.vx) ? closestVeh.vx : 0;
+        closestVeh.vy = typeof closestVeh.vy === 'number' && Number.isFinite(closestVeh.vy) ? closestVeh.vy : 0;
+
+        if (!closestVeh.engineState) {
+          closestVeh.engineState = createDefaultEngineState(closestVeh.type, true, false);
+        }
+
         closestVeh.isPlayerControlled = true;
         closestVeh.isParked = false;
         setPlayerHeadlightMode(closestVeh.headlightMode || 'off');
         setPlayerTurnSignal(closestVeh.turnSignal || 'none');
         closestVeh.aiState = 'driving';
+        
         if (closestVeh.engineState) {
           closestVeh.engineState.engineRunning = true;
           closestVeh.engineState.isStalled = false;
@@ -2630,9 +2890,11 @@ export default function App() {
           const relY = player.y - bld.y;
 
           // Find the exit zone closest to the player's current position
-          let bestExit = layout.exits[0] || layout.exitZone;
+          const exits = (layout.exits && layout.exits.length > 0) ? layout.exits : (layout.exitZone ? [layout.exitZone] : []);
+          let bestExit = exits[0] || layout.exitZone || { x: 10, y: 10, width: 20, height: 10 };
           let bestDist = Infinity;
-          for (const ex of (layout.exits || [layout.exitZone])) {
+          for (const ex of exits) {
+            if (!ex) continue;
             const d = Math.hypot(relX - (ex.x + ex.width / 2), relY - (ex.y + ex.height / 2));
             if (d < bestDist) {
               bestDist = d;
@@ -2641,10 +2903,10 @@ export default function App() {
           }
 
           const ents = getAllBuildingEntrances(bld);
-          let targetEnt = ents[0];
-          if (bestExit.entranceIndex !== undefined && ents[bestExit.entranceIndex]) {
+          let targetEnt = (ents && ents.length > 0) ? ents[0] : { x: bld.x + bld.width / 2, y: bld.y + bld.height + 14, side: 'south' as const };
+          if (bestExit.entranceIndex !== undefined && ents && ents[bestExit.entranceIndex]) {
             targetEnt = ents[bestExit.entranceIndex];
-          } else {
+          } else if (ents && ents.length > 0) {
             // Find entrance closest to the exit zone
             let minEntDist = Infinity;
             for (const ent of ents) {
@@ -2733,9 +2995,8 @@ export default function App() {
         }
 
         const layout = getBuildingLayout(bld, 0);
-        const exitZone = (layout.exits && layout.exits[closestEntIndex])
-          ? layout.exits[closestEntIndex]
-          : (layout.exits[0] || layout.exitZone);
+        const exits = (layout.exits && layout.exits.length > 0) ? layout.exits : (layout.exitZone ? [layout.exitZone] : []);
+        const exitZone = exits[closestEntIndex] || exits[0] || layout.exitZone || { x: 10, y: 10, width: 20, height: 10 };
 
         // Place player just in front of that section's exit door inside the entrance vestibule
         let enterX = exitZone.x + exitZone.width / 2;
@@ -2780,6 +3041,33 @@ export default function App() {
       return;
     }
 
+    // 0-water. WATER HOSE INTERACTION (Pick up from pump station / rear tap, or stow back)
+    if (world) {
+      if (p.heldWaterHose) {
+        const nearWaterVeh = getNearbyWaterVehicle(p.x, p.y, world);
+        if (nearWaterVeh && nearWaterVeh.vehicle.id === p.heldWaterHose.vehicleId) {
+          stowWaterHose(p, world);
+          addPlayerNotification(p, 'Поливочный шланг смотан и закреплен на штатное место.', 'info');
+          sound.playUseItem();
+          setVitalsRefreshTick(t => t + 1);
+          return;
+        }
+        // When away from the vehicle, tapping E does not stow the hose; holding E or LMB fires water!
+        return;
+      } else {
+        const nearWaterVeh = getNearbyWaterVehicle(p.x, p.y, world);
+        if (nearWaterVeh) {
+          const veh = nearWaterVeh.vehicle;
+          takeWaterHose(p, veh, world);
+          const sourceName = veh.type === 'truck_water' ? 'насосной станции водовоза' : 'крана бочки-цистерны';
+          addPlayerNotification(p, `Шланг размотан с ${sourceName}! Зажмите ЛКМ или E для подачи воды.`, 'info');
+          sound.playUseItem();
+          setVitalsRefreshTick(t => t + 1);
+          return;
+        }
+      }
+    }
+
     // 0. HIGH-DETAIL GAS STATION MECHANICS (Nozzle pickup, Vehicle insert, Cashier payment)
     if (world) {
       // 0a. Player holding a fuel nozzle
@@ -2815,11 +3103,8 @@ export default function App() {
       if (world.vehicles) {
         for (const v of world.vehicles) {
           if (v.fuelingState?.nozzleInTank) {
-            const capOffsetDist = -v.length * 0.35;
-            const capOffsetSide = v.width * 0.45;
-            const capX = v.x + Math.cos(v.angle) * capOffsetDist - Math.sin(v.angle) * capOffsetSide;
-            const capY = v.y + Math.sin(v.angle) * capOffsetDist + Math.cos(v.angle) * capOffsetSide;
-            const d = Math.hypot(capX - p.x, capY - p.y);
+            const capPos = getVehicleFuelCapPosition(v);
+            const d = Math.hypot(capPos.x - p.x, capPos.y - p.y);
             if (d < 75) {
               const pump = world.gasPumps?.find(gp => gp.id === v.fuelingState?.pumpId);
               if (pump) {
@@ -2868,7 +3153,7 @@ export default function App() {
           const frontY = v.y + Math.sin(v.angle) * (cfg.length * 0.42);
           const distToFront = Math.hypot(p.x - frontX, p.y - frontY);
 
-          if (distToFront < 55) {
+          if (distToFront < 55 && !isTrailerVehicle(v)) {
             v.engineState.hoodOpen = true;
             setEngineBayVehicle(v);
             setIsEngineBayOpen(true);
@@ -2967,7 +3252,11 @@ export default function App() {
           resolvedType = 'cafe';
           resolvedTitle = bld.nameRu || 'Кафе & Кофейня "Bean & Bistro"';
           hasStandaloneShop = true;
-        } else if (bld.shopBrand === 'pitstop_service' || bld.type === 'car_dealership') {
+        } else if (bld.type === 'car_dealership' || bld.shopBrand === 'car_dealership') {
+          setIsDealershipOpen(true);
+          sound.playUseItem();
+          return;
+        } else if (bld.shopBrand === 'pitstop_service') {
           resolvedType = 'auto_shop';
           resolvedTitle = bld.nameRu || 'Автомастерская & Сервис "PIT-STOP"';
           hasStandaloneShop = true;
@@ -3071,18 +3360,26 @@ export default function App() {
         const relY = player.y - bld.y;
 
         // Find elevator zone in the target floor matching player's current section or position
-        let bestElevator = layout.elevators[0] || layout.elevatorZone;
-        let minElDist = Infinity;
-        for (const el of (layout.elevators || [layout.elevatorZone])) {
-          const d = Math.hypot(relX - (el.x + el.width / 2), relY - (el.y + el.height / 2));
-          if (d < minElDist) {
-            minElDist = d;
-            bestElevator = el;
+        const elevators = (layout.elevators && layout.elevators.length > 0) ? layout.elevators : (layout.elevatorZone ? [layout.elevatorZone] : []);
+        let bestElevator = elevators[0];
+        if (elevators.length > 0) {
+          let minElDist = Infinity;
+          for (const el of elevators) {
+            if (!el) continue;
+            const d = Math.hypot(relX - (el.x + el.width / 2), relY - (el.y + el.height / 2));
+            if (d < minElDist) {
+              minElDist = d;
+              bestElevator = el;
+            }
           }
         }
 
-        const destX = bld.x + bestElevator.x + bestElevator.width / 2;
-        const destY = bld.y + (bestElevator.y < bld.height / 2 ? bestElevator.y + bestElevator.height + 12 : bestElevator.y - 12);
+        const elX = bestElevator?.x ?? (bld.width / 2 - 9);
+        const elY = bestElevator?.y ?? (bld.height / 2 - 9);
+        const elW = bestElevator?.width ?? 18;
+        const elH = bestElevator?.height ?? 18;
+        const destX = bld.x + elX + elW / 2;
+        const destY = bld.y + (elY < bld.height / 2 ? elY + elH + 12 : elY - 12);
         player.x = destX;
         player.y = destY;
 
@@ -3242,10 +3539,23 @@ export default function App() {
       // Roads
       ctx.fillStyle = '#334155';
       for (const road of world.roads) {
+        if (road.isRoundabout) continue;
         if (road.direction === 'horizontal') {
           ctx.fillRect(road.x1, road.y1 - road.width / 2, road.x2 - road.x1, road.width);
         } else {
           ctx.fillRect(road.x1 - road.width / 2, road.y1, road.width, road.y2 - road.y1);
+        }
+      }
+      if (world.roundabouts) {
+        for (const rb of world.roundabouts) {
+          ctx.fillStyle = '#334155';
+          ctx.beginPath();
+          ctx.arc(rb.x, rb.y, rb.radius, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.fillStyle = '#1e293b';
+          ctx.beginPath();
+          ctx.arc(rb.x, rb.y, rb.innerRadius, 0, Math.PI * 2);
+          ctx.fill();
         }
       }
 
@@ -3354,10 +3664,23 @@ export default function App() {
       // Roads
       ctx.fillStyle = '#334155';
       for (const road of world.roads) {
+        if (road.isRoundabout) continue;
         if (road.direction === 'horizontal') {
           ctx.fillRect(road.x1, road.y1 - road.width / 2, road.x2 - road.x1, road.width);
         } else {
           ctx.fillRect(road.x1 - road.width / 2, road.y1, road.width, road.y2 - road.y1);
+        }
+      }
+      if (world.roundabouts) {
+        for (const rb of world.roundabouts) {
+          ctx.fillStyle = '#334155';
+          ctx.beginPath();
+          ctx.arc(rb.x, rb.y, rb.radius, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.fillStyle = '#1e293b';
+          ctx.beginPath();
+          ctx.arc(rb.x, rb.y, rb.innerRadius, 0, Math.PI * 2);
+          ctx.fill();
         }
       }
 
@@ -3583,6 +3906,30 @@ export default function App() {
             >
               {isMuted ? <VolumeX className="w-3.5 h-3.5 text-rose-400" /> : <Volume2 className="w-3.5 h-3.5 text-emerald-400" />}
               <span>{isMuted ? 'Mute' : 'Звук'}</span>
+            </button>
+
+            {/* Online Multiplayer Toggle Button */}
+            <button
+              id="online-toggle-btn"
+              onClick={() => {
+                sound.playButtonPress();
+                setIsOnlineModalOpen((prev) => !prev);
+              }}
+              onTouchEnd={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                sound.playButtonPress();
+                setIsOnlineModalOpen((prev) => !prev);
+              }}
+              className={`border rounded-lg px-2.5 py-1.5 text-xs flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer ${
+                onlineStatus === 'connected'
+                  ? 'bg-emerald-950/80 border-emerald-500/50 text-emerald-300 hover:border-emerald-400'
+                  : 'bg-slate-800 border-slate-700 text-slate-400 hover:text-white'
+              }`}
+              title="Онлайн режим (комнаты, чат, синхронизация) [O]"
+            >
+              <Radio className={`w-3.5 h-3.5 ${onlineStatus === 'connected' ? 'text-emerald-400 animate-pulse' : 'text-sky-400'}`} />
+              <span>{onlineStatus === 'connected' ? `Онлайн (${onlinePlayerCount})` : 'Онлайн [O]'}</span>
             </button>
 
             <button
@@ -3874,6 +4221,8 @@ export default function App() {
             isHandbraking={inputRef.current.handbrake}
             playerTurnSignal={playerTurnSignal}
             playerHeadlightMode={playerHeadlightMode}
+            timeHour={timeHour}
+            weather={weather}
             onToggleTurnSignal={toggleTurnSignal}
             onToggleHeadlights={toggleHeadlights}
             onToggleEngine={handleToggleEngine}
@@ -4264,6 +4613,16 @@ export default function App() {
         }}
       />
 
+      {/* CAR DEALERSHIP MODAL */}
+      <CarDealershipModal
+        isOpen={isDealershipOpen}
+        onClose={() => setIsDealershipOpen(false)}
+        player={playerRef.current}
+        world={worldRef.current}
+        dealershipX={252}
+        dealershipY={5916}
+      />
+
       {/* SHOP & AUTO REPAIR MODAL */}
       <ShopModal
         isOpen={isShopOpen}
@@ -4324,14 +4683,16 @@ export default function App() {
             addPlayerNotification(p, 'Недостаточно денег на балансе!', 'warning');
           }
         }}
-        onRepairVehicle={() => {
+        onRepairVehicle={(alreadyPaid) => {
           const p = playerRef.current;
           const w = worldRef.current;
           if (!p || !w) return;
-          const currentCash = getPlayerCash(p);
-          if (currentCash < 300) {
-            addPlayerNotification(p, 'Недостаточно денег для ремонта ($300)', 'warning');
-            return;
+          if (!alreadyPaid) {
+            const currentCash = getPlayerCash(p);
+            if (currentCash < 300) {
+              addPlayerNotification(p, 'Недостаточно денег для ремонта ($300)', 'warning');
+              return;
+            }
           }
 
           // Find PIT-STOP repair bays / platforms
@@ -4357,7 +4718,7 @@ export default function App() {
             const currentCar = w.vehicles.find((v) => v.id === p.currentVehicleId);
             if (currentCar) {
               const nearService = pitstopBuildings.some((bld) => 
-                Math.hypot(currentCar.x - (bld.x + bld.width / 2), currentCar.y - (bld.y + bld.height / 2)) < 80
+                Math.hypot(currentCar.x - (bld.x + bld.width / 2), currentCar.y - (bld.y + bld.height / 2)) < 120
               );
               if (nearService) {
                 targetCar = currentCar;
@@ -4366,13 +4727,119 @@ export default function App() {
           }
 
           if (targetCar) {
-            deductPlayerCash(p, 300);
+            if (!alreadyPaid) {
+              deductPlayerCash(p, 300);
+            }
+            // 1. Reset physical body damage
             targetCar.damage = createDefaultVehicleDamage(targetCar.length, targetCar.width);
+            
+            // 2. Fully repair engine state to defaults (fix infinite repair cost bug)
+            if (targetCar.engineState) {
+              targetCar.engineState.radiatorPunctured = false;
+              targetCar.engineState.oilPunctured = false;
+              targetCar.engineState.engineHealth = 100;
+              targetCar.engineState.transmissionHealth = 100;
+              targetCar.engineState.isSeized = false;
+              targetCar.engineState.transmissionJammed = false;
+              targetCar.engineState.engineKnocking = false;
+              targetCar.engineState.engineStalled = false;
+              targetCar.engineState.overheatingSteam = false;
+              targetCar.engineState.radiatorWater = 100;
+              targetCar.engineState.oilLevel = 100;
+              if (targetCar.engineState.batteryCharge < 20) {
+                targetCar.engineState.batteryCharge = 100;
+              }
+              targetCar.engineState.starterWorking = true;
+            }
+            
+            // 3. Fully repair fuel system (leaks and pressure rail)
+            if (targetCar.fuelSystem) {
+              targetCar.fuelSystem.tankPunctured = false;
+              targetCar.fuelSystem.fuelRailBroken = false;
+            }
+
             sound.playUseItem();
-            addPlayerNotification(p, '🛠️ Автомобиль успешно отремонтирован на подъемнике PIT-STOP! (-$300)', 'heal');
+            const costText = alreadyPaid ? '' : ' (-$300)';
+            addPlayerNotification(p, `🛠️ Автомобиль успешно отремонтирован на подъемнике PIT-STOP!${costText}`, 'heal');
             setVitalsRefreshTick((t) => t + 1);
+            handleCreateSave('Автосохранение');
           } else {
             addPlayerNotification(p, '⚠️ Загоните автомобиль на специальную ремонтную площадку (подъёмник) автосервиса PIT-STOP!', 'warning');
+          }
+        }}
+        onTuningVehicle={(action, metadata) => {
+          const p = playerRef.current;
+          const w = worldRef.current;
+          if (!p || !w) return;
+
+          // Find PIT-STOP repair bays / platforms
+          const pitstopBuildings = w.buildings.filter(
+            (bld) => bld.shopBrand === 'pitstop_service' || bld.type === 'car_dealership'
+          );
+
+          let targetCar: Vehicle | null = null;
+
+          for (const bld of pitstopBuildings) {
+            const bayX = bld.x + bld.width / 2;
+            const bayY = bld.y + bld.height + 25;
+            const parkedCar = w.vehicles.find((v) => Math.hypot(v.x - bayX, v.y - bayY) < 60);
+            if (parkedCar) {
+              targetCar = parkedCar;
+              break;
+            }
+          }
+
+          if (!targetCar && p.isInVehicle && p.currentVehicleId) {
+            const currentCar = w.vehicles.find((v) => v.id === p.currentVehicleId);
+            if (currentCar) {
+              const nearService = pitstopBuildings.some((bld) => 
+                Math.hypot(currentCar.x - (bld.x + bld.width / 2), currentCar.y - (bld.y + bld.height / 2)) < 120
+              );
+              if (nearService) {
+                targetCar = currentCar;
+              }
+            }
+          }
+
+          // Fallback to closest car within 120 units
+          if (!targetCar) {
+            targetCar = w.vehicles
+              .filter((v) => Math.hypot(v.x - p.x, v.y - p.y) < 120)
+              .sort((a, b) => Math.hypot(a.x - p.x, a.y - p.y) - Math.hypot(b.x - p.x, b.y - p.y))[0] || null;
+          }
+
+          if (targetCar) {
+            if (action === 'gbo_install') {
+              targetCar.hasGBO = true;
+              addPlayerNotification(p, '🟢 ГБО Lovato 4 успешно установлено на ваш автомобиль!', 'pickup');
+            } else if (action === 'gbo_remove') {
+              targetCar.hasGBO = false;
+              addPlayerNotification(p, '🔴 ГБО успешно демонтировано!', 'warning');
+            } else if (action === 'alignment') {
+              if (targetCar.damage) {
+                targetCar.damage.steeringDrift = 0;
+              }
+              addPlayerNotification(p, '🔧 Сход-развал 3D успешно отрегулирован. Машину больше не уводит!', 'pickup');
+            } else if (action === 'suspension') {
+              (targetCar as any).hasHeavySuspension = true;
+              addPlayerNotification(p, '🛡️ Усиленная подвеска Bilstein HD успешно установлена!', 'pickup');
+            } else if (action === 'chiptuning') {
+              (targetCar as any).hasChiptuning = true;
+              addPlayerNotification(p, '🚀 Чип-тюнинг ECU Stage 1 успешно применен к двигателю!', 'pickup');
+            } else if (action === 'paint') {
+              const target = metadata?.paintTarget || 'body';
+              const color = metadata?.color || '#991b1b';
+              if (target === 'roof') {
+                targetCar.roofColor = color;
+              } else {
+                targetCar.color = color;
+              }
+              addPlayerNotification(p, '🎨 Лакокрасочное покрытие кузова успешно обновлено!', 'pickup');
+            }
+            setVitalsRefreshTick((t) => t + 1);
+            handleCreateSave('Автосохранение');
+          } else {
+            addPlayerNotification(p, '⚠️ Не удалось обнаружить автомобиль для тюнинга на площадке!', 'warning');
           }
         }}
       />
@@ -4390,6 +4857,7 @@ export default function App() {
         onChangeHeaterMode={handleChangeHeaterMode}
         onToggleEngine={handleToggleEngine}
         onToggleWindow={handleToggleWindow}
+        onToggleTrailerHitch={handleToggleTrailerHitch}
       />
 
       {/* GAS STATION: FUEL NOZZLE SELECTOR MODAL */}
@@ -5116,6 +5584,77 @@ export default function App() {
                   </button>
                 </div>
 
+                {/* Grid Mode (G) Switch */}
+                <div className="flex items-center justify-between p-2.5 bg-slate-950/40 border border-slate-800/80 rounded-xl">
+                  <div className="flex items-center gap-2">
+                    <Grid className={`w-4 h-4 ${isGridMode ? 'text-cyan-400 animate-pulse' : 'text-slate-500'}`} />
+                    <div className="text-xs">
+                      <div className="font-semibold text-slate-200">Сетка деформации (Grid G)</div>
+                      <div className="text-[9px] text-slate-400">Визуализация 3D-сетки BeamNG</div>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => {
+                      const cam = cameraRef.current;
+                      cam.gridMode = !cam.gridMode;
+                      const val = !!cam.gridMode;
+                      setIsGridMode(val);
+                      const p = playerRef.current;
+                      if (p) {
+                        addPlayerNotification(p, `Режим сетки (Grid Mode) ${val ? 'ВКЛ' : 'ВЫКЛ'}`, val ? 'info' : 'warning');
+                      }
+                    }}
+                    className={`w-10 h-5 rounded-full p-0.5 transition-all cursor-pointer ${
+                      isGridMode ? 'bg-cyan-500 flex justify-end' : 'bg-slate-800 flex justify-start'
+                    }`}
+                  >
+                    <div className="w-4 h-4 rounded-full bg-slate-100 shadow" />
+                  </button>
+                </div>
+
+                {/* Clean Crash Test Mode Switch */}
+                <div className="flex items-center justify-between p-2.5 bg-slate-950/40 border border-slate-800/80 rounded-xl">
+                  <div className="flex items-center gap-2">
+                    <Sparkles className={`w-4 h-4 ${isCleanMode ? 'text-amber-300 animate-spin' : 'text-slate-500'}`} />
+                    <div className="text-xs">
+                      <div className="font-semibold text-slate-200">Чистый режим (Краштест)</div>
+                      <div className="text-[9px] text-slate-400">Без дыма/пара (огонь остаётся) + 0 урон игроку</div>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => {
+                      const val = !isCleanMode;
+                      setIsCleanMode(val);
+                      isCleanModeRef.current = val;
+                      const world = worldRef.current;
+                      if (world) {
+                        world.cleanMode = val;
+                        if (val && world.particles) {
+                          world.particles = world.particles.filter(p => p.type !== 'engine_smoke' && p.type !== 'tire_smoke' && p.type !== 'exhaust');
+                        }
+                      }
+                      const p = playerRef.current;
+                      if (p) {
+                        p.isCleanMode = val;
+                        if (val) {
+                          p.needs.health = 100;
+                          if (p.bodyState) {
+                            p.bodyState.painLevel = 0;
+                            p.bodyState.bloodLoss = 0;
+                            p.bodyState.shockLevel = 0;
+                          }
+                        }
+                        addPlayerNotification(p, val ? 'Чистый режим ВКЛ! Дым/пар убраны, урон отключен.' : 'Чистый режим ВЫКЛ.', val ? 'info' : 'warning');
+                      }
+                    }}
+                    className={`w-10 h-5 rounded-full p-0.5 transition-all cursor-pointer ${
+                      isCleanMode ? 'bg-amber-500 flex justify-end' : 'bg-slate-800 flex justify-start'
+                    }`}
+                  >
+                    <div className="w-4 h-4 rounded-full bg-slate-100 shadow" />
+                  </button>
+                </div>
+
                 {/* Give Cash Button */}
                 <button
                   onClick={() => {
@@ -5236,6 +5775,10 @@ export default function App() {
             setIsPauseMenuOpen(false);
             setIsMainMenuOpen(true);
           }}
+          onOpenOnline={() => {
+            setIsPauseMenuOpen(false);
+            setIsOnlineModalOpen(true);
+          }}
           onExitToMainMenu={() => {
             setIsPauseMenuOpen(false);
             setIsMainMenuOpen(true);
@@ -5263,6 +5806,23 @@ export default function App() {
           settings={settings}
           onUpdateSettings={setSettings}
           spawnLocations={SPAWN_LOCATIONS}
+          onOpenOnline={() => {
+            setIsOnlineModalOpen(true);
+          }}
+        />
+      )}
+
+      {/* Online P2P Multiplayer Modal */}
+      <OnlineModal
+        isOpen={isOnlineModalOpen}
+        onClose={() => setIsOnlineModalOpen(false)}
+      />
+
+      {/* Online Chat Overlay */}
+      {!isMainMenuOpen && !isPauseMenuOpen && (
+        <ChatOverlay
+          isChatFocused={isChatFocused}
+          onSetChatFocused={setIsChatFocused}
         />
       )}
     </div>

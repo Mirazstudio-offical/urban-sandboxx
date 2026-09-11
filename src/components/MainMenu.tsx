@@ -24,7 +24,9 @@ import {
   TreePine,
   Building2,
   Home,
-  Truck
+  Truck,
+  Globe,
+  Radio
 } from 'lucide-react';
 
 export interface SaveSlot {
@@ -71,6 +73,7 @@ interface MainMenuProps {
   };
   onUpdateSettings: (newSettings: any) => void;
   spawnLocations?: SpawnLocation[];
+  onOpenOnline?: () => void;
 }
 
 type MenuScreen = 'main' | 'saves' | 'new_game' | 'settings' | 'about';
@@ -108,8 +111,8 @@ const DEFAULT_SPAWNS: SpawnLocation[] = [
     id: 'industrial_district',
     name: 'Freight Logistics Yard',
     nameRu: 'Промзона (Грузовая база & Склады)',
-    x: 5200,
-    y: 4400,
+    x: 6400,
+    y: 1000,
     description: 'Логистический хаб, ангары, склады и стоянка спецтранспорта',
     icon: <Truck className="w-5 h-5 text-stone-400" />
   }
@@ -125,7 +128,8 @@ export const MainMenu: React.FC<MainMenuProps> = ({
   onToggleMute,
   settings,
   onUpdateSettings,
-  spawnLocations = DEFAULT_SPAWNS
+  spawnLocations = DEFAULT_SPAWNS,
+  onOpenOnline
 }) => {
   const [screen, setScreen] = useState<MenuScreen>('main');
   const [settingsTab, setSettingsTab] = useState<SettingsTab>('graphics');
@@ -245,6 +249,28 @@ export const MainMenu: React.FC<MainMenuProps> = ({
               </div>
               <ChevronRight className="w-5 h-5 text-slate-500 group-hover:text-white transition-colors" />
             </button>
+
+            {/* Online P2P Button */}
+            {onOpenOnline && (
+              <button
+                onClick={onOpenOnline}
+                className="group flex items-center justify-between p-4.5 bg-slate-900 hover:bg-slate-850 border border-sky-500/30 hover:border-sky-500/60 rounded-2xl transition-all active:scale-[0.99] cursor-pointer shadow-lg"
+              >
+                <div className="flex items-center gap-4">
+                  <div className="p-3 bg-sky-500/10 border border-sky-500/30 rounded-xl text-sky-400 group-hover:scale-110 transition-transform">
+                    <Radio className="w-5 h-5 animate-pulse" />
+                  </div>
+                  <div className="text-left">
+                    <div className="flex items-center gap-2">
+                      <span className="text-base font-extrabold text-white">Онлайн режим</span>
+                      <span className="px-1.5 py-0.2 bg-sky-500/20 text-sky-300 border border-sky-500/40 text-[10px] font-bold rounded">P2P СЕТЬ</span>
+                    </div>
+                    <div className="text-xs text-slate-400">Создание комнат, чат и синхронизация игроков</div>
+                  </div>
+                </div>
+                <ChevronRight className="w-5 h-5 text-sky-400 group-hover:translate-x-1 transition-transform" />
+              </button>
+            )}
 
             {/* About / Info Button */}
             <button

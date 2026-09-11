@@ -1,5 +1,5 @@
-import { CAR_CONFIGS, createDefaultEngineState, createDefaultFuelSystem, createDefaultVehicleDamage, ensureVehicleDamage } from './vehicleHelpers';
-import { Building, GameWorld, InputState, Particle, Pedestrian, Player, SkidMark, Vehicle, StreetProp } from './types';
+import { CAR_CONFIGS, canVehicleHaveHitch, createDefaultEngineState, createDefaultFuelSystem, createDefaultFluidTank, ensureVehicleFluidTank, liquidTypeToStainType, createDefaultVehicleDamage, ensureVehicleDamage, getVehicleFuelCapPosition, getVehicleAxleGeometry, isTrailerVehicle } from './vehicleHelpers';
+import { Building, GameWorld, InputState, Particle, Pedestrian, Player, SkidMark, Vehicle, StreetProp, FluidStainType } from './types';
 import { getBuildingLayout, constrainPlayerToInterior } from './buildingInteriors';
 import { sound } from './audio';
 import { trafficDiagnostics, isVehicleDisabledOrCrashed } from './aiTraffic';
@@ -28,6 +28,8 @@ const GAS_STATION_STRUCTURAL_SUB_BOXES = [
   { x: 5003, y: 5190, width: 34, height: 180 },
   // Island 1 (East fuel island, pumps & support pillars)
   { x: 5143, y: 5190, width: 34, height: 180 },
+  // Island 2 (LPG Gas Island, Propane Storage Tank & Dispenser)
+  { x: 4950, y: 4923, width: 180, height: 34 },
   // Price Totem on corner lawn
   { x: 4872, y: 4872, width: 16, height: 16 }
 ];
@@ -118,7 +120,7 @@ export function checkCarBoxCollision(
 
 // Check intersection between rotated car box and AABB building using SAT
 export function checkCarBuildingCollision(car: Vehicle, building: Building): CollisionResult {
-  if (building.type === 'gas_station_canopy') {
+  if (building.type === 'gas_station_canopy' || building.type === 'gas_station_island') {
     for (const sub of GAS_STATION_STRUCTURAL_SUB_BOXES) {
       const res = checkCarBoxCollision(car, sub);
       if (res.collided) {
@@ -177,7 +179,7 @@ export function checkPedestrianBuildingCollision(
   radius: number,
   building: Building
 ): { x: number; y: number; collided: boolean } {
-  if (building.type === 'gas_station_canopy') {
+  if (building.type === 'gas_station_canopy' || building.type === 'gas_station_island') {
     let currentX = px;
     let currentY = py;
     let collidedAny = false;
@@ -541,6 +543,54 @@ export function getPropHitbox(prop: StreetProp): PropHitbox {
       return { shape: 'none', resistance: 0, displayNameRu: 'канализационный люк' };
     case 'drain_grate':
       return { shape: 'none', resistance: 0, displayNameRu: 'ливневая решётка' };
+    case 'village_well':
+      return { shape: 'circle', radius: 11, resistance: 10.0, isIndestructible: true, displayNameRu: 'деревенский колодец' };
+    case 'village_sign':
+      return { shape: 'box', halfWidth: 10, halfHeight: 3, resistance: 0.15, displayNameRu: 'дорожный указатель' };
+    case 'haystack':
+      return { shape: 'circle', radius: 14, resistance: 0.05, displayNameRu: 'стог сена' };
+    case 'woodpile':
+      return { shape: 'box', halfWidth: 12, halfHeight: 6, resistance: 0.18, displayNameRu: 'поленница дров' };
+    case 'rustic_car_wreck':
+      return { shape: 'box', halfWidth: 20, halfHeight: 10, resistance: 10.0, isIndestructible: true, displayNameRu: 'ржавый остов машины' };
+    case 'concrete_barrier':
+      return { shape: 'box', halfWidth: 16, halfHeight: 6, resistance: 10.0, isIndestructible: true, displayNameRu: 'бетонный блок' };
+    case 'concrete_fence_po2':
+      return { shape: 'box', halfWidth: 19, halfHeight: 6, resistance: 10.0, isIndestructible: true, displayNameRu: 'бетонный забор ПО-2' };
+    case 'power_pole':
+      return { shape: 'circle', radius: 3.2, resistance: 10.0, isIndestructible: true, displayNameRu: 'деревянный столб ЛЭП' };
+    case 'shipping_container':
+      return { shape: 'box', halfWidth: 26, halfHeight: 12, resistance: 10.0, isIndestructible: true, displayNameRu: 'грузовой контейнер' };
+    case 'pallet_stack':
+      return { shape: 'box', halfWidth: 10, halfHeight: 8, resistance: 0.12, displayNameRu: 'стопка деревянных поддонов' };
+    case 'industrial_tank':
+      return { shape: 'box', halfWidth: 22, halfHeight: 12, resistance: 10.0, isIndestructible: true, displayNameRu: 'резервуар ГСМ' };
+    case 'silo_tank':
+      return { shape: 'circle', radius: 16, resistance: 10.0, isIndestructible: true, displayNameRu: 'силосная башня' };
+    case 'cable_spool':
+      return { shape: 'circle', radius: 9, resistance: 0.35, displayNameRu: 'кабельный барабан' };
+    case 'security_barrier':
+      return { shape: 'box', halfWidth: 12, halfHeight: 3, resistance: 0.15, displayNameRu: 'шлагбаум КПП' };
+    case 'industrial_floodlight':
+      return { shape: 'box', halfWidth: 5, halfHeight: 5, resistance: 10.0, isIndestructible: true, displayNameRu: 'прожекторная мачта' };
+    case 'industrial_tires':
+      return { shape: 'circle', radius: 10, resistance: 0.45, displayNameRu: 'штабель карьерных шин' };
+    case 'scrap_pile':
+      return { shape: 'circle', radius: 12, resistance: 0.60, displayNameRu: 'куча металлолома' };
+    case 'industrial_sign':
+      return { shape: 'box', halfWidth: 8, halfHeight: 3, resistance: 0.10, displayNameRu: 'щит-указатель' };
+    case 'industrial_pipe':
+      return { shape: 'box', halfWidth: 16, halfHeight: 4, resistance: 10.0, isIndestructible: true, displayNameRu: 'эстакада трубопровода' };
+    case 'fence_wood_vertical':
+      return { shape: 'box', halfWidth: 18, halfHeight: 3.5, resistance: 0.85, displayNameRu: 'деревянный штакетник' };
+    case 'fence_metal_vertical':
+      return { shape: 'box', halfWidth: 18, halfHeight: 3.5, resistance: 1.80, displayNameRu: 'забор из профнастила' };
+    case 'cottage_gate':
+      return { shape: 'box', halfWidth: 36, halfHeight: 4.5, resistance: 2.20, displayNameRu: 'въездные ворота' };
+    case 'wicket_gate':
+      return { shape: 'box', halfWidth: 12, halfHeight: 2.5, resistance: 0.15, displayNameRu: 'калитка' };
+    case 'garden_path_tile':
+      return { shape: 'none', resistance: 0, displayNameRu: 'садовая дорожка' };
     default:
       return { shape: 'circle', radius: 3.0, resistance: 0.05, displayNameRu: 'уличный объект' };
   }
@@ -675,6 +725,7 @@ export function applyVehicleDamageAndDeformation(
   if (!car.fuelSystem) {
     car.fuelSystem = createDefaultFuelSystem(car.type);
   }
+  ensureVehicleFluidTank(car);
 
   const now = performance.now() / 1000;
 
@@ -810,17 +861,38 @@ export function applyVehicleDamageAndDeformation(
         }
 
         const deltaPush = pushStrength * weight;
-        const maxOffset = len * Math.min(0.38, 0.08 + severity * 0.28 * Math.sqrt(massRatio));
+        const maxOffset = Math.min(10.0, Math.max(2.5, len * 0.32));
 
-        // Apply permanent plastic offset
-        const newOffsetX = v.offsetX + nodeImpulseX * deltaPush;
-        const newOffsetY = v.offsetY + nodeImpulseY * deltaPush;
-        const newLen = Math.hypot(newOffsetX, newOffsetY);
+        // Apply permanent plastic offset with progressive multi-frame crumple targets
+        const currentTargetX = v.targetOffsetX !== undefined && isFinite(v.targetOffsetX) ? v.targetOffsetX : (isFinite(v.offsetX) ? v.offsetX : 0);
+        const currentTargetY = v.targetOffsetY !== undefined && isFinite(v.targetOffsetY) ? v.targetOffsetY : (isFinite(v.offsetY) ? v.offsetY : 0);
+        let newTargetX = currentTargetX + nodeImpulseX * deltaPush;
+        let newTargetY = currentTargetY + nodeImpulseY * deltaPush;
+        const newLen = Math.hypot(newTargetX, newTargetY);
 
-        if (newLen < maxOffset || isPoissonBulge) {
-          v.offsetX = newOffsetX;
-          v.offsetY = newOffsetY;
+        if (newLen > maxOffset) {
+          newTargetX = (newTargetX / newLen) * maxOffset;
+          newTargetY = (newTargetY / newLen) * maxOffset;
         }
+
+        v.targetOffsetX = newTargetX;
+        v.targetOffsetY = newTargetY;
+        // Apply initial partial step (25%) so the impact registers immediately,
+        // while the remaining 75% smoothly compresses over the next 6-10 frames!
+        v.offsetX = v.offsetX + (newTargetX - v.offsetX) * 0.25;
+        v.offsetY = v.offsetY + (newTargetY - v.offsetY) * 0.25;
+
+        // Hard bound check for offset values
+        const curOffLen = Math.hypot(v.offsetX, v.offsetY);
+        if (curOffLen > maxOffset) {
+          v.offsetX = (v.offsetX / curOffLen) * maxOffset;
+          v.offsetY = (v.offsetY / curOffLen) * maxOffset;
+        }
+
+        if (!isFinite(v.targetOffsetX)) v.targetOffsetX = 0;
+        if (!isFinite(v.targetOffsetY)) v.targetOffsetY = 0;
+        if (!isFinite(v.offsetX)) v.offsetX = 0;
+        if (!isFinite(v.offsetY)) v.offsetY = 0;
 
         // Accumulate plastic strain (metal yield & crease severity)
         const strainAdd = Math.abs(deltaPush) / (len * 0.25);
@@ -885,6 +957,8 @@ export function applyVehicleDamageAndDeformation(
     checkWheelRub(13); // Rear-Right wheel well
   }
 
+  const isTrailer = isTrailerVehicle(car);
+
   // 2. Structural crumple & component damage logic (Radiator, Oil pan, Fuel tank, Suspension, Engine & Transmission)
   const crushFactor = severity * (1.2 + severity * 1.8) * Math.sqrt(massRatio) * 0.4;
 
@@ -893,39 +967,41 @@ export function applyVehicleDamageAndDeformation(
     const maxFrontCrush = halfL * 0.24; // Engine block restricts crumpling
     dmg.frontCrumple = Math.min(maxFrontCrush, dmg.frontCrumple + crushFactor);
 
-    // Mechanical engine and transmission shock / crushing
-    const engShock = (severity * 58 + (dmg.frontCrumple / maxFrontCrush) * 52) * Math.sqrt(massRatio);
-    eng.engineHealth = Math.max(0, (eng.engineHealth ?? 100) - engShock);
+    if (!isTrailer) {
+      // Mechanical engine and transmission shock / crushing
+      const engShock = (severity * 58 + (dmg.frontCrumple / maxFrontCrush) * 52) * Math.sqrt(massRatio);
+      eng.engineHealth = Math.max(0, (eng.engineHealth ?? 100) - engShock);
 
-    const transShock = (severity * 48 + (dmg.frontCrumple / maxFrontCrush) * 44) * Math.sqrt(massRatio);
-    eng.transmissionHealth = Math.max(0, (eng.transmissionHealth ?? 100) - transShock);
+      const transShock = (severity * 48 + (dmg.frontCrumple / maxFrontCrush) * 44) * Math.sqrt(massRatio);
+      eng.transmissionHealth = Math.max(0, (eng.transmissionHealth ?? 100) - transShock);
 
-    // Radiator puncture (starts rapid coolant loss & overheating)
-    if (severity > 0.20 || dmg.frontCrumple > 3.0) {
-      eng.radiatorPunctured = true;
-    }
+      // Radiator puncture (starts rapid coolant loss & overheating)
+      if (severity > 0.20 || dmg.frontCrumple > 3.0) {
+        eng.radiatorPunctured = true;
+      }
 
-    // Oil pan puncture (starts oil loss, knocking, then seizure)
-    if (severity > 0.38 || dmg.frontCrumple > 5.5) {
-      eng.oilPunctured = true;
-    }
+      // Oil pan puncture (starts oil loss, knocking, then seizure)
+      if (severity > 0.38 || dmg.frontCrumple > 5.5) {
+        eng.oilPunctured = true;
+      }
 
-    // Engine knock from internal mechanical damage
-    if (eng.engineHealth <= 45 || severity > 0.50) {
-      eng.engineKnocking = true;
-    }
+      // Engine knock from internal mechanical damage
+      if (eng.engineHealth <= 45 || severity > 0.50) {
+        eng.engineKnocking = true;
+      }
 
-    // Severe engine seizure & dead starter from direct engine bay smash
-    if (eng.engineHealth <= 15 || severity > 0.72 || dmg.frontCrumple > 9.0) {
-      eng.starterWorking = false;
-      eng.engineRunning = false;
-      eng.isSeized = true;
-      eng.engineRPM = 0;
-    }
+      // Severe engine seizure & dead starter from direct engine bay smash
+      if (eng.engineHealth <= 15 || severity > 0.72 || dmg.frontCrumple > 9.0) {
+        eng.starterWorking = false;
+        eng.engineRunning = false;
+        eng.isSeized = true;
+        eng.engineRPM = 0;
+      }
 
-    // Transmission jamming / locking up
-    if (eng.transmissionHealth <= 20 || (severity > 0.55 && Math.random() < 0.75) || (eng.transmissionHealth <= 40 && Math.random() < 0.4)) {
-      eng.transmissionJammed = true;
+      // Transmission jamming / locking up
+      if (eng.transmissionHealth <= 20 || (severity > 0.55 && Math.random() < 0.75) || (eng.transmissionHealth <= 40 && Math.random() < 0.4)) {
+        eng.transmissionJammed = true;
+      }
     }
 
     if (normY < -0.22) {
@@ -952,8 +1028,10 @@ export function applyVehicleDamageAndDeformation(
       }
     }
 
-    if (severity > 0.40 || dmg.frontCrumple > 5.5) {
-      dmg.hoodBuckled = true;
+    if (!isTrailer) {
+      if (severity > 0.40 || dmg.frontCrumple > 5.5) {
+        dmg.hoodBuckled = true;
+      }
     }
     if (severity > 0.60 || dmg.frontCrumple > 8.5) {
       dmg.windshieldCracked = true;
@@ -963,15 +1041,21 @@ export function applyVehicleDamageAndDeformation(
     const maxRearCrush = halfL * 0.22; // Fuel tank & subframe restrict rear crumpling
     dmg.rearCrumple = Math.min(maxRearCrush, dmg.rearCrumple + crushFactor);
 
-    if (severity > 0.40 || dmg.rearCrumple > 3.0) {
-      fuel.tankPunctured = true;
+    if (!isTrailer) {
+      if (severity > 0.40 || dmg.rearCrumple > 3.0) {
+        fuel.tankPunctured = true;
+      }
+
+      // Rear impacts can shock transmission driveshaft and differential
+      const rearTransShock = (severity * 32 + (dmg.rearCrumple / maxRearCrush) * 28) * Math.sqrt(massRatio);
+      eng.transmissionHealth = Math.max(0, (eng.transmissionHealth ?? 100) - rearTransShock);
+      if (eng.transmissionHealth <= 15 || (severity > 0.75 && Math.random() < 0.5)) {
+        eng.transmissionJammed = true;
+      }
     }
 
-    // Rear impacts can shock transmission driveshaft and differential
-    const rearTransShock = (severity * 32 + (dmg.rearCrumple / maxRearCrush) * 28) * Math.sqrt(massRatio);
-    eng.transmissionHealth = Math.max(0, (eng.transmissionHealth ?? 100) - rearTransShock);
-    if (eng.transmissionHealth <= 15 || (severity > 0.75 && Math.random() < 0.5)) {
-      eng.transmissionJammed = true;
+    if (car.fluidTank && (severity > 0.32 || dmg.rearCrumple > 2.5)) {
+      car.fluidTank.isPunctured = true;
     }
 
     if (normY < -0.22) {
@@ -1012,150 +1096,191 @@ export function applyVehicleDamageAndDeformation(
     }
     dmg.wheelRubResistance += severity * 15;
 
-    if (severity > 0.28) {
-      eng.transmissionHealth = Math.max(0, (eng.transmissionHealth ?? 100) - severity * 38);
-      eng.engineHealth = Math.max(0, (eng.engineHealth ?? 100) - severity * 30);
-      if (eng.transmissionHealth <= 20 || (severity > 0.65 && Math.random() < 0.65)) {
-        eng.transmissionJammed = true;
-      }
-      if (eng.engineHealth <= 15 || (severity > 0.78 && Math.random() < 0.55)) {
-        eng.isSeized = true;
-        eng.engineRunning = false;
-        eng.starterWorking = false;
-        eng.engineRPM = 0;
+    if (car.fluidTank && (severity > 0.35 || dmg.leftDent > 2.0 || dmg.rightDent > 2.0)) {
+      car.fluidTank.isPunctured = true;
+    }
+
+    if (!isTrailer) {
+      if (severity > 0.28) {
+        eng.transmissionHealth = Math.max(0, (eng.transmissionHealth ?? 100) - severity * 38);
+        eng.engineHealth = Math.max(0, (eng.engineHealth ?? 100) - severity * 30);
+        if (eng.transmissionHealth <= 20 || (severity > 0.65 && Math.random() < 0.65)) {
+          eng.transmissionJammed = true;
+        }
+        if (eng.engineHealth <= 15 || (severity > 0.78 && Math.random() < 0.55)) {
+          eng.isSeized = true;
+          eng.engineRunning = false;
+          eng.starterWorking = false;
+          eng.engineRPM = 0;
+        }
       }
     }
     if (severity > 0.48) {
       dmg.windshieldCracked = true;
     }
-    if (severity > 0.52) {
-      fuel.tankPunctured = true;
+    if (!isTrailer) {
+      if (severity > 0.52) {
+        fuel.tankPunctured = true;
+      }
     }
   }
 
   // 3. Engine smoke & differentiated fire ignition conditions (Frontal Engine Fire vs. Rear Fuel Tank Fire)
-  if (eng.radiatorPunctured || eng.oilPunctured || eng.overheatingSteam) {
-    dmg.engineSmoking = true;
-    if (eng.radiatorPunctured || eng.overheatingSteam) {
-      if (!dmg.underHoodSteam || dmg.underHoodSteam === 'none') {
-        dmg.underHoodSteam = 'thin';
+  if (!isTrailer) {
+    if (eng.radiatorPunctured || eng.oilPunctured || eng.overheatingSteam) {
+      dmg.engineSmoking = true;
+      if (eng.radiatorPunctured || eng.overheatingSteam) {
+        if (!dmg.underHoodSteam || dmg.underHoodSteam === 'none') {
+          dmg.underHoodSteam = 'thin';
+        }
       }
-    }
-    if (eng.oilPunctured) {
-      if (!dmg.underHoodSmoke || dmg.underHoodSmoke === 'none') {
-        dmg.underHoodSmoke = 'oil_blue';
-      }
-    }
-  }
-  const isEngineHot = (eng.temperature ?? 20) > 85;
-
-  if (normX > 0.15 && impactSpeed > 10) {
-    const isFrontFuelRailBroken = (dmg.frontCrumple ?? 0) > 2.2 || severity > 0.38;
-    if (isFrontFuelRailBroken) {
-      fuel.fuelRailBroken = true;
-    }
-
-    // Detailed collision probability calculation (Kmh based)
-    const impactKmh = impactSpeed * 0.36;
-    if (!dmg.underHoodSteam) dmg.underHoodSteam = 'none';
-    if (!dmg.underHoodSmoke) dmg.underHoodSmoke = 'none';
-
-    if (impactKmh >= 25 && impactKmh <= 45) {
-      // Легкий удар (25–45 км/ч / бампер и радиатор):
-      // Шанс пара: 10% (тонкая белая струйка, если треснул бачок).
-      // Шанс дыма: 0%.
-      if (Math.random() < 0.10) {
-        dmg.underHoodSteam = 'thin';
-        dmg.engineSmoking = true;
-      }
-    } else if (impactKmh > 45 && impactKmh <= 75) {
-      // Средний удар (45–75 км/ч / замятие капота):
-      // Шанс пара: 40% (плотное облако).
-      // Шанс сизого масляного дыма: 15%.
-      if (Math.random() < 0.40) {
-        dmg.underHoodSteam = 'dense';
-        dmg.engineSmoking = true;
-      } else if (Math.random() < 0.30) {
-        dmg.underHoodSteam = 'thin';
-        dmg.engineSmoking = true;
-      }
-      
-      if (Math.random() < 0.15) {
-        dmg.underHoodSmoke = 'oil_blue';
-        dmg.engineSmoking = true;
-      }
-    } else if (impactKmh > 75) {
-      // Тяжелый удар (75+ км/ч / двигатель ушел назад):
-      // Шанс пара: 70% (гейзер или плотный).
-      // Шанс дыма: 40% (густой серый дым масла + черный дым проводки).
-      // Шанс открытого пламени: 3%!
-      if (Math.random() < 0.30) {
-        dmg.underHoodSteam = 'geyser';
-        dmg.engineSmoking = true;
-      } else if (Math.random() < 0.80) {
-        dmg.underHoodSteam = 'dense';
-        dmg.engineSmoking = true;
-      }
-      
-      if (Math.random() < 0.40) {
-        dmg.underHoodSmoke = 'oil_gray_wiring_black';
-        dmg.engineSmoking = true;
-      }
-      if (Math.random() < 0.03 && !dmg.isFullyBurnt && !dmg.engineFire && !dmg.cabinFire && !dmg.underHoodSmolder && !dmg.fuelTankFire) {
-        dmg.fireOrigin = 'front';
-        dmg.underHoodSmolder = true;
-        dmg.fireTimer = 0;
-        dmg.engineSmoking = true;
-        dmg.engineFire = false;
-        dmg.fuelTankFire = false;
-        dmg.cabinFire = false;
-        dmg.fireProgress = 0;
-        dmg.fireIntensity = 0;
-        dmg.underHoodSmoke = 'oil_gray_wiring_black';
-        if (car.isPlayerControlled && (world as any).player) {
-          addPlayerNotification((world as any).player, '⚠️ Из-под капота повалил едкий серый дым! Повреждена топливная рампа, тление в моторном отсеке!', 'warning');
+      if (eng.oilPunctured) {
+        if (!dmg.underHoodSmoke || dmg.underHoodSmoke === 'none') {
+          dmg.underHoodSmoke = 'oil_blue';
         }
       }
     }
-  }
+    const isEngineHot = (eng.temperature ?? 20) > 85;
 
-  if (!dmg.isFullyBurnt && !dmg.engineFire && !dmg.cabinFire && !dmg.underHoodSmolder && !dmg.fuelTankFire) {
-    // Check REAR or TANK AREA collision ignition (Fuel Tank / Puddle fire)
-    // Occurs when the rear or side near the fuel tank is crushed:
-    // Tank / filler neck punctures, gasoline leaks and flashes from metal friction sparks or hot exhaust
-    if (normX <= 0.15 && fuel.tankPunctured) {
-      const hasIgnitionSource = (scrapeSpeed > 14 || impactSpeed > 30 || severity > 0.44 || isEngineHot);
-      if (hasIgnitionSource && Math.random() < 0.04) {
-        dmg.fireOrigin = 'rear';
-        dmg.fuelTankFire = true;
-        dmg.fireTimer = 0;
-        dmg.engineSmoking = false; // Engine at the front is fine!
-        dmg.underHoodSmolder = false;
-        dmg.engineFire = false;
-        dmg.cabinFire = false;
-        dmg.fireProgress = 0.15;
-        dmg.fireIntensity = 0.6;
-        dmg.groundPuddleIgnited = true;
+    if (normX > 0.15 && impactSpeed > 10) {
+      const isFrontFuelRailBroken = (dmg.frontCrumple ?? 0) > 2.2 || severity > 0.38;
+      if (isFrontFuelRailBroken) {
+        fuel.fuelRailBroken = true;
+      }
 
-        // Immediately spill & ignite fuel under the rear of the car
-        const fAnchor = getVehicleAnchor(car, 'fuel');
-        addOrGrowFluidStain(world, fAnchor.x, fAnchor.y, 'fuel');
-        if (world.stains && world.stains.length > 0) {
-          for (const st of world.stains) {
-            if (st.type === 'fuel') {
-              const dist = Math.hypot(st.x - fAnchor.x, st.y - fAnchor.y);
-              if (dist < 28) {
-                st.onFire = true;
-                st.fireIntensity = 0.85;
-                st.maxRadius = Math.max(st.maxRadius, 26);
+      // Detailed collision probability calculation (Kmh based)
+      const impactKmh = impactSpeed * 0.36;
+      if (!dmg.underHoodSteam) dmg.underHoodSteam = 'none';
+      if (!dmg.underHoodSmoke) dmg.underHoodSmoke = 'none';
+
+      if (impactKmh >= 25 && impactKmh <= 45) {
+        // Легкий удар (25–45 км/ч / бампер и радиатор):
+        // Шанс пара: 10% (тонкая белая струйка, если треснул бачок).
+        // Шанс дыма: 0%.
+        if (Math.random() < 0.10) {
+          dmg.underHoodSteam = 'thin';
+          dmg.engineSmoking = true;
+        }
+      } else if (impactKmh > 45 && impactKmh <= 75) {
+        // Средний удар (45–75 км/ч / замятие капота):
+        // Шанс пара: 40% (плотное облако).
+        // Шанс сизого масляного дыма: 15%.
+        if (Math.random() < 0.40) {
+          dmg.underHoodSteam = 'dense';
+          dmg.engineSmoking = true;
+        } else if (Math.random() < 0.30) {
+          dmg.underHoodSteam = 'thin';
+          dmg.engineSmoking = true;
+        }
+        
+        if (Math.random() < 0.15) {
+          dmg.underHoodSmoke = 'oil_blue';
+          dmg.engineSmoking = true;
+        }
+      } else if (impactKmh > 75) {
+        // Тяжелый удар (75+ км/ч / двигатель ушел назад):
+        // Шанс пара: 70% (гейзер или плотный).
+        // Шанс дыма: 40% (густой серый дым масла + черный дым проводки).
+        // Шанс открытого пламени: 3%!
+        if (Math.random() < 0.30) {
+          dmg.underHoodSteam = 'geyser';
+          dmg.engineSmoking = true;
+        } else if (Math.random() < 0.80) {
+          dmg.underHoodSteam = 'dense';
+          dmg.engineSmoking = true;
+        }
+        
+        if (Math.random() < 0.40) {
+          dmg.underHoodSmoke = 'oil_gray_wiring_black';
+          dmg.engineSmoking = true;
+        }
+        if (Math.random() < 0.03 && !dmg.isFullyBurnt && !dmg.engineFire && !dmg.cabinFire && !dmg.underHoodSmolder && !dmg.fuelTankFire) {
+          dmg.fireOrigin = 'front';
+          dmg.underHoodSmolder = true;
+          dmg.fireTimer = 0;
+          dmg.engineSmoking = true;
+          dmg.engineFire = false;
+          dmg.fuelTankFire = false;
+          dmg.cabinFire = false;
+          dmg.fireProgress = 0;
+          dmg.fireIntensity = 0;
+          dmg.underHoodSmoke = 'oil_gray_wiring_black';
+          if (car.isPlayerControlled && (world as any).player) {
+            addPlayerNotification((world as any).player, '⚠️ Из-под капота повалил едкий серый дым! Повреждена топливная рампа, тление в моторном отсеке!', 'warning');
+          }
+        }
+      }
+    }
+
+    if (!dmg.isFullyBurnt && !dmg.engineFire && !dmg.cabinFire && !dmg.underHoodSmolder && !dmg.fuelTankFire) {
+      // Check REAR or TANK AREA collision ignition (Fuel Tank / Puddle fire)
+      // Occurs when the rear or side near the fuel tank is crushed:
+      // Tank / filler neck punctures, gasoline leaks and flashes from metal friction sparks or hot exhaust
+      if (normX <= 0.15 && fuel.tankPunctured) {
+        const hasIgnitionSource = (scrapeSpeed > 14 || impactSpeed > 30 || severity > 0.44 || isEngineHot);
+        if (hasIgnitionSource && Math.random() < 0.04) {
+          dmg.fireOrigin = 'rear';
+          dmg.fuelTankFire = true;
+          dmg.fireTimer = 0;
+          dmg.engineSmoking = false; // Engine at the front is fine!
+          dmg.underHoodSmolder = false;
+          dmg.engineFire = false;
+          dmg.cabinFire = false;
+          dmg.fireProgress = 0.15;
+          dmg.fireIntensity = 0.6;
+          dmg.groundPuddleIgnited = true;
+
+          // Immediately spill & ignite fuel under the rear of the car
+          const fAnchor = getVehicleAnchor(car, 'fuel');
+          addOrGrowFluidStain(world, fAnchor.x, fAnchor.y, 'fuel');
+          if (world.stains && world.stains.length > 0) {
+            for (const st of world.stains) {
+              if (st.type === 'fuel') {
+                const dist = Math.hypot(st.x - fAnchor.x, st.y - fAnchor.y);
+                if (dist < 28) {
+                  st.onFire = true;
+                  st.fireIntensity = 0.85;
+                  st.maxRadius = Math.max(st.maxRadius, 26);
+                }
               }
             }
           }
-        }
-        if (car.isPlayerControlled && (world as any).player) {
-          addPlayerNotification((world as any).player, '🔥 ВСПЫХНУЛ БЕНЗОБАК И РАЗЛИВШЕЕСЯ ТОПЛИВО СЗАДИ! Огонь охватил заднюю часть и днище машины!', 'warning');
+          if (car.isPlayerControlled && (world as any).player) {
+            addPlayerNotification((world as any).player, '🔥 ВСПЫХНУЛ БЕНЗОБАК И РАЗЛИВШЕЕСЯ ТОПЛИВО СЗАДИ! Огонь охватил заднюю часть и днище машины!', 'warning');
+          }
         }
       }
+    }
+  } else {
+    // Force clean trailer engine / fuel states
+    if (eng) {
+      eng.radiatorPunctured = false;
+      eng.oilPunctured = false;
+      eng.engineRunning = false;
+      eng.engineKnocking = false;
+      eng.engineStalled = false;
+      eng.overheatingSteam = false;
+      eng.oilPressure = 0;
+      eng.starterWorking = false;
+      eng.isSeized = false;
+      eng.transmissionJammed = false;
+      eng.hoodOpen = false;
+    }
+    if (fuel) {
+      fuel.tankPunctured = false;
+      fuel.fuelRailBroken = false;
+      fuel.tankLevel = 0;
+      fuel.tankCapacity = 0;
+    }
+    if (dmg) {
+      dmg.hoodBuckled = false;
+      dmg.engineSmoking = false;
+      dmg.underHoodSmolder = false;
+      dmg.underHoodSteam = 'none';
+      dmg.underHoodSmoke = 'none';
+      dmg.engineFire = false;
+      dmg.fuelTankFire = false;
+      dmg.cabinFire = false;
     }
   }
 
@@ -1254,18 +1379,21 @@ export function getVehicleAnchor(
   const sinA = Math.sin(car.angle);
   const L = car.length;
   const W = car.width;
+  const carType = car.type || 'sedan';
   
   let f = 0; // localForward
   let r = 0; // localRight
   
-  const isTruck = car.type.startsWith('truck_') || car.type === 'cement_mixer' || car.type === 'garbage_truck';
-  const isRearEngineBus = car.type === 'bus' || car.type === 'bus_minibus';
+  const isTruck = carType.startsWith('truck_') || carType === 'cement_mixer' || carType === 'garbage_truck' || carType === 'pickup_heavy' || carType === 'delivery_truck';
+  const isTractor = carType.startsWith('tractor_');
+  const isBike = carType.startsWith('moto_') || carType.startsWith('moped_');
+  const isRearEngineBus = carType === 'bus' || carType === 'bus_minibus';
   
   if (type === 'radiator') {
     if (isRearEngineBus) {
       f = -0.45 * L;
       r = 0;
-    } else if (isTruck) {
+    } else if (isTruck || isTractor) {
       f = 0.42 * L;
       r = 0;
     } else {
@@ -1276,7 +1404,7 @@ export function getVehicleAnchor(
     if (isRearEngineBus) {
       f = -0.45 * L;
       r = 0;
-    } else if (isTruck) {
+    } else if (isTruck || isTractor) {
       f = 0.30 * L;
       r = 0;
     } else {
@@ -1285,26 +1413,49 @@ export function getVehicleAnchor(
     }
   } else if (type === 'fuel' || type === 'fuel_left' || type === 'fuel_right') {
     if (isTruck) {
-      // Fuel tanks on the SIDES RIGHT BEHIND THE CAB (+0.05 * L, ±0.45 * W)
       f = 0.05 * L;
-      r = type === 'fuel_left' ? -0.45 * W : (type === 'fuel_right' ? 0.45 * W : (Math.random() < 0.5 ? -0.45 * W : 0.45 * W));
+      r = type === 'fuel_left' ? -0.48 * W : (type === 'fuel_right' ? 0.48 * W : (Math.random() < 0.5 ? -0.48 * W : 0.48 * W));
+    } else if (isTractor) {
+      f = -0.42 * L;
+      r = 0.28 * W;
+    } else if (isBike) {
+      f = 0.08 * L;
+      r = 0;
     } else if (isRearEngineBus) {
-      f = -0.20 * L;
-      r = 0.30 * W;
+      f = -0.15 * L;
+      r = 0.48 * W;
     } else {
-      f = -0.28 * L;
-      r = 0.25 * W;
+      f = -0.35 * L;
+      r = 0.45 * W;
     }
   } else if (type === 'exhaust') {
-    if (isRearEngineBus) {
-      f = -0.50 * L;
-      r = -0.35 * W;
+    if (isTractor) {
+      // MTZ Tractor: Vertical hood exhaust stack on front-right hood
+      f = 0.22 * L;
+      r = -0.38 * W;
+    } else if ((carType as string) === 'truck_tractor' || (carType as string) === 'truck_dumper' || (carType as string) === 'truck_dump' || (carType as string) === 'truck_tanker' || (carType as string) === 'cement_mixer' || (carType as string) === 'garbage_truck') {
+      // Heavy Truck: Vertical exhaust stack behind cabin
+      f = 0.08 * L;
+      r = -0.42 * W;
     } else if (isTruck) {
-      f = -0.48 * L;
-      r = -0.35 * W;
-    } else {
+      // Medium / Light Truck: Side exit pipe under chassis frame
+      f = -0.05 * L;
+      r = -0.45 * W;
+    } else if (isBike) {
+      // Motorcycle / Moped: Right side chrome pipe
+      f = -0.35 * L;
+      r = 0.38 * W;
+    } else if (carType === 'muscle_classic' || carType === 'muscle' || carType === 'supercar') {
+      // Muscle / Supercar: Side rocker pipe or rear center pipe
+      f = carType === 'muscle_classic' ? -0.05 * L : -0.50 * L;
+      r = carType === 'muscle_classic' ? -0.48 * W : 0;
+    } else if (isRearEngineBus) {
       f = -0.50 * L;
-      r = -0.30 * W;
+      r = -0.40 * W;
+    } else {
+      // Standard Passenger Cars
+      f = -0.50 * L;
+      r = -0.32 * W;
     }
   }
 
@@ -1318,9 +1469,37 @@ export function addOrGrowFluidStain(
   world: GameWorld, 
   x: number, 
   y: number, 
-  type: 'oil' | 'coolant' | 'fuel'
+  type: FluidStainType
 ) {
   if (!world.stains) world.stains = [];
+
+  // If water stain, douse any overlapping fire stains immediately
+  if (type === 'water') {
+    for (const st of world.stains) {
+      if (st.onFire) {
+        const dx = st.x - x;
+        const dy = st.y - y;
+        if (dx * dx + dy * dy < (st.radius + 18) * (st.radius + 18)) {
+          st.onFire = false;
+          st.fireIntensity = 0;
+          if (world.particles) {
+            world.particles.push({
+              x: st.x,
+              y: st.y,
+              vx: (Math.random() - 0.5) * 16,
+              vy: -25 - Math.random() * 20,
+              radius: 4 + Math.random() * 4,
+              color: '#f8fafc',
+              alpha: 0.75,
+              life: 0,
+              maxLife: 0.65,
+              type: 'engine_smoke'
+            });
+          }
+        }
+      }
+    }
+  }
   
   // Find nearby existing stain of same type to grow - reduced radius from 22 to 10 for continuous track support
   for (const stain of world.stains) {
@@ -1329,7 +1508,7 @@ export function addOrGrowFluidStain(
       const dy = stain.y - y;
       if (dx * dx + dy * dy < 10 * 10) {
         stain.radius = Math.min(stain.maxRadius, stain.radius + 0.18);
-        stain.life = Math.max(0, stain.life - 10); // Refresh lifespan
+        stain.life = Math.max(0, stain.life - 8); // Refresh lifespan
         stain.alpha = Math.min(0.85, stain.alpha + 0.05);
         return;
       }
@@ -1341,12 +1520,12 @@ export function addOrGrowFluidStain(
       id: Math.random().toString(36).substring(2, 9),
       x,
       y,
-      radius: 2.5,
-      maxRadius: 8 + Math.random() * 12,
+      radius: type === 'water' ? 2.2 : 2.5,
+      maxRadius: type === 'water' ? (6 + Math.random() * 4) : (8 + Math.random() * 12),
       type,
-      alpha: type === 'oil' ? 0.75 : (type === 'coolant' ? 0.65 : 0.45),
+      alpha: type === 'oil' ? 0.75 : (type === 'coolant' ? 0.65 : (type === 'water' ? 0.60 : 0.45)),
       life: 0,
-      maxLife: 180 + Math.random() * 120 // Lives 3-5 minutes (180s - 300s)
+      maxLife: type === 'water' ? (60 + Math.random() * 30) : (180 + Math.random() * 120)
     });
   }
 }
@@ -1365,14 +1544,60 @@ export function updateVehicleSystems(car: Vehicle, dt: number, world: GameWorld)
   const fuel = car.fuelSystem;
   const dmg = car.damage;
 
-  // Step transient softbody elastic jiggle & vibration dynamics
-  if (dmg.deformedVertices) {
+  // Check if any vertices require progressive plastic or elastic simulation
+  const needsDeformSimulation = dmg.deformedVertices && dmg.deformedVertices.some(v => 
+    (v.targetOffsetX !== undefined && Math.abs(v.targetOffsetX - (v.offsetX || 0)) > 0.02) || 
+    (v.targetOffsetY !== undefined && Math.abs(v.targetOffsetY - (v.offsetY || 0)) > 0.02) || 
+    (v.velX !== undefined && (Math.abs(v.velX) > 0.02 || Math.abs(v.velY || 0) > 0.02 || Math.abs(v.elasticX || 0) > 0.02 || Math.abs(v.elasticY || 0) > 0.02))
+  );
+
+  // Step progressive softbody plastic crumple & transient elastic jiggle dynamics
+  if (needsDeformSimulation && dmg.deformedVertices) {
     const kSpring = 160;  // Spring stiffness
     const cDamping = 18;  // Damping factor
     const clampedDt = Math.min(0.05, Math.max(0.001, dt));
+    const crumpleRate = Math.min(1.0, 18.0 * clampedDt); // Smooth multi-frame crumple progression (~80-120ms)
 
     for (const v of dmg.deformedVertices) {
       if (!v) continue;
+
+      const vLen = Math.hypot(v.localX, v.localY) || 1;
+      const maxAllowedOffset = Math.min(10.0, Math.max(2.5, vLen * 0.32));
+
+      // Sanitize non-finite values
+      if (!isFinite(v.targetOffsetX || 0)) v.targetOffsetX = 0;
+      if (!isFinite(v.targetOffsetY || 0)) v.targetOffsetY = 0;
+      if (!isFinite(v.offsetX || 0)) v.offsetX = 0;
+      if (!isFinite(v.offsetY || 0)) v.offsetY = 0;
+      if (!isFinite(v.elasticX || 0)) v.elasticX = 0;
+      if (!isFinite(v.elasticY || 0)) v.elasticY = 0;
+
+      // Hard clamp target offsets
+      if (v.targetOffsetX !== undefined && v.targetOffsetY !== undefined) {
+        const tDist = Math.hypot(v.targetOffsetX, v.targetOffsetY);
+        if (tDist > maxAllowedOffset) {
+          v.targetOffsetX = (v.targetOffsetX / tDist) * maxAllowedOffset;
+          v.targetOffsetY = (v.targetOffsetY / tDist) * maxAllowedOffset;
+        }
+      }
+
+      // Smooth progressive plastic deformation towards target offset
+      if (v.targetOffsetX !== undefined && v.targetOffsetY !== undefined) {
+        v.offsetX += (v.targetOffsetX - v.offsetX) * crumpleRate;
+        v.offsetY += (v.targetOffsetY - v.offsetY) * crumpleRate;
+        if (Math.abs(v.targetOffsetX - v.offsetX) < 0.04 && Math.abs(v.targetOffsetY - v.offsetY) < 0.04) {
+          v.offsetX = v.targetOffsetX;
+          v.offsetY = v.targetOffsetY;
+        }
+      }
+
+      // Hard clamp current offsets
+      const oDist = Math.hypot(v.offsetX, v.offsetY);
+      if (oDist > maxAllowedOffset) {
+        v.offsetX = (v.offsetX / oDist) * maxAllowedOffset;
+        v.offsetY = (v.offsetY / oDist) * maxAllowedOffset;
+      }
+
       if (v.velX !== undefined && v.velY !== undefined) {
         let elX = v.elasticX || 0;
         let elY = v.elasticY || 0;
@@ -1414,6 +1639,33 @@ export function updateVehicleSystems(car: Vehicle, dt: number, world: GameWorld)
         }
       }
     }
+  }
+
+  // Trailers do not have engines, fuel systems, radiators, or internal thermal/fire mechanics
+  if (isTrailerVehicle(car)) return;
+
+  // Fast-path: completely skip inactive parked/stationary cars with engine off, no fire, and no leaks
+  const isVehicleInactive = !eng.engineRunning && 
+    !eng.radiatorPunctured && 
+    !eng.oilPunctured && 
+    !fuel.tankPunctured && 
+    !fuel.fuelRailBroken && 
+    !dmg.engineFire && 
+    !dmg.cabinFire && 
+    !dmg.fuelTankFire && 
+    !dmg.underHoodSmolder &&
+    !dmg.underHoodSteam &&
+    !dmg.underHoodSmoke &&
+    eng.temperature <= 21 && 
+    Math.abs(car.speed) < 0.1 && 
+    !car.isPlayerControlled;
+
+  if (isVehicleInactive) {
+    eng.temperature = 20;
+    car.engineTemp = 20;
+    eng.overheatingSteam = false;
+    eng.oilPressure = 0;
+    return;
   }
 
   const cosA = Math.cos(car.angle);
@@ -1460,16 +1712,25 @@ export function updateVehicleSystems(car: Vehicle, dt: number, world: GameWorld)
 
   // 2. ENGINE THERMAL DYNAMICS & OVERHEATING
   if (eng.engineRunning) {
-    const heatGen = 3.5 + (Math.abs(car.speed) / 100) * 8.0;
+    const rpmNorm = Math.max(0.2, (eng.engineRPM || 800) / 3800);
+    const throttleRatio = (car as any)._lastThrottle !== undefined ? (car as any)._lastThrottle : 0.4;
+    const baseHeat = 2.4;
+    // Combustion heat scales quadratically with RPM and linearly with throttle
+    const heatGen = (baseHeat + Math.pow(rpmNorm, 1.8) * 8.8) * (0.45 + throttleRatio * 0.55);
+
     let cooling = 0;
     if (eng.radiatorWater > 10) {
-      const coolingFactor = (eng.radiatorWater / 100) * (1 + (Math.abs(car.speed) / 80) * 0.5);
-      cooling = (eng.temperature - 85) * 0.8 * coolingFactor;
+      // Radiator cooling: base fan flow + ram-air effect through grille at speed
+      const airFlowKmh = Math.abs(car.speed) * 0.36;
+      const ramAirFactor = 1.0 + (airFlowKmh / 55.0) * 1.5;
+      const coolingFactor = (eng.radiatorWater / 100) * ramAirFactor;
+      cooling = (eng.temperature - 84) * 0.85 * coolingFactor;
     } else {
-      cooling = (eng.temperature - 20) * 0.01;
+      // Dry engine cooling (convection through metal surface only)
+      cooling = (eng.temperature - 20) * 0.02;
     }
 
-    eng.temperature = Math.min(140, Math.max(20, eng.temperature + (heatGen - cooling) * dt));
+    eng.temperature = Math.min(145, Math.max(20, eng.temperature + (heatGen - cooling) * dt));
     car.engineTemp = eng.temperature;
 
     if (eng.temperature > 102) {
@@ -1706,6 +1967,182 @@ export function updateVehicleSystems(car: Vehicle, dt: number, world: GameWorld)
     }
   } else {
     (car as any)._lastFuelAnchor = null;
+  }
+
+  // 5. UNIFIED FLUID STORAGE SYSTEM (Tankers, Water Trucks, Barrel Trailers)
+  ensureVehicleFluidTank(car);
+  if (car.fluidTank && car.fluidTank.capacity > 0) {
+    const fTank = car.fluidTank;
+
+    // Check severe structural damage, crumple, or fire rupture
+    const isTankHeavilyDamaged = (
+      dmg.rearCrumple > 3.5 || 
+      dmg.leftDent > 2.0 || 
+      dmg.rightDent > 2.0 || 
+      dmg.frontLeftDent > 2.8 || 
+      dmg.frontRightDent > 2.8 || 
+      dmg.rearLeftDent > 2.8 || 
+      dmg.rearRightDent > 2.8 || 
+      !!dmg.fuelTankFire ||
+      !!dmg.cabinFire ||
+      !!dmg.engineFire
+    );
+
+    if (isTankHeavilyDamaged && !fTank.isPunctured) {
+      fTank.isPunctured = true;
+    }
+
+    const halfL = car.length / 2;
+    const rearOffset = car.type === 'trailer_barrel' ? -halfL * 0.75 : -halfL * 0.65;
+    const tankAnchor = {
+      x: car.x + cosA * rearOffset,
+      y: car.y + sinA * rearOffset
+    };
+
+    const targetStainType = liquidTypeToStainType(fTank.liquidType);
+
+    const spawnCisternStain = (wx: number, wy: number, isMajorSpill: boolean) => {
+      const stainRadius = isMajorSpill ? (3.8 + Math.random() * 2.2) : (1.6 + Math.random() * 1.2);
+      const stainMaxRadius = isMajorSpill ? (12 + Math.random() * 4) : (5.5 + Math.random() * 2.5);
+      const stainAlpha = targetStainType === 'oil' ? 0.80 : (targetStainType === 'coolant' ? 0.70 : (targetStainType === 'water' ? 0.60 : 0.65));
+
+      let merged = false;
+      for (const st of world.stains) {
+        if (st.type === targetStainType) {
+          const dx = st.x - wx;
+          const dy = st.y - wy;
+          const mergeDist = isMajorSpill ? 14 : 7;
+          if (dx * dx + dy * dy < mergeDist * mergeDist) {
+            st.radius = Math.min(st.maxRadius, st.radius + (isMajorSpill ? 0.35 : 0.15));
+            st.maxRadius = Math.max(st.maxRadius, stainMaxRadius);
+            st.life = Math.max(0, st.life - 10);
+            st.alpha = Math.min(0.85, st.alpha + 0.05);
+            merged = true;
+            break;
+          }
+        }
+      }
+
+      if (!merged && world.stains.length < 600) {
+        world.stains.push({
+          id: `tank_stain_${Date.now()}_${Math.random()}`,
+          x: wx,
+          y: wy,
+          radius: stainRadius,
+          maxRadius: stainMaxRadius,
+          type: targetStainType,
+          alpha: stainAlpha,
+          life: 0,
+          maxLife: targetStainType === 'water' ? (60 + Math.random() * 30) : (200 + Math.random() * 100),
+          onFire: false,
+          fireIntensity: 0
+        });
+      }
+
+      // If water is spilled, douse overlapping ground fire!
+      if (targetStainType === 'water') {
+        for (const st of world.stains) {
+          if (st.onFire) {
+            const dx = st.x - wx;
+            const dy = st.y - wy;
+            if (dx * dx + dy * dy < 28 * 28) {
+              st.onFire = false;
+              st.fireIntensity = 0;
+              if (world.particles) {
+                world.particles.push({
+                  x: st.x,
+                  y: st.y,
+                  vx: (Math.random() - 0.5) * 16,
+                  vy: -25 - Math.random() * 20,
+                  radius: 4 + Math.random() * 4,
+                  color: '#f8fafc',
+                  alpha: 0.75,
+                  life: 0,
+                  maxLife: 0.65,
+                  type: 'engine_smoke'
+                });
+              }
+            }
+          }
+        }
+      }
+
+      // Droplet particles
+      if (isMajorSpill && world.particles && Math.random() < 0.35) {
+        const pColor = targetStainType === 'water' ? (Math.random() < 0.6 ? '#38bdf8' : '#e0f2fe') :
+                       (targetStainType === 'fuel' ? (Math.random() < 0.7 ? '#f59e0b' : '#ca8a04') :
+                       (targetStainType === 'oil' ? '#0f172a' : '#22c55e'));
+        world.particles.push({
+          x: wx,
+          y: wy,
+          vx: (Math.random() - 0.5) * 30,
+          vy: (Math.random() - 0.5) * 30,
+          radius: 1.2 + Math.random() * 1.5,
+          color: pColor,
+          alpha: 0.85,
+          life: 0,
+          maxLife: 0.28,
+          type: 'debris'
+        });
+      }
+    };
+
+    // A. Puncture / High-speed rupture leak
+    if (fTank.isPunctured && fTank.currentVolume > 0) {
+      const pRate = fTank.punctureRatePerSec || 16.0; // L/s
+      const drained = Math.min(fTank.currentVolume, pRate * dt);
+      fTank.currentVolume = Math.max(0, fTank.currentVolume - drained);
+
+      const last = fTank._lastLeakAnchor;
+      if (last) {
+        const dx = tankAnchor.x - last.x;
+        const dy = tankAnchor.y - last.y;
+        const dist = Math.hypot(dx, dy);
+        if (dist > 10) {
+          const steps = Math.min(10, Math.ceil(dist / 14));
+          for (let s = 1; s <= steps; s++) {
+            const t = s / steps;
+            spawnCisternStain(last.x + dx * t + (Math.random() * 4 - 2), last.y + dy * t + (Math.random() * 4 - 2), true);
+          }
+        } else {
+          spawnCisternStain(tankAnchor.x + (Math.random() * 6 - 3), tankAnchor.y + (Math.random() * 6 - 3), true);
+        }
+      } else {
+        spawnCisternStain(tankAnchor.x, tankAnchor.y, true);
+      }
+      fTank._lastLeakAnchor = { x: tankAnchor.x, y: tankAnchor.y };
+    }
+    // B. Manual Drain Valve opened (dumping liquid on ground)
+    else if (fTank.drainValveOpen && fTank.currentVolume > 0) {
+      const drainRate = 8.0; // 8 L/s
+      const drained = Math.min(fTank.currentVolume, drainRate * dt);
+      fTank.currentVolume = Math.max(0, fTank.currentVolume - drained);
+      spawnCisternStain(tankAnchor.x + (Math.random() * 4 - 2), tankAnchor.y + (Math.random() * 4 - 2), true);
+      fTank._lastLeakAnchor = { x: tankAnchor.x, y: tankAnchor.y };
+    }
+    // C. Non-Hermetic Idle Micro-Leaks (Water Trucks & Barrel Trailers)
+    else if (!fTank.isHermetic && fTank.currentVolume > 0) {
+      const currentSpeed = Math.hypot(car.vx, car.vy);
+      const isIdleOrParked = currentSpeed < 0.6 || car.isParked;
+      
+      fTank.idleLeakTimer = (fTank.idleLeakTimer || 0) + dt;
+
+      // Leak interval: while idle/parked, drips consistently to leave puddles
+      const dripInterval = isIdleOrParked ? 1.5 : 4.0;
+      if (fTank.idleLeakTimer >= dripInterval) {
+        fTank.idleLeakTimer = 0;
+        const dripChance = fTank.leakProbabilityPerSec !== undefined ? fTank.leakProbabilityPerSec : 0.3;
+        if (Math.random() < (isIdleOrParked ? Math.max(0.65, dripChance * 2.5) : dripChance)) {
+          const dripAmount = (fTank.dripRatePerSec || 0.12) * (isIdleOrParked ? 1.5 : 0.8);
+          fTank.currentVolume = Math.max(0, fTank.currentVolume - dripAmount);
+          spawnCisternStain(tankAnchor.x + (Math.random() * 4 - 2), tankAnchor.y + (Math.random() * 4 - 2), false);
+        }
+      }
+      fTank._lastLeakAnchor = null;
+    } else {
+      // Hermetic tanks (like fuel tankers) do not leak when intact
+      fTank._lastLeakAnchor = null;
+    }
   }
 
   if (fuel.detonation || fuel.fuelQuality < 50) {
@@ -2364,6 +2801,16 @@ export function updatePlayerPedestrianPhysics(
     }
   }
 
+  // Explicit collision with Gas Station structural islands (including LPG island & propane tank)
+  for (const sub of GAS_STATION_STRUCTURAL_SUB_BOXES) {
+    if (newX + pedRadius > sub.x && newX - pedRadius < sub.x + sub.width &&
+        newY + pedRadius > sub.y && newY - pedRadius < sub.y + sub.height) {
+      const res = checkPedestrianBoxCollision(newX, newY, pedRadius, sub);
+      newX = res.x;
+      newY = res.y;
+    }
+  }
+
   // Collision with vehicles
   if (world) {
     const nearbyVehicles = vehGrid ? vehGrid.queryRadius(newX, newY, 150) : world.vehicles;
@@ -2394,18 +2841,20 @@ export function updatePlayerPedestrianPhysics(
             player.vy += Math.sin(impactAngle) * impulseMag;
 
             // Distribute realistic impact across limbs
-            distributeImpactDamage(player, impactForce, impactAngle, true);
-            sound.playHurt();
+            if (!player.isInvincible && !player.isCleanMode) {
+              distributeImpactDamage(player, impactForce, impactAngle, true);
+              sound.playHurt();
 
-            // Clear speed-calibrated notifications
-            if (speedKmh < 12) {
-              addPlayerNotification(player, `🚗 Легкий толчок бампером (${speedKmh} км/ч). Ссадины и легкие ушибы.`, 'info');
-            } else if (speedKmh < 32) {
-              addPlayerNotification(player, `💥 Сбит автомобилем на скорости ${speedKmh} км/ч! Ушибы и растяжение!`, 'warning');
-            } else if (speedKmh < 60) {
-              addPlayerNotification(player, `💥 Тяжелое столкновение (${speedKmh} км/ч)! Перелом кости и кровотечение!`, 'warning');
-            } else {
-              addPlayerNotification(player, `🚨 Критический наезд на большой скорости (${speedKmh} км/ч)! Множественные переломы!`, 'warning');
+              // Clear speed-calibrated notifications
+              if (speedKmh < 12) {
+                addPlayerNotification(player, `🚗 Легкий толчок бампером (${speedKmh} км/ч). Ссадины и легкие ушибы.`, 'info');
+              } else if (speedKmh < 32) {
+                addPlayerNotification(player, `💥 Сбит автомобилем на скорости ${speedKmh} км/ч! Ушибы и растяжение!`, 'warning');
+              } else if (speedKmh < 60) {
+                addPlayerNotification(player, `💥 Тяжелое столкновение (${speedKmh} км/ч)! Перелом кости и кровотечение!`, 'warning');
+              } else {
+                addPlayerNotification(player, `🚨 Критический наезд на большой скорости (${speedKmh} км/ч)! Множественные переломы!`, 'warning');
+              }
             }
           }
         }
@@ -2744,7 +3193,7 @@ export function updatePlayerNeedsAndVitals(
   }
 
   // Invincibility / Creative Mode vitals override
-  if (player.isInvincible || player.isCreativeMode) {
+  if (player.isInvincible || player.isCreativeMode || player.isCleanMode) {
     player.needs.health = 100;
     player.needs.hunger = 100;
     player.needs.thirst = 100;
@@ -2939,7 +3388,7 @@ export function updatePlayerNeedsAndVitals(
     if (bs.temperature < 35.0) {
       player.needs.health = Math.max(5, (player.needs.health ?? 100) - 0.75 * dt);
     }
-  } else if (ambientTemp >= 38.0 || (player.isInVehicle && (curVehicle?.cabinSmoke ?? 0) > 0)) {
+  } else if (!player.isInvincible && !player.isCleanMode && (ambientTemp >= 38.0 || (player.isInVehicle && (curVehicle?.cabinSmoke ?? 0) > 0))) {
     // -------------------------------------------------------------------------
     // SCALDING HEAT, CO POISONING & SMOKE INHALATION DYNAMICS
     // -------------------------------------------------------------------------
@@ -3316,6 +3765,28 @@ export function updateVehiclePhysics(
 ) {
   const cfg = CAR_CONFIGS[vehicle.type] || CAR_CONFIGS.sedan;
 
+  // Trailers are unpowered passive vehicles (no driver, no autonomous engine, no NPC AI cruising)
+  if (vehicle.type.startsWith('trailer_') || vehicle.isTrailer) {
+    if (vehicle.towedById) {
+      // Position and kinematics are 100% computed in updateTrailerTowingPhysics!
+      return;
+    }
+    // Unhitched trailer: simple passive rolling friction to a halt
+    const rollingFriction = 0.92;
+    vehicle.speed *= Math.pow(rollingFriction, dt * 60);
+    vehicle.vx = Math.cos(vehicle.angle) * vehicle.speed;
+    vehicle.vy = Math.sin(vehicle.angle) * vehicle.speed;
+    vehicle.x += vehicle.vx * dt;
+    vehicle.y += vehicle.vy * dt;
+    if (Math.abs(vehicle.speed) < 0.2) {
+      vehicle.speed = 0;
+      vehicle.vx = 0;
+      vehicle.vy = 0;
+      vehicle.isParked = true;
+    }
+    return;
+  }
+
   if (vehicle.isPlayerControlled && input) {
     // --- REALISTIC PROGRESSIVE STEERING MODEL ---
     // Speed-sensitive steering: at higher speeds, steering angle is capped for stability
@@ -3344,16 +3815,32 @@ export function updateVehiclePhysics(
     const isHandbraking = input.handbrake;
     const throttle = input.forward && !input.backward ? 1.0 : 0;
     const brake = input.backward ? 1.0 : 0;
+    (vehicle as any)._lastThrottle = throttle;
     
     // --- MODULE 1 & 2: POWERTRAIN, ENGINE RPM, FUEL COMBUSTION ---
     let engineAccel = 0;
     const eng = vehicle.engineState;
     const fuel = vehicle.fuelSystem;
     
-    if (eng && eng.engineRunning) {
-      const idleRPM = 800;
-      const redlineRPM = 6200;
-      const stallThreshold = 450;
+    if (eng) {
+      let idleRPM = 800;
+      let redlineRPM = 6200;
+      let maxRPM = 8000;
+
+      if (vehicle.type === 'supercar' || vehicle.type === 'sports' || vehicle.type === 'muscle' || vehicle.type === 'muscle_classic' || vehicle.type === 'coupe_gt' || vehicle.type === 'hatch_hot') {
+        idleRPM = 900;
+        redlineRPM = 7000;
+        maxRPM = 9000;
+      } else if (vehicle.type.startsWith('truck_') || vehicle.type === 'bus' || vehicle.type === 'bus_minibus' || vehicle.type === 'cement_mixer' || vehicle.type === 'garbage_truck' || vehicle.type === 'delivery_truck') {
+        idleRPM = 600;
+        redlineRPM = 3200;
+        maxRPM = 4500;
+      } else if (vehicle.type.includes('retro') || vehicle.type.includes('classic') || vehicle.type === 'micro_car') {
+        idleRPM = 750;
+        redlineRPM = 5200;
+        maxRPM = 6500;
+      }
+      const stallThreshold = idleRPM * 0.55;
       
       // Auto transmission logic
       if (eng.transmissionType === 'AUTO') {
@@ -3371,12 +3858,31 @@ export function updateVehiclePhysics(
             input.shiftUp = false;
           } else if (input.shiftDown) {
             // Shift selector ladder: D -> N -> R -> P
+            const oldMode = eng.autoGearMode;
             if (eng.autoGearMode === 'D') eng.autoGearMode = 'N';
             else if (eng.autoGearMode === 'N') eng.autoGearMode = 'R';
             else if (eng.autoGearMode === 'R') eng.autoGearMode = 'P';
             eng.shiftCooldown = 0.3;
             sound.playButtonPress();
             input.shiftDown = false;
+
+            // Destructive shift into Park 'P' or Reverse 'R' at speed
+            if (eng.autoGearMode === 'P' && Math.abs(vehicle.speed) > 10) {
+              eng.transmissionHealth = Math.max(0, (eng.transmissionHealth ?? 100) - 45);
+              sound.playCollision(0.9);
+              vehicle.speed *= 0.15; // violent jerk / parking pawl snap
+              if (eng.transmissionHealth <= 20) eng.transmissionJammed = true;
+              if (player && player.vehicleId === vehicle.id) {
+                addPlayerNotification(player, '💥 СРЕЗАН ФИКСАТОР ПАРКИНГА (PARKING PAWL)! Переключение в "P" на ходу!', 'warning');
+              }
+            } else if (oldMode === 'N' && eng.autoGearMode === 'R' && Math.abs(vehicle.speed) > 12) {
+              eng.transmissionHealth = Math.max(0, (eng.transmissionHealth ?? 100) - 35);
+              sound.playCollision(0.8);
+              if (eng.transmissionHealth <= 20) eng.transmissionJammed = true;
+              if (player && player.vehicleId === vehicle.id) {
+                addPlayerNotification(player, '⚙️ УДАР ПО АКПП! Включение задней передачи "R" на ходу!', 'warning');
+              }
+            }
           }
         }
 
@@ -3393,11 +3899,12 @@ export function updateVehiclePhysics(
         } else if (eng.autoGearMode === 'D') {
           if (eng.currentGear <= 0) eng.currentGear = 1;
 
-          // Smooth automatic upshifts & downshifts with cooldown
-          if (eng.shiftCooldown <= 0) {
-            const upshiftRPM = throttle > 0.85 ? 5200 : 3300;
-            const downshiftRPM = throttle > 0.85 ? 3500 : 1750;
-            if (eng.engineRPM > upshiftRPM && eng.currentGear < 5) {
+          // Smooth automatic upshifts & downshifts with cooldown (only if engine is running)
+          if (eng.engineRunning && eng.shiftCooldown <= 0) {
+            const maxForwardGear = (eng.gearRatios?.length || 7) - 2;
+            const upshiftRPM = throttle > 0.85 ? redlineRPM * 0.84 : redlineRPM * 0.52;
+            const downshiftRPM = throttle > 0.85 ? redlineRPM * 0.56 : redlineRPM * 0.28;
+            if (eng.engineRPM > upshiftRPM && eng.currentGear < maxForwardGear) {
               eng.currentGear++;
               eng.shiftCooldown = 0.45;
               sound.playGearShift();
@@ -3416,14 +3923,17 @@ export function updateVehiclePhysics(
         eng.shiftCooldown = Math.max(0, (eng.shiftCooldown || 0) - dt);
         if (eng.transmissionJammed) {
           if (input.shiftUp || input.shiftDown) {
-            sound.playCollision(0.2);
+            sound.playCollision(0.3);
             input.shiftUp = false;
             input.shiftDown = false;
+            if (player && player.vehicleId === vehicle.id) {
+              addPlayerNotification(player, '⚙️ КОРОБКА ПЕРЕДАЧ ЗАБЛОКИРОВАНА! Требуется ремонт в PIT-STOP.', 'warning');
+            }
           }
         } else {
-          eng.shiftCooldown = Math.max(0, (eng.shiftCooldown || 0) - dt);
           if (input.shiftUp && eng.shiftCooldown <= 0) {
-            if (eng.currentGear < 5) {
+            const maxForwardGear = (eng.gearRatios?.length || 7) - 2;
+            if (eng.currentGear < maxForwardGear) {
               eng.currentGear++;
               sound.playGearShift();
               eng.shiftCooldown = 0.16;
@@ -3435,12 +3945,17 @@ export function updateVehiclePhysics(
               eng.currentGear--;
               sound.playGearShift();
 
-              // Catastrophic downshift / reverse lock at speed
-              if (eng.currentGear === -1 && Math.abs(vehicle.speed) > 25) {
-                eng.transmissionHealth = Math.max(0, (eng.transmissionHealth ?? 100) - 45);
-                sound.playCollision(0.7);
-                if (eng.transmissionHealth <= 25) {
+              // Catastrophic downshift into reverse while moving forward at speed
+              if (eng.currentGear === -1 && Math.abs(vehicle.speed) > 8) {
+                const damage = Math.min(65, 20 + Math.abs(vehicle.speed) * 0.9);
+                eng.transmissionHealth = Math.max(0, (eng.transmissionHealth ?? 100) - damage);
+                sound.playCollision(0.85);
+                vehicle.speed *= 0.3; // sudden violent deceleration
+                if (eng.transmissionHealth <= 20) {
                   eng.transmissionJammed = true;
+                }
+                if (player && player.vehicleId === vehicle.id) {
+                  addPlayerNotification(player, '⚙️ ТЯЖЕЛЫЙ СКРЕЖЕТ В КПП! Задняя передача включена во время движения!', 'warning');
                 }
               }
               eng.shiftCooldown = 0.16;
@@ -3458,158 +3973,278 @@ export function updateVehiclePhysics(
           eng.clutchPedal += (1.0 - eng.clutchPedal) * Math.min(1.0, 20 * dt);
         }
 
-        // Manual stalling:
-        // 1. In gear with clutch engaged, stopped without throttle
-        if (eng.currentGear !== 0 && eng.clutchPedal > 0.85 && Math.abs(vehicle.speed) < 4 && throttle < 0.12) {
-          eng.isStalled = true;
-          eng.engineRunning = false;
-          sound.playEngineStall();
-        }
-        // 2. High gear lugging at very low speed
-        if (eng.currentGear > 1 && eng.clutchPedal > 0.75 && Math.abs(vehicle.speed) < 10 && throttle < 0.25) {
-          eng.isStalled = true;
-          eng.engineRunning = false;
-          sound.playEngineStall();
-        }
-        // 3. Hard braking to dead stop in gear with clutch engaged
-        if (eng.currentGear > 0 && eng.clutchPedal > 0.8 && Math.abs(vehicle.speed) < 3 && brake > 0 && throttle === 0) {
-          if (eng.engineRPM < stallThreshold) {
+        // Manual stalling (only if engine is running)
+        if (eng.engineRunning) {
+          let hasStalled = false;
+          // 1. In gear with clutch engaged, stopped without throttle
+          if (eng.currentGear !== 0 && eng.clutchPedal > 0.85 && Math.abs(vehicle.speed) < 4 && throttle < 0.12) {
+            hasStalled = true;
+          }
+          // 2. High gear lugging at very low speed
+          else if (eng.currentGear > 1 && eng.clutchPedal > 0.75 && Math.abs(vehicle.speed) < 10 && throttle < 0.25) {
+            hasStalled = true;
+          }
+          // 3. Hard braking to dead stop in gear with clutch engaged
+          else if (eng.currentGear > 0 && eng.clutchPedal > 0.8 && Math.abs(vehicle.speed) < 3 && brake > 0 && throttle === 0) {
+            if (eng.engineRPM < stallThreshold) {
+              hasStalled = true;
+              vehicle.speed = 0;
+            }
+          }
+
+          if (hasStalled) {
             eng.isStalled = true;
             eng.engineRunning = false;
-            vehicle.speed = 0;
+            eng.engineRPM = 0;
+            vehicle.speed *= 0.3; // Physical shudder / abrupt torque loss
             sound.playEngineStall();
+            if (player && player.vehicleId === vehicle.id) {
+              addPlayerNotification(player, '🛑 Двигатель заглох! (Сброс оборотов ниже нормы / отпущено сцепление)', 'warning');
+            }
           }
         }
       }
 
-      // Calculate RPM & engine response
-      const currentGearRatio = eng.gearRatios[eng.currentGear + 1] !== undefined ? eng.gearRatios[eng.currentGear + 1] : 0;
-      const gearRatio = Math.abs(currentGearRatio);
-      const v_speed = Math.abs(vehicle.speed);
-      
-      const maxSpeedPx = cfg.maxSpeed * 2.7778;
-      const reverseMaxSpeedPx = cfg.reverseMaxSpeed * 2.7778;
+      // Calculate RPM & engine response (only if engine is running)
+      if (eng.engineRunning) {
+        const currentGearRatio = eng.gearRatios[eng.currentGear + 1] !== undefined ? eng.gearRatios[eng.currentGear + 1] : 0;
+        const gearRatio = Math.abs(currentGearRatio);
+        const v_speed = Math.abs(vehicle.speed);
+        
+        const maxSpeedPx = cfg.maxSpeed * 2.7778;
+        const reverseMaxSpeedPx = cfg.reverseMaxSpeed * 2.7778;
 
-      // Speed corresponding to redline in current gear
-      const speedAtRedline = eng.currentGear === -1 
-        ? reverseMaxSpeedPx 
-        : (maxSpeedPx * (0.8 / Math.max(0.3, gearRatio))) * 1.05;
+        const topGearIdx = (eng.gearRatios?.length || 7) - 1;
+        const topGearRatio = Math.abs(eng.gearRatios[topGearIdx] || 0.78);
+        const firstGearRatio = Math.abs(eng.gearRatios[2] || 3.6);
 
-      const wheelDrivenRPM = idleRPM + (v_speed / Math.max(1, speedAtRedline)) * (redlineRPM - idleRPM);
+        // Speed corresponding to redline in current gear
+        const speedAtRedline = eng.currentGear === -1 
+          ? reverseMaxSpeedPx 
+          : (maxSpeedPx * (topGearRatio / Math.max(0.3, gearRatio)));
 
-      if (eng.currentGear !== 0 && (!eng.autoGearMode || eng.autoGearMode !== 'P')) {
-        let coupledRPM = wheelDrivenRPM;
-        if (eng.transmissionType === 'AUTO') {
-          const launchRPM = idleRPM + throttle * 1400;
-          coupledRPM = Math.max(launchRPM, wheelDrivenRPM);
-        } else {
-          // Manual: at launch allow slip, once rolling clutch rigidly synchronizes engine to wheels
-          if (v_speed < 10) {
-            const launchRPM = idleRPM + throttle * 1300;
+        const wheelDrivenRPM = idleRPM + (v_speed / Math.max(1, speedAtRedline)) * (redlineRPM - idleRPM);
+
+        if (eng.currentGear !== 0 && (!eng.autoGearMode || eng.autoGearMode !== 'P')) {
+          let coupledRPM = wheelDrivenRPM;
+          if (eng.transmissionType === 'AUTO') {
+            const launchRPM = idleRPM + throttle * 1400;
             coupledRPM = Math.max(launchRPM, wheelDrivenRPM);
           } else {
-            coupledRPM = wheelDrivenRPM;
+            // Manual: at launch allow slip, once rolling clutch rigidly synchronizes engine to wheels
+            if (v_speed < 10) {
+              const launchRPM = idleRPM + throttle * 1300;
+              coupledRPM = Math.max(launchRPM, wheelDrivenRPM);
+            } else {
+              coupledRPM = wheelDrivenRPM;
+            }
           }
+          const freeRevRPM = idleRPM + throttle * (redlineRPM - idleRPM);
+          const targetRPM = freeRevRPM * (1 - eng.clutchPedal) + coupledRPM * eng.clutchPedal;
+          eng.engineRPM += (targetRPM - eng.engineRPM) * Math.min(1.0, 22 * dt);
+        } else {
+          // Neutral or Park: free revving with flywheel inertia
+          const freeRevRPM = idleRPM + throttle * (redlineRPM - idleRPM);
+          eng.engineRPM += (freeRevRPM - eng.engineRPM) * Math.min(1.0, (throttle > 0.05 ? 18 : 12) * dt);
         }
-        const freeRevRPM = idleRPM + throttle * (redlineRPM - idleRPM);
-        const targetRPM = freeRevRPM * (1 - eng.clutchPedal) + coupledRPM * eng.clutchPedal;
-        eng.engineRPM += (targetRPM - eng.engineRPM) * Math.min(1.0, 22 * dt);
-      } else {
-        // Neutral or Park: free revving
-        const freeRevRPM = idleRPM + throttle * (redlineRPM - idleRPM);
-        eng.engineRPM += (freeRevRPM - eng.engineRPM) * Math.min(1.0, 18 * dt);
-      }
-      eng.engineRPM = Math.max(idleRPM - 50, Math.min(6800, eng.engineRPM));
-      
-      // Dynamic torque curve: 75% torque at idle, 100% at mid-range, 75% at redline
-      const normRPM = Math.max(0, Math.min(1.15, (eng.engineRPM - idleRPM) / (redlineRPM - idleRPM)));
-      let T_factor = 0.75 + 0.25 * Math.sin(Math.min(1.0, normRPM) * Math.PI);
-      if (normRPM > 1.0) {
-        T_factor *= Math.max(0, 1.0 - (normRPM - 1.0) * 3.0);
-      }
-      
-      // Gear acceleration multiplier (1st gear is torquiest, higher gears trade accel for top speed)
-      let gearAccelMult = 1.0;
-      if (eng.currentGear === -1) {
-        gearAccelMult = 0.95;
-      } else if (eng.currentGear > 0) {
-        gearAccelMult = (gearRatio / 3.6) * 0.55 + 0.70;
-      }
+        eng.engineRPM = Math.max(idleRPM - 50, Math.min(maxRPM, eng.engineRPM));
+        
+        // Dynamic torque curve: 75% torque at idle, 100% at mid-range, 75% at redline
+        const normRPM = Math.max(0, Math.min(1.15, (eng.engineRPM - idleRPM) / (redlineRPM - idleRPM)));
+        let T_factor = 0.75 + 0.25 * Math.sin(Math.min(1.0, normRPM) * Math.PI);
+        if (normRPM > 1.0) {
+          T_factor *= Math.max(0, 1.0 - (normRPM - 1.0) * 3.0);
+        }
 
-      // Fuel System Consequences
-      let fuelFactor = 1.0;
-      if (fuel && vehicle.requiredFuel) {
-        // 1. Wrong fuel
-        if (vehicle.requiredFuel !== 'diesel' && fuel.fuelType === 'diesel') {
-          eng.engineKnocking = true;
-          fuelFactor = 0.0;
-          if (!eng.isStalled && Math.random() < 0.02) {
-            eng.isStalled = true;
-            eng.engineRunning = false;
+        // Realistic Electronic Fuel/Ignition Rev Limiter (Отсечка: циклические микро-пропуски ~18-20 Гц и искры)
+        if (eng.engineRPM >= redlineRPM) {
+          const prevTimer = eng.revLimiterTimer || 0;
+          eng.revLimiterTimer = prevTimer + dt;
+          const cutCycle = (eng.revLimiterTimer * 20) % 1.0;
+
+          // Sustained redline operation causes engine wear and heat buildup
+          if (eng.revLimiterTimer > 3.5) {
+            eng.engineHealth = Math.max(0, (eng.engineHealth ?? 100) - 7 * dt);
+            eng.temperature = Math.min(130, (eng.temperature ?? 85) + 6 * dt);
+            if (prevTimer <= 3.5 && player && player.vehicleId === vehicle.id) {
+              addPlayerNotification(player, '⚠️ Длительное удержание в отсечке разрушает двигатель и вызываeт перегрев!', 'warning');
+            }
+            if (Math.random() < 0.3) {
+              world.particles.push({
+                x: vehicle.x, y: vehicle.y,
+                vx: -Math.cos(vehicle.angle) * 20 + (Math.random() * 10 - 5),
+                vy: -Math.sin(vehicle.angle) * 20 + (Math.random() * 10 - 5),
+                radius: 3.5, color: '#94a3b8', alpha: 0.7, life: 0, maxLife: 0.4, type: 'engine_smoke'
+              });
+            }
           }
-          if (Math.random() < 0.3) {
-            world.particles.push({
-              x: vehicle.x, y: vehicle.y, vx: -Math.cos(vehicle.angle)*20, vy: -Math.sin(vehicle.angle)*20,
-              radius: 4, color: '#e2e8f0', alpha: 0.8, life: 0, maxLife: 0.5, type: 'engine_smoke'
-            });
+
+          if (cutCycle > 0.45) {
+            // Fuel cut phase: zero torque & drop RPM slightly
+            T_factor = 0.0;
+            eng.engineRPM -= 2400 * dt;
+            if (Math.random() < 0.25) {
+              const cosA = Math.cos(vehicle.angle);
+              const sinA = Math.sin(vehicle.angle);
+              const exhaustAnchor = getVehicleAnchor(vehicle, 'exhaust');
+              world.particles.push({
+                x: exhaustAnchor.x,
+                y: exhaustAnchor.y,
+                vx: -cosA * 55 + (Math.random() * 24 - 12),
+                vy: -sinA * 55 + (Math.random() * 24 - 12),
+                radius: 2.5 + Math.random() * 1.5,
+                color: '#f97316',
+                alpha: 0.95,
+                life: 0,
+                maxLife: 0.12,
+                type: 'spark'
+              });
+            }
           }
+        } else {
+          eng.revLimiterTimer = 0;
         }
-        // 2. Sub-Octane Fuel
-        if (vehicle.requiredFuel === 'ai95' && fuel.octaneNumber === 92) {
-          fuelFactor *= 0.82;
-          if (throttle > 0.8 && Math.random() < 0.08 * dt) {
-            eng.temperature += 5;
+
+        // Cold engine viscous resistance (thick cold oil reduces available torque by ~14% until warmed up to 60°C)
+        if ((eng.temperature ?? 85) < 60) {
+          const warmupRatio = Math.max(0, Math.min(1.0, ((eng.temperature ?? 20) - 20) / 40));
+          T_factor *= (0.86 + 0.14 * warmupRatio);
+        }
+        
+        // Gear acceleration multiplier (1st gear has high torque multiplier, overdrive top gear trades acceleration for low RPM cruising)
+        let gearAccelMult = 1.0;
+        if (eng.currentGear === -1) {
+          gearAccelMult = 1.05;
+        } else if (eng.currentGear > 0) {
+          // Mechanical wheel torque advantage proportional to gear ratio
+          gearAccelMult = Math.pow(gearRatio / firstGearRatio, 0.85);
+        }
+
+        // Fuel System Consequences
+        let fuelFactor = 1.0;
+        if (fuel && vehicle.requiredFuel) {
+          // 1. Wrong fuel
+          if (vehicle.requiredFuel !== 'diesel' && fuel.fuelType === 'diesel') {
             eng.engineKnocking = true;
-            vehicle.speed *= 0.95;
-            sound.playHurt();
+            fuelFactor = 0.0;
+            if (!eng.isStalled && Math.random() < 0.02) {
+              eng.isStalled = true;
+              eng.engineRunning = false;
+            }
+            if (Math.random() < 0.3) {
+              world.particles.push({
+                x: vehicle.x, y: vehicle.y, vx: -Math.cos(vehicle.angle)*20, vy: -Math.sin(vehicle.angle)*20,
+                radius: 4, color: '#e2e8f0', alpha: 0.8, life: 0, maxLife: 0.5, type: 'engine_smoke'
+              });
+            }
+          }
+          // 2. Sub-Octane Fuel
+          if (vehicle.requiredFuel === 'ai95' && fuel.octaneNumber === 92) {
+            fuelFactor *= 0.82;
+            if (throttle > 0.8 && Math.random() < 0.08 * dt) {
+              eng.temperature += 5;
+              eng.engineKnocking = true;
+              vehicle.speed *= 0.95;
+              sound.playHurt();
+            }
+          }
+          // 3. Low Quality
+          if (fuel.fuelQuality < 65) {
+            if (Math.random() < 0.1) fuelFactor = 0;
+            if (Math.random() < 0.05) {
+              world.particles.push({
+                x: vehicle.x, y: vehicle.y, vx: -Math.cos(vehicle.angle)*20, vy: -Math.sin(vehicle.angle)*20,
+                radius: 3, color: '#111827', alpha: 0.8, life: 0, maxLife: 0.3, type: 'exhaust'
+              });
+            }
           }
         }
-        // 3. Low Quality
-        if (fuel.fuelQuality < 65) {
-          if (Math.random() < 0.1) fuelFactor = 0;
-          if (Math.random() < 0.05) {
-            world.particles.push({
-              x: vehicle.x, y: vehicle.y, vx: -Math.cos(vehicle.angle)*20, vy: -Math.sin(vehicle.angle)*20,
-              radius: 3, color: '#111827', alpha: 0.8, life: 0, maxLife: 0.3, type: 'exhaust'
-            });
+        
+        const isParkedMode = eng.transmissionType === 'AUTO' && eng.autoGearMode === 'P';
+        const isNeutralMode = (eng.transmissionType === 'AUTO' && eng.autoGearMode === 'N') || eng.currentGear === 0;
+
+        // Current gear top speed calculation
+        const gearMaxSpeedPx = maxSpeedPx * (0.8 / Math.max(0.3, gearRatio)) * 1.05;
+
+        // Calculate Engine Compression Braking & Over-Rev Retardation Force
+        let engineBrakeFactor = 0;
+        if (eng.clutchPedal > 0.3 && eng.currentGear !== 0 && !isNeutralMode && !isParkedMode) {
+          // 1. Standard throttle-off engine compression braking
+          if (throttle === 0 && eng.engineRPM > idleRPM + 400) {
+            engineBrakeFactor = (gearRatio / 3.4) * (eng.engineRPM / redlineRPM) * 85.0 * eng.clutchPedal;
+          }
+
+          // 2. Downshift / Over-rev braking (Money shift / Downshifting at high speed)
+          // Rapidly decelerates vehicle momentum via engine drag instead of instant speed teleportation
+          if (v_speed > gearMaxSpeedPx) {
+            const overSpeedRatio = (v_speed - gearMaxSpeedPx) / gearMaxSpeedPx;
+            const overRevBrake = (180.0 + overSpeedRatio * 380.0) * (gearRatio / 2.5) * eng.clutchPedal;
+            engineBrakeFactor = Math.max(engineBrakeFactor, overRevBrake);
+
+            // Transmission synchro & gear damage during over-rev
+            if (overSpeedRatio > 0.15) {
+              eng.transmissionHealth = Math.max(0, (eng.transmissionHealth ?? 100) - overSpeedRatio * 35 * dt);
+              if (eng.transmissionHealth <= 20) eng.transmissionJammed = true;
+            }
+
+            // Severe Money Shift: Catastrophic engine mechanical over-rev (valve float / bent valves / connecting rod stress)
+            if (overSpeedRatio > 0.25) {
+              eng.engineHealth = Math.max(0, (eng.engineHealth ?? 100) - overSpeedRatio * 55 * dt);
+              eng.temperature = Math.min(130, (eng.temperature ?? 85) + overSpeedRatio * 15 * dt);
+              if (eng.engineHealth <= 0) {
+                eng.isSeized = true;
+                eng.engineRunning = false;
+                eng.engineRPM = 0;
+              }
+              if (Math.random() < 0.2 * dt) {
+                sound.playCollision(0.8);
+                if (player && player.vehicleId === vehicle.id) {
+                  addPlayerNotification(player, '💥 МЕХАНИЧЕСКИЙ ПЕРЕКРУТ (MONEY SHIFT)! Клапаны загнуты, КПП разрушается!', 'warning');
+                }
+              }
+            }
           }
         }
-      }
-      
-      const isParkedMode = eng.transmissionType === 'AUTO' && eng.autoGearMode === 'P';
-      const isNeutralMode = (eng.transmissionType === 'AUTO' && eng.autoGearMode === 'N') || eng.currentGear === 0;
 
-      let driveAccel = 0;
-      if (!isParkedMode && !isNeutralMode) {
-        let effectiveThrottle = throttle;
-        // Automatic transmission creep in D or R when no pedal is pressed
-        if (eng.transmissionType === 'AUTO' && brake === 0 && throttle === 0 && Math.abs(vehicle.speed) < 16) {
-          effectiveThrottle = 0.16;
+        let driveAccel = 0;
+        if (!isParkedMode && !isNeutralMode) {
+          let effectiveThrottle = throttle;
+          // Automatic transmission creep in D or R when no pedal is pressed
+          if (eng.transmissionType === 'AUTO' && brake === 0 && throttle === 0 && Math.abs(vehicle.speed) < 16) {
+            effectiveThrottle = 0.16;
+          }
+
+          if (effectiveThrottle > 0) {
+            // Engine power drops off smoothly as vehicle approaches top speed for current gear
+            const speedCapFactor = Math.max(0, Math.min(1.0, (gearMaxSpeedPx - v_speed) / (gearMaxSpeedPx * 0.12)));
+            const clutchGrip = Math.max(0.4, eng.clutchPedal);
+            driveAccel = cfg.acceleration * gearAccelMult * T_factor * fuelFactor * effectiveThrottle * clutchGrip * speedCapFactor;
+          }
+        }
+        
+        // Determine propulsion direction
+        const isReverseMode = eng.currentGear === -1 || (eng.transmissionType === 'AUTO' && eng.autoGearMode === 'R');
+        if (isReverseMode && !isParkedMode) {
+          engineAccel = -driveAccel;
+          vehicle.isReversing = true;
+        } else if (!isReverseMode && !isParkedMode && !isNeutralMode && eng.currentGear > 0) {
+          engineAccel = driveAccel;
+          vehicle.isReversing = false;
+        } else {
+          engineAccel = 0;
+          vehicle.isReversing = false;
         }
 
-        if (effectiveThrottle > 0) {
-          const clutchGrip = Math.max(0.4, eng.clutchPedal);
-          driveAccel = cfg.acceleration * gearAccelMult * T_factor * fuelFactor * effectiveThrottle * clutchGrip;
+        // Apply engine compression and downshift braking
+        if (engineBrakeFactor > 0 && Math.abs(vehicle.speed) > 1) {
+          engineAccel -= Math.sign(vehicle.speed) * engineBrakeFactor;
         }
-      }
-      
-      // Determine propulsion direction
-      const isReverseMode = eng.currentGear === -1 || (eng.transmissionType === 'AUTO' && eng.autoGearMode === 'R');
-      if (isReverseMode && !isParkedMode) {
-        engineAccel = -driveAccel;
-        vehicle.isReversing = true;
-      } else if (!isReverseMode && !isParkedMode && !isNeutralMode && eng.currentGear > 0) {
-        engineAccel = driveAccel;
-        vehicle.isReversing = false;
       } else {
-        engineAccel = 0;
-        vehicle.isReversing = false;
-      }
-    } else {
-      // Engine Off Coasting
-      if (eng && eng.engineRPM > 0) {
-        eng.engineRPM -= 800 * dt;
-        eng.engineRPM = Math.max(0, eng.engineRPM);
+        // Engine Off Coasting (RPM decays to 0)
+        if (eng.engineRPM > 0) {
+          eng.engineRPM -= 800 * dt;
+          eng.engineRPM = Math.max(0, eng.engineRPM);
+        }
       }
     }
     
@@ -3638,11 +4273,24 @@ export function updateVehiclePhysics(
           vehicle.speed = 0;
         }
       } else {
-        // Natural rolling resistance and aerodynamic drag
+        // Natural rolling resistance and aerodynamic drag (v^2)
         const vAbs = Math.abs(vehicle.speed);
-        const rollingResistance = 5.0 + vAbs * 0.04;
+        const rollingResistance = 5.0 + vAbs * 0.02;
+        
+        let aeroCoeff = 0.00085;
+        if (['truck_box', 'truck_dump', 'truck_tanker', 'truck_water', 'truck_flatbed', 'cement_mixer', 'garbage_truck', 'bus', 'delivery_truck', 'truck_tow', 'fire_engine', 'fire_ladder', 'fire_rescue'].includes(cfg.type)) {
+          aeroCoeff = 0.0016;
+        } else if (cfg.type.startsWith('tractor_') || ['suv', 'suv_luxury', 'offroad_hardcore', 'suv_classic_box'].includes(cfg.type)) {
+          aeroCoeff = 0.0013;
+        } else if (['supercar', 'sports', 'coupe_gt', 'hatch_hot'].includes(cfg.type)) {
+          aeroCoeff = 0.00065;
+        }
+        
+        const aeroDrag = aeroCoeff * vAbs * vAbs;
+        const totalDrag = rollingResistance + aeroDrag;
+
         if (vAbs > 1) {
-          engineAccel -= Math.sign(vehicle.speed) * rollingResistance;
+          engineAccel -= Math.sign(vehicle.speed) * totalDrag;
         } else if (throttle === 0 && (!eng || eng.transmissionType !== 'AUTO' || eng.autoGearMode === 'P' || eng.autoGearMode === 'N')) {
           vehicle.speed = 0;
         }
@@ -3673,15 +4321,6 @@ export function updateVehiclePhysics(
     const maxSpeedPx = cfg.maxSpeed * 2.7778;
     const reverseMaxSpeedPx = cfg.reverseMaxSpeed * 2.7778;
 
-    // Gear speed limit (cannot exceed max speed of current gear)
-    if (eng && eng.engineRunning && eng.currentGear > 0) {
-      const currentGearRatio = eng.gearRatios[eng.currentGear + 1] !== undefined ? eng.gearRatios[eng.currentGear + 1] : 0.8;
-      const gearMaxSpeedPx = maxSpeedPx * (0.8 / Math.max(0.3, Math.abs(currentGearRatio))) * 1.05;
-      if (vehicle.speed > gearMaxSpeedPx) {
-        vehicle.speed = gearMaxSpeedPx;
-      }
-    }
-
     // Hard speed limits
     if (vehicle.speed > maxSpeedPx) vehicle.speed = maxSpeedPx;
     if (vehicle.speed < -reverseMaxSpeedPx) vehicle.speed = -reverseMaxSpeedPx;
@@ -3689,56 +4328,86 @@ export function updateVehiclePhysics(
       vehicle.speed = 0;
     }
 
-    // Bicycle Model with Lateral Slip & Drift
-    const headingCos = Math.cos(vehicle.angle);
-    const headingSin = Math.sin(vehicle.angle);
+    // --- REALISTIC BICYCLE KINEMATICS WITH REAR-AXLE PIVOT & CONTROLLED DRIFT ---
+    const { rearAxleDist, wheelBase } = getVehicleAxleGeometry(vehicle);
 
-    // Current forward & lateral speeds
-    const currentForwardSpeed = vehicle.vx * headingCos + vehicle.vy * headingSin;
-    const currentLateralSpeed = -vehicle.vx * headingSin + vehicle.vy * headingCos;
+    const initialAngle = vehicle.angle;
+    const initHeadingCos = Math.cos(initialAngle);
+    const initHeadingSin = Math.sin(initialAngle);
 
-    // Lateral grip friction
-    const currentGrip = isHandbraking ? cfg.driftGrip : cfg.grip;
-    const effectiveGrip = currentGrip * (1 - Math.min(0.8, vehicle.driftFactor || 0));
-    const lateralDamping = Math.pow(1 - effectiveGrip, dt * 12);
-    const newLateralSpeed = currentLateralSpeed * lateralDamping;
-    vehicle.lateralVelocity = newLateralSpeed;
+    // Initial position of the rear axle in world space (the true pivot of front-steered vehicles)
+    const rearX = vehicle.x - initHeadingCos * rearAxleDist;
+    const rearY = vehicle.y - initHeadingSin * rearAxleDist;
 
-    // Angular rotation from front wheel steer angle
-    const turnRadius = cfg.wheelBase / Math.max(0.001, Math.sin(Math.abs(vehicle.steerAngle)));
-    const angularSpeed = (vehicle.speed / turnRadius) * Math.sign(vehicle.steerAngle);
+    // Angular rotation from front wheel steer angle (Ackerman / Bicycle model around rear axle)
+    // Turn radius R = wheelBase / tan(steerAngle)
+    // Yaw rate omega = v / R = (v / wheelBase) * tan(steerAngle)
+    const maxSafeSteer = 0.82; // cap tan(steer) from asymptotic growth
+    const clampedSteer = Math.max(-maxSafeSteer, Math.min(maxSafeSteer, vehicle.steerAngle));
+    const tanSteer = Math.tan(clampedSteer);
+    const angularSpeed = (vehicle.speed / Math.max(1, wheelBase)) * tanSteer;
 
-    // Smooth yaw rotation
+    // Update yaw angle around the physical center (rear axle)
     vehicle.angularVelocity = angularSpeed;
     vehicle.angle += vehicle.angularVelocity * dt;
+    vehicle.angle = ((vehicle.angle + Math.PI) % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI) - Math.PI;
 
-    // Velocity vector in world coordinates
+    // Lateral grip friction & drift slip at the rear tires
+    // In normal driving (no handbrake, no intentional drift), rear wheels have full traction (no phantom sideways slip)
+    const currentGrip = isHandbraking ? cfg.driftGrip : cfg.grip;
+    const effectiveGrip = currentGrip * (1 - Math.min(0.8, vehicle.driftFactor || 0));
+
+    let lateralSlip = vehicle.lateralVelocity || 0;
+    if (isHandbraking && Math.abs(vehicle.speed) > 20) {
+      // Handbrake breaks rear traction, swinging the rear out in the direction of turn
+      const centrifugalSlip = -Math.sign(vehicle.steerAngle || 1) * Math.min(120, Math.abs(vehicle.speed) * 0.7);
+      lateralSlip += (centrifugalSlip - lateralSlip) * Math.min(1.0, 10.0 * dt);
+    } else {
+      // Natural tire grip quickly damps any residual lateral slip to 0
+      const lateralDamping = Math.pow(1 - effectiveGrip, dt * 16);
+      lateralSlip *= lateralDamping;
+      if (Math.abs(lateralSlip) < 0.5) lateralSlip = 0;
+    }
+    vehicle.lateralVelocity = lateralSlip;
+
+    // New heading after rotation
     const newHeadingCos = Math.cos(vehicle.angle);
     const newHeadingSin = Math.sin(vehicle.angle);
 
-    vehicle.vx = newHeadingCos * vehicle.speed - newHeadingSin * newLateralSpeed;
-    vehicle.vy = newHeadingSin * vehicle.speed + newHeadingCos * newLateralSpeed;
+    // Rear axle moves along forward heading at vehicle.speed, plus any genuine lateral drift slip
+    const rearVelX = newHeadingCos * vehicle.speed - newHeadingSin * lateralSlip;
+    const rearVelY = newHeadingSin * vehicle.speed + newHeadingCos * lateralSlip;
+
+    const newRearX = rearX + rearVelX * dt;
+    const newRearY = rearY + rearVelY * dt;
+
+    // Reconstruct vehicle center from the newly translated & rotated rear axle
+    const newCenterX = newRearX + newHeadingCos * rearAxleDist;
+    const newCenterY = newRearY + newHeadingSin * rearAxleDist;
+
+    // Velocity vector for the vehicle center (combines longitudinal speed and rear-pivot angular swing)
+    vehicle.vx = (newCenterX - vehicle.x) / dt;
+    vehicle.vy = (newCenterY - vehicle.y) / dt;
 
     // Drift Detection & Skidmarks
-    const lateralSlip = Math.abs(currentLateralSpeed);
+    const slipMagnitude = Math.abs(lateralSlip);
     vehicle.isDrifting = (isHandbraking && Math.abs(vehicle.speed) > 35) || 
-                         (lateralSlip > 55 && Math.abs(vehicle.speed) > 75);
+                         (slipMagnitude > 45 && Math.abs(vehicle.speed) > 65);
 
     if (vehicle.isDrifting) {
-      sound.startTireScreech(Math.min(1.0, lateralSlip / 100));
+      sound.startTireScreech(Math.min(1.0, slipMagnitude / 100));
 
-      const rearAxleDist = cfg.length * 0.38;
       const trackHalf = cfg.width * 0.42;
-      const leftTireX = vehicle.x - newHeadingCos * rearAxleDist - newHeadingSin * trackHalf;
-      const leftTireY = vehicle.y - newHeadingSin * rearAxleDist + newHeadingCos * trackHalf;
-      const rightTireX = vehicle.x - newHeadingCos * rearAxleDist + newHeadingSin * trackHalf;
-      const rightTireY = vehicle.y - newHeadingSin * rearAxleDist - newHeadingCos * trackHalf;
+      const leftTireX = newRearX - newHeadingSin * trackHalf;
+      const leftTireY = newRearY + newHeadingCos * trackHalf;
+      const rightTireX = newRearX + newHeadingSin * trackHalf;
+      const rightTireY = newRearY - newHeadingCos * trackHalf;
 
       world.skidMarks.push({
         x1: leftTireX,
         y1: leftTireY,
-        x2: leftTireX - vehicle.vx * dt * 0.9,
-        y2: leftTireY - vehicle.vy * dt * 0.9,
+        x2: leftTireX - rearVelX * dt * 0.9,
+        y2: leftTireY - rearVelY * dt * 0.9,
         alpha: Math.min(0.65, lateralSlip / 100),
         color: '#111827',
         width: 3.5
@@ -3747,8 +4416,8 @@ export function updateVehiclePhysics(
       world.skidMarks.push({
         x1: rightTireX,
         y1: rightTireY,
-        x2: rightTireX - vehicle.vx * dt * 0.9,
-        y2: rightTireY - vehicle.vy * dt * 0.9,
+        x2: rightTireX - rearVelX * dt * 0.9,
+        y2: rightTireY - rearVelY * dt * 0.9,
         alpha: Math.min(0.65, lateralSlip / 100),
         color: '#111827',
         width: 3.5
@@ -3787,7 +4456,7 @@ export function updateVehiclePhysics(
     );
 
     sound.updateOverheatingSteam(
-      eng ? eng.overheatingSteam : false,
+      eng ? (eng.overheatingSteam && !world.cleanMode) : false,
       eng ? (eng.temperature - 100) / 35 : 0
     );
 
@@ -3844,9 +4513,57 @@ export function updateVehiclePhysics(
       }
     }
 
-    // Direct linear velocity aligned with vehicle heading (no artificial counter-swerving)
+    // Kinematic velocity aligned with vehicle heading and rear-axle pivot rotation
+    const { rearAxleDist: npcRearAxleDist } = getVehicleAxleGeometry(vehicle);
+    const cosA = Math.cos(vehicle.angle);
+    const sinA = Math.sin(vehicle.angle);
+    const yawRate = vehicle.angularVelocity || 0;
+    vehicle.vx = cosA * vehicle.speed - sinA * (yawRate * npcRearAxleDist);
+    vehicle.vy = sinA * vehicle.speed + cosA * (yawRate * npcRearAxleDist);
+  }
+
+  // --- PROGRESSIVE MULTI-FRAME CRUMPLE ZONE CUSHIONING & DECELERATION ---
+  if (vehicle.activeCrumple && vehicle.activeCrumple.timer > 0) {
+    const c = vehicle.activeCrumple;
+    c.timer = Math.max(0, c.timer - dt);
+    const progress = 1 - c.timer / c.totalDuration; // 0.0 to 1.0
+
+    // Smooth softbody deceleration curve:
+    // Phase 1 (0.0 to 0.72): Progressive plastic compression & kinetic energy absorption
+    // Phase 2 (0.72 to 1.0): Gentle elastic rebound as chassis springs back
+    if (progress < 0.72) {
+      const compressProgress = progress / 0.72;
+      // Cosine easing creates gradual entry, peak resistance at max penetration, then zero speed
+      const decel = Math.cos(compressProgress * Math.PI * 0.5);
+      vehicle.speed = c.initialSpeed * decel;
+    } else {
+      const reboundProgress = (progress - 0.72) / 0.28;
+      vehicle.speed = c.reboundSpeed * Math.sin(reboundProgress * Math.PI * 0.5);
+    }
     vehicle.vx = Math.cos(vehicle.angle) * vehicle.speed;
     vehicle.vy = Math.sin(vehicle.angle) * vehicle.speed;
+
+    // Continuous collision sparks along contact point while metal crumples over multiple frames
+    if (Math.abs(c.initialSpeed) > 35 && Math.random() < 0.60) {
+      const spkAngle = Math.atan2(c.normalY, c.normalX) + (Math.random() - 0.5) * 1.6;
+      const spkSpeed = 25 + Math.random() * 65;
+      world.particles.push({
+        x: c.contactX + (Math.random() - 0.5) * 8,
+        y: c.contactY + (Math.random() - 0.5) * 8,
+        vx: Math.cos(spkAngle) * spkSpeed,
+        vy: Math.sin(spkAngle) * spkSpeed,
+        radius: 1.5 + Math.random() * 2,
+        color: Math.random() > 0.35 ? '#f59e0b' : '#ef4444',
+        alpha: 0.95,
+        life: 0,
+        maxLife: 0.12 + Math.random() * 0.12,
+        type: 'spark'
+      });
+    }
+
+    if (c.timer <= 0) {
+      vehicle.activeCrumple = undefined;
+    }
   }
 
   // Update position with combined engine velocity and physical knockback momentum
@@ -3855,12 +4572,12 @@ export function updateVehiclePhysics(
   vehicle.x += totalVx * dt;
   vehicle.y += totalVy * dt;
 
-  // Smooth exponential decay of physics knockback & spin recoil (Heavy tire friction dampening)
+  // Smooth exponential decay of physics knockback & spin recoil (Cushioned tire friction dampening)
   if (vehicle.knockbackVx || vehicle.knockbackVy || vehicle.knockbackSpin) {
-    const kDecay = Math.pow(0.0001, dt);
+    const kDecay = Math.pow(0.008, dt);
     vehicle.knockbackVx = (vehicle.knockbackVx || 0) * kDecay;
     vehicle.knockbackVy = (vehicle.knockbackVy || 0) * kDecay;
-    vehicle.knockbackSpin = (vehicle.knockbackSpin || 0) * Math.pow(0.001, dt);
+    vehicle.knockbackSpin = (vehicle.knockbackSpin || 0) * Math.pow(0.015, dt);
     
     vehicle.angle += (vehicle.knockbackSpin || 0) * dt;
 
@@ -3876,6 +4593,10 @@ export function updateVehiclePhysics(
   // --- VEHICLE-TO-VEHICLE COLLISION RESOLUTION ---
   for (const other of nearbyVehicles) {
     if (other.id === vehicle.id) continue;
+    // Towing vehicle and hitched trailer must never collide with each other!
+    if (vehicle.trailerId === other.id || vehicle.towedById === other.id || other.trailerId === vehicle.id || other.towedById === vehicle.id) {
+      continue;
+    }
 
     const isPlayerInvolved = vehicle.isPlayerControlled || other.isPlayerControlled;
     
@@ -3955,6 +4676,35 @@ export function updateVehiclePhysics(
 
           const impactSpeed = Math.abs(velAlongNormal);
           const scrapeSpeed = Math.abs(relVx * -col.normalY + relVy * col.normalX);
+
+          // Apply mutual softbody crumple zone cushion if relative impact is significant
+          if (impactSpeed > 20) {
+            const crumpleDuration = 0.08 + Math.min(0.06, impactSpeed / 800);
+            if (!vehicle.activeCrumple) {
+              vehicle.activeCrumple = {
+                timer: crumpleDuration,
+                totalDuration: crumpleDuration,
+                normalX: -col.normalX,
+                normalY: -col.normalY,
+                initialSpeed: vehicle.speed,
+                reboundSpeed: -0.1 * Math.sign(vehicle.speed || 1) * Math.min(20, Math.abs(vehicle.speed)),
+                contactX: col.contactX,
+                contactY: col.contactY
+              };
+            }
+            if (!other.activeCrumple) {
+              other.activeCrumple = {
+                timer: crumpleDuration,
+                totalDuration: crumpleDuration,
+                normalX: col.normalX,
+                normalY: col.normalY,
+                initialSpeed: other.speed,
+                reboundSpeed: -0.1 * Math.sign(other.speed || 1) * Math.min(20, Math.abs(other.speed)),
+                contactX: col.contactX,
+                contactY: col.contactY
+              };
+            }
+          }
 
           applyVehicleDamageAndDeformation(vehicle, col.contactX, col.contactY, impactSpeed, scrapeSpeed, world, other.mass, false);
           applyVehicleDamageAndDeformation(other, col.contactX, col.contactY, impactSpeed, scrapeSpeed, world, vehicle.mass, false);
@@ -4066,49 +4816,122 @@ export function updateVehiclePhysics(
 
     const col = checkCarBuildingCollision(vehicle, bld);
     if (col.collided) {
-      vehicle.x += col.normalX * (col.depth + 1.5);
-      vehicle.y += col.normalY * (col.depth + 1.5);
-
-      const impactSpeed = Math.hypot(vehicle.vx, vehicle.vy);
-
-      vehicle.speed *= -0.2;
-      vehicle.vx *= 0.2;
-      vehicle.vy *= 0.2;
-
-      // Contact point on the car shell facing the building (opposite to the separation normal)
       const contactX = vehicle.x - col.normalX * (vehicle.length / 2);
       const contactY = vehicle.y - col.normalY * (vehicle.width / 2);
 
-      applyVehicleDamageAndDeformation(vehicle, contactX, contactY, impactSpeed, 10, world, 12000, true);
-
-      if (vehicle.isPlayerControlled || (player && player.isInVehicle && player.currentVehicleId === vehicle.id)) {
-        sound.playCollision(Math.min(1.0, impactSpeed / 120));
-        if (player) {
-          applyDriverVehicleCrashTrauma(player, impactSpeed, 'здание', 1.0, vehicle);
-        }
+      if (vehicle.activeCrumple && vehicle.activeCrumple.timer > 0) {
+        // Vehicle is actively absorbing collision energy in its crumple zone:
+        // Firmly clamp position to surface without snapping backwards in 1 frame
+        vehicle.x += col.normalX * col.depth;
+        vehicle.y += col.normalY * col.depth;
       } else {
-        // For AI cars: Trigger hazard stop if disabled/crashed, otherwise trigger smart reverse recovery
-        if (isVehicleDisabledOrCrashed(vehicle)) {
-          vehicle.turnSignal = 'hazard';
-          vehicle.brakeLightsOn = true;
-          vehicle.targetSpeed = 0;
-          vehicle.speed = 0;
-          vehicle.aiState = 'stopping_obstacle';
-          if (vehicle.engineState) {
-            vehicle.engineState.engineRunning = false;
-            vehicle.engineState.engineRPM = 0;
+        const impactSpeed = Math.hypot(vehicle.vx, vehicle.vy);
+
+        if (impactSpeed > 16) {
+          // Dynamic multi-frame crumple zone cushion:
+          // Kinetic energy is absorbed over ~5-8 frames (0.08 - 0.12s),
+          // generating continuous metal wrinkling and smooth deceleration!
+          const crumpleDuration = 0.08 + Math.min(0.06, impactSpeed / 800);
+          const rebound = -0.12 * Math.sign(vehicle.speed || 1) * Math.min(25, Math.abs(vehicle.speed));
+
+          vehicle.activeCrumple = {
+            timer: crumpleDuration,
+            totalDuration: crumpleDuration,
+            normalX: col.normalX,
+            normalY: col.normalY,
+            initialSpeed: vehicle.speed,
+            reboundSpeed: rebound,
+            contactX,
+            contactY
+          };
+
+          vehicle.x += col.normalX * col.depth;
+          vehicle.y += col.normalY * col.depth;
+
+          applyVehicleDamageAndDeformation(vehicle, contactX, contactY, impactSpeed, 10, world, 12000, true);
+
+          if (vehicle.isPlayerControlled || (player && player.isInVehicle && player.currentVehicleId === vehicle.id)) {
+            sound.playCollision(Math.min(1.0, impactSpeed / 120));
+            if (player) {
+              applyDriverVehicleCrashTrauma(player, impactSpeed, 'здание', 1.0, vehicle);
+            }
+          } else {
+            // For AI cars: Trigger hazard stop if disabled/crashed, otherwise trigger smart reverse recovery
+            if (isVehicleDisabledOrCrashed(vehicle)) {
+              vehicle.turnSignal = 'hazard';
+              vehicle.brakeLightsOn = true;
+              vehicle.targetSpeed = 0;
+              vehicle.speed = 0;
+              vehicle.aiState = 'stopping_obstacle';
+              if (vehicle.engineState) {
+                vehicle.engineState.engineRunning = false;
+                vehicle.engineState.engineRPM = 0;
+              }
+            } else if (vehicle.aiState === 'reversing') {
+              // If already reversing and rear bumped a building, complete reverse early
+              vehicle.reverseTimer = 0;
+            } else {
+              vehicle.aiState = 'reversing';
+              vehicle.reverseTimer = 1.2;
+              vehicle.recoveryTargetAngle = vehicle.angle;
+              vehicle.recoverySteer = 0;
+              vehicle.speed = -35;
+              vehicle.ghostingAlpha = 0.5; // Allow ghosting to avoid re-triggering collision
+            }
           }
-        } else if (vehicle.aiState === 'reversing') {
-          // If already reversing and rear bumped a building, complete reverse early
-          vehicle.reverseTimer = 0;
         } else {
-          vehicle.aiState = 'reversing';
-          vehicle.reverseTimer = 1.2;
-          vehicle.recoveryTargetAngle = vehicle.angle;
-          vehicle.recoverySteer = 0;
-          vehicle.speed = -35;
-          vehicle.ghostingAlpha = 0.5; // Allow ghosting to avoid re-triggering collision
+          // Low speed contact (< 16 px/s): gentle bumper nudge / resting contact
+          vehicle.x += col.normalX * (col.depth + 0.5);
+          vehicle.y += col.normalY * (col.depth + 0.5);
+          vehicle.speed *= 0.4;
+          vehicle.vx *= 0.4;
+          vehicle.vy *= 0.4;
         }
+      }
+    }
+  }
+
+  // Explicit collision with Gas Station structural islands (including LPG island & propane tank)
+  if (vehicle.x >= 4800 && vehicle.x <= 5500 && vehicle.y >= 4800 && vehicle.y <= 5500) {
+    for (const sub of GAS_STATION_STRUCTURAL_SUB_BOXES) {
+      const col = checkCarBoxCollision(vehicle, sub);
+      if (col.collided) {
+        const contactX = vehicle.x - col.normalX * (vehicle.length / 2);
+        const contactY = vehicle.y - col.normalY * (vehicle.width / 2);
+
+        if (vehicle.activeCrumple && vehicle.activeCrumple.timer > 0) {
+          vehicle.x += col.normalX * col.depth;
+          vehicle.y += col.normalY * col.depth;
+        } else {
+          const impactSpeed = Math.hypot(vehicle.vx, vehicle.vy);
+          if (impactSpeed > 16) {
+            const crumpleDuration = 0.08 + Math.min(0.06, impactSpeed / 800);
+            const rebound = -0.12 * Math.sign(vehicle.speed || 1) * Math.min(25, Math.abs(vehicle.speed));
+
+            vehicle.activeCrumple = {
+              timer: crumpleDuration,
+              totalDuration: crumpleDuration,
+              normalX: col.normalX,
+              normalY: col.normalY,
+              initialSpeed: vehicle.speed,
+              reboundSpeed: rebound,
+              contactX,
+              contactY
+            };
+
+            vehicle.x += col.normalX * col.depth;
+            vehicle.y += col.normalY * col.depth;
+
+            applyVehicleDamageAndDeformation(vehicle, contactX, contactY, impactSpeed, 10, world, 12000, true);
+          } else {
+            vehicle.x += col.normalX * (col.depth + 0.5);
+            vehicle.y += col.normalY * (col.depth + 0.5);
+            vehicle.speed *= 0.4;
+            vehicle.vx *= 0.4;
+            vehicle.vy *= 0.4;
+          }
+        }
+        break;
       }
     }
   }
@@ -4119,25 +4942,37 @@ export function updateVehiclePhysics(
 }
 
 export function updateSkidMarksAndParticles(world: GameWorld, player: Player, dt: number) {
-  // Skid marks fade
-  for (let i = world.skidMarks.length - 1; i >= 0; i--) {
-    const sm = world.skidMarks[i];
+  // Skid marks fade (O(N) in-place retention, zero splice overhead)
+  const smList = world.skidMarks;
+  const smLen = smList.length;
+  let smWrite = 0;
+  for (let i = 0; i < smLen; i++) {
+    const sm = smList[i];
     sm.alpha -= dt * 0.015;
-    if (sm.alpha <= 0.01) {
-      world.skidMarks.splice(i, 1);
+    if (sm.alpha > 0.01) {
+      smList[smWrite++] = sm;
     }
   }
+  smList.length = smWrite;
 
-  if (world.skidMarks.length > 500) {
-    world.skidMarks.splice(0, world.skidMarks.length - 500);
+  if (smList.length > 500) {
+    const dropCount = smList.length - 500;
+    for (let i = 0; i < 500; i++) {
+      smList[i] = smList[i + dropCount];
+    }
+    smList.length = 500;
   }
 
   // Fluid Stains aging & drying & BURNING dynamics
   if (!world.stains) world.stains = [];
   const newlyIgnited = new Set<string>();
 
-  for (let i = world.stains.length - 1; i >= 0; i--) {
-    const st = world.stains[i];
+  const stainsList = world.stains;
+  const stainsLen = stainsList.length;
+  let stWrite = 0;
+
+  for (let i = 0; i < stainsLen; i++) {
+    const st = stainsList[i];
 
     if (st.onFire) {
       // Fuel/oil burns: increase fire intensity quickly
@@ -4213,7 +5048,8 @@ export function updateSkidMarksAndParticles(world: GameWorld, player: Player, dt
 
       // SPREAD FIRE TO NEIGHBORING FUEL/OIL STAINS (chain reaction!)
       if (st.fireIntensity > 0.45) {
-        for (const other of world.stains) {
+        for (let j = 0; j < stainsLen; j++) {
+          const other = stainsList[j];
           if (other !== st && !other.onFire && !newlyIgnited.has(other.id) && (other.type === 'fuel' || other.type === 'oil')) {
             const dx = other.x - st.x;
             const dy = other.y - st.y;
@@ -4263,25 +5099,34 @@ export function updateSkidMarksAndParticles(world: GameWorld, player: Player, dt
         }
       }
     } else {
-      // Normal drying out
-      st.life += dt;
+      // Normal drying out (water evaporates faster on asphalt, especially in warm weather)
+      const dryMultiplier = st.type === 'water' ? 1.5 : 1.0;
+      st.life += dt * dryMultiplier;
     }
 
     if (typeof st.alpha !== 'number' || !isFinite(st.alpha)) {
-      st.alpha = st.type === 'oil' ? 0.75 : (st.type === 'coolant' ? 0.65 : 0.45);
+      st.alpha = st.type === 'oil' ? 0.75 : (st.type === 'coolant' ? 0.65 : (st.type === 'water' ? 0.60 : 0.45));
     }
 
-    const fadeStart = Math.max(0, st.maxLife - 60);
+    const fadeDuration = st.type === 'water' ? 20 : 60;
+    const fadeStart = Math.max(0, st.maxLife - fadeDuration);
     if (st.life > fadeStart) {
-      st.alpha = Math.max(0, (1 - (st.life - fadeStart) / 60) * (st.type === 'oil' ? 0.75 : (st.type === 'coolant' ? 0.65 : 0.45)));
+      st.alpha = Math.max(0, (1 - (st.life - fadeStart) / fadeDuration) * (st.type === 'oil' ? 0.75 : (st.type === 'coolant' ? 0.65 : (st.type === 'water' ? 0.60 : 0.45))));
     }
-    if (st.life >= st.maxLife || st.alpha <= 0.005 || st.radius <= 0.15) {
-      world.stains.splice(i, 1);
+
+    // In-place retention condition
+    if (st.life < st.maxLife && st.alpha > 0.005 && st.radius > 0.15) {
+      stainsList[stWrite++] = st;
     }
   }
+  stainsList.length = stWrite;
 
-  if (world.stains.length > 600) {
-    world.stains.splice(0, world.stains.length - 600);
+  if (stainsList.length > 600) {
+    const dropStains = stainsList.length - 600;
+    for (let i = 0; i < 600; i++) {
+      stainsList[i] = stainsList[i + dropStains];
+    }
+    stainsList.length = 600;
   }
 
   // Tick modular vehicle systems (engine heat, radiator leak, oil level/pressure, fuel tank, suspension drag & steering pull)
@@ -4289,8 +5134,12 @@ export function updateSkidMarksAndParticles(world: GameWorld, player: Player, dt
     updateVehicleSystems(car, dt, world);
   }
 
+  // Update trailer towing physics and tow hitch constraint positioning
+  updateTrailerTowingPhysics(world, dt);
+
   // Spawn smoke/steam/flame for damaged vehicles
   for (const car of world.vehicles) {
+    if (isTrailerVehicle(car)) continue; // Trailers do not emit engine smoke, steam or flames!
     if (car.damage && (car.damage.engineSmoking || car.damage.underHoodSmolder || car.damage.engineFire || car.damage.fuelTankFire || car.damage.cabinFire)) {
       const hasActiveFlame = car.damage.engineFire || car.damage.cabinFire || car.damage.fuelTankFire;
       // Convert raw probability to frame-rate independent spawn rate (scaled with dt)
@@ -4514,6 +5363,9 @@ export function updateSkidMarksAndParticles(world: GameWorld, player: Player, dt
     world.particles.push = function(...items: Particle[]) {
       for (let i = 0; i < items.length; i++) {
         const item = items[i];
+        if (world.cleanMode && (item.type === 'engine_smoke' || item.type === 'tire_smoke' || item.type === 'exhaust')) {
+          continue;
+        }
         const p = particlePool.pop();
         if (p) {
           p.type = item.type;
@@ -4536,14 +5388,23 @@ export function updateSkidMarksAndParticles(world: GameWorld, player: Player, dt
   }
 
   if (world.particles.length > performanceConfig.particleLimit) {
-    const excess = world.particles.splice(0, world.particles.length - performanceConfig.particleLimit);
-    for (let i = 0; i < excess.length; i++) {
-      particlePool.push(excess[i]);
+    const excessCount = world.particles.length - performanceConfig.particleLimit;
+    for (let i = 0; i < excessCount; i++) {
+      particlePool.push(world.particles[i]);
     }
+    const remCount = performanceConfig.particleLimit;
+    for (let i = 0; i < remCount; i++) {
+      world.particles[i] = world.particles[i + excessCount];
+    }
+    world.particles.length = remCount;
   }
 
-  for (let i = world.particles.length - 1; i >= 0; i--) {
-    const p = world.particles[i];
+  const pList = world.particles;
+  const pCount = pList.length;
+  let pWrite = 0;
+
+  for (let i = 0; i < pCount; i++) {
+    const p = pList[i];
     p.life += dt;
     p.x += p.vx * dt;
     p.y += p.vy * dt;
@@ -4552,11 +5413,13 @@ export function updateSkidMarksAndParticles(world: GameWorld, player: Player, dt
     }
     p.alpha = Math.max(0, 1 - (p.life / p.maxLife));
 
-    if (p.life >= p.maxLife) {
-      particlePool.push(p); // Recycle to pool
-      world.particles.splice(i, 1);
+    if (p.life < p.maxLife) {
+      pList[pWrite++] = p;
+    } else {
+      particlePool.push(p); // Recycle to pool without array shifting
     }
   }
+  pList.length = pWrite;
 }
 
 const scratchVehicleSet = new Set<Vehicle>();
@@ -4654,35 +5517,60 @@ export function updateBreakablePropsAndLivingWorld(world: GameWorld, player: Pla
 
       // Special case: indestructible props (e.g. old concrete lamppost, garage doors)
       if (hitbox.isIndestructible) {
-        veh.x += col.pushX * 1.05;
-        veh.y += col.pushY * 1.05;
-
-        const impactSpeed = Math.hypot(veh.vx, veh.vy);
-
-        // Hard bounce back from immovable reinforced concrete or steel post
-        veh.vx = -veh.vx * 0.22;
-        veh.vy = -veh.vy * 0.22;
-        veh.speed = -veh.speed * 0.22;
-
         const contactX = col.contactX;
         const contactY = col.contactY;
+        const pushDist = Math.hypot(col.pushX, col.pushY) || 1;
+        const normX = col.pushX / pushDist;
+        const normY = col.pushY / pushDist;
 
-        // Heavy vehicle damage & deformation proportional to impact speed
-        applyVehicleDamageAndDeformation(veh, contactX, contactY, impactSpeed, 12, world, 14000, true);
-
-        sound.playCollision(Math.min(1.0, impactSpeed / 80));
-
-        if (player && (veh.isPlayerControlled || (player.isInVehicle && player.currentVehicleId === veh.id))) {
-          applyDriverVehicleCrashTrauma(player, impactSpeed, hitbox.displayNameRu, 1.2, veh);
+        if (veh.activeCrumple && veh.activeCrumple.timer > 0) {
+          veh.x += col.pushX;
+          veh.y += col.pushY;
         } else {
-          if (isVehicleDisabledOrCrashed(veh)) {
-            veh.turnSignal = 'hazard';
-            veh.brakeLightsOn = true;
-            veh.targetSpeed = 0;
-            veh.speed = 0;
-            veh.aiState = 'stopping_obstacle';
+          const impactSpeed = Math.hypot(veh.vx, veh.vy);
+
+          if (impactSpeed > 16) {
+            const crumpleDuration = 0.08 + Math.min(0.06, impactSpeed / 800);
+            const rebound = -0.12 * Math.sign(veh.speed || 1) * Math.min(25, Math.abs(veh.speed));
+
+            veh.activeCrumple = {
+              timer: crumpleDuration,
+              totalDuration: crumpleDuration,
+              normalX: normX,
+              normalY: normY,
+              initialSpeed: veh.speed,
+              reboundSpeed: rebound,
+              contactX,
+              contactY
+            };
+
+            veh.x += col.pushX;
+            veh.y += col.pushY;
+
+            // Heavy vehicle damage & deformation proportional to impact speed
+            applyVehicleDamageAndDeformation(veh, contactX, contactY, impactSpeed, 12, world, 14000, true);
+
+            sound.playCollision(Math.min(1.0, impactSpeed / 80));
+
+            if (player && (veh.isPlayerControlled || (player.isInVehicle && player.currentVehicleId === veh.id))) {
+              applyDriverVehicleCrashTrauma(player, impactSpeed, hitbox.displayNameRu, 1.2, veh);
+            } else {
+              if (isVehicleDisabledOrCrashed(veh)) {
+                veh.turnSignal = 'hazard';
+                veh.brakeLightsOn = true;
+                veh.targetSpeed = 0;
+                veh.speed = 0;
+                veh.aiState = 'stopping_obstacle';
+              } else {
+                veh.aiState = 'reversing';
+              }
+            }
           } else {
-            veh.aiState = 'reversing';
+            veh.x += col.pushX * 1.02;
+            veh.y += col.pushY * 1.02;
+            veh.speed *= 0.4;
+            veh.vx *= 0.4;
+            veh.vy *= 0.4;
           }
         }
 
@@ -5153,5 +6041,246 @@ export function getBuildingEntrancePos(bld: Building): { x: number; y: number } 
   const ents = getAllBuildingEntrances(bld);
   return { x: ents[0].x, y: ents[0].y };
 }
+
+// ============================================================================
+// TRAILER & TOW HITCH SYSTEM PHYSICS
+// ============================================================================
+
+export function updateTrailerTowingPhysics(world: GameWorld, dt: number) {
+  for (const veh of world.vehicles) {
+    if (!veh.trailerId) continue;
+    const trailer = world.vehicles.find(v => v.id === veh.trailerId);
+    if (!trailer) {
+      veh.trailerId = null;
+      continue;
+    }
+    trailer.towedById = veh.id;
+    trailer.isTrailer = true;
+    trailer.isParked = false;
+
+    // Duplicate all lights, signals and braking state from the towing vehicle to the trailer
+    trailer.turnSignal = veh.turnSignal;
+    trailer.turnSignalTimer = veh.turnSignalTimer;
+    trailer.brakeLightsOn = veh.brakeLightsOn;
+    trailer.isReversing = veh.isReversing || (veh.speed < -1 && !veh.isParked);
+    trailer.headlightsOn = veh.headlightsOn;
+    trailer.headlightMode = veh.headlightMode;
+
+    // Tow hitch ball position on towing vehicle (rear)
+    const vehCfg = CAR_CONFIGS[veh.type] || CAR_CONFIGS.sedan;
+    const vehHalfL = vehCfg.length / 2;
+    const hitchOffset = veh.hitchOffset !== undefined ? veh.hitchOffset : (-vehHalfL - 2);
+
+    const cosV = Math.cos(veh.angle);
+    const sinV = Math.sin(veh.angle);
+    const hitchX = veh.x + cosV * hitchOffset;
+    const hitchY = veh.y + sinV * hitchOffset;
+
+    // Trailer details
+    const trailerCfg = CAR_CONFIGS[trailer.type] || CAR_CONFIGS.sedan;
+    const trailerHalfL = trailerCfg.length / 2;
+
+    const oldX = trailer.x;
+    const oldY = trailer.y;
+
+    if (trailer.type === 'trailer_flatbed_2axle' || trailer.trailerType === 'turntable_dolly_2axle') {
+      // 2-Axle Turntable Dolly Farm Trailer (2-PTS-4):
+      // - Front turntable dolly pivot P sits at front of chassis
+      // - Front axle and drawbar are mounted on the dolly and swivel around P
+      // - Rear axle R sits at rear of chassis
+      // Modeled as two mathematically chained Tractrix barrels for rock-solid stability:
+      // 1. Dolly drawbar to towing vehicle hitch (first barrel)
+      // 2. Trailer body to dolly turntable pivot (second barrel with persistent rear axle)
+      const pivotDist = trailerHalfL * 0.44; // Distance from chassis center to front turntable pivot (~15px)
+      const rearAxleDist = trailerHalfL * 0.56; // Distance from chassis center to rear fixed axle (~19px)
+      const bodyWheelBase = pivotDist + rearAxleDist; // Total wheelbase between turntable pivot and rear axle (~34px)
+      const drawbarL = trailer.drawbarLength || 20; // Length from turntable pivot to hitch ring coupler
+
+      if (trailer.trailerDollyAngle === undefined) {
+        trailer.trailerDollyAngle = trailer.angle;
+      }
+
+      // Initialize persistent, decoupled dolly coordinates if they don't exist
+      if (trailer.trailerDollyX === undefined || trailer.trailerDollyY === undefined) {
+        trailer.trailerDollyX = trailer.x + Math.cos(trailer.angle) * pivotDist;
+        trailer.trailerDollyY = trailer.y + Math.sin(trailer.angle) * pivotDist;
+      }
+
+      // Initialize persistent rear axle coordinates if they don't exist
+      if (trailer.trailerRearX === undefined || trailer.trailerRearY === undefined) {
+        trailer.trailerRearX = trailer.x - Math.cos(trailer.angle) * rearAxleDist;
+        trailer.trailerRearY = trailer.y - Math.sin(trailer.angle) * rearAxleDist;
+      }
+
+      // Step 2: First Barrel: Dolly drawbar points towards tow hitch ball
+      const dxDolly = hitchX - trailer.trailerDollyX;
+      const dyDolly = hitchY - trailer.trailerDollyY;
+      const distDolly = Math.hypot(dxDolly, dyDolly);
+
+      if (distDolly > 0.001) {
+        trailer.trailerDollyAngle = Math.atan2(dyDolly, dxDolly);
+      }
+
+      // Step 3: Set new position of dolly turntable pivot from hitch using the dolly angle
+      const newDollyX = hitchX - Math.cos(trailer.trailerDollyAngle) * drawbarL;
+      const newDollyY = hitchY - Math.sin(trailer.trailerDollyAngle) * drawbarL;
+
+      // Update persistent dolly coordinates for next frame
+      trailer.trailerDollyX = newDollyX;
+      trailer.trailerDollyY = newDollyY;
+
+      // Step 4: Second Barrel: Trailer body behaves as a trailer hitched to the new turntable pivot
+      // Persistent rear axle position ensures zero feedback oscillation and pristine straight-line tracking
+      const dxBody = newDollyX - trailer.trailerRearX;
+      const dyBody = newDollyY - trailer.trailerRearY;
+      const distBody = Math.hypot(dxBody, dyBody);
+
+      if (distBody > 0.001) {
+        trailer.angle = Math.atan2(dyBody, dxBody);
+      }
+
+      // Step 5: Update rear axle and trailer chassis coordinates based on the new body angle and pivot position
+      const newRearX = newDollyX - Math.cos(trailer.angle) * bodyWheelBase;
+      const newRearY = newDollyY - Math.sin(trailer.angle) * bodyWheelBase;
+      trailer.trailerRearX = newRearX;
+      trailer.trailerRearY = newRearY;
+
+      trailer.x = newDollyX - Math.cos(trailer.angle) * pivotDist;
+      trailer.y = newDollyY - Math.sin(trailer.angle) * pivotDist;
+
+      trailer.vx = (trailer.x - oldX) / Math.max(0.001, dt);
+      trailer.vy = (trailer.y - oldY) / Math.max(0.001, dt);
+      trailer.speed = veh.speed * Math.cos(veh.angle - trailer.angle);
+
+    } else {
+      // Standard 1-Axle Drawbar Trailer (e.g. trailer_barrel):
+      // Single axle with rigid A-frame drawbar extending forward to hitch ball
+      const drawbarL = trailer.couplerOffset !== undefined ? trailer.couplerOffset : 26;
+
+      const dx = hitchX - trailer.x;
+      const dy = hitchY - trailer.y;
+      const dist = Math.hypot(dx, dy);
+
+      if (dist > 0.001) {
+        trailer.angle = Math.atan2(dy, dx);
+      }
+
+      // Geometric coupling: axle is kept exactly drawbarL distance behind hitch point
+      trailer.x = hitchX - Math.cos(trailer.angle) * drawbarL;
+      trailer.y = hitchY - Math.sin(trailer.angle) * drawbarL;
+
+      trailer.vx = (trailer.x - oldX) / Math.max(0.001, dt);
+      trailer.vy = (trailer.y - oldY) / Math.max(0.001, dt);
+      trailer.speed = veh.speed * Math.cos(veh.angle - trailer.angle);
+    }
+  }
+}
+
+export function hitchTrailerToVehicle(vehicle: Vehicle, trailer: Vehicle, world: GameWorld): boolean {
+  if (vehicle.trailerId || trailer.towedById) return false;
+  vehicle.trailerId = trailer.id;
+  trailer.towedById = vehicle.id;
+  trailer.isTrailer = true;
+  trailer.isParked = false;
+
+  // Immediately align dolly angle towards tow hitch ball to eliminate initial angle offset on spawn/hitch
+  const vehCfg = CAR_CONFIGS[vehicle.type] || CAR_CONFIGS.sedan;
+  const hitchOffset = vehicle.hitchOffset !== undefined ? vehicle.hitchOffset : (-vehCfg.length / 2 - 2);
+  const hitchX = vehicle.x + Math.cos(vehicle.angle) * hitchOffset;
+  const hitchY = vehicle.y + Math.sin(vehicle.angle) * hitchOffset;
+  const pivotDist = (trailer.length / 2) * 0.46;
+  const curPivotX = trailer.x + Math.cos(trailer.angle) * pivotDist;
+  const curPivotY = trailer.y + Math.sin(trailer.angle) * pivotDist;
+  const dx = hitchX - curPivotX;
+  const dy = hitchY - curPivotY;
+  if (Math.hypot(dx, dy) > 0.001) {
+    trailer.trailerDollyAngle = Math.atan2(dy, dx);
+  } else {
+    trailer.trailerDollyAngle = vehicle.angle;
+  }
+  trailer.trailerDollyX = curPivotX;
+  trailer.trailerDollyY = curPivotY;
+
+  const rearAxleDist = (trailer.length / 2) * 0.56;
+  trailer.trailerRearX = trailer.x - Math.cos(trailer.angle) * rearAxleDist;
+  trailer.trailerRearY = trailer.y - Math.sin(trailer.angle) * rearAxleDist;
+
+  sound.playButtonPress();
+  return true;
+}
+
+export function unhitchTrailerFromVehicle(vehicle: Vehicle, world: GameWorld): boolean {
+  if (!vehicle.trailerId) return false;
+  const trailer = world.vehicles.find(v => v.id === vehicle.trailerId);
+  if (trailer) {
+    trailer.towedById = null;
+    trailer.speed = 0;
+    trailer.vx = 0;
+    trailer.vy = 0;
+    trailer.isParked = true;
+    trailer.trailerDollyX = undefined;
+    trailer.trailerDollyY = undefined;
+    trailer.trailerRearX = undefined;
+    trailer.trailerRearY = undefined;
+  }
+  vehicle.trailerId = null;
+  sound.playButtonPress();
+  return true;
+}
+
+export function toggleTrailerHitch(vehicle: Vehicle, world: GameWorld, playerNotifications?: any): boolean {
+  if (vehicle.trailerId) {
+    unhitchTrailerFromVehicle(vehicle, world);
+    if (playerNotifications && typeof playerNotifications.add === 'function') {
+      playerNotifications.add('Прицеп отцеплен', 'info');
+    }
+    return true;
+  }
+
+  if (!canVehicleHaveHitch(vehicle)) {
+    if (playerNotifications && typeof playerNotifications.add === 'function') {
+      playerNotifications.add('У этого транспортного средства нет фаркопа', 'warning');
+    }
+    return false;
+  }
+  const vehCfg = CAR_CONFIGS[vehicle.type] || CAR_CONFIGS.sedan;
+  const hitchOffset = vehicle.hitchOffset !== undefined ? vehicle.hitchOffset : (-vehCfg.length / 2 - 2);
+  const hitchX = vehicle.x + Math.cos(vehicle.angle) * hitchOffset;
+  const hitchY = vehicle.y + Math.sin(vehicle.angle) * hitchOffset;
+
+  let nearestTrailer: Vehicle | null = null;
+  let minDist = 110;
+
+  for (const other of world.vehicles) {
+    if (other.id === vehicle.id) continue;
+    if (other.type.startsWith('trailer_') || other.isTrailer) {
+      if (other.towedById && other.towedById !== vehicle.id) continue;
+      const otherCfg = CAR_CONFIGS[other.type] || CAR_CONFIGS.sedan;
+      const couplerOffset = other.couplerOffset !== undefined ? other.couplerOffset : (otherCfg.length / 2 + 8);
+      const couplerX = other.x + Math.cos(other.angle) * couplerOffset;
+      const couplerY = other.y + Math.sin(other.angle) * couplerOffset;
+
+      const d = Math.hypot(hitchX - couplerX, hitchY - couplerY);
+      if (d < minDist) {
+        minDist = d;
+        nearestTrailer = other;
+      }
+    }
+  }
+
+  if (nearestTrailer) {
+    hitchTrailerToVehicle(vehicle, nearestTrailer, world);
+    if (playerNotifications && typeof playerNotifications.add === 'function') {
+      playerNotifications.add(`Прицеп сцеплен: ${CAR_CONFIGS[nearestTrailer.type]?.name || 'Прицеп'}`, 'success');
+    }
+    return true;
+  } else {
+    if (playerNotifications && typeof playerNotifications.add === 'function') {
+      playerNotifications.add('Рядом нет подходящего прицепа для сцепки', 'warning');
+    }
+    return false;
+  }
+}
+
 
 

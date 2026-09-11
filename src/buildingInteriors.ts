@@ -54,6 +54,7 @@ export interface InteriorFurniture {
     | 'file_cabinet'
     | 'server_rack'
     | 'exam_table'
+    | 'car_podium'
     | 'lockers';
   x: number; // relative X
   y: number; // relative Y
@@ -79,6 +80,7 @@ export interface InteriorRoom {
   width: number;
   height: number;
   color: string;
+  floorColor?: string;
   floorStyle?: 'parquet' | 'tile' | 'wood' | 'linoleum' | 'carpet' | 'playmat' | 'concrete';
 }
 
@@ -173,11 +175,64 @@ export function createDefaultBuildingLayout(bld: Building, floor: number): Build
 }
 
 export function getBuildingLayout(bld: Building, floor: number): BuildingLayout {
+  let raw: any = null;
   if (bld.interiors) {
-    if (bld.interiors[floor]) return bld.interiors[floor];
-    if (bld.interiors[String(floor)]) return bld.interiors[String(floor)];
+    if (bld.interiors[floor]) raw = bld.interiors[floor];
+    else if (bld.interiors[String(floor)]) raw = bld.interiors[String(floor)];
   }
-  return createDefaultBuildingLayout(bld, floor);
+  if (!raw) {
+    return createDefaultBuildingLayout(bld, floor);
+  }
+
+  const rawExits = (Array.isArray(raw.exits) && raw.exits.length > 0)
+    ? raw.exits
+    : ((Array.isArray(raw.exitZones) && raw.exitZones.length > 0)
+      ? raw.exitZones
+      : (raw.exitZone ? [raw.exitZone] : []));
+
+  const exits = rawExits.filter(Boolean);
+  if (exits.length === 0) {
+    exits.push({
+      x: Math.max(6, Math.round(bld.width / 2 - 17)),
+      y: Math.max(6, Math.round(bld.height - 14)),
+      width: 34,
+      height: 8
+    });
+  }
+  const exitZone = raw.exitZone || exits[0];
+
+  const rawElevators = Array.isArray(raw.elevators)
+    ? raw.elevators
+    : (raw.elevatorZone ? [raw.elevatorZone] : []);
+  const elevators = rawElevators.filter(Boolean);
+  const elevatorZone = raw.elevatorZone || elevators[0] || { x: 8, y: 8, width: 18, height: 18 };
+
+  const rawStairs = Array.isArray(raw.stairs)
+    ? raw.stairs
+    : (raw.stairsZone ? [raw.stairsZone] : []);
+  const stairs = rawStairs.filter(Boolean);
+  const stairsZone = raw.stairsZone || stairs[0] || { x: 30, y: 8, width: 18, height: 18 };
+
+  return {
+    buildingId: raw.buildingId || bld.id,
+    floor: raw.floor ?? floor,
+    width: raw.width || bld.width,
+    height: raw.height || bld.height,
+    rooms: Array.isArray(raw.rooms)
+      ? raw.rooms.filter(Boolean).map((rm: any) => ({
+          ...rm,
+          color: (typeof rm.color === 'string' && rm.color) ? rm.color : ((typeof rm.floorColor === 'string' && rm.floorColor) ? rm.floorColor : '#1e293b')
+        }))
+      : [],
+    walls: Array.isArray(raw.walls) ? raw.walls.filter(Boolean) : [],
+    furniture: Array.isArray(raw.furniture) ? raw.furniture.filter(Boolean) : [],
+    elevatorZone,
+    stairsZone,
+    exitZone,
+    elevators,
+    stairs,
+    exits
+  };
 }
 
 // Backwards compatibility alias
@@ -268,55 +323,71 @@ export function constrainPlayerToInterior(
   player.y = bld.y + py;
 }
 
-export function renderBuildingInterior(
+// --- OFFSCREEN CANVAS CACHE FOR INTERIOR FLOORS & FURNITURE ---
+const interiorCanvasCache = new Map<string, HTMLCanvasElement>();
+
+function renderStaticInteriorLayout(
   ctx: CanvasRenderingContext2D,
   bld: Building,
   layout: BuildingLayout,
-  player: Player,
-  timeHour: number
+  windows: { x: number; y: number; side: 'top' | 'bottom' | 'left' | 'right' }[],
+  isHospital: boolean
 ) {
-  ctx.save();
-  ctx.translate(bld.x, bld.y);
-
-  // Generate windows along outer walls
-  const windows: { x: number; y: number; side: 'top' | 'bottom' | 'left' | 'right' }[] = [];
-  for (let x = 30; x < bld.width - 30; x += 40) {
-    windows.push({ x, y: 0, side: 'top' });
-    windows.push({ x, y: bld.height, side: 'bottom' });
-  }
-  for (let y = 30; y < bld.height - 30; y += 40) {
-    windows.push({ x: 0, y, side: 'left' });
-    windows.push({ x: bld.width, y, side: 'right' });
-  }
-
-  // Calculate daylight & electric lighting intensity
-  let dayIntensity = 0;
-  if (timeHour >= 5 && timeHour < 19) {
-    if (timeHour < 12) {
-      dayIntensity = (timeHour - 5) / 7;
-    } else {
-      dayIntensity = (19 - timeHour) / 7;
-    }
-  }
-
-  let electricIntensity = 0;
-  if (timeHour >= 17 || timeHour < 7) {
-    if (timeHour >= 17 && timeHour < 20) {
-      electricIntensity = (timeHour - 17) / 3;
-    } else if (timeHour >= 4 && timeHour < 7) {
-      electricIntensity = (7 - timeHour) / 3;
-    } else {
-      electricIntensity = 1;
-    }
-  }
-
   // Base background floor of the building
-  ctx.fillStyle = '#0f172a';
-  ctx.fillRect(0, 0, bld.width, bld.height);
+  if (isHospital) {
+    ctx.fillStyle = '#eef2f6';
+    ctx.fillRect(0, 0, bld.width, bld.height);
 
-  // Render rooms with realistic floor textures
-  for (const rm of layout.rooms) {
-    ctx.fillStyle = rm.color;
+    // Sterile institutional floor tiles (single batched stroke for high FPS)
+    ctx.strokeStyle = 'rgba(148, 163, 184, 0.28)';
+    ctx.lineWidth = 0.6;
+    ctx.beginPath();
+    for (let tx = 0; tx < bld.width; tx += 12) {
+      ctx.moveTo(tx, 0); ctx.lineTo(tx, bld.height);
+    }
+    for (let ty = 0; ty < bld.height; ty += 12) {
+      ctx.moveTo(0, ty); ctx.lineTo(bld.width, ty);
+    }
+    ctx.stroke();
+
+    // Classic Hospital Floor Navigation Guide Lines
+    ctx.strokeStyle = 'rgba(239, 68, 68, 0.42)';
+    ctx.lineWidth = 1.8;
+    ctx.beginPath();
+    ctx.moveTo(25, 116);
+    ctx.lineTo(bld.width - 25, 116);
+    ctx.stroke();
+
+    ctx.strokeStyle = 'rgba(2, 132, 199, 0.42)';
+    ctx.lineWidth = 1.8;
+    ctx.beginPath();
+    ctx.moveTo(25, 124);
+    ctx.lineTo(bld.width - 25, 124);
+    ctx.stroke();
+
+    // Red Cross emblem in main lobby floor
+    const crossX = 221;
+    const crossY = 172;
+    ctx.fillStyle = 'rgba(239, 68, 68, 0.3)';
+    ctx.fillRect(crossX - 9, crossY - 3, 18, 6);
+    ctx.fillRect(crossX - 3, crossY - 9, 6, 18);
+    ctx.strokeStyle = 'rgba(239, 68, 68, 0.65)';
+    ctx.lineWidth = 0.8;
+    ctx.strokeRect(crossX - 9, crossY - 3, 18, 6);
+    ctx.strokeRect(crossX - 3, crossY - 9, 6, 18);
+  } else {
+    ctx.fillStyle = '#0f172a';
+    ctx.fillRect(0, 0, bld.width, bld.height);
+  }
+
+  // Render rooms with optimized floor textures
+  for (const rm of (layout.rooms || [])) {
+    if (!rm) continue;
+    const roomColor = (typeof rm.color === 'string' && rm.color)
+      ? rm.color
+      : ((typeof (rm as any).floorColor === 'string' && (rm as any).floorColor) ? (rm as any).floorColor : '#1e293b');
+
+    ctx.fillStyle = roomColor;
     ctx.fillRect(rm.x, rm.y, rm.width, rm.height);
 
     ctx.save();
@@ -324,42 +395,49 @@ export function renderBuildingInterior(
     ctx.rect(rm.x, rm.y, rm.width, rm.height);
     ctx.clip();
     
-    if (rm.floorStyle === 'tile' || rm.color === '#1e293b' || rm.color === '#042f2e' || rm.color === '#0f172a') {
-      // Ceramic tile grid
-      ctx.strokeStyle = 'rgba(255,255,255,0.04)';
+    if (rm.floorStyle === 'tile' || roomColor === '#1e293b' || roomColor === '#042f2e' || roomColor === '#0f172a' || isHospital) {
+      // Ceramic tile grid (single batched stroke)
+      ctx.strokeStyle = isHospital || roomColor.startsWith('#f') || roomColor.startsWith('#e') || roomColor.startsWith('#d') 
+        ? 'rgba(100, 116, 139, 0.18)' 
+        : 'rgba(255,255,255,0.04)';
       ctx.lineWidth = 0.6;
-      for (let tx = rm.x; tx < rm.x + rm.width; tx += 8) {
-        ctx.beginPath(); ctx.moveTo(tx, rm.y); ctx.lineTo(tx, rm.y + rm.height); ctx.stroke();
+      ctx.beginPath();
+      for (let tx = rm.x; tx < rm.x + rm.width; tx += 10) {
+        ctx.moveTo(tx, rm.y); ctx.lineTo(tx, rm.y + rm.height);
       }
-      for (let ty = rm.y; ty < rm.y + rm.height; ty += 8) {
-        ctx.beginPath(); ctx.moveTo(rm.x, ty); ctx.lineTo(rm.x + rm.width, ty); ctx.stroke();
+      for (let ty = rm.y; ty < rm.y + rm.height; ty += 10) {
+        ctx.moveTo(rm.x, ty); ctx.lineTo(rm.x + rm.width, ty);
       }
+      ctx.stroke();
     } else if (rm.floorStyle === 'parquet' || rm.floorStyle === 'wood') {
-      // Parquet wood planks
+      // Parquet wood planks (batched stroke)
       ctx.strokeStyle = 'rgba(0,0,0,0.18)';
       ctx.lineWidth = 0.5;
-      for (let ty = rm.y; ty < rm.y + rm.height; ty += 3.5) {
-        ctx.beginPath(); ctx.moveTo(rm.x, ty); ctx.lineTo(rm.x + rm.width, ty); ctx.stroke();
+      ctx.beginPath();
+      for (let ty = rm.y; ty < rm.y + rm.height; ty += 4) {
+        ctx.moveTo(rm.x, ty); ctx.lineTo(rm.x + rm.width, ty);
       }
+      ctx.stroke();
     } else if (rm.floorStyle === 'playmat') {
-      // Kids playmat pattern
+      // Kids playmat pattern (batched stroke)
       ctx.strokeStyle = 'rgba(255,255,255,0.08)';
       ctx.lineWidth = 0.8;
-      for (let tx = rm.x; tx < rm.x + rm.width; tx += 12) {
-        ctx.beginPath(); ctx.moveTo(tx, rm.y); ctx.lineTo(tx, rm.y + rm.height); ctx.stroke();
+      ctx.beginPath();
+      for (let tx = rm.x; tx < rm.x + rm.width; tx += 14) {
+        ctx.moveTo(tx, rm.y); ctx.lineTo(tx, rm.y + rm.height);
       }
+      ctx.stroke();
     }
     
-    // Ambient Occlusion / subtle inner shadow for rooms
-    ctx.shadowColor = 'rgba(0,0,0,0.45)';
-    ctx.shadowBlur = 8;
-    ctx.strokeStyle = rm.color;
-    ctx.lineWidth = 4;
-    ctx.strokeRect(rm.x - 2, rm.y - 2, rm.width + 4, rm.height + 4);
+    // Crisp room boundary (zero shadowBlur for high performance)
+    ctx.strokeStyle = isHospital ? 'rgba(148, 163, 184, 0.3)' : 'rgba(0,0,0,0.3)';
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(rm.x + 0.5, rm.y + 0.5, rm.width - 1, rm.height - 1);
     ctx.restore();
 
     // Cyrillic room label
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.28)';
+    const isLightFloor = isHospital || roomColor.startsWith('#f') || roomColor.startsWith('#e') || roomColor.startsWith('#d') || roomColor.startsWith('#c');
+    ctx.fillStyle = isLightFloor ? 'rgba(15, 23, 42, 0.65)' : 'rgba(255, 255, 255, 0.28)';
     ctx.font = 'bold 5px sans-serif';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
@@ -367,7 +445,8 @@ export function renderBuildingInterior(
   }
 
   // Draw all elevator zones (Лифты)
-  for (const el of layout.elevators) {
+  for (const el of (layout.elevators || [])) {
+    if (!el) continue;
     ctx.fillStyle = '#334155';
     ctx.fillRect(el.x, el.y, el.width, el.height);
     ctx.strokeStyle = '#64748b';
@@ -396,7 +475,8 @@ export function renderBuildingInterior(
   }
 
   // Draw all stairs zones (Лестницы)
-  for (const st of layout.stairs) {
+  for (const st of (layout.stairs || [])) {
+    if (!st) continue;
     ctx.fillStyle = '#1e293b';
     ctx.fillRect(st.x, st.y, st.width, st.height);
     ctx.strokeStyle = '#64748b';
@@ -422,7 +502,9 @@ export function renderBuildingInterior(
   }
 
   // Draw all exit zones (Выходы на улицу)
-  for (const ex of layout.exits) {
+  const exitsList = (layout.exits && layout.exits.length > 0) ? layout.exits : (layout.exitZone ? [layout.exitZone] : []);
+  for (const ex of exitsList) {
+    if (!ex) continue;
     ctx.fillStyle = 'rgba(34, 197, 94, 0.22)';
     ctx.fillRect(ex.x, ex.y, ex.width, ex.height);
     ctx.strokeStyle = '#22c55e';
@@ -436,69 +518,6 @@ export function renderBuildingInterior(
     ctx.fillText('ВЫХОД', ex.x + ex.width / 2, ex.y + ex.height / 2);
   }
 
-  // Volumetric daylight beams from windows
-  if (dayIntensity > 0) {
-    ctx.save();
-    ctx.globalCompositeOperation = 'screen';
-    
-    for (const win of windows) {
-      let x1 = win.x;
-      let y1 = win.y;
-      let x2 = win.x;
-      let y2 = win.y;
-      
-      const beamLength = 48;
-      const beamSpread = 14;
-      
-      let p1x = 0, p1y = 0, p2x = 0, p2y = 0, p3x = 0, p3y = 0, p4x = 0, p4y = 0;
-      
-      if (win.side === 'top') {
-        y2 = win.y + beamLength;
-        x2 = win.x + 12;
-        p1x = win.x - 5; p1y = win.y;
-        p2x = win.x + 5; p2y = win.y;
-        p3x = x2 + beamSpread; p3y = y2;
-        p4x = x2 - beamSpread; p4y = y2;
-      } else if (win.side === 'bottom') {
-        y2 = win.y - beamLength;
-        x2 = win.x - 12;
-        p1x = win.x - 5; p1y = win.y;
-        p2x = win.x + 5; p2y = win.y;
-        p3x = x2 + beamSpread; p3y = y2;
-        p4x = x2 - beamSpread; p4y = y2;
-      } else if (win.side === 'left') {
-        x2 = win.x + beamLength;
-        y2 = win.y + 12;
-        p1x = win.x; p1y = win.y - 5;
-        p2x = win.x; p2y = win.y + 5;
-        p3x = x2; p3y = y2 + beamSpread;
-        p4x = x2; p4y = y2 - beamSpread;
-      } else if (win.side === 'right') {
-        x2 = win.x - beamLength;
-        y2 = win.y - 12;
-        p1x = win.x; p1y = win.y - 5;
-        p2x = win.x; p2y = win.y + 5;
-        p3x = x2; p3y = y2 + beamSpread;
-        p4x = x2; p4y = y2 - beamSpread;
-      }
-      
-      const grad = ctx.createLinearGradient(x1, y1, x2, y2);
-      grad.addColorStop(0, `rgba(254, 240, 138, ${0.32 * dayIntensity})`);
-      grad.addColorStop(0.3, `rgba(254, 240, 138, ${0.14 * dayIntensity})`);
-      grad.addColorStop(1, 'rgba(254, 240, 138, 0)');
-      
-      ctx.fillStyle = grad;
-      ctx.beginPath();
-      ctx.moveTo(p1x, p1y);
-      ctx.lineTo(p2x, p2y);
-      ctx.lineTo(p3x, p3y);
-      ctx.lineTo(p4x, p4y);
-      ctx.closePath();
-      ctx.fill();
-    }
-    ctx.restore();
-  }
-
   // Draw Furniture with high-fidelity vector textures
   // 1. Base floor textiles (carpets, rugs) drawn first
   for (const f of layout.furniture) {
@@ -506,26 +525,27 @@ export function renderBuildingInterior(
       ctx.save();
       ctx.translate(f.x + f.width / 2, f.y + f.height / 2);
       ctx.rotate(f.angle);
-      renderInteriorFurniture(ctx, f, timeHour);
+      renderInteriorFurniture(ctx, f, 12);
       ctx.restore();
     }
   }
 
-  // 2. Physical furniture items with realistic depth & contact shadows
+  // 2. Physical furniture items with realistic depth & lightweight contact shadows
   for (const f of layout.furniture) {
     if (f.type !== 'carpet') {
       ctx.save();
       ctx.translate(f.x + f.width / 2, f.y + f.height / 2);
       ctx.rotate(f.angle);
 
+      // Lightweight crisp ambient contact shadow (Zero GPU Gaussian blur overhead)
       if (f.type !== 'blackboard' && f.type !== 'whiteboard') {
-        ctx.shadowColor = 'rgba(0, 0, 0, 0.38)';
-        ctx.shadowBlur = 4;
-        ctx.shadowOffsetX = 1.2;
-        ctx.shadowOffsetY = 1.2;
+        const halfW = f.width / 2;
+        const halfH = f.height / 2;
+        ctx.fillStyle = 'rgba(15, 23, 42, 0.22)';
+        ctx.fillRect(-halfW + 0.8, -halfH + 0.8, f.width, f.height);
       }
 
-      renderInteriorFurniture(ctx, f, timeHour);
+      renderInteriorFurniture(ctx, f, 12);
       ctx.restore();
     }
   }
@@ -605,9 +625,139 @@ export function renderBuildingInterior(
     }
     ctx.stroke();
   }
+}
 
-  // Electric Ceiling Lights at night
-  if (electricIntensity > 0) {
+export function renderBuildingInterior(
+  ctx: CanvasRenderingContext2D,
+  bld: Building,
+  layout: BuildingLayout,
+  player: Player,
+  timeHour: number
+) {
+  ctx.save();
+  ctx.translate(bld.x, bld.y);
+
+  // Generate windows along outer walls
+  const windows: { x: number; y: number; side: 'top' | 'bottom' | 'left' | 'right' }[] = [];
+  for (let x = 30; x < bld.width - 30; x += 40) {
+    windows.push({ x, y: 0, side: 'top' });
+    windows.push({ x, y: bld.height, side: 'bottom' });
+  }
+  for (let y = 30; y < bld.height - 30; y += 40) {
+    windows.push({ x: 0, y, side: 'left' });
+    windows.push({ x: bld.width, y, side: 'right' });
+  }
+
+  // Calculate daylight & electric lighting intensity
+  let dayIntensity = 0;
+  if (timeHour >= 5 && timeHour < 19) {
+    if (timeHour < 12) {
+      dayIntensity = (timeHour - 5) / 7;
+    } else {
+      dayIntensity = (19 - timeHour) / 7;
+    }
+  }
+
+  let electricIntensity = 0;
+  if (timeHour >= 17 || timeHour < 7) {
+    if (timeHour >= 17 && timeHour < 20) {
+      electricIntensity = (timeHour - 17) / 3;
+    } else if (timeHour >= 4 && timeHour < 7) {
+      electricIntensity = (7 - timeHour) / 3;
+    } else {
+      electricIntensity = 1;
+    }
+  }
+
+  const isHospital = bld.type === 'hospital';
+
+  // Render static floor & furniture from cached bitmap
+  const cacheKey = `${bld.id}_${(bld as any).currentFloor ?? 0}_${bld.width}_${bld.height}_${layout.rooms?.length || 0}_${layout.furniture?.length || 0}`;
+  let cachedCanvas = interiorCanvasCache.get(cacheKey);
+  if (!cachedCanvas && typeof document !== 'undefined') {
+    cachedCanvas = document.createElement('canvas');
+    cachedCanvas.width = bld.width;
+    cachedCanvas.height = bld.height;
+    const cCtx = cachedCanvas.getContext('2d');
+    if (cCtx) {
+      renderStaticInteriorLayout(cCtx, bld, layout, windows, isHospital);
+      interiorCanvasCache.set(cacheKey, cachedCanvas);
+    }
+  }
+
+  if (cachedCanvas) {
+    ctx.drawImage(cachedCanvas, 0, 0);
+  } else {
+    renderStaticInteriorLayout(ctx, bld, layout, windows, isHospital);
+  }
+
+  // Dynamic Layer 1: Volumetric daylight beams from windows
+  if (dayIntensity > 0) {
+    ctx.save();
+    ctx.globalCompositeOperation = 'screen';
+    
+    for (const win of windows) {
+      let x1 = win.x;
+      let y1 = win.y;
+      let x2 = win.x;
+      let y2 = win.y;
+      
+      const beamLength = 48;
+      const beamSpread = 14;
+      
+      let p1x = 0, p1y = 0, p2x = 0, p2y = 0, p3x = 0, p3y = 0, p4x = 0, p4y = 0;
+      
+      if (win.side === 'top') {
+        y2 = win.y + beamLength;
+        x2 = win.x + 12;
+        p1x = win.x - 5; p1y = win.y;
+        p2x = win.x + 5; p2y = win.y;
+        p3x = x2 + beamSpread; p3y = y2;
+        p4x = x2 - beamSpread; p4y = y2;
+      } else if (win.side === 'bottom') {
+        y2 = win.y - beamLength;
+        x2 = win.x - 12;
+        p1x = win.x - 5; p1y = win.y;
+        p2x = win.x + 5; p2y = win.y;
+        p3x = x2 + beamSpread; p3y = y2;
+        p4x = x2 - beamSpread; p4y = y2;
+      } else if (win.side === 'left') {
+        x2 = win.x + beamLength;
+        y2 = win.y + 12;
+        p1x = win.x; p1y = win.y - 5;
+        p2x = win.x + 5; p2y = win.y;
+        p3x = x2 + beamSpread; p3y = y2;
+        p4x = x2 - beamSpread; p4y = y2;
+      } else if (win.side === 'right') {
+        x2 = win.x - beamLength;
+        y2 = win.y - 12;
+        p1x = win.x - 5; p1y = win.y;
+        p2x = win.x + 5; p2y = win.y;
+        p3x = x2 + beamSpread; p3y = y2;
+        p4x = x2 - beamSpread; p4y = y2;
+      }
+      
+      const grad = ctx.createLinearGradient(x1, y1, x2, y2);
+      grad.addColorStop(0, `rgba(254, 240, 138, ${0.32 * dayIntensity})`);
+      grad.addColorStop(0.3, `rgba(254, 240, 138, ${0.14 * dayIntensity})`);
+      grad.addColorStop(1, 'rgba(254, 240, 138, 0)');
+      
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.moveTo(p1x, p1y);
+      ctx.lineTo(p2x, p2y);
+      ctx.lineTo(p3x, p3y);
+      ctx.lineTo(p4x, p4y);
+      ctx.closePath();
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  // Dynamic Layer 2: Electric Ceiling Lights (Fluorescent in hospital, warm incandescent in residential)
+  const isNight = electricIntensity > 0;
+  if (isNight || isHospital) {
+    const intensity = isHospital ? Math.max(0.7, electricIntensity) : electricIntensity;
     const lights: { x: number; y: number; radius: number }[] = [];
     
     for (const rm of layout.rooms) {
@@ -624,7 +774,8 @@ export function renderBuildingInterior(
       }
     }
 
-    for (const el of layout.elevators) {
+    for (const el of (layout.elevators || [])) {
+      if (!el) continue;
       lights.push({ x: el.x + el.width / 2, y: el.y + el.height / 2, radius: 22 });
     }
 
@@ -632,9 +783,17 @@ export function renderBuildingInterior(
     ctx.globalCompositeOperation = 'screen';
     for (const lt of lights) {
       const grad = ctx.createRadialGradient(lt.x, lt.y, 1.5, lt.x, lt.y, lt.radius);
-      grad.addColorStop(0, `rgba(253, 224, 71, ${0.44 * electricIntensity})`);
-      grad.addColorStop(0.35, `rgba(253, 224, 71, ${0.16 * electricIntensity})`);
-      grad.addColorStop(1, 'rgba(253, 224, 71, 0)');
+      if (isHospital) {
+        // Cold white-cyan 5500K clinical fluorescent light
+        grad.addColorStop(0, `rgba(224, 242, 254, ${0.48 * intensity})`);
+        grad.addColorStop(0.35, `rgba(186, 230, 253, ${0.18 * intensity})`);
+        grad.addColorStop(1, 'rgba(186, 230, 253, 0)');
+      } else {
+        // Warm home incandescent light
+        grad.addColorStop(0, `rgba(253, 224, 71, ${0.44 * intensity})`);
+        grad.addColorStop(0.35, `rgba(253, 224, 71, ${0.16 * intensity})`);
+        grad.addColorStop(1, 'rgba(253, 224, 71, 0)');
+      }
       
       ctx.fillStyle = grad;
       ctx.beginPath();
@@ -644,10 +803,19 @@ export function renderBuildingInterior(
     ctx.restore();
 
     for (const lt of lights) {
-      ctx.fillStyle = '#ffffff';
-      ctx.beginPath();
-      ctx.arc(lt.x, lt.y, 1.4, 0, Math.PI * 2);
-      ctx.fill();
+      if (isHospital) {
+        // Fluorescent rectangular ceiling diffuser troffer (ЛВО 600x600)
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(lt.x - 3, lt.y - 1.5, 6, 3);
+        ctx.strokeStyle = '#bae6fd';
+        ctx.lineWidth = 0.5;
+        ctx.strokeRect(lt.x - 3, lt.y - 1.5, 6, 3);
+      } else {
+        ctx.fillStyle = '#ffffff';
+        ctx.beginPath();
+        ctx.arc(lt.x, lt.y, 1.4, 0, Math.PI * 2);
+        ctx.fill();
+      }
     }
   }
 

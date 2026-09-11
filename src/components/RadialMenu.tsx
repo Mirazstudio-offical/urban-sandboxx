@@ -12,9 +12,12 @@ import {
   Wind,
   AlertTriangle,
   Thermometer,
-  Gauge
+  Gauge,
+  Link2
 } from 'lucide-react';
 import { sound } from '../audio';
+import { toggleTrailerHitch } from '../physics';
+import { getLiquidNameRu } from '../vehicleHelpers';
 
 interface RadialMenuProps {
   isOpen: boolean;
@@ -28,6 +31,7 @@ interface RadialMenuProps {
   onChangeHeaterMode: (mode: 'off' | 'low' | 'med' | 'high') => void;
   onToggleWindow?: () => void;
   onToggleEngine?: () => void;
+  onToggleTrailerHitch?: () => void;
 }
 
 export const RadialMenu: React.FC<RadialMenuProps> = ({
@@ -41,7 +45,8 @@ export const RadialMenu: React.FC<RadialMenuProps> = ({
   onToggleTurnSignal,
   onChangeHeaterMode,
   onToggleWindow,
-  onToggleEngine
+  onToggleEngine,
+  onToggleTrailerHitch
 }) => {
   if (!isOpen || !player || !world) return null;
 
@@ -186,6 +191,23 @@ export const RadialMenu: React.FC<RadialMenuProps> = ({
         sound.playButtonPress();
         onToggleTurnSignal('left');
       }
+    },
+    {
+      id: 'trailer',
+      label: 'ПРИЦЕП',
+      keyHint: 'H',
+      sub: veh.trailerId ? 'СЦЕПЛЕН' : 'ОТЦЕПЛЕН',
+      icon: <Link2 className={`w-5 h-5 ${veh.trailerId ? 'text-amber-400' : 'text-slate-400'}`} />,
+      active: !!veh.trailerId,
+      badgeColor: veh.trailerId ? 'bg-amber-500 text-amber-950' : 'bg-slate-700 text-slate-300',
+      activeBorder: veh.trailerId ? 'border-amber-400/80 shadow-amber-500/20 text-amber-400' : 'border-slate-700/80 text-slate-400',
+      action: () => {
+        if (onToggleTrailerHitch) {
+          onToggleTrailerHitch();
+        } else {
+          toggleTrailerHitch(veh, world);
+        }
+      }
     }
   ];
 
@@ -257,6 +279,36 @@ export const RadialMenu: React.FC<RadialMenuProps> = ({
                 <span className={`font-mono font-bold ${fogPercent > 35 ? 'text-amber-400' : 'text-slate-300'}`}>
                   {fogPercent > 0 ? `Туман ${fogPercent}%` : `Дождь ${rainPercent}%`}
                 </span>
+              </div>
+            )}
+
+            {/* Fluid Storage Tank (Cistern / Tanker / Barrel) */}
+            {veh.fluidTank && veh.fluidTank.capacity > 0 && (
+              <div className="flex flex-col gap-0.5 mt-1 pt-1 border-t border-slate-800 text-[9px]">
+                <div className="flex items-center justify-between px-1">
+                  <span className="text-slate-400">Бак:</span>
+                  <span className="font-mono font-bold text-sky-400">
+                    {Math.round(veh.fluidTank.currentVolume ?? veh.fluidTank.currentAmount ?? 0)} / {veh.fluidTank.capacity} л
+                  </span>
+                </div>
+                <div className="flex items-center justify-between px-1">
+                  <span className="text-slate-400 truncate max-w-[80px]">{getLiquidNameRu(veh.fluidTank.liquidType)}</span>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      veh.fluidTank!.drainValveOpen = !veh.fluidTank!.drainValveOpen;
+                      sound.playButtonPress();
+                    }}
+                    className={`px-1.5 py-0.5 rounded text-[8px] font-bold cursor-pointer transition ${
+                      veh.fluidTank.drainValveOpen 
+                        ? 'bg-rose-500 text-white animate-pulse' 
+                        : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+                    }`}
+                  >
+                    {veh.fluidTank.drainValveOpen ? 'СЛИВ: ВКЛ' : 'СЛИВ: ВЫКЛ'}
+                  </button>
+                </div>
               </div>
             )}
           </div>

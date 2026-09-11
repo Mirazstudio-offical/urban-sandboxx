@@ -147,6 +147,7 @@ export function distributeImpactDamage(
   impactAngle: number = 0,
   isVehicleCollision: boolean = true
 ) {
+  if (!player || player.isInvincible || player.isCleanMode) return;
   if (!player.bodyState) {
     player.bodyState = createDefaultBodyState();
   }
@@ -258,7 +259,7 @@ export function applyDriverVehicleCrashTrauma(
   resistanceFactor: number = 1.0,
   vehicle?: Vehicle
 ) {
-  if (!player.needs) return;
+  if (!player || !player.needs || player.isInvincible || player.isCleanMode) return;
 
   const now = Date.now() / 1000;
   if (player.lastHurtTime && now - player.lastHurtTime < 0.45) {

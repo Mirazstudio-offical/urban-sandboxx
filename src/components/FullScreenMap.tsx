@@ -79,6 +79,16 @@ export interface CityLandmark {
 // REAL in-game landmarks (strictly matching game world locations)
 export const REAL_LANDMARKS: CityLandmark[] = [
   {
+    id: 'car_dealership_showroom',
+    name: 'City Car Dealership & Showroom',
+    nameRu: '🚘 Автосалон "Премиум Авто"',
+    category: 'commercial',
+    x: 252,
+    y: 5800,
+    icon: <Briefcase className="w-5 h-5 text-amber-400" />,
+    description: 'Официальный автосалон: выставка машин, покупка, оформление ПТС и ключей'
+  },
+  {
     id: 'central_park',
     name: 'Central Park & Fountain',
     nameRu: 'Центральный Парк (Фонтан & Сквер)',
@@ -123,8 +133,8 @@ export const REAL_LANDMARKS: CityLandmark[] = [
     name: 'Freight Logistics Hub',
     nameRu: 'Логистический Хаб (Промзона)',
     category: 'industrial',
-    x: 5200,
-    y: 4400,
+    x: 6530,
+    y: 1030,
     icon: <Truck className="w-5 h-5 text-stone-400" />,
     description: 'Грузовые ангары, склады, стоянки спецтехники и терминалы'
   },
@@ -147,6 +157,26 @@ export const REAL_LANDMARKS: CityLandmark[] = [
     y: 4000,
     icon: <Navigation className="w-5 h-5 text-sky-400" />,
     description: 'Четырехполосная скоростная магистраль с активным движением'
+  },
+  {
+    id: 'steppe_village',
+    name: 'Old Semi-Abandoned Village Polynovka',
+    nameRu: 'Деревня Полыновка (Полузаброшенная)',
+    category: 'nature',
+    x: 11500,
+    y: 2480,
+    icon: <Home className="w-5 h-5 text-amber-500" />,
+    description: 'Старая глухая деревня с покосившимися деревянными избами, заросшими садами, скрипучим колодцем, амбаром и атмосферой советского запустения'
+  },
+  {
+    id: 'steppe_road_end',
+    name: 'Steppe Highway Terminus & Loop',
+    nameRu: 'Конец Магистрали (Разворотная петля)',
+    category: 'commercial',
+    x: 14400,
+    y: 4000,
+    icon: <Navigation className="w-5 h-5 text-sky-400" />,
+    description: 'Оборудованная разворотная петля в конце скоростного шоссе, предупреждающие знаки, бетонные блоки и выход в бескрайнюю степь'
   },
   ...CITY_SHOPS.map((s) => ({
     id: s.id,
@@ -402,8 +432,8 @@ export const FullScreenMap: React.FC<FullScreenMapProps> = ({
 
       // 4. Intersections & Real-time Signal Lights
       world.intersections.forEach((inter) => {
-        const phase = inter.phases[inter.currentPhaseIndex];
-        const isGreen = phase.nsState === 'green' || phase.nsState === 'green_flashing';
+        const phase = inter.phases?.[inter.currentPhaseIndex] || inter.phases?.[0];
+        const isGreen = phase ? (phase.nsState === 'green' || phase.nsState === 'green_flashing') : false;
 
         ctx.fillStyle = '#0f172a';
         ctx.fillRect(inter.x - inter.width / 2, inter.y - inter.height / 2, inter.width, inter.height);
@@ -418,6 +448,23 @@ export const FullScreenMap: React.FC<FullScreenMapProps> = ({
       // 5. Buildings Vector Footprints (Color coded by archetype)
       world.buildings.forEach((bld) => {
         if (bld.type === 'park_monument') return; // Handled in park section
+
+        if (bld.type === 'car_dealership') {
+          ctx.fillStyle = 'rgba(234, 179, 8, 0.35)';
+          ctx.strokeStyle = '#eab308';
+          ctx.lineWidth = 2.5;
+          ctx.fillRect(bld.x, bld.y, bld.width, bld.height);
+          ctx.strokeRect(bld.x, bld.y, bld.width, bld.height);
+
+          if (zoom > 0.15) {
+            ctx.fillStyle = '#fef08a';
+            ctx.font = 'bold 13px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('🚘 АВТОСАЛОН', bld.x + bld.width / 2, bld.y + bld.height / 2);
+          }
+          return;
+        }
 
         if (bld.type === 'office') {
           ctx.fillStyle = '#1e293b90';

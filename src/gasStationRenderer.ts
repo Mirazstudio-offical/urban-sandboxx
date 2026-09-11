@@ -1,5 +1,6 @@
-import { Camera, GameWorld, GasPumpDispenser, Player, Vehicle } from './types';
+import { Camera, FuelType, GameWorld, GasPumpDispenser, Player, Vehicle } from './types';
 import { FUEL_GRADES, GAS_STATION_CONFIG } from './gasStationSystem';
+import { getVehicleFuelCapPosition } from './vehicleHelpers';
 
 export class GasStationRenderer {
   /**
@@ -582,7 +583,35 @@ export class GasStationRenderer {
   }
 
   /**
-   * Render individual high-detail gas pump unit.
+   * Calculate precise origin coordinates for a nozzle / hose on a dispenser unit.
+   */
+  public static getPumpNozzleOrigin(pump: GasPumpDispenser, fuelType?: FuelType | null): { x: number; y: number } {
+    const isLpg = pump.id === 'gas_pump_5_lpg';
+    const pumpW = 28;
+
+    if (isLpg) {
+      // High-pressure hose manifold on the East side (driveway) of the LPG dispenser
+      return { x: pump.x + pumpW / 2 + 1, y: pump.y + 3 };
+    }
+
+    // Modern MPD: dispensers 1, 3 face West (-1) and dispensers 2, 4 face East (+1)
+    const facingSide = pump.pumpNumber % 2 === 1 ? -1 : 1;
+    const holsterX = pump.x + facingSide * (pumpW / 2 + 1);
+
+    const yOffsets: Record<string, number> = {
+      ai92: -15,
+      ai95: -7.5,
+      ai98: 0,
+      ai100: 7.5,
+      diesel: 15
+    };
+
+    const yOff = (fuelType && yOffsets[fuelType] !== undefined) ? yOffsets[fuelType] : 0;
+    return { x: holsterX, y: pump.y + yOff };
+  }
+
+  /**
+   * Render individual high-detail gas pump unit in realistic top-down perspective.
    */
   private static renderPumpDispenserUnit(
     ctx: CanvasRenderingContext2D,
@@ -593,238 +622,361 @@ export class GasStationRenderer {
     ctx.translate(pump.x, pump.y);
 
     const pumpW = 28;
-    const pumpH = 42;
-    const displayW = 22;
-    const displayH = 10;
-
+    const pumpH = 44;
     const isLpg = pump.id === 'gas_pump_5_lpg';
 
     if (isLpg) {
-      // 1. OLD RETRO VINTAGE LPG PUMP SPECIFIC RENDERING
-      // Dispenser shadow
-      ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+      // ==========================================
+      // 1. LPG AUTOGAS DISPENSER UNIT (ГРК №5 АГЗС)
+      // ==========================================
+      const lpgW = 26;
+      const lpgH = 32;
+
+      // Island anchor shadow
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
       ctx.beginPath();
-      ctx.roundRect(-pumpW / 2 + 2, -pumpH / 2 + 3, pumpW, pumpH, 4);
+      ctx.roundRect(-lpgW / 2 + 3, -lpgH / 2 + 4, lpgW, lpgH, 4);
       ctx.fill();
 
-      // Vintage Teal/Cyan body
-      ctx.fillStyle = '#0f766e'; 
-      ctx.strokeStyle = '#042f2e';
-      ctx.lineWidth = 1.8;
+      // Stainless steel pedestal base plate with corner hex bolts
+      ctx.fillStyle = '#475569';
+      ctx.strokeStyle = '#1e293b';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.roundRect(-lpgW / 2 - 1, -lpgH / 2 - 1, lpgW + 2, lpgH + 2, 3);
+      ctx.fill();
+      ctx.stroke();
+
+      // Bolts on pedestal corners
+      ctx.fillStyle = '#94a3b8';
+      const boltPts = [
+        [-lpgW / 2 + 1, -lpgH / 2 + 1],
+        [lpgW / 2 - 1, -lpgH / 2 + 1],
+        [-lpgW / 2 + 1, lpgH / 2 - 1],
+        [lpgW / 2 - 1, lpgH / 2 - 1]
+      ];
+      for (const [bx, by] of boltPts) {
+        ctx.fillRect(bx - 0.75, by - 0.75, 1.5, 1.5);
+      }
+
+      // Main LPG Column Body (Dual-tone cyan/slate industrial powder-coated metal)
+      const lpgBodyGrad = ctx.createLinearGradient(-lpgW / 2, -lpgH / 2, lpgW / 2, lpgH / 2);
+      lpgBodyGrad.addColorStop(0, '#0369a1');
+      lpgBodyGrad.addColorStop(0.5, '#0284c7');
+      lpgBodyGrad.addColorStop(1, '#0f172a');
+      ctx.fillStyle = lpgBodyGrad;
+      ctx.strokeStyle = '#082f49';
+      ctx.lineWidth = 1.4;
+      ctx.beginPath();
+      ctx.roundRect(-lpgW / 2, -lpgH / 2, lpgW, lpgH, 3);
+      ctx.fill();
+      ctx.stroke();
+
+      // Stainless steel central column cap trim
+      ctx.fillStyle = '#cbd5e1';
+      ctx.fillRect(-lpgW / 2 + 3, -lpgH / 2 + 2, lpgW - 6, 2);
+
+      // Top Glass Head with Russian ADR Flammable Gas Class 2 Placard (Красный ромб "2")
+      ctx.fillStyle = '#dc2626';
+      ctx.beginPath();
+      const diamondSize = 3.5;
+      const dX = -lpgW / 2 + 6;
+      const dY = -lpgH / 2 + 7;
+      ctx.moveTo(dX, dY - diamondSize);
+      ctx.lineTo(dX + diamondSize, dY);
+      ctx.lineTo(dX, dY + diamondSize);
+      ctx.lineTo(dX - diamondSize, dY);
+      ctx.closePath();
+      ctx.fill();
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 0.6;
+      ctx.stroke();
+
+      // High-pressure Glycerin Manometer Dial (Манометр 1.6 МПа)
+      const manoX = lpgW / 2 - 6;
+      const manoY = -lpgH / 2 + 7;
+      ctx.fillStyle = '#f8fafc';
+      ctx.strokeStyle = '#0f172a';
+      ctx.lineWidth = 0.8;
+      ctx.beginPath();
+      ctx.arc(manoX, manoY, 3, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      // Pointer
+      ctx.strokeStyle = '#dc2626';
+      ctx.lineWidth = 0.8;
+      ctx.beginPath();
+      ctx.moveTo(manoX, manoY);
+      ctx.lineTo(manoX + 1.6, manoY - 1.2);
+      ctx.stroke();
+
+      // Emergency Gas Shut-off Mushroom Button (Аварийный СТОП)
+      ctx.fillStyle = '#facc15';
+      ctx.beginPath();
+      ctx.arc(-lpgW / 2 + 6, lpgH / 2 - 6, 2.5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#ef4444';
+      ctx.beginPath();
+      ctx.arc(-lpgW / 2 + 6, lpgH / 2 - 6, 1.8, 0, Math.PI * 2);
+      ctx.fill();
+
+      // LCD Display Screen (Backlit Cyan Digital Panel)
+      const scrW = 18;
+      const scrH = 12;
+      ctx.fillStyle = '#020617';
+      ctx.fillRect(-scrW / 2 + 1, -scrH / 2 + 2, scrW, scrH);
+      ctx.strokeStyle = '#38bdf8';
+      ctx.lineWidth = 0.8;
+      ctx.strokeRect(-scrW / 2 + 1, -scrH / 2 + 2, scrW, scrH);
+
+      ctx.font = 'bold 4.5px monospace';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+
+      if (pump.isPumping) {
+        ctx.fillStyle = '#38bdf8';
+        ctx.fillText(`${(pump.currentPumpedLiters || 0).toFixed(1)}L`, 1, -scrH / 2 + 5.5);
+        ctx.fillStyle = '#4ade80';
+        ctx.fillText(`${pump.displayCost || 0}₽`, 1, -scrH / 2 + 10.5);
+      } else if (pump.status === 'completed') {
+        ctx.fillStyle = '#4ade80';
+        ctx.fillText('ГОТОВО', 1, -scrH / 2 + 5.5);
+        ctx.fillText(`${(pump.currentPumpedLiters || 0).toFixed(1)}L`, 1, -scrH / 2 + 10.5);
+      } else if (pump.status === 'inserted') {
+        ctx.fillStyle = '#facc15';
+        ctx.fillText('В БАКЕ', 1, -scrH / 2 + 5.5);
+        ctx.fillText('КАССА', 1, -scrH / 2 + 10.5);
+      } else {
+        ctx.fillStyle = '#38bdf8';
+        ctx.fillText('LPG №5', 1, -scrH / 2 + 5.5);
+        ctx.fillStyle = '#94a3b8';
+        ctx.fillText('32.20₽', 1, -scrH / 2 + 10.5);
+      }
+
+      // Heavy LPG Fueling Gun Holster on East side (facing driveway)
+      const isTaken = pump.nozzleTaken === 'lpg';
+      const holsterY = 3;
+      if (!isTaken) {
+        // High-pressure brass/metallic clamp nozzle in holster
+        ctx.fillStyle = '#0284c7'; // Cyan protective sleeve
+        ctx.fillRect(lpgW / 2, holsterY - 2, 3.5, 4.5);
+        ctx.fillStyle = '#f59e0b'; // Brass locking clamp
+        ctx.fillRect(lpgW / 2 + 3.5, holsterY - 1.5, 2.5, 3);
+        ctx.fillStyle = '#64748b'; // Trigger safety lever
+        ctx.fillRect(lpgW / 2 + 1, holsterY + 2.5, 2, 1);
+
+        // Heavy rubber hose looping down into holster
+        ctx.strokeStyle = '#0f172a';
+        ctx.lineWidth = 2.4;
+        ctx.beginPath();
+        ctx.arc(lpgW / 2 - 2, lpgH / 2 - 2, 4.5, 0, Math.PI);
+        ctx.stroke();
+      } else {
+        // Empty holster slot with sensor switch
+        ctx.fillStyle = '#082f49';
+        ctx.fillRect(lpgW / 2 - 1, holsterY - 2, 2.5, 4.5);
+        ctx.fillStyle = '#94a3b8';
+        ctx.fillRect(lpgW / 2 - 0.5, holsterY, 1, 1);
+      }
+
+    } else {
+      // ==============================================================
+      // 2. MODERN MULTI-PRODUCT GASOLINE & DIESEL DISPENSER (ТРК 1-4)
+      // ==============================================================
+      // Dispenser drop shadow on concrete island
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
+      ctx.beginPath();
+      ctx.roundRect(-pumpW / 2 + 2, -pumpH / 2 + 3, pumpW, pumpH, 5);
+      ctx.fill();
+
+      // Island base mounting flange with corner anchor studs
+      ctx.fillStyle = '#334155';
+      ctx.strokeStyle = '#0f172a';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.roundRect(-pumpW / 2 - 1.5, -pumpH / 2 - 1.5, pumpW + 3, pumpH + 3, 4);
+      ctx.fill();
+      ctx.stroke();
+
+      // Anchor studs
+      ctx.fillStyle = '#cbd5e1';
+      ctx.fillRect(-pumpW / 2, -pumpH / 2, 1.5, 1.5);
+      ctx.fillRect(pumpW / 2 - 1.5, -pumpH / 2, 1.5, 1.5);
+      ctx.fillRect(-pumpW / 2, pumpH / 2 - 1.5, 1.5, 1.5);
+      ctx.fillRect(pumpW / 2 - 1.5, pumpH / 2 - 1.5, 1.5, 1.5);
+
+      // Main Column Housing (Dark graphite steel body with bevelled edges)
+      const bodyGrad = ctx.createLinearGradient(-pumpW / 2, 0, pumpW / 2, 0);
+      bodyGrad.addColorStop(0, '#1e293b');
+      bodyGrad.addColorStop(0.5, '#0f172a');
+      bodyGrad.addColorStop(1, '#1e293b');
+      ctx.fillStyle = bodyGrad;
+      ctx.strokeStyle = '#020617';
+      ctx.lineWidth = 1.2;
       ctx.beginPath();
       ctx.roundRect(-pumpW / 2, -pumpH / 2, pumpW, pumpH, 4);
       ctx.fill();
       ctx.stroke();
 
-      // Tiny simulated rust spots on the antique body
-      ctx.fillStyle = 'rgba(154, 52, 18, 0.45)'; // Rust orange/brown
-      ctx.fillRect(-pumpW/2 + 2, -pumpH/2 + 15, 3, 2);
-      ctx.fillRect(pumpW/2 - 5, pumpH/2 - 12, 4, 1.5);
-      ctx.fillRect(-3, pumpH/2 - 5, 2, 2);
-
-      // Old analog mechanical roller counter screen (white rectangular board)
-      ctx.fillStyle = '#f8fafc';
-      ctx.strokeStyle = '#1e293b';
-      ctx.lineWidth = 1.2;
-      ctx.fillRect(-displayW / 2, -10, displayW, 20);
-      ctx.strokeRect(-displayW / 2, -10, displayW, 20);
-
-      // Simple black lines representing the split between rollers
-      ctx.strokeStyle = '#cbd5e1';
-      ctx.lineWidth = 1;
+      // Sleek Corporate Green Head Canopy Roof on top of dispenser
+      const headH = 8;
+      const headGrad = ctx.createLinearGradient(0, -pumpH / 2, 0, -pumpH / 2 + headH);
+      headGrad.addColorStop(0, '#22c55e');
+      headGrad.addColorStop(0.6, '#16a34a');
+      headGrad.addColorStop(1, '#15803d');
+      ctx.fillStyle = headGrad;
       ctx.beginPath();
-      ctx.moveTo(-displayW / 2, 0);
-      ctx.lineTo(displayW / 2, 0);
-      ctx.stroke();
-
-      // Old mechanical font numbers
-      ctx.fillStyle = '#0f172a';
-      ctx.font = 'bold 5px monospace';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      
-      if (pump.isPumping) {
-        ctx.fillText(`${(pump.currentPumpedLiters || 0).toFixed(1)} л`, 0, -5);
-        ctx.fillText(`${pump.displayCost || 0} руб`, 0, 5);
-      } else if (pump.status === 'completed') {
-        ctx.fillText(`${(pump.currentPumpedLiters || 0).toFixed(1)} л`, 0, -5);
-        ctx.fillText('ГОТОВО', 0, 5);
-      } else if (pump.status === 'inserted') {
-        ctx.fillText('В БАКЕ', 0, -5);
-        ctx.fillText('КАССА', 0, 5);
-      } else {
-        ctx.fillText('0.0 л', 0, -5);
-        ctx.fillStyle = '#64748b';
-        ctx.font = 'bold 4.5px sans-serif';
-        ctx.fillText('LPG ГАЗ', 0, 5);
-      }
-
-      // Illuminated Vintage Glass Dome on top of the pump (lights up at night!)
-      ctx.save();
-      // Metal base for dome
-      ctx.fillStyle = '#334155';
-      ctx.fillRect(-5, -pumpH / 2 - 2, 10, 2);
-      
-      // Radial glow gradient for the retro gas dome
-      const glowIntensity = nightAlpha > 0.3 ? nightAlpha : 0.3;
-      const domeGrad = ctx.createRadialGradient(0, -pumpH / 2 - 7, 1, 0, -pumpH / 2 - 7, 5);
-      domeGrad.addColorStop(0, '#f0f9ff');
-      domeGrad.addColorStop(0.5, `rgba(14, 165, 233, ${0.7 + glowIntensity * 0.3})`); // glowing propane sky blue
-      domeGrad.addColorStop(1, '#0284c7');
-      
-      ctx.fillStyle = domeGrad;
-      ctx.beginPath();
-      ctx.arc(0, -pumpH / 2 - 6, 4.5, 0, Math.PI * 2);
+      ctx.roundRect(-pumpW / 2, -pumpH / 2, pumpW, headH, [4, 4, 0, 0]);
       ctx.fill();
-      ctx.strokeStyle = '#0284c7';
-      ctx.lineWidth = 1;
-      ctx.stroke();
 
-      // Tiny Russian "ГАЗ" text inside the glowing sphere
+      // White brand accent pinstripe along head
       ctx.fillStyle = '#ffffff';
-      ctx.font = 'bold 3.5px sans-serif';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText('ГАЗ', 0, -pumpH / 2 - 5.5);
-      ctx.restore();
+      ctx.fillRect(-pumpW / 2 + 3, -pumpH / 2 + 3, pumpW - 6, 1.5);
 
-      // Only ONE nozzle holster for LPG on the East side (facing the driveway)
-      const isTaken = pump.nozzleTaken === 'lpg';
-      if (!isTaken) {
-        ctx.fillStyle = '#0ea5e9'; // LPG blue nozzle
-        ctx.fillRect(pumpW / 2, -2, 3, 4);
-        ctx.fillStyle = '#64748b'; // metallic spout
-        ctx.fillRect(pumpW / 2 + 3, -1, 2, 2);
-      } else {
-        ctx.fillStyle = '#0f172a';
-        ctx.fillRect(pumpW / 2, -2, 2, 4);
-      }
-
-      // Old hanging rubber hose loop on the East side
-      ctx.strokeStyle = '#0f172a';
-      ctx.lineWidth = 2.5;
+      // Emergency Stop Mushroom Button on top-left of roof
+      ctx.fillStyle = '#facc15'; // yellow backing disc
       ctx.beginPath();
-      ctx.arc(pumpW / 2 - 3, pumpH / 2 - 2, 5, 0, Math.PI);
-      ctx.stroke();
-
-    } else {
-      // 2. MODERN HIGH-DETAIL GAS STATION PUMP RENDERING
-      // Dispenser Unit Drop Shadow
-      ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
+      ctx.arc(-pumpW / 2 + 5, -pumpH / 2 + headH / 2, 2.2, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#dc2626'; // red push button
       ctx.beginPath();
-      ctx.roundRect(-pumpW / 2 + 2, -pumpH / 2 + 3, pumpW, pumpH, 6);
+      ctx.arc(-pumpW / 2 + 5, -pumpH / 2 + headH / 2, 1.5, 0, Math.PI * 2);
       ctx.fill();
 
-      // Main Housing (Dark graphite steel body with brand green accent)
-      ctx.fillStyle = '#1e293b';
-      ctx.strokeStyle = '#0f172a';
-      ctx.lineWidth = 1.5;
+      // Overhead LED Status Beacon Lens on top-right
+      let beaconColor = '#4ade80';
+      if (pump.status === 'pumping') beaconColor = '#22c55e';
+      else if (pump.status === 'completed') beaconColor = '#38bdf8';
+      else if (pump.status === 'inserted') beaconColor = '#facc15';
+      ctx.fillStyle = beaconColor;
       ctx.beginPath();
-      ctx.roundRect(-pumpW / 2, -pumpH / 2, pumpW, pumpH, 5);
-      ctx.fill();
-      ctx.stroke();
-
-      // Brand Green Top Cap
-      ctx.fillStyle = '#16a34a';
-      ctx.beginPath();
-      ctx.roundRect(-pumpW / 2, -pumpH / 2, pumpW, 8, [5, 5, 0, 0]);
+      ctx.arc(pumpW / 2 - 5, -pumpH / 2 + headH / 2, 1.8, 0, Math.PI * 2);
       ctx.fill();
 
-      // White brand logo line
-      ctx.fillStyle = '#ffffff';
-      ctx.fillRect(-pumpW / 2 + 4, -pumpH / 2 + 3, pumpW - 8, 2);
-
-      // North display
+      // North Display Screen Pod (Digital LED matrix)
+      const dW = 18;
+      const dH = 8.5;
       ctx.fillStyle = '#020617';
-      ctx.fillRect(-displayW / 2, -12, displayW, displayH);
+      ctx.fillRect(-dW / 2, -12.5, dW, dH);
       ctx.strokeStyle = '#334155';
-      ctx.lineWidth = 1;
-      ctx.strokeRect(-displayW / 2, -12, displayW, displayH);
+      ctx.lineWidth = 0.8;
+      ctx.strokeRect(-dW / 2, -12.5, dW, dH);
 
-      // South display
+      // South Display Screen Pod
       ctx.fillStyle = '#020617';
-      ctx.fillRect(-displayW / 2, 2, displayW, displayH);
+      ctx.fillRect(-dW / 2, 4, dW, dH);
       ctx.strokeStyle = '#334155';
-      ctx.lineWidth = 1;
-      ctx.strokeRect(-displayW / 2, 2, displayW, displayH);
+      ctx.lineWidth = 0.8;
+      ctx.strokeRect(-dW / 2, 4, dW, dH);
 
-      // Glowing LED Digits on screens
-      ctx.font = 'bold 5px monospace';
+      // Digital Screen Typography
+      ctx.font = 'bold 4.5px monospace';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
 
       if (pump.isPumping) {
-        // Animated green pumping numbers
         ctx.fillStyle = '#4ade80';
-        ctx.fillText(`${(pump.currentPumpedLiters || 0).toFixed(1)}L`, 0, -7);
-        ctx.fillText(`${pump.displayCost || 0}₽`, 0, 7);
+        ctx.fillText(`${(pump.currentPumpedLiters || 0).toFixed(1)}L`, 0, -8.2);
+        ctx.fillText(`${pump.displayCost || 0}₽`, 0, 8.2);
       } else if (pump.status === 'completed') {
-        ctx.fillStyle = '#22d3ee';
-        ctx.fillText(`${(pump.currentPumpedLiters || 0).toFixed(1)}L`, 0, -7);
-        ctx.fillText('ГОТОВО', 0, 7);
+        ctx.fillStyle = '#38bdf8';
+        ctx.fillText('ГОТОВО', 0, -8.2);
+        ctx.fillText(`${(pump.currentPumpedLiters || 0).toFixed(1)}L`, 0, 8.2);
       } else if (pump.status === 'inserted') {
         ctx.fillStyle = '#facc15';
-        ctx.fillText('В БАКЕ', 0, -7);
-        ctx.fillText('КАССА', 0, 7);
+        ctx.fillText('В БАКЕ', 0, -8.2);
+        ctx.fillText('КАССА', 0, 8.2);
       } else {
-        // Idle screen showing pump number
         ctx.fillStyle = '#38bdf8';
-        ctx.fillText(`№${pump.pumpNumber}`, 0, -7);
+        ctx.fillText(`ТРК №${pump.pumpNumber}`, 0, -8.2);
         ctx.fillStyle = '#94a3b8';
-        ctx.fillText('СТОП', 0, 7);
+        ctx.fillText('СТОП', 0, 8.2);
       }
 
-      // 5 Color-coded Nozzle Holsters (AI92, AI95, AI98, AI100, Diesel)
+      // 5 Color-coded Nozzle Holsters & Boots along the lane side
       const nozzleTypes = [
-        { type: 'ai92', color: '#eab308', y: -16 },
-        { type: 'ai95', color: '#22c55e', y: -8 },
-        { type: 'ai98', color: '#f97316', y: 0 },
-        { type: 'ai100', color: '#ef4444', y: 8 },
-        { type: 'diesel', color: '#475569', y: 16 }
+        { type: 'ai92', color: '#eab308', y: -15, label: '92' },
+        { type: 'ai95', color: '#22c55e', y: -7.5, label: '95' },
+        { type: 'ai98', color: '#f97316', y: 0, label: '98' },
+        { type: 'ai100', color: '#ef4444', y: 7.5, label: '100' },
+        { type: 'diesel', color: '#334155', y: 15, label: 'ДТ' }
       ];
 
-      // On each island: one pump faces West (-1, outward on island 0, inward on island 1) and one faces East (+1)
+      // Lane-facing side: Odd pumps face West (-1), Even pumps face East (+1)
       const facingSide = pump.pumpNumber % 2 === 1 ? -1 : 1;
 
       for (const noz of nozzleTypes) {
         const isTaken = pump.nozzleTaken === noz.type;
+        const holsterX = facingSide === -1 ? -pumpW / 2 : pumpW / 2;
 
         if (facingSide === -1) {
           // West side holster
           if (!isTaken) {
+            // Stainless holster boot cradle
+            ctx.fillStyle = '#1e293b';
+            ctx.fillRect(holsterX - 1, noz.y - 2.5, 2, 5);
+
+            // Ergonomic color nozzle handle
             ctx.fillStyle = noz.color;
-            ctx.fillRect(-pumpW / 2 - 3, noz.y - 2, 3, 4);
-            ctx.fillStyle = '#64748b'; // metallic spout tip
-            ctx.fillRect(-pumpW / 2 - 5, noz.y - 1, 2, 2);
+            ctx.fillRect(holsterX - 3.5, noz.y - 2, 3, 4);
+
+            // Trigger lever guard
+            ctx.fillStyle = '#475569';
+            ctx.fillRect(holsterX - 2.5, noz.y + 2, 2, 0.8);
+
+            // Metallic curved spout tip pointing into holster
+            ctx.fillStyle = '#cbd5e1';
+            ctx.fillRect(holsterX - 5.5, noz.y - 1, 2, 2);
+
+            // Small flexible rubber hose loop
+            ctx.strokeStyle = '#0f172a';
+            ctx.lineWidth = 1.8;
+            ctx.beginPath();
+            ctx.moveTo(holsterX - 1, noz.y + 3);
+            ctx.quadraticCurveTo(holsterX - 3, noz.y + 5, holsterX, noz.y + 4);
+            ctx.stroke();
           } else {
-            // Empty holster slot
-            ctx.fillStyle = '#0f172a';
-            ctx.fillRect(-pumpW / 2 - 2, noz.y - 2, 2, 4);
+            // Empty holster slot with microswitch
+            ctx.fillStyle = '#090d16';
+            ctx.fillRect(holsterX - 2, noz.y - 2.5, 2.5, 5);
+            ctx.fillStyle = '#64748b';
+            ctx.fillRect(holsterX - 1, noz.y, 0.8, 1);
           }
         } else {
           // East side holster
           if (!isTaken) {
+            // Stainless holster boot cradle
+            ctx.fillStyle = '#1e293b';
+            ctx.fillRect(holsterX - 1, noz.y - 2.5, 2, 5);
+
+            // Ergonomic color nozzle handle
             ctx.fillStyle = noz.color;
-            ctx.fillRect(pumpW / 2, noz.y - 2, 3, 4);
-            ctx.fillStyle = '#64748b';
-            ctx.fillRect(pumpW / 2 + 3, noz.y - 1, 2, 2);
+            ctx.fillRect(holsterX + 0.5, noz.y - 2, 3, 4);
+
+            // Trigger lever guard
+            ctx.fillStyle = '#475569';
+            ctx.fillRect(holsterX + 0.5, noz.y + 2, 2, 0.8);
+
+            // Metallic curved spout tip pointing into holster
+            ctx.fillStyle = '#cbd5e1';
+            ctx.fillRect(holsterX + 3.5, noz.y - 1, 2, 2);
+
+            // Small flexible rubber hose loop
+            ctx.strokeStyle = '#0f172a';
+            ctx.lineWidth = 1.8;
+            ctx.beginPath();
+            ctx.moveTo(holsterX + 1, noz.y + 3);
+            ctx.quadraticCurveTo(holsterX + 3, noz.y + 5, holsterX, noz.y + 4);
+            ctx.stroke();
           } else {
-            ctx.fillStyle = '#0f172a';
-            ctx.fillRect(pumpW / 2, noz.y - 2, 2, 4);
+            // Empty holster slot with microswitch
+            ctx.fillStyle = '#090d16';
+            ctx.fillRect(holsterX - 0.5, noz.y - 2.5, 2.5, 5);
+            ctx.fillStyle = '#64748b';
+            ctx.fillRect(holsterX + 0.2, noz.y, 0.8, 1);
           }
         }
       }
-
-      // Hanging flexible black rubber hose loop on facing side ONLY
-      ctx.strokeStyle = '#0f172a';
-      ctx.lineWidth = 2.5;
-      ctx.beginPath();
-      if (facingSide === -1) {
-        ctx.arc(-pumpW / 2 + 3, pumpH / 2 - 2, 5, 0, Math.PI);
-      } else {
-        ctx.arc(pumpW / 2 - 3, pumpH / 2 - 2, 5, 0, Math.PI);
-      }
-      ctx.stroke();
     }
 
     ctx.restore();
@@ -914,12 +1066,11 @@ export class GasStationRenderer {
       const nozzle = player.heldFuelNozzle;
       const pump = world.gasPumps.find(p => p.id === nozzle.pumpId);
       if (pump) {
-        const originX = pump.x;
-        const originY = pump.y;
+        const origin = this.getPumpNozzleOrigin(pump, nozzle.fuelType);
         const targetX = player.x + Math.cos(player.angle + 0.4) * 12;
         const targetY = player.y + Math.sin(player.angle + 0.4) * 12;
 
-        this.drawCatenaryHose(ctx, originX, originY, targetX, targetY, nozzle.color, false, time);
+        this.drawCatenaryHose(ctx, origin.x, origin.y, targetX, targetY, nozzle.color, false, time);
         // Draw metallic nozzle in player's hand
         this.drawHandNozzle(ctx, targetX, targetY, player.angle, nozzle.color);
       }
@@ -931,18 +1082,14 @@ export class GasStationRenderer {
         if (veh.fuelingState && veh.fuelingState.nozzleInTank) {
           const pump = world.gasPumps.find(p => p.id === veh.fuelingState?.pumpId);
           if (pump) {
-            const originX = pump.x;
-            const originY = pump.y;
+            const origin = this.getPumpNozzleOrigin(pump, veh.fuelingState.fuelType);
 
-            // Vehicle fuel cap is typically on the rear-right quarter
-            const capOffsetDist = -veh.length * 0.35;
-            const capOffsetSide = veh.width * 0.45;
-            const capX = veh.x + Math.cos(veh.angle) * capOffsetDist - Math.sin(veh.angle) * capOffsetSide;
-            const capY = veh.y + Math.sin(veh.angle) * capOffsetDist + Math.cos(veh.angle) * capOffsetSide;
+            // Vehicle fuel cap position according to archetype
+            const capPos = getVehicleFuelCapPosition(veh);
 
             const grade = FUEL_GRADES[veh.fuelingState.fuelType] || FUEL_GRADES.ai95;
-            this.drawCatenaryHose(ctx, originX, originY, capX, capY, grade.color, pump.isPumping, time);
-            this.drawInsertedNozzle(ctx, capX, capY, veh.angle + Math.PI / 2, grade.color, pump.isPumping);
+            this.drawCatenaryHose(ctx, origin.x, origin.y, capPos.x, capPos.y, grade.color, pump.isPumping, time);
+            this.drawInsertedNozzle(ctx, capPos.x, capPos.y, veh.angle + Math.PI / 2, grade.color, pump.isPumping);
           }
         }
       }

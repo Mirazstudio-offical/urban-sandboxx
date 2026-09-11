@@ -1,6 +1,111 @@
 import { FuelType, GameWorld, GasPumpDispenser, GasPumpNozzle, Player, Vehicle } from './types';
 import { sound } from './audio';
 import { createItem, addPlayerNotification } from './items';
+import { BuildingLayout } from './buildingInteriors';
+import { getVehicleFuelCapPosition, isTrailerVehicle } from './vehicleHelpers';
+
+export function createGasStationShopLayout(): BuildingLayout {
+  return {
+    buildingId: 'bld_gas_station_shop_se',
+    floor: 0,
+    width: 220,
+    height: 130,
+    rooms: [
+      {
+        name: 'Торговый Зал АЗС',
+        x: 12,
+        y: 12,
+        width: 196,
+        height: 106,
+        color: '#1e293b',
+        floorStyle: 'tile'
+      },
+      {
+        name: 'Кафе-Зона Bistro',
+        x: 144,
+        y: 78,
+        width: 64,
+        height: 40,
+        color: '#292524',
+        floorStyle: 'wood'
+      },
+      {
+        name: 'Служебная зона',
+        x: 12,
+        y: 80,
+        width: 60,
+        height: 38,
+        color: '#0f172a',
+        floorStyle: 'tile'
+      }
+    ],
+    walls: [
+      { x1: 14, y1: 82, x2: 40, y2: 82 }
+    ],
+    furniture: [
+      // === ЗОНА КАССЫ И КОФЕ-БАРА ===
+      { type: 'counter', x: 18, y: 44, width: 34, height: 9, angle: 0, color: '#334155' },
+      { type: 'freezer_display', x: 52, y: 44, width: 8, height: 9, angle: 0, color: '#f59e0b' },
+      { type: 'cash_register', x: 26, y: 45, width: 7, height: 6, angle: 0, color: '#0f172a' },
+      { type: 'cash_register', x: 40, y: 45, width: 7, height: 6, angle: 0, color: '#0f172a' },
+      { type: 'kitchen_counter', x: 18, y: 14, width: 42, height: 6, angle: 0, color: '#1e293b' },
+      { type: 'computer', x: 24, y: 14, width: 7, height: 6, angle: 0, color: '#0f172a' },
+      { type: 'shelf', x: 18, y: 13, width: 42, height: 2, angle: 0, color: '#475569' },
+      { type: 'chair', x: 34, y: 28, width: 7, height: 7, angle: 0, color: '#1e293b' },
+
+      // === ВХОДНАЯ ГРУППА И БАНКОМАТ ===
+      { type: 'carpet', x: 95, y: 98, width: 30, height: 16, angle: 0, color: '#1e293b' },
+      { type: 'atm', x: 74, y: 84, width: 6, height: 6, angle: 0, color: '#059669' },
+      { type: 'plant', x: 80, y: 104, width: 7, height: 7, angle: 0, color: '#16a34a' },
+      { type: 'plant', x: 130, y: 104, width: 7, height: 7, angle: 0, color: '#15803d' },
+
+      // === РЯДЫ ВИТРИН (ГОНДОЛЫ ТОРГОВОГО ЗАЛА) ===
+      // Западный ряд 1 (Север): Снеки, орехи, чипсы
+      { type: 'shelf', x: 98, y: 36, width: 28, height: 9, angle: 0, color: '#e2e8f0' },
+      // Западный ряд 2 (Юг): Кондитерка, шоколад, выпечка
+      { type: 'shelf', x: 98, y: 62, width: 28, height: 9, angle: 0, color: '#e2e8f0' },
+      // Восточный ряд 3 (Север): Автомасла, антифриз, омыватели
+      { type: 'shelf', x: 154, y: 36, width: 28, height: 9, angle: 0, color: '#cbd5e1' },
+      // Восточный ряд 4 (Юг): Автоаксессуары, провода, салфетки
+      { type: 'shelf', x: 154, y: 62, width: 28, height: 9, angle: 0, color: '#cbd5e1' },
+
+      // === СЕВЕРНАЯ СТЕНА: ХОЛОДИЛЬНИКИ НАПИТКОВ И МОРОЖЕНОГО ===
+      { type: 'freezer_display', x: 96, y: 14, width: 26, height: 5, angle: 0, color: '#0284c7' },
+      { type: 'freezer_display', x: 126, y: 14, width: 26, height: 5, angle: 0, color: '#0369a1' },
+      { type: 'freezer_display', x: 156, y: 14, width: 26, height: 5, angle: 0, color: '#e11d48' },
+
+      // === ВОСТОЧНАЯ СТЕНА: ВЕНДИНГ, КУЛЕР, УРНА, РАСТЕНИЕ ===
+      { type: 'vending_machine', x: 201, y: 24, width: 5, height: 12, angle: 0, color: '#dc2626' },
+      { type: 'cooler', x: 202, y: 42, width: 4, height: 6, angle: 0, color: '#38bdf8' },
+      { type: 'trash_can', x: 202, y: 52, width: 4, height: 6, angle: 0, color: '#475569' },
+      { type: 'plant', x: 202, y: 64, width: 4, height: 6, angle: 0, color: '#22c55e' },
+
+      // === КАФЕ-ЗОНА BISTRO ===
+      { type: 'table', x: 154, y: 86, width: 12, height: 12, angle: 0, color: '#78350f' },
+      { type: 'chair', x: 145, y: 88, width: 7, height: 7, angle: 0, color: '#451a03' },
+      { type: 'chair', x: 168, y: 88, width: 7, height: 7, angle: 0, color: '#451a03' },
+      { type: 'table', x: 182, y: 86, width: 12, height: 12, angle: 0, color: '#78350f' },
+      { type: 'chair', x: 173, y: 88, width: 7, height: 7, angle: 0, color: '#451a03' },
+      { type: 'chair', x: 196, y: 88, width: 7, height: 7, angle: 0, color: '#451a03' },
+      { type: 'plant', x: 170, y: 80, width: 6, height: 6, angle: 0, color: '#16a34a' },
+      { type: 'radiator', x: 150, y: 114, width: 20, height: 2, angle: 0, color: '#94a3b8' },
+      { type: 'radiator', x: 180, y: 114, width: 20, height: 2, angle: 0, color: '#94a3b8' },
+
+      // === СЛУЖЕБНАЯ ЗОНА / САНИТАРНЫЙ УЗЕЛ ===
+      { type: 'sink', x: 16, y: 88, width: 6, height: 6, angle: 0, color: '#f8fafc' },
+      { type: 'shelf', x: 14, y: 104, width: 18, height: 6, angle: 0, color: '#334155' },
+      { type: 'lockers', x: 42, y: 106, width: 14, height: 5, angle: 0, color: '#475569' },
+      { type: 'fire_rack', x: 28, y: 83, width: 8, height: 2, angle: 0, color: '#ef4444' },
+      { type: 'trash_can', x: 14, y: 84, width: 4, height: 4, angle: 0, color: '#64748b' }
+    ],
+    exitZone: { x: 95, y: 114, width: 30, height: 16 },
+    stairsZone: { x: -100, y: -100, width: 0, height: 0 },
+    elevatorZone: { x: -100, y: -100, width: 0, height: 0 },
+    exits: [{ x: 95, y: 114, width: 30, height: 16 }],
+    stairs: [],
+    elevators: []
+  };
+}
 
 export interface FuelGradeInfo {
   fuelType: FuelType;
@@ -238,13 +343,11 @@ export function getNearbyVehicleForFueling(
   let minDist = radius;
 
   for (const veh of world.vehicles) {
-    // Calculate precise fuel cap position (rear-right quarter)
-    const capOffsetDist = -veh.length * 0.35;
-    const capOffsetSide = veh.width * 0.45;
-    const capX = veh.x + Math.cos(veh.angle) * capOffsetDist - Math.sin(veh.angle) * capOffsetSide;
-    const capY = veh.y + Math.sin(veh.angle) * capOffsetDist + Math.cos(veh.angle) * capOffsetSide;
+    if (isTrailerVehicle(veh)) continue; // Trailers do not have fuel filler caps
+    // Calculate precise fuel cap position according to vehicle type
+    const capPos = getVehicleFuelCapPosition(veh);
 
-    const dist = Math.hypot(x - capX, y - capY);
+    const dist = Math.hypot(x - capPos.x, y - capPos.y);
     if (dist < minDist) {
       minDist = dist;
       closest = veh;
@@ -305,6 +408,12 @@ export function insertNozzleIntoVehicle(
   world?: GameWorld
 ): boolean {
   if (!player.heldFuelNozzle || player.heldFuelNozzle.pumpId !== pump.id) {
+    return false;
+  }
+
+  if (isTrailerVehicle(vehicle)) {
+    addPlayerNotification(player, '⛽ У прицепа нет топливного бака!', 'warning');
+    sound.playHurt();
     return false;
   }
 
@@ -446,17 +555,14 @@ export function removeNozzleFromVehicle(
 
     // Spawn minor white vapor cloud that quickly dissipates
     if (world && world.particles) {
-      const cosA = Math.cos(vehicle.angle || 0);
-      const sinA = Math.sin(vehicle.angle || 0);
-      const capX = vehicle.x - cosA * (vehicle.length * 0.35);
-      const capY = vehicle.y - sinA * (vehicle.length * 0.35);
+      const capPos = getVehicleFuelCapPosition(vehicle);
 
       for (let i = 0; i < 10; i++) {
         const ang = Math.random() * Math.PI * 2;
         const spd = 12 + Math.random() * 18;
         world.particles.push({
-          x: capX,
-          y: capY,
+          x: capPos.x,
+          y: capPos.y,
           vx: Math.cos(ang) * spd,
           vy: Math.sin(ang) * spd,
           radius: 3 + Math.random() * 3,
@@ -664,7 +770,11 @@ export function ensureWorldGasStation(world: GameWorld): void {
           { type: 'ac', rx: 0.2, ry: 0.3, rw: 24, rh: 16 },
           { type: 'ac', rx: 0.7, ry: 0.4, rw: 24, rh: 16 },
           { type: 'solar', rx: 0.4, ry: 0.2, rw: 36, rh: 20 }
-        ]
+        ],
+        floorsCount: 1,
+        interiors: {
+          0: createGasStationShopLayout()
+        }
       };
       world.buildings.push(shopBld);
     } else {
@@ -672,6 +782,12 @@ export function ensureWorldGasStation(world: GameWorld): void {
       shopBld.y = GAS_STATION_CONFIG.shopY;
       shopBld.width = GAS_STATION_CONFIG.shopW;
       shopBld.height = GAS_STATION_CONFIG.shopH;
+      shopBld.floorsCount = 1;
+      if (!shopBld.interiors || !shopBld.interiors[0]) {
+        shopBld.interiors = {
+          0: createGasStationShopLayout()
+        };
+      }
     }
 
     // Check if Gas Station canopy structure exists

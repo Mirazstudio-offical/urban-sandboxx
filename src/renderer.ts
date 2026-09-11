@@ -13,8 +13,10 @@ import {
   TimeOfDay, 
   Tree,
   Vehicle,
-  VehicleDamage
+  VehicleDamage,
+  ParkingSpot
 } from './types';
+import { CAR_CONFIGS, canVehicleHaveHitch } from './vehicleHelpers';
 import { trafficDiagnostics } from './aiTraffic';
 import {
   renderSpecializedVehicleAttachments,
@@ -34,6 +36,8 @@ import { drawItemModel2D } from './itemGraphic';
 import { screenEffectsSystem } from './screenEffects';
 import { renderStreetProp, renderTallStreetProp } from './propRenderer';
 import { GasStationRenderer } from './gasStationRenderer';
+import { WaterHoseRenderer } from './waterHoseRenderer';
+import { RemotePlayerState, SpeechBubble } from './onlineSystem';
 
 const hashString = (str: string): number => {
   let hash = 0;
@@ -190,6 +194,9 @@ export class GameRenderer {
     );
     this.renderSidewalks(chunkCtx, chunkSidewalks, minX, minY, maxX, maxY);
 
+    // 2b. Static Driveways from map.json
+    this.renderStaticDriveways(chunkCtx, world, minX, minY, maxX, maxY);
+
     // 3. Roads & Markings
     this.renderRoadsAndMarkings(chunkCtx, world, minX, minY, maxX, maxY);
 
@@ -233,7 +240,9 @@ export class GameRenderer {
     visibleProps?: StreetProp[],
     visibleSidewalks?: SidewalkBlock[],
     activePlacement?: ActivePlacement | null,
-    mouseWorldPos?: { x: number; y: number } | null
+    mouseWorldPos?: { x: number; y: number } | null,
+    remotePlayers: RemotePlayerState[] = [],
+    speechBubbles?: Map<string, SpeechBubble>
   ) {
     const ctx = this.ctx;
 
@@ -300,12 +309,12 @@ export class GameRenderer {
           windows.push({ x: bld.width, y, side: 'right' });
         }
 
-        // Filter windows: only show outside view when player approaches them and looks towards them
+        // Filter windows: only show outside view when player is right next to an outer window and looking out
         const activeWindows = windows.filter(win => {
           const wx = bld.x + win.x;
           const wy = bld.y + win.y;
           const dist = Math.hypot(player.x - wx, player.y - wy);
-          if (dist > 180) return false;
+          if (dist > 75) return false;
 
           // Check if player is facing towards the window
           const dirX = wx - player.x;
@@ -317,51 +326,51 @@ export class GameRenderer {
           const playerDirX = Math.cos(player.angle);
           const playerDirY = Math.sin(player.angle);
           const dot = playerDirX * ndx + playerDirY * ndy;
-          // dot > -0.3 means player is generally facing towards or near the window direction
-          return dot > -0.3;
+          // dot > 0.15 means player is looking towards the window
+          return dot > 0.15;
         });
 
         ctx.save();
-        ctx.beginPath();
-        const viewDist = 450;
-        for (const win of activeWindows) {
-          const wx = bld.x + win.x;
-          const wy = bld.y + win.y;
-          let w1x = wx, w1y = wy, w2x = wx, w2y = wy;
-          if (win.side === 'top' || win.side === 'bottom') {
-            w1x = wx - 7;
-            w2x = wx + 7;
-          } else {
-            w1y = wy - 7;
-            w2y = wy + 7;
+        if (activeWindows.length > 0) {
+          ctx.beginPath();
+          const viewDist = 280;
+          for (const win of activeWindows) {
+            const wx = bld.x + win.x;
+            const wy = bld.y + win.y;
+            let w1x = wx, w1y = wy, w2x = wx, w2y = wy;
+            if (win.side === 'top' || win.side === 'bottom') {
+              w1x = wx - 7;
+              w2x = wx + 7;
+            } else {
+              w1y = wy - 7;
+              w2y = wy + 7;
+            }
+
+            // Directional vectors from player's eyes to window outer corners
+            const dx1 = w1x - player.x;
+            const dy1 = w1y - player.y;
+            const dx2 = w2x - player.x;
+            const dy2 = w2y - player.y;
+
+            const len1 = Math.hypot(dx1, dy1) || 1;
+            const len2 = Math.hypot(dx2, dy2) || 1;
+
+            // Extend rays out into the world to construct the visibility cone
+            const o1x = w1x + (dx1 / len1) * viewDist;
+            const o1y = w1y + (dy1 / len1) * viewDist;
+            const o2x = w2x + (dx2 / len2) * viewDist;
+            const o2y = w2y + (dy2 / len2) * viewDist;
+
+            ctx.moveTo(w1x, w1y);
+            ctx.lineTo(o1x, o1y);
+            ctx.lineTo(o2x, o2y);
+            ctx.lineTo(w2x, w2y);
+            ctx.closePath();
           }
 
-          // Directional vectors from player's eyes to window outer corners
-          const dx1 = w1x - player.x;
-          const dy1 = w1y - player.y;
-          const dx2 = w2x - player.x;
-          const dy2 = w2y - player.y;
-
-          const len1 = Math.hypot(dx1, dy1) || 1;
-          const len2 = Math.hypot(dx2, dy2) || 1;
-
-          // Extend rays out into the world to construct the visibility cone
-          const o1x = w1x + (dx1 / len1) * viewDist;
-          const o1y = w1y + (dy1 / len1) * viewDist;
-          const o2x = w2x + (dx2 / len2) * viewDist;
-          const o2y = w2y + (dy2 / len2) * viewDist;
-
-          ctx.moveTo(w1x, w1y);
-          ctx.lineTo(o1x, o1y);
-          ctx.lineTo(o2x, o2y);
-          ctx.lineTo(w2x, w2y);
-          ctx.closePath();
-        }
-
-        if (activeWindows.length > 0) {
           ctx.clip();
 
-          // Apply floor elevation height perspective (higher floors scale down the world to create height perspective / getting smaller, and render roofs instead of bases)
+          // Apply floor elevation height perspective
           const floor = player.currentFloor ?? 0;
           ctx.save();
           const heightScale = Math.max(0.45, 1.0 - floor * 0.05);
@@ -371,12 +380,11 @@ export class GameRenderer {
           const sMinY = camera.y - (camera.y - minY) * invScale;
           const sMaxY = camera.y + (maxY - camera.y) * invScale;
 
-          // Scale around player / camera position so world shrinks towards viewer and covers full view
           ctx.translate(camera.x, camera.y);
           ctx.scale(heightScale, heightScale);
           ctx.translate(-camera.x, -camera.y);
 
-          // Render Ground, Sidewalks, Roads, and Parkings via cached chunks for window outside view
+          // Fast cached chunks for outdoor window view
           const sStartChunkX = Math.floor(Math.max(0, sMinX) / this.chunkSize);
           const sEndChunkX = Math.floor(Math.min(world.width || 8200, sMaxX) / this.chunkSize);
           const sStartChunkY = Math.floor(Math.max(0, sMinY) / this.chunkSize);
@@ -389,30 +397,11 @@ export class GameRenderer {
             }
           }
 
-          this.renderPostSovietAtmosphereAndSignage(world, sMinX, sMinY, sMaxX, sMaxY);
           this.renderPuddles(world.puddles, sMinX, sMinY, sMaxX, sMaxY);
-          this.renderSkidMarks(world.skidMarks, sMinX, sMinY, sMaxX, sMaxY);
-          this.renderStains(world.stains, sMinX, sMinY, sMaxX, sMaxY);
-          // Render building roofs/tops instead of ground bases when viewed from height
-          this.renderBuildingRoofsAndCanopies(visibleBuildings, nightAlpha, player, world);
-          this.renderLitter(world.litter, sMinX, sMinY, sMaxX, sMaxY, nightAlpha);
-          this.renderGroundItems(world.groundItems, player, sMinX, sMinY, sMaxX, sMaxY);
-          this.renderGroundProps(vpProps, sMinX, sMinY, sMaxX, sMaxY);
           this.renderPedestrians(visiblePedestrians, world);
           this.renderVehicles(visibleVehicles, nightAlpha, camera.gridMode);
-
-          // Render lightmap (street lights, car headlights, etc.) outside windows
-          this.renderLightmap(world, timeHour, weatherTransition, visibleVehicles, vpProps, sMinX, sMinY, sMaxX, sMaxY);
-
-          const isRaining = world.weather === 'rain' || world.weather === 'storm';
-          const isFog = world.weather === 'fog';
-          const effectiveAlpha = Math.max(nightAlpha, isRaining ? 0.35 * weatherTransition : 0, isFog ? 0.45 * weatherTransition : 0);
-          this.renderVehicleCabins(visibleVehicles, effectiveAlpha);
-          this.renderBuildingRoofsAndCanopies(visibleBuildings, nightAlpha, player, world);
           this.renderTreesAndTallProps(vpTrees, vpProps, sMinX, sMinY, sMaxX, sMaxY, nightAlpha);
-          this.renderParticles(world.particles);
 
-          // Apply outdoor time darkness filter over the clipped window view so night/sunset is accurate
           if (nightAlpha > 0) {
             ctx.fillStyle = `rgba(15, 23, 42, ${nightAlpha})`;
             ctx.fillRect(sMinX, sMinY, sMaxX - sMinX, sMaxY - sMinY);
@@ -518,11 +507,23 @@ export class GameRenderer {
       this.renderPlayerPedestrian(player);
     }
 
+    // 13b. Remote Players on Foot
+    if (remotePlayers && remotePlayers.length > 0) {
+      for (const rp of remotePlayers) {
+        if (!rp.isInVehicle) {
+          this.renderPlayerPedestrian(rp as unknown as Player, true);
+        }
+      }
+    }
+
     // 14. Vehicles (Cars with dynamic wheels, lights & wipers)
     this.renderVehicles(visibleVehicles, nightAlpha, camera.gridMode);
 
     // 14b. Gas Station Fuel Hoses (connected to hands or vehicle filler caps)
     GasStationRenderer.renderFuelHoses(this.ctx, world, player);
+
+    // 14c. Physical Water Hose (connected to water truck / barrel trailer)
+    WaterHoseRenderer.render(this.ctx, world, player);
 
     // 15. Professional Two-Pass 2D Lightmap System
     // Moved up to be BELOW roofs/trees so lights don't "draw" on top of foliage/buildings
@@ -540,7 +541,7 @@ export class GameRenderer {
     const effectiveAlpha = Math.max(nightAlpha, isRaining ? 0.35 * weatherTransition : 0, isFog ? 0.45 * weatherTransition : 0);
 
     // 15b. Render Vehicle Cabins, Roofs, and Roof attachments (drawn ON TOP of lightmap to avoid headlight bleed)
-    this.renderVehicleCabins(visibleVehicles, effectiveAlpha);
+    this.renderVehicleCabins(visibleVehicles, effectiveAlpha, camera.gridMode);
 
     // 16. Building Roofs, Canopies, Balconies & Fire Escapes
     this.renderBuildingRoofsAndCanopies(visibleBuildings, nightAlpha, player, world);
@@ -555,7 +556,7 @@ export class GameRenderer {
     this.renderBirds(world.birds.filter((b) => b.state === 'flying'), minX, minY, maxX, maxY, nightAlpha);
 
     // 17. Particles (Smoke, Sparks, Water Fountains)
-    this.renderParticles(world.particles);
+    this.renderParticles(world.particles, world.cleanMode);
 
     // 18. Optional AI Telemetry & Debug Visualizer
     if (trafficDiagnostics.debugOverlayEnabled) {
@@ -566,6 +567,9 @@ export class GameRenderer {
     if (activePlacement && mouseWorldPos) {
       this.renderPlacementPreview(activePlacement, mouseWorldPos);
     }
+
+    // 20. Multiplayer Overhead Nametags & Speech Bubbles (drawn above roofs/trees in world space)
+    this.renderMultiplayerOverhead(player, remotePlayers, speechBubbles, world);
 
     ctx.restore();
 
@@ -596,10 +600,50 @@ export class GameRenderer {
     ctx.fillStyle = '#16a34a'; // Vibrant meadow green
     const villageX1 = Math.max(minX, 3800);
     const villageY1 = Math.max(minY, 3800);
-    const villageX2 = Math.min(maxX, world.width || 8200);
+    const villageX2 = Math.min(maxX, 8000);
     const villageY2 = Math.min(maxY, world.height || 8200);
     if (villageX2 > villageX1 && villageY2 > villageY1) {
       ctx.fillRect(villageX1, villageY1, villageX2 - villageX1, villageY2 - villageY1);
+    }
+
+    // --- STEPPE & PINE FOREST BIOME (x >= 8000) ---
+    const steppeX1 = Math.max(minX, 8000);
+    const steppeY1 = Math.max(minY, 0);
+    const steppeX2 = Math.min(maxX, world.width || 16000);
+    const steppeY2 = Math.min(maxY, world.height || 8000);
+
+    if (steppeX2 > steppeX1 && steppeY2 > steppeY1) {
+      // Warm golden-olive steppe grass base
+      ctx.fillStyle = '#8ca04a';
+      ctx.fillRect(steppeX1, steppeY1, steppeX2 - steppeX1, steppeY2 - steppeY1);
+
+      // Dark Pine Needle Soil under Pine Forest Grove #1 (x: 9800..11200)
+      const pine1X1 = Math.max(steppeX1, 9800);
+      const pine1X2 = Math.min(steppeX2, 11200);
+      if (pine1X2 > pine1X1) {
+        ctx.fillStyle = '#2d2116';
+        ctx.fillRect(pine1X1, Math.max(steppeY1, 2900), pine1X2 - pine1X1, Math.min(steppeY2, 5100) - Math.max(steppeY1, 2900));
+      }
+
+      // Dark Pine Needle Soil under Pine Forest Grove #2 (x: 13600..15500)
+      const pine2X1 = Math.max(steppeX1, 13600);
+      const pine2X2 = Math.min(steppeX2, 15500);
+      if (pine2X2 > pine2X1) {
+        ctx.fillStyle = '#261b11';
+        ctx.fillRect(pine2X1, Math.max(steppeY1, 2700), pine2X2 - pine2X1, Math.min(steppeY2, 5300) - Math.max(steppeY1, 2700));
+      }
+
+      // Sandy turnouts / shoulders along the Steppe Highway (y = 4000)
+      const shoulderX1 = Math.max(steppeX1, 8000);
+      const shoulderX2 = Math.min(steppeX2, 15600);
+      if (shoulderX2 > shoulderX1) {
+        const topS = Math.max(steppeY1, 3860);
+        const botS = Math.min(steppeY2, 4140);
+        if (botS > topS) {
+          ctx.fillStyle = '#a8976b';
+          ctx.fillRect(shoulderX1, topS, shoulderX2 - shoulderX1, botS - topS);
+        }
+      }
     }
 
     // --- WEST SCENIC GREEN BUFFER ---
@@ -623,6 +667,59 @@ export class GameRenderer {
     if (parkX2 > parkX1 && parkY2 > parkY1) {
       ctx.fillRect(parkX1, parkY1, parkX2 - parkX1, parkY2 - parkY1);
     }
+
+    // --- INDUSTRIAL DISTRICT / LOGISTICS ZONE (Heavy Concrete Slab Aprons & Freight Yards) ---
+    // North-East Sector (x: 5600 to 8000, y: 0 to 3300)
+    const indX1 = Math.max(minX, 5600);
+    const indY1 = Math.max(minY, 0);
+    const indX2 = Math.min(maxX, 8000);
+    const indY2 = Math.min(maxY, 3300);
+
+    if (indX2 > indX1 && indY2 > indY1) {
+      // Dark heavy industrial weathered concrete / asphalt yard base
+      ctx.fillStyle = '#222934';
+      ctx.fillRect(indX1, indY1, indX2 - indX1, indY2 - indY1);
+
+      // Concrete road slabs expansion joints (плиты ПДН/ПАГ 48x24px со швами, залитыми битумом)
+      const slabW = 48;
+      const slabH = 24;
+      const startX = Math.floor(indX1 / slabW) * slabW;
+      const startY = Math.floor(indY1 / slabH) * slabH;
+
+      ctx.strokeStyle = 'rgba(15, 23, 42, 0.55)';
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      for (let x = startX; x <= indX2; x += slabW) {
+        ctx.moveTo(x, indY1);
+        ctx.lineTo(x, indY2);
+      }
+      for (let y = startY; y <= indY2; y += slabH) {
+        ctx.moveTo(indX1, y);
+        ctx.lineTo(indX2, y);
+      }
+      ctx.stroke();
+
+      // Subtle concrete slab variation and oil/diesel patches
+      for (let x = startX; x <= indX2; x += slabW) {
+        for (let y = startY; y <= indY2; y += slabH) {
+          const slabHash = ((x * 73856093) ^ (y * 19349663)) >>> 0;
+          const modVal = slabHash % 8;
+          if (modVal === 0) {
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.035)';
+            ctx.fillRect(x + 1, y + 1, slabW - 2, slabH - 2);
+          } else if (modVal === 1) {
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.12)';
+            ctx.fillRect(x + 1, y + 1, slabW - 2, slabH - 2);
+          } else if (modVal === 2) {
+            // Dark circular diesel / oil spill spot on apron
+            ctx.fillStyle = 'rgba(10, 15, 25, 0.35)';
+            ctx.beginPath();
+            ctx.ellipse(x + 24, y + 12, 10, 6, 0.3, 0, Math.PI * 2);
+            ctx.fill();
+          }
+        }
+      }
+    }
   }
 
   // --- ROADS, MARKINGS & CROSSWALKS ---
@@ -635,10 +732,11 @@ export class GameRenderer {
 
     // Asphalt, Dirt or Gravel Surfaces
     for (const road of roads) {
+      if (road.isRoundabout) continue; // Roundabouts rendered with dedicated circular geometry
       const isHoriz = road.direction === 'horizontal';
       
       if (road.isDirt) {
-        ctx.fillStyle = '#7c2d12'; // Rich muddy dirt brown for forest paths
+        ctx.fillStyle = '#5c3d23'; // Rustic earth brown for dirt roads
       } else if (road.isGravel) {
         ctx.fillStyle = '#475569'; // Soft dusty gravel grey for village roads
       } else {
@@ -650,18 +748,27 @@ export class GameRenderer {
         if (road.x2 < minX || road.x1 > maxX || top + road.width < minY || top > maxY) continue;
         ctx.fillRect(road.x1, top, road.x2 - road.x1, road.width);
 
-        // Detailed realistic dirt road texturing (center packed track & tire ruts)
+        // Detailed realistic dirt road texturing (overgrown center grass ridge & worn wheel ruts)
         if (road.isDirt) {
-          ctx.fillStyle = '#854d0e';
-          ctx.fillRect(road.x1, road.y1 - 6, road.x2 - road.x1, 12);
-          ctx.strokeStyle = 'rgba(45, 15, 5, 0.45)';
-          ctx.lineWidth = 2;
-          ctx.beginPath();
-          ctx.moveTo(road.x1, road.y1 - road.width / 4);
-          ctx.lineTo(road.x2, road.y1 - road.width / 4);
-          ctx.moveTo(road.x1, road.y1 + road.width / 4);
-          ctx.lineTo(road.x2, road.y1 + road.width / 4);
-          ctx.stroke();
+          // Worn muddy wheel ruts
+          ctx.fillStyle = '#3a2514';
+          ctx.fillRect(road.x1, road.y1 - road.width * 0.28, road.x2 - road.x1, 6);
+          ctx.fillRect(road.x1, road.y1 + road.width * 0.16, road.x2 - road.x1, 6);
+
+          // Overgrown grassy center ridge
+          ctx.fillStyle = '#4d6824';
+          ctx.fillRect(road.x1, road.y1 - 4, road.x2 - road.x1, 8);
+          ctx.fillStyle = '#5b7b29';
+          ctx.fillRect(road.x1, road.y1 - 2, road.x2 - road.x1, 4);
+
+          // Ragged grassy tufts along road edges
+          ctx.fillStyle = '#4d6824';
+          for (let rx = road.x1 + 10; rx < road.x2; rx += 38) {
+            ctx.beginPath();
+            ctx.arc(rx, top + 1, 3.5, 0, Math.PI * 2);
+            ctx.arc(rx + 18, top + road.width - 1, 3.5, 0, Math.PI * 2);
+            ctx.fill();
+          }
         }
       } else {
         const left = road.x1 - road.width / 2;
@@ -670,16 +777,25 @@ export class GameRenderer {
 
         // Detailed realistic dirt road texturing (vertical)
         if (road.isDirt) {
-          ctx.fillStyle = '#854d0e';
-          ctx.fillRect(road.x1 - 6, road.y1, 12, road.y2 - road.y1);
-          ctx.strokeStyle = 'rgba(45, 15, 5, 0.45)';
-          ctx.lineWidth = 2;
-          ctx.beginPath();
-          ctx.moveTo(road.x1 - road.width / 4, road.y1);
-          ctx.lineTo(road.x1 - road.width / 4, road.y2);
-          ctx.moveTo(road.x1 + road.width / 4, road.y1);
-          ctx.lineTo(road.x1 + road.width / 4, road.y2);
-          ctx.stroke();
+          // Worn muddy wheel ruts
+          ctx.fillStyle = '#3a2514';
+          ctx.fillRect(road.x1 - road.width * 0.28, road.y1, 6, road.y2 - road.y1);
+          ctx.fillRect(road.x1 + road.width * 0.16, road.y1, 6, road.y2 - road.y1);
+
+          // Overgrown grassy center ridge
+          ctx.fillStyle = '#4d6824';
+          ctx.fillRect(road.x1 - 4, road.y1, 8, road.y2 - road.y1);
+          ctx.fillStyle = '#5b7b29';
+          ctx.fillRect(road.x1 - 2, road.y1, 4, road.y2 - road.y1);
+
+          // Ragged grassy tufts along road edges
+          ctx.fillStyle = '#4d6824';
+          for (let ry = road.y1 + 10; ry < road.y2; ry += 38) {
+            ctx.beginPath();
+            ctx.arc(left + 1, ry, 3.5, 0, Math.PI * 2);
+            ctx.arc(left + road.width - 1, ry + 18, 3.5, 0, Math.PI * 2);
+            ctx.fill();
+          }
         }
       }
     }
@@ -756,8 +872,8 @@ export class GameRenderer {
 
     // Road Markings (Clean standard road paint: double yellow lines, dashed lane dividers, edge lines)
     for (const road of roads) {
-      // Dirt roads have absolutely no paint markings
-      if (road.isDirt) continue;
+      // Dirt roads and roundabouts do not use standard rectangular paint markings
+      if (road.isDirt || road.isRoundabout) continue;
 
       const isHoriz = road.direction === 'horizontal';
       const halfW = road.width / 2;
@@ -868,7 +984,7 @@ export class GameRenderer {
 
       if (!inter.isDirt && !inter.isGravel) {
         // Crosswalks (Zebras) on paved roads
-        for (const cw of inter.crosswalks) {
+        for (const cw of inter.crosswalks || []) {
           ctx.fillStyle = '#f8fafc';
           const isHoriz = cw.width > cw.height;
           if (isHoriz) {
@@ -885,7 +1001,7 @@ export class GameRenderer {
         }
 
         // Stop Lines (Solid White) on paved roads
-        for (const sl of inter.stopLines) {
+        for (const sl of inter.stopLines || []) {
           ctx.strokeStyle = '#f8fafc';
           ctx.lineWidth = 3;
           ctx.beginPath();
@@ -894,6 +1010,219 @@ export class GameRenderer {
           ctx.stroke();
         }
       }
+    }
+
+    // --- STEPPE HIGHWAY TERMINAL TURNAROUND & HIGHWAY DETAILING ---
+    // Smooth asphalt turnaround loop at highway end (x = 14400, y = 4000)
+    if (maxX >= 14350 && minX <= 14550 && maxY >= 3850 && minY <= 4150) {
+      ctx.save();
+
+      // 1. Asphalt turnaround teardrop bulb
+      ctx.fillStyle = '#1e293b';
+      ctx.beginPath();
+      // Flared outer connection from x=14400, y=3904 around to x=14400, y=4096
+      ctx.moveTo(14400, 3904);
+      ctx.bezierCurveTo(14460, 3904, 14515, 3940, 14515, 4000);
+      ctx.bezierCurveTo(14515, 4060, 14460, 4096, 14400, 4096);
+      ctx.closePath();
+      ctx.fill();
+
+      // Inner median asphalt fillet
+      ctx.fillStyle = '#1e293b';
+      ctx.fillRect(14380, 3976, 50, 48);
+
+      // Weathered asphalt tar crack seals (битумные полосы)
+      ctx.strokeStyle = 'rgba(15, 23, 42, 0.7)';
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      ctx.moveTo(14420, 3930);
+      ctx.lineTo(14445, 3965);
+      ctx.lineTo(14435, 4030);
+      ctx.lineTo(14470, 4060);
+      ctx.stroke();
+
+      // 2. Road Markings on Turnaround Loop
+      // Outer solid white edge boundary curve
+      ctx.strokeStyle = '#f8fafc';
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      ctx.moveTo(14400, 3906);
+      ctx.bezierCurveTo(14458, 3906, 14510, 3942, 14510, 4000);
+      ctx.bezierCurveTo(14510, 4058, 14458, 4094, 14400, 4094);
+      ctx.stroke();
+
+      // Middle dashed white lane separation curve
+      ctx.strokeStyle = '#f8fafc';
+      ctx.lineWidth = 1.8;
+      ctx.setLineDash([12, 16]);
+      ctx.beginPath();
+      ctx.moveTo(14400, 3952);
+      ctx.bezierCurveTo(14435, 3952, 14470, 3970, 14470, 4000);
+      ctx.bezierCurveTo(14470, 4030, 14435, 4048, 14400, 4048);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      // Painted Curved U-Turn Arrows on Asphalt
+      [
+        { x: 14450, y: 4000, angle: -Math.PI / 2, size: 1.1 },
+        { x: 14430, y: 4050, angle: -Math.PI * 0.75, size: 1.0 }
+      ].forEach(arr => {
+        ctx.save();
+        ctx.translate(arr.x, arr.y);
+        ctx.rotate(arr.angle);
+        ctx.scale(arr.size, arr.size);
+        ctx.fillStyle = 'rgba(248, 250, 252, 0.85)';
+        // Arrow stem & head
+        ctx.beginPath();
+        ctx.moveTo(0, -12);
+        ctx.lineTo(7, -2);
+        ctx.lineTo(3, -2);
+        ctx.lineTo(3, 10);
+        ctx.lineTo(-3, 10);
+        ctx.lineTo(-3, -2);
+        ctx.lineTo(-7, -2);
+        ctx.closePath();
+        ctx.fill();
+        ctx.restore();
+      });
+
+      // Yellow Chevron Signs (<<<) mounted behind the curve
+      const chevronPositions = [
+        { x: 14520, y: 3950, angle: -Math.PI / 6 },
+        { x: 14525, y: 4000, angle: 0 },
+        { x: 14520, y: 4050, angle: Math.PI / 6 }
+      ];
+      for (const ch of chevronPositions) {
+        ctx.save();
+        ctx.translate(ch.x, ch.y);
+        ctx.rotate(ch.angle);
+        // Black backing plate
+        ctx.fillStyle = '#0f172a';
+        ctx.fillRect(-4, -14, 8, 28);
+        ctx.strokeStyle = '#e2e8f0';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(-4, -14, 8, 28);
+        // Yellow chevron arrows
+        ctx.fillStyle = '#eab308';
+        [-7, 0, 7].forEach(cy => {
+          ctx.beginPath();
+          ctx.moveTo(2, cy - 4);
+          ctx.lineTo(-2, cy);
+          ctx.lineTo(2, cy + 4);
+          ctx.lineTo(0, cy + 4);
+          ctx.lineTo(-4, cy);
+          ctx.lineTo(0, cy - 4);
+          ctx.closePath();
+          ctx.fill();
+        });
+        ctx.restore();
+      }
+
+      ctx.restore();
+    }
+
+    // Steppe Highway Guardrails & Shoulder Detailing along (x in 8000..14400, y = 4000)
+    if (maxX >= 8000 && minX <= 14450 && maxY >= 3850 && minY <= 4150) {
+      ctx.save();
+      const startX = Math.max(8000, Math.floor(minX / 100) * 100);
+      const endX = Math.min(14400, Math.ceil(maxX / 100) * 100);
+
+      // Galvanized Steel Guardrails (Волновой дорожный отбойник)
+      // North shoulder (y = 3900) and South shoulder (y = 4100)
+      [3900, 4100].forEach(gy => {
+        // Steel rail line
+        ctx.strokeStyle = '#94a3b8';
+        ctx.lineWidth = 2.4;
+        ctx.beginPath();
+        ctx.moveTo(startX, gy);
+        ctx.lineTo(endX, gy);
+        ctx.stroke();
+
+        // Highlight sheen on w-beam
+        ctx.strokeStyle = '#e2e8f0';
+        ctx.lineWidth = 0.8;
+        ctx.beginPath();
+        ctx.moveTo(startX, gy - 0.6);
+        ctx.lineTo(endX, gy - 0.6);
+        ctx.stroke();
+
+        // Guardrail I-beam support posts every 36px
+        ctx.fillStyle = '#475569';
+        const postStart = Math.floor(startX / 36) * 36;
+        for (let px = postStart; px <= endX; px += 36) {
+          ctx.fillRect(px - 1.2, gy - 1.8, 2.4, 3.6);
+        }
+
+        // White guideposts with red/white cat's eye reflectors every 108px
+        const poleStart = Math.floor(startX / 108) * 108;
+        for (let gx = poleStart; gx <= endX; gx += 108) {
+          const py = gy === 3900 ? gy - 6 : gy + 6;
+          // Post body
+          ctx.fillStyle = '#f8fafc';
+          ctx.fillRect(gx - 1.5, py - 3, 3, 6);
+          // Reflector
+          ctx.fillStyle = gy === 3900 ? '#ffffff' : '#dc2626';
+          ctx.fillRect(gx - 1.2, py - 1, 2.4, 2);
+        }
+      });
+
+      // Steppe Highway Road Signs (Top-down visible road signage)
+      // Sign 1: Highway start / Speed limit 110 at x = 8400
+      if (minX <= 8500 && maxX >= 8350) {
+        ctx.fillStyle = '#0284c7'; // Blue motorway sign
+        ctx.fillRect(8400, 4110, 18, 14);
+        ctx.strokeStyle = '#f8fafc';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(8400, 4110, 18, 14);
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 8px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('110', 8409, 4120);
+      }
+
+      // Sign 2: Wild animals warning at x = 10000
+      if (minX <= 10100 && maxX >= 9950) {
+        ctx.fillStyle = '#ffffff'; // White triangle with red border
+        ctx.beginPath();
+        ctx.moveTo(10000, 4110);
+        ctx.lineTo(10014, 4128);
+        ctx.lineTo(9986, 4128);
+        ctx.closePath();
+        ctx.fill();
+        ctx.strokeStyle = '#dc2626';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+      }
+
+      // Sign 3: Turnoff to Village Polynovka at x = 11360
+      if (minX <= 11450 && maxX >= 11300) {
+        // Large overhead / roadside green directional sign
+        ctx.fillStyle = '#15803d'; // Green road guide sign
+        ctx.fillRect(11340, 3870, 70, 20);
+        ctx.strokeStyle = '#f8fafc';
+        ctx.lineWidth = 1.2;
+        ctx.strokeRect(11340, 3870, 70, 20);
+
+        ctx.fillStyle = '#f8fafc';
+        ctx.font = 'bold 8px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('← ПОЛЫНОВКА 1.2', 11375, 3883);
+      }
+
+      // Sign 4: End of Motorway / Turnaround Ahead at x = 14200
+      if (minX <= 14280 && maxX >= 14150) {
+        ctx.fillStyle = '#1e3a8a';
+        ctx.fillRect(14200, 4110, 50, 18);
+        ctx.strokeStyle = '#dc2626';
+        ctx.lineWidth = 1.5;
+        ctx.strokeRect(14200, 4110, 50, 18);
+        ctx.fillStyle = '#f8fafc';
+        ctx.font = 'bold 7px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('РАЗВОРОТ 200М', 14225, 4122);
+      }
+
+      ctx.restore();
     }
   }
 
@@ -1094,6 +1423,29 @@ export class GameRenderer {
           const sy = Math.sin(angle) * rDist;
           ctx.fillRect(sx - 1, sy - 1, 2, 2);
         }
+
+      } else if (stain.type === 'water') {
+        // Realistic clear water puddle: glassy sky reflection, gentle blue-slate refraction, bright specular highlights
+        const grad = safeRadialGradient(ctx, -rx * 0.1, -ry * 0.1, 0, 0, 0, rx);
+        grad.addColorStop(0, `rgba(14, 116, 144, ${stainAlpha * 0.55})`); // Deep water refraction tint
+        grad.addColorStop(0.35, `rgba(56, 189, 248, ${stainAlpha * 0.4})`); // Clear translucent water
+        grad.addColorStop(0.75, `rgba(186, 230, 253, ${stainAlpha * 0.22})`); // Thin meniscus boundary film
+        grad.addColorStop(1, `rgba(224, 242, 254, 0)`);
+
+        ctx.fillStyle = grad;
+        this.drawOrganicBlob(ctx, rx, ry, seed);
+        ctx.fill();
+
+        // Wet glossy specular reflection on puddle surface
+        ctx.fillStyle = `rgba(255, 255, 255, ${stainAlpha * 0.55})`;
+        ctx.beginPath();
+        safeEllipse(ctx, -rx * 0.28, -ry * 0.22, rx * 0.28, ry * 0.12, -0.15, 0, Math.PI * 2);
+        ctx.fill();
+        // Secondary soft sky gleam
+        ctx.fillStyle = `rgba(224, 242, 254, ${stainAlpha * 0.3})`;
+        ctx.beginPath();
+        safeEllipse(ctx, rx * 0.2, ry * 0.18, rx * 0.15, ry * 0.08, 0.2, 0, Math.PI * 2);
+        ctx.fill();
       }
 
       if ((stain as any).onFire) {
@@ -1388,97 +1740,65 @@ export class GameRenderer {
         }
       }
 
-      // 4b. Draw Driveway Courtyard Entrances / Exits
-      if (sw.driveways) {
-        for (const dw of sw.driveways) {
-          ctx.save();
-          ctx.fillStyle = '#475569'; // dark slate asphalt/concrete for driveway ramp
-          ctx.strokeStyle = '#1e293b';
-          ctx.lineWidth = 1.5;
+    }
+  }
 
-          let rx = 0;
-          let ry = 0;
-          let rw = 0;
-          let rh = 0;
+  private renderStaticDriveways(
+    ctx: CanvasRenderingContext2D,
+    world: GameWorld,
+    minX: number,
+    minY: number,
+    maxX: number,
+    maxY: number
+  ) {
+    if (!world.driveways) return;
+    for (const dw of world.driveways) {
+      if (dw.x + dw.width < minX || dw.x > maxX || dw.y + dw.height < minY || dw.y > maxY) continue;
 
-          if (dw.side === 'north') {
-            rx = sw.x + dw.offset;
-            ry = sw.y;
-            rw = dw.width;
-            rh = sw.sidewalkWidth + 10;
-          } else if (dw.side === 'south') {
-            rx = sw.x + dw.offset;
-            ry = sw.y + sw.height - sw.sidewalkWidth - 10;
-            rw = dw.width;
-            rh = sw.sidewalkWidth + 10;
-          } else if (dw.side === 'west') {
-            rx = sw.x;
-            ry = sw.y + dw.offset;
-            rw = sw.sidewalkWidth + 10;
-            rh = dw.width;
-          } else if (dw.side === 'east') {
-            rx = sw.x + sw.width - sw.sidewalkWidth - 10;
-            ry = sw.y + dw.offset;
-            rw = sw.sidewalkWidth + 10;
-            rh = dw.width;
-          }
+      if (dw.type === 'dirt') {
+        // Rustic earthy dirt driveway with wheel ruts
+        ctx.fillStyle = '#5c3d23';
+        ctx.fillRect(dw.x, dw.y, dw.width, dw.height);
 
-          // Draw driveway asphalt ramp
-          ctx.fillRect(rx, ry, rw, rh);
-
-          // Draw subtle tire tread skidmarks on the driveway for added realism
-          ctx.strokeStyle = 'rgba(15, 23, 42, 0.4)';
-          ctx.lineWidth = 2;
-          ctx.beginPath();
-          if (dw.side === 'north' || dw.side === 'south') {
-            // Draw 2 vertical tire track lines
-            ctx.moveTo(rx + 8, ry);
-            ctx.lineTo(rx + 8, ry + rh);
-            ctx.moveTo(rx + rw - 8, ry);
-            ctx.lineTo(rx + rw - 8, ry + rh);
-          } else {
-            // Draw 2 horizontal tire track lines
-            ctx.moveTo(rx, ry + 8);
-            ctx.lineTo(rx + rw, ry + 8);
-            ctx.moveTo(rx, ry + rh - 8);
-            ctx.lineTo(rx + rw, ry + rh - 8);
-          }
-          ctx.stroke();
-
-          // Draw yellow dashed warning lines at the entry curb
-          ctx.strokeStyle = '#f59e0b';
-          ctx.lineWidth = 2.5;
-          ctx.setLineDash([4, 4]);
-          ctx.beginPath();
-          if (dw.side === 'north') {
-            ctx.moveTo(rx, ry);
-            ctx.lineTo(rx + rw, ry);
-          } else if (dw.side === 'south') {
-            ctx.moveTo(rx, ry + rh);
-            ctx.lineTo(rx + rw, ry + rh);
-          } else if (dw.side === 'west') {
-            ctx.moveTo(rx, ry);
-            ctx.lineTo(rx, ry + rh);
-          } else if (dw.side === 'east') {
-            ctx.moveTo(rx + rw, ry);
-            ctx.lineTo(rx + rw, ry + rh);
-          }
-          ctx.stroke();
-          ctx.restore();
+        // Dark damp wheel tracks
+        ctx.fillStyle = '#3a2514';
+        if (dw.width > dw.height) {
+          ctx.fillRect(dw.x, dw.y + dw.height * 0.2, dw.width, Math.max(3, dw.height * 0.2));
+          ctx.fillRect(dw.x, dw.y + dw.height * 0.6, dw.width, Math.max(3, dw.height * 0.2));
+        } else {
+          ctx.fillRect(dw.x + dw.width * 0.2, dw.y, Math.max(3, dw.width * 0.2), dw.height);
+          ctx.fillRect(dw.x + dw.width * 0.6, dw.y, Math.max(3, dw.width * 0.2), dw.height);
         }
-      }
 
-      // 5. Tactile Safety Paving (Yellow ribbed pads at sidewalk corners facing crosswalks)
-      ctx.fillStyle = '#f59e0b';
-      const padSize = 14;
-      // Top-Left corner pads
-      ctx.fillRect(sw.x + 4, sw.y + 4, padSize, padSize);
-      // Top-Right corner pads
-      ctx.fillRect(sw.x + sw.width - padSize - 4, sw.y + 4, padSize, padSize);
-      // Bottom-Left corner pads
-      ctx.fillRect(sw.x + 4, sw.y + sw.height - padSize - 4, padSize, padSize);
-      // Bottom-Right corner pads
-      ctx.fillRect(sw.x + sw.width - padSize - 4, sw.y + sw.height - padSize - 4, padSize, padSize);
+        ctx.strokeStyle = '#3a2514';
+        ctx.lineWidth = 1.2;
+        ctx.strokeRect(dw.x, dw.y, dw.width, dw.height);
+      } else if (dw.type === 'gravel') {
+        // Natural crushed stone / gravel driveway
+        ctx.fillStyle = '#57534e';
+        ctx.fillRect(dw.x, dw.y, dw.width, dw.height);
+
+        // Crushed stone flecks
+        ctx.fillStyle = '#78716c';
+        const step = 14;
+        for (let gx = dw.x + 4; gx < dw.x + dw.width - 4; gx += step) {
+          for (let gy = dw.y + 4; gy < dw.y + dw.height - 4; gy += step) {
+            ctx.fillRect(gx, gy, 2, 2);
+          }
+        }
+
+        ctx.strokeStyle = '#44403c';
+        ctx.lineWidth = 1.2;
+        ctx.strokeRect(dw.x, dw.y, dw.width, dw.height);
+      } else {
+        // Draw clean asphalt surface
+        ctx.fillStyle = '#1e293b';
+        ctx.fillRect(dw.x, dw.y, dw.width, dw.height);
+
+        ctx.strokeStyle = '#475569';
+        ctx.lineWidth = 1.5;
+        ctx.strokeRect(dw.x, dw.y, dw.width, dw.height);
+      }
     }
   }
 
@@ -1487,111 +1807,220 @@ export class GameRenderer {
     for (const pk of world.parkings) {
       if (pk.x + pk.width < minX || pk.x > maxX || pk.y + pk.height < minY || pk.y > maxY) continue;
 
-      // 1. Asphalt Surface with Curb Trim
+      // 1. Asphalt Surface with Durable Curb Trim
       ctx.fillStyle = '#1e293b'; // deep clean dark asphalt
       ctx.fillRect(pk.x, pk.y, pk.width, pk.height);
 
       ctx.strokeStyle = '#475569';
-      ctx.lineWidth = 3;
+      ctx.lineWidth = 2.5;
       ctx.strokeRect(pk.x, pk.y, pk.width, pk.height);
 
-      // Draw driveway connecting asphalt paths for courtyard parking lots
-      if (pk.id.startsWith('court_parking_')) {
-        const parts = pk.id.split('_');
-        const bx = parseInt(parts[2]);
-        const by = parseInt(parts[3]);
-        const sw = world.sidewalks.find(s => s.id === `sidewalk_${bx}_${by}`);
-        if (sw && sw.driveways) {
-          ctx.fillStyle = '#1e293b'; // match the parking lot asphalt color perfectly
-          for (const dw of sw.driveways) {
-            if (dw.side === 'south') {
-              const rx = sw.x + dw.offset;
-              const ry = sw.y + sw.height - sw.sidewalkWidth - 10;
-              const rw = dw.width;
-              // Draw a connecting asphalt road from the south driveway to the bottom of the parking lot
-              const roadY = pk.y + pk.height;
-              const roadH = ry - roadY + 2;
-              if (roadH > 0) {
-                ctx.fillRect(rx, roadY, rw, roadH);
-                // Subtle road edges/curbs
-                ctx.strokeStyle = '#475569';
-                ctx.lineWidth = 1.5;
-                ctx.beginPath();
-                ctx.moveTo(rx, roadY);
-                ctx.lineTo(rx, ry);
-                ctx.moveTo(rx + rw, roadY);
-                ctx.lineTo(rx + rw, ry);
-                ctx.stroke();
-              }
-            } else if (dw.side === 'east') {
-              const rx = sw.x + sw.width - sw.sidewalkWidth - 10;
-              const ry = sw.y + dw.offset;
-              const rh = dw.width;
-              // Draw a connecting asphalt road from the east driveway to the right edge of the parking lot
-              const roadX = pk.x + pk.width;
-              const roadW = rx - roadX + 2;
-              if (roadW > 0) {
-                ctx.fillRect(roadX, ry, roadW, rh);
-                // Subtle road edges/curbs
-                ctx.strokeStyle = '#475569';
-                ctx.lineWidth = 1.5;
-                ctx.beginPath();
-                ctx.moveTo(roadX, ry);
-                ctx.lineTo(rx, ry);
-                ctx.moveTo(roadX, ry + rh);
-                ctx.lineTo(rx, ry + rh);
-                ctx.stroke();
-              }
-            }
-          }
+      // 2. Individual Direction Arrows from map.json (Разметка 1.18)
+      if (pk.arrows && pk.arrows.length > 0) {
+        for (const arrow of pk.arrows) {
+          this.drawParkingArrow(ctx, arrow.x, arrow.y, arrow.angle, arrow.type || 'straight');
         }
       }
 
-      // 2. Central Driving Lane Direction Arrows
-      ctx.fillStyle = '#64748b';
-      const arrowCenterX = pk.x + pk.width / 2;
-      for (let ay = pk.y + 40; ay < pk.y + pk.height - 40; ay += 90) {
-        ctx.beginPath();
-        ctx.moveTo(arrowCenterX, ay - 12);
-        ctx.lineTo(arrowCenterX - 7, ay + 6);
-        ctx.lineTo(arrowCenterX - 3, ay + 6);
-        ctx.lineTo(arrowCenterX - 3, ay + 14);
-        ctx.lineTo(arrowCenterX + 3, ay + 14);
-        ctx.lineTo(arrowCenterX + 3, ay + 6);
-        ctx.lineTo(arrowCenterX + 7, ay + 6);
-        ctx.closePath();
-        ctx.fill();
-      }
-
-      // 3. Parking Bays with Crisp White Stall Lines and Wheel Stops
-      for (let idx = 0; idx < pk.spots.length; idx++) {
-        const spot = pk.spots[idx];
-        const isHandicap = idx === 0 || idx === 1;
-
-        // Stall line box
-        ctx.strokeStyle = isHandicap ? '#38bdf8' : '#f8fafc';
-        ctx.lineWidth = 2;
-        ctx.strokeRect(spot.x - 16, spot.y - 20, 32, 40);
-
-        // Concrete Wheel Stop (Parking curb bumper)
-        ctx.fillStyle = '#94a3b8';
-        const bumperX = spot.angle === 0 ? spot.x - 12 : spot.x + 6;
-        ctx.fillRect(bumperX, spot.y - 12, 6, 24);
-
-        // Handicap Accessible Icon
-        if (isHandicap) {
-          ctx.fillStyle = 'rgba(56, 189, 248, 0.25)';
-          ctx.fillRect(spot.x - 14, spot.y - 18, 28, 36);
-
-          ctx.fillStyle = '#38bdf8';
-          ctx.beginPath();
-          ctx.arc(spot.x, spot.y - 5, 3, 0, Math.PI * 2);
-          ctx.fill();
-          ctx.fillRect(spot.x - 1.5, spot.y - 1, 3, 8);
-          ctx.fillRect(spot.x - 1.5, spot.y + 4, 6, 3);
+      // 3. Realistic U-shaped Parking Bays (Разметка 1.1) with Wheel Stops and Marking 1.24.3
+      if (pk.spots && pk.spots.length > 0) {
+        for (let idx = 0; idx < pk.spots.length; idx++) {
+          const spot = pk.spots[idx];
+          this.drawParkingSpot(ctx, spot);
         }
       }
     }
+  }
+
+  // --- REALISTIC PARKING BAY DRAWING (U-SHAPE STALL LINES & WHEEL STOP) ---
+  private drawParkingSpot(ctx: CanvasRenderingContext2D, spot: ParkingSpot) {
+    const w = spot.width || 38;
+    const len = spot.length || 54;
+    const hw = w / 2;
+    const hl = len / 2;
+    const openSide = spot.openSide || (spot.angle === 0 ? 'south' : (spot.angle === Math.PI ? 'north' : (spot.angle > 0 ? 'east' : 'west')));
+    const isHandicap = !!spot.isHandicap;
+
+    ctx.save();
+    ctx.strokeStyle = '#f8fafc';
+    ctx.lineWidth = 2;
+    ctx.lineCap = 'square';
+    ctx.lineJoin = 'miter';
+
+    // 1. U-shaped stall lines: open towards drive aisle (NO closed rectangle box!)
+    ctx.beginPath();
+    let bumperX = spot.x;
+    let bumperY = spot.y;
+    let bumperW = 24;
+    let bumperH = 6;
+    let iconAngle = 0;
+
+    if (openSide === 'south') {
+      // Open at South (+y). Dividers on Left (-x) and Right (+x), Back at North (-y)
+      ctx.moveTo(spot.x - hw, spot.y + hl);
+      ctx.lineTo(spot.x - hw, spot.y - hl);
+      ctx.lineTo(spot.x + hw, spot.y - hl);
+      ctx.lineTo(spot.x + hw, spot.y + hl);
+      bumperX = spot.x - 12;
+      bumperY = spot.y - hl + 8;
+      bumperW = 24;
+      bumperH = 6;
+      iconAngle = -Math.PI / 2;
+    } else if (openSide === 'north') {
+      // Open at North (-y). Dividers on Left and Right, Back at South (+y)
+      ctx.moveTo(spot.x - hw, spot.y - hl);
+      ctx.lineTo(spot.x - hw, spot.y + hl);
+      ctx.lineTo(spot.x + hw, spot.y + hl);
+      ctx.lineTo(spot.x + hw, spot.y - hl);
+      bumperX = spot.x - 12;
+      bumperY = spot.y + hl - 14;
+      bumperW = 24;
+      bumperH = 6;
+      iconAngle = Math.PI / 2;
+    } else if (openSide === 'east') {
+      // Open at East (+x). Dividers on Top (-y) and Bottom (+y), Back at West (-x)
+      ctx.moveTo(spot.x + hl, spot.y - hw);
+      ctx.lineTo(spot.x - hl, spot.y - hw);
+      ctx.lineTo(spot.x - hl, spot.y + hw);
+      ctx.lineTo(spot.x + hl, spot.y + hw);
+      bumperX = spot.x - hl + 8;
+      bumperY = spot.y - 12;
+      bumperW = 6;
+      bumperH = 24;
+      iconAngle = 0;
+    } else if (openSide === 'west') {
+      // Open at West (-x). Dividers on Top and Bottom, Back at East (+x)
+      ctx.moveTo(spot.x - hl, spot.y - hw);
+      ctx.lineTo(spot.x + hl, spot.y - hw);
+      ctx.lineTo(spot.x + hl, spot.y + hw);
+      ctx.lineTo(spot.x - hl, spot.y + hw);
+      bumperX = spot.x + hl - 14;
+      bumperY = spot.y - 12;
+      bumperW = 6;
+      bumperH = 24;
+      iconAngle = Math.PI;
+    }
+    ctx.stroke();
+
+    // 2. Concrete Wheel Stop (Колесоотбойник) positioned near the rear curb
+    ctx.fillStyle = '#64748b';
+    ctx.fillRect(bumperX, bumperY, bumperW, bumperH);
+    ctx.fillStyle = '#94a3b8';
+    if (bumperW > bumperH) {
+      ctx.fillRect(bumperX + 1, bumperY + 1, bumperW - 2, 2);
+    } else {
+      ctx.fillRect(bumperX + 1, bumperY + 1, 2, bumperH - 2);
+    }
+
+    // 3. Handicap Accessible Road Marking (Разметка 1.24.3 "Инвалиды")
+    // White pictogram painted directly on asphalt, NO BLUE PAINT
+    if (isHandicap) {
+      this.drawWheelchairMarking(ctx, spot.x, spot.y, iconAngle);
+    }
+
+    ctx.restore();
+  }
+
+  // --- CANONICAL WHEELCHAIR PICTOGRAM (РАЗМЕТКА 1.24.3 "ИНВАЛИДЫ", БЕЛАЯ НА АСФАЛЬТЕ) ---
+  private drawWheelchairMarking(ctx: CanvasRenderingContext2D, cx: number, cy: number, angle: number = 0) {
+    ctx.save();
+    ctx.translate(cx, cy);
+    if (angle !== 0) ctx.rotate(angle);
+
+    ctx.strokeStyle = '#f8fafc';
+    ctx.fillStyle = '#f8fafc';
+    ctx.lineWidth = 1.8;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+
+    // Head (solid circle)
+    ctx.beginPath();
+    ctx.arc(0, -9, 2.3, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Spine & Seat & Leg & Foot
+    ctx.beginPath();
+    ctx.moveTo(0, -6);      // Neck
+    ctx.lineTo(-2.5, 1);    // Pelvis/Hips
+    ctx.lineTo(4.5, 1);     // Knee
+    ctx.lineTo(4.5, 6.5);   // Lower leg
+    ctx.lineTo(7, 6.5);     // Foot
+    ctx.stroke();
+
+    // Arm reaching to wheel
+    ctx.beginPath();
+    ctx.moveTo(-1.5, -2.5);
+    ctx.lineTo(1.5, -1);
+    ctx.lineTo(2, 2.5);
+    ctx.stroke();
+
+    // Wheel arc
+    ctx.beginPath();
+    ctx.arc(-2, 1.5, 5.2, 0.45, Math.PI * 1.82);
+    ctx.stroke();
+
+    // Front small caster wheel
+    ctx.beginPath();
+    ctx.arc(4.5, 7.5, 1.2, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.restore();
+  }
+
+  // --- DIRECTION ARROWS ON PARKING DRIVEWAYS (РАЗМЕТКА 1.18) ---
+  private drawParkingArrow(ctx: CanvasRenderingContext2D, x: number, y: number, angle: number, type: 'straight' | 'turn_left' | 'turn_right' = 'straight') {
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(angle);
+
+    ctx.fillStyle = '#f8fafc';
+    ctx.strokeStyle = '#f8fafc';
+
+    if (type === 'straight') {
+      // Slender shaft and sharp triangular head
+      ctx.beginPath();
+      ctx.moveTo(12, 0);
+      ctx.lineTo(2, -6.5);
+      ctx.lineTo(3.5, -2.5);
+      ctx.lineTo(-12, -2.5);
+      ctx.lineTo(-12, 2.5);
+      ctx.lineTo(3.5, 2.5);
+      ctx.lineTo(2, 6.5);
+      ctx.closePath();
+      ctx.fill();
+    } else if (type === 'turn_right') {
+      ctx.lineWidth = 4.5;
+      ctx.lineCap = 'butt';
+      ctx.beginPath();
+      ctx.moveTo(-10, 0);
+      ctx.quadraticCurveTo(0, 0, 4, 7);
+      ctx.stroke();
+
+      ctx.beginPath();
+      ctx.moveTo(4, 15);
+      ctx.lineTo(-2, 7.5);
+      ctx.lineTo(2, 8.5);
+      ctx.lineTo(10, 7.5);
+      ctx.closePath();
+      ctx.fill();
+    } else if (type === 'turn_left') {
+      ctx.lineWidth = 4.5;
+      ctx.lineCap = 'butt';
+      ctx.beginPath();
+      ctx.moveTo(-10, 0);
+      ctx.quadraticCurveTo(0, 0, 4, -7);
+      ctx.stroke();
+
+      ctx.beginPath();
+      ctx.moveTo(4, -15);
+      ctx.lineTo(10, -7.5);
+      ctx.lineTo(2, -8.5);
+      ctx.lineTo(-2, -7.5);
+      ctx.closePath();
+      ctx.fill();
+    }
+
+    ctx.restore();
   }
 
   // --- BUILDINGS: BASE & ROOF SPLIT ENGINE ---
@@ -1599,8 +2028,8 @@ export class GameRenderer {
     const ctx = this.ctx;
 
     for (const bld of buildings) {
-      if (bld.type === 'gas_station_canopy') {
-        // Open drive-through canopy: no solid base walls
+      if (bld.type === 'gas_station_canopy' || bld.type === 'gas_station_island') {
+        // Open drive-through canopy / custom gas island: no solid base walls (rendered by GasStationRenderer)
         continue;
       }
       if (bld.type === 'park_monument') {
@@ -1677,6 +2106,113 @@ export class GameRenderer {
           ctx.lineTo(gx, bld.y + bld.height);
         }
         ctx.stroke();
+      } else if (bld.type === 'industrial') {
+        // --- INDUSTRIAL WAREHOUSE / HANGAR FACADE & LOADING BAYS ---
+        // Weathered corrugated sheet metal (профнастил)
+        ctx.fillStyle = bld.color || '#334155';
+        ctx.fillRect(bld.x, bld.y, bld.width, bld.height);
+
+        // Corrugated metal vertical sheet ribs
+        ctx.strokeStyle = 'rgba(15, 23, 42, 0.35)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        for (let gx = bld.x + 8; gx < bld.x + bld.width; gx += 8) {
+          ctx.moveTo(gx, bld.y);
+          ctx.lineTo(gx, bld.y + bld.height);
+        }
+        ctx.stroke();
+
+        // Heavy concrete perimeter foundation plinth
+        ctx.fillStyle = '#1e293b';
+        ctx.fillRect(bld.x, bld.y + bld.height - 4, bld.width, 4);
+        ctx.fillRect(bld.x, bld.y, bld.width, 3);
+
+        // Industrial Loading Bays / Freight Docks (дебаркадеры с воротами и номерами доков)
+        if (bld.width >= 70 && bld.height >= 40) {
+          const dockW = 20;
+          const dockCount = Math.min(4, Math.floor((bld.width - 20) / 28));
+          const startX = bld.x + (bld.width - (dockCount * 28 - 8)) / 2;
+
+          for (let i = 0; i < dockCount; i++) {
+            const dx = startX + i * 28;
+            const dy = bld.y + bld.height - 6;
+
+            // Roll-up overhead sectional garage door (секционные промышленные ворота)
+            ctx.fillStyle = '#475569';
+            ctx.fillRect(dx, dy - 12, dockW, 14);
+            ctx.strokeStyle = '#0f172a';
+            ctx.lineWidth = 1.0;
+            ctx.strokeRect(dx, dy - 12, dockW, 14);
+
+            // Horizontal sectional panel seams
+            ctx.strokeStyle = '#334155';
+            ctx.lineWidth = 0.8;
+            ctx.beginPath();
+            ctx.moveTo(dx, dy - 8); ctx.lineTo(dx + dockW, dy - 8);
+            ctx.moveTo(dx, dy - 4); ctx.lineTo(dx + dockW, dy - 4);
+            ctx.moveTo(dx, dy); ctx.lineTo(dx + dockW, dy);
+            ctx.stroke();
+
+            // Yellow/Black diagonal hazard warning border around dock portal
+            ctx.fillStyle = '#eab308';
+            ctx.fillRect(dx - 2, dy - 14, dockW + 4, 2);
+            ctx.fillRect(dx - 2, dy - 14, 2, 16);
+            ctx.fillRect(dx + dockW, dy - 14, 2, 16);
+
+            // Dock number plate ("ДОК 1", "ДОК 2", ...)
+            ctx.fillStyle = '#0f172a';
+            ctx.fillRect(dx + dockW / 2 - 8, dy - 17, 16, 5);
+            ctx.fillStyle = '#ffffff';
+            ctx.font = 'bold 3.5px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(`ДОК ${i + 1}`, dx + dockW / 2, dy - 14.5);
+
+            // Rubber dock bumpers (резиновые отбойники для фур)
+            ctx.fillStyle = '#18181b';
+            ctx.fillRect(dx - 1, dy + 2, 2.5, 4);
+            ctx.fillRect(dx + dockW - 1.5, dy + 2, 2.5, 4);
+          }
+        }
+      } else if (bld.type === 'suburban') {
+        // --- RURAL WOODEN IZBA / VILLAGE HOUSE LOG WALLS ---
+        ctx.fillStyle = bld.roofColor || '#452e1e';
+        ctx.fillRect(bld.x, bld.y, bld.width, bld.height);
+
+        // Horizontal wooden log courses (сруб из брёвен)
+        ctx.strokeStyle = 'rgba(20, 10, 5, 0.45)';
+        ctx.lineWidth = 1.2;
+        ctx.beginPath();
+        for (let ly = bld.y + 6; ly < bld.y + bld.height; ly += 6) {
+          ctx.moveTo(bld.x, ly);
+          ctx.lineTo(bld.x + bld.width, ly);
+        }
+        ctx.stroke();
+
+        // Corner interlocking notched log joints ("в обло / в лапу")
+        ctx.fillStyle = '#26170e';
+        [bld.x + 3, bld.x + bld.width - 3].forEach(cx => {
+          for (let cy = bld.y + 3; cy < bld.y + bld.height; cy += 6) {
+            ctx.beginPath();
+            ctx.arc(cx, cy, 2.2, 0, Math.PI * 2);
+            ctx.fill();
+          }
+        });
+
+        // Carved wooden window architraves ("наличники")
+        const winColor = bld.accentColor || '#38bdf8';
+        const winY = bld.y + bld.height - 4;
+        const numWins = Math.max(2, Math.floor(bld.width / 24));
+        const winSpacing = bld.width / (numWins + 1);
+        for (let w = 1; w <= numWins; w++) {
+          const wx = bld.x + w * winSpacing;
+          // Outer carved frame
+          ctx.fillStyle = winColor;
+          ctx.fillRect(wx - 4, winY - 3, 8, 4);
+          // Dark window glass
+          ctx.fillStyle = '#0f172a';
+          ctx.fillRect(wx - 2.5, winY - 2, 5, 3);
+        }
       } else if (bld.type === 'shopping_mall' || bld.type === 'commercial' || bld.type === 'shop' || bld.type === 'tactical_store' || bld.type === 'auto_service_center' || bld.type === 'car_wash_station' || bld.type === 'pharmacy_store' || bld.type === 'supermarket_store' || bld.type === 'bakery_cafe' || bld.type === 'coffee_bistro' || bld.type === 'electronics_store' || bld.type === 'sports_store' || bld.type === 'fast_food_restaurant' || bld.type === 'pizzeria_restaurant' || bld.type === 'commercial_gallery' || bld.shopBrand !== undefined) {
         if (bld.shopBrand === 'pharmacy_36_6' || bld.type === 'pharmacy_store') {
           // --- АПТЕКА 36.6: MODERN PHARMACEUTICAL CLINICAL FACADE ---
@@ -1844,6 +2380,88 @@ export class GameRenderer {
           ctx.textAlign = 'center';
           ctx.textBaseline = 'middle';
           ctx.fillText('BEAN & BISTRO • SPECIALTY COFFEE & BRUNCH', bSignX + bSignW / 2, bld.y + 11);
+        } else if (bld.type === 'car_dealership') {
+          // --- ОФИЦИАЛЬНЫЙ АВТОСАЛОН "ПРЕМИУМ АВТО": PANORAMIC GLASS SHOWROOM & ARCHITECTURAL COMPOSITE ---
+          ctx.fillStyle = '#09090b';
+          ctx.fillRect(bld.x, bld.y, bld.width, bld.height);
+
+          // Modern brushed steel & obsidian roof parapet perimeter
+          ctx.strokeStyle = '#1e293b';
+          ctx.lineWidth = 3;
+          ctx.strokeRect(bld.x + 1.5, bld.y + 1.5, bld.width - 3, bld.height - 3);
+
+          // LED Ambient cyan architectural crown accent along top edge
+          ctx.fillStyle = '#0284c7';
+          ctx.fillRect(bld.x + 4, bld.y + 2, bld.width - 8, 3);
+          ctx.fillStyle = '#38bdf8';
+          ctx.fillRect(bld.x + 8, bld.y + 2.5, bld.width - 16, 1.5);
+
+          // Large Panoramic Glass Curtain Wall / Showroom Glazing facing South (Bottom facade)
+          const glassH = 26;
+          const glassY = bld.y + bld.height - glassH;
+          ctx.fillStyle = 'rgba(15, 23, 42, 0.95)';
+          ctx.fillRect(bld.x + 6, glassY, bld.width - 12, glassH - 2);
+
+          // Showroom interior spotlight warm glows shining through the glass
+          const numPillars = Math.max(3, Math.floor((bld.width - 20) / 45));
+          const pStep = (bld.width - 24) / numPillars;
+          for (let p = 0; p < numPillars; p++) {
+            const gx = bld.x + 12 + p * pStep;
+            ctx.fillStyle = 'rgba(56, 189, 248, 0.25)';
+            ctx.fillRect(gx + 2, glassY + 2, pStep - 4, glassH - 6);
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.15)';
+            ctx.beginPath();
+            ctx.moveTo(gx + 4, glassY + 2);
+            ctx.lineTo(gx + pStep - 4, glassY + 2);
+            ctx.lineTo(gx + pStep - 8, glassY + glassH - 4);
+            ctx.lineTo(gx + 8, glassY + glassH - 4);
+            ctx.fill();
+            // Vertical structural mullions
+            ctx.strokeStyle = '#334155';
+            ctx.lineWidth = 1.5;
+            ctx.strokeRect(gx, glassY, pStep, glassH - 2);
+          }
+
+          // Rooftop Glass Atrium / Skylight (Central showroom illumination)
+          const atriumW = Math.min(180, bld.width * 0.55);
+          const atriumH = Math.min(65, bld.height * 0.38);
+          const atriumX = bld.x + (bld.width - atriumW) / 2;
+          const atriumY = bld.y + (bld.height - glassH - atriumH) / 2 + 8;
+          ctx.fillStyle = 'rgba(2, 132, 199, 0.4)';
+          ctx.fillRect(atriumX, atriumY, atriumW, atriumH);
+          ctx.strokeStyle = '#38bdf8';
+          ctx.lineWidth = 1.5;
+          ctx.strokeRect(atriumX, atriumY, atriumW, atriumH);
+          // Skylight structural steel geometric lattice
+          ctx.strokeStyle = 'rgba(255, 255, 255, 0.25)';
+          ctx.lineWidth = 1;
+          for (let sx = atriumX + 18; sx < atriumX + atriumW; sx += 18) {
+            ctx.beginPath();
+            ctx.moveTo(sx, atriumY);
+            ctx.lineTo(sx, atriumY + atriumH);
+            ctx.stroke();
+          }
+          for (let sy = atriumY + 16; sy < atriumY + atriumH; sy += 16) {
+            ctx.beginPath();
+            ctx.moveTo(atriumX, sy);
+            ctx.lineTo(atriumX + atriumW, sy);
+            ctx.stroke();
+          }
+
+          // Grand Showroom Fascia Marquee Sign (Top center)
+          const dealSignW = Math.min(270, bld.width - 40);
+          const dealSignX = bld.x + (bld.width - dealSignW) / 2;
+          ctx.fillStyle = '#09090b';
+          ctx.fillRect(dealSignX, bld.y + 4, dealSignW, 17);
+          ctx.strokeStyle = '#38bdf8';
+          ctx.lineWidth = 1.5;
+          ctx.strokeRect(dealSignX, bld.y + 4, dealSignW, 17);
+
+          ctx.fillStyle = '#ffffff';
+          ctx.font = 'bold 9px sans-serif';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText('🚘 ПРЕМИУМ АВТО • ОФИЦИАЛЬНЫЙ АВТОСАЛОН & ШОУРУМ', dealSignX + dealSignW / 2, bld.y + 12.5);
         } else if (bld.shopBrand === 'pitstop_service') {
           // --- АВТОМАСТЕРСКАЯ "PIT-STOP": INDUSTRIAL STEEL & RACING GARAGE BAYS ---
           ctx.fillStyle = '#1e293b';
@@ -2167,14 +2785,46 @@ export class GameRenderer {
         entranceList.push({ side: bld.entranceSide, offsetRatio: 0.5, number: 1 });
       }
 
+      // Dedicated Country Garage Door Renderer for suburban garages
+      if (bld.id.startsWith('garage_suburban_')) {
+        const entSide = bld.entranceSide || 'north';
+        const gdw = Math.min(bld.width - 10, 42);
+        const gdx = bld.x + (bld.width - gdw) / 2;
+        const gdy = entSide === 'north' ? bld.y - 2 : bld.y + bld.height - 2;
+
+        // Concrete / gravel entrance ramp apron
+        const rampH = 8;
+        const rampY = entSide === 'north' ? bld.y - rampH : bld.y + bld.height;
+        ctx.fillStyle = '#64748b';
+        ctx.fillRect(gdx - 2, rampY, gdw + 4, rampH);
+        ctx.strokeStyle = '#475569';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(gdx - 2, rampY, gdw + 4, rampH);
+
+        // Sectional overhead garage door
+        ctx.fillStyle = '#334155';
+        ctx.fillRect(gdx, gdy, gdw, 4);
+
+        // Horizontal panel ribs
+        ctx.strokeStyle = '#1e293b';
+        ctx.lineWidth = 0.8;
+        ctx.strokeRect(gdx, gdy, gdw, 4);
+
+        // Chrome door lock handle
+        ctx.fillStyle = '#cbd5e1';
+        ctx.fillRect(gdx + gdw / 2 - 2, gdy + 1, 4, 1.5);
+        continue;
+      }
+
       for (const ent of entranceList) {
         let ex = 0, ey = 0, ew = 0, eh = 0;
         let doorX = 0, doorY = 0, doorW = 0, doorH = 0;
         let lightCX = 0, lightCY = 0;
         let rampX = 0, rampY = 0, rampW = 0, rampH = 0;
 
-        const canopyDepth = 14;
-        const canopyWidth = 28;
+        const isSuburbanHouse = bld.type === 'suburban';
+        const canopyDepth = isSuburbanHouse ? 10 : 14;
+        const canopyWidth = isSuburbanHouse ? 20 : 28;
 
         if (ent.side === 'north') {
           ex = bld.x + bld.width * ent.offsetRatio - canopyWidth / 2;
@@ -2589,6 +3239,10 @@ export class GameRenderer {
         GasStationRenderer.renderCanopyRoof(ctx, nightAlpha, player, world);
         continue;
       }
+      if (bld.type === 'gas_station_island') {
+        // Ground island rendered with high fidelity by GasStationRenderer
+        continue;
+      }
       if (bld.type === 'park_monument') {
         this.renderParkFountainSpray(bld, nightAlpha);
         continue;
@@ -2846,6 +3500,9 @@ export class GameRenderer {
           } else if (bld.shopBrand === 'splav_gear') {
             marqueeColor = '#4d7c0f';
             marqueeBorder = '#bef264';
+          } else if (bld.type === 'car_dealership') {
+            marqueeColor = '#0f172a';
+            marqueeBorder = '#38bdf8';
           }
 
           // Check if player stands under entrance canopy
@@ -2972,7 +3629,42 @@ export class GameRenderer {
             ctx.strokeStyle = '#78350f'; ctx.lineWidth = 1; ctx.strokeRect(deckX - 8, deckY + 4, 5, 8);
             ctx.fillStyle = '#ffffff'; ctx.fillRect(deckX - 7, deckY + 6, 3, 1);
             ctx.fillRect(deckX - 7, deckY + 8, 2, 1);
-          } else if (bld.shopBrand === 'pitstop_service' || bld.type === 'car_dealership') {
+          } else if (bld.type === 'car_dealership') {
+            // C1. CAR DEALERSHIP SHOWROOM: GRAND POLISHED ENTRANCE PLAZA, GLASS DOORS & TOTEM
+            const plazaW = Math.min(90, bld.width * 0.4);
+            const plazaX = ex + (ew - plazaW) / 2;
+            const plazaY = ey + eh;
+
+            // Polished granite entry apron
+            ctx.fillStyle = '#1e293b';
+            ctx.fillRect(plazaX, plazaY, plazaW, 14);
+            ctx.strokeStyle = '#38bdf8';
+            ctx.lineWidth = 1;
+            ctx.strokeRect(plazaX, plazaY, plazaW, 14);
+
+            // Welcome Floor Mat (Navy/Gold "PREMIUM AUTO")
+            ctx.fillStyle = '#0f172a';
+            ctx.fillRect(plazaX + 12, plazaY + 2, plazaW - 24, 10);
+            ctx.strokeStyle = '#eab308';
+            ctx.lineWidth = 0.8;
+            ctx.strokeRect(plazaX + 12, plazaY + 2, plazaW - 24, 10);
+
+            ctx.fillStyle = '#eab308';
+            ctx.font = 'bold 7px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('ПРЕМИУМ АВТО', plazaX + plazaW / 2, plazaY + 7);
+
+            // Polished stainless steel stanchions / bollards on sides
+            ctx.fillStyle = '#94a3b8';
+            ctx.fillRect(plazaX + 3, plazaY + 3, 2, 8);
+            ctx.fillRect(plazaX + plazaW - 5, plazaY + 3, 2, 8);
+            ctx.fillStyle = '#38bdf8';
+            ctx.beginPath();
+            ctx.arc(plazaX + 4, plazaY + 3, 1.5, 0, Math.PI * 2);
+            ctx.arc(plazaX + plazaW - 4, plazaY + 3, 1.5, 0, Math.PI * 2);
+            ctx.fill();
+          } else if (bld.shopBrand === 'pitstop_service') {
             // C. AUTO REPAIR "PIT-STOP": GARAGE ROLLER DOORS, CAR LIFT & TIRE STACKS
             const garageW = bld.width * 0.7;
             const garageX = bld.x + (bld.width - garageW) / 2;
@@ -3108,6 +3800,258 @@ export class GameRenderer {
             ctx.fillRect(ex + ew / 2 - 4, ent.side === 'north' ? bld.y - 1.5 : bld.y + bld.height, 8, 1.5);
           }
         }
+      }
+
+      // --- INDUSTRIAL WAREHOUSE / HANGAR ROOF ---
+      if (bld.type === 'industrial') {
+        const rx = bld.x;
+        const ry = bld.y;
+        const rw = bld.width;
+        const rh = bld.height;
+
+        // Heavy industrial corrugated metal roof body
+        ctx.fillStyle = bld.roofColor || '#334155';
+        ctx.fillRect(rx, ry, rw, rh);
+        ctx.strokeStyle = '#0f172a';
+        ctx.lineWidth = 2.0;
+        ctx.strokeRect(rx, ry, rw, rh);
+
+        // Corrugated metal seams (профлист / оцинкованные полосы)
+        ctx.strokeStyle = 'rgba(0, 0, 0, 0.35)';
+        ctx.lineWidth = 1.0;
+        ctx.beginPath();
+        if (rw >= rh) {
+          for (let gx = rx + 8; gx < rx + rw - 6; gx += 8) {
+            ctx.moveTo(gx, ry + 2);
+            ctx.lineTo(gx, ry + rh - 2);
+          }
+        } else {
+          for (let gy = ry + 8; gy < ry + rh - 6; gy += 8) {
+            ctx.moveTo(rx + 2, gy);
+            ctx.lineTo(rx + rw - 2, gy);
+          }
+        }
+        ctx.stroke();
+
+        // Longitudinal skylight ribbon band (светоаэрационный фонарь)
+        if (rw > 60 && rh > 40) {
+          const skyW = rw >= rh ? rw * 0.6 : rw - 16;
+          const skyH = rw >= rh ? Math.min(18, rh * 0.35) : rh * 0.6;
+          const skyX = rx + (rw - skyW) / 2;
+          const skyY = ry + (rh - skyH) / 2;
+
+          ctx.fillStyle = 'rgba(14, 116, 144, 0.85)';
+          ctx.fillRect(skyX, skyY, skyW, skyH);
+          ctx.strokeStyle = '#0891b2';
+          ctx.lineWidth = 1.2;
+          ctx.strokeRect(skyX, skyY, skyW, skyH);
+
+          // Glass pane mullions
+          ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+          ctx.lineWidth = 0.8;
+          ctx.beginPath();
+          if (rw >= rh) {
+            for (let mx = skyX + 12; mx < skyX + skyW; mx += 12) {
+              ctx.moveTo(mx, skyY);
+              ctx.lineTo(mx, skyY + skyH);
+            }
+          } else {
+            for (let my = skyY + 12; my < skyY + skyH; my += 12) {
+              ctx.moveTo(skyX, my);
+              ctx.lineTo(skyX + skyW, my);
+            }
+          }
+          ctx.stroke();
+        }
+
+        // Industrial Factory Chimney / Smokestack on major facilities
+        if (bld.id.includes('mfg') || bld.id.includes('hub') || bld.id.includes('9_0') || bld.id.includes('8_3')) {
+          const chimX = rx + 24;
+          const chimY = ry + 24;
+
+          // Smokestack drop shadow
+          ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+          ctx.beginPath();
+          ctx.arc(chimX + 4, chimY + 4, 8, 0, Math.PI * 2);
+          ctx.fill();
+
+          // Industrial Brick/Steel Smokestack Body
+          ctx.fillStyle = '#7f1d1d';
+          ctx.beginPath();
+          ctx.arc(chimX, chimY, 8, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.strokeStyle = '#450a0a';
+          ctx.lineWidth = 1.2;
+          ctx.stroke();
+
+          // Warning Red/White Bands on rim
+          ctx.fillStyle = '#ffffff';
+          ctx.beginPath();
+          ctx.arc(chimX, chimY, 5.5, 0, Math.PI * 2);
+          ctx.fill();
+
+          ctx.fillStyle = '#0f172a';
+          ctx.beginPath();
+          ctx.arc(chimX, chimY, 3.5, 0, Math.PI * 2);
+          ctx.fill();
+
+          // Animated industrial exhaust smoke plume drifting northeast
+          const smokeTime = (now / 1500);
+          for (let p = 0; p < 4; p++) {
+            const pTime = (smokeTime + p * 1.25) % 5.0;
+            const progress = pTime / 5.0;
+            const driftX = chimX + progress * 36 + Math.sin(smokeTime + p) * 4;
+            const driftY = chimY - progress * 28;
+            const size = 3.5 + progress * 9;
+            const alpha = (1 - progress) * 0.22 * Math.max(0.2, 1 - nightAlpha * 0.7);
+
+            ctx.fillStyle = `rgba(203, 213, 225, ${alpha.toFixed(3)})`;
+            ctx.beginPath();
+            ctx.arc(driftX, driftY, size, 0, Math.PI * 2);
+            ctx.fill();
+          }
+        }
+
+        // Industrial Facility Rooftop Signboard / Warehouse Logo
+        if (bld.name && rw > 100) {
+          const signW = Math.min(220, rw - 24);
+          const signH = 14;
+          const signX = rx + (rw - signW) / 2;
+          const signY = ry + 6;
+
+          ctx.fillStyle = '#0f172a';
+          ctx.fillRect(signX, signY, signW, signH);
+          ctx.strokeStyle = '#eab308';
+          ctx.lineWidth = 1;
+          ctx.strokeRect(signX, signY, signW, signH);
+
+          ctx.fillStyle = '#fef08a';
+          ctx.font = 'bold 8px sans-serif';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(bld.name.toUpperCase(), signX + signW / 2, signY + signH / 2);
+        }
+
+        continue;
+      }
+
+      // --- RURAL GABLE ROOF FOR VILLAGE IZBAS ---
+      if (bld.type === 'suburban') {
+        const isAbandoned = bld.id.includes('abandoned');
+        const isBarn = bld.id.includes('barn');
+
+        // Eaves overhang (вынос карниза крыши)
+        const eX = bld.x - 4;
+        const eY = bld.y - 4;
+        const eW = bld.width + 8;
+        const eH = bld.height + 8;
+
+        // Shadow under eaves
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
+        ctx.fillRect(eX + 3, eY + 3, eW, eH);
+
+        // Ridge running horizontally
+        const midY = eY + eH / 2;
+
+        // North slope (slightly shaded)
+        ctx.fillStyle = isAbandoned ? '#27170e' : (bld.roofColor || '#452e1e');
+        ctx.fillRect(eX, eY, eW, eH / 2);
+
+        // South slope (natural matching tone, non-glowing at night)
+        ctx.fillStyle = isAbandoned ? '#321e13' : (bld.roofColor || '#452e1e');
+        ctx.fillRect(eX, midY, eW, eH / 2);
+        // Subtle sunlit tint during daytime only
+        if (nightAlpha < 0.6) {
+          ctx.fillStyle = `rgba(255, 255, 255, ${(0.08 * (1 - nightAlpha)).toFixed(2)})`;
+          ctx.fillRect(eX, midY, eW, eH / 2);
+        }
+
+        // Slanted corrugated metal or timber shingle grooves
+        ctx.strokeStyle = 'rgba(15, 10, 5, 0.35)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        for (let gx = eX + 6; gx < eX + eW - 4; gx += 8) {
+          ctx.moveTo(gx, eY);
+          ctx.lineTo(gx, eY + eH);
+        }
+        ctx.stroke();
+
+        // Heavy central wooden ridge beam (конёк)
+        ctx.fillStyle = '#1c1008';
+        ctx.fillRect(eX, midY - 2.5, eW, 5);
+        ctx.strokeStyle = '#0a0604';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(eX, midY - 2.5, eW, 5);
+
+        // If abandoned: hole in the roof with broken rafter beams
+        if (isAbandoned) {
+          const holeX = eX + eW * 0.35;
+          const holeY = eY + eH * 0.25;
+          const holeW = eW * 0.35;
+          const holeH = eH * 0.5;
+
+          // Dark hole inside
+          ctx.fillStyle = '#09090b';
+          ctx.beginPath();
+          ctx.roundRect(holeX, holeY, holeW, holeH, 4);
+          ctx.fill();
+
+          // Broken rafters criss-crossing
+          ctx.strokeStyle = '#452e1e';
+          ctx.lineWidth = 1.8;
+          ctx.beginPath();
+          ctx.moveTo(holeX + 4, holeY);
+          ctx.lineTo(holeX + holeW - 6, holeY + holeH);
+          ctx.moveTo(holeX, holeY + 6);
+          ctx.lineTo(holeX + holeW, holeY + holeH - 4);
+          ctx.stroke();
+
+          // Wild green moss along the fracture
+          ctx.fillStyle = '#4d7c0f';
+          ctx.beginPath();
+          ctx.arc(holeX + 2, holeY + 2, 3, 0, Math.PI * 2);
+          ctx.arc(holeX + holeW - 2, holeY + 4, 3.5, 0, Math.PI * 2);
+          ctx.fill();
+        } else if (!isBarn) {
+          // Intact house: Red brick chimney (печная труба)
+          const chimX = eX + eW * 0.2;
+          const chimY = eY + eH * 0.25;
+
+          // Chimney drop shadow
+          ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
+          ctx.fillRect(chimX + 2, chimY + 2, 8, 8);
+
+          // Red clay brick body
+          ctx.fillStyle = '#8b251e';
+          ctx.fillRect(chimX, chimY, 8, 8);
+          ctx.strokeStyle = '#521410';
+          ctx.lineWidth = 0.8;
+          ctx.strokeRect(chimX, chimY, 8, 8);
+
+          // Dark metal rain flue cap
+          ctx.fillStyle = '#1e293b';
+          ctx.fillRect(chimX - 1, chimY - 1, 10, 3);
+
+          // Gentle animated woodsmoke drifting only from inhabited izba 1
+          if (bld.id === 'bld_village_izba_1') {
+            const smokeTime = (Date.now() / 1600);
+            for (let p = 0; p < 3; p++) {
+              const pTime = (smokeTime + p * 1.6) % 4.8;
+              const progress = pTime / 4.8; // 0 to 1
+              const driftX = chimX + 4 + progress * 22 + Math.sin(smokeTime + p) * 3;
+              const driftY = chimY - progress * 26;
+              const size = 3.0 + progress * 6;
+              const alpha = (1 - progress) * 0.24 * Math.max(0.2, 1 - nightAlpha * 0.7);
+
+              ctx.fillStyle = `rgba(148, 163, 184, ${alpha.toFixed(3)})`;
+              ctx.beginPath();
+              ctx.arc(driftX, driftY, size, 0, Math.PI * 2);
+              ctx.fill();
+            }
+          }
+        }
+
+        continue;
       }
 
       // 2. PARAPET / ROOF RIDGE BORDER
@@ -3316,8 +4260,8 @@ export class GameRenderer {
             ctx.lineTo(dx + d.rw, dy);
             ctx.stroke();
           } else if (d.type === 'antenna') {
-            // If Residential or Industrial, render a beautiful round Water Storage Tower Tower!
-            if (bld.type === 'residential' || bld.type === 'industrial') {
+            // If Residential, render a beautiful round Water Storage Tower Tower!
+            if (bld.type === 'residential') {
               const rad = d.rw / 2;
               const cx = dx + rad;
               const cy = dy + rad;
@@ -3464,6 +4408,19 @@ export class GameRenderer {
           ctx.textAlign = 'center';
           ctx.textBaseline = 'middle';
           ctx.fillText('BEAN & BISTRO', signCx, signCy);
+        } else if (bld.type === 'car_dealership') {
+          const rsw = Math.min(220, bld.width - 20);
+          ctx.fillStyle = '#09090b';
+          ctx.fillRect(signCx - rsw / 2, signCy - 9, rsw, 18);
+          ctx.strokeStyle = '#38bdf8';
+          ctx.lineWidth = 1.6;
+          ctx.strokeRect(signCx - rsw / 2, signCy - 9, rsw, 18);
+
+          ctx.fillStyle = '#38bdf8';
+          ctx.font = 'bold 8.5px sans-serif';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText('🚘 ПРЕМИУМ АВТО • АВТОСАЛОН', signCx, signCy);
         } else if (bld.shopBrand === 'pitstop_service') {
           const rsw = Math.min(150, bld.width - 20);
           ctx.fillStyle = '#0f172a';
@@ -3498,7 +4455,11 @@ export class GameRenderer {
     if (nightAlpha > 0.05) {
       ctx.fillStyle = `rgba(0, 0, 15, ${nightAlpha * 0.72})`;
       for (const bldToTint of buildings) {
-        ctx.fillRect(bldToTint.x, bldToTint.y, bldToTint.width, bldToTint.height);
+        if (bldToTint.type === 'suburban') {
+          ctx.fillRect(bldToTint.x - 4, bldToTint.y - 4, bldToTint.width + 8, bldToTint.height + 8);
+        } else {
+          ctx.fillRect(bldToTint.x, bldToTint.y, bldToTint.width, bldToTint.height);
+        }
       }
     }
   }
@@ -3687,7 +4648,7 @@ export class GameRenderer {
       if ((prop.type === 'lamp' || prop.type === 'lamp_highway' || prop.type === 'lamp_concrete') && !prop.isBroken) continue;
       if (prop.type === 'traffic_light') continue;
 
-      if (prop.x < minX - 30 || prop.x > maxX + 30 || prop.y < minY - 30 || prop.y > maxY + 30) continue;
+      if (prop.x < minX - 120 || prop.x > maxX + 120 || prop.y < minY - 120 || prop.y > maxY + 120) continue;
 
       ctx.save();
       ctx.translate(prop.x, prop.y);
@@ -3717,38 +4678,143 @@ export class GameRenderer {
       if (tree.x + tree.radius < minX || tree.x - tree.radius > maxX ||
           tree.y + tree.radius < minY || tree.y - tree.radius > maxY) continue;
 
-      // Tree Shadow
-      if (performanceConfig.enableShadows) {
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+      const isPine = (tree as any).type === 'pine' || tree.color === '#0f3e24' || tree.color === '#124c2c' || tree.color === '#165732' || tree.color === '#1b6138';
+      const isBirch = (tree as any).type === 'birch' || tree.color === '#84cc16' || tree.color === '#a3e635' || tree.color === '#65a30d';
+
+      if (isPine) {
+        const r = tree.radius;
+
+        // Pine Shadow
+        if (performanceConfig.enableShadows) {
+          ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
+          ctx.beginPath();
+          ctx.ellipse(tree.x + tree.shadowOffset, tree.y + tree.shadowOffset, r * 1.1, r * 0.9, Math.PI / 4, 0, Math.PI * 2);
+          ctx.fill();
+        }
+
+        // Outer Needle Tier (Dark evergreen starburst)
+        ctx.fillStyle = tree.color || '#124c2c';
         ctx.beginPath();
-        ctx.arc(tree.x + tree.shadowOffset, tree.y + tree.shadowOffset, tree.radius, 0, Math.PI * 2);
+        for (let a = 0; a < Math.PI * 2; a += Math.PI / 6) {
+          const pr = r * (0.82 + Math.sin(a * 5 + tree.x) * 0.18);
+          const px = tree.x + Math.cos(a) * pr;
+          const py = tree.y + Math.sin(a) * pr;
+          if (a === 0) ctx.moveTo(px, py);
+          else ctx.lineTo(px, py);
+        }
+        ctx.closePath();
         ctx.fill();
-      }
 
-      // Tree Foliage
-      ctx.fillStyle = tree.color;
-      ctx.beginPath();
-      ctx.arc(tree.x, tree.y, tree.radius, 0, Math.PI * 2);
-      ctx.fill();
+        // Middle Needle Tier
+        ctx.fillStyle = '#1e663d';
+        ctx.beginPath();
+        for (let a = 0; a < Math.PI * 2; a += Math.PI / 5) {
+          const pr = r * 0.65 * (0.85 + Math.cos(a * 4 + tree.y) * 0.15);
+          const px = tree.x + Math.cos(a + 0.2) * pr;
+          const py = tree.y + Math.sin(a + 0.2) * pr;
+          if (a === 0) ctx.moveTo(px, py);
+          else ctx.lineTo(px, py);
+        }
+        ctx.closePath();
+        ctx.fill();
 
-      // Inner highlight
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.15)';
-      ctx.beginPath();
-      ctx.arc(tree.x - tree.radius * 0.3, tree.y - tree.radius * 0.3, tree.radius * 0.5, 0, Math.PI * 2);
-      ctx.fill();
+        // Top Apex Tier
+        ctx.fillStyle = '#2a8750';
+        ctx.beginPath();
+        ctx.arc(tree.x - r * 0.1, tree.y - r * 0.1, r * 0.35, 0, Math.PI * 2);
+        ctx.fill();
 
-      // Night Tint for the tree (since it's drawn ABOVE the lightmap)
-      if (nightAlpha > 0.05) {
-        ctx.fillStyle = `rgba(0, 5, 20, ${nightAlpha * 0.75})`;
+        // Center Trunk Ring
+        ctx.fillStyle = '#23160c';
+        ctx.beginPath();
+        ctx.arc(tree.x, tree.y, Math.max(3, r * 0.12), 0, Math.PI * 2);
+        ctx.fill();
+
+        // Night Tint for the pine tree
+        if (nightAlpha > 0.05) {
+          ctx.fillStyle = `rgba(0, 5, 20, ${nightAlpha * 0.75})`;
+          ctx.beginPath();
+          ctx.arc(tree.x, tree.y, tree.radius, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      } else if (isBirch) {
+        // --- RUSSIAN BIRCH TREE (БЕРЁЗА: БЕЛЫЙ СТВОЛ С ЧЁРНЫМИ ЧЕЧЕВИЧКАМИ И НЕЖНАЯ ЛИСТВА) ---
+        const r = tree.radius;
+
+        // Birch Dappled Shadow
+        if (performanceConfig.enableShadows) {
+          ctx.fillStyle = 'rgba(0, 0, 0, 0.25)';
+          ctx.beginPath();
+          ctx.ellipse(tree.x + tree.shadowOffset, tree.y + tree.shadowOffset, r * 1.05, r * 0.85, 0.3, 0, Math.PI * 2);
+          ctx.fill();
+        }
+
+        // Outer Foliage Puffs (Layered organic clusters)
+        const foliageColors = ['#4d7c0f', '#65a30d', '#84cc16'];
+        foliageColors.forEach((col, idx) => {
+          ctx.fillStyle = col;
+          const puffRadius = r * (0.85 - idx * 0.16);
+          for (let a = 0; a < Math.PI * 2; a += Math.PI / 3) {
+            const px = tree.x + Math.cos(a + idx * 0.5) * (r * 0.38);
+            const py = tree.y + Math.sin(a + idx * 0.5) * (r * 0.38);
+            ctx.beginPath();
+            ctx.arc(px, py, puffRadius * 0.72, 0, Math.PI * 2);
+            ctx.fill();
+          }
+        });
+
+        // Top Soft Leafy Canopy Highlights
+        ctx.fillStyle = '#a3e635';
+        ctx.beginPath();
+        ctx.arc(tree.x - r * 0.18, tree.y - r * 0.18, r * 0.42, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = '#bef264';
+        ctx.beginPath();
+        ctx.arc(tree.x - r * 0.26, tree.y - r * 0.26, r * 0.24, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Night Tint for birch
+        if (nightAlpha > 0.05) {
+          ctx.fillStyle = `rgba(0, 5, 20, ${nightAlpha * 0.75})`;
+          ctx.beginPath();
+          ctx.arc(tree.x, tree.y, tree.radius * 1.05, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      } else {
+        // Standard Tree Shadow
+        if (performanceConfig.enableShadows) {
+          ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+          ctx.beginPath();
+          ctx.arc(tree.x + tree.shadowOffset, tree.y + tree.shadowOffset, tree.radius, 0, Math.PI * 2);
+          ctx.fill();
+        }
+
+        // Tree Foliage
+        ctx.fillStyle = tree.color;
         ctx.beginPath();
         ctx.arc(tree.x, tree.y, tree.radius, 0, Math.PI * 2);
         ctx.fill();
+
+        // Inner highlight
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.15)';
+        ctx.beginPath();
+        ctx.arc(tree.x - tree.radius * 0.3, tree.y - tree.radius * 0.3, tree.radius * 0.5, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Night Tint for the tree (since it's drawn ABOVE the lightmap)
+        if (nightAlpha > 0.05) {
+          ctx.fillStyle = `rgba(0, 5, 20, ${nightAlpha * 0.75})`;
+          ctx.beginPath();
+          ctx.arc(tree.x, tree.y, tree.radius, 0, Math.PI * 2);
+          ctx.fill();
+        }
       }
     }
 
-    // Tall Intact Lampposts
+    // Tall Intact Lampposts & Power Poles
     for (const prop of props) {
-      if ((prop.type !== 'lamp' && prop.type !== 'lamp_highway' && prop.type !== 'lamp_concrete') || prop.isBroken) continue;
+      if ((prop.type !== 'lamp' && prop.type !== 'lamp_highway' && prop.type !== 'lamp_concrete' && prop.type !== 'power_pole') || prop.isBroken) continue;
       if (prop.x < minX - 30 || prop.x > maxX + 30 || prop.y < minY - 30 || prop.y > maxY + 30) continue;
 
       ctx.save();
@@ -3792,7 +4858,7 @@ export class GameRenderer {
           } else {
             lightState = phase.ewState;
           }
-          const cw = inter.crosswalks.find((c) => c.direction === prop.direction);
+          const cw = inter.crosswalks?.find((c) => c.direction === prop.direction);
           pedSignal = cw?.pedestrianSignal || 'wait';
         }
       }
@@ -5188,13 +6254,13 @@ export class GameRenderer {
   }
 
   // --- PLAYER ON FOOT ---
-  private renderPlayerPedestrian(player: Player) {
+  private renderPlayerPedestrian(player: Player | (RemotePlayerState & { insideBuildingId?: string | null }), isRemote: boolean = false) {
     const ctx = this.ctx;
     ctx.save();
     ctx.translate(player.x, player.y);
 
     // Ground Directional Indicator Ring
-    ctx.strokeStyle = 'rgba(56, 189, 248, 0.4)';
+    ctx.strokeStyle = isRemote ? 'rgba(34, 197, 94, 0.45)' : 'rgba(56, 189, 248, 0.4)';
     ctx.lineWidth = 1;
     ctx.beginPath();
     ctx.arc(0, 0, 10, 0, Math.PI * 2);
@@ -5204,14 +6270,14 @@ export class GameRenderer {
     ctx.rotate(player.angle);
 
     // Directional facing dot on ground
-    ctx.fillStyle = '#38bdf8';
+    ctx.fillStyle = isRemote ? '#22c55e' : '#38bdf8';
     ctx.beginPath();
     ctx.arc(12, 0, 2.2, 0, Math.PI * 2);
     ctx.fill();
 
     // Dodge Roll Motion Trail
     if (player.isDashing) {
-      ctx.fillStyle = 'rgba(56, 189, 248, 0.25)';
+      ctx.fillStyle = isRemote ? 'rgba(34, 197, 94, 0.25)' : 'rgba(56, 189, 248, 0.25)';
       ctx.beginPath();
       ctx.arc(-8, 0, 7, 0, Math.PI * 2);
       ctx.arc(-16, 0, 5, 0, Math.PI * 2);
@@ -5357,6 +6423,164 @@ export class GameRenderer {
   }
 
   /**
+   * Renders overhead nametags and speech bubbles for both local player and remote players.
+   */
+  private renderMultiplayerOverhead(
+    localPlayer: Player,
+    remotePlayers: RemotePlayerState[] = [],
+    speechBubbles?: Map<string, SpeechBubble>,
+    world?: GameWorld
+  ) {
+    // 1. Remote Players Overhead Tags & Bubbles
+    if (remotePlayers && remotePlayers.length > 0) {
+      for (const rp of remotePlayers) {
+        let posX = rp.x;
+        let posY = rp.y;
+        let isDriving = rp.isInVehicle;
+
+        if (rp.isInVehicle && rp.currentVehicleId && world) {
+          const veh = world.vehicles.find((v) => v.id === rp.currentVehicleId);
+          if (veh) {
+            posX = veh.x;
+            posY = veh.y;
+          }
+        }
+
+        const bubble = speechBubbles?.get(rp.peerId);
+        this.renderNametagAndSpeechBubble(rp.name, posX, posY, isDriving, bubble?.text);
+      }
+    }
+
+    // 2. Local Player Overhead Speech Bubble (if chatting)
+    const localBubble = speechBubbles?.get('local');
+    if (localBubble && localBubble.text) {
+      let posX = localPlayer.x;
+      let posY = localPlayer.y;
+      let isDriving = localPlayer.isInVehicle;
+
+      if (localPlayer.isInVehicle && localPlayer.currentVehicleId && world) {
+        const veh = world.vehicles.find((v) => v.id === localPlayer.currentVehicleId);
+        if (veh) {
+          posX = veh.x;
+          posY = veh.y;
+        }
+      }
+
+      this.renderNametagAndSpeechBubble(
+        (localPlayer as any).name || 'Вы',
+        posX,
+        posY,
+        isDriving,
+        localBubble.text,
+        true
+      );
+    }
+  }
+
+  /**
+   * Renders a stylish nametag pill and comic-style speech bubble above a character or car.
+   */
+  private renderNametagAndSpeechBubble(
+    name: string,
+    x: number,
+    y: number,
+    isDriving: boolean,
+    bubbleText?: string,
+    isLocalPlayer: boolean = false
+  ) {
+    const ctx = this.ctx;
+    ctx.save();
+    ctx.translate(x, y);
+
+    const tagH = 14;
+    const tagBaseY = isDriving ? -26 : -18;
+
+    // Only draw nametag for remote players or when explicitly desired
+    if (!isLocalPlayer) {
+      ctx.font = 'bold 8.5px sans-serif';
+      const tagText = isDriving ? `🚗 ${name}` : `🚶 ${name}`;
+      const textW = ctx.measureText(tagText).width;
+      const padX = 5;
+      const tagW = textW + padX * 2;
+
+      // Tag background
+      ctx.fillStyle = 'rgba(15, 23, 42, 0.88)';
+      safeRoundRect(ctx, -tagW / 2, tagBaseY - tagH, tagW, tagH, 6);
+      ctx.fill();
+
+      // Border outline
+      ctx.strokeStyle = isDriving ? '#38bdf8' : '#22c55e';
+      ctx.lineWidth = 0.9;
+      safeRoundRect(ctx, -tagW / 2, tagBaseY - tagH, tagW, tagH, 6);
+      ctx.stroke();
+
+      // Text
+      ctx.fillStyle = '#f8fafc';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(tagText, 0, tagBaseY - tagH / 2);
+    }
+
+    // Speech bubble
+    if (bubbleText && bubbleText.trim()) {
+      ctx.font = 'bold 9.5px sans-serif';
+      const words = bubbleText.split(' ');
+      const lines: string[] = [];
+      let curLine = '';
+
+      for (const w of words) {
+        if ((curLine + ' ' + w).trim().length > 20) {
+          if (curLine) lines.push(curLine.trim());
+          curLine = w;
+        } else {
+          curLine += ' ' + w;
+        }
+      }
+      if (curLine) lines.push(curLine.trim());
+
+      const lineH = 12;
+      const maxLineW = Math.max(...lines.map((l) => ctx.measureText(l).width), 24);
+      const pad = 6;
+      const bubbleW = maxLineW + pad * 2;
+      const bubbleH = lines.length * lineH + pad * 2;
+      const bubbleBottomY = tagBaseY - (isLocalPlayer ? 10 : tagH + 8);
+      const bubbleTopY = bubbleBottomY - bubbleH;
+
+      // Bubble card background
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.96)';
+      safeRoundRect(ctx, -bubbleW / 2, bubbleTopY, bubbleW, bubbleH, 6);
+      ctx.fill();
+
+      // Bubble card border
+      ctx.strokeStyle = isLocalPlayer ? '#0284c7' : '#059669';
+      ctx.lineWidth = 1.2;
+      safeRoundRect(ctx, -bubbleW / 2, bubbleTopY, bubbleW, bubbleH, 6);
+      ctx.stroke();
+
+      // Bubble pointer triangle pointing down
+      ctx.beginPath();
+      ctx.moveTo(-4, bubbleBottomY);
+      ctx.lineTo(4, bubbleBottomY);
+      ctx.lineTo(0, bubbleBottomY + 5);
+      ctx.closePath();
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.96)';
+      ctx.fill();
+      ctx.strokeStyle = isLocalPlayer ? '#0284c7' : '#059669';
+      ctx.stroke();
+
+      // Bubble text lines
+      ctx.fillStyle = '#0f172a';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'top';
+      lines.forEach((line, idx) => {
+        ctx.fillText(line, 0, bubbleTopY + pad + idx * lineH);
+      });
+    }
+
+    ctx.restore();
+  }
+
+  /**
    * Renders the ghost/placement preview for Creative Mode object spawning.
    */
   private renderPlacementPreview(placement: ActivePlacement, pos: { x: number; y: number }) {
@@ -5479,10 +6703,6 @@ export class GameRenderer {
       const halfL = car.length / 2;
       const halfW = car.width / 2;
 
-      // 1. Drop Shadow
-      ctx.fillStyle = 'rgba(0, 0, 0, 0.38)';
-      ctx.fillRect(-halfL + 3, -halfW + 4, car.length, car.width);
-
       // 3. Body Shell Contours (with Crumple/Dent deform calculations)
       const dmg: VehicleDamage = car.damage || ({
         health: 100, frontCrumple: 0, rearCrumple: 0, leftDent: 0, rightDent: 0,
@@ -5510,10 +6730,19 @@ export class GameRenderer {
         bodyPoly = basePoly.map((bv, idx) => {
           const dv = dmg.deformedVertices![idx];
           if (!dv) return bv;
-          const ox = isFinite(dv.offsetX) ? dv.offsetX : 0;
-          const oy = isFinite(dv.offsetY) ? dv.offsetY : 0;
-          const ex = isFinite(dv.elasticX) ? dv.elasticX : 0;
-          const ey = isFinite(dv.elasticY) ? dv.elasticY : 0;
+          let ox = isFinite(dv.offsetX) ? dv.offsetX : 0;
+          let oy = isFinite(dv.offsetY) ? dv.offsetY : 0;
+          let ex = isFinite(dv.elasticX) ? Math.max(-6.0, Math.min(6.0, dv.elasticX)) : 0;
+          let ey = isFinite(dv.elasticY) ? Math.max(-6.0, Math.min(6.0, dv.elasticY)) : 0;
+
+          const dvLen = Math.hypot(dv.localX || bv.x, dv.localY || bv.y) || 1;
+          const maxAllowed = Math.min(12.0, Math.max(3.0, dvLen * 0.35));
+          const oDist = Math.hypot(ox, oy);
+          if (oDist > maxAllowed) {
+            ox = (ox / oDist) * maxAllowed;
+            oy = (oy / oDist) * maxAllowed;
+          }
+
           return {
             x: bv.x + ox + ex,
             y: bv.y + oy + ey
@@ -5522,13 +6751,25 @@ export class GameRenderer {
       }
 
       // 3b. Inverse Distance Weighting deformation function for car attachments
-      const deform = (px: number, py: number): [number, number] => {
+      let hasDeformation = false;
+      const polyLen = Math.min(basePoly.length, bodyPoly.length);
+      for (let i = 0; i < polyLen; i++) {
+        const bp = basePoly[i];
+        const bvp = bodyPoly[i];
+        if (bp && bvp && (Math.abs(bvp.x - bp.x) > 0.05 || Math.abs(bvp.y - bp.y) > 0.05)) {
+          hasDeformation = true;
+          break;
+        }
+      }
+
+      const deform = hasDeformation ? (px: number, py: number): [number, number] => {
         let totalWeight = 0;
         let dx = 0;
         let dy = 0;
-        for (let i = 0; i < 20; i++) {
+        for (let i = 0; i < polyLen; i++) {
           const bp = basePoly[i];
           const bvp = bodyPoly[i];
+          if (!bp || !bvp) continue;
           const vx = bp.x;
           const vy = bp.y;
           const distSq = (px - vx) * (px - vx) + (py - vy) * (py - vy);
@@ -5541,9 +6782,29 @@ export class GameRenderer {
           return [px + dx / totalWeight, py + dy / totalWeight];
         }
         return [px, py];
-      };
+      } : (px: number, py: number): [number, number] => [px, py];
 
-      const drawDeformedRect = (rx: number, ry: number, rw: number, rh: number, fillStyle: string | CanvasGradient) => {
+      // 1. Drop Shadow
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.32)';
+      if (car.type === 'trailer_barrel') {
+        ctx.beginPath();
+        const sPoly = bodyPoly.map(p => {
+          const [dx, dy] = deform(p.x + 1.5, p.y + 2.5);
+          return { x: dx, y: dy };
+        });
+        if (sPoly.length > 0) {
+          ctx.moveTo(sPoly[0].x, sPoly[0].y);
+          for (let i = 1; i < sPoly.length; i++) {
+            ctx.lineTo(sPoly[i].x, sPoly[i].y);
+          }
+          ctx.closePath();
+          ctx.fill();
+        }
+      } else {
+        ctx.fillRect(-halfL + 3, -halfW + 4, car.length, car.width);
+      }
+
+      const drawDeformedRect = hasDeformation ? (rx: number, ry: number, rw: number, rh: number, fillStyle: string | CanvasGradient) => {
         const p1 = deform(rx, ry);
         const p2 = deform(rx + rw, ry);
         const p3 = deform(rx + rw, ry + rh);
@@ -5556,9 +6817,12 @@ export class GameRenderer {
         ctx.lineTo(p4[0], p4[1]);
         ctx.closePath();
         ctx.fill();
+      } : (rx: number, ry: number, rw: number, rh: number, fillStyle: string | CanvasGradient) => {
+        ctx.fillStyle = fillStyle;
+        ctx.fillRect(rx, ry, rw, rh);
       };
 
-      const drawDeformedLine = (x1: number, y1: number, x2: number, y2: number, strokeStyle: string, lineWidth: number, isDashed = false) => {
+      const drawDeformedLine = hasDeformation ? (x1: number, y1: number, x2: number, y2: number, strokeStyle: string, lineWidth: number, isDashed = false) => {
         const p1 = deform(x1, y1);
         const p2 = deform(x2, y2);
         ctx.strokeStyle = strokeStyle;
@@ -5570,9 +6834,55 @@ export class GameRenderer {
         ctx.lineTo(p2[0], p2[1]);
         ctx.stroke();
         ctx.restore();
+      } : (x1: number, y1: number, x2: number, y2: number, strokeStyle: string, lineWidth: number, isDashed = false) => {
+        ctx.strokeStyle = strokeStyle;
+        ctx.lineWidth = lineWidth;
+        ctx.save();
+        if (isDashed) ctx.setLineDash([2, 2]);
+        ctx.beginPath();
+        ctx.moveTo(x1, y1);
+        ctx.lineTo(x2, y2);
+        ctx.stroke();
+        ctx.restore();
+      };
+
+      const drawDeformedCircle = hasDeformation ? (cx: number, cy: number, r: number, color: string, strokeColor?: string, lineWidth?: number) => {
+        ctx.fillStyle = color;
+        ctx.beginPath();
+        const steps = 12;
+        for (let i = 0; i <= steps; i++) {
+          const angle = (i / steps) * Math.PI * 2;
+          const px = cx + Math.cos(angle) * r;
+          const py = cy + Math.sin(angle) * r;
+          const [dpx, dpy] = deform(px, py);
+          if (i === 0) ctx.moveTo(dpx, dpy);
+          else ctx.lineTo(dpx, dpy);
+        }
+        ctx.fill();
+        if (strokeColor) {
+          ctx.strokeStyle = strokeColor;
+          ctx.lineWidth = lineWidth || 1.0;
+          ctx.stroke();
+        }
+      } : (cx: number, cy: number, r: number, color: string, strokeColor?: string, lineWidth?: number) => {
+        ctx.fillStyle = color;
+        ctx.beginPath();
+        ctx.arc(cx, cy, r, 0, Math.PI * 2);
+        ctx.fill();
+        if (strokeColor) {
+          ctx.strokeStyle = strokeColor;
+          ctx.lineWidth = lineWidth || 1.0;
+          ctx.stroke();
+        }
       };
 
       // 2. Wheels - Tucked realistically inside wheel wells & deformed organically
+      const isTractor = car.type === 'tractor_mtz82' || car.type === 'tractor_mtz80' || car.type === 'tractor_mtz80_old';
+      const isSoloMoto = car.type === 'moto_izh_jupiter' || car.type === 'moto_jawa350' || 
+                         car.type === 'moto_sport' || car.type === 'moto_chopper' || car.type === 'moped_soviet';
+      const isUralSidecar = car.type === 'moto_ural_sidecar';
+      const isTrailer = car.type.startsWith('trailer_') || car.isTrailer || car.type === 'trailer_barrel' || car.type === 'trailer_flatbed_2axle';
+
       const isThreeAxle = car.type === 'truck_box' || car.type === 'truck_tanker' || 
                           car.type === 'truck_flatbed' || car.type === 'cement_mixer' ||
                           car.type === 'truck_dump' || car.type === 'garbage_truck' ||
@@ -5600,7 +6910,203 @@ export class GameRenderer {
         ctx.fillRect(dwx - wheelL / 2 + 2, dwy - wheelW / 2 + 0.8, wheelL - 4, wheelW - 1.6);
       };
 
-      if (isThreeAxle) {
+      if (isTractor) {
+        // TRACTOR AGRICULTURAL WHEELS (PREMIUM DETAILED TIRES & HUBS)
+        // Massive Rear Agricultural Wheels with Chevron Herringbone Tread
+        const rearAxleX = -halfL * 0.48;
+        const rearWheelL = 20.0;
+        const rearWheelW = 8.5;
+        const rearTrackY = halfW - 0.4;
+
+        const renderAgriRearWheel = (side: 1 | -1) => {
+          const cy = side * (rearTrackY - rearWheelW / 2);
+          const [dwx, dwy] = deform(rearAxleX, cy);
+          ctx.save();
+          ctx.translate(dwx, dwy);
+          // Dark agricultural rubber tire
+          ctx.fillStyle = '#0f172a';
+          ctx.fillRect(-rearWheelL / 2, -rearWheelW / 2, rearWheelL, rearWheelW);
+          // Wheel Rim Flange (Soviet cream/yellow, silver, or weathered grey)
+          const rimColor = car.type === 'tractor_mtz80_old' ? '#94a3b8' : '#fef08a';
+          ctx.fillStyle = rimColor;
+          ctx.beginPath();
+          ctx.arc(0, 0, rearWheelW * 0.42, 0, Math.PI * 2);
+          ctx.fill();
+          // Rim Lug Nuts (8 perimeter bolts)
+          ctx.fillStyle = '#1e293b';
+          for (let b = 0; b < 8; b++) {
+            const bAngle = (b * Math.PI * 2) / 8;
+            const bx = Math.cos(bAngle) * (rearWheelW * 0.32);
+            const by = Math.sin(bAngle) * (rearWheelW * 0.32);
+            ctx.beginPath();
+            ctx.arc(bx, by, 0.5, 0, Math.PI * 2);
+            ctx.fill();
+          }
+          // Center Cast-Iron Axle Hub & Shaft End
+          ctx.fillStyle = '#0f172a';
+          ctx.beginPath();
+          ctx.arc(0, 0, 1.6, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.fillStyle = '#475569';
+          ctx.beginPath();
+          ctx.arc(0, 0, 0.8, 0, Math.PI * 2);
+          ctx.fill();
+
+          // High-Fidelity Chevron Herringbone V-Cleats (Рельефная «Ёлочка»)
+          ctx.strokeStyle = '#334155';
+          ctx.lineWidth = 1.4;
+          for (let c = -rearWheelL / 2 + 2.0; c <= rearWheelL / 2 - 2.0; c += 3.2) {
+            ctx.beginPath();
+            ctx.moveTo(c - 1.4, -rearWheelW / 2);
+            ctx.lineTo(c + 1.6, 0);
+            ctx.lineTo(c - 1.4, rearWheelW / 2);
+            ctx.stroke();
+          }
+          // Highlight edge on cleats
+          ctx.strokeStyle = '#64748b';
+          ctx.lineWidth = 0.7;
+          for (let c = -rearWheelL / 2 + 2.0; c <= rearWheelL / 2 - 2.0; c += 3.2) {
+            ctx.beginPath();
+            ctx.moveTo(c - 1.1, -rearWheelW / 2);
+            ctx.lineTo(c + 1.9, 0);
+            ctx.lineTo(c - 1.1, rearWheelW / 2);
+            ctx.stroke();
+          }
+          ctx.restore();
+        };
+        renderAgriRearWheel(1);
+        renderAgriRearWheel(-1);
+
+        // Front Tractor Wheels (Steered)
+        const frontAxleX = halfL * 0.70;
+        const is82 = car.type === 'tractor_mtz82';
+        const frontWheelL = is82 ? 13.5 : 11.5;
+        const frontWheelW = is82 ? 5.8 : 4.4;
+        const frontTrackY = is82 ? halfW * 0.68 : halfW * 0.64;
+
+        const renderTractorFrontWheel = (side: 1 | -1) => {
+          const cy = side * frontTrackY;
+          const [dwx, dwy] = deform(frontAxleX, cy);
+          ctx.save();
+          ctx.translate(dwx, dwy);
+          ctx.rotate(car.steerAngle);
+          // Tire rubber
+          ctx.fillStyle = '#0f172a';
+          ctx.fillRect(-frontWheelL / 2, -frontWheelW / 2, frontWheelL, frontWheelW);
+
+          // Front Steel Rim
+          const frontRimColor = car.type === 'tractor_mtz80_old' ? '#94a3b8' : (is82 ? '#fef08a' : '#cbd5e1');
+          ctx.fillStyle = frontRimColor;
+          ctx.fillRect(-frontWheelL / 2 + 2.0, -frontWheelW / 2 + 0.9, frontWheelL - 4.0, frontWheelW - 1.8);
+
+          // Wheel Center Hub
+          ctx.fillStyle = '#0f172a';
+          ctx.beginPath();
+          ctx.arc(0, 0, is82 ? 1.6 : 1.1, 0, Math.PI * 2);
+          ctx.fill();
+
+          if (is82) {
+            // MTZ-82 4WD Front Herringbone Chevron Cleats (Ёлочка переднего ведущего моста)
+            ctx.strokeStyle = '#334155';
+            ctx.lineWidth = 1.1;
+            for (let c = -frontWheelL / 2 + 2.0; c <= frontWheelL / 2 - 2.0; c += 2.8) {
+              ctx.beginPath();
+              ctx.moveTo(c - 1.0, -frontWheelW / 2);
+              ctx.lineTo(c + 1.1, 0);
+              ctx.lineTo(c - 1.0, frontWheelW / 2);
+              ctx.stroke();
+            }
+
+            // Front Curved Mudguard attached to steering knuckle (turns with the wheel!)
+            const mudguardL = frontWheelL * 0.82;
+            const mudguardW = frontWheelW + 1.2;
+            ctx.fillStyle = '#1e293b';
+            ctx.fillRect(-mudguardL / 2 - 0.8, -mudguardW / 2, mudguardL, mudguardW);
+            // Stiffener bracket strap
+            ctx.fillStyle = '#334155';
+            ctx.fillRect(-1.0, -mudguardW / 2, 2.0, mudguardW);
+            // Rear rubber mudflap
+            ctx.fillStyle = '#0f172a';
+            ctx.fillRect(-mudguardL / 2 - 1.6, -mudguardW / 2, 0.8, mudguardW);
+          } else {
+            // MTZ-80 2WD Longitudinal Steering Guide Ribs (3 Продольных ребра направляющего протектора)
+            ctx.strokeStyle = '#1e293b';
+            ctx.lineWidth = 0.9;
+            ctx.beginPath();
+            ctx.moveTo(-frontWheelL / 2 + 1.2, -frontWheelW * 0.30);
+            ctx.lineTo(frontWheelL / 2 - 1.2, -frontWheelW * 0.30);
+            ctx.moveTo(-frontWheelL / 2 + 1.2, 0);
+            ctx.lineTo(frontWheelL / 2 - 1.2, 0);
+            ctx.moveTo(-frontWheelL / 2 + 1.2, frontWheelW * 0.30);
+            ctx.lineTo(frontWheelL / 2 - 1.2, frontWheelW * 0.30);
+            ctx.stroke();
+          }
+          ctx.restore();
+        };
+        renderTractorFrontWheel(1);
+        renderTractorFrontWheel(-1);
+
+      } else if (isSoloMoto) {
+        // SOLO MOTORCYCLE: 2 Inline Centerline Wheels
+        const motoWheelL = car.type === 'moped_soviet' ? 6.5 : (car.type === 'moto_sport' || car.type === 'moto_chopper' ? 8.2 : 7.5);
+        const motoWheelW = car.type === 'moped_soviet' ? 1.8 : (car.type === 'moto_sport' ? 3.4 : (car.type === 'moto_chopper' ? 3.6 : 2.4));
+        
+        // Rear Wheel
+        const rearWheelX = -halfL * 0.65;
+        const [drwx, drwy] = deform(rearWheelX, 0);
+        ctx.fillStyle = '#0f172a';
+        ctx.fillRect(drwx - motoWheelL / 2, drwy - motoWheelW / 2, motoWheelL, motoWheelW);
+        ctx.fillStyle = '#cbd5e1';
+        ctx.fillRect(drwx - motoWheelL / 2 + 1.5, drwy - motoWheelW / 2 + 0.4, motoWheelL - 3, motoWheelW - 0.8);
+
+        // Front Wheel (Steered with Handlebars)
+        const frontWheelX = halfL * 0.70;
+        const [dfwx, dfwy] = deform(frontWheelX, 0);
+        ctx.save();
+        ctx.translate(dfwx, dfwy);
+        ctx.rotate(car.steerAngle);
+        ctx.fillStyle = '#0f172a';
+        ctx.fillRect(-motoWheelL / 2, -motoWheelW / 2, motoWheelL, motoWheelW);
+        ctx.fillStyle = '#cbd5e1';
+        ctx.fillRect(-motoWheelL / 2 + 1.5, -motoWheelW / 2 + 0.4, motoWheelL - 3, motoWheelW - 0.8);
+        ctx.restore();
+
+      } else if (isUralSidecar) {
+        // URAL WITH SIDECAR: 3 Wheels
+        const bikeY = -halfW * 0.45;
+        const motoWheelL = 7.8;
+        const motoWheelW = 2.6;
+
+        // Bike Rear Wheel
+        const rearWheelX = -halfL * 0.65;
+        const [drwx, drwy] = deform(rearWheelX, bikeY);
+        ctx.fillStyle = '#0f172a';
+        ctx.fillRect(drwx - motoWheelL / 2, drwy - motoWheelW / 2, motoWheelL, motoWheelW);
+        ctx.fillStyle = '#cbd5e1';
+        ctx.fillRect(drwx - motoWheelL / 2 + 1.5, drwy - motoWheelW / 2 + 0.5, motoWheelL - 3, motoWheelW - 1.0);
+
+        // Bike Front Wheel (Steered)
+        const frontWheelX = halfL * 0.70;
+        const [dfwx, dfwy] = deform(frontWheelX, bikeY);
+        ctx.save();
+        ctx.translate(dfwx, dfwy);
+        ctx.rotate(car.steerAngle);
+        ctx.fillStyle = '#0f172a';
+        ctx.fillRect(-motoWheelL / 2, -motoWheelW / 2, motoWheelL, motoWheelW);
+        ctx.fillStyle = '#cbd5e1';
+        ctx.fillRect(-motoWheelL / 2 + 1.5, -motoWheelW / 2 + 0.5, motoWheelL - 3, motoWheelW - 1.0);
+        ctx.restore();
+
+        // Sidecar Wheel
+        const sidecarWheelX = -halfL * 0.20;
+        const sidecarWheelY = halfW * 0.75;
+        const [dswx, dswy] = deform(sidecarWheelX, sidecarWheelY);
+        ctx.fillStyle = '#0f172a';
+        ctx.fillRect(dswx - motoWheelL / 2, dswy - motoWheelW / 2, motoWheelL, motoWheelW);
+        ctx.fillStyle = '#cbd5e1';
+        ctx.fillRect(dswx - motoWheelL / 2 + 1.5, dswy - motoWheelW / 2 + 0.5, motoWheelL - 3, motoWheelW - 1.0);
+
+      } else if (isThreeAxle) {
         // Dual tandem rear axles (6x4 / 6x6)
         const rearAxle1X = -halfL * 0.36;
         const rearAxle2X = -halfL * 0.74;
@@ -5608,6 +7114,22 @@ export class GameRenderer {
         renderFixedWheel(rearAxle1X, trackY - wheelW);
         renderFixedWheel(rearAxle2X, -trackY);
         renderFixedWheel(rearAxle2X, trackY - wheelW);
+
+        // Front wheels (steered)
+        const renderSteeredWheel = (wx: number, wy: number) => {
+          const [dwx, dwy] = deform(wx, wy);
+          ctx.save();
+          ctx.translate(dwx, dwy);
+          ctx.rotate(car.steerAngle);
+          ctx.fillStyle = '#0f172a';
+          ctx.fillRect(-wheelL / 2, -wheelW / 2, wheelL, wheelW);
+          ctx.fillStyle = isSport ? '#cbd5e1' : '#64748b';
+          ctx.fillRect(-wheelL / 2 + 2, -wheelW / 2 + 0.8, wheelL - 4, wheelW - 1.6);
+          ctx.restore();
+        };
+        renderSteeredWheel(frontAxleX, -trackY + wheelW / 2);
+        renderSteeredWheel(frontAxleX, trackY - wheelW / 2);
+
       } else if (isDually) {
         // Dually pickup truck (dual rear tires)
         const rearAxleX = -halfL * 0.62;
@@ -5615,26 +7137,163 @@ export class GameRenderer {
         renderFixedWheel(rearAxleX, -trackY + wheelW + 0.6);
         renderFixedWheel(rearAxleX, trackY - wheelW);
         renderFixedWheel(rearAxleX, trackY - wheelW * 2 - 0.6);
+
+        // Front wheels (steered)
+        const renderSteeredWheel = (wx: number, wy: number) => {
+          const [dwx, dwy] = deform(wx, wy);
+          ctx.save();
+          ctx.translate(dwx, dwy);
+          ctx.rotate(car.steerAngle);
+          ctx.fillStyle = '#0f172a';
+          ctx.fillRect(-wheelL / 2, -wheelW / 2, wheelL, wheelW);
+          ctx.fillStyle = isSport ? '#cbd5e1' : '#64748b';
+          ctx.fillRect(-wheelL / 2 + 2, -wheelW / 2 + 0.8, wheelL - 4, wheelW - 1.6);
+          ctx.restore();
+        };
+        renderSteeredWheel(frontAxleX, -trackY + wheelW / 2);
+        renderSteeredWheel(frontAxleX, trackY - wheelW / 2);
+
+      } else if (car.type === 'trailer_barrel') {
+        // Single central axle with 2 clean trailer wheels (shifted slightly backward for realistic weight distribution onto tractor drawbar)
+        const centerAxleX = -halfL * 0.28;
+        const barrelWheelL = 13.5;
+        const barrelWheelW = 4.6;
+        const barrelTrackY = halfW * 0.82 + barrelWheelW / 2;
+
+        // Draw structural axle beam connecting left and right wheels
+        const [ax1x, ax1y] = deform(centerAxleX, -barrelTrackY);
+        const [ax2x, ax2y] = deform(centerAxleX, barrelTrackY);
+        ctx.strokeStyle = '#1e293b';
+        ctx.lineWidth = 2.4;
+        ctx.beginPath();
+        ctx.moveTo(ax1x, ax1y);
+        ctx.lineTo(ax2x, ax2y);
+        ctx.stroke();
+
+        const renderBarrelWheel = (wx: number, wy: number) => {
+          const [dwx, dwy] = deform(wx, wy);
+          ctx.save();
+          ctx.translate(dwx, dwy);
+          // Dark tire tread
+          ctx.fillStyle = '#0f172a';
+          ctx.fillRect(-barrelWheelL / 2, -barrelWheelW / 2, barrelWheelL, barrelWheelW);
+          // Silver/grey stamped steel rim
+          ctx.fillStyle = '#64748b';
+          ctx.fillRect(-barrelWheelL / 2 + 2, -barrelWheelW / 2 + 0.8, barrelWheelL - 4, barrelWheelW - 1.6);
+          // Small central metallic hub cap
+          ctx.fillStyle = '#cbd5e1';
+          ctx.fillRect(-1.5, -barrelWheelW / 2 + 1.3, 3, barrelWheelW - 2.6);
+          ctx.restore();
+        };
+        renderBarrelWheel(centerAxleX, -barrelTrackY);
+        renderBarrelWheel(centerAxleX, barrelTrackY);
+
+      } else if (car.type === 'trailer_flatbed_2axle') {
+        // 2-Axle Farm Trailer with Steerable Front Turntable Dolly
+        const rearAxleX = -halfL * 0.56;
+        const dollyPivotX = halfL * 0.44;
+        const trailerWheelL = 15.5;
+        const trailerWheelW = 5.6;
+        const trailerTrackY = halfW - 0.6;
+
+        // 1. Rear Fixed Wheels (mounted on rear chassis axle)
+        const renderTrailerWheel = (wx: number, wy: number) => {
+          const [dwx, dwy] = deform(wx, wy);
+          ctx.save();
+          ctx.translate(dwx, dwy);
+          // Dark weathered agricultural tire (9.00-16)
+          ctx.fillStyle = '#1c1f24';
+          ctx.fillRect(-trailerWheelL / 2, -trailerWheelW / 2, trailerWheelL, trailerWheelW);
+          ctx.fillStyle = '#121519';
+          ctx.fillRect(-trailerWheelL / 2 + 1.2, -trailerWheelW / 2 + 0.6, trailerWheelL - 2.4, trailerWheelW - 1.2);
+          // Stamped steel rim with aged patina
+          ctx.fillStyle = '#475569';
+          ctx.fillRect(-trailerWheelL / 2 + 3.2, -trailerWheelW / 2 + 1.0, trailerWheelL - 6.4, trailerWheelW - 2.0);
+          // Central hub with axle cap
+          ctx.fillStyle = '#1e293b';
+          ctx.beginPath();
+          ctx.arc(0, 0, 1.8, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.fillStyle = '#64748b';
+          ctx.beginPath();
+          ctx.arc(0, 0, 0.8, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.restore();
+        };
+        renderTrailerWheel(rearAxleX, -trailerTrackY);
+        renderTrailerWheel(rearAxleX, trailerTrackY);
+
+        // Rear mudflaps behind rear wheels (брызговики)
+        const renderMudflap = (wy: number) => {
+          const mfx = rearAxleX - trailerWheelL / 2 - 1.2;
+          const [dmx, dmy] = deform(mfx, wy);
+          ctx.save();
+          ctx.translate(dmx, dmy);
+          ctx.fillStyle = '#0f172a';
+          ctx.fillRect(-0.8, -trailerWheelW / 2 - 0.2, 1.2, trailerWheelW + 0.4);
+          ctx.restore();
+        };
+        renderMudflap(-trailerTrackY);
+        renderMudflap(trailerTrackY);
+
+        // 2. Front Dolly Wheels (mounted on front turntable dolly, steered by dolly angle!)
+        const dollyWorldAngle = car.trailerDollyAngle !== undefined ? car.trailerDollyAngle : car.angle;
+        let relDollyAngle = dollyWorldAngle - car.angle;
+        relDollyAngle = ((relDollyAngle + Math.PI) % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI) - Math.PI;
+
+        const renderFrontDollyWheel = (relY: number) => {
+          const cosD = Math.cos(relDollyAngle);
+          const sinD = Math.sin(relDollyAngle);
+          const wx = dollyPivotX - sinD * relY;
+          const wy = cosD * relY;
+          const [dwx, dwy] = deform(wx, wy);
+
+          ctx.save();
+          ctx.translate(dwx, dwy);
+          ctx.rotate(relDollyAngle);
+          // Dark weathered agricultural tire (9.00-16)
+          ctx.fillStyle = '#1c1f24';
+          ctx.fillRect(-trailerWheelL / 2, -trailerWheelW / 2, trailerWheelL, trailerWheelW);
+          ctx.fillStyle = '#121519';
+          ctx.fillRect(-trailerWheelL / 2 + 1.2, -trailerWheelW / 2 + 0.6, trailerWheelL - 2.4, trailerWheelW - 1.2);
+          // Stamped steel rim with aged patina
+          ctx.fillStyle = '#475569';
+          ctx.fillRect(-trailerWheelL / 2 + 3.2, -trailerWheelW / 2 + 1.0, trailerWheelL - 6.4, trailerWheelW - 2.0);
+          // Central hub with axle cap
+          ctx.fillStyle = '#1e293b';
+          ctx.beginPath();
+          ctx.arc(0, 0, 1.8, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.fillStyle = '#64748b';
+          ctx.beginPath();
+          ctx.arc(0, 0, 0.8, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.restore();
+        };
+        renderFrontDollyWheel(-trailerTrackY);
+        renderFrontDollyWheel(trailerTrackY);
+
       } else {
+        // Standard 4-wheel passenger car
         const rearAxleX = -halfL * 0.65;
         renderFixedWheel(rearAxleX, -trackY);
         renderFixedWheel(rearAxleX, trackY - wheelW);
-      }
 
-      // Front wheels (steered)
-      const renderSteeredWheel = (wx: number, wy: number) => {
-        const [dwx, dwy] = deform(wx, wy);
-        ctx.save();
-        ctx.translate(dwx, dwy);
-        ctx.rotate(car.steerAngle);
-        ctx.fillStyle = '#0f172a';
-        ctx.fillRect(-wheelL / 2, -wheelW / 2, wheelL, wheelW);
-        ctx.fillStyle = isSport ? '#cbd5e1' : '#64748b';
-        ctx.fillRect(-wheelL / 2 + 2, -wheelW / 2 + 0.8, wheelL - 4, wheelW - 1.6);
-        ctx.restore();
-      };
-      renderSteeredWheel(frontAxleX, -trackY + wheelW / 2);
-      renderSteeredWheel(frontAxleX, trackY - wheelW / 2);
+        // Front wheels (steered)
+        const renderSteeredWheel = (wx: number, wy: number) => {
+          const [dwx, dwy] = deform(wx, wy);
+          ctx.save();
+          ctx.translate(dwx, dwy);
+          ctx.rotate(car.steerAngle);
+          ctx.fillStyle = '#0f172a';
+          ctx.fillRect(-wheelL / 2, -wheelW / 2, wheelL, wheelW);
+          ctx.fillStyle = isSport ? '#cbd5e1' : '#64748b';
+          ctx.fillRect(-wheelL / 2 + 2, -wheelW / 2 + 0.8, wheelL - 4, wheelW - 1.6);
+          ctx.restore();
+        };
+        renderSteeredWheel(frontAxleX, -trackY + wheelW / 2);
+        renderSteeredWheel(frontAxleX, trackY - wheelW / 2);
+      }
 
       // Now draw body shell with high-fidelity softbody spline contour
       ctx.fillStyle = car.color;
@@ -5678,94 +7337,27 @@ export class GameRenderer {
       // Softbody metallic stress highlights and ambient crease shadow lines
       renderSoftbodyStressLines(ctx, bodyPoly, dmg.deformedVertices);
 
-      // Grid Mode Mesh Visualization (BeamNG-style)
-      if (gridMode && dmg.deformedVertices && dmg.deformedVertices.length > 0) {
-        ctx.save();
-        ctx.strokeStyle = 'rgba(0, 255, 128, 0.7)';
-        ctx.lineWidth = 1;
-        
-        const perimPoints = bodyPoly;
-        const internalPoints = [];
-        for (let i = 20; i < dmg.deformedVertices.length; i++) {
-          const dv = dmg.deformedVertices[i];
-          if (!dv) continue;
-          internalPoints.push({
-            x: dv.localX + (dv.offsetX || 0) + (dv.elasticX || 0),
-            y: dv.localY + (dv.offsetY || 0) + (dv.elasticY || 0)
-          });
-        }
-
-        ctx.beginPath();
-        for (let i = 0; i < perimPoints.length; i++) {
-          const p = perimPoints[i];
-          const nextP = perimPoints[(i + 1) % perimPoints.length];
-          ctx.moveTo(p.x, p.y);
-          ctx.lineTo(nextP.x, nextP.y);
-        }
-
-        // Internal roof / cabin / glass / hood wireframe connections
-        if (internalPoints.length >= 8 && perimPoints.length >= 20) {
-          const hC = internalPoints[0]; // 20: Hood center
-          const wT = internalPoints[1]; // 21: Windshield top
-          const rC = internalPoints[2]; // 22: Roof center
-          const rL = internalPoints[3]; // 23: Roof left
-          const rR = internalPoints[4]; // 24: Roof right
-          const rW = internalPoints[5]; // 25: Rear window top
-          const tC = internalPoints[6]; // 26: Trunk center
-          const cC = internalPoints[7]; // 27: Cabin center
-
-          ctx.moveTo(hC.x, hC.y); ctx.lineTo(perimPoints[0].x, perimPoints[0].y);
-          ctx.moveTo(hC.x, hC.y); ctx.lineTo(wT.x, wT.y);
-          ctx.moveTo(wT.x, wT.y); ctx.lineTo(rC.x, rC.y);
-
-          ctx.moveTo(rC.x, rC.y); ctx.lineTo(rL.x, rL.y);
-          ctx.moveTo(rC.x, rC.y); ctx.lineTo(rR.x, rR.y);
-          ctx.moveTo(rL.x, rL.y); ctx.lineTo(rR.x, rR.y);
-          ctx.moveTo(rL.x, rL.y); ctx.lineTo(cC.x, cC.y);
-          ctx.moveTo(rR.x, rR.y); ctx.lineTo(cC.x, cC.y);
-
-          ctx.moveTo(wT.x, wT.y); ctx.lineTo(rL.x, rL.y);
-          ctx.moveTo(wT.x, wT.y); ctx.lineTo(rR.x, rR.y);
-          ctx.moveTo(rW.x, rW.y); ctx.lineTo(rL.x, rL.y);
-          ctx.moveTo(rW.x, rW.y); ctx.lineTo(rR.x, rR.y);
-
-          ctx.moveTo(rW.x, rW.y); ctx.lineTo(tC.x, tC.y);
-          ctx.moveTo(tC.x, tC.y); ctx.lineTo(perimPoints[10].x, perimPoints[10].y);
-        }
-        ctx.stroke();
-
-        // Draw node points (perimeter)
-        ctx.fillStyle = '#00ff80';
-        for (const p of perimPoints) {
-          ctx.beginPath();
-          ctx.arc(p.x, p.y, 1.5, 0, Math.PI * 2);
-          ctx.fill();
-        }
-        // Draw internal nodes (roof, glass, windshield)
-        ctx.fillStyle = '#38bdf8';
-        for (const p of internalPoints) {
-          ctx.beginPath();
-          ctx.arc(p.x, p.y, 2.0, 0, Math.PI * 2);
-          ctx.fill();
-        }
-        
-        // Draw elastic displacement vectors if active
-        ctx.strokeStyle = 'rgba(255, 0, 0, 0.8)';
-        ctx.beginPath();
-        for (let i = 0; i < dmg.deformedVertices.length; i++) {
-          const dv = dmg.deformedVertices[i];
-          if (!dv) continue;
-          const x = dv.localX + (dv.offsetX || 0);
-          const y = dv.localY + (dv.offsetY || 0);
-          if (Math.abs(dv.elasticX || 0) > 0.1 || Math.abs(dv.elasticY || 0) > 0.1) {
-            ctx.moveTo(x, y);
-            ctx.lineTo(x + (dv.elasticX || 0) * 2, y + (dv.elasticY || 0) * 2);
-          }
-        }
-        ctx.stroke();
-        
-        ctx.restore();
+      // Render specialized trailer attachments (turntable dolly, A-frame drawbar, drop-side box, barrel tank, etc.)
+      if (isTrailer) {
+        renderSpecializedVehicleAttachments({
+          ctx,
+          car,
+          halfL,
+          halfW,
+          fc,
+          rc,
+          cabinX: 0,
+          cabinL: halfL,
+          cabinW: halfW,
+          deform,
+          drawDeformedRect,
+          drawDeformedLine,
+          drawDeformedCircle,
+          nightAlpha
+        });
       }
+
+
 
       // 2.5D buckled hood and sagging bumper attachments
       renderBuckledHoodOverlay(ctx, car, bodyPoly, halfL, halfW);
@@ -5847,14 +7439,40 @@ export class GameRenderer {
       const isHighBeam = car.headlightMode === 'high';
       const isLowBeam = car.headlightMode === 'low' || (hasHeadlightsOn && !isHighBeam);
 
-      const leftLampX = halfL - Math.max(fld, fc) - 3.2;
-      const leftLampY = -halfW + 3.2 + ld * 0.15;
-      const rightLampX = halfL - Math.max(frd, fc) - 3.2;
-      const rightLampY = halfW - 3.2 - rd * 0.15;
+      let leftLampX = halfL - Math.max(fld, fc) - 3.2;
+      let leftLampY = -halfW + 3.2 + ld * 0.15;
+      let rightLampX = halfL - Math.max(frd, fc) - 3.2;
+      let rightLampY = halfW - 3.2 - rd * 0.15;
 
-      // Front bumper grille
-      ctx.fillStyle = '#0f172a';
-      ctx.fillRect(halfL - fc - 2, -halfW + 4.5, 1.5, halfW * 2 - 9);
+      if (isSoloMoto) {
+        leftLampX = halfL - fc - 2.5;
+        leftLampY = 0;
+        rightLampX = halfL - fc - 2.5;
+        rightLampY = 0;
+      } else if (isUralSidecar) {
+        leftLampX = halfL - fc - 2.5;
+        leftLampY = -halfW * 0.45;
+        rightLampX = halfL * 0.25;
+        rightLampY = halfW * 0.78;
+      } else if (isTractor) {
+        leftLampX = halfL - fc - 2.0;
+        leftLampY = -halfW * 0.23;
+        rightLampX = halfL - fc - 2.0;
+        rightLampY = halfW * 0.23;
+      }
+
+      // Front bumper grille (cars & trucks only, never trailers or vehicles with bespoke fascias)
+      const hasCustomGrille = car.type === 'sedan_classic' || car.type === 'sedan_luxury' || 
+                              car.type === 'classic_compact' || car.type === 'retro_bubble' || 
+                              car.type === 'suv_classic_box' || car.type === 'van' || 
+                              car.type === 'van_cargo_old' || car.type === 'delivery_truck' ||
+                              car.type === 'van_camper' || car.type === 'hatch_hot' ||
+                              car.type === 'police' || car.type === 'sports' || car.type === 'supercar';
+      if (!isSoloMoto && !isUralSidecar && !isTractor && !isTrailer && !hasCustomGrille) {
+        const grilleW = Math.max(halfW * 1.0, halfW * 2 - 14);
+        ctx.fillStyle = '#0f172a';
+        ctx.fillRect(halfL - fc - 2, -grilleW / 2, 1.5, grilleW);
+      }
 
       const drawHeadlight = (lx: number, ly: number, broken: boolean) => {
         if (broken) {
@@ -5868,18 +7486,43 @@ export class GameRenderer {
           ctx.stroke();
         }
       };
-      drawHeadlight(leftLampX, leftLampY, dmg.leftHeadlightBroken);
-      drawHeadlight(rightLampX, rightLampY, dmg.rightHeadlightBroken);
+      // Trailers have no front headlights!
+      if (!isTrailer) {
+        if (isSoloMoto) {
+          drawHeadlight(leftLampX, leftLampY, dmg.leftHeadlightBroken);
+        } else {
+          drawHeadlight(leftLampX, leftLampY, dmg.leftHeadlightBroken);
+          drawHeadlight(rightLampX, rightLampY, dmg.rightHeadlightBroken);
+        }
+      }
 
       // 8. Taillights, Brake Lights & Reverse Lights
       const isReversing = car.isReversing || (car.speed < -1 && !car.isParked);
       const isBraking = car.brakeLightsOn && !isReversing;
       const isNightRunning = (nightAlpha > 0.05 || hasHeadlightsOn) && !car.isParked;
 
-      const rearLeftX = -halfL + rc * 0.85 + rld * 0.4 + 2.5;
-      const rearLeftY = -halfW + 3.2 + ld * 0.15;
-      const rearRightX = -halfL + rc * 0.85 + rrd * 0.4 + 2.5;
-      const rearRightY = halfW - 3.2 - rd * 0.15;
+      let rearLeftX = -halfL + rc * 0.85 + rld * 0.4 + 2.5;
+      let rearLeftY = -halfW + 3.2 + ld * 0.15;
+      let rearRightX = -halfL + rc * 0.85 + rrd * 0.4 + 2.5;
+      let rearRightY = halfW - 3.2 - rd * 0.15;
+
+      if (isSoloMoto) {
+        rearLeftX = -halfL + rc + 2.0;
+        rearLeftY = 0;
+        rearRightX = -halfL + rc + 2.0;
+        rearRightY = 0;
+      } else if (isUralSidecar) {
+        rearLeftX = -halfL + rc + 2.0;
+        rearLeftY = -halfW * 0.45;
+        rearRightX = -halfL * 0.55;
+        rearRightY = halfW * 0.85;
+      } else if (isTractor) {
+        const cabBackX = car.type === 'tractor_mtz80_old' ? (-halfL * 0.72) : (-halfL * 0.74);
+        rearLeftX = cabBackX + 2.5;
+        rearLeftY = -halfW * 0.82;
+        rearRightX = cabBackX + 2.5;
+        rearRightY = halfW * 0.82;
+      }
 
       const drawTaillight = (rx: number, ry: number, broken: boolean) => {
         if (broken) return;
@@ -5903,8 +7546,30 @@ export class GameRenderer {
           ctx.fillRect(rx - 1, ry - 1, 2, 2);
         }
       };
-      drawTaillight(rearLeftX, rearLeftY, dmg.leftTaillightBroken);
-      drawTaillight(rearRightX, rearRightY, dmg.rightTaillightBroken);
+      if (isSoloMoto) {
+        drawTaillight(rearLeftX, rearLeftY, dmg.leftTaillightBroken);
+      } else if (car.type !== 'trailer_barrel') { // Barrels have no taillights or electrical lighting
+        drawTaillight(rearLeftX, rearLeftY, dmg.leftTaillightBroken);
+        drawTaillight(rearRightX, rearRightY, dmg.rightTaillightBroken);
+      }
+
+      // Trailers: Authentic red reflective warning triangles (ECE R3 / ГОСТ 8769-75)
+      if (isTrailer && car.type !== 'trailer_barrel') {
+        const drawRedReflectorTriangle = (tx: number, ty: number) => {
+          ctx.fillStyle = '#dc2626';
+          ctx.beginPath();
+          ctx.moveTo(tx - 1.5, ty);
+          ctx.lineTo(tx + 1.0, ty - 1.8);
+          ctx.lineTo(tx + 1.0, ty + 1.8);
+          ctx.closePath();
+          ctx.fill();
+          ctx.strokeStyle = '#7f1d1d';
+          ctx.lineWidth = 0.5;
+          ctx.stroke();
+        };
+        drawRedReflectorTriangle(-halfL + 2.2, -halfW * 0.74);
+        drawRedReflectorTriangle(-halfL + 2.2, halfW * 0.74);
+      }
 
       // 9. Turn Indicators (Amber blinking corners)
       if (car.turnSignal !== 'none') {
@@ -5914,39 +7579,190 @@ export class GameRenderer {
           const isLeft = car.turnSignal === 'left' || car.turnSignal === 'hazard';
           const isRight = car.turnSignal === 'right' || car.turnSignal === 'hazard';
 
+          const frontTurnX = isTractor ? (car.type === 'tractor_mtz80_old' ? 0.6 : (halfL * 0.10 + 0.6)) : leftLampX;
+          const frontTurnY = isTractor ? (halfW * 0.76 * 0.48) : Math.abs(leftLampY);
+
           if (isLeft) {
-            ctx.fillRect(leftLampX - 1, leftLampY - 2.5, 1.8, 1.8);
-            ctx.fillRect(rearLeftX - 1, rearLeftY - 2.5, 1.8, 1.8);
+            if (!isTrailer) {
+              ctx.fillRect(frontTurnX - 1, -frontTurnY - 1.5, 1.8, 1.8);
+            }
+            if (car.type !== 'trailer_barrel') {
+              ctx.fillRect(rearLeftX - 1, rearLeftY - 2.5, 1.8, 1.8);
+            }
             ctx.fillStyle = 'rgba(245, 158, 11, 0.45)';
             ctx.beginPath();
-            ctx.arc(leftLampX, leftLampY - 1.5, 6, 0, Math.PI * 2);
-            ctx.arc(rearLeftX, rearLeftY - 1.5, 6, 0, Math.PI * 2);
+            if (!isTrailer) {
+              ctx.arc(frontTurnX, -frontTurnY - 0.6, 5, 0, Math.PI * 2);
+            }
+            if (car.type !== 'trailer_barrel') {
+              ctx.arc(rearLeftX, rearLeftY - 1.5, 6, 0, Math.PI * 2);
+            }
             ctx.fill();
           }
           if (isRight) {
             ctx.fillStyle = '#f59e0b';
-            ctx.fillRect(rightLampX - 1, rightLampY + 0.8, 1.8, 1.8);
-            ctx.fillRect(rearRightX - 1, rearRightY + 0.8, 1.8, 1.8);
+            if (!isTrailer) {
+              ctx.fillRect(frontTurnX - 1, frontTurnY - 0.3, 1.8, 1.8);
+            }
+            if (car.type !== 'trailer_barrel') {
+              ctx.fillRect(rearRightX - 1, rearRightY + 0.8, 1.8, 1.8);
+            }
             ctx.fillStyle = 'rgba(245, 158, 11, 0.45)';
             ctx.beginPath();
-            ctx.arc(rightLampX, rightLampY + 1.5, 6, 0, Math.PI * 2);
-            ctx.arc(rearRightX, rearRightY + 1.5, 6, 0, Math.PI * 2);
+            if (!isTrailer) {
+              ctx.arc(frontTurnX, frontTurnY + 0.6, 5, 0, Math.PI * 2);
+            }
+            if (car.type !== 'trailer_barrel') {
+              ctx.arc(rearRightX, rearRightY + 1.5, 6, 0, Math.PI * 2);
+            }
             ctx.fill();
           }
         }
       }
 
-      // (Roof sirens relocated to renderVehicleCabins)
+      // 10. Heavy-Duty Realistic Tow Hitch (Фаркоп - только для тракторов, грузовиков и тяжелых пикапов)
+      if (canVehicleHaveHitch(car)) {
+        const defaultHitchOffset = -halfL - 2;
+        const hitchOffset = car.hitchOffset !== undefined ? car.hitchOffset : defaultHitchOffset;
+        const carType = car.type || 'sedan';
+        const isTractor = carType.startsWith('tractor_');
+
+        if (isTractor) {
+          // Agricultural Clevis Jaw / Hook Assembly (ТСУ со шкворнем МТЗ)
+          // Rear steel mounting plate attached to transmission casing
+          ctx.fillStyle = '#0f172a';
+          ctx.fillRect(hitchOffset + 1.0, -2.5, 2.5, 5.0);
+
+          // Clevis jaw brackets (верхняя и нижняя вилка)
+          ctx.fillStyle = '#334155';
+          ctx.fillRect(hitchOffset - 1.5, -2.0, 3.0, 4.0);
+          ctx.fillStyle = '#1e293b';
+          ctx.fillRect(hitchOffset - 1.0, -1.0, 2.0, 2.0); // Jaw gap cutout
+
+          // Heavy vertical steel locking pin (шкворень)
+          ctx.fillStyle = '#e2e8f0';
+          ctx.beginPath();
+          ctx.arc(hitchOffset - 0.2, 0, 1.2, 0, Math.PI * 2);
+          ctx.fill();
+
+          // Red & Blue hydraulic quick-coupler ports (гидровыходы)
+          ctx.fillStyle = '#ef4444'; // Red hydraulic outlet
+          ctx.beginPath();
+          ctx.arc(hitchOffset + 2.0, -2.0, 0.8, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.fillStyle = '#3b82f6'; // Blue hydraulic outlet
+          ctx.beginPath();
+          ctx.arc(hitchOffset + 2.0, 2.0, 0.8, 0, Math.PI * 2);
+          ctx.fill();
+
+          // When hitched, draw A-frame drawbar ring inside jaw with hydraulic lines connected
+          if (car.trailerId) {
+            // Drawbar ring loop inside clevis jaw
+            ctx.strokeStyle = '#0f172a';
+            ctx.lineWidth = 1.2;
+            ctx.beginPath();
+            ctx.arc(hitchOffset - 0.2, 0, 1.8, 0, Math.PI * 2);
+            ctx.stroke();
+
+            // Hydraulic hoses running from tractor outlets to trailer drawbar
+            ctx.strokeStyle = '#ef4444';
+            ctx.lineWidth = 1.0;
+            ctx.beginPath();
+            ctx.moveTo(hitchOffset + 2.0, -2.0);
+            ctx.quadraticCurveTo(hitchOffset, -3.5, hitchOffset - 3.0, -1.0);
+            ctx.stroke();
+
+            ctx.strokeStyle = '#2563eb';
+            ctx.lineWidth = 1.0;
+            ctx.beginPath();
+            ctx.moveTo(hitchOffset + 2.0, 2.0);
+            ctx.quadraticCurveTo(hitchOffset, 3.5, hitchOffset - 3.0, 1.0);
+            ctx.stroke();
+          }
+        } else {
+          // Trucks / Heavy Pickups: Forged Pintle Hook (Буксирный прибор типа "зев") or Receiver Hitch
+          const isPickup = carType === 'pickup' || carType === 'pickup_heavy';
+
+          if (isPickup) {
+            // Pickup 2-inch square tube receiver + drop ball drawbar
+            ctx.fillStyle = '#0f172a';
+            ctx.fillRect(hitchOffset + 1.2, -1.5, 2.5, 3.0); // Receiver box
+            ctx.fillStyle = '#1e293b';
+            ctx.fillRect(hitchOffset - 1.2, -1.0, 2.8, 2.0); // Square drawbar mount
+            ctx.fillStyle = '#cbd5e1';
+            ctx.beginPath();
+            ctx.arc(hitchOffset - 1.2, 0, 1.3, 0, Math.PI * 2); // Tow ball
+            ctx.fill();
+
+            // Dual safety chain loops
+            ctx.strokeStyle = '#64748b';
+            ctx.lineWidth = 0.8;
+            ctx.strokeRect(hitchOffset, -2.2, 1.2, 0.8);
+            ctx.strokeRect(hitchOffset, 1.4, 1.2, 0.8);
+          } else {
+            // Heavy Truck Forged Pintle Jaw & Hook (Буксирный прибор ГАЗ/КАМАЗ)
+            ctx.fillStyle = '#0f172a';
+            ctx.fillRect(hitchOffset + 0.8, -3.0, 2.2, 6.0); // Frame crossmember base plate
+
+            // Forged steel pintle hook jaw
+            ctx.fillStyle = '#1e293b';
+            ctx.beginPath();
+            ctx.arc(hitchOffset - 0.8, 0, 2.2, -Math.PI * 0.75, Math.PI * 0.75);
+            ctx.fill();
+            ctx.fillStyle = '#334155';
+            ctx.fillRect(hitchOffset - 1.8, -1.2, 2.2, 2.4);
+
+            // Chrome safety latch pin (собачка затвора)
+            ctx.fillStyle = '#cbd5e1';
+            ctx.fillRect(hitchOffset - 1.2, -1.8, 1.4, 0.8);
+
+            // Red and blue pneumatic gladhand air brake connectors (пневмовыводы тормозов)
+            ctx.fillStyle = '#ef4444'; // Red emergency air line
+            ctx.fillRect(hitchOffset + 1.5, -2.8, 1.2, 1.2);
+            ctx.fillStyle = '#2563eb'; // Blue service air line
+            ctx.fillRect(hitchOffset + 1.5, 1.6, 1.2, 1.2);
+          }
+
+          // When hitched to trailer:
+          if (car.trailerId) {
+            // Heavy drawbar ring eye coupled into jaw
+            ctx.fillStyle = '#020617';
+            ctx.beginPath();
+            ctx.arc(hitchOffset - 1.2, 0, 2.0, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = '#f59e0b'; // Yellow safety pin lock lever
+            ctx.fillRect(hitchOffset - 1.8, -0.6, 2.2, 1.2);
+
+            // Coiled red & blue pneumatic air brake lines
+            ctx.strokeStyle = '#ef4444';
+            ctx.lineWidth = 1.0;
+            ctx.beginPath();
+            ctx.moveTo(hitchOffset + 1.5, -2.2);
+            ctx.quadraticCurveTo(hitchOffset - 0.5, -4.0, hitchOffset - 2.5, -1.2);
+            ctx.stroke();
+
+            ctx.strokeStyle = '#2563eb';
+            ctx.lineWidth = 1.0;
+            ctx.beginPath();
+            ctx.moveTo(hitchOffset + 1.5, 2.2);
+            ctx.quadraticCurveTo(hitchOffset - 0.5, 4.0, hitchOffset - 2.5, 1.2);
+            ctx.stroke();
+          }
+        }
+      }
 
       ctx.restore();
     }
   }
 
   // --- VEHICLE CABINS, ROOFS & ROOF ATTACHMENTS (Drawn on top of lightmap) ---
-  private renderVehicleCabins(vehicles: Vehicle[], nightAlpha: number) {
+  private renderVehicleCabins(vehicles: Vehicle[], nightAlpha: number, gridMode?: boolean) {
     const ctx = this.ctx;
 
     for (const car of vehicles) {
+      if (car.type.startsWith('trailer_') || car.isTrailer || car.type === 'trailer_barrel' || car.type === 'trailer_flatbed_2axle') {
+        continue;
+      }
       ctx.save();
       if (car.ghostingAlpha !== undefined) {
         ctx.globalAlpha = car.ghostingAlpha;
@@ -5983,10 +7799,19 @@ export class GameRenderer {
         bodyPoly = basePoly.map((bv, idx) => {
           const dv = dmg.deformedVertices![idx];
           if (!dv) return bv;
-          const ox = isFinite(dv.offsetX) ? dv.offsetX : 0;
-          const oy = isFinite(dv.offsetY) ? dv.offsetY : 0;
-          const ex = isFinite(dv.elasticX) ? dv.elasticX : 0;
-          const ey = isFinite(dv.elasticY) ? dv.elasticY : 0;
+          let ox = isFinite(dv.offsetX) ? dv.offsetX : 0;
+          let oy = isFinite(dv.offsetY) ? dv.offsetY : 0;
+          let ex = isFinite(dv.elasticX) ? Math.max(-6.0, Math.min(6.0, dv.elasticX)) : 0;
+          let ey = isFinite(dv.elasticY) ? Math.max(-6.0, Math.min(6.0, dv.elasticY)) : 0;
+
+          const dvLen = Math.hypot(dv.localX || bv.x, dv.localY || bv.y) || 1;
+          const maxAllowed = Math.min(12.0, Math.max(3.0, dvLen * 0.35));
+          const oDist = Math.hypot(ox, oy);
+          if (oDist > maxAllowed) {
+            ox = (ox / oDist) * maxAllowed;
+            oy = (oy / oDist) * maxAllowed;
+          }
+
           return {
             x: bv.x + ox + ex,
             y: bv.y + oy + ey
@@ -5998,9 +7823,11 @@ export class GameRenderer {
         let totalWeight = 0;
         let dx = 0;
         let dy = 0;
-        for (let i = 0; i < 20; i++) {
+        const polyLen = Math.min(basePoly.length, bodyPoly.length);
+        for (let i = 0; i < polyLen; i++) {
           const bp = basePoly[i];
           const bvp = bodyPoly[i];
+          if (!bp || !bvp) continue;
           const vx = bp.x;
           const vy = bp.y;
           const distSq = (px - vx) * (px - vx) + (py - vy) * (py - vy);
@@ -6210,12 +8037,176 @@ export class GameRenderer {
         ctx.fill();
       }
 
+      // Grid Mode Mesh Visualization on top of cabin/roof (BeamNG-style 3D Projection)
+      if (gridMode && dmg.deformedVertices && dmg.deformedVertices.length > 0) {
+        ctx.save();
+        
+        let zMultiplier = 1.0;
+        if (car.type === 'bus' || car.type === 'bus_minibus') zMultiplier = 1.8;
+        else if (car.type === 'fire_engine' || car.type === 'fire_ladder' || car.type === 'fire_rescue') zMultiplier = 1.7;
+        else if (car.type === 'truck_box' || car.type === 'truck_dump' || car.type === 'truck_tanker' || car.type === 'truck_flatbed') zMultiplier = 1.6;
+        else if (car.type === 'suv' || car.type === 'suv_luxury' || car.type === 'suv_classic_box' || car.type === 'ambulance' || car.type === 'ambulance_van') zMultiplier = 1.4;
+        else if (car.type === 'supercar' || car.type === 'sports') zMultiplier = 0.75;
+
+        const getNodeZ = (idx: number): number => {
+          if (idx < 20) return 0;
+          switch (idx) {
+            case 20: return 8;   // Hood center
+            case 21: return 12;  // Windshield cowl
+            case 22: return 22;  // Roof center
+            case 23: return 22;  // Roof front-left
+            case 24: return 22;  // Roof front-right
+            case 25: return 22;  // Roof rear-left
+            case 26: return 22;  // Roof rear-right
+            case 27: return 10;  // Trunk deck / rear base
+            default: return 0;
+          }
+        };
+
+        const getDeformedNode = (idx: number) => {
+          if (idx < 20) {
+            return bodyPoly[idx];
+          } else {
+            const dv = dmg.deformedVertices![idx];
+            if (!dv) return { x: 0, y: 0 };
+            const ox = isFinite(dv.offsetX) ? dv.offsetX : 0;
+            const oy = isFinite(dv.offsetY) ? dv.offsetY : 0;
+            const ex = isFinite(dv.elasticX) ? dv.elasticX : 0;
+            const ey = isFinite(dv.elasticY) ? dv.elasticY : 0;
+            return {
+              x: dv.localX + ox + ex,
+              y: dv.localY + oy + ey
+            };
+          }
+        };
+
+        const getProjectedNode = (idx: number) => {
+          const node = getDeformedNode(idx);
+          const z = getNodeZ(idx) * zMultiplier;
+          
+          // Pure orthographic top-down projection aligned with the car geometry.
+          // (No arbitrary off-axis screen skew that shifts the roof sideways)
+          return {
+            x: node.x,
+            y: node.y,
+            z: z
+          };
+        };
+
+        const projNodes: { x: number; y: number; z: number }[] = [];
+        for (let i = 0; i < 28; i++) {
+          projNodes.push(getProjectedNode(i));
+        }
+
+        // 1. Draw flat chassis base / perimeter (Z = 0) with a darker green shade
+        ctx.strokeStyle = 'rgba(0, 180, 80, 0.45)';
+        ctx.lineWidth = 1.0;
+        ctx.beginPath();
+        for (let i = 0; i < 20; i++) {
+          const p = projNodes[i];
+          const nextP = projNodes[(i + 1) % 20];
+          ctx.moveTo(p.x, p.y);
+          ctx.lineTo(nextP.x, nextP.y);
+        }
+        ctx.stroke();
+
+        // 2. Draw 3D wireframe connections and vertical pillars (Z > 0) with glowing neon green
+        ctx.strokeStyle = 'rgba(0, 255, 128, 0.85)';
+        ctx.lineWidth = 1.3;
+        ctx.beginPath();
+
+        // Hood connections (Node 20 to front bumper and cowl)
+        ctx.moveTo(projNodes[20].x, projNodes[20].y); ctx.lineTo(projNodes[0].x, projNodes[0].y);
+        ctx.moveTo(projNodes[20].x, projNodes[20].y); ctx.lineTo(projNodes[2].x, projNodes[2].y);
+        ctx.moveTo(projNodes[20].x, projNodes[20].y); ctx.lineTo(projNodes[18].x, projNodes[18].y);
+        ctx.moveTo(projNodes[20].x, projNodes[20].y); ctx.lineTo(projNodes[21].x, projNodes[21].y);
+
+        // Cowl / Base of windshield (Node 21) to front fenders
+        ctx.moveTo(projNodes[21].x, projNodes[21].y); ctx.lineTo(projNodes[3].x, projNodes[3].y);
+        ctx.moveTo(projNodes[21].x, projNodes[21].y); ctx.lineTo(projNodes[17].x, projNodes[17].y);
+
+        // A-pillars: windshield base & beltline up to front roof corners (23: FL, 24: FR)
+        ctx.moveTo(projNodes[3].x, projNodes[3].y); ctx.lineTo(projNodes[23].x, projNodes[23].y);
+        ctx.moveTo(projNodes[17].x, projNodes[17].y); ctx.lineTo(projNodes[24].x, projNodes[24].y);
+        ctx.moveTo(projNodes[21].x, projNodes[21].y); ctx.lineTo(projNodes[23].x, projNodes[23].y);
+        ctx.moveTo(projNodes[21].x, projNodes[21].y); ctx.lineTo(projNodes[24].x, projNodes[24].y);
+
+        // Full Roof Perimeter (23: FL, 24: FR, 26: RR, 25: RL)
+        ctx.moveTo(projNodes[23].x, projNodes[23].y); ctx.lineTo(projNodes[24].x, projNodes[24].y); // Front roof header
+        ctx.moveTo(projNodes[24].x, projNodes[24].y); ctx.lineTo(projNodes[26].x, projNodes[26].y); // Right roof rail
+        ctx.moveTo(projNodes[26].x, projNodes[26].y); ctx.lineTo(projNodes[25].x, projNodes[25].y); // Rear roof header
+        ctx.moveTo(projNodes[25].x, projNodes[25].y); ctx.lineTo(projNodes[23].x, projNodes[23].y); // Left roof rail
+
+        // Roof center X-brace structural truss (Node 22)
+        ctx.moveTo(projNodes[22].x, projNodes[22].y); ctx.lineTo(projNodes[23].x, projNodes[23].y);
+        ctx.moveTo(projNodes[22].x, projNodes[22].y); ctx.lineTo(projNodes[24].x, projNodes[24].y);
+        ctx.moveTo(projNodes[22].x, projNodes[22].y); ctx.lineTo(projNodes[25].x, projNodes[25].y);
+        ctx.moveTo(projNodes[22].x, projNodes[22].y); ctx.lineTo(projNodes[26].x, projNodes[26].y);
+
+        // B-pillars (mid-body sides up to roof rails)
+        ctx.moveTo(projNodes[5].x, projNodes[5].y); ctx.lineTo((projNodes[23].x + projNodes[25].x) * 0.5, (projNodes[23].y + projNodes[25].y) * 0.5);
+        ctx.moveTo(projNodes[15].x, projNodes[15].y); ctx.lineTo((projNodes[24].x + projNodes[26].x) * 0.5, (projNodes[24].y + projNodes[26].y) * 0.5);
+
+        // C-pillars: rear roof corners (25: RL, 26: RR) down to rear quarters
+        ctx.moveTo(projNodes[25].x, projNodes[25].y); ctx.lineTo(projNodes[7].x, projNodes[7].y);
+        ctx.moveTo(projNodes[26].x, projNodes[26].y); ctx.lineTo(projNodes[13].x, projNodes[13].y);
+        ctx.moveTo(projNodes[25].x, projNodes[25].y); ctx.lineTo(projNodes[27].x, projNodes[27].y);
+        ctx.moveTo(projNodes[26].x, projNodes[26].y); ctx.lineTo(projNodes[27].x, projNodes[27].y);
+
+        // Trunk & rear bumper connections (Node 27)
+        ctx.moveTo(projNodes[27].x, projNodes[27].y); ctx.lineTo(projNodes[9].x, projNodes[9].y);
+        ctx.moveTo(projNodes[27].x, projNodes[27].y); ctx.lineTo(projNodes[10].x, projNodes[10].y);
+        ctx.moveTo(projNodes[27].x, projNodes[27].y); ctx.lineTo(projNodes[11].x, projNodes[11].y);
+
+        ctx.stroke();
+
+        // 3. Draw base level node points (Z = 0, darker green/teal)
+        ctx.fillStyle = 'rgba(0, 220, 100, 0.75)';
+        for (let i = 0; i < 20; i++) {
+          const p = projNodes[i];
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, 1.5, 0, Math.PI * 2);
+          ctx.fill();
+        }
+
+        // 4. Draw elevated 3D cabin node points (Z > 0, sky blue)
+        ctx.fillStyle = '#38bdf8';
+        for (let i = 20; i < 28; i++) {
+          const p = projNodes[i];
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, 2.4, 0, Math.PI * 2);
+          ctx.fill();
+        }
+
+        // 5. Draw elastic displacement stress vectors
+        ctx.strokeStyle = 'rgba(239, 68, 68, 0.95)';
+        ctx.lineWidth = 1.3;
+        ctx.beginPath();
+        for (let i = 0; i < 28; i++) {
+          const dv = dmg.deformedVertices![i];
+          if (!dv) continue;
+          if (Math.abs(dv.elasticX || 0) > 0.1 || Math.abs(dv.elasticY || 0) > 0.1) {
+            const origX = dv.localX + (dv.offsetX || 0);
+            const origY = dv.localY + (dv.offsetY || 0);
+            
+            const pOrig = { x: origX, y: origY };
+            const pDeformed = projNodes[i];
+            
+            ctx.moveTo(pOrig.x, pOrig.y);
+            ctx.lineTo(pDeformed.x, pDeformed.y);
+          }
+        }
+        ctx.stroke();
+
+        ctx.restore();
+      }
+
       ctx.restore();
     }
   }
 
   // --- PARTICLES ---
-  private renderParticles(particles: GameWorld['particles']) {
+  private renderParticles(particles: GameWorld['particles'], cleanMode?: boolean) {
     const len = particles.length;
     if (len === 0) return;
 
@@ -6242,14 +8233,16 @@ export class GameRenderer {
     const ctx = this.ctx;
 
     // Pass 1: Render thick background smoke (engine smoke, tire smoke, exhaust)
-    // Completely bypass ctx.save() / ctx.restore() to avoid expensive matrix allocations!
-    for (let i = 0; i < smoke.length; i++) {
-      const p = smoke[i];
-      ctx.globalAlpha = Math.max(0, Math.min(1.0, p.alpha));
-      ctx.fillStyle = p.color;
-      ctx.beginPath();
-      ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
-      ctx.fill();
+    // Completely bypass in Clean Mode (cleanMode === true)
+    if (!cleanMode) {
+      for (let i = 0; i < smoke.length; i++) {
+        const p = smoke[i];
+        ctx.globalAlpha = Math.max(0, Math.min(1.0, p.alpha));
+        ctx.fillStyle = p.color;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+        ctx.fill();
+      }
     }
 
     // Pass 2: Render neutral physics elements (glass shards, debris, water, etc.)
@@ -6418,6 +8411,7 @@ export class GameRenderer {
     };
 
     const getVehicleHeadlightOn = (car: Vehicle) => {
+      if (car.type.startsWith('trailer_') || car.isTrailer || car.type === 'trailer_barrel' || car.type === 'trailer_flatbed_2axle') return false;
       if (car.isPlayerControlled) return car.headlightsOn;
       if (car.headlightsOn) return true;
       if (car.isParked) return false;
@@ -6438,6 +8432,7 @@ export class GameRenderer {
 
     // A. Headlight Cone Cutouts
     for (const car of nearbyVehicles) {
+      if (car.type.startsWith('trailer_') || car.isTrailer || car.type === 'trailer_barrel' || car.type === 'trailer_flatbed_2axle') continue;
       const cosA = Math.cos(car.angle);
       const sinA = Math.sin(car.angle);
       const halfL = car.length / 2;
@@ -6454,10 +8449,32 @@ export class GameRenderer {
       const fld = Math.min(9, dmg.frontLeftDent || 0);
       const frd = Math.min(9, dmg.frontRightDent || 0);
 
-      const leftLampLX = halfL - Math.max(fld, fc) - 3.2;
-      const leftLampLY = -halfW + 3.2 + ld * 0.15;
-      const rightLampLX = halfL - Math.max(frd, fc) - 3.2;
-      const rightLampLY = halfW - 3.2 - rd * 0.15;
+      const isTractor = car.type === 'tractor_mtz82' || car.type === 'tractor_mtz80' || car.type === 'tractor_mtz80_old';
+      const isSoloMoto = car.type === 'moto_izh_jupiter' || car.type === 'moto_jawa350' || 
+                         car.type === 'moto_sport' || car.type === 'moto_chopper' || car.type === 'moped_soviet';
+      const isUralSidecar = car.type === 'moto_ural_sidecar';
+
+      let leftLampLX = halfL - Math.max(fld, fc) - 3.2;
+      let leftLampLY = -halfW + 3.2 + ld * 0.15;
+      let rightLampLX = halfL - Math.max(frd, fc) - 3.2;
+      let rightLampLY = halfW - 3.2 - rd * 0.15;
+
+      if (isSoloMoto) {
+        leftLampLX = halfL - fc - 2.5;
+        leftLampLY = 0;
+        rightLampLX = halfL - fc - 2.5;
+        rightLampLY = 0;
+      } else if (isUralSidecar) {
+        leftLampLX = halfL - fc - 2.5;
+        leftLampLY = -halfW * 0.45;
+        rightLampLX = halfL * 0.25;
+        rightLampLY = halfW * 0.78;
+      } else if (isTractor) {
+        leftLampLX = halfL - fc - 2.0;
+        leftLampLY = -halfW * 0.23;
+        rightLampLX = halfL - fc - 2.0;
+        rightLampLY = halfW * 0.23;
+      }
 
       const hasHeadlightsOn = getVehicleHeadlightOn(car);
 
@@ -6495,8 +8512,12 @@ export class GameRenderer {
       };
 
       if (hasHeadlightsOn) {
-        cutHeadlightBeam(leftLampLX, leftLampLY, dmg.leftHeadlightBroken);
-        cutHeadlightBeam(rightLampLX, rightLampLY, dmg.rightHeadlightBroken);
+        if (isSoloMoto) {
+          cutHeadlightBeam(leftLampLX, leftLampLY, dmg.leftHeadlightBroken);
+        } else {
+          cutHeadlightBeam(leftLampLX, leftLampLY, dmg.leftHeadlightBroken);
+          cutHeadlightBeam(rightLampLX, rightLampLY, dmg.rightHeadlightBroken);
+        }
       }
 
       // Rear Cutouts
@@ -6504,10 +8525,28 @@ export class GameRenderer {
       const rld = Math.min(8, dmg.rearLeftDent || 0);
       const rrd = Math.min(8, dmg.rearRightDent || 0);
 
-      const rearLeftLX = -halfL + rc * 0.85 + rld * 0.4 + 2.5;
-      const rearLeftLY = -halfW + 3.2 + ld * 0.15;
-      const rearRightLX = -halfL + rc * 0.85 + rrd * 0.4 + 2.5;
-      const rearRightLY = halfW - 3.2 - rd * 0.15;
+      let rearLeftLX = -halfL + rc * 0.85 + rld * 0.4 + 2.5;
+      let rearLeftLY = -halfW + 3.2 + ld * 0.15;
+      let rearRightLX = -halfL + rc * 0.85 + rrd * 0.4 + 2.5;
+      let rearRightLY = halfW - 3.2 - rd * 0.15;
+
+      if (isSoloMoto) {
+        rearLeftLX = -halfL + rc + 2.0;
+        rearLeftLY = 0;
+        rearRightLX = -halfL + rc + 2.0;
+        rearRightLY = 0;
+      } else if (isUralSidecar) {
+        rearLeftLX = -halfL + rc + 2.0;
+        rearLeftLY = -halfW * 0.45;
+        rearRightLX = -halfL * 0.55;
+        rearRightLY = halfW * 0.85;
+      } else if (isTractor) {
+        const cabBackX = car.type === 'tractor_mtz80_old' ? (-halfL * 0.72) : (-halfL * 0.74);
+        rearLeftLX = cabBackX + 2.5;
+        rearLeftLY = -halfW * 0.82;
+        rearRightLX = cabBackX + 2.5;
+        rearRightLY = halfW * 0.82;
+      }
 
       const isReversing = (car.speed < -0.5 && !car.isParked);
       const isBraking = car.brakeLightsOn && !isReversing;
@@ -6768,6 +8807,7 @@ export class GameRenderer {
 
     // B. Vehicle Headlight Beams (Additive)
     for (const car of nearbyVehicles) {
+      if (car.type.startsWith('trailer_') || car.isTrailer || car.type === 'trailer_barrel' || car.type === 'trailer_flatbed_2axle') continue;
       const cosA = Math.cos(car.angle);
       const sinA = Math.sin(car.angle);
       const halfL = car.length / 2;
@@ -6784,10 +8824,32 @@ export class GameRenderer {
       const fld = Math.min(9, dmg.frontLeftDent || 0);
       const frd = Math.min(9, dmg.frontRightDent || 0);
 
-      const leftLampLX = halfL - Math.max(fld, fc) - 3.2;
-      const leftLampLY = -halfW + 3.2 + ld * 0.15;
-      const rightLampLX = halfL - Math.max(frd, fc) - 3.2;
-      const rightLampLY = halfW - 3.2 - rd * 0.15;
+      const isTractor = car.type === 'tractor_mtz82' || car.type === 'tractor_mtz80' || car.type === 'tractor_mtz80_old';
+      const isSoloMoto = car.type === 'moto_izh_jupiter' || car.type === 'moto_jawa350' || 
+                         car.type === 'moto_sport' || car.type === 'moto_chopper' || car.type === 'moped_soviet';
+      const isUralSidecar = car.type === 'moto_ural_sidecar';
+
+      let leftLampLX = halfL - Math.max(fld, fc) - 3.2;
+      let leftLampLY = -halfW + 3.2 + ld * 0.15;
+      let rightLampLX = halfL - Math.max(frd, fc) - 3.2;
+      let rightLampLY = halfW - 3.2 - rd * 0.15;
+
+      if (isSoloMoto) {
+        leftLampLX = halfL - fc - 2.5;
+        leftLampLY = 0;
+        rightLampLX = halfL - fc - 2.5;
+        rightLampLY = 0;
+      } else if (isUralSidecar) {
+        leftLampLX = halfL - fc - 2.5;
+        leftLampLY = -halfW * 0.45;
+        rightLampLX = halfL * 0.25;
+        rightLampLY = halfW * 0.78;
+      } else if (isTractor) {
+        leftLampLX = halfL - fc - 2.0;
+        leftLampLY = -halfW * 0.23;
+        rightLampLX = halfL - fc - 2.0;
+        rightLampLY = halfW * 0.23;
+      }
 
       const hasHeadlightsOn = getVehicleHeadlightOn(car);
 
@@ -6825,18 +8887,40 @@ export class GameRenderer {
       };
 
       if (hasHeadlightsOn) {
-        drawHeadlightAdd(leftLampLX, leftLampLY, dmg.leftHeadlightBroken);
-        drawHeadlightAdd(rightLampLX, rightLampLY, dmg.rightHeadlightBroken);
+        if (isSoloMoto) {
+          drawHeadlightAdd(leftLampLX, leftLampLY, dmg.leftHeadlightBroken);
+        } else {
+          drawHeadlightAdd(leftLampLX, leftLampLY, dmg.leftHeadlightBroken);
+          drawHeadlightAdd(rightLampLX, rightLampLY, dmg.rightHeadlightBroken);
+        }
       }
 
       const rc = Math.min(12, dmg.rearCrumple || 0);
       const rld = Math.min(8, dmg.rearLeftDent || 0);
       const rrd = Math.min(8, dmg.rearRightDent || 0);
 
-      const rearLeftLX = -halfL + rc * 0.85 + rld * 0.4 + 2.5;
-      const rearLeftLY = -halfW + 3.2 + ld * 0.15;
-      const rearRightLX = -halfL + rc * 0.85 + rrd * 0.4 + 2.5;
-      const rearRightLY = halfW - 3.2 - rd * 0.15;
+      let rearLeftLX = -halfL + rc * 0.85 + rld * 0.4 + 2.5;
+      let rearLeftLY = -halfW + 3.2 + ld * 0.15;
+      let rearRightLX = -halfL + rc * 0.85 + rrd * 0.4 + 2.5;
+      let rearRightLY = halfW - 3.2 - rd * 0.15;
+
+      if (isSoloMoto) {
+        rearLeftLX = -halfL + rc + 2.0;
+        rearLeftLY = 0;
+        rearRightLX = -halfL + rc + 2.0;
+        rearRightLY = 0;
+      } else if (isUralSidecar) {
+        rearLeftLX = -halfL + rc + 2.0;
+        rearLeftLY = -halfW * 0.45;
+        rearRightLX = -halfL * 0.55;
+        rearRightLY = halfW * 0.85;
+      } else if (isTractor) {
+        const cabBackX = car.type === 'tractor_mtz80_old' ? (-halfL * 0.72) : (-halfL * 0.74);
+        rearLeftLX = cabBackX + 2.5;
+        rearLeftLY = -halfW * 0.82;
+        rearRightLX = cabBackX + 2.5;
+        rearRightLY = halfW * 0.82;
+      }
 
       const isReversing = (car.speed < -0.5 && !car.isParked);
       const isBraking = car.brakeLightsOn && !isReversing;
@@ -6855,6 +8939,13 @@ export class GameRenderer {
       if (isReversing) {
         drawRadialAdditive(rearLeftLX, rearLeftLY, 12, 'rgba(255, 255, 255, 0.6)');
         drawRadialAdditive(rearRightLX, rearRightLY, 12, 'rgba(255, 255, 255, 0.6)');
+        if (isTractor) {
+          // Rear cabin floodlights illuminating when reversing
+          const cabFloodLX = -halfL * 0.26;
+          const cabFloodLY = halfW * 0.35;
+          drawRadialAdditive(cabFloodLX, -cabFloodLY, 22, 'rgba(255, 255, 220, 0.85)');
+          drawRadialAdditive(cabFloodLX, cabFloodLY, 22, 'rgba(255, 255, 220, 0.85)');
+        }
       } else if (isBraking) {
         drawRadialAdditive(rearLeftLX, rearLeftLY, 22, 'rgba(255, 30, 30, 0.75)');
         drawRadialAdditive(rearRightLX, rearRightLY, 22, 'rgba(255, 30, 30, 0.75)');
@@ -6871,12 +8962,15 @@ export class GameRenderer {
           const isRight = car.turnSignal === 'right' || car.turnSignal === 'hazard';
           const amberColor = 'rgba(255, 160, 0, 0.7)';
 
+          const frontTurnLX = isTractor ? (car.type === 'tractor_mtz80_old' ? 0.6 : (halfL * 0.10 + 0.6)) : leftLampLX;
+          const frontTurnLY = isTractor ? (halfW * 0.76 * 0.48) : Math.abs(leftLampLY);
+
           if (isLeft) {
-            drawRadialAdditive(leftLampLX, leftLampLY - 1.5, 10, amberColor);
+            drawRadialAdditive(frontTurnLX, -frontTurnLY, 8, amberColor);
             drawRadialAdditive(rearLeftLX, rearLeftLY - 1.5, 10, amberColor);
           }
           if (isRight) {
-            drawRadialAdditive(rightLampLX, rightLampLY + 1.5, 10, amberColor);
+            drawRadialAdditive(frontTurnLX, frontTurnLY, 8, amberColor);
             drawRadialAdditive(rearRightLX, rearRightLY + 1.5, 10, amberColor);
           }
         }
@@ -6891,7 +8985,8 @@ export class GameRenderer {
       const inter = world.intersections.find((i) => i.id === prop.intersectionId);
       if (!inter) continue;
 
-      const phase = inter.phases[inter.currentPhaseIndex];
+      const phase = inter.phases?.[inter.currentPhaseIndex] || inter.phases?.[0];
+      if (!phase) continue;
       let lightColor = '';
       if (prop.direction === 'north' || prop.direction === 'south') {
         const state = phase.nsState;

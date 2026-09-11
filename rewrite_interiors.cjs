@@ -217,9 +217,52 @@ export function generateBuildingLayout(bld: Building, floor: number): BuildingLa
     furniture.push({ type: 'cooler', x: W - 20, y: 20, width: 12, height: 12, angle: 0, color: '#38bdf8' });
     furniture.push({ type: 'cooler', x: W - 20, y: 40, width: 12, height: 12, angle: 0, color: '#38bdf8' });
   } else if (bld.type === 'car_dealership') {
-    rooms.push({ name: 'Автосалон', x: 6, y: 6, width: W - 12, height: H - 12, color: '#e2e8f0' });
-    furniture.push({ type: 'carpet', x: 12, y: 12, width: 40, height: 30, angle: 0, color: '#1e293b' }); // display pad
-    furniture.push({ type: 'desk_reception', x: W - 40, y: 20, width: 30, height: 10, angle: 0, color: '#0284c7' });
+    rooms.push({ name: 'Главный Шоурум & Экспозиция Авто', x: 6, y: 6, width: 236, height: H - 12, color: '#f1f5f9' });
+    rooms.push({ name: 'Отдел Продаж & Кредитования', x: 242, y: 6, width: W - 248, height: H - 12, color: '#e2e8f0' });
+    
+    // Dividing inner wall with 44px wide entrance
+    walls.push({ x1: 242, y1: 6, x2: 242, y2: 70 });
+    walls.push({ x1: 242, y1: 114, x2: 242, y2: H - 6 });
+
+    // Showroom display cars & podiums
+    furniture.push({ type: 'car_podium', x: 26, y: 44, width: 68, height: 38, angle: 0, color: '#dc2626' });
+    furniture.push({ type: 'car_podium', x: 138, y: 44, width: 68, height: 38, angle: 0, color: '#2563eb' });
+    furniture.push({ type: 'tv', x: 44, y: 10, width: 32, height: 8, angle: 0, color: '#0284c7' });
+    furniture.push({ type: 'tv', x: 156, y: 10, width: 32, height: 8, angle: 0, color: '#0284c7' });
+
+    // Reception desk
+    furniture.push({ type: 'desk_reception', x: 104, y: 110, width: 64, height: 18, angle: 0, color: '#0284c7' });
+    furniture.push({ type: 'chair', x: 120, y: 132, width: 12, height: 12, angle: 0, color: '#334155' });
+    furniture.push({ type: 'chair', x: 140, y: 132, width: 12, height: 12, angle: 0, color: '#334155' });
+    furniture.push({ type: 'computer', x: 114, y: 112, width: 12, height: 8, angle: 0, color: '#475569' });
+    furniture.push({ type: 'computer', x: 146, y: 112, width: 12, height: 8, angle: 0, color: '#475569' });
+
+    // Lounge
+    furniture.push({ type: 'sofa', x: 14, y: 98, width: 44, height: 18, angle: 0, color: '#1e293b' });
+    furniture.push({ type: 'table', x: 16, y: 125, width: 38, height: 16, angle: 0, color: '#475569' });
+    furniture.push({ type: 'sofa', x: 14, y: 149, width: 44, height: 18, angle: 0, color: '#1e293b' });
+    furniture.push({ type: 'cooler', x: 68, y: 150, width: 14, height: 14, angle: 0, color: '#38bdf8' });
+    furniture.push({ type: 'vending_machine', x: 68, y: 98, width: 16, height: 18, angle: 0, color: '#ea580c' });
+    furniture.push({ type: 'plant', x: 10, y: 12, width: 14, height: 14, angle: 0, color: '#15803d' });
+    furniture.push({ type: 'plant', x: 218, y: 12, width: 14, height: 14, angle: 0, color: '#15803d' });
+
+    // Sales office
+    furniture.push({ type: 'desk', x: 256, y: 28, width: 40, height: 20, angle: 0, color: '#1e293b' });
+    furniture.push({ type: 'chair', x: 270, y: 12, width: 12, height: 12, angle: 0, color: '#0284c7' });
+    furniture.push({ type: 'chair', x: 260, y: 52, width: 12, height: 12, angle: 0, color: '#64748b' });
+    furniture.push({ type: 'chair', x: 280, y: 52, width: 12, height: 12, angle: 0, color: '#64748b' });
+    furniture.push({ type: 'computer', x: 270, y: 30, width: 12, height: 8, angle: 0, color: '#475569' });
+
+    furniture.push({ type: 'desk', x: 256, y: 118, width: 40, height: 20, angle: 0, color: '#1e293b' });
+    furniture.push({ type: 'chair', x: 270, y: 142, width: 12, height: 12, angle: 0, color: '#0284c7' });
+    furniture.push({ type: 'chair', x: 260, y: 102, width: 12, height: 12, angle: 0, color: '#64748b' });
+    furniture.push({ type: 'chair', x: 280, y: 102, width: 12, height: 12, angle: 0, color: '#64748b' });
+    furniture.push({ type: 'computer', x: 270, y: 120, width: 12, height: 8, angle: 0, color: '#475569' });
+
+    furniture.push({ type: 'file_cabinet', x: 314, y: 22, width: 16, height: 18, angle: 0, color: '#475569' });
+    furniture.push({ type: 'shelf', x: 314, y: 118, width: 16, height: 24, angle: 0, color: '#334155' });
+    furniture.push({ type: 'atm', x: 248, y: 76, width: 14, height: 14, angle: 0, color: '#16a34a' });
+    furniture.push({ type: 'plant', x: 314, y: 74, width: 14, height: 14, angle: 0, color: '#15803d' });
   } else if (bld.type === 'sports_stadium') {
     rooms.push({ name: 'Спортивный Зал', x: 6, y: 6, width: W - 12, height: H - 12, color: '#d97706' }); // wood floor
     furniture.push({ type: 'carpet', x: W/2 - 30, y: H/2 - 20, width: 60, height: 40, angle: 0, color: '#15803d' }); // field/mat
