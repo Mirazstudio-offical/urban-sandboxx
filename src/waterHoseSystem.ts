@@ -11,7 +11,16 @@ export const WATER_HOSE_INTERACTION_DIST = 55; // Distance to pick up / return h
  */
 export function createWaterHose(vehicle: Vehicle): HeldWaterHose {
   const anchor = getVehicleWaterHoseAnchor(vehicle) || { x: vehicle.x, y: vehicle.y };
-  const segLength = WATER_HOSE_MAX_LENGTH / (WATER_HOSE_NUM_SEGMENTS - 1);
+  
+  // Dynamic realistic lengths for different vehicle scales:
+  // - truck_water: 120 px (long high-pressure fire hose)
+  // - trailer_barrel: 75 px (medium water discharge hose)
+  // - trailer_vacuum: 55 px (thick, heavy, corrugated suction hose)
+  const isVacuum = vehicle.type === 'trailer_vacuum';
+  const isBarrel = vehicle.type === 'trailer_barrel';
+  const maxLength = isVacuum ? 55 : (isBarrel ? 75 : WATER_HOSE_MAX_LENGTH);
+  
+  const segLength = maxLength / (WATER_HOSE_NUM_SEGMENTS - 1);
   const segments: HoseSegmentNode[] = [];
 
   for (let i = 0; i < WATER_HOSE_NUM_SEGMENTS; i++) {
@@ -28,8 +37,9 @@ export function createWaterHose(vehicle: Vehicle): HeldWaterHose {
   }
 
   // Realistic micro-leak puncture holes along the hose length
-  // 2 to 3 micro-holes at random intermediate segments
-  const leaks: HoseLeakPoint[] = [
+  // 2 to 3 micro-holes at random intermediate segments.
+  // Vacuum hoses operate under negative pressure (suction) so they do NOT leak outwards!
+  const leaks: HoseLeakPoint[] = isVacuum ? [] : [
     {
       segmentIndex: Math.floor(4 + Math.random() * 4), // Middle-first third
       flowIntensity: 0.45 + Math.random() * 0.45
@@ -42,8 +52,8 @@ export function createWaterHose(vehicle: Vehicle): HeldWaterHose {
 
   return {
     vehicleId: vehicle.id,
-    sourceType: vehicle.type as 'truck_water' | 'trailer_barrel',
-    maxLength: WATER_HOSE_MAX_LENGTH,
+    sourceType: vehicle.type as 'truck_water' | 'trailer_barrel' | 'trailer_vacuum',
+    maxLength,
     segments,
     segmentLength: segLength,
     leaks,
@@ -60,7 +70,7 @@ export function getNearbyWaterVehicle(playerX: number, playerY: number, world: G
   let closest: { vehicle: Vehicle; dist: number } | null = null;
 
   for (const veh of world.vehicles) {
-    if (veh.type !== 'truck_water' && veh.type !== 'trailer_barrel') continue;
+    if (veh.type !== 'truck_water' && veh.type !== 'trailer_barrel' && veh.type !== 'trailer_vacuum') continue;
     ensureVehicleFluidTank(veh);
     const anchor = getVehicleWaterHoseAnchor(veh);
     if (!anchor) continue;
@@ -225,39 +235,48 @@ export function updateWaterHosePhysics(player: Player, world: GameWorld, dt: num
   const currentWater = tank ? (tank.currentVolume ?? tank.currentAmount ?? 0) : 0;
   const hasWater = currentWater > 0;
 
-  // Check if water pressure pump is actively powered by vehicle engine (e.g. truck_water with running motor)
-  const isPumpActive = veh.type === 'truck_water' && !!veh.engineState?.engineRunning;
-  hose.isPressurized = isPumpActive;
+  // Pump pressure calculation (КОМ - Коробка Отбора Мощности + Обороты двигателя)
+  const isEngineRunning = !!veh.engineState?.engineRunning;
+  const isPtoActive = !!veh.isPtoActive || !!veh.isWashingNozzlesActive;
+  const isPumpPowered = isEngineRunning && isPtoActive;
+
+  const rpm = veh.engineState?.engineRPM || 800;
+  const rpmRatio = Math.min(1.0, Math.max(0, (rpm - 750) / 1850));
+  // At idle (800 RPM): ~3.8 bar (factor 0.55). Under throttle (2600+ RPM): ~7.2 bar (factor 1.20)
+  const pressureFactor = isPumpPowered ? (0.55 + rpmRatio * 0.65) : 0.0;
+  const barPressure = isPumpPowered ? (3.8 + rpmRatio * 3.4) : 0.3; // BAR
+
+  hose.isPressurized = isPumpPowered;
 
   // Check if player wants to spray (LMB or active key)
   const wantsToSpray = isMouseDown && hasWater && !player.isInVehicle;
   hose.isSpraying = wantsToSpray;
 
   if (wantsToSpray && tank) {
-    // Water consumption:
-    // - Under high pressure pump (engine running on truck_water): ~5.2 L/s (fire-fighting hose)
-    // - Under natural gravity flow (trailer_barrel or engine off): ~0.75 L/s (gentle garden/gravity trickle)
-    const sprayRate = isPumpActive ? 5.2 : 0.75; // L/s
+    // Water consumption scales with pump pressure:
+    // - High pressure (КОМ ВКЛ + подгазовка): ~5.2 - 7.5 L/s (пожарно-поливочный ствол)
+    // - Gravity flow (КОМ ВЫКЛ или мотор заглушен): ~0.75 L/s (самотёк под ноги)
+    const sprayRate = isPumpPowered ? (3.8 + pressureFactor * 3.0) : 0.75; // L/s
     const consumed = Math.min(currentWater, sprayRate * dt);
     tank.currentVolume = Math.max(0, currentWater - consumed);
     tank.currentAmount = tank.currentVolume;
 
-    // Audio looping
+    // Audio looping (sound frequency scales with RPM and pressure)
     hose.sprayCooldown = (hose.sprayCooldown || 0) + dt;
-    const soundInterval = isPumpActive ? 0.12 : 0.22;
+    const soundInterval = isPumpPowered ? Math.max(0.08, 0.14 - rpmRatio * 0.05) : 0.22;
     if (hose.sprayCooldown >= soundInterval) {
       hose.sprayCooldown = 0;
       sound.playWaterSpray();
     }
 
     // Water stream projection (High pressure jet vs gentle gravity arc)
-    spawnWaterStream(player, handX, handY, world, dt, isPumpActive);
+    spawnWaterStream(player, handX, handY, world, dt, isPumpPowered, pressureFactor);
   }
 
   // 6. Micro-hole leaks along the hose body (дырочки со струйками и каплями)
-  if (hasWater) {
-    // When spraying with pump, pressure is high -> leaks squirt further. Under gravity or idle, they gently drip.
-    const isHighPressure = (wantsToSpray && isPumpActive) || (tank?.drainValveOpen && isPumpActive);
+  if (hasWater && hose.sourceType !== 'trailer_vacuum') {
+    // When spraying under high pump pressure, leaks squirt further sideways.
+    const isHighPressure = (wantsToSpray && isPumpPowered) || (tank?.drainValveOpen && isPumpPowered);
     const leakChance = isHighPressure ? 0.85 : (wantsToSpray ? 0.50 : 0.25);
 
     if (Math.random() < leakChance) {
@@ -275,7 +294,7 @@ export function updateWaterHosePhysics(player: Player, world: GameWorld, dt: num
 
         // Squirt out droplets
         if (world.particles && world.particles.length < 500) {
-          const squirtSpeed = isHighPressure ? (25 + Math.random() * 35) * leak.flowIntensity : (4 + Math.random() * 6);
+          const squirtSpeed = isHighPressure ? (20 + pressureFactor * 25 + Math.random() * 20) * leak.flowIntensity : (4 + Math.random() * 6);
           const side = Math.random() < 0.5 ? 1 : -1;
           world.particles.push({
             x: segNode.x + (Math.random() - 0.5) * 2,
@@ -303,21 +322,23 @@ export function updateWaterHosePhysics(player: Player, world: GameWorld, dt: num
 /**
  * Spawns water stream particles, handles extinguishing fires and realistic puddle wetting.
  */
-function spawnWaterStream(player: Player, muzzleX: number, muzzleY: number, world: GameWorld, dt: number, isPressurized: boolean) {
+function spawnWaterStream(player: Player, muzzleX: number, muzzleY: number, world: GameWorld, dt: number, isPressurized: boolean, pressureFactor: number = 1.0) {
   const aimAngle = player.angle;
   const cosAim = Math.cos(aimAngle);
   const sinAim = Math.sin(aimAngle);
+  let extinguishedAnyFire = false;
 
   // Stream reach and velocity:
-  // - Pressurized pump: ~135 px (~14 meters) straight jet
-  // - Gravity trickle: ~34 px (~3.5 meters) drooping arc
-  const streamReach = isPressurized ? 135 : 34;
-  const numParticles = isPressurized ? 4 : 2;
+  // - Pressurized pump with RPM подгазовка: ~90 px (idle) up to ~165 px (~16.5 meters) high pressure jet!
+  // - Gravity trickle (КОМ ВЫКЛ / мотор заглушен): ~32 px (~3.2 meters) drooping arc
+  const streamReach = isPressurized ? (55 + pressureFactor * 90) : 32;
+  const numParticles = isPressurized ? Math.round(3 + pressureFactor * 2) : 2;
 
   for (let i = 0; i < numParticles; i++) {
-    const spread = (Math.random() - 0.5) * (isPressurized ? 0.16 : 0.28);
+    const spread = (Math.random() - 0.5) * (isPressurized ? (0.18 - pressureFactor * 0.05) : 0.28);
     const pAngle = aimAngle + spread;
-    const speed = isPressurized ? (280 + Math.random() * 120) : (75 + Math.random() * 40);
+    const baseSpeed = isPressurized ? (180 + pressureFactor * 320) : (70 + Math.random() * 35);
+    const speed = baseSpeed + (Math.random() - 0.5) * 40;
 
     if (world.particles && world.particles.length < 500) {
       world.particles.push({
@@ -325,24 +346,23 @@ function spawnWaterStream(player: Player, muzzleX: number, muzzleY: number, worl
         y: muzzleY + Math.sin(pAngle) * 3,
         vx: Math.cos(pAngle) * speed + player.vx * 0.2,
         vy: Math.sin(pAngle) * speed + player.vy * 0.2 + (isPressurized ? 0 : 25), // gravity droop for trickle
-        radius: isPressurized ? (1.8 + Math.random() * 2.2) : (1.4 + Math.random() * 1.4),
-        color: Math.random() < 0.6 ? '#e0f2fe' : (Math.random() < 0.5 ? '#38bdf8' : '#ffffff'),
+        radius: isPressurized ? (1.8 + pressureFactor * 1.2 + Math.random() * 1.5) : (1.4 + Math.random() * 1.4),
+        color: Math.random() < 0.65 ? '#e0f2fe' : (Math.random() < 0.5 ? '#38bdf8' : '#ffffff'),
         alpha: 0.85,
         life: 0,
-        maxLife: isPressurized ? (0.35 + Math.random() * 0.12) : (0.28 + Math.random() * 0.1),
-        type: 'debris'
+        maxLife: isPressurized ? (0.28 + pressureFactor * 0.12) : 0.25,
+        type: 'water_spray'
       });
     }
   }
 
   // Raycast/Impact point along stream
-  const impactDist = streamReach * (0.70 + Math.random() * 0.30);
-  const impactX = muzzleX + cosAim * impactDist + (Math.random() - 0.5) * 8;
-  const impactY = muzzleY + sinAim * impactDist + (Math.random() - 0.5) * 8;
+  const impactDist = streamReach * (0.75 + Math.random() * 0.25);
+  const impactX = muzzleX + cosAim * impactDist + (Math.random() - 0.5) * (isPressurized ? 12 : 6);
+  const impactY = muzzleY + sinAim * impactDist + (Math.random() - 0.5) * (isPressurized ? 12 : 6);
 
   // 1. Extinguish flaming ground stains in the target area & create water puddles
-  let extinguishedAnyFire = false;
-  const extinguishRadius = isPressurized ? 38 : 18;
+  const extinguishRadius = isPressurized ? (25 + pressureFactor * 25) : 16;
   if (world.stains) {
     for (const st of world.stains) {
       const dx = st.x - impactX;
@@ -352,7 +372,6 @@ function spawnWaterStream(player: Player, muzzleX: number, muzzleY: number, worl
         if (st.onFire) {
           st.onFire = false;
           st.fireIntensity = 0;
-          extinguishedAnyFire = true;
         }
       }
     }

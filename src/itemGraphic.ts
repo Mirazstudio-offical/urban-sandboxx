@@ -5,6 +5,9 @@ import { drawMedicalItem } from './graphics/medicalGraphics';
 import { drawGearToolItem } from './graphics/gearToolGraphics';
 import { drawLeftoverItem } from './graphics/leftoverGraphics';
 import { drawClothingItem } from './graphics/clothingGraphics';
+import { drawSmartphoneItem } from './graphics/smartphoneGraphics';
+import { drawFurnitureItem } from './graphics/furnitureGraphics';
+import { drawKitchenAndValuableItem } from './graphics/kitchenAndValuablesGraphics';
 import { drawShadow } from './graphics/itemGraphicShared';
 
 export function drawItemModel2D(
@@ -12,7 +15,8 @@ export function drawItemModel2D(
   itemId: string,
   centerX: number = 0,
   centerY: number = 0,
-  size: number = 24
+  size: number = 24,
+  item?: any
 ) {
   ctx.save();
   ctx.translate(centerX, centerY);
@@ -21,10 +25,13 @@ export function drawItemModel2D(
   ctx.scale(scale, scale);
 
   const drawn =
+    drawSmartphoneItem(ctx, itemId) ||
     drawFoodItem(ctx, itemId) ||
     drawDrinkItem(ctx, itemId) ||
     drawMedicalItem(ctx, itemId) ||
-    drawGearToolItem(ctx, itemId) ||
+    drawGearToolItem(ctx, itemId, item) ||
+    drawFurnitureItem(ctx, itemId) ||
+    drawKitchenAndValuableItem(ctx, itemId) ||
     drawClothingItem(ctx, itemId) ||
     drawLeftoverItem(ctx, itemId);
 

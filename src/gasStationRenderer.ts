@@ -107,7 +107,7 @@ export class GasStationRenderer {
     ctx.arc(5070, blockBottom, 8, 0, Math.PI, false);
     ctx.stroke();
 
-    // Entrance Signboard Post (Green "ВЪЕЗД ➔" on post near West entry, shifted slightly North on the lawn)
+    // Entrance Signboard Post (Green "ВЪЕЗД >" on post near West entry, shifted slightly North on the lawn)
     ctx.fillStyle = '#1e293b';
     ctx.fillRect(4875, 4912, 4, 14); // post
     ctx.fillStyle = '#16a34a';
@@ -119,9 +119,9 @@ export class GasStationRenderer {
     ctx.fillStyle = '#ffffff';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText('ВЪЕЗД ➔', 4877, 4908);
+    ctx.fillText('ВЪЕЗД >', 4877, 4908);
 
-    // Exit Signboard Post (Amber "➔ ВЫЕЗД" on post near South exit)
+    // Exit Signboard Post (Amber "> ВЫЕЗД" on post near South exit)
     ctx.fillStyle = '#1e293b';
     ctx.fillRect(5085, 5510, 4, 14);
     ctx.fillStyle = '#d97706';
@@ -129,7 +129,7 @@ export class GasStationRenderer {
     ctx.strokeStyle = '#ffffff';
     ctx.strokeRect(5070, 5522, 34, 12);
     ctx.fillStyle = '#ffffff';
-    ctx.fillText('➔ ВЫЕЗД', 5087, 5528);
+    ctx.fillText('> ВЫЕЗД', 5087, 5528);
 
     // 3. Reinforced Concrete Fuel Island Pad (under canopy)
     const canopyX = GAS_STATION_CONFIG.canopyX;
@@ -259,7 +259,7 @@ export class GasStationRenderer {
         ctx.fillRect(px + 6, parkY + 18, spotW - 12, 20);
         ctx.fillStyle = '#ffffff';
         ctx.font = 'bold 11px sans-serif';
-        ctx.fillText('♿', px + spotW / 2, parkY + 28);
+        ctx.fillText('P', px + spotW / 2, parkY + 28);
       }
     }
 
@@ -1462,15 +1462,16 @@ export class GasStationRenderer {
     const canopyW = GAS_STATION_CONFIG.canopyW;
     const canopyH = GAS_STATION_CONFIG.canopyH;
 
-    // 1. Under-Canopy Floodlight Cutout (Bright overhead light under canopy)
+    // 1. Under-Canopy Floodlight Cutout (Bright overhead light under canopy with soft perimeter)
     const cCenterX = canopyX + canopyW / 2;
     const cCenterY = canopyY + canopyH / 2;
-    const canopyRadius = Math.max(canopyW, canopyH) * 0.82;
+    const canopyRadius = Math.max(canopyW, canopyH) * 0.85;
 
     const cGrad = lCtx.createRadialGradient(cCenterX, cCenterY, 30, cCenterX, cCenterY, canopyRadius);
     cGrad.addColorStop(0, 'rgba(0, 0, 0, 1.0)');
-    cGrad.addColorStop(0.6, 'rgba(0, 0, 0, 0.9)');
-    cGrad.addColorStop(0.85, 'rgba(0, 0, 0, 0.45)');
+    cGrad.addColorStop(0.35, 'rgba(0, 0, 0, 0.92)');
+    cGrad.addColorStop(0.65, 'rgba(0, 0, 0, 0.60)');
+    cGrad.addColorStop(0.85, 'rgba(0, 0, 0, 0.25)');
     cGrad.addColorStop(1.0, 'rgba(0, 0, 0, 0)');
 
     lCtx.fillStyle = cGrad;
@@ -1490,8 +1491,9 @@ export class GasStationRenderer {
 
     const shopGrad = lCtx.createRadialGradient(sCenterX, sCenterY, 20, sCenterX, sCenterY, shopRadius);
     shopGrad.addColorStop(0, 'rgba(0, 0, 0, 1.0)');
-    shopGrad.addColorStop(0.5, 'rgba(0, 0, 0, 0.85)');
-    shopGrad.addColorStop(0.85, 'rgba(0, 0, 0, 0.3)');
+    shopGrad.addColorStop(0.35, 'rgba(0, 0, 0, 0.82)');
+    shopGrad.addColorStop(0.7, 'rgba(0, 0, 0, 0.40)');
+    shopGrad.addColorStop(0.9, 'rgba(0, 0, 0, 0.12)');
     shopGrad.addColorStop(1.0, 'rgba(0, 0, 0, 0)');
 
     lCtx.fillStyle = shopGrad;
@@ -1505,8 +1507,9 @@ export class GasStationRenderer {
     const totemRadius = 85 * fogFactor;
 
     const totemGrad = lCtx.createRadialGradient(totemX, totemY, 4, totemX, totemY, totemRadius);
-    totemGrad.addColorStop(0, 'rgba(0, 0, 0, 1.0)');
-    totemGrad.addColorStop(0.5, 'rgba(0, 0, 0, 0.65)');
+    totemGrad.addColorStop(0, 'rgba(0, 0, 0, 0.95)');
+    totemGrad.addColorStop(0.4, 'rgba(0, 0, 0, 0.55)');
+    totemGrad.addColorStop(0.75, 'rgba(0, 0, 0, 0.18)');
     totemGrad.addColorStop(1.0, 'rgba(0, 0, 0, 0)');
 
     lCtx.fillStyle = totemGrad;
@@ -1521,7 +1524,9 @@ export class GasStationRenderer {
     ];
     for (const s of signs) {
       const sGrad = lCtx.createRadialGradient(s.x, s.y, 2, s.x, s.y, 45 * fogFactor);
-      sGrad.addColorStop(0, 'rgba(0, 0, 0, 0.95)');
+      sGrad.addColorStop(0, 'rgba(0, 0, 0, 0.90)');
+      sGrad.addColorStop(0.4, 'rgba(0, 0, 0, 0.45)');
+      sGrad.addColorStop(0.8, 'rgba(0, 0, 0, 0.12)');
       sGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
       lCtx.fillStyle = sGrad;
       lCtx.beginPath();
@@ -1537,8 +1542,10 @@ export class GasStationRenderer {
     for (const yL of yardLamps) {
       const yRadius = 120 * fogFactor;
       const yGrad = lCtx.createRadialGradient(yL.x, yL.y, 6, yL.x, yL.y, yRadius);
-      yGrad.addColorStop(0, 'rgba(0, 0, 0, 1.0)');
-      yGrad.addColorStop(0.5, 'rgba(0, 0, 0, 0.6)');
+      yGrad.addColorStop(0, 'rgba(0, 0, 0, 0.95)');
+      yGrad.addColorStop(0.3, 'rgba(0, 0, 0, 0.75)');
+      yGrad.addColorStop(0.6, 'rgba(0, 0, 0, 0.38)');
+      yGrad.addColorStop(0.85, 'rgba(0, 0, 0, 0.12)');
       yGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
       lCtx.fillStyle = yGrad;
       lCtx.beginPath();
@@ -1569,9 +1576,10 @@ export class GasStationRenderer {
     for (const lx of lightCols) {
       for (const ly of lightRows) {
         const spotRadius = 48 * fogFactor;
-        const spotGrad = ctx.createRadialGradient(lx, ly, 2, lx, ly, spotRadius);
-        spotGrad.addColorStop(0, `rgba(255, 255, 240, ${0.7 * nightAlpha})`);
-        spotGrad.addColorStop(0.4, `rgba(250, 240, 190, ${0.35 * nightAlpha})`);
+        const spotGrad = ctx.createRadialGradient(lx, ly, 1, lx, ly, spotRadius);
+        spotGrad.addColorStop(0, `rgba(255, 255, 240, ${0.28 * nightAlpha})`);
+        spotGrad.addColorStop(0.3, `rgba(250, 240, 190, ${0.12 * nightAlpha})`);
+        spotGrad.addColorStop(0.7, `rgba(250, 240, 190, ${0.04 * nightAlpha})`);
         spotGrad.addColorStop(1, 'rgba(250, 240, 190, 0)');
 
         ctx.fillStyle = spotGrad;
@@ -1582,18 +1590,18 @@ export class GasStationRenderer {
     }
 
     // 2. Canopy Fascia Neon Halo & Brand Signage Glow
-    ctx.strokeStyle = `rgba(34, 197, 94, ${0.65 * nightAlpha})`;
-    ctx.lineWidth = 6;
+    ctx.strokeStyle = `rgba(34, 197, 94, ${0.35 * nightAlpha})`;
+    ctx.lineWidth = 4;
     ctx.beginPath();
     ctx.roundRect(canopyX + 1, canopyY + 1, canopyW - 2, canopyH - 2, 6);
     ctx.stroke();
 
     ctx.font = '900 13px sans-serif';
-    ctx.fillStyle = `rgba(255, 255, 255, ${0.92 * nightAlpha})`;
+    ctx.fillStyle = `rgba(255, 255, 255, ${0.85 * nightAlpha})`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.shadowColor = '#22c55e';
-    ctx.shadowBlur = 18;
+    ctx.shadowColor = 'rgba(34, 197, 94, 0.4)';
+    ctx.shadowBlur = 10;
     ctx.fillText('НЕФТЬ • МАГИСТРАЛЬ  24/7', canopyX + canopyW / 2, canopyY + 20);
     ctx.fillText('APEX PETROL • DRIVE-THRU', canopyX + canopyW / 2, canopyY + canopyH - 18);
     ctx.shadowBlur = 0;
@@ -1604,8 +1612,9 @@ export class GasStationRenderer {
     const shopW = 210;
 
     const shopGlow = ctx.createRadialGradient(shopX + shopW / 2, shopY + 130, 10, shopX + shopW / 2, shopY + 130, 95 * fogFactor);
-    shopGlow.addColorStop(0, `rgba(254, 240, 138, ${0.6 * nightAlpha})`);
-    shopGlow.addColorStop(0.5, `rgba(251, 191, 36, ${0.28 * nightAlpha})`);
+    shopGlow.addColorStop(0, `rgba(254, 240, 138, ${0.25 * nightAlpha})`);
+    shopGlow.addColorStop(0.4, `rgba(251, 191, 36, ${0.09 * nightAlpha})`);
+    shopGlow.addColorStop(0.8, `rgba(251, 191, 36, ${0.02 * nightAlpha})`);
     shopGlow.addColorStop(1, 'rgba(251, 191, 36, 0)');
 
     ctx.fillStyle = shopGlow;
@@ -1618,8 +1627,8 @@ export class GasStationRenderer {
     const totemY = GAS_STATION_CONFIG.priceTotemY;
 
     const totemGlow = ctx.createRadialGradient(totemX, totemY, 2, totemX, totemY, 40 * fogFactor);
-    totemGlow.addColorStop(0, `rgba(34, 197, 94, ${0.85 * nightAlpha})`);
-    totemGlow.addColorStop(0.5, `rgba(234, 179, 8, ${0.4 * nightAlpha})`);
+    totemGlow.addColorStop(0, `rgba(34, 197, 94, ${0.35 * nightAlpha})`);
+    totemGlow.addColorStop(0.4, `rgba(234, 179, 8, ${0.12 * nightAlpha})`);
     totemGlow.addColorStop(1, 'rgba(0, 0, 0, 0)');
 
     ctx.fillStyle = totemGlow;
@@ -1635,8 +1644,9 @@ export class GasStationRenderer {
     for (const yL of yardLamps) {
       const poolRadius = 100 * fogFactor;
       const yPool = ctx.createRadialGradient(yL.x, yL.y, 4, yL.x, yL.y, poolRadius);
-      yPool.addColorStop(0, `rgba(255, 245, 200, ${0.55 * nightAlpha})`);
-      yPool.addColorStop(0.5, `rgba(250, 210, 120, ${0.22 * nightAlpha})`);
+      yPool.addColorStop(0, `rgba(255, 245, 200, ${0.22 * nightAlpha})`);
+      yPool.addColorStop(0.4, `rgba(250, 210, 120, ${0.08 * nightAlpha})`);
+      yPool.addColorStop(0.8, `rgba(250, 210, 120, ${0.02 * nightAlpha})`);
       yPool.addColorStop(1, 'rgba(250, 210, 120, 0)');
 
       ctx.fillStyle = yPool;

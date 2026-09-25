@@ -1,6 +1,7 @@
 import { Building, Player } from './types';
 import { sound } from './audio';
 import { renderInteriorFurniture } from './interiorFurnitureRenderer';
+import { getApartmentById, getCityApartments } from './propertySystem';
 
 export interface InteriorWall {
   x1: number;
@@ -55,7 +56,16 @@ export interface InteriorFurniture {
     | 'server_rack'
     | 'exam_table'
     | 'car_podium'
-    | 'lockers';
+    | 'lockers'
+    | 'stove'
+    | 'microwave'
+    | 'washing_machine'
+    | 'safe'
+    | 'dresser'
+    | 'coat_rack'
+    | 'mirror'
+    | 'bean_bag'
+    | 'floor_lamp';
   x: number; // relative X
   y: number; // relative Y
   width: number;
@@ -126,6 +136,7 @@ export function getBuildingFloorsCount(bld: Building): number {
     case 'suburban':
     case 'fire_station':
     case 'transit_hub':
+    case 'railway_station':
     case 'cultural_center':
       return 2;
     case 'shop':
@@ -155,7 +166,7 @@ export function createDefaultBuildingLayout(bld: Building, floor: number): Build
         width: W - 12,
         height: H - 12,
         color: '#1e293b',
-        floorStyle: bld.type.includes('residential') ? 'parquet' : 'tile'
+        floorStyle: (bld.type && bld.type.includes('residential')) ? 'parquet' : 'tile'
       }
     ],
     walls: [
@@ -174,7 +185,270 @@ export function createDefaultBuildingLayout(bld: Building, floor: number): Build
   };
 }
 
-export function getBuildingLayout(bld: Building, floor: number): BuildingLayout {
+export function createRealEstateAgencyLayout(): BuildingLayout {
+  return {
+    buildingId: 'bld_real_estate_agency_main',
+    floor: 0,
+    width: 220,
+    height: 140,
+    rooms: [
+      {
+        name: 'Главный Зал «ГлавНедвижимость»',
+        x: 10,
+        y: 10,
+        width: 200,
+        height: 120,
+        color: '#0f172a',
+        floorStyle: 'parquet'
+      },
+      {
+        name: 'Кабинет Нотариуса & Архив ЕГРН',
+        x: 10,
+        y: 10,
+        width: 70,
+        height: 55,
+        color: '#1e293b',
+        floorStyle: 'wood'
+      },
+      {
+        name: 'Переговорная VIP',
+        x: 140,
+        y: 10,
+        width: 70,
+        height: 55,
+        color: '#1e293b',
+        floorStyle: 'carpet'
+      }
+    ],
+    walls: [
+      { x1: 10, y1: 65, x2: 70, y2: 65 },
+      { x1: 70, y1: 10, x2: 70, y2: 65 },
+      { x1: 140, y1: 10, x2: 140, y2: 65 },
+      { x1: 140, y1: 65, x2: 200, y2: 65 }
+    ],
+    furniture: [
+      // Reception desk
+      { type: 'desk_reception', x: 85, y: 78, width: 50, height: 14, angle: 0, color: '#eab308' },
+      { type: 'computer', x: 95, y: 78, width: 8, height: 6, angle: 0, color: '#0f172a' },
+      { type: 'computer', x: 115, y: 78, width: 8, height: 6, angle: 0, color: '#0f172a' },
+      { type: 'chair', x: 98, y: 95, width: 8, height: 8, angle: 0, color: '#1e293b' },
+      { type: 'chair', x: 118, y: 95, width: 8, height: 8, angle: 0, color: '#1e293b' },
+      // Client waiting area
+      { type: 'sofa', x: 30, y: 85, width: 36, height: 16, angle: 0, color: '#0284c7' },
+      { type: 'table', x: 36, y: 105, width: 24, height: 12, angle: 0, color: '#475569' },
+      { type: 'plant', x: 15, y: 85, width: 10, height: 10, angle: 0, color: '#16a34a' },
+      { type: 'cooler', x: 15, y: 110, width: 8, height: 8, angle: 0, color: '#38bdf8' },
+      { type: 'atm', x: 188, y: 85, width: 10, height: 10, angle: 0, color: '#059669' },
+      // Notary cabinet
+      { type: 'desk', x: 18, y: 18, width: 32, height: 14, angle: 0, color: '#78350f' },
+      { type: 'chair', x: 28, y: 34, width: 8, height: 8, angle: 0, color: '#451a03' },
+      { type: 'file_cabinet', x: 52, y: 15, width: 14, height: 10, angle: 0, color: '#94a3b8' },
+      { type: 'bookshelf', x: 52, y: 30, width: 14, height: 10, angle: 0, color: '#475569' },
+      // VIP Meeting Room
+      { type: 'table', x: 150, y: 20, width: 44, height: 20, angle: 0, color: '#78350f' },
+      { type: 'chair', x: 155, y: 12, width: 7, height: 7, angle: 0, color: '#451a03' },
+      { type: 'chair', x: 175, y: 12, width: 7, height: 7, angle: 0, color: '#451a03' },
+      { type: 'chair', x: 155, y: 44, width: 7, height: 7, angle: 0, color: '#451a03' },
+      { type: 'chair', x: 175, y: 44, width: 7, height: 7, angle: 0, color: '#451a03' },
+      { type: 'plant', x: 195, y: 15, width: 10, height: 10, angle: 0, color: '#15803d' }
+    ],
+    exitZone: { x: 95, y: 118, width: 30, height: 16 },
+    stairsZone: { x: -100, y: -100, width: 0, height: 0 },
+    elevatorZone: { x: -100, y: -100, width: 0, height: 0 },
+    exits: [{ x: 95, y: 118, width: 30, height: 16 }],
+    stairs: [],
+    elevators: []
+  };
+}
+
+export function createRailwayStationLayout(bld: Building, floor: number): BuildingLayout {
+  const W = bld.width;
+  const H = bld.height;
+
+  if (floor === 1) {
+    return {
+      buildingId: bld.id,
+      floor: 1,
+      width: W,
+      height: H,
+      rooms: [
+        {
+          name: 'Диспетчерский центр управления движением СЦБ',
+          x: 10,
+          y: 10,
+          width: 140,
+          height: 90,
+          color: '#0f172a',
+          floorStyle: 'tile'
+        },
+        {
+          name: 'Кабинет Начальника Станции',
+          x: 160,
+          y: 10,
+          width: 70,
+          height: 90,
+          color: '#1e293b',
+          floorStyle: 'parquet'
+        },
+        {
+          name: 'Комната отдыха поездных бригад',
+          x: 240,
+          y: 10,
+          width: 70,
+          height: 90,
+          color: '#1e293b',
+          floorStyle: 'carpet'
+        }
+      ],
+      walls: [
+        { x1: 6, y1: 6, x2: W - 6, y2: 6 },
+        { x1: W - 6, y1: 6, x2: W - 6, y2: H - 6 },
+        { x1: W - 6, y1: H - 6, x2: 6, y2: H - 6 },
+        { x1: 6, y1: H - 6, x2: 6, y2: 6 },
+        { x1: 155, y1: 6, x2: 155, y2: H - 6 },
+        { x1: 235, y1: 6, x2: 235, y2: H - 6 }
+      ],
+      furniture: [
+        { type: 'desk', x: 40, y: 30, width: 45, height: 22, angle: 0, color: '#334155' },
+        { type: 'chair', x: 58, y: 56, width: 9, height: 9, angle: 0, color: '#0284c7' },
+        { type: 'file_cabinet', x: 15, y: 15, width: 25, height: 12, angle: 0, color: '#475569' },
+        { type: 'desk', x: 180, y: 40, width: 30, height: 18, angle: 0, color: '#78350f' },
+        { type: 'chair', x: 190, y: 62, width: 9, height: 9, angle: 0, color: '#9a3412' },
+        { type: 'safe', x: 215, y: 15, width: 12, height: 12, angle: 0, color: '#1e293b' },
+        { type: 'sofa', x: 255, y: 25, width: 40, height: 16, angle: 0, color: '#047857' },
+        { type: 'table', x: 265, y: 55, width: 22, height: 14, angle: 0, color: '#b45309' }
+      ],
+      exitZone: { x: -100, y: -100, width: 0, height: 0 },
+      stairsZone: { x: 145, y: 70, width: 22, height: 22 },
+      elevatorZone: { x: -100, y: -100, width: 0, height: 0 },
+      exits: [],
+      stairs: [{ x: 145, y: 70, width: 22, height: 22 }],
+      elevators: []
+    };
+  }
+
+  const exitNorth = { x: 148, y: 6, width: 26, height: 14 };
+  const exitSouth1 = { x: 80, y: H - 18, width: 26, height: 14 };
+  const exitSouth2 = { x: 214, y: H - 18, width: 26, height: 14 };
+
+  return {
+    buildingId: bld.id,
+    floor: 0,
+    width: W,
+    height: H,
+    rooms: [
+      {
+        name: 'Центральный Кассовый Вестибюль и Зал Ожидания',
+        x: 8,
+        y: 8,
+        width: W - 16,
+        height: H - 16,
+        color: '#0f172a',
+        floorStyle: 'tile'
+      },
+      {
+        name: 'Билетные кассы РЖД',
+        x: 12,
+        y: 12,
+        width: 70,
+        height: 42,
+        color: '#1e293b',
+        floorStyle: 'tile'
+      },
+      {
+        name: 'Камера хранения & Бюро находок',
+        x: 12,
+        y: 58,
+        width: 70,
+        height: 42,
+        color: '#1e293b',
+        floorStyle: 'tile'
+      },
+      {
+        name: 'Привокзальный буфет',
+        x: 238,
+        y: 12,
+        width: 70,
+        height: 42,
+        color: '#1e293b',
+        floorStyle: 'tile'
+      },
+      {
+        name: 'Линейный пункт полиции',
+        x: 238,
+        y: 58,
+        width: 70,
+        height: 42,
+        color: '#1e293b',
+        floorStyle: 'tile'
+      }
+    ],
+    walls: [
+      { x1: 6, y1: 6, x2: W - 6, y2: 6 },
+      { x1: W - 6, y1: 6, x2: W - 6, y2: H - 6 },
+      { x1: W - 6, y1: H - 6, x2: 6, y2: H - 6 },
+      { x1: 6, y1: H - 6, x2: 6, y2: 6 },
+      { x1: 84, y1: 6, x2: 84, y2: 48 },
+      { x1: 6, y1: 56, x2: 84, y2: 56 },
+      { x1: 236, y1: 6, x2: 236, y2: 48 },
+      { x1: 236, y1: 56, x2: W - 6, y2: 56 }
+    ],
+    furniture: [
+      { type: 'desk', x: 20, y: 22, width: 22, height: 12, angle: 0, color: '#dc2626' },
+      { type: 'desk', x: 50, y: 22, width: 22, height: 12, angle: 0, color: '#dc2626' },
+      { type: 'sofa', x: 105, y: 35, width: 34, height: 10, angle: 0, color: '#92400e' },
+      { type: 'sofa', x: 105, y: 55, width: 34, height: 10, angle: 0, color: '#92400e' },
+      { type: 'sofa', x: 180, y: 35, width: 34, height: 10, angle: 0, color: '#92400e' },
+      { type: 'sofa', x: 180, y: 55, width: 34, height: 10, angle: 0, color: '#92400e' },
+      { type: 'kitchen_counter', x: 245, y: 18, width: 45, height: 12, angle: 0, color: '#ca8a04' },
+      { type: 'table', x: 255, y: 36, width: 14, height: 14, angle: 0, color: '#78350f' },
+      { type: 'chair', x: 246, y: 39, width: 7, height: 7, angle: 0, color: '#451a03' },
+      { type: 'chair', x: 271, y: 39, width: 7, height: 7, angle: 0, color: '#451a03' },
+      { type: 'lockers', x: 20, y: 68, width: 28, height: 12, angle: 0, color: '#475569' },
+      { type: 'lockers', x: 50, y: 68, width: 26, height: 12, angle: 0, color: '#475569' },
+      { type: 'desk', x: 250, y: 68, width: 26, height: 14, angle: 0, color: '#1e3a8a' },
+      { type: 'chair', x: 258, y: 84, width: 8, height: 8, angle: 0, color: '#1e40af' },
+      { type: 'safe', x: 285, y: 68, width: 12, height: 12, angle: 0, color: '#0f172a' },
+      { type: 'plant', x: 92, y: 14, width: 10, height: 10, angle: 0, color: '#15803d' },
+      { type: 'plant', x: 220, y: 14, width: 10, height: 10, angle: 0, color: '#15803d' }
+    ],
+    exitZone: exitNorth,
+    stairsZone: { x: 145, y: 70, width: 22, height: 22 },
+    elevatorZone: { x: -100, y: -100, width: 0, height: 0 },
+    exits: [exitNorth, exitSouth1, exitSouth2],
+    stairs: [{ x: 145, y: 70, width: 22, height: 22 }],
+    elevators: []
+  };
+}
+
+export function getBuildingLayout(bld: Building, floor: number, aptId?: string | null): BuildingLayout {
+  if (aptId) {
+    const apt = getApartmentById(aptId);
+    if (apt && apt.layout) {
+      if (apt.dynamicFurniture && apt.dynamicFurniture.length > 0) {
+        const mappedDynamic: InteriorFurniture[] = apt.dynamicFurniture.map(df => ({
+          type: df.type as any,
+          x: df.x,
+          y: df.y,
+          width: df.width || 20,
+          height: df.height || 20,
+          angle: df.rotation || 0,
+          color: df.color || '#64748b'
+        }));
+        return {
+          ...apt.layout,
+          furniture: [...apt.layout.furniture, ...mappedDynamic]
+        };
+      }
+      return apt.layout;
+    }
+  }
+  if (bld.type === 'real_estate_agency') {
+    return createRealEstateAgencyLayout();
+  }
+  if (bld.type === 'railway_station') {
+    return createRailwayStationLayout(bld, floor);
+  }
   let raw: any = null;
   if (bld.interiors) {
     if (bld.interiors[floor]) raw = bld.interiors[floor];
@@ -237,6 +511,110 @@ export function getBuildingLayout(bld: Building, floor: number): BuildingLayout 
 
 // Backwards compatibility alias
 export const generateBuildingLayout = getBuildingLayout;
+
+export interface DoorSegment {
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
+  side: 'top' | 'bottom' | 'left' | 'right';
+}
+
+export function getApartmentDoorSegment(rm: InteriorRoom, walls: InteriorWall[]): DoorSegment | null {
+  const rx1 = rm.x;
+  const ry1 = rm.y;
+  const rx2 = rm.x + rm.width;
+  const ry2 = rm.y + rm.height;
+  const epsilon = 1.5;
+
+  // Let's check each of the 4 edges of the room rm.
+  // We want to find the edge that has wall segments but also has a gap.
+  
+  // Edge 1: Bottom edge (y = ry2)
+  const bottomWalls = walls.filter(w => Math.abs(w.y1 - ry2) < epsilon && Math.abs(w.y2 - ry2) < epsilon);
+  if (bottomWalls.length > 0) {
+    const segments = bottomWalls.map(w => ({ x1: Math.min(w.x1, w.x2), x2: Math.max(w.x1, w.x2) }))
+      .filter(s => s.x2 > rx1 && s.x1 < rx2)
+      .sort((a, b) => a.x1 - b.x1);
+    
+    let currentX = rx1;
+    for (const s of segments) {
+      if (s.x1 > currentX + 5) {
+        return { x1: currentX, y1: ry2, x2: s.x1, y2: ry2, side: 'bottom' };
+      }
+      currentX = Math.max(currentX, s.x2);
+    }
+    if (currentX < rx2 - 5) {
+      return { x1: currentX, y1: ry2, x2: rx2, y2: ry2, side: 'bottom' };
+    }
+  }
+
+  // Edge 2: Top edge (y = ry1)
+  const topWalls = walls.filter(w => Math.abs(w.y1 - ry1) < epsilon && Math.abs(w.y2 - ry1) < epsilon);
+  if (topWalls.length > 0) {
+    const segments = topWalls.map(w => ({ x1: Math.min(w.x1, w.x2), x2: Math.max(w.x1, w.x2) }))
+      .filter(s => s.x2 > rx1 && s.x1 < rx2)
+      .sort((a, b) => a.x1 - b.x1);
+    
+    let currentX = rx1;
+    for (const s of segments) {
+      if (s.x1 > currentX + 5) {
+        return { x1: currentX, y1: ry1, x2: s.x1, y2: ry1, side: 'top' };
+      }
+      currentX = Math.max(currentX, s.x2);
+    }
+    if (currentX < rx2 - 5) {
+      return { x1: currentX, y1: ry1, x2: rx2, y2: ry1, side: 'top' };
+    }
+  }
+
+  // Edge 3: Left edge (x = rx1)
+  const leftWalls = walls.filter(w => Math.abs(w.x1 - rx1) < epsilon && Math.abs(w.x2 - rx1) < epsilon);
+  if (leftWalls.length > 0) {
+    const segments = leftWalls.map(w => ({ y1: Math.min(w.y1, w.y2), y2: Math.max(w.y1, w.y2) }))
+      .filter(s => s.y2 > ry1 && s.y1 < ry2)
+      .sort((a, b) => a.y1 - b.y1);
+    
+    let currentY = ry1;
+    for (const s of segments) {
+      if (s.y1 > currentY + 5) {
+        return { x1: rx1, y1: currentY, x2: rx1, y2: s.y1, side: 'left' };
+      }
+      currentY = Math.max(currentY, s.y2);
+    }
+    if (currentY < ry2 - 5) {
+      return { x1: rx1, y1: currentY, x2: rx1, y2: ry2, side: 'left' };
+    }
+  }
+
+  // Edge 4: Right edge (x = rx2)
+  const rightWalls = walls.filter(w => Math.abs(w.x1 - rx2) < epsilon && Math.abs(w.x2 - rx2) < epsilon);
+  if (rightWalls.length > 0) {
+    const segments = rightWalls.map(w => ({ y1: Math.min(w.y1, w.y2), y2: Math.max(w.y1, w.y2) }))
+      .filter(s => s.y2 > ry1 && s.y1 < ry2)
+      .sort((a, b) => a.y1 - b.y1);
+    
+    let currentY = ry1;
+    for (const s of segments) {
+      if (s.y1 > currentY + 5) {
+        return { x1: rx2, y1: currentY, x2: rx2, y2: s.y1, side: 'right' };
+      }
+      currentY = Math.max(currentY, s.y2);
+    }
+    if (currentY < ry2 - 5) {
+      return { x1: rx2, y1: currentY, x2: rx2, y2: ry2, side: 'right' };
+    }
+  }
+
+  // Fallback: Default to a centered bottom door
+  return {
+    x1: rm.x + rm.width / 2 - 12,
+    y1: rm.y + rm.height,
+    x2: rm.x + rm.width / 2 + 12,
+    y2: rm.y + rm.height,
+    side: 'bottom'
+  };
+}
 
 export function constrainPlayerToInterior(
   player: Player,
@@ -318,6 +696,50 @@ export function constrainPlayerToInterior(
     }
   }
 
+  // D. Block entry to locked apartments on this floor inside multi-apartment buildings using Door-specific line collision
+  const floorApts = getCityApartments().filter(a => a.buildingId === bld.id && a.floor === (player.currentFloor || 0));
+  for (const apt of floorApts) {
+    if (apt.isLocked) {
+      const aptRoom = layout.rooms.find(rm => rm.name === `Кв. ${apt.apartmentNumber}` || rm.name === `Кв.${apt.apartmentNumber}`);
+      if (aptRoom) {
+        const door = getApartmentDoorSegment(aptRoom, layout.walls);
+        if (door) {
+          const x1 = door.x1;
+          const y1 = door.y1;
+          const x2 = door.x2;
+          const y2 = door.y2;
+
+          const dx = x2 - x1;
+          const dy = y2 - y1;
+          const lenSq = dx * dx + dy * dy;
+          let t = 0;
+          if (lenSq > 0) {
+            t = ((px - x1) * dx + (py - y1) * dy) / lenSq;
+            t = Math.max(0, Math.min(1, t));
+          }
+          const closestX = x1 + t * dx;
+          const closestY = y1 + t * dy;
+
+          const distDx = px - closestX;
+          const distDy = py - closestY;
+          const distSq = distDx * distDx + distDy * distDy;
+          const minDist = radius + 1.5;
+
+          if (distSq < minDist * minDist) {
+            const dist = Math.sqrt(distSq);
+            const overlap = minDist - dist;
+            if (dist > 0.001) {
+              px += (distDx / dist) * overlap;
+              py += (distDy / dist) * overlap;
+            } else {
+              px += minDist;
+            }
+          }
+        }
+      }
+    }
+  }
+
   // Map back to absolute world coordinates
   player.x = bld.x + px;
   player.y = bld.y + py;
@@ -325,6 +747,15 @@ export function constrainPlayerToInterior(
 
 // --- OFFSCREEN CANVAS CACHE FOR INTERIOR FLOORS & FURNITURE ---
 const interiorCanvasCache = new Map<string, HTMLCanvasElement>();
+const MAX_INTERIOR_CANVASES = 20;
+
+export function clearInteriorCanvasCache() {
+  for (const c of interiorCanvasCache.values()) {
+    c.width = 0;
+    c.height = 0;
+  }
+  interiorCanvasCache.clear();
+}
 
 function renderStaticInteriorLayout(
   ctx: CanvasRenderingContext2D,
@@ -672,9 +1103,21 @@ export function renderBuildingInterior(
   const isHospital = bld.type === 'hospital';
 
   // Render static floor & furniture from cached bitmap
-  const cacheKey = `${bld.id}_${(bld as any).currentFloor ?? 0}_${bld.width}_${bld.height}_${layout.rooms?.length || 0}_${layout.furniture?.length || 0}`;
+  const furnAnglesSum = layout.furniture?.reduce((acc, f) => acc + (f.angle || 0), 0) || 0;
+  const cacheKey = `${bld.id}_${(bld as any).currentFloor ?? 0}_${bld.width}_${bld.height}_${layout.rooms?.length || 0}_${layout.furniture?.length || 0}_${furnAnglesSum.toFixed(2)}`;
   let cachedCanvas = interiorCanvasCache.get(cacheKey);
   if (!cachedCanvas && typeof document !== 'undefined') {
+    if (interiorCanvasCache.size >= MAX_INTERIOR_CANVASES) {
+      const firstKey = interiorCanvasCache.keys().next().value;
+      if (firstKey !== undefined) {
+        const oldC = interiorCanvasCache.get(firstKey);
+        if (oldC) {
+          oldC.width = 0;
+          oldC.height = 0;
+        }
+        interiorCanvasCache.delete(firstKey);
+      }
+    }
     cachedCanvas = document.createElement('canvas');
     cachedCanvas.width = bld.width;
     cachedCanvas.height = bld.height;
@@ -683,6 +1126,10 @@ export function renderBuildingInterior(
       renderStaticInteriorLayout(cCtx, bld, layout, windows, isHospital);
       interiorCanvasCache.set(cacheKey, cachedCanvas);
     }
+  } else if (cachedCanvas) {
+    // Refresh LRU order
+    interiorCanvasCache.delete(cacheKey);
+    interiorCanvasCache.set(cacheKey, cachedCanvas);
   }
 
   if (cachedCanvas) {
@@ -815,6 +1262,68 @@ export function renderBuildingInterior(
         ctx.beginPath();
         ctx.arc(lt.x, lt.y, 1.4, 0, Math.PI * 2);
         ctx.fill();
+      }
+    }
+  }
+
+  // Draw physical doors dynamically
+  if (!player.isInsideApartment) {
+    const floorApts = getCityApartments().filter(a => a.buildingId === bld.id && a.floor === (player.currentFloor || 0));
+    for (const apt of floorApts) {
+      const rm = layout.rooms?.find(r => r.name === `Кв. ${apt.apartmentNumber}` || r.name === `Кв.${apt.apartmentNumber}`);
+      if (rm) {
+        const door = getApartmentDoorSegment(rm, layout.walls);
+        if (door) {
+          ctx.save();
+          
+          if (apt.isLocked) {
+            // Closed / Locked Door: Draw a thick solid wooden-brown line
+            ctx.strokeStyle = '#78350f'; // Dark wood
+            ctx.lineWidth = 3.5;
+            ctx.beginPath();
+            ctx.moveTo(door.x1, door.y1);
+            ctx.lineTo(door.x2, door.y2);
+            ctx.stroke();
+
+            // Draw a shiny brass door lock / handle
+            const cx = (door.x1 + door.x2) / 2;
+            const cy = (door.y1 + door.y2) / 2;
+            ctx.fillStyle = '#eab308'; // Gold / Brass
+            ctx.beginPath();
+            ctx.arc(cx, cy, 1.8, 0, Math.PI * 2);
+            ctx.fill();
+
+            // A tiny red security dot to indicate locked
+            ctx.fillStyle = '#ef4444';
+            ctx.beginPath();
+            ctx.arc(cx, cy, 0.8, 0, Math.PI * 2);
+            ctx.fill();
+          } else {
+            // Open Door: Draw a door swung open at 90 degrees
+            ctx.strokeStyle = '#a16207'; // Medium wood
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+
+            // Swing angle (-Math.PI / 2.5) from point 1 to indicate swing direction
+            const angle = -Math.PI / 2.5;
+            const len = Math.hypot(door.x2 - door.x1, door.y2 - door.y1);
+            const baseAngle = Math.atan2(door.y2 - door.y1, door.x2 - door.x1);
+            const dx = Math.cos(baseAngle + angle) * len;
+            const dy = Math.sin(baseAngle + angle) * len;
+
+            ctx.moveTo(door.x1, door.y1);
+            ctx.lineTo(door.x1 + dx, door.y1 + dy);
+            ctx.stroke();
+
+            // Draw thin grey swing trajectory arc
+            ctx.strokeStyle = 'rgba(148, 163, 184, 0.25)';
+            ctx.lineWidth = 0.5;
+            ctx.beginPath();
+            ctx.arc(door.x1, door.y1, len, baseAngle, baseAngle + angle, angle < 0);
+            ctx.stroke();
+          }
+          ctx.restore();
+        }
       }
     }
   }

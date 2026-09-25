@@ -13,7 +13,7 @@ import { sound } from './audio';
 export interface MedicationConfig {
   itemId: string;
   nameRu: string;
-  type: 'analgesic' | 'antibiotic' | 'stimulant' | 'antiseptic' | 'sedative';
+  type: 'analgesic'| 'antibiotic'| 'stimulant'| 'antiseptic'| 'sedative';
   absorptionDuration: number;
   peakDuration: number;
   actionDuration: number;
@@ -34,7 +34,7 @@ export const MEDICATION_CONFIGS: Record<string, MedicationConfig> = {
   },
   diclofenac_gel: {
     itemId: 'diclofenac_gel',
-    nameRu: 'Гель "Диклофенак" (Мазь от боли)',
+    nameRu: 'Гель "Диклофенак"(Мазь от боли)',
     type: 'analgesic',
     absorptionDuration: 10,
     peakDuration: 15,
@@ -157,9 +157,8 @@ export function administerMedication(player: Player, itemId: string) {
     }
     addPlayerNotification(
       player,
-      `💊 Принята повторная доза: ${config.nameRu}. Действие усилено.`,
-      'heal'
-    );
+      `Принята повторная доза: ${config.nameRu}. Действие усилено.`,
+      'heal');
     return;
   }
 
@@ -183,9 +182,8 @@ export function administerMedication(player: Player, itemId: string) {
   bs.activeMedications.push(newMed);
   addPlayerNotification(
     player,
-    `💊 Принято: ${config.nameRu}. Начинается медленное всасывание (~${config.absorptionDuration}с)...`,
-    'heal'
-  );
+    `Принято: ${config.nameRu}. Начинается медленное всасывание (~${config.absorptionDuration}с)...`,
+    'heal');
 }
 
 /**
@@ -207,7 +205,7 @@ export function applySplint(player: Player, targetInjuryId?: string): boolean {
       fracture.treatedTimer = 0;
       fracture.pain = Math.round(fracture.pain ? fracture.pain * 0.45 : 25);
       sound.playUseItem();
-      addPlayerNotification(player, `🪵 Наложена шина на ${getPartNameRu(key)}. Перелом зафиксирован!`, 'heal');
+      addPlayerNotification(player, `Наложена шина на ${getPartNameRu(key)}. Перелом зафиксирован!`, 'heal');
       return true;
     }
   }
@@ -226,16 +224,16 @@ export function applyPanthenol(player: Player, targetInjuryId?: string): boolean
     const key = k as keyof BodyPartsMap;
     const part = parts[key];
     const injuryToTreat = targetInjuryId
-      ? part.find(i => i.id === targetInjuryId && !i.treated && (i.type === 'burn' || i.type === 'abrasion'))
-      : part.find(i => !i.treated && (i.type === 'burn' || i.type === 'abrasion'));
+      ? part.find(i => i.id === targetInjuryId && !i.treated && (i.type === 'burn'|| i.type === 'abrasion'))
+      : part.find(i => !i.treated && (i.type === 'burn'|| i.type === 'abrasion'));
 
     if (injuryToTreat) {
       injuryToTreat.treated = true;
       injuryToTreat.treatedTimer = 0;
       injuryToTreat.pain = Math.round((injuryToTreat.pain || 20) * 0.35); // Rapid cooling & pain relief
       sound.playUseItem();
-      const degText = injuryToTreat.burnDegree ? ` (${injuryToTreat.burnDegree}-я степень)` : '';
-      addPlayerNotification(player, `🧴 Нанесен Пантенол на ${getPartNameRu(key)}${degText}. Охлаждающая пена снимает жжение и отек!`, 'heal');
+      const degText = injuryToTreat.burnDegree ? `(${injuryToTreat.burnDegree}-я степень)`: '';
+      addPlayerNotification(player, `Нанесен Пантенол на ${getPartNameRu(key)}${degText}. Охлаждающая пена снимает жжение и отек!`, 'heal');
       return true;
     }
   }
@@ -258,8 +256,8 @@ export function applySpasatel(player: Player, targetInjuryId?: string): boolean 
     const key = k as keyof BodyPartsMap;
     const part = parts[key];
     const injuryToTreat = targetInjuryId
-      ? part.find(i => i.id === targetInjuryId && !i.treated && (i.type === 'burn' || i.type === 'abrasion' || i.type === 'bruise'))
-      : part.find(i => !i.treated && (i.type === 'burn' || i.type === 'abrasion' || i.type === 'bruise'));
+      ? part.find(i => i.id === targetInjuryId && !i.treated && (i.type === 'burn'|| i.type === 'abrasion'|| i.type === 'bruise'))
+      : part.find(i => !i.treated && (i.type === 'burn'|| i.type === 'abrasion'|| i.type === 'bruise'));
 
     if (injuryToTreat) {
       injuryToTreat.treated = true;
@@ -267,7 +265,7 @@ export function applySpasatel(player: Player, targetInjuryId?: string): boolean 
       injuryToTreat.bleedingRate = 0;
       injuryToTreat.pain = Math.round((injuryToTreat.pain || 15) * 0.4);
       sound.playUseItem();
-      addPlayerNotification(player, `🌿 Бальзам "Спасатель" нанесен на ${getPartNameRu(key)}. Запущена ускоренная регенерация тканей.`, 'heal');
+      addPlayerNotification(player, `Бальзам "Спасатель"нанесен на ${getPartNameRu(key)}. Запущена ускоренная регенерация тканей.`, 'heal');
       return true;
     }
   }
@@ -290,8 +288,8 @@ export function applyZelenka(player: Player, targetInjuryId?: string): boolean {
     const key = k as keyof BodyPartsMap;
     const part = parts[key];
     const injuryToTreat = targetInjuryId
-      ? part.find(i => i.id === targetInjuryId && !i.treated && (i.type === 'abrasion' || i.type === 'bleeding' || i.type === 'bruise' || i.type === 'burn'))
-      : part.find(i => !i.treated && (i.type === 'abrasion' || i.type === 'bleeding' || i.type === 'bruise' || i.type === 'burn'));
+      ? part.find(i => i.id === targetInjuryId && !i.treated && (i.type === 'abrasion'|| i.type === 'bleeding'|| i.type === 'bruise'|| i.type === 'burn'))
+      : part.find(i => !i.treated && (i.type === 'abrasion'|| i.type === 'bleeding'|| i.type === 'bruise'|| i.type === 'burn'));
 
     if (injuryToTreat) {
       injuryToTreat.treated = true;
@@ -299,7 +297,7 @@ export function applyZelenka(player: Player, targetInjuryId?: string): boolean {
       injuryToTreat.bleedingRate = 0;
       injuryToTreat.pain = Math.round((injuryToTreat.pain || 15) * 0.5);
       sound.playUseItem();
-      addPlayerNotification(player, `🟢 Зелёнка нанесена на ${getPartNameRu(key)}. Рана обеззаражена и подсушена.`, 'heal');
+      addPlayerNotification(player, `Зелёнка нанесена на ${getPartNameRu(key)}. Рана обеззаражена и подсушена.`, 'heal');
       return true;
     }
   }
@@ -318,15 +316,15 @@ export function applyIodine(player: Player, targetInjuryId?: string): boolean {
     const key = k as keyof BodyPartsMap;
     const part = parts[key];
     const injuryToTreat = targetInjuryId
-      ? part.find(i => i.id === targetInjuryId && !i.treated && (i.type === 'abrasion' || i.type === 'bruise' || i.type === 'sprain'))
-      : part.find(i => !i.treated && (i.type === 'abrasion' || i.type === 'bruise' || i.type === 'sprain'));
+      ? part.find(i => i.id === targetInjuryId && !i.treated && (i.type === 'abrasion'|| i.type === 'bruise'|| i.type === 'sprain'))
+      : part.find(i => !i.treated && (i.type === 'abrasion'|| i.type === 'bruise'|| i.type === 'sprain'));
 
     if (injuryToTreat) {
       injuryToTreat.treated = true;
       injuryToTreat.treatedTimer = 0;
       injuryToTreat.pain = Math.round((injuryToTreat.pain || 15) * 0.45);
       sound.playUseItem();
-      addPlayerNotification(player, `🟤 Йодная сетка нанесена на ${getPartNameRu(key)}. Прогревающий и антисептический эффект.`, 'heal');
+      addPlayerNotification(player, `Йодная сетка нанесена на ${getPartNameRu(key)}. Прогревающий и антисептический эффект.`, 'heal');
       return true;
     }
   }
@@ -345,8 +343,8 @@ export function applyDiclofenac(player: Player, targetInjuryId?: string): boolea
     const key = k as keyof BodyPartsMap;
     const part = parts[key];
     const injuryToTreat = targetInjuryId
-      ? part.find(i => i.id === targetInjuryId && (i.type === 'sprain' || i.type === 'bruise' || i.type === 'fracture' || !i.treated))
-      : part.find(i => i.type === 'sprain' || i.type === 'bruise' || i.type === 'fracture' || !i.treated);
+      ? part.find(i => i.id === targetInjuryId && (i.type === 'sprain'|| i.type === 'bruise'|| i.type === 'fracture'|| !i.treated))
+      : part.find(i => i.type === 'sprain'|| i.type === 'bruise'|| i.type === 'fracture'|| !i.treated);
 
     if (injuryToTreat) {
       injuryToTreat.treated = true;
@@ -354,7 +352,7 @@ export function applyDiclofenac(player: Player, targetInjuryId?: string): boolea
       injuryToTreat.pain = Math.round((injuryToTreat.pain || 25) * 0.3);
       administerMedication(player, 'diclofenac_gel');
       sound.playUseItem();
-      addPlayerNotification(player, `🧪 Диклофенак гель втерт в ${getPartNameRu(key)}. Воспаление и боль в суставе сняты!`, 'heal');
+      addPlayerNotification(player, `Диклофенак гель втерт в ${getPartNameRu(key)}. Воспаление и боль в суставе сняты!`, 'heal');
       return true;
     }
   }
@@ -379,8 +377,8 @@ export function applyHydrogenPeroxide(player: Player, targetInjuryId?: string): 
     const key = k as keyof BodyPartsMap;
     const part = parts[key];
     const injuryToTreat = targetInjuryId
-      ? part.find(i => i.id === targetInjuryId && !i.treated && (i.type === 'bleeding' || i.type === 'abrasion'))
-      : part.find(i => !i.treated && (i.type === 'bleeding' || i.type === 'abrasion'));
+      ? part.find(i => i.id === targetInjuryId && !i.treated && (i.type === 'bleeding'|| i.type === 'abrasion'))
+      : part.find(i => !i.treated && (i.type === 'bleeding'|| i.type === 'abrasion'));
 
     if (injuryToTreat) {
       injuryToTreat.treated = true;
@@ -388,7 +386,7 @@ export function applyHydrogenPeroxide(player: Player, targetInjuryId?: string): 
       injuryToTreat.bleedingRate = 0;
       injuryToTreat.pain = Math.round((injuryToTreat.pain || 15) * 0.5);
       sound.playUseItem();
-      addPlayerNotification(player, `💧 Перекись водорода промыла рану на ${getPartNameRu(key)}. Пена остановила кровь и очистила ткани.`, 'heal');
+      addPlayerNotification(player, `Перекись водорода промыла рану на ${getPartNameRu(key)}. Пена остановила кровь и очистила ткани.`, 'heal');
       return true;
     }
   }
@@ -410,7 +408,7 @@ export function applyAmmoniaSpirit(player: Player): boolean {
   }
   player.needs.energy = Math.min(100, (player.needs.energy || 50) + 15);
   sound.playAlert();
-  addPlayerNotification(player, `💨 Резкий вдох нашатырного спирта! Чувства мгновенно прояснились, обморок снят!`, 'heal');
+  addPlayerNotification(player, `Резкий вдох нашатырного спирта! Чувства мгновенно прояснились, обморок снят!`, 'heal');
   return true;
 }
 
@@ -427,7 +425,7 @@ export function applyBalmStar(player: Player): boolean {
     player.bodyState.panicLevel = Math.max(0, (player.bodyState.panicLevel || 0) - 25);
   }
   sound.playUseItem();
-  addPlayerNotification(player, `⭐ Бальзам "Звёздочка" нанесен на виски и грудь: эфирные масла снимают головную боль, тошноту и сонливость.`, 'heal');
+  addPlayerNotification(player, `Бальзам "Звёздочка"нанесен на виски и грудь: эфирные масла снимают головную боль, тошноту и сонливость.`, 'heal');
   return true;
 }
 
@@ -438,7 +436,7 @@ export function applyActivatedCharcoal(player: Player): boolean {
   player.needs.nausea = 0;
   player.needs.health = Math.min(100, (player.needs.health || 0) + 10);
   sound.playEat();
-  addPlayerNotification(player, `⚫ Активированный уголь сорбирует токсины: тяжесть в животе и тошнота полностью прошли.`, 'heal');
+  addPlayerNotification(player, `Активированный уголь сорбирует токсины: тяжесть в животе и тошнота полностью прошли.`, 'heal');
   return true;
 }
 
@@ -451,7 +449,7 @@ export function applyValerianDrops(player: Player): boolean {
   player.bodyState.panicLevel = 0;
   player.bodyState.heartRate = Math.max(65, (player.bodyState.heartRate || 80) - 20);
   sound.playDrink();
-  addPlayerNotification(player, `🍃 Капли валерианы приняты: сердцебиение замедлилось, паническая атака и тревога отступили.`, 'heal');
+  addPlayerNotification(player, `Капли валерианы приняты: сердцебиение замедлилось, паническая атака и тревога отступили.`, 'heal');
   return true;
 }
 
@@ -466,8 +464,8 @@ export function applyBandage(player: Player, targetInjuryId?: string): boolean {
     const key = k as keyof BodyPartsMap;
     const part = parts[key];
     const injuryToTreat = targetInjuryId
-      ? part.find(i => i.id === targetInjuryId && !i.treated && (i.type === 'bleeding' || i.type === 'bruise' || i.type === 'abrasion' || i.type === 'sprain' || i.type === 'burn'))
-      : part.find(i => !i.treated && (i.type === 'bleeding' || i.type === 'bruise' || i.type === 'abrasion' || i.type === 'sprain' || i.type === 'burn'));
+      ? part.find(i => i.id === targetInjuryId && !i.treated && (i.type === 'bleeding'|| i.type === 'bruise'|| i.type === 'abrasion'|| i.type === 'sprain'|| i.type === 'burn'))
+      : part.find(i => !i.treated && (i.type === 'bleeding'|| i.type === 'bruise'|| i.type === 'abrasion'|| i.type === 'sprain'|| i.type === 'burn'));
 
     if (injuryToTreat) {
       injuryToTreat.treated = true;
@@ -475,7 +473,7 @@ export function applyBandage(player: Player, targetInjuryId?: string): boolean {
       injuryToTreat.bleedingRate = 0; // Bleeding stopped
       injuryToTreat.pain = Math.round(injuryToTreat.pain ? injuryToTreat.pain * 0.5 : 12);
       sound.playUseItem();
-      addPlayerNotification(player, `🩹 Наложена тугая асептическая повязка на ${getPartNameRu(key)} (${injuryToTreat.type === 'bleeding' ? 'Остановка кровотечения' : injuryToTreat.type === 'burn' ? 'Защита ожога' : 'Перевязка'})`, 'heal');
+      addPlayerNotification(player, `Наложена тугая асептическая повязка на ${getPartNameRu(key)} (${injuryToTreat.type === 'bleeding'? 'Остановка кровотечения': injuryToTreat.type === 'burn'? 'Защита ожога': 'Перевязка'})`, 'heal');
       return true;
     }
   }
@@ -494,8 +492,8 @@ export function applyMedicalPatch(player: Player, targetInjuryId?: string): bool
     const key = k as keyof BodyPartsMap;
     const part = parts[key];
     const injuryToTreat = targetInjuryId
-      ? part.find(i => i.id === targetInjuryId && !i.treated && (i.type === 'abrasion' || i.type === 'bruise' || i.type === 'burn'))
-      : part.find(i => !i.treated && (i.type === 'abrasion' || i.type === 'bruise' || i.type === 'burn'));
+      ? part.find(i => i.id === targetInjuryId && !i.treated && (i.type === 'abrasion'|| i.type === 'bruise'|| i.type === 'burn'))
+      : part.find(i => !i.treated && (i.type === 'abrasion'|| i.type === 'bruise'|| i.type === 'burn'));
 
     if (injuryToTreat) {
       injuryToTreat.treated = true;
@@ -518,8 +516,8 @@ export function applyAntiseptic(player: Player, targetInjuryId?: string): boolea
     const key = k as keyof BodyPartsMap;
     const part = parts[key];
     const injuryToTreat = targetInjuryId
-      ? part.find(i => i.id === targetInjuryId && !i.treated && (i.type === 'abrasion' || i.type === 'bleeding' || i.type === 'bruise' || i.type === 'burn'))
-      : part.find(i => !i.treated && (i.type === 'abrasion' || i.type === 'bleeding' || i.type === 'bruise' || i.type === 'burn'));
+      ? part.find(i => i.id === targetInjuryId && !i.treated && (i.type === 'abrasion'|| i.type === 'bleeding'|| i.type === 'bruise'|| i.type === 'burn'))
+      : part.find(i => !i.treated && (i.type === 'abrasion'|| i.type === 'bleeding'|| i.type === 'bruise'|| i.type === 'burn'));
 
     if (injuryToTreat) {
       injuryToTreat.treated = true;
@@ -550,7 +548,7 @@ export function applyMedkit(player: Player): boolean {
     const key = k as keyof BodyPartsMap;
     const part = parts[key];
     part.forEach(inj => {
-      if (!inj.treated && (inj.type === 'bleeding' || inj.type === 'bruise' || inj.type === 'abrasion' || inj.type === 'sprain' || inj.type === 'burn')) {
+      if (!inj.treated && (inj.type === 'bleeding'|| inj.type === 'bruise'|| inj.type === 'abrasion'|| inj.type === 'sprain'|| inj.type === 'burn')) {
         inj.treated = true;
         inj.treatedTimer = 0;
         inj.bleedingRate = 0;
@@ -565,7 +563,7 @@ export function applyMedkit(player: Player): boolean {
   player.bodyState.temperature = 36.6;
   player.bodyState.wetness = Math.max(0, player.bodyState.wetness - 30);
   sound.playUseItem();
-  addPlayerNotification(player, `🧰 Аптечка применена: здоровье восстановлено, кровотечения и ожоги перевязаны, введен анальгетик.`, 'heal');
+  addPlayerNotification(player, `Аптечка применена: здоровье восстановлено, кровотечения и ожоги перевязаны, введен анальгетик.`, 'heal');
   return true;
 }
 
@@ -586,7 +584,7 @@ export function updateMedicineSystem(player: Player, dt: number) {
       if (med.timer >= med.absorptionDuration) {
         med.phase = 'peak';
         med.timer = 0;
-        addPlayerNotification(player, `💊 ${med.nameRu}: наступает активная фаза действия! Боль отступает.`, 'heal');
+        addPlayerNotification(player, `${med.nameRu}: наступает активная фаза действия! Боль отступает.`, 'heal');
       }
     } else if (med.phase === 'peak') {
       if (med.timer >= med.peakDuration) {
@@ -597,13 +595,13 @@ export function updateMedicineSystem(player: Player, dt: number) {
       if (med.timer >= med.actionDuration) {
         med.phase = 'decay';
         med.timer = 0;
-        addPlayerNotification(player, `⏳ Действие ${med.nameRu} начинает постепенно ослабевать...`, 'info');
+        addPlayerNotification(player, `Действие ${med.nameRu} начинает постепенно ослабевать...`, 'info');
       }
     } else if (med.phase === 'decay') {
       if (med.timer >= med.decayDuration) {
         // Drug fully cleared
         meds.splice(i, 1);
-        addPlayerNotification(player, `⚠️ Действие ${med.nameRu} полностью завершилось.`, 'warning');
+        addPlayerNotification(player, `Действие ${med.nameRu} полностью завершилось.`, 'warning');
         continue;
       }
     }

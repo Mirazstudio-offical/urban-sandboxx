@@ -26,9 +26,16 @@ export type CarType =
   | 'ambulance_suv'
   | 'truck_box'
   | 'truck_dump'
+  | 'truck_semi'
+  | 'trailer_semi'
+  | 'trailer_semi_box'
+  | 'trailer_semi_tanker'
+  | 'trailer_semi_container'
+  | 'trailer_semi_lowboy'
   | 'truck_tanker'
   | 'truck_water'
   | 'truck_flatbed'
+  | 'truck_covered'
   | 'cement_mixer'
   | 'garbage_truck'
   | 'wagon_classic'
@@ -37,6 +44,14 @@ export type CarType =
   | 'sedan_classic'
   | 'sedan_luxury'
   | 'sedan_compact'
+  | 'compact_matiz'
+  | 'sedan_logan'
+  | 'sedan_nexia'
+  | 'liftback_tavria'
+  | 'sedan_accent'
+  | 'sedan_polo'
+  | 'hatch_samara'
+  | 'sedan_samara'
   | 'hatch_hot'
   | 'micro_car'
   | 'classic_compact'
@@ -64,7 +79,12 @@ export type CarType =
   | 'moto_chopper'
   | 'moped_soviet'
   | 'trailer_barrel'
-  | 'trailer_flatbed_2axle';
+  | 'trailer_vacuum'
+  | 'trailer_flatbed_2axle'
+  | 'paver_asphalt_wheeled'
+  | 'roller_heavy_tandem'
+  | 'roller_compact_sidewalk'
+  | 'roller_pneumatic';
 
 export interface CarConfig {
   type: CarType;
@@ -84,6 +104,11 @@ export interface CarConfig {
   driftGrip: number;     // lateral tire grip when drifting / handbraking
   name: string;
   transmission?: 'AUTO' | 'MANUAL';
+  driveType?: 'FWD' | 'RWD' | 'AWD';
+  hitchOffset?: number;    // Where the hitch/fifth wheel is located relative to the center of the towing vehicle
+  couplerOffset?: number;  // Where the trailer connects to the towing vehicle relative to the center of the trailer
+  color?: string;
+  massEmpty?: number;
 }
 
 export interface DeformVertex {
@@ -121,9 +146,11 @@ export interface EngineState {
   starterWorking: boolean;      // starter motor state
   temperature: number;          // Engine temperature in °C (normal ~85-90°C)
   engineRunning: boolean;       // whether engine is currently running
+  ignition?: boolean;           // ignition switch state (on/off)
   engineKnocking: boolean;      // knock/detonation due to low oil or bad fuel
   engineStalled: boolean;       // engine stalled
   overheatingSteam: boolean;    // thick white steam pouring out from radiator
+  isDieselRunaway?: boolean;    // diesel runaway state (разнос дизеля: uncontrolled burning of oil)
   
   // Powertrain & Transmission
   engineRPM: number;
@@ -133,6 +160,9 @@ export interface EngineState {
   gearRatios: number[];
   finalDriveRatio: number;
   clutchPedal: number;
+  hasTransferCase?: boolean;
+  transferCaseMode?: 'HIGH' | 'LOW';
+  tractorRange?: 1 | 2;
   isStalled: boolean;
   shiftCooldown?: number;
   revLimiterTimer?: number;
@@ -141,10 +171,17 @@ export interface EngineState {
   // Mechanical Integrity & Damage States
   engineHealth: number;         // 0 to 100 (%) health of engine block, pistons, head gasket
   isSeized: boolean;            // engine seized from impact or overheating/oil starvation (will not run or crank)
+  hydrolocked?: boolean;        // engine hydrolocked from ingesting water through air intake (гидроудар)
+  waterInCylinders?: number;    // 0 to 100 (% cylinder water volume)
   transmissionHealth: number;   // 0 to 100 (%) gearbox health
   transmissionJammed: boolean;  // gearbox jammed from impact or stripped gears (cannot shift, gear stuck)
 
-  // Interactive Under-Hood Engine Bay States
+  // Powertrain & Transmission Thermodynamics & Wear
+  clutchTemperature?: number;   // Clutch disc temperature in °C (normal ~20-90°C, burning >250°C)
+  clutchWear?: number;          // 0 to 100 (%) clutch lining wear (100 = completely burnt out/destroyed)
+  clutchSmokeTimer?: number;    // Timer for acrid white smoke notification & particles
+  transmissionTemp?: number;    // Gearbox / ATF fluid temperature in °C (normal ~70-90°C, overheat >130°C)
+  gearGrindTimer?: number;      // Gear grind sound/warning cooldown
   hoodOpen?: boolean;
   batteryInstalled?: boolean;        // default true
   batteryPosConnected?: boolean;     // default true (+)
@@ -152,6 +189,16 @@ export interface EngineState {
   radiatorCapOpen?: boolean;         // default false
   oilCapOpen?: boolean;              // default false
   dipstickPulled?: boolean;          // default false
+
+  // Vehicle History & Improvements
+  mileageKm?: number;
+  isChiptuned?: boolean;
+  isHeavySuspended?: boolean;
+  hasGBO?: boolean;
+
+  // Offroad Physics & Terrain Interaction
+  offroadSinkDepth?: number;   // 0.0 to 1.5 (current depth sunken into mud/soil)
+  isBoggedDown?: boolean;      // vehicle struggling in deep mud / high drag
 }
 
 export type FuelType = 'ai92' | 'ai95' | 'ai98' | 'ai100' | 'diesel' | 'lpg';
@@ -199,6 +246,10 @@ export interface FuelSystem {
   octaneNumber: number;
   engineFuelLeaked?: number;    // amount leaked from engine in liters (max 0.5-1.0L)
   fuelRailBroken?: boolean;     // fuel line/rail broken in frontal crash
+  gboLevel?: number;            // 0 to 100 (%)
+  gboCapacity?: number;         // Liters (e.g. 42L)
+  gboActive?: boolean;          // whether GBO system is toggled on (default true)
+  gboInstalled?: boolean;
 }
 
 export type StoredLiquidType = 
@@ -225,7 +276,7 @@ export interface HoseSegmentNode {
 
 export interface HeldWaterHose {
   vehicleId: string;
-  sourceType: 'truck_water' | 'trailer_barrel';
+  sourceType: 'truck_water' | 'trailer_barrel' | 'trailer_vacuum';
   maxLength: number;            // max physical uncoiled length in pixels (e.g. 250 px, ~16m)
   segments: HoseSegmentNode[];   // Verlet physical nodes
   segmentLength: number;         // distance constraint per segment
@@ -233,6 +284,35 @@ export interface HeldWaterHose {
   isSpraying: boolean;           // actively shooting water stream
   isPressurized?: boolean;       // true if high pressure pump running (e.g. truck engine on), false if natural gravity trickle
   sprayCooldown?: number;        // audio / particle timer
+}
+
+export interface HeldTowRope {
+  vehicleId: string;
+  isFront: boolean;
+  maxLength: number;
+  segments: HoseSegmentNode[];
+  segmentLength: number;
+}
+
+export interface TowingRope {
+  id: string;
+  vehicleAId: string;
+  isFrontA: boolean;
+  vehicleBId: string;
+  isFrontB: boolean;
+  maxLength: number;
+  segments: HoseSegmentNode[];
+  segmentLength: number;
+  // Dynamic tension & realism state
+  tension?: number;        // Normalized strain / pulling load (0.0 to 1.5+)
+  isTaut?: boolean;         // True when stretched beyond slack threshold
+  slackAmount?: number;     // Remaining slack in pixels (< 0 means stretched)
+  vibration?: number;       // High tension micro-vibration factor (0..1)
+  hasSafetyFlag?: boolean;  // Red/white reflective warning flag (GOST/traffic safety)
+  lastDistance?: number;    // Previous step distance for jerk calculation
+  jerkCooldown?: number;    // Cooldown timer for dynamic jerk sound/impact
+  groanCooldown?: number;   // Cooldown timer for fiber groaning sound
+  maxLoadCapacity?: number; // Overload breaking limit in kg force
 }
 
 export interface FluidStorageTank {
@@ -328,7 +408,11 @@ export interface Vehicle {
   
   // Ownership & Security
   ownerId?: string;
+  keyId?: string;
+  keyTier?: 'classic' | 'flip' | 'smart' | 'display';
   isLocked?: boolean;
+  insertedKeyType?: 'gold' | 'iron';
+  insertedKeyId?: string;
 
   // Physical dimensions & config
   width: number;
@@ -338,6 +422,10 @@ export interface Vehicle {
   roofColor: string;
   headlightsOn: boolean;
   headlightMode: 'off' | 'low' | 'high';
+  positionLightsOn?: boolean;
+  frontFogLightsOn?: boolean;
+  rearFogLightsOn?: boolean;
+  roadTrainLightsOn?: boolean;
   brakeLightsOn: boolean;
   isReversing?: boolean;
   turnSignal: 'none' | 'left' | 'right' | 'hazard';
@@ -346,6 +434,8 @@ export interface Vehicle {
   // Modular Physics, Engine & Fuel Systems
   requiredFuel: 'ai92' | 'ai95' | 'diesel';
   hasGBO?: boolean;
+  tractorBrakeLatch?: boolean; // MTZ split brakes lock/latch state (default: true)
+  hasRearviewCamera?: boolean;
   engineState?: EngineState;
   fuelSystem?: FuelSystem;
   fluidTank?: FluidStorageTank;
@@ -359,6 +449,7 @@ export interface Vehicle {
   knockbackVy?: number;
   knockbackSpin?: number;
   stunnedTimer?: number;
+  spinoutTimer?: number;       // Duration of post-collision uncontrolled spinout/drift physics
 
   // Progressive Softbody Impact Cushioning (multi-frame crumple zone dynamics)
   activeCrumple?: {
@@ -370,19 +461,39 @@ export interface Vehicle {
     reboundSpeed: number;     // gentle restitution bounce speed
     contactX: number;
     contactY: number;
+    preserveVelocity?: boolean; // If true (oblique/vehicle collision), do not clamp speed to 0
   };
 
   // AI & State
   isPlayerControlled: boolean;
   isParked: boolean;
+  isDerelict?: boolean;        // Totaled, crushed, or abandoned wreck
+  waterDepth?: number;         // Water depth at vehicle center (meters)
+  frontWaterDepth?: number;    // Water depth at front bumper / intake (meters)
+  submergedFraction?: number;  // 0 to 1 ratio of vehicle height submerged
+  isFloating?: boolean;        // Whether vehicle is bobbing/floating in deep water
   targetSpeed: number;
   currentLaneId: string | null;
   targetWaypointIndex: number;
   routeWaypoints: Vector2D[];
-  aiState: 'driving' | 'stopping_light' | 'in_intersection' | 'stopping_obstacle' | 'yielding' | 'waiting' | 'reversing' | 'parked';
+  aiState: 'driving' | 'stopping_light' | 'in_intersection' | 'stopping_obstacle' | 'yielding' | 'waiting' | 'reversing' | 'parked' | 'lane_changing' | 'overtaking' | 'avoiding_obstacle' | 'evading' | 'spinout' | 'wrecked';
   reverseTimer?: number;
   recoverySteer?: number;
   recoveryTargetAngle?: number;
+  // Intelligent Obstacle Avoidance, Lane Changing & Evasion
+  avoidanceOffset?: number;             // Current lateral shift from lane centerline in pixels (+ left, - right)
+  targetAvoidanceOffset?: number;       // Target lateral shift to reach (+ left, - right)
+  avoidancePhase?: 'none' | 'swerving' | 'passing' | 'returning' | 'emergency_evading';
+  avoidanceObstacleId?: string | null;  // ID of vehicle or prop being bypassed
+  avoidanceWaitTimer?: number;          // Time waited behind obstacle before committing to maneuver
+  avoidanceCooldown?: number;           // Cooldown before initiating another bypass
+  laneChangeState?: {
+    targetLaneId: string;
+    direction: 'left' | 'right';
+    progress: number;
+    initialOffset: number;
+  } | null;
+  laneChangeCooldown?: number;
   inIntersection: boolean;
   plannedTurn: 'straight' | 'left' | 'right';
   recentTurns?: ('straight' | 'left' | 'right' | 'turnaround')[];
@@ -404,6 +515,12 @@ export interface Vehicle {
   idmAcceleration?: number;
   intersectionWaitTimer?: number;
   intersectionReservationId?: string | null;
+  intersectionReservationToken?: string | null;
+  hasExclusiveIntersectionToken?: boolean;
+  stoppedYieldTimer?: number;
+  priorityPassUntil?: number;
+  priorityPassIgnoreId?: string | null;
+  priorityPassReason?: string;
 
   // Horn & Siren
   isHonking: boolean;
@@ -425,6 +542,11 @@ export interface Vehicle {
   fogLevel?: number; // 0.0 (clear) to 1.0 (completely fogged)
   windshieldRainLevel?: number;
   cabinSmoke?: number; // 0 to 100% toxic smoke concentration inside vehicle cabin
+  isPtoActive?: boolean; // PTO / PUMP Drive (КОМ - Коробка отбора мощности для водометных систем)
+  isWashingNozzlesActive?: boolean; // Street-washing front nozzles active on truck_water
+  _waterSpraySoundTimer?: number;
+  _washSweepTimer?: number;
+  _washParticleTimer?: number;
   externalHeatTimer?: number; // continuous seconds exposed to adjacent fire torch (< 1.5m)
   adjacentFireSourceId?: string | null;
 
@@ -449,6 +571,27 @@ export interface Vehicle {
   hitchOffset?: number;            // Local X offset to rear tow hitch ball/clevis (typically -halfL - 2)
   couplerOffset?: number;          // Local X offset to front hitch loop
   trailerType?: 'single_axle_drawbar' | 'turntable_dolly_2axle';
+  trailerPlugConnected?: boolean;
+  trailerBrakesConnected?: boolean;
+  trailerParkingBrakeEngaged?: boolean;
+
+  // Tuning & Equipment
+  hasChiptuning?: boolean;
+  isHeavySuspended?: boolean;
+
+  // Offroad Physics & Terrain Interaction
+  offroadSinkDepth?: number;         // Soil sink depth (0 = rigid surface, 1.0+ = deep mud/bog)
+  isBoggedDown?: boolean;            // Vehicle stuck in deep mud with high resistance
+  hasTransferCase?: boolean;         // 4x4 Part-time / Full-time transfer case
+  transferCaseMode?: '2H' | '4H' | '4L'; // Active transfer case mode
+  diffLock?: VehicleDiffLockState;   // Mechanical / pneumatic axle differential locks (МОБ, МКБ)
+  _diffLockWarnTimer?: number;
+}
+
+export interface VehicleDiffLockState {
+  center: boolean; // Межосевая блокировка (МОБ - 50:50 раздаточная коробка)
+  rear: boolean;   // Межколесная блокировка задней оси (МКБ-З)
+  front: boolean;  // Межколесная блокировка передней оси (МКБ-П)
 }
 
 export interface Pedestrian {
@@ -500,6 +643,8 @@ export interface Pedestrian {
   crosswalkWaitTimer: number;
   crosswalkCooldownTimer: number;
   targetCrosswalkId?: string | null;
+  pathDirection?: number;
+  branchCooldownTimer?: number;
   
   // State & Panic
   state: 'walking' | 'waiting_light' | 'waiting_traffic' | 'crossing' | 'panicking' | 'waiting_taxi' | 'entering_building' | 'exiting_building' | 'idle_phone' | 'idle_window' | 'greeting' | 'extinguishing_fire';
@@ -539,7 +684,7 @@ export interface Intersection {
   y: number;
   width: number;
   height: number;
-  type: '4way' | '3way_T_north' | '3way_T_south' | '3way_T_east' | '3way_T_west';
+  type: '4way' | '3way' | '3way_T_north' | '3way_T_south' | '3way_T_east' | '3way_T_west' | 'turnaround' | 'fork';
   
   // Traffic light controller
   hasLights: boolean;
@@ -570,6 +715,20 @@ export interface Intersection {
   isSignalLost?: boolean;
   isDirt?: boolean;
   isGravel?: boolean;
+
+  // Map-Based Priority & Yield Rules (ПДД + Главная дорога / Уступи дорогу)
+  priorityRules?: {
+    mainLaneIds?: string[];
+    yieldLaneIds?: string[];
+    yieldToMap?: { [yieldingLaneId: string]: string[] };
+    priorityRoads?: string[];     // IDs of main priority road segments
+    yieldRoads?: string[];        // IDs of secondary road segments that must yield
+    rules?: {
+      fromLaneId: string;
+      yieldToLaneId: string;
+      mode?: 'yield' | 'stop' | 'priority';
+    }[];
+  };
 }
 
 export interface RoadSegment {
@@ -584,7 +743,12 @@ export interface RoadSegment {
   isDirt?: boolean;
   isGravel?: boolean;
   isRoundabout?: boolean;
-  direction: 'horizontal' | 'vertical';
+  direction: 'horizontal' | 'vertical' | 'diagonal' | 'curved';
+  curvePoints?: Vector2D[]; // Continuous high-density Bezier curve points along road centerline
+  _minX?: number;
+  _maxX?: number;
+  _minY?: number;
+  _maxY?: number;
   name: string;
   lanePaths: {
     laneId: string;
@@ -597,8 +761,39 @@ export interface RoadSegment {
       pathWaypoints: Vector2D[];
       intersectionId?: string;
       stopLineDirection?: 'north' | 'south' | 'east' | 'west';
+      priority?: 'main' | 'yield' | 'stop';
+      yieldToLaneId?: string;      // Explicit target lane ID that vehicle MUST yield to before entering
+      yieldToLaneIds?: string[];   // Array of lane IDs that vehicle MUST yield to before entering
+      maxTurnAngle?: number;       // Max turn angle limit (radians) for this connection
+      yieldRule?: 'yield_to_main' | 'stop_sign' | 'zipper_merge' | 'priority';
+      isSecondaryMerge?: boolean;  // Secondary branch or ramp that yields to main road
     }[];
   }[];
+}
+
+export interface GuardrailDeformation {
+  t: number;             // position along segment 0..1
+  lateralOffset: number; // offset in px perpendicular to guardrail normal (-25..+25)
+  extent: number;        // longitudinal reach (px)
+}
+
+export interface GuardrailSegment {
+  id: string;
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
+  curvePoints?: Vector2D[];
+  width: number;         // physical width (typically 4-8 px)
+  type: 'w_beam' | 'double_w_beam' | 'cable_barrier' | 'concrete_jersey';
+  hasStartAttenuator: boolean; // Ударогаситель на начальном торце
+  hasEndAttenuator: boolean;   // Ударогаситель на конечном торце
+  startAttenuatorCompression: number; // 0..1 (0 = intact, 1 = fully crushed accordion)
+  endAttenuatorCompression: number;   // 0..1
+  startAttenuatorLength?: number;     // length in px (typically 24-30 px)
+  endAttenuatorLength?: number;       // length in px
+  deformations: GuardrailDeformation[];
+  isSideBarrier?: boolean;            // true if outer shoulder barrier, false if central median
 }
 
 export interface BuildingEntrance {
@@ -673,12 +868,29 @@ export interface Building {
     | 'commercial_gallery'
     | 'gas_station_shop'
     | 'gas_station_canopy'
-    | 'gas_station_island';
+    | 'gas_station_island'
+    | 'garage_cooperative'
+    | 'garage_box'
+    | 'garage_workshop'
+    | 'garage_gatehouse'
+    | 'garage_substation'
+    | 'garage_ramp'
+    | 'real_estate_agency'
+    | 'railway_station'
+    | 'railway_platform'
+    | 'railway_warehouse'
+    | 'railway_crossing_post';
   color: string;
   roofColor: string;
   accentColor: string;
   entranceSide?: 'north' | 'south' | 'east' | 'west';
   entrances?: BuildingEntrance[];
+  garageSubtype?: 'brick' | 'silicate' | 'concrete' | 'metal' | 'workshop' | 'gatehouse' | 'ramp' | 'substation';
+  garageNumber?: string;
+  garageDoorColor?: string;
+  garageSign?: string;
+  cooperativeName?: string;
+  hasOverpass?: boolean;
   balconies?: BuildingBalcony[];
   fireEscapes?: {
     side: 'north' | 'south' | 'east' | 'west';
@@ -799,7 +1011,26 @@ export interface StreetProp {
     | 'fence_metal_vertical'
     | 'wicket_gate'
     | 'cottage_gate'
-    | 'garden_path_tile';
+    | 'garden_path_tile'
+    | 'garage_sofa'
+    | 'garage_workbench'
+    | 'garage_dirt_pile'
+    | 'garage_sand_pile'
+    | 'garage_tires_heap'
+    | 'garage_scrap_metal'
+    | 'tarp_covered_car'
+    | 'car_on_blocks'
+    | 'oil_barrel_cluster'
+    | 'garage_trash_heap'
+    | 'railway_signal'
+    | 'railway_buffer_stop'
+    | 'railway_switch_box'
+    | 'railway_crossing_light'
+    | 'railway_crossing_gate'
+    | 'railway_platform_sign'
+    | 'railway_clock'
+    | 'railway_catenary_mast'
+    | 'railway_picket_post';
   angle: number;
   intersectionId?: string;
   direction?: 'north' | 'south' | 'east' | 'west';
@@ -865,6 +1096,12 @@ export interface SkidMark {
   alpha: number;
   color: string;
   width: number;
+  // Volumetric Offroad Rut properties
+  depth?: number;          // 0.0 to 1.5+ (depth/sink level into the ground)
+  surfaceType?: string;    // 'grass' | 'dirt_road' | 'mud' | 'sand' | 'gravel_road' | 'asphalt' | 'concrete'
+  isWet?: boolean;         // wet muddy rut reflection
+  bermColor?: string;      // displaced outer soil berm color
+  grooveColor?: string;    // dark inner trench shadow color
 }
 
 export type FluidStainType = 'oil' | 'coolant' | 'fuel' | 'sand' | 'water';
@@ -893,7 +1130,14 @@ export interface Particle {
   alpha: number;
   life: number;
   maxLife: number;
-  type: 'tire_smoke' | 'spark' | 'exhaust' | 'engine_smoke' | 'glass_shard' | 'debris' | 'flame' | 'water_splash' | 'rain_drop' | 'water_fountain' | 'leaf' | 'feather';
+  type: 'tire_smoke' | 'spark' | 'exhaust' | 'engine_smoke' | 'glass_shard' | 'debris' | 'flame' | 'water_splash' | 'rain_drop' | 'water_fountain' | 'leaf' | 'feather' | 'water_spray' | 'dust' | 'mud_clod';
+  underVehicle?: boolean;
+  initialAlpha?: number;
+  z?: number;
+  vz?: number;
+  splatted?: boolean;
+  shapeSeed?: number;
+  targetRadius?: number;
 }
 
 export type ClothingLayer = 'skin' | 'underwear' | 'shirt' | 'jacket' | 'outerwear';
@@ -920,7 +1164,40 @@ export type EquippedClothing = {
   };
 };
 
-export type ItemCategory = 'food' | 'drink' | 'med' | 'medical' | 'tool' | 'auto' | 'valuable' | 'clothing' | 'misc';
+export type ItemCategory = 'food' | 'drink' | 'med' | 'medical' | 'tool' | 'auto' | 'valuable' | 'clothing' | 'electronics' | 'misc';
+
+export interface PhoneSpecs {
+  modelId: string;
+  modelName: string;
+  seriesName: string;
+  brand: string;
+  colorNameRu: string;
+  colorHex: string;
+  accentHex: string;
+  storageGb: number;
+  storageUsedGb: number;
+  cpuModel: string;
+  cpuFrequencyGhz: number;
+  cpuCores: number;
+  ramGb: number;
+  ramUsedGb: number;
+  batteryCapacityMah: number;
+  batteryLevelPct: number;
+  isPoweredOn: boolean;
+  flashlightOn?: boolean;
+  wallpaperId?: string;
+  osName?: string;
+  osVersion?: string;
+  screenSizeInches?: number;
+  cameraSpecs?: string;
+  networkType?: '5G' | 'LTE' | '4G' | 'No SIM';
+  signalStrength?: number; // 0 to 4
+  airplaneMode?: boolean;
+  wifiConnected?: boolean;
+  bluetoothConnected?: boolean;
+  notes?: string[];
+  unreadSmsCount?: number;
+}
 
 export interface InventoryItem {
   id: string;
@@ -958,10 +1235,46 @@ export interface InventoryItem {
   maxContainedWeightKg?: number;    // Max total weight of contained items in kg
   allowedItemCategories?: ItemCategory[]; // Optional category filter (e.g. wallet only for money/valuable)
   contents?: InventoryItem[];       // Items stored inside this container
+  // Apartment, real estate and property metadata
+  propertyId?: string;
+  lockCode?: string;
+  cadastralNumber?: string;
+  ownerName?: string;
+  purchaseDate?: string;
+  areaSqM?: number;
+  address?: string;
+  priceRub?: number;
+  roomsCount?: number;
+  floor?: string;
+  registrationRecord?: string;
+  cadastralValueRub?: number;
+  sellerName?: string;
   // Car key and document metadata
   vehicleId?: string;
   carName?: string;
   carColor?: string;
+  carPrice?: number;
+  carType?: CarType;
+  keyTier?: 'classic' | 'flip' | 'smart' | 'display';
+  keyFeatures?: ('lock' | 'unlock' | 'engine_start' | 'headlights' | 'horn')[];
+  vehicleVin?: string;
+  vehicleName?: string;
+  vehicleColor?: string;
+  vehicleYear?: number;
+  vehiclePowerHp?: number;
+  engineDisplacementCc?: number;
+  engineNumber?: string;
+  bodyNumber?: string;
+  licensePlate?: string;
+  documentSeries?: string;
+  registrationDate?: string;
+  issuingAuthority?: string;
+  // Smartphone specifications & hardware
+  phoneSpecs?: PhoneSpecs;
+  cpu?: string;
+  ram?: number;
+  storage?: number;
+  battery?: number;
 }
 
 export interface GroundItem {
@@ -1119,6 +1432,10 @@ export interface Player {
   isInsideBuilding?: boolean;
   insideBuildingId?: string | null;
   currentFloor?: number;
+  isInsideApartment?: boolean;
+  insideApartmentId?: string | null;
+  insideEntranceNumber?: number | null;
+  ownedApartmentIds?: string[];
   
   // Creative / Sandbox Mode
   isCreativeMode?: boolean;
@@ -1131,6 +1448,14 @@ export interface Player {
   dashTimer?: number;
   dashAngle?: number;
   aimAngle?: number;
+  flashlightOn?: boolean;
+  phoneFlashlightOn?: boolean;
+
+  // Water & Aquatic Physics
+  isSwimming?: boolean;
+  isWading?: boolean;
+  waterDepth?: number;
+  wetFootstepCount?: number;
 
   // Survival Needs & Vitals
   needs: PlayerNeeds;
@@ -1146,6 +1471,8 @@ export interface Player {
   lastHurtTime?: number;
   isSleeping?: boolean;
   sleepTimer?: number;
+  consecutiveWakeHours?: number;
+  prevTimeHour?: number;
   isFainting?: boolean;
   faintTimer?: number;
   needsHospitalEvacuation?: boolean;
@@ -1181,6 +1508,13 @@ export interface Player {
 
   // Water hose equipped in hands (connected to truck_water or trailer_barrel)
   heldWaterHose?: HeldWaterHose | null;
+
+  // Tow rope interaction fields
+  heldTowRope?: HeldTowRope | null;
+  towRopeAnchor?: {
+    vehicleId: string;
+    isFront: boolean;
+  } | null;
 }
 
 export interface SidewalkBlock {
@@ -1229,10 +1563,231 @@ export interface Roundabout {
   name?: string;
 }
 
+export interface RailwayTrackSegment {
+  id: string;
+  name: string;
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
+  curvePoints?: Vector2D[];
+  trackType: 'mainline' | 'station' | 'siding' | 'deadend';
+  gauge?: number;              // default 16 px (~1520 mm Russian broad gauge)
+  ballastWidth?: number;       // default 38 px
+  sleepersType?: 'concrete' | 'wood';
+  hasBufferStop?: boolean;
+  bufferStopEnd?: 'start' | 'end';
+  isElectrified?: boolean;
+  isCrossing?: boolean;
+  crossingRoadName?: string;
+  isSwitch?: boolean;
+  switchData?: {
+    branchDirection: 'left' | 'right';
+    pointX: number;
+    pointY: number;
+    frogX: number;
+    frogY: number;
+    divergingAngle: number;
+  };
+}
+
+export interface RailwayPlatform {
+  id: string;
+  name: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  platformNumber: number;
+  trackSide: 'north' | 'south' | 'island';
+  hasCanopy?: boolean;
+  canopySegments?: { x: number; y: number; w: number; h: number }[];
+}
+
+export interface RollingStockCar {
+  id: string;
+  name: string;
+  type: 
+    | 'locomotive_diesel'
+    | 'locomotive_passenger'
+    | 'locomotive_shunter'
+    | 'locomotive_diesel_chme3' 
+    | 'locomotive_electric_vl80' 
+    | 'passenger_coach_rzhd' 
+    | 'freight_hopper' 
+    | 'freight_tanker' 
+    | 'freight_flatcar_timber';
+  x: number;
+  y: number;
+  angle: number;
+  length: number;
+  width: number;
+  color?: string;
+  livery?: string;
+  roadNumber?: string;
+  hasHeadlight?: boolean;
+  headlightColor?: string;
+  cargoType?: string;
+  trainId?: string;
+  carIndex?: number;
+  speed?: number;
+  targetSpeed?: number;
+  direction?: 1 | -1;
+  throttle?: number;
+  brakeState?: 'released' | 'service' | 'emergency';
+  hornTimer?: number;
+  wheelClickTimer?: number;
+}
+
+export type RailwaySignalType =
+  | 'entry'       // Входной (Н, Ч, НД, ЧД)
+  | 'exit'        // Выходной (Ч1, Н1, Ч2, Н2, Ч3, Н3, Ч4, Н4)
+  | 'block'       // Проходной автоблокировки (1, 2, 3, 4, 5, 6)
+  | 'shunting'    // Маневровый (М1, М2, М3, М4, М5, М6, М7, М8, М10)
+  | 'obstacle'    // Заградительный переездной (З1, З2)
+  | 'repeater'    // Повторительный (ПЧ3)
+  | 'crossing';   // Переездный светофор дорожный
+
+export type RailwaySignalMast = 'mast' | 'dwarf' | 'bridge' | 'crossing';
+
+export type RailwayLensColor = 'green' | 'yellow' | 'red' | 'white' | 'blue';
+
+export type RailwaySignalAspect =
+  | 'green'
+  | 'yellow'
+  | 'two_yellows'
+  | 'yellow_flashing_yellow'
+  | 'two_yellows_one_flashing'
+  | 'yellow_flashing'
+  | 'red'
+  | 'lunar_white'
+  | 'lunar_white_flashing'
+  | 'blue'
+  | 'red_alternating'
+  | 'red_alternating_flashing'
+  | 'dark';
+
+export interface RailwaySignalCondition {
+  triggerType: 'train_on_track' | 'train_approach' | 'switch_state' | 'signal_state' | 'schedule_active' | 'always';
+  trackId?: string;
+  signalId?: string;
+  expectedState?: string;
+  targetAspect: RailwaySignalAspect;
+  description?: string;
+}
+
+export interface RailwaySignalLogic {
+  mode: 'auto_block' | 'interlocking' | 'manual' | 'conditional' | 'schedule_route';
+  defaultAspect?: RailwaySignalAspect;
+  divergingAspect?: RailwaySignalAspect;
+  conditions?: RailwaySignalCondition[];
+}
+
+export interface RailwaySignalFilament {
+  temp: number; // 0.0 (ambient/cold) to 1.0 (nominal white-hot ~2400K operating temperature)
+  brightness: number; // 0.0 to 1.0 (actual emitted visible optical flux)
+  voltage: number; // 0.0 to 1.0 (supplied circuit voltage from relays)
+  coldTestPulse?: number; // 0.0 to 1.0 (brief test impulse from fire-relay continuity check)
+}
+
+export type RailwayRelayPhase = 'steady' | 'code_decoding' | 'blackout' | 'lamp_check';
+
+export interface RailwaySignal {
+  id: string;
+  name: string;
+  nameRu?: string;
+  type: RailwaySignalType;
+  mastType: RailwaySignalMast;
+  designation: string; // e.g. "Н", "Ч", "Ч1", "Н2", "М1", "3"
+  x: number;
+  y: number;
+  angle: number; // Face orientation angle in radians
+  lenses: RailwayLensColor[]; // Configuration of lens cluster from top to bottom
+  currentAspect: RailwaySignalAspect;
+  linkedTrackId?: string;
+  nextSignalId?: string;
+  targetTrack?: string; // Target track designation or name (e.g. "Главный I путь", "Путь 3 (Платформа 1)")
+  switchNumber?: string; // Governed switch number for shunting (e.g. "1", "2", "5/6")
+  isApproachSignal?: boolean; // Has diagonal striped approach marker plate
+  isCrossingGate?: boolean;
+  barrierLength?: number; // Lowered boom length in pixels
+  barrierProgress?: number; // 0.0 (fully open/raised) to 1.0 (fully closed/lowered)
+  logic?: RailwaySignalLogic;
+
+  // Real-world physical electro-mechanical relay and incandescent filament simulation:
+  targetAspect?: RailwaySignalAspect; // desired aspect requested by track circuits / interlocking logic
+  pendingAspect?: RailwaySignalAspect; // aspect queued to turn on after code reception and fire-check
+  relayPhase?: RailwayRelayPhase; // current state of relay logic ('steady' | 'code_decoding' | 'blackout' | 'lamp_check')
+  relayTimer?: number; // countdown timer in current relay phase (seconds)
+  filaments?: RailwaySignalFilament[]; // thermal & optical state of each individual lens filament
+}
+
+export interface TrainScheduleConsistCar {
+  type: RollingStockCar['type'];
+  name?: string;
+  livery?: string;
+  roadNumber?: string;
+  cargoType?: string;
+}
+
+export interface TrainScheduleRouteStep {
+  id: string;
+  type: 'travel' | 'switch_branch' | 'station_stop' | 'signal_hold' | 'reverse' | 'despawn';
+  targetX?: number;
+  targetY?: number;
+  trackId?: string;
+  speedLimit?: number;
+  dwellSeconds?: number;
+  switchTrackId?: string;
+  switchBranch?: 'straight' | 'diverging';
+  signalId?: string;
+  signalClearAspect?: RailwaySignalAspect;
+  stationName?: string;
+}
+
+export interface TrainSchedule {
+  id: string;
+  name: string;
+  trainId: string;
+  enabled?: boolean;
+  spawnTime: number; // seconds from game start
+  repeatInterval?: number; // seconds between loops (e.g. 300)
+  spawnTrackId?: string;
+  spawnX: number;
+  spawnY: number;
+  spawnSpeed: number;
+  spawnDirection: 1 | -1;
+  maxSpeed?: number;
+  acceleration?: number;
+  deceleration?: number;
+  locomotive: {
+    type: RollingStockCar['type'];
+    name?: string;
+    livery?: string;
+    roadNumber?: string;
+    headlightColor?: string;
+  };
+  cars: TrainScheduleConsistCar[];
+  routeSteps: TrainScheduleRouteStep[];
+}
+
+export interface PedestrianPath {
+  id: string;
+  waypoints: Vector2D[];
+  isCrosswalk?: boolean;
+  crosswalkRef?: string;
+}
+
 export interface GameWorld {
+  player?: Player;
   width: number;
   height: number;
   roads: RoadSegment[];
+  railwayTracks?: RailwayTrackSegment[];
+  railwayPlatforms?: RailwayPlatform[];
+  rollingStock?: RollingStockCar[];
+  railwaySignals?: RailwaySignal[];
+  trainSchedules?: TrainSchedule[];
   intersections: Intersection[];
   roundabouts?: Roundabout[];
   sidewalks?: SidewalkBlock[];
@@ -1241,6 +1796,7 @@ export interface GameWorld {
   driveways?: StaticDriveway[];
   trees: Tree[];
   props: StreetProp[];
+  guardrails?: GuardrailSegment[];
   vehicles: Vehicle[];
   pedestrians: Pedestrian[];
   birds: Bird[];
@@ -1251,6 +1807,7 @@ export interface GameWorld {
   stains: FluidStain[];
   particles: Particle[];
   weather: WeatherType;
+  timeHour?: number;
   cleanMode?: boolean;
   outsideTemp?: number;
   humidity?: number;
@@ -1266,12 +1823,8 @@ export interface GameWorld {
   } | null;
   gpsDestination?: GpsDestination | null;
   gpsPath?: Vector2D[] | null;
-  pedestrianPaths: {
-    id: string;
-    waypoints: Vector2D[];
-    isCrosswalk?: boolean;
-    crosswalkRef?: string;
-  }[];
+  pedestrianPaths: PedestrianPath[];
+  towingRopes?: TowingRope[];
 }
 
 export interface Camera {
@@ -1293,6 +1846,9 @@ export interface InputState {
   backward: boolean;
   left: boolean;
   right: boolean;
+  brakeLeft?: boolean;  // Separate left brake pedal (for MTZ)
+  brakeRight?: boolean; // Separate right brake pedal (for MTZ)
+  steeringAxis?: number; // Analog steering input (-1.0 left to +1.0 right) for mobile steering wheel or gamepad
   handbrake: boolean;
   sprint: boolean;
   actionE: boolean;
@@ -1306,6 +1862,8 @@ export interface InputState {
   turnRightZ: boolean;
   shiftUp: boolean;
   shiftDown: boolean;
+  transferCaseToggle?: boolean;
+  diffLockToggle?: boolean;
   hazardX: boolean;
   inventoryI?: boolean;
   hotbar1?: boolean;

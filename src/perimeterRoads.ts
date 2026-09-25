@@ -1148,9 +1148,9 @@ export function buildPerimeterNetwork(
   //            West Ring NB (direction -PI/2) -> North Ring EB (direction 0)
   const nwRoadN = roads.find((r) => r.id === 'road_ring_n_0');
   const nwRoadW = roads.find((r) => r.id === 'road_ring_w_0');
-  if (nwRoadN && nwRoadW) {
+  if (nwRoadN && nwRoadN.lanePaths && nwRoadW && nwRoadW.lanePaths) {
     nwRoadN.lanePaths.filter((lp) => lp.direction === Math.PI).forEach((inLane) => {
-      const outLane = nwRoadW.lanePaths.find((lp) => lp.direction === Math.PI / 2);
+      const outLane = nwRoadW.lanePaths?.find((lp) => lp.direction === Math.PI / 2);
       if (outLane) {
         const pStart = inLane.waypoints[inLane.waypoints.length - 1];
         const pEnd = outLane.waypoints[0];
@@ -1160,7 +1160,7 @@ export function buildPerimeterNetwork(
       }
     });
     nwRoadW.lanePaths.filter((lp) => lp.direction === -Math.PI / 2).forEach((inLane) => {
-      const outLane = nwRoadN.lanePaths.find((lp) => lp.direction === 0);
+      const outLane = nwRoadN.lanePaths?.find((lp) => lp.direction === 0);
       if (outLane) {
         const pStart = inLane.waypoints[inLane.waypoints.length - 1];
         const pEnd = outLane.waypoints[0];
@@ -1175,9 +1175,9 @@ export function buildPerimeterNetwork(
   //            East Ring NB (direction -PI/2) -> North Ring WB (direction PI)
   const neRoadN = roads.find((r) => r.id === `road_ring_n_${vertRoadXs.length}`);
   const neRoadE = roads.find((r) => r.id === 'road_ring_e_0');
-  if (neRoadN && neRoadE) {
+  if (neRoadN && neRoadN.lanePaths && neRoadE && neRoadE.lanePaths) {
     neRoadN.lanePaths.filter((lp) => lp.direction === 0).forEach((inLane) => {
-      const outLane = neRoadE.lanePaths.find((lp) => lp.direction === Math.PI / 2);
+      const outLane = neRoadE.lanePaths?.find((lp) => lp.direction === Math.PI / 2);
       if (outLane) {
         const pStart = inLane.waypoints[inLane.waypoints.length - 1];
         const pEnd = outLane.waypoints[0];
@@ -1187,7 +1187,7 @@ export function buildPerimeterNetwork(
       }
     });
     neRoadE.lanePaths.filter((lp) => lp.direction === -Math.PI / 2).forEach((inLane) => {
-      const outLane = neRoadN.lanePaths.find((lp) => lp.direction === Math.PI);
+      const outLane = neRoadN.lanePaths?.find((lp) => lp.direction === Math.PI);
       if (outLane) {
         const pStart = inLane.waypoints[inLane.waypoints.length - 1];
         const pEnd = outLane.waypoints[0];
@@ -1202,9 +1202,9 @@ export function buildPerimeterNetwork(
   //            South Ring WB (direction PI) -> West Ring NB (direction -PI/2)
   const swRoadW = roads.find((r) => r.id === `road_ring_w_${horizRoadYs.length}`);
   const swRoadS = roads.find((r) => r.id === 'road_ring_s_0');
-  if (swRoadW && swRoadS) {
+  if (swRoadW && swRoadW.lanePaths && swRoadS && swRoadS.lanePaths) {
     swRoadW.lanePaths.filter((lp) => lp.direction === Math.PI / 2).forEach((inLane) => {
-      const outLane = swRoadS.lanePaths.find((lp) => lp.direction === 0);
+      const outLane = swRoadS.lanePaths?.find((lp) => lp.direction === 0);
       if (outLane) {
         const pStart = inLane.waypoints[inLane.waypoints.length - 1];
         const pEnd = outLane.waypoints[0];
@@ -1214,7 +1214,7 @@ export function buildPerimeterNetwork(
       }
     });
     swRoadS.lanePaths.filter((lp) => lp.direction === Math.PI).forEach((inLane) => {
-      const outLane = swRoadW.lanePaths.find((lp) => lp.direction === -Math.PI / 2);
+      const outLane = swRoadW.lanePaths?.find((lp) => lp.direction === -Math.PI / 2);
       if (outLane) {
         const pStart = inLane.waypoints[inLane.waypoints.length - 1];
         const pEnd = outLane.waypoints[0];
@@ -1229,9 +1229,9 @@ export function buildPerimeterNetwork(
   //            South Ring EB (direction 0) -> East Ring NB (direction -PI/2)
   const seRoadE = roads.find((r) => r.id === `road_ring_e_${horizRoadYs.length}`);
   const seRoadS = roads.find((r) => r.id === `road_ring_s_${vertRoadXs.length}`);
-  if (seRoadE && seRoadS) {
+  if (seRoadE && seRoadE.lanePaths && seRoadS && seRoadS.lanePaths) {
     seRoadE.lanePaths.filter((lp) => lp.direction === Math.PI / 2).forEach((inLane) => {
-      const outLane = seRoadS.lanePaths.find((lp) => lp.direction === Math.PI);
+      const outLane = seRoadS.lanePaths?.find((lp) => lp.direction === Math.PI);
       if (outLane) {
         const pStart = inLane.waypoints[inLane.waypoints.length - 1];
         const pEnd = outLane.waypoints[0];
@@ -1241,7 +1241,7 @@ export function buildPerimeterNetwork(
       }
     });
     seRoadS.lanePaths.filter((lp) => lp.direction === 0).forEach((inLane) => {
-      const outLane = seRoadE.lanePaths.find((lp) => lp.direction === -Math.PI / 2);
+      const outLane = seRoadE.lanePaths?.find((lp) => lp.direction === -Math.PI / 2);
       if (outLane) {
         const pStart = inLane.waypoints[inLane.waypoints.length - 1];
         const pEnd = outLane.waypoints[0];

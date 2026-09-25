@@ -6,8 +6,9 @@
   "scripts": {
     "dev": "vite --port=3000 --host=0.0.0.0",
     "build": "vite build",
-    "preview": "vite preview",
-    "clean": "rm -rf dist server.js",
+    "start": "node server.js",
+    "preview": "vite preview --port 3000 --host 0.0.0.0",
+    "clean": "rm -rf dist",
     "lint": "tsc --noEmit"
   },
   "dependencies": {
@@ -16,6 +17,7 @@
     "@vitejs/plugin-react": "^5.0.4",
     "dotenv": "^17.2.3",
     "express": "^4.21.2",
+    "firebase": "^12.19.0",
     "lucide-react": "^0.546.0",
     "motion": "^12.23.24",
     "peerjs": "^1.5.5",

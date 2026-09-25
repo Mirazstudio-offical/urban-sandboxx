@@ -4,35 +4,88 @@ import { drawShadow, drawGlossBand, drawMedicalCross } from './itemGraphicShared
 export function drawMedicalItem(ctx: CanvasRenderingContext2D, itemId: string): boolean {
   switch (itemId) {
     case 'medkit': {
-      drawShadow(ctx, 9, 3.2, 7.8, 0.25);
+      drawShadow(ctx, 9.5, 3.5, 8, 0.28);
 
-      // Red trauma hard-case body
-      ctx.fillStyle = '#dc2626';
-      ctx.beginPath();
-      ctx.roundRect(-8.5, -5.5, 17, 13, 2.5);
-      ctx.fill();
-
-      // Bevel highlight & shadow
-      ctx.fillStyle = '#ef4444';
-      ctx.fillRect(-8.5, -5.5, 17, 1.2);
-      ctx.fillStyle = '#b91c1c';
-      ctx.fillRect(-8.5, 6.3, 17, 1.2);
-
-      // Top carrying handle
+      // Authentic CIS Automobile First Aid Kit (Аптечка первой помощи автомобильная / ФЭСТ)
+      // Heavy-duty black polymer hardcase body with ribbed perimeter
       ctx.fillStyle = '#18181b';
       ctx.beginPath();
-      ctx.roundRect(-4, -8.5, 8, 3.5, 1.5);
+      ctx.roundRect(-9, -5.5, 18, 13, 2.2);
       ctx.fill();
-      ctx.fillStyle = '#0f172a';
-      ctx.fillRect(-2.5, -7, 5, 2);
 
-      // Dual snap latches
+      // Textured rim bevel
+      ctx.strokeStyle = '#3f3f46';
+      ctx.lineWidth = 0.8;
+      ctx.stroke();
+
+      // Top bevel highlight & bottom shadow
+      ctx.fillStyle = '#27272a';
+      ctx.fillRect(-8.5, -5, 17, 1.2);
+      ctx.fillStyle = '#09090b';
+      ctx.fillRect(-8.5, 6, 17, 1.2);
+
+      // Molded top carrying handle
+      ctx.fillStyle = '#18181b';
+      ctx.beginPath();
+      ctx.roundRect(-4.5, -8.5, 9, 3.5, 1.5);
+      ctx.fill();
+      ctx.strokeStyle = '#3f3f46';
+      ctx.lineWidth = 0.8;
+      ctx.stroke();
+      // Handle finger grip opening
+      ctx.fillStyle = '#09090b';
+      ctx.beginPath();
+      ctx.roundRect(-3, -7.2, 6, 2, 1);
+      ctx.fill();
+
+      // Dual red snap latches (Iconic CIS automotive kit latches)
+      ctx.fillStyle = '#dc2626';
+      ctx.beginPath();
+      ctx.roundRect(-6.5, -6, 2.4, 2.5, 0.6);
+      ctx.roundRect(4.1, -6, 2.4, 2.5, 0.6);
+      ctx.fill();
+      ctx.fillStyle = '#ef4444';
+      ctx.fillRect(-6.5, -6, 2.4, 0.6);
+      ctx.fillRect(4.1, -6, 2.4, 0.6);
+
+      // White Information Label Plate (Минздрав / ГОСТ РСТ)
+      ctx.fillStyle = '#f8fafc';
+      ctx.beginPath();
+      ctx.roundRect(-6.5, -3.2, 13, 9.5, 1.2);
+      ctx.fill();
+
+      // Green safety border around label
+      ctx.strokeStyle = '#16a34a';
+      ctx.lineWidth = 0.7;
+      ctx.stroke();
+
+      // Header: "АПТЕЧКА" in crisp high-contrast dark green
+      ctx.fillStyle = '#15803d';
+      ctx.fillRect(-5.2, -2.4, 10.4, 1.4);
+      // Stenciled white text appearance
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 1.1px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('АПТЕЧКА', 0, -1.3);
+
+      // Official CIS Medical First Aid Green Cross (Зеленый крест первой помощи СНГ)
+      drawMedicalCross(ctx, 0, 1.5, 5.2, '#16a34a');
+
+      // Inner subtle contrast highlight in cross center
+      ctx.fillStyle = '#22c55e';
+      ctx.fillRect(-0.7, 0.8, 1.4, 1.4);
+
+      // Sub-label text strip: "ПЕРВАЯ ПОМОЩЬ" / ГОСТ
       ctx.fillStyle = '#475569';
-      ctx.fillRect(-5.5, -5.8, 2, 2.5);
-      ctx.fillRect(3.5, -5.8, 2, 2.5);
+      ctx.fillRect(-4.5, 4.5, 9, 0.7);
 
-      // Large White Medical Cross
-      drawMedicalCross(ctx, 0, 1, 6.5, '#ffffff');
+      // Fine certification micro-markings
+      ctx.fillStyle = '#94a3b8';
+      ctx.fillRect(-4, 5.4, 3.5, 0.4);
+      ctx.fillRect(0.5, 5.4, 3.5, 0.4);
+
+      // Subtle plastic surface gloss sheen
+      drawGlossBand(ctx, -7.5, -4, 2.5, 10);
       return true;
     }
 

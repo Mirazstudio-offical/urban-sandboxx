@@ -4,7 +4,8 @@ import {
   trafficDiagnostics, 
   TrafficLogEntry, 
   flushCityGridlocks, 
-  respawnStalledVehicles 
+  respawnStalledVehicles,
+  intersectionArbiter
 } from '../aiTraffic';
 import { 
   Activity, 
@@ -21,11 +22,13 @@ import {
   Maximize2, 
   Radio, 
   RefreshCw, 
+  ShieldCheck,
   Terminal, 
   Trash2, 
   X, 
   Zap 
 } from 'lucide-react';
+import { PX_S_TO_SPEED_KMH } from '../vehicleHelpers';
 
 interface TrafficConsoleProps {
   world: GameWorld | null;
@@ -111,8 +114,8 @@ export const TrafficConsole: React.FC<TrafficConsoleProps> = ({
         id: v.id,
         type: v.type,
         aiState: v.aiState,
-        speedKmh: Math.round(v.speed * 0.36),
-        targetSpeedKmh: Math.round(v.targetSpeed * 0.36),
+        speedKmh: Math.round(v.speed * PX_S_TO_SPEED_KMH),
+        targetSpeedKmh: Math.round(v.targetSpeed * PX_S_TO_SPEED_KMH),
         position: { x: Math.round(v.x), y: Math.round(v.y) },
         headingDeg: Math.round((v.angle * 180) / Math.PI),
         stuckTimer: parseFloat(v.stuckTimer.toFixed(2)),
@@ -233,7 +236,7 @@ export const TrafficConsole: React.FC<TrafficConsoleProps> = ({
         </div>
 
         {/* QUICK STATS STRIP */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 p-3 bg-slate-900/60 border-b border-slate-800 font-sans">
+        <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 p-3 bg-slate-900/60 border-b border-slate-800 font-sans">
           <div className="p-2.5 rounded-xl bg-slate-950/70 border border-slate-800 flex items-center justify-between">
             <div>
               <div className="text-[11px] text-slate-400">Average City Speed</div>
@@ -254,10 +257,18 @@ export const TrafficConsole: React.FC<TrafficConsoleProps> = ({
 
           <div className="p-2.5 rounded-xl bg-slate-950/70 border border-slate-800 flex items-center justify-between">
             <div>
-              <div className="text-[11px] text-slate-400">Completed Turns</div>
-              <div className="text-base font-bold text-emerald-400 mt-0.5">{trafficDiagnostics.totalPassedThrough}</div>
+              <div className="text-[11px] text-slate-400">Cycles Dissolved</div>
+              <div className="text-base font-bold text-purple-400 mt-0.5">{trafficDiagnostics.cyclesDissolved}</div>
             </div>
-            <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+            <RefreshCw className="w-4 h-4 text-purple-400" />
+          </div>
+
+          <div className="p-2.5 rounded-xl bg-slate-950/70 border border-slate-800 flex items-center justify-between">
+            <div>
+              <div className="text-[11px] text-slate-400">Spillback Block Holds</div>
+              <div className="text-base font-bold text-amber-400 mt-0.5">{trafficDiagnostics.boxBlocksAvoided}</div>
+            </div>
+            <ShieldCheck className="w-4 h-4 text-amber-400" />
           </div>
 
           <div className="p-2.5 rounded-xl bg-slate-950/70 border border-slate-800 flex items-center justify-between">
@@ -451,8 +462,8 @@ export const TrafficConsole: React.FC<TrafficConsoleProps> = ({
                   </thead>
                   <tbody className="divide-y divide-slate-800/60 font-mono text-[11px]">
                     {filteredVehicles.map((car) => {
-                      const speedKmh = Math.round(car.speed * 0.36);
-                      const targetKmh = Math.round(car.targetSpeed * 0.36);
+                      const speedKmh = Math.round(car.speed * PX_S_TO_SPEED_KMH);
+                      const targetKmh = Math.round(car.targetSpeed * PX_S_TO_SPEED_KMH);
                       const isStalled = car.speed < 4 && car.aiState !== 'stopping_light';
 
                       return (
@@ -512,16 +523,26 @@ export const TrafficConsole: React.FC<TrafficConsoleProps> = ({
                   const halfH = inter.height / 2 + 10;
                   return v.x >= inter.x - halfW && v.x <= inter.x + halfW && v.y >= inter.y - halfH && v.y <= inter.y + halfH;
                 });
+                const activeRes = intersectionArbiter.reservations.get(inter.id) || [];
+                const waitQueue = intersectionArbiter.waitingMap.get(inter.id) || [];
+                const elected = intersectionArbiter.electedPriority.get(inter.id);
 
                 return (
-                  <div key={inter.id} className="p-3.5 rounded-xl bg-slate-950/60 border border-slate-800 space-y-2">
+                  <div key={inter.id} className="p-3.5 rounded-xl bg-slate-950/60 border border-slate-800 space-y-2.5">
                     <div className="flex items-center justify-between">
-                      <span className="font-bold text-slate-100 uppercase">{inter.id} ({inter.type})</span>
-                      <span className={`px-2 py-0.5 rounded text-[10px] uppercase font-bold ${
-                        carsInside.length > 2 ? 'bg-amber-500/20 text-amber-400' : 'bg-emerald-500/20 text-emerald-400'
-                      }`}>
-                        {carsInside.length} cars in junction
-                      </span>
+                      <span className="font-bold text-slate-100 uppercase text-xs">{inter.id} ({inter.type})</span>
+                      <div className="flex items-center gap-1.5">
+                        {elected && (
+                          <span className="px-1.5 py-0.5 rounded text-[9px] bg-purple-500/20 text-purple-300 border border-purple-500/40 font-mono">
+                            Wave Leader: #{elected.vehicleId.slice(-4)}
+                          </span>
+                        )}
+                        <span className={`px-2 py-0.5 rounded text-[10px] uppercase font-bold ${
+                          carsInside.length > 2 ? 'bg-amber-500/20 text-amber-400' : 'bg-emerald-500/20 text-emerald-400'
+                        }`}>
+                          {carsInside.length} in box
+                        </span>
+                      </div>
                     </div>
 
                     <div className="grid grid-cols-2 gap-2 text-xs">
@@ -545,8 +566,20 @@ export const TrafficConsole: React.FC<TrafficConsoleProps> = ({
                       </div>
                     </div>
 
+                    <div className="p-2 rounded-lg bg-slate-900/60 border border-slate-800/80 text-[11px] space-y-1">
+                      <div className="flex justify-between text-slate-400">
+                        <span>Active Wave Passes: <strong className="text-emerald-400">{activeRes.length}</strong></span>
+                        <span>Waiting Queue: <strong className={waitQueue.length > 2 ? 'text-amber-400' : 'text-slate-200'}>{waitQueue.length}</strong></span>
+                      </div>
+                      {waitQueue.length > 0 && (
+                        <div className="text-[10px] text-slate-500 truncate">
+                          Queued: {waitQueue.map((w) => `#${w.vehicleId.slice(-4)}${w.spillbackBlocked ? ' [box-hold]' : ''}`).join(', ')}
+                        </div>
+                      )}
+                    </div>
+
                     <div className="text-[10px] text-slate-500 flex justify-between">
-                      <span>Phase time: {(inter.phaseTimer || 0).toFixed(1)}s / {currentPhase?.duration || 0}s</span>
+                      <span>Phase: {(inter.phaseTimer || 0).toFixed(1)}s / {currentPhase?.duration || 0}s</span>
                       <span>Stop lines: {inter.stopLines?.length || 0}</span>
                     </div>
                   </div>

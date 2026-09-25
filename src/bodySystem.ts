@@ -1,6 +1,7 @@
 import { BodyPartsMap, BodyState, Injury, InjuryType, Player, InputState, Vehicle } from './types';
 import { sound } from './audio';
 import { addPlayerNotification } from './items';
+import { PX_S_TO_SPEED_KMH } from './vehicleHelpers';
 
 export const BODY_PART_KEYS: (keyof BodyPartsMap)[] = [
   'head',
@@ -8,8 +9,7 @@ export const BODY_PART_KEYS: (keyof BodyPartsMap)[] = [
   'leftArm',
   'rightArm',
   'leftLeg',
-  'rightLeg'
-];
+  'rightLeg'];
 
 export const BODY_PART_NAMES_RU: Record<keyof BodyPartsMap, string> = {
   head: 'Голова',
@@ -17,8 +17,7 @@ export const BODY_PART_NAMES_RU: Record<keyof BodyPartsMap, string> = {
   leftArm: 'Левая рука',
   rightArm: 'Правая рука',
   leftLeg: 'Левая нога',
-  rightLeg: 'Правая нога'
-};
+  rightLeg: 'Правая нога'};
 
 /**
  * Creates an empty default BodyPartsMap
@@ -93,8 +92,8 @@ export function addInjuryToPart(
     severity: Math.min(100, severity),
     pain: calculateInjuryPain(type, severity, false, burnDegree),
     treatedTimer: 0,
-    bleedingRate: type === 'bleeding' ? severity : 0,
-    burnDegree: type === 'burn' ? (burnDegree || 1) : undefined
+    bleedingRate: type === 'bleeding'? severity : 0,
+    burnDegree: type === 'burn'? (burnDegree || 1) : undefined
   };
 
   part.push(newInj);
@@ -181,7 +180,7 @@ export function distributeImpactDamage(
     bs.impactFlashTimer = 2.0;
     bs.tinnitusTimer = 3.5;
     sound.playTinnitus(3.5);
-    addPlayerNotification(player, `💫 Вы потеряли сознание от сильного удара! (${Math.round(player.faintTimer)}s)`, 'warning');
+    addPlayerNotification(player, `Вы потеряли сознание от сильного удара! (${Math.round(player.faintTimer)}s)`, 'warning');
   }
 
   // Multi-limb distribution based on realistic mechanics:
@@ -226,7 +225,7 @@ export function distributeImpactDamage(
     // 4. Arms (Defensive reflex injuries / pavement slide / fracture)
     const armDamage = impactForce * 0.55;
     if (armDamage >= 30) {
-      addInjuryToPart(bs, Math.random() > 0.5 ? 'leftArm' : 'rightArm', 'fracture', armDamage);
+      addInjuryToPart(bs, Math.random() > 0.5 ? 'leftArm': 'rightArm', 'fracture', armDamage);
     } else {
       addInjuryToPart(bs, 'leftArm', 'bruise', armDamage);
       addInjuryToPart(bs, 'rightArm', 'abrasion', armDamage);
@@ -268,31 +267,31 @@ export function applyDriverVehicleCrashTrauma(
 
   // Effective impact speed scaled by frangibility/resistance of the obstacle
   const effectiveSpeedPx = impactSpeedPx * resistanceFactor;
-  const speedKmh = Math.round(effectiveSpeedPx * 0.36);
+  const speedKmh = Math.round(effectiveSpeedPx * PX_S_TO_SPEED_KMH);
 
   // 1. Determine vehicle class passive safety absorption (Euro NCAP / NHTSA standards)
   let baseSafetyAbsorption = 0.65; // Default modern sedan (65% absorption)
-  let safetyTag = '🛡️ [Euro NCAP 5★]';
+  let safetyTag = '[Euro NCAP 5]';
 
   if (vehicle) {
     const vType = vehicle.type;
     const isSuvOrPolice = ['suv', 'ambulance_suv', 'police', 'fire_rescue'].includes(vType);
-    const isHeavyTruck = ['truck_box', 'truck_dump', 'truck_tanker', 'truck_water', 'truck_flatbed', 'cement_mixer', 'fire_engine', 'fire_ladder', 'garbage_truck'].includes(vType);
+    const isHeavyTruck = ['truck_box', 'truck_dump', 'truck_semi', 'truck_tanker', 'truck_water', 'truck_flatbed', 'truck_covered', 'cement_mixer', 'fire_engine', 'fire_ladder', 'garbage_truck'].includes(vType);
     const isSports = ['sports', 'muscle'].includes(vType);
-    const isBus = vType === 'bus' || vType === 'bus_minibus';
+    const isBus = vType === 'bus'|| vType === 'bus_minibus';
 
     if (isSuvOrPolice) {
       baseSafetyAbsorption = 0.75; // Heavy chassis, high seating, multiple airbags & pretensioners
-      safetyTag = '🚜 [Рамный кузов/SUV]';
+      safetyTag = '[Рамный кузов/SUV]';
     } else if (isHeavyTruck) {
-      baseSafetyAbsorption = obstacleType === 'здание' ? 0.45 : 0.72; // High mass against cars, stiff cab against walls
-      safetyTag = '🚛 [Силовой каркас тягача]';
+      baseSafetyAbsorption = obstacleType === 'здание'? 0.45 : 0.72; // High mass against cars, stiff cab against walls
+      safetyTag = '[Силовой каркас тягача]';
     } else if (isSports) {
       baseSafetyAbsorption = 0.50; // Carbon/steel monocoque, stiffer G-forces
-      safetyTag = '🏎️ [Спорткар / Жесткий кузов]';
+      safetyTag = '[Спорткар / Жесткий кузов]';
     } else if (isBus) {
       baseSafetyAbsorption = 0.60;
-      safetyTag = '🚌 [Автобус]';
+      safetyTag = '[Автобус]';
     }
   }
 
@@ -337,20 +336,20 @@ export function applyDriverVehicleCrashTrauma(
     addPlayerNotification(player, `${safetyTag} Удар о ${obstacleType} (${speedKmh} км/ч). Ремень и подушка уберегли от травм.`, 'warning');
   } else if (speedKmh < 65) {
     if (isCabinCompromised) {
-      addPlayerNotification(player, `⚠️ [Деформация салона] ДТП на ${speedKmh} км/ч! Повторный удар по исчерпанной зоне деформации!`, 'warning');
+      addPlayerNotification(player, `[Деформация салона] ДТП на ${speedKmh} км/ч! Повторный удар по исчерпанной зоне деформации!`, 'warning');
     } else if (isSideImpact) {
-      addPlayerNotification(player, `🚗 [Боковой удар] Удар в стойку двери на ${speedKmh} км/ч! Ушиб грудной клетки!`, 'warning');
+      addPlayerNotification(player, `[Боковой удар] Удар в стойку двери на ${speedKmh} км/ч! Ушиб грудной клетки!`, 'warning');
     } else {
       addPlayerNotification(player, `${safetyTag} Столкновение (${speedKmh} км/ч)! Сработали подушки безопасности и преднатяжители ремней!`, 'warning');
     }
   } else if (speedKmh < 95) {
     if (isCabinCompromised) {
-      addPlayerNotification(player, `💥 [Деформация салона] Тяжелая авария на ${speedKmh} км/ч! Смещение педального узла и рулевой колонки!`, 'warning');
+      addPlayerNotification(player, `[Деформация салона] Тяжелая авария на ${speedKmh} км/ч! Смещение педального узла и рулевой колонки!`, 'warning');
     } else {
-      addPlayerNotification(player, `💥 Тяжелое ДТП (${speedKmh} км/ч)! Перегрузка >15G, травматический шок и переломы!`, 'warning');
+      addPlayerNotification(player, `Тяжелое ДТП (${speedKmh} км/ч)! Перегрузка >15G, травматический шок и переломы!`, 'warning');
     }
   } else {
-    addPlayerNotification(player, `🚨 [Перегрузка >25G] Катастрофический таран на ${speedKmh} км/ч! Разрушение силового каркаса и потеря сознания!`, 'warning');
+    addPlayerNotification(player, `[Перегрузка >25G] Катастрофический таран на ${speedKmh} км/ч! Разрушение силового каркаса и потеря сознания!`, 'warning');
   }
 }
 
@@ -400,22 +399,22 @@ export function updateBodySystem(
         inj.treatedTimer = (inj.treatedTimer || 0) + dt;
         // Treated injuries gradually heal and fade over time:
         // Abrasions & Bruises heal in ~80-100s
-        if ((inj.type === 'abrasion' || inj.type === 'bruise') && inj.treatedTimer > 90) {
+        if ((inj.type === 'abrasion'|| inj.type === 'bruise') && inj.treatedTimer > 90) {
           part.splice(i, 1);
           continue;
         }
         // Sprains heal in ~150s
-        if (inj.type === 'sprain' && inj.treatedTimer > 150) {
+        if (inj.type === 'sprain'&& inj.treatedTimer > 150) {
           part.splice(i, 1);
           continue;
         }
         // Bleeding wounds heal/close in ~120s once bandaged
-        if (inj.type === 'bleeding' && inj.treatedTimer > 120) {
+        if (inj.type === 'bleeding'&& inj.treatedTimer > 120) {
           part.splice(i, 1);
           continue;
         }
         // Fractures heal in ~240s once immobilized with a splint
-        if (inj.type === 'fracture' && inj.treatedTimer > 240) {
+        if (inj.type === 'fracture'&& inj.treatedTimer > 240) {
           part.splice(i, 1);
           continue;
         }
@@ -430,21 +429,21 @@ export function updateBodySystem(
       }
 
       // Check bleeding
-      if (inj.type === 'bleeding' && !inj.treated) {
+      if (inj.type === 'bleeding'&& !inj.treated) {
         activeBleedingCount++;
         totalBleedingRate += (inj.bleedingRate || inj.severity || 50);
       }
 
       // Check limb conditions
-      if (k === 'leftLeg' || k === 'rightLeg') {
+      if (k === 'leftLeg'|| k === 'rightLeg') {
         if (inj.type === 'fracture') {
           if (!inj.treated) hasUntreatedLegFracture = true;
           else hasTreatedLegFracture = true;
         }
         if (!inj.treated) hasLegInjury = true;
       }
-      if (k === 'leftArm' || k === 'rightArm') {
-        if (inj.type === 'fracture' && !inj.treated) {
+      if (k === 'leftArm'|| k === 'rightArm') {
+        if (inj.type === 'fracture'&& !inj.treated) {
           hasUntreatedArmFracture = true;
         }
       }
@@ -572,7 +571,7 @@ export function updateBodySystem(
     player.vy = 0;
     if (player.faintTimer === 0) {
       player.isFainting = false;
-      addPlayerNotification(player, `👁️ Вы пришли в сознание... Голова раскалывается.`, 'warning');
+      addPlayerNotification(player, `Вы пришли в сознание... Голова раскалывается.`, 'warning');
     }
   } else {
     player.isFainting = false;
@@ -605,7 +604,7 @@ export function soothePanic(player: Player, amount: number) {
   if (prevPanic > 0) {
     bs.panicLevel = Math.max(0, prevPanic - amount);
     if (prevPanic > 20 && bs.panicLevel <= 20) {
-      addPlayerNotification(player, '🧘 Вы смогли перевести дыхание и немного успокоиться...', 'info');
+      addPlayerNotification(player, 'Вы смогли перевести дыхание и немного успокоиться...', 'info');
     }
   }
 }

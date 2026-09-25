@@ -27,7 +27,9 @@ export class SpatialGrid<T extends SpatialItem> {
   }
 
   public clear() {
-    this.grid.clear();
+    for (const cell of this.grid.values()) {
+      cell.length = 0;
+    }
   }
 
   public insert(item: T) {

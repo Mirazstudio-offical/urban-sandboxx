@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Vehicle, CarType, WeatherType } from '../types';
+import { getVehicleRequiredKeyType } from '../items';
 import { 
   Fuel, 
   Thermometer, 
@@ -16,13 +17,19 @@ import {
   ShieldAlert,
   Clock,
   Compass,
-  Activity
+  Activity,
+  Key,
+  Lock,
+  Unlock
 } from 'lucide-react';
 import { sound } from '../audio';
+import { getOutsideTemperature } from '../physics';
+import { getTerrainSlope } from '../terrainElevation';
+import { getVehicleDiffCapabilities, cycleVehicleDiffLock, toggleAxleDiffLock } from '../vehicleHelpers';
 
 export type DashboardTheme = 'sport' | 'truck' | 'retro' | 'emergency' | 'luxury';
 
-export type TripComputerMode = 'eco' | 'range' | 'trip' | 'sys' | 'tank';
+export type TripComputerMode = 'eco' | 'range' | 'trip' | 'sys' | 'tank' | 'gbo';
 
 export function getVehicleDashboardTheme(type?: CarType): DashboardTheme {
   if (!type) return 'luxury';
@@ -39,9 +46,11 @@ export function getVehicleDashboardTheme(type?: CarType): DashboardTheme {
 
     case 'truck_box':
     case 'truck_dump':
+    case 'truck_semi':
     case 'truck_tanker':
     case 'truck_water':
     case 'truck_flatbed':
+    case 'truck_covered':
     case 'truck_tow':
     case 'truck_armored':
     case 'cement_mixer':
@@ -61,6 +70,10 @@ export function getVehicleDashboardTheme(type?: CarType): DashboardTheme {
     case 'micro_car':
     case 'sedan_classic':
     case 'wagon_classic':
+    case 'liftback_tavria':
+    case 'hatch_samara':
+    case 'sedan_samara':
+    case 'sedan_nexia':
     case 'moto_izh_jupiter':
     case 'moto_ural_sidecar':
     case 'moto_jawa350':
@@ -111,6 +124,11 @@ interface SpeedometerHUDProps {
   onToggleEngine?: () => void;
   onOpenRadialMenu?: () => void;
   onSelectGear?: (gear: 'P' | 'R' | 'N' | 'D' | number | string) => void;
+  onTakeOutKey?: () => void;
+  onInsertKey?: (keyType: 'gold' | 'iron') => void;
+  hasKeysInInventory?: ('gold' | 'iron')[];
+  onToggleDiffLock?: () => void;
+  onToggleAxleDiffLock?: (axle: 'center' | 'rear' | 'front') => void;
 }
 
 export const SpeedometerHUD: React.FC<SpeedometerHUDProps> = ({
@@ -128,6 +146,11 @@ export const SpeedometerHUD: React.FC<SpeedometerHUDProps> = ({
   onToggleEngine,
   onOpenRadialMenu,
   onSelectGear,
+  onTakeOutKey,
+  onInsertKey,
+  hasKeysInInventory = [],
+  onToggleDiffLock,
+  onToggleAxleDiffLock
 }) => {
   const [isMinimized, setIsMinimized] = useState<boolean>(false);
   const [tripMode, setTripMode] = useState<TripComputerMode>('eco');
@@ -143,26 +166,67 @@ export const SpeedometerHUD: React.FC<SpeedometerHUDProps> = ({
   const currentRPM = eng?.engineRunning ? Math.round(eng.engineRPM || 800) : 0;
   const coolantTemp = Math.round(eng?.temperature ?? 88);
   const oilPressure = Math.round(eng?.oilPressure ?? (eng?.oilLevel ?? 90));
-  const fuelLevel = Math.round(fuel?.tankLevel ?? 75);
+
+  const isLpgRunning = !!(vehicle.hasGBO && fuel?.gboActive !== false && (fuel?.gboLevel ?? 0) > 0 && coolantTemp >= 40);
+  const fuelLevel = Math.round(isLpgRunning ? (fuel?.gboLevel ?? 100) : (fuel?.tankLevel ?? 75));
   const isEngineRunning = !!eng?.engineRunning;
   const isStalled = !!eng?.isStalled || !!eng?.engineStalled;
   const batteryCharge = Math.round(eng?.batteryCharge ?? 100);
 
   // Modern On-Board Computer (Trip Computer / БК) Calculations
-  let tankCapacityLiters = 55;
-  let baseAvgConsumption = 7.8; // L/100km
-  if (theme === 'sport') {
-    tankCapacityLiters = 68;
-    baseAvgConsumption = 12.5;
-  } else if (theme === 'truck') {
-    tankCapacityLiters = 180;
-    baseAvgConsumption = 26.0;
-  } else if (theme === 'retro') {
-    tankCapacityLiters = 45;
-    baseAvgConsumption = 8.5;
+  let tankCapacityLiters = isLpgRunning ? (fuel?.gboCapacity ?? 42) : (fuel?.tankCapacity || 55);
+  let baseAvgConsumption = isLpgRunning ? 9.2 : 7.8; // LPG consumption is ~18% higher by volume
+  if (!isLpgRunning) {
+    if (theme === 'sport') {
+      tankCapacityLiters = fuel?.tankCapacity || 68;
+      baseAvgConsumption = 12.5;
+    } else if (theme === 'truck') {
+      tankCapacityLiters = fuel?.tankCapacity || 180;
+      baseAvgConsumption = vehicle.type === 'truck_semi' ? 34.0 : 26.0;
+    } else if (theme === 'retro') {
+      tankCapacityLiters = fuel?.tankCapacity || 45;
+      baseAvgConsumption = 8.5;
+    }
   }
 
   const remainingFuelLiters = ((fuelLevel / 100) * tankCapacityLiters).toFixed(1);
+
+  // Differential Lock Capabilities & Current Axle State
+  const diffCaps = getVehicleDiffCapabilities(vehicle.type);
+  const dl = vehicle.diffLock;
+  const isDiffLocked = !!(dl?.center || dl?.rear || dl?.front);
+
+  let diffLockDesc = 'СВОБОДНЫЙ';
+  if (dl?.front && dl?.rear && dl?.center) diffLockDesc = 'ПОЛНАЯ (100%)';
+  else if (dl?.center && dl?.rear) diffLockDesc = 'МОБ + МКБ-З';
+  else if (dl?.center) diffLockDesc = 'МОБ (МЕЖОСЕВ.)';
+  else if (dl?.rear) diffLockDesc = 'МКБ-З (ЗАДНЯЯ)';
+  else if (dl?.front) diffLockDesc = 'МКБ-П (ПЕРЕДН.)';
+
+  const handleCycleDiffLock = () => {
+    if (onToggleDiffLock) {
+      onToggleDiffLock();
+    } else {
+      const res = cycleVehicleDiffLock(vehicle);
+      if (res.isEngaged) sound.playDiffLockEngage();
+      else if (res.changed) sound.playDiffLockDisengage();
+      else sound.playDiffLockWarning();
+    }
+  };
+
+  const handleToggleAxle = (axle: 'center' | 'rear' | 'front') => {
+    if (onToggleAxleDiffLock) {
+      onToggleAxleDiffLock(axle);
+    } else {
+      const res = toggleAxleDiffLock(vehicle, axle);
+      if (res.success) {
+        if (res.state) sound.playDiffLockEngage();
+        else sound.playDiffLockDisengage();
+      } else {
+        sound.playDiffLockWarning();
+      }
+    }
+  };
 
   // Compass Heading from vehicle angle
   const headingDeg = (((vehicle.angle * 180) / Math.PI) % 360 + 360) % 360;
@@ -170,19 +234,21 @@ export const SpeedometerHUD: React.FC<SpeedometerHUDProps> = ({
   const headingIndex = Math.round(headingDeg / 45) % 8;
   const compassHeading = compassHeadings[headingIndex];
 
+  // Slope / Incline Grade % calculation
+  const currentSlope = getTerrainSlope(vehicle.x, vehicle.y);
+  const cosH = Math.cos(vehicle.angle);
+  const sinH = Math.sin(vehicle.angle);
+  const slopeAlongHeading = -(currentSlope.slopeX * cosH + currentSlope.slopeY * sinH);
+  const gradePercent = Math.round(slopeAlongHeading * 100 * 2.5);
+
   // In-Game Clock calculation
   const safeTimeHour = ((timeHour % 24) + 24) % 24;
   const gameHours = Math.floor(safeTimeHour);
   const gameMinutes = Math.floor((safeTimeHour % 1) * 60);
   const gameTimeStr = `${String(gameHours).padStart(2, '0')}:${String(gameMinutes).padStart(2, '0')}`;
 
-  // In-Game Ambient Temperature calculation based on time of day and weather
-  const baseTemp = 18 + 7 * Math.sin(((safeTimeHour - 8) / 24) * 2 * Math.PI);
-  let weatherDelta = 0;
-  if (weather === 'rain') weatherDelta = -4;
-  else if (weather === 'storm') weatherDelta = -6;
-  else if (weather === 'fog') weatherDelta = -2;
-  const currentTempC = Math.round(baseTemp + weatherDelta);
+  // In-Game Ambient Temperature calculation based on unified getOutsideTemperature function
+  const currentTempC = Math.round(getOutsideTemperature({ weather } as any, safeTimeHour));
   const ambientTempStr = `${currentTempC >= 0 ? '+' : ''}${currentTempC}°C`;
 
   // Instant fuel consumption logic (л/100км в движении, л/ч на холостом ходу, 0.0 при торможении двигателем ПХХ)
@@ -229,11 +295,14 @@ export const SpeedometerHUD: React.FC<SpeedometerHUDProps> = ({
   const tripOdoKm = (((vehicle.distanceTraveled ?? 0) / 1000) % 1000).toFixed(1);
 
   // Transmission & Gear display
+  const isMachinery = carType.startsWith('roller_') || carType.startsWith('paver_');
   let currentGearLabel = String(gear);
   if (eng?.transmissionType === 'MANUAL') {
     if (eng.currentGear === -1) currentGearLabel = 'R';
     else if (eng.currentGear === 0) currentGearLabel = 'N';
-    else currentGearLabel = String(eng.currentGear);
+    else if (isMachinery) {
+      currentGearLabel = eng.currentGear === 1 ? '1 (РАБ)' : '2 (ТР)';
+    } else currentGearLabel = String(eng.currentGear);
   } else {
     const autoMode = eng?.autoGearMode || (typeof gear === 'string' && ['P', 'R', 'N', 'D'].includes(gear) ? gear : 'D');
     if (autoMode === 'D') {
@@ -243,19 +312,31 @@ export const SpeedometerHUD: React.FC<SpeedometerHUDProps> = ({
     }
   }
 
-  // Max scales based on car theme
+  // Max scales based on specific vehicle type & theme
   let maxSpeed = 240;
   let maxRPM = 8000;
   let redlineRPM = 6200;
 
-  if (theme === 'sport') {
+  if (isMachinery) {
+    maxSpeed = 25;
+    maxRPM = 2800;
+    redlineRPM = 2200;
+  } else if (carType.startsWith('tractor_')) {
+    maxSpeed = 45;
+    maxRPM = 3000;
+    redlineRPM = 2200;
+  } else if (carType.startsWith('truck_') || carType === 'bus' || carType === 'bus_minibus' || carType === 'cement_mixer' || carType === 'garbage_truck' || carType === 'fire_engine' || carType === 'fire_ladder' || carType === 'fire_rescue') {
+    maxSpeed = 130;
+    maxRPM = 3600;
+    redlineRPM = 2600;
+  } else if (theme === 'sport') {
     maxSpeed = 340;
     maxRPM = 9000;
     redlineRPM = 7000;
   } else if (theme === 'truck') {
-    maxSpeed = 140;
+    maxSpeed = 160;
     maxRPM = 4500;
-    redlineRPM = 3200;
+    redlineRPM = 3400;
   } else if (theme === 'retro') {
     maxSpeed = 180;
     maxRPM = 6500;
@@ -265,6 +346,21 @@ export const SpeedometerHUD: React.FC<SpeedometerHUDProps> = ({
     maxRPM = 7500;
     redlineRPM = 6200;
   }
+
+  // Dynamic Redline Arc path calculation for Tachometer
+  const redlineStartAngle = -125 + Math.min(1.0, Math.max(0, redlineRPM / maxRPM)) * 250;
+  const redlineEndAngle = 125;
+  const radStart = ((redlineStartAngle - 90) * Math.PI) / 180;
+  const radEnd = ((redlineEndAngle - 90) * Math.PI) / 180;
+  const rArc = 52;
+  const cxArc = 70;
+  const cyArc = 70;
+  const xStart = cxArc + rArc * Math.cos(radStart);
+  const yStart = cyArc + rArc * Math.sin(radStart);
+  const xEnd = cxArc + rArc * Math.cos(radEnd);
+  const yEnd = cyArc + rArc * Math.sin(radEnd);
+  const largeArcFlag = (redlineEndAngle - redlineStartAngle) > 180 ? 1 : 0;
+  const redlinePathD = `M ${xStart.toFixed(1)} ${yStart.toFixed(1)} A ${rArc} ${rArc} 0 ${largeArcFlag} 1 ${xEnd.toFixed(1)} ${yEnd.toFixed(1)}`;
 
   // Calculate needle angles: -125deg to +125deg for circular main gauges
   const speedRatio = Math.max(0, Math.min(1, speedKmh / maxSpeed));
@@ -486,27 +582,51 @@ export const SpeedometerHUD: React.FC<SpeedometerHUDProps> = ({
 
       {/* COMPACT MINIMALIST BAR (IF MINIMIZED) */}
       {isMinimized ? (
-        <div className={`flex items-center gap-3 px-4 py-2 rounded-xl border backdrop-blur-md shadow-2xl ${themeStyles.casingBg} ${themeStyles.border} text-white whitespace-nowrap overflow-x-auto max-w-full`}>
+        <div className="flex items-center gap-3 px-4.5 py-2.5 rounded-2xl border border-slate-800 bg-slate-950/85 backdrop-blur-md shadow-2xl text-white whitespace-nowrap overflow-x-auto max-w-full animate-in fade-in duration-100">
           <div className="flex items-baseline gap-1 font-mono whitespace-nowrap shrink-0">
             <span className="text-2xl font-black text-sky-400">{speedKmh}</span>
             <span className="text-[9px] text-slate-400 font-bold uppercase">КМ/Ч</span>
           </div>
-          <div className="h-4 w-px bg-slate-700 shrink-0" />
+          <div className="h-4 w-px bg-slate-800 shrink-0" />
           <div className="flex items-center gap-2 font-mono text-xs whitespace-nowrap shrink-0">
-            <span className="text-slate-400">RPM:</span>
+            <span className="text-slate-400 font-bold uppercase text-[9px] tracking-wider">RPM:</span>
             <span className={`font-bold ${currentRPM > redlineRPM ? 'text-rose-400 animate-pulse' : 'text-slate-200'}`}>{currentRPM}</span>
           </div>
-          <div className="h-4 w-px bg-slate-700 shrink-0" />
-          <span className="px-2 py-0.5 rounded font-mono font-black text-xs bg-slate-800 border border-slate-700 text-emerald-400 shrink-0">
+          <div className="h-4 w-px bg-slate-800 shrink-0" />
+          <span className="px-2.5 py-1 rounded-xl font-mono font-black text-xs bg-slate-900 border border-slate-800 text-emerald-400 shrink-0">
             {currentGearLabel}
           </span>
-          <div className="h-4 w-px bg-slate-700 shrink-0" />
+          {eng?.hasTransferCase && (
+            <div className="flex items-center px-2 py-1 bg-slate-900 border border-slate-800 rounded-xl gap-1 shrink-0 ml-1" title="Делитель [X]">
+              <span className={`text-[10px] font-black uppercase ${eng.transferCaseMode === 'LOW' ? 'text-amber-500' : 'text-slate-300'}`}>
+                {eng.transferCaseMode === 'LOW' ? 'LO' : 'HI'}
+              </span>
+            </div>
+          )}
+          {diffCaps.supported && (
+            <button
+              type="button"
+              onClick={handleCycleDiffLock}
+              className={`flex items-center px-2 py-1 border rounded-xl gap-1.5 shrink-0 ml-1 transition cursor-pointer active:scale-95 ${
+                isDiffLocked 
+                  ? 'bg-amber-500/20 border-amber-500/60 text-amber-300 shadow-[0_0_8px_rgba(245,158,11,0.2)]'
+                  : 'bg-slate-900 border-slate-800 text-slate-500 hover:text-slate-300'
+              }`}
+              title="Блокировка дифференциала [V]"
+            >
+              <ShieldAlert className={`w-3 h-3 ${isDiffLocked ? 'text-amber-400 animate-pulse' : 'text-slate-500'}`} />
+              <span className="text-[10px] font-black uppercase">
+                {diffLockDesc}
+              </span>
+            </button>
+          )}
+          <div className="h-4 w-px bg-slate-800 shrink-0" />
           {/* Quick Engine start/stop */}
           <button
             type="button"
             onClick={onToggleEngine}
-            className={`p-1.5 rounded-lg border flex items-center justify-center transition shrink-0 ${
-              isEngineRunning ? 'bg-emerald-500/20 border-emerald-500 text-emerald-300' : 'bg-rose-500/20 border-rose-500 text-rose-300'
+            className={`p-1.5 rounded-xl border flex items-center justify-center transition active:scale-95 cursor-pointer shrink-0 ${
+              isEngineRunning ? 'bg-emerald-500/20 border-emerald-500 text-emerald-300' : 'bg-rose-500/20 border-rose-600 text-rose-300'
             }`}
             title="Зажигание [J]"
           >
@@ -514,41 +634,55 @@ export const SpeedometerHUD: React.FC<SpeedometerHUDProps> = ({
           </button>
         </div>
       ) : (
-        /* FULL ANALOG INSTRUMENT CLUSTER */
+        /* FULL ANALOG INSTRUMENT CLUSTER (BENTO PANEL DESIGN) */
         <div
-          className={`relative rounded-2xl border-2 p-2.5 md:p-3 shadow-2xl backdrop-blur-xl ${themeStyles.casingBg} ${themeStyles.border} flex flex-col items-center gap-2`}
+          className="relative bg-slate-950/85 border border-slate-800 rounded-2xl p-4 md:p-5 shadow-2xl backdrop-blur-xl flex flex-col items-center gap-3.5 w-full max-w-[480px] select-none animate-in fade-in duration-150"
         >
           {/* TOP ANNUNCIATOR STRIP & SHIFT LIGHTS */}
-          <div className="w-full flex items-center justify-between px-2 text-[10px] font-mono border-b border-slate-800/80 pb-1.5 gap-2">
+          <div className="w-full flex items-center justify-between text-slate-400 text-[9px] font-mono font-bold uppercase tracking-wider border-b border-slate-800/80 pb-2.5 gap-2">
             {/* Left: Signal & In-Game Telemetry (Time, Outside Temp, Compass) */}
             <div className="flex items-center gap-1.5">
-              <span className={`p-1 rounded ${playerTurnSignal === 'left' || playerTurnSignal === 'hazard' ? 'bg-emerald-500/30 text-emerald-400 animate-pulse' : 'text-slate-600'}`}>
+              <span className={`p-1 rounded-lg ${playerTurnSignal === 'left' || playerTurnSignal === 'hazard' ? 'bg-emerald-500/20 text-emerald-400 animate-pulse border border-emerald-500/30' : 'text-slate-600 border border-transparent'}`}>
                 <ArrowLeft className="w-3.5 h-3.5" />
               </span>
 
               {/* In-Game Time, Outside Temp & Compass chips */}
-              <div className="flex items-center gap-1.5 text-[9px] font-mono text-slate-400 bg-slate-900/90 px-2 py-0.5 rounded border border-slate-800">
+              <div className="flex items-center gap-1.5 text-[9px] font-mono text-slate-300 bg-slate-900/40 px-2 py-1 rounded-xl border border-slate-800/50">
                 <span className="flex items-center gap-1 text-slate-200 font-bold" title="Игровое время">
                   <Clock className="w-2.5 h-2.5 text-sky-400" />
                   {gameTimeStr}
                 </span>
-                <span className="text-slate-600">|</span>
+                <span className="text-slate-700">|</span>
                 <span className="flex items-center gap-1 text-slate-200 font-bold" title="Температура за бортом">
                   <Thermometer className="w-2.5 h-2.5 text-amber-400" />
                   {ambientTempStr}
                 </span>
-                <span className="text-slate-600">|</span>
+                <span className="text-slate-700">|</span>
                 <span className="flex items-center gap-1 text-emerald-400 font-bold" title="Компас / Курс">
                   <Compass className="w-2.5 h-2.5" />
                   {compassHeading}
                 </span>
+                {Math.abs(gradePercent) >= 2 && (
+                  <>
+                    <span className="text-slate-700">|</span>
+                    <span
+                      className={`flex items-center gap-0.5 font-mono font-extrabold ${
+                        gradePercent > 0 ? 'text-amber-400' : 'text-cyan-400'
+                      }`}
+                      title={gradePercent > 0 ? `Крутой подъём: +${gradePercent}%` : `Спуск: ${gradePercent}%`}
+                    >
+                      <span>{gradePercent > 0 ? '▲' : '▼'}</span>
+                      <span>{gradePercent > 0 ? `+${gradePercent}%` : `${gradePercent}%`}</span>
+                    </span>
+                  </>
+                )}
               </div>
             </div>
 
             {/* Right / Center: Sport RPM Shift Lights or Range & Consumption + Engine State */}
             <div className="flex items-center gap-2">
               {theme === 'sport' ? (
-                <div className="flex items-center gap-1">
+                <div className="flex items-center gap-1.5 bg-slate-900/40 px-2 py-1 rounded-xl border border-slate-800/50">
                   {[0.6, 0.7, 0.8, 0.88, 0.95].map((thresh, idx) => {
                     const active = rpmRatio >= thresh;
                     let dotColor = 'bg-emerald-500';
@@ -557,18 +691,18 @@ export const SpeedometerHUD: React.FC<SpeedometerHUDProps> = ({
                     return (
                       <span
                         key={idx}
-                        className={`w-2.5 h-1.5 rounded-sm transition-all ${active ? `${dotColor} shadow-[0_0_8px_currentColor] animate-pulse` : 'bg-slate-800'}`}
+                        className={`w-2 h-1 rounded-sm transition-all ${active ? `${dotColor} shadow-[0_0_8px_currentColor] animate-pulse` : 'bg-slate-800'}`}
                       />
                     );
                   })}
                 </div>
               ) : (
-                <div className="hidden sm:flex items-center gap-1.5 bg-slate-900/90 px-2 py-0.5 rounded border border-slate-800 text-[9px] font-mono">
+                <div className="hidden sm:flex items-center gap-1.5 bg-slate-900/40 px-2.5 py-1 rounded-xl border border-slate-800/50 text-[9px] font-mono text-slate-300">
                   <span className="flex items-center gap-1 text-amber-300 font-semibold" title="Запас хода">
                     <Fuel className="w-2.5 h-2.5 text-amber-400" />
                     {estimatedRangeKm} км
                   </span>
-                  <span className="text-slate-600">|</span>
+                  <span className="text-slate-700">|</span>
                   <span className="flex items-center gap-1 text-sky-300 font-semibold" title="Мгновенный расход">
                     <Droplet className="w-2.5 h-2.5 text-sky-400" />
                     {instantConsumptionShort}
@@ -576,12 +710,12 @@ export const SpeedometerHUD: React.FC<SpeedometerHUDProps> = ({
                 </div>
               )}
 
-              <span className={`text-[9px] font-mono font-bold px-1.5 py-0.5 rounded ${
+              <span className={`text-[9px] font-mono font-bold px-2 py-1 rounded-xl border ${
                 isEngineRunning 
-                  ? 'text-emerald-400 bg-emerald-950/40 border border-emerald-500/30' 
+                  ? 'text-emerald-400 bg-emerald-950/40 border-emerald-500/20' 
                   : isStalled 
-                  ? 'text-amber-400 bg-amber-950/40 border border-amber-500/30 animate-pulse' 
-                  : 'text-rose-400 bg-rose-950/40 border border-rose-500/30'
+                  ? 'text-amber-400 bg-amber-950/40 border-amber-500/20 animate-pulse' 
+                  : 'text-rose-400 bg-rose-950/40 border-rose-500/20'
               }`}>
                 {isEngineRunning ? 'МОТОР ВКЛ' : isStalled ? 'ЗАГЛОХ' : 'МОТОР ВЫКЛ'}
               </span>
@@ -589,19 +723,19 @@ export const SpeedometerHUD: React.FC<SpeedometerHUDProps> = ({
               {/* Headlights and Right Signal Indicator */}
               <div className="flex items-center gap-1.5">
                 {playerHeadlightMode !== 'off' && (
-                  <span className={`p-0.5 rounded ${playerHeadlightMode === 'high' ? 'text-sky-400' : 'text-emerald-400'}`}>
+                  <span className={`p-1 rounded-lg border ${playerHeadlightMode === 'high' ? 'bg-blue-500/20 text-blue-400 border-blue-500/30' : 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'}`}>
                     <Lightbulb className="w-3.5 h-3.5" />
                   </span>
                 )}
-                <span className={`p-1 rounded ${playerTurnSignal === 'right' || playerTurnSignal === 'hazard' ? 'bg-emerald-500/30 text-emerald-400 animate-pulse' : 'text-slate-600'}`}>
+                <span className={`p-1 rounded-lg ${playerTurnSignal === 'right' || playerTurnSignal === 'hazard' ? 'bg-emerald-500/20 text-emerald-400 animate-pulse border border-emerald-500/30' : 'text-slate-600 border border-transparent'}`}>
                   <ArrowRight className="w-3.5 h-3.5" />
                 </span>
               </div>
             </div>
           </div>
 
-          {/* MAIN GAUGES SVG CANVAS */}
-          <div className="relative flex items-center justify-center">
+          {/* MAIN GAUGES SVG CANVAS BENTO CELL */}
+          <div className="w-full bg-slate-900/20 border border-slate-800/40 rounded-2xl p-2.5 sm:p-3 flex items-center justify-center relative shadow-inner">
             <svg
               viewBox="0 0 460 135"
               className="w-[310px] sm:w-[380px] md:w-[440px] h-[95px] sm:h-[115px] md:h-[135px] overflow-visible"
@@ -626,11 +760,11 @@ export const SpeedometerHUD: React.FC<SpeedometerHUDProps> = ({
 
                 {/* Redline arc */}
                 <path
-                  d="M 106 32 A 52 52 0 0 1 118 78"
+                  d={redlinePathD}
                   fill="none"
                   stroke="#ef4444"
                   strokeWidth="3.5"
-                  strokeOpacity="0.7"
+                  strokeOpacity="0.75"
                 />
 
                 {/* Dial Ticks & Numbers */}
@@ -665,7 +799,8 @@ export const SpeedometerHUD: React.FC<SpeedometerHUDProps> = ({
                       const nextIdx = (ladder.indexOf(curMode as any) + 1) % ladder.length;
                       onSelectGear?.(ladder[nextIdx]);
                     } else if (eng) {
-                      const nextGear = eng.currentGear >= 5 ? -1 : eng.currentGear + 1;
+                      const maxForwardGear = (eng.gearRatios?.length || 7) - 2;
+                      const nextGear = eng.currentGear >= maxForwardGear ? -1 : eng.currentGear + 1;
                       onSelectGear?.(nextGear);
                     }
                   }}
@@ -802,13 +937,18 @@ export const SpeedometerHUD: React.FC<SpeedometerHUDProps> = ({
                     <line x1="0" y1="2" x2="120" y2="2" stroke="#1e293b" strokeWidth="0.6" />
                   </g>
 
-                  {/* LCD Mode Tabs: [ECO] [RANGE] [TRIP] [SYS] (and [TANK] for tanker/water/barrel) */}
+                  {/* LCD Mode Tabs: [ECO] [RANGE] [TRIP] [SYS] (and [TANK] / [GBO] if equipped) */}
                   {(() => {
-                    const availableModes: TripComputerMode[] = (vehicle.fluidTank && vehicle.fluidTank.capacity > 0)
-                      ? ['eco', 'range', 'trip', 'sys', 'tank']
-                      : ['eco', 'range', 'trip', 'sys'];
-                    const tabWidth = availableModes.length === 5 ? 22 : 28;
-                    const tabStep = availableModes.length === 5 ? 24.2 : 30.5;
+                    const availableModes: TripComputerMode[] = ['eco', 'range', 'trip', 'sys'];
+                    if (vehicle.fluidTank && vehicle.fluidTank.capacity > 0) {
+                      availableModes.push('tank');
+                    }
+                    if (vehicle.hasGBO) {
+                      availableModes.push('gbo');
+                    }
+                    const numTabs = availableModes.length;
+                    const tabWidth = numTabs === 6 ? 18 : (numTabs === 5 ? 22 : 28);
+                    const tabStep = numTabs === 6 ? 20.0 : (numTabs === 5 ? 24.2 : 30.5);
 
                     return (
                       <g transform="translate(4, 16)">
@@ -841,7 +981,7 @@ export const SpeedometerHUD: React.FC<SpeedometerHUDProps> = ({
                                 x={tabWidth / 2}
                                 y="1.2"
                                 textAnchor="middle"
-                                fontSize={availableModes.length === 5 ? "3.8" : "4.2"}
+                                fontSize={numTabs === 6 ? "3.2" : (numTabs === 5 ? "3.8" : "4.2")}
                                 fontWeight="bold"
                                 fontFamily="monospace"
                                 fill={isSelected ? '#f0f9ff' : '#64748b'}
@@ -916,8 +1056,10 @@ export const SpeedometerHUD: React.FC<SpeedometerHUDProps> = ({
                         <text x="116" y="0" textAnchor="end" fontSize="6.5" fill="#f8fafc" fontWeight="900" fontFamily="monospace">
                           {sysVoltageStr} V
                         </text>
-                        <text x="58" y="5" textAnchor="middle" fontSize="4.2" fill="#94a3b8" fontFamily="monospace">
-                          BATTERY HEALTH: {batteryCharge}%
+                        <text x="58" y="5" textAnchor="middle" fontSize="3.8" fill={isDiffLocked ? '#f59e0b' : '#94a3b8'} fontFamily="monospace" fontWeight={isDiffLocked ? 'bold' : 'normal'}>
+                          {diffCaps.supported
+                            ? `DIFF: ${diffLockDesc} (МОБ:${dl?.center ? 'ВКЛ' : '0'} З:${dl?.rear ? 'ВКЛ' : '0'} П:${dl?.front ? 'ВКЛ' : '0'})`
+                            : `BATTERY HEALTH: ${batteryCharge}%`}
                         </text>
                       </>
                     )}
@@ -932,6 +1074,58 @@ export const SpeedometerHUD: React.FC<SpeedometerHUDProps> = ({
                         </text>
                         <text x="58" y="5" textAnchor="middle" fontSize="4.2" fill={vehicle.fluidTank.drainValveOpen ? '#f59e0b' : vehicle.fluidTank.isPunctured ? '#ef4444' : '#94a3b8'} fontFamily="monospace">
                           {vehicle.fluidTank.drainValveOpen ? 'СЛИВНОЙ КЛАПАН ОТКРЫТ' : vehicle.fluidTank.isPunctured ? 'ПРОБОИНА ЦИСТЕРНЫ!' : `ВМЕСТИМОСТЬ: ${vehicle.fluidTank.capacity} L`}
+                        </text>
+                      </>
+                    )}
+
+                    {tripMode === 'gbo' && (
+                      <>
+                        <text x="0" y="0" fontSize="5.5" fill="#eab308" fontWeight="bold" fontFamily="monospace">
+                          GBO SYSTEM
+                        </text>
+                        {(() => {
+                          const isGboOn = fuel?.gboActive !== false;
+                          const hasLpg = (fuel?.gboLevel ?? 0) > 0;
+                          const isWarm = coolantTemp >= 40;
+                          const gboStatusText = !isGboOn ? 'ВЫКЛ (БЕНЗ)' : (!isWarm ? 'ПРОГРЕВ...' : (hasLpg ? 'ГАЗ (АКТИВ)' : 'НЕТ ГАЗА'));
+                          const gboStatusColor = !isGboOn ? '#64748b' : (!isWarm ? '#f59e0b' : (hasLpg ? '#22c55e' : '#ef4444'));
+                          return (
+                            <g
+                              className="cursor-pointer"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (fuel) {
+                                  fuel.gboActive = !fuel.gboActive;
+                                  try { sound.playButtonPress(); } catch {}
+                                }
+                              }}
+                            >
+                              <rect
+                                x="68"
+                                y="-5.5"
+                                width="48"
+                                height="7"
+                                rx="1.5"
+                                fill={`${gboStatusColor}15`}
+                                stroke={gboStatusColor}
+                                strokeWidth="0.5"
+                              />
+                              <text
+                                x="92"
+                                y="-0.5"
+                                textAnchor="middle"
+                                fontSize="4.2"
+                                fill={gboStatusColor}
+                                fontWeight="bold"
+                                fontFamily="monospace"
+                              >
+                                {gboStatusText}
+                              </text>
+                            </g>
+                          );
+                        })()}
+                        <text x="58" y="5.2" textAnchor="middle" fontSize="4.2" fill="#94a3b8" fontFamily="monospace">
+                          ГАЗ: {Math.round(fuel?.gboLevel ?? 0)}% ({( ((fuel?.gboLevel ?? 0) / 100) * (fuel?.gboCapacity ?? 42) ).toFixed(1)} L)
                         </text>
                       </>
                     )}
@@ -1139,6 +1333,32 @@ export const SpeedometerHUD: React.FC<SpeedometerHUDProps> = ({
                 <text x="80" y="122" textAnchor="middle" fontSize="13" fontWeight="900" fill="#f8fafc" fontFamily="monospace" letterSpacing="0.5">
                   {speedKmh} <tspan fontSize="8" fill="#94a3b8">КМ/Ч</tspan>
                 </text>
+
+                {/* Differential Lock Schematic in Center Display for 4WD / Locked Vehicles */}
+                {diffCaps.supported && (
+                  <g transform="translate(80, 134)" className="cursor-pointer" onClick={handleCycleDiffLock}>
+                    {/* Front Axle */}
+                    <line x1="-10" y1="-3" x2="10" y2="-3" stroke={dl?.front ? '#f59e0b' : '#334155'} strokeWidth="1.2" />
+                    {/* Front Wheels */}
+                    <rect x="-12" y="-4.5" width="2.5" height="3.5" rx="0.5" fill={dl?.front ? '#f59e0b' : '#475569'} />
+                    <rect x="9.5" y="-4.5" width="2.5" height="3.5" rx="0.5" fill={dl?.front ? '#f59e0b' : '#475569'} />
+                    {/* Driveshaft */}
+                    <line x1="0" y1="-3" x2="0" y2="3" stroke={dl?.center ? '#f59e0b' : '#334155'} strokeWidth="1.2" />
+                    {/* Center Diff */}
+                    <circle cx="0" cy="0" r="1.6" fill={dl?.center ? '#f59e0b' : '#1e293b'} stroke={dl?.center ? '#fbbf24' : '#475569'} strokeWidth="0.7" />
+                    {/* Rear Axle */}
+                    <line x1="-10" y1="3" x2="10" y2="3" stroke={dl?.rear ? '#f59e0b' : '#334155'} strokeWidth="1.2" />
+                    {/* Rear Wheels */}
+                    <rect x="-12" y="1.5" width="2.5" height="3.5" rx="0.5" fill={dl?.rear ? '#f59e0b' : '#475569'} />
+                    <rect x="9.5" y="1.5" width="2.5" height="3.5" rx="0.5" fill={dl?.rear ? '#f59e0b' : '#475569'} />
+                    {/* Axle Lock Indicator Dots */}
+                    {dl?.front && <circle cx="0" cy="-3" r="1" fill="#fef08a" />}
+                    {dl?.rear && <circle cx="0" cy="3" r="1" fill="#fef08a" />}
+                    <text x="0" y="8" textAnchor="middle" fontSize="3.2" fill={isDiffLocked ? '#f59e0b' : '#475569'} fontWeight="bold" fontFamily="monospace">
+                      {isDiffLocked ? 'DIFF LOCK' : 'DIFF OPEN'}
+                    </text>
+                  </g>
+                )}
               </g>
 
               {/* ================= GAUGE 2: SPEEDOMETER ================= */}
@@ -1178,19 +1398,19 @@ export const SpeedometerHUD: React.FC<SpeedometerHUDProps> = ({
           </div>
 
           {/* BOTTOM QUICK CONTROLS BAR (LIGHTS, SIGNALS, IGNITION, RADIAL MENU) */}
-          <div className="w-full flex items-center justify-center gap-1.5 pt-1 border-t border-slate-800/80">
+          <div className="w-full flex items-center justify-center gap-2 pt-2.5 border-t border-slate-800/80">
             {/* Left Signal (Q) */}
             <button
               type="button"
               onClick={() => onToggleTurnSignal?.('left')}
-              className={`px-2.5 py-1 rounded border text-[10px] font-bold font-mono flex items-center gap-1 transition ${
+              className={`px-3 py-1.5 rounded-xl border text-[10px] font-bold font-mono flex items-center gap-1 transition-all active:scale-95 cursor-pointer ${
                 playerTurnSignal === 'left' || playerTurnSignal === 'hazard'
-                  ? 'bg-amber-500/30 border-amber-400 text-amber-300 animate-pulse'
-                  : 'bg-slate-900 border-slate-700 text-slate-400 hover:text-white'
+                  ? 'bg-amber-500/30 border-amber-400 text-amber-300 animate-pulse font-extrabold'
+                  : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-white'
               }`}
               title="Левый поворотник [Q]"
             >
-              <ArrowLeft className="w-3 h-3" />
+              <ArrowLeft className="w-3.5 h-3.5" />
               <span>Q</span>
             </button>
 
@@ -1198,14 +1418,14 @@ export const SpeedometerHUD: React.FC<SpeedometerHUDProps> = ({
             <button
               type="button"
               onClick={() => onToggleTurnSignal?.('hazard')}
-              className={`px-2.5 py-1 rounded border text-[10px] font-bold font-mono flex items-center gap-1 transition ${
+              className={`px-3 py-1.5 rounded-xl border text-[10px] font-bold font-mono flex items-center gap-1 transition-all active:scale-95 cursor-pointer ${
                 playerTurnSignal === 'hazard'
-                  ? 'bg-rose-500/30 border-rose-400 text-rose-300 animate-pulse'
-                  : 'bg-slate-900 border-slate-700 text-slate-400 hover:text-white'
+                  ? 'bg-rose-500/30 border-rose-400 text-rose-300 animate-pulse font-extrabold'
+                  : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-white'
               }`}
               title="Аварийка [Z]"
             >
-              <AlertTriangle className="w-3 h-3" />
+              <AlertTriangle className="w-3.5 h-3.5" />
               <span>Z</span>
             </button>
 
@@ -1213,50 +1433,290 @@ export const SpeedometerHUD: React.FC<SpeedometerHUDProps> = ({
             <button
               type="button"
               onClick={() => onToggleTurnSignal?.('right')}
-              className={`px-2.5 py-1 rounded border text-[10px] font-bold font-mono flex items-center gap-1 transition ${
+              className={`px-3 py-1.5 rounded-xl border text-[10px] font-bold font-mono flex items-center gap-1 transition-all active:scale-95 cursor-pointer ${
                 playerTurnSignal === 'right' || playerTurnSignal === 'hazard'
-                  ? 'bg-amber-500/30 border-amber-400 text-amber-300 animate-pulse'
-                  : 'bg-slate-900 border-slate-700 text-slate-400 hover:text-white'
+                  ? 'bg-amber-500/30 border-amber-400 text-amber-300 animate-pulse font-extrabold'
+                  : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-white'
               }`}
               title="Правый поворотник [E]"
             >
               <span>E</span>
-              <ArrowRight className="w-3 h-3" />
+              <ArrowRight className="w-3.5 h-3.5" />
             </button>
 
-            <div className="h-4 w-px bg-slate-800 mx-0.5" />
+            <div className="h-5 w-px bg-slate-800 mx-1" />
 
             {/* Headlights Toggle (L) */}
             <button
               type="button"
               onClick={onToggleHeadlights}
-              className={`px-2.5 py-1 rounded border text-[10px] font-bold font-mono flex items-center gap-1 transition ${
+              className={`px-3 py-1.5 rounded-xl border text-[10px] font-bold font-mono flex items-center gap-1 transition-all active:scale-95 cursor-pointer ${
                 playerHeadlightMode === 'high'
-                  ? 'bg-blue-600/30 border-blue-400 text-blue-300'
+                  ? 'bg-blue-600/30 border-blue-400 text-blue-300 font-extrabold shadow-[0_0_8px_rgba(59,130,246,0.2)]'
                   : playerHeadlightMode === 'low'
-                  ? 'bg-emerald-600/30 border-emerald-400 text-emerald-300'
-                  : 'bg-slate-900 border-slate-700 text-slate-400 hover:text-white'
+                  ? 'bg-emerald-600/30 border-emerald-400 text-emerald-300 font-extrabold shadow-[0_0_8px_rgba(16,185,129,0.2)]'
+                  : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-white'
               }`}
               title="Фары: Ближний / Дальний / Выкл [L]"
             >
-              <Lightbulb className="w-3 h-3" />
+              <Lightbulb className="w-3.5 h-3.5" />
               <span>L</span>
             </button>
+
+            {/* Water Truck PTO / Pump Drive Button (P) */}
+            {(vehicle?.type === 'truck_water' || vehicle?.type === 'fire_engine') && (
+              <button
+                type="button"
+                onClick={() => {
+                  if (vehicle) {
+                    vehicle.isPtoActive = !vehicle.isPtoActive;
+                    sound.playButtonPress();
+                  }
+                }}
+                className={`px-3 py-1.5 rounded-xl border text-[10px] font-bold font-mono flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer ${
+                  vehicle.isPtoActive && isEngineRunning
+                    ? 'bg-blue-600/30 border-blue-400 text-blue-300 shadow-[0_0_10px_rgba(59,130,246,0.3)] animate-pulse font-extrabold'
+                    : vehicle.isPtoActive
+                    ? 'bg-amber-500/20 border-amber-500/40 text-amber-300 font-extrabold'
+                    : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-white'
+                }`}
+                title="КОМ (Коробка Отбора Мощности / Привод Насоса) [P]"
+              >
+                <Gauge className="w-3.5 h-3.5 text-blue-400" />
+                <span>
+                  КОМ [P]: {
+                    vehicle.isPtoActive && isEngineRunning
+                      ? `${(3.8 + Math.min(1.0, Math.max(0, ((vehicle.engineState?.engineRPM || 800) - 750) / 1850)) * 3.8).toFixed(1)} БАР`
+                      : (vehicle.isPtoActive ? 'НЕТ ДВС' : 'САМОТЁК')
+                  }
+                </span>
+              </button>
+            )}
+
+            {/* Water Truck Washing Nozzles Button (G) */}
+            {vehicle?.type === 'truck_water' && (
+              <button
+                type="button"
+                onClick={() => {
+                  if (vehicle) {
+                    vehicle.isWashingNozzlesActive = !vehicle.isWashingNozzlesActive;
+                    sound.playButtonPress();
+                  }
+                }}
+                className={`px-3 py-1.5 rounded-xl border text-[10px] font-bold font-mono flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer ${
+                  vehicle.isWashingNozzlesActive
+                    ? vehicle.isPtoActive && isEngineRunning
+                      ? 'bg-cyan-500/30 border-cyan-400 text-cyan-300 animate-pulse shadow-[0_0_10px_rgba(6,182,212,0.2)] font-extrabold'
+                      : 'bg-amber-500/20 border-amber-500/40 text-amber-300 font-extrabold'
+                    : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-white'
+                }`}
+                title="Поливомоечные сопла: Смывать мусор [G / N]"
+              >
+                <Droplet className="w-3.5 h-3.5 text-cyan-400" />
+                <span>СОПЛА [G]: {vehicle.isWashingNozzlesActive ? (vehicle.isPtoActive && isEngineRunning ? 'ВКЛ' : 'САМОТЁК') : 'ВЫКЛ'}</span>
+              </button>
+            )}
+
+            {/* MTZ Tractor Split Brakes Latch Toggle (B) */}
+            {carType.startsWith('tractor_') && (
+              <button
+                type="button"
+                onClick={() => {
+                  if (vehicle) {
+                    const nextLatch = vehicle.tractorBrakeLatch === false;
+                    vehicle.tractorBrakeLatch = nextLatch;
+                    sound.playButtonPress();
+                  }
+                }}
+                className={`px-3 py-1.5 rounded-xl border text-[10px] font-bold font-mono flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer ${
+                  vehicle.tractorBrakeLatch !== false
+                    ? 'bg-emerald-600/30 border-emerald-500/50 text-emerald-300 shadow-[0_0_8px_rgba(16,185,129,0.2)] font-extrabold'
+                    : 'bg-amber-500/20 border-amber-500/40 text-amber-300 font-extrabold'
+                }`}
+                title="Блокировка спаренных педалей тормоза МТЗ [B]"
+              >
+                {vehicle.tractorBrakeLatch !== false ? (
+                  <Lock className="w-3.5 h-3.5 text-emerald-400" />
+                ) : (
+                  <Unlock className="w-3.5 h-3.5 text-amber-400" />
+                )}
+                <span>
+                  ТОРМОЗА [B]: {vehicle.tractorBrakeLatch !== false ? 'СБЛОКИР.' : 'РАЗДЕЛЬН.'}
+                </span>
+              </button>
+            )}
+
+            {/* MTZ Live Brake Pedal Indicators */}
+            {carType.startsWith('tractor_') && (
+              <div className="flex items-center gap-1 bg-slate-950/60 border border-slate-800/80 px-2.5 py-1.5 rounded-xl text-[10px] font-bold font-mono text-slate-300">
+                <span className="text-slate-500 text-[8px] mr-1">ПЕДАЛИ:</span>
+                <span className={`px-1.5 py-0.5 rounded transition-all ${((vehicle as any)?._brakeLeftVal > 0.1) ? 'bg-rose-600 text-white font-extrabold scale-105' : 'bg-slate-900 text-slate-500'}`}>
+                  Л [,]
+                </span>
+                <span className={`px-1.5 py-0.5 rounded transition-all ${((vehicle as any)?._brakeRightVal > 0.1) ? 'bg-rose-600 text-white font-extrabold scale-105' : 'bg-slate-900 text-slate-500'}`}>
+                  П [.]
+                </span>
+              </div>
+            )}
+
+            {/* DIFFERENTIAL LOCK AXLE CONTROLS [V] */}
+            {diffCaps.supported && (
+              <div className="flex items-center gap-1 bg-slate-900/90 border border-slate-800 rounded-xl px-2 py-1 shadow-inner">
+                {/* Main Differential Cycle Button */}
+                <button
+                  type="button"
+                  onClick={handleCycleDiffLock}
+                  className={`px-2.5 py-1 rounded-lg text-[10px] font-mono font-bold flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer ${
+                    isDiffLocked
+                      ? 'bg-amber-500/25 border border-amber-400 text-amber-300 shadow-[0_0_10px_rgba(245,158,11,0.25)] font-extrabold'
+                      : 'bg-slate-950/80 border border-slate-800 text-slate-400 hover:text-white'
+                  }`}
+                  title="Циклическое переключение блокировок дифференциала [V]"
+                >
+                  <ShieldAlert className={`w-3.5 h-3.5 ${isDiffLocked ? 'text-amber-400 animate-pulse' : 'text-slate-500'}`} />
+                  <span>ДИФФ [V]:</span>
+                  <span className={`font-black ${isDiffLocked ? 'text-amber-300' : 'text-slate-500'}`}>
+                    {diffLockDesc}
+                  </span>
+                </button>
+
+                {/* Per-Axle Direct Toggles */}
+                <div className="flex items-center gap-0.5 ml-1 border-l border-slate-800 pl-1.5">
+                  {diffCaps.hasCenter && (
+                    <button
+                      type="button"
+                      onClick={() => handleToggleAxle('center')}
+                      className={`px-1.5 py-0.5 rounded text-[9px] font-mono font-bold transition active:scale-90 cursor-pointer ${
+                        dl?.center
+                          ? 'bg-amber-500 text-slate-950 font-black shadow-sm'
+                          : 'bg-slate-950 text-slate-500 hover:text-slate-300 border border-slate-800'
+                      }`}
+                      title="Межосевая блокировка (МОБ) 50:50"
+                    >
+                      МОБ
+                    </button>
+                  )}
+                  {diffCaps.hasRear && (
+                    <button
+                      type="button"
+                      onClick={() => handleToggleAxle('rear')}
+                      className={`px-1.5 py-0.5 rounded text-[9px] font-mono font-bold transition active:scale-90 cursor-pointer ${
+                        dl?.rear
+                          ? 'bg-amber-500 text-slate-950 font-black shadow-sm'
+                          : 'bg-slate-950 text-slate-500 hover:text-slate-300 border border-slate-800'
+                      }`}
+                      title="Межколесная блокировка задней оси (МКБ-З)"
+                    >
+                      МКБ-З
+                    </button>
+                  )}
+                  {diffCaps.hasFront && (
+                    <button
+                      type="button"
+                      onClick={() => handleToggleAxle('front')}
+                      className={`px-1.5 py-0.5 rounded text-[9px] font-mono font-bold transition active:scale-90 cursor-pointer ${
+                        dl?.front
+                          ? 'bg-amber-500 text-slate-950 font-black shadow-sm'
+                          : 'bg-slate-950 text-slate-500 hover:text-slate-300 border border-slate-800'
+                      }`}
+                      title="Межколесная блокировка передней оси (МКБ-П)"
+                    >
+                      МКБ-П
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Mechanical Ignition Slot */}
+            {(() => {
+              const t = vehicle.type || '';
+              const requiresMechKey = 
+                t === 'classic_compact' || 
+                t === 'retro_bubble' || 
+                t === 'sedan_classic' || 
+                t === 'wagon_classic' || 
+                t === 'micro_car' ||
+                t === 'muscle_classic' ||
+                t === 'suv_classic_box' ||
+                t === 'offroad_hardcore' ||
+                t.startsWith('tractor_') || 
+                t.startsWith('truck_') ||
+                t === 'van_cargo_old' ||
+                t === 'cement_mixer' ||
+                t === 'garbage_truck' ||
+                t === 'delivery_truck';
+
+              if (!requiresMechKey) return null;
+
+              const isInserted = !!vehicle.insertedKeyType;
+              const isGoldKey = vehicle.insertedKeyType === 'gold';
+              const keyName = isGoldKey ? 'Золотой' : 'Железный';
+
+              return (
+                <div className="flex items-center gap-1.5 bg-slate-900 border border-slate-800 rounded-xl px-2.5 py-1.5 text-[10px] font-mono shrink-0">
+                  <span className="text-slate-500 font-bold">ЗАМОК:</span>
+                  {isInserted ? (
+                    <button
+                      type="button"
+                      onClick={onTakeOutKey}
+                      className="flex items-center gap-1 text-amber-400 hover:text-amber-300 font-bold cursor-pointer transition active:scale-95 bg-amber-500/10 hover:bg-amber-500/20 px-1.5 py-0.5 rounded-md border border-amber-500/30"
+                      title="Кликните, чтобы вынуть ключ из зажигания"
+                    >
+                      <Key className={`w-3 h-3 ${isGoldKey ? 'text-amber-400' : 'text-slate-300'}`} />
+                      <span>{keyName}</span>
+                      <span className="text-[9px] text-slate-400 font-normal underline">(Вынуть)</span>
+                    </button>
+                  ) : (
+                    <div className="flex items-center gap-1">
+                      <span className="text-rose-400 font-bold bg-rose-500/10 px-1.5 py-0.5 rounded border border-rose-500/30">
+                        Щель пуста
+                      </span>
+                      {(() => {
+                        const neededKeyType = getVehicleRequiredKeyType(vehicle);
+                        if (!neededKeyType) return null;
+                        const hasThisKey = hasKeysInInventory.includes(neededKeyType);
+                        if (hasThisKey) {
+                          return (
+                            <button
+                              type="button"
+                              onClick={() => onInsertKey?.(neededKeyType)}
+                              className="flex items-center gap-1 text-emerald-400 hover:text-emerald-300 font-black cursor-pointer transition active:scale-95 bg-emerald-500/20 hover:bg-emerald-500/30 px-2 py-0.5 rounded-md border border-emerald-500/50 shadow-[0_0_8px_rgba(16,185,129,0.2)] animate-pulse"
+                              title="Кликните, чтобы вставить подходящий ключ"
+                            >
+                              <Key className="w-3 h-3 text-emerald-400" />
+                              <span>Вставить</span>
+                            </button>
+                          );
+                        } else {
+                          const isGold = neededKeyType === 'gold';
+                          return (
+                            <span className="text-slate-500 text-[9px] flex items-center gap-1">
+                              (Нужен {isGold ? 'Золотой' : 'Железный'} <Key className="w-2.5 h-2.5 inline" />)
+                            </span>
+                          );
+                        }
+                      })()}
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
 
             {/* Engine Start / Stop (J) */}
             <button
               type="button"
               onClick={onToggleEngine}
-              className={`px-3 py-1 rounded border text-[10px] font-bold font-mono flex items-center gap-1.5 transition ${
+              className={`px-3.5 py-1.5 rounded-xl border text-[10px] font-bold font-mono flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer ${
                 isEngineRunning
-                  ? 'bg-emerald-950/80 border-emerald-500 text-emerald-300 shadow-[0_0_10px_rgba(16,185,129,0.3)]'
+                  ? 'bg-emerald-950/85 border-emerald-500 text-emerald-300 shadow-[0_0_10px_rgba(16,185,129,0.25)] font-extrabold'
                   : isStalled
-                  ? 'bg-amber-950/80 border-amber-500 text-amber-300 animate-pulse'
-                  : 'bg-rose-950/80 border-rose-600 text-rose-300'
+                  ? 'bg-amber-950/85 border-amber-500 text-amber-300 animate-pulse font-extrabold'
+                  : 'bg-rose-950/85 border-rose-600 text-rose-300'
               }`}
               title="Зажигание: Запустить / Заглушить двигатель [J]"
             >
-              <Power className="w-3 h-3" />
+              <Power className="w-3.5 h-3.5" />
               <span>{isEngineRunning ? 'СТАРТ' : 'ЗАПУСК'}</span>
             </button>
 
@@ -1265,10 +1725,10 @@ export const SpeedometerHUD: React.FC<SpeedometerHUDProps> = ({
               <button
                 type="button"
                 onClick={onOpenRadialMenu}
-                className="px-2 py-1 rounded border border-slate-700 bg-slate-900 text-slate-300 hover:text-white text-[10px] font-bold font-mono flex items-center gap-1 transition"
+                className="px-3 py-1.5 rounded-xl border border-slate-800 bg-slate-900 text-slate-300 hover:text-white text-[10px] font-bold font-mono flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer"
                 title="Панель приборов автомобиля"
               >
-                <Gauge className="w-3 h-3 text-emerald-400" />
+                <Gauge className="w-3.5 h-3.5 text-emerald-400" />
                 <span className="hidden sm:inline">ПРИБОРЫ</span>
               </button>
             )}

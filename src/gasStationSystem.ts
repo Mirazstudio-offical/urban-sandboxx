@@ -18,8 +18,7 @@ export function createGasStationShopLayout(): BuildingLayout {
         width: 196,
         height: 106,
         color: '#1e293b',
-        floorStyle: 'tile'
-      },
+        floorStyle: 'tile'},
       {
         name: 'Кафе-Зона Bistro',
         x: 144,
@@ -27,8 +26,7 @@ export function createGasStationShopLayout(): BuildingLayout {
         width: 64,
         height: 40,
         color: '#292524',
-        floorStyle: 'wood'
-      },
+        floorStyle: 'wood'},
       {
         name: 'Служебная зона',
         x: 12,
@@ -36,67 +34,66 @@ export function createGasStationShopLayout(): BuildingLayout {
         width: 60,
         height: 38,
         color: '#0f172a',
-        floorStyle: 'tile'
-      }
+        floorStyle: 'tile'}
     ],
     walls: [
       { x1: 14, y1: 82, x2: 40, y2: 82 }
     ],
     furniture: [
       // === ЗОНА КАССЫ И КОФЕ-БАРА ===
-      { type: 'counter', x: 18, y: 44, width: 34, height: 9, angle: 0, color: '#334155' },
-      { type: 'freezer_display', x: 52, y: 44, width: 8, height: 9, angle: 0, color: '#f59e0b' },
-      { type: 'cash_register', x: 26, y: 45, width: 7, height: 6, angle: 0, color: '#0f172a' },
-      { type: 'cash_register', x: 40, y: 45, width: 7, height: 6, angle: 0, color: '#0f172a' },
-      { type: 'kitchen_counter', x: 18, y: 14, width: 42, height: 6, angle: 0, color: '#1e293b' },
-      { type: 'computer', x: 24, y: 14, width: 7, height: 6, angle: 0, color: '#0f172a' },
-      { type: 'shelf', x: 18, y: 13, width: 42, height: 2, angle: 0, color: '#475569' },
-      { type: 'chair', x: 34, y: 28, width: 7, height: 7, angle: 0, color: '#1e293b' },
+      { type: 'counter', x: 18, y: 44, width: 34, height: 9, angle: 0, color: '#334155'},
+      { type: 'freezer_display', x: 52, y: 44, width: 8, height: 9, angle: 0, color: '#f59e0b'},
+      { type: 'cash_register', x: 26, y: 45, width: 7, height: 6, angle: 0, color: '#0f172a'},
+      { type: 'cash_register', x: 40, y: 45, width: 7, height: 6, angle: 0, color: '#0f172a'},
+      { type: 'kitchen_counter', x: 18, y: 14, width: 42, height: 6, angle: 0, color: '#1e293b'},
+      { type: 'computer', x: 24, y: 14, width: 7, height: 6, angle: 0, color: '#0f172a'},
+      { type: 'shelf', x: 18, y: 13, width: 42, height: 2, angle: 0, color: '#475569'},
+      { type: 'chair', x: 34, y: 28, width: 7, height: 7, angle: 0, color: '#1e293b'},
 
       // === ВХОДНАЯ ГРУППА И БАНКОМАТ ===
-      { type: 'carpet', x: 95, y: 98, width: 30, height: 16, angle: 0, color: '#1e293b' },
-      { type: 'atm', x: 74, y: 84, width: 6, height: 6, angle: 0, color: '#059669' },
-      { type: 'plant', x: 80, y: 104, width: 7, height: 7, angle: 0, color: '#16a34a' },
-      { type: 'plant', x: 130, y: 104, width: 7, height: 7, angle: 0, color: '#15803d' },
+      { type: 'carpet', x: 95, y: 98, width: 30, height: 16, angle: 0, color: '#1e293b'},
+      { type: 'atm', x: 74, y: 84, width: 6, height: 6, angle: 0, color: '#059669'},
+      { type: 'plant', x: 80, y: 104, width: 7, height: 7, angle: 0, color: '#16a34a'},
+      { type: 'plant', x: 130, y: 104, width: 7, height: 7, angle: 0, color: '#15803d'},
 
       // === РЯДЫ ВИТРИН (ГОНДОЛЫ ТОРГОВОГО ЗАЛА) ===
       // Западный ряд 1 (Север): Снеки, орехи, чипсы
-      { type: 'shelf', x: 98, y: 36, width: 28, height: 9, angle: 0, color: '#e2e8f0' },
+      { type: 'shelf', x: 98, y: 36, width: 28, height: 9, angle: 0, color: '#e2e8f0'},
       // Западный ряд 2 (Юг): Кондитерка, шоколад, выпечка
-      { type: 'shelf', x: 98, y: 62, width: 28, height: 9, angle: 0, color: '#e2e8f0' },
+      { type: 'shelf', x: 98, y: 62, width: 28, height: 9, angle: 0, color: '#e2e8f0'},
       // Восточный ряд 3 (Север): Автомасла, антифриз, омыватели
-      { type: 'shelf', x: 154, y: 36, width: 28, height: 9, angle: 0, color: '#cbd5e1' },
+      { type: 'shelf', x: 154, y: 36, width: 28, height: 9, angle: 0, color: '#cbd5e1'},
       // Восточный ряд 4 (Юг): Автоаксессуары, провода, салфетки
-      { type: 'shelf', x: 154, y: 62, width: 28, height: 9, angle: 0, color: '#cbd5e1' },
+      { type: 'shelf', x: 154, y: 62, width: 28, height: 9, angle: 0, color: '#cbd5e1'},
 
       // === СЕВЕРНАЯ СТЕНА: ХОЛОДИЛЬНИКИ НАПИТКОВ И МОРОЖЕНОГО ===
-      { type: 'freezer_display', x: 96, y: 14, width: 26, height: 5, angle: 0, color: '#0284c7' },
-      { type: 'freezer_display', x: 126, y: 14, width: 26, height: 5, angle: 0, color: '#0369a1' },
-      { type: 'freezer_display', x: 156, y: 14, width: 26, height: 5, angle: 0, color: '#e11d48' },
+      { type: 'freezer_display', x: 96, y: 14, width: 26, height: 5, angle: 0, color: '#0284c7'},
+      { type: 'freezer_display', x: 126, y: 14, width: 26, height: 5, angle: 0, color: '#0369a1'},
+      { type: 'freezer_display', x: 156, y: 14, width: 26, height: 5, angle: 0, color: '#e11d48'},
 
       // === ВОСТОЧНАЯ СТЕНА: ВЕНДИНГ, КУЛЕР, УРНА, РАСТЕНИЕ ===
-      { type: 'vending_machine', x: 201, y: 24, width: 5, height: 12, angle: 0, color: '#dc2626' },
-      { type: 'cooler', x: 202, y: 42, width: 4, height: 6, angle: 0, color: '#38bdf8' },
-      { type: 'trash_can', x: 202, y: 52, width: 4, height: 6, angle: 0, color: '#475569' },
-      { type: 'plant', x: 202, y: 64, width: 4, height: 6, angle: 0, color: '#22c55e' },
+      { type: 'vending_machine', x: 201, y: 24, width: 5, height: 12, angle: 0, color: '#dc2626'},
+      { type: 'cooler', x: 202, y: 42, width: 4, height: 6, angle: 0, color: '#38bdf8'},
+      { type: 'trash_can', x: 202, y: 52, width: 4, height: 6, angle: 0, color: '#475569'},
+      { type: 'plant', x: 202, y: 64, width: 4, height: 6, angle: 0, color: '#22c55e'},
 
       // === КАФЕ-ЗОНА BISTRO ===
-      { type: 'table', x: 154, y: 86, width: 12, height: 12, angle: 0, color: '#78350f' },
-      { type: 'chair', x: 145, y: 88, width: 7, height: 7, angle: 0, color: '#451a03' },
-      { type: 'chair', x: 168, y: 88, width: 7, height: 7, angle: 0, color: '#451a03' },
-      { type: 'table', x: 182, y: 86, width: 12, height: 12, angle: 0, color: '#78350f' },
-      { type: 'chair', x: 173, y: 88, width: 7, height: 7, angle: 0, color: '#451a03' },
-      { type: 'chair', x: 196, y: 88, width: 7, height: 7, angle: 0, color: '#451a03' },
-      { type: 'plant', x: 170, y: 80, width: 6, height: 6, angle: 0, color: '#16a34a' },
-      { type: 'radiator', x: 150, y: 114, width: 20, height: 2, angle: 0, color: '#94a3b8' },
-      { type: 'radiator', x: 180, y: 114, width: 20, height: 2, angle: 0, color: '#94a3b8' },
+      { type: 'table', x: 154, y: 86, width: 12, height: 12, angle: 0, color: '#78350f'},
+      { type: 'chair', x: 145, y: 88, width: 7, height: 7, angle: 0, color: '#451a03'},
+      { type: 'chair', x: 168, y: 88, width: 7, height: 7, angle: 0, color: '#451a03'},
+      { type: 'table', x: 182, y: 86, width: 12, height: 12, angle: 0, color: '#78350f'},
+      { type: 'chair', x: 173, y: 88, width: 7, height: 7, angle: 0, color: '#451a03'},
+      { type: 'chair', x: 196, y: 88, width: 7, height: 7, angle: 0, color: '#451a03'},
+      { type: 'plant', x: 170, y: 80, width: 6, height: 6, angle: 0, color: '#16a34a'},
+      { type: 'radiator', x: 150, y: 114, width: 20, height: 2, angle: 0, color: '#94a3b8'},
+      { type: 'radiator', x: 180, y: 114, width: 20, height: 2, angle: 0, color: '#94a3b8'},
 
       // === СЛУЖЕБНАЯ ЗОНА / САНИТАРНЫЙ УЗЕЛ ===
-      { type: 'sink', x: 16, y: 88, width: 6, height: 6, angle: 0, color: '#f8fafc' },
-      { type: 'shelf', x: 14, y: 104, width: 18, height: 6, angle: 0, color: '#334155' },
-      { type: 'lockers', x: 42, y: 106, width: 14, height: 5, angle: 0, color: '#475569' },
-      { type: 'fire_rack', x: 28, y: 83, width: 8, height: 2, angle: 0, color: '#ef4444' },
-      { type: 'trash_can', x: 14, y: 84, width: 4, height: 4, angle: 0, color: '#64748b' }
+      { type: 'sink', x: 16, y: 88, width: 6, height: 6, angle: 0, color: '#f8fafc'},
+      { type: 'shelf', x: 14, y: 104, width: 18, height: 6, angle: 0, color: '#334155'},
+      { type: 'lockers', x: 42, y: 106, width: 14, height: 5, angle: 0, color: '#475569'},
+      { type: 'fire_rack', x: 28, y: 83, width: 8, height: 2, angle: 0, color: '#ef4444'},
+      { type: 'trash_can', x: 14, y: 84, width: 4, height: 4, angle: 0, color: '#64748b'}
     ],
     exitZone: { x: 95, y: 114, width: 30, height: 16 },
     stairsZone: { x: -100, y: -100, width: 0, height: 0 },
@@ -129,10 +126,9 @@ export const FUEL_GRADES: Record<FuelType, FuelGradeInfo> = {
     gradient: 'from-amber-500 to-yellow-600',
     octane: 92,
     pricePerLiter: 52.90,
-    description: 'Базовый бензин стандарта ГОСТ для карбюраторных и атмосферных двигателей.',
-    engineCompatibility: 'ВАЗ, Нива, УАЗ, Волга, классика',
-    accentGlow: 'rgba(234, 179, 8, 0.4)'
-  },
+    description: 'Базовый бензин государственного стандарта для карбюраторных и атмосферных двигателей.',
+    engineCompatibility: 'Отечественная классика, ретро, внедорожники',
+    accentGlow: 'rgba(234, 179, 8, 0.4)'},
   ai95: {
     fuelType: 'ai95',
     nameRu: 'АИ-95 Евро-5',
@@ -143,8 +139,7 @@ export const FUEL_GRADES: Record<FuelType, FuelGradeInfo> = {
     pricePerLiter: 58.40,
     description: 'Оптимальное топливо с пакетом моющих присадок для современных инжекторных авто.',
     engineCompatibility: 'Седаны, хэтчбеки, кроссоверы, такси',
-    accentGlow: 'rgba(34, 197, 94, 0.4)'
-  },
+    accentGlow: 'rgba(34, 197, 94, 0.4)'},
   ai98: {
     fuelType: 'ai98',
     nameRu: 'АИ-98 Супер',
@@ -155,8 +150,7 @@ export const FUEL_GRADES: Record<FuelType, FuelGradeInfo> = {
     pricePerLiter: 65.50,
     description: 'Высокооктановый бензин повышенной детонационной стойкости для турбомоторов.',
     engineCompatibility: 'Турбированные седаны, спорткары',
-    accentGlow: 'rgba(249, 115, 22, 0.4)'
-  },
+    accentGlow: 'rgba(249, 115, 22, 0.4)'},
   ai100: {
     fuelType: 'ai100',
     nameRu: 'АИ-100 Спорт Рейсинг',
@@ -167,8 +161,7 @@ export const FUEL_GRADES: Record<FuelType, FuelGradeInfo> = {
     pricePerLiter: 69.80,
     description: 'Премиальное гоночное топливо 100 октана для максимальной отдачи и динамики.',
     engineCompatibility: 'Спорткупе, маслкары, тюнинг-кары',
-    accentGlow: 'rgba(239, 68, 68, 0.45)'
-  },
+    accentGlow: 'rgba(239, 68, 68, 0.45)'},
   diesel: {
     fuelType: 'diesel',
     nameRu: 'ДТ Зимнее Ультра',
@@ -179,8 +172,7 @@ export const FUEL_GRADES: Record<FuelType, FuelGradeInfo> = {
     pricePerLiter: 64.50,
     description: 'Очищенное дизельное топливо с низкотемпературными депрессорными присадками.',
     engineCompatibility: 'Внедорожники, фургоны, грузовики, автобусы',
-    accentGlow: 'rgba(100, 116, 139, 0.4)'
-  },
+    accentGlow: 'rgba(100, 116, 139, 0.4)'},
   lpg: {
     fuelType: 'lpg',
     nameRu: 'ГАЗ (Пропан-Бутан / LPG)',
@@ -191,8 +183,7 @@ export const FUEL_GRADES: Record<FuelType, FuelGradeInfo> = {
     pricePerLiter: 32.20,
     description: 'Сжиженный углеводородный газ высокой чистоты для автомобилей с ГБО.',
     engineCompatibility: 'Газобаллонное оборудование (ГБО 4-6)',
-    accentGlow: 'rgba(14, 165, 233, 0.4)'
-  }
+    accentGlow: 'rgba(14, 165, 233, 0.4)'}
 };
 
 export const GAS_STATION_NOZZLES: GasPumpNozzle[] = [
@@ -203,8 +194,7 @@ export const GAS_STATION_NOZZLES: GasPumpNozzle[] = [
     octane: 92,
     pricePerLiter: FUEL_GRADES.ai92.pricePerLiter,
     description: FUEL_GRADES.ai92.description,
-    badgeText: '92'
-  },
+    badgeText: '92'},
   {
     fuelType: 'ai95',
     nameRu: FUEL_GRADES.ai95.nameRu,
@@ -212,8 +202,7 @@ export const GAS_STATION_NOZZLES: GasPumpNozzle[] = [
     octane: 95,
     pricePerLiter: FUEL_GRADES.ai95.pricePerLiter,
     description: FUEL_GRADES.ai95.description,
-    badgeText: '95'
-  },
+    badgeText: '95'},
   {
     fuelType: 'ai98',
     nameRu: FUEL_GRADES.ai98.nameRu,
@@ -221,8 +210,7 @@ export const GAS_STATION_NOZZLES: GasPumpNozzle[] = [
     octane: 98,
     pricePerLiter: FUEL_GRADES.ai98.pricePerLiter,
     description: FUEL_GRADES.ai98.description,
-    badgeText: '98'
-  },
+    badgeText: '98'},
   {
     fuelType: 'ai100',
     nameRu: FUEL_GRADES.ai100.nameRu,
@@ -230,8 +218,7 @@ export const GAS_STATION_NOZZLES: GasPumpNozzle[] = [
     octane: 100,
     pricePerLiter: FUEL_GRADES.ai100.pricePerLiter,
     description: FUEL_GRADES.ai100.description,
-    badgeText: '100'
-  },
+    badgeText: '100'},
   {
     fuelType: 'diesel',
     nameRu: FUEL_GRADES.diesel.nameRu,
@@ -239,8 +226,7 @@ export const GAS_STATION_NOZZLES: GasPumpNozzle[] = [
     octane: 55,
     pricePerLiter: FUEL_GRADES.diesel.pricePerLiter,
     description: FUEL_GRADES.diesel.description,
-    badgeText: 'ДТ'
-  }
+    badgeText: 'ДТ'}
 ];
 
 export const GAS_STATION_CONFIG = {
@@ -263,11 +249,11 @@ export const GAS_STATION_CONFIG = {
   },
   // 5 Gas pump locations (4 under canopy, 1 separate old LPG pump)
   pumps: [
-    { id: 'gas_pump_1', number: 1, x: 5020, y: 5220, angle: 0, islandIndex: 0, lane: 'north' },
-    { id: 'gas_pump_2', number: 2, x: 5020, y: 5340, angle: 0, islandIndex: 0, lane: 'south' },
-    { id: 'gas_pump_3', number: 3, x: 5160, y: 5220, angle: 0, islandIndex: 1, lane: 'north' },
-    { id: 'gas_pump_4', number: 4, x: 5160, y: 5340, angle: 0, islandIndex: 1, lane: 'south' },
-    { id: 'gas_pump_5_lpg', number: 5, x: 5085, y: 4940, angle: 0, islandIndex: 2, lane: 'west' }
+    { id: 'gas_pump_1', number: 1, x: 5020, y: 5220, angle: 0, islandIndex: 0, lane: 'north'},
+    { id: 'gas_pump_2', number: 2, x: 5020, y: 5340, angle: 0, islandIndex: 0, lane: 'south'},
+    { id: 'gas_pump_3', number: 3, x: 5160, y: 5220, angle: 0, islandIndex: 1, lane: 'north'},
+    { id: 'gas_pump_4', number: 4, x: 5160, y: 5340, angle: 0, islandIndex: 1, lane: 'south'},
+    { id: 'gas_pump_5_lpg', number: 5, x: 5085, y: 4940, angle: 0, islandIndex: 2, lane: 'west'}
   ]
 };
 
@@ -283,8 +269,7 @@ export function createDefaultGasPumps(): GasPumpDispenser[] {
             octane: 105,
             pricePerLiter: FUEL_GRADES.lpg.pricePerLiter,
             description: FUEL_GRADES.lpg.description,
-            badgeText: 'ГАЗ'
-          } as GasPumpNozzle
+            badgeText: 'ГАЗ'} as GasPumpNozzle
         ]
       : [...GAS_STATION_NOZZLES];
 
@@ -412,7 +397,7 @@ export function insertNozzleIntoVehicle(
   }
 
   if (isTrailerVehicle(vehicle)) {
-    addPlayerNotification(player, '⛽ У прицепа нет топливного бака!', 'warning');
+    addPlayerNotification(player, 'У прицепа нет топливного бака!', 'warning');
     sound.playHurt();
     return false;
   }
@@ -428,8 +413,7 @@ export function insertNozzleIntoVehicle(
       // @ts-ignore
       player.lastNozzleForceId = vehicle.id;
       const msg = isLpgNozzle
-        ? "Пистолет ГАЗ (LPG) физически не влезает в бензиновую/дизельную горловину! На автомобиле не установлено ГБО. Нажмите еще раз, чтобы вставить силой на свой страх и риск!"
-        : "Бензиновый/дизельный пистолет физически не подходит к заправочному устройству ГБО! Нажмите еще раз, чтобы вставить силой на свой страх и риск!";
+        ? "Пистолет ГАЗ (LPG) физически не влезает в бензиновую/дизельную горловину! На автомобиле не установлено ГБО. Нажмите еще раз, чтобы вставить силой на свой страх и риск!": "Бензиновый/дизельный пистолет физически не подходит к заправочному устройству ГБО! Нажмите еще раз, чтобы вставить силой на свой страх и риск!";
       addPlayerNotification(player, msg, "warning");
       return false;
     } else {
@@ -441,7 +425,7 @@ export function insertNozzleIntoVehicle(
         addPlayerNotification(player, "Вы насильно вставили пистолет LPG в обычную горловину! Сжиженный газ начал под давлением брызгать наружу!", "warning");
         
         // Gloves cold protection check
-        const hasGloves = player.equippedClothing?.hands?.outerwear?.itemId === 'gloves_winter' || 
+        const hasGloves = player.equippedClothing?.hands?.outerwear?.itemId === 'gloves_winter'|| 
                           player.equippedClothing?.hands?.outerwear?.itemId === 'gloves_leather';
         if (!hasGloves) {
           player.needs.health = Math.max(1, player.needs.health - 15);
@@ -456,7 +440,7 @@ export function insertNozzleIntoVehicle(
         if (world) {
           if (!world.stains) world.stains = [];
           world.stains.push({
-            id: 'gas_leak_' + Date.now(),
+            id: 'gas_leak_'+ Date.now(),
             x: vehicle.x,
             y: vehicle.y,
             radius: 50,
@@ -466,7 +450,7 @@ export function insertNozzleIntoVehicle(
             life: 0,
             maxLife: 300,
             amount: 1.0,
-            color: 'rgba(224, 242, 254, 0.4)' // transparent cold icy stain appearance
+            color: 'rgba(224, 242, 254, 0.4)'// transparent cold icy stain appearance
           } as any);
 
           // Puncture tank so it leaks out!
@@ -488,7 +472,7 @@ export function insertNozzleIntoVehicle(
         if (world) {
           if (!world.stains) world.stains = [];
           world.stains.push({
-            id: 'fuel_spill_' + Date.now(),
+            id: 'fuel_spill_'+ Date.now(),
             x: vehicle.x,
             y: vehicle.y,
             radius: 40,
@@ -542,7 +526,7 @@ export function removeNozzleFromVehicle(
 
   // Realism trigger for LPG when disconnecting
   if (fuelType === 'lpg') {
-    const hasGloves = player.equippedClothing?.hands?.outerwear?.itemId === 'gloves_winter' || 
+    const hasGloves = player.equippedClothing?.hands?.outerwear?.itemId === 'gloves_winter'|| 
                       player.equippedClothing?.hands?.outerwear?.itemId === 'gloves_leather';
     if (!hasGloves) {
       player.needs.health = Math.max(1, player.needs.health - 5);
@@ -570,8 +554,7 @@ export function removeNozzleFromVehicle(
           alpha: 0.95,
           life: 0,
           maxLife: 0.3 + Math.random() * 0.2, // very short life, quickly dissipates!
-          type: 'engine_smoke'
-        } as any);
+          type: 'engine_smoke'} as any);
       }
     }
   }
@@ -668,21 +651,41 @@ export function updateGasPumps(
       // Transfer into connected vehicle
       const vehicle = world.vehicles.find(v => v.id === pump.connectedVehicleId);
       if (vehicle && vehicle.fuelSystem) {
-        const cap = vehicle.fuelSystem.tankCapacity || 55;
-        const currentLiters = (vehicle.fuelSystem.tankLevel / 100) * cap;
-        const newLiters = Math.min(cap, currentLiters + litersThisFrame);
-        vehicle.fuelSystem.tankLevel = Math.min(100, (newLiters / cap) * 100);
+        const isLpgPump = pump.connectedFuelType === 'lpg';
+
+        if (isLpgPump) {
+          if (vehicle.fuelSystem.gboLevel === undefined) {
+            vehicle.fuelSystem.gboLevel = 0;
+          }
+          if (vehicle.fuelSystem.gboCapacity === undefined) {
+            vehicle.fuelSystem.gboCapacity = 42;
+          }
+          const cap = vehicle.fuelSystem.gboCapacity || 42;
+          const currentLiters = (vehicle.fuelSystem.gboLevel / 100) * cap;
+          const newLiters = Math.min(cap, currentLiters + litersThisFrame);
+          vehicle.fuelSystem.gboLevel = Math.min(100, (newLiters / cap) * 100);
+
+          // Auto shutoff if GBO tank is 100% full
+          if (vehicle.fuelSystem.gboLevel >= 100 && pump.currentPumpedLiters < pump.targetLiters) {
+            pump.targetLiters = pump.currentPumpedLiters;
+          }
+        } else {
+          const cap = vehicle.fuelSystem.tankCapacity || 55;
+          const currentLiters = (vehicle.fuelSystem.tankLevel / 100) * cap;
+          const newLiters = Math.min(cap, currentLiters + litersThisFrame);
+          vehicle.fuelSystem.tankLevel = Math.min(100, (newLiters / cap) * 100);
+
+          // Auto shutoff if tank is 100% full
+          if (vehicle.fuelSystem.tankLevel >= 100 && pump.currentPumpedLiters < pump.targetLiters) {
+            pump.targetLiters = pump.currentPumpedLiters;
+          }
+        }
 
         // Blend fuel quality and octane rating
         const grade = FUEL_GRADES[pump.connectedFuelType || 'ai95'] || FUEL_GRADES.ai95;
         vehicle.fuelSystem.octaneNumber = Math.max(vehicle.fuelSystem.octaneNumber || 92, grade.octane);
         vehicle.fuelSystem.fuelQuality = Math.min(100, Math.max(vehicle.fuelSystem.fuelQuality || 90, 96));
         vehicle.fuelSystem.detonation = false;
-
-        // Auto shutoff if tank is 100% full
-        if (vehicle.fuelSystem.tankLevel >= 100 && pump.currentPumpedLiters < pump.targetLiters) {
-          pump.targetLiters = pump.currentPumpedLiters;
-        }
       }
 
       // Check if finished
@@ -736,15 +739,14 @@ export function ensureWorldGasStation(world: GameWorld): void {
   // Remove small cottages in block 6_6 if present
   if (Array.isArray(world.buildings)) {
     world.buildings = world.buildings.filter(
-      b => b.id !== 'cottage_6_6_1' && b.id !== 'cottage_6_6_2'
-    );
+      b => b.id !== 'cottage_6_6_1'&& b.id !== 'cottage_6_6_2');
 
     // Check if Gas Station shop exists
     let shopBld = world.buildings.find(b => b.id === GAS_STATION_CONFIG.shopId);
     if (!shopBld) {
       shopBld = {
         id: GAS_STATION_CONFIG.shopId,
-        nameRu: 'АЗС "Нефть-Магистраль 24/7" (Касса & Магазин)',
+        nameRu: 'АЗС "Нефть-Магистраль 24/7"(Касса & Магазин)',
         shopBrand: 'gas_station_shop',
         x: GAS_STATION_CONFIG.shopX,
         y: GAS_STATION_CONFIG.shopY,

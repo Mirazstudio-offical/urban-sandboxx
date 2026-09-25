@@ -14,7 +14,8 @@ import {
   Activity, 
   Trash2,
   Sparkles,
-  AlertCircle
+  AlertCircle,
+  Lightbulb
 } from 'lucide-react';
 import { PerformanceConfig, DEFAULT_CONFIG, savePerformanceConfig, performanceConfig } from '../performanceConfig';
 
@@ -296,7 +297,7 @@ export function PerformanceProfiler({
                     <span className="text-[10px] text-slate-400 uppercase tracking-wide">Лимит бюджета (60 FPS)</span>
                     <div className="text-lg font-bold text-slate-100 flex items-center gap-1">
                       {stats.totalFrameTime <= 16.6 ? (
-                        <span className="text-emerald-400 flex items-center gap-0.5 text-sm font-bold">✓ Норма</span>
+                        <span className="text-emerald-400 flex items-center gap-0.5 text-sm font-bold">Норма</span>
                       ) : (
                         <span className="text-red-400 flex items-center gap-1 text-sm font-bold">
                           <AlertCircle className="w-4 h-4 text-red-400" /> Превышен
@@ -636,8 +637,11 @@ export function PerformanceProfiler({
                   </button>
                 </div>
 
-                <div className="bg-slate-900/20 p-2.5 rounded border border-slate-800/40 text-[9px] text-slate-400">
-                  <span className="font-bold text-slate-300">💡 Совет по лагам:</span> Больше всего на частоту кадров влияет отрисовка огромного количества зданий и миникарта. Включите <span className="text-red-400 font-bold">Упрощенный Рендеринг</span> и выключите <span className="text-indigo-400 font-bold">Миникарту</span> для мгновенного прироста производительности!
+                <div className="bg-slate-900/20 p-2.5 rounded border border-slate-800/40 text-[9px] text-slate-400 flex items-start gap-2">
+                  <Lightbulb className="w-3.5 h-3.5 text-amber-400 shrink-0 mt-0.5" />
+                  <div>
+                    <span className="font-bold text-slate-300">Совет по лагам:</span> Больше всего на частоту кадров влияет отрисовка огромного количества зданий и миникарта. Включите <span className="text-red-400 font-bold">Упрощенный Рендеринг</span> и выключите <span className="text-indigo-400 font-bold">Миникарту</span> для мгновенного прироста производительности!
+                  </div>
                 </div>
               </div>
             )}

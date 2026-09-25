@@ -1,4 +1,5 @@
-import { StreetProp } from './types';
+import { StreetProp, RailwaySignal } from './types';
+import { RailwaySignalingSystem } from './railwaySignalingSystem';
 
 /**
  * High-fidelity vector rendering for all street props (intact & broken states).
@@ -1099,7 +1100,7 @@ export function renderPropBusStop(ctx: CanvasRenderingContext2D, prop: StreetPro
   ctx.font = 'bold 5.5px sans-serif';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.fillText('🛈', 21, -10);
+  ctx.fillText('i', 21, -10);
 }
 
 // --- 14. KIOSK (ТОРГОВЫЙ КИОСК / «ПРЕССА») ---
@@ -1427,7 +1428,7 @@ export function renderPropBrokenLamp(ctx: CanvasRenderingContext2D, prop: Street
 
 // --- MASTER PROP DISPATCHER (GROUND LEVEL) ---
 export function renderStreetProp(ctx: CanvasRenderingContext2D, prop: StreetProp) {
-  switch (prop.type) {
+  switch (prop.type as string) {
     case 'bench':
       renderPropBench(ctx, prop);
       break;
@@ -1534,6 +1535,9 @@ export function renderStreetProp(ctx: CanvasRenderingContext2D, prop: StreetProp
     case 'industrial_sign':
       renderPropIndustrialSign(ctx, prop);
       break;
+    case 'river_warning_sign':
+      renderPropRiverWarningSign(ctx, prop);
+      break;
     case 'industrial_pipe':
       renderPropIndustrialPipe(ctx, prop);
       break;
@@ -1554,6 +1558,60 @@ export function renderStreetProp(ctx: CanvasRenderingContext2D, prop: StreetProp
       break;
     case 'garden_path_tile':
       renderPropGardenPathTile(ctx, prop);
+      break;
+    case 'garage_sofa':
+      renderPropGarageSofa(ctx, prop);
+      break;
+    case 'garage_workbench':
+      renderPropGarageWorkbench(ctx, prop);
+      break;
+    case 'garage_dirt_pile':
+      renderPropGarageDirtPile(ctx, prop);
+      break;
+    case 'garage_sand_pile':
+      renderPropGarageSandPile(ctx, prop);
+      break;
+    case 'garage_tires_heap':
+      renderPropGarageTiresHeap(ctx, prop);
+      break;
+    case 'garage_scrap_metal':
+      renderPropGarageScrapMetal(ctx, prop);
+      break;
+    case 'tarp_covered_car':
+      renderPropTarpCoveredCar(ctx, prop);
+      break;
+    case 'car_on_blocks':
+      renderPropCarOnBlocks(ctx, prop);
+      break;
+    case 'oil_barrel_cluster':
+      renderPropOilBarrelCluster(ctx, prop);
+      break;
+    case 'garage_trash_heap':
+      renderPropGarageTrashHeap(ctx, prop);
+      break;
+    case 'railway_signal':
+      renderPropRailwaySignal(ctx, prop);
+      break;
+    case 'railway_buffer_stop':
+      renderPropRailwayBufferStop(ctx, prop);
+      break;
+    case 'railway_switch_box':
+      renderPropRailwaySwitchBox(ctx, prop);
+      break;
+    case 'railway_crossing_light':
+      renderPropRailwayCrossingLight(ctx, prop);
+      break;
+    case 'railway_crossing_gate':
+      renderPropRailwayCrossingGate(ctx, prop);
+      break;
+    case 'railway_platform_sign':
+      renderPropRailwayPlatformSign(ctx, prop);
+      break;
+    case 'railway_clock':
+      renderPropRailwayClock(ctx, prop);
+      break;
+    case 'railway_picket_post':
+      renderPropRailwayPicketPost(ctx, prop);
       break;
   }
 }
@@ -3302,6 +3360,79 @@ export function renderPropVillageSign(ctx: CanvasRenderingContext2D, prop: Stree
   ctx.fillRect(-4, -1, 13, 2);
 }
 
+export function renderPropRiverWarningSign(ctx: CanvasRenderingContext2D, _prop: StreetProp) {
+  ctx.save();
+  // Shadow
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
+  ctx.beginPath();
+  ctx.ellipse(3, 3, 12, 6, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Steel pole
+  ctx.fillStyle = '#475569';
+  ctx.fillRect(-1.5, -20, 3, 20);
+
+  // Triangular Warning Sign
+  ctx.save();
+  ctx.translate(0, -22);
+
+  const sz = 14;
+  ctx.fillStyle = '#ffffff';
+  ctx.beginPath();
+  ctx.moveTo(0, -sz);
+  ctx.lineTo(sz * 0.866, sz * 0.5);
+  ctx.lineTo(-sz * 0.866, sz * 0.5);
+  ctx.closePath();
+  ctx.fill();
+
+  ctx.fillStyle = '#f59e0b'; // Yellow fill
+  ctx.beginPath();
+  ctx.moveTo(0, -sz + 2.2);
+  ctx.lineTo(sz * 0.866 - 2.0, sz * 0.5 - 1.2);
+  ctx.lineTo(-sz * 0.866 + 2.0, sz * 0.5 - 1.2);
+  ctx.closePath();
+  ctx.fill();
+
+  ctx.strokeStyle = '#dc2626'; // Red GOST border
+  ctx.lineWidth = 2.0;
+  ctx.stroke();
+
+  // Sliding car / Mud wave icon inside triangle
+  ctx.fillStyle = '#1e1b18';
+  ctx.fillRect(-3.5, -2, 7, 3);
+  ctx.fillRect(-2.5, -3.8, 5, 1.8);
+
+  ctx.strokeStyle = '#78350f';
+  ctx.lineWidth = 1.0;
+  ctx.beginPath();
+  ctx.arc(-2, 2.5, 2, 0.2, Math.PI);
+  ctx.arc(2, 2.5, 2, 0.2, Math.PI);
+  ctx.stroke();
+
+  ctx.restore();
+
+  // Sign text plate "ВЯЗКИЙ ИЛ • СЪЕЗД К ВОДЕ"
+  ctx.save();
+  ctx.translate(0, -6);
+  ctx.fillStyle = '#f8fafc';
+  ctx.fillRect(-18, -4, 36, 8);
+  ctx.strokeStyle = '#0284c7';
+  ctx.lineWidth = 1.0;
+  ctx.strokeRect(-18, -4, 36, 8);
+
+  ctx.fillStyle = '#0f172a';
+  ctx.font = 'bold 3.2px sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('ВЯЗКИЙ ИЛ', 0, -1.8);
+  ctx.font = 'bold 2.5px sans-serif';
+  ctx.fillStyle = '#dc2626';
+  ctx.fillText('СЪЕЗД К ВОДЕ', 0, 1.8);
+  ctx.restore();
+
+  ctx.restore();
+}
+
 export function renderPropHaystack(ctx: CanvasRenderingContext2D, prop: StreetProp) {
   // Shadow
   ctx.fillStyle = 'rgba(0, 0, 0, 0.28)';
@@ -4618,4 +4749,1033 @@ export function renderPropGardenPathTile(ctx: CanvasRenderingContext2D, prop: St
     ctx.fillRect(4.7, 4.7, 0.7, 0.7);
   }
 }
+
+// =========================================================================
+// 32. GARAGE COOPERATIVE ATMOSPHERE & CLUTTER PROPS
+// =========================================================================
+
+/**
+ * 1. GARAGE SOFA (Гаражный диван / кресло)
+ * Authentic worn-out outdoor faux-leather couch where garage owners relax, chat, and drink tea.
+ */
+export function renderPropGarageSofa(ctx: CanvasRenderingContext2D, prop: StreetProp) {
+  let hash = 0;
+  for (let i = 0; i < prop.id.length; i++) hash = (hash * 31 + prop.id.charCodeAt(i)) >>> 0;
+  const isMaroon = (hash % 2) === 0;
+
+  // Ground drop shadow
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
+  ctx.beginPath();
+  ctx.ellipse(1.5, 2, 11, 7, 0.05, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Brick/wooden support blocks under feet
+  ctx.fillStyle = '#78350f';
+  ctx.fillRect(-9, -5, 2.5, 2);
+  ctx.fillRect(6.5, -5, 2.5, 2);
+  ctx.fillRect(-9, 4, 2.5, 2);
+  ctx.fillRect(6.5, 4, 2.5, 2);
+
+  // Main sofa body frame (faded brown or maroon leatherette)
+  ctx.fillStyle = isMaroon ? '#4c1d1a' : '#3d2516';
+  ctx.beginPath();
+  ctx.roundRect(-9.5, -5.5, 19, 11, 2);
+  ctx.fill();
+  ctx.strokeStyle = '#1c1917';
+  ctx.lineWidth = 0.8;
+  ctx.stroke();
+
+  // Backrest cushion (darker, button-tufted)
+  ctx.fillStyle = isMaroon ? '#361412' : '#27170c';
+  ctx.fillRect(-9, -5, 18, 3.5);
+  ctx.strokeStyle = 'rgba(0, 0, 0, 0.5)';
+  ctx.lineWidth = 0.6;
+  ctx.beginPath();
+  ctx.moveTo(-6, -5); ctx.lineTo(-6, -1.5);
+  ctx.moveTo(0, -5); ctx.lineTo(0, -1.5);
+  ctx.moveTo(6, -5); ctx.lineTo(6, -1.5);
+  ctx.stroke();
+
+  // Seat cushions (left & right)
+  ctx.fillStyle = isMaroon ? '#5c221e' : '#4a2f1b';
+  ctx.fillRect(-8.5, -1, 8, 6);
+  ctx.fillRect(0.5, -1, 8, 6);
+  ctx.strokeStyle = '#291c13';
+  ctx.lineWidth = 0.6;
+  ctx.strokeRect(-8.5, -1, 8, 6);
+  ctx.strokeRect(0.5, -1, 8, 6);
+
+  // Split cushion tear with yellow sponge foam showing
+  ctx.fillStyle = '#ca8a04';
+  ctx.fillRect(2, 1.5, 3.5, 2);
+
+  // Silver repair tape (серый армированный скотч) across a seam
+  ctx.fillStyle = '#94a3b8';
+  ctx.fillRect(-6, 0.5, 4.5, 1.4);
+
+  // Makeshift side table (wooden fruit crate / cable spool cutoff)
+  ctx.fillStyle = '#854d0e';
+  ctx.fillRect(10.5, -2, 5, 5);
+  ctx.strokeStyle = '#451a03';
+  ctx.lineWidth = 0.6;
+  ctx.strokeRect(10.5, -2, 5, 5);
+
+  // Tin can ashtray with cigarette butts on the crate
+  ctx.fillStyle = '#e2e8f0';
+  ctx.beginPath();
+  ctx.arc(13, 0.5, 1.3, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#1c1917';
+  ctx.fillRect(12.7, 0.2, 0.6, 0.6); // ash
+  ctx.fillStyle = '#ea580c';
+  ctx.fillRect(13.4, 0.8, 0.5, 0.5); // orange filter butt
+}
+
+/**
+ * 2. GARAGE WORKBENCH (Верстак с тисками и инструментом)
+ * Heavy welded steel table outside a garage with a bench vise, hammer, wrenches, and toolbox.
+ */
+export function renderPropGarageWorkbench(ctx: CanvasRenderingContext2D, prop: StreetProp) {
+  // Ground drop shadow
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
+  ctx.beginPath();
+  ctx.ellipse(2, 2.5, 13, 7, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Steel legs with mounting pads
+  ctx.fillStyle = '#0f172a';
+  ctx.fillRect(-11, -5, 2.2, 2.2);
+  ctx.fillRect(8.8, -5, 2.2, 2.2);
+  ctx.fillRect(-11, 2.8, 2.2, 2.2);
+  ctx.fillRect(8.8, 2.8, 2.2, 2.2);
+
+  // Heavy timber / sheet steel table surface
+  ctx.fillStyle = '#334155';
+  ctx.fillRect(-11.5, -5.5, 23, 11);
+  ctx.strokeStyle = '#0f172a';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(-11.5, -5.5, 23, 11);
+
+  // Heavy wooden insert planks
+  ctx.fillStyle = '#78350f';
+  ctx.fillRect(-10.5, -4.5, 14, 9);
+  ctx.strokeStyle = '#451a03';
+  ctx.lineWidth = 0.6;
+  ctx.strokeRect(-10.5, -4.5, 14, 9);
+
+  // Dark oily grease smudges on the bench
+  ctx.fillStyle = 'rgba(15, 23, 42, 0.65)';
+  ctx.beginPath();
+  ctx.ellipse(-4, 0, 4, 2.5, 0.3, 0, Math.PI * 2);
+  ctx.fill();
+
+  // CAST-IRON BENCH VISE (Тиски) mounted on the right edge
+  ctx.fillStyle = '#1e293b'; // Base swivel
+  ctx.fillRect(5, -4, 5.5, 5);
+  ctx.fillStyle = '#475569'; // Fixed jaw
+  ctx.fillRect(5.5, -3.5, 4.5, 2);
+  ctx.fillStyle = '#64748b'; // Moving jaw
+  ctx.fillRect(5.5, -0.5, 4.5, 1.8);
+  // Threaded lead screw spindle & handle
+  ctx.strokeStyle = '#cbd5e1';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(7.7, 1.2); ctx.lineTo(7.7, 4.2);
+  ctx.stroke();
+  ctx.fillStyle = '#e2e8f0';
+  ctx.beginPath();
+  ctx.arc(7.7, 1.2, 0.8, 0, Math.PI * 2);
+  ctx.arc(7.7, 4.2, 0.8, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Hand tools on the table: Ball-peen hammer & combination wrench
+  // Hammer
+  ctx.fillStyle = '#d97706'; // Wooden handle
+  ctx.fillRect(-8, -2, 6, 1);
+  ctx.fillStyle = '#475569'; // Steel head
+  ctx.fillRect(-9, -2.7, 1.6, 2.4);
+
+  // Wrench
+  ctx.strokeStyle = '#cbd5e1';
+  ctx.lineWidth = 0.9;
+  ctx.beginPath();
+  ctx.moveTo(-7, 2); ctx.lineTo(-2, 2.5);
+  ctx.stroke();
+
+  // Red metal portable toolbox
+  ctx.fillStyle = '#b91c1c';
+  ctx.fillRect(-1, -3.8, 4.5, 2.6);
+  ctx.strokeStyle = '#7f1d1d';
+  ctx.lineWidth = 0.6;
+  ctx.strokeRect(-1, -3.8, 4.5, 2.6);
+  // Silver toolbox handle
+  ctx.fillStyle = '#cbd5e1';
+  ctx.fillRect(0.8, -4.5, 1, 0.8);
+}
+
+/**
+ * 3. GARAGE DIRT PILE (Куча влажного грунта / земли)
+ * 3D volumetric mound of excavated dark soil with weeds and a shovel stuck in it.
+ */
+export function renderPropGarageDirtPile(ctx: CanvasRenderingContext2D, prop: StreetProp) {
+  let hash = 0;
+  for (let i = 0; i < prop.id.length; i++) hash = (hash * 31 + prop.id.charCodeAt(i)) >>> 0;
+
+  // Ground contact shadow
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
+  ctx.beginPath();
+  ctx.ellipse(1.5, 2, 12, 9, 0.1, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Base dark loam mound
+  ctx.fillStyle = '#22150b';
+  ctx.beginPath();
+  ctx.ellipse(0, 0, 11, 8.5, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Secondary contour layer
+  ctx.fillStyle = '#332011';
+  ctx.beginPath();
+  ctx.ellipse(-1, -1, 9, 6.8, -0.1, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Crest peak layer
+  ctx.fillStyle = '#452b17';
+  ctx.beginPath();
+  ctx.ellipse(-2, -2, 6, 4.5, 0.15, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Soil flecks, pebbles, clods
+  ctx.fillStyle = '#170f07';
+  ctx.fillRect(-6, 2, 2, 1.5);
+  ctx.fillRect(3, -4, 1.8, 1.8);
+  ctx.fillRect(5, 3, 2.2, 1.6);
+  ctx.fillRect(-2, 4, 1.5, 1.2);
+
+  // Gravel flecks
+  ctx.fillStyle = '#78716c';
+  ctx.fillRect(-4, -3, 1.5, 1.2);
+  ctx.fillRect(2, 1, 1.2, 1.2);
+  ctx.fillRect(-1, -5, 1.3, 1.3);
+
+  // Sprouting wild weeds / nettles on the flanks
+  ctx.fillStyle = '#365314';
+  ctx.beginPath();
+  ctx.arc(-7, 3, 2, 0, Math.PI * 2);
+  ctx.arc(6, -2, 2.2, 0, Math.PI * 2);
+  ctx.arc(1, 6, 1.8, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#4d7c0f';
+  ctx.fillRect(-7.2, 2.8, 1, 1);
+  ctx.fillRect(5.8, -2.2, 1, 1);
+
+  // Shovel stuck in the mound
+  ctx.save();
+  ctx.rotate(0.35);
+  // Wooden shaft
+  ctx.fillStyle = '#b45309';
+  ctx.fillRect(-1, -11, 1.4, 9);
+  // Shovel blade in dirt
+  ctx.fillStyle = '#78350f';
+  ctx.fillRect(-2.5, -2, 4.4, 3);
+  ctx.restore();
+}
+
+/**
+ * 4. GARAGE SAND PILE (Куча речного/карьерного песка)
+ * Golden construction sand with gravel and an old steel bucket.
+ */
+export function renderPropGarageSandPile(ctx: CanvasRenderingContext2D, prop: StreetProp) {
+  // Shadow
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.38)';
+  ctx.beginPath();
+  ctx.ellipse(1.5, 2, 11.5, 8.5, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Base sand mound
+  ctx.fillStyle = '#854d0e';
+  ctx.beginPath();
+  ctx.ellipse(0, 0, 10.5, 8, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Mid contour layer
+  ctx.fillStyle = '#a16207';
+  ctx.beginPath();
+  ctx.ellipse(-1, -1, 8.5, 6, -0.1, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Top highlight ridge
+  ctx.fillStyle = '#ca8a04';
+  ctx.beginPath();
+  ctx.ellipse(-2, -2, 5.5, 4, 0.1, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Granular texture dots
+  ctx.fillStyle = '#713f12';
+  ctx.fillRect(-5, 1, 1.5, 1.2);
+  ctx.fillRect(4, -3, 1.5, 1.5);
+  ctx.fillRect(2, 3, 1.5, 1.2);
+  ctx.fillRect(-3, -4, 1.2, 1.2);
+
+  // Old dented zinc bucket sitting tilted on the sand slope
+  ctx.fillStyle = '#64748b';
+  ctx.beginPath();
+  ctx.arc(5, 1, 2.5, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#334155';
+  ctx.beginPath();
+  ctx.arc(5, 1, 1.6, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#94a3b8';
+  ctx.fillRect(4, -0.5, 2, 0.6); // wire handle
+}
+
+/**
+ * 5. GARAGE TIRES HEAP (Свалка старых автомобильных покрышек)
+ * Large cluster of worn tires thrown in a heap, with pooled rainwater and weeds.
+ */
+export function renderPropGarageTiresHeap(ctx: CanvasRenderingContext2D, prop: StreetProp) {
+  // Ground shadow
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+  ctx.beginPath();
+  ctx.ellipse(2, 2.5, 13, 10, 0.1, 0, Math.PI * 2);
+  ctx.fill();
+
+  const drawSingleTire = (x: number, y: number, r: number, innerR: number, angle: number = 0) => {
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(angle);
+
+    // Tire outer rubber
+    ctx.fillStyle = '#18181b';
+    ctx.beginPath();
+    ctx.arc(0, 0, r, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Tread ring
+    ctx.strokeStyle = '#27272a';
+    ctx.lineWidth = 1.4;
+    ctx.stroke();
+
+    // Tire sidewall bevel
+    ctx.fillStyle = '#27272a';
+    ctx.beginPath();
+    ctx.arc(0, 0, r - 1.2, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Inner rim hole
+    ctx.fillStyle = '#09090b';
+    ctx.beginPath();
+    ctx.arc(0, 0, innerR, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Pooled rainwater in the bottom of the tire
+    ctx.fillStyle = 'rgba(30, 41, 59, 0.8)';
+    ctx.beginPath();
+    ctx.arc(0.5, 0.5, innerR * 0.7, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.restore();
+  };
+
+  // Base layer of tires lying flat
+  drawSingleTire(-5, -3, 6.2, 3.2, 0.2);
+  drawSingleTire(5, -2, 6.5, 3.3, -0.4);
+  drawSingleTire(-2, 4, 6.0, 3.0, 0.6);
+  drawSingleTire(4, 4, 5.8, 2.8, -0.1);
+
+  // Top tilted tires leaning into the pile
+  drawSingleTire(0, 0, 6.8, 3.4, 0.1);
+
+  // Weeds poking through the tire centers
+  ctx.fillStyle = '#365314';
+  ctx.beginPath();
+  ctx.arc(-5, -3, 1.8, 0, Math.PI * 2);
+  ctx.arc(0, 0, 2.2, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#4d7c0f';
+  ctx.fillRect(-0.5, -0.5, 1.2, 1.2);
+}
+
+/**
+ * 6. GARAGE SCRAP METAL (Гора металлолома, ржавые автозапчасти)
+ * Rusted car doors, bent exhaust pipes, suspension springs, and sheet metal.
+ */
+export function renderPropGarageScrapMetal(ctx: CanvasRenderingContext2D, prop: StreetProp) {
+  // Ground drop shadow
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
+  ctx.beginPath();
+  ctx.ellipse(2, 2.5, 14, 11, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Base rust-stained soil
+  ctx.fillStyle = '#3c1d0b';
+  ctx.beginPath();
+  ctx.ellipse(0, 0, 12, 9, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Crumpled red automotive door/fender with rust holes
+  ctx.save();
+  ctx.rotate(0.2);
+  ctx.fillStyle = '#7f1d1d'; // faded red primer/paint
+  ctx.fillRect(-9, -6, 12, 7);
+  ctx.strokeStyle = '#450a0a';
+  ctx.lineWidth = 0.8;
+  ctx.strokeRect(-9, -6, 12, 7);
+  // Rust holes eaten through sheet metal
+  ctx.fillStyle = '#1c1917';
+  ctx.beginPath();
+  ctx.ellipse(-6, -4, 1.6, 1.2, 0.3, 0, Math.PI * 2);
+  ctx.ellipse(-2, -2, 2.2, 1.4, -0.2, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+
+  // Heavy automotive suspension coil spring (пружина подвески)
+  ctx.strokeStyle = '#78350f';
+  ctx.lineWidth = 1.6;
+  ctx.beginPath();
+  for (let sx = -8; sx <= 2; sx += 2) {
+    ctx.arc(sx, 3, 2.5, -Math.PI * 0.4, Math.PI * 0.4);
+  }
+  ctx.stroke();
+
+  // Curved exhaust pipe with rusted muffler canister (глушитель)
+  ctx.strokeStyle = '#9a3412';
+  ctx.lineWidth = 2.2;
+  ctx.beginPath();
+  ctx.moveTo(8, -8);
+  ctx.bezierCurveTo(4, -4, 2, 2, -6, 5);
+  ctx.stroke();
+
+  // Muffler canister
+  ctx.fillStyle = '#7c2d12';
+  ctx.beginPath();
+  ctx.roundRect(1, -5, 7, 3.5, 1.2);
+  ctx.fill();
+  ctx.strokeStyle = '#431407';
+  ctx.lineWidth = 0.8;
+  ctx.stroke();
+
+  // Cast iron brake rotor (тормозной диск с ржавчиной)
+  ctx.fillStyle = '#78350f';
+  ctx.beginPath();
+  ctx.arc(5, 4, 4, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#1c1917';
+  ctx.beginPath();
+  ctx.arc(5, 4, 1.8, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = '#451a03';
+  ctx.lineWidth = 0.6;
+  ctx.beginPath();
+  ctx.arc(5, 4, 3.2, 0, Math.PI * 2);
+  ctx.stroke();
+}
+
+/**
+ * 7. TARP-COVERED CAR (Автомобиль под брезентом)
+ * A mystery classic car wrapped completely under a weathered canvas tarp with tie-down ropes.
+ */
+export function renderPropTarpCoveredCar(ctx: CanvasRenderingContext2D, prop: StreetProp) {
+  let hash = 0;
+  for (let i = 0; i < prop.id.length; i++) hash = (hash * 31 + prop.id.charCodeAt(i)) >>> 0;
+  const isSlate = (hash % 2) === 0;
+
+  // Heavy car drop shadow
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
+  ctx.beginPath();
+  ctx.roundRect(-21, -11, 42, 22, 5);
+  ctx.fill();
+
+  // Canvas tarp main envelope (shows classic sedan silhouette)
+  ctx.fillStyle = isSlate ? '#334155' : '#3f3f46';
+  ctx.beginPath();
+  ctx.roundRect(-20, -10, 40, 20, 4);
+  ctx.fill();
+  ctx.strokeStyle = '#1e293b';
+  ctx.lineWidth = 1.0;
+  ctx.stroke();
+
+  // Cabin roof bulge under canvas
+  ctx.fillStyle = isSlate ? '#475569' : '#52525b';
+  ctx.beginPath();
+  ctx.roundRect(-7, -8, 16, 16, 2.5);
+  ctx.fill();
+
+  // Hood & trunk folds & creases
+  ctx.strokeStyle = 'rgba(0, 0, 0, 0.35)';
+  ctx.lineWidth = 1.0;
+  ctx.beginPath();
+  // Hood crease
+  ctx.moveTo(-19, -4); ctx.lineTo(-8, -4);
+  ctx.moveTo(-19, 4); ctx.lineTo(-8, 4);
+  // Windshield transition slope
+  ctx.moveTo(-8, -8); ctx.lineTo(-8, 8);
+  // Rear window transition slope
+  ctx.moveTo(9, -8); ctx.lineTo(9, 8);
+  // Trunk crease
+  ctx.moveTo(10, -5); ctx.lineTo(19, -5);
+  ctx.moveTo(10, 5); ctx.lineTo(19, 5);
+  ctx.stroke();
+
+  // Wheel arch bulges showing under the tarp
+  ctx.fillStyle = '#0f172a';
+  ctx.fillRect(-16, -10.5, 6, 1.5);
+  ctx.fillRect(10, -10.5, 6, 1.5);
+  ctx.fillRect(-16, 9, 6, 1.5);
+  ctx.fillRect(10, 9, 6, 1.5);
+
+  // Diagonal tie-down ropes / bungee cords strapped tightly across
+  ctx.strokeStyle = '#d97706';
+  ctx.lineWidth = 0.9;
+  ctx.beginPath();
+  ctx.moveTo(-18, -10); ctx.lineTo(-10, 10);
+  ctx.moveTo(-6, -10); ctx.lineTo(2, 10);
+  ctx.moveTo(4, -10); ctx.lineTo(12, 10);
+  ctx.moveTo(12, -10); ctx.lineTo(19, 10);
+  ctx.stroke();
+
+  // Grommet eyelets along bottom edge
+  ctx.fillStyle = '#e2e8f0';
+  for (let rx = -16; rx <= 16; rx += 8) {
+    ctx.fillRect(rx, -9.8, 1, 1);
+    ctx.fillRect(rx, 8.8, 1, 1);
+  }
+}
+
+/**
+ * 8. CAR ON BLOCKS (Автомобиль на колодках / кирпичах)
+ * Vintage project sedan undergoing restoration, front wheels removed, on wooden/brick piers.
+ */
+export function renderPropCarOnBlocks(ctx: CanvasRenderingContext2D, prop: StreetProp) {
+  let hash = 0;
+  for (let i = 0; i < prop.id.length; i++) hash = (hash * 31 + prop.id.charCodeAt(i)) >>> 0;
+  const bodyColor = (hash % 2 === 0) ? '#0284c7' : '#ca8a04'; // turquoise or ochre
+
+  // Vehicle ground shadow
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
+  ctx.beginPath();
+  ctx.roundRect(-20, -10, 40, 20, 3);
+  ctx.fill();
+
+  // Brick & sleeper support piers under car jacking points
+  ctx.fillStyle = '#991b1b'; // red bricks
+  ctx.fillRect(-15, -11, 4, 3);
+  ctx.fillRect(-15, 8, 4, 3);
+  ctx.fillStyle = '#78350f'; // wooden railway sleeper blocks under rear
+  ctx.fillRect(11, -11, 4, 3);
+  ctx.fillRect(11, 8, 4, 3);
+
+  // Rear wheels (still mounted)
+  ctx.fillStyle = '#18181b';
+  ctx.fillRect(9, -11.5, 7, 2.5);
+  ctx.fillRect(9, 9, 7, 2.5);
+
+  // Main vehicle body (Soviet classic sedan shape)
+  ctx.fillStyle = bodyColor;
+  ctx.beginPath();
+  ctx.roundRect(-19, -9, 38, 18, 3);
+  ctx.fill();
+  ctx.strokeStyle = '#1c1917';
+  ctx.lineWidth = 0.8;
+  ctx.stroke();
+
+  // Front left fender in red primer (загрунтованное крыло)
+  ctx.fillStyle = '#7f1d1d';
+  ctx.fillRect(-19, -9, 9, 5);
+
+  // Cabin roof & glass
+  ctx.fillStyle = '#0f172a'; // Windshield & rear glass
+  ctx.fillRect(-7, -8, 14, 16);
+  ctx.fillStyle = bodyColor; // Roof panel
+  ctx.fillRect(-5, -7.5, 10, 15);
+  ctx.strokeStyle = '#cbd5e1'; // Chrome rain gutters
+  ctx.lineWidth = 0.6;
+  ctx.strokeRect(-5, -7.5, 10, 15);
+
+  // Front bumper (chrome with rubber overriders)
+  ctx.fillStyle = '#e2e8f0';
+  ctx.fillRect(-19.5, -8, 1.2, 16);
+  ctx.fillStyle = '#09090b';
+  ctx.fillRect(-19.8, -5, 1, 2);
+  ctx.fillRect(-19.8, 3, 1, 2);
+
+  // FRONT WHEELS REMOVED! Empty wheel wells exposing cast iron brake drums
+  ctx.fillStyle = '#0f172a'; // Wheel well recess
+  ctx.fillRect(-16, -9.5, 6, 2);
+  ctx.fillRect(-16, 7.5, 6, 2);
+
+  // Cast iron brake drums (Тормозные барабаны со шпильками)
+  ctx.fillStyle = '#78350f';
+  ctx.beginPath();
+  ctx.arc(-13, -9.5, 2.2, 0, Math.PI * 2);
+  ctx.arc(-13, 9.5, 2.2, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#e2e8f0'; // Wheel studs
+  ctx.fillRect(-13.5, -10, 1, 1);
+  ctx.fillRect(-13.5, 9, 1, 1);
+
+  // The two removed wheels leaning against the front door
+  ctx.fillStyle = '#18181b';
+  ctx.beginPath();
+  ctx.arc(-6, -11, 3.5, 0, Math.PI * 2);
+  ctx.arc(1, -11, 3.5, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#94a3b8'; // Stamped steel wheel center
+  ctx.beginPath();
+  ctx.arc(-6, -11, 1.8, 0, Math.PI * 2);
+  ctx.arc(1, -11, 1.8, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+/**
+ * 9. OIL BARREL CLUSTER (Бочки из-под ГСМ с масляным разливом)
+ * Three 200-liter drums: blue, rusty red, and one knocked over with spilled oil.
+ */
+export function renderPropOilBarrelCluster(ctx: CanvasRenderingContext2D, prop: StreetProp) {
+  // Massive dark engine oil spill oozing from the tipped drum into the dirt
+  ctx.fillStyle = 'rgba(15, 12, 10, 0.85)';
+  ctx.beginPath();
+  ctx.ellipse(-3, 3, 9, 6, -0.3, 0, Math.PI * 2);
+  ctx.fill();
+  // Oil glossy iridescent highlight
+  ctx.fillStyle = 'rgba(40, 50, 45, 0.4)';
+  ctx.beginPath();
+  ctx.ellipse(-3, 3, 5, 3, -0.3, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Ground drop shadow
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
+  ctx.beginPath();
+  ctx.ellipse(1, 2, 11, 8, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // 1. Upright Blue 200L Drum
+  ctx.fillStyle = '#1d4ed8';
+  ctx.beginPath();
+  ctx.arc(-4, -3, 4.5, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = '#1e3a8a';
+  ctx.lineWidth = 1;
+  ctx.stroke();
+  // Rolled chime rim & bungs
+  ctx.strokeStyle = '#93c5fd';
+  ctx.lineWidth = 0.7;
+  ctx.beginPath();
+  ctx.arc(-4, -3, 3.8, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.fillStyle = '#e2e8f0';
+  ctx.fillRect(-5, -4, 1.2, 1.2);
+
+  // 2. Upright Rusty Red Drum
+  ctx.fillStyle = '#9a3412';
+  ctx.beginPath();
+  ctx.arc(4, -2, 4.5, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = '#431407';
+  ctx.lineWidth = 1;
+  ctx.stroke();
+  ctx.strokeStyle = '#d97706';
+  ctx.lineWidth = 0.7;
+  ctx.beginPath();
+  ctx.arc(4, -2, 3.8, 0, Math.PI * 2);
+  ctx.stroke();
+
+  // 3. Tipped-over Drum on its side
+  ctx.save();
+  ctx.translate(-1, 4);
+  ctx.rotate(0.3);
+  ctx.fillStyle = '#475569';
+  ctx.fillRect(-5, -3, 10, 6);
+  ctx.strokeStyle = '#1e293b';
+  ctx.lineWidth = 0.8;
+  ctx.strokeRect(-5, -3, 10, 6);
+  // Ribs on cylinder
+  ctx.strokeStyle = '#94a3b8';
+  ctx.lineWidth = 0.7;
+  ctx.beginPath();
+  ctx.moveTo(-1.5, -3); ctx.lineTo(-1.5, 3);
+  ctx.moveTo(1.5, -3); ctx.lineTo(1.5, 3);
+  ctx.stroke();
+  // Open bung draining oil
+  ctx.fillStyle = '#0f172a';
+  ctx.beginPath();
+  ctx.arc(-4, 0, 1.2, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+}
+
+/**
+ * 10. GARAGE TRASH HEAP (Куча гаражного мусора и отходов)
+ * Cardboard boxes, motor oil bottles, car battery, fan belts, and oily rags.
+ */
+export function renderPropGarageTrashHeap(ctx: CanvasRenderingContext2D, prop: StreetProp) {
+  // Ground shadow
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
+  ctx.beginPath();
+  ctx.ellipse(1.5, 2, 11, 8, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Torn cardboard box (разорванная картонная коробка)
+  ctx.fillStyle = '#a16207';
+  ctx.fillRect(-7, -5, 8, 7);
+  ctx.strokeStyle = '#713f12';
+  ctx.lineWidth = 0.7;
+  ctx.strokeRect(-7, -5, 8, 7);
+  // Torn box flaps
+  ctx.fillStyle = '#ca8a04';
+  ctx.beginPath();
+  ctx.moveTo(-7, -5); ctx.lineTo(-9, -7); ctx.lineTo(-3, -5);
+  ctx.fill();
+
+  // Blue plastic 5-liter canister ("ТОСОЛ")
+  ctx.fillStyle = '#0284c7';
+  ctx.beginPath();
+  ctx.roundRect(2, -4, 6, 4.5, 1);
+  ctx.fill();
+  ctx.fillStyle = '#f8fafc'; // White cap
+  ctx.fillRect(6, -5, 1.5, 1.2);
+  // Handle cutout
+  ctx.fillStyle = '#0369a1';
+  ctx.fillRect(3.5, -3, 2.5, 1.2);
+
+  // Black plastic 4-liter oil bottle
+  ctx.fillStyle = '#18181b';
+  ctx.fillRect(-3, 1, 5, 4);
+  ctx.fillStyle = '#ef4444'; // Red cap
+  ctx.fillRect(1, 0, 1.2, 1);
+
+  // Discarded car battery (АКБ 6СТ-55)
+  ctx.fillStyle = '#27272a';
+  ctx.fillRect(3, 2, 6, 4.5);
+  ctx.strokeStyle = '#09090b';
+  ctx.lineWidth = 0.6;
+  ctx.strokeRect(3, 2, 6, 4.5);
+  // Battery lead terminals
+  ctx.fillStyle = '#cbd5e1';
+  ctx.fillRect(3.8, 2.5, 1.2, 1.2);
+  ctx.fillRect(7, 2.5, 1.2, 1.2);
+
+  // Oily crumpled shop rag
+  ctx.fillStyle = '#b45309';
+  ctx.beginPath();
+  ctx.arc(-5, 3, 2, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Coiled rubber fan belt
+  ctx.strokeStyle = '#09090b';
+  ctx.lineWidth = 1.0;
+  ctx.beginPath();
+  ctx.arc(-1, -1, 3, 0, Math.PI * 2);
+  ctx.stroke();
+}
+
+// --- RAILWAY & STATION INFRASTRUCTURE PROPS ---
+
+/**
+ * 1. RAILWAY MAST SIGNAL (Железнодорожный мачтовый линзовый светофор)
+ */
+export function renderPropRailwaySignal(ctx: CanvasRenderingContext2D, prop: StreetProp) {
+  if (prop.isBroken) {
+    ctx.save();
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
+    ctx.beginPath();
+    ctx.ellipse(0, 0, 14, 5, 0, 0, Math.PI * 2);
+    ctx.fill();
+    // Toppled mast pole
+    ctx.fillStyle = '#475569';
+    ctx.fillRect(-12, -2, 24, 4);
+    // Damaged lens box on ground
+    ctx.fillStyle = '#0f172a';
+    ctx.fillRect(8, -4, 7, 8);
+    // Shattered glass lens shards
+    ctx.fillStyle = '#ef4444';
+    ctx.fillRect(11, -2, 1.5, 1.5);
+    ctx.fillStyle = '#f59e0b';
+    ctx.fillRect(13, 1, 1.5, 1.5);
+    ctx.restore();
+    return;
+  }
+  // If intact: RailwaySignalingSystem.renderAllSignals in renderer.ts renders standing signals upright
+}
+
+/**
+ * 2. RAILWAY BUFFER STOP (Путевой упор с амортизатором)
+ */
+export function renderPropRailwayBufferStop(ctx: CanvasRenderingContext2D, prop: StreetProp) {
+  // Ground shadow
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+  ctx.fillRect(-12, -4, 24, 8);
+
+  // Timber/steel main horizontal beam
+  ctx.fillStyle = '#0f172a';
+  ctx.fillRect(-10, -3, 20, 6);
+
+  // Diagonal red/white hazard stripes
+  const numStripes = 6;
+  const stripeW = 20 / numStripes;
+  for (let i = 0; i < numStripes; i++) {
+    ctx.fillStyle = i % 2 === 0 ? '#dc2626' : '#f8fafc';
+    ctx.fillRect(-10 + i * stripeW, -2.6, stripeW, 5.2);
+  }
+
+  // Twin circular buffer discs
+  ctx.fillStyle = '#334155';
+  ctx.beginPath();
+  ctx.arc(-6, 0, 2.5, 0, Math.PI * 2);
+  ctx.arc(6, 0, 2.5, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#020617';
+  ctx.beginPath();
+  ctx.arc(-6, 0, 1.6, 0, Math.PI * 2);
+  ctx.arc(6, 0, 1.6, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Center red warning lamp
+  ctx.fillStyle = '#ef4444';
+  ctx.fillRect(-1.5, -1.5, 3, 3);
+}
+
+/**
+ * 3. RAILWAY SWITCH BOX (Электропривод стрелочного перевода СП-6М)
+ */
+export function renderPropRailwaySwitchBox(ctx: CanvasRenderingContext2D, prop: StreetProp) {
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
+  ctx.fillRect(-6, -4, 12, 8);
+
+  // Cast iron body
+  ctx.fillStyle = '#334155';
+  ctx.fillRect(-5, -3.5, 10, 7);
+  ctx.strokeStyle = '#1e293b';
+  ctx.lineWidth = 0.8;
+  ctx.strokeRect(-5, -3.5, 10, 7);
+
+  // Machine cover with ribs
+  ctx.fillStyle = '#475569';
+  ctx.fillRect(-4, -2.5, 8, 5);
+
+  // Yellow high-voltage symbol
+  ctx.fillStyle = '#eab308';
+  ctx.fillRect(-1, -1, 2, 2);
+
+  // Operating rod extending to track (рабочая тяга)
+  ctx.fillStyle = '#64748b';
+  ctx.fillRect(5, -0.6, 6, 1.2);
+}
+
+/**
+ * 4. RAILWAY LEVEL CROSSING LIGHTS (Светофор переездной автоматической сигнализации)
+ */
+export function renderPropRailwayCrossingLight(ctx: CanvasRenderingContext2D, prop: StreetProp) {
+  // Ground shadow
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
+  ctx.beginPath();
+  ctx.ellipse(1, 2, 8, 7, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Foundation
+  ctx.fillStyle = '#64748b';
+  ctx.fillRect(-5, -5, 10, 10);
+  ctx.fillStyle = '#94a3b8';
+  ctx.fillRect(-4, -4, 8, 8);
+
+  // Mast top-down
+  ctx.fillStyle = '#0f172a';
+  ctx.beginPath();
+  ctx.arc(0, 0, 2.5, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Acoustic bell
+  ctx.fillStyle = '#92400e';
+  ctx.beginPath();
+  ctx.arc(0, 0, 1.5, 0, Math.PI * 2);
+  ctx.fill();
+
+  // St. Andrew's Cross board edge facing +X
+  ctx.fillStyle = '#f8fafc';
+  ctx.fillRect(1.5, -9, 1.5, 18);
+  ctx.fillStyle = '#dc2626';
+  ctx.fillRect(1.5, -9, 1.5, 2.2);
+  ctx.fillRect(1.5, 6.8, 1.5, 2.2);
+
+  // Lantern heads with visor hoods
+  ctx.fillStyle = '#0f172a';
+  ctx.fillRect(0.8, -7, 2, 14);
+
+  // Red lenses
+  ctx.fillStyle = '#ef4444';
+  ctx.beginPath();
+  ctx.arc(2.5, -5, 1.4, 0, Math.PI * 2);
+  ctx.arc(2.5, 5, 1.4, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#fca5a5';
+  ctx.beginPath();
+  ctx.arc(2.8, -5, 0.6, 0, Math.PI * 2);
+  ctx.arc(2.8, 5, 0.6, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+/**
+ * 5. RAILWAY CROSSING BARRIER GATE (Шлагбаум переезда)
+ */
+export function renderPropRailwayCrossingGate(ctx: CanvasRenderingContext2D, prop: StreetProp) {
+  if (prop.isBroken) {
+    ctx.save();
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
+    ctx.beginPath();
+    ctx.ellipse(0, 0, 10, 4, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#1e293b';
+    ctx.fillRect(-3, -3, 6, 6);
+    ctx.fillStyle = '#f8fafc';
+    ctx.fillRect(2, -1, 16, 2.2);
+    ctx.fillStyle = '#dc2626';
+    ctx.fillRect(6, -1, 3.5, 2.2);
+    ctx.fillRect(13, -1, 3.5, 2.2);
+    ctx.restore();
+    return;
+  }
+
+  const sig = RailwaySignalingSystem.getSignal(prop.id, (prop as any).railwaySignalId, prop.x, prop.y);
+  const isClosed = sig ? (sig.currentAspect === 'red_alternating_flashing' || sig.currentAspect === 'red') : false;
+
+  ctx.save();
+  // Foundation
+  ctx.fillStyle = '#64748b';
+  ctx.fillRect(-5, -5, 10, 10);
+
+  // Mechanism housing cabinet
+  ctx.fillStyle = '#1e293b';
+  ctx.fillRect(-3.5, -4, 7, 8);
+  ctx.fillStyle = '#334155';
+  ctx.fillRect(-3, -3.5, 6, 7);
+
+  // Counterweight
+  ctx.fillStyle = '#1e293b';
+  ctx.fillRect(-2, -9, 4, 5);
+
+  // Rotary hub
+  ctx.fillStyle = '#0f172a';
+  ctx.beginPath();
+  ctx.arc(0, 2, 2.2, 0, Math.PI * 2);
+  ctx.fill();
+
+  // In strict top-down, when open boom points up towards camera (0 length projected)
+  if (isClosed) {
+    const boomLen = 42;
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
+    ctx.fillRect(0.8, 3.2, 2.4, boomLen);
+
+    ctx.fillStyle = '#f8fafc';
+    ctx.fillRect(-1.2, 2, 2.4, boomLen);
+
+    // Red reflective stripes
+    ctx.fillStyle = '#dc2626';
+    for (let by = 5; by < boomLen; by += 7) {
+      ctx.fillRect(-1.2, 2 + by, 2.4, 3.5);
+    }
+  }
+
+  ctx.restore();
+}
+
+/**
+ * 6. RAILWAY PLATFORM SIGN (Указатель платформы)
+ */
+export function renderPropRailwayPlatformSign(ctx: CanvasRenderingContext2D, prop: StreetProp) {
+  // Dual steel stanchions
+  ctx.fillStyle = '#475569';
+  ctx.fillRect(-12, -1, 2, 2);
+  ctx.fillRect(10, -1, 2, 2);
+
+  // Blue enamel sign board
+  ctx.fillStyle = '#1d4ed8';
+  ctx.fillRect(-15, -4, 30, 8);
+  ctx.strokeStyle = '#ffffff';
+  ctx.lineWidth = 0.6;
+  ctx.strokeRect(-15, -4, 30, 8);
+
+  // Crisp text
+  ctx.fillStyle = '#ffffff';
+  ctx.font = 'bold 3.5px sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('СТЕПНАЯ', 0, 0);
+}
+
+/**
+ * 7. RAILWAY STATION CLOCK (Вокзальные часы)
+ */
+export function renderPropRailwayClock(ctx: CanvasRenderingContext2D, prop: StreetProp) {
+  // Cast iron ornate wall bracket
+  ctx.fillStyle = '#0f172a';
+  ctx.fillRect(-2, -1, 4, 2);
+
+  // Circular clock casing with brass rim
+  ctx.fillStyle = '#b45309';
+  ctx.beginPath();
+  ctx.arc(0, 0, 6, 0, Math.PI * 2);
+  ctx.fill();
+
+  // White dial face
+  ctx.fillStyle = '#f8fafc';
+  ctx.beginPath();
+  ctx.arc(0, 0, 5, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Hour marks
+  ctx.fillStyle = '#0f172a';
+  for (let a = 0; a < Math.PI * 2; a += Math.PI / 6) {
+    const hx = Math.cos(a) * 4;
+    const hy = Math.sin(a) * 4;
+    ctx.fillRect(hx - 0.4, hy - 0.4, 0.8, 0.8);
+  }
+
+  // Black clock hands
+  ctx.strokeStyle = '#020617';
+  ctx.lineWidth = 0.8;
+  ctx.beginPath();
+  ctx.moveTo(0, 0); ctx.lineTo(1.8, -2.5); // Hour hand
+  ctx.moveTo(0, 0); ctx.lineTo(-2.2, -1.0); // Minute hand
+  ctx.stroke();
+
+  // Red second hand
+  ctx.strokeStyle = '#dc2626';
+  ctx.lineWidth = 0.5;
+  ctx.beginPath();
+  ctx.moveTo(0, 0); ctx.lineTo(0.5, 3.5);
+  ctx.stroke();
+}
+
+/**
+ * 8. RAILWAY PICKET POST (Путевой пикетный столбик ПК)
+ */
+export function renderPropRailwayPicketPost(ctx: CanvasRenderingContext2D, prop: StreetProp) {
+  // Ground shadow
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
+  ctx.beginPath();
+  ctx.ellipse(1, 1, 3, 2, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Concrete post painted white
+  ctx.fillStyle = '#f8fafc';
+  ctx.fillRect(-1.5, -4, 3, 8);
+  ctx.strokeStyle = '#94a3b8';
+  ctx.lineWidth = 0.5;
+  ctx.strokeRect(-1.5, -4, 3, 8);
+
+  // Black diagonal top cap
+  ctx.fillStyle = '#0f172a';
+  ctx.beginPath();
+  ctx.moveTo(-1.5, -4); ctx.lineTo(1.5, -2); ctx.lineTo(1.5, -4);
+  ctx.fill();
+
+  // Black painted picket number
+  ctx.fillStyle = '#0f172a';
+  ctx.font = 'bold 3px monospace';
+  ctx.textAlign = 'center';
+  ctx.fillText('4', 0, 2);
+}
+
+
 

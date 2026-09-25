@@ -1909,6 +1909,650 @@ export function renderInteriorFurniture(
     }
 
     // ==========================================
+    // 42. STOVE / COOKTOP & OVEN (Кухонная плита)
+    // ==========================================
+    case 'stove': {
+      // Main brushed stainless / dark anthracite housing
+      ctx.fillStyle = f.color || '#1e293b';
+      ctx.fillRect(-halfW, -halfH, f.width, f.height);
+      drawBevelFrame(ctx, -halfW, -halfH, f.width, f.height, '#64748b', '#090d16');
+
+      // Tempered ceramic glass cooktop plate (glossy obsidian)
+      const margin = 1.6;
+      const cookW = f.width - margin * 2;
+      const cookH = f.height - margin * 2 - (f.height > 16 ? 4 : 0);
+      ctx.fillStyle = '#090d16';
+      ctx.fillRect(-halfW + margin, -halfH + margin, cookW, cookH);
+      drawBevelFrame(ctx, -halfW + margin, -halfH + margin, cookW, cookH, '#334155', '#020617', 0.6);
+
+      // Burners layout: 4 circular radiant heating induction zones
+      const burnerConfigs = [
+        { rx: -cookW * 0.25, ry: -cookH * 0.25, r: Math.min(cookW, cookH) * 0.18, hot: true },
+        { rx: cookW * 0.25, ry: -cookH * 0.25, r: Math.min(cookW, cookH) * 0.13, hot: false },
+        { rx: -cookW * 0.25, ry: cookH * 0.25, r: Math.min(cookW, cookH) * 0.13, hot: false },
+        { rx: cookW * 0.25, ry: cookH * 0.25, r: Math.min(cookW, cookH) * 0.19, hot: true },
+      ];
+
+      const centerX = -halfW + margin + cookW / 2;
+      const centerY = -halfH + margin + cookH / 2;
+
+      for (const b of burnerConfigs) {
+        const bx = centerX + b.rx;
+        const by = centerY + b.ry;
+
+        // Outer burner border ring
+        ctx.strokeStyle = b.hot ? 'rgba(239, 68, 68, 0.7)' : 'rgba(148, 163, 184, 0.4)';
+        ctx.lineWidth = 0.8;
+        ctx.beginPath();
+        ctx.arc(bx, by, b.r, 0, Math.PI * 2);
+        ctx.stroke();
+
+        // Inner glowing heating coil or accent ring
+        ctx.strokeStyle = b.hot ? 'rgba(249, 115, 22, 0.55)' : 'rgba(71, 85, 105, 0.35)';
+        ctx.lineWidth = 0.6;
+        ctx.beginPath();
+        ctx.arc(bx, by, b.r * 0.6, 0, Math.PI * 2);
+        ctx.stroke();
+
+        // Center crosshair / touch induction marker
+        ctx.fillStyle = b.hot ? '#ef4444' : '#94a3b8';
+        ctx.fillRect(bx - 0.4, by - 1.2, 0.8, 2.4);
+        ctx.fillRect(bx - 1.2, by - 0.4, 2.4, 0.8);
+      }
+
+      // Front stainless control panel with dials & digital clock
+      if (f.height > 16) {
+        const panelY = halfH - 4;
+        ctx.fillStyle = '#334155';
+        ctx.fillRect(-halfW + margin, panelY, cookW, 3.2);
+        drawBevelFrame(ctx, -halfW + margin, panelY, cookW, 3.2, '#64748b', '#0f172a', 0.5);
+
+        // Control knobs
+        const numKnobs = 4;
+        const spacing = cookW / (numKnobs + 1);
+        for (let i = 1; i <= numKnobs; i++) {
+          const kx = -halfW + margin + spacing * i;
+          const ky = panelY + 1.6;
+          // Knob base
+          ctx.fillStyle = '#0f172a';
+          ctx.beginPath();
+          ctx.arc(kx, ky, 1.1, 0, Math.PI * 2);
+          ctx.fill();
+          // Chrome indicator tick
+          ctx.fillStyle = '#e2e8f0';
+          ctx.fillRect(kx - 0.3, ky - 1.0, 0.6, 0.9);
+        }
+
+        // LED digital display in center if wide enough
+        if (cookW > 24) {
+          ctx.fillStyle = '#020617';
+          ctx.fillRect(-halfW + margin + cookW * 0.42, panelY + 0.6, cookW * 0.16, 2.0);
+          ctx.fillStyle = '#38bdf8';
+          ctx.fillRect(-halfW + margin + cookW * 0.46, panelY + 1.2, 1.2, 0.8);
+        }
+      }
+      break;
+    }
+
+    // ==========================================
+    // 43. MICROWAVE OVEN (Микроволновая печь)
+    // ==========================================
+    case 'microwave': {
+      // Sleek modern brushed dark metallic chassis
+      ctx.fillStyle = f.color || '#334155';
+      ctx.fillRect(-halfW, -halfH, f.width, f.height);
+      drawBevelFrame(ctx, -halfW, -halfH, f.width, f.height, '#94a3b8', '#0f172a');
+
+      // Top ventilation cooling slots
+      ctx.fillStyle = '#1e293b';
+      for (let vx = -halfW + 3; vx < halfW - 8; vx += 2.5) {
+        ctx.fillRect(vx, -halfH + 1.0, 1.2, 0.6);
+      }
+
+      // Tinted protective door glass (left 70% of unit)
+      const doorW = f.width * 0.65;
+      const doorH = f.height - 3.5;
+      const doorX = -halfW + 1.5;
+      const doorY = -halfH + 2.0;
+
+      ctx.fillStyle = '#020617';
+      ctx.fillRect(doorX, doorY, doorW, doorH);
+      drawBevelFrame(ctx, doorX, doorY, doorW, doorH, '#475569', '#000000', 0.5);
+
+      // Glass reflection diagonal glare
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.12)';
+      ctx.beginPath();
+      ctx.moveTo(doorX + 2, doorY + doorH - 1);
+      ctx.lineTo(doorX + doorW * 0.4, doorY + 1);
+      ctx.lineTo(doorX + doorW * 0.6, doorY + 1);
+      ctx.lineTo(doorX + 4, doorY + doorH - 1);
+      ctx.closePath();
+      ctx.fill();
+
+      // Chrome vertical door handle bar
+      ctx.fillStyle = '#cbd5e1';
+      ctx.fillRect(doorX + doorW - 1.8, doorY + 1.5, 1.0, doorH - 3.0);
+      drawBevelFrame(ctx, doorX + doorW - 1.8, doorY + 1.5, 1.0, doorH - 3.0, '#ffffff', '#475569', 0.3);
+
+      // Right-side electronic digital control matrix
+      const ctrlX = doorX + doorW + 1.0;
+      const ctrlW = f.width - (doorW + 3.5);
+      const ctrlH = doorH;
+
+      if (ctrlW >= 4) {
+        // Glowing 7-segment digital display (01:30)
+        ctx.fillStyle = '#020617';
+        ctx.fillRect(ctrlX, doorY + 0.5, ctrlW, 2.5);
+        ctx.fillStyle = '#4ade80';
+        ctx.fillRect(ctrlX + 1.0, doorY + 1.2, ctrlW - 2.0, 1.0);
+
+        // Membrane button grid
+        ctx.fillStyle = '#1e293b';
+        ctx.fillRect(ctrlX + 0.5, doorY + 3.8, ctrlW - 1.0, ctrlH - 8.0);
+        ctx.strokeStyle = '#475569';
+        ctx.lineWidth = 0.4;
+        ctx.strokeRect(ctrlX + 0.5, doorY + 3.8, ctrlW - 1.0, ctrlH - 8.0);
+
+        // Quick start (green) & Stop (red) touch buttons at bottom
+        ctx.fillStyle = '#22c55e';
+        ctx.fillRect(ctrlX + 0.8, doorY + ctrlH - 3.2, (ctrlW - 2.0) / 2, 1.5);
+        ctx.fillStyle = '#ef4444';
+        ctx.fillRect(ctrlX + 0.8 + (ctrlW - 2.0) / 2 + 0.4, doorY + ctrlH - 3.2, (ctrlW - 2.0) / 2 - 0.4, 1.5);
+      }
+      break;
+    }
+
+    // ==========================================
+    // 44. WASHING MACHINE (Стиральная машина)
+    // ==========================================
+    case 'washing_machine': {
+      // Pure gloss white/anthracite enamelled steel body
+      ctx.fillStyle = f.color || '#f8fafc';
+      ctx.fillRect(-halfW, -halfH, f.width, f.height);
+      drawBevelFrame(ctx, -halfW, -halfH, f.width, f.height, '#ffffff', '#94a3b8');
+
+      // Top control fascia panel
+      const fasciaH = Math.max(3.5, f.height * 0.22);
+      ctx.fillStyle = '#e2e8f0';
+      ctx.fillRect(-halfW + 1, -halfH + 1, f.width - 2, fasciaH);
+      drawBevelFrame(ctx, -halfW + 1, -halfH + 1, f.width - 2, fasciaH, '#ffffff', '#cbd5e1', 0.5);
+
+      // Detergent dispenser drawer (left side)
+      const drawerW = (f.width - 4) * 0.28;
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(-halfW + 2, -halfH + 1.5, drawerW, fasciaH - 1);
+      drawBevelFrame(ctx, -halfW + 2, -halfH + 1.5, drawerW, fasciaH - 1, '#ffffff', '#94a3b8', 0.4);
+      // Drawer pull lip
+      ctx.fillStyle = '#94a3b8';
+      ctx.fillRect(-halfW + 3, -halfH + fasciaH * 0.5, drawerW - 2, 0.6);
+
+      // Central rotary program selection knob
+      const knobX = -halfW + f.width * 0.48;
+      const knobY = -halfH + fasciaH * 0.55;
+      ctx.fillStyle = '#0f172a';
+      ctx.beginPath();
+      ctx.arc(knobX, knobY, 1.3, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#38bdf8';
+      ctx.fillRect(knobX - 0.2, knobY - 1.2, 0.4, 0.8);
+
+      // Right-side digital LED status screen & power button
+      const screenX = knobX + 3.5;
+      const screenW = halfW - screenX - 1.5;
+      if (screenW > 3) {
+        ctx.fillStyle = '#020617';
+        ctx.fillRect(screenX, -halfH + 1.6, screenW, fasciaH - 1.2);
+        ctx.fillStyle = '#38bdf8';
+        ctx.fillRect(screenX + 0.8, -halfH + 2.2, screenW - 1.6, 0.8);
+      }
+
+      // Large central front-loading porthole door
+      const doorRadius = Math.min(f.width * 0.38, (f.height - fasciaH) * 0.42);
+      const doorCenterY = -halfH + fasciaH + (f.height - fasciaH) * 0.5;
+
+      // Chrome outer door bezel
+      ctx.fillStyle = '#cbd5e1';
+      ctx.beginPath();
+      ctx.arc(0, doorCenterY, doorRadius, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = '#64748b';
+      ctx.lineWidth = 0.8;
+      ctx.stroke();
+
+      // Recessed dark blue tempered glass bowl
+      ctx.fillStyle = '#0f172a';
+      ctx.beginPath();
+      ctx.arc(0, doorCenterY, doorRadius * 0.82, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Stainless steel perforated drum interior pattern
+      ctx.strokeStyle = 'rgba(203, 213, 225, 0.4)';
+      ctx.lineWidth = 0.6;
+      ctx.beginPath();
+      ctx.arc(0, doorCenterY, doorRadius * 0.58, 0, Math.PI * 2);
+      ctx.stroke();
+
+      // Drum agitator paddle
+      ctx.fillStyle = 'rgba(241, 245, 249, 0.35)';
+      ctx.beginPath();
+      ctx.moveTo(-doorRadius * 0.4, doorCenterY - 0.8);
+      ctx.lineTo(doorRadius * 0.4, doorCenterY + 0.8);
+      ctx.lineTo(doorRadius * 0.3, doorCenterY + 1.6);
+      ctx.lineTo(-doorRadius * 0.3, doorCenterY);
+      ctx.closePath();
+      ctx.fill();
+
+      // Curved glass reflection highlight
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.45)';
+      ctx.lineWidth = 0.9;
+      ctx.beginPath();
+      ctx.arc(0, doorCenterY, doorRadius * 0.72, -Math.PI * 0.75, -Math.PI * 0.25);
+      ctx.stroke();
+
+      // Door release handle on the right
+      ctx.fillStyle = '#64748b';
+      ctx.fillRect(doorRadius * 0.75, doorCenterY - 1.2, 1.4, 2.4);
+      break;
+    }
+
+    // ==========================================
+    // 45. REINFORCED SAFE (Бронированный сейф)
+    // ==========================================
+    case 'safe': {
+      // Heavy matte dark anthracite steel housing
+      ctx.fillStyle = f.color || '#0f172a';
+      ctx.fillRect(-halfW, -halfH, f.width, f.height);
+      drawBevelFrame(ctx, -halfW, -halfH, f.width, f.height, '#475569', '#020617', 1.5);
+
+      // Deeply recessed armored door slab
+      const doorInset = 2.0;
+      const dW = f.width - doorInset * 2;
+      const dH = f.height - doorInset * 2;
+      ctx.fillStyle = '#1e293b';
+      ctx.fillRect(-halfW + doorInset, -halfH + doorInset, dW, dH);
+      drawBevelFrame(ctx, -halfW + doorInset, -halfH + doorInset, dW, dH, '#64748b', '#000000', 0.8);
+
+      // 4 Heavy-duty corner steel rivets/hex bolts
+      const boltMargin = 1.0;
+      const bolts = [
+        [-halfW + boltMargin, -halfH + boltMargin],
+        [halfW - boltMargin - 1, -halfH + boltMargin],
+        [-halfW + boltMargin, halfH - boltMargin - 1],
+        [halfW - boltMargin - 1, halfH - boltMargin - 1]
+      ];
+      for (const [bx, by] of bolts) {
+        ctx.fillStyle = '#64748b';
+        ctx.fillRect(bx, by, 1.2, 1.2);
+        ctx.fillStyle = '#f8fafc';
+        ctx.fillRect(bx + 0.2, by + 0.2, 0.4, 0.4);
+      }
+
+      // External heavy cylindrical door hinges (right edge)
+      ctx.fillStyle = '#334155';
+      ctx.fillRect(halfW - doorInset - 0.6, -halfH + doorInset + 2, 1.2, 2.5);
+      ctx.fillRect(halfW - doorInset - 0.6, halfH - doorInset - 4.5, 1.2, 2.5);
+      drawBevelFrame(ctx, halfW - doorInset - 0.6, -halfH + doorInset + 2, 1.2, 2.5, '#64748b', '#020617', 0.4);
+      drawBevelFrame(ctx, halfW - doorInset - 0.6, halfH - doorInset - 4.5, 1.2, 2.5, '#64748b', '#020617', 0.4);
+
+      // Electronic digital keypad matrix (left side of door)
+      const padW = Math.min(dW * 0.35, 6);
+      const padH = Math.min(dH * 0.55, 8);
+      const padX = -halfW + doorInset + 2;
+      const padY = -padH / 2;
+
+      ctx.fillStyle = '#020617';
+      ctx.fillRect(padX, padY, padW, padH);
+      drawBevelFrame(ctx, padX, padY, padW, padH, '#475569', '#000000', 0.4);
+
+      // Keypad status LED (Green for ready/authorized, Red for locked)
+      ctx.fillStyle = '#22c55e';
+      ctx.fillRect(padX + 0.8, padY + 0.8, 1.0, 0.8);
+      ctx.fillStyle = '#ef4444';
+      ctx.fillRect(padX + padW - 1.8, padY + 0.8, 1.0, 0.8);
+
+      // Numeric buttons dots
+      ctx.fillStyle = '#94a3b8';
+      for (let row = 0; row < 3; row++) {
+        for (let col = 0; col < 2; col++) {
+          ctx.fillRect(padX + 0.8 + col * (padW * 0.45), padY + 2.2 + row * 1.6, 0.8, 0.8);
+        }
+      }
+
+      // Heavy 3-spoke chrome vault wheel / rotary dial handle (center-right)
+      const wheelX = padX + padW + (dW - padW - 3) * 0.5;
+      const wheelY = 0;
+      const wheelR = Math.min(dW, dH) * 0.22;
+
+      // Drop shadow of wheel
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+      ctx.beginPath();
+      ctx.arc(wheelX + 0.6, wheelY + 0.6, wheelR, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Polished central hub
+      ctx.fillStyle = '#cbd5e1';
+      ctx.beginPath();
+      ctx.arc(wheelX, wheelY, wheelR * 0.45, 0, Math.PI * 2);
+      ctx.fill();
+      drawBevelFrame(ctx, wheelX - wheelR * 0.45, wheelY - wheelR * 0.45, wheelR * 0.9, wheelR * 0.9, '#ffffff', '#475569', 0.5);
+
+      // 3 Radial turning spokes
+      ctx.strokeStyle = '#e2e8f0';
+      ctx.lineWidth = 1.0;
+      for (let a = 0; a < 3; a++) {
+        const angle = (a * Math.PI * 2) / 3 - Math.PI / 6;
+        const sx = wheelX + Math.cos(angle) * wheelR;
+        const sy = wheelY + Math.sin(angle) * wheelR;
+        ctx.beginPath();
+        ctx.moveTo(wheelX, wheelY);
+        ctx.lineTo(sx, sy);
+        ctx.stroke();
+
+        // End ball grip
+        ctx.fillStyle = '#94a3b8';
+        ctx.beginPath();
+        ctx.arc(sx, sy, 0.9, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      break;
+    }
+
+    // ==========================================
+    // 46. DRESSER / CHEST OF DRAWERS (Комод для белья)
+    // ==========================================
+    case 'dresser': {
+      // Solid rich walnut / mahogany wood carcass
+      ctx.fillStyle = f.color || '#78350f';
+      ctx.fillRect(-halfW, -halfH, f.width, f.height);
+      drawBevelFrame(ctx, -halfW, -halfH, f.width, f.height, 'rgba(255,255,255,0.25)', 'rgba(0,0,0,0.6)');
+      drawWoodGrain(ctx, -halfW, -halfH, f.width, f.height, 'rgba(0,0,0,0.18)', 3.0);
+
+      // Top overhanging counter ledge
+      const topH = Math.max(2.5, f.height * 0.16);
+      ctx.fillStyle = '#92400e';
+      ctx.fillRect(-halfW - 0.5, -halfH, f.width + 1.0, topH);
+      drawBevelFrame(ctx, -halfW - 0.5, -halfH, f.width + 1.0, topH, 'rgba(255,255,255,0.3)', 'rgba(0,0,0,0.4)', 0.5);
+
+      // 3 or 4 Stacked horizontal pull-out drawers
+      const numDrawers = f.height >= 24 ? 4 : 3;
+      const drawerStartY = -halfH + topH + 0.8;
+      const totalDrawersH = f.height - topH - 2.0;
+      const singleDrawerH = totalDrawersH / numDrawers;
+
+      for (let i = 0; i < numDrawers; i++) {
+        const dy = drawerStartY + i * singleDrawerH;
+        const dw = f.width - 2.4;
+        const dx = -halfW + 1.2;
+        const dh = singleDrawerH - 0.8;
+
+        // Drawer face panel
+        ctx.fillStyle = '#854d0e';
+        ctx.fillRect(dx, dy, dw, dh);
+        drawBevelFrame(ctx, dx, dy, dw, dh, 'rgba(255,255,255,0.18)', 'rgba(0,0,0,0.5)', 0.4);
+        drawWoodGrain(ctx, dx, dy, dw, dh, 'rgba(0,0,0,0.12)', 2.0);
+
+        // Dual brushed brass / satin gold horizontal handles
+        const handleW = Math.min(dw * 0.22, 6);
+        const handleH = 0.9;
+        const leftHandleX = dx + dw * 0.25 - handleW / 2;
+        const rightHandleX = dx + dw * 0.75 - handleW / 2;
+        const handleY = dy + dh / 2 - handleH / 2;
+
+        // Left handle
+        ctx.fillStyle = '#ca8a04';
+        ctx.fillRect(leftHandleX, handleY, handleW, handleH);
+        drawBevelFrame(ctx, leftHandleX, handleY, handleW, handleH, '#fef08a', '#713f12', 0.3);
+
+        // Right handle
+        ctx.fillStyle = '#ca8a04';
+        ctx.fillRect(rightHandleX, handleY, handleW, handleH);
+        drawBevelFrame(ctx, rightHandleX, handleY, handleW, handleH, '#fef08a', '#713f12', 0.3);
+      }
+      break;
+    }
+
+    // ==========================================
+    // 47. COAT RACK (Напольная вешалка для одежды)
+    // ==========================================
+    case 'coat_rack': {
+      // Circular weighted cast-iron / dark mahogany base plate
+      const baseR = Math.min(halfW, halfH) * 0.9;
+      ctx.fillStyle = f.color || '#451a03';
+      ctx.beginPath();
+      ctx.arc(0, 0, baseR, 0, Math.PI * 2);
+      ctx.fill();
+      drawBevelFrame(ctx, -baseR, -baseR, baseR * 2, baseR * 2, 'rgba(255,255,255,0.3)', 'rgba(0,0,0,0.6)');
+
+      // Central turned wood / brass spindle pole
+      ctx.fillStyle = '#78350f';
+      ctx.beginPath();
+      ctx.arc(0, 0, baseR * 0.35, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Top brass crown ring
+      ctx.fillStyle = '#eab308';
+      ctx.beginPath();
+      ctx.arc(0, 0, baseR * 0.2, 0, Math.PI * 2);
+      ctx.fill();
+
+      // 6 Radial outward-curving brass/wood coat hooks
+      const numHooks = 6;
+      ctx.strokeStyle = '#ca8a04';
+      ctx.lineWidth = 1.2;
+      for (let i = 0; i < numHooks; i++) {
+        const a = (i * Math.PI * 2) / numHooks;
+        const hx = Math.cos(a) * (baseR * 0.92);
+        const hy = Math.sin(a) * (baseR * 0.92);
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        ctx.lineTo(hx, hy);
+        ctx.stroke();
+
+        // Hook tip ball
+        ctx.fillStyle = '#fef08a';
+        ctx.beginPath();
+        ctx.arc(hx, hy, 1.0, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      // Draped stylish outerwear: navy wool coat hanging over one side
+      ctx.fillStyle = '#1e3a8a';
+      ctx.beginPath();
+      ctx.ellipse(-baseR * 0.45, -baseR * 0.2, baseR * 0.45, baseR * 0.25, -Math.PI / 4, 0, Math.PI * 2);
+      ctx.fill();
+      drawBevelFrame(ctx, -baseR * 0.8, -baseR * 0.4, baseR * 0.7, baseR * 0.4, 'rgba(255,255,255,0.2)', 'rgba(0,0,0,0.4)', 0.4);
+
+      // Wool scarf draped down the opposite side
+      ctx.fillStyle = '#991b1b';
+      ctx.fillRect(baseR * 0.15, -baseR * 0.1, baseR * 0.35, baseR * 0.7);
+      drawBevelFrame(ctx, baseR * 0.15, -baseR * 0.1, baseR * 0.35, baseR * 0.7, 'rgba(255,255,255,0.2)', 'rgba(0,0,0,0.3)', 0.3);
+
+      // Top fedora hat resting on center peg
+      ctx.fillStyle = '#374151';
+      ctx.beginPath();
+      ctx.ellipse(0, 0, baseR * 0.38, baseR * 0.3, 0, 0, Math.PI * 2);
+      ctx.fill();
+      // Hat ribbon band
+      ctx.fillStyle = '#b91c1c';
+      ctx.fillRect(-baseR * 0.3, -1.0, baseR * 0.6, 2.0);
+      break;
+    }
+
+    // ==========================================
+    // 48. MIRROR (Напольное / Настенное зеркало)
+    // ==========================================
+    case 'mirror': {
+      // Luxurious carved gold / walnut beveled frame
+      ctx.fillStyle = f.color || '#b45309';
+      ctx.fillRect(-halfW, -halfH, f.width, f.height);
+      drawBevelFrame(ctx, -halfW, -halfH, f.width, f.height, '#fef08a', '#451a03', 1.2);
+
+      // Inner ornate molding frame
+      const frameBorder = Math.max(1.8, Math.min(f.width, f.height) * 0.12);
+      ctx.fillStyle = '#78350f';
+      ctx.fillRect(-halfW + frameBorder, -halfH + frameBorder, f.width - frameBorder * 2, f.height - frameBorder * 2);
+
+      // Pristine silver-coated glass plate
+      const glassX = -halfW + frameBorder + 0.6;
+      const glassY = -halfH + frameBorder + 0.6;
+      const glassW = f.width - (frameBorder + 0.6) * 2;
+      const glassH = f.height - (frameBorder + 0.6) * 2;
+
+      // Soft ambient blue-cyan mirror glass reflection
+      const grad = ctx.createLinearGradient(glassX, glassY, glassX + glassW, glassY + glassH);
+      grad.addColorStop(0, '#e0f2fe');
+      grad.addColorStop(0.4, '#bae6fd');
+      grad.addColorStop(0.7, '#7dd3fc');
+      grad.addColorStop(1, '#94a3b8');
+      ctx.fillStyle = grad;
+      ctx.fillRect(glassX, glassY, glassW, glassH);
+      drawBevelFrame(ctx, glassX, glassY, glassW, glassH, 'rgba(255,255,255,0.8)', 'rgba(0,0,0,0.25)', 0.6);
+
+      // Crisp diagonal specular reflection glare strips
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.45)';
+      ctx.beginPath();
+      ctx.moveTo(glassX + 2, glassY + glassH);
+      ctx.lineTo(glassX + glassW * 0.45, glassY);
+      ctx.lineTo(glassX + glassW * 0.65, glassY);
+      ctx.lineTo(glassX + 5, glassY + glassH);
+      ctx.closePath();
+      ctx.fill();
+
+      // Second thin glare strip
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.25)';
+      ctx.beginPath();
+      ctx.moveTo(glassX + glassW * 0.7, glassY + glassH);
+      ctx.lineTo(glassX + glassW * 0.88, glassY);
+      ctx.lineTo(glassX + glassW * 0.96, glassY);
+      ctx.lineTo(glassX + glassW * 0.78, glassY + glassH);
+      ctx.closePath();
+      ctx.fill();
+      break;
+    }
+
+    // ==========================================
+    // 49. BEAN BAG CHAIR (Кресло-мешок / пуф)
+    // ==========================================
+    case 'bean_bag': {
+      // Organic rounded ergonomic pebble shape with soft fabric folds
+      const bagColor = f.color || '#ea580c';
+      ctx.fillStyle = bagColor;
+
+      ctx.beginPath();
+      // Organic teardrop silhouette
+      ctx.moveTo(0, -halfH * 0.85);
+      ctx.bezierCurveTo(halfW * 0.85, -halfH * 0.7, halfW * 1.05, halfH * 0.4, halfW * 0.65, halfH * 0.92);
+      ctx.bezierCurveTo(halfW * 0.3, halfH * 1.05, -halfW * 0.3, halfH * 1.05, -halfW * 0.65, halfH * 0.92);
+      ctx.bezierCurveTo(-halfW * 1.05, halfH * 0.4, -halfW * 0.85, -halfH * 0.7, 0, -halfH * 0.85);
+      ctx.closePath();
+      ctx.fill();
+
+      // Shaded contact crease / drop shadow around bottom
+      ctx.strokeStyle = 'rgba(0,0,0,0.3)';
+      ctx.lineWidth = 1.0;
+      ctx.stroke();
+
+      // Top depression center button where fabric panels meet
+      const btnX = 0;
+      const btnY = -halfH * 0.35;
+
+      // Curved fabric panel seams radiating from button
+      ctx.strokeStyle = 'rgba(0,0,0,0.22)';
+      ctx.lineWidth = 0.8;
+
+      const seamPoints = [
+        [-halfW * 0.65, -halfH * 0.4],
+        [halfW * 0.65, -halfH * 0.4],
+        [-halfW * 0.8, halfH * 0.3],
+        [halfW * 0.8, halfH * 0.3],
+        [-halfW * 0.35, halfH * 0.85],
+        [halfW * 0.35, halfH * 0.85],
+      ];
+
+      for (const [px, py] of seamPoints) {
+        ctx.beginPath();
+        ctx.moveTo(btnX, btnY);
+        ctx.quadraticCurveTo((btnX + px) * 0.5 + 1.2, (btnY + py) * 0.5 - 1.0, px, py);
+        ctx.stroke();
+      }
+
+      // Soft seating depression highlight
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.18)';
+      ctx.beginPath();
+      ctx.ellipse(btnX, btnY + 2.5, halfW * 0.45, halfH * 0.28, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Center tuft button
+      ctx.fillStyle = '#7c2d12';
+      ctx.beginPath();
+      ctx.arc(btnX, btnY, 1.4, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Top carry-strap handle loop
+      ctx.fillStyle = '#7c2d12';
+      ctx.fillRect(-2.0, -halfH * 0.95, 4.0, 2.0);
+      drawBevelFrame(ctx, -2.0, -halfH * 0.95, 4.0, 2.0, 'rgba(255,255,255,0.4)', 'rgba(0,0,0,0.4)', 0.4);
+      break;
+    }
+
+    // ==========================================
+    // 50. FLOOR LAMP (Торшер / Напольная лампа)
+    // ==========================================
+    case 'floor_lamp': {
+      const baseR = Math.min(halfW, halfH) * 0.75;
+      const isNight = timeHour < 7 || timeHour > 19;
+
+      // Atmospheric radial warm light pool on floor if night
+      if (isNight) {
+        const glowRadius = Math.max(f.width, f.height) * 2.2;
+        const glowGrad = ctx.createRadialGradient(0, 0, baseR * 0.5, 0, 0, glowRadius);
+        glowGrad.addColorStop(0, 'rgba(254, 240, 138, 0.28)');
+        glowGrad.addColorStop(0.4, 'rgba(253, 224, 71, 0.14)');
+        glowGrad.addColorStop(1, 'rgba(253, 224, 71, 0)');
+        ctx.fillStyle = glowGrad;
+        ctx.beginPath();
+        ctx.arc(0, 0, glowRadius, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      // Weighted metal base
+      ctx.fillStyle = '#334155';
+      ctx.beginPath();
+      ctx.arc(0, 0, baseR, 0, Math.PI * 2);
+      ctx.fill();
+      drawBevelFrame(ctx, -baseR, -baseR, baseR * 2, baseR * 2, '#94a3b8', '#0f172a', 0.8);
+
+      // Brass center stand column
+      ctx.fillStyle = '#ca8a04';
+      ctx.beginPath();
+      ctx.arc(0, 0, baseR * 0.35, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Conical warm translucent fabric lampshade
+      const shadeR = baseR * 0.9;
+      ctx.fillStyle = isNight ? '#fef08a' : (f.color || '#fef3c7');
+      ctx.beginPath();
+      ctx.arc(0, 0, shadeR, 0, Math.PI * 2);
+      ctx.fill();
+      drawBevelFrame(ctx, -shadeR, -shadeR, shadeR * 2, shadeR * 2, '#ffffff', 'rgba(0,0,0,0.3)', 0.6);
+
+      // Inner glowing light bulb core
+      ctx.fillStyle = isNight ? '#ffffff' : '#fef9c3';
+      ctx.beginPath();
+      ctx.arc(0, 0, shadeR * 0.45, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Power cord trailing from base
+      ctx.strokeStyle = '#1e293b';
+      ctx.lineWidth = 0.6;
+      ctx.beginPath();
+      ctx.moveTo(baseR * 0.7, baseR * 0.7);
+      ctx.quadraticCurveTo(baseR * 1.2, baseR * 1.0, baseR * 1.4, baseR * 1.5);
+      ctx.stroke();
+      break;
+    }
+
+    // ==========================================
     // DEFAULT FALLBACK
     // ==========================================
     default: {

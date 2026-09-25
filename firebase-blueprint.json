@@ -1,0 +1,91 @@
+{
+  "collections": {
+    "users": {
+      "title": "Users",
+      "description": "User profiles, metadata, and stats",
+      "fields": {
+        "email": { "type": "string", "description": "User email address" },
+        "displayName": { "type": "string", "description": "User display name" },
+        "nickname": { "type": "string", "description": "In-game nickname" },
+        "avatarUrl": { "type": "string", "description": "Avatar image URL" },
+        "bio": { "type": "string", "description": "Short bio or status text" },
+        "createdAt": { "type": "timestamp", "description": "Creation timestamp" },
+        "updatedAt": { "type": "timestamp", "description": "Last update timestamp" },
+        "stats": { "type": "map", "description": "In-game statistics (distance, money, playtime, etc.)" },
+        "status": { "type": "string", "description": "Online status: online, offline, or in_game" },
+        "currentRoomCode": { "type": "string", "description": "Current active room code if in_game" },
+        "lastSeen": { "type": "timestamp", "description": "Last online timestamp" },
+        "customMetadata": { "type": "map", "description": "Arbitrary key-value metadata pairs" }
+      }
+    },
+    "friend_requests": {
+      "title": "Friend Requests",
+      "description": "Incoming and outgoing friend requests between players",
+      "fields": {
+        "senderUid": { "type": "string", "description": "Sender User UID" },
+        "senderName": { "type": "string", "description": "Sender Name/Nickname" },
+        "receiverUid": { "type": "string", "description": "Receiver User UID" },
+        "receiverName": { "type": "string", "description": "Receiver Name/Nickname" },
+        "status": { "type": "string", "description": "Status: pending, accepted, or rejected" },
+        "createdAt": { "type": "timestamp", "description": "Creation timestamp" }
+      }
+    },
+    "friends": {
+      "title": "Friends",
+      "description": "Established friendships between players",
+      "fields": {
+        "users": { "type": "array", "description": "Array of 2 user UIDs [uid1, uid2]" },
+        "user1": { "type": "map", "description": "Info of user 1 {uid, name, nickname, avatarUrl}" },
+        "user2": { "type": "map", "description": "Info of user 2 {uid, name, nickname, avatarUrl}" },
+        "createdAt": { "type": "timestamp", "description": "Friendship establishment timestamp" }
+      }
+    },
+    "invites": {
+      "title": "World Invites",
+      "description": "Direct world invitations to friends",
+      "fields": {
+        "senderUid": { "type": "string", "description": "Sender User UID" },
+        "senderName": { "type": "string", "description": "Sender Name/Nickname" },
+        "receiverUid": { "type": "string", "description": "Receiver User UID" },
+        "roomCode": { "type": "string", "description": "Room or Server PeerJS Code" },
+        "serverName": { "type": "string", "description": "Display name of the server/room" },
+        "status": { "type": "string", "description": "Status: pending, accepted, or declined" },
+        "createdAt": { "type": "timestamp", "description": "Invite creation timestamp" }
+      }
+    },
+    "p2p_servers": {
+      "title": "P2P Servers",
+      "description": "Hosted P2P game rooms and server lobby list",
+      "fields": {
+        "hostUid": { "type": "string", "description": "Host player UID" },
+        "hostName": { "type": "string", "description": "Host display name" },
+        "name": { "type": "string", "description": "Server / Room name" },
+        "peerId": { "type": "string", "description": "PeerJS ID for WebRTC connection" },
+        "maxPlayers": { "type": "number", "description": "Max allowed players" },
+        "currentPlayers": { "type": "number", "description": "Current player count" },
+        "mapName": { "type": "string", "description": "Selected map" },
+        "gameMode": { "type": "string", "description": "Selected game mode" },
+        "isPrivate": { "type": "boolean", "description": "Room privacy setting" },
+        "status": { "type": "string", "description": "Server status: active, in_game, or closed" },
+        "createdAt": { "type": "timestamp", "description": "Creation timestamp" },
+        "updatedAt": { "type": "timestamp", "description": "Heartbeat timestamp" },
+        "metadata": { "type": "map", "description": "Custom server metadata tags (e.g. region, password, description)" }
+      }
+    },
+    "player_saves": {
+      "title": "Player Saves",
+      "description": "Saved player progress and inventory data",
+      "fields": {
+        "uid": { "type": "string", "description": "Player UID" },
+        "money": { "type": "number", "description": "Player money" },
+        "health": { "type": "number", "description": "Player health" },
+        "position": { "type": "map", "description": "Player position coordinates {x, y}" },
+        "inventory": { "type": "array", "description": "List of inventory items" },
+        "needs": { "type": "map", "description": "Player needs (hunger, thirst, energy)" },
+        "equippedItems": { "type": "map", "description": "Equipped items" },
+        "metadata": { "type": "map", "description": "Save game custom metadata" },
+        "updatedAt": { "type": "timestamp", "description": "Last save timestamp" }
+      }
+    }
+  }
+}

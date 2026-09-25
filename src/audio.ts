@@ -307,10 +307,12 @@ class SoundEngine {
     try {
       const now = this.ctx.currentTime;
 
+      const isTruckHorn = carType ? (carType === 'truck' || carType.startsWith('truck') || carType.startsWith('tractor') || ['bus', 'cement_mixer', 'garbage_truck', 'pickup_heavy', 'fire_engine'].includes(carType)) : false;
+
       // Pitch definitions (High-low dual pneumatic horn + upper harmonic)
-      const f1 = carType === 'truck' ? 220 : 435;
-      const f2 = carType === 'truck' ? 175 : 345;
-      const f3 = carType === 'truck' ? 290 : 520;
+      const f1 = isTruckHorn ? 220 : 435;
+      const f2 = isTruckHorn ? 175 : 345;
+      const f3 = isTruckHorn ? 290 : 520;
 
       this.hornOsc1 = this.ctx.createOscillator();
       this.hornOsc2 = this.ctx.createOscillator();
@@ -1364,6 +1366,59 @@ class SoundEngine {
     } catch {}
   }
 
+  // 3.5 CATASTROPHIC DIESEL RUNAWAY ENGINE EXPLOSION ("КУЛАК ДРУЖБЫ")
+  public playEngineExplosion() {
+    if (!this.ctx || this.isMuted) return;
+    try {
+      const now = this.ctx.currentTime;
+
+      // Deep explosive sub-bass punch (low impact boom)
+      const subOsc = this.ctx.createOscillator();
+      subOsc.type = 'sawtooth';
+      subOsc.frequency.setValueAtTime(140, now);
+      subOsc.frequency.exponentialRampToValueAtTime(18, now + 0.7);
+
+      const subFilter = this.ctx.createBiquadFilter();
+      subFilter.type = 'lowpass';
+      subFilter.frequency.setValueAtTime(450, now);
+      subFilter.frequency.exponentialRampToValueAtTime(60, now + 0.7);
+
+      const subGain = this.ctx.createGain();
+      subGain.gain.setValueAtTime(1.0, now);
+      subGain.gain.exponentialRampToValueAtTime(0.001, now + 0.7);
+
+      subOsc.connect(subFilter);
+      subFilter.connect(subGain);
+      subGain.connect(this.ctx.destination);
+      subOsc.start(now);
+      subOsc.stop(now + 0.7);
+
+      // High metallic explosion crackle & shrapnel blast
+      const bufSize = Math.floor(this.ctx.sampleRate * 0.5);
+      const buf = this.ctx.createBuffer(1, bufSize, this.ctx.sampleRate);
+      const data = buf.getChannelData(0);
+      for (let i = 0; i < bufSize; i++) {
+        data[i] = (Math.random() * 2 - 1) * Math.exp(-i / (bufSize * 0.15));
+      }
+      const noise = this.ctx.createBufferSource();
+      noise.buffer = buf;
+
+      const noiseFilter = this.ctx.createBiquadFilter();
+      noiseFilter.type = 'bandpass';
+      noiseFilter.frequency.setValueAtTime(1800, now);
+      noiseFilter.Q.setValueAtTime(1.2, now);
+
+      const nGain = this.ctx.createGain();
+      nGain.gain.setValueAtTime(0.9, now);
+      nGain.gain.exponentialRampToValueAtTime(0.001, now + 0.5);
+
+      noise.connect(noiseFilter);
+      noiseFilter.connect(nGain);
+      nGain.connect(this.ctx.destination);
+      noise.start(now);
+    } catch {}
+  }
+
   // 4. SCRAPING OF FENDER AGAINST WHEEL
   private rubNoiseSource: AudioBufferSourceNode | null = null;
   private rubFilter: BiquadFilterNode | null = null;
@@ -1514,6 +1569,614 @@ class SoundEngine {
       gain.connect(this.ctx.destination);
       osc.start(now);
       osc.stop(now + 0.035);
+    } catch {}
+  }
+
+  // --- SMARTPHONE SOUND EFFECTS ---
+  public playPhoneChime() {
+    if (!this.ctx || this.isMuted) return;
+    try {
+      const now = this.ctx.currentTime;
+      // Dual-tone harmonic glass chime (e.g. C6 -> G6)
+      const freqs = [1046.5, 1567.98];
+      freqs.forEach((freq, idx) => {
+        if (!this.ctx) return;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(freq, now + idx * 0.08);
+        gain.gain.setValueAtTime(0, now);
+        gain.gain.setValueAtTime(0.08, now + idx * 0.08);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.08 + 0.25);
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start(now + idx * 0.08);
+        osc.stop(now + idx * 0.08 + 0.26);
+      });
+    } catch {}
+  }
+
+  public playPhoneKeypad(digitFreq?: number) {
+    if (!this.ctx || this.isMuted) return;
+    try {
+      const now = this.ctx.currentTime;
+      const f1 = digitFreq || 697;
+      const f2 = f1 * 1.63;
+      const osc1 = this.ctx.createOscillator();
+      const osc2 = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+
+      osc1.type = 'sine';
+      osc2.type = 'sine';
+      osc1.frequency.setValueAtTime(f1, now);
+      osc2.frequency.setValueAtTime(f2, now);
+
+      gain.gain.setValueAtTime(0.05, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.09);
+
+      osc1.connect(gain);
+      osc2.connect(gain);
+      gain.connect(this.ctx.destination);
+
+      osc1.start(now);
+      osc2.start(now);
+      osc1.stop(now + 0.095);
+      osc2.stop(now + 0.095);
+    } catch {}
+  }
+
+  public playCameraShutter() {
+    if (!this.ctx || this.isMuted) return;
+    try {
+      const now = this.ctx.currentTime;
+      // Double click optical shutter simulation
+      [0, 0.045].forEach((offset) => {
+        if (!this.ctx) return;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(2400, now + offset);
+        osc.frequency.exponentialRampToValueAtTime(400, now + offset + 0.025);
+        gain.gain.setValueAtTime(0.12, now + offset);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + offset + 0.03);
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start(now + offset);
+        osc.stop(now + offset + 0.035);
+      });
+    } catch {}
+  }
+
+  public playNotificationPing() {
+    if (!this.ctx || this.isMuted) return;
+    try {
+      const now = this.ctx.currentTime;
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(880, now);
+      osc.frequency.exponentialRampToValueAtTime(1760, now + 0.08);
+      gain.gain.setValueAtTime(0.09, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.18);
+      osc.connect(gain);
+      gain.connect(this.ctx.destination);
+      osc.start(now);
+      osc.stop(now + 0.19);
+    } catch {}
+  }
+
+  public playPaperRustle() {
+    if (!this.ctx || this.isMuted) return;
+    try {
+      const now = this.ctx.currentTime;
+      const bufferSize = Math.floor(this.ctx.sampleRate * 0.15);
+      const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+      const data = buffer.getChannelData(0);
+      for (let i = 0; i < bufferSize; i++) {
+        data[i] = (Math.random() * 2 - 1) * 0.15;
+      }
+      const noise = this.ctx.createBufferSource();
+      noise.buffer = buffer;
+      const filter = this.ctx.createBiquadFilter();
+      filter.type = 'highpass';
+      filter.frequency.setValueAtTime(2500, now);
+      const gain = this.ctx.createGain();
+      gain.gain.setValueAtTime(0.08, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.14);
+      noise.connect(filter);
+      filter.connect(gain);
+      gain.connect(this.ctx.destination);
+      noise.start(now);
+    } catch {}
+  }
+
+  // --- TOW ROPE & STRAP SOUND EFFECTS ---
+  public playRopeTension() {
+    if (!this.ctx || this.isMuted) return;
+    try {
+      const now = this.ctx.currentTime;
+      // Straining nylon strap groaning pitch
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+      osc.type = 'sawtooth';
+      osc.frequency.setValueAtTime(95, now);
+      osc.frequency.exponentialRampToValueAtTime(145, now + 0.15);
+      
+      const filter = this.ctx.createBiquadFilter();
+      filter.type = 'bandpass';
+      filter.frequency.setValueAtTime(320, now);
+      filter.Q.setValueAtTime(4.0, now);
+
+      gain.gain.setValueAtTime(0.06, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.22);
+
+      osc.connect(filter);
+      filter.connect(gain);
+      gain.connect(this.ctx.destination);
+      osc.start(now);
+      osc.stop(now + 0.23);
+    } catch {}
+  }
+
+  public playRopeJerk(intensity: number = 1.0) {
+    if (!this.ctx || this.isMuted) return;
+    try {
+      const now = this.ctx.currentTime;
+      const safeIntensity = Math.min(2.0, Math.max(0.2, intensity));
+
+      // 1. Heavy dynamic low-end thud
+      const thudOsc = this.ctx.createOscillator();
+      const thudGain = this.ctx.createGain();
+      thudOsc.type = 'sine';
+      thudOsc.frequency.setValueAtTime(120, now);
+      thudOsc.frequency.exponentialRampToValueAtTime(45, now + 0.18);
+      thudGain.gain.setValueAtTime(0.22 * safeIntensity, now);
+      thudGain.gain.exponentialRampToValueAtTime(0.001, now + 0.22);
+      thudOsc.connect(thudGain);
+      thudGain.connect(this.ctx.destination);
+      thudOsc.start(now);
+      thudOsc.stop(now + 0.23);
+
+      // 2. Metallic shackle & hook clank
+      const clankOsc = this.ctx.createOscillator();
+      const clankGain = this.ctx.createGain();
+      clankOsc.type = 'triangle';
+      clankOsc.frequency.setValueAtTime(1650, now);
+      clankOsc.frequency.exponentialRampToValueAtTime(380, now + 0.09);
+      clankGain.gain.setValueAtTime(0.14 * safeIntensity, now);
+      clankGain.gain.exponentialRampToValueAtTime(0.001, now + 0.12);
+      clankOsc.connect(clankGain);
+      clankGain.connect(this.ctx.destination);
+      clankOsc.start(now);
+      clankOsc.stop(now + 0.13);
+    } catch {}
+  }
+
+  public playRopeSnap() {
+    if (!this.ctx || this.isMuted) return;
+    try {
+      const now = this.ctx.currentTime;
+      // High energy whip-like rupture crack
+      const bufferSize = Math.floor(this.ctx.sampleRate * 0.25);
+      const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+      const data = buffer.getChannelData(0);
+      for (let i = 0; i < bufferSize; i++) {
+        data[i] = (Math.random() * 2 - 1) * Math.exp(-i / (this.ctx.sampleRate * 0.04));
+      }
+      const noise = this.ctx.createBufferSource();
+      noise.buffer = buffer;
+
+      const filter = this.ctx.createBiquadFilter();
+      filter.type = 'bandpass';
+      filter.frequency.setValueAtTime(1800, now);
+      filter.frequency.exponentialRampToValueAtTime(400, now + 0.2);
+
+      const gain = this.ctx.createGain();
+      gain.gain.setValueAtTime(0.35, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.25);
+
+      noise.connect(filter);
+      filter.connect(gain);
+      gain.connect(this.ctx.destination);
+      noise.start(now);
+
+      // Metallic recoil ring
+      const ringOsc = this.ctx.createOscillator();
+      const ringGain = this.ctx.createGain();
+      ringOsc.type = 'sine';
+      ringOsc.frequency.setValueAtTime(2200, now);
+      ringGain.gain.setValueAtTime(0.15, now);
+      ringGain.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
+      ringOsc.connect(ringGain);
+      ringGain.connect(this.ctx.destination);
+      ringOsc.start(now);
+      ringOsc.stop(now + 0.36);
+    } catch {}
+  }
+
+  // =========================================================================
+  // REALISTIC RAILWAY & TRAIN SOUND SYNTHESIZER
+  // =========================================================================
+
+  /**
+   * Powerful Soviet/RZD Typhon T-9 Locomotive Horn (370 Hz + 440 Hz Major Third)
+   */
+  public playTrainHorn(duration: number = 1.6, distanceGain: number = 1.0) {
+    if (!this.ctx || this.isMuted || distanceGain <= 0.01) return;
+    try {
+      const now = this.ctx.currentTime;
+      const safeDist = Math.max(0, Math.min(1, distanceGain));
+
+      // Main Chord: 370Hz + 440Hz + 660Hz Harmonic
+      const freqs = [370, 440, 660];
+      const masterGain = this.ctx.createGain();
+      masterGain.gain.setValueAtTime(0.001, now);
+      masterGain.gain.linearRampToValueAtTime(0.35 * safeDist, now + 0.08);
+      masterGain.gain.setValueAtTime(0.35 * safeDist, now + duration - 0.15);
+      masterGain.gain.exponentialRampToValueAtTime(0.001, now + duration);
+
+      const filter = this.ctx.createBiquadFilter();
+      filter.type = 'lowpass';
+      filter.frequency.setValueAtTime(2400, now);
+
+      masterGain.connect(filter);
+      filter.connect(this.ctx.destination);
+
+      for (const f of freqs) {
+        const osc = this.ctx.createOscillator();
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(f, now);
+        osc.frequency.linearRampToValueAtTime(f * 1.008, now + duration);
+        osc.connect(masterGain);
+        osc.start(now);
+        osc.stop(now + duration + 0.05);
+      }
+    } catch {}
+  }
+
+  /**
+   * Shunting ChME3/TGK2 Locomotive High-Pitch Whistle
+   */
+  public playTrainShuntWhistle(distanceGain: number = 1.0) {
+    if (!this.ctx || this.isMuted || distanceGain <= 0.01) return;
+    try {
+      const now = this.ctx.currentTime;
+      const safeDist = Math.max(0, Math.min(1, distanceGain));
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(880, now);
+      osc.frequency.exponentialRampToValueAtTime(920, now + 0.5);
+
+      gain.gain.setValueAtTime(0.001, now);
+      gain.gain.linearRampToValueAtTime(0.25 * safeDist, now + 0.04);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.6);
+
+      osc.connect(gain);
+      gain.connect(this.ctx.destination);
+      osc.start(now);
+      osc.stop(now + 0.65);
+    } catch {}
+  }
+
+  /**
+   * Steel Wheel-on-Rail Joint Click-Clack (Перестук колес на стыках рельсов)
+   */
+  public playTrainWheelClick(distanceGain: number = 1.0) {
+    if (!this.ctx || this.isMuted || distanceGain <= 0.01) return;
+    try {
+      const now = this.ctx.currentTime;
+      const safeDist = Math.max(0, Math.min(1, distanceGain));
+
+      // Click 1 (Leading axle)
+      const osc1 = this.ctx.createOscillator();
+      const gain1 = this.ctx.createGain();
+      osc1.type = 'triangle';
+      osc1.frequency.setValueAtTime(120, now);
+      osc1.frequency.exponentialRampToValueAtTime(45, now + 0.04);
+      gain1.gain.setValueAtTime(0.18 * safeDist, now);
+      gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.05);
+      osc1.connect(gain1);
+      gain1.connect(this.ctx.destination);
+      osc1.start(now);
+      osc1.stop(now + 0.06);
+
+      // Click 2 (Trailing axle 70ms later)
+      const osc2 = this.ctx.createOscillator();
+      const gain2 = this.ctx.createGain();
+      osc2.type = 'triangle';
+      osc2.frequency.setValueAtTime(140, now + 0.065);
+      osc2.frequency.exponentialRampToValueAtTime(50, now + 0.105);
+      gain2.gain.setValueAtTime(0.001, now);
+      gain2.gain.setValueAtTime(0.15 * safeDist, now + 0.065);
+      gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.115);
+      osc2.connect(gain2);
+      gain2.connect(this.ctx.destination);
+      osc2.start(now + 0.065);
+      osc2.stop(now + 0.125);
+    } catch {}
+  }
+
+  private trainBrakeBuffer: AudioBuffer | null = null;
+
+  /**
+   * Brake Pipe Air Discharge (Пневматический сброс тормозов)
+   */
+  public playTrainBrakeAir(distanceGain: number = 1.0) {
+    if (!this.ctx || this.isMuted || distanceGain <= 0.01) return;
+    try {
+      const now = this.ctx.currentTime;
+      const safeDist = Math.max(0, Math.min(1, distanceGain));
+
+      if (!this.trainBrakeBuffer) {
+        const bufferSize = Math.floor(this.ctx.sampleRate * 0.35);
+        this.trainBrakeBuffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+        const data = this.trainBrakeBuffer.getChannelData(0);
+        for (let i = 0; i < bufferSize; i++) {
+          data[i] = (Math.random() * 2 - 1) * Math.exp(-i / (this.ctx.sampleRate * 0.12));
+        }
+      }
+
+      const noise = this.ctx.createBufferSource();
+      noise.buffer = this.trainBrakeBuffer;
+
+      const filter = this.ctx.createBiquadFilter();
+      filter.type = 'bandpass';
+      filter.frequency.setValueAtTime(1200, now);
+      filter.Q.value = 1.2;
+
+      const gain = this.ctx.createGain();
+      gain.gain.setValueAtTime(0.22 * safeDist, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
+
+      noise.connect(filter);
+      filter.connect(gain);
+      gain.connect(this.ctx.destination);
+      noise.start(now);
+    } catch {}
+  }
+
+  /**
+   * Railroad Level Crossing Electronic Bell (Звонок переездной сигнализации СП1/СП2)
+   */
+  public playCrossingBell(distanceGain: number = 1.0) {
+    if (!this.ctx || this.isMuted || distanceGain <= 0.01) return;
+    try {
+      const now = this.ctx.currentTime;
+      const safeDist = Math.max(0, Math.min(1, distanceGain));
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(1050, now);
+      osc.frequency.exponentialRampToValueAtTime(800, now + 0.12);
+
+      gain.gain.setValueAtTime(0.18 * safeDist, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.15);
+
+      osc.connect(gain);
+      gain.connect(this.ctx.destination);
+      osc.start(now);
+      osc.stop(now + 0.16);
+    } catch {}
+  }
+
+  /**
+   * Differential Lock Engagement Sound (Механическое / пневматическое включение блокировки дифференциала)
+   */
+  public playDiffLockEngage(isPneumatic: boolean = false) {
+    if (!this.ctx || this.isMuted) return;
+    try {
+      const now = this.ctx.currentTime;
+      if (isPneumatic) {
+        // 1. Pressurized pneumatic valve discharge hiss ("Пссшш-клац")
+        const bufferSize = Math.floor(this.ctx.sampleRate * 0.14);
+        const noiseBuffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+        const output = noiseBuffer.getChannelData(0);
+        for (let i = 0; i < bufferSize; i++) {
+          output[i] = (Math.random() * 2 - 1) * Math.exp(-i / (this.ctx.sampleRate * 0.04));
+        }
+        const noise = this.ctx.createBufferSource();
+        noise.buffer = noiseBuffer;
+
+        const filter = this.ctx.createBiquadFilter();
+        filter.type = 'bandpass';
+        filter.frequency.setValueAtTime(2600, now);
+        filter.Q.value = 1.4;
+
+        const pGain = this.ctx.createGain();
+        pGain.gain.setValueAtTime(0.28, now);
+        pGain.gain.exponentialRampToValueAtTime(0.001, now + 0.13);
+
+        noise.connect(filter);
+        filter.connect(pGain);
+        pGain.connect(this.ctx.destination);
+        noise.start(now);
+      }
+
+      // 2. Heavy mechanical dog clutch snap into axle splines ("КЛАЦ-ТУК")
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(280, now + 0.02);
+      osc.frequency.exponentialRampToValueAtTime(75, now + 0.10);
+
+      gain.gain.setValueAtTime(0.001, now);
+      gain.gain.setValueAtTime(0.25, now + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.12);
+
+      osc.connect(gain);
+      gain.connect(this.ctx.destination);
+      osc.start(now + 0.02);
+      osc.stop(now + 0.13);
+
+      // Deep secondary metallic housing thud
+      const subOsc = this.ctx.createOscillator();
+      const subGain = this.ctx.createGain();
+      subOsc.type = 'sine';
+      subOsc.frequency.setValueAtTime(140, now + 0.04);
+      subOsc.frequency.exponentialRampToValueAtTime(45, now + 0.12);
+      subGain.gain.setValueAtTime(0.22, now + 0.04);
+      subGain.gain.exponentialRampToValueAtTime(0.001, now + 0.14);
+      subOsc.connect(subGain);
+      subGain.connect(this.ctx.destination);
+      subOsc.start(now + 0.04);
+      subOsc.stop(now + 0.15);
+    } catch {}
+  }
+
+  /**
+   * Differential Lock Disengagement Sound (Пружинный щелчок выключения кулачковой муфты)
+   */
+  public playDiffLockDisengage(isPneumatic: boolean = false) {
+    if (!this.ctx || this.isMuted) return;
+    try {
+      const now = this.ctx.currentTime;
+      if (isPneumatic) {
+        // Quick short air puff
+        const bufferSize = Math.floor(this.ctx.sampleRate * 0.08);
+        const noiseBuffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+        const output = noiseBuffer.getChannelData(0);
+        for (let i = 0; i < bufferSize; i++) {
+          output[i] = (Math.random() * 2 - 1) * Math.exp(-i / (this.ctx.sampleRate * 0.02));
+        }
+        const noise = this.ctx.createBufferSource();
+        noise.buffer = noiseBuffer;
+        const filter = this.ctx.createBiquadFilter();
+        filter.type = 'highpass';
+        filter.frequency.setValueAtTime(1800, now);
+        const pGain = this.ctx.createGain();
+        pGain.gain.setValueAtTime(0.18, now);
+        pGain.gain.exponentialRampToValueAtTime(0.001, now + 0.07);
+        noise.connect(filter);
+        filter.connect(pGain);
+        pGain.connect(this.ctx.destination);
+        noise.start(now);
+      }
+
+      // Crisp return spring release click
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(520, now);
+      osc.frequency.exponentialRampToValueAtTime(190, now + 0.06);
+      gain.gain.setValueAtTime(0.15, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.07);
+      osc.connect(gain);
+      gain.connect(this.ctx.destination);
+      osc.start(now);
+      osc.stop(now + 0.08);
+    } catch {}
+  }
+
+  /**
+   * Mechanical Teeth Grind / Lock Warning (Хруст шлицев при попытке включить на скорости)
+   */
+  public playDiffLockWarning() {
+    if (!this.ctx || this.isMuted) return;
+    try {
+      const now = this.ctx.currentTime;
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+      osc.type = 'sawtooth';
+      osc.frequency.setValueAtTime(420, now);
+      osc.frequency.linearRampToValueAtTime(280, now + 0.12);
+      gain.gain.setValueAtTime(0.22, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.14);
+      osc.connect(gain);
+      gain.connect(this.ctx.destination);
+      osc.start(now);
+      osc.stop(now + 0.15);
+    } catch {}
+  }
+
+  /**
+   * Railway Electro-Mechanical Signaling Relay Click (Срабатывание сигнального реле НМШ / КМШ в релейном шкафу)
+   * Authentic transient armature impact and metal relay cabinet enclosure resonance.
+   */
+  public playRailwayRelayClick(volume: number = 0.3) {
+    if (!this.ctx || this.isMuted || volume <= 0.005) return;
+    try {
+      const now = this.ctx.currentTime;
+      const masterVol = Math.min(1.0, Math.max(0.01, volume));
+
+      // 1. Sharp transient armature impact (металлический переброс якоря)
+      const noiseLen = 0.025;
+      const bufferSize = Math.floor(this.ctx.sampleRate * noiseLen);
+      const noiseBuffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+      const output = noiseBuffer.getChannelData(0);
+      for (let i = 0; i < bufferSize; i++) {
+        output[i] = (Math.random() * 2 - 1) * Math.exp(-i / (this.ctx.sampleRate * 0.005));
+      }
+      const noiseSource = this.ctx.createBufferSource();
+      noiseSource.buffer = noiseBuffer;
+
+      const bandFilter = this.ctx.createBiquadFilter();
+      bandFilter.type = 'bandpass';
+      bandFilter.frequency.setValueAtTime(1400 + Math.random() * 300, now);
+      bandFilter.Q.setValueAtTime(3.5, now);
+
+      const noiseGain = this.ctx.createGain();
+      noiseGain.gain.setValueAtTime(0.25 * masterVol, now);
+      noiseGain.gain.exponentialRampToValueAtTime(0.001, now + noiseLen);
+
+      noiseSource.connect(bandFilter);
+      bandFilter.connect(noiseGain);
+      noiseGain.connect(this.ctx.destination);
+      noiseSource.start(now);
+
+      // 2. Relay core & iron frame resonance clack (резонанс сердечника и ярма реле)
+      const osc = this.ctx.createOscillator();
+      const oscGain = this.ctx.createGain();
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(680, now);
+      osc.frequency.exponentialRampToValueAtTime(260, now + 0.045);
+
+      oscGain.gain.setValueAtTime(0.22 * masterVol, now);
+      oscGain.gain.exponentialRampToValueAtTime(0.001, now + 0.05);
+
+      osc.connect(oscGain);
+      oscGain.connect(this.ctx.destination);
+      osc.start(now);
+      osc.stop(now + 0.06);
+    } catch {}
+  }
+
+  /**
+   * Railway Level Crossing Acoustic Alarm Chime (Акустический звонок переездной сигнализации)
+   * High-metallic impact with twin bell tone harmonic decay.
+   */
+  public playLevelCrossingChime(volume: number = 0.3) {
+    if (!this.ctx || this.isMuted || volume <= 0.005) return;
+    try {
+      const now = this.ctx.currentTime;
+      const masterVol = Math.min(1.0, Math.max(0.01, volume));
+
+      // Dual harmonic bell strike (основной тон ~880 Hz и обертон ~1760 Hz)
+      const osc1 = this.ctx.createOscillator();
+      const osc2 = this.ctx.createOscillator();
+      const gain1 = this.ctx.createGain();
+      const gain2 = this.ctx.createGain();
+
+      osc1.type = 'sine';
+      osc1.frequency.setValueAtTime(880, now);
+      osc2.type = 'triangle';
+      osc2.frequency.setValueAtTime(1760, now);
+
+      gain1.gain.setValueAtTime(0.35 * masterVol, now);
+      gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.28);
+
+      gain2.gain.setValueAtTime(0.18 * masterVol, now);
+      gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.15);
+
+      osc1.connect(gain1);
+      osc2.connect(gain2);
+      gain1.connect(this.ctx.destination);
+      gain2.connect(this.ctx.destination);
+
+      osc1.start(now);
+      osc2.start(now);
+      osc1.stop(now + 0.3);
+      osc2.stop(now + 0.18);
     } catch {}
   }
 }

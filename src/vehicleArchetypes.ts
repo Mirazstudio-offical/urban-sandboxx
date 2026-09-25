@@ -38,52 +38,55 @@ function getVehicleBasePolygonRaw(
 ): { x: number; y: number }[] {
   const type = car.type;
 
-  // 1. SEDANS (3-Box Notchback: Defined front hood/fenders, slight door waist, distinct rectangular stepped trunk)
+  // 1. SEDANS (3-Box Notchback: Defined front hood/fenders, straight door flanks, distinct rectangular stepped trunk)
   const isSedan = type === 'sedan' || type === 'sedan_classic' || type === 'sedan_luxury' || 
                   type === 'sedan_compact' || type === 'classic_compact' || type === 'taxi' || 
-                  type === 'police';
+                  type === 'police' || type === 'sedan_logan' || type === 'sedan_nexia' || 
+                  type === 'sedan_accent' || type === 'sedan_polo' || type === 'sedan_samara';
 
   if (isSedan) {
+    const sideW = halfW;
     return [
       { x: halfL - fc, y: 0 },
-      { x: halfL - fc - 0.8, y: halfW * 0.72 },
-      { x: halfL - frd - 2.8, y: halfW - frd * 0.35 - 0.4 },
-      { x: halfL * 0.45, y: halfW - rd * 0.35 },
-      { x: 0, y: halfW - rd - 0.8 },
-      { x: -halfL * 0.40, y: halfW - rd * 0.35 },
-      { x: -halfL + rrd + 1.2, y: halfW * 0.90 - rrd * 0.35 },
-      { x: -halfL + rc + 0.4, y: halfW * 0.52 },
+      { x: halfL - fc - 0.8, y: sideW * 0.78 },
+      { x: halfL - frd - 2.0, y: sideW - frd * 0.35 },
+      { x: halfL * 0.45, y: sideW - rd * 0.35 },
+      { x: 0, y: sideW - rd * 0.35 },
+      { x: -halfL * 0.45, y: sideW - rd * 0.35 },
+      { x: -halfL + rrd + 1.2, y: sideW * 0.95 - rrd * 0.35 },
+      { x: -halfL + rc + 0.4, y: sideW * 0.62 },
       { x: -halfL + rc, y: 0 },
-      { x: -halfL + rc + 0.4, y: -halfW * 0.52 },
-      { x: -halfL + rld + 1.2, y: -halfW * 0.90 + rld * 0.35 },
-      { x: -halfL * 0.40, y: -halfW + ld * 0.35 },
-      { x: 0, y: -halfW + ld + 0.8 },
-      { x: halfL * 0.45, y: -halfW + ld * 0.35 },
-      { x: halfL - fld - 2.8, y: -halfW + fld * 0.35 + 0.4 },
-      { x: halfL - fc - 0.8, y: -halfW * 0.72 }
+      { x: -halfL + rc + 0.4, y: -sideW * 0.62 },
+      { x: -halfL + rld + 1.2, y: -sideW * 0.95 + rld * 0.35 },
+      { x: -halfL * 0.45, y: -sideW + ld * 0.35 },
+      { x: 0, y: -sideW + ld * 0.35 },
+      { x: halfL * 0.45, y: -sideW + ld * 0.35 },
+      { x: halfL - fld - 2.0, y: -sideW + fld * 0.35 },
+      { x: halfL - fc - 0.8, y: -sideW * 0.78 }
     ];
   }
 
   // 2. STATION WAGONS / ESTATES (2-Box Full Estate: Parallel straight body flanks extending to square rear tailgate)
   const isWagon = type === 'wagon_classic' || type === 'wagon_modern' || type === 'wagon_allroad';
   if (isWagon) {
+    const sideW = halfW;
     return [
       { x: halfL - fc, y: 0 },
-      { x: halfL - fc - 0.9, y: halfW * 0.75 },
-      { x: halfL - frd - 2.5, y: halfW - frd * 0.35 },
-      { x: halfL * 0.40, y: halfW - rd * 0.35 },
-      { x: 0, y: halfW - rd },
-      { x: -halfL * 0.50, y: halfW - rd * 0.35 },
-      { x: -halfL + rrd + 0.8, y: halfW * 0.96 - rrd * 0.35 },
-      { x: -halfL + rc + 0.2, y: halfW * 0.60 },
+      { x: halfL - fc - 0.8, y: sideW * 0.78 },
+      { x: halfL - frd - 2.0, y: sideW - frd * 0.35 },
+      { x: halfL * 0.45, y: sideW - rd * 0.35 },
+      { x: 0, y: sideW - rd * 0.35 },
+      { x: -halfL * 0.50, y: sideW - rd * 0.35 },
+      { x: -halfL + rrd + 0.8, y: sideW * 0.98 - rrd * 0.35 },
+      { x: -halfL + rc + 0.2, y: sideW * 0.68 },
       { x: -halfL + rc, y: 0 },
-      { x: -halfL + rc + 0.2, y: -halfW * 0.60 },
-      { x: -halfL + rld + 0.8, y: -halfW * 0.96 + rld * 0.35 },
-      { x: -halfL * 0.50, y: -halfW + ld * 0.35 },
-      { x: 0, y: -halfW + ld },
-      { x: halfL * 0.40, y: -halfW + ld * 0.35 },
-      { x: halfL - fld - 2.5, y: -halfW + fld * 0.35 },
-      { x: halfL - fc - 0.9, y: -halfW * 0.75 }
+      { x: -halfL + rc + 0.2, y: -sideW * 0.68 },
+      { x: -halfL + rld + 0.8, y: -sideW * 0.98 + rld * 0.35 },
+      { x: -halfL * 0.50, y: -sideW + ld * 0.35 },
+      { x: 0, y: -sideW + ld * 0.35 },
+      { x: halfL * 0.45, y: -sideW + ld * 0.35 },
+      { x: halfL - fld - 2.0, y: -sideW + fld * 0.35 },
+      { x: halfL - fc - 0.8, y: -sideW * 0.78 }
     ];
   }
 
@@ -91,73 +94,137 @@ function getVehicleBasePolygonRaw(
   const isPickup = type === 'pickup' || type === 'pickup_heavy';
   if (isPickup) {
     const isHeavy = type === 'pickup_heavy';
-    const bedFlareW = isHeavy ? (halfW + 2.4) : halfW;
+    const bedFlareW = isHeavy ? (halfW + 2.0) : halfW;
     return [
       { x: halfL - fc, y: 0 },
-      { x: halfL - fc - 0.4, y: halfW * 0.88 },
+      { x: halfL - fc - 0.5, y: halfW * 0.88 },
       { x: halfL - frd - 2.0, y: halfW - frd * 0.35 },
-      { x: halfL * 0.30, y: halfW - rd * 0.35 },
-      { x: 0, y: halfW - rd },
+      { x: halfL * 0.35, y: halfW - rd * 0.35 },
+      { x: 0, y: halfW - rd * 0.35 },
       { x: -halfL * 0.55, y: bedFlareW - rd * 0.35 },
-      { x: -halfL + rrd + 0.6, y: bedFlareW * 0.95 - rrd * 0.35 },
-      { x: -halfL + rc + 0.1, y: halfW * 0.65 },
+      { x: -halfL + rrd + 0.6, y: bedFlareW * 0.96 - rrd * 0.35 },
+      { x: -halfL + rc + 0.1, y: halfW * 0.70 },
       { x: -halfL + rc, y: 0 },
-      { x: -halfL + rc + 0.1, y: -halfW * 0.65 },
-      { x: -halfL + rld + 0.6, y: -bedFlareW * 0.95 + rld * 0.35 },
+      { x: -halfL + rc + 0.1, y: -halfW * 0.70 },
+      { x: -halfL + rld + 0.6, y: -bedFlareW * 0.96 + rld * 0.35 },
       { x: -halfL * 0.55, y: -bedFlareW + ld * 0.35 },
-      { x: 0, y: -halfW + ld },
-      { x: halfL * 0.30, y: -halfW + ld * 0.35 },
+      { x: 0, y: -halfW + ld * 0.35 },
+      { x: halfL * 0.35, y: -halfW + ld * 0.35 },
       { x: halfL - fld - 2.0, y: -halfW + fld * 0.35 },
-      { x: halfL - fc - 0.4, y: -halfW * 0.88 }
+      { x: halfL - fc - 0.5, y: -halfW * 0.88 }
     ];
   }
 
-  // 4. SUPERCAR (Low wedge nose, pinched coke-bottle waist, wide muscular rear hips)
+  // 4. SUPERCAR (Low wedge nose, wide muscular rear hips)
   if (type === 'supercar') {
     return [
       { x: halfL - fc + 0.5, y: 0 },
-      { x: halfL - fc - 1.8, y: halfW * 0.72 },
-      { x: halfL - frd - 3.8, y: halfW * 0.90 - frd * 0.35 },
-      { x: halfL * 0.30, y: halfW * 0.92 - rd * 0.35 },
-      { x: 0, y: halfW * 0.84 - rd },
-      { x: -halfL * 0.45, y: halfW * 1.05 - rd * 0.35 },
+      { x: halfL - fc - 1.8, y: halfW * 0.76 },
+      { x: halfL - frd - 3.2, y: halfW * 0.94 - frd * 0.35 },
+      { x: halfL * 0.30, y: halfW * 0.96 - rd * 0.35 },
+      { x: 0, y: halfW * 0.96 - rd * 0.35 },
+      { x: -halfL * 0.45, y: halfW * 1.04 - rd * 0.35 },
       { x: -halfL + rrd + 1.0, y: halfW * 0.98 - rrd * 0.35 },
-      { x: -halfL + rc + 0.3, y: halfW * 0.55 },
+      { x: -halfL + rc + 0.3, y: halfW * 0.60 },
       { x: -halfL + rc, y: 0 },
-      { x: -halfL + rc + 0.3, y: -halfW * 0.55 },
+      { x: -halfL + rc + 0.3, y: -halfW * 0.60 },
       { x: -halfL + rld + 1.0, y: -halfW * 0.98 + rld * 0.35 },
-      { x: -halfL * 0.45, y: -halfW * 1.05 + ld * 0.35 },
-      { x: 0, y: -halfW * 0.84 + ld },
-      { x: halfL * 0.30, y: -halfW * 0.92 + ld * 0.35 },
-      { x: halfL - fld - 3.8, y: -halfW * 0.90 + fld * 0.35 },
-      { x: halfL - fc - 1.8, y: -halfW * 0.72 }
+      { x: -halfL * 0.45, y: -halfW * 1.04 + ld * 0.35 },
+      { x: 0, y: -halfW * 0.96 + ld * 0.35 },
+      { x: halfL * 0.30, y: -halfW * 0.96 + ld * 0.35 },
+      { x: halfL - fld - 3.2, y: -halfW * 0.94 + fld * 0.35 },
+      { x: halfL - fc - 1.8, y: -halfW * 0.76 }
     ];
   }
 
-  // 5. CLASSIC & MODERN MUSCLE (Broad rectangular front, long hood, flared rear coke-bottle quarters)
+  // 5. CLASSIC & MODERN MUSCLE (Broad rectangular front, long hood, muscular proportions)
   if (type === 'muscle_classic' || type === 'muscle') {
     return [
       { x: halfL - fc, y: 0 },
       { x: halfL - fc - 0.2, y: halfW * 0.90 },
-      { x: halfL - frd - 2.2, y: halfW - frd * 0.35 },
-      { x: halfL * 0.40, y: halfW * 0.96 - rd * 0.35 },
-      { x: 0, y: halfW * 0.90 - rd },
+      { x: halfL - frd - 2.0, y: halfW - frd * 0.35 },
+      { x: halfL * 0.40, y: halfW - rd * 0.35 },
+      { x: 0, y: halfW - rd * 0.35 },
       { x: -halfL * 0.45, y: halfW * 1.02 - rd * 0.35 },
-      { x: -halfL + rrd + 0.8, y: halfW * 0.94 - rrd * 0.35 },
-      { x: -halfL + rc + 0.2, y: halfW * 0.50 },
+      { x: -halfL + rrd + 0.8, y: halfW * 0.96 - rrd * 0.35 },
+      { x: -halfL + rc + 0.2, y: halfW * 0.58 },
       { x: -halfL + rc, y: 0 },
-      { x: -halfL + rc + 0.2, y: -halfW * 0.50 },
-      { x: -halfL + rld + 0.8, y: -halfW * 0.94 + rld * 0.35 },
+      { x: -halfL + rc + 0.2, y: -halfW * 0.58 },
+      { x: -halfL + rld + 0.8, y: -halfW * 0.96 + rld * 0.35 },
       { x: -halfL * 0.45, y: -halfW * 1.02 + ld * 0.35 },
-      { x: 0, y: -halfW * 0.90 + ld },
-      { x: halfL * 0.40, y: -halfW * 0.96 + ld * 0.35 },
-      { x: halfL - fld - 2.2, y: -halfW * 0.90 + fld * 0.35 },
+      { x: 0, y: -halfW + ld * 0.35 },
+      { x: halfL * 0.40, y: -halfW + ld * 0.35 },
+      { x: halfL - fld - 2.0, y: -halfW + fld * 0.35 },
       { x: halfL - fc - 0.2, y: -halfW * 0.90 }
     ];
   }
 
-  // 6. BOXY 4X4 & HARDCORE RIGS (Strictly sharp rectangular perimeter, flat square front & flat square rear)
-  if (type === 'suv_classic_box' || type === 'offroad_hardcore') {
+  // 5h. SEMI-TRUCK TRACTOR (Седельный тягач КАМАЗ-5410: бескапотная кабина со спальником и открытая рама шасси сзади)
+  if (type === 'truck_semi') {
+    const cabFrontX = halfL - fc;
+    const cabinL = halfL * 0.56; // 0.28 * length = 0.56 * halfL
+    const cabRearX = halfL - cabinL - 2; // Real cabin rear wall (~12.0)
+    const cabW = halfW * 0.94;
+    const frameRearX = -halfL + rc + 0.5;
+    const frameW = halfW * 0.38; // Narrow heavy ladder chassis rails
+
+    return [
+      { x: cabFrontX, y: 0 },
+      { x: cabFrontX - 0.1, y: cabW },
+      { x: halfL * 0.65, y: cabW - frd * 0.35 },
+      { x: cabRearX, y: cabW - rd * 0.35 },
+      { x: cabRearX, y: frameW },
+      { x: 0, y: frameW },
+      { x: -halfL * 0.45, y: frameW },
+      { x: frameRearX, y: frameW },
+      { x: frameRearX, y: 0 },
+      { x: frameRearX, y: -frameW },
+      { x: -halfL * 0.45, y: -frameW },
+      { x: 0, y: -frameW },
+      { x: cabRearX, y: -frameW },
+      { x: cabRearX, y: -cabW + ld * 0.35 },
+      { x: halfL * 0.65, y: -cabW + fld * 0.35 },
+      { x: cabFrontX - 0.1, y: -cabW }
+    ];
+  }
+
+  // 5i. GAZ-53 HOODED FLATBED & COVERED TRUCK (ГАЗ-53: скругленный капот, выраженные крылья и грузовая платформа)
+  if (type === 'truck_flatbed' || type === 'truck_covered') {
+    const hoodFrontX = halfL - fc;
+    const hoodW = halfW * 0.72; // Tapered rounded front nose
+    const fenderW = halfW * 0.88; // Rounded front fender wings
+    const cabW = halfW * 0.86;
+    const bedW = halfW * 0.98; // Wide wooden flatbed
+    const bedFrontX = halfL * 0.18;
+    const bedRearX = -halfL + rc + 0.2;
+
+    return [
+      { x: hoodFrontX, y: 0 },
+      { x: hoodFrontX - 0.5, y: hoodW * 0.85 },
+      { x: halfL * 0.65, y: fenderW - frd * 0.35 },
+      { x: halfL * 0.32, y: cabW - rd * 0.35 },
+      { x: bedFrontX, y: bedW },
+      { x: 0, y: bedW - rd },
+      { x: -halfL * 0.45, y: bedW - rd * 0.35 },
+      { x: bedRearX, y: bedW - rrd * 0.35 },
+      { x: bedRearX, y: 0 },
+      { x: bedRearX, y: -bedW + rld * 0.35 },
+      { x: -halfL * 0.45, y: -bedW + ld * 0.35 },
+      { x: 0, y: -bedW + ld },
+      { x: bedFrontX, y: -bedW },
+      { x: halfL * 0.32, y: -cabW + ld * 0.35 },
+      { x: halfL * 0.65, y: -fenderW + fld * 0.35 },
+      { x: hoodFrontX - 0.5, y: -hoodW * 0.85 }
+    ];
+  }
+
+  // 6. BOXY 4X4 & HEAVY COMMERCIAL RIGS (Strictly sharp rectangular perimeter, flat square front & flat square rear)
+  const isBoxyRig = type === 'suv_classic_box' || type === 'offroad_hardcore' || 
+                    type === 'truck_dump' || type === 'truck_box' || type === 'truck_water' || 
+                    type === 'truck_tanker' || type === 'cement_mixer' || 
+                    type === 'garbage_truck' || type === 'fire_ladder' || type === 'fire_engine' || 
+                    type === 'truck_tow';
+  if (isBoxyRig) {
     return [
       { x: halfL - fc, y: 0 },
       { x: halfL - fc - 0.1, y: halfW * 0.95 },
@@ -209,46 +276,50 @@ function getVehicleBasePolygonRaw(
                 type === 'van_cargo_old' || type === 'ambulance_van' || type === 'ambulance' || 
                 type === 'delivery_truck' || type === 'truck_armored';
   if (isVan) {
+    const sideW = halfW;
     return [
       { x: halfL - fc, y: 0 },
-      { x: halfL - fc - 0.5, y: halfW * 0.90 },
-      { x: halfL - frd - 1.8, y: halfW - frd * 0.35 },
-      { x: halfL * 0.50, y: halfW - rd * 0.35 },
-      { x: 0, y: halfW - rd },
-      { x: -halfL * 0.60, y: halfW - rd * 0.35 },
-      { x: -halfL + rrd + 1.2, y: halfW * 0.95 - rrd * 0.35 },
-      { x: -halfL + rc + 0.3, y: halfW * 0.80 },
+      { x: halfL - fc - 0.4, y: sideW * 0.92 },
+      { x: halfL - frd - 1.5, y: sideW - frd * 0.35 },
+      { x: halfL * 0.50, y: sideW - rd * 0.35 },
+      { x: 0, y: sideW - rd * 0.35 },
+      { x: -halfL * 0.60, y: sideW - rd * 0.35 },
+      { x: -halfL + rrd + 1.0, y: sideW * 0.98 - rrd * 0.35 },
+      { x: -halfL + rc + 0.2, y: sideW * 0.85 },
       { x: -halfL + rc, y: 0 },
-      { x: -halfL + rc + 0.3, y: -halfW * 0.80 },
-      { x: -halfL + rld + 1.2, y: -halfW * 0.95 + rld * 0.35 },
-      { x: -halfL * 0.60, y: -halfW + ld * 0.35 },
-      { x: 0, y: -halfW + ld },
-      { x: halfL * 0.50, y: -halfW + ld * 0.35 },
-      { x: halfL - fld - 1.8, y: -halfW + fld * 0.35 },
-      { x: halfL - fc - 0.5, y: -halfW * 0.90 }
+      { x: -halfL + rc + 0.2, y: -sideW * 0.85 },
+      { x: -halfL + rld + 1.0, y: -sideW * 0.98 + rld * 0.35 },
+      { x: -halfL * 0.60, y: -sideW + ld * 0.35 },
+      { x: 0, y: -sideW + ld * 0.35 },
+      { x: halfL * 0.50, y: -sideW + ld * 0.35 },
+      { x: halfL - fld - 1.5, y: -sideW + fld * 0.35 },
+      { x: halfL - fc - 0.4, y: -sideW * 0.92 }
     ];
   }
 
-  // 8. HATCHBACKS & HOT HATCHES (Compact 2-box, short hood, tapered rear hatch)
-  const isHatch = type === 'hatchback' || type === 'hatch_hot' || type === 'micro_car' || type === 'retro_bubble';
+  // 8. HATCHBACKS & HOT HATCHES (Compact 2-box, short hood, straight clean flanks, tapered rear hatch)
+  const isHatch = type === 'hatchback' || type === 'hatch_hot' || type === 'micro_car' || 
+                  type === 'retro_bubble' || type === 'compact_matiz' || type === 'liftback_tavria' || 
+                  type === 'hatch_samara';
   if (isHatch) {
+    const sideW = halfW;
     return [
       { x: halfL - fc, y: 0 },
-      { x: halfL - fc - 0.8, y: halfW * 0.65 },
-      { x: halfL - frd - 2.5, y: halfW - frd * 0.35 - 0.5 },
-      { x: halfL * 0.40, y: halfW - rd * 0.35 },
-      { x: 0, y: halfW - rd },
-      { x: -halfL * 0.45, y: halfW - rd * 0.35 },
-      { x: -halfL + rrd + 1.8, y: halfW * 0.82 - rrd * 0.35 },
-      { x: -halfL + rc + 0.6, y: halfW * 0.45 },
+      { x: halfL - fc - 0.8, y: sideW * 0.76 },
+      { x: halfL - frd - 2.0, y: sideW - frd * 0.35 },
+      { x: halfL * 0.45, y: sideW - rd * 0.35 },
+      { x: 0, y: sideW - rd * 0.35 },
+      { x: -halfL * 0.45, y: sideW - rd * 0.35 },
+      { x: -halfL + rrd + 1.2, y: sideW * 0.92 - rrd * 0.35 },
+      { x: -halfL + rc + 0.4, y: sideW * 0.58 },
       { x: -halfL + rc, y: 0 },
-      { x: -halfL + rc + 0.6, y: -halfW * 0.45 },
-      { x: -halfL + rld + 1.8, y: -halfW * 0.82 + rld * 0.35 },
-      { x: -halfL * 0.45, y: -halfW + ld * 0.35 },
-      { x: 0, y: -halfW + ld },
-      { x: halfL * 0.40, y: -halfW + ld * 0.35 },
-      { x: halfL - fld - 2.5, y: -halfW + fld * 0.35 + 0.5 },
-      { x: halfL - fc - 0.8, y: -halfW * 0.65 }
+      { x: -halfL + rc + 0.4, y: -sideW * 0.58 },
+      { x: -halfL + rld + 1.2, y: -sideW * 0.92 + rld * 0.35 },
+      { x: -halfL * 0.45, y: -sideW + ld * 0.35 },
+      { x: 0, y: -sideW + ld * 0.35 },
+      { x: halfL * 0.45, y: -sideW + ld * 0.35 },
+      { x: halfL - fld - 2.0, y: -sideW + fld * 0.35 },
+      { x: halfL - fc - 0.8, y: -sideW * 0.76 }
     ];
   }
 
@@ -279,7 +350,7 @@ function getVehicleBasePolygonRaw(
   }
 
   // 9b. TRACTOR BARREL TRAILER (Тракторная бочка-цистерна: A-frame drawbar, cylindrical tank on frame)
-  if (type === 'trailer_barrel') {
+  if (type === 'trailer_barrel' || type === 'trailer_vacuum') {
     const tankFront = halfL * 0.55;
     const tankRear = -halfL * 0.80;
     return [
@@ -300,9 +371,9 @@ function getVehicleBasePolygonRaw(
   }
 
   // 9c. 2-AXLE FLATBED FARM TRAILER 2-PTS-4 (Бортовой 2-осный тракторный прицеп 2-ПТС-4)
-  if (type === 'trailer_flatbed_2axle') {
-    const boxFront = halfL * 0.72;
-    const boxRear = -halfL * 0.88;
+  if (type === 'trailer_flatbed_2axle' || type.startsWith('trailer_semi')) {
+    const boxFront = type.startsWith('trailer_semi') ? halfL * 0.95 : halfL * 0.72;
+    const boxRear = -halfL * 0.95;
     const sideW = halfW * 0.96;
     return [
       { x: boxFront - fc, y: 0 },
@@ -322,6 +393,80 @@ function getVehicleBasePolygonRaw(
       { x: boxFront - fld - 1.0, y: -sideW + fld * 0.3 },
       { x: boxFront - fc, y: -sideW }
     ];
+  }
+
+  // 9d. ROAD MACHINERY (ROAD ROLLERS & ASPHALT PAVERS)
+  if (type === 'paver_asphalt_wheeled') {
+    // Wheeled asphalt paver has a 100% RIGID monocoque frame (hopper, chassis, cabin and screed are fixed)
+    return [
+      { x: halfL - fc, y: 0 },
+      { x: halfL - fc, y: halfW * 0.45 },   // Push roller right bumper
+      { x: halfL * 0.90, y: halfW * 0.96 }, // Hopper right front corner
+      { x: halfL * 0.08, y: halfW * 0.96 }, // Hopper right rear corner
+      { x: 0, y: halfW * 0.82 },            // Tractor waist
+      { x: -halfL * 0.58, y: halfW * 1.00 }, // Operator deck outer step
+      { x: -halfL * 0.72, y: halfW * 0.90 }, // Screed tow arm pivot
+      { x: -halfL * 0.78, y: halfW * 1.10 }, // Screed end plate front
+      { x: -halfL + rc, y: halfW * 1.10 },   // Screed end plate rear
+      { x: -halfL + rc, y: 0 },             // Screed rear center
+      { x: -halfL + rc, y: -halfW * 1.10 },  // Screed left end plate rear
+      { x: -halfL * 0.78, y: -halfW * 1.10 }, // Screed left end plate front
+      { x: -halfL * 0.72, y: -halfW * 0.90 }, // Screed left tow arm pivot
+      { x: -halfL * 0.58, y: -halfW * 1.00 }, // Operator deck left step
+      { x: 0, y: -halfW * 0.82 },            // Tractor left waist
+      { x: halfL * 0.08, y: -halfW * 0.96 }, // Hopper left rear corner
+      { x: halfL * 0.90, y: -halfW * 0.96 }, // Hopper left front corner
+      { x: halfL - fc, y: -halfW * 0.45 },   // Push roller left bumper
+    ];
+  }
+
+  const isArticulatedRoller = type === 'roller_heavy_tandem' || type === 'roller_compact_sidewalk' || type === 'roller_pneumatic';
+  if (isArticulatedRoller) {
+    const gamma = car.steerAngle || 0;
+    const cosF = Math.cos(gamma);
+    const sinF = Math.sin(gamma);
+
+    const drumW = type === 'roller_compact_sidewalk' ? halfW * 0.94 : halfW * 0.97;
+    const waistW = halfW * 0.42;
+
+    // Front frame raw points (pivots by steer angle gamma around central hinge at 0, 0)
+    const rawFront = [
+      { x: halfL - fc, y: 0 },
+      { x: halfL - fc, y: drumW },
+      { x: halfL * 0.35, y: drumW },
+      { x: halfL * 0.12, y: waistW * 1.3 },
+      { x: 0, y: waistW }
+    ];
+
+    // Rear frame (fixed baseline reference frame containing engine, ROPS cabin & rear drum)
+    const rawRear = [
+      { x: -halfL * 0.12, y: waistW * 1.3 },
+      { x: -halfL * 0.35, y: drumW },
+      { x: -halfL + rc, y: drumW },
+      { x: -halfL + rc, y: 0 },
+      { x: -halfL + rc, y: -drumW },
+      { x: -halfL * 0.35, y: -drumW },
+      { x: -halfL * 0.12, y: -waistW * 1.3 },
+      { x: 0, y: -waistW }
+    ];
+
+    const rawFrontLeft = [
+      { x: halfL * 0.12, y: -waistW * 1.3 },
+      { x: halfL * 0.35, y: -drumW },
+      { x: halfL - fc, y: -drumW }
+    ];
+
+    const rotatedFront = rawFront.map(p => ({
+      x: p.x * cosF - p.y * sinF,
+      y: p.x * sinF + p.y * cosF
+    }));
+
+    const rotatedFrontLeft = rawFrontLeft.map(p => ({
+      x: p.x * cosF - p.y * sinF,
+      y: p.x * sinF + p.y * cosF
+    }));
+
+    return [...rotatedFront, ...rawRear, ...rotatedFrontLeft];
   }
 
   // 10. MOTORCYCLE WITH SIDECAR (Ural M-67)
@@ -369,24 +514,25 @@ function getVehicleBasePolygonRaw(
     ];
   }
 
-  // Default / Modern SUV / Crossover / Sports Coupe (Muscular profile)
+  // Default / Modern SUV / Crossover / Sports Coupe (Clean modern profile)
+  const sideW = halfW;
   return [
     { x: halfL - fc, y: 0 },
-    { x: halfL - fc - 0.6, y: halfW * 0.70 },
-    { x: halfL - frd - 2.5, y: halfW - frd * 0.35 },
-    { x: halfL * 0.45, y: halfW - rd * 0.35 },
-    { x: 0, y: halfW - rd },
-    { x: -halfL * 0.45, y: halfW - rd * 0.35 },
-    { x: -halfL + rrd + 1.5, y: halfW * 0.90 - rrd * 0.35 },
-    { x: -halfL + rc + 0.4, y: halfW * 0.50 },
+    { x: halfL - fc - 0.6, y: sideW * 0.78 },
+    { x: halfL - frd - 2.0, y: sideW - frd * 0.35 },
+    { x: halfL * 0.45, y: sideW - rd * 0.35 },
+    { x: 0, y: sideW - rd * 0.35 },
+    { x: -halfL * 0.45, y: sideW - rd * 0.35 },
+    { x: -halfL + rrd + 1.2, y: sideW * 0.95 - rrd * 0.35 },
+    { x: -halfL + rc + 0.3, y: sideW * 0.62 },
     { x: -halfL + rc, y: 0 },
-    { x: -halfL + rc + 0.4, y: -halfW * 0.50 },
-    { x: -halfL + rld + 1.5, y: -halfW * 0.90 + rld * 0.35 },
-    { x: -halfL * 0.45, y: -halfW + ld * 0.35 },
-    { x: 0, y: -halfW + ld },
-    { x: halfL * 0.45, y: -halfW + ld * 0.35 },
-    { x: halfL - fld - 2.5, y: -halfW + fld * 0.35 },
-    { x: halfL - fc - 0.6, y: -halfW * 0.70 }
+    { x: -halfL + rc + 0.3, y: -sideW * 0.62 },
+    { x: -halfL + rld + 1.2, y: -sideW * 0.95 + rld * 0.35 },
+    { x: -halfL * 0.45, y: -sideW + ld * 0.35 },
+    { x: 0, y: -sideW + ld * 0.35 },
+    { x: halfL * 0.45, y: -sideW + ld * 0.35 },
+    { x: halfL - fld - 2.0, y: -sideW + fld * 0.35 },
+    { x: halfL - fc - 0.6, y: -sideW * 0.78 }
   ];
 }
 
@@ -405,11 +551,16 @@ export function getVehicleCabinDimensions(
   let cabinW = Math.max(8, car.width * 0.80 - (ld + rd) * 0.3);
   let cabinX = -car.length * 0.05;
 
-  const isCabOverTruck = type === 'truck_box' || type === 'truck_dump' || 
+  const isCabOverTruck = type === 'truck_box' || type === 'truck_dump' || type === 'truck_semi' || 
                          type === 'cement_mixer' || type === 'garbage_truck' ||
                          type === 'fire_ladder';
 
-  if (isCabOverTruck) {
+  if (type === 'truck_semi') {
+    // Sleeper cab with rear bunk compartment
+    cabinL = car.length * 0.28;
+    cabinW = car.width * 0.92;
+    cabinX = halfL - cabinL / 2 - 2;
+  } else if (isCabOverTruck) {
     cabinL = car.length * 0.18;
     cabinW = car.width * 0.88;
     cabinX = halfL - cabinL / 2 - 2;
@@ -417,7 +568,7 @@ export function getVehicleCabinDimensions(
     cabinL = car.length * 0.28;
     cabinW = car.width * 0.90;
     cabinX = halfL - cabinL / 2 - 2;
-  } else if (type === 'truck_flatbed' || type === 'truck_tanker' || type === 'truck_water') {
+  } else if (type === 'truck_flatbed' || type === 'truck_covered' || type === 'truck_tanker' || type === 'truck_water') {
     cabinL = car.length * 0.20;
     cabinW = car.width * 0.86;
     cabinX = halfL - cabinL * 1.35;
@@ -457,7 +608,7 @@ export function getVehicleCabinDimensions(
     cabinL = car.length * 0.66;
     cabinW = car.width * 0.80;
     cabinX = -car.length * 0.08;
-  } else if (type === 'sedan_classic' || type === 'classic_compact') {
+  } else if (type === 'sedan_classic' || type === 'classic_compact' || type === 'sedan_nexia') {
     cabinL = car.length * 0.48;
     cabinW = car.width * 0.78;
     cabinX = -car.length * 0.04;
@@ -465,6 +616,30 @@ export function getVehicleCabinDimensions(
     cabinL = car.length * 0.52;
     cabinW = car.width * 0.82;
     cabinX = -car.length * 0.06;
+  } else if (type === 'sedan_logan') {
+    cabinL = car.length * 0.53;
+    cabinW = car.width * 0.82;
+    cabinX = -car.length * 0.03;
+  } else if (type === 'sedan_polo' || type === 'sedan_accent') {
+    cabinL = car.length * 0.51;
+    cabinW = car.width * 0.80;
+    cabinX = -car.length * 0.05;
+  } else if (type === 'sedan_samara') {
+    cabinL = car.length * 0.49;
+    cabinW = car.width * 0.78;
+    cabinX = -car.length * 0.04;
+  } else if (type === 'compact_matiz') {
+    cabinL = car.length * 0.62;
+    cabinW = car.width * 0.84;
+    cabinX = -car.length * 0.02;
+  } else if (type === 'liftback_tavria') {
+    cabinL = car.length * 0.55;
+    cabinW = car.width * 0.80;
+    cabinX = -car.length * 0.06;
+  } else if (type === 'hatch_samara') {
+    cabinL = car.length * 0.53;
+    cabinW = car.width * 0.80;
+    cabinX = -car.length * 0.08;
   } else if (type === 'sedan_compact' || type === 'sedan' || type === 'taxi' || type === 'police') {
     cabinL = car.length * 0.50;
     cabinW = car.width * 0.78;
@@ -533,6 +708,18 @@ export function getVehicleCabinDimensions(
     cabinL = car.length * 0.42;
     cabinW = car.width * 0.76;
     cabinX = -car.length * 0.16;
+  } else if (type === 'roller_heavy_tandem' || type === 'roller_pneumatic') {
+    cabinL = car.length * 0.38;
+    cabinW = car.width * 0.85;
+    cabinX = 0;
+  } else if (type === 'roller_compact_sidewalk') {
+    cabinL = car.length * 0.35;
+    cabinW = car.width * 0.80;
+    cabinX = -car.length * 0.12;
+  } else if (type === 'paver_asphalt_wheeled') {
+    cabinL = car.length * 0.32;
+    cabinW = car.width * 0.92;
+    cabinX = -car.length * 0.18;
   } else if (type === 'moto_ural_sidecar') {
     cabinL = car.length * 0.48;
     cabinW = car.width * 0.75;
@@ -562,7 +749,7 @@ export function renderVehicleGreenhouseAndBodyPanels(vCtx: VehicleRenderContext)
   const dmg = car.damage;
 
   // If bus, ambulance box, or trailer, handled separately (trailers have no cabin/greenhouse)
-  if (type === 'bus' || type === 'ambulance' || type === 'ambulance_van' || type.startsWith('trailer_') || type === 'trailer_barrel' || type === 'trailer_flatbed_2axle' || car.isTrailer) {
+  if (type === 'bus' || type === 'ambulance' || type === 'ambulance_van' || type.startsWith('trailer_') || type === 'trailer_barrel' || type === 'trailer_flatbed_2axle' || type === 'trailer_semi' || car.isTrailer) {
     return;
   }
 
@@ -571,7 +758,8 @@ export function renderVehicleGreenhouseAndBodyPanels(vCtx: VehicleRenderContext)
   // =========================================================================
   const isSedan = type === 'sedan' || type === 'sedan_classic' || type === 'sedan_luxury' || 
                   type === 'sedan_compact' || type === 'classic_compact' || type === 'taxi' || 
-                  type === 'police';
+                  type === 'police' || type === 'sedan_logan' || type === 'sedan_nexia' || 
+                  type === 'sedan_accent' || type === 'sedan_polo' || type === 'sedan_samara';
 
   if (isSedan) {
     const hoodX1 = cabinX + cabinL / 2;
@@ -608,6 +796,17 @@ export function renderVehicleGreenhouseAndBodyPanels(vCtx: VehicleRenderContext)
       drawDeformedLine(roofX - 2.5, 0, roofX + 2.5, 0, '#475569', 0.8);
     }
 
+    // Logan front roof whip antenna
+    if (type === 'sedan_logan') {
+      drawDeformedCircle(roofX + roofL / 2 - 1.5, 0, 1.0, '#0f172a');
+      drawDeformedLine(roofX + roofL / 2 - 1.5, 0, roofX + roofL / 2 + 2.5, 0, '#0f172a', 1.0);
+    }
+
+    // Polo shark-fin antenna
+    if (type === 'sedan_polo') {
+      drawDeformedRect(roofX - roofL / 2 + 1.2, -0.6, 1.8, 1.2, '#0f172a');
+    }
+
     // Front Windshield (Raked glass)
     const fWsX1 = roofX + roofL / 2;
     const fWsX2 = cabinX + cabinL / 2;
@@ -641,10 +840,29 @@ export function renderVehicleGreenhouseAndBodyPanels(vCtx: VehicleRenderContext)
     drawDeformedLine(trunkX2, -trunkDeckW / 2, trunkX1 + 2, -trunkDeckW / 2, 'rgba(0,0,0,0.35)', 1.0);
     drawDeformedLine(trunkX2, trunkDeckW / 2, trunkX1 + 2, trunkDeckW / 2, 'rgba(0,0,0,0.35)', 1.0);
     drawDeformedLine(trunkX1 + 2, -trunkDeckW / 2, trunkX1 + 2, trunkDeckW / 2, 'rgba(0,0,0,0.35)', 1.0);
-    // Chrome badge / key lock in center of trunk lid
-    drawDeformedCircle(trunkX1 + 3.5, 0, 0.8, '#cbd5e1');
-    // High-mount third brake light at base of rear glass
-    drawDeformedRect(trunkX2 - 0.6, -1.8, 0.8, 3.6, '#ef4444');
+
+    // Specific trunk details per model
+    if (type === 'sedan_samara') {
+      // VAZ-21099 / 2115 factory pedestal rear trunk spoiler wing
+      const spX = trunkX1 + 2.0;
+      drawDeformedRect(spX, -trunkDeckW * 0.44, 1.8, trunkDeckW * 0.88, '#1e293b');
+      drawDeformedRect(spX + 0.3, -2.0, 0.8, 4.0, '#ef4444'); // spoiler 3rd brake light
+    } else if (type === 'sedan_nexia') {
+      // Daewoo Nexia full-width dark red taillight panel along rear edge
+      drawDeformedRect(trunkX1 + 1.0, -trunkDeckW * 0.42, 1.2, trunkDeckW * 0.84, '#7f1d1d');
+      drawDeformedRect(trunkX1 + 1.0, -1.5, 1.2, 3.0, '#1e293b'); // license plate recess
+    } else {
+      // Chrome badge / key lock in center of trunk lid
+      drawDeformedCircle(trunkX1 + 3.5, 0, 0.8, '#cbd5e1');
+      // High-mount third brake light at base of rear glass
+      drawDeformedRect(trunkX2 - 0.6, -1.8, 0.8, 3.6, '#ef4444');
+    }
+
+    // Side rub-strips for budget models (Logan, Samara, Nexia)
+    if (type === 'sedan_logan' || type === 'sedan_samara' || type === 'sedan_nexia') {
+      drawDeformedLine(cabinX - cabinL * 0.35, -halfW + 0.4, cabinX + cabinL * 0.35, -halfW + 0.4, '#0f172a', 1.0);
+      drawDeformedLine(cabinX - cabinL * 0.35, halfW - 0.4, cabinX + cabinL * 0.35, halfW - 0.4, '#0f172a', 1.0);
+    }
 
     return;
   }
@@ -917,6 +1135,20 @@ export function renderVehicleGreenhouseAndBodyPanels(vCtx: VehicleRenderContext)
       drawDeformedRect(roofX - hatchL / 2 + 0.5, -hatchW / 2 + 0.5, hatchL - 1.0, hatchW - 1.0, '#f1f5f9');
     }
 
+    // Road Train Marker Lights (3 оранжевых фонарика «автопоезд») on tractor roof front
+    const markerX = roofX + roofL / 2 - 1.0;
+    const isTrainOn = car.roadTrainLightsOn !== false;
+    const mBody = '#1c1917';
+    const mLens = isTrainOn ? '#f59e0b' : '#78350f';
+    const mCore = isTrainOn ? '#fef08a' : '#451a03';
+    [-2.5, 0, 2.5].forEach(my => {
+      drawDeformedRect(markerX - 0.6, my - 0.5, 1.2, 1.0, mBody);
+      drawDeformedRect(markerX - 0.4, my - 0.35, 0.8, 0.7, mLens);
+      if (isTrainOn) {
+        drawDeformedCircle(markerX, my, 0.25, mCore);
+      }
+    });
+
     // --- 5. PANORAMIC CABIN GLASS & PILLARS ---
     // Front Windshield
     const fWsX1 = roofX + roofL / 2;
@@ -1021,12 +1253,13 @@ export function renderVehicleGreenhouseAndBodyPanels(vCtx: VehicleRenderContext)
   }
 
   // =========================================================================
-  // 5D. VANS, DELIVERY & COMMERCIAL TRANSPORTERS (VAN, DELIVERY TRUCK, VAN CARGO OLD)
+  // 5D. VANS, DELIVERY, ARMORED & COMMERCIAL TRANSPORTERS
   // =========================================================================
-  const isVanType = type === 'van' || type === 'bus_minibus' || type === 'delivery_truck' || type === 'van_cargo_old';
+  const isVanType = type === 'van' || type === 'bus_minibus' || type === 'delivery_truck' || type === 'van_cargo_old' || type === 'truck_armored';
   if (isVanType) {
     const isRetro = type === 'van_cargo_old';
     const isDelivery = type === 'delivery_truck';
+    const isArmored = type === 'truck_armored';
 
     // 1. Base greenhouse glass & cabin pillars
     drawDeformedRect(cabinX - cabinL / 2, -cabinW / 2, cabinL, cabinW, '#0f172a');
@@ -1041,6 +1274,21 @@ export function renderVehicleGreenhouseAndBodyPanels(vCtx: VehicleRenderContext)
     for (let ry = -roofW * 0.32; ry <= roofW * 0.32; ry += roofW * 0.16) {
       drawDeformedLine(roofX - roofL / 2 + 2, ry, roofX + roofL / 2 - 2, ry, 'rgba(0,0,0,0.15)', 1.0);
       drawDeformedLine(roofX - roofL / 2 + 2, ry - 0.5, roofX + roofL / 2 - 2, ry - 0.5, 'rgba(255,255,255,0.15)', 0.6);
+    }
+
+    if (isDelivery || type === 'bus_minibus') {
+      const markerX = roofX + roofL / 2 - 1.2;
+      const isTrainOn = car.roadTrainLightsOn !== false;
+      const mBody = '#1c1917';
+      const mLens = isTrainOn ? '#f59e0b' : '#78350f';
+      const mCore = isTrainOn ? '#fef08a' : '#451a03';
+      [-2.8, 0, 2.8].forEach(my => {
+        drawDeformedRect(markerX - 0.6, my - 0.5, 1.2, 1.0, mBody);
+        drawDeformedRect(markerX - 0.4, my - 0.35, 0.8, 0.7, mLens);
+        if (isTrainOn) {
+          drawDeformedCircle(markerX, my, 0.25, mCore);
+        }
+      });
     }
 
     // 3. Front Cab Windshield
@@ -1187,18 +1435,344 @@ export function renderVehicleGreenhouseAndBodyPanels(vCtx: VehicleRenderContext)
   }
 
   // =========================================================================
+  // 5F-1. GAZ-53 HOODED TRUCK CABIN (ГАЗ-53 «Газон» Бортовой / Крытый с шифером)
+  // =========================================================================
+  if (type === 'truck_flatbed' || type === 'truck_covered') {
+    // 1. GAZ-53 Tapered Rounded Hood & Front Fender Wings (Вид строго сверху)
+    const hoodX1 = cabinX + cabinL / 2;
+    const hoodX2 = halfL - fc - 0.5;
+    const hoodW = halfW * 1.32; // Tapered central hood width
+    const fenderW = halfW * 2 - 1.0; // Outer width across front fender wings
+    const cabColor = car.color || '#0284c7';
+
+    // Front Fender Wings (Скругленные крылья над передними колесами)
+    drawDeformedRect(hoodX1 - 1, -fenderW / 2, hoodX2 - hoodX1 + 1, fenderW, cabColor);
+    // Dark wheel arch inner gap
+    drawDeformedLine(hoodX1 + 2, -fenderW / 2 + 0.5, hoodX2 - 4, -fenderW / 2 + 0.5, 'rgba(0,0,0,0.4)', 1.0);
+    drawDeformedLine(hoodX1 + 2, fenderW / 2 - 0.5, hoodX2 - 4, fenderW / 2 - 0.5, 'rgba(0,0,0,0.4)', 1.0);
+
+    // Central Raised Hood Stamping (Капот ГАЗ-53 со скруглением к передней кромке)
+    drawDeformedRect(hoodX1, -hoodW / 2, hoodX2 - hoodX1, hoodW, cabColor);
+    // Central hood longitudinal crease ridge (Центральное ребро выштамповки капота)
+    drawDeformedLine(hoodX1, 0, hoodX2 - 0.5, 0, 'rgba(255,255,255,0.3)', 1.2);
+    drawDeformedLine(hoodX1, 0.6, hoodX2 - 0.5, 0.6, 'rgba(0,0,0,0.25)', 0.8);
+
+    // Side Hood Air Vents / Louvers (Боковые продольные жалюзи капота ГАЗ-53, видны сверху)
+    const louverX1 = hoodX1 + 2.5;
+    const louverX2 = hoodX2 - 3.5;
+    [-hoodW / 2 + 1.2, hoodW / 2 - 1.2].forEach(ly => {
+      drawDeformedLine(louverX1, ly, louverX2, ly, 'rgba(0,0,0,0.35)', 0.9);
+      drawDeformedLine(louverX1, ly + 0.8, louverX2, ly + 0.8, 'rgba(0,0,0,0.35)', 0.9);
+    });
+
+    // 2. Strict 2D Top-Down Hood Nose Leading Edge & Steel Bumper (Вид строго сверху: без 2.5D решетки и плоских фар в небо)
+    drawDeformedLine(hoodX2 - 0.4, -hoodW / 2 + 0.6, hoodX2 - 0.4, hoodW / 2 - 0.6, 'rgba(255,255,255,0.25)', 0.8);
+    drawDeformedLine(hoodX2, -fenderW / 2 + 0.6, hoodX2, fenderW / 2 - 0.6, 'rgba(0,0,0,0.35)', 0.8);
+
+    // Front Metal Bumper with Tow Hooks (Массивный стальной швеллерный бампер ГАЗ-53, вид сверху)
+    const bumperX = hoodX2 - 0.2;
+    drawDeformedRect(bumperX, -halfW + 0.4, 1.6, halfW * 2 - 0.8, '#1e293b');
+    drawDeformedLine(bumperX + 0.2, -halfW + 0.8, bumperX + 0.2, halfW - 0.8, '#475569', 0.6); // Top edge steel bevel
+    // Dual front towing hooks (Буксирные крючья ГАЗ-53)
+    drawDeformedRect(bumperX + 1.2, -halfW * 0.38, 1.2, 1.4, '#cbd5e1');
+    drawDeformedRect(bumperX + 1.2, halfW * 0.38 - 1.4, 1.2, 1.4, '#cbd5e1');
+
+    // 3. Rounded Cabin Shell & Curved Roof (Кабина ГАЗ-53)
+    drawDeformedRect(cabinX - cabinL / 2, -cabinW / 2, cabinL, cabinW, '#0f172a');
+
+    const roofL = cabinL * 0.64;
+    const roofW = cabinW * 0.88;
+    const roofX = cabinX + cabinL * 0.03;
+    drawDeformedRect(roofX - roofL / 2, -roofW / 2, roofL, roofW, car.roofColor || cabColor);
+
+    // Roof stamping ribs & circular ventilation dome hatch (Лючок вентиляции крыши)
+    drawDeformedLine(roofX - roofL / 2 + 1.5, -roofW * 0.26, roofX + roofL / 2 - 1.5, -roofW * 0.26, 'rgba(0,0,0,0.22)', 0.8);
+    drawDeformedLine(roofX - roofL / 2 + 1.5, roofW * 0.26, roofX + roofL / 2 - 1.5, roofW * 0.26, 'rgba(0,0,0,0.22)', 0.8);
+    drawDeformedCircle(roofX - 1.0, 0, 1.4, 'rgba(0,0,0,0.18)', 'rgba(255,255,255,0.25)', 0.6);
+
+    // 3 Amber "Road Train" Marker Lights (3 фонаря автопоезда)
+    const markerX = roofX + roofL / 2 - 1.0;
+    const isTrainOn = car.roadTrainLightsOn !== false;
+    const mLens = isTrainOn ? '#f59e0b' : '#78350f';
+    const mCore = isTrainOn ? '#fef08a' : '#451a03';
+    [-2.6, 0, 2.6].forEach(my => {
+      drawDeformedRect(markerX - 0.6, my - 0.45, 1.2, 0.9, '#0f172a');
+      drawDeformedRect(markerX - 0.4, my - 0.3, 0.8, 0.6, mLens);
+      if (isTrainOn) {
+        drawDeformedCircle(markerX, my, 0.3, mCore);
+      }
+    });
+
+    // 4. Curved Panoramic Front Windshield with Wipers (Панорамное лобовое стекло)
+    const fWsX1 = roofX + roofL / 2;
+    const fWsX2 = cabinX + cabinL / 2;
+    drawDeformedRect(fWsX1, -cabinW / 2 + 0.8, fWsX2 - fWsX1, cabinW - 1.6, 'rgba(56, 189, 248, 0.22)');
+    drawDeformedLine(fWsX1 + 1, -cabinW / 2 + 1.4, fWsX2 - 1, cabinW / 2 - 1.4, 'rgba(255, 255, 255, 0.3)', 1.2);
+    // Vintage dual wipers
+    drawDeformedLine(fWsX1 + 0.8, -cabinW * 0.25, fWsX2 - 0.8, -cabinW * 0.06, '#0f172a', 1.0);
+    drawDeformedLine(fWsX1 + 0.8, cabinW * 0.06, fWsX2 - 0.8, cabinW * 0.25, '#0f172a', 1.0);
+
+    // 5. Side Windows with Triangular Vent Quarter-Lights & Tubular Bracket Mirrors
+    const sideWinH = (cabinW - roofW) / 2 - 0.4;
+    drawDeformedRect(roofX - roofL / 2, -cabinW / 2 + 0.4, roofL, sideWinH, 'rgba(56, 189, 248, 0.12)');
+    drawDeformedRect(roofX - roofL / 2, roofW / 2, roofL, sideWinH, 'rgba(56, 189, 248, 0.12)');
+    // Quarter-light dividing pillars (Стойки форточек)
+    drawDeformedLine(roofX + roofL * 0.18, -cabinW / 2 + 0.4, roofX + roofL * 0.18, -cabinW / 2 + 0.4 + sideWinH, '#0f172a', 0.8);
+    drawDeformedLine(roofX + roofL * 0.18, roofW / 2, roofX + roofL * 0.18, roofW / 2 + sideWinH, '#0f172a', 0.8);
+
+    // Tubular bracket side mirrors (Зеркала заднего вида на изогнутых металлических кронштейнах)
+    const mirrorX = roofX + roofL * 0.25;
+    // Left mirror
+    drawDeformedLine(mirrorX, -cabinW / 2, mirrorX - 1.2, -halfW - 2.8, '#1e293b', 1.0);
+    drawDeformedRect(mirrorX - 2.4, -halfW - 3.4, 2.4, 1.4, '#0f172a');
+    // Right mirror
+    drawDeformedLine(mirrorX, cabinW / 2, mirrorX - 1.2, halfW + 2.8, '#1e293b', 1.0);
+    drawDeformedRect(mirrorX - 2.4, halfW + 2.0, 2.4, 1.4, '#0f172a');
+
+    // Cab Entry Side Footsteps (Подножки кабины)
+    drawDeformedRect(cabinX - cabinL * 0.25, -halfW + 0.2, cabinL * 0.5, 1.4, '#334155');
+    drawDeformedRect(cabinX - cabinL * 0.25, halfW - 1.6, cabinL * 0.5, 1.4, '#334155');
+
+    // Rear cab wall with small rectangular back window
+    const rWsX1 = cabinX - cabinL / 2;
+    drawDeformedLine(rWsX1, -cabinW / 2 + 1, rWsX1, cabinW / 2 - 1, '#0f172a', 1.4);
+    drawDeformedRect(rWsX1 + 0.4, -cabinW * 0.22, 0.8, cabinW * 0.44, 'rgba(56, 189, 248, 0.16)');
+
+    return;
+  }
+
+  // =========================================================================
+  // 5F-2. HEAVY TRUCK CABIN (ЗИЛ-4331 - Водовоз КО-829А, Бензовоз)
+  // =========================================================================
+  const isZilHoodedTruckCab = type === 'truck_water' || type === 'truck_tanker';
+  if (isZilHoodedTruckCab) {
+    // 1. ZIL-4331 Angular Hood & Iconic White Front Grille Mask («Намордник» ЗИЛ-4331)
+    const hoodX1 = cabinX + cabinL / 2;
+    const hoodX2 = halfL - fc - 0.5;
+    const hoodW = halfW * 2 - 4.5;
+
+    // Metal Hood Body
+    drawDeformedRect(hoodX1, -hoodW / 2, hoodX2 - hoodX1, hoodW, car.color || '#0284c7');
+    // Central cowl shutline
+    drawDeformedLine(hoodX1, 0, hoodX2 - 2, 0, 'rgba(0,0,0,0.35)', 1.0);
+
+    // Strict 2D Top-Down Hood Nose Leading Edge (Вид строго сверху без плоской 2.5D маски)
+    drawDeformedLine(hoodX2 - 0.4, -hoodW / 2 + 0.6, hoodX2 - 0.4, hoodW / 2 - 0.6, 'rgba(255,255,255,0.25)', 0.8);
+    drawDeformedLine(hoodX2, -hoodW / 2 + 0.4, hoodX2, hoodW / 2 - 0.4, 'rgba(0,0,0,0.35)', 0.8);
+
+    // Heavy Front Bumper with integrated steps and tow hooks
+    drawDeformedRect(hoodX2 - 0.5, -halfW + 0.2, 2.2, halfW * 2 - 0.4, '#0f172a');
+    // Bumper rubber pads / step plates
+    drawDeformedRect(hoodX2, -halfW * 0.70, 1.4, halfW * 0.35, '#334155');
+    drawDeformedRect(hoodX2, halfW * 0.35, 1.4, halfW * 0.35, '#334155');
+    // Dual front tow hooks / eyes (буксирные проушины)
+    drawDeformedRect(hoodX2 + 1.2, -halfW * 0.40, 1.2, 1.8, '#cbd5e1');
+    drawDeformedRect(hoodX2 + 1.2, halfW * 0.40 - 1.8, 1.2, 1.8, '#cbd5e1');
+
+    // 2. Enclosed Cab Base & Roof
+    drawDeformedRect(cabinX - cabinL / 2, -cabinW / 2, cabinL, cabinW, '#0f172a');
+
+    const roofL = cabinL * 0.65;
+    const roofW = cabinW * 0.86;
+    const roofX = cabinX + cabinL * 0.04;
+    drawDeformedRect(roofX - roofL / 2, -roofW / 2, roofL, roofW, car.roofColor || car.color || '#0284c7');
+
+    // Roof stiffener channels
+    drawDeformedLine(roofX - roofL / 2 + 1, -roofW * 0.28, roofX + roofL / 2 - 1, -roofW * 0.28, 'rgba(0,0,0,0.22)', 0.8);
+    drawDeformedLine(roofX - roofL / 2 + 1, roofW * 0.28, roofX + roofL / 2 - 1, roofW * 0.28, 'rgba(0,0,0,0.22)', 0.8);
+
+    // 3. Road Train Marker Lights (3 оранжевых фонарика «автопоезд») on cab roof front
+    const markerX = roofX + roofL / 2 - 1.2;
+    const isTrainOn = car.roadTrainLightsOn !== false;
+    const mBody = '#1c1917';
+    const mLens = isTrainOn ? '#f59e0b' : '#78350f';
+    const mCore = isTrainOn ? '#fef08a' : '#451a03';
+    [-2.8, 0, 2.8].forEach(my => {
+      drawDeformedRect(markerX - 0.7, my - 0.5, 1.4, 1.0, mBody);
+      drawDeformedRect(markerX - 0.5, my - 0.35, 1.0, 0.7, mLens);
+      if (isTrainOn) {
+        drawDeformedCircle(markerX, my, 0.3, mCore);
+      }
+    });
+
+    // 4. Municipal Orange Flashing Beacon (Оранжевый проблесковый маячок) on roof for truck_water!
+    if (type === 'truck_water') {
+      const beaconX = roofX - 1.0;
+      drawDeformedCircle(beaconX, 0, 2.2, '#0f172a'); // Black rubber base
+      drawDeformedCircle(beaconX, 0, 1.6, '#f97316'); // Glowing orange lens
+      drawDeformedCircle(beaconX, 0, 0.8, '#fef08a'); // Bright incandescent bulb center
+    }
+
+    // 5. Wide Panoramic Front Windshield with dual wipers
+    const fWsX1 = roofX + roofL / 2;
+    const fWsX2 = cabinX + cabinL / 2;
+    drawDeformedRect(fWsX1, -cabinW / 2 + 0.8, fWsX2 - fWsX1, cabinW - 1.6, 'rgba(56, 189, 248, 0.22)');
+    drawDeformedLine(fWsX1 + 1, -cabinW / 2 + 1.5, fWsX2 - 1, cabinW / 2 - 1.5, 'rgba(255, 255, 255, 0.3)', 1.2);
+    // Heavy dual wipers
+    drawDeformedLine(fWsX1 + 1, -cabinW * 0.25, fWsX2 - 1, -cabinW * 0.05, '#0f172a', 1.0);
+    drawDeformedLine(fWsX1 + 1, cabinW * 0.05, fWsX2 - 1, cabinW * 0.25, '#0f172a', 1.0);
+
+    // 6. Side Door Windows & Extended Bracket Side Mirrors
+    const sideWinH = (cabinW - roofW) / 2 - 0.4;
+    drawDeformedRect(roofX - roofL / 2, -cabinW / 2 + 0.4, roofL, sideWinH, 'rgba(56, 189, 248, 0.12)');
+    drawDeformedRect(roofX - roofL / 2, roofW / 2, roofL, sideWinH, 'rgba(56, 189, 248, 0.12)');
+
+    // Extended tubular bracket side mirrors (зеркала заднего вида на кронштейнах)
+    const mirrorX = roofX + roofL * 0.25;
+    // Left mirror
+    drawDeformedLine(mirrorX, -cabinW / 2, mirrorX - 1.0, -halfW - 2.5, '#0f172a', 1.0);
+    drawDeformedRect(mirrorX - 2.2, -halfW - 3.2, 2.4, 1.4, '#1e293b');
+    // Right mirror
+    drawDeformedLine(mirrorX, cabinW / 2, mirrorX - 1.0, halfW + 2.5, '#0f172a', 1.0);
+    drawDeformedRect(mirrorX - 2.2, halfW + 1.8, 2.4, 1.4, '#1e293b');
+
+    // Rear cab wall
+    const rWsX1 = cabinX - cabinL / 2;
+    drawDeformedLine(rWsX1, -cabinW / 2 + 1, rWsX1, cabinW / 2 - 1, '#0f172a', 1.2);
+
+    return;
+  }
+
+  // =========================================================================
+  // 5G. KAMAZ CAB-OVER TRUCK CABIN (КАМАЗ-5511 / КАМАЗ-5320 / Мусоровоз / Бетономешалка)
+  // =========================================================================
+  const isKamazCabOver = type === 'truck_dump' || type === 'truck_box' || type === 'truck_semi' || type === 'cement_mixer' || type === 'garbage_truck' || type === 'fire_ladder';
+  if (isKamazCabOver) {
+    // Authentic Soviet & Russian Kamaz factory cab color: iconic terracotta orange (#d94e16) if unassigned or dull slate
+    const isDullSlate = !car.color || car.color === '#334155' || car.color === '#0f172a';
+    const cabColor = isDullSlate ? '#d94e16' : car.color;
+    
+    // 1. Cab Base (Rectangular, cab-over-engine)
+    drawDeformedRect(cabinX - cabinL / 2, -cabinW / 2, cabinL, cabinW, '#0f172a');
+    
+    // 2. Roof Panel (Classic Kamaz ribbed roof)
+    const roofL = cabinL * 0.70;
+    const roofW = cabinW * 0.90;
+    const roofX = cabinX + cabinL * 0.10;
+    drawDeformedRect(roofX - roofL / 2, -roofW / 2, roofL, roofW, car.roofColor || cabColor);
+    
+    // 3. Kamaz distinctive triple ribbed roof stamps
+    drawDeformedLine(roofX - roofL / 2 + 1, -roofW * 0.35, roofX + roofL / 2 - 1, -roofW * 0.35, 'rgba(0,0,0,0.25)', 1.2);
+    drawDeformedLine(roofX - roofL / 2 + 1, 0, roofX + roofL / 2 - 1, 0, 'rgba(0,0,0,0.25)', 1.2);
+    drawDeformedLine(roofX - roofL / 2 + 1, roofW * 0.35, roofX + roofL / 2 - 1, roofW * 0.35, 'rgba(0,0,0,0.25)', 1.2);
+    
+    // 4. Roof air intake/vent hatch
+    drawDeformedRect(roofX + 0.5, -3, 3, 6, 'rgba(0,0,0,0.15)');
+
+    // 5. Flat steep windshield
+    const fWsX1 = roofX + roofL / 2;
+    const fWsX2 = cabinX + cabinL / 2;
+    drawDeformedRect(fWsX1, -cabinW / 2 + 0.8, fWsX2 - fWsX1, cabinW - 1.6, 'rgba(56, 189, 248, 0.22)');
+    // Classic split two-piece windshield center rubber gasket (вертикальная перемычка)
+    drawDeformedLine(fWsX1, 0, fWsX2, 0, '#0f172a', 1.2);
+    // Wipers
+    drawDeformedLine(fWsX1 + 1.2, -cabinW * 0.30, fWsX2 - 0.5, -cabinW * 0.05, '#0f172a', 1.2);
+    drawDeformedLine(fWsX1 + 1.2, cabinW * 0.30, fWsX2 - 0.5, cabinW * 0.05, '#0f172a', 1.2);
+    
+    // 6. External Front Sun Visor (Солнцезащитный козырек - often black or cab color)
+    drawDeformedRect(fWsX1 - 1, -cabinW / 2, 1.2, cabinW, '#1e293b');
+
+    // 7. Side Windows
+    const sideWinH = (cabinW - roofW) / 2 - 0.4;
+    drawDeformedRect(roofX - roofL / 2, -cabinW / 2 + 0.4, roofL, sideWinH, 'rgba(56, 189, 248, 0.12)');
+    drawDeformedRect(roofX - roofL / 2, roofW / 2, roofL, sideWinH, 'rgba(56, 189, 248, 0.12)');
+    
+    // 8. Extended Kamaz Bracket Mirrors (Very prominent, spanning far out)
+    const mirrorX = fWsX1 - 1.5;
+    // Left mirror
+    drawDeformedLine(mirrorX, -cabinW / 2, mirrorX, -halfW - 3.5, '#0f172a', 1.2);
+    drawDeformedRect(mirrorX - 1.5, -halfW - 4.5, 3, 2.0, '#1e293b');
+    // Right mirror
+    drawDeformedLine(mirrorX, cabinW / 2, mirrorX, halfW + 3.5, '#0f172a', 1.2);
+    drawDeformedRect(mirrorX - 1.5, halfW + 2.5, 3, 2.0, '#1e293b');
+
+    // 9. Authentic Kamaz Front Nose & Radiator Grille
+    // White stamped central grille panel («морда КАМАЗ» белого цвета)
+    const grilleX = fWsX2 - 0.2;
+    const grilleW = cabinW * 0.65;
+    drawDeformedRect(grilleX - 1.2, -grilleW / 2, 1.4, grilleW, '#f8fafc');
+    // Horizontal matte black ventilation slats
+    drawDeformedLine(grilleX - 0.7, -grilleW * 0.42, grilleX - 0.7, grilleW * 0.42, '#0f172a', 0.8);
+    drawDeformedLine(grilleX - 0.2, -grilleW * 0.38, grilleX - 0.2, grilleW * 0.38, '#0f172a', 0.8);
+    // Dark Kamaz badge emblem in the center
+    drawDeformedRect(grilleX - 0.8, -1.8, 0.9, 3.6, '#0f172a');
+
+    // Aerodynamic corner wind deflectors (боковые щитки-дефлекторы КАМАЗ)
+    drawDeformedRect(grilleX - 1.6, -cabinW / 2 + 0.4, 1.6, 2.0, cabColor);
+    drawDeformedLine(grilleX - 1.6, -cabinW / 2 + 0.4, grilleX, -cabinW / 2 + 0.4, '#0f172a', 0.8);
+    drawDeformedRect(grilleX - 1.6, cabinW / 2 - 2.4, 1.6, 2.0, cabColor);
+    drawDeformedLine(grilleX - 1.6, cabinW / 2 - 0.4, grilleX, cabinW / 2 - 0.4, '#0f172a', 0.8);
+
+    // 10. Heavy stamped steel front bumper with headlights & fog lights
+    const bumperX = fWsX2 + 1.0;
+    drawDeformedRect(bumperX - 0.8, -halfW * 0.92, 2.0, halfW * 1.84, '#1e293b');
+    // Main rectangular halogen headlights
+    drawDeformedRect(bumperX + 0.4, -halfW * 0.78, 0.8, 3.2, '#fef08a');
+    drawDeformedRect(bumperX + 0.4, halfW * 0.78 - 3.2, 0.8, 3.2, '#fef08a');
+    // Amber corner turn signals
+    drawDeformedRect(bumperX + 0.4, -halfW * 0.90, 0.8, 1.8, '#f59e0b');
+    drawDeformedRect(bumperX + 0.4, halfW * 0.90 - 1.8, 0.8, 1.8, '#f59e0b');
+    // Towing shackles / hooks
+    drawDeformedRect(bumperX + 0.4, -4.0, 0.9, 1.6, '#475569');
+    drawDeformedRect(bumperX + 0.4, 2.4, 0.9, 1.6, '#475569');
+    
+    // 11. Road Train Marker Lights (3 оранжевых фонарика «автопоезд» на крыше)
+    const markerX = roofX + roofL / 2 - 1.2;
+    const isTrainOn = car.roadTrainLightsOn !== false;
+    const mBody = '#1c1917';
+    const mLens = isTrainOn ? '#f59e0b' : '#78350f';
+    const mCore = isTrainOn ? '#fef08a' : '#451a03';
+    [-3.0, 0, 3.0].forEach(my => {
+      drawDeformedRect(markerX - 0.7, my - 0.5, 1.4, 1.0, mBody);
+      drawDeformedRect(markerX - 0.5, my - 0.35, 1.0, 0.7, mLens);
+      if (isTrainOn) {
+        drawDeformedCircle(markerX, my, 0.3, mCore);
+      }
+    });
+
+    // 12. Equipment behind the cab (dump truck spare tire / semi-truck air intake snorkel)
+    if (type === 'truck_dump') {
+      const spareX = cabinX - cabinL / 2 - 3.5;
+      drawDeformedRect(spareX, -halfW + 4, 3, 7, '#0f172a'); // The black rubber tire
+      drawDeformedLine(spareX + 1.5, -halfW + 4.5, spareX + 1.5, -halfW + 10.5, '#475569', 1.2); // Steel wheel rim edge
+      
+      // Air intake stack on the right side behind the cab
+      drawDeformedCircle(spareX + 1.5, halfW - 4, 1.8, '#1e293b');
+      drawDeformedCircle(spareX + 1.5, halfW - 4, 1.0, '#0f172a');
+    } else if (type === 'truck_semi') {
+      // Tall air cleaner snorkel pipe with mushroom cap behind right side of cab
+      const snorkelX = cabinX - cabinL / 2 - 1.8;
+      const snorkelY = halfW - 3.8;
+      drawDeformedCircle(snorkelX, snorkelY, 1.8, '#1e293b');
+      drawDeformedCircle(snorkelX, snorkelY, 1.2, '#0f172a');
+      drawDeformedCircle(snorkelX, snorkelY, 0.6, '#475569');
+      // Snorkel vertical bracket clamp
+      drawDeformedLine(snorkelX, snorkelY - 1.8, snorkelX, halfW - 1.0, '#334155', 1.0);
+    }
+
+    return;
+  }
+
+  // =========================================================================
   // 6. DEFAULT / SUVS / HATCHBACKS / CROSSOVERS / SPORTS
   // =========================================================================
   drawDeformedRect(cabinX - cabinL / 2, -cabinW / 2, cabinL, cabinW, '#0f172a');
 
-  const isHatch = type === 'hatchback' || type === 'hatch_hot';
+  const isHatch = type === 'hatchback' || type === 'hatch_hot' || type === 'compact_matiz' || 
+                  type === 'liftback_tavria' || type === 'hatch_samara' || type === 'micro_car' || type === 'retro_bubble';
   const isSUV = type === 'suv' || type === 'suv_luxury' || type === 'suv_classic_box' || type === 'crossover_compact' || type === 'offroad_hardcore';
 
-  const roofL = isSUV ? cabinL * 0.74 : (isHatch ? cabinL * 0.62 : cabinL * 0.66);
+  const roofL = isSUV ? cabinL * 0.74 : (type === 'compact_matiz' ? cabinL * 0.68 : (isHatch ? cabinL * 0.62 : cabinL * 0.66));
   const roofW = cabinW * 0.82;
   const roofX = isSUV ? (cabinX - cabinL * 0.02) : (cabinX + cabinL * 0.02);
 
   drawDeformedRect(roofX - roofL / 2, -roofW / 2, roofL, roofW, car.roofColor || car.color);
+
+  // Matiz black roof rails
+  if (type === 'compact_matiz') {
+    drawDeformedLine(roofX - roofL / 2 + 1, -roofW / 2 + 0.6, roofX + roofL / 2 - 1, -roofW / 2 + 0.6, '#0f172a', 1.2);
+    drawDeformedLine(roofX - roofL / 2 + 1, roofW / 2 - 0.6, roofX + roofL / 2 - 1, roofW / 2 - 0.6, '#0f172a', 1.2);
+  }
 
   // Front Windshield
   const fWsX1 = roofX + roofL / 2;
@@ -1206,11 +1780,34 @@ export function renderVehicleGreenhouseAndBodyPanels(vCtx: VehicleRenderContext)
   drawDeformedRect(fWsX1, -cabinW / 2 + 1, fWsX2 - fWsX1, cabinW - 2, 'rgba(56, 189, 248, 0.16)');
   drawDeformedLine(fWsX1 + 1, -cabinW / 2 + 2, fWsX2 - 1, cabinW / 2 - 2, 'rgba(255, 255, 255, 0.25)', 1.2);
 
+  // Single center wiper for Tavria (iconic design detail)
+  if (type === 'liftback_tavria') {
+    drawDeformedLine(fWsX1 + 0.5, 0, fWsX2 - 0.5, 2.0, '#0f172a', 1.2);
+  }
+
   // Rear Windshield
   const rWsX1 = cabinX - cabinL / 2;
   const rWsX2 = roofX - roofL / 2;
   drawDeformedRect(rWsX1, -cabinW / 2 + 1, rWsX2 - rWsX1, cabinW - 2, 'rgba(56, 189, 248, 0.14)');
   drawDeformedLine(rWsX1 + 1, -cabinW / 4, rWsX2 - 1, cabinW / 4, 'rgba(255, 255, 255, 0.15)', 1.2);
+
+  // Rear spoiler & wiper for Samara and Tavria
+  if (type === 'hatch_samara') {
+    // Aerodynamic black roof spoiler on rear tailgate
+    drawDeformedRect(roofX - roofL / 2 - 1.2, -roofW / 2, 1.4, roofW, '#1e293b');
+    // Rear wiper
+    drawDeformedLine(rWsX1 + 0.5, 0, rWsX2 - 0.5, -2.5, '#0f172a', 0.8);
+    // Side body protection rub-strips
+    drawDeformedLine(cabinX - cabinL * 0.4, -halfW + 0.4, cabinX + cabinL * 0.4, -halfW + 0.4, '#0f172a', 1.0);
+    drawDeformedLine(cabinX - cabinL * 0.4, halfW - 0.4, cabinX + cabinL * 0.4, halfW - 0.4, '#0f172a', 1.0);
+  } else if (type === 'liftback_tavria') {
+    // Small black rubber lip spoiler on liftback edge
+    drawDeformedRect(rWsX1 - 1.0, -roofW * 0.44, 1.0, roofW * 0.88, '#1e293b');
+  } else if (type === 'compact_matiz') {
+    // Rear wiper and high brake light
+    drawDeformedLine(rWsX1 + 0.5, 0, rWsX2 - 0.5, 1.8, '#0f172a', 0.8);
+    drawDeformedRect(roofX - roofL / 2 - 0.4, -1.2, 0.8, 2.4, '#ef4444');
+  }
 
   // Side Windows
   const sideWinH = (cabinW - roofW) / 2 - 0.5;

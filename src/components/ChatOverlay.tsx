@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { MessageSquare, Send, X, Minimize2, Maximize2 } from 'lucide-react';
+import { MessageSquare, Send, X, Minimize2, Maximize2, Zap } from 'lucide-react';
 import { onlineManager, ChatMessage } from '../onlineSystem';
 import { sound } from '../audio';
 
@@ -109,8 +109,9 @@ export const ChatOverlay: React.FC<ChatOverlayProps> = ({
 
                 if (isSys) {
                   return (
-                    <div key={msg.id} className="text-[11px] text-amber-400/90 italic bg-amber-950/20 px-2 py-1 rounded border border-amber-500/20">
-                      ⚡ {msg.text}
+                    <div key={msg.id} className="text-[11px] text-amber-400/90 italic bg-amber-950/20 px-2 py-1 rounded border border-amber-500/20 flex items-center gap-1">
+                      <Zap className="w-3 h-3 text-amber-400 shrink-0" />
+                      <span>{msg.text}</span>
                     </div>
                   );
                 }

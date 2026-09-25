@@ -964,31 +964,204 @@ export function drawLeftoverItem(ctx: CanvasRenderingContext2D, itemId: string):
       return true;
     }
 
-    // Empty opened first aid box (matches medkit)
+    // Empty opened first aid box (matches CIS medkit)
     case 'medkit_empty': {
-      drawShadow(ctx, 9, 3.2, 7.8, 0.25);
+      drawShadow(ctx, 9.5, 3.5, 8, 0.28);
 
-      // Red case open
-      ctx.fillStyle = '#dc2626';
-      ctx.beginPath();
-      ctx.roundRect(-8.5, -5, 17, 12.5, 2);
-      ctx.fill();
-
-      // White empty compartments inside
-      ctx.fillStyle = '#f1f5f9';
-      ctx.beginPath();
-      ctx.roundRect(-7.5, -3.8, 15, 10, 1.5);
-      ctx.fill();
-
-      // Internal compartment divider grid
-      ctx.fillStyle = '#cbd5e1';
-      ctx.fillRect(0, -3.8, 1, 10);
-      ctx.fillRect(-7.5, 1.2, 15, 1);
-
-      // Handle
+      // Black polymer case opened
       ctx.fillStyle = '#18181b';
       ctx.beginPath();
-      ctx.roundRect(-3.5, -7.5, 7, 2.5, 1);
+      ctx.roundRect(-9, -5, 18, 13, 2);
+      ctx.fill();
+      ctx.strokeStyle = '#3f3f46';
+      ctx.lineWidth = 0.8;
+      ctx.stroke();
+
+      // Top carrying handle
+      ctx.fillStyle = '#18181b';
+      ctx.beginPath();
+      ctx.roundRect(-4.5, -8, 9, 3, 1.2);
+      ctx.fill();
+      ctx.fillStyle = '#09090b';
+      ctx.fillRect(-3, -7, 6, 1.8);
+
+      // Open red latches hanging loose
+      ctx.fillStyle = '#dc2626';
+      ctx.fillRect(-6.5, -6.5, 2.2, 2);
+      ctx.fillRect(4.3, -6.5, 2.2, 2);
+
+      // Inside empty molded plastic tray
+      ctx.fillStyle = '#27272a';
+      ctx.beginPath();
+      ctx.roundRect(-7.8, -3.8, 15.6, 10.5, 1.2);
+      ctx.fill();
+
+      // Empty internal compartment divider ribs
+      ctx.strokeStyle = '#3f3f46';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(-1, -3.8); ctx.lineTo(-1, 6.7);
+      ctx.moveTo(-7.8, 1.5); ctx.lineTo(7.8, 1.5);
+      ctx.stroke();
+
+      // Crumpled empty paper instruction leaflet in corner
+      ctx.fillStyle = '#f1f5f9';
+      ctx.beginPath();
+      ctx.moveTo(-6.5, 2.5);
+      ctx.lineTo(-2, 3);
+      ctx.lineTo(-2.5, 5.8);
+      ctx.lineTo(-7, 5.2);
+      ctx.closePath();
+      ctx.fill();
+      ctx.fillStyle = '#16a34a'; // Green first aid text line on leaflet
+      ctx.fillRect(-6, 3.5, 3.2, 0.6);
+      return true;
+    }
+
+    // Empty 4L motor oil canister (matches motor_oil)
+    case 'motor_oil_empty': {
+      drawShadow(ctx, 8.5, 3.2, 8, 0.25);
+
+      // Premium gunmetal / dark titanium 4L plastic canister body
+      ctx.fillStyle = '#1e293b';
+      ctx.beginPath();
+      ctx.roundRect(-7, -4.5, 14, 12, 2.2);
+      ctx.fill();
+
+      // Top carrying handle arch
+      ctx.fillStyle = '#1e293b';
+      ctx.beginPath();
+      ctx.roundRect(-4, -8, 10.5, 3.8, 1.5);
+      ctx.fill();
+      // Handle grip opening
+      ctx.fillStyle = '#0f172a';
+      ctx.beginPath();
+      ctx.roundRect(-2.5, -6.5, 7.5, 2.2, 1);
+      ctx.fill();
+
+      // Unsealed / missing cap: open threaded spout at top left
+      ctx.fillStyle = '#334155';
+      ctx.fillRect(-6.5, -7.5, 2.8, 3.5);
+      // Threads
+      ctx.strokeStyle = '#64748b';
+      ctx.lineWidth = 0.6;
+      ctx.beginPath();
+      ctx.moveTo(-6.8, -6.8); ctx.lineTo(-3.4, -6.8);
+      ctx.moveTo(-6.8, -5.5); ctx.lineTo(-3.4, -5.5);
+      ctx.stroke();
+      // Broken red security ring on neck
+      ctx.fillStyle = '#dc2626';
+      ctx.fillRect(-6.8, -4.8, 3.4, 0.8);
+      // Dark open aperture
+      ctx.fillStyle = '#020617';
+      ctx.beginPath();
+      ctx.ellipse(-5.1, -7.5, 1.4, 0.6, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Translucent level sight-strip (EMPTY - dry with amber droplet at bottom)
+      ctx.fillStyle = '#334155';
+      ctx.fillRect(4.8, -3.5, 1.4, 10);
+      // Gradation ticks
+      ctx.fillStyle = '#64748b';
+      ctx.fillRect(4.5, -2, 0.8, 0.5);
+      ctx.fillRect(4.5, 0.5, 0.8, 0.5);
+      ctx.fillRect(4.5, 3, 0.8, 0.5);
+      // Tiny amber oil droplet settled at bottom
+      ctx.fillStyle = '#d97706';
+      ctx.fillRect(4.8, 5.2, 1.4, 1.2);
+
+      // Label: dark carbon badge with 5W-40 and oil smudges
+      ctx.fillStyle = '#0f172a';
+      ctx.beginPath();
+      ctx.roundRect(-5.5, -2.5, 9, 8.5, 1);
+      ctx.fill();
+      ctx.strokeStyle = '#f59e0b';
+      ctx.lineWidth = 0.6;
+      ctx.stroke();
+
+      // Viscosity badge
+      ctx.fillStyle = '#94a3b8';
+      ctx.font = 'bold 2px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('5W-40', -1, 1.5);
+
+      // Dripping dark used oil streaks running down from spout
+      ctx.fillStyle = '#020617';
+      ctx.beginPath();
+      ctx.moveTo(-5.5, -4.5);
+      ctx.lineTo(-4.2, 0);
+      ctx.lineTo(-4.8, 2);
+      ctx.lineTo(-5.8, -1);
+      ctx.closePath();
+      ctx.fill();
+      return true;
+    }
+
+    // Empty 5L antifreeze coolant canister (matches antifreeze)
+    case 'antifreeze_empty': {
+      drawShadow(ctx, 8.5, 3.2, 8, 0.25);
+
+      // Translucent milky HDPE white/light-grey canister body
+      ctx.fillStyle = '#cbd5e1';
+      ctx.beginPath();
+      ctx.roundRect(-7, -4.5, 14, 12, 2.2);
+      ctx.fill();
+
+      // Top ergonomic handle
+      ctx.fillStyle = '#cbd5e1';
+      ctx.beginPath();
+      ctx.roundRect(-4.5, -8, 11, 3.8, 1.5);
+      ctx.fill();
+      ctx.fillStyle = '#0f172a';
+      ctx.beginPath();
+      ctx.roundRect(-3, -6.5, 8, 2.2, 1);
+      ctx.fill();
+
+      // Open angled spout neck (red cap removed)
+      ctx.fillStyle = '#94a3b8';
+      ctx.fillRect(-6.5, -7.5, 2.8, 3.5);
+      // Open mouth aperture
+      ctx.fillStyle = '#020617';
+      ctx.beginPath();
+      ctx.ellipse(-5.1, -7.5, 1.4, 0.6, 0, 0, Math.PI * 2);
+      ctx.fill();
+      // Torn red tamper seal ring
+      ctx.fillStyle = '#e11d48';
+      ctx.fillRect(-6.8, -4.8, 3.4, 0.8);
+
+      // Empty volume gauge on side
+      ctx.fillStyle = '#94a3b8';
+      ctx.fillRect(4.8, -3.5, 1.4, 10);
+      // Dried pink G12+ residue at the bottom of the gauge
+      ctx.fillStyle = '#fda4af';
+      ctx.fillRect(4.8, 5.2, 1.4, 1.2);
+
+      // G12+ Frost Label
+      ctx.fillStyle = '#f8fafc';
+      ctx.beginPath();
+      ctx.roundRect(-5.5, -2.5, 9, 8.5, 1);
+      ctx.fill();
+      ctx.strokeStyle = '#e11d48';
+      ctx.lineWidth = 0.7;
+      ctx.stroke();
+
+      // Crimson G12+ header banner
+      ctx.fillStyle = '#e11d48';
+      ctx.fillRect(-5.5, -2.5, 9, 2.5);
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 1.8px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('G12+', -1, -0.7);
+
+      // -40°C subzero text
+      ctx.fillStyle = '#0284c7';
+      ctx.font = 'bold 1.6px sans-serif';
+      ctx.fillText('-40°C', -1, 3.5);
+
+      // Dried magenta droplet streak at pouring spout
+      ctx.fillStyle = '#be123c';
+      ctx.beginPath();
+      ctx.arc(-5.1, -3.8, 0.7, 0, Math.PI * 2);
       ctx.fill();
       return true;
     }

@@ -274,7 +274,7 @@ export class ScreenEffectsSystem {
         ctx.fillStyle = co > 70 ? 'rgba(239, 68, 68, 0.95)' : 'rgba(251, 146, 60, 0.9)';
         ctx.font = 'bold 14px system-ui, sans-serif';
         ctx.textAlign = 'center';
-        ctx.fillText(`☣️ ОСТРОЕ УДУШЬЕ: УГАРНЫЙ ГАЗ В КРОВИ (${Math.round(co)}% CO)! СРОЧНО НА СВЕЖИЙ ВОЗДУХ!`, width / 2, 105);
+        ctx.fillText(`ОСТРОЕ УДУШЬЕ: УГАРНЫЙ ГАЗ В КРОВИ (${Math.round(co)}% CO)! СРОЧНО НА СВЕЖИЙ ВОЗДУХ!`, width / 2, 105);
       }
 
       ctx.restore();
@@ -339,7 +339,7 @@ export class ScreenEffectsSystem {
         ctx.fillStyle = 'rgba(254, 215, 170, 0.95)';
         ctx.font = 'bold 15px system-ui, sans-serif';
         ctx.textAlign = 'center';
-        ctx.fillText(`🔥 ЖАР В САЛОНЕ (${Math.round(cabinTemp)}°C)! НАРАСТАЮЩАЯ БОЛЬ И ОЖОГИ!`, width / 2, 75);
+        ctx.fillText(`ЖАР В САЛОНЕ (${Math.round(cabinTemp)}°C)! НАРАСТАЮЩАЯ БОЛЬ И ОЖОГИ!`, width / 2, 75);
       } else {
         // TIER 3: > 120°C (and > 150°C severe) - Roaring inferno, blistering edges
         const heatNorm = Math.min(1.0, (cabinTemp - 120) / 100);
@@ -365,8 +365,8 @@ export class ScreenEffectsSystem {
         ctx.font = 'bold 16px system-ui, sans-serif';
         ctx.textAlign = 'center';
         const msg = cabinTemp >= 150 
-          ? `🚨 СМЕРТЕЛЬНЫЙ ОГОНЬ В САЛОНЕ (${Math.round(cabinTemp)}°C)! СРОЧНО ВЫБИРАЙТЕСЬ!`
-          : `🚨 САЛОН В ОГНЕ (${Math.round(cabinTemp)}°C)! СРОЧНО ПОКИНЬТЕ АВТОМОБИЛЬ!`;
+          ? `СМЕРТЕЛЬНЫЙ ОГОНЬ В САЛОНЕ (${Math.round(cabinTemp)}°C)! СРОЧНО ВЫБИРАЙТЕСЬ!`
+          : `САЛОН В ОГНЕ (${Math.round(cabinTemp)}°C)! СРОЧНО ПОКИНЬТЕ АВТОМОБИЛЬ!`;
         ctx.fillText(msg, width / 2, 75);
       }
 

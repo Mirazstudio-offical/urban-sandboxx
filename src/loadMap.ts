@@ -1,6 +1,9 @@
 import { GameWorld } from './types';
-import { CAR_CONFIGS, ensureVehicleDamage } from './vehicleHelpers';
+import { CAR_CONFIGS, ensureVehicleDamage, ensureVehicleEngineState } from './vehicleHelpers';
 import { ensureWorldGasStation } from './gasStationSystem';
+import { ensureWorldGuardrails } from './guardrails';
+import { createRealEstateAgencyLayout } from './buildingInteriors';
+import { initializeCityApartmentsFromWorld } from './propertySystem';
 import defaultMapData from '../public/map.json';
 
 export interface LoadedMapResult {
@@ -21,6 +24,12 @@ export function sanitizeWorldVehicles(world: GameWorld): GameWorld {
       veh.mass = cfg.mass;
       veh.wheelBase = cfg.wheelBase;
       veh.damage = ensureVehicleDamage(veh);
+      veh.engineState = ensureVehicleEngineState(veh);
+
+      // Modern/expensive cars have rearview camera by default
+      if (['sports', 'sedan_luxury', 'suv_luxury', 'supercar', 'coupe_gt', 'wagon_modern', 'wagon_allroad'].includes(veh.type)) {
+        veh.hasRearviewCamera = true;
+      }
 
       // Guarantee non-NaN numeric fields
       veh.steerAngle = typeof veh.steerAngle === 'number' && Number.isFinite(veh.steerAngle) ? veh.steerAngle : 0;
@@ -37,6 +46,7 @@ export function sanitizeWorldVehicles(world: GameWorld): GameWorld {
       const isSpecial = (v: any) => 
         v.id.includes('starter') || 
         v.id.includes('showcase') || 
+        v.id.includes('gsk_') || 
         v.isPlayerControlled || 
         v.id.includes('mup_') || 
         v.type.startsWith('tractor_') || 
@@ -55,6 +65,7 @@ export function sanitizeWorldVehicles(world: GameWorld): GameWorld {
 
 export function normalizeWorld(parsed: any): GameWorld {
   let pedestrians = Array.isArray(parsed.pedestrians) ? parsed.pedestrians : [];
+  pedestrians = pedestrians.filter((p: any) => p && typeof p.x === 'number' && p.x > 0 && typeof p.y === 'number' && p.y > 0);
   
   // Cap pedestrians at 20 max to improve performance, but shuffle them first so they 
   // aren't clustered in the same location (since map.json often saves them in sequential order)
@@ -62,10 +73,52 @@ export function normalizeWorld(parsed: any): GameWorld {
     pedestrians = [...pedestrians].sort(() => Math.random() - 0.5).slice(0, 20);
   }
 
+  const rawRoads = Array.isArray(parsed.roads) ? parsed.roads : [];
+  const normalizedRoads = rawRoads.map((road: any) => {
+    if (road.curvePoints && Array.isArray(road.curvePoints) && road.curvePoints.length > 0) {
+      const firstPt = road.curvePoints[0];
+      const lastPt = road.curvePoints[road.curvePoints.length - 1];
+      if (road.x1 === undefined) road.x1 = firstPt.x;
+      if (road.y1 === undefined) road.y1 = firstPt.y;
+      if (road.x2 === undefined) road.x2 = lastPt.x;
+      if (road.y2 === undefined) road.y2 = lastPt.y;
+      if (!road.direction) road.direction = 'curved';
+      if (road.lanes === undefined) road.lanes = 1;
+      if (road.isDirt === undefined) road.isDirt = false;
+      if (road.isGravel === undefined) road.isGravel = false;
+
+      let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+      for (let i = 0; i < road.curvePoints.length; i++) {
+        const pt = road.curvePoints[i];
+        if (pt.x < minX) minX = pt.x;
+        if (pt.x > maxX) maxX = pt.x;
+        if (pt.y < minY) minY = pt.y;
+        if (pt.y > maxY) maxY = pt.y;
+      }
+      road._minX = minX;
+      road._maxX = maxX;
+      road._minY = minY;
+      road._maxY = maxY;
+    } else {
+      if (road.x1 !== undefined && road.x2 !== undefined && road.y1 !== undefined && road.y2 !== undefined) {
+        if (!road.direction) {
+          if (Math.abs(road.y2 - road.y1) < 10) road.direction = 'horizontal';
+          else if (Math.abs(road.x2 - road.x1) < 10) road.direction = 'vertical';
+          else road.direction = 'diagonal';
+        }
+        road._minX = Math.min(road.x1, road.x2);
+        road._maxX = Math.max(road.x1, road.x2);
+        road._minY = Math.min(road.y1, road.y2);
+        road._maxY = Math.max(road.y1, road.y2);
+      }
+    }
+    return road;
+  });
+
   const world: GameWorld = {
     width: typeof parsed.width === 'number' ? parsed.width : 8000,
     height: typeof parsed.height === 'number' ? parsed.height : 8000,
-    roads: Array.isArray(parsed.roads) ? parsed.roads : [],
+    roads: normalizedRoads,
     intersections: Array.isArray(parsed.intersections) ? parsed.intersections : [],
     roundabouts: Array.isArray(parsed.roundabouts) ? parsed.roundabouts : [],
     sidewalks: Array.isArray(parsed.sidewalks) ? parsed.sidewalks : [],
@@ -84,11 +137,79 @@ export function normalizeWorld(parsed: any): GameWorld {
     particles: Array.isArray(parsed.particles) ? parsed.particles : [],
     weather: parsed.weather || 'clear',
     pedestrianPaths: Array.isArray(parsed.pedestrianPaths) ? parsed.pedestrianPaths : [],
+    guardrails: Array.isArray(parsed.guardrails) ? parsed.guardrails : [],
+    gasPumps: Array.isArray(parsed.gasPumps) ? parsed.gasPumps : [],
+    groundItems: Array.isArray(parsed.groundItems) ? parsed.groundItems : [],
+    railwayTracks: Array.isArray(parsed.railwayTracks) ? parsed.railwayTracks : [],
+    railwayPlatforms: Array.isArray(parsed.railwayPlatforms) ? parsed.railwayPlatforms : [],
+    rollingStock: Array.isArray(parsed.rollingStock) ? parsed.rollingStock : [],
+    railwaySignals: Array.isArray(parsed.railwaySignals) ? parsed.railwaySignals : [],
+    trainSchedules: Array.isArray(parsed.trainSchedules) ? parsed.trainSchedules : [],
   };
 
   ensureWorldGasStation(world);
+  ensureRealEstateAgencyBuilding(world);
   ensureTrailers(world);
+  ensureWorldGuardrails(world);
+  initializeCityApartmentsFromWorld(world);
   return world;
+}
+
+export function ensureRealEstateAgencyBuilding(world: GameWorld): void {
+  if (!world.buildings) world.buildings = [];
+
+  let bld = world.buildings.find(b => b.id === 'bld_real_estate_agency_main' || b.type === 'real_estate_agency');
+  const agencyX = 4920;
+  const agencyY = 4440;
+  const agencyW = 220;
+  const agencyH = 140;
+
+  if (!bld) {
+    bld = {
+      id: 'bld_real_estate_agency_main',
+      nameRu: 'Агентство Недвижимости «ГлавНедвижимость» (Росреестр & Недвижимость)',
+      type: 'real_estate_agency',
+      x: agencyX,
+      y: agencyY,
+      width: agencyW,
+      height: agencyH,
+      floorsCount: 3,
+      color: '#0f172a',
+      roofColor: '#1e293b',
+      accentColor: '#eab308',
+      entrances: [
+        { side: 'south', offsetRatio: 0.5, number: 1, hasCanopyLight: true }
+      ],
+      roofDetails: [
+        { type: 'ac', rx: 0.2, ry: 0.3, rw: 20, rh: 15 },
+        { type: 'antenna', rx: 0.8, ry: 0.2, rw: 10, rh: 10 }
+      ],
+      windows: [],
+      interiors: {
+        0: createRealEstateAgencyLayout()
+      }
+    };
+    world.buildings.push(bld);
+  } else {
+    bld.type = 'real_estate_agency';
+    bld.nameRu = 'Агентство Недвижимости «ГлавНедвижимость» (Росреестр & Недвижимость)';
+    bld.floorsCount = 3;
+    bld.x = agencyX;
+    bld.y = agencyY;
+    bld.width = agencyW;
+    bld.height = agencyH;
+    bld.color = '#0f172a';
+    bld.roofColor = '#1e293b';
+    bld.accentColor = '#eab308';
+    bld.entrances = [
+      { side: 'south', offsetRatio: 0.5, number: 1, hasCanopyLight: true }
+    ];
+    if (!bld.interiors || !bld.interiors[0]) {
+      bld.interiors = {
+        0: createRealEstateAgencyLayout()
+      };
+    }
+  }
 }
 
 export function ensureTrailers(world: GameWorld): void {
@@ -128,6 +249,31 @@ export function ensureTrailers(world: GameWorld): void {
       damage: ensureVehicleDamage({ type: 'trailer_barrel' } as any)
     };
     world.vehicles.push(barrelTrailer);
+  }
+
+  const hasVacuum = world.vehicles.some(v => v.type === 'trailer_vacuum');
+  if (!hasVacuum) {
+    const vacuumTrailer: any = {
+      id: `mup_trailer_vacuum_${Date.now()}`,
+      type: 'trailer_vacuum',
+      x: spawnX + 180,
+      y: spawnY - 80,
+      angle: 0,
+      speed: 0,
+      vx: 0,
+      vy: 0,
+      steerAngle: 0,
+      length: 45,
+      width: 22,
+      mass: 1480,
+      wheelBase: 18,
+      color: '#2563eb', // Rich industrial blue
+      isParked: true,
+      isTrailer: true,
+      couplerOffset: 34,
+      damage: ensureVehicleDamage({ type: 'trailer_vacuum' } as any)
+    };
+    world.vehicles.push(vacuumTrailer);
   }
 
   const hasFlatbed = world.vehicles.some(v => v.type === 'trailer_flatbed_2axle');

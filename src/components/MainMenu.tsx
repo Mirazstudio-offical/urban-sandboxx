@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { hasCustomSavedMap, clearCustomMapStorage } from '../loadMap';
 import { 
   Play, 
   Settings, 
@@ -26,7 +27,16 @@ import {
   Home,
   Truck,
   Globe,
-  Radio
+  Radio,
+  User,
+  Map,
+  Navigation,
+  Briefcase,
+  Activity,
+  Heart,
+  Zap,
+  Power,
+  Wrench
 } from 'lucide-react';
 
 export interface SaveSlot {
@@ -74,6 +84,7 @@ interface MainMenuProps {
   onUpdateSettings: (newSettings: any) => void;
   spawnLocations?: SpawnLocation[];
   onOpenOnline?: () => void;
+  onOpenProfile?: () => void;
 }
 
 type MenuScreen = 'main' | 'saves' | 'new_game' | 'settings' | 'about';
@@ -83,38 +94,38 @@ const DEFAULT_SPAWNS: SpawnLocation[] = [
   {
     id: 'central_park',
     name: 'Central Park Promenade',
-    nameRu: 'Центральный Парк (Фонтан & Сквер)',
+    nameRu: 'Городской Сквер (Фонтан & Сквер)',
     x: 4400,
     y: 2800,
-    description: 'Парковый фонтан, пешеходные аллеи, грузовики и прогулочные зоны',
-    icon: <TreePine className="w-5 h-5 text-emerald-400" />
+    description: 'Парковый фонтан, аллеи со скамейками, гуляющие горожане и тихие проезды.',
+    icon: <TreePine className="w-5 h-5 text-emerald-500" />
   },
   {
     id: 'downtown_plaza',
     name: 'Downtown Commercial Plaza',
-    nameRu: 'Центр Города (Парковка & Небоскребы)',
+    nameRu: 'Площадь Администрации (Центр)',
     x: 4350,
     y: 2000,
-    description: 'Оживленный перекрёсток проспектов, деловой центр и автопарковка',
-    icon: <Building2 className="w-5 h-5 text-sky-400" />
+    description: 'Официальный центр города, парковка перед госучреждениями и проспекты.',
+    icon: <Building2 className="w-5 h-5 text-slate-500" />
   },
   {
     id: 'residential_courtyard',
     name: 'Residential Courtyard',
-    nameRu: 'Жилой Двор (Многоэтажки & Парковка)',
+    nameRu: 'Жилой Двор (Хрущёвки & Гаражи)',
     x: 2750,
     y: 2750,
-    description: 'Уютный спальный район, подъезды зданий и дворовые проезды',
-    icon: <Home className="w-5 h-5 text-amber-400" />
+    description: 'Панельные пятиэтажки, детская площадка из детства, гаражные боксы и берёзы.',
+    icon: <Home className="w-5 h-5 text-amber-600" />
   },
   {
     id: 'industrial_district',
     name: 'Freight Logistics Yard',
-    nameRu: 'Промзона (Грузовая база & Склады)',
-    x: 6400,
-    y: 1000,
-    description: 'Логистический хаб, ангары, склады и стоянка спецтранспорта',
-    icon: <Truck className="w-5 h-5 text-stone-400" />
+    nameRu: 'Промзона (Автобаза №4 & Склады)',
+    x: 6530,
+    y: 1030,
+    description: 'Грузовые ангары, авторемонтные ямы, стоянка спецтехники и плиты перекрытий.',
+    icon: <Truck className="w-5 h-5 text-stone-500" />
   }
 ];
 
@@ -129,12 +140,14 @@ export const MainMenu: React.FC<MainMenuProps> = ({
   settings,
   onUpdateSettings,
   spawnLocations = DEFAULT_SPAWNS,
-  onOpenOnline
+  onOpenOnline,
+  onOpenProfile
 }) => {
   const [screen, setScreen] = useState<MenuScreen>('main');
   const [settingsTab, setSettingsTab] = useState<SettingsTab>('graphics');
   const [newGameName, setNewGameName] = useState<string>('Водитель #1');
   const [selectedSpawnId, setSelectedSpawnId] = useState<string>(spawnLocations[0]?.id || 'central_park');
+  const [hoveredOption, setHoveredOption] = useState<string>('resume');
 
   const hasSaves = saves.length > 0;
   const latestSave = hasSaves ? saves[0] : null;
@@ -145,522 +158,910 @@ export const MainMenu: React.FC<MainMenuProps> = ({
     onNewGame(finalName, selectedSpawnId);
   };
 
-  return (
-    <div className="absolute inset-0 z-50 flex items-center justify-center bg-[#070b14]/95 backdrop-blur-xl text-slate-100 font-sans select-none animate-in fade-in duration-300">
-      
-      {/* Background ambient lighting */}
-      <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[700px] h-[400px] bg-sky-600/10 rounded-full blur-3xl pointer-events-none" />
-      <div className="absolute bottom-10 right-10 w-[500px] h-[300px] bg-emerald-600/5 rounded-full blur-3xl pointer-events-none" />
+  // Safe helper to grab spawn descriptions for preview
+  const getSpawnDetails = (id: string) => {
+    const s = spawnLocations.find(l => l.id === id);
+    if (!s) return { title: 'Неизвестный пункт', desc: '' };
+    
+    // Cozy CIS-themed flavor text
+    let flavor = '';
+    if (id === 'central_park') {
+      flavor = 'Старый городской сквер с неработающим по осени фонтаном, чугунные решётки забора и укатанный асфальт прогулочных зон. Здесь спокойно и пахнет влажными листьями.';
+    } else if (id === 'downtown_plaza') {
+      flavor = 'Площадь перед Домом Культуры и местной администрацией. Редкие ели у фасада, серый бетонный плац, припаркованные дежурные машины и широкие проспекты.';
+    } else if (id === 'residential_courtyard') {
+      flavor = 'Классический спальный район с хрущёвками. Металлические сушилки для белья, покосившиеся турники во дворе, вековые тополя и железные гаражи у забора.';
+    } else if (id === 'industrial_district') {
+      flavor = 'Автобаза на окраине города. Запах отработанного масла, бетонный забор с колючей проволокой, массивные ремонтные ангары и тяжёлый грузовой спецтранспорт.';
+    } else if (id === 'steppe_village') {
+      flavor = 'Глухая деревня Полыновка. Деревянные избы с печным отоплением, заброшенный сельский клуб, колодец-журавль у дороги и бескрайнее поле сухой полыни.';
+    } else if (id === 'pine_forest') {
+      flavor = 'Песчаные лесные дороги заповедника. Сосновый бор, вечно зелёные кроны, глухое лесное озерцо и ухабы, идеальные для старого внедорожника.';
+    } else if (id === 'car_dealership_loc') {
+      flavor = 'Региональный дилерский центр «Автоэкспорт». Новенькие машины на гравийной площадке, офис продаж с запахом дешёвого кофе и ключи с заводским клеймом.';
+    } else {
+      flavor = s.description;
+    }
 
-      {/* Container Card */}
-      <div className="relative z-10 w-full max-w-2xl bg-[#0f1523]/95 border border-slate-800/80 rounded-3xl shadow-2xl flex flex-col p-8 md:p-10 transition-all overflow-hidden">
+    return {
+      title: s.nameRu,
+      desc: flavor
+    };
+  };
+
+  const activeSpawnInfo = getSpawnDetails(selectedSpawnId);
+
+  return (
+    <div className="absolute inset-0 z-50 flex items-center justify-center bg-stone-950/95 text-stone-200 font-sans select-none overflow-y-auto p-4 md:p-6">
+      
+      {/* Background ambient lighting - soft, foggy, warm amber dashboard color instead of neon blue */}
+      <div className="absolute top-1/3 left-1/3 w-[600px] h-[400px] bg-amber-900/5 rounded-full blur-[120px] pointer-events-none" />
+      <div className="absolute bottom-1/4 right-1/4 w-[400px] h-[300px] bg-emerald-950/5 rounded-full blur-[100px] pointer-events-none" />
+
+      {/* Container Card - Compact, rounded-xl (no extreme border radius) */}
+      <div className="relative z-10 w-full max-w-4xl bg-stone-900 border border-stone-800 rounded-xl shadow-2xl flex flex-col overflow-hidden max-h-[95vh] md:max-h-[85vh]">
         
-        {/* Top Header Badge & Title */}
-        <div className="text-center mb-8">
-          <div className="inline-flex items-center gap-2 px-3.5 py-1.5 bg-slate-900/90 border border-slate-700/60 rounded-full text-slate-300 text-xs font-bold tracking-widest uppercase mb-3 shadow-inner">
-            <Compass className="w-3.5 h-3.5 text-emerald-400 animate-pulse" /> Открытый мир • Автомобильная физика • Выживание
+        {/* TOP ATMOSPHERIC HEADER */}
+        <div className="border-b border-stone-800 bg-stone-900/60 p-5 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+          <div className="flex flex-col">
+            <div className="inline-flex items-center gap-2 text-[10px] font-mono font-bold tracking-widest text-emerald-500/90 uppercase">
+              <Compass className="w-3.5 h-3.5 text-emerald-600" />
+              <span>СТЕПНЫЕ ДОРОГИ • СНГ СИМУЛЯТОР</span>
+            </div>
+            <h1 className="text-2xl md:text-3xl font-bold tracking-tight text-stone-100 font-mono mt-1">
+              СТЕПНОЙ ТРАКТ <span className="text-amber-500 text-lg font-bold">2D</span>
+            </h1>
           </div>
-          <h1 className="text-4xl md:text-5xl font-black tracking-tight text-white mb-2">
-            METROPOLIS <span className="text-emerald-400">2D</span>
-          </h1>
-          <p className="text-xs text-slate-400 max-w-md mx-auto leading-relaxed">
-            Реалистичный симулятор городской жизни, логистики и вождения в бесшовном открытом мегаполисе.
-          </p>
+          
+          <div className="hidden md:block text-right">
+            <p className="text-[10px] font-mono text-stone-500 leading-relaxed italic">
+              "Шорох шин по асфальту, тусклый свет приборов<br />и запах сухой полыни в открытом окне..."
+            </p>
+          </div>
         </div>
 
-        {/* SCREEN: MAIN MENU */}
-        {screen === 'main' && (
-          <div className="flex flex-col gap-3.5 animate-in fade-in duration-200">
-            
-            {/* Quick Resume Button if saves exist */}
-            {hasSaves && latestSave && (
-              <button
-                onClick={() => onLoadSave(latestSave.id)}
-                className="group relative flex items-center justify-between p-5 bg-gradient-to-r from-emerald-950/60 to-slate-900 hover:from-emerald-900/70 hover:to-slate-850 border border-emerald-500/40 hover:border-emerald-400/70 rounded-2xl transition-all active:scale-[0.99] cursor-pointer shadow-xl shadow-emerald-950/20"
-              >
-                <div className="flex items-center gap-4">
-                  <div className="p-3.5 bg-emerald-500/20 border border-emerald-500/30 rounded-xl text-emerald-400 group-hover:scale-110 transition-transform">
-                    <Play className="w-6 h-6 fill-emerald-400" />
-                  </div>
-                  <div className="text-left">
-                    <div className="text-sm font-bold text-emerald-400 uppercase tracking-wider">Продолжить сессию</div>
-                    <div className="text-base font-extrabold text-white mt-0.5">{latestSave.name}</div>
-                    <div className="text-[11px] text-slate-400 mt-0.5 flex items-center gap-2">
-                      <span>{latestSave.date}</span>
-                      <span>•</span>
-                      <span>{latestSave.isInVehicle ? '🚗 В авто' : '🚶 Пешком'}</span>
-                    </div>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-xs font-mono font-bold px-2 py-1 bg-emerald-500/10 border border-emerald-500/30 rounded-lg text-emerald-300">Быстрый запуск</span>
-                  <ChevronRight className="w-5 h-5 text-emerald-400 group-hover:translate-x-1 transition-transform" />
-                </div>
-              </button>
-            )}
-
-            {/* New Game Button */}
-            <button
-              onClick={() => setScreen('new_game')}
-              className="group flex items-center justify-between p-4.5 bg-slate-900 hover:bg-slate-850 border border-slate-800 hover:border-slate-700 rounded-2xl transition-all active:scale-[0.99] cursor-pointer shadow-lg"
-            >
-              <div className="flex items-center gap-4">
-                <div className="p-3 bg-sky-500/10 border border-sky-500/20 rounded-xl text-sky-400 group-hover:scale-110 transition-transform">
-                  <PlusCircle className="w-5 h-5" />
-                </div>
-                <div className="text-left">
-                  <div className="text-base font-extrabold text-white">Новая игра</div>
-                  <div className="text-xs text-slate-400">Выбор точки спавна и создание новой сессии</div>
-                </div>
-              </div>
-              <ChevronRight className="w-5 h-5 text-slate-500 group-hover:text-white transition-colors" />
-            </button>
-
-            {/* Saves Manager Button */}
-            <button
-              onClick={() => setScreen('saves')}
-              className="group flex items-center justify-between p-4.5 bg-slate-900 hover:bg-slate-850 border border-slate-800 hover:border-slate-700 rounded-2xl transition-all active:scale-[0.99] cursor-pointer shadow-lg"
-            >
-              <div className="flex items-center gap-4">
-                <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl text-amber-400 group-hover:scale-110 transition-transform">
-                  <HardDrive className="w-5 h-5" />
-                </div>
-                <div className="text-left">
-                  <div className="text-base font-extrabold text-white">Сохранения ({saves.length})</div>
-                  <div className="text-xs text-slate-400">Управление слотами и архивом сессий</div>
-                </div>
-              </div>
-              <ChevronRight className="w-5 h-5 text-slate-500 group-hover:text-white transition-colors" />
-            </button>
-
-            {/* Settings Button */}
-            <button
-              onClick={() => setScreen('settings')}
-              className="group flex items-center justify-between p-4.5 bg-slate-900 hover:bg-slate-850 border border-slate-800 hover:border-slate-700 rounded-2xl transition-all active:scale-[0.99] cursor-pointer shadow-lg"
-            >
-              <div className="flex items-center gap-4">
-                <div className="p-3 bg-indigo-500/10 border border-indigo-500/20 rounded-xl text-indigo-400 group-hover:scale-110 transition-transform">
-                  <Settings className="w-5 h-5" />
-                </div>
-                <div className="text-left">
-                  <div className="text-base font-extrabold text-white">Настройки</div>
-                  <div className="text-xs text-slate-400">Графика, звук, управление и игровой мир</div>
-                </div>
-              </div>
-              <ChevronRight className="w-5 h-5 text-slate-500 group-hover:text-white transition-colors" />
-            </button>
-
-            {/* Online P2P Button */}
-            {onOpenOnline && (
-              <button
-                onClick={onOpenOnline}
-                className="group flex items-center justify-between p-4.5 bg-slate-900 hover:bg-slate-850 border border-sky-500/30 hover:border-sky-500/60 rounded-2xl transition-all active:scale-[0.99] cursor-pointer shadow-lg"
-              >
-                <div className="flex items-center gap-4">
-                  <div className="p-3 bg-sky-500/10 border border-sky-500/30 rounded-xl text-sky-400 group-hover:scale-110 transition-transform">
-                    <Radio className="w-5 h-5 animate-pulse" />
-                  </div>
-                  <div className="text-left">
-                    <div className="flex items-center gap-2">
-                      <span className="text-base font-extrabold text-white">Онлайн режим</span>
-                      <span className="px-1.5 py-0.2 bg-sky-500/20 text-sky-300 border border-sky-500/40 text-[10px] font-bold rounded">P2P СЕТЬ</span>
-                    </div>
-                    <div className="text-xs text-slate-400">Создание комнат, чат и синхронизация игроков</div>
-                  </div>
-                </div>
-                <ChevronRight className="w-5 h-5 text-sky-400 group-hover:translate-x-1 transition-transform" />
-              </button>
-            )}
-
-            {/* About / Info Button */}
-            <button
-              onClick={() => setScreen('about')}
-              className="group flex items-center justify-between p-3.5 bg-slate-900/60 hover:bg-slate-900 border border-slate-800/60 rounded-2xl transition-all cursor-pointer"
-            >
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-purple-500/10 border border-purple-500/20 rounded-lg text-purple-400">
-                  <Info className="w-4 h-4" />
-                </div>
-                <div className="text-left">
-                  <div className="text-xs font-bold text-slate-300">Об игре и возможностях</div>
-                </div>
-              </div>
-              <ChevronRight className="w-4 h-4 text-slate-600 group-hover:text-slate-400 transition-colors" />
-            </button>
-
-          </div>
-        )}
-
-        {/* SCREEN: SAVES LIST */}
-        {screen === 'saves' && (
-          <div className="flex flex-col gap-4 animate-in slide-in-from-right-4 duration-150">
-            <div className="flex items-center justify-between mb-1">
-              <button
-                onClick={() => setScreen('main')}
-                className="flex items-center gap-1.5 text-xs font-bold text-slate-400 hover:text-white transition-colors cursor-pointer"
-              >
-                <ArrowLeft className="w-4 h-4" /> Назад в меню
-              </button>
-              <h2 className="text-sm font-extrabold uppercase tracking-wider text-slate-200">
-                Сохраненные сессии ({saves.length})
-              </h2>
-            </div>
-
-            <div className="flex flex-col gap-2.5 max-h-[310px] overflow-y-auto pr-1">
-              {saves.length === 0 ? (
-                <div className="text-center py-12 text-slate-500 text-xs italic bg-slate-950/40 border border-slate-800/80 rounded-2xl p-6">
-                  Нет сохраненных сессий. Нажмите «Новая игра», чтобы начать исследование мегаполиса.
-                </div>
-              ) : (
-                saves.map((save) => (
-                  <div 
-                    key={save.id}
-                    className="group bg-slate-900 hover:bg-slate-850 border border-slate-800 hover:border-slate-700 rounded-2xl p-4 flex items-center justify-between gap-4 transition-all"
+        {/* SCREEN MODULES */}
+        <div className="flex-1 overflow-y-auto p-5 md:p-6 min-h-0">
+          
+          {/* SCREEN: MAIN MENU */}
+          {screen === 'main' && (
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 h-full items-stretch">
+              
+              {/* LEFT COLUMN: LIST OF OPTIONS (Touch target rich, mobile vertical list) */}
+              <div className="lg:col-span-5 flex flex-col gap-2.5">
+                
+                {/* 1. Resume / Continue session */}
+                {hasSaves && latestSave ? (
+                  <button
+                    onClick={() => onLoadSave(latestSave.id)}
+                    onMouseEnter={() => setHoveredOption('resume')}
+                    className="w-full min-h-[52px] px-4 py-3 bg-stone-800/80 hover:bg-stone-800 border border-emerald-900/50 hover:border-emerald-700/60 text-stone-100 rounded-xl text-left transition-all active:scale-[0.98] flex items-center justify-between cursor-pointer group"
                   >
-                    <div className="flex flex-col gap-1 overflow-hidden">
-                      <div className="font-extrabold text-sm text-white truncate flex items-center gap-2">
-                        <span>{save.name}</span>
-                        <span className="text-[10px] font-mono px-1.5 py-0.5 bg-slate-800 rounded text-slate-400">ID: {save.id.slice(-6)}</span>
+                    <div className="flex items-center gap-3">
+                      <Play className="w-4 h-4 text-emerald-500 fill-emerald-500/20" />
+                      <div>
+                        <span className="block text-xs font-bold uppercase tracking-wider text-emerald-400">Продолжить поездку</span>
+                        <span className="block text-[10px] text-stone-400 font-mono truncate max-w-[180px]">{latestSave.name}</span>
                       </div>
-                      <div className="text-[11px] text-slate-400 flex items-center gap-3">
-                        <span className="flex items-center gap-1">
-                          <HardDrive className="w-3.5 h-3.5 text-sky-400" /> {save.date}
-                        </span>
-                        <span>•</span>
-                        <span className="text-slate-300">{save.isInVehicle ? '🚗 В транспорте' : '🚶 Пешком'}</span>
-                        <span>•</span>
-                        <span className="text-emerald-400 font-mono">⏱️ {save.timeHour?.toFixed(1) || '10.0'}ч</span>
+                    </div>
+                    <ChevronRight className="w-4 h-4 text-stone-500 group-hover:translate-x-1 transition-transform" />
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => setScreen('new_game')}
+                    onMouseEnter={() => setHoveredOption('new_game')}
+                    className="w-full min-h-[52px] px-4 py-3 bg-emerald-950/25 hover:bg-emerald-950/45 border border-emerald-900/50 hover:border-emerald-700/60 text-emerald-200 rounded-xl text-left transition-all active:scale-[0.98] flex items-center justify-between cursor-pointer group"
+                  >
+                    <div className="flex items-center gap-3">
+                      <PlusCircle className="w-4 h-4 text-emerald-400" />
+                      <div>
+                        <span className="block text-xs font-bold uppercase tracking-wider text-emerald-300">Начать новый выезд</span>
+                        <span className="block text-[10px] text-emerald-500/70 font-mono">Выбрать точку старта</span>
+                      </div>
+                    </div>
+                    <ChevronRight className="w-4 h-4 text-emerald-400 group-hover:translate-x-1 transition-transform" />
+                  </button>
+                )}
+
+                {/* 2. New Game Setup */}
+                <button
+                  onClick={() => setScreen('new_game')}
+                  onMouseEnter={() => setHoveredOption('new_game')}
+                  className="w-full min-h-[52px] px-4 py-3.5 bg-stone-900 hover:bg-stone-850 border border-stone-800 hover:border-stone-750 text-stone-300 hover:text-white rounded-xl text-left transition-all active:scale-[0.98] flex items-center justify-between cursor-pointer group"
+                >
+                  <div className="flex items-center gap-3">
+                    <PlusCircle className="w-4 h-4 text-amber-500" />
+                    <span className="text-xs font-bold uppercase tracking-wider">Новый выезд</span>
+                  </div>
+                  <ChevronRight className="w-4 h-4 text-stone-500 group-hover:translate-x-1 transition-transform" />
+                </button>
+
+                {/* 3. Saves Archive */}
+                <button
+                  onClick={() => setScreen('saves')}
+                  onMouseEnter={() => setHoveredOption('saves')}
+                  className="w-full min-h-[52px] px-4 py-3.5 bg-stone-900 hover:bg-stone-850 border border-stone-800 hover:border-stone-750 text-stone-300 hover:text-white rounded-xl text-left transition-all active:scale-[0.98] flex items-center justify-between cursor-pointer group"
+                >
+                  <div className="flex items-center gap-3">
+                    <HardDrive className="w-4 h-4 text-stone-400" />
+                    <span className="text-xs font-bold uppercase tracking-wider">Архив поездок ({saves.length})</span>
+                  </div>
+                  <ChevronRight className="w-4 h-4 text-stone-500 group-hover:translate-x-1 transition-transform" />
+                </button>
+
+                {/* 4. Driver Profile (Cloud DB Sync) */}
+                {onOpenProfile && (
+                  <button
+                    onClick={onOpenProfile}
+                    onMouseEnter={() => setHoveredOption('profile')}
+                    className="w-full min-h-[52px] px-4 py-3.5 bg-stone-900 hover:bg-stone-850 border border-stone-800 hover:border-stone-750 text-stone-300 hover:text-white rounded-xl text-left transition-all active:scale-[0.98] flex items-center justify-between cursor-pointer group"
+                  >
+                    <div className="flex items-center gap-3">
+                      <User className="w-4 h-4 text-stone-400" />
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-bold uppercase tracking-wider">Личное дело</span>
+                        <span className="text-[8px] font-bold tracking-widest bg-stone-800 border border-stone-700 text-stone-400 px-1 py-0.5 rounded">ОБЛАКО</span>
+                      </div>
+                    </div>
+                    <ChevronRight className="w-4 h-4 text-stone-500 group-hover:translate-x-1 transition-transform" />
+                  </button>
+                )}
+
+                {/* 5. Online P2P multiplayer */}
+                {onOpenOnline && (
+                  <button
+                    onClick={onOpenOnline}
+                    onMouseEnter={() => setHoveredOption('online')}
+                    className="w-full min-h-[52px] px-4 py-3.5 bg-stone-900 hover:bg-stone-850 border border-stone-800 hover:border-stone-750 text-stone-300 hover:text-white rounded-xl text-left transition-all active:scale-[0.98] flex items-center justify-between cursor-pointer group"
+                  >
+                    <div className="flex items-center gap-3">
+                      <Radio className="w-4 h-4 text-stone-400" />
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-bold uppercase tracking-wider">Диспетчерская P2P</span>
+                        <span className="text-[8px] font-bold tracking-widest bg-emerald-950/50 border border-emerald-900 text-emerald-400 px-1 py-0.5 rounded">ОНЛАЙН</span>
+                      </div>
+                    </div>
+                    <ChevronRight className="w-4 h-4 text-stone-500 group-hover:translate-x-1 transition-transform" />
+                  </button>
+                )}
+
+                {/* 6. Dashboard Settings */}
+                <button
+                  onClick={() => setScreen('settings')}
+                  onMouseEnter={() => setHoveredOption('settings')}
+                  className="w-full min-h-[52px] px-4 py-3.5 bg-stone-900 hover:bg-stone-850 border border-stone-800 hover:border-stone-750 text-stone-300 hover:text-white rounded-xl text-left transition-all active:scale-[0.98] flex items-center justify-between cursor-pointer group"
+                >
+                  <div className="flex items-center gap-3">
+                    <Settings className="w-4 h-4 text-stone-400" />
+                    <span className="text-xs font-bold uppercase tracking-wider">Настройка кабины</span>
+                  </div>
+                  <ChevronRight className="w-4 h-4 text-stone-500 group-hover:translate-x-1 transition-transform" />
+                </button>
+
+                {/* 7. Guides & Handbook */}
+                <button
+                  onClick={() => setScreen('about')}
+                  onMouseEnter={() => setHoveredOption('about')}
+                  className="w-full min-h-[52px] px-4 py-3.5 bg-stone-900 hover:bg-stone-850 border border-stone-800 hover:border-stone-750 text-stone-300 hover:text-white rounded-xl text-left transition-all active:scale-[0.98] flex items-center justify-between cursor-pointer group"
+                >
+                  <div className="flex items-center gap-3">
+                    <Info className="w-4 h-4 text-stone-400" />
+                    <span className="text-xs font-bold uppercase tracking-wider">Справочник</span>
+                  </div>
+                  <ChevronRight className="w-4 h-4 text-stone-500 group-hover:translate-x-1 transition-transform" />
+                </button>
+
+                {/* 8. Custom Map Cache Detector and Sync button */}
+                {hasCustomSavedMap() && (
+                  <div className="mt-4 p-3.5 bg-amber-950/20 border border-amber-800/40 rounded-xl flex flex-col gap-2">
+                    <div className="flex gap-2 animate-pulse">
+                      <Settings className="w-5 h-5 text-amber-500 shrink-0" />
+                      <div>
+                        <h4 className="text-[11px] font-bold text-amber-300 uppercase tracking-wider">Редакторская карта активна</h4>
+                        <p className="text-[10px] text-stone-400 mt-0.5 leading-relaxed">
+                          Обнаружена сохраненная карта из Редактора. Встроенные новые обновления (включая реалистичную Ж/Д сеть, пути и вокзал) скрыты вашей локальной картой.
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => {
+                        clearCustomMapStorage();
+                        window.location.reload();
+                      }}
+                      className="w-full py-2 bg-amber-500/10 hover:bg-amber-500/25 active:scale-[0.98] border border-amber-500/30 text-amber-300 rounded-lg text-[10px] font-bold uppercase tracking-wider text-center transition-all cursor-pointer"
+                    >
+                      Сбросить изменения редактора и загрузить оригинал
+                    </button>
+                  </div>
+                )}
+
+              </div>
+
+              {/* RIGHT COLUMN: DYNAMIC DOSSIER PREVIEW (Hidden on mobile, beautiful on desktop) */}
+              <div className="hidden lg:col-span-7 bg-stone-950/40 border border-stone-800/80 rounded-xl p-5 flex flex-col justify-between relative overflow-hidden">
+                <div className="absolute top-0 right-0 w-48 h-48 bg-stone-800/5 rounded-full blur-3xl pointer-events-none" />
+                
+                {/* 1. Preview Resume/Active Save (The "Waybill" card) */}
+                {hoveredOption === 'resume' && (
+                  <div className="flex flex-col h-full justify-between animate-in fade-in duration-150">
+                    <div>
+                      <div className="flex items-center justify-between border-b border-stone-800 pb-3 mb-4">
+                        <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-stone-400">Путевой лист №СНГ-992</span>
+                        <span className="px-2 py-0.5 bg-emerald-950/40 border border-emerald-900 text-emerald-400 rounded text-[8px] font-mono font-bold uppercase">Активен</span>
+                      </div>
+
+                      {hasSaves && latestSave ? (
+                        <div className="space-y-4">
+                          <h3 className="text-base font-extrabold text-stone-100 uppercase tracking-tight">{latestSave.name}</h3>
+                          
+                          <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-1">
+                              <span className="text-[9px] font-mono text-stone-500 uppercase block">Время отбытия</span>
+                              <span className="text-xs text-stone-200 font-mono font-bold block">{latestSave.date}</span>
+                            </div>
+                            <div className="space-y-1">
+                              <span className="text-[9px] font-mono text-stone-500 uppercase block">Пункт нахождения</span>
+                              <span className="text-xs text-stone-200 font-bold block">{latestSave.streetName || 'Степной тракт'}</span>
+                            </div>
+                            <div className="space-y-1">
+                              <span className="text-[9px] font-mono text-stone-500 uppercase block">Статус движения</span>
+                              <span className="text-xs text-stone-200 font-bold flex items-center gap-1">
+                                {latestSave.isInVehicle ? <Car className="w-3.5 h-3.5 text-stone-400 inline" /> : <User className="w-3.5 h-3.5 text-stone-400 inline" />}
+                                {latestSave.isInVehicle ? 'За рулём авто' : 'Пеший маршрут'}
+                              </span>
+                            </div>
+                            <div className="space-y-1">
+                              <span className="text-[9px] font-mono text-stone-500 uppercase block">Моточасы в пути</span>
+                              <span className="text-xs text-amber-500 font-mono font-bold block">{latestSave.timeHour?.toFixed(1) || '10.0'} ч.</span>
+                            </div>
+                          </div>
+
+                          {/* Quick Vitals of the driver */}
+                          {latestSave.needs && (
+                            <div className="pt-3 border-t border-stone-800/60 mt-3 space-y-2">
+                              <span className="text-[9px] font-mono text-stone-500 uppercase block">Физическое состояние водителя</span>
+                              <div className="grid grid-cols-2 gap-2">
+                                <div className="bg-stone-900/60 border border-stone-800 p-2 rounded-xl flex items-center justify-between">
+                                  <span className="text-[9px] font-mono text-stone-400 flex items-center gap-1"><Heart className="w-2.5 h-2.5 text-rose-500" /> HP</span>
+                                  <span className="text-xs font-mono font-bold text-stone-200">{Math.round(latestSave.needs.health || 100)}%</span>
+                                </div>
+                                <div className="bg-stone-900/60 border border-stone-800 p-2 rounded-xl flex items-center justify-between">
+                                  <span className="text-[9px] font-mono text-stone-400 flex items-center gap-1"><Zap className="w-2.5 h-2.5 text-amber-500" /> Энергия</span>
+                                  <span className="text-xs font-mono font-bold text-stone-200">{Math.round(latestSave.needs.energy || 100)}%</span>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <div className="space-y-3">
+                          <h3 className="text-base font-extrabold text-stone-100 uppercase tracking-tight">Первый выезд на трассу</h3>
+                          <p className="text-xs text-stone-400 leading-relaxed">
+                            У вас нет активных сохранённых поездок. Начните новую сессию вождения, выбрав точку появления в СНГ.
+                          </p>
+                          <ul className="text-xs text-stone-500 space-y-1 list-disc pl-4 mt-2">
+                            <li>Перевозка грузов и обслуживание авто</li>
+                            <li>Исследование жилых дворов и хрущёвок</li>
+                            <li>Реалистичная физика управления и сцепления</li>
+                          </ul>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="pt-4 border-t border-stone-800 flex items-center justify-between mt-auto">
+                      <span className="text-[10px] font-mono text-stone-500">Министерство транспорта • Симулятор</span>
+                      {hasSaves && latestSave && (
+                        <button
+                          onClick={() => onLoadSave(latestSave.id)}
+                          className="px-4 py-2 bg-emerald-700 hover:bg-emerald-600 active:scale-[0.98] text-white font-mono text-xs uppercase font-extrabold rounded-xl transition-all cursor-pointer flex items-center gap-1.5 shadow"
+                        >
+                          <Play className="w-3.5 h-3.5 fill-white" /> В рейс
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* 2. New Game Preview */}
+                {hoveredOption === 'new_game' && (
+                  <div className="flex flex-col h-full justify-between animate-in fade-in duration-150">
+                    <div>
+                      <div className="flex items-center justify-between border-b border-stone-800 pb-3 mb-4">
+                        <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-stone-400">Карта маршрута</span>
+                        <span className="px-2 py-0.5 bg-amber-950/40 border border-amber-900 text-amber-500 rounded text-[8px] font-mono font-bold uppercase">Создание</span>
+                      </div>
+
+                      <div className="space-y-4">
+                        <h3 className="text-base font-extrabold text-stone-100 uppercase tracking-tight">Новое назначение</h3>
+                        <p className="text-xs text-stone-400 leading-relaxed">
+                          Позволяет настроить путевой лист с уникальным именем водителя и заступить на смену в выбранной точке города.
+                        </p>
+                        <div className="bg-stone-900/60 border border-stone-800 p-3 rounded-xl space-y-1.5">
+                          <span className="text-[9px] font-mono text-amber-500 uppercase block font-bold">Выбранный пункт старта</span>
+                          <span className="text-xs text-stone-200 font-bold block">{activeSpawnInfo.title}</span>
+                          <p className="text-[11px] text-stone-400 leading-relaxed">{activeSpawnInfo.desc}</p>
+                        </div>
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-2 shrink-0">
+                    <div className="pt-4 border-t border-stone-800 flex items-center justify-between mt-auto">
+                      <span className="text-[10px] font-mono text-stone-500">Маршрутная ведомость</span>
                       <button
-                        onClick={() => onLoadSave(save.id)}
-                        className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-extrabold text-xs shadow-lg shadow-emerald-600/20 transition-all cursor-pointer flex items-center gap-1.5"
+                        onClick={() => setScreen('new_game')}
+                        className="px-4 py-2 bg-amber-600 hover:bg-amber-500 active:scale-[0.98] text-white font-mono text-xs uppercase font-extrabold rounded-xl transition-all cursor-pointer flex items-center gap-1.5 shadow"
                       >
-                        <Play className="w-3.5 h-3.5 fill-white" /> Загрузить
-                      </button>
-
-                      <button
-                        onClick={() => onDeleteSave(save.id)}
-                        className="p-2.5 bg-slate-800 hover:bg-rose-950/60 text-slate-400 hover:text-rose-400 border border-slate-700 hover:border-rose-500/30 rounded-xl transition-all cursor-pointer"
-                        title="Удалить сохранение"
-                      >
-                        <Trash2 className="w-4 h-4" />
+                        <PlusCircle className="w-3.5 h-3.5" /> Настроить
                       </button>
                     </div>
                   </div>
-                ))
-              )}
-            </div>
-          </div>
-        )}
+                )}
 
-        {/* SCREEN: NEW GAME SETUP & SPAWN SELECTION */}
-        {screen === 'new_game' && (
-          <form onSubmit={handleStartNewGameSubmit} className="flex flex-col gap-4 animate-in slide-in-from-right-4 duration-150">
-            <div className="flex items-center justify-between mb-1">
+                {/* 3. Saves Preview */}
+                {hoveredOption === 'saves' && (
+                  <div className="flex flex-col h-full justify-between animate-in fade-in duration-150">
+                    <div>
+                      <div className="flex items-center justify-between border-b border-stone-800 pb-3 mb-4">
+                        <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-stone-400">Архивные ведомости</span>
+                        <span className="px-2 py-0.5 bg-stone-800 border border-stone-700 text-stone-400 rounded text-[8px] font-mono font-bold uppercase">База</span>
+                      </div>
+
+                      <div className="space-y-4">
+                        <h3 className="text-base font-extrabold text-stone-100 uppercase tracking-tight">База данных рейсов</h3>
+                        <p className="text-xs text-stone-400 leading-relaxed">
+                          Здесь хранится вся хроника ваших поездок. Вы можете вернуться к любому сохранённому состоянию симулятора, чтобы продолжить рейс с того же места.
+                        </p>
+                        <div className="p-3.5 bg-stone-900/40 rounded-xl border border-stone-850 flex items-center justify-between">
+                          <span className="text-[11px] font-mono text-stone-400">Всего записей на диске:</span>
+                          <span className="text-sm font-mono font-bold text-stone-200">{saves.length}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="pt-4 border-t border-stone-800 flex items-center justify-between mt-auto font-mono text-[10px] text-stone-500">
+                      <span>Формат файла: JSON (Local)</span>
+                      <span>Доступно для загрузки</span>
+                    </div>
+                  </div>
+                )}
+
+                {/* 4. Profile Preview */}
+                {hoveredOption === 'profile' && (
+                  <div className="flex flex-col h-full justify-between animate-in fade-in duration-150">
+                    <div>
+                      <div className="flex items-center justify-between border-b border-stone-800 pb-3 mb-4">
+                        <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-stone-400">Личное дело водителя</span>
+                        <span className="px-2 py-0.5 bg-stone-800 border border-stone-700 text-stone-400 rounded text-[8px] font-mono font-bold uppercase">Профиль</span>
+                      </div>
+
+                      <div className="space-y-4">
+                        <h3 className="text-base font-extrabold text-stone-100 uppercase tracking-tight">Облачная синхронизация</h3>
+                        <p className="text-xs text-stone-400 leading-relaxed">
+                          Свяжите симулятор с вашей учётной записью Firestore, чтобы хранить сейвы в надёжном облаке и не беспокоиться за сохранность данных при очистке кэша браузера.
+                        </p>
+                        <div className="p-3 bg-emerald-950/15 border border-emerald-900/30 text-emerald-300 rounded-xl text-[11px] leading-relaxed flex items-start gap-2">
+                          <Shield className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+                          <span>Рекомендуется для долгосрочной игры и накопления игровой статистики по пройденному километражу.</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="pt-4 border-t border-stone-800 text-[10px] text-stone-500 font-mono">
+                      <span>Идентификатор профиля • СНГ-ID</span>
+                    </div>
+                  </div>
+                )}
+
+                {/* 5. Online Preview */}
+                {hoveredOption === 'online' && (
+                  <div className="flex flex-col h-full justify-between animate-in fade-in duration-150">
+                    <div>
+                      <div className="flex items-center justify-between border-b border-stone-800 pb-3 mb-4">
+                        <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-stone-400">Диспетчерский узел связи</span>
+                        <span className="px-2 py-0.5 bg-emerald-950/40 border border-emerald-900 text-emerald-400 rounded text-[8px] font-mono font-bold uppercase">P2P</span>
+                      </div>
+
+                      <div className="space-y-4">
+                        <h3 className="text-base font-extrabold text-stone-100 uppercase tracking-tight">Совместное вождение</h3>
+                        <p className="text-xs text-stone-400 leading-relaxed">
+                          Создайте диспетчерскую комнату или подключитесь по коду лобби к сессии другого водителя. Координируйте движение, общайтесь в рации и делитесь дорожным трафиком в реальном времени.
+                        </p>
+                        <div className="p-3 bg-stone-900/60 border border-stone-800 rounded-xl flex items-center justify-between">
+                          <span className="text-[11px] text-stone-400">Режим соединения:</span>
+                          <span className="text-xs font-mono font-bold text-emerald-400">Peer-to-Peer</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="pt-4 border-t border-stone-800 text-[10px] text-stone-500 font-mono">
+                      <span>Стабильность зависит от пинга хоста</span>
+                    </div>
+                  </div>
+                )}
+
+                {/* 6. Settings Preview */}
+                {hoveredOption === 'settings' && (
+                  <div className="flex flex-col h-full justify-between animate-in fade-in duration-150">
+                    <div>
+                      <div className="flex items-center justify-between border-b border-stone-800 pb-3 mb-4">
+                        <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-stone-400">Технический формуляр</span>
+                        <span className="px-2 py-0.5 bg-stone-800 border border-stone-700 text-stone-400 rounded text-[8px] font-mono font-bold uppercase">Кабина</span>
+                      </div>
+
+                      <div className="space-y-4">
+                        <h3 className="text-base font-extrabold text-stone-100 uppercase tracking-tight">Регулировка оборудования</h3>
+                        <p className="text-xs text-stone-400 leading-relaxed">
+                          Калибровка органов управления симулятором, аудиосистемы двигателя и параметров рендеринга для комфортного вождения.
+                        </p>
+
+                        <div className="grid grid-cols-2 gap-2 mt-2">
+                          <div className="bg-stone-900/50 p-2.5 rounded-xl border border-stone-850 text-xs text-stone-300">
+                            <span className="text-stone-500 block text-[9px] font-mono uppercase">Графика</span>
+                            <span className="font-bold text-stone-200 block mt-0.5">{settings.fpsLimit === 0 ? 'Без лимита' : `${settings.fpsLimit} FPS`}</span>
+                          </div>
+                          <div className="bg-stone-900/50 p-2.5 rounded-xl border border-stone-850 text-xs text-stone-300">
+                            <span className="text-stone-500 block text-[9px] font-mono uppercase">Звуковое вещание</span>
+                            <span className="font-bold text-stone-200 block mt-0.5">{isMuted ? 'Отключено' : 'Стереоактивно'}</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="pt-4 border-t border-stone-800 text-[10px] text-stone-500 font-mono">
+                      <span>Настройки сохраняются автоматически</span>
+                    </div>
+                  </div>
+                )}
+
+                {/* 7. About Preview */}
+                {hoveredOption === 'about' && (
+                  <div className="flex flex-col h-full justify-between animate-in fade-in duration-150">
+                    <div>
+                      <div className="flex items-center justify-between border-b border-stone-800 pb-3 mb-4">
+                        <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-stone-400">Бортовой журнал</span>
+                        <span className="px-2 py-0.5 bg-stone-800 border border-stone-700 text-stone-400 rounded text-[8px] font-mono font-bold uppercase">Инфо</span>
+                      </div>
+
+                      <div className="space-y-3">
+                        <h3 className="text-base font-extrabold text-stone-100 uppercase tracking-tight">Общие сведения</h3>
+                        <p className="text-xs text-stone-400 leading-relaxed">
+                          Двухмерная физическая песочница, погружающая в атмосферу провинциальных дорог и городских кварталов СНГ.
+                        </p>
+                        
+                        <div className="space-y-1.5 text-[11px] text-stone-400 mt-2">
+                          <div className="flex items-center gap-1.5"><Check className="w-3.5 h-3.5 text-emerald-500" /> Физика заноса задней оси</div>
+                          <div className="flex items-center gap-1.5"><Check className="w-3.5 h-3.5 text-emerald-500" /> Подъёмные лифты в панельках</div>
+                          <div className="flex items-center gap-1.5"><Check className="w-3.5 h-3.5 text-emerald-500" /> Система травм и утомления</div>
+                          <div className="flex items-center gap-1.5"><Check className="w-3.5 h-3.5 text-emerald-500" /> Рабочая КОМ цистерн и сопла</div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="pt-4 border-t border-stone-800 text-[10px] text-stone-500 font-mono">
+                      <span>Версия симулятора: 1.4 Stable</span>
+                    </div>
+                  </div>
+                )}
+
+              </div>
+
+            </div>
+          )}
+
+          {/* SCREEN: SAVES LIST */}
+          {screen === 'saves' && (
+            <div className="flex flex-col gap-4 animate-in fade-in duration-200">
+              <div className="flex items-center justify-between border-b border-stone-800 pb-3">
+                <button
+                  type="button"
+                  onClick={() => setScreen('main')}
+                  className="min-h-[44px] flex items-center gap-2 text-xs font-bold text-stone-400 hover:text-white transition-colors cursor-pointer"
+                >
+                  <ArrowLeft className="w-4 h-4" /> Назад в меню
+                </button>
+                <h2 className="text-xs font-mono font-bold uppercase tracking-wider text-stone-400">
+                  Архив поездок / Сейвы ({saves.length})
+                </h2>
+              </div>
+
+              <div className="flex flex-col gap-3 max-h-[340px] overflow-y-auto pr-1">
+                {saves.length === 0 ? (
+                  <div className="text-center py-12 text-stone-500 text-xs italic bg-stone-950/40 border border-stone-850 rounded-xl p-6">
+                    Нет зарегистрированных рейсов в архиве. Начните новую игру («Новый выезд»), чтобы сохранить свой прогресс.
+                  </div>
+                ) : (
+                  saves.map((save) => (
+                    <div 
+                      key={save.id}
+                      className="bg-stone-950/50 border border-stone-850 hover:border-stone-800 rounded-xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-all"
+                    >
+                      <div className="flex flex-col gap-1 overflow-hidden">
+                        <div className="font-bold text-sm text-stone-100 truncate flex items-center gap-2">
+                          <span>{save.name}</span>
+                          <span className="text-[9px] font-mono px-1.5 py-0.5 bg-stone-900 rounded border border-stone-800 text-stone-500">ID: {save.id.slice(-6)}</span>
+                        </div>
+                        <div className="text-[11px] text-stone-400 flex flex-wrap items-center gap-x-3 gap-y-1">
+                          <span className="flex items-center gap-1 font-mono">
+                            <HardDrive className="w-3.5 h-3.5 text-stone-500" /> {save.date}
+                          </span>
+                          <span className="text-stone-700 hidden sm:inline">•</span>
+                          <span className="text-stone-300 flex items-center gap-1">
+                            {save.isInVehicle ? <Car className="w-3.5 h-3.5 text-stone-400" /> : <User className="w-3.5 h-3.5 text-stone-400" />}
+                            {save.isInVehicle ? 'В транспорте' : 'Пешком'}
+                          </span>
+                          <span className="text-stone-700 hidden sm:inline">•</span>
+                          <span className="text-amber-500 font-mono font-bold flex items-center gap-1">
+                            <Clock className="w-3.5 h-3.5 text-amber-500" />
+                            {save.timeHour?.toFixed(1) || '10.0'}ч в пути
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2.5 shrink-0 self-end sm:self-auto">
+                        <button
+                          onClick={() => onLoadSave(save.id)}
+                          className="min-h-[44px] px-4 py-2 bg-emerald-700 hover:bg-emerald-600 text-white rounded-xl font-bold font-mono text-xs uppercase tracking-wider transition-all cursor-pointer flex items-center gap-1.5 shadow"
+                        >
+                          <Play className="w-3.5 h-3.5 fill-white" /> ВЫЕХАТЬ
+                        </button>
+
+                        <button
+                          onClick={() => onDeleteSave(save.id)}
+                          className="min-h-[44px] px-3 py-2 bg-stone-900 hover:bg-rose-950/60 text-stone-500 hover:text-rose-400 border border-stone-800 hover:border-rose-900/30 rounded-xl transition-all cursor-pointer"
+                          title="Списать ведомость"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* SCREEN: NEW GAME SETUP */}
+          {screen === 'new_game' && (
+            <form onSubmit={handleStartNewGameSubmit} className="flex flex-col gap-4 animate-in fade-in duration-200">
+              <div className="flex items-center justify-between border-b border-stone-800 pb-3">
+                <button
+                  type="button"
+                  onClick={() => setScreen('main')}
+                  className="min-h-[44px] flex items-center gap-2 text-xs font-bold text-stone-400 hover:text-white transition-colors cursor-pointer"
+                >
+                  <ArrowLeft className="w-4 h-4" /> Назад
+                </button>
+                <h2 className="text-xs font-mono font-bold uppercase tracking-wider text-stone-400">
+                  Путевой лист новой поездки
+                </h2>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-12 gap-5 max-h-[380px] overflow-y-auto pr-1">
+                
+                {/* Driver Name Input Card */}
+                <div className="md:col-span-4 bg-stone-950/40 border border-stone-800 rounded-xl p-4 flex flex-col justify-between">
+                  <div className="space-y-3">
+                    <label className="block text-[10px] font-mono font-bold uppercase tracking-wider text-stone-400">
+                      Имя водителя в ПТС
+                    </label>
+                    <input
+                      type="text"
+                      value={newGameName}
+                      onChange={(e) => setNewGameName(e.target.value)}
+                      maxLength={32}
+                      required
+                      placeholder="Введите ваше имя..."
+                      className="w-full bg-stone-900 border border-stone-800 rounded-xl px-3.5 py-3 text-stone-200 text-xs font-bold focus:outline-none focus:border-stone-700 transition-colors"
+                    />
+                  </div>
+                  
+                  <div className="mt-4 pt-3 border-t border-stone-850 text-[10px] text-stone-500 leading-relaxed italic hidden md:block">
+                    Имя водителя запишется в документы транспортного средства при покупке в автосалоне.
+                  </div>
+                </div>
+
+                {/* Spawn Point Selector Grid */}
+                <div className="md:col-span-8 space-y-3">
+                  <label className="block text-[10px] font-mono font-bold uppercase tracking-wider text-stone-400">
+                    Пункт назначения (Где начать симуляцию)
+                  </label>
+                  
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                    {spawnLocations.map((loc) => {
+                      const isSelected = selectedSpawnId === loc.id;
+                      return (
+                        <div
+                          key={loc.id}
+                          onClick={() => {
+                            setSelectedSpawnId(loc.id);
+                            setHoveredOption('new_game');
+                          }}
+                          className={`p-3 rounded-xl border transition-all cursor-pointer flex items-start gap-3 ${
+                            isSelected 
+                              ? 'bg-amber-950/20 border-amber-550/50 shadow shadow-amber-950/50' 
+                              : 'bg-stone-950/40 hover:bg-stone-900/60 border-stone-800 hover:border-stone-750'
+                          }`}
+                        >
+                          <div className={`p-2 rounded-lg border ${
+                            isSelected ? 'bg-amber-950/60 border-amber-900 text-amber-500' : 'bg-stone-900 border-stone-850 text-stone-400'
+                          }`}>
+                            {loc.icon}
+                          </div>
+                          <div className="flex-1 overflow-hidden">
+                            <div className="text-xs font-bold text-stone-100 flex items-center justify-between">
+                              <span className="truncate">{loc.nameRu}</span>
+                              {isSelected && <span className="w-2 h-2 rounded-full bg-amber-500 shrink-0 ml-1" />}
+                            </div>
+                            <p className="text-[10px] text-stone-400 mt-0.5 leading-relaxed truncate">{loc.description}</p>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+              </div>
+
+              <button
+                type="submit"
+                className="w-full min-h-[50px] py-3.5 bg-emerald-700 hover:bg-emerald-600 active:scale-[0.99] text-white font-mono font-bold text-xs uppercase tracking-widest rounded-xl transition-all flex items-center justify-center gap-2 cursor-pointer shadow-lg"
+              >
+                <Play className="w-4 h-4 fill-white" /> ПОДПИСАТЬ И ВЫЕХАТЬ
+              </button>
+            </form>
+          )}
+
+          {/* SCREEN: SETTINGS */}
+          {screen === 'settings' && (
+            <div className="flex flex-col gap-4 animate-in fade-in duration-200">
+              <div className="flex items-center justify-between border-b border-stone-800 pb-3">
+                <button
+                  type="button"
+                  onClick={() => setScreen('main')}
+                  className="min-h-[44px] flex items-center gap-2 text-xs font-bold text-stone-400 hover:text-white transition-colors cursor-pointer"
+                >
+                  <ArrowLeft className="w-4 h-4" /> Назад
+                </button>
+                <h2 className="text-xs font-mono font-bold uppercase tracking-wider text-stone-400">
+                  Технический формуляр кабины (Настройки)
+                </h2>
+              </div>
+
+              {/* Muted tab navigation */}
+              <div className="grid grid-cols-4 gap-1 bg-stone-950/60 p-1 rounded-xl border border-stone-850">
+                {[
+                  { id: 'graphics', label: 'Вид', icon: Monitor },
+                  { id: 'audio', label: 'Аудио', icon: Volume2 },
+                  { id: 'gameplay', label: 'Игровой Мир', icon: Clock },
+                  { id: 'controls', label: 'Кабины', icon: Gamepad2 },
+                ].map((tab) => {
+                  const Icon = tab.icon;
+                  const isActive = settingsTab === tab.id;
+                  return (
+                    <button
+                      key={tab.id}
+                      type="button"
+                      onClick={() => setSettingsTab(tab.id as SettingsTab)}
+                      className={`flex flex-col sm:flex-row items-center justify-center gap-1.5 py-2.5 px-1 rounded-lg text-[10px] sm:text-xs font-bold transition-all cursor-pointer ${
+                        isActive 
+                          ? 'bg-stone-800 text-stone-100 border border-stone-700/80 shadow' 
+                          : 'text-stone-400 hover:text-stone-200 hover:bg-stone-900'
+                      }`}
+                    >
+                      <Icon className="w-3.5 h-3.5" />
+                      <span className="truncate">{tab.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Tab options wrapper */}
+              <div className="bg-stone-950/30 border border-stone-800 rounded-xl p-4 min-h-[180px] max-h-[220px] overflow-y-auto space-y-4">
+                
+                {/* Graphics */}
+                {settingsTab === 'graphics' && (
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between flex-wrap gap-2">
+                      <div>
+                        <div className="text-xs font-bold text-stone-200">Ограничение FPS</div>
+                        <div className="text-[10px] text-stone-400 mt-0.5">Лимит частоты смены кадров рендеринга</div>
+                      </div>
+                      <div className="flex gap-1">
+                        {[60, 120, 0].map((limit) => (
+                          <button
+                            key={limit}
+                            type="button"
+                            onClick={() => onUpdateSettings({ ...settings, fpsLimit: limit })}
+                            className={`px-3 py-1.5 rounded-lg text-[11px] font-mono font-bold transition-all cursor-pointer ${
+                              settings.fpsLimit === limit 
+                                ? 'bg-stone-800 text-stone-100 border border-stone-700' 
+                                : 'bg-stone-900/60 text-stone-400 hover:bg-stone-850 border border-stone-850'
+                            }`}
+                          >
+                            {limit === 0 ? 'Без лимита' : `${limit} FPS`}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Audio */}
+                {settingsTab === 'audio' && (
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between flex-wrap gap-2">
+                      <div>
+                        <div className="text-xs font-bold text-stone-200">Глобальный звук</div>
+                        <div className="text-[10px] text-stone-400 mt-0.5">Звук мотора автомобиля, сирен и окружения</div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={onToggleMute}
+                        className={`min-h-[44px] px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition-all cursor-pointer ${
+                          isMuted 
+                            ? 'bg-rose-950/30 text-rose-400 border border-rose-900/30' 
+                            : 'bg-stone-850 text-stone-200 hover:text-white border border-stone-750'
+                        }`}
+                      >
+                        {isMuted ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4 text-emerald-500" />}
+                        <span>{isMuted ? 'Звуки выключены' : 'Звуки включены'}</span>
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Gameplay */}
+                {settingsTab === 'gameplay' && (
+                  <div className="space-y-3.5">
+                    <div className="flex items-center justify-between flex-wrap gap-2">
+                      <div>
+                        <div className="text-xs font-bold text-stone-200">Автосохранение</div>
+                        <div className="text-[10px] text-stone-400 mt-0.5">Интервал автоматической записи прогресса рейса</div>
+                      </div>
+                      <div className="flex gap-1">
+                        {[
+                          { val: 25, label: '25 с' },
+                          { val: 60, label: '1 мин' },
+                          { val: 0, label: 'Выкл' }
+                        ].map((opt) => (
+                          <button
+                            key={opt.val}
+                            type="button"
+                            onClick={() => onUpdateSettings({ ...settings, autoSaveInterval: opt.val })}
+                            className={`px-3 py-1.5 rounded-lg text-[11px] font-mono font-bold transition-all cursor-pointer ${
+                              settings.autoSaveInterval === opt.val 
+                                ? 'bg-stone-800 text-stone-100 border border-stone-700' 
+                                : 'bg-stone-900/60 text-stone-400 hover:bg-stone-850 border border-stone-850'
+                            }`}
+                          >
+                            {opt.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-between pt-3 border-t border-stone-850">
+                      <div>
+                        <div className="text-xs font-bold text-stone-200">Время суток</div>
+                        <div className="text-[10px] text-stone-400 mt-0.5">Циклическая смена дня и ночи в симуляторе</div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => onUpdateSettings({ ...settings, timeAutoCycle: !settings.timeAutoCycle })}
+                        className={`w-12 h-6 rounded-full p-1 transition-all cursor-pointer ${
+                          settings.timeAutoCycle ? 'bg-emerald-800 flex justify-end' : 'bg-stone-900 border border-stone-850 flex justify-start'
+                        }`}
+                      >
+                        <div className="w-4 h-4 rounded-full bg-stone-300 shadow" />
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Controls */}
+                {settingsTab === 'controls' && (
+                  <div className="space-y-3">
+                    <div>
+                      <div className="text-xs font-bold text-stone-200">Чувствительность мыши</div>
+                      <div className="flex items-center gap-3 mt-1.5">
+                        <input
+                          type="range"
+                          min="0.5"
+                          max="2.0"
+                          step="0.1"
+                          value={settings.mouseSensitivity}
+                          onChange={(e) => onUpdateSettings({ ...settings, mouseSensitivity: parseFloat(e.target.value) })}
+                          className="w-full accent-stone-400 cursor-pointer h-1.5 bg-stone-900 rounded-lg appearance-none"
+                        />
+                        <span className="text-xs font-mono font-bold text-stone-200 shrink-0">{settings.mouseSensitivity.toFixed(1)}x</span>
+                      </div>
+                    </div>
+                    <div className="text-[10px] text-stone-400 bg-stone-950/50 p-2.5 rounded-lg border border-stone-850 leading-relaxed font-mono">
+                      Управление авто: <span className="text-stone-200 font-bold">WASD / Стрелки</span> • Ручник: <span className="text-stone-200 font-bold">Пробел</span> • Свет фар: <span className="text-stone-200 font-bold">L</span> • Поворотники: <span className="text-stone-200 font-bold">Q/E</span> • Инвентарь: <span className="text-stone-200 font-bold">I</span> • Самоосмотр: <span className="text-stone-200 font-bold">C</span> • Пауза: <span className="text-stone-200 font-bold">ESC</span>.
+                    </div>
+                  </div>
+                )}
+
+              </div>
+
               <button
                 type="button"
                 onClick={() => setScreen('main')}
-                className="flex items-center gap-1.5 text-xs font-bold text-slate-400 hover:text-white transition-colors cursor-pointer"
+                className="w-full min-h-[46px] py-2.5 bg-stone-800 hover:bg-stone-750 text-stone-200 font-bold text-xs uppercase tracking-wider rounded-xl transition-all cursor-pointer border border-stone-700"
               >
-                <ArrowLeft className="w-4 h-4" /> Назад в меню
+                Сохранить параметры
               </button>
-              <h2 className="text-sm font-extrabold uppercase tracking-wider text-slate-200">
-                Новая игра и выбор спавна
-              </h2>
             </div>
+          )}
 
-            <div className="space-y-4 max-h-[330px] overflow-y-auto pr-1">
-              {/* Driver Name Input */}
-              <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-4">
-                <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">
-                  Имя водителя / Персонажа
-                </label>
-                <input
-                  type="text"
-                  value={newGameName}
-                  onChange={(e) => setNewGameName(e.target.value)}
-                  maxLength={32}
-                  required
-                  placeholder="Введите имя..."
-                  className="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-white text-sm font-semibold focus:outline-none focus:border-emerald-500 transition-colors"
-                />
+          {/* SCREEN: ABOUT */}
+          {screen === 'about' && (
+            <div className="flex flex-col gap-4 animate-in fade-in duration-200">
+              <div className="flex items-center justify-between border-b border-stone-800 pb-3">
+                <button
+                  type="button"
+                  onClick={() => setScreen('main')}
+                  className="min-h-[44px] flex items-center gap-2 text-xs font-bold text-stone-400 hover:text-white transition-colors cursor-pointer"
+                >
+                  <ArrowLeft className="w-4 h-4" /> Назад
+                </button>
+                <h2 className="text-xs font-mono font-bold uppercase tracking-wider text-stone-400">
+                  Бортовой журнал симулятора (Справка)
+                </h2>
               </div>
 
-              {/* Spawn Location Selector */}
-              <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-2.5">
-                  Точка появления в городе
-                </label>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                  {spawnLocations.map((loc) => {
-                    const isSelected = selectedSpawnId === loc.id;
-                    return (
-                      <div
-                        key={loc.id}
-                        onClick={() => setSelectedSpawnId(loc.id)}
-                        className={`p-3.5 rounded-2xl border transition-all cursor-pointer flex flex-col justify-between ${
-                          isSelected 
-                            ? 'bg-emerald-950/40 border-emerald-500 shadow-lg shadow-emerald-500/10' 
-                            : 'bg-slate-900/60 hover:bg-slate-900 border-slate-800 hover:border-slate-700'
-                        }`}
-                      >
-                        <div className="flex items-center justify-between mb-2">
-                          <div className="p-2 rounded-xl bg-slate-800/80 border border-slate-700">
-                            {loc.icon}
-                          </div>
-                          {isSelected && (
-                            <span className="w-5 h-5 rounded-full bg-emerald-500 flex items-center justify-center text-slate-950 font-bold text-xs">
-                              ✓
-                            </span>
-                          )}
-                        </div>
-                        <div>
-                          <div className="text-xs font-extrabold text-white">{loc.nameRu}</div>
-                          <div className="text-[11px] text-slate-400 mt-1 leading-relaxed">{loc.description}</div>
-                        </div>
-                      </div>
-                    );
-                  })}
+              <div className="bg-stone-950/40 border border-stone-800 rounded-xl p-4 max-h-[300px] overflow-y-auto space-y-3.5 text-xs text-stone-300 leading-relaxed">
+                <p>
+                  <strong className="text-white">Степной Тракт 2D</strong> — это глубокая транспортно-логистическая песочница, воссоздающая атмосферу автомобильной жизни в глубинке СНГ.
+                </p>
+                
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                  <div className="p-3 bg-stone-900/60 rounded-xl border border-stone-800">
+                    <div className="font-bold text-amber-500 mb-0.5 flex items-center gap-1.5">
+                      <Wrench className="w-3.5 h-3.5" />
+                      <span>Обслуживание ДВС</span>
+                    </div>
+                    <div className="text-[11px] text-stone-400">Вы можете открыть капот, проверить уровень антифриза и масла, заменить фильтры и свечи зажигания при износе.</div>
+                  </div>
+                  <div className="p-3 bg-stone-900/60 rounded-xl border border-stone-800">
+                    <div className="font-bold text-emerald-500 mb-0.5 flex items-center gap-1.5">
+                      <TreePine className="w-3.5 h-3.5" />
+                      <span>Деревня Полыновка</span>
+                    </div>
+                    <div className="text-[11px] text-stone-400">Глубокая атмосферная локация на востоке карты. Жители, печное отопление, колодцы и грунтовые размытые колеи.</div>
+                  </div>
+                  <div className="p-3 bg-stone-900/60 rounded-xl border border-stone-800">
+                    <div className="font-bold text-sky-500 mb-0.5 flex items-center gap-1.5">
+                      <Heart className="w-3.5 h-3.5" />
+                      <span>Первая Помощь</span>
+                    </div>
+                    <div className="text-[11px] text-stone-400">Травмы конечностей лечатся бинтами, шинами и мазями. Открыть меню самоосмотра можно по кнопке в HUD или клавише C.</div>
+                  </div>
+                  <div className="p-3 bg-stone-900/60 rounded-xl border border-stone-800">
+                    <div className="font-bold text-stone-300 mb-0.5 flex items-center gap-1.5">
+                      <Briefcase className="w-3.5 h-3.5" />
+                      <span>Рюкзак и Карманы</span>
+                    </div>
+                    <div className="text-[11px] text-stone-400">Вещи можно раскладывать по карманам куртки, брюк или уложить в рюкзак. Рюкзак можно носить на спине или снять на землю.</div>
+                  </div>
                 </div>
               </div>
-            </div>
 
-            <button
-              type="submit"
-              className="w-full py-4 bg-emerald-600 hover:bg-emerald-500 active:scale-[0.99] text-white font-extrabold text-sm uppercase tracking-wider rounded-2xl shadow-xl shadow-emerald-600/25 transition-all flex items-center justify-center gap-2 cursor-pointer"
-            >
-              <Play className="w-5 h-5 fill-white" /> Запустить симуляцию
-            </button>
-          </form>
-        )}
-
-        {/* SCREEN: SETTINGS */}
-        {screen === 'settings' && (
-          <div className="flex flex-col gap-4 animate-in slide-in-from-right-4 duration-150">
-            <div className="flex items-center justify-between mb-1">
               <button
+                type="button"
                 onClick={() => setScreen('main')}
-                className="flex items-center gap-1.5 text-xs font-bold text-slate-400 hover:text-white transition-colors cursor-pointer"
+                className="w-full min-h-[46px] py-2.5 bg-stone-800 hover:bg-stone-750 text-stone-200 font-bold text-xs uppercase tracking-wider rounded-xl transition-all cursor-pointer border border-stone-700"
               >
-                <ArrowLeft className="w-4 h-4" /> Назад в меню
+                Закрыть справку
               </button>
-              <h2 className="text-sm font-extrabold uppercase tracking-wider text-slate-200">
-                Настройки симулятора
-              </h2>
             </div>
+          )}
 
-            {/* Settings Tabs */}
-            <div className="grid grid-cols-4 gap-1.5 bg-slate-950/80 p-1.5 rounded-2xl border border-slate-800">
-              {[
-                { id: 'graphics', label: 'Графика', icon: Monitor },
-                { id: 'audio', label: 'Звук', icon: Volume2 },
-                { id: 'gameplay', label: 'Игровой мир', icon: Clock },
-                { id: 'controls', label: 'Управление', icon: Gamepad2 },
-              ].map((tab) => {
-                const Icon = tab.icon;
-                const isActive = settingsTab === tab.id;
-                return (
-                  <button
-                    key={tab.id}
-                    onClick={() => setSettingsTab(tab.id as SettingsTab)}
-                    className={`flex flex-col items-center justify-center py-2.5 px-1 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                      isActive 
-                        ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-600/20' 
-                        : 'text-slate-400 hover:text-white hover:bg-slate-900'
-                    }`}
-                  >
-                    <Icon className="w-4 h-4 mb-1" />
-                    <span className="text-[10px] truncate">{tab.label}</span>
-                  </button>
-                );
-              })}
-            </div>
+        </div>
 
-            {/* Tab Contents */}
-            <div className="bg-slate-950/50 border border-slate-800 rounded-2xl p-4 min-h-[220px] max-h-[260px] overflow-y-auto space-y-4">
-              
-              {settingsTab === 'graphics' && (
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <div className="text-xs font-bold text-slate-200">Ограничение FPS</div>
-                      <div className="text-[10px] text-slate-500">Частота обновления кадров рендеринга</div>
-                    </div>
-                    <div className="flex gap-1.5">
-                      {[60, 120, 0].map((limit) => (
-                        <button
-                          key={limit}
-                          onClick={() => onUpdateSettings({ ...settings, fpsLimit: limit })}
-                          className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                            settings.fpsLimit === limit 
-                              ? 'bg-emerald-600 text-white' 
-                              : 'bg-slate-900 text-slate-400 hover:bg-slate-800 border border-slate-800'
-                          }`}
-                        >
-                          {limit === 0 ? 'Без лимита' : `${limit} FPS`}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {settingsTab === 'audio' && (
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <div className="text-xs font-bold text-slate-200">Глобальный звук</div>
-                      <div className="text-[10px] text-slate-500">Моторы, сирены, окружение и интерфейс</div>
-                    </div>
-                    <button
-                      onClick={onToggleMute}
-                      className={`px-4 py-2 rounded-xl text-xs font-extrabold flex items-center gap-2 transition-all cursor-pointer ${
-                        isMuted 
-                          ? 'bg-rose-500/20 text-rose-300 border border-rose-500/30' 
-                          : 'bg-emerald-600 text-white shadow-lg shadow-emerald-600/20'
-                      }`}
-                    >
-                      {isMuted ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
-                      <span>{isMuted ? 'Звук выключен' : 'Звук включен'}</span>
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {settingsTab === 'gameplay' && (
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <div className="text-xs font-bold text-slate-200">Автосохранение</div>
-                      <div className="text-[10px] text-slate-500">Интервал автоматической записи прогресса</div>
-                    </div>
-                    <div className="flex gap-1.5">
-                      {[
-                        { val: 25, label: '25с' },
-                        { val: 60, label: '1 мин' },
-                        { val: 0, label: 'Выкл' }
-                      ].map((opt) => (
-                        <button
-                          key={opt.val}
-                          onClick={() => onUpdateSettings({ ...settings, autoSaveInterval: opt.val })}
-                          className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                            settings.autoSaveInterval === opt.val 
-                              ? 'bg-emerald-600 text-white' 
-                              : 'bg-slate-900 text-slate-400 hover:bg-slate-800 border border-slate-800'
-                          }`}
-                        >
-                          {opt.label}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div className="flex items-center justify-between pt-3 border-t border-slate-800/80">
-                    <div>
-                      <div className="text-xs font-bold text-slate-200">Динамическое время суток</div>
-                      <div className="text-[10px] text-slate-500">Автоматическая смена дня и ночи</div>
-                    </div>
-                    <button
-                      onClick={() => onUpdateSettings({ ...settings, timeAutoCycle: !settings.timeAutoCycle })}
-                      className={`w-12 h-6 rounded-full p-1 transition-all cursor-pointer ${
-                        settings.timeAutoCycle ? 'bg-emerald-600 flex justify-end' : 'bg-slate-900 border border-slate-800 flex justify-start'
-                      }`}
-                    >
-                      <div className="w-4 h-4 rounded-full bg-white shadow" />
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {settingsTab === 'controls' && (
-                <div className="space-y-4">
-                  <div>
-                    <div className="text-xs font-bold text-slate-200 mb-2">Чувствительность мыши</div>
-                    <div className="flex items-center gap-3">
-                      <input
-                        type="range"
-                        min="0.5"
-                        max="2.0"
-                        step="0.1"
-                        value={settings.mouseSensitivity}
-                        onChange={(e) => onUpdateSettings({ ...settings, mouseSensitivity: parseFloat(e.target.value) })}
-                        className="w-full accent-emerald-500 cursor-pointer"
-                      />
-                      <span className="text-xs font-mono font-bold text-emerald-400 shrink-0">{settings.mouseSensitivity.toFixed(1)}x</span>
-                    </div>
-                  </div>
-                  <div className="text-[11px] text-slate-400 bg-slate-900/80 p-3 rounded-xl border border-slate-800 leading-relaxed">
-                    💡 Управление автомобилем: <code className="text-emerald-400">WASD / Стрелки</code>, Ручник: <code className="text-emerald-400">Пробел</code>, Фары: <code className="text-emerald-400">L</code>, Поворотники: <code className="text-emerald-400">Q/E</code>, Инвентарь: <code className="text-emerald-400">I</code>, Пауза: <code className="text-emerald-400">ESC</code>.
-                  </div>
-                </div>
-              )}
-
-            </div>
-
-            <button
-              onClick={() => setScreen('main')}
-              className="w-full py-3.5 bg-slate-900 hover:bg-slate-850 border border-slate-800 text-slate-200 font-bold text-xs uppercase tracking-wider rounded-xl transition-all cursor-pointer"
-            >
-              Сохранить и вернуться
-            </button>
-          </div>
-        )}
-
-        {/* SCREEN: ABOUT */}
-        {screen === 'about' && (
-          <div className="flex flex-col gap-4 animate-in slide-in-from-right-4 duration-150">
-            <div className="flex items-center justify-between mb-1">
-              <button
-                onClick={() => setScreen('main')}
-                className="flex items-center gap-1.5 text-xs font-bold text-slate-400 hover:text-white transition-colors cursor-pointer"
-              >
-                <ArrowLeft className="w-4 h-4" /> Назад в меню
-              </button>
-              <h2 className="text-sm font-extrabold uppercase tracking-wider text-slate-200">
-                О симуляторе
-              </h2>
-            </div>
-
-            <div className="bg-slate-950/60 border border-slate-800 rounded-2xl p-4 max-h-[280px] overflow-y-auto space-y-3 text-xs text-slate-300 leading-relaxed">
-              <p>
-                <strong className="text-white">Metropolis 2D</strong> — продвинутый градостроительный симулятор с физикой колесного транспорта, интеллектуальным трафиком ИИ, многоэтажными интерьерами зданий и системой выживания.
-              </p>
-              <div className="grid grid-cols-2 gap-2 pt-2">
-                <div className="p-2.5 bg-slate-900 rounded-xl border border-slate-800">
-                  <div className="font-bold text-emerald-400 mb-0.5">🚗 Физика Авто</div>
-                  <div className="text-[11px] text-slate-400">Реалистичный занос, сцепление с дорогой, износ деталей, фары и топливная система.</div>
-                </div>
-                <div className="p-2.5 bg-slate-900 rounded-xl border border-slate-800">
-                  <div className="font-bold text-sky-400 mb-0.5">❤️ Выживание</div>
-                  <div className="text-[11px] text-slate-400">Показатели здоровья, голода, жажды, утомления, медицинская система лечения травм.</div>
-                </div>
-                <div className="p-2.5 bg-slate-900 rounded-xl border border-slate-800">
-                  <div className="font-bold text-amber-400 mb-0.5">🏢 Интерьеры</div>
-                  <div className="text-[11px] text-slate-400">Возможность заходить внутрь зданий, магазинов, больниц и подниматься на лифтах.</div>
-                </div>
-                <div className="p-2.5 bg-slate-900 rounded-xl border border-slate-800">
-                  <div className="font-bold text-purple-400 mb-0.5">📦 Инвентарь</div>
-                  <div className="text-[11px] text-slate-400">Интерактивный рюкзак, еда, медикаменты, инструменты и торговые точки 24/7.</div>
-                </div>
-              </div>
-            </div>
-
-            <button
-              onClick={() => setScreen('main')}
-              className="w-full py-3.5 bg-slate-900 hover:bg-slate-850 border border-slate-800 text-slate-200 font-bold text-xs uppercase tracking-wider rounded-xl transition-all cursor-pointer"
-            >
-              Понятно
-            </button>
-          </div>
-        )}
-
-        {/* Footer version */}
-        <div className="mt-6 text-center text-[10px] text-slate-500 border-t border-slate-800/80 pt-4 flex items-center justify-between">
-          <span>Metropolis 2D Simulator</span>
-          <span className="font-mono text-emerald-500">Stable v1.4</span>
+        {/* VERSION FOOTER */}
+        <div className="border-t border-stone-800 bg-stone-900/40 px-5 py-4 text-center text-[10px] text-stone-500 flex items-center justify-between font-mono shrink-0">
+          <span>Сделано с душой • Степной Тракт 2D</span>
+          <span className="text-stone-400 font-bold">Версия 1.4 Stable</span>
         </div>
 
       </div>

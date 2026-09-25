@@ -220,6 +220,13 @@ addVehicle('truck_dump', 6720, 1820, Math.PI);
 // 6. Timber Flatbed Truck at Sawmill
 addVehicle('truck_flatbed', 7450, 280, 0);
 
+// 7. Semi Tractor (Седельный тягач)
+addVehicle('truck_semi', 7350, 1500, Math.PI / 2);
+
+// 8. Semi Trailer (Полуприцеп)
+addVehicle('trailer_semi', 7350, 1400, Math.PI / 2);
+
+
 map.vehicles = [...preservedVehicles, ...newVehicles];
 
 fs.writeFileSync('public/map.json', JSON.stringify(map, null, 2), 'utf8');

@@ -9,8 +9,12 @@ import {
   FluidStainType,
   Vector2D, 
   Vehicle,
-  VehicleDamage 
+  VehicleDamage,
+  VehicleDiffLockState 
 } from './types';
+
+export const SPEED_KMH_TO_PX_S = 4.4444; // 1.6x speedup for realistic screen motion (formerly 2.7778)
+export const PX_S_TO_SPEED_KMH = 0.225;  // 1 / 4.4444 (formerly 0.36)
 
 export function isTrailerVehicle(car: Vehicle | { type?: string; isTrailer?: boolean } | null | undefined): boolean {
   if (!car) return false;
@@ -64,14 +68,17 @@ export function createDefaultEngineState(
   const configTransmission = CAR_CONFIGS[type]?.transmission;
   const isManual = configTransmission ? configTransmission === 'MANUAL' : [
     'hatchback', 'pickup', 'wagon_classic', 'sedan_classic', 'sedan_compact',
+    'compact_matiz', 'sedan_logan', 'sedan_nexia', 'liftback_tavria', 'sedan_accent',
+    'hatch_samara', 'sedan_samara',
     'hatch_hot', 'micro_car', 'classic_compact', 'retro_bubble', 'offroad_hardcore',
     'suv_classic_box', 'muscle_classic', 'van_camper', 'van_cargo_old', 'truck_tow',
-    'delivery_truck', 'truck_box', 'truck_dump', 'truck_tanker', 'truck_water',
-    'truck_flatbed', 'cement_mixer', 'garbage_truck', 'bus',
+    'delivery_truck', 'truck_box', 'truck_dump', 'truck_semi', 'truck_tanker', 'truck_water',
+    'truck_flatbed', 'truck_covered', 'cement_mixer', 'garbage_truck', 'bus',
     'tractor_mtz82', 'tractor_mtz80', 'tractor_mtz80_old',
     'moto_izh_jupiter', 'moto_ural_sidecar', 'moto_jawa350', 'moto_sport', 'moto_chopper', 'moped_soviet'
   ].includes(type);
   const transmissionType: 'MANUAL' | 'AUTO' = configTransmission || (isManual ? 'MANUAL' : 'AUTO');
+  const hasTransferCase = type.startsWith('tractor_') || ['truck_box', 'truck_dump', 'truck_semi', 'truck_tanker', 'truck_water', 'truck_flatbed', 'truck_covered', 'cement_mixer', 'garbage_truck', 'truck_armored', 'fire_engine', 'fire_ladder'].includes(type);
 
   return {
     radiatorWater,
@@ -90,33 +97,91 @@ export function createDefaultEngineState(
     transmissionType,
     autoGearMode: transmissionType === 'AUTO' ? (isParkedOnStreet ? 'P' : 'D') : undefined,
     currentGear: transmissionType === 'AUTO' ? (engineRunning ? 1 : 0) : (engineRunning ? 1 : 0),
+    hasTransferCase,
+    transferCaseMode: 'HIGH',
+    tractorRange: type.startsWith('tractor_') ? 1 : undefined,
     gearRatios: (function() {
-      if (['truck_box', 'truck_dump', 'truck_tanker', 'truck_water', 'truck_flatbed', 'cement_mixer', 'garbage_truck', 'bus', 'delivery_truck', 'truck_tow', 'fire_engine', 'fire_ladder', 'fire_rescue'].includes(type)) {
-        return [-4.5, 0, 5.2, 3.2, 2.1, 1.4, 1.0, 0.72]; // Heavy 6-speed commercial
+      if (['paver_asphalt_wheeled', 'roller_heavy_tandem', 'roller_compact_sidewalk', 'roller_pneumatic'].includes(type)) {
+        return [-3.6, 0, 5.2, 2.0]; // Hydrostatic 2-Range (R: Реверс, N: Нейтраль, 1: Рабочий режим 0-5 км/ч, 2: Транспортный 0-14 км/ч)
+      } else if (['truck_box', 'truck_dump', 'truck_semi', 'truck_tanker', 'truck_water', 'truck_flatbed', 'truck_covered', 'cement_mixer', 'garbage_truck', 'bus', 'delivery_truck', 'truck_tow', 'fire_engine', 'fire_ladder', 'fire_rescue', 'pickup_heavy', 'truck_armored'].includes(type)) {
+        return [-4.5, 0, 4.8, 3.1, 2.0, 1.42, 1.00, 0.75]; // Heavy 6-speed commercial
       } else if (type.startsWith('tractor_')) {
-        return [-4.2, 0, 6.0, 4.0, 2.6, 1.7, 1.1, 0.82]; // Heavy tractor low-range
+        return [-4.5, 0, 5.5, 4.3, 3.3, 2.5, 1.9, 1.4, 1.0, 0.8, 0.65]; // Heavy tractor 9-speed base (18 total with multiplier)
       } else if (['supercar', 'sports', 'hatch_hot', 'coupe_gt', 'moto_sport'].includes(type)) {
-        return [-3.2, 0, 3.2, 2.2, 1.6, 1.25, 1.0, 0.82]; // Sport 6-speed close-ratio
-      } else if (['retro_bubble', 'classic_compact', 'sedan_classic', 'wagon_classic', 'micro_car', 'moped_soviet'].includes(type)) {
-        return [-3.6, 0, 3.8, 2.1, 1.35, 0.98]; // Vintage 4-speed
+        return [-3.2, 0, 3.1, 2.1, 1.55, 1.22, 1.00, 0.80]; // Sport 6-speed close-ratio
+      } else if (['retro_bubble', 'classic_compact', 'sedan_classic', 'wagon_classic', 'micro_car'].includes(type)) {
+        return [-3.5, 0, 3.6, 2.1, 1.36, 0.96]; // Vintage 4-speed
+      } else if (type === 'moped_soviet') {
+        return [-3.0, 0, 3.2, 1.8, 1.10]; // Soviet 3-speed moped
       } else if (type.startsWith('moto_')) {
-        return [-2.8, 0, 2.8, 1.9, 1.4, 1.1, 0.9]; // Motorcycle
+        return [-2.8, 0, 2.7, 1.85, 1.35, 1.05, 0.85]; // Motorcycle 5-speed
       }
-      return [-3.5, 0, 3.6, 2.1, 1.4, 1.0, 0.78]; // Standard passenger car 5-speed
+      return [-3.4, 0, 3.5, 2.05, 1.38, 1.00, 0.78]; // Standard passenger car 5-speed
     })(),
     finalDriveRatio: (function() {
-      if (['truck_box', 'truck_dump', 'truck_tanker', 'truck_water', 'truck_flatbed', 'cement_mixer', 'garbage_truck', 'bus', 'fire_engine'].includes(type)) return 4.8;
+      if (['paver_asphalt_wheeled', 'roller_heavy_tandem', 'roller_compact_sidewalk', 'roller_pneumatic'].includes(type)) return 6.2;
+      if (['truck_box', 'truck_dump', 'truck_semi', 'truck_tanker', 'truck_water', 'truck_flatbed', 'truck_covered', 'cement_mixer', 'garbage_truck', 'bus', 'fire_engine'].includes(type)) return 4.8;
       if (type.startsWith('tractor_')) return 5.4;
       if (['supercar', 'sports'].includes(type)) return 3.4;
       return 3.9;
     })(),
     clutchPedal: 1.0,
+    clutchTemperature: temperature,
+    clutchWear: 0,
+    transmissionTemp: temperature,
     isStalled: false,
     engineHealth: 100,
     isSeized: false,
     transmissionHealth: 100,
     transmissionJammed: false
   };
+}
+
+export function ensureVehicleEngineState(veh: Vehicle): EngineState {
+  if (!veh.engineState) {
+    veh.engineState = createDefaultEngineState(veh.type, !veh.isParked, veh.isParked);
+    return veh.engineState;
+  }
+  const eng = veh.engineState;
+  
+  const defaultEng = createDefaultEngineState(veh.type);
+  
+  // Force update to ensure correct length for 9-speed/6-speed configs if mismatched
+  if (!eng.gearRatios || !Array.isArray(eng.gearRatios) || eng.gearRatios.length !== defaultEng.gearRatios.length) {
+    eng.gearRatios = defaultEng.gearRatios;
+    eng.finalDriveRatio = defaultEng.finalDriveRatio;
+    // ensure currentGear is within bounds
+    if (eng.currentGear > eng.gearRatios.length - 2) {
+      eng.currentGear = eng.gearRatios.length - 2;
+    }
+  }
+
+  // Force update transfer case attributes
+  if (eng.hasTransferCase === undefined) {
+    eng.hasTransferCase = defaultEng.hasTransferCase;
+    eng.transferCaseMode = defaultEng.transferCaseMode || 'HIGH';
+  }
+
+  const isMachinery = isRoadMachinery(veh.type);
+  if (isMachinery) {
+    // Road machinery is strictly hydrostatic drive (ГСТ): AUTO, F/N/R, no manual clutch or stepped gears
+    eng.transmissionType = 'AUTO';
+    if (!eng.autoGearMode) eng.autoGearMode = veh.isParked ? 'P' : 'D';
+    eng.gearRatios = defaultEng.gearRatios;
+    eng.finalDriveRatio = defaultEng.finalDriveRatio;
+    eng.tractorRange = undefined;
+    eng.clutchPedal = 1.0;
+  } else if (veh.type.startsWith('tractor_') && eng.tractorRange === undefined) {
+    eng.tractorRange = 1;
+  }
+
+  if (eng.clutchPedal === undefined) eng.clutchPedal = 1.0;
+  if (eng.engineHealth === undefined) eng.engineHealth = 100;
+  if (eng.transmissionHealth === undefined) eng.transmissionHealth = 100;
+  if (eng.transmissionType === undefined) {
+    eng.transmissionType = CAR_CONFIGS[veh.type]?.transmission || 'AUTO';
+  }
+  return eng;
 }
 
 export function createDefaultFuelSystem(type: CarType = 'sedan', isParkedOnStreet: boolean = false): FuelSystem {
@@ -134,13 +199,16 @@ export function createDefaultFuelSystem(type: CarType = 'sedan', isParkedOnStree
 
   const isDiesel = [
     'bus', 'fire_engine', 'fire_ladder', 'truck_box', 'truck_dump', 'truck_tanker', 
-    'truck_water', 'truck_flatbed', 'cement_mixer', 'garbage_truck', 'pickup_heavy', 
+    'truck_water', 'truck_flatbed', 'truck_covered', 'cement_mixer', 'garbage_truck', 'pickup_heavy', 
     'truck_tow', 'truck_armored', 'delivery_truck', 'van_camper',
-    'tractor_mtz82', 'tractor_mtz80', 'tractor_mtz80_old'
+    'tractor_mtz82', 'tractor_mtz80', 'tractor_mtz80_old', 'truck_semi',
+    'paver_asphalt_wheeled', 'roller_heavy_tandem', 'roller_compact_sidewalk', 'roller_pneumatic'
   ].includes(type);
   const isVintage92 = [
     'wagon_classic', 'sedan_classic', 'classic_compact', 'retro_bubble', 
     'van_cargo_old', 'muscle_classic',
+    'compact_matiz', 'sedan_logan', 'sedan_nexia', 'liftback_tavria', 'sedan_accent',
+    'hatch_samara', 'sedan_samara', 'micro_car',
     'moto_izh_jupiter', 'moto_ural_sidecar', 'moto_jawa350', 'moto_chopper', 'moped_soviet'
   ].includes(type);
   const isBike = [
@@ -154,9 +222,26 @@ export function createDefaultFuelSystem(type: CarType = 'sedan', isParkedOnStree
     tankLevel = Math.round(35 + Math.random() * 55);
   }
 
-  const tankCapacity = isDiesel 
-    ? (type.startsWith('tractor_') ? 130 : 120) 
-    : (isBike ? (type === 'moped_soviet' ? 8 : (type === 'moto_ural_sidecar' ? 19 : 14)) : (['supercar', 'suv_luxury', 'pickup_heavy', 'offroad_hardcore'].includes(type) ? 80 : 55));
+  let tankCapacity = 55;
+  if (isDiesel) {
+    tankCapacity = type === 'truck_semi' ? 350 : (type.startsWith('tractor_') ? 130 : 120);
+  } else if (isBike) {
+    tankCapacity = type === 'moped_soviet' ? 8 : (type === 'moto_ural_sidecar' ? 19 : 14);
+  } else if (['supercar', 'suv_luxury', 'pickup_heavy', 'offroad_hardcore'].includes(type)) {
+    tankCapacity = 80;
+  } else if (type === 'compact_matiz') {
+    tankCapacity = 35;
+  } else if (type === 'liftback_tavria') {
+    tankCapacity = 39;
+  } else if (type === 'micro_car' || type === 'retro_bubble') {
+    tankCapacity = 30;
+  } else if (type === 'hatch_samara' || type === 'sedan_samara') {
+    tankCapacity = 43;
+  } else if (type === 'sedan_accent') {
+    tankCapacity = 45;
+  } else if (type === 'sedan_logan' || type === 'sedan_nexia' || type === 'sedan_compact' || type === 'hatchback') {
+    tankCapacity = 50;
+  }
 
   return {
     fuelType: isDiesel ? 'diesel' : (isVintage92 ? 'ai92' : 'ai95'),
@@ -167,6 +252,41 @@ export function createDefaultFuelSystem(type: CarType = 'sedan', isParkedOnStree
     detonation: false,
     octaneNumber: isDiesel ? 45 : (isVintage92 ? 92 : 95)
   };
+}
+
+export function isRoadMachinery(type?: string): boolean {
+  if (!type) return false;
+  return (
+    type === 'paver_asphalt_wheeled' ||
+    type === 'roller_heavy_tandem' ||
+    type === 'roller_compact_sidewalk' ||
+    type === 'roller_pneumatic'
+  );
+}
+
+export function getLPGDefaultCapacity(type: string): number {
+  if (['truck_semi', 'truck_dump', 'truck_box', 'truck_tanker', 'truck_water', 'truck_flatbed', 'truck_covered', 'cement_mixer', 'garbage_truck', 'bus', 'fire_engine', 'fire_ladder'].includes(type) || type.includes('semi')) {
+    return 200;
+  }
+  if (['delivery_truck', 'van_cargo_old', 'van', 'bus_minibus', 'truck_armored', 'truck_tow'].includes(type)) {
+    return 120;
+  }
+  if (type.startsWith('tractor_')) {
+    return 100;
+  }
+  if (['pickup_heavy', 'pickup', 'suv_luxury', 'suv_classic_box', 'offroad_hardcore', 'crossover_compact', 'van_camper', 'ambulance_suv'].includes(type) || type.includes('suv') || type.includes('pickup')) {
+    return 85;
+  }
+  if (['sedan_luxury', 'wagon_allroad', 'classic_black', 'wagon_modern', 'coupe_gt', 'muscle', 'muscle_classic'].includes(type)) {
+    return 65;
+  }
+  if (['sedan', 'sedan_classic', 'wagon_classic', 'sedan_logan', 'sedan_nexia', 'sedan_polo', 'sedan_accent', 'sedan_samara', 'hatch_samara', 'liftback_tavria', 'taxi', 'police'].includes(type)) {
+    return 55;
+  }
+  if (['compact_matiz', 'micro_car', 'retro_bubble', 'sports', 'supercar', 'hatch_hot', 'hatchback'].includes(type)) {
+    return 45;
+  }
+  return 55;
 }
 
 export function createDefaultFluidTank(type: CarType): FluidStorageTank | undefined {
@@ -218,6 +338,22 @@ export function createDefaultFluidTank(type: CarType): FluidStorageTank | undefi
       isWaterHoseDeployed: false
     };
   }
+  if (type === 'trailer_vacuum') {
+    return {
+      capacity: 800,
+      currentVolume: 800,
+      currentAmount: 800,
+      liquidType: 'water',
+      isHermetic: true, // Vacuum barrels are hermetically sealed (airtight) to hold vacuum!
+      leakProbabilityPerSec: 0,
+      dripRatePerSec: 0,
+      isPunctured: false,
+      punctureRatePerSec: 12.0,
+      drainValveOpen: false,
+      hasWaterHose: true,
+      isWaterHoseDeployed: false
+    };
+  }
   return undefined;
 }
 
@@ -232,7 +368,7 @@ export function ensureVehicleFluidTank(car: Vehicle): FluidStorageTank | undefin
     if (car.fluidTank.currentVolume === undefined) {
       car.fluidTank.currentVolume = car.fluidTank.currentAmount ?? 0;
     }
-    if (car.type === 'truck_water' || car.type === 'trailer_barrel') {
+    if (car.type === 'truck_water' || car.type === 'trailer_barrel' || car.type === 'trailer_vacuum') {
       if (car.fluidTank.hasWaterHose === undefined) {
         car.fluidTank.hasWaterHose = true;
       }
@@ -263,8 +399,18 @@ export function getVehicleWaterHoseAnchor(car: Vehicle): { x: number; y: number 
   }
 
   if (car.type === 'trailer_barrel') {
-    // Rear discharge faucet / spigot centered at the back bumper
-    const localX = -halfL * 0.88 - 2.0;
+    // End of small brass discharge tap
+    const localX = -halfL * 0.88 - 4.2;
+    const localY = 0;
+    return {
+      x: car.x + cosA * localX,
+      y: car.y + sinA * localX
+    };
+  }
+
+  if (car.type === 'trailer_vacuum') {
+    // End of brass receiving snout nozzle (ANM-53)
+    const localX = -halfL * 0.88 - 6.3;
     const localY = 0;
     return {
       x: car.x + cosA * localX,
@@ -471,13 +617,47 @@ export function ensureVehicleDamage(veh: { length?: number; width?: number; dama
   return dmg;
 }
 
+export function getVehicleDriveType(type: string): 'FWD' | 'RWD' | 'AWD' {
+  const cfg = CAR_CONFIGS[type];
+  if (cfg && cfg.driveType) return cfg.driveType;
+
+  // Defaults based on type mapping
+  if (type.startsWith('moto_') || type === 'moped_soviet') {
+    return 'RWD';
+  }
+  if (type.startsWith('tractor_')) {
+    return type === 'tractor_mtz82' ? 'AWD' : 'RWD';
+  }
+  if (type.startsWith('trailer_')) {
+    return 'RWD'; // trailers are passive anyway
+  }
+  
+  const rwdTypes = [
+    'sports', 'supercar', 'sedan_luxury', 'coupe_gt', 'muscle_classic', 
+    'sedan_classic', 'classic_compact', 'retro_bubble', 'wagon_classic', 
+    'ambulance', 'bus', 'fire_engine', 'fire_ladder', 'truck_tow', 'van_camper', 
+    'truck_box', 'truck_dump', 'truck_semi', 'truck_tanker', 'truck_water', 
+    'truck_flatbed', 'truck_covered', 'cement_mixer', 'garbage_truck'
+  ];
+  if (rwdTypes.includes(type)) return 'RWD';
+
+  const awdTypes = [
+    'pickup', 'pickup_heavy', 'suv', 'suv_luxury', 'offroad_hardcore', 
+    'suv_classic_box', 'van_cargo_old', 'truck_armored',
+    'paver_asphalt_wheeled', 'roller_heavy_tandem', 'roller_compact_sidewalk', 'roller_pneumatic'
+  ];
+  if (awdTypes.includes(type)) return 'AWD';
+
+  return 'FWD'; // default for sedan, hatchback, taxi, police, compacts, micro, delivery
+}
+
 export function getVehicleAxleGeometry(car: { type: string; length?: number }) {
   const cfg = CAR_CONFIGS[car.type] || CAR_CONFIGS.sedan;
   const length = car.length || cfg.length || 42;
   const halfL = length / 2;
 
   const isTractor = car.type === 'tractor_mtz82' || car.type === 'tractor_mtz80' || car.type === 'tractor_mtz80_old';
-  const isThreeAxle = car.type === 'truck_dump' || car.type === 'truck_tanker' || car.type === 'truck_flatbed' || car.type === 'cement_mixer' || car.type === 'garbage_truck';
+  const isThreeAxle = car.type === 'truck_dump' || car.type === 'truck_semi' || car.type === 'truck_tanker' || car.type === 'truck_flatbed' || car.type === 'truck_covered' || car.type === 'cement_mixer' || car.type === 'garbage_truck';
   const isDually = car.type === 'pickup_heavy';
   const isMoto = car.type.startsWith('moto_') || car.type === 'moped_soviet';
   const isHeavyTruck = isThreeAxle || car.type === 'truck_box' || car.type === 'truck_water' || car.type === 'truck_tow' || car.type === 'truck_armored' || car.type === 'delivery_truck' || car.type === 'fire_engine' || car.type === 'fire_ladder' || car.type === 'bus';
@@ -525,6 +705,14 @@ export const CAR_CONFIGS: Record<string, CarConfig> = {
   crossover_compact: { type: 'crossover_compact', width: 21, length: 43, wheelBase: 26, mass: 1420, maxSpeed: 180, reverseMaxSpeed: 45, acceleration: 30, brakingForce: 240, friction: 0.987, turnSpeed: 4.0, maxSteerAngle: 0.66, minSteerAngle: 0.13, grip: 0.984, driftGrip: 0.36, name: 'Компактный кроссовер', transmission: 'AUTO' },
   sedan_classic: { type: 'sedan_classic', width: 19, length: 42, wheelBase: 25, mass: 1200, maxSpeed: 150, reverseMaxSpeed: 40, acceleration: 22, brakingForce: 200, friction: 0.986, turnSpeed: 3.9, maxSteerAngle: 0.68, minSteerAngle: 0.14, grip: 0.978, driftGrip: 0.34, name: 'Классический седан', transmission: 'MANUAL' },
   sedan_compact: { type: 'sedan_compact', width: 18, length: 39, wheelBase: 24, mass: 1050, maxSpeed: 165, reverseMaxSpeed: 42, acceleration: 28, brakingForce: 230, friction: 0.988, turnSpeed: 4.3, maxSteerAngle: 0.68, minSteerAngle: 0.15, grip: 0.985, driftGrip: 0.39, name: 'Компактный седан', transmission: 'MANUAL' },
+  compact_matiz: { type: 'compact_matiz', width: 17, length: 33, wheelBase: 21, mass: 770, maxSpeed: 145, reverseMaxSpeed: 35, acceleration: 26, brakingForce: 220, friction: 0.988, turnSpeed: 4.8, maxSteerAngle: 0.72, minSteerAngle: 0.16, grip: 0.984, driftGrip: 0.38, name: 'Субкомпактный хэтчбек (Matiz)', transmission: 'MANUAL' },
+  sedan_logan: { type: 'sedan_logan', width: 19, length: 42, wheelBase: 26, mass: 980, maxSpeed: 165, reverseMaxSpeed: 42, acceleration: 28, brakingForce: 230, friction: 0.988, turnSpeed: 4.2, maxSteerAngle: 0.68, minSteerAngle: 0.14, grip: 0.985, driftGrip: 0.38, name: 'Бюджетный седан (Logan)', transmission: 'MANUAL' },
+  sedan_nexia: { type: 'sedan_nexia', width: 18, length: 44, wheelBase: 25, mass: 1020, maxSpeed: 170, reverseMaxSpeed: 45, acceleration: 29, brakingForce: 230, friction: 0.988, turnSpeed: 4.1, maxSteerAngle: 0.68, minSteerAngle: 0.14, grip: 0.985, driftGrip: 0.38, name: 'Седан 90-х (Nexia)', transmission: 'MANUAL' },
+  liftback_tavria: { type: 'liftback_tavria', width: 17, length: 35, wheelBase: 22, mass: 710, maxSpeed: 140, reverseMaxSpeed: 36, acceleration: 25, brakingForce: 200, friction: 0.987, turnSpeed: 4.6, maxSteerAngle: 0.70, minSteerAngle: 0.15, grip: 0.980, driftGrip: 0.36, name: 'Компактный лифтбек (Таврия)', transmission: 'MANUAL' },
+  sedan_accent: { type: 'sedan_accent', width: 18, length: 41, wheelBase: 24, mass: 1030, maxSpeed: 180, reverseMaxSpeed: 45, acceleration: 32, brakingForce: 240, friction: 0.988, turnSpeed: 4.3, maxSteerAngle: 0.68, minSteerAngle: 0.14, grip: 0.986, driftGrip: 0.39, name: 'Городской седан (Accent)', transmission: 'MANUAL' },
+  sedan_polo: { type: 'sedan_polo', width: 19, length: 43, wheelBase: 25, mass: 1160, maxSpeed: 190, reverseMaxSpeed: 48, acceleration: 33, brakingForce: 250, friction: 0.988, turnSpeed: 4.3, maxSteerAngle: 0.68, minSteerAngle: 0.14, grip: 0.987, driftGrip: 0.39, name: 'Седан B+ (Polo Sedan)', transmission: 'AUTO' },
+  hatch_samara: { type: 'hatch_samara', width: 18, length: 39, wheelBase: 24, mass: 945, maxSpeed: 160, reverseMaxSpeed: 42, acceleration: 28, brakingForce: 220, friction: 0.988, turnSpeed: 4.4, maxSteerAngle: 0.69, minSteerAngle: 0.15, grip: 0.983, driftGrip: 0.38, name: 'Хэтчбек «Самара» (ВАЗ-2109)', transmission: 'MANUAL' },
+  sedan_samara: { type: 'sedan_samara', width: 18, length: 42, wheelBase: 25, mass: 970, maxSpeed: 165, reverseMaxSpeed: 42, acceleration: 28, brakingForce: 220, friction: 0.988, turnSpeed: 4.2, maxSteerAngle: 0.68, minSteerAngle: 0.14, grip: 0.984, driftGrip: 0.38, name: 'Седан «Самара» (ВАЗ-21099)', transmission: 'MANUAL' },
   sedan_luxury: { type: 'sedan_luxury', width: 21, length: 46, wheelBase: 28, mass: 1650, maxSpeed: 230, reverseMaxSpeed: 50, acceleration: 45, brakingForce: 270, friction: 0.989, turnSpeed: 4.1, maxSteerAngle: 0.66, minSteerAngle: 0.13, grip: 0.988, driftGrip: 0.40, name: 'Бизнес-седан', transmission: 'AUTO' },
   suv_luxury: { type: 'suv_luxury', width: 23, length: 50, wheelBase: 31, mass: 2400, maxSpeed: 230, reverseMaxSpeed: 50, acceleration: 48, brakingForce: 280, friction: 0.989, turnSpeed: 4.0, maxSteerAngle: 0.64, minSteerAngle: 0.12, grip: 0.988, driftGrip: 0.41, name: 'Люкс Внедорожник', transmission: 'AUTO' },
   pickup_heavy: { type: 'pickup_heavy', width: 24, length: 54, wheelBase: 34, mass: 3100, maxSpeed: 160, reverseMaxSpeed: 40, acceleration: 32, brakingForce: 240, friction: 0.984, turnSpeed: 3.6, maxSteerAngle: 0.62, minSteerAngle: 0.10, grip: 0.972, driftGrip: 0.30, name: 'Тяжелый пикап 4x4', transmission: 'AUTO' },
@@ -546,9 +734,16 @@ export const CAR_CONFIGS: Record<string, CarConfig> = {
   van_cargo_old: { type: 'van_cargo_old', width: 21, length: 46, wheelBase: 28, mass: 1700, maxSpeed: 135, reverseMaxSpeed: 35, acceleration: 18, brakingForce: 190, friction: 0.983, turnSpeed: 3.6, maxSteerAngle: 0.62, minSteerAngle: 0.11, grip: 0.968, driftGrip: 0.30, name: 'Вездеходный фургон («Буханка»)', transmission: 'MANUAL' },
   truck_box: { type: 'truck_box', width: 25, length: 68, wheelBase: 42, mass: 6200, maxSpeed: 125, reverseMaxSpeed: 32, acceleration: 15, brakingForce: 185, friction: 0.981, turnSpeed: 3.2, maxSteerAngle: 0.60, minSteerAngle: 0.09, grip: 0.958, driftGrip: 0.24, name: 'Фургон-Будка', transmission: 'MANUAL' },
   truck_dump: { type: 'truck_dump', width: 26, length: 72, wheelBase: 44, mass: 8500, maxSpeed: 115, reverseMaxSpeed: 30, acceleration: 14, brakingForce: 180, friction: 0.980, turnSpeed: 3.2, maxSteerAngle: 0.60, minSteerAngle: 0.08, grip: 0.955, driftGrip: 0.23, name: 'Самосвал', transmission: 'MANUAL' },
+  truck_semi: { type: 'truck_semi', width: 26, length: 64, wheelBase: 38, mass: 7500, maxSpeed: 125, reverseMaxSpeed: 30, acceleration: 18, brakingForce: 210, friction: 0.980, turnSpeed: 3.4, maxSteerAngle: 0.62, minSteerAngle: 0.08, grip: 0.960, driftGrip: 0.25, name: 'Седельный тягач КАМАЗ-5410', transmission: 'MANUAL', hitchOffset: -12, color: '#d94e16' },
+  trailer_semi: { type: 'trailer_semi', width: 26, length: 120, wheelBase: 80, mass: 6500, maxSpeed: 120, reverseMaxSpeed: 30, acceleration: 0, brakingForce: 300, friction: 0.980, turnSpeed: 3.0, maxSteerAngle: 0, minSteerAngle: 0, grip: 0.975, driftGrip: 0.30, name: 'Полуприцеп бортовой НЕФАЗ', transmission: 'MANUAL', couplerOffset: 50, color: '#1e3a8a' },
+  trailer_semi_box: { type: 'trailer_semi_box', width: 26, length: 124, wheelBase: 82, mass: 7200, maxSpeed: 120, reverseMaxSpeed: 30, acceleration: 0, brakingForce: 320, friction: 0.980, turnSpeed: 3.0, maxSteerAngle: 0, minSteerAngle: 0, grip: 0.975, driftGrip: 0.30, name: 'Полуприцеп-рефрижератор «Совтрансавто»', transmission: 'MANUAL', couplerOffset: 50, color: '#f8fafc' },
+  trailer_semi_tanker: { type: 'trailer_semi_tanker', width: 26, length: 120, wheelBase: 80, mass: 7800, massEmpty: 7800, maxSpeed: 115, reverseMaxSpeed: 30, acceleration: 0, brakingForce: 340, friction: 0.980, turnSpeed: 3.0, maxSteerAngle: 0, minSteerAngle: 0, grip: 0.970, driftGrip: 0.28, name: 'Полуприцеп-цистерна ГСМ НЕФАЗ', transmission: 'MANUAL', couplerOffset: 50, color: '#ea580c' },
+  trailer_semi_container: { type: 'trailer_semi_container', width: 26, length: 126, wheelBase: 82, mass: 8500, maxSpeed: 120, reverseMaxSpeed: 30, acceleration: 0, brakingForce: 330, friction: 0.980, turnSpeed: 3.0, maxSteerAngle: 0, minSteerAngle: 0, grip: 0.975, driftGrip: 0.30, name: 'Контейнеровоз (40ft MAERSK)', transmission: 'MANUAL', couplerOffset: 50, color: '#991b1b' },
+  trailer_semi_lowboy: { type: 'trailer_semi_lowboy', width: 28, length: 130, wheelBase: 86, mass: 8900, maxSpeed: 110, reverseMaxSpeed: 30, acceleration: 0, brakingForce: 350, friction: 0.978, turnSpeed: 3.0, maxSteerAngle: 0, minSteerAngle: 0, grip: 0.970, driftGrip: 0.28, name: 'Низкорамный трал-тяжеловоз ЧМЗАП', transmission: 'MANUAL', couplerOffset: 54, color: '#d97706' },
   truck_tanker: { type: 'truck_tanker', width: 26, length: 76, wheelBase: 46, mass: 9200, maxSpeed: 110, reverseMaxSpeed: 30, acceleration: 12, brakingForce: 175, friction: 0.979, turnSpeed: 3.0, maxSteerAngle: 0.58, minSteerAngle: 0.08, grip: 0.950, driftGrip: 0.22, name: 'Бензовоз', transmission: 'MANUAL' },
   truck_water: { type: 'truck_water', width: 25, length: 70, wheelBase: 43, mass: 8000, maxSpeed: 118, reverseMaxSpeed: 30, acceleration: 13, brakingForce: 180, friction: 0.980, turnSpeed: 3.2, maxSteerAngle: 0.60, minSteerAngle: 0.08, grip: 0.955, driftGrip: 0.23, name: 'Водовоз', transmission: 'MANUAL' },
-  truck_flatbed: { type: 'truck_flatbed', width: 25, length: 74, wheelBase: 45, mass: 7000, maxSpeed: 120, reverseMaxSpeed: 32, acceleration: 14, brakingForce: 185, friction: 0.981, turnSpeed: 3.2, maxSteerAngle: 0.60, minSteerAngle: 0.08, grip: 0.958, driftGrip: 0.24, name: 'Бортовой грузовик', transmission: 'MANUAL' },
+  truck_flatbed: { type: 'truck_flatbed', width: 25, length: 74, wheelBase: 45, mass: 7000, maxSpeed: 120, reverseMaxSpeed: 32, acceleration: 14, brakingForce: 185, friction: 0.981, turnSpeed: 3.2, maxSteerAngle: 0.60, minSteerAngle: 0.08, grip: 0.958, driftGrip: 0.24, name: 'Бортовой грузовик (ГАЗ-53)', transmission: 'MANUAL', color: '#0284c7' },
+  truck_covered: { type: 'truck_covered', width: 25, length: 74, wheelBase: 45, mass: 7400, maxSpeed: 118, reverseMaxSpeed: 30, acceleration: 13, brakingForce: 180, friction: 0.981, turnSpeed: 3.1, maxSteerAngle: 0.60, minSteerAngle: 0.08, grip: 0.956, driftGrip: 0.23, name: 'Крытый грузовик (ГАЗ-53, шифер)', transmission: 'MANUAL', color: '#0284c7' },
   cement_mixer: { type: 'cement_mixer', width: 26, length: 72, wheelBase: 44, mass: 9800, maxSpeed: 105, reverseMaxSpeed: 28, acceleration: 11, brakingForce: 170, friction: 0.978, turnSpeed: 3.0, maxSteerAngle: 0.58, minSteerAngle: 0.07, grip: 0.948, driftGrip: 0.21, name: 'Бетономешалка', transmission: 'MANUAL' },
   garbage_truck: { type: 'garbage_truck', width: 26, length: 78, wheelBase: 46, mass: 10500, maxSpeed: 100, reverseMaxSpeed: 28, acceleration: 10, brakingForce: 175, friction: 0.978, turnSpeed: 3.0, maxSteerAngle: 0.58, minSteerAngle: 0.07, grip: 0.945, driftGrip: 0.20, name: 'Мусоровоз', transmission: 'MANUAL' },
   // TRACTORS
@@ -563,7 +758,13 @@ export const CAR_CONFIGS: Record<string, CarConfig> = {
   moto_chopper: { type: 'moto_chopper', width: 12, length: 28, wheelBase: 19, mass: 310, maxSpeed: 190, reverseMaxSpeed: 20, acceleration: 52, brakingForce: 260, friction: 0.990, turnSpeed: 5.0, maxSteerAngle: 0.68, minSteerAngle: 0.14, grip: 0.982, driftGrip: 0.42, name: 'Чоппер V-Twin', transmission: 'MANUAL' },
   moped_soviet: { type: 'moped_soviet', width: 8, length: 20, wheelBase: 13, mass: 55, maxSpeed: 95, reverseMaxSpeed: 15, acceleration: 24, brakingForce: 190, friction: 0.988, turnSpeed: 6.8, maxSteerAngle: 0.75, minSteerAngle: 0.20, grip: 0.975, driftGrip: 0.35, name: 'Мопед «Карпаты»', transmission: 'MANUAL' },
   trailer_barrel: { type: 'trailer_barrel', width: 22, length: 38, wheelBase: 16, mass: 1400, maxSpeed: 110, reverseMaxSpeed: 35, acceleration: 0, brakingForce: 140, friction: 0.986, turnSpeed: 3.5, maxSteerAngle: 0, minSteerAngle: 0, grip: 0.982, driftGrip: 0.36, name: 'Тракторная бочка-цистерна', transmission: 'MANUAL' },
-  trailer_flatbed_2axle: { type: 'trailer_flatbed_2axle', width: 26, length: 68, wheelBase: 38, mass: 2400, maxSpeed: 110, reverseMaxSpeed: 35, acceleration: 0, brakingForce: 200, friction: 0.985, turnSpeed: 3.5, maxSteerAngle: 0.65, minSteerAngle: 0.1, grip: 0.980, driftGrip: 0.35, name: 'Прицеп 2-ПТС-4 (2-осный бортовой)', transmission: 'MANUAL' }
+  trailer_vacuum: { type: 'trailer_vacuum', width: 22, length: 45, wheelBase: 18, mass: 1480, maxSpeed: 110, reverseMaxSpeed: 35, acceleration: 0, brakingForce: 140, friction: 0.986, turnSpeed: 3.5, maxSteerAngle: 0, minSteerAngle: 0, grip: 0.982, driftGrip: 0.36, name: 'Тракторная вакуумная бочка', transmission: 'MANUAL' },
+  trailer_flatbed_2axle: { type: 'trailer_flatbed_2axle', width: 26, length: 68, wheelBase: 38, mass: 2400, maxSpeed: 110, reverseMaxSpeed: 35, acceleration: 0, brakingForce: 200, friction: 0.985, turnSpeed: 3.5, maxSteerAngle: 0.65, minSteerAngle: 0.1, grip: 0.980, driftGrip: 0.35, name: 'Прицеп 2-ПТС-4 (2-осный бортовой)', transmission: 'MANUAL' },
+  // ROAD CONSTRUCTION MACHINERY (Hydrostatic Transmission: Forward / Neutral / Reverse, no clutch)
+  paver_asphalt_wheeled: { type: 'paver_asphalt_wheeled', width: 32, length: 64, wheelBase: 36, mass: 18500, maxSpeed: 16, reverseMaxSpeed: 10, acceleration: 12, brakingForce: 360, friction: 0.985, turnSpeed: 2.0, maxSteerAngle: 0.65, minSteerAngle: 0.25, grip: 0.999, driftGrip: 0.995, name: 'Асфальтоукладчик колесный (ГСТ)', transmission: 'AUTO' },
+  roller_heavy_tandem: { type: 'roller_heavy_tandem', width: 28, length: 56, wheelBase: 34, mass: 12500, maxSpeed: 12, reverseMaxSpeed: 12, acceleration: 10, brakingForce: 380, friction: 0.988, turnSpeed: 1.8, maxSteerAngle: 0.70, minSteerAngle: 0.30, grip: 0.999, driftGrip: 0.995, name: 'Дорожный каток (ломаная рама, ГСТ)', transmission: 'AUTO' },
+  roller_compact_sidewalk: { type: 'roller_compact_sidewalk', width: 18, length: 32, wheelBase: 18, mass: 2200, maxSpeed: 10, reverseMaxSpeed: 10, acceleration: 14, brakingForce: 320, friction: 0.990, turnSpeed: 2.4, maxSteerAngle: 0.75, minSteerAngle: 0.35, grip: 0.999, driftGrip: 0.995, name: 'Тротуарный каток (ломаная рама, ГСТ)', transmission: 'AUTO' },
+  roller_pneumatic: { type: 'roller_pneumatic', width: 28, length: 58, wheelBase: 36, mass: 14000, maxSpeed: 16, reverseMaxSpeed: 16, acceleration: 11, brakingForce: 350, friction: 0.988, turnSpeed: 1.9, maxSteerAngle: 0.65, minSteerAngle: 0.28, grip: 0.999, driftGrip: 0.995, name: 'Пневмоколесный каток (ломаная рама, ГСТ)', transmission: 'AUTO' }
 };
 
 export const CAR_PALETTE = [
@@ -707,3 +908,339 @@ export function getVehicleFuelCapPosition(veh: Vehicle): { x: number; y: number;
 
   return { x, y, localF, localR };
 }
+
+export function hasRoadTrainLights(car: Vehicle | CarType | string | null | undefined): boolean {
+  if (!car) return false;
+  const typeStr = typeof car === 'string' ? car : (car.type || '');
+  if (typeStr.startsWith('trailer_')) return false;
+
+  const heavyTypes = [
+    'truck_water', 'truck_tanker', 'truck_flatbed', 'truck_covered', 'truck_dump', 
+    'truck_box', 'truck_semi', 'truck_tow', 'truck_armored',
+    'cement_mixer', 'garbage_truck',
+    'fire_engine', 'fire_ladder', 'fire_rescue',
+    'tractor_mtz82', 'tractor_mtz80', 'tractor_mtz80_old',
+    'bus', 'bus_minibus', 'delivery_truck'
+  ];
+  if (heavyTypes.includes(typeStr)) return true;
+  if (typeStr.startsWith('tractor_')) return true;
+
+  if (typeof car === 'object' && car !== null) {
+    if (car.trailerId || car.roadTrainLightsOn) return true;
+  }
+  return false;
+}
+
+export interface VehicleDiffLockCapabilities {
+  supported: boolean;
+  hasCenter: boolean; // Межосевая блокировка (МОБ - раздатка 50:50)
+  hasRear: boolean;   // Межколесная блокировка задней оси (МКБ-З)
+  hasFront: boolean;  // Межколесная блокировка передней оси (МКБ-П)
+  systemNameRu: string;
+  driveLayoutRu: string;
+}
+
+/**
+ * Returns differential lock capabilities by vehicle archetype.
+ * Strictly available ONLY for supported real-world offroaders, heavy commercial trucks, and tractors.
+ */
+export function getVehicleDiffCapabilities(carType: string): VehicleDiffLockCapabilities {
+  const type = carType || '';
+
+  // 1. Extreme Offroaders (UAZ, Hunter, G-Wagen, Defender): Full 3 Lockers (МОБ + МКБ-З + МКБ-П)
+  if (type === 'offroad_hardcore') {
+    return {
+      supported: true,
+      hasCenter: true,
+      hasRear: true,
+      hasFront: true,
+      systemNameRu: 'Тройная блокировка 4x4 (МОБ + МКБ-З + МКБ-П)',
+      driveLayoutRu: '4WD с жестким подключением и 3 принудительными блокировками'
+    };
+  }
+
+  // 2. Classic Boxy SUV (Lada Niva 4x4): Transfer case center diff lock + rear cross-axle locker
+  if (type === 'suv_classic_box') {
+    return {
+      supported: true,
+      hasCenter: true,
+      hasRear: true,
+      hasFront: false,
+      systemNameRu: 'Блокировка раздатки и заднего моста (МОБ + МКБ-З)',
+      driveLayoutRu: 'Постоянный полный привод (Full-time 4WD) с блокировкой МОБ и МКБ'
+    };
+  }
+
+  // 3. Full-size SUV & Luxury Offroaders (Land Cruiser, Patrol, Touareg)
+  if (type === 'suv' || type === 'suv_luxury' || type === 'crossover_compact' || type === 'truck_armored') {
+    return {
+      supported: true,
+      hasCenter: true,
+      hasRear: true,
+      hasFront: false,
+      systemNameRu: 'Блокировка межосевая и заднего дифференциала (МОБ + МКБ-З)',
+      driveLayoutRu: '4WD / AWD с электро-пневматической блокировкой мостов'
+    };
+  }
+
+  // 4. Heavy Duty Pickups (Part-time transfer lock + Rear axle E-Locker)
+  if (type === 'pickup' || type === 'pickup_heavy') {
+    return {
+      supported: true,
+      hasCenter: true,
+      hasRear: true,
+      hasFront: false,
+      systemNameRu: 'Блокировка раздатки и заднего моста (МОБ + МКБ-З)',
+      driveLayoutRu: 'Part-time 4WD с принудительной блокировкой заднего моста'
+    };
+  }
+
+  // 5. MTZ-82 Belarus Tractor (4x4): Rear axle hydraulic lock pedal + Front driving axle
+  if (type === 'tractor_mtz82') {
+    return {
+      supported: true,
+      hasCenter: true,
+      hasRear: true,
+      hasFront: true,
+      systemNameRu: 'Блокировка МТЗ-82 (МКБ-З педаль + ПВМ самоблок)',
+      driveLayoutRu: 'Сельхозтрактор 4x4: гидромеханическая блокировка заднего моста и ПВМ'
+    };
+  }
+
+  // 6. MTZ-80 Belarus Tractor (4x2): Rear axle mechanical/hydraulic lock pedal
+  if (type === 'tractor_mtz80' || type === 'tractor_mtz80_old') {
+    return {
+      supported: true,
+      hasCenter: false,
+      hasRear: true,
+      hasFront: false,
+      systemNameRu: 'Педаль блокировки заднего дифференциала МТЗ-80 (МКБ-З)',
+      driveLayoutRu: 'Заднеприводный трактор: педальная блокировка заднего моста'
+    };
+  }
+
+  // 7. Heavy Commercial Trucks & Construction Vehicles (KamAZ, MAZ, Ural, Dump, Tanker, Mixer, etc.)
+  if (
+    type === 'truck_dump' || 
+    type === 'truck_semi' || 
+    type === 'truck_box' || 
+    type === 'truck_tanker' || 
+    type === 'truck_water' || 
+    type === 'truck_flatbed' || 
+    type === 'truck_covered' || 
+    type === 'cement_mixer' || 
+    type === 'garbage_truck' || 
+    type === 'fire_engine' || 
+    type === 'fire_ladder' || 
+    type === 'fire_rescue'
+  ) {
+    return {
+      supported: true,
+      hasCenter: true,
+      hasRear: true,
+      hasFront: false,
+      systemNameRu: 'Пневмоблокировка грузовика (МОБ + МКБ)',
+      driveLayoutRu: 'Тяжелый грузовик: межосевая блокировка (МОБ) и межколесная задняя (МКБ)'
+    };
+  }
+
+  // Passenger sedans, hatchbacks, vans, sports cars, supercars, bikes, trailers: OPEN DIFF ONLY
+  return {
+    supported: false,
+    hasCenter: false,
+    hasRear: false,
+    hasFront: false,
+    systemNameRu: 'Свободный дифференциал',
+    driveLayoutRu: 'Стандартный открытый дифференциал'
+  };
+}
+
+/**
+ * Ensures a vehicle has initialized differential lock state.
+ */
+export function ensureVehicleDiffLock(car: Vehicle): VehicleDiffLockState {
+  if (!car.diffLock) {
+    car.diffLock = {
+      center: false,
+      rear: false,
+      front: false
+    };
+  }
+  return car.diffLock;
+}
+
+/**
+ * Cycles differential lock modes sequentially:
+ * Free -> Center (МОБ) -> Center + Rear (МОБ+МКБ-З) -> All (МОБ+МКБ-З+МКБ-П) -> Free
+ */
+export function cycleVehicleDiffLock(car: Vehicle): {
+  changed: boolean;
+  message: string;
+  stateDesc: string;
+  isEngaged: boolean;
+} {
+  const caps = getVehicleDiffCapabilities(car.type);
+  if (!caps.supported) {
+    return {
+      changed: false,
+      message: 'На данном автомобиле установлен свободный дифференциал без принудительной блокировки.',
+      stateDesc: 'СВОБОДНЫЙ',
+      isEngaged: false
+    };
+  }
+
+  const dl = ensureVehicleDiffLock(car);
+  const speedKmh = Math.abs(car.speed) * PX_S_TO_SPEED_KMH;
+  const isCurrentlyLocked = dl.center || dl.rear || dl.front;
+
+  // Realistic mechanical safety interlock: cannot engage dog clutches at speeds over 40 km/h
+  if (!isCurrentlyLocked && speedKmh > 40) {
+    return {
+      changed: false,
+      message: `Слишком высокая скорость (${Math.round(speedKmh)} км/ч)! Сбросьте скорость ниже 40 км/ч для включения блокировки.`,
+      stateDesc: 'СВОБОДНЫЙ',
+      isEngaged: false
+    };
+  }
+
+  // State 0: All free
+  if (!dl.center && !dl.rear && !dl.front) {
+    if (caps.hasCenter) {
+      dl.center = true;
+      dl.rear = false;
+      dl.front = false;
+      return {
+        changed: true,
+        message: 'Блокировка: МЕЖОСЕВАЯ [МОБ] ВКЛ (Крутящий момент 50:50 между осями)',
+        stateDesc: 'МОБ',
+        isEngaged: true
+      };
+    } else {
+      dl.rear = true;
+      return {
+        changed: true,
+        message: 'Блокировка: ЗАДНЯЯ МЕЖКОЛЕСНАЯ [МКБ-З] ВКЛ (Оба задних колеса заблокированы)',
+        stateDesc: 'МКБ-З',
+        isEngaged: true
+      };
+    }
+  }
+
+  // State 1: Center only
+  if (dl.center && !dl.rear && !dl.front) {
+    if (caps.hasRear) {
+      dl.center = true;
+      dl.rear = true;
+      dl.front = false;
+      return {
+        changed: true,
+        message: 'Блокировка: МЕЖОСЕВАЯ + ЗАДНЯЯ [МОБ + МКБ-З] ВКЛ (3 колеса жестко связаны)',
+        stateDesc: 'МОБ+МКБ',
+        isEngaged: true
+      };
+    } else {
+      dl.center = false;
+      dl.rear = false;
+      dl.front = false;
+      return {
+        changed: true,
+        message: 'Блокировка дифференциала: ВЫКЛЮЧЕНА (Все дифференциалы свободные)',
+        stateDesc: 'СВОБОДНЫЙ',
+        isEngaged: false
+      };
+    }
+  }
+
+  // State 2: Center + Rear
+  if (dl.rear && (!caps.hasCenter || dl.center) && !dl.front) {
+    if (caps.hasFront) {
+      dl.center = caps.hasCenter;
+      dl.rear = true;
+      dl.front = true;
+      return {
+        changed: true,
+        message: 'Блокировка: ПОЛНАЯ ТРОЙНАЯ [МОБ + МКБ-З + МКБ-П] ВКЛ (Все 4 колеса заблокированы)',
+        stateDesc: 'ПОЛНАЯ (100%)',
+        isEngaged: true
+      };
+    } else {
+      dl.center = false;
+      dl.rear = false;
+      dl.front = false;
+      return {
+        changed: true,
+        message: 'Блокировка дифференциала: ВЫКЛЮЧЕНА (Все дифференциалы свободные)',
+        stateDesc: 'СВОБОДНЫЙ',
+        isEngaged: false
+      };
+    }
+  }
+
+  // State 3: Disengage everything
+  dl.center = false;
+  dl.rear = false;
+  dl.front = false;
+  return {
+    changed: true,
+    message: 'Блокировка дифференциала: ВЫКЛЮЧЕНА (Все дифференциалы свободные)',
+    stateDesc: 'СВОБОДНЫЙ',
+    isEngaged: false
+  };
+}
+
+/**
+ * Directly toggles a specific axle's differential lock.
+ */
+export function toggleAxleDiffLock(
+  car: Vehicle, 
+  axle: 'center' | 'rear' | 'front'
+): { success: boolean; state: boolean; message: string } {
+  const caps = getVehicleDiffCapabilities(car.type);
+  if (!caps.supported) {
+    return {
+      success: false,
+      state: false,
+      message: 'На данном ТС нет принудительной блокировки дифференциала.'
+    };
+  }
+
+  const dl = ensureVehicleDiffLock(car);
+  const speedKmh = Math.abs(car.speed) * PX_S_TO_SPEED_KMH;
+
+  if (axle === 'center') {
+    if (!caps.hasCenter) return { success: false, state: false, message: 'Межосевая блокировка отсутствует на данном ТС' };
+    if (!dl.center && speedKmh > 40) return { success: false, state: false, message: 'Сбросьте скорость ниже 40 км/ч для блокировки МОБ!' };
+    dl.center = !dl.center;
+    return {
+      success: true,
+      state: dl.center,
+      message: dl.center ? 'Межосевая блокировка [МОБ]: ВКЛ' : 'Межосевая блокировка [МОБ]: ВЫКЛ'
+    };
+  }
+
+  if (axle === 'rear') {
+    if (!caps.hasRear) return { success: false, state: false, message: 'Блокировка заднего моста отсутствует на данном ТС' };
+    if (!dl.rear && speedKmh > 40) return { success: false, state: false, message: 'Сбросьте скорость ниже 40 км/ч для блокировки заднего моста!' };
+    dl.rear = !dl.rear;
+    return {
+      success: true,
+      state: dl.rear,
+      message: dl.rear ? 'Межколесная задняя блокировка [МКБ-З]: ВКЛ' : 'Межколесная задняя блокировка [МКБ-З]: ВЫКЛ'
+    };
+  }
+
+  if (axle === 'front') {
+    if (!caps.hasFront) return { success: false, state: false, message: 'Блокировка переднего моста отсутствует на данном ТС' };
+    if (!dl.front && speedKmh > 30) return { success: false, state: false, message: 'Сбросьте скорость ниже 30 км/ч для блокировки передка!' };
+    dl.front = !dl.front;
+    return {
+      success: true,
+      state: dl.front,
+      message: dl.front ? 'Межколесная передняя блокировка [МКБ-П]: ВКЛ (Внимание: управляемость ограничена!)' : 'Межколесная передняя блокировка [МКБ-П]: ВЫКЛ'
+    };
+  }
+
+  return { success: false, state: false, message: 'Неизвестная ось' };
+}
+
+

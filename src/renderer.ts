@@ -14,9 +14,10 @@ import {
   Tree,
   Vehicle,
   VehicleDamage,
-  ParkingSpot
+  ParkingSpot,
+  Particle
 } from './types';
-import { CAR_CONFIGS, canVehicleHaveHitch } from './vehicleHelpers';
+import { CAR_CONFIGS, canVehicleHaveHitch, PX_S_TO_SPEED_KMH, hasRoadTrainLights, isRoadMachinery } from './vehicleHelpers';
 import { trafficDiagnostics } from './aiTraffic';
 import {
   renderSpecializedVehicleAttachments,
@@ -36,8 +37,17 @@ import { drawItemModel2D } from './itemGraphic';
 import { screenEffectsSystem } from './screenEffects';
 import { renderStreetProp, renderTallStreetProp } from './propRenderer';
 import { GasStationRenderer } from './gasStationRenderer';
+import { GarageCooperativeRenderer } from './garageCooperativeRenderer';
+import { RailwayRenderer } from './railwayRenderer';
+import { RailwaySignalingSystem } from './railwaySignalingSystem';
 import { WaterHoseRenderer } from './waterHoseRenderer';
+import { TowRopeRenderer } from './towRopeRenderer';
+import { GuardrailRenderer } from './guardrailRenderer';
+import { TerrainRenderer } from './terrainRenderer';
+import { renderRiverSystem } from './riverSystem';
 import { RemotePlayerState, SpeechBubble } from './onlineSystem';
+import { InteractionTarget } from './interactionSystem';
+import { getCityApartments } from './propertySystem';
 
 const hashString = (str: string): number => {
   let hash = 0;
@@ -46,6 +56,16 @@ const hashString = (str: string): number => {
     hash |= 0;
   }
   return (Math.abs(hash) % 1000) / 1000;
+};
+
+export const isVehicleReverseGearActive = (car: Vehicle): boolean => {
+  if (car.engineState) {
+    if (car.engineState.transmissionType === 'AUTO') {
+      return car.engineState.autoGearMode === 'R';
+    }
+    return car.engineState.currentGear === -1;
+  }
+  return !!car.isReversing;
 };
 
 // --- SAFE CANVAS PRIMITIVES TO PREVENT IndexSizeError DOMExceptions ---
@@ -163,8 +183,8 @@ export class GameRenderer {
     this.lightmapCtx = this.lightmapCanvas.getContext('2d')!;
     this.resize(this.width, this.height);
     
-    for(let i=0; i<15; i++) {
-      this.cloudShadows.push({x: Math.random() * 8000, y: Math.random() * 8000, size: 100 + Math.random() * 200});
+    for(let i=0; i<60; i++) {
+      this.cloudShadows.push({x: Math.random() * 52000, y: Math.random() * 30000, size: 150 + Math.random() * 300});
     }
   }
 
@@ -199,6 +219,13 @@ export class GameRenderer {
 
     // 3. Roads & Markings
     this.renderRoadsAndMarkings(chunkCtx, world, minX, minY, maxX, maxY);
+    this.renderRoadSurfaceTextureAndDefects(chunkCtx, world, minX, minY, maxX, maxY);
+
+    // 3b. Railway Superstructure (Ballast, sleepers, steel rails, switches, buffer stops)
+    RailwayRenderer.renderTrackSuperstructure(chunkCtx, world, minX, minY, maxX, maxY);
+
+    // 3c. Railway Platforms (paving, tactile yellow strips, canopies & station signs)
+    RailwayRenderer.renderPlatforms(chunkCtx, world, minX, minY, maxX, maxY);
 
     // 4. Parking lots
     this.renderParkings(chunkCtx, world, minX, minY, maxX, maxY);
@@ -206,15 +233,31 @@ export class GameRenderer {
     chunkCtx.restore();
   }
 
+  private static readonly MAX_CHUNKS = 48;
   private getChunkCanvas(cx: number, cy: number, world: GameWorld): HTMLCanvasElement {
     const key = `${cx},${cy}`;
     let canvas = this.chunkCache.get(key);
     if (!canvas) {
+      if (this.chunkCache.size >= GameRenderer.MAX_CHUNKS) {
+        const firstKey = this.chunkCache.keys().next().value;
+        if (firstKey !== undefined) {
+          const oldCanvas = this.chunkCache.get(firstKey);
+          if (oldCanvas) {
+            oldCanvas.width = 0;
+            oldCanvas.height = 0;
+          }
+          this.chunkCache.delete(firstKey);
+        }
+      }
       canvas = document.createElement('canvas');
       canvas.width = this.chunkSize;
       canvas.height = this.chunkSize;
       const chunkCtx = canvas.getContext('2d', { alpha: false })!;
       this.renderChunkStatic(chunkCtx, cx, cy, world);
+      this.chunkCache.set(key, canvas);
+    } else {
+      // Move to back for LRU
+      this.chunkCache.delete(key);
       this.chunkCache.set(key, canvas);
     }
     return canvas;
@@ -242,7 +285,8 @@ export class GameRenderer {
     activePlacement?: ActivePlacement | null,
     mouseWorldPos?: { x: number; y: number } | null,
     remotePlayers: RemotePlayerState[] = [],
-    speechBubbles?: Map<string, SpeechBubble>
+    speechBubbles?: Map<string, SpeechBubble>,
+    activeInteraction?: InteractionTarget | null
   ) {
     const ctx = this.ctx;
 
@@ -276,7 +320,11 @@ export class GameRenderer {
     const vpSidewalks = visibleSidewalks || world.sidewalks || [];
 
     // Early-out if inside a building (make the surrounding world pitch black except for window sight cones)
-    if (player && player.isInsideBuilding && player.insideBuildingId) {
+    const insideBld = (player && player.isInsideBuilding && player.insideBuildingId) 
+      ? world.buildings.find(b => b.id === player.insideBuildingId) 
+      : null;
+
+    if (insideBld && player) {
       // 1. Clear Screen to Pitch Black
       ctx.fillStyle = '#000000';
       ctx.fillRect(0, 0, this.width, this.height);
@@ -297,7 +345,7 @@ export class GameRenderer {
       }
 
       // Find the specific building and render its interior + outside world through windows
-      const bld = world.buildings.find(b => b.id === player.insideBuildingId);
+      const bld = insideBld;
       if (bld) {
         const windows: { x: number; y: number; side: 'top' | 'bottom' | 'left' | 'right' }[] = [];
         for (let x = 30; x < bld.width - 30; x += 40) {
@@ -385,10 +433,10 @@ export class GameRenderer {
           ctx.translate(-camera.x, -camera.y);
 
           // Fast cached chunks for outdoor window view
-          const sStartChunkX = Math.floor(Math.max(0, sMinX) / this.chunkSize);
-          const sEndChunkX = Math.floor(Math.min(world.width || 8200, sMaxX) / this.chunkSize);
-          const sStartChunkY = Math.floor(Math.max(0, sMinY) / this.chunkSize);
-          const sEndChunkY = Math.floor(Math.min(world.height || 8200, sMaxY) / this.chunkSize);
+          const sStartChunkX = Math.floor(sMinX / this.chunkSize);
+          const sEndChunkX = Math.floor(sMaxX / this.chunkSize);
+          const sStartChunkY = Math.floor(sMinY / this.chunkSize);
+          const sEndChunkY = Math.floor(sMaxY / this.chunkSize);
 
           for (let cx = sStartChunkX; cx <= sEndChunkX; cx++) {
             for (let cy = sStartChunkY; cy <= sEndChunkY; cy++) {
@@ -398,9 +446,12 @@ export class GameRenderer {
           }
 
           this.renderPuddles(world.puddles, sMinX, sMinY, sMaxX, sMaxY);
+          GuardrailRenderer.renderGuardrails(ctx, world, sMinX, sMinY, sMaxX, sMaxY, nightAlpha);
           this.renderPedestrians(visiblePedestrians, world);
+          this.renderUnderVehicleParticles(world.particles, world.cleanMode);
           this.renderVehicles(visibleVehicles, nightAlpha, camera.gridMode);
           this.renderTreesAndTallProps(vpTrees, vpProps, sMinX, sMinY, sMaxX, sMaxY, nightAlpha);
+          this.renderOverheadParticles(world.particles, world.cleanMode);
 
           if (nightAlpha > 0) {
             ctx.fillStyle = `rgba(15, 23, 42, ${nightAlpha})`;
@@ -412,14 +463,26 @@ export class GameRenderer {
 
         // 2. Render building interior itself on top
         const floor = player.currentFloor ?? 0;
-        const layout = getBuildingLayout(bld, floor);
+        const layout = getBuildingLayout(bld, floor, player.insideApartmentId || undefined);
         renderBuildingInterior(ctx, bld, layout, player, timeHour);
+
+        // 3. Render ground items on the interior floor
+        if (world.groundItems && world.groundItems.length > 0) {
+          this.renderGroundItems(world.groundItems, player, minX, minY, maxX, maxY);
+        }
       }
 
       // Render player pedestrian inside
       if (!player.isInVehicle) {
         this.renderPlayerPedestrian(player);
       }
+
+      // Disabled in favor of high-performance ContextInteractionHUD Lucide React overlay
+      /*
+      if (activeInteraction) {
+        this.renderInteractionReticle(activeInteraction, camera);
+      }
+      */
 
       ctx.restore();
 
@@ -448,10 +511,10 @@ export class GameRenderer {
     }
 
     // 3. Render Ground, Sidewalks, Roads, and Parkings via cached chunks
-    const startChunkX = Math.floor(Math.max(0, minX) / this.chunkSize);
-    const endChunkX = Math.floor(Math.min(world.width || 8200, maxX) / this.chunkSize);
-    const startChunkY = Math.floor(Math.max(0, minY) / this.chunkSize);
-    const endChunkY = Math.floor(Math.min(world.height || 8200, maxY) / this.chunkSize);
+    const startChunkX = Math.floor(minX / this.chunkSize);
+    const endChunkX = Math.floor(maxX / this.chunkSize);
+    const startChunkY = Math.floor(minY / this.chunkSize);
+    const endChunkY = Math.floor(maxY / this.chunkSize);
 
     for (let cx = startChunkX; cx <= endChunkX; cx++) {
       for (let cy = startChunkY; cy <= endChunkY; cy++) {
@@ -463,11 +526,17 @@ export class GameRenderer {
     // 3. Gas Station Full Heavy-Duty Asphalt Apron & Paved Driveways
     GasStationRenderer.renderGroundApron(this.ctx, world, minX, minY, maxX, maxY, nightAlpha);
 
+    // 3b. Garage Cooperative Ground Apron (Concrete slabs, gravel verges, weeds & oil stains)
+    GarageCooperativeRenderer.renderGroundApron(this.ctx, world, minX, minY, maxX, maxY, nightAlpha);
+
     // 3a. Cloud Shadows (Atmosphere)
     this.renderCloudShadows(minX, minY, maxX, maxY);
 
     // 4b. Post-Soviet Atmosphere & Cyrillic Signage
     this.renderPostSovietAtmosphereAndSignage(world, minX, minY, maxX, maxY);
+
+    // 4c. River "Быстрица" (Flowing water, animated currents, riverbanks, ford, obstacles & logging bridge)
+    renderRiverSystem(this.ctx, minX, minY, maxX, maxY, timeHour, nightAlpha, world.weather, visibleVehicles);
 
     // 5. Puddles (Road wet spots)
     this.renderPuddles(world.puddles, minX, minY, maxX, maxY);
@@ -489,6 +558,9 @@ export class GameRenderer {
 
     // 9. Ground-level Props (Benches, Hydrants, Kiosks, Cones, Trash Cans, Mailboxes, and BROKEN lampposts!)
     this.renderGroundProps(vpProps, minX, minY, maxX, maxY);
+
+    // 9-guardrails. Real Soft Guardrails & Terminal Impact Attenuators (Металлические отбойники с ударогасителями)
+    GuardrailRenderer.renderGuardrails(this.ctx, world, minX, minY, maxX, maxY, nightAlpha);
 
     // 9a. Gas Station Pump Islands & Dispensers
     GasStationRenderer.renderGroundPumpsAndIslands(this.ctx, world, player, nightAlpha);
@@ -516,14 +588,27 @@ export class GameRenderer {
       }
     }
 
+    // 13c. Under-Vehicle Ground Exhaust Smoke (rendered UNDER car chassis on asphalt)
+    this.renderUnderVehicleParticles(world.particles, world.cleanMode);
+
     // 14. Vehicles (Cars with dynamic wheels, lights & wipers)
     this.renderVehicles(visibleVehicles, nightAlpha, camera.gridMode);
+
+    // 14-rail. Railway Rolling Stock (Locomotives, passenger coaches, freight cars)
+    RailwayRenderer.renderRollingStock(this.ctx, world, minX, minY, maxX, maxY, nightAlpha);
 
     // 14b. Gas Station Fuel Hoses (connected to hands or vehicle filler caps)
     GasStationRenderer.renderFuelHoses(this.ctx, world, player);
 
     // 14c. Physical Water Hose (connected to water truck / barrel trailer)
     WaterHoseRenderer.render(this.ctx, world, player);
+
+    // 14d. Physical Towing Rope (connected between vehicles or held by player)
+    TowRopeRenderer.render(this.ctx, world, player);
+
+    // 14e. Mid-Layer Wheel Ground Particles (flying mud clods, dust clouds, tire smoke & spray)
+    // Rendered AFTER vehicle chassis, but BEFORE vehicle cabins, building roofs, and trees!
+    this.renderWheelGroundParticles(world.particles, world.cleanMode);
 
     // 15. Professional Two-Pass 2D Lightmap System
     // Moved up to be BELOW roofs/trees so lights don't "draw" on top of foliage/buildings
@@ -533,7 +618,8 @@ export class GameRenderer {
       weatherTransition,
       visibleVehicles, 
       vpProps, 
-      minX, minY, maxX, maxY
+      minX, minY, maxX, maxY,
+      player
     );
 
     const isRaining = world.weather === 'rain' || world.weather === 'storm';
@@ -549,14 +635,23 @@ export class GameRenderer {
     // 16b. Tall Intact Props (Intact trees, and intact lampposts!)
     this.renderTreesAndTallProps(vpTrees, vpProps, minX, minY, maxX, maxY, nightAlpha);
 
+    // 16b2. Overhead Sagging Electrical Wires (СИП between poles and garage roofs)
+    GarageCooperativeRenderer.renderOverheadWires(this.ctx, world, minX, minY, maxX, maxY);
+
+    // 16b3. Overhead Railway Electrification Catenary & Cantilevers
+    RailwayRenderer.renderOverheadCatenary(this.ctx, world, minX, minY, maxX, maxY, nightAlpha);
+
+    // 16b4. Authentic Railway Signals according to ISI (Инструкция по сигнализации)
+    RailwaySignalingSystem.renderAllSignals(this.ctx, world, minX, minY, maxX, maxY, nightAlpha, player.x, player.y);
+
     // 16c. Intact Traffic Light Posts
     this.renderTrafficLights(world.intersections, vpProps.filter((p) => !p.isBroken), minX, minY, maxX, maxY, nightAlpha);
 
     // 16d. Flying Birds
     this.renderBirds(world.birds.filter((b) => b.state === 'flying'), minX, minY, maxX, maxY, nightAlpha);
 
-    // 17. Particles (Smoke, Sparks, Water Fountains)
-    this.renderParticles(world.particles, world.cleanMode);
+    // 17. Overhead Particles (Tractor Stack Exhaust, Engine Bay Steam/Smoke, Flames, Sparks, Debris)
+    this.renderOverheadParticles(world.particles, world.cleanMode);
 
     // 18. Optional AI Telemetry & Debug Visualizer
     if (trafficDiagnostics.debugOverlayEnabled) {
@@ -571,6 +666,13 @@ export class GameRenderer {
     // 20. Multiplayer Overhead Nametags & Speech Bubbles (drawn above roofs/trees in world space)
     this.renderMultiplayerOverhead(player, remotePlayers, speechBubbles, world);
 
+    // Disabled in favor of high-performance ContextInteractionHUD Lucide React overlay
+    /*
+    if (activeInteraction) {
+      this.renderInteractionReticle(activeInteraction, camera);
+    }
+    */
+
     ctx.restore();
 
     // Render full physiological screen effects pass (Pain vignette, Shock desaturation, Frost cyan, Amber wave)
@@ -579,147 +681,7 @@ export class GameRenderer {
 
   // --- GROUND & BASE TERRAIN ---
   private renderGround(ctx: CanvasRenderingContext2D, world: GameWorld, minX: number, minY: number, maxX: number, maxY: number) {
-    
-    // Default urban concrete floor color
-    ctx.fillStyle = '#334155';
-    ctx.fillRect(minX, minY, maxX - minX, maxY - minY);
-
-    // --- FOREST ZONE (Grass floor) ---
-    // North-West area (0 to 3800, 0 to 3800)
-    ctx.fillStyle = '#14532d'; // Deep forest dark green
-    const forestX1 = Math.max(minX, 0);
-    const forestY1 = Math.max(minY, 0);
-    const forestX2 = Math.min(maxX, 3800);
-    const forestY2 = Math.min(maxY, 3800);
-    if (forestX2 > forestX1 && forestY2 > forestY1) {
-      ctx.fillRect(forestX1, forestY1, forestX2 - forestX1, forestY2 - forestY1);
-    }
-
-    // --- COZY VILLAGE / MEADOWS ZONE (Meadows grass floor) ---
-    // South-East area (3800 to end, 3800 to end)
-    ctx.fillStyle = '#16a34a'; // Vibrant meadow green
-    const villageX1 = Math.max(minX, 3800);
-    const villageY1 = Math.max(minY, 3800);
-    const villageX2 = Math.min(maxX, 8000);
-    const villageY2 = Math.min(maxY, world.height || 8200);
-    if (villageX2 > villageX1 && villageY2 > villageY1) {
-      ctx.fillRect(villageX1, villageY1, villageX2 - villageX1, villageY2 - villageY1);
-    }
-
-    // --- STEPPE & PINE FOREST BIOME (x >= 8000) ---
-    const steppeX1 = Math.max(minX, 8000);
-    const steppeY1 = Math.max(minY, 0);
-    const steppeX2 = Math.min(maxX, world.width || 16000);
-    const steppeY2 = Math.min(maxY, world.height || 8000);
-
-    if (steppeX2 > steppeX1 && steppeY2 > steppeY1) {
-      // Warm golden-olive steppe grass base
-      ctx.fillStyle = '#8ca04a';
-      ctx.fillRect(steppeX1, steppeY1, steppeX2 - steppeX1, steppeY2 - steppeY1);
-
-      // Dark Pine Needle Soil under Pine Forest Grove #1 (x: 9800..11200)
-      const pine1X1 = Math.max(steppeX1, 9800);
-      const pine1X2 = Math.min(steppeX2, 11200);
-      if (pine1X2 > pine1X1) {
-        ctx.fillStyle = '#2d2116';
-        ctx.fillRect(pine1X1, Math.max(steppeY1, 2900), pine1X2 - pine1X1, Math.min(steppeY2, 5100) - Math.max(steppeY1, 2900));
-      }
-
-      // Dark Pine Needle Soil under Pine Forest Grove #2 (x: 13600..15500)
-      const pine2X1 = Math.max(steppeX1, 13600);
-      const pine2X2 = Math.min(steppeX2, 15500);
-      if (pine2X2 > pine2X1) {
-        ctx.fillStyle = '#261b11';
-        ctx.fillRect(pine2X1, Math.max(steppeY1, 2700), pine2X2 - pine2X1, Math.min(steppeY2, 5300) - Math.max(steppeY1, 2700));
-      }
-
-      // Sandy turnouts / shoulders along the Steppe Highway (y = 4000)
-      const shoulderX1 = Math.max(steppeX1, 8000);
-      const shoulderX2 = Math.min(steppeX2, 15600);
-      if (shoulderX2 > shoulderX1) {
-        const topS = Math.max(steppeY1, 3860);
-        const botS = Math.min(steppeY2, 4140);
-        if (botS > topS) {
-          ctx.fillStyle = '#a8976b';
-          ctx.fillRect(shoulderX1, topS, shoulderX2 - shoulderX1, botS - topS);
-        }
-      }
-    }
-
-    // --- WEST SCENIC GREEN BUFFER ---
-    // Southwest area (0 to 2000, 3800 to end)
-    ctx.fillStyle = '#15803d'; // Green buffer
-    const countryX1 = Math.max(minX, 0);
-    const countryY1 = Math.max(minY, 3800);
-    const countryX2 = Math.min(maxX, 2000);
-    const countryY2 = Math.min(maxY, world.height || 8200);
-    if (countryX2 > countryX1 && countryY2 > countryY1) {
-      ctx.fillRect(countryX1, countryY1, countryX2 - countryX1, countryY2 - countryY1);
-    }
-
-    // --- MODERN DOWNTOWN PARKS ---
-    // Central Park (around x: 4200..5000, y: 1800..2600)
-    ctx.fillStyle = '#15803d';
-    const parkX1 = Math.max(minX, 4200);
-    const parkY1 = Math.max(minY, 1800);
-    const parkX2 = Math.min(maxX, 5000);
-    const parkY2 = Math.min(maxY, 2600);
-    if (parkX2 > parkX1 && parkY2 > parkY1) {
-      ctx.fillRect(parkX1, parkY1, parkX2 - parkX1, parkY2 - parkY1);
-    }
-
-    // --- INDUSTRIAL DISTRICT / LOGISTICS ZONE (Heavy Concrete Slab Aprons & Freight Yards) ---
-    // North-East Sector (x: 5600 to 8000, y: 0 to 3300)
-    const indX1 = Math.max(minX, 5600);
-    const indY1 = Math.max(minY, 0);
-    const indX2 = Math.min(maxX, 8000);
-    const indY2 = Math.min(maxY, 3300);
-
-    if (indX2 > indX1 && indY2 > indY1) {
-      // Dark heavy industrial weathered concrete / asphalt yard base
-      ctx.fillStyle = '#222934';
-      ctx.fillRect(indX1, indY1, indX2 - indX1, indY2 - indY1);
-
-      // Concrete road slabs expansion joints (плиты ПДН/ПАГ 48x24px со швами, залитыми битумом)
-      const slabW = 48;
-      const slabH = 24;
-      const startX = Math.floor(indX1 / slabW) * slabW;
-      const startY = Math.floor(indY1 / slabH) * slabH;
-
-      ctx.strokeStyle = 'rgba(15, 23, 42, 0.55)';
-      ctx.lineWidth = 1.2;
-      ctx.beginPath();
-      for (let x = startX; x <= indX2; x += slabW) {
-        ctx.moveTo(x, indY1);
-        ctx.lineTo(x, indY2);
-      }
-      for (let y = startY; y <= indY2; y += slabH) {
-        ctx.moveTo(indX1, y);
-        ctx.lineTo(indX2, y);
-      }
-      ctx.stroke();
-
-      // Subtle concrete slab variation and oil/diesel patches
-      for (let x = startX; x <= indX2; x += slabW) {
-        for (let y = startY; y <= indY2; y += slabH) {
-          const slabHash = ((x * 73856093) ^ (y * 19349663)) >>> 0;
-          const modVal = slabHash % 8;
-          if (modVal === 0) {
-            ctx.fillStyle = 'rgba(255, 255, 255, 0.035)';
-            ctx.fillRect(x + 1, y + 1, slabW - 2, slabH - 2);
-          } else if (modVal === 1) {
-            ctx.fillStyle = 'rgba(0, 0, 0, 0.12)';
-            ctx.fillRect(x + 1, y + 1, slabW - 2, slabH - 2);
-          } else if (modVal === 2) {
-            // Dark circular diesel / oil spill spot on apron
-            ctx.fillStyle = 'rgba(10, 15, 25, 0.35)';
-            ctx.beginPath();
-            ctx.ellipse(x + 24, y + 12, 10, 6, 0.3, 0, Math.PI * 2);
-            ctx.fill();
-          }
-        }
-      }
-    }
+    TerrainRenderer.renderGround(ctx, world, minX, minY, maxX, maxY);
   }
 
   // --- ROADS, MARKINGS & CROSSWALKS ---
@@ -736,11 +698,11 @@ export class GameRenderer {
       const isHoriz = road.direction === 'horizontal';
       
       if (road.isDirt) {
-        ctx.fillStyle = '#5c3d23'; // Rustic earth brown for dirt roads
+        ctx.fillStyle = '#553d2c'; // Beautiful natural earth brown for dirt roads
       } else if (road.isGravel) {
-        ctx.fillStyle = '#475569'; // Soft dusty gravel grey for village roads
+        ctx.fillStyle = '#5d5e62'; // Soft dusty limestone grey for gravel roads
       } else {
-        ctx.fillStyle = '#1e293b'; // Standard deep asphalt slate grey for urban roads
+        ctx.fillStyle = '#32343a'; // Realistic premium weathered charcoal tarmac for urban roads
       }
 
       if (isHoriz) {
@@ -751,18 +713,18 @@ export class GameRenderer {
         // Detailed realistic dirt road texturing (overgrown center grass ridge & worn wheel ruts)
         if (road.isDirt) {
           // Worn muddy wheel ruts
-          ctx.fillStyle = '#3a2514';
+          ctx.fillStyle = '#3d2b1f';
           ctx.fillRect(road.x1, road.y1 - road.width * 0.28, road.x2 - road.x1, 6);
           ctx.fillRect(road.x1, road.y1 + road.width * 0.16, road.x2 - road.x1, 6);
 
           // Overgrown grassy center ridge
-          ctx.fillStyle = '#4d6824';
+          ctx.fillStyle = '#4f642f';
           ctx.fillRect(road.x1, road.y1 - 4, road.x2 - road.x1, 8);
-          ctx.fillStyle = '#5b7b29';
+          ctx.fillStyle = '#5c7437';
           ctx.fillRect(road.x1, road.y1 - 2, road.x2 - road.x1, 4);
 
           // Ragged grassy tufts along road edges
-          ctx.fillStyle = '#4d6824';
+          ctx.fillStyle = '#4f642f';
           for (let rx = road.x1 + 10; rx < road.x2; rx += 38) {
             ctx.beginPath();
             ctx.arc(rx, top + 1, 3.5, 0, Math.PI * 2);
@@ -770,7 +732,7 @@ export class GameRenderer {
             ctx.fill();
           }
         }
-      } else {
+      } else if (road.direction === 'vertical') {
         const left = road.x1 - road.width / 2;
         if (left + road.width < minX || left > maxX || road.y2 < minY || road.y1 > maxY) continue;
         ctx.fillRect(left, road.y1, road.width, road.y2 - road.y1);
@@ -778,18 +740,18 @@ export class GameRenderer {
         // Detailed realistic dirt road texturing (vertical)
         if (road.isDirt) {
           // Worn muddy wheel ruts
-          ctx.fillStyle = '#3a2514';
+          ctx.fillStyle = '#3d2b1f';
           ctx.fillRect(road.x1 - road.width * 0.28, road.y1, 6, road.y2 - road.y1);
           ctx.fillRect(road.x1 + road.width * 0.16, road.y1, 6, road.y2 - road.y1);
 
           // Overgrown grassy center ridge
-          ctx.fillStyle = '#4d6824';
+          ctx.fillStyle = '#4f642f';
           ctx.fillRect(road.x1 - 4, road.y1, 8, road.y2 - road.y1);
-          ctx.fillStyle = '#5b7b29';
+          ctx.fillStyle = '#5c7437';
           ctx.fillRect(road.x1 - 2, road.y1, 4, road.y2 - road.y1);
 
           // Ragged grassy tufts along road edges
-          ctx.fillStyle = '#4d6824';
+          ctx.fillStyle = '#4f642f';
           for (let ry = road.y1 + 10; ry < road.y2; ry += 38) {
             ctx.beginPath();
             ctx.arc(left + 1, ry, 3.5, 0, Math.PI * 2);
@@ -797,6 +759,130 @@ export class GameRenderer {
             ctx.fill();
           }
         }
+      } else if (road.curvePoints && road.curvePoints.length > 1) {
+        // True Bezier Curved Road Segment (Ribbon mesh with smooth normals)
+        const pts = road.curvePoints;
+        const n = pts.length;
+        const halfW = road.width / 2;
+
+        let minPX = Infinity, maxPX = -Infinity, minPY = Infinity, maxPY = -Infinity;
+        for (let i = 0; i < n; i++) {
+          if (pts[i].x < minPX) minPX = pts[i].x;
+          if (pts[i].x > maxPX) maxPX = pts[i].x;
+          if (pts[i].y < minPY) minPY = pts[i].y;
+          if (pts[i].y > maxPY) maxPY = pts[i].y;
+        }
+        if (maxPX + halfW >= minX && minPX - halfW <= maxX && maxPY + halfW >= minY && minPY - halfW <= maxY) {
+          const leftEdge: { x: number; y: number }[] = [];
+          const rightEdge: { x: number; y: number }[] = [];
+
+          for (let i = 0; i < n; i++) {
+            let dx = 0, dy = 0;
+            if (i === 0) {
+              dx = pts[1].x - pts[0].x;
+              dy = pts[1].y - pts[0].y;
+            } else if (i === n - 1) {
+              dx = pts[n - 1].x - pts[n - 2].x;
+              dy = pts[n - 1].y - pts[n - 2].y;
+            } else {
+              dx = pts[i + 1].x - pts[i - 1].x;
+              dy = pts[i + 1].y - pts[i - 1].y;
+            }
+            const len = Math.hypot(dx, dy) || 1;
+            const nx = -dy / len;
+            const ny = dx / len;
+
+            leftEdge.push({ x: pts[i].x - nx * halfW, y: pts[i].y - ny * halfW });
+            rightEdge.push({ x: pts[i].x + nx * halfW, y: pts[i].y + ny * halfW });
+          }
+
+          ctx.beginPath();
+          ctx.moveTo(leftEdge[0].x, leftEdge[0].y);
+          for (let i = 1; i < n; i++) {
+            ctx.lineTo(leftEdge[i].x, leftEdge[i].y);
+          }
+          for (let i = n - 1; i >= 0; i--) {
+            ctx.lineTo(rightEdge[i].x, rightEdge[i].y);
+          }
+          ctx.closePath();
+          ctx.fill();
+
+          // Rounded endcaps
+          ctx.beginPath();
+          safeArc(ctx, pts[0].x, pts[0].y, halfW, 0, Math.PI * 2);
+          safeArc(ctx, pts[n - 1].x, pts[n - 1].y, halfW, 0, Math.PI * 2);
+          ctx.fill();
+
+          if (road.isDirt) {
+            ctx.strokeStyle = '#3d2b1f';
+            ctx.lineWidth = 6;
+            ctx.beginPath();
+            for (let i = 0; i < n; i++) {
+              const p = pts[i];
+              const normX = leftEdge[i].x - p.x;
+              const normY = leftEdge[i].y - p.y;
+              const rx = p.x + normX * 0.56;
+              const ry = p.y + normY * 0.56;
+              if (i === 0) ctx.moveTo(rx, ry);
+              else ctx.lineTo(rx, ry);
+            }
+            ctx.stroke();
+
+            ctx.beginPath();
+            for (let i = 0; i < n; i++) {
+              const p = pts[i];
+              const normX = rightEdge[i].x - p.x;
+              const normY = rightEdge[i].y - p.y;
+              const rx = p.x + normX * 0.56;
+              const ry = p.y + normY * 0.56;
+              if (i === 0) ctx.moveTo(rx, ry);
+              else ctx.lineTo(rx, ry);
+            }
+            ctx.stroke();
+
+            ctx.strokeStyle = '#4f642f';
+            ctx.lineWidth = 8;
+            ctx.beginPath();
+            ctx.moveTo(pts[0].x, pts[0].y);
+            for (let i = 1; i < n; i++) ctx.lineTo(pts[i].x, pts[i].y);
+            ctx.stroke();
+          }
+        }
+      } else {
+        // Diagonal / Angled Road Segment (Curved and winding country roads)
+        const dx = road.x2 - road.x1;
+        const dy = road.y2 - road.y1;
+        const len = Math.hypot(dx, dy);
+        if (len < 0.5) continue;
+
+        const minRX = Math.min(road.x1, road.x2) - road.width;
+        const maxRX = Math.max(road.x1, road.x2) + road.width;
+        const minRY = Math.min(road.y1, road.y2) - road.width;
+        const maxRY = Math.max(road.y1, road.y2) + road.width;
+        if (maxRX < minX || minRX > maxX || maxRY < minY || minRY > maxY) continue;
+
+        const angle = Math.atan2(dy, dx);
+        ctx.save();
+        ctx.translate(road.x1, road.y1);
+        ctx.rotate(angle);
+        ctx.fillRect(0, -road.width / 2, len, road.width);
+
+        // Seamless rounded joints at road segment vertices
+        ctx.beginPath();
+        safeArc(ctx, 0, 0, road.width / 2, 0, Math.PI * 2);
+        safeArc(ctx, len, 0, road.width / 2, 0, Math.PI * 2);
+        ctx.fill();
+
+        if (road.isDirt) {
+          ctx.fillStyle = '#3d2b1f';
+          ctx.fillRect(0, -road.width * 0.28, len, 6);
+          ctx.fillRect(0, road.width * 0.16, len, 6);
+          ctx.fillStyle = '#4f642f';
+          ctx.fillRect(0, -4, len, 8);
+          ctx.fillStyle = '#5c7437';
+          ctx.fillRect(0, -2, len, 4);
+        }
+        ctx.restore();
       }
     }
 
@@ -805,24 +891,142 @@ export class GameRenderer {
       if (inter.x + inter.width / 2 < minX || inter.x - inter.width / 2 > maxX ||
           inter.y + inter.height / 2 < minY || inter.y - inter.height / 2 > maxY) continue;
       
-      if (inter.isDirt) {
-        ctx.fillStyle = '#7c2d12'; // Dirt intersection
-      } else if (inter.isGravel) {
-        ctx.fillStyle = '#475569'; // Gravel intersection
-      } else if (inter.x < 3800 && inter.y < 3800) {
-        ctx.fillStyle = '#7c2d12'; // Dirt intersection in forest zone
-      } else if (inter.x > 3800 && inter.y > 3800) {
-        ctx.fillStyle = '#475569'; // Gravel intersection in village zone
-      } else {
-        ctx.fillStyle = '#1e293b'; // Standard asphalt
+      // Smart dynamic surface style detection
+      let isDirt = inter.isDirt;
+      let isGravel = inter.isGravel;
+
+      if (isDirt === undefined && isGravel === undefined) {
+        // Proximity check: see if any touching road is asphalt, dirt, or gravel
+        const halfW = inter.width / 2;
+        const halfH = inter.height / 2;
+        const interLeft = inter.x - halfW;
+        const interRight = inter.x + halfW;
+        const interTop = inter.y - halfH;
+        const interBottom = inter.y + halfH;
+
+        const touchingRoads = roads.filter(r => {
+          if (r.direction === 'horizontal') {
+            const rTop = r.y1 - r.width / 2;
+            const rBottom = r.y1 + r.width / 2;
+            return !(r.x2 < interLeft - 10 || r.x1 > interRight + 10 || rBottom < interTop - 10 || rTop > interBottom + 10);
+          } else {
+            const rLeft = r.x1 - r.width / 2;
+            const rRight = r.x1 + r.width / 2;
+            return !(rRight < interLeft - 10 || rLeft > interRight + 10 || r.y2 < interTop - 10 || r.y1 > interBottom + 10);
+          }
+        });
+
+        if (touchingRoads.length > 0) {
+          const hasAsphalt = touchingRoads.some(r => !r.isDirt && !r.isGravel);
+          const hasGravel = touchingRoads.some(r => r.isGravel);
+          const hasDirt = touchingRoads.some(r => r.isDirt);
+
+          if (hasAsphalt) {
+            isDirt = false;
+            isGravel = false;
+          } else if (hasGravel) {
+            isGravel = true;
+          } else if (hasDirt) {
+            isDirt = true;
+          }
+        }
+
+        // Fallback to zone coordinates if no roads are detected
+        if (isDirt === undefined && isGravel === undefined) {
+          if (inter.x < 3800 && inter.y < 3800) {
+            isDirt = true;
+          } else if (inter.x > 3800 && inter.y > 3800) {
+            isGravel = true;
+          }
+        }
       }
 
-      // Main intersection box
+      if (isDirt) {
+        ctx.fillStyle = '#553d2c'; // Natural clay brown dirt intersection
+      } else if (isGravel) {
+        ctx.fillStyle = '#5d5e62'; // Dusty gravel intersection
+      } else {
+        ctx.fillStyle = '#32343a'; // Standard premium weathered charcoal asphalt
+      }
+
+      // 1. Dedicated Turnaround (Cul-de-sac loop) rendering
+      if (inter.type === 'turnaround' || inter.id.includes('terminal') || inter.id.includes('summit')) {
+        const radius = Math.max(inter.width, inter.height) / 2;
+        ctx.beginPath();
+        safeArc(ctx, inter.x, inter.y, radius, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Subtle outer curb border
+        ctx.strokeStyle = isDirt ? '#3d2b1f' : (isGravel ? '#47484b' : '#222327');
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        safeArc(ctx, inter.x, inter.y, radius - 2, 0, Math.PI * 2);
+        ctx.stroke();
+
+        // Center turnaround guide circle (for paved turnarounds)
+        if (!isDirt && !isGravel) {
+          ctx.strokeStyle = 'rgba(255, 255, 255, 0.35)';
+          ctx.lineWidth = 2;
+          ctx.setLineDash([8, 8]);
+          ctx.beginPath();
+          safeArc(ctx, inter.x, inter.y, radius * 0.55, 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.setLineDash([]);
+        }
+        continue;
+      }
+
+      // 2. Main intersection box
       const halfW = inter.width / 2;
       const halfH = inter.height / 2;
       ctx.fillRect(inter.x - halfW, inter.y - halfH, inter.width, inter.height);
 
-      // Realistic rounded intersection corner fillets (curb returns)
+      // Check which arms have connecting roads to only draw fillets between real adjacent arms
+      let hasNorth = false;
+      let hasSouth = false;
+      let hasWest = false;
+      let hasEast = false;
+
+      for (const road of roads) {
+        if (road.direction === 'horizontal') {
+          if (Math.abs(road.y1 - inter.y) <= halfH + 15) {
+            if (road.x1 <= inter.x - halfW + 15 && road.x2 >= inter.x - halfW - 25) hasWest = true;
+            if (road.x2 >= inter.x + halfW - 15 && road.x1 <= inter.x + halfW + 25) hasEast = true;
+          }
+        } else if (road.direction === 'vertical') {
+          if (Math.abs(road.x1 - inter.x) <= halfW + 15) {
+            if (road.y1 <= inter.y - halfH + 15 && road.y2 >= inter.y - halfH - 25) hasNorth = true;
+            if (road.y2 >= inter.y + halfH - 15 && road.y1 <= inter.y + halfH + 25) hasSouth = true;
+          }
+        } else if (road.curvePoints && road.curvePoints.length > 0) {
+          // Curved road touching intersection boundary
+          const firstPt = road.curvePoints[0];
+          const lastPt = road.curvePoints[road.curvePoints.length - 1];
+          const checkPt = (pt: { x: number; y: number }) => {
+            if (Math.hypot(pt.x - inter.x, pt.y - inter.y) < Math.max(halfW, halfH) + 60) {
+              if (pt.y < inter.y - 15) hasNorth = true;
+              if (pt.y > inter.y + 15) hasSouth = true;
+              if (pt.x < inter.x - 15) hasWest = true;
+              if (pt.x > inter.x + 15) hasEast = true;
+            }
+          };
+          checkPt(firstPt);
+          checkPt(lastPt);
+        }
+      }
+
+      // Default to 4way in city grid if undetermined
+      if (!hasNorth && !hasSouth && !hasWest && !hasEast && inter.type === '4way') {
+        hasNorth = true; hasSouth = true; hasWest = true; hasEast = true;
+      }
+
+      // Explicit 3-way type flags
+      if (inter.type === '3way_T_south') { hasEast = true; hasWest = true; hasSouth = true; hasNorth = false; }
+      if (inter.type === '3way_T_north') { hasEast = true; hasWest = true; hasNorth = true; hasSouth = false; }
+      if (inter.type === '3way_T_east') { hasNorth = true; hasSouth = true; hasEast = true; hasWest = false; }
+      if (inter.type === '3way_T_west') { hasNorth = true; hasSouth = true; hasWest = true; hasEast = false; }
+
+      // Realistic rounded intersection corner fillets (curb returns) - only between adjacent connected arms!
       const R = 20;
       const xTL = inter.x - halfW;
       const yTL = inter.y - halfH;
@@ -833,41 +1037,49 @@ export class GameRenderer {
       const xBR = inter.x + halfW;
       const yBR = inter.y + halfH;
 
-      // Top-Left corner fillet
-      ctx.beginPath();
-      ctx.moveTo(xTL, yTL);
-      ctx.lineTo(xTL - R, yTL);
-      ctx.arc(xTL - R, yTL - R, R, Math.PI / 2, 0, true);
-      ctx.lineTo(xTL, yTL);
-      ctx.closePath();
-      ctx.fill();
+      // Top-Left corner fillet (requires North + West)
+      if (hasNorth && hasWest) {
+        ctx.beginPath();
+        ctx.moveTo(xTL, yTL);
+        ctx.lineTo(xTL - R, yTL);
+        ctx.arc(xTL - R, yTL - R, R, Math.PI / 2, 0, true);
+        ctx.lineTo(xTL, yTL);
+        ctx.closePath();
+        ctx.fill();
+      }
 
-      // Top-Right corner fillet
-      ctx.beginPath();
-      ctx.moveTo(xTR, yTR);
-      ctx.lineTo(xTR, yTR - R);
-      ctx.arc(xTR + R, yTR - R, R, Math.PI, Math.PI / 2, true);
-      ctx.lineTo(xTR, yTR);
-      ctx.closePath();
-      ctx.fill();
+      // Top-Right corner fillet (requires North + East)
+      if (hasNorth && hasEast) {
+        ctx.beginPath();
+        ctx.moveTo(xTR, yTR);
+        ctx.lineTo(xTR, yTR - R);
+        ctx.arc(xTR + R, yTR - R, R, Math.PI, Math.PI / 2, true);
+        ctx.lineTo(xTR, yTR);
+        ctx.closePath();
+        ctx.fill();
+      }
 
-      // Bottom-Left corner fillet
-      ctx.beginPath();
-      ctx.moveTo(xBL, yBL);
-      ctx.lineTo(xBL, yBL + R);
-      ctx.arc(xBL - R, yBL + R, R, 0, -Math.PI / 2, true);
-      ctx.lineTo(xBL, yBL);
-      ctx.closePath();
-      ctx.fill();
+      // Bottom-Left corner fillet (requires South + West)
+      if (hasSouth && hasWest) {
+        ctx.beginPath();
+        ctx.moveTo(xBL, yBL);
+        ctx.lineTo(xBL, yBL + R);
+        ctx.arc(xBL - R, yBL + R, R, 0, -Math.PI / 2, true);
+        ctx.lineTo(xBL, yBL);
+        ctx.closePath();
+        ctx.fill();
+      }
 
-      // Bottom-Right corner fillet
-      ctx.beginPath();
-      ctx.moveTo(xBR, yBR);
-      ctx.lineTo(xBR + R, yBR);
-      ctx.arc(xBR + R, yBR + R, R, -Math.PI / 2, -Math.PI, true);
-      ctx.lineTo(xBR, yBR);
-      ctx.closePath();
-      ctx.fill();
+      // Bottom-Right corner fillet (requires South + East)
+      if (hasSouth && hasEast) {
+        ctx.beginPath();
+        ctx.moveTo(xBR, yBR);
+        ctx.lineTo(xBR + R, yBR);
+        ctx.arc(xBR + R, yBR + R, R, -Math.PI / 2, -Math.PI, true);
+        ctx.lineTo(xBR, yBR);
+        ctx.closePath();
+        ctx.fill();
+      }
     }
 
     // Road Markings (Clean standard road paint: double yellow lines, dashed lane dividers, edge lines)
@@ -928,7 +1140,7 @@ export class GameRenderer {
         ctx.lineTo(road.x2, road.y1 + halfW - 1);
         ctx.stroke();
 
-      } else {
+      } else if (road.direction === 'vertical') {
         // Vertical Road Markings
         if (road.lanes >= 2) {
           if (road.isGravel) {
@@ -973,6 +1185,172 @@ export class GameRenderer {
         ctx.moveTo(road.x1 + halfW - 1, road.y1);
         ctx.lineTo(road.x1 + halfW - 1, road.y2);
         ctx.stroke();
+      } else if (road.curvePoints && road.curvePoints.length > 1) {
+        // Curved Bezier Road Markings
+        const pts = road.curvePoints;
+        const n = pts.length;
+        const halfW = road.width / 2;
+
+        let minPX = Infinity, maxPX = -Infinity, minPY = Infinity, maxPY = -Infinity;
+        for (let i = 0; i < n; i++) {
+          if (pts[i].x < minPX) minPX = pts[i].x;
+          if (pts[i].x > maxPX) maxPX = pts[i].x;
+          if (pts[i].y < minPY) minPY = pts[i].y;
+          if (pts[i].y > maxPY) maxPY = pts[i].y;
+        }
+
+        if (maxPX + halfW >= minX && minPX - halfW <= maxX && maxPY + halfW >= minY && minPY - halfW <= maxY) {
+          // Double Yellow Center Line
+          if (road.lanes >= 2 && !road.isDirt) {
+            if (road.isGravel) {
+              ctx.strokeStyle = 'rgba(255, 255, 255, 0.25)';
+              ctx.lineWidth = 1.5;
+              ctx.beginPath();
+              ctx.moveTo(pts[0].x, pts[0].y);
+              for (let i = 1; i < n; i++) ctx.lineTo(pts[i].x, pts[i].y);
+              ctx.stroke();
+            } else {
+              ctx.strokeStyle = '#eab308';
+              ctx.lineWidth = 1.8;
+
+              // Center line offset -2
+              ctx.beginPath();
+              for (let i = 0; i < n; i++) {
+                let dx = 0, dy = 0;
+                if (i === 0) { dx = pts[1].x - pts[0].x; dy = pts[1].y - pts[0].y; }
+                else if (i === n - 1) { dx = pts[n - 1].x - pts[n - 2].x; dy = pts[n - 1].y - pts[n - 2].y; }
+                else { dx = pts[i + 1].x - pts[i - 1].x; dy = pts[i + 1].y - pts[i - 1].y; }
+                const len = Math.hypot(dx, dy) || 1;
+                const nx = -dy / len;
+                const ny = dx / len;
+                const px = pts[i].x - nx * 2;
+                const py = pts[i].y - ny * 2;
+                if (i === 0) ctx.moveTo(px, py);
+                else ctx.lineTo(px, py);
+              }
+              ctx.stroke();
+
+              // Center line offset +2
+              ctx.beginPath();
+              for (let i = 0; i < n; i++) {
+                let dx = 0, dy = 0;
+                if (i === 0) { dx = pts[1].x - pts[0].x; dy = pts[1].y - pts[0].y; }
+                else if (i === n - 1) { dx = pts[n - 1].x - pts[n - 2].x; dy = pts[n - 1].y - pts[n - 2].y; }
+                else { dx = pts[i + 1].x - pts[i - 1].x; dy = pts[i + 1].y - pts[i - 1].y; }
+                const len = Math.hypot(dx, dy) || 1;
+                const nx = -dy / len;
+                const ny = dx / len;
+                const px = pts[i].x + nx * 2;
+                const py = pts[i].y + ny * 2;
+                if (i === 0) ctx.moveTo(px, py);
+                else ctx.lineTo(px, py);
+              }
+              ctx.stroke();
+            }
+          }
+
+          // White Outer Edge Lines
+          if (!road.isDirt) {
+            ctx.strokeStyle = road.isGravel ? 'rgba(255, 255, 255, 0.15)' : '#94a3b8';
+            ctx.lineWidth = 1.5;
+
+            // Left Edge Line
+            ctx.beginPath();
+            for (let i = 0; i < n; i++) {
+              let dx = 0, dy = 0;
+              if (i === 0) { dx = pts[1].x - pts[0].x; dy = pts[1].y - pts[0].y; }
+              else if (i === n - 1) { dx = pts[n - 1].x - pts[n - 2].x; dy = pts[n - 1].y - pts[n - 2].y; }
+              else { dx = pts[i + 1].x - pts[i - 1].x; dy = pts[i + 1].y - pts[i - 1].y; }
+              const len = Math.hypot(dx, dy) || 1;
+              const nx = -dy / len;
+              const ny = dx / len;
+              const px = pts[i].x - nx * (halfW - 2);
+              const py = pts[i].y - ny * (halfW - 2);
+              if (i === 0) ctx.moveTo(px, py);
+              else ctx.lineTo(px, py);
+            }
+            ctx.stroke();
+
+            // Right Edge Line
+            ctx.beginPath();
+            for (let i = 0; i < n; i++) {
+              let dx = 0, dy = 0;
+              if (i === 0) { dx = pts[1].x - pts[0].x; dy = pts[1].y - pts[0].y; }
+              else if (i === n - 1) { dx = pts[n - 1].x - pts[n - 2].x; dy = pts[n - 1].y - pts[n - 2].y; }
+              else { dx = pts[i + 1].x - pts[i - 1].x; dy = pts[i + 1].y - pts[i - 1].y; }
+              const len = Math.hypot(dx, dy) || 1;
+              const nx = -dy / len;
+              const ny = dx / len;
+              const px = pts[i].x + nx * (halfW - 2);
+              const py = pts[i].y + ny * (halfW - 2);
+              if (i === 0) ctx.moveTo(px, py);
+              else ctx.lineTo(px, py);
+            }
+            ctx.stroke();
+          }
+        }
+      } else {
+        // Diagonal / Angled Road Markings
+        const dx = road.x2 - road.x1;
+        const dy = road.y2 - road.y1;
+        const len = Math.hypot(dx, dy);
+        if (len >= 0.5) {
+          const minRX = Math.min(road.x1, road.x2) - road.width;
+          const maxRX = Math.max(road.x1, road.x2) + road.width;
+          const minRY = Math.min(road.y1, road.y2) - road.width;
+          const maxRY = Math.max(road.y1, road.y2) + road.width;
+          if (!(maxRX < minX || minRX > maxX || maxRY < minY || minRY > maxY)) {
+            const angle = Math.atan2(dy, dx);
+            ctx.translate(road.x1, road.y1);
+            ctx.rotate(angle);
+
+            // Double Yellow Center Line
+            if (road.lanes >= 2) {
+              if (road.isGravel) {
+                ctx.strokeStyle = 'rgba(255, 255, 255, 0.25)';
+                ctx.lineWidth = 1.5;
+                ctx.beginPath();
+                ctx.moveTo(0, 0);
+                ctx.lineTo(len, 0);
+                ctx.stroke();
+              } else {
+                ctx.strokeStyle = '#eab308';
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.moveTo(0, -2);
+                ctx.lineTo(len, -2);
+                ctx.moveTo(0, 2);
+                ctx.lineTo(len, 2);
+                ctx.stroke();
+              }
+            }
+
+            // White Dashed Lane Dividers (4 lanes)
+            if (road.lanes === 4 && !road.isGravel) {
+              ctx.strokeStyle = '#f8fafc';
+              ctx.lineWidth = 1.5;
+              ctx.setLineDash([12, 16]);
+              const laneW = road.width / 4;
+              ctx.beginPath();
+              ctx.moveTo(0, -laneW);
+              ctx.lineTo(len, -laneW);
+              ctx.moveTo(0, laneW);
+              ctx.lineTo(len, laneW);
+              ctx.stroke();
+              ctx.setLineDash([]);
+            }
+
+            // White Outer Edge Lines
+            ctx.strokeStyle = road.isGravel ? 'rgba(255, 255, 255, 0.15)' : '#94a3b8';
+            ctx.lineWidth = 1.5;
+            ctx.beginPath();
+            ctx.moveTo(0, -halfW + 1);
+            ctx.lineTo(len, -halfW + 1);
+            ctx.moveTo(0, halfW - 1);
+            ctx.lineTo(len, halfW - 1);
+            ctx.stroke();
+          }
+        }
       }
       ctx.restore();
     }
@@ -1013,42 +1391,42 @@ export class GameRenderer {
     }
 
     // --- STEPPE HIGHWAY TERMINAL TURNAROUND & HIGHWAY DETAILING ---
-    // Smooth asphalt turnaround loop at highway end (x = 14400, y = 4000)
-    if (maxX >= 14350 && minX <= 14550 && maxY >= 3850 && minY <= 4150) {
+    // --- STEPPE HIGHWAY TERMINAL TURNAROUND & HIGHWAY DETAILING ---
+    // Smooth asphalt turnaround loop at far eastern highway terminal (x = 48000, y = 4000)
+    if (maxX >= 47950 && minX <= 48250 && maxY >= 3850 && minY <= 4150) {
       ctx.save();
 
       // 1. Asphalt turnaround teardrop bulb
-      ctx.fillStyle = '#1e293b';
+      ctx.fillStyle = '#32343a';
       ctx.beginPath();
-      // Flared outer connection from x=14400, y=3904 around to x=14400, y=4096
-      ctx.moveTo(14400, 3904);
-      ctx.bezierCurveTo(14460, 3904, 14515, 3940, 14515, 4000);
-      ctx.bezierCurveTo(14515, 4060, 14460, 4096, 14400, 4096);
+      // Flared outer connection from x=48000, y=3904 around to x=48000, y=4096
+      ctx.moveTo(48000, 3904);
+      ctx.bezierCurveTo(48060, 3904, 48140, 3940, 48140, 4000);
+      ctx.bezierCurveTo(48140, 4060, 48060, 4096, 48000, 4096);
       ctx.closePath();
       ctx.fill();
 
       // Inner median asphalt fillet
-      ctx.fillStyle = '#1e293b';
-      ctx.fillRect(14380, 3976, 50, 48);
+      ctx.fillStyle = '#32343a';
+      ctx.fillRect(47980, 3976, 50, 48);
 
-      // Weathered asphalt tar crack seals (битумные полосы)
+      // Weathered asphalt tar crack seals
       ctx.strokeStyle = 'rgba(15, 23, 42, 0.7)';
       ctx.lineWidth = 1.2;
       ctx.beginPath();
-      ctx.moveTo(14420, 3930);
-      ctx.lineTo(14445, 3965);
-      ctx.lineTo(14435, 4030);
-      ctx.lineTo(14470, 4060);
+      ctx.moveTo(48020, 3930);
+      ctx.lineTo(48045, 3965);
+      ctx.lineTo(48035, 4030);
+      ctx.lineTo(48070, 4060);
       ctx.stroke();
 
       // 2. Road Markings on Turnaround Loop
-      // Outer solid white edge boundary curve
       ctx.strokeStyle = '#f8fafc';
       ctx.lineWidth = 2.5;
       ctx.beginPath();
-      ctx.moveTo(14400, 3906);
-      ctx.bezierCurveTo(14458, 3906, 14510, 3942, 14510, 4000);
-      ctx.bezierCurveTo(14510, 4058, 14458, 4094, 14400, 4094);
+      ctx.moveTo(48000, 3906);
+      ctx.bezierCurveTo(48058, 3906, 48135, 3942, 48135, 4000);
+      ctx.bezierCurveTo(48135, 4058, 48058, 4094, 48000, 4094);
       ctx.stroke();
 
       // Middle dashed white lane separation curve
@@ -1056,23 +1434,22 @@ export class GameRenderer {
       ctx.lineWidth = 1.8;
       ctx.setLineDash([12, 16]);
       ctx.beginPath();
-      ctx.moveTo(14400, 3952);
-      ctx.bezierCurveTo(14435, 3952, 14470, 3970, 14470, 4000);
-      ctx.bezierCurveTo(14470, 4030, 14435, 4048, 14400, 4048);
+      ctx.moveTo(48000, 3952);
+      ctx.bezierCurveTo(48035, 3952, 48090, 3970, 48090, 4000);
+      ctx.bezierCurveTo(48090, 4030, 48035, 4048, 48000, 4048);
       ctx.stroke();
       ctx.setLineDash([]);
 
       // Painted Curved U-Turn Arrows on Asphalt
       [
-        { x: 14450, y: 4000, angle: -Math.PI / 2, size: 1.1 },
-        { x: 14430, y: 4050, angle: -Math.PI * 0.75, size: 1.0 }
+        { x: 48060, y: 4000, angle: -Math.PI / 2, size: 1.1 },
+        { x: 48040, y: 4050, angle: -Math.PI * 0.75, size: 1.0 }
       ].forEach(arr => {
         ctx.save();
         ctx.translate(arr.x, arr.y);
         ctx.rotate(arr.angle);
         ctx.scale(arr.size, arr.size);
         ctx.fillStyle = 'rgba(248, 250, 252, 0.85)';
-        // Arrow stem & head
         ctx.beginPath();
         ctx.moveTo(0, -12);
         ctx.lineTo(7, -2);
@@ -1088,21 +1465,19 @@ export class GameRenderer {
 
       // Yellow Chevron Signs (<<<) mounted behind the curve
       const chevronPositions = [
-        { x: 14520, y: 3950, angle: -Math.PI / 6 },
-        { x: 14525, y: 4000, angle: 0 },
-        { x: 14520, y: 4050, angle: Math.PI / 6 }
+        { x: 48150, y: 3950, angle: -Math.PI / 6 },
+        { x: 48155, y: 4000, angle: 0 },
+        { x: 48150, y: 4050, angle: Math.PI / 6 }
       ];
       for (const ch of chevronPositions) {
         ctx.save();
         ctx.translate(ch.x, ch.y);
         ctx.rotate(ch.angle);
-        // Black backing plate
         ctx.fillStyle = '#0f172a';
         ctx.fillRect(-4, -14, 8, 28);
         ctx.strokeStyle = '#e2e8f0';
         ctx.lineWidth = 1;
         ctx.strokeRect(-4, -14, 8, 28);
-        // Yellow chevron arrows
         ctx.fillStyle = '#eab308';
         [-7, 0, 7].forEach(cy => {
           ctx.beginPath();
@@ -1121,50 +1496,11 @@ export class GameRenderer {
       ctx.restore();
     }
 
-    // Steppe Highway Guardrails & Shoulder Detailing along (x in 8000..14400, y = 4000)
-    if (maxX >= 8000 && minX <= 14450 && maxY >= 3850 && minY <= 4150) {
+    // Steppe Highway Roadside Detailing & Signage (x in 8000..48000, y = 4000)
+    if (maxX >= 8000 && minX <= 48100 && maxY >= 3850 && minY <= 4150) {
       ctx.save();
       const startX = Math.max(8000, Math.floor(minX / 100) * 100);
-      const endX = Math.min(14400, Math.ceil(maxX / 100) * 100);
-
-      // Galvanized Steel Guardrails (Волновой дорожный отбойник)
-      // North shoulder (y = 3900) and South shoulder (y = 4100)
-      [3900, 4100].forEach(gy => {
-        // Steel rail line
-        ctx.strokeStyle = '#94a3b8';
-        ctx.lineWidth = 2.4;
-        ctx.beginPath();
-        ctx.moveTo(startX, gy);
-        ctx.lineTo(endX, gy);
-        ctx.stroke();
-
-        // Highlight sheen on w-beam
-        ctx.strokeStyle = '#e2e8f0';
-        ctx.lineWidth = 0.8;
-        ctx.beginPath();
-        ctx.moveTo(startX, gy - 0.6);
-        ctx.lineTo(endX, gy - 0.6);
-        ctx.stroke();
-
-        // Guardrail I-beam support posts every 36px
-        ctx.fillStyle = '#475569';
-        const postStart = Math.floor(startX / 36) * 36;
-        for (let px = postStart; px <= endX; px += 36) {
-          ctx.fillRect(px - 1.2, gy - 1.8, 2.4, 3.6);
-        }
-
-        // White guideposts with red/white cat's eye reflectors every 108px
-        const poleStart = Math.floor(startX / 108) * 108;
-        for (let gx = poleStart; gx <= endX; gx += 108) {
-          const py = gy === 3900 ? gy - 6 : gy + 6;
-          // Post body
-          ctx.fillStyle = '#f8fafc';
-          ctx.fillRect(gx - 1.5, py - 3, 3, 6);
-          // Reflector
-          ctx.fillStyle = gy === 3900 ? '#ffffff' : '#dc2626';
-          ctx.fillRect(gx - 1.2, py - 1, 2.4, 2);
-        }
-      });
+      const endX = Math.min(48000, Math.ceil(maxX / 100) * 100);
 
       // Steppe Highway Road Signs (Top-down visible road signage)
       // Sign 1: Highway start / Speed limit 110 at x = 8400
@@ -1182,7 +1518,7 @@ export class GameRenderer {
 
       // Sign 2: Wild animals warning at x = 10000
       if (minX <= 10100 && maxX >= 9950) {
-        ctx.fillStyle = '#ffffff'; // White triangle with red border
+        ctx.fillStyle = '#ffffff';
         ctx.beginPath();
         ctx.moveTo(10000, 4110);
         ctx.lineTo(10014, 4128);
@@ -1196,33 +1532,239 @@ export class GameRenderer {
 
       // Sign 3: Turnoff to Village Polynovka at x = 11360
       if (minX <= 11450 && maxX >= 11300) {
-        // Large overhead / roadside green directional sign
-        ctx.fillStyle = '#15803d'; // Green road guide sign
+        ctx.fillStyle = '#15803d';
         ctx.fillRect(11340, 3870, 70, 20);
         ctx.strokeStyle = '#f8fafc';
         ctx.lineWidth = 1.2;
         ctx.strokeRect(11340, 3870, 70, 20);
-
         ctx.fillStyle = '#f8fafc';
         ctx.font = 'bold 8px sans-serif';
         ctx.textAlign = 'center';
         ctx.fillText('← ПОЛЫНОВКА 1.2', 11375, 3883);
       }
 
-      // Sign 4: End of Motorway / Turnaround Ahead at x = 14200
-      if (minX <= 14280 && maxX >= 14150) {
+      // Sign 4: Interchange 1 Gantry (Степной Узел) at x = 14200
+      if (minX <= 14350 && maxX >= 14100) {
         ctx.fillStyle = '#1e3a8a';
-        ctx.fillRect(14200, 4110, 50, 18);
-        ctx.strokeStyle = '#dc2626';
+        ctx.fillRect(14150, 3860, 140, 24);
+        ctx.strokeStyle = '#38bdf8';
         ctx.lineWidth = 1.5;
-        ctx.strokeRect(14200, 4110, 50, 18);
+        ctx.strokeRect(14150, 3860, 140, 24);
         ctx.fillStyle = '#f8fafc';
         ctx.font = 'bold 7px sans-serif';
         ctx.textAlign = 'center';
-        ctx.fillText('РАЗВОРОТ 200М', 14225, 4122);
+        ctx.fillText('↑ М-12 ВОСТОК | ← СЕВЕРНЫЙ ТРАКТ | → ОЗЁРА', 14220, 3875);
+      }
+
+      // Sign 5: Interchange 2 Gantry (Оазис / Золотые Пески) at x = 23750
+      if (minX <= 23900 && maxX >= 23650) {
+        ctx.fillStyle = '#1e3a8a';
+        ctx.fillRect(23700, 3860, 140, 24);
+        ctx.strokeStyle = '#38bdf8';
+        ctx.lineWidth = 1.5;
+        ctx.strokeRect(23700, 3860, 140, 24);
+        ctx.fillStyle = '#f8fafc';
+        ctx.font = 'bold 7px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('↑ М-12 ДАЛЬНИЙ ВОСТОК | → КАНЬОН & ДЮНЫ', 23770, 3875);
+      }
+
+      // Sign 6: Interchange 3 Gantry (Таёжный Перевал) at x = 35750
+      if (minX <= 35900 && maxX >= 35650) {
+        ctx.fillStyle = '#1e3a8a';
+        ctx.fillRect(35700, 3860, 150, 24);
+        ctx.strokeStyle = '#38bdf8';
+        ctx.lineWidth = 1.5;
+        ctx.strokeRect(35700, 3860, 150, 24);
+        ctx.fillStyle = '#f8fafc';
+        ctx.font = 'bold 7px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('↑ ВОСТОЧНЫЕ ВОРОТА | ← ПЕРЕВАЛ ОРЛИНЫЙ ПИК', 35775, 3875);
+      }
+
+      // Sign 7: Terminal Turnaround Ahead at x = 47750
+      if (minX <= 47900 && maxX >= 47650) {
+        ctx.fillStyle = '#1e3a8a';
+        ctx.fillRect(47700, 4110, 80, 20);
+        ctx.strokeStyle = '#dc2626';
+        ctx.lineWidth = 1.5;
+        ctx.strokeRect(47700, 4110, 80, 20);
+        ctx.fillStyle = '#f8fafc';
+        ctx.font = 'bold 7px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('КОНЕЦ ТРАССЫ: РАЗВОРОТ 250М', 47740, 4123);
       }
 
       ctx.restore();
+    }
+  }
+
+  // --- HIGHWAY SURFACE TEXTURES, ASPHALT PATCHES, BITUMEN CRACKS & MUD DRIFTS ---
+  private renderRoadSurfaceTextureAndDefects(
+    ctx: CanvasRenderingContext2D,
+    world: GameWorld,
+    minX: number, minY: number, maxX: number, maxY: number
+  ) {
+    const { roads } = world;
+
+    for (const road of roads) {
+      if (road.isRoundabout) continue;
+
+      // 1. Gravel Shoulders along Country Highways
+      if (!road.isDirt && !road.isGravel) {
+        const isCountryRoad = road.y1 > 3500 || road.y2 > 3500 || road.x1 > 5500 || road.x2 > 5500 || road.x1 < 2000;
+        if (isCountryRoad) {
+          const isHoriz = road.direction === 'horizontal';
+          const halfW = road.width / 2;
+          const shoulderW = 10;
+
+          ctx.fillStyle = '#4a443a'; // Natural dusty gravel/crushed stone shoulder
+          if (isHoriz) {
+            const top = road.y1 - halfW;
+            const bottom = road.y1 + halfW;
+            if (!(road.x2 < minX || road.x1 > maxX || bottom + shoulderW < minY || top - shoulderW > maxY)) {
+              // Top shoulder strip
+              ctx.fillRect(road.x1, top - shoulderW, road.x2 - road.x1, shoulderW);
+              // Bottom shoulder strip
+              ctx.fillRect(road.x1, bottom, road.x2 - road.x1, shoulderW);
+
+              // Coarse gravel stones along shoulder
+              ctx.fillStyle = 'rgba(165, 155, 140, 0.45)';
+              for (let sx = road.x1 + 12; sx < road.x2; sx += 48) {
+                const seed = ((Math.floor(sx * 98765) ^ Math.floor(top * 54321)) >>> 0) % 5;
+                if (seed < 3) {
+                  ctx.fillRect(sx, top - shoulderW + 2, 4, 3);
+                  ctx.fillRect(sx + 20, bottom + shoulderW - 5, 5, 3);
+                }
+              }
+            }
+          } else if (road.direction === 'vertical') {
+            const left = road.x1 - halfW;
+            const right = road.x1 + halfW;
+            if (!(right + shoulderW < minX || left - shoulderW > maxX || road.y2 < minY || road.y1 > maxY)) {
+              // Left shoulder strip
+              ctx.fillRect(left - shoulderW, road.y1, shoulderW, road.y2 - road.y1);
+              // Right shoulder strip
+              ctx.fillRect(right, road.y1, shoulderW, road.y2 - road.y1);
+
+              // Coarse gravel stones
+              ctx.fillStyle = 'rgba(165, 155, 140, 0.45)';
+              for (let sy = road.y1 + 12; sy < road.y2; sy += 48) {
+                const seed = ((Math.floor(sy * 98765) ^ Math.floor(left * 54321)) >>> 0) % 5;
+                if (seed < 3) {
+                  ctx.fillRect(left - shoulderW + 2, sy, 3, 4);
+                  ctx.fillRect(right + shoulderW - 5, sy + 20, 3, 5);
+                }
+              }
+            }
+          }
+        }
+      }
+
+      // 2. Asphalt Repair Patches (Заплатки ямочного ремонта) & Bitumen Cracks (Битумные трещины)
+      if (!road.isDirt && !road.isGravel) {
+        const isHoriz = road.direction === 'horizontal';
+        const length = isHoriz ? (road.x2 - road.x1) : (road.direction === 'vertical' ? (road.y2 - road.y1) : 0);
+
+        if (length > 100) {
+          const isCountry = road.y1 > 3200 || road.x1 > 5400;
+          const numPatches = Math.floor(length / (isCountry ? 260 : 480));
+
+          for (let p = 0; p < numPatches; p++) {
+            const patchSeed = ((Math.floor((road.x1 + p * 137) * 73856093) ^ Math.floor((road.y1 + p * 193) * 19349663)) >>> 0);
+            if (patchSeed % 3 === 0) continue;
+
+            const offsetDist = 50 + (patchSeed % (length - 100));
+            const laneOffset = ((patchSeed % 100) / 100 - 0.5) * (road.width * 0.55);
+
+            let px = 0, py = 0;
+            if (isHoriz) {
+              px = road.x1 + offsetDist;
+              py = road.y1 + laneOffset;
+            } else {
+              px = road.x1 + laneOffset;
+              py = road.y1 + offsetDist;
+            }
+
+            if (px < minX - 40 || px > maxX + 40 || py < minY - 40 || py > maxY + 40) continue;
+
+            const patchType = patchSeed % 4;
+            if (patchType === 0 || patchType === 1) {
+              // Rectangular bitumen asphalt patch
+              const pw = 18 + (patchSeed % 28);
+              const ph = 12 + ((patchSeed >> 3) % 18);
+
+              ctx.fillStyle = 'rgba(22, 24, 28, 0.88)';
+              ctx.fillRect(px - pw / 2, py - ph / 2, pw, ph);
+
+              ctx.strokeStyle = 'rgba(12, 14, 18, 0.65)';
+              ctx.lineWidth = 1.2;
+              ctx.strokeRect(px - pw / 2, py - ph / 2, pw, ph);
+            } else if (patchType === 2) {
+              // Snake bitumen crack line
+              ctx.strokeStyle = 'rgba(16, 18, 22, 0.92)';
+              ctx.lineWidth = 1.8;
+              ctx.beginPath();
+              ctx.moveTo(px - 15, py - 6);
+              ctx.lineTo(px - 4, py + 8);
+              ctx.lineTo(px + 6, py - 4);
+              ctx.lineTo(px + 18, py + 10);
+              ctx.stroke();
+            } else {
+              // Small weathered pothole with exposed aggregate
+              const potholeR = 5 + (patchSeed % 7);
+              ctx.fillStyle = 'rgba(18, 20, 24, 0.95)';
+              ctx.beginPath();
+              ctx.arc(px, py, potholeR + 1.5, 0, Math.PI * 2);
+              ctx.fill();
+
+              ctx.fillStyle = '#483c32';
+              ctx.beginPath();
+              ctx.arc(px, py, potholeR, 0, Math.PI * 2);
+              ctx.fill();
+            }
+          }
+        }
+      }
+
+      // 3. Mud/Dust Drifts & Tire Tracks at Dirt-to-Asphalt Junctions
+      if (road.isDirt) {
+        const isHoriz = road.direction === 'horizontal';
+        const startX = isHoriz ? road.x1 : road.x1;
+        const startY = isHoriz ? road.y1 : road.y1;
+        const endX = isHoriz ? road.x2 : road.x1;
+        const endY = isHoriz ? road.y1 : road.y2;
+
+        const checkJunction = (jx: number, jy: number) => {
+          if (jx < minX - 100 || jx > maxX + 100 || jy < minY - 100 || jy > maxY + 100) return;
+
+          const nearAsphalt = roads.some(r => !r.isDirt && !r.isGravel && (
+            (r.direction === 'horizontal' && Math.abs(r.y1 - jy) < 40 && jx >= r.x1 - 30 && jx <= r.x2 + 30) ||
+            (r.direction === 'vertical' && Math.abs(r.x1 - jx) < 40 && jy >= r.y1 - 30 && jy <= r.y2 + 30)
+          ));
+
+          if (nearAsphalt) {
+            ctx.save();
+            ctx.fillStyle = 'rgba(85, 61, 44, 0.42)';
+            ctx.beginPath();
+            ctx.arc(jx, jy, 36, 0, Math.PI * 2);
+            ctx.fill();
+
+            ctx.strokeStyle = 'rgba(45, 30, 20, 0.55)';
+            ctx.lineWidth = 3.5;
+            ctx.beginPath();
+            ctx.arc(jx - 6, jy - 6, 22, 0, Math.PI * 1.5);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.arc(jx + 6, jy + 6, 22, Math.PI * 0.5, Math.PI * 2);
+            ctx.stroke();
+            ctx.restore();
+          }
+        };
+
+        checkJunction(startX, startY);
+        checkJunction(endX, endY);
+      }
     }
   }
 
@@ -1231,18 +1773,20 @@ export class GameRenderer {
     const ctx = this.ctx;
     ctx.save();
 
-    // 1. Upright 3D Standing Street Signposts at Intersections (Visible from Top-Down View)
+    // 1. Upright 3D Standing Street Signposts at Intersections (Only in City Bounds)
     for (const inter of world.intersections) {
+      // Strictly skip country highways, mountain passes, canyons, turnarounds, or out-of-city junctions
+      if (inter.x > 8000 || inter.y > 8000 || inter.type === 'turnaround' || inter.id.startsWith('inter_highway_') || inter.id.startsWith('inter_deadend_')) continue;
       if (inter.x < minX - 250 || inter.x > maxX + 250 || inter.y < minY - 250 || inter.y > maxY + 250) continue;
 
-      let hName = 'ул. Советская';
-      let vName = 'пр. Ленина';
+      let hName = 'ул. Тенистая';
+      let vName = 'ул. Садовая';
       for (const road of world.roads) {
         if (road.direction === 'horizontal' && Math.abs(inter.y - road.y1) < 100) {
-          hName = road.name === 'Grand Boulevard' ? 'пр. Ленина' : (road.name === 'Central Avenue' ? 'ул. Гагарина' : road.name);
+          hName = road.name === 'Grand Boulevard' ? 'ул. Садовая' : (road.name === 'Central Avenue' ? 'ул. Космическая' : road.name);
         }
         if (road.direction === 'vertical' && Math.abs(inter.x - road.x1) < 100) {
-          vName = road.name === 'Silicon Highway' ? 'шоссе Энтузиастов' : (road.name === 'Metro Avenue' ? 'ул. Строителей' : road.name);
+          vName = road.name === 'Silicon Highway' ? 'шоссе Нова' : (road.name === 'Metro Avenue' ? 'ул. Строителей' : road.name);
         }
       }
 
@@ -1287,21 +1831,83 @@ export class GameRenderer {
     ctx.restore();
   }
 
-  // --- SKID MARKS ---
+  // --- SKID MARKS & VOLUMETRIC OFFROAD RUTS ---
   private renderSkidMarks(skidMarks: GameWorld['skidMarks'], minX: number, minY: number, maxX: number, maxY: number) {
     const ctx = this.ctx;
     ctx.save();
-    for (const sm of skidMarks) {
+    ctx.lineCap = 'round';
+    for (let i = 0; i < skidMarks.length; i++) {
+      const sm = skidMarks[i];
       if (Math.max(sm.x1, sm.x2) < minX || Math.min(sm.x1, sm.x2) > maxX ||
           Math.max(sm.y1, sm.y2) < minY || Math.min(sm.y1, sm.y2) > maxY) continue;
 
-      ctx.strokeStyle = sm.color;
-      ctx.globalAlpha = sm.alpha;
-      ctx.lineWidth = sm.width;
-      ctx.beginPath();
-      ctx.moveTo(sm.x1, sm.y1);
-      ctx.lineTo(sm.x2, sm.y2);
-      ctx.stroke();
+      if (sm.depth && sm.depth > 0.04) {
+        const depth = Math.max(0.05, Math.min(1.5, sm.depth));
+        const w = sm.width;
+        const bermW = w * (1.30 + depth * 0.35);
+
+        // Pass 1: Displaced soil berms on outer edges (выдавленный валик грунта)
+        ctx.strokeStyle = sm.bermColor || '#452a18';
+        ctx.globalAlpha = Math.max(0, Math.min(1.0, sm.alpha * 0.60));
+        ctx.lineWidth = bermW;
+        ctx.beginPath();
+        ctx.moveTo(sm.x1, sm.y1);
+        ctx.lineTo(sm.x2, sm.y2);
+        ctx.stroke();
+
+        // Pass 2: Compacted depressed rut trench / furrow (вдавленное дно колеи)
+        ctx.strokeStyle = sm.grooveColor || sm.color;
+        ctx.globalAlpha = Math.max(0, Math.min(1.0, sm.alpha * (0.85 + depth * 0.25)));
+        ctx.lineWidth = w;
+        ctx.beginPath();
+        ctx.moveTo(sm.x1, sm.y1);
+        ctx.lineTo(sm.x2, sm.y2);
+        ctx.stroke();
+
+        // Pass 3: Deep ambient occlusion core crevice (глубокая тень впадины при сильном проседании)
+        if (depth > 0.28) {
+          ctx.strokeStyle = '#0a0604';
+          ctx.globalAlpha = Math.max(0, Math.min(0.85, sm.alpha * (depth - 0.2) * 0.8));
+          ctx.lineWidth = Math.max(1.2, w * 0.42);
+          ctx.beginPath();
+          ctx.moveTo(sm.x1, sm.y1);
+          ctx.lineTo(sm.x2, sm.y2);
+          ctx.stroke();
+        }
+
+        // Pass 4: Tire tread ribbing profile (рельеф протектора)
+        if (depth > 0.20) {
+          ctx.setLineDash([3, 4]);
+          ctx.strokeStyle = sm.grooveColor ? sm.grooveColor : '#1a110a';
+          ctx.globalAlpha = Math.max(0, Math.min(0.5, sm.alpha * 0.40));
+          ctx.lineWidth = Math.max(1.0, w * 0.72);
+          ctx.beginPath();
+          ctx.moveTo(sm.x1, sm.y1);
+          ctx.lineTo(sm.x2, sm.y2);
+          ctx.stroke();
+          ctx.setLineDash([]);
+        }
+
+        // Pass 5: Wet water puddle sheen in rain / wet mud (водяной зеркальный отблеск в размытой колее)
+        if (sm.isWet && depth > 0.20) {
+          ctx.strokeStyle = 'rgba(186, 230, 253, 0.45)';
+          ctx.globalAlpha = Math.max(0, Math.min(0.65, sm.alpha * depth * 0.55));
+          ctx.lineWidth = Math.max(0.8, w * 0.24);
+          ctx.beginPath();
+          ctx.moveTo(sm.x1, sm.y1);
+          ctx.lineTo(sm.x2, sm.y2);
+          ctx.stroke();
+        }
+      } else {
+        // Standard asphalt tire skid mark / burnout line
+        ctx.strokeStyle = sm.color;
+        ctx.globalAlpha = sm.alpha;
+        ctx.lineWidth = sm.width;
+        ctx.beginPath();
+        ctx.moveTo(sm.x1, sm.y1);
+        ctx.lineTo(sm.x2, sm.y2);
+        ctx.stroke();
+      }
     }
     ctx.restore();
   }
@@ -1792,7 +2398,7 @@ export class GameRenderer {
         ctx.strokeRect(dw.x, dw.y, dw.width, dw.height);
       } else {
         // Draw clean asphalt surface
-        ctx.fillStyle = '#1e293b';
+        ctx.fillStyle = '#32343a';
         ctx.fillRect(dw.x, dw.y, dw.width, dw.height);
 
         ctx.strokeStyle = '#475569';
@@ -1808,7 +2414,7 @@ export class GameRenderer {
       if (pk.x + pk.width < minX || pk.x > maxX || pk.y + pk.height < minY || pk.y > maxY) continue;
 
       // 1. Asphalt Surface with Durable Curb Trim
-      ctx.fillStyle = '#1e293b'; // deep clean dark asphalt
+      ctx.fillStyle = '#32343a'; // deep clean dark asphalt
       ctx.fillRect(pk.x, pk.y, pk.width, pk.height);
 
       ctx.strokeStyle = '#475569';
@@ -2036,11 +2642,23 @@ export class GameRenderer {
         this.renderParkFountainBase(bld, nightAlpha);
         continue;
       }
+      if (
+        bld.type === 'garage_cooperative' ||
+        bld.type === 'garage_box' ||
+        bld.type === 'garage_workshop' ||
+        bld.type === 'garage_gatehouse' ||
+        bld.type === 'garage_substation' ||
+        bld.type === 'garage_ramp' ||
+        (bld.id && bld.id.startsWith('garage_gsk_'))
+      ) {
+        GarageCooperativeRenderer.renderGarageBase(ctx, bld, nightAlpha, player, timeHour);
+        continue;
+      }
 
       // Render building interior if player is inside this specific building
       if (player && player.isInsideBuilding && player.insideBuildingId === bld.id) {
         const floor = player.currentFloor ?? 0;
-        const layout = getBuildingLayout(bld, floor);
+        const layout = getBuildingLayout(bld, floor, player.insideApartmentId || undefined);
         renderBuildingInterior(ctx, bld, layout, player, timeHour);
         continue;
       }
@@ -2213,9 +2831,45 @@ export class GameRenderer {
           ctx.fillStyle = '#0f172a';
           ctx.fillRect(wx - 2.5, winY - 2, 5, 3);
         }
+      } else if (bld.type === 'real_estate_agency') {
+        // --- АГЕНТСТВО НЕДВИЖИМОСТИ «ГЛАВНЕДВИЖИМОСТЬ» FACADE ---
+        ctx.fillStyle = '#0f172a';
+        ctx.fillRect(bld.x, bld.y, bld.width, bld.height);
+
+        // Polished granite seam trim
+        ctx.strokeStyle = 'rgba(234, 179, 8, 0.25)';
+        ctx.lineWidth = 1.5;
+        ctx.strokeRect(bld.x + 2, bld.y + 2, bld.width - 4, bld.height - 4);
+
+        // Glass curtain windows
+        const winW = Math.min(48, (bld.width - 60) / 2);
+        ctx.fillStyle = 'rgba(56, 189, 248, 0.35)';
+        ctx.fillRect(bld.x + 16, bld.y + bld.height - 24, winW, 20);
+        ctx.fillRect(bld.x + bld.width - 16 - winW, bld.y + bld.height - 24, winW, 20);
+        ctx.strokeStyle = '#38bdf8';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(bld.x + 16, bld.y + bld.height - 24, winW, 20);
+        ctx.strokeRect(bld.x + bld.width - 16 - winW, bld.y + bld.height - 24, winW, 20);
+
+        // Golden fascia sign board
+        const signW = Math.min(180, bld.width - 20);
+        const signX = bld.x + (bld.width - signW) / 2;
+        const signY = bld.y + bld.height - 24;
+
+        ctx.fillStyle = '#1e293b';
+        ctx.fillRect(signX, signY, signW, 20);
+        ctx.strokeStyle = '#ca8a04';
+        ctx.lineWidth = 1.5;
+        ctx.strokeRect(signX, signY, signW, 20);
+
+        ctx.fillStyle = '#fef08a';
+        ctx.font = 'bold 8.5px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('ГЛАВНЕДВИЖИМОСТЬ • ЕДИНЫЙ РЕЕСТР', signX + signW / 2, signY + 10);
       } else if (bld.type === 'shopping_mall' || bld.type === 'commercial' || bld.type === 'shop' || bld.type === 'tactical_store' || bld.type === 'auto_service_center' || bld.type === 'car_wash_station' || bld.type === 'pharmacy_store' || bld.type === 'supermarket_store' || bld.type === 'bakery_cafe' || bld.type === 'coffee_bistro' || bld.type === 'electronics_store' || bld.type === 'sports_store' || bld.type === 'fast_food_restaurant' || bld.type === 'pizzeria_restaurant' || bld.type === 'commercial_gallery' || bld.shopBrand !== undefined) {
         if (bld.shopBrand === 'pharmacy_36_6' || bld.type === 'pharmacy_store') {
-          // --- АПТЕКА 36.6: MODERN PHARMACEUTICAL CLINICAL FACADE ---
+          // --- АПТЕКА "ПАНАЦЕЯ": MODERN PHARMACEUTICAL CLINICAL FACADE ---
           ctx.fillStyle = '#f8fafc';
           ctx.fillRect(bld.x, bld.y, bld.width, bld.height);
 
@@ -2261,9 +2915,9 @@ export class GameRenderer {
           ctx.font = 'bold 8px sans-serif';
           ctx.textAlign = 'center';
           ctx.textBaseline = 'middle';
-          ctx.fillText('АПТЕКА 36.6 • МЕДИКАМЕНТЫ 24/7', signX + signW / 2, bld.y + 9);
+          ctx.fillText('АПТЕКА "ПАНАЦЕЯ" • МЕДИКАМЕНТЫ 24/7', signX + signW / 2, bld.y + 9);
         } else if (bld.shopBrand === 'pyaterochka') {
-          // --- СУПЕРМАРКЕТ "ПЯТЁРОЧКА 24/7": SIGNATURE RED & GREEN GROCERY ---
+          // --- СУПЕРМАРКЕТ "РЕГУЛЯР 24/7": SIGNATURE RED & GREEN GROCERY ---
           ctx.fillStyle = '#15803d';
           ctx.fillRect(bld.x, bld.y, bld.width, bld.height);
 
@@ -2278,7 +2932,7 @@ export class GameRenderer {
           ctx.lineWidth = 1.2;
           ctx.strokeRect(bld.x + 15, bld.y + bld.height - 20, bld.width - 30, 17);
 
-          // Red Round Emblem with Green Leaf & "5"
+          // Red Round Emblem with Green Leaf & "Р"
           const emblemX = bld.x + 24;
           const emblemY = bld.y + 11;
           ctx.fillStyle = '#ffffff';
@@ -2297,12 +2951,12 @@ export class GameRenderer {
           ctx.ellipse(emblemX + 3, emblemY - 6, 3, 1.8, Math.PI / 4, 0, Math.PI * 2);
           ctx.fill();
 
-          // White "5" inside emblem
+          // White "Р" inside emblem
           ctx.fillStyle = '#ffffff';
           ctx.font = 'bold 9px sans-serif';
           ctx.textAlign = 'center';
           ctx.textBaseline = 'middle';
-          ctx.fillText('5', emblemX, emblemY + 1);
+          ctx.fillText('Р', emblemX, emblemY);
 
           // Signboard Text
           const pSignW = Math.min(240, bld.width - 65);
@@ -2317,9 +2971,9 @@ export class GameRenderer {
           ctx.font = 'bold 9px sans-serif';
           ctx.textAlign = 'center';
           ctx.textBaseline = 'middle';
-          ctx.fillText('ПЯТЁРОЧКА 24/7 • ПРОДУКТЫ У ДОМА', pSignX + pSignW / 2, bld.y + 11);
+          ctx.fillText('РЕГУЛЯР 24/7 • ПРОДУКТЫ У ДОМА', pSignX + pSignW / 2, bld.y + 11);
         } else if (bld.shopBrand === 'cofix_bakery') {
-          // --- КАФЕ & ПЕКАРНЯ "COFIX": MATTE BLACK & ORANGE URBAN AESTHETIC ---
+          // --- КАФЕ & ПЕКАРНЯ "УРБАН": MATTE BLACK & ORANGE URBAN AESTHETIC ---
           ctx.fillStyle = '#18181b';
           ctx.fillRect(bld.x, bld.y, bld.width, bld.height);
 
@@ -2353,7 +3007,7 @@ export class GameRenderer {
           ctx.font = 'bold 8.5px sans-serif';
           ctx.textAlign = 'center';
           ctx.textBaseline = 'middle';
-          ctx.fillText('COFIX & BAKERY • СВЕЖИЙ КОФЕ И ВЫПЕЧКА', cSignX + cSignW / 2, bld.y + 11);
+          ctx.fillText('УРБАН & БЕЙКЕРИ • СВЕЖИЙ КОФЕ И ВЫПЕЧКА', cSignX + cSignW / 2, bld.y + 11);
         } else if (bld.shopBrand === 'bean_bistro') {
           // --- КАФЕ & КОФЕЙНЯ "BEAN & BISTRO": COZY ROAST MAHOGANY & TERRACOTTA ---
           ctx.fillStyle = '#451a03';
@@ -2461,7 +3115,7 @@ export class GameRenderer {
           ctx.font = 'bold 9px sans-serif';
           ctx.textAlign = 'center';
           ctx.textBaseline = 'middle';
-          ctx.fillText('🚘 ПРЕМИУМ АВТО • ОФИЦИАЛЬНЫЙ АВТОСАЛОН & ШОУРУМ', dealSignX + dealSignW / 2, bld.y + 12.5);
+          ctx.fillText('ПРЕМИУМ АВТО • ОФИЦИАЛЬНЫЙ АВТОСАЛОН & ШОУРУМ', dealSignX + dealSignW / 2, bld.y + 12.5);
         } else if (bld.shopBrand === 'pitstop_service') {
           // --- АВТОМАСТЕРСКАЯ "PIT-STOP": INDUSTRIAL STEEL & RACING GARAGE BAYS ---
           ctx.fillStyle = '#1e293b';
@@ -2588,9 +3242,9 @@ export class GameRenderer {
           ctx.font = 'bold 9px sans-serif';
           ctx.textAlign = 'center';
           ctx.textBaseline = 'middle';
-          ctx.fillText('ПЕРЕКРЁСТОК 24/7 • СУПЕРМАРКЕТ', pSignX + pSignW / 2, bld.y + 11);
+          ctx.fillText('АЗИМУТ 24/7 • СУПЕРМАРКЕТ', pSignX + pSignW / 2, bld.y + 11);
         } else if (bld.shopBrand === 'dodo_pizza') {
-          // --- ПИЦЦЕРИЯ "ДОДО ПИЦЦА": VIBRANT ORANGE & TERRACOTTA BRICK ---
+          // --- ПИЦЦЕРИЯ "ПИЦЦА-ИМПЕРИЯ": VIBRANT ORANGE & TERRACOTTA BRICK ---
           ctx.fillStyle = '#7c2d12';
           ctx.fillRect(bld.x, bld.y, bld.width, bld.height);
 
@@ -2605,7 +3259,7 @@ export class GameRenderer {
           ctx.lineWidth = 1.2;
           ctx.strokeRect(bld.x + 12, bld.y + bld.height - 20, bld.width - 24, 17);
 
-          // Round Dodo bird emblem
+          // Round bird/pizza emblem
           const emblemX = bld.x + 22;
           const emblemY = bld.y + 11;
           ctx.fillStyle = '#ffffff';
@@ -2630,9 +3284,9 @@ export class GameRenderer {
           ctx.font = 'bold 9px sans-serif';
           ctx.textAlign = 'center';
           ctx.textBaseline = 'middle';
-          ctx.fillText('ДОДО ПИЦЦА • ПИЦЦЕРИЯ & ДОСТАВКА', dSignX + dSignW / 2, bld.y + 11);
+          ctx.fillText('ПИЦЦА-ИМПЕРИЯ • ПИЦЦЕРИЯ & ДОСТАВКА', dSignX + dSignW / 2, bld.y + 11);
         } else if (bld.shopBrand === 'vkusno_tochka') {
-          // --- РЕСТОРАН "ВКУСНО — И ТОЧКА": BURGUNDY & WARM MUSTARD ---
+          // --- РЕСТОРАН "БУРГЕР-КЛАБ": BURGUNDY & WARM MUSTARD ---
           ctx.fillStyle = '#7f1d1d';
           ctx.fillRect(bld.x, bld.y, bld.width, bld.height);
 
@@ -2673,9 +3327,9 @@ export class GameRenderer {
           ctx.font = 'bold 9px sans-serif';
           ctx.textAlign = 'center';
           ctx.textBaseline = 'middle';
-          ctx.fillText('ВКУСНО — И ТОЧКА • РЕСТОРАН', vSignX + vSignW / 2, bld.y + 11);
+          ctx.fillText('БУРГЕР-КЛАБ • БЫСТРОЕ ПИТАНИЕ', vSignX + vSignW / 2, bld.y + 11);
         } else if (bld.shopBrand === 'mvideo') {
-          // --- ЭЛЕКТРОНИКА "М.ВИДЕО": ROYAL BLUE & CRIMSON LOGO ---
+          // --- ЭЛЕКТРОНИКА "ЭЛЕКТРО-МАРКЕТ": ROYAL BLUE & CRIMSON LOGO ---
           ctx.fillStyle = '#1e3a8a';
           ctx.fillRect(bld.x, bld.y, bld.width, bld.height);
 
@@ -2690,7 +3344,7 @@ export class GameRenderer {
           ctx.lineWidth = 1.2;
           ctx.strokeRect(bld.x + 12, bld.y + bld.height - 20, bld.width - 24, 17);
 
-          // Red badge with cursive 'М'
+          // Red badge with cursive 'Э'
           const emblemX = bld.x + 22;
           const emblemY = bld.y + 11;
           ctx.fillStyle = '#ffffff';
@@ -2701,7 +3355,7 @@ export class GameRenderer {
           ctx.font = 'bold 9px sans-serif';
           ctx.textAlign = 'center';
           ctx.textBaseline = 'middle';
-          ctx.fillText('М', emblemX, emblemY + 1);
+          ctx.fillText('Э', emblemX, emblemY + 1);
 
           // Signboard Text
           const mSignW = Math.min(260, bld.width - 60);
@@ -2716,9 +3370,9 @@ export class GameRenderer {
           ctx.font = 'bold 9px sans-serif';
           ctx.textAlign = 'center';
           ctx.textBaseline = 'middle';
-          ctx.fillText('М.ВИДЕО • ГИПЕРМАРКЕТ ЭЛЕКТРОНИКИ', mSignX + mSignW / 2, bld.y + 11);
+          ctx.fillText('ЭЛЕКТРО-МАРКЕТ • ГИПЕРМАРКЕТ ТЕХНИКИ', mSignX + mSignW / 2, bld.y + 11);
         } else if (bld.shopBrand === 'sportmaster') {
-          // --- СПОРТТОВАРЫ "СПОРТМАСТЕР": BLUE & TRI-COLOR CHEVRONS ---
+          // --- СПОРТТОВАРЫ "СПОРТ-ОЛИМП": BLUE & TRI-COLOR CHEVRONS ---
           ctx.fillStyle = '#0369a1';
           ctx.fillRect(bld.x, bld.y, bld.width, bld.height);
 
@@ -2746,7 +3400,7 @@ export class GameRenderer {
           ctx.font = 'bold 9px sans-serif';
           ctx.textAlign = 'center';
           ctx.textBaseline = 'middle';
-          ctx.fillText('СПОРТМАСТЕР • СПОРТИВНЫЙ МАГАЗИН', sSignX + sSignW / 2, bld.y + 11);
+          ctx.fillText('СПОРТ-ОЛИМП • СПОРТИВНЫЙ МАГАЗИН', sSignX + sSignW / 2, bld.y + 11);
         } else {
           // --- STANDALONE LOCAL RETAIL STORE / CAFE ---
           ctx.fillStyle = '#1e293b';
@@ -2786,7 +3440,7 @@ export class GameRenderer {
       }
 
       // Dedicated Country Garage Door Renderer for suburban garages
-      if (bld.id.startsWith('garage_suburban_')) {
+      if (bld.id && bld.id.startsWith('garage_suburban_')) {
         const entSide = bld.entranceSide || 'north';
         const gdw = Math.min(bld.width - 10, 42);
         const gdx = bld.x + (bld.width - gdw) / 2;
@@ -2826,8 +3480,14 @@ export class GameRenderer {
         const canopyDepth = isSuburbanHouse ? 10 : 14;
         const canopyWidth = isSuburbanHouse ? 20 : 28;
 
+        const ratio = (ent.offsetRatio !== undefined && Number.isFinite(ent.offsetRatio))
+          ? ent.offsetRatio
+          : ((ent as any).x !== undefined && Number.isFinite((ent as any).x)
+              ? Math.max(0, Math.min(1, ((ent as any).x - bld.x) / (bld.width || 1)))
+              : 0.5);
+
         if (ent.side === 'north') {
-          ex = bld.x + bld.width * ent.offsetRatio - canopyWidth / 2;
+          ex = bld.x + bld.width * ratio - canopyWidth / 2;
           ey = bld.y - canopyDepth;
           ew = canopyWidth;
           eh = canopyDepth;
@@ -2835,7 +3495,7 @@ export class GameRenderer {
           lightCX = ex + canopyWidth / 2; lightCY = bld.y - 6;
           rampX = ex - 6; rampY = ey; rampW = 5; rampH = eh;
         } else if (ent.side === 'south') {
-          ex = bld.x + bld.width * ent.offsetRatio - canopyWidth / 2;
+          ex = bld.x + bld.width * ratio - canopyWidth / 2;
           ey = bld.y + bld.height;
           ew = canopyWidth;
           eh = canopyDepth;
@@ -2844,7 +3504,7 @@ export class GameRenderer {
           rampX = ex + ew + 1; rampY = ey; rampW = 5; rampH = eh;
         } else if (ent.side === 'west') {
           ex = bld.x - canopyDepth;
-          ey = bld.y + bld.height * ent.offsetRatio - canopyWidth / 2;
+          ey = bld.y + bld.height * ratio - canopyWidth / 2;
           ew = canopyDepth;
           eh = canopyWidth;
           doorX = bld.x; doorY = ey + 5; doorW = 2.5; doorH = canopyWidth - 10;
@@ -2852,7 +3512,7 @@ export class GameRenderer {
           rampX = ex; rampY = ey - 6; rampW = ew; rampH = 5;
         } else if (ent.side === 'east') {
           ex = bld.x + bld.width;
-          ey = bld.y + bld.height * ent.offsetRatio - canopyWidth / 2;
+          ey = bld.y + bld.height * ratio - canopyWidth / 2;
           ew = canopyDepth;
           eh = canopyWidth;
           doorX = bld.x + bld.width - 2.5; doorY = ey + 5; doorW = 2.5; doorH = canopyWidth - 10;
@@ -3245,6 +3905,34 @@ export class GameRenderer {
       }
       if (bld.type === 'park_monument') {
         this.renderParkFountainSpray(bld, nightAlpha);
+        continue;
+      }
+      if (
+        bld.type === 'garage_cooperative' ||
+        bld.type === 'garage_box' ||
+        bld.type === 'garage_workshop' ||
+        bld.type === 'garage_gatehouse' ||
+        bld.type === 'garage_substation' ||
+        bld.type === 'garage_ramp' ||
+        (bld.id && bld.id.startsWith('garage_gsk_'))
+      ) {
+        GarageCooperativeRenderer.renderGarageRoof(ctx, bld, nightAlpha, player, world);
+        continue;
+      }
+
+      if (
+        bld.type === 'railway_station' ||
+        bld.type === 'railway_warehouse' ||
+        bld.type === 'railway_crossing_post'
+      ) {
+        const isPlayerInside = player && (
+          (player.isInsideBuilding && player.insideBuildingId === bld.id) ||
+          (player.x >= bld.x - 4 && player.x <= bld.x + bld.width + 4 &&
+           player.y >= bld.y - 4 && player.y <= bld.y + bld.height + 4)
+        );
+        if (!isPlayerInside) {
+          RailwayRenderer.renderRailwayBuildingRoof(ctx, bld, nightAlpha);
+        }
         continue;
       }
 
@@ -3865,7 +4553,7 @@ export class GameRenderer {
         }
 
         // Industrial Factory Chimney / Smokestack on major facilities
-        if (bld.id.includes('mfg') || bld.id.includes('hub') || bld.id.includes('9_0') || bld.id.includes('8_3')) {
+        if (bld.id && (bld.id.includes('mfg') || bld.id.includes('hub') || bld.id.includes('9_0') || bld.id.includes('8_3'))) {
           const chimX = rx + 24;
           const chimY = ry + 24;
 
@@ -3937,8 +4625,8 @@ export class GameRenderer {
 
       // --- RURAL GABLE ROOF FOR VILLAGE IZBAS ---
       if (bld.type === 'suburban') {
-        const isAbandoned = bld.id.includes('abandoned');
-        const isBarn = bld.id.includes('barn');
+        const isAbandoned = bld.id ? bld.id.includes('abandoned') : false;
+        const isBarn = bld.id ? bld.id.includes('barn') : false;
 
         // Eaves overhang (вынос карниза крыши)
         const eX = bld.x - 4;
@@ -4055,11 +4743,11 @@ export class GameRenderer {
       }
 
       // 2. PARAPET / ROOF RIDGE BORDER
-      ctx.fillStyle = bld.roofColor;
+      ctx.fillStyle = bld.roofColor || '#1e293b';
       ctx.fillRect(bld.x + 4, bld.y + 4, bld.width - 8, bld.height - 8);
 
       // Accent Coping Line on Parapet Edge
-      ctx.strokeStyle = bld.accentColor;
+      ctx.strokeStyle = bld.accentColor || '#475569';
       ctx.lineWidth = isCommercial ? 3.0 : 2.2;
       ctx.strokeRect(bld.x + 4, bld.y + 4, bld.width - 8, bld.height - 8);
 
@@ -4120,19 +4808,19 @@ export class GameRenderer {
         ctx.fillRect(penX + 4, penY + 4, penW, penH);
 
         // Penthouse base wall
-        ctx.fillStyle = bld.color;
+        ctx.fillStyle = bld.color || '#334155';
         ctx.fillRect(penX, penY, penW, penH);
 
         // Penthouse flat roof deck
-        ctx.fillStyle = bld.roofColor;
+        ctx.fillStyle = bld.roofColor || '#1e293b';
         ctx.fillRect(penX + 2, penY + 2, penW - 4, penH - 4);
-        ctx.strokeStyle = bld.accentColor;
+        ctx.strokeStyle = bld.accentColor || '#475569';
         ctx.lineWidth = 1;
         ctx.strokeRect(penX + 2, penY + 2, penW - 4, penH - 4);
       }
 
       // 5. ROOF DETAILS (AC Units with spinning fans, Helipads with flashing beacons, solar panels, water towers)
-      if (!performanceConfig.lowQualityRendering) {
+      if (!performanceConfig.lowQualityRendering && bld.roofDetails) {
         for (const d of bld.roofDetails) {
           const dx = bld.x + bld.width * d.rx;
           const dy = bld.y + bld.height * d.ry;
@@ -4359,7 +5047,7 @@ export class GameRenderer {
           ctx.font = 'bold 8px sans-serif';
           ctx.textAlign = 'center';
           ctx.textBaseline = 'middle';
-          ctx.fillText('АПТЕКА 36.6', signCx + 4, signCy);
+          ctx.fillText('АПТЕКА ПАНАЦЕЯ', signCx + 4, signCy);
         } else if (bld.shopBrand === 'pyaterochka') {
           const rsw = Math.min(150, bld.width - 20);
           ctx.fillStyle = '#dc2626';
@@ -4368,7 +5056,7 @@ export class GameRenderer {
           ctx.lineWidth = 1.5;
           ctx.strokeRect(signCx - rsw / 2, signCy - 8, rsw, 16);
 
-          // "5" emblem
+          // "Р" emblem
           ctx.fillStyle = '#ffffff';
           ctx.beginPath();
           ctx.arc(signCx - rsw / 2 + 10, signCy, 6, 0, Math.PI * 2);
@@ -4377,11 +5065,11 @@ export class GameRenderer {
           ctx.font = 'bold 7px sans-serif';
           ctx.textAlign = 'center';
           ctx.textBaseline = 'middle';
-          ctx.fillText('5', signCx - rsw / 2 + 10, signCy + 0.5);
+          ctx.fillText('Р', signCx - rsw / 2 + 10, signCy + 0.5);
 
           ctx.fillStyle = '#ffffff';
           ctx.font = 'bold 8px sans-serif';
-          ctx.fillText('ПЯТЁРОЧКА', signCx + 6, signCy);
+          ctx.fillText('РЕГУЛЯР', signCx + 6, signCy);
         } else if (bld.shopBrand === 'cofix_bakery') {
           const rsw = Math.min(140, bld.width - 20);
           ctx.fillStyle = '#18181b';
@@ -4394,7 +5082,7 @@ export class GameRenderer {
           ctx.font = 'bold 8px sans-serif';
           ctx.textAlign = 'center';
           ctx.textBaseline = 'middle';
-          ctx.fillText('COFIX & BAKERY', signCx, signCy);
+          ctx.fillText('УРБАН & БЕЙКЕРИ', signCx, signCy);
         } else if (bld.shopBrand === 'bean_bistro') {
           const rsw = Math.min(140, bld.width - 20);
           ctx.fillStyle = '#291104';
@@ -4420,7 +5108,7 @@ export class GameRenderer {
           ctx.font = 'bold 8.5px sans-serif';
           ctx.textAlign = 'center';
           ctx.textBaseline = 'middle';
-          ctx.fillText('🚘 ПРЕМИУМ АВТО • АВТОСАЛОН', signCx, signCy);
+          ctx.fillText('ПРЕМИУМ АВТО • АВТОСАЛОН', signCx, signCy);
         } else if (bld.shopBrand === 'pitstop_service') {
           const rsw = Math.min(150, bld.width - 20);
           ctx.fillStyle = '#0f172a';
@@ -4447,6 +5135,42 @@ export class GameRenderer {
           ctx.textAlign = 'center';
           ctx.textBaseline = 'middle';
           ctx.fillText('СПЛАВ ТУРИЗМ', signCx, signCy);
+        }
+      }
+
+      // Render official street sign/house address plaque on the roof top
+      if (['panel_apartment', 'brick_residential', 'modern_residential', 'suburban'].includes(bld.type)) {
+        const apartments = getCityApartments();
+        const apt = apartments.find(a => a.buildingId === bld.id);
+        if (apt) {
+          ctx.save();
+          const plaqueW = 76;
+          const plaqueH = 16;
+          const px = bld.x + bld.width / 2 - plaqueW / 2;
+          const py = bld.y + bld.height - 24;
+
+          // Drop shadow
+          ctx.fillStyle = 'rgba(15, 23, 42, 0.45)';
+          ctx.fillRect(px + 2, py + 2, plaqueW, plaqueH);
+
+          // Deep blue street sign plate
+          ctx.fillStyle = '#0f172a';
+          ctx.fillRect(px, py, plaqueW, plaqueH);
+          ctx.strokeStyle = '#e2e8f0';
+          ctx.lineWidth = 1;
+          ctx.strokeRect(px, py, plaqueW, plaqueH);
+
+          // Squeezed address format
+          let cleanAddr = apt.address.split(',')[0].replace('ул. ', '').replace('пр. ', '').trim();
+          const houseNum = apt.address.split(',')[1].replace(' д. ', '').replace('д. ', '').trim();
+          const label = `${cleanAddr}, ${houseNum}`;
+
+          ctx.fillStyle = '#facc15';
+          ctx.font = 'bold 8.5px "Courier New", monospace';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(label, px + plaqueW / 2, py + plaqueH / 2);
+          ctx.restore();
         }
       }
     }
@@ -4646,7 +5370,7 @@ export class GameRenderer {
     // Street Props (High-Detail Vector Rendering & Authentic Damage Textures)
     for (const prop of props) {
       if ((prop.type === 'lamp' || prop.type === 'lamp_highway' || prop.type === 'lamp_concrete') && !prop.isBroken) continue;
-      if (prop.type === 'traffic_light') continue;
+      if (prop.type === 'traffic_light' || prop.type === 'railway_signal') continue;
 
       if (prop.x < minX - 120 || prop.x > maxX + 120 || prop.y < minY - 120 || prop.y > maxY + 120) continue;
 
@@ -4678,10 +5402,158 @@ export class GameRenderer {
       if (tree.x + tree.radius < minX || tree.x - tree.radius > maxX ||
           tree.y + tree.radius < minY || tree.y - tree.radius > maxY) continue;
 
-      const isPine = (tree as any).type === 'pine' || tree.color === '#0f3e24' || tree.color === '#124c2c' || tree.color === '#165732' || tree.color === '#1b6138';
-      const isBirch = (tree as any).type === 'birch' || tree.color === '#84cc16' || tree.color === '#a3e635' || tree.color === '#65a30d';
+      const isDead = (tree as any).type === 'dead' || tree.color === '#57534e' || tree.color === '#78716c' || tree.color === '#44403c' || tree.color === '#3b3835' || tree.color === '#525252';
+      const isPine = !isDead && ((tree as any).type === 'pine' || tree.color === '#0f3e24' || tree.color === '#124c2c' || tree.color === '#165732' || tree.color === '#1b6138');
+      const isBirch = !isDead && ((tree as any).type === 'birch' || tree.color === '#84cc16' || tree.color === '#a3e635' || tree.color === '#65a30d');
 
-      if (isPine) {
+      if (isDead) {
+        // --- DEAD TREE / SNAG / СУХОСТОЙ (WEATHERED LIGHT-GREY HIGH-VISIBILITY SNAG MODEL) ---
+        const r = tree.radius;
+        const seed = Math.abs(Math.floor(tree.x * 12.9898 + tree.y * 78.233));
+
+        // 1. Soft Ground Shadow of bare branches and roots
+        if (performanceConfig.enableShadows) {
+          ctx.strokeStyle = 'rgba(0, 0, 0, 0.35)';
+          ctx.lineWidth = Math.max(2.0, r * 0.15);
+          for (let b = 0; b < 5; b++) {
+            const ang = (b / 5) * Math.PI * 2 + (seed % 10) * 0.12;
+            const len = r * (0.65 + ((seed + b) % 5) * 0.12);
+            ctx.beginPath();
+            ctx.moveTo(tree.x + tree.shadowOffset * 0.8, tree.y + tree.shadowOffset * 0.8);
+            ctx.lineTo(tree.x + tree.shadowOffset * 0.8 + Math.cos(ang) * len, tree.y + tree.shadowOffset * 0.8 + Math.sin(ang) * len);
+            ctx.stroke();
+          }
+        }
+
+        // 2. Thick Gnarled Roots (Weathered dark-grey-brown anchoring base)
+        ctx.strokeStyle = '#57534e';
+        ctx.lineWidth = Math.max(3.5, r * 0.22);
+        ctx.lineCap = 'round';
+        const numRoots = 4;
+        for (let ri = 0; ri < numRoots; ri++) {
+          const rootAngle = (ri / numRoots) * Math.PI * 2 + (seed % 8) * 0.15;
+          const rootLen = r * (0.35 + (ri % 2) * 0.1);
+          ctx.beginPath();
+          ctx.moveTo(tree.x, tree.y);
+          ctx.quadraticCurveTo(
+            tree.x + Math.cos(rootAngle + 0.4) * (rootLen * 0.5),
+            tree.y + Math.sin(rootAngle + 0.4) * (rootLen * 0.5),
+            tree.x + Math.cos(rootAngle) * rootLen,
+            tree.y + Math.sin(rootAngle) * rootLen
+          );
+          ctx.stroke();
+        }
+
+        // 3. Main Gnarled Skeleton Branches (Weathered wood color, thick & expressive)
+        const numBranches = 6;
+        for (let b = 0; b < numBranches; b++) {
+          const ang = (b / numBranches) * Math.PI * 2 + ((seed * (b + 1)) % 10) * 0.15;
+          const len = r * (0.8 + ((seed + b * 7) % 6) * 0.1);
+
+          const bx = tree.x + Math.cos(ang) * len;
+          const by = tree.y + Math.sin(ang) * len;
+
+          const midX = tree.x + Math.cos(ang + 0.25) * (len * 0.5);
+          const midY = tree.y + Math.sin(ang + 0.25) * (len * 0.5);
+
+          // Render Branch Base (Darker bark texture)
+          ctx.strokeStyle = '#78716c';
+          ctx.lineWidth = Math.max(3.5, r * 0.25);
+          ctx.lineCap = 'round';
+          ctx.beginPath();
+          ctx.moveTo(tree.x, tree.y);
+          ctx.quadraticCurveTo(midX, midY, bx, by);
+          ctx.stroke();
+
+          // Render Bleached Wood Core (Lighter silver-grey inside)
+          ctx.strokeStyle = '#a8a29e';
+          ctx.lineWidth = Math.max(2.0, r * 0.16);
+          ctx.beginPath();
+          ctx.moveTo(tree.x, tree.y);
+          ctx.quadraticCurveTo(midX, midY, bx, by);
+          ctx.stroke();
+
+          // Render Sunlit Highlights (High-contrast bright silver top ridge)
+          ctx.strokeStyle = '#f1f5f9';
+          ctx.lineWidth = Math.max(1.0, r * 0.08);
+          ctx.beginPath();
+          ctx.moveTo(tree.x - 1, tree.y - 1);
+          ctx.quadraticCurveTo(midX - 1, midY - 1, bx - 1, by - 1);
+          ctx.stroke();
+
+          // Sub-twigs
+          const twigAng = ang + ((b % 2 === 0) ? 0.48 : -0.48);
+          const twigLen = r * 0.38;
+          const tx = bx + Math.cos(twigAng) * twigLen;
+          const ty = by + Math.sin(twigAng) * twigLen;
+
+          ctx.strokeStyle = '#78716c';
+          ctx.lineWidth = Math.max(2.0, r * 0.12);
+          ctx.beginPath();
+          ctx.moveTo(bx, by);
+          ctx.lineTo(tx, ty);
+          ctx.stroke();
+
+          ctx.strokeStyle = '#f1f5f9';
+          ctx.lineWidth = Math.max(0.8, r * 0.05);
+          ctx.beginPath();
+          ctx.moveTo(bx - 0.5, by - 0.5);
+          ctx.lineTo(tx - 0.5, ty - 0.5);
+          ctx.stroke();
+
+          // Occasional dry colored leaves clinging to the twigs (Gold, Bronze, or Amber)
+          if ((seed + b) % 2 === 0) {
+            const leafColor = (seed + b) % 3 === 0 ? '#ea580c' : (seed + b) % 3 === 1 ? '#ca8a04' : '#b45309';
+            ctx.fillStyle = leafColor;
+            ctx.beginPath();
+            ctx.arc(tx, ty, Math.max(2.5, r * 0.12), 0, Math.PI * 2);
+            ctx.fill();
+            ctx.strokeStyle = '#292524';
+            ctx.lineWidth = 0.5;
+            ctx.stroke();
+          }
+        }
+
+        // 4. Large Central Weathered Trunk (Bleached wooden stump base)
+        const stumpRadius = Math.max(4.5, r * 0.32);
+        
+        // Dark bark outline
+        ctx.fillStyle = '#44403c';
+        ctx.beginPath();
+        ctx.arc(tree.x, tree.y, stumpRadius, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Inner bleached wood (silver-grey top)
+        ctx.fillStyle = '#cbd5e1';
+        ctx.beginPath();
+        ctx.arc(tree.x, tree.y, stumpRadius * 0.85, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Sunlit bleached core highlight
+        ctx.fillStyle = '#f8fafc';
+        ctx.beginPath();
+        ctx.arc(tree.x - stumpRadius * 0.15, tree.y - stumpRadius * 0.15, stumpRadius * 0.48, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Dark age rings & starburst splits (ancient weathered wood radial cracks)
+        ctx.strokeStyle = '#292524';
+        ctx.lineWidth = 0.8;
+        for (let c = 0; c < 4; c++) {
+          const crackAngle = (c / 4) * Math.PI * 2 + (seed % 10) * 0.2;
+          ctx.beginPath();
+          ctx.moveTo(tree.x, tree.y);
+          ctx.lineTo(tree.x + Math.cos(crackAngle) * (stumpRadius * 0.75), tree.y + Math.sin(crackAngle) * (stumpRadius * 0.75));
+          ctx.stroke();
+        }
+
+        // 5. Night Tint (if darkness is active)
+        if (nightAlpha > 0.05) {
+          ctx.fillStyle = `rgba(0, 5, 20, ${nightAlpha * 0.75})`;
+          ctx.beginPath();
+          ctx.arc(tree.x, tree.y, r * 1.05, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      } else if (isPine) {
         const r = tree.radius;
 
         // Pine Shadow
@@ -4774,6 +5646,14 @@ export class GameRenderer {
         ctx.arc(tree.x - r * 0.26, tree.y - r * 0.26, r * 0.24, 0, Math.PI * 2);
         ctx.fill();
 
+        // Birch White Trunk visible in center with black lenticels
+        ctx.fillStyle = '#f8fafc';
+        ctx.beginPath();
+        ctx.arc(tree.x, tree.y, Math.max(2.5, r * 0.16), 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#0f172a';
+        ctx.fillRect(tree.x - r * 0.1, tree.y - 1, r * 0.2, 1.5);
+
         // Night Tint for birch
         if (nightAlpha > 0.05) {
           ctx.fillStyle = `rgba(0, 5, 20, ${nightAlpha * 0.75})`;
@@ -4782,27 +5662,36 @@ export class GameRenderer {
           ctx.fill();
         }
       } else {
-        // Standard Tree Shadow
+        // --- DECIDUOUS / OAK / MAPLE / AUTUMN BROADLEAF TREE ---
+        const r = tree.radius;
+
+        // Shadow
         if (performanceConfig.enableShadows) {
           ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
           ctx.beginPath();
-          ctx.arc(tree.x + tree.shadowOffset, tree.y + tree.shadowOffset, tree.radius, 0, Math.PI * 2);
+          ctx.ellipse(tree.x + tree.shadowOffset, tree.y + tree.shadowOffset, r * 1.1, r * 0.9, 0.2, 0, Math.PI * 2);
           ctx.fill();
         }
 
-        // Tree Foliage
-        ctx.fillStyle = tree.color;
+        // Multi-cluster overlapping leafy canopy puffs
+        const baseColor = tree.color || '#15803d';
+        ctx.fillStyle = baseColor;
+
+        for (let a = 0; a < Math.PI * 2; a += Math.PI / 2) {
+          const px = tree.x + Math.cos(a + tree.x) * (r * 0.35);
+          const py = tree.y + Math.sin(a + tree.y) * (r * 0.35);
+          ctx.beginPath();
+          ctx.arc(px, py, r * 0.7, 0, Math.PI * 2);
+          ctx.fill();
+        }
+
+        // Central canopy highlight
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.18)';
         ctx.beginPath();
-        ctx.arc(tree.x, tree.y, tree.radius, 0, Math.PI * 2);
+        ctx.arc(tree.x - r * 0.22, tree.y - r * 0.22, r * 0.48, 0, Math.PI * 2);
         ctx.fill();
 
-        // Inner highlight
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.15)';
-        ctx.beginPath();
-        ctx.arc(tree.x - tree.radius * 0.3, tree.y - tree.radius * 0.3, tree.radius * 0.5, 0, Math.PI * 2);
-        ctx.fill();
-
-        // Night Tint for the tree (since it's drawn ABOVE the lightmap)
+        // Night Tint
         if (nightAlpha > 0.05) {
           ctx.fillStyle = `rgba(0, 5, 20, ${nightAlpha * 0.75})`;
           ctx.beginPath();
@@ -6416,7 +7305,7 @@ export class GameRenderer {
       ctx.stroke();
 
       ctx.fillStyle = '#22d3ee';
-      ctx.fillText('✈️ ФЛАЙ', 0, -15);
+      ctx.fillText('ФЛАЙ', 0, -15);
     }
 
     ctx.restore(); // end translate
@@ -6498,7 +7387,7 @@ export class GameRenderer {
     // Only draw nametag for remote players or when explicitly desired
     if (!isLocalPlayer) {
       ctx.font = 'bold 8.5px sans-serif';
-      const tagText = isDriving ? `🚗 ${name}` : `🚶 ${name}`;
+      const tagText = isDriving ? `[CAR] ${name}` : name;
       const textW = ctx.measureText(tagText).width;
       const padX = 5;
       const tagW = textW + padX * 2;
@@ -6575,6 +7464,226 @@ export class GameRenderer {
       lines.forEach((line, idx) => {
         ctx.fillText(line, 0, bubbleTopY + pad + idx * lineH);
       });
+    }
+
+    ctx.restore();
+  }
+
+  /**
+   * Renders a sleek, realistic physical interaction reticle in the world at the focused object.
+   */
+  private renderInteractionVectorIcon(
+    ctx: CanvasRenderingContext2D,
+    type: string,
+    color: string
+  ) {
+    ctx.save();
+    ctx.strokeStyle = color;
+    ctx.fillStyle = color;
+    ctx.lineWidth = 1.4;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+
+    switch (type) {
+      case 'enter_vehicle':
+      case 'exit_vehicle': {
+        ctx.beginPath();
+        ctx.rect(-5, -4, 10, 8);
+        ctx.moveTo(-2, -4); ctx.lineTo(-2, 4);
+        ctx.moveTo(2, -1); ctx.arc(2, -1, 0.8, 0, Math.PI * 2);
+        ctx.stroke();
+        break;
+      }
+      case 'open_hood': {
+        ctx.beginPath();
+        ctx.moveTo(-5, 3); ctx.lineTo(5, 3);
+        ctx.lineTo(4, -3); ctx.lineTo(-4, -3); ctx.closePath();
+        ctx.moveTo(0, -3); ctx.lineTo(0, 3);
+        ctx.stroke();
+        break;
+      }
+      case 'fuel_insert':
+      case 'pump_take_nozzle':
+      case 'pump_return_nozzle': {
+        ctx.beginPath();
+        ctx.rect(-4, -3, 5, 7);
+        ctx.moveTo(1, -1); ctx.lineTo(5, -1); ctx.lineTo(5, 3);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.arc(-1.5, 0.5, 1, 0, Math.PI * 2);
+        ctx.fill();
+        break;
+      }
+      case 'water_hose_take':
+      case 'water_hose_stow': {
+        ctx.beginPath();
+        ctx.moveTo(0, -5);
+        ctx.bezierCurveTo(-4, -1, -4, 4, 0, 5);
+        ctx.bezierCurveTo(4, 4, 4, -1, 0, -5);
+        ctx.closePath();
+        ctx.fill();
+        break;
+      }
+      case 'enter_building':
+      case 'exit_building': {
+        ctx.beginPath();
+        ctx.rect(-4, -5, 8, 10);
+        ctx.moveTo(1, 0); ctx.arc(1, 0, 0.8, 0, Math.PI * 2);
+        ctx.stroke();
+        break;
+      }
+      case 'building_elevator': {
+        ctx.beginPath();
+        ctx.moveTo(-3, 0); ctx.lineTo(0, -4); ctx.lineTo(3, 0);
+        ctx.moveTo(-3, 1); ctx.lineTo(0, 5); ctx.lineTo(3, 1);
+        ctx.stroke();
+        break;
+      }
+      case 'building_shop':
+      case 'gas_cashier': {
+        ctx.beginPath();
+        ctx.rect(-4, -2, 8, 7);
+        ctx.moveTo(-2, -2); ctx.arc(0, -2, 2, Math.PI, 0);
+        ctx.stroke();
+        break;
+      }
+      case 'pickup_item':
+      case 'pickup_litter': {
+        ctx.beginPath();
+        ctx.rect(-4, -4, 8, 8);
+        ctx.moveTo(-4, 0); ctx.lineTo(4, 0);
+        ctx.moveTo(0, -4); ctx.lineTo(0, 4);
+        ctx.stroke();
+        break;
+      }
+      case 'trailer_hitch':
+      case 'trailer_unhitch':
+      case 'trailer_connect_plug':
+      case 'trailer_connect_brakes':
+      case 'trailer_toggle_handbrake': {
+        ctx.beginPath();
+        ctx.arc(-2.5, 0, 2.5, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.arc(2.5, 0, 2.5, 0, Math.PI * 2);
+        ctx.stroke();
+        break;
+      }
+      case 'eco_recycle':
+      case 'trash_throw': {
+        ctx.beginPath();
+        ctx.moveTo(-5, -3); ctx.lineTo(5, -3);
+        ctx.moveTo(-3, -3); ctx.lineTo(-2, 4); ctx.lineTo(2, 4); ctx.lineTo(3, -3);
+        ctx.stroke();
+        break;
+      }
+      default: {
+        ctx.beginPath();
+        ctx.arc(0, 0, 3, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(-5, 0); ctx.lineTo(-3, 0);
+        ctx.moveTo(3, 0); ctx.lineTo(5, 0);
+        ctx.moveTo(0, -5); ctx.lineTo(0, -3);
+        ctx.moveTo(0, 3); ctx.lineTo(0, 5);
+        ctx.stroke();
+        break;
+      }
+    }
+    ctx.restore();
+  }
+
+  private renderInteractionReticle(
+    target: InteractionTarget,
+    camera: Camera
+  ) {
+    if (!target || target.type === 'hand_item' || target.type === 'exit_vehicle') return;
+
+    const ctx = this.ctx;
+    ctx.save();
+    ctx.translate(target.x, target.y);
+
+    // Counter-rotate to keep reticle and label text upright on screen
+    ctx.rotate(camera.angle + Math.PI / 2);
+
+    const nowSec = performance.now() * 0.001;
+    const isF = target.primaryKey === 'F';
+    const mainColor = isF ? '#34d399' : '#38bdf8';
+    const accentColor = isF ? '#059669' : '#0284c7';
+    const glowColor = isF ? 'rgba(52, 211, 153, 0.22)' : 'rgba(56, 189, 248, 0.22)';
+
+    // 1. Ground Radial Halo Glow
+    const pulseRad = 20 + Math.sin(nowSec * 3.5) * 2;
+    const haloGrad = ctx.createRadialGradient(0, 0, 2, 0, 0, pulseRad);
+    haloGrad.addColorStop(0, glowColor);
+    haloGrad.addColorStop(0.6, isF ? 'rgba(52, 211, 153, 0.08)' : 'rgba(56, 189, 248, 0.08)');
+    haloGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+    ctx.fillStyle = haloGrad;
+    ctx.beginPath();
+    ctx.arc(0, 0, pulseRad, 0, Math.PI * 2);
+    ctx.fill();
+
+    // 2. Intricate Rotating Outer Lace Ring ("Кружево")
+    ctx.save();
+    ctx.rotate(nowSec * 0.75); // Continuous rotation for visual lace pattern
+    ctx.strokeStyle = mainColor;
+    ctx.lineWidth = 1.3;
+    ctx.setLineDash([5, 3, 2, 3]);
+    ctx.beginPath();
+    ctx.arc(0, 0, 18, 0, Math.PI * 2);
+    ctx.stroke();
+
+    // Inner secondary lace ring
+    ctx.rotate(-nowSec * 1.5);
+    ctx.strokeStyle = accentColor;
+    ctx.lineWidth = 1.0;
+    ctx.setLineDash([2, 3]);
+    ctx.beginPath();
+    ctx.arc(0, 0, 15, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.restore();
+
+    // 3. Central Dark Disc Badge with Glassmorphism
+    ctx.beginPath();
+    ctx.arc(0, 0, 12.5, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(15, 23, 42, 0.92)';
+    ctx.fill();
+    ctx.strokeStyle = mainColor;
+    ctx.lineWidth = 1.6;
+    ctx.stroke();
+
+    // 4. Render Vector Action Icon inside Central Disc
+    this.renderInteractionVectorIcon(ctx, target.type, '#ffffff');
+
+    // 5. Key Badge Pill Attached Below Disc ([E] or [F])
+    const keyLabel = `[${target.primaryKey}]`;
+    ctx.font = 'bold 9px monospace, sans-serif';
+    const keyW = ctx.measureText(keyLabel).width + 8;
+    const keyH = 13;
+    const keyY = 20;
+
+    ctx.fillStyle = isF ? 'rgba(6, 78, 59, 0.94)' : 'rgba(12, 74, 110, 0.94)';
+    ctx.beginPath();
+    safeRoundRect(ctx, -keyW / 2, keyY - keyH / 2, keyW, keyH, 4);
+    ctx.fill();
+    ctx.strokeStyle = mainColor;
+    ctx.lineWidth = 1.0;
+    ctx.stroke();
+
+    ctx.fillStyle = '#ffffff';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(keyLabel, 0, keyY);
+
+    // 6. Action Title Below Key Badge
+    if (target.actionTitle) {
+      ctx.font = 'bold 9px sans-serif';
+      ctx.fillStyle = 'rgba(248, 250, 252, 0.95)';
+      ctx.shadowColor = '#000000';
+      ctx.shadowBlur = 4;
+      ctx.fillText(target.actionTitle, 0, keyY + 13);
+      ctx.shadowBlur = 0;
     }
 
     ctx.restore();
@@ -6692,7 +7801,19 @@ export class GameRenderer {
   private renderVehicles(vehicles: Vehicle[], nightAlpha: number, gridMode?: boolean) {
     const ctx = this.ctx;
 
-    for (const car of vehicles) {
+    // Sort vehicles so towing vehicles (tractors) are rendered BEFORE their trailers,
+    // ensuring the trailer body sits cleanly on top of the tractor's fifth-wheel saddle plate!
+    const sortedVehicles = [...vehicles].sort((a, b) => {
+      if (a.trailerId === b.id || b.towedById === a.id) return -1;
+      if (b.trailerId === a.id || a.towedById === b.id) return 1;
+      const aIsTrailer = a.type.startsWith('trailer_') || a.isTrailer;
+      const bIsTrailer = b.type.startsWith('trailer_') || b.isTrailer;
+      if (!aIsTrailer && bIsTrailer) return -1;
+      if (aIsTrailer && !bIsTrailer) return 1;
+      return 0;
+    });
+
+    for (const car of sortedVehicles) {
       ctx.save();
       if (car.ghostingAlpha !== undefined) {
         ctx.globalAlpha = car.ghostingAlpha;
@@ -6786,7 +7907,7 @@ export class GameRenderer {
 
       // 1. Drop Shadow
       ctx.fillStyle = 'rgba(0, 0, 0, 0.32)';
-      if (car.type === 'trailer_barrel') {
+      if (car.type === 'trailer_barrel' || car.type === 'trailer_vacuum' || isRoadMachinery(car.type)) {
         ctx.beginPath();
         const sPoly = bodyPoly.map(p => {
           const [dx, dy] = deform(p.x + 1.5, p.y + 2.5);
@@ -6884,9 +8005,10 @@ export class GameRenderer {
       const isTrailer = car.type.startsWith('trailer_') || car.isTrailer || car.type === 'trailer_barrel' || car.type === 'trailer_flatbed_2axle';
 
       const isThreeAxle = car.type === 'truck_box' || car.type === 'truck_tanker' || 
-                          car.type === 'truck_flatbed' || car.type === 'cement_mixer' ||
+                          car.type === 'truck_flatbed' || car.type === 'truck_covered' || car.type === 'cement_mixer' ||
                           car.type === 'truck_dump' || car.type === 'garbage_truck' ||
-                          car.type === 'fire_ladder' || car.type === 'truck_water';
+                          car.type === 'fire_ladder' || car.type === 'truck_water' ||
+                          car.type === 'truck_semi';
       const isHeavyTruck = isThreeAxle || car.type === 'truck_water' || car.type === 'fire_engine' || 
                            car.type === 'fire_rescue' || car.type === 'bus' || car.type === 'truck_tow' || 
                            car.type === 'truck_armored' || car.type === 'delivery_truck' || car.type === 'pickup_heavy';
@@ -7110,10 +8232,23 @@ export class GameRenderer {
         // Dual tandem rear axles (6x4 / 6x6)
         const rearAxle1X = -halfL * 0.36;
         const rearAxle2X = -halfL * 0.74;
-        renderFixedWheel(rearAxle1X, -trackY);
-        renderFixedWheel(rearAxle1X, trackY - wheelW);
-        renderFixedWheel(rearAxle2X, -trackY);
-        renderFixedWheel(rearAxle2X, trackY - wheelW);
+        if (car.type === 'truck_semi') {
+          // Authentic semi-truck tractor dual drive wheels (8 tires on the rear bogie!)
+          renderFixedWheel(rearAxle1X, -trackY);
+          renderFixedWheel(rearAxle1X, -trackY + wheelW + 0.4);
+          renderFixedWheel(rearAxle1X, trackY - wheelW * 2 - 0.4);
+          renderFixedWheel(rearAxle1X, trackY - wheelW);
+
+          renderFixedWheel(rearAxle2X, -trackY);
+          renderFixedWheel(rearAxle2X, -trackY + wheelW + 0.4);
+          renderFixedWheel(rearAxle2X, trackY - wheelW * 2 - 0.4);
+          renderFixedWheel(rearAxle2X, trackY - wheelW);
+        } else {
+          renderFixedWheel(rearAxle1X, -trackY);
+          renderFixedWheel(rearAxle1X, trackY - wheelW);
+          renderFixedWheel(rearAxle2X, -trackY);
+          renderFixedWheel(rearAxle2X, trackY - wheelW);
+        }
 
         // Front wheels (steered)
         const renderSteeredWheel = (wx: number, wy: number) => {
@@ -7153,7 +8288,7 @@ export class GameRenderer {
         renderSteeredWheel(frontAxleX, -trackY + wheelW / 2);
         renderSteeredWheel(frontAxleX, trackY - wheelW / 2);
 
-      } else if (car.type === 'trailer_barrel') {
+      } else if (car.type === 'trailer_barrel' || car.type === 'trailer_vacuum') {
         // Single central axle with 2 clean trailer wheels (shifted slightly backward for realistic weight distribution onto tractor drawbar)
         const centerAxleX = -halfL * 0.28;
         const barrelWheelL = 13.5;
@@ -7273,6 +8408,30 @@ export class GameRenderer {
         renderFrontDollyWheel(-trailerTrackY);
         renderFrontDollyWheel(trailerTrackY);
 
+      } else if (car.type.startsWith('trailer_semi')) {
+        // Semi-Trailer (Бортовой полуприцеп ОдАЗ / МАЗ / НЕФАЗ, рефрижератор, цистерна, контейнеровоз, трал)
+        // No front wheels - rests on tractor fifth-wheel saddle or landing gear legs!
+        // Dual tandem rear axles with dual tires on each side (8 heavy trailer tires)
+        const trailerWheelL = 13.5;
+        const trailerWheelW = 4.8;
+        const tTrackY = halfW - 0.4;
+        const tAxle1X = -halfL * 0.44;
+        const tAxle2X = -halfL * 0.72;
+
+        const renderTrailerDualWheel = (axleX: number) => {
+          // Left dual tires
+          renderFixedWheel(axleX, -tTrackY);
+          renderFixedWheel(axleX, -tTrackY + trailerWheelW + 0.3);
+          // Right dual tires
+          renderFixedWheel(axleX, tTrackY - trailerWheelW * 2 - 0.3);
+          renderFixedWheel(axleX, tTrackY - trailerWheelW);
+        };
+        renderTrailerDualWheel(tAxle1X);
+        renderTrailerDualWheel(tAxle2X);
+
+      } else if (isRoadMachinery(car.type)) {
+        // Road machinery (tandem rollers, sidewalk roller, pneumatic roller, asphalt paver)
+        // Steel drums and pneumatic roller tires are rendered dynamically in their articulated sections!
       } else {
         // Standard 4-wheel passenger car
         const rearAxleX = -halfL * 0.65;
@@ -7295,50 +8454,53 @@ export class GameRenderer {
         renderSteeredWheel(frontAxleX, trackY - wheelW / 2);
       }
 
-      // Now draw body shell with high-fidelity softbody spline contour
-      ctx.fillStyle = car.color;
-      ctx.beginPath();
-      traceSoftbodyPath(ctx, bodyPoly, dmg.deformedVertices);
-      ctx.closePath();
-      ctx.fill();
-
-      // Soot charring & fire heat glow overlays
-      const fireProg = dmg.fireProgress || (dmg.isFullyBurnt ? 1.0 : (dmg.cabinFire ? 0.65 : ((dmg.engineFire || dmg.fuelTankFire) ? 0.28 : (dmg.underHoodSmolder ? 0.08 : 0))));
-      if (fireProg > 0 || dmg.isFullyBurnt) {
-        const charAlpha = Math.min(0.92, fireProg * 0.85 + (dmg.isFullyBurnt ? 0.90 : 0));
-        ctx.fillStyle = `rgba(15, 23, 42, ${charAlpha})`;
+      // Now draw body shell with high-fidelity softbody spline contour (skip for road machinery which has articulated sections)
+      if (!isRoadMachinery(car.type)) {
+        ctx.fillStyle = car.color;
         ctx.beginPath();
         traceSoftbodyPath(ctx, bodyPoly, dmg.deformedVertices);
         ctx.closePath();
         ctx.fill();
 
-        // Fire heat glow flicker on vehicle
-        if ((dmg.engineFire || dmg.fuelTankFire || dmg.cabinFire) && !dmg.isFullyBurnt) {
-          const glowPulse = 0.6 + Math.sin(Date.now() * 0.012) * 0.4;
-          const isRearOnly = dmg.fuelTankFire && !dmg.cabinFire && !dmg.engineFire;
-          const glowCenter = dmg.cabinFire ? 0 : (isRearOnly ? -halfL * 0.35 : halfL * 0.22);
-          const glowRadius = dmg.cabinFire ? halfL * 0.95 : halfL * 0.75;
-          const fireGlowGrad = ctx.createRadialGradient(glowCenter, 0, 2, glowCenter, 0, glowRadius);
-          fireGlowGrad.addColorStop(0, `rgba(254, 240, 138, ${0.9 * glowPulse})`);
-          fireGlowGrad.addColorStop(0.4, `rgba(249, 115, 22, ${0.75 * glowPulse})`);
-          fireGlowGrad.addColorStop(1, 'rgba(239, 68, 68, 0)');
-          ctx.fillStyle = fireGlowGrad;
+        // Soot charring & fire heat glow overlays
+        const fireProg = dmg.fireProgress || (dmg.isFullyBurnt ? 1.0 : (dmg.cabinFire ? 0.65 : ((dmg.engineFire || dmg.fuelTankFire) ? 0.28 : (dmg.underHoodSmolder ? 0.08 : 0))));
+        if (fireProg > 0 || dmg.isFullyBurnt) {
+          const charAlpha = Math.min(0.92, fireProg * 0.85 + (dmg.isFullyBurnt ? 0.90 : 0));
+          ctx.fillStyle = `rgba(15, 23, 42, ${charAlpha})`;
           ctx.beginPath();
           traceSoftbodyPath(ctx, bodyPoly, dmg.deformedVertices);
           ctx.closePath();
           ctx.fill();
+
+          // Fire heat glow flicker on vehicle
+          if ((dmg.engineFire || dmg.fuelTankFire || dmg.cabinFire) && !dmg.isFullyBurnt) {
+            const glowPulse = 0.6 + Math.sin(Date.now() * 0.012) * 0.4;
+            const isRearOnly = dmg.fuelTankFire && !dmg.cabinFire && !dmg.engineFire;
+            const glowCenter = dmg.cabinFire ? 0 : (isRearOnly ? -halfL * 0.35 : halfL * 0.22);
+            const glowRadius = dmg.cabinFire ? halfL * 0.95 : halfL * 0.75;
+            const fireGlowGrad = ctx.createRadialGradient(glowCenter, 0, 2, glowCenter, 0, glowRadius);
+            fireGlowGrad.addColorStop(0, `rgba(254, 240, 138, ${0.9 * glowPulse})`);
+            fireGlowGrad.addColorStop(0.4, `rgba(249, 115, 22, ${0.75 * glowPulse})`);
+            fireGlowGrad.addColorStop(1, 'rgba(239, 68, 68, 0)');
+            ctx.fillStyle = fireGlowGrad;
+            ctx.beginPath();
+            traceSoftbodyPath(ctx, bodyPoly, dmg.deformedVertices);
+            ctx.closePath();
+            ctx.fill();
+          }
         }
+
+        ctx.strokeStyle = 'rgba(0, 0, 0, 0.42)';
+        ctx.lineWidth = 1.2;
+        ctx.stroke();
+
+        // Softbody metallic stress highlights and ambient crease shadow lines
+        renderSoftbodyStressLines(ctx, bodyPoly, dmg.deformedVertices);
       }
 
-      ctx.strokeStyle = 'rgba(0, 0, 0, 0.42)';
-      ctx.lineWidth = 1.2;
-      ctx.stroke();
-
-      // Softbody metallic stress highlights and ambient crease shadow lines
-      renderSoftbodyStressLines(ctx, bodyPoly, dmg.deformedVertices);
-
-      // Render specialized trailer attachments (turntable dolly, A-frame drawbar, drop-side box, barrel tank, etc.)
-      if (isTrailer) {
+      // Render specialized trailer attachments and truck_semi chassis & fifth-wheel saddle (on chassis layer under trailers)
+      if (isTrailer || car.type === 'truck_semi' || isRoadMachinery(car.type)) {
+        const { cabinL: cL, cabinW: cW, cabinX: cX } = getVehicleCabinDimensions(car, halfL, halfW, ld, rd);
         renderSpecializedVehicleAttachments({
           ctx,
           car,
@@ -7346,9 +8508,9 @@ export class GameRenderer {
           halfW,
           fc,
           rc,
-          cabinX: 0,
-          cabinL: halfL,
-          cabinW: halfW,
+          cabinX: cX,
+          cabinL: cL,
+          cabinW: cW,
           deform,
           drawDeformedRect,
           drawDeformedLine,
@@ -7362,30 +8524,6 @@ export class GameRenderer {
       // 2.5D buckled hood and sagging bumper attachments
       renderBuckledHoodOverlay(ctx, car, bodyPoly, halfL, halfW);
       renderSaggingBumpers(ctx, car, bodyPoly, halfL, halfW);
-
-      // Police Car Dual-Tone Paint Layout
-      if (car.type === 'police') {
-        ctx.fillStyle = '#0f172a'; // Black hood and trunk
-        ctx.beginPath();
-        ctx.moveTo(halfL * 0.3, -halfW + 0.8);
-        ctx.lineTo(bodyPoly[0].x, bodyPoly[0].y);
-        ctx.lineTo(halfL * 0.3, halfW - 0.8);
-        ctx.closePath();
-        ctx.fill();
-
-        ctx.beginPath();
-        ctx.moveTo(-halfL * 0.38, -halfW + 0.8);
-        ctx.lineTo(bodyPoly[8].x, bodyPoly[8].y);
-        ctx.lineTo(-halfL * 0.38, halfW - 0.8);
-        ctx.closePath();
-        ctx.fill();
-
-        // Push bumper (bullbar)
-        ctx.fillStyle = '#0f172a';
-        ctx.fillRect(halfL - fc - 0.5, -5, 2, 10);
-        ctx.fillRect(halfL - fc - 2, -4, 2.2, 1.5);
-        ctx.fillRect(halfL - fc - 2, 2.5, 2.2, 1.5);
-      }
 
       // 4. Crease Lines & Scratches
       if (fc > 2 || fld > 2 || frd > 2 || dmg.hoodBuckled) {
@@ -7461,19 +8599,6 @@ export class GameRenderer {
         rightLampY = halfW * 0.23;
       }
 
-      // Front bumper grille (cars & trucks only, never trailers or vehicles with bespoke fascias)
-      const hasCustomGrille = car.type === 'sedan_classic' || car.type === 'sedan_luxury' || 
-                              car.type === 'classic_compact' || car.type === 'retro_bubble' || 
-                              car.type === 'suv_classic_box' || car.type === 'van' || 
-                              car.type === 'van_cargo_old' || car.type === 'delivery_truck' ||
-                              car.type === 'van_camper' || car.type === 'hatch_hot' ||
-                              car.type === 'police' || car.type === 'sports' || car.type === 'supercar';
-      if (!isSoloMoto && !isUralSidecar && !isTractor && !isTrailer && !hasCustomGrille) {
-        const grilleW = Math.max(halfW * 1.0, halfW * 2 - 14);
-        ctx.fillStyle = '#0f172a';
-        ctx.fillRect(halfL - fc - 2, -grilleW / 2, 1.5, grilleW);
-      }
-
       const drawHeadlight = (lx: number, ly: number, broken: boolean) => {
         if (broken) {
           ctx.fillStyle = '#1e293b';
@@ -7486,8 +8611,8 @@ export class GameRenderer {
           ctx.stroke();
         }
       };
-      // Trailers have no front headlights!
-      if (!isTrailer) {
+      // Trailers and road machinery have no front passenger headlights!
+      if (!isTrailer && !isRoadMachinery(car.type)) {
         if (isSoloMoto) {
           drawHeadlight(leftLampX, leftLampY, dmg.leftHeadlightBroken);
         } else {
@@ -7497,9 +8622,20 @@ export class GameRenderer {
       }
 
       // 8. Taillights, Brake Lights & Reverse Lights
-      const isReversing = car.isReversing || (car.speed < -1 && !car.isParked);
+      const isReversing = isVehicleReverseGearActive(car);
       const isBraking = car.brakeLightsOn && !isReversing;
-      const isNightRunning = (nightAlpha > 0.05 || hasHeadlightsOn) && !car.isParked;
+      let hasTaillightsActive = false;
+      if (isTrailer) {
+        const towedVeh = vehicles.find(v => v.id === car.towedById || v.trailerId === car.id);
+        const isPlugConnected = car.type !== 'trailer_barrel' && (car.trailerPlugConnected !== false);
+        if (towedVeh && isPlugConnected) {
+          const tHeadlights = towedVeh.isPlayerControlled ? towedVeh.headlightsOn : (towedVeh.headlightsOn || (nightAlpha > 0.05 && !towedVeh.isParked));
+          hasTaillightsActive = !!(towedVeh.positionLightsOn || tHeadlights);
+        }
+      } else {
+        hasTaillightsActive = !!(car.positionLightsOn || hasHeadlightsOn) && !car.isParked;
+      }
+      const isNightRunning = hasTaillightsActive;
 
       let rearLeftX = -halfL + rc * 0.85 + rld * 0.4 + 2.5;
       let rearLeftY = -halfW + 3.2 + ld * 0.15;
@@ -7522,6 +8658,13 @@ export class GameRenderer {
         rearLeftY = -halfW * 0.82;
         rearRightX = cabBackX + 2.5;
         rearRightY = halfW * 0.82;
+      } else if (car.type === 'trailer_vacuum') {
+        const fenderX = -halfL + 5.2;
+        const barrelTrackY = halfW * 0.94;
+        rearLeftX = fenderX + 0.7;
+        rearLeftY = -barrelTrackY - 0.8;
+        rearRightX = fenderX + 0.7;
+        rearRightY = barrelTrackY + 0.8;
       }
 
       const drawTaillight = (rx: number, ry: number, broken: boolean) => {
@@ -7548,7 +8691,7 @@ export class GameRenderer {
       };
       if (isSoloMoto) {
         drawTaillight(rearLeftX, rearLeftY, dmg.leftTaillightBroken);
-      } else if (car.type !== 'trailer_barrel') { // Barrels have no taillights or electrical lighting
+      } else if (car.type !== 'trailer_barrel' && !isRoadMachinery(car.type)) { // Barrels and machinery handled specially
         drawTaillight(rearLeftX, rearLeftY, dmg.leftTaillightBroken);
         drawTaillight(rearRightX, rearRightY, dmg.rightTaillightBroken);
       }
@@ -7655,7 +8798,15 @@ export class GameRenderer {
           ctx.arc(hitchOffset + 2.0, 2.0, 0.8, 0, Math.PI * 2);
           ctx.fill();
 
-          // When hitched, draw A-frame drawbar ring inside jaw with hydraulic lines connected
+          // Black electrical socket (розетка электрооборудования)
+          ctx.fillStyle = '#1e293b';
+          ctx.fillRect(hitchOffset + 1.2, -0.6, 1.0, 1.2);
+
+          // Red single-line pneumatic coupling head (соединительная головка пневмотормозов)
+          ctx.fillStyle = '#991b1b'; // Dark red/burgundy coupling head
+          ctx.fillRect(hitchOffset + 1.8, -3.8, 1.2, 1.0);
+
+          // When hitched, draw A-frame drawbar ring inside jaw with hydraulic/brake/electrical lines connected
           if (car.trailerId) {
             // Drawbar ring loop inside clevis jaw
             ctx.strokeStyle = '#0f172a';
@@ -7664,20 +8815,180 @@ export class GameRenderer {
             ctx.arc(hitchOffset - 0.2, 0, 1.8, 0, Math.PI * 2);
             ctx.stroke();
 
-            // Hydraulic hoses running from tractor outlets to trailer drawbar
-            ctx.strokeStyle = '#ef4444';
-            ctx.lineWidth = 1.0;
-            ctx.beginPath();
-            ctx.moveTo(hitchOffset + 2.0, -2.0);
-            ctx.quadraticCurveTo(hitchOffset, -3.5, hitchOffset - 3.0, -1.0);
-            ctx.stroke();
+            const trailer = vehicles.find(v => v.id === car.trailerId);
+            const isPlugConnected = trailer && trailer.trailerPlugConnected;
+            const isBrakesConnected = trailer && trailer.trailerBrakesConnected;
+            const hasBrakes = trailer && trailer.type === 'trailer_flatbed_2axle';
 
-            ctx.strokeStyle = '#2563eb';
-            ctx.lineWidth = 1.0;
+            // 1. ELECTRICAL WIRE (вилка светотехники)
+            if (isPlugConnected) {
+              // Coiled black electrical wire running to trailer frame
+              ctx.strokeStyle = '#020617';
+              ctx.lineWidth = 1.3;
+              ctx.beginPath();
+              ctx.moveTo(hitchOffset + 1.5, 0);
+              ctx.quadraticCurveTo(hitchOffset - 1.0, -2.5, hitchOffset - 3.5, -0.5);
+              ctx.stroke();
+            } else {
+              // Loose dangling electrical wire from trailer
+              ctx.strokeStyle = '#020617';
+              ctx.lineWidth = 1.3;
+              ctx.beginPath();
+              ctx.moveTo(hitchOffset - 3.5, -0.5);
+              ctx.quadraticCurveTo(hitchOffset - 5.5, 1.5, hitchOffset - 4.5, 3.5);
+              ctx.stroke();
+            }
+
+            // 2. PNEUMATIC BRAKE HOSE (тормозной пневморукав)
+            if (hasBrakes) {
+              if (isBrakesConnected) {
+                // Red single-line brake hose from coupler head
+                ctx.strokeStyle = '#ef4444';
+                ctx.lineWidth = 1.2;
+                ctx.beginPath();
+                ctx.moveTo(hitchOffset + 2.4, -3.3);
+                ctx.quadraticCurveTo(hitchOffset + 0.5, -5.0, hitchOffset - 3.5, -1.5);
+                ctx.stroke();
+              } else {
+                // Loose dangling pneumatic hose hanging from the trailer
+                ctx.strokeStyle = '#ef4444';
+                ctx.lineWidth = 1.2;
+                ctx.beginPath();
+                ctx.moveTo(hitchOffset - 3.5, -1.5);
+                ctx.quadraticCurveTo(hitchOffset - 5.5, -3.5, hitchOffset - 4.0, -5.0);
+                ctx.stroke();
+              }
+            }
+
+            // 3. HYDRAULIC LINES (гидросистема - красный и синий шланги опрокидывания)
+            if (isPlugConnected) {
+              ctx.strokeStyle = '#dc2626'; // Red high-pressure hydraulic hose
+              ctx.lineWidth = 1.1;
+              ctx.beginPath();
+              ctx.moveTo(hitchOffset + 2.0, -2.0);
+              ctx.quadraticCurveTo(hitchOffset, -3.5, hitchOffset - 3.0, -1.0);
+              ctx.stroke();
+
+              ctx.strokeStyle = '#2563eb'; // Blue return/lift hydraulic hose
+              ctx.lineWidth = 1.1;
+              ctx.beginPath();
+              ctx.moveTo(hitchOffset + 2.0, 2.0);
+              ctx.quadraticCurveTo(hitchOffset, 3.5, hitchOffset - 3.0, 1.0);
+              ctx.stroke();
+            } else {
+              // Dangling hydraulic hoses from trailer
+              ctx.strokeStyle = '#dc2626';
+              ctx.lineWidth = 1.1;
+              ctx.beginPath();
+              ctx.moveTo(hitchOffset - 3.0, -1.0);
+              ctx.quadraticCurveTo(hitchOffset - 5.0, -2.5, hitchOffset - 4.5, -4.0);
+              ctx.stroke();
+
+              ctx.strokeStyle = '#2563eb';
+              ctx.lineWidth = 1.1;
+              ctx.beginPath();
+              ctx.moveTo(hitchOffset - 3.0, 1.0);
+              ctx.quadraticCurveTo(hitchOffset - 5.0, 2.5, hitchOffset - 4.5, 4.0);
+              ctx.stroke();
+            }
+          }
+        } else if (carType === 'truck_semi') {
+          // --- SEMI-TRUCK TRACTOR: FIFTH WHEEL & SPIRAL PIGTAIL COILS ("КОСИЧКИ") ---
+          // No rear pintle hook! Coupling is performed via the fifth-wheel saddle.
+          // Behind the sleeper cab is the headache rack / pylon with spring-supported spiral hoses.
+          const cabRackX = halfL * 0.16; // Just behind sleeper cab
+          const trailer = car.trailerId ? vehicles.find(v => v.id === car.trailerId) : null;
+          const isBrakesConnected = trailer ? !!trailer.trailerBrakesConnected : false;
+          const isPlugConnected = trailer ? !!trailer.trailerPlugConnected : false;
+
+          // Helper to draw a spring-coiled spiral hose ("косичка")
+          const drawCoiledHose = (x1: number, y1: number, x2: number, y2: number, color: string, coils: number, radius: number, lineW: number) => {
+            ctx.strokeStyle = color;
+            ctx.lineWidth = lineW;
+            ctx.lineCap = 'round';
+            ctx.lineJoin = 'round';
             ctx.beginPath();
-            ctx.moveTo(hitchOffset + 2.0, 2.0);
-            ctx.quadraticCurveTo(hitchOffset, 3.5, hitchOffset - 3.0, 1.0);
+            const segs = 32;
+            const dx = x2 - x1;
+            const dy = y2 - y1;
+            const len = Math.hypot(dx, dy) || 1;
+            const nx = -dy / len;
+            const ny = dx / len;
+
+            ctx.moveTo(x1, y1);
+            for (let i = 1; i <= segs; i++) {
+              const t = i / segs;
+              const angle = t * coils * Math.PI * 2;
+              const wave = Math.sin(angle) * radius;
+              const sag = Math.sin(t * Math.PI) * 0.4;
+              const px = x1 + dx * t + nx * wave + (dx / len) * sag;
+              const py = y1 + dy * t + ny * wave + (dy / len) * sag;
+              ctx.lineTo(px, py);
+            }
             ctx.stroke();
+          };
+
+          // Draw Pylon / Headache Rack Hose Hangers ("Гитара" со стойкой и пружинами)
+          ctx.fillStyle = '#0f172a';
+          ctx.fillRect(cabRackX - 0.8, -4.5, 1.6, 9.0); // Transverse support bar
+          ctx.fillStyle = '#334155';
+          ctx.fillRect(cabRackX - 0.5, -3.5, 1.0, 7.0);
+
+          // Spring tension hanger brackets (пружинные подвесы)
+          ctx.strokeStyle = '#94a3b8';
+          ctx.lineWidth = 0.8;
+          ctx.beginPath();
+          ctx.moveTo(cabRackX, -2.6);
+          ctx.lineTo(cabRackX - 1.2, -2.6);
+          ctx.moveTo(cabRackX, 0);
+          ctx.lineTo(cabRackX - 1.2, 0);
+          ctx.moveTo(cabRackX, 2.6);
+          ctx.lineTo(cabRackX - 1.2, 2.6);
+          ctx.stroke();
+
+          if (trailer && car.trailerId) {
+            // Trailer front bulkhead connection manifold in tractor's local coordinates
+            const trCouplerOffset = trailer.couplerOffset !== undefined ? trailer.couplerOffset : 50;
+            // The front headboard with gladhands is ahead of the kingpin
+            const trHeadDist = trCouplerOffset + 4;
+            const trHeadWorldX = trailer.x + Math.cos(trailer.angle) * trHeadDist;
+            const trHeadWorldY = trailer.y + Math.sin(trailer.angle) * trHeadDist;
+
+            const tdx = trHeadWorldX - car.x;
+            const tdy = trHeadWorldY - car.y;
+            const cosA = Math.cos(car.angle);
+            const sinA = Math.sin(car.angle);
+            const trLocalX = tdx * cosA + tdy * sinA;
+            const trLocalY = -tdx * sinA + tdy * cosA;
+
+            // 1. RED PNEUMATIC EMERGENCY BRAKE LINE (Красная питающая магистраль)
+            if (isBrakesConnected) {
+              drawCoiledHose(cabRackX - 1.2, -2.6, trLocalX, trLocalY - 2.8, '#ef4444', 16, 1.2, 1.3);
+            } else {
+              // Hanging coiled loop parked on cab rack
+              drawCoiledHose(cabRackX - 1.2, -2.6, cabRackX - 3.8, -4.2, '#ef4444', 8, 1.0, 1.2);
+            }
+
+            // 2. BLUE/YELLOW PNEUMATIC SERVICE BRAKE LINE (Синяя управляющая магистраль)
+            if (isBrakesConnected) {
+              drawCoiledHose(cabRackX - 1.2, 2.6, trLocalX, trLocalY + 2.8, '#2563eb', 16, 1.2, 1.3);
+            } else {
+              // Hanging coiled loop parked on cab rack
+              drawCoiledHose(cabRackX - 1.2, 2.6, cabRackX - 3.8, 4.2, '#2563eb', 8, 1.0, 1.2);
+            }
+
+            // 3. BLACK 24V ELECTRICAL PIGTAIL (Черная витая электрокосичка светотехники)
+            if (isPlugConnected) {
+              drawCoiledHose(cabRackX - 1.2, 0, trLocalX, trLocalY, '#020617', 20, 1.4, 1.4);
+            } else {
+              // Hanging coiled loop parked on cab rack
+              drawCoiledHose(cabRackX - 1.2, 0, cabRackX - 4.2, 0, '#020617', 10, 1.1, 1.3);
+            }
+          } else {
+            // Unhitched tractor: all three pigtails hang neatly coiled on the parking dock of the headache rack
+            drawCoiledHose(cabRackX - 1.2, -2.6, cabRackX - 3.8, -4.2, '#ef4444', 8, 1.0, 1.2);
+            drawCoiledHose(cabRackX - 1.2, 2.6, cabRackX - 3.8, 4.2, '#2563eb', 8, 1.0, 1.2);
+            drawCoiledHose(cabRackX - 1.2, 0, cabRackX - 4.2, 0, '#020617', 10, 1.1, 1.3);
           }
         } else {
           // Trucks / Heavy Pickups: Forged Pintle Hook (Буксирный прибор типа "зев") or Receiver Hitch
@@ -7733,22 +9044,186 @@ export class GameRenderer {
             ctx.fillStyle = '#f59e0b'; // Yellow safety pin lock lever
             ctx.fillRect(hitchOffset - 1.8, -0.6, 2.2, 1.2);
 
-            // Coiled red & blue pneumatic air brake lines
-            ctx.strokeStyle = '#ef4444';
-            ctx.lineWidth = 1.0;
-            ctx.beginPath();
-            ctx.moveTo(hitchOffset + 1.5, -2.2);
-            ctx.quadraticCurveTo(hitchOffset - 0.5, -4.0, hitchOffset - 2.5, -1.2);
-            ctx.stroke();
+            const trailer = vehicles.find(v => v.id === car.trailerId);
+            const isBrakesConnected = trailer && trailer.trailerBrakesConnected;
+            const isPlugConnected = trailer && trailer.trailerPlugConnected;
 
-            ctx.strokeStyle = '#2563eb';
-            ctx.lineWidth = 1.0;
-            ctx.beginPath();
-            ctx.moveTo(hitchOffset + 1.5, 2.2);
-            ctx.quadraticCurveTo(hitchOffset - 0.5, 4.0, hitchOffset - 2.5, 1.2);
-            ctx.stroke();
+            if (isBrakesConnected) {
+              // Coiled red & blue pneumatic air brake lines (connected!)
+              ctx.strokeStyle = '#ef4444';
+              ctx.lineWidth = 1.0;
+              ctx.beginPath();
+              ctx.moveTo(hitchOffset + 1.5, -2.2);
+              ctx.quadraticCurveTo(hitchOffset - 0.5, -4.0, hitchOffset - 2.5, -1.2);
+              ctx.stroke();
+
+              ctx.strokeStyle = '#2563eb';
+              ctx.lineWidth = 1.0;
+              ctx.beginPath();
+              ctx.moveTo(hitchOffset + 1.5, 2.2);
+              ctx.quadraticCurveTo(hitchOffset - 0.5, 4.0, hitchOffset - 2.5, 1.2);
+              ctx.stroke();
+            } else {
+              // Disconnected air hoses hanging down from trailer
+              ctx.strokeStyle = '#ef4444';
+              ctx.lineWidth = 1.0;
+              ctx.beginPath();
+              ctx.moveTo(hitchOffset - 2.5, -1.2);
+              ctx.quadraticCurveTo(hitchOffset - 4.5, -3.5, hitchOffset - 3.5, -5.0);
+              ctx.stroke();
+
+              ctx.strokeStyle = '#2563eb';
+              ctx.lineWidth = 1.0;
+              ctx.beginPath();
+              ctx.moveTo(hitchOffset - 2.5, 1.2);
+              ctx.quadraticCurveTo(hitchOffset - 4.5, 3.5, hitchOffset - 3.5, 5.0);
+              ctx.stroke();
+            }
+
+            if (isPlugConnected) {
+              // Coiled black electrical plug connected (7-pin cord)
+              ctx.strokeStyle = '#020617';
+              ctx.lineWidth = 1.3;
+              ctx.beginPath();
+              ctx.moveTo(hitchOffset + 1.5, 0);
+              ctx.quadraticCurveTo(hitchOffset - 0.5, -1.5, hitchOffset - 2.5, 0);
+              ctx.stroke();
+            } else {
+              // Disconnected coiled black electrical wire hanging
+              ctx.strokeStyle = '#020617';
+              ctx.lineWidth = 1.3;
+              ctx.beginPath();
+              ctx.moveTo(hitchOffset - 2.5, 0);
+              ctx.quadraticCurveTo(hitchOffset - 5.0, 2.0, hitchOffset - 4.0, 3.5);
+              ctx.stroke();
+            }
           }
         }
+      }
+
+      // --- DYNAMIC REARVIEW CAMERA GUIDELINES ---
+      const isModernCar = ['sports', 'sedan_luxury', 'suv_luxury', 'supercar', 'coupe_gt', 'wagon_modern', 'wagon_allroad'].includes(car.type);
+      const hasCamera = !!(car.hasRearviewCamera || isModernCar);
+      if (hasCamera && isVehicleReverseGearActive(car)) {
+        ctx.save();
+        
+        // Compact, realistic backup camera distance (~3.6m to 4.5m, ~1.2 car lengths)
+        const maxDist = 48;
+        const step = 3;
+        const steer = car.steerAngle || 0;
+        const baseWB = car.wheelBase || 30;
+        const trackW = halfW - 0.8; // Car width tracking (outer tires)
+        
+        const rearAxleX = -halfL + (car.wheelBase ? Math.max(6, (car.length - car.wheelBase) * 0.5) : 8);
+        const rearOverhang = rearAxleX - (-halfL); // Distance from rear axle to rear bumper
+        
+        const pointsLeft: { x: number; y: number; alpha: number }[] = [];
+        const pointsRight: { x: number; y: number; alpha: number }[] = [];
+        
+        // Exact kinematic Ackerman circle calculation:
+        // Preserves constant track width perpendicular to curve without distortion
+        const isTurning = Math.abs(steer) > 0.015;
+        const R = isTurning ? (baseWB / Math.tan(steer)) : 0;
+        
+        for (let s = 0; s <= maxDist; s += step) {
+          if (!isTurning) {
+            const px = -halfL - s;
+            pointsLeft.push({ x: px, y: -trackW, alpha: 0 });
+            pointsRight.push({ x: px, y: trackW, alpha: 0 });
+          } else {
+            const alpha = s / R;
+            // Centerline along the circular arc
+            const cx = rearAxleX - (R * Math.sin(alpha) + rearOverhang * Math.cos(alpha));
+            const cy = R - (R * Math.cos(alpha) - rearOverhang * Math.sin(alpha));
+            
+            // Unit normal vector perpendicular to curve (pointing across car width towards +Y)
+            const nx = Math.sin(alpha);
+            const ny = Math.cos(alpha);
+            
+            // Left and right guide points strictly maintain vehicle track width (2 * trackW)
+            pointsLeft.push({ x: cx - trackW * nx, y: cy - trackW * ny, alpha });
+            pointsRight.push({ x: cx + trackW * nx, y: cy + trackW * ny, alpha });
+          }
+        }
+        
+        // High-contrast automotive zone color palette
+        const getColorForDist = (t: number) => {
+          if (t <= 14) return 'rgba(239, 68, 68, 0.9)';   // Red Stop Zone (< 1.2m)
+          if (t <= 30) return 'rgba(245, 158, 11, 0.9)';  // Amber Caution Zone (1.2m - 2.5m)
+          return 'rgba(16, 185, 129, 0.9)';              // Emerald Safe Zone (2.5m - 4.0m)
+        };
+
+        // Draw left and right dynamic guide rails
+        ctx.lineWidth = 2.0;
+        for (let i = 0; i < pointsLeft.length - 1; i++) {
+          const t = i * step;
+          const strokeColor = getColorForDist(t);
+          ctx.strokeStyle = strokeColor;
+          
+          // Left rail segment
+          ctx.beginPath();
+          ctx.moveTo(pointsLeft[i].x, pointsLeft[i].y);
+          ctx.lineTo(pointsLeft[i + 1].x, pointsLeft[i + 1].y);
+          ctx.stroke();
+          
+          // Right rail segment
+          ctx.beginPath();
+          ctx.moveTo(pointsRight[i].x, pointsRight[i].y);
+          ctx.lineTo(pointsRight[i + 1].x, pointsRight[i + 1].y);
+          ctx.stroke();
+        }
+
+        // Draw colored distance crossbars / rungs with OEM tick marks
+        const drawRung = (distIndex: number) => {
+          const ptL = pointsLeft[distIndex];
+          const ptR = pointsRight[distIndex];
+          if (!ptL || !ptR) return;
+          const t = distIndex * step;
+          const color = getColorForDist(t);
+          
+          ctx.strokeStyle = color;
+          ctx.lineWidth = 2.2;
+          ctx.beginPath();
+          ctx.moveTo(ptL.x, ptL.y);
+          ctx.lineTo(ptR.x, ptR.y);
+          ctx.stroke();
+
+          // Tick marks at the edges aligned with trajectory tangent
+          const tx = -Math.cos(ptL.alpha);
+          const ty = Math.sin(ptL.alpha);
+          const tickLen = 3.5;
+          ctx.beginPath();
+          ctx.moveTo(ptL.x, ptL.y);
+          ctx.lineTo(ptL.x + tx * tickLen, ptL.y + ty * tickLen);
+          ctx.moveTo(ptR.x, ptR.y);
+          ctx.lineTo(ptR.x + tx * tickLen, ptR.y + ty * tickLen);
+          ctx.stroke();
+        };
+
+        // Rungs: 14px (Red stop line), 30px (Amber warning line), 48px (Green limit line)
+        drawRung(Math.floor(14 / step));
+        drawRung(Math.floor(30 / step));
+        drawRung(Math.floor(48 / step));
+
+        ctx.restore();
+      }
+
+      // --- WATER IMMERSION & WATERLINE SUBMERGED VISUAL OVERLAY ---
+      if (car.waterDepth && car.waterDepth > 0.08) {
+        const sub = Math.min(1.0, car.waterDepth / 1.4);
+        ctx.fillStyle = `rgba(12, 74, 96, ${Math.min(0.65, sub * 0.70)})`;
+        ctx.beginPath();
+        ctx.roundRect(-halfL - 1.5, -halfW - 1.5, car.length + 3, car.width + 3, 6);
+        ctx.fill();
+
+        // Dynamic waterline foam collar around hull
+        const timeSec = performance.now() * 0.003;
+        const waveOsc = Math.sin(timeSec + car.x * 0.01) * 1.2;
+        ctx.strokeStyle = `rgba(240, 249, 255, ${Math.min(0.85, 0.35 + sub * 0.5)})`;
+        ctx.lineWidth = 1.8;
+        ctx.beginPath();
+        ctx.roundRect(-halfL - 2.5 + waveOsc, -halfW - 2.5, car.length + 5, car.width + 5, 8);
+        ctx.stroke();
       }
 
       ctx.restore();
@@ -7760,9 +9235,6 @@ export class GameRenderer {
     const ctx = this.ctx;
 
     for (const car of vehicles) {
-      if (car.type.startsWith('trailer_') || car.isTrailer || car.type === 'trailer_barrel' || car.type === 'trailer_flatbed_2axle') {
-        continue;
-      }
       ctx.save();
       if (car.ghostingAlpha !== undefined) {
         ctx.globalAlpha = car.ghostingAlpha;
@@ -7911,6 +9383,28 @@ export class GameRenderer {
         nightAlpha,
       };
 
+      const isTrailer = car.type.startsWith('trailer_') || car.isTrailer || car.type === 'trailer_barrel' || car.type === 'trailer_flatbed_2axle';
+      const isMachinery = isRoadMachinery(car.type);
+
+      if (isTrailer || isMachinery) {
+        // Render specialized trailer attachments and machinery superstructure on top of lightmap
+        renderSpecializedVehicleAttachments(vCtx);
+
+        // Night/Weather Tint on top of lightmap
+        if (nightAlpha > 0.05) {
+          ctx.fillStyle = `rgba(0, 0, 15, ${nightAlpha * 0.72})`;
+          ctx.beginPath();
+          ctx.moveTo(bodyPoly[0].x, bodyPoly[0].y);
+          for (let i = 1; i < bodyPoly.length; i++) {
+            ctx.lineTo(bodyPoly[i].x, bodyPoly[i].y);
+          }
+          ctx.closePath();
+          ctx.fill();
+        }
+        ctx.restore();
+        continue;
+      }
+
       // Accurate greenhouse (windshield, roof, side glass, pillars, sedan trunk deck, wagon roof, pickup bed, supercar mid-engine, etc.)
       renderVehicleGreenhouseAndBodyPanels(vCtx);
 
@@ -8023,7 +9517,10 @@ export class GameRenderer {
       }
 
       // Specialized vehicle attachments, emergency sirens, cabins & equipment
-      renderSpecializedVehicleAttachments(vCtx);
+      // (skip truck_semi and trailers whose chassis and attachments are rendered on the lower chassis/body layer)
+      if (car.type !== 'truck_semi' && !car.type.startsWith('trailer_') && !car.isTrailer) {
+        renderSpecializedVehicleAttachments(vCtx);
+      }
 
       // Night/Weather Tint for the cabins (since drawn above lightmap)
       if (nightAlpha > 0.05) {
@@ -8044,7 +9541,7 @@ export class GameRenderer {
         let zMultiplier = 1.0;
         if (car.type === 'bus' || car.type === 'bus_minibus') zMultiplier = 1.8;
         else if (car.type === 'fire_engine' || car.type === 'fire_ladder' || car.type === 'fire_rescue') zMultiplier = 1.7;
-        else if (car.type === 'truck_box' || car.type === 'truck_dump' || car.type === 'truck_tanker' || car.type === 'truck_flatbed') zMultiplier = 1.6;
+        else if (car.type === 'truck_box' || car.type === 'truck_dump' || car.type === 'truck_semi' || car.type === 'truck_tanker' || car.type === 'truck_flatbed' || car.type === 'truck_covered') zMultiplier = 1.6;
         else if (car.type === 'suv' || car.type === 'suv_luxury' || car.type === 'suv_classic_box' || car.type === 'ambulance' || car.type === 'ambulance_van') zMultiplier = 1.4;
         else if (car.type === 'supercar' || car.type === 'sports') zMultiplier = 0.75;
 
@@ -8205,12 +9702,235 @@ export class GameRenderer {
     }
   }
 
-  // --- PARTICLES ---
-  private renderParticles(particles: GameWorld['particles'], cleanMode?: boolean) {
+  // --- PARTICLES & SOFT VOLUMETRIC GAS ENGINE ---
+
+  // Offscreen cached radial-gradient sprites for soft volumetric gas / exhaust puffs.
+  // Replaces hard-edged solid circles with realistic feather-edged gas clouds and avoids per-frame CPU gradients.
+  private static gasPuffCache = new Map<string, HTMLCanvasElement>();
+
+  private static getGasPuffSprite(color: string): HTMLCanvasElement {
+    let cached = GameRenderer.gasPuffCache.get(color);
+    if (!cached) {
+      if (GameRenderer.gasPuffCache.size >= 32) {
+        const firstKey = GameRenderer.gasPuffCache.keys().next().value;
+        if (firstKey !== undefined) {
+          const old = GameRenderer.gasPuffCache.get(firstKey);
+          if (old) {
+            old.width = 0;
+            old.height = 0;
+          }
+          GameRenderer.gasPuffCache.delete(firstKey);
+        }
+      }
+      cached = document.createElement('canvas');
+      const size = 64;
+      cached.width = size;
+      cached.height = size;
+      const cctx = cached.getContext('2d');
+      if (cctx) {
+        const half = size / 2;
+        const grad = cctx.createRadialGradient(half, half, 0, half, half, half);
+
+        let r = 71, g = 85, b = 105;
+        if (color.startsWith('#')) {
+          let hex = color.slice(1);
+          if (hex.length === 3) {
+            hex = hex[0] + hex[0] + hex[1] + hex[1] + hex[2] + hex[2];
+          }
+          const val = parseInt(hex, 16);
+          if (!isNaN(val)) {
+            r = (val >> 16) & 255;
+            g = (val >> 8) & 255;
+            b = val & 255;
+          }
+        } else if (color.startsWith('rgb')) {
+          const parts = color.match(/\d+/g);
+          if (parts && parts.length >= 3) {
+            r = parseInt(parts[0], 10);
+            g = parseInt(parts[1], 10);
+            b = parseInt(parts[2], 10);
+          }
+        }
+
+        // Smooth volumetric gas falloff:
+        // Broad dense core ensures rich opacity, feathered outer rim prevents hard polygon edges
+        grad.addColorStop(0, `rgba(${r}, ${g}, ${b}, 1.0)`);
+        grad.addColorStop(0.50, `rgba(${r}, ${g}, ${b}, 0.95)`);
+        grad.addColorStop(0.75, `rgba(${r}, ${g}, ${b}, 0.70)`);
+        grad.addColorStop(0.90, `rgba(${r}, ${g}, ${b}, 0.30)`);
+        grad.addColorStop(1.0, `rgba(${r}, ${g}, ${b}, 0.0)`);
+
+        cctx.fillStyle = grad;
+        cctx.fillRect(0, 0, size, size);
+      }
+      GameRenderer.gasPuffCache.set(color, cached);
+    }
+    return cached;
+  }
+
+  private drawGasSmokeParticle(p: Particle) {
+    const sprite = GameRenderer.getGasPuffSprite(p.color);
+    this.ctx.globalAlpha = Math.max(0, Math.min(1.0, p.alpha));
+    const r = p.radius;
+    this.ctx.drawImage(sprite, p.x - r, p.y - r, r * 2, r * 2);
+  }
+
+  // 13c. Under-Vehicle Ground Particles: Under-car exhaust gas and flat splatted mud stains on the ground
+  // Rendered on the ground BEFORE vehicles, roofs, and trees are drawn
+  private renderUnderVehicleParticles(particles: GameWorld['particles'], cleanMode?: boolean) {
+    if (cleanMode || !particles || particles.length === 0) return;
+    const len = particles.length;
+
+    for (let i = 0; i < len; i++) {
+      const p = particles[i];
+      if (p.type === 'exhaust' && p.underVehicle !== false) {
+        this.drawGasSmokeParticle(p);
+      } else if (p.type === 'mud_clod' && p.splatted) {
+        // Mud that has already landed: stationary flat ground stain
+        this.drawMudClodParticle(p);
+      }
+    }
+    this.ctx.globalAlpha = 1.0;
+  }
+
+  // 14e. Mid-Layer Wheel Ground Particles: Flying mud clods, Atmospheric dust clouds, Tire smoke, Tire water spray
+  // Rendered immediately AFTER vehicle chassis, but BEFORE vehicle cabins, building roofs, and trees!
+  private renderWheelGroundParticles(particles: GameWorld['particles'], cleanMode?: boolean) {
+    if (cleanMode || !particles || particles.length === 0) return;
+    const len = particles.length;
+    const ctx = this.ctx;
+
+    for (let i = 0; i < len; i++) {
+      const p = particles[i];
+      if (p.type === 'dust') {
+        this.drawDustParticle(p);
+      } else if (p.type === 'mud_clod' && !p.splatted) {
+        // Mud clod in airborne 3D ballistic trajectory with contact shadow
+        this.drawMudClodParticle(p);
+      } else if (p.type === 'tire_smoke' && !p.underVehicle) {
+        ctx.globalAlpha = Math.max(0, Math.min(1.0, p.alpha));
+        ctx.fillStyle = p.color;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+        ctx.fill();
+      } else if (p.type === 'water_spray') {
+        ctx.globalAlpha = Math.max(0, Math.min(1.0, p.alpha));
+        ctx.fillStyle = p.color;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+    this.ctx.globalAlpha = 1.0;
+  }
+
+  // Volumetric billowy ground dust cloud puff
+  private drawDustParticle(p: Particle) {
+    const ctx = this.ctx;
+    const a = Math.max(0, Math.min(1.0, p.alpha));
+    const rad = p.radius;
+
+    // Outer soft atmospheric puff
+    ctx.globalAlpha = a * 0.42;
+    ctx.fillStyle = p.color;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, rad, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Intermediate billowy body
+    ctx.globalAlpha = a * 0.68;
+    ctx.beginPath();
+    ctx.arc(p.x + (Math.sin(p.life * 2.5) * rad * 0.14), p.y + (Math.cos(p.life * 2.5) * rad * 0.14), rad * 0.60, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Dense inner dusty core
+    if (rad > 6.0) {
+      ctx.globalAlpha = a * 0.88;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, rad * 0.30, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  // Realistic heavy mud clod with contact shadow, 3D trajectory, tumbling, and ground splatter
+  private drawMudClodParticle(p: Particle) {
+    const ctx = this.ctx;
+    const a = Math.max(0, Math.min(1.0, p.alpha));
+    const seed = p.shapeSeed || 1;
+    const r = p.radius;
+
+    if (p.z !== undefined && p.z > 0 && !p.splatted) {
+      // 1. Soft contact shadow on the ground directly beneath the airborne chunk
+      const shadowAlpha = Math.max(0, Math.min(0.48, a * 0.55));
+      ctx.globalAlpha = shadowAlpha;
+      ctx.fillStyle = 'rgba(12, 6, 2, 0.50)';
+      ctx.beginPath();
+      ctx.ellipse(p.x, p.y, Math.max(1.0, r * 0.85), Math.max(0.6, r * 0.45), 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // 2. Chunky, organic airborne mud projectile elevated along Z axis
+      const drawY = p.y - p.z;
+      ctx.globalAlpha = a;
+      ctx.fillStyle = p.color;
+      ctx.beginPath();
+
+      const rot = (seed % 31) * 0.2 + p.life * 5.0; // tumbling rotation
+      const aspectW = 1.0 + ((seed % 7) - 3) * 0.08;
+      const aspectH = 0.80 + ((seed % 5) - 2) * 0.08;
+      ctx.ellipse(p.x, drawY, Math.max(1.0, r * aspectW), Math.max(0.7, r * aspectH), rot, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Darker rich core for medium and large chunks
+      if (r > 3.0) {
+        ctx.fillStyle = '#0f0703';
+        ctx.beginPath();
+        ctx.ellipse(p.x, drawY, r * 0.45, r * 0.35, rot, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      // Micro-droplets trailing behind fast flying clod
+      const vSq = p.vx * p.vx + p.vy * p.vy;
+      if (vSq > 220) {
+        const vLen = Math.sqrt(vSq);
+        const nx = p.vx / vLen;
+        const ny = p.vy / vLen;
+        ctx.fillStyle = p.color;
+        ctx.beginPath();
+        ctx.arc(p.x - nx * (r * 1.5), drawY - ny * (r * 1.5), Math.max(0.6, r * 0.32), 0, Math.PI * 2);
+        ctx.fill();
+      }
+    } else {
+      // Splatted on the ground: flattened wet earth stain with micro-satellite flecks
+      ctx.globalAlpha = a;
+      ctx.fillStyle = p.color;
+      ctx.beginPath();
+      const rot = (seed % 31) * 0.2;
+      ctx.ellipse(p.x, p.y, Math.max(1.2, r * 1.4), Math.max(0.8, r * 0.85), rot, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Satellite micro-splatter fleck
+      const ang = (seed % 62) * 0.1;
+      const dist = r * 1.4;
+      ctx.beginPath();
+      ctx.arc(p.x + Math.cos(ang) * dist, p.y + Math.sin(ang) * dist, Math.max(0.5, r * 0.25), 0, Math.PI * 2);
+      ctx.fill();
+
+      if (r > 3.5) {
+        const ang2 = ang + 2.2;
+        const dist2 = r * 1.7;
+        ctx.beginPath();
+        ctx.arc(p.x + Math.cos(ang2) * dist2, p.y + Math.sin(ang2) * dist2, Math.max(0.4, r * 0.20), 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+  }
+
+  // Overhead Particles: Tractor hood stack exhaust (shoots UPWARDS into sky), Engine bay fire/steam, Sparks, Flames, Debris
+  private renderOverheadParticles(particles: GameWorld['particles'], cleanMode?: boolean) {
     const len = particles.length;
     if (len === 0) return;
 
-    const smoke: typeof particles = [];
+    const overheadSmoke: typeof particles = [];
     const neutral: typeof particles = [];
     const flames: typeof particles = [];
     const sparks: typeof particles = [];
@@ -8218,9 +9938,20 @@ export class GameRenderer {
     // O(N) single-pass categorization to avoid multiple array scans
     for (let i = 0; i < len; i++) {
       const p = particles[i];
+      // Skip all ground and wheel particles (dust, mud clods, tire water spray)
+      // so they are NEVER drawn above vehicle roofs, buildings, or trees!
+      if (p.underVehicle || p.type === 'dust' || p.type === 'mud_clod' || p.type === 'water_spray') {
+        continue;
+      }
+
       const t = p.type;
-      if (t === 'engine_smoke' || t === 'tire_smoke' || t === 'exhaust') {
-        smoke.push(p);
+      if (t === 'exhaust') {
+        // Only overhead exhaust (TRACTORS where p.underVehicle === false)
+        if (p.underVehicle === false) {
+          overheadSmoke.push(p);
+        }
+      } else if (t === 'engine_smoke' || t === 'tire_smoke') {
+        overheadSmoke.push(p);
       } else if (t === 'flame') {
         flames.push(p);
       } else if (t === 'spark') {
@@ -8232,16 +9963,11 @@ export class GameRenderer {
 
     const ctx = this.ctx;
 
-    // Pass 1: Render thick background smoke (engine smoke, tire smoke, exhaust)
+    // Pass 1: Render volumetric overhead smoke (Tractor vertical stack exhaust, Engine bay steam/smoke, Tire smoke)
     // Completely bypass in Clean Mode (cleanMode === true)
     if (!cleanMode) {
-      for (let i = 0; i < smoke.length; i++) {
-        const p = smoke[i];
-        ctx.globalAlpha = Math.max(0, Math.min(1.0, p.alpha));
-        ctx.fillStyle = p.color;
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
-        ctx.fill();
+      for (let i = 0; i < overheadSmoke.length; i++) {
+        this.drawGasSmokeParticle(overheadSmoke[i]);
       }
     }
 
@@ -8278,8 +10004,38 @@ export class GameRenderer {
       } else if (p.type === 'debris') {
         ctx.fillStyle = p.color;
         ctx.fillRect(p.x - p.radius * 0.5, p.y - p.radius * 0.5, p.radius, p.radius);
+      } else if (p.type === 'water_spray' || p.type === 'water_splash') {
+        // High-velocity elongated water droplet streak or soft mist droplet
+        const vSq = p.vx * p.vx + p.vy * p.vy;
+        if (vSq > 900) {
+          // Fast-moving water streak
+          const vLen = Math.sqrt(vSq);
+          const streakLen = Math.min(10, Math.max(3, vLen * 0.04));
+          const nx = p.vx / vLen;
+          const ny = p.vy / vLen;
+
+          ctx.strokeStyle = p.color;
+          ctx.lineWidth = Math.max(1.0, p.radius * 0.85);
+          ctx.lineCap = 'round';
+          ctx.beginPath();
+          ctx.moveTo(p.x - nx * streakLen, p.y - ny * streakLen);
+          ctx.lineTo(p.x, p.y);
+          ctx.stroke();
+
+          // Droplet highlight head
+          ctx.fillStyle = '#ffffff';
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, Math.max(0.7, p.radius * 0.45), 0, Math.PI * 2);
+          ctx.fill();
+        } else {
+          // Ground splash / mist droplet
+          ctx.fillStyle = p.color;
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+          ctx.fill();
+        }
       } else {
-        // Other neutral (water splash, rain droplets, water fountains, etc.)
+        // Other neutral (rain droplets, water fountains, etc.)
         ctx.fillStyle = p.color;
         ctx.beginPath();
         ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
@@ -8338,6 +10094,11 @@ export class GameRenderer {
     ctx.globalAlpha = 1.0;
   }
 
+  // Backward-compatible particle rendering alias
+  public renderParticles(particles: GameWorld['particles'], cleanMode?: boolean) {
+    this.renderOverheadParticles(particles, cleanMode);
+  }
+
   // --- PROFESSIONAL TWO-PASS LIGHTMAP SYSTEM ---
   private renderLightmap(
     world: GameWorld,
@@ -8345,7 +10106,8 @@ export class GameRenderer {
     weatherTransition: number,
     nearbyVehicles: Vehicle[],
     props: StreetProp[],
-    minX: number, minY: number, maxX: number, maxY: number
+    minX: number, minY: number, maxX: number, maxY: number,
+    player?: Player | null
   ) {
     let nightAlpha = 0;
     let baseColor = 'rgba(5, 10, 24, ';
@@ -8430,17 +10192,123 @@ export class GameRenderer {
       return (timeHour >= sunsetHour || timeHour < sunriseHour);
     };
 
-    // A. Headlight Cone Cutouts
+    // A. Automotive Headlight, Trailer & Vehicle Light Cutouts (Pass 1 - Organic illumination footprints)
     for (const car of nearbyVehicles) {
-      if (car.type.startsWith('trailer_') || car.isTrailer || car.type === 'trailer_barrel' || car.type === 'trailer_flatbed_2axle') continue;
       const cosA = Math.cos(car.angle);
       const sinA = Math.sin(car.angle);
       const halfL = car.length / 2;
       const halfW = car.width / 2;
 
+      const isTrailer = car.type.startsWith('trailer_') || car.isTrailer || car.type === 'trailer_barrel' || car.type === 'trailer_flatbed_2axle';
+
+      if (isTrailer) {
+        // Synchronize electrical lighting state from towing tractor if connected
+        const towedVeh = world.vehicles.find(v => v.id === car.towedById || v.trailerId === car.id);
+        const isPlugConnected = car.type !== 'trailer_barrel' && (car.trailerPlugConnected !== false);
+        if (towedVeh && isPlugConnected) {
+          const tractorHeadlights = getVehicleHeadlightOn(towedVeh);
+          car.headlightsOn = tractorHeadlights;
+          car.positionLightsOn = !!(towedVeh.positionLightsOn || tractorHeadlights);
+          car.brakeLightsOn = !!towedVeh.brakeLightsOn;
+          car.isReversing = isVehicleReverseGearActive(towedVeh);
+          car.turnSignal = towedVeh.turnSignal;
+          car.turnSignalTimer = towedVeh.turnSignalTimer;
+        } else {
+          car.headlightsOn = false;
+          car.positionLightsOn = false;
+          car.brakeLightsOn = false;
+          car.isReversing = false;
+          car.turnSignal = 'none';
+        }
+
+        const trailerLightsActive = car.headlightsOn || car.positionLightsOn || car.brakeLightsOn || car.isReversing || (car.turnSignal && car.turnSignal !== 'none');
+        if (!trailerLightsActive) continue;
+
+        const cutTrailerLight = (rxOffset: number, ryOffset: number, radius: number, peakAlpha: number = 0.8) => {
+          const rx = car.x + cosA * rxOffset - sinA * ryOffset;
+          const ry = car.y + sinA * rxOffset + cosA * ryOffset;
+          const targetRadius = radius * fogFactor;
+          const rGrad = lCtx.createRadialGradient(rx, ry, 0, rx, ry, targetRadius);
+          rGrad.addColorStop(0.0, `rgba(0, 0, 0, ${peakAlpha})`);
+          rGrad.addColorStop(0.4, `rgba(0, 0, 0, ${peakAlpha * 0.5})`);
+          rGrad.addColorStop(0.8, `rgba(0, 0, 0, ${peakAlpha * 0.12})`);
+          rGrad.addColorStop(1.0, 'rgba(0, 0, 0, 0)');
+          lCtx.fillStyle = rGrad;
+          lCtx.beginPath();
+          lCtx.arc(rx, ry, targetRadius, 0, Math.PI * 2);
+          lCtx.fill();
+        };
+
+        let rLeftLX = -halfL * 0.94;
+        let rLeftLY = -halfW + 3.0;
+        let rRightLX = -halfL * 0.94;
+        let rRightLY = halfW - 3.0;
+        let sideMarkerXs: number[] = [];
+        let hasRev = true;
+
+        if (car.type === 'trailer_flatbed_2axle') {
+          const boxRear = -halfL * 0.88;
+          const boxW = halfW * 0.96 * 2;
+          rLeftLX = boxRear - 0.6; rLeftLY = -boxW * 0.42;
+          rRightLX = boxRear - 0.6; rRightLY = boxW * 0.42;
+          sideMarkerXs = [halfL * 0.35, -halfL * 0.25];
+          hasRev = false;
+        } else if (car.type === 'trailer_vacuum') {
+          const wheelAxleX = -halfL * 0.28;
+          const fenderX = wheelAxleX - 17.5 / 2;
+          const barrelTrackY = halfW * 0.82 + 2.3;
+          rLeftLX = fenderX + 0.7; rLeftLY = -barrelTrackY;
+          rRightLX = fenderX + 0.7; rRightLY = barrelTrackY;
+          sideMarkerXs = [];
+          hasRev = true;
+        } else if (car.type === 'trailer_barrel') {
+          rLeftLX = -halfL * 0.85; rLeftLY = -halfW * 0.75;
+          rRightLX = -halfL * 0.85; rRightLY = halfW * 0.75;
+          sideMarkerXs = [];
+          hasRev = false;
+        } else {
+          sideMarkerXs = [-halfL * 0.72, -halfL * 0.35, 0, halfL * 0.35];
+          hasRev = true;
+        }
+
+        const hasTrailerRunningLights = (car.positionLightsOn || car.headlightsOn) && (car.type !== 'trailer_barrel');
+
+        // Reversing lights cutout
+        if (car.isReversing && hasRev) {
+          cutTrailerLight(rLeftLX, rLeftLY, 28, 0.82);
+          cutTrailerLight(rRightLX, rRightLY, 28, 0.82);
+        } else if (car.brakeLightsOn) {
+          // Brake lights cutout
+          cutTrailerLight(rLeftLX, rLeftLY, 30, 0.85);
+          cutTrailerLight(rRightLX, rRightLY, 30, 0.85);
+        } else if (hasTrailerRunningLights) {
+          // Running tail lights
+          cutTrailerLight(rLeftLX, rLeftLY, 12, 0.50);
+          cutTrailerLight(rRightLX, rRightLY, 12, 0.50);
+          // Side clearance marker lights along trailer flanks (illuminating ground beside trailer)
+          for (const smx of sideMarkerXs) {
+            cutTrailerLight(smx, -halfW - 1.2, 7, 0.35);
+            cutTrailerLight(smx, halfW + 1.2, 7, 0.35);
+          }
+        }
+
+        // Turn signal cutouts
+        if (car.turnSignal && car.turnSignal !== 'none') {
+          const isBlinkOn = Math.floor((car.turnSignalTimer || 0) * 4) % 2 === 0;
+          if (isBlinkOn) {
+            const isLeft = car.turnSignal === 'left' || car.turnSignal === 'hazard';
+            const isRight = car.turnSignal === 'right' || car.turnSignal === 'hazard';
+            if (isLeft) cutTrailerLight(rLeftLX, rLeftLY - 1.5, 16, 0.65);
+            if (isRight) cutTrailerLight(rRightLX, rRightLY + 1.5, 16, 0.65);
+          }
+        }
+
+        continue;
+      }
+
       const isHighBeam = car.headlightMode === 'high';
-      const beamLen = (isHighBeam ? 350 : 220) * fogFactor;
-      const beamSpread = (isHighBeam ? 75 : 52) * fogFactor;
+      const beamReach = (isHighBeam ? 360 : 230) * fogFactor;
+      const beamSpreadWidth = (isHighBeam ? 85 : 56) * fogFactor;
       const dmg = car.damage || { leftHeadlightBroken: false, rightHeadlightBroken: false, frontCrumple: 0, rearCrumple: 0, leftDent: 0, rightDent: 0, frontLeftDent: 0, frontRightDent: 0, rearLeftDent: 0, rearRightDent: 0 };
       
       const fc = Math.min(14, dmg.frontCrumple || 0);
@@ -8477,50 +10345,169 @@ export class GameRenderer {
       }
 
       const hasHeadlightsOn = getVehicleHeadlightOn(car);
+      const hasPositionLightsOn = !!(car.positionLightsOn || hasHeadlightsOn);
+      const isIgnitionOn = !!(car.engineState?.engineRunning || car.engineState?.ignition || car.positionLightsOn || hasHeadlightsOn);
 
-      const cutHeadlightBeam = (lxOffset: number, lyOffset: number, broken: boolean) => {
-        if (broken) return;
-        const lx = car.x + cosA * lxOffset - sinA * lyOffset;
-        const ly = car.y + sinA * lxOffset + cosA * lyOffset;
-
-        // Pass 1: Cut a hole in the darkness. 
-        // Softened stops to prevent "daylight" sharp holes
-        const beamGrad = lCtx.createRadialGradient(lx, ly, 0, lx + cosA * (beamLen * 0.5), ly + sinA * (beamLen * 0.45), beamLen);
-        beamGrad.addColorStop(0, 'rgba(0, 0, 0, 0.82)'); 
-        beamGrad.addColorStop(0.35, 'rgba(0, 0, 0, 0.62)');
-        beamGrad.addColorStop(0.7, 'rgba(0, 0, 0, 0.22)');
-        beamGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
-
-        lCtx.fillStyle = beamGrad;
-        lCtx.beginPath();
-        lCtx.moveTo(lx, ly);
-        // Draw a trapezoid-like shape with an arc at the end for realistic light propagation
-        const endLX = lx + cosA * beamLen;
-        const endLY = ly + sinA * beamLen;
-        lCtx.lineTo(endLX - sinA * beamSpread, endLY + cosA * beamSpread);
-        lCtx.arc(lx, ly, beamLen, Math.atan2(sinA * beamLen + cosA * beamSpread, cosA * beamLen - sinA * beamSpread), Math.atan2(sinA * beamLen - cosA * beamSpread, cosA * beamLen + sinA * beamSpread), true);
-        lCtx.lineTo(lx, ly);
-        lCtx.closePath();
-        lCtx.fill();
-        
-        // Very small source cutout to ensure the bulb itself is visible
-        const sourceGrad = lCtx.createRadialGradient(lx, ly, 0, lx, ly, 3);
-        sourceGrad.addColorStop(0, 'rgba(0, 0, 0, 1.0)');
-        sourceGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
-        lCtx.fillStyle = sourceGrad;
-        lCtx.beginPath(); lCtx.arc(lx, ly, 3, 0, Math.PI * 2); lCtx.fill();
-      };
-
+      // Smooth, natural forward headlight field (No harsh triangular polygons!)
       if (hasHeadlightsOn) {
+        const leftActive = !dmg.leftHeadlightBroken;
+        const rightActive = !isSoloMoto && !dmg.rightHeadlightBroken;
+
+        if (leftActive || rightActive) {
+          let beamOriginLX = (leftLampLX + rightLampLX) * 0.5;
+          let beamOriginLY = (leftLampLY + rightLampLY) * 0.5;
+          if (!leftActive && rightActive) {
+            beamOriginLX = rightLampLX;
+            beamOriginLY = rightLampLY;
+          } else if (leftActive && !rightActive) {
+            beamOriginLX = leftLampLX;
+            beamOriginLY = leftLampLY;
+          }
+
+          const originX = car.x + cosA * beamOriginLX - sinA * beamOriginLY;
+          const originY = car.y + sinA * beamOriginLX + cosA * beamOriginLY;
+
+          const forwardX = originX + cosA * beamReach;
+          const forwardY = originY + sinA * beamReach;
+
+          const leftFlankLY = isSoloMoto ? -2.0 : leftLampLY - 1.5;
+          const rightFlankLY = isSoloMoto ? 2.0 : rightLampLY + 1.5;
+
+          const startLeftX = car.x + cosA * leftLampLX - sinA * leftFlankLY;
+          const startLeftY = car.y + sinA * leftLampLX + cosA * leftFlankLY;
+          const startRightX = car.x + cosA * rightLampLX - sinA * rightFlankLY;
+          const startRightY = car.y + sinA * rightLampLX + cosA * rightFlankLY;
+
+          const endLeftX = forwardX - sinA * beamSpreadWidth;
+          const endLeftY = forwardY + cosA * beamSpreadWidth;
+          const endRightX = forwardX + sinA * beamSpreadWidth;
+          const endRightY = forwardY - cosA * beamSpreadWidth;
+
+          lCtx.save();
+          lCtx.beginPath();
+          lCtx.moveTo(startLeftX, startLeftY);
+          const ctrlDist = beamReach * 0.45;
+          lCtx.quadraticCurveTo(
+            originX + cosA * ctrlDist - sinA * (beamSpreadWidth * 0.65),
+            originY + sinA * ctrlDist + cosA * (beamSpreadWidth * 0.65),
+            endLeftX, endLeftY
+          );
+          lCtx.arc(
+            originX, originY, beamReach,
+            Math.atan2(endLeftY - originY, endLeftX - originX),
+            Math.atan2(endRightY - originY, endRightX - originX),
+            true
+          );
+          lCtx.quadraticCurveTo(
+            originX + cosA * ctrlDist + sinA * (beamSpreadWidth * 0.65),
+            originY + sinA * ctrlDist - cosA * (beamSpreadWidth * 0.65),
+            startRightX, startRightY
+          );
+          lCtx.closePath();
+
+          // Multi-step smooth polynomial gradient decay (zero harsh edges, seamlessly blending with ambient night)
+          const beamGrad = lCtx.createRadialGradient(
+            originX, originY, 0,
+            originX + cosA * (beamReach * 0.35),
+            originY + sinA * (beamReach * 0.35),
+            beamReach
+          );
+          beamGrad.addColorStop(0.00, 'rgba(0, 0, 0, 0.88)');
+          beamGrad.addColorStop(0.20, 'rgba(0, 0, 0, 0.76)');
+          beamGrad.addColorStop(0.48, 'rgba(0, 0, 0, 0.46)');
+          beamGrad.addColorStop(0.75, 'rgba(0, 0, 0, 0.18)');
+          beamGrad.addColorStop(0.92, 'rgba(0, 0, 0, 0.04)');
+          beamGrad.addColorStop(1.00, 'rgba(0, 0, 0, 0.00)');
+
+          lCtx.fillStyle = beamGrad;
+          lCtx.fill();
+          lCtx.restore();
+
+          // Tiny soft bulb cutouts directly at the lamp glass
+          if (leftActive) {
+            const lx = car.x + cosA * leftLampLX - sinA * leftLampLY;
+            const ly = car.y + sinA * leftLampLX + cosA * leftLampLY;
+            const bulbCut = lCtx.createRadialGradient(lx, ly, 0, lx, ly, 4);
+            bulbCut.addColorStop(0, 'rgba(0, 0, 0, 0.95)');
+            bulbCut.addColorStop(1, 'rgba(0, 0, 0, 0)');
+            lCtx.fillStyle = bulbCut;
+            lCtx.beginPath(); lCtx.arc(lx, ly, 4, 0, Math.PI * 2); lCtx.fill();
+          }
+          if (rightActive) {
+            const rx = car.x + cosA * rightLampLX - sinA * rightLampLY;
+            const ry = car.y + sinA * rightLampLX + cosA * rightLampLY;
+            const bulbCut = lCtx.createRadialGradient(rx, ry, 0, rx, ry, 4);
+            bulbCut.addColorStop(0, 'rgba(0, 0, 0, 0.95)');
+            bulbCut.addColorStop(1, 'rgba(0, 0, 0, 0)');
+            lCtx.fillStyle = bulbCut;
+            lCtx.beginPath(); lCtx.arc(rx, ry, 4, 0, Math.PI * 2); lCtx.fill();
+          }
+        }
+      } else if (isIgnitionOn) {
+        // Front position lights (габариты / ДХО) gentle soft clearance
+        const cutPositionLight = (lxOffset: number, lyOffset: number) => {
+          const px = car.x + cosA * lxOffset - sinA * lyOffset;
+          const py = car.y + sinA * lxOffset + cosA * lyOffset;
+          const pGrad = lCtx.createRadialGradient(px, py, 0, px, py, 9 * fogFactor);
+          pGrad.addColorStop(0, 'rgba(0, 0, 0, 0.85)');
+          pGrad.addColorStop(0.5, 'rgba(0, 0, 0, 0.35)');
+          pGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+          lCtx.fillStyle = pGrad;
+          lCtx.beginPath(); lCtx.arc(px, py, 9 * fogFactor, 0, Math.PI * 2); lCtx.fill();
+        };
+        if (!dmg.leftHeadlightBroken) cutPositionLight(leftLampLX, leftLampLY);
+        if (!isSoloMoto && !dmg.rightHeadlightBroken) cutPositionLight(rightLampLX, rightLampLY);
+      }
+
+      // Front Fog Lights (ПТФ передние) Cutout
+      if (car.frontFogLightsOn) {
+        const fogLeftLX = halfL - fc - 2.0;
+        const fogLeftLY = -halfW + 2.5;
+        const fogRightLX = halfL - fc - 2.0;
+        const fogRightLY = halfW - 2.5;
+
+        const cutFogBeam = (lxOffset: number, lyOffset: number, broken: boolean) => {
+          if (broken) return;
+          const lx = car.x + cosA * lxOffset - sinA * lyOffset;
+          const ly = car.y + sinA * lxOffset + cosA * lyOffset;
+          const fogBeamLen = 140 * fogFactor;
+          const fogSpread = 90 * fogFactor;
+
+          const beamGrad = lCtx.createRadialGradient(lx, ly, 0, lx + cosA * (fogBeamLen * 0.4), ly + sinA * (fogBeamLen * 0.4), fogBeamLen);
+          beamGrad.addColorStop(0.0, 'rgba(0, 0, 0, 0.82)');
+          beamGrad.addColorStop(0.35, 'rgba(0, 0, 0, 0.55)');
+          beamGrad.addColorStop(0.7, 'rgba(0, 0, 0, 0.20)');
+          beamGrad.addColorStop(1.0, 'rgba(0, 0, 0, 0)');
+
+          lCtx.fillStyle = beamGrad;
+          lCtx.beginPath();
+          lCtx.moveTo(lx, ly);
+          const endLX = lx + cosA * fogBeamLen;
+          const endLY = ly + sinA * fogBeamLen;
+          lCtx.quadraticCurveTo(
+            lx + cosA * (fogBeamLen * 0.4) - sinA * (fogSpread * 0.6),
+            ly + sinA * (fogBeamLen * 0.4) + cosA * (fogSpread * 0.6),
+            endLX - sinA * fogSpread, endLY + cosA * fogSpread
+          );
+          lCtx.arc(lx, ly, fogBeamLen, Math.atan2(sinA * fogBeamLen + cosA * fogSpread, cosA * fogBeamLen - sinA * fogSpread), Math.atan2(sinA * fogBeamLen - cosA * fogSpread, cosA * fogBeamLen + sinA * fogSpread), true);
+          lCtx.quadraticCurveTo(
+            lx + cosA * (fogBeamLen * 0.4) + sinA * (fogSpread * 0.6),
+            ly + sinA * (fogBeamLen * 0.4) - cosA * (fogSpread * 0.6),
+            lx, ly
+          );
+          lCtx.closePath();
+          lCtx.fill();
+        };
+
         if (isSoloMoto) {
-          cutHeadlightBeam(leftLampLX, leftLampLY, dmg.leftHeadlightBroken);
+          cutFogBeam(fogLeftLX, 0, dmg.leftHeadlightBroken);
         } else {
-          cutHeadlightBeam(leftLampLX, leftLampLY, dmg.leftHeadlightBroken);
-          cutHeadlightBeam(rightLampLX, rightLampLY, dmg.rightHeadlightBroken);
+          cutFogBeam(fogLeftLX, fogLeftLY, dmg.leftHeadlightBroken);
+          cutFogBeam(fogRightLX, fogRightLY, dmg.rightHeadlightBroken);
         }
       }
 
-      // Rear Cutouts
+      // Rear Vehicle Lighting Cutouts (Smooth natural diffusion)
       const rc = Math.min(12, dmg.rearCrumple || 0);
       const rld = Math.min(8, dmg.rearLeftDent || 0);
       const rrd = Math.min(8, dmg.rearRightDent || 0);
@@ -8548,43 +10535,40 @@ export class GameRenderer {
         rearRightLY = halfW * 0.82;
       }
 
-      const isReversing = (car.speed < -0.5 && !car.isParked);
-      const isBraking = car.brakeLightsOn && !isReversing;
-
-      const cutRadialLight = (rxOffset: number, ryOffset: number, radius: number) => {
+      const cutSmoothRearLight = (rxOffset: number, ryOffset: number, radius: number, peakAlpha: number = 0.8) => {
         const rx = car.x + cosA * rxOffset - sinA * ryOffset;
         const ry = car.y + sinA * rxOffset + cosA * ryOffset;
         const targetRadius = radius * fogFactor;
-        const radGrad = lCtx.createRadialGradient(rx, ry, 0.5, rx, ry, targetRadius);
-        radGrad.addColorStop(0, 'rgba(0, 0, 0, 1.0)');
-        radGrad.addColorStop(0.5, 'rgba(0, 0, 0, 0.4)');
-        radGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
-        lCtx.fillStyle = radGrad;
+        const rGrad = lCtx.createRadialGradient(rx, ry, 0, rx, ry, targetRadius);
+        rGrad.addColorStop(0.0, `rgba(0, 0, 0, ${peakAlpha})`);
+        rGrad.addColorStop(0.4, `rgba(0, 0, 0, ${peakAlpha * 0.5})`);
+        rGrad.addColorStop(0.8, `rgba(0, 0, 0, ${peakAlpha * 0.12})`);
+        rGrad.addColorStop(1.0, 'rgba(0, 0, 0, 0)');
+        lCtx.fillStyle = rGrad;
         lCtx.beginPath();
         lCtx.arc(rx, ry, targetRadius, 0, Math.PI * 2);
         lCtx.fill();
       };
 
-      if (isReversing) {
-        cutRadialLight(rearLeftLX, rearLeftLY, 30);
-        cutRadialLight(rearRightLX, rearRightLY, 30);
-      } else if (isBraking) {
-        cutRadialLight(rearLeftLX, rearLeftLY, 35);
-        cutRadialLight(rearRightLX, rearRightLY, 35);
-      } else {
-        cutRadialLight(rearLeftLX, rearLeftLY, 12);
-        cutRadialLight(rearRightLX, rearRightLY, 12);
+      const isReversing = isVehicleReverseGearActive(car);
+      const isBraking = car.brakeLightsOn && !isReversing;
+
+      // Rear Fog Lights
+      if (car.rearFogLightsOn) {
+        cutSmoothRearLight(rearLeftLX, rearLeftLY, 45, 0.85);
+        if (!isSoloMoto) cutSmoothRearLight(rearRightLX, rearRightLY, 45, 0.85);
       }
 
-      // Small ambient cutout for the car body to make it visible
-      const carGradRadius = 45 * fogFactor;
-      const carGrad = lCtx.createRadialGradient(car.x, car.y, 2, car.x, car.y, carGradRadius);
-      carGrad.addColorStop(0, 'rgba(0, 0, 0, 0.4)');
-      carGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
-      lCtx.fillStyle = carGrad;
-      lCtx.beginPath();
-      lCtx.arc(car.x, car.y, carGradRadius, 0, Math.PI * 2);
-      lCtx.fill();
+      if (isReversing) {
+        cutSmoothRearLight(rearLeftLX, rearLeftLY, 26, 0.8);
+        cutSmoothRearLight(rearRightLX, rearRightLY, 26, 0.8);
+      } else if (isBraking) {
+        cutSmoothRearLight(rearLeftLX, rearLeftLY, 28, 0.82);
+        cutSmoothRearLight(rearRightLX, rearRightLY, 28, 0.82);
+      } else if (hasPositionLightsOn) {
+        cutSmoothRearLight(rearLeftLX, rearLeftLY, 10, 0.45);
+        cutSmoothRearLight(rearRightLX, rearRightLY, 10, 0.45);
+      }
 
       // Turn signal cutouts
       if (car.turnSignal !== 'none') {
@@ -8594,60 +10578,86 @@ export class GameRenderer {
           const isRight = car.turnSignal === 'right' || car.turnSignal === 'hazard';
           
           if (isLeft) {
-            cutRadialLight(leftLampLX, leftLampLY - 1.5, 20);
-            cutRadialLight(rearLeftLX, rearLeftLY - 1.5, 20);
+            cutSmoothRearLight(leftLampLX, leftLampLY - 1.5, 16, 0.65);
+            cutSmoothRearLight(rearLeftLX, rearLeftLY - 1.5, 16, 0.65);
           }
           if (isRight) {
-            cutRadialLight(rightLampLX, rightLampLY + 1.5, 20);
-            cutRadialLight(rearRightLX, rearRightLY + 1.5, 20);
+            cutSmoothRearLight(rightLampLX, rightLampLY + 1.5, 16, 0.65);
+            cutSmoothRearLight(rearRightLX, rearRightLY + 1.5, 16, 0.65);
           }
         }
       }
+
+      // Road Train Marker Lights Lightmap Cutout (Огни автопоезда - мягкая подсветка крыши и кабины)
+      if (hasRoadTrainLights(car) && car.roadTrainLightsOn !== false && isIgnitionOn) {
+        let mRoofX = halfL * 0.35;
+        if (isTractor) {
+          mRoofX = -halfL * 0.08 + (halfL * 0.52 * 0.68) / 2 - 1.0;
+        } else if (car.type === 'truck_dump' || car.type === 'truck_box' || car.type === 'truck_semi' || car.type === 'cement_mixer' || car.type === 'garbage_truck' || car.type === 'fire_ladder') {
+          mRoofX = halfL * 0.52 + (halfL * 0.48 * 0.70) / 2 - 1.2;
+        } else if (car.type.startsWith('truck_') || car.type.startsWith('fire_')) {
+          mRoofX = halfL * 0.08 + (halfL * 0.42 * 0.65) / 2 - 1.2;
+        } else if (car.type === 'bus' || car.type === 'bus_minibus' || car.type === 'delivery_truck') {
+          mRoofX = halfL * 0.05 + (halfL * 0.85 * 0.82) / 2 - 1.2;
+        }
+        const mWorldX = car.x + cosA * mRoofX;
+        const mWorldY = car.y + sinA * mRoofX;
+        const trainCutRadius = 24 * fogFactor;
+        const trainGrad = lCtx.createRadialGradient(mWorldX, mWorldY, 0, mWorldX, mWorldY, trainCutRadius);
+        trainGrad.addColorStop(0.0, 'rgba(0, 0, 0, 0.65)');
+        trainGrad.addColorStop(0.4, 'rgba(0, 0, 0, 0.35)');
+        trainGrad.addColorStop(0.8, 'rgba(0, 0, 0, 0.08)');
+        trainGrad.addColorStop(1.0, 'rgba(0, 0, 0, 0)');
+        lCtx.fillStyle = trainGrad;
+        lCtx.beginPath();
+        lCtx.arc(mWorldX, mWorldY, trainCutRadius, 0, Math.PI * 2);
+        lCtx.fill();
+      }
     }
 
-    // C. Street Lamp Cutouts
+    // C. Street Lamp Cutouts (Smooth polynomial light field with zero concentric ring banding)
     for (const prop of props) {
-      if (getStreetLampOn(prop) && prop.x >= minX - 40 && prop.x <= maxX + 40 && prop.y >= minY - 40 && prop.y <= maxY + 40) {
+      if (getStreetLampOn(prop) && prop.x >= minX - 60 && prop.x <= maxX + 60 && prop.y >= minY - 60 && prop.y <= maxY + 60) {
         if (prop.type === 'lamp_highway') {
-          // Luminaire hangs 22px out along the cantilever arm over the driving lane
           const angle = prop.angle || 0;
           const lx = prop.x + Math.cos(angle) * 22;
           const ly = prop.y + Math.sin(angle) * 22;
 
-          // Powerful wide beam covering highway traffic lane
-          const lampRadius = 140 * fogFactor;
-          const lampGrad = lCtx.createRadialGradient(lx, ly, 6, lx, ly, lampRadius);
-          lampGrad.addColorStop(0, 'rgba(0, 0, 0, 1.0)');
-          lampGrad.addColorStop(0.35, 'rgba(0, 0, 0, 0.75)');
-          lampGrad.addColorStop(0.7, 'rgba(0, 0, 0, 0.3)');
-          lampGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+          const lampRadius = 145 * fogFactor;
+          const lampGrad = lCtx.createRadialGradient(lx, ly, 1, lx, ly, lampRadius);
+          lampGrad.addColorStop(0.00, 'rgba(0, 0, 0, 0.95)');
+          lampGrad.addColorStop(0.22, 'rgba(0, 0, 0, 0.74)');
+          lampGrad.addColorStop(0.50, 'rgba(0, 0, 0, 0.40)');
+          lampGrad.addColorStop(0.78, 'rgba(0, 0, 0, 0.12)');
+          lampGrad.addColorStop(1.00, 'rgba(0, 0, 0, 0)');
           lCtx.fillStyle = lampGrad;
           lCtx.beginPath();
           lCtx.arc(lx, ly, lampRadius, 0, Math.PI * 2);
           lCtx.fill();
         } else if (prop.type === 'lamp_concrete') {
-          // Classic incandescent/sodium light centered near the vintage bell fixture
           const angle = prop.angle || 0;
           const lx = prop.x + Math.cos(angle) * 9;
           const ly = prop.y + Math.sin(angle) * 9;
 
-          const lampRadius = 115 * fogFactor;
-          const lampGrad = lCtx.createRadialGradient(lx, ly, 4, lx, ly, lampRadius);
-          lampGrad.addColorStop(0, 'rgba(0, 0, 0, 0.95)');
-          lampGrad.addColorStop(0.4, 'rgba(0, 0, 0, 0.6)');
-          lampGrad.addColorStop(0.8, 'rgba(0, 0, 0, 0.2)');
-          lampGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+          const lampRadius = 120 * fogFactor;
+          const lampGrad = lCtx.createRadialGradient(lx, ly, 1, lx, ly, lampRadius);
+          lampGrad.addColorStop(0.00, 'rgba(0, 0, 0, 0.92)');
+          lampGrad.addColorStop(0.25, 'rgba(0, 0, 0, 0.68)');
+          lampGrad.addColorStop(0.52, 'rgba(0, 0, 0, 0.36)');
+          lampGrad.addColorStop(0.80, 'rgba(0, 0, 0, 0.10)');
+          lampGrad.addColorStop(1.00, 'rgba(0, 0, 0, 0)');
           lCtx.fillStyle = lampGrad;
           lCtx.beginPath();
           lCtx.arc(lx, ly, lampRadius, 0, Math.PI * 2);
           lCtx.fill();
         } else {
-          // Standard park/promenade lamp
           const lampRadius = 110 * fogFactor;
-          const lampGrad = lCtx.createRadialGradient(prop.x, prop.y, 5, prop.x, prop.y, lampRadius);
-          lampGrad.addColorStop(0, 'rgba(0, 0, 0, 1.0)');
-          lampGrad.addColorStop(0.5, 'rgba(0, 0, 0, 0.5)');
-          lampGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+          const lampGrad = lCtx.createRadialGradient(prop.x, prop.y, 1, prop.x, prop.y, lampRadius);
+          lampGrad.addColorStop(0.00, 'rgba(0, 0, 0, 0.92)');
+          lampGrad.addColorStop(0.25, 'rgba(0, 0, 0, 0.68)');
+          lampGrad.addColorStop(0.52, 'rgba(0, 0, 0, 0.36)');
+          lampGrad.addColorStop(0.80, 'rgba(0, 0, 0, 0.10)');
+          lampGrad.addColorStop(1.00, 'rgba(0, 0, 0, 0)');
           lCtx.fillStyle = lampGrad;
           lCtx.beginPath();
           lCtx.arc(prop.x, prop.y, lampRadius, 0, Math.PI * 2);
@@ -8658,10 +10668,11 @@ export class GameRenderer {
 
     // D. Traffic Light Cutouts
     for (const prop of props) {
-      if (prop.type === 'traffic_light' && !prop.isBroken && prop.x >= minX - 60 && prop.x <= maxX + 60 && prop.y >= minY - 60 && prop.y <= maxY + 60) {
-        const tfRadius = 50 * fogFactor;
-        const tfGrad = lCtx.createRadialGradient(prop.x, prop.y, 2, prop.x, prop.y, tfRadius);
-        tfGrad.addColorStop(0, 'rgba(0, 0, 0, 0.8)');
+      if (prop.type === 'traffic_light' && !prop.isBroken && prop.x >= minX - 40 && prop.x <= maxX + 40 && prop.y >= minY - 40 && prop.y <= maxY + 40) {
+        const tfRadius = 24 * fogFactor;
+        const tfGrad = lCtx.createRadialGradient(prop.x, prop.y, 1, prop.x, prop.y, tfRadius);
+        tfGrad.addColorStop(0, 'rgba(0, 0, 0, 0.7)');
+        tfGrad.addColorStop(0.5, 'rgba(0, 0, 0, 0.28)');
         tfGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
         lCtx.fillStyle = tfGrad;
         lCtx.beginPath();
@@ -8693,9 +10704,10 @@ export class GameRenderer {
 
         const entRadius = 45 * fogFactor;
         const entGrad = lCtx.createRadialGradient(lightCX, lightCY, 1, lightCX, lightCY, entRadius);
-        entGrad.addColorStop(0, 'rgba(0, 0, 0, 1.0)');
-        entGrad.addColorStop(0.5, 'rgba(0, 0, 0, 0.45)');
-        entGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+        entGrad.addColorStop(0.0, 'rgba(0, 0, 0, 0.95)');
+        entGrad.addColorStop(0.35, 'rgba(0, 0, 0, 0.60)');
+        entGrad.addColorStop(0.75, 'rgba(0, 0, 0, 0.18)');
+        entGrad.addColorStop(1.0, 'rgba(0, 0, 0, 0)');
         lCtx.fillStyle = entGrad;
         lCtx.beginPath();
         lCtx.arc(lightCX, lightCY, entRadius, 0, Math.PI * 2);
@@ -8722,9 +10734,9 @@ export class GameRenderer {
 
           const balRadius = 35 * fogFactor;
           const balGrad = lCtx.createRadialGradient(cx, cy, 1, cx, cy, balRadius);
-          balGrad.addColorStop(0, 'rgba(0, 0, 0, 0.85)');
-          balGrad.addColorStop(0.5, 'rgba(0, 0, 0, 0.35)');
-          balGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+          balGrad.addColorStop(0.0, 'rgba(0, 0, 0, 0.80)');
+          balGrad.addColorStop(0.4, 'rgba(0, 0, 0, 0.40)');
+          balGrad.addColorStop(1.0, 'rgba(0, 0, 0, 0)');
           lCtx.fillStyle = balGrad;
           lCtx.beginPath();
           lCtx.arc(cx, cy, balRadius, 0, Math.PI * 2);
@@ -8752,9 +10764,9 @@ export class GameRenderer {
 
           const feRadius = 30 * fogFactor;
           const feGrad = lCtx.createRadialGradient(cx, cy, 1, cx, cy, feRadius);
-          feGrad.addColorStop(0, 'rgba(0, 0, 0, 0.7)');
-          feGrad.addColorStop(0.5, 'rgba(0, 0, 0, 0.25)');
-          feGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+          feGrad.addColorStop(0.0, 'rgba(0, 0, 0, 0.70)');
+          feGrad.addColorStop(0.4, 'rgba(0, 0, 0, 0.30)');
+          feGrad.addColorStop(1.0, 'rgba(0, 0, 0, 0)');
           lCtx.fillStyle = feGrad;
           lCtx.beginPath();
           lCtx.arc(cx, cy, feRadius, 0, Math.PI * 2);
@@ -8768,6 +10780,65 @@ export class GameRenderer {
       GasStationRenderer.renderLightmapCutouts(lCtx, nightAlpha, fogFactor);
     }
 
+    // F2. Garage Cooperative Nighttime Bulkhead Light Cutouts
+    if (minX <= 2000 && maxX >= 50 && minY <= 2400 && maxY >= 800) {
+      GarageCooperativeRenderer.renderLightmapCutouts(lCtx, world, nightAlpha, fogFactor);
+    }
+
+    // G. Player Handheld & Smartphone Flashlight Cutout (Pass 1)
+    const p = player;
+    const isPlayerFlashlightOn = !!(
+      p &&
+      !p.isInVehicle &&
+      (p.phoneFlashlightOn ||
+        p.flashlightOn ||
+        p.leftHandItem?.phoneSpecs?.flashlightOn ||
+        p.rightHandItem?.phoneSpecs?.flashlightOn ||
+        (p.leftHandItem?.itemId === 'flashlight' && (p.leftHandItem as any).isOn) ||
+        (p.rightHandItem?.itemId === 'flashlight' && (p.rightHandItem as any).isOn) ||
+        p.inventory?.some(it => it && (it.phoneSpecs?.flashlightOn || (it.itemId === 'flashlight' && (it as any).isOn))))
+    );
+
+    if (p && isPlayerFlashlightOn && p.x >= minX - 300 && p.x <= maxX + 300 && p.y >= minY - 300 && p.y <= maxY + 300) {
+      const aimAngle = p.aimAngle !== undefined ? p.aimAngle : p.angle;
+      const fRange = 280 * fogFactor;
+      const fSpread = 0.52; // ~30 degrees half-cone
+
+      // 1. Ambient soft circle around player's hands/body
+      const bodyHaloRad = 24 * fogFactor;
+      const bodyGrad = lCtx.createRadialGradient(p.x, p.y, 1, p.x, p.y, bodyHaloRad);
+      bodyGrad.addColorStop(0, 'rgba(0, 0, 0, 0.90)');
+      bodyGrad.addColorStop(0.45, 'rgba(0, 0, 0, 0.40)');
+      bodyGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+      lCtx.fillStyle = bodyGrad;
+      lCtx.beginPath();
+      lCtx.arc(p.x, p.y, bodyHaloRad, 0, Math.PI * 2);
+      lCtx.fill();
+
+      // 2. Focused forward flashlight beam with smooth curved falloff
+      lCtx.save();
+      lCtx.translate(p.x, p.y);
+      lCtx.rotate(aimAngle);
+
+      const coneGrad = lCtx.createRadialGradient(0, 0, 2, fRange * 0.3, 0, fRange);
+      coneGrad.addColorStop(0.00, 'rgba(0, 0, 0, 0.95)');
+      coneGrad.addColorStop(0.25, 'rgba(0, 0, 0, 0.80)');
+      coneGrad.addColorStop(0.55, 'rgba(0, 0, 0, 0.45)');
+      coneGrad.addColorStop(0.82, 'rgba(0, 0, 0, 0.15)');
+      coneGrad.addColorStop(1.00, 'rgba(0, 0, 0, 0)');
+
+      lCtx.fillStyle = coneGrad;
+      lCtx.beginPath();
+      lCtx.moveTo(0, 0);
+      lCtx.arc(0, 0, fRange, -fSpread, fSpread);
+      lCtx.closePath();
+      lCtx.fill();
+      lCtx.restore();
+    }
+
+    // G. Railway Signal Lights (ISI focused directional cones and optic glow cutouts)
+    RailwaySignalingSystem.renderLightmap(lCtx, world, minX, minY, maxX, maxY, nightAlpha);
+
     lCtx.restore();
 
     // --- Apply Lightmap to Main Canvas ---
@@ -8777,45 +10848,138 @@ export class GameRenderer {
     ctx.restore();
 
     // --- PASS 2: Additive Glow / Optics (lighter) ---
+    // Pure optical flares and subtle atmospheric mist (Zero white blowouts or concentric circle rings!)
     ctx.save();
     ctx.globalCompositeOperation = 'lighter';
 
-    // A. Street Lamp Additive Pools & Bulb Halos
+    // A. Street Lamp Additive Ground Atmosphere & Fixture Pinpoints
     for (const prop of props) {
-      if (getStreetLampOn(prop) && prop.x >= minX && prop.x <= maxX && prop.y >= minY && prop.y <= maxY) {
-        const poolRadius = 80 * fogFactor;
-        const poolGrad = ctx.createRadialGradient(prop.x, prop.y, 4, prop.x, prop.y, poolRadius);
-        poolGrad.addColorStop(0, `rgba(255, 230, 150, ${0.45 * fogFactor})`);
-        poolGrad.addColorStop(0.5, `rgba(255, 200, 50, ${0.15 * fogFactor})`);
-        poolGrad.addColorStop(1, 'rgba(255, 200, 50, 0)');
+      if (getStreetLampOn(prop) && prop.x >= minX - 60 && prop.x <= maxX + 60 && prop.y >= minY - 60 && prop.y <= maxY + 60) {
+        let lx = prop.x;
+        let ly = prop.y;
+        if (prop.type === 'lamp_highway') {
+          const angle = prop.angle || 0;
+          lx = prop.x + Math.cos(angle) * 22;
+          ly = prop.y + Math.sin(angle) * 22;
+        } else if (prop.type === 'lamp_concrete') {
+          const angle = prop.angle || 0;
+          lx = prop.x + Math.cos(angle) * 9;
+          ly = prop.y + Math.sin(angle) * 9;
+        }
+
+        // Soft, continuous warm ground pool (NO concentric step rings!)
+        const poolRadius = (prop.type === 'lamp_highway' ? 100 : 80) * fogFactor;
+        const poolGrad = ctx.createRadialGradient(lx, ly, 2, lx, ly, poolRadius);
+        poolGrad.addColorStop(0.0, `rgba(255, 230, 160, ${0.14 * fogFactor})`);
+        poolGrad.addColorStop(0.4, `rgba(255, 210, 110, ${0.05 * fogFactor})`);
+        poolGrad.addColorStop(0.8, `rgba(255, 190, 80, ${0.01 * fogFactor})`);
+        poolGrad.addColorStop(1.0, 'rgba(255, 190, 80, 0)');
         ctx.fillStyle = poolGrad;
         ctx.beginPath();
-        ctx.arc(prop.x, prop.y, poolRadius, 0, Math.PI * 2);
+        ctx.arc(lx, ly, poolRadius, 0, Math.PI * 2);
         ctx.fill();
 
-        const bulbRadius = 20 * fogFactor;
-        const bulbGlow = ctx.createRadialGradient(prop.x, prop.y, 1, prop.x, prop.y, bulbRadius);
-        bulbGlow.addColorStop(0, `rgba(255, 255, 220, ${0.9 * fogFactor})`);
-        bulbGlow.addColorStop(0.5, `rgba(255, 220, 100, ${0.5 * fogFactor})`);
-        bulbGlow.addColorStop(1, 'rgba(255, 200, 50, 0)');
+        // Tiny physical bulb fixture emitter
+        const bulbGlow = ctx.createRadialGradient(lx, ly, 0, lx, ly, 3.5);
+        bulbGlow.addColorStop(0, 'rgba(255, 255, 240, 0.85)');
+        bulbGlow.addColorStop(0.5, 'rgba(255, 225, 140, 0.45)');
+        bulbGlow.addColorStop(1, 'rgba(255, 200, 80, 0)');
         ctx.fillStyle = bulbGlow;
         ctx.beginPath();
-        ctx.arc(prop.x, prop.y, bulbRadius, 0, Math.PI * 2);
+        ctx.arc(lx, ly, 3.5, 0, Math.PI * 2);
         ctx.fill();
       }
     }
 
-    // B. Vehicle Headlight Beams (Additive)
+    // B. Vehicle Headlights, Trailers & Signal Optics (Additive)
     for (const car of nearbyVehicles) {
-      if (car.type.startsWith('trailer_') || car.isTrailer || car.type === 'trailer_barrel' || car.type === 'trailer_flatbed_2axle') continue;
       const cosA = Math.cos(car.angle);
       const sinA = Math.sin(car.angle);
       const halfL = car.length / 2;
       const halfW = car.width / 2;
 
+      const isTrailer = car.type.startsWith('trailer_') || car.isTrailer || car.type === 'trailer_barrel' || car.type === 'trailer_flatbed_2axle';
+
+      if (isTrailer) {
+        const trailerLightsActive = car.headlightsOn || car.positionLightsOn || car.brakeLightsOn || car.isReversing || (car.turnSignal && car.turnSignal !== 'none');
+        if (!trailerLightsActive && nightAlpha <= 0.05) continue;
+
+        const drawTrailerAdditive = (lxOffset: number, lyOffset: number, radius: number, color: string) => {
+          const lx = car.x + cosA * lxOffset - sinA * lyOffset;
+          const ly = car.y + sinA * lxOffset + cosA * lyOffset;
+          const targetRadius = radius * fogFactor;
+          const flare = ctx.createRadialGradient(0, 0, 0.3, 0, 0, targetRadius);
+          flare.addColorStop(0, color);
+          flare.addColorStop(1, 'rgba(0, 0, 0, 0)');
+          ctx.fillStyle = flare;
+          ctx.save(); ctx.translate(lx, ly); ctx.beginPath(); ctx.arc(0, 0, targetRadius, 0, Math.PI * 2); ctx.fill(); ctx.restore();
+        };
+
+        let rLeftLX = -halfL * 0.94;
+        let rLeftLY = -halfW + 3.0;
+        let rRightLX = -halfL * 0.94;
+        let rRightLY = halfW - 3.0;
+        let sideMarkerXs: number[] = [];
+        let hasRev = true;
+
+        if (car.type === 'trailer_flatbed_2axle') {
+          const boxRear = -halfL * 0.88;
+          const boxW = halfW * 0.96 * 2;
+          rLeftLX = boxRear - 0.6; rLeftLY = -boxW * 0.42;
+          rRightLX = boxRear - 0.6; rRightLY = boxW * 0.42;
+          sideMarkerXs = [halfL * 0.35, -halfL * 0.25];
+          hasRev = false;
+        } else if (car.type === 'trailer_vacuum') {
+          const wheelAxleX = -halfL * 0.28;
+          const fenderX = wheelAxleX - 17.5 / 2;
+          const barrelTrackY = halfW * 0.82 + 2.3;
+          rLeftLX = fenderX + 0.7; rLeftLY = -barrelTrackY;
+          rRightLX = fenderX + 0.7; rRightLY = barrelTrackY;
+          sideMarkerXs = [];
+          hasRev = true;
+        } else if (car.type === 'trailer_barrel') {
+          rLeftLX = -halfL * 0.85; rLeftLY = -halfW * 0.75;
+          rRightLX = -halfL * 0.85; rRightLY = halfW * 0.75;
+          sideMarkerXs = [];
+          hasRev = false;
+        } else {
+          sideMarkerXs = [-halfL * 0.72, -halfL * 0.35, 0, halfL * 0.35];
+          hasRev = true;
+        }
+
+        const hasTrailerRunningLights = (car.positionLightsOn || car.headlightsOn) && (car.type !== 'trailer_barrel');
+
+        if (car.isReversing && hasRev) {
+          drawTrailerAdditive(rLeftLX, rLeftLY, 9, 'rgba(255, 255, 255, 0.60)');
+          drawTrailerAdditive(rRightLX, rRightLY, 9, 'rgba(255, 255, 255, 0.60)');
+        } else if (car.brakeLightsOn) {
+          drawTrailerAdditive(rLeftLX, rLeftLY, 14, 'rgba(255, 30, 30, 0.70)');
+          drawTrailerAdditive(rRightLX, rRightLY, 14, 'rgba(255, 30, 30, 0.70)');
+        } else if (hasTrailerRunningLights) {
+          drawTrailerAdditive(rLeftLX, rLeftLY, 4.5, 'rgba(220, 20, 20, 0.40)');
+          drawTrailerAdditive(rRightLX, rRightLY, 4.5, 'rgba(220, 20, 20, 0.40)');
+          for (const smx of sideMarkerXs) {
+            drawTrailerAdditive(smx, -halfW - 0.2, 2.5, 'rgba(255, 170, 20, 0.45)');
+            drawTrailerAdditive(smx, halfW + 0.2, 2.5, 'rgba(255, 170, 20, 0.45)');
+          }
+        }
+
+        if (car.turnSignal && car.turnSignal !== 'none') {
+          const isBlinkOn = Math.floor((car.turnSignalTimer || 0) * 4) % 2 === 0;
+          if (isBlinkOn) {
+            const isLeft = car.turnSignal === 'left' || car.turnSignal === 'hazard';
+            const isRight = car.turnSignal === 'right' || car.turnSignal === 'hazard';
+            if (isLeft) drawTrailerAdditive(rLeftLX, rLeftLY - 1.5, 7.5, 'rgba(255, 160, 0, 0.70)');
+            if (isRight) drawTrailerAdditive(rRightLX, rRightLY + 1.5, 7.5, 'rgba(255, 160, 0, 0.70)');
+          }
+        }
+
+        continue;
+      }
+
       const isHighBeam = car.headlightMode === 'high';
-      const beamLen = (isHighBeam ? 400 : 220) * fogFactor;
-      const beamSpread = (isHighBeam ? 85 : 55) * fogFactor;
+      const beamLen = (isHighBeam ? 360 : 230) * fogFactor;
+      const beamSpread = (isHighBeam ? 85 : 56) * fogFactor;
       const dmg = car.damage || { leftHeadlightBroken: false, rightHeadlightBroken: false, frontCrumple: 0, rearCrumple: 0, leftDent: 0, rightDent: 0, frontLeftDent: 0, frontRightDent: 0, rearLeftDent: 0, rearRightDent: 0 };
       
       const fc = Math.min(14, dmg.frontCrumple || 0);
@@ -8828,6 +10992,11 @@ export class GameRenderer {
       const isSoloMoto = car.type === 'moto_izh_jupiter' || car.type === 'moto_jawa350' || 
                          car.type === 'moto_sport' || car.type === 'moto_chopper' || car.type === 'moped_soviet';
       const isUralSidecar = car.type === 'moto_ural_sidecar';
+
+      const isArticulated = car.type === 'roller_heavy_tandem' || car.type === 'roller_compact_sidewalk' || car.type === 'roller_pneumatic';
+      const frontAngle = isArticulated ? (car.angle + (car.steerAngle || 0)) : car.angle;
+      const cosFA = Math.cos(frontAngle);
+      const sinFA = Math.sin(frontAngle);
 
       let leftLampLX = halfL - Math.max(fld, fc) - 3.2;
       let leftLampLY = -halfW + 3.2 + ld * 0.15;
@@ -8849,49 +11018,196 @@ export class GameRenderer {
         leftLampLY = -halfW * 0.23;
         rightLampLX = halfL - fc - 2.0;
         rightLampLY = halfW * 0.23;
+      } else if (car.type === 'roller_compact_sidewalk') {
+        leftLampLX = halfL - fc - 2.5;
+        leftLampLY = 0;
+        rightLampLX = halfL - fc - 2.5;
+        rightLampLY = 0;
+      } else if (car.type === 'roller_heavy_tandem') {
+        leftLampLX = halfL - fc - 3.0;
+        leftLampLY = -halfW * 0.82;
+        rightLampLX = halfL - fc - 3.0;
+        rightLampLY = halfW * 0.82;
+      } else if (car.type === 'roller_pneumatic') {
+        leftLampLX = halfL - fc - 3.0;
+        leftLampLY = -halfW * 0.80;
+        rightLampLX = halfL - fc - 3.0;
+        rightLampLY = halfW * 0.80;
+      } else if (car.type === 'paver_asphalt_wheeled') {
+        leftLampLX = halfL * 0.92;
+        leftLampLY = -halfW * 0.85;
+        rightLampLX = halfL * 0.92;
+        rightLampLY = halfW * 0.85;
       }
 
       const hasHeadlightsOn = getVehicleHeadlightOn(car);
+      const hasPositionLightsOn = !!(car.positionLightsOn || hasHeadlightsOn);
+      const isIgnitionOn = !!(car.engineState?.engineRunning || car.engineState?.ignition || car.positionLightsOn || hasHeadlightsOn);
+
+      const drawRadialAdditive = (rxOffset: number, ryOffset: number, radius: number, color: string) => {
+        const rx = car.x + cosA * rxOffset - sinA * ryOffset;
+        const ry = car.y + sinA * rxOffset + cosA * ryOffset;
+        const targetRadius = radius * fogFactor;
+        const grad = ctx.createRadialGradient(0, 0, 0.5, 0, 0, targetRadius);
+        grad.addColorStop(0, color);
+        grad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+        ctx.fillStyle = grad;
+        ctx.save(); ctx.translate(rx, ry); ctx.beginPath(); ctx.arc(0, 0, targetRadius, 0, Math.PI * 2); ctx.fill(); ctx.restore();
+      };
 
       const drawHeadlightAdd = (lxOffset: number, lyOffset: number, broken: boolean) => {
         if (broken) return;
-        const lx = car.x + cosA * lxOffset - sinA * lyOffset;
-        const ly = car.y + sinA * lxOffset + cosA * lyOffset;
+        const lx = car.x + cosFA * lxOffset - sinFA * lyOffset;
+        const ly = car.y + sinFA * lxOffset + cosFA * lyOffset;
 
-        // More balanced volumetric beam effect
-        const hGlow = ctx.createRadialGradient(lx, ly, 2, lx + cosA * (beamLen * 0.45), ly + sinA * (beamLen * 0.45), beamLen);
-        const intensity = (isHighBeam ? 0.65 : 0.42) * fogFactor;
-        hGlow.addColorStop(0, `rgba(255, 255, ${isHighBeam ? '255' : '210'}, ${intensity})`);
-        hGlow.addColorStop(0.4, `rgba(255, 255, 180, ${intensity * 0.4})`);
-        hGlow.addColorStop(0.75, `rgba(255, 255, 140, ${intensity * 0.08})`);
-        hGlow.addColorStop(1, 'rgba(255, 255, 140, 0)');
-
-        ctx.fillStyle = hGlow;
-        ctx.beginPath();
-        ctx.moveTo(lx, ly);
-        const endLX = lx + cosA * beamLen;
-        const endLY = ly + sinA * beamLen;
-        ctx.lineTo(endLX - sinA * beamSpread, endLY + cosA * beamSpread);
-        ctx.arc(lx, ly, beamLen, Math.atan2(sinA * beamLen + cosA * beamSpread, cosA * beamLen - sinA * beamSpread), Math.atan2(sinA * beamLen - cosA * beamSpread, cosA * beamLen + sinA * beamSpread), true);
-        ctx.lineTo(lx, ly);
-        ctx.closePath();
-        ctx.fill();
-        
-        // Lens Flare / Source Glow (Very compact source)
-        const flareSize = (isHighBeam ? 6 : 4) * fogFactor;
+        // Lens Flare / Source Glow (Crisp, compact optical emitter directly on the lamp glass)
+        const flareSize = (isHighBeam ? 3.8 : 2.8);
         const flare = ctx.createRadialGradient(lx, ly, 0, lx, ly, flareSize);
-        flare.addColorStop(0, 'rgba(255, 255, 255, 1.0)');
+        flare.addColorStop(0, isHighBeam ? 'rgba(255, 255, 255, 0.9)' : 'rgba(255, 250, 225, 0.85)');
+        flare.addColorStop(0.5, isHighBeam ? 'rgba(224, 242, 254, 0.4)' : 'rgba(255, 235, 175, 0.35)');
         flare.addColorStop(1, 'rgba(255, 255, 255, 0)');
         ctx.fillStyle = flare;
         ctx.beginPath(); ctx.arc(lx, ly, flareSize, 0, Math.PI * 2); ctx.fill();
+
+        // Atmospheric Volumetric Mist (ONLY drawn when foggy or rainy, with subtle alpha so traffic never blows out into solid white)
+        if (isFog || isRaining) {
+          const mistAlpha = (isFog ? 0.05 : 0.025) * weatherTransition;
+          if (mistAlpha > 0.005) {
+            const hGlow = ctx.createRadialGradient(
+              lx, ly, 2,
+              lx + cosFA * (beamLen * 0.4),
+              ly + sinFA * (beamLen * 0.4),
+              beamLen
+            );
+            hGlow.addColorStop(0, `rgba(240, 248, 255, ${mistAlpha})`);
+            hGlow.addColorStop(0.4, `rgba(224, 242, 254, ${mistAlpha * 0.4})`);
+            hGlow.addColorStop(1, 'rgba(224, 242, 254, 0)');
+
+            ctx.fillStyle = hGlow;
+            ctx.beginPath();
+            ctx.moveTo(lx, ly);
+            const endLX = lx + cosFA * beamLen;
+            const endLY = ly + sinFA * beamLen;
+            ctx.lineTo(endLX - sinFA * beamSpread, endLY + cosFA * beamSpread);
+            ctx.arc(lx, ly, beamLen, Math.atan2(sinFA * beamLen + cosFA * beamSpread, cosFA * beamLen - sinFA * beamSpread), Math.atan2(sinFA * beamLen - cosFA * beamSpread, cosFA * beamLen + sinFA * beamSpread), true);
+            ctx.lineTo(lx, ly);
+            ctx.closePath();
+            ctx.fill();
+          }
+        }
       };
 
       if (hasHeadlightsOn) {
-        if (isSoloMoto) {
+        if (isSoloMoto || car.type === 'roller_compact_sidewalk') {
           drawHeadlightAdd(leftLampLX, leftLampLY, dmg.leftHeadlightBroken);
         } else {
           drawHeadlightAdd(leftLampLX, leftLampLY, dmg.leftHeadlightBroken);
           drawHeadlightAdd(rightLampLX, rightLampLY, dmg.rightHeadlightBroken);
+        }
+      } else if (isIgnitionOn) {
+        // Front position lights (габариты / ДХО) subtle optical glow
+        if (!dmg.leftHeadlightBroken) {
+          const px = car.x + cosFA * leftLampLX - sinFA * leftLampLY;
+          const py = car.y + sinFA * leftLampLX + cosFA * leftLampLY;
+          const pGrad = ctx.createRadialGradient(px, py, 0, px, py, 3.5);
+          pGrad.addColorStop(0, 'rgba(255, 255, 240, 0.7)');
+          pGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+          ctx.fillStyle = pGrad;
+          ctx.beginPath(); ctx.arc(px, py, 3.5, 0, Math.PI * 2); ctx.fill();
+        }
+        if (!isSoloMoto && car.type !== 'roller_compact_sidewalk' && !dmg.rightHeadlightBroken) {
+          const px = car.x + cosFA * rightLampLX - sinFA * rightLampLY;
+          const py = car.y + sinFA * rightLampLX + cosFA * rightLampLY;
+          const pGrad = ctx.createRadialGradient(px, py, 0, px, py, 3.5);
+          pGrad.addColorStop(0, 'rgba(255, 255, 240, 0.7)');
+          pGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+          ctx.fillStyle = pGrad;
+          ctx.beginPath(); ctx.arc(px, py, 3.5, 0, Math.PI * 2); ctx.fill();
+        }
+      }
+
+      // Amber Strobe Beacons on Roof / ROPS Bar (Heavy Machinery & Service Vehicles)
+      if (isIgnitionOn && (isArticulated || car.type === 'paver_asphalt_wheeled' || isTractor || car.type === 'truck_dump' || car.type === 'garbage_truck')) {
+        const beaconPeriod = 0.35;
+        const beaconPulse = Math.sin((Date.now() / 1000) / beaconPeriod * Math.PI * 2);
+        if (beaconPulse > 0.1) {
+          let bX = 0;
+          let bY = 0;
+          if (car.type === 'roller_heavy_tandem') {
+            bX = -halfL * 0.09; bY = 0;
+          } else if (car.type === 'roller_compact_sidewalk') {
+            bX = -halfL * 0.58; bY = 0;
+          } else if (car.type === 'roller_pneumatic') {
+            bX = -halfL * 0.28; bY = 0;
+          } else if (car.type === 'paver_asphalt_wheeled') {
+            bX = -halfL * 0.42; bY = 0;
+          } else if (isTractor) {
+            bX = -halfL * 0.10; bY = 0;
+          } else {
+            bX = halfL * 0.25; bY = 0;
+          }
+
+          const wx = car.x + cosA * bX - sinA * bY;
+          const wy = car.y + sinA * bX + cosA * bY;
+          const bRadius = (16 + beaconPulse * 14) * fogFactor;
+          const bGrad = ctx.createRadialGradient(wx, wy, 0.5, wx, wy, bRadius);
+          bGrad.addColorStop(0, `rgba(255, 220, 100, ${0.85 * beaconPulse})`);
+          bGrad.addColorStop(0.4, `rgba(245, 158, 11, ${0.45 * beaconPulse})`);
+          bGrad.addColorStop(1, 'rgba(245, 158, 11, 0)');
+          ctx.fillStyle = bGrad;
+          ctx.beginPath(); ctx.arc(wx, wy, bRadius, 0, Math.PI * 2); ctx.fill();
+        }
+      }
+
+      // Front Fog Lights (ПТФ передние) Additive Glow
+      if (car.frontFogLightsOn) {
+        const fogLeftLX = halfL - fc - 2.0;
+        const fogLeftLY = -halfW + 2.5;
+        const fogRightLX = halfL - fc - 2.0;
+        const fogRightLY = halfW - 2.5;
+
+        const drawFogAdd = (lxOffset: number, lyOffset: number, broken: boolean) => {
+          if (broken) return;
+          const lx = car.x + cosA * lxOffset - sinA * lyOffset;
+          const ly = car.y + sinA * lxOffset + cosA * lyOffset;
+
+          // Warm yellow lens flare on bumper
+          const flareGrad = ctx.createRadialGradient(lx, ly, 0, lx, ly, 3.5);
+          flareGrad.addColorStop(0, 'rgba(255, 245, 180, 0.90)');
+          flareGrad.addColorStop(0.6, 'rgba(255, 215, 0, 0.40)');
+          flareGrad.addColorStop(1, 'rgba(255, 215, 0, 0)');
+          ctx.fillStyle = flareGrad;
+          ctx.beginPath(); ctx.arc(lx, ly, 3.5, 0, Math.PI * 2); ctx.fill();
+
+          if (isFog || isRaining) {
+            const fogBeamLen = 140 * fogFactor;
+            const fogBeamSpread = 90 * fogFactor;
+            const fogMistAlpha = (isFog ? 0.06 : 0.03) * weatherTransition;
+
+            const fogGrad = ctx.createRadialGradient(lx, ly, 0, lx + cosA * (fogBeamLen * 0.4), ly + sinA * (fogBeamLen * 0.4), fogBeamLen);
+            fogGrad.addColorStop(0, `rgba(255, 235, 140, ${fogMistAlpha})`);
+            fogGrad.addColorStop(0.5, `rgba(255, 225, 100, ${fogMistAlpha * 0.3})`);
+            fogGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+
+            ctx.fillStyle = fogGrad;
+            ctx.beginPath();
+            ctx.moveTo(lx, ly);
+            const endLX = lx + cosA * fogBeamLen;
+            const endLY = ly + sinA * fogBeamLen;
+            ctx.lineTo(endLX - sinA * fogBeamSpread, endLY + cosA * fogBeamSpread);
+            ctx.arc(lx, ly, fogBeamLen, Math.atan2(sinA * fogBeamLen + cosA * fogSpread, cosA * fogBeamLen - sinA * fogSpread), Math.atan2(sinA * fogBeamLen - cosA * fogSpread, cosA * fogBeamLen + sinA * fogSpread), true);
+            ctx.lineTo(lx, ly);
+            ctx.closePath();
+            ctx.fill();
+          }
+        };
+
+        const fogSpread = 90 * fogFactor;
+        if (isSoloMoto) {
+          drawFogAdd(fogLeftLX, 0, dmg.leftHeadlightBroken);
+        } else {
+          drawFogAdd(fogLeftLX, fogLeftLY, dmg.leftHeadlightBroken);
+          drawFogAdd(fogRightLX, fogRightLY, dmg.rightHeadlightBroken);
         }
       }
 
@@ -8922,37 +11238,30 @@ export class GameRenderer {
         rearRightLY = halfW * 0.82;
       }
 
-      const isReversing = (car.speed < -0.5 && !car.isParked);
+      const isReversing = isVehicleReverseGearActive(car);
       const isBraking = car.brakeLightsOn && !isReversing;
 
-      const drawRadialAdditive = (rxOffset: number, ryOffset: number, radius: number, color: string) => {
-        const rx = car.x + cosA * rxOffset - sinA * ryOffset;
-        const ry = car.y + sinA * rxOffset + cosA * ryOffset;
-        const targetRadius = radius * fogFactor;
-        const grad = ctx.createRadialGradient(0, 0, 0.5, 0, 0, targetRadius);
-        grad.addColorStop(0, color);
-        grad.addColorStop(1, 'rgba(0, 0, 0, 0)');
-        ctx.fillStyle = grad;
-        ctx.save(); ctx.translate(rx, ry); ctx.beginPath(); ctx.arc(0, 0, targetRadius, 0, Math.PI * 2); ctx.fill(); ctx.restore();
-      };
+      // Rear Fog Lights (Задние ПТФ) Additive Glow
+      if (car.rearFogLightsOn) {
+        drawRadialAdditive(rearLeftLX, rearLeftLY, 16, 'rgba(255, 30, 30, 0.85)');
+        if (!isSoloMoto) drawRadialAdditive(rearRightLX, rearRightLY, 16, 'rgba(255, 30, 30, 0.85)');
+      }
 
       if (isReversing) {
-        drawRadialAdditive(rearLeftLX, rearLeftLY, 12, 'rgba(255, 255, 255, 0.6)');
-        drawRadialAdditive(rearRightLX, rearRightLY, 12, 'rgba(255, 255, 255, 0.6)');
+        drawRadialAdditive(rearLeftLX, rearLeftLY, 9, 'rgba(255, 255, 255, 0.55)');
+        drawRadialAdditive(rearRightLX, rearRightLY, 9, 'rgba(255, 255, 255, 0.55)');
         if (isTractor) {
-          // Rear cabin floodlights illuminating when reversing
           const cabFloodLX = -halfL * 0.26;
           const cabFloodLY = halfW * 0.35;
-          drawRadialAdditive(cabFloodLX, -cabFloodLY, 22, 'rgba(255, 255, 220, 0.85)');
-          drawRadialAdditive(cabFloodLX, cabFloodLY, 22, 'rgba(255, 255, 220, 0.85)');
+          drawRadialAdditive(cabFloodLX, -cabFloodLY, 14, 'rgba(255, 255, 220, 0.75)');
+          drawRadialAdditive(cabFloodLX, cabFloodLY, 14, 'rgba(255, 255, 220, 0.75)');
         }
       } else if (isBraking) {
-        drawRadialAdditive(rearLeftLX, rearLeftLY, 22, 'rgba(255, 30, 30, 0.75)');
-        drawRadialAdditive(rearRightLX, rearRightLY, 22, 'rgba(255, 30, 30, 0.75)');
-      } else if (nightAlpha > 0.05) {
-        // Dim taillights
-        drawRadialAdditive(rearLeftLX, rearLeftLY, 8, 'rgba(200, 0, 0, 0.4)');
-        drawRadialAdditive(rearRightLX, rearRightLY, 8, 'rgba(200, 0, 0, 0.4)');
+        drawRadialAdditive(rearLeftLX, rearLeftLY, 14, 'rgba(255, 30, 30, 0.65)');
+        drawRadialAdditive(rearRightLX, rearRightLY, 14, 'rgba(255, 30, 30, 0.65)');
+      } else if (hasPositionLightsOn) {
+        drawRadialAdditive(rearLeftLX, rearLeftLY, 5, 'rgba(220, 20, 20, 0.35)');
+        drawRadialAdditive(rearRightLX, rearRightLY, 5, 'rgba(220, 20, 20, 0.35)');
       }
 
       if (car.turnSignal !== 'none') {
@@ -8960,24 +11269,56 @@ export class GameRenderer {
         if (isBlinkOn) {
           const isLeft = car.turnSignal === 'left' || car.turnSignal === 'hazard';
           const isRight = car.turnSignal === 'right' || car.turnSignal === 'hazard';
-          const amberColor = 'rgba(255, 160, 0, 0.7)';
+          const amberColor = 'rgba(255, 160, 0, 0.65)';
 
           const frontTurnLX = isTractor ? (car.type === 'tractor_mtz80_old' ? 0.6 : (halfL * 0.10 + 0.6)) : leftLampLX;
           const frontTurnLY = isTractor ? (halfW * 0.76 * 0.48) : Math.abs(leftLampLY);
 
           if (isLeft) {
-            drawRadialAdditive(frontTurnLX, -frontTurnLY, 8, amberColor);
-            drawRadialAdditive(rearLeftLX, rearLeftLY - 1.5, 10, amberColor);
+            drawRadialAdditive(frontTurnLX, -frontTurnLY, 6, amberColor);
+            drawRadialAdditive(rearLeftLX, rearLeftLY - 1.5, 7, amberColor);
           }
           if (isRight) {
-            drawRadialAdditive(frontTurnLX, frontTurnLY, 8, amberColor);
-            drawRadialAdditive(rearRightLX, rearRightLY + 1.5, 10, amberColor);
+            drawRadialAdditive(frontTurnLX, frontTurnLY, 6, amberColor);
+            drawRadialAdditive(rearRightLX, rearRightLY + 1.5, 7, amberColor);
           }
+        }
+      }
+
+      // Road Train Marker Lights (Огни автопоезда - 3 мягких оптических янтарных огонька на крыше кабины)
+      if (hasRoadTrainLights(car) && car.roadTrainLightsOn !== false && isIgnitionOn) {
+        let mRoofX = halfL * 0.35;
+        let mOffsetsY = [-2.8, 0, 2.8];
+        if (isTractor) {
+          mRoofX = -halfL * 0.08 + (halfL * 0.52 * 0.68) / 2 - 1.0;
+          mOffsetsY = [-2.5, 0, 2.5];
+        } else if (car.type === 'truck_dump' || car.type === 'truck_box' || car.type === 'truck_semi' || car.type === 'cement_mixer' || car.type === 'garbage_truck' || car.type === 'fire_ladder') {
+          mRoofX = halfL * 0.52 + (halfL * 0.48 * 0.70) / 2 - 1.2;
+          mOffsetsY = [-3.0, 0, 3.0];
+        } else if (car.type.startsWith('truck_') || car.type.startsWith('fire_')) {
+          mRoofX = halfL * 0.08 + (halfL * 0.42 * 0.65) / 2 - 1.2;
+          mOffsetsY = [-2.8, 0, 2.8];
+        } else if (car.type === 'bus' || car.type === 'bus_minibus' || car.type === 'delivery_truck') {
+          mRoofX = halfL * 0.05 + (halfL * 0.85 * 0.82) / 2 - 1.2;
+          mOffsetsY = [-2.8, 0, 2.8];
+        }
+
+        for (const my of mOffsetsY) {
+          const mx = car.x + cosA * mRoofX - sinA * my;
+          const myPos = car.y + sinA * mRoofX + cosA * my;
+          const flare = ctx.createRadialGradient(mx, myPos, 0.2, mx, myPos, 3.0);
+          flare.addColorStop(0, 'rgba(255, 245, 170, 0.85)');
+          flare.addColorStop(0.4, 'rgba(245, 158, 11, 0.35)');
+          flare.addColorStop(1, 'rgba(245, 158, 11, 0)');
+          ctx.fillStyle = flare;
+          ctx.beginPath();
+          ctx.arc(mx, myPos, 3.0, 0, Math.PI * 2);
+          ctx.fill();
         }
       }
     }
 
-    // C. Traffic Lights Glowing Lenses (Additive)
+    // C. Traffic Lights Glowing Lenses (Additive - Subtle focused 8px lens aura)
     for (const prop of props) {
       if (prop.type !== 'traffic_light' || prop.isBroken) continue;
       if (prop.x < minX - 100 || prop.x > maxX + 100 || prop.y < minY - 100 || prop.y > maxY + 100) continue;
@@ -9017,12 +11358,13 @@ export class GameRenderer {
       const signalX = prop.x + cosFA * 8.5;
       const signalY = prop.y + sinFA * 8.5;
 
-      const sigGlow = ctx.createRadialGradient(signalX, signalY, 1, signalX, signalY, 35);
+      const sigGlow = ctx.createRadialGradient(signalX, signalY, 0.5, signalX, signalY, 8);
       sigGlow.addColorStop(0, lightColor);
+      sigGlow.addColorStop(0.5, lightColor.replace('0.95', '0.30'));
       sigGlow.addColorStop(1, 'rgba(0, 0, 0, 0)');
       ctx.fillStyle = sigGlow;
       ctx.beginPath();
-      ctx.arc(signalX, signalY, 35, 0, Math.PI * 2);
+      ctx.arc(signalX, signalY, 8, 0, Math.PI * 2);
       ctx.fill();
     }
 
@@ -9033,21 +11375,23 @@ export class GameRenderer {
         const redAngle = car.angle + Math.sin(strobe) * 1.2;
         const blueAngle = car.angle - Math.sin(strobe) * 1.2;
 
-        const rGlow = ctx.createRadialGradient(car.x, car.y, 4, car.x + Math.cos(redAngle) * 140, car.y + Math.sin(redAngle) * 140, 140);
-        rGlow.addColorStop(0, 'rgba(255, 50, 50, 0.9)');
+        const rGlow = ctx.createRadialGradient(car.x, car.y, 2, car.x + Math.cos(redAngle) * 110, car.y + Math.sin(redAngle) * 110, 110);
+        rGlow.addColorStop(0, 'rgba(255, 50, 50, 0.45)');
+        rGlow.addColorStop(0.5, 'rgba(255, 50, 50, 0.15)');
         rGlow.addColorStop(1, 'rgba(255, 50, 50, 0)');
         ctx.fillStyle = rGlow;
         ctx.beginPath();
-        ctx.arc(car.x, car.y, 140, redAngle - 0.6, redAngle + 0.6);
+        ctx.arc(car.x, car.y, 110, redAngle - 0.5, redAngle + 0.5);
         ctx.lineTo(car.x, car.y);
         ctx.fill();
 
-        const bGlow = ctx.createRadialGradient(car.x, car.y, 4, car.x + Math.cos(blueAngle) * 140, car.y + Math.sin(blueAngle) * 140, 140);
-        bGlow.addColorStop(0, 'rgba(50, 100, 255, 0.9)');
+        const bGlow = ctx.createRadialGradient(car.x, car.y, 2, car.x + Math.cos(blueAngle) * 110, car.y + Math.sin(blueAngle) * 110, 110);
+        bGlow.addColorStop(0, 'rgba(50, 100, 255, 0.45)');
+        bGlow.addColorStop(0.5, 'rgba(50, 100, 255, 0.15)');
         bGlow.addColorStop(1, 'rgba(50, 100, 255, 0)');
         ctx.fillStyle = bGlow;
         ctx.beginPath();
-        ctx.arc(car.x, car.y, 140, blueAngle - 0.6, blueAngle + 0.6);
+        ctx.arc(car.x, car.y, 110, blueAngle - 0.5, blueAngle + 0.5);
         ctx.lineTo(car.x, car.y);
         ctx.fill();
       }
@@ -9057,7 +11401,7 @@ export class GameRenderer {
     for (const bld of world.buildings) {
       if (bld.x + bld.width < minX || bld.x > maxX || bld.y + bld.height < minY || bld.y > maxY) continue;
 
-      // 1. Entrance warm additive pool and glow bulb
+      // 1. Entrance warm porch light
       if (bld.entranceSide) {
         let lightCX = 0, lightCY = 0;
         if (bld.entranceSide === 'north') {
@@ -9075,10 +11419,9 @@ export class GameRenderer {
         }
 
         const poolRadius = 35 * fogFactor;
-        const poolGrad = ctx.createRadialGradient(lightCX, lightCY, 2, lightCX, lightCY, poolRadius);
-        // Beautiful warm yellow-orange porch light glow!
-        poolGrad.addColorStop(0, `rgba(254, 240, 138, ${0.40 * fogFactor})`);
-        poolGrad.addColorStop(0.4, `rgba(251, 191, 36, ${0.15 * fogFactor})`);
+        const poolGrad = ctx.createRadialGradient(lightCX, lightCY, 1, lightCX, lightCY, poolRadius);
+        poolGrad.addColorStop(0, `rgba(254, 240, 138, ${0.25 * fogFactor})`);
+        poolGrad.addColorStop(0.4, `rgba(251, 191, 36, ${0.08 * fogFactor})`);
         poolGrad.addColorStop(1, 'rgba(251, 191, 36, 0)');
         ctx.fillStyle = poolGrad;
         ctx.beginPath();
@@ -9086,18 +11429,17 @@ export class GameRenderer {
         ctx.fill();
 
         // Little glowing bulb core
-        const bulbRadius = 6 * fogFactor;
-        const bulbGrad = ctx.createRadialGradient(lightCX, lightCY, 0.5, lightCX, lightCY, bulbRadius);
+        const bulbGrad = ctx.createRadialGradient(lightCX, lightCY, 0.5, lightCX, lightCY, 3.5);
         bulbGrad.addColorStop(0, `rgba(255, 255, 255, ${0.9 * fogFactor})`);
-        bulbGrad.addColorStop(0.5, `rgba(254, 240, 138, ${0.6 * fogFactor})`);
+        bulbGrad.addColorStop(0.6, `rgba(254, 240, 138, ${0.4 * fogFactor})`);
         bulbGrad.addColorStop(1, 'rgba(254, 240, 138, 0)');
         ctx.fillStyle = bulbGrad;
         ctx.beginPath();
-        ctx.arc(lightCX, lightCY, bulbRadius, 0, Math.PI * 2);
+        ctx.arc(lightCX, lightCY, 3.5, 0, Math.PI * 2);
         ctx.fill();
       }
 
-      // 2. Balcony warm additive pool
+      // 2. Balcony soft light
       if (bld.balconies && performanceConfig.enableBalconyDetails) {
         for (const bal of bld.balconies) {
           let cx = 0, cy = 0;
@@ -9115,11 +11457,10 @@ export class GameRenderer {
             cy = bld.y + bld.height * bal.offset;
           }
 
-          const poolRadius = 25 * fogFactor;
+          const poolRadius = 24 * fogFactor;
           const poolGrad = ctx.createRadialGradient(cx, cy, 1, cx, cy, poolRadius);
-          // Soft cyan sliding door light bleed
-          poolGrad.addColorStop(0, `rgba(165, 243, 252, ${0.30 * fogFactor})`);
-          poolGrad.addColorStop(0.5, `rgba(56, 189, 248, ${0.10 * fogFactor})`);
+          poolGrad.addColorStop(0, `rgba(165, 243, 252, ${0.18 * fogFactor})`);
+          poolGrad.addColorStop(0.5, `rgba(56, 189, 248, ${0.05 * fogFactor})`);
           poolGrad.addColorStop(1, 'rgba(56, 189, 248, 0)');
           ctx.fillStyle = poolGrad;
           ctx.beginPath();
@@ -9128,7 +11469,7 @@ export class GameRenderer {
         }
       }
 
-      // 3. Fire Escape soft orange security light pool
+      // 3. Fire Escape soft orange security light
       if (bld.fireEscapes) {
         for (const fe of bld.fireEscapes) {
           let cx = 0, cy = 0;
@@ -9148,9 +11489,8 @@ export class GameRenderer {
 
           const poolRadius = 20 * fogFactor;
           const poolGrad = ctx.createRadialGradient(cx, cy, 1, cx, cy, poolRadius);
-          // Soft orange security light
-          poolGrad.addColorStop(0, `rgba(253, 186, 116, ${0.25 * fogFactor})`);
-          poolGrad.addColorStop(0.6, `rgba(249, 115, 22, ${0.08 * fogFactor})`);
+          poolGrad.addColorStop(0, `rgba(253, 186, 116, ${0.15 * fogFactor})`);
+          poolGrad.addColorStop(0.6, `rgba(249, 115, 22, ${0.04 * fogFactor})`);
           poolGrad.addColorStop(1, 'rgba(249, 115, 22, 0)');
           ctx.fillStyle = poolGrad;
           ctx.beginPath();
@@ -9163,6 +11503,50 @@ export class GameRenderer {
     // F. Gas Station Additive Glow & Optics
     if (maxX >= 4800 && minX <= 5520 && maxY >= 4800 && minY <= 5520) {
       GasStationRenderer.renderAdditiveGlow(ctx, nightAlpha, fogFactor);
+    }
+
+    // F2. Garage Cooperative Additive Light Glow
+    if (minX <= 2000 && maxX >= 50 && minY <= 2400 && maxY >= 800) {
+      GarageCooperativeRenderer.renderAdditiveGlow(ctx, world, nightAlpha, fogFactor);
+    }
+
+    // G. Player Handheld & Smartphone Flashlight Volumetric Cone & LED Flare (Pass 2)
+    if (p && isPlayerFlashlightOn && p.x >= minX - 300 && p.x <= maxX + 300 && p.y >= minY - 300 && p.y <= maxY + 300) {
+      const aimAngle = p.aimAngle !== undefined ? p.aimAngle : p.angle;
+      const fRange = 280 * fogFactor;
+      const fSpread = 0.52;
+
+      ctx.save();
+      ctx.translate(p.x, p.y);
+      ctx.rotate(aimAngle);
+
+      // Atmospheric haze only when foggy or rainy
+      if (isFog || isRaining) {
+        const mistAlpha = (isFog ? 0.08 : 0.035) * weatherTransition;
+        const addCone = ctx.createRadialGradient(0, 0, 2, fRange * 0.3, 0, fRange);
+        addCone.addColorStop(0, `rgba(240, 249, 255, ${mistAlpha})`);
+        addCone.addColorStop(0.4, `rgba(224, 242, 254, ${mistAlpha * 0.35})`);
+        addCone.addColorStop(1, 'rgba(186, 230, 253, 0)');
+
+        ctx.fillStyle = addCone;
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        ctx.arc(0, 0, fRange, -fSpread, fSpread);
+        ctx.closePath();
+        ctx.fill();
+      }
+
+      // Compact LED emitter lens flare at player origin
+      const emitterGlow = ctx.createRadialGradient(0, 0, 0.5, 0, 0, 6);
+      emitterGlow.addColorStop(0, 'rgba(255, 255, 255, 0.90)');
+      emitterGlow.addColorStop(0.5, 'rgba(224, 242, 254, 0.35)');
+      emitterGlow.addColorStop(1, 'rgba(224, 242, 254, 0)');
+      ctx.fillStyle = emitterGlow;
+      ctx.beginPath();
+      ctx.arc(0, 0, 6, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.restore();
     }
 
     ctx.restore();
@@ -9490,8 +11874,9 @@ export class GameRenderer {
     // 1. Draw all road lanes & waypoint connection curves
     ctx.lineWidth = 1.5;
     for (const road of world.roads) {
+      if (!road.lanePaths) continue;
       for (const lane of road.lanePaths) {
-        if (lane.waypoints.length >= 2) {
+        if (lane.waypoints && lane.waypoints.length >= 2) {
           ctx.strokeStyle = 'rgba(59, 130, 246, 0.4)';
           ctx.beginPath();
           ctx.moveTo(lane.waypoints[0].x, lane.waypoints[0].y);
@@ -9558,10 +11943,14 @@ export class GameRenderer {
         in_intersection: '#8b5cf6',
         stopping_obstacle: '#f97316',
         reversing: '#ec4899',
-        waiting: '#64748b'
+        waiting: '#64748b',
+        lane_changing: '#06b6d4',
+        overtaking: '#a855f7',
+        avoiding_obstacle: '#3b82f6',
+        evading: '#e11d48'
       };
       const pillColor = stateColors[v.aiState] || '#64748b';
-      const labelText = `#${v.id.slice(-3)} ${v.aiState.toUpperCase()} (${Math.round(v.speed * 0.36)}km/h)`;
+      const labelText = `#${v.id.slice(-3)} ${v.aiState.toUpperCase()} (${Math.round(v.speed * PX_S_TO_SPEED_KMH)}km/h)`;
       ctx.font = 'bold 9px monospace';
       const textW = ctx.measureText(labelText).width;
 
@@ -9654,8 +12043,8 @@ export class GameRenderer {
     
     for (const shadow of this.cloudShadows) {
       // Move shadow
-      shadow.x = (shadow.x + time * 50) % 8000;
-      shadow.y = (shadow.y + time * 20) % 8000;
+      shadow.x = (shadow.x + time * 50) % 52000;
+      shadow.y = (shadow.y + time * 20) % 30000;
       
       // Draw if in view
       if (shadow.x + shadow.size > minX && shadow.x - shadow.size < maxX &&

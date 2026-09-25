@@ -1,6 +1,6 @@
 import React from 'react';
 import { Player, InventoryItem, GameWorld } from '../types';
-import { isPlayerNearTrashBin, isPlayerNearEcoVending, stowItemFromHandToPockets, swapPlayerHands } from '../items';
+import { stowItemFromHandToPockets, swapPlayerHands } from '../items';
 import { getDetailedBodySensations } from '../sensations';
 import { ItemIconCanvas } from './ItemIconCanvas';
 import { 
@@ -18,7 +18,8 @@ import {
   Trash2,
   Hand,
   ArrowLeftRight,
-  ArrowDownToLine
+  ArrowDownToLine,
+  Utensils
 } from 'lucide-react';
 
 interface PlayerNeedsHUDProps {
@@ -77,10 +78,6 @@ export const PlayerNeedsHUD: React.FC<PlayerNeedsHUDProps> = ({
   const bs = player.bodyState;
   const detailed = getDetailedBodySensations(player);
 
-  const isNearLitter = world && world.litter ? world.litter.some(lit => !lit.isAirborne && Math.hypot(player.x - lit.x, player.y - lit.y) < 65) : false;
-  const isNearTrash = world ? isPlayerNearTrashBin(player, world) : false;
-  const isNearEco = world ? isPlayerNearEcoVending(player, world) : false;
-
   const isCritical = player.needs.health < 30 || (bs?.painLevel ?? 0) > 60;
   const isConsuming = !!player.consumption?.isConsuming;
   const tinnitusActive = (bs?.tinnitusTimer || 0) > 0;
@@ -130,42 +127,142 @@ export const PlayerNeedsHUD: React.FC<PlayerNeedsHUDProps> = ({
         </div>
       )}
 
-      {/* 2. BODY SENSATIONS & INSPECTION HUD PANEL */}
+      {/* 2. BODY SENSATIONS & INSPECTION HUD PANEL (Bento Grid Widget) */}
       <div 
         id="bottom-right-symptoms-bar"
-        className={`fixed z-30 flex flex-col items-end gap-1.5 pointer-events-auto transition-all duration-200 ${
+        className={`fixed z-30 flex flex-col items-end gap-2.5 pointer-events-auto transition-all duration-200 ${
           isMobileTouch 
             ? 'top-[92px] sm:top-[140px] right-3 max-w-[200px]' 
             : 'bottom-4 right-4 max-w-[320px]'
         }`}
       >
-        {/* Inspection Button Trigger (Key [C]) */}
-        <button
-          id="hud-self-inspection-btn"
-          onClick={onOpenSelfInspection}
-          onTouchEnd={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            onOpenSelfInspection();
-          }}
-          className={`flex items-center gap-2 ${
-            isMobileTouch ? 'px-2.5 py-1.5' : 'px-3.5 py-2'
-          } bg-slate-950/95 hover:bg-slate-900 active:scale-95 border border-slate-700/90 rounded-xl shadow-2xl text-slate-200 transition font-mono`}
-          title="Открыть самоосмотр организма (Клавиша C)"
-        >
-          <div className={`p-1 rounded bg-slate-900 ${isCritical ? 'text-rose-400' : 'text-slate-300'}`}>
-            <Activity className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-          </div>
-          <div className="text-left">
-            <div className="text-[9px] font-bold tracking-widest uppercase text-slate-400 flex items-center gap-1.5">
-              <span>СОСТОЯНИЕ</span>
-              <span className="px-1 bg-slate-900 rounded text-[9px] font-mono border border-slate-700 text-slate-300">C</span>
+        {isMobileTouch ? (
+          /* Compact Mobile View */
+          <button
+            id="hud-self-inspection-btn"
+            onClick={onOpenSelfInspection}
+            onTouchEnd={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              onOpenSelfInspection();
+            }}
+            className="flex items-center gap-2 px-2.5 py-1.5 bg-slate-950/95 border border-slate-700/90 rounded-xl shadow-2xl text-slate-200 transition font-mono active:scale-95"
+            title="Открыть самоосмотр организма (Клавиша C)"
+          >
+            <div className={`p-1 rounded bg-slate-900 ${isCritical ? 'text-rose-400 animate-pulse' : 'text-slate-300'}`}>
+              <Activity className="w-3.5 h-3.5" />
             </div>
-            <div className="text-[11px] sm:text-xs font-medium text-slate-200 line-clamp-1 max-w-[120px] sm:max-w-[150px]">
-              {detailed.healthText}
+            <div className="text-left text-[10px] font-bold uppercase tracking-wider text-slate-300">
+              СОСТОЯНИЕ: {Math.round(player.needs.health)}% HP
             </div>
+          </button>
+        ) : (
+          /* Premium Bento Diagnostics & Vitals Widget */
+          <div className="p-4 bg-slate-950/85 border border-slate-800 rounded-2xl shadow-2xl flex flex-col gap-3 w-[280px] sm:w-[320px] backdrop-blur-md animate-in fade-in slide-in-from-bottom-2 duration-150">
+            {/* Title / Header */}
+            <div className="flex items-center justify-between text-slate-400 text-[9px] font-mono font-bold uppercase tracking-wider border-b border-slate-800/80 pb-2">
+              <span className="flex items-center gap-1.5"><Activity className="w-3.5 h-3.5 text-sky-400" /> ДИАГНОСТИКА</span>
+              <span className="font-mono text-slate-500">VITALS</span>
+            </div>
+            
+            {/* Vitals Grid (2 Columns, 2 Rows) */}
+            <div className="grid grid-cols-2 gap-2">
+              {/* Health Cell */}
+              <div className="bg-slate-900/40 border border-slate-800/50 rounded-xl p-2 flex flex-col gap-1.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-[9px] font-mono font-extrabold text-slate-400 flex items-center gap-1">
+                    <Heart className={`w-3 h-3 ${player.needs.health < 30 ? 'text-rose-500 animate-pulse' : 'text-rose-400'}`} /> HP
+                  </span>
+                  <span className={`text-[10px] font-mono font-bold ${player.needs.health < 30 ? 'text-rose-400' : 'text-slate-200'}`}>
+                    {Math.round(player.needs.health)}%
+                  </span>
+                </div>
+                <div className="w-full h-1.5 bg-slate-950 rounded-full overflow-hidden">
+                  <div 
+                    className={`h-full rounded-full transition-all duration-300 ${player.needs.health < 30 ? 'bg-rose-500 shadow-[0_0_8px_rgba(239,68,68,0.5)]' : 'bg-rose-600'}`}
+                    style={{ width: `${player.needs.health}%` }}
+                  />
+                </div>
+              </div>
+
+              {/* Energy Cell */}
+              <div className="bg-slate-900/40 border border-slate-800/50 rounded-xl p-2 flex flex-col gap-1.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-[9px] font-mono font-extrabold text-slate-400 flex items-center gap-1">
+                    <Zap className={`w-3 h-3 ${player.needs.energy < 25 ? 'text-amber-500 animate-pulse' : 'text-amber-400'}`} /> ЭНЕРГИЯ
+                  </span>
+                  <span className={`text-[10px] font-mono font-bold ${player.needs.energy < 25 ? 'text-amber-400' : 'text-slate-200'}`}>
+                    {Math.round(player.needs.energy)}%
+                  </span>
+                </div>
+                <div className="w-full h-1.5 bg-slate-950 rounded-full overflow-hidden">
+                  <div 
+                    className={`h-full rounded-full transition-all duration-300 ${player.needs.energy < 25 ? 'bg-amber-500 shadow-[0_0_8px_rgba(245,158,11,0.5)]' : 'bg-amber-500'}`}
+                    style={{ width: `${player.needs.energy}%` }}
+                  />
+                </div>
+              </div>
+
+              {/* Hunger Cell */}
+              <div className="bg-slate-900/40 border border-slate-800/50 rounded-xl p-2 flex flex-col gap-1.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-[9px] font-mono font-extrabold text-slate-400 flex items-center gap-1">
+                    <Utensils className={`w-3 h-3 ${player.needs.hunger < 25 ? 'text-orange-500 animate-pulse' : 'text-orange-400'}`} /> СЫТОСТЬ
+                  </span>
+                  <span className={`text-[10px] font-mono font-bold ${player.needs.hunger < 25 ? 'text-orange-400' : 'text-slate-200'}`}>
+                    {Math.round(player.needs.hunger)}%
+                  </span>
+                </div>
+                <div className="w-full h-1.5 bg-slate-950 rounded-full overflow-hidden">
+                  <div 
+                    className={`h-full rounded-full transition-all duration-300 ${player.needs.hunger < 25 ? 'bg-orange-500 shadow-[0_0_8px_rgba(249,115,22,0.5)]' : 'bg-orange-500'}`}
+                    style={{ width: `${player.needs.hunger}%` }}
+                  />
+                </div>
+              </div>
+
+              {/* Thirst Cell */}
+              <div className="bg-slate-900/40 border border-slate-800/50 rounded-xl p-2 flex flex-col gap-1.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-[9px] font-mono font-extrabold text-slate-400 flex items-center gap-1">
+                    <Droplet className={`w-3 h-3 ${player.needs.thirst < 25 ? 'text-sky-500 animate-pulse' : 'text-sky-400'}`} /> ВОДА
+                  </span>
+                  <span className={`text-[10px] font-mono font-bold ${player.needs.thirst < 25 ? 'text-sky-400' : 'text-slate-200'}`}>
+                    {Math.round(player.needs.thirst)}%
+                  </span>
+                </div>
+                <div className="w-full h-1.5 bg-slate-950 rounded-full overflow-hidden">
+                  <div 
+                    className={`h-full rounded-full transition-all duration-300 ${player.needs.thirst < 25 ? 'bg-sky-500 shadow-[0_0_8px_rgba(14,165,233,0.5)]' : 'bg-sky-500'}`}
+                    style={{ width: `${player.needs.thirst}%` }}
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Self-Inspection Button & Text */}
+            <button
+              onClick={onOpenSelfInspection}
+              onTouchEnd={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                onOpenSelfInspection();
+              }}
+              className="w-full py-2 bg-slate-900 hover:bg-slate-800 active:scale-95 border border-slate-800 hover:border-slate-700 rounded-xl flex items-center justify-between px-3 transition font-mono group cursor-pointer"
+            >
+              <span className="text-[9px] font-extrabold uppercase text-slate-300 tracking-wider flex items-center gap-1.5">
+                <span className="relative flex h-2 w-2">
+                  <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${isCritical ? 'bg-rose-500' : 'bg-emerald-400'}`} />
+                  <span className={`relative inline-flex rounded-full h-2 w-2 ${isCritical ? 'bg-rose-500' : 'bg-emerald-500'}`} />
+                </span>
+                {detailed.healthText}
+              </span>
+              <span className="px-1.5 py-0.5 bg-slate-800 group-hover:bg-slate-700 text-[9px] font-mono text-slate-400 rounded border border-slate-700">
+                C
+              </span>
+            </button>
           </div>
-        </button>
+        )}
 
         {/* Dynamic Symptom Badges */}
         <div className="flex flex-wrap justify-end gap-1 max-w-[220px] sm:max-w-[320px]">
@@ -228,59 +325,6 @@ export const PlayerNeedsHUD: React.FC<PlayerNeedsHUDProps> = ({
       {/* 4. BOTTOM DUAL HANDS & POCKETS HUD */}
       {!player.isInVehicle && (
         <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-40 flex flex-col items-center gap-2 pointer-events-auto">
-          {/* Active Hand Action Prompt [E] */}
-          {actionPrompt && (
-            <div 
-              id="hud-active-hand-use-prompt"
-              onClick={() => onUseActiveHandItem?.()}
-              className="px-4 py-2 bg-slate-950/95 border border-sky-500/70 rounded-xl shadow-2xl text-sky-200 text-xs font-mono uppercase tracking-wider flex items-center gap-2.5 pointer-events-auto cursor-pointer hover:bg-slate-900 active:scale-95 transition animate-fadeIn backdrop-blur-md"
-              title="Нажмите E для активации предмета в активной руке"
-            >
-              <span className="px-2 py-0.5 bg-sky-950 border border-sky-500/60 rounded-md text-[11px] font-bold text-sky-300">
-                E
-              </span>
-              <span className="font-semibold">{actionPrompt}</span>
-              <span className="text-[10px] text-slate-400 lowercase">
-                ({activeHand === 'left' ? 'лев. рука' : 'прав. рука'})
-              </span>
-            </div>
-          )}
-
-          {/* Quick World Interactions: Trash / Eco / Litter */}
-          {isNearLitter && !actionPrompt && (
-            <div 
-              onClick={() => {
-                if (world && player) {
-                  import('../items').then(mod => {
-                    mod.pickupNearbyLitter(player, world);
-                  });
-                }
-              }}
-              className="px-3.5 py-1.5 bg-slate-950/95 border border-slate-700 rounded-xl shadow-xl text-slate-200 text-xs font-mono uppercase tracking-wider flex items-center gap-2 pointer-events-auto cursor-pointer hover:bg-slate-900 transition"
-            >
-              <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-              <span>[E] Подобрать вторсырье</span>
-            </div>
-          )}
-          {isNearEco && (
-            <div 
-              onClick={onOpenInventory}
-              className="px-3.5 py-1.5 bg-slate-950/95 border border-emerald-600/60 rounded-xl shadow-xl text-emerald-300 text-xs font-mono uppercase tracking-wider flex items-center gap-2 pointer-events-auto cursor-pointer hover:bg-slate-900 transition"
-            >
-              <Trash2 className="w-3.5 h-3.5 text-emerald-400" />
-              <span>[I] Эко-фандомат: сдать тару (+$5)</span>
-            </div>
-          )}
-          {isNearTrash && !isNearEco && (
-            <div 
-              onClick={onOpenInventory}
-              className="px-3.5 py-1.5 bg-slate-950/95 border border-slate-700 rounded-xl shadow-xl text-slate-300 text-xs font-mono uppercase tracking-wider flex items-center gap-2 pointer-events-auto cursor-pointer hover:bg-slate-900 transition"
-            >
-              <Trash2 className="w-3.5 h-3.5 text-slate-400" />
-              <span>[I] Урна: выбросить мусор</span>
-            </div>
-          )}
-
           {/* MAIN INTERFACE ROW: LEFT HAND | SWAP | RIGHT HAND | DIVIDER | POCKETS 1-6 | INVENTORY BUTTON */}
           <div 
             id="player-dual-hands-hotbar"

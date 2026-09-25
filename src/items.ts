@@ -1,5 +1,6 @@
-import { GameWorld, GroundItem, InventoryItem, ItemCategory, Player } from './types';
+import { GameWorld, GroundItem, InventoryItem, ItemCategory, Player, Vehicle, TowingRope } from './types';
 import { sound } from './audio';
+import { getPhoneSpecsForItemId } from './phoneData';
 import {
   administerMedication,
   applySplint,
@@ -19,7 +20,9 @@ import {
   applyValerianDrops
 } from './medicineSystem';
 import { soothePanic } from './bodySystem';
-import { isTrailerVehicle } from './vehicleHelpers';
+import { isTrailerVehicle, CAR_CONFIGS } from './vehicleHelpers';
+import { getCityApartments } from './propertySystem';
+import { clearInteriorCanvasCache } from './buildingInteriors';
 
 export interface ItemDefinition {
   itemId: string;
@@ -61,7 +64,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     nameRu: 'Сэндвич с ветчиной и сыром',
     category: 'food',
     maxStack: 10,
-    icon: '🥪',
+    icon: '',
     description: 'Fresh toasted sandwich with smoked ham, cheddar and greens. Restores food and slight health.',
     descriptionRu: 'Свежий тост с копченой ветчиной, чеддером и зеленью. Утоляет голод и восстанавливает здоровье.',
     effects: { hunger: 40, health: 8, energy: 10 },
@@ -80,7 +83,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     nameRu: 'Сочный чизбургер',
     category: 'food',
     maxStack: 8,
-    icon: '🍔',
+    icon: '',
     description: 'Hearty grilled beef patty with cheese, tomato and sesame bun. High satiety.',
     descriptionRu: 'Сытная котлета из говядины на гриле с сыром, томатом и кунжутной булочкой. Высокая сытность.',
     effects: { hunger: 60, health: 12, energy: 15 },
@@ -99,7 +102,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     nameRu: 'Кусок пиццы Пепперони',
     category: 'food',
     maxStack: 12,
-    icon: '🍕',
+    icon: '',
     description: 'Hot slice with crispy mozzarella and spicy sausage.',
     descriptionRu: 'Горячий кусок пиццы с хрустящей моцареллой и пикантной колбасой.',
     effects: { hunger: 35, health: 6, energy: 8 },
@@ -118,7 +121,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     nameRu: 'Спелое яблоко',
     category: 'food',
     maxStack: 20,
-    icon: '🍎',
+    icon: '',
     description: 'Juicy natural fruit. Restores a bit of hunger and thirst.',
     descriptionRu: 'Сочный натуральный фрукт. Восстанавливает немного сытости и утоляет легкую жажду.',
     effects: { hunger: 18, thirst: 12, health: 4 },
@@ -137,7 +140,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     nameRu: 'Шоколадный батончик',
     category: 'food',
     maxStack: 15,
-    icon: '🍫',
+    icon: '',
     description: 'Rich dark cocoa bar. Provides a fast burst of stamina and calories.',
     descriptionRu: 'Плитка шоколада. Дает быстрый прилив бодрости, энергии и калорий.',
     effects: { hunger: 22, energy: 25, sleepiness: -10 },
@@ -156,7 +159,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     nameRu: 'Картофельные чипсы',
     category: 'food',
     maxStack: 10,
-    icon: '🥔',
+    icon: '',
     description: 'Salty snack. Gives quick energy but slightly increases thirst.',
     descriptionRu: 'Хрустящие соленые чипсы. Быстрый перекус, но слегка усиливает жажду.',
     effects: { hunger: 25, energy: 12, thirst: -8 },
@@ -175,7 +178,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     nameRu: 'Армейская тушёнка',
     category: 'food',
     maxStack: 8,
-    icon: '🥫',
+    icon: '',
     description: 'High-calorie canned preserved meat with long shelf life.',
     descriptionRu: 'Высококалорийные мясные консервы длительного хранения.',
     effects: { hunger: 70, health: 15, energy: 20 },
@@ -196,7 +199,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     nameRu: 'Бутылка минеральной воды',
     category: 'drink',
     maxStack: 10,
-    icon: '💧',
+    icon: '',
     description: 'Clean pure spring water. Essential for hydration and survival.',
     descriptionRu: 'Чистая родниковая вода (0.5 л). Главное средство от жажды и обезвоживания.',
     effects: { thirst: 50, health: 5, energy: 10 },
@@ -215,7 +218,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     nameRu: 'Баночка Колы',
     category: 'drink',
     maxStack: 12,
-    icon: '🥤',
+    icon: '',
     description: 'Carbonated chilled soda with sweet caramel taste and light caffeine.',
     descriptionRu: 'Освежающая газировка со сладким вкусом и легким тонизирующим эффектом.',
     effects: { thirst: 35, energy: 20, sleepiness: -8 },
@@ -234,7 +237,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     nameRu: 'Горячий кофе Эспрессо',
     category: 'drink',
     maxStack: 8,
-    icon: '☕',
+    icon: '',
     description: 'Freshly brewed strong coffee. Dramatically banishes drowsiness and restores stamina.',
     descriptionRu: 'Крепкий свежесваренный кофе. Эффективно снимает сонливость и возвращает бодрость.',
     effects: { thirst: 25, energy: 40, sleepiness: -40 },
@@ -253,7 +256,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     nameRu: 'Энергетик «Турбо-Драйв»',
     category: 'drink',
     maxStack: 10,
-    icon: '⚡',
+    icon: '',
     description: 'High-octane taurine and caffeine booster for maximum alertness.',
     descriptionRu: 'Мощный энергетик с таурином и кофеином для мгновенного снятия усталости.',
     effects: { thirst: 35, energy: 55, sleepiness: -50, health: -2 },
@@ -272,7 +275,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     nameRu: 'Апельсиновый сок',
     category: 'drink',
     maxStack: 8,
-    icon: '🧃',
+    icon: '',
     description: 'Vitamin C rich citrus juice. Quenches thirst and supports health.',
     descriptionRu: 'Натуральный сок с витамином C. Отлично утоляет жажду и укрепляет здоровье.',
     effects: { thirst: 45, hunger: 15, health: 10, energy: 15 },
@@ -293,7 +296,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     nameRu: 'Большая автомобильная аптечка',
     category: 'med',
     maxStack: 4,
-    icon: '🩹',
+    icon: '',
     description: 'Complete emergency trauma kit with bandages, antiseptic and coagulants.',
     descriptionRu: 'Комплект первой помощи: бинты, антисептик, жгут и обеззараживатель.',
     effects: { health: 65, energy: 20 },
@@ -301,15 +304,14 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     usable: true,
     biteCount: 4,
     leftoverId: 'medkit_empty',
-    leftoverNameRu: 'Пустая коробка аптечки'
-  },
+    leftoverNameRu: 'Пустая коробка аптечки'},
   bandage: {
     itemId: 'bandage',
     name: 'Sterile Gauze Bandage',
     nameRu: 'Стерильный медицинский бинт',
     category: 'med',
     maxStack: 16,
-    icon: '🩹',
+    icon: '',
     description: 'Quick dressing to patch minor scrapes and car collision cuts.',
     descriptionRu: 'Быстрая повязка для остановки кровотечения и лечения ушибов.',
     effects: { health: 25 },
@@ -323,7 +325,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     nameRu: 'Обезболивающие таблетки',
     category: 'med',
     maxStack: 10,
-    icon: '💊',
+    icon: '',
     description: 'Alleviates pain and fatigue, helping restore mobility.',
     descriptionRu: 'Снимают болевой синдром при авариях и восстанавливают выносливость (10 таблеток в блистере).',
     effects: { health: 20, energy: 30, sleepiness: 10 },
@@ -341,7 +343,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     nameRu: 'Ампула с морфином',
     category: 'med',
     maxStack: 5,
-    icon: '💉',
+    icon: '',
     description: 'Powerful clinical analgesic for extreme pain, fractures, and severe trauma.',
     descriptionRu: 'Сильнодействующий рецептурный анальгетик для купирования острой боли, переломов и тяжелых травм.',
     effects: { health: 30, energy: 20, sleepiness: 15 },
@@ -359,7 +361,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     nameRu: 'Комплекс витаминов',
     category: 'med',
     maxStack: 10,
-    icon: '🧪',
+    icon: '',
     description: 'Daily essential micronutrients. Improves metabolism and natural healing.',
     descriptionRu: 'Комплекс микроэлементов (12 драже в баночке). Улучшает самочувствие и бодрость.',
     effects: { health: 15, energy: 24, sleepiness: -15 },
@@ -377,7 +379,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     nameRu: 'Медицинская фиксирующая шина',
     category: 'med',
     maxStack: 6,
-    icon: '🪵',
+    icon: '',
     description: 'Rigid orthopedic splint designed to immobilize and treat bone fractures.',
     descriptionRu: 'Жесткая медицинская шина для фиксации и лечения переломов костей.',
     effects: { health: 10 },
@@ -391,7 +393,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     nameRu: 'Аэрозоль Пантенол от ожогов',
     category: 'med',
     maxStack: 6,
-    icon: '🧴',
+    icon: '',
     description: 'Specialized burn foam with D-panthenol. Stimulates rapid epidermal regeneration and relieves severe burn pain (10 doses).',
     descriptionRu: 'Специализированная регенерирующая пена при термических ожогах 1-3 степени. Ускоряет заживление и мгновенно охлаждает (10 применений).',
     effects: { health: 30 },
@@ -409,7 +411,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     nameRu: 'Бальзам «Спасатель»',
     category: 'med',
     maxStack: 8,
-    icon: '🧪',
+    icon: '',
     description: 'Natural regenerative balm based on sea buckthorn and propolis for treating burns, wounds and bruises (8 doses).',
     descriptionRu: 'Натуральный регенерирующий бальзам на основе облепихи и прополиса для ожогов, ран и глубоких ссадин (туба на 8 нанесений).',
     effects: { health: 25 },
@@ -427,7 +429,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     nameRu: 'Раствор бриллиантового зелёного (Зелёнка)',
     category: 'med',
     maxStack: 12,
-    icon: '🟢',
+    icon: '',
     description: 'Classic pharmacy antiseptic. Dries and sterilizes abrasions and edges of wounds (15 doses).',
     descriptionRu: 'Народный аптечный антисептик. Прижигает и дезинфицирует раны, ссадины и ожоги (флакон на 15 обработок).',
     effects: { health: 18 },
@@ -445,7 +447,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     nameRu: 'Раствор йода спиртовой 5%',
     category: 'med',
     maxStack: 12,
-    icon: '🟤',
+    icon: '',
     description: 'Iodine antiseptic. Warms deep bruises and sprains through iodine grid, disinfects cuts (15 doses).',
     descriptionRu: 'Спиртовой раствор йода. Йодная сетка снимает отек при ушибах и растяжениях, дезинфицирует ссадины (15 применений).',
     effects: { health: 18 },
@@ -463,7 +465,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     nameRu: 'Гель Диклофенак 5%',
     category: 'med',
     maxStack: 8,
-    icon: '🧴',
+    icon: '',
     description: 'Potent NSAID gel for joint sprains, tendon injuries and muscular pain from impacts (10 doses).',
     descriptionRu: 'Сильное обезболивающее и противовоспалительное средство при растяжениях связок и ушибах суставов (10 доз).',
     effects: { health: 20 },
@@ -481,7 +483,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     nameRu: 'Перекись водорода 3%',
     category: 'med',
     maxStack: 10,
-    icon: '💧',
+    icon: '',
     description: 'Foaming hemostatic antiseptic. Cleans wounds and halts capillary bleeding (12 doses).',
     descriptionRu: 'Пенообразующий антисептик. Останавливает капиллярное кровотечение и механически вымывает грязь (12 доз).',
     effects: { health: 22 },
@@ -499,7 +501,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     nameRu: 'Нашатырный спирт (Аммиак 10%)',
     category: 'med',
     maxStack: 10,
-    icon: '🧪',
+    icon: '',
     description: 'Pungent smelling salts. Instantly stimulates the respiratory center, preventing syncope and shock (20 uses).',
     descriptionRu: 'Резкий раствор для вдыхания. Мгновенно выводит из полуобморока, снимает шок и сонливость (20 применений).',
     effects: { energy: 35, sleepiness: -40 },
@@ -517,8 +519,8 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     nameRu: 'Бальзам «Золотая Звезда» (Звёздочка)',
     category: 'med',
     maxStack: 15,
-    icon: '⭐',
-    description: 'Legendary Vietnamese aromatic balm with essential oils. Relieves headaches, clears mind and reduces panic (25 uses).',
+    icon: '',
+    description: 'Legendary aromatic balm with essential oils. Relieves headaches, clears mind and reduces panic (25 uses).',
     descriptionRu: 'Легендарный аптечный бальзам с маслами мяты, гвоздики и корицы. Снимает головную боль и успокаивает (25 применений).',
     effects: { energy: 20, sleepiness: -25 },
     weight: 0.02,
@@ -553,7 +555,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     nameRu: 'Капли настойки валерианы',
     category: 'med',
     maxStack: 10,
-    icon: '🌿',
+    icon: '',
     description: 'Natural sedative tincture. Rapidly lowers heart rate, panic, fear and physical tremor (15 doses).',
     descriptionRu: 'Натуральное седативное средство. Успокаивает учащенный пульс, снимает страх и панику после аварии (15 доз).',
     effects: { sleepiness: 15 },
@@ -573,7 +575,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     nameRu: 'Кожаный бумажник',
     category: 'valuable',
     maxStack: 1,
-    icon: '👛',
+    icon: '',
     description: 'Bifold leather wallet. Stores banknotes, coins, and small papers without cluttering pockets.',
     descriptionRu: 'Компактный кожаный кошелек. Вмещает банкноты, монеты и мелочь, освобождая карманы.',
     effects: {},
@@ -592,9 +594,9 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     nameRu: 'Пакет "Майка"',
     category: 'misc',
     maxStack: 1,
-    icon: '🛍️',
+    icon: '',
     description: 'Durable white plastic bag for carrying bulky groceries, auto parts and supplies.',
-    descriptionRu: 'Белый полиэтиленовый пакет "майка" с ручками для покупок и габаритных предметов.',
+    descriptionRu: 'Белый полиэтиленовый пакет "майка"с ручками для покупок и габаритных предметов.',
     effects: {},
     weight: 0.02,
     volume: 0.08,
@@ -610,7 +612,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     nameRu: 'Наличные деньги ($)',
     category: 'valuable',
     maxStack: 9999,
-    icon: '💵',
+    icon: '',
     description: 'Currency used to buy drinks and snacks from vending machines and city kiosks.',
     descriptionRu: 'Деньги для покупок в торговых автоматах, кафе и уличных ларьках.',
     effects: {},
@@ -623,7 +625,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     nameRu: 'Купюра $5000',
     category: 'valuable',
     maxStack: 100,
-    icon: '💵',
+    icon: '',
     description: 'Large banknote of $5000. Double click or use to deposit into your cash wallet.',
     descriptionRu: 'Крупная купюра номиналом в $5000. Используйте, чтобы положить её в кошелёк.',
     effects: {},
@@ -636,7 +638,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     nameRu: 'Купюра $1000',
     category: 'valuable',
     maxStack: 100,
-    icon: '💵',
+    icon: '',
     description: 'Banknote of $1000. Double click or use to deposit into your cash wallet.',
     descriptionRu: 'Купюра номиналом в $1000. Используйте, чтобы положить её в кошелёк.',
     effects: {},
@@ -649,7 +651,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     nameRu: 'Купюра $500',
     category: 'valuable',
     maxStack: 100,
-    icon: '💵',
+    icon: '',
     description: 'Banknote of $500. Double click or use to deposit into your cash wallet.',
     descriptionRu: 'Купюра номиналом в $500. Используйте, чтобы положить её в кошелёк.',
     effects: {},
@@ -662,7 +664,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     nameRu: 'Купюра $100',
     category: 'valuable',
     maxStack: 100,
-    icon: '💵',
+    icon: '',
     description: 'Banknote of $100. Double click or use to deposit into your cash wallet.',
     descriptionRu: 'Купюра номиналом в $100. Используйте, чтобы положить её в кошелёк.',
     effects: {},
@@ -675,7 +677,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     nameRu: 'Купюра $50',
     category: 'valuable',
     maxStack: 100,
-    icon: '💵',
+    icon: '',
     description: 'Banknote of $50. Double click or use to deposit into your cash wallet.',
     descriptionRu: 'Купюра номиналом в $50. Используйте, чтобы положить её в кошелёк.',
     effects: {},
@@ -688,7 +690,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     nameRu: 'Купюра $10',
     category: 'valuable',
     maxStack: 100,
-    icon: '💵',
+    icon: '',
     description: 'Small banknote of $10. Double click or use to deposit into your cash wallet.',
     descriptionRu: 'Купюра номиналом в $10. Используйте, чтобы положить её в кошелёк.',
     effects: {},
@@ -701,7 +703,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     nameRu: 'Монета $10',
     category: 'valuable',
     maxStack: 100,
-    icon: '🪙',
+    icon: '',
     description: 'Heavy metallic coin of $10. Double click or use to deposit into your cash wallet.',
     descriptionRu: 'Тяжелая металлическая монета номиналом в $10. Используйте, чтобы положить её в кошелёк.',
     effects: {},
@@ -714,7 +716,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     nameRu: 'Монета $5',
     category: 'valuable',
     maxStack: 100,
-    icon: '🪙',
+    icon: '',
     description: 'Metallic coin of $5. Double click or use to deposit into your cash wallet.',
     descriptionRu: 'Металлическая монета номиналом в $5. Используйте, чтобы положить её в кошелёк.',
     effects: {},
@@ -727,7 +729,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     nameRu: 'Монета $2',
     category: 'valuable',
     maxStack: 100,
-    icon: '🪙',
+    icon: '',
     description: 'Metallic coin of $2. Double click or use to deposit into your cash wallet.',
     descriptionRu: 'Металлическая монета номиналом в $2. Используйте, чтобы положить её в кошелёк.',
     effects: {},
@@ -740,7 +742,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     nameRu: 'Монета $1',
     category: 'valuable',
     maxStack: 100,
-    icon: '🪙',
+    icon: '',
     description: 'Metallic coin of $1. Double click or use to deposit into your cash wallet.',
     descriptionRu: 'Металлическая монета номиналом в $1. Используйте, чтобы положить её в кошелёк.',
     effects: {},
@@ -754,11 +756,89 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     nameRu: 'Ключ от автомобиля',
     category: 'auto',
     maxStack: 1,
-    icon: '🔑',
+    icon: '',
     description: 'Remote key fob for locking and unlocking your personal vehicle. Press E while holding in hands or use from inventory near car.',
-    descriptionRu: 'Электронный ключ с пультом сигнализации. Нажмите [E] с ключом в руках или активируйте из инвентаря рядом с авто для отпирания/запирания дверей.',
+    descriptionRu: 'Электронный ключ с пультом сигнализации. Нажмите [E] с ключом в руках или активируйте из инвентаря для управления замками и системами авто.',
+    effects: {},
+    weight: 0.08,
+    usable: true
+  },
+  car_key_classic: {
+    itemId: 'car_key_classic',
+    name: 'Mechanical Ignition Key',
+    nameRu: 'Ключ зажигания (Классика)',
+    category: 'auto',
+    maxStack: 1,
+    icon: '',
+    description: 'Traditional metal ignition key with polymer grip for classic and utility vehicles.',
+    descriptionRu: 'Классический металлический ключ зажигания с рельефной пластиковой головкой.',
+    effects: {},
+    weight: 0.05,
+    usable: true
+  },
+  car_key_flip: {
+    itemId: 'car_key_flip',
+    name: 'Folding Flip Key Fob',
+    nameRu: 'Выкидной ключ-брелок',
+    category: 'auto',
+    maxStack: 1,
+    icon: '',
+    description: 'Modern switchblade flip-key with integrated central locking remote buttons.',
+    descriptionRu: 'Современный выкидной ключ со складным стальным лезвием и пультом центрального замка.',
+    effects: {},
+    weight: 0.09,
+    usable: true
+  },
+  car_key_smart: {
+    itemId: 'car_key_smart',
+    name: 'Smart Keyless-Go Fob',
+    nameRu: 'Премиальный смарт-ключ',
+    category: 'auto',
+    maxStack: 1,
+    icon: '',
+    description: 'Aerodynamic smart key fob with remote engine start, central lock, and headlights control.',
+    descriptionRu: 'Премиальный электронный смарт-ключ с дистанционным автозапуском двигателя [] и управлением фарами [].',
     effects: {},
     weight: 0.1,
+    usable: true
+  },
+  car_key_display: {
+    itemId: 'car_key_display',
+    name: 'Interactive Smart Display Key',
+    nameRu: 'Интерактивный Smart Display Key',
+    category: 'auto',
+    maxStack: 1,
+    icon: '',
+    description: 'Ultra-luxury high-tech display key with touch interface, vehicle telemetry, remote start, and light show.',
+    descriptionRu: 'Эксклюзивный цифровой смарт-ключ с цветным дисплеем, телеметрией, автозапуском и дистанционным освещением.',
+    effects: {},
+    weight: 0.12,
+    usable: true
+  },
+  car_key_gold: {
+    itemId: 'car_key_gold',
+    name: 'Golden Ignition Key',
+    nameRu: 'Золотой ключ зажигания',
+    category: 'auto',
+    maxStack: 1,
+    icon: '',
+    description: 'Traditional heavy gold-plated key. Perfect for vintage and classic passenger cars. Must be inserted into the ignition slot inside the vehicle.',
+    descriptionRu: 'Классический латунный золотой ключ. Подходит для различных отечественных и зарубежных ретро-машин. Вставляется в щель зажигания.',
+    effects: {},
+    weight: 0.05,
+    usable: true
+  },
+  car_key_iron: {
+    itemId: 'car_key_iron',
+    name: 'Iron Ignition Key',
+    nameRu: 'Железный ключ зажигания',
+    category: 'auto',
+    maxStack: 1,
+    icon: '',
+    description: 'Heavy old-school iron utility key. Essential for agricultural tractors and old-school cargo trucks. Must be inserted into the ignition slot.',
+    descriptionRu: 'Старый тракторный/грузовой железный ключ. Необходим для специальной и грузовой техники. Вставляется в замочную скважину зажигания.',
+    effects: {},
+    weight: 0.06,
     usable: true
   },
   car_pts: {
@@ -767,12 +847,12 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     nameRu: 'Паспорт ТС (ПТС)',
     category: 'auto',
     maxStack: 1,
-    icon: '📄',
+    icon: '',
     description: 'Official Passport of Vehicle Construction proving vehicle registration and factory specifications.',
     descriptionRu: 'Официальный паспорт транспортного средства (ПТС) с указанием параметров, VIN-кода и права собственности.',
     effects: {},
     weight: 0.05,
-    usable: false
+    usable: true
   },
   car_tech_passport: {
     itemId: 'car_tech_passport',
@@ -780,12 +860,97 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     nameRu: 'Техпаспорт (СТС)',
     category: 'auto',
     maxStack: 1,
-    icon: '💳',
+    icon: '',
     description: 'Laminated Certificate of Vehicle Registration required for lawful driving in the city.',
     descriptionRu: 'Свидетельство о регистрации ТС (Техпаспорт / СТС). Содержит госномер, данные владельца и параметры авто.',
     effects: {},
     weight: 0.03,
-    usable: false
+    usable: true
+  },
+  car_contract_dkp: {
+    itemId: 'car_contract_dkp',
+    name: 'Vehicle Purchase Contract (DKP)',
+    nameRu: 'Договор купли-продажи ТС (ДКП)',
+    category: 'auto',
+    maxStack: 1,
+    icon: '',
+    description: 'Written purchase and sale contract for the vehicle with transaction price and signatures.',
+    descriptionRu: 'Договор купли-продажи транспортного средства с указанием стоимости, VIN-кода и подписей сторон.',
+    effects: {},
+    weight: 0.04,
+    usable: true
+  },
+
+  // === REAL ESTATE KEYS & PROPERTY DEEDS (НЕДВИЖИМОСТЬ И КВАРТИРЫ) ===
+  apartment_key: {
+    itemId: 'apartment_key',
+    name: 'Apartment Steel Key',
+    nameRu: 'Ключ от квартиры',
+    category: 'valuable',
+    maxStack: 1,
+    icon: '',
+    description: 'Precision milled steel key with engraved lock code. Unlocks the front door of your apartment.',
+    descriptionRu: 'Фрезерованный стальной ключ с гравировкой замка. Отпирает и запирает входную дверь вашей квартиры.',
+    effects: {},
+    weight: 0.04,
+    volume: 0.05,
+    usable: true
+  },
+  apartment_key_spare: {
+    itemId: 'apartment_key_spare',
+    name: 'Spare Apartment Key (Sealed)',
+    nameRu: 'Дубликат ключа в пенале',
+    category: 'valuable',
+    maxStack: 1,
+    icon: '',
+    description: 'Official backup duplicate key sealed in a brass case with tamper-evident seal.',
+    descriptionRu: 'Официальный запасной дубликат ключа в опечатанном латунном пенале с пломбой.',
+    effects: {},
+    weight: 0.06,
+    volume: 0.08,
+    usable: true
+  },
+  property_deed_egrn: {
+    itemId: 'property_deed_egrn',
+    name: 'EGRN Property Deed',
+    nameRu: 'Выписка из ЕГРН о праве собственности',
+    category: 'valuable',
+    maxStack: 1,
+    icon: '',
+    description: 'Official State Cadastral Register extract confirming full legal ownership of the residential property.',
+    descriptionRu: 'Официальная выписка из ЕГРН с гербовой печатью, подтверждающая право собственности на квартиру.',
+    effects: {},
+    weight: 0.05,
+    volume: 0.1,
+    usable: true
+  },
+  property_contract_dkp: {
+    itemId: 'property_contract_dkp',
+    name: 'Property Purchase Agreement (DKP)',
+    nameRu: 'Договор купли-продажи квартиры (ДКП)',
+    category: 'valuable',
+    maxStack: 1,
+    icon: '',
+    description: 'Notarized contract of sale with state registration stamps and notary seal.',
+    descriptionRu: 'Нотариально заверенный договор купли-продажи жилого помещения с отметкой Единого Реестра.',
+    effects: {},
+    weight: 0.06,
+    volume: 0.12,
+    usable: true
+  },
+  property_tech_passport: {
+    itemId: 'property_tech_passport',
+    name: 'BTI Technical Passport',
+    nameRu: 'Технический паспорт БТИ',
+    category: 'valuable',
+    maxStack: 1,
+    icon: '',
+    description: 'Technical certificate with architectural floor plan, room layout dimensions and engineering conduits.',
+    descriptionRu: 'Технический паспорт помещения БТИ с поэтажным планом, площадями комнат и схемами коммуникаций.',
+    effects: {},
+    weight: 0.08,
+    volume: 0.15,
+    usable: true
   },
 
   repair_kit: {
@@ -794,7 +959,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     nameRu: 'Набор автоинструментов',
     category: 'tool',
     maxStack: 2,
-    icon: '🔧',
+    icon: '',
     description: 'Wrench and auto parts kit to repair engine damage and body crumple.',
     descriptionRu: 'Набор ключей и запчастей для полевого ремонта кузова и двигателя авто.',
     effects: {},
@@ -807,7 +972,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     nameRu: 'Тактический LED-фонарик',
     category: 'tool',
     maxStack: 1,
-    icon: '🔦',
+    icon: '',
     description: 'Handheld bright flashlight for navigating dark alleyways and buildings at night.',
     descriptionRu: 'Яркий ручной фонарь для темных улиц, переулков и подъездов ночью.',
     effects: {},
@@ -820,7 +985,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     nameRu: 'Антисептик для ран',
     category: 'med',
     maxStack: 12,
-    icon: '🧴',
+    icon: '',
     description: 'Disinfects deep cuts and scrapes to prevent infection (8 doses).',
     descriptionRu: 'Обеззараживает глубокие царапины и предотвращает инфекцию (флакон на 8 обработок).',
     effects: { health: 15 },
@@ -829,15 +994,14 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     biteCount: 8,
     biteDuration: 0.5,
     leftoverId: 'antiseptic_empty',
-    leftoverNameRu: 'Пустой флакон антисептика'
-  },
+    leftoverNameRu: 'Пустой флакон антисептика'},
   motor_oil: {
     itemId: 'motor_oil',
     name: 'Motor Oil Canister',
     nameRu: 'Канистра моторного масла',
     category: 'tool',
     maxStack: 4,
-    icon: '🛢️',
+    icon: '',
     description: 'High-grade synthetic engine oil for engine protection and smooth operation.',
     descriptionRu: 'Высококачественное синтетическое масло для защиты двигателя.',
     effects: {},
@@ -850,7 +1014,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     nameRu: 'Запасной аккумулятор',
     category: 'tool',
     maxStack: 2,
-    icon: '🔋',
+    icon: '',
     description: 'Heavy duty lead-acid battery to power vehicle electronics.',
     descriptionRu: 'Надежный свинцово-кислотный аккумулятор для бортовой сети авто.',
     effects: {},
@@ -863,7 +1027,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     nameRu: 'Автоогнетушитель',
     category: 'tool',
     maxStack: 2,
-    icon: '🧯',
+    icon: '',
     description: 'Dry chemical foam extinguisher (100 foam charges). Hold down use/attack button to spray a continuous foam stream to extinguish fires.',
     descriptionRu: 'Порошковый автоогнетушитель (100 зарядов пены). Удерживайте кнопку применения/атаки для непрерывной струи пены и тушения огня.',
     effects: {},
@@ -872,15 +1036,14 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     biteCount: 100,
     biteDuration: 0.1,
     leftoverId: 'extinguisher_empty',
-    leftoverNameRu: 'Пустой огнетушитель'
-  },
+    leftoverNameRu: 'Пустой огнетушитель'},
   extinguisher_empty: {
     itemId: 'extinguisher_empty',
     name: 'Empty Fire Extinguisher',
     nameRu: 'Пустой огнетушитель',
     category: 'misc',
     maxStack: 2,
-    icon: '🧯',
+    icon: '',
     description: 'Depleted steel fire extinguisher cylinder.',
     descriptionRu: 'Пустой стальной баллон из-под огнетушителя.',
     effects: {},
@@ -893,7 +1056,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     nameRu: 'Сливочный Капучино',
     category: 'drink',
     maxStack: 8,
-    icon: '☕',
+    icon: '',
     description: 'Delicious coffee with whipped cream. Warms up and restores stamina.',
     descriptionRu: 'Вкусный кофейный напиток со сливочной пенкой. Согревает и бодрит.',
     effects: { thirst: 30, energy: 30, sleepiness: -25 },
@@ -912,7 +1075,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     nameRu: 'Свежий круассан',
     category: 'food',
     maxStack: 15,
-    icon: '🥐',
+    icon: '',
     description: 'Crispy and buttery French pastry.',
     descriptionRu: 'Хрустящая французская выпечка из слоеного теста.',
     effects: { hunger: 25, energy: 10 },
@@ -929,7 +1092,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     nameRu: 'Горячий куриный бульон',
     category: 'food',
     maxStack: 6,
-    icon: '🥣',
+    icon: '',
     description: 'Warming and highly nutritious soup.',
     descriptionRu: 'Питательный домашний суп. Отлично согревает.',
     effects: { hunger: 45, thirst: 15, health: 10, energy: 15 },
@@ -950,7 +1113,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     nameRu: 'Картофель фри',
     category: 'food',
     maxStack: 10,
-    icon: '🍟',
+    icon: '',
     description: 'Golden crispy potato fries with sea salt.',
     descriptionRu: 'Хрустящий золотистый картофель фри с морской солью.',
     effects: { hunger: 30, energy: 15 },
@@ -969,7 +1132,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     nameRu: 'Куриные наггетсы (6 шт)',
     category: 'food',
     maxStack: 10,
-    icon: '🍗',
+    icon: '',
     description: 'Tender chicken nuggets in crispy batter.',
     descriptionRu: 'Нежное куриное филе в хрустящей золотистой панировке.',
     effects: { hunger: 35, energy: 20 },
@@ -988,7 +1151,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     nameRu: 'Датский хот-дог',
     category: 'food',
     maxStack: 10,
-    icon: '🌭',
+    icon: '',
     description: 'Juicy sausage in a toasted bun with mustard and crispy onions.',
     descriptionRu: 'Сочная сосиска в булочке с горчицей, кетчупом и хрустящим луком.',
     effects: { hunger: 40, energy: 20 },
@@ -1007,7 +1170,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     nameRu: 'Кола Зеро (0.33L)',
     category: 'food',
     maxStack: 15,
-    icon: '🥤',
+    icon: '',
     description: 'Sugar-free refreshing iced cola soda.',
     descriptionRu: 'Освежающая газировка без сахара со льдом.',
     effects: { thirst: 28, energy: 15 },
@@ -1026,7 +1189,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     nameRu: 'Ванильный милкшейк',
     category: 'food',
     maxStack: 10,
-    icon: '🍦',
+    icon: '',
     description: 'Thick cold milkshake with real vanilla ice cream.',
     descriptionRu: 'Густой молочный коктейль с натуральным пломбиром и сливками.',
     effects: { thirst: 35, hunger: 20, energy: 25 },
@@ -1045,7 +1208,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     nameRu: 'Зеленый чай Сенча',
     category: 'food',
     maxStack: 12,
-    icon: '🍵',
+    icon: '',
     description: 'Hot fragrant green tea with antioxidants.',
     descriptionRu: 'Горячий зеленый чай с антиоксидантами. Снимает стресс и бодрит.',
     effects: { thirst: 35, energy: 15, health: 5 },
@@ -1064,7 +1227,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     nameRu: 'Пончик с розовой глазурью',
     category: 'food',
     maxStack: 15,
-    icon: '🍩',
+    icon: '',
     description: 'Fresh donut with sweet strawberry glaze and sprinkles.',
     descriptionRu: 'Пышный пончик с клубничной глазурью и цветной посыпкой.',
     effects: { hunger: 25, energy: 20 },
@@ -1083,7 +1246,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     nameRu: 'Сет роллов Филадельфия',
     category: 'food',
     maxStack: 5,
-    icon: '🍣',
+    icon: '',
     description: 'Fresh Atlantic salmon, cream cheese, sushi rice and avocado.',
     descriptionRu: 'Свежий атлантический лосось, сливочный сыр и рис. Соевый соус и имбирь.',
     effects: { hunger: 55, thirst: 10, health: 15, energy: 25 },
@@ -1102,7 +1265,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     nameRu: 'WOK-лапша с курицей Терияки',
     category: 'food',
     maxStack: 5,
-    icon: '🥡',
+    icon: '',
     description: 'Stir-fried egg noodles with vegetables, tender chicken and sweet soy glaze.',
     descriptionRu: 'Яичная лапша вок с овощами, куриным филе и сладковатым соусом терияки.',
     effects: { hunger: 60, thirst: 10, energy: 30 },
@@ -1121,7 +1284,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     nameRu: 'Спелый банан',
     category: 'food',
     maxStack: 20,
-    icon: '🍌',
+    icon: '',
     description: 'Rich in potassium and natural energy.',
     descriptionRu: 'Сладкий спелый банан. Быстро насыщает организм калием и энергией.',
     effects: { hunger: 20, energy: 15 },
@@ -1140,7 +1303,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     nameRu: 'Батон нарезной',
     category: 'food',
     maxStack: 10,
-    icon: '🍞',
+    icon: '',
     description: 'Crusty loaf of white bakery bread.',
     descriptionRu: 'Свежий мягкий белый хлеб с хрустящей корочкой.',
     effects: { hunger: 35, energy: 15 },
@@ -1159,7 +1322,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     nameRu: 'Печенье с шоколадной крошкой',
     category: 'food',
     maxStack: 15,
-    icon: '🍪',
+    icon: '',
     description: 'Sweet cookies with rich Belgian chocolate drops.',
     descriptionRu: 'Хрустящее печенье с кусочками темного шоколада.',
     effects: { hunger: 25, energy: 20 },
@@ -1178,7 +1341,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     nameRu: 'Карамельный попкорн',
     category: 'food',
     maxStack: 8,
-    icon: '🍿',
+    icon: '',
     description: 'Crispy sweet popcorn bucket from cinema snack bar.',
     descriptionRu: 'Большое ведерко сладкого попкорна в золотистой карамели.',
     effects: { hunger: 25, energy: 18 },
@@ -1197,7 +1360,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     nameRu: 'Начос с сырным соусом',
     category: 'food',
     maxStack: 8,
-    icon: '🧀',
+    icon: '',
     description: 'Crispy Mexican corn tortilla chips with warm cheddar dip.',
     descriptionRu: 'Хрустящие кукурузные чипсы начос с теплым сырным соусом чеддер.',
     effects: { hunger: 32, energy: 15 },
@@ -1218,7 +1381,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     nameRu: 'Жаропонижающее "Парацетамол"',
     category: 'medical',
     maxStack: 10,
-    icon: '🌡️',
+    icon: '',
     description: 'Reduces fever and stabilizes core body temperature.',
     descriptionRu: 'Снижает температуру, устраняет озноб и жар при простуде.',
     effects: { health: 15 },
@@ -1237,7 +1400,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     nameRu: 'Глазные капли "Чистый Взор"',
     category: 'medical',
     maxStack: 5,
-    icon: '👁️',
+    icon: '',
     description: 'Relieves eye strain and clears vision fatigue.',
     descriptionRu: 'Снимает сухость и усталость глаз, восстанавливает четкость зрения.',
     effects: { energy: 10, health: 5 },
@@ -1254,7 +1417,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     nameRu: 'Набор бактерицидных пластырей',
     category: 'medical',
     maxStack: 20,
-    icon: '🩹',
+    icon: '',
     description: 'Protective plaster for small scratches and blisters.',
     descriptionRu: 'Быстро заклеивает порезы и царапины, предотвращая попадание грязи.',
     effects: { health: 10 },
@@ -1271,7 +1434,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     nameRu: 'Электронный термометр',
     category: 'medical',
     maxStack: 2,
-    icon: '🌡️',
+    icon: '',
     description: 'Accurately measures body temperature in Celsius.',
     descriptionRu: 'Быстро измеряет точную температуру тела.',
     effects: {},
@@ -1286,7 +1449,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     nameRu: 'Повербанк 20 000 мАч',
     category: 'tool',
     maxStack: 2,
-    icon: '🔋',
+    icon: '',
     description: 'High capacity battery for charging portable devices.',
     descriptionRu: 'Портативный аккумулятор высокой емкости с быстрой зарядкой.',
     effects: {},
@@ -1299,7 +1462,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     nameRu: 'Тактические смарт-часы',
     category: 'tool',
     maxStack: 1,
-    icon: '⌚',
+    icon: '',
     description: 'Waterproof watch tracking pulse, steps, and ambient temperature.',
     descriptionRu: 'Ударопрочные часы с датчиками пульса, температуры и шагомером.',
     effects: {},
@@ -1312,7 +1475,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     nameRu: 'Рация дальнего действия',
     category: 'tool',
     maxStack: 4,
-    icon: '📻',
+    icon: '',
     description: 'Two-way radio for shortwave city communications.',
     descriptionRu: 'Портативная рация с чистым сигналом на расстоянии до 5 км.',
     effects: {},
@@ -1325,12 +1488,285 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     nameRu: 'Беспроводные наушники ANC',
     category: 'misc',
     maxStack: 1,
-    icon: '🎧',
+    icon: '',
     description: 'High-fidelity audio with active noise cancellation.',
     descriptionRu: 'Накладные наушники с активным шумоподавлением и чистым звуком.',
     effects: {},
     weight: 0.25,
     usable: false
+  },
+
+  // === SMARTPHONES & MOBILE DEVICES (ТЕЛЕФОНЫ) ===
+  smartphone: {
+    itemId: 'smartphone',
+    name: 'Aura Pro 16 Titanium',
+    nameRu: 'Смартфон Aura Pro 16',
+    category: 'electronics',
+    maxStack: 1,
+    icon: '',
+    description: 'Flagship smartphone with 512GB storage, Bionic CPU, and high-res OLED display.',
+    descriptionRu: 'Флагманский титановый смартфон с накопителем 512 ГБ, процессором Bionic и OLED-экраном 120 Гц.',
+    effects: {},
+    weight: 0.22,
+    volume: 0.18,
+    usable: true
+  },
+  // 1. Aura Pro 16 Series
+  phone_aura_pro_black: {
+    itemId: 'phone_aura_pro_black',
+    name: 'Aura Pro 16 (Space Black)',
+    nameRu: 'Aura Pro 16 «Титановый Чёрный»',
+    category: 'electronics',
+    maxStack: 1,
+    icon: '',
+    description: 'Aura Pro 16 Titanium Space Black (512GB / 12GB RAM / Bionic A18 / 4685mAh).',
+    descriptionRu: 'Aura Pro 16 в черном титановом корпусе (512 ГБ ПЗУ / 12 ГБ ОЗУ / Bionic A18 / 4685 мА·ч).',
+    effects: {},
+    weight: 0.22,
+    volume: 0.18,
+    usable: true
+  },
+  phone_aura_pro_gold: {
+    itemId: 'phone_aura_pro_gold',
+    name: 'Aura Pro 16 (Desert Titanium)',
+    nameRu: 'Aura Pro 16 «Пустынный Титан»',
+    category: 'electronics',
+    maxStack: 1,
+    icon: '',
+    description: 'Aura Pro 16 Desert Titanium (512GB / 12GB RAM / Bionic A18 / 4685mAh).',
+    descriptionRu: 'Aura Pro 16 в золотисто-песочном титане (512 ГБ ПЗУ / 12 ГБ ОЗУ / Bionic A18 / 4685 мА·ч).',
+    effects: {},
+    weight: 0.22,
+    volume: 0.18,
+    usable: true
+  },
+  phone_aura_pro_titanium: {
+    itemId: 'phone_aura_pro_titanium',
+    name: 'Aura Pro 16 (Natural Titanium)',
+    nameRu: 'Aura Pro 16 «Натуральный Титан»',
+    category: 'electronics',
+    maxStack: 1,
+    icon: '',
+    description: 'Aura Pro 16 Natural Titanium (512GB / 12GB RAM / Bionic A18 / 4685mAh).',
+    descriptionRu: 'Aura Pro 16 в классическом сером титане (512 ГБ ПЗУ / 12 ГБ ОЗУ / Bionic A18 / 4685 мА·ч).',
+    effects: {},
+    weight: 0.22,
+    volume: 0.18,
+    usable: true
+  },
+  phone_aura_pro_blue: {
+    itemId: 'phone_aura_pro_blue',
+    name: 'Aura Pro 16 (Deep Marine Blue)',
+    nameRu: 'Aura Pro 16 «Глубокий Синий»',
+    category: 'electronics',
+    maxStack: 1,
+    icon: '',
+    description: 'Aura Pro 16 Deep Marine Blue (512GB / 12GB RAM / Bionic A18 / 4685mAh).',
+    descriptionRu: 'Aura Pro 16 в глубоком синем сапфировом титане (512 ГБ ПЗУ / 12 ГБ ОЗУ / Bionic A18 / 4685 мА·ч).',
+    effects: {},
+    weight: 0.22,
+    volume: 0.18,
+    usable: true
+  },
+  // 2. Quantum Ultra S25 Series
+  phone_quantum_black: {
+    itemId: 'phone_quantum_black',
+    name: 'Quantum Ultra S25 (Phantom Black)',
+    nameRu: 'Quantum Ultra S25 «Фантомный Графит»',
+    category: 'electronics',
+    maxStack: 1,
+    icon: '',
+    description: 'Quantum Ultra S25 Phantom Black (512GB / 16GB RAM / Snapdragon 8 Elite / 5300mAh).',
+    descriptionRu: 'Quantum Ultra S25 в черном матовом стекле (512 ГБ ПЗУ / 16 ГБ ОЗУ / Snapdragon 8 Elite / 5300 мА·ч).',
+    effects: {},
+    weight: 0.23,
+    volume: 0.19,
+    usable: true
+  },
+  phone_quantum_silver: {
+    itemId: 'phone_quantum_silver',
+    name: 'Quantum Ultra S25 (Titanium Silver)',
+    nameRu: 'Quantum Ultra S25 «Титановое Серебро»',
+    category: 'electronics',
+    maxStack: 1,
+    icon: '',
+    description: 'Quantum Ultra S25 Titanium Silver (512GB / 16GB RAM / Snapdragon 8 Elite / 5300mAh).',
+    descriptionRu: 'Quantum Ultra S25 в полированном серебре (512 ГБ ПЗУ / 16 ГБ ОЗУ / Snapdragon 8 Elite / 5300 мА·ч).',
+    effects: {},
+    weight: 0.23,
+    volume: 0.19,
+    usable: true
+  },
+  phone_quantum_emerald: {
+    itemId: 'phone_quantum_emerald',
+    name: 'Quantum Ultra S25 (Emerald Jade)',
+    nameRu: 'Quantum Ultra S25 «Изумрудный Нефрит»',
+    category: 'electronics',
+    maxStack: 1,
+    icon: '',
+    description: 'Quantum Ultra S25 Emerald Jade (512GB / 16GB RAM / Snapdragon 8 Elite / 5300mAh).',
+    descriptionRu: 'Quantum Ultra S25 в благородном изумрудно-зеленом цвете (512 ГБ ПЗУ / 16 ГБ ОЗУ / 5300 мА·ч).',
+    effects: {},
+    weight: 0.23,
+    volume: 0.19,
+    usable: true
+  },
+  phone_quantum_violet: {
+    itemId: 'phone_quantum_violet',
+    name: 'Quantum Ultra S25 (Amethyst Violet)',
+    nameRu: 'Quantum Ultra S25 «Аметистовый Шёлк»',
+    category: 'electronics',
+    maxStack: 1,
+    icon: '',
+    description: 'Quantum Ultra S25 Amethyst Violet (512GB / 16GB RAM / Snapdragon 8 Elite / 5300mAh).',
+    descriptionRu: 'Quantum Ultra S25 в переливающемся аметистовом шелке (512 ГБ ПЗУ / 16 ГБ ОЗУ / 5300 мА·ч).',
+    effects: {},
+    weight: 0.23,
+    volume: 0.19,
+    usable: true
+  },
+  // 3. Pixel Nova 9 Series
+  phone_pixel_obsidian: {
+    itemId: 'phone_pixel_obsidian',
+    name: 'Pixel Nova 9 (Obsidian)',
+    nameRu: 'Pixel Nova 9 «Обсидиан»',
+    category: 'electronics',
+    maxStack: 1,
+    icon: '',
+    description: 'Pixel Nova 9 Obsidian (256GB / 12GB RAM / Tensor G4 AI / 4850mAh).',
+    descriptionRu: 'Pixel Nova 9 в обсидиановом черном стекле с визором (256 ГБ ПЗУ / 12 ГБ ОЗУ / Tensor G4 / 4850 мА·ч).',
+    effects: {},
+    weight: 0.20,
+    volume: 0.17,
+    usable: true
+  },
+  phone_pixel_porcelain: {
+    itemId: 'phone_pixel_porcelain',
+    name: 'Pixel Nova 9 (Porcelain White)',
+    nameRu: 'Pixel Nova 9 «Фарфор»',
+    category: 'electronics',
+    maxStack: 1,
+    icon: '',
+    description: 'Pixel Nova 9 Porcelain White (256GB / 12GB RAM / Tensor G4 AI / 4850mAh).',
+    descriptionRu: 'Pixel Nova 9 в белом фарфоровом исполнении (256 ГБ ПЗУ / 12 ГБ ОЗУ / Tensor G4 / 4850 мА·ч).',
+    effects: {},
+    weight: 0.20,
+    volume: 0.17,
+    usable: true
+  },
+  phone_pixel_hazel: {
+    itemId: 'phone_pixel_hazel',
+    name: 'Pixel Nova 9 (Hazel Green)',
+    nameRu: 'Pixel Nova 9 «Ореховый Шалфей»',
+    category: 'electronics',
+    maxStack: 1,
+    icon: '',
+    description: 'Pixel Nova 9 Hazel Green (256GB / 12GB RAM / Tensor G4 AI / 4850mAh).',
+    descriptionRu: 'Pixel Nova 9 в оливково-шалфейном цвете (256 ГБ ПЗУ / 12 ГБ ОЗУ / Tensor G4 / 4850 мА·ч).',
+    effects: {},
+    weight: 0.20,
+    volume: 0.17,
+    usable: true
+  },
+  phone_pixel_rose: {
+    itemId: 'phone_pixel_rose',
+    name: 'Pixel Nova 9 (Rose Quartz)',
+    nameRu: 'Pixel Nova 9 «Розовый Кварц»',
+    category: 'electronics',
+    maxStack: 1,
+    icon: '',
+    description: 'Pixel Nova 9 Rose Quartz (256GB / 12GB RAM / Tensor G4 AI / 4850mAh).',
+    descriptionRu: 'Pixel Nova 9 в кварцево-розовом нежном оттенке (256 ГБ ПЗУ / 12 ГБ ОЗУ / Tensor G4 / 4850 мА·ч).',
+    effects: {},
+    weight: 0.20,
+    volume: 0.17,
+    usable: true
+  },
+  // 4. CyberPhone Mech-X Series
+  phone_cyber_dark: {
+    itemId: 'phone_cyber_dark',
+    name: 'CyberPhone Mech-X (Cyber Dark)',
+    nameRu: 'CyberPhone Mech-X «Кибер-Графит»',
+    category: 'electronics',
+    maxStack: 1,
+    icon: '',
+    description: 'CyberPhone Mech-X Cyber Dark (1024GB / 24GB RAM / Dimensity 9400 / 6600mAh).',
+    descriptionRu: 'Игровой флагман CyberPhone Mech-X в кибер-графите с подсветкой (1 ТБ ПЗУ / 24 ГБ ОЗУ / 6600 мА·ч).',
+    effects: {},
+    weight: 0.25,
+    volume: 0.21,
+    usable: true
+  },
+  phone_cyber_white: {
+    itemId: 'phone_cyber_white',
+    name: 'CyberPhone Mech-X (Mecha White)',
+    nameRu: 'CyberPhone Mech-X «Меха-Белый»',
+    category: 'electronics',
+    maxStack: 1,
+    icon: '',
+    description: 'CyberPhone Mech-X Mecha White (1024GB / 24GB RAM / Dimensity 9400 / 6600mAh).',
+    descriptionRu: 'CyberPhone Mech-X в стиле научно-фантастических роботов меха (1 ТБ ПЗУ / 24 ГБ ОЗУ / 6600 мА·ч).',
+    effects: {},
+    weight: 0.25,
+    volume: 0.21,
+    usable: true
+  },
+  phone_cyber_neon: {
+    itemId: 'phone_cyber_neon',
+    name: 'CyberPhone Mech-X (Neon Volt)',
+    nameRu: 'CyberPhone Mech-X «Неоновый Электрик»',
+    category: 'electronics',
+    maxStack: 1,
+    icon: '',
+    description: 'CyberPhone Mech-X Neon Volt (1024GB / 24GB RAM / Dimensity 9400 / 6600mAh).',
+    descriptionRu: 'CyberPhone Mech-X в сине-желтом неоновом корпусе (1 ТБ ПЗУ / 24 ГБ ОЗУ / 6600 мА·ч).',
+    effects: {},
+    weight: 0.25,
+    volume: 0.21,
+    usable: true
+  },
+  // 5. Neo Compact Series
+  phone_compact_navy: {
+    itemId: 'phone_compact_navy',
+    name: 'Neo Compact 5G (Matte Navy)',
+    nameRu: 'Neo Compact «Морской Индиго»',
+    category: 'electronics',
+    maxStack: 1,
+    icon: '',
+    description: 'Neo Compact 5G Matte Navy (128GB / 8GB RAM / Helio G99 / 3800mAh).',
+    descriptionRu: 'Компактный смартфон Neo Compact в глубоком матовом синем цвете (128 ГБ ПЗУ / 8 ГБ ОЗУ / 3800 мА·ч).',
+    effects: {},
+    weight: 0.17,
+    volume: 0.15,
+    usable: true
+  },
+  phone_compact_gray: {
+    itemId: 'phone_compact_gray',
+    name: 'Neo Compact 5G (Storm Gray)',
+    nameRu: 'Neo Compact «Штормовой Базальт»',
+    category: 'electronics',
+    maxStack: 1,
+    icon: '',
+    description: 'Neo Compact 5G Storm Gray (128GB / 8GB RAM / Helio G99 / 3800mAh).',
+    descriptionRu: 'Neo Compact в ударопрочном корпусе цвета мокрого асфальта (128 ГБ ПЗУ / 8 ГБ ОЗУ / 3800 мА·ч).',
+    effects: {},
+    weight: 0.17,
+    volume: 0.15,
+    usable: true
+  },
+  phone_compact_coral: {
+    itemId: 'phone_compact_coral',
+    name: 'Neo Compact 5G (Bright Coral)',
+    nameRu: 'Neo Compact «Солнечный Коралл»',
+    category: 'electronics',
+    maxStack: 1,
+    icon: '',
+    description: 'Neo Compact 5G Bright Coral (128GB / 8GB RAM / Helio G99 / 3800mAh).',
+    descriptionRu: 'Neo Compact в ярком теплом коралловом цвете (128 ГБ ПЗУ / 8 ГБ ОЗУ / 3800 мА·ч).',
+    effects: {},
+    weight: 0.17,
+    volume: 0.15,
+    usable: true
   },
 
   // === NEW CLOTHING & GEAR ===
@@ -1340,7 +1776,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     nameRu: 'Кроссовки "Urban Sprint"',
     category: 'clothing',
     maxStack: 1,
-    icon: '👟',
+    icon: '',
     description: 'Lightweight cushioned shoes for fast sprinting and comfort.',
     descriptionRu: 'Легкие кроссовки с амортизацией для быстрого бега по асфальту.',
     effects: {},
@@ -1353,7 +1789,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     nameRu: 'Поляризационные очки',
     category: 'misc',
     maxStack: 2,
-    icon: '🕶️',
+    icon: '',
     description: 'Protects vision from harsh sunlight and glare.',
     descriptionRu: 'Стильные темные очки с защитой от ультрафиолета и бликов.',
     effects: {},
@@ -1366,7 +1802,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     nameRu: 'Городской рюкзак (35L)',
     category: 'clothing',
     maxStack: 1,
-    icon: '🎒',
+    icon: '',
     description: 'Heavy duty waterproof backpack with reinforced straps.',
     descriptionRu: 'Вместительный прочный рюкзак с водоотталкивающей пропиткой.',
     effects: {},
@@ -1384,7 +1820,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     nameRu: 'Армейский сухпай (ИРП)',
     category: 'food',
     maxStack: 4,
-    icon: '🍱',
+    icon: '',
     description: 'Complete balanced combat ration with entrees, crackers and sweets.',
     descriptionRu: 'Сбалансированный армейский рацион питания: тушеное мясо, галеты, чай и джем.',
     effects: { hunger: 85, thirst: 30, health: 20, energy: 50 },
@@ -1403,7 +1839,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     nameRu: 'Бензиновая зажигалка Zippo',
     category: 'tool',
     maxStack: 2,
-    icon: '🔥',
+    icon: '',
     description: 'Reliable windproof flint lighter with metal flip top. Can ignite fuel, oil puddles or leaks (30 uses).',
     descriptionRu: 'Надежная бензиновая зажигалка (30 использования). Позволяет поджигать пролитый бензин, масло и горючие подтёки.',
     effects: {},
@@ -1412,15 +1848,14 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     biteCount: 30,
     biteDuration: 0.3,
     leftoverId: 'zippo_empty',
-    leftoverNameRu: 'Пустая зажигалка Zippo'
-  },
+    leftoverNameRu: 'Пустая зажигалка Zippo'},
   zippo_empty: {
     itemId: 'zippo_empty',
     name: 'Empty Zippo Lighter',
     nameRu: 'Пустая зажигалка Zippo',
     category: 'misc',
     maxStack: 5,
-    icon: '🔥',
+    icon: '',
     description: 'Zippo lighter out of fuel and flint.',
     descriptionRu: 'Пустая зажигалка Zippo без бензина и кремня.',
     effects: {},
@@ -1433,7 +1868,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     nameRu: 'Канистра с бензином (20л)',
     category: 'tool',
     maxStack: 1,
-    icon: '⛽',
+    icon: '',
     description: 'Heavy metal canister filled with A-95 gasoline (20L). Heavy and bulky: must be carried in hand or vehicle trunk.',
     descriptionRu: 'Тяжелая металлическая канистра с бензином АИ-95 (20л). Слишком крупная для рюкзака — переносится в руке.',
     effects: {},
@@ -1443,15 +1878,14 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     biteCount: 20,
     biteDuration: 0.3,
     leftoverId: 'canister_empty',
-    leftoverNameRu: 'Пустая канистра (20л)'
-  },
+    leftoverNameRu: 'Пустая канистра (20л)'},
   canister_empty: {
     itemId: 'canister_empty',
     name: 'Empty Canister (20L)',
     nameRu: 'Пустая канистра (20л)',
     category: 'misc',
     maxStack: 1,
-    icon: '🛢️',
+    icon: '',
     description: 'Empty 20-liter metal canister. Bulky item carried in hand. Can be filled from cisterns or fuel tanks.',
     descriptionRu: 'Пустая металлическая 20-литровая канистра. Можно наполнить из цистерны или бака.',
     effects: {},
@@ -1465,7 +1899,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     nameRu: 'Мешок песка (1 кг)',
     category: 'tool',
     maxStack: 5,
-    icon: '⏳',
+    icon: '',
     description: 'Burlap sack with 1 kg of silica sand. Extinguishes small flames and absorbs fuel, oil, and antifreeze spills.',
     descriptionRu: 'Мешок с просеянным песком (1 кг). При активации рассыпает песок перед собой, высушивая пятна бензина, масла, антифриза и туша пламя.',
     effects: {},
@@ -1473,21 +1907,34 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     volume: 0.8,
     usable: true,
     leftoverId: 'sack_empty',
-    leftoverNameRu: 'Пустой мешок'
-  },
+    leftoverNameRu: 'Пустой мешок'},
   sack_empty: {
     itemId: 'sack_empty',
     name: 'Empty Sack',
     nameRu: 'Пустой мешок',
     category: 'tool',
     maxStack: 10,
-    icon: '🎒',
-    description: 'Empty heavy canvas burlap bag. Light and durable. Used for storage or as scrap canvas.',
-    descriptionRu: 'Прочный пустой мешок из сурового брезента. Легкий и надежный.',
+    icon: '',
+    description: 'Empty heavy canvas burlap bag. Light and durable. Used for storage, scrap canvas, or choking engine air intake.',
+    descriptionRu: 'Прочный пустой мешок из сурового брезента. Легкий и надежный. Можно применить для перекрытия воздухозаборника дизеля.',
     effects: {},
     weight: 0.15,
     volume: 0.3,
-    usable: false
+    usable: true
+  },
+  rag: {
+    itemId: 'rag',
+    name: 'Oily Shop Rag',
+    nameRu: 'Автомобильная ветошь (Тряпка)',
+    category: 'tool',
+    maxStack: 10,
+    icon: '',
+    description: 'Dense canvas rag. Used for wiping oil, cleaning engine parts, or choking air intake during diesel runaway.',
+    descriptionRu: 'Плотная ветошь. Используется для протирки масла, чистки запчастей и перекрытия воздухозаборника дизеля в разносе.',
+    effects: {},
+    weight: 0.1,
+    volume: 0.2,
+    usable: true
   },
   camp_flask: {
     itemId: 'camp_flask',
@@ -1495,7 +1942,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     nameRu: 'Стальная фляга (0.75L)',
     category: 'food',
     maxStack: 2,
-    icon: '🍶',
+    icon: '',
     description: 'Durable metal flask filled with pure mountain water.',
     descriptionRu: 'Надежная металлическая фляга с чистой родниковой водой.',
     effects: { thirst: 50, energy: 10 },
@@ -1514,7 +1961,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     nameRu: 'Тактический компас',
     category: 'tool',
     maxStack: 2,
-    icon: '🧭',
+    icon: '',
     description: 'Liquid-filled compass for precise geographic navigation.',
     descriptionRu: 'Жидкостный компас для точного ориентирования на местности.',
     effects: {},
@@ -1527,7 +1974,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     nameRu: 'Спальный мешок (-15°C)',
     category: 'misc',
     maxStack: 1,
-    icon: '🛌',
+    icon: '',
     description: 'Compact roll-up sleeping bag for cold weather shelter.',
     descriptionRu: 'Теплый походный спальник с защитой от сырости и заморозков.',
     effects: {},
@@ -1540,7 +1987,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     nameRu: 'Путеводитель по городу',
     category: 'misc',
     maxStack: 5,
-    icon: '📖',
+    icon: '',
     description: 'Detailed tourist handbook with city landmarks and streets.',
     descriptionRu: 'Глянцевый справочник с картой ключевых мест и описанием кварталов.',
     effects: {},
@@ -1553,7 +2000,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     nameRu: 'Блокнот для заметок',
     category: 'misc',
     maxStack: 10,
-    icon: '📓',
+    icon: '',
     description: 'Blank lined paper notebook for journal records.',
     descriptionRu: 'Компактный блокнот в плотной обложке для записей.',
     effects: {},
@@ -1566,7 +2013,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     nameRu: 'Шариковая ручка',
     category: 'misc',
     maxStack: 20,
-    icon: '🖊️',
+    icon: '',
     description: 'Blue ink smooth ballpoint pen.',
     descriptionRu: 'Классическая шариковая ручка с синей пастой.',
     effects: {},
@@ -1581,7 +2028,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     nameRu: 'Канистра антифриза G12+',
     category: 'auto',
     maxStack: 2,
-    icon: '🛢️',
+    icon: '',
     description: 'High performance engine coolant prevents overheating and freezing.',
     descriptionRu: 'Охлаждающая жидкость для радиатора. Предотвращает перегрев двигателя.',
     effects: {},
@@ -1594,7 +2041,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     nameRu: 'Пустая канистра от антифриза',
     category: 'misc',
     maxStack: 4,
-    icon: '🛢️',
+    icon: '',
     description: 'Empty plastic canister for G12+ antifreeze.',
     descriptionRu: 'Пустая пластиковая канистра из-под антифриза.',
     effects: {},
@@ -1607,7 +2054,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     nameRu: 'Пустая канистра из-под масла',
     category: 'misc',
     maxStack: 4,
-    icon: '🛢️',
+    icon: '',
     description: 'Empty plastic canister from engine oil.',
     descriptionRu: 'Пустая пластиковая канистра из-под моторного масла.',
     effects: {},
@@ -1620,12 +2067,12 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     nameRu: 'Буксировочный трос 5т',
     category: 'tool',
     maxStack: 2,
-    icon: '🪢',
+    icon: '',
     description: 'Heavy duty strap with steel carabiners for emergency vehicle recovery.',
     descriptionRu: 'Прочный капроновый трос со стальными крюками для эвакуации авто.',
     effects: {},
     weight: 0.9,
-    usable: false
+    usable: true
   },
 
   // === LEFTOVERS (ОСТАТКИ ПОСЛЕ ЕДЫ) ===
@@ -1635,7 +2082,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     nameRu: 'Банановая кожура',
     category: 'misc',
     maxStack: 20,
-    icon: '🍌',
+    icon: '',
     description: 'Slippery yellow banana peel. Throw into trash bin.',
     descriptionRu: 'Скользкая банановая кожура. Выбросьте в урну.',
     effects: {},
@@ -1648,7 +2095,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     nameRu: 'Коробочка от картошки фри',
     category: 'misc',
     maxStack: 20,
-    icon: '🍟',
+    icon: '',
     description: 'Red cardboard fries container.',
     descriptionRu: 'Пустая красная картонная коробочка от картофеля фри.',
     effects: {},
@@ -1661,7 +2108,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     nameRu: 'Пустой стакан от коктейля',
     category: 'misc',
     maxStack: 20,
-    icon: '🥤',
+    icon: '',
     description: 'Clear plastic cup with domed lid and straw.',
     descriptionRu: 'Прозрачный пластиковый стаканчик с купольной крышкой и соломинкой.',
     effects: {},
@@ -1674,7 +2121,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     nameRu: 'Ведерко от попкорна',
     category: 'misc',
     maxStack: 20,
-    icon: '🍿',
+    icon: '',
     description: 'Striped cardboard cinema popcorn bucket.',
     descriptionRu: 'Полосатое картонное ведерко из-под попкорна.',
     effects: {},
@@ -1687,7 +2134,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     nameRu: 'Пустая коробочка ВОК',
     category: 'misc',
     maxStack: 20,
-    icon: '🥡',
+    icon: '',
     description: 'Empty Chinese food container with wooden chopsticks.',
     descriptionRu: 'Пустая картонная коробочка вок с деревянными палочками.',
     effects: {},
@@ -1700,7 +2147,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     nameRu: 'Пустая упаковка сухпайка',
     category: 'misc',
     maxStack: 10,
-    icon: '🍱',
+    icon: '',
     description: 'Discarded green military ration container.',
     descriptionRu: 'Пустая зеленая полимерная упаковка от армейского сухого пайка.',
     effects: {},
@@ -1713,7 +2160,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     nameRu: 'Огрызок яблока',
     category: 'misc',
     maxStack: 20,
-    icon: '🍎',
+    icon: '',
     description: 'Brown oxidized apple core. Throw in trash.',
     descriptionRu: 'Бурый окислившийся огрызок. Выбросьте в урну.',
     effects: {},
@@ -1726,7 +2173,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     nameRu: 'Обёртка от бургера',
     category: 'misc',
     maxStack: 20,
-    icon: '🍔',
+    icon: '',
     description: 'Greasy paper wrapper from a cheeseburger.',
     descriptionRu: 'Жирная бумажная обёртка от чизбургера.',
     effects: {},
@@ -1739,7 +2186,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     nameRu: 'Бумажная тарелка',
     category: 'misc',
     maxStack: 20,
-    icon: '🍽️',
+    icon: '',
     description: 'Greasy paper plate with pizza crumbs.',
     descriptionRu: 'Жирная бумажная тарелка с крошками пиццы.',
     effects: {},
@@ -1752,7 +2199,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     nameRu: 'Пакет от сэндвича',
     category: 'misc',
     maxStack: 20,
-    icon: '🥪',
+    icon: '',
     description: 'Empty plastic sandwich bag.',
     descriptionRu: 'Пустой пластиковый пакет из-под сэндвича.',
     effects: {},
@@ -1765,7 +2212,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     nameRu: 'Фольга от шоколада',
     category: 'misc',
     maxStack: 20,
-    icon: '🍫',
+    icon: '',
     description: 'Torn foil wrapper from a chocolate bar.',
     descriptionRu: 'Рваная фольга от шоколадного батончика.',
     effects: {},
@@ -1778,7 +2225,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     nameRu: 'Пустой пакет от чипсов',
     category: 'misc',
     maxStack: 20,
-    icon: '🥔',
+    icon: '',
     description: 'Crinkled empty potato chips bag.',
     descriptionRu: 'Мятый пустой пакет от картофельных чипсов.',
     effects: {},
@@ -1791,7 +2238,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     nameRu: 'Пустая жестяная банка',
     category: 'misc',
     maxStack: 20,
-    icon: '🥫',
+    icon: '',
     description: 'Empty crushed tin can.',
     descriptionRu: 'Пустая сплющенная жестяная банка.',
     effects: {},
@@ -1804,7 +2251,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     nameRu: 'Пустая пластиковая бутылка',
     category: 'misc',
     maxStack: 20,
-    icon: '💧',
+    icon: '',
     description: 'Empty clear plastic water bottle.',
     descriptionRu: 'Пустая прозрачная пластиковая бутылка.',
     effects: {},
@@ -1817,7 +2264,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     nameRu: 'Одноразовый стаканчик',
     category: 'misc',
     maxStack: 20,
-    icon: '☕',
+    icon: '',
     description: 'Empty paper coffee cup.',
     descriptionRu: 'Пустой бумажный стаканчик из-под кофе.',
     effects: {},
@@ -1830,7 +2277,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     nameRu: 'Пустой пакетик от сока',
     category: 'misc',
     maxStack: 20,
-    icon: '🧃',
+    icon: '',
     description: 'Empty tetra pak juice container.',
     descriptionRu: 'Пустой тетрапак от апельсинового сока.',
     effects: {},
@@ -1843,7 +2290,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     nameRu: 'Блистер из-под таблеток',
     category: 'misc',
     maxStack: 20,
-    icon: '💊',
+    icon: '',
     description: 'Empty medicine blister pack.',
     descriptionRu: 'Пустой блистер из-под лекарства.',
     effects: {},
@@ -1856,7 +2303,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     nameRu: 'Банка из-под тушёнки',
     category: 'misc',
     maxStack: 20,
-    icon: '🥫',
+    icon: '',
     description: 'Empty tin can with curled lid.',
     descriptionRu: 'Пустая жестяная консервная банка с отогнутой крышкой.',
     effects: {},
@@ -1869,7 +2316,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     nameRu: 'Смятая банка Колы Зеро',
     category: 'misc',
     maxStack: 20,
-    icon: '🥤',
+    icon: '',
     description: 'Crushed black aluminum cola can.',
     descriptionRu: 'Смятая черная алюминиевая банка из-под диетической колы.',
     effects: {},
@@ -1882,7 +2329,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     nameRu: 'Смятая банка энергетика',
     category: 'misc',
     maxStack: 20,
-    icon: '⚡',
+    icon: '',
     description: 'Crushed navy energy drink can with open pull tab.',
     descriptionRu: 'Смятая синяя банка из-под энергетического напитка.',
     effects: {},
@@ -1895,7 +2342,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     nameRu: 'Пустая стальная фляга',
     category: 'misc',
     maxStack: 5,
-    icon: '🍶',
+    icon: '',
     description: 'Empty stainless steel hip flask with dangling cap.',
     descriptionRu: 'Пустая походная металлическая фляга с отвинченной крышкой.',
     effects: {},
@@ -1908,7 +2355,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     nameRu: 'Пустая суповая тарелка',
     category: 'misc',
     maxStack: 10,
-    icon: '🥣',
+    icon: '',
     description: 'Empty ceramic bowl with spoon and broth sheen.',
     descriptionRu: 'Пустая глубокая тарелка из-под горячего бульона с ложкой.',
     effects: {},
@@ -1921,7 +2368,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     nameRu: 'Обёртка от хот-дога',
     category: 'misc',
     maxStack: 20,
-    icon: '🌭',
+    icon: '',
     description: 'Paper food boat with mustard smear.',
     descriptionRu: 'Бумажный лоток из-под хот-дога со следами горчицы.',
     effects: {},
@@ -1934,7 +2381,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     nameRu: 'Пустой лоток от суши',
     category: 'misc',
     maxStack: 15,
-    icon: '🍱',
+    icon: '',
     description: 'Black sushi bento tray with decorative grass divider.',
     descriptionRu: 'Черный лоток из-под роллов с зеленой перегородкой и следами соевого соуса.',
     effects: {},
@@ -1947,7 +2394,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     nameRu: 'Лоток из-под начос',
     category: 'misc',
     maxStack: 20,
-    icon: '🧀',
+    icon: '',
     description: 'Cardboard boat with cheese dip residue.',
     descriptionRu: 'Картонный лоток из-под чипсов начос с пустым соусником.',
     effects: {},
@@ -1960,7 +2407,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     nameRu: 'Пустая баночка от витаминов',
     category: 'misc',
     maxStack: 20,
-    icon: '🧪',
+    icon: '',
     description: 'Empty amber pill bottle with open cap.',
     descriptionRu: 'Пустая янтарная пластиковая баночка из-под поливитаминов.',
     effects: {},
@@ -1973,7 +2420,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     nameRu: 'Пустой флакон антисептика',
     category: 'misc',
     maxStack: 20,
-    icon: '🧴',
+    icon: '',
     description: 'Depleted green antiseptic spray bottle.',
     descriptionRu: 'Пустой зеленый флакон с распылителем от антисептика.',
     effects: {},
@@ -1986,7 +2433,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     nameRu: 'Пустая коробка аптечки',
     category: 'misc',
     maxStack: 6,
-    icon: '🧰',
+    icon: '',
     description: 'Open plastic medical emergency case with empty compartments.',
     descriptionRu: 'Пустой красный пластиковый кейс автомобильной аптечки.',
     effects: {},
@@ -2000,7 +2447,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     nameRu: 'Туристический нож',
     category: 'tool',
     maxStack: 2,
-    icon: '🔪',
+    icon: '',
     description: 'Stainless steel folding utility knife.',
     descriptionRu: 'Складной нож из нержавеющей стали для хозяйственных нужд.',
     effects: {},
@@ -2013,7 +2460,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     nameRu: 'Термокуртка "Arctix"',
     category: 'clothing',
     maxStack: 1,
-    icon: '🧥',
+    icon: '',
     description: 'Heavy duty windproof and insulated coat to keep you warm.',
     descriptionRu: 'Плотная ветрозащитная куртка с утеплителем для защиты от холода.',
     effects: {},
@@ -2026,11 +2473,260 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     nameRu: 'Армированный скотч',
     category: 'tool',
     maxStack: 10,
-    icon: '🩹',
+    icon: '',
     description: 'Strong reinforced adhesive tape for quick fixes.',
     descriptionRu: 'Прочный армированный скотч для быстрого ремонта подручных вещей.',
     effects: {},
     weight: 0.15,
+    usable: true
+  },
+
+  // === FURNITURE (МЕБЕЛЬ ДЛЯ КВАРТИРЫ) ===
+  furn_chair: {
+    itemId: 'furn_chair',
+    name: 'Chair',
+    nameRu: 'Стул',
+    category: 'furniture' as any,
+    maxStack: 5,
+    icon: '',
+    description: 'A wooden chair for your home.',
+    descriptionRu: 'Деревянный стул со спинкой. Можно установить в своей квартире.',
+    effects: {},
+    weight: 3.5,
+    usable: true
+  },
+  furn_table: {
+    itemId: 'furn_table',
+    name: 'Table',
+    nameRu: 'Обеденный стол',
+    category: 'furniture' as any,
+    maxStack: 2,
+    icon: '',
+    description: 'A wooden dining table.',
+    descriptionRu: 'Деревянный обеденный стол для кухни или гостиной.',
+    effects: {},
+    weight: 12.0,
+    usable: true
+  },
+  furn_sofa: {
+    itemId: 'furn_sofa',
+    name: 'Sofa',
+    nameRu: 'Мягкий диван',
+    category: 'furniture' as any,
+    maxStack: 1,
+    icon: '',
+    description: 'Comfortable two-seater sofa.',
+    descriptionRu: 'Уютный мягкий диван для отдыха в квартире.',
+    effects: {},
+    weight: 25.0,
+    usable: true
+  },
+  furn_bed: {
+    itemId: 'furn_bed',
+    name: 'Double Bed',
+    nameRu: 'Двуспальная кровать',
+    category: 'furniture' as any,
+    maxStack: 1,
+    icon: '',
+    description: 'A comfortable bed with soft mattress.',
+    descriptionRu: 'Удобная двуспальная кровать с мягким матрасом.',
+    effects: {},
+    weight: 35.0,
+    usable: true
+  },
+  furn_fridge: {
+    itemId: 'furn_fridge',
+    name: 'Refrigerator',
+    nameRu: 'Холодильник',
+    category: 'furniture' as any,
+    maxStack: 1,
+    icon: '',
+    description: 'Two-compartment home refrigerator.',
+    descriptionRu: 'Двухкамерный бытовой холодильник для хранения продуктов.',
+    effects: {},
+    weight: 45.0,
+    usable: true
+  },
+  furn_tv: {
+    itemId: 'furn_tv',
+    name: 'TV',
+    nameRu: 'Телевизор',
+    category: 'furniture' as any,
+    maxStack: 1,
+    icon: '',
+    description: 'Modern LCD television.',
+    descriptionRu: 'Современный ЖК-телевизор для квартиры.',
+    effects: {},
+    weight: 8.0,
+    usable: true
+  },
+  furn_shelf: {
+    itemId: 'furn_shelf',
+    name: 'Bookshelf / Rack',
+    nameRu: 'Книжный стеллаж',
+    category: 'furniture' as any,
+    maxStack: 2,
+    icon: '',
+    description: 'Open storage rack for books and items.',
+    descriptionRu: 'Вместительный открытый стеллаж для вещей и книг.',
+    effects: {},
+    weight: 15.0,
+    usable: true
+  },
+  furn_plant: {
+    itemId: 'furn_plant',
+    name: 'Houseplant',
+    nameRu: 'Комнатное растение',
+    category: 'furniture' as any,
+    maxStack: 5,
+    icon: '',
+    description: 'A decorative houseplant in ceramic pot.',
+    descriptionRu: 'Декоративное комнатное растение в керамическом горшке.',
+    effects: {},
+    weight: 4.0,
+    usable: true
+  },
+  furn_wardrobe: {
+    itemId: 'furn_wardrobe',
+    name: 'Wardrobe',
+    nameRu: 'Платяной шкаф',
+    category: 'furniture' as any,
+    maxStack: 1,
+    icon: '',
+    description: 'Large wooden wardrobe for storing clothes and gear.',
+    descriptionRu: 'Вместительный платяной шкаф для одежды и вещей.',
+    effects: {},
+    weight: 35.0,
+    usable: true
+  },
+  furn_nightstand: {
+    itemId: 'furn_nightstand',
+    name: 'Nightstand',
+    nameRu: 'Прикроватная тумбочка',
+    category: 'furniture' as any,
+    maxStack: 2,
+    icon: '',
+    description: 'Compact bedside nightstand with a drawer.',
+    descriptionRu: 'Компактная прикроватная тумбочка с выдвижным ящиком.',
+    effects: {},
+    weight: 8.0,
+    usable: true
+  },
+  furn_kitchen_counter: {
+    itemId: 'furn_kitchen_counter',
+    name: 'Kitchen Counter',
+    nameRu: 'Кухонный гарнитур',
+    category: 'furniture' as any,
+    maxStack: 1,
+    icon: '',
+    description: 'Modular kitchen counter with cabinets.',
+    descriptionRu: 'Кухонный гарнитур со столешницей и вместительными шкафчиками.',
+    effects: {},
+    weight: 30.0,
+    usable: true
+  },
+  furn_tv_cabinet: {
+    itemId: 'furn_tv_cabinet',
+    name: 'TV Cabinet',
+    nameRu: 'Тумба под ТВ',
+    category: 'furniture' as any,
+    maxStack: 1,
+    icon: '',
+    description: 'Low-profile TV stand and media console.',
+    descriptionRu: 'Низкая устойчивая тумба под телевизор и медиа-технику.',
+    effects: {},
+    weight: 16.0,
+    usable: true
+  },
+  furn_carpet: {
+    itemId: 'furn_carpet',
+    name: 'Carpet',
+    nameRu: 'Напольный ковер',
+    category: 'furniture' as any,
+    maxStack: 2,
+    icon: '',
+    description: 'Cozy patterned floor carpet.',
+    descriptionRu: 'Мягкий напольный ковер с декоративным узором.',
+    effects: {},
+    weight: 6.0,
+    usable: true
+  },
+  furn_bath: {
+    itemId: 'furn_bath',
+    name: 'Bathtub',
+    nameRu: 'Ванна',
+    category: 'furniture' as any,
+    maxStack: 1,
+    icon: '',
+    description: 'Enamel bathroom tub.',
+    descriptionRu: 'Эмалированная сантехническая ванна.',
+    effects: {},
+    weight: 40.0,
+    usable: true
+  },
+  furn_sink: {
+    itemId: 'furn_sink',
+    name: 'Washbasin / Sink',
+    nameRu: 'Раковина-умывальник',
+    category: 'furniture' as any,
+    maxStack: 1,
+    icon: '',
+    description: 'Ceramic bathroom or kitchen sink.',
+    descriptionRu: 'Керамическая раковина со смесителем.',
+    effects: {},
+    weight: 12.0,
+    usable: true
+  },
+  furn_toilet: {
+    itemId: 'furn_toilet',
+    name: 'Toilet',
+    nameRu: 'Унитаз',
+    category: 'furniture' as any,
+    maxStack: 1,
+    icon: '',
+    description: 'Ceramic toilet bowl.',
+    descriptionRu: 'Керамический сантехнический унитаз со смывным бачком.',
+    effects: {},
+    weight: 18.0,
+    usable: true
+  },
+  furn_desk: {
+    itemId: 'furn_desk',
+    name: 'Writing Desk',
+    nameRu: 'Письменный стол',
+    category: 'furniture' as any,
+    maxStack: 1,
+    icon: '',
+    description: 'Comfortable work desk with drawers.',
+    descriptionRu: 'Удобный рабочий стол для работы или учебы.',
+    effects: {},
+    weight: 20.0,
+    usable: true
+  },
+  furn_bookshelf: {
+    itemId: 'furn_bookshelf',
+    name: 'Bookshelf',
+    nameRu: 'Книжный шкаф',
+    category: 'furniture' as any,
+    maxStack: 1,
+    icon: '',
+    description: 'Wooden bookshelf for literature and files.',
+    descriptionRu: 'Деревянный книжный шкаф со стеклянными дверцами.',
+    effects: {},
+    weight: 25.0,
+    usable: true
+  },
+  furn_mirror: {
+    itemId: 'furn_mirror',
+    name: 'Wall Mirror',
+    nameRu: 'Настенное зеркало',
+    category: 'furniture' as any,
+    maxStack: 2,
+    icon: '',
+    description: 'Framed wall mirror for entryway or bathroom.',
+    descriptionRu: 'Настенное зеркало в деревянной рамке.',
+    effects: {},
+    weight: 5.0,
     usable: true
   },
   
@@ -2043,7 +2739,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     nameRu: 'Брезентовый рюкзак',
     category: 'clothing',
     maxStack: 1,
-    icon: '🎒',
+    icon: '',
     description: 'Rugged canvas backpack (28L capacity). Carries large and bulky items.',
     descriptionRu: 'Вместительный брезентовый рюкзак на 28 литров для переноски вещей и припасов.',
     effects: {},
@@ -2061,7 +2757,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     nameRu: 'Черная шапка',
     category: 'clothing',
     maxStack: 1,
-    icon: '🧢',
+    icon: '',
     description: 'A warm woolen black beanie.',
     descriptionRu: 'Теплая шерстяная черная шапка.',
     effects: {},
@@ -2074,7 +2770,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     nameRu: 'Красная кепка',
     category: 'clothing',
     maxStack: 1,
-    icon: '🧢',
+    icon: '',
     description: 'A simple red baseball cap. Protects from the sun.',
     descriptionRu: 'Простая красная бейсболка. Защищает от солнца.',
     effects: {},
@@ -2087,7 +2783,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     nameRu: 'Шапка-ушанка',
     category: 'clothing',
     maxStack: 1,
-    icon: '🎩',
+    icon: '',
     description: 'Very warm fur hat for severe frosts.',
     descriptionRu: 'Очень теплая меховая шапка для суровых морозов.',
     effects: {},
@@ -2102,7 +2798,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     nameRu: 'Синий шарф',
     category: 'clothing',
     maxStack: 1,
-    icon: '🧣',
+    icon: '',
     description: 'Knitted warm blue scarf.',
     descriptionRu: 'Вязаный теплый синий шарф.',
     effects: {},
@@ -2117,7 +2813,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     nameRu: 'Белая футболка',
     category: 'clothing',
     maxStack: 1,
-    icon: '👕',
+    icon: '',
     description: 'Light breathable cotton t-shirt.',
     descriptionRu: 'Легкая дышащая хлопковая футболка.',
     effects: {},
@@ -2130,7 +2826,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     nameRu: 'Черная футболка',
     category: 'clothing',
     maxStack: 1,
-    icon: '👕',
+    icon: '',
     description: 'Simple black cotton t-shirt.',
     descriptionRu: 'Простая черная хлопковая футболка.',
     effects: {},
@@ -2143,7 +2839,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     nameRu: 'Термобелье',
     category: 'clothing',
     maxStack: 1,
-    icon: '🩲',
+    icon: '',
     description: 'Warm base layer for cold weather.',
     descriptionRu: 'Теплый базовый слой для холодной погоды.',
     effects: {},
@@ -2158,7 +2854,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     nameRu: 'Синяя кофта',
     category: 'clothing',
     maxStack: 1,
-    icon: '🧥',
+    icon: '',
     description: 'Comfortable blue knitted sweater.',
     descriptionRu: 'Удобная синяя вязаная кофта.',
     effects: {},
@@ -2171,7 +2867,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     nameRu: 'Клетчатая рубашка',
     category: 'clothing',
     maxStack: 1,
-    icon: '👔',
+    icon: '',
     description: 'Flannel plaid shirt. Classic.',
     descriptionRu: 'Фланелевая клетчатая рубашка. Классика.',
     effects: {},
@@ -2186,7 +2882,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     nameRu: 'Кожаная куртка',
     category: 'clothing',
     maxStack: 1,
-    icon: '🧥',
+    icon: '',
     description: 'Tough leather jacket. Good wind protection.',
     descriptionRu: 'Прочная кожаная куртка. Хорошо защищает от ветра.',
     effects: {},
@@ -2199,7 +2895,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     nameRu: 'Зимний пуховик',
     category: 'clothing',
     maxStack: 1,
-    icon: '🧥',
+    icon: '',
     description: 'Heavy insulated jacket for extreme cold.',
     descriptionRu: 'Тяжелая утепленная куртка для сильных морозов.',
     effects: {},
@@ -2212,7 +2908,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     nameRu: 'Желтый дождевик',
     category: 'clothing',
     maxStack: 1,
-    icon: '🧥',
+    icon: '',
     description: 'Waterproof raincoat. Keeps you dry but not very breathable.',
     descriptionRu: 'Водонепроницаемый плащ. Сохранит сухим, но почти не дышит.',
     effects: {},
@@ -2227,7 +2923,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     nameRu: 'Синие джинсы',
     category: 'clothing',
     maxStack: 1,
-    icon: '👖',
+    icon: '',
     description: 'Classic durable denim jeans.',
     descriptionRu: 'Классические прочные джинсы.',
     effects: {},
@@ -2240,7 +2936,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     nameRu: 'Штаны карго',
     category: 'clothing',
     maxStack: 1,
-    icon: '👖',
+    icon: '',
     description: 'Practical pants with many pockets.',
     descriptionRu: 'Практичные штаны с множеством карманов.',
     effects: {},
@@ -2253,7 +2949,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     nameRu: 'Шорты хаки',
     category: 'clothing',
     maxStack: 1,
-    icon: '🩳',
+    icon: '',
     description: 'Lightweight shorts for hot weather.',
     descriptionRu: 'Легкие шорты для жаркой погоды.',
     effects: {},
@@ -2268,7 +2964,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     nameRu: 'Белые кроссовки',
     category: 'clothing',
     maxStack: 1,
-    icon: '👟',
+    icon: '',
     description: 'Comfortable sports shoes.',
     descriptionRu: 'Удобная спортивная обувь.',
     effects: {},
@@ -2281,7 +2977,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     nameRu: 'Рабочие ботинки',
     category: 'clothing',
     maxStack: 1,
-    icon: '👢',
+    icon: '',
     description: 'Heavy duty leather boots.',
     descriptionRu: 'Тяжелые кожаные рабочие ботинки.',
     effects: {},
@@ -2294,7 +2990,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     nameRu: 'Зимние ботинки',
     category: 'clothing',
     maxStack: 1,
-    icon: '👢',
+    icon: '',
     description: 'Insulated boots for snow.',
     descriptionRu: 'Утепленные ботинки для снега.',
     effects: {},
@@ -2307,7 +3003,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     nameRu: 'Хлопковые носки',
     category: 'clothing',
     maxStack: 1,
-    icon: '🧦',
+    icon: '',
     description: 'Simple white socks.',
     descriptionRu: 'Простые белые носки.',
     effects: {},
@@ -2320,7 +3016,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     nameRu: 'Шерстяные носки',
     category: 'clothing',
     maxStack: 1,
-    icon: '🧦',
+    icon: '',
     description: 'Warm thick knitted socks.',
     descriptionRu: 'Теплые толстые вязаные носки.',
     effects: {},
@@ -2335,7 +3031,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     nameRu: 'Кожаные перчатки',
     category: 'clothing',
     maxStack: 1,
-    icon: '🧤',
+    icon: '',
     description: 'Protects hands from cold and scratches.',
     descriptionRu: 'Защищают руки от холода и царапин.',
     effects: {},
@@ -2348,7 +3044,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     nameRu: 'Зимние перчатки',
     category: 'clothing',
     maxStack: 1,
-    icon: '🧤',
+    icon: '',
     description: 'Thick insulated gloves.',
     descriptionRu: 'Толстые утепленные перчатки.',
     effects: {},
@@ -2362,11 +3058,470 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     nameRu: 'Уличный мусор (Вторсырье)',
     category: 'misc',
     maxStack: 20,
-    icon: '🗑️',
+    icon: '',
     description: 'Empty bottles, tin cans or crumpled paper gathered from city sidewalks. Throw into dumpster for cash reward.',
     descriptionRu: 'Смятые жестянные банки, пластик и бумаги с уличных тротуаров. Выбросьте в урну или контейнер за вознаграждение.',
     effects: {},
     weight: 0.1,
+    usable: false
+  },
+
+  // === VALUABLES (ЦЕННОСТИ) ===
+  valuable_gold_watch: {
+    itemId: 'valuable_gold_watch',
+    name: 'Gold Wristwatch Slava',
+    nameRu: 'Золотые наручные часы «Слава»',
+    category: 'valuable',
+    maxStack: 5,
+    icon: '',
+    description: 'Gold-plated Soviet automatic mechanical wristwatch on leather strap.',
+    descriptionRu: 'Позолоченные механические часы на кожаном ремешке с автоподзаводом.',
+    effects: {},
+    weight: 0.15,
+    usable: true
+  },
+  valuable_silver_pocket_watch: {
+    itemId: 'valuable_silver_pocket_watch',
+    name: 'Antique Silver Pocket Watch',
+    nameRu: 'Карманные серебряные часы',
+    category: 'valuable',
+    maxStack: 5,
+    icon: '',
+    description: 'Heavy 925 sterling silver pocket watch with hinged engraved lid.',
+    descriptionRu: 'Тяжелые серебряные карманные часы 925 пробы с резным узором.',
+    effects: {},
+    weight: 0.22,
+    usable: true
+  },
+  valuable_diamond_ring: {
+    itemId: 'valuable_diamond_ring',
+    name: 'Gold Ring with Diamond',
+    nameRu: 'Золотое кольцо с бриллиантом',
+    category: 'valuable',
+    maxStack: 10,
+    icon: '',
+    description: '585 yellow gold ring with brilliant-cut sparkling diamond.',
+    descriptionRu: 'Кольцо из желтого золота 585 пробы со сверкающим бриллиантом.',
+    effects: {},
+    weight: 0.05,
+    usable: false
+  },
+  valuable_gold_chain: {
+    itemId: 'valuable_gold_chain',
+    name: 'Heavy Gold Chain',
+    nameRu: 'Массивная золотая цепочка',
+    category: 'valuable',
+    maxStack: 5,
+    icon: '',
+    description: 'Solid gold chain in Bismarck weave with lobster lock.',
+    descriptionRu: 'Толстая цепь из литого золота плетения «Бисмарк».',
+    effects: {},
+    weight: 0.12,
+    usable: false
+  },
+  valuable_amber_pendant: {
+    itemId: 'valuable_amber_pendant',
+    name: 'Baltic Amber Pendant',
+    nameRu: 'Балтийский янтарный кулон',
+    category: 'valuable',
+    maxStack: 10,
+    icon: '',
+    description: 'Honey Baltic amber piece set in fine silver bezel.',
+    descriptionRu: 'Крупный медовый янтарь в изящном серебряном обрамлении.',
+    effects: {},
+    weight: 0.08,
+    usable: false
+  },
+  valuable_antique_coin: {
+    itemId: 'valuable_antique_coin',
+    name: 'Imperial Silver Coin 1913',
+    nameRu: 'Старинная серебряная монета (1 Рубль 1913 г.)',
+    category: 'valuable',
+    maxStack: 20,
+    icon: '',
+    description: 'Rare collectible Tsarist silver rouble coin.',
+    descriptionRu: 'Коллекционная серебряная монета царской чеканки.',
+    effects: {},
+    weight: 0.03,
+    usable: false
+  },
+  valuable_ruby_earrings: {
+    itemId: 'valuable_ruby_earrings',
+    name: 'Gold Earrings with Rubies',
+    nameRu: 'Золотые серьги с рубинами',
+    category: 'valuable',
+    maxStack: 10,
+    icon: '',
+    description: 'Pair of gold drop earrings set with crimson rubies.',
+    descriptionRu: 'Пара золотых сережек с насыщенно-красными рубинами.',
+    effects: {},
+    weight: 0.04,
+    usable: false
+  },
+  valuable_silver_cigarette_case: {
+    itemId: 'valuable_silver_cigarette_case',
+    name: 'Engraved Silver Cigarette Case',
+    nameRu: 'Серебряный гравированный портсигар',
+    category: 'valuable',
+    maxStack: 5,
+    icon: '',
+    description: 'Sterling silver engraved case with spring-loaded catch.',
+    descriptionRu: 'Массивный портсигар из черненого серебра с гравировкой.',
+    effects: {},
+    weight: 0.25,
+    usable: false
+  },
+  valuable_faberge_egg_replica: {
+    itemId: 'valuable_faberge_egg_replica',
+    name: 'Souvenir Imperial Egg',
+    nameRu: 'Сувенирное яйцо в стиле Фаберже',
+    category: 'valuable',
+    maxStack: 3,
+    icon: '',
+    description: 'Jeweled souvenir egg coated in royal blue enamel and gold filigree.',
+    descriptionRu: 'Ювелирный сувенир, покрытый синей эмалью и позолотой.',
+    effects: {},
+    weight: 0.45,
+    usable: false
+  },
+  valuable_gold_bar_small: {
+    itemId: 'valuable_gold_bar_small',
+    name: 'Small Gold Bullion Bar (50g)',
+    nameRu: 'Слиток золота (50г)',
+    category: 'valuable',
+    maxStack: 10,
+    icon: '',
+    description: 'Stamped 999.9 fine gold bank ingot.',
+    descriptionRu: 'Банковский мерный слиток чистейшего золота 999.9 пробы.',
+    effects: {},
+    weight: 0.05,
+    usable: false
+  },
+  valuable_silver_bar_100g: {
+    itemId: 'valuable_silver_bar_100g',
+    name: 'Silver Bullion Bar (100g)',
+    nameRu: 'Слиток серебра (100г)',
+    category: 'valuable',
+    maxStack: 10,
+    icon: '',
+    description: 'Stamped 999 fine silver bullion bar in plastic capsule.',
+    descriptionRu: 'Мерный банковский слиток серебра 999 пробы в капсуле.',
+    effects: {},
+    weight: 0.1,
+    usable: false
+  },
+  valuable_jade_figurine: {
+    itemId: 'valuable_jade_figurine',
+    name: 'Carved Jade Statuette',
+    nameRu: 'Нефритовая резная статуэтка',
+    category: 'valuable',
+    maxStack: 5,
+    icon: '',
+    description: 'Hand-carved green jade dragon figurine on dark wood stand.',
+    descriptionRu: 'Статуэтка из темно-зеленого нефрита на деревянной подставке.',
+    effects: {},
+    weight: 0.38,
+    usable: false
+  },
+
+  // === KITCHENWARE (КУХОННАЯ УТВАРЬ) ===
+  kitchen_pot_enamel: {
+    itemId: 'kitchen_pot_enamel',
+    name: 'Enamel Pot',
+    nameRu: 'Эмалированная кастрюля',
+    category: 'tool',
+    maxStack: 3,
+    icon: '',
+    description: 'Red enamel steel cooking pot with lid and bakelite handles.',
+    descriptionRu: 'Эмалированная стальная кастрюля с орнаментом и крышкой.',
+    effects: {},
+    weight: 1.2,
+    usable: false
+  },
+  kitchen_pot_steel: {
+    itemId: 'kitchen_pot_steel',
+    name: 'Stainless Steel Pot',
+    nameRu: 'Стальная кастрюля из нержавейки',
+    category: 'tool',
+    maxStack: 3,
+    icon: '',
+    description: 'Polished stainless steel pot with heat-resistant glass lid.',
+    descriptionRu: 'Кастрюля из нержавеющей стали с прозрачной стеклянной крышкой.',
+    effects: {},
+    weight: 1.5,
+    usable: false
+  },
+  kitchen_pot_aluminum: {
+    itemId: 'kitchen_pot_aluminum',
+    name: 'Aluminum Pot',
+    nameRu: 'Алюминиевая кастрюля',
+    category: 'tool',
+    maxStack: 3,
+    icon: '',
+    description: 'Lightweight brushed aluminum cooking pot.',
+    descriptionRu: 'Легкая советская алюминиевая кастрюля с крышкой.',
+    effects: {},
+    weight: 0.8,
+    usable: false
+  },
+  kitchen_pot_cast_iron: {
+    itemId: 'kitchen_pot_cast_iron',
+    name: 'Cast Iron Dutch Pot',
+    nameRu: 'Чугунный казан / кастрюля',
+    category: 'tool',
+    maxStack: 2,
+    icon: '',
+    description: 'Heavy thick-walled cast iron cauldron pot with brass lid knob.',
+    descriptionRu: 'Тяжелая кастрюля-казан из толстостенного черного чугуна.',
+    effects: {},
+    weight: 3.8,
+    usable: false
+  },
+  kitchen_kettle_enamel: {
+    itemId: 'kitchen_kettle_enamel',
+    name: 'Enamel Tea Kettle',
+    nameRu: 'Эмалированный чайник',
+    category: 'tool',
+    maxStack: 3,
+    icon: '',
+    description: 'Classic stovetop enamel kettle with arching overhead handle.',
+    descriptionRu: 'Классический эмалированный чайник для плиты с ручкой.',
+    effects: {},
+    weight: 1.1,
+    usable: false
+  },
+  kitchen_kettle_steel: {
+    itemId: 'kitchen_kettle_steel',
+    name: 'Steel Whistling Kettle',
+    nameRu: 'Стальной чайник со свистком',
+    category: 'tool',
+    maxStack: 3,
+    icon: '',
+    description: 'Chrome stainless steel kettle with flip-up spout whistle.',
+    descriptionRu: 'Чайник из нержавеющей стали с откидным свистком.',
+    effects: {},
+    weight: 1.3,
+    usable: false
+  },
+  kitchen_kettle_electric: {
+    itemId: 'kitchen_kettle_electric',
+    name: 'Electric Glass Kettle',
+    nameRu: 'Электрический чайник',
+    category: 'electronics',
+    maxStack: 2,
+    icon: '',
+    description: 'Glass electric kettle with LED illumination and stainless base.',
+    descriptionRu: 'Электрочайник из термостекла со светодиодной подсветкой.',
+    effects: {},
+    weight: 1.2,
+    usable: true
+  },
+  kitchen_kettle_clay: {
+    itemId: 'kitchen_kettle_clay',
+    name: 'Clay Teapot',
+    nameRu: 'Глиняный заварочный чайник',
+    category: 'tool',
+    maxStack: 5,
+    icon: '',
+    description: 'Handcrafted terracotta clay teapot for aromatic tea brewing.',
+    descriptionRu: 'Керамический глиняный заварочный чайник ручной работы.',
+    effects: {},
+    weight: 0.6,
+    usable: false
+  },
+  kitchen_pan_cast_iron: {
+    itemId: 'kitchen_pan_cast_iron',
+    name: 'Cast Iron Skillet',
+    nameRu: 'Чугунная сковорода',
+    category: 'tool',
+    maxStack: 3,
+    icon: '',
+    description: 'Heavy black cast iron frying pan with carved wooden handle.',
+    descriptionRu: 'Массивная чугунная сковорода с деревянной съёмной ручкой.',
+    effects: {},
+    weight: 2.5,
+    usable: false
+  },
+  kitchen_pan_teflon: {
+    itemId: 'kitchen_pan_teflon',
+    name: 'Non-Stick Teflon Pan',
+    nameRu: 'Тефлоновая сковорода',
+    category: 'tool',
+    maxStack: 3,
+    icon: '',
+    description: 'Aluminum skillet with black non-stick coating and bakelite handle.',
+    descriptionRu: 'Сковорода с антипригарным тефлоновым покрытием.',
+    effects: {},
+    weight: 0.9,
+    usable: false
+  },
+  kitchen_plate_ceramic: {
+    itemId: 'kitchen_plate_ceramic',
+    name: 'Glazed Ceramic Plate',
+    nameRu: 'Керамическая тарелка',
+    category: 'misc',
+    maxStack: 10,
+    icon: '',
+    description: 'Smooth glazed off-white ceramic dinner plate.',
+    descriptionRu: 'Столовая керамическая тарелка с глазурованным покрытием.',
+    effects: {},
+    weight: 0.4,
+    usable: false
+  },
+  kitchen_plate_porcelain: {
+    itemId: 'kitchen_plate_porcelain',
+    name: 'Fine Porcelain Plate',
+    nameRu: 'Фарфоровая тарелка',
+    category: 'misc',
+    maxStack: 10,
+    icon: '',
+    description: 'Fine porcelain plate with Gzhel blue pattern and gold rim.',
+    descriptionRu: 'Фарфоровая тарелка с расписным узором и золоченым кантиком.',
+    effects: {},
+    weight: 0.35,
+    usable: false
+  },
+  kitchen_plate_enamel: {
+    itemId: 'kitchen_plate_enamel',
+    name: 'Enamel Deep Bowl',
+    nameRu: 'Эмалированная глубокая миска',
+    category: 'misc',
+    maxStack: 10,
+    icon: '',
+    description: 'Durable Soviet enamel deep bowl with dark blue rim line.',
+    descriptionRu: 'Советская эмалированная миска глубокой формы.',
+    effects: {},
+    weight: 0.25,
+    usable: false
+  },
+  kitchen_bowl_wooden: {
+    itemId: 'kitchen_bowl_wooden',
+    name: 'Carved Wooden Bowl',
+    nameRu: 'Деревянная резная пиала',
+    category: 'misc',
+    maxStack: 10,
+    icon: '',
+    description: 'Carved solid wood bowl with visible concentric grain pattern.',
+    descriptionRu: 'Глубокая пиала, выточенная из цельного массива дерева.',
+    effects: {},
+    weight: 0.2,
+    usable: false
+  },
+  kitchen_mug_ceramic: {
+    itemId: 'kitchen_mug_ceramic',
+    name: 'Ceramic Coffee Mug',
+    nameRu: 'Керамическая кружка',
+    category: 'misc',
+    maxStack: 10,
+    icon: '',
+    description: 'Sturdy glazed ceramic mug for coffee or tea.',
+    descriptionRu: 'Удобная керамическая кружка для чая и кофе.',
+    effects: {},
+    weight: 0.3,
+    usable: false
+  },
+  kitchen_mug_enamel: {
+    itemId: 'kitchen_mug_enamel',
+    name: 'Enamel Camping Mug',
+    nameRu: 'Эмалированная кружка',
+    category: 'misc',
+    maxStack: 10,
+    icon: '',
+    description: 'Lightweight enamel mug with blue rim accent.',
+    descriptionRu: 'Походная эмалированная кружка с синей каемкой.',
+    effects: {},
+    weight: 0.15,
+    usable: false
+  },
+  kitchen_mug_glass: {
+    itemId: 'kitchen_mug_glass',
+    name: 'Faceted Glass Mug',
+    nameRu: 'Стеклянная граненая кружка',
+    category: 'misc',
+    maxStack: 10,
+    icon: '',
+    description: 'Thick clear faceted glass tea mug with handle.',
+    descriptionRu: 'Толстостенная прозрачная стеклянная кружка.',
+    effects: {},
+    weight: 0.35,
+    usable: false
+  },
+  kitchen_cup_porcelain: {
+    itemId: 'kitchen_cup_porcelain',
+    name: 'Porcelain Tea Cup',
+    nameRu: 'Фарфоровая чайная чашка',
+    category: 'misc',
+    maxStack: 10,
+    icon: '',
+    description: 'Delicate fine porcelain tea cup with saucer.',
+    descriptionRu: 'Тонкостенная чайная чашка из белого фарфора.',
+    effects: {},
+    weight: 0.25,
+    usable: false
+  },
+  kitchen_knife_chef: {
+    itemId: 'kitchen_knife_chef',
+    name: "Chef's Kitchen Knife",
+    nameRu: 'Кухонный нож шеф-повара',
+    category: 'tool',
+    maxStack: 5,
+    icon: '',
+    description: "Sharp forged steel chef's knife with full tang wooden handle.",
+    descriptionRu: 'Острый кухонный нож шеф-повара с широким стальным лезвием.',
+    effects: {},
+    weight: 0.3,
+    usable: true
+  },
+  kitchen_fork_steel: {
+    itemId: 'kitchen_fork_steel',
+    name: 'Stainless Steel Fork',
+    nameRu: 'Стальная вилка',
+    category: 'misc',
+    maxStack: 20,
+    icon: '',
+    description: 'Standard 4-tine stainless steel dinner fork.',
+    descriptionRu: 'Столовая вилка из нержавеющей стали.',
+    effects: {},
+    weight: 0.05,
+    usable: false
+  },
+  kitchen_fork_silver: {
+    itemId: 'kitchen_fork_silver',
+    name: 'Sterling Silver Fork',
+    nameRu: 'Серебряная вилка',
+    category: 'valuable',
+    maxStack: 10,
+    icon: '',
+    description: 'Heavy sterling silver dinner fork with ornate engraving.',
+    descriptionRu: 'Тяжелая серебряная вилка с изящной узорчатой гравировкой.',
+    effects: {},
+    weight: 0.08,
+    usable: false
+  },
+  kitchen_spoon_steel: {
+    itemId: 'kitchen_spoon_steel',
+    name: 'Stainless Steel Spoon',
+    nameRu: 'Стальная ложка',
+    category: 'misc',
+    maxStack: 20,
+    icon: '',
+    description: 'Polished stainless steel soup spoon.',
+    descriptionRu: 'Столовая ложка из нержавеющей стали.',
+    effects: {},
+    weight: 0.06,
+    usable: false
+  },
+  kitchen_spoon_wooden: {
+    itemId: 'kitchen_spoon_wooden',
+    name: 'Khokhloma Wooden Spoon',
+    nameRu: 'Деревянная хохломская ложка',
+    category: 'misc',
+    maxStack: 15,
+    icon: '',
+    description: 'Traditional Russian wooden spoon painted in Khokhloma style.',
+    descriptionRu: 'Традиционная русская деревянная ложка с яркой росписью.',
+    effects: {},
+    weight: 0.04,
     usable: false
   }
 };
@@ -2377,16 +3532,16 @@ let itemCounter = 100;
 export const CLOTHING_STATS: Record<string, import('./types').ClothingStats> = {
   
   backpack: { slot: 'back', layer: 'outerwear', insulation: 5, windResistance: 5, waterResistance: 5, breathability: 90, mobilityPenalty: 2, color: '#4a5568', pocketCapacityL: 28.0, maxPocketItemVolumeL: 18.0, maxPocketWeightKg: 25.0 },
-  beanie_black: { slot: 'head', layer: 'outerwear', insulation: 30, windResistance: 20, waterResistance: 10, breathability: 40, mobilityPenalty: 2, color: '#222' },
-  cap_red: { slot: 'head', layer: 'outerwear', insulation: 5, windResistance: 5, waterResistance: 5, breathability: 60, mobilityPenalty: 0, color: '#e53e3e' },
-  ushanka_hat: { slot: 'head', layer: 'outerwear', insulation: 70, windResistance: 80, waterResistance: 30, breathability: 20, mobilityPenalty: 5, color: '#5a4d41' },
+  beanie_black: { slot: 'head', layer: 'outerwear', insulation: 30, windResistance: 20, waterResistance: 10, breathability: 40, mobilityPenalty: 2, color: '#222'},
+  cap_red: { slot: 'head', layer: 'outerwear', insulation: 5, windResistance: 5, waterResistance: 5, breathability: 60, mobilityPenalty: 0, color: '#e53e3e'},
+  ushanka_hat: { slot: 'head', layer: 'outerwear', insulation: 70, windResistance: 80, waterResistance: 30, breathability: 20, mobilityPenalty: 5, color: '#5a4d41'},
 
-  sunglasses: { slot: 'face', layer: 'outerwear', insulation: 0, windResistance: 5, waterResistance: 0, breathability: 100, mobilityPenalty: 0, color: '#111' },
-  scarf_blue: { slot: 'face', layer: 'outerwear', insulation: 20, windResistance: 30, waterResistance: 10, breathability: 50, mobilityPenalty: 2, color: '#3182ce' },
+  sunglasses: { slot: 'face', layer: 'outerwear', insulation: 0, windResistance: 5, waterResistance: 0, breathability: 100, mobilityPenalty: 0, color: '#111'},
+  scarf_blue: { slot: 'face', layer: 'outerwear', insulation: 20, windResistance: 30, waterResistance: 10, breathability: 50, mobilityPenalty: 2, color: '#3182ce'},
 
-  tshirt_white: { slot: 'torso', layer: 'underwear', insulation: 10, windResistance: 5, waterResistance: 0, breathability: 80, mobilityPenalty: 1, color: '#f8fafc' },
-  tshirt_black: { slot: 'torso', layer: 'underwear', insulation: 10, windResistance: 5, waterResistance: 0, breathability: 80, mobilityPenalty: 1, color: '#1a202c' },
-  long_johns: { slot: 'legs', layer: 'underwear', insulation: 40, windResistance: 10, waterResistance: 5, breathability: 60, mobilityPenalty: 3, color: '#e2e8f0' },
+  tshirt_white: { slot: 'torso', layer: 'underwear', insulation: 10, windResistance: 5, waterResistance: 0, breathability: 80, mobilityPenalty: 1, color: '#f8fafc'},
+  tshirt_black: { slot: 'torso', layer: 'underwear', insulation: 10, windResistance: 5, waterResistance: 0, breathability: 80, mobilityPenalty: 1, color: '#1a202c'},
+  long_johns: { slot: 'legs', layer: 'underwear', insulation: 40, windResistance: 10, waterResistance: 5, breathability: 60, mobilityPenalty: 3, color: '#e2e8f0'},
 
   sweater_blue: { slot: 'torso', layer: 'shirt', insulation: 45, windResistance: 15, waterResistance: 10, breathability: 40, mobilityPenalty: 5, color: '#2b6cb0', pocketCapacityL: 1.2, maxPocketItemVolumeL: 0.4, maxPocketWeightKg: 1.5 },
   plaid_shirt: { slot: 'torso', layer: 'shirt', insulation: 20, windResistance: 10, waterResistance: 5, breathability: 60, mobilityPenalty: 2, color: '#c53030', secondaryColor: '#2d3748', pocketCapacityL: 0.5, maxPocketItemVolumeL: 0.25, maxPocketWeightKg: 0.8 },
@@ -2399,16 +3554,16 @@ export const CLOTHING_STATS: Record<string, import('./types').ClothingStats> = {
   cargo_pants: { slot: 'legs', layer: 'shirt', insulation: 25, windResistance: 40, waterResistance: 20, breathability: 45, mobilityPenalty: 6, color: '#718096', pocketCapacityL: 4.5, maxPocketItemVolumeL: 1.0, maxPocketWeightKg: 6.0 },
   shorts_khaki: { slot: 'legs', layer: 'shirt', insulation: 5, windResistance: 5, waterResistance: 5, breathability: 90, mobilityPenalty: 0, color: '#d6bcfa', pocketCapacityL: 1.2, maxPocketItemVolumeL: 0.4, maxPocketWeightKg: 2.0 },
   
-  sneakers_white: { slot: 'feet', layer: 'outerwear', insulation: 15, windResistance: 20, waterResistance: 15, breathability: 60, mobilityPenalty: 2, color: '#f8fafc' },
-  work_boots: { slot: 'feet', layer: 'outerwear', insulation: 30, windResistance: 50, waterResistance: 60, breathability: 30, mobilityPenalty: 12, color: '#7b341e' },
-  winter_boots: { slot: 'feet', layer: 'outerwear', insulation: 80, windResistance: 70, waterResistance: 80, breathability: 20, mobilityPenalty: 15, color: '#4a5568' },
-  socks_white: { slot: 'feet', layer: 'underwear', insulation: 10, windResistance: 5, waterResistance: 0, breathability: 70, mobilityPenalty: 1, color: '#f8fafc' },
-  socks_wool: { slot: 'feet', layer: 'underwear', insulation: 40, windResistance: 10, waterResistance: 10, breathability: 40, mobilityPenalty: 2, color: '#a0aec0' },
+  sneakers_white: { slot: 'feet', layer: 'outerwear', insulation: 15, windResistance: 20, waterResistance: 15, breathability: 60, mobilityPenalty: 2, color: '#f8fafc'},
+  work_boots: { slot: 'feet', layer: 'outerwear', insulation: 30, windResistance: 50, waterResistance: 60, breathability: 30, mobilityPenalty: 12, color: '#7b341e'},
+  winter_boots: { slot: 'feet', layer: 'outerwear', insulation: 80, windResistance: 70, waterResistance: 80, breathability: 20, mobilityPenalty: 15, color: '#4a5568'},
+  socks_white: { slot: 'feet', layer: 'underwear', insulation: 10, windResistance: 5, waterResistance: 0, breathability: 70, mobilityPenalty: 1, color: '#f8fafc'},
+  socks_wool: { slot: 'feet', layer: 'underwear', insulation: 40, windResistance: 10, waterResistance: 10, breathability: 40, mobilityPenalty: 2, color: '#a0aec0'},
 
-  gloves_leather: { slot: 'hands', layer: 'outerwear', insulation: 20, windResistance: 60, waterResistance: 40, breathability: 30, mobilityPenalty: 5, color: '#4a3f35' },
-  gloves_winter: { slot: 'hands', layer: 'outerwear', insulation: 60, windResistance: 50, waterResistance: 50, breathability: 20, mobilityPenalty: 10, color: '#2d3748' },
+  gloves_leather: { slot: 'hands', layer: 'outerwear', insulation: 20, windResistance: 60, waterResistance: 40, breathability: 30, mobilityPenalty: 5, color: '#4a3f35'},
+  gloves_winter: { slot: 'hands', layer: 'outerwear', insulation: 60, windResistance: 50, waterResistance: 50, breathability: 20, mobilityPenalty: 10, color: '#2d3748'},
 
-  sneakers: { slot: 'feet', layer: 'outerwear', insulation: 18, windResistance: 25, waterResistance: 20, breathability: 70, mobilityPenalty: 1, color: '#2b6cb0' },
+  sneakers: { slot: 'feet', layer: 'outerwear', insulation: 18, windResistance: 25, waterResistance: 20, breathability: 70, mobilityPenalty: 1, color: '#2b6cb0'},
   backpack_travel: { slot: 'back', layer: 'outerwear', insulation: 5, windResistance: 10, waterResistance: 25, breathability: 80, mobilityPenalty: 2, color: '#3182ce', pocketCapacityL: 35.0, maxPocketItemVolumeL: 22.0, maxPocketWeightKg: 30.0 },
   thermal_coat: { slot: 'torso', layer: 'jacket', insulation: 85, windResistance: 85, waterResistance: 75, breathability: 25, mobilityPenalty: 12, color: '#2d3748', pocketCapacityL: 4.0, maxPocketItemVolumeL: 1.0, maxPocketWeightKg: 4.5 },
 };
@@ -2427,20 +3582,25 @@ export function createItem(itemId: string, count: number = 1, initialPortions?: 
   // Approximate realistic volume (L) if not explicitly set
   let baseVolume = def.volume;
   if (baseVolume === undefined) {
-    if (def.category === 'valuable' && (itemId.startsWith('cash') || itemId.startsWith('coin'))) {
+    if (def.category === 'valuable'&& (itemId.startsWith('cash') || itemId.startsWith('coin'))) {
       baseVolume = 0.001;
+    } else if (def.category === 'electronics') {
+      baseVolume = 0.18;
     } else if (def.category === 'drink') {
       baseVolume = Math.max(0.25, (def.weight || 0.35));
     } else if (def.category === 'food') {
       baseVolume = Math.max(0.15, (def.weight || 0.25) * 1.2);
     } else if (def.category === 'med') {
-      baseVolume = itemId === 'medkit' ? 3.0 : 0.15;
+      baseVolume = itemId === 'medkit'? 3.0 : 0.15;
     } else if (def.category === 'clothing') {
-      baseVolume = itemId === 'backpack' ? 2.5 : Math.max(0.5, (def.weight || 0.4) * 2.0);
+      baseVolume = itemId === 'backpack'? 2.5 : Math.max(0.5, (def.weight || 0.4) * 2.0);
     } else {
       baseVolume = Math.max(0.05, (def.weight || 0.2) * 1.2);
     }
   }
+
+  const isPhone = def.itemId.startsWith('phone_') || def.itemId === 'smartphone';
+  const phoneSpecs = isPhone ? getPhoneSpecsForItemId(def.itemId) : undefined;
 
   return {
     id: `item_${itemId}_${Date.now()}_${itemCounter}`,
@@ -2466,10 +3626,15 @@ export function createItem(itemId: string, count: number = 1, initialPortions?: 
     maxContainedItemVolumeL: maxContainedVol,
     maxContainedWeightKg: maxContainedWt,
     allowedItemCategories: def.allowedItemCategories,
-    batteryCharge: def.itemId === 'car_battery' ? 100 : undefined,
-    fluidLiters: def.itemId === 'antifreeze' ? 5.0 : def.itemId === 'motor_oil' ? 4.0 : undefined,
-    maxFluidLiters: def.itemId === 'antifreeze' ? 5.0 : def.itemId === 'motor_oil' ? 4.0 : undefined,
-    fluidType: def.itemId === 'antifreeze' ? 'coolant' : def.itemId === 'motor_oil' ? 'oil' : undefined
+    batteryCharge: def.itemId === 'car_battery'? 100 : undefined,
+    fluidLiters: def.itemId === 'antifreeze'? 5.0 : def.itemId === 'motor_oil'? 4.0 : undefined,
+    maxFluidLiters: def.itemId === 'antifreeze'? 5.0 : def.itemId === 'motor_oil'? 4.0 : undefined,
+    fluidType: def.itemId === 'antifreeze'? 'coolant': def.itemId === 'motor_oil'? 'oil': undefined,
+    phoneSpecs: phoneSpecs ? { ...phoneSpecs } : undefined,
+    cpu: phoneSpecs?.cpuModel,
+    ram: phoneSpecs?.ramGb,
+    storage: phoneSpecs?.storageGb,
+    battery: phoneSpecs?.batteryCapacityMah
   };
 }
 
@@ -2782,7 +3947,6 @@ export function getItemTotalWeight(item: InventoryItem | null | undefined): numb
 }
 
 // Calculate recursive volume of item (including its contents)
-// "Кстати, не забывай что предмет(пакет, рюкзак, кошель и тп) в виде предмета занимает в другом инвентаре столько сколько сам и его содержимое"
 export function getItemTotalVolume(item: InventoryItem | null | undefined): number {
   if (!item) return 0;
   const count = item.count || 1;
@@ -2794,6 +3958,178 @@ export function getItemTotalVolume(item: InventoryItem | null | undefined): numb
     }
   }
   return Number(total.toFixed(3));
+}
+
+// Check if an item is bulky/large
+export function isItemBulky(item: InventoryItem | null | undefined): boolean {
+  if (!item) return false;
+  const vol = item.volume || 0;
+  const wt = item.weight || 0;
+  const isSpecialContainer = item.isContainer && item.itemId !== 'wallet' && item.itemId !== 'plastic_bag';
+  return vol >= 1.5 || wt >= 1.5 || isSpecialContainer || item.maxStack === 1;
+}
+
+export interface InventoryCompartment {
+  id: 'base' | 'torso' | 'legs' | 'back';
+  nameRu: string;
+  sourceItemNameRu: string;
+  iconType: 'user' | 'shirt' | 'pants' | 'backpack';
+  startIndex: number;
+  slotCount: number;
+  capacityL: number;
+  maxWeightKg: number;
+  maxItemVolumeL: number;
+  usedVolumeL: number;
+  usedWeightKg: number;
+  itemCount: number;
+}
+
+export function getPlayerCompartments(player: Player): InventoryCompartment[] {
+  const compartments: InventoryCompartment[] = [];
+  let currentIndex = 0;
+
+  // 1. Base pockets (always present)
+  compartments.push({
+    id: 'base',
+    nameRu: 'Базовые карманы',
+    sourceItemNameRu: 'Внутренние карманы',
+    iconType: 'user',
+    startIndex: currentIndex,
+    slotCount: 4,
+    capacityL: 0.6,
+    maxWeightKg: 1.5,
+    maxItemVolumeL: 0.35,
+    usedVolumeL: 0,
+    usedWeightKg: 0,
+    itemCount: 0
+  });
+  currentIndex += 4;
+
+  // 2. Torso (jacket / sweater / outerwear)
+  const torsoCloth = player.equippedClothing?.torso?.jacket || 
+                     player.equippedClothing?.torso?.outerwear || 
+                     player.equippedClothing?.torso?.shirt;
+  if (torsoCloth) {
+    const stats = torsoCloth.clothingStats;
+    let slotCount = 4;
+    if (torsoCloth.itemId === 'sweater_blue' || torsoCloth.itemId === 'plaid_shirt') {
+      slotCount = 2;
+    }
+    const capL = stats?.pocketCapacityL || 3.5;
+    const maxWt = stats?.maxPocketWeightKg || 4.0;
+    const maxVol = stats?.maxPocketItemVolumeL || 0.8;
+    compartments.push({
+      id: 'torso',
+      nameRu: 'Верхняя одежда',
+      sourceItemNameRu: torsoCloth.nameRu,
+      iconType: 'shirt',
+      startIndex: currentIndex,
+      slotCount,
+      capacityL: capL,
+      maxWeightKg: maxWt,
+      maxItemVolumeL: maxVol,
+      usedVolumeL: 0,
+      usedWeightKg: 0,
+      itemCount: 0
+    });
+    currentIndex += slotCount;
+  }
+
+  // 3. Legs (jeans / cargo pants / shorts)
+  const legsCloth = player.equippedClothing?.legs?.outerwear || 
+                    player.equippedClothing?.legs?.shirt;
+  if (legsCloth) {
+    const stats = legsCloth.clothingStats;
+    let slotCount = 4;
+    if (legsCloth.itemId === 'cargo_pants') {
+      slotCount = 6;
+    } else if (legsCloth.itemId === 'shorts_khaki') {
+      slotCount = 2;
+    }
+    const capL = stats?.pocketCapacityL || 1.8;
+    const maxWt = stats?.maxPocketWeightKg || 3.0;
+    const maxVol = stats?.maxPocketItemVolumeL || 0.5;
+    compartments.push({
+      id: 'legs',
+      nameRu: 'Брюки / Джинсы',
+      sourceItemNameRu: legsCloth.nameRu,
+      iconType: 'pants',
+      startIndex: currentIndex,
+      slotCount,
+      capacityL: capL,
+      maxWeightKg: maxWt,
+      maxItemVolumeL: maxVol,
+      usedVolumeL: 0,
+      usedWeightKg: 0,
+      itemCount: 0
+    });
+    currentIndex += slotCount;
+  }
+
+  // 4. Back (Backpack)
+  const backCloth = player.equippedClothing?.back?.outerwear;
+  if (backCloth) {
+    const stats = backCloth.clothingStats;
+    let slotCount = 12;
+    if (backCloth.itemId === 'backpack_travel') {
+      slotCount = 18;
+    }
+    const capL = backCloth.containerCapacityL || stats?.pocketCapacityL || 28.0;
+    const maxWt = backCloth.maxContainedWeightKg || stats?.maxPocketWeightKg || 25.0;
+    const maxVol = backCloth.maxContainedItemVolumeL || stats?.maxPocketItemVolumeL || 18.0;
+    compartments.push({
+      id: 'back',
+      nameRu: 'Рюкзак за спиной',
+      sourceItemNameRu: backCloth.nameRu,
+      iconType: 'backpack',
+      startIndex: currentIndex,
+      slotCount,
+      capacityL: capL,
+      maxWeightKg: maxWt,
+      maxItemVolumeL: maxVol,
+      usedVolumeL: 0,
+      usedWeightKg: 0,
+      itemCount: 0
+    });
+    currentIndex += slotCount;
+  }
+
+  // Calculate used volume & weight for each compartment
+  if (player.inventory) {
+    for (const comp of compartments) {
+      let vol = 0;
+      let wt = 0;
+      let count = 0;
+      for (let i = comp.startIndex; i < comp.startIndex + comp.slotCount; i++) {
+        const item = player.inventory[i];
+        if (item) {
+          vol += getItemTotalVolume(item);
+          wt += getItemTotalWeight(item);
+          count++;
+        }
+      }
+      comp.usedVolumeL = Number(vol.toFixed(2));
+      comp.usedWeightKg = Number(wt.toFixed(2));
+      comp.itemCount = count;
+    }
+  }
+
+  return compartments;
+}
+
+export function getPlayerTotalSlots(player: Player): number {
+  const compartments = getPlayerCompartments(player);
+  return compartments.reduce((sum, c) => sum + c.slotCount, 0);
+}
+
+export function getSlotCompartment(player: Player, slotIndex: number): { compartment: InventoryCompartment; slotOffset: number } | null {
+  const compartments = getPlayerCompartments(player);
+  for (const comp of compartments) {
+    if (slotIndex >= comp.startIndex && slotIndex < comp.startIndex + comp.slotCount) {
+      return { compartment: comp, slotOffset: slotIndex - comp.startIndex };
+    }
+  }
+  return null;
 }
 
 // Get player's pocket capacity calculated from all worn clothing
@@ -2892,22 +4228,19 @@ export function canItemFitInPockets(player: Player, item: InventoryItem): { fits
   if (singleUnitVol > cap.maxItemVolumeL) {
     return {
       fits: false,
-      reason: `Предмет слишком громоздкий для карманов (${singleUnitVol}л > макс. ${cap.maxItemVolumeL}л). Возьмите в руку, положите в рюкзак или пакет.`
-    };
+      reason: `Предмет слишком громоздкий для карманов (${singleUnitVol}л > макс. ${cap.maxItemVolumeL}л). Возьмите в руку, положите в рюкзак или пакет.`};
   }
 
   if (cap.usedVolumeL + itemVol > cap.totalCapacityL) {
     return {
       fits: false,
-      reason: `В карманах недостаточно места (${(cap.totalCapacityL - cap.usedVolumeL).toFixed(1)}л свободно, нужно ${itemVol.toFixed(1)}л).`
-    };
+      reason: `В карманах недостаточно места (${(cap.totalCapacityL - cap.usedVolumeL).toFixed(1)}л свободно, нужно ${itemVol.toFixed(1)}л).`};
   }
 
   if (cap.usedWeightKg + itemWt > cap.maxWeightKg) {
     return {
       fits: false,
-      reason: `Карманы перегружены по весу (${(cap.maxWeightKg - cap.usedWeightKg).toFixed(1)}кг свободно, нужно ${itemWt.toFixed(1)}кг).`
-    };
+      reason: `Карманы перегружены по весу (${(cap.maxWeightKg - cap.usedWeightKg).toFixed(1)}кг свободно, нужно ${itemWt.toFixed(1)}кг).`};
   }
 
   return { fits: true };
@@ -2916,17 +4249,17 @@ export function canItemFitInPockets(player: Player, item: InventoryItem): { fits
 // Check if an item can fit inside a container
 export function canItemFitInContainer(container: InventoryItem, item: InventoryItem): { fits: boolean; reason?: string } {
   if (!container.isContainer) {
-    return { fits: false, reason: 'Этот предмет не является контейнером' };
+    return { fits: false, reason: 'Этот предмет не является контейнером'};
   }
 
   if (container.allowedItemCategories && container.allowedItemCategories.length > 0) {
     if (!container.allowedItemCategories.includes(item.category)) {
-      return { fits: false, reason: `${container.nameRu} не предназначен для предметов этого типа (${item.category}).` };
+      return { fits: false, reason: `${container.nameRu} не предназначен для предметов этого типа (${item.category}).`};
     }
   }
 
   if (container.id === item.id) {
-    return { fits: false, reason: 'Нельзя поместить контейнер внутрь самого себя.' };
+    return { fits: false, reason: 'Нельзя поместить контейнер внутрь самого себя.'};
   }
 
   const containerCapL = container.containerCapacityL || 5.0;
@@ -2940,8 +4273,7 @@ export function canItemFitInContainer(container: InventoryItem, item: InventoryI
   if (singleUnitVol > maxContainedVolL) {
     return {
       fits: false,
-      reason: `Предмет не помещается по габаритам в ${container.nameRu} (${singleUnitVol}л > макс. ${maxContainedVolL}л).`
-    };
+      reason: `Предмет не помещается по габаритам в ${container.nameRu} (${singleUnitVol}л > макс. ${maxContainedVolL}л).`};
   }
 
   let currentContentsVol = 0;
@@ -2956,15 +4288,13 @@ export function canItemFitInContainer(container: InventoryItem, item: InventoryI
   if (currentContentsVol + itemTotalVol > containerCapL) {
     return {
       fits: false,
-      reason: `Недостаточно места в ${container.nameRu} (свободно ${(containerCapL - currentContentsVol).toFixed(1)}л, нужно ${itemTotalVol.toFixed(1)}л).`
-    };
+      reason: `Недостаточно места в ${container.nameRu} (свободно ${(containerCapL - currentContentsVol).toFixed(1)}л, нужно ${itemTotalVol.toFixed(1)}л).`};
   }
 
   if (currentContentsWt + itemTotalWt > maxContainedWtKg) {
     return {
       fits: false,
-      reason: `Перегрузка по весу в ${container.nameRu} (свободно ${(maxContainedWtKg - currentContentsWt).toFixed(1)}кг, нужно ${itemTotalWt.toFixed(1)}кг).`
-    };
+      reason: `Перегрузка по весу в ${container.nameRu} (свободно ${(maxContainedWtKg - currentContentsWt).toFixed(1)}кг, нужно ${itemTotalWt.toFixed(1)}кг).`};
   }
 
   return { fits: true };
@@ -2974,7 +4304,7 @@ export function canItemFitInContainer(container: InventoryItem, item: InventoryI
 export function addItemToContainer(container: InventoryItem, itemToAdd: InventoryItem): { success: boolean; message: string } {
   const check = canItemFitInContainer(container, itemToAdd);
   if (!check.fits) {
-    return { success: false, message: check.reason || 'Не помещается' };
+    return { success: false, message: check.reason || 'Не помещается'};
   }
   if (!container.contents) {
     container.contents = [];
@@ -2987,11 +4317,11 @@ export function addItemToContainer(container: InventoryItem, itemToAdd: Inventor
     existing.count += addCount;
     itemToAdd.count -= addCount;
     if (itemToAdd.count <= 0) {
-      return { success: true, message: `Помещено в ${container.nameRu}: ${existing.nameRu} (+${addCount})` };
+      return { success: true, message: `Помещено в ${container.nameRu}: ${existing.nameRu} (+${addCount})`};
     }
   }
   container.contents.push(itemToAdd);
-  return { success: true, message: `Помещено в ${container.nameRu}: ${itemToAdd.nameRu} (x${itemToAdd.count})` };
+  return { success: true, message: `Помещено в ${container.nameRu}: ${itemToAdd.nameRu} (x${itemToAdd.count})`};
 }
 
 // Remove item from container contents
@@ -3010,22 +4340,51 @@ export function removeItemFromContainer(container: InventoryItem, contentIndex: 
 }
 
 // Put item into left or right hand
-export function putItemInHand(player: Player, hand: 'left' | 'right', item: InventoryItem): { success: boolean; message: string } {
-  const currentHandItem = hand === 'left' ? player.leftHandItem : player.rightHandItem;
+export function putItemInHand(player: Player, hand: 'left'| 'right', item: InventoryItem, world?: GameWorld): { success: boolean; message: string } {
+  const currentHandItem = hand === 'left'? player.leftHandItem : player.rightHandItem;
   if (currentHandItem) {
-    return { success: false, message: `${hand === 'left' ? 'Левая' : 'Правая'} рука уже занята (${currentHandItem.nameRu})!` };
+    return { success: false, message: `${hand === 'left'? 'Левая': 'Правая'} рука уже занята (${currentHandItem.nameRu})!`};
   }
+
+  // Enforce single-item rule for bulky items in hands
+  let itemInHand = item;
+  let remainder: InventoryItem | null = null;
+  if (isItemBulky(item) && item.count > 1) {
+    remainder = { ...item, id: `item_${item.itemId}_${Date.now()}_remainder`, count: item.count - 1 };
+    itemInHand = { ...item, count: 1 };
+  }
+
   if (hand === 'left') {
-    player.leftHandItem = item;
+    player.leftHandItem = itemInHand;
   } else {
-    player.rightHandItem = item;
+    player.rightHandItem = itemInHand;
   }
-  return { success: true, message: `Взято в ${hand === 'left' ? 'левую' : 'правую'} руку: ${item.nameRu}` };
+
+  if (remainder) {
+    const added = addItemToPlayer(player, remainder);
+    if (!added) {
+      if (world) {
+        if (!world.groundItems) world.groundItems = [];
+        world.groundItems.push({
+          id: `ground_split_${Date.now()}_${Math.random()}`,
+          x: player.x + (Math.random() * 20 - 10),
+          y: player.y + (Math.random() * 20 - 10),
+          item: remainder,
+          spawnTime: Date.now()
+        });
+        addPlayerNotification(player, `Инвентарь полон! Остальные ${remainder.nameRu} (x${remainder.count}) упали на землю.`, 'warning');
+      } else {
+        addPlayerNotification(player, `Инвентарь полон! Лишние ${remainder.nameRu} (x${remainder.count}) утеряны.`, 'warning');
+      }
+    }
+  }
+
+  return { success: true, message: `Взято в ${hand === 'left'? 'левую': 'правую'} руку: ${itemInHand.nameRu}`};
 }
 
 // Take item out of hand
-export function takeItemFromHand(player: Player, hand: 'left' | 'right'): InventoryItem | null {
-  const item = hand === 'left' ? player.leftHandItem : player.rightHandItem;
+export function takeItemFromHand(player: Player, hand: 'left'| 'right'): InventoryItem | null {
+  const item = hand === 'left'? player.leftHandItem : player.rightHandItem;
   if (!item) return null;
   if (hand === 'left') {
     player.leftHandItem = null;
@@ -3036,9 +4395,9 @@ export function takeItemFromHand(player: Player, hand: 'left' | 'right'): Invent
 }
 
 // Stow item from hand directly into player pockets (inventory) without loss
-export function stowItemFromHandToPockets(player: Player, hand: 'left' | 'right'): { success: boolean; message: string } {
-  const item = hand === 'left' ? player.leftHandItem : player.rightHandItem;
-  if (!item) return { success: false, message: 'В этой руке ничего нет' };
+export function stowItemFromHandToPockets(player: Player, hand: 'left'| 'right'): { success: boolean; message: string } {
+  const item = hand === 'left'? player.leftHandItem : player.rightHandItem;
+  if (!item) return { success: false, message: 'В этой руке ничего нет'};
 
   if (!player.inventory) player.inventory = [];
   const maxSlots = player.maxInventorySlots || 24;
@@ -3054,7 +4413,7 @@ export function stowItemFromHandToPockets(player: Player, hand: 'left' | 'right'
         if (item.count <= 0) {
           takeItemFromHand(player, hand);
           addPlayerNotification(player, `Убрано в карман: ${exist.nameRu} (+${canAdd})`, 'pickup');
-          return { success: true, message: `Убрано в карман: ${exist.nameRu}` };
+          return { success: true, message: `Убрано в карман: ${exist.nameRu}`};
         }
       }
     }
@@ -3066,16 +4425,16 @@ export function stowItemFromHandToPockets(player: Player, hand: 'left' | 'right'
     takeItemFromHand(player, hand);
     player.inventory[emptyIdx] = item;
     addPlayerNotification(player, `Убрано в карман: ${item.nameRu}`, 'pickup');
-    return { success: true, message: `Убрано в карман: ${item.nameRu}` };
+    return { success: true, message: `Убрано в карман: ${item.nameRu}`};
   } else if (player.inventory.length < maxSlots) {
     takeItemFromHand(player, hand);
     player.inventory.push(item);
     addPlayerNotification(player, `Убрано в карман: ${item.nameRu}`, 'pickup');
-    return { success: true, message: `Убрано в карман: ${item.nameRu}` };
+    return { success: true, message: `Убрано в карман: ${item.nameRu}`};
   }
 
   addPlayerNotification(player, 'Карманы переполнены! Освободите место в инвентаре.', 'warning');
-  return { success: false, message: 'Карманы переполнены!' };
+  return { success: false, message: 'Карманы переполнены!'};
 }
 
 // Swap items between left and right hand
@@ -3109,7 +4468,7 @@ export function restoreStarterContainers(player: Player): { restoredWallet: bool
   let restoredBag = false;
 
   const hasWallet = (player.inventory && player.inventory.some(i => i && i.itemId === 'wallet')) ||
-    player.leftHandItem?.itemId === 'wallet' ||
+    player.leftHandItem?.itemId === 'wallet'||
     player.rightHandItem?.itemId === 'wallet';
 
   if (!hasWallet) {
@@ -3119,7 +4478,7 @@ export function restoreStarterContainers(player: Player): { restoredWallet: bool
   }
 
   const hasBag = (player.inventory && player.inventory.some(i => i && i.itemId === 'plastic_bag')) ||
-    player.leftHandItem?.itemId === 'plastic_bag' ||
+    player.leftHandItem?.itemId === 'plastic_bag'||
     player.rightHandItem?.itemId === 'plastic_bag';
 
   if (!hasBag) {
@@ -3129,7 +4488,7 @@ export function restoreStarterContainers(player: Player): { restoredWallet: bool
   }
 
   if (restoredWallet || restoredBag) {
-    addPlayerNotification(player, '👛 Восстановлен кошелек и пакет со стартовыми средствами!', 'heal');
+    addPlayerNotification(player, 'Восстановлен кошелек и пакет со стартовыми средствами!', 'heal');
   }
 
   return { restoredWallet, restoredBag };
@@ -3142,6 +4501,7 @@ export function createDefaultPlayerInventory(): InventoryItem[] {
   return [
     wallet,
     plasticBag,
+    createItem('phone_aura_pro_black', 1),
     createItem('water_bottle', 1),
     createItem('sandwich', 1),
     createItem('hot_coffee', 1),
@@ -3150,7 +4510,11 @@ export function createDefaultPlayerInventory(): InventoryItem[] {
   ];
 }
 
-export function addItemToPlayer(player: Player, itemToAdd: InventoryItem): boolean {
+export function addItemToPlayer(
+  player: Player, 
+  itemToAdd: InventoryItem,
+  options?: { preferPockets?: boolean; skipHands?: boolean }
+): boolean {
   if (!player.inventory) {
     player.inventory = [];
   }
@@ -3169,78 +4533,125 @@ export function addItemToPlayer(player: Player, itemToAdd: InventoryItem): boole
     }
   }
 
-  // 2. PRIMARY PHYSICAL RULE: Pick up into FREE HAND first!
-  const activeHand = player.activeHand || 'right';
-  if (activeHand === 'left' && !player.leftHandItem) {
-    player.leftHandItem = itemToAdd;
-    addPlayerNotification(player, `Взято в левую руку: ${itemToAdd.nameRu} (x${itemToAdd.count})`, 'pickup');
-    return true;
-  } else if (activeHand === 'right' && !player.rightHandItem) {
-    player.rightHandItem = itemToAdd;
-    addPlayerNotification(player, `Взято в правую руку: ${itemToAdd.nameRu} (x${itemToAdd.count})`, 'pickup');
-    return true;
-  } else if (!player.rightHandItem) {
-    player.rightHandItem = itemToAdd;
-    addPlayerNotification(player, `Взято в правую руку: ${itemToAdd.nameRu} (x${itemToAdd.count})`, 'pickup');
-    return true;
-  } else if (!player.leftHandItem) {
-    player.leftHandItem = itemToAdd;
-    addPlayerNotification(player, `Взято в левую руку: ${itemToAdd.nameRu} (x${itemToAdd.count})`, 'pickup');
-    return true;
-  }
+  // Helper to place into clothing pockets (player.inventory)
+  const tryPlaceInPockets = (): boolean => {
+    // A. Stack onto existing item of same itemId in pockets
+    const existing = player.inventory.find(i => i && i.itemId === itemToAdd.itemId && i.count < i.maxStack);
+    if (existing) {
+      const space = existing.maxStack - existing.count;
+      const addCount = Math.min(space, itemToAdd.count);
+      const addedItem = { ...itemToAdd, count: addCount };
+      const check = canItemFitInPockets(player, addedItem);
+      if (check.fits) {
+        existing.count += addCount;
+        itemToAdd.count -= addCount;
+        if (itemToAdd.count <= 0) {
+          addPlayerNotification(player, `+${addCount} ${itemToAdd.nameRu}`, 'pickup');
+          return true;
+        }
+      }
+    }
 
-  // 3. If both hands are full, try to stack onto existing item of same itemId in pockets
-  const existing = player.inventory.find(i => i && i.itemId === itemToAdd.itemId && i.count < i.maxStack);
-  if (existing) {
-    const space = existing.maxStack - existing.count;
-    const addCount = Math.min(space, itemToAdd.count);
-    const addedItem = { ...itemToAdd, count: addCount };
-    const check = canItemFitInPockets(player, addedItem);
-    if (check.fits) {
-      existing.count += addCount;
-      itemToAdd.count -= addCount;
-      if (itemToAdd.count <= 0) {
-        addPlayerNotification(player, `+${addCount} ${itemToAdd.nameRu}`, 'pickup');
+    // B. Place in empty pocket/backpack slot
+    const pocketCheck = canItemFitInPockets(player, itemToAdd);
+    if (pocketCheck.fits) {
+      const maxSlots = getPlayerTotalSlots(player);
+      let placed = false;
+      for (let i = 0; i < player.inventory.length && i < maxSlots; i++) {
+        if (!player.inventory[i]) {
+          player.inventory[i] = itemToAdd;
+          placed = true;
+          break;
+        }
+      }
+      if (!placed && player.inventory.length < maxSlots) {
+        player.inventory.push(itemToAdd);
+        placed = true;
+      }
+      if (placed) {
+        const slotIdx = player.inventory.indexOf(itemToAdd);
+        const comp = slotIdx !== -1 ? getSlotCompartment(player, slotIdx)?.compartment : null;
+        const targetName = comp ? comp.nameRu : 'инвентарь';
+        addPlayerNotification(player, `Положено в ${targetName}: ${itemToAdd.nameRu} (x${itemToAdd.count})`, 'pickup');
         return true;
       }
     }
-  }
+    return false;
+  };
 
-  // 4. Try to put into worn backpack if player has one
-  const wornBackpack = player.equippedClothing?.back?.outerwear;
-  if (wornBackpack && wornBackpack.isContainer) {
-    const checkBackpack = canItemFitInContainer(wornBackpack, itemToAdd);
-    if (checkBackpack.fits) {
-      addItemToContainer(wornBackpack, itemToAdd);
-      addPlayerNotification(player, `Положено в рюкзак: ${itemToAdd.nameRu} (x${itemToAdd.count})`, 'pickup');
+  // Helper to place into worn backpack container if slots in inventory are full
+  const tryPlaceInBackpack = (): boolean => {
+    return false;
+  };
+
+  const activeHand = player.activeHand || 'right';
+  const bulky = isItemBulky(itemToAdd);
+
+  const tryPlaceInHand = (hand: 'left' | 'right'): boolean => {
+    const handItem = hand === 'left' ? player.leftHandItem : player.rightHandItem;
+    if (!handItem) {
+      let toHand = itemToAdd;
+      let remainder: InventoryItem | null = null;
+      if (bulky && itemToAdd.count > 1) {
+        toHand = { ...itemToAdd, count: 1 };
+        remainder = { ...itemToAdd, id: `item_${itemToAdd.itemId}_${Date.now()}_rem`, count: itemToAdd.count - 1 };
+      }
+      
+      if (hand === 'left') {
+        player.leftHandItem = toHand;
+        addPlayerNotification(player, `Взято в левую руку: ${toHand.nameRu} (x${toHand.count})`, 'pickup');
+      } else {
+        player.rightHandItem = toHand;
+        addPlayerNotification(player, `Взято в правую руку: ${toHand.nameRu} (x${toHand.count})`, 'pickup');
+      }
+      
+      if (remainder) {
+        addItemToPlayer(player, remainder, options);
+      }
       return true;
     }
-  }
+    return false;
+  };
 
-  // 5. Try to put into clothing pockets (player.inventory)
-  const pocketCheck = canItemFitInPockets(player, itemToAdd);
-  if (pocketCheck.fits) {
-    // Find empty slot or push
-    const maxSlots = 36; // flexible slots for realistic physical pocket storage
-    let placed = false;
-    for (let i = 0; i < player.inventory.length; i++) {
-      if (!player.inventory[i]) {
-        player.inventory[i] = itemToAdd;
-        placed = true;
-        break;
+  // If preferPockets: try pockets -> backpack -> hands
+  if (options?.preferPockets) {
+    if (tryPlaceInPockets()) return true;
+    if (tryPlaceInBackpack()) return true;
+    if (!options.skipHands) {
+      if (activeHand === 'left') {
+        if (tryPlaceInHand('left')) return true;
+        if (tryPlaceInHand('right')) return true;
+      } else {
+        if (tryPlaceInHand('right')) return true;
+        if (tryPlaceInHand('left')) return true;
       }
     }
-    if (!placed && player.inventory.length < maxSlots) {
-      player.inventory.push(itemToAdd);
-      placed = true;
+  } else {
+    // Default flow:
+    // 1. If active hand is free and item is bulky or single, take into active hand
+    if (!options?.skipHands) {
+      if (activeHand === 'left') {
+        if (tryPlaceInHand('left')) return true;
+      } else {
+        if (tryPlaceInHand('right')) return true;
+      }
     }
-    if (placed) {
-      addPlayerNotification(player, `Подобрано в карман: ${itemToAdd.nameRu} (x${itemToAdd.count})`, 'pickup');
-      return true;
+
+    // 2. Next: try pockets (player.inventory) so items appear directly in the main 18-slot inventory grid!
+    if (tryPlaceInPockets()) return true;
+
+    // 3. Next: try worn backpack container
+    if (tryPlaceInBackpack()) return true;
+
+    // 4. Next: try secondary hand if still not placed
+    if (!options?.skipHands) {
+      const otherHand = activeHand === 'left' ? 'right' : 'left';
+      if (tryPlaceInHand(otherHand)) return true;
     }
   }
 
-  // 6. No space anywhere
+  // 5. No space anywhere
+  const pocketCheck = canItemFitInPockets(player, itemToAdd);
   const reason = pocketCheck.reason || 'Нет места в карманах, рюкзаке и обе руки заняты!';
   addPlayerNotification(player, reason, 'warning');
   return false;
@@ -3289,7 +4700,7 @@ export function removeItemFromPlayer(player: Player, itemIndex: number, count: n
   const item = player.inventory[itemIndex];
   if (!item) return null;
   if (item.count <= count) {
-    player.inventory.splice(itemIndex, 1);
+    player.inventory[itemIndex] = null as any;
     return item;
   } else {
     item.count -= count;
@@ -3297,45 +4708,91 @@ export function removeItemFromPlayer(player: Player, itemIndex: number, count: n
   }
 }
 
-export function handleCarKeyActivation(
+export function getCarKeyTier(carType?: string, priceRub?: number): 'classic'| 'flip'| 'smart'| 'display'{
+  if (carType === 'supercar'|| carType === 'coupe_gt'|| (priceRub !== undefined && priceRub >= 2000000)) {
+    return 'display';
+  }
+  if (
+    carType === 'sedan_luxury'||
+    carType === 'suv_luxury'||
+    carType === 'sports'||
+    carType === 'hatch_hot'||
+    carType === 'van'||
+    (priceRub !== undefined && priceRub >= 950000)
+  ) {
+    return 'smart';
+  }
+  if (
+    carType === 'sedan_classic'||
+    carType === 'micro_car'||
+    carType === 'classic_compact'||
+    carType === 'retro_bubble'||
+    carType === 'tractor_mtz80'||
+    carType === 'tractor_mtz82'||
+    carType === 'moped_soviet'||
+    carType === 'van_cargo_old'||
+    (priceRub !== undefined && priceRub < 450000)
+  ) {
+    return 'classic';
+  }
+  return 'flip';
+}
+
+export function getCarKeyFeatures(tier: 'classic'| 'flip'| 'smart'| 'display'): ('lock'| 'unlock'| 'engine_start'| 'headlights'| 'horn')[] {
+  switch (tier) {
+    case 'display':
+    case 'smart':
+      return ['lock', 'unlock', 'engine_start', 'headlights', 'horn'];
+    case 'flip':
+      return ['lock', 'unlock', 'horn'];
+    case 'classic':
+    default:
+      return ['lock', 'unlock'];
+  }
+}
+
+export function getTargetVehicleForKey(player: Player, keyItem: InventoryItem, world?: GameWorld): Vehicle | null {
+  if (!world || !world.vehicles || world.vehicles.length === 0) return null;
+
+  // 1. Direct match by vehicleId
+  if (keyItem.vehicleId) {
+    const matched = world.vehicles.find(v => v.id === keyItem.vehicleId);
+    if (matched) return matched;
+  }
+
+  // 2. Closest vehicle within 250px
+  let closest: Vehicle | null = null;
+  let minDist = 250;
+  for (const v of world.vehicles) {
+    const d = Math.hypot(v.x - player.x, v.y - player.y);
+    if (d < minDist) {
+      minDist = d;
+      closest = v;
+    }
+  }
+  return closest;
+}
+
+export function remoteToggleLock(
   player: Player,
   keyItem: InventoryItem,
   world?: GameWorld
 ): { success: boolean; message: string } {
-  if (!world || !world.vehicles || world.vehicles.length === 0) {
-    sound.playAlert();
-    addPlayerNotification(player, '🔑 Брелок ключа пикнул, но поблизости нет автомобилей.', 'warning');
-    return { success: false, message: 'Автомобиль не найден' };
-  }
-
-  // Find target vehicle matching custom vehicleId or closest within 180px
-  let targetVeh = keyItem.vehicleId ? world.vehicles.find(v => v.id === keyItem.vehicleId) : null;
-
-  if (!targetVeh) {
-    let minDist = 180;
-    for (const v of world.vehicles) {
-      const d = Math.hypot(v.x - player.x, v.y - player.y);
-      if (d < minDist) {
-        minDist = d;
-        targetVeh = v;
-      }
-    }
-  }
-
+  const targetVeh = getTargetVehicleForKey(player, keyItem, world);
   if (!targetVeh) {
     sound.playAlert();
-    addPlayerNotification(player, '🔑 Автомобиль находится слишком далеко для сигнала ключа!', 'warning');
-    return { success: false, message: 'Слишком далеко' };
+    addPlayerNotification(player, 'Автомобиль находится слишком далеко для радиосигнала ключа!', 'warning');
+    return { success: false, message: 'Автомобиль вне зоны действия'};
   }
 
   const dist = Math.hypot(targetVeh.x - player.x, targetVeh.y - player.y);
-  if (dist > 220 && !player.isInVehicle) {
+  const maxRange = keyItem.keyTier === 'display'? 320 : (keyItem.keyTier === 'smart'? 240 : (keyItem.keyTier === 'flip'? 160 : 70));
+  if (dist > maxRange && !player.isInVehicle) {
     sound.playAlert();
-    addPlayerNotification(player, '🔑 Вы слишком далеко от авто для работы центрального замка.', 'warning');
-    return { success: false, message: 'Слишком далеко' };
+    addPlayerNotification(player, `Слишком далеко (${Math.round(dist / 10)}м). Радиус действия ключа: ${Math.round(maxRange / 10)}м`, 'warning');
+    return { success: false, message: 'Слишком далеко'};
   }
 
-  // Toggle lock state
   targetVeh.isLocked = !targetVeh.isLocked;
   targetVeh.turnSignal = 'hazard';
   setTimeout(() => {
@@ -3345,11 +4802,521 @@ export function handleCarKeyActivation(
   sound.playPickup();
   const carName = keyItem.carName || targetVeh.type?.toUpperCase() || 'Автомобиль';
   const statusMsg = targetVeh.isLocked
-    ? `🔒 Пик-пик! ЦЗ заблокирован: ${carName}`
-    : `🔓 Пик-пик! ЦЗ разблокирован: ${carName}`;
+    ? `Пик-пик! ЦЗ заблокирован: ${carName}`: `Пик-пик! ЦЗ разблокирован: ${carName}`;
 
-  addPlayerNotification(player, statusMsg, targetVeh.isLocked ? 'warning' : 'heal');
+  addPlayerNotification(player, statusMsg, targetVeh.isLocked ? 'warning': 'heal');
   return { success: true, message: statusMsg };
+}
+
+export function remoteToggleEngine(
+  player: Player,
+  keyItem: InventoryItem,
+  world?: GameWorld
+): { success: boolean; message: string } {
+  const targetVeh = getTargetVehicleForKey(player, keyItem, world);
+  if (!targetVeh) {
+    sound.playAlert();
+    addPlayerNotification(player, 'Автомобиль находится слишком далеко для автозапуска!', 'warning');
+    return { success: false, message: 'Автомобиль не найден'};
+  }
+
+  const tier = keyItem.keyTier || getCarKeyTier(targetVeh.type, keyItem.carPrice);
+  if (tier !== 'smart'&& tier !== 'display') {
+    sound.playAlert();
+    addPlayerNotification(player, 'На данном типе ключа нет модуля дистанционного автозапуска ДВС.', 'warning');
+    return { success: false, message: 'Функция недоступна для этого ключа'};
+  }
+
+  const dist = Math.hypot(targetVeh.x - player.x, targetVeh.y - player.y);
+  const maxRange = tier === 'display'? 320 : 240;
+  if (dist > maxRange && !player.isInVehicle) {
+    sound.playAlert();
+    addPlayerNotification(player, `Слишком далеко (${Math.round(dist / 10)}м). Радиус автозапуска: ${Math.round(maxRange / 10)}м`, 'warning');
+    return { success: false, message: 'Слишком далеко'};
+  }
+
+  if (!targetVeh.engineState) {
+    targetVeh.engineState = {
+      radiatorWater: 100,
+      radiatorPunctured: false,
+      oilLevel: 100,
+      oilPunctured: false,
+      engineHealth: 100,
+      transmissionHealth: 100,
+      batteryCharge: 100,
+      starterWorking: true,
+      engineRunning: false,
+      engineStalled: false,
+      isSeized: false,
+      temperature: 20
+    } as any;
+  }
+
+  const eng = targetVeh.engineState;
+  const carName = keyItem.carName || targetVeh.type?.toUpperCase() || 'Автомобиль';
+
+  if (eng.engineRunning) {
+    // Stop engine remotely
+    eng.engineRunning = false;
+    eng.engineStalled = false;
+    if (targetVeh.id === player.currentVehicleId) {
+      sound.stopEngine();
+    }
+    targetVeh.turnSignal = 'hazard';
+    setTimeout(() => {
+      if (targetVeh) targetVeh.turnSignal = 'none';
+    }, 1000);
+    sound.playPickup();
+    const msg = `Дистанционный автозапуск: Двигатель «${carName}» заглушен с брелока.`;
+    addPlayerNotification(player, msg, 'warning');
+    return { success: true, message: msg };
+  } else {
+    // Start engine remotely
+    if (eng.isSeized || (eng.engineHealth ?? 100) <= 12) {
+      sound.playAlert();
+      addPlayerNotification(player, `Ошибка автозапуска: Двигатель «${carName}» поврежден или заклинил!`, 'warning');
+      return { success: false, message: 'Двигатель поврежден'};
+    }
+    if (targetVeh.fuelSystem && targetVeh.fuelSystem.tankLevel <= 0) {
+      sound.playAlert();
+      addPlayerNotification(player, `Ошибка автозапуска: В баке «${carName}» нет топлива!`, 'warning');
+      return { success: false, message: 'Нет топлива'};
+    }
+    if (eng.batteryCharge !== undefined && eng.batteryCharge < 15) {
+      sound.playAlert();
+      addPlayerNotification(player, `Ошибка автозапуска: Разряжен аккумулятор «${carName}»!`, 'warning');
+      return { success: false, message: 'Разряжен аккумулятор'};
+    }
+
+    eng.engineRunning = true;
+    eng.starterWorking = true;
+    eng.engineStalled = false;
+    targetVeh.turnSignal = 'hazard';
+    setTimeout(() => {
+      if (targetVeh) targetVeh.turnSignal = 'none';
+    }, 2000);
+
+    sound.playPickup();
+    const msg = `Дистанционный автозапуск: ДВС «${carName}» успешно заведён с брелока!`;
+    addPlayerNotification(player, msg, 'heal');
+    return { success: true, message: msg };
+  }
+}
+
+export function remoteToggleHeadlights(
+  player: Player,
+  keyItem: InventoryItem,
+  world?: GameWorld
+): { success: boolean; message: string } {
+  const targetVeh = getTargetVehicleForKey(player, keyItem, world);
+  if (!targetVeh) {
+    sound.playAlert();
+    addPlayerNotification(player, 'Автомобиль находится слишком далеко для сигнала!', 'warning');
+    return { success: false, message: 'Автомобиль не найден'};
+  }
+
+  const tier = keyItem.keyTier || getCarKeyTier(targetVeh.type, keyItem.carPrice);
+  if (tier !== 'smart'&& tier !== 'display') {
+    sound.playAlert();
+    addPlayerNotification(player, 'На данном ключе нет функции дистанционного включения фар.', 'warning');
+    return { success: false, message: 'Функция недоступна для этого ключа'};
+  }
+
+  const dist = Math.hypot(targetVeh.x - player.x, targetVeh.y - player.y);
+  const maxRange = tier === 'display'? 320 : 240;
+  if (dist > maxRange && !player.isInVehicle) {
+    sound.playAlert();
+    addPlayerNotification(player, `Слишком далеко (${Math.round(dist / 10)}м). Радиус действия: ${Math.round(maxRange / 10)}м`, 'warning');
+    return { success: false, message: 'Слишком далеко'};
+  }
+
+  targetVeh.headlightsOn = !targetVeh.headlightsOn;
+  targetVeh.headlightMode = targetVeh.headlightsOn ? 'low': 'off';
+
+  sound.playUseItem();
+  const carName = keyItem.carName || targetVeh.type?.toUpperCase() || 'Автомобиль';
+  const statusMsg = targetVeh.headlightsOn
+    ? `Дистанционный свет («Проводи домой»): Фары «${carName}» включены`: `Дистанционный свет: Фары «${carName}» выключены`;
+
+  addPlayerNotification(player, statusMsg, targetVeh.headlightsOn ? 'heal': 'warning');
+  return { success: true, message: statusMsg };
+}
+
+export function remoteCarFinder(
+  player: Player,
+  keyItem: InventoryItem,
+  world?: GameWorld
+): { success: boolean; message: string } {
+  const targetVeh = getTargetVehicleForKey(player, keyItem, world);
+  if (!targetVeh) {
+    sound.playAlert();
+    addPlayerNotification(player, 'Автомобиль не найден поблизости!', 'warning');
+    return { success: false, message: 'Автомобиль не найден'};
+  }
+
+  const dist = Math.hypot(targetVeh.x - player.x, targetVeh.y - player.y);
+  const maxRange = 320;
+  if (dist > maxRange && !player.isInVehicle) {
+    sound.playAlert();
+    addPlayerNotification(player, 'Автомобиль вне зоны слышимости сигнала!', 'warning');
+    return { success: false, message: 'Слишком далеко'};
+  }
+
+  targetVeh.turnSignal = 'hazard';
+  targetVeh.isHonking = true;
+  sound.playHorn(targetVeh.type);
+  setTimeout(() => {
+    if (targetVeh) {
+      targetVeh.turnSignal = 'none';
+      targetVeh.isHonking = false;
+    }
+  }, 1800);
+
+  const carName = keyItem.carName || targetVeh.type?.toUpperCase() || 'Автомобиль';
+  const msg = `Поиск на парковке: «${carName}» подал звуковой и световой сигнал!`;
+  addPlayerNotification(player, msg, 'heal');
+  return { success: true, message: msg };
+}
+
+export function getVehicleRequiredKeyType(typeOrVehicle: string | Vehicle): 'gold'| 'iron'| null {
+  let type = '';
+  if (typeof typeOrVehicle === 'string') {
+    type = typeOrVehicle;
+  } else {
+    // Unowned (parked/map-spawned) vehicles don't require keys
+    if (!typeOrVehicle.ownerId && !typeOrVehicle.keyId) return null;
+    type = typeOrVehicle.type;
+  }
+  if (!type) return null;
+  const t = type.toLowerCase();
+
+  // Tractors & heavy utility trucks
+  if (
+    t.startsWith('tractor_') || 
+    t.startsWith('truck_') ||
+    t === 'van_cargo_old'||
+    t === 'cement_mixer'||
+    t === 'garbage_truck'||
+    t === 'delivery_truck') {
+    return 'iron';
+  }
+
+  // Classic/old passenger retro cars
+  if (
+    t === 'classic_compact'|| 
+    t === 'retro_bubble'|| 
+    t === 'sedan_classic'|| 
+    t === 'wagon_classic'|| 
+    t === 'micro_car'||
+    t === 'muscle_classic'||
+    t === 'suv_classic_box'||
+    t === 'offroad_hardcore') {
+    return 'gold';
+  }
+
+  return null;
+}
+
+export function handleMechanicalKeyUsage(
+  player: Player,
+  item: InventoryItem,
+  world?: GameWorld,
+  fromHand?: 'left'| 'right'| null,
+  fromInventoryIndex?: number
+): { success: boolean; message: string } {
+  if (!world) return { success: false, message: 'Окружение игры недоступно.'};
+
+  const requiredType = item.itemId === 'car_key_gold'? 'gold': 'iron';
+
+  // 1. If player is inside a vehicle
+  if (player.isInVehicle && player.currentVehicleId) {
+    const veh = world.vehicles.find(v => v.id === player.currentVehicleId);
+    if (!veh) return { success: false, message: 'Транспортное средство не найдено.'};
+
+    const vehicleRequiredKey = getVehicleRequiredKeyType(veh);
+    if (!vehicleRequiredKey) {
+      return { success: false, message: 'Этому современному автомобилю не требуется механический ключ зажигания!'};
+    }
+
+    if (vehicleRequiredKey !== requiredType) {
+      const neededName = requiredType === 'gold'? 'Золотой ключ зажигания': 'Железный ключ зажигания';
+      const requiredName = vehicleRequiredKey === 'gold'? 'Золотой': 'Железный';
+      return { success: false, message: `Для зажигания этого ТС необходим ${requiredName} ключ!`};
+    }
+
+    if (veh.insertedKeyType !== undefined) {
+      return { success: false, message: 'В замке зажигания уже находится другой ключ!'};
+    }
+
+    veh.insertedKeyType = requiredType;
+    veh.insertedKeyId = item.vehicleId || 'any';
+    sound.playUseItem();
+    addPlayerNotification(player, `Вы вставили ${requiredType === 'gold'? 'Золотой': 'Железный'} ключ в замок зажигания!`, 'pickup');
+
+    if (fromHand) {
+      takeItemFromHand(player, fromHand);
+    } else if (fromInventoryIndex !== undefined) {
+      removeItemFromPlayer(player, fromInventoryIndex, 1);
+    }
+
+    return { success: true, message: 'Ключ успешно вставлен в замок зажигания.'};
+  }
+
+  // 2. If player is outside
+  const targetVeh = world.vehicles.find(v => Math.hypot(v.x - player.x, v.y - player.y) < 95);
+  if (!targetVeh) {
+    return { success: false, message: 'Вы слишком далеко от ТС или поблизости нет машин.'};
+  }
+
+  const vehicleRequiredKey = getVehicleRequiredKeyType(targetVeh);
+  if (!vehicleRequiredKey) {
+    return { success: false, message: 'Этот ключ не подходит к замкам дверей современного автомобиля.'};
+  }
+
+  if (vehicleRequiredKey !== requiredType) {
+    const neededName = vehicleRequiredKey === 'gold'? 'Золотого': 'Железного';
+    return { success: false, message: `Замки этой машины требуют ${neededName} ключа!`};
+  }
+
+  targetVeh.isLocked = !targetVeh.isLocked;
+  if ((sound as any).playLockToggle) (sound as any).playLockToggle();
+  else sound.playUseItem();
+
+  targetVeh.turnSignal = 'hazard';
+  targetVeh.turnSignalTimer = 1.2;
+  setTimeout(() => {
+    if (targetVeh) targetVeh.turnSignal = 'none';
+  }, 1200);
+
+  const statusMsg = targetVeh.isLocked 
+    ? 'Вы заперли транспорт ключом.': 'Вы отперли транспорт ключом.';
+  addPlayerNotification(player, statusMsg, 'pickup');
+  return { success: true, message: statusMsg };
+}
+
+export function insertKeyToVehicle(player: Player, vehicle: Vehicle, keyType: 'gold'| 'iron'): { success: boolean; message: string } {
+  if (vehicle.insertedKeyType) {
+    return { success: false, message: 'В замке зажигания уже есть ключ.'};
+  }
+
+  const keyItemId = keyType === 'gold'? 'car_key_gold': 'car_key_iron';
+  
+  if (player.leftHandItem && player.leftHandItem.itemId === keyItemId) {
+    vehicle.insertedKeyType = keyType;
+    vehicle.insertedKeyId = player.leftHandItem.vehicleId || 'any';
+    takeItemFromHand(player, 'left');
+    sound.playUseItem();
+    addPlayerNotification(player, `Вы вставили ${keyType === 'gold'? 'Золотой': 'Железный'} ключ в замок зажигания!`, 'pickup');
+    return { success: true, message: 'Ключ успешно вставлен.'};
+  }
+  if (player.rightHandItem && player.rightHandItem.itemId === keyItemId) {
+    vehicle.insertedKeyType = keyType;
+    vehicle.insertedKeyId = player.rightHandItem.vehicleId || 'any';
+    takeItemFromHand(player, 'right');
+    sound.playUseItem();
+    addPlayerNotification(player, `Вы вставили ${keyType === 'gold'? 'Золотой': 'Железный'} ключ в замок зажигания!`, 'pickup');
+    return { success: true, message: 'Ключ успешно вставлен.'};
+  }
+
+  if (player.inventory) {
+    const idx = player.inventory.findIndex(i => i && i.itemId === keyItemId);
+    if (idx !== -1) {
+      const item = player.inventory[idx];
+      vehicle.insertedKeyType = keyType;
+      vehicle.insertedKeyId = item.vehicleId || 'any';
+      removeItemFromPlayer(player, idx, 1);
+      sound.playUseItem();
+      addPlayerNotification(player, `Вы вставили ${keyType === 'gold'? 'Золотой': 'Железный'} ключ в замок зажигания!`, 'pickup');
+      return { success: true, message: 'Ключ успешно вставлен.'};
+    }
+  }
+
+  return { success: false, message: 'У вас нет подходящего ключа в руках или инвентаре.'};
+}
+
+export function takeOutKeyFromVehicle(player: Player, vehicle: Vehicle): { success: boolean; message: string } {
+  if (!vehicle.insertedKeyType) {
+    return { success: false, message: 'В замке зажигания нет ключа.'};
+  }
+
+  const keyType = vehicle.insertedKeyType;
+  const keyItemId = keyType === 'gold'? 'car_key_gold': 'car_key_iron';
+
+  const newKeyItem = createItem(keyItemId, 1);
+  newKeyItem.vehicleId = vehicle.id;
+  newKeyItem.keyTier = 'classic';
+  newKeyItem.nameRu = keyType === 'gold'? 'Золотой ключ зажигания': 'Железный ключ зажигания';
+  
+  const added = addItemToPlayer(player, newKeyItem);
+  if (!added) {
+    return { success: false, message: 'Инвентарь полон! Освободите место, чтобы достать ключ.'};
+  }
+
+  vehicle.insertedKeyType = undefined;
+  vehicle.insertedKeyId = undefined;
+  
+  if (vehicle.engineState && vehicle.engineState.engineRunning) {
+    vehicle.engineState.engineRunning = false;
+    vehicle.engineState.engineRPM = 0;
+    addPlayerNotification(player, 'Вы вынули ключ из зажигания — двигатель заглох.', 'warning');
+  } else {
+    addPlayerNotification(player, 'Вы вынули ключ зажигания.', 'pickup');
+  }
+
+  sound.playUseItem();
+  return { success: true, message: 'Ключ успешно извлечен.'};
+}
+
+export function handleCarKeyActivation(
+  player: Player,
+  keyItem: InventoryItem,
+  world?: GameWorld,
+  action?: 'toggle_lock'| 'toggle_engine'| 'toggle_headlights'| 'horn'): { success: boolean; message: string } {
+  if (action === 'toggle_engine') {
+    return remoteToggleEngine(player, keyItem, world);
+  }
+  if (action === 'toggle_headlights') {
+    return remoteToggleHeadlights(player, keyItem, world);
+  }
+  if (action === 'horn') {
+    return remoteCarFinder(player, keyItem, world);
+  }
+  return remoteToggleLock(player, keyItem, world);
+}
+
+export function activateTowRopeItem(
+  player: Player,
+  world: GameWorld | undefined,
+  consumeItemCallback: () => void
+): { success: boolean; message: string } {
+  if (!world) {
+    return { success: false, message: 'Мир игры не инициализирован' };
+  }
+  if (player.isInVehicle) {
+    return { success: false, message: 'Вы не можете использовать трос, находясь внутри машины' };
+  }
+
+  // 1. Find the nearest vehicle within physical reach of the player
+  let closestVehicle: Vehicle | null = null;
+  let minDistance = 46; // Physical interaction distance (similar to hose/hitch)
+  let bestIsFront = false;
+  let bestAttachPos = { x: 0, y: 0 };
+
+  for (const veh of world.vehicles) {
+    const cfg = CAR_CONFIGS[veh.type] || CAR_CONFIGS.sedan;
+    const cosA = Math.cos(veh.angle);
+    const sinA = Math.sin(veh.angle);
+
+    // Front bumper anchor
+    const fx = veh.x + cosA * (cfg.length / 2 + 1);
+    const fy = veh.y + sinA * (cfg.length / 2 + 1);
+    const distF = Math.hypot(fx - player.x, fy - player.y);
+
+    // Rear bumper anchor
+    const rx = veh.x - cosA * (cfg.length / 2 + 1);
+    const ry = veh.y - sinA * (cfg.length / 2 + 1);
+    const distR = Math.hypot(rx - player.x, ry - player.y);
+
+    if (distF < minDistance && distF < distR) {
+      minDistance = distF;
+      closestVehicle = veh;
+      bestIsFront = true;
+      bestAttachPos = { x: fx, y: fy };
+    } else if (distR < minDistance) {
+      minDistance = distR;
+      closestVehicle = veh;
+      bestIsFront = false;
+      bestAttachPos = { x: rx, y: ry };
+    }
+  }
+
+  if (!closestVehicle) {
+    return { success: false, message: 'Подойдите ближе к переднему или заднему бамперу автомобиля' };
+  }
+
+  const vehName = CAR_CONFIGS[closestVehicle.type]?.name || closestVehicle.type;
+  const bumperText = bestIsFront ? 'передний бампер' : 'задний бампер';
+
+  // CASE A: Player is not dragging a rope yet. Hook first end of the rope!
+  if (!player.heldTowRope) {
+    const ropeLen = 140; // 14 meters
+    const numSegs = 14;
+    const segLen = ropeLen / (numSegs - 1);
+    const segments = [];
+    
+    // Create rope physical segments from bumper to player
+    for (let i = 0; i < numSegs; i++) {
+      const frac = i / (numSegs - 1);
+      const rx = bestAttachPos.x + (player.x - bestAttachPos.x) * frac;
+      const ry = bestAttachPos.y + (player.y - bestAttachPos.y) * frac;
+      segments.push({ x: rx, y: ry, oldX: rx, oldY: ry });
+    }
+
+    player.heldTowRope = {
+      vehicleId: closestVehicle.id,
+      isFront: bestIsFront,
+      maxLength: ropeLen,
+      segments,
+      segmentLength: segLen
+    };
+
+    sound.playPickup();
+    addPlayerNotification(
+      player,
+      `Буксировочный трос прицеплен за ${bumperText} машины ${vehName}! Теперь подойдите ко второму автомобилю и закрепите его.`,
+      'info'
+    );
+    return { success: true, message: `Трос прицеплен к ${vehName}` };
+  }
+
+  // CASE B: Player is holding one end of the rope. Connect to second vehicle!
+  const firstVehId = player.heldTowRope.vehicleId;
+  const firstIsFront = player.heldTowRope.isFront;
+
+  if (firstVehId === closestVehicle.id && firstIsFront === bestIsFront) {
+    return { success: false, message: 'Нельзя прицепить оба конца троса к одному и тому же месту' };
+  }
+
+  // Create a brand new physical TowingRope between Vehicle A and Vehicle B!
+  const newRopeId = 'tow_rope_' + Date.now() + '_' + Math.floor(Math.random() * 1000);
+  
+  if (!world.towingRopes) {
+    world.towingRopes = [];
+  }
+
+  // We reuse the segments simulated by the player to avoid snaps, but we pin node N to the new vehicle
+  const segments = [...player.heldTowRope.segments];
+  const lastSeg = segments[segments.length - 1];
+  lastSeg.x = bestAttachPos.x;
+  lastSeg.y = bestAttachPos.y;
+  lastSeg.oldX = bestAttachPos.x;
+  lastSeg.oldY = bestAttachPos.y;
+
+  const newRope: TowingRope = {
+    id: newRopeId,
+    vehicleAId: firstVehId,
+    isFrontA: firstIsFront,
+    vehicleBId: closestVehicle.id,
+    isFrontB: bestIsFront,
+    maxLength: player.heldTowRope.maxLength,
+    segments,
+    segmentLength: player.heldTowRope.segmentLength
+  };
+
+  world.towingRopes.push(newRope);
+
+  // Success! Clean up player's dragging state and consume the item
+  player.heldTowRope = null;
+  consumeItemCallback();
+
+  sound.playPickup(); // Clank sound
+  addPlayerNotification(
+    player,
+    `Буксировочный трос натянут между машинами! Чтобы отцепить трос, подойдите к любому крюку и нажмите [E] при появлении подсказки.`,
+    'info'
+  );
+
+  return { success: true, message: 'Буксировочный трос натянут' };
 }
 
 export function useItemOnPlayer(
@@ -3359,17 +5326,46 @@ export function useItemOnPlayer(
   targetInjuryId?: string
 ): { success: boolean; message: string } {
   if (!player.inventory || itemIndex < 0 || itemIndex >= player.inventory.length) {
-    return { success: false, message: 'Предмет не найден' };
+    return { success: false, message: 'Предмет не найден'};
   }
 
   const item = player.inventory[itemIndex];
   if (!item || !item.usable) {
-    return { success: false, message: 'Этот предмет нельзя использовать напрямую' };
+    return { success: false, message: 'Этот предмет нельзя использовать напрямую'};
   }
 
   // Safety: Containers must NEVER be consumed or deleted on use
   if (item.isContainer) {
-    return { success: false, message: 'Это контейнер: откройте его, чтобы положить или достать вещи' };
+    return { success: false, message: 'Это контейнер: откройте его, чтобы положить или достать вещи'};
+  }
+
+  // Tow Rope activation from Inventory
+  if (item.itemId === 'tow_rope') {
+    return activateTowRopeItem(player, world, () => {
+      removeItemFromPlayer(player, itemIndex, 1);
+    });
+  }
+
+  // Furniture item -> Equip to hand for placement
+  if (item.itemId.startsWith('furn_') || item.category === ('furniture' as any)) {
+    const activeHand = player.activeHand || 'right';
+    const itemToHold = removeItemFromPlayer(player, itemIndex, 1);
+    if (itemToHold) {
+      if (activeHand === 'left') {
+        if (player.leftHandItem) {
+          addItemToPlayer(player, player.leftHandItem);
+        }
+        player.leftHandItem = itemToHold;
+      } else {
+        if (player.rightHandItem) {
+          addItemToPlayer(player, player.rightHandItem);
+        }
+        player.rightHandItem = itemToHold;
+      }
+      sound.playPickup();
+      addPlayerNotification(player, `${itemToHold.nameRu} взят в руки! Подойдите к месту в своей квартире и нажмите [E], чтобы установить.`, 'info');
+      return { success: true, message: `${itemToHold.nameRu} взят в руки` };
+    }
   }
 
   // Physical banknotes & coins deposits
@@ -3392,14 +5388,68 @@ export function useItemOnPlayer(
       removeItemFromPlayer(player, itemIndex, count);
       sound.playPickup();
       addPlayerNotification(player, `Зачислено в кошелёк: +$${value * count}`, 'pickup');
-      return { success: true, message: `Зачислено в кошелёк: +$${value * count}` };
+      return { success: true, message: `Зачислено в кошелёк: +$${value * count}`};
     }
   }
 
   const def = ITEM_CATALOG[item.itemId];
 
+  // Smartphone activation (screen & interactive apps)
+  if (item.itemId.startsWith('phone_') || item.itemId === 'smartphone'|| item.phoneSpecs) {
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('open_phone_modal', { detail: { item } }));
+    }
+    sound.playPhoneChime();
+    addPlayerNotification(player, `Открыт экран: ${item.nameRu}`, 'heal');
+    return { success: true, message: `Открыт экран: ${item.nameRu}`};
+  }
+
+  // Watches & valuables inspection from inventory
+  if (item.itemId === 'valuable_gold_watch' || item.itemId === 'valuable_silver_pocket_watch') {
+    sound.playUseItem();
+    addPlayerNotification(player, `Вы смотрите на ${item.nameRu}. Механизм работает с безупречной точностью.`, 'info');
+    return { success: true, message: `Время проверено по ${item.nameRu}` };
+  }
+
+  // Chef knife inspection from inventory
+  if (item.itemId === 'kitchen_knife_chef') {
+    sound.playUseItem();
+    addPlayerNotification(player, `Острый кухонный нож шеф-повара. Нажмите [E] с ножом в руке для взмаха.`, 'info');
+    return { success: true, message: 'Кухонный нож осмотрен' };
+  }
+
+  // Electric kettle inspection from inventory
+  if (item.itemId === 'kitchen_kettle_electric') {
+    sound.playUseItem();
+    addPlayerNotification(player, `Электрочайник с подсветкой. Возьмите в руки или поставьте на кухонный стол.`, 'info');
+    return { success: true, message: 'Электрочайник проверен' };
+  }
+
+  // Apartment key usage (Lock/Unlock apartment door or inspect key code)
+  if (item.itemId === 'apartment_key' || item.itemId === 'apartment_key_spare') {
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('apartment_key_activated', { detail: { item } }));
+    }
+    sound.playUseItem();
+    addPlayerNotification(player, `Ключ: ${item.nameRu}`, 'info');
+    return { success: true, message: `Ключ: ${item.nameRu}` };
+  }
+
+  // Real estate legal deeds and documents inspection
+  if (item.itemId === 'property_deed_egrn' || item.itemId === 'property_contract_dkp' || item.itemId === 'property_tech_passport') {
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('open_property_document_modal', { detail: { item } }));
+    }
+    sound.playUseItem();
+    addPlayerNotification(player, `Изучение документа: ${item.nameRu}`, 'heal');
+    return { success: true, message: `Изучен документ: ${item.nameRu}` };
+  }
+
   // Automotive Key Fob usage
-  if (item.itemId === 'car_key') {
+  if (item.itemId === 'car_key_gold'|| item.itemId === 'car_key_iron') {
+    return handleMechanicalKeyUsage(player, item, world, null, itemIndex);
+  }
+  if (item.itemId.startsWith('car_key')) {
     return handleCarKeyActivation(player, item, world);
   }
 
@@ -3458,6 +5508,10 @@ export function useItemOnPlayer(
             veh.engineState.engineKnocking = false;
             veh.engineState.engineStalled = false;
             veh.engineState.overheatingSteam = false;
+            veh.engineState.hydrolocked = false;
+            veh.engineState.waterInCylinders = 0;
+            veh.engineState.isSeized = false;
+            veh.engineState.engineHealth = 100;
           }
           if (veh.fuelSystem) {
             veh.fuelSystem.tankPunctured = false;
@@ -3466,13 +5520,12 @@ export function useItemOnPlayer(
         removeItemFromPlayer(player, itemIndex, 1);
         sound.playPropBreak('hydrant');
         const msg = isTrailerVehicle(veh)
-          ? '🔧 Кузов, рама и подвеска прицепа полностью отремонтированы!'
-          : '🔧 Узлы двигателя, подвеска и кузов автомобиля полностью отремонтированы!';
+          ? 'Кузов, рама и подвеска прицепа полностью отремонтированы!': 'Узлы двигателя, подвеска и кузов автомобиля полностью отремонтированы!';
         addPlayerNotification(player, msg, 'heal');
-        return { success: true, message: 'Техника отремонтирована' };
+        return { success: true, message: 'Техника отремонтирована'};
       } else {
         addPlayerNotification(player, 'Подойдите к поврежденному авто/прицепу или сядьте в него для ремонта!', 'warning');
-        return { success: false, message: 'Нужно быть рядом с техникой' };
+        return { success: false, message: 'Нужно быть рядом с техникой'};
       }
     }
   }
@@ -3498,7 +5551,7 @@ export function useItemOnPlayer(
             }
             const addLiters = Math.min(5, veh.fluidTank.capacity - veh.fluidTank.currentVolume);
             veh.fluidTank.currentVolume += addLiters;
-            const tankName = veh.type === 'truck_tanker' ? 'бензовоз' : (veh.type === 'truck_water' ? 'водовоз' : (veh.type === 'trailer_barrel' ? 'бочку' : 'цистерну'));
+            const tankName = veh.type === 'truck_tanker'? 'бензовоз': (veh.type === 'truck_water'? 'водовоз': (veh.type === 'trailer_barrel'? 'бочку': (veh.type === 'trailer_vacuum'? 'вакуумную бочку': 'цистерну')));
             refueledVehicleName = `${tankName} (залито 5л АИ-95)`;
             break;
           }
@@ -3509,7 +5562,7 @@ export function useItemOnPlayer(
             const currentLiters = (veh.fuelSystem.tankLevel / 100) * capacity;
             const newLiters = Math.min(capacity, currentLiters + 5); // add 5 liters
             veh.fuelSystem.tankLevel = Math.min(100, (newLiters / capacity) * 100);
-            refueledVehicleName = veh.type ? `автомобиль (${veh.type.toUpperCase()})` : 'автомобиль';
+            refueledVehicleName = veh.type ? `автомобиль (${veh.type.toUpperCase()})`: 'автомобиль';
             break;
           }
         }
@@ -3524,7 +5577,7 @@ export function useItemOnPlayer(
         if (!world.stains) world.stains = [];
 
         // Check if expanding an existing nearby fuel stain
-        let existingStain = world.stains.find(st => st.type === 'fuel' && Math.hypot(st.x - stainX, st.y - stainY) < 45);
+        let existingStain = world.stains.find(st => st.type === 'fuel'&& Math.hypot(st.x - stainX, st.y - stainY) < 45);
         if (existingStain) {
           existingStain.radius = Math.min(90, existingStain.radius + 15);
           existingStain.life = 0; // reset decay timer
@@ -3554,12 +5607,11 @@ export function useItemOnPlayer(
             vx: Math.cos(pAngle) * pSpeed,
             vy: Math.sin(pAngle) * pSpeed,
             radius: 2 + Math.random() * 3,
-            color: Math.random() < 0.7 ? '#eab308' : '#ca8a04',
+            color: Math.random() < 0.7 ? '#eab308': '#ca8a04',
             alpha: 0.95,
             life: 0,
             maxLife: 0.35,
-            type: 'debris'
-          });
+            type: 'debris'});
         }
       }
     }
@@ -3570,9 +5622,9 @@ export function useItemOnPlayer(
 
     if (remaining % 5 === 0 || remaining === maxPortions - 1) {
       if (refueledVehicleName) {
-        addPlayerNotification(player, `⛽ Вы заправили ${refueledVehicleName}! (Осталось: ${remaining}/${maxPortions}л)`, 'heal');
+        addPlayerNotification(player, `Вы заправили ${refueledVehicleName}! (Осталось: ${remaining}/${maxPortions}л)`, 'heal');
       } else {
-        addPlayerNotification(player, `⛽ Вы разлили бензин на землю! (Осталось: ${remaining}/${maxPortions}л)`, 'info');
+        addPlayerNotification(player, `Вы разлили бензин на землю! (Осталось: ${remaining}/${maxPortions}л)`, 'info');
       }
     }
 
@@ -3585,10 +5637,10 @@ export function useItemOnPlayer(
       }
       const leftover = createItem('canister_empty', 1);
       addItemToPlayer(player, leftover);
-      addPlayerNotification(player, '🛢️ В канистре полностью закончился бензин!', 'warning');
+      addPlayerNotification(player, 'В канистре полностью закончился бензин!', 'warning');
     }
 
-    return { success: true, message: 'Бензин залит/разлит' };
+    return { success: true, message: 'Бензин залит/разлит'};
   }
 
   // Empty Canister usage (draws liquid from cistern, tanker, or barrel)
@@ -3611,20 +5663,38 @@ export function useItemOnPlayer(
               filled.name = 'Canister with Water (20L)';
               filled.nameRu = 'Канистра с водой (20л)';
               addItemToPlayer(player, filled);
-              addPlayerNotification(player, `💧 Набрано ${Math.round(drawVol)}л чистой воды из цистерны!`, 'heal');
+              addPlayerNotification(player, `Набрано ${Math.round(drawVol)}л чистой воды из цистерны!`, 'heal');
             } else {
-              const lName = veh.fluidTank.liquidType === 'fuel_ai95' ? 'Бензин АИ-95' : (veh.fluidTank.liquidType === 'diesel' ? 'Дизель' : 'Топливо');
+              const lName = veh.fluidTank.liquidType === 'fuel_ai95'? 'Бензин АИ-95': (veh.fluidTank.liquidType === 'diesel'? 'Дизель': 'Топливо');
               filled.nameRu = `Канистра (${lName} 20л)`;
               addItemToPlayer(player, filled);
-              addPlayerNotification(player, `⛽ Набрано ${Math.round(drawVol)}л ${lName} из цистерны!`, 'heal');
+              addPlayerNotification(player, `Набрано ${Math.round(drawVol)}л ${lName} из цистерны!`, 'heal');
             }
-            return { success: true, message: 'Канистра наполнена' };
+            return { success: true, message: 'Канистра наполнена'};
           }
         }
       }
     }
-    addPlayerNotification(player, '🛢️ Канистра пуста. Подойдите к цистерне, водовозу или бочке чтобы набрать жидкость.', 'info');
-    return { success: false, message: 'Канистра пуста' };
+    addPlayerNotification(player, 'Канистра пуста. Подойдите к цистерне, водовозу или бочке чтобы набрать жидкость.', 'info');
+    return { success: false, message: 'Канистра пуста'};
+  }
+
+  // Rag, Empty Sack, Bandage, or Cloth usage to choke air intake of runaway diesel engine
+  if (['rag', 'sack_empty', 'bandage', 'tshirt_white', 'tshirt_black', 'plaid_shirt'].includes(item.itemId)) {
+    if (world) {
+      const runawayVeh = world.vehicles.find(v => v.engineState?.isDieselRunaway && (Math.hypot(v.x - player.x, v.y - player.y) < 135 || (player.isInVehicle && player.currentVehicleId === v.id)));
+      if (runawayVeh && runawayVeh.engineState) {
+        runawayVeh.engineState.isDieselRunaway = false;
+        runawayVeh.engineState.engineRunning = false;
+        runawayVeh.engineState.engineRPM = 0;
+        runawayVeh.engineState.engineStalled = true;
+        sound.playEngineStall();
+
+        removeItemFromPlayer(player, itemIndex, 1);
+        addPlayerNotification(player, 'Воздухозаборник перекрыт ветошью! Неконтролируемый разнос дизеля остановлен!', 'heal');
+        return { success: true, message: 'Разнос дизеля остановлен ветошью'};
+      }
+    }
   }
 
   // Zippo Lighter usage (finite charges, ignites puddles & leaks)
@@ -3643,12 +5713,11 @@ export function useItemOnPlayer(
           vx: Math.cos(pAngle) * pSpeed,
           vy: Math.sin(pAngle) * pSpeed - 15,
           radius: 2 + Math.random() * 3,
-          color: Math.random() < 0.6 ? '#f97316' : '#ef4444',
+          color: Math.random() < 0.6 ? '#f97316': '#ef4444',
           alpha: 0.95,
           life: 0,
           maxLife: 0.25 + Math.random() * 0.2,
-          type: 'flame'
-        });
+          type: 'flame'});
       }
     }
 
@@ -3662,7 +5731,7 @@ export function useItemOnPlayer(
       if (world.stains) {
         for (const st of world.stains) {
           if (!st.onFire && Math.hypot(st.x - player.x, st.y - player.y) < 120) {
-            if (st.type === 'fuel' || st.type === 'oil') {
+            if (st.type === 'fuel'|| st.type === 'oil') {
               st.onFire = true;
               st.fireIntensity = 1.0;
               ignitedStainsCount++;
@@ -3679,8 +5748,7 @@ export function useItemOnPlayer(
                   alpha: 0.9,
                   life: 0,
                   maxLife: 0.45,
-                  type: 'flame'
-                });
+                  type: 'flame'});
               }
             }
           }
@@ -3712,13 +5780,13 @@ export function useItemOnPlayer(
 
     let msg = '';
     if (ignitedCarFuel) {
-      msg = `🔥 Вы поджгли вытекающее топливо автомобиля! (Осталось зажиганий: ${remaining}/${maxPortions})`;
+      msg = `Вы поджгли вытекающее топливо автомобиля! (Осталось зажиганий: ${remaining}/${maxPortions})`;
       addPlayerNotification(player, msg, 'warning');
     } else if (ignitedStainsCount > 0) {
-      msg = `🔥 Вы поджгли лужу бензина/масла! (Осталось зажиганий: ${remaining}/${maxPortions})`;
+      msg = `Вы поджгли лужу бензина/масла! (Осталось зажиганий: ${remaining}/${maxPortions})`;
       addPlayerNotification(player, msg, 'warning');
     } else {
-      msg = `🔥 Вспышка Zippo! Поблизости нет горючих жидкостей. (Осталось зажиганий: ${remaining}/${maxPortions})`;
+      msg = `Вспышка Zippo! Поблизости нет горючих жидкостей. (Осталось зажиганий: ${remaining}/${maxPortions})`;
       addPlayerNotification(player, msg, 'info');
     }
 
@@ -3731,10 +5799,10 @@ export function useItemOnPlayer(
       }
       const leftover = createItem('zippo_empty', 1);
       addItemToPlayer(player, leftover);
-      addPlayerNotification(player, '🔥 В зажигалке Zippo закончился бензин и кремень!', 'warning');
+      addPlayerNotification(player, 'В зажигалке Zippo закончился бензин и кремень!', 'warning');
     }
 
-    return { success: true, message: 'Зажигалка Zippo использована' };
+    return { success: true, message: 'Зажигалка Zippo использована'};
   }
 
   // Sandbag usage (pours 1 kg sand at a distance, extinguishing fires and drying/absorbing oil, fuel, and antifreeze spills)
@@ -3767,12 +5835,11 @@ export function useItemOnPlayer(
           alpha: 0.95,
           life: 0,
           maxLife: 0.4 + Math.random() * 0.2,
-          type: 'debris'
-        });
+          type: 'debris'});
       }
 
       // 2. Create/expand a sand mound/stain on ground
-      let existingSand = world.stains.find(st => st.type === 'sand' && Math.hypot(st.x - sandX, st.y - sandY) < 40);
+      let existingSand = world.stains.find(st => st.type === 'sand'&& Math.hypot(st.x - sandX, st.y - sandY) < 40);
       if (existingSand) {
         existingSand.radius = Math.min(85, existingSand.radius + 20);
         existingSand.alpha = Math.min(1.0, existingSand.alpha + 0.3);
@@ -3848,13 +5915,13 @@ export function useItemOnPlayer(
       });
     }
 
-    let resultMsg = '⏳ Вы рассыпали 1 кг песка!';
+    let resultMsg = 'Вы рассыпали 1 кг песка!';
     if (extinguishedFiresCount > 0 && driedSpillsCount > 0) {
-      resultMsg = `⏳ Вы рассыпали 1 кг песка! Очаг огня потушен, а пятна масел/топлива впитаны.`;
+      resultMsg = `Вы рассыпали 1 кг песка! Очаг огня потушен, а пятна масел/топлива впитаны.`;
     } else if (extinguishedFiresCount > 0) {
-      resultMsg = `⏳ Вы рассыпали 1 кг песка и затушили очаг возгорания!`;
+      resultMsg = `Вы рассыпали 1 кг песка и затушили очаг возгорания!`;
     } else if (driedSpillsCount > 0) {
-      resultMsg = `⏳ Вы рассыпали 1 кг песка, осушив пятна бензина, масла и антифриза!`;
+      resultMsg = `Вы рассыпали 1 кг песка, осушив пятна бензина, масла и антифриза!`;
     }
 
     addPlayerNotification(player, resultMsg, 'heal');
@@ -3884,8 +5951,7 @@ export function useItemOnPlayer(
           alpha: 0.85,
           life: 0,
           maxLife: 0.35 + Math.random() * 0.25,
-          type: 'tire_smoke'
-        });
+          type: 'tire_smoke'});
       }
     }
 
@@ -3943,16 +6009,16 @@ export function useItemOnPlayer(
 
     let msg = '';
     if (carFireExtinguished) {
-      msg = `🧯 Пожар автомобиля полностью потушен! (Осталось пены: ${remaining}/${maxPortions})`;
+      msg = `Пожар автомобиля полностью потушен! (Осталось пены: ${remaining}/${maxPortions})`;
       addPlayerNotification(player, msg, 'heal');
     } else if (carFireReduced) {
-      msg = `🧯 Вы сбили пламя пеной, но машина всё ещё пылает! Потребуется ещё пена. (${remaining}/${maxPortions})`;
+      msg = `Вы сбили пламя пеной, но машина всё ещё пылает! Потребуется ещё пена. (${remaining}/${maxPortions})`;
       addPlayerNotification(player, msg, 'warning');
     } else if (extinguishedStainsCount > 0) {
-      msg = `🧯 Затушено горевших луж: ${extinguishedStainsCount}. (${remaining}/${maxPortions})`;
+      msg = `Затушено горевших луж: ${extinguishedStainsCount}. (${remaining}/${maxPortions})`;
       addPlayerNotification(player, msg, 'heal');
     } else {
-      msg = `🧯 Выпустили струю пены. Поблизости нет огня. (${remaining}/${maxPortions})`;
+      msg = `Выпустили струю пены. Поблизости нет огня. (${remaining}/${maxPortions})`;
       addPlayerNotification(player, msg, 'info');
     }
 
@@ -3965,18 +6031,18 @@ export function useItemOnPlayer(
       }
       const leftover = createItem('extinguisher_empty', 1);
       addItemToPlayer(player, leftover);
-      addPlayerNotification(player, '🧯 В огнетушителе закончился заряд пены!', 'warning');
+      addPlayerNotification(player, 'В огнетушителе закончился заряд пены!', 'warning');
     }
 
-    return { success: true, message: 'Огнетушитель использован' };
+    return { success: true, message: 'Огнетушитель использован'};
   }
 
   // Flashlight toggle
   if (item.itemId === 'flashlight') {
-    player.heldItemId = player.heldItemId === 'flashlight' ? null : 'flashlight';
+    player.heldItemId = player.heldItemId === 'flashlight'? null : 'flashlight';
     sound.playAlert();
-    addPlayerNotification(player, player.heldItemId ? '🔦 Фонарик включен' : '🔦 Фонарик выключен', 'info');
-    return { success: true, message: 'Фонарик переключен' };
+    addPlayerNotification(player, player.heldItemId ? 'Фонарик включен': 'Фонарик выключен', 'info');
+    return { success: true, message: 'Фонарик переключен'};
   }
 
   // Multi-portion / Bite-by-Bite logic for consumables (food, drink, medicine with multiple doses)
@@ -3984,18 +6050,18 @@ export function useItemOnPlayer(
   const currentPortions = item.portions !== undefined ? item.portions : maxPortions;
 
   // Check fullness & nausea
-  if ((item.category === 'food' || item.category === 'drink') && (player.needs.fullness || 0) >= 98) {
+  if ((item.category === 'food'|| item.category === 'drink') && (player.needs.fullness || 0) >= 98) {
     if (item.category === 'food') {
       addPlayerNotification(player, 'Вы слишком сыты! Подождите, пока переварится...', 'warning');
-      return { success: false, message: 'Слишком сытно' };
+      return { success: false, message: 'Слишком сытно'};
     } else {
       addPlayerNotification(player, 'Желудок полон! Больше не лезет...', 'warning');
-      return { success: false, message: 'Желудок полон' };
+      return { success: false, message: 'Желудок полон'};
     }
   }
   if ((player.needs.nausea || 0) >= 65) {
     addPlayerNotification(player, 'Вас тошнит! Нельзя есть или пить.', 'warning');
-    return { success: false, message: 'Тошнит' };
+    return { success: false, message: 'Тошнит'};
   }
 
   if (maxPortions > 1) {
@@ -4016,14 +6082,14 @@ export function useItemOnPlayer(
     if (energyGain) player.needs.energy = Math.min(100, Math.max(0, player.needs.energy + energyGain));
     if (sleepinessGain) player.needs.sleepiness = Math.min(100, Math.max(0, player.needs.sleepiness + sleepinessGain));
 
-    const fGain = def?.fullnessPerBite !== undefined ? def.fullnessPerBite : (item.category === 'food' ? 3 : 1);
+    const fGain = def?.fullnessPerBite !== undefined ? def.fullnessPerBite : (item.category === 'food'? 3 : 1);
     player.needs.fullness = Math.min(100, (player.needs.fullness || 0) + fGain);
     if ((player.needs.fullness || 0) > 88) {
       player.needs.nausea = Math.min(100, (player.needs.nausea || 0) + 4);
     }
 
     // Specific item effects
-    if (item.itemId === 'painkillers' || item.itemId === 'morphine') {
+    if (item.itemId === 'painkillers'|| item.itemId === 'morphine') {
       administerMedication(player, item.itemId);
     } else if (item.itemId === 'vitamins') {
       player.needs.energy = Math.min(100, player.needs.energy + 4);
@@ -4056,7 +6122,7 @@ export function useItemOnPlayer(
       applyActivatedCharcoal(player);
     } else if (item.itemId === 'valerian_drops') {
       applyValerianDrops(player);
-    } else if (item.itemId === 'antiseptic' && player.bodyState) {
+    } else if (item.itemId === 'antiseptic'&& player.bodyState) {
       applyAntiseptic(player, targetInjuryId);
     }
 
@@ -4083,7 +6149,7 @@ export function useItemOnPlayer(
       taste = def.tasteMessages[Math.floor(Math.random() * def.tasteMessages.length)];
     }
 
-    const unitLabel = item.category === 'drink' ? 'глотков' : item.category === 'food' ? 'укусов' : (item.itemId === 'painkillers' || item.itemId === 'vitamins' ? 'таблеток' : 'применений');
+    const unitLabel = item.category === 'drink'? 'глотков': item.category === 'food'? 'укусов': (item.itemId === 'painkillers'|| item.itemId === 'vitamins'? 'таблеток': 'применений');
 
     if (remaining <= 0) {
       // Completely finished!
@@ -4097,22 +6163,21 @@ export function useItemOnPlayer(
       if (def?.leftoverId) {
         const leftover = createItem(def.leftoverId, 1);
         addItemToPlayer(player, leftover);
-        addPlayerNotification(player, `🗑️ Вы закончили ${item.nameRu}. Осталась упаковка: ${def.leftoverNameRu || leftover.nameRu}`, 'info');
+        addPlayerNotification(player, `Вы закончили ${item.nameRu}. Осталась упаковка: ${def.leftoverNameRu || leftover.nameRu}`, 'info');
       } else {
-        addPlayerNotification(player, `✅ ${item.nameRu} полностью закончен!`, 'food');
+        addPlayerNotification(player, `${item.nameRu} полностью закончен!`, 'food');
       }
     } else {
       // Throttle notifications for high-charge rapid items (e.g. extinguisher)
-      if (item.itemId !== 'extinguisher' || remaining % 10 === 0 || remaining === maxPortions - 1) {
+      if (item.itemId !== 'extinguisher'|| remaining % 10 === 0 || remaining === maxPortions - 1) {
         addPlayerNotification(
           player,
-          `${item.category === 'drink' ? '🥤' : item.category === 'food' ? '🍽️' : '🧯'} ${taste || item.nameRu} (${remaining}/${maxPortions} ${unitLabel})`,
-          item.category === 'drink' ? 'drink' : item.category === 'food' ? 'food' : 'heal'
-        );
+          `${item.category === 'drink'? '': item.category === 'food'? '': ''} ${taste || item.nameRu} (${remaining}/${maxPortions} ${unitLabel})`,
+          item.category === 'drink'? 'drink': item.category === 'food'? 'food': 'heal');
       }
     }
 
-    return { success: true, message: `Использовано: ${item.nameRu}` };
+    return { success: true, message: `Использовано: ${item.nameRu}`};
   }
 
   const fx = item.effects;
@@ -4140,8 +6205,8 @@ export function useItemOnPlayer(
   }
 
   // Apply Fullness for single portion items
-  if (item.category === 'food' || item.category === 'drink') {
-    const fGain = def?.fullnessPerBite !== undefined ? def.fullnessPerBite : (item.category === 'food' ? 20 : 15);
+  if (item.category === 'food'|| item.category === 'drink') {
+    const fGain = def?.fullnessPerBite !== undefined ? def.fullnessPerBite : (item.category === 'food'? 20 : 15);
     player.needs.fullness = Math.min(100, (player.needs.fullness || 0) + fGain);
     if ((player.needs.fullness || 0) > 88) {
       player.needs.nausea = Math.min(100, (player.needs.nausea || 0) + 4);
@@ -4153,22 +6218,22 @@ export function useItemOnPlayer(
     if (item.itemId === 'bandage') {
       const res = applyBandage(player, targetInjuryId);
       if (!res && targetInjuryId) {
-        return { success: false, message: 'Этот бинт нельзя применить к этой травме' };
+        return { success: false, message: 'Этот бинт нельзя применить к этой травме'};
       }
     } else if (item.itemId === 'splint') {
       const res = applySplint(player, targetInjuryId);
       if (!res && targetInjuryId) {
-        return { success: false, message: 'Шину можно наложить только на свежий перелом' };
+        return { success: false, message: 'Шину можно наложить только на свежий перелом'};
       }
     } else if (item.itemId === 'medical_patch') {
       const res = applyMedicalPatch(player, targetInjuryId);
       if (!res && targetInjuryId) {
-        return { success: false, message: 'Пластырь не подходит для этой травмы' };
+        return { success: false, message: 'Пластырь не подходит для этой травмы'};
       }
     } else if (item.itemId === 'antiseptic') {
       const res = applyAntiseptic(player, targetInjuryId);
       if (!res && targetInjuryId) {
-        return { success: false, message: 'Антисептик не подходит для этой травмы' };
+        return { success: false, message: 'Антисептик не подходит для этой травмы'};
       }
     } else if (item.itemId === 'panthenol_spray') {
       applyPanthenolSpray(player, targetInjuryId);
@@ -4192,7 +6257,7 @@ export function useItemOnPlayer(
       applyValerianDrops(player);
     } else if (item.itemId === 'medkit') {
       applyMedkit(player);
-    } else if (item.itemId === 'painkillers' || item.itemId === 'morphine') {
+    } else if (item.itemId === 'painkillers'|| item.itemId === 'morphine') {
       administerMedication(player, item.itemId);
     }
   }
@@ -4223,26 +6288,130 @@ export function useItemOnPlayer(
   // Consume 1 item from stack
   removeItemFromPlayer(player, itemIndex, 1);
 
-  return { success: true, message: `Использовано: ${item.nameRu}` };
+  return { success: true, message: `Использовано: ${item.nameRu}`};
 }
 
 export function useHandItemOnPlayer(
   player: Player,
-  hand: 'left' | 'right',
+  hand: 'left'| 'right',
   world?: GameWorld,
   targetInjuryId?: string
 ): { success: boolean; message: string } {
-  const item = hand === 'left' ? player.leftHandItem : player.rightHandItem;
+  const item = hand === 'left'? player.leftHandItem : player.rightHandItem;
   if (!item) {
-    return { success: false, message: 'В выбранной руке ничего нет' };
+    return { success: false, message: 'В выбранной руке ничего нет'};
   }
 
   if (!item.usable) {
-    return { success: false, message: 'Этот предмет нельзя использовать напрямую' };
+    return { success: false, message: 'Этот предмет нельзя использовать напрямую'};
   }
 
   if (item.isContainer) {
-    return { success: false, message: 'Это контейнер: откройте его, чтобы достать или положить вещи' };
+    return { success: false, message: 'Это контейнер: откройте его, чтобы достать или положить вещи'};
+  }
+
+  // Tow Rope activation from hand (activated with E)
+  if (item.itemId === 'tow_rope') {
+    return activateTowRopeItem(player, world, () => {
+      takeItemFromHand(player, hand);
+    });
+  }
+
+  // Watched & valuables held in hand
+  if (item.itemId === 'valuable_gold_watch' || item.itemId === 'valuable_silver_pocket_watch') {
+    sound.playUseItem();
+    addPlayerNotification(player, `Вы подносите ${item.nameRu} к уху. Слышно мерное тиканье механизма.`, 'heal');
+    return { success: true, message: `Тиканье ${item.nameRu}` };
+  }
+
+  // Chef knife held in hand
+  if (item.itemId === 'kitchen_knife_chef') {
+    sound.playPropBreak('metal');
+    addPlayerNotification(player, `Вы рассекаете воздух кухонным ножом шеф-повара!`, 'warning');
+    return { success: true, message: 'Взмах ножом' };
+  }
+
+  // Electric kettle held in hand
+  if (item.itemId === 'kitchen_kettle_electric') {
+    sound.playUseItem();
+    addPlayerNotification(player, `Электрочайник включен: внутри вспыхнула синяя диодная подсветка!`, 'heal');
+    return { success: true, message: 'Включен чайник' };
+  }
+
+  // Furniture item placement from hand (activated with E)
+  if (item.itemId.startsWith('furn_') || item.category === ('furniture' as any)) {
+    if (!player.isInsideBuilding || !player.isInsideApartment || !player.insideApartmentId) {
+      addPlayerNotification(player, 'Расставлять мебель можно только находясь внутри своей квартиры!', 'warning');
+      return { success: false, message: 'Нужно находиться в своей квартире' };
+    }
+
+    const apts = getCityApartments();
+    const apt = apts.find(a => a.id === player.insideApartmentId);
+    if (!apt || !apt.isOwned) {
+      addPlayerNotification(player, 'Вы можете расставлять мебель только в собственной квартире!', 'warning');
+      return { success: false, message: 'Ограничение собственности' };
+    }
+
+    const FURN_SPECS: Record<string, { type: string; width: number; height: number; color: string }> = {
+      furn_chair: { type: 'chair', width: 14, height: 14, color: '#334155' },
+      furn_table: { type: 'table', width: 28, height: 18, color: '#475569' },
+      furn_sofa: { type: 'sofa', width: 38, height: 18, color: '#0284c7' },
+      furn_bed: { type: 'bed', width: 32, height: 42, color: '#38bdf8' },
+      furn_fridge: { type: 'fridge', width: 16, height: 16, color: '#e2e8f0' },
+      furn_tv: { type: 'tv', width: 24, height: 12, color: '#0f172a' },
+      furn_shelf: { type: 'shelf', width: 24, height: 12, color: '#64748b' },
+      furn_plant: { type: 'plant', width: 12, height: 12, color: '#16a34a' },
+      furn_wardrobe: { type: 'wardrobe', width: 32, height: 14, color: '#475569' },
+      furn_nightstand: { type: 'nightstand', width: 10, height: 10, color: '#64748b' },
+      furn_kitchen_counter: { type: 'kitchen_counter', width: 36, height: 14, color: '#64748b' },
+      furn_tv_cabinet: { type: 'tv_cabinet', width: 28, height: 8, color: '#334155' },
+      furn_carpet: { type: 'carpet', width: 26, height: 22, color: '#6366f1' },
+      furn_bath: { type: 'bath', width: 30, height: 16, color: '#e2e8f0' },
+      furn_sink: { type: 'sink', width: 12, height: 10, color: '#e2e8f0' },
+      furn_toilet: { type: 'toilet', width: 10, height: 12, color: '#ffffff' },
+      furn_desk: { type: 'desk', width: 28, height: 14, color: '#475569' },
+      furn_bookshelf: { type: 'bookshelf', width: 24, height: 10, color: '#78350f' },
+      furn_mirror: { type: 'mirror' as any, width: 12, height: 4, color: '#38bdf8' }
+    };
+
+    const spec = FURN_SPECS[item.itemId] || {
+      type: item.itemId.replace('furn_', '') || 'chair',
+      width: 20,
+      height: 20,
+      color: '#64748b'
+    };
+
+    const bld = world?.buildings?.find(b => b.id === apt.buildingId);
+    const bldX = bld ? bld.x : 0;
+    const bldY = bld ? bld.y : 0;
+
+    const spawnDist = 24;
+    const targetWorldX = player.x + Math.cos(player.angle || 0) * spawnDist;
+    const targetWorldY = player.y + Math.sin(player.angle || 0) * spawnDist;
+
+    const localX = targetWorldX - bldX - spec.width / 2;
+    const localY = targetWorldY - bldY - spec.height / 2;
+
+    if (!apt.dynamicFurniture) {
+      apt.dynamicFurniture = [];
+    }
+
+    apt.dynamicFurniture.push({
+      id: `furn_dyn_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+      type: spec.type,
+      x: Math.round(localX),
+      y: Math.round(localY),
+      rotation: player.angle || 0,
+      width: spec.width,
+      height: spec.height,
+      color: spec.color
+    });
+
+    takeItemFromHand(player, hand);
+    clearInteriorCanvasCache();
+    sound.playPickup();
+    addPlayerNotification(player, `Установлено: ${item.nameRu} в квартире!`, 'pickup');
+    return { success: true, message: `Установлена мебель ${item.nameRu}` };
   }
 
   // Currency deposit
@@ -4265,14 +6434,47 @@ export function useHandItemOnPlayer(
       takeItemFromHand(player, hand);
       sound.playPickup();
       addPlayerNotification(player, `Зачислено в кошелёк: +$${value * count}`, 'pickup');
-      return { success: true, message: `Зачислено в кошелёк: +$${value * count}` };
+      return { success: true, message: `Зачислено в кошелёк: +$${value * count}`};
     }
   }
 
   const def = ITEM_CATALOG[item.itemId];
 
+  // Smartphone activation (triggers when held in active hand and pressing E)
+  if (item.itemId.startsWith('phone_') || item.itemId === 'smartphone'|| item.phoneSpecs) {
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('open_phone_modal', { detail: { item } }));
+    }
+    sound.playPhoneChime();
+    addPlayerNotification(player, `Открыт экран: ${item.nameRu}`, 'heal');
+    return { success: true, message: `Открыт экран: ${item.nameRu}`};
+  }
+
+  // Apartment key usage from hands (Lock/Unlock apartment door)
+  if (item.itemId === 'apartment_key' || item.itemId === 'apartment_key_spare') {
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('apartment_key_activated', { detail: { item } }));
+    }
+    sound.playUseItem();
+    addPlayerNotification(player, `Ключ: ${item.nameRu}`, 'info');
+    return { success: true, message: `Ключ: ${item.nameRu}` };
+  }
+
+  // Real estate legal deeds and documents inspection from hands
+  if (item.itemId === 'property_deed_egrn' || item.itemId === 'property_contract_dkp' || item.itemId === 'property_tech_passport') {
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('open_property_document_modal', { detail: { item } }));
+    }
+    sound.playUseItem();
+    addPlayerNotification(player, `Изучение документа: ${item.nameRu}`, 'heal');
+    return { success: true, message: `Изучен документ: ${item.nameRu}` };
+  }
+
   // Automotive Key Fob usage (triggers when held in active hand and pressing E)
-  if (item.itemId === 'car_key') {
+  if (item.itemId === 'car_key_gold'|| item.itemId === 'car_key_iron') {
+    return handleMechanicalKeyUsage(player, item, world, hand, null);
+  }
+  if (item.itemId.startsWith('car_key')) {
     return handleCarKeyActivation(player, item, world);
   }
 
@@ -4331,6 +6533,10 @@ export function useHandItemOnPlayer(
             veh.engineState.engineKnocking = false;
             veh.engineState.engineStalled = false;
             veh.engineState.overheatingSteam = false;
+            veh.engineState.hydrolocked = false;
+            veh.engineState.waterInCylinders = 0;
+            veh.engineState.isSeized = false;
+            veh.engineState.engineHealth = 100;
           }
           if (veh.fuelSystem) {
             veh.fuelSystem.tankPunctured = false;
@@ -4343,23 +6549,22 @@ export function useHandItemOnPlayer(
         }
         sound.playPropBreak('hydrant');
         const msg = isTrailerVehicle(veh)
-          ? '🔧 Кузов, рама и подвеска прицепа полностью отремонтированы!'
-          : '🔧 Узлы двигателя, подвеска и кузов автомобиля полностью отремонтированы!';
+          ? 'Кузов, рама и подвеска прицепа полностью отремонтированы!': 'Узлы двигателя, подвеска и кузов автомобиля полностью отремонтированы!';
         addPlayerNotification(player, msg, 'heal');
-        return { success: true, message: 'Техника отремонтирована' };
+        return { success: true, message: 'Техника отремонтирована'};
       } else {
         addPlayerNotification(player, 'Подойдите к поврежденному авто/прицепу или сядьте в него для ремонта!', 'warning');
-        return { success: false, message: 'Нужно быть рядом с техникой' };
+        return { success: false, message: 'Нужно быть рядом с техникой'};
       }
     }
   }
 
   // Flashlight toggle
   if (item.itemId === 'flashlight') {
-    player.heldItemId = player.heldItemId === 'flashlight' ? null : 'flashlight';
+    player.heldItemId = player.heldItemId === 'flashlight'? null : 'flashlight';
     sound.playAlert();
-    addPlayerNotification(player, player.heldItemId ? '🔦 Фонарик включен' : '🔦 Фонарик выключен', 'info');
-    return { success: true, message: 'Фонарик переключен' };
+    addPlayerNotification(player, player.heldItemId ? 'Фонарик включен': 'Фонарик выключен', 'info');
+    return { success: true, message: 'Фонарик переключен'};
   }
 
   // Gasoline Canister usage (spills fuel puddles on ground or refuels nearby vehicle)
@@ -4383,7 +6588,7 @@ export function useHandItemOnPlayer(
             }
             const addLiters = Math.min(5, veh.fluidTank.capacity - veh.fluidTank.currentVolume);
             veh.fluidTank.currentVolume += addLiters;
-            const tankName = veh.type === 'truck_tanker' ? 'бензовоз' : (veh.type === 'truck_water' ? 'водовоз' : (veh.type === 'trailer_barrel' ? 'бочку' : 'цистерну'));
+            const tankName = veh.type === 'truck_tanker'? 'бензовоз': (veh.type === 'truck_water'? 'водовоз': (veh.type === 'trailer_barrel'? 'бочку': (veh.type === 'trailer_vacuum'? 'вакуумную бочку': 'цистерну')));
             refueledVehicleName = `${tankName} (залито 5л АИ-95)`;
             break;
           }
@@ -4394,7 +6599,7 @@ export function useHandItemOnPlayer(
             const currentLiters = (veh.fuelSystem.tankLevel / 100) * capacity;
             const newLiters = Math.min(capacity, currentLiters + 5); // add 5 liters
             veh.fuelSystem.tankLevel = Math.min(100, (newLiters / capacity) * 100);
-            refueledVehicleName = veh.type ? `автомобиль (${veh.type.toUpperCase()})` : 'автомобиль';
+            refueledVehicleName = veh.type ? `автомобиль (${veh.type.toUpperCase()})`: 'автомобиль';
             break;
           }
         }
@@ -4409,7 +6614,7 @@ export function useHandItemOnPlayer(
         if (!world.stains) world.stains = [];
 
         // Check if expanding an existing nearby fuel stain
-        let existingStain = world.stains.find(st => st.type === 'fuel' && Math.hypot(st.x - stainX, st.y - stainY) < 45);
+        let existingStain = world.stains.find(st => st.type === 'fuel'&& Math.hypot(st.x - stainX, st.y - stainY) < 45);
         if (existingStain) {
           existingStain.radius = Math.min(90, existingStain.radius + 15);
           existingStain.life = 0; // reset decay timer
@@ -4439,12 +6644,11 @@ export function useHandItemOnPlayer(
             vx: Math.cos(pAngle) * pSpeed,
             vy: Math.sin(pAngle) * pSpeed,
             radius: 2 + Math.random() * 3,
-            color: Math.random() < 0.7 ? '#eab308' : '#ca8a04',
+            color: Math.random() < 0.7 ? '#eab308': '#ca8a04',
             alpha: 0.95,
             life: 0,
             maxLife: 0.35,
-            type: 'debris'
-          });
+            type: 'debris'});
         }
       }
     }
@@ -4455,9 +6659,9 @@ export function useHandItemOnPlayer(
 
     if (remaining % 5 === 0 || remaining === maxPortions - 1) {
       if (refueledVehicleName) {
-        addPlayerNotification(player, `⛽ Вы заправили ${refueledVehicleName}! (Осталось: ${remaining}/${maxPortions}л)`, 'heal');
+        addPlayerNotification(player, `Вы заправили ${refueledVehicleName}! (Осталось: ${remaining}/${maxPortions}л)`, 'heal');
       } else {
-        addPlayerNotification(player, `⛽ Вы разлили бензин на землю! (Осталось: ${remaining}/${maxPortions}л)`, 'info');
+        addPlayerNotification(player, `Вы разлили бензин на землю! (Осталось: ${remaining}/${maxPortions}л)`, 'info');
       }
     }
 
@@ -4469,17 +6673,17 @@ export function useHandItemOnPlayer(
         takeItemFromHand(player, hand);
       }
       const leftover = createItem('canister_empty', 1);
-      if (hand === 'left' && !player.leftHandItem) {
+      if (hand === 'left'&& !player.leftHandItem) {
         player.leftHandItem = leftover;
-      } else if (hand === 'right' && !player.rightHandItem) {
+      } else if (hand === 'right'&& !player.rightHandItem) {
         player.rightHandItem = leftover;
       } else {
         addItemToPlayer(player, leftover);
       }
-      addPlayerNotification(player, '🛢️ В канистре полностью закончился бензин!', 'warning');
+      addPlayerNotification(player, 'В канистре полностью закончился бензин!', 'warning');
     }
 
-    return { success: true, message: 'Бензин залит/разлит' };
+    return { success: true, message: 'Бензин залит/разлит'};
   }
 
   // Empty Canister usage in hands (draws liquid from cistern, tanker, or barrel)
@@ -4507,30 +6711,30 @@ export function useHandItemOnPlayer(
               filled.name = 'Canister with Water (20L)';
               filled.nameRu = 'Канистра с водой (20л)';
             } else {
-              const lName = veh.fluidTank.liquidType === 'fuel_ai95' ? 'Бензин АИ-95' : (veh.fluidTank.liquidType === 'diesel' ? 'Дизель' : 'Топливо');
+              const lName = veh.fluidTank.liquidType === 'fuel_ai95'? 'Бензин АИ-95': (veh.fluidTank.liquidType === 'diesel'? 'Дизель': 'Топливо');
               filled.nameRu = `Канистра (${lName} 20л)`;
             }
 
-            if (hand === 'left' && !player.leftHandItem) {
+            if (hand === 'left'&& !player.leftHandItem) {
               player.leftHandItem = filled;
-            } else if (hand === 'right' && !player.rightHandItem) {
+            } else if (hand === 'right'&& !player.rightHandItem) {
               player.rightHandItem = filled;
             } else {
               addItemToPlayer(player, filled);
             }
 
             if (veh.fluidTank.liquidType === 'water') {
-              addPlayerNotification(player, `💧 Набрано ${Math.round(drawVol)}л чистой воды из цистерны!`, 'heal');
+              addPlayerNotification(player, `Набрано ${Math.round(drawVol)}л чистой воды из цистерны!`, 'heal');
             } else {
-              addPlayerNotification(player, `⛽ Набрано ${Math.round(drawVol)}л топлива из цистерны!`, 'heal');
+              addPlayerNotification(player, `Набрано ${Math.round(drawVol)}л топлива из цистерны!`, 'heal');
             }
-            return { success: true, message: 'Канистра наполнена' };
+            return { success: true, message: 'Канистра наполнена'};
           }
         }
       }
     }
-    addPlayerNotification(player, '🛢️ Канистра пуста. Подойдите к цистерне, водовозу или бочке чтобы набрать жидкость.', 'info');
-    return { success: false, message: 'Канистра пуста' };
+    addPlayerNotification(player, 'Канистра пуста. Подойдите к цистерне, водовозу или бочке чтобы набрать жидкость.', 'info');
+    return { success: false, message: 'Канистра пуста'};
   }
 
   // Zippo Lighter usage (finite charges, ignites puddles & leaks)
@@ -4549,12 +6753,11 @@ export function useHandItemOnPlayer(
           vx: Math.cos(pAngle) * pSpeed,
           vy: Math.sin(pAngle) * pSpeed - 15,
           radius: 2 + Math.random() * 3,
-          color: Math.random() < 0.6 ? '#f97316' : '#ef4444',
+          color: Math.random() < 0.6 ? '#f97316': '#ef4444',
           alpha: 0.95,
           life: 0,
           maxLife: 0.25 + Math.random() * 0.2,
-          type: 'flame'
-        });
+          type: 'flame'});
       }
     }
 
@@ -4568,7 +6771,7 @@ export function useHandItemOnPlayer(
       if (world.stains) {
         for (const st of world.stains) {
           if (!st.onFire && Math.hypot(st.x - player.x, st.y - player.y) < 120) {
-            if (st.type === 'fuel' || st.type === 'oil') {
+            if (st.type === 'fuel'|| st.type === 'oil') {
               st.onFire = true;
               st.fireIntensity = 1.0;
               ignitedStainsCount++;
@@ -4585,8 +6788,7 @@ export function useHandItemOnPlayer(
                   alpha: 0.9,
                   life: 0,
                   maxLife: 0.45,
-                  type: 'flame'
-                });
+                  type: 'flame'});
               }
             }
           }
@@ -4618,13 +6820,13 @@ export function useHandItemOnPlayer(
 
     let msg = '';
     if (ignitedCarFuel) {
-      msg = `🔥 Вы поджгли вытекающее топливо автомобиля! (Осталось зажиганий: ${remaining}/${maxPortions})`;
+      msg = `Вы поджгли вытекающее топливо автомобиля! (Осталось зажиганий: ${remaining}/${maxPortions})`;
       addPlayerNotification(player, msg, 'warning');
     } else if (ignitedStainsCount > 0) {
-      msg = `🔥 Вы поджгли лужу бензина/масла! (Осталось зажиганий: ${remaining}/${maxPortions})`;
+      msg = `Вы поджгли лужу бензина/масла! (Осталось зажиганий: ${remaining}/${maxPortions})`;
       addPlayerNotification(player, msg, 'warning');
     } else {
-      msg = `🔥 Вспышка Zippo! Поблизости нет горючих жидкостей. (Осталось зажиганий: ${remaining}/${maxPortions})`;
+      msg = `Вспышка Zippo! Поблизости нет горючих жидкостей. (Осталось зажиганий: ${remaining}/${maxPortions})`;
       addPlayerNotification(player, msg, 'info');
     }
 
@@ -4636,17 +6838,17 @@ export function useHandItemOnPlayer(
         takeItemFromHand(player, hand);
       }
       const leftover = createItem('zippo_empty', 1);
-      if (hand === 'left' && !player.leftHandItem) {
+      if (hand === 'left'&& !player.leftHandItem) {
         player.leftHandItem = leftover;
-      } else if (hand === 'right' && !player.rightHandItem) {
+      } else if (hand === 'right'&& !player.rightHandItem) {
         player.rightHandItem = leftover;
       } else {
         addItemToPlayer(player, leftover);
       }
-      addPlayerNotification(player, '🔥 В зажигалке Zippo закончился бензин и кремень!', 'warning');
+      addPlayerNotification(player, 'В зажигалке Zippo закончился бензин и кремень!', 'warning');
     }
 
-    return { success: true, message: 'Зажигалка Zippo использована' };
+    return { success: true, message: 'Зажигалка Zippo использована'};
   }
 
   // Fire extinguisher usage (volume/capacity, foam spray, gradual/partial fire suppression)
@@ -4670,8 +6872,7 @@ export function useHandItemOnPlayer(
           alpha: 0.85,
           life: 0,
           maxLife: 0.35 + Math.random() * 0.25,
-          type: 'tire_smoke'
-        });
+          type: 'tire_smoke'});
       }
     }
 
@@ -4729,16 +6930,16 @@ export function useHandItemOnPlayer(
 
     let msg = '';
     if (carFireExtinguished) {
-      msg = `🧯 Пожар автомобиля полностью потушен! (Осталось пены: ${remaining}/${maxPortions})`;
+      msg = `Пожар автомобиля полностью потушен! (Осталось пены: ${remaining}/${maxPortions})`;
       addPlayerNotification(player, msg, 'heal');
     } else if (carFireReduced) {
-      msg = `🧯 Вы сбили пламя пеной, но машина всё ещё пылает! Потребуется ещё пена. (${remaining}/${maxPortions})`;
+      msg = `Вы сбили пламя пеной, но машина всё ещё пылает! Потребуется ещё пена. (${remaining}/${maxPortions})`;
       addPlayerNotification(player, msg, 'warning');
     } else if (extinguishedStainsCount > 0) {
-      msg = `🧯 Затушено горевших луж: ${extinguishedStainsCount}. (${remaining}/${maxPortions})`;
+      msg = `Затушено горевших луж: ${extinguishedStainsCount}. (${remaining}/${maxPortions})`;
       addPlayerNotification(player, msg, 'heal');
     } else {
-      msg = `🧯 Выпустили струю пены. Поблизости нет огня. (${remaining}/${maxPortions})`;
+      msg = `Выпустили струю пены. Поблизости нет огня. (${remaining}/${maxPortions})`;
       addPlayerNotification(player, msg, 'info');
     }
 
@@ -4750,17 +6951,17 @@ export function useHandItemOnPlayer(
         takeItemFromHand(player, hand);
       }
       const leftover = createItem('extinguisher_empty', 1);
-      if (hand === 'left' && !player.leftHandItem) {
+      if (hand === 'left'&& !player.leftHandItem) {
         player.leftHandItem = leftover;
-      } else if (hand === 'right' && !player.rightHandItem) {
+      } else if (hand === 'right'&& !player.rightHandItem) {
         player.rightHandItem = leftover;
       } else {
         addItemToPlayer(player, leftover);
       }
-      addPlayerNotification(player, '🧯 В огнетушителе закончился заряд пены!', 'warning');
+      addPlayerNotification(player, 'В огнетушителе закончился заряд пены!', 'warning');
     }
 
-    return { success: true, message: 'Огнетушитель использован' };
+    return { success: true, message: 'Огнетушитель использован'};
   }
 
   // Sandbag usage in hand (pours 1 kg sand at a distance, extinguishing fires and drying/absorbing oil, fuel, and antifreeze spills)
@@ -4793,12 +6994,11 @@ export function useHandItemOnPlayer(
           alpha: 0.95,
           life: 0,
           maxLife: 0.4 + Math.random() * 0.2,
-          type: 'debris'
-        });
+          type: 'debris'});
       }
 
       // 2. Create/expand a sand mound/stain on ground
-      let existingSand = world.stains.find(st => st.type === 'sand' && Math.hypot(st.x - sandX, st.y - sandY) < 40);
+      let existingSand = world.stains.find(st => st.type === 'sand'&& Math.hypot(st.x - sandX, st.y - sandY) < 40);
       if (existingSand) {
         existingSand.radius = Math.min(85, existingSand.radius + 20);
         existingSand.alpha = Math.min(1.0, existingSand.alpha + 0.3);
@@ -4884,34 +7084,57 @@ export function useHandItemOnPlayer(
       }
     }
 
-    let resultMsg = '⏳ Вы рассыпали 1 кг песка!';
+    let resultMsg = 'Вы рассыпали 1 кг песка!';
     if (extinguishedFiresCount > 0 && driedSpillsCount > 0) {
-      resultMsg = `⏳ Вы рассыпали 1 кг песка! Очаг огня потушен, а пятна масел/топлива впитаны.`;
+      resultMsg = `Вы рассыпали 1 кг песка! Очаг огня потушен, а пятна масел/топлива впитаны.`;
     } else if (extinguishedFiresCount > 0) {
-      resultMsg = `⏳ Вы рассыпали 1 кг песка и затушили очаг возгорания!`;
+      resultMsg = `Вы рассыпали 1 кг песка и затушили очаг возгорания!`;
     } else if (driedSpillsCount > 0) {
-      resultMsg = `⏳ Вы рассыпали 1 кг песка, осушив пятна бензина, масла и антифриза!`;
+      resultMsg = `Вы рассыпали 1 кг песка, осушив пятна бензина, масла и антифриза!`;
     }
 
     addPlayerNotification(player, resultMsg, 'heal');
     return { success: true, message: resultMsg };
   }
 
+  // Rag, Empty Sack, Bandage, or Cloth usage from HAND to choke air intake of runaway diesel engine
+  if (['rag', 'sack_empty', 'bandage', 'tshirt_white', 'tshirt_black', 'plaid_shirt'].includes(item.itemId)) {
+    if (world) {
+      const runawayVeh = world.vehicles.find(v => v.engineState?.isDieselRunaway && (Math.hypot(v.x - player.x, v.y - player.y) < 135 || (player.isInVehicle && player.currentVehicleId === v.id)));
+      if (runawayVeh && runawayVeh.engineState) {
+        runawayVeh.engineState.isDieselRunaway = false;
+        runawayVeh.engineState.engineRunning = false;
+        runawayVeh.engineState.engineRPM = 0;
+        runawayVeh.engineState.engineStalled = true;
+        sound.playEngineStall();
+
+        if (item.count > 1) {
+          item.count -= 1;
+        } else {
+          takeItemFromHand(player, hand);
+        }
+
+        addPlayerNotification(player, 'Воздухозаборник перекрыт ветошью! Неконтролируемый разнос дизеля остановлен!', 'heal');
+        return { success: true, message: 'Разнос дизеля остановлен ветошью'};
+      }
+    }
+  }
+
 
 
   // Check fullness & nausea
-  if ((item.category === 'food' || item.category === 'drink') && (player.needs.fullness || 0) >= 98) {
+  if ((item.category === 'food'|| item.category === 'drink') && (player.needs.fullness || 0) >= 98) {
     if (item.category === 'food') {
       addPlayerNotification(player, 'Вы слишком сыты! Подождите, пока переварится...', 'warning');
-      return { success: false, message: 'Слишком сытно' };
+      return { success: false, message: 'Слишком сытно'};
     } else {
       addPlayerNotification(player, 'Желудок полон! Больше не лезет...', 'warning');
-      return { success: false, message: 'Желудок полон' };
+      return { success: false, message: 'Желудок полон'};
     }
   }
   if ((player.needs.nausea || 0) >= 65) {
     addPlayerNotification(player, 'Вас тошнит! Нельзя есть или пить.', 'warning');
-    return { success: false, message: 'Тошнит' };
+    return { success: false, message: 'Тошнит'};
   }
 
   // Multi-portion / Bite-by-Bite logic
@@ -4935,14 +7158,14 @@ export function useHandItemOnPlayer(
     if (energyGain) player.needs.energy = Math.min(100, Math.max(0, player.needs.energy + energyGain));
     if (sleepinessGain) player.needs.sleepiness = Math.min(100, Math.max(0, player.needs.sleepiness + sleepinessGain));
 
-    const fGain = def?.fullnessPerBite !== undefined ? def.fullnessPerBite : (item.category === 'food' ? 3 : 1);
+    const fGain = def?.fullnessPerBite !== undefined ? def.fullnessPerBite : (item.category === 'food'? 3 : 1);
     player.needs.fullness = Math.min(100, (player.needs.fullness || 0) + fGain);
     if ((player.needs.fullness || 0) > 88) {
       player.needs.nausea = Math.min(100, (player.needs.nausea || 0) + 4);
     }
 
     // Specific item effects
-    if (item.itemId === 'painkillers' || item.itemId === 'morphine') {
+    if (item.itemId === 'painkillers'|| item.itemId === 'morphine') {
       administerMedication(player, item.itemId);
     } else if (item.itemId === 'vitamins') {
       player.needs.energy = Math.min(100, player.needs.energy + 4);
@@ -4975,7 +7198,7 @@ export function useHandItemOnPlayer(
       applyActivatedCharcoal(player);
     } else if (item.itemId === 'valerian_drops') {
       applyValerianDrops(player);
-    } else if (item.itemId === 'antiseptic' && player.bodyState) {
+    } else if (item.itemId === 'antiseptic'&& player.bodyState) {
       applyAntiseptic(player, targetInjuryId);
     }
 
@@ -4996,7 +7219,7 @@ export function useHandItemOnPlayer(
       taste = def.tasteMessages[Math.floor(Math.random() * def.tasteMessages.length)];
     }
 
-    const unitLabel = item.category === 'drink' ? 'глотков' : item.category === 'food' ? 'укусов' : (item.itemId === 'painkillers' || item.itemId === 'vitamins' ? 'таблеток' : 'применений');
+    const unitLabel = item.category === 'drink'? 'глотков': item.category === 'food'? 'укусов': (item.itemId === 'painkillers'|| item.itemId === 'vitamins'? 'таблеток': 'применений');
 
     if (remaining <= 0) {
       if (item.count > 1) {
@@ -5008,26 +7231,25 @@ export function useHandItemOnPlayer(
 
       if (def?.leftoverId) {
         const leftover = createItem(def.leftoverId, 1);
-        if (hand === 'left' && !player.leftHandItem) {
+        if (hand === 'left'&& !player.leftHandItem) {
           player.leftHandItem = leftover;
-        } else if (hand === 'right' && !player.rightHandItem) {
+        } else if (hand === 'right'&& !player.rightHandItem) {
           player.rightHandItem = leftover;
         } else {
           stowItemFromHandToPockets(player, hand);
         }
-        addPlayerNotification(player, `🗑️ Вы закончили ${item.nameRu}. В руке осталась упаковка: ${def.leftoverNameRu || leftover.nameRu}`, 'info');
+        addPlayerNotification(player, `Вы закончили ${item.nameRu}. В руке осталась упаковка: ${def.leftoverNameRu || leftover.nameRu}`, 'info');
       } else {
-        addPlayerNotification(player, `✅ ${item.nameRu} полностью закончен!`, 'food');
+        addPlayerNotification(player, `${item.nameRu} полностью закончен!`, 'food');
       }
     } else {
       addPlayerNotification(
         player,
-        `${item.category === 'drink' ? '🥤' : item.category === 'food' ? '🍽️' : '🧯'} ${taste || item.nameRu} (${remaining}/${maxPortions} ${unitLabel})`,
-        item.category === 'drink' ? 'drink' : item.category === 'food' ? 'food' : 'heal'
-      );
+        `${item.category === 'drink'? '': item.category === 'food'? '': ''} ${taste || item.nameRu} (${remaining}/${maxPortions} ${unitLabel})`,
+        item.category === 'drink'? 'drink': item.category === 'food'? 'food': 'heal');
     }
 
-    return { success: true, message: `Использовано: ${item.nameRu}` };
+    return { success: true, message: `Использовано: ${item.nameRu}`};
   }
 
   // Single portion items
@@ -5041,8 +7263,8 @@ export function useHandItemOnPlayer(
   if (fx.energy) player.needs.energy = Math.min(100, Math.max(0, player.needs.energy + fx.energy));
   if (fx.sleepiness) player.needs.sleepiness = Math.min(100, Math.max(0, player.needs.sleepiness + fx.sleepiness));
 
-  if (item.category === 'food' || item.category === 'drink') {
-    const fGain = def?.fullnessPerBite !== undefined ? def.fullnessPerBite : (item.category === 'food' ? 20 : 15);
+  if (item.category === 'food'|| item.category === 'drink') {
+    const fGain = def?.fullnessPerBite !== undefined ? def.fullnessPerBite : (item.category === 'food'? 20 : 15);
     player.needs.fullness = Math.min(100, (player.needs.fullness || 0) + fGain);
     if ((player.needs.fullness || 0) > 88) {
       player.needs.nausea = Math.min(100, (player.needs.nausea || 0) + 4);
@@ -5066,7 +7288,7 @@ export function useHandItemOnPlayer(
     else if (item.itemId === 'activated_charcoal') applyActivatedCharcoal(player);
     else if (item.itemId === 'valerian_drops') applyValerianDrops(player);
     else if (item.itemId === 'medkit') applyMedkit(player);
-    else if (item.itemId === 'painkillers' || item.itemId === 'morphine') administerMedication(player, item.itemId);
+    else if (item.itemId === 'painkillers'|| item.itemId === 'morphine') administerMedication(player, item.itemId);
   }
 
   if (item.category === 'food') soothePanic(player, 30);
@@ -5084,7 +7306,7 @@ export function useHandItemOnPlayer(
     takeItemFromHand(player, hand);
   }
 
-  return { success: true, message: `Использовано: ${item.nameRu}` };
+  return { success: true, message: `Использовано: ${item.nameRu}`};
 }
 
 export function dropItemFromPlayer(
@@ -5190,8 +7412,7 @@ export function seedInitialGroundItems(world: GameWorld) {
 export function addPlayerNotification(
   player: Player | null | undefined,
   text: string,
-  type: 'heal' | 'food' | 'drink' | 'energy' | 'sleep' | 'warning' | 'pickup' | 'info' = 'info'
-) {
+  type: 'heal'| 'food'| 'drink'| 'energy'| 'sleep'| 'warning'| 'pickup'| 'info'= 'info') {
   if (!player || !text) return;
   if (!player.notifications) player.notifications = [];
 
@@ -5201,8 +7422,7 @@ export function addPlayerNotification(
     food: '#f59e0b',
     drink: '#38bdf8',
     pickup: '#a855f7',
-    info: '#38bdf8'
-  };
+    info: '#38bdf8'};
 
   player.notifications.push({
     id: `notif_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
@@ -5219,7 +7439,7 @@ export function addPlayerNotification(
 export function isPlayerNearTrashBin(player: Player, world: GameWorld): boolean {
   if (!world.props) return false;
   for (const prop of world.props) {
-    if (prop.type === 'trash_can' || prop.type === 'dumpster') {
+    if (prop.type === 'trash_can'|| prop.type === 'dumpster') {
       const dist = Math.hypot(player.x - prop.x, player.y - prop.y);
       if (dist < 50) {
         return true;
@@ -5338,7 +7558,7 @@ export function disposeTrashInBin(player: Player, world: GameWorld, targetItemId
 
 
 
-export function equipClothing(player: Player, inventoryIndex: number) {
+export function equipClothing(player: Player, inventoryIndex: number, world?: GameWorld): { success: boolean; message: string } {
   const item = player.inventory[inventoryIndex];
   if (!item || !item.clothingStats) return { success: false, message: 'Это не одежда' };
   
@@ -5346,29 +7566,125 @@ export function equipClothing(player: Player, inventoryIndex: number) {
   player.equippedClothing = player.equippedClothing || {};
   player.equippedClothing[stats.slot] = player.equippedClothing[stats.slot] || {};
   
-  // If there is already something in this layer, we should probably swap it, 
-  // but for now let's just unequip it and put it in inventory
+  // If there is already something in this layer, unequip it first
   if (player.equippedClothing[stats.slot]![stats.layer]) {
-    const existing = player.equippedClothing[stats.slot]![stats.layer]!;
-    player.inventory[inventoryIndex] = existing;
-  } else {
-    // Remove from inventory
-    player.inventory.splice(inventoryIndex, 1);
+    unequipClothing(player, stats.slot, stats.layer, world);
   }
+  
+  // Remove item from inventory slot
+  player.inventory[inventoryIndex] = null as any;
   player.equippedClothing[stats.slot]![stats.layer] = item;
-  return { success: true, message: 'Одежда надета' };
+
+  // If this item had stored contents (e.g. backpack was unequipped with items inside), unpack them into inventory!
+  if (item.contents && item.contents.length > 0) {
+    const contentsToUnpack = [...item.contents];
+    item.contents = [];
+    for (const contItem of contentsToUnpack) {
+      addItemToPlayer(player, contItem, { preferPockets: true, skipHands: true });
+    }
+  }
+
+  // Update dynamic max slots
+  const totalSlots = getPlayerTotalSlots(player);
+  player.maxInventorySlots = totalSlots;
+
+  return { success: true, message: `Надето: ${item.nameRu}` };
 }
 
-export function unequipClothing(player: Player, slot: import('./types').ClothingSlot, layer: import('./types').ClothingLayer) {
-  if (!player.equippedClothing || !player.equippedClothing[slot] || !player.equippedClothing[slot]![layer]) return { success: false };
+export function unequipClothing(
+  player: Player, 
+  slot: import('./types').ClothingSlot, 
+  layer: import('./types').ClothingLayer,
+  world?: GameWorld
+): { success: boolean; message: string } {
+  if (!player.equippedClothing || !player.equippedClothing[slot] || !player.equippedClothing[slot]![layer]) {
+    return { success: false, message: 'Предмет не надет' };
+  }
   
   const item = player.equippedClothing[slot]![layer]!;
   
-  if (player.inventory.length >= player.maxInventorySlots) {
-    return { success: false, message: 'Инвентарь полон' };
-  }
-  
-  player.inventory.push(item);
+  // Find compartment corresponding to this clothing before removing
+  const beforeCompartments = getPlayerCompartments(player);
+  const targetComp = beforeCompartments.find(c => {
+    if (slot === 'back' && c.id === 'back') return true;
+    if (slot === 'torso' && c.id === 'torso') return true;
+    if (slot === 'legs' && c.id === 'legs') return true;
+    return false;
+  });
+
+  // Remove from equipped
   delete player.equippedClothing[slot]![layer];
-  return { success: true, message: 'Одежда снята' };
+
+  // If this item had a storage compartment (like backpack or jacket), pack the items from its slots into item.contents
+  if (targetComp && item.isContainer) {
+    item.contents = item.contents || [];
+    for (let i = targetComp.startIndex; i < targetComp.startIndex + targetComp.slotCount; i++) {
+      const slotItem = player.inventory[i];
+      if (slotItem) {
+        item.contents.push(slotItem);
+        player.inventory[i] = null as any;
+      }
+    }
+  }
+
+  // Recalculate max slots
+  const newTotalSlots = getPlayerTotalSlots(player);
+  player.maxInventorySlots = newTotalSlots;
+
+  // Clean up any items past new total slots
+  if (player.inventory.length > newTotalSlots) {
+    for (let i = newTotalSlots; i < player.inventory.length; i++) {
+      const extraItem = player.inventory[i];
+      if (extraItem) {
+        if (item.isContainer) {
+          item.contents = item.contents || [];
+          item.contents.push(extraItem);
+        } else {
+          addItemToPlayer(player, extraItem);
+        }
+        player.inventory[i] = null as any;
+      }
+    }
+    player.inventory.length = newTotalSlots;
+  }
+
+  // Place unequipped item into pockets or hands or ground
+  let placed = false;
+  for (let i = 0; i < newTotalSlots; i++) {
+    if (!player.inventory[i]) {
+      player.inventory[i] = item;
+      placed = true;
+      break;
+    }
+  }
+  if (!placed) {
+    if (!player.leftHandItem) {
+      player.leftHandItem = item;
+      placed = true;
+    } else if (!player.rightHandItem) {
+      player.rightHandItem = item;
+      placed = true;
+    }
+  }
+  if (!placed) {
+    if (world) {
+      if (!world.groundItems) world.groundItems = [];
+      world.groundItems.push({
+        id: `ground_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+        x: player.x + (Math.random() * 20 - 10),
+        y: player.y + (Math.random() * 20 - 10),
+        item,
+        spawnTime: Date.now()
+      });
+      addPlayerNotification(player, `Инвентарь полон! ${item.nameRu} упал на землю`, 'warning');
+    }
+  }
+
+  const packedCount = item.contents?.length || 0;
+  const msg = packedCount > 0 
+    ? `${item.nameRu} снят (внутри сохранено ${packedCount} предм.)`
+    : `${item.nameRu} снят`;
+
+  return { success: true, message: msg };
 }
+

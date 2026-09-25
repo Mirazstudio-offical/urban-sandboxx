@@ -157,26 +157,102 @@ function findClosestIntersection(
   return first;
 }
 
-// Find direct connected neighbor intersections along roads (without skipping intermediate intersections)
+// Project point onto line segment
+function projectPointOnSegment(p: Vector2D, a: Vector2D, b: Vector2D): { proj: Vector2D; t: number; dist: number } {
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  const l2 = dx * dx + dy * dy;
+  if (l2 === 0) {
+    return { proj: { x: a.x, y: a.y }, t: 0, dist: getDistance(p, a) };
+  }
+  let t = ((p.x - a.x) * dx + (p.y - a.y) * dy) / l2;
+  t = Math.max(0, Math.min(1, t));
+  const proj = { x: a.x + t * dx, y: a.y + t * dy };
+  return { proj, t, dist: getDistance(p, proj) };
+}
+
+// Find direct connected neighbor intersections along roads
 function getIntersectionNeighbors(
   current: Intersection,
   allIntersections: Intersection[],
   roads?: RoadSegment[]
 ): Intersection[] {
   const neighbors: Intersection[] = [];
-  const threshold = 1800; // max search threshold for adjacent intersections
+  const neighborSet = new Set<string>();
 
+  if (roads && roads.length > 0) {
+    for (const road of roads) {
+      const p1 = { x: road.x1, y: road.y1 };
+      const p2 = { x: road.x2, y: road.y2 };
+      const maxConnDist = Math.max(160, road.width * 1.5 + 40);
+
+      const d1 = getDistance({ x: current.x, y: current.y }, p1);
+      const d2 = getDistance({ x: current.x, y: current.y }, p2);
+
+      // Check if current is near one end of the road
+      if (d1 < maxConnDist || d2 < maxConnDist) {
+        const targetEnd = d1 < maxConnDist ? p2 : p1;
+
+        // Find the intersection closest to targetEnd
+        let bestTarget: Intersection | null = null;
+        let bestDist = maxConnDist;
+
+        for (const other of allIntersections) {
+          if (other.id === current.id) continue;
+          const od = getDistance({ x: other.x, y: other.y }, targetEnd);
+          if (od < bestDist) {
+            bestDist = od;
+            bestTarget = other;
+          }
+        }
+
+        if (bestTarget && !neighborSet.has(bestTarget.id)) {
+          neighborSet.add(bestTarget.id);
+          neighbors.push(bestTarget);
+        }
+      }
+
+      // Also check if both current and other lie along this road segment
+      const projCurrent = projectPointOnSegment({ x: current.x, y: current.y }, p1, p2);
+      if (projCurrent.dist < road.width / 2 + 40) {
+        for (const other of allIntersections) {
+          if (other.id === current.id || neighborSet.has(other.id)) continue;
+          const projOther = projectPointOnSegment({ x: other.x, y: other.y }, p1, p2);
+          if (projOther.dist < road.width / 2 + 40) {
+            // Check if there is any intermediate intersection on this road between them
+            const tMin = Math.min(projCurrent.t, projOther.t);
+            const tMax = Math.max(projCurrent.t, projOther.t);
+            if (tMax - tMin > 0.01) {
+              let hasMid = false;
+              for (const mid of allIntersections) {
+                if (mid.id === current.id || mid.id === other.id) continue;
+                const projMid = projectPointOnSegment({ x: mid.x, y: mid.y }, p1, p2);
+                if (projMid.dist < road.width / 2 + 40 && projMid.t > tMin + 0.02 && projMid.t < tMax - 0.02) {
+                  hasMid = true;
+                  break;
+                }
+              }
+              if (!hasMid) {
+                neighborSet.add(other.id);
+                neighbors.push(other);
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  // Fallback / supplement for city grid intersections:
   for (const other of allIntersections) {
-    if (other.id === current.id) continue;
+    if (other.id === current.id || neighborSet.has(other.id)) continue;
 
-    // Check if aligned horizontally or vertically (within 50px tolerance)
-    const isHoriz = Math.abs(other.y - current.y) < 50;
-    const isVert = Math.abs(other.x - current.x) < 50;
+    const isHoriz = Math.abs(other.y - current.y) < 55;
+    const isVert = Math.abs(other.x - current.x) < 55;
 
     if (isHoriz || isVert) {
       const dist = getDistance({ x: current.x, y: current.y }, { x: other.x, y: other.y });
-      if (dist < threshold) {
-        // Ensure there is NO intermediate intersection between current and other
+      if (dist < 4500) {
         let hasMid = false;
         const minX = Math.min(current.x, other.x) + 40;
         const maxX = Math.max(current.x, other.x) - 40;
@@ -185,48 +261,65 @@ function getIntersectionNeighbors(
 
         for (const mid of allIntersections) {
           if (mid.id === current.id || mid.id === other.id) continue;
-          if (isHoriz && Math.abs(mid.y - current.y) < 50 && mid.x > minX && mid.x < maxX) {
+          if (isHoriz && Math.abs(mid.y - current.y) < 55 && mid.x > minX && mid.x < maxX) {
             hasMid = true;
             break;
           }
-          if (isVert && Math.abs(mid.x - current.x) < 50 && mid.y > minY && mid.y < maxY) {
+          if (isVert && Math.abs(mid.x - current.x) < 55 && mid.y > minY && mid.y < maxY) {
             hasMid = true;
             break;
           }
         }
 
         if (!hasMid) {
-          // If roads are available, ensure road geometry actually exists between them
-          if (roads && roads.length > 0) {
-            const hasRoad = roads.some((r) => {
-              if (isHoriz && r.direction === 'horizontal') {
-                return (
-                  Math.abs(r.y1 - current.y) < 60 &&
-                  r.x1 <= Math.min(current.x, other.x) + 80 &&
-                  r.x2 >= Math.max(current.x, other.x) - 80
-                );
-              }
-              if (isVert && r.direction === 'vertical') {
-                return (
-                  Math.abs(r.x1 - current.x) < 60 &&
-                  r.y1 <= Math.min(current.y, other.y) + 80 &&
-                  r.y2 >= Math.max(current.y, other.y) - 80
-                );
-              }
-              return false;
-            });
-            if (hasRoad) {
-              neighbors.push(other);
-            }
-          } else {
-            neighbors.push(other);
-          }
+          neighborSet.add(other.id);
+          neighbors.push(other);
         }
       }
     }
   }
 
   return neighbors;
+}
+
+// Helper to extract path waypoints along a road between two points/intersections
+function getRoadWaypointsBetween(pA: Vector2D, pB: Vector2D, roads: RoadSegment[]): Vector2D[] {
+  let bestRoad: RoadSegment | null = null;
+  let bestDistSum = Infinity;
+
+  for (const road of roads) {
+    const p1 = { x: road.x1, y: road.y1 };
+    const p2 = { x: road.x2, y: road.y2 };
+    const d1A = getDistance(pA, p1);
+    const d2B = getDistance(pB, p2);
+    const d2A = getDistance(pA, p2);
+    const d1B = getDistance(pB, p1);
+
+    const sumForward = d1A + d2B;
+    const sumReverse = d2A + d1B;
+    const minSum = Math.min(sumForward, sumReverse);
+
+    if (minSum < bestDistSum && minSum < Math.max(300, road.width * 2 + 100)) {
+      bestDistSum = minSum;
+      bestRoad = road;
+    }
+  }
+
+  if (bestRoad && bestRoad.lanePaths && bestRoad.lanePaths.length > 0) {
+    const lane = bestRoad.lanePaths[0];
+    if (lane && lane.waypoints && lane.waypoints.length > 2) {
+      const wps = [...lane.waypoints];
+      // Check if waypoints run from pA to pB or reverse
+      const startDist = getDistance(pA, wps[0]);
+      const endDist = getDistance(pA, wps[wps.length - 1]);
+      if (endDist < startDist) {
+        wps.reverse();
+      }
+      return wps;
+    }
+  }
+
+  return [pB];
 }
 
 // A* algorithm to compute path over intersection nodes avoiding traffic jams and accidents in either direction
@@ -274,17 +367,32 @@ export function calculateGpsRoute(world: GameWorld, start: Vector2D, end: Vector
     if (!currentId) break;
 
     if (currentId === endInter.id) {
-      // Reconstruct path
-      const pathNodes: Vector2D[] = [];
+      // Reconstruct path with curved road waypoints
+      const interSequence: Intersection[] = [];
       let curr: Intersection | undefined = idToInter.get(endInter.id);
 
       while (curr) {
-        pathNodes.unshift({ x: curr.x, y: curr.y });
+        interSequence.unshift(curr);
         curr = cameFrom.get(curr.id);
       }
 
-      // Add actual start and end coordinates
-      return [start, ...pathNodes, end];
+      const detailedPath: Vector2D[] = [start];
+      for (let i = 0; i < interSequence.length; i++) {
+        const node = interSequence[i];
+        if (i === 0) {
+          detailedPath.push({ x: node.x, y: node.y });
+        } else {
+          const prev = interSequence[i - 1];
+          const segmentWps = getRoadWaypointsBetween(
+            { x: prev.x, y: prev.y },
+            { x: node.x, y: node.y },
+            world.roads
+          );
+          detailedPath.push(...segmentWps);
+        }
+      }
+      detailedPath.push(end);
+      return detailedPath;
     }
 
     openSet.delete(currentId);

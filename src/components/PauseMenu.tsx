@@ -1,5 +1,5 @@
 import React from 'react';
-import { Play, Save, Settings, LogOut, Compass, Globe } from 'lucide-react';
+import { Play, Save, Settings, LogOut, Compass, Globe, User } from 'lucide-react';
 
 interface PauseMenuProps {
   onResume: () => void;
@@ -7,6 +7,7 @@ interface PauseMenuProps {
   onOpenSettings: () => void;
   onExitToMainMenu: () => void;
   onOpenOnline?: () => void;
+  onOpenProfile?: () => void;
 }
 
 export const PauseMenu: React.FC<PauseMenuProps> = ({
@@ -14,7 +15,8 @@ export const PauseMenu: React.FC<PauseMenuProps> = ({
   onSave,
   onOpenSettings,
   onExitToMainMenu,
-  onOpenOnline
+  onOpenOnline,
+  onOpenProfile
 }) => {
   return (
     <div className="absolute inset-0 z-50 flex items-center justify-center bg-[#070b14]/85 backdrop-blur-md text-slate-100 font-sans select-none animate-in fade-in duration-200">
@@ -48,6 +50,19 @@ export const PauseMenu: React.FC<PauseMenuProps> = ({
             <span>Продолжить игру</span>
           </button>
 
+          {onOpenProfile && (
+            <button
+              onClick={onOpenProfile}
+              className="flex items-center gap-4 px-5 py-4 bg-slate-900 hover:bg-slate-850 border border-emerald-500/30 hover:border-emerald-500/60 rounded-2xl transition-all font-bold text-sm text-white group cursor-pointer active:scale-[0.99] shadow-lg"
+            >
+              <User className="w-5 h-5 text-emerald-400 group-hover:scale-110 transition-transform" />
+              <div className="text-left">
+                <div>Профиль & Облачные Сохранения</div>
+                <div className="text-[10px] text-slate-400 font-normal">Авторизация, мейнтейнер серверов, облако</div>
+              </div>
+            </button>
+          )}
+
           {onOpenOnline && (
             <button
               onClick={onOpenOnline}
@@ -55,8 +70,8 @@ export const PauseMenu: React.FC<PauseMenuProps> = ({
             >
               <Globe className="w-5 h-5 text-sky-400 group-hover:scale-110 transition-transform" />
               <div className="text-left">
-                <div>Онлайн режим (P2P Сеть)</div>
-                <div className="text-[10px] text-slate-400 font-normal">Комнаты, общий чат, синхронизация машин</div>
+                <div>Онлайн режим (P2P Сеть & Серверы)</div>
+                <div className="text-[10px] text-slate-400 font-normal">Браузер комнат, общий чат, синхронизация</div>
               </div>
             </button>
           )}
@@ -97,4 +112,3 @@ export const PauseMenu: React.FC<PauseMenuProps> = ({
     </div>
   );
 };
-

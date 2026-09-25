@@ -125,7 +125,7 @@ export const SelfInspectionModal: React.FC<SelfInspectionModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 md:p-6 bg-slate-950/85 backdrop-blur-md animate-fadeIn pointer-events-auto select-none">
-      <div className="relative w-full max-w-5xl bg-slate-900 border border-slate-700/80 rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[92vh]">
+      <div className="relative w-full max-w-5xl bg-slate-900 border border-slate-700/80 rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[95vh] md:max-h-[90vh]">
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 bg-slate-950/90 border-b border-slate-800">
           <div className="flex items-center gap-3">
@@ -145,25 +145,25 @@ export const SelfInspectionModal: React.FC<SelfInspectionModalProps> = ({
 
           <button
             onClick={onClose}
-            className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition"
+            className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition cursor-pointer"
             title="Закрыть (Esc)"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        {/* Content Body */}
-        <div className="p-6 overflow-y-auto grid grid-cols-1 md:grid-cols-12 gap-6">
+        {/* Content Body (Bento Grid) */}
+        <div className="p-5 md:p-6 overflow-y-auto grid grid-cols-1 md:grid-cols-12 md:grid-rows-2 gap-4 flex-1">
           
-          {/* LEFT: Interactive Anatomy Silhouette (4 cols) */}
-          <div className="md:col-span-4 bg-slate-950/70 rounded-2xl p-4 border border-slate-800 flex flex-col items-center justify-between">
+          {/* BENTO CARD 1: Interactive Anatomy Silhouette (Col span 4, Row span 2) */}
+          <div className="md:col-span-4 md:row-span-2 bg-slate-950/80 rounded-2xl p-5 border border-slate-800 flex flex-col items-center justify-between min-h-[380px] md:min-h-0">
             <div className="w-full flex items-center justify-between text-xs font-semibold text-slate-400 tracking-wider uppercase mb-1">
               <span>Карта тела</span>
-              <span className="text-[10px] text-sky-400 lowercase">кликните конечность</span>
+              <span className="text-[10px] text-sky-400 lowercase font-bold">кликните конечность</span>
             </div>
 
             {/* Vector Human Silhouette SVG */}
-            <div className="relative w-48 h-72 flex items-center justify-center my-2">
+            <div className="relative w-48 h-64 md:h-72 flex items-center justify-center my-2">
               <svg viewBox="0 0 100 160" className="w-full h-full drop-shadow-md">
                 {/* Head */}
                 <circle
@@ -255,7 +255,7 @@ export const SelfInspectionModal: React.FC<SelfInspectionModalProps> = ({
                 <button
                   key={p}
                   onClick={() => selectPart(p)}
-                  className={`px-2 py-1 rounded-lg text-[10px] font-bold border transition ${
+                  className={`px-2 py-1.5 rounded-lg text-[10px] font-bold border transition duration-200 cursor-pointer ${
                     selectedPart === p
                       ? 'bg-sky-500/20 text-sky-300 border-sky-500'
                       : 'bg-slate-900 text-slate-400 border-slate-800 hover:border-slate-700'
@@ -267,10 +267,10 @@ export const SelfInspectionModal: React.FC<SelfInspectionModalProps> = ({
             </div>
           </div>
 
-          {/* MIDDLE: Selected Part Details & Injuries (4 cols) */}
-          <div className="md:col-span-4 flex flex-col gap-3">
-            <div className="bg-slate-950/70 p-4 rounded-2xl border border-slate-800 flex flex-col gap-2">
-              <div className="flex items-center justify-between font-bold text-slate-200">
+          {/* BENTO CARD 2: Selected Part Details & Injuries (Col span 5, Row span 1) */}
+          <div className="md:col-span-5 bg-slate-950/70 p-5 rounded-2xl border border-slate-800 flex flex-col justify-between gap-3 min-h-[220px] md:min-h-0">
+            <div>
+              <div className="flex items-center justify-between font-bold text-slate-200 mb-2">
                 <span className="text-base">{getBodyPartLabel(selectedPart)}</span>
                 <span className={`px-2 py-0.5 rounded border text-[10px] font-semibold ${getPartBadgeClass(currentInjuries)}`}>
                   {getBodyPartStatusText(currentInjuries)}
@@ -278,18 +278,18 @@ export const SelfInspectionModal: React.FC<SelfInspectionModalProps> = ({
               </div>
               
               {currentPartPain > 0 && (
-                <div className="flex items-center justify-between text-xs text-rose-400/90 font-mono bg-rose-950/30 px-2.5 py-1 rounded-lg border border-rose-900/40">
+                <div className="flex items-center justify-between text-xs text-rose-400/90 font-mono bg-rose-950/30 px-2.5 py-1 rounded-lg border border-rose-900/40 mb-2">
                   <span>Локальная боль:</span>
                   <span className="font-bold">{Math.round(currentPartPain)}%</span>
                 </div>
               )}
 
-              <div className="text-xs text-slate-400 mt-1 font-medium flex items-center justify-between">
+              <div className="text-xs text-slate-400 font-medium flex items-center justify-between mb-2">
                 <span>Список диагностированных травм:</span>
                 <span className="text-[10px] text-slate-500">{currentInjuries.length} травм</span>
               </div>
 
-              <div className="flex flex-col gap-2 max-h-[220px] overflow-y-auto pr-1">
+              <div className="flex flex-col gap-2 max-h-[120px] md:max-h-[140px] overflow-y-auto pr-1">
                 {currentInjuries.length === 0 ? (
                   <div className="text-xs text-emerald-400 italic p-3 text-center border border-emerald-900/50 bg-emerald-950/20 rounded-xl flex items-center justify-center gap-1.5">
                     <ShieldCheck className="w-4 h-4 text-emerald-400" />
@@ -341,7 +341,7 @@ export const SelfInspectionModal: React.FC<SelfInspectionModalProps> = ({
                                 <button
                                   key={`${item.itemId}_${idx}`}
                                   onClick={() => handleApplyToInjury(idx, injury.id)}
-                                  className="px-2 py-1 bg-emerald-950/80 hover:bg-emerald-900 border border-emerald-600/80 hover:border-emerald-400 text-emerald-200 hover:text-white rounded text-[10px] font-bold flex items-center gap-1 transition active:scale-95"
+                                  className="px-2 py-1 bg-emerald-950/80 hover:bg-emerald-900 border border-emerald-600/80 hover:border-emerald-400 text-emerald-200 hover:text-white rounded text-[10px] font-bold flex items-center gap-1 transition active:scale-95 cursor-pointer"
                                 >
                                   <span>{item.nameRu}</span>
                                 </button>
@@ -355,28 +355,65 @@ export const SelfInspectionModal: React.FC<SelfInspectionModalProps> = ({
                 )}
               </div>
             </div>
+          </div>
 
-            {/* Active Pharmacokinetics Card */}
-            <div className="bg-slate-950/70 p-4 rounded-2xl border border-slate-800 flex flex-col gap-2">
-              <div className="flex items-center justify-between text-xs font-bold uppercase tracking-wider text-slate-300">
+          {/* BENTO CARD 3: Vitals & Shock Gauge (Col span 3, Row span 1) */}
+          <div className="md:col-span-3 bg-slate-950/70 p-5 rounded-2xl border border-slate-800 flex flex-col justify-between gap-3 min-h-[160px] md:min-h-0">
+            <div>
+              <div className="flex items-center justify-between text-xs font-bold mb-2">
+                <span className="flex items-center gap-1.5 text-rose-400">
+                  <Activity className="w-4 h-4" />
+                  <span>Порог боли</span>
+                </span>
+                <span className="text-xs font-mono text-rose-300 font-bold">{Math.round(bs.effectivePain || bs.painLevel)} / 100</span>
+              </div>
+              <div className="w-full h-2.5 bg-slate-800 rounded-full overflow-hidden mb-4">
+                <div 
+                  className="h-full bg-rose-500 transition-all duration-200"
+                  style={{ width: `${Math.min(100, Math.max(0, bs.effectivePain || bs.painLevel))}%` }}
+                />
+              </div>
+
+              {/* Traumatic Shock */}
+              <div className="flex items-center justify-between text-xs text-slate-400 pt-2.5 border-t border-slate-800/80 mb-2">
+                <span>Травматический шок:</span>
+                <span className={`font-bold font-mono ${(bs.shockLevel || 0) > 30 ? 'text-amber-400 animate-pulse' : 'text-slate-300'}`}>
+                  {Math.round(bs.shockLevel || 0)}%
+                </span>
+              </div>
+
+              {/* Panic Level */}
+              <div className="flex items-center justify-between text-xs text-slate-400">
+                <span>Уровень паники и страха:</span>
+                <span className={`font-bold font-mono ${(bs.panicLevel || 0) > 30 ? 'text-amber-400' : 'text-slate-300'}`}>
+                  {Math.round(bs.panicLevel || 0)}%
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* BENTO CARD 4: Active Pharmacokinetics (Col span 5, Row span 1) */}
+          <div className="md:col-span-5 bg-slate-950/70 p-5 rounded-2xl border border-slate-800 flex flex-col justify-between gap-3 min-h-[160px] md:min-h-0">
+            <div>
+              <div className="flex items-center justify-between text-xs font-bold uppercase tracking-wider text-slate-300 mb-2">
                 <span className="flex items-center gap-1.5">
                   <Pill className="w-3.5 h-3.5 text-sky-400" />
                   <span>Активные медикаменты</span>
                 </span>
-                <span className="text-[10px] font-mono text-sky-400">{activeMeds.length} в крови</span>
+                <span className="text-[10px] font-mono text-sky-400 font-bold">{activeMeds.length} в сыворотке</span>
               </div>
 
               {activeMeds.length === 0 ? (
-                <div className="text-xs text-slate-500 italic p-2.5 text-center bg-slate-900/50 rounded-xl border border-slate-800/60">
+                <div className="text-xs text-slate-500 italic p-4 text-center bg-slate-900/30 rounded-xl border border-slate-800/60 leading-relaxed">
                   Медикаменты не принимались. Всасывание отсутствует.
                 </div>
               ) : (
-                <div className="flex flex-col gap-2 max-h-[140px] overflow-y-auto">
+                <div className="flex flex-col gap-2 max-h-[120px] md:max-h-[140px] overflow-y-auto pr-1">
                   {activeMeds.map(med => (
-                    <div key={med.id} className="p-2 bg-slate-900/90 rounded-xl border border-slate-700/60 text-xs">
+                    <div key={med.id} className="p-2.5 bg-slate-900/90 rounded-xl border border-slate-700/60 text-xs">
                       <div className="flex items-center justify-between font-bold text-sky-300">
                         <span>{med.nameRu || (med as any).name || 'Медикамент'}</span>
-                        <span className="text-[10px] px-1.5 py-0.2 bg-sky-950 text-sky-400 rounded border border-sky-800 font-mono">
+                        <span className="text-[10px] px-1.5 py-0.2 bg-sky-950 text-sky-400 rounded border border-sky-800 font-mono font-bold">
                           {med.phase === 'absorption' && '[Всасывание]'}
                           {med.phase === 'peak' && '[Пик]'}
                           {med.phase === 'action' && '[Терапия]'}
@@ -400,61 +437,26 @@ export const SelfInspectionModal: React.FC<SelfInspectionModalProps> = ({
             </div>
           </div>
 
-          {/* RIGHT: Vitals & Pain / Pharmacokinetics (4 cols) */}
-          <div className="md:col-span-4 flex flex-col gap-3">
-            
-            {/* Effective Pain & Shock Gauge */}
-            <div className="bg-slate-950/70 p-4 rounded-2xl border border-slate-800 flex flex-col gap-3">
-              <div className="flex items-center justify-between text-xs font-bold">
-                <span className="flex items-center gap-1.5 text-rose-400">
-                  <Activity className="w-4 h-4" />
-                  <span>Волновой порог боли (с пульсом)</span>
-                </span>
-                <span className="text-xs font-mono text-rose-300 font-bold">{Math.round(bs.effectivePain || bs.painLevel)} / 100</span>
-              </div>
-              <div className="w-full h-2.5 bg-slate-800 rounded-full overflow-hidden">
-                <div 
-                  className="h-full bg-amber-500 transition-all duration-200"
-                  style={{ width: `${Math.min(100, Math.max(0, bs.effectivePain || bs.painLevel))}%` }}
-                />
-              </div>
-
-              {/* Traumatic Shock */}
-              <div className="flex items-center justify-between text-xs text-slate-400 mt-1 pt-2 border-t border-slate-800/80">
-                <span>Травматический шок:</span>
-                <span className={`font-bold font-mono ${(bs.shockLevel || 0) > 30 ? 'text-amber-400' : 'text-slate-300'}`}>
-                  {Math.round(bs.shockLevel || 0)}%
-                </span>
-              </div>
-
-              {/* Panic Level */}
-              <div className="flex items-center justify-between text-xs text-slate-400">
-                <span>Уровень паники и страха:</span>
-                <span className={`font-bold font-mono ${(bs.panicLevel || 0) > 30 ? 'text-amber-400' : 'text-slate-300'}`}>
-                  {Math.round(bs.panicLevel || 0)}%
-                </span>
-              </div>
-            </div>
-
-            {/* Clinical Summary Note */}
-            <div className="bg-slate-950/80 p-4 rounded-2xl border border-slate-800 flex flex-col gap-2 flex-1">
+          {/* BENTO CARD 5: Clinical Summary (Col span 3, Row span 1) */}
+          <div className="md:col-span-3 bg-slate-950/80 p-5 rounded-2xl border border-slate-800 flex flex-col justify-between gap-3 min-h-[180px] md:min-h-0">
+            <div className="flex flex-col gap-2 flex-1">
               <div className="text-xs font-bold uppercase tracking-wider text-slate-300 flex items-center justify-between">
                 <span className="flex items-center gap-1.5">
                   <Heart className="w-3.5 h-3.5 text-rose-400" />
-                  <span>Общее клиническое резюме</span>
+                  <span>Клинический вердикт</span>
                 </span>
               </div>
               
-              <div className="text-xs text-slate-300 leading-relaxed p-3 bg-slate-900/60 rounded-xl border border-slate-800">
+              <div className="text-xs text-slate-300 leading-relaxed p-3 bg-slate-900/60 rounded-xl border border-slate-800 overflow-y-auto max-h-[110px] md:max-h-[120px] flex-1">
                 {detailed.overallSensorySummary || detailed.healthText}
-              </div>
-
-              <div className="text-[11px] text-slate-400 leading-normal p-3 bg-slate-900/40 rounded-xl border border-slate-800/60 mt-auto">
-                <span className="text-slate-300 font-bold">Для оказания первой помощи:</span> примените медикаменты (бинт, шину, пластырь, антисептик) напрямую из инвентаря. Вся симптоматика отображается на главном экране.
               </div>
             </div>
 
+            <div className="text-[10px] text-slate-500 font-medium leading-relaxed pt-2 border-t border-slate-800/60">
+              <span className="text-slate-400 font-bold">Помощь:</span> примените средства напрямую из рюкзака.
+            </div>
           </div>
+
         </div>
       </div>
     </div>

@@ -31,9 +31,11 @@ export class WaterHoseRenderer {
     ctx.lineTo(nodes[nodes.length - 1].x + 1.8, nodes[nodes.length - 1].y + 2.5);
     ctx.stroke();
 
+    const isVacuum = hose.sourceType === 'trailer_vacuum';
+
     // 2. Main Realistic Black Rubber Hose Body (Classic matte black)
     ctx.strokeStyle = '#09090b'; // Solid matte black rubber
-    ctx.lineWidth = 1.8; // Slim, realistic top-down hose gauge
+    ctx.lineWidth = isVacuum ? 3.0 : 1.8; // Heavy-duty thicker gauge for vacuum suction hose!
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
     ctx.beginPath();
@@ -46,57 +48,120 @@ export class WaterHoseRenderer {
     ctx.lineTo(nodes[nodes.length - 1].x, nodes[nodes.length - 1].y);
     ctx.stroke();
 
-    // 3. Subtle Upper Rubber Sheen / Ridge for 3D depth
-    ctx.strokeStyle = '#27272a';
-    ctx.lineWidth = 0.6;
-    ctx.beginPath();
-    ctx.moveTo(nodes[0].x, nodes[0].y - 0.3);
-    for (let i = 1; i < nodes.length - 1; i++) {
-      const xc = (nodes[i].x + nodes[i + 1].x) / 2;
-      const yc = (nodes[i].y + nodes[i + 1].y) / 2 - 0.3;
-      ctx.quadraticCurveTo(nodes[i].x, nodes[i].y - 0.3, xc, yc);
+    if (isVacuum) {
+      // Draw ultra-realistic transverse corrugated rib rings along the physics segments of the hose.
+      // This mimics the stored corrugated hoses on the trailer rack perfectly!
+      for (let i = 0; i < nodes.length - 1; i++) {
+        const n1 = nodes[i];
+        const n2 = nodes[i + 1];
+        const dx = n2.x - n1.x;
+        const dy = n2.y - n1.y;
+        const segLen = Math.hypot(dx, dy);
+        
+        if (segLen > 0.1) {
+          const ux = dx / segLen;
+          const uy = dy / segLen;
+          const nx = -uy; // Perpendicular normal vector
+          const ny = ux;
+          
+          // Place corrugation ribs every 1.5 pixels along the segment
+          const spacing = 1.5;
+          for (let d = 0; d < segLen; d += spacing) {
+            const rx = n1.x + ux * d;
+            const ry = n1.y + uy * d;
+            
+            // 1. Dark-gray base rib representing the raised rubber ring
+            ctx.strokeStyle = '#27272a'; // Deep charcoal gray
+            ctx.lineWidth = 1.0;
+            ctx.beginPath();
+            ctx.moveTo(rx - nx * 1.6, ry - ny * 1.6);
+            ctx.lineTo(rx + nx * 1.6, ry + ny * 1.6);
+            ctx.stroke();
+
+            // 2. Bright steel core of the rib for brilliant industrial reflection (matching stored hose exactly)
+            ctx.strokeStyle = '#475569'; // Steel blue-gray
+            ctx.lineWidth = 0.6;
+            ctx.beginPath();
+            ctx.moveTo(rx - nx * 1.5, ry - ny * 1.5);
+            ctx.lineTo(rx + nx * 1.5, ry + ny * 1.5);
+            ctx.stroke();
+
+            // 3. Highlight sheen/glint on the left/top edge for rich 3D roundness
+            ctx.strokeStyle = '#94a3b8'; // Light silver glint
+            ctx.lineWidth = 0.5;
+            ctx.beginPath();
+            ctx.moveTo(rx - nx * 1.5, ry - ny * 1.5);
+            ctx.lineTo(rx - nx * 0.6, ry - ny * 0.6);
+            ctx.stroke();
+          }
+        }
+      }
+    } else {
+      // 3. Subtle Upper Rubber Sheen / Ridge for 3D depth on normal hose
+      ctx.strokeStyle = '#27272a';
+      ctx.lineWidth = 0.6;
+      ctx.beginPath();
+      ctx.moveTo(nodes[0].x, nodes[0].y - 0.3);
+      for (let i = 1; i < nodes.length - 1; i++) {
+        const xc = (nodes[i].x + nodes[i + 1].x) / 2;
+        const yc = (nodes[i].y + nodes[i + 1].y) / 2 - 0.3;
+        ctx.quadraticCurveTo(nodes[i].x, nodes[i].y - 0.3, xc, yc);
+      }
+      ctx.lineTo(nodes[nodes.length - 1].x, nodes[nodes.length - 1].y - 0.3);
+      ctx.stroke();
     }
-    ctx.lineTo(nodes[nodes.length - 1].x, nodes[nodes.length - 1].y - 0.3);
-    ctx.stroke();
 
     // 4. Compact Brass & Steel Hose Fitting at Vehicle Anchor
     const anchorNode = nodes[0];
-    ctx.fillStyle = '#1e293b'; // Steel threaded coupler
-    ctx.beginPath();
-    ctx.arc(anchorNode.x, anchorNode.y, 1.8, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = '#b45309'; // Brass nipple ring
-    ctx.beginPath();
-    ctx.arc(anchorNode.x, anchorNode.y, 1.0, 0, Math.PI * 2);
-    ctx.fill();
-
-    // 5. Micro-leak Punctures & Tiny Droplets along the hose
-    for (const leak of hose.leaks) {
-      const segIdx = Math.min(nodes.length - 2, Math.max(1, leak.segmentIndex));
-      const node = nodes[segIdx];
-      const next = nodes[segIdx + 1];
-
-      // Perpendicular angle to hose
-      const hdx = next.x - node.x;
-      const hdy = next.y - node.y;
-      const hlen = Math.hypot(hdx, hdy) || 1;
-      const normX = -hdy / hlen;
-      const normY = hdx / hlen;
-
-      // Tiny worn puncture spot
-      ctx.fillStyle = '#09090b';
+    if (isVacuum) {
+      ctx.fillStyle = '#475569'; // Steel camlock coupler
       ctx.beginPath();
-      ctx.arc(node.x, node.y, 1.2, 0, Math.PI * 2);
+      ctx.arc(anchorNode.x, anchorNode.y, 2.5, 0, Math.PI * 2);
       ctx.fill();
-
-      // Fine micro water spray / drip escaping from the hole
-      const squirtLen = isSpraying ? (3.5 + Math.sin(time * 16 + segIdx) * 1.8) : (1.2 + Math.sin(time * 6 + segIdx) * 0.8);
-      ctx.strokeStyle = 'rgba(56, 189, 248, 0.75)';
-      ctx.lineWidth = 0.6;
+      ctx.fillStyle = '#94a3b8'; // Silver ring
       ctx.beginPath();
-      ctx.moveTo(node.x, node.y);
-      ctx.lineTo(node.x + normX * squirtLen, node.y + normY * squirtLen);
-      ctx.stroke();
+      ctx.arc(anchorNode.x, anchorNode.y, 1.6, 0, Math.PI * 2);
+      ctx.fill();
+    } else {
+      ctx.fillStyle = '#1e293b'; // Steel threaded coupler
+      ctx.beginPath();
+      ctx.arc(anchorNode.x, anchorNode.y, 1.8, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#b45309'; // Brass nipple ring
+      ctx.beginPath();
+      ctx.arc(anchorNode.x, anchorNode.y, 1.0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // 5. Micro-leak Punctures & Tiny Droplets along the hose (only on pressurized water hoses)
+    if (!isVacuum) {
+      for (const leak of hose.leaks) {
+        const segIdx = Math.min(nodes.length - 2, Math.max(1, leak.segmentIndex));
+        const node = nodes[segIdx];
+        const next = nodes[segIdx + 1];
+
+        // Perpendicular angle to hose
+        const hdx = next.x - node.x;
+        const hdy = next.y - node.y;
+        const hlen = Math.hypot(hdx, hdy) || 1;
+        const normX = -hdy / hlen;
+        const normY = hdx / hlen;
+
+        // Tiny worn puncture spot
+        ctx.fillStyle = '#09090b';
+        ctx.beginPath();
+        ctx.arc(node.x, node.y, 1.2, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Fine micro water spray / drip escaping from the hole
+        const squirtLen = isSpraying ? (3.5 + Math.sin(time * 16 + segIdx) * 1.8) : (1.2 + Math.sin(time * 6 + segIdx) * 0.8);
+        ctx.strokeStyle = 'rgba(56, 189, 248, 0.75)';
+        ctx.lineWidth = 0.6;
+        ctx.beginPath();
+        ctx.moveTo(node.x, node.y);
+        ctx.lineTo(node.x + normX * squirtLen, node.y + normY * squirtLen);
+        ctx.stroke();
+      }
     }
 
     // 6. Compact Realistic Spray Gun / Nozzle in Player's Hands
