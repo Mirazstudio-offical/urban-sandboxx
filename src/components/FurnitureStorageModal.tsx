@@ -338,20 +338,11 @@ export const FurnitureStorageModal: React.FC<FurnitureStorageModalProps> = (prop
                       <div className="flex items-center gap-1 shrink-0">
                         <button
                           onClick={(e) => { e.stopPropagation(); handleTakeItem(idx, 1); }}
-                          className="px-2 py-1 bg-slate-700 hover:bg-indigo-600 text-white rounded text-[11px] font-medium transition-colors"
-                          title="Забрать 1 шт"
+                          className="px-2.5 py-1 bg-slate-700 hover:bg-indigo-600 text-white rounded text-[11px] font-medium transition-colors"
+                          title="Забрать предмет"
                         >
-                          Взять 1
+                          Забрать
                         </button>
-                        {it.count > 1 && (
-                          <button
-                            onClick={(e) => { e.stopPropagation(); handleTakeItem(idx, it.count); }}
-                            className="px-2 py-1 bg-slate-700 hover:bg-indigo-600 text-white rounded text-[11px] font-medium transition-colors"
-                            title="Забрать всю стопку"
-                          >
-                            Всё
-                          </button>
-                        )}
                       </div>
                     </div>
                   );
@@ -448,7 +439,7 @@ export const FurnitureStorageModal: React.FC<FurnitureStorageModalProps> = (prop
                         </div>
                         <div className="min-w-0">
                           <div className="text-xs font-semibold text-slate-100 truncate">
-                            {item.nameRu} {item.count > 1 && <span className="text-amber-400 font-mono">x{item.count}</span>}
+                            {item.nameRu}
                           </div>
                           <div className="text-[11px] text-slate-400 flex items-center gap-2 mt-0.5">
                             <span>{itWt.toFixed(2)} кг</span>
@@ -463,7 +454,7 @@ export const FurnitureStorageModal: React.FC<FurnitureStorageModalProps> = (prop
                         <button
                           onClick={(e) => { e.stopPropagation(); handleStoreItem(originalIndex, 1); }}
                           className="px-2.5 py-1 bg-slate-700 hover:bg-blue-600 text-white rounded text-[11px] font-medium transition-colors flex items-center gap-1"
-                          title="Положить 1 шт в хранилище"
+                          title="Положить в хранилище"
                         >
                           <ArrowLeft className="w-3 h-3" /> В шкаф
                         </button>
@@ -483,15 +474,9 @@ export const FurnitureStorageModal: React.FC<FurnitureStorageModalProps> = (prop
                 <div className="flex items-center gap-1.5 shrink-0">
                   <button
                     onClick={() => handleStoreItem(selectedInventoryIdx, 1)}
-                    className="px-3 py-1 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-xs rounded transition-colors"
-                  >
-                    Положить 1
-                  </button>
-                  <button
-                    onClick={() => handleStoreItem(selectedInventoryIdx)}
                     className="flex items-center gap-1 px-3 py-1 bg-blue-600 hover:bg-blue-500 text-white text-xs font-medium rounded transition-colors"
                   >
-                    <ArrowLeft className="w-3.5 h-3.5" /> Положить всё
+                    <ArrowLeft className="w-3.5 h-3.5" /> Положить в шкаф
                   </button>
                 </div>
               </div>

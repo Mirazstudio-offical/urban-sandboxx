@@ -808,7 +808,17 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
                                         {item.contents?.length || 0}
                                       </span>
                                     )}
-                                    {item.maxPortions && item.maxPortions > 1 && (
+                                    {/* Liquid / Substance Container Fill Bar */}
+                                    {item.fluidStorage ? (
+                                      <div className="absolute bottom-1 left-1.5 right-1.5 flex flex-col items-center gap-0.5 pointer-events-none">
+                                        <div className="w-full bg-zinc-950/90 h-1 rounded-full overflow-hidden border border-zinc-700/80">
+                                          <div 
+                                            className="h-full bg-cyan-400 rounded-full transition-all"
+                                            style={{ width: `${Math.max(0, Math.min(100, (item.fluidStorage.currentMl / (item.fluidStorage.maxMl || 1)) * 100))}%` }}
+                                          />
+                                        </div>
+                                      </div>
+                                    ) : item.maxPortions && item.maxPortions > 1 ? (
                                       <div className="absolute bottom-1 left-1.5 right-1.5 flex flex-col items-center gap-0.5 pointer-events-none">
                                         <div className="w-full bg-zinc-950/90 h-1 rounded-full overflow-hidden border border-zinc-700/80">
                                           <div 
@@ -817,7 +827,7 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
                                           />
                                         </div>
                                       </div>
-                                    )}
+                                    ) : null}
                                   </>
                                 ) : (
                                   <div className="w-1.5 h-1.5 rounded-full bg-zinc-800/80" />

@@ -12,11 +12,25 @@ import {
   renderCompactSidewalkRoller,
   renderPneumaticRoller
 } from './roadMachineryVisuals';
+import {
+  renderMotoIzhJupiter,
+  renderMotoUralSidecar,
+  renderMotoJawa350,
+  renderMotoSport,
+  renderMotoChopper,
+  renderMopedSoviet
+} from './motorcycleVisuals';
 export {
   renderWheeledAsphaltPaver,
   renderHeavyTandemRoller,
   renderCompactSidewalkRoller,
-  renderPneumaticRoller
+  renderPneumaticRoller,
+  renderMotoIzhJupiter,
+  renderMotoUralSidecar,
+  renderMotoJawa350,
+  renderMotoSport,
+  renderMotoChopper,
+  renderMopedSoviet
 };
 
 /**
@@ -2982,125 +2996,7 @@ export function renderSpecializedVehicleAttachments(vCtx: VehicleRenderContext):
     }
   }
 
-  // --- MOTORCYCLE WITH SIDECAR: URAL M-67-36 ---
-  if (car.type === 'moto_ural_sidecar') {
-    const bikeY = -halfW * 0.45;
-    const sidecarY = halfW * 0.55;
-
-    // 1. Horizontally Opposed 2-Cylinder Boxer Engine (Оппозитный двигатель)
-    // Left cylinder head sticking out
-    drawDeformedRect(-halfL * 0.05, bikeY - 5.5, halfL * 0.22, 2.8, '#475569');
-    drawDeformedLine(-halfL * 0.05, bikeY - 4.5, -halfL * 0.05 + halfL * 0.22, bikeY - 4.5, '#0f172a', 0.8);
-    drawDeformedCircle(-halfL * 0.05 + halfL * 0.11, bikeY - 5.8, 0.8, '#ef4444'); // Red spark plug cap
-    // Right cylinder head sticking out between frame and sidecar
-    drawDeformedRect(-halfL * 0.05, bikeY + 2.7, halfL * 0.22, 2.8, '#475569');
-    drawDeformedCircle(-halfL * 0.05 + halfL * 0.11, bikeY + 5.8, 0.8, '#ef4444');
-
-    // 2. Twin Chrome Exhaust Silencers
-    // Bike left silencer
-    drawDeformedLine(-halfL * 0.05, bikeY - 3.8, -halfL + rc + 1, bikeY - 3.8, '#cbd5e1', 1.5);
-    drawDeformedRect(-halfL * 0.65, bikeY - 4.5, halfL * 0.40, 1.4, '#e2e8f0');
-
-    // 3. Sidecar Spare Wheel Mounted on Rear Trunk
-    const spareX = -halfL * 0.52;
-    const spareY = halfW * 0.55;
-    drawDeformedCircle(spareX, spareY, 4.2, '#1e293b'); // Tire
-    drawDeformedCircle(spareX, spareY, 2.8, '#475569'); // Rim
-    drawDeformedCircle(spareX, spareY, 1.0, '#cbd5e1'); // Center nut
-    drawDeformedLine(spareX - 3.5, spareY, spareX + 3.5, spareY, '#78350f', 1.0); // Leather mounting strap
-
-    // 4. Sidecar Front Marker Light
-    drawDeformedCircle(halfL * 0.25, halfW * 0.78, 1.2, '#f59e0b');
-  }
-
-  // --- CLASSIC SOVIET MOTORCYCLE: IZH JUPITER-5 ---
-  if (car.type === 'moto_izh_jupiter') {
-    // 1. Dual Chrome Exhaust Pipes on both sides
-    drawDeformedLine(-halfL * 0.15, -halfW * 0.48, -halfL + rc + 1, -halfW * 0.48, '#e2e8f0', 1.4);
-    drawDeformedLine(-halfL * 0.15, halfW * 0.48, -halfL + rc + 1, halfW * 0.48, '#e2e8f0', 1.4);
-    
-    // 2. Finned 2-Cylinder Engine Block & Spark Plugs
-    drawDeformedRect(-halfL * 0.12, -halfW * 0.38, halfL * 0.28, halfW * 0.76, '#475569');
-    drawDeformedLine(-halfL * 0.12, -halfW * 0.25, halfL * 0.16, -halfW * 0.25, '#1e293b', 0.8);
-    drawDeformedLine(-halfL * 0.12, halfW * 0.25, halfL * 0.16, halfW * 0.25, '#1e293b', 0.8);
-    drawDeformedCircle(0, -halfW * 0.20, 0.8, '#ef4444');
-    drawDeformedCircle(0, halfW * 0.20, 0.8, '#ef4444');
-
-    // 3. Chrome Rear Grab Rail behind saddle
-    drawDeformedLine(-halfL * 0.58, -halfW * 0.35, -halfL * 0.58, halfW * 0.35, '#cbd5e1', 1.2);
-    // 4. Chrome Round Mirrors
-    const barX = halfL * 0.42;
-    drawDeformedCircle(barX + 2, -halfW * 0.90, 1.1, '#f8fafc');
-    drawDeformedCircle(barX + 2, halfW * 0.90, 1.1, '#f8fafc');
-  }
-
-  // --- ICONIC VINTAGE MOTORCYCLE: JAWA 350 (638) ---
-  if (car.type === 'moto_jawa350') {
-    // 1. Upswept Megaphone Chrome Silencers
-    drawDeformedLine(-halfL * 0.10, -halfW * 0.45, -halfL + rc + 1, -halfW * 0.52, '#f8fafc', 1.6);
-    drawDeformedLine(-halfL * 0.10, halfW * 0.45, -halfL + rc + 1, halfW * 0.52, '#f8fafc', 1.6);
-    
-    // 2. Chrome Inset Badge on Cherry-Red Tank
-    const tankX = halfL * 0.05;
-    drawDeformedRect(tankX - 2, -halfW * 0.42, 4, 0.8, '#fbbf24'); // Gold JAWA badge
-    drawDeformedRect(tankX - 2, halfW * 0.42 - 0.8, 4, 0.8, '#fbbf24');
-
-    // 3. Black Sport Instrument Pod
-    const barX = halfL * 0.42;
-    drawDeformedRect(barX + 0.8, -2, 2.2, 4, '#0f172a');
-    drawDeformedCircle(barX + 1.8, -1.0, 0.7, '#22c55e');
-    drawDeformedCircle(barX + 1.8, 1.0, 0.7, '#38bdf8');
-  }
-
-  // --- MODERN SUPERBIKE: 1000cc ---
-  if (car.type === 'moto_sport') {
-    // 1. Aerodynamic Smoked Bubble Windscreen
-    drawDeformedLine(halfL * 0.50, -halfW * 0.35, halfL * 0.65, 0, 'rgba(15, 23, 42, 0.85)', 2.0);
-    drawDeformedLine(halfL * 0.65, 0, halfL * 0.50, halfW * 0.35, 'rgba(15, 23, 42, 0.85)', 2.0);
-
-    // 2. Twin Aggressive LED Headlights
-    drawDeformedLine(halfL * 0.62, -halfW * 0.22, halfL * 0.68, -halfW * 0.08, '#fef08a', 1.4);
-    drawDeformedLine(halfL * 0.62, halfW * 0.22, halfL * 0.68, halfW * 0.08, '#fef08a', 1.4);
-
-    // 3. Carbon Fiber / Titanium Upswept Single Canister (Right side)
-    drawDeformedLine(-halfL * 0.10, halfW * 0.42, -halfL + rc + 2, halfW * 0.55, '#1e293b', 2.2);
-    drawDeformedCircle(-halfL + rc + 2, halfW * 0.55, 1.2, '#94a3b8');
-
-    // 4. Aluminum Twin-Spar Perimeter Frame
-    drawDeformedLine(-halfL * 0.20, -halfW * 0.42, halfL * 0.20, -halfW * 0.30, '#cbd5e1', 1.8);
-    drawDeformedLine(-halfL * 0.20, halfW * 0.42, halfL * 0.20, halfW * 0.30, '#cbd5e1', 1.8);
-  }
-
-  // --- CUSTOM CHOPPER V-TWIN ---
-  if (car.type === 'moto_chopper') {
-    // 1. Stretched Extended Front Chrome Telescopic Forks
-    drawDeformedLine(halfL * 0.35, -halfW * 0.20, halfL * 0.85, -halfW * 0.12, '#f8fafc', 1.8);
-    drawDeformedLine(halfL * 0.35, halfW * 0.20, halfL * 0.85, halfW * 0.12, '#f8fafc', 1.8);
-
-    // 2. Chrome 45-Degree V-Twin Engine Block
-    drawDeformedRect(-halfL * 0.15, -halfW * 0.35, halfL * 0.35, halfW * 0.70, '#cbd5e1');
-    drawDeformedLine(-halfL * 0.15, 0, halfL * 0.20, 0, '#0f172a', 1.0);
-    // Round Chrome Air Cleaner on right
-    drawDeformedCircle(0, halfW * 0.42, 1.8, '#f8fafc');
-
-    // 3. Staggered Dual Chrome Straight Drag Pipes
-    drawDeformedLine(-halfL * 0.10, halfW * 0.48, -halfL + rc, halfW * 0.48, '#f8fafc', 1.5);
-    drawDeformedLine(-halfL * 0.05, halfW * 0.58, -halfL + rc - 2, halfW * 0.58, '#f8fafc', 1.5);
-  }
-
-  // --- SOVIET MOPED «КАРПАТЫ» ---
-  if (car.type === 'moped_soviet') {
-    // 1. Thin Skinny Tubular Frame & Small Engine
-    drawDeformedLine(-halfL * 0.40, 0, halfL * 0.40, 0, '#0f172a', 1.8);
-    drawDeformedCircle(-halfL * 0.05, 0, 2.0, '#64748b'); // 50cc motor
-    // 2. Small Skinny Chrome Exhaust
-    drawDeformedLine(-halfL * 0.05, halfW * 0.35, -halfL + rc + 1, halfW * 0.35, '#cbd5e1', 1.0);
-    // 3. Rear Tubular Luggage Cargo Rack
-    drawDeformedRect(-halfL * 0.55, -halfW * 0.25, halfL * 0.25, halfW * 0.50, '#334155');
-    drawDeformedLine(-halfL * 0.55, -halfW * 0.25, -halfL * 0.30, -halfW * 0.25, '#cbd5e1', 1.0);
-    drawDeformedLine(-halfL * 0.55, halfW * 0.25, -halfL * 0.30, halfW * 0.25, '#cbd5e1', 1.0);
-    drawDeformedLine(-halfL * 0.55, 0, -halfL * 0.30, 0, '#cbd5e1', 1.0);
-  }
+  // (Motorcycles are rendered with 100% prototype-accurate textures and components in renderVehicleGreenhouseAndBodyPanels)
 
   // --- TRACTOR BARREL TRAILER (Тракторная бочка-цистерна) ---
   if (car.type === 'trailer_barrel') {

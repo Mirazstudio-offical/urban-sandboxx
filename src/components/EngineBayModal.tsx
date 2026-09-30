@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Vehicle, Player, GroundItem, InventoryItem, CarType } from '../types';
 import { CAR_CONFIGS } from '../vehicleHelpers';
 import { createItem, ITEM_CATALOG } from '../items';
+import { syncItemContainerProperties } from '../liquidSystem';
 import { Wrench, Droplets, Battery, Zap, AlertTriangle, Lightbulb, Gauge, Activity, Lock, Unlock, X, Check, Shield, Flame, Disc, Radio } from 'lucide-react';
 import { sound } from '../audio';
 
@@ -83,8 +84,18 @@ export const EngineBayModal: React.FC<EngineBayModalProps> = ({
   };
 
   const batteryInHand = getHandItem(i => i.itemId === 'car_battery');
-  const coolantInHand = getHandItem(i => i.itemId === 'antifreeze'&& (i.fluidLiters ?? 5.0) > 0);
-  const oilInHand = getHandItem(i => i.itemId === 'motor_oil'&& (i.fluidLiters ?? 4.0) > 0);
+  const coolantInHand = getHandItem(i => {
+    if (i.fluidStorage) {
+      return (i.fluidStorage.liquidId === 'antifreeze' || i.fluidStorage.liquidId === 'water') && i.fluidStorage.currentMl > 0;
+    }
+    return (i.itemId === 'antifreeze' || i.itemId === 'water_bottle') && ((i.fluidLiters ?? 5.0) > 0);
+  });
+  const oilInHand = getHandItem(i => {
+    if (i.fluidStorage) {
+      return i.fluidStorage.liquidId === 'motor_oil' && i.fluidStorage.currentMl > 0;
+    }
+    return i.itemId === 'motor_oil' && ((i.fluidLiters ?? 4.0) > 0);
+  });
 
   // Handlers
   const togglePosTerminal = () => {
@@ -194,8 +205,12 @@ export const EngineBayModal: React.FC<EngineBayModalProps> = ({
     }
 
     const { hand, item } = coolantInHand;
-    const canisterLiters = item.fluidLiters ?? 5.0;
-    const canisterMl = canisterLiters * 1000;
+    let canisterMl = 5000;
+    if (item.fluidStorage) {
+      canisterMl = item.fluidStorage.currentMl;
+    } else if (item.fluidLiters !== undefined) {
+      canisterMl = item.fluidLiters * 1000;
+    }
 
     const pourMl = Math.min(missingCoolantMl, canisterMl);
     const newCoolantMl = currentCoolantMl + pourMl;
@@ -204,23 +219,31 @@ export const EngineBayModal: React.FC<EngineBayModalProps> = ({
     eng.radiatorWater = newRadiatorWater;
     eng.radiatorPunctured = false; // sealing effect
 
-    const remainingCanisterMl = canisterMl - pourMl;
-    const remainingCanisterLiters = Math.max(0, remainingCanisterMl / 1000);
-
     const updatedPlayer = { ...player };
 
-    if (remainingCanisterLiters <= 0.05) {
-      // Empty canister
-      const emptyCanister = createItem('antifreeze_empty', 1);
-      if (hand === 'right') updatedPlayer.rightHandItem = emptyCanister;
-      else updatedPlayer.leftHandItem = emptyCanister;
-      addNotification(`Залито ${Math.round(pourMl)} мл антифриза. Канистра опустела!`, 'pickup');
+    if (item.fluidStorage) {
+      item.fluidStorage.currentMl = Math.max(0, item.fluidStorage.currentMl - pourMl);
+      if (item.fluidStorage.currentMl <= 0) {
+        item.fluidStorage.currentMl = 0;
+        item.fluidStorage.liquidId = null;
+      }
+      syncItemContainerProperties(item);
+      const remainingL = (item.fluidStorage.currentMl / 1000).toFixed(1);
+      addNotification(`Залито ${Math.round(pourMl)} мл антифриза. (Осталось: ${remainingL} л)`, 'heal');
     } else {
-      // Update canister volume
-      const updatedCanister = { ...item, fluidLiters: remainingCanisterLiters };
-      if (hand === 'right') updatedPlayer.rightHandItem = updatedCanister;
-      else updatedPlayer.leftHandItem = updatedCanister;
-      addNotification(`Залито ${Math.round(pourMl)} мл антифриза. В канистре осталось ${remainingCanisterLiters.toFixed(1)} л.`, 'info');
+      const remainingCanisterMl = canisterMl - pourMl;
+      const remainingCanisterLiters = Math.max(0, remainingCanisterMl / 1000);
+      if (remainingCanisterLiters <= 0.05) {
+        const emptyCanister = createItem('antifreeze_empty', 1);
+        if (hand === 'right') updatedPlayer.rightHandItem = emptyCanister;
+        else updatedPlayer.leftHandItem = emptyCanister;
+        addNotification(`Залито ${Math.round(pourMl)} мл антифриза. Канистра опустела!`, 'pickup');
+      } else {
+        const updatedCanister = { ...item, fluidLiters: remainingCanisterLiters };
+        if (hand === 'right') updatedPlayer.rightHandItem = updatedCanister;
+        else updatedPlayer.leftHandItem = updatedCanister;
+        addNotification(`Залито ${Math.round(pourMl)} мл антифриза. В канистре осталось ${remainingCanisterLiters.toFixed(1)} л.`, 'info');
+      }
     }
 
     sound.playDrink(); // Liquid sound
@@ -271,8 +294,12 @@ export const EngineBayModal: React.FC<EngineBayModalProps> = ({
     }
 
     const { hand, item } = oilInHand;
-    const canisterLiters = item.fluidLiters ?? 4.0;
-    const canisterMl = canisterLiters * 1000;
+    let canisterMl = 4000;
+    if (item.fluidStorage) {
+      canisterMl = item.fluidStorage.currentMl;
+    } else if (item.fluidLiters !== undefined) {
+      canisterMl = item.fluidLiters * 1000;
+    }
 
     const pourMl = Math.min(availableSpaceMl, Math.min(1000, canisterMl));
     const newOilMl = currentOilMl + pourMl;
@@ -282,26 +309,39 @@ export const EngineBayModal: React.FC<EngineBayModalProps> = ({
     eng.oilPressure = Math.min(100, Math.max(30, newOilLevel));
     eng.oilPunctured = false;
 
-    const remainingCanisterMl = canisterMl - pourMl;
-    const remainingCanisterLiters = Math.max(0, remainingCanisterMl / 1000);
-
     const updatedPlayer = { ...player };
 
-    if (remainingCanisterLiters <= 0.05) {
-      // Empty oil canister
-      const emptyCanister = createItem('motor_oil_empty', 1);
-      if (hand === 'right') updatedPlayer.rightHandItem = emptyCanister;
-      else updatedPlayer.leftHandItem = emptyCanister;
+    if (item.fluidStorage) {
+      item.fluidStorage.currentMl = Math.max(0, item.fluidStorage.currentMl - pourMl);
+      if (item.fluidStorage.currentMl <= 0) {
+        item.fluidStorage.currentMl = 0;
+        item.fluidStorage.liquidId = null;
+      }
+      syncItemContainerProperties(item);
+      const remainingL = (item.fluidStorage.currentMl / 1000).toFixed(1);
+      if (newOilLevel > 105) {
+        addNotification(`ПЕРЕЛИВ МАСЛА (${Math.round(newOilLevel)}%)! Внимание: на дизелях перелив масла провоцирует РАЗНОС! (Осталось: ${remainingL} л)`, 'warning');
+      } else {
+        addNotification(`Залито ${Math.round(pourMl)} мл масла (Уровень: ${Math.round(newOilLevel)}%, в канистре: ${remainingL} л).`, 'info');
+      }
     } else {
-      const updatedCanister = { ...item, fluidLiters: remainingCanisterLiters };
-      if (hand === 'right') updatedPlayer.rightHandItem = updatedCanister;
-      else updatedPlayer.leftHandItem = updatedCanister;
-    }
+      const remainingCanisterMl = canisterMl - pourMl;
+      const remainingCanisterLiters = Math.max(0, remainingCanisterMl / 1000);
+      if (remainingCanisterLiters <= 0.05) {
+        const emptyCanister = createItem('motor_oil_empty', 1);
+        if (hand === 'right') updatedPlayer.rightHandItem = emptyCanister;
+        else updatedPlayer.leftHandItem = emptyCanister;
+      } else {
+        const updatedCanister = { ...item, fluidLiters: remainingCanisterLiters };
+        if (hand === 'right') updatedPlayer.rightHandItem = updatedCanister;
+        else updatedPlayer.leftHandItem = updatedCanister;
+      }
 
-    if (newOilLevel > 105) {
-      addNotification(`ПЕРЕЛИВ МАСЛА (${Math.round(newOilLevel)}%)! Внимание: на дизелях перелив масла провоцирует РАЗНОС при запуске!`, 'warning');
-    } else {
-      addNotification(`Залито ${Math.round(pourMl)} мл масла (Уровень: ${Math.round(newOilLevel)}%).`, 'info');
+      if (newOilLevel > 105) {
+        addNotification(`ПЕРЕЛИВ МАСЛА (${Math.round(newOilLevel)}%)! Внимание: на дизелях перелив масла провоцирует РАЗНОС при запуске!`, 'warning');
+      } else {
+        addNotification(`Залито ${Math.round(pourMl)} мл масла (Уровень: ${Math.round(newOilLevel)}%).`, 'info');
+      }
     }
 
     sound.playDrink();

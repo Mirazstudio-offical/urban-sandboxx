@@ -4,7 +4,7 @@
 // high/island passenger platforms with tactile yellow paving, buffer stops, overhead catenary system,
 // level crossings with rubber panels, and authentic rolling stock (ЧМЭ3 shunter, passenger cars, hoppers).
 
-import { Building, GameWorld, RailwayPlatform, RailwayTrackSegment, RollingStockCar } from './types';
+import { Building, GameWorld, Player, RailwayPlatform, RailwayTrackSegment, RollingStockCar } from './types';
 import { RollingStockRenderer } from './rollingStockRenderer';
 import { getLevelCrossings } from './levelCrossingSystem';
 
@@ -877,6 +877,69 @@ export class RailwayRenderer {
         ctx.fillRect(bx - 11, by + 0.5, 22, 2.0);
       }
 
+      // 8. Authentic RZD Trackside Stop Signs: «ОСТАНОВКА 1 ВАГОНА» (ОПВ) / «ОСТАНОВКА ЛОКОМОТИВА» (ОЛ)
+      // Placed at the departure ends of the passenger platforms near the track edge
+      const opvLocations = [
+        { x: p.x + p.width - 80, dir: 'east' }, // Eastbound departure stop signs (X ≈ 12420)
+        { x: p.x + 80, dir: 'west' }           // Westbound departure stop signs (X ≈ 10080 / 10180)
+      ];
+
+      for (const opv of opvLocations) {
+        const signX = opv.x;
+        const signY = p.trackSide === 'north' ? p.y + p.height - 12 : p.y + 12;
+
+        // Striped signal mast / post
+        ctx.fillStyle = '#0f172a';
+        ctx.fillRect(signX - 1.5, signY - 14, 3, 28);
+        // Red and white reflective diagonal safety stripes on mast
+        ctx.fillStyle = '#dc2626';
+        ctx.fillRect(signX - 1.5, signY - 8, 3, 3);
+        ctx.fillRect(signX - 1.5, signY + 2, 3, 3);
+
+        // 8a. Primary Sign Board: «ОПВ» / «ОСТ. 1 ВАГОНА» (Остановка первого вагона)
+        const opvW = 50;
+        const opvH = 11;
+        const opvX = signX - opvW / 2;
+        const opvY = signY - 12;
+
+        ctx.fillStyle = '#f8fafc';
+        ctx.fillRect(opvX, opvY, opvW, opvH);
+        ctx.strokeStyle = '#0f172a';
+        ctx.lineWidth = 1.2;
+        ctx.strokeRect(opvX, opvY, opvW, opvH);
+
+        ctx.fillStyle = '#0f172a';
+        ctx.font = 'bold 6px monospace';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('ОПВ • ОСТ. 1 ВАГ', signX, opvY + opvH / 2);
+
+        // Red reflector marker on sign edge
+        ctx.fillStyle = '#ef4444';
+        ctx.fillRect(opv.dir === 'east' ? opvX + opvW - 2.5 : opvX + 0.5, opvY + 1.5, 2.0, opvH - 3);
+
+        // 8b. Secondary Sign Board: «ОЛ» / «ОСТ. ЛОКОМОТИВА» (Остановка локомотива)
+        const olW = 44;
+        const olH = 10;
+        const olX = signX - olW / 2;
+        const olY = signY + 2;
+
+        ctx.fillStyle = '#f8fafc';
+        ctx.fillRect(olX, olY, olW, olH);
+        ctx.strokeStyle = '#0f172a';
+        ctx.lineWidth = 1.2;
+        ctx.strokeRect(olX, olY, olW, olH);
+
+        ctx.fillStyle = '#1e3a8a'; // Deep blue accent for OL sign
+        ctx.font = 'bold 6px monospace';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('ОЛ • ЛОКОМОТИВ', signX, olY + olH / 2);
+
+        ctx.fillStyle = '#3b82f6';
+        ctx.fillRect(opv.dir === 'east' ? olX + olW - 2.5 : olX + 0.5, olY + 1.5, 2.0, olH - 3);
+      }
+
       ctx.restore();
     }
   }
@@ -892,9 +955,10 @@ export class RailwayRenderer {
     minY: number,
     maxX: number,
     maxY: number,
-    nightAlpha: number
+    nightAlpha: number,
+    player?: Player
   ): void {
-    RollingStockRenderer.renderRollingStock(ctx, world, minX, minY, maxX, maxY, nightAlpha);
+    RollingStockRenderer.renderRollingStock(ctx, world, minX, minY, maxX, maxY, nightAlpha, player);
   }
 
   /**

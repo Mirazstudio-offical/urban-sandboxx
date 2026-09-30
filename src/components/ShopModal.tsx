@@ -397,38 +397,103 @@ export function getLPGConfigForVehicle(carType: string) {
 
 export const SHOP_CATALOGS: Record<string, ShopItem[]> = {
   gas_station_shop: [
-    { id: 'gas_canister_full', itemId: 'fuel_canister', nameRu: 'Канистра с бензином (20л)', price: 2360, description: 'Стальная канистра, заправленная бензином АИ-95.', category: 'auto', effectText: 'Заправка авто / 20L' },
-    { id: 'gas_canister_empty', itemId: 'canister_empty', nameRu: 'Пустая канистра (20л)', price: 1200, description: 'Металлическая канистра для набора топлива на АЗС.', category: 'auto', effectText: 'Емкость 20L' },
+    { id: 'gas_canister_full', itemId: 'canister_metal_20l', nameRu: 'Канистра с бензином АИ-95 (20л)', price: 2360, description: 'Стальная 20-литровая канистра, заправленная бензином АИ-95.', category: 'auto', effectText: 'Заправка авто / 20L' },
+    { id: 'gas_canister_empty', itemId: 'canister_plastic_10l', nameRu: 'Пластиковая канистра (10л)', price: 850, description: 'Ударопрочная канистра для набора топлива или спецжидкостей.', category: 'auto', effectText: 'Емкость 10L' },
     { id: 'gas_oil', itemId: 'motor_oil', nameRu: 'Моторное масло 5W-40 (4L)', price: 110, description: 'Синтетическое масло высокой вязкости для защиты двигателя.', category: 'auto', effectText: 'Защита двигателя' },
     { id: 'gas_antifreeze', itemId: 'antifreeze', nameRu: 'Канистра антифриза G12+ (5L)', price: 140, description: 'Охлаждающая жидкость для радиатора.', category: 'auto', effectText: 'Охлаждение двигателя' },
+    { id: 'gas_washer', itemId: 'washer_fluid', nameRu: 'Стеклоомыватель зимний (-25°C)', price: 120, description: 'Канистра незамерзающей жидкости для бачка омывателя.', category: 'auto', effectText: 'Чистота стекол' },
     { id: 'gas_battery', itemId: 'car_battery', nameRu: 'Запасной аккумулятор 12V', price: 180, description: 'Свинцово-кислотная батарея высокой пусковой мощности.', category: 'auto', effectText: 'Питание авто' },
     { id: 'gas_repair_kit', itemId: 'repair_kit', nameRu: 'Набор автоинструментов', price: 220, description: 'Тяжелый кейс: ключи, головки, отвертки.', category: 'auto', effectText: 'Ремонт авто' },
     { id: 'gas_rope', itemId: 'tow_rope', nameRu: 'Буксировочный трос 5т', price: 95, description: 'Прочный капроновый трос для буксировки.', category: 'auto', effectText: 'Буксировка' },
-    { id: 'gas_extinguisher', itemId: 'extinguisher', nameRu: 'Автоогнетушитель', price: 130, description: 'Красный металлический баллон с чекой и манометром.', category: 'auto', effectText: 'Безопасность' },
+    { id: 'gas_extinguisher', itemId: 'extinguisher', nameRu: 'Автоогнетушитель ОП-2', price: 130, description: 'Красный металлический баллон с чекой и манометром.', category: 'auto', effectText: 'Безопасность' },
+    { id: 'gas_sandbag', itemId: 'sandbag', nameRu: 'Мешок песка (1 кг)', price: 30, description: 'Сухой кварцевый песок для тушения огня и впитывания ГСМ.', category: 'auto', effectText: 'Тушение & Впитывание' },
     { id: 'gas_tape', itemId: 'duct_tape', nameRu: 'Армированный скотч', price: 40, description: 'Влагостойкая клейкая лента повышенной прочности.', category: 'auto', effectText: 'Быстрый ремонт' },
     { id: 'gas_hotdog', itemId: 'hot_dog', nameRu: 'Датский хот-дог АЗС', price: 65, description: 'Хрустящая булка, поджаристая сосиска, кетчуп и горчица.', category: 'food', effectText: '+40% Сытость' },
-    { id: 'gas_cappuccino', itemId: 'cappuccino', nameRu: 'Кофе Капучино АЗС', price: 65, description: 'Свежесваренный зерновой кофе с плотной молочной пенкой.', category: 'food', effectText: '+20% Гидратация, +20% Бодрость' },
+    { id: 'gas_sandwich', itemId: 'sandwich', nameRu: 'Сэндвич с ветчиной и сыром', price: 70, description: 'Треугольный сэндвич в пластиковом боксе.', category: 'food', effectText: '+40% Сытость' },
+    { id: 'gas_cappuccino', itemId: 'cappuccino', nameRu: 'Кофе Капучино АЗС (0.35L)', price: 65, description: 'Свежесваренный зерновой кофе в стакане с крышкой.', category: 'food', effectText: '+20% Гидратация, +20% Бодрость' },
     { id: 'gas_espresso', itemId: 'hot_coffee', nameRu: 'Горячий Эспрессо', price: 50, description: 'Крепкий бодрящий согревающий напиток.', category: 'food', effectText: '+5°C Тепло, +25% Бодрость' },
-    { id: 'gas_energy', itemId: 'energy_drink', nameRu: 'Энергетик "Вспышка"', price: 65, description: 'Банка ледяного энергетика с таурином и кофеином.', category: 'food', effectText: '+35% Энергия' },
+    { id: 'gas_energy', itemId: 'energy_drink', nameRu: 'Энергетик "Вспышка" (0.5L)', price: 65, description: 'Банка ледяного энергетика с таурином и кофеином.', category: 'food', effectText: '+35% Энергия' },
     { id: 'gas_water', itemId: 'water_bottle', nameRu: 'Минеральная вода (0.5L)', price: 30, description: 'Чистая питьевая вода в пластиковой бутылке.', category: 'food', effectText: '+40% Гидратация' },
+    { id: 'gas_water_15', itemId: 'bottle_plastic_1500', nameRu: 'Питьевая вода (1.5L)', price: 55, description: 'Большая бутылка чистой питьевой воды.', category: 'food', effectText: '+80% Гидратация' },
     { id: 'gas_chips', itemId: 'chips', nameRu: 'Картофельные чипсы', price: 40, description: 'Хрустящие чипсы с паприкой.', category: 'food', effectText: '+20% Сытость' },
-    { id: 'gas_chocolate', itemId: 'chocolate', nameRu: 'Шоколадный батончик', price: 30, description: 'Батончик с карамелью и арахисом.', category: 'food', effectText: '+20% Энергия' }
+    { id: 'gas_chocolate', itemId: 'chocolate', nameRu: 'Шоколадный батончик', price: 30, description: 'Батончик с карамелью и арахисом.', category: 'food', effectText: '+20% Энергия' },
+    { id: 'gas_canned', itemId: 'canned_meat', nameRu: 'Армейская тушёнка (0.4L)', price: 110, description: 'Мясные консервы в банке с ключом открытия.', category: 'food', effectText: '+70% Сытость' },
+    { id: 'gas_plastic_bag', itemId: 'plastic_bag', nameRu: 'Пакет-майка АЗС', price: 5, description: 'Пластиковый пакет с ручками для покупок.', category: 'auto', effectText: 'Пакет 5.0L' }
   ],
   supermarket: [
-    { id: 'sup_water', itemId: 'water_bottle', nameRu: 'Минеральная вода (0.5L)', price: 30, description: 'Чистая питьевая вода в пластиковой бутылке.', category: 'food', effectText: '+40% Гидратация' },
-    { id: 'sup_bread', itemId: 'bread_loaf', nameRu: 'Батон нарезной', price: 35, description: 'Свежий белый хлеб, упакован в хрустящий целлофан.', category: 'food', effectText: '+35% Сытость' },
-    { id: 'sup_banana', itemId: 'banana', nameRu: 'Спелый банан', price: 25, description: 'Сладкий желтый тропический фрукт.', category: 'food', effectText: '+20% Сытость, +15% Энергия' },
-    { id: 'sup_apple', itemId: 'apple', nameRu: 'Сочное яблоко', price: 20, description: 'Спелое красно-зеленое яблоко, богато витаминами.', category: 'food', effectText: '+15% Сытость, +10% Гидратация' },
-    { id: 'sup_juice', itemId: 'fresh_juice', nameRu: 'Апельсиновый сок (0.5L)', price: 45, description: 'Картонная коробка пастеризованного сока с мякотью.', category: 'food', effectText: '+30% Гидратация' },
-    { id: 'sup_cookies', itemId: 'cookie_pack', nameRu: 'Печенье с шоколадом', price: 50, description: 'Упаковка песочного печенья с темными каплями какао.', category: 'food', effectText: '+25% Сытость, +20% Энергия' },
-    { id: 'sup_chocolate', itemId: 'chocolate', nameRu: 'Шоколадный батончик', price: 30, description: 'Энергетический батончик в фольгированной обертке.', category: 'food', effectText: '+20% Энергия' },
-    { id: 'sup_chips', itemId: 'chips', nameRu: 'Хрустящие картофельные чипсы', price: 40, description: 'Герметичная шуршащая пачка со вкусом паприки и соли.', category: 'food', effectText: '+20% Сытость' },
-    { id: 'sup_canned', itemId: 'canned_meat', nameRu: 'Армейская тушенка', price: 90, description: 'Свиной тушеный консерв в жестяной банке по ГОСТу.', category: 'food', effectText: '+60% Сытость' },
-    { id: 'sup_phone_retro', itemId: 'phone_retro', nameRu: 'Телефон Matrix Classic (Кнопочный)', price: 3500, description: 'Неубиваемый кнопочный монохромный телефон с фонариком и антенной.', category: 'auto', effectText: 'Связь & SMS' },
-    { id: 'sup_phone_nord', itemId: 'phone_nord', nameRu: 'Смартфон Nord Lite 5G', price: 38000, description: 'Доступный смартфон с 90 Гц дисплеем и тройной камерой.', category: 'auto', effectText: 'Смартфон & GPS' },
-    { id: 'sup_furn_chair', itemId: 'furn_chair', nameRu: 'Стул деревянный со спинкой', price: 1800, description: 'Удобный стул для квартиры.', category: 'auto', effectText: 'Мебель для дома' },
-    { id: 'sup_furn_plant', itemId: 'furn_plant', nameRu: 'Комнатный фикус в горшке', price: 1200, description: 'Декоративное растение для уюта в доме.', category: 'auto', effectText: 'Уют и декор' },
-    { id: 'sup_furn_shelf', itemId: 'furn_shelf', nameRu: 'Книжный стеллаж', price: 6500, description: 'Стеллаж для хранения вещей и книг.', category: 'auto', effectText: 'Хранилище вещей' }
+    // 1. НАПИТКИ И ВОДА В БУТЫЛКАХ И БАНКАХ
+    { id: 'sup_water_05', itemId: 'water_bottle', nameRu: 'Минеральная вода (0.5L)', price: 30, description: 'Чистая питьевая вода в ПЭТ бутылке 0.5л.', category: 'food', effectText: '+40% Гидратация' },
+    { id: 'sup_water_15', itemId: 'bottle_plastic_1500', nameRu: 'Минеральная вода (1.5L)', price: 55, description: 'Большая бутылка чистой природной воды 1.5л.', category: 'food', effectText: '+80% Гидратация' },
+    { id: 'sup_juice_tetra', itemId: 'fresh_juice', nameRu: 'Сок апельсиновый Тетрапак (1.0L)', price: 95, description: 'Пастеризованный 100% сок с мякотью в литровом тетрапаке.', category: 'food', effectText: '+60% Гидратация, +15% Энергия' },
+    { id: 'sup_kvas', itemId: 'kvas', nameRu: 'Хлебный квас "Старорусский" (1.5L)', price: 85, description: 'Освежающий квас живого брожения в пластиковой бутылке 1.5л.', category: 'food', effectText: '+50% Гидратация, +20% Сытость' },
+    { id: 'sup_cola_can', itemId: 'cola', nameRu: 'Баночка Колы (0.33L)', price: 45, description: 'Алюминиевая банка сильногазированной колы.', category: 'food', effectText: '+30% Гидратация, +15% Энергия' },
+    { id: 'sup_energy_can', itemId: 'energy_drink', nameRu: 'Энергетик Drive (0.5L)', price: 75, description: 'Тонизирующий напиток с таурином и витаминами B.', category: 'food', effectText: '+35% Энергия' },
+    { id: 'sup_beer_can', itemId: 'beer', nameRu: 'Пиво светлое фильтрованное (0.5L)', price: 65, description: 'Алюминиевая банка классического светлого лагера 4.8%.', category: 'food', effectText: '+Алкоголь, расслабление' },
+
+    // 2. БАНКИ, КОНСЕРВЫ И ЗАГОТОВКИ
+    { id: 'sup_canned_stew', itemId: 'canned_meat', nameRu: 'Тушёнка говяжья высший сорт (0.4L)', price: 125, description: 'Армейская тушёнка ГОСТ в герметичной жестяной банке с ключом.', category: 'food', effectText: '+75% Сытость' },
+    { id: 'sup_canned_fish', itemId: 'canned_fish', nameRu: 'Рыбные консервы в масле (0.15L)', price: 95, description: 'Шпроты и сардины в пряном масле в банке.', category: 'food', effectText: '+65% Сытость' },
+    { id: 'sup_condensed_milk', itemId: 'condensed_milk', nameRu: 'Сгущённое молоко цельное (0.4L)', price: 85, description: 'Классическая сладкая сгущенка в сине-белой банке.', category: 'food', effectText: '+50% Сытость, +35% Энергия' },
+    { id: 'sup_pickles_jar', itemId: 'jar_pickles', nameRu: 'Огурчики маринованные в банке (0.5L)', price: 110, description: 'Хрустящие корнишоны с пряным рассолом и укропом в стекле.', category: 'food', effectText: '+30% Сытость, +30% Гидратация' },
+    { id: 'sup_jam_raspberry', itemId: 'jam_raspberry', nameRu: 'Малиновое варенье в банке (0.2L)', price: 130, description: 'Домашнее варенье из спелой малины в стеклянной баночке.', category: 'food', effectText: '+42% Сытость, целебное' },
+    { id: 'sup_jam_strawberry', itemId: 'jam_strawberry', nameRu: 'Клубничный джем в стекле (0.2L)', price: 125, description: 'Сладкий джем из отборной клубники в баночке с винтовой крышкой.', category: 'food', effectText: '+42% Сытость' },
+    { id: 'sup_honey_jar', itemId: 'jar_honey', nameRu: 'Натуральный цветочный мёд (0.2L)', price: 160, description: 'Золотистый липовый мёд в стеклянной баночке.', category: 'food', effectText: '+45% Сытость, иммунитет' },
+    { id: 'sup_caviar_red', itemId: 'salmon_caviar_jar', nameRu: 'Икра лососевая зернистая (140г)', price: 480, description: 'Красная икра лосося премиум в стеклянной баночке под вакуумом.', category: 'food', effectText: '+65% Сытость, деликатес' },
+    { id: 'sup_caviar_squash', itemId: 'caviar_squash_jar', nameRu: 'Кабачковая икра в банке (0.5L)', price: 75, description: 'Нежная обжаренная кабачковая икра по-домашнему.', category: 'food', effectText: '+45% Сытость' },
+    { id: 'sup_caviar_eggplant', itemId: 'caviar_eggplant_jar', nameRu: 'Баклажанная икра в банке (0.5L)', price: 85, description: 'Пикантная баклажанная икра с томатом и чесноком.', category: 'food', effectText: '+48% Сытость' },
+    { id: 'sup_broth_beef', itemId: 'broth_beef_jar', nameRu: 'Говяжий бульон концентрированный (0.45L)', price: 90, description: 'Стеклянная баночка наваристого мясного бульона для супов.', category: 'food', effectText: '+60% Сытость, тепло' },
+    { id: 'sup_broth_chicken', itemId: 'broth_chicken_jar', nameRu: 'Куриный бульон в банке (0.45L)', price: 80, description: 'Золотистый куриный бульон с травами.', category: 'food', effectText: '+50% Сытость' },
+
+    // 3. ПОРЦИОННОЕ СВЕЖЕЕ МЯСО И РЫБА (РЕАЛИСТИЧНЫЕ ЛОТКИ И ВАКУУМ)
+    { id: 'sup_chicken_breast', itemId: 'chicken_breast_large', nameRu: 'Филе грудки цыпленка (лоток 400г)', price: 145, description: 'Охлажденное бескостное филе куриной грудки в лотке под пленкой.', category: 'food', effectText: 'Свежее мясо птицы' },
+    { id: 'sup_chicken_thighs', itemId: 'chicken_thighs_medium', nameRu: 'Бедра цыпленка (лоток 300г)', price: 115, description: 'Охлажденные сочные куриные бедра для жарки и варки.', category: 'food', effectText: 'Свежее мясо птицы' },
+    { id: 'sup_beef_steak', itemId: 'beef_rump_large', nameRu: 'Стейк из говядины (вакуум 500г)', price: 340, description: 'Отборная мраморная говяжья вырезка в вакуумной упаковке.', category: 'food', effectText: 'Мраморная говядина' },
+    { id: 'sup_pork_ribs', itemId: 'pork_ribs_medium', nameRu: 'Ребрышки свиные охлажденные (800г)', price: 260, description: 'Мясные свиные ребра для запекания в термопакете.', category: 'food', effectText: 'Свежая свинина' },
+    { id: 'sup_salmon_steak', itemId: 'salmon_steak', nameRu: 'Стейк лосося охлажденный (250г)', price: 290, description: 'Порционный стейк атлантического лосося на ледяной подложке.', category: 'food', effectText: 'Красная рыба' },
+    { id: 'sup_cod_fillet', itemId: 'cod_fillet', nameRu: 'Филе трески без кожи (500г)', price: 210, description: 'Свежее белое филе северной трески в вакууме.', category: 'food', effectText: 'Дикая рыба' },
+
+    // 4. СВЕЖИЕ ГРИБЫ В УПАКОВКЕ
+    { id: 'sup_champignon_white', itemId: 'champignon_white_whole', nameRu: 'Шампиньоны свежие (лоток 300г)', price: 75, description: 'Белые упругие культивированные шампиньоны в лотке.', category: 'food', effectText: 'Свежие грибы' },
+    { id: 'sup_champignon_brown', itemId: 'champignon_brown_whole', nameRu: 'Королевские шампиньоны (300г)', price: 90, description: 'Бурые ароматные королевские шампиньоны.', category: 'food', effectText: 'Свежие грибы' },
+    { id: 'sup_oyster_mushrooms', itemId: 'oyster_mushroom_cluster', nameRu: 'Вешенки свежие (лоток 300г)', price: 70, description: 'Гроздь свежих вешенок на подложке.', category: 'food', effectText: 'Свежие грибы' },
+
+    // 5. ОВОЩИ, ФРУКТЫ И ЗЕЛЕНЬ
+    { id: 'sup_potato_pack', itemId: 'potato_whole', nameRu: 'Картофель мытый отборный', price: 25, description: 'Свежий клубень картофеля.', category: 'food', effectText: 'Овощи' },
+    { id: 'sup_tomato_fresh', itemId: 'tomato_whole', nameRu: 'Помидор грунтовой спелый', price: 35, description: 'Сочный красный спелый томат.', category: 'food', effectText: '+15% Сытость, сок' },
+    { id: 'sup_cherry_bunch', itemId: 'tomato_cherry_bunch', nameRu: 'Ветка томатов черри (250г)', price: 85, description: 'Сладкие маленькие томаты черри на ветке в картонном боксе.', category: 'food', effectText: '+20% Сытость, сладость' },
+    { id: 'sup_cucumber', itemId: 'cucumber_whole', nameRu: 'Огурец короткоплодный', price: 25, description: 'Свежий хрустящий пупырчатый огурец.', category: 'food', effectText: '+15% Гидратация' },
+    { id: 'sup_bell_pepper', itemId: 'bell_pepper_red', nameRu: 'Перец болгарский сладкий красный', price: 45, description: 'Крупный толстостенный сочный красный перец.', category: 'food', effectText: '+18% Сытость, витамины' },
+    { id: 'sup_onion', itemId: 'onion_bulb', nameRu: 'Лук репчатый золотистый', price: 15, description: 'Головка репчатого лука.', category: 'food', effectText: 'Кулинария' },
+    { id: 'sup_garlic', itemId: 'garlic_bulb', nameRu: 'Чеснок свежий', price: 20, description: 'Плотная цельная головка чеснока.', category: 'food', effectText: 'Фитонциды / специя' },
+    { id: 'sup_dill', itemId: 'dill_bunch_fresh', nameRu: 'Зелень укропа (пучок)', price: 25, description: 'Свежий душистый зеленый укроп.', category: 'food', effectText: 'Свежая зелень' },
+    { id: 'sup_apple', itemId: 'apple', nameRu: 'Яблоко сочное', price: 20, description: 'Свежее красно-зеленое яблоко.', category: 'food', effectText: '+15% Сытость, +10% Гидратация' },
+    { id: 'sup_banana', itemId: 'banana_single', nameRu: 'Бананы спелые (связка)', price: 45, description: 'Связка сладких питательных желтых бананов.', category: 'food', effectText: '+30% Сытость, +20% Энергия' },
+    { id: 'sup_orange', itemId: 'orange_citrus', nameRu: 'Апельсин сочный', price: 30, description: 'Спелый сочный цитрус с мякотью.', category: 'food', effectText: '+20% Гидратация, витамин C' },
+    { id: 'sup_lemon', itemId: 'lemon_whole', nameRu: 'Лимон желтый', price: 20, description: 'Кислый ароматный лимон для чая и кулинарии.', category: 'food', effectText: 'Бодрость, витамин C' },
+
+    // 6. МОЛОЧНЫЙ ОТДЕЛ, МАСЛА И БАКАЛЕЯ
+    { id: 'sup_milk_carton', itemId: 'carton_milk', nameRu: 'Молоко пастеризованное 3.2% (1.0L)', price: 65, description: 'Пакет питьевого пастеризованного молока.', category: 'food', effectText: '+35% Гидратация, +20% Сытость' },
+    { id: 'sup_sour_cream', itemId: 'sour_cream_pot', nameRu: 'Сметана 20% (стаканчик 400г)', price: 75, description: 'Густая натуральная сметана с нежной кислинкой.', category: 'food', effectText: '+35% Сытость' },
+    { id: 'sup_butter', itemId: 'butter_brick_salted', nameRu: 'Масло сливочное 82.5% (200г)', price: 95, description: 'Брикет натурального сладко-сливочного масла.', category: 'food', effectText: '+30% Сытость' },
+    { id: 'sup_cheese', itemId: 'cheese_cheddar_block', nameRu: 'Сыр Чеддер (брусок 300г)', price: 160, description: 'Выдержанный полутвердый сыр с пикантным вкусом.', category: 'food', effectText: '+40% Сытость' },
+    { id: 'sup_eggs', itemId: 'eggs_chicken_carton', nameRu: 'Яйца куриные С1 (лоток 10 шт)', price: 90, description: 'Упаковка столовых отборных куриных яиц.', category: 'food', effectText: 'Кулинария / 10 шт' },
+    { id: 'sup_oil_sunflower', itemId: 'oil_sunflower_bottle', nameRu: 'Масло подсолнечное (1.0L)', price: 95, description: 'Рафинированное подсолнечное масло в пластиковой бутылке.', category: 'food', effectText: 'Масло для жарки' },
+    { id: 'sup_oil_olive', itemId: 'oil_olive_extra_virgin', nameRu: 'Оливковое масло Extra Virgin (0.5L)', price: 240, description: 'Стеклянная бутылка нерафинированного оливкового масла.', category: 'food', effectText: 'Салатная заправка' },
+    { id: 'sup_soy_sauce', itemId: 'soy_sauce_classic', nameRu: 'Соевый соус в бутылочке (0.25L)', price: 65, description: 'Соус натурального брожения в стеклянной бутылке.', category: 'food', effectText: 'Соевая заправка' },
+    { id: 'sup_sugar', itemId: 'sugar', nameRu: 'Сахар-песок в пакете (1 кг)', price: 55, description: 'Пакет белоснежного сахара-песка.', category: 'food', effectText: 'Бакалея' },
+    { id: 'sup_flour', itemId: 'flour_wheat_bag_1k', nameRu: 'Мука пшеничная в/с (1 кг)', price: 50, description: 'Пакет муки высшего сорта для выпечки.', category: 'food', effectText: 'Бакалея' },
+    { id: 'sup_salt', itemId: 'salt_shaker', nameRu: 'Соль поваренная в солонке (150г)', price: 30, description: 'Удобная кухонная солонка с мелкой солью.', category: 'food', effectText: 'Специя' },
+    { id: 'sup_bread', itemId: 'bread_loaf', nameRu: 'Батон нарезной "Утренний"', price: 35, description: 'Свежий пшеничный хлеб в нарезке.', category: 'food', effectText: '+35% Сытость' },
+
+    // 7. СНЕКИ, СЛАДОСТИ И ТАРА
+    { id: 'sup_chocolate', itemId: 'chocolate', nameRu: 'Шоколад темный 75%', price: 45, description: 'Плитка горького шоколада с кусочками какао.', category: 'food', effectText: '+25% Энергия' },
+    { id: 'sup_cookies', itemId: 'cookie_pack', nameRu: 'Печенье с шоколадными каплями', price: 50, description: 'Пачка рассыпчатого песочного печенья.', category: 'food', effectText: '+25% Сытость' },
+    { id: 'sup_chips', itemId: 'chips', nameRu: 'Картофельные чипсы (пачка 150г)', price: 55, description: 'Хрустящие ломтики картофеля с морской солью.', category: 'food', effectText: '+20% Сытость' },
+    { id: 'sup_plastic_bag', itemId: 'plastic_bag', nameRu: 'Пакет-майка с ручками', price: 5, description: 'Вместительный прочный полиэтиленовый пакет 5.0L.', category: 'auto', effectText: 'Пакет 5.0L' },
+    { id: 'sup_package_bag', itemId: 'package_bag', nameRu: 'Фасовочные пакеты (1.5L)', price: 3, description: 'Тонкий прозрачный полиэтиленовый пакетик.', category: 'auto', effectText: 'Пакет 1.5L' },
+    { id: 'sup_jar_empty', itemId: 'jar_glass_medium', nameRu: 'Банка стеклянная с крышкой (0.5L)', price: 35, description: 'Унифицированная чистая банка твист-офф для консервации.', category: 'auto', effectText: 'Емкость 0.5L' },
+    { id: 'sup_phone_retro', itemId: 'phone_retro', nameRu: 'Телефон Matrix Classic (Кнопочный)', price: 3500, description: 'Неубиваемый кнопочный телефон с фонариком.', category: 'auto', effectText: 'Связь & SMS' },
+    { id: 'sup_phone_nord', itemId: 'phone_nord', nameRu: 'Смартфон Nord Lite 5G', price: 38000, description: 'Доступный смартфон с дисплеем 90 Гц.', category: 'auto', effectText: 'Смартфон & GPS' }
   ],
   fast_food: [
     { id: 'ff_burger', itemId: 'burger', nameRu: 'Двойной Чизбургер', price: 95, description: 'Бургер в картонной коробке: кунжутная булка, две котлеты, сыр.', category: 'food', effectText: '+50% Сытость, +25% Энергия' },
@@ -557,6 +622,12 @@ export const SHOP_CATALOGS: Record<string, ShopItem[]> = {
   ],
   gear_shop: [
     { id: 'gea_ration', itemId: 'military_ration', nameRu: 'Армейский сухпай (ИРП)', price: 220, description: 'Зеленая герметичная коробка с пайком на сутки, спичками и ложками.', category: 'food', effectText: '+85% Сытость, +50% Энергия' },
+    { id: 'gea_lukoshko', itemId: 'lukoshko', nameRu: 'Плетёное берестяное лукошко (2.0L)', price: 90, description: 'Легкая плетеная корзинка с ручкой для сбора лесных ягод и грибов.', category: 'food', effectText: 'Тара для сбора ягод/грибов' },
+    { id: 'gea_blueberry_basket', itemId: 'blueberry_basket', nameRu: 'Лукошко лесной черники (1.5L)', price: 180, description: 'Свежесобранная спелая черника в берестяном лукошке.', category: 'food', effectText: '+35% Сытость, витамины' },
+    { id: 'gea_chanterelle_basket', itemId: 'chanterelle_basket', nameRu: 'Лукошко свежих лисичек (1.5L)', price: 210, description: 'Отборные рыжие лесные лисички в плетёном лукошке.', category: 'food', effectText: 'Свежие лесные грибы' },
+    { id: 'gea_wild_honey', itemId: 'honey_wild_jar', nameRu: 'Дикий таёжный мёд (0.35L)', price: 240, description: 'Баночка концентрированного темного таежного бортевого меда.', category: 'food', effectText: '+50% Сытость, иммунитет' },
+    { id: 'gea_thermos', itemId: 'thermos', nameRu: 'Походный термос с чаем (1.0L)', price: 260, description: 'Вакуумный термос из нержавеющей стали с горячим чаем.', category: 'food', effectText: '+50% Гидратация, +8°C Тепло' },
+    { id: 'gea_soup_bowl', itemId: 'soup_bowl', nameRu: 'Походная суповая пиала с ложкой', price: 60, description: 'Глубокая походная миска для горячих супов и бульонов.', category: 'food', effectText: 'Тара для супа (0.5L)' },
     { id: 'gea_flask', itemId: 'camp_flask', nameRu: 'Стальная фляга (0.75L)', price: 90, description: 'Окрашенная в хаки металлическая походная бутылка с чехлом.', category: 'food', effectText: '+50% Гидратация' },
     { id: 'gea_flashlight', itemId: 'flashlight', nameRu: 'Яркий LED-фонарь', price: 1800, description: 'Алюминиевый герметичный фонарь с зубчатой короной линзы.', category: 'auto', effectText: 'Освещение в темноте' },
     { id: 'gea_knife', itemId: 'pocket_knife', nameRu: 'Туристический нож', price: 2000, description: 'Черная рукоять со стеклобоем, клинок с серрейтором.', category: 'auto', effectText: 'Инструмент' },
@@ -724,6 +795,9 @@ export const ShopModal: React.FC<ShopModalProps> = (props) => {
   // Repair states
   const [isRepairing, setIsRepairing] = useState<boolean>(false);
   const [repairActionMessage, setRepairActionMessage] = useState<string | null>(null);
+  const [repairLogs, setRepairLogs] = useState<string[]>([]);
+  const [currentRepairStep, setCurrentRepairStep] = useState<number>(0);
+  const [totalRepairStepsCount, setTotalRepairStepsCount] = useState<number>(0);
 
   // Tuning states
   const [installingChiptuning, setInstallingChiptuning] = useState<boolean>(false);
@@ -974,90 +1048,244 @@ export const ShopModal: React.FC<ShopModalProps> = (props) => {
     }
   }
 
-  // --- REPAIR HANDLERS ---
+  // --- DYNAMIC WORK-ORDER (НАРЯД-ЗАКАЗ) SYSTEM ---
+  const getActiveRepairs = () => {
+    if (!currentVehicle) return [];
+    
+    const list: {
+      id: string;
+      title: string;
+      desc: string;
+      price: number;
+      needsRepair: boolean;
+      apply: (v: Vehicle) => void;
+    }[] = [
+      {
+        id: 'engine_health',
+        title: 'Капитальный ремонт цилиндро-поршневой группы (ЦПГ)',
+        desc: 'Проточка блока цилиндров, хонингование гильз, замена поршневых колец, шатунных вкладышей и прокладки ГБЦ. Устраняет критический износ и восстанавливает компрессию до 100%.',
+        price: Math.round((100 - (currentVehicle.engineState?.engineHealth ?? 100)) * 320) + 2500,
+        needsRepair: (currentVehicle.engineState?.engineHealth ?? 100) < 95,
+        apply: (v) => {
+          if (v.engineState) {
+            v.engineState.engineHealth = 100;
+            v.engineState.engineKnocking = false;
+            v.engineState.engineStalled = false;
+            v.engineState.isSeized = false;
+          }
+        }
+      },
+      {
+        id: 'leaks_and_fluids',
+        title: 'Аргонная сварка картера и замена техжидкостей ДВС',
+        desc: 'Аргонно-дуговая сварка трещин поддона картера, пайка поврежденных сот радиатора охлаждения. Полная замена моторного масла 5W-40 и антифриза G12+.',
+        price: (currentVehicle.engineState?.radiatorPunctured ? 4500 : 0) + (currentVehicle.engineState?.oilPunctured ? 3800 : 0) + 1200,
+        needsRepair: !!(currentVehicle.engineState?.radiatorPunctured || currentVehicle.engineState?.oilPunctured || (currentVehicle.engineState?.oilLevel ?? 100) < 90 || (currentVehicle.engineState?.radiatorWater ?? 100) < 90),
+        apply: (v) => {
+          if (v.engineState) {
+            v.engineState.radiatorPunctured = false;
+            v.engineState.oilPunctured = false;
+            v.engineState.oilLevel = 100;
+            v.engineState.radiatorWater = 100;
+            v.engineState.overheatingSteam = false;
+          }
+        }
+      },
+      {
+        id: 'alignment',
+        title: 'Сход-развал 3D и юстировка рычагов подвески',
+        desc: 'Лазерная 3D регулировка углов установки колес на стенде Hunter, замена деформированных сайлентблоков, регулировка рулевых тяг и наконечников. Устраняет боковой увод руля.',
+        price: Math.round(
+          ((currentVehicle.damage?.frontLeftSuspensionDamage || 0) + 
+           (currentVehicle.damage?.frontRightSuspensionDamage || 0) + 
+           (currentVehicle.damage?.rearLeftSuspensionDamage || 0) + 
+           (currentVehicle.damage?.rearRightSuspensionDamage || 0)) * 5000 + 
+          (Math.abs(currentVehicle.damage?.steeringDrift || 0) > 0.01 ? 1800 : 0)
+        ),
+        needsRepair: Math.abs(currentVehicle.damage?.steeringDrift || 0) > 0.01 || 
+                     (currentVehicle.damage?.frontLeftSuspensionDamage || 0) > 0.05 ||
+                     (currentVehicle.damage?.frontRightSuspensionDamage || 0) > 0.05 ||
+                     (currentVehicle.damage?.rearLeftSuspensionDamage || 0) > 0.05 ||
+                     (currentVehicle.damage?.rearRightSuspensionDamage || 0) > 0.05,
+        apply: (v) => {
+          if (v.damage) {
+            v.damage.steeringDrift = 0;
+            v.damage.frontLeftSuspensionDamage = 0;
+            v.damage.frontRightSuspensionDamage = 0;
+            v.damage.rearLeftSuspensionDamage = 0;
+            v.damage.rearRightSuspensionDamage = 0;
+          }
+        }
+      },
+      {
+        id: 'starter_battery',
+        title: 'Зарядка АКБ, десульфатация и переборка стартера',
+        desc: 'Глубокий десульфатирующий заряд батареи, очистка клемм от окислов. Замена изношенного втягивающего реле, бендикса и щеточного узла стартера.',
+        price: (!currentVehicle.engineState?.starterWorking ? 1800 : 0) + Math.round((100 - (currentVehicle.engineState?.batteryCharge ?? 100)) * 25) + 500,
+        needsRepair: (currentVehicle.engineState?.batteryCharge ?? 100) < 95 || !currentVehicle.engineState?.starterWorking,
+        apply: (v) => {
+          if (v.engineState) {
+            v.engineState.batteryCharge = 100;
+            v.engineState.starterWorking = true;
+          }
+        }
+      },
+      {
+        id: 'bodywork',
+        title: 'Стапельные работы кузовного цеха и замена триплекс остекления',
+        desc: 'Выравнивание лонжеронов на гидравлическом стапеле по контрольным точкам кузова, рихтовка навесных панелей, вклейка лобового/заднего остекления триплекс, замена разбитой оптики.',
+        price: Math.round(
+          ((currentVehicle.damage?.frontCrumple || 0) + 
+           (currentVehicle.damage?.rearCrumple || 0) + 
+           (currentVehicle.damage?.leftDent || 0) + 
+           (currentVehicle.damage?.rightDent || 0)) * 3000 + 
+          (currentVehicle.damage?.windshieldCracked ? 6500 : 0) + 
+          (currentVehicle.damage?.rearGlassCracked ? 4500 : 0) + 
+          ((currentVehicle.damage?.leftHeadlightBroken ? 1 : 0) + 
+           (currentVehicle.damage?.rightHeadlightBroken ? 1 : 0) + 
+           (currentVehicle.damage?.leftTaillightBroken ? 1 : 0) + 
+           (currentVehicle.damage?.rightTaillightBroken ? 1 : 0)) * 2500
+        ),
+        needsRepair: !!((currentVehicle.damage?.frontCrumple || 0) > 0.05 || 
+                      (currentVehicle.damage?.rearCrumple || 0) > 0.05 || 
+                      (currentVehicle.damage?.leftDent || 0) > 0.05 || 
+                      (currentVehicle.damage?.rightDent || 0) > 0.05 ||
+                      currentVehicle.damage?.windshieldCracked || 
+                      currentVehicle.damage?.rearGlassCracked ||
+                      currentVehicle.damage?.leftHeadlightBroken ||
+                      currentVehicle.damage?.rightHeadlightBroken ||
+                      currentVehicle.damage?.leftTaillightBroken ||
+                      currentVehicle.damage?.rightTaillightBroken),
+        apply: (v) => {
+          if (v.damage) {
+            v.damage.frontCrumple = 0;
+            v.damage.rearCrumple = 0;
+            v.damage.leftDent = 0;
+            v.damage.rightDent = 0;
+            v.damage.frontLeftDent = 0;
+            v.damage.frontRightDent = 0;
+            v.damage.rearLeftDent = 0;
+            v.damage.rearRightDent = 0;
+            v.damage.hoodBuckled = false;
+            v.damage.windshieldCracked = false;
+            v.damage.rearGlassCracked = false;
+            v.damage.leftHeadlightBroken = false;
+            v.damage.rightHeadlightBroken = false;
+            v.damage.leftTaillightBroken = false;
+            v.damage.rightTaillightBroken = false;
+          }
+        }
+      },
+      {
+        id: 'fuel_system',
+        title: 'Устранение разгерметизации топливной рампы и бака',
+        desc: 'Выявление утечек бензобака, заварка пробоин бензостойким шовным герметиком, замена топливных магистралей высокого давления и топливной рампы впрыска.',
+        price: (currentVehicle.fuelSystem?.tankPunctured ? 4800 : 0) + (currentVehicle.fuelSystem?.fuelRailBroken ? 3500 : 0) + 800,
+        needsRepair: !!(currentVehicle.fuelSystem?.tankPunctured || currentVehicle.fuelSystem?.fuelRailBroken),
+        apply: (v) => {
+          if (v.fuelSystem) {
+            v.fuelSystem.tankPunctured = false;
+            v.fuelSystem.fuelRailBroken = false;
+          }
+        }
+      }
+    ];
+
+    return list.filter(item => item.needsRepair);
+  };
+
   const handleFullRepair = () => {
-    if (!onRepairVehicle) return;
-    if (playerCash < 300) return;
+    if (!onRepairVehicle || !currentVehicle) return;
+    
+    const activeRepairs = getActiveRepairs();
+    if (activeRepairs.length === 0) {
+      setRepairActionMessage('Компьютерная диагностика не обнаружила дефектов. Все системы автомобиля в норме!');
+      setTimeout(() => setRepairActionMessage(null), 3500);
+      return;
+    }
+
+    const totalCost = activeRepairs.reduce((sum, r) => sum + r.price, 0);
+    if (playerCash < totalCost) {
+      setRepairActionMessage(`Недостаточно средств! Требуется ${totalCost.toLocaleString()} ₽, у вас ${playerCash.toLocaleString()} ₽`);
+      setTimeout(() => setRepairActionMessage(null), 4000);
+      return;
+    }
+
     sound.playUseItem();
     setIsRepairing(true);
-    setTimeout(() => {
-      onRepairVehicle(false);
-      setIsRepairing(false);
-      setRepairActionMessage('Комплексный ремонт успешно завершен!');
-      setTimeout(() => setRepairActionMessage(null), 3000);
-    }, 800);
-  };
+    setRepairLogs([]);
+    setCurrentRepairStep(0);
+    
+    // Mark vehicle under repair to prevent entry/use
+    (currentVehicle as any).isUnderRepair = true;
 
-  const handleAlignmentRepair = () => {
-    if (!currentVehicle || playerCash < 1500) return;
-    sound.playUseItem();
-    deductPlayerCash(player, 1500);
-    if (currentVehicle.damage) {
-      currentVehicle.damage.steeringDrift = 0;
-      currentVehicle.damage.frontLeftSuspensionDamage = 0;
-      currentVehicle.damage.frontRightSuspensionDamage = 0;
-      currentVehicle.damage.rearLeftSuspensionDamage = 0;
-      currentVehicle.damage.rearRightSuspensionDamage = 0;
-    }
-    if (onTuningVehicle) onTuningVehicle('alignment');
-    sound.playPickup();
-    setRepairActionMessage('Сход-развал 3D откалиброван. Увод руля устранен!');
-    setTimeout(() => setRepairActionMessage(null), 3000);
-  };
+    // Compile dynamic, realistic mechanic terminal logs
+    const logSteps: string[] = [
+      `>>> ИНИЦИАЛИЗАЦИЯ ТЕХНИЧЕСКОГО ЦИКЛА РЕМОНТА ДЛЯ ТС: ${currentVehicle.nameRu || currentVehicle.type}...`,
+      `[1/4] Считывание ошибок OBD-II, подготовка ремонтного поста и инструмента...`,
+      `[1/4] Позиционирование ТС на двухстоечном подъемнике, блокировка осей...`
+    ];
 
-  const handleFluidsService = () => {
-    if (!currentVehicle || playerCash < 800) return;
-    sound.playUseItem();
-    deductPlayerCash(player, 800);
-    if (currentVehicle.engineState) {
-      currentVehicle.engineState.radiatorPunctured = false;
-      currentVehicle.engineState.oilPunctured = false;
-      currentVehicle.engineState.oilLevel = 100;
-      currentVehicle.engineState.radiatorWater = 100;
-      currentVehicle.engineState.overheatingSteam = false;
+    if (activeRepairs.some(r => r.id === 'engine_health')) {
+      logSteps.push(`[2/4] ДВС: Слив технических жидкостей, снятие клапанной крышки и ГБЦ...`);
+      logSteps.push(`[2/4] ДВС: Расточка блока цилиндров под ремонтный размер, плоскостное хонингование гильз...`);
+      logSteps.push(`[2/4] ДВС: Замена поршневых колец, упорных полуколец, шатунных вкладышей и прокладки ГБЦ...`);
+      logSteps.push(`[2/4] ДВС: Сборка агрегата, динамометрическая затяжка болтов головки по схеме завода...`);
     }
-    sound.playPickup();
-    setRepairActionMessage('Масло 5W-40 и антифриз G12+ заменены, течи устранены!');
-    setTimeout(() => setRepairActionMessage(null), 3000);
-  };
 
-  const handleBatteryService = () => {
-    if (!currentVehicle || playerCash < 300) return;
-    sound.playUseItem();
-    deductPlayerCash(player, 300);
-    if (currentVehicle.engineState) {
-      currentVehicle.engineState.batteryCharge = 100;
-      currentVehicle.engineState.starterWorking = true;
+    if (activeRepairs.some(r => r.id === 'leaks_and_fluids')) {
+      logSteps.push(`[2/4] ТЕЧИ: Демонтаж поддона, аргонно-дуговая сварка трещин картера...`);
+      logSteps.push(`[2/4] ОХЛАЖДЕНИЕ: Опрессовка системы под давлением, герметизация и пайка сот радиатора...`);
+      logSteps.push(`[2/4] ЖИДКОСТИ: Промывка каналов, заправка моторного масла 5W-40 и антифриза G12+...`);
     }
-    sound.playPickup();
-    setRepairActionMessage('Аккумулятор заряжен на 100%, клеммы очищены!');
-    setTimeout(() => setRepairActionMessage(null), 3000);
-  };
 
-  const handleBodyworkService = () => {
-    if (!currentVehicle || playerCash < 2000) return;
-    sound.playUseItem();
-    deductPlayerCash(player, 2000);
-    if (currentVehicle.damage) {
-      currentVehicle.damage.frontCrumple = 0;
-      currentVehicle.damage.rearCrumple = 0;
-      currentVehicle.damage.leftDent = 0;
-      currentVehicle.damage.rightDent = 0;
-      currentVehicle.damage.frontLeftDent = 0;
-      currentVehicle.damage.frontRightDent = 0;
-      currentVehicle.damage.rearLeftDent = 0;
-      currentVehicle.damage.rearRightDent = 0;
-      currentVehicle.damage.hoodBuckled = false;
-      currentVehicle.damage.windshieldCracked = false;
-      currentVehicle.damage.rearGlassCracked = false;
-      currentVehicle.damage.leftHeadlightBroken = false;
-      currentVehicle.damage.rightHeadlightBroken = false;
-      currentVehicle.damage.leftTaillightBroken = false;
-      currentVehicle.damage.rightTaillightBroken = false;
+    if (activeRepairs.some(r => r.id === 'fuel_system')) {
+      logSteps.push(`[2/4] ТОПЛИВО: Герметизация пробоин бензобака, замена магистралей высокого давления...`);
     }
-    sound.playPickup();
-    setRepairActionMessage('Кузовные панели выправлены, остекление и оптика заменены!');
-    setTimeout(() => setRepairActionMessage(null), 3000);
+
+    if (activeRepairs.some(r => r.id === 'alignment')) {
+      logSteps.push(`[3/4] ПОДВЕСКА: Прессовка новых сайлентблоков, замена деформированных рычагов и тяг...`);
+      logSteps.push(`[3/4] СХОД-РАЗВАЛ: Лазерная компенсация биения дисков, юстировка углов на 3D-стенде Hunter...`);
+    }
+
+    if (activeRepairs.some(r => r.id === 'starter_battery')) {
+      logSteps.push(`[3/4] ЭЛЕКТРИКА: Зачистка окисления клемм АКБ, замена щеток и втягивающего реле стартера...`);
+      logSteps.push(`[3/4] АКБ: Проведение цикла десульфатации пластин, зарядка батареи импульсным током до 100%...`);
+    }
+
+    if (activeRepairs.some(r => r.id === 'bodywork')) {
+      logSteps.push(`[4/4] КУЗОВ: Установка кузова на стапель, гидравлическая вытяжка лонжеронов по геометрии...`);
+      logSteps.push(`[4/4] КУЗОВ: Срезка старого герметика стекла, профессиональная вклейка лобового стекла триплекс...`);
+      logSteps.push(`[4/4] КУЗОВ: Замена разбитых блок-фар на новые, калибровка направления световых пучков...`);
+    }
+
+    logSteps.push(`[СХЕМА] Полная очистка буфера ошибок ЭБУ по протоколу OBD-II, калибровка датчиков...`);
+    logSteps.push(`>>> НАРЯД-ЗАКАЗ ЗАКРЫТ. ТС СНЯТО С ПОДЪЕМНИКА И ГОТОВО К СДАЧЕ КЛИЕНТУ!`);
+
+    setTotalRepairStepsCount(logSteps.length);
+
+    let step = 0;
+    const interval = setInterval(() => {
+      setRepairLogs(prev => [...prev, logSteps[step]]);
+      setCurrentRepairStep(step + 1);
+      sound.playUseItem();
+
+      step++;
+      if (step >= logSteps.length) {
+        clearInterval(interval);
+        
+        // Execute physical logic for each repair item
+        activeRepairs.forEach(r => r.apply(currentVehicle));
+
+        // Submit the repair with custom cost to App.tsx
+        onRepairVehicle?.(false, totalCost);
+        
+        setIsRepairing(false);
+        (currentVehicle as any).isUnderRepair = false;
+        setRepairActionMessage('Техническое обслуживание и ремонт по наряд-заказу успешно завершены!');
+        setTimeout(() => setRepairActionMessage(null), 3000);
+      }
+    }, 600); // 600ms per step
   };
 
   // --- TUNING HANDLERS ---
@@ -1791,7 +2019,7 @@ export const ShopModal: React.FC<ShopModalProps> = (props) => {
                     <p className="text-xs text-zinc-400">
                       {currentVehicle
                         ? `Автомобиль: ${currentVehicle.nameRu || currentVehicle.type}`
-                        : 'Подгоните автомобиль к воротам мастерской для выполнения работ'}
+                        : 'Подгоните ТС в бокс СТО для калькуляции наряд-заказа'}
                     </p>
                   </div>
                 </div>
@@ -1811,163 +2039,138 @@ export const ShopModal: React.FC<ShopModalProps> = (props) => {
                   <Car className="w-12 h-12 mx-auto text-zinc-600" />
                   <p className="text-sm text-zinc-300 font-medium">Транспортное средство не обнаружено на подъемнике</p>
                   <p className="text-xs text-zinc-500 max-w-md mx-auto">
-                    Загоните вашу машину в зону автосервиса, чтобы получить доступ к регулировке сход-развала, замене масел и кузовному ремонту.
+                    Загоните вашу машину на двухстоечный подъемник автосервиса PIT-STOP, чтобы компьютерная диагностика могла составить дефектовочную ведомость и рассчитать наряд-заказ.
+                  </p>
+                </div>
+              ) : isRepairing ? (
+                /* IMMERSIVE MECHANIC LOG TERMINAL CONSOLE */
+                <div className="p-5 bg-zinc-950 border border-zinc-800 rounded-2xl space-y-4 shadow-inner">
+                  <div className="flex items-center justify-between pb-3 border-b border-zinc-800/80">
+                    <div className="flex items-center gap-2">
+                      <Cpu className="w-5 h-5 text-sky-400 animate-pulse" />
+                      <h4 className="text-xs font-mono font-bold uppercase tracking-wider text-sky-400">
+                        СТЕНД СТО PIT-STOP — ЦИКЛ РЕМОНТА ТС
+                      </h4>
+                    </div>
+                    <span className="text-xs font-mono text-zinc-500">
+                      Шаг {currentRepairStep} из {totalRepairStepsCount}
+                    </span>
+                  </div>
+
+                  {/* Terminal Screen */}
+                  <div className="h-64 overflow-y-auto bg-black/90 p-4 rounded-xl border border-zinc-900 font-mono text-[11px] leading-relaxed text-zinc-300 space-y-1.5 shadow-inner select-none scrollbar-thin scrollbar-thumb-zinc-800 scrollbar-track-transparent">
+                    {repairLogs.map((log, idx) => (
+                      <div
+                        key={idx}
+                        className={`transition-all duration-300 ${
+                          log.startsWith('>>>')
+                            ? 'text-sky-400 font-bold'
+                            : log.includes('[ОК]') || log.includes('УСПЕШНО')
+                            ? 'text-emerald-400'
+                            : 'text-zinc-300'
+                        }`}
+                      >
+                        {log}
+                      </div>
+                    ))}
+                    {/* Blinking green prompt */}
+                    <div className="flex items-center gap-1 text-sky-400 animate-pulse">
+                      <span>_</span>
+                    </div>
+                  </div>
+
+                  {/* Analog Physical Progress Bar */}
+                  <div className="space-y-1.5">
+                    <div className="flex justify-between text-[10px] font-mono text-zinc-400">
+                      <span>ПРОГРЕСС РЕМОНТНЫХ РАБОТ</span>
+                      <span>{Math.round((currentRepairStep / (totalRepairStepsCount || 1)) * 100)}%</span>
+                    </div>
+                    <div className="w-full h-2.5 bg-zinc-900 rounded-full overflow-hidden border border-zinc-800 p-0.5">
+                      <div
+                        className="h-full bg-sky-500 rounded-full transition-all duration-300 shadow-[0_0_8px_rgba(56,189,248,0.5)]"
+                        style={{ width: `${(currentRepairStep / (totalRepairStepsCount || 1)) * 100}%` }}
+                      />
+                    </div>
+                  </div>
+
+                  <p className="text-[10px] text-zinc-500 text-center italic">
+                    Камера заблокирована. Механики производят работы согласно регламенту наряд-заказа СТО.
                   </p>
                 </div>
               ) : (
-                <div className="space-y-3">
-                  {/* Service 1: Comprehensive Capital Repair */}
-                  <div className="p-4 bg-zinc-900/80 border border-zinc-800 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 hover:border-zinc-700 transition-colors">
-                    <div className="flex items-start gap-3">
-                      <div className="p-2.5 rounded-xl bg-sky-500/10 text-sky-400 border border-sky-500/20 shrink-0">
-                        <Sparkles className="w-5 h-5" />
+                /* WORK ORDER PREVIEW */
+                <div className="space-y-4">
+                  {getActiveRepairs().length === 0 ? (
+                    <div className="p-8 rounded-2xl bg-zinc-900/50 border border-zinc-800 text-center space-y-4">
+                      <div className="p-3 w-14 h-14 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded-full mx-auto flex items-center justify-center">
+                        <CheckCircle2 className="w-8 h-8" />
                       </div>
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <h4 className="text-sm font-bold text-zinc-100">Комплексный капитальный ремонт</h4>
-                          <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                            Все включено
-                          </span>
-                        </div>
-                        <p className="text-xs text-zinc-400 mt-0.5">
-                          Полное восстановление ДВС до 100%, устранение всех пробоин картера и радиатора, замена жидкостей, выправление кузова и новая оптика.
+                      <div className="space-y-2">
+                        <h4 className="text-base font-bold text-zinc-100">Дефектовка завершена. Проблем нет!</h4>
+                        <p className="text-xs text-zinc-400 max-w-md mx-auto">
+                          Компьютерная диагностика ЭБУ и механический осмотр подвески не выявили никаких отклонений или повреждений. Ваш автомобиль находится в безупречном состоянии!
                         </p>
                       </div>
                     </div>
-
-                    <div className="flex items-center justify-between w-full sm:w-auto gap-4 pt-2 sm:pt-0 border-t sm:border-t-0 border-zinc-800">
-                      <span className="text-base font-mono font-bold text-emerald-400 whitespace-nowrap">
-                        300 ₽
-                      </span>
-                      <button
-                        disabled={isRepairing || playerCash < 300}
-                        onClick={handleFullRepair}
-                        className="px-4 py-2 min-h-[44px] bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-bold text-xs rounded-xl flex items-center gap-2 transition-colors whitespace-nowrap"
-                      >
-                        {isRepairing ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Wrench className="w-4 h-4" />}
-                        {isRepairing ? 'Ремонт...' : 'Ремонтировать'}
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Service 2: 3D Wheel Alignment */}
-                  <div className="p-4 bg-zinc-900/80 border border-zinc-800 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 hover:border-zinc-700 transition-colors">
-                    <div className="flex items-start gap-3">
-                      <div className="p-2.5 rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 shrink-0">
-                        <Disc className="w-5 h-5" />
+                  ) : (
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between pb-1 border-b border-zinc-800">
+                        <span className="text-xs font-mono font-bold tracking-wider text-zinc-400 uppercase">
+                          ОБНАРУЖЕННЫЕ НЕИСПРАВНОСТИ К ОПЛАТЕ:
+                        </span>
+                        <span className="text-xs font-mono text-zinc-500">
+                          {getActiveRepairs().length} позиций
+                        </span>
                       </div>
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <h4 className="text-sm font-bold text-zinc-100">Регулировка сход-развала 3D (Калибровка)</h4>
-                          {Math.abs(currentVehicle.damage?.steeringDrift || 0) > 0.02 && (
-                            <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/20">
-                              Требуется
+
+                      <div className="space-y-3">
+                        {getActiveRepairs().map((rep) => (
+                          <div
+                            key={rep.id}
+                            className="p-4 bg-zinc-900/80 border border-zinc-800/80 rounded-2xl hover:border-zinc-700/80 transition-all flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3"
+                          >
+                            <div className="space-y-1 max-w-xl">
+                              <h4 className="text-sm font-bold text-zinc-200">{rep.title}</h4>
+                              <p className="text-xs text-zinc-400 leading-relaxed">{rep.desc}</p>
+                            </div>
+                            <div className="font-mono font-bold text-sm text-emerald-400 bg-zinc-950/80 px-3 py-1.5 rounded-xl border border-zinc-800/50 shrink-0">
+                              {rep.price.toLocaleString()} ₽
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+
+                      {/* SUMMARY COMPILATION & SUBMIT CARD */}
+                      <div className="p-5 bg-zinc-900 border border-zinc-800 rounded-2xl space-y-4">
+                        <div className="flex justify-between items-center pb-3 border-b border-zinc-800/80">
+                          <span className="text-xs font-bold text-zinc-400 uppercase">ИТОГО К ОПЛАТЕ (ЗАПЧАСТИ + РАБОТЫ):</span>
+                          <span className="text-lg font-mono font-black text-emerald-400">
+                            {getActiveRepairs().reduce((sum, r) => sum + r.price, 0).toLocaleString()} ₽
+                          </span>
+                        </div>
+
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+                          <div className="text-zinc-400">
+                            Ваш кошелек: <span className="font-mono text-zinc-200">{playerCash.toLocaleString()} ₽</span>
+                          </div>
+                          {playerCash < getActiveRepairs().reduce((sum, r) => sum + r.price, 0) && (
+                            <span className="text-rose-400 font-semibold bg-rose-500/10 px-2.5 py-1 rounded-lg border border-rose-500/20">
+                              Недостаточно средств на балансе!
                             </span>
                           )}
                         </div>
-                        <p className="text-xs text-zinc-400 mt-0.5">
-                          Точная лазерная юстировка подвески. Полностью устраняет боковой увод руля и стабилизирует прямолинейный выбег.
-                        </p>
+
+                        <button
+                          disabled={playerCash < getActiveRepairs().reduce((sum, r) => sum + r.price, 0)}
+                          onClick={handleFullRepair}
+                          className="w-full py-3 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 disabled:hover:bg-emerald-600 text-white font-bold text-xs sm:text-sm rounded-xl transition-all shadow-md flex items-center justify-center gap-2 uppercase tracking-wider"
+                        >
+                          <Wrench className="w-4 h-4" />
+                          Утвердить наряд-заказ и начать ремонт
+                        </button>
                       </div>
                     </div>
-
-                    <div className="flex items-center justify-between w-full sm:w-auto gap-4 pt-2 sm:pt-0 border-t sm:border-t-0 border-zinc-800">
-                      <span className="text-base font-mono font-bold text-emerald-400 whitespace-nowrap">
-                        1,500 ₽
-                      </span>
-                      <button
-                        disabled={playerCash < 1500 || Math.abs(currentVehicle.damage?.steeringDrift || 0) < 0.005}
-                        onClick={handleAlignmentRepair}
-                        className="px-4 py-2 min-h-[44px] bg-zinc-800 hover:bg-zinc-700 disabled:opacity-50 text-zinc-200 hover:text-white font-bold text-xs rounded-xl flex items-center gap-2 transition-colors whitespace-nowrap"
-                      >
-                        {Math.abs(currentVehicle.damage?.steeringDrift || 0) < 0.005 ? 'В норме' : 'Отрегулировать'}
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Service 3: Fluids & Leak Sealing */}
-                  <div className="p-4 bg-zinc-900/80 border border-zinc-800 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 hover:border-zinc-700 transition-colors">
-                    <div className="flex items-start gap-3">
-                      <div className="p-2.5 rounded-xl bg-amber-500/10 text-amber-400 border border-amber-500/20 shrink-0">
-                        <Droplets className="w-5 h-5" />
-                      </div>
-                      <div>
-                        <h4 className="text-sm font-bold text-zinc-100">Замена масла и антифриза (Герметизация)</h4>
-                        <p className="text-xs text-zinc-400 mt-0.5">
-                          Запайка пробоин поддона и радиатора, доливка синтетического масла 5W-40 и охлаждающей жидкости G12+ до 100%.
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center justify-between w-full sm:w-auto gap-4 pt-2 sm:pt-0 border-t sm:border-t-0 border-zinc-800">
-                      <span className="text-base font-mono font-bold text-emerald-400 whitespace-nowrap">
-                        800 ₽
-                      </span>
-                      <button
-                        disabled={playerCash < 800}
-                        onClick={handleFluidsService}
-                        className="px-4 py-2 min-h-[44px] bg-zinc-800 hover:bg-zinc-700 disabled:opacity-50 text-zinc-200 hover:text-white font-bold text-xs rounded-xl flex items-center gap-2 transition-colors whitespace-nowrap"
-                      >
-                        Залить и запаять
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Service 4: Battery & Starter */}
-                  <div className="p-4 bg-zinc-900/80 border border-zinc-800 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 hover:border-zinc-700 transition-colors">
-                    <div className="flex items-start gap-3">
-                      <div className="p-2.5 rounded-xl bg-sky-500/10 text-sky-400 border border-sky-500/20 shrink-0">
-                        <Zap className="w-5 h-5" />
-                      </div>
-                      <div>
-                        <h4 className="text-sm font-bold text-zinc-100">Обслуживание АКБ и ремонт стартера</h4>
-                        <p className="text-xs text-zinc-400 mt-0.5">
-                          Глубокий заряд аккумулятора постоянным током до 100%, очистка клемм от окислов и ремонт втягивающего реле стартера.
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center justify-between w-full sm:w-auto gap-4 pt-2 sm:pt-0 border-t sm:border-t-0 border-zinc-800">
-                      <span className="text-base font-mono font-bold text-emerald-400 whitespace-nowrap">
-                        300 ₽
-                      </span>
-                      <button
-                        disabled={playerCash < 300}
-                        onClick={handleBatteryService}
-                        className="px-4 py-2 min-h-[44px] bg-zinc-800 hover:bg-zinc-700 disabled:opacity-50 text-zinc-200 hover:text-white font-bold text-xs rounded-xl flex items-center gap-2 transition-colors whitespace-nowrap"
-                      >
-                        Зарядить АКБ
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Service 5: Bodywork & Glass */}
-                  <div className="p-4 bg-zinc-900/80 border border-zinc-800 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 hover:border-zinc-700 transition-colors">
-                    <div className="flex items-start gap-3">
-                      <div className="p-2.5 rounded-xl bg-rose-500/10 text-rose-400 border border-rose-500/20 shrink-0">
-                        <ShieldCheck className="w-5 h-5" />
-                      </div>
-                      <div>
-                        <h4 className="text-sm font-bold text-zinc-100">Кузовные работы и замена остекления</h4>
-                        <p className="text-xs text-zinc-400 mt-0.5">
-                          Стапельная вытяжка вмятин передка и кормы, установка целых стекол триплекс и замена разбитых фар.
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center justify-between w-full sm:w-auto gap-4 pt-2 sm:pt-0 border-t sm:border-t-0 border-zinc-800">
-                      <span className="text-base font-mono font-bold text-emerald-400 whitespace-nowrap">
-                        2,000 ₽
-                      </span>
-                      <button
-                        disabled={playerCash < 2000}
-                        onClick={handleBodyworkService}
-                        className="px-4 py-2 min-h-[44px] bg-zinc-800 hover:bg-zinc-700 disabled:opacity-50 text-zinc-200 hover:text-white font-bold text-xs rounded-xl flex items-center gap-2 transition-colors whitespace-nowrap"
-                      >
-                        Выправить кузов
-                      </button>
-                    </div>
-                  </div>
+                  )}
                 </div>
               )}
             </div>

@@ -185,6 +185,396 @@ export function createDefaultBuildingLayout(bld: Building, floor: number): Build
   };
 }
 
+export function createDefaultSuburbanLayout(bld: Building, floor: number): BuildingLayout {
+  const isGarage = bld.id.includes('garage') || (bld.nameRu && bld.nameRu.includes('Гараж'));
+  const isBanya = bld.id.includes('banya') || (bld.nameRu && (bld.nameRu.includes('Баня') || bld.nameRu.includes('Сауна')));
+
+  if (isGarage) {
+    // --- TEMPLATE G: SUBURBAN WORKSHOP & GARAGE (ПРИУСАДЕБНЫЙ ГАРАЖ-МАСТЕРСКАЯ) ---
+    const W = 160;
+    const H = 110;
+    const rooms: InteriorRoom[] = [
+      { name: 'Гаражный бокс & Мастерская', x: 8, y: 8, width: 144, height: 94, color: '#1e293b', floorStyle: 'tile' }
+    ];
+    const walls: InteriorWall[] = [
+      { x1: 6, y1: 6, x2: 154, y2: 6 },
+      { x1: 154, y1: 6, x2: 154, y2: 104 },
+      { x1: 154, y1: 104, x2: 6, y2: 104 },
+      { x1: 6, y1: 104, x2: 6, y2: 6 }
+    ];
+    const furniture: InteriorFurniture[] = [
+      // Metal Workbench with Vise & Tools
+      { type: 'desk', x: 12, y: 12, width: 36, height: 16, angle: 0, color: '#334155' },
+      { type: 'chair', x: 22, y: 32, width: 8, height: 8, angle: 0, color: '#0f172a' },
+      // Shelving units & Tool racks
+      { type: 'shelf', x: 54, y: 10, width: 32, height: 12, angle: 0, color: '#475569' },
+      { type: 'shelf', x: 92, y: 10, width: 32, height: 12, angle: 0, color: '#475569' },
+      // Storage safe & Parts bin
+      { type: 'safe', x: 130, y: 12, width: 14, height: 14, angle: 0, color: '#0f172a' },
+      { type: 'file_cabinet', x: 130, y: 32, width: 14, height: 14, angle: 0, color: '#64748b' },
+      // Resting sofa in corner
+      { type: 'sofa', x: 12, y: 64, width: 34, height: 16, angle: 0, color: '#78350f' }
+    ];
+    const exitZone: InteriorZone = { x: 55, y: 88, width: 34, height: 16 };
+    return {
+      buildingId: bld.id,
+      floor,
+      width: W,
+      height: H,
+      rooms,
+      walls,
+      furniture,
+      exitZone,
+      stairsZone: { x: -100, y: -100, width: 0, height: 0 },
+      elevatorZone: { x: -100, y: -100, width: 0, height: 0 },
+      exits: [exitZone],
+      stairs: [],
+      elevators: []
+    };
+  }
+
+  if (isBanya) {
+    // --- TEMPLATE B: WOODEN SUBURBAN BANYA / SAUNA (РУССКАЯ БАНЯ С КАМЕНКОЙ) ---
+    const W = 150;
+    const H = 100;
+    const rooms: InteriorRoom[] = [
+      { name: 'Предбанник / Комната отдыха', x: 8, y: 8, width: 70, height: 84, color: '#3d2516', floorStyle: 'wood' },
+      { name: 'Парная & Каменка', x: 82, y: 8, width: 60, height: 46, color: '#27170f', floorStyle: 'wood' },
+      { name: 'Помывочная', x: 82, y: 56, width: 60, height: 36, color: '#1c100a', floorStyle: 'tile' }
+    ];
+    const walls: InteriorWall[] = [
+      { x1: 6, y1: 6, x2: 144, y2: 6 },
+      { x1: 144, y1: 6, x2: 144, y2: 94 },
+      { x1: 144, y1: 94, x2: 6, y2: 94 },
+      { x1: 6, y1: 94, x2: 6, y2: 6 },
+      // Internal wooden partitions with door openings
+      { x1: 80, y1: 6, x2: 80, y2: 24 },
+      // Door gap y: 24..50 (26px) for entering Steam Room
+      { x1: 80, y1: 50, x2: 80, y2: 64 },
+      // Door gap y: 64..86 (22px) for entering Washing Room
+      { x1: 80, y1: 86, x2: 80, y2: 94 },
+      // Door between steam room and shower: gap from x = 104 to x = 128 (24px)
+      { x1: 80, y1: 54, x2: 104, y2: 54 },
+      { x1: 128, y1: 54, x2: 144, y2: 54 }
+    ];
+    const furniture: InteriorFurniture[] = [
+      // Resting room (Предбанник)
+      { type: 'table', x: 16, y: 16, width: 28, height: 18, angle: 0, color: '#7c2d12' },
+      { type: 'chair', x: 10, y: 20, width: 6, height: 6, angle: 0, color: '#451a03' },
+      { type: 'chair', x: 44, y: 20, width: 6, height: 6, angle: 0, color: '#451a03' },
+      { type: 'bench' as any, x: 14, y: 44, width: 34, height: 10, angle: 0, color: '#7c2d12' },
+      { type: 'coat_rack', x: 12, y: 64, width: 10, height: 10, angle: 0, color: '#451a03' },
+      { type: 'mirror', x: 40, y: 66, width: 4, height: 14, angle: 0, color: '#f59e0b' },
+      // Steam room (Парная)
+      { type: 'stove', x: 86, y: 12, width: 20, height: 20, angle: 0, color: '#c2410c' }, // Sauna stone stove
+      { type: 'bench' as any, x: 110, y: 12, width: 28, height: 36, angle: 0, color: '#b45309' }, // Sauna wooden tier tiers
+      // Washing room (Помывочная)
+      { type: 'bath', x: 86, y: 60, width: 32, height: 18, angle: 0, color: '#f1f5f9' },
+      { type: 'sink', x: 122, y: 60, width: 14, height: 12, angle: 0, color: '#e2e8f0' }
+    ];
+    const exitZone: InteriorZone = { x: 16, y: 80, width: 24, height: 14 };
+    return {
+      buildingId: bld.id,
+      floor,
+      width: W,
+      height: H,
+      rooms,
+      walls,
+      furniture,
+      exitZone,
+      stairsZone: { x: -100, y: -100, width: 0, height: 0 },
+      elevatorZone: { x: -100, y: -100, width: 0, height: 0 },
+      exits: [exitZone],
+      stairs: [],
+      elevators: []
+    };
+  }
+
+  const isIzba = bld.id.includes('izba') || 
+                 bld.id.includes('village') || 
+                 (bld.nameRu && (bld.nameRu.includes('Изба') || bld.nameRu.includes('Дом пасечника') || bld.nameRu.includes('деревн') || bld.nameRu.includes('Почта') || bld.nameRu.includes('Сельпо') || bld.nameRu.includes('Сельский')));
+
+  if (isIzba) {
+    // --- TEMPLATE A: TRADITIONAL RUSTIC VILLAGE IZBA (ИЗБА С РУССКОЙ ПЕЧЬЮ) ---
+    const W = 200;
+    const H = 130;
+    const rooms: InteriorRoom[] = [
+      { name: 'Сени (Прихожая)', x: 8, y: 70, width: 48, height: 52, color: '#27170f', floorStyle: 'wood' },
+      { name: 'Большая Горница (Кухня & Печь)', x: 58, y: 8, width: 134, height: 74, color: '#3d2516', floorStyle: 'wood' },
+      { name: 'Опочивальня (Спальня)', x: 58, y: 84, width: 134, height: 38, color: '#2b1b11', floorStyle: 'wood' },
+      { name: 'Баня / Помывочная', x: 8, y: 8, width: 48, height: 60, color: '#1c100a', floorStyle: 'wood' }
+    ];
+    const walls: InteriorWall[] = [
+      { x1: 6, y1: 6, x2: 194, y2: 6 },
+      { x1: 194, y1: 6, x2: 194, y2: 124 },
+      { x1: 194, y1: 124, x2: 6, y2: 124 },
+      { x1: 6, y1: 124, x2: 6, y2: 6 },
+      // Internal wooden walls with door openings
+      { x1: 56, y1: 6, x2: 56, y2: 68 },
+      // Door gap y: 68..96 (28px) for entering living room (Горница)
+      { x1: 56, y1: 96, x2: 56, y2: 124 },
+      // Door between Entryway and Bath: gap x: 20..42 (22px)
+      { x1: 6, y1: 68, x2: 20, y2: 68 },
+      { x1: 42, y1: 68, x2: 56, y2: 68 },
+      // Door between Горница and Bedroom: gap x: 110..138 (28px)
+      { x1: 56, y1: 82, x2: 110, y2: 82 },
+      { x1: 138, y1: 82, x2: 194, y2: 82 }
+    ];
+    const furniture: InteriorFurniture[] = [
+      // Горница (Living/Kitchen)
+      { type: 'stove', x: 62, y: 12, width: 34, height: 34, angle: 0, color: '#c2410c' }, // Russian Oven
+      { type: 'table', x: 120, y: 44, width: 34, height: 22, angle: 0, color: '#7c2d12' }, // Wooden dining table
+      { type: 'chair', x: 108, y: 52, width: 8, height: 8, angle: 0, color: '#451a03' },
+      { type: 'chair', x: 136, y: 52, width: 8, height: 8, angle: 0, color: '#451a03' },
+      { type: 'kitchen_counter', x: 160, y: 12, width: 28, height: 14, angle: 0, color: '#7c2d12' },
+      { type: 'fridge', x: 102, y: 12, width: 16, height: 16, angle: 0, color: '#e2e8f0' },
+      // Опочивальня (Bedroom)
+      { type: 'bed', x: 64, y: 88, width: 44, height: 30, angle: 0, color: '#ea580c' },
+      { type: 'dresser', x: 120, y: 88, width: 24, height: 12, angle: 0, color: '#7c2d12' },
+      { type: 'floor_lamp', x: 154, y: 88, width: 8, height: 8, angle: 0, color: '#ea580c' },
+      // Баня (Bath/Sauna)
+      { type: 'bath', x: 10, y: 10, width: 38, height: 18, angle: 0, color: '#f1f5f9' },
+      { type: 'stove', x: 12, y: 32, width: 14, height: 14, angle: 0, color: '#334155' }, // Bath stone heater
+      // Сени (Entryway)
+      { type: 'coat_rack', x: 12, y: 74, width: 10, height: 10, angle: 0, color: '#451a03' },
+      { type: 'mirror', x: 44, y: 74, width: 4, height: 16, angle: 0, color: '#f59e0b' }
+    ];
+    const exitZone: InteriorZone = { x: 18, y: 110, width: 24, height: 12 };
+    return {
+      buildingId: bld.id,
+      floor,
+      width: W,
+      height: H,
+      rooms,
+      walls,
+      furniture,
+      exitZone,
+      stairsZone: { x: -100, y: -100, width: 0, height: 0 },
+      elevatorZone: { x: -100, y: -100, width: 0, height: 0 },
+      exits: [exitZone],
+      stairs: [],
+      elevators: []
+    };
+  }
+
+  // --- TEMPLATE B: PROSPEROUS COUNTRY COTTAGE (ЗАГОРОДНЫЙ КОТТЕДЖ) ---
+  if (floor === 1) {
+    return createCottageFloor1Layout(bld.id, bld.width, bld.height);
+  }
+  return createCottageFloor0Layout(bld.id, bld.width, bld.height);
+}
+
+/**
+ * Floor 0: Ground Floor of Country Cottage
+ * Fully open, passable layout scaled to building dimensions.
+ */
+export function createCottageFloor0Layout(buildingId: string, width = 160, height = 110): BuildingLayout {
+  const W = Math.max(120, width);
+  const H = Math.max(80, height);
+
+  const xCol1 = Math.round(W * 0.28);
+  const xCol2 = Math.round(W * 0.70);
+  const yMid = Math.round(H * 0.54);
+
+  const rooms: InteriorRoom[] = [
+    { name: 'Прихожая / Холл', x: 8, y: yMid, width: xCol1 - 10, height: H - yMid - 8, color: '#1e293b', floorStyle: 'tile' },
+    { name: 'Ванная комната & Сауна', x: 8, y: 8, width: xCol1 - 10, height: yMid - 10, color: '#0f172a', floorStyle: 'tile' },
+    { name: 'Каминный Зал', x: xCol1, y: 8, width: xCol2 - xCol1 - 2, height: yMid - 10, color: '#334155', floorStyle: 'parquet' },
+    { name: 'Кухня-Столовая', x: xCol1, y: yMid, width: xCol2 - xCol1 - 2, height: H - yMid - 8, color: '#1e293b', floorStyle: 'tile' },
+    { name: 'Мастер-Спальня', x: xCol2, y: 8, width: W - xCol2 - 8, height: yMid - 10, color: '#1e293b', floorStyle: 'carpet' },
+    { name: 'Садовая Терраса', x: xCol2, y: yMid, width: W - xCol2 - 8, height: H - yMid - 8, color: '#334155', floorStyle: 'wood' }
+  ];
+
+  const walls: InteriorWall[] = [
+    // Outer perimeter envelope
+    { x1: 6, y1: 6, x2: W - 6, y2: 6 },
+    { x1: W - 6, y1: 6, x2: W - 6, y2: H - 6 },
+    { x1: W - 6, y1: H - 6, x2: 6, y2: H - 6 },
+    { x1: 6, y1: H - 6, x2: 6, y2: 6 },
+
+    // Partition 1: Between Bathroom (top) and Hallway (bottom) at y = yMid
+    { x1: 6, y1: yMid, x2: 18, y2: yMid },
+    { x1: 38, y1: yMid, x2: xCol1, y2: yMid },
+
+    // Partition 2: Between West wing and Central Hall at x = xCol1
+    { x1: xCol1, y1: 6, x2: xCol1, y2: yMid },
+    { x1: xCol1, y1: yMid + 20, x2: xCol1, y2: H - 6 },
+
+    // Partition 3: Between Living Hall (top) and Dining/Kitchen (bottom) at y = yMid
+    { x1: xCol1, y1: yMid, x2: xCol1 + 10, y2: yMid },
+    { x1: xCol2 - 10, y1: yMid, x2: xCol2, y2: yMid },
+
+    // Partition 4: Between Living Hall and Master Bedroom at x = xCol2
+    { x1: xCol2, y1: 6, x2: xCol2, y2: 20 },
+    { x1: xCol2, y1: 42, x2: xCol2, y2: yMid },
+
+    // Partition 5: Between Kitchen and Garden Terrace at x = xCol2
+    { x1: xCol2, y1: yMid, x2: xCol2, y2: yMid + 12 },
+    { x1: xCol2, y1: H - 20, x2: xCol2, y2: H - 6 },
+
+    // Partition 6: Between Master Bedroom and Terrace at y = yMid
+    { x1: xCol2, y1: yMid, x2: xCol2 + 10, y2: yMid },
+    { x1: W - 18, y1: yMid, x2: W - 6, y2: yMid }
+  ];
+
+  const furniture: InteriorFurniture[] = [
+    // --- 1. ПРИХОЖАЯ / ХОЛЛ ---
+    { type: 'coat_rack', x: 10, y: yMid + 4, width: 8, height: 8, angle: 0, color: '#451a03' },
+    { type: 'bench', x: 10, y: yMid + 16, width: 14, height: 6, angle: 0, color: '#78350f' },
+    { type: 'mirror', x: 8, y: yMid + 26, width: 3, height: 10, angle: 0, color: '#f59e0b' },
+
+    // --- 2. ВАННАЯ КОМНАТА & САУНА ---
+    { type: 'bath', x: 10, y: 10, width: 24, height: 14, angle: 0, color: '#f1f5f9' },
+    { type: 'toilet', x: 10, y: 28, width: 10, height: 10, angle: 0, color: '#ffffff' },
+    { type: 'sink', x: 10, y: 42, width: 10, height: 10, angle: 0, color: '#e2e8f0' },
+    { type: 'stove', x: xCol1 - 18, y: 10, width: 10, height: 10, angle: 0, color: '#c2410c' },
+
+    // --- 3. КАМИННЫЙ ЗАЛ / ГОСТИНАЯ ---
+    { type: 'stove', x: Math.round((xCol1 + xCol2) / 2) - 8, y: 8, width: 16, height: 10, angle: 0, color: '#b45309' },
+    { type: 'sofa', x: xCol1 + 8, y: 24, width: 28, height: 14, angle: 0, color: '#991b1b' },
+    { type: 'carpet', x: xCol1 + 6, y: 22, width: 32, height: 18, angle: 0, color: '#7f1d1d' },
+    { type: 'tv', x: xCol1 + 8, y: 10, width: 16, height: 4, angle: 0, color: '#0f172a' },
+    { type: 'plant', x: xCol2 - 16, y: 10, width: 8, height: 8, angle: 0, color: '#16a34a' },
+
+    // --- 4. КУХНЯ-СТОЛОВАЯ ---
+    { type: 'fridge', x: xCol1 + 4, y: yMid + 6, width: 12, height: 12, angle: 0, color: '#e2e8f0' },
+    { type: 'kitchen_counter', x: xCol1 + 4, y: H - 18, width: 18, height: 10, angle: 0, color: '#64748b' },
+    { type: 'stove', x: xCol1 + 24, y: H - 18, width: 12, height: 10, angle: 0, color: '#334155' },
+    { type: 'table', x: xCol2 - 28, y: yMid + 10, width: 20, height: 14, angle: 0, color: '#78350f' },
+    { type: 'chair', x: xCol2 - 34, y: yMid + 14, width: 5, height: 5, angle: 0, color: '#92400e' },
+    { type: 'chair', x: xCol2 - 6, y: yMid + 14, width: 5, height: 5, angle: 0, color: '#92400e' },
+
+    // --- 5. МАСТЕР-СПАЛЬНЯ ---
+    { type: 'bed', x: W - 36, y: 10, width: 28, height: 24, angle: 0, color: '#d97706' },
+    { type: 'nightstand', x: xCol2 + 4, y: 10, width: 6, height: 6, angle: 0, color: '#78350f' },
+    { type: 'dresser', x: xCol2 + 4, y: 38, width: 20, height: 10, angle: 0, color: '#78350f' },
+
+    // --- 6. САДОВАЯ ТЕРРАСА ---
+    { type: 'table', x: xCol2 + 10, y: yMid + 12, width: 16, height: 10, angle: 0, color: '#451a03' },
+    { type: 'chair', x: xCol2 + 4, y: yMid + 14, width: 5, height: 5, angle: 0, color: '#78350f' },
+    { type: 'chair', x: xCol2 + 28, y: yMid + 14, width: 5, height: 5, angle: 0, color: '#78350f' },
+    { type: 'plant', x: W - 16, y: H - 18, width: 8, height: 8, angle: 0, color: '#16a34a' }
+  ];
+
+  const exitZone: InteriorZone = { x: 14, y: H - 14, width: 24, height: 10 };
+  const stairsZone: InteriorZone = { x: xCol2 - 26, y: 10, width: 22, height: 20 };
+
+  return {
+    buildingId,
+    floor: 0,
+    width: W,
+    height: H,
+    rooms,
+    walls,
+    furniture,
+    exitZone,
+    stairsZone,
+    elevatorZone: { x: -100, y: -100, width: 0, height: 0 },
+    exits: [exitZone],
+    stairs: [stairsZone],
+    elevators: []
+  };
+}
+
+/**
+ * Floor 1: Mansard / 2nd Floor of Country Cottage
+ * Study, Library, Guest Bedroom, Billiard & Lounge Room, Upper Bathroom.
+ */
+export function createCottageFloor1Layout(buildingId: string, width = 160, height = 110): BuildingLayout {
+  const W = Math.max(120, width);
+  const H = Math.max(80, height);
+
+  const xCol1 = Math.round(W * 0.32);
+  const xCol2 = Math.round(W * 0.68);
+  const yMid = Math.round(H * 0.54);
+
+  const rooms: InteriorRoom[] = [
+    { name: 'Холл 2-го этажа', x: xCol1, y: 8, width: xCol2 - xCol1 - 2, height: yMid - 10, color: '#334155', floorStyle: 'parquet' },
+    { name: 'Личный Кабинет & Библиотека', x: 8, y: 8, width: xCol1 - 10, height: yMid - 10, color: '#1e293b', floorStyle: 'wood' },
+    { name: 'Гостевая спальня', x: 8, y: yMid, width: xCol1 - 10, height: H - yMid - 8, color: '#1e293b', floorStyle: 'carpet' },
+    { name: 'Верхний санузел', x: xCol2, y: 8, width: W - xCol2 - 8, height: yMid - 10, color: '#0f172a', floorStyle: 'tile' },
+    { name: 'Бильярдная & Лаунж-зона', x: xCol1, y: yMid, width: W - xCol1 - 8, height: H - yMid - 8, color: '#334155', floorStyle: 'wood' }
+  ];
+
+  const walls: InteriorWall[] = [
+    // Outer building envelope
+    { x1: 6, y1: 6, x2: W - 6, y2: 6 },
+    { x1: W - 6, y1: 6, x2: W - 6, y2: H - 6 },
+    { x1: W - 6, y1: H - 6, x2: 6, y2: H - 6 },
+    { x1: 6, y1: H - 6, x2: 6, y2: 6 },
+
+    // Partition 1: Between Study (left) and Upper Hall (center) at x = xCol1
+    { x1: xCol1, y1: 6, x2: xCol1, y2: 18 },
+    { x1: xCol1, y1: 38, x2: xCol1, y2: yMid },
+
+    // Partition 2: Between Study (top) and Guest Bedroom (bottom) at y = yMid
+    { x1: 6, y1: yMid, x2: 24, y2: yMid },
+    { x1: 44, y1: yMid, x2: xCol1, y2: yMid },
+
+    // Partition 3: Between Guest Bedroom (left) and Billiard Lounge (right) at x = xCol1
+    { x1: xCol1, y1: yMid, x2: xCol1, y2: yMid + 12 },
+    { x1: xCol1, y1: H - 18, x2: xCol1, y2: H - 6 },
+
+    // Partition 4: Between Upper Hall and Billiard Lounge at y = yMid
+    { x1: xCol1, y1: yMid, x2: xCol1 + 10, y2: yMid },
+    { x1: xCol2 - 10, y1: yMid, x2: xCol2, y2: yMid },
+
+    // Partition 5: Between Upper Hall (center) and Upper Bathroom (right) at x = xCol2
+    { x1: xCol2, y1: 6, x2: xCol2, y2: 18 },
+    { x1: xCol2, y1: 38, x2: xCol2, y2: yMid },
+
+    // Partition 6: Between Upper Bathroom (top) and Billiard Lounge (bottom) at y = yMid
+    { x1: xCol2, y1: yMid, x2: W - 6, y2: yMid }
+  ];
+
+  const furniture: InteriorFurniture[] = [
+    // --- 1. ХОЛЛ 2-ГО ЭТАЖА ---
+    { type: 'bookshelf', x: xCol1 + 4, y: 10, width: 14, height: 8, angle: 0, color: '#451a03' },
+    { type: 'plant', x: xCol2 - 14, y: 10, width: 8, height: 8, angle: 0, color: '#16a34a' },
+    { type: 'sofa', x: xCol1 + 4, y: yMid - 18, width: 22, height: 10, angle: 0, color: '#1e3a8a' },
+
+    // --- 2. ЛИЧНЫЙ КАБИНЕТ & БИБЛИОТЕКА ---
+    { type: 'desk', x: 20, y: 12, width: 22, height: 12, angle: 0, color: '#78350f' },
+    { type: 'chair', x: 28, y: 26, width: 6, height: 6, angle: 0, color: '#1e3a8a' },
+    { type: 'computer', x: 26, y: 13, width: 8, height: 5, angle: 0, color: '#0f172a' },
+    { type: 'bookshelf', x: 8, y: 8, width: 10, height: 8, angle: 0, color: '#451a03' },
+
+    // --- 3. ГОСТЕВАЯ СПАЛЬНЯ ---
+    { type: 'bed', x: 10, y: yMid + 8, width: 26, height: 18, angle: 0, color: '#0284c7' },
+    { type: 'nightstand', x: 10, y: H - 16, width: 6, height: 6, angle: 0, color: '#78350f' },
+    { type: 'dresser', x: 22, y: H - 16, width: 16, height: 8, angle: 0, color: '#78350f' },
+
+    // --- 4. ВЕРХНИЙ САНУЗЕЛ ---
+    { type: 'bath', x: xCol2 + 6, y: 10, width: 22, height: 12, angle: 0, color: '#ffffff' },
+    { type: 'sink', x: xCol2 + 6, y: 26, width: 10, height: 8, angle: 0, color: '#e2e8f0' },
+    { type: 'toilet', x: xCol2 + 6, y: 38, width: 8, height: 10, angle: 0, color: '#ffffff' },
+
+    // --- 5. БИЛЬЯРДНАЯ & ЛАУНЖ ---
+    { type: 'table', x: xCol1 + 18, y: yMid + 10, width: 28, height: 16, angle: 0, color: '#15803d' }, // Billiard table
+    { type: 'sofa', x: W - 30, y: H - 18, width: 22, height: 10, angle: 0, color: '#7c2d12' },
+    { type: 'plant', x: xCol1 + 4, y: H - 16, width: 8, height: 8, angle: 0, color: '#16a34a' }
+  ];
+
+  // Match Floor 0 stairs position exactly!
+  const stairsZone: InteriorZone = { x: xCol2 - 26, y: 10, width: 22, height: 20 };
+
+  return {
+    buildingId,
+    floor: 1,
+    width: W,
+    height: H,
+    rooms,
+    walls,
+    furniture,
+    exitZone: { x: -100, y: -100, width: 0, height: 0 },
+    stairsZone,
+    elevatorZone: { x: -100, y: -100, width: 0, height: 0 },
+    exits: [],
+    stairs: [stairsZone],
+    elevators: []
+  };
+}
+
 export function createRealEstateAgencyLayout(): BuildingLayout {
   return {
     buildingId: 'bld_real_estate_agency_main',
@@ -443,6 +833,37 @@ export function getBuildingLayout(bld: Building, floor: number, aptId?: string |
       return apt.layout;
     }
   }
+  if (bld.type === 'suburban') {
+    if (floor === 1) {
+      return createCottageFloor1Layout(bld.id, bld.width, bld.height);
+    }
+    // Attempt to load the registered suburban apartment if it exists
+    const apt = getCityApartments().find(a => a.buildingId === bld.id);
+    if (apt && apt.layout) {
+      if (apt.dynamicFurniture && apt.dynamicFurniture.length > 0) {
+        const mappedDynamic: InteriorFurniture[] = apt.dynamicFurniture.map(df => ({
+          type: df.type as any,
+          x: df.x,
+          y: df.y,
+          width: df.width || 20,
+          height: df.height || 20,
+          angle: df.rotation || 0,
+          color: df.color || '#64748b'
+        }));
+        return {
+          ...apt.layout,
+          furniture: [...apt.layout.furniture, ...mappedDynamic]
+        };
+      }
+      return apt.layout;
+    }
+    const isSecondaryOutbuilding = bld.id.includes('garage') || bld.id.includes('banya') ||
+      (bld.nameRu && (bld.nameRu.includes('Гараж') || bld.nameRu.includes('Баня') || bld.nameRu.includes('Сауна')));
+    if (isSecondaryOutbuilding) {
+      return createDefaultSuburbanLayout(bld, floor);
+    }
+    return createCottageFloor0Layout(bld.id, bld.width, bld.height);
+  }
   if (bld.type === 'real_estate_agency') {
     return createRealEstateAgencyLayout();
   }
@@ -628,8 +1049,8 @@ export function constrainPlayerToInterior(
   const radius = 6.5;
 
   // A. Constrain inside outer walls
-  px = Math.max(radius + 7, Math.min(bld.width - radius - 7, px));
-  py = Math.max(radius + 7, Math.min(bld.height - radius - 7, py));
+  px = Math.max(radius + 7, Math.min(layout.width - radius - 7, px));
+  py = Math.max(radius + 7, Math.min(layout.height - radius - 7, py));
 
   // B. Collide with internal walls (slide-collision physics)
   for (const wall of layout.walls) {
@@ -674,7 +1095,9 @@ export function constrainPlayerToInterior(
       furn.type === 'chair' || 
       furn.type === 'computer' || 
       furn.type === 'tv' ||
-      furn.type === 'blackboard'
+      furn.type === 'blackboard' ||
+      furn.type === 'whiteboard' ||
+      furn.type === 'mirror'
     ) continue;
 
     const fx1 = furn.x;
@@ -699,7 +1122,7 @@ export function constrainPlayerToInterior(
   // D. Block entry to locked apartments on this floor inside multi-apartment buildings using Door-specific line collision
   const floorApts = getCityApartments().filter(a => a.buildingId === bld.id && a.floor === (player.currentFloor || 0));
   for (const apt of floorApts) {
-    if (apt.isLocked) {
+    if (apt.isLocked && (!player.isInsideApartment || player.insideApartmentId !== apt.id)) {
       const aptRoom = layout.rooms.find(rm => rm.name === `Кв. ${apt.apartmentNumber}` || rm.name === `Кв.${apt.apartmentNumber}`);
       if (aptRoom) {
         const door = getApartmentDoorSegment(aptRoom, layout.walls);
@@ -767,17 +1190,17 @@ function renderStaticInteriorLayout(
   // Base background floor of the building
   if (isHospital) {
     ctx.fillStyle = '#eef2f6';
-    ctx.fillRect(0, 0, bld.width, bld.height);
+    ctx.fillRect(0, 0, layout.width, layout.height);
 
     // Sterile institutional floor tiles (single batched stroke for high FPS)
     ctx.strokeStyle = 'rgba(148, 163, 184, 0.28)';
     ctx.lineWidth = 0.6;
     ctx.beginPath();
-    for (let tx = 0; tx < bld.width; tx += 12) {
-      ctx.moveTo(tx, 0); ctx.lineTo(tx, bld.height);
+    for (let tx = 0; tx < layout.width; tx += 12) {
+      ctx.moveTo(tx, 0); ctx.lineTo(tx, layout.height);
     }
-    for (let ty = 0; ty < bld.height; ty += 12) {
-      ctx.moveTo(0, ty); ctx.lineTo(bld.width, ty);
+    for (let ty = 0; ty < layout.height; ty += 12) {
+      ctx.moveTo(0, ty); ctx.lineTo(layout.width, ty);
     }
     ctx.stroke();
 
@@ -786,14 +1209,14 @@ function renderStaticInteriorLayout(
     ctx.lineWidth = 1.8;
     ctx.beginPath();
     ctx.moveTo(25, 116);
-    ctx.lineTo(bld.width - 25, 116);
+    ctx.lineTo(layout.width - 25, 116);
     ctx.stroke();
 
     ctx.strokeStyle = 'rgba(2, 132, 199, 0.42)';
     ctx.lineWidth = 1.8;
     ctx.beginPath();
     ctx.moveTo(25, 124);
-    ctx.lineTo(bld.width - 25, 124);
+    ctx.lineTo(layout.width - 25, 124);
     ctx.stroke();
 
     // Red Cross emblem in main lobby floor
@@ -808,7 +1231,7 @@ function renderStaticInteriorLayout(
     ctx.strokeRect(crossX - 3, crossY - 9, 6, 18);
   } else {
     ctx.fillStyle = '#0f172a';
-    ctx.fillRect(0, 0, bld.width, bld.height);
+    ctx.fillRect(0, 0, layout.width, layout.height);
   }
 
   // Render rooms with optimized floor textures
@@ -1032,15 +1455,15 @@ function renderStaticInteriorLayout(
   // Outer Building Walls & Windows
   ctx.strokeStyle = 'rgba(0,0,0,0.5)';
   ctx.lineWidth = 5;
-  ctx.strokeRect(1, 1, bld.width, bld.height);
+  ctx.strokeRect(1, 1, layout.width, layout.height);
 
   ctx.strokeStyle = '#64748b';
   ctx.lineWidth = 4;
-  ctx.strokeRect(0, 0, bld.width, bld.height);
+  ctx.strokeRect(0, 0, layout.width, layout.height);
 
   ctx.strokeStyle = '#f8fafc';
   ctx.lineWidth = 2;
-  ctx.strokeRect(0, 0, bld.width, bld.height);
+  ctx.strokeRect(0, 0, layout.width, layout.height);
 
   // Window cyan glass sills
   ctx.strokeStyle = '#38bdf8';
@@ -1070,13 +1493,13 @@ export function renderBuildingInterior(
 
   // Generate windows along outer walls
   const windows: { x: number; y: number; side: 'top' | 'bottom' | 'left' | 'right' }[] = [];
-  for (let x = 30; x < bld.width - 30; x += 40) {
+  for (let x = 30; x < layout.width - 30; x += 40) {
     windows.push({ x, y: 0, side: 'top' });
-    windows.push({ x, y: bld.height, side: 'bottom' });
+    windows.push({ x, y: layout.height, side: 'bottom' });
   }
-  for (let y = 30; y < bld.height - 30; y += 40) {
+  for (let y = 30; y < layout.height - 30; y += 40) {
     windows.push({ x: 0, y, side: 'left' });
-    windows.push({ x: bld.width, y, side: 'right' });
+    windows.push({ x: layout.width, y, side: 'right' });
   }
 
   // Calculate daylight & electric lighting intensity
@@ -1104,7 +1527,7 @@ export function renderBuildingInterior(
 
   // Render static floor & furniture from cached bitmap
   const furnAnglesSum = layout.furniture?.reduce((acc, f) => acc + (f.angle || 0), 0) || 0;
-  const cacheKey = `${bld.id}_${(bld as any).currentFloor ?? 0}_${bld.width}_${bld.height}_${layout.rooms?.length || 0}_${layout.furniture?.length || 0}_${furnAnglesSum.toFixed(2)}`;
+  const cacheKey = `${bld.id}_${layout.floor ?? (bld as any).currentFloor ?? 0}_${layout.width}_${layout.height}_${layout.rooms?.length || 0}_${layout.furniture?.length || 0}_${furnAnglesSum.toFixed(2)}`;
   let cachedCanvas = interiorCanvasCache.get(cacheKey);
   if (!cachedCanvas && typeof document !== 'undefined') {
     if (interiorCanvasCache.size >= MAX_INTERIOR_CANVASES) {
@@ -1119,8 +1542,8 @@ export function renderBuildingInterior(
       }
     }
     cachedCanvas = document.createElement('canvas');
-    cachedCanvas.width = bld.width;
-    cachedCanvas.height = bld.height;
+    cachedCanvas.width = layout.width;
+    cachedCanvas.height = layout.height;
     const cCtx = cachedCanvas.getContext('2d');
     if (cCtx) {
       renderStaticInteriorLayout(cCtx, bld, layout, windows, isHospital);

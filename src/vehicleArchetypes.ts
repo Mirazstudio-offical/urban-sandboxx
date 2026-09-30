@@ -1,4 +1,12 @@
 import { Vehicle } from './types';
+import {
+  renderMotoIzhJupiter,
+  renderMotoUralSidecar,
+  renderMotoJawa350,
+  renderMotoSport,
+  renderMotoChopper,
+  renderMopedSoviet
+} from './motorcycleVisuals';
 
 export interface VehicleRenderContext {
   ctx: CanvasRenderingContext2D;
@@ -1176,79 +1184,30 @@ export function renderVehicleGreenhouseAndBodyPanels(vCtx: VehicleRenderContext)
   }
 
   // =========================================================================
-  // 5C. MOTORCYCLES & MOPEDS
+  // 5C. MOTORCYCLES & MOPEDS (100% Prototype-Accurate Custom Textures & Parts)
   // =========================================================================
-  const isBike = type === 'moto_izh_jupiter' || type === 'moto_ural_sidecar' || type === 'moto_jawa350' || 
-                 type === 'moto_sport' || type === 'moto_chopper' || type === 'moped_soviet';
-  if (isBike) {
-    if (type === 'moto_ural_sidecar') {
-      const bikeY = -halfW * 0.45;
-      const sidecarY = halfW * 0.55;
-
-      // Sidecar tub body
-      drawDeformedRect(-halfL * 0.55, halfW * 0.15, halfL * 0.90, halfW * 0.70, car.color);
-      // Sidecar passenger opening
-      drawDeformedRect(-halfL * 0.25, halfW * 0.25, halfL * 0.40, halfW * 0.50, '#1e293b');
-      // Sidecar seat cushion
-      drawDeformedRect(-halfL * 0.20, halfW * 0.30, halfL * 0.25, halfW * 0.40, '#0f172a');
-      // Sidecar windshield deflector
-      drawDeformedLine(halfL * 0.18, halfW * 0.22, halfL * 0.18, halfW * 0.75, 'rgba(56, 189, 248, 0.4)', 1.5);
-      
-      // Connecting tubular cross-members to motorcycle frame
-      drawDeformedLine(-halfL * 0.35, bikeY, -halfL * 0.35, halfW * 0.20, '#334155', 2.0);
-      drawDeformedLine(halfL * 0.10, bikeY, halfL * 0.10, halfW * 0.20, '#334155', 2.0);
-
-      // Motorcycle backbone frame & Fuel Tank
-      drawDeformedRect(-halfL * 0.40, bikeY - 2, halfL * 0.75, 4, '#1e293b');
-      drawDeformedRect(halfL * 0.05, bikeY - 3.5, halfL * 0.30, 7, car.color);
-      // Tank chrome cap
-      drawDeformedCircle(halfL * 0.18, bikeY, 1.2, '#f8fafc');
-      // Two-up leather seat
-      drawDeformedRect(-halfL * 0.35, bikeY - 3.0, halfL * 0.35, 6, '#0f172a');
-      // Chrome Handlebars
-      drawDeformedLine(halfL * 0.35, bikeY - 7, halfL * 0.35, bikeY + 7, '#e2e8f0', 1.8);
-      drawDeformedCircle(halfL * 0.35, bikeY - 7, 1.0, '#0f172a');
-      drawDeformedCircle(halfL * 0.35, bikeY + 7, 1.0, '#0f172a');
-    } else {
-      // Solo Motorcycles
-      const tankL = halfL * 0.55;
-      const tankW = halfW * 0.85;
-      const seatL = halfL * 0.65;
-      const seatW = halfW * 0.75;
-
-      // Frame & Engine Block
-      drawDeformedRect(-halfL * 0.35, -halfW * 0.40, halfL * 0.75, halfW * 0.80, '#334155');
-
-      // Fuel Tank
-      const tankX = halfL * 0.05;
-      drawDeformedRect(tankX - tankL / 2, -tankW / 2, tankL, tankW, car.color);
-      drawDeformedCircle(tankX + tankL * 0.15, 0, 1.2, '#f8fafc'); // Gas cap
-
-      // Tank knee grip rubber pads on classic bikes
-      if (type === 'moto_izh_jupiter' || type === 'moto_jawa350') {
-        drawDeformedRect(tankX - tankL * 0.2, -tankW / 2 - 0.4, tankL * 0.4, 0.8, '#0f172a');
-        drawDeformedRect(tankX - tankL * 0.2, tankW / 2 - 0.4, tankL * 0.4, 0.8, '#0f172a');
-      }
-
-      // Rider & Passenger Saddle
-      const seatX = -halfL * 0.30;
-      const seatColor = type === 'moto_chopper' ? '#3e2723' : '#0f172a';
-      drawDeformedRect(seatX - seatL / 2, -seatW / 2, seatL, seatW, seatColor);
-      drawDeformedLine(seatX - seatL / 2 + 1, 0, seatX + seatL / 2 - 1, 0, 'rgba(255,255,255,0.15)', 0.8);
-
-      // Handlebars
-      const barX = halfL * 0.42;
-      const barW = halfW * 1.85;
-      drawDeformedLine(barX, -barW / 2, barX, barW / 2, '#cbd5e1', 1.8);
-      // Grips
-      drawDeformedRect(barX - 1.2, -barW / 2, 2.4, 1.5, '#0f172a');
-      drawDeformedRect(barX - 1.2, barW / 2 - 1.5, 2.4, 1.5, '#0f172a');
-
-      // Instrument Gauge / Speedometer Cluster
-      drawDeformedCircle(barX + 1.5, 0, 1.2, '#1e293b');
-      drawDeformedCircle(barX + 1.5, 0, 0.8, '#38bdf8');
-    }
-
+  if (type === 'moto_izh_jupiter') {
+    renderMotoIzhJupiter(vCtx);
+    return;
+  }
+  if (type === 'moto_ural_sidecar') {
+    renderMotoUralSidecar(vCtx);
+    return;
+  }
+  if (type === 'moto_jawa350') {
+    renderMotoJawa350(vCtx);
+    return;
+  }
+  if (type === 'moto_sport') {
+    renderMotoSport(vCtx);
+    return;
+  }
+  if (type === 'moto_chopper') {
+    renderMotoChopper(vCtx);
+    return;
+  }
+  if (type === 'moped_soviet') {
+    renderMopedSoviet(vCtx);
     return;
   }
 

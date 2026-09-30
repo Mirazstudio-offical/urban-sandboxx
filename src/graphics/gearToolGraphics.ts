@@ -773,7 +773,143 @@ export function drawGearToolItem(ctx: CanvasRenderingContext2D, itemId: string, 
       return true;
     }
 
-    case 'motor_oil': {
+    case 'flashlight_police': {
+      drawShadow(ctx, 8.5, 2.8, 7.8, 0.26);
+
+      // Heavy Tactical Police Maglite / Duty Flashlight
+      // Aircraft-grade matte black anodized aluminum barrel
+      ctx.fillStyle = '#0f172a';
+      ctx.beginPath();
+      ctx.roundRect(-8.5, -2.4, 12, 4.8, 1);
+      ctx.fill();
+
+      // Deep cross-hatch knurling on grip barrel
+      ctx.strokeStyle = '#334155';
+      ctx.lineWidth = 0.6;
+      for (let kx = -7.5; kx <= 1.5; kx += 1.4) {
+        ctx.beginPath();
+        ctx.moveTo(kx, -2.4); ctx.lineTo(kx + 1, 2.4);
+        ctx.moveTo(kx + 1, -2.4); ctx.lineTo(kx, 2.4);
+        ctx.stroke();
+      }
+
+      // Tailcap with tactical lanyard ring & strike rim
+      ctx.fillStyle = '#1e293b';
+      ctx.fillRect(-9.5, -2.8, 1.4, 5.6);
+      ctx.fillStyle = '#475569';
+      ctx.beginPath();
+      ctx.arc(-9.5, 0, 1.2, 0, Math.PI * 2);
+      ctx.stroke();
+
+      // Recessed side pushbutton (textured tactical silicone rubber)
+      ctx.fillStyle = '#475569';
+      ctx.fillRect(1.5, -3.2, 2.2, 1.2);
+      ctx.fillStyle = '#f59e0b'; // Amber tactical switch dot
+      ctx.fillRect(2.1, -3.0, 1.0, 0.7);
+
+      // Aggressive flared strike-bezel head
+      ctx.fillStyle = '#1e293b';
+      ctx.beginPath();
+      ctx.moveTo(3.2, -2.6);
+      ctx.lineTo(8.5, -5.2);
+      ctx.lineTo(8.5, 5.2);
+      ctx.lineTo(3.2, 2.6);
+      ctx.closePath();
+      ctx.fill();
+
+      // Bezel anti-roll hex flats
+      ctx.strokeStyle = '#475569';
+      ctx.lineWidth = 0.8;
+      ctx.stroke();
+
+      // Heavy cooling fins on head
+      ctx.fillStyle = '#0f172a';
+      ctx.fillRect(4.5, -3.8, 1.0, 7.6);
+      ctx.fillRect(6.2, -4.5, 1.0, 9.0);
+
+      // High-intensity Cree LED reflector lens
+      ctx.fillStyle = '#38bdf8';
+      ctx.beginPath();
+      ctx.ellipse(8.5, 0, 1.6, 5.0, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.ellipse(8.5, 0, 0.9, 3.2, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Concentrated tactical high-candela light beam cone
+      ctx.fillStyle = 'rgba(56, 189, 248, 0.28)';
+      ctx.beginPath();
+      ctx.moveTo(8.5, -5.2);
+      ctx.lineTo(13.5, -8.0);
+      ctx.lineTo(13.5, 8.0);
+      ctx.lineTo(8.5, 5.2);
+      ctx.closePath();
+      ctx.fill();
+      return true;
+    }
+
+    case 'screwdriver': {
+      drawShadow(ctx, 8.5, 2.4, 7.5, 0.22);
+
+      // Professional Heavy-Duty Magnetic Screwdriver
+      // Chrome-Vanadium round steel shaft
+      const shaftGrad = ctx.createLinearGradient(0, -1.2, 0, 1.2);
+      shaftGrad.addColorStop(0, '#f1f5f9');
+      shaftGrad.addColorStop(0.5, '#cbd5e1');
+      shaftGrad.addColorStop(1, '#64748b');
+      ctx.fillStyle = shaftGrad;
+      ctx.fillRect(0, -1.2, 8.5, 2.4);
+
+      // Hardened black magnetic magnetic cross/slotted tip
+      ctx.fillStyle = '#0f172a';
+      ctx.beginPath();
+      ctx.moveTo(8.5, -1.2);
+      ctx.lineTo(11.5, -0.6);
+      ctx.lineTo(11.5, 0.6);
+      ctx.lineTo(8.5, 1.2);
+      ctx.closePath();
+      ctx.fill();
+
+      // Tip magnetic finish line
+      ctx.fillStyle = '#38bdf8';
+      ctx.fillRect(8.5, -1.2, 0.6, 2.4);
+
+      // Hex bolster at the junction of shaft and handle
+      ctx.fillStyle = '#94a3b8';
+      ctx.fillRect(-1.2, -2.0, 1.6, 4.0);
+
+      // Ergonomic dual-component handle body (impact-resistant yellow core)
+      ctx.fillStyle = '#eab308';
+      ctx.beginPath();
+      ctx.roundRect(-9.5, -3.8, 9.5, 7.6, [2, 1, 1, 2]);
+      ctx.fill();
+
+      // Molded textured black rubber grip zones (soft-grip finger inlays)
+      ctx.fillStyle = '#0f172a';
+      ctx.beginPath();
+      ctx.roundRect(-8.5, -4.2, 2.6, 8.4, 1);
+      ctx.roundRect(-4.8, -4.2, 2.4, 8.4, 1);
+      ctx.fill();
+
+      // Longitudinal anti-slip torque ribs on handle
+      ctx.fillStyle = '#18181b';
+      ctx.fillRect(-9.0, -1.0, 7.5, 2.0);
+
+      // Strike-through metal butt cap on handle base
+      ctx.fillStyle = '#94a3b8';
+      ctx.beginPath();
+      ctx.roundRect(-10.2, -2.8, 1.2, 5.6, 0.6);
+      ctx.fill();
+
+      // Specular highlight on blade
+      drawGlossBand(ctx, 1.0, -0.9, 6.5, 0.6, 0.5);
+      return true;
+    }
+
+    case 'motor_oil':
+    case 'oil_canister':
+    case 'canister_oil': {
       drawShadow(ctx, 8.5, 3.2, 8, 0.28);
 
       // Authentic 4L Automotive Engine Oil Canister (Genesis / Mobil / Castrol style)
@@ -1694,7 +1830,9 @@ export function drawGearToolItem(ctx: CanvasRenderingContext2D, itemId: string, 
       return true;
     }
 
-    case 'antifreeze': {
+    case 'antifreeze':
+    case 'antifreeze_canister':
+    case 'canister_coolant': {
       drawShadow(ctx, 8.5, 3.2, 8, 0.28);
 
       // Authentic 5L Automotive Coolant Canister (G12+ Long Life / Felix / Sintec style)
@@ -1800,6 +1938,171 @@ export function drawGearToolItem(ctx: CanvasRenderingContext2D, itemId: string, 
       return true;
     }
 
+    case 'washer_fluid':
+    case 'washer_fluid_can':
+    case 'canister_washer_fluid': {
+      drawShadow(ctx, 8.5, 3.2, 8, 0.28);
+
+      // Authentic 5L Winter Windshield Washer Fluid ("Омывайка -25°C Arctic")
+      // Semi-translucent frosted HDPE plastic canister
+      const canGrad = ctx.createLinearGradient(-7, -4.5, 7, 7.5);
+      canGrad.addColorStop(0, 'rgba(240, 249, 255, 0.9)');
+      canGrad.addColorStop(0.5, 'rgba(224, 242, 254, 0.85)');
+      canGrad.addColorStop(1, 'rgba(186, 230, 253, 0.9)');
+      ctx.fillStyle = canGrad;
+      ctx.beginPath();
+      ctx.roundRect(-7, -4.5, 14, 12, 2.2);
+      ctx.fill();
+
+      // Glowing Neon Cyan / Azure Washer Fluid visible inside tank
+      const fluidGrad = ctx.createLinearGradient(-6.2, -3.5, 6.2, 7);
+      fluidGrad.addColorStop(0, 'rgba(14, 165, 233, 0.85)'); // Vivid Arctic Cyan-Blue
+      fluidGrad.addColorStop(1, 'rgba(2, 132, 199, 0.92)');
+      ctx.fillStyle = fluidGrad;
+      ctx.beginPath();
+      ctx.roundRect(-6.2, -3.5, 12.4, 10.5, 1.5);
+      ctx.fill();
+
+      // Container outer rim stroke
+      ctx.strokeStyle = '#38bdf8';
+      ctx.lineWidth = 0.8;
+      ctx.beginPath();
+      ctx.roundRect(-7, -4.5, 14, 12, 2.2);
+      ctx.stroke();
+
+      // Molded ergonomic top carrying handle
+      ctx.fillStyle = '#e0f2fe';
+      ctx.beginPath();
+      ctx.roundRect(-4.5, -8, 11, 3.8, 1.5);
+      ctx.fill();
+      ctx.strokeStyle = '#bae6fd';
+      ctx.lineWidth = 0.7;
+      ctx.stroke();
+
+      // Handle cutout hole
+      ctx.fillStyle = '#0f172a';
+      ctx.beginPath();
+      ctx.roundRect(-3, -6.5, 8, 2.2, 1);
+      ctx.fill();
+
+      // Spout & bright blue child-safe screw cap
+      ctx.fillStyle = '#bae6fd';
+      ctx.fillRect(-6.5, -7.5, 2.8, 3.5);
+      ctx.fillStyle = '#0284c7';
+      ctx.beginPath();
+      ctx.roundRect(-7, -8.5, 3.8, 2.8, 0.8);
+      ctx.fill();
+      ctx.fillStyle = '#38bdf8';
+      ctx.fillRect(-6.8, -8.5, 3.4, 0.7); // Cap highlight
+      ctx.fillStyle = '#0369a1';
+      ctx.fillRect(-7, -6.2, 3.8, 0.6); // Lock ring
+
+      // Measurement sight-gauge on right side
+      ctx.fillStyle = '#bae6fd';
+      ctx.fillRect(4.8, -3.5, 1.4, 10);
+      ctx.fillStyle = '#0ea5e9';
+      ctx.fillRect(5, -3.2, 1, 9.4);
+      // Ticks (1L, 2L, 3L, 4L, 5L)
+      ctx.fillStyle = '#ffffff';
+      for (let ty = -2; ty <= 5; ty += 1.8) {
+        ctx.fillRect(4.6, ty, 0.8, 0.4);
+      }
+
+      // Large Arctic Winter Diagnostic Label
+      ctx.fillStyle = '#0c4a6e';
+      ctx.beginPath();
+      ctx.roundRect(-5.5, -2.5, 9.2, 8.5, 1.2);
+      ctx.fill();
+      ctx.strokeStyle = '#38bdf8';
+      ctx.lineWidth = 0.7;
+      ctx.stroke();
+
+      // Top cyan banner: "-25°C"
+      ctx.fillStyle = '#0284c7';
+      ctx.fillRect(-5.5, -2.5, 9.2, 3.0);
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 2.1px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('-25°C', -0.9, -0.3);
+
+      // Snowflake emblem
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 0.6;
+      const sfx = -0.9, sfy = 2.2;
+      ctx.beginPath();
+      ctx.moveTo(sfx - 1.8, sfy); ctx.lineTo(sfx + 1.8, sfy);
+      ctx.moveTo(sfx, sfy - 1.8); ctx.lineTo(sfx, sfy + 1.8);
+      ctx.moveTo(sfx - 1.2, sfy - 1.2); ctx.lineTo(sfx + 1.2, sfy + 1.2);
+      ctx.moveTo(sfx - 1.2, sfy + 1.2); ctx.lineTo(sfx + 1.2, sfy - 1.2);
+      ctx.stroke();
+
+      // Windshield wiper sweep graphic icon
+      ctx.strokeStyle = '#38bdf8';
+      ctx.lineWidth = 0.7;
+      ctx.beginPath();
+      ctx.arc(-0.9, 5.2, 2.5, -Math.PI * 0.75, -Math.PI * 0.25);
+      ctx.stroke();
+
+      // Specular gloss reflection streak
+      drawGlossBand(ctx, -6, -4, 2.2, 11, 0.4);
+      return true;
+    }
+
+    case 'brake_fluid':
+    case 'brake_fluid_can':
+    case 'canister_brake_fluid': {
+      drawShadow(ctx, 6.5, 2.5, 7.8, 0.22);
+
+      // Authentic 500ml Automotive Synthetic Brake Fluid DOT-4 (Castrol / Bosch style)
+      // Dark graphite / charcoal cylindrical polymer bottle
+      ctx.fillStyle = '#1e293b';
+      ctx.beginPath();
+      ctx.roundRect(-4.8, -4.5, 9.6, 12, 1.8);
+      ctx.fill();
+
+      // Bottle neck & yellow childproof ribbed safety cap
+      ctx.fillStyle = '#334155';
+      ctx.fillRect(-1.6, -7.0, 3.2, 3.0);
+      ctx.fillStyle = '#eab308';
+      ctx.beginPath();
+      ctx.roundRect(-2.2, -8.6, 4.4, 2.6, 0.8);
+      ctx.fill();
+      ctx.fillStyle = '#ca8a04';
+      ctx.fillRect(-2.2, -6.6, 4.4, 0.6); // Tamper seal
+
+      // High-Temperature Racing Formula Label
+      ctx.fillStyle = '#09090b';
+      ctx.beginPath();
+      ctx.roundRect(-4.2, -2.5, 8.4, 8.5, 1.0);
+      ctx.fill();
+
+      // Yellow top stripe
+      ctx.fillStyle = '#eab308';
+      ctx.fillRect(-4.2, -2.5, 8.4, 1.4);
+
+      // "DOT 4" bold lettering
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 2.4px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('DOT 4', 0, 1.2);
+
+      // Gold badge "SYNTHETIC"
+      ctx.fillStyle = '#fbbf24';
+      ctx.font = 'bold 1.0px sans-serif';
+      ctx.fillText('BRAKE FLUID', 0, 3.0);
+
+      // Perforated brake disc rotor icon
+      ctx.strokeStyle = '#94a3b8';
+      ctx.lineWidth = 0.6;
+      ctx.beginPath();
+      ctx.arc(0, 4.5, 1.2, 0, Math.PI * 2);
+      ctx.stroke();
+
+      // Gloss streak
+      drawGlossBand(ctx, -3.8, -4.0, 1.2, 11, 0.35);
+      return true;
+    }
+
     case 'tow_rope': {
       drawShadow(ctx, 8, 3, 7.5, 0.22);
 
@@ -1835,6 +2138,305 @@ export function drawGearToolItem(ctx: CanvasRenderingContext2D, itemId: string, 
       return true;
     }
 
+    // Fuel Dispenser Order / Gas Pump Nozzle (Топливный талон / Заказ ТРК)
+    case 'fuel_order': {
+      drawShadow(ctx, 8.5, 3.2, 7.8, 0.28);
+
+      // Coiled high-pressure black fuel hose loop at bottom
+      ctx.strokeStyle = '#0f172a';
+      ctx.lineWidth = 2.4;
+      ctx.beginPath();
+      ctx.arc(-2, 7, 3.8, Math.PI * 0.2, Math.PI * 1.8);
+      ctx.stroke();
+
+      // Brass threaded hose swivel coupling
+      ctx.fillStyle = '#ca8a04';
+      ctx.beginPath();
+      ctx.roundRect(-4.5, 4.5, 4, 3, 0.8);
+      ctx.fill();
+
+      // Ergonomic composite nozzle body (heavy-duty industrial fuel gun)
+      const gunGrad = ctx.createLinearGradient(-6, -4, 6, 6);
+      gunGrad.addColorStop(0, '#1e293b');
+      gunGrad.addColorStop(0.5, '#0f172a');
+      gunGrad.addColorStop(1, '#020617');
+      ctx.fillStyle = gunGrad;
+      ctx.beginPath();
+      ctx.roundRect(-6, -3, 11, 8, 2.5);
+      ctx.fill();
+
+      // Colored protective rubber scuff guard boot (Vivid Emerald Green for Premium 95)
+      ctx.fillStyle = '#059669';
+      ctx.beginPath();
+      ctx.roundRect(-6.5, -4, 5, 10, 2);
+      ctx.fill();
+      ctx.fillStyle = '#10b981';
+      ctx.fillRect(-6, -3.5, 4, 1.2);
+
+      // Trigger guard loop
+      ctx.strokeStyle = '#334155';
+      ctx.lineWidth = 1.6;
+      ctx.beginPath();
+      ctx.moveTo(-1, 5);
+      ctx.lineTo(3.5, 5);
+      ctx.lineTo(4, 0);
+      ctx.stroke();
+
+      // Aluminum finger trigger with multi-notch latch
+      ctx.fillStyle = '#94a3b8';
+      ctx.beginPath();
+      ctx.roundRect(0.5, 1.5, 2.8, 1.4, 0.4);
+      ctx.fill();
+
+      // Curved stainless steel dispensing spout tube
+      ctx.strokeStyle = '#cbd5e1';
+      ctx.lineWidth = 2.2;
+      ctx.beginPath();
+      ctx.moveTo(3, -2);
+      ctx.lineTo(6.5, -6);
+      ctx.quadraticCurveTo(8.5, -8.5, 9, -10.5);
+      ctx.stroke();
+
+      // Spout tip vapor recovery collar
+      ctx.fillStyle = '#475569';
+      ctx.beginPath();
+      ctx.arc(9, -10.5, 1.4, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Digital LCD display on top of nozzle housing (Lit Cyan screen)
+      ctx.fillStyle = '#0369a1';
+      ctx.beginPath();
+      ctx.roundRect(-3, -2.5, 5.5, 3.2, 0.6);
+      ctx.fill();
+      ctx.fillStyle = '#38bdf8';
+      ctx.fillRect(-2.5, -2, 4.5, 2.2);
+
+      // Digital fuel text lines on LCD
+      ctx.fillStyle = '#0f172a';
+      ctx.font = 'bold 1.8px monospace';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('95', -0.2, -0.9);
+
+      // Fuel droplet icon decal
+      ctx.fillStyle = '#fbbf24';
+      ctx.beginPath();
+      ctx.arc(-4, 0, 1, 0, Math.PI * 2);
+      ctx.fill();
+
+      return true;
+    }
+
+    // 10L Blue HDPE Plastic Utility Canister (Пластиковая канистра 10л)
+    case 'canister_plastic_10l': {
+      drawShadow(ctx, 8.5, 3.2, 7.8, 0.25);
+
+      // Blue HDPE rectangular body with rounded corners
+      const bodyGrad = ctx.createLinearGradient(-6.5, -5, 6.5, 7);
+      bodyGrad.addColorStop(0, '#0284c7');
+      bodyGrad.addColorStop(0.4, '#0369a1');
+      bodyGrad.addColorStop(1, '#075985');
+      ctx.fillStyle = bodyGrad;
+      ctx.beginPath();
+      ctx.roundRect(-6.5, -4, 13, 11, 2.2);
+      ctx.fill();
+
+      // Molded top carry handle loop
+      ctx.fillStyle = '#0284c7';
+      ctx.beginPath();
+      ctx.roundRect(-4.5, -7.5, 9, 3.5, 1.2);
+      ctx.fill();
+      ctx.fillStyle = 'rgba(15, 23, 42, 0.85)';
+      ctx.fillRect(-3.2, -6.5, 6.4, 2);
+
+      // Translucent liquid level vertical view strip
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+      ctx.fillRect(4.2, -3.5, 1.4, 9.8);
+      // Embossed liter tick marks
+      ctx.fillStyle = '#0369a1';
+      for (let y = -2.5; y <= 5.5; y += 2) {
+        ctx.fillRect(3.8, y, 0.8, 0.5);
+      }
+
+      // Large red screw fill cap with grip ridges
+      ctx.fillStyle = '#dc2626';
+      ctx.beginPath();
+      ctx.roundRect(-5.5, -8.5, 3.2, 2.2, 0.6);
+      ctx.fill();
+      ctx.fillStyle = '#b91c1c';
+      ctx.fillRect(-5.5, -7.2, 3.2, 0.5);
+
+      // White rear breather vent plug
+      ctx.fillStyle = '#f8fafc';
+      ctx.beginPath();
+      ctx.arc(3.5, -7.2, 1.1, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Molded "10L HDPE" label
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
+      ctx.font = 'bold 2.8px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('10L', -0.5, 1.5);
+
+      drawGlossBand(ctx, -5.5, -4, 1.4, 10.5, 0.35);
+      return true;
+    }
+
+    // 5L Red Compact Fuel Canister with Pour Spout (Канистра 5л)
+    case 'canister_plastic_5l': {
+      drawShadow(ctx, 7.8, 2.8, 7.5, 0.25);
+
+      // Compact red blow-molded HDPE canister body
+      const redGrad = ctx.createLinearGradient(-6, -4, 6, 6);
+      redGrad.addColorStop(0, '#ef4444');
+      redGrad.addColorStop(0.4, '#dc2626');
+      redGrad.addColorStop(1, '#991b1b');
+      ctx.fillStyle = redGrad;
+      ctx.beginPath();
+      ctx.roundRect(-6, -3, 12, 9.5, 2.2);
+      ctx.fill();
+
+      // Molded top handle
+      ctx.fillStyle = '#dc2626';
+      ctx.beginPath();
+      ctx.roundRect(-4.5, -6.5, 9, 3.2, 1.2);
+      ctx.fill();
+      ctx.fillStyle = 'rgba(15, 23, 42, 0.85)';
+      ctx.fillRect(-3.2, -5.5, 6.4, 1.8);
+
+      // Yellow safety screw-cap with child lock
+      ctx.fillStyle = '#facc15';
+      ctx.beginPath();
+      ctx.roundRect(2.5, -7.5, 3.2, 2.2, 0.6);
+      ctx.fill();
+
+      // Flexible accordion black pouring spout clipped to side
+      ctx.strokeStyle = '#0f172a';
+      ctx.lineWidth = 1.4;
+      ctx.beginPath();
+      ctx.moveTo(-4.5, -2);
+      ctx.lineTo(-5.2, 4);
+      ctx.lineTo(-4.2, 5.5);
+      ctx.stroke();
+
+      // White hazard flame decal
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 2.6px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('5L', 0, 1.5);
+
+      // Warning flame silhouette
+      ctx.fillStyle = '#facc15';
+      ctx.beginPath();
+      ctx.arc(0, -1, 0.9, 0, Math.PI * 2);
+      ctx.fill();
+
+      drawGlossBand(ctx, -4.5, -3, 1.2, 9.2, 0.35);
+      return true;
+    }
+
+    // Heavy Steel Diesel Jerrycan (Канистра Дизель)
+    case 'canister_diesel': {
+      drawShadow(ctx, 8.5, 3.2, 7.8, 0.26);
+
+      // Heavy 20L Jerrycan in dark olive/golden yellow diesel color
+      ctx.fillStyle = '#854d0e';
+      ctx.beginPath();
+      ctx.roundRect(-7, -5, 14, 12, 2.5);
+      ctx.fill();
+
+      // Distinctive wide yellow identity stripe across middle
+      ctx.fillStyle = '#eab308';
+      ctx.fillRect(-7, -0.5, 14, 4);
+
+      // X-rib stamp
+      ctx.strokeStyle = '#713f12';
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      ctx.moveTo(-5, -3); ctx.lineTo(5, 5);
+      ctx.moveTo(5, -3); ctx.lineTo(-5, 5);
+      ctx.stroke();
+
+      // Triple steel handle
+      ctx.fillStyle = '#713f12';
+      ctx.beginPath();
+      ctx.roundRect(-5.5, -8, 11, 3.5, 1.2);
+      ctx.fill();
+      ctx.fillStyle = 'rgba(15, 23, 42, 0.85)';
+      ctx.fillRect(-4.5, -7, 3.2, 1.8);
+      ctx.fillRect(1.3, -7, 3.2, 1.8);
+
+      // Stenciled black "DIESEL" text
+      ctx.fillStyle = '#0f172a';
+      ctx.font = 'bold 2.4px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('DIESEL', 0, 1.5);
+
+      // Cam lock spout
+      ctx.fillStyle = '#ca8a04';
+      ctx.fillRect(3.6, -9.2, 3.6, 1.4);
+
+      drawGlossBand(ctx, -6, -5, 1.4, 12, 0.28);
+      return true;
+    }
+
+    // Food-grade White Potable Water Canister with Dispenser Tap (Канистра питьевой воды)
+    case 'canister_water': {
+      drawShadow(ctx, 8.5, 3.2, 7.8, 0.22);
+
+      // Milky translucent white polymer body
+      const waterCanGrad = ctx.createLinearGradient(-6.5, -5, 6.5, 7);
+      waterCanGrad.addColorStop(0, '#f8fafc');
+      waterCanGrad.addColorStop(0.5, '#e2e8f0');
+      waterCanGrad.addColorStop(1, '#cbd5e1');
+      ctx.fillStyle = waterCanGrad;
+      ctx.beginPath();
+      ctx.roundRect(-6.5, -4, 13, 11, 2.2);
+      ctx.fill();
+
+      // Blue carry handle
+      ctx.fillStyle = '#0284c7';
+      ctx.beginPath();
+      ctx.roundRect(-4.5, -7.5, 9, 3.5, 1.2);
+      ctx.fill();
+      ctx.fillStyle = 'rgba(15, 23, 42, 0.85)';
+      ctx.fillRect(-3.2, -6.5, 6.4, 2);
+
+      // Blue screw mouth cap
+      ctx.fillStyle = '#0284c7';
+      ctx.beginPath();
+      ctx.roundRect(-5.5, -8.5, 3.4, 2.2, 0.6);
+      ctx.fill();
+
+      // Integrated blue rotary water tap / spigot at bottom right
+      ctx.fillStyle = '#0369a1';
+      ctx.beginPath();
+      ctx.roundRect(5.5, 3, 2.6, 2.6, 0.6);
+      ctx.fill();
+      ctx.fillStyle = '#38bdf8';
+      ctx.fillRect(6.5, 4.5, 1.5, 1);
+
+      // Water droplet blue insignia
+      ctx.fillStyle = '#38bdf8';
+      ctx.beginPath();
+      ctx.arc(-0.5, 1.5, 2.2, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 2.2px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('H2O', -0.5, 1.5);
+
+      drawGlossBand(ctx, -5.5, -4, 1.4, 10.5, 0.4);
+      return true;
+    }
+
+    case 'canister_metal_20l':
+    case 'canister_fuel':
+    case 'jerrycan_steel':
     case 'fuel_canister': {
       drawShadow(ctx, 8.5, 3.2, 7.8, 0.25);
 
@@ -2487,6 +3089,574 @@ export function drawGearToolItem(ctx: CanvasRenderingContext2D, itemId: string, 
       ctx.moveTo(-5.5, 7.5);
       ctx.quadraticCurveTo(-3.5, 6.5, -1, 7.2);
       ctx.stroke();
+      return true;
+    }
+
+    // Wicker Basket / Lukoshko (Плетёное лукошко)
+    case 'lukoshko':
+    case 'basket_wicker':
+    case 'berries_basket': {
+      drawShadow(ctx, 8, 3.5, 7.5, 0.26);
+
+      // Wicker handle arch
+      ctx.strokeStyle = '#92400e';
+      ctx.lineWidth = 1.4;
+      ctx.beginPath();
+      ctx.arc(0, -1, 6.5, Math.PI, 0);
+      ctx.stroke();
+
+      // Woven Basket Body (birch bark / willow wicker)
+      const wickerGrad = ctx.createLinearGradient(-7, -4, 7, 7);
+      wickerGrad.addColorStop(0, '#d97706');
+      wickerGrad.addColorStop(0.5, '#b45309');
+      wickerGrad.addColorStop(1, '#78350f');
+      ctx.fillStyle = wickerGrad;
+      ctx.beginPath();
+      ctx.moveTo(-7.5, -3);
+      ctx.lineTo(7.5, -3);
+      ctx.lineTo(5.5, 7.5);
+      ctx.lineTo(-5.5, 7.5);
+      ctx.closePath();
+      ctx.fill();
+
+      // Wicker weave pattern texture
+      ctx.strokeStyle = '#fef3c7';
+      ctx.lineWidth = 0.5;
+      ctx.beginPath();
+      for (let y = -2; y <= 6; y += 2) {
+        ctx.moveTo(-6.5 + (y > 0 ? 0.8 : 0), y);
+        ctx.lineTo(6.5 - (y > 0 ? 0.8 : 0), y);
+      }
+      ctx.stroke();
+
+      ctx.strokeStyle = '#78350f';
+      ctx.lineWidth = 0.6;
+      for (let x = -5; x <= 5; x += 2.5) {
+        ctx.beginPath();
+        ctx.moveTo(x, -3);
+        ctx.lineTo(x * 0.75, 7.5);
+        ctx.stroke();
+      }
+
+      // Top rim
+      ctx.fillStyle = '#b45309';
+      ctx.beginPath();
+      ctx.ellipse(0, -3, 7.5, 2.2, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = '#d97706';
+      ctx.lineWidth = 0.7;
+      ctx.stroke();
+
+      // Contents peek inside if item has berries or contents
+      if (item?.fluidStorage?.liquidId === 'berries' || itemId === 'berries_basket') {
+        // Juicy forest blueberries and cranberries inside
+        const berries = [
+          { x: -3.5, y: -3.2, c: '#4338ca', r: 1.2 },
+          { x: -1.5, y: -3.8, c: '#dc2626', r: 1.1 },
+          { x: 1.2, y: -3.5, c: '#6d28d9', r: 1.3 },
+          { x: 3.5, y: -3.0, c: '#e11d48', r: 1.1 },
+          { x: -0.2, y: -2.8, c: '#3730a3', r: 1.2 },
+          { x: 2.2, y: -2.7, c: '#9333ea', r: 1.0 },
+          { x: -2.2, y: -2.4, c: '#be123c', r: 1.1 }
+        ];
+        berries.forEach(b => {
+          ctx.fillStyle = b.c;
+          ctx.beginPath();
+          ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2);
+          ctx.fill();
+        });
+      }
+      return true;
+    }
+
+    // Plastic Package Bag (Фасовочный пакетик)
+    case 'package_bag': {
+      drawShadow(ctx, 6.5, 3, 6.5, 0.18);
+
+      ctx.fillStyle = 'rgba(241, 245, 249, 0.4)';
+      ctx.strokeStyle = 'rgba(203, 213, 225, 0.8)';
+      ctx.lineWidth = 0.8;
+      ctx.beginPath();
+      ctx.roundRect(-5.5, -6.5, 11, 14, 2);
+      ctx.fill();
+      ctx.stroke();
+
+      // Twisted plastic knot top
+      ctx.fillStyle = 'rgba(226, 232, 240, 0.8)';
+      ctx.beginPath();
+      ctx.ellipse(0, -6.5, 2.2, 1.2, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Translucent wrinkles and crinkles
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.7)';
+      ctx.lineWidth = 0.6;
+      ctx.beginPath();
+      ctx.moveTo(-3.5, -4);
+      ctx.lineTo(2, 1);
+      ctx.lineTo(-1, 5);
+      ctx.stroke();
+      return true;
+    }
+
+    // Grocery Carrier Bag (Пакет-майка)
+    case 'plastic_bag': {
+      drawShadow(ctx, 8, 3.5, 7.5, 0.22);
+
+      // White/light blue shopping bag with handles
+      ctx.fillStyle = '#f8fafc';
+      ctx.beginPath();
+      ctx.moveTo(-6.5, -4);
+      ctx.lineTo(-6.5, 7.5);
+      ctx.quadraticCurveTo(0, 8.5, 6.5, 7.5);
+      ctx.lineTo(6.5, -4);
+      ctx.lineTo(3.5, -4);
+      ctx.lineTo(3.5, -9);
+      ctx.lineTo(1.5, -9);
+      ctx.lineTo(1.5, -3);
+      ctx.lineTo(-1.5, -3);
+      ctx.lineTo(-1.5, -9);
+      ctx.lineTo(-3.5, -9);
+      ctx.lineTo(-3.5, -4);
+      ctx.closePath();
+      ctx.fill();
+
+      // Outline & subtle crinkles
+      ctx.strokeStyle = '#cbd5e1';
+      ctx.lineWidth = 0.7;
+      ctx.stroke();
+
+      // Thank you / store green logo stamp
+      ctx.fillStyle = '#16a34a';
+      ctx.beginPath();
+      ctx.arc(0, 1.5, 2.2, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(-1.2, 1.1, 2.4, 0.8);
+      return true;
+    }
+
+    // Soup Bowl (Суповая пиала)
+    case 'soup_bowl':
+    case 'soup_bowl_empty': {
+      drawShadow(ctx, 8, 3.5, 7.5, 0.28);
+
+      // Ceramic bowl body
+      const bowlGrad = ctx.createLinearGradient(-7, -4, 7, 6);
+      bowlGrad.addColorStop(0, '#f1f5f9');
+      bowlGrad.addColorStop(0.7, '#cbd5e1');
+      bowlGrad.addColorStop(1, '#94a3b8');
+      ctx.fillStyle = bowlGrad;
+      ctx.beginPath();
+      ctx.moveTo(-7.5, -2);
+      ctx.quadraticCurveTo(-6.5, 6.5, 0, 7);
+      ctx.quadraticCurveTo(6.5, 6.5, 7.5, -2);
+      ctx.closePath();
+      ctx.fill();
+
+      // Decorative folk blue stripe on porcelain
+      ctx.strokeStyle = '#2563eb';
+      ctx.lineWidth = 0.8;
+      ctx.beginPath();
+      ctx.ellipse(0, -1.8, 7.4, 2.3, 0, 0, Math.PI * 2);
+      ctx.stroke();
+
+      // Top opening ellipse
+      ctx.fillStyle = '#1e293b';
+      ctx.beginPath();
+      ctx.ellipse(0, -2.2, 7.0, 2.6, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Hot broth if filled
+      if (item?.fluidStorage?.currentMl > 0 || itemId === 'soup_bowl') {
+        const soupColor = item?.fluidStorage?.liquidId === 'broth' ? '#b45309' : '#d97706';
+        ctx.fillStyle = soupColor;
+        ctx.beginPath();
+        ctx.ellipse(0, -2.2, 6.2, 2.1, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Fresh green parsley herbs floating on broth
+        ctx.fillStyle = '#15803d';
+        ctx.beginPath();
+        ctx.arc(-2, -2.5, 0.7, 0, Math.PI * 2);
+        ctx.arc(1.5, -1.8, 0.6, 0, Math.PI * 2);
+        ctx.arc(3.0, -2.6, 0.5, 0, Math.PI * 2);
+        ctx.arc(-0.5, -1.6, 0.6, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      // Ceramic soup spoon resting on edge
+      ctx.fillStyle = '#e2e8f0';
+      ctx.beginPath();
+      ctx.moveTo(3.5, 0.5);
+      ctx.lineTo(8.5, -6.5);
+      ctx.lineTo(9.5, -5.8);
+      ctx.lineTo(4.5, 1.2);
+      ctx.closePath();
+      ctx.fill();
+      return true;
+    }
+
+    // ==============================================================
+    // === UNIFIED GLASS PRESERVATION JARS (Стеклянные банки) ===
+    // ==============================================================
+    case 'jar_glass_large':
+    case 'jar_glass_medium':
+    case 'jar_glass_small': {
+      const isLg = itemId === 'jar_glass_large';
+      const isSm = itemId === 'jar_glass_small';
+
+      const w = isLg ? 13 : (isSm ? 9 : 11);
+      const h = isLg ? 14 : (isSm ? 8.5 : 11.5);
+      const hw = w / 2;
+      const topY = 7.0 - h;
+      const botY = 7.0;
+
+      drawShadow(ctx, hw + 1.2, 2.5, botY + 0.8, 0.24);
+
+      // Translucent soda-lime glass jar body
+      const glassGrad = ctx.createLinearGradient(-hw, topY, hw, botY);
+      glassGrad.addColorStop(0, 'rgba(224, 242, 254, 0.8)');
+      glassGrad.addColorStop(0.3, 'rgba(186, 230, 253, 0.55)');
+      glassGrad.addColorStop(0.7, 'rgba(125, 211, 252, 0.65)');
+      glassGrad.addColorStop(1, 'rgba(6, 182, 212, 0.75)');
+
+      ctx.fillStyle = glassGrad;
+      ctx.beginPath();
+      ctx.roundRect(-hw, topY + 2.0, w, h - 2.0, 1.8);
+      ctx.fill();
+
+      // Fluid filling if present
+      if (item?.fluidStorage?.currentMl > 0) {
+        const fillFrac = Math.min(1, item.fluidStorage.currentMl / (item.fluidStorage.capacityMl || 1000));
+        const fluidH = (h - 3.5) * fillFrac;
+        const fluidTop = botY - fluidH - 0.5;
+
+        let fluidColor = 'rgba(56, 189, 248, 0.85)';
+        if (item.fluidStorage.liquidId === 'milk') fluidColor = 'rgba(248, 250, 252, 0.95)';
+        else if (item.fluidStorage.liquidId === 'oil') fluidColor = 'rgba(234, 179, 8, 0.9)';
+        else if (item.fluidStorage.liquidId === 'tea' || item.fluidStorage.liquidId === 'broth') fluidColor = 'rgba(180, 83, 9, 0.88)';
+        else if (item.fluidStorage.liquidId === 'gasoline') fluidColor = 'rgba(245, 158, 11, 0.85)';
+
+        ctx.fillStyle = fluidColor;
+        ctx.beginPath();
+        ctx.roundRect(-hw + 0.8, fluidTop, w - 1.6, fluidH, [0, 0, 1.2, 1.2]);
+        ctx.fill();
+      }
+
+      // Heavy glass bottom punt
+      ctx.fillStyle = 'rgba(6, 182, 212, 0.5)';
+      ctx.beginPath();
+      ctx.ellipse(0, botY - 0.6, hw - 1.0, 1.2, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Embossed volume marking
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
+      ctx.font = `bold ${isSm ? 2.0 : 2.6}px sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(isLg ? '1.0 L' : (isSm ? '0.2 L' : '0.5 L'), 0, topY + h * 0.55);
+
+      // Glass refraction streaks & vertical highlights
+      drawGlossBand(ctx, -hw + 1.2, topY + 2.5, 1.2, h - 3.5, 0.45);
+      drawGlossBand(ctx, hw - 2.0, topY + 2.5, 0.7, h - 3.5, 0.3);
+
+      // Threaded glass neck
+      ctx.fillStyle = 'rgba(207, 250, 254, 0.9)';
+      ctx.fillRect(-hw + 0.8, topY + 0.6, w - 1.6, 1.6);
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
+      ctx.lineWidth = 0.5;
+      ctx.strokeRect(-hw + 0.8, topY + 0.6, w - 1.6, 1.6);
+
+      // Gold lacquered tin screw-on twist-off lid
+      const lidGrad = ctx.createLinearGradient(-hw - 0.5, topY - 1.5, hw + 0.5, topY + 1.2);
+      lidGrad.addColorStop(0, '#fef08a');
+      lidGrad.addColorStop(0.35, '#eab308');
+      lidGrad.addColorStop(0.75, '#ca8a04');
+      lidGrad.addColorStop(1, '#854d0e');
+
+      ctx.fillStyle = lidGrad;
+      ctx.beginPath();
+      ctx.roundRect(-hw - 0.5, topY - 1.2, w + 1.0, 2.4, 0.8);
+      ctx.fill();
+
+      // Lid knurling / stamped grip ridges
+      ctx.strokeStyle = '#a16207';
+      ctx.lineWidth = 0.5;
+      for (let x = -hw + 0.5; x <= hw - 0.5; x += 1.8) {
+        ctx.beginPath();
+        ctx.moveTo(x, topY - 1.0);
+        ctx.lineTo(x, topY + 1.0);
+        ctx.stroke();
+      }
+
+      return true;
+    }
+
+    // ==============================================================
+    // === UNIFIED METAL TIN CANS (Жестяные консервные банки) ===
+    // ==============================================================
+    case 'can_metal_large':
+    case 'can_metal_medium':
+    case 'can_metal_small': {
+      const isLg = itemId === 'can_metal_large';
+      const isSm = itemId === 'can_metal_small';
+
+      const w = isLg ? 12 : (isSm ? 11 : 10);
+      const h = isLg ? 14 : (isSm ? 6.5 : 11.5);
+      const hw = w / 2;
+      const topY = 7.0 - h;
+      const botY = 7.0;
+
+      drawShadow(ctx, hw + 1.0, 2.4, botY + 0.8, 0.25);
+
+      // Cylindrical brushed tinplate metal body
+      const metalGrad = ctx.createLinearGradient(-hw, topY, hw, topY);
+      metalGrad.addColorStop(0, '#94a3b8');
+      metalGrad.addColorStop(0.25, '#f1f5f9');
+      metalGrad.addColorStop(0.5, '#cbd5e1');
+      metalGrad.addColorStop(0.8, '#64748b');
+      metalGrad.addColorStop(1, '#475569');
+
+      ctx.fillStyle = metalGrad;
+      ctx.beginPath();
+      ctx.roundRect(-hw, topY + 1.0, w, h - 2.0, 0.5);
+      ctx.fill();
+
+      // Stamped corrugated reinforcement ribs (выдавленные желобки)
+      ctx.strokeStyle = '#475569';
+      ctx.lineWidth = 0.6;
+      const ribCount = isSm ? 1 : (isLg ? 4 : 3);
+      const ribSpacing = (h - 5.0) / (ribCount + 1);
+      for (let i = 1; i <= ribCount; i++) {
+        const ry = topY + 2.0 + i * ribSpacing;
+        ctx.beginPath();
+        ctx.moveTo(-hw, ry);
+        ctx.lineTo(hw, ry);
+        ctx.stroke();
+
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 0.4;
+        ctx.beginPath();
+        ctx.moveTo(-hw, ry + 0.5);
+        ctx.lineTo(hw, ry + 0.5);
+        ctx.stroke();
+        ctx.strokeStyle = '#475569';
+        ctx.lineWidth = 0.6;
+      }
+
+      // Vertical metallic sheen highlight
+      drawGlossBand(ctx, -hw + 2.0, topY + 1.0, 1.6, h - 2.0, 0.4);
+
+      // Crimped bottom seam rim (закатной нижний шов)
+      ctx.fillStyle = '#64748b';
+      ctx.beginPath();
+      ctx.ellipse(0, botY - 0.4, hw + 0.4, 1.2, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Crimped top seam rim
+      ctx.fillStyle = '#94a3b8';
+      ctx.beginPath();
+      ctx.ellipse(0, topY + 1.0, hw + 0.5, 1.4, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Recessed lid with stamped scorelines
+      ctx.fillStyle = '#cbd5e1';
+      ctx.beginPath();
+      ctx.ellipse(0, topY + 1.0, hw - 0.8, 1.0, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Ring pull tab with rivet
+      ctx.fillStyle = '#64748b';
+      ctx.beginPath();
+      ctx.roundRect(-1.2, topY - 0.2, 2.4, 2.0, 0.4);
+      ctx.fill();
+      ctx.fillStyle = '#1e293b';
+      ctx.beginPath();
+      ctx.arc(0, topY + 0.6, 0.45, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Stamped capacity badge
+      ctx.fillStyle = '#334155';
+      ctx.font = `bold ${isSm ? 2.0 : 2.4}px monospace`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(isLg ? '0.8L' : (isSm ? '0.15L' : '0.4L'), 0, topY + h * 0.7);
+
+      return true;
+    }
+
+    // ==============================================================
+    // === UNIFIED CLOTH SACKS (Тканевые холщовые мешки) ===
+    // ==============================================================
+    case 'sack_cloth_large':
+    case 'sack_cloth_medium':
+    case 'sack_cloth_small': {
+      const isLg = itemId === 'sack_cloth_large';
+      const isSm = itemId === 'sack_cloth_small';
+
+      const hw = isLg ? 8.0 : (isSm ? 5.2 : 6.8);
+      const topY = isLg ? -8.0 : (isSm ? -6.0 : -7.0);
+      const botY = 7.5;
+
+      drawShadow(ctx, hw + 1.0, 3.5, botY + 0.5, 0.25);
+
+      // Heavy linen / ecru canvas sack body
+      const sackGrad = ctx.createLinearGradient(-hw, topY, hw, botY);
+      sackGrad.addColorStop(0, '#e5d5b5');
+      sackGrad.addColorStop(0.35, '#cbb48b');
+      sackGrad.addColorStop(0.75, '#9a7b4f');
+      sackGrad.addColorStop(1, '#6b4f2c');
+
+      ctx.fillStyle = sackGrad;
+      ctx.beginPath();
+      ctx.moveTo(-hw * 0.4, topY);
+      ctx.quadraticCurveTo(-hw * 0.9, topY + 2.0, -hw, topY + 6.0);
+      ctx.quadraticCurveTo(-hw * 1.05, botY - 1.5, -hw * 0.8, botY);
+      ctx.quadraticCurveTo(0, botY + 1.5, hw * 0.8, botY);
+      ctx.quadraticCurveTo(hw * 1.05, botY - 1.5, hw, topY + 6.0);
+      ctx.quadraticCurveTo(hw * 0.9, topY + 2.0, hw * 0.4, topY);
+      ctx.quadraticCurveTo(0, topY - 0.6, -hw * 0.4, topY);
+      ctx.closePath();
+      ctx.fill();
+
+      // Fabric weave texture cross-hatching
+      ctx.strokeStyle = 'rgba(74, 44, 18, 0.22)';
+      ctx.lineWidth = 0.5;
+      ctx.beginPath();
+      for (let x = -hw + 1.5; x <= hw - 1.5; x += 2.2) {
+        ctx.moveTo(x, topY + 2.5);
+        ctx.quadraticCurveTo(x * 1.1, 0, x * 0.9, botY - 0.5);
+      }
+      for (let y = topY + 3.0; y <= botY - 1.0; y += 2.2) {
+        ctx.moveTo(-hw + 1.0, y);
+        ctx.quadraticCurveTo(0, y + 0.8, hw - 1.0, y);
+      }
+      ctx.stroke();
+
+      // Flared ruffled cloth collar top
+      ctx.fillStyle = '#dec79f';
+      ctx.beginPath();
+      ctx.moveTo(-hw * 0.4, topY);
+      ctx.quadraticCurveTo(-hw * 0.6, topY - 2.5, -hw * 0.4, topY - 3.5);
+      ctx.quadraticCurveTo(0, topY - 2.0, hw * 0.4, topY - 3.5);
+      ctx.quadraticCurveTo(hw * 0.6, topY - 2.5, hw * 0.4, topY);
+      ctx.closePath();
+      ctx.fill();
+
+      // Tied jute twine rope & knot at neck
+      ctx.fillStyle = '#fef08a';
+      ctx.strokeStyle = '#78350f';
+      ctx.lineWidth = 0.7;
+      ctx.beginPath();
+      ctx.roundRect(-hw * 0.45, topY - 0.6, hw * 0.9, 1.8, 0.6);
+      ctx.fill();
+      ctx.stroke();
+
+      ctx.fillStyle = '#ca8a04';
+      ctx.beginPath();
+      ctx.arc(0, topY + 0.3, 0.9, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Stenciled capacity stamp ("10L", "5L", "1L")
+      ctx.fillStyle = 'rgba(69, 26, 3, 0.8)';
+      ctx.font = `bold ${isSm ? 2.2 : (isLg ? 3.4 : 2.8)}px sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(isLg ? '10 L' : (isSm ? '1 L' : '5 L'), 0, topY + (botY - topY) * 0.55);
+
+      return true;
+    }
+
+    // ==============================================================
+    // === UNIFIED CARDBOARD BOXES (Картонные коробки 15л, 5л, 1л) ===
+    // ==============================================================
+    case 'box_cardboard_large':
+    case 'box_cardboard_medium':
+    case 'box_cardboard_small': {
+      const isLg = itemId === 'box_cardboard_large';
+      const isSm = itemId === 'box_cardboard_small';
+
+      const w = isLg ? 16 : (isSm ? 10 : 13);
+      const h = isLg ? 13 : (isSm ? 8.5 : 11);
+      const hw = w / 2;
+      const topY = 7.0 - h;
+      const botY = 7.0;
+
+      drawShadow(ctx, hw + 1.2, 3.2, botY + 0.8, 0.28);
+
+      // Isometric / 3D Kraft cardboard box body
+      // Front face
+      const frontGrad = ctx.createLinearGradient(-hw, topY + 2.5, hw, botY);
+      frontGrad.addColorStop(0, '#d97706');
+      frontGrad.addColorStop(0.5, '#b45309');
+      frontGrad.addColorStop(1, '#92400e');
+
+      ctx.fillStyle = frontGrad;
+      ctx.beginPath();
+      ctx.roundRect(-hw, topY + 2.5, w, h - 2.5, 0.8);
+      ctx.fill();
+
+      // Top flaps perspective face
+      const topGrad = ctx.createLinearGradient(-hw, topY, hw, topY + 2.5);
+      topGrad.addColorStop(0, '#f59e0b');
+      topGrad.addColorStop(1, '#d97706');
+
+      ctx.fillStyle = topGrad;
+      ctx.beginPath();
+      ctx.moveTo(-hw, topY + 2.5);
+      ctx.lineTo(-hw + 2.0, topY);
+      ctx.lineTo(hw - 2.0, topY);
+      ctx.lineTo(hw, topY + 2.5);
+      ctx.closePath();
+      ctx.fill();
+
+      // Corrugated flap seam line
+      ctx.strokeStyle = '#78350f';
+      ctx.lineWidth = 0.6;
+      ctx.beginPath();
+      ctx.moveTo(0, topY);
+      ctx.lineTo(0, topY + 2.5);
+      ctx.stroke();
+
+      // Transparent packing tape strip along top and over front face
+      ctx.fillStyle = 'rgba(254, 240, 138, 0.45)';
+      ctx.fillRect(-1.6, topY, 3.2, h);
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
+      ctx.lineWidth = 0.5;
+      ctx.strokeRect(-1.6, topY, 3.2, h);
+
+      // Shipping barcode & address label on front
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.roundRect(-hw + 1.5, topY + 4.5, isSm ? 4.5 : 5.8, isSm ? 3.0 : 4.0, 0.4);
+      ctx.fill();
+
+      // Barcode lines
+      ctx.fillStyle = '#0f172a';
+      const barCount = isSm ? 4 : 6;
+      for (let i = 0; i < barCount; i++) {
+        ctx.fillRect(-hw + 2.0 + i * (isSm ? 0.8 : 0.8), topY + 5.0, 0.4, isSm ? 1.4 : 2.0);
+      }
+
+      // Fragile / Upward arrows stamp on box
+      ctx.fillStyle = 'rgba(69, 26, 3, 0.85)';
+      ctx.beginPath();
+      // Upward arrow 1
+      const ax = hw - 3.5;
+      const ay = topY + 5.5;
+      ctx.moveTo(ax, ay); ctx.lineTo(ax - 1.2, ay + 1.2); ctx.lineTo(ax - 0.4, ay + 1.2);
+      ctx.lineTo(ax - 0.4, ay + 2.5); ctx.lineTo(ax + 0.4, ay + 2.5); ctx.lineTo(ax + 0.4, ay + 1.2);
+      ctx.lineTo(ax + 1.2, ay + 1.2);
+      ctx.closePath();
+      ctx.fill();
+
+      // Box volume marking ("15L", "5L", "1L")
+      ctx.fillStyle = 'rgba(69, 26, 3, 0.85)';
+      ctx.font = `bold ${isSm ? 2.0 : 2.6}px monospace`;
+      ctx.textAlign = 'right';
+      ctx.textBaseline = 'bottom';
+      ctx.fillText(isLg ? '15L' : (isSm ? '1L' : '5L'), hw - 1.5, botY - 1.2);
+
       return true;
     }
 

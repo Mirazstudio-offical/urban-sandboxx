@@ -1,5 +1,5 @@
 import { Building, GameWorld, InventoryItem, Player } from './types';
-import { BuildingLayout, InteriorFurniture, InteriorRoom, InteriorWall, InteriorZone } from './buildingInteriors';
+import { BuildingLayout, InteriorFurniture, InteriorRoom, InteriorWall, InteriorZone, createCottageFloor0Layout, createCottageFloor1Layout } from './buildingInteriors';
 import { createItem, addItemToPlayer, getPlayerCash, deductPlayerCash, addPlayerNotification } from './items';
 import { sound } from './audio';
 
@@ -18,6 +18,7 @@ export interface DynamicFurniture {
 export interface PropertyApartment {
   id: string;
   buildingId: string;
+  plotId?: string;
   buildingNameRu: string;
   buildingType: Building['type'];
   address: string;
@@ -163,9 +164,10 @@ export const CITY_APARTMENTS: PropertyApartment[] = [
   {
     id: 'apt_cottage_steppe_12',
     buildingId: 'cottage_house_plot_12',
+    plotId: 'plot_12',
     buildingNameRu: 'Загородная усадьба (Коттеджный посёлок)',
     buildingType: 'suburban',
-    address: 'КП «Зелёный Рукав», уч. 12 (Коттедж)',
+    address: 'КП «Зелёный Рукав», уч. 12',
     cadastralNumber: '77:09:0007012:1204',
     floor: 0, // Ground level 2-floor villa
     totalBuildingFloors: 2,
@@ -180,13 +182,13 @@ export const CITY_APARTMENTS: PropertyApartment[] = [
     stateDutyRub: 2000,
     notaryFeeRub: 25000,
     monthlyUtilitiesRub: 5500,
-    descriptionRu: 'Великолепный загородный коттедж на собственном земельном участке. Автономное газовое отопление, скважина с чистейшей артезианской водой, каминная зона, гараж, открытая терраса для барбекю.',
+    descriptionRu: 'Великолепный загородный коттедж на собственном земельном участке. Автономное газовое отопление, скважина с чистейшей артезианской водой, каминная зона, гараж, баня, въездные ворота и калитка.',
     features: [
       'Большая каминная гостиная с панорамными окнами в сад',
       'Главная спальня King-Size с выходом на террасу',
       'Гостевая спальня и рабочий кабинет',
       'Просторная кухня с каменной столешницей и винным шкафом',
-      'Собственный благоустроенный двор и зона отдыха'
+      'Собственный благоустроенный двор с воротами и калиткой'
     ],
     keyId: 'key_cottage_12',
     lockCode: 'LC-COT12-2022',
@@ -194,69 +196,9 @@ export const CITY_APARTMENTS: PropertyApartment[] = [
     isOwned: false,
     entranceWorldX: 7778,
     entranceWorldY: 5399,
-    layout: {
-      buildingId: 'apt_cottage_steppe_12',
-      floor: 0,
-      width: 240,
-      height: 150,
-      rooms: [
-        { name: 'Прихожая / Тамбур', x: 8, y: 80, width: 48, height: 62, color: '#1e293b', floorStyle: 'tile' },
-        { name: 'Каминный Зал', x: 58, y: 8, width: 104, height: 80, color: '#334155', floorStyle: 'parquet' },
-        { name: 'Мастер-Спальня', x: 164, y: 8, width: 68, height: 80, color: '#1e293b', floorStyle: 'carpet' },
-        { name: 'Кухня-Столовая', x: 58, y: 90, width: 94, height: 52, color: '#1e293b', floorStyle: 'tile' },
-        { name: 'Ванная & Сауна', x: 8, y: 8, width: 48, height: 70, color: '#0f172a', floorStyle: 'tile' },
-        { name: 'Садовая Терраса', x: 154, y: 90, width: 78, height: 52, color: '#334155', floorStyle: 'wood' }
-      ],
-      walls: [
-        { x1: 6, y1: 6, x2: 234, y2: 6 },
-        { x1: 234, y1: 6, x2: 234, y2: 144 },
-        { x1: 234, y1: 144, x2: 6, y2: 144 },
-        { x1: 6, y1: 144, x2: 6, y2: 6 },
-        // Internal dividing walls
-        { x1: 56, y1: 6, x2: 56, y2: 76 },
-        { x1: 56, y1: 88, x2: 56, y2: 144 },
-        { x1: 6, y1: 78, x2: 56, y2: 78 },
-        { x1: 162, y1: 6, x2: 162, y2: 88 },
-        { x1: 56, y1: 88, x2: 234, y2: 88 },
-        { x1: 152, y1: 88, x2: 152, y2: 144 }
-      ],
-      furniture: [
-        // Master Bedroom
-        { type: 'bed', x: 174, y: 14, width: 46, height: 38, angle: 0, color: '#d97706' },
-        { type: 'floor_lamp', x: 166, y: 14, width: 10, height: 10, angle: 0, color: '#fef3c7' },
-        { type: 'dresser', x: 166, y: 60, width: 34, height: 16, angle: 0, color: '#78350f' },
-        { type: 'safe', x: 218, y: 62, width: 12, height: 14, angle: 0, color: '#0f172a' },
-        // Fireplace Hall
-        { type: 'sofa', x: 64, y: 16, width: 46, height: 22, angle: 0, color: '#991b1b' },
-        { type: 'floor_lamp', x: 60, y: 14, width: 10, height: 10, angle: 0, color: '#fef3c7' },
-        { type: 'carpet', x: 74, y: 40, width: 48, height: 34, angle: 0, color: '#b45309' },
-        { type: 'bean_bag', x: 130, y: 42, width: 18, height: 18, angle: 0, color: '#ea580c' },
-        { type: 'tv_cabinet', x: 114, y: 16, width: 42, height: 8, angle: 0, color: '#451a03' },
-        { type: 'tv', x: 120, y: 17, width: 30, height: 5, angle: 0, color: '#0f172a' },
-        // Entryway / Corridor
-        { type: 'coat_rack', x: 12, y: 86, width: 12, height: 12, angle: 0, color: '#451a03' },
-        { type: 'mirror', x: 48, y: 92, width: 6, height: 24, angle: 0, color: '#b45309' },
-        // Kitchen
-        { type: 'stove', x: 62, y: 92, width: 16, height: 14, angle: 0, color: '#1e293b' },
-        { type: 'microwave', x: 80, y: 92, width: 14, height: 12, angle: 0, color: '#334155' },
-        { type: 'kitchen_counter', x: 96, y: 92, width: 16, height: 14, angle: 0, color: '#64748b' },
-        { type: 'fridge', x: 114, y: 92, width: 18, height: 16, angle: 0, color: '#e2e8f0' },
-        { type: 'table', x: 80, y: 114, width: 32, height: 22, angle: 0, color: '#78350f' },
-        { type: 'chair', x: 70, y: 118, width: 7, height: 7, angle: 0, color: '#92400e' },
-        { type: 'chair', x: 116, y: 118, width: 7, height: 7, angle: 0, color: '#92400e' },
-        // Bathroom & Sauna
-        { type: 'bath', x: 10, y: 10, width: 42, height: 20, angle: 0, color: '#ffffff' },
-        { type: 'sink', x: 10, y: 34, width: 16, height: 12, angle: 0, color: '#e2e8f0' },
-        { type: 'washing_machine', x: 10, y: 52, width: 15, height: 15, angle: 0, color: '#f8fafc' },
-        { type: 'toilet', x: 34, y: 52, width: 12, height: 14, angle: 0, color: '#ffffff' }
-      ],
-      exitZone: { x: 14, y: 124, width: 28, height: 14 },
-      stairsZone: { x: 0, y: 0, width: 0, height: 0 },
-      elevatorZone: { x: 0, y: 0, width: 0, height: 0 },
-      exits: [{ x: 14, y: 124, width: 28, height: 14 }],
-      stairs: [],
-      elevators: []
-    }
+    spawnX: 34,
+    spawnY: 114,
+    layout: null
   }
 ];
 
@@ -322,6 +264,8 @@ export function initializeCityApartmentsFromWorld(world: GameWorld): void {
           bld.id.toLowerCase().includes('village') ||
           bld.id.toLowerCase().includes('old') ||
           bld.id.toLowerCase().includes('ruin') ||
+          bld.id.toLowerCase().includes('shed') ||
+          bld.id.toLowerCase().includes('barn') ||
           (bld.nameRu && bld.nameRu.toLowerCase().includes('заброш')) ||
           (bld.nameRu && bld.nameRu.toLowerCase().includes('изба')) ||
           (bld.nameRu && bld.nameRu.toLowerCase().includes('деревн'))
@@ -329,44 +273,65 @@ export function initializeCityApartmentsFromWorld(world: GameWorld): void {
           return;
         }
 
-        // Single cottage
-        const price = 6500000 + Math.floor(bld.x % 4) * 1000000;
-        const area = 140 + Math.floor(bld.y % 3) * 30;
-        const roomsLabel = 'Двухэтажный загородный коттедж';
-        const address = `${street}, д. ${houseNum} (Коттедж)`;
-        const cadastralNumber = `77:0${Math.floor(bld.x / 1000) % 9 + 1}:000${Math.floor(bld.y / 1000) % 9 + 1}00${houseNum}:1`;
-        
+        // Secondary buildings on plot (garage or banya) belong to the main cottage on this plot, NOT separate properties!
+        const isSecondaryOutbuilding = bld.id.includes('garage') || bld.id.includes('banya') ||
+          (bld.nameRu && (bld.nameRu.includes('Гараж') || bld.nameRu.includes('Баня')));
+        if (isSecondaryOutbuilding) {
+          return;
+        }
+
+        const plotMatch = bld.id.match(/plot_(\d+)/);
+        const plotNum = plotMatch ? parseInt(plotMatch[1]) : houseNum;
+        const plotId = `plot_${plotNum}`;
+
+        // Check if there is a garage and/or banya on this plot
+        const outbuildings = world.buildings.filter(b => b.id && b.id.includes(`plot_${plotNum}`) && b.id !== bld.id);
+        const hasGarage = outbuildings.some(b => b.id.includes('garage') || (b.nameRu && b.nameRu.includes('Гараж')));
+        const hasBanya = outbuildings.some(b => b.id.includes('banya') || (b.nameRu && b.nameRu.includes('Баня')));
+
+        const price = 6500000 + (plotNum % 4) * 1000000 + (hasGarage ? 800000 : 0) + (hasBanya ? 600000 : 0);
+        const area = 140 + (plotNum % 3) * 30;
+        const roomsLabel = 'Загородная усадьба (Коттедж с участком)';
+        const address = `КП «Зелёный Рукав», уч. ${plotNum}`;
+        const cadastralNumber = `77:0${Math.floor(bld.x / 1000) % 9 + 1}:000${Math.floor(bld.y / 1000) % 9 + 1}00${plotNum}:1`;
+
+        const features = ['Автономное газовое отопление', 'Каминный зал', 'Огороженный приусадебный участок', 'Въездные ворота и калитка'];
+        if (hasGarage) features.push('Капитальный гараж');
+        if (hasBanya) features.push('Русская бревенчатая баня');
+
+        const outbldDesc = hasGarage && hasBanya ? ' с капитальным гаражом и бревенчатой баней' : (hasGarage ? ' с капитальным гаражом' : (hasBanya ? ' с баней на участке' : ''));
+        const descriptionRu = `Великолепная загородная усадьба по адресу ${address} на собственном огороженном участке${outbldDesc}. Оборудована въездными воротами и калиткой.`;
+
         const cottageApt: PropertyApartment = {
           id: `suburban_${bld.id}`,
           buildingId: bld.id,
-          buildingNameRu: bld.nameRu || 'Загородный коттедж',
+          plotId: plotId,
+          buildingNameRu: bld.nameRu || `Коттедж (Участок №${plotNum})`,
           buildingType: 'suburban',
           address,
           cadastralNumber,
           floor: 0,
           totalBuildingFloors: 2,
-          apartmentNumber: 1,
+          apartmentNumber: plotNum,
           roomsCount: 4,
           roomsLabel,
           areaSqM: area,
-          ceilingHeightM: 3.0,
+          ceilingHeightM: 3.1,
           wallMaterial: 'Кирпич/Брус',
-          yearBuilt: 2018,
+          yearBuilt: 2021,
           priceRub: price,
           stateDutyRub: 2000,
           notaryFeeRub: Math.floor(price * 0.005),
           monthlyUtilitiesRub: Math.floor(area * 60),
-          descriptionRu: `Уютный загородный коттедж по адресу ${address} с собственным двором.`,
-          features: ['Автономное отопление', 'Каминный зал', 'Гараж', 'Терраса'],
-          keyId: `key_suburban_${bld.id}`,
-          lockCode: `LC-SUB-${houseNum}`,
+          descriptionRu,
+          features,
+          keyId: `key_plot_${plotNum}`,
+          lockCode: `LC-COT-${plotNum}`,
           isLocked: true,
           isOwned: false,
-          layout: suburbanTemplate?.layout ? {
-            ...suburbanTemplate.layout,
-            buildingId: bld.id,
-            floor: 0
-          } : null
+          spawnX: 34,
+          spawnY: 114,
+          layout: null
         };
 
         const saved = stateMap.get(cottageApt.id);
@@ -466,16 +431,37 @@ export function getApartmentsByBuildingId(bldId: string): PropertyApartment[] {
   return currentCityApartments.filter(a => a.buildingId === bldId);
 }
 
+export function getApartmentForPlot(plotIdentifier: string | number): PropertyApartment | undefined {
+  if (!plotIdentifier) return undefined;
+  const str = String(plotIdentifier).trim();
+  const numMatch = str.match(/\d+/);
+  const num = numMatch ? parseInt(numMatch[0]) : null;
+
+  return currentCityApartments.find(a => {
+    if (a.plotId && (a.plotId === str || a.plotId === `plot_${num}`)) return true;
+    if (a.buildingId && (a.buildingId.includes(`plot_${num}`) || a.buildingId === str)) return true;
+    if (num !== null && a.apartmentNumber === num && a.buildingType === 'suburban') return true;
+    return false;
+  });
+}
+
 /**
- * Checks if the player has the key for a specific apartment in inventory or hands
+ * Checks if the player has the key for a specific apartment or suburban estate in inventory or hands
  */
 export function hasPlayerApartmentKey(player: Player, apt: PropertyApartment): boolean {
   if (!player || !player.inventory) return false;
-  return player.inventory.some(item => 
-    item && 
-    (item.itemId === 'apartment_key' || item.itemId === 'apartment_key_spare') && 
-    (item.lockCode === apt.lockCode || item.propertyId === apt.id || item.descriptionRu.includes(apt.cadastralNumber) || item.descriptionRu.includes(apt.address))
-  );
+  const aptPlotId = apt.plotId || (apt.buildingId ? apt.buildingId.match(/plot_\d+/)?.[0] : undefined);
+  return player.inventory.some(item => {
+    if (!item) return false;
+    const isKey = item.itemId === 'apartment_key' || item.itemId === 'apartment_key_spare';
+    if (!isKey) return false;
+    if (item.lockCode && (item.lockCode === apt.lockCode || (apt.keyId && item.lockCode === apt.keyId))) return true;
+    if (item.propertyId && (item.propertyId === apt.id || (aptPlotId && item.propertyId.includes(aptPlotId)))) return true;
+    if (apt.cadastralNumber && item.descriptionRu?.includes(apt.cadastralNumber)) return true;
+    if (apt.address && item.descriptionRu?.includes(apt.address)) return true;
+    if (aptPlotId && (item.lockCode?.includes(aptPlotId) || item.nameRu?.includes(aptPlotId) || item.descriptionRu?.includes(aptPlotId))) return true;
+    return false;
+  });
 }
 
 /**
@@ -483,15 +469,18 @@ export function hasPlayerApartmentKey(player: Player, apt: PropertyApartment): b
  */
 export function toggleApartmentLock(player: Player, apt: PropertyApartment): { success: boolean; message: string } {
   if (!hasPlayerApartmentKey(player, apt)) {
+    const isSuburban = apt.buildingType === 'suburban';
     return {
       success: false,
-      message: `Дверь заперта! Требуется стальной ключ от квартиры (${apt.address})`
+      message: `Замок заперт! Требуется стальной ключ от ${isSuburban ? 'усадьбы' : 'квартиры'} (${apt.address})`
     };
   }
   apt.isLocked = !apt.isLocked;
+  const isSub = apt.buildingType === 'suburban';
+  const name = isSub ? `Усадьба (${apt.address})` : `Квартира №${apt.apartmentNumber}`;
   return {
     success: true,
-    message: apt.isLocked ? `Дверь квартиры №${apt.apartmentNumber} заперта на ключ.` : `Дверь квартиры №${apt.apartmentNumber} отперта.`
+    message: apt.isLocked ? `${name} заперта на ключ.` : `${name} отперта ключом.`
   };
 }
 

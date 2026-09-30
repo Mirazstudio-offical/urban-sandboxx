@@ -929,6 +929,14 @@ canvas#editorCanvas {
       <span></span>
       <span class="tool-hotkey">E</span>
     </button>
+    <button class="tool-btn" id="tool-marker" onclick="setTool('marker')" title="Метка для миникарты [X]">
+      <i data-lucide="map-pin" style="width:18px;height:18px;"></i>
+      <span class="tool-hotkey">X</span>
+    </button>
+    <button class="tool-btn" id="tool-spawnPoint" onclick="setTool('spawnPoint')" title="Точка спавна игрока [Z]">
+      <i data-lucide="navigation" style="width:18px;height:18px;"></i>
+      <span class="tool-hotkey">Z</span>
+    </button>
 
     <div class="tool-separator"></div>
 
@@ -987,6 +995,8 @@ canvas#editorCanvas {
         <label style="width: auto;">Фильтр слоя:</label>
         <select id="outliner-layer-filter" onchange="renderOutliner()">
           <option value="all">Все слои</option>
+          <option value="minimapMarkers">Метки миникарты</option>
+          <option value="spawnPoints">Точки спавна</option>
           <option value="roads">Дороги</option>
           <option value="buildings">Здания</option>
           <option value="intersections">Перекрестки</option>
@@ -1095,6 +1105,7 @@ canvas#editorCanvas {
         </div>
 
         <div style="display:flex;align-items:center;gap:8px;">
+          <button class="btn sm" id="is-passability-btn" onclick="isTogglePassabilityOverlay()" title="Инспекция зон проходимости и коллизий игрока (радиус 6.5м / проход 16м)">Проходимость (P)</button>
           <label style="display:flex;align-items:center;gap:4px;cursor:pointer;">
             <input type="checkbox" id="is-grid-snap" checked onchange="isToggleSnap(this.checked)">
             <span>Сетка 2м</span>
@@ -1150,6 +1161,1958 @@ canvas#editorCanvas {
   </div>
 </div>
 
+<script>
+/**
+ * RAILWAY SCHEDULE & DISPATCHING STUDIO
+ * Interactive Route Builder with Visual Map Picking & Multi-Scenario Conflict/SPAD Simulation
+ */
+window.RailwayScheduleStudio = (function() {
+  let selectedScheduleIndex = 0;
+  let activeTab = 'route'; // 'route' | 'preview' | 'schematic'
+
+  // Map Picker State
+  const pickerState = {
+    active: false,
+    mode: null, // 'spawn' | 'travel' | 'switch' | 'signal' | 'platform'
+    stepIndex: -1,
+    hoveredItem: null
+  };
+
+  // Simulation State
+  const simState = {
+    isPlaying: false,
+    time: 0, // seconds (0 to 360)
+    maxTime: 360,
+    speed: 1.0,
+    scenario: 'solo', // 'solo' | 'all_trains' | 'red_signal' | 'head_on' | 'station_delay'
+    followTrain: true,
+    cam: { x: 10800, y: 8800, zoom: 0.28 },
+    isDragging: false,
+    dragStart: { x: 0, y: 0 },
+    camStart: { x: 0, y: 0 },
+    lastFrameTime: 0,
+    animFrameId: null,
+    canvas: null,
+    ctx: null,
+    incidents: [],
+    eventLog: []
+  };
+
+  const locomotivePresets = [
+    { type: 'locomotive_diesel', name: 'Пассажирский тепловоз ТЭП70БС', roadNumber: 'ТЭП70БС-0245', livery: 'rzd_classic' },
+    { type: 'locomotive_electric_vl80', name: 'Магистральный электровоз ВЛ80С', roadNumber: 'ВЛ80С-1420', livery: 'rzd_classic' },
+    { type: 'locomotive_shunter', name: 'Маневровый тепловоз ЧМЭ3', roadNumber: 'ЧМЭ3-4812', livery: 'rzd_classic' }
+  ];
+
+  const carPresets = [
+    { type: 'passenger_coach_rzhd', name: 'Фирменный купейный вагон РЖД (ТВЗ 61-4440)', livery: 'rzd_classic', cargoType: '' },
+    { type: 'passenger_coach_platskart', name: 'Плацкартный вагон (ТВЗ 61-4447)', livery: 'rzd_classic', cargoType: '' },
+    { type: 'freight_tanker', name: 'Нефтяная 4-осная цистерна (15-1547)', livery: 'tanker_blue', cargoType: 'Нефть сырая' },
+    { type: 'freight_hopper', name: 'Хоппер для сыпучих грузов (19-752)', livery: 'hopper_brown', cargoType: 'Щебень балластный' },
+    { type: 'freight_timber', name: 'Лесовозная платформа (13-4012)', livery: 'timber_green', cargoType: 'Пиловочник хвойный' }
+  ];
+
+  function getMapData() {
+    return window.mapData || {};
+  }
+
+  function getDefaultSchedules() {
+    return [
+      {
+        id: 'sched_pass_express_12',
+        name: 'Пассажирский поезд №12 «Степной Экспресс»',
+        trainId: 'train_pass_12',
+        enabled: true,
+        spawnTime: 0,
+        repeatInterval: 240,
+        spawnTrackId: 'rail_main_1_west',
+        spawnX: 3500,
+        spawnY: 8740,
+        spawnSpeed: 120,
+        spawnDirection: 1,
+        maxSpeed: 210,
+        acceleration: 18,
+        deceleration: 35,
+        locomotive: {
+          type: 'locomotive_diesel',
+          name: 'Пассажирский тепловоз ТЭП70БС',
+          roadNumber: 'ТЭП70БС-0245',
+          livery: 'rzd_classic',
+          headlightColor: '#fffbeb'
+        },
+        cars: [
+          { type: 'passenger_coach_rzhd', name: 'Купейный вагон РЖД №01', livery: 'rzd_classic', roadNumber: 'РЖД-01' },
+          { type: 'passenger_coach_rzhd', name: 'Купейный вагон РЖД №02', livery: 'rzd_classic', roadNumber: 'РЖД-02' },
+          { type: 'passenger_coach_platskart', name: 'Плацкартный вагон №03', livery: 'rzd_classic', roadNumber: 'РЖД-03' },
+          { type: 'passenger_coach_platskart', name: 'Плацкартный вагон №04', livery: 'rzd_classic', roadNumber: 'РЖД-04' }
+        ],
+        routeSteps: [
+          { id: 's1', type: 'travel', targetX: 9100, targetY: 8740, speedLimit: 140, locationName: 'Входная западная горловина' },
+          { id: 's2', type: 'switch_branch', switchTrackId: 'rail_bezier_turnout_track3_west', targetY: 8600, switchBranch: 'diverging', speedLimit: 45 },
+          { id: 's3', type: 'station_stop', targetX: 10800, targetY: 8600, dwellSeconds: 25, stationName: 'ст. Степная (Путь 3, Платформа №1)' },
+          { id: 's4', type: 'signal_hold', signalId: 'sig_exit_N3', signalClearAspect: 'green' },
+          { id: 's5', type: 'switch_branch', switchTrackId: 'rail_bezier_turnout_track3_east', targetY: 8740, switchBranch: 'straight', speedLimit: 80 },
+          { id: 's6', type: 'travel', targetX: 38000, targetY: 8740, speedLimit: 170, locationName: 'Восточный перегон' },
+          { id: 's7', type: 'despawn' }
+        ]
+      },
+      {
+        id: 'sched_freight_heavy_2418',
+        name: 'Тяжелый грузовой состав №2418 «Кузбасс-Транзит» (2x ВЛ80С)',
+        trainId: 'train_freight_2418',
+        enabled: true,
+        spawnTime: 30,
+        repeatInterval: 300,
+        spawnTrackId: 'rail_main_2_east',
+        spawnX: 32000,
+        spawnY: 8880,
+        spawnSpeed: 100,
+        spawnDirection: -1,
+        maxSpeed: 170,
+        acceleration: 12,
+        deceleration: 25,
+        locomotive: {
+          type: 'locomotive_electric_vl80',
+          name: 'Магистральный электровоз ВЛ80С',
+          roadNumber: 'ВЛ80С-1420',
+          livery: 'rzd_classic',
+          headlightColor: '#fffbeb'
+        },
+        cars: [
+          { type: 'freight_tanker', name: 'Нефтяная цистерна №1', livery: 'tanker_blue', cargoType: 'Нефть' },
+          { type: 'freight_tanker', name: 'Нефтяная цистерна №2', livery: 'tanker_blue', cargoType: 'Бензин' },
+          { type: 'freight_hopper', name: 'Полувагон с углем', livery: 'hopper_brown', cargoType: 'Уголь' },
+          { type: 'freight_hopper', name: 'Хоппер для щебня', livery: 'hopper_brown', cargoType: 'Щебень' },
+          { type: 'freight_hopper', name: 'Хоппер-балластер', livery: 'hopper_brown', cargoType: 'Балласт' },
+          { type: 'freight_timber', name: 'Лесовозная платформа №1', livery: 'timber_green', cargoType: 'Кругляк сосны' },
+          { type: 'freight_timber', name: 'Лесовозная платформа №2', livery: 'timber_green', cargoType: 'Пиловочник' }
+        ],
+        routeSteps: [
+          { id: 's1', type: 'travel', targetX: 14200, targetY: 8880, speedLimit: 110, locationName: 'Восточный подход к станции' },
+          { id: 's2', type: 'travel', targetX: 9650, targetY: 8880, speedLimit: 90, locationName: 'Сквозной пропуск (Главный II путь)' },
+          { id: 's3', type: 'travel', targetX: -1000, targetY: 8880, speedLimit: 140, locationName: 'Западный трансконтинентальный перегон' },
+          { id: 's4', type: 'despawn' }
+        ]
+      },
+      {
+        id: 'sched_commuter_suburban',
+        name: 'Пригородный поезд РА-3 «Орлан» №048',
+        trainId: 'train_commuter_ra3',
+        enabled: true,
+        spawnTime: 120,
+        repeatInterval: 260,
+        spawnTrackId: 'rail_main_2_east',
+        spawnX: 26000,
+        spawnY: 8880,
+        spawnSpeed: 105,
+        spawnDirection: -1,
+        maxSpeed: 130,
+        acceleration: 20,
+        deceleration: 35,
+        locomotive: {
+          type: 'locomotive_diesel',
+          name: 'Рельсовый автобус РА-3 (Головной вагон)',
+          roadNumber: 'РА3-048.1',
+          livery: 'rzd_classic',
+          headlightColor: '#fffbeb'
+        },
+        cars: [
+          { type: 'passenger_coach_rzhd', name: 'Рельсовый автобус РА-3 (Прицепной вагон)', livery: 'rzd_classic', roadNumber: 'РА3-048.2' }
+        ],
+        routeSteps: [
+          { id: 's1', type: 'travel', targetX: 13500, targetY: 8880, speedLimit: 110, locationName: 'Восточный перегон' },
+          { id: 's2', type: 'station_stop', targetX: 11200, targetY: 8880, dwellSeconds: 20, stationName: 'ст. Степная (Островная платформа №2)' },
+          { id: 's3', type: 'travel', targetX: 1000, targetY: 8880, speedLimit: 125, locationName: 'Западный перегон' },
+          { id: 's4', type: 'despawn' }
+        ]
+      }
+    ];
+  }
+
+  function getSchedules() {
+    const md = getMapData();
+    if (!md.trainSchedules || !Array.isArray(md.trainSchedules) || md.trainSchedules.length === 0) {
+      md.trainSchedules = getDefaultSchedules();
+    }
+    return md.trainSchedules;
+  }
+
+  function getCurrentSchedule() {
+    const list = getSchedules();
+    if (selectedScheduleIndex >= list.length) selectedScheduleIndex = Math.max(0, list.length - 1);
+    return list[selectedScheduleIndex];
+  }
+
+  // --- ENTITY HELPERS & READABLE NAMES ---
+  function getFriendlySignalLabel(sigId) {
+    if (!sigId) return 'Светофор не выбран';
+    const sig = (getMapData().railwaySignals || []).find(s => s.id === sigId);
+    if (!sig) return sigId;
+    const typeRu = sig.type === 'entry' ? 'Входной' :
+                   sig.type === 'exit' ? 'Выходной' :
+                   sig.type === 'block' ? 'Проходной' :
+                   sig.type === 'shunting' ? 'Маневровый' :
+                   sig.type === 'obstacle' ? 'Заградительный' : 'Светофор';
+    return `${sig.designation || ''} - ${typeRu} (X=${Math.round(sig.x)}, ${sig.targetTrack || sig.nameRu || ''})`;
+  }
+
+  function getFriendlySwitchLabel(trackId) {
+    if (!trackId) return 'Стрелка не выбрана';
+    const t = (getMapData().railwayTracks || []).find(tr => tr.id === trackId);
+    if (!t) return trackId;
+    return t.name || `Стрелочный перевод (${Math.round(t.x1)} -> ${Math.round(t.x2)})`;
+  }
+
+  function getFriendlyPlatformLabel(nameOrId) {
+    if (!nameOrId) return 'Платформа не выбрана';
+    return nameOrId;
+  }
+
+  function getAllSwitchesList() {
+    return (getMapData().railwayTracks || []).filter(t => t.isSwitch || t.curvePoints || t.id.includes('turnout') || t.id.includes('crossover'));
+  }
+
+  function getAllSignalsList() {
+    const list = [...(getMapData().railwaySignals || [])];
+    return list.sort((a, b) => a.x - b.x);
+  }
+
+  function getAllPlatformsList() {
+    return getMapData().railwayPlatforms || [];
+  }
+
+  // --- MODAL OPEN / CLOSE ---
+  function openModal() {
+    let modal = document.getElementById('train-schedule-modal');
+    if (!modal) {
+      modal = document.createElement('div');
+      modal.id = 'train-schedule-modal';
+      modal.style.cssText = `
+        position: fixed; inset: 0; background: rgba(2, 6, 23, 0.88); backdrop-filter: blur(8px);
+        display: flex; align-items: center; justify-content: center; z-index: 10000;
+      `;
+      document.body.appendChild(modal);
+    }
+    modal.style.display = 'flex';
+    renderModal();
+  }
+
+  function closeModal() {
+    const modal = document.getElementById('train-schedule-modal');
+    if (modal) modal.style.display = 'none';
+    stopSimulation();
+    cancelPicker();
+  }
+
+  function switchTab(tab) {
+    activeTab = tab;
+    renderModal();
+    if (tab === 'preview') {
+      initSimulationCanvas();
+      startSimulation();
+    } else {
+      stopSimulation();
+    }
+  }
+
+  // --- MAIN MODAL RENDER ---
+  function renderModal() {
+    const modal = document.getElementById('train-schedule-modal');
+    if (!modal) return;
+
+    const schedules = getSchedules();
+    const curSched = getCurrentSchedule();
+
+    modal.innerHTML = `
+      <div style="
+        width: 1180px; max-width: 96vw; height: 90vh; background: #0b0f19; border: 1px solid var(--border);
+        border-radius: 14px; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 25px 60px -15px rgba(0,0,0,0.9);
+      ">
+        <!-- TOP HEADER -->
+        <div style="padding: 12px 20px; background: rgba(15, 23, 42, 0.98); border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center;">
+          <div style="display:flex;align-items:center;gap:12px;">
+            <div style="width:32px;height:32px;border-radius:8px;background:rgba(56,189,248,0.15);border:1px solid #38bdf8;display:flex;align-items:center;justify-content:center;color:#38bdf8;">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="4" y="3" width="16" height="16" rx="2"></rect>
+                <path d="M4 11h16M12 3v8m-4 8l-2 2m12-2l2 2M8 15h.01M16 15h.01"></path>
+              </svg>
+            </div>
+            <div>
+              <div style="font-size:16px;font-weight:800;color:var(--text-main);letter-spacing:0.5px;">ДИСПЕТЧЕР И РАСПИСАНИЕ ПОЕЗДОВ</div>
+              <div style="font-size:11px;color:var(--text-muted);">Маршрутизация СЦБ, стрелочные переводы, сигналы и проверка безопасности</div>
+            </div>
+          </div>
+
+          <!-- TABS -->
+          <div style="display:flex;background:#090d16;padding:3px;border-radius:8px;border:1px solid var(--border);gap:4px;">
+            <button class="btn ${activeTab==='route'?'primary':''}" onclick="window.RailwayScheduleStudio.switchTab('route')" style="padding:5px 12px;font-size:12px;">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19L19 4M4 4l5 5m6 6l5 5"></path></svg>
+              Состав и Маршрут
+            </button>
+            <button class="btn ${activeTab==='preview'?'primary':''}" onclick="window.RailwayScheduleStudio.switchTab('preview')" style="padding:5px 12px;font-size:12px;">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+              Предпросмотр и Тест Ситуаций
+            </button>
+            <button class="btn ${activeTab==='schematic'?'primary':''}" onclick="window.RailwayScheduleStudio.switchTab('schematic')" style="padding:5px 12px;font-size:12px;">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"></rect><path d="M3 9h18M9 21V9"></path></svg>
+              Схема путей и СЦБ
+            </button>
+          </div>
+
+          <button class="btn icon-only" onclick="window.RailwayScheduleStudio.closeModal()" style="font-size:16px;color:var(--text-muted);">✕</button>
+        </div>
+
+        <!-- TAB BODY -->
+        <div style="flex:1;display:flex;overflow:hidden;">
+          ${activeTab === 'route' ? renderRouteTabHTML(curSched, schedules) :
+            activeTab === 'preview' ? renderPreviewTabHTML(curSched) :
+            renderSchematicTabHTML()}
+        </div>
+      </div>
+    `;
+  }
+
+  // --- TAB 1: ROUTE & CONSIST BUILDER ---
+  function renderRouteTabHTML(curSched, schedules) {
+    if (!curSched) {
+      return `<div style="flex:1;display:flex;align-items:center;justify-content:center;color:var(--text-muted);">Нет расписаний. Создайте новый поезд слева.</div>`;
+    }
+
+    const steps = curSched.routeSteps || [];
+    const cars = curSched.cars || [];
+
+    return `
+      <!-- LEFT SCHEDULES LIST -->
+      <div style="width: 270px; background: #080c14; border-right: 1px solid var(--border); display: flex; flex-direction: column; padding: 12px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+          <span style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Составы (${schedules.length})</span>
+          <button class="btn primary" style="padding:3px 8px;font-size:11px;" onclick="window.RailwayScheduleStudio.addNewSchedule()">+ Добавить</button>
+        </div>
+        <div style="flex:1; overflow-y:auto; display:flex; flex-direction:column; gap:6px;">
+          ${schedules.map((s, idx) => `
+            <div onclick="window.RailwayScheduleStudio.selectSchedule(${idx})" style="
+              padding: 9px 10px; border-radius: 8px; border: 1px solid ${idx===selectedScheduleIndex?'var(--accent)':'var(--border)'};
+              background: ${idx===selectedScheduleIndex?'rgba(56, 189, 248, 0.15)':'rgba(15, 23, 42, 0.6)'};
+              cursor: pointer; transition: all 0.15s ease;
+            ">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px;">
+                <span style="font-weight:700;font-size:12px;color:${idx===selectedScheduleIndex?'#38bdf8':'#f1f5f9'};">
+                  ${s.name || 'Поезд ' + (idx + 1)}
+                </span>
+                <span style="width:8px;height:8px;border-radius:50%;background:${s.enabled!==false?'#22c55e':'#64748b'};"></span>
+              </div>
+              <div style="font-size:10px;color:var(--text-muted);display:flex;justify-content:space-between;">
+                <span>${s.locomotive?.name ? s.locomotive.name.replace(/^(Пассажирский тепловоз |Магистральный электровоз )/, '') : 'Локомотив'}</span>
+                <span>${s.cars?.length || 0} ваг. • ${s.routeSteps?.length || 0} шаг.</span>
+              </div>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+
+      <!-- RIGHT ROUTE EDITOR -->
+      <div style="flex:1;display:flex;flex-direction:column;overflow-y:auto;padding:16px;background:#0b0f19;gap:14px;">
+        <!-- TRAIN GENERAL PARAMS -->
+        <div style="background:rgba(15,23,42,0.6);border:1px solid var(--border);border-radius:10px;padding:12px;">
+          <div style="display:grid; grid-template-columns: 2fr 1fr 1fr 1fr; gap:10px; align-items:center;">
+            <div>
+              <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:3px;">Название поезда и номер рейса:</label>
+              <input type="text" value="${curSched.name || ''}" style="width:100%;font-weight:600;font-size:13px;" oninput="window.RailwayScheduleStudio.updateScheduleProp('name', this.value)">
+            </div>
+            <div>
+              <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:3px;">Интервал рейса (сек):</label>
+              <input type="number" value="${curSched.repeatInterval || 240}" min="30" max="1800" onchange="window.RailwayScheduleStudio.updateScheduleProp('repeatInterval', parseInt(this.value))">
+            </div>
+            <div>
+              <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:3px;">Макс. скорость (км/ч):</label>
+              <input type="number" value="${Math.round((curSched.maxSpeed || 180) * 0.4)}" min="40" max="250" onchange="window.RailwayScheduleStudio.updateScheduleProp('maxSpeed', parseFloat(this.value) / 0.4)">
+            </div>
+            <div style="display:flex;align-items:flex-end;">
+              <label style="font-size:12px;cursor:pointer;display:flex;align-items:center;gap:6px;height:32px;font-weight:600;">
+                <input type="checkbox" ${curSched.enabled!==false?'checked':''} onchange="window.RailwayScheduleStudio.updateScheduleProp('enabled', this.checked)">
+                Активен на карте
+              </label>
+            </div>
+          </div>
+        </div>
+
+        <!-- SECTION: SPAWN POINT (WITH VISUAL PICKER) -->
+        <div style="background:rgba(15,23,42,0.6);border:1px solid var(--border);border-radius:10px;padding:12px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+            <div style="display:flex;align-items:center;gap:6px;">
+              <span style="font-weight:700;font-size:12px;color:var(--accent);text-transform:uppercase;">1. Точка старта и направление движения</span>
+              <span style="font-size:10px;background:#0369a1;color:#fff;padding:1px 6px;border-radius:4px;">ПК ${Math.round((curSched.spawnX || 6500)/100)}</span>
+            </div>
+            <button class="btn primary" onclick="window.RailwayScheduleStudio.startMapPicker('spawn')" style="padding:3px 10px;font-size:11px;">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="22" y1="12" x2="18" y2="12"></line><line x1="6" y1="12" x2="2" y2="12"></line><line x1="12" y1="6" x2="12" y2="2"></line><line x1="12" y1="22" x2="12" y2="18"></line></svg>
+              Указать старт на карте
+            </button>
+          </div>
+
+          <div style="display:grid; grid-template-columns: 2fr 1fr 1fr 1fr; gap:10px; align-items:center;">
+            <div>
+              <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:2px;">Быстрый выбор пути отправления:</label>
+              <select onchange="window.RailwayScheduleStudio.applySpawnPreset(this.value)">
+                <option value="main1_west" ${curSched.spawnY===8740 && curSched.spawnDirection===1 ? 'selected':''}>Главный I путь (Западный перегон, на Восток)</option>
+                <option value="main2_east" ${curSched.spawnY===8880 && curSched.spawnDirection===-1 ? 'selected':''}>Главный II путь (Восточный перегон, на Запад)</option>
+                <option value="track3_platform" ${curSched.spawnY===8600 ? 'selected':''}>Путь 3 (Островная платформа ст. Степная)</option>
+                <option value="track4_station" ${curSched.spawnY===9020 ? 'selected':''}>Путь 4 (Южный приемо-отправочный)</option>
+                <option value="freight_siding" ${curSched.spawnY===9180 ? 'selected':''}>Погрузочный путь у пакгауза</option>
+              </select>
+            </div>
+            <div>
+              <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:2px;">Spawn X:</label>
+              <input type="number" value="${Math.round(curSched.spawnX || 6500)}" onchange="window.RailwayScheduleStudio.updateScheduleProp('spawnX', parseFloat(this.value))">
+            </div>
+            <div>
+              <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:2px;">Spawn Y (Путь):</label>
+              <input type="number" value="${Math.round(curSched.spawnY || 8740)}" onchange="window.RailwayScheduleStudio.updateScheduleProp('spawnY', parseFloat(this.value))">
+            </div>
+            <div>
+              <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:2px;">Направление:</label>
+              <select onchange="window.RailwayScheduleStudio.updateScheduleProp('spawnDirection', parseInt(this.value))">
+                <option value="1" ${(curSched.spawnDirection||1)===1?'selected':''}>Восток (+X, Вправо)</option>
+                <option value="-1" ${curSched.spawnDirection===-1?'selected':''}>Запад (-X, Влево)</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <!-- SECTION: CONSIST -->
+        <div style="background:rgba(15,23,42,0.6);border:1px solid var(--border);border-radius:10px;padding:12px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+            <span style="font-weight:700;font-size:12px;color:var(--accent);text-transform:uppercase;">2. Локомотив и прицепной состав (1 + ${cars.length} ваг.)</span>
+            <button class="btn" style="padding:2px 8px;font-size:11px;" onclick="window.RailwayScheduleStudio.addCarToConsist()">+ Прицепить вагон</button>
+          </div>
+
+          <div style="display:flex;align-items:center;gap:8px;background:#1e293b;padding:8px 12px;border-radius:6px;margin-bottom:8px;">
+            <span style="font-weight:700;font-size:12px;color:#38bdf8;width:90px;">Локомотив:</span>
+            <select style="flex:1;" onchange="window.RailwayScheduleStudio.updateLocomotiveType(this.value)">
+              ${locomotivePresets.map(l => `<option value="${l.type}" ${curSched.locomotive?.type===l.type?'selected':''}>${l.name}</option>`).join('')}
+            </select>
+            <input type="text" placeholder="Бортовой номер" value="${curSched.locomotive?.roadNumber || ''}" style="width:140px;" oninput="window.RailwayScheduleStudio.updateLocomotiveRoadNumber(this.value)">
+          </div>
+
+          <div style="display:flex;flex-direction:column;gap:5px;max-height:160px;overflow-y:auto;">
+            ${cars.map((car, cIdx) => `
+              <div style="display:flex;align-items:center;gap:8px;background:rgba(30,41,59,0.5);padding:5px 8px;border-radius:6px;font-size:12px;">
+                <span style="color:var(--text-muted);font-weight:700;width:55px;">#${cIdx+1}</span>
+                <select style="flex:1;" onchange="window.RailwayScheduleStudio.updateCarType(${cIdx}, this.value)">
+                  ${carPresets.map(cp => `<option value="${cp.type}" ${car.type===cp.type?'selected':''}>${cp.name}</option>`).join('')}
+                </select>
+                <input type="text" placeholder="Борт / Груз" value="${car.roadNumber || car.cargoType || ''}" style="width:130px;" oninput="window.RailwayScheduleStudio.updateCarLabel(${cIdx}, this.value)">
+                <button class="btn danger" style="padding:1px 6px;font-size:11px;" onclick="window.RailwayScheduleStudio.removeCarFromConsist(${cIdx})">✕</button>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+
+        <!-- SECTION: ROUTE STEPS -->
+        <div style="background:rgba(15,23,42,0.6);border:1px solid var(--border);border-radius:10px;padding:12px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+            <div style="display:flex;align-items:center;gap:8px;">
+              <span style="font-weight:700;font-size:12px;color:var(--accent);text-transform:uppercase;">3. Пошаговый маршрут следования (${steps.length} шагов)</span>
+              <span style="font-size:11px;color:var(--text-muted);">Без слепых координат: указывайте объекты прямо на карте</span>
+            </div>
+            <div style="display:flex;gap:4px;">
+              <button class="btn" style="padding:2px 7px;font-size:11px;" onclick="window.RailwayScheduleStudio.addRouteStep('travel')">+ Движение</button>
+              <button class="btn" style="padding:2px 7px;font-size:11px;" onclick="window.RailwayScheduleStudio.addRouteStep('switch_branch')">+ Стрелка</button>
+              <button class="btn" style="padding:2px 7px;font-size:11px;" onclick="window.RailwayScheduleStudio.addRouteStep('station_stop')">+ Остановка</button>
+              <button class="btn" style="padding:2px 7px;font-size:11px;" onclick="window.RailwayScheduleStudio.addRouteStep('signal_hold')">+ Светофор</button>
+              <button class="btn" style="padding:2px 7px;font-size:11px;" onclick="window.RailwayScheduleStudio.addRouteStep('despawn')">+ Конец пути</button>
+            </div>
+          </div>
+
+          <div style="display:flex;flex-direction:column;gap:8px;">
+            ${steps.map((step, sIdx) => renderStepCardHTML(step, sIdx, steps.length)).join('')}
+          </div>
+        </div>
+
+        <!-- BOTTOM ACTIONS -->
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:auto;padding-top:10px;border-top:1px solid var(--border);">
+          <button class="btn danger" onclick="window.RailwayScheduleStudio.deleteCurrentSchedule()">Удалить поезд</button>
+          <div style="display:flex;gap:8px;">
+            <button class="btn" onclick="window.RailwayScheduleStudio.duplicateCurrentSchedule()">Дублировать состав</button>
+            <button class="btn primary" onclick="window.RailwayScheduleStudio.switchTab('preview')" style="font-weight:700;">
+              Предпросмотр маршрута ->
+            </button>
+            <button class="btn success" onclick="window.RailwayScheduleStudio.saveAndClose()" style="font-weight:700;">
+              Применить и сохранить
+            </button>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  // --- RENDER SINGLE STEP CARD ---
+  function renderStepCardHTML(step, sIdx, totalSteps) {
+    const type = step.type || 'travel';
+    const signalsList = getAllSignalsList();
+    const switchesList = getAllSwitchesList();
+    const platformsList = getAllPlatformsList();
+
+    let headerBadge = '';
+    let bodyContent = '';
+
+    if (type === 'travel') {
+      headerBadge = `<span style="background:#0284c7;color:#fff;padding:2px 8px;border-radius:4px;font-weight:700;font-size:11px;">ДВИЖЕНИЕ ПО ПУТИ</span>`;
+      bodyContent = `
+        <div style="display:flex;align-items:center;gap:8px;flex:1;">
+          <button class="btn primary" onclick="window.RailwayScheduleStudio.startMapPicker('travel', ${sIdx})" style="padding:2px 8px;font-size:11px;">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="22" y1="12" x2="18" y2="12"></line><line x1="6" y1="12" x2="2" y2="12"></line><line x1="12" y1="6" x2="12" y2="2"></line><line x1="12" y1="22" x2="12" y2="18"></line></svg>
+            Указать на карте
+          </button>
+          <label style="color:var(--text-muted);font-size:11px;">До координаты X:</label>
+          <input type="number" value="${Math.round(step.targetX || 12000)}" style="width:75px;" onchange="window.RailwayScheduleStudio.updateStepProp(${sIdx}, 'targetX', parseFloat(this.value))">
+          <label style="color:var(--text-muted);font-size:11px;">Скор. км/ч:</label>
+          <input type="number" value="${Math.round((step.speedLimit || 120) * 0.4)}" style="width:55px;" onchange="window.RailwayScheduleStudio.updateStepProp(${sIdx}, 'speedLimit', parseFloat(this.value)/0.4)">
+          <div style="display:flex;gap:3px;">
+            <button class="btn" style="padding:1px 5px;font-size:10px;" onclick="window.RailwayScheduleStudio.updateStepProp(${sIdx}, 'speedLimit', 40/0.4)">40</button>
+            <button class="btn" style="padding:1px 5px;font-size:10px;" onclick="window.RailwayScheduleStudio.updateStepProp(${sIdx}, 'speedLimit', 80/0.4)">80</button>
+            <button class="btn" style="padding:1px 5px;font-size:10px;" onclick="window.RailwayScheduleStudio.updateStepProp(${sIdx}, 'speedLimit', 120/0.4)">120</button>
+            <button class="btn" style="padding:1px 5px;font-size:10px;" onclick="window.RailwayScheduleStudio.updateStepProp(${sIdx}, 'speedLimit', 160/0.4)">160</button>
+          </div>
+          <span style="font-size:11px;color:#38bdf8;margin-left:auto;">${step.locationName || 'Перегон ст. Степная'}</span>
+        </div>
+      `;
+    } else if (type === 'switch_branch') {
+      headerBadge = `<span style="background:#d97706;color:#fff;padding:2px 8px;border-radius:4px;font-weight:700;font-size:11px;">СТРЕЛОЧНЫЙ ПЕРЕВОД</span>`;
+      bodyContent = `
+        <div style="display:flex;align-items:center;gap:8px;flex:1;">
+          <button class="btn primary" onclick="window.RailwayScheduleStudio.startMapPicker('switch', ${sIdx})" style="padding:2px 8px;font-size:11px;">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19L19 4M4 4l5 5m6 6l5 5"></path></svg>
+            Выбрать стрелку с карты
+          </button>
+          <select style="flex:1;" onchange="window.RailwayScheduleStudio.updateStepSwitch(${sIdx}, this.value)">
+            <option value="">-- Выберите стрелочный перевод --</option>
+            ${switchesList.map(sw => `<option value="${sw.id}" ${step.switchTrackId===sw.id?'selected':''}>${sw.name || sw.id}</option>`).join('')}
+          </select>
+          <select style="width:150px;" onchange="window.RailwayScheduleStudio.updateStepProp(${sIdx}, 'switchBranch', this.value)">
+            <option value="straight" ${step.switchBranch==='straight'?'selected':''}>Прямой ход (Главный)</option>
+            <option value="diverging" ${step.switchBranch==='diverging'?'selected':''}>Боковой путь (Отклонение)</option>
+          </select>
+        </div>
+      `;
+    } else if (type === 'signal_hold') {
+      headerBadge = `<span style="background:#dc2626;color:#fff;padding:2px 8px;border-radius:4px;font-weight:700;font-size:11px;">СВЕТОФОР СЦБ</span>`;
+      bodyContent = `
+        <div style="display:flex;align-items:center;gap:8px;flex:1;">
+          <button class="btn primary" onclick="window.RailwayScheduleStudio.startMapPicker('signal', ${sIdx})" style="padding:2px 8px;font-size:11px;">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="22" y1="12" x2="18" y2="12"></line><line x1="6" y1="12" x2="2" y2="12"></line><line x1="12" y1="6" x2="12" y2="2"></line><line x1="12" y1="22" x2="12" y2="18"></line></svg>
+            Выбрать светофор с карты
+          </button>
+          <select style="flex:1;" onchange="window.RailwayScheduleStudio.updateStepSignal(${sIdx}, this.value)">
+            <option value="">-- Выберите светофор СЦБ --</option>
+            ${signalsList.map(s => `<option value="${s.id}" ${step.signalId===s.id?'selected':''}>${s.designation} (${s.type==='entry'?'Входной':s.type==='exit'?'Выходной':'Проходной'}, X=${Math.round(s.x)})</option>`).join('')}
+          </select>
+          <label style="color:var(--text-muted);font-size:11px;">Разрешающий аспект:</label>
+          <select style="width:110px;" onchange="window.RailwayScheduleStudio.updateStepProp(${sIdx}, 'signalClearAspect', this.value)">
+            <option value="green" ${step.signalClearAspect==='green'?'selected':''}>Зеленый</option>
+            <option value="yellow" ${step.signalClearAspect==='yellow'?'selected':''}>Желтый</option>
+            <option value="lunar_white" ${step.signalClearAspect==='lunar_white'?'selected':''}>Лунно-белый</option>
+          </select>
+        </div>
+      `;
+    } else if (type === 'station_stop') {
+      headerBadge = `<span style="background:#16a34a;color:#fff;padding:2px 8px;border-radius:4px;font-weight:700;font-size:11px;">СТОЯНКА У ПЛАТФОРМЫ</span>`;
+      bodyContent = `
+        <div style="display:flex;align-items:center;gap:8px;flex:1;">
+          <button class="btn primary" onclick="window.RailwayScheduleStudio.startMapPicker('platform', ${sIdx})" style="padding:2px 8px;font-size:11px;">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"></rect><path d="M3 9h18M9 21V9"></path></svg>
+            Выбрать платформу с карты
+          </button>
+          <input type="text" placeholder="Название станции" value="${step.stationName || 'ст. Степная'}" style="flex:1;" oninput="window.RailwayScheduleStudio.updateStepProp(${sIdx}, 'stationName', this.value)">
+          <label style="color:var(--text-muted);font-size:11px;">Стоянка (сек):</label>
+          <input type="number" value="${step.dwellSeconds || 25}" min="5" max="600" style="width:60px;" onchange="window.RailwayScheduleStudio.updateStepProp(${sIdx}, 'dwellSeconds', parseInt(this.value))">
+          <div style="display:flex;gap:3px;">
+            <button class="btn" style="padding:1px 5px;font-size:10px;" onclick="window.RailwayScheduleStudio.updateStepProp(${sIdx}, 'dwellSeconds', 15)">15с</button>
+            <button class="btn" style="padding:1px 5px;font-size:10px;" onclick="window.RailwayScheduleStudio.updateStepProp(${sIdx}, 'dwellSeconds', 30)">30с</button>
+            <button class="btn" style="padding:1px 5px;font-size:10px;" onclick="window.RailwayScheduleStudio.updateStepProp(${sIdx}, 'dwellSeconds', 60)">60с</button>
+          </div>
+        </div>
+      `;
+    } else {
+      headerBadge = `<span style="background:#475569;color:#fff;padding:2px 8px;border-radius:4px;font-weight:700;font-size:11px;">ЗАВЕРШЕНИЕ РЕЙСА</span>`;
+      bodyContent = `
+        <div style="color:var(--text-muted);font-size:12px;display:flex;align-items:center;gap:6px;">
+          <span>Поезд покидает участок и возобновляет маршрут согласно интервалу повтора.</span>
+        </div>
+      `;
+    }
+
+    return `
+      <div style="background:rgba(30,41,59,0.7);border:1px solid var(--border);border-radius:8px;padding:8px 12px;display:flex;flex-direction:column;gap:6px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <div style="display:flex;align-items:center;gap:8px;">
+            <span style="font-weight:800;font-size:12px;color:var(--accent);">Шаг ${sIdx+1}</span>
+            ${headerBadge}
+          </div>
+          <div style="display:flex;align-items:center;gap:3px;">
+            <button class="btn icon-only" style="padding:2px 6px;font-size:10px;" ${sIdx===0?'disabled':''} onclick="window.RailwayScheduleStudio.moveStep(${sIdx}, -1)">▲</button>
+            <button class="btn icon-only" style="padding:2px 6px;font-size:10px;" ${sIdx===totalSteps-1?'disabled':''} onclick="window.RailwayScheduleStudio.moveStep(${sIdx}, 1)">▼</button>
+            <button class="btn icon-only" style="padding:2px 6px;font-size:10px;" onclick="window.RailwayScheduleStudio.duplicateStep(${sIdx})">+</button>
+            <button class="btn danger icon-only" style="padding:2px 6px;font-size:10px;" onclick="window.RailwayScheduleStudio.removeStep(${sIdx})">✕</button>
+          </div>
+        </div>
+        ${bodyContent}
+      </div>
+    `;
+  }
+
+  // --- TAB 2: ROUTE SIMULATION & CONFLICT PREVIEW ---
+  function renderPreviewTabHTML(curSched) {
+    return `
+      <div style="flex:1;display:flex;flex-direction:column;background:#060911;overflow:hidden;">
+        <!-- SIMULATION CONTROLS BAR -->
+        <div style="padding:8px 16px;background:rgba(15,23,42,0.95);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:12px;">
+          <!-- PLAY / STEP / REWIND -->
+          <div style="display:flex;align-items:center;gap:6px;">
+            <button class="btn ${simState.isPlaying?'danger':'success'}" onclick="window.RailwayScheduleStudio.togglePlay()" style="padding:5px 14px;font-size:12px;font-weight:700;">
+              ${simState.isPlaying ? ' Пауза' : ' Старт'}
+            </button>
+            <button class="btn" onclick="window.RailwayScheduleStudio.seekRelative(-5)" title="-5 секунд" style="padding:5px 8px;font-size:11px;">-5с</button>
+            <button class="btn" onclick="window.RailwayScheduleStudio.seekRelative(-1)" title="-1 секунда" style="padding:5px 8px;font-size:11px;">-1с</button>
+            <button class="btn" onclick="window.RailwayScheduleStudio.seekRelative(1)" title="+1 секунда" style="padding:5px 8px;font-size:11px;">+1с</button>
+            <button class="btn" onclick="window.RailwayScheduleStudio.seekRelative(5)" title="+5 секунд" style="padding:5px 8px;font-size:11px;">+5с</button>
+            <button class="btn" onclick="window.RailwayScheduleStudio.resetSimulationTime()" title="В начало" style="padding:5px 8px;font-size:11px;">К началу</button>
+          </div>
+
+          <!-- TIME SCRUBBER -->
+          <div style="flex:1;display:flex;align-items:center;gap:10px;max-width:480px;">
+            <span id="sim-time-display" style="font-family:monospace;font-size:13px;font-weight:700;color:#38bdf8;width:60px;">00:00</span>
+            <input type="range" id="sim-scrubber" min="0" max="${simState.maxTime}" step="0.5" value="${simState.time}" style="flex:1;cursor:pointer;" oninput="window.RailwayScheduleStudio.onScrubberInput(parseFloat(this.value))">
+            <span style="font-family:monospace;font-size:11px;color:var(--text-muted);">06:00</span>
+          </div>
+
+          <!-- SPEED MULTIPLIER -->
+          <div style="display:flex;align-items:center;gap:4px;">
+            <span style="font-size:11px;color:var(--text-muted);">Скорость:</span>
+            <button class="btn ${simState.speed===1?'primary':''}" style="padding:2px 6px;font-size:11px;" onclick="window.RailwayScheduleStudio.setSpeed(1)">1x</button>
+            <button class="btn ${simState.speed===2?'primary':''}" style="padding:2px 6px;font-size:11px;" onclick="window.RailwayScheduleStudio.setSpeed(2)">2x</button>
+            <button class="btn ${simState.speed===5?'primary':''}" style="padding:2px 6px;font-size:11px;" onclick="window.RailwayScheduleStudio.setSpeed(5)">5x</button>
+            <button class="btn ${simState.speed===10?'primary':''}" style="padding:2px 6px;font-size:11px;" onclick="window.RailwayScheduleStudio.setSpeed(10)">10x</button>
+          </div>
+
+          <!-- SCENARIO SELECTOR -->
+          <div style="display:flex;align-items:center;gap:6px;">
+            <span style="font-size:11px;color:var(--text-muted);">Ситуация:</span>
+            <select id="sim-scenario-select" onchange="window.RailwayScheduleStudio.setScenario(this.value)" style="width:200px;font-size:11px;">
+              <option value="solo" ${simState.scenario==='solo'?'selected':''}>1. Штатный свободный маршрут</option>
+              <option value="all_trains" ${simState.scenario==='all_trains'?'selected':''}>2. Все поезда расписания (Параллельно)</option>
+              <option value="red_signal" ${simState.scenario==='red_signal'?'selected':''}>3. Запрещающий светофор (Тест SPAD)</option>
+              <option value="head_on" ${simState.scenario==='head_on'?'selected':''}>4. Встречный поезд на горловине (Конфликт)</option>
+              <option value="station_delay" ${simState.scenario==='station_delay'?'selected':''}>5. Задержка поезда на станции</option>
+            </select>
+          </div>
+
+          <!-- CAMERA TOGGLE -->
+          <div style="display:flex;align-items:center;gap:6px;">
+            <label style="font-size:11px;color:var(--text-muted);cursor:pointer;display:flex;align-items:center;gap:4px;">
+              <input type="checkbox" id="sim-follow-chk" ${simState.followTrain?'checked':''} onchange="window.RailwayScheduleStudio.toggleFollow(this.checked)">
+              Следить
+            </label>
+            <button class="btn" style="padding:2px 6px;font-size:11px;" onclick="window.RailwayScheduleStudio.centerStation()">Станция</button>
+          </div>
+        </div>
+
+        <!-- CANVAS VIEWPORT -->
+        <div style="flex:1;position:relative;overflow:hidden;background:#040711;">
+          <canvas id="railway-sim-canvas" style="display:block;width:100%;height:100%;cursor:grab;"></canvas>
+
+          <!-- LIVE STATUS PILL OVERLAY -->
+          <div id="sim-safety-pill" style="
+            position:absolute;top:12px;left:16px;padding:6px 14px;border-radius:20px;
+            font-size:12px;font-weight:800;display:flex;align-items:center;gap:8px;
+            background:rgba(22,101,52,0.9);color:#bbf7d0;border:1px solid #22c55e;
+            box-shadow:0 4px 12px rgba(0,0,0,0.5);backdrop-filter:blur(6px);
+          ">
+            <span style="width:8px;height:8px;border-radius:50%;background:#22c55e;"></span>
+            <span>МАРШРУТ ЧИСТ: Нарушений СЦБ нет</span>
+          </div>
+        </div>
+
+        <!-- BOTTOM TELEMETRY & EVENT LOG -->
+        <div style="height:140px;background:#090d16;border-top:1px solid var(--border);display:flex;">
+          <!-- LEFT TELEMETRY -->
+          <div style="width:360px;border-right:1px solid var(--border);padding:10px 14px;display:flex;flex-direction:column;justify-content:space-between;">
+            <div style="font-size:11px;font-weight:700;color:var(--accent);text-transform:uppercase;">Телеметрия поезда и СЦБ</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:11px;">
+              <div>
+                <span style="color:var(--text-muted);">Скорость:</span>
+                <span id="sim-tel-speed" style="font-weight:700;color:#f8fafc;margin-left:4px;">0 км/ч</span>
+              </div>
+              <div>
+                <span style="color:var(--text-muted);">Координата X:</span>
+                <span id="sim-tel-pos" style="font-weight:700;color:#f8fafc;margin-left:4px;">0</span>
+              </div>
+              <div>
+                <span style="color:var(--text-muted);">Светофор впереди:</span>
+                <span id="sim-tel-signal" style="font-weight:700;color:#22c55e;margin-left:4px;">Н3 (Зеленый)</span>
+              </div>
+              <div>
+                <span style="color:var(--text-muted);">Дистанция до сигнала:</span>
+                <span id="sim-tel-dist" style="font-weight:700;color:#f8fafc;margin-left:4px;">--</span>
+              </div>
+            </div>
+            <div style="font-size:11px;color:#38bdf8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
+              <span style="color:var(--text-muted);">Текущий шаг:</span>
+              <span id="sim-tel-step" style="margin-left:4px;">--</span>
+            </div>
+          </div>
+
+          <!-- RIGHT CHRONOLOGICAL INCIDENT & EVENT LOG -->
+          <div style="flex:1;padding:8px 14px;display:flex;flex-direction:column;overflow:hidden;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+              <span style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Хронология событий и журнал нарушений</span>
+              <span id="sim-incident-count" style="font-size:11px;font-weight:700;color:#22c55e;">0 инцидентов</span>
+            </div>
+            <div id="sim-event-list" style="flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:3px;font-size:11px;font-family:monospace;">
+              <!-- Populated dynamically -->
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  // --- TAB 3: INTERACTIVE TRACK & SIGNAL SCHEMATIC ---
+  function renderSchematicTabHTML() {
+    const signals = getAllSignalsList();
+    const switches = getAllSwitchesList();
+    const platforms = getAllPlatformsList();
+
+    return `
+      <div style="flex:1;display:flex;flex-direction:column;background:#0b0f19;padding:16px;overflow-y:auto;gap:14px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <div>
+            <div style="font-size:15px;font-weight:800;color:var(--text-main);">ИНТЕРАКТИВНАЯ СХЕМА СТАНЦИИ «СТЕПНАЯ» И ПЕРЕГОНОВ</div>
+            <div style="font-size:12px;color:var(--text-muted);">Кликните по любому светофору или стрелочному переводу для добавления в маршрут</div>
+          </div>
+          <button class="btn primary" onclick="window.RailwayScheduleStudio.switchTab('route')">Вернуться к расписанию</button>
+        </div>
+
+        <!-- SCHEMATIC CANVAS / SVG -->
+        <div style="background:#060911;border:1px solid var(--border);border-radius:10px;padding:16px;overflow-x:auto;">
+          <svg viewBox="7000 8400 9000 900" style="width:100%;min-width:1000px;height:320px;display:block;">
+            <!-- Mainline I (8740) -->
+            <line x1="7000" y1="8740" x2="16000" y2="8740" stroke="#64748b" stroke-width="8"></line>
+            <text x="7100" y="8730" fill="#94a3b8" font-size="70" font-weight="bold">Главный I путь (на Восток ->)</text>
+
+            <!-- Mainline II (8880) -->
+            <line x1="7000" y1="8880" x2="16000" y2="8880" stroke="#64748b" stroke-width="8"></line>
+            <text x="7100" y="8930" fill="#94a3b8" font-size="70" font-weight="bold">Главный II путь (<- на Запад)</text>
+
+            <!-- Track 3 (8600) -->
+            <line x1="9600" y1="8600" x2="12900" y2="8600" stroke="#38bdf8" stroke-width="6"></line>
+            <text x="10000" y="8580" fill="#38bdf8" font-size="65" font-weight="bold">Путь 3 (Пассажирский приемо-отправочный)</text>
+
+            <!-- Track 4 (9020) -->
+            <line x1="9600" y1="9020" x2="12900" y2="9020" stroke="#38bdf8" stroke-width="6"></line>
+            <text x="10000" y="9070" fill="#38bdf8" font-size="65" font-weight="bold">Путь 4 (Южный приемо-отправочный)</text>
+
+            <!-- Switch 1 (Turnout Main I -> Track 3) -->
+            <path d="M 9100 8740 Q 9350 8740 9600 8600" stroke="#f59e0b" stroke-width="6" fill="none" cursor="pointer" onclick="window.RailwayScheduleStudio.pickFromSchematic('switch', 'rail_bezier_turnout_track3_west')"></path>
+            <text x="9150" y="8660" fill="#f59e0b" font-size="55">Стрелка №1</text>
+
+            <!-- Switch 3 (Turnout Track 3 -> Main I) -->
+            <path d="M 12900 8600 Q 13150 8740 13400 8740" stroke="#f59e0b" stroke-width="6" fill="none" cursor="pointer" onclick="window.RailwayScheduleStudio.pickFromSchematic('switch', 'rail_bezier_turnout_track3_east')"></path>
+            <text x="13000" y="8660" fill="#f59e0b" font-size="55">Стрелка №3</text>
+
+            <!-- Platform 1 -->
+            <rect x="9600" y="8630" width="3300" height="90" fill="#334155" stroke="#22c55e" stroke-width="6" cursor="pointer" onclick="window.RailwayScheduleStudio.pickFromSchematic('platform', 'platform_station_main')"></rect>
+            <text x="10800" y="8690" fill="#ffffff" font-size="65" font-weight="bold">Островная платформа ст. Степная</text>
+
+            <!-- Key Signals -->
+            ${signals.map(sig => `
+              <g transform="translate(${sig.x}, ${sig.y})" cursor="pointer" onclick="window.RailwayScheduleStudio.pickFromSchematic('signal', '${sig.id}')">
+                <circle cx="0" cy="0" r="35" fill="${sig.type==='entry'?'#f59e0b':sig.type==='exit'?'#22c55e':'#38bdf8'}"></circle>
+                <text x="0" y="12" fill="#000000" font-size="40" font-weight="bold" text-anchor="middle">${sig.designation}</text>
+              </g>
+            `).join('')}
+          </svg>
+        </div>
+
+        <!-- LIST OF ALL STATION SIGNALS & SWITCHES FOR QUICK SELECTION -->
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
+          <div style="background:rgba(15,23,42,0.6);border:1px solid var(--border);border-radius:10px;padding:12px;">
+            <div style="font-size:12px;font-weight:700;color:var(--accent);margin-bottom:8px;text-transform:uppercase;">Все светофоры СЦБ (${signals.length})</div>
+            <div style="display:flex;flex-direction:column;gap:4px;max-height:220px;overflow-y:auto;font-size:11px;">
+              ${signals.map(s => `
+                <div onclick="window.RailwayScheduleStudio.pickFromSchematic('signal', '${s.id}')" style="padding:4px 8px;border-radius:4px;background:rgba(30,41,59,0.5);display:flex;justify-content:space-between;cursor:pointer;">
+                  <span style="font-weight:700;color:#38bdf8;">${s.designation} (${s.type==='entry'?'Входной':s.type==='exit'?'Выходной':'Проходной'})</span>
+                  <span style="color:var(--text-muted);">X = ${Math.round(s.x)}</span>
+                </div>
+              `).join('')}
+            </div>
+          </div>
+
+          <div style="background:rgba(15,23,42,0.6);border:1px solid var(--border);border-radius:10px;padding:12px;">
+            <div style="font-size:12px;font-weight:700;color:var(--accent);margin-bottom:8px;text-transform:uppercase;">Стрелочные переводы (${switches.length})</div>
+            <div style="display:flex;flex-direction:column;gap:4px;max-height:220px;overflow-y:auto;font-size:11px;">
+              ${switches.map(sw => `
+                <div onclick="window.RailwayScheduleStudio.pickFromSchematic('switch', '${sw.id}')" style="padding:4px 8px;border-radius:4px;background:rgba(30,41,59,0.5);display:flex;justify-content:space-between;cursor:pointer;">
+                  <span style="font-weight:700;color:#f59e0b;">${sw.name || sw.id}</span>
+                  <span style="color:var(--text-muted);">${Math.round(sw.x1)} -> ${Math.round(sw.x2)}</span>
+                </div>
+              `).join('')}
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  // --- VISUAL MAP PICKER ACTIONS ---
+  function startMapPicker(mode, stepIdx = -1) {
+    pickerState.active = true;
+    pickerState.mode = mode;
+    pickerState.stepIndex = stepIdx;
+    pickerState.hoveredItem = null;
+
+    // Hide schedule modal partially during picking
+    const modal = document.getElementById('train-schedule-modal');
+    if (modal) modal.style.display = 'none';
+
+    // Create persistent HUD overlay
+    let hud = document.getElementById('picker-hud-bar');
+    if (!hud) {
+      hud = document.createElement('div');
+      hud.id = 'picker-hud-bar';
+      hud.style.cssText = `
+        position: fixed; top: 16px; left: 50%; transform: translateX(-50%);
+        background: rgba(15, 23, 42, 0.95); border: 2px solid #38bdf8;
+        padding: 10px 20px; border-radius: 30px; z-index: 10001;
+        display: flex; align-items: center; gap: 14px; box-shadow: 0 10px 30px rgba(0,0,0,0.8);
+        backdrop-filter: blur(8px); color: #f8fafc; font-size: 13px; font-weight: 700;
+      `;
+      document.body.appendChild(hud);
+    }
+
+    const modeTitle = mode === 'spawn' ? 'Укажите точку старта поезда' :
+                      mode === 'travel' ? 'Укажите целевую точку на пути' :
+                      mode === 'switch' ? 'Кликните по стрелочному переводу' :
+                      mode === 'signal' ? 'Кликните по светофору СЦБ' : 'Кликните по платформе станции';
+
+    hud.innerHTML = `
+      <div style="width:10px;height:10px;border-radius:50%;background:#38bdf8;animation:pulse 0.8s infinite;"></div>
+      <span>${modeTitle}</span>
+      <span id="picker-hud-preview" style="color:#f59e0b;font-family:monospace;font-weight:600;">Наведите на объект...</span>
+      <button class="btn danger" onclick="window.RailwayScheduleStudio.cancelPicker()" style="padding:3px 10px;font-size:11px;">Отмена [Esc]</button>
+    `;
+    hud.style.display = 'flex';
+
+    // Center camera on station for convenience
+    if (window.camera) {
+      window.camera.x = 10800;
+      window.camera.y = 8800;
+      window.camera.zoom = 0.35;
+    }
+  }
+
+  function cancelPicker() {
+    pickerState.active = false;
+    pickerState.mode = null;
+    pickerState.stepIndex = -1;
+    pickerState.hoveredItem = null;
+
+    const hud = document.getElementById('picker-hud-bar');
+    if (hud) hud.style.display = 'none';
+
+    const modal = document.getElementById('train-schedule-modal');
+    if (modal) modal.style.display = 'flex';
+  }
+
+  function isPickerActive() {
+    return pickerState.active;
+  }
+
+  function handleCanvasPickerHover(wp) {
+    if (!pickerState.active) return;
+    const mode = pickerState.mode;
+    const md = getMapData();
+    let hovered = null;
+
+    if (mode === 'signal') {
+      const signals = md.railwaySignals || [];
+      let minD = 70 / (window.camera ? window.camera.zoom : 1);
+      for (const sig of signals) {
+        const d = Math.hypot(wp.x - sig.x, wp.y - sig.y);
+        if (d < minD) {
+          minD = d;
+          hovered = { type: 'signal', data: sig, name: `${sig.designation} (${sig.nameRu || 'Светофор'})` };
+        }
+      }
+    } else if (mode === 'switch') {
+      const tracks = md.railwayTracks || [];
+      for (const t of tracks) {
+        if (!t.isSwitch && !t.curvePoints && !t.id.includes('turnout')) continue;
+        const d = window.RailwayEditor ? window.RailwayEditor.findNearestTrack(wp) : null;
+        if (d && d.track && (d.track.id === t.id) && d.distance < 80) {
+          hovered = { type: 'switch', data: t, name: t.name || 'Стрелочный перевод' };
+          break;
+        }
+      }
+    } else if (mode === 'platform') {
+      const platforms = md.railwayPlatforms || [];
+      for (const p of platforms) {
+        if (wp.x >= p.x && wp.x <= p.x + p.width && wp.y >= p.y && wp.y <= p.y + p.height) {
+          hovered = { type: 'platform', data: p, name: p.name || 'Платформа №1' };
+          break;
+        }
+      }
+    } else if (mode === 'spawn' || mode === 'travel') {
+      const nearest = window.RailwayEditor ? window.RailwayEditor.findNearestTrack(wp) : null;
+      if (nearest && nearest.track && nearest.distance < 120) {
+        hovered = {
+          type: 'track',
+          data: nearest.track,
+          point: nearest.point,
+          name: nearest.track.name || 'ЖД Путь'
+        };
+      }
+    }
+
+    pickerState.hoveredItem = hovered;
+    const prevEl = document.getElementById('picker-hud-preview');
+    if (prevEl) {
+      prevEl.textContent = hovered ? hovered.name : 'Наведите курсор на объект...';
+    }
+  }
+
+  function handleCanvasPickerClick(wp, e) {
+    if (!pickerState.active) return false;
+    handleCanvasPickerHover(wp);
+
+    const hovered = pickerState.hoveredItem;
+    if (!hovered) return false;
+
+    const curSched = getCurrentSchedule();
+    if (!curSched) return false;
+
+    const mode = pickerState.mode;
+    const sIdx = pickerState.stepIndex;
+
+    if (mode === 'spawn' && hovered.point) {
+      curSched.spawnX = Math.round(hovered.point.x);
+      curSched.spawnY = Math.round(hovered.point.y);
+      curSched.spawnTrackId = hovered.data?.id;
+      if (window.showToast) window.showToast(`Старт установлен: X=${curSched.spawnX}, Y=${curSched.spawnY}`);
+    } else if (mode === 'travel' && hovered.point && sIdx >= 0) {
+      if (curSched.routeSteps[sIdx]) {
+        curSched.routeSteps[sIdx].targetX = Math.round(hovered.point.x);
+        curSched.routeSteps[sIdx].targetY = Math.round(hovered.point.y);
+        curSched.routeSteps[sIdx].locationName = hovered.name;
+        if (window.showToast) window.showToast(`Цель движения: ${hovered.name} (X=${curSched.routeSteps[sIdx].targetX})`);
+      }
+    } else if (mode === 'switch' && hovered.data && sIdx >= 0) {
+      if (curSched.routeSteps[sIdx]) {
+        curSched.routeSteps[sIdx].switchTrackId = hovered.data.id;
+        curSched.routeSteps[sIdx].targetY = hovered.data.y2;
+        if (window.showToast) window.showToast(`Стрелка привязана: ${hovered.name}`);
+      }
+    } else if (mode === 'signal' && hovered.data && sIdx >= 0) {
+      if (curSched.routeSteps[sIdx]) {
+        curSched.routeSteps[sIdx].signalId = hovered.data.id;
+        if (window.showToast) window.showToast(`Светофор привязан: ${hovered.name}`);
+      }
+    } else if (mode === 'platform' && hovered.data && sIdx >= 0) {
+      if (curSched.routeSteps[sIdx]) {
+        curSched.routeSteps[sIdx].stationName = hovered.data.name || 'ст. Степная';
+        curSched.routeSteps[sIdx].targetX = Math.round(hovered.data.x + hovered.data.width / 2);
+        if (window.showToast) window.showToast(`Платформа привязана: ${curSched.routeSteps[sIdx].stationName}`);
+      }
+    }
+
+    cancelPicker();
+    renderModal();
+    return true;
+  }
+
+  function pickFromSchematic(type, entityId) {
+    const curSched = getCurrentSchedule();
+    if (!curSched) return;
+
+    if (type === 'signal') {
+      const sig = (getMapData().railwaySignals || []).find(s => s.id === entityId);
+      if (!sig) return;
+      curSched.routeSteps.push({
+        id: `step_${Date.now()}`,
+        type: 'signal_hold',
+        signalId: sig.id,
+        signalClearAspect: 'green'
+      });
+      if (window.showToast) window.showToast(`Светофор ${sig.designation} добавлен в маршрут`);
+    } else if (type === 'switch') {
+      const sw = (getMapData().railwayTracks || []).find(t => t.id === entityId);
+      if (!sw) return;
+      curSched.routeSteps.push({
+        id: `step_${Date.now()}`,
+        type: 'switch_branch',
+        switchTrackId: sw.id,
+        targetY: sw.y2,
+        switchBranch: 'diverging',
+        speedLimit: 45
+      });
+      if (window.showToast) window.showToast(`Стрелка ${sw.name || sw.id} добавлена в маршрут`);
+    } else if (type === 'platform') {
+      const p = (getMapData().railwayPlatforms || []).find(pl => pl.id === entityId);
+      if (!p) return;
+      curSched.routeSteps.push({
+        id: `step_${Date.now()}`,
+        type: 'station_stop',
+        targetX: Math.round(p.x + p.width / 2),
+        stationName: p.name || 'ст. Степная',
+        dwellSeconds: 25
+      });
+      if (window.showToast) window.showToast(`Стоянка у ${p.name || 'платформы'} добавлена`);
+    }
+
+    switchTab('route');
+  }
+
+  // --- PRESET ACTIONS ---
+  function applySpawnPreset(presetKey) {
+    const cur = getCurrentSchedule();
+    if (!cur) return;
+    if (presetKey === 'main1_west') {
+      cur.spawnX = 6500;
+      cur.spawnY = 8740;
+      cur.spawnDirection = 1;
+      cur.spawnTrackId = 'rail_main_1_west';
+    } else if (presetKey === 'main2_east') {
+      cur.spawnX = 17500;
+      cur.spawnY = 8880;
+      cur.spawnDirection = -1;
+      cur.spawnTrackId = 'rail_main_2_east';
+    } else if (presetKey === 'track3_platform') {
+      cur.spawnX = 9800;
+      cur.spawnY = 8600;
+      cur.spawnDirection = 1;
+      cur.spawnTrackId = 'rail_track_3_platform';
+    } else if (presetKey === 'track4_station') {
+      cur.spawnX = 9800;
+      cur.spawnY = 9020;
+      cur.spawnDirection = 1;
+      cur.spawnTrackId = 'rail_track_4_station';
+    } else if (presetKey === 'freight_siding') {
+      cur.spawnX = 11200;
+      cur.spawnY = 9180;
+      cur.spawnDirection = 1;
+      cur.spawnTrackId = 'rail_siding_freight_ramp';
+    }
+    renderModal();
+  }
+
+  // --- CRUD OPERATIONS ---
+  function selectSchedule(idx) {
+    selectedScheduleIndex = idx;
+    renderModal();
+  }
+
+  function addNewSchedule() {
+    const md = getMapData();
+    if (!md.trainSchedules) md.trainSchedules = [];
+    const count = md.trainSchedules.length + 1;
+    const newS = {
+      id: `sched_train_${Date.now()}`,
+      name: `Пассажирский поезд №${count * 10 + 2}`,
+      trainId: `train_custom_${Date.now()}`,
+      enabled: true,
+      spawnTime: 0,
+      repeatInterval: 240,
+      spawnX: 6500,
+      spawnY: 8740,
+      spawnSpeed: 100,
+      spawnDirection: 1,
+      maxSpeed: 180,
+      acceleration: 15,
+      deceleration: 30,
+      locomotive: {
+        type: 'locomotive_diesel',
+        name: 'Пассажирский тепловоз ТЭП70БС',
+        roadNumber: `ТЭП70БС-0${count}`,
+        livery: 'rzd_classic',
+        headlightColor: '#fffbeb'
+      },
+      cars: [
+        { type: 'passenger_coach_rzhd', name: 'Купейный вагон РЖД', livery: 'rzd_classic', roadNumber: `018 2450${count}` }
+      ],
+      routeSteps: [
+        { id: 's1', type: 'travel', targetX: 9100, targetY: 8740, speedLimit: 140, locationName: 'Западный подход' },
+        { id: 's2', type: 'station_stop', targetX: 10800, targetY: 8740, dwellSeconds: 20, stationName: 'ст. Степная' },
+        { id: 's3', type: 'travel', targetX: 18000, targetY: 8740, speedLimit: 160, locationName: 'Восточный перегон' },
+        { id: 's4', type: 'despawn' }
+      ]
+    };
+    md.trainSchedules.push(newS);
+    selectedScheduleIndex = md.trainSchedules.length - 1;
+    renderModal();
+    if (window.pushHistory) window.pushHistory('Create Train Schedule');
+  }
+
+  function deleteCurrentSchedule() {
+    const md = getMapData();
+    if (!md.trainSchedules || md.trainSchedules.length === 0) return;
+    md.trainSchedules.splice(selectedScheduleIndex, 1);
+    selectedScheduleIndex = Math.max(0, selectedScheduleIndex - 1);
+    renderModal();
+    if (window.pushHistory) window.pushHistory('Delete Train Schedule');
+  }
+
+  function duplicateCurrentSchedule() {
+    const md = getMapData();
+    if (!md.trainSchedules || !md.trainSchedules[selectedScheduleIndex]) return;
+    const clone = JSON.parse(JSON.stringify(md.trainSchedules[selectedScheduleIndex]));
+    clone.id = `sched_train_${Date.now()}`;
+    clone.name += ' (Копия)';
+    md.trainSchedules.push(clone);
+    selectedScheduleIndex = md.trainSchedules.length - 1;
+    renderModal();
+    if (window.pushHistory) window.pushHistory('Duplicate Train Schedule');
+  }
+
+  function updateScheduleProp(prop, val) {
+    const cur = getCurrentSchedule();
+    if (!cur) return;
+    cur[prop] = val;
+  }
+
+  function updateLocomotiveType(type) {
+    const cur = getCurrentSchedule();
+    if (!cur) return;
+    const p = locomotivePresets.find(l => l.type === type);
+    cur.locomotive = {
+      type: type,
+      name: p?.name || 'Локомотив',
+      roadNumber: p?.roadNumber || 'РЖД-001',
+      livery: p?.livery || 'rzd_classic',
+      headlightColor: '#fffbeb'
+    };
+    renderModal();
+  }
+
+  function updateLocomotiveRoadNumber(val) {
+    const cur = getCurrentSchedule();
+    if (cur && cur.locomotive) cur.locomotive.roadNumber = val;
+  }
+
+  function addCarToConsist() {
+    const cur = getCurrentSchedule();
+    if (!cur) return;
+    if (!cur.cars) cur.cars = [];
+    const p = carPresets[0];
+    cur.cars.push({
+      type: p.type,
+      name: p.name,
+      livery: p.livery,
+      roadNumber: `РЖД-0${cur.cars.length + 1}`
+    });
+    renderModal();
+  }
+
+  function removeCarFromConsist(idx) {
+    const cur = getCurrentSchedule();
+    if (!cur || !cur.cars) return;
+    cur.cars.splice(idx, 1);
+    renderModal();
+  }
+
+  function updateCarType(idx, type) {
+    const cur = getCurrentSchedule();
+    if (!cur || !cur.cars || !cur.cars[idx]) return;
+    const p = carPresets.find(cp => cp.type === type);
+    cur.cars[idx].type = type;
+    cur.cars[idx].name = p?.name || 'Вагон';
+    cur.cars[idx].livery = p?.livery || 'rzd_classic';
+    if (p?.cargoType) cur.cars[idx].cargoType = p.cargoType;
+    renderModal();
+  }
+
+  function updateCarLabel(idx, val) {
+    const cur = getCurrentSchedule();
+    if (!cur || !cur.cars || !cur.cars[idx]) return;
+    cur.cars[idx].roadNumber = val;
+    cur.cars[idx].cargoType = val;
+  }
+
+  function addRouteStep(type) {
+    const cur = getCurrentSchedule();
+    if (!cur) return;
+    if (!cur.routeSteps) cur.routeSteps = [];
+    const newStep = {
+      id: `step_${Date.now()}_${Math.floor(Math.random()*100)}`,
+      type: type
+    };
+    if (type === 'travel') {
+      newStep.targetX = (cur.routeSteps[cur.routeSteps.length - 1]?.targetX || cur.spawnX || 6500) + 3000;
+      newStep.targetY = cur.spawnY || 8740;
+      newStep.speedLimit = 140;
+      newStep.locationName = 'Перегон';
+    } else if (type === 'switch_branch') {
+      const sw = getAllSwitchesList()[0];
+      newStep.switchTrackId = sw?.id || 'rail_bezier_turnout_track3_west';
+      newStep.targetY = sw?.y2 || 8600;
+      newStep.switchBranch = 'diverging';
+      newStep.speedLimit = 45;
+    } else if (type === 'station_stop') {
+      newStep.targetX = 10800;
+      newStep.targetY = 8600;
+      newStep.stationName = 'ст. Степная (Платформа №1)';
+      newStep.dwellSeconds = 25;
+    } else if (type === 'signal_hold') {
+      const sig = getAllSignalsList()[0];
+      newStep.signalId = sig?.id || 'sig_exit_N3';
+      newStep.signalClearAspect = 'green';
+    }
+    cur.routeSteps.push(newStep);
+    renderModal();
+  }
+
+  function removeStep(idx) {
+    const cur = getCurrentSchedule();
+    if (!cur || !cur.routeSteps) return;
+    cur.routeSteps.splice(idx, 1);
+    renderModal();
+  }
+
+  function moveStep(idx, dir) {
+    const cur = getCurrentSchedule();
+    if (!cur || !cur.routeSteps) return;
+    const targetIdx = idx + dir;
+    if (targetIdx < 0 || targetIdx >= cur.routeSteps.length) return;
+    const tmp = cur.routeSteps[idx];
+    cur.routeSteps[idx] = cur.routeSteps[targetIdx];
+    cur.routeSteps[targetIdx] = tmp;
+    renderModal();
+  }
+
+  function duplicateStep(idx) {
+    const cur = getCurrentSchedule();
+    if (!cur || !cur.routeSteps || !cur.routeSteps[idx]) return;
+    const clone = JSON.parse(JSON.stringify(cur.routeSteps[idx]));
+    clone.id = `step_${Date.now()}`;
+    cur.routeSteps.splice(idx + 1, 0, clone);
+    renderModal();
+  }
+
+  function updateStepProp(idx, prop, val) {
+    const cur = getCurrentSchedule();
+    if (!cur || !cur.routeSteps || !cur.routeSteps[idx]) return;
+    cur.routeSteps[idx][prop] = val;
+  }
+
+  function updateStepSwitch(idx, switchId) {
+    const cur = getCurrentSchedule();
+    if (!cur || !cur.routeSteps || !cur.routeSteps[idx]) return;
+    cur.routeSteps[idx].switchTrackId = switchId;
+    const sw = (getMapData().railwayTracks || []).find(t => t.id === switchId);
+    if (sw) {
+      cur.routeSteps[idx].targetY = sw.y2;
+    }
+  }
+
+  function updateStepSignal(idx, sigId) {
+    const cur = getCurrentSchedule();
+    if (!cur || !cur.routeSteps || !cur.routeSteps[idx]) return;
+    cur.routeSteps[idx].signalId = sigId;
+  }
+
+  function saveAndClose() {
+    if (window.pushHistory) window.pushHistory('Save Train Schedules');
+    closeModal();
+    if (window.showToast) window.showToast('Расписание поездов успешно сохранено!');
+  }
+
+  // --- SIMULATION ENGINE ---
+  function initSimulationCanvas() {
+    simState.canvas = document.getElementById('railway-sim-canvas');
+    if (!simState.canvas) return;
+    simState.ctx = simState.canvas.getContext('2d');
+
+    const resize = () => {
+      if (!simState.canvas) return;
+      simState.canvas.width = simState.canvas.parentElement.clientWidth;
+      simState.canvas.height = simState.canvas.parentElement.clientHeight;
+    };
+    resize();
+
+    // Mouse drag pan
+    simState.canvas.onmousedown = (e) => {
+      simState.isDragging = true;
+      simState.dragStart = { x: e.clientX, y: e.clientY };
+      simState.camStart = { x: simState.cam.x, y: simState.cam.y };
+      simState.canvas.style.cursor = 'grabbing';
+    };
+
+    window.onmousemove = (e) => {
+      if (!simState.isDragging) return;
+      simState.cam.x = simState.camStart.x - (e.clientX - simState.dragStart.x) / simState.cam.zoom;
+      simState.cam.y = simState.camStart.y - (e.clientY - simState.dragStart.y) / simState.cam.zoom;
+    };
+
+    window.onmouseup = () => {
+      if (simState.isDragging) {
+        simState.isDragging = false;
+        if (simState.canvas) simState.canvas.style.cursor = 'grab';
+      }
+    };
+
+    // Zoom wheel
+    simState.canvas.onwheel = (e) => {
+      e.preventDefault();
+      const factor = e.deltaY < 0 ? 1.15 : 0.87;
+      simState.cam.zoom = Math.max(0.05, Math.min(2.0, simState.cam.zoom * factor));
+    };
+
+    // Precalculate diagnostic incidents and timeline event log
+    precalculateIncidentsAndEvents();
+  }
+
+  function startSimulation() {
+    simState.isPlaying = true;
+    simState.lastFrameTime = performance.now();
+    cancelAnimationFrame(simState.animFrameId);
+    simLoop();
+  }
+
+  function stopSimulation() {
+    simState.isPlaying = false;
+    cancelAnimationFrame(simState.animFrameId);
+  }
+
+  function togglePlay() {
+    if (simState.isPlaying) stopSimulation();
+    else startSimulation();
+    renderModal();
+    if (simState.isPlaying) initSimulationCanvas();
+  }
+
+  function setSpeed(spd) {
+    simState.speed = spd;
+    renderModal();
+    initSimulationCanvas();
+  }
+
+  function setScenario(scen) {
+    simState.scenario = scen;
+    simState.time = 0;
+    precalculateIncidentsAndEvents();
+    renderModal();
+    initSimulationCanvas();
+  }
+
+  function toggleFollow(val) {
+    simState.followTrain = val;
+  }
+
+  function centerStation() {
+    simState.cam.x = 10800;
+    simState.cam.y = 8800;
+    simState.cam.zoom = 0.32;
+  }
+
+  function seekRelative(deltaSec) {
+    simState.time = Math.max(0, Math.min(simState.maxTime, simState.time + deltaSec));
+    updateScrubberUI();
+  }
+
+  function onScrubberInput(val) {
+    simState.time = val;
+    updateScrubberUI();
+  }
+
+  function resetSimulationTime() {
+    simState.time = 0;
+    updateScrubberUI();
+  }
+
+  function updateScrubberUI() {
+    const sc = document.getElementById('sim-scrubber');
+    if (sc) sc.value = simState.time;
+    const td = document.getElementById('sim-time-display');
+    if (td) {
+      const m = Math.floor(simState.time / 60);
+      const s = Math.floor(simState.time % 60);
+      td.textContent = `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+    }
+  }
+
+  function jumpToTime(t) {
+    simState.time = Math.max(0, Math.min(simState.maxTime, t));
+    updateScrubberUI();
+  }
+
+  // --- KINEMATICS CALCULATION AT TIME T ---
+  function getStepWorldTarget(step, sched, prevX, prevY) {
+    const md = getMapData();
+    let targetX = step?.targetX;
+    let targetY = step?.targetY;
+
+    if (step?.type === 'signal_hold' && step.signalId) {
+      const sig = (md.railwaySignals || []).find(s => s.id === step.signalId);
+      if (sig) {
+        if (!targetX) targetX = sig.x;
+        if (!targetY) targetY = sig.y;
+      }
+    } else if (step?.type === 'switch_branch' && step.switchTrackId) {
+      const sw = (md.railwayTracks || []).find(t => t.id === step.switchTrackId);
+      if (sw) {
+        if (!targetX) targetX = (sched.spawnDirection === 1 ? Math.max(sw.x1, sw.x2) : Math.min(sw.x1, sw.x2));
+        if (!targetY) targetY = (step.switchBranch === 'diverging' && sw.y2) ? sw.y2 : sw.y1;
+      }
+    } else if (step?.type === 'station_stop' && step.stationName) {
+      const pl = (md.railwayPlatforms || []).find(p => p.name === step.stationName || p.id === step.stationName);
+      if (pl) {
+        if (!targetX) targetX = pl.x + pl.width / 2;
+        if (!targetY) targetY = pl.y + 40;
+      }
+    }
+
+    // Fallbacks
+    if (!targetY || targetY < 1000) targetY = prevY || sched?.spawnY || 8740;
+    if (!targetX) {
+      targetX = prevX + ((sched?.spawnDirection || 1) === 1 ? 2500 : -2500);
+    }
+
+    return { targetX, targetY };
+  }
+
+  function computeTrainTrajectory(sched, t, scenario) {
+    if (!sched) return null;
+    const steps = sched.routeSteps || [];
+    let x = sched.spawnX || 6500;
+    let y = sched.spawnY || 8740;
+    if (y < 1000) y = 8740;
+
+    let speed = sched.spawnSpeed || 100;
+    let currentStepIdx = 0;
+    const direction = sched.spawnDirection || 1;
+    const maxSpd = sched.maxSpeed || 200;
+    const accel = sched.acceleration || 18;
+    const decel = sched.deceleration || 32;
+
+    // Numerical integration from 0 to t
+    const dt = 0.2;
+    let dwellTimer = 0;
+
+    for (let curT = 0; curT <= t; curT += dt) {
+      const step = steps[currentStepIdx];
+      let targetSpeed = maxSpd;
+
+      if (!step) {
+        // Despawned or loop
+        x += speed * direction * dt;
+        continue;
+      }
+
+      // Resolve step target position
+      const stepPos = getStepWorldTarget(step, sched, x, y);
+
+      // Smoothly snap/interpolate train Y coordinate to track Y
+      y += (stepPos.targetY - y) * 0.2;
+
+      if (step.type === 'travel') {
+        targetSpeed = step.speedLimit || maxSpd;
+        const reached = direction === 1 ? x >= stepPos.targetX : x <= stepPos.targetX;
+        if (reached && currentStepIdx < steps.length - 1) {
+          currentStepIdx++;
+        }
+      } else if (step.type === 'switch_branch') {
+        targetSpeed = step.switchBranch === 'diverging' ? 45 : (step.speedLimit || maxSpd);
+        const passed = direction === 1 ? x >= stepPos.targetX : x <= stepPos.targetX;
+        if (passed && currentStepIdx < steps.length - 1) {
+          currentStepIdx++;
+        }
+      } else if (step.type === 'station_stop') {
+        const dist = Math.abs(x - stepPos.targetX);
+        if (dist < 40) {
+          targetSpeed = 0;
+          if (dwellTimer === 0 && speed < 10) {
+            dwellTimer = step.dwellSeconds || 25;
+          }
+        } else if (dist < 600) {
+          targetSpeed = Math.min(targetSpeed, 35);
+        }
+
+        if (dwellTimer > 0) {
+          targetSpeed = 0;
+          dwellTimer -= dt;
+          if (dwellTimer <= 0 && currentStepIdx < steps.length - 1) {
+            currentStepIdx++;
+          }
+        }
+      } else if (step.type === 'signal_hold') {
+        let isRed = false;
+        if (scenario === 'red_signal') {
+          isRed = true;
+        }
+        const distToSig = Math.abs(x - stepPos.targetX);
+        if (isRed) {
+          if (distToSig < 40) {
+            targetSpeed = 0;
+          } else if (distToSig < 400) {
+            targetSpeed = Math.min(targetSpeed, 20);
+          }
+        } else {
+          targetSpeed = step.speedLimit || maxSpd;
+          const passedSignal = direction === 1 ? x >= stepPos.targetX : x <= stepPos.targetX;
+          if (passedSignal && currentStepIdx < steps.length - 1) {
+            currentStepIdx++;
+          }
+        }
+      } else if (step.type === 'despawn') {
+        targetSpeed = 0;
+      }
+
+      // Physics ramp
+      if (speed < targetSpeed) {
+        speed = Math.min(targetSpeed, speed + accel * dt);
+      } else if (speed > targetSpeed) {
+        speed = Math.max(targetSpeed, speed - decel * dt);
+      }
+
+      x += speed * direction * dt;
+    }
+
+    return {
+      x,
+      y,
+      speed,
+      direction,
+      currentStepIdx,
+      step: steps[currentStepIdx]
+    };
+  }
+
+  // Pre-evaluates route for SPADs, collisions and event milestones
+  function precalculateIncidentsAndEvents() {
+    simState.incidents = [];
+    simState.eventLog = [];
+
+    const curSched = getCurrentSchedule();
+    if (!curSched) return;
+
+    // Scan timeline 0 to 360 seconds at 1-sec intervals
+    let lastStep = -1;
+    for (let sec = 0; sec <= simState.maxTime; sec += 1.0) {
+      const train = computeTrainTrajectory(curSched, sec, simState.scenario);
+      if (!train) continue;
+
+      // Event: step change
+      if (train.currentStepIdx !== lastStep) {
+        lastStep = train.currentStepIdx;
+        const st = curSched.routeSteps[train.currentStepIdx];
+        if (st) {
+          const typeRu = st.type === 'travel' ? `Движение до ПК ${Math.round((st.targetX||0)/100)}` :
+                         st.type === 'switch_branch' ? `Стрелочный перевод (${st.switchBranch==='diverging'?'Отклонение':'Прямой'})` :
+                         st.type === 'station_stop' ? `Стоянка на станции ${st.stationName || ''}` :
+                         st.type === 'signal_hold' ? `Светофор СЦБ (${getFriendlySignalLabel(st.signalId)})` : 'Завершение маршрута';
+          simState.eventLog.push({
+            time: sec,
+            type: 'info',
+            title: `Шаг ${train.currentStepIdx + 1}: ${typeRu}`,
+            desc: `Скорость: ${Math.round(train.speed * 0.4)} км/ч, X=${Math.round(train.x)}`
+          });
+        }
+      }
+
+      // Check SPAD (Signal Passed at Danger)
+      if (simState.scenario === 'red_signal') {
+        const exitSignalX = 12850;
+        if (train.x >= exitSignalX - 30 && train.x <= exitSignalX + 80 && train.speed > 15) {
+          if (!simState.incidents.some(i => i.type === 'spad')) {
+            const inc = {
+              time: sec,
+              type: 'spad',
+              title: 'НАРУШЕНИЕ СЦБ: Проезд на запрещающий сигнал (SPAD)!',
+              desc: `Поезд №12 проехал светофор Н3 на красный со скоростью ${Math.round(train.speed * 0.4)} км/ч на ${sec} сек.`,
+              x: exitSignalX,
+              y: train.y
+            };
+            simState.incidents.push(inc);
+            simState.eventLog.push({ time: sec, type: 'danger', title: inc.title, desc: inc.desc });
+          }
+        }
+      }
+
+      // Check Collision on throat switch (Scenario: head_on)
+      if (simState.scenario === 'head_on') {
+        // Injected opposing train moving West on Track 1 from X=15000
+        const oppX = 15000 - 90 * sec;
+        const oppY = 8740;
+        const dist = Math.hypot(train.x - oppX, train.y - oppY);
+        if (dist < 180) {
+          if (!simState.incidents.some(i => i.type === 'collision')) {
+            const inc = {
+              time: sec,
+              type: 'collision',
+              title: 'КРИТИЧЕСКИЙ КОНФЛИКТ: Столкновение составов!',
+              desc: `Опасное сближение и столкновение с встречным грузовым поездом на стрелке (дистанция ${Math.round(dist)}м).`,
+              x: (train.x + oppX) / 2,
+              y: train.y
+            };
+            simState.incidents.push(inc);
+            simState.eventLog.push({ time: sec, type: 'danger', title: inc.title, desc: inc.desc });
+          }
+        }
+      }
+    }
+
+    renderEventLogUI();
+  }
+
+  function renderEventLogUI() {
+    const listEl = document.getElementById('sim-event-list');
+    const cntEl = document.getElementById('sim-incident-count');
+    if (!listEl) return;
+
+    if (cntEl) {
+      if (simState.incidents.length > 0) {
+        cntEl.textContent = `${simState.incidents.length} КРИТИЧЕСКИХ НАРУШЕНИЙ`;
+        cntEl.style.color = '#ef4444';
+      } else {
+        cntEl.textContent = '0 нарушений • Маршрут безопасен';
+        cntEl.style.color = '#22c55e';
+      }
+    }
+
+    listEl.innerHTML = simState.eventLog.map(ev => {
+      const m = Math.floor(ev.time / 60);
+      const s = Math.floor(ev.time % 60);
+      const timeStr = `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+      const color = ev.type === 'danger' ? '#ef4444' : ev.type === 'warn' ? '#f59e0b' : '#94a3b8';
+      const bg = ev.type === 'danger' ? 'rgba(239, 68, 68, 0.15)' : 'rgba(15, 23, 42, 0.4)';
+
+      return `
+        <div onclick="window.RailwayScheduleStudio.jumpToTime(${ev.time})" style="
+          padding: 3px 6px; border-radius: 4px; background: ${bg}; border-left: 3px solid ${color};
+          display: flex; align-items: center; justify-content: space-between; cursor: pointer;
+        ">
+          <div style="display:flex;align-items:center;gap:6px;">
+            <span style="color:#38bdf8;font-weight:700;">[${timeStr}]</span>
+            <span style="color:${color};font-weight:${ev.type==='danger'?'800':'600'};">${ev.title}</span>
+          </div>
+          <span style="color:var(--text-muted);font-size:10px;">${ev.desc}</span>
+        </div>
+      `;
+    }).join('');
+  }
+
+  // --- MAIN SIMULATION LOOP ---
+  function simLoop() {
+    if (!simState.isPlaying) return;
+
+    const now = performance.now();
+    const dt = (now - simState.lastFrameTime) / 1000;
+    simState.lastFrameTime = now;
+
+    simState.time += dt * simState.speed;
+    if (simState.time > simState.maxTime) {
+      simState.time = 0; // Loop
+    }
+
+    updateScrubberUI();
+    renderSimulationFrame();
+
+    simState.animFrameId = requestAnimationFrame(simLoop);
+  }
+
+  // --- RENDER 2D SIMULATION VIEWPORT ---
+  function renderSimulationFrame() {
+    const ctx = simState.ctx;
+    const canvas = simState.canvas;
+    if (!ctx || !canvas) return;
+
+    const w = canvas.width;
+    const h = canvas.height;
+    ctx.clearRect(0, 0, w, h);
+
+    const curSched = getCurrentSchedule();
+    const train = computeTrainTrajectory(curSched, simState.time, simState.scenario);
+
+    // Follow train with smooth camera
+    if (simState.followTrain && train) {
+      simState.cam.x += (train.x - simState.cam.x) * 0.1;
+      simState.cam.y += (train.y - simState.cam.y) * 0.1;
+    }
+
+    ctx.save();
+    ctx.translate(w / 2, h / 2);
+    ctx.scale(simState.cam.zoom, simState.cam.zoom);
+    ctx.translate(-simState.cam.x, -simState.cam.y);
+
+    const zoom = simState.cam.zoom;
+    const md = getMapData();
+
+    // 1. Draw Platforms
+    for (const p of md.railwayPlatforms || []) {
+      ctx.fillStyle = '#334155';
+      ctx.fillRect(p.x, p.y, p.width, p.height);
+      ctx.strokeStyle = '#22c55e';
+      ctx.lineWidth = 4 / zoom;
+      ctx.strokeRect(p.x, p.y, p.width, p.height);
+
+      ctx.fillStyle = '#f59e0b';
+      ctx.fillRect(p.x, p.y + p.height - 8, p.width, 8);
+      ctx.fillRect(p.x, p.y, p.width, 8);
+
+      ctx.fillStyle = '#f8fafc';
+      ctx.font = `bold ${Math.max(20, 28/zoom)}px sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.fillText(p.name || 'Платформа ст. Степная', p.x + p.width/2, p.y + p.height/2 + 8);
+    }
+
+    // 2. Draw Tracks & Sleepers
+    for (const t of md.railwayTracks || []) {
+      const isSwitch = t.isSwitch || t.curvePoints;
+      ctx.strokeStyle = isSwitch ? 'rgba(245, 158, 11, 0.4)' : '#332f2b';
+      ctx.lineWidth = t.ballastWidth || 92;
+      ctx.lineCap = 'butt';
+      ctx.beginPath();
+      if (t.curvePoints && t.curvePoints.length > 1) {
+        ctx.moveTo(t.curvePoints[0].x, t.curvePoints[0].y);
+        for (let i = 1; i < t.curvePoints.length; i++) ctx.lineTo(t.curvePoints[i].x, t.curvePoints[i].y);
+      } else {
+        ctx.moveTo(t.x1, t.y1);
+        ctx.lineTo(t.x2, t.y2);
+      }
+      ctx.stroke();
+
+      // Metallic rails
+      ctx.strokeStyle = '#f8fafc';
+      ctx.lineWidth = 5;
+      ctx.stroke();
+    }
+
+    // 3. Draw Route Planned Path (Glowing Cyan Neon Trace)
+    if (train) {
+      ctx.strokeStyle = 'rgba(56, 189, 248, 0.7)';
+      ctx.lineWidth = 12;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      ctx.beginPath();
+      let lastX = curSched.spawnX || 6500;
+      let lastY = curSched.spawnY || 8740;
+      if (lastY < 1000) lastY = 8740;
+      ctx.moveTo(lastX, lastY);
+
+      (curSched.routeSteps || []).forEach(st => {
+        const pt = getStepWorldTarget(st, curSched, lastX, lastY);
+        ctx.lineTo(pt.targetX, pt.targetY);
+        lastX = pt.targetX;
+        lastY = pt.targetY;
+      });
+      ctx.stroke();
+    }
+
+    // 4. Draw Signals with Real Lit Optics
+    for (const sig of md.railwaySignals || []) {
+      const isExitSig = sig.id === 'sig_exit_N3' || sig.id === 'sig_exit_Ch2';
+      let litAspect = sig.currentAspect || 'green';
+      if (simState.scenario === 'red_signal' && isExitSig) {
+        litAspect = 'red';
+      }
+
+      ctx.save();
+      ctx.translate(sig.x, sig.y);
+      ctx.rotate(sig.angle || 0);
+
+      // Signal Mast & Head
+      ctx.fillStyle = '#1e293b';
+      ctx.strokeStyle = '#94a3b8';
+      ctx.lineWidth = 2;
+      ctx.fillRect(-8, -25, 16, 50);
+      ctx.strokeRect(-8, -25, 16, 50);
+
+      // Glowing Lamp
+      const lampColor = litAspect === 'red' ? '#ef4444' : litAspect === 'yellow' ? '#f59e0b' : '#22c55e';
+      ctx.fillStyle = lampColor;
+      ctx.shadowColor = lampColor;
+      ctx.shadowBlur = 15;
+      ctx.beginPath();
+      ctx.arc(0, litAspect === 'red' ? 12 : -12, 6, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.shadowBlur = 0;
+
+      // Designation label
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 16px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(sig.designation || 'С1', 0, -32);
+      ctx.restore();
+    }
+
+    // 5. Draw Active Simulated Train (Locomotive + Cars)
+    if (train) {
+      renderSimulatedConsist(ctx, train, curSched);
+    }
+
+    // 6. Draw Injected Conflict Train in Scenario 'head_on'
+    if (simState.scenario === 'head_on') {
+      const oppX = 15000 - 90 * simState.time;
+      const oppTrain = { x: oppX, y: 8740, speed: 90, direction: -1 };
+      renderSimulatedConsist(ctx, oppTrain, {
+        locomotive: { name: 'ВЛ80С (Встречный)', livery: 'rzd_classic' },
+        cars: [{ type: 'freight_hopper' }, { type: 'freight_hopper' }, { type: 'freight_tanker' }]
+      });
+    }
+
+    // 7. Draw SPAD or Collision Warning Zone
+    for (const inc of simState.incidents) {
+      if (Math.abs(inc.time - simState.time) < 8) {
+        ctx.save();
+        ctx.strokeStyle = '#ef4444';
+        ctx.lineWidth = 6;
+        ctx.setLineDash([12, 8]);
+        ctx.beginPath();
+        ctx.arc(inc.x, inc.y, 80 + Math.sin(performance.now() * 0.01) * 15, 0, Math.PI * 2);
+        ctx.stroke();
+
+        ctx.fillStyle = '#ef4444';
+        ctx.font = 'bold 22px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText(inc.title, inc.x, inc.y - 100);
+        ctx.restore();
+      }
+    }
+
+    ctx.restore();
+
+    // Update Telemetry & Safety UI
+    updateTelemetryUI(train);
+  }
+
+  function renderSimulatedConsist(ctx, train, sched) {
+    const cars = sched.cars || [];
+    const dir = train.direction;
+
+    // Locomotive
+    ctx.save();
+    ctx.translate(train.x, train.y);
+    ctx.rotate(dir === 1 ? 0 : Math.PI);
+
+    // Locomotive Body
+    ctx.fillStyle = '#991b1b'; // RZD red
+    ctx.fillRect(-130, -28, 260, 56);
+    ctx.strokeStyle = '#cbd5e1';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(-130, -28, 260, 56);
+
+    // Windshield & Roof
+    ctx.fillStyle = '#475569';
+    ctx.fillRect(-80, -20, 160, 40);
+    ctx.fillStyle = '#38bdf8';
+    ctx.fillRect(80, -18, 30, 36);
+
+    // Headlight Beam
+    ctx.fillStyle = 'rgba(255, 251, 235, 0.4)';
+    ctx.beginPath();
+    ctx.moveTo(130, 0);
+    ctx.lineTo(380, -70);
+    ctx.lineTo(380, 70);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.restore();
+
+    // Coupled Cars
+    for (let i = 0; i < cars.length; i++) {
+      const cDef = cars[i];
+      const carLen = 220;
+      const carOffset = (130 + carLen / 2 + 15) * (i + 1);
+      const carX = dir === 1 ? train.x - carOffset : train.x + carOffset;
+
+      ctx.save();
+      ctx.translate(carX, train.y);
+      ctx.rotate(dir === 1 ? 0 : Math.PI);
+
+      ctx.fillStyle = cDef.type?.includes('tanker') ? '#1e3a8a' :
+                     cDef.type?.includes('hopper') ? '#78350f' : '#1e293b';
+      ctx.fillRect(-carLen / 2, -26, carLen, 52);
+      ctx.strokeStyle = '#cbd5e1';
+      ctx.lineWidth = 1.5;
+      ctx.strokeRect(-carLen / 2, -26, carLen, 52);
+
+      // Coupler
+      ctx.fillStyle = '#64748b';
+      ctx.fillRect(carLen / 2, -4, 15, 8);
+
+      ctx.restore();
+    }
+  }
+
+  function updateTelemetryUI(train) {
+    if (!train) return;
+    const spdEl = document.getElementById('sim-tel-speed');
+    const posEl = document.getElementById('sim-tel-pos');
+    const stepEl = document.getElementById('sim-tel-step');
+    const pill = document.getElementById('sim-safety-pill');
+
+    if (spdEl) spdEl.textContent = `${Math.round(train.speed * 0.4)} км/ч`;
+    if (posEl) posEl.textContent = `X=${Math.round(train.x)} (ПК ${Math.round(train.x / 100)})`;
+    if (stepEl) stepEl.textContent = train.step ? `Шаг ${train.currentStepIdx + 1}: ${train.step.type}` : 'Маршрут завершен';
+
+    // Safety pill badge
+    if (pill) {
+      const activeInc = simState.incidents.find(i => Math.abs(i.time - simState.time) < 4);
+      if (activeInc) {
+        pill.style.background = 'rgba(153, 27, 27, 0.95)';
+        pill.style.borderColor = '#ef4444';
+        pill.style.color = '#fecaca';
+        pill.innerHTML = `<span style="width:8px;height:8px;border-radius:50%;background:#ef4444;animation:pulse 0.5s infinite;"></span><span>${activeInc.title}</span>`;
+      } else {
+        pill.style.background = 'rgba(22, 101, 52, 0.9)';
+        pill.style.borderColor = '#22c55e';
+        pill.style.color = '#bbf7d0';
+        pill.innerHTML = `<span style="width:8px;height:8px;border-radius:50%;background:#22c55e;"></span><span>МАРШРУТ ЧИСТ: Нарушений СЦБ нет</span>`;
+      }
+    }
+  }
+
+  return {
+    openModal,
+    closeModal,
+    switchTab,
+    startMapPicker,
+    cancelPicker,
+    isPickerActive,
+    handleCanvasPickerHover,
+    handleCanvasPickerClick,
+    pickFromSchematic,
+    applySpawnPreset,
+    selectSchedule,
+    addNewSchedule,
+    deleteCurrentSchedule,
+    duplicateCurrentSchedule,
+    updateScheduleProp,
+    updateLocomotiveType,
+    updateLocomotiveRoadNumber,
+    addCarToConsist,
+    removeCarFromConsist,
+    updateCarType,
+    updateCarLabel,
+    addRouteStep,
+    removeStep,
+    moveStep,
+    duplicateStep,
+    updateStepProp,
+    updateStepSwitch,
+    updateStepSignal,
+    saveAndClose,
+    // Simulation controls
+    togglePlay,
+    setSpeed,
+    setScenario,
+    toggleFollow,
+    centerStation,
+    seekRelative,
+    onScrubberInput,
+    resetSimulationTime,
+    jumpToTime
+  };
+})();
+</script>
 <script>
 /**
  * COMPREHENSIVE RAILWAY & SIGNALING & TRAIN SCHEDULE EDITOR MODULE
@@ -1588,53 +3551,187 @@ window.RailwayEditor = (function() {
       ctx.rotate(sig.angle || 0);
 
       const sigScale = Math.max(1, 0.35 / Math.max(0.05, zoom));
-      const sigW = 22 * sigScale;
-      const sigH = 38 * sigScale;
+      const isCrossing = sig.type === 'crossing' || sig.mastType === 'crossing';
 
-      ctx.fillStyle = isSel ? '#38bdf8' : '#0f172a';
-      ctx.fillRect(-sigW / 2, -sigH / 2, sigW, sigH);
-      ctx.strokeStyle = isSel ? '#ffffff' : '#f1f5f9';
-      ctx.lineWidth = Math.max(2, 2 / zoom);
-      ctx.strokeRect(-sigW / 2, -sigH / 2, sigW, sigH);
+      if (isCrossing) {
+        // Render crossing signal with St. Andrew's cross & barrier arm indicator in editor (matching game view)
+        const crossW = 24 * sigScale;
 
-      const aspectColorMap = {
-        green: '#22c55e',
-        yellow: '#eab308',
-        two_yellows: '#eab308',
-        yellow_flashing_yellow: '#eab308',
-        red: '#ef4444',
-        lunar_white: '#f8fafc',
-        lunar_white_flashing: '#f8fafc',
-        blue: '#3b82f6',
-        red_alternating: '#ef4444',
-        dark: '#334155'
-      };
-      const col = aspectColorMap[sig.currentAspect] || '#22c55e';
+        // 1. Base plate & foundation
+        ctx.fillStyle = isSel ? '#38bdf8' : '#334155';
+        ctx.fillRect(-6 * sigScale, -6 * sigScale, 12 * sigScale, 12 * sigScale);
+        ctx.strokeStyle = isSel ? '#ffffff' : '#64748b';
+        ctx.lineWidth = Math.max(1.5, 1.5 / zoom);
+        ctx.strokeRect(-6 * sigScale, -6 * sigScale, 12 * sigScale, 12 * sigScale);
 
-      ctx.fillStyle = col;
-      ctx.shadowColor = col;
-      ctx.shadowBlur = Math.max(8, 16 / zoom);
-      ctx.beginPath();
-      ctx.arc(0, 0, Math.max(7, 8 * sigScale), 0, Math.PI * 2);
-      ctx.fill();
-      ctx.shadowBlur = 0;
+        // 2. Tubular mast center
+        ctx.fillStyle = '#0f172a';
+        ctx.beginPath();
+        ctx.arc(0, 0, Math.max(3, 4 * sigScale), 0, Math.PI * 2);
+        ctx.fill();
 
-      if (sig.designation) {
-        ctx.fillStyle = '#ffffff';
-        ctx.font = `bold ${Math.max(11, 12 / zoom)}px sans-serif`;
-        ctx.textAlign = 'center';
-        ctx.fillText(sig.designation, 0, sigH / 2 + Math.max(12, 14 / zoom));
+        // 3. Counterweight pointing away from roadway (-Y local)
+        ctx.fillStyle = '#1e293b';
+        ctx.fillRect(-3 * sigScale, -12 * sigScale, 6 * sigScale, 8 * sigScale);
+
+        // 4. St. Andrew's cross board along Y facing oncoming traffic (+X local)
+        ctx.fillStyle = '#f8fafc';
+        ctx.fillRect(2 * sigScale, -crossW / 2, 3 * sigScale, crossW);
+        ctx.fillStyle = '#dc2626';
+        ctx.fillRect(2 * sigScale, -crossW / 2, 3 * sigScale, 4 * sigScale);
+        ctx.fillRect(2 * sigScale, crossW / 2 - 4 * sigScale, 3 * sigScale, 4 * sigScale);
+
+        // 5. Twin red lanterns facing oncoming traffic (+X local)
+        const isRed = sig.currentAspect === 'red_alternating_flashing' || sig.currentAspect === 'red';
+        ctx.fillStyle = isRed ? '#ef4444' : '#38bdf8';
+        ctx.beginPath();
+        ctx.arc(4 * sigScale, -7 * sigScale, 3.5 * sigScale, 0, Math.PI * 2);
+        ctx.arc(4 * sigScale, 7 * sigScale, 3.5 * sigScale, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = '#0f172a';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+
+        // 6. Barrier boom extending across lane (+Y local) in true world length
+        const boomLen = sig.barrierLength || 54;
+        ctx.strokeStyle = '#dc2626';
+        ctx.lineWidth = Math.max(3, 4 / zoom);
+        ctx.beginPath();
+        ctx.moveTo(0, 2);
+        ctx.lineTo(0, boomLen);
+        ctx.stroke();
+
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = Math.max(1.5, 2 / zoom);
+        ctx.setLineDash([6 / zoom, 6 / zoom]);
+        ctx.beginPath();
+        ctx.moveTo(0, 2);
+        ctx.lineTo(0, boomLen);
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        if (sig.designation) {
+          ctx.fillStyle = '#ffffff';
+          ctx.font = `bold ${Math.max(11, 12 / zoom)}px sans-serif`;
+          ctx.textAlign = 'center';
+          ctx.fillText(sig.designation, -14 * sigScale, 0);
+        }
+      } else {
+        // Authentic Realistic Black Railway Signal in Editor View
+        const lensCount = sig.lenses ? sig.lenses.length : 3;
+        const lensSpacing = 5.2 * sigScale;
+        const halfSpan = ((lensCount - 1) * lensSpacing) / 2;
+        const shieldH = (lensCount * 5.2 + 10) * sigScale;
+        const shieldW = 6.0 * sigScale;
+        const shieldX = 2.4 * sigScale;
+
+        // 1. Concrete foundation base
+        ctx.fillStyle = isSel ? '#38bdf8' : '#64748b';
+        ctx.fillRect(-5 * sigScale, -5 * sigScale, 10 * sigScale, 10 * sigScale);
+        ctx.strokeStyle = '#334155';
+        ctx.lineWidth = Math.max(1, 1 / zoom);
+        ctx.strokeRect(-5 * sigScale, -5 * sigScale, 10 * sigScale, 10 * sigScale);
+
+        // 2. Steel mast tube
+        ctx.fillStyle = '#0f172a';
+        ctx.beginPath();
+        ctx.arc(0, 0, 2.6 * sigScale, 0, Math.PI * 2);
+        ctx.fill();
+
+        // 3. Large Matte Black Background Shield
+        ctx.fillStyle = '#080a0f';
+        ctx.beginPath();
+        ctx.roundRect(shieldX, -shieldH / 2, shieldW, shieldH, 2.8 * sigScale);
+        ctx.fill();
+        ctx.strokeStyle = isSel ? '#38bdf8' : '#27272a';
+        ctx.lineWidth = Math.max(1.2, 1.2 / zoom);
+        ctx.stroke();
+
+        // 4. Lenses with long protruding hoods
+        const activeIdx = (sig.currentAspect === 'dark') ? -1 : 0;
+        const aspectColorMap = {
+          green: '#10b981',
+          yellow: '#f59e0b',
+          two_yellows: '#f59e0b',
+          yellow_flashing_yellow: '#f59e0b',
+          two_yellows_one_flashing: '#f59e0b',
+          yellow_flashing: '#f59e0b',
+          red: '#ef4444',
+          lunar_white: '#f8fafc',
+          lunar_white_flashing: '#f8fafc',
+          blue: '#3b82f6',
+          dark: '#1e293b'
+        };
+
+        const activeCol = aspectColorMap[sig.currentAspect] || '#10b981';
+
+        for (let i = 0; i < lensCount; i++) {
+          const ly = -halfSpan + i * lensSpacing;
+          const lColorName = sig.lenses ? sig.lenses[i] : (i === 0 ? 'green' : i === 1 ? 'yellow' : 'red');
+          
+          let isThisLensLit = false;
+          if (sig.currentAspect === 'green' && lColorName === 'green') isThisLensLit = true;
+          else if ((sig.currentAspect === 'yellow' || sig.currentAspect === 'yellow_flashing') && lColorName === 'yellow') isThisLensLit = true;
+          else if (sig.currentAspect === 'red' && lColorName === 'red') isThisLensLit = true;
+          else if (sig.currentAspect === 'blue' && lColorName === 'blue') isThisLensLit = true;
+          else if ((sig.currentAspect === 'lunar_white' || sig.currentAspect === 'lunar_white_flashing') && (lColorName === 'white' || lColorName === 'lunar_white')) isThisLensLit = true;
+          else if ((sig.currentAspect === 'two_yellows' || sig.currentAspect === 'two_yellows_one_flashing') && lColorName === 'yellow') isThisLensLit = true;
+
+          // Long hood extending forward (+X)
+          const hoodLen = 8.5 * sigScale;
+          const hoodHalfW = 2.4 * sigScale;
+          ctx.fillStyle = '#05070a';
+          ctx.beginPath();
+          ctx.arc(shieldX + 2.5 * sigScale, ly, hoodHalfW, -Math.PI / 2, Math.PI / 2, false);
+          ctx.lineTo(shieldX + 2.5 * sigScale + hoodLen, ly + hoodHalfW - 0.4 * sigScale);
+          ctx.lineTo(shieldX + 2.5 * sigScale + hoodLen + 1.2 * sigScale, ly);
+          ctx.lineTo(shieldX + 2.5 * sigScale + hoodLen, ly - hoodHalfW + 0.4 * sigScale);
+          ctx.closePath();
+          ctx.fill();
+
+          // Lens glass
+          const lensR = 1.8 * sigScale;
+          let glassCol = '#090d16';
+          if (lColorName === 'red') glassCol = '#450a0a';
+          else if (lColorName === 'yellow') glassCol = '#451a03';
+          else if (lColorName === 'green') glassCol = '#052e16';
+          else if (lColorName === 'blue') glassCol = '#172554';
+          else if (lColorName === 'white' || lColorName === 'lunar_white') glassCol = '#1e293b';
+
+          ctx.fillStyle = isThisLensLit ? activeCol : glassCol;
+          if (isThisLensLit) {
+            ctx.shadowColor = activeCol;
+            ctx.shadowBlur = Math.max(6, 12 / zoom);
+          }
+          ctx.beginPath();
+          ctx.arc(shieldX + 2.5 * sigScale, ly, lensR, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.shadowBlur = 0;
+        }
+
+        // 5. Designation Nameplate
+        if (sig.designation) {
+          ctx.fillStyle = '#f8fafc';
+          ctx.font = `bold ${Math.max(10, 11 / zoom)}px sans-serif`;
+          ctx.textAlign = 'center';
+          ctx.fillText(sig.designation, -12 * sigScale, 0);
+        }
+
+        // 6. Direction arrow pointer
+        ctx.fillStyle = 'rgba(56, 189, 248, 0.9)';
+        ctx.beginPath();
+        ctx.moveTo(shieldX + 10 * sigScale, 0);
+        ctx.lineTo(shieldX + 4 * sigScale, -4 * sigScale);
+        ctx.lineTo(shieldX + 4 * sigScale, 4 * sigScale);
+        ctx.closePath();
+        ctx.fill();
       }
 
-      ctx.fillStyle = 'rgba(56, 189, 248, 0.9)';
-      ctx.beginPath();
-      ctx.moveTo(0, -sigH / 2 - 4);
-      ctx.lineTo(-6 * sigScale, -sigH / 2 - 12 * sigScale);
-      ctx.lineTo(6 * sigScale, -sigH / 2 - 12 * sigScale);
-      ctx.closePath();
-      ctx.fill();
-
       ctx.restore();
+    }
+
+    if (typeof renderPickerCanvasOverlay === 'function') {
+      renderPickerCanvasOverlay(ctx, zoom);
     }
   }
 
@@ -1875,6 +3972,113 @@ window.RailwayEditor = (function() {
   function alignSignalToRail(sigId) {
     const sig = (window.mapData.railwaySignals || []).find(s => s.id === sigId);
     if (!sig) return;
+
+    if (sig.type === 'crossing' || sig.mastType === 'crossing') {
+      const PRESET_CROSSING_COORDS = {
+        "sig_cross_north": { x: 12530, y: 8525, angle: -1.5708, barrierLength: 66 },
+        "sig_cross_south": { x: 12670, y: 9095, angle: 1.5708, barrierLength: 66 },
+        "sig_cross_canyon_w_n": { x: 18100, y: 8680, angle: -2.366, barrierLength: 54 },
+        "sig_cross_canyon_w_s": { x: 18546, y: 8945, angle: 0.776, barrierLength: 54 },
+        "sig_cross_quarry_n": { x: 23816, y: 8665, angle: -2.156, barrierLength: 54 },
+        "sig_cross_quarry_s": { x: 24142, y: 8945, angle: 0.985, barrierLength: 54 },
+        "sig_cross_canyon_e_n": { x: 30055, y: 8631, angle: -0.67, barrierLength: 54 },
+        "sig_cross_canyon_e_s": { x: 29790, y: 8997, angle: 2.47, barrierLength: 54 },
+        "sig_cross_dunes_n": { x: 47112, y: 8635, angle: -1.393, barrierLength: 54 },
+        "sig_cross_dunes_s": { x: 47167, y: 8985, angle: 1.7464, barrierLength: 54 },
+        "sig_cross_border_n": { x: 49747, y: 8646, angle: -1.5827, barrierLength: 54 },
+        "sig_cross_border_s": { x: 49849, y: 8980, angle: 1.6559, barrierLength: 54 }
+      };
+
+      if (PRESET_CROSSING_COORDS[sig.id]) {
+        const preset = PRESET_CROSSING_COORDS[sig.id];
+        sig.x = preset.x;
+        sig.y = preset.y;
+        sig.angle = preset.angle;
+        sig.barrierLength = preset.barrierLength;
+        window.pushHistory('Align Signal to Level Crossing');
+        window.updateInspector();
+        window.showToast('Переездный светофор выставлен точно на обочине переезда');
+        return;
+      }
+
+      // Find nearest road & track intersection
+      let closestPt = null;
+      let minDistance = Infinity;
+      let segTangent = null;
+      let isNorth = sig.id.endsWith('_n') || sig.y < 8800;
+
+      const roads = window.mapData.roads || [];
+      const tracks = window.mapData.railwayTracks || [];
+
+      for (const road of roads) {
+        const rSegs = road.curvePoints && road.curvePoints.length > 1
+          ? road.curvePoints.slice(0, -1).map((p, i) => ({ x1: p.x, y1: p.y, x2: road.curvePoints[i+1].x, y2: road.curvePoints[i+1].y }))
+          : [{ x1: road.x1, y1: road.y1, x2: road.x2, y2: road.y2 }];
+
+        for (const rSeg of rSegs) {
+          for (const track of tracks) {
+            const tSegs = track.curvePoints && track.curvePoints.length > 1
+              ? track.curvePoints.slice(0, -1).map((p, i) => ({ x1: p.x, y1: p.y, x2: track.curvePoints[i+1].x, y2: track.curvePoints[i+1].y }))
+              : [{ x1: track.x1, y1: track.y1, x2: track.x2, y2: track.y2 }];
+
+            for (const tSeg of tSegs) {
+              const denom = (tSeg.y2 - tSeg.y1) * (rSeg.x2 - rSeg.x1) - (tSeg.x2 - tSeg.x1) * (rSeg.y2 - rSeg.y1);
+              if (Math.abs(denom) < 1e-6) continue;
+              const ua = ((tSeg.x2 - tSeg.x1) * (rSeg.y1 - tSeg.y1) - (tSeg.y2 - tSeg.y1) * (rSeg.x1 - tSeg.x1)) / denom;
+              const ub = ((rSeg.x2 - rSeg.x1) * (rSeg.y1 - tSeg.y1) - (rSeg.y2 - rSeg.y1) * (rSeg.x1 - tSeg.x1)) / denom;
+              if (ua >= 0 && ua <= 1 && ub >= 0 && ub <= 1) {
+                const px = rSeg.x1 + ua * (rSeg.x2 - rSeg.x1);
+                const py = rSeg.y1 + ua * (rSeg.y2 - rSeg.y1);
+                const d = Math.hypot(sig.x - px, sig.y - py);
+                if (d < minDistance) {
+                  minDistance = d;
+                  closestPt = { x: px, y: py, road, trackY: tSeg.y1 };
+                  segTangent = rSeg;
+                }
+              }
+            }
+          }
+        }
+      }
+
+      if (closestPt && segTangent) {
+        const rWidth = closestPt.road.width || 72;
+        const halfOffset = rWidth / 2 + 12;
+        let dx = segTangent.x2 - segTangent.x1;
+        let dy = segTangent.y2 - segTangent.y1;
+        if (dy < 0) { dx = -dx; dy = -dy; }
+        const theta = Math.atan2(dy, dx);
+
+        if (isNorth) {
+          let ang = theta + Math.PI;
+          while (ang > Math.PI) ang -= Math.PI * 2;
+          while (ang <= -Math.PI) ang += Math.PI * 2;
+          const nx = -Math.sin(theta);
+          const ny = Math.cos(theta);
+          const safeTrackY = Math.min(closestPt.y, closestPt.trackY || closestPt.y) - 65;
+          const stopLineX = closestPt.x - Math.cos(theta) * 65;
+          sig.x = Math.round(stopLineX + nx * halfOffset);
+          sig.y = Math.round(Math.min(safeTrackY, closestPt.y - 60));
+          sig.angle = parseFloat(ang.toFixed(4));
+        } else {
+          let ang = theta;
+          while (ang > Math.PI) ang -= Math.PI * 2;
+          while (ang <= -Math.PI) ang += Math.PI * 2;
+          const nx = Math.sin(theta);
+          const ny = -Math.cos(theta);
+          const safeTrackY = Math.max(closestPt.y, closestPt.trackY || closestPt.y) + 65;
+          const stopLineX = closestPt.x + Math.cos(theta) * 65;
+          sig.x = Math.round(stopLineX + nx * halfOffset);
+          sig.y = Math.round(Math.max(safeTrackY, closestPt.y + 60));
+          sig.angle = parseFloat(ang.toFixed(4));
+        }
+        window.pushHistory('Align Signal to Level Crossing');
+        window.updateInspector();
+        window.showToast('Переездный светофор сориентирован вдоль автодороги');
+        return;
+      }
+    }
+
     const nearest = findNearestTrack({ x: sig.x, y: sig.y });
     if (nearest && nearest.track) {
       sig.angle = nearest.angle;
@@ -1923,6 +4127,10 @@ window.RailwayEditor = (function() {
   }
 
   function openTrainScheduleModal() {
+    if (window.RailwayScheduleStudio) {
+      window.RailwayScheduleStudio.openModal();
+      return;
+    }
     let modal = document.getElementById('train-schedule-modal');
     if (!modal) {
       modal = document.createElement('div');
@@ -1948,83 +4156,7 @@ window.RailwayEditor = (function() {
   }
 
   function getDefaultTrainSchedules() {
-    return [
-      {
-        id: 'sched_pass_express_12',
-        name: 'Пассажирский поезд №12 «Степной Экспресс»',
-        trainId: 'train_pass_12',
-        enabled: true,
-        spawnTime: 0,
-        repeatInterval: 240,
-        spawnTrackId: 'rail_main_1_west',
-        spawnX: 6500,
-        spawnY: 5740,
-        spawnSpeed: 120,
-        spawnDirection: 1,
-        maxSpeed: 210,
-        acceleration: 18,
-        deceleration: 35,
-        locomotive: {
-          type: 'locomotive_diesel',
-          name: 'Пассажирский тепловоз ТЭП70БС',
-          roadNumber: 'ТЭП70БС-0245',
-          livery: 'rzd_classic',
-          headlightColor: '#fffbeb'
-        },
-        cars: [
-          { type: 'passenger_coach_rzhd', name: 'Купейный вагон РЖД №01', livery: 'rzd_classic', roadNumber: 'РЖД-01' },
-          { type: 'passenger_coach_rzhd', name: 'Купейный вагон РЖД №02', livery: 'rzd_classic', roadNumber: 'РЖД-02' },
-          { type: 'passenger_coach_platskart', name: 'Плацкартный вагон №03', livery: 'rzd_classic', roadNumber: 'РЖД-03' },
-          { type: 'passenger_coach_platskart', name: 'Плацкартный вагон №04', livery: 'rzd_classic', roadNumber: 'РЖД-04' }
-        ],
-        routeSteps: [
-          { id: 's1', type: 'travel', targetX: 9100, speedLimit: 140 },
-          { id: 's2', type: 'switch_branch', switchTrackId: 'rail_bezier_turnout_track3_west', targetY: 5600, switchBranch: 'diverging' },
-          { id: 's3', type: 'station_stop', targetX: 10800, dwellSeconds: 25, stationName: 'Степная (Путь 3, Платформа №1)' },
-          { id: 's4', type: 'signal_hold', signalId: 'sig_exit_N3', signalClearAspect: 'green' },
-          { id: 's5', type: 'switch_branch', switchTrackId: 'rail_bezier_turnout_track3_east', targetY: 5740, switchBranch: 'straight' },
-          { id: 's6', type: 'travel', targetX: 18500, speedLimit: 180 },
-          { id: 's7', type: 'despawn' }
-        ]
-      },
-      {
-        id: 'sched_freight_heavy_2418',
-        name: 'Тяжелый грузовой состав №2418 (ВЛ80С)',
-        trainId: 'train_freight_2418',
-        enabled: true,
-        spawnTime: 30,
-        repeatInterval: 300,
-        spawnTrackId: 'rail_main_2_east',
-        spawnX: 17500,
-        spawnY: 5880,
-        spawnSpeed: 100,
-        spawnDirection: -1,
-        maxSpeed: 170,
-        acceleration: 12,
-        deceleration: 25,
-        locomotive: {
-          type: 'locomotive_electric_vl80',
-          name: 'Электровоз ВЛ80С',
-          roadNumber: 'ВЛ80С-1420',
-          livery: 'rzd_classic',
-          headlightColor: '#fffbeb'
-        },
-        cars: [
-          { type: 'freight_tanker', name: 'Нефтяная цистерна №1', livery: 'tanker_blue', cargoType: 'Нефть' },
-          { type: 'freight_tanker', name: 'Нефтяная цистерна №2', livery: 'tanker_blue', cargoType: 'Бензин' },
-          { type: 'freight_hopper', name: 'Хоппер для щебня №1', livery: 'hopper_brown', cargoType: 'Щебень' },
-          { type: 'freight_hopper', name: 'Хоппер для щебня №2', livery: 'hopper_brown', cargoType: 'Балласт' },
-          { type: 'freight_timber', name: 'Лесовозная платформа', livery: 'timber_green', cargoType: 'Кругляк сосны' }
-        ],
-        routeSteps: [
-          { id: 's1', type: 'travel', targetX: 13500, speedLimit: 110 },
-          { id: 's2', type: 'signal_hold', signalId: 'sig_entry_Ch', signalClearAspect: 'green' },
-          { id: 's3', type: 'travel', targetX: 9300, speedLimit: 90 },
-          { id: 's4', type: 'travel', targetX: 5000, speedLimit: 140 },
-          { id: 's5', type: 'despawn' }
-        ]
-      }
-    ];
+    return getDefaultSchedules();
   }
 
   function renderScheduleModalContent() {
@@ -2485,7 +4617,11 @@ window.RailwayEditor = (function() {
     removeRouteStep,
     updateStepProp,
     saveSchedulesAndClose,
-    hitTestRailway
+    hitTestRailway,
+    isPickerActive: () => (window.RailwayScheduleStudio ? window.RailwayScheduleStudio.isPickerActive() : false),
+    handleCanvasPickerHover: (wp) => (window.RailwayScheduleStudio ? window.RailwayScheduleStudio.handleCanvasPickerHover(wp) : false),
+    handleCanvasPickerClick: (wp, e) => (window.RailwayScheduleStudio ? window.RailwayScheduleStudio.handleCanvasPickerClick(wp, e) : false),
+    cancelPicker: () => (window.RailwayScheduleStudio ? window.RailwayScheduleStudio.cancelPicker() : false)
   };
 })();
 /**
@@ -2645,6 +4781,8 @@ function rebuildSpatialIndex() {
   if (mapData.railwaySignals) mapData.railwaySignals.forEach(rs => spatialIndex.insert(rs, 'railwaySignals'));
   if (mapData.railwayPlatforms) mapData.railwayPlatforms.forEach(rp => spatialIndex.insert(rp, 'railwayPlatforms'));
   if (mapData.rollingStock) mapData.rollingStock.forEach(rs => spatialIndex.insert(rs, 'rollingStock'));
+  if (mapData.minimapMarkers) mapData.minimapMarkers.forEach(mm => spatialIndex.insert(mm, 'minimapMarkers'));
+  if (mapData.spawnPoints) mapData.spawnPoints.forEach(sp => spatialIndex.insert(sp, 'spawnPoints'));
   markMinimapDirty();
 }
 
@@ -2704,7 +4842,9 @@ const toolConfigs = {
   prop: { type: 'bench', angle: 0 },
   sidewalk: { sidewalkWidth: 32, style: 'urban' },
   parking: { spotsCount: 6, angle: 0 },
-  intersection: { type: '4way', hasLights: true, isDirt: false }
+  intersection: { type: '4way', hasLights: true, isDirt: false },
+  marker: { nameRu: 'Новая метка', category: 'services', iconKey: 'spawn', badgeColor: '#0284c7', description: '' },
+  spawnPoint: { nameRu: 'Новая точка спавна', description: 'Точка спавна игрока', iconKey: 'spawn' }
 };
 
 // FPS Counter
@@ -2753,6 +4893,8 @@ function ensureMapDataDefaults(md) {
   if (!md.railwayPlatforms) md.railwayPlatforms = [];
   if (!md.rollingStock) md.rollingStock = [];
   if (!md.trainSchedules) md.trainSchedules = [];
+  if (!md.minimapMarkers) md.minimapMarkers = [];
+  if (!md.spawnPoints) md.spawnPoints = [];
 }
 
 function getDefaultMapData() {
@@ -3059,10 +5201,19 @@ function applySnapping(pos) {
       const entry = nearby[i];
       if (entry.layer === 'roads') {
         const r = entry.entity;
-        const d1 = Math.hypot(pos.x - r.x1, pos.y - r.y1);
-        if (d1 < closestDist) { closestDist = d1; snapPt = { x: r.x1, y: r.y1 }; }
-        const d2 = Math.hypot(pos.x - r.x2, pos.y - r.y2);
-        if (d2 < closestDist) { closestDist = d2; snapPt = { x: r.x2, y: r.y2 }; }
+        if (r.curvePoints && r.curvePoints.length > 0) {
+          const pStart = r.curvePoints[0];
+          const pEnd = r.curvePoints[r.curvePoints.length - 1];
+          const d1 = Math.hypot(pos.x - pStart.x, pos.y - pStart.y);
+          if (d1 < closestDist) { closestDist = d1; snapPt = { x: pStart.x, y: pStart.y }; }
+          const d2 = Math.hypot(pos.x - pEnd.x, pos.y - pEnd.y);
+          if (d2 < closestDist) { closestDist = d2; snapPt = { x: pEnd.x, y: pEnd.y }; }
+        } else {
+          const d1 = Math.hypot(pos.x - r.x1, pos.y - r.y1);
+          if (d1 < closestDist) { closestDist = d1; snapPt = { x: r.x1, y: r.y1 }; }
+          const d2 = Math.hypot(pos.x - r.x2, pos.y - r.y2);
+          if (d2 < closestDist) { closestDist = d2; snapPt = { x: r.x2, y: r.y2 }; }
+        }
       } else if (entry.layer === 'intersections') {
         const inter = entry.entity;
         const d = Math.hypot(pos.x - inter.x, pos.y - inter.y);
@@ -3174,7 +5325,9 @@ function getToolName(t) {
     railStraight: 'Прямой ЖД путь',
     railCurve: 'Кривой ЖД путь / Стрелка',
     railSignal: 'ЖД Светофор',
-    railPlatform: 'Пассажирская платформа'
+    railPlatform: 'Пассажирская платформа',
+    marker: 'Метка миникарты',
+    spawnPoint: 'Точка спавна игрока'
   };
   return names[t] || t;
 }
@@ -3303,6 +5456,39 @@ function updateSubtoolBar() {
       </div>
       <span style="color:var(--accent);font-size:11px;">Кликните в место размещения</span>
     `;
+  } else if (currentTool === 'marker') {
+    const c = toolConfigs.marker;
+    bar.innerHTML = `
+      <div class="subtool-group">
+        <label>Название:</label>
+        <input type="text" value="${c.nameRu}" style="width:130px;" oninput="toolConfigs.marker.nameRu=this.value">
+      </div>
+      <div class="subtool-group">
+        <label>Категория:</label>
+        <select onchange="toolConfigs.marker.category=this.value">
+          <option value="services">Сервисы</option>
+          <option value="spawns">Спавны</option>
+          <option value="gas_stations">АЗС</option>
+          <option value="shops">Магазины</option>
+          <option value="nature">Природа</option>
+          <option value="industrial">Промзона</option>
+        </select>
+      </div>
+      <div class="subtool-group">
+        <label>Цвет:</label>
+        <input type="color" value="${c.badgeColor}" onchange="toolConfigs.marker.badgeColor=this.value">
+      </div>
+      <span style="color:var(--accent);font-size:11px;">Кликните на карту для установки метки</span>
+    `;
+  } else if (currentTool === 'spawnPoint') {
+    const c = toolConfigs.spawnPoint;
+    bar.innerHTML = `
+      <div class="subtool-group">
+        <label>Название спавна:</label>
+        <input type="text" value="${c.nameRu}" style="width:160px;" oninput="toolConfigs.spawnPoint.nameRu=this.value">
+      </div>
+      <span style="color:var(--accent);font-size:11px;">Кликните на карту для добавления точки спавна</span>
+    `;
   } else {
     bar.innerHTML = `<span style="color:var(--text-muted);">Инструмент: ${getToolName(currentTool)}</span>`;
   }
@@ -3374,6 +5560,12 @@ canvas.addEventListener('mousedown', (e) => {
   }
 
   if (e.button !== 0) return;
+
+  if (window.RailwayEditor && typeof window.RailwayEditor.isPickerActive === 'function' && window.RailwayEditor.isPickerActive()) {
+    if (window.RailwayEditor.handleCanvasPickerClick(wp, e)) {
+      return;
+    }
+  }
 
   const snapped = applySnapping(wp);
 
@@ -3878,12 +6070,64 @@ canvas.addEventListener('mousedown', (e) => {
       updateFooterCounts();
     }
   }
+
+  else if (currentTool === 'marker') {
+    const c = toolConfigs.marker || {};
+    if (!mapData.minimapMarkers) mapData.minimapMarkers = [];
+    const newMarker = {
+      id: generateUniqueId('marker'),
+      nameRu: c.nameRu || 'Новая метка',
+      category: c.category || 'services',
+      iconKey: c.iconKey || 'spawn',
+      badgeColor: c.badgeColor || '#0284c7',
+      description: c.description || '',
+      x: snapped.x,
+      y: snapped.y
+    };
+    mapData.minimapMarkers.push(newMarker);
+    spatialIndex.insert(newMarker, 'minimapMarkers');
+    markMinimapDirty();
+    selectedEntities = [{ entity: newMarker, layer: 'minimapMarkers' }];
+    updateSelectionSet();
+    updateInspector();
+    renderOutliner();
+    pushHistory('Create Minimap Marker');
+    showToast('Метка «' + newMarker.nameRu + '» создана');
+    updateFooterCounts();
+  }
+
+  else if (currentTool === 'spawnPoint') {
+    const c = toolConfigs.spawnPoint || {};
+    if (!mapData.spawnPoints) mapData.spawnPoints = [];
+    const newSpawn = {
+      id: generateUniqueId('spawn'),
+      nameRu: c.nameRu || 'Точка спавна',
+      description: c.description || 'Точка спавна игрока',
+      iconKey: c.iconKey || 'spawn',
+      x: snapped.x,
+      y: snapped.y
+    };
+    mapData.spawnPoints.push(newSpawn);
+    spatialIndex.insert(newSpawn, 'spawnPoints');
+    markMinimapDirty();
+    selectedEntities = [{ entity: newSpawn, layer: 'spawnPoints' }];
+    updateSelectionSet();
+    updateInspector();
+    renderOutliner();
+    pushHistory('Create Spawn Point');
+    showToast('Точка спавна «' + newSpawn.nameRu + '» добавлена');
+    updateFooterCounts();
+  }
 });
 
 canvas.addEventListener('mousemove', (e) => {
   const wp = screenToWorld(e.offsetX, e.offsetY);
   mouseScreen = { x: e.offsetX, y: e.offsetY };
   mouseWorld = wp;
+
+  if (window.RailwayEditor && typeof window.RailwayEditor.isPickerActive === 'function' && window.RailwayEditor.isPickerActive()) {
+    window.RailwayEditor.handleCanvasPickerHover(wp);
+  }
 
   if (isPanning) {
     camera.x = cameraStart.x - (e.clientX - panStart.x) / camera.zoom;
@@ -4069,6 +6313,22 @@ function hitTestWorld(wx, wy) {
 
   for (let i = nearby.length - 1; i >= 0; i--) {
     const entry = nearby[i];
+    if (entry.layer === 'minimapMarkers') {
+      const m = entry.entity;
+      if (Math.hypot(wx - m.x, wy - m.y) < 22 + tol) return { entity: m, layer: 'minimapMarkers' };
+    }
+  }
+
+  for (let i = nearby.length - 1; i >= 0; i--) {
+    const entry = nearby[i];
+    if (entry.layer === 'spawnPoints') {
+      const sp = entry.entity;
+      if (Math.hypot(wx - sp.x, wy - sp.y) < 26 + tol) return { entity: sp, layer: 'spawnPoints' };
+    }
+  }
+
+  for (let i = nearby.length - 1; i >= 0; i--) {
+    const entry = nearby[i];
     if (entry.layer === 'props') {
       const p = entry.entity;
       if (Math.hypot(wx - p.x, wy - p.y) < 16 + tol) return { entity: p, layer: 'props' };
@@ -4107,7 +6367,15 @@ function hitTestWorld(wx, wy) {
     const entry = nearby[i];
     if (entry.layer === 'roads') {
       const r = entry.entity;
-      const dist = distToSegment(wx, wy, r.x1, r.y1, r.x2, r.y2);
+      let dist = Infinity;
+      if (r.curvePoints && r.curvePoints.length > 1) {
+        for (let j = 0; j < r.curvePoints.length - 1; j++) {
+          const d = distToSegment(wx, wy, r.curvePoints[j].x, r.curvePoints[j].y, r.curvePoints[j+1].x, r.curvePoints[j+1].y);
+          if (d < dist) dist = d;
+        }
+      } else {
+        dist = distToSegment(wx, wy, r.x1, r.y1, r.x2, r.y2);
+      }
       if (dist <= r.width / 2 + tol) {
         return { entity: r, layer: 'roads' };
       }
@@ -4243,16 +6511,30 @@ function render() {
     ctx.lineWidth = r.width;
     ctx.lineCap = 'round';
     ctx.beginPath();
-    ctx.moveTo(r.x1, r.y1);
-    ctx.lineTo(r.x2, r.y2);
+    if (r.curvePoints && r.curvePoints.length > 1) {
+      ctx.moveTo(r.curvePoints[0].x, r.curvePoints[0].y);
+      for (let j = 1; j < r.curvePoints.length; j++) {
+        ctx.lineTo(r.curvePoints[j].x, r.curvePoints[j].y);
+      }
+    } else {
+      ctx.moveTo(r.x1, r.y1);
+      ctx.lineTo(r.x2, r.y2);
+    }
     ctx.stroke();
 
     if (!r.isDirt) {
       ctx.strokeStyle = r.isGravel ? 'rgba(255,255,255,0.3)' : '#eab308';
-      ctx.lineWidth = 2 / zoom;
+      ctx.lineWidth = Math.max(1.5, 2 / zoom);
       ctx.beginPath();
-      ctx.moveTo(r.x1, r.y1);
-      ctx.lineTo(r.x2, r.y2);
+      if (r.curvePoints && r.curvePoints.length > 1) {
+        ctx.moveTo(r.curvePoints[0].x, r.curvePoints[0].y);
+        for (let j = 1; j < r.curvePoints.length; j++) {
+          ctx.lineTo(r.curvePoints[j].x, r.curvePoints[j].y);
+        }
+      } else {
+        ctx.moveTo(r.x1, r.y1);
+        ctx.lineTo(r.x2, r.y2);
+      }
       ctx.stroke();
     }
     ctx.restore();
@@ -4351,6 +6633,73 @@ function render() {
 
   if (window.RailwayEditor) {
     window.RailwayEditor.renderAllRailwayElements(ctx, minX, minY, maxX, maxY, zoom);
+  }
+
+  // Render Minimap Markers
+  for (let i = 0; i < visibleEntities.length; i++) {
+    const entry = visibleEntities[i];
+    if (entry.layer !== 'minimapMarkers') continue;
+    const m = entry.entity;
+    const isSel = selectedEntityIds.has(m.id);
+    ctx.save();
+    ctx.translate(m.x, m.y);
+    
+    const pinR = Math.max(14, 18 / zoom);
+    ctx.fillStyle = isSel ? '#38bdf8' : (m.badgeColor || '#0284c7');
+    ctx.beginPath();
+    ctx.arc(0, -pinR, pinR, 0, Math.PI * 2);
+    ctx.fill();
+    
+    ctx.beginPath();
+    ctx.moveTo(-pinR * 0.5, -pinR * 0.3);
+    ctx.lineTo(0, 0);
+    ctx.lineTo(pinR * 0.5, -pinR * 0.3);
+    ctx.closePath();
+    ctx.fill();
+    
+    if (isSel) {
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = Math.max(2, 3 / zoom);
+      ctx.stroke();
+    }
+    
+    if (zoom > 0.08) {
+      ctx.fillStyle = '#ffffff';
+      ctx.font = `bold ${Math.max(11, 13 / zoom)}px sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.fillText(m.nameRu || 'Метка', 0, pinR * 0.8);
+    }
+    ctx.restore();
+  }
+
+  // Render Spawn Points
+  for (let i = 0; i < visibleEntities.length; i++) {
+    const entry = visibleEntities[i];
+    if (entry.layer !== 'spawnPoints') continue;
+    const sp = entry.entity;
+    const isSel = selectedEntityIds.has(sp.id);
+    ctx.save();
+    ctx.translate(sp.x, sp.y);
+    
+    const r = Math.max(16, 22 / zoom);
+    ctx.strokeStyle = isSel ? '#38bdf8' : '#eab308';
+    ctx.lineWidth = Math.max(2, 3 / zoom);
+    ctx.beginPath();
+    ctx.arc(0, 0, r, 0, Math.PI * 2);
+    ctx.stroke();
+    
+    ctx.fillStyle = isSel ? '#38bdf8' : '#eab308';
+    ctx.beginPath();
+    ctx.arc(0, 0, r * 0.35, 0, Math.PI * 2);
+    ctx.fill();
+    
+    if (zoom > 0.08) {
+      ctx.fillStyle = '#f8fafc';
+      ctx.font = `bold ${Math.max(11, 13 / zoom)}px sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.fillText(`[Спавн] ${sp.nameRu || 'Спавн'}`, 0, r + 14 / zoom);
+    }
+    ctx.restore();
   }
 
   // 9. Tool Overlays & Live Previews
@@ -4619,9 +6968,21 @@ function updateOffscreenMinimap() {
   offscreenMinimapCtx.fillRect(0, 0, mw, mh);
 
   // Draw Roads
-  offscreenMinimapCtx.fillStyle = '#475569';
+  offscreenMinimapCtx.strokeStyle = '#475569';
+  offscreenMinimapCtx.lineCap = 'round';
   (mapData.roads || []).forEach(r => {
-    offscreenMinimapCtx.fillRect(r.x1 * scale, r.y1 * scale, Math.max(2, (r.x2 - r.x1) * scale), Math.max(2, r.width * scale));
+    offscreenMinimapCtx.lineWidth = Math.max(2, r.width * scale);
+    offscreenMinimapCtx.beginPath();
+    if (r.curvePoints && r.curvePoints.length > 1) {
+      offscreenMinimapCtx.moveTo(r.curvePoints[0].x * scale, r.curvePoints[0].y * scale);
+      for (let j = 1; j < r.curvePoints.length; j++) {
+        offscreenMinimapCtx.lineTo(r.curvePoints[j].x * scale, r.curvePoints[j].y * scale);
+      }
+    } else {
+      offscreenMinimapCtx.moveTo(r.x1 * scale, r.y1 * scale);
+      offscreenMinimapCtx.lineTo(r.x2 * scale, r.y2 * scale);
+    }
+    offscreenMinimapCtx.stroke();
   });
 
   // Draw Buildings
@@ -4656,6 +7017,265 @@ function renderMinimap() {
   minimapCtx.strokeRect(cx, cy, cw, ch);
 }
 
+function renderMinimapMarkerInspector(m) {
+  const categories = [
+    { key: 'services', name: 'Сервисы & Важное' },
+    { key: 'spawns', name: 'Спавны / Места' },
+    { key: 'gas_stations', name: 'АЗС / Заправки' },
+    { key: 'shops', name: 'Магазины / ТРЦ' },
+    { key: 'nature', name: 'Природа / Заповедники' },
+    { key: 'industrial', name: 'Промзона / Базы' },
+    { key: 'custom', name: 'Пользовательская' }
+  ];
+
+  const icons = [
+    { key: 'spawn', name: 'Точка / Игла' },
+    { key: 'car', name: 'Автосалон / Авто' },
+    { key: 'hospital', name: 'Больница' },
+    { key: 'police', name: 'Полиция' },
+    { key: 'fire', name: 'Пожарная' },
+    { key: 'mall', name: 'ТРЦ / Магазин' },
+    { key: 'garage', name: 'Гараж / СТО' },
+    { key: 'fuel', name: 'АЗС' },
+    { key: 'food', name: 'Еда / Кафе' },
+    { key: 'pharmacy', name: 'Аптека' },
+    { key: 'nature', name: 'Лес / Природа' },
+    { key: 'mountain', name: 'Гора / Серпантин' },
+    { key: 'industrial', name: 'Промзона' },
+    { key: 'agency', name: 'Агентство / Здание' },
+    { key: 'train', name: 'Вокзал / ЖД' }
+  ];
+
+  return `
+    <div class="prop-card">
+      <div style="font-weight:700;font-size:13px;color:var(--accent);">МЕТКА МИНИКАРТЫ</div>
+
+      <div class="prop-field">
+        <label>Название (RU):</label>
+        <input type="text" value="${m.nameRu || ''}" oninput="updateEntityProp('nameRu', this.value)">
+      </div>
+
+      <div class="prop-field">
+        <label>Категория:</label>
+        <select onchange="updateEntityProp('category', this.value)">
+          ${categories.map(c => `<option value="${c.key}" ${m.category === c.key ? 'selected' : ''}>${c.name}</option>`).join('')}
+        </select>
+      </div>
+
+      <div class="prop-field">
+        <label>Иконка:</label>
+        <select onchange="updateEntityProp('iconKey', this.value)">
+          ${icons.map(ic => `<option value="${ic.key}" ${m.iconKey === ic.key ? 'selected' : ''}>${ic.name}</option>`).join('')}
+        </select>
+      </div>
+
+      <div class="prop-field">
+        <label>Цвет значка:</label>
+        <input type="color" value="${m.badgeColor || '#0284c7'}" onchange="updateEntityProp('badgeColor', this.value)">
+      </div>
+
+      <div class="prop-field">
+        <label>Описание:</label>
+        <input type="text" value="${m.description || ''}" oninput="updateEntityProp('description', this.value)">
+      </div>
+
+      <div class="prop-field">
+        <label>Координаты X, Y:</label>
+        <div class="prop-grid-2">
+          <input type="number" value="${Math.round(m.x)}" onchange="updateEntityProp('x', parseFloat(this.value))">
+          <input type="number" value="${Math.round(m.y)}" onchange="updateEntityProp('y', parseFloat(this.value))">
+        </div>
+      </div>
+
+      <div class="prop-grid-2" style="margin-top:10px;">
+        <button class="btn danger" onclick="deleteSelected()">Удалить</button>
+        <button class="btn" onclick="duplicateSelected()">Дубликат</button>
+      </div>
+    </div>
+  `;
+}
+
+function renderSpawnPointInspector(sp) {
+  return `
+    <div class="prop-card">
+      <div style="font-weight:700;font-size:13px;color:var(--accent);">ТОЧКА СПАВНА ИГРОКА</div>
+
+      <div class="prop-field">
+        <label>Название точки:</label>
+        <input type="text" value="${sp.nameRu || ''}" oninput="updateEntityProp('nameRu', this.value)">
+      </div>
+
+      <div class="prop-field">
+        <label>Описание:</label>
+        <input type="text" value="${sp.description || ''}" oninput="updateEntityProp('description', this.value)">
+      </div>
+
+      <div class="prop-field">
+        <label>Координаты X, Y:</label>
+        <div class="prop-grid-2">
+          <input type="number" value="${Math.round(sp.x)}" onchange="updateEntityProp('x', parseFloat(this.value))">
+          <input type="number" value="${Math.round(sp.y)}" onchange="updateEntityProp('y', parseFloat(this.value))">
+        </div>
+      </div>
+
+      <div class="prop-grid-2" style="margin-top:10px;">
+        <button class="btn danger" onclick="deleteSelected()">Удалить</button>
+        <button class="btn" onclick="duplicateSelected()">Дубликат</button>
+      </div>
+    </div>
+  `;
+}
+
+function renderBuildingInspectorExtended(b) {
+  const floors = b.floorsCount || (b.interiors ? Object.keys(b.interiors).length : 1);
+  return `
+    <div class="prop-card">
+      <div style="font-weight:700;font-size:13px;color:var(--accent);">ЗДАНИЕ: ${b.id || ''}</div>
+      <div class="prop-field">
+        <label>Название / Вывеска:</label>
+        <input type="text" value="${b.name || ''}" oninput="updateEntityProp('name', this.value)">
+      </div>
+      <div class="prop-field">
+        <label>Тип здания:</label>
+        <select onchange="updateEntityProp('type', this.value)">
+          <option value="residential" ${b.type === 'residential' ? 'selected' : ''}>Жилой дом (стандарт)</option>
+          <option value="panel_apartment" ${b.type === 'panel_apartment' ? 'selected' : ''}>Панельная многоэтажка</option>
+          <option value="brick_residential" ${b.type === 'brick_residential' ? 'selected' : ''}>Кирпичный дом</option>
+          <option value="modern_residential" ${b.type === 'modern_residential' ? 'selected' : ''}>Современный ЖК</option>
+          <option value="office" ${b.type === 'office' ? 'selected' : ''}>Офисное здание</option>
+          <option value="shop" ${b.type === 'shop' ? 'selected' : ''}>Магазин</option>
+          <option value="shopping_mall" ${b.type === 'shopping_mall' ? 'selected' : ''}>ТРЦ / Торговый центр</option>
+          <option value="commercial" ${b.type === 'commercial' ? 'selected' : ''}>Коммерческий объект</option>
+          <option value="business_center" ${b.type === 'business_center' ? 'selected' : ''}>Бизнес-центр</option>
+          <option value="school_kindergarten" ${b.type === 'school_kindergarten' ? 'selected' : ''}>Школа / Детсад</option>
+          <option value="hospital" ${b.type === 'hospital' ? 'selected' : ''}>Больница / Клиника</option>
+          <option value="police_station" ${b.type === 'police_station' ? 'selected' : ''}>Отделение полиции</option>
+          <option value="fire_station" ${b.type === 'fire_station' ? 'selected' : ''}>Пожарная часть</option>
+          <option value="suburban" ${b.type === 'suburban' ? 'selected' : ''}>Частный дом / Коттедж</option>
+          <option value="industrial" ${b.type === 'industrial' ? 'selected' : ''}>Промзона / Завод</option>
+          <option value="car_dealership" ${b.type === 'car_dealership' ? 'selected' : ''}>Автосалон</option>
+          <option value="auto_service_center" ${b.type === 'auto_service_center' ? 'selected' : ''}>Автосервис / СТО</option>
+          <option value="car_wash_station" ${b.type === 'car_wash_station' ? 'selected' : ''}>Автомойка</option>
+          <option value="gas_station_shop" ${b.type === 'gas_station_shop' ? 'selected' : ''}>Магазин АЗС</option>
+          <option value="garage_cooperative" ${b.type === 'garage_cooperative' ? 'selected' : ''}>Гаражный кооператив</option>
+          <option value="garage_box" ${b.type === 'garage_box' ? 'selected' : ''}>Гаражный бокс</option>
+          <option value="garage_workshop" ${b.type === 'garage_workshop' ? 'selected' : ''}>Гараж-мастерская</option>
+          <option value="garage_gatehouse" ${b.type === 'garage_gatehouse' ? 'selected' : ''}>КПП ГСК</option>
+          <option value="railway_station" ${b.type === 'railway_station' ? 'selected' : ''}>ЖД Вокзал</option>
+          <option value="railway_warehouse" ${b.type === 'railway_warehouse' ? 'selected' : ''}>ЖД Склад</option>
+        </select>
+      </div>
+      <div class="prop-field">
+        <label>Бренд / Сеть:</label>
+        <select onchange="updateEntityProp('shopBrand', this.value)">
+          <option value="" ${!b.shopBrand ? 'selected' : ''}>Без бренда</option>
+          <option value="pyaterochka" ${b.shopBrand === 'pyaterochka' ? 'selected' : ''}>Пятёрочка</option>
+          <option value="perekrestok" ${b.shopBrand === 'perekrestok' ? 'selected' : ''}>Перекрёсток</option>
+          <option value="pharmacy_36_6" ${b.shopBrand === 'pharmacy_36_6' ? 'selected' : ''}>Аптека 36.6</option>
+          <option value="cofix_bakery" ${b.shopBrand === 'cofix_bakery' ? 'selected' : ''}>Cofix Пекарня</option>          <option value="dodo_pizza" ${b.shopBrand === 'dodo_pizza' ? 'selected' : ''}>Додо Пицца</option>
+          <option value="vkusno_tochka" ${b.shopBrand === 'vkusno_tochka' ? 'selected' : ''}>Вкусно — и точка</option>
+          <option value="mvideo" ${b.shopBrand === 'mvideo' ? 'selected' : ''}>М.Видео</option>
+          <option value="sportmaster" ${b.shopBrand === 'sportmaster' ? 'selected' : ''}>Спортмастер</option>
+          <option value="pitstop_service" ${b.shopBrand === 'pitstop_service' ? 'selected' : ''}>PitStop Сервис</option>
+        </select>
+      </div>
+      <div class="prop-field">
+        <label>Сторона главного входа:</label>
+        <select onchange="updateEntityProp('entranceSide', this.value)">
+          <option value="north" ${b.entranceSide === 'north' ? 'selected' : ''}>Север (Вверх)</option>
+          <option value="south" ${b.entranceSide === 'south' ? 'selected' : ''}>Юг (Вниз)</option>
+          <option value="east" ${b.entranceSide === 'east' ? 'selected' : ''}>Восток (Вправо)</option>
+          <option value="west" ${b.entranceSide === 'west' ? 'selected' : ''}>Запад (Влево)</option>
+        </select>
+      </div>
+      <div class="prop-field">
+        <label>Этажность:</label>
+        <input type="number" min="1" max="50" value="${floors}" onchange="updateBuildingFloorsCount(parseInt(this.value))">
+      </div>
+      <div class="prop-field">
+        <label>Цвет фасада:</label>
+        <input type="color" value="${b.color || '#64748b'}" onchange="updateEntityProp('color', this.value)">
+      </div>
+      <div class="prop-field">
+        <label>Цвет крыши:</label>
+        <input type="color" value="${b.roofColor || '#334155'}" onchange="updateEntityProp('roofColor', this.value)">
+      </div>
+      <div class="prop-field">
+        <label>Координаты X, Y:</label>
+        <div class="prop-grid-2">
+          <input type="number" value="${Math.round(b.x)}" onchange="updateEntityProp('x', parseFloat(this.value))">
+          <input type="number" value="${Math.round(b.y)}" onchange="updateEntityProp('y', parseFloat(this.value))">
+        </div>
+      </div>
+      <div class="prop-field">
+        <label>Размеры W, H:</label>
+        <div class="prop-grid-2">
+          <input type="number" value="${Math.round(b.width)}" onchange="updateEntityProp('width', parseFloat(this.value))">
+          <input type="number" value="${Math.round(b.height)}" onchange="updateEntityProp('height', parseFloat(this.value))">
+        </div>
+      </div>
+      <div style="margin-top: 12px; margin-bottom: 8px;">
+        <button class="btn primary" style="width: 100%; justify-content: center; padding: 10px; font-size: 13px; font-weight: 600; gap: 8px;" onclick="openInteriorStudioForBuilding('${b.id}')">
+          Редактор интерьера (${floors} эт.)
+        </button>
+      </div>
+      <div class="prop-grid-2" style="margin-top:10px;">
+        <button class="btn danger" onclick="deleteSelected()">Удалить</button>
+        <button class="btn" onclick="duplicateSelected()">Дубликат</button>
+      </div>
+    </div>
+  `;
+}
+
+function renderPropInspectorExtended(p) {
+  const rotDeg = Math.round(((p.angle || 0) * 180 / Math.PI) % 360);
+  return `
+    <div class="prop-card">
+      <div style="font-weight:700;font-size:13px;color:var(--accent);">ДЕКОР / ПРОП: ${p.id || ''}</div>
+      <div class="prop-field">
+        <label>Тип объекта:</label>
+        <select onchange="updateEntityProp('type', this.value)">
+          <option value="trash_can" ${p.type === 'trash_can' ? 'selected' : ''}>Мусорный бак</option>
+          <option value="hydrant" ${p.type === 'hydrant' ? 'selected' : ''}>Пожарный гидрант</option>
+          <option value="cone" ${p.type === 'cone' ? 'selected' : ''}>Дорожный конус</option>
+          <option value="bollard" ${p.type === 'bollard' ? 'selected' : ''}>Заградительный столбик</option>
+          <option value="manhole" ${p.type === 'manhole' ? 'selected' : ''}>Канализационный люк</option>
+          <option value="bench" ${p.type === 'bench' ? 'selected' : ''}>Уличная скамейка</option>
+          <option value="picket_post" ${p.type === 'picket_post' ? 'selected' : ''}>Пикетный столбик ПК</option>
+          <option value="station_clock" ${p.type === 'station_clock' ? 'selected' : ''}>Вокзальные часы</option>
+          <option value="railway_signal" ${p.type === 'railway_signal' ? 'selected' : ''}>Мачтовый ЖД светофор</option>
+          <option value="buffer_stop" ${p.type === 'buffer_stop' ? 'selected' : ''}>Тупиковый упор</option>
+          <option value="switch_box" ${p.type === 'switch_box' ? 'selected' : ''}>Привод стрелки СП-6</option>
+          <option value="crossing_light" ${p.type === 'crossing_light' ? 'selected' : ''}>Переездной светофор</option>
+          <option value="crossing_gate" ${p.type === 'crossing_gate' ? 'selected' : ''}>Шлагбаум переезда</option>
+          <option value="platform_sign" ${p.type === 'platform_sign' ? 'selected' : ''}>Указатель платформы</option>
+        </select>
+      </div>
+      <div class="prop-field">
+        <label>Угол поворота (°): ${rotDeg}°</label>
+        <input type="range" min="0" max="360" value="${rotDeg}" oninput="updateEntityProp('angle', parseFloat(this.value) * Math.PI / 180)">
+      </div>
+      <div class="prop-field">
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;">
+          <input type="checkbox" ${p.isBroken ? 'checked' : ''} onchange="updateEntityProp('isBroken', this.checked)">
+          <span>Поврежден / Разбит</span>
+        </label>
+      </div>
+      <div class="prop-field">
+        <label>Координаты X, Y:</label>
+        <div class="prop-grid-2">
+          <input type="number" value="${Math.round(p.x)}" onchange="updateEntityProp('x', parseFloat(this.value))">
+          <input type="number" value="${Math.round(p.y)}" onchange="updateEntityProp('y', parseFloat(this.value))">
+        </div>
+      </div>
+      <div class="prop-grid-2" style="margin-top:10px;">
+        <button class="btn danger" onclick="deleteSelected()">Удалить</button>
+        <button class="btn" onclick="duplicateSelected()">Дубликат</button>
+      </div>
+    </div>
+  `;
+}
+
 // --- INSPECTOR UI ---
 function updateInspector() {
   const emptyView = document.getElementById('inspector-empty');
@@ -4688,12 +7308,30 @@ function updateInspector() {
   const e = sel.entity;
   const layer = sel.layer;
 
+  if (layer === 'minimapMarkers') {
+    contentView.innerHTML = renderMinimapMarkerInspector(e);
+    return;
+  }
+  if (layer === 'spawnPoints') {
+    contentView.innerHTML = renderSpawnPointInspector(e);
+    return;
+  }
+
   if (layer === 'railwayTracks' && window.RailwayEditor) {
     contentView.innerHTML = window.RailwayEditor.renderTrackInspector(e);
     return;
   }
   if (layer === 'railwaySignals' && window.RailwayEditor) {
     contentView.innerHTML = window.RailwayEditor.renderSignalInspector(e);
+    return;
+  }
+
+  if (layer === 'buildings') {
+    contentView.innerHTML = renderBuildingInspectorExtended(e);
+    return;
+  }
+  if (layer === 'props') {
+    contentView.innerHTML = renderPropInspectorExtended(e);
     return;
   }
 
@@ -4841,6 +7479,8 @@ function renderOutliner() {
 
   let html = '';
   const layers = [
+    { key: 'minimapMarkers', label: 'Метки миникарты', items: mapData.minimapMarkers || [] },
+    { key: 'spawnPoints', label: 'Точки спавна', items: mapData.spawnPoints || [] },
     { key: 'roads', label: 'Дороги', items: mapData.roads },
     { key: 'buildings', label: 'Здания', items: mapData.buildings },
     { key: 'intersections', label: 'Перекрестки', items: mapData.intersections },
@@ -4857,7 +7497,7 @@ function renderOutliner() {
     let matching = l.items;
     if (search) {
       matching = l.items.filter(item => {
-        const title = (item.name || item.type || item.id || '').toLowerCase();
+        const title = (item.nameRu || item.name || item.type || item.id || '').toLowerCase();
         return title.includes(search) || item.id.toLowerCase().includes(search);
       });
     }
@@ -5050,15 +7690,19 @@ function toggleHelpModal() {
 function updateFooterCounts() {
   const el = document.getElementById('footer-counts');
   if (!el || !mapData) return;
-  el.textContent = `Дорог: ${mapData.roads?.length || 0} | ЖД путей: ${mapData.railwayTracks?.length || 0} | Светофоров: ${mapData.railwaySignals?.length || 0} | Зданий: ${mapData.buildings?.length || 0} | Деревьев: ${mapData.trees?.length || 0} | Декора: ${mapData.props?.length || 0}`;
+  el.textContent = `Дорог: ${mapData.roads?.length || 0} | ЖД: ${mapData.railwayTracks?.length || 0} | Светофоров: ${mapData.railwaySignals?.length || 0} | Зданий: ${mapData.buildings?.length || 0} | Деревьев: ${mapData.trees?.length || 0} | Декора: ${mapData.props?.length || 0} | Меток: ${mapData.minimapMarkers?.length || 0} | Спавнов: ${mapData.spawnPoints?.length || 0}`;
 }
 
 // --- GLOBAL KEYBOARD SHORTCUTS ---
 window.addEventListener('keydown', (e) => {
-  if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT' || e.target.tagName === 'TEXTAREA') return;
+  const isInteriorOpen = document.getElementById('interior-studio-modal') && document.getElementById('interior-studio-modal').style.display === 'flex';
+  if (isInteriorOpen) return;
 
   if (e.key === 'z' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); undo(); }
   else if (e.key === 'y' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); redo(); }
+  else if (e.key === 'z' || e.key === 'я') { setTool('spawnPoint'); }
+  else if (e.key === 'x' || e.key === 'ч') { setTool('marker'); }
   else if (e.key === 'd' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); duplicateSelected(); }
   else if (e.key === 'Delete' || e.key === 'Backspace') { deleteSelected(); }
   else if (e.key === 'v' || e.key === 'м') { setTool('select'); }
@@ -5081,6 +7725,10 @@ window.addEventListener('keydown', (e) => {
   else if (e.key === 'h' || e.key === 'р') { window.RailwayEditor.openTrainScheduleModal(); }
   else if (e.key === 'f' || e.key === 'а') { centerCamera(); }
   else if (e.key === 'Escape') {
+    if (window.RailwayEditor && typeof window.RailwayEditor.isPickerActive === 'function' && window.RailwayEditor.isPickerActive()) {
+      window.RailwayEditor.cancelPicker();
+      return;
+    }
     selectedEntities = [];
     updateSelectionSet();
     toolStep = 0;
@@ -5115,58 +7763,72 @@ let isHistory = [];
 let isHistoryIndex = -1;
 
 const IS_FURNITURE_CATALOG = [
-  // Спальня
-  { type: 'bed', name: 'Двуспальная кровать', width: 24, height: 24, color: '#f43f5e', category: 'bedroom', icon: '' },
-  { type: 'kids_bed', name: 'Детская кровать', width: 18, height: 20, color: '#38bdf8', category: 'bedroom', icon: '' },
-  { type: 'wardrobe', name: 'Шкаф платяной', width: 18, height: 9, color: '#451a03', category: 'bedroom', icon: '' },
-  { type: 'nightstand', name: 'Тумбочка прикроватная', width: 6, height: 6, color: '#78350f', category: 'bedroom', icon: '' },
-  { type: 'bookshelf', name: 'Книжный шкаф', width: 18, height: 6, color: '#7c2d12', category: 'bedroom', icon: '' },
+  // Спальня & Жилье
+  { type: 'bed', name: 'Двуспальная кровать', width: 24, height: 24, color: '#f43f5e', category: 'bedroom' },
+  { type: 'kids_bed', name: 'Детская кровать', width: 18, height: 20, color: '#38bdf8', category: 'bedroom' },
+  { type: 'wardrobe', name: 'Шкаф платяной', width: 18, height: 9, color: '#451a03', category: 'bedroom' },
+  { type: 'dresser', name: 'Комод бельевой', width: 14, height: 7, color: '#581c87', category: 'bedroom' },
+  { type: 'nightstand', name: 'Тумбочка прикроватная', width: 6, height: 6, color: '#78350f', category: 'bedroom' },
+  { type: 'bookshelf', name: 'Книжный шкаф', width: 18, height: 6, color: '#7c2d12', category: 'bedroom' },
+  { type: 'coat_rack', name: 'Напольная вешалка', width: 6, height: 6, color: '#a16207', category: 'bedroom' },
+  { type: 'mirror', name: 'Зеркало напольное', width: 8, height: 3, color: '#e0f2fe', category: 'bedroom' },
 
-  // Гостиная
-  { type: 'sofa', name: 'Мягкий диван', width: 24, height: 10, color: '#475569', category: 'living', icon: '' },
-  { type: 'tv_cabinet', name: 'Тумба под ТВ', width: 18, height: 6, color: '#1e293b', category: 'living', icon: '' },
-  { type: 'tv', name: 'Телевизор плазма', width: 14, height: 3, color: '#0f172a', category: 'living', icon: '' },
-  { type: 'carpet', name: 'Ковер напольный', width: 32, height: 22, color: '#991b1b', category: 'living', icon: '' },
-  { type: 'plant', name: 'Комнатный фикус', width: 6, height: 6, color: '#15803d', category: 'living', icon: '' },
-  { type: 'bench', name: 'Скамья со спинкой', width: 16, height: 6, color: '#334155', category: 'living', icon: '' },
+  // Гостиная & Отдых
+  { type: 'sofa', name: 'Мягкий диван', width: 24, height: 10, color: '#475569', category: 'living' },
+  { type: 'bean_bag', name: 'Кресло-мешок', width: 8, height: 8, color: '#ea580c', category: 'living' },
+  { type: 'tv_cabinet', name: 'Тумба под ТВ', width: 18, height: 6, color: '#1e293b', category: 'living' },
+  { type: 'tv', name: 'Телевизор плазма', width: 14, height: 3, color: '#0f172a', category: 'living' },
+  { type: 'carpet', name: 'Ковер напольный', width: 32, height: 22, color: '#991b1b', category: 'living' },
+  { type: 'plant', name: 'Комнатный фикус', width: 6, height: 6, color: '#15803d', category: 'living' },
+  { type: 'bench', name: 'Скамья со спинкой', width: 16, height: 6, color: '#334155', category: 'living' },
+  { type: 'floor_lamp', name: 'Напольный торшер', width: 5, height: 5, color: '#eab308', category: 'living' },
 
-  // Офис и кабинет
-  { type: 'desk', name: 'Письменный стол', width: 18, height: 10, color: '#334155', category: 'office', icon: '' },
-  { type: 'desk_reception', name: 'Стойка ресепшн', width: 28, height: 10, color: '#1d4ed8', category: 'office', icon: '' },
-  { type: 'computer', name: 'Компьютер / Монитор', width: 7, height: 5, color: '#0f172a', category: 'office', icon: '' },
-  { type: 'chair', name: 'Офисное кресло', width: 6, height: 6, color: '#1e293b', category: 'office', icon: '' },
-  { type: 'cooler', name: 'Кулер с водой', width: 6, height: 6, color: '#e2e8f0', category: 'office', icon: '' },
-  { type: 'server_rack', name: 'Серверная стойка', width: 12, height: 8, color: '#020617', category: 'office', icon: '' },
-  { type: 'blackboard', name: 'Школьная доска', width: 24, height: 4, color: '#14532d', category: 'office', icon: '' },
-  { type: 'whiteboard', name: 'Маркерная доска', width: 20, height: 4, color: '#f8fafc', category: 'office', icon: '' },
-  { type: 'trash_can', name: 'Корзина для мусора', width: 5, height: 5, color: '#64748b', category: 'office', icon: '' },
-  { type: 'mailbox_bank', name: 'Почтовые ячейки', width: 20, height: 5, color: '#475569', category: 'office', icon: '' },
-  { type: 'atm', name: 'Банкомат', width: 8, height: 7, color: '#15803d', category: 'office', icon: '' },
+  // Кухня & Еда
+  { type: 'kitchen_counter', name: 'Кухонный гарнитур', width: 26, height: 9, color: '#0f172a', category: 'kitchen' },
+  { type: 'table', name: 'Обеденный стол', width: 16, height: 12, color: '#78350f', category: 'kitchen' },
+  { type: 'fridge', name: 'Холодильник', width: 9, height: 9, color: '#e2e8f0', category: 'kitchen' },
+  { type: 'stove', name: 'Кухонная плита', width: 8, height: 8, color: '#334155', category: 'kitchen' },
+  { type: 'microwave', name: 'Микроволновка', width: 6, height: 5, color: '#475569', category: 'kitchen' },
+  { type: 'vending_machine', name: 'Автомат со снеками', width: 10, height: 8, color: '#dc2626', category: 'kitchen' },
 
-  // Кухня
-  { type: 'kitchen_counter', name: 'Кухонный гарнитур', width: 26, height: 9, color: '#0f172a', category: 'kitchen', icon: '' },
-  { type: 'table', name: 'Обеденный стол', width: 16, height: 12, color: '#78350f', category: 'kitchen', icon: '' },
-  { type: 'fridge', name: 'Холодильник', width: 9, height: 9, color: '#e2e8f0', category: 'kitchen', icon: '' },
-  { type: 'vending_machine', name: 'Автомат со снеками', width: 10, height: 8, color: '#dc2626', category: 'kitchen', icon: '' },
+  // Ванная & Сантехника
+  { type: 'bath', name: 'Ванна акриловая', width: 20, height: 12, color: '#cbd5e1', category: 'bathroom' },
+  { type: 'toilet', name: 'Унитаз фаянсовый', width: 7, height: 9, color: '#f8fafc', category: 'bathroom' },
+  { type: 'sink', name: 'Раковина / Умывальник', width: 10, height: 7, color: '#cbd5e1', category: 'bathroom' },
+  { type: 'washing_machine', name: 'Стиральная машина', width: 8, height: 8, color: '#f1f5f9', category: 'bathroom' },
 
-  // Ванная комната (без унитазов)
-  { type: 'bath', name: 'Ванна акриловая', width: 20, height: 12, color: '#cbd5e1', category: 'bathroom', icon: '' },
-  { type: 'sink', name: 'Раковина / Умывальник', width: 10, height: 7, color: '#cbd5e1', category: 'bathroom', icon: '' },
+  // Офис & Бизнес
+  { type: 'desk', name: 'Письменный стол', width: 18, height: 10, color: '#334155', category: 'office' },
+  { type: 'desk_reception', name: 'Стойка ресепшн', width: 28, height: 10, color: '#1d4ed8', category: 'office' },
+  { type: 'computer', name: 'Компьютер / ПК', width: 7, height: 5, color: '#0f172a', category: 'office' },
+  { type: 'chair', name: 'Офисное кресло', width: 6, height: 6, color: '#1e293b', category: 'office' },
+  { type: 'cooler', name: 'Кулер с водой', width: 6, height: 6, color: '#e2e8f0', category: 'office' },
+  { type: 'file_cabinet', name: 'Картотека документов', width: 10, height: 8, color: '#475569', category: 'office' },
+  { type: 'server_rack', name: 'Серверная стойка', width: 12, height: 8, color: '#020617', category: 'office' },
+  { type: 'safe', name: 'Сейф бронированный', width: 8, height: 8, color: '#1e293b', category: 'office' },
+  { type: 'blackboard', name: 'Школьная доска', width: 24, height: 4, color: '#14532d', category: 'office' },
+  { type: 'whiteboard', name: 'Маркерная доска', width: 20, height: 4, color: '#f8fafc', category: 'office' },
+  { type: 'trash_can', name: 'Корзина для мусора', width: 5, height: 5, color: '#64748b', category: 'office' },
+  { type: 'mailbox_bank', name: 'Почтовые ячейки', width: 20, height: 5, color: '#475569', category: 'office' },
+  { type: 'atm', name: 'Банкомат', width: 8, height: 7, color: '#15803d', category: 'office' },
 
-  // Магазин
-  { type: 'shelf', name: 'Торговый стеллаж', width: 24, height: 7, color: '#475569', category: 'shop', icon: '' },
-  { type: 'counter', name: 'Прилавок кассовый', width: 22, height: 8, color: '#1e293b', category: 'shop', icon: '' },
-  { type: 'cash_register', name: 'Кассовый аппарат', width: 7, height: 6, color: '#334155', category: 'shop', icon: '' },
-  { type: 'freezer_display', name: 'Морозильный ларь', width: 20, height: 10, color: '#94a3b8', category: 'shop', icon: '' },
+  // Магазин & Торговля
+  { type: 'shelf', name: 'Торговый стеллаж', width: 24, height: 7, color: '#475569', category: 'shop' },
+  { type: 'counter', name: 'Прилавок кассовый', width: 22, height: 8, color: '#1e293b', category: 'shop' },
+  { type: 'cash_register', name: 'Кассовый аппарат', width: 7, height: 6, color: '#334155', category: 'shop' },
+  { type: 'freezer_display', name: 'Морозильный ларь', width: 20, height: 10, color: '#94a3b8', category: 'shop' },
+  { type: 'car_podium', name: 'Подиум автосалона', width: 36, height: 20, color: '#1d4ed8', category: 'shop' },
 
-  // Склад и спец.
-  { type: 'pallet_stack', name: 'Паллета с ящиками', width: 14, height: 14, color: '#b45309', category: 'storage', icon: '' },
-  { type: 'radiator', name: 'Батарея отопления', width: 12, height: 3, color: '#e2e8f0', category: 'storage', icon: '' },
-  { type: 'fire_rack', name: 'Пожарный щит', width: 12, height: 4, color: '#dc2626', category: 'storage', icon: '' },
-  { type: 'lockers', name: 'Шкафчики раздевалки', width: 20, height: 6, color: '#475569', category: 'storage', icon: '' },
-  { type: 'bed_hospital', name: 'Медицинская койка', width: 22, height: 12, color: '#38bdf8', category: 'special', icon: '' },
-  { type: 'exam_table', name: 'Смотровой стол', width: 18, height: 10, color: '#0284c7', category: 'special', icon: '' },
-  { type: 'jail_cot', name: 'Тюремные нары', width: 18, height: 10, color: '#78350f', category: 'special', icon: '' }
+  // Склад & Спец.
+  { type: 'pallet_stack', name: 'Паллета с ящиками', width: 14, height: 14, color: '#b45309', category: 'storage' },
+  { type: 'radiator', name: 'Батарея отопления', width: 12, height: 3, color: '#e2e8f0', category: 'storage' },
+  { type: 'fire_rack', name: 'Пожарный щит', width: 12, height: 4, color: '#dc2626', category: 'storage' },
+  { type: 'lockers', name: 'Шкафчики раздевалки', width: 20, height: 6, color: '#475569', category: 'storage' },
+  { type: 'bed_hospital', name: 'Медицинская койка', width: 22, height: 12, color: '#38bdf8', category: 'special' },
+  { type: 'exam_table', name: 'Смотровой стол', width: 18, height: 10, color: '#0284c7', category: 'special' },
+  { type: 'jail_cot', name: 'Тюремные нары', width: 18, height: 10, color: '#78350f', category: 'special' },
+  { type: 'kids_table', name: 'Детский столик', width: 12, height: 10, color: '#38bdf8', category: 'special' },
+  { type: 'toy_chest', name: 'Сундук с игрушками', width: 12, height: 8, color: '#eab308', category: 'special' }
 ];
 
 function updateBuildingFloorsCount(count) {
@@ -5235,8 +7897,23 @@ function closeInteriorStudio() {
 function saveAndCloseInteriorStudio() {
   if (!isBuilding || !isLayout) return;
   isSaveCurrentFloorToBuilding();
+
+  // Safeguard: Ensure target building stays in mapData.buildings
+  if (mapData && mapData.buildings) {
+    const idx = mapData.buildings.findIndex(b => b.id === isBuilding.id);
+    if (idx >= 0) {
+      mapData.buildings[idx] = isBuilding;
+    } else {
+      mapData.buildings.push(isBuilding);
+    }
+  }
+
+  rebuildSpatialIndex();
+  renderOutliner();
+  updateFooterCounts();
   pushHistory('Edit Building Interior');
   closeInteriorStudio();
+  render();
   showToast('Интерьер здания успешно сохранен!');
 }
 
@@ -5667,6 +8344,8 @@ window.addEventListener('keydown', (e) => {
 
   if (e.code === 'Space') {
     isSpacePanning = true;
+  } else if (e.key === 'p' || e.key === 'з') {
+    isTogglePassabilityOverlay();
   } else if (e.key === 'r' || e.key === 'к') {
     isRotateSelectedItem();
   } else if (e.key === 'Delete' || e.key === 'Backspace') {
@@ -5786,8 +8465,13 @@ function isHandleMouseMove(e) {
   if (sx < 0 || sy < 0 || sx > isCanvas.width || sy > isCanvas.height) return;
 
   const wPos = isScreenToWorld(sx, sy);
+  isLastMouseWorld = wPos;
   const curPosEl = document.getElementById('is-cursor-pos');
   if (curPosEl) curPosEl.textContent = 'X: ' + Math.round(wPos.x) + ' | Y: ' + Math.round(wPos.y);
+
+  if (isPassabilityOverlay) {
+    isRenderCanvas();
+  }
 
   if (isIsDragging) {
     if (isSpacePanning || e.buttons === 4 || e.altKey) {
@@ -6110,6 +8794,148 @@ function isRenderCanvas() {
     ctx.restore();
   }
 
+  // 8. Player Passability & Collision Overlay
+  if (isPassabilityOverlay) {
+    isDrawPassabilityOverlay(ctx);
+  }
+
+  ctx.restore();
+}
+
+let isPassabilityOverlay = false;
+let isLastMouseWorld = { x: 0, y: 0 };
+
+function isTogglePassabilityOverlay() {
+  isPassabilityOverlay = !isPassabilityOverlay;
+  const btn = document.getElementById('is-passability-btn');
+  if (btn) {
+    if (isPassabilityOverlay) {
+      btn.style.background = '#0284c7';
+      btn.style.color = '#ffffff';
+      btn.style.borderColor = '#38bdf8';
+    } else {
+      btn.style.background = '';
+      btn.style.color = '';
+      btn.style.borderColor = '';
+    }
+  }
+  showToast(isPassabilityOverlay ? 'Инспекция проходимости ВКЛЮЧЕНА (габариты 16px)' : 'Инспекция проходимости выключена');
+  isRenderCanvas();
+}
+
+function isCheckPositionCollision(px, py) {
+  if (!isBuilding || !isLayout) return { collided: false, cause: '' };
+  const radius = 6.5;
+  const BW = isBuilding.width;
+  const BH = isBuilding.height;
+
+  if (px < radius + 7 || px > BW - (radius + 7) || py < radius + 7 || py > BH - (radius + 7)) {
+    return { collided: true, cause: 'Внешняя стена' };
+  }
+
+  for (const w of isLayout.walls || []) {
+    const d = isDistToSegment(px, py, w.x1, w.y1, w.x2, w.y2);
+    if (d < radius + 1.5) {
+      return { collided: true, cause: w.isJailBars ? 'Решетка' : 'Стена' };
+    }
+  }
+
+  for (const f of isLayout.furniture || []) {
+    if (px + radius > f.x && px - radius < f.x + f.width &&
+        py + radius > f.y && py - radius < f.y + f.height) {
+      const def = IS_FURNITURE_CATALOG.find(c => c.type === f.type);
+      return { collided: true, cause: def ? def.name : 'Мебель' };
+    }
+  }
+
+  return { collided: false, cause: '' };
+}
+
+function isDrawPassabilityOverlay(ctx) {
+  if (!isBuilding || !isLayout) return;
+  const BW = isBuilding.width;
+  const BH = isBuilding.height;
+  const radius = 6.5;
+
+  ctx.save();
+
+  // 1. Highlight blocked outer wall perimeter
+  ctx.fillStyle = 'rgba(239, 68, 68, 0.22)';
+  ctx.fillRect(0, 0, BW, radius + 7);
+  ctx.fillRect(0, BH - (radius + 7), BW, radius + 7);
+  ctx.fillRect(0, 0, radius + 7, BH);
+  ctx.fillRect(BW - (radius + 7), 0, radius + 7, BH);
+
+  // 2. Highlight furniture collision clearance zones
+  (isLayout.furniture || []).forEach(f => {
+    ctx.fillStyle = 'rgba(239, 68, 68, 0.28)';
+    ctx.fillRect(f.x - radius, f.y - radius, f.width + radius * 2, f.height + radius * 2);
+    ctx.strokeStyle = 'rgba(239, 68, 68, 0.6)';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([2, 2]);
+    ctx.strokeRect(f.x - radius, f.y - radius, f.width + radius * 2, f.height + radius * 2);
+  });
+
+  // 3. Highlight internal wall collision clearance zones
+  (isLayout.walls || []).forEach(w => {
+    ctx.strokeStyle = 'rgba(239, 68, 68, 0.45)';
+    ctx.lineWidth = (radius + 1.5) * 2;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(w.x1, w.y1);
+    ctx.lineTo(w.x2, w.y2);
+    ctx.stroke();
+  });
+
+  // 4. Walkable zone green grid outline
+  ctx.strokeStyle = 'rgba(34, 197, 94, 0.3)';
+  ctx.lineWidth = 1;
+  ctx.setLineDash([4, 4]);
+  ctx.strokeRect(radius + 7, radius + 7, BW - (radius + 7) * 2, BH - (radius + 7) * 2);
+
+  // 5. Player test puppet attached to mouse position
+  const mx = isLastMouseWorld.x;
+  const my = isLastMouseWorld.y;
+
+  if (mx >= 0 && mx <= BW && my >= 0 && my <= BH) {
+    const col = isCheckPositionCollision(mx, my);
+
+    // Player body circle
+    ctx.beginPath();
+    ctx.arc(mx, my, radius, 0, Math.PI * 2);
+    ctx.fillStyle = col.collided ? 'rgba(239, 68, 68, 0.7)' : 'rgba(34, 197, 94, 0.7)';
+    ctx.fill();
+    ctx.strokeStyle = col.collided ? '#ef4444' : '#22c55e';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([]);
+    ctx.stroke();
+
+    // Clearance buffer ring
+    ctx.beginPath();
+    ctx.arc(mx, my, radius + 1.5, 0, Math.PI * 2);
+    ctx.strokeStyle = col.collided ? 'rgba(239, 68, 68, 0.4)' : 'rgba(34, 197, 94, 0.4)';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
+    // Player direction dot
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath();
+    ctx.arc(mx, my - 3, 1.8, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Status badge tag above circle
+    ctx.font = 'bold 8px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'bottom';
+    const tagText = col.collided ? `ТУПИК (${col.cause})` : 'ПРОХОД СВОБОДЕН';
+    const tw = ctx.measureText(tagText).width;
+
+    ctx.fillStyle = col.collided ? 'rgba(153, 27, 27, 0.95)' : 'rgba(20, 83, 45, 0.95)';
+    ctx.fillRect(mx - tw / 2 - 4, my - radius - 16, tw + 8, 13);
+    ctx.fillStyle = '#ffffff';
+    ctx.fillText(tagText, mx, my - radius - 4);
+  }
+
   ctx.restore();
 }
 
@@ -6343,11 +9169,15 @@ function isUpdateRightInspector() {
 
   if (isSelectedItem.type === 'furniture') {
     const def = IS_FURNITURE_CATALOG.find(c => c.type === item.type);
+    const typeOpts = IS_FURNITURE_CATALOG.map(c => `<option value="${c.type}" ${item.type === c.type ? 'selected' : ''}>${c.name} (${c.type})</option>`).join('');
+    
     fieldsHtml = `
       <h4>${def?.name || item.type}</h4>
       <div class="prop-field">
-        <label>Тип:</label>
-        <span style="font-size:11px;color:var(--accent);">${item.type}</span>
+        <label>Тип предмета:</label>
+        <select onchange="isUpdateFurnitureType(this.value)">
+          ${typeOpts}
+        </select>
       </div>
       <div class="prop-field">
         <label>Позиция X, Y:</label>
@@ -6375,6 +9205,16 @@ function isUpdateRightInspector() {
       <div class="prop-field">
         <label>Цвет:</label>
         <input type="color" value="${item.color || '#475569'}" onchange="isUpdateItemProp('color', this.value)" style="width:100%;height:32px;background:none;border:none;cursor:pointer;">
+      </div>
+      <div class="prop-field">
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;">
+          <input type="checkbox" ${item.interactive !== false ? 'checked' : ''} onchange="isUpdateItemProp('interactive', this.checked)">
+          <span>Интерактивный объект (взаимодействие)</span>
+        </label>
+      </div>
+      <div class="prop-field">
+        <label>Емкость хранилища (предметов):</label>
+        <input type="number" min="0" max="100" value="${item.storageCapacity || 0}" onchange="isUpdateItemProp('storageCapacity', parseInt(this.value) || 0)">
       </div>
     `;
   } else if (isSelectedItem.type === 'wall') {
@@ -6472,6 +9312,21 @@ function isUpdateItemProp(prop, val) {
   if (!item) return;
   item[prop] = val;
   isPushHistory('Change ' + prop);
+  isRenderCanvas();
+}
+
+function isUpdateFurnitureType(newType) {
+  const item = isGetItemByRef(isSelectedItem);
+  if (!item || isSelectedItem.type !== 'furniture') return;
+  item.type = newType;
+  const def = IS_FURNITURE_CATALOG.find(c => c.type === newType);
+  if (def) {
+    item.width = def.width;
+    item.height = def.height;
+    if (def.color) item.color = def.color;
+  }
+  isPushHistory('Change Furniture Type');
+  isUpdateRightInspector();
   isRenderCanvas();
 }
 

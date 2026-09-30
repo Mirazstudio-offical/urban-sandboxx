@@ -57,36 +57,44 @@ export const db = (() => {
   }
 })();
 
-// Validate initial backend connectivity with a 3-second fail-fast timeout to prevent blocking UI/startup
+// Validate initial backend connectivity gracefully in background without blocking or prematurely disabling network
 async function validateConnectivity() {
-  let hasConnected = false;
-  
-  // Create a timeout promise
-  const timeoutPromise = new Promise((_, reject) => {
-    setTimeout(() => {
-      if (!hasConnected) {
-        reject(new Error("Timeout waiting for Firestore backend connection"));
-      }
-    }, 3000);
+  if (typeof window === 'undefined') return;
+
+  // React to online/offline network lifecycle
+  window.addEventListener('online', async () => {
+    try {
+      await enableNetwork(db);
+      console.log("[Firestore] Browser online: network enabled.");
+    } catch {}
   });
 
+  window.addEventListener('offline', async () => {
+    try {
+      await disableNetwork(db);
+      console.log("[Firestore] Browser offline: local cache mode active.");
+    } catch {}
+  });
+
+  if (!navigator.onLine) {
+    console.log("[Firestore] Operating in local offline cache mode (browser offline).");
+    return;
+  }
+
   try {
-    // Try to get a dummy doc from the server within 3 seconds
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      setTimeout(() => reject(new Error("Connectivity probe timeout")), 8000);
+    });
+
     await Promise.race([
       getDocFromServer(doc(db, 'test', 'connection')),
       timeoutPromise
     ]);
-    hasConnected = true;
     console.log("[Firestore] Successfully verified connection to Cloud Firestore backend.");
   } catch (error: any) {
-    console.warn("[Firestore] Could not establish connection to backend within 3 seconds. Falling back to offline/cache mode instantly to prevent UI blocking.");
-    try {
-      // Force Firestore into offline mode immediately to bypass all 10s network timeouts
-      await disableNetwork(db);
-      console.log("[Firestore] Operating in high-performance local offline cache mode.");
-    } catch (err) {
-      console.error("[Firestore] Failed to disable network:", err);
-    }
+    // If initial probe times out due to cold start, do NOT disable network.
+    // Firestore SDK handles its own background connection retry and offline cache gracefully.
+    console.log("[Firestore] Background sync active; local cache ready.");
   }
 }
 validateConnectivity();

@@ -19,6 +19,7 @@
 
 import { GameWorld, RailwaySignal, RailwaySignalType, RailwaySignalAspect, RailwayLensColor, StreetProp, RailwaySignalFilament, RailwayRelayPhase } from './types';
 import { sound } from './audio';
+import { TrainSystem } from './trainSystem';
 import { getLevelCrossings, isCrossingApproachOccupied } from './levelCrossingSystem';
 
 export class RailwaySignalingSystem {
@@ -73,7 +74,7 @@ export class RailwaySignalingSystem {
             "designation": "Н",
             "targetTrack": "Главный I путь",
             "x": 8400,
-            "y": 8768,
+            "y": 8792,
             "angle": 3.141592653589793,
             "lenses": [
                   "yellow",
@@ -82,7 +83,7 @@ export class RailwaySignalingSystem {
                   "yellow",
                   "white"
             ],
-            "currentAspect": "green",
+            "currentAspect": "red",
             "linkedTrackId": "rail_main_1_west",
             "nextSignalId": "sig_exit_N1"
       },
@@ -95,7 +96,7 @@ export class RailwaySignalingSystem {
             "designation": "НД",
             "targetTrack": "II неправильный путь",
             "x": 8400,
-            "y": 8908,
+            "y": 8932,
             "angle": 3.141592653589793,
             "lenses": [
                   "yellow",
@@ -116,7 +117,7 @@ export class RailwaySignalingSystem {
             "designation": "Ч",
             "targetTrack": "Главный II путь",
             "x": 14100,
-            "y": 8852,
+            "y": 8828,
             "angle": 0,
             "lenses": [
                   "yellow",
@@ -125,7 +126,7 @@ export class RailwaySignalingSystem {
                   "yellow",
                   "white"
             ],
-            "currentAspect": "green",
+            "currentAspect": "red",
             "linkedTrackId": "rail_main_2_east",
             "nextSignalId": "sig_exit_Ch2"
       },
@@ -138,7 +139,7 @@ export class RailwaySignalingSystem {
             "designation": "ЧД",
             "targetTrack": "I неправильный путь",
             "x": 14100,
-            "y": 8712,
+            "y": 8688,
             "angle": 0,
             "lenses": [
                   "yellow",
@@ -150,7 +151,7 @@ export class RailwaySignalingSystem {
             "currentAspect": "red",
             "linkedTrackId": "rail_main_1_east"
       },
-      {
+       {
             "id": "sig_exit_N3",
             "name": "Выходной светофор «Н3» (Путь 3, отправление на восток)",
             "nameRu": "Выходной «Н3»",
@@ -158,8 +159,8 @@ export class RailwaySignalingSystem {
             "mastType": "dwarf",
             "designation": "Н3",
             "targetTrack": "Путь 3 (Платформа 1)",
-            "x": 12850,
-            "y": 8626,
+            "x": 11650,
+            "y": 8642,
             "angle": 3.141592653589793,
             "lenses": [
                   "yellow",
@@ -176,11 +177,11 @@ export class RailwaySignalingSystem {
             "name": "Выходной светофор «Н1» (Главный I путь, отправление на восток)",
             "nameRu": "Выходной «Н1»",
             "type": "exit",
-            "mastType": "mast",
+            "mastType": "dwarf",
             "designation": "Н1",
             "targetTrack": "Главный I путь",
-            "x": 12850,
-            "y": 8768,
+            "x": 11650,
+            "y": 8782,
             "angle": 3.141592653589793,
             "lenses": [
                   "yellow",
@@ -189,7 +190,7 @@ export class RailwaySignalingSystem {
                   "yellow",
                   "white"
             ],
-            "currentAspect": "green",
+            "currentAspect": "red",
             "nextSignalId": "sig_block_e_13"
       },
       {
@@ -197,11 +198,11 @@ export class RailwaySignalingSystem {
             "name": "Выходной светофор «Н2» (Главный II путь, отправление на восток)",
             "nameRu": "Выходной «Н2»",
             "type": "exit",
-            "mastType": "mast",
+            "mastType": "dwarf",
             "designation": "Н2",
             "targetTrack": "Главный II путь",
-            "x": 12850,
-            "y": 8908,
+            "x": 11650,
+            "y": 8922,
             "angle": 3.141592653589793,
             "lenses": [
                   "yellow",
@@ -221,8 +222,8 @@ export class RailwaySignalingSystem {
             "mastType": "dwarf",
             "designation": "Н4",
             "targetTrack": "Путь 4 (Южный)",
-            "x": 12850,
-            "y": 9048,
+            "x": 11650,
+            "y": 9062,
             "angle": 3.141592653589793,
             "lenses": [
                   "yellow",
@@ -242,8 +243,8 @@ export class RailwaySignalingSystem {
             "mastType": "dwarf",
             "designation": "Ч3",
             "targetTrack": "Путь 3 (Платформа 1)",
-            "x": 9650,
-            "y": 8572,
+            "x": 9950,
+            "y": 8558,
             "angle": 0,
             "lenses": [
                   "yellow",
@@ -260,11 +261,11 @@ export class RailwaySignalingSystem {
             "name": "Выходной светофор «Ч1» (Главный I путь, отправление на запад)",
             "nameRu": "Выходной «Ч1»",
             "type": "exit",
-            "mastType": "mast",
+            "mastType": "dwarf",
             "designation": "Ч1",
             "targetTrack": "Главный I путь",
-            "x": 9650,
-            "y": 8712,
+            "x": 9950,
+            "y": 8698,
             "angle": 0,
             "lenses": [
                   "yellow",
@@ -281,11 +282,11 @@ export class RailwaySignalingSystem {
             "name": "Выходной светофор «Ч2» (Главный II путь, отправление на запад)",
             "nameRu": "Выходной «Ч2»",
             "type": "exit",
-            "mastType": "mast",
+            "mastType": "dwarf",
             "designation": "Ч2",
             "targetTrack": "Главный II путь",
-            "x": 9650,
-            "y": 8852,
+            "x": 9950,
+            "y": 8838,
             "angle": 0,
             "lenses": [
                   "yellow",
@@ -294,7 +295,7 @@ export class RailwaySignalingSystem {
                   "yellow",
                   "white"
             ],
-            "currentAspect": "green",
+            "currentAspect": "red",
             "nextSignalId": "sig_block_w_8"
       },
       {
@@ -305,8 +306,8 @@ export class RailwaySignalingSystem {
             "mastType": "dwarf",
             "designation": "Ч4",
             "targetTrack": "Путь 4 (Южный)",
-            "x": 9650,
-            "y": 8992,
+            "x": 9950,
+            "y": 8978,
             "angle": 0,
             "lenses": [
                   "yellow",
@@ -328,8 +329,8 @@ export class RailwaySignalingSystem {
             "targetTrack": "Съезд 5/6",
             "switchNumber": "5/6",
             "x": 8620,
-            "y": 8768,
-            "angle": 3.141592653589793,
+            "y": 8782,
+            "angle": 0,
             "lenses": [
                   "white",
                   "blue"
@@ -346,8 +347,8 @@ export class RailwaySignalingSystem {
             "targetTrack": "Стрелка 1 (Путь 3)",
             "switchNumber": "1",
             "x": 9120,
-            "y": 8768,
-            "angle": 3.141592653589793,
+            "y": 8782,
+            "angle": 0,
             "lenses": [
                   "white",
                   "blue"
@@ -364,8 +365,8 @@ export class RailwaySignalingSystem {
             "targetTrack": "Стрелка 2 (Путь 4)",
             "switchNumber": "2",
             "x": 9120,
-            "y": 8852,
-            "angle": 3.141592653589793,
+            "y": 8922,
+            "angle": 0,
             "lenses": [
                   "white",
                   "blue"
@@ -382,8 +383,8 @@ export class RailwaySignalingSystem {
             "targetTrack": "Съезд 5/6",
             "switchNumber": "5/6",
             "x": 8980,
-            "y": 8852,
-            "angle": 0,
+            "y": 8838,
+            "angle": 3.141592653589793,
             "lenses": [
                   "white",
                   "blue"
@@ -400,8 +401,8 @@ export class RailwaySignalingSystem {
             "targetTrack": "Горловина",
             "switchNumber": "1",
             "x": 9580,
-            "y": 8572,
-            "angle": 0,
+            "y": 8558,
+            "angle": 3.141592653589793,
             "lenses": [
                   "white",
                   "blue"
@@ -418,8 +419,8 @@ export class RailwaySignalingSystem {
             "targetTrack": "Горловина",
             "switchNumber": "2",
             "x": 9580,
-            "y": 9048,
-            "angle": 0,
+            "y": 8978,
+            "angle": 3.141592653589793,
             "lenses": [
                   "white",
                   "blue"
@@ -436,8 +437,8 @@ export class RailwaySignalingSystem {
             "targetTrack": "Стрелка 3",
             "switchNumber": "3",
             "x": 12880,
-            "y": 8626,
-            "angle": 3.141592653589793,
+            "y": 8642,
+            "angle": 0,
             "lenses": [
                   "white",
                   "blue"
@@ -454,8 +455,8 @@ export class RailwaySignalingSystem {
             "targetTrack": "Стрелка 4",
             "switchNumber": "4",
             "x": 12880,
-            "y": 9048,
-            "angle": 3.141592653589793,
+            "y": 9062,
+            "angle": 0,
             "lenses": [
                   "white",
                   "blue"
@@ -472,7 +473,7 @@ export class RailwaySignalingSystem {
             "targetTrack": "Съезд 7/8",
             "switchNumber": "7/8",
             "x": 13520,
-            "y": 8908,
+            "y": 8838,
             "angle": 3.141592653589793,
             "lenses": [
                   "white",
@@ -490,8 +491,8 @@ export class RailwaySignalingSystem {
             "targetTrack": "Стрелка 3",
             "switchNumber": "3",
             "x": 13380,
-            "y": 8712,
-            "angle": 0,
+            "y": 8698,
+            "angle": 3.141592653589793,
             "lenses": [
                   "white",
                   "blue"
@@ -508,7 +509,7 @@ export class RailwaySignalingSystem {
             "targetTrack": "Стрелка 4",
             "switchNumber": "4",
             "x": 13380,
-            "y": 8852,
+            "y": 8922,
             "angle": 0,
             "lenses": [
                   "white",
@@ -526,8 +527,8 @@ export class RailwaySignalingSystem {
             "targetTrack": "Съезд 7/8",
             "switchNumber": "7/8",
             "x": 13880,
-            "y": 8712,
-            "angle": 0,
+            "y": 8698,
+            "angle": 3.141592653589793,
             "lenses": [
                   "white",
                   "blue"
@@ -543,8 +544,8 @@ export class RailwaySignalingSystem {
             "designation": "М14",
             "targetTrack": "Пакгауз",
             "switchNumber": "пакгауз",
-            "x": 10620,
-            "y": 9048,
+            "x": 10580,
+            "y": 8978,
             "angle": 3.141592653589793,
             "lenses": [
                   "white",
@@ -562,8 +563,26 @@ export class RailwaySignalingSystem {
             "targetTrack": "Путь 4",
             "switchNumber": "пакгауз",
             "x": 10980,
-            "y": 9152,
-            "angle": 0,
+            "y": 9078,
+            "angle": 3.141592653589793,
+            "lenses": [
+                  "white",
+                  "blue"
+            ],
+            "currentAspect": "blue"
+      },
+      {
+            "id": "sig_shunt_M18",
+            "name": "Маневровый светофор «М18» (Тупик пакгауза)",
+            "nameRu": "Маневровый «М18»",
+            "type": "shunting",
+            "mastType": "dwarf",
+            "designation": "М18",
+            "targetTrack": "Вытяжной тупик",
+            "switchNumber": "тупик",
+            "x": 12400,
+            "y": 9138,
+            "angle": 3.141592653589793,
             "lenses": [
                   "white",
                   "blue"
@@ -579,7 +598,7 @@ export class RailwaySignalingSystem {
             "designation": "З1",
             "targetTrack": "Главный I путь",
             "x": 12450,
-            "y": 8768,
+            "y": 8792,
             "angle": 3.141592653589793,
             "lenses": [
                   "red"
@@ -595,7 +614,7 @@ export class RailwaySignalingSystem {
             "designation": "З2",
             "targetTrack": "Главный II путь",
             "x": 12750,
-            "y": 8852,
+            "y": 8828,
             "angle": 0,
             "lenses": [
                   "red"
@@ -642,9 +661,9 @@ export class RailwaySignalingSystem {
             "mastType": "crossing",
             "designation": "СП-К1",
             "targetTrack": "Каньонное Шоссе",
-            "x": 18055,
-            "y": 8631,
-            "angle": -2.3538,
+            "x": 18100,
+            "y": 8680,
+            "angle": -2.366,
             "lenses": ["red", "red", "white"],
             "currentAspect": "lunar_white_flashing",
             "isCrossingGate": true,
@@ -658,9 +677,9 @@ export class RailwaySignalingSystem {
             "mastType": "crossing",
             "designation": "СП-К2",
             "targetTrack": "Каньонное Шоссе",
-            "x": 18583,
-            "y": 8977,
-            "angle": 0.7448,
+            "x": 18546,
+            "y": 8945,
+            "angle": 0.776,
             "lenses": ["red", "red", "white"],
             "currentAspect": "lunar_white_flashing",
             "isCrossingGate": true,
@@ -674,9 +693,9 @@ export class RailwaySignalingSystem {
             "mastType": "crossing",
             "designation": "СП-КР1",
             "targetTrack": "Спуск в карьер",
-            "x": 23932,
-            "y": 8626,
-            "angle": -2.2313,
+            "x": 23816,
+            "y": 8665,
+            "angle": -2.156,
             "lenses": ["red", "red", "white"],
             "currentAspect": "lunar_white_flashing",
             "isCrossingGate": true,
@@ -690,9 +709,9 @@ export class RailwaySignalingSystem {
             "mastType": "crossing",
             "designation": "СП-КР2",
             "targetTrack": "Спуск в карьер",
-            "x": 24357,
-            "y": 8985,
-            "angle": 0.9266,
+            "x": 24142,
+            "y": 8945,
+            "angle": 0.985,
             "lenses": ["red", "red", "white"],
             "currentAspect": "lunar_white_flashing",
             "isCrossingGate": true,
@@ -706,9 +725,9 @@ export class RailwaySignalingSystem {
             "mastType": "crossing",
             "designation": "СП-К3",
             "targetTrack": "Каньонное Шоссе",
-            "x": 30086,
-            "y": 8635,
-            "angle": -0.6790,
+            "x": 30055,
+            "y": 8631,
+            "angle": -0.67,
             "lenses": ["red", "red", "white"],
             "currentAspect": "lunar_white_flashing",
             "isCrossingGate": true,
@@ -722,9 +741,9 @@ export class RailwaySignalingSystem {
             "mastType": "crossing",
             "designation": "СП-К4",
             "targetTrack": "Каньонное Шоссе",
-            "x": 29827,
-            "y": 8986,
-            "angle": 2.4892,
+            "x": 29790,
+            "y": 8997,
+            "angle": 2.47,
             "lenses": ["red", "red", "white"],
             "currentAspect": "lunar_white_flashing",
             "isCrossingGate": true,
@@ -740,7 +759,7 @@ export class RailwaySignalingSystem {
             "targetTrack": "Трасса «Золотые Пески»",
             "x": 47112,
             "y": 8635,
-            "angle": -1.3930,
+            "angle": -1.393,
             "lenses": ["red", "red", "white"],
             "currentAspect": "lunar_white_flashing",
             "isCrossingGate": true,
@@ -803,7 +822,7 @@ export class RailwaySignalingSystem {
             "designation": "7",
             "targetTrack": "Главный I путь",
             "x": -1200,
-            "y": 8768,
+            "y": 8792,
             "angle": 3.141592653589793,
             "lenses": [
                   "green",
@@ -822,7 +841,7 @@ export class RailwaySignalingSystem {
             "designation": "5",
             "targetTrack": "Главный I путь",
             "x": 500,
-            "y": 8768,
+            "y": 8792,
             "angle": 3.141592653589793,
             "lenses": [
                   "green",
@@ -841,7 +860,7 @@ export class RailwaySignalingSystem {
             "designation": "3",
             "targetTrack": "Главный I путь",
             "x": 3000,
-            "y": 8768,
+            "y": 8792,
             "angle": 3.141592653589793,
             "lenses": [
                   "green",
@@ -860,7 +879,7 @@ export class RailwaySignalingSystem {
             "designation": "1",
             "targetTrack": "Главный I путь",
             "x": 6000,
-            "y": 8768,
+            "y": 8792,
             "angle": 3.141592653589793,
             "lenses": [
                   "green",
@@ -880,7 +899,7 @@ export class RailwaySignalingSystem {
             "designation": "8",
             "targetTrack": "Главный II путь",
             "x": 6000,
-            "y": 8852,
+            "y": 8828,
             "angle": 0,
             "lenses": [
                   "green",
@@ -899,7 +918,7 @@ export class RailwaySignalingSystem {
             "designation": "6",
             "targetTrack": "Главный II путь",
             "x": 3000,
-            "y": 8852,
+            "y": 8828,
             "angle": 0,
             "lenses": [
                   "green",
@@ -918,7 +937,7 @@ export class RailwaySignalingSystem {
             "designation": "4",
             "targetTrack": "Главный II путь",
             "x": 500,
-            "y": 8852,
+            "y": 8828,
             "angle": 0,
             "lenses": [
                   "green",
@@ -937,7 +956,7 @@ export class RailwaySignalingSystem {
             "designation": "2",
             "targetTrack": "Главный II путь",
             "x": -1200,
-            "y": 8852,
+            "y": 8828,
             "angle": 0,
             "lenses": [
                   "green",
@@ -956,7 +975,7 @@ export class RailwaySignalingSystem {
             "designation": "13",
             "targetTrack": "Главный I путь",
             "x": 18000,
-            "y": 8768,
+            "y": 8792,
             "angle": 3.141592653589793,
             "lenses": [
                   "green",
@@ -975,7 +994,7 @@ export class RailwaySignalingSystem {
             "designation": "11",
             "targetTrack": "Главный I путь",
             "x": 23500,
-            "y": 8768,
+            "y": 8792,
             "angle": 3.141592653589793,
             "lenses": [
                   "green",
@@ -994,7 +1013,7 @@ export class RailwaySignalingSystem {
             "designation": "9",
             "targetTrack": "Главный I путь",
             "x": 29000,
-            "y": 8768,
+            "y": 8792,
             "angle": 3.141592653589793,
             "lenses": [
                   "green",
@@ -1013,7 +1032,7 @@ export class RailwaySignalingSystem {
             "designation": "7",
             "targetTrack": "Главный I путь",
             "x": 35000,
-            "y": 8768,
+            "y": 8792,
             "angle": 3.141592653589793,
             "lenses": [
                   "green",
@@ -1032,7 +1051,7 @@ export class RailwaySignalingSystem {
             "designation": "5",
             "targetTrack": "Главный I путь",
             "x": 41000,
-            "y": 8768,
+            "y": 8792,
             "angle": 3.141592653589793,
             "lenses": [
                   "green",
@@ -1051,7 +1070,7 @@ export class RailwaySignalingSystem {
             "designation": "3",
             "targetTrack": "Главный I путь",
             "x": 47500,
-            "y": 8768,
+            "y": 8792,
             "angle": 3.141592653589793,
             "lenses": [
                   "green",
@@ -1070,7 +1089,7 @@ export class RailwaySignalingSystem {
             "designation": "1",
             "targetTrack": "Главный I путь",
             "x": 53000,
-            "y": 8768,
+            "y": 8792,
             "angle": 3.141592653589793,
             "lenses": [
                   "green",
@@ -1089,7 +1108,7 @@ export class RailwaySignalingSystem {
             "designation": "14",
             "targetTrack": "Главный II путь",
             "x": 53000,
-            "y": 8852,
+            "y": 8828,
             "angle": 0,
             "lenses": [
                   "green",
@@ -1108,7 +1127,7 @@ export class RailwaySignalingSystem {
             "designation": "12",
             "targetTrack": "Главный II путь",
             "x": 47500,
-            "y": 8852,
+            "y": 8828,
             "angle": 0,
             "lenses": [
                   "green",
@@ -1127,7 +1146,7 @@ export class RailwaySignalingSystem {
             "designation": "10",
             "targetTrack": "Главный II путь",
             "x": 41000,
-            "y": 8852,
+            "y": 8828,
             "angle": 0,
             "lenses": [
                   "green",
@@ -1146,7 +1165,7 @@ export class RailwaySignalingSystem {
             "designation": "8",
             "targetTrack": "Главный II путь",
             "x": 35000,
-            "y": 8852,
+            "y": 8828,
             "angle": 0,
             "lenses": [
                   "green",
@@ -1165,7 +1184,7 @@ export class RailwaySignalingSystem {
             "designation": "6",
             "targetTrack": "Главный II путь",
             "x": 29000,
-            "y": 8852,
+            "y": 8828,
             "angle": 0,
             "lenses": [
                   "green",
@@ -1184,7 +1203,7 @@ export class RailwaySignalingSystem {
             "designation": "4",
             "targetTrack": "Главный II путь",
             "x": 23500,
-            "y": 8852,
+            "y": 8828,
             "angle": 0,
             "lenses": [
                   "green",
@@ -1203,7 +1222,7 @@ export class RailwaySignalingSystem {
             "designation": "2",
             "targetTrack": "Главный II путь",
             "x": 18000,
-            "y": 8852,
+            "y": 8828,
             "angle": 0,
             "lenses": [
                   "green",
@@ -1230,10 +1249,13 @@ export class RailwaySignalingSystem {
     const vehicles = world.vehicles || [];
     const sigMap = this.cachedSignals;
 
-    // Helper: test track occupancy by rolling stock
+    // Helper: test track occupancy by rolling stock envelope (from front nose to rear coupler)
     const isTrackOccupied = (minX: number, maxX: number, minY: number, maxY: number) => {
       for (const car of cars) {
-        if (car.x >= minX && car.x < maxX && car.y >= minY && car.y <= maxY) {
+        const halfL = car.length / 2;
+        const noseWest = car.x - halfL;
+        const noseEast = car.x + halfL;
+        if (noseEast >= minX && noseWest <= maxX && car.y >= minY && car.y <= maxY) {
           return true;
         }
       }
@@ -1247,13 +1269,28 @@ export class RailwaySignalingSystem {
       sig.targetAspect = aspect;
     };
 
-    // --- A. RECTANGULAR TRACK CIRCUITS (Рельсовые цепи) ---
-    // Mainline I (Eastbound +X, Y around 8768, tolerance 8710..8810)
+    // Helper to check if a train consist is currently on or approaching a specific track section
+    const consists = TrainSystem.getConsists();
+
+    // --- A. ISOLATED TRACK CIRCUITS & STATION THROATS ---
+    // Open Line Block Sections (Track I Eastbound)
     const occ_w7 = isTrackOccupied(-4000, 500, 8710, 8810);
     const occ_w5 = isTrackOccupied(500, 3000, 8710, 8810);
     const occ_w3 = isTrackOccupied(3000, 6000, 8710, 8810);
     const occ_w1_app = isTrackOccupied(6000, 8400, 8710, 8810);
-    const occ_station_I = isTrackOccupied(8400, 12850, 8710, 8810);
+
+    // Station Switch Throat Sections (Стрелочно-путные секции горловин)
+    const occ_west_throat = isTrackOccupied(8400, 9650, 8550, 9110);
+    const occ_east_throat = isTrackOccupied(12850, 14100, 8550, 9110);
+
+    // Station Internal Tracks (Приемо-отправочные пути)
+    const occ_station_I_track = isTrackOccupied(9650, 12850, 8710, 8810); // Mainline I (IП)
+    const occ_station_II_track = isTrackOccupied(9650, 12850, 8815, 8920); // Mainline II (IIП)
+    const occ_track3 = isTrackOccupied(9650, 12850, 8550, 8680); // Track 3 (3П - Platform 1)
+    const occ_track4 = isTrackOccupied(9650, 12850, 8980, 9110); // Track 4 (4П - South Track)
+    const occ_siding = isTrackOccupied(10600, 12500, 9115, 9250); // Freight siding
+
+    // Open Line Departure & Block Sections (Track I Eastbound)
     const occ_dep_e13 = isTrackOccupied(12850, 18000, 8710, 8810);
     const occ_e11 = isTrackOccupied(18000, 23500, 8710, 8810);
     const occ_e9 = isTrackOccupied(23500, 29000, 8710, 8810);
@@ -1263,7 +1300,7 @@ export class RailwaySignalingSystem {
     const occ_e1_app = isTrackOccupied(47500, 53000, 8710, 8810);
     const occ_beyond_e1 = isTrackOccupied(53000, 65000, 8710, 8810);
 
-    // Mainline II (Westbound -X, Y around 8852, tolerance 8815..8920)
+    // Open Line Block Sections (Track II Westbound)
     const occ_e14 = isTrackOccupied(47500, 53000, 8815, 8920);
     const occ_e12 = isTrackOccupied(41000, 47500, 8815, 8920);
     const occ_e10 = isTrackOccupied(35000, 41000, 8815, 8920);
@@ -1271,19 +1308,13 @@ export class RailwaySignalingSystem {
     const occ_e6 = isTrackOccupied(23500, 29000, 8815, 8920);
     const occ_e4 = isTrackOccupied(18000, 23500, 8815, 8920);
     const occ_e2_app = isTrackOccupied(14100, 18000, 8815, 8920);
-    const occ_station_II = isTrackOccupied(9650, 14100, 8815, 8920);
     const occ_dep_w8 = isTrackOccupied(6000, 9650, 8815, 8920);
     const occ_w6 = isTrackOccupied(3000, 6000, 8815, 8920);
     const occ_w4 = isTrackOccupied(500, 3000, 8815, 8920);
     const occ_w2_app = isTrackOccupied(-1200, 500, 8815, 8920);
     const occ_beyond_w2 = isTrackOccupied(-5000, -1200, 8815, 8920);
 
-    // Side Tracks
-    const occ_track3 = isTrackOccupied(9500, 12950, 8550, 8680); // Track 3 (Platform 1)
-    const occ_track4 = isTrackOccupied(9500, 12950, 8980, 9110); // Track 4 (South Track)
-    const occ_siding = isTrackOccupied(10600, 12500, 9115, 9250); // Freight siding
-
-    // Level Crossings - Dynamic Detection & Approach Occupancy Check across ALL crossings
+    // Level Crossings
     const levelCrossings = getLevelCrossings(world);
     const occupiedCrossingIds = new Set<string>();
     for (const cross of levelCrossings) {
@@ -1294,7 +1325,6 @@ export class RailwaySignalingSystem {
       }
     }
 
-    // Test if any crossing is blocked by a stranded road vehicle
     let crossingObstacle = false;
     for (const cross of levelCrossings) {
       const minTY = Math.min(...cross.tracksY) - 30;
@@ -1308,9 +1338,9 @@ export class RailwaySignalingSystem {
       if (crossingObstacle) break;
     }
 
-    // --- B. AUTO-BLOCK CASCADE (АВТОБЛОКИРОВКА ИСИ) ---
+    // --- B. AUTO-BLOCK CASCADE (АВТОБЛОКИРОВКА НА ПЕРЕГОНАХ) ---
 
-    // 1. EAST OPEN LINE - TRACK I (Eastbound +X: e13 -> e11 -> e9 -> e7 -> e5 -> e3 -> e1)
+    // 1. EAST OPEN LINE - TRACK I (Eastbound +X)
     const sE1 = sigMap.get('sig_block_e_1');
     setDesired(sE1, occ_beyond_e1 ? 'red' : 'green');
 
@@ -1350,52 +1380,163 @@ export class RailwaySignalingSystem {
       else setDesired(sE13, sE11?.currentAspect === 'red' ? 'yellow' : 'green');
     }
 
-    // 2. STATION STEPNAYA - EASTBOUND EXITS (Н1, Н2, Н3, Н4)
-    const sExitN1 = sigMap.get('sig_exit_N1');
-    if (sExitN1) {
-      if (occ_dep_e13) setDesired(sExitN1, 'red');
-      else setDesired(sExitN1, sE13?.currentAspect === 'red' ? 'yellow' : 'green');
-    }
+    // 2. STATION STEPNAYA - EASTBOUND EXIT SIGNALS (Н1, Н2, Н3, Н4)
+    // Normal state: RED (Закрыто). Opens ONLY when route is set and train is ready to depart.
 
+    // Exit N3 (Track 3 / Platform 1 to East)
     const sExitN3 = sigMap.get('sig_exit_N3');
     if (sExitN3) {
-      if (occ_dep_e13 || occ_track3) {
-        setDesired(sExitN3, 'red');
-      } else {
+      // Find train actually standing on or departing from Track 3 platform/throat
+      let trainOnTrack3 = consists.find(c => {
+        const hc = cars.find(car => car.id === c.headCarId);
+        return hc && Math.abs(hc.y - 8600) < 55 && hc.x >= 9650 && hc.x <= 13500;
+      });
+
+      // OR pre-clear for approaching non-stop train targeting Track 3
+      if (!trainOnTrack3) {
+        trainOnTrack3 = consists.find(c => {
+          if (c.direction !== 1) return false;
+          const hc = cars.find(car => car.id === c.headCarId);
+          if (!hc || hc.x < 5000 || hc.x >= 9650) return false;
+          const targetIsTrack3 = c.routeType === 'mainline_east' ||
+            (c.schedule?.routeSteps?.some((step, idx) => idx >= (c.currentStepIndex || 0) && step.targetY === 8600));
+          if (!targetIsTrack3) return false;
+          const stopsAtStation = c.schedule?.routeSteps?.some(step => step.type === 'station_stop');
+          return !stopsAtStation;
+        });
+      }
+
+      const stopsAtStationN3 = trainOnTrack3 && (trainOnTrack3.routeType === 'mainline_east' ||
+        trainOnTrack3.schedule?.routeSteps?.some(step => step.type === 'station_stop'));
+      const isReadyToDepartN3 = trainOnTrack3 && (stopsAtStationN3 ? trainOnTrack3.stationDwellTimer === -1 : trainOnTrack3.stationDwellTimer <= 0);
+
+      if (isReadyToDepartN3 && !occ_east_throat && !occ_dep_e13) {
         setDesired(sExitN3, sE13?.currentAspect === 'red' ? 'two_yellows' : 'two_yellows_one_flashing');
-      }
-    }
-
-    const sExitN4 = sigMap.get('sig_exit_N4');
-    if (sExitN4) {
-      if (occ_dep_e13 || occ_track4) {
-        setDesired(sExitN4, 'red');
       } else {
-        setDesired(sExitN4, sE13?.currentAspect === 'red' ? 'two_yellows' : 'two_yellows_one_flashing');
+        setDesired(sExitN3, 'red');
       }
     }
 
+    // Exit N1 (Mainline I to East)
+    const sExitN1 = sigMap.get('sig_exit_N1');
+    if (sExitN1) {
+      // Find train actually standing on or departing from Mainline I platform/throat
+      let trainOnMainI = consists.find(c => {
+        const hc = cars.find(car => car.id === c.headCarId);
+        return hc && Math.abs(hc.y - 8740) < 40 && hc.x >= 9650 && hc.x <= 13500;
+      });
+
+      // OR pre-clear for approaching non-stop train targeting Mainline I
+      if (!trainOnMainI) {
+        trainOnMainI = consists.find(c => {
+          if (c.direction !== 1) return false;
+          const hc = cars.find(car => car.id === c.headCarId);
+          if (!hc || hc.x < 5000 || hc.x >= 9650) return false;
+          const targetIsTrack3Or4 = c.schedule?.routeSteps?.some((step, idx) => idx >= (c.currentStepIndex || 0) && (step.targetY === 8600 || step.targetY === 9020));
+          if (targetIsTrack3Or4) return false;
+          const stopsAtStation = c.schedule?.routeSteps?.some(step => step.type === 'station_stop');
+          return !stopsAtStation;
+        });
+      }
+
+      const stopsAtStationN1 = trainOnMainI && (trainOnMainI.routeType === 'mainline_east' ||
+        trainOnMainI.schedule?.routeSteps?.some(step => step.type === 'station_stop'));
+      const isReadyToPassN1 = trainOnMainI && (stopsAtStationN1 ? trainOnMainI.stationDwellTimer === -1 : trainOnMainI.stationDwellTimer <= 0);
+
+      if (isReadyToPassN1 && !occ_east_throat && !occ_dep_e13) {
+        setDesired(sExitN1, sE13?.currentAspect === 'red' ? 'yellow' : 'green');
+      } else {
+        setDesired(sExitN1, 'red');
+      }
+    }
+
+    // Exit N2 (Mainline II Eastbound - Normal CLOSED)
     const sExitN2 = sigMap.get('sig_exit_N2');
     if (sExitN2) setDesired(sExitN2, 'red');
 
-    // 3. WEST OPEN LINE - TRACK I (Eastbound +X approaching station: w7 -> w5 -> w3 -> w1 -> Н)
-    const sEntryN = sigMap.get('sig_entry_N');
-    if (sEntryN) {
-      if (occ_station_I) {
-        setDesired(sEntryN, 'red');
+    // Exit N4 (Track 4 to East)
+    const sExitN4 = sigMap.get('sig_exit_N4');
+    if (sExitN4) {
+      // Find train actually standing on or departing from Track 4 platform/throat
+      let trainOnTrack4 = consists.find(c => {
+        const hc = cars.find(car => car.id === c.headCarId);
+        return hc && Math.abs(hc.y - 9020) < 55 && hc.x >= 9650 && hc.x <= 13500;
+      });
+
+      // OR pre-clear for approaching non-stop train targeting Track 4
+      if (!trainOnTrack4) {
+        trainOnTrack4 = consists.find(c => {
+          if (c.direction !== 1) return false;
+          const hc = cars.find(car => car.id === c.headCarId);
+          if (!hc || hc.x < 5000 || hc.x >= 9650) return false;
+          const targetIsTrack4 = c.schedule?.routeSteps?.some((step, idx) => idx >= (c.currentStepIndex || 0) && step.targetY === 9020);
+          if (!targetIsTrack4) return false;
+          const stopsAtStation = c.schedule?.routeSteps?.some(step => step.type === 'station_stop');
+          return !stopsAtStation;
+        });
+      }
+
+      const stopsAtStationN4 = trainOnTrack4 && (trainOnTrack4.routeType === 'mainline_east' ||
+        trainOnTrack4.schedule?.routeSteps?.some(step => step.type === 'station_stop'));
+      const isReadyToDepartN4 = trainOnTrack4 && (stopsAtStationN4 ? trainOnTrack4.stationDwellTimer === -1 : trainOnTrack4.stationDwellTimer <= 0);
+
+      if (isReadyToDepartN4 && !occ_east_throat && !occ_dep_e13) {
+        setDesired(sExitN4, sE13?.currentAspect === 'red' ? 'two_yellows' : 'two_yellows_one_flashing');
       } else {
-        setDesired(sEntryN, sExitN1?.currentAspect === 'red' ? 'yellow' : 'green');
+        setDesired(sExitN4, 'red');
       }
     }
 
+    // 3. WEST APPROACH - TRACK I (Eastbound: w7 -> w5 -> w3 -> w1 -> Entry Н)
+    const sEntryN = sigMap.get('sig_entry_N');
+    if (sEntryN) {
+      const trainApproachingN = consists.find(c => {
+        if (c.direction !== 1) return false;
+        const hc = cars.find(car => car.id === c.headCarId);
+        return hc && hc.x >= 5000 && hc.x <= 8400;
+      });
+
+      if (trainApproachingN) {
+        // Eastbound train on West approach
+        const targetIsTrack3 = trainApproachingN.routeType === 'siding_track3' ||
+          Boolean(trainApproachingN.schedule?.routeSteps?.some((step, idx) => idx >= (trainApproachingN.currentStepIndex || 0) && step.targetY === 8600));
+
+        if (targetIsTrack3) {
+          // Reception to Track 3 (side platform track via turnout Switch #1)
+          if (occ_west_throat || occ_track3) {
+            setDesired(sEntryN, 'red');
+          } else {
+            // According to ISI:
+            // - If exit signal N3 is closed (RED): Entrance signal shows Two Yellows (-ж-ж-)
+            // - If exit signal N3 is open: Entrance signal shows Two Yellows, top flashing (-жм-ж-)
+            const sExitN3 = sigMap.get('sig_exit_N3');
+            const isExitOpen = sExitN3 && sExitN3.currentAspect !== 'red';
+            setDesired(sEntryN, isExitOpen ? 'two_yellows_one_flashing' : 'two_yellows');
+          }
+        } else {
+          // Reception straight along Mainline I
+          if (occ_west_throat || occ_station_I_track) {
+            setDesired(sEntryN, 'red');
+          } else {
+            setDesired(sEntryN, sExitN1?.currentAspect === 'red' ? 'yellow' : 'green');
+          }
+        }
+      } else {
+        // No train on approach -> Entry N remains RED
+        setDesired(sEntryN, 'red');
+      }
+    }
+
+    // Approach Signal w1 (Предвходной светофор 1)
     const sW1 = sigMap.get('sig_block_w_1');
     if (sW1) {
       if (occ_w1_app) {
         setDesired(sW1, 'red');
+      } else if (sEntryN?.currentAspect === 'two_yellows' || sEntryN?.currentAspect === 'two_yellows_one_flashing') {
+        // According to ISI: Approach signal to 2 yellows MUST be Yellow Flashing (Жм)
+        setDesired(sW1, 'yellow_flashing');
       } else if (sEntryN?.currentAspect === 'red') {
         setDesired(sW1, 'yellow');
-      } else if (sEntryN?.currentAspect === 'two_yellows' || sEntryN?.currentAspect === 'two_yellows_one_flashing') {
-        setDesired(sW1, 'yellow_flashing');
       } else {
         setDesired(sW1, 'green');
       }
@@ -1419,7 +1560,7 @@ export class RailwaySignalingSystem {
       else setDesired(sW7, sW5?.currentAspect === 'red' ? 'yellow' : 'green');
     }
 
-    // 4. WEST OPEN LINE - TRACK II (Westbound -X: Ч2/Ч3/Ч4 -> w8 -> w6 -> w4 -> w2)
+    // 4. WEST OPEN LINE - TRACK II (Westbound -X)
     const sW2 = sigMap.get('sig_block_w_2');
     if (sW2) setDesired(sW2, occ_beyond_w2 ? 'red' : 'green');
 
@@ -1441,51 +1582,156 @@ export class RailwaySignalingSystem {
       else setDesired(sW8, sW6?.currentAspect === 'red' ? 'yellow' : 'green');
     }
 
+    // STATION STEPNAYA - WESTBOUND EXIT SIGNALS (Ч1, Ч2, Ч3, Ч4)
+    // Normal state: RED (Закрыто)
+
+    // Exit Ch2 (Mainline II Westbound Exit)
     const sExitCh2 = sigMap.get('sig_exit_Ch2');
     if (sExitCh2) {
-      if (occ_dep_w8) setDesired(sExitCh2, 'red');
-      else setDesired(sExitCh2, sW8?.currentAspect === 'red' ? 'yellow' : 'green');
+      // Find train actually standing on Mainline II platform track
+      let trainOnMainII = consists.find(c => {
+        const hc = cars.find(car => car.id === c.headCarId);
+        return hc && Math.abs(hc.y - 8880) < 40 && hc.x >= 9650 && hc.x <= 12850;
+      });
+
+      // OR pre-clear for approaching non-stop train targeting Mainline II from East
+      if (!trainOnMainII) {
+        trainOnMainII = consists.find(c => {
+          if (c.direction !== -1) return false;
+          const hc = cars.find(car => car.id === c.headCarId);
+          if (!hc || hc.x < 12850 || hc.x > 18500) return false;
+          const targetIsTrack3Or4 = c.schedule?.routeSteps?.some((step, idx) => idx >= (c.currentStepIndex || 0) && (step.targetY === 8600 || step.targetY === 9020));
+          if (targetIsTrack3Or4) return false;
+          const stopsAtStation = c.schedule?.routeSteps?.some(step => step.type === 'station_stop');
+          return !stopsAtStation;
+        });
+      }
+
+      const stopsAtStationCh2 = trainOnMainII && (trainOnMainII.routeType === 'mainline_west' ||
+        trainOnMainII.schedule?.routeSteps?.some(step => step.type === 'station_stop'));
+      const isReadyToPassCh2 = trainOnMainII && (stopsAtStationCh2 ? trainOnMainII.stationDwellTimer === -1 : trainOnMainII.stationDwellTimer <= 0);
+
+      if (isReadyToPassCh2 && !occ_west_throat && !occ_dep_w8) {
+        setDesired(sExitCh2, sW8?.currentAspect === 'red' ? 'yellow' : 'green');
+      } else {
+        setDesired(sExitCh2, 'red');
+      }
     }
 
+    // Exit Ch3 (Track 3 Westbound Exit)
     const sExitCh3 = sigMap.get('sig_exit_Ch3');
     if (sExitCh3) {
-      if (occ_dep_w8 || occ_track3) {
-        setDesired(sExitCh3, 'red');
-      } else {
+      // Find train actually standing on Track 3 platform track
+      let trainOnTrack3W = consists.find(c => {
+        if (c.direction !== -1) return false;
+        const hc = cars.find(car => car.id === c.headCarId);
+        return hc && Math.abs(hc.y - 8600) < 40 && hc.x >= 9650 && hc.x <= 12850;
+      });
+
+      // OR pre-clear for approaching non-stop train targeting Track 3 from East
+      if (!trainOnTrack3W) {
+        trainOnTrack3W = consists.find(c => {
+          if (c.direction !== -1) return false;
+          const hc = cars.find(car => car.id === c.headCarId);
+          if (!hc || hc.x < 12850 || hc.x > 18500) return false;
+          const targetIsTrack3 = c.routeType === 'mainline_west' ||
+            (c.schedule?.routeSteps?.some((step, idx) => idx >= (c.currentStepIndex || 0) && step.targetY === 8600));
+          if (!targetIsTrack3) return false;
+          const stopsAtStation = c.schedule?.routeSteps?.some(step => step.type === 'station_stop');
+          return !stopsAtStation;
+        });
+      }
+
+      const stopsAtStationCh3 = trainOnTrack3W && (trainOnTrack3W.routeType === 'mainline_west' ||
+        trainOnTrack3W.schedule?.routeSteps?.some(step => step.type === 'station_stop'));
+      const isReadyToDepartCh3 = trainOnTrack3W && (stopsAtStationCh3 ? trainOnTrack3W.stationDwellTimer === -1 : trainOnTrack3W.stationDwellTimer <= 0);
+
+      if (isReadyToDepartCh3 && !occ_west_throat && !occ_dep_w8) {
         setDesired(sExitCh3, sW8?.currentAspect === 'red' ? 'two_yellows' : 'two_yellows_one_flashing');
+      } else {
+        setDesired(sExitCh3, 'red');
       }
     }
 
+    // Exit Ch4 (Track 4 Westbound Exit)
     const sExitCh4 = sigMap.get('sig_exit_Ch4');
     if (sExitCh4) {
-      if (occ_dep_w8 || occ_track4) {
-        setDesired(sExitCh4, 'red');
-      } else {
+      // Find train actually standing on Track 4 platform track
+      let trainOnTrack4W = consists.find(c => {
+        if (c.direction !== -1) return false;
+        const hc = cars.find(car => car.id === c.headCarId);
+        return hc && Math.abs(hc.y - 9020) < 40 && hc.x >= 9650 && hc.x <= 12850;
+      });
+
+      // OR pre-clear for approaching non-stop train targeting Track 4 from East
+      if (!trainOnTrack4W) {
+        trainOnTrack4W = consists.find(c => {
+          if (c.direction !== -1) return false;
+          const hc = cars.find(car => car.id === c.headCarId);
+          if (!hc || hc.x < 12850 || hc.x > 18500) return false;
+          const targetIsTrack4 = c.schedule?.routeSteps?.some((step, idx) => idx >= (c.currentStepIndex || 0) && step.targetY === 9020);
+          if (!targetIsTrack4) return false;
+          const stopsAtStation = c.schedule?.routeSteps?.some(step => step.type === 'station_stop');
+          return !stopsAtStation;
+        });
+      }
+
+      const stopsAtStationCh4 = trainOnTrack4W && (trainOnTrack4W.routeType === 'mainline_west' ||
+        trainOnTrack4W.schedule?.routeSteps?.some(step => step.type === 'station_stop'));
+      const isReadyToDepartCh4 = trainOnTrack4W && (stopsAtStationCh4 ? trainOnTrack4W.stationDwellTimer === -1 : trainOnTrack4W.stationDwellTimer <= 0);
+
+      if (isReadyToDepartCh4 && !occ_west_throat && !occ_dep_w8) {
         setDesired(sExitCh4, sW8?.currentAspect === 'red' ? 'two_yellows' : 'two_yellows_one_flashing');
+      } else {
+        setDesired(sExitCh4, 'red');
       }
     }
 
+    // Exit Ch1 (Mainline I Westbound - Normal CLOSED)
     const sExitCh1 = sigMap.get('sig_exit_Ch1');
     if (sExitCh1) setDesired(sExitCh1, 'red');
 
-    // 5. EAST OPEN LINE - TRACK II (Westbound -X approaching station: e14 -> e12 -> e10 -> e8 -> e6 -> e4 -> e2 -> Ч)
+    // 5. EAST APPROACH - TRACK II (Westbound: e14 -> e12 -> e10 -> e8 -> e6 -> e4 -> e2 -> Entry Ч)
     const sEntryCh = sigMap.get('sig_entry_Ch');
     if (sEntryCh) {
-      if (occ_station_II) {
-        setDesired(sEntryCh, 'red');
+      const trainApproachingCh = consists.find(c => {
+        if (c.direction !== -1) return false;
+        const hc = cars.find(car => car.id === c.headCarId);
+        return hc && hc.x >= 14100 && hc.x <= 18500;
+      });
+
+      if (trainApproachingCh) {
+        const targetIsTrack4 = trainApproachingCh.routeType === 'siding_track4' ||
+          Boolean(trainApproachingCh.schedule?.routeSteps?.some((step, idx) => idx >= (trainApproachingCh.currentStepIndex || 0) && step.targetY === 9020));
+
+        if (targetIsTrack4) {
+          if (occ_east_throat || occ_track4) {
+            setDesired(sEntryCh, 'red');
+          } else {
+            setDesired(sEntryCh, sExitCh4?.currentAspect === 'red' ? 'two_yellows' : 'two_yellows_one_flashing');
+          }
+        } else {
+          if (occ_east_throat || occ_station_II_track) {
+            setDesired(sEntryCh, 'red');
+          } else {
+            setDesired(sEntryCh, sExitCh2?.currentAspect === 'red' ? 'yellow' : 'green');
+          }
+        }
       } else {
-        setDesired(sEntryCh, sExitCh2?.currentAspect === 'red' ? 'yellow' : 'green');
+        // No train on approach -> Entry Ч remains RED
+        setDesired(sEntryCh, 'red');
       }
     }
 
+    // Approach Signal e2 (Предвходной светофор 2)
     const sE2 = sigMap.get('sig_block_e_2');
     if (sE2) {
       if (occ_e2_app) {
         setDesired(sE2, 'red');
+      } else if (sEntryCh?.currentAspect === 'two_yellows' || sEntryCh?.currentAspect === 'two_yellows_one_flashing') {
+        setDesired(sE2, 'yellow_flashing'); // Yellow Flashing (Жм)
       } else if (sEntryCh?.currentAspect === 'red') {
         setDesired(sE2, 'yellow');
-      } else if (sEntryCh?.currentAspect === 'two_yellows' || sEntryCh?.currentAspect === 'two_yellows_one_flashing') {
-        setDesired(sE2, 'yellow_flashing');
       } else {
         setDesired(sE2, 'green');
       }
@@ -1527,7 +1773,7 @@ export class RailwaySignalingSystem {
       else setDesired(sE14, sE12?.currentAspect === 'red' ? 'yellow' : 'green');
     }
 
-    // 6. SHUNTING, OBSTACLE & CROSSING SIGNALS
+    // 6. SHUNTING SIGNALS (М1..М16), OBSTACLE & CROSSING SIGNALS
     for (const sig of signals) {
       switch (sig.id) {
         case 'sig_entry_ND':
@@ -1535,24 +1781,51 @@ export class RailwaySignalingSystem {
           setDesired(sig, 'red');
           break;
 
+        case 'sig_shunt_M1':
+        case 'sig_shunt_M2':
+        case 'sig_shunt_M3':
+        case 'sig_shunt_M4':
+        case 'sig_shunt_M5':
+        case 'sig_shunt_M6':
+        case 'sig_shunt_M7':
+        case 'sig_shunt_M8':
+        case 'sig_shunt_M9':
+        case 'sig_shunt_M10':
+        case 'sig_shunt_M11':
+        case 'sig_shunt_M12':
         case 'sig_shunt_M14':
         case 'sig_shunt_M16':
-          setDesired(sig, occ_siding ? 'lunar_white' : 'blue');
+        case 'sig_shunt_M18': {
+          // Normal state for shunting signals is strictly BLUE (Синий огонь - маневры запрещены).
+          // Opens to LUNAR WHITE (Лунно-белый огонь) ONLY when a shunting locomotive / consist
+          // is actually on the approach section on that exact track.
+          const isTrainApproaching = cars.some(car => {
+            // Strict track Y tolerance (< 35px) so mainline or adjacent track trains don't falsely open shunting signals
+            if (Math.abs(car.y - sig.y) > 35) return false;
+
+            const isShuntingLoco = car.type.includes('chme3') || car.type.includes('shunter') ||
+              consists.some(c => c.carIds.includes(car.id) && (c.routeType === 'shunting' || Boolean(c.schedule?.id.includes('shunter'))));
+            if (!isShuntingLoco) return false;
+
+            const halfL = car.length / 2;
+            const facesWest = (Math.abs(sig.angle - Math.PI) < 0.2);
+
+            if (facesWest) {
+              // Signal faces West (-X), regulates Eastbound (+X) movements approaching from the West
+              const frontNoseX = car.x + halfL;
+              const distToSig = sig.x - frontNoseX;
+              return distToSig >= -50 && distToSig <= 350;
+            } else {
+              // Signal faces East (+X), regulates Westbound (-X) movements approaching from the East
+              const frontNoseX = car.x - halfL;
+              const distToSig = frontNoseX - sig.x;
+              return distToSig >= -50 && distToSig <= 350;
+            }
+          });
+
+          setDesired(sig, isTrainApproaching ? 'lunar_white' : 'blue');
           break;
-        case 'sig_shunt_M1':
-        case 'sig_shunt_M3':
-        case 'sig_shunt_M5':
-        case 'sig_shunt_M7':
-        case 'sig_shunt_M9':
-        case 'sig_shunt_M11':
-        case 'sig_shunt_M2':
-        case 'sig_shunt_M4':
-        case 'sig_shunt_M6':
-        case 'sig_shunt_M8':
-        case 'sig_shunt_M10':
-        case 'sig_shunt_M12':
-          setDesired(sig, occ_track4 ? 'lunar_white' : 'blue');
-          break;
+        }
 
         case 'sig_cross_north':
         case 'sig_cross_south':
@@ -1642,15 +1915,21 @@ export class RailwaySignalingSystem {
         case 'steady': {
           if (desired !== sig.currentAspect) {
             sig.pendingAspect = desired;
-            const isImmediateShunt = (desired === 'red' || desired === 'blue' || desired === 'dark');
-            if (isImmediateShunt) {
+            if (sig.type === 'shunting') {
+              // Instant relay flip for shunting signals
+              sig.relayPhase = 'blackout';
+              sig.relayTimer = 0.08;
+              sig.currentAspect = desired;
+              if (clickVol > 0.01) sound.playRailwayRelayClick(clickVol);
+            } else if (desired === 'red' || desired === 'blue' || desired === 'dark') {
               sig.relayPhase = 'blackout';
               sig.relayTimer = 0.35; // 350ms dark gap while contacts break
               sig.currentAspect = 'red'; // Instant safety stop for train AI
               if (clickVol > 0.01) sound.playRailwayRelayClick(clickVol);
             } else {
               sig.relayPhase = 'code_decoding';
-              sig.relayTimer = 1.25; // 1.25s code pulse train decoding
+              sig.relayTimer = 0.40; // 400ms automatic block code pulse decoding
+              if (clickVol > 0.01) sound.playRailwayRelayClick(clickVol);
             }
           }
           break;
@@ -1658,7 +1937,7 @@ export class RailwaySignalingSystem {
 
         case 'code_decoding': {
           sig.relayTimer -= dt;
-          if (desired === 'red' || desired === 'blue') {
+          if (desired === 'red' || desired === 'blue' || desired === 'dark') {
             sig.pendingAspect = desired;
             sig.relayPhase = 'blackout';
             sig.relayTimer = 0.35;
@@ -1669,7 +1948,7 @@ export class RailwaySignalingSystem {
           sig.pendingAspect = desired;
           if (sig.relayTimer <= 0) {
             sig.relayPhase = 'blackout';
-            sig.relayTimer = 0.40; // 400ms inter-aspect blackout
+            sig.relayTimer = 0.35; // 350ms inter-aspect blackout gap
             if (clickVol > 0.01) sound.playRailwayRelayClick(clickVol);
           }
           break;
@@ -1683,7 +1962,8 @@ export class RailwaySignalingSystem {
               sig.currentAspect = 'dark';
             } else {
               sig.relayPhase = 'lamp_check';
-              sig.relayTimer = 0.28; // 280ms continuity check and fire-relay pick-up
+              sig.relayTimer = 0.30; // 300ms cold filament pre-heating check
+              sig.currentAspect = sig.pendingAspect || 'red';
               if (clickVol > 0.01) sound.playRailwayRelayClick(clickVol * 0.75);
             }
           }
@@ -1702,25 +1982,22 @@ export class RailwaySignalingSystem {
       }
 
       // 3. Thermal and Optical Simulation for Each Tungsten Filament
+      const activeIdxs = this.getActiveIndicesForAspect(sig, sig.relayPhase === 'lamp_check' ? (sig.pendingAspect || sig.currentAspect) : sig.currentAspect);
+
       for (let idx = 0; idx < sig.lenses.length; idx++) {
         const filament = sig.filaments[idx];
         let targetVoltage = 0.0;
         let coldPulse = 0.0;
 
-        if (sig.relayPhase === 'blackout') {
+        if (sig.relayPhase === 'blackout' || sig.relayPhase === 'code_decoding') {
           targetVoltage = 0.0;
         } else if (sig.relayPhase === 'lamp_check') {
-          const pendingIdxs = this.getActiveIndicesForAspect(sig, sig.pendingAspect || sig.currentAspect);
-          if (pendingIdxs.includes(idx)) {
-            if (sig.relayTimer > 0.16) {
-              targetVoltage = 0.22;
-              coldPulse = 0.40;
-            } else {
-              targetVoltage = 0.0;
-            }
+          if (activeIdxs.includes(idx)) {
+            targetVoltage = 0.35; // Pre-heating test voltage for cold tungsten filament
+            coldPulse = 0.55; // Initial warm ember glow
+          } else {
+            targetVoltage = 0.0;
           }
-        } else if (sig.relayPhase === 'code_decoding') {
-          targetVoltage = this.getAspectLensVoltage(sig, sig.currentAspect, idx, time);
         } else {
           targetVoltage = this.getAspectLensVoltage(sig, sig.currentAspect, idx, time);
         }
@@ -1730,21 +2007,18 @@ export class RailwaySignalingSystem {
 
         // Tungsten filament heating & cooling thermodynamics
         if (filament.voltage > filament.temp) {
-          const heatRate = 1.0 / 0.18;
+          const heatRate = 1.0 / 0.20;
           filament.temp += (filament.voltage - filament.temp) * Math.min(1.0, dt * heatRate);
         } else {
-          const coolRate = 1.0 / 0.26;
-          const coolingAmount = (Math.pow(filament.temp, 1.4) + 0.12 * filament.temp) * dt * coolRate;
-          filament.temp -= coolingAmount;
-          if (filament.temp < 0.001) filament.temp = 0.0;
+          const coolRate = 1.0 / 0.35; // Smooth thermal cooldown over ~350ms
+          filament.temp -= (filament.temp - filament.voltage) * Math.min(1.0, dt * coolRate);
         }
         filament.temp = Math.max(0.0, Math.min(1.0, filament.temp));
 
-        // Stefan-Boltzmann radiation threshold
-        if (filament.temp < 0.25) {
+        if (filament.temp < 0.15) {
           filament.brightness = 0.0;
         } else {
-          filament.brightness = Math.pow((filament.temp - 0.25) / 0.75, 2.2);
+          filament.brightness = Math.pow((filament.temp - 0.15) / 0.85, 2.0);
         }
       }
 
@@ -2010,98 +2284,193 @@ export class RailwaySignalingSystem {
     nightAlpha: number
   ): void {
     const lensCount = signal.lenses.length;
-    const shieldWidth = Math.max(10, lensCount * 3.6 + 4);
-    const shieldDepth = 2.4;
+    const lensSpacing = 5.2;
+    const halfSpan = ((lensCount - 1) * lensSpacing) / 2;
+    const shieldHeight = lensCount * lensSpacing + 10;
+    const shieldDepth = 5.6;
+    const shieldX = 2.4;
 
-    // 1. Ground Shadow
+    // 1. Ambient Ground Shadow under signal installation
     ctx.save();
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.48)';
     ctx.beginPath();
-    ctx.ellipse(-2, 3, 7.5, 5, 0.25, 0, Math.PI * 2);
+    ctx.ellipse(-1, 3, 10.5, 7, 0.25, 0, Math.PI * 2);
     ctx.fill();
     ctx.restore();
 
-    // 2. Concrete Foundation Base
+    // 2. Concrete Foundation Base (Бетонный цоколь со скошенными фасками)
     ctx.save();
+    ctx.fillStyle = '#475569';
+    ctx.fillRect(-6, -6, 12, 12);
     ctx.fillStyle = '#64748b';
-    ctx.fillRect(-4.5, -4.5, 9, 9);
+    ctx.fillRect(-5, -5, 10, 10);
     ctx.strokeStyle = '#334155';
     ctx.lineWidth = 0.8;
-    ctx.strokeRect(-4.5, -4.5, 9, 9);
+    ctx.strokeRect(-5, -5, 10, 10);
 
     // Inner beveled top
     ctx.fillStyle = '#94a3b8';
-    ctx.fillRect(-3, -3, 6, 6);
+    ctx.fillRect(-3.5, -3.5, 7, 7);
 
-    // 4 Anchor bolts
+    // 4 Heavy galvanized anchor bolts with washers
     ctx.fillStyle = '#0f172a';
     ctx.beginPath();
-    ctx.arc(-2.5, -2.5, 0.7, 0, Math.PI * 2);
-    ctx.arc(2.5, -2.5, 0.7, 0, Math.PI * 2);
-    ctx.arc(-2.5, 2.5, 0.7, 0, Math.PI * 2);
-    ctx.arc(2.5, 2.5, 0.7, 0, Math.PI * 2);
+    ctx.arc(-3.2, -3.2, 0.85, 0, Math.PI * 2);
+    ctx.arc(3.2, -3.2, 0.85, 0, Math.PI * 2);
+    ctx.arc(-3.2, 3.2, 0.85, 0, Math.PI * 2);
+    ctx.arc(3.2, 3.2, 0.85, 0, Math.PI * 2);
     ctx.fill();
+    ctx.fillStyle = '#cbd5e1';
+    ctx.fillRect(-3.6, -3.6, 0.8, 0.8);
+    ctx.fillRect(2.8, -3.6, 0.8, 0.8);
+    ctx.fillRect(-3.6, 2.8, 0.8, 0.8);
+    ctx.fillRect(2.8, 2.8, 0.8, 0.8);
 
-    // 3. Cast Iron Transformer Box
-    ctx.fillStyle = '#1e293b';
-    ctx.fillRect(-3.5, 3.5, 7, 5);
-    ctx.strokeStyle = '#0f172a';
-    ctx.lineWidth = 0.5;
-    ctx.strokeRect(-3.5, 3.5, 7, 5);
-
-    // 4. Inspection Platform Grating
-    ctx.fillStyle = '#475569';
-    ctx.fillRect(-3, -shieldWidth / 2 - 2, 6, shieldWidth + 4);
-    ctx.strokeStyle = '#1e293b';
-    ctx.lineWidth = 0.5;
-    ctx.strokeRect(-3, -shieldWidth / 2 - 2, 6, shieldWidth + 4);
-
-    // 5. Mast Tube
-    ctx.fillStyle = '#334155';
-    ctx.beginPath();
-    ctx.arc(0, 0, 2.2, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.strokeStyle = '#0f172a';
+    // 3. Trackside Transformer & Relay Junction Box (Путевой ящик ПЯ / ТЯ)
+    ctx.fillStyle = '#111827';
+    ctx.fillRect(-4.5, 4.5, 9, 6.5);
+    ctx.strokeStyle = '#374151';
     ctx.lineWidth = 0.6;
-    ctx.stroke();
-    ctx.restore();
-
-    // 6. Signal Head & Oval Background Shield
-    ctx.save();
-    ctx.fillStyle = '#090d16'; // Deep matte black
+    ctx.strokeRect(-4.5, 4.5, 9, 6.5);
+    // Box cover bevel & brass padlock
+    ctx.fillStyle = '#1f2937';
+    ctx.fillRect(-3.8, 5.2, 7.6, 5.1);
+    ctx.fillStyle = '#eab308'; // High-voltage warning emblem
     ctx.beginPath();
-    ctx.roundRect(1.2, -shieldWidth / 2, shieldDepth, shieldWidth, 1.2);
+    ctx.moveTo(0, 6.2);
+    ctx.lineTo(1.4, 8.2);
+    ctx.lineTo(-0.2, 8.2);
+    ctx.lineTo(0.6, 9.6);
+    ctx.lineTo(-1.2, 7.8);
+    ctx.lineTo(0.2, 7.8);
+    ctx.closePath();
     ctx.fill();
 
+    // 4. Service Ladder & Safety Basket Cage (Лестница с дугами безопасности)
     ctx.strokeStyle = '#334155';
-    ctx.lineWidth = 0.5;
+    ctx.lineWidth = 0.8;
+    // Ladder vertical stringers
+    ctx.beginPath();
+    ctx.moveTo(-2.2, -halfSpan - 6); ctx.lineTo(-2.2, 4.5);
+    ctx.moveTo(-4.2, -halfSpan - 6); ctx.lineTo(-4.2, 4.5);
     ctx.stroke();
-
-    // Approach warning stripes
-    if (signal.isApproachSignal) {
-      ctx.fillStyle = '#ffffff';
-      ctx.fillRect(1.2, -shieldWidth / 2 - 2, shieldDepth, 2);
-      ctx.fillRect(1.2, shieldWidth / 2, shieldDepth, 2);
-      ctx.fillStyle = '#dc2626';
-      ctx.fillRect(1.2, -shieldWidth / 2 - 4, shieldDepth, 2);
-      ctx.fillRect(1.2, shieldWidth / 2 + 2, shieldDepth, 2);
+    // Ladder rungs
+    ctx.lineWidth = 0.6;
+    for (let ry = -halfSpan - 4; ry < 4; ry += 2.8) {
+      ctx.beginPath();
+      ctx.moveTo(-4.2, ry); ctx.lineTo(-2.2, ry);
+      ctx.stroke();
+    }
+    // Semicircular safety hoops (дуги ограждения)
+    ctx.strokeStyle = '#475569';
+    ctx.lineWidth = 0.7;
+    for (let hy = -halfSpan - 2; hy < 2; hy += 4.5) {
+      ctx.beginPath();
+      ctx.arc(-3.2, hy, 2.4, Math.PI * 0.5, Math.PI * 1.5, false);
+      ctx.stroke();
     }
 
-    // 7. Physical lenses in their dedicated vertical slots on the shield
+    // 5. Inspection Platform with Safety Railings (Смотровая площадка за щитом)
+    const platW = 7.5;
+    const platH = shieldHeight + 4;
+    ctx.fillStyle = 'rgba(15, 23, 42, 0.95)';
+    ctx.fillRect(-platW + 1.2, -platH / 2, platW, platH);
+    ctx.strokeStyle = '#374151';
+    ctx.lineWidth = 0.7;
+    ctx.strokeRect(-platW + 1.2, -platH / 2, platW, platH);
+    // Anti-slip expanded metal grid texture
+    ctx.fillStyle = '#1e293b';
+    for (let py = -platH / 2 + 2; py < platH / 2 - 1; py += 3.2) {
+      ctx.fillRect(-platW + 2.0, py, platW - 1.8, 0.8);
+    }
+    // Handrail perimeter
+    ctx.strokeStyle = '#64748b';
+    ctx.lineWidth = 0.9;
+    ctx.strokeRect(-platW + 0.5, -platH / 2 - 1, platW + 0.7, platH + 2);
+
+    // 6. Mast Tube (Стальная трубчатая мачта)
+    ctx.fillStyle = '#1e293b';
+    ctx.beginPath();
+    ctx.arc(0, 0, 2.6, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = '#475569';
+    ctx.lineWidth = 0.7;
+    ctx.stroke();
+    // Metallic specular line
+    ctx.fillStyle = '#64748b';
+    ctx.beginPath();
+    ctx.arc(-0.6, -0.6, 1.2, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+
+    // 7. Signal Head & Large Matte Black Background Shield (Большой черный фоновый щит)
+    ctx.save();
+    const bgShieldHalfW = shieldHeight / 2;
+
+    // Shield back shadow on structure
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+    ctx.beginPath();
+    ctx.roundRect(shieldX - 0.5, -bgShieldHalfW - 1.5, shieldDepth + 1.0, shieldHeight + 3.0, 3.2);
+    ctx.fill();
+
+    // Massive Matte Black Background Shield (Глубокий матовый черный экран)
+    ctx.fillStyle = '#0a0c10';
+    ctx.beginPath();
+    ctx.roundRect(shieldX, -bgShieldHalfW, shieldDepth, shieldHeight, 2.8);
+    ctx.fill();
+
+    // Shield outer structural steel trim / rim
+    ctx.strokeStyle = '#27272a';
+    ctx.lineWidth = 0.9;
+    ctx.stroke();
+
+    // Mounting bolts on shield perimeter
+    ctx.fillStyle = '#52525b';
+    ctx.fillRect(shieldX + 0.4, -bgShieldHalfW + 1.2, 0.9, 0.9);
+    ctx.fillRect(shieldX + shieldDepth - 1.3, -bgShieldHalfW + 1.2, 0.9, 0.9);
+    ctx.fillRect(shieldX + 0.4, bgShieldHalfW - 2.1, 0.9, 0.9);
+    ctx.fillRect(shieldX + shieldDepth - 1.3, bgShieldHalfW - 2.1, 0.9, 0.9);
+
+    // Approach signal distinctive diagonal reflective zebra stripes (Предвходной светофор)
+    if (signal.isApproachSignal) {
+      // Top zebra border
+      ctx.fillStyle = '#f8fafc';
+      ctx.fillRect(shieldX, -bgShieldHalfW - 4.5, shieldDepth, 4.5);
+      ctx.fillStyle = '#dc2626';
+      ctx.beginPath();
+      ctx.moveTo(shieldX, -bgShieldHalfW - 4.5);
+      ctx.lineTo(shieldX + shieldDepth, -bgShieldHalfW - 2.2);
+      ctx.lineTo(shieldX + shieldDepth, -bgShieldHalfW);
+      ctx.lineTo(shieldX, -bgShieldHalfW - 2.3);
+      ctx.closePath();
+      ctx.fill();
+
+      // Bottom zebra border
+      ctx.fillStyle = '#f8fafc';
+      ctx.fillRect(shieldX, bgShieldHalfW, shieldDepth, 4.5);
+      ctx.fillStyle = '#dc2626';
+      ctx.beginPath();
+      ctx.moveTo(shieldX, bgShieldHalfW);
+      ctx.lineTo(shieldX + shieldDepth, bgShieldHalfW + 2.3);
+      ctx.lineTo(shieldX + shieldDepth, bgShieldHalfW + 4.5);
+      ctx.lineTo(shieldX, bgShieldHalfW + 2.2);
+      ctx.closePath();
+      ctx.fill();
+    }
+
+    // 8. Individual Lens Units with Deep Visors / Hoods
     const activeLenses = this.getActiveLensesForAspect(signal, time);
-    const spacing = 3.4;
-    const halfSpan = ((lensCount - 1) * spacing) / 2;
 
     for (let i = 0; i < lensCount; i++) {
-      const lensY = -halfSpan + i * spacing;
+      const lensY = -halfSpan + i * lensSpacing;
       const color = signal.lenses[i];
       const filament = signal.filaments && signal.filaments[i];
       const isLitFallback = activeLenses.includes(i);
-      this.renderLensUnit(ctx, 2.2, lensY, color, filament, isLitFallback, nightAlpha, 1.3);
+      this.renderLensUnit(ctx, shieldX + 2.4, lensY, color, filament, isLitFallback, nightAlpha, 1.8, 8.8);
     }
 
-    // 8. Enameled Designation Nameplate
-    this.renderNameplate(ctx, signal, -1, -6.5);
+    // 9. Enameled Designation Nameplate with upright readability
+    this.renderNameplate(ctx, signal, -1.5, -halfSpan - 9.5);
     ctx.restore();
   }
 
@@ -2115,49 +2484,68 @@ export class RailwaySignalingSystem {
     nightAlpha: number
   ): void {
     ctx.save();
-    // Ground Shadow
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
+    // 1. Ground Shadow
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
     ctx.beginPath();
-    ctx.ellipse(-1, 2, 5.5, 4, 0.2, 0, Math.PI * 2);
+    ctx.ellipse(-0.5, 2.5, 8.5, 6, 0.2, 0, Math.PI * 2);
     ctx.fill();
 
-    // Concrete Foundation Pad
+    // 2. Reinforced Concrete Foundation Pad (Бетонная подушка с анкерами)
+    ctx.fillStyle = '#475569';
+    ctx.fillRect(-5, -5.5, 10, 11);
     ctx.fillStyle = '#64748b';
-    ctx.fillRect(-3.5, -4, 7, 8);
+    ctx.fillRect(-4.2, -4.7, 8.4, 9.4);
     ctx.strokeStyle = '#334155';
     ctx.lineWidth = 0.6;
-    ctx.strokeRect(-3.5, -4, 7, 8);
+    ctx.strokeRect(-4.2, -4.7, 8.4, 9.4);
 
-    // Cast-iron dwarf casing (Чугунный литой корпус карликового светофора)
+    // 4 Anchor bolts
     ctx.fillStyle = '#0f172a';
+    ctx.fillRect(-3.6, -4.1, 1.1, 1.1);
+    ctx.fillRect(2.5, -4.1, 1.1, 1.1);
+    ctx.fillRect(-3.6, 3.0, 1.1, 1.1);
+    ctx.fillRect(2.5, 3.0, 1.1, 1.1);
+
+    // 3. Heavy Cast-Iron Dwarf Casing & Front Shield (Чугунный литой корпус с щитком)
+    // Black cast iron main housing
+    ctx.fillStyle = '#090c12';
     ctx.beginPath();
-    ctx.roundRect(-2, -3.6, 4.2, 7.2, 1.2);
+    ctx.roundRect(-3.2, -5.0, 6.4, 10.0, 1.8);
+    ctx.fill();
+    ctx.strokeStyle = '#27272a';
+    ctx.lineWidth = 0.8;
+    ctx.stroke();
+
+    // Front protective black background plate
+    ctx.fillStyle = '#05070a';
+    ctx.beginPath();
+    ctx.roundRect(1.2, -5.2, 2.6, 10.4, 1.2);
     ctx.fill();
     ctx.strokeStyle = '#1e293b';
-    ctx.lineWidth = 0.6;
+    ctx.lineWidth = 0.5;
     ctx.stroke();
 
     const activeLenses = this.getActiveLensesForAspect(signal, time);
 
-    // Top Lens Unit (e.g. lunar white or green)
+    // Top Lens Unit (e.g. Lunar White or Green) with Long Sun Visor
     const topColor = signal.lenses[0] || 'white';
     const topFilament = signal.filaments && signal.filaments[0];
     const isTopLit = activeLenses.includes(0);
-    this.renderLensUnit(ctx, 1.2, -1.8, topColor, topFilament, isTopLit, nightAlpha, 1.15);
+    this.renderLensUnit(ctx, 2.4, -2.6, topColor, topFilament, isTopLit, nightAlpha, 1.6, 7.5);
 
-    // Bottom Lens Unit (e.g. blue or red)
+    // Bottom Lens Unit (e.g. Blue or Red) with Long Sun Visor
     const bottomColor = signal.lenses[1] || 'blue';
     const bottomFilament = signal.filaments && signal.filaments[1];
     const isBottomLit = activeLenses.includes(1);
-    this.renderLensUnit(ctx, 1.2, 1.8, bottomColor, bottomFilament, isBottomLit, nightAlpha, 1.15);
+    this.renderLensUnit(ctx, 2.4, 2.6, bottomColor, bottomFilament, isBottomLit, nightAlpha, 1.6, 7.5);
 
-    // Enameled designation plate
-    this.renderNameplate(ctx, signal, -1, -5.5, 7.5, 4.5, 'bold 4.5px sans-serif');
+    // 4. Enameled designation plate with track/switch badge
+    this.renderNameplate(ctx, signal, -1.8, -8.2, 9.5, 5.2, 'bold 4.8px sans-serif');
     ctx.restore();
   }
 
   // =========================================================================
-  // 3. OBSTACLE SIGNAL (Заградительный светофор - ромбовидный щит)
+  // 3. OBSTACLE SIGNAL (Заградительный светофор - крупный ромбовидный щит)
   // =========================================================================
   private static renderObstacleSignal(
     ctx: CanvasRenderingContext2D,
@@ -2166,43 +2554,61 @@ export class RailwaySignalingSystem {
     nightAlpha: number
   ): void {
     ctx.save();
-    // Concrete foundation
+    // 1. Concrete foundation
+    ctx.fillStyle = '#475569';
+    ctx.fillRect(-5.5, -5.5, 11, 11);
     ctx.fillStyle = '#64748b';
-    ctx.fillRect(-4, -4, 8, 8);
+    ctx.fillRect(-4.5, -4.5, 9, 9);
     ctx.strokeStyle = '#334155';
     ctx.lineWidth = 0.8;
-    ctx.strokeRect(-4, -4, 8, 8);
+    ctx.strokeRect(-4.5, -4.5, 9, 9);
 
-    // Mast tube
+    // Anchor bolts
+    ctx.fillStyle = '#0f172a';
+    ctx.fillRect(-3.5, -3.5, 1.1, 1.1);
+    ctx.fillRect(2.4, -3.5, 1.1, 1.1);
+    ctx.fillRect(-3.5, 2.4, 1.1, 1.1);
+    ctx.fillRect(2.4, 2.4, 1.1, 1.1);
+
+    // 2. Mast tube
     ctx.fillStyle = '#1e293b';
     ctx.beginPath();
-    ctx.arc(0, 0, 2.2, 0, Math.PI * 2);
+    ctx.arc(0, 0, 2.6, 0, Math.PI * 2);
     ctx.fill();
+    ctx.strokeStyle = '#475569';
+    ctx.lineWidth = 0.7;
+    ctx.stroke();
 
-    // Diamond (rhombus) shield rotated 45 degrees according to ISI
+    // 3. Large Diamond (Rhombus) Shield rotated 45° according to ISI/GOST
     ctx.save();
-    ctx.translate(2.5, 0);
+    ctx.translate(3.2, 0);
     ctx.rotate(Math.PI / 4);
+
     // Outer black border
-    ctx.fillStyle = '#090d16';
-    ctx.fillRect(-7, -7, 14, 14);
-    // Reflective white border
+    ctx.fillStyle = '#080a0f';
+    ctx.fillRect(-10, -10, 20, 20);
+
+    // Contrasting white reflective border
     ctx.fillStyle = '#f8fafc';
-    ctx.fillRect(-6, -6, 12, 12);
-    // Zebra border
-    ctx.strokeStyle = '#0f172a';
-    ctx.lineWidth = 1.2;
-    ctx.strokeRect(-5, -5, 10, 10);
-    // Inner matte black field
-    ctx.fillStyle = '#090d16';
-    ctx.fillRect(-4, -4, 8, 8);
+    ctx.fillRect(-8.5, -8.5, 17, 17);
+
+    // Diagonal black zebra warning stripes along border
+    ctx.strokeStyle = '#0a0c10';
+    ctx.lineWidth = 1.8;
+    ctx.strokeRect(-7, -7, 14, 14);
+
+    // Inner deep matte black field
+    ctx.fillStyle = '#05070a';
+    ctx.fillRect(-5.5, -5.5, 11, 11);
     ctx.restore();
 
-    // Central Red lens unit
+    // 4. Central Powerful Red Lens Unit with Extended Visor
     const fil = signal.filaments && signal.filaments[0];
     const isLit = signal.currentAspect === 'red';
-    this.renderLensUnit(ctx, 2.5, 0, 'red', fil, isLit, nightAlpha, 1.6);
-    this.renderNameplate(ctx, signal, -1, -7.5);
+    this.renderLensUnit(ctx, 3.2, 0, 'red', fil, isLit, nightAlpha, 2.2, 10.0);
+
+    // 5. Nameplate
+    this.renderNameplate(ctx, signal, -2, -10.5);
     ctx.restore();
   }
 
@@ -2216,21 +2622,34 @@ export class RailwaySignalingSystem {
     nightAlpha: number
   ): void {
     ctx.save();
+    // Foundation
+    ctx.fillStyle = '#475569';
+    ctx.fillRect(-4.5, -4.5, 9, 9);
     ctx.fillStyle = '#64748b';
-    ctx.fillRect(-3, -3, 6, 6);
+    ctx.fillRect(-3.5, -3.5, 7, 7);
     ctx.strokeStyle = '#334155';
     ctx.lineWidth = 0.6;
-    ctx.strokeRect(-3, -3, 6, 6);
+    ctx.strokeRect(-3.5, -3.5, 7, 7);
 
-    ctx.fillStyle = '#090d16';
+    // Mast
+    ctx.fillStyle = '#1e293b';
     ctx.beginPath();
-    ctx.roundRect(1.2, -4.5, 2.2, 9, 0.8);
+    ctx.arc(0, 0, 2.2, 0, Math.PI * 2);
     ctx.fill();
+
+    // Large Oval Black Shield
+    ctx.fillStyle = '#080a0f';
+    ctx.beginPath();
+    ctx.roundRect(2.0, -7.5, 4.6, 15, 2.4);
+    ctx.fill();
+    ctx.strokeStyle = '#27272a';
+    ctx.lineWidth = 0.7;
+    ctx.stroke();
 
     const fil = signal.filaments && signal.filaments[0];
     const isLit = signal.currentAspect === 'green';
-    this.renderLensUnit(ctx, 2.2, 0, 'green', fil, isLit, nightAlpha, 1.3);
-    this.renderNameplate(ctx, signal, -1, -6);
+    this.renderLensUnit(ctx, 3.5, 0, 'green', fil, isLit, nightAlpha, 1.8, 8.5);
+    this.renderNameplate(ctx, signal, -1.5, -9.5);
     ctx.restore();
   }
 
@@ -2246,94 +2665,114 @@ export class RailwaySignalingSystem {
     ctx.save();
 
     // 1. Soft ground shadow under installation
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.42)';
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
     ctx.beginPath();
-    ctx.ellipse(1, 2, 9, 8, 0, 0, Math.PI * 2);
+    ctx.ellipse(1, 2, 11, 9, 0, 0, Math.PI * 2);
     ctx.fill();
 
-    // 2. Reinforced Concrete Mounting Foundation Base (Бетонный фундамент)
+    // 2. Reinforced Concrete Foundation Base
+    ctx.fillStyle = '#334155';
+    ctx.fillRect(-7.5, -7.5, 15, 15);
     ctx.fillStyle = '#475569';
     ctx.fillRect(-6.5, -6.5, 13, 13);
     ctx.fillStyle = '#64748b';
     ctx.fillRect(-5.5, -5.5, 11, 11);
-    ctx.fillStyle = '#94a3b8';
-    ctx.fillRect(-4.5, -4.5, 9, 9);
 
     // 4 Galvanized anchor bolts with nuts
     ctx.fillStyle = '#0f172a';
-    ctx.fillRect(-4, -4, 1.3, 1.3);
-    ctx.fillRect(2.7, -4, 1.3, 1.3);
-    ctx.fillRect(-4, 2.7, 1.3, 1.3);
-    ctx.fillRect(2.7, 2.7, 1.3, 1.3);
+    ctx.fillRect(-4.5, -4.5, 1.4, 1.4);
+    ctx.fillRect(3.1, -4.5, 1.4, 1.4);
+    ctx.fillRect(-4.5, 3.1, 1.4, 1.4);
+    ctx.fillRect(3.1, 3.1, 1.4, 1.4);
 
     // 3. Electric Barrier Drive Cabinet Housing (Тумба электропривода ША-4)
-    ctx.fillStyle = '#1e293b';
-    ctx.fillRect(-4, -4.5, 8, 9);
-    ctx.fillStyle = '#334155';
-    ctx.fillRect(-3.5, -4, 7, 8);
+    ctx.fillStyle = '#111827';
+    ctx.fillRect(-4.5, -5.0, 9, 10);
+    ctx.fillStyle = '#1f2937';
+    ctx.fillRect(-4.0, -4.5, 8, 9);
+    ctx.strokeStyle = '#374151';
+    ctx.lineWidth = 0.7;
+    ctx.strokeRect(-4.0, -4.5, 8, 9);
 
     // Hazard warning stripes on cabinet top
     ctx.save();
     ctx.beginPath();
-    ctx.rect(-3.5, -4, 7, 8);
+    ctx.rect(-4.0, -4.5, 8, 9);
     ctx.clip();
     ctx.strokeStyle = '#eab308';
-    ctx.lineWidth = 1.8;
-    for (let d = -10; d < 15; d += 3.8) {
+    ctx.lineWidth = 2.0;
+    for (let d = -12; d < 18; d += 4.2) {
       ctx.beginPath();
-      ctx.moveTo(-5 + d, -6);
-      ctx.lineTo(5 + d, 6);
+      ctx.moveTo(-6 + d, -7);
+      ctx.lineTo(6 + d, 7);
       ctx.stroke();
     }
     ctx.restore();
 
-    // 4. Counterweight Beam (Противовес, направленный от проезжей части в сторону обочины -Y)
-    ctx.fillStyle = '#1e293b';
-    ctx.fillRect(-2, -10.5, 4, 6.5);
-    ctx.fillStyle = '#475569';
-    ctx.fillRect(-2.5, -10, 5, 2.2);
-    ctx.fillRect(-2.5, -7, 5, 2.2);
+    // 4. Counterweight Beam
+    ctx.fillStyle = '#111827';
+    ctx.fillRect(-2.5, -12.0, 5, 7.5);
+    ctx.fillStyle = '#374151';
+    ctx.fillRect(-3.0, -11.5, 6, 2.6);
+    ctx.fillRect(-3.0, -8.0, 6, 2.6);
 
-    // 5. Vertical Tubular Mast (Мачта) viewed strictly from above
-    ctx.fillStyle = '#0f172a';
+    // 5. Vertical Tubular Mast
+    ctx.fillStyle = '#090c10';
     ctx.beginPath();
-    ctx.arc(0, 0, 2.5, 0, Math.PI * 2);
+    ctx.arc(0, 0, 2.8, 0, Math.PI * 2);
     ctx.fill();
     ctx.fillStyle = '#64748b';
     ctx.beginPath();
-    ctx.arc(-0.6, -0.6, 1.0, 0, Math.PI * 2);
+    ctx.arc(-0.7, -0.7, 1.2, 0, Math.PI * 2);
     ctx.fill();
 
-    // Acoustic Alarm Bell Dome (Акустический звонок) on mast top
-    ctx.fillStyle = '#92400e';
+    // Acoustic Alarm Bell Dome
+    ctx.fillStyle = '#78350f';
     ctx.beginPath();
-    ctx.arc(0, 0, 1.6, 0, Math.PI * 2);
+    ctx.arc(0, 0, 1.8, 0, Math.PI * 2);
     ctx.fill();
     ctx.fillStyle = '#d97706';
     ctx.beginPath();
-    ctx.arc(-0.4, -0.4, 0.6, 0, Math.PI * 2);
+    ctx.arc(-0.4, -0.4, 0.7, 0, Math.PI * 2);
     ctx.fill();
 
     // 6. Signal Head Traverse & St. Andrew's Cross (Траверса и Андреевский крест)
-    // Mounted facing oncoming traffic (+X). In strict top-down, crossbar plate spans along Y:
-    // St. Andrew's cross board edge (белая планка с красными шевронами на концах)
     ctx.fillStyle = '#f8fafc';
-    ctx.fillRect(1.8, -10, 1.5, 20);
+    ctx.fillRect(2.0, -12, 1.8, 24);
     ctx.fillStyle = '#dc2626';
-    ctx.fillRect(1.8, -10, 1.5, 2.5); // Left chevron tip
-    ctx.fillRect(1.8, 7.5, 1.5, 2.5); // Right chevron tip
+    ctx.fillRect(2.0, -12, 1.8, 3.2); // Top chevron
+    ctx.fillRect(2.0, 8.8, 1.8, 3.2); // Bottom chevron
 
-    // Traverse bracket
-    ctx.fillStyle = '#0f172a';
-    ctx.fillRect(0.8, -7.5, 1.6, 15);
+    // Steel traverse frame
+    ctx.fillStyle = '#0a0c10';
+    ctx.fillRect(1.0, -9.5, 2.2, 19);
 
-    // 7. Optical Lantern Heads (Фонари СП-2 / СП-3) with protective visors
+    // 7. Large Matte Black Background Shields for Optical Heads
+    ctx.fillStyle = '#05070a';
+    // Left lantern backplate
+    ctx.beginPath();
+    ctx.arc(3.4, -6.8, 4.4, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = '#27272a';
+    ctx.lineWidth = 0.6;
+    ctx.stroke();
+
+    // Right lantern backplate
+    ctx.beginPath();
+    ctx.arc(3.4, 6.8, 4.4, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+
+    // Center lunar white backplate
+    ctx.beginPath();
+    ctx.arc(4.2, 0, 4.0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+
+    // Optical Lantern Heads with Long Sun Visors
     const isCrossingClosed = signal.currentAspect === 'red_alternating_flashing' || signal.currentAspect === 'red';
     const blinkCycle = Math.floor(time * 1.5) % 2;
 
-    // Strict Mutual Exclusivity:
-    // When crossing is closed: ONLY red lanterns can flash, lunar white is strictly OFF!
-    // When crossing is open: ONLY lunar white flashes, red lanterns are strictly OFF!
     const leftLit = isCrossingClosed && blinkCycle === 0;
     const rightLit = isCrossingClosed && blinkCycle === 1;
     const isLunarLit = !isCrossingClosed && signal.currentAspect === 'lunar_white_flashing' && (Math.floor(time * 0.8) % 2 === 0);
@@ -2342,47 +2781,43 @@ export class RailwaySignalingSystem {
     const rightFil = signal.filaments && signal.filaments[1];
     const whiteFil = signal.filaments && signal.filaments[2];
 
-    // Left red lantern unit at Y = -5.5 (allowed to light ONLY when crossing is closed)
-    this.renderTopDownLanternUnit(ctx, 2.8, -5.5, 'red', leftFil, leftLit, nightAlpha, isCrossingClosed);
-    // Right red lantern unit at Y = +5.5 (allowed to light ONLY when crossing is closed)
-    this.renderTopDownLanternUnit(ctx, 2.8, 5.5, 'red', rightFil, rightLit, nightAlpha, isCrossingClosed);
+    // Left red lantern unit at Y = -6.8
+    this.renderTopDownLanternUnit(ctx, 3.4, -6.8, 'red', leftFil, leftLit, nightAlpha, isCrossingClosed);
+    // Right red lantern unit at Y = +6.8
+    this.renderTopDownLanternUnit(ctx, 3.4, 6.8, 'red', rightFil, rightLit, nightAlpha, isCrossingClosed);
 
-    // Center lunar-white lantern at Y = 0 (allowed to light ONLY when crossing is OPEN)
-    this.renderTopDownLanternUnit(ctx, 3.4, 0, 'white', whiteFil, isLunarLit, nightAlpha, !isCrossingClosed);
+    // Center lunar-white lantern at Y = 0
+    this.renderTopDownLanternUnit(ctx, 4.2, 0, 'white', whiteFil, isLunarLit, nightAlpha, !isCrossingClosed);
 
     // 8. Automatic Barrier Boom (Брус шлагбаума)
     if (signal.isCrossingGate) {
-      // Rotary pivot hub
-      ctx.fillStyle = '#0f172a';
+      ctx.fillStyle = '#0a0c10';
       ctx.beginPath();
-      ctx.arc(0, 2.2, 2.4, 0, Math.PI * 2);
+      ctx.arc(0, 2.4, 2.6, 0, Math.PI * 2);
       ctx.fill();
 
       const maxBoomLen = signal.barrierLength || 58;
       const progress = signal.barrierProgress !== undefined ? signal.barrierProgress : (isCrossingClosed ? 1.0 : 0.0);
       const currentLen = progress * maxBoomLen;
 
-      // In strict top-down view:
-      // When raised (vertical in sky): boom projects at length 0 (pointing up at camera).
-      // When lowered: extends across roadway along +Y local towards centerline.
       if (currentLen > 3) {
         // Drop shadow on roadway asphalt
         ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
-        ctx.fillRect(-0.6 + 1.6, 2.2 + 1.4, 2.2, currentLen);
+        ctx.fillRect(-0.6 + 1.8, 2.4 + 1.6, 2.4, currentLen);
 
-        // Boom base (White aluminum / fiberglass beam)
-        const boomW = 2.4;
+        // Boom base (White aluminum beam)
+        const boomW = 2.6;
         ctx.fillStyle = '#f8fafc';
-        ctx.fillRect(-boomW / 2, 2.2, boomW, currentLen);
+        ctx.fillRect(-boomW / 2, 2.4, boomW, currentLen);
 
         // Alternating diagonal 45° red reflective safety stripes
-        const stripePitch = 7.0;
+        const stripePitch = 7.5;
         ctx.save();
         ctx.beginPath();
-        ctx.rect(-boomW / 2, 2.2, boomW, currentLen);
+        ctx.rect(-boomW / 2, 2.4, boomW, currentLen);
         ctx.clip();
         ctx.fillStyle = '#dc2626';
-        for (let py = 2.2; py < 2.2 + currentLen + stripePitch; py += stripePitch) {
+        for (let py = 2.4; py < 2.4 + currentLen + stripePitch; py += stripePitch) {
           ctx.beginPath();
           ctx.moveTo(-boomW / 2, py);
           ctx.lineTo(boomW / 2, py + boomW);
@@ -2394,24 +2829,24 @@ export class RailwaySignalingSystem {
         ctx.restore();
 
         // Red protective rubber tip on boom end
-        ctx.fillStyle = '#b91c1c';
-        ctx.fillRect(-boomW / 2 - 0.3, 2.2 + currentLen - 2.5, boomW + 0.6, 2.5);
+        ctx.fillStyle = '#991b1b';
+        ctx.fillRect(-boomW / 2 - 0.4, 2.4 + currentLen - 2.8, boomW + 0.8, 2.8);
 
-        // 3 Red warning LED marker lights along boom (active when closed)
+        // Red warning LED markers along boom
         if (isCrossingClosed && currentLen > 15) {
           const ledPositions = [0.28, 0.58, 0.88];
           const ledLit = blinkCycle === 0;
           for (const pos of ledPositions) {
-            const ledY = 2.2 + currentLen * pos;
+            const ledY = 2.4 + currentLen * pos;
             ctx.fillStyle = ledLit ? '#ef4444' : '#7f1d1d';
             ctx.beginPath();
-            ctx.arc(0, ledY, 1.1, 0, Math.PI * 2);
+            ctx.arc(0, ledY, 1.2, 0, Math.PI * 2);
             ctx.fill();
 
             if (ledLit) {
-              ctx.fillStyle = 'rgba(239, 68, 68, 0.5)';
+              ctx.fillStyle = 'rgba(239, 68, 68, 0.55)';
               ctx.beginPath();
-              ctx.arc(0, ledY, 2.6, 0, Math.PI * 2);
+              ctx.arc(0, ledY, 3.0, 0, Math.PI * 2);
               ctx.fill();
             }
           }
@@ -2434,74 +2869,112 @@ export class RailwaySignalingSystem {
   ): void {
     ctx.save();
 
-    // Cylindrical sun visor hood extending forward (+X) towards oncoming traffic
-    ctx.fillStyle = '#0f172a';
+    // 1. Long Cylindrical Sun Visor Hood extending forward (+X)
+    const visorLength = 8.5;
+    const visorHalfW = 2.8;
+
+    // Visor drop shadow
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
+    ctx.fillRect(lx, ly - visorHalfW + 0.5, visorLength, visorHalfW * 2);
+
+    // Deep matte black outer visor barrel
+    ctx.fillStyle = '#080a0f';
     ctx.beginPath();
-    ctx.arc(lx, ly, 2.2, -Math.PI / 2, Math.PI / 2, false);
-    ctx.lineTo(lx + 3.4, ly + 2.0);
-    ctx.lineTo(lx + 3.4, ly - 2.0);
+    ctx.arc(lx, ly, visorHalfW, -Math.PI / 2, Math.PI / 2, false);
+    ctx.lineTo(lx + visorLength, ly + visorHalfW - 0.4);
+    ctx.lineTo(lx + visorLength + 1.2, ly); // Beveled top hood brim
+    ctx.lineTo(lx + visorLength, ly - visorHalfW + 0.4);
     ctx.closePath();
     ctx.fill();
 
-    // Lens rim and dark glass
-    const baseColor = color === 'red' ? '#450a0a' : '#1e293b';
-    ctx.fillStyle = baseColor;
+    // Visor outer rim edge highlight
+    ctx.strokeStyle = '#27272a';
+    ctx.lineWidth = 0.6;
+    ctx.stroke();
+
+    // Matte anti-reflective interior cavity
+    ctx.fillStyle = '#020305';
     ctx.beginPath();
-    ctx.arc(lx, ly, 1.4, 0, Math.PI * 2);
+    ctx.arc(lx + 0.5, ly, visorHalfW - 0.6, -Math.PI / 2, Math.PI / 2, false);
+    ctx.lineTo(lx + visorLength - 0.8, ly + visorHalfW - 0.9);
+    ctx.lineTo(lx + visorLength - 0.8, ly - visorHalfW + 0.9);
+    ctx.closePath();
     ctx.fill();
 
-    // Concentric stepped Fresnel lens ring
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)';
-    ctx.lineWidth = 0.4;
+    // Top metal spine specular line
+    ctx.strokeStyle = '#475569';
+    ctx.lineWidth = 0.5;
     ctx.beginPath();
-    ctx.arc(lx, ly, 0.9, 0, Math.PI * 2);
+    ctx.moveTo(lx, ly - visorHalfW + 0.3);
+    ctx.lineTo(lx + visorLength - 0.5, ly - visorHalfW + 0.6);
+    ctx.stroke();
+
+    // 2. Optical Glass Lens with Fresnel Rings
+    const lensRadius = 1.8;
+    const baseColor = color === 'red' ? '#3b0707' : '#0f172a';
+    ctx.fillStyle = baseColor;
+    ctx.beginPath();
+    ctx.arc(lx, ly, lensRadius, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Stepped Fresnel concentric rings
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
+    ctx.lineWidth = 0.35;
+    ctx.beginPath();
+    ctx.arc(lx, ly, lensRadius * 0.65, 0, Math.PI * 2);
     ctx.stroke();
 
     const isLit = allowedToLight && (filament ? (filament.brightness > 0.05 && isLitFallback) : isLitFallback);
     if (isLit) {
       const brightness = filament ? filament.brightness : 1.0;
       if (color === 'red') {
-        // Red glowing core
+        // Glowing ruby core
         ctx.fillStyle = '#ef4444';
         ctx.beginPath();
-        ctx.arc(lx, ly, 1.4, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.fillStyle = '#fca5a5';
-        ctx.beginPath();
-        ctx.arc(lx + 0.4, ly, 0.7, 0, Math.PI * 2);
+        ctx.arc(lx, ly, lensRadius, 0, Math.PI * 2);
         ctx.fill();
 
-        // Forward directional optical glow cone cast onto road surface (+X)
-        const coneGrad = ctx.createRadialGradient(lx, ly, 1, lx + 16, ly, 22);
-        coneGrad.addColorStop(0, `rgba(239, 68, 68, ${0.45 * brightness})`);
-        coneGrad.addColorStop(0.5, `rgba(239, 68, 68, ${0.18 * brightness})`);
+        // White-hot center
+        ctx.fillStyle = '#fca5a5';
+        ctx.beginPath();
+        ctx.arc(lx + 0.5, ly, lensRadius * 0.55, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#ffffff';
+        ctx.beginPath();
+        ctx.arc(lx + 0.6, ly, lensRadius * 0.25, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Directional optical glow cone (+X)
+        const coneGrad = ctx.createRadialGradient(lx, ly, 1, lx + 22, ly, 30);
+        coneGrad.addColorStop(0, `rgba(239, 68, 68, ${0.55 * brightness})`);
+        coneGrad.addColorStop(0.45, `rgba(239, 68, 68, ${0.22 * brightness})`);
         coneGrad.addColorStop(1, 'rgba(239, 68, 68, 0.0)');
 
         ctx.fillStyle = coneGrad;
         ctx.beginPath();
-        ctx.moveTo(lx + 1, ly);
-        ctx.arc(lx + 1, ly, 22, -0.45, 0.45);
+        ctx.moveTo(lx + 1.5, ly);
+        ctx.arc(lx + 1.5, ly, 30, -0.45, 0.45);
         ctx.closePath();
         ctx.fill();
       } else {
         // Lunar white glowing core
         ctx.fillStyle = '#e0f2fe';
         ctx.beginPath();
-        ctx.arc(lx, ly, 1.3, 0, Math.PI * 2);
+        ctx.arc(lx, ly, lensRadius, 0, Math.PI * 2);
         ctx.fill();
         ctx.fillStyle = '#ffffff';
         ctx.beginPath();
-        ctx.arc(lx + 0.3, ly, 0.6, 0, Math.PI * 2);
+        ctx.arc(lx + 0.4, ly, lensRadius * 0.6, 0, Math.PI * 2);
         ctx.fill();
 
         // Soft forward glow
-        const coneGrad = ctx.createRadialGradient(lx, ly, 1, lx + 12, ly, 16);
-        coneGrad.addColorStop(0, `rgba(224, 242, 254, ${0.35 * brightness})`);
+        const coneGrad = ctx.createRadialGradient(lx, ly, 1, lx + 18, ly, 24);
+        coneGrad.addColorStop(0, `rgba(224, 242, 254, ${0.45 * brightness})`);
         coneGrad.addColorStop(1, 'rgba(224, 242, 254, 0.0)');
         ctx.fillStyle = coneGrad;
         ctx.beginPath();
-        ctx.moveTo(lx + 1, ly);
-        ctx.arc(lx + 1, ly, 16, -0.4, 0.4);
+        ctx.moveTo(lx + 1.5, ly);
+        ctx.arc(lx + 1.5, ly, 24, -0.4, 0.4);
         ctx.closePath();
         ctx.fill();
       }
@@ -2511,7 +2984,7 @@ export class RailwaySignalingSystem {
   }
 
   // =========================================================================
-  // HELPER: LENS UNIT VECTOR RENDERING (INCANDESCENT FILAMENT OPTICS)
+  // HELPER: LENS UNIT VECTOR RENDERING (INCANDESCENT FILAMENT & LONG HOOD)
   // =========================================================================
   private static renderLensUnit(
     ctx: CanvasRenderingContext2D,
@@ -2521,65 +2994,109 @@ export class RailwaySignalingSystem {
     filament: RailwaySignalFilament | undefined,
     isLitFallback: boolean,
     nightAlpha: number,
-    radius: number = 1.3
+    radius: number = 1.8,
+    visorLen: number = 8.5
   ): void {
     ctx.save();
-    // Sun visor hood
-    ctx.fillStyle = '#0f172a';
+
+    const visorHalfW = radius + 1.3;
+
+    // 1. Long Sun Visor Hood extending forward in beam direction (+X)
+    // Cast iron lens barrel collar
+    ctx.fillStyle = '#090b10';
     ctx.beginPath();
-    ctx.arc(lx, ly, radius + 1.2, -Math.PI / 2, Math.PI / 2, false);
-    ctx.lineTo(lx + 1.6, ly);
+    ctx.arc(lx, ly, visorHalfW + 0.4, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = '#27272a';
+    ctx.lineWidth = 0.6;
+    ctx.stroke();
+
+    // Visor barrel body
+    ctx.fillStyle = '#05070a';
+    ctx.beginPath();
+    ctx.arc(lx, ly, visorHalfW, -Math.PI / 2, Math.PI / 2, false);
+    ctx.lineTo(lx + visorLen, ly + visorHalfW - 0.4);
+    ctx.lineTo(lx + visorLen + 1.2, ly); // Protruding forward upper peak of the hood
+    ctx.lineTo(lx + visorLen, ly - visorHalfW + 0.4);
     ctx.closePath();
     ctx.fill();
 
-    // Dark unlit Fresnel lens glass
-    let baseGlassColor = '#0b0f19';
-    if (color === 'red') baseGlassColor = '#450a0a';
-    else if (color === 'yellow') baseGlassColor = '#451a03';
-    else if (color === 'green') baseGlassColor = '#052e16';
-    else if (color === 'blue') baseGlassColor = '#172554';
-    else if (color === 'white') baseGlassColor = '#1e293b';
+    // Outer edge highlight on visor rim
+    ctx.strokeStyle = '#1f2937';
+    ctx.lineWidth = 0.5;
+    ctx.stroke();
+
+    // Matte anti-glare interior cavity
+    ctx.fillStyle = '#020305';
+    ctx.beginPath();
+    ctx.arc(lx + 0.4, ly, visorHalfW - 0.6, -Math.PI / 2, Math.PI / 2, false);
+    ctx.lineTo(lx + visorLen - 0.8, ly + visorHalfW - 0.8);
+    ctx.lineTo(lx + visorLen - 0.8, ly - visorHalfW + 0.8);
+    ctx.closePath();
+    ctx.fill();
+
+    // Top metal spine specular reflection line
+    ctx.strokeStyle = '#475569';
+    ctx.lineWidth = 0.5;
+    ctx.beginPath();
+    ctx.moveTo(lx, ly - visorHalfW + 0.3);
+    ctx.lineTo(lx + visorLen - 0.5, ly - visorHalfW + 0.5);
+    ctx.stroke();
+
+    // 2. Optical Glass Lens in its cast bezel
+    let baseGlassColor = '#05070a';
+    if (color === 'red') baseGlassColor = '#3b0707';
+    else if (color === 'yellow') baseGlassColor = '#381a03';
+    else if (color === 'green') baseGlassColor = '#022110';
+    else if (color === 'blue') baseGlassColor = '#0c1a3b';
+    else if (color === 'white') baseGlassColor = '#111827';
 
     ctx.fillStyle = baseGlassColor;
     ctx.beginPath();
     ctx.arc(lx, ly, radius, 0, Math.PI * 2);
     ctx.fill();
 
-    // Concentric Fresnel stepped lens ring simulation
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.08)';
+    // Concentric Fresnel stepped lens grooves
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.12)';
     ctx.lineWidth = 0.35;
     ctx.beginPath();
     ctx.arc(lx, ly, radius * 0.65, 0, Math.PI * 2);
     ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(lx, ly, radius * 0.35, 0, Math.PI * 2);
+    ctx.stroke();
 
     // Physical filament variables
-    const b = filament ? filament.brightness : (isLitFallback ? 1.0 : 0.0);
-    const temp = filament ? filament.temp : (isLitFallback ? 1.0 : 0.0);
-    const coldPulse = filament?.coldTestPulse || 0;
+    const isLensActive = isLitFallback;
+    const b = filament ? (isLensActive ? filament.brightness : 0.0) : (isLensActive ? 1.0 : 0.0);
+    const temp = filament ? filament.temp : (isLensActive ? 1.0 : 0.0);
+    const coldPulse = (isLensActive && filament) ? filament.coldTestPulse : 0;
 
-    // 1. Incandescent tungsten wire coil / ember rendering
-    if (temp > 0.08 || coldPulse > 0) {
-      let emberColor = 'rgba(239, 68, 68, 0.8)';
-      if (temp > 0.7) {
-        emberColor = 'rgba(255, 255, 255, 0.95)';
-      } else if (temp > 0.45) {
-        emberColor = 'rgba(251, 146, 60, 0.9)';
-      } else if (coldPulse > 0) {
-        emberColor = 'rgba(253, 186, 116, 0.75)';
+    // 3. Incandescent tungsten wire coil / warm ember during warm-up or cooldown
+    if (temp > 0.05 || coldPulse > 0) {
+      if (isLensActive || temp > 0.15) {
+        let emberColor = 'rgba(239, 68, 68, 0.85)';
+        if (temp > 0.7) {
+          emberColor = 'rgba(255, 255, 255, 0.98)';
+        } else if (temp > 0.4) {
+          emberColor = 'rgba(251, 146, 60, 0.92)';
+        } else if (coldPulse > 0 || temp > 0.05) {
+          emberColor = 'rgba(253, 186, 116, 0.78)';
+        }
+
+        ctx.save();
+        ctx.fillStyle = emberColor;
+        ctx.shadowColor = emberColor;
+        ctx.shadowBlur = 3.0 * Math.max(temp, coldPulse * 0.6);
+        ctx.beginPath();
+        ctx.arc(lx + 0.3, ly, radius * 0.35, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
       }
-
-      ctx.save();
-      ctx.fillStyle = emberColor;
-      ctx.shadowColor = emberColor;
-      ctx.shadowBlur = 2.5 * temp;
-      ctx.beginPath();
-      ctx.arc(lx + 0.2, ly, radius * 0.35, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.restore();
     }
 
-    // 2. Optical Luminous Flux and Directional Beam
-    if (b > 0.01) {
+    // 4. Optical Luminous Flux and Directional Collimated Beam
+    if (isLensActive && b > 0.01) {
       let r = 16, g = 185, bCol = 129;
       if (color === 'red') { r = 239; g = 68; bCol = 68; }
       else if (color === 'yellow') { r = 245; g = 158; bCol = 11; }
@@ -2594,48 +3111,48 @@ export class RailwaySignalingSystem {
       }
 
       const litRim = `rgb(${r}, ${g}, ${bCol})`;
-      const glowAlpha = Math.min(0.85, b * 0.7);
+      const glowAlpha = Math.min(0.90, b * 0.78);
       const glowColor = `rgba(${r}, ${g}, ${bCol}, ${glowAlpha})`;
 
       // Outer Bloom Halo
-      const haloRadius = radius * (1.6 + b * 2.2);
-      const bloomGrad = ctx.createRadialGradient(lx + 0.3, ly, radius * 0.3, lx + 0.3, ly, haloRadius);
+      const haloRadius = radius * (1.8 + b * 2.5);
+      const bloomGrad = ctx.createRadialGradient(lx + 0.4, ly, radius * 0.3, lx + 0.4, ly, haloRadius);
       bloomGrad.addColorStop(0, glowColor);
       bloomGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
       ctx.fillStyle = bloomGrad;
       ctx.beginPath();
-      ctx.arc(lx + 0.3, ly, haloRadius, 0, Math.PI * 2);
+      ctx.arc(lx + 0.4, ly, haloRadius, 0, Math.PI * 2);
       ctx.fill();
 
       // Saturated Lens Body
       ctx.fillStyle = litRim;
       ctx.beginPath();
-      ctx.arc(lx + 0.3, ly, radius, 0, Math.PI * 2);
+      ctx.arc(lx + 0.4, ly, radius, 0, Math.PI * 2);
       ctx.fill();
 
-      // White Hot Incandescent Core
+      // White Hot Incandescent Center Core
       const coreColor = temp > 0.75 ? '#ffffff' : (temp > 0.5 ? '#fffbeb' : '#fed7aa');
       ctx.fillStyle = coreColor;
       ctx.beginPath();
-      ctx.arc(lx + 0.3, ly, radius * (0.3 + b * 0.3), 0, Math.PI * 2);
+      ctx.arc(lx + 0.4, ly, radius * (0.35 + b * 0.35), 0, Math.PI * 2);
       ctx.fill();
 
       // Directional Collimated Beam through Fresnel Lens
       if (b > 0.15) {
-        const beamThrow = (20 + nightAlpha * 35) * b;
-        const beamSpread = (14 + nightAlpha * 10) * b;
-        const beamGrad = ctx.createRadialGradient(lx, ly, radius, lx + beamThrow * 0.6, ly, beamThrow);
-        const beamOpacity = Math.min(0.75, Math.pow(b, 1.3) * (0.35 + nightAlpha * 0.4));
+        const beamThrow = (28 + nightAlpha * 45) * b;
+        const beamSpread = (18 + nightAlpha * 14) * b;
+        const beamGrad = ctx.createRadialGradient(lx + 2, ly, radius, lx + beamThrow * 0.6, ly, beamThrow);
+        const beamOpacity = Math.min(0.85, Math.pow(b, 1.3) * (0.42 + nightAlpha * 0.45));
         beamGrad.addColorStop(0, `rgba(${r}, ${g}, ${bCol}, ${beamOpacity})`);
-        beamGrad.addColorStop(0.35, `rgba(${r}, ${g}, ${bCol}, ${beamOpacity * 0.35})`);
+        beamGrad.addColorStop(0.35, `rgba(${r}, ${g}, ${bCol}, ${beamOpacity * 0.4})`);
         beamGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
 
         ctx.fillStyle = beamGrad;
         ctx.beginPath();
-        ctx.moveTo(lx + 2, ly - 2);
+        ctx.moveTo(lx + visorLen, ly - radius);
         ctx.lineTo(lx + beamThrow, ly - beamSpread / 2);
         ctx.lineTo(lx + beamThrow, ly + beamSpread / 2);
-        ctx.lineTo(lx + 2, ly + 2);
+        ctx.lineTo(lx + visorLen, ly + radius);
         ctx.closePath();
         ctx.fill();
       }
@@ -2652,9 +3169,9 @@ export class RailwaySignalingSystem {
     signal: RailwaySignal,
     x: number,
     y: number,
-    w: number = 8.5,
-    h: number = 5.2,
-    font: string = 'bold 5px sans-serif'
+    w: number = 9.5,
+    h: number = 5.6,
+    font: string = 'bold 5.2px sans-serif'
   ): void {
     ctx.save();
     ctx.translate(x, y + h / 2);
@@ -2664,14 +3181,13 @@ export class RailwaySignalingSystem {
     }
     const text = signal.designation;
 
-    // Black enamel background
-    ctx.fillStyle = '#020617';
+    // Black enamel plate background with crisp border
+    ctx.fillStyle = '#030712';
     ctx.beginPath();
-    ctx.roundRect(-w / 2, -h / 2, w, h, 1);
+    ctx.roundRect(-w / 2, -h / 2, w, h, 1.2);
     ctx.fill();
-    // Crisp white border
     ctx.strokeStyle = '#ffffff';
-    ctx.lineWidth = 0.6;
+    ctx.lineWidth = 0.7;
     ctx.stroke();
 
     // Lettering
@@ -2684,19 +3200,19 @@ export class RailwaySignalingSystem {
     // Track or switch indicator badge for shunting signals
     const trackBadge = signal.switchNumber ? `№${signal.switchNumber}` : (signal.targetTrack ? (signal.targetTrack.includes('3') ? '3П' : signal.targetTrack.includes('4') ? '4П' : signal.targetTrack.includes('I') ? 'IП' : '') : '');
     if (trackBadge && signal.type === 'shunting') {
-      const bw = 10;
-      const bh = 4.2;
-      const by = h / 2 + 2.5;
+      const bw = 11;
+      const bh = 4.6;
+      const by = h / 2 + 2.8;
       ctx.fillStyle = '#0f172a';
       ctx.beginPath();
       ctx.roundRect(-bw / 2, by - bh / 2, bw, bh, 0.8);
       ctx.fill();
       ctx.strokeStyle = '#38bdf8'; // Blue rim for switch/track
-      ctx.lineWidth = 0.5;
+      ctx.lineWidth = 0.6;
       ctx.stroke();
 
       ctx.fillStyle = '#38bdf8';
-      ctx.font = 'bold 3.6px monospace';
+      ctx.font = 'bold 3.8px monospace';
       ctx.fillText(trackBadge, 0, by + 0.2);
     }
 
@@ -2853,7 +3369,10 @@ export class RailwaySignalingSystem {
   // ASPECT LOGIC
   // =========================================================================
   private static getActiveLensesForAspect(signal: RailwaySignal, time: number): number[] {
-    const aspect = signal.currentAspect;
+    if (signal.relayPhase === 'blackout') {
+      return []; // Dark gap during relay contact break
+    }
+    const aspect = (signal.relayPhase === 'lamp_check' && signal.pendingAspect) ? signal.pendingAspect : signal.currentAspect;
     const lenses = signal.lenses;
 
     if (aspect === 'dark') return [];
@@ -2952,27 +3471,47 @@ export class RailwaySignalingSystem {
         else if (color === 'blue') rgb = '59, 130, 246';
         else if (color === 'white') rgb = '241, 245, 249';
 
-        const groundGrad = ctx.createRadialGradient(0, 0, 1, 0, 0, 24);
-        groundGrad.addColorStop(0, `rgba(${rgb}, ${0.4 * nightAlpha})`);
-        groundGrad.addColorStop(0.5, `rgba(${rgb}, ${0.15 * nightAlpha})`);
-        groundGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+        const groundGrad = ctx.createRadialGradient(0, 0, 1, 0, 0, 28);
+        groundGrad.addColorStop(0.0, `rgba(${rgb}, ${0.50 * nightAlpha})`);
+        groundGrad.addColorStop(0.4, `rgba(${rgb}, ${0.18 * nightAlpha})`);
+        groundGrad.addColorStop(0.8, `rgba(${rgb}, ${0.04 * nightAlpha})`);
+        groundGrad.addColorStop(1.0, 'rgba(0, 0, 0, 0)');
         ctx.fillStyle = groundGrad;
         ctx.beginPath();
-        ctx.arc(0, 0, 24, 0, Math.PI * 2);
+        ctx.arc(0, 0, 28, 0, Math.PI * 2);
         ctx.fill();
 
-        const coneGrad = ctx.createRadialGradient(2, 0, 1, 60, 0, 75);
-        coneGrad.addColorStop(0, `rgba(${rgb}, ${0.65 * nightAlpha})`);
-        coneGrad.addColorStop(0.35, `rgba(${rgb}, ${0.3 * nightAlpha})`);
-        coneGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+        // Focused optical lens emission with curved parabolic penumbra and radial falloff (no harsh triangle polygon)
+        const coneReach = 85;
+        const coneHalfW = 28;
+        const coneGrad = ctx.createRadialGradient(2, 0, 1, coneReach * 0.45, 0, coneReach);
+        coneGrad.addColorStop(0.00, `rgba(${rgb}, ${0.60 * nightAlpha})`);
+        coneGrad.addColorStop(0.30, `rgba(${rgb}, ${0.28 * nightAlpha})`);
+        coneGrad.addColorStop(0.70, `rgba(${rgb}, ${0.07 * nightAlpha})`);
+        coneGrad.addColorStop(0.92, `rgba(${rgb}, ${0.01 * nightAlpha})`);
+        coneGrad.addColorStop(1.00, 'rgba(0, 0, 0, 0)');
 
         ctx.fillStyle = coneGrad;
         ctx.beginPath();
-        ctx.moveTo(2, -2);
-        ctx.lineTo(80, -28);
-        ctx.lineTo(80, 28);
-        ctx.lineTo(2, 2);
+        ctx.moveTo(2, 0);
+        ctx.quadraticCurveTo(coneReach * 0.45, -coneHalfW * 0.6, coneReach, -coneHalfW);
+        ctx.bezierCurveTo(
+          coneReach + 15, -coneHalfW * 0.4,
+          coneReach + 15, coneHalfW * 0.4,
+          coneReach, coneHalfW
+        );
+        ctx.quadraticCurveTo(coneReach * 0.45, coneHalfW * 0.6, 2, 0);
         ctx.closePath();
+        ctx.fill();
+
+        // Optical lens flare core directly on the signal optic
+        const flareGrad = ctx.createRadialGradient(2, 0, 0.5, 2, 0, 7.5);
+        flareGrad.addColorStop(0.0, `rgba(${rgb}, 0.95)`);
+        flareGrad.addColorStop(0.5, `rgba(${rgb}, 0.45)`);
+        flareGrad.addColorStop(1.0, 'rgba(0, 0, 0, 0)');
+        ctx.fillStyle = flareGrad;
+        ctx.beginPath();
+        ctx.arc(2, 0, 7.5, 0, Math.PI * 2);
         ctx.fill();
       }
 

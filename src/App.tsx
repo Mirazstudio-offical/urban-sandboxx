@@ -17,7 +17,8 @@ import {
   ActivePlacement,
   FuelType,
   GasPumpDispenser,
-  CarType
+  CarType,
+  RollingStockCar
 } from './types';
 import { CAR_CONFIGS, createDefaultEngineState, createDefaultFuelSystem, createDefaultVehicleDamage, ensureVehicleDamage, getVehicleFuelCapPosition, isTrailerVehicle, PX_S_TO_SPEED_KMH, hasRoadTrainLights, toggleAxleDiffLock, cycleVehicleDiffLock, getVehicleDiffCapabilities } from './vehicleHelpers';
 import { loadMap, sanitizeWorldVehicles } from './loadMap';
@@ -37,7 +38,7 @@ import {
   unhitchTrailerFromVehicle
 } from './physics';
 import { GameRenderer } from './renderer';
-import { getBuildingFloorsCount, getBuildingLayout, constrainPlayerToInterior, clearInteriorCanvasCache } from './buildingInteriors';
+import { getBuildingFloorsCount, getBuildingLayout, constrainPlayerToInterior, clearInteriorCanvasCache, getApartmentDoorSegment } from './buildingInteriors';
 import { calculateGpsRoute } from './navigation';
 import { sound } from './audio';
 import { 
@@ -81,6 +82,9 @@ import { SpeedometerHUD } from './components/SpeedometerHUD';
 import { PerformanceProfiler } from './components/PerformanceProfiler';
 import { PhoneModal } from './components/PhoneModal';
 import { performanceConfig } from './performanceConfig';
+import { crashLogger, CrashReport } from './crashLogger';
+import { CrashDiagnosticsModal } from './components/CrashDiagnosticsModal';
+import { CrashAlertToast } from './components/CrashAlertToast';
 import { FuelNozzleSelectorModal } from './components/FuelNozzleSelectorModal';
 import { GasStationCashierModal } from './components/GasStationCashierModal';
 import { EngineBayModal } from './components/EngineBayModal';
@@ -436,6 +440,27 @@ export const SPAWN_LOCATIONS: SpawnLocation[] = [
   }
 ];
 
+export function getAllSpawnLocations(world: GameWorld | null): SpawnLocation[] {
+  const list = [...SPAWN_LOCATIONS];
+  if (world && Array.isArray(world.spawnPoints)) {
+    for (const sp of world.spawnPoints) {
+      if (!sp || !sp.id) continue;
+      if (!list.some(s => s.id === sp.id)) {
+        list.push({
+          id: sp.id,
+          name: sp.nameEn || sp.nameRu,
+          nameRu: sp.nameRu,
+          x: sp.x,
+          y: sp.y,
+          description: sp.description || 'Точка спавна с карты',
+          icon: <MapPin className="w-8 h-8 text-sky-400" />
+        });
+      }
+    }
+  }
+  return list;
+}
+
 function findStreetNameAtPosition(world: GameWorld | null, px: number, py: number): string {
   if (!world || !world.roads) return 'Grand Boulevard';
   for (let i = 0; i < world.roads.length; i++) {
@@ -563,6 +588,8 @@ export default function App() {
   const [isFriendsModalOpen, setIsFriendsModalOpen] = useState<boolean>(false);
   const [onlineStatus, setOnlineStatus] = useState<OnlineStatus>(onlineManager.status);
   const [isChatFocused, setIsChatFocused] = useState<boolean>(false);
+  const isChatFocusedRef = useRef<boolean>(false);
+  isChatFocusedRef.current = isChatFocused;
 
   // Real Estate & Apartment System States
   const [isRealEstateModalOpen, setIsRealEstateModalOpen] = useState<boolean>(false);
@@ -683,6 +710,8 @@ export default function App() {
   const [vitalsRefreshTick, setVitalsRefreshTick] = useState<number>(0);
   const [isConsoleOpen, setIsConsoleOpen] = useState<boolean>(false);
   const [isPerfConsoleOpen, setIsPerfConsoleOpen] = useState<boolean>(false);
+  const [isCrashDiagnosticsOpen, setIsCrashDiagnosticsOpen] = useState<boolean>(false);
+  const [crashToastReport, setCrashToastReport] = useState<CrashReport | null>(() => crashLogger.getPreviousCrashDetected());
   const [currentPerfStats, setCurrentPerfStats] = useState({
     fps: 60,
     spatialGridTime: 0,
@@ -870,13 +899,24 @@ export default function App() {
       keyedVehicleIds.add(player.currentVehicleId);
     }
 
-    // Filter world vehicles to strictly save only vehicles with a linked key / player ownership
+    // Filter world vehicles to strictly save only vehicles with a linked key / player ownership / inserted key / hitched trailer
     const savedVehicles = (world.vehicles || [])
-      .filter(v => keyedVehicleIds.has(v.id) || v.ownerId === 'player'|| Boolean(v.keyId))
+      .filter(v => 
+        keyedVehicleIds.has(v.id) || 
+        v.ownerId === 'player' || 
+        Boolean(v.keyId) || 
+        Boolean(v.insertedKeyType) || 
+        Boolean(v.insertedKeyId) || 
+        v.id === player.currentVehicleId ||
+        Boolean(v.trailerId) ||
+        Boolean(v.towedById)
+      )
       .map(v => ({
         id: v.id,
         keyId: v.keyId,
         keyTier: v.keyTier,
+        insertedKeyType: v.insertedKeyType,
+        insertedKeyId: v.insertedKeyId,
         ownerId: v.ownerId || 'player',
         isLocked: v.isLocked,
         type: v.type,
@@ -887,12 +927,27 @@ export default function App() {
         color: v.color,
         roofColor: v.roofColor,
         hasGBO: v.hasGBO,
+        tractorBrakeLatch: v.tractorBrakeLatch,
+        hasRearviewCamera: v.hasRearviewCamera,
         hasHeavySuspension: (v as any).hasHeavySuspension,
         hasChiptuning: (v as any).hasChiptuning,
-        fuelSystem: v.fuelSystem ? { ...v.fuelSystem } : undefined,
-        engineState: v.engineState ? { ...v.engineState } : undefined,
-        damage: v.damage ? { ...v.damage } : undefined,
-        isParked: v.isParked
+        fuelSystem: v.fuelSystem ? JSON.parse(JSON.stringify(v.fuelSystem)) : undefined,
+        engineState: v.engineState ? JSON.parse(JSON.stringify(v.engineState)) : undefined,
+        damage: v.damage ? JSON.parse(JSON.stringify(v.damage)) : undefined,
+        fluidTank: v.fluidTank ? JSON.parse(JSON.stringify(v.fluidTank)) : undefined,
+        isParked: v.isParked,
+        isDerelict: v.isDerelict,
+        isPtoActive: v.isPtoActive,
+        windowOpen: v.windowOpen,
+        headlightsOn: v.headlightsOn,
+        headlightMode: v.headlightMode,
+        trailerId: v.trailerId,
+        towedById: v.towedById,
+        trailerPlugConnected: v.trailerPlugConnected,
+        trailerBrakesConnected: v.trailerBrakesConnected,
+        trailerParkingBrakeEngaged: v.trailerParkingBrakeEngaged,
+        diffLock: v.diffLock ? { ...v.diffLock } : undefined,
+        transferCaseMode: v.transferCaseMode
       }));
 
     const newSave = {
@@ -918,6 +973,8 @@ export default function App() {
       cash: player.cash || 0,
       selectedHotbarIndex: player.selectedHotbarIndex || 0,
       vehicles: savedVehicles,
+      towingRopes: world.towingRopes ? JSON.parse(JSON.stringify(world.towingRopes)) : [],
+      groundItems: world.groundItems ? JSON.parse(JSON.stringify(world.groundItems)) : [],
       isInsideBuilding: player.isInsideBuilding || false,
       insideBuildingId: player.insideBuildingId || null,
       isInsideApartment: player.isInsideApartment || false,
@@ -998,6 +1055,13 @@ export default function App() {
     player.rightHandItem = save.rightHandItem ? JSON.parse(JSON.stringify(save.rightHandItem)) : null;
     player.activeHand = save.activeHand || 'right';
 
+    if (save.groundItems && Array.isArray(save.groundItems)) {
+      world.groundItems = JSON.parse(JSON.stringify(save.groundItems));
+    }
+    if (save.towingRopes && Array.isArray(save.towingRopes)) {
+      world.towingRopes = JSON.parse(JSON.stringify(save.towingRopes));
+    }
+
     if (save.vehicles && Array.isArray(save.vehicles)) {
       save.vehicles.forEach((sv: any) => {
         let v = world.vehicles.find(item => item.id === sv.id);
@@ -1007,6 +1071,8 @@ export default function App() {
             id: sv.id,
             keyId: sv.keyId || sv.id,
             keyTier: sv.keyTier,
+            insertedKeyType: sv.insertedKeyType,
+            insertedKeyId: sv.insertedKeyId,
             type: sv.type,
             x: sv.x,
             y: sv.y,
@@ -1026,14 +1092,16 @@ export default function App() {
             wheelBase: cfg.wheelBase,
             color: sv.color || '#3b82f6',
             roofColor: sv.roofColor || sv.color || '#3b82f6',
-            headlightsOn: false,
-            headlightMode: 'off',
+            headlightsOn: sv.headlightsOn || false,
+            headlightMode: sv.headlightMode || 'off',
             brakeLightsOn: false,
             isReversing: false,
             turnSignal: 'none',
             turnSignalTimer: 0,
             isLocked: sv.isLocked !== undefined ? sv.isLocked : true,
             ownerId: sv.ownerId || 'player',
+            tractorBrakeLatch: sv.tractorBrakeLatch,
+            hasRearviewCamera: sv.hasRearviewCamera,
             isParked: true,
             isPlayerControlled: false,
             targetSpeed: 0,
@@ -1043,7 +1111,18 @@ export default function App() {
             aiState: 'parked',
             damage: sv.damage ? ensureVehicleDamage({ length: cfg.length, width: cfg.width, damage: sv.damage }) : createDefaultVehicleDamage(cfg.length, cfg.width),
             engineState: sv.engineState ? { ...sv.engineState } : createDefaultEngineState(sv.type, false, true),
-            fuelSystem: sv.fuelSystem ? { ...sv.fuelSystem } : createDefaultFuelSystem(sv.type, false)
+            fuelSystem: sv.fuelSystem ? { ...sv.fuelSystem } : createDefaultFuelSystem(sv.type, false),
+            fluidTank: sv.fluidTank ? JSON.parse(JSON.stringify(sv.fluidTank)) : undefined,
+            isPtoActive: sv.isPtoActive,
+            windowOpen: sv.windowOpen,
+            trailerId: sv.trailerId,
+            towedById: sv.towedById,
+            trailerPlugConnected: sv.trailerPlugConnected,
+            trailerBrakesConnected: sv.trailerBrakesConnected,
+            trailerParkingBrakeEngaged: sv.trailerParkingBrakeEngaged,
+            diffLock: sv.diffLock ? { ...sv.diffLock } : undefined,
+            transferCaseMode: sv.transferCaseMode,
+            isDerelict: sv.isDerelict
           } as Vehicle;
           world.vehicles.push(v);
         }
@@ -1054,8 +1133,25 @@ export default function App() {
           v.angle = sv.angle;
           if (sv.keyId) v.keyId = sv.keyId;
           if (sv.keyTier) v.keyTier = sv.keyTier;
+          v.insertedKeyType = sv.insertedKeyType;
+          v.insertedKeyId = sv.insertedKeyId;
           if (sv.ownerId) v.ownerId = sv.ownerId;
           if (sv.isLocked !== undefined) v.isLocked = sv.isLocked;
+          if (sv.tractorBrakeLatch !== undefined) v.tractorBrakeLatch = sv.tractorBrakeLatch;
+          if (sv.hasRearviewCamera !== undefined) v.hasRearviewCamera = sv.hasRearviewCamera;
+          if (sv.fluidTank) v.fluidTank = JSON.parse(JSON.stringify(sv.fluidTank));
+          if (sv.isPtoActive !== undefined) v.isPtoActive = sv.isPtoActive;
+          if (sv.windowOpen !== undefined) v.windowOpen = sv.windowOpen;
+          if (sv.headlightsOn !== undefined) v.headlightsOn = sv.headlightsOn;
+          if (sv.headlightMode !== undefined) v.headlightMode = sv.headlightMode;
+          if (sv.trailerId !== undefined) v.trailerId = sv.trailerId;
+          if (sv.towedById !== undefined) v.towedById = sv.towedById;
+          if (sv.trailerPlugConnected !== undefined) v.trailerPlugConnected = sv.trailerPlugConnected;
+          if (sv.trailerBrakesConnected !== undefined) v.trailerBrakesConnected = sv.trailerBrakesConnected;
+          if (sv.trailerParkingBrakeEngaged !== undefined) v.trailerParkingBrakeEngaged = sv.trailerParkingBrakeEngaged;
+          if (sv.diffLock) v.diffLock = { ...sv.diffLock };
+          if (sv.transferCaseMode !== undefined) v.transferCaseMode = sv.transferCaseMode;
+          if (sv.isDerelict !== undefined) v.isDerelict = sv.isDerelict;
           
           const isPlayerCar = save.isInVehicle && save.currentVehicleId === v.id;
           if (isPlayerCar) {
@@ -1205,7 +1301,7 @@ export default function App() {
     inputRef.current.handbrake = false;
     inputRef.current.sprint = false;
 
-    const spawnLoc = SPAWN_LOCATIONS.find(s => s.id === spawnId) || SPAWN_LOCATIONS[0];
+    const spawnLoc = getAllSpawnLocations(worldRef.current).find(s => s.id === spawnId) || SPAWN_LOCATIONS[0];
     setCurrentSpawnId(spawnLoc.id);
     setIsSpawnMenuOpen(false);
 
@@ -1511,6 +1607,7 @@ export default function App() {
   const turnTickTimerRef = useRef<number>(0);
   const hudUpdateTimerRef = useRef<number>(0);
   const perfUiTimerRef = useRef<number>(0);
+  const telemetryTimerRef = useRef<number>(0);
 
   // Initialize Game World (Runs ONCE on mount, NEVER resets when toggling day/night)
   useEffect(() => {
@@ -1559,6 +1656,40 @@ export default function App() {
 
       rendererRef.current = new GameRenderer(ctx);
 
+      // --- HYPER-EFFICIENT BACKGROUND HIBERNATION ---
+      // When user switches tabs, focuses studio chat, or minimizes window,
+      // hibernate heavy canvas rendering, pause engine audio and throttle loop to 0-2 FPS.
+      let isWindowHibernated = false;
+      let lastHibernationTick = 0;
+
+      const handleVisibilityChange = () => {
+        if (typeof document === 'undefined') return;
+        if (document.hidden) {
+          isWindowHibernated = true;
+          sound.purgeAudioGraph();
+          // Release all active input keys so the player/car stops moving blindly
+          inputRef.current.forward = false;
+          inputRef.current.backward = false;
+          inputRef.current.left = false;
+          inputRef.current.right = false;
+          inputRef.current.isMouseDown = false;
+        } else {
+          isWindowHibernated = false;
+          lastTime = performance.now();
+        }
+      };
+
+      const handleWindowBlur = () => {
+        // Stop car engines & screeching to save Web Audio thread CPU while user types elsewhere
+        sound.stopEngine();
+        sound.stopTireScreech();
+        sound.stopHorn();
+        inputRef.current.isMouseDown = false;
+      };
+
+      window.addEventListener('visibilitychange', handleVisibilityChange);
+      window.addEventListener('blur', handleWindowBlur);
+
       const handleResize = () => {
         if (!canvas || !rendererRef.current) return;
         canvas.width = window.innerWidth;
@@ -1574,10 +1705,16 @@ export default function App() {
       sound.resume();
       const code = e.code;
 
-      // When typing in text input or textarea, skip game controls and allow Escape to blur
-      if (document.activeElement?.tagName === 'INPUT'|| document.activeElement?.tagName === 'TEXTAREA') {
+      // When typing in text input or textarea, or when chat is focused, skip game controls and allow Escape to blur
+      const isTypingOrChatting = 
+        isChatFocusedRef.current ||
+        document.activeElement?.tagName === 'INPUT' ||
+        document.activeElement?.tagName === 'TEXTAREA' ||
+        !!document.activeElement?.closest('#chat-overlay-container');
+
+      if (isTypingOrChatting) {
         if (code === 'Escape') {
-          (document.activeElement as HTMLElement).blur();
+          (document.activeElement as HTMLElement)?.blur?.();
           setIsChatFocused(false);
           e.preventDefault();
         }
@@ -1593,7 +1730,18 @@ export default function App() {
         return;
       }
 
+      if (code === 'F2') {
+        setIsCrashDiagnosticsOpen((prev) => !prev);
+        e.preventDefault();
+        return;
+      }
+
       if (code === 'Escape') {
+        if (isCrashDiagnosticsOpen) {
+          setIsCrashDiagnosticsOpen(false);
+          e.preventDefault();
+          return;
+        }
         if (activePlacementRef.current) {
           setActivePlacement(null);
           activePlacementRef.current = null;
@@ -1885,6 +2033,14 @@ export default function App() {
     };
 
     const handleKeyUp = (e: KeyboardEvent) => {
+      if (
+        isChatFocusedRef.current ||
+        document.activeElement?.tagName === 'INPUT' ||
+        document.activeElement?.tagName === 'TEXTAREA' ||
+        !!document.activeElement?.closest('#chat-overlay-container')
+      ) {
+        return;
+      }
       const code = e.code;
       if (code === 'ShiftLeft'|| code === 'ShiftRight') inputRef.current.shiftUp = false;
       if (code === 'ControlLeft'|| code === 'ControlRight') inputRef.current.shiftDown = false;
@@ -1904,6 +2060,7 @@ export default function App() {
     const handleMouseMove = (e: MouseEvent) => {
       inputRef.current.mouseX = e.clientX;
       inputRef.current.mouseY = e.clientY;
+      inputRef.current.lastPointerType = 'mouse';
 
       // Update pedestrian aim angle if walking (accounting for camera rotation)
       // Only update when mouse is moving directly over the world canvas, not UI buttons!
@@ -1971,6 +2128,7 @@ export default function App() {
     };
 
     const handleTouchMove = (e: TouchEvent) => {
+      inputRef.current.lastPointerType = 'touch';
       if (e.touches.length > 0 && canvas && e.target === canvas) {
         const touch = e.touches[0];
         const player = playerRef.current;
@@ -2005,6 +2163,8 @@ export default function App() {
 
     cleanupListeners = () => {
       window.removeEventListener('resize', handleResize);
+      window.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('blur', handleWindowBlur);
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
       window.removeEventListener('mousemove', handleMouseMove);
@@ -2028,6 +2188,19 @@ export default function App() {
         return;
       }
 
+      // If page is hidden (user switched tabs, is writing prompt in chat, or browser minimized),
+      // hibernate CPU/GPU rendering: update network heartbeat at max 2 Hz and skip canvas draws
+      if (isWindowHibernated) {
+        if (now - lastHibernationTick > 500) {
+          lastHibernationTick = now;
+          if (worldRef.current && playerRef.current) {
+            onlineManager.update(0.5, worldRef.current);
+          }
+        }
+        animationFrameId = requestAnimationFrame(gameLoop);
+        return;
+      }
+
       const frameStart = performance.now();
       const dt = Math.min((now - lastTime) / 1000, 0.05);
       lastTime = now;
@@ -2042,10 +2215,12 @@ export default function App() {
       }
 
       if (worldRef.current && rendererRef.current) {
-        const world = worldRef.current;
-        const player = playerRef.current;
-        const camera = cameraRef.current;
-        const input = inputRef.current;
+        try {
+          const world = worldRef.current;
+          const player = playerRef.current;
+          const camera = cameraRef.current;
+          const input = inputRef.current;
+          world.player = player;
 
         // 0. Update Online Multiplayer Network State & Synchronize Entities
         onlineManager.update(dt, world);
@@ -2143,7 +2318,11 @@ export default function App() {
               camera.targetX = player.x;
               camera.targetY = player.y;
               camera.targetAngle = 0;
-              camera.targetZoom = 1.3 * userZoomFactorRef.current;
+              if (player.insideCarId) {
+                camera.targetZoom = 2.4 * userZoomFactorRef.current;
+              } else {
+                camera.targetZoom = 1.3 * userZoomFactorRef.current;
+              }
             }
           }
 
@@ -2189,6 +2368,37 @@ export default function App() {
               const relX = player.x - bld.x;
               const relY = player.y - bld.y;
 
+              // Dynamically check and update player's inside-apartment status based on physical coordinates inside the building floor
+              const apartmentsList = getCityApartments();
+              const floorApts = apartmentsList.filter(a => a.buildingId === bld.id && a.floor === currentFloor);
+              let insideApt = null;
+              
+              if (bld.type === 'suburban') {
+                insideApt = floorApts[0] || null;
+              } else {
+                for (const apt of floorApts) {
+                  const rm = layout.rooms?.find(r => r.name === `Кв. ${apt.apartmentNumber}` || r.name === `Кв.${apt.apartmentNumber}`);
+                  if (rm) {
+                    if (relX >= rm.x && relX <= rm.x + rm.width && relY >= rm.y && relY <= rm.y + rm.height) {
+                      insideApt = apt;
+                      break;
+                    }
+                  }
+                }
+              }
+
+              if (insideApt) {
+                if (!player.isInsideApartment || player.insideApartmentId !== insideApt.id) {
+                  player.isInsideApartment = true;
+                  player.insideApartmentId = insideApt.id;
+                }
+              } else {
+                if (player.isInsideApartment) {
+                  player.isInsideApartment = false;
+                  player.insideApartmentId = null;
+                }
+              }
+
               // Check if player is standing in ANY elevator zone
               const elevators = (layout.elevators && layout.elevators.length > 0) ? layout.elevators : (layout.elevatorZone ? [layout.elevatorZone] : []);
               const inElevator = elevators.some(el =>
@@ -2205,13 +2415,13 @@ export default function App() {
                 relY >= st.y && relY <= st.y + st.height
               );
 
-              // Check if player is standing in ANY exit zone or near doors on floor 0
+              // Check if player is standing in ANY exit zone on floor 0
               const exits = (layout.exits && layout.exits.length > 0) ? layout.exits : (layout.exitZone ? [layout.exitZone] : []);
               const inExit = exits.some(ex =>
                 ex &&
-                relX >= ex.x - 35 && relX <= ex.x + ex.width + 35 &&
-                relY >= ex.y - 35 && relY <= ex.y + ex.height + 35
-              ) || (currentFloor === 0 && (relY <= 50 || relY >= bld.height - 50 || relX <= 50 || relX >= bld.width - 50));
+                relX >= ex.x - 24 && relX <= ex.x + ex.width + 24 &&
+                relY >= ex.y - 24 && relY <= ex.y + ex.height + 24
+              );
 
               const maxFloors = getBuildingFloorsCount(bld);
               const canGoUpOrDown = inElevator || inStairs;
@@ -2451,13 +2661,51 @@ export default function App() {
           if (veh.isPlayerControlled) {
             player.x = veh.x;
             player.y = veh.y;
-            camera.targetX = veh.x + Math.cos(veh.angle) * (veh.speed * 0.25);
-            camera.targetY = veh.y + Math.sin(veh.angle) * (veh.speed * 0.25);
+
+            const speedAbs = Math.abs(veh.speed);
+            const isReversingCar = veh.speed < -5;
+            const travelAngle = isReversingCar ? veh.angle + Math.PI : veh.angle;
+
+            // 1. Balanced Forward Bias: subtle forward lookahead that keeps player vehicle centered and visible
+            // Rest: 0px, 40 km/h (~150 px/s): ~22px, 80 km/h (~300 px/s): ~45px, 140+ km/h (~500 px/s): ~75px max
+            const forwardDist = Math.min(75, speedAbs * 0.15);
+
+            // 2. Subtle Steering Apex Bias: slight hint into turning arc without shifting vehicle off-center
+            const steer = veh.steerAngle || 0;
+            const lateralDist = steer * Math.min(25, 10 + speedAbs * 0.04);
+
+            // 3. Optional Driver Free Look / Glance: gentle manual peek
+            let lookNormX = 0;
+            let lookNormY = 0;
+
+            if (input.lookOffsetX !== undefined && input.lookOffsetY !== undefined && (input.isTouchLookActive || Math.abs(input.lookOffsetX) > 0.001 || Math.abs(input.lookOffsetY) > 0.001)) {
+              lookNormX = Math.max(-1, Math.min(1, input.lookOffsetX));
+              lookNormY = Math.max(-1, Math.min(1, input.lookOffsetY));
+            } else if (input.lastPointerType === 'mouse') {
+              const halfW = (window.innerWidth || 1920) * 0.5;
+              const halfH = (window.innerHeight || 1080) * 0.5;
+              lookNormX = Math.max(-1, Math.min(1, ((input.mouseX ?? halfW) - halfW) / (halfW || 1)));
+              lookNormY = Math.max(-1, Math.min(1, ((input.mouseY ?? halfH) - halfH) / (halfH || 1)));
+            }
+
+            const driverPeekForward = -lookNormY * 35;
+            const driverPeekSide = lookNormX * 30;
+
+            const totalForward = forwardDist + driverPeekForward;
+            const totalLateral = lateralDist + driverPeekSide;
+
+            const cosA = Math.cos(travelAngle);
+            const sinA = Math.sin(travelAngle);
+            const latCos = -sinA;
+            const latSin = cosA;
+
+            camera.targetX = veh.x + cosA * totalForward + latCos * totalLateral;
+            camera.targetY = veh.y + sinA * totalForward + latSin * totalLateral;
             camera.targetAngle = veh.angle;
 
-            // Dynamic camera zoom: speed zoom out
-            const speedRatio = Math.min(1.0, Math.abs(veh.speed) / 500);
-            camera.targetZoom = (1.05 - speedRatio * 0.35) * userZoomFactorRef.current;
+            // Dynamic camera zoom: smooth wide-angle transition at high speeds to open view naturally
+            const speedRatio = Math.min(1.0, speedAbs / 500);
+            camera.targetZoom = (1.15 - speedRatio * 0.30) * userZoomFactorRef.current;
           }
         }
 
@@ -2832,10 +3080,17 @@ export default function App() {
           }
         }
 
-        // 8.5. Smooth Camera Lerp
-        camera.x += (camera.targetX - camera.x) * 6 * dt;
-        camera.y += (camera.targetY - camera.y) * 6 * dt;
-        camera.zoom += (camera.targetZoom - camera.zoom) * 4 * dt;
+        // 8.5. Smooth Camera Lerp with velocity-responsive tracking
+        if (player.insideCarId) {
+          // Direct rock-solid tracking while inside train eliminates all camera interpolation lag and jitter
+          camera.x = player.x;
+          camera.y = player.y;
+        } else {
+          const camLerpSpeed = player.isInVehicle ? 8.5 : 6.0;
+          camera.x += (camera.targetX - camera.x) * camLerpSpeed * dt;
+          camera.y += (camera.targetY - camera.y) * camLerpSpeed * dt;
+        }
+        camera.zoom += (camera.targetZoom - camera.zoom) * 4.5 * dt;
         if (camera.shakeTimer > 0) camera.shakeTimer = Math.max(0, camera.shakeTimer - dt);
 
         // Active Interactive Hospital Treatment Simulation
@@ -3037,7 +3292,40 @@ export default function App() {
           perfUiTimerRef.current = 0;
           setCurrentPerfStats({ ...performanceStatsRef.current });
         }
+
+        // Blackbox Flight Recorder Telemetry Snapshot (~2 Hz)
+        telemetryTimerRef.current += dt;
+        if (telemetryTimerRef.current >= 0.5) {
+          telemetryTimerRef.current = 0;
+          crashLogger.recordTelemetry({
+            fps: computedFps,
+            playerPos: {
+              x: Math.round(player.x),
+              y: Math.round(player.y),
+              inVehicle: !!player.isInVehicle,
+              vehicleId: player.currentVehicleId,
+              floor: player.currentFloor || 0
+            },
+            entities: {
+              vehicles: world.vehicles.length,
+              pedestrians: world.pedestrians.length,
+              particles: world.particles.length,
+              skidMarks: world.skidMarks?.length || 0,
+              stains: world.stains?.length || 0,
+              groundItems: world.groundItems?.length || 0
+            },
+            audioState: {
+              state: sound.getMuted() ? 'muted' : 'active',
+              engineRunning: !!player.isInVehicle
+            }
+          });
+        }
+      } catch (loopErr) {
+        const errMsg = loopErr instanceof Error ? loopErr.message : String(loopErr);
+        const errStack = loopErr instanceof Error ? loopErr.stack : undefined;
+        crashLogger.recordError('GameLoopError', errMsg, errStack);
       }
+    }
 
       animationFrameId = requestAnimationFrame(gameLoop);
     };
@@ -3057,7 +3345,8 @@ export default function App() {
 
   useEffect(() => {
     const handleKeyActivated = (e: CustomEvent) => {
-      const { apartmentId } = e.detail || {};
+      const detail = e.detail || {};
+      const apartmentId = detail.apartmentId || detail.item?.propertyId;
       const p = playerRef.current;
       if (!p || !apartmentId) return;
       const apt = getApartmentById(apartmentId);
@@ -3210,6 +3499,28 @@ export default function App() {
     const veh = world.vehicles.find((v) => v.id === player.currentVehicleId);
     if (!veh) return;
     veh.heaterMode = mode;
+    sound.playUseItem();
+    setVitalsRefreshTick(t => t + 1);
+  };
+
+  const handleToggleAC = () => {
+    const world = worldRef.current;
+    const player = playerRef.current;
+    if (!world || !player.isInVehicle || !player.currentVehicleId) return;
+    const veh = world.vehicles.find((v) => v.id === player.currentVehicleId);
+    if (!veh) return;
+    veh.acOn = !veh.acOn;
+    sound.playUseItem();
+    setVitalsRefreshTick(t => t + 1);
+  };
+
+  const handleToggleRecirc = () => {
+    const world = worldRef.current;
+    const player = playerRef.current;
+    if (!world || !player.isInVehicle || !player.currentVehicleId) return;
+    const veh = world.vehicles.find((v) => v.id === player.currentVehicleId);
+    if (!veh) return;
+    veh.recircOn = !veh.recircOn;
     sound.playUseItem();
     setVitalsRefreshTick(t => t + 1);
   };
@@ -3560,6 +3871,12 @@ export default function App() {
           return;
         }
 
+        if ((closestVeh as any).isUnderRepair) {
+          sound.playAlert();
+          addPlayerNotification(player, 'Автомобиль на подъемнике! Идут технические работы, вход заблокирован.', 'warning');
+          return;
+        }
+
         closestVeh.steerAngle = typeof closestVeh.steerAngle === 'number'&& Number.isFinite(closestVeh.steerAngle) ? closestVeh.steerAngle : 0;
         closestVeh.angle = typeof closestVeh.angle === 'number'&& Number.isFinite(closestVeh.angle) ? closestVeh.angle : 0;
         closestVeh.speed = typeof closestVeh.speed === 'number'&& Number.isFinite(closestVeh.speed) ? closestVeh.speed : 0;
@@ -3620,9 +3937,96 @@ export default function App() {
 
     const p = playerRef.current;
     const world = worldRef.current;
-    if (!p || !world) return;
+    const camera = cameraRef.current;
+    if (!p || !world || !camera) return;
 
     switch (target.type) {
+      case 'enter_passenger_car': {
+        const carData = target.data?.car || target.data;
+        const door = target.data?.door;
+        const car = carData as RollingStockCar;
+        if (car) {
+          setFadeActive(true);
+          sound.playCarDoor();
+          
+          // Instantly assign inside state so collision physics treats the player as inside carriage
+          p.insideCarId = car.id;
+          world.player = p;
+
+          // Place player in local coordinates relative to the carriage inside the entered vestibule
+          const cos = Math.cos(car.angle);
+          const sin = Math.sin(car.angle);
+          if (door) {
+            p.carLocalX = door.vestibuleLocalX;
+            p.carLocalY = door.vestibuleLocalY;
+          } else {
+            p.carLocalX = car.length / 2 - 19;
+            p.carLocalY = 0;
+          }
+
+          // Immediately compute player world position inside the carriage
+          p.x = car.x + p.carLocalX * cos - p.carLocalY * sin;
+          p.y = car.y + p.carLocalX * sin + p.carLocalY * cos;
+          p.vx = 0;
+          p.vy = 0;
+
+          // Clear any trauma camera shake or panic jitter from standing near tracks
+          camera.shakeTimer = 0;
+          camera.shakeIntensity = 0;
+          camera.x = p.x;
+          camera.y = p.y;
+          camera.targetX = p.x;
+          camera.targetY = p.y;
+          camera.zoom = 2.4 * userZoomFactorRef.current;
+          camera.targetZoom = 2.4 * userZoomFactorRef.current;
+
+          setTimeout(() => {
+            setFadeActive(false);
+          }, 180);
+        }
+        break;
+      }
+
+      case 'exit_passenger_car': {
+        const car = (world.rollingStock || []).find(c => c.id === p.insideCarId);
+        if (car) {
+          setFadeActive(true);
+          sound.playCarDoor();
+          
+          const cos = Math.cos(car.angle);
+          const sin = Math.sin(car.angle);
+          
+          // Exit player to the side of the carriage at that specific vestibule door
+          const exitLocalX = p.carLocalX ?? (car.length / 2 - 19);
+          const exitLocalY = target.data?.exitLocalY ?? ((p.carLocalY ?? 0) <= 0 ? -car.width / 2 - 14 : car.width / 2 + 14);
+
+          p.insideCarId = null;
+          world.player = p;
+
+          p.x = car.x + exitLocalX * cos - exitLocalY * sin;
+          p.y = car.y + exitLocalX * sin + exitLocalY * cos;
+          p.vx = 0;
+          p.vy = 0;
+
+          p.carLocalX = undefined;
+          p.carLocalY = undefined;
+
+          camera.x = p.x;
+          camera.y = p.y;
+          camera.targetX = p.x;
+          camera.targetY = p.y;
+          camera.zoom = 1.3 * userZoomFactorRef.current;
+          camera.targetZoom = 1.3 * userZoomFactorRef.current;
+
+          setTimeout(() => {
+            setFadeActive(false);
+          }, 180);
+        } else {
+          p.insideCarId = null;
+        }
+        break;
+      }
+
       case 'enter_vehicle':
       case 'exit_vehicle':
         handleEnterExitVehicle();
@@ -3649,7 +4053,7 @@ export default function App() {
             let enterY = exitZone.y + exitZone.height / 2;
             if (exitZone.x <= 10) {
               enterX = exitZone.x + exitZone.width + 12;
-            } else if (exitZone.x >= bld.width - 20) {
+            } else if (exitZone.x >= layout.width - 20) {
               enterX = exitZone.x - 12;
             } else if (exitZone.y <= 10) {
               enterY = exitZone.y + exitZone.height + 12;
@@ -3658,8 +4062,8 @@ export default function App() {
             }
             let newPX = bld.x + enterX;
             let newPY = bld.y + enterY;
-            if (!Number.isFinite(newPX)) newPX = bld.x + bld.width / 2;
-            if (!Number.isFinite(newPY)) newPY = bld.y + bld.height / 2;
+            if (!Number.isFinite(newPX)) newPX = bld.x + layout.width / 2;
+            if (!Number.isFinite(newPY)) newPY = bld.y + layout.height / 2;
             p.x = newPX;
             p.y = newPY;
             cameraRef.current.x = newPX;
@@ -3848,12 +4252,14 @@ export default function App() {
       }
 
       case 'building_elevator': {
-        const { bld } = target.data;
+        const { bld, sz } = target.data;
+        const isStairs = (target.actionTitle && target.actionTitle.includes('Лестн')) || (target.detail && target.detail.includes('Лестн'));
         setActiveElevatorMenu({
           bldId: bld.id,
           bldName: bld.nameRu || 'Здание',
           currentFloor: p.currentFloor || 0,
-          totalFloors: bld.floors || 1
+          maxFloors: getBuildingFloorsCount(bld),
+          type: isStairs ? 'stairs' : 'elevator'
         });
         sound.playUseItem();
         break;
@@ -4049,72 +4455,58 @@ export default function App() {
         break;
       }
 
-      case 'apartment_door_enter': {
-        const { apt } = target.data || {};
-        if (!apt) break;
-        if (apt.isLocked) {
-          addPlayerNotification(p, `Дверь заперта! Требуется стальной ключ`, 'warning');
+      case 'gate_open_close': {
+        const { prop, apt } = target.data || {};
+        if (prop) {
+          if (prop.isLocked) {
+            addPlayerNotification(p, 'Заперто на ключ! Сначала отоприте замок.', 'warning');
+            sound.playUseItem();
+            return;
+          }
+          prop.isOpen = !prop.isOpen;
+          const isGate = prop.type === 'cottage_gate';
+          const isWicket = prop.type === 'wicket_gate';
+          const isBarrier = prop.type === 'security_barrier';
+          const name = isGate ? 'Въездные ворота' : (isWicket ? 'Калитка' : (isBarrier ? 'Шлагбаум' : 'Ворота'));
+          addPlayerNotification(p, prop.isOpen ? `${name} распахнуты!` : `${name} закрыты.`, 'info');
           sound.playUseItem();
-          return;
+          setVitalsRefreshTick(t => t + 1);
         }
-        setFadeActive(true);
-        sound.playCarDoor();
-        setTimeout(() => {
-          const bld = world.buildings?.find(b => b.id === apt.buildingId);
-          const baseBldX = bld ? bld.x : 0;
-          const baseBldY = bld ? bld.y : 0;
-          const spawnX = baseBldX + (apt.spawnX ?? 25);
-          const spawnY = baseBldY + (apt.spawnY ?? 75);
-          
-          p.isInsideBuilding = true;
-          p.isInsideApartment = true;
-          p.insideApartmentId = apt.id;
-          p.insideBuildingId = apt.buildingId;
-          p.currentFloor = apt.floor;
-          p.x = spawnX;
-          p.y = spawnY;
-          cameraRef.current.x = spawnX;
-          cameraRef.current.y = spawnY;
-          cameraRef.current.targetX = spawnX;
-          cameraRef.current.targetY = spawnY;
-          addPlayerNotification(p, `Вы вошли в коттедж (${apt.address})`, 'info');
-          setTimeout(() => {
-            setFadeActive(false);
-          }, 150);
-        }, 200);
         break;
       }
 
-      case 'apartment_exit': {
-        const apt = getApartmentById(p.insideApartmentId || '');
-        setFadeActive(true);
-        sound.playCarDoor();
-        setTimeout(() => {
-          p.isInsideApartment = false;
-          p.insideApartmentId = null;
-          if (apt) {
-            const bld = world.buildings?.find(b => b.id === apt.buildingId);
-            const exitX = apt.entranceWorldX ?? (bld ? bld.x + bld.width / 2 : p.x);
-            const exitY = apt.entranceWorldY ?? (bld ? bld.y + bld.height + 16 : p.y + 16);
-            p.x = exitX;
-            p.y = exitY;
-            
-            // If it was a suburban cottage, we also exit building mode entirely
-            if (apt.buildingType === 'suburban') {
-              p.isInsideBuilding = false;
-              p.insideBuildingId = null;
-            }
+      case 'gate_lock_unlock': {
+        const { prop, apt, hasKey } = target.data || {};
+        if (prop) {
+          if (!hasKey) {
+            const detailStr = apt ? ` (${apt.address})` : '';
+            addPlayerNotification(p, `Заперто! Требуется ключ от участка${detailStr}`, 'warning');
+            sound.playUseItem();
+            return;
           }
-          cameraRef.current.x = p.x;
-          cameraRef.current.y = p.y;
-          cameraRef.current.targetX = p.x;
-          cameraRef.current.targetY = p.y;
-          setTimeout(() => {
-            setFadeActive(false);
-          }, 150);
-        }, 200);
+          prop.isLocked = !prop.isLocked;
+          if (prop.isLocked) {
+            prop.isOpen = false; // Locking ensures it's closed
+          }
+          const isGate = prop.type === 'cottage_gate';
+          const isWicket = prop.type === 'wicket_gate';
+          const name = isGate ? 'Ворота' : (isWicket ? 'Калитка' : 'Ограждение');
+          addPlayerNotification(p, prop.isLocked ? `${name} заперты на ключ.` : `${name} отперты!`, prop.isLocked ? 'heal' : 'info');
+          sound.playUseItem();
+          setVitalsRefreshTick(t => t + 1);
+        }
         break;
       }
+
+      case 'gate_locked_nokey': {
+        const { prop, apt } = target.data || {};
+        const detailStr = apt ? ` (${apt.address})` : '';
+        addPlayerNotification(p, `Замок заперт! Требуется ключ от участка${detailStr}`, 'warning');
+        sound.playUseItem();
+        break;
+      }
+
+
 
       case 'furniture_storage': {
         const { bld, currentFloor, furnitureIndex, furnitureType, aptId, customTitle } = target.data || {};
@@ -4277,7 +4669,42 @@ export default function App() {
       }
 
       case 'hand_item': {
-        handleInteractE();
+        const activeHand = p.activeHand || 'right';
+        let currentHand = activeHand;
+        let handItem = currentHand === 'left' ? p.leftHandItem : p.rightHandItem;
+
+        if (!handItem) {
+          const otherHand = activeHand === 'left' ? 'right' : 'left';
+          const otherHandItem = otherHand === 'left' ? p.leftHandItem : p.rightHandItem;
+          if (otherHandItem) {
+            currentHand = otherHand;
+            handItem = otherHandItem;
+            p.activeHand = otherHand;
+          }
+        }
+
+        if (handItem) {
+          if (handItem.isContainer || handItem.itemId === 'wallet' || handItem.itemId === 'plastic_bag') {
+            setIsInventoryOpen(true);
+            sound.playUseItem();
+            addPlayerNotification(p, `Открыт контейнер: ${handItem.nameRu}`, 'info');
+            break;
+          }
+
+          const TOPICAL_ITEMS = ['bandage', 'splint', 'medical_patch', 'antiseptic', 'panthenol_spray', 'spasatel_ointment', 'zelenka', 'iodine', 'diclofenac_gel', 'hydrogen_peroxide'];
+          if ((handItem.category === 'med' && TOPICAL_ITEMS.includes(handItem.itemId)) || (handItem as any).requiresLimbSelection) {
+            setTreatmentModalItem({ index: -1, item: handItem });
+            sound.playUseItem();
+            break;
+          }
+
+          if (handItem.usable) {
+            useHandItemOnPlayer(p, currentHand, world || undefined);
+            sound.resume();
+            setVitalsRefreshTick(t => t + 1);
+            break;
+          }
+        }
         break;
       }
     }
@@ -4621,27 +5048,37 @@ export default function App() {
         const relX = player.x - bld.x;
         const relY = player.y - bld.y;
 
-        // Find elevator zone in the target floor matching player's current section or position
+        // Find elevator or stairs zone in the target floor matching player's current position
         const elevators = (layout.elevators && layout.elevators.length > 0) ? layout.elevators : (layout.elevatorZone ? [layout.elevatorZone] : []);
-        let bestElevator = elevators[0];
-        if (elevators.length > 0) {
-          let minElDist = Infinity;
-          for (const el of elevators) {
-            if (!el) continue;
-            const d = Math.hypot(relX - (el.x + el.width / 2), relY - (el.y + el.height / 2));
-            if (d < minElDist) {
-              minElDist = d;
-              bestElevator = el;
+        const stairsList = (layout.stairs && layout.stairs.length > 0) ? layout.stairs : (layout.stairsZone ? [layout.stairsZone] : []);
+        
+        let targetZones = elevators.filter(e => e && e.x > 0);
+        if (activeElevatorMenu?.type === 'stairs' || targetZones.length === 0) {
+          const validStairs = stairsList.filter(s => s && s.x > 0);
+          if (validStairs.length > 0) {
+            targetZones = validStairs;
+          }
+        }
+        
+        let bestZone = targetZones[0] || layout.elevatorZone || layout.stairsZone;
+        if (targetZones.length > 0) {
+          let minDist = Infinity;
+          for (const zone of targetZones) {
+            if (!zone || zone.x <= 0) continue;
+            const d = Math.hypot(relX - (zone.x + zone.width / 2), relY - (zone.y + zone.height / 2));
+            if (d < minDist) {
+              minDist = d;
+              bestZone = zone;
             }
           }
         }
 
-        const elX = bestElevator?.x ?? (bld.width / 2 - 9);
-        const elY = bestElevator?.y ?? (bld.height / 2 - 9);
-        const elW = bestElevator?.width ?? 18;
-        const elH = bestElevator?.height ?? 18;
-        const destX = bld.x + elX + elW / 2;
-        const destY = bld.y + (elY < bld.height / 2 ? elY + elH + 12 : elY - 12);
+        const zoneX = (bestZone && bestZone.x > 0) ? bestZone.x : (layout.width / 2 - 10);
+        const zoneY = (bestZone && bestZone.y > 0) ? bestZone.y : (layout.height / 2 - 10);
+        const zoneW = bestZone?.width ?? 20;
+        const zoneH = bestZone?.height ?? 20;
+        const destX = bld.x + zoneX + zoneW / 2;
+        const destY = bld.y + (zoneY < layout.height / 2 ? zoneY + zoneH + 14 : zoneY - 14);
         player.x = destX;
         player.y = destY;
 
@@ -5420,6 +5857,25 @@ export default function App() {
               <Sparkles className={`w-3.5 h-3.5 ${isCreativeMode ? 'text-amber-400 animate-pulse': ''}`} />
               <span>Творчество: {isCreativeMode ? 'ВКЛ': 'ВЫКЛ'}</span>
             </button>
+
+            <button
+              id="open-diagnostics-btn"
+              onClick={() => {
+                setIsCrashDiagnosticsOpen(true);
+                setIsQuickMenuOpen(false);
+              }}
+              onTouchEnd={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                setIsCrashDiagnosticsOpen(true);
+                setIsQuickMenuOpen(false);
+              }}
+              className="bg-indigo-950/80 hover:bg-indigo-900 active:bg-indigo-800 border border-indigo-500/50 rounded-lg px-2.5 py-1.5 text-xs text-indigo-200 flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer"
+              title="Диагностика памяти, счетчики сущностей и журнал падений [F2]"
+            >
+              <Activity className="w-3.5 h-3.5 text-indigo-400 animate-pulse" />
+              <span>Лог Сбоев [F2]</span>
+            </button>
           </div>
         )}
       </div>
@@ -6039,14 +6495,15 @@ export default function App() {
             addPlayerNotification(p, 'Недостаточно денег на балансе!', 'warning');
           }
         }}
-        onRepairVehicle={(alreadyPaid) => {
+        onRepairVehicle={(alreadyPaid, customCost) => {
           const p = playerRef.current;
           const w = worldRef.current;
           if (!p || !w) return;
+          const finalCost = typeof customCost === 'number' ? customCost : 300;
           if (!alreadyPaid) {
             const currentCash = getPlayerCash(p);
-            if (currentCash < 300) {
-              addPlayerNotification(p, 'Недостаточно денег для ремонта ($300)', 'warning');
+            if (currentCash < finalCost) {
+              addPlayerNotification(p, `Недостаточно денег для ремонта (${finalCost.toLocaleString()} ₽)`, 'warning');
               return;
             }
           }
@@ -6083,7 +6540,7 @@ export default function App() {
 
           if (targetCar) {
             if (!alreadyPaid) {
-              deductPlayerCash(p, 300);
+              deductPlayerCash(p, finalCost);
             }
             // 1. Reset physical body damage
             targetCar.damage = createDefaultVehicleDamage(targetCar.length, targetCar.width);
@@ -6114,8 +6571,8 @@ export default function App() {
             }
 
             sound.playUseItem();
-            const costText = alreadyPaid ? '': '(-$300)';
-            addPlayerNotification(p, `Автомобиль успешно отремонтирован на подъемнике PIT-STOP!${costText}`, 'heal');
+            const costText = alreadyPaid ? '': `(-${finalCost.toLocaleString()} ₽)`;
+            addPlayerNotification(p, `Автомобиль успешно отремонтирован на подъемнике PIT-STOP! ${costText}`, 'heal');
             setVitalsRefreshTick((t) => t + 1);
             handleCreateSave('Автосохранение');
           } else {
@@ -6214,6 +6671,8 @@ export default function App() {
         onToggleSiren={handleToggleSiren}
         onToggleTurnSignal={toggleTurnSignal}
         onChangeHeaterMode={handleChangeHeaterMode}
+        onToggleAC={handleToggleAC}
+        onToggleRecirc={handleToggleRecirc}
         onToggleEngine={handleToggleEngine}
         onToggleWindow={handleToggleWindow}
         onToggleTrailerHitch={handleToggleTrailerHitch}
@@ -6539,20 +6998,19 @@ export default function App() {
                     const cause = playerRef.current.evacCause || 'general';
                     if (!playerRef.current.inventory) playerRef.current.inventory = [];
                     if (cause === 'fire_burns') {
-                      playerRef.current.inventory.push({ ...ITEM_CATALOG.panthenol_spray, count: 1, maxStack: 6, weight: 0.18 });
-                      playerRef.current.inventory.push({ ...ITEM_CATALOG.spasatel_ointment, count: 1, maxStack: 8, weight: 0.08 });
-                      playerRef.current.inventory.push({ ...ITEM_CATALOG.painkillers, count: 2, maxStack: 10, weight: 0.05 });
+                      addItemToPlayer(playerRef.current, createItem('panthenol_spray', 1));
+                      addItemToPlayer(playerRef.current, createItem('spasatel_ointment', 1));
+                      addItemToPlayer(playerRef.current, createItem('painkillers', 1));
                     } else if (cause === 'fractures_shock') {
-                      playerRef.current.inventory.push({ ...ITEM_CATALOG.splint, stack: 2 });
-                      playerRef.current.inventory.push({ ...ITEM_CATALOG.painkillers, stack: 3 });
-                      playerRef.current.inventory.push({ ...ITEM_CATALOG.antiseptic, stack: 1 });
+                      addItemToPlayer(playerRef.current, createItem('splint', 1));
+                      addItemToPlayer(playerRef.current, createItem('painkillers', 1));
+                      addItemToPlayer(playerRef.current, createItem('antiseptic', 1));
                     } else if (cause === 'blood_loss') {
-                      playerRef.current.inventory.push({ ...ITEM_CATALOG.tourniquet, stack: 2 });
-                      playerRef.current.inventory.push({ ...ITEM_CATALOG.bandage, stack: 2 });
-                      playerRef.current.inventory.push({ ...ITEM_CATALOG.saline_iv, stack: 1 });
+                      addItemToPlayer(playerRef.current, createItem('bandage', 1));
+                      addItemToPlayer(playerRef.current, createItem('bandage', 1));
                     } else {
-                      playerRef.current.inventory.push({ ...ITEM_CATALOG.painkillers, stack: 2 });
-                      playerRef.current.inventory.push({ ...ITEM_CATALOG.bandage, stack: 1 });
+                      addItemToPlayer(playerRef.current, createItem('painkillers', 1));
+                      addItemToPlayer(playerRef.current, createItem('bandage', 1));
                     }
                   }
 
@@ -7093,6 +7551,10 @@ export default function App() {
             setIsPauseMenuOpen(false);
             setIsUserProfileModalOpen(true);
           }}
+          onOpenDiagnostics={() => {
+            setIsPauseMenuOpen(false);
+            setIsCrashDiagnosticsOpen(true);
+          }}
           onExitToMainMenu={() => {
             setIsPauseMenuOpen(false);
             setIsMainMenuOpen(true);
@@ -7119,7 +7581,7 @@ export default function App() {
           onToggleMute={toggleSoundMute}
           settings={settings}
           onUpdateSettings={setSettings}
-          spawnLocations={SPAWN_LOCATIONS}
+          spawnLocations={getAllSpawnLocations(worldRef.current)}
           onOpenOnline={() => {
             setIsOnlineModalOpen(true);
           }}
@@ -7291,6 +7753,63 @@ export default function App() {
         <ChatOverlay
           isChatFocused={isChatFocused}
           onSetChatFocused={setIsChatFocused}
+        />
+      )}
+
+      {/* Crash Alert Toast from Previous Session */}
+      {crashToastReport && (
+        <CrashAlertToast
+          crashReport={crashToastReport}
+          onOpenDiagnostics={() => {
+            setIsCrashDiagnosticsOpen(true);
+            setCrashToastReport(null);
+            crashLogger.dismissPreviousCrashNotification();
+          }}
+          onDismiss={() => {
+            setCrashToastReport(null);
+            crashLogger.dismissPreviousCrashNotification();
+          }}
+        />
+      )}
+
+      {/* Crash Diagnostics & Flight Recorder Modal */}
+      {isCrashDiagnosticsOpen && (
+        <CrashDiagnosticsModal
+          isOpen={isCrashDiagnosticsOpen}
+          onClose={() => setIsCrashDiagnosticsOpen(false)}
+          currentSnapshot={{
+            timestamp: new Date().toLocaleTimeString(),
+            timeMs: Date.now(),
+            fps: fps,
+            playerPos: {
+              x: Math.round(playerRef.current?.x || 0),
+              y: Math.round(playerRef.current?.y || 0),
+              inVehicle: !!playerRef.current?.isInVehicle,
+              vehicleId: playerRef.current?.currentVehicleId || null,
+              floor: playerRef.current?.currentFloor || 0
+            },
+            entities: {
+              vehicles: worldRef.current?.vehicles?.length || 0,
+              pedestrians: worldRef.current?.pedestrians?.length || 0,
+              particles: worldRef.current?.particles?.length || 0,
+              skidMarks: worldRef.current?.skidMarks?.length || 0,
+              stains: worldRef.current?.stains?.length || 0,
+              groundItems: worldRef.current?.groundItems?.length || 0
+            }
+          }}
+          onEmergencyPurge={() => {
+            if (worldRef.current) {
+              worldRef.current.particles = [];
+              if (worldRef.current.stains) {
+                worldRef.current.stains = worldRef.current.stains.slice(0, 30);
+              }
+              if (worldRef.current.skidMarks) {
+                worldRef.current.skidMarks = worldRef.current.skidMarks.slice(0, 100);
+              }
+            }
+            sound.purgeAudioGraph();
+            clearInteriorCanvasCache();
+          }}
         />
       )}
     </div>

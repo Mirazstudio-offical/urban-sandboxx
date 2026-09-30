@@ -39,6 +39,7 @@ import { renderStreetProp, renderTallStreetProp } from './propRenderer';
 import { GasStationRenderer } from './gasStationRenderer';
 import { GarageCooperativeRenderer } from './garageCooperativeRenderer';
 import { RailwayRenderer } from './railwayRenderer';
+import { RollingStockRenderer } from './rollingStockRenderer';
 import { RailwaySignalingSystem } from './railwaySignalingSystem';
 import { WaterHoseRenderer } from './waterHoseRenderer';
 import { TowRopeRenderer } from './towRopeRenderer';
@@ -347,14 +348,15 @@ export class GameRenderer {
       // Find the specific building and render its interior + outside world through windows
       const bld = insideBld;
       if (bld) {
+        const layout = getBuildingLayout(bld, player.currentFloor || 0, player.insideApartmentId);
         const windows: { x: number; y: number; side: 'top' | 'bottom' | 'left' | 'right' }[] = [];
-        for (let x = 30; x < bld.width - 30; x += 40) {
+        for (let x = 30; x < layout.width - 30; x += 40) {
           windows.push({ x, y: 0, side: 'top' });
-          windows.push({ x, y: bld.height, side: 'bottom' });
+          windows.push({ x, y: layout.height, side: 'bottom' });
         }
-        for (let y = 30; y < bld.height - 30; y += 40) {
+        for (let y = 30; y < layout.height - 30; y += 40) {
           windows.push({ x: 0, y, side: 'left' });
-          windows.push({ x: bld.width, y, side: 'right' });
+          windows.push({ x: layout.width, y, side: 'right' });
         }
 
         // Filter windows: only show outside view when player is right next to an outer window and looking out
@@ -463,8 +465,8 @@ export class GameRenderer {
 
         // 2. Render building interior itself on top
         const floor = player.currentFloor ?? 0;
-        const layout = getBuildingLayout(bld, floor, player.insideApartmentId || undefined);
-        renderBuildingInterior(ctx, bld, layout, player, timeHour);
+        const floorLayout = getBuildingLayout(bld, floor, player.insideApartmentId || undefined);
+        renderBuildingInterior(ctx, bld, floorLayout, player, timeHour);
 
         // 3. Render ground items on the interior floor
         if (world.groundItems && world.groundItems.length > 0) {
@@ -574,15 +576,15 @@ export class GameRenderer {
     // 12. Pedestrians (with Umbrellas during Rain)
     this.renderPedestrians(visiblePedestrians, world);
 
-    // 13. Player on Foot (if not inside vehicle)
-    if (!player.isInVehicle) {
+    // 13. Player on Foot (if not inside vehicle and not inside train carriage)
+    if (!player.isInVehicle && !player.insideCarId) {
       this.renderPlayerPedestrian(player);
     }
 
     // 13b. Remote Players on Foot
     if (remotePlayers && remotePlayers.length > 0) {
       for (const rp of remotePlayers) {
-        if (!rp.isInVehicle) {
+        if (!rp.isInVehicle && !(rp as any).insideCarId) {
           this.renderPlayerPedestrian(rp as unknown as Player, true);
         }
       }
@@ -595,7 +597,12 @@ export class GameRenderer {
     this.renderVehicles(visibleVehicles, nightAlpha, camera.gridMode);
 
     // 14-rail. Railway Rolling Stock (Locomotives, passenger coaches, freight cars)
-    RailwayRenderer.renderRollingStock(this.ctx, world, minX, minY, maxX, maxY, nightAlpha);
+    RailwayRenderer.renderRollingStock(this.ctx, world, minX, minY, maxX, maxY, nightAlpha, player);
+
+    // 14-rail-player. Render Player inside train carriage on top of carriage interior floor
+    if (player.insideCarId) {
+      this.renderPlayerPedestrian(player);
+    }
 
     // 14b. Gas Station Fuel Hoses (connected to hands or vehicle filler caps)
     GasStationRenderer.renderFuelHoses(this.ctx, world, player);
@@ -2009,25 +2016,88 @@ export class GameRenderer {
         ctx.fill();
 
       } else if (stain.type === 'sand') {
-        // Realistic silica sand mound / absorbent layer on asphalt
-        const grad = safeRadialGradient(ctx, -rx * 0.1, -ry * 0.1, 0, 0, 0, rx);
-        grad.addColorStop(0, `rgba(217, 119, 6, ${stainAlpha * 0.95})`); // Dense warm tan-amber core
-        grad.addColorStop(0.5, `rgba(234, 179, 8, ${stainAlpha * 0.85})`); // Silica yellow-golden body
-        grad.addColorStop(0.8, `rgba(254, 240, 138, ${stainAlpha * 0.5})`); // Fine sand dusting rim
-        grad.addColorStop(1, `rgba(254, 240, 138, 0)`);
+        // --- 1. Soft bottom-right drop shadow (3D height projection) ---
+        ctx.save();
+        ctx.translate(rx * 0.08, ry * 0.12);
+        ctx.fillStyle = `rgba(15, 23, 42, ${stainAlpha * 0.5})`;
+        this.drawOrganicBlob(ctx, rx * 1.02, ry * 1.02, seed);
+        ctx.fill();
+        ctx.restore();
 
-        ctx.fillStyle = grad;
+        // --- 2. Main volumetric sand cone slope gradient (from shadow to light) ---
+        // Shifting peak center slightly top-left to simulate light from top-left
+        const peakX = -rx * 0.15;
+        const peakY = -ry * 0.15;
+        const mainGrad = safeRadialGradient(ctx, peakX, peakY, 2, peakX, peakY, rx * 1.1);
+        
+        // Dark steep shadow side, mid-tones, lit golden peak
+        mainGrad.addColorStop(0, `rgba(254, 240, 138, ${stainAlpha * 1.0})`); // Lit peak tip (bright silica yellow)
+        mainGrad.addColorStop(0.15, `rgba(234, 179, 8, ${stainAlpha * 0.95})`); // Golden warm peak slope
+        mainGrad.addColorStop(0.4, `rgba(217, 119, 6, ${stainAlpha * 0.92})`);  // Warm amber mid-slope
+        mainGrad.addColorStop(0.7, `rgba(146, 64, 14, ${stainAlpha * 0.88})`);  // Darker base slope shadow
+        mainGrad.addColorStop(0.9, `rgba(120, 53, 4, ${stainAlpha * 0.55})`);  // Thin dust scattering border
+        mainGrad.addColorStop(1, `rgba(120, 53, 4, 0)`);
+
+        ctx.fillStyle = mainGrad;
         this.drawOrganicBlob(ctx, rx, ry, seed);
         ctx.fill();
 
-        // Subtle grainy texture speckles
-        ctx.fillStyle = `rgba(180, 83, 9, ${stainAlpha * 0.4})`;
-        for (let s = 0; s < 14; s++) {
-          const angle = (s * 2.39996) + seed;
-          const rDist = (Math.sin(s * 1.7 + seed) * 0.4 + 0.5) * rx * 0.7;
-          const sx = Math.cos(angle) * rDist;
-          const sy = Math.sin(angle) * rDist;
-          ctx.fillRect(sx - 1, sy - 1, 2, 2);
+        // --- 3. Steepness height ridges (concentric bevel circles to define depth) ---
+        ctx.strokeStyle = `rgba(146, 64, 14, ${stainAlpha * 0.35})`;
+        ctx.lineWidth = 1.5;
+        for (const rFactor of [0.35, 0.65]) {
+          ctx.beginPath();
+          // Offset concentric rings toward the top-left peak
+          safeEllipse(
+            ctx, 
+            peakX * (1 - rFactor), 
+            peakY * (1 - rFactor), 
+            rx * rFactor, 
+            ry * rFactor, 
+            0, 
+            0, 
+            Math.PI * 2
+          );
+          ctx.stroke();
+        }
+
+        // --- 4. Light-side highlight on peak (top-left glint of sand mound) ---
+        const peakGrad = safeRadialGradient(ctx, peakX, peakY, 0, peakX, peakY, rx * 0.4);
+        peakGrad.addColorStop(0, `rgba(255, 255, 255, ${stainAlpha * 0.6})`);
+        peakGrad.addColorStop(0.5, `rgba(254, 240, 138, ${stainAlpha * 0.3})`);
+        peakGrad.addColorStop(1, `rgba(254, 240, 138, 0)`);
+        ctx.fillStyle = peakGrad;
+        ctx.beginPath();
+        safeEllipse(ctx, peakX, peakY, rx * 0.35, ry * 0.35, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // --- 5. Volumetric grain rendering (heavy grain scattering for physical texture) ---
+        // Drawing grains with height-based perspective (dense at the center/top, scattered at the edges)
+        for (let s = 0; s < 45; s++) {
+          const randAngle = (s * 2.39996) + seed;
+          // Distribute grains with a bias toward the peak using square root
+          const progress = Math.pow(Math.sin(s * 7.9 + seed) * 0.5 + 0.5, 1.5);
+          const rDist = progress * rx * 0.9;
+          
+          // Shift grain coordinate to align with peak coordinates
+          const gx = Math.cos(randAngle) * rDist + (peakX * (1 - progress));
+          const gy = Math.sin(randAngle) * rDist + (peakY * (1 - progress));
+          
+          // Choose colors depending on light angle: light grains on left-top, dark grains on shadow side
+          let color = `rgba(254, 240, 138, ${stainAlpha * 0.85})`; // mid yellow
+          const leftTopBias = gx < 0 && gy < 0;
+          
+          if (leftTopBias) {
+            // Bright white or bright yellow grains reflecting direct light
+            color = Math.random() > 0.5 ? `rgba(255, 255, 255, ${stainAlpha * 0.9})` : `rgba(254, 243, 199, ${stainAlpha * 0.9})`;
+          } else {
+            // Dark brown/amber shade grains
+            color = Math.random() > 0.5 ? `rgba(180, 83, 9, ${stainAlpha * 0.75})` : `rgba(120, 53, 4, ${stainAlpha * 0.8})`;
+          }
+          
+          const grainSize = Math.random() > 0.65 ? 1.5 : 1.0;
+          ctx.fillStyle = color;
+          ctx.fillRect(gx - grainSize / 2, gy - grainSize / 2, grainSize, grainSize);
         }
 
       } else if (stain.type === 'water') {
@@ -7413,22 +7483,31 @@ export class GameRenderer {
     // Speech bubble
     if (bubbleText && bubbleText.trim()) {
       ctx.font = 'bold 9.5px sans-serif';
-      const words = bubbleText.split(' ');
+      // Sanitize and cap overhead bubble text to prevent canvas stalls on long prompts
+      const trimmedText = bubbleText.trim();
+      const displayBubbleText = trimmedText.length > 120 ? trimmedText.slice(0, 117) + '...' : trimmedText;
+      const words = displayBubbleText.split(/\s+/);
       const lines: string[] = [];
       let curLine = '';
 
       for (const w of words) {
-        if ((curLine + ' ' + w).trim().length > 20) {
+        if ((curLine + ' ' + w).trim().length > 22) {
           if (curLine) lines.push(curLine.trim());
           curLine = w;
         } else {
           curLine += ' ' + w;
         }
+        if (lines.length >= 4) break;
       }
-      if (curLine) lines.push(curLine.trim());
+      if (curLine && lines.length < 4) lines.push(curLine.trim());
+      if (lines.length === 0) lines.push(displayBubbleText.slice(0, 22));
 
       const lineH = 12;
-      const maxLineW = Math.max(...lines.map((l) => ctx.measureText(l).width), 24);
+      let maxLineW = 24;
+      for (const l of lines) {
+        const w = ctx.measureText(l).width;
+        if (w > maxLineW) maxLineW = w;
+      }
       const pad = 6;
       const bubbleW = maxLineW + pad * 2;
       const bubbleH = lines.length * lineH + pad * 2;
@@ -8169,64 +8248,117 @@ export class GameRenderer {
         renderTractorFrontWheel(-1);
 
       } else if (isSoloMoto) {
-        // SOLO MOTORCYCLE: 2 Inline Centerline Wheels
-        const motoWheelL = car.type === 'moped_soviet' ? 6.5 : (car.type === 'moto_sport' || car.type === 'moto_chopper' ? 8.2 : 7.5);
-        const motoWheelW = car.type === 'moped_soviet' ? 1.8 : (car.type === 'moto_sport' ? 3.4 : (car.type === 'moto_chopper' ? 3.6 : 2.4));
-        
-        // Rear Wheel
+        // SOLO MOTORCYCLE: High-Fidelity Prototype Wheels (Spoke / Racing Alloy Wheels)
+        const isSport = car.type === 'moto_sport';
+        const isChopper = car.type === 'moto_chopper';
+        const isMoped = car.type === 'moped_soviet';
+
+        const frontWheelL = isMoped ? 6.5 : (isChopper ? 9.2 : (isSport ? 7.6 : 8.0));
+        const frontWheelW = isMoped ? 1.6 : (isChopper ? 2.0 : (isSport ? 2.6 : 2.2));
+        const rearWheelL = isMoped ? 6.5 : (isChopper ? 8.2 : (isSport ? 8.4 : 8.0));
+        const rearWheelW = isMoped ? 1.8 : (isChopper ? 3.8 : (isSport ? 3.8 : 2.5));
+
+        // Rear Wheel (Inline centerline)
         const rearWheelX = -halfL * 0.65;
         const [drwx, drwy] = deform(rearWheelX, 0);
+        ctx.save();
+        ctx.translate(drwx, drwy);
+        // Black rubber tire with tread
         ctx.fillStyle = '#0f172a';
-        ctx.fillRect(drwx - motoWheelL / 2, drwy - motoWheelW / 2, motoWheelL, motoWheelW);
-        ctx.fillStyle = '#cbd5e1';
-        ctx.fillRect(drwx - motoWheelL / 2 + 1.5, drwy - motoWheelW / 2 + 0.4, motoWheelL - 3, motoWheelW - 0.8);
+        ctx.fillRect(-rearWheelL / 2, -rearWheelW / 2, rearWheelL, rearWheelW);
+        if (isSport) {
+          // Lightweight racing alloy mag rim with gold chain on left & brake disc on right
+          ctx.fillStyle = '#1e293b';
+          ctx.fillRect(-rearWheelL / 2 + 1.2, -rearWheelW / 2 + 0.6, rearWheelL - 2.4, rearWheelW - 1.2);
+          ctx.fillStyle = '#eab308'; // Gold chain sprocket
+          ctx.fillRect(-rearWheelL / 2 + 1.0, -rearWheelW / 2 + 0.2, rearWheelL - 2.0, 0.6);
+          ctx.fillStyle = '#cbd5e1'; // Drilled steel brake disc
+          ctx.fillRect(-rearWheelL / 2 + 1.5, rearWheelW / 2 - 0.8, rearWheelL - 3.0, 0.6);
+        } else {
+          // Chrome/Silver Spoke Wheel Rim with center hub
+          ctx.fillStyle = isChopper ? '#f8fafc' : '#cbd5e1';
+          ctx.fillRect(-rearWheelL / 2 + 1.2, -rearWheelW / 2 + 0.4, rearWheelL - 2.4, rearWheelW - 0.8);
+          ctx.fillStyle = '#0f172a'; // Center hub
+          ctx.fillRect(-1.2, -rearWheelW / 2 + 0.6, 2.4, rearWheelW - 1.2);
+          // Spoke cross pattern
+          ctx.strokeStyle = '#ffffff';
+          ctx.lineWidth = 0.5;
+          ctx.beginPath();
+          ctx.moveTo(-rearWheelL / 2 + 1.8, 0);
+          ctx.lineTo(rearWheelL / 2 - 1.8, 0);
+          ctx.stroke();
+        }
+        ctx.restore();
 
         // Front Wheel (Steered with Handlebars)
-        const frontWheelX = halfL * 0.70;
+        const frontWheelX = isChopper ? (halfL * 0.82) : (halfL * 0.70);
         const [dfwx, dfwy] = deform(frontWheelX, 0);
         ctx.save();
         ctx.translate(dfwx, dfwy);
         ctx.rotate(car.steerAngle);
+        // Rubber tire
         ctx.fillStyle = '#0f172a';
-        ctx.fillRect(-motoWheelL / 2, -motoWheelW / 2, motoWheelL, motoWheelW);
-        ctx.fillStyle = '#cbd5e1';
-        ctx.fillRect(-motoWheelL / 2 + 1.5, -motoWheelW / 2 + 0.4, motoWheelL - 3, motoWheelW - 0.8);
+        ctx.fillRect(-frontWheelL / 2, -frontWheelW / 2, frontWheelL, frontWheelW);
+        if (isSport) {
+          // Dark alloy racing rim + twin floating drilled brake discs with gold Brembo calipers
+          ctx.fillStyle = '#1e293b';
+          ctx.fillRect(-frontWheelL / 2 + 1.2, -frontWheelW / 2 + 0.5, frontWheelL - 2.4, frontWheelW - 1.0);
+          ctx.fillStyle = '#cbd5e1'; // Left & right brake discs
+          ctx.fillRect(-frontWheelL / 2 + 1.5, -frontWheelW / 2 + 0.2, frontWheelL - 3.0, 0.5);
+          ctx.fillRect(-frontWheelL / 2 + 1.5, frontWheelW / 2 - 0.7, frontWheelL - 3.0, 0.5);
+          ctx.fillStyle = '#eab308'; // Gold Brembo calipers
+          ctx.fillRect(0, -frontWheelW / 2, 1.8, 0.7);
+          ctx.fillRect(0, frontWheelW / 2 - 0.7, 1.8, 0.7);
+        } else {
+          // Classic Chrome Spoke Rim & Hub
+          ctx.fillStyle = isChopper ? '#f8fafc' : '#cbd5e1';
+          ctx.fillRect(-frontWheelL / 2 + 1.2, -frontWheelW / 2 + 0.4, frontWheelL - 2.4, frontWheelW - 0.8);
+          ctx.fillStyle = '#0f172a';
+          ctx.fillRect(-1.0, -frontWheelW / 2 + 0.6, 2.0, frontWheelW - 1.2);
+          ctx.strokeStyle = '#ffffff';
+          ctx.lineWidth = 0.5;
+          ctx.beginPath();
+          ctx.moveTo(-frontWheelL / 2 + 1.6, 0);
+          ctx.lineTo(frontWheelL / 2 - 1.6, 0);
+          ctx.stroke();
+        }
         ctx.restore();
 
       } else if (isUralSidecar) {
-        // URAL WITH SIDECAR: 3 Wheels
-        const bikeY = -halfW * 0.45;
-        const motoWheelL = 7.8;
+        // URAL WITH SIDECAR: 3 Authentic Soviet Spoke Wheels
+        const bikeY = -halfW * 0.44;
+        const motoWheelL = 8.0;
         const motoWheelW = 2.6;
 
-        // Bike Rear Wheel
-        const rearWheelX = -halfL * 0.65;
-        const [drwx, drwy] = deform(rearWheelX, bikeY);
-        ctx.fillStyle = '#0f172a';
-        ctx.fillRect(drwx - motoWheelL / 2, drwy - motoWheelW / 2, motoWheelL, motoWheelW);
-        ctx.fillStyle = '#cbd5e1';
-        ctx.fillRect(drwx - motoWheelL / 2 + 1.5, drwy - motoWheelW / 2 + 0.5, motoWheelL - 3, motoWheelW - 1.0);
+        const renderUralSpokeWheel = (wx: number, wy: number, isSteered: boolean) => {
+          const [dwx, dwy] = deform(wx, wy);
+          ctx.save();
+          ctx.translate(dwx, dwy);
+          if (isSteered) ctx.rotate(car.steerAngle);
+          // Dark rubber tire
+          ctx.fillStyle = '#0f172a';
+          ctx.fillRect(-motoWheelL / 2, -motoWheelW / 2, motoWheelL, motoWheelW);
+          // Steel/Chrome spoke rim
+          ctx.fillStyle = '#cbd5e1';
+          ctx.fillRect(-motoWheelL / 2 + 1.2, -motoWheelW / 2 + 0.4, motoWheelL - 2.4, motoWheelW - 0.8);
+          // Black drum brake center hub
+          ctx.fillStyle = '#1e293b';
+          ctx.fillRect(-1.4, -motoWheelW / 2 + 0.6, 2.8, motoWheelW - 1.2);
+          ctx.strokeStyle = '#f8fafc';
+          ctx.lineWidth = 0.5;
+          ctx.beginPath();
+          ctx.moveTo(-motoWheelL / 2 + 1.8, 0);
+          ctx.lineTo(motoWheelL / 2 - 1.8, 0);
+          ctx.stroke();
+          ctx.restore();
+        };
 
-        // Bike Front Wheel (Steered)
-        const frontWheelX = halfL * 0.70;
-        const [dfwx, dfwy] = deform(frontWheelX, bikeY);
-        ctx.save();
-        ctx.translate(dfwx, dfwy);
-        ctx.rotate(car.steerAngle);
-        ctx.fillStyle = '#0f172a';
-        ctx.fillRect(-motoWheelL / 2, -motoWheelW / 2, motoWheelL, motoWheelW);
-        ctx.fillStyle = '#cbd5e1';
-        ctx.fillRect(-motoWheelL / 2 + 1.5, -motoWheelW / 2 + 0.5, motoWheelL - 3, motoWheelW - 1.0);
-        ctx.restore();
-
-        // Sidecar Wheel
-        const sidecarWheelX = -halfL * 0.20;
-        const sidecarWheelY = halfW * 0.75;
-        const [dswx, dswy] = deform(sidecarWheelX, sidecarWheelY);
-        ctx.fillStyle = '#0f172a';
-        ctx.fillRect(dswx - motoWheelL / 2, dswy - motoWheelW / 2, motoWheelL, motoWheelW);
-        ctx.fillStyle = '#cbd5e1';
-        ctx.fillRect(dswx - motoWheelL / 2 + 1.5, dswy - motoWheelW / 2 + 0.5, motoWheelL - 3, motoWheelW - 1.0);
+        // 1. Bike Rear Wheel
+        renderUralSpokeWheel(-halfL * 0.65, bikeY, false);
+        // 2. Bike Front Wheel (Steered)
+        renderUralSpokeWheel(halfL * 0.70, bikeY, true);
+        // 3. Sidecar Wheel
+        renderUralSpokeWheel(-halfL * 0.20, halfW * 0.76, false);
 
       } else if (isThreeAxle) {
         // Dual tandem rear axles (6x4 / 6x6)
@@ -8454,8 +8586,8 @@ export class GameRenderer {
         renderSteeredWheel(frontAxleX, trackY - wheelW / 2);
       }
 
-      // Now draw body shell with high-fidelity softbody spline contour (skip for road machinery which has articulated sections)
-      if (!isRoadMachinery(car.type)) {
+      // Now draw body shell with high-fidelity softbody spline contour (skip for road machinery and motorcycles which have dedicated multi-component architecture)
+      if (!isRoadMachinery(car.type) && !isSoloMoto && !isUralSidecar) {
         ctx.fillStyle = car.color;
         ctx.beginPath();
         traceSoftbodyPath(ctx, bodyPoly, dmg.deformedVertices);
@@ -8672,18 +8804,24 @@ export class GameRenderer {
         if (isReversing) {
           ctx.fillStyle = '#ffffff';
           ctx.fillRect(rx - 1, ry - 1, 2, 2);
-          ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
-          ctx.beginPath(); ctx.arc(rx, ry, 5, 0, Math.PI * 2); ctx.fill();
-        } else if (isBraking) {
-          ctx.fillStyle = '#ef4444';
-          ctx.fillRect(rx - 1, ry - 1, 2, 2);
-          ctx.fillStyle = 'rgba(239, 68, 68, 0.55)';
+          ctx.fillStyle = 'rgba(255, 255, 255, 0.65)';
           ctx.beginPath(); ctx.arc(rx, ry, 7, 0, Math.PI * 2); ctx.fill();
+        } else if (isBraking) {
+          // Intense automotive brake light with rich glow and specular core
+          ctx.fillStyle = '#ffffff';
+          ctx.fillRect(rx - 1, ry - 1, 2, 2);
+          ctx.fillStyle = '#ef4444';
+          ctx.beginPath(); ctx.arc(rx, ry, 3.2, 0, Math.PI * 2); ctx.fill();
+          // High-contrast optical halo for instant driver reaction even in peripheral view
+          ctx.fillStyle = 'rgba(239, 68, 68, 0.72)';
+          ctx.beginPath(); ctx.arc(rx, ry, 9, 0, Math.PI * 2); ctx.fill();
+          ctx.fillStyle = 'rgba(254, 202, 202, 0.40)';
+          ctx.beginPath(); ctx.arc(rx, ry, 4.5, 0, Math.PI * 2); ctx.fill();
         } else if (isNightRunning) {
           ctx.fillStyle = '#ef4444';
           ctx.fillRect(rx - 1, ry - 1, 2, 2);
-          ctx.fillStyle = 'rgba(185, 28, 28, 0.22)';
-          ctx.beginPath(); ctx.arc(rx, ry, 3.8, 0, Math.PI * 2); ctx.fill();
+          ctx.fillStyle = 'rgba(220, 38, 38, 0.35)';
+          ctx.beginPath(); ctx.arc(rx, ry, 5.0, 0, Math.PI * 2); ctx.fill();
         } else {
           ctx.fillStyle = '#dc2626';
           ctx.fillRect(rx - 1, ry - 1, 2, 2);
@@ -10307,8 +10445,8 @@ export class GameRenderer {
       }
 
       const isHighBeam = car.headlightMode === 'high';
-      const beamReach = (isHighBeam ? 360 : 230) * fogFactor;
-      const beamSpreadWidth = (isHighBeam ? 85 : 56) * fogFactor;
+      const beamReach = (isHighBeam ? 480 : 310) * fogFactor;
+      const beamSpreadWidth = (isHighBeam ? 115 : 75) * fogFactor;
       const dmg = car.damage || { leftHeadlightBroken: false, rightHeadlightBroken: false, frontCrumple: 0, rearCrumple: 0, leftDent: 0, rightDent: 0, frontLeftDent: 0, frontRightDent: 0, rearLeftDent: 0, rearRightDent: 0 };
       
       const fc = Math.min(14, dmg.frontCrumple || 0);
@@ -10392,11 +10530,10 @@ export class GameRenderer {
             originY + sinA * ctrlDist + cosA * (beamSpreadWidth * 0.65),
             endLeftX, endLeftY
           );
-          lCtx.arc(
-            originX, originY, beamReach,
-            Math.atan2(endLeftY - originY, endLeftX - originX),
-            Math.atan2(endRightY - originY, endRightX - originX),
-            true
+          lCtx.bezierCurveTo(
+            endLeftX + cosA * 25, endLeftY + sinA * 25,
+            endRightX + cosA * 25, endRightY + sinA * 25,
+            endRightX, endRightY
           );
           lCtx.quadraticCurveTo(
             originX + cosA * ctrlDist + sinA * (beamSpreadWidth * 0.65),
@@ -10405,18 +10542,18 @@ export class GameRenderer {
           );
           lCtx.closePath();
 
-          // Multi-step smooth polynomial gradient decay (zero harsh edges, seamlessly blending with ambient night)
+          // Multi-step smooth polynomial gradient decay with soft penumbra boundary
           const beamGrad = lCtx.createRadialGradient(
             originX, originY, 0,
             originX + cosA * (beamReach * 0.35),
             originY + sinA * (beamReach * 0.35),
             beamReach
           );
-          beamGrad.addColorStop(0.00, 'rgba(0, 0, 0, 0.88)');
-          beamGrad.addColorStop(0.20, 'rgba(0, 0, 0, 0.76)');
-          beamGrad.addColorStop(0.48, 'rgba(0, 0, 0, 0.46)');
-          beamGrad.addColorStop(0.75, 'rgba(0, 0, 0, 0.18)');
-          beamGrad.addColorStop(0.92, 'rgba(0, 0, 0, 0.04)');
+          beamGrad.addColorStop(0.00, 'rgba(0, 0, 0, 0.90)');
+          beamGrad.addColorStop(0.18, 'rgba(0, 0, 0, 0.78)');
+          beamGrad.addColorStop(0.45, 'rgba(0, 0, 0, 0.46)');
+          beamGrad.addColorStop(0.72, 'rgba(0, 0, 0, 0.16)');
+          beamGrad.addColorStop(0.88, 'rgba(0, 0, 0, 0.03)');
           beamGrad.addColorStop(1.00, 'rgba(0, 0, 0, 0.00)');
 
           lCtx.fillStyle = beamGrad;
@@ -10479,20 +10616,25 @@ export class GameRenderer {
           beamGrad.addColorStop(0.7, 'rgba(0, 0, 0, 0.20)');
           beamGrad.addColorStop(1.0, 'rgba(0, 0, 0, 0)');
 
+          // Multi-point parabolic fog cone without harsh triangular lines
           lCtx.fillStyle = beamGrad;
           lCtx.beginPath();
           lCtx.moveTo(lx, ly);
           const endLX = lx + cosA * fogBeamLen;
           const endLY = ly + sinA * fogBeamLen;
           lCtx.quadraticCurveTo(
-            lx + cosA * (fogBeamLen * 0.4) - sinA * (fogSpread * 0.6),
-            ly + sinA * (fogBeamLen * 0.4) + cosA * (fogSpread * 0.6),
+            lx + cosA * (fogBeamLen * 0.4) - sinA * (fogSpread * 0.55),
+            ly + sinA * (fogBeamLen * 0.4) + cosA * (fogSpread * 0.55),
             endLX - sinA * fogSpread, endLY + cosA * fogSpread
           );
-          lCtx.arc(lx, ly, fogBeamLen, Math.atan2(sinA * fogBeamLen + cosA * fogSpread, cosA * fogBeamLen - sinA * fogSpread), Math.atan2(sinA * fogBeamLen - cosA * fogSpread, cosA * fogBeamLen + sinA * fogSpread), true);
+          lCtx.bezierCurveTo(
+            endLX + cosA * 15 - sinA * (fogSpread * 0.5), endLY + sinA * 15 + cosA * (fogSpread * 0.5),
+            endLX + cosA * 15 + sinA * (fogSpread * 0.5), endLY + sinA * 15 - cosA * (fogSpread * 0.5),
+            endLX + sinA * fogSpread, endLY - cosA * fogSpread
+          );
           lCtx.quadraticCurveTo(
-            lx + cosA * (fogBeamLen * 0.4) + sinA * (fogSpread * 0.6),
-            ly + sinA * (fogBeamLen * 0.4) - cosA * (fogSpread * 0.6),
+            lx + cosA * (fogBeamLen * 0.4) + sinA * (fogSpread * 0.55),
+            ly + sinA * (fogBeamLen * 0.4) - cosA * (fogSpread * 0.55),
             lx, ly
           );
           lCtx.closePath();
@@ -10838,6 +10980,9 @@ export class GameRenderer {
 
     // G. Railway Signal Lights (ISI focused directional cones and optic glow cutouts)
     RailwaySignalingSystem.renderLightmap(lCtx, world, minX, minY, maxX, maxY, nightAlpha);
+
+    // H. Rolling Stock Dynamic Light Cutouts (Projector searchlights, buffer lights, and passenger windows)
+    RollingStockRenderer.renderLightmapCutouts(lCtx, world, minX, minY, maxX, maxY, effectiveAlpha, fogFactor);
 
     lCtx.restore();
 
@@ -11185,18 +11330,31 @@ export class GameRenderer {
             const fogMistAlpha = (isFog ? 0.06 : 0.03) * weatherTransition;
 
             const fogGrad = ctx.createRadialGradient(lx, ly, 0, lx + cosA * (fogBeamLen * 0.4), ly + sinA * (fogBeamLen * 0.4), fogBeamLen);
-            fogGrad.addColorStop(0, `rgba(255, 235, 140, ${fogMistAlpha})`);
-            fogGrad.addColorStop(0.5, `rgba(255, 225, 100, ${fogMistAlpha * 0.3})`);
-            fogGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+            fogGrad.addColorStop(0.00, `rgba(255, 235, 140, ${fogMistAlpha})`);
+            fogGrad.addColorStop(0.40, `rgba(255, 225, 100, ${fogMistAlpha * 0.35})`);
+            fogGrad.addColorStop(0.80, `rgba(255, 215, 80, ${fogMistAlpha * 0.08})`);
+            fogGrad.addColorStop(1.00, 'rgba(0, 0, 0, 0)');
 
             ctx.fillStyle = fogGrad;
             ctx.beginPath();
             ctx.moveTo(lx, ly);
             const endLX = lx + cosA * fogBeamLen;
             const endLY = ly + sinA * fogBeamLen;
-            ctx.lineTo(endLX - sinA * fogBeamSpread, endLY + cosA * fogBeamSpread);
-            ctx.arc(lx, ly, fogBeamLen, Math.atan2(sinA * fogBeamLen + cosA * fogSpread, cosA * fogBeamLen - sinA * fogSpread), Math.atan2(sinA * fogBeamLen - cosA * fogSpread, cosA * fogBeamLen + sinA * fogSpread), true);
-            ctx.lineTo(lx, ly);
+            ctx.quadraticCurveTo(
+              lx + cosA * (fogBeamLen * 0.4) - sinA * (fogBeamSpread * 0.55),
+              ly + sinA * (fogBeamLen * 0.4) + cosA * (fogBeamSpread * 0.55),
+              endLX - sinA * fogBeamSpread, endLY + cosA * fogBeamSpread
+            );
+            ctx.bezierCurveTo(
+              endLX + cosA * 15 - sinA * (fogBeamSpread * 0.5), endLY + sinA * 15 + cosA * (fogBeamSpread * 0.5),
+              endLX + cosA * 15 + sinA * (fogBeamSpread * 0.5), endLY + sinA * 15 - cosA * (fogBeamSpread * 0.5),
+              endLX + sinA * fogBeamSpread, endLY - cosA * fogBeamSpread
+            );
+            ctx.quadraticCurveTo(
+              lx + cosA * (fogBeamLen * 0.4) + sinA * (fogBeamSpread * 0.55),
+              ly + sinA * (fogBeamLen * 0.4) - cosA * (fogBeamSpread * 0.55),
+              lx, ly
+            );
             ctx.closePath();
             ctx.fill();
           }
@@ -11368,31 +11526,65 @@ export class GameRenderer {
       ctx.fill();
     }
 
-    // D. Police Siren Beams
+    // D. Police Siren Beams (Rotating volumetric optical lobes with curved diffusion)
     for (const car of nearbyVehicles) {
       if (car.sirenOn) {
         const strobe = (car.sirenStrobe || 0);
         const redAngle = car.angle + Math.sin(strobe) * 1.2;
         const blueAngle = car.angle - Math.sin(strobe) * 1.2;
+        const sirenReach = 115;
+        const sirenSpread = 0.65;
 
-        const rGlow = ctx.createRadialGradient(car.x, car.y, 2, car.x + Math.cos(redAngle) * 110, car.y + Math.sin(redAngle) * 110, 110);
-        rGlow.addColorStop(0, 'rgba(255, 50, 50, 0.45)');
-        rGlow.addColorStop(0.5, 'rgba(255, 50, 50, 0.15)');
-        rGlow.addColorStop(1, 'rgba(255, 50, 50, 0)');
+        // Red rotating beacon lobe
+        const redMidX = car.x + Math.cos(redAngle) * (sirenReach * 0.45);
+        const redMidY = car.y + Math.sin(redAngle) * (sirenReach * 0.45);
+        const rGlow = ctx.createRadialGradient(car.x, car.y, 2, redMidX, redMidY, sirenReach);
+        rGlow.addColorStop(0.0, 'rgba(255, 60, 60, 0.55)');
+        rGlow.addColorStop(0.3, 'rgba(255, 40, 40, 0.28)');
+        rGlow.addColorStop(0.7, 'rgba(239, 68, 68, 0.07)');
+        rGlow.addColorStop(1.0, 'rgba(239, 68, 68, 0)');
         ctx.fillStyle = rGlow;
         ctx.beginPath();
-        ctx.arc(car.x, car.y, 110, redAngle - 0.5, redAngle + 0.5);
-        ctx.lineTo(car.x, car.y);
+        ctx.moveTo(car.x, car.y);
+        const rLeftX = car.x + Math.cos(redAngle - sirenSpread) * sirenReach;
+        const rLeftY = car.y + Math.sin(redAngle - sirenSpread) * sirenReach;
+        const rRightX = car.x + Math.cos(redAngle + sirenSpread) * sirenReach;
+        const rRightY = car.y + Math.sin(redAngle + sirenSpread) * sirenReach;
+        ctx.quadraticCurveTo(car.x + Math.cos(redAngle - sirenSpread * 0.5) * (sirenReach * 0.6), car.y + Math.sin(redAngle - sirenSpread * 0.5) * (sirenReach * 0.6), rLeftX, rLeftY);
+        ctx.quadraticCurveTo(car.x + Math.cos(redAngle) * (sirenReach + 20), car.y + Math.sin(redAngle) * (sirenReach + 20), rRightX, rRightY);
+        ctx.quadraticCurveTo(car.x + Math.cos(redAngle + sirenSpread * 0.5) * (sirenReach * 0.6), car.y + Math.sin(redAngle + sirenSpread * 0.5) * (sirenReach * 0.6), car.x, car.y);
+        ctx.closePath();
         ctx.fill();
 
-        const bGlow = ctx.createRadialGradient(car.x, car.y, 2, car.x + Math.cos(blueAngle) * 110, car.y + Math.sin(blueAngle) * 110, 110);
-        bGlow.addColorStop(0, 'rgba(50, 100, 255, 0.45)');
-        bGlow.addColorStop(0.5, 'rgba(50, 100, 255, 0.15)');
-        bGlow.addColorStop(1, 'rgba(50, 100, 255, 0)');
+        // Blue rotating beacon lobe
+        const blueMidX = car.x + Math.cos(blueAngle) * (sirenReach * 0.45);
+        const blueMidY = car.y + Math.sin(blueAngle) * (sirenReach * 0.45);
+        const bGlow = ctx.createRadialGradient(car.x, car.y, 2, blueMidX, blueMidY, sirenReach);
+        bGlow.addColorStop(0.0, 'rgba(60, 130, 255, 0.55)');
+        bGlow.addColorStop(0.3, 'rgba(40, 100, 255, 0.28)');
+        bGlow.addColorStop(0.7, 'rgba(59, 130, 246, 0.07)');
+        bGlow.addColorStop(1.0, 'rgba(59, 130, 246, 0)');
         ctx.fillStyle = bGlow;
         ctx.beginPath();
-        ctx.arc(car.x, car.y, 110, blueAngle - 0.5, blueAngle + 0.5);
-        ctx.lineTo(car.x, car.y);
+        ctx.moveTo(car.x, car.y);
+        const bLeftX = car.x + Math.cos(blueAngle - sirenSpread) * sirenReach;
+        const bLeftY = car.y + Math.sin(blueAngle - sirenSpread) * sirenReach;
+        const bRightX = car.x + Math.cos(blueAngle + sirenSpread) * sirenReach;
+        const bRightY = car.y + Math.sin(blueAngle + sirenSpread) * sirenReach;
+        ctx.quadraticCurveTo(car.x + Math.cos(blueAngle - sirenSpread * 0.5) * (sirenReach * 0.6), car.y + Math.sin(blueAngle - sirenSpread * 0.5) * (sirenReach * 0.6), bLeftX, bLeftY);
+        ctx.quadraticCurveTo(car.x + Math.cos(blueAngle) * (sirenReach + 20), car.y + Math.sin(blueAngle) * (sirenReach + 20), bRightX, bRightY);
+        ctx.quadraticCurveTo(car.x + Math.cos(blueAngle + sirenSpread * 0.5) * (sirenReach * 0.6), car.y + Math.sin(blueAngle + sirenSpread * 0.5) * (sirenReach * 0.6), car.x, car.y);
+        ctx.closePath();
+        ctx.fill();
+
+        // Central roof strobe lens flare
+        const roofBeacon = ctx.createRadialGradient(car.x, car.y, 0.5, car.x, car.y, 8);
+        roofBeacon.addColorStop(0, 'rgba(255, 255, 255, 0.9)');
+        roofBeacon.addColorStop(0.5, 'rgba(147, 197, 253, 0.4)');
+        roofBeacon.addColorStop(1, 'rgba(0, 0, 0, 0)');
+        ctx.fillStyle = roofBeacon;
+        ctx.beginPath();
+        ctx.arc(car.x, car.y, 8, 0, Math.PI * 2);
         ctx.fill();
       }
     }
@@ -11548,6 +11740,9 @@ export class GameRenderer {
 
       ctx.restore();
     }
+
+    // G. Rolling Stock Dynamic Light Optics (Additive volumetric projector beam, lenses, and warm windows)
+    RollingStockRenderer.renderLightmapOptics(ctx, world, minX, minY, maxX, maxY, effectiveAlpha, fogFactor);
 
     ctx.restore();
 

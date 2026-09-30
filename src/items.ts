@@ -1,6 +1,7 @@
 import { GameWorld, GroundItem, InventoryItem, ItemCategory, Player, Vehicle, TowingRope } from './types';
 import { sound } from './audio';
 import { getPhoneSpecsForItemId } from './phoneData';
+import { COOKING_INGREDIENTS_CATALOG } from './cookingIngredients';
 import {
   administerMedication,
   applySplint,
@@ -23,6 +24,21 @@ import { soothePanic } from './bodySystem';
 import { isTrailerVehicle, CAR_CONFIGS } from './vehicleHelpers';
 import { getCityApartments } from './propertySystem';
 import { clearInteriorCanvasCache } from './buildingInteriors';
+import {
+  LIQUID_REGISTRY,
+  CONTAINER_CONFIGS,
+  LiquidId,
+  FluidContainerState,
+  isFluidContainer,
+  getFluidContainerWeight,
+  getFluidContainerVolume,
+  getFluidContainerDisplayName,
+  syncItemContainerProperties,
+  tryFillOrUseFluidContainer,
+  handleConsumeFluid,
+  pourLiquidBetweenContainers,
+  fillContainerWithLiquid
+} from './liquidSystem';
 
 export interface ItemDefinition {
   itemId: string;
@@ -63,7 +79,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     name: 'Ham & Cheese Sandwich',
     nameRu: 'Сэндвич с ветчиной и сыром',
     category: 'food',
-    maxStack: 10,
+    maxStack: 1,
     icon: '',
     description: 'Fresh toasted sandwich with smoked ham, cheddar and greens. Restores food and slight health.',
     descriptionRu: 'Свежий тост с копченой ветчиной, чеддером и зеленью. Утоляет голод и восстанавливает здоровье.',
@@ -82,7 +98,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     name: 'Juicy Cheeseburger',
     nameRu: 'Сочный чизбургер',
     category: 'food',
-    maxStack: 8,
+    maxStack: 1,
     icon: '',
     description: 'Hearty grilled beef patty with cheese, tomato and sesame bun. High satiety.',
     descriptionRu: 'Сытная котлета из говядины на гриле с сыром, томатом и кунжутной булочкой. Высокая сытность.',
@@ -101,7 +117,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     name: 'Pepperoni Pizza Slice',
     nameRu: 'Кусок пиццы Пепперони',
     category: 'food',
-    maxStack: 12,
+    maxStack: 1,
     icon: '',
     description: 'Hot slice with crispy mozzarella and spicy sausage.',
     descriptionRu: 'Горячий кусок пиццы с хрустящей моцареллой и пикантной колбасой.',
@@ -120,7 +136,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     name: 'Crisp Red Apple',
     nameRu: 'Спелое яблоко',
     category: 'food',
-    maxStack: 20,
+    maxStack: 1,
     icon: '',
     description: 'Juicy natural fruit. Restores a bit of hunger and thirst.',
     descriptionRu: 'Сочный натуральный фрукт. Восстанавливает немного сытости и утоляет легкую жажду.',
@@ -139,7 +155,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     name: 'Dark Chocolate Bar',
     nameRu: 'Шоколадный батончик',
     category: 'food',
-    maxStack: 15,
+    maxStack: 1,
     icon: '',
     description: 'Rich dark cocoa bar. Provides a fast burst of stamina and calories.',
     descriptionRu: 'Плитка шоколада. Дает быстрый прилив бодрости, энергии и калорий.',
@@ -158,7 +174,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     name: 'Crunchy Potato Chips',
     nameRu: 'Картофельные чипсы',
     category: 'food',
-    maxStack: 10,
+    maxStack: 1,
     icon: '',
     description: 'Salty snack. Gives quick energy but slightly increases thirst.',
     descriptionRu: 'Хрустящие соленые чипсы. Быстрый перекус, но слегка усиливает жажду.',
@@ -177,7 +193,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     name: 'Canned Beef Stew',
     nameRu: 'Армейская тушёнка',
     category: 'food',
-    maxStack: 8,
+    maxStack: 1,
     icon: '',
     description: 'High-calorie canned preserved meat with long shelf life.',
     descriptionRu: 'Высококалорийные мясные консервы длительного хранения.',
@@ -198,7 +214,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     name: 'Mineral Water (0.5L)',
     nameRu: 'Бутылка минеральной воды',
     category: 'drink',
-    maxStack: 10,
+    maxStack: 1,
     icon: '',
     description: 'Clean pure spring water. Essential for hydration and survival.',
     descriptionRu: 'Чистая родниковая вода (0.5 л). Главное средство от жажды и обезвоживания.',
@@ -217,7 +233,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     name: 'Cola Soda Can',
     nameRu: 'Баночка Колы',
     category: 'drink',
-    maxStack: 12,
+    maxStack: 1,
     icon: '',
     description: 'Carbonated chilled soda with sweet caramel taste and light caffeine.',
     descriptionRu: 'Освежающая газировка со сладким вкусом и легким тонизирующим эффектом.',
@@ -236,7 +252,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     name: 'Hot Espresso Coffee',
     nameRu: 'Горячий кофе Эспрессо',
     category: 'drink',
-    maxStack: 8,
+    maxStack: 1,
     icon: '',
     description: 'Freshly brewed strong coffee. Dramatically banishes drowsiness and restores stamina.',
     descriptionRu: 'Крепкий свежесваренный кофе. Эффективно снимает сонливость и возвращает бодрость.',
@@ -255,7 +271,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     name: 'Turbo Energy Drink',
     nameRu: 'Энергетик «Турбо-Драйв»',
     category: 'drink',
-    maxStack: 10,
+    maxStack: 1,
     icon: '',
     description: 'High-octane taurine and caffeine booster for maximum alertness.',
     descriptionRu: 'Мощный энергетик с таурином и кофеином для мгновенного снятия усталости.',
@@ -274,7 +290,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     name: 'Fresh Orange Juice',
     nameRu: 'Апельсиновый сок',
     category: 'drink',
-    maxStack: 8,
+    maxStack: 1,
     icon: '',
     description: 'Vitamin C rich citrus juice. Quenches thirst and supports health.',
     descriptionRu: 'Натуральный сок с витамином C. Отлично утоляет жажду и укрепляет здоровье.',
@@ -295,7 +311,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     name: 'First Aid Medical Kit',
     nameRu: 'Большая автомобильная аптечка',
     category: 'med',
-    maxStack: 4,
+    maxStack: 1,
     icon: '',
     description: 'Complete emergency trauma kit with bandages, antiseptic and coagulants.',
     descriptionRu: 'Комплект первой помощи: бинты, антисептик, жгут и обеззараживатель.',
@@ -310,7 +326,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     name: 'Sterile Gauze Bandage',
     nameRu: 'Стерильный медицинский бинт',
     category: 'med',
-    maxStack: 16,
+    maxStack: 1,
     icon: '',
     description: 'Quick dressing to patch minor scrapes and car collision cuts.',
     descriptionRu: 'Быстрая повязка для остановки кровотечения и лечения ушибов.',
@@ -324,7 +340,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     name: 'Painkiller Tablets',
     nameRu: 'Обезболивающие таблетки',
     category: 'med',
-    maxStack: 10,
+    maxStack: 1,
     icon: '',
     description: 'Alleviates pain and fatigue, helping restore mobility.',
     descriptionRu: 'Снимают болевой синдром при авариях и восстанавливают выносливость (10 таблеток в блистере).',
@@ -342,7 +358,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     name: 'Morphine Ampoule',
     nameRu: 'Ампула с морфином',
     category: 'med',
-    maxStack: 5,
+    maxStack: 1,
     icon: '',
     description: 'Powerful clinical analgesic for extreme pain, fractures, and severe trauma.',
     descriptionRu: 'Сильнодействующий рецептурный анальгетик для купирования острой боли, переломов и тяжелых травм.',
@@ -360,7 +376,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     name: 'Multivitamin Complex',
     nameRu: 'Комплекс витаминов',
     category: 'med',
-    maxStack: 10,
+    maxStack: 1,
     icon: '',
     description: 'Daily essential micronutrients. Improves metabolism and natural healing.',
     descriptionRu: 'Комплекс микроэлементов (12 драже в баночке). Улучшает самочувствие и бодрость.',
@@ -378,7 +394,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     name: 'Medical Splint',
     nameRu: 'Медицинская фиксирующая шина',
     category: 'med',
-    maxStack: 6,
+    maxStack: 1,
     icon: '',
     description: 'Rigid orthopedic splint designed to immobilize and treat bone fractures.',
     descriptionRu: 'Жесткая медицинская шина для фиксации и лечения переломов костей.',
@@ -392,7 +408,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     name: 'Panthenol Aerosol Foam Spray',
     nameRu: 'Аэрозоль Пантенол от ожогов',
     category: 'med',
-    maxStack: 6,
+    maxStack: 1,
     icon: '',
     description: 'Specialized burn foam with D-panthenol. Stimulates rapid epidermal regeneration and relieves severe burn pain (10 doses).',
     descriptionRu: 'Специализированная регенерирующая пена при термических ожогах 1-3 степени. Ускоряет заживление и мгновенно охлаждает (10 применений).',
@@ -410,7 +426,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     name: 'Rescuer Healing Balm',
     nameRu: 'Бальзам «Спасатель»',
     category: 'med',
-    maxStack: 8,
+    maxStack: 1,
     icon: '',
     description: 'Natural regenerative balm based on sea buckthorn and propolis for treating burns, wounds and bruises (8 doses).',
     descriptionRu: 'Натуральный регенерирующий бальзам на основе облепихи и прополиса для ожогов, ран и глубоких ссадин (туба на 8 нанесений).',
@@ -428,7 +444,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     name: 'Brilliant Green Solution (Zelenka)',
     nameRu: 'Раствор бриллиантового зелёного (Зелёнка)',
     category: 'med',
-    maxStack: 12,
+    maxStack: 1,
     icon: '',
     description: 'Classic pharmacy antiseptic. Dries and sterilizes abrasions and edges of wounds (15 doses).',
     descriptionRu: 'Народный аптечный антисептик. Прижигает и дезинфицирует раны, ссадины и ожоги (флакон на 15 обработок).',
@@ -446,7 +462,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     name: 'Iodine Tincture 5%',
     nameRu: 'Раствор йода спиртовой 5%',
     category: 'med',
-    maxStack: 12,
+    maxStack: 1,
     icon: '',
     description: 'Iodine antiseptic. Warms deep bruises and sprains through iodine grid, disinfects cuts (15 doses).',
     descriptionRu: 'Спиртовой раствор йода. Йодная сетка снимает отек при ушибах и растяжениях, дезинфицирует ссадины (15 применений).',
@@ -464,7 +480,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     name: 'Diclofenac Anti-Inflammatory Gel',
     nameRu: 'Гель Диклофенак 5%',
     category: 'med',
-    maxStack: 8,
+    maxStack: 1,
     icon: '',
     description: 'Potent NSAID gel for joint sprains, tendon injuries and muscular pain from impacts (10 doses).',
     descriptionRu: 'Сильное обезболивающее и противовоспалительное средство при растяжениях связок и ушибах суставов (10 доз).',
@@ -482,7 +498,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     name: 'Hydrogen Peroxide 3%',
     nameRu: 'Перекись водорода 3%',
     category: 'med',
-    maxStack: 10,
+    maxStack: 1,
     icon: '',
     description: 'Foaming hemostatic antiseptic. Cleans wounds and halts capillary bleeding (12 doses).',
     descriptionRu: 'Пенообразующий антисептик. Останавливает капиллярное кровотечение и механически вымывает грязь (12 доз).',
@@ -500,7 +516,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     name: 'Ammonia Spirit 10%',
     nameRu: 'Нашатырный спирт (Аммиак 10%)',
     category: 'med',
-    maxStack: 10,
+    maxStack: 1,
     icon: '',
     description: 'Pungent smelling salts. Instantly stimulates the respiratory center, preventing syncope and shock (20 uses).',
     descriptionRu: 'Резкий раствор для вдыхания. Мгновенно выводит из полуобморока, снимает шок и сонливость (20 применений).',
@@ -518,7 +534,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     name: 'Golden Star Balm (Zvezdochka)',
     nameRu: 'Бальзам «Золотая Звезда» (Звёздочка)',
     category: 'med',
-    maxStack: 15,
+    maxStack: 1,
     icon: '',
     description: 'Legendary aromatic balm with essential oils. Relieves headaches, clears mind and reduces panic (25 uses).',
     descriptionRu: 'Легендарный аптечный бальзам с маслами мяты, гвоздики и корицы. Снимает головную боль и успокаивает (25 применений).',
@@ -536,8 +552,8 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     name: 'Activated Charcoal Tablets',
     nameRu: 'Активированный уголь',
     category: 'med',
-    maxStack: 15,
-    icon: '⬛',
+    maxStack: 1,
+    icon: '',
     description: 'Natural enterosorbent. Absorbs stomach toxins, eliminates nausea and indigestion (10 tablets).',
     descriptionRu: 'Природный сорбент. Связывает токсины в желудочно-кишечном тракте, снимает тошноту и отравление (10 таблеток).',
     effects: { health: 15 },
@@ -554,7 +570,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     name: 'Valerian Tincture Drops',
     nameRu: 'Капли настойки валерианы',
     category: 'med',
-    maxStack: 10,
+    maxStack: 1,
     icon: '',
     description: 'Natural sedative tincture. Rapidly lowers heart rate, panic, fear and physical tremor (15 doses).',
     descriptionRu: 'Натуральное седативное средство. Успокаивает учащенный пульс, снимает страх и панику после аварии (15 доз).',
@@ -611,7 +627,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     name: 'Banknotes Cash ($)',
     nameRu: 'Наличные деньги ($)',
     category: 'valuable',
-    maxStack: 9999,
+    maxStack: 1,
     icon: '',
     description: 'Currency used to buy drinks and snacks from vending machines and city kiosks.',
     descriptionRu: 'Деньги для покупок в торговых автоматах, кафе и уличных ларьках.',
@@ -624,7 +640,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     name: 'Banknote $5000',
     nameRu: 'Купюра $5000',
     category: 'valuable',
-    maxStack: 100,
+    maxStack: 1,
     icon: '',
     description: 'Large banknote of $5000. Double click or use to deposit into your cash wallet.',
     descriptionRu: 'Крупная купюра номиналом в $5000. Используйте, чтобы положить её в кошелёк.',
@@ -637,7 +653,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     name: 'Banknote $1000',
     nameRu: 'Купюра $1000',
     category: 'valuable',
-    maxStack: 100,
+    maxStack: 1,
     icon: '',
     description: 'Banknote of $1000. Double click or use to deposit into your cash wallet.',
     descriptionRu: 'Купюра номиналом в $1000. Используйте, чтобы положить её в кошелёк.',
@@ -650,7 +666,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     name: 'Banknote $500',
     nameRu: 'Купюра $500',
     category: 'valuable',
-    maxStack: 100,
+    maxStack: 1,
     icon: '',
     description: 'Banknote of $500. Double click or use to deposit into your cash wallet.',
     descriptionRu: 'Купюра номиналом в $500. Используйте, чтобы положить её в кошелёк.',
@@ -663,7 +679,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     name: 'Banknote $100',
     nameRu: 'Купюра $100',
     category: 'valuable',
-    maxStack: 100,
+    maxStack: 1,
     icon: '',
     description: 'Banknote of $100. Double click or use to deposit into your cash wallet.',
     descriptionRu: 'Купюра номиналом в $100. Используйте, чтобы положить её в кошелёк.',
@@ -676,7 +692,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     name: 'Banknote $50',
     nameRu: 'Купюра $50',
     category: 'valuable',
-    maxStack: 100,
+    maxStack: 1,
     icon: '',
     description: 'Banknote of $50. Double click or use to deposit into your cash wallet.',
     descriptionRu: 'Купюра номиналом в $50. Используйте, чтобы положить её в кошелёк.',
@@ -689,7 +705,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     name: 'Banknote $10',
     nameRu: 'Купюра $10',
     category: 'valuable',
-    maxStack: 100,
+    maxStack: 1,
     icon: '',
     description: 'Small banknote of $10. Double click or use to deposit into your cash wallet.',
     descriptionRu: 'Купюра номиналом в $10. Используйте, чтобы положить её в кошелёк.',
@@ -702,7 +718,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     name: 'Coin $10',
     nameRu: 'Монета $10',
     category: 'valuable',
-    maxStack: 100,
+    maxStack: 1,
     icon: '',
     description: 'Heavy metallic coin of $10. Double click or use to deposit into your cash wallet.',
     descriptionRu: 'Тяжелая металлическая монета номиналом в $10. Используйте, чтобы положить её в кошелёк.',
@@ -715,7 +731,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     name: 'Coin $5',
     nameRu: 'Монета $5',
     category: 'valuable',
-    maxStack: 100,
+    maxStack: 1,
     icon: '',
     description: 'Metallic coin of $5. Double click or use to deposit into your cash wallet.',
     descriptionRu: 'Металлическая монета номиналом в $5. Используйте, чтобы положить её в кошелёк.',
@@ -728,7 +744,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     name: 'Coin $2',
     nameRu: 'Монета $2',
     category: 'valuable',
-    maxStack: 100,
+    maxStack: 1,
     icon: '',
     description: 'Metallic coin of $2. Double click or use to deposit into your cash wallet.',
     descriptionRu: 'Металлическая монета номиналом в $2. Используйте, чтобы положить её в кошелёк.',
@@ -741,7 +757,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     name: 'Coin $1',
     nameRu: 'Монета $1',
     category: 'valuable',
-    maxStack: 100,
+    maxStack: 1,
     icon: '',
     description: 'Metallic coin of $1. Double click or use to deposit into your cash wallet.',
     descriptionRu: 'Металлическая монета номиналом в $1. Используйте, чтобы положить её в кошелёк.',
@@ -958,7 +974,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     name: 'Vehicle Repair Toolbox',
     nameRu: 'Набор автоинструментов',
     category: 'tool',
-    maxStack: 2,
+    maxStack: 1,
     icon: '',
     description: 'Wrench and auto parts kit to repair engine damage and body crumple.',
     descriptionRu: 'Набор ключей и запчастей для полевого ремонта кузова и двигателя авто.',
@@ -984,7 +1000,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     name: 'Wound Antiseptic',
     nameRu: 'Антисептик для ран',
     category: 'med',
-    maxStack: 12,
+    maxStack: 1,
     icon: '',
     description: 'Disinfects deep cuts and scrapes to prevent infection (8 doses).',
     descriptionRu: 'Обеззараживает глубокие царапины и предотвращает инфекцию (флакон на 8 обработок).',
@@ -1000,7 +1016,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     name: 'Motor Oil Canister',
     nameRu: 'Канистра моторного масла',
     category: 'tool',
-    maxStack: 4,
+    maxStack: 1,
     icon: '',
     description: 'High-grade synthetic engine oil for engine protection and smooth operation.',
     descriptionRu: 'Высококачественное синтетическое масло для защиты двигателя.',
@@ -1013,7 +1029,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     name: 'Spare Car Battery',
     nameRu: 'Запасной аккумулятор',
     category: 'tool',
-    maxStack: 2,
+    maxStack: 1,
     icon: '',
     description: 'Heavy duty lead-acid battery to power vehicle electronics.',
     descriptionRu: 'Надежный свинцово-кислотный аккумулятор для бортовой сети авто.',
@@ -1026,7 +1042,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     name: 'Car Fire Extinguisher',
     nameRu: 'Автоогнетушитель',
     category: 'tool',
-    maxStack: 2,
+    maxStack: 1,
     icon: '',
     description: 'Dry chemical foam extinguisher (100 foam charges). Hold down use/attack button to spray a continuous foam stream to extinguish fires.',
     descriptionRu: 'Порошковый автоогнетушитель (100 зарядов пены). Удерживайте кнопку применения/атаки для непрерывной струи пены и тушения огня.',
@@ -1042,7 +1058,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     name: 'Empty Fire Extinguisher',
     nameRu: 'Пустой огнетушитель',
     category: 'misc',
-    maxStack: 2,
+    maxStack: 1,
     icon: '',
     description: 'Depleted steel fire extinguisher cylinder.',
     descriptionRu: 'Пустой стальной баллон из-под огнетушителя.',
@@ -1055,7 +1071,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     name: 'Creamy Cappuccino',
     nameRu: 'Сливочный Капучино',
     category: 'drink',
-    maxStack: 8,
+    maxStack: 1,
     icon: '',
     description: 'Delicious coffee with whipped cream. Warms up and restores stamina.',
     descriptionRu: 'Вкусный кофейный напиток со сливочной пенкой. Согревает и бодрит.',
@@ -1074,7 +1090,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     name: 'Butter Croissant',
     nameRu: 'Свежий круассан',
     category: 'food',
-    maxStack: 15,
+    maxStack: 1,
     icon: '',
     description: 'Crispy and buttery French pastry.',
     descriptionRu: 'Хрустящая французская выпечка из слоеного теста.',
@@ -1091,7 +1107,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     name: 'Hot Chicken Soup',
     nameRu: 'Горячий куриный бульон',
     category: 'food',
-    maxStack: 6,
+    maxStack: 1,
     icon: '',
     description: 'Warming and highly nutritious soup.',
     descriptionRu: 'Питательный домашний суп. Отлично согревает.',
@@ -1112,7 +1128,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     name: 'Crispy French Fries',
     nameRu: 'Картофель фри',
     category: 'food',
-    maxStack: 10,
+    maxStack: 1,
     icon: '',
     description: 'Golden crispy potato fries with sea salt.',
     descriptionRu: 'Хрустящий золотистый картофель фри с морской солью.',
@@ -1131,7 +1147,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     name: 'Crispy Chicken Nuggets',
     nameRu: 'Куриные наггетсы (6 шт)',
     category: 'food',
-    maxStack: 10,
+    maxStack: 1,
     icon: '',
     description: 'Tender chicken nuggets in crispy batter.',
     descriptionRu: 'Нежное куриное филе в хрустящей золотистой панировке.',
@@ -1150,7 +1166,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     name: 'Classic Hot Dog',
     nameRu: 'Датский хот-дог',
     category: 'food',
-    maxStack: 10,
+    maxStack: 1,
     icon: '',
     description: 'Juicy sausage in a toasted bun with mustard and crispy onions.',
     descriptionRu: 'Сочная сосиска в булочке с горчицей, кетчупом и хрустящим луком.',
@@ -1169,7 +1185,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     name: 'Cola Zero (Can)',
     nameRu: 'Кола Зеро (0.33L)',
     category: 'food',
-    maxStack: 15,
+    maxStack: 1,
     icon: '',
     description: 'Sugar-free refreshing iced cola soda.',
     descriptionRu: 'Освежающая газировка без сахара со льдом.',
@@ -1188,7 +1204,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     name: 'Vanilla Milkshake',
     nameRu: 'Ванильный милкшейк',
     category: 'food',
-    maxStack: 10,
+    maxStack: 1,
     icon: '',
     description: 'Thick cold milkshake with real vanilla ice cream.',
     descriptionRu: 'Густой молочный коктейль с натуральным пломбиром и сливками.',
@@ -1207,7 +1223,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     name: 'Green Sencha Tea',
     nameRu: 'Зеленый чай Сенча',
     category: 'food',
-    maxStack: 12,
+    maxStack: 1,
     icon: '',
     description: 'Hot fragrant green tea with antioxidants.',
     descriptionRu: 'Горячий зеленый чай с антиоксидантами. Снимает стресс и бодрит.',
@@ -1226,7 +1242,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     name: 'Pink Glazed Donut',
     nameRu: 'Пончик с розовой глазурью',
     category: 'food',
-    maxStack: 15,
+    maxStack: 1,
     icon: '',
     description: 'Fresh donut with sweet strawberry glaze and sprinkles.',
     descriptionRu: 'Пышный пончик с клубничной глазурью и цветной посыпкой.',
@@ -1245,7 +1261,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     name: 'Philadelphia Rolls Set',
     nameRu: 'Сет роллов Филадельфия',
     category: 'food',
-    maxStack: 5,
+    maxStack: 1,
     icon: '',
     description: 'Fresh Atlantic salmon, cream cheese, sushi rice and avocado.',
     descriptionRu: 'Свежий атлантический лосось, сливочный сыр и рис. Соевый соус и имбирь.',
@@ -1264,7 +1280,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     name: 'Teriyaki Chicken WOK',
     nameRu: 'WOK-лапша с курицей Терияки',
     category: 'food',
-    maxStack: 5,
+    maxStack: 1,
     icon: '',
     description: 'Stir-fried egg noodles with vegetables, tender chicken and sweet soy glaze.',
     descriptionRu: 'Яичная лапша вок с овощами, куриным филе и сладковатым соусом терияки.',
@@ -1283,7 +1299,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     name: 'Fresh Banana',
     nameRu: 'Спелый банан',
     category: 'food',
-    maxStack: 20,
+    maxStack: 1,
     icon: '',
     description: 'Rich in potassium and natural energy.',
     descriptionRu: 'Сладкий спелый банан. Быстро насыщает организм калием и энергией.',
@@ -1302,7 +1318,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     name: 'Fresh Bakery Loaf',
     nameRu: 'Батон нарезной',
     category: 'food',
-    maxStack: 10,
+    maxStack: 1,
     icon: '',
     description: 'Crusty loaf of white bakery bread.',
     descriptionRu: 'Свежий мягкий белый хлеб с хрустящей корочкой.',
@@ -1321,7 +1337,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     name: 'Chocolate Chip Cookies',
     nameRu: 'Печенье с шоколадной крошкой',
     category: 'food',
-    maxStack: 15,
+    maxStack: 1,
     icon: '',
     description: 'Sweet cookies with rich Belgian chocolate drops.',
     descriptionRu: 'Хрустящее печенье с кусочками темного шоколада.',
@@ -1340,7 +1356,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     name: 'Caramel Cinema Popcorn',
     nameRu: 'Карамельный попкорн',
     category: 'food',
-    maxStack: 8,
+    maxStack: 1,
     icon: '',
     description: 'Crispy sweet popcorn bucket from cinema snack bar.',
     descriptionRu: 'Большое ведерко сладкого попкорна в золотистой карамели.',
@@ -1359,7 +1375,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     name: 'Cheese Nachos',
     nameRu: 'Начос с сырным соусом',
     category: 'food',
-    maxStack: 8,
+    maxStack: 1,
     icon: '',
     description: 'Crispy Mexican corn tortilla chips with warm cheddar dip.',
     descriptionRu: 'Хрустящие кукурузные чипсы начос с теплым сырным соусом чеддер.',
@@ -1380,7 +1396,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     name: 'Antipyretic Fever Reducer',
     nameRu: 'Жаропонижающее "Парацетамол"',
     category: 'medical',
-    maxStack: 10,
+    maxStack: 1,
     icon: '',
     description: 'Reduces fever and stabilizes core body temperature.',
     descriptionRu: 'Снижает температуру, устраняет озноб и жар при простуде.',
@@ -1399,7 +1415,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     name: 'Moisturizing Eye Drops',
     nameRu: 'Глазные капли "Чистый Взор"',
     category: 'medical',
-    maxStack: 5,
+    maxStack: 1,
     icon: '',
     description: 'Relieves eye strain and clears vision fatigue.',
     descriptionRu: 'Снимает сухость и усталость глаз, восстанавливает четкость зрения.',
@@ -1416,7 +1432,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     name: 'Adhesive Plaster Pack',
     nameRu: 'Набор бактерицидных пластырей',
     category: 'medical',
-    maxStack: 20,
+    maxStack: 1,
     icon: '',
     description: 'Protective plaster for small scratches and blisters.',
     descriptionRu: 'Быстро заклеивает порезы и царапины, предотвращая попадание грязи.',
@@ -1433,7 +1449,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     name: 'Digital Medical Thermometer',
     nameRu: 'Электронный термометр',
     category: 'medical',
-    maxStack: 2,
+    maxStack: 1,
     icon: '',
     description: 'Accurately measures body temperature in Celsius.',
     descriptionRu: 'Быстро измеряет точную температуру тела.',
@@ -1448,7 +1464,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     name: '20000mAh Power Bank',
     nameRu: 'Повербанк 20 000 мАч',
     category: 'tool',
-    maxStack: 2,
+    maxStack: 1,
     icon: '',
     description: 'High capacity battery for charging portable devices.',
     descriptionRu: 'Портативный аккумулятор высокой емкости с быстрой зарядкой.',
@@ -1474,7 +1490,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     name: 'Long-Range Walkie Talkie',
     nameRu: 'Рация дальнего действия',
     category: 'tool',
-    maxStack: 4,
+    maxStack: 1,
     icon: '',
     description: 'Two-way radio for shortwave city communications.',
     descriptionRu: 'Портативная рация с чистым сигналом на расстоянии до 5 км.',
@@ -1788,7 +1804,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     name: 'Polarized Sunglasses',
     nameRu: 'Поляризационные очки',
     category: 'misc',
-    maxStack: 2,
+    maxStack: 1,
     icon: '',
     description: 'Protects vision from harsh sunlight and glare.',
     descriptionRu: 'Стильные темные очки с защитой от ультрафиолета и бликов.',
@@ -1819,7 +1835,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     name: 'Army Combat Ration (MRE)',
     nameRu: 'Армейский сухпай (ИРП)',
     category: 'food',
-    maxStack: 4,
+    maxStack: 1,
     icon: '',
     description: 'Complete balanced combat ration with entrees, crackers and sweets.',
     descriptionRu: 'Сбалансированный армейский рацион питания: тушеное мясо, галеты, чай и джем.',
@@ -1838,7 +1854,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     name: 'Windproof Brass Lighter',
     nameRu: 'Бензиновая зажигалка Zippo',
     category: 'tool',
-    maxStack: 2,
+    maxStack: 1,
     icon: '',
     description: 'Reliable windproof flint lighter with metal flip top. Can ignite fuel, oil puddles or leaks (30 uses).',
     descriptionRu: 'Надежная бензиновая зажигалка (30 использования). Позволяет поджигать пролитый бензин, масло и горючие подтёки.',
@@ -1854,7 +1870,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     name: 'Empty Zippo Lighter',
     nameRu: 'Пустая зажигалка Zippo',
     category: 'misc',
-    maxStack: 5,
+    maxStack: 1,
     icon: '',
     description: 'Zippo lighter out of fuel and flint.',
     descriptionRu: 'Пустая зажигалка Zippo без бензина и кремня.',
@@ -1898,7 +1914,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     name: 'Bag of Sand (1kg)',
     nameRu: 'Мешок песка (1 кг)',
     category: 'tool',
-    maxStack: 5,
+    maxStack: 1,
     icon: '',
     description: 'Burlap sack with 1 kg of silica sand. Extinguishes small flames and absorbs fuel, oil, and antifreeze spills.',
     descriptionRu: 'Мешок с просеянным песком (1 кг). При активации рассыпает песок перед собой, высушивая пятна бензина, масла, антифриза и туша пламя.',
@@ -1913,7 +1929,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     name: 'Empty Sack',
     nameRu: 'Пустой мешок',
     category: 'tool',
-    maxStack: 10,
+    maxStack: 1,
     icon: '',
     description: 'Empty heavy canvas burlap bag. Light and durable. Used for storage, scrap canvas, or choking engine air intake.',
     descriptionRu: 'Прочный пустой мешок из сурового брезента. Легкий и надежный. Можно применить для перекрытия воздухозаборника дизеля.',
@@ -1927,7 +1943,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     name: 'Oily Shop Rag',
     nameRu: 'Автомобильная ветошь (Тряпка)',
     category: 'tool',
-    maxStack: 10,
+    maxStack: 1,
     icon: '',
     description: 'Dense canvas rag. Used for wiping oil, cleaning engine parts, or choking air intake during diesel runaway.',
     descriptionRu: 'Плотная ветошь. Используется для протирки масла, чистки запчастей и перекрытия воздухозаборника дизеля в разносе.',
@@ -1941,7 +1957,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     name: 'Stainless Steel Flask',
     nameRu: 'Стальная фляга (0.75L)',
     category: 'food',
-    maxStack: 2,
+    maxStack: 1,
     icon: '',
     description: 'Durable metal flask filled with pure mountain water.',
     descriptionRu: 'Надежная металлическая фляга с чистой родниковой водой.',
@@ -1960,7 +1976,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     name: 'Military Magnetic Compass',
     nameRu: 'Тактический компас',
     category: 'tool',
-    maxStack: 2,
+    maxStack: 1,
     icon: '',
     description: 'Liquid-filled compass for precise geographic navigation.',
     descriptionRu: 'Жидкостный компас для точного ориентирования на местности.',
@@ -1986,7 +2002,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     name: 'Illustrated City Guide',
     nameRu: 'Путеводитель по городу',
     category: 'misc',
-    maxStack: 5,
+    maxStack: 1,
     icon: '',
     description: 'Detailed tourist handbook with city landmarks and streets.',
     descriptionRu: 'Глянцевый справочник с картой ключевых мест и описанием кварталов.',
@@ -1999,7 +2015,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     name: 'Leatherbound Notebook',
     nameRu: 'Блокнот для заметок',
     category: 'misc',
-    maxStack: 10,
+    maxStack: 1,
     icon: '',
     description: 'Blank lined paper notebook for journal records.',
     descriptionRu: 'Компактный блокнот в плотной обложке для записей.',
@@ -2012,7 +2028,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     name: 'Ballpoint Pen',
     nameRu: 'Шариковая ручка',
     category: 'misc',
-    maxStack: 20,
+    maxStack: 1,
     icon: '',
     description: 'Blue ink smooth ballpoint pen.',
     descriptionRu: 'Классическая шариковая ручка с синей пастой.',
@@ -2027,7 +2043,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     name: 'G12+ Coolant Antifreeze (5L)',
     nameRu: 'Канистра антифриза G12+',
     category: 'auto',
-    maxStack: 2,
+    maxStack: 1,
     icon: '',
     description: 'High performance engine coolant prevents overheating and freezing.',
     descriptionRu: 'Охлаждающая жидкость для радиатора. Предотвращает перегрев двигателя.',
@@ -2040,7 +2056,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     name: 'Empty Coolant Canister',
     nameRu: 'Пустая канистра от антифриза',
     category: 'misc',
-    maxStack: 4,
+    maxStack: 1,
     icon: '',
     description: 'Empty plastic canister for G12+ antifreeze.',
     descriptionRu: 'Пустая пластиковая канистра из-под антифриза.',
@@ -2053,7 +2069,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     name: 'Empty Oil Canister',
     nameRu: 'Пустая канистра из-под масла',
     category: 'misc',
-    maxStack: 4,
+    maxStack: 1,
     icon: '',
     description: 'Empty plastic canister from engine oil.',
     descriptionRu: 'Пустая пластиковая канистра из-под моторного масла.',
@@ -2066,7 +2082,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     name: 'Reinforced Towing Rope (5T)',
     nameRu: 'Буксировочный трос 5т',
     category: 'tool',
-    maxStack: 2,
+    maxStack: 1,
     icon: '',
     description: 'Heavy duty strap with steel carabiners for emergency vehicle recovery.',
     descriptionRu: 'Прочный капроновый трос со стальными крюками для эвакуации авто.',
@@ -2081,7 +2097,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     name: 'Banana Peel',
     nameRu: 'Банановая кожура',
     category: 'misc',
-    maxStack: 20,
+    maxStack: 1,
     icon: '',
     description: 'Slippery yellow banana peel. Throw into trash bin.',
     descriptionRu: 'Скользкая банановая кожура. Выбросьте в урну.',
@@ -2094,7 +2110,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     name: 'Empty Fries Box',
     nameRu: 'Коробочка от картошки фри',
     category: 'misc',
-    maxStack: 20,
+    maxStack: 1,
     icon: '',
     description: 'Red cardboard fries container.',
     descriptionRu: 'Пустая красная картонная коробочка от картофеля фри.',
@@ -2107,7 +2123,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     name: 'Empty Milkshake Cup',
     nameRu: 'Пустой стакан от коктейля',
     category: 'misc',
-    maxStack: 20,
+    maxStack: 1,
     icon: '',
     description: 'Clear plastic cup with domed lid and straw.',
     descriptionRu: 'Прозрачный пластиковый стаканчик с купольной крышкой и соломинкой.',
@@ -2120,7 +2136,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     name: 'Empty Popcorn Bucket',
     nameRu: 'Ведерко от попкорна',
     category: 'misc',
-    maxStack: 20,
+    maxStack: 1,
     icon: '',
     description: 'Striped cardboard cinema popcorn bucket.',
     descriptionRu: 'Полосатое картонное ведерко из-под попкорна.',
@@ -2133,7 +2149,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     name: 'Empty WOK Container',
     nameRu: 'Пустая коробочка ВОК',
     category: 'misc',
-    maxStack: 20,
+    maxStack: 1,
     icon: '',
     description: 'Empty Chinese food container with wooden chopsticks.',
     descriptionRu: 'Пустая картонная коробочка вок с деревянными палочками.',
@@ -2146,7 +2162,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     name: 'Empty MRE Packaging',
     nameRu: 'Пустая упаковка сухпайка',
     category: 'misc',
-    maxStack: 10,
+    maxStack: 1,
     icon: '',
     description: 'Discarded green military ration container.',
     descriptionRu: 'Пустая зеленая полимерная упаковка от армейского сухого пайка.',
@@ -2159,7 +2175,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     name: 'Apple Core',
     nameRu: 'Огрызок яблока',
     category: 'misc',
-    maxStack: 20,
+    maxStack: 1,
     icon: '',
     description: 'Brown oxidized apple core. Throw in trash.',
     descriptionRu: 'Бурый окислившийся огрызок. Выбросьте в урну.',
@@ -2172,7 +2188,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     name: 'Burger Wrapper',
     nameRu: 'Обёртка от бургера',
     category: 'misc',
-    maxStack: 20,
+    maxStack: 1,
     icon: '',
     description: 'Greasy paper wrapper from a cheeseburger.',
     descriptionRu: 'Жирная бумажная обёртка от чизбургера.',
@@ -2185,7 +2201,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     name: 'Paper Plate',
     nameRu: 'Бумажная тарелка',
     category: 'misc',
-    maxStack: 20,
+    maxStack: 1,
     icon: '',
     description: 'Greasy paper plate with pizza crumbs.',
     descriptionRu: 'Жирная бумажная тарелка с крошками пиццы.',
@@ -2198,7 +2214,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     name: 'Sandwich Bag',
     nameRu: 'Пакет от сэндвича',
     category: 'misc',
-    maxStack: 20,
+    maxStack: 1,
     icon: '',
     description: 'Empty plastic sandwich bag.',
     descriptionRu: 'Пустой пластиковый пакет из-под сэндвича.',
@@ -2211,7 +2227,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     name: 'Chocolate Foil',
     nameRu: 'Фольга от шоколада',
     category: 'misc',
-    maxStack: 20,
+    maxStack: 1,
     icon: '',
     description: 'Torn foil wrapper from a chocolate bar.',
     descriptionRu: 'Рваная фольга от шоколадного батончика.',
@@ -2224,7 +2240,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     name: 'Empty Chips Bag',
     nameRu: 'Пустой пакет от чипсов',
     category: 'misc',
-    maxStack: 20,
+    maxStack: 1,
     icon: '',
     description: 'Crinkled empty potato chips bag.',
     descriptionRu: 'Мятый пустой пакет от картофельных чипсов.',
@@ -2237,7 +2253,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     name: 'Empty Can',
     nameRu: 'Пустая жестяная банка',
     category: 'misc',
-    maxStack: 20,
+    maxStack: 1,
     icon: '',
     description: 'Empty crushed tin can.',
     descriptionRu: 'Пустая сплющенная жестяная банка.',
@@ -2250,7 +2266,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     name: 'Empty Bottle',
     nameRu: 'Пустая пластиковая бутылка',
     category: 'misc',
-    maxStack: 20,
+    maxStack: 1,
     icon: '',
     description: 'Empty clear plastic water bottle.',
     descriptionRu: 'Пустая прозрачная пластиковая бутылка.',
@@ -2263,7 +2279,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     name: 'Disposable Cup',
     nameRu: 'Одноразовый стаканчик',
     category: 'misc',
-    maxStack: 20,
+    maxStack: 1,
     icon: '',
     description: 'Empty paper coffee cup.',
     descriptionRu: 'Пустой бумажный стаканчик из-под кофе.',
@@ -2276,7 +2292,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     name: 'Empty Juice Box',
     nameRu: 'Пустой пакетик от сока',
     category: 'misc',
-    maxStack: 20,
+    maxStack: 1,
     icon: '',
     description: 'Empty tetra pak juice container.',
     descriptionRu: 'Пустой тетрапак от апельсинового сока.',
@@ -2289,7 +2305,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     name: 'Blister Pack',
     nameRu: 'Блистер из-под таблеток',
     category: 'misc',
-    maxStack: 20,
+    maxStack: 1,
     icon: '',
     description: 'Empty medicine blister pack.',
     descriptionRu: 'Пустой блистер из-под лекарства.',
@@ -2302,7 +2318,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     name: 'Empty Stew Can',
     nameRu: 'Банка из-под тушёнки',
     category: 'misc',
-    maxStack: 20,
+    maxStack: 1,
     icon: '',
     description: 'Empty tin can with curled lid.',
     descriptionRu: 'Пустая жестяная консервная банка с отогнутой крышкой.',
@@ -2315,7 +2331,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     name: 'Crushed Cola Zero Can',
     nameRu: 'Смятая банка Колы Зеро',
     category: 'misc',
-    maxStack: 20,
+    maxStack: 1,
     icon: '',
     description: 'Crushed black aluminum cola can.',
     descriptionRu: 'Смятая черная алюминиевая банка из-под диетической колы.',
@@ -2328,7 +2344,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     name: 'Crushed Energy Drink Can',
     nameRu: 'Смятая банка энергетика',
     category: 'misc',
-    maxStack: 20,
+    maxStack: 1,
     icon: '',
     description: 'Crushed navy energy drink can with open pull tab.',
     descriptionRu: 'Смятая синяя банка из-под энергетического напитка.',
@@ -2341,7 +2357,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     name: 'Empty Steel Flask',
     nameRu: 'Пустая стальная фляга',
     category: 'misc',
-    maxStack: 5,
+    maxStack: 1,
     icon: '',
     description: 'Empty stainless steel hip flask with dangling cap.',
     descriptionRu: 'Пустая походная металлическая фляга с отвинченной крышкой.',
@@ -2354,7 +2370,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     name: 'Empty Soup Bowl',
     nameRu: 'Пустая суповая тарелка',
     category: 'misc',
-    maxStack: 10,
+    maxStack: 1,
     icon: '',
     description: 'Empty ceramic bowl with spoon and broth sheen.',
     descriptionRu: 'Пустая глубокая тарелка из-под горячего бульона с ложкой.',
@@ -2367,7 +2383,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     name: 'Hot Dog Paper Tray',
     nameRu: 'Обёртка от хот-дога',
     category: 'misc',
-    maxStack: 20,
+    maxStack: 1,
     icon: '',
     description: 'Paper food boat with mustard smear.',
     descriptionRu: 'Бумажный лоток из-под хот-дога со следами горчицы.',
@@ -2380,7 +2396,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     name: 'Empty Bento Sushi Tray',
     nameRu: 'Пустой лоток от суши',
     category: 'misc',
-    maxStack: 15,
+    maxStack: 1,
     icon: '',
     description: 'Black sushi bento tray with decorative grass divider.',
     descriptionRu: 'Черный лоток из-под роллов с зеленой перегородкой и следами соевого соуса.',
@@ -2393,7 +2409,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     name: 'Empty Nachos Boat',
     nameRu: 'Лоток из-под начос',
     category: 'misc',
-    maxStack: 20,
+    maxStack: 1,
     icon: '',
     description: 'Cardboard boat with cheese dip residue.',
     descriptionRu: 'Картонный лоток из-под чипсов начос с пустым соусником.',
@@ -2406,7 +2422,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     name: 'Empty Vitamin Bottle',
     nameRu: 'Пустая баночка от витаминов',
     category: 'misc',
-    maxStack: 20,
+    maxStack: 1,
     icon: '',
     description: 'Empty amber pill bottle with open cap.',
     descriptionRu: 'Пустая янтарная пластиковая баночка из-под поливитаминов.',
@@ -2419,7 +2435,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     name: 'Empty Antiseptic Spray',
     nameRu: 'Пустой флакон антисептика',
     category: 'misc',
-    maxStack: 20,
+    maxStack: 1,
     icon: '',
     description: 'Depleted green antiseptic spray bottle.',
     descriptionRu: 'Пустой зеленый флакон с распылителем от антисептика.',
@@ -2432,7 +2448,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     name: 'Empty First Aid Box',
     nameRu: 'Пустая коробка аптечки',
     category: 'misc',
-    maxStack: 6,
+    maxStack: 1,
     icon: '',
     description: 'Open plastic medical emergency case with empty compartments.',
     descriptionRu: 'Пустой красный пластиковый кейс автомобильной аптечки.',
@@ -2446,7 +2462,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     name: 'Folding Pocket Knife',
     nameRu: 'Туристический нож',
     category: 'tool',
-    maxStack: 2,
+    maxStack: 1,
     icon: '',
     description: 'Stainless steel folding utility knife.',
     descriptionRu: 'Складной нож из нержавеющей стали для хозяйственных нужд.',
@@ -2472,12 +2488,923 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     name: 'Heavy Duty Duct Tape',
     nameRu: 'Армированный скотч',
     category: 'tool',
-    maxStack: 10,
+    maxStack: 1,
     icon: '',
     description: 'Strong reinforced adhesive tape for quick fixes.',
     descriptionRu: 'Прочный армированный скотч для быстрого ремонта подручных вещей.',
     effects: {},
     weight: 0.15,
+    usable: true
+  },
+
+  // === GAS STATION, SUPERMARKET & ELECTRONICS CATALOG ITEMS ===
+  fuel_order: {
+    itemId: 'fuel_order',
+    name: 'Fuel Dispenser Order',
+    nameRu: 'Топливный талон / Заказ ТРК',
+    category: 'auto',
+    maxStack: 1,
+    icon: '',
+    description: 'Fuel pump order voucher for vehicle fueling.',
+    descriptionRu: 'Оплаченный заказ топлива на топливораздаточной колонке (ТРК).',
+    effects: {},
+    weight: 0.1,
+    usable: false
+  },
+  washer_fluid: {
+    itemId: 'washer_fluid',
+    name: 'Windshield Washer Fluid (-25°C)',
+    nameRu: 'Стеклоомыватель зимний (-25°C)',
+    category: 'auto',
+    maxStack: 1,
+    icon: '',
+    description: '5L frost-resistant windshield washer fluid canister.',
+    descriptionRu: 'Канистра зимней незамерзающей жидкости (5 л) для бачка омывателя стекол.',
+    effects: {},
+    weight: 5.1,
+    volume: 5.2,
+    usable: true,
+    isContainer: true
+  },
+  kvas: {
+    itemId: 'kvas',
+    name: 'Traditional Bread Kvas (1.5L)',
+    nameRu: 'Хлебный квас "Старорусский" (1.5L)',
+    category: 'drink',
+    maxStack: 1,
+    icon: '',
+    description: 'Refreshing fermented rye bread beverage in 1.5L PET bottle.',
+    descriptionRu: 'Традиционный хлебный квас живого брожения в пластиковой бутылке 1.5 л.',
+    effects: { thirst: 50, hunger: 20, energy: 15 },
+    weight: 1.55,
+    volume: 1.6,
+    usable: true,
+    portions: 5,
+    maxPortions: 5,
+    leftoverId: 'bottle_plastic_1500',
+    isContainer: true
+  },
+  cola: {
+    itemId: 'cola',
+    name: 'Classic Cola Can (0.33L)',
+    nameRu: 'Баночка Колы (0.33L)',
+    category: 'drink',
+    maxStack: 4,
+    icon: '',
+    description: 'Chilled carbonated cola soda in aluminum can.',
+    descriptionRu: 'Алюминиевая банка сильногазированной сладкой колы (0.33 л).',
+    effects: { thirst: 30, energy: 15 },
+    weight: 0.35,
+    volume: 0.35,
+    usable: true,
+    portions: 1,
+    maxPortions: 1,
+    leftoverId: 'can_empty'
+  },
+  beer: {
+    itemId: 'beer',
+    name: 'Lager Beer Can (0.5L)',
+    nameRu: 'Пиво светлое фильтрованное (0.5L)',
+    category: 'drink',
+    maxStack: 4,
+    icon: '',
+    description: 'Cold premium lager beer 4.8% in aluminum can.',
+    descriptionRu: 'Банка светлого ячменного лагера (0.5 л) 4.8% крепости.',
+    effects: { thirst: 25, energy: -10, sleepiness: 15 },
+    weight: 0.52,
+    volume: 0.52,
+    usable: true,
+    portions: 2,
+    maxPortions: 2,
+    leftoverId: 'can_empty'
+  },
+  canned_fish: {
+    itemId: 'canned_fish',
+    name: 'Canned Baltic Sprats in Oil',
+    nameRu: 'Рыбные консервы в масле (0.15L)',
+    category: 'food',
+    maxStack: 4,
+    icon: '',
+    description: 'Smoked Baltic sprats in vegetable oil with key pull.',
+    descriptionRu: 'Балтийские шпроты в ароматном масле в жестяной банке с ключом.',
+    effects: { hunger: 65, health: 10 },
+    weight: 0.18,
+    volume: 0.2,
+    usable: true,
+    portions: 2,
+    maxPortions: 2,
+    leftoverId: 'tin_can_empty'
+  },
+  condensed_milk: {
+    itemId: 'condensed_milk',
+    name: 'Sweetened Condensed Milk',
+    nameRu: 'Сгущённое молоко цельное (0.4L)',
+    category: 'food',
+    maxStack: 4,
+    icon: '',
+    description: 'Classic GOST whole condensed milk with sugar.',
+    descriptionRu: 'Цельное сгущенное молоко с сахаром по ГОСТ в жестяной банке.',
+    effects: { hunger: 50, energy: 35 },
+    weight: 0.42,
+    volume: 0.4,
+    usable: true,
+    portions: 3,
+    maxPortions: 3,
+    leftoverId: 'tin_can_empty'
+  },
+  jar_pickles: {
+    itemId: 'jar_pickles',
+    name: 'Pickled Cucumbers Jar (0.5L)',
+    nameRu: 'Огурчики маринованные в банке (0.5L)',
+    category: 'food',
+    maxStack: 2,
+    icon: '',
+    description: 'Crisp gherkins in aromatic dill and garlic brine.',
+    descriptionRu: 'Стеклянная банка хрустящих маринованных огурчиков с укропом и чесноком.',
+    effects: { hunger: 30, thirst: 30, health: 5 },
+    weight: 0.85,
+    volume: 0.6,
+    usable: true,
+    portions: 4,
+    maxPortions: 4,
+    leftoverId: 'jar_glass_medium',
+    isContainer: true
+  },
+  jam_raspberry: {
+    itemId: 'jam_raspberry',
+    name: 'Raspberry Jam Jar (0.2L)',
+    nameRu: 'Малиновое варенье в банке (0.2L)',
+    category: 'food',
+    maxStack: 2,
+    icon: '',
+    description: 'Natural sweet raspberry preserves with whole berries.',
+    descriptionRu: 'Домашнее варенье из спелой садовой малины в баночке с винтовой крышкой.',
+    effects: { hunger: 42, health: 15, energy: 20 },
+    weight: 0.38,
+    volume: 0.25,
+    usable: true,
+    portions: 4,
+    maxPortions: 4,
+    leftoverId: 'jar_glass_small',
+    isContainer: true
+  },
+  jam_strawberry: {
+    itemId: 'jam_strawberry',
+    name: 'Strawberry Jam Jar (0.2L)',
+    nameRu: 'Клубничный джем в стекле (0.2L)',
+    category: 'food',
+    maxStack: 2,
+    icon: '',
+    description: 'Delicious ripe strawberry fruit jam.',
+    descriptionRu: 'Сладкий клубничный джем в стеклянной баночке.',
+    effects: { hunger: 42, health: 10, energy: 20 },
+    weight: 0.38,
+    volume: 0.25,
+    usable: true,
+    portions: 4,
+    maxPortions: 4,
+    leftoverId: 'jar_glass_small',
+    isContainer: true
+  },
+  jar_honey: {
+    itemId: 'jar_honey',
+    name: 'Pure Flower Honey (0.2L)',
+    nameRu: 'Натуральный цветочный мёд (0.2L)',
+    category: 'food',
+    maxStack: 2,
+    icon: '',
+    description: 'Golden linden and meadow floral honey.',
+    descriptionRu: 'Натуральный янтарный липовый мёд в стеклянной баночке.',
+    effects: { hunger: 45, health: 20, energy: 30 },
+    weight: 0.42,
+    volume: 0.25,
+    usable: true,
+    portions: 4,
+    maxPortions: 4,
+    leftoverId: 'jar_glass_small',
+    isContainer: true
+  },
+  caviar_squash_jar: {
+    itemId: 'caviar_squash_jar',
+    name: 'Squash Caviar Jar (0.5L)',
+    nameRu: 'Кабачковая икра в банке (0.5L)',
+    category: 'food',
+    maxStack: 2,
+    icon: '',
+    description: 'Smooth cooked vegetable spread with carrots and tomatoes.',
+    descriptionRu: 'Нежная обжаренная кабачковая икра по-домашнему в стекле.',
+    effects: { hunger: 45, health: 10 },
+    weight: 0.8,
+    volume: 0.55,
+    usable: true,
+    portions: 3,
+    maxPortions: 3,
+    leftoverId: 'jar_glass_medium',
+    isContainer: true
+  },
+  caviar_eggplant_jar: {
+    itemId: 'caviar_eggplant_jar',
+    name: 'Eggplant Caviar Jar (0.5L)',
+    nameRu: 'Баклажанная икра в банке (0.5L)',
+    category: 'food',
+    maxStack: 2,
+    icon: '',
+    description: 'Roasted eggplant spread with garlic and herbs.',
+    descriptionRu: 'Пикантная баклажанная икра с чесноком и специями.',
+    effects: { hunger: 48, health: 10 },
+    weight: 0.8,
+    volume: 0.55,
+    usable: true,
+    portions: 3,
+    maxPortions: 3,
+    leftoverId: 'jar_glass_medium',
+    isContainer: true
+  },
+  carton_milk: {
+    itemId: 'carton_milk',
+    name: 'Pasteurized Milk 3.2% (1.0L)',
+    nameRu: 'Молоко пастеризованное 3.2% (1.0L)',
+    category: 'drink',
+    maxStack: 2,
+    icon: '',
+    description: '1.0L carton of pasteurized whole milk.',
+    descriptionRu: 'Пакет питьевого пастеризованного молока 3.2% жирности (1.0 л).',
+    effects: { thirst: 35, hunger: 20 },
+    weight: 1.05,
+    volume: 1.0,
+    usable: true,
+    portions: 3,
+    maxPortions: 3,
+    leftoverId: 'juice_box',
+    isContainer: true
+  },
+  sugar: {
+    itemId: 'sugar',
+    name: 'Refined White Sugar (1kg)',
+    nameRu: 'Сахар-песок в пакете (1 кг)',
+    category: 'food',
+    maxStack: 2,
+    icon: '',
+    description: '1 kg paper bag of pure refined granulated sugar.',
+    descriptionRu: 'Пакет белоснежного кристального сахара-песка (1 кг).',
+    effects: { hunger: 10, energy: 30 },
+    weight: 1.02,
+    volume: 1.1,
+    usable: true
+  },
+  phone_retro: {
+    itemId: 'phone_retro',
+    name: 'Matrix Classic Keypad Phone',
+    nameRu: 'Телефон Matrix Classic (Кнопочный)',
+    category: 'electronics',
+    maxStack: 1,
+    icon: '',
+    description: 'Indestructible monochrome keypad phone with flashlight and week-long battery.',
+    descriptionRu: 'Неубиваемый кнопочный телефон с монохромным экраном, фонариком и недельной батареей.',
+    effects: {},
+    weight: 0.12,
+    usable: true
+  },
+  phone_nord: {
+    itemId: 'phone_nord',
+    name: 'Nord Lite 5G Smartphone',
+    nameRu: 'Смартфон Nord Lite 5G',
+    category: 'electronics',
+    maxStack: 1,
+    icon: '',
+    description: 'Clean Nordic teal design with 90Hz AMOLED and triple AI camera.',
+    descriptionRu: 'Стильный скандинавский смартфон бирюзового оттенка с 90 Гц дисплеем и тройной камерой.',
+    effects: {},
+    weight: 0.18,
+    usable: true
+  },
+  phone_nova15: {
+    itemId: 'phone_nova15',
+    name: 'Nova 15 Ultra Flagship Smartphone',
+    nameRu: 'Смартфон Nova 15 Ultra (Флагман)',
+    category: 'electronics',
+    maxStack: 1,
+    icon: '',
+    description: 'Top luxury flagship with 200MP Star Orbit camera and gold accents.',
+    descriptionRu: 'Премиальный флагман с 6.8" 120Hz дисплеем, 200MP камерой в кольце Star Orbit и золотыми акцентами.',
+    effects: {},
+    weight: 0.22,
+    usable: true
+  },
+  phone_pixel: {
+    itemId: 'phone_pixel',
+    name: 'Pixel Horizon 9 Smartphone',
+    nameRu: 'Смартфон Pixel Horizon 9',
+    category: 'electronics',
+    maxStack: 1,
+    icon: '',
+    description: 'Modern Android smartphone with iconic horizontal camera visor.',
+    descriptionRu: 'Умный камерофон с фирменным горизонтальным козырьком камер и чистым интерфейсом.',
+    effects: {},
+    weight: 0.19,
+    usable: true
+  },
+  phone_fold: {
+    itemId: 'phone_fold',
+    name: 'CyberFold Neo Folding Smartphone',
+    nameRu: 'Гибкий смартфон CyberFold Neo',
+    category: 'electronics',
+    maxStack: 1,
+    icon: '',
+    description: 'Next-gen folding book phone with titanium hinge and dual AMOLED screens.',
+    descriptionRu: 'Футуристический раскладной гибкий смартфон с титановым шарниром и двойным дисплеем.',
+    effects: {},
+    weight: 0.25,
+    usable: true
+  },
+  jeans_classic: {
+    itemId: 'jeans_classic',
+    name: 'Classic Indigo Jeans',
+    nameRu: 'Классические джинсы',
+    category: 'clothing',
+    maxStack: 1,
+    icon: '',
+    description: 'Durable classic blue denim jeans with copper rivets.',
+    descriptionRu: 'Прочные классические синие джинсы из плотного денима с медными заклепками.',
+    effects: {},
+    weight: 0.6,
+    usable: true
+  },
+  shoes_sneakers: {
+    itemId: 'shoes_sneakers',
+    name: 'Sport Running Sneakers',
+    nameRu: 'Спортивные кроссовки',
+    category: 'clothing',
+    maxStack: 1,
+    icon: '',
+    description: 'Lightweight breathable mesh sneakers with EVA cushioning.',
+    descriptionRu: 'Легкие дышащие кроссовки с амортизирующей подошвой для бега и ходьбы.',
+    effects: {},
+    weight: 0.55,
+    usable: true
+  },
+  jacket_leather: {
+    itemId: 'jacket_leather',
+    name: 'Classic Leather Biker Jacket',
+    nameRu: 'Кожаная косуха',
+    category: 'clothing',
+    maxStack: 1,
+    icon: '',
+    description: 'Heavy black genuine leather jacket with asymmetric zipper and wind protection.',
+    descriptionRu: 'Плотная байкерская куртка из натуральной кожи с диагональной молнией и заклепками.',
+    effects: {},
+    weight: 1.8,
+    usable: true
+  },
+  flashlight_police: {
+    itemId: 'flashlight_police',
+    name: 'Tactical Patrol Flashlight',
+    nameRu: 'Тактический патрульный фонарь',
+    category: 'tool',
+    maxStack: 1,
+    icon: '',
+    description: 'Heavy anodized aircraft-grade aluminum flashlight with ultra-bright beam.',
+    descriptionRu: 'Тяжелый тактический фонарь из анодированного авиационного алюминия с мощным лучом.',
+    effects: {},
+    weight: 0.45,
+    usable: true
+  },
+  screwdriver: {
+    itemId: 'screwdriver',
+    name: 'Heavy Duty Screwdriver',
+    nameRu: 'Универсальная отвертка',
+    category: 'tool',
+    maxStack: 1,
+    icon: '',
+    description: 'Chrome-vanadium steel screwdriver with ergonomic non-slip grip.',
+    descriptionRu: 'Слесарная отвертка из хром-ванадиевой стали с удобной прорезиненной рукоятью.',
+    effects: {},
+    weight: 0.15,
+    usable: false
+  },
+  panthenol_empty: {
+    itemId: 'panthenol_empty',
+    name: 'Empty Panthenol Spray Can',
+    nameRu: 'Пустой баллончик Пантенола',
+    category: 'misc',
+    maxStack: 1,
+    icon: '',
+    description: 'Empty aluminum spray canister from panthenol burn foam.',
+    descriptionRu: 'Пустой алюминиевый баллончик из-под пены Пантенол.',
+    effects: {},
+    weight: 0.05,
+    usable: false
+  },
+  ointment_tube_empty: {
+    itemId: 'ointment_tube_empty',
+    name: 'Empty Ointment Tube',
+    nameRu: 'Пустой тюбик мази',
+    category: 'misc',
+    maxStack: 1,
+    icon: '',
+    description: 'Empty squeezed metal tube from healing ointment.',
+    descriptionRu: 'Смятый пустой металлический тюбик из-под мази «Спасатель».',
+    effects: {},
+    weight: 0.01,
+    usable: false
+  },
+  zelenka_bottle_empty: {
+    itemId: 'zelenka_bottle_empty',
+    name: 'Empty Zelenka Vial',
+    nameRu: 'Пустой флакон зелёнки',
+    category: 'misc',
+    maxStack: 1,
+    icon: '',
+    description: 'Empty glass vial with emerald green crust on rim.',
+    descriptionRu: 'Пустой стеклянный флакончик со следами бриллиантового зеленого.',
+    effects: {},
+    weight: 0.03,
+    usable: false
+  },
+  iodine_bottle_empty: {
+    itemId: 'iodine_bottle_empty',
+    name: 'Empty Iodine Vial',
+    nameRu: 'Пустой флакон йода',
+    category: 'misc',
+    maxStack: 1,
+    icon: '',
+    description: 'Empty amber glass vial from iodine disinfectant.',
+    descriptionRu: 'Пустой флакон из темного стекла со следами раствора йода.',
+    effects: {},
+    weight: 0.03,
+    usable: false
+  },
+  diclofenac_tube_empty: {
+    itemId: 'diclofenac_tube_empty',
+    name: 'Empty Diclofenac Gel Tube',
+    nameRu: 'Пустой тюбик Диклофенака',
+    category: 'misc',
+    maxStack: 1,
+    icon: '',
+    description: 'Rolled up empty tube from anti-inflammatory gel.',
+    descriptionRu: 'Свернутый пустой тюбик из-под геля Диклофенак.',
+    effects: {},
+    weight: 0.015,
+    usable: false
+  },
+  peroxide_bottle_empty: {
+    itemId: 'peroxide_bottle_empty',
+    name: 'Empty Peroxide Bottle',
+    nameRu: 'Пустой флакон перекиси',
+    category: 'misc',
+    maxStack: 1,
+    icon: '',
+    description: 'Empty white plastic hydrogen peroxide dispenser bottle.',
+    descriptionRu: 'Пустой белый полиэтиленовый флакон из-под перекиси водорода.',
+    effects: {},
+    weight: 0.02,
+    usable: false
+  },
+  ammonia_bottle_empty: {
+    itemId: 'ammonia_bottle_empty',
+    name: 'Empty Ammonia Spirit Vial',
+    nameRu: 'Пустой флакон нашатыря',
+    category: 'misc',
+    maxStack: 1,
+    icon: '',
+    description: 'Empty miniature glass vial from 10% ammonia spirit.',
+    descriptionRu: 'Пустой стеклянный флакончик из-под нашатырного спирта.',
+    effects: {},
+    weight: 0.025,
+    usable: false
+  },
+  star_tin_empty: {
+    itemId: 'star_tin_empty',
+    name: 'Empty Golden Star Balm Tin',
+    nameRu: 'Пустая баночка «Звёздочки»',
+    category: 'misc',
+    maxStack: 1,
+    icon: '',
+    description: 'Empty tiny red circular tin from aromatic herbal balm.',
+    descriptionRu: 'Крошечная пустая круглая жестяная баночка из-под бальзама «Золотая Звезда».',
+    effects: {},
+    weight: 0.005,
+    usable: false
+  },
+  valerian_bottle_empty: {
+    itemId: 'valerian_bottle_empty',
+    name: 'Empty Valerian Drops Bottle',
+    nameRu: 'Пустой флакон валерьянки',
+    category: 'misc',
+    maxStack: 1,
+    icon: '',
+    description: 'Empty brown glass dropper bottle from soothing valerian drops.',
+    descriptionRu: 'Пустой коричневый стеклянный флакон-капельница из-под настойки валерианы.',
+    effects: {},
+    weight: 0.03,
+    usable: false
+  },
+
+  // === UNIFIED FLUID & BULK CONTAINERS (УНИФИЦИРОВАННАЯ ТАРА) ===
+  bottle_plastic_500: {
+    itemId: 'bottle_plastic_500',
+    name: 'Plastic Bottle (0.5L)',
+    nameRu: 'Пластиковая бутылка 0.5л',
+    category: 'drink',
+    maxStack: 1,
+    icon: '',
+    description: 'Universal 0.5L PET bottle. Can store any drink, chemical fluid or sand.',
+    descriptionRu: 'Универсальная пластиковая ПЭТ-бутылка объемом 0.5 литра для любых напитков, технических жидкостей или песка.',
+    effects: {},
+    weight: 0.03,
+    volume: 0.55,
+    usable: true
+  },
+  bottle_plastic_1500: {
+    itemId: 'bottle_plastic_1500',
+    name: 'Plastic Bottle (1.5L)',
+    nameRu: 'Пластиковая бутылка 1.5л',
+    category: 'drink',
+    maxStack: 1,
+    icon: '',
+    description: 'Large 1.5L PET bottle for fluids and granular materials.',
+    descriptionRu: 'Большая пластиковая ПЭТ-бутылка на 1.5 литра. Подходит для воды, кваса, молока, топлива и песка.',
+    effects: {},
+    weight: 0.06,
+    volume: 1.6,
+    usable: true
+  },
+  glass_bottle_500: {
+    itemId: 'glass_bottle_500',
+    name: 'Glass Bottle (0.5L)',
+    nameRu: 'Стеклянная бутылка 0.5л',
+    category: 'drink',
+    maxStack: 1,
+    icon: '',
+    description: '0.5L glass bottle with airtight screw cap.',
+    descriptionRu: 'Стеклянная бутылка на 0.5 литра с винтовой крышкой.',
+    effects: {},
+    weight: 0.35,
+    volume: 0.55,
+    usable: true
+  },
+  bottle_glass_medium: {
+    itemId: 'bottle_glass_medium',
+    name: 'Glass Bottle (0.5L)',
+    nameRu: 'Стеклянная бутылка 0.5л',
+    category: 'drink',
+    maxStack: 1,
+    icon: '',
+    description: 'Standard 0.5L glass bottle.',
+    descriptionRu: 'Унифицированная стеклянная бутылка объемом 0.5 литра.',
+    effects: {},
+    weight: 0.35,
+    volume: 0.55,
+    usable: true
+  },
+  bottle_glass_large: {
+    itemId: 'bottle_glass_large',
+    name: 'Glass Bottle (1.0L)',
+    nameRu: 'Стеклянная бутылка 1.0л',
+    category: 'drink',
+    maxStack: 1,
+    icon: '',
+    description: 'Large 1.0L glass bottle for fluids.',
+    descriptionRu: 'Унифицированная стеклянная бутылка объемом 1 литр.',
+    effects: {},
+    weight: 0.50,
+    volume: 1.05,
+    usable: true
+  },
+  canister_metal_20l: {
+    itemId: 'canister_metal_20l',
+    name: 'Metal Canister (20L)',
+    nameRu: 'Металлическая канистра 20л',
+    category: 'gear',
+    maxStack: 1,
+    icon: '',
+    description: 'Durable 20L steel canister for fuel, water, or sand.',
+    descriptionRu: 'Прочная стальная 20-литровая канистра с герметичной крышкой. Подходит для бензина, дизеля, воды или песка.',
+    effects: {},
+    weight: 3.20,
+    volume: 22.0,
+    usable: true
+  },
+  canister_plastic_10l: {
+    itemId: 'canister_plastic_10l',
+    name: 'Plastic Canister (10L)',
+    nameRu: 'Пластиковая канистра 10л',
+    category: 'gear',
+    maxStack: 1,
+    icon: '',
+    description: '10L impact-resistant plastic canister.',
+    descriptionRu: 'Ударопрочная пластиковая канистра на 10 литров с ручкой.',
+    effects: {},
+    weight: 0.75,
+    volume: 11.0,
+    usable: true
+  },
+  canister_plastic_5l: {
+    itemId: 'canister_plastic_5l',
+    name: 'Plastic Canister (5L)',
+    nameRu: 'Пластиковая канистра 5л',
+    category: 'gear',
+    maxStack: 1,
+    icon: '',
+    description: 'Compact 5L plastic canister for fluids, coolant, oil, or fuel.',
+    descriptionRu: 'Компактная пластиковая канистра на 5 литров для технических жидкостей, антифриза, масла или топлива.',
+    effects: {},
+    weight: 0.40,
+    volume: 5.5,
+    usable: true
+  },
+  camp_flask: {
+    itemId: 'camp_flask',
+    name: 'Camp Flask (0.8L)',
+    nameRu: 'Походная фляга 0.8л',
+    category: 'gear',
+    maxStack: 1,
+    icon: '',
+    description: 'Field camp canteen flask in fabric case (800 ml).',
+    descriptionRu: 'Армейская стальная походная фляжка в матерчатом чехле на 800 мл.',
+    effects: {},
+    weight: 0.22,
+    volume: 0.9,
+    usable: true
+  },
+  thermos: {
+    itemId: 'thermos',
+    name: 'Thermos (1.0L)',
+    nameRu: 'Термос 1.0л',
+    category: 'gear',
+    maxStack: 1,
+    icon: '',
+    description: 'Vacuum insulated stainless steel thermos (1.0L).',
+    descriptionRu: 'Вакуумный стальной термос на 1 литр для горячих и холодных напитков.',
+    effects: {},
+    weight: 0.45,
+    volume: 1.2,
+    usable: true
+  },
+  paper_cup: {
+    itemId: 'paper_cup',
+    name: 'Paper Cup (0.25L)',
+    nameRu: 'Бумажный стаканчик 0.25л',
+    category: 'drink',
+    maxStack: 1,
+    icon: '',
+    description: 'Disposable paper cup for beverages (250 ml).',
+    descriptionRu: 'Одноразовый бумажный стаканчик для кофе, чая или воды.',
+    effects: {},
+    weight: 0.01,
+    volume: 0.28,
+    usable: true
+  },
+  glass_mug: {
+    itemId: 'glass_mug',
+    name: 'Glass Mug (0.35L)',
+    nameRu: 'Стеклянная кружка 0.35л',
+    category: 'gear',
+    maxStack: 1,
+    icon: '',
+    description: 'Heavy glass mug for tea and beverages (350 ml).',
+    descriptionRu: 'Увесистая стеклянная чайная кружка объемом 350 мл.',
+    effects: {},
+    weight: 0.28,
+    volume: 0.4,
+    usable: true
+  },
+  can_alu_330: {
+    itemId: 'can_alu_330',
+    name: 'Aluminum Can (0.33L)',
+    nameRu: 'Алюминиевая банка 0.33л',
+    category: 'drink',
+    maxStack: 1,
+    icon: '',
+    description: 'Aluminum can for beverages (330 ml).',
+    descriptionRu: 'Алюминиевая банка для напитков и газировки (330 мл).',
+    effects: {},
+    weight: 0.015,
+    volume: 0.35,
+    usable: true
+  },
+  tetra_pack_1000: {
+    itemId: 'tetra_pack_1000',
+    name: 'Tetra Pak (1.0L)',
+    nameRu: 'Тетрапак 1.0л',
+    category: 'drink',
+    maxStack: 1,
+    icon: '',
+    description: '1-liter carton Tetra Pak packaging.',
+    descriptionRu: 'Картонная упаковка тетрапак с пластиковым клапаном на 1 литр.',
+    effects: {},
+    weight: 0.04,
+    volume: 1.05,
+    usable: true
+  },
+  jar_glass_large: {
+    itemId: 'jar_glass_large',
+    name: 'Glass Jar (1.0L)',
+    nameRu: 'Стеклянная банка 1.0л',
+    category: 'gear',
+    maxStack: 1,
+    icon: '',
+    description: 'Unified 1.0L glass jar.',
+    descriptionRu: 'Унифицированная стеклянная банка объемом 1 литр.',
+    effects: {},
+    weight: 0.40,
+    volume: 1.1,
+    usable: true
+  },
+  jar_glass_medium: {
+    itemId: 'jar_glass_medium',
+    name: 'Glass Jar (0.5L)',
+    nameRu: 'Стеклянная банка 0.5л',
+    category: 'gear',
+    maxStack: 1,
+    icon: '',
+    description: 'Unified 0.5L glass jar.',
+    descriptionRu: 'Унифицированная стеклянная банка объемом 0.5 литра.',
+    effects: {},
+    weight: 0.25,
+    volume: 0.55,
+    usable: true
+  },
+  jar_glass_small: {
+    itemId: 'jar_glass_small',
+    name: 'Glass Jar (0.2L)',
+    nameRu: 'Стеклянная банка 0.2л',
+    category: 'gear',
+    maxStack: 1,
+    icon: '',
+    description: 'Unified 0.2L glass jar.',
+    descriptionRu: 'Унифицированная стеклянная банка объемом 0.2 литра.',
+    effects: {},
+    weight: 0.12,
+    volume: 0.22,
+    usable: true
+  },
+  can_metal_large: {
+    itemId: 'can_metal_large',
+    name: 'Tin Can (0.8L)',
+    nameRu: 'Жестяная банка 0.8л',
+    category: 'gear',
+    maxStack: 1,
+    icon: '',
+    description: 'Unified 0.8L tin can.',
+    descriptionRu: 'Унифицированная жестяная банка объемом 0.8 литра.',
+    effects: {},
+    weight: 0.10,
+    volume: 0.85,
+    usable: true
+  },
+  can_metal_medium: {
+    itemId: 'can_metal_medium',
+    name: 'Tin Can (0.4L)',
+    nameRu: 'Жестяная банка 0.4л',
+    category: 'gear',
+    maxStack: 1,
+    icon: '',
+    description: 'Unified 0.4L tin can.',
+    descriptionRu: 'Унифицированная жестяная банка объемом 0.4 литра.',
+    effects: {},
+    weight: 0.06,
+    volume: 0.45,
+    usable: true
+  },
+  can_metal_small: {
+    itemId: 'can_metal_small',
+    name: 'Tin Can (0.15L)',
+    nameRu: 'Жестяная банка 0.15л',
+    category: 'gear',
+    maxStack: 1,
+    icon: '',
+    description: 'Unified 0.15L tin can.',
+    descriptionRu: 'Унифицированная жестяная банка объемом 0.15 литра.',
+    effects: {},
+    weight: 0.03,
+    volume: 0.18,
+    usable: true
+  },
+  sack_cloth_large: {
+    itemId: 'sack_cloth_large',
+    name: 'Cloth Sack (10L)',
+    nameRu: 'Тканевый мешок 10л',
+    category: 'gear',
+    maxStack: 1,
+    icon: '',
+    description: 'Unified 10L cloth sack.',
+    descriptionRu: 'Унифицированный тканевый мешок объемом 10 литров.',
+    effects: {},
+    weight: 0.10,
+    volume: 10.0,
+    usable: true
+  },
+  sack_cloth_medium: {
+    itemId: 'sack_cloth_medium',
+    name: 'Cloth Sack (5L)',
+    nameRu: 'Тканевый мешок 5л',
+    category: 'gear',
+    maxStack: 1,
+    icon: '',
+    description: 'Unified 5L cloth sack.',
+    descriptionRu: 'Унифицированный тканевый мешок объемом 5 литров.',
+    effects: {},
+    weight: 0.06,
+    volume: 5.0,
+    usable: true
+  },
+  sack_cloth_small: {
+    itemId: 'sack_cloth_small',
+    name: 'Cloth Sack (1L)',
+    nameRu: 'Тканевый мешок 1л',
+    category: 'gear',
+    maxStack: 1,
+    icon: '',
+    description: 'Unified 1L cloth sack.',
+    descriptionRu: 'Унифицированный тканевый мешок объемом 1 литр.',
+    effects: {},
+    weight: 0.02,
+    volume: 1.0,
+    usable: true
+  },
+  sandbag: {
+    itemId: 'sandbag',
+    name: 'Sandbag (1kg)',
+    nameRu: 'Мешок с песком',
+    category: 'gear',
+    maxStack: 1,
+    icon: '',
+    description: 'Durable burlap sack with dry quartz sand (1 kg).',
+    descriptionRu: 'Плотный джутовый мешок с сухим кварцевым песком (1 кг). Используется для тушения пожаров и впитывания горюче-смазочных пятен.',
+    effects: {},
+    weight: 1.65,
+    volume: 1.0,
+    usable: true
+  },
+  sack_empty: {
+    itemId: 'sack_empty',
+    name: 'Empty Burlap Sack',
+    nameRu: 'Пустой джутовый мешок',
+    category: 'gear',
+    maxStack: 1,
+    icon: '',
+    description: 'Empty durable burlap canvas sack.',
+    descriptionRu: 'Прочный пустой мешок из грубой мешковины. Можно наполнять песком или использовать как ветошь.',
+    effects: {},
+    weight: 0.05,
+    volume: 1.0,
+    usable: true
+  },
+  lukoshko: {
+    itemId: 'lukoshko',
+    name: 'Wicker Basket (2.0L)',
+    nameRu: 'Плетёное лукошко',
+    category: 'gear',
+    maxStack: 1,
+    icon: '',
+    description: 'Lightweight woven wicker basket with handle for forest berries, mushrooms, and provisions.',
+    descriptionRu: 'Легкое плетеное берестяное лукошко с ручкой для сбора лесных ягод, грибов и припасов.',
+    effects: {},
+    weight: 0.15,
+    volume: 2.2,
+    usable: true
+  },
+  package_bag: {
+    itemId: 'package_bag',
+    name: 'Plastic Bag (1.5L)',
+    nameRu: 'Фасовочный пакет',
+    category: 'gear',
+    maxStack: 1,
+    icon: '',
+    description: 'Transparent thin polyethylene bag for granular products, grains, and sugar.',
+    descriptionRu: 'Прозрачный тонкий полиэтиленовый фасовочный пакет для сыпучих продуктов, круп и сахара.',
+    effects: {},
+    weight: 0.005,
+    volume: 1.5,
+    usable: true
+  },
+  plastic_bag: {
+    itemId: 'plastic_bag',
+    name: 'Carrier Bag (5.0L)',
+    nameRu: 'Пакет-майка',
+    category: 'gear',
+    maxStack: 1,
+    icon: '',
+    description: 'Universal plastic grocery shopping bag with handles.',
+    descriptionRu: 'Универсальный пластиковый пакет-майка с ручками для переноски продуктов и предметов.',
+    effects: {},
+    weight: 0.015,
+    volume: 5.0,
+    usable: true
+  },
+  soup_bowl: {
+    itemId: 'soup_bowl',
+    name: 'Soup Bowl (0.5L)',
+    nameRu: 'Суповая пиала',
+    category: 'food',
+    maxStack: 1,
+    icon: '',
+    description: 'Deep ceramic soup bowl for hot broths, stews, and soups.',
+    descriptionRu: 'Глубокая керамическая суповая тарелка-пиала для горячего бульона, рагу и ухи.',
+    effects: {},
+    weight: 0.20,
+    volume: 0.6,
     usable: true
   },
 
@@ -2487,7 +3414,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     name: 'Chair',
     nameRu: 'Стул',
     category: 'furniture' as any,
-    maxStack: 5,
+    maxStack: 1,
     icon: '',
     description: 'A wooden chair for your home.',
     descriptionRu: 'Деревянный стул со спинкой. Можно установить в своей квартире.',
@@ -2500,7 +3427,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     name: 'Table',
     nameRu: 'Обеденный стол',
     category: 'furniture' as any,
-    maxStack: 2,
+    maxStack: 1,
     icon: '',
     description: 'A wooden dining table.',
     descriptionRu: 'Деревянный обеденный стол для кухни или гостиной.',
@@ -2565,7 +3492,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     name: 'Bookshelf / Rack',
     nameRu: 'Книжный стеллаж',
     category: 'furniture' as any,
-    maxStack: 2,
+    maxStack: 1,
     icon: '',
     description: 'Open storage rack for books and items.',
     descriptionRu: 'Вместительный открытый стеллаж для вещей и книг.',
@@ -2578,7 +3505,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     name: 'Houseplant',
     nameRu: 'Комнатное растение',
     category: 'furniture' as any,
-    maxStack: 5,
+    maxStack: 1,
     icon: '',
     description: 'A decorative houseplant in ceramic pot.',
     descriptionRu: 'Декоративное комнатное растение в керамическом горшке.',
@@ -2604,7 +3531,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     name: 'Nightstand',
     nameRu: 'Прикроватная тумбочка',
     category: 'furniture' as any,
-    maxStack: 2,
+    maxStack: 1,
     icon: '',
     description: 'Compact bedside nightstand with a drawer.',
     descriptionRu: 'Компактная прикроватная тумбочка с выдвижным ящиком.',
@@ -2643,7 +3570,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     name: 'Carpet',
     nameRu: 'Напольный ковер',
     category: 'furniture' as any,
-    maxStack: 2,
+    maxStack: 1,
     icon: '',
     description: 'Cozy patterned floor carpet.',
     descriptionRu: 'Мягкий напольный ковер с декоративным узором.',
@@ -2721,7 +3648,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     name: 'Wall Mirror',
     nameRu: 'Настенное зеркало',
     category: 'furniture' as any,
-    maxStack: 2,
+    maxStack: 1,
     icon: '',
     description: 'Framed wall mirror for entryway or bathroom.',
     descriptionRu: 'Настенное зеркало в деревянной рамке.',
@@ -3057,7 +3984,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     name: 'Recyclable Street Litter',
     nameRu: 'Уличный мусор (Вторсырье)',
     category: 'misc',
-    maxStack: 20,
+    maxStack: 1,
     icon: '',
     description: 'Empty bottles, tin cans or crumpled paper gathered from city sidewalks. Throw into dumpster for cash reward.',
     descriptionRu: 'Смятые жестянные банки, пластик и бумаги с уличных тротуаров. Выбросьте в урну или контейнер за вознаграждение.',
@@ -3072,7 +3999,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     name: 'Gold Wristwatch Slava',
     nameRu: 'Золотые наручные часы «Слава»',
     category: 'valuable',
-    maxStack: 5,
+    maxStack: 1,
     icon: '',
     description: 'Gold-plated Soviet automatic mechanical wristwatch on leather strap.',
     descriptionRu: 'Позолоченные механические часы на кожаном ремешке с автоподзаводом.',
@@ -3085,7 +4012,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     name: 'Antique Silver Pocket Watch',
     nameRu: 'Карманные серебряные часы',
     category: 'valuable',
-    maxStack: 5,
+    maxStack: 1,
     icon: '',
     description: 'Heavy 925 sterling silver pocket watch with hinged engraved lid.',
     descriptionRu: 'Тяжелые серебряные карманные часы 925 пробы с резным узором.',
@@ -3098,7 +4025,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     name: 'Gold Ring with Diamond',
     nameRu: 'Золотое кольцо с бриллиантом',
     category: 'valuable',
-    maxStack: 10,
+    maxStack: 1,
     icon: '',
     description: '585 yellow gold ring with brilliant-cut sparkling diamond.',
     descriptionRu: 'Кольцо из желтого золота 585 пробы со сверкающим бриллиантом.',
@@ -3111,7 +4038,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     name: 'Heavy Gold Chain',
     nameRu: 'Массивная золотая цепочка',
     category: 'valuable',
-    maxStack: 5,
+    maxStack: 1,
     icon: '',
     description: 'Solid gold chain in Bismarck weave with lobster lock.',
     descriptionRu: 'Толстая цепь из литого золота плетения «Бисмарк».',
@@ -3124,7 +4051,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     name: 'Baltic Amber Pendant',
     nameRu: 'Балтийский янтарный кулон',
     category: 'valuable',
-    maxStack: 10,
+    maxStack: 1,
     icon: '',
     description: 'Honey Baltic amber piece set in fine silver bezel.',
     descriptionRu: 'Крупный медовый янтарь в изящном серебряном обрамлении.',
@@ -3137,7 +4064,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     name: 'Imperial Silver Coin 1913',
     nameRu: 'Старинная серебряная монета (1 Рубль 1913 г.)',
     category: 'valuable',
-    maxStack: 20,
+    maxStack: 1,
     icon: '',
     description: 'Rare collectible Tsarist silver rouble coin.',
     descriptionRu: 'Коллекционная серебряная монета царской чеканки.',
@@ -3150,7 +4077,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     name: 'Gold Earrings with Rubies',
     nameRu: 'Золотые серьги с рубинами',
     category: 'valuable',
-    maxStack: 10,
+    maxStack: 1,
     icon: '',
     description: 'Pair of gold drop earrings set with crimson rubies.',
     descriptionRu: 'Пара золотых сережек с насыщенно-красными рубинами.',
@@ -3163,7 +4090,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     name: 'Engraved Silver Cigarette Case',
     nameRu: 'Серебряный гравированный портсигар',
     category: 'valuable',
-    maxStack: 5,
+    maxStack: 1,
     icon: '',
     description: 'Sterling silver engraved case with spring-loaded catch.',
     descriptionRu: 'Массивный портсигар из черненого серебра с гравировкой.',
@@ -3176,7 +4103,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     name: 'Souvenir Imperial Egg',
     nameRu: 'Сувенирное яйцо в стиле Фаберже',
     category: 'valuable',
-    maxStack: 3,
+    maxStack: 1,
     icon: '',
     description: 'Jeweled souvenir egg coated in royal blue enamel and gold filigree.',
     descriptionRu: 'Ювелирный сувенир, покрытый синей эмалью и позолотой.',
@@ -3189,7 +4116,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     name: 'Small Gold Bullion Bar (50g)',
     nameRu: 'Слиток золота (50г)',
     category: 'valuable',
-    maxStack: 10,
+    maxStack: 1,
     icon: '',
     description: 'Stamped 999.9 fine gold bank ingot.',
     descriptionRu: 'Банковский мерный слиток чистейшего золота 999.9 пробы.',
@@ -3202,7 +4129,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     name: 'Silver Bullion Bar (100g)',
     nameRu: 'Слиток серебра (100г)',
     category: 'valuable',
-    maxStack: 10,
+    maxStack: 1,
     icon: '',
     description: 'Stamped 999 fine silver bullion bar in plastic capsule.',
     descriptionRu: 'Мерный банковский слиток серебра 999 пробы в капсуле.',
@@ -3215,7 +4142,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     name: 'Carved Jade Statuette',
     nameRu: 'Нефритовая резная статуэтка',
     category: 'valuable',
-    maxStack: 5,
+    maxStack: 1,
     icon: '',
     description: 'Hand-carved green jade dragon figurine on dark wood stand.',
     descriptionRu: 'Статуэтка из темно-зеленого нефрита на деревянной подставке.',
@@ -3230,7 +4157,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     name: 'Enamel Pot',
     nameRu: 'Эмалированная кастрюля',
     category: 'tool',
-    maxStack: 3,
+    maxStack: 1,
     icon: '',
     description: 'Red enamel steel cooking pot with lid and bakelite handles.',
     descriptionRu: 'Эмалированная стальная кастрюля с орнаментом и крышкой.',
@@ -3243,7 +4170,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     name: 'Stainless Steel Pot',
     nameRu: 'Стальная кастрюля из нержавейки',
     category: 'tool',
-    maxStack: 3,
+    maxStack: 1,
     icon: '',
     description: 'Polished stainless steel pot with heat-resistant glass lid.',
     descriptionRu: 'Кастрюля из нержавеющей стали с прозрачной стеклянной крышкой.',
@@ -3256,7 +4183,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     name: 'Aluminum Pot',
     nameRu: 'Алюминиевая кастрюля',
     category: 'tool',
-    maxStack: 3,
+    maxStack: 1,
     icon: '',
     description: 'Lightweight brushed aluminum cooking pot.',
     descriptionRu: 'Легкая советская алюминиевая кастрюля с крышкой.',
@@ -3269,7 +4196,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     name: 'Cast Iron Dutch Pot',
     nameRu: 'Чугунный казан / кастрюля',
     category: 'tool',
-    maxStack: 2,
+    maxStack: 1,
     icon: '',
     description: 'Heavy thick-walled cast iron cauldron pot with brass lid knob.',
     descriptionRu: 'Тяжелая кастрюля-казан из толстостенного черного чугуна.',
@@ -3282,7 +4209,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     name: 'Enamel Tea Kettle',
     nameRu: 'Эмалированный чайник',
     category: 'tool',
-    maxStack: 3,
+    maxStack: 1,
     icon: '',
     description: 'Classic stovetop enamel kettle with arching overhead handle.',
     descriptionRu: 'Классический эмалированный чайник для плиты с ручкой.',
@@ -3295,7 +4222,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     name: 'Steel Whistling Kettle',
     nameRu: 'Стальной чайник со свистком',
     category: 'tool',
-    maxStack: 3,
+    maxStack: 1,
     icon: '',
     description: 'Chrome stainless steel kettle with flip-up spout whistle.',
     descriptionRu: 'Чайник из нержавеющей стали с откидным свистком.',
@@ -3308,7 +4235,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     name: 'Electric Glass Kettle',
     nameRu: 'Электрический чайник',
     category: 'electronics',
-    maxStack: 2,
+    maxStack: 1,
     icon: '',
     description: 'Glass electric kettle with LED illumination and stainless base.',
     descriptionRu: 'Электрочайник из термостекла со светодиодной подсветкой.',
@@ -3321,7 +4248,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     name: 'Clay Teapot',
     nameRu: 'Глиняный заварочный чайник',
     category: 'tool',
-    maxStack: 5,
+    maxStack: 1,
     icon: '',
     description: 'Handcrafted terracotta clay teapot for aromatic tea brewing.',
     descriptionRu: 'Керамический глиняный заварочный чайник ручной работы.',
@@ -3334,7 +4261,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     name: 'Cast Iron Skillet',
     nameRu: 'Чугунная сковорода',
     category: 'tool',
-    maxStack: 3,
+    maxStack: 1,
     icon: '',
     description: 'Heavy black cast iron frying pan with carved wooden handle.',
     descriptionRu: 'Массивная чугунная сковорода с деревянной съёмной ручкой.',
@@ -3347,7 +4274,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     name: 'Non-Stick Teflon Pan',
     nameRu: 'Тефлоновая сковорода',
     category: 'tool',
-    maxStack: 3,
+    maxStack: 1,
     icon: '',
     description: 'Aluminum skillet with black non-stick coating and bakelite handle.',
     descriptionRu: 'Сковорода с антипригарным тефлоновым покрытием.',
@@ -3360,7 +4287,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     name: 'Glazed Ceramic Plate',
     nameRu: 'Керамическая тарелка',
     category: 'misc',
-    maxStack: 10,
+    maxStack: 1,
     icon: '',
     description: 'Smooth glazed off-white ceramic dinner plate.',
     descriptionRu: 'Столовая керамическая тарелка с глазурованным покрытием.',
@@ -3373,7 +4300,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     name: 'Fine Porcelain Plate',
     nameRu: 'Фарфоровая тарелка',
     category: 'misc',
-    maxStack: 10,
+    maxStack: 1,
     icon: '',
     description: 'Fine porcelain plate with Gzhel blue pattern and gold rim.',
     descriptionRu: 'Фарфоровая тарелка с расписным узором и золоченым кантиком.',
@@ -3386,7 +4313,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     name: 'Enamel Deep Bowl',
     nameRu: 'Эмалированная глубокая миска',
     category: 'misc',
-    maxStack: 10,
+    maxStack: 1,
     icon: '',
     description: 'Durable Soviet enamel deep bowl with dark blue rim line.',
     descriptionRu: 'Советская эмалированная миска глубокой формы.',
@@ -3399,7 +4326,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     name: 'Carved Wooden Bowl',
     nameRu: 'Деревянная резная пиала',
     category: 'misc',
-    maxStack: 10,
+    maxStack: 1,
     icon: '',
     description: 'Carved solid wood bowl with visible concentric grain pattern.',
     descriptionRu: 'Глубокая пиала, выточенная из цельного массива дерева.',
@@ -3412,7 +4339,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     name: 'Ceramic Coffee Mug',
     nameRu: 'Керамическая кружка',
     category: 'misc',
-    maxStack: 10,
+    maxStack: 1,
     icon: '',
     description: 'Sturdy glazed ceramic mug for coffee or tea.',
     descriptionRu: 'Удобная керамическая кружка для чая и кофе.',
@@ -3425,7 +4352,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     name: 'Enamel Camping Mug',
     nameRu: 'Эмалированная кружка',
     category: 'misc',
-    maxStack: 10,
+    maxStack: 1,
     icon: '',
     description: 'Lightweight enamel mug with blue rim accent.',
     descriptionRu: 'Походная эмалированная кружка с синей каемкой.',
@@ -3438,7 +4365,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     name: 'Faceted Glass Mug',
     nameRu: 'Стеклянная граненая кружка',
     category: 'misc',
-    maxStack: 10,
+    maxStack: 1,
     icon: '',
     description: 'Thick clear faceted glass tea mug with handle.',
     descriptionRu: 'Толстостенная прозрачная стеклянная кружка.',
@@ -3451,7 +4378,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     name: 'Porcelain Tea Cup',
     nameRu: 'Фарфоровая чайная чашка',
     category: 'misc',
-    maxStack: 10,
+    maxStack: 1,
     icon: '',
     description: 'Delicate fine porcelain tea cup with saucer.',
     descriptionRu: 'Тонкостенная чайная чашка из белого фарфора.',
@@ -3464,7 +4391,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     name: "Chef's Kitchen Knife",
     nameRu: 'Кухонный нож шеф-повара',
     category: 'tool',
-    maxStack: 5,
+    maxStack: 1,
     icon: '',
     description: "Sharp forged steel chef's knife with full tang wooden handle.",
     descriptionRu: 'Острый кухонный нож шеф-повара с широким стальным лезвием.',
@@ -3477,7 +4404,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     name: 'Stainless Steel Fork',
     nameRu: 'Стальная вилка',
     category: 'misc',
-    maxStack: 20,
+    maxStack: 1,
     icon: '',
     description: 'Standard 4-tine stainless steel dinner fork.',
     descriptionRu: 'Столовая вилка из нержавеющей стали.',
@@ -3490,7 +4417,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     name: 'Sterling Silver Fork',
     nameRu: 'Серебряная вилка',
     category: 'valuable',
-    maxStack: 10,
+    maxStack: 1,
     icon: '',
     description: 'Heavy sterling silver dinner fork with ornate engraving.',
     descriptionRu: 'Тяжелая серебряная вилка с изящной узорчатой гравировкой.',
@@ -3503,7 +4430,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     name: 'Stainless Steel Spoon',
     nameRu: 'Стальная ложка',
     category: 'misc',
-    maxStack: 20,
+    maxStack: 1,
     icon: '',
     description: 'Polished stainless steel soup spoon.',
     descriptionRu: 'Столовая ложка из нержавеющей стали.',
@@ -3516,14 +4443,71 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     name: 'Khokhloma Wooden Spoon',
     nameRu: 'Деревянная хохломская ложка',
     category: 'misc',
-    maxStack: 15,
+    maxStack: 1,
     icon: '',
     description: 'Traditional Russian wooden spoon painted in Khokhloma style.',
     descriptionRu: 'Традиционная русская деревянная ложка с яркой росписью.',
     effects: {},
     weight: 0.04,
     usable: false
-  }
+  },
+
+  // === UNIFIED STORAGE BOXES (УНИФИЦИРОВАННЫЕ КОРОБКИ) ===
+  box_cardboard_large: {
+    itemId: 'box_cardboard_large',
+    name: 'Unified Cardboard Box (Large 15L)',
+    nameRu: 'Картонная коробка (Большая 15л)',
+    category: 'misc',
+    maxStack: 5,
+    icon: '',
+    description: 'Large corrugated cardboard box.',
+    descriptionRu: 'Большая прочная картонная коробка (15л) для бытовых предметов.',
+    effects: {},
+    weight: 0.30,
+    volume: 15.0,
+    usable: false,
+    isContainer: true,
+    containerCapacityL: 15.0,
+    maxContainedItemVolumeL: 15.0,
+    maxContainedWeightKg: 12.0
+  },
+  box_cardboard_medium: {
+    itemId: 'box_cardboard_medium',
+    name: 'Unified Cardboard Box (Medium 5L)',
+    nameRu: 'Картонная коробка (Средняя 5л)',
+    category: 'misc',
+    maxStack: 10,
+    icon: '',
+    description: 'Medium cardboard box.',
+    descriptionRu: 'Средняя картонная коробка (5л) для яиц, хлопьев или запчастей.',
+    effects: {},
+    weight: 0.15,
+    volume: 5.0,
+    usable: false,
+    isContainer: true,
+    containerCapacityL: 5.0,
+    maxContainedItemVolumeL: 5.0,
+    maxContainedWeightKg: 5.0
+  },
+  box_cardboard_small: {
+    itemId: 'box_cardboard_small',
+    name: 'Unified Cardboard Box (Small 1L)',
+    nameRu: 'Картонная коробка (Малая 1л)',
+    category: 'misc',
+    maxStack: 15,
+    icon: '',
+    description: 'Small cardboard box.',
+    descriptionRu: 'Малая картонная коробочка объемом 1л для чая, спичек или медикаментов.',
+    effects: {},
+    weight: 0.05,
+    volume: 1.0,
+    usable: false,
+    isContainer: true,
+    containerCapacityL: 1.0,
+    maxContainedItemVolumeL: 1.0,
+    maxContainedWeightKg: 1.5
+  },
+  ...COOKING_INGREDIENTS_CATALOG
 };
 
 let itemCounter = 100;
@@ -3568,6 +4552,230 @@ export const CLOTHING_STATS: Record<string, import('./types').ClothingStats> = {
   thermal_coat: { slot: 'torso', layer: 'jacket', insulation: 85, windResistance: 85, waterResistance: 75, breathability: 25, mobilityPenalty: 12, color: '#2d3748', pocketCapacityL: 4.0, maxPocketItemVolumeL: 1.0, maxPocketWeightKg: 4.5 },
 };
 
+export const LEGACY_CONTAINER_MAP: Record<string, { containerId: string; liquidId: LiquidId | null; amountMl: number }> = {
+  // Plastic Bottles
+  bottle_plastic_500: { containerId: 'bottle_plastic_500', liquidId: null, amountMl: 0 },
+  bottle_plastic_1500: { containerId: 'bottle_plastic_1500', liquidId: null, amountMl: 0 },
+  bottle_empty: { containerId: 'bottle_plastic_500', liquidId: null, amountMl: 0 },
+  water_bottle_empty: { containerId: 'bottle_plastic_500', liquidId: null, amountMl: 0 },
+  water_bottle: { containerId: 'bottle_plastic_500', liquidId: 'water', amountMl: 500 },
+  bottle_water: { containerId: 'bottle_plastic_500', liquidId: 'water', amountMl: 500 },
+  mineral_water: { containerId: 'bottle_plastic_500', liquidId: 'mineral_water', amountMl: 500 },
+  kvas_bottle: { containerId: 'bottle_plastic_1500', liquidId: 'kvas', amountMl: 1500 },
+  kvas: { containerId: 'bottle_plastic_1500', liquidId: 'kvas', amountMl: 1500 },
+  milk_bottle: { containerId: 'bottle_plastic_1500', liquidId: 'milk', amountMl: 1000 },
+  
+  // Glass Bottles
+  glass_bottle_500: { containerId: 'glass_bottle_500', liquidId: null, amountMl: 0 },
+  bottle_glass_medium: { containerId: 'bottle_glass_medium', liquidId: null, amountMl: 0 },
+  bottle_glass_large: { containerId: 'bottle_glass_large', liquidId: null, amountMl: 0 },
+  beer_bottle: { containerId: 'glass_bottle_500', liquidId: 'beer', amountMl: 500 },
+  bottle_beer: { containerId: 'glass_bottle_500', liquidId: 'beer', amountMl: 500 },
+  vodka_bottle: { containerId: 'glass_bottle_500', liquidId: 'vodka', amountMl: 500 },
+  bottle_vodka: { containerId: 'glass_bottle_500', liquidId: 'vodka', amountMl: 500 },
+  vodka: { containerId: 'glass_bottle_500', liquidId: 'vodka', amountMl: 500 },
+  bottle_wine: { containerId: 'bottle_glass_large', liquidId: 'juice', amountMl: 750 },
+  wine_bottle: { containerId: 'bottle_glass_large', liquidId: 'juice', amountMl: 750 },
+  
+  // Canisters & Technical Fluids
+  canister_metal_20l: { containerId: 'canister_metal_20l', liquidId: null, amountMl: 0 },
+  canister_empty: { containerId: 'canister_metal_20l', liquidId: null, amountMl: 0 },
+  jerrycan_steel: { containerId: 'canister_metal_20l', liquidId: null, amountMl: 0 },
+  fuel_canister: { containerId: 'canister_metal_20l', liquidId: 'gasoline_95', amountMl: 20000 },
+  canister_fuel: { containerId: 'canister_metal_20l', liquidId: 'gasoline_95', amountMl: 20000 },
+  canister_diesel: { containerId: 'canister_metal_20l', liquidId: 'diesel', amountMl: 20000 },
+  canister_water: { containerId: 'canister_metal_20l', liquidId: 'water', amountMl: 20000 },
+  canister_plastic_10l: { containerId: 'canister_plastic_10l', liquidId: null, amountMl: 0 },
+  canister_plastic_5l: { containerId: 'canister_plastic_5l', liquidId: null, amountMl: 0 },
+  motor_oil: { containerId: 'canister_plastic_5l', liquidId: 'motor_oil', amountMl: 4000 },
+  oil_canister: { containerId: 'canister_plastic_5l', liquidId: 'motor_oil', amountMl: 4000 },
+  canister_oil: { containerId: 'canister_plastic_5l', liquidId: 'motor_oil', amountMl: 4000 },
+  motor_oil_empty: { containerId: 'canister_plastic_5l', liquidId: null, amountMl: 0 },
+  antifreeze: { containerId: 'canister_plastic_5l', liquidId: 'antifreeze', amountMl: 5000 },
+  antifreeze_canister: { containerId: 'canister_plastic_5l', liquidId: 'antifreeze', amountMl: 5000 },
+  canister_coolant: { containerId: 'canister_plastic_5l', liquidId: 'antifreeze', amountMl: 5000 },
+  antifreeze_empty: { containerId: 'canister_plastic_5l', liquidId: null, amountMl: 0 },
+  washer_fluid: { containerId: 'canister_plastic_5l', liquidId: 'washer_fluid', amountMl: 5000 },
+  washer_fluid_can: { containerId: 'canister_plastic_5l', liquidId: 'washer_fluid', amountMl: 5000 },
+  canister_washer_fluid: { containerId: 'canister_plastic_5l', liquidId: 'washer_fluid', amountMl: 5000 },
+  brake_fluid: { containerId: 'bottle_plastic_500', liquidId: 'brake_fluid', amountMl: 500 },
+  brake_fluid_can: { containerId: 'bottle_plastic_500', liquidId: 'brake_fluid', amountMl: 500 },
+  canister_brake_fluid: { containerId: 'bottle_plastic_500', liquidId: 'brake_fluid', amountMl: 500 },
+
+  // Cups & Mugs
+  paper_cup: { containerId: 'paper_cup', liquidId: null, amountMl: 0 },
+  plastic_cup: { containerId: 'paper_cup', liquidId: null, amountMl: 0 },
+  cup_disposable: { containerId: 'paper_cup', liquidId: null, amountMl: 0 },
+  coffee_cup: { containerId: 'paper_cup', liquidId: 'coffee', amountMl: 250 },
+  coffee_cup_empty: { containerId: 'paper_cup', liquidId: null, amountMl: 0 },
+  hot_coffee: { containerId: 'paper_cup', liquidId: 'coffee', amountMl: 250 },
+  coffee: { containerId: 'paper_cup', liquidId: 'coffee', amountMl: 250 },
+  tea_cup: { containerId: 'paper_cup', liquidId: 'tea', amountMl: 250 },
+  tea: { containerId: 'paper_cup', liquidId: 'tea', amountMl: 250 },
+  shake_cup: { containerId: 'paper_cup', liquidId: 'milk', amountMl: 250 },
+  glass_mug: { containerId: 'glass_mug', liquidId: null, amountMl: 0 },
+
+  // Aluminum Cans
+  can_alu_330: { containerId: 'can_alu_330', liquidId: null, amountMl: 0 },
+  energy_drink: { containerId: 'can_alu_330', liquidId: 'energy_drink', amountMl: 330 },
+  cola_can: { containerId: 'can_alu_330', liquidId: 'cola', amountMl: 330 },
+  soda_can: { containerId: 'can_alu_330', liquidId: 'cola', amountMl: 330 },
+  cola: { containerId: 'can_alu_330', liquidId: 'cola', amountMl: 330 },
+  can_beer: { containerId: 'can_alu_330', liquidId: 'beer', amountMl: 500 },
+  beer_can: { containerId: 'can_alu_330', liquidId: 'beer', amountMl: 500 },
+  beer: { containerId: 'can_alu_330', liquidId: 'beer', amountMl: 500 },
+  can_empty: { containerId: 'can_alu_330', liquidId: null, amountMl: 0 },
+  cola_zero_empty: { containerId: 'can_alu_330', liquidId: null, amountMl: 0 },
+  energy_can_empty: { containerId: 'can_alu_330', liquidId: null, amountMl: 0 },
+
+  // Flasks & Thermoses
+  camp_flask: { containerId: 'camp_flask', liquidId: 'water', amountMl: 800 },
+  camp_flask_empty: { containerId: 'camp_flask', liquidId: null, amountMl: 0 },
+  thermos: { containerId: 'thermos', liquidId: 'tea', amountMl: 1000 },
+
+  // Tetra Paks
+  tetra_pack_1000: { containerId: 'tetra_pack_1000', liquidId: null, amountMl: 0 },
+  carton_milk: { containerId: 'tetra_pack_1000', liquidId: 'milk', amountMl: 1000 },
+  milk: { containerId: 'tetra_pack_1000', liquidId: 'milk', amountMl: 1000 },
+  juice_pack: { containerId: 'tetra_pack_1000', liquidId: 'juice', amountMl: 1000 },
+  juice_box: { containerId: 'tetra_pack_1000', liquidId: 'juice', amountMl: 1000 },
+  fresh_juice: { containerId: 'tetra_pack_1000', liquidId: 'juice', amountMl: 1000 },
+  juice: { containerId: 'tetra_pack_1000', liquidId: 'juice', amountMl: 1000 },
+
+  // Glass Jars & Culinary Preserves
+  jar_glass_large: { containerId: 'jar_glass_large', liquidId: null, amountMl: 0 },
+  jar_glass_medium: { containerId: 'jar_glass_medium', liquidId: null, amountMl: 0 },
+  jar_glass_small: { containerId: 'jar_glass_small', liquidId: null, amountMl: 0 },
+  jar_pickles: { containerId: 'jar_glass_medium', liquidId: 'pickles', amountMl: 500 },
+  pickles: { containerId: 'jar_glass_medium', liquidId: 'pickles', amountMl: 500 },
+  jar_jam: { containerId: 'jar_glass_small', liquidId: 'jam', amountMl: 200 },
+  jam: { containerId: 'jar_glass_small', liquidId: 'jam', amountMl: 200 },
+  jam_raspberry: { containerId: 'jar_glass_small', liquidId: 'jam_raspberry', amountMl: 200 },
+  jam_strawberry: { containerId: 'jar_glass_small', liquidId: 'jam_strawberry', amountMl: 200 },
+  jam_blueberry: { containerId: 'jar_glass_small', liquidId: 'jam_blueberry', amountMl: 200 },
+  honey: { containerId: 'jar_glass_small', liquidId: 'honey', amountMl: 200 },
+  jar_honey: { containerId: 'jar_glass_small', liquidId: 'honey', amountMl: 200 },
+  honey_wild_jar: { containerId: 'jar_glass_medium', liquidId: 'honey_wild', amountMl: 350 },
+  honey_wild: { containerId: 'jar_glass_medium', liquidId: 'honey_wild', amountMl: 350 },
+  honey_buckwheat: { containerId: 'jar_glass_medium', liquidId: 'honey_buckwheat', amountMl: 350 },
+  maple_syrup_bottle: { containerId: 'bottle_glass_medium', liquidId: 'maple_syrup', amountMl: 250 },
+  maple_syrup: { containerId: 'bottle_glass_medium', liquidId: 'maple_syrup', amountMl: 250 },
+  mustard_dijon_jar: { containerId: 'jar_glass_small', liquidId: 'mustard_dijon', amountMl: 180 },
+  mustard_dijon: { containerId: 'jar_glass_small', liquidId: 'mustard_dijon', amountMl: 180 },
+
+  // Dairy in Jars & Bottles
+  milk_bottle_raw: { containerId: 'bottle_glass_large', liquidId: 'milk_raw', amountMl: 1000 },
+  cream_heavy_jar: { containerId: 'jar_glass_medium', liquidId: 'cream_heavy', amountMl: 380 },
+  sour_cream_pot: { containerId: 'jar_glass_medium', liquidId: 'sour_cream', amountMl: 430 },
+  kefir_fermented_bottle: { containerId: 'bottle_glass_large', liquidId: 'kefir', amountMl: 1000 },
+  buttermilk_fermented_jar: { containerId: 'jar_glass_medium', liquidId: 'kefir', amountMl: 480 },
+
+  // Culinary Oils, Vinegars & Sauces
+  oil_sunflower_bottle: { containerId: 'bottle_glass_large', liquidId: 'oil_sunflower', amountMl: 1000 },
+  oil_sunflower: { containerId: 'bottle_glass_large', liquidId: 'oil_sunflower', amountMl: 1000 },
+  oil_olive_extra_virgin: { containerId: 'bottle_glass_medium', liquidId: 'oil_olive', amountMl: 500 },
+  oil_olive: { containerId: 'bottle_glass_medium', liquidId: 'oil_olive', amountMl: 500 },
+  oil_linseed_bottle: { containerId: 'bottle_glass_medium', liquidId: 'oil_linseed', amountMl: 500 },
+  oil_linseed: { containerId: 'bottle_glass_medium', liquidId: 'oil_linseed', amountMl: 500 },
+  oil_sesame_bottle: { containerId: 'bottle_glass_medium', liquidId: 'oil_sesame', amountMl: 250 },
+  oil_sesame: { containerId: 'bottle_glass_medium', liquidId: 'oil_sesame', amountMl: 250 },
+  vinegar_table_bottle: { containerId: 'bottle_glass_medium', liquidId: 'vinegar_table', amountMl: 500 },
+  vinegar_table: { containerId: 'bottle_glass_medium', liquidId: 'vinegar_table', amountMl: 500 },
+  vinegar_apple_cider: { containerId: 'bottle_glass_medium', liquidId: 'vinegar_apple', amountMl: 500 },
+  vinegar_apple: { containerId: 'bottle_glass_medium', liquidId: 'vinegar_apple', amountMl: 500 },
+  vinegar_balsamic_premium: { containerId: 'bottle_glass_medium', liquidId: 'vinegar_balsamic', amountMl: 250 },
+  vinegar_balsamic: { containerId: 'bottle_glass_medium', liquidId: 'vinegar_balsamic', amountMl: 250 },
+  soy_sauce_classic: { containerId: 'bottle_glass_medium', liquidId: 'sauce_soy', amountMl: 250 },
+  sauce_soy: { containerId: 'bottle_glass_medium', liquidId: 'sauce_soy', amountMl: 250 },
+  sauce_fish_premium: { containerId: 'bottle_glass_medium', liquidId: 'sauce_soy', amountMl: 200 },
+  sauce_worcestershire: { containerId: 'bottle_glass_medium', liquidId: 'sauce_soy', amountMl: 290 },
+  sauce_pomegranate_narsharab: { containerId: 'bottle_glass_medium', liquidId: 'sauce_narsharab', amountMl: 250 },
+  sauce_narsharab: { containerId: 'bottle_glass_medium', liquidId: 'sauce_narsharab', amountMl: 250 },
+  sauce_teriyaki_bottle: { containerId: 'bottle_glass_medium', liquidId: 'sauce_teriyaki', amountMl: 300 },
+  sauce_teriyaki: { containerId: 'bottle_glass_medium', liquidId: 'sauce_teriyaki', amountMl: 300 },
+  wine_white_cooking: { containerId: 'bottle_glass_large', liquidId: 'juice', amountMl: 750 },
+  wine_red_cooking: { containerId: 'bottle_glass_large', liquidId: 'juice', amountMl: 750 },
+  liquid_yeast_mixture: { containerId: 'jar_glass_small', liquidId: 'kefir', amountMl: 180 },
+  milk_pasteurized_carton: { containerId: 'tetra_pack_1000', liquidId: 'milk', amountMl: 1000 },
+
+  // Tin Cans & Preserves
+  can_metal_large: { containerId: 'can_metal_large', liquidId: null, amountMl: 0 },
+  can_metal_medium: { containerId: 'can_metal_medium', liquidId: null, amountMl: 0 },
+  can_metal_small: { containerId: 'can_metal_small', liquidId: null, amountMl: 0 },
+  tin_can_empty: { containerId: 'can_metal_medium', liquidId: null, amountMl: 0 },
+  canned_meat: { containerId: 'can_metal_medium', liquidId: 'stew_meat', amountMl: 400 },
+  canned_stew: { containerId: 'can_metal_medium', liquidId: 'stew_meat', amountMl: 400 },
+  stew_meat: { containerId: 'can_metal_medium', liquidId: 'stew_meat', amountMl: 400 },
+  canned_fish: { containerId: 'can_metal_small', liquidId: 'fish_preserves', amountMl: 150 },
+  fish_preserves: { containerId: 'can_metal_small', liquidId: 'fish_preserves', amountMl: 150 },
+  canned_condensed_milk: { containerId: 'can_metal_medium', liquidId: 'condensed_milk', amountMl: 400 },
+  condensed_milk: { containerId: 'can_metal_medium', liquidId: 'condensed_milk', amountMl: 400 },
+  caviar: { containerId: 'can_metal_small', liquidId: 'caviar_red', amountMl: 150 },
+  canned_caviar: { containerId: 'can_metal_small', liquidId: 'caviar_red', amountMl: 150 },
+  salmon_caviar_jar: { containerId: 'jar_glass_small', liquidId: 'caviar_red', amountMl: 140 },
+  salmon_caviar: { containerId: 'jar_glass_small', liquidId: 'caviar_red', amountMl: 140 },
+  pike_caviar_jar: { containerId: 'jar_glass_small', liquidId: 'caviar_pike', amountMl: 140 },
+  pike_caviar: { containerId: 'jar_glass_small', liquidId: 'caviar_pike', amountMl: 140 },
+  cod_caviar_jar: { containerId: 'jar_glass_small', liquidId: 'caviar_cod', amountMl: 140 },
+  cod_caviar: { containerId: 'jar_glass_small', liquidId: 'caviar_cod', amountMl: 140 },
+  perch_caviar_jar: { containerId: 'jar_glass_small', liquidId: 'caviar_pike', amountMl: 140 },
+  herring_caviar_jar: { containerId: 'jar_glass_small', liquidId: 'caviar_cod', amountMl: 140 },
+  tuna_caviar_jar: { containerId: 'jar_glass_small', liquidId: 'caviar_red', amountMl: 140 },
+  eel_caviar_jar: { containerId: 'jar_glass_small', liquidId: 'caviar_black', amountMl: 140 },
+  catfish_caviar_jar: { containerId: 'jar_glass_small', liquidId: 'caviar_black', amountMl: 140 },
+  caviar_squash_jar: { containerId: 'jar_glass_medium', liquidId: 'caviar_squash', amountMl: 500 },
+  caviar_squash: { containerId: 'jar_glass_medium', liquidId: 'caviar_squash', amountMl: 500 },
+  caviar_eggplant_jar: { containerId: 'jar_glass_medium', liquidId: 'caviar_eggplant', amountMl: 500 },
+  caviar_eggplant: { containerId: 'jar_glass_medium', liquidId: 'caviar_eggplant', amountMl: 500 },
+
+  // Bowls & Broths
+  soup_bowl: { containerId: 'soup_bowl', liquidId: null, amountMl: 0 },
+  soup_bowl_empty: { containerId: 'soup_bowl', liquidId: null, amountMl: 0 },
+  hot_soup: { containerId: 'soup_bowl', liquidId: 'broth_beef', amountMl: 500 },
+  soup: { containerId: 'soup_bowl', liquidId: 'broth_beef', amountMl: 500 },
+  broth: { containerId: 'soup_bowl', liquidId: 'broth', amountMl: 500 },
+  broth_beef_jar: { containerId: 'jar_glass_medium', liquidId: 'broth_beef', amountMl: 450 },
+  broth_beef: { containerId: 'soup_bowl', liquidId: 'broth_beef', amountMl: 500 },
+  broth_chicken_jar: { containerId: 'jar_glass_medium', liquidId: 'broth_chicken', amountMl: 450 },
+  broth_chicken: { containerId: 'soup_bowl', liquidId: 'broth_chicken', amountMl: 500 },
+  broth_fish_jar: { containerId: 'jar_glass_medium', liquidId: 'broth_fish', amountMl: 450 },
+  broth_fish: { containerId: 'soup_bowl', liquidId: 'broth_fish', amountMl: 500 },
+  broth_vegetable_jar: { containerId: 'jar_glass_medium', liquidId: 'broth_vegetable', amountMl: 450 },
+  broth_vegetable: { containerId: 'soup_bowl', liquidId: 'broth_vegetable', amountMl: 500 },
+  broth_mushroom: { containerId: 'soup_bowl', liquidId: 'broth_mushroom', amountMl: 500 },
+
+  // Wicker Basket & Forest Produce
+  lukoshko: { containerId: 'lukoshko', liquidId: null, amountMl: 0 },
+  basket_wicker: { containerId: 'lukoshko', liquidId: null, amountMl: 0 },
+  berries: { containerId: 'lukoshko', liquidId: 'berries', amountMl: 1500 },
+  berries_basket: { containerId: 'lukoshko', liquidId: 'berries', amountMl: 1500 },
+  forest_berries: { containerId: 'lukoshko', liquidId: 'berries', amountMl: 1500 },
+  blueberry_basket: { containerId: 'lukoshko', liquidId: 'berries_blueberry', amountMl: 1500 },
+  lingonberry_basket: { containerId: 'lukoshko', liquidId: 'berries_lingonberry', amountMl: 1500 },
+  cranberry_basket: { containerId: 'lukoshko', liquidId: 'berries_cranberry', amountMl: 1500 },
+  raspberry_basket: { containerId: 'lukoshko', liquidId: 'berries_raspberry', amountMl: 1500 },
+  strawberry_basket: { containerId: 'lukoshko', liquidId: 'berries_strawberry', amountMl: 1500 },
+  chanterelle_basket: { containerId: 'lukoshko', liquidId: 'mushrooms_chanterelle', amountMl: 1500 },
+  honey_agaric_basket: { containerId: 'lukoshko', liquidId: 'mushrooms_honey_agaric', amountMl: 1500 },
+
+  // Plastic Bags & Dry Culinary Goods
+  package_bag: { containerId: 'package_bag', liquidId: null, amountMl: 0 },
+  plastic_bag: { containerId: 'plastic_bag', liquidId: null, amountMl: 0 },
+  sugar: { containerId: 'package_bag', liquidId: 'sugar', amountMl: 1000 },
+  sugar_bag: { containerId: 'package_bag', liquidId: 'sugar', amountMl: 1000 },
+  salt: { containerId: 'package_bag', liquidId: 'salt', amountMl: 500 },
+  salt_pack: { containerId: 'package_bag', liquidId: 'salt', amountMl: 500 },
+
+  // Sacks & Bulk Goods
+  sack_cloth_large: { containerId: 'sack_cloth_large', liquidId: null, amountMl: 0 },
+  sack_cloth_medium: { containerId: 'sack_cloth_medium', liquidId: null, amountMl: 0 },
+  sack_cloth_small: { containerId: 'sack_cloth_small', liquidId: null, amountMl: 0 },
+  flour: { containerId: 'sack_cloth_medium', liquidId: 'flour', amountMl: 3000 },
+  flour_bag: { containerId: 'sack_cloth_medium', liquidId: 'flour', amountMl: 3000 },
+  sandbag: { containerId: 'sandbag', liquidId: 'sand', amountMl: 1000 },
+  sack_empty: { containerId: 'sack_empty', liquidId: null, amountMl: 0 }
+};
+
 export function createItem(itemId: string, count: number = 1, initialPortions?: number): InventoryItem {
   const def = ITEM_CATALOG[itemId] || ITEM_CATALOG.water_bottle;
   itemCounter++;
@@ -3582,7 +4790,7 @@ export function createItem(itemId: string, count: number = 1, initialPortions?: 
   // Approximate realistic volume (L) if not explicitly set
   let baseVolume = def.volume;
   if (baseVolume === undefined) {
-    if (def.category === 'valuable'&& (itemId.startsWith('cash') || itemId.startsWith('coin'))) {
+    if (def.category === 'valuable' && (itemId.startsWith('cash') || itemId.startsWith('coin'))) {
       baseVolume = 0.001;
     } else if (def.category === 'electronics') {
       baseVolume = 0.18;
@@ -3591,9 +4799,9 @@ export function createItem(itemId: string, count: number = 1, initialPortions?: 
     } else if (def.category === 'food') {
       baseVolume = Math.max(0.15, (def.weight || 0.25) * 1.2);
     } else if (def.category === 'med') {
-      baseVolume = itemId === 'medkit'? 3.0 : 0.15;
+      baseVolume = itemId === 'medkit' ? 3.0 : 0.15;
     } else if (def.category === 'clothing') {
-      baseVolume = itemId === 'backpack'? 2.5 : Math.max(0.5, (def.weight || 0.4) * 2.0);
+      baseVolume = itemId === 'backpack' ? 2.5 : Math.max(0.5, (def.weight || 0.4) * 2.0);
     } else {
       baseVolume = Math.max(0.05, (def.weight || 0.2) * 1.2);
     }
@@ -3602,14 +4810,40 @@ export function createItem(itemId: string, count: number = 1, initialPortions?: 
   const isPhone = def.itemId.startsWith('phone_') || def.itemId === 'smartphone';
   const phoneSpecs = isPhone ? getPhoneSpecsForItemId(def.itemId) : undefined;
 
-  return {
+  // Unified Fluid & Bulk substance storage detection
+  const legacyMap = LEGACY_CONTAINER_MAP[itemId] || (
+    CONTAINER_CONFIGS[itemId] 
+      ? { 
+          containerId: itemId, 
+          liquidId: CONTAINER_CONFIGS[itemId].defaultLiquidId || null, 
+          amountMl: CONTAINER_CONFIGS[itemId].defaultAmountMl || 0 
+        } 
+      : null
+  );
+
+  let fluidStorage: FluidContainerState | undefined;
+  if (legacyMap) {
+    const cfg = CONTAINER_CONFIGS[legacyMap.containerId];
+    if (cfg) {
+      fluidStorage = {
+        liquidId: legacyMap.liquidId,
+        currentMl: legacyMap.amountMl,
+        maxMl: cfg.maxMl,
+        emptyWeightKg: cfg.emptyWeightKg,
+        baseItemNameRu: def.nameRu || cfg.nameRu,
+        baseItemNameEn: def.name || cfg.name
+      };
+    }
+  }
+
+  const createdItem: InventoryItem = {
     id: `item_${itemId}_${Date.now()}_${itemCounter}`,
     itemId: def.itemId,
     name: def.name,
     nameRu: def.nameRu,
     category: def.category,
-    count: Math.min(count, def.maxStack),
-    maxStack: def.maxStack,
+    count: 1,
+    maxStack: 1,
     icon: def.icon,
     description: def.description,
     descriptionRu: def.descriptionRu,
@@ -3617,15 +4851,16 @@ export function createItem(itemId: string, count: number = 1, initialPortions?: 
     weight: def.weight,
     volume: baseVolume,
     clothingStats: stats,
-    usable: isContainer ? false : def.usable,
-    portions: portions,
-    maxPortions: maxPortions,
+    usable: isContainer ? false : (fluidStorage ? true : def.usable),
+    portions: fluidStorage ? undefined : portions,
+    maxPortions: fluidStorage ? undefined : maxPortions,
     isContainer,
     contents: isContainer ? [] : undefined,
     containerCapacityL: containerCap,
     maxContainedItemVolumeL: maxContainedVol,
     maxContainedWeightKg: maxContainedWt,
     allowedItemCategories: def.allowedItemCategories,
+    fluidStorage,
     batteryCharge: def.itemId === 'car_battery'? 100 : undefined,
     fluidLiters: def.itemId === 'antifreeze'? 5.0 : def.itemId === 'motor_oil'? 4.0 : undefined,
     maxFluidLiters: def.itemId === 'antifreeze'? 5.0 : def.itemId === 'motor_oil'? 4.0 : undefined,
@@ -3636,6 +4871,12 @@ export function createItem(itemId: string, count: number = 1, initialPortions?: 
     storage: phoneSpecs?.storageGb,
     battery: phoneSpecs?.batteryCapacityMah
   };
+
+  if (createdItem.fluidStorage) {
+    syncItemContainerProperties(createdItem);
+  }
+
+  return createdItem;
 }
 
 // Start multi-step consumption (eating/drinking) - kept for backward compatibility if used
@@ -3805,13 +5046,15 @@ export function createChangeItems(amount: number): InventoryItem[] {
   for (const d of denoms) {
     if (rem <= 0) break;
     const count = Math.floor(rem / d.val);
-    if (count > 0) {
-      items.push(createItem(d.id, count));
-      rem -= count * d.val;
+    for (let c = 0; c < count; c++) {
+      items.push(createItem(d.id, 1));
     }
+    rem -= count * d.val;
   }
   if (rem > 0) {
-    items.push(createItem('cash', rem));
+    for (let c = 0; c < rem; c++) {
+      items.push(createItem('coin_1', 1));
+    }
   }
   return items;
 }
@@ -3825,12 +5068,7 @@ export function depositChangeToPlayer(player: Player, changeAmount: number): voi
   for (const item of changeItems) {
     if (wallet) {
       if (!wallet.contents) wallet.contents = [];
-      const existing = wallet.contents.find(i => i && i.itemId === item.itemId);
-      if (existing) {
-        existing.count += item.count;
-      } else {
-        wallet.contents.push(item);
-      }
+      wallet.contents.push(item);
     } else {
       addItemToPlayer(player, item);
     }
@@ -3932,11 +5170,14 @@ export function addPlayerCash(player: Player | null, amount: number): boolean {
   return true;
 }
 
-// Calculate recursive unit weight of item (including its contents)
+// Calculate recursive unit weight of item (including its contents and fluids)
 export function getItemTotalWeight(item: InventoryItem | null | undefined): number {
   if (!item) return 0;
   const count = item.count || 1;
-  const unitWeight = item.weight || 0;
+  let unitWeight = item.weight || 0;
+  if (item.fluidStorage) {
+    unitWeight = getFluidContainerWeight(item);
+  }
   let total = unitWeight * count;
   if (item.contents && item.contents.length > 0) {
     for (const child of item.contents) {
@@ -3946,11 +5187,14 @@ export function getItemTotalWeight(item: InventoryItem | null | undefined): numb
   return Number(total.toFixed(3));
 }
 
-// Calculate recursive volume of item (including its contents)
+// Calculate recursive volume of item (including its contents and fluid capacity)
 export function getItemTotalVolume(item: InventoryItem | null | undefined): number {
   if (!item) return 0;
   const count = item.count || 1;
-  const baseVolume = item.volume !== undefined ? item.volume : Math.max(0.01, (item.weight || 0.1) * 1.0);
+  let baseVolume = item.volume !== undefined ? item.volume : Math.max(0.01, (item.weight || 0.1) * 1.0);
+  if (item.fluidStorage) {
+    baseVolume = getFluidContainerVolume(item);
+  }
   let total = baseVolume * count;
   if (item.contents && item.contents.length > 0) {
     for (const child of item.contents) {
@@ -4309,19 +5553,10 @@ export function addItemToContainer(container: InventoryItem, itemToAdd: Inventor
   if (!container.contents) {
     container.contents = [];
   }
-  // Try stacking if stackable
-  const existing = container.contents.find(i => i.itemId === itemToAdd.itemId && i.count < i.maxStack);
-  if (existing) {
-    const space = existing.maxStack - existing.count;
-    const addCount = Math.min(space, itemToAdd.count);
-    existing.count += addCount;
-    itemToAdd.count -= addCount;
-    if (itemToAdd.count <= 0) {
-      return { success: true, message: `Помещено в ${container.nameRu}: ${existing.nameRu} (+${addCount})`};
-    }
-  }
+  itemToAdd.count = 1;
+  itemToAdd.maxStack = 1;
   container.contents.push(itemToAdd);
-  return { success: true, message: `Помещено в ${container.nameRu}: ${itemToAdd.nameRu} (x${itemToAdd.count})`};
+  return { success: true, message: `Помещено в ${container.nameRu}: ${itemToAdd.nameRu}`};
 }
 
 // Remove item from container contents
@@ -4330,13 +5565,8 @@ export function removeItemFromContainer(container: InventoryItem, contentIndex: 
   const item = container.contents[contentIndex];
   if (!item) return null;
 
-  if (item.count <= count) {
-    container.contents.splice(contentIndex, 1);
-    return item;
-  } else {
-    item.count -= count;
-    return { ...item, count };
-  }
+  container.contents.splice(contentIndex, 1);
+  return { ...item, count: 1, maxStack: 1 };
 }
 
 // Put item into left or right hand
@@ -4346,40 +5576,16 @@ export function putItemInHand(player: Player, hand: 'left'| 'right', item: Inven
     return { success: false, message: `${hand === 'left'? 'Левая': 'Правая'} рука уже занята (${currentHandItem.nameRu})!`};
   }
 
-  // Enforce single-item rule for bulky items in hands
-  let itemInHand = item;
-  let remainder: InventoryItem | null = null;
-  if (isItemBulky(item) && item.count > 1) {
-    remainder = { ...item, id: `item_${item.itemId}_${Date.now()}_remainder`, count: item.count - 1 };
-    itemInHand = { ...item, count: 1 };
-  }
+  item.count = 1;
+  item.maxStack = 1;
 
   if (hand === 'left') {
-    player.leftHandItem = itemInHand;
+    player.leftHandItem = item;
   } else {
-    player.rightHandItem = itemInHand;
+    player.rightHandItem = item;
   }
 
-  if (remainder) {
-    const added = addItemToPlayer(player, remainder);
-    if (!added) {
-      if (world) {
-        if (!world.groundItems) world.groundItems = [];
-        world.groundItems.push({
-          id: `ground_split_${Date.now()}_${Math.random()}`,
-          x: player.x + (Math.random() * 20 - 10),
-          y: player.y + (Math.random() * 20 - 10),
-          item: remainder,
-          spawnTime: Date.now()
-        });
-        addPlayerNotification(player, `Инвентарь полон! Остальные ${remainder.nameRu} (x${remainder.count}) упали на землю.`, 'warning');
-      } else {
-        addPlayerNotification(player, `Инвентарь полон! Лишние ${remainder.nameRu} (x${remainder.count}) утеряны.`, 'warning');
-      }
-    }
-  }
-
-  return { success: true, message: `Взято в ${hand === 'left'? 'левую': 'правую'} руку: ${itemInHand.nameRu}`};
+  return { success: true, message: `Взято в ${hand === 'left'? 'левую': 'правую'} руку: ${item.nameRu}`};
 }
 
 // Take item out of hand
@@ -4391,6 +5597,8 @@ export function takeItemFromHand(player: Player, hand: 'left'| 'right'): Invento
   } else {
     player.rightHandItem = null;
   }
+  item.count = 1;
+  item.maxStack = 1;
   return item;
 }
 
@@ -4402,22 +5610,8 @@ export function stowItemFromHandToPockets(player: Player, hand: 'left'| 'right')
   if (!player.inventory) player.inventory = [];
   const maxSlots = player.maxInventorySlots || 24;
 
-  // Stacking onto existing slot with same itemId
-  if (item.maxStack > 1) {
-    for (let i = 0; i < player.inventory.length; i++) {
-      const exist = player.inventory[i];
-      if (exist && exist.itemId === item.itemId && exist.count < exist.maxStack) {
-        const canAdd = Math.min(exist.maxStack - exist.count, item.count);
-        exist.count += canAdd;
-        item.count -= canAdd;
-        if (item.count <= 0) {
-          takeItemFromHand(player, hand);
-          addPlayerNotification(player, `Убрано в карман: ${exist.nameRu} (+${canAdd})`, 'pickup');
-          return { success: true, message: `Убрано в карман: ${exist.nameRu}`};
-        }
-      }
-    }
-  }
+  item.count = 1;
+  item.maxStack = 1;
 
   // Find empty slot or push
   const emptyIdx = player.inventory.findIndex(slot => !slot);
@@ -4449,16 +5643,22 @@ export function createStarterWallet(): InventoryItem {
   const wallet = createItem('wallet', 1);
   wallet.contents = [
     createItem('cash_5000', 1),
-    createItem('cash_1000', 2),
-    createItem('cash_500', 2),
-    createItem('cash_100', 5),
-    createItem('cash_50', 5),
-    createItem('cash_10', 10),
-    createItem('coin_10', 5),
-    createItem('coin_5', 5),
-    createItem('coin_2', 5),
-    createItem('coin_1', 10),
-    createItem('cash', 1500)
+    createItem('cash_1000', 1),
+    createItem('cash_1000', 1),
+    createItem('cash_500', 1),
+    createItem('cash_500', 1),
+    createItem('cash_100', 1),
+    createItem('cash_100', 1),
+    createItem('cash_100', 1),
+    createItem('cash_50', 1),
+    createItem('cash_50', 1),
+    createItem('cash_10', 1),
+    createItem('cash_10', 1),
+    createItem('coin_10', 1),
+    createItem('coin_10', 1),
+    createItem('coin_5', 1),
+    createItem('coin_2', 1),
+    createItem('coin_1', 1)
   ];
   return wallet;
 }
@@ -4519,6 +5719,27 @@ export function addItemToPlayer(
     player.inventory = [];
   }
 
+  // If item has count > 1, unstack and add individually as separate 1-count items
+  if (itemToAdd.count > 1) {
+    const totalCount = itemToAdd.count;
+    itemToAdd.count = 1;
+    itemToAdd.maxStack = 1;
+    let anySuccess = addItemToPlayer(player, itemToAdd, options);
+    for (let i = 1; i < totalCount; i++) {
+      const singleCopy = {
+        ...itemToAdd,
+        id: `item_${itemToAdd.itemId}_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+        count: 1,
+        maxStack: 1
+      };
+      addItemToPlayer(player, singleCopy, options);
+    }
+    return anySuccess;
+  }
+
+  itemToAdd.count = 1;
+  itemToAdd.maxStack = 1;
+
   // 1. Auto-store currency/coins into leather wallet if player has one with space
   const isCurrency = itemToAdd.category === 'valuable' && (itemToAdd.itemId.startsWith('cash') || itemToAdd.itemId.startsWith('coin'));
   if (isCurrency) {
@@ -4527,32 +5748,14 @@ export function addItemToPlayer(
       const check = canItemFitInContainer(w, itemToAdd);
       if (check.fits) {
         addItemToContainer(w, itemToAdd);
-        addPlayerNotification(player, `Убрано в кошелёк: ${itemToAdd.nameRu} (x${itemToAdd.count})`, 'pickup');
+        addPlayerNotification(player, `Убрано в кошелёк: ${itemToAdd.nameRu}`, 'pickup');
         return true;
       }
     }
   }
 
-  // Helper to place into clothing pockets (player.inventory)
+  // Helper to place into clothing pockets (player.inventory) - STRICT NO STACKING
   const tryPlaceInPockets = (): boolean => {
-    // A. Stack onto existing item of same itemId in pockets
-    const existing = player.inventory.find(i => i && i.itemId === itemToAdd.itemId && i.count < i.maxStack);
-    if (existing) {
-      const space = existing.maxStack - existing.count;
-      const addCount = Math.min(space, itemToAdd.count);
-      const addedItem = { ...itemToAdd, count: addCount };
-      const check = canItemFitInPockets(player, addedItem);
-      if (check.fits) {
-        existing.count += addCount;
-        itemToAdd.count -= addCount;
-        if (itemToAdd.count <= 0) {
-          addPlayerNotification(player, `+${addCount} ${itemToAdd.nameRu}`, 'pickup');
-          return true;
-        }
-      }
-    }
-
-    // B. Place in empty pocket/backpack slot
     const pocketCheck = canItemFitInPockets(player, itemToAdd);
     if (pocketCheck.fits) {
       const maxSlots = getPlayerTotalSlots(player);
@@ -4572,41 +5775,28 @@ export function addItemToPlayer(
         const slotIdx = player.inventory.indexOf(itemToAdd);
         const comp = slotIdx !== -1 ? getSlotCompartment(player, slotIdx)?.compartment : null;
         const targetName = comp ? comp.nameRu : 'инвентарь';
-        addPlayerNotification(player, `Положено в ${targetName}: ${itemToAdd.nameRu} (x${itemToAdd.count})`, 'pickup');
+        addPlayerNotification(player, `Положено в ${targetName}: ${itemToAdd.nameRu}`, 'pickup');
         return true;
       }
     }
     return false;
   };
 
-  // Helper to place into worn backpack container if slots in inventory are full
   const tryPlaceInBackpack = (): boolean => {
     return false;
   };
 
   const activeHand = player.activeHand || 'right';
-  const bulky = isItemBulky(itemToAdd);
 
   const tryPlaceInHand = (hand: 'left' | 'right'): boolean => {
     const handItem = hand === 'left' ? player.leftHandItem : player.rightHandItem;
     if (!handItem) {
-      let toHand = itemToAdd;
-      let remainder: InventoryItem | null = null;
-      if (bulky && itemToAdd.count > 1) {
-        toHand = { ...itemToAdd, count: 1 };
-        remainder = { ...itemToAdd, id: `item_${itemToAdd.itemId}_${Date.now()}_rem`, count: itemToAdd.count - 1 };
-      }
-      
       if (hand === 'left') {
-        player.leftHandItem = toHand;
-        addPlayerNotification(player, `Взято в левую руку: ${toHand.nameRu} (x${toHand.count})`, 'pickup');
+        player.leftHandItem = itemToAdd;
+        addPlayerNotification(player, `Взято в левую руку: ${itemToAdd.nameRu}`, 'pickup');
       } else {
-        player.rightHandItem = toHand;
-        addPlayerNotification(player, `Взято в правую руку: ${toHand.nameRu} (x${toHand.count})`, 'pickup');
-      }
-      
-      if (remainder) {
-        addItemToPlayer(player, remainder, options);
+        player.rightHandItem = itemToAdd;
+        addPlayerNotification(player, `Взято в правую руку: ${itemToAdd.nameRu}`, 'pickup');
       }
       return true;
     }
@@ -4628,7 +5818,6 @@ export function addItemToPlayer(
     }
   } else {
     // Default flow:
-    // 1. If active hand is free and item is bulky or single, take into active hand
     if (!options?.skipHands) {
       if (activeHand === 'left') {
         if (tryPlaceInHand('left')) return true;
@@ -4637,13 +5826,9 @@ export function addItemToPlayer(
       }
     }
 
-    // 2. Next: try pockets (player.inventory) so items appear directly in the main 18-slot inventory grid!
     if (tryPlaceInPockets()) return true;
-
-    // 3. Next: try worn backpack container
     if (tryPlaceInBackpack()) return true;
 
-    // 4. Next: try secondary hand if still not placed
     if (!options?.skipHands) {
       const otherHand = activeHand === 'left' ? 'right' : 'left';
       if (tryPlaceInHand(otherHand)) return true;
@@ -4673,18 +5858,9 @@ export function moveInventoryItem(player: Player, fromIdx: number, toIdx: number
 
   if (!itemFrom) return false;
 
-  if (itemTo && itemTo.itemId === itemFrom.itemId && itemTo.maxStack > 1 && itemTo.count < itemTo.maxStack) {
-    const spaceLeft = itemTo.maxStack - itemTo.count;
-    const transferCount = Math.min(spaceLeft, itemFrom.count);
-    itemTo.count += transferCount;
-    itemFrom.count -= transferCount;
-    if (itemFrom.count <= 0) {
-      player.inventory[fromIdx] = undefined as any;
-    }
-  } else {
-    player.inventory[fromIdx] = itemTo;
-    player.inventory[toIdx] = itemFrom;
-  }
+  // Always swap slots without stacking
+  player.inventory[fromIdx] = itemTo;
+  player.inventory[toIdx] = itemFrom;
 
   while (player.inventory.length > 0 && player.inventory[player.inventory.length - 1] === undefined) {
     player.inventory.pop();
@@ -4699,13 +5875,8 @@ export function removeItemFromPlayer(player: Player, itemIndex: number, count: n
   }
   const item = player.inventory[itemIndex];
   if (!item) return null;
-  if (item.count <= count) {
-    player.inventory[itemIndex] = null as any;
-    return item;
-  } else {
-    item.count -= count;
-    return { ...item, count };
-  }
+  player.inventory[itemIndex] = null as any;
+  return { ...item, count: 1, maxStack: 1 };
 }
 
 export function getCarKeyTier(carType?: string, priceRub?: number): 'classic'| 'flip'| 'smart'| 'display'{
@@ -5319,6 +6490,151 @@ export function activateTowRopeItem(
   return { success: true, message: 'Буксировочный трос натянут' };
 }
 
+export function isButcherableItem(itemId: string): boolean {
+  const parts = itemId.split('_');
+  if (parts.length < 2) return false;
+  const suffix = parts.slice(1).join('_'); // handles cases like 'carcass_raw' and 'carcass_dressed'
+  
+  const animalIds = ['beef', 'pork', 'mutton', 'venison', 'goat'];
+  const birdIds = ['chicken', 'duck', 'goose', 'turkey', 'pheasant', 'quail'];
+  const fishIds = ['salmon', 'tuna', 'cod', 'perch', 'herring', 'pike', 'eel', 'catfish'];
+  
+  const prefix = parts[0];
+  
+  if (animalIds.includes(prefix)) {
+    return ['carcass', 'side', 'quarter'].includes(suffix);
+  }
+  if (birdIds.includes(prefix)) {
+    return ['carcass_raw', 'carcass_dressed'].includes(suffix);
+  }
+  if (fishIds.includes(prefix)) {
+    return suffix === 'whole';
+  }
+  return false;
+}
+
+export function hasKnife(player: Player): boolean {
+  if (player.leftHandItem && (player.leftHandItem.itemId === 'kitchen_knife_chef' || player.leftHandItem.itemId === 'pocket_knife')) {
+    return true;
+  }
+  if (player.rightHandItem && (player.rightHandItem.itemId === 'kitchen_knife_chef' || player.rightHandItem.itemId === 'pocket_knife')) {
+    return true;
+  }
+  if (player.inventory) {
+    for (const item of player.inventory) {
+      if (item && (item.itemId === 'kitchen_knife_chef' || item.itemId === 'pocket_knife')) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+export function butcherItem(player: Player, item: InventoryItem, world?: GameWorld): { success: boolean; message: string } {
+  if (!hasKnife(player)) {
+    addPlayerNotification(
+      player,
+      `Для разделки ${item.nameRu} вам необходим нож в руках или инвентаре! Есть сырую тушу целиком невозможно.`,
+      'warning'
+    );
+    return { success: false, message: 'Нож не найден' };
+  }
+
+  const parts = item.itemId.split('_');
+  const prefix = parts[0];
+  const suffix = parts.slice(1).join('_');
+
+  const animalIds = ['beef', 'pork', 'mutton', 'venison', 'goat'];
+  const birdIds = ['chicken', 'duck', 'goose', 'turkey', 'pheasant', 'quail'];
+  const fishIds = ['salmon', 'tuna', 'cod', 'perch', 'herring', 'pike', 'eel', 'catfish'];
+
+  sound.playPropBreak('metal'); // Slicing sound
+
+  const spawnOrGive = (id: string) => {
+    const newItem = createItem(id, 1);
+    const success = addItemToPlayer(player, newItem);
+    if (!success && world) {
+      if (!world.groundItems) world.groundItems = [];
+      const angle = player.angle || 0;
+      const gx = player.x + Math.cos(angle) * (20 + Math.random() * 15);
+      const gy = player.y + Math.sin(angle) * (20 + Math.random() * 15);
+      world.groundItems.push({
+        id: `ground_${newItem.id}_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+        x: gx,
+        y: gy,
+        item: newItem,
+        spawnTime: Date.now()
+      });
+      addPlayerNotification(player, `Выпало на землю: ${newItem.nameRu} (нет места в инвентаре)`, 'info');
+    }
+  };
+
+  if (animalIds.includes(prefix)) {
+    if (suffix === 'carcass') {
+      spawnOrGive(`${prefix}_side`);
+      spawnOrGive(`${prefix}_side`);
+      addPlayerNotification(player, `Разделка завершена: ${item.nameRu} разделена на 2 полутуши!`, 'heal');
+      return { success: true, message: 'Туша разделана' };
+    } else if (suffix === 'side') {
+      spawnOrGive(`${prefix}_quarter`);
+      spawnOrGive(`${prefix}_quarter`);
+      addPlayerNotification(player, `Разделка завершена: ${item.nameRu} разделена на 2 четвертины!`, 'heal');
+      return { success: true, message: 'Полутуша разделана' };
+    } else if (suffix === 'quarter') {
+      const subCuts = [
+        'tenderloin_huge',
+        'brisket_large',
+        'rump_large',
+        'neck_medium',
+        'ribs_medium',
+        'liver',
+        'bone_marrow',
+        'tallow'
+      ];
+      for (const sc of subCuts) {
+        spawnOrGive(`${prefix}_${sc}`);
+      }
+      addPlayerNotification(player, `Разделка завершена: ${item.nameRu} разделана на вырезку, окорок, грудинку, ребра, субпродукты и кости!`, 'heal');
+      return { success: true, message: 'Четвертина разделана' };
+    }
+  }
+
+  if (birdIds.includes(prefix)) {
+    if (suffix === 'carcass_raw') {
+      spawnOrGive(`${prefix}_carcass_dressed`);
+      spawnOrGive(`${prefix}_giblets`);
+      spawnOrGive(`${prefix}_necks_small`);
+      addPlayerNotification(player, `Вы выпотрошили ${item.nameRu}: получена потрошеная тушка, потроха и шея.`, 'heal');
+      return { success: true, message: 'Птица выпотрошена' };
+    } else if (suffix === 'carcass_dressed') {
+      spawnOrGive(`${prefix}_breast_large`);
+      spawnOrGive(`${prefix}_breast_large`);
+      spawnOrGive(`${prefix}_thighs_medium`);
+      spawnOrGive(`${prefix}_thighs_medium`);
+      spawnOrGive(`${prefix}_drumsticks_medium`);
+      spawnOrGive(`${prefix}_drumsticks_medium`);
+      spawnOrGive(`${prefix}_wings_small`);
+      spawnOrGive(`${prefix}_wings_small`);
+      spawnOrGive(`${prefix}_bones`);
+      addPlayerNotification(player, `Разделка завершена: потрошеная ${item.nameRu} разделана на грудки, бедра, голени, крылышки и остов!`, 'heal');
+      return { success: true, message: 'Птица разделана' };
+    }
+  }
+
+  if (fishIds.includes(prefix)) {
+    if (suffix === 'whole') {
+      spawnOrGive(`${prefix}_fillet`);
+      spawnOrGive(`${prefix}_fillet`);
+      spawnOrGive(`${prefix}_head`);
+      spawnOrGive(`${prefix}_skeleton`);
+      addPlayerNotification(player, `Разделка завершена: цельная рыба ${item.nameRu} разделана на филе, голову и хребет!`, 'heal');
+      return { success: true, message: 'Рыба разделана' };
+    }
+  }
+
+  return { success: false, message: 'Неподдерживаемый предмет для разделки' };
+}
+
 export function useItemOnPlayer(
   player: Player,
   itemIndex: number,
@@ -5337,6 +6653,15 @@ export function useItemOnPlayer(
   // Safety: Containers must NEVER be consumed or deleted on use
   if (item.isContainer) {
     return { success: false, message: 'Это контейнер: откройте его, чтобы положить или достать вещи'};
+  }
+
+  // Check if item is butcherable (carcasses, sides, quarters, whole birds/fish)
+  if (isButcherableItem(item.itemId)) {
+    const res = butcherItem(player, item, world);
+    if (res.success) {
+      removeItemFromPlayer(player, itemIndex, 1);
+    }
+    return res;
   }
 
   // Tow Rope activation from Inventory
@@ -5451,6 +6776,11 @@ export function useItemOnPlayer(
   }
   if (item.itemId.startsWith('car_key')) {
     return handleCarKeyActivation(player, item, world);
+  }
+
+  // Unified Fluid / Beverage / Fuel / Sand Container usage
+  if (item.fluidStorage) {
+    return tryFillOrUseFluidContainer(player, item, world);
   }
 
   // Special repair tool usage
@@ -6288,6 +7618,12 @@ export function useItemOnPlayer(
   // Consume 1 item from stack
   removeItemFromPlayer(player, itemIndex, 1);
 
+  if (def?.leftoverId) {
+    const leftover = createItem(def.leftoverId, 1);
+    addItemToPlayer(player, leftover);
+    addPlayerNotification(player, `Вы закончили ${item.nameRu}. Осталась упаковка: ${def.leftoverNameRu || leftover.nameRu}`, 'info');
+  }
+
   return { success: true, message: `Использовано: ${item.nameRu}`};
 }
 
@@ -6308,6 +7644,15 @@ export function useHandItemOnPlayer(
 
   if (item.isContainer) {
     return { success: false, message: 'Это контейнер: откройте его, чтобы достать или положить вещи'};
+  }
+
+  // Check if item is butcherable (carcasses, sides, quarters, whole birds/fish)
+  if (isButcherableItem(item.itemId)) {
+    const res = butcherItem(player, item, world);
+    if (res.success) {
+      takeItemFromHand(player, hand);
+    }
+    return res;
   }
 
   // Tow Rope activation from hand (activated with E)
@@ -6565,6 +7910,11 @@ export function useHandItemOnPlayer(
     sound.playAlert();
     addPlayerNotification(player, player.heldItemId ? 'Фонарик включен': 'Фонарик выключен', 'info');
     return { success: true, message: 'Фонарик переключен'};
+  }
+
+  // Unified Fluid / Beverage / Fuel / Sand Container usage
+  if (item.fluidStorage) {
+    return tryFillOrUseFluidContainer(player, item, world);
   }
 
   // Gasoline Canister usage (spills fuel puddles on ground or refuels nearby vehicle)
@@ -7306,6 +8656,18 @@ export function useHandItemOnPlayer(
     takeItemFromHand(player, hand);
   }
 
+  if (def?.leftoverId) {
+    const leftover = createItem(def.leftoverId, 1);
+    if (hand === 'left' && !player.leftHandItem) {
+      player.leftHandItem = leftover;
+    } else if (hand === 'right' && !player.rightHandItem) {
+      player.rightHandItem = leftover;
+    } else {
+      addItemToPlayer(player, leftover);
+    }
+    addPlayerNotification(player, `Вы закончили ${item.nameRu}. В руке осталась упаковка: ${def.leftoverNameRu || leftover.nameRu}`, 'info');
+  }
+
   return { success: true, message: `Использовано: ${item.nameRu}`};
 }
 
@@ -7367,14 +8729,14 @@ export function seedInitialGroundItems(world: GameWorld) {
         id: 'ground_seed_1',
         x: 4420,
         y: 2790,
-        item: createItem('water_bottle', 2),
+        item: createItem('water_bottle', 1),
         spawnTime: Date.now()
       },
       {
         id: 'ground_seed_2',
         x: 4450,
         y: 2820,
-        item: createItem('apple', 3),
+        item: createItem('apple', 1),
         spawnTime: Date.now()
       },
       {
@@ -7395,7 +8757,7 @@ export function seedInitialGroundItems(world: GameWorld) {
         id: 'ground_seed_5',
         x: 2770,
         y: 2760,
-        item: createItem('bandage', 2),
+        item: createItem('bandage', 1),
         spawnTime: Date.now()
       },
       {

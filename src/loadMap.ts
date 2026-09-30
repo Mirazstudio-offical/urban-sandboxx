@@ -52,7 +52,11 @@ export function sanitizeWorldVehicles(world: GameWorld): GameWorld {
         v.type.startsWith('tractor_') || 
         v.type.startsWith('trailer_') || 
         v.type.startsWith('truck_') ||
-        v.type === 'garbage_truck';
+        v.type === 'garbage_truck' ||
+        Boolean(v.insertedKeyType) ||
+        Boolean(v.insertedKeyId) ||
+        Boolean(v.keyId) ||
+        v.ownerId === 'player';
 
       const specialVehicles = world.vehicles.filter(isSpecial);
       const ordinaryVehicles = world.vehicles.filter(v => !isSpecial(v));
@@ -145,6 +149,8 @@ export function normalizeWorld(parsed: any): GameWorld {
     rollingStock: Array.isArray(parsed.rollingStock) ? parsed.rollingStock : [],
     railwaySignals: Array.isArray(parsed.railwaySignals) ? parsed.railwaySignals : [],
     trainSchedules: Array.isArray(parsed.trainSchedules) ? parsed.trainSchedules : [],
+    minimapMarkers: Array.isArray(parsed.minimapMarkers) ? parsed.minimapMarkers : [],
+    spawnPoints: Array.isArray(parsed.spawnPoints) ? parsed.spawnPoints : [],
   };
 
   ensureWorldGasStation(world);

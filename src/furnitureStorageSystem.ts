@@ -266,30 +266,37 @@ function seedApartmentFurnitureItems(
       items.push(createItem('backpack', 1));
     }
   } else if (furnitureType === 'fridge') {
-    items.push(createItem('water_bottle', 2));
-    items.push(createItem('apple', 3));
-    items.push(createItem('sandwich', 2));
+    items.push(createItem('water_bottle', 1));
+    items.push(createItem('water_bottle', 1));
+    items.push(createItem('apple', 1));
+    items.push(createItem('apple', 1));
+    items.push(createItem('apple', 1));
+    items.push(createItem('sandwich', 1));
+    items.push(createItem('sandwich', 1));
     items.push(createItem('energy_drink', 1));
     if (aptId?.includes('cottage')) {
-      items.push(createItem('burger', 2));
+      items.push(createItem('burger', 1));
+      items.push(createItem('burger', 1));
       items.push(createItem('camp_flask', 1));
     }
   } else if (furnitureType === 'kitchen_counter') {
     items.push(createItem('military_ration', 1));
     items.push(createItem('pocket_knife', 1));
     items.push(createItem('duct_tape', 1));
-    items.push(createItem('rag', 2));
+    items.push(createItem('rag', 1));
+    items.push(createItem('rag', 1));
   } else if (furnitureType === 'nightstand') {
     items.push(createItem('flashlight_police', 1));
     items.push(createItem('zippo_lighter', 1));
     items.push(createItem('painkillers', 1));
-    items.push(createItem('coin_10', 5));
+    items.push(createItem('coin_10', 1));
   } else if (furnitureType === 'bookshelf') {
     items.push(createItem('compass', 1));
-    items.push(createItem('cash_500', 2));
+    items.push(createItem('cash_500', 1));
   } else if (furnitureType === 'file_cabinet') {
     items.push(createItem('duct_tape', 1));
-    items.push(createItem('bandage', 2));
+    items.push(createItem('bandage', 1));
+    items.push(createItem('bandage', 1));
   } else if (furnitureType === 'desk') {
     items.push(createItem('smartphone', 1));
     items.push(createItem('cash_1000', 1));
@@ -299,7 +306,8 @@ function seedApartmentFurnitureItems(
     items.push(createItem('duct_tape', 1));
     items.push(createItem('cash_500', 1));
   } else if (furnitureType === 'sink') {
-    items.push(createItem('rag', 2));
+    items.push(createItem('rag', 1));
+    items.push(createItem('rag', 1));
     items.push(createItem('bandage', 1));
   }
 
@@ -426,7 +434,7 @@ export function canItemFitInFurniture(
 export function addItemToFurnitureStorage(
   storage: FurnitureStorage,
   itemToAdd: InventoryItem,
-  countToTransfer: number = itemToAdd.count
+  countToTransfer: number = 1
 ): { success: boolean; message: string; transferredCount: number } {
   if (countToTransfer <= 0) return { success: false, message: 'Количество должно быть больше нуля', transferredCount: 0 };
 
@@ -437,38 +445,21 @@ export function addItemToFurnitureStorage(
 
   if (!storage.items) storage.items = [];
 
-  const actualCount = Math.min(itemToAdd.count, countToTransfer);
+  const actualCount = Math.max(1, countToTransfer);
 
-  // Try stacking into existing stack
-  if (itemToAdd.maxStack > 1) {
-    const existing = storage.items.find(i => i.itemId === itemToAdd.itemId && i.count < i.maxStack);
-    if (existing) {
-      const space = existing.maxStack - existing.count;
-      const addCount = Math.min(space, actualCount);
-      existing.count += addCount;
-      const remaining = actualCount - addCount;
-      if (remaining <= 0) {
-        return { success: true, message: `Помещено в хранилище: ${itemToAdd.nameRu} (x${addCount})`, transferredCount: addCount };
-      }
-      // If some left, continue to push new stack
-      const splitItem = { ...itemToAdd, count: remaining, id: `item_${itemToAdd.itemId}_${Date.now()}` };
-      storage.items.push(splitItem);
-      saveFurnitureStoragesToLocalStorage();
-      return { success: true, message: `Помещено в хранилище: ${itemToAdd.nameRu} (x${actualCount})`, transferredCount: actualCount };
-    }
-  }
-
-  if (actualCount === itemToAdd.count) {
-    storage.items.push(itemToAdd);
-  } else {
-    const splitItem = { ...itemToAdd, count: actualCount, id: `item_${itemToAdd.itemId}_${Date.now()}` };
-    storage.items.push(splitItem);
+  for (let i = 0; i < actualCount; i++) {
+    storage.items.push({
+      ...itemToAdd,
+      id: `storage_item_${itemToAdd.itemId}_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+      count: 1,
+      maxStack: 1
+    });
   }
 
   saveFurnitureStoragesToLocalStorage();
   return {
     success: true,
-    message: `Помещено в хранилище: ${itemToAdd.nameRu} (x${actualCount})`,
+    message: `Помещено в хранилище: ${itemToAdd.nameRu}`,
     transferredCount: actualCount
   };
 }
@@ -485,15 +476,7 @@ export function removeItemFromFurnitureStorage(
   const target = storage.items[itemIndex];
   if (!target) return null;
 
-  let removedItem: InventoryItem;
-  if (target.count <= count) {
-    storage.items.splice(itemIndex, 1);
-    removedItem = target;
-  } else {
-    target.count -= count;
-    removedItem = { ...target, count };
-  }
-
+  storage.items.splice(itemIndex, 1);
   saveFurnitureStoragesToLocalStorage();
-  return removedItem;
+  return { ...target, count: 1, maxStack: 1 };
 }

@@ -1,5 +1,5 @@
 import { CAR_CONFIGS, canVehicleHaveHitch, createDefaultEngineState, createDefaultFuelSystem, createDefaultFluidTank, ensureVehicleFluidTank, liquidTypeToStainType, createDefaultVehicleDamage, ensureVehicleDamage, getVehicleFuelCapPosition, getVehicleAxleGeometry, isTrailerVehicle, isRoadMachinery, getVehicleDriveType, SPEED_KMH_TO_PX_S, PX_S_TO_SPEED_KMH, getLPGDefaultCapacity, cycleVehicleDiffLock, getVehicleDiffCapabilities, ensureVehicleDiffLock } from './vehicleHelpers';
-import { Building, GameWorld, InputState, Particle, Pedestrian, Player, SkidMark, Vehicle, StreetProp, FluidStainType, Roundabout } from './types';
+import { Building, GameWorld, InputState, Particle, Pedestrian, Player, SkidMark, Vehicle, StreetProp, FluidStainType, Roundabout, RollingStockCar } from './types';
 import { getBuildingLayout, constrainPlayerToInterior } from './buildingInteriors';
 import { sound } from './audio';
 import { trafficDiagnostics, isVehicleDisabledOrCrashed } from './aiTraffic';
@@ -376,7 +376,7 @@ export function checkPedestrianVehicleCollision(
   py: number,
   radius: number,
   car: Vehicle
-): { x: number; y: number; collided: boolean } {
+): { x: number; y: number; collided: boolean; normalX: number; normalY: number } {
   const obbs = getVehicleCollisionOBBs(car, 0);
   let curX = px;
   let curY = py;
@@ -440,7 +440,295 @@ export function checkPedestrianVehicleCollision(
     }
   }
 
-  return { x: curX, y: curY, collided: hasCollided };
+  const pushDx = curX - px;
+  const pushDy = curY - py;
+  const pushDist = Math.hypot(pushDx, pushDy);
+  const normX = pushDist > 0.0001 ? pushDx / pushDist : 0;
+  const normY = pushDist > 0.0001 ? pushDy / pushDist : 0;
+
+  return { x: curX, y: curY, collided: hasCollided, normalX: normX, normalY: normY };
+}
+
+export function checkPedestrianRollingStockCollision(
+  px: number,
+  py: number,
+  radius: number,
+  car: RollingStockCar
+): { x: number; y: number; collided: boolean } {
+  const dx = px - car.x;
+  const dy = py - car.y;
+  const halfL = car.length / 2;
+  const halfW = car.width / 2;
+  const maxDim = halfL + radius + 10;
+  if (dx * dx + dy * dy > maxDim * maxDim) {
+    return { x: px, y: py, collided: false };
+  }
+
+  const cos = Math.cos(car.angle);
+  const sin = Math.sin(car.angle);
+
+  // Transform pedestrian point into car local coordinates
+  const localX = dx * cos + dy * sin;
+  const localY = -dx * sin + dy * cos;
+
+  // Clamped closest point on car body OBB
+  const closestX = Math.max(-halfL, Math.min(halfL, localX));
+  const closestY = Math.max(-halfW, Math.min(halfW, localY));
+
+  const diffX = localX - closestX;
+  const diffY = localY - closestY;
+  const distSq = diffX * diffX + diffY * diffY;
+
+  if (distSq < radius * radius && distSq > 0.0001) {
+    const dist = Math.sqrt(distSq);
+    const overlap = radius - dist;
+    const normLocalX = diffX / dist;
+    const normLocalY = diffY / dist;
+
+    const pushLocalX = normLocalX * overlap;
+    const pushLocalY = normLocalY * overlap;
+
+    const pushWorldX = pushLocalX * cos - pushLocalY * sin;
+    const pushWorldY = pushLocalX * sin + pushLocalY * cos;
+
+    return { x: px + pushWorldX, y: py + pushWorldY, collided: true };
+  } else if (distSq <= 0.0001) {
+    const dLeft = localX + halfL;
+    const dRight = halfL - localX;
+    const dTop = localY + halfW;
+    const dBottom = halfW - localY;
+    const minD = Math.min(dLeft, dRight, dTop, dBottom);
+
+    let pushLocalX = 0;
+    let pushLocalY = 0;
+    if (minD === dLeft) pushLocalX = -(radius + dLeft);
+    else if (minD === dRight) pushLocalX = radius + dRight;
+    else if (minD === dTop) pushLocalY = -(radius + dTop);
+    else pushLocalY = radius + dBottom;
+
+    const pushWorldX = pushLocalX * cos - pushLocalY * sin;
+    const pushWorldY = pushLocalX * sin + pushLocalY * cos;
+
+    return { x: px + pushWorldX, y: py + pushWorldY, collided: true };
+  }
+
+  return { x: px, y: py, collided: false };
+}
+
+export function constrainPlayerToCarInterior(
+  player: Player,
+  car: RollingStockCar,
+  dt: number
+): void {
+  let px = player.carLocalX ?? 0;
+  let py = player.carLocalY ?? 8;
+
+  const playerRadius = 4.8;
+  const halfL = car.length / 2;
+  const halfW = car.width / 2;
+
+  // 1. Boundary of outer car hull and end gangways
+  const minX = -halfL + 4 + playerRadius;
+  const maxX = halfL - 4 - playerRadius;
+  const minY = -halfW + 3 + playerRadius;
+  const maxY = halfW - 3 - playerRadius;
+
+  px = Math.max(minX, Math.min(maxX, px));
+  py = Math.max(minY, Math.min(maxY, py));
+
+  const isPlatskart = (car.type && car.type.includes('platskart')) ||
+    (car.name && car.name.toLowerCase().includes('плацкарт'));
+
+  // 2. Define interior wall segments [{ x1, y1, x2, y2 }]
+  const nwVestEnd = -halfL + 36; // -209
+  const wcEndX = -halfL + 85;    // -160
+  const saloonStartX = wcEndX;   // -160
+  const saloonEndX = halfL - 75; // 170
+  const srvEndX = halfL - 33;    // 212
+
+  const walls: { x1: number; y1: number; x2: number; y2: number }[] = [
+    // Non-working vestibule bulkhead at nwVestEnd (-209)
+    // Passageway door is at y in [2, 16]
+    { x1: nwVestEnd, y1: -halfW + 2, x2: nwVestEnd, y2: 2 },
+    { x1: nwVestEnd, y1: 16, x2: nwVestEnd, y2: halfW - 2 },
+
+    // Working vestibule bulkhead at srvEndX (212)
+    // Passageway door is at y in [2, 14]
+    { x1: srvEndX, y1: -halfW + 2, x2: srvEndX, y2: 2 },
+    { x1: srvEndX, y1: 14, x2: srvEndX, y2: halfW - 2 },
+
+    // WC sanitary cabins (y in [-halfW + 2, 0], x in [-209, -160])
+    // WC front wall at y = 0 with 2 cabin doors: door 1 at [-202, -192], door 2 at [-178, -168]
+    { x1: nwVestEnd, y1: 0, x2: nwVestEnd + 7, y2: 0 },
+    { x1: nwVestEnd + 17, y1: 0, x2: nwVestEnd + 31, y2: 0 },
+    { x1: nwVestEnd + 41, y1: 0, x2: wcEndX, y2: 0 },
+    // Dividing wall between WC cabin 1 and WC cabin 2 at -184.5
+    { x1: (nwVestEnd + wcEndX) / 2, y1: -halfW + 2, x2: (nwVestEnd + wcEndX) / 2, y2: 0 },
+    // End wall separating WC from passenger saloon
+    { x1: wcEndX, y1: -halfW + 2, x2: wcEndX, y2: 0 },
+
+    // Conductor's compartment in service zone (x in [170, 212], y in [-halfW + 2, 0])
+    // Divider bulkhead between saloon and conductor compartment
+    { x1: saloonEndX, y1: -halfW + 2, x2: saloonEndX, y2: 0 },
+    // Front corridor wall at y = 0 with door at [178, 190]
+    { x1: saloonEndX, y1: 0, x2: saloonEndX + 8, y2: 0 },
+    { x1: saloonEndX + 20, y1: 0, x2: srvEndX, y2: 0 }
+  ];
+
+  // Compartment partitions & corridor doors
+  const saloonL = saloonEndX - saloonStartX; // 330
+  const numComps = 9;
+  const compW = saloonL / numComps; // 36.67
+
+  for (let i = 0; i < numComps; i++) {
+    const compX = saloonStartX + i * compW;
+
+    // Transverse partition wall between compartments (i > 0)
+    if (i > 0) {
+      walls.push({
+        x1: compX,
+        y1: -halfW + 2,
+        x2: compX,
+        y2: isPlatskart ? 0 : 1.5
+      });
+    }
+
+    if (!isPlatskart) {
+      // In Kupe: longitudinal corridor wall at y = 1.5
+      // Door opening is from compX + 11 to compX + compW - 11 (~14.7 px wide)
+      walls.push({
+        x1: compX,
+        y1: 1.5,
+        x2: compX + 11,
+        y2: 1.5
+      });
+      walls.push({
+        x1: compX + compW - 11,
+        y1: 1.5,
+        x2: compX + compW,
+        y2: 1.5
+      });
+    }
+  }
+
+  // 3. Resolve collision against all interior wall segments
+  for (const wall of walls) {
+    const dx = wall.x2 - wall.x1;
+    const dy = wall.y2 - wall.y1;
+    const lenSq = dx * dx + dy * dy;
+    let t = 0;
+    if (lenSq > 0) {
+      t = ((px - wall.x1) * dx + (py - wall.y1) * dy) / lenSq;
+      t = Math.max(0, Math.min(1, t));
+    }
+    const closestX = wall.x1 + t * dx;
+    const closestY = wall.y1 + t * dy;
+
+    const distDx = px - closestX;
+    const distDy = py - closestY;
+    const distSq = distDx * distDx + distDy * distDy;
+    const minDist = playerRadius + 1.2;
+
+    if (distSq < minDist * minDist) {
+      const dist = Math.sqrt(distSq);
+      const overlap = minDist - dist;
+      if (dist > 0.001) {
+        px += (distDx / dist) * overlap;
+        py += (distDy / dist) * overlap;
+      } else {
+        px += minDist;
+      }
+    }
+  }
+
+  // 4. Resolve collision against solid interior furniture & equipment
+  const furnitureBoxes: { minX: number; maxX: number; minY: number; maxY: number }[] = [];
+
+  // Titan copper boiler & fireplace hearth in service zone
+  furnitureBoxes.push({
+    minX: saloonEndX + 4,
+    maxX: saloonEndX + 20,
+    minY: 14.5,
+    maxY: halfW - 2
+  });
+
+  // Conductor's desk inside conductor compartment
+  furnitureBoxes.push({
+    minX: saloonEndX + 22,
+    maxX: srvEndX - 3,
+    minY: -halfW + 3,
+    maxY: -halfW + 15
+  });
+
+  // Toilets inside WC cabins
+  const cabinW = (wcEndX - nwVestEnd) / 2;
+  furnitureBoxes.push({
+    minX: nwVestEnd + 4,
+    maxX: nwVestEnd + 10,
+    minY: -halfW + 3,
+    maxY: -halfW + 12
+  });
+  furnitureBoxes.push({
+    minX: nwVestEnd + cabinW + 4,
+    maxX: nwVestEnd + cabinW + 10,
+    minY: -halfW + 3,
+    maxY: -halfW + 12
+  });
+
+  // Compartment dining tables & berths
+  for (let i = 0; i < numComps; i++) {
+    const compX = saloonStartX + i * compW;
+
+    // Dining table by window in every compartment
+    furnitureBoxes.push({
+      minX: compX + 13.5,
+      maxX: compX + compW - 13.5,
+      minY: -halfW + 2,
+      maxY: -halfW + 15.5
+    });
+
+    if (isPlatskart) {
+      // Platskart side berths (боковушки) on bottom wall
+      furnitureBoxes.push({
+        minX: compX + 2,
+        maxX: compX + compW - 2,
+        minY: 14.0,
+        maxY: halfW - 2
+      });
+    }
+  }
+
+  // Resolve box collisions
+  for (const box of furnitureBoxes) {
+    const closestX = Math.max(box.minX, Math.min(px, box.maxX));
+    const closestY = Math.max(box.minY, Math.min(py, box.maxY));
+
+    const distDx = px - closestX;
+    const distDy = py - closestY;
+    const distSq = distDx * distDx + distDy * distDy;
+    const minDist = playerRadius + 0.5;
+
+    if (distSq < minDist * minDist && distSq > 0.0001) {
+      const dist = Math.sqrt(distSq);
+      const overlap = minDist - dist;
+      px += (distDx / dist) * overlap;
+      py += (distDy / dist) * overlap;
+    } else if (distSq <= 0.0001) {
+      const dLeft = px - box.minX;
+      const dRight = box.maxX - px;
+      const dTop = py - box.minY;
+      const dBottom = box.maxY - py;
+      const minD = Math.min(dLeft, dRight, dTop, dBottom);
+
+      if (minD === dLeft) px = box.minX - minDist;
+      else if (minD === dRight) px = box.maxX + minDist;
+      else if (minD === dTop) py = box.minY - minDist;
+      else py = box.maxY + minDist;
+    }
+  }
+
+  player.carLocalX = px;
+  player.carLocalY = py;
 }
 
 // --- EXACT ORIENTED BOUNDING BOX (OBB) SAT COLLISION DETECTION ---
@@ -624,7 +912,7 @@ export interface PropHitbox {
 }
 
 export function getPropHitbox(prop: StreetProp): PropHitbox {
-  switch (prop.type) {
+  switch (prop.type as string) {
     case 'bench':
       return { shape: 'box', halfWidth: 11, halfHeight: 5, resistance: 0.06, displayNameRu: 'скамейка'};
     case 'dumpster':
@@ -690,27 +978,37 @@ export function getPropHitbox(prop: StreetProp): PropHitbox {
     case 'cable_spool':
       return { shape: 'circle', radius: 9, resistance: 0.35, displayNameRu: 'кабельный барабан'};
     case 'security_barrier':
-      return { shape: 'box', halfWidth: 12, halfHeight: 3, resistance: 0.15, displayNameRu: 'шлагбаум КПП'};
+      if (prop.isOpen) return { shape: 'none', resistance: 0, displayNameRu: 'открытый шлагбаум КПП' };
+      return { shape: 'box', halfWidth: 12, halfHeight: 3, resistance: 0.15, displayNameRu: 'шлагбаум КПП' };
     case 'industrial_floodlight':
-      return { shape: 'box', halfWidth: 5, halfHeight: 5, resistance: 10.0, isIndestructible: true, displayNameRu: 'прожекторная мачта'};
+      return { shape: 'box', halfWidth: 5, halfHeight: 5, resistance: 10.0, isIndestructible: true, displayNameRu: 'прожекторная мачта' };
     case 'industrial_tires':
-      return { shape: 'circle', radius: 10, resistance: 0.45, displayNameRu: 'штабель карьерных шин'};
+      return { shape: 'circle', radius: 10, resistance: 0.45, displayNameRu: 'штабель карьерных шин' };
     case 'scrap_pile':
-      return { shape: 'circle', radius: 12, resistance: 0.60, displayNameRu: 'куча металлолома'};
+      return { shape: 'circle', radius: 12, resistance: 0.60, displayNameRu: 'куча металлолома' };
     case 'industrial_sign':
-      return { shape: 'box', halfWidth: 8, halfHeight: 3, resistance: 0.10, displayNameRu: 'щит-указатель'};
+      return { shape: 'box', halfWidth: 8, halfHeight: 3, resistance: 0.10, displayNameRu: 'щит-указатель' };
     case 'industrial_pipe':
-      return { shape: 'box', halfWidth: 16, halfHeight: 4, resistance: 10.0, isIndestructible: true, displayNameRu: 'эстакада трубопровода'};
+      return { shape: 'box', halfWidth: 16, halfHeight: 4, resistance: 10.0, isIndestructible: true, displayNameRu: 'эстакада трубопровода' };
     case 'fence_wood_vertical':
-      return { shape: 'box', halfWidth: 18, halfHeight: 3.5, resistance: 0.85, displayNameRu: 'деревянный штакетник'};
+      return { shape: 'box', halfWidth: 18, halfHeight: 3.5, resistance: 0.85, displayNameRu: 'деревянный штакетник' };
     case 'fence_metal_vertical':
-      return { shape: 'box', halfWidth: 18, halfHeight: 3.5, resistance: 1.80, displayNameRu: 'забор из профнастила'};
+      return { shape: 'box', halfWidth: 18, halfHeight: 3.5, resistance: 1.80, displayNameRu: 'забор из профнастила' };
     case 'cottage_gate':
-      return { shape: 'box', halfWidth: 36, halfHeight: 4.5, resistance: 2.20, displayNameRu: 'въездные ворота'};
+      if (prop.isOpen) return { shape: 'none', resistance: 0, displayNameRu: 'открытые въездные ворота' };
+      return { shape: 'box', halfWidth: 36, halfHeight: 4.5, resistance: 2.20, displayNameRu: 'въездные ворота' };
     case 'wicket_gate':
-      return { shape: 'box', halfWidth: 12, halfHeight: 2.5, resistance: 0.15, displayNameRu: 'калитка'};
+      if (prop.isOpen) return { shape: 'none', resistance: 0, displayNameRu: 'открытая калитка' };
+      return { shape: 'box', halfWidth: 12, halfHeight: 2.5, resistance: 0.15, displayNameRu: 'калитка' };
     case 'garden_path_tile':
       return { shape: 'none', resistance: 0, displayNameRu: 'садовая дорожка'};
+    case 'catenary_pole':
+    case 'railway_catenary_mast':
+      return { shape: 'none', resistance: 0, displayNameRu: 'опора контактной сети'};
+    case 'railway_km_post':
+      return { shape: 'none', resistance: 0, displayNameRu: 'километровый столб'};
+    case 'rail_switch':
+      return { shape: 'none', resistance: 0, displayNameRu: 'стрелочный перевод'};
     case 'garage_sofa':
       return { shape: 'box', halfWidth: 10, halfHeight: 6, resistance: 0.35, displayNameRu: 'гаражный диван' };
     case 'garage_workbench':
@@ -2111,7 +2409,7 @@ export function updateVehicleSystems(car: Vehicle, dt: number, world: GameWorld)
     const isMachinery = isRoadMachinery(car.type);
     const rpmNorm = Math.max(0.2, (eng.engineRPM || 800) / 3800);
     const throttleRatio = (car as any)._lastThrottle !== undefined ? (car as any)._lastThrottle : 0.4;
-    const baseHeat = 2.4;
+    const baseHeat = car.acOn ? 2.9 : 2.4; // A/C compressor adds extra load and heat generation
     // Combustion heat scales quadratically with RPM and linearly with throttle
     // Heavy road machinery runs with steady governed industrial diesel RPM without runaway heat spikes
     const heatGen = isMachinery
@@ -2438,6 +2736,9 @@ export function updateVehicleSystems(car: Vehicle, dt: number, world: GameWorld)
   // --- REALISTIC DRIVING FUEL CONSUMPTION (Influenced by Chip Tuning & GBO/LPG) ---
   if (eng.engineRunning && fuel) {
     let consumptionRate = 0.0003 + (eng.engineRPM / 3000) * 0.0012; // liters per second
+    if (car.acOn) {
+      consumptionRate *= 1.15; // A/C compressor parasite load (+15% fuel consumption)
+    }
     if ((car as any).hasChiptuning) {
       consumptionRate *= 0.85; // 15% fuel economy from optimized timing & AFR
     }
@@ -2487,6 +2788,12 @@ export function updateVehicleSystems(car: Vehicle, dt: number, world: GameWorld)
     }
     if (car.heaterMode && car.heaterMode !== 'off') {
       eng.batteryCharge = Math.max(0, eng.batteryCharge - 0.05 * dt);
+    }
+    if (car.acOn) {
+      eng.batteryCharge = Math.max(0, eng.batteryCharge - 0.08 * dt); // A/C blower & electronics discharge
+    }
+    if (car.recircOn) {
+      eng.batteryCharge = Math.max(0, eng.batteryCharge - 0.02 * dt); // Recirculation flap & fan discharge
     }
   }
 
@@ -3468,6 +3775,65 @@ export function updatePlayerPedestrianPhysics(
     return;
   }
 
+  // Train Carriage Interior Movement (Хождение внутри движущихся пассажирских вагонов)
+  if (player.insideCarId && world) {
+    const car = (world.rollingStock || []).find(c => c.id === player.insideCarId);
+    if (car) {
+      let moveX = 0;
+      let moveY = 0;
+      if (input.forward) moveY -= 1; // Screen Up
+      if (input.backward) moveY += 1; // Screen Down
+      if (input.left) moveX -= 1;    // Screen Left
+      if (input.right) moveX += 1;   // Screen Right
+
+      const len = Math.hypot(moveX, moveY);
+      const walkSpeed = input.sprint ? 130 : 75;
+
+      if (player.carLocalX === undefined) player.carLocalX = 0;
+      if (player.carLocalY === undefined) player.carLocalY = 9;
+
+      const carCos = Math.cos(car.angle);
+      const carSin = Math.sin(car.angle);
+
+      if (len > 0.01) {
+        moveX /= len;
+        moveY /= len;
+
+        // Rotate screen-space input based on camera angle (standard orthogonal game view)
+        const rotAngle = cameraAngle + Math.PI / 2;
+        const cosCam = Math.cos(rotAngle);
+        const sinCam = Math.sin(rotAngle);
+        const worldMoveX = moveX * cosCam - moveY * sinCam;
+        const worldMoveY = moveX * sinCam + moveY * cosCam;
+
+        // Transform world movement vector into carriage local axes
+        const localMoveX = worldMoveX * carCos + worldMoveY * carSin;
+        const localMoveY = -worldMoveX * carSin + worldMoveY * carCos;
+
+        player.carLocalX += localMoveX * walkSpeed * dt;
+        player.carLocalY += localMoveY * walkSpeed * dt;
+        player.walkCycle += dt * (input.sprint ? 14 : 8);
+        player.speed = walkSpeed;
+        player.angle = Math.atan2(worldMoveY, worldMoveX);
+      } else {
+        player.speed = 0;
+      }
+
+      // Constrain player strictly within interior passenger coach walls and compartments
+      constrainPlayerToCarInterior(player, car, dt);
+
+      // Calculate world coordinates from carriage position and local offset
+      player.x = car.x + player.carLocalX * carCos - player.carLocalY * carSin;
+      player.y = car.y + player.carLocalX * carSin + player.carLocalY * carCos;
+
+      player.vx = 0;
+      player.vy = 0;
+      return;
+    } else {
+      player.insideCarId = null;
+    }
+  }
+
   // If player is inside a building, bypass standard physics and use interior constraints
   if (player.isInsideBuilding && player.insideBuildingId && world) {
     const bld = world.buildings.find(b => b.id === player.insideBuildingId);
@@ -3618,15 +3984,18 @@ export function updatePlayerPedestrianPhysics(
     // 0 - 8 kg: 1.0 (light, no penalty)
     // 8 - 25 kg: scales down from 1.0 to 0.75
     // 25 - 45 kg: scales down from 0.75 to 0.45
-    // 45+ kg: heavily encumbered, scales down to 0.25
+    // 45 - 80 kg: heavily encumbered, scales down from 0.45 to 0.10
+    // 80+ kg: extreme overencumbrance, slows to a crawl (down to 0.02)
     let weightPenalty = 1.0;
     if (carriedWeight > 8) {
       if (carriedWeight <= 25) {
         weightPenalty = 1.0 - ((carriedWeight - 8) / 17) * 0.25;
       } else if (carriedWeight <= 45) {
         weightPenalty = 0.75 - ((carriedWeight - 25) / 20) * 0.30;
+      } else if (carriedWeight <= 80) {
+        weightPenalty = 0.45 - ((carriedWeight - 45) / 35) * 0.35;
       } else {
-        weightPenalty = Math.max(0.25, 0.45 - ((carriedWeight - 45) / 25) * 0.20);
+        weightPenalty = Math.max(0.02, 0.10 - ((carriedWeight - 80) / 40) * 0.08);
       }
     }
     if (isCarryingBulky) {
@@ -3856,6 +4225,17 @@ export function updatePlayerPedestrianPhysics(
     }
   }
 
+  // Collision with rolling stock (trains, passenger cars, locomotives, freight cars)
+  if (world && world.rollingStock) {
+    for (const car of world.rollingStock) {
+      const col = checkPedestrianRollingStockCollision(newX, newY, pedRadius, car);
+      if (col.collided) {
+        newX = col.x;
+        newY = col.y;
+      }
+    }
+  }
+
   // Collision with vehicles
   if (world) {
     const nearbyVehicles = vehGrid ? vehGrid.queryRadius(newX, newY, 150) : world.vehicles;
@@ -3865,41 +4245,51 @@ export function updatePlayerPedestrianPhysics(
         newX = res.x;
         newY = res.y;
 
-        // Apply hit damage based on real collision speed in km/h
-        const carSpeedMag = Math.abs(car.speed || 0);
-        const speedKmh = Math.round(carSpeedMag * PX_S_TO_SPEED_KMH); // Conversion from internal engine speed to km/h
+        // Calculate relative normal velocity (from car towards player along collision normal)
+        const carVx = Math.cos(car.angle) * (car.speed || 0);
+        const carVy = Math.sin(car.angle) * (car.speed || 0);
+        const playerVx = player.vx || 0;
+        const playerVy = player.vy || 0;
 
-        if (speedKmh >= 3 && player.needs) {
+        const relVx = carVx - playerVx;
+        const relVy = carVy - playerVy;
+
+        const normX = res.normalX || 0;
+        const normY = res.normalY || 0;
+
+        // Projected impact velocity along the collision normal (px/s -> km/h)
+        const normalImpactPxS = relVx * normX + relVy * normY;
+        const impactSpeedKmh = Math.round(Math.max(0, normalImpactPxS) * PX_S_TO_SPEED_KMH);
+
+        // ONLY apply impact trauma if the vehicle is ACTUALLY striking the player along the normal at >= 12 km/h!
+        // Touching, brushing against, or walking into a parked/idling car applies ZERO damage.
+        if (impactSpeedKmh >= 12 && player.needs) {
           const now = Date.now() / 1000;
           if (!player.lastHurtTime || now - player.lastHurtTime > 0.5) {
             player.lastHurtTime = now;
             const carType = car.type || '';
             const isTruck = carType.includes('truck') || carType.includes('bus') || carType.includes('cement') || carType.includes('garbage') || carType.includes('fire');
             
-            // Calculate impact force proportional to km/h and vehicle mass
-            let impactForce = speedKmh * 1.45;
+            let impactForce = impactSpeedKmh * 1.45;
             if (isTruck) impactForce *= 1.6;
 
-            // Physical impulse & knockback throwing the player back
-            const impactAngle = car.angle;
-            const impulseMag = Math.min(550, speedKmh * 7.0);
-            player.vx += Math.cos(impactAngle) * impulseMag;
-            player.vy += Math.sin(impactAngle) * impulseMag;
+            const impactAngle = Math.atan2(normY, normX);
+            const impulseMag = Math.min(550, impactSpeedKmh * 7.0);
+            player.vx += normX * impulseMag;
+            player.vy += normY * impulseMag;
 
-            // Distribute realistic impact across limbs
             if (!player.isInvincible && !player.isCleanMode) {
               distributeImpactDamage(player, impactForce, impactAngle, true);
               sound.playHurt();
 
-              // Clear speed-calibrated notifications
-              if (speedKmh < 12) {
-                addPlayerNotification(player, `Легкий толчок бампером (${speedKmh} км/ч). Ссадины и легкие ушибы.`, 'info');
-              } else if (speedKmh < 32) {
-                addPlayerNotification(player, `Сбит автомобилем на скорости ${speedKmh} км/ч! Ушибы и растяжение!`, 'warning');
-              } else if (speedKmh < 60) {
-                addPlayerNotification(player, `Тяжелое столкновение (${speedKmh} км/ч)! Перелом кости и кровотечение!`, 'warning');
+              if (impactSpeedKmh < 20) {
+                addPlayerNotification(player, `Легкий толчок бампером (${impactSpeedKmh} км/ч). Ссадины и легкие ушибы.`, 'info');
+              } else if (impactSpeedKmh < 40) {
+                addPlayerNotification(player, `Сбит автомобилем на скорости ${impactSpeedKmh} км/ч! Ушибы!`, 'warning');
+              } else if (impactSpeedKmh < 70) {
+                addPlayerNotification(player, `Тяжелое столкновение (${impactSpeedKmh} км/ч)! Перелом кости!`, 'warning');
               } else {
-                addPlayerNotification(player, `Критический наезд на большой скорости (${speedKmh} км/ч)! Множественные переломы!`, 'warning');
+                addPlayerNotification(player, `Критический наезд на высокой скорости (${impactSpeedKmh} км/ч)!`, 'warning');
               }
             }
           }
@@ -4074,7 +4464,10 @@ export function updateFog(
     wetness = player.bodyState?.wetness ?? (player as any).wetness ?? 0;
   }
   const wetRatio = Math.max(0, Math.min(100, Number.isFinite(wetness) ? wetness : 0)) / 100;
-  const wetClothesRate = wetRatio > 0.12 ? (wetRatio - 0.12) * 0.045 : 0;
+  
+  // Recirculation factor makes humidity accumulate 1.8x faster because we are breathing the same air
+  const recircFactor = car.recircOn ? 1.8 : 1.0;
+  const wetClothesRate = wetRatio > 0.12 ? (wetRatio - 0.12) * 0.045 * recircFactor : 0;
 
   // 5. Glass Temperature & Dew Point Check:
   // On warm dry days (outsideTemp >= 16°C, no rain, dry clothes), the windshield surface temperature
@@ -4094,25 +4487,36 @@ export function updateFog(
     // Soaked clothing over-saturates cabin humidity
     isCondensationCondition = true;
     coldGlassFactor = 1.0;
+  } else if (car.recircOn) {
+    // Air recirculation causes gradual fogging even in warm weather due to moisture buildup
+    isCondensationCondition = true;
+    coldGlassFactor = 0.5;
   }
 
   // Respiration moisture only condenses when glass is cold or air is saturated
   const breathCondensationRate = isCondensationCondition
-    ? passengerCount * 0.009 * (1.0 + coldGlassFactor)
-    : 0.0;
+    ? passengerCount * 0.009 * (1.0 + coldGlassFactor) * recircFactor
+    : (car.recircOn ? passengerCount * 0.004 : 0.0);
 
   // 6. Heater / Blower state
   const heaterMode = car.heaterMode || 'off';
   const fanSpeed = heaterMode === 'high'? 1.0 : heaterMode === 'med'? 0.65 : heaterMode === 'low'? 0.35 : 0.0;
 
+  // A/C compressor is active when enabled, engine is running and fan speed is not zero
+  const isAcActive = !!(car.acOn && car.engineState?.engineRunning && fanSpeed > 0);
+
   let coldBlowerFogRate = 0.0;
   let warmBlowerDryRate = 0.0;
+  let acDryRate = 0.0;
 
   if (fanSpeed > 0) {
     if (engineTemp < 55) {
       // COLD BLOWER: When engineTemp < 55°C, heater core is cold and damp, blowing wet cold air directly onto glass
       const coldFraction = Math.max(0, Math.min(1.0, (55 - engineTemp) / 35));
       coldBlowerFogRate = fanSpeed * (0.016 + 0.032 * coldFraction);
+      if (isAcActive) {
+        coldBlowerFogRate *= 0.1; // A/C dries incoming air, neutralizing the cold damp core effect!
+      }
     } else if (engineTemp > 65) {
       // WARM HEATER DRYING: Effective drying when engineTemp > 65°C
       const warmFraction = Math.max(0, Math.min(1.0, (engineTemp - 65) / (90 - 65)));
@@ -4121,6 +4525,11 @@ export function updateFog(
       // Lukewarm transition (55°C - 65°C)
       const lukewarmFraction = (engineTemp - 55) / 10;
       warmBlowerDryRate = fanSpeed * lukewarmFraction * 0.015;
+    }
+
+    if (isAcActive) {
+      // A/C dehumidification drying effect scales with fan speed
+      acDryRate = fanSpeed * 0.14;
     }
   }
 
@@ -4151,7 +4560,7 @@ export function updateFog(
   const windowRetention = windowOpen ? 0.15 : 1.0;
   let accumulationRate = (breathCondensationRate + wetClothesRate) * windowRetention + coldBlowerFogRate;
 
-  let evaporationRate = warmBlowerDryRate + windowDraftDryRate + naturalDryAirEvaporation;
+  let evaporationRate = warmBlowerDryRate + windowDraftDryRate + naturalDryAirEvaporation + acDryRate;
 
   // 10. Net Balance, Smooth dt Integration & Clamping to [0.0, 1.0]
   const netRate = accumulationRate - evaporationRate;
@@ -4298,15 +4707,37 @@ export function updatePlayerNeedsAndVitals(
     // If heater is ON, blowing air temperature scales directly with engine coolant temperature!
     let targetCabinTemp = outsideTemp < 20 ? outsideTemp - 2.5 : outsideTemp;
     const heaterMode = curVehicle.heaterMode || 'off';
+    const isAcActive = !!(curVehicle.acOn && curVehicle.engineState?.engineRunning && heaterMode !== 'off');
+
     if (heaterMode !== 'off') {
-      const modeTarget = heaterMode === 'low'? 22 : heaterMode === 'med'? 27 : 34;
-      // If engine is cold (<50°C), blowing air is cold!
-      const maxAirFromEngine = Math.max(outsideTemp - 2.5, engTemp - 6);
-      targetCabinTemp = Math.min(modeTarget, maxAirFromEngine);
+      let modeTarget = heaterMode === 'low'? 22 : heaterMode === 'med'? 27 : 34;
+
+      // If A/C is active, it cools down the incoming target temperature
+      if (isAcActive) {
+        if (heaterMode === 'low') {
+          modeTarget = 16; // Chilled air conditioning
+        } else if (heaterMode === 'med') {
+          modeTarget = 21; // Gentle cooled dry climate
+        } else {
+          modeTarget = 26; // Warm but dried climate
+        }
+      }
+
+      // If engine is cold (<50°C) and AC is OFF, blowing air is cold!
+      // But if AC is ON, it can cool the cabin even if the engine is cold or hot.
+      if (isAcActive) {
+        targetCabinTemp = modeTarget;
+      } else {
+        const maxAirFromEngine = Math.max(outsideTemp - 2.5, engTemp - 6);
+        targetCabinTemp = Math.min(modeTarget, maxAirFromEngine);
+      }
     }
 
     // Cooling/heating transfer rate
-    const transferSpeed = heaterMode !== 'off'? 0.14 : 0.07;
+    let transferSpeed = heaterMode !== 'off'? 0.14 : 0.07;
+    if (curVehicle.recircOn) {
+      transferSpeed *= 1.4; // 40% faster heating/cooling since we recycle the cabin air and don't draw outside ambient air!
+    }
     const hasActiveFire = curVehicle.damage && (curVehicle.damage.engineFire || curVehicle.damage.fuelTankFire || curVehicle.damage.cabinFire || curVehicle.damage.underHoodSmolder);
     if (!hasActiveFire) {
       if (curVehicle.windowOpen) {
@@ -8949,7 +9380,9 @@ export function updateSkidMarksAndParticles(world: GameWorld, player: Player, dt
   if (world.particles.length > performanceConfig.particleLimit) {
     const excessCount = world.particles.length - performanceConfig.particleLimit;
     for (let i = 0; i < excessCount; i++) {
-      particlePool.push(world.particles[i]);
+      if (particlePool.length < 250) {
+        particlePool.push(world.particles[i]);
+      }
     }
     const remCount = performanceConfig.particleLimit;
     for (let i = 0; i < remCount; i++) {
@@ -9042,10 +9475,15 @@ export function updateSkidMarksAndParticles(world: GameWorld, player: Player, dt
     if (p.life < p.maxLife && !isOffscreen) {
       pList[pWrite++] = p;
     } else {
-      particlePool.push(p); // Recycle to pool without array shifting
+      if (particlePool.length < 250) {
+        particlePool.push(p); // Recycle to pool without unbounded array growth
+      }
     }
   }
   pList.length = pWrite;
+  if (particlePool.length > 250) {
+    particlePool.length = 250;
+  }
 }
 
 const scratchVehicleSet = new Set<Vehicle>();

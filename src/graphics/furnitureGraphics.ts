@@ -468,6 +468,721 @@ export function drawFurnitureItem(ctx: CanvasRenderingContext2D, itemId: string)
       return true;
     }
 
+    // 9. Modern Wardrobe / Clothes Closet
+    case 'furn_wardrobe': {
+      drawShadow(ctx, 9.5, 3.5, 8.5, 0.28);
+
+      // Main tall cabinet body (Warm Scandinavian Oak)
+      const woodGrad = ctx.createLinearGradient(-8.5, -9, 8.5, 8);
+      woodGrad.addColorStop(0, '#92400e');
+      woodGrad.addColorStop(0.5, '#b45309');
+      woodGrad.addColorStop(1, '#78350f');
+      ctx.fillStyle = woodGrad;
+      ctx.beginPath();
+      ctx.roundRect(-8.5, -9.5, 17, 18, 1.8);
+      ctx.fill();
+
+      // Top crown molding trim
+      ctx.fillStyle = '#b45309';
+      ctx.fillRect(-8.8, -9.8, 17.6, 1.5);
+      ctx.fillStyle = '#f59e0b';
+      ctx.fillRect(-8.8, -9.8, 17.6, 0.5);
+
+      // Base plinth
+      ctx.fillStyle = '#451a03';
+      ctx.fillRect(-8.5, 6.8, 17, 1.7);
+
+      // Twin wardrobe doors with dark shadow seam
+      ctx.fillStyle = '#a16207';
+      ctx.beginPath();
+      ctx.roundRect(-7.8, -7.8, 7.4, 14, 1);
+      ctx.roundRect(0.4, -7.8, 7.4, 14, 1);
+      ctx.fill();
+
+      // Door panel bevel frames
+      ctx.strokeStyle = 'rgba(69, 26, 3, 0.5)';
+      ctx.lineWidth = 0.8;
+      ctx.strokeRect(-7.8, -7.8, 7.4, 14);
+      ctx.strokeRect(0.4, -7.8, 7.4, 14);
+
+      // Subtle vertical wood grain lines
+      ctx.strokeStyle = 'rgba(254, 243, 199, 0.15)';
+      ctx.lineWidth = 0.5;
+      ctx.beginPath();
+      ctx.moveTo(-4.5, -7); ctx.lineTo(-4.5, 5);
+      ctx.moveTo(4.2, -7); ctx.lineTo(4.2, 5);
+      ctx.stroke();
+
+      // Long minimalist brushed steel vertical handles
+      ctx.fillStyle = '#cbd5e1';
+      ctx.beginPath();
+      ctx.roundRect(-1.8, -2, 0.9, 5, 0.4);
+      ctx.roundRect(0.9, -2, 0.9, 5, 0.4);
+      ctx.fill();
+
+      ctx.fillStyle = '#475569';
+      ctx.fillRect(-1.8, -0.2, 0.9, 1.2);
+      ctx.fillRect(0.9, -0.2, 0.9, 1.2);
+      return true;
+    }
+
+    // 10. Bedside Nightstand
+    case 'furn_nightstand': {
+      drawShadow(ctx, 7, 2.8, 8, 0.26);
+
+      // Four small tapered feet
+      ctx.fillStyle = '#451a03';
+      ctx.fillRect(-5.5, 6, 1.8, 2);
+      ctx.fillRect(3.7, 6, 1.8, 2);
+
+      // Cabinet main body (Rich Walnut)
+      ctx.fillStyle = '#78350f';
+      ctx.beginPath();
+      ctx.roundRect(-6.5, -5.5, 13, 12, 1.5);
+      ctx.fill();
+
+      // Top bevel tabletop
+      ctx.fillStyle = '#92400e';
+      ctx.beginPath();
+      ctx.roundRect(-7, -6.5, 14, 2.2, 1);
+      ctx.fill();
+      ctx.fillStyle = '#d97706';
+      ctx.fillRect(-6.8, -6.5, 13.6, 0.6);
+
+      // Upper drawer front
+      ctx.fillStyle = '#a16207';
+      ctx.beginPath();
+      ctx.roundRect(-5.5, -3.8, 11, 4.2, 0.8);
+      ctx.fill();
+
+      // Lower drawer front
+      ctx.beginPath();
+      ctx.roundRect(-5.5, 1.2, 11, 4.2, 0.8);
+      ctx.fill();
+
+      // Drawer shadow seams
+      ctx.strokeStyle = '#451a03';
+      ctx.lineWidth = 0.7;
+      ctx.strokeRect(-5.5, -3.8, 11, 4.2);
+      ctx.strokeRect(-5.5, 1.2, 11, 4.2);
+
+      // Brushed brass circular knobs
+      ctx.fillStyle = '#fbbf24';
+      ctx.beginPath();
+      ctx.arc(0, -1.7, 0.9, 0, Math.PI * 2);
+      ctx.arc(0, 3.3, 0.9, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#78350f';
+      ctx.beginPath();
+      ctx.arc(0.2, -1.5, 0.3, 0, Math.PI * 2);
+      ctx.arc(0.2, 3.5, 0.3, 0, Math.PI * 2);
+      ctx.fill();
+      return true;
+    }
+
+    // 11. Kitchen Countertop with Sink & Mixer
+    case 'furn_kitchen_counter': {
+      drawShadow(ctx, 10, 3.5, 8.5, 0.3);
+
+      // Lower cabinet base (Matte Slate Grey)
+      ctx.fillStyle = '#334155';
+      ctx.beginPath();
+      ctx.roundRect(-8.5, -3, 17, 11.5, 1.2);
+      ctx.fill();
+
+      // Base kick-plate plinth
+      ctx.fillStyle = '#0f172a';
+      ctx.fillRect(-8.2, 6.8, 16.4, 1.7);
+
+      // Cabinet twin front doors
+      ctx.fillStyle = '#475569';
+      ctx.beginPath();
+      ctx.roundRect(-8, -2.5, 7.5, 8.5, 0.8);
+      ctx.roundRect(0.5, -2.5, 7.5, 8.5, 0.8);
+      ctx.fill();
+
+      // Horizontal brushed stainless steel bar handles
+      ctx.fillStyle = '#cbd5e1';
+      ctx.beginPath();
+      ctx.roundRect(-6.5, -1, 4.5, 0.8, 0.3);
+      ctx.roundRect(2, -1, 4.5, 0.8, 0.3);
+      ctx.fill();
+
+      // White Quartz / Granite composite countertop slab
+      const counterGrad = ctx.createLinearGradient(-9, -5, 9, -2);
+      counterGrad.addColorStop(0, '#f8fafc');
+      counterGrad.addColorStop(1, '#e2e8f0');
+      ctx.fillStyle = counterGrad;
+      ctx.beginPath();
+      ctx.roundRect(-9, -5.5, 18, 3, 1);
+      ctx.fill();
+
+      // Polished front edge highlight
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(-8.8, -5.5, 17.6, 0.7);
+
+      // Stainless steel sink basin cutout (right side)
+      ctx.fillStyle = '#64748b';
+      ctx.beginPath();
+      ctx.roundRect(1, -5.2, 6.8, 2.4, 0.6);
+      ctx.fill();
+
+      ctx.fillStyle = '#94a3b8';
+      ctx.beginPath();
+      ctx.roundRect(1.4, -5, 6, 2, 0.4);
+      ctx.fill();
+
+      // Drain strainer in basin
+      ctx.fillStyle = '#475569';
+      ctx.beginPath();
+      ctx.arc(4.4, -4, 0.6, 0, Math.PI * 2);
+      ctx.fill();
+
+      // High-arc gooseneck chrome mixer faucet
+      ctx.strokeStyle = '#e2e8f0';
+      ctx.lineWidth = 1.1;
+      ctx.beginPath();
+      ctx.moveTo(6.5, -5.2);
+      ctx.lineTo(6.5, -8.5);
+      ctx.arc(5.2, -8.5, 1.3, 0, Math.PI, true);
+      ctx.lineTo(3.9, -7.5);
+      ctx.stroke();
+
+      // Faucet base & handle
+      ctx.fillStyle = '#cbd5e1';
+      ctx.fillRect(6, -5.8, 1, 0.8);
+      ctx.fillRect(5.5, -6.8, 2, 0.6);
+      return true;
+    }
+
+    // 12. Modern Lowboard TV Cabinet
+    case 'furn_tv_cabinet': {
+      drawShadow(ctx, 10.5, 3.5, 8.5, 0.28);
+
+      // Sleek black metal hairpin legs
+      ctx.strokeStyle = '#0f172a';
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      ctx.moveTo(-7.5, 3); ctx.lineTo(-8.5, 7.5);
+      ctx.moveTo(7.5, 3);  ctx.lineTo(8.5, 7.5);
+      ctx.moveTo(-1, 3);   ctx.lineTo(-1, 7.5);
+      ctx.moveTo(1, 3);    ctx.lineTo(1, 7.5);
+      ctx.stroke();
+
+      // Main console chassis (Ash Walnut)
+      const ashGrad = ctx.createLinearGradient(-9.5, -3, 9.5, 4);
+      ashGrad.addColorStop(0, '#78350f');
+      ashGrad.addColorStop(0.5, '#92400e');
+      ashGrad.addColorStop(1, '#451a03');
+      ctx.fillStyle = ashGrad;
+      ctx.beginPath();
+      ctx.roundRect(-9.5, -3.5, 19, 7.5, 1.5);
+      ctx.fill();
+
+      // Top surface bevel
+      ctx.fillStyle = '#d97706';
+      ctx.fillRect(-9.2, -3.5, 18.4, 0.7);
+
+      // Left soft-close drop door
+      ctx.fillStyle = '#b45309';
+      ctx.beginPath();
+      ctx.roundRect(-8.8, -2.2, 5.2, 5.2, 0.8);
+      ctx.fill();
+
+      // Right soft-close drop door
+      ctx.beginPath();
+      ctx.roundRect(3.6, -2.2, 5.2, 5.2, 0.8);
+      ctx.fill();
+
+      // Center open electronics / console bay (recessed dark compartment)
+      ctx.fillStyle = '#1e293b';
+      ctx.beginPath();
+      ctx.roundRect(-3, -2.2, 6, 5.2, 0.6);
+      ctx.fill();
+
+      // Glass shelf divider in open bay
+      ctx.fillStyle = 'rgba(148, 163, 184, 0.6)';
+      ctx.fillRect(-2.8, 0.4, 5.6, 0.6);
+
+      // Sleek recessed finger-pull notches on doors
+      ctx.fillStyle = '#451a03';
+      ctx.fillRect(-6.5, -1.8, 1.8, 0.6);
+      ctx.fillRect(5, -1.8, 1.8, 0.6);
+      return true;
+    }
+
+    // 13. Ornamental Area Carpet / Rug
+    case 'furn_carpet': {
+      drawShadow(ctx, 10, 4, 8, 0.25);
+
+      // White cotton knotted fringe / tassels (Left & Right ends)
+      ctx.fillStyle = '#f1f5f9';
+      for (let y = -5; y <= 5; y += 1.2) {
+        ctx.fillRect(-9.8, y, 1.2, 0.7);
+        ctx.fillRect(8.6, y, 1.2, 0.7);
+      }
+
+      // Rich Crimson / Persian Ruby Woven Fabric Body
+      const carpetGrad = ctx.createLinearGradient(-8.5, -6, 8.5, 6);
+      carpetGrad.addColorStop(0, '#991b1b');
+      carpetGrad.addColorStop(0.5, '#7f1d1d');
+      carpetGrad.addColorStop(1, '#991b1b');
+      ctx.fillStyle = carpetGrad;
+      ctx.beginPath();
+      ctx.roundRect(-8.6, -6, 17.2, 12, 1.2);
+      ctx.fill();
+
+      // Outer golden woven border
+      ctx.strokeStyle = '#d97706';
+      ctx.lineWidth = 0.9;
+      ctx.strokeRect(-7.8, -5.2, 15.6, 10.4);
+
+      // Inner navy blue accent border
+      ctx.strokeStyle = '#1e3a8a';
+      ctx.lineWidth = 0.7;
+      ctx.strokeRect(-6.8, -4.2, 13.6, 8.4);
+
+      // Ornate central diamond medallion (Gold & Ivory)
+      ctx.fillStyle = '#b45309';
+      ctx.beginPath();
+      ctx.moveTo(0, -3.2);
+      ctx.lineTo(4, 0);
+      ctx.lineTo(0, 3.2);
+      ctx.lineTo(-4, 0);
+      ctx.closePath();
+      ctx.fill();
+
+      ctx.fillStyle = '#fbbf24';
+      ctx.beginPath();
+      ctx.moveTo(0, -2.2);
+      ctx.lineTo(2.8, 0);
+      ctx.lineTo(0, 2.2);
+      ctx.lineTo(-2.8, 0);
+      ctx.closePath();
+      ctx.fill();
+
+      ctx.fillStyle = '#1e3a8a';
+      ctx.beginPath();
+      ctx.arc(0, 0, 1, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Corner floral motifs
+      ctx.fillStyle = '#fbbf24';
+      ctx.fillRect(-5.8, -3.4, 1.2, 1.2);
+      ctx.fillRect(4.6, -3.4, 1.2, 1.2);
+      ctx.fillRect(-5.8, 2.2, 1.2, 1.2);
+      ctx.fillRect(4.6, 2.2, 1.2, 1.2);
+      return true;
+    }
+
+    // 14. Freestanding Enamel Bathtub
+    case 'furn_bath': {
+      drawShadow(ctx, 10, 3.8, 8.5, 0.28);
+
+      // Four polished chrome clawfeet / pedestal supports
+      ctx.fillStyle = '#94a3b8';
+      ctx.fillRect(-7.5, 6, 1.8, 2.2);
+      ctx.fillRect(5.7, 6, 1.8, 2.2);
+
+      // Outer tub silhouette (Glossy White Porcelain Enamel)
+      const tubGrad = ctx.createLinearGradient(-9, -4, 9, 6);
+      tubGrad.addColorStop(0, '#ffffff');
+      tubGrad.addColorStop(0.7, '#f1f5f9');
+      tubGrad.addColorStop(1, '#cbd5e1');
+      ctx.fillStyle = tubGrad;
+      ctx.beginPath();
+      ctx.roundRect(-9, -4.5, 18, 11, 4.5);
+      ctx.fill();
+
+      // Tub rolled rim collar
+      ctx.strokeStyle = '#e2e8f0';
+      ctx.lineWidth = 1.2;
+      ctx.strokeRect(-9, -4.5, 18, 11);
+
+      // Inner concave water basin (Reflective soft aqua depth)
+      const basinGrad = ctx.createLinearGradient(0, -3.5, 0, 3.5);
+      basinGrad.addColorStop(0, '#e0f2fe');
+      basinGrad.addColorStop(0.6, '#bae6fd');
+      basinGrad.addColorStop(1, '#38bdf8');
+      ctx.fillStyle = basinGrad;
+      ctx.beginPath();
+      ctx.ellipse(0, 0.5, 7.5, 3.8, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Chrome drain ring at the base
+      ctx.fillStyle = '#64748b';
+      ctx.beginPath();
+      ctx.arc(4.2, 0.8, 0.9, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#cbd5e1';
+      ctx.beginPath();
+      ctx.arc(4.2, 0.8, 0.4, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Overflow circle on side
+      ctx.fillStyle = '#94a3b8';
+      ctx.beginPath();
+      ctx.arc(-6.5, -0.5, 0.7, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Freestanding chrome mixer column with gooseneck spout
+      ctx.strokeStyle = '#cbd5e1';
+      ctx.lineWidth = 1.3;
+      ctx.beginPath();
+      ctx.moveTo(-8, -4);
+      ctx.lineTo(-8, -7.5);
+      ctx.quadraticCurveTo(-8, -9, -6.5, -8.5);
+      ctx.stroke();
+
+      // Handheld shower wand attached
+      ctx.strokeStyle = '#94a3b8';
+      ctx.lineWidth = 0.9;
+      ctx.beginPath();
+      ctx.moveTo(-8.2, -6);
+      ctx.lineTo(-9.5, -4.5);
+      ctx.stroke();
+      return true;
+    }
+
+    // 15. Ceramic Bathroom Sink / Vanity
+    case 'furn_sink': {
+      drawShadow(ctx, 7.5, 3, 8, 0.26);
+
+      // Vanity pedestal base / bracket
+      ctx.fillStyle = '#cbd5e1';
+      ctx.fillRect(-2.5, 2, 5, 6);
+      ctx.fillStyle = '#94a3b8';
+      ctx.fillRect(-2.2, 7, 4.4, 1);
+
+      // Main porcelain vanity basin body (Crisp White Enamel)
+      const sinkGrad = ctx.createLinearGradient(-7, -4, 7, 3);
+      sinkGrad.addColorStop(0, '#ffffff');
+      sinkGrad.addColorStop(0.7, '#f8fafc');
+      sinkGrad.addColorStop(1, '#e2e8f0');
+      ctx.fillStyle = sinkGrad;
+      ctx.beginPath();
+      ctx.roundRect(-7, -4.5, 14, 8, 2.5);
+      ctx.fill();
+
+      // Inner bowl recess
+      ctx.fillStyle = '#cbd5e1';
+      ctx.beginPath();
+      ctx.ellipse(0, 0, 5.2, 2.8, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.fillStyle = '#f1f5f9';
+      ctx.beginPath();
+      ctx.ellipse(0, 0.2, 4.6, 2.3, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Chrome drain hole
+      ctx.fillStyle = '#475569';
+      ctx.beginPath();
+      ctx.arc(0, 0.4, 0.8, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Chrome mixer faucet at rear
+      ctx.fillStyle = '#94a3b8';
+      ctx.beginPath();
+      ctx.roundRect(-1.2, -5.8, 2.4, 2, 0.5);
+      ctx.fill();
+
+      // Spout extending over basin
+      ctx.strokeStyle = '#e2e8f0';
+      ctx.lineWidth = 1.3;
+      ctx.beginPath();
+      ctx.moveTo(0, -5.5);
+      ctx.lineTo(0, -3.2);
+      ctx.stroke();
+
+      // Top lever
+      ctx.fillStyle = '#64748b';
+      ctx.fillRect(-1.5, -6.5, 3, 0.7);
+      return true;
+    }
+
+    // 16. Modern Porcelain Toilet
+    case 'furn_toilet': {
+      drawShadow(ctx, 6.5, 3.2, 8, 0.28);
+
+      // Pedestal base mounting to floor
+      ctx.fillStyle = '#cbd5e1';
+      ctx.beginPath();
+      ctx.roundRect(-3.5, 3.5, 7, 4.5, 1.5);
+      ctx.fill();
+
+      // Rear water cistern tank
+      const tankGrad = ctx.createLinearGradient(-5, -8, 5, 0);
+      tankGrad.addColorStop(0, '#ffffff');
+      tankGrad.addColorStop(1, '#e2e8f0');
+      ctx.fillStyle = tankGrad;
+      ctx.beginPath();
+      ctx.roundRect(-5, -8.5, 10, 7.5, 1.5);
+      ctx.fill();
+
+      // Cistern top lid
+      ctx.fillStyle = '#f8fafc';
+      ctx.beginPath();
+      ctx.roundRect(-5.4, -9.2, 10.8, 1.5, 0.6);
+      ctx.fill();
+
+      // Chrome dual-flush push button
+      ctx.fillStyle = '#94a3b8';
+      ctx.beginPath();
+      ctx.ellipse(0, -8.8, 1.4, 0.5, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#f1f5f9';
+      ctx.beginPath();
+      ctx.ellipse(-0.5, -8.8, 0.5, 0.3, 0, 0, Math.PI * 2);
+      ctx.ellipse(0.5, -8.8, 0.5, 0.3, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Contoured toilet bowl extending forward
+      const bowlGrad = ctx.createLinearGradient(-4.5, -1, 4.5, 5);
+      bowlGrad.addColorStop(0, '#ffffff');
+      bowlGrad.addColorStop(1, '#cbd5e1');
+      ctx.fillStyle = bowlGrad;
+      ctx.beginPath();
+      ctx.ellipse(0, 2.5, 4.5, 4.5, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Closed seat lid
+      ctx.fillStyle = '#f8fafc';
+      ctx.beginPath();
+      ctx.ellipse(0, 2.2, 4.2, 4, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Seat lid contour shadow line
+      ctx.strokeStyle = '#94a3b8';
+      ctx.lineWidth = 0.7;
+      ctx.beginPath();
+      ctx.ellipse(0, 2.2, 4.2, 4, 0, 0, Math.PI * 2);
+      ctx.stroke();
+
+      // Chrome hinge cylinders
+      ctx.fillStyle = '#64748b';
+      ctx.fillRect(-2.5, -1.8, 1.2, 1);
+      ctx.fillRect(1.3, -1.8, 1.2, 1);
+      return true;
+    }
+
+    // 17. Executive / Study Writing Desk
+    case 'furn_desk': {
+      drawShadow(ctx, 10, 3.6, 8.5, 0.28);
+
+      // Left black steel leg frame
+      ctx.strokeStyle = '#1e293b';
+      ctx.lineWidth = 1.4;
+      ctx.strokeRect(-8.5, -3, 2, 11);
+
+      // Right 3-tier drawer pedestal
+      ctx.fillStyle = '#78350f';
+      ctx.beginPath();
+      ctx.roundRect(2.5, -3, 6, 11, 1);
+      ctx.fill();
+
+      // 3 drawer faces
+      ctx.fillStyle = '#92400e';
+      ctx.beginPath();
+      ctx.roundRect(2.8, -2.5, 5.4, 2.8, 0.5);
+      ctx.roundRect(2.8, 0.8, 5.4, 2.8, 0.5);
+      ctx.roundRect(2.8, 4.1, 5.4, 2.8, 0.5);
+      ctx.fill();
+
+      // Brushed silver drawer pull bars
+      ctx.fillStyle = '#cbd5e1';
+      ctx.fillRect(4.5, -1.3, 2, 0.6);
+      ctx.fillRect(4.5, 2, 2, 0.6);
+      ctx.fillRect(4.5, 5.3, 2, 0.6);
+
+      // Spacious Walnut Tabletop
+      const deskTopGrad = ctx.createLinearGradient(-9.5, -5.5, 9.5, -2);
+      deskTopGrad.addColorStop(0, '#b45309');
+      deskTopGrad.addColorStop(0.5, '#d97706');
+      deskTopGrad.addColorStop(1, '#92400e');
+      ctx.fillStyle = deskTopGrad;
+      ctx.beginPath();
+      ctx.roundRect(-9.5, -6, 19, 3.2, 1.2);
+      ctx.fill();
+
+      // Top bevel highlight
+      ctx.fillStyle = '#f59e0b';
+      ctx.fillRect(-9.2, -6, 18.4, 0.6);
+
+      // Dark leather writing pad / blotter on the center-left
+      ctx.fillStyle = '#1e293b';
+      ctx.beginPath();
+      ctx.roundRect(-6.5, -5.5, 8.5, 2.2, 0.4);
+      ctx.fill();
+
+      // Chrome cable grommet ring (top right)
+      ctx.fillStyle = '#94a3b8';
+      ctx.beginPath();
+      ctx.arc(7.2, -4.5, 0.7, 0, Math.PI * 2);
+      ctx.fill();
+      return true;
+    }
+
+    // 18. Library Bookshelf with Books
+    case 'furn_bookshelf': {
+      drawShadow(ctx, 9, 3.5, 8.5, 0.28);
+
+      // Outer heavy oak bookcase frame
+      const shelfGrad = ctx.createLinearGradient(-8, -9, 8, 8);
+      shelfGrad.addColorStop(0, '#78350f');
+      shelfGrad.addColorStop(0.5, '#92400e');
+      shelfGrad.addColorStop(1, '#451a03');
+      ctx.fillStyle = shelfGrad;
+      ctx.beginPath();
+      ctx.roundRect(-8, -9.5, 16, 18, 1.5);
+      ctx.fill();
+
+      // Top decorative crown cornice
+      ctx.fillStyle = '#b45309';
+      ctx.fillRect(-8.4, -9.8, 16.8, 1.4);
+
+      // Dark backboard interior
+      ctx.fillStyle = '#291404';
+      ctx.fillRect(-7, -8, 14, 15);
+
+      // 3 horizontal shelf planks
+      ctx.fillStyle = '#a16207';
+      ctx.fillRect(-7, -3.5, 14, 1.2);
+      ctx.fillRect(-7, 1.5, 14, 1.2);
+      ctx.fillRect(-7, 6.5, 14, 1.2);
+
+      // Shelf 1 (Top): Row of colorful book spines
+      const topBooks = [
+        { x: -6.5, w: 1.5, h: 3.8, c: '#dc2626' },
+        { x: -4.8, w: 1.8, h: 4.2, c: '#2563eb' },
+        { x: -2.8, w: 1.4, h: 3.5, c: '#16a34a' },
+        { x: -1.2, w: 2.2, h: 4.0, c: '#d97706' },
+        { x: 1.2,  w: 1.6, h: 3.7, c: '#7c3aed' },
+        { x: 3.0,  w: 1.9, h: 4.1, c: '#0891b2' },
+        { x: 5.1,  w: 1.4, h: 3.4, c: '#b91c1c' }
+      ];
+      for (const b of topBooks) {
+        ctx.fillStyle = b.c;
+        ctx.fillRect(b.x, -3.5 - b.h, b.w, b.h);
+        // Gold foil spine ribs
+        ctx.fillStyle = '#fef08a';
+        ctx.fillRect(b.x, -3.5 - b.h + 0.8, b.w, 0.4);
+        ctx.fillRect(b.x, -3.5 - 0.8, b.w, 0.4);
+      }
+
+      // Shelf 2 (Middle): Varied books + leaning book
+      const midBooks = [
+        { x: -6.5, w: 2.2, h: 4.4, c: '#475569' },
+        { x: -4.1, w: 1.6, h: 4.0, c: '#b45309' },
+        { x: -2.3, w: 2.0, h: 4.5, c: '#0f766e' },
+        { x: -0.1, w: 1.7, h: 3.9, c: '#9333ea' }
+      ];
+      for (const b of midBooks) {
+        ctx.fillStyle = b.c;
+        ctx.fillRect(b.x, 1.5 - b.h, b.w, b.h);
+        ctx.fillStyle = '#fef08a';
+        ctx.fillRect(b.x, 1.5 - b.h + 0.6, b.w, 0.3);
+      }
+      // Leaning book on the right
+      ctx.save();
+      ctx.translate(3.5, 1.5);
+      ctx.rotate(0.25);
+      ctx.fillStyle = '#e11d48';
+      ctx.fillRect(0, -4.2, 1.8, 4.2);
+      ctx.restore();
+
+      // Shelf 3 (Bottom): Thick heavy encyclopedia volumes
+      const botBooks = [
+        { x: -6.5, w: 2.6, h: 4.5, c: '#1e293b' },
+        { x: -3.7, w: 2.6, h: 4.5, c: '#1e293b' },
+        { x: -0.9, w: 2.6, h: 4.5, c: '#1e293b' },
+        { x: 1.9,  w: 2.6, h: 4.5, c: '#1e293b' },
+        { x: 4.7,  w: 1.8, h: 4.0, c: '#854d0e' }
+      ];
+      for (const b of botBooks) {
+        ctx.fillStyle = b.c;
+        ctx.fillRect(b.x, 6.5 - b.h, b.w, b.h);
+        ctx.fillStyle = '#fbbf24';
+        ctx.fillRect(b.x + 0.3, 6.5 - b.h + 1, b.w - 0.6, 0.5);
+      }
+      return true;
+    }
+
+    // 19. Elegant Wall Mirror in Molded Frame
+    case 'furn_mirror': {
+      drawShadow(ctx, 7.5, 2.5, 8.2, 0.22);
+
+      // Wall mounting hook & wire at top
+      ctx.strokeStyle = '#64748b';
+      ctx.lineWidth = 0.8;
+      ctx.beginPath();
+      ctx.moveTo(0, -9.5);
+      ctx.lineTo(-3, -7.5);
+      ctx.moveTo(0, -9.5);
+      ctx.lineTo(3, -7.5);
+      ctx.stroke();
+
+      ctx.fillStyle = '#94a3b8';
+      ctx.beginPath();
+      ctx.arc(0, -9.5, 0.8, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Champagne Gold Molded Beveled Frame
+      const goldFrame = ctx.createLinearGradient(-7, -7.5, 7, 7.5);
+      goldFrame.addColorStop(0, '#fef08a');
+      goldFrame.addColorStop(0.3, '#d97706');
+      goldFrame.addColorStop(0.7, '#f59e0b');
+      goldFrame.addColorStop(1, '#92400e');
+      ctx.fillStyle = goldFrame;
+      ctx.beginPath();
+      ctx.roundRect(-7, -7.5, 14, 15, 2.5);
+      ctx.fill();
+
+      // Inner frame bezel
+      ctx.strokeStyle = '#78350f';
+      ctx.lineWidth = 0.7;
+      ctx.strokeRect(-7, -7.5, 14, 15);
+
+      // Mirror Glass Face (Cool sky-blue reflective tint)
+      const mirrorGrad = ctx.createLinearGradient(-5.5, -6, 5.5, 6);
+      mirrorGrad.addColorStop(0, '#e0f2fe');
+      mirrorGrad.addColorStop(0.5, '#f0f9ff');
+      mirrorGrad.addColorStop(1, '#bae6fd');
+      ctx.fillStyle = mirrorGrad;
+      ctx.beginPath();
+      ctx.roundRect(-5.5, -6, 11, 12, 1.5);
+      ctx.fill();
+
+      // Sharp diagonal glass reflection streaks (gloss shine)
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.65)';
+      ctx.beginPath();
+      ctx.moveTo(-4, -6);
+      ctx.lineTo(-1.5, -6);
+      ctx.lineTo(-5.5, 2);
+      ctx.lineTo(-5.5, -0.5);
+      ctx.closePath();
+      ctx.fill();
+
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.45)';
+      ctx.beginPath();
+      ctx.moveTo(0, -6);
+      ctx.lineTo(2.2, -6);
+      ctx.lineTo(-3, 6);
+      ctx.lineTo(-5.2, 6);
+      ctx.closePath();
+      ctx.fill();
+
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
+      ctx.beginPath();
+      ctx.moveTo(3.5, -6);
+      ctx.lineTo(4.8, -6);
+      ctx.lineTo(0.5, 6);
+      ctx.lineTo(-0.8, 6);
+      ctx.closePath();
+      ctx.fill();
+      return true;
+    }
+
     default:
       return false;
   }

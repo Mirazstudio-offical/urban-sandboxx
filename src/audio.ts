@@ -72,6 +72,28 @@ class SoundEngine {
     return this.isMuted;
   }
 
+  public bindAutoCleanup(sourceNode: AudioNode, ...downstreamNodes: (AudioNode | null | undefined)[]) {
+    if ('onended' in sourceNode) {
+      (sourceNode as any).onended = () => {
+        try { sourceNode.disconnect(); } catch {}
+        downstreamNodes.forEach(n => {
+          if (n) {
+            try { n.disconnect(); } catch {}
+          }
+        });
+      };
+    }
+  }
+
+  public purgeAudioGraph() {
+    this.stopEngine();
+    this.stopTireScreech();
+    this.stopHorn();
+    this.updateOverheatingSteam(false, 0);
+    this.updateWheelRubScrape(0, 0);
+    this.updateEngineFireSound(false, 0);
+  }
+
   private getDistortionCurve(): Float32Array {
     if (this.distortionCurve) return this.distortionCurve;
     const n_samples = 44100;

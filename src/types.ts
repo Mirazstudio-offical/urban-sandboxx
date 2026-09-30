@@ -250,6 +250,10 @@ export interface FuelSystem {
   gboCapacity?: number;         // Liters (e.g. 42L)
   gboActive?: boolean;          // whether GBO system is toggled on (default true)
   gboInstalled?: boolean;
+  hasLPG?: boolean;
+  lpgTankCapacity?: number;
+  lpgTankLevel?: number;
+  activeFuelSource?: 'petrol' | 'lpg';
 }
 
 export type StoredLiquidType = 
@@ -539,6 +543,8 @@ export interface Vehicle {
   engineTemp?: number;
   windowOpen?: boolean;
   cabinHumidity?: number;
+  acOn?: boolean;
+  recircOn?: boolean;
   fogLevel?: number; // 0.0 (clear) to 1.0 (completely fogged)
   windshieldRainLevel?: number;
   cabinSmoke?: number; // 0 to 100% toxic smoke concentration inside vehicle cabin
@@ -1036,6 +1042,12 @@ export interface StreetProp {
   direction?: 'north' | 'south' | 'east' | 'west';
 
   isMasterLight?: boolean;
+  // Gate & Wicket Properties
+  isOpen?: boolean;
+  isLocked?: boolean;
+  plotId?: string;
+  lockCode?: string;
+
   // Breakable Props Physics
   isBroken?: boolean;
   breakVX?: number;
@@ -1164,7 +1176,7 @@ export type EquippedClothing = {
   };
 };
 
-export type ItemCategory = 'food' | 'drink' | 'med' | 'medical' | 'tool' | 'auto' | 'valuable' | 'clothing' | 'electronics' | 'misc';
+export type ItemCategory = 'food' | 'drink' | 'med' | 'medical' | 'tool' | 'gear' | 'auto' | 'furniture' | 'valuable' | 'clothing' | 'electronics' | 'misc';
 
 export interface PhoneSpecs {
   modelId: string;
@@ -1228,6 +1240,14 @@ export interface InventoryItem {
   fluidLiters?: number;     // Remaining fluid volume in liters (L)
   maxFluidLiters?: number;  // Maximum fluid capacity in liters (L)
   fluidType?: 'coolant' | 'oil' | 'fuel';
+  fluidStorage?: {
+    liquidId: string | null;
+    currentMl: number;
+    maxMl: number;
+    emptyWeightKg: number;
+    baseItemNameRu: string;
+    baseItemNameEn?: string;
+  };
   // Container properties (recursive containers: backpack, wallet, plastic bag, pockets, etc.)
   isContainer?: boolean;
   containerCapacityL?: number;      // Total internal volume capacity in Liters
@@ -1437,6 +1457,11 @@ export interface Player {
   insideEntranceNumber?: number | null;
   ownedApartmentIds?: string[];
   
+  // Passenger Train Carriage Interior
+  insideCarId?: string | null;
+  carLocalX?: number;
+  carLocalY?: number;
+  
   // Creative / Sandbox Mode
   isCreativeMode?: boolean;
   isFlying?: boolean;
@@ -1614,9 +1639,11 @@ export interface RollingStockCar {
     | 'locomotive_diesel_chme3' 
     | 'locomotive_electric_vl80' 
     | 'passenger_coach_rzhd' 
+    | 'passenger_coach_platskart'
     | 'freight_hopper' 
     | 'freight_tanker' 
-    | 'freight_flatcar_timber';
+    | 'freight_flatcar_timber'
+    | string;
   x: number;
   y: number;
   angle: number;
@@ -1637,6 +1664,9 @@ export interface RollingStockCar {
   brakeState?: 'released' | 'service' | 'emergency';
   hornTimer?: number;
   wheelClickTimer?: number;
+  isSectionB?: boolean;
+  isFlipped?: boolean;
+  isPlayerInside?: boolean;
 }
 
 export type RailwaySignalType =
@@ -1771,6 +1801,28 @@ export interface TrainSchedule {
   routeSteps: TrainScheduleRouteStep[];
 }
 
+export interface MinimapMarker {
+  id: string;
+  nameRu: string;
+  nameEn?: string;
+  x: number;
+  y: number;
+  iconKey: 'car' | 'hospital' | 'police' | 'fire' | 'mall' | 'garage' | 'fuel' | 'food' | 'pharmacy' | 'nature' | 'mountain' | 'industrial' | 'agency' | 'train' | 'spawn' | string;
+  category?: 'spawns' | 'gas_stations' | 'services' | 'shops' | 'nature' | 'industrial' | 'custom' | string;
+  badgeColor?: string;
+  description?: string;
+}
+
+export interface MapSpawnPoint {
+  id: string;
+  nameRu: string;
+  nameEn?: string;
+  x: number;
+  y: number;
+  description?: string;
+  iconKey?: string;
+}
+
 export interface PedestrianPath {
   id: string;
   waypoints: Vector2D[];
@@ -1788,6 +1840,8 @@ export interface GameWorld {
   rollingStock?: RollingStockCar[];
   railwaySignals?: RailwaySignal[];
   trainSchedules?: TrainSchedule[];
+  minimapMarkers?: MinimapMarker[];
+  spawnPoints?: MapSpawnPoint[];
   intersections: Intersection[];
   roundabouts?: Roundabout[];
   sidewalks?: SidewalkBlock[];
@@ -1875,4 +1929,8 @@ export interface InputState {
   mouseX: number;
   mouseY: number;
   isMouseDown: boolean;
+  lookOffsetX?: number; // Normalized custom look offset X (-1.0 to 1.0)
+  lookOffsetY?: number; // Normalized custom look offset Y (-1.0 to 1.0)
+  isTouchLookActive?: boolean;
+  lastPointerType?: 'mouse' | 'touch';
 }

@@ -8,6 +8,10 @@ import { drawClothingItem } from './graphics/clothingGraphics';
 import { drawSmartphoneItem } from './graphics/smartphoneGraphics';
 import { drawFurnitureItem } from './graphics/furnitureGraphics';
 import { drawKitchenAndValuableItem } from './graphics/kitchenAndValuablesGraphics';
+import { drawMeatAndPoultryItem } from './graphics/meatAndPoultryGraphics';
+import { drawFishAndSeafoodItem } from './graphics/fishAndSeafoodGraphics';
+import { drawProduceAndMushroomItem } from './graphics/produceAndMushroomGraphics';
+import { drawPantryAndDairyItem } from './graphics/pantryAndDairyGraphics';
 import { drawShadow } from './graphics/itemGraphicShared';
 
 export function drawItemModel2D(
@@ -33,6 +37,10 @@ export function drawItemModel2D(
     drawFurnitureItem(ctx, itemId) ||
     drawKitchenAndValuableItem(ctx, itemId) ||
     drawClothingItem(ctx, itemId) ||
+    drawMeatAndPoultryItem(ctx, itemId) ||
+    drawFishAndSeafoodItem(ctx, itemId) ||
+    drawProduceAndMushroomItem(ctx, itemId) ||
+    drawPantryAndDairyItem(ctx, itemId) ||
     drawLeftoverItem(ctx, itemId);
 
   if (!drawn) {

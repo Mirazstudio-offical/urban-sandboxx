@@ -31,7 +31,8 @@ import {
   LogOut,
   Compass,
   Square,
-  Truck
+  Truck,
+  Eye
 } from 'lucide-react';
 
 interface MobileTouchControlsProps {
@@ -109,6 +110,7 @@ const TouchButton: React.FC<TouchButtonProps> = ({
   const handleTouchStart = (e: React.TouchEvent) => {
     e.preventDefault();
     e.stopPropagation();
+    inputRef.current.lastPointerType = 'touch';
     for (let i = 0; i < e.changedTouches.length; i++) {
       touchIds.current.add(e.changedTouches[i].identifier);
     }
@@ -161,6 +163,147 @@ const TouchButton: React.FC<TouchButtonProps> = ({
     >
       {children}
     </button>
+  );
+};
+
+/* Tactile Windshield Glance Zone for Mobile: swipe road/sky area to peek forward/crossroads with spring recovery */
+interface VehicleWindshieldGlanceZoneProps {
+  inputRef: React.MutableRefObject<InputState>;
+}
+
+const VehicleWindshieldGlanceZone: React.FC<VehicleWindshieldGlanceZoneProps> = ({ inputRef }) => {
+  const [touchState, setTouchState] = useState<{
+    active: boolean;
+    x: number;
+    y: number;
+  }>({ active: false, x: 0, y: 0 });
+
+  const activeTouchId = useRef<number | null>(null);
+  const startPos = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+  const decayRaf = useRef<number | null>(null);
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    if (e.touches.length === 0) return;
+
+    // Safety check: do not capture touches on buttons, speedometer cluster, or HUD controls
+    const targetEl = e.target as HTMLElement | null;
+    if (
+      targetEl &&
+      (targetEl.tagName === 'BUTTON' ||
+        targetEl.closest('button') ||
+        targetEl.closest('#speedometer-cluster') ||
+        targetEl.closest('#touch-turn-signals') ||
+        targetEl.closest('#touch-steering-zone') ||
+        targetEl.closest('#touch-actions-zone') ||
+        targetEl.closest('[role="button"]'))
+    ) {
+      return;
+    }
+
+    const touch = e.touches[0];
+    activeTouchId.current = touch.identifier;
+    startPos.current = { x: touch.clientX, y: touch.clientY };
+
+    if (decayRaf.current) {
+      cancelAnimationFrame(decayRaf.current);
+      decayRaf.current = null;
+    }
+
+    inputRef.current.lastPointerType = 'touch';
+    inputRef.current.isTouchLookActive = true;
+    setTouchState({
+      active: true,
+      x: touch.clientX,
+      y: touch.clientY,
+    });
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (activeTouchId.current === null) return;
+    for (let i = 0; i < e.changedTouches.length; i++) {
+      const touch = e.changedTouches[i];
+      if (touch.identifier === activeTouchId.current) {
+        const dx = touch.clientX - startPos.current.x;
+        const dy = touch.clientY - startPos.current.y;
+
+        const normX = Math.max(-1, Math.min(1, dx / 110));
+        const normY = Math.max(-1, Math.min(1, dy / 110));
+
+        inputRef.current.lookOffsetX = normX;
+        inputRef.current.lookOffsetY = normY;
+        inputRef.current.isTouchLookActive = true;
+        inputRef.current.lastPointerType = 'touch';
+
+        setTouchState({
+          active: true,
+          x: touch.clientX,
+          y: touch.clientY,
+        });
+        break;
+      }
+    }
+  };
+
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    if (activeTouchId.current === null) return;
+    for (let i = 0; i < e.changedTouches.length; i++) {
+      const touch = e.changedTouches[i];
+      if (touch.identifier === activeTouchId.current) {
+        activeTouchId.current = null;
+        inputRef.current.isTouchLookActive = false;
+        setTouchState((prev) => ({ ...prev, active: false }));
+
+        // Physical spring decay back to natural forward road view
+        const decayStep = () => {
+          const curX = inputRef.current.lookOffsetX || 0;
+          const curY = inputRef.current.lookOffsetY || 0;
+
+          if (Math.abs(curX) > 0.005 || Math.abs(curY) > 0.005) {
+            inputRef.current.lookOffsetX = curX * 0.82;
+            inputRef.current.lookOffsetY = curY * 0.82;
+            decayRaf.current = requestAnimationFrame(decayStep);
+          } else {
+            inputRef.current.lookOffsetX = 0;
+            inputRef.current.lookOffsetY = 0;
+            decayRaf.current = null;
+          }
+        };
+
+        decayRaf.current = requestAnimationFrame(decayStep);
+        break;
+      }
+    }
+  };
+
+  useEffect(() => {
+    return () => {
+      if (decayRaf.current) cancelAnimationFrame(decayRaf.current);
+      if (inputRef.current) {
+        inputRef.current.lookOffsetX = 0;
+        inputRef.current.lookOffsetY = 0;
+        inputRef.current.isTouchLookActive = false;
+      }
+    };
+  }, [inputRef]);
+
+  return (
+    <div
+      id="touch-windshield-glance-zone"
+      className="absolute top-16 bottom-56 left-20 right-20 sm:left-32 sm:right-32 pointer-events-auto touch-none z-10 select-none"
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
+      onTouchEnd={handleTouchEnd}
+      onTouchCancel={handleTouchEnd}
+    >
+      {touchState.active && (
+        <div
+          className="pointer-events-none fixed -translate-x-1/2 -translate-y-1/2 w-12 h-12 rounded-full border border-sky-400/60 bg-sky-950/40 backdrop-blur-sm flex items-center justify-center shadow-lg transition-transform duration-75"
+          style={{ left: touchState.x, top: touchState.y }}
+        >
+          <Eye className="w-5 h-5 text-sky-300 stroke-[2] animate-pulse" />
+        </div>
+      )}
+    </div>
   );
 };
 
@@ -1346,6 +1489,9 @@ export const MobileTouchControls: React.FC<MobileTouchControlsProps> = ({
           <Hand className="w-5 h-5 text-slate-200" />
         </button>
       </div>
+
+      {/* IN-VEHICLE WINDSHIELD GLANCE ZONE (Swipe road area to glance ahead/sideways with elastic return) */}
+      {isInVehicle && <VehicleWindshieldGlanceZone inputRef={inputRef} />}
 
       {/* LEFT BOTTOM ZONE: STEERING WHEEL (IN CAR) OR VIRTUAL JOYSTICK (ON FOOT) */}
       {isInVehicle ? (

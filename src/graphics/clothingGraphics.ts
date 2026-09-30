@@ -560,7 +560,8 @@ export function drawClothingItem(ctx: CanvasRenderingContext2D, itemId: string):
     }
 
     // === JACKETS & COATS ===
-    case 'leather_jacket': {
+    case 'leather_jacket':
+    case 'jacket_leather': {
       drawShadow(ctx, 8.5, 3.2, 7.8, 0.26);
 
       // Burnished black leather body
@@ -731,7 +732,8 @@ export function drawClothingItem(ctx: CanvasRenderingContext2D, itemId: string):
     }
 
     // === PANTS & LEGS ===
-    case 'jeans_blue': {
+    case 'jeans_blue':
+    case 'jeans_classic': {
       drawShadow(ctx, 7.5, 2.8, 7.8, 0.22);
 
       // Classic indigo denim folded jeans
@@ -869,7 +871,9 @@ export function drawClothingItem(ctx: CanvasRenderingContext2D, itemId: string):
     }
 
     // === FOOTWEAR ===
-    case 'sneakers_white': {
+    case 'sneakers_white':
+    case 'shoes_sneakers':
+    case 'sneakers': {
       drawShadow(ctx, 8.5, 2.8, 7.8, 0.22);
 
       // Sculpted running shoe EVA midsole (white/light grey)

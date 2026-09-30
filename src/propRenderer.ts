@@ -4261,16 +4261,34 @@ function renderGateLeaf(ctx: CanvasRenderingContext2D, length: number) {
 // --- COTTAGE DISTRICT INFRASTRUCTURE PROPS ---
 // ==========================================
 
+export function getPlotHashKey(prop: StreetProp): number {
+  if (prop.plotId) {
+    let h = 0;
+    for (let i = 0; i < prop.plotId.length; i++) h = (h * 31 + prop.plotId.charCodeAt(i)) >>> 0;
+    return h;
+  }
+  if (prop.id) {
+    const m = prop.id.match(/plot_\d+/);
+    if (m) {
+      let h = 0;
+      for (let i = 0; i < m[0].length; i++) h = (h * 31 + m[0].charCodeAt(i)) >>> 0;
+      return h;
+    }
+  }
+  // Spatial plot bucket fallback (~320px plot cell)
+  const cellX = Math.floor(prop.x / 320);
+  const cellY = Math.floor(prop.y / 320);
+  return ((cellX * 73856093) ^ (cellY * 19349663)) >>> 0;
+}
+
 // --- 1. VERTICAL WOODEN PICKET FENCE (ДЕРЕВЯННЫЙ ВЕРТИКАЛЬНЫЙ ШТАКЕТНИК) ---
 export function renderPropFenceWoodVertical(ctx: CanvasRenderingContext2D, prop: StreetProp) {
-  let hash = 0;
-  const idStr = prop.id || 'fence_wood';
-  for (let i = 0; i < idStr.length; i++) hash = (hash * 31 + idStr.charCodeAt(i)) >>> 0;
+  const hash = getPlotHashKey(prop);
 
   const w = 36;
   const halfW = w / 2; // 18
 
-  // Natural wood tone palettes based on deterministic hash
+  // Natural wood tone palettes based on deterministic plot hash (1 consistent color per plot!)
   const palettes = [
     { main: '#b45309', light: '#d97706', dark: '#78350f', post: '#542907' }, // Classic warm pine
     { main: '#92400e', light: '#b45309', dark: '#542907', post: '#3b1c04' }, // Cedar stain
@@ -4388,14 +4406,12 @@ export function renderPropFenceWoodVertical(ctx: CanvasRenderingContext2D, prop:
 
 // --- 2. VERTICAL METAL FENCE / CORRUGATED PROFILE (ЗАБОР ИЗ ПРОФНАСТИЛА / ЕВРОШТАКЕТНИКА) ---
 export function renderPropFenceMetalVertical(ctx: CanvasRenderingContext2D, prop: StreetProp) {
-  let hash = 0;
-  const idStr = prop.id || 'fence_metal';
-  for (let i = 0; i < idStr.length; i++) hash = (hash * 31 + idStr.charCodeAt(i)) >>> 0;
+  const hash = getPlotHashKey(prop);
 
   const w = 36;
   const halfW = w / 2; // 18
 
-  // Popular suburban color coats
+  // Popular suburban color coats (1 consistent color per plot!)
   const palettes = [
     { base: '#3b2015', light: '#5c3321', dark: '#24130c', cap: '#1c0f0a' }, // RAL 8017 Chocolate
     { base: '#14532d', light: '#166534', dark: '#052e16', cap: '#052e16' }, // RAL 6005 Moss Green
@@ -4479,6 +4495,7 @@ export function renderPropFenceMetalVertical(ctx: CanvasRenderingContext2D, prop
 export function renderPropWicketGate(ctx: CanvasRenderingContext2D, prop: StreetProp) {
   const w = 26;
   const halfW = 13;
+  const hash = getPlotHashKey(prop);
 
   if (prop.isBroken) {
     // Unhinged wicket hanging loose
@@ -4532,50 +4549,84 @@ export function renderPropWicketGate(ctx: CanvasRenderingContext2D, prop: Street
   ctx.fillRect(-halfW - 2.5, -5.2, 6, 2.2);
   ctx.fillRect(halfW - 3.5, -5.2, 6, 2.2);
 
-  // 3. Gate Leaf Frame & Infill Pickets (Створка калитки)
+  // 3. Gate Leaf (Створка калитки: открытая или закрытая)
   const leafW = w - 6;
-  ctx.fillStyle = '#b45309';
-  ctx.fillRect(-halfW + 3, -2.8, leafW, 5.6);
 
-  // Inner frame bevel
-  ctx.strokeStyle = '#78350f';
-  ctx.lineWidth = 1;
-  ctx.strokeRect(-halfW + 3, -2.8, leafW, 5.6);
+  if (prop.isOpen) {
+    // --- OPEN WICKET GATE (Распахнута во двор) ---
+    ctx.save();
+    ctx.translate(-halfW + 2.5, -2);
+    ctx.rotate(-1.48); // Open ~85 degrees into the yard
 
-  // Diagonal support brace (укосина)
-  ctx.strokeStyle = '#542907';
-  ctx.lineWidth = 1.2;
-  ctx.beginPath();
-  ctx.moveTo(-halfW + 4, -2.2);
-  ctx.lineTo(halfW - 4, 2.2);
-  ctx.stroke();
+    // Shadow of open leaf
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.28)';
+    ctx.fillRect(0, 2, leafW, 3.5);
 
-  // Slender vertical infill slats
-  ctx.fillStyle = '#d97706';
-  for (let sx = -halfW + 6; sx < halfW - 4; sx += 3.4) {
-    ctx.fillRect(sx, -2.4, 1.8, 4.8);
+    // Open leaf body
+    ctx.fillStyle = '#b45309';
+    ctx.fillRect(0, -2.4, leafW, 4.8);
+    ctx.strokeStyle = '#78350f';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(0, -2.4, leafW, 4.8);
+
+    // Diagonal brace
+    ctx.strokeStyle = '#542907';
+    ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    ctx.moveTo(2, -1.8);
+    ctx.lineTo(leafW - 2, 1.8);
+    ctx.stroke();
+
+    // Lever handle
+    ctx.fillStyle = '#f59e0b';
+    ctx.fillRect(leafW - 3.5, -0.6, 1.8, 2.4);
+    ctx.restore();
+  } else {
+    // --- CLOSED WICKET GATE ---
+    ctx.fillStyle = '#b45309';
+    ctx.fillRect(-halfW + 3, -2.8, leafW, 5.6);
+
+    // Inner frame bevel
+    ctx.strokeStyle = '#78350f';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(-halfW + 3, -2.8, leafW, 5.6);
+
+    // Diagonal support brace (укосина)
+    ctx.strokeStyle = '#542907';
+    ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    ctx.moveTo(-halfW + 4, -2.2);
+    ctx.lineTo(halfW - 4, 2.2);
+    ctx.stroke();
+
+    // Slender vertical infill slats
+    ctx.fillStyle = '#d97706';
+    for (let sx = -halfW + 6; sx < halfW - 4; sx += 3.4) {
+      ctx.fillRect(sx, -2.4, 1.8, 4.8);
+    }
+
+    // Polished Brass Lever Handle & Escutcheon Plate (Ручка и замок калитки)
+    ctx.fillStyle = '#f59e0b'; // brass plate
+    ctx.fillRect(halfW - 4.5, -0.6, 1.8, 2.8);
+    // Lever handle sticking out
+    ctx.fillStyle = '#fbbf24';
+    ctx.fillRect(halfW - 5.5, -0.2, 2.0, 0.8);
+    // Keyhole
+    ctx.fillStyle = '#0f172a';
+    ctx.fillRect(halfW - 4.1, 1.0, 0.8, 0.8);
   }
 
   // 4. Heavy Steel Hinges on left post
   ctx.fillStyle = '#0f172a';
   ctx.fillRect(-halfW + 1.5, -2.2, 2.5, 1.2);
   ctx.fillRect(-halfW + 1.5, 1.2, 2.5, 1.2);
-
-  // 5. Polished Brass Lever Handle & Escutcheon Plate (Ручка и замок калитки)
-  ctx.fillStyle = '#f59e0b'; // brass plate
-  ctx.fillRect(halfW - 4.5, -0.6, 1.8, 2.8);
-  // Lever handle sticking out
-  ctx.fillStyle = '#fbbf24';
-  ctx.fillRect(halfW - 5.5, -0.2, 2.0, 0.8);
-  // Keyhole
-  ctx.fillStyle = '#0f172a';
-  ctx.fillRect(halfW - 4.1, 1.0, 0.8, 0.8);
 }
 
 // --- 4. COTTAGE VEHICLE GATE (ШИРОКИЕ ВЪЕЗДНЫЕ ВОРОТА ВО ДВОР / В ГАРАЖ) ---
 export function renderPropCottageGate(ctx: CanvasRenderingContext2D, prop: StreetProp) {
   const w = 72;
   const halfW = 36;
+  const hash = getPlotHashKey(prop);
 
   if (prop.isBroken) {
     // Smashed vehicular gate: bent steel leaves, shattered brick pillar
@@ -4632,49 +4683,97 @@ export function renderPropCottageGate(ctx: CanvasRenderingContext2D, prop: Stree
   ctx.fillStyle = '#cbd5e1';
   ctx.fillRect(halfW - 2, -pillarH / 2 - 1, pillarW + 2, 2.2);
 
-  // 3. Two Swinging Gate Leaves (Левая и правая створки ворот)
+  // 3. Two Swinging Gate Leaves (Левая и правая створки ворот: открыты или закрыты)
   const leafW = halfW - 2;
 
-  // Left leaf
-  ctx.fillStyle = '#1e293b'; // Charcoal graphite gate frame
-  ctx.fillRect(-halfW + 2, -2.6, leafW, 5.2);
-  ctx.strokeStyle = '#0f172a';
-  ctx.lineWidth = 1;
-  ctx.strokeRect(-halfW + 2, -2.6, leafW, 5.2);
+  if (prop.isOpen) {
+    // --- OPEN VEHICULAR GATES (Распахнуты во двор для проезда машин) ---
+    // Left leaf swung open -95° inward into yard
+    ctx.save();
+    ctx.translate(-halfW + 1, -2);
+    ctx.rotate(-1.65);
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.32)';
+    ctx.fillRect(0, 2, leafW, 4);
+    ctx.fillStyle = '#1e293b';
+    ctx.fillRect(0, -2.4, leafW, 4.8);
+    ctx.strokeStyle = '#0f172a';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(0, -2.4, leafW, 4.8);
+    ctx.strokeStyle = '#334155';
+    ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    ctx.moveTo(2, -1.8); ctx.lineTo(leafW - 2, 1.8);
+    ctx.moveTo(2, 1.8); ctx.lineTo(leafW - 2, -1.8);
+    ctx.stroke();
+    ctx.restore();
 
-  // Left leaf diagonal cross-brace
-  ctx.strokeStyle = '#334155';
-  ctx.lineWidth = 1.4;
-  ctx.beginPath();
-  ctx.moveTo(-halfW + 3, -2.0); ctx.lineTo(-2, 2.0);
-  ctx.moveTo(-halfW + 3, 2.0); ctx.lineTo(-2, -2.0);
-  ctx.stroke();
+    // Right leaf swung open +95° inward into yard
+    ctx.save();
+    ctx.translate(halfW - 1, -2);
+    ctx.rotate(1.65 + Math.PI);
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.32)';
+    ctx.fillRect(0, 2, leafW, 4);
+    ctx.fillStyle = '#1e293b';
+    ctx.fillRect(0, -2.4, leafW, 4.8);
+    ctx.strokeStyle = '#0f172a';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(0, -2.4, leafW, 4.8);
+    ctx.strokeStyle = '#334155';
+    ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    ctx.moveTo(2, -1.8); ctx.lineTo(leafW - 2, 1.8);
+    ctx.moveTo(2, 1.8); ctx.lineTo(leafW - 2, -1.8);
+    ctx.stroke();
+    ctx.restore();
+  } else {
+    // --- CLOSED VEHICULAR GATES ---
+    // Left leaf
+    ctx.fillStyle = '#1e293b'; // Charcoal graphite gate frame
+    ctx.fillRect(-halfW + 2, -2.6, leafW, 5.2);
+    ctx.strokeStyle = '#0f172a';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(-halfW + 2, -2.6, leafW, 5.2);
 
-  // Left leaf vertical bars
-  ctx.fillStyle = '#475569';
-  for (let bx = -halfW + 6; bx < -4; bx += 4) {
-    ctx.fillRect(bx, -2.2, 1.5, 4.4);
-  }
+    // Left leaf diagonal cross-brace
+    ctx.strokeStyle = '#334155';
+    ctx.lineWidth = 1.4;
+    ctx.beginPath();
+    ctx.moveTo(-halfW + 3, -2.0); ctx.lineTo(-2, 2.0);
+    ctx.moveTo(-halfW + 3, 2.0); ctx.lineTo(-2, -2.0);
+    ctx.stroke();
 
-  // Right leaf
-  ctx.fillStyle = '#1e293b';
-  ctx.fillRect(1, -2.6, leafW, 5.2);
-  ctx.strokeStyle = '#0f172a';
-  ctx.lineWidth = 1;
-  ctx.strokeRect(1, -2.6, leafW, 5.2);
+    // Left leaf vertical bars
+    ctx.fillStyle = '#475569';
+    for (let bx = -halfW + 6; bx < -4; bx += 4) {
+      ctx.fillRect(bx, -2.2, 1.5, 4.4);
+    }
 
-  // Right leaf diagonal cross-brace
-  ctx.strokeStyle = '#334155';
-  ctx.lineWidth = 1.4;
-  ctx.beginPath();
-  ctx.moveTo(2, -2.0); ctx.lineTo(halfW - 3, 2.0);
-  ctx.moveTo(2, 2.0); ctx.lineTo(halfW - 3, -2.0);
-  ctx.stroke();
+    // Right leaf
+    ctx.fillStyle = '#1e293b';
+    ctx.fillRect(1, -2.6, leafW, 5.2);
+    ctx.strokeStyle = '#0f172a';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(1, -2.6, leafW, 5.2);
 
-  // Right leaf vertical bars
-  ctx.fillStyle = '#475569';
-  for (let bx = 5; bx < halfW - 5; bx += 4) {
-    ctx.fillRect(bx, -2.2, 1.5, 4.4);
+    // Right leaf diagonal cross-brace
+    ctx.strokeStyle = '#334155';
+    ctx.lineWidth = 1.4;
+    ctx.beginPath();
+    ctx.moveTo(2, -2.0); ctx.lineTo(halfW - 3, 2.0);
+    ctx.moveTo(2, 2.0); ctx.lineTo(halfW - 3, -2.0);
+    ctx.stroke();
+
+    // Right leaf vertical bars
+    ctx.fillStyle = '#475569';
+    for (let bx = 5; bx < halfW - 5; bx += 4) {
+      ctx.fillRect(bx, -2.2, 1.5, 4.4);
+    }
+
+    // 5. Central Vertical Locking Drop-Bolt & Floor Receiver Stop
+    ctx.fillStyle = '#cbd5e1';
+    ctx.fillRect(-0.8, -1.2, 1.6, 3.4);
+    ctx.fillStyle = '#0f172a';
+    ctx.fillRect(-1.2, 1.5, 2.4, 1.2);
   }
 
   // 4. Heavy Steel Strap Hinges on Pillars
@@ -4683,12 +4782,6 @@ export function renderPropCottageGate(ctx: CanvasRenderingContext2D, prop: Stree
   ctx.fillRect(-halfW, 1.0, 4, 1.4);
   ctx.fillRect(halfW - 4, -2.2, 4, 1.4);
   ctx.fillRect(halfW - 4, 1.0, 4, 1.4);
-
-  // 5. Central Vertical Locking Drop-Bolt & Floor Receiver Stop
-  ctx.fillStyle = '#cbd5e1';
-  ctx.fillRect(-0.8, -1.2, 1.6, 3.4);
-  ctx.fillStyle = '#0f172a';
-  ctx.fillRect(-1.2, 1.5, 2.4, 1.2);
 }
 
 // --- 5. GARDEN PATH TILE / STEPPING STONES (ШАГОВЫЕ САДОВЫЕ ПЛИТЫ С ЦВЕТОЧНЫМИ КЛУМБАМИ) ---

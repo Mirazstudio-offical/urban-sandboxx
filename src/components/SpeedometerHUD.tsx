@@ -565,7 +565,7 @@ export const SpeedometerHUD: React.FC<SpeedometerHUDProps> = ({
   return (
     <div
       id="speedometer-cluster"
-      className="fixed bottom-2 md:bottom-3 left-1/2 -translate-x-1/2 z-30 pointer-events-auto select-none transition-all duration-300 flex flex-col items-center"
+      className="fixed bottom-2 md:bottom-3 left-1/2 -translate-x-1/2 z-50 pointer-events-auto select-none transition-all duration-300 flex flex-col items-center"
       style={{ maxWidth: 'calc(100vw - 20px)' }}
     >
       {/* MINIMIZE / EXPAND TOGGLE BAR */}

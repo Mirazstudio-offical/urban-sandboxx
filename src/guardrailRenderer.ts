@@ -197,11 +197,24 @@ export class GuardrailRenderer {
         ctx.fillRect(-1, -rail.width * 0.7, 2, 2.5);
         ctx.fillStyle = '#f8fafc'; // White reflector
         ctx.fillRect(-1, rail.width * 0.7 - 2.5, 2, 2.5);
+
+        if (nightAlpha > 0.1) {
+          ctx.fillStyle = 'rgba(239, 68, 68, 0.45)';
+          ctx.beginPath(); ctx.arc(0, -rail.width * 0.7 + 1.2, 3.5, 0, Math.PI * 2); ctx.fill();
+          ctx.fillStyle = 'rgba(248, 250, 252, 0.45)';
+          ctx.beginPath(); ctx.arc(0, rail.width * 0.7 - 1.2, 3.5, 0, Math.PI * 2); ctx.fill();
+        }
       } else {
         // Bright amber double-sided prism for median divider
         ctx.fillStyle = '#f59e0b';
         ctx.fillRect(-1, -rail.width * 0.7, 2, 2.5);
         ctx.fillRect(-1, rail.width * 0.7 - 2.5, 2, 2.5);
+
+        if (nightAlpha > 0.1) {
+          ctx.fillStyle = 'rgba(245, 158, 11, 0.45)';
+          ctx.beginPath(); ctx.arc(0, -rail.width * 0.7 + 1.2, 3.5, 0, Math.PI * 2); ctx.fill();
+          ctx.beginPath(); ctx.arc(0, rail.width * 0.7 - 1.2, 3.5, 0, Math.PI * 2); ctx.fill();
+        }
       }
 
       ctx.restore();

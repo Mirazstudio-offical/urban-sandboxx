@@ -3485,7 +3485,7 @@ export function updateAITraffic(
         if (isClosed) {
           const minTrackY = Math.min(...cross.tracksY);
           const maxTrackY = Math.max(...cross.tracksY);
-          const onTracks = car.x >= cross.minX - 25 && car.x <= cross.maxX + 25 && car.y >= minTrackY - 20 && car.y <= maxTrackY + 20;
+          const onTracks = car.x >= cross.minX - 25 && car.x <= cross.maxX + 25 && car.y >= minTrackY - 10 && car.y <= maxTrackY + 10;
 
           if (onTracks && !car.isDerelict) {
             // If caught directly on tracks when crossing closes, emergency clear the tracks immediately!
@@ -3493,21 +3493,37 @@ export function updateAITraffic(
             car.targetSpeed = 160;
             car.turnSignal = 'hazard';
           } else {
-            // Determine forward distance along car heading towards the crossing center / barrier
-            const toCrossingX = cross.centerX - car.x;
-            const toCrossingY = cross.centerY - car.y;
-            const forwardDist = toCrossingX * carCos + toCrossingY * carSin;
+            // Determine stopping distance relative to actual barriers
+            let stopDist = 999;
+            const carDirY = Math.sin(car.angle);
 
-            // Only stop if heading TOWARDS the crossing deck
-            if (forwardDist > 0 && forwardDist < 300) {
-              const crossingHalfDepth = Math.max(45, (maxTrackY - minTrackY) / 2 + 55);
-              const stopDist = Math.max(0, forwardDist - crossingHalfDepth);
-              if (stopDist < 240) {
-                mustStopAtStopLine = true;
-                stopLineDist = stopDist;
-                car.aiState = 'stopping_light';
-                break;
-              }
+            // Proactively lookup physical level crossing barrier signal mast locations in the world
+            const sigNorth = world.railwaySignals?.find(s => s.id === cross.signalNorthId);
+            const sigSouth = world.railwaySignals?.find(s => s.id === cross.signalSouthId);
+
+            if (carDirY > 0.3) {
+              // Moving South: stop before North barrier
+              const stopY = sigNorth ? sigNorth.y - 12 : minTrackY - 215;
+              stopDist = stopY - (car.y + car.length / 2);
+            } else if (carDirY < -0.3) {
+              // Moving North: stop before South barrier
+              const stopY = sigSouth ? sigSouth.y + 12 : maxTrackY + 215;
+              stopDist = (car.y - car.length / 2) - stopY;
+            } else {
+              // Fallback for general heading
+              const toCrossingX = cross.centerX - car.x;
+              const toCrossingY = cross.centerY - car.y;
+              const forwardDist = toCrossingX * carCos + toCrossingY * carSin;
+              const crossingHalfDepth = Math.max(45, (maxTrackY - minTrackY) / 2 + 180);
+              stopDist = Math.max(0, forwardDist - crossingHalfDepth);
+            }
+
+            // Only stop if heading towards the crossing and haven't passed the barrier yet
+            if (stopDist > -15 && stopDist < 280) {
+              mustStopAtStopLine = true;
+              stopLineDist = Math.max(0, stopDist);
+              car.aiState = 'stopping_light';
+              break;
             }
           }
         }

@@ -2,7 +2,7 @@
 import { drawShadow } from './itemGraphicShared';
 
 export interface PhoneVisualTheme {
-  series: 'aura' | 'quantum' | 'pixel' | 'cyber' | 'compact';
+  series: 'aura' | 'quantum' | 'pixel' | 'cyber' | 'compact' | 'retro' | 'nord' | 'nova' | 'fold';
   bodyColor: string;
   rimColor: string;
   accentColor: string;
@@ -11,6 +11,44 @@ export interface PhoneVisualTheme {
 }
 
 export function getPhoneTheme(itemId: string): PhoneVisualTheme {
+  if (itemId.includes('retro')) {
+    return {
+      series: 'retro',
+      bodyColor: '#334155',
+      rimColor: '#64748b',
+      accentColor: '#22c55e',
+      variant: 'Vintage Candybar 3310'
+    };
+  }
+  if (itemId.includes('nord')) {
+    return {
+      series: 'nord',
+      bodyColor: '#0f766e',
+      rimColor: '#14b8a6',
+      accentColor: '#2dd4bf',
+      variant: 'Nordic Emerald'
+    };
+  }
+  if (itemId.includes('nova')) {
+    return {
+      series: 'nova',
+      bodyColor: '#581c87',
+      rimColor: '#9333ea',
+      accentColor: '#c084fc',
+      cameraPlateColor: '#3b0764',
+      variant: 'Nova Star Ring'
+    };
+  }
+  if (itemId.includes('fold')) {
+    return {
+      series: 'fold',
+      bodyColor: '#18181b',
+      rimColor: '#3f3f46',
+      accentColor: '#f59e0b',
+      cameraPlateColor: '#09090b',
+      variant: 'CyberFold Pro'
+    };
+  }
   // 1. Aura Pro 16 Series (Apple-style Pro Titanium & Triangle Triple Camera)
   if (itemId.includes('aura_pro')) {
     if (itemId.includes('gold')) {
@@ -712,6 +750,153 @@ function drawNeoCompactBack(ctx: CanvasRenderingContext2D, theme: PhoneVisualThe
 }
 
 // -------------------------------------------------------------
+// 6. Retro Candybar Button Phone Rendering (Nokia 3310 Style)
+// -------------------------------------------------------------
+function drawRetroPhoneBack(ctx: CanvasRenderingContext2D, theme: PhoneVisualTheme) {
+  // Telescoping antenna on top right
+  ctx.fillStyle = '#475569';
+  ctx.beginPath();
+  ctx.roundRect(3.0, -11.5, 1.6, 3.5, 0.5);
+  ctx.fill();
+
+  // Chunky plastic outer chassis
+  ctx.fillStyle = theme.bodyColor;
+  ctx.beginPath();
+  ctx.roundRect(-5.5, -9.0, 11.0, 18.0, 3.5);
+  ctx.fill();
+  ctx.strokeStyle = theme.rimColor;
+  ctx.lineWidth = 0.8;
+  ctx.stroke();
+
+  // Green backlit monochrome screen frame
+  ctx.fillStyle = '#1e293b';
+  ctx.beginPath();
+  ctx.roundRect(-4.2, -7.5, 8.4, 5.5, 1.0);
+  ctx.fill();
+
+  // Green LCD display
+  ctx.fillStyle = '#15803d';
+  ctx.beginPath();
+  ctx.roundRect(-3.8, -7.1, 7.6, 4.7, 0.6);
+  ctx.fill();
+
+  // Monochrome display pixels signal & battery
+  ctx.fillStyle = '#86efac';
+  ctx.fillRect(-3.2, -6.5, 1.5, 2.0); // signal
+  ctx.fillRect(1.7, -6.5, 1.5, 1.0);  // battery
+
+  // Rubberized T9 keypad area
+  ctx.fillStyle = '#0f172a';
+  ctx.beginPath();
+  ctx.roundRect(-4.2, -1.2, 8.4, 9.2, 1.2);
+  ctx.fill();
+
+  // D-pad / soft keys
+  ctx.fillStyle = theme.rimColor;
+  ctx.beginPath();
+  ctx.roundRect(-3.5, -0.7, 3.2, 1.5, 0.5);
+  ctx.roundRect(0.3, -0.7, 3.2, 1.5, 0.5);
+  ctx.fill();
+
+  // Number grid buttons (3x4)
+  ctx.fillStyle = '#e2e8f0';
+  for (let row = 0; row < 4; row++) {
+    for (let col = 0; col < 3; col++) {
+      const bx = -3.2 + col * 2.3;
+      const by = 1.3 + row * 1.6;
+      ctx.beginPath();
+      ctx.roundRect(bx, by, 1.8, 1.1, 0.4);
+      ctx.fill();
+    }
+  }
+}
+
+// -------------------------------------------------------------
+// 7. Nord Emerald Minimalist Phone
+// -------------------------------------------------------------
+function drawNordPhoneBack(ctx: CanvasRenderingContext2D, theme: PhoneVisualTheme) {
+  drawNeoCompactBack(ctx, theme);
+}
+
+// -------------------------------------------------------------
+// 8. Nova Star Ring Phone
+// -------------------------------------------------------------
+function drawNovaPhoneBack(ctx: CanvasRenderingContext2D, theme: PhoneVisualTheme) {
+  // Curved chassis
+  ctx.fillStyle = theme.rimColor;
+  ctx.beginPath();
+  ctx.roundRect(-5.8, -9.0, 11.6, 18.0, 2.5);
+  ctx.fill();
+
+  ctx.fillStyle = theme.bodyColor;
+  ctx.beginPath();
+  ctx.roundRect(-5.3, -8.6, 10.6, 17.2, 2.0);
+  ctx.fill();
+
+  // Large circular star ring camera module
+  ctx.fillStyle = theme.cameraPlateColor || '#1e1b4b';
+  ctx.beginPath();
+  ctx.arc(0, -3.5, 3.8, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = theme.accentColor;
+  ctx.lineWidth = 0.8;
+  ctx.stroke();
+
+  // Ring flash and lenses inside circular module
+  ctx.fillStyle = '#020617';
+  ctx.beginPath();
+  ctx.arc(0, -3.5, 2.5, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Lenses
+  const lenses = [
+    { x: -1.0, y: -4.2 },
+    { x: 1.0, y: -4.2 },
+    { x: 0, y: -2.5 }
+  ];
+  lenses.forEach(l => {
+    ctx.fillStyle = '#38bdf8';
+    ctx.beginPath();
+    ctx.arc(l.x, l.y, 0.6, 0, Math.PI * 2);
+    ctx.fill();
+  });
+}
+
+// -------------------------------------------------------------
+// 9. CyberFold Dual Screen Foldable Phone
+// -------------------------------------------------------------
+function drawFoldPhoneBack(ctx: CanvasRenderingContext2D, theme: PhoneVisualTheme) {
+  // Dual chassis with central hinge line
+  ctx.fillStyle = theme.rimColor;
+  ctx.beginPath();
+  ctx.roundRect(-6.5, -8.8, 13.0, 17.6, 2.2);
+  ctx.fill();
+
+  // Left & Right body halves
+  ctx.fillStyle = theme.bodyColor;
+  ctx.fillRect(-6.0, -8.3, 5.7, 16.6);
+  ctx.fillRect(0.3, -8.3, 5.7, 16.6);
+
+  // Central metallic Spine Hinge
+  ctx.fillStyle = theme.accentColor;
+  ctx.fillRect(-0.3, -8.8, 0.6, 17.6);
+
+  // Camera module on left side
+  ctx.fillStyle = theme.cameraPlateColor || '#09090b';
+  ctx.beginPath();
+  ctx.roundRect(-5.2, -7.5, 4.0, 6.0, 1.2);
+  ctx.fill();
+
+  // Lenses on foldable camera strip
+  [-5.8, -4.5, -3.2].forEach(y => {
+    ctx.fillStyle = '#f59e0b';
+    ctx.beginPath();
+    ctx.arc(-3.2, y, 0.7, 0, Math.PI * 2);
+    ctx.fill();
+  });
+}
+
+// -------------------------------------------------------------
 // Central Dispatcher for All Smartphone Item Textures
 // -------------------------------------------------------------
 export function drawSmartphoneItem(ctx: CanvasRenderingContext2D, itemId: string): boolean {
@@ -722,7 +907,7 @@ export function drawSmartphoneItem(ctx: CanvasRenderingContext2D, itemId: string
   const theme = getPhoneTheme(itemId);
 
   // Ambient Drop Shadow
-  if (theme.series === 'compact') {
+  if (theme.series === 'compact' || theme.series === 'retro') {
     drawShadow(ctx, 6.0, 2.0, 7.8, 0.25);
   } else {
     drawShadow(ctx, 6.8, 2.4, 8.8, 0.28);
@@ -731,6 +916,18 @@ export function drawSmartphoneItem(ctx: CanvasRenderingContext2D, itemId: string
   ctx.save();
 
   switch (theme.series) {
+    case 'retro':
+      drawRetroPhoneBack(ctx, theme);
+      break;
+    case 'nord':
+      drawNordPhoneBack(ctx, theme);
+      break;
+    case 'nova':
+      drawNovaPhoneBack(ctx, theme);
+      break;
+    case 'fold':
+      drawFoldPhoneBack(ctx, theme);
+      break;
     case 'quantum':
       drawQuantumUltraBack(ctx, theme);
       break;

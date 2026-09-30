@@ -1,5 +1,5 @@
 import React from 'react';
-import { Play, Save, Settings, LogOut, Compass, Globe, User } from 'lucide-react';
+import { Play, Save, Settings, LogOut, Compass, Globe, User, Activity } from 'lucide-react';
 
 interface PauseMenuProps {
   onResume: () => void;
@@ -8,6 +8,7 @@ interface PauseMenuProps {
   onExitToMainMenu: () => void;
   onOpenOnline?: () => void;
   onOpenProfile?: () => void;
+  onOpenDiagnostics?: () => void;
 }
 
 export const PauseMenu: React.FC<PauseMenuProps> = ({
@@ -16,7 +17,8 @@ export const PauseMenu: React.FC<PauseMenuProps> = ({
   onOpenSettings,
   onExitToMainMenu,
   onOpenOnline,
-  onOpenProfile
+  onOpenProfile,
+  onOpenDiagnostics
 }) => {
   return (
     <div className="absolute inset-0 z-50 flex items-center justify-center bg-[#070b14]/85 backdrop-blur-md text-slate-100 font-sans select-none animate-in fade-in duration-200">
@@ -91,6 +93,19 @@ export const PauseMenu: React.FC<PauseMenuProps> = ({
             <Settings className="w-5 h-5 text-indigo-400 group-hover:scale-110 transition-transform" />
             <span>Настройки симулятора</span>
           </button>
+
+          {onOpenDiagnostics && (
+            <button
+              onClick={onOpenDiagnostics}
+              className="flex items-center gap-4 px-5 py-4 bg-slate-900 hover:bg-slate-850 border border-indigo-500/30 hover:border-indigo-500/60 rounded-2xl transition-all font-bold text-sm text-indigo-300 group cursor-pointer active:scale-[0.99] shadow-lg"
+            >
+              <Activity className="w-5 h-5 text-indigo-400 group-hover:scale-110 transition-transform" />
+              <div className="text-left">
+                <div>Диагностика и Лог Сбоев [F2]</div>
+                <div className="text-[10px] text-slate-400 font-normal">Память вкладки, счетчик сущностей, лог падений</div>
+              </div>
+            </button>
+          )}
 
           <div className="h-px bg-slate-800/80 my-1" />
 

@@ -25,7 +25,9 @@ import {
   ToggleLeft,
   ToggleRight,
   Activity,
-  CheckCircle2
+  CheckCircle2,
+  Snowflake,
+  RefreshCw
 } from 'lucide-react';
 import { sound } from '../audio';
 import { toggleTrailerHitch } from '../physics';
@@ -49,6 +51,8 @@ interface RadialMenuProps {
   onToggleTrailerHitch?: () => void;
   onToggleRoadTrainLights?: () => void;
   onCycleDiffLock?: () => void;
+  onToggleAC?: () => void;
+  onToggleRecirc?: () => void;
 }
 
 export const RadialMenu: React.FC<RadialMenuProps> = ({
@@ -67,7 +71,9 @@ export const RadialMenu: React.FC<RadialMenuProps> = ({
   onToggleEngine,
   onToggleTrailerHitch,
   onToggleRoadTrainLights,
-  onCycleDiffLock
+  onCycleDiffLock,
+  onToggleAC,
+  onToggleRecirc
 }) => {
   // Close menu on Escape or E key
   useEffect(() => {
@@ -103,6 +109,8 @@ export const RadialMenu: React.FC<RadialMenuProps> = ({
   const isEngineRunning = veh.engineState?.engineRunning ?? false;
   const isStalled = !!veh.engineState?.isStalled || !!veh.engineState?.engineStalled;
   const isWindowOpen = !!veh.windowOpen;
+  const acActive = !!veh.acOn;
+  const recircActive = !!veh.recircOn;
   const speedKmh = Math.round(Math.abs(veh.speed) * 3.6);
   const rpm = isEngineRunning ? Math.round(veh.engineState?.engineRPM || 800) : 0;
   const batteryCharge = Math.round(veh.engineState?.batteryCharge ?? 100);
@@ -614,7 +622,7 @@ export const RadialMenu: React.FC<RadialMenuProps> = ({
           <div className={`flex flex-col justify-between p-3.5 rounded-2xl border shadow-lg ${panelStyles.plateBorder}`}>
             <div className="flex items-center justify-between">
               <span className="text-[9px] font-mono font-bold uppercase text-slate-400 tracking-wider">
-                КЛИМАТ / ПЕЧКА [P]
+                КЛИМАТ / ПЕЧКА
               </span>
               <div 
                 className={`w-2.5 h-2.5 rounded-full border border-black ${
@@ -630,7 +638,7 @@ export const RadialMenu: React.FC<RadialMenuProps> = ({
             </div>
 
             {/* 4-Step Rotary Switch Selector */}
-            <div className="grid grid-cols-4 gap-1 mt-2.5 bg-black/60 p-1 rounded-xl border border-white/10">
+            <div className="grid grid-cols-4 gap-1 mt-2 bg-black/60 p-1 rounded-xl border border-white/10">
               {(['off', 'low', 'med', 'high'] as const).map((m) => {
                 const isActive = heaterMode === m;
                 return (
@@ -659,10 +667,53 @@ export const RadialMenu: React.FC<RadialMenuProps> = ({
               })}
             </div>
 
+            {/* A/C & Recirculation Toggles */}
+            <div className="grid grid-cols-2 gap-1.5 mt-2 bg-black/40 p-1 rounded-xl border border-white/5">
+              {/* A/C Toggle */}
+              <button
+                type="button"
+                onClick={() => {
+                  sound.playButtonPress();
+                  if (onToggleAC) onToggleAC();
+                }}
+                className={`py-1 px-1.5 rounded-lg border flex items-center justify-between cursor-pointer transition-all duration-150 active:scale-95 text-[8.5px] font-mono font-black ${
+                  acActive
+                    ? 'bg-linear-to-r from-sky-950 to-sky-900 border-sky-500 text-sky-200 shadow-[0_0_6px_rgba(14,165,233,0.3)]'
+                    : 'bg-black/50 border-white/10 text-slate-400 hover:text-white'
+                }`}
+              >
+                <span className="flex items-center gap-1">
+                  <Snowflake className={`w-3 h-3 ${acActive ? 'text-sky-400 animate-spin' : 'text-slate-600'}`} style={{ animationDuration: '3s' }} />
+                  <span>A/C</span>
+                </span>
+                {acActive ? <span className="text-[7.5px] text-sky-400 font-bold">ВКЛ</span> : <span className="text-[7.5px] text-slate-600 font-normal">ВЫКЛ</span>}
+              </button>
+
+              {/* Recirculation Toggle */}
+              <button
+                type="button"
+                onClick={() => {
+                  sound.playButtonPress();
+                  if (onToggleRecirc) onToggleRecirc();
+                }}
+                className={`py-1 px-1.5 rounded-lg border flex items-center justify-between cursor-pointer transition-all duration-150 active:scale-95 text-[8.5px] font-mono font-black ${
+                  recircActive
+                    ? 'bg-linear-to-r from-amber-950 to-amber-900 border-amber-500 text-amber-200 shadow-[0_0_6px_rgba(245,158,11,0.3)]'
+                    : 'bg-black/50 border-white/10 text-slate-400 hover:text-white'
+                }`}
+              >
+                <span className="flex items-center gap-1">
+                  <RefreshCw className={`w-3 h-3 ${recircActive ? 'text-amber-400 animate-spin' : 'text-slate-600'}`} style={{ animationDuration: '4s' }} />
+                  <span>РЕЦ.</span>
+                </span>
+                {recircActive ? <span className="text-[7.5px] text-amber-400 font-bold">ВНУТ</span> : <span className="text-[7.5px] text-slate-600 font-normal">УЛИЦ</span>}
+              </button>
+            </div>
+
             <div className="flex items-center justify-between text-[8px] font-mono text-slate-400 mt-2">
               <span className="flex items-center gap-1">
                 <Fan className={`w-3 h-3 ${heaterMode !== 'off' ? 'text-amber-400 animate-spin' : 'text-slate-600'}`} />
-                <span>ТЕМПЕРАТУРА:</span>
+                <span>САЛОН:</span>
               </span>
               <span className="font-bold text-white">
                 {heaterTemp}°C

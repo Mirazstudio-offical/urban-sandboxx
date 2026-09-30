@@ -579,11 +579,14 @@ class OnlineManager {
     const trimmed = text.trim();
     if (!trimmed) return;
 
+    // Safe cap to prevent WebRTC SCTP buffer overflow on huge prompts
+    const safeText = trimmed.length > 4000 ? trimmed.slice(0, 4000) : trimmed;
+
     const message: ChatMessage = {
       id: `${this.localPeerId}_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
       senderPeerId: this.localPeerId,
       senderName: this.localPlayerName,
-      text: trimmed,
+      text: safeText,
       timestamp: Date.now()
     };
 
@@ -592,21 +595,26 @@ class OnlineManager {
       this.chatMessages.shift();
     }
 
-    // Set local player's speech bubble
+    // Set local player's speech bubble (compact overhead preview)
+    const bubblePreview = safeText.length > 120 ? safeText.slice(0, 117) + '...' : safeText;
     this.speechBubbles.set('local', {
-      text: trimmed,
+      text: bubblePreview,
       expiresAt: Date.now() + 5000
     });
     this.speechBubbles.set(this.localPeerId, {
-      text: trimmed,
+      text: bubblePreview,
       expiresAt: Date.now() + 5000
     });
 
-    this.broadcastPacket({
-      type: 'chat',
-      packetId: this.nextPacketId(),
-      message
-    });
+    try {
+      this.broadcastPacket({
+        type: 'chat',
+        packetId: this.nextPacketId(),
+        message
+      });
+    } catch (err) {
+      console.warn('[OnlineManager] Error broadcasting chat:', err);
+    }
 
     this.notify();
   }

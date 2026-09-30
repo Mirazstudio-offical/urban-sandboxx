@@ -523,6 +523,55 @@ export function resolveWorldLandmarks(world: GameWorld | null): CityLandmark[] {
     addedIds.add(sp.id);
   }
 
+  // Add Custom Minimap Markers loaded from map file (world.minimapMarkers)
+  if (world && Array.isArray(world.minimapMarkers)) {
+    for (const marker of world.minimapMarkers) {
+      if (!marker || !marker.id) continue;
+      if (addedIds.has(marker.id)) continue;
+      landmarks.push({
+        id: marker.id,
+        name: marker.nameEn || marker.nameRu,
+        nameRu: marker.nameRu,
+        category: (marker.category as LandmarkCategory) || 'services',
+        x: marker.x,
+        y: marker.y,
+        iconKey: (marker.iconKey as LandmarkIconKey) || 'spawn',
+        badgeColor: marker.badgeColor || '#0284c7',
+        description: marker.description || ''
+      });
+      addedIds.add(marker.id);
+    }
+  }
+
+  // Add Custom Spawn Points loaded from map file (world.spawnPoints)
+  if (world && Array.isArray(world.spawnPoints)) {
+    for (const sp of world.spawnPoints) {
+      if (!sp || !sp.id) continue;
+      if (addedIds.has(sp.id)) continue;
+      landmarks.push({
+        id: sp.id,
+        name: sp.nameEn || sp.nameRu,
+        nameRu: sp.nameRu,
+        category: 'spawns',
+        x: sp.x,
+        y: sp.y,
+        iconKey: (sp.iconKey as LandmarkIconKey) || 'spawn',
+        badgeColor: '#0284c7',
+        description: sp.description || 'Точка спавна с карты',
+        spawnLoc: {
+          id: sp.id,
+          name: sp.nameEn || sp.nameRu,
+          nameRu: sp.nameRu,
+          x: sp.x,
+          y: sp.y,
+          description: sp.description || 'Точка спавна с карты',
+          icon: null
+        }
+      });
+      addedIds.add(sp.id);
+    }
+  }
+
   return landmarks;
 }
 

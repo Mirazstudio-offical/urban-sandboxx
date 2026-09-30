@@ -509,49 +509,87 @@ export function drawFoodItem(ctx: CanvasRenderingContext2D, itemId: string): boo
       return true;
     }
 
-    case 'soup': {
+    case 'soup':
+    case 'hot_soup':
+    case 'broth':
+    case 'broth_beef':
+    case 'broth_chicken':
+    case 'broth_fish':
+    case 'broth_vegetable':
+    case 'broth_mushroom': {
       drawShadow(ctx, 8.5, 3, 7.5, 0.22);
 
-      // Ceramic red soup bowl body
-      ctx.fillStyle = '#9f1239';
+      // Ceramic bowl body (warm terracotta/crimson ceramic)
+      const bowlColor = itemId.includes('fish') ? '#0284c7' :
+                        itemId.includes('beef') ? '#7f1d1d' :
+                        itemId.includes('mushroom') ? '#78350f' : '#9f1239';
+      const rimColor = itemId.includes('fish') ? '#38bdf8' :
+                       itemId.includes('beef') ? '#991b1b' :
+                       itemId.includes('mushroom') ? '#92400e' : '#be123c';
+
+      ctx.fillStyle = bowlColor;
       ctx.beginPath();
       ctx.ellipse(0, 1.5, 8.5, 4.8, 0, 0, Math.PI * 2);
       ctx.fill();
       ctx.fillRect(-8.5, -3, 17, 5);
 
       // Ceramic outer bowl rim
-      ctx.fillStyle = '#be123c';
+      ctx.fillStyle = rimColor;
       ctx.beginPath();
       ctx.ellipse(0, -3, 8.5, 3, 0, 0, Math.PI * 2);
       ctx.fill();
 
       // Ceramic highlight on rim
-      ctx.fillStyle = '#fb7185';
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.35)';
       ctx.beginPath();
       ctx.ellipse(-2, -3.3, 5, 1.4, -0.1, 0, Math.PI * 2);
       ctx.fill();
 
-      // Rich golden chicken broth
-      ctx.fillStyle = '#eab308';
+      // Broth liquid color
+      let brothBase = '#eab308'; // Chicken golden
+      let brothGlow = '#facc15';
+      if (itemId.includes('beef')) {
+        brothBase = '#b45309';
+        brothGlow = '#d97706';
+      } else if (itemId.includes('mushroom')) {
+        brothBase = '#713f12';
+        brothGlow = '#854d0e';
+      } else if (itemId.includes('fish')) {
+        brothBase = '#fef08a';
+        brothGlow = '#fef9c3';
+      }
+
+      ctx.fillStyle = brothBase;
       ctx.beginPath();
       ctx.ellipse(0, -2.8, 7.5, 2.4, 0, 0, Math.PI * 2);
       ctx.fill();
-      ctx.fillStyle = '#facc15';
+      ctx.fillStyle = brothGlow;
       ctx.beginPath();
       ctx.ellipse(-1, -3, 6, 1.8, 0, 0, Math.PI * 2);
       ctx.fill();
 
-      // Carrot coins & chicken pieces
+      // Carrot coins & garnish
       ctx.fillStyle = '#ea580c';
       ctx.beginPath();
       ctx.ellipse(-3.5, -3.2, 1.2, 0.8, 0.3, 0, Math.PI * 2);
       ctx.ellipse(3, -2.5, 1.2, 0.8, -0.4, 0, Math.PI * 2);
       ctx.fill();
 
-      // Fresh chopped parsley flakes
+      // Fresh chopped parsley / dill flakes
       ctx.fillStyle = '#15803d';
       const flakes = [[-2, -2.5], [0.5, -3.5], [-1, -3.8], [2, -3.2], [3.5, -3.8], [-4, -2.5]];
       flakes.forEach(([fx, fy]) => ctx.fillRect(fx, fy, 0.9, 0.9));
+
+      // Delicate rising steam wisps
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.45)';
+      ctx.lineWidth = 0.8;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(-2.5, -5.5);
+      ctx.quadraticCurveTo(-4.0, -8.0, -2.0, -10.5);
+      ctx.moveTo(2.0, -5.5);
+      ctx.quadraticCurveTo(3.5, -8.0, 1.5, -10.5);
+      ctx.stroke();
       return true;
     }
 
@@ -1080,6 +1118,263 @@ export function drawFoodItem(ctx: CanvasRenderingContext2D, itemId: string): boo
       ctx.fillStyle = '#fef08a';
       ctx.fillRect(-5, 0.5, 10, 1.4);
       ctx.fillRect(-3.5, 2.8, 7, 1.2);
+      return true;
+    }
+
+    case 'canned_fish':
+    case 'fish_preserves': {
+      drawShadow(ctx, 7.5, 2.6, 7.8, 0.25);
+
+      // Authentic Baltic Sprats in Oil ("Шпроты в масле ГОСТ")
+      // Flat oval golden-lacquered tin can
+      ctx.fillStyle = '#b45309';
+      ctx.beginPath();
+      ctx.ellipse(0, 1.0, 7.5, 4.5, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Golden metallic side wall
+      ctx.fillStyle = '#d97706';
+      ctx.beginPath();
+      ctx.roundRect(-7.5, -3.5, 15, 6.0, 3);
+      ctx.fill();
+
+      // Top crimped tin lid
+      ctx.fillStyle = '#f59e0b';
+      ctx.beginPath();
+      ctx.ellipse(0, -3.5, 7.2, 3.8, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Metallic rim highlight
+      ctx.strokeStyle = '#fef3c7';
+      ctx.lineWidth = 0.7;
+      ctx.stroke();
+
+      // Dark lithographed label in center
+      ctx.fillStyle = '#18181b';
+      ctx.beginPath();
+      ctx.ellipse(0, -3.5, 5.6, 2.8, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Gold sprat silhouette swimming
+      ctx.fillStyle = '#fbbf24';
+      ctx.beginPath();
+      ctx.ellipse(-0.8, -3.5, 2.8, 1.0, 0.1, 0, Math.PI * 2);
+      ctx.fill();
+      // Fish tail
+      ctx.beginPath();
+      ctx.moveTo(1.8, -3.5); ctx.lineTo(3.2, -4.5); ctx.lineTo(3.2, -2.5);
+      ctx.closePath();
+      ctx.fill();
+
+      // Silver easy-open pull ring tab
+      ctx.strokeStyle = '#cbd5e1';
+      ctx.lineWidth = 0.8;
+      ctx.beginPath();
+      ctx.arc(-3.8, -3.5, 1.2, 0, Math.PI * 2);
+      ctx.stroke();
+
+      // Specular sheen
+      drawGlossBand(ctx, -4.5, -4.5, 2.0, 6.0, 0.35);
+      return true;
+    }
+
+    case 'canned_stew':
+    case 'stew_meat': {
+      drawShadow(ctx, 6.8, 2.6, 7.8, 0.25);
+
+      // Heavy Army Beef Stew Tin Can ("Говядина тушёная В/С")
+      // Heavy cylindrical tin can body
+      ctx.fillStyle = '#64748b';
+      ctx.beginPath();
+      ctx.roundRect(-5.5, -5.5, 11, 12.5, 1.5);
+      ctx.fill();
+
+      // Stamped horizontal tin beads
+      ctx.strokeStyle = '#94a3b8';
+      ctx.lineWidth = 0.6;
+      ctx.beginPath();
+      ctx.moveTo(-5.5, -4); ctx.lineTo(5.5, -4);
+      ctx.moveTo(-5.5, 5.5); ctx.lineTo(5.5, 5.5);
+      ctx.stroke();
+
+      // Red and Cream Paper Wrap Label
+      ctx.fillStyle = '#991b1b';
+      ctx.fillRect(-5.2, -3.0, 10.4, 7.5);
+      ctx.fillStyle = '#fef3c7';
+      ctx.fillRect(-5.2, -1.0, 10.4, 4.0);
+
+      // Cow head silhouette emblem
+      ctx.fillStyle = '#7f1d1d';
+      ctx.beginPath();
+      ctx.arc(0, 1.0, 1.4, 0, Math.PI * 2);
+      ctx.fill();
+      // Horns
+      ctx.strokeStyle = '#7f1d1d';
+      ctx.lineWidth = 0.6;
+      ctx.beginPath();
+      ctx.moveTo(-1.2, 0.2); ctx.lineTo(-1.8, -0.8);
+      ctx.moveTo(1.2, 0.2); ctx.lineTo(1.8, -0.8);
+      ctx.stroke();
+
+      // Gold Medal Seal
+      ctx.fillStyle = '#fbbf24';
+      ctx.beginPath();
+      ctx.arc(3.2, 1.0, 1.0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Top crimped metal lid with concentric stamping rings
+      ctx.fillStyle = '#cbd5e1';
+      ctx.beginPath();
+      ctx.ellipse(0, -5.5, 5.2, 1.8, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = '#94a3b8';
+      ctx.lineWidth = 0.5;
+      ctx.stroke();
+
+      // Silver pull tab
+      ctx.fillStyle = '#64748b';
+      ctx.fillRect(-1.0, -6.5, 2.0, 1.6);
+
+      drawGlossBand(ctx, -3.6, -5.5, 1.2, 12.5, 0.35);
+      return true;
+    }
+
+    case 'condensed_milk':
+    case 'canned_condensed_milk': {
+      drawShadow(ctx, 6.8, 2.6, 7.8, 0.25);
+
+      // Legendary Russian GOST Sweetened Condensed Milk ("Сгущёнка ГОСТ")
+      // Sturdy cylindrical steel can body
+      ctx.fillStyle = '#cbd5e1';
+      ctx.beginPath();
+      ctx.roundRect(-5.5, -5.5, 11, 12.5, 1.5);
+      ctx.fill();
+
+      // Label background (Navy Blue #1e3a8a)
+      ctx.fillStyle = '#1e3a8a';
+      ctx.fillRect(-5.2, -3.2, 10.4, 8.0);
+
+      // Iconic geometric alternating white & cyan triangles at top and bottom
+      ctx.fillStyle = '#ffffff';
+      for (let tx = -5.0; tx <= 4.0; tx += 2.0) {
+        // Top white triangles
+        ctx.beginPath();
+        ctx.moveTo(tx, -3.2); ctx.lineTo(tx + 1.0, -2.0); ctx.lineTo(tx + 2.0, -3.2);
+        ctx.closePath();
+        ctx.fill();
+        // Bottom white triangles
+        ctx.beginPath();
+        ctx.moveTo(tx, 4.8); ctx.lineTo(tx + 1.0, 3.6); ctx.lineTo(tx + 2.0, 4.8);
+        ctx.closePath();
+        ctx.fill();
+      }
+
+      ctx.fillStyle = '#38bdf8';
+      for (let tx = -4.0; tx <= 4.0; tx += 2.0) {
+        // Top cyan triangles
+        ctx.beginPath();
+        ctx.moveTo(tx, -3.2); ctx.lineTo(tx + 1.0, -2.0); ctx.lineTo(tx, -2.0);
+        ctx.closePath();
+        ctx.fill();
+      }
+
+      // Center white/cyan milk drop badge
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.arc(0, 0.8, 1.8, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#0284c7';
+      ctx.beginPath();
+      ctx.arc(0, 0.8, 1.2, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(-0.4, 0.2, 0.8, 1.2);
+
+      // Top crimped metal lid with recessed ridge
+      ctx.fillStyle = '#e2e8f0';
+      ctx.beginPath();
+      ctx.ellipse(0, -5.5, 5.2, 1.8, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = '#94a3b8';
+      ctx.lineWidth = 0.6;
+      ctx.stroke();
+
+      // Specular tin reflection streak
+      drawGlossBand(ctx, -3.5, -5.5, 1.4, 12.5, 0.4);
+      return true;
+    }
+
+    case 'berries':
+    case 'forest_berries': {
+      drawShadow(ctx, 8.0, 3.0, 7.8, 0.24);
+
+      // Rustic Birchbark Woven Basket filled with Wild Forest Berries
+      // Birchbark basket container
+      ctx.fillStyle = '#d97706';
+      ctx.beginPath();
+      ctx.roundRect(-6.5, -2.5, 13, 9.5, [1, 1, 3, 3]);
+      ctx.fill();
+
+      // Woven lattice / criss-cross pattern
+      ctx.strokeStyle = '#b45309';
+      ctx.lineWidth = 0.8;
+      for (let wx = -5; wx <= 5; wx += 2.2) {
+        ctx.beginPath();
+        ctx.moveTo(wx, -2.5); ctx.lineTo(wx, 7.0);
+        ctx.stroke();
+      }
+      for (let wy = -0.5; wy <= 5.5; wy += 2.0) {
+        ctx.beginPath();
+        ctx.moveTo(-6.5, wy); ctx.lineTo(6.5, wy);
+        ctx.stroke();
+      }
+
+      // Wooden rim
+      ctx.fillStyle = '#92400e';
+      ctx.fillRect(-7.0, -3.5, 14, 1.6);
+
+      // Mound of plump ripe forest berries:
+      // Wild blueberries (navy / deep indigo)
+      ctx.fillStyle = '#1e3a8a';
+      const blues = [[-4.0, -4.2], [-1.5, -4.8], [2.2, -4.5], [4.5, -3.8], [-0.5, -3.5], [-3.2, -2.5]];
+      blues.forEach(([bx, by]) => {
+        ctx.beginPath();
+        ctx.arc(bx, by, 1.4, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#3b82f6';
+        ctx.fillRect(bx - 0.4, by - 0.4, 0.8, 0.8); // Specular gleam
+        ctx.fillStyle = '#1e3a8a';
+      });
+
+      // Wild lingonberries / cranberries (bright ruby red)
+      ctx.fillStyle = '#dc2626';
+      const reds = [[-2.8, -4.5], [0.8, -5.2], [3.5, -4.8], [-2.0, -3.2], [1.8, -3.4], [4.0, -2.8]];
+      reds.forEach(([rx, ry]) => {
+        ctx.beginPath();
+        ctx.arc(rx, ry, 1.3, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#fca5a5';
+        ctx.fillRect(rx - 0.3, ry - 0.3, 0.6, 0.6); // Gleam
+        ctx.fillStyle = '#dc2626';
+      });
+
+      // Wild raspberries (segmented crimson)
+      ctx.fillStyle = '#e11d48';
+      const rasps = [[-0.5, -5.5], [2.5, -3.8], [-4.5, -3.0]];
+      rasps.forEach(([rx, ry]) => {
+        ctx.beginPath();
+        ctx.arc(rx, ry, 1.6, 0, Math.PI * 2);
+        ctx.fill();
+      });
+
+      // Two tiny fresh green forest leaves
+      ctx.fillStyle = '#15803d';
+      ctx.beginPath();
+      ctx.ellipse(-1.5, -6.5, 1.8, 0.9, -0.4, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.ellipse(1.5, -6.8, 1.6, 0.8, 0.5, 0, Math.PI * 2);
+      ctx.fill();
       return true;
     }
 

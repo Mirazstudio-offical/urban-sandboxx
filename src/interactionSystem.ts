@@ -4,7 +4,7 @@ import { getAllBuildingEntrances } from './physics';
 import { getBuildingLayout, getBuildingFloorsCount, getApartmentDoorSegment } from './buildingInteriors';
 import { isPlayerNearGasStationCashier, getNearbyGasPump, getNearbyVehicleForFueling, FUEL_GRADES } from './gasStationSystem';
 import { getNearbyWaterVehicle } from './waterHoseSystem';
-import { getCityApartments, getApartmentById, hasPlayerApartmentKey, PropertyApartment } from './propertySystem';
+import { getCityApartments, getApartmentById, getApartmentForPlot, hasPlayerApartmentKey, PropertyApartment } from './propertySystem';
 import { FURNITURE_STORAGE_CONFIGS } from './furnitureStorageSystem';
 
 export type InteractionType =
@@ -40,11 +40,16 @@ export type InteractionType =
   | 'apartment_door_locked_nokey'
   | 'apartment_door_enter'
   | 'apartment_exit'
+  | 'gate_open_close'
+  | 'gate_lock_unlock'
+  | 'gate_locked_nokey'
   | 'furniture_storage'
   | 'bed_sleep'
   | 'furniture_pickup'
   | 'furniture_rotate'
-  | 'tow_rope_detach';
+  | 'tow_rope_detach'
+  | 'enter_passenger_car'
+  | 'exit_passenger_car';
 
 export interface InteractionTarget {
   type: InteractionType;
@@ -139,6 +144,84 @@ export function findActiveInteraction(
   filterKey?: 'E' | 'F' | 'R'
 ): InteractionTarget | null {
   if (!player) return null;
+
+  // If inside passenger carriage, exit carriage prompt ONLY when standing in a vestibule near an exit door
+  if (player.insideCarId) {
+    const car = (world.rollingStock || []).find(c => c.id === player.insideCarId);
+    if (!car) {
+      player.insideCarId = null;
+      return null;
+    }
+
+    const halfL = car.length / 2;
+    const halfW = car.width / 2;
+    const localX = player.carLocalX ?? 0;
+    const localY = player.carLocalY ?? 0;
+
+    // Check vestibules
+    // Working vestibule: localX > halfL - 33
+    // Non-working vestibule: localX < -halfL + 36
+    if (localX > halfL - 33) {
+      if (localY <= 0) {
+        return {
+          type: 'exit_passenger_car',
+          primaryKey: 'F',
+          actionTitle: 'Спуститься из вагона',
+          detail: 'Рабочий тамбур (северная дверь) — на платформу/насыпь',
+          x: player.x,
+          y: player.y,
+          dist: 0,
+          angleDiff: 0,
+          score: 0,
+          data: { car, doorId: 'work_north', exitLocalY: -halfW - 14 }
+        };
+      } else {
+        return {
+          type: 'exit_passenger_car',
+          primaryKey: 'F',
+          actionTitle: 'Спуститься из вагона',
+          detail: 'Рабочий тамбур (южная дверь) — на платформу/насыпь',
+          x: player.x,
+          y: player.y,
+          dist: 0,
+          angleDiff: 0,
+          score: 0,
+          data: { car, doorId: 'work_south', exitLocalY: halfW + 14 }
+        };
+      }
+    } else if (localX < -halfL + 36) {
+      if (localY <= 0) {
+        return {
+          type: 'exit_passenger_car',
+          primaryKey: 'F',
+          actionTitle: 'Спуститься из вагона',
+          detail: 'Нерабочий тамбур (северная дверь) — на платформу/насыпь',
+          x: player.x,
+          y: player.y,
+          dist: 0,
+          angleDiff: 0,
+          score: 0,
+          data: { car, doorId: 'nonwork_north', exitLocalY: -halfW - 14 }
+        };
+      } else {
+        return {
+          type: 'exit_passenger_car',
+          primaryKey: 'F',
+          actionTitle: 'Спуститься из вагона',
+          detail: 'Нерабочий тамбур (южная дверь) — на платформу/насыпь',
+          x: player.x,
+          y: player.y,
+          dist: 0,
+          angleDiff: 0,
+          score: 0,
+          data: { car, doorId: 'nonwork_south', exitLocalY: halfW + 14 }
+        };
+      }
+    }
+
+    // Inside saloon, compartment, corridor or toilet - cannot exit through walls or windows
+    return null;
+  }
 
   // If inside vehicle, simple in-vehicle prompt
   if (player.isInVehicle) {
@@ -263,6 +346,52 @@ export function findActiveInteraction(
             data: { rope, isEndA: false }
           });
         }
+      }
+    }
+  }
+
+  // ==========================================
+  // PASSENGER CAR ENTRY (STRICTLY THROUGH 4 VESTIBULE BOARDING DOORS)
+  // ==========================================
+  const passengerCars = (world.rollingStock || []).filter(car => 
+    car.type.startsWith('passenger_') || car.type.includes('coach') || car.type.includes('platskart') || car.type.includes('kupe') || car.name?.includes('вагон') || car.name?.includes('Рельсовый автобус')
+  );
+
+  for (const car of passengerCars) {
+    const distToCar = Math.hypot(px - car.x, py - car.y);
+    const halfL = car.length / 2;
+    const halfW = car.width / 2;
+
+    if (distToCar > halfL + 80) continue;
+
+    const cos = Math.cos(car.angle);
+    const sin = Math.sin(car.angle);
+
+    const doors = [
+      { id: 'work_north', name: 'Рабочий тамбур (северная дверь)', localX: halfL - 19, localY: -halfW, vestibuleLocalX: halfL - 19, vestibuleLocalY: -8 },
+      { id: 'work_south', name: 'Рабочий тамбур (южная дверь)', localX: halfL - 19, localY: halfW, vestibuleLocalX: halfL - 19, vestibuleLocalY: 8 },
+      { id: 'nonwork_north', name: 'Нерабочий тамбур (северная дверь)', localX: -halfL + 18, localY: -halfW, vestibuleLocalX: -halfL + 18, vestibuleLocalY: -8 },
+      { id: 'nonwork_south', name: 'Нерабочий тамбур (южная дверь)', localX: -halfL + 18, localY: halfW, vestibuleLocalX: -halfL + 18, vestibuleLocalY: 8 },
+    ];
+
+    for (const d of doors) {
+      const doorWorldX = car.x + d.localX * cos - d.localY * sin;
+      const doorWorldY = car.y + d.localX * sin + d.localY * cos;
+
+      const reach = isTargetInPhysicalReach(px, py, facing, doorWorldX, doorWorldY, 44, 2.2, mouseWorldPos);
+      if (reach.inReach) {
+        candidates.push({
+          type: 'enter_passenger_car',
+          primaryKey: 'F',
+          actionTitle: 'Подняться в вагон',
+          detail: `${d.name} — ${car.name}`,
+          x: doorWorldX,
+          y: doorWorldY,
+          dist: reach.dist,
+          angleDiff: reach.angleDiff,
+          score: reach.score - 15,
+          data: { car, door: d }
+        });
       }
     }
   }
@@ -504,33 +633,18 @@ export function findActiveInteraction(
         const exitWorldY = bld.y + ex.y + ex.height / 2;
         const reach = isTargetInPhysicalReach(px, py, facing, exitWorldX, exitWorldY, 46, 1.4, mouseWorldPos);
         if (reach.inReach) {
-          if (player.isInsideApartment) {
-            candidates.push({
-              type: 'apartment_exit',
-              primaryKey: 'F',
-              actionTitle: bld.type === 'suburban' ? 'Выйти во двор' : 'Выйти на лестничную площадку',
-              detail: 'Выход из квартиры',
-              x: exitWorldX,
-              y: exitWorldY,
-              dist: reach.dist,
-              angleDiff: reach.angleDiff,
-              score: reach.score - 12,
-              data: { bld, aptId: player.insideApartmentId }
-            });
-          } else {
-            candidates.push({
-              type: 'exit_building',
-              primaryKey: 'F',
-              actionTitle: 'Выйти на улицу',
-              detail: bld.nameRu || 'Выход из здания',
-              x: exitWorldX,
-              y: exitWorldY,
-              dist: reach.dist,
-              angleDiff: reach.angleDiff,
-              score: reach.score - 12,
-              data: bld
-            });
-          }
+          candidates.push({
+            type: 'exit_building',
+            primaryKey: 'F',
+            actionTitle: bld.type === 'suburban' ? 'Выйти во двор' : 'Выйти на улицу',
+            detail: bld.nameRu || 'Выход из здания',
+            x: exitWorldX,
+            y: exitWorldY,
+            dist: reach.dist,
+            angleDiff: reach.angleDiff,
+            score: reach.score - 12,
+            data: bld
+          });
           break;
         }
       }
@@ -753,81 +867,67 @@ export function findActiveInteraction(
         }
       }
 
-      // 4d. Apartment Doors inside public corridors (only if not already inside an apartment)
-      if (!player.isInsideApartment) {
-        const apartments = getCityApartments();
-        const floorApts = apartments.filter(a => a.buildingId === bld.id && a.floor === currentFloor);
-        for (const apt of floorApts) {
-          const rm = layout.rooms?.find(r => r.name === `Кв. ${apt.apartmentNumber}` || r.name === `Кв.${apt.apartmentNumber}`);
-          if (rm) {
-            const playerLocalX = player.x - bld.x;
-            const playerLocalY = player.y - bld.y;
+      // 4d. Apartment Doors inside public corridors / apartment rooms
+      const apartments = getCityApartments();
+      const floorApts = apartments.filter(a => a.buildingId === bld.id && a.floor === currentFloor);
+      for (const apt of floorApts) {
+        const rm = layout.rooms?.find(r => r.name === `Кв. ${apt.apartmentNumber}` || r.name === `Кв.${apt.apartmentNumber}`);
+        if (rm) {
+          const playerLocalX = player.x - bld.x;
+          const playerLocalY = player.y - bld.y;
+          
+          const door = getApartmentDoorSegment(rm, layout.walls);
+          const doorLocalX = door ? (door.x1 + door.x2) / 2 : rm.x + rm.width / 2;
+          const doorLocalY = door ? (door.y1 + door.y2) / 2 : rm.y + rm.height / 2;
+          const dist = Math.hypot(playerLocalX - doorLocalX, playerLocalY - doorLocalY);
+          
+          if (dist < 32) {
+            const hasKey = hasPlayerApartmentKey(player, apt);
+            const doorWorldX = bld.x + doorLocalX;
+            const doorWorldY = bld.y + doorLocalY;
             
-            const door = getApartmentDoorSegment(rm, layout.walls);
-            const doorLocalX = door ? (door.x1 + door.x2) / 2 : rm.x + rm.width / 2;
-            const doorLocalY = door ? (door.y1 + door.y2) / 2 : rm.y + rm.height / 2;
-            const dist = Math.hypot(playerLocalX - doorLocalX, playerLocalY - doorLocalY);
-            
-            if (dist < 32) {
-              const hasKey = hasPlayerApartmentKey(player, apt);
-              const doorWorldX = bld.x + doorLocalX;
-              const doorWorldY = bld.y + doorLocalY;
-              
-              if (apt.isLocked) {
-                if (hasKey) {
-                  candidates.push({
-                    type: 'apartment_door_lock',
-                    primaryKey: 'E',
-                    actionTitle: `Отпереть замок: Кв. №${apt.apartmentNumber}`,
-                    detail: `Замок: ${apt.lockCode} (${apt.address})`,
-                    x: doorWorldX,
-                    y: doorWorldY,
-                    dist: dist,
-                    angleDiff: 0,
-                    score: 100 - dist,
-                    data: { apt, hasKey }
-                  });
-                } else {
-                  candidates.push({
-                    type: 'apartment_door_locked_nokey',
-                    primaryKey: 'E',
-                    actionTitle: `Дверь заперта: Кв. №${apt.apartmentNumber} (Нет ключа)`,
-                    detail: `Требуется ключ от квартиры: ${apt.address}`,
-                    x: doorWorldX,
-                    y: doorWorldY,
-                    dist: dist,
-                    angleDiff: 0,
-                    score: 90 - dist,
-                    data: { apt }
-                  });
-                }
-              } else {
+            if (apt.isLocked) {
+              if (hasKey) {
                 candidates.push({
-                  type: 'apartment_door_enter',
-                  primaryKey: 'F',
-                  actionTitle: `Войти в квартиру №${apt.apartmentNumber}`,
-                  detail: `Адрес: ${apt.address}`,
+                  type: 'apartment_door_lock',
+                  primaryKey: 'E',
+                  actionTitle: `Отпереть замок: Кв. №${apt.apartmentNumber}`,
+                  detail: `Замок: ${apt.lockCode} (${apt.address})`,
                   x: doorWorldX,
                   y: doorWorldY,
                   dist: dist,
                   angleDiff: 0,
-                  score: 95 - dist,
+                  score: 100 - dist,
+                  data: { apt, hasKey }
+                });
+              } else {
+                candidates.push({
+                  type: 'apartment_door_locked_nokey',
+                  primaryKey: 'E',
+                  actionTitle: `Дверь заперта: Кв. №${apt.apartmentNumber} (Нет ключа)`,
+                  detail: `Требуется ключ от квартиры: ${apt.address}`,
+                  x: doorWorldX,
+                  y: doorWorldY,
+                  dist: dist,
+                  angleDiff: 0,
+                  score: 90 - dist,
                   data: { apt }
                 });
-                if (hasKey) {
-                  candidates.push({
-                    type: 'apartment_door_lock',
-                    primaryKey: 'E',
-                    actionTitle: `Запереть замок: Кв. №${apt.apartmentNumber}`,
-                    detail: `Замок: ${apt.lockCode}`,
-                    x: doorWorldX,
-                    y: doorWorldY,
-                    dist: dist,
-                    angleDiff: 0,
-                    score: 100 - dist,
-                    data: { apt, hasKey }
-                  });
-                }
+              }
+            } else {
+              if (hasKey) {
+                candidates.push({
+                  type: 'apartment_door_lock',
+                  primaryKey: 'E',
+                  actionTitle: `Запереть замок: Кв. №${apt.apartmentNumber}`,
+                  detail: `Замок: ${apt.lockCode}`,
+                  x: doorWorldX,
+                  y: doorWorldY,
+                  dist: dist,
+                  angleDiff: 0,
+                  score: 100 - dist,
+                  data: { apt, hasKey }
+                });
               }
             }
           }
@@ -877,7 +977,12 @@ export function findActiveInteraction(
             const isResidential = bld.type === 'panel_apartment' || bld.type === 'brick_residential' || bld.type === 'modern_residential' || bld.type === 'suburban';
 
             if (bld.type === 'suburban') {
-              const apt = apartments.find(a => a.buildingId === bld.id);
+              const apt = apartments.find(a => a.buildingId === bld.id) || getApartmentForPlot(bld.id);
+              const isGarage = bld.id.includes('garage') || (bld.nameRu && bld.nameRu.includes('Гараж'));
+              const isBanya = bld.id.includes('banya') || (bld.nameRu && (bld.nameRu.includes('Баня') || bld.nameRu.includes('Сауна')));
+              const bldLabel = isGarage ? 'гараж' : (isBanya ? 'баню' : 'коттедж');
+              const bldNameCap = isGarage ? 'Гараж' : (isBanya ? 'Баня' : 'Коттедж');
+
               if (apt) {
                 const hasKey = hasPlayerApartmentKey(player, apt);
                 if (apt.isLocked) {
@@ -885,7 +990,7 @@ export function findActiveInteraction(
                     candidates.push({
                       type: 'apartment_door_lock',
                       primaryKey: 'E',
-                      actionTitle: `Отпереть коттедж ключом`,
+                      actionTitle: `Отпереть ${bldLabel} ключом`,
                       detail: `Замок: ${apt.lockCode} (${apt.address})`,
                       x: ent.x,
                       y: ent.y,
@@ -897,7 +1002,7 @@ export function findActiveInteraction(
                     candidates.push({
                       type: 'apartment_door_locked_nokey',
                       primaryKey: 'F',
-                      actionTitle: `Коттедж заперт`,
+                      actionTitle: `${bldNameCap} заперт`,
                       detail: `Отприте замок ключом на клавишу [E]`,
                       x: ent.x,
                       y: ent.y,
@@ -910,7 +1015,7 @@ export function findActiveInteraction(
                     candidates.push({
                       type: 'apartment_door_locked_nokey',
                       primaryKey: 'E',
-                      actionTitle: `Коттедж заперт (Нет ключа)`,
+                      actionTitle: `${bldNameCap} заперт (Нет ключа)`,
                       detail: `Требуется стальной ключ: ${apt.address}`,
                       x: ent.x,
                       y: ent.y,
@@ -922,22 +1027,22 @@ export function findActiveInteraction(
                   }
                 } else {
                   candidates.push({
-                    type: 'apartment_door_enter',
+                    type: 'enter_building',
                     primaryKey: 'F',
-                    actionTitle: `Войти в коттедж`,
+                    actionTitle: `Войти в ${bldLabel}`,
                     detail: `Адрес: ${apt.address}`,
                     x: ent.x,
                     y: ent.y,
                     dist: reach.dist,
                     angleDiff: reach.angleDiff,
                     score: reach.score - 3,
-                    data: { apt }
+                    data: { bld, ent }
                   });
                   if (hasKey) {
                     candidates.push({
                       type: 'apartment_door_lock',
                       primaryKey: 'E',
-                      actionTitle: `Запереть коттедж ключом`,
+                      actionTitle: `Запереть ${bldLabel} ключом`,
                       detail: `Замок: ${apt.lockCode}`,
                       x: ent.x,
                       y: ent.y,
@@ -1088,6 +1193,95 @@ export function findActiveInteraction(
             score: reach.score,
             data: prop
           });
+        }
+      } else if (prop.type === 'cottage_gate' || prop.type === 'wicket_gate' || prop.type === 'security_barrier') {
+        const isGate = prop.type === 'cottage_gate';
+        const isWicket = prop.type === 'wicket_gate';
+        const isBarrier = prop.type === 'security_barrier';
+        const reachDist = isGate ? 62 : 46;
+        const reach = isTargetInPhysicalReach(px, py, facing, prop.x, prop.y, reachDist, 1.45, mouseWorldPos);
+
+        if (reach.inReach) {
+          const apt = getApartmentForPlot(prop.plotId || prop.id);
+          const hasKey = hasPlayerApartmentKey(player, apt);
+          const nameProp = isGate ? 'ворота' : (isWicket ? 'калитку' : 'шлагбаум');
+          const namePropCap = isGate ? 'Въездные ворота' : (isWicket ? 'Калитка' : 'Шлагбаум');
+
+          if (prop.isOpen) {
+            // Already open -> Close it
+            candidates.push({
+              type: 'gate_open_close',
+              primaryKey: 'E',
+              actionTitle: isBarrier ? 'Опустить шлагбаум' : `Закрыть ${nameProp}`,
+              detail: apt ? `Участок: ${apt.address}` : 'Створка распахнута',
+              x: prop.x,
+              y: prop.y,
+              dist: reach.dist,
+              angleDiff: reach.angleDiff,
+              score: reach.score - 4,
+              data: { prop, apt, hasKey }
+            });
+          } else {
+            // Closed
+            if (prop.isLocked) {
+              if (hasKey) {
+                candidates.push({
+                  type: 'gate_lock_unlock',
+                  primaryKey: 'E',
+                  actionTitle: `Отпереть ${nameProp} ключом`,
+                  detail: apt ? `Ключ: ${apt.lockCode} (${apt.address})` : 'Замок заперт на ключ',
+                  x: prop.x,
+                  y: prop.y,
+                  dist: reach.dist,
+                  angleDiff: reach.angleDiff,
+                  score: reach.score - 4,
+                  data: { prop, apt, hasKey }
+                });
+              } else {
+                candidates.push({
+                  type: 'gate_locked_nokey',
+                  primaryKey: 'E',
+                  actionTitle: `${namePropCap} заперта на ключ (Нет ключа)`,
+                  detail: apt ? `Требуется стальной ключ: ${apt.address}` : 'Заперто на ключ собственника',
+                  x: prop.x,
+                  y: prop.y,
+                  dist: reach.dist,
+                  angleDiff: reach.angleDiff,
+                  score: reach.score - 2,
+                  data: { prop, apt }
+                });
+              }
+            } else {
+              // Unlocked
+              candidates.push({
+                type: 'gate_open_close',
+                primaryKey: 'E',
+                actionTitle: isBarrier ? 'Поднять шлагбаум' : `Открыть ${nameProp}`,
+                detail: apt ? `Участок: ${apt.address}` : 'Створка закрыта',
+                x: prop.x,
+                y: prop.y,
+                dist: reach.dist,
+                angleDiff: reach.angleDiff,
+                score: reach.score - 4,
+                data: { prop, apt, hasKey }
+              });
+
+              if (hasKey) {
+                candidates.push({
+                  type: 'gate_lock_unlock',
+                  primaryKey: 'F',
+                  actionTitle: `Запереть ${nameProp} на ключ`,
+                  detail: apt ? `Замок: ${apt.lockCode}` : 'Запереть замок',
+                  x: prop.x,
+                  y: prop.y,
+                  dist: reach.dist,
+                  angleDiff: reach.angleDiff,
+                  score: reach.score - 2,
+                  data: { prop, apt, hasKey }
+                });
+              }
+            }
+          }
         }
       }
     }
