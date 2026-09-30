@@ -8,6 +8,7 @@ export type LiquidId =
   | 'water'
   | 'mineral_water'
   | 'tea'
+  | 'tea_green'
   | 'coffee'
   | 'energy_drink'
   | 'cola'
@@ -20,6 +21,8 @@ export type LiquidId =
   | 'kvas'
   | 'beer'
   | 'vodka'
+  | 'wine_white'
+  | 'wine_red'
   | 'gasoline_95'
   | 'gasoline_92'
   | 'gasoline_98'
@@ -32,6 +35,12 @@ export type LiquidId =
   | 'sand'
   | 'antiseptic'
   | 'saline'
+  | 'saline_solution'
+  | 'zelenka'
+  | 'iodine'
+  | 'peroxide'
+  | 'valerian_tincture'
+  | 'ammonia_solution'
   | 'honey'
   | 'honey_wild'
   | 'honey_buckwheat'
@@ -55,6 +64,7 @@ export type LiquidId =
   | 'jam_blueberry'
   | 'condensed_milk'
   | 'pickles'
+  | 'pickles_salted_mushrooms'
   | 'stew_meat'
   | 'fish_preserves'
   | 'berries'
@@ -73,9 +83,34 @@ export type LiquidId =
   | 'vinegar_apple'
   | 'vinegar_balsamic'
   | 'sauce_soy'
+  | 'sauce_fish'
+  | 'sauce_worcestershire'
   | 'sauce_narsharab'
   | 'sauce_teriyaki'
   | 'mustard_dijon'
+  | 'lard_pork'
+  | 'beef_tallow'
+  | 'ghee'
+  | 'cottage_cheese'
+  | 'yogurt'
+  | 'yeast_liquid'
+  | 'black_pepper_ground'
+  | 'chili_powder'
+  | 'paprika'
+  | 'cinnamon'
+  | 'turmeric'
+  | 'grain_wheat'
+  | 'grain_rye'
+  | 'grain_oats'
+  | 'rice'
+  | 'buckwheat'
+  | 'barley'
+  | 'millet'
+  | 'semolina'
+  | 'peas'
+  | 'beans'
+  | 'lentils'
+  | 'chickpeas'
   | 'sugar'
   | 'flour'
   | 'salt';
@@ -954,6 +989,32 @@ export const LIQUID_REGISTRY: Record<LiquidId, LiquidDef> = {
     tasteMessages: ['Очень соленый, насыщенный вкус умами... Срочно нужна вода!'],
     stainType: 'water'
   },
+  sauce_fish: {
+    id: 'sauce_fish',
+    name: 'Fish Sauce',
+    nameRu: 'Азиатский рыбный соус',
+    category: 'food',
+    densityKgPerL: 1.18,
+    isDrinkable: true,
+    isFlammable: false,
+    color: '#78350f',
+    effects: { hunger: 5, thirst: -25 },
+    tasteMessages: ['Резкий соленый анчоусный вкус концентрированного рыбного соуса.'],
+    stainType: 'water'
+  },
+  sauce_worcestershire: {
+    id: 'sauce_worcestershire',
+    name: 'Worcestershire Sauce',
+    nameRu: 'Соус Ворчестер',
+    category: 'food',
+    densityKgPerL: 1.16,
+    isDrinkable: true,
+    isFlammable: false,
+    color: '#3b0764',
+    effects: { hunger: 6, thirst: -15 },
+    tasteMessages: ['Сложный кисло-сладкий пряный вкус ворчестершира...'],
+    stainType: 'water'
+  },
   sauce_narsharab: {
     id: 'sauce_narsharab',
     name: 'Narsharab Pomegranate Sauce',
@@ -993,6 +1054,432 @@ export const LIQUID_REGISTRY: Record<LiquidId, LiquidDef> = {
     tasteMessages: ['Пикантный пряный вкус цельных горчичных зерен приятно бодрит!'],
     stainType: 'water'
   },
+  tea_green: {
+    id: 'tea_green',
+    name: 'Green Sencha Tea',
+    nameRu: 'Зеленый чай Сенча',
+    category: 'beverage',
+    densityKgPerL: 1.00,
+    isDrinkable: true,
+    isFlammable: false,
+    color: '#65a30d',
+    effects: { thirst: 35, energy: 15, health: 5, soothePanic: 20 },
+    tasteMessages: ['Тонкий травяной вкус свежезаваренного зеленого чая.', 'Приятное умиротворяющее тепло.'],
+    stainType: 'water'
+  },
+  wine_white: {
+    id: 'wine_white',
+    name: 'Dry White Wine',
+    nameRu: 'Белое сухое вино',
+    category: 'alcohol',
+    densityKgPerL: 0.99,
+    isDrinkable: true,
+    isFlammable: false,
+    color: '#fef08a',
+    effects: { thirst: 15, alcohol: 12, soothePanic: 30 },
+    tasteMessages: ['Освежающий виноградный вкус белого вина с легкой кислинкой.'],
+    stainType: 'water'
+  },
+  wine_red: {
+    id: 'wine_red',
+    name: 'Dry Red Wine',
+    nameRu: 'Красное сухое вино',
+    category: 'alcohol',
+    densityKgPerL: 0.99,
+    isDrinkable: true,
+    isFlammable: false,
+    color: '#881337',
+    effects: { thirst: 15, alcohol: 12, soothePanic: 35 },
+    tasteMessages: ['Терпкий ягодный вкус выдержанного красного сухого вина.'],
+    stainType: 'water'
+  },
+  saline_solution: {
+    id: 'saline_solution',
+    name: 'Sterile Saline Solution',
+    nameRu: 'Физраствор (0.9% NaCl)',
+    category: 'medical',
+    densityKgPerL: 1.00,
+    isDrinkable: true,
+    isFlammable: false,
+    color: '#e0f2fe',
+    effects: { thirst: 20, health: 5 },
+    tasteMessages: ['Слабосоленый стерильный раствор для промывания глаз и ран.'],
+    stainType: 'water'
+  },
+  zelenka: {
+    id: 'zelenka',
+    name: 'Brilliant Green (Zelenka)',
+    nameRu: 'Раствор бриллиантового зелёного',
+    category: 'medical',
+    densityKgPerL: 0.95,
+    isDrinkable: false,
+    isFlammable: true,
+    color: '#15803d',
+    toxicWarning: 'Спиртовой антисептик для наружного применения! Не пить!',
+    stainType: 'water'
+  },
+  iodine: {
+    id: 'iodine',
+    name: 'Iodine Tincture 5%',
+    nameRu: 'Спиртовой раствор йода 5%',
+    category: 'medical',
+    densityKgPerL: 0.96,
+    isDrinkable: false,
+    isFlammable: true,
+    color: '#78350f',
+    toxicWarning: 'Спиртовой раствор йода предназначен строго для наружной дезинфекции!',
+    stainType: 'water'
+  },
+  peroxide: {
+    id: 'peroxide',
+    name: 'Hydrogen Peroxide 3%',
+    nameRu: 'Перекись водорода 3%',
+    category: 'medical',
+    densityKgPerL: 1.01,
+    isDrinkable: false,
+    isFlammable: false,
+    color: '#f0fdf4',
+    toxicWarning: 'Медицинский антисептик для промывания ран! Не принимать внутрь!',
+    stainType: 'water'
+  },
+  valerian_tincture: {
+    id: 'valerian_tincture',
+    name: 'Valerian Drops',
+    nameRu: 'Настойка валерианы',
+    category: 'medical',
+    densityKgPerL: 0.98,
+    isDrinkable: true,
+    isFlammable: false,
+    color: '#854d0e',
+    effects: { sleepiness: 25, soothePanic: 60 },
+    tasteMessages: ['Характерный травяной вкус валерианы быстро успокаивает пульс и тревогу.'],
+    stainType: 'water'
+  },
+  ammonia_solution: {
+    id: 'ammonia_solution',
+    name: 'Ammonia Spirit 10%',
+    nameRu: 'Нашатырный спирт 10%',
+    category: 'medical',
+    densityKgPerL: 0.96,
+    isDrinkable: false,
+    isFlammable: false,
+    color: '#f8fafc',
+    toxicWarning: 'Резкий раствор аммиака для ингаляционной стимуляции дыхания при обмороке!',
+    stainType: 'water'
+  },
+  pickles_salted_mushrooms: {
+    id: 'pickles_salted_mushrooms',
+    name: 'Salted White Milk Mushrooms',
+    nameRu: 'Соленые грузди с рассолом',
+    category: 'food',
+    densityKgPerL: 1.10,
+    isDrinkable: true,
+    isFlammable: false,
+    color: '#fef08a',
+    effects: { hunger: 35, thirst: 15, health: 12, soothePanic: 25 },
+    tasteMessages: ['Хрустящий соленый груздь с пряным укропно-чесночным рассолом!'],
+    stainType: 'water'
+  },
+  lard_pork: {
+    id: 'lard_pork',
+    name: 'Rendered Pork Lard',
+    nameRu: 'Свиной смалец (лярд)',
+    category: 'food',
+    densityKgPerL: 0.92,
+    isDrinkable: true,
+    isFlammable: true,
+    color: '#fef3c7',
+    effects: { hunger: 45, energy: 20 },
+    tasteMessages: ['Сытный топленый смалец...', 'Наваристый мясной жир.'],
+    stainType: 'oil'
+  },
+  beef_tallow: {
+    id: 'beef_tallow',
+    name: 'Rendered Beef Tallow',
+    nameRu: 'Топленый говяжий жир',
+    category: 'food',
+    densityKgPerL: 0.91,
+    isDrinkable: true,
+    isFlammable: true,
+    color: '#fef9c3',
+    effects: { hunger: 40, energy: 18 },
+    tasteMessages: ['Густой топленый говяжий жир.'],
+    stainType: 'oil'
+  },
+  ghee: {
+    id: 'ghee',
+    name: 'Ghee Clarified Butter',
+    nameRu: 'Топленое масло Гхи',
+    category: 'food',
+    densityKgPerL: 0.90,
+    isDrinkable: true,
+    isFlammable: true,
+    color: '#fbbf24',
+    effects: { hunger: 45, energy: 25, health: 8 },
+    tasteMessages: ['Благородный сливочно-ореховый вкус топленого масла Гхи.'],
+    stainType: 'oil'
+  },
+  cottage_cheese: {
+    id: 'cottage_cheese',
+    name: 'Fresh Cottage Cheese',
+    nameRu: 'Творог рассыпчатый',
+    category: 'food',
+    densityKgPerL: 0.88,
+    isDrinkable: true,
+    isFlammable: false,
+    isGranular: true,
+    color: '#ffffff',
+    effects: { hunger: 30, energy: 15, health: 10 },
+    tasteMessages: ['Нежный кисловато-сливочный вкус рассыпчатого домашнего творога.'],
+    stainType: 'water'
+  },
+  yogurt: {
+    id: 'yogurt',
+    name: 'Natural Yogurt',
+    nameRu: 'Натуральный йогурт',
+    category: 'food',
+    densityKgPerL: 1.05,
+    isDrinkable: true,
+    isFlammable: false,
+    color: '#f8fafc',
+    effects: { hunger: 20, thirst: 15, health: 8, energy: 12 },
+    tasteMessages: ['Легкий йогурт со сливочной текстурой и освежающим вкусом.'],
+    stainType: 'water'
+  },
+  yeast_liquid: {
+    id: 'yeast_liquid',
+    name: 'Liquid Sourdough Yeast',
+    nameRu: 'Жидкая дрожжевая закваска',
+    category: 'food',
+    densityKgPerL: 1.02,
+    isDrinkable: true,
+    isFlammable: false,
+    color: '#fef3c7',
+    effects: { hunger: 8 },
+    tasteMessages: ['Кислый бродящий хлебный вкус живой дрожжевой закваски.'],
+    stainType: 'water'
+  },
+  black_pepper_ground: {
+    id: 'black_pepper_ground',
+    name: 'Ground Black Pepper',
+    nameRu: 'Молотый черный перец',
+    category: 'granular',
+    densityKgPerL: 0.55,
+    isDrinkable: false,
+    isFlammable: false,
+    isGranular: true,
+    color: '#27272a',
+    toxicWarning: 'Ароматный пряный черный перец для кулинарных блюд.',
+    stainType: 'sand'
+  },
+  chili_powder: {
+    id: 'chili_powder',
+    name: 'Ground Chili Powder',
+    nameRu: 'Молотый перец чили',
+    category: 'granular',
+    densityKgPerL: 0.50,
+    isDrinkable: false,
+    isFlammable: false,
+    isGranular: true,
+    color: '#dc2626',
+    toxicWarning: 'Обжигающий молотый перец чили! Берегите глаза!',
+    stainType: 'sand'
+  },
+  paprika: {
+    id: 'paprika',
+    name: 'Sweet Smoked Paprika',
+    nameRu: 'Сладкая паприка',
+    category: 'granular',
+    densityKgPerL: 0.52,
+    isDrinkable: false,
+    isFlammable: false,
+    isGranular: true,
+    color: '#b91c1c',
+    toxicWarning: 'Ароматная сладкая копченая паприка.',
+    stainType: 'sand'
+  },
+  cinnamon: {
+    id: 'cinnamon',
+    name: 'Ground Cinnamon',
+    nameRu: 'Молотая корица',
+    category: 'granular',
+    densityKgPerL: 0.55,
+    isDrinkable: false,
+    isFlammable: false,
+    isGranular: true,
+    color: '#9a3412',
+    toxicWarning: 'Душистая молотая корица для выпечки и десертов.',
+    stainType: 'sand'
+  },
+  turmeric: {
+    id: 'turmeric',
+    name: 'Golden Turmeric',
+    nameRu: 'Молотая куркума',
+    category: 'granular',
+    densityKgPerL: 0.60,
+    isDrinkable: false,
+    isFlammable: false,
+    isGranular: true,
+    color: '#f59e0b',
+    toxicWarning: 'Пряная золотистая молотая куркума.',
+    stainType: 'sand'
+  },
+  grain_wheat: {
+    id: 'grain_wheat',
+    name: 'Raw Wheat Grain',
+    nameRu: 'Цельное зерно пшеницы',
+    category: 'granular',
+    densityKgPerL: 0.78,
+    isDrinkable: false,
+    isFlammable: false,
+    isGranular: true,
+    color: '#fde047',
+    toxicWarning: 'Твердые отборные зерна пшеницы для помола или каши.',
+    stainType: 'sand'
+  },
+  grain_rye: {
+    id: 'grain_rye',
+    name: 'Raw Rye Grain',
+    nameRu: 'Цельное зерно ржи',
+    category: 'granular',
+    densityKgPerL: 0.72,
+    isDrinkable: false,
+    isFlammable: false,
+    isGranular: true,
+    color: '#a16207',
+    toxicWarning: 'Фуражное и пищевое цельное зерно ржи.',
+    stainType: 'sand'
+  },
+  grain_oats: {
+    id: 'grain_oats',
+    name: 'Rolled Oats',
+    nameRu: 'Овсяные хлопья',
+    category: 'granular',
+    densityKgPerL: 0.45,
+    isDrinkable: false,
+    isFlammable: false,
+    isGranular: true,
+    color: '#fef08a',
+    toxicWarning: 'Овсяные хлопья Геркулес для варки сытной каши.',
+    stainType: 'sand'
+  },
+  rice: {
+    id: 'rice',
+    name: 'Rice Grains',
+    nameRu: 'Рисовая крупа',
+    category: 'granular',
+    densityKgPerL: 0.85,
+    isDrinkable: false,
+    isFlammable: false,
+    isGranular: true,
+    color: '#ffffff',
+    toxicWarning: 'Белый шлифованный рис для плова и гарниров.',
+    stainType: 'sand'
+  },
+  buckwheat: {
+    id: 'buckwheat',
+    name: 'Roasted Buckwheat',
+    nameRu: 'Гречневая крупа ядрица',
+    category: 'granular',
+    densityKgPerL: 0.80,
+    isDrinkable: false,
+    isFlammable: false,
+    isGranular: true,
+    color: '#78350f',
+    toxicWarning: 'Отборная обжаренная гречневая крупа.',
+    stainType: 'sand'
+  },
+  barley: {
+    id: 'barley',
+    name: 'Pearl Barley',
+    nameRu: 'Перловая крупа',
+    category: 'granular',
+    densityKgPerL: 0.82,
+    isDrinkable: false,
+    isFlammable: false,
+    isGranular: true,
+    color: '#e2e8f0',
+    toxicWarning: 'Шлифованная перловая ячменная крупа.',
+    stainType: 'sand'
+  },
+  millet: {
+    id: 'millet',
+    name: 'Yellow Millet',
+    nameRu: 'Золотое пшено',
+    category: 'granular',
+    densityKgPerL: 0.80,
+    isDrinkable: false,
+    isFlammable: false,
+    isGranular: true,
+    color: '#eab308',
+    toxicWarning: 'Шлифованное круглое золотистое пшено.',
+    stainType: 'sand'
+  },
+  semolina: {
+    id: 'semolina',
+    name: 'Semolina Groats',
+    nameRu: 'Манная крупа',
+    category: 'granular',
+    densityKgPerL: 0.70,
+    isDrinkable: false,
+    isFlammable: false,
+    isGranular: true,
+    color: '#fef3c7',
+    toxicWarning: 'Манная крупа из пшеницы тонкого помола.',
+    stainType: 'sand'
+  },
+  peas: {
+    id: 'peas',
+    name: 'Split Yellow Peas',
+    nameRu: 'Колотый горох',
+    category: 'granular',
+    densityKgPerL: 0.85,
+    isDrinkable: false,
+    isFlammable: false,
+    isGranular: true,
+    color: '#facc15',
+    toxicWarning: 'Сушеный колотый желтый горох для супов.',
+    stainType: 'sand'
+  },
+  beans: {
+    id: 'beans',
+    name: 'Dry Beans',
+    nameRu: 'Сухая фасоль',
+    category: 'granular',
+    densityKgPerL: 0.85,
+    isDrinkable: false,
+    isFlammable: false,
+    isGranular: true,
+    color: '#991b1b',
+    toxicWarning: 'Сухая фасоль для тушения и супов.',
+    stainType: 'sand'
+  },
+  lentils: {
+    id: 'lentils',
+    name: 'Dry Lentils',
+    nameRu: 'Чечевица',
+    category: 'granular',
+    densityKgPerL: 0.85,
+    isDrinkable: false,
+    isFlammable: false,
+    isGranular: true,
+    color: '#ea580c',
+    toxicWarning: 'Сушеная чечевица для гарниров.',
+    stainType: 'sand'
+  },
+  chickpeas: {
+    id: 'chickpeas',
+    name: 'Garbanzo Chickpeas',
+    nameRu: 'Нут сухой',
+    category: 'granular',
+    densityKgPerL: 0.80,
+    isDrinkable: false,
+    isFlammable: false,
+    isGranular: true,
+    color: '#fef08a',
+    toxicWarning: 'Крупный сухой турецкий горох нут.',
+    stainType: 'sand'
+  },
   condensed_milk: {
     id: 'condensed_milk',
     name: 'Condensed Milk',
@@ -1014,6 +1501,7 @@ export const LIQUID_REGISTRY: Record<LiquidId, LiquidDef> = {
     densityKgPerL: 1.10,
     isDrinkable: true,
     isFlammable: false,
+    color: '#15803d',
     effects: { hunger: 30, thirst: 30, energy: 10, health: 8, soothePanic: 25 },
     tasteMessages: ['Хрустящий соленый огурчик и ядреный пряный рассол...', 'Освежающий соленый рассол с укропом и чесноком.'],
     stainType: 'water'
@@ -1042,20 +1530,6 @@ export const LIQUID_REGISTRY: Record<LiquidId, LiquidDef> = {
     color: '#b45309',
     effects: { hunger: 65, energy: 20, health: 14, soothePanic: 30 },
     tasteMessages: ['Нежные кусочки рыбы в пряном ароматном масле...', 'Сытный вкус натуральных рыбных консервов.'],
-    stainType: 'water'
-  },
-  berries: {
-    id: 'berries',
-    name: 'Wild Forest Berries',
-    nameRu: 'Лесные ягоды',
-    category: 'food',
-    densityKgPerL: 0.85,
-    isDrinkable: true,
-    isFlammable: false,
-    isGranular: true,
-    color: '#701a75',
-    effects: { hunger: 25, thirst: 20, health: 15, energy: 15, soothePanic: 25 },
-    tasteMessages: ['Свежие лесные ягоды: черника, брусника и земляника...', 'Сладкий сок спелых диких ягод освежает рецепторы.'],
     stainType: 'water'
   },
   sugar: {
@@ -1469,6 +1943,102 @@ export const CONTAINER_CONFIGS: Record<string, ContainerDefConfig> = {
     descriptionEn: 'Universal plastic grocery shopping bag with handles.',
     defaultLiquidId: null,
     defaultAmountMl: 0
+  },
+  bottle_glass_small: {
+    itemId: 'bottle_glass_small',
+    name: 'Small Glass Bottle (0.25L)',
+    nameRu: 'Стеклянная бутылочка 0.25л',
+    maxMl: 250,
+    emptyWeightKg: 0.18,
+    emptyVolumeL: 0.28,
+    category: 'drink',
+    icon: 'Wine',
+    descriptionRu: 'Компактная стеклянная бутылочка объемом 250 мл для соусов, масел и сиропов.',
+    descriptionEn: 'Small 250ml glass bottle for sauces, oils, and syrups.'
+  },
+  bottle_plastic_100: {
+    itemId: 'bottle_plastic_100',
+    name: 'Small Plastic Dropper Bottle (100ml)',
+    nameRu: 'Пластиковый флакон 100мл',
+    maxMl: 100,
+    emptyWeightKg: 0.015,
+    emptyVolumeL: 0.12,
+    category: 'gear',
+    icon: 'FlaskConical',
+    descriptionRu: 'Малый медицинский пластиковый флакон с дозатором объемом 100 мл.',
+    descriptionEn: 'Small 100ml medical plastic dropper bottle.'
+  },
+  tetra_pack_250: {
+    itemId: 'tetra_pack_250',
+    name: 'Small Tetra Pak (0.25L)',
+    nameRu: 'Тетрапак 0.25л',
+    maxMl: 250,
+    emptyWeightKg: 0.012,
+    emptyVolumeL: 0.28,
+    category: 'drink',
+    icon: 'Box',
+    descriptionRu: 'Компактный картонный тетрапак на 250 мл с трубочкой для сока или молока.',
+    descriptionEn: 'Compact 250ml Tetra Pak carton with straw.'
+  },
+  package_sachet: {
+    itemId: 'package_sachet',
+    name: 'Seasoning Sachet (100ml)',
+    nameRu: 'Пакетик-саше',
+    maxMl: 100,
+    emptyWeightKg: 0.002,
+    emptyVolumeL: 0.1,
+    category: 'gear',
+    icon: 'ShoppingBag',
+    descriptionRu: 'Герметичный фольгированный пакетик-саше для молотых пряностей, специй и сухих дрожжей.',
+    descriptionEn: 'Airtight foil sachet pack for spices, seasonings, and yeast.'
+  },
+  pot_clay_medium: {
+    itemId: 'pot_clay_medium',
+    name: 'Clay Pot (0.5L)',
+    nameRu: 'Глиняный горшочек 0.5л',
+    maxMl: 500,
+    emptyWeightKg: 0.35,
+    emptyVolumeL: 0.6,
+    category: 'food',
+    icon: 'Utensils',
+    descriptionRu: 'Обожженный глиняный горшочек для смальца, топленого масла или тушеных блюд.',
+    descriptionEn: 'Earthenware clay pot for lard, ghee, or stews (500 ml).'
+  },
+  box_cardboard_large: {
+    itemId: 'box_cardboard_large',
+    name: 'Large Cardboard Box (15L)',
+    nameRu: 'Большая картонная коробка 15л',
+    maxMl: 15000,
+    emptyWeightKg: 0.25,
+    emptyVolumeL: 15.0,
+    category: 'gear',
+    icon: 'Box',
+    descriptionRu: 'Большая прочная картонная коробка для хранения и транспортировки предметов.',
+    descriptionEn: 'Large heavy-duty cardboard storage box (15L).'
+  },
+  box_cardboard_medium: {
+    itemId: 'box_cardboard_medium',
+    name: 'Medium Cardboard Box (5L)',
+    nameRu: 'Средняя картонная коробка 5л',
+    maxMl: 5000,
+    emptyWeightKg: 0.12,
+    emptyVolumeL: 5.0,
+    category: 'gear',
+    icon: 'Box',
+    descriptionRu: 'Универсальная картонная коробка на 5 литров для припасов и продуктов.',
+    descriptionEn: 'Medium cardboard box for provisions and gear (5L).'
+  },
+  box_cardboard_small: {
+    itemId: 'box_cardboard_small',
+    name: 'Small Cardboard Box (1L)',
+    nameRu: 'Малая картонная коробка 1л',
+    maxMl: 1000,
+    emptyWeightKg: 0.05,
+    emptyVolumeL: 1.0,
+    category: 'gear',
+    icon: 'Box',
+    descriptionRu: 'Компактная картонная коробочка на 1 литр для мелких предметов, чая или выпечки.',
+    descriptionEn: 'Small 1L cardboard box for small items, tea, or meals.'
   },
   soup_bowl: {
     itemId: 'soup_bowl',

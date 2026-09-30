@@ -3660,6 +3660,190 @@ export function drawGearToolItem(ctx: CanvasRenderingContext2D, itemId: string, 
       return true;
     }
 
+    // Small Glass Bottle (Стеклянная бутылочка 0.25л)
+    case 'bottle_glass_small': {
+      drawShadow(ctx, 4.5, 2.0, 7.5, 0.22);
+
+      // Slender glass bottle
+      const glassGrad = ctx.createLinearGradient(-4, -6, 4, 7);
+      glassGrad.addColorStop(0, 'rgba(241, 245, 249, 0.85)');
+      glassGrad.addColorStop(0.5, 'rgba(203, 213, 225, 0.65)');
+      glassGrad.addColorStop(1, 'rgba(148, 163, 184, 0.8)');
+
+      ctx.fillStyle = glassGrad;
+      ctx.beginPath();
+      ctx.roundRect(-3.8, -3.5, 7.6, 10.5, 1.2);
+      ctx.fill();
+
+      // Slender bottle neck
+      ctx.fillRect(-1.6, -7.5, 3.2, 4.2);
+
+      // Fluid if present
+      if (item?.fluidStorage?.currentMl > 0) {
+        ctx.fillStyle = item.fluidStorage.liquidId?.includes('soy') ? '#1c1917' : '#78350f';
+        ctx.beginPath();
+        ctx.roundRect(-3.2, -1, 6.4, 7.5, 0.8);
+        ctx.fill();
+      }
+
+      // Red/gold bottle screw cap with pour spout
+      ctx.fillStyle = '#dc2626';
+      ctx.beginPath();
+      ctx.roundRect(-2.0, -9.0, 4.0, 2.0, 0.6);
+      ctx.fill();
+
+      drawGlossBand(ctx, -2.8, -3.0, 1.0, 9.5, 0.35);
+      return true;
+    }
+
+    // Small Plastic Dropper Bottle (Пластиковый медицинский флакон 100мл)
+    case 'bottle_plastic_100': {
+      drawShadow(ctx, 4.0, 1.8, 7.5, 0.2);
+
+      // Translucent HDPE medical vial body
+      ctx.fillStyle = '#f1f5f9';
+      ctx.beginPath();
+      ctx.roundRect(-3.5, -3.0, 7.0, 10.0, 1.2);
+      ctx.fill();
+
+      // Liquid tint inside
+      if (item?.fluidStorage?.currentMl > 0) {
+        const lId = item.fluidStorage.liquidId;
+        const tint = lId === 'zelenka' ? '#15803d' : (lId === 'iodine' ? '#78350f' : '#38bdf8');
+        ctx.fillStyle = tint;
+        ctx.beginPath();
+        ctx.roundRect(-2.8, -1.0, 5.6, 7.5, 0.8);
+        ctx.fill();
+      }
+
+      // Dropper neck & cap
+      ctx.fillStyle = '#e2e8f0';
+      ctx.fillRect(-1.4, -6.5, 2.8, 3.8);
+
+      // White ribbed dropper cap
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.roundRect(-2.2, -8.5, 4.4, 2.4, 0.8);
+      ctx.fill();
+
+      drawGlossBand(ctx, -2.5, -2.5, 0.8, 8.5, 0.3);
+      return true;
+    }
+
+    // Small Tetra Pak (Тетрапак 0.25л)
+    case 'tetra_pack_250': {
+      drawShadow(ctx, 4.5, 2.0, 7.5, 0.22);
+
+      // Mini carton
+      ctx.fillStyle = '#ea580c';
+      ctx.beginPath();
+      ctx.roundRect(-3.8, -4.5, 7.6, 11.5, 1.0);
+      ctx.fill();
+
+      // Straw on back
+      ctx.strokeStyle = '#f8fafc';
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      ctx.moveTo(-2.5, -3.5);
+      ctx.lineTo(-2.5, 6.0);
+      ctx.stroke();
+
+      // Mini juice logo
+      ctx.fillStyle = '#fef08a';
+      ctx.beginPath();
+      ctx.arc(0.5, 0.5, 1.8, 0, Math.PI * 2);
+      ctx.fill();
+
+      return true;
+    }
+
+    // Seasoning Sachet (Пакетик-саше 100мл)
+    case 'package_sachet': {
+      drawShadow(ctx, 4.5, 2.2, 7.5, 0.18);
+
+      // Foil pouch with crimped edges
+      const sachetGrad = ctx.createLinearGradient(-4, -5, 4, 6);
+      sachetGrad.addColorStop(0, '#f8fafc');
+      sachetGrad.addColorStop(0.5, '#e2e8f0');
+      sachetGrad.addColorStop(1, '#cbd5e1');
+
+      ctx.fillStyle = sachetGrad;
+      ctx.beginPath();
+      ctx.roundRect(-4.0, -5.5, 8.0, 12.0, 1.0);
+      ctx.fill();
+
+      // Crimped heat-sealed borders top and bottom
+      ctx.fillStyle = '#94a3b8';
+      ctx.fillRect(-4.0, -5.5, 8.0, 1.4);
+      ctx.fillRect(-4.0, 5.1, 8.0, 1.4);
+
+      // Tear notch on side
+      ctx.fillStyle = '#0f172a';
+      ctx.beginPath();
+      ctx.moveTo(-4.0, -3.5);
+      ctx.lineTo(-3.0, -3.0);
+      ctx.lineTo(-4.0, -2.5);
+      ctx.closePath();
+      ctx.fill();
+
+      // Spice label stamp
+      ctx.fillStyle = '#dc2626';
+      ctx.beginPath();
+      ctx.roundRect(-2.8, -1.5, 5.6, 4.2, 0.6);
+      ctx.fill();
+
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 2px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('SPICE', 0, 0.6);
+
+      return true;
+    }
+
+    // Clay Pot (Глиняный горшочек 0.5л)
+    case 'pot_clay_medium': {
+      drawShadow(ctx, 6.5, 2.8, 7.8, 0.28);
+
+      // Terracotta bulbous earthenware body
+      const clayGrad = ctx.createLinearGradient(-6, -4, 6, 7);
+      clayGrad.addColorStop(0, '#ea580c');
+      clayGrad.addColorStop(0.4, '#c2410c');
+      clayGrad.addColorStop(1, '#7c2d12');
+
+      ctx.fillStyle = clayGrad;
+      ctx.beginPath();
+      ctx.moveTo(-4.5, -3.5);
+      ctx.quadraticCurveTo(-7.5, 1.0, -5.5, 6.5);
+      ctx.quadraticCurveTo(0, 8.0, 5.5, 6.5);
+      ctx.quadraticCurveTo(7.5, 1.0, 4.5, -3.5);
+      ctx.closePath();
+      ctx.fill();
+
+      // Wide flared ceramic lip
+      ctx.fillStyle = '#9a3412';
+      ctx.beginPath();
+      ctx.ellipse(0, -3.8, 5.5, 1.8, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Tied parchment cloth cover on top
+      ctx.fillStyle = '#fef3c7';
+      ctx.beginPath();
+      ctx.roundRect(-4.8, -5.8, 9.6, 2.4, 0.8);
+      ctx.fill();
+
+      // Twine tie
+      ctx.strokeStyle = '#78350f';
+      ctx.lineWidth = 0.8;
+      ctx.beginPath();
+      ctx.moveTo(-4.8, -3.8);
+      ctx.lineTo(4.8, -3.8);
+      ctx.stroke();
+
+      drawGlossBand(ctx, -4.5, -1.0, 1.2, 6.5, 0.3);
+      return true;
+    }
+
     default:
       return false;
   }

@@ -7126,15 +7126,22 @@ export function updateVehiclePhysics(
     vehicle.offroadSinkDepth = currentSinkDepth;
     vehicle.isBoggedDown = currentSinkDepth > 0.65 && Math.abs(vehicle.speed) < 18.0;
 
-    // Separate front and rear axle grip factors for realistic differential slip
-    let frontGripFactor = cfg.grip * surfaceGripFront;
-    let rearGripFactor = (isHandbraking ? cfg.driftGrip * 0.48 : cfg.grip) * surfaceGripRear;
+    // --- REALISTIC DYNAMIC WEIGHT TRANSFER & NORMAL LOAD (Pacejka Tire Model) ---
+    // Longitudinal acceleration (engineAccel > 0) transfers normal weight to the rear axle, INCREASING rear tire grip.
+    // Braking (engineAccel < 0) transfers normal weight to the front axle.
+    const accelG = Math.max(-1.2, Math.min(1.2, engineAccel / 98.0));
+    const dynamicWeightTransferRear = Math.max(0.75, Math.min(1.28, 1.0 + accelG * 0.20));
+    const dynamicWeightTransferFront = Math.max(0.75, Math.min(1.28, 1.0 - accelG * 0.20));
+
+    // Separate front and rear axle grip factors incorporating surface, weather, stains, and dynamic normal load
+    let frontGripFactor = cfg.grip * surfaceGripFront * dynamicWeightTransferFront;
+    let rearGripFactor = (isHandbraking ? cfg.driftGrip * 0.48 : cfg.grip) * surfaceGripRear * dynamicWeightTransferRear;
 
     const vSpeedKmh = Math.abs(vehicle.speed) * PX_S_TO_SPEED_KMH;
     const vSpeedAbs = Math.abs(vehicle.speed);
     const moveDir = Math.sign(vehicle.speed) || 1;
 
-    // --- REALISTIC TRACTION & POWER SLIP PHYSICS (Physically sound torque-based slip) ---
+    // --- REALISTIC FIRST-PRINCIPLES TRACTION & WHEEL TORQUE vs TIRE FRICTION ---
     const isEngineRunning = !eng || (eng.engineRunning && !eng.isStalled && eng.engineRPM > 400);
     const effectiveThrottle = isEngineRunning ? (throttle > 0 ? throttle : 0) : 0;
 
@@ -7143,38 +7150,38 @@ export function updateVehiclePhysics(
     const isInGear = eng ? (eng.currentGear !== 0 && (!eng.autoGearMode || (eng.autoGearMode !== 'N' && eng.autoGearMode !== 'P'))) : true;
     const effectiveDriveTransmission = isClutchEngaged * (isInGear ? 1.0 : 0.0);
 
-    // 2. Wheel torque calculation (torque at driven wheels = engine torque * gear ratio * transmission engagement)
-    const isPowerfulCar = ['supercar', 'sports', 'coupe_gt', 'muscle', 'muscle_classic', 'sedan_luxury', 'moto_sport'].includes(cfg.type);
-    const powerMultiplier = isPowerfulCar ? 1.45 : (vehicle.hasChiptuning ? 1.15 : 0.85);
-    const autoDamping = (eng?.transmissionType === 'AUTO' && !isPowerfulCar) ? 0.75 : 1.0;
-
-    // Torque multiplier by gear (1st gear = 1.0, 2nd gear = 0.62, 3rd = 0.38, 4th+ = 0.20 or less)
-    const wheelTorqueFactor = effectiveThrottle * effectiveDriveTransmission * gearAccelMult * T_factor * autoDamping;
-
-    // 3. Launch RPM boost ONLY when launching from stop/low speed in 1st/reverse gear with clutch engaged
-    const isLaunchState = vSpeedKmh < 15.0 && (eng ? (eng.currentGear === 1 || eng.currentGear === -1) : true);
-    const launchRPMBoost = (isLaunchState && eng && eng.engineRPM > 4000 && effectiveDriveTransmission > 0.5)
-      ? Math.min(1.7, 1.0 + (eng.engineRPM - 4000) / 3500)
-      : 1.0;
-
-    // 4. Speed slip attenuation and physical traction weight-scaling
-    const speedSlipFactor = Math.max(0, 1.0 - (vSpeedKmh / 38.0));
+    // 2. Power-to-weight and vehicle torque categorization (first principles):
+    // Standard cars (classic VAZ, Volga, Logan, Matiz, vans, commercial trucks, buses) have modest hp/kg (~0.05-0.09 hp/kg).
+    // They physically cannot spin driven wheels on dry clean asphalt under normal launch without high-RPM clutch dump.
+    // Sports cars, supercars, classic big-block muscle cars (0.20-0.50+ hp/kg) have enough raw torque to break traction on dry road.
+    const isHighPower = ['supercar', 'sports', 'coupe_gt', 'muscle', 'muscle_classic', 'moto_sport'].includes(cfg.type);
+    const isMediumSport = ['hatch_hot', 'sedan_luxury', 'suv_luxury'].includes(cfg.type);
     
-    // Scale engine driving torque force proportionally with its configured acceleration power
-    const baseEngineForceFactor = (cfg.acceleration || 30) / 30.0;
-    
+    let vehicleTorqueRatio = isHighPower ? 2.15 : (isMediumSport ? 1.35 : 0.85);
+    if (vehicle.hasChiptuning) vehicleTorqueRatio *= 1.20;
+
+    // Automatic transmission torque converter damping
+    const autoTorqueDamping = (eng?.transmissionType === 'AUTO' && !isHighPower) ? 0.80 : 1.0;
+
+    // Wheel torque demand: engine torque curve * gear mechanical ratio * clutch engagement * throttle
+    const wheelTorqueFactor = effectiveThrottle * effectiveDriveTransmission * (gearAccelMult / 1.65) * T_factor * autoTorqueDamping;
+
+    // 3. Launch RPM clutch dump boost (only if revving above 4500 RPM with manual clutch dropped)
+    const isLaunchState = vSpeedKmh < 12.0 && (eng ? (eng.currentGear === 1 || eng.currentGear === -1) : true);
+    const isClutchDump = isLaunchState && eng && eng.transmissionType === 'MANUAL' && eng.engineRPM > 4500 && effectiveDriveTransmission > 0.7;
+    const launchRPMBoost = isClutchDump ? Math.min(1.65, 1.0 + (eng.engineRPM - 4500) / 3000) : 1.0;
+
+    // 4. Speed slip attenuation: at higher speeds, tire grip easily handles available engine power
+    const speedSlipFactor = Math.max(0, 1.0 - (vSpeedKmh / 42.0));
+
     // Dynamic combined mass calculation (including vehicle cargo, fluid tank volumes, and connected trailers)
     let dynamicCombinedMass = cfg.mass || 1500;
-    
-    // Include liquid payload (water tank, fuel tanker) mass (1 Liter = 1 kg)
     if (vehicle.fluidTank) {
       dynamicCombinedMass += vehicle.fluidTank.currentVolume ?? vehicle.fluidTank.currentAmount ?? 0;
     }
     if ((vehicle as any).cargoMass) {
       dynamicCombinedMass += (vehicle as any).cargoMass;
     }
-    
-    // Add trailer and trailer's cargo/fluid mass
     if (vehicle.trailerId) {
       const trailer = world.vehicles.find(v => v.id === vehicle.trailerId);
       if (trailer) {
@@ -7189,60 +7196,76 @@ export function updateVehiclePhysics(
         dynamicCombinedMass += trailMass;
       }
     }
-    
-    // Scale resistance to tire slip based on dynamic weight relative to a standard passenger car
-    const massScaleFactor = dynamicCombinedMass / 1500;
-    const driveSlipDemand = wheelTorqueFactor * baseEngineForceFactor * powerMultiplier * launchRPMBoost * (0.30 + 0.70 * speedSlipFactor);
+
+    // Dynamic mass scale relative to reference passenger vehicle (1400 kg)
+    const massScaleFactor = dynamicCombinedMass / 1400.0;
+    const tractiveDemand = wheelTorqueFactor * vehicleTorqueRatio * launchRPMBoost * (0.25 + 0.75 * speedSlipFactor);
 
     // Burnout on the spot (holding throttle + handbrake with running engine at low speed)
-    // Only physically possible if the engine torque force can overcome the rear tires' static friction!
     const isBurnoutHolding = isEngineRunning && isHandbraking && effectiveThrottle > 0.65 && vSpeedKmh < 12.0 &&
-                             (driveSlipDemand > (surfaceGripRear * 0.85 * massScaleFactor));
+                             (tractiveDemand > (surfaceGripRear * 0.95 * massScaleFactor));
 
-    // 5. Drive-type specific power slip triggers and traction limits
+    // 5. Physical Traction Limits & Friction Circle (F_x^2 + F_y^2 <= F_max^2)
     let isFrontPowerSlip = false;
     let isRearPowerSlip = false;
     let isAwdPowerSlip = false;
+    let longitudinalSlipRatio = 0; // 0 (pure grip) to 1.0 (full burnout/wheelspin)
 
     if (driveType === 'FWD') {
-      const fwdTractionLimit = surfaceGripFront * 0.90 * massScaleFactor;
-      isFrontPowerSlip = isEngineRunning && effectiveThrottle > 0.30 &&
-                         (isBurnoutHolding || (
-                           driveSlipDemand > fwdTractionLimit * 1.25 &&
-                           vSpeedKmh < 45.0 &&
-                           (Math.abs(vehicle.steerAngle) > 0.18 || isWetSurface || frontStainGrip < 0.80)
-                         ));
+      const fwdTractionLimit = surfaceGripFront * 1.35 * massScaleFactor * dynamicWeightTransferFront;
+      
+      // On dry asphalt, standard FWD cars cannot spin tires without clutch dump or slick surface
+      isFrontPowerSlip = isEngineRunning && effectiveThrottle > 0.40 && (
+        isBurnoutHolding || (
+          tractiveDemand > fwdTractionLimit &&
+          (isClutchDump || isWetSurface || frontStainGrip < 0.75 || (isHighPower && vSpeedKmh < 25.0))
+        )
+      );
+
       if (isFrontPowerSlip) {
-        const slipScale = Math.min(0.40, effectiveThrottle * 0.30 * (1.0 + Math.abs(vehicle.steerAngle)));
-        frontGripFactor *= (1.0 - slipScale);
+        longitudinalSlipRatio = Math.min(1.0, (tractiveDemand - fwdTractionLimit) / Math.max(0.2, fwdTractionLimit) + (isWetSurface ? 0.3 : 0));
+        // Friction Circle: modest 12-16% kinetic friction drop + lateral stiffness softening
+        const kineticDrop = 0.84 + 0.16 * (1.0 - longitudinalSlipRatio);
+        frontGripFactor *= kineticDrop;
       }
     } else if (driveType === 'RWD') {
-      const rwdTractionLimit = surfaceGripRear * 0.85 * massScaleFactor;
-      isRearPowerSlip = isEngineRunning && effectiveThrottle > 0.25 &&
-                        (isBurnoutHolding || (
-                          driveSlipDemand > rwdTractionLimit * 1.05 &&
-                          (Math.abs(vehicle.steerAngle) > 0.05 || isWetSurface || rearStainGrip < 0.80 || isBurnoutHolding || (isPowerfulCar && effectiveThrottle > 0.80 && vSpeedKmh < 28.0))
-                        ));
-      if (isRearPowerSlip && effectiveThrottle > 0.20) {
-        rearGripFactor *= 0.42;
+      const rwdTractionLimit = surfaceGripRear * 1.40 * massScaleFactor * dynamicWeightTransferRear;
+      
+      // On dry clean asphalt: only high-power cars, clutch dump launches, or slick surfaces break rear traction
+      const isSlickRearSurface = isWetSurface || rearStainGrip < 0.75;
+      const canOverpowerTraction = isHighPower || vehicle.hasChiptuning || (isMediumSport && vSpeedKmh < 15.0);
+
+      isRearPowerSlip = isEngineRunning && effectiveThrottle > 0.35 && (
+        isBurnoutHolding || (
+          tractiveDemand > rwdTractionLimit &&
+          (isClutchDump || isSlickRearSurface || (canOverpowerTraction && vSpeedKmh < 32.0))
+        )
+      );
+
+      if (isRearPowerSlip) {
+        longitudinalSlipRatio = Math.min(1.0, (tractiveDemand - rwdTractionLimit) / Math.max(0.2, rwdTractionLimit) + (isSlickRearSurface ? 0.35 : 0));
+        // Realistic dynamic kinetic friction drop (Pacejka model: 12% to 20% max drop, NOT 58%!)
+        // In turns, longitudinal tractive slip softens available lateral cornering stiffness per friction circle
+        const steerMagnitude = Math.abs(vehicle.steerAngle);
+        const frictionCircleLateralDrop = Math.sqrt(Math.max(0.40, 1.0 - Math.min(0.85, longitudinalSlipRatio * (0.5 + steerMagnitude))));
+        const kineticGripRatio = 0.85 * frictionCircleLateralDrop;
+        rearGripFactor *= Math.max(0.55, kineticGripRatio);
       }
     } else if (driveType === 'AWD') {
-      // AWD / 4WD / 4x4: Engine torque is distributed across all 4 wheels (front and rear)
-      // High traction limit - breaking 4WD into wheelspin on dry asphalt is nearly impossible (especially on automatic)
-      const awdTractionLimit = (surfaceGripFront + surfaceGripRear) * 1.65 * massScaleFactor;
+      const awdTractionLimit = (surfaceGripFront + surfaceGripRear) * 1.85 * massScaleFactor;
       
-      // AWD power slip occurs ONLY under extreme torque (e.g. supercar launch or chiptuned) or very slick surface (ice/rain/oil)
-      isAwdPowerSlip = isEngineRunning && effectiveThrottle > 0.45 &&
-                       (isBurnoutHolding || (
-                         driveSlipDemand > awdTractionLimit * (eng?.transmissionType === 'AUTO' ? 1.45 : 1.25) &&
-                         (isWetSurface || rearStainGrip < 0.85 || frontStainGrip < 0.85 || (isPowerfulCar && vSpeedKmh < 20.0))
-                       ));
+      isAwdPowerSlip = isEngineRunning && effectiveThrottle > 0.60 && (
+        isBurnoutHolding || (
+          tractiveDemand > awdTractionLimit &&
+          (isWetSurface || rearStainGrip < 0.70 || (isHighPower && isClutchDump && vSpeedKmh < 15.0))
+        )
+      );
 
       if (isAwdPowerSlip) {
-        // Symmetric, mild 4-wheel slip: preserves stability and control, NO tail-spin / drift collapse!
-        const awdSlipScale = Math.min(0.22, effectiveThrottle * 0.18);
-        frontGripFactor *= (1.0 - awdSlipScale);
-        rearGripFactor *= (1.0 - awdSlipScale);
+        longitudinalSlipRatio = Math.min(0.6, (tractiveDemand - awdTractionLimit) / Math.max(0.2, awdTractionLimit));
+        const awdGripDrop = 0.90 + 0.10 * (1.0 - longitudinalSlipRatio);
+        frontGripFactor *= awdGripDrop;
+        rearGripFactor *= awdGripDrop;
       }
     }
 
@@ -7263,17 +7286,16 @@ export function updateVehiclePhysics(
     const rearGripLimit = rearGripFactor * 780.0;
     const frontGripLimit = frontGripFactor * 780.0;
 
-    // Dynamic kinetic sliding friction factor
+    // Dynamic kinetic sliding friction factor (Pacejka model: smooth 15-20% transition)
     const slipFractionForK = Math.min(1.0, Math.abs(lateralSlip) / 100.0);
-    // Kinetic friction drop: up to 40% reduction in lateral grip when fully sliding
-    const kineticGripReduction = slipFractionForK * 0.40;
+    const kineticGripReduction = slipFractionForK * 0.18;
     const lateralRearGripLimit = rearGripLimit * (1.0 - kineticGripReduction);
 
     // UNDERSTEER (снос передней оси) расчет
     const excessFront = Math.max(0, (Math.abs(lateralDemand) - frontGripLimit) / frontGripLimit);
-    let understeerFactor = Math.min(0.65, excessFront * 0.35);
+    let understeerFactor = Math.min(0.60, excessFront * 0.35);
     if (isFrontPowerSlip) {
-      understeerFactor = Math.max(understeerFactor, Math.min(0.55, effectiveThrottle * 0.40));
+      understeerFactor = Math.max(understeerFactor, Math.min(0.50, effectiveThrottle * 0.35));
     }
 
     // --- REALISTIC DIFFERENTIAL LOCK RESISTANCE & UNDERSTEER (МАТЕМАТИКА СОПРОТИВЛЕНИЯ ПОВОРОТУ) ---
@@ -7313,12 +7335,18 @@ export function updateVehiclePhysics(
     // 1. Oversteer / Drift Logic: Calculate sliding forces and lateral momentum
     let isDriftingThisFrame = false;
 
-    // Sustained power drift maintenance on RWD/AWD (maintaining slide with running engine throttle)
+    // Sustained power drift maintenance on RWD/AWD:
+    // ONLY physically possible if the vehicle has power reserve or is on a slippery surface!
+    const hasPowerToMaintainDrift = isHighPower || vehicle.hasChiptuning || isWetSurface || surfaceGripRear < 0.72 || isBurnoutHolding;
     const isPowerDriftMaintaining = isEngineRunning &&
                                     (driveType === 'RWD' || driveType === 'AWD') &&
-                                    (Math.abs(lateralSlip) > 10.0) &&
-                                    (effectiveThrottle > 0.15) &&
-                                    vSpeedKmh > 4.0;
+                                    (Math.abs(lateralSlip) > 12.0) &&
+                                    (effectiveThrottle > 0.40) &&
+                                    hasPowerToMaintainDrift &&
+                                    vSpeedKmh > 8.0;
+
+    // Power oversteer kick requires noticeable steering angle (> 0.12 rad / ~7 deg) and genuine power slip
+    const isPowerOversteerKick = isRearPowerSlip && Math.abs(vehicle.steerAngle) > 0.12 && effectiveThrottle > 0.50;
 
     if (isHandbraking && vSpeedKmh > 6.0) {
       // Handbrake locks rear wheels, swinging rear out in forward or reverse
@@ -7331,39 +7359,42 @@ export function updateVehiclePhysics(
       const existingSlipInfluence = Math.min(1.0, Math.abs(lateralSlip) / 25.0);
       const handbrakeInfluence = Math.max(steerInfluence, existingSlipInfluence);
       
-      const targetSlip = swingSign * Math.min(150, vSpeedAbs * 0.70) * handbrakeInfluence;
+      const targetSlip = swingSign * Math.min(140, vSpeedAbs * 0.65) * handbrakeInfluence;
       
-      // Build up the slide at a progressive, manageable rate (6.0 instead of 9.0)
+      // Build up the slide at a progressive, manageable rate
       lateralSlip += (targetSlip - lateralSlip) * Math.min(1.0, 6.0 * dt);
-    } else if (vSpeedAbs > 2.0 && (Math.abs(lateralDemand) > lateralRearGripLimit || (isRearPowerSlip && Math.abs(vehicle.steerAngle) > 0.06))) {
-      // Oversteer drift from centrifugal force, Scandinavian flick, or RWD power kick
+    } else if (vSpeedAbs > 2.0 && (Math.abs(lateralDemand) > lateralRearGripLimit || isPowerOversteerKick)) {
+      // Oversteer drift from centrifugal force, Scandinavian flick, or genuine RWD power kick
       isDriftingThisFrame = true;
-      const excessFactor = isRearPowerSlip ? 1.6 : (Math.abs(lateralDemand) - lateralRearGripLimit) / lateralRearGripLimit;
+      const excessCentrifugal = Math.max(0, (Math.abs(lateralDemand) - lateralRearGripLimit) / lateralRearGripLimit);
+      const powerExcess = isPowerOversteerKick ? (0.6 + longitudinalSlipRatio * 0.6) : 0;
+      const totalExcess = Math.max(excessCentrifugal, powerExcess);
+
       const swingSign = -Math.sign(vehicle.steerAngle || (vehicle.angularVelocity * moveDir) || 1) * moveDir;
-      const targetSlip = swingSign * Math.min(150, (excessFactor * 36.0 + vSpeedAbs * 0.42) * Math.min(1.0, vSpeedAbs / 8.0));
-      
-      lateralSlip += (targetSlip - lateralSlip) * Math.min(1.0, 6.5 * dt);
-    } else if (isPowerDriftMaintaining) {
-      // Holding throttle in a slide sustains drift angle smoothly
-      isDriftingThisFrame = true;
-      const swingSign = Math.sign(lateralSlip) || 1;
-      const targetSlip = swingSign * Math.min(170, effectiveThrottle * 58.0 + vSpeedAbs * 0.45);
+      const targetSlip = swingSign * Math.min(140, (totalExcess * 24.0 + vSpeedAbs * 0.38) * Math.min(1.0, vSpeedAbs / 8.0));
       
       lateralSlip += (targetSlip - lateralSlip) * Math.min(1.0, 5.5 * dt);
+    } else if (isPowerDriftMaintaining) {
+      // Holding throttle in a slide sustains drift angle smoothly on high-power cars or slick surfaces
+      isDriftingThisFrame = true;
+      const swingSign = Math.sign(lateralSlip) || 1;
+      const targetSlip = swingSign * Math.min(150, effectiveThrottle * 45.0 + vSpeedAbs * 0.40);
+      
+      lateralSlip += (targetSlip - lateralSlip) * Math.min(1.0, 4.8 * dt);
     } else {
       // GRIP / TRANSITION REGIME: Smooth kinetic to static tire tracking
       // Does not snap or lock, allowing smooth weight transfer pendulum ("повилять")
-      const slipRel = Math.min(1.0, Math.abs(lateralSlip) / 60.0);
+      const slipRel = Math.min(1.0, Math.abs(lateralSlip) / 50.0);
 
-      // Throttle-based drift maintenance damping (reduces recovery when giving gas in RWD/AWD)
+      // Throttle-based drift maintenance damping ONLY for high-power cars or slippery surfaces
       let throttleDamping = 1.0;
-      if (effectiveThrottle > 0.15 && (driveType === 'RWD' || driveType === 'AWD')) {
-        throttleDamping = Math.max(0.35, 1.0 - effectiveThrottle * 0.65);
+      if (effectiveThrottle > 0.20 && (driveType === 'RWD' || driveType === 'AWD') && hasPowerToMaintainDrift) {
+        throttleDamping = Math.max(0.45, 1.0 - effectiveThrottle * 0.55);
       }
 
-      const recoveryRate = (5.5 + (1.0 - slipRel) * 8.0) * effectiveGrip * fwdStabilization * throttleDamping;
+      const recoveryRate = (7.0 + (1.0 - slipRel) * 10.0) * effectiveGrip * fwdStabilization * throttleDamping;
       lateralSlip *= Math.max(0, 1.0 - recoveryRate * dt);
-      if (Math.abs(lateralSlip) < 0.4 || vSpeedAbs < 0.8) lateralSlip = 0;
+      if (Math.abs(lateralSlip) < 0.3 || vSpeedAbs < 0.6) lateralSlip = 0;
     }
 
     if (isRoadMachinery(vehicle.type)) {
