@@ -10725,9 +10725,20 @@ export class GameRenderer {
         continue;
       }
 
+      // Suspension Pitch Calculation (First-principles vehicle weight transfer)
+      let pitchFactor = 1.0;
+      if (car.speed !== undefined) {
+        if (car.brakeLightsOn && Math.abs(car.speed) > 3) {
+          const brakeStrength = Math.min(1.0, Math.abs(car.speed) / 50);
+          pitchFactor = 1.0 - 0.16 * brakeStrength; // nose dive shortens beam on braking
+        } else if (car.engineState?.engineRunning && car.speed > 15) {
+          pitchFactor = 1.0 + Math.min(0.12, (car.speed / 160) * 0.10); // squat on hard acceleration
+        }
+      }
+
       const isHighBeam = car.headlightMode === 'high';
-      const beamReach = (isHighBeam ? 480 : 310) * fogFactor;
-      const beamSpreadWidth = (isHighBeam ? 115 : 75) * fogFactor;
+      const baseBeamReach = (isHighBeam ? 500 : 340) * pitchFactor * fogFactor;
+      const baseSpreadWidth = (isHighBeam ? 120 : 80) * fogFactor;
       const dmg = car.damage || { leftHeadlightBroken: false, rightHeadlightBroken: false, frontCrumple: 0, rearCrumple: 0, leftDent: 0, rightDent: 0, frontLeftDent: 0, frontRightDent: 0, rearLeftDent: 0, rearRightDent: 0 };
       
       const fc = Math.min(14, dmg.frontCrumple || 0);
@@ -10767,98 +10778,293 @@ export class GameRenderer {
       const hasPositionLightsOn = !!(car.positionLightsOn || hasHeadlightsOn);
       const isIgnitionOn = !!(car.engineState?.engineRunning || car.engineState?.ignition || car.positionLightsOn || hasHeadlightsOn);
 
-      // Smooth, natural forward headlight field (No harsh triangular polygons!)
+      // Independent Dual-Beam Optical System with ECE R112 Asymmetric Cutoff
       if (hasHeadlightsOn) {
         const leftActive = !dmg.leftHeadlightBroken;
         const rightActive = !isSoloMoto && !dmg.rightHeadlightBroken;
 
         if (leftActive || rightActive) {
-          let beamOriginLX = (leftLampLX + rightLampLX) * 0.5;
-          let beamOriginLY = (leftLampLY + rightLampLY) * 0.5;
-          if (!leftActive && rightActive) {
-            beamOriginLX = rightLampLX;
-            beamOriginLY = rightLampLY;
-          } else if (leftActive && !rightActive) {
-            beamOriginLX = leftLampLX;
-            beamOriginLY = leftLampLY;
-          }
+          // Function to render an individual headlamp optical projection
+          const renderHeadlampBeam = (lampLX: number, lampLY: number, isLeftHeadlamp: boolean) => {
+            const lx = car.x + cosA * lampLX - sinA * lampLY;
+            const ly = car.y + sinA * lampLX + cosA * lampLY;
 
-          const originX = car.x + cosA * beamOriginLX - sinA * beamOriginLY;
-          const originY = car.y + sinA * beamOriginLX + cosA * beamOriginLY;
+            let beamReach = baseBeamReach;
+            let leftSpread = baseSpreadWidth * 0.5;
+            let rightSpread = baseSpreadWidth * 0.5;
+            let focalOffsetSide = 0;
 
-          const forwardX = originX + cosA * beamReach;
-          const forwardY = originY + sinA * beamReach;
+            if (!isHighBeam) {
+              // ECE R112 European Asymmetric Low Beam Pattern (Right-Hand Traffic standard)
+              // Left flank (oncoming traffic side): clipped flat, shorter reach to prevent glare
+              // Right flank (curb/shoulder/signs): 15-degree rising wedge for pedestrian & roadside safety
+              leftSpread = baseSpreadWidth * 0.38;
+              rightSpread = baseSpreadWidth * 0.88;
+              const leftFlankReach = baseBeamReach * 0.74;
+              const rightFlankReach = baseBeamReach * 1.06;
+              beamReach = baseBeamReach * 0.94;
+              focalOffsetSide = 6.5; // slight tilt toward right verge
 
-          const leftFlankLY = isSoloMoto ? -2.0 : leftLampLY - 1.5;
-          const rightFlankLY = isSoloMoto ? 2.0 : rightLampLY + 1.5;
+              // Asymmetric polygon footprint
+              const startLX = lx - sinA * (isSoloMoto ? -1.5 : -2.0);
+              const startLY = ly + cosA * (isSoloMoto ? -1.5 : -2.0);
+              const startRX = lx - sinA * (isSoloMoto ? 1.5 : 2.0);
+              const startRY = ly + cosA * (isSoloMoto ? 1.5 : 2.0);
 
-          const startLeftX = car.x + cosA * leftLampLX - sinA * leftFlankLY;
-          const startLeftY = car.y + sinA * leftLampLX + cosA * leftFlankLY;
-          const startRightX = car.x + cosA * rightLampLX - sinA * rightFlankLY;
-          const startRightY = car.y + sinA * rightLampLX + cosA * rightFlankLY;
+              const endLX = lx + cosA * leftFlankReach - sinA * (-leftSpread);
+              const endLY = ly + sinA * leftFlankReach + cosA * (-leftSpread);
+              const endRX = lx + cosA * rightFlankReach - sinA * rightSpread;
+              const endRY = ly + sinA * rightFlankReach + cosA * rightSpread;
 
-          const endLeftX = forwardX - sinA * beamSpreadWidth;
-          const endLeftY = forwardY + cosA * beamSpreadWidth;
-          const endRightX = forwardX + sinA * beamSpreadWidth;
-          const endRightY = forwardY - cosA * beamSpreadWidth;
+              lCtx.save();
+              lCtx.beginPath();
+              lCtx.moveTo(startLX, startLY);
 
-          lCtx.save();
+              const ctrlLeftDist = leftFlankReach * 0.45;
+              lCtx.quadraticCurveTo(
+                lx + cosA * ctrlLeftDist - sinA * (-leftSpread * 0.6),
+                ly + sinA * ctrlLeftDist + cosA * (-leftSpread * 0.6),
+                endLX, endLY
+              );
+
+              // 15-degree rising shelf connecting left cutoff to right shoulder projection
+              lCtx.bezierCurveTo(
+                endLX + cosA * 20, endLY + sinA * 20,
+                endRX + cosA * 15, endRY + sinA * 15,
+                endRX, endRY
+              );
+
+              const ctrlRightDist = rightFlankReach * 0.50;
+              lCtx.quadraticCurveTo(
+                lx + cosA * ctrlRightDist - sinA * (rightSpread * 0.65),
+                ly + sinA * ctrlRightDist + cosA * (rightSpread * 0.65),
+                startRX, startRY
+              );
+              lCtx.closePath();
+
+              // Smooth photometrical gradient decay (High contrast 1.00 clarity in core, soft penumbra)
+              const beamGrad = lCtx.createRadialGradient(
+                lx, ly, 2,
+                lx + cosA * (beamReach * 0.38) - sinA * focalOffsetSide,
+                ly + sinA * (beamReach * 0.38) + cosA * focalOffsetSide,
+                rightFlankReach
+              );
+              beamGrad.addColorStop(0.00, 'rgba(0, 0, 0, 1.00)');
+              beamGrad.addColorStop(0.20, 'rgba(0, 0, 0, 0.94)');
+              beamGrad.addColorStop(0.48, 'rgba(0, 0, 0, 0.65)');
+              beamGrad.addColorStop(0.75, 'rgba(0, 0, 0, 0.24)');
+              beamGrad.addColorStop(0.90, 'rgba(0, 0, 0, 0.05)');
+              beamGrad.addColorStop(1.00, 'rgba(0, 0, 0, 0.00)');
+
+              lCtx.fillStyle = beamGrad;
+              lCtx.fill();
+
+              // Concentrated high-candela optical hot-spot core (projector lens focus)
+              const hotReach = beamReach * 0.55;
+              const hotSpread = rightSpread * 0.42;
+              lCtx.beginPath();
+              lCtx.moveTo(startLX, startLY);
+              lCtx.quadraticCurveTo(
+                lx + cosA * (hotReach * 0.45) - sinA * (-leftSpread * 0.25),
+                ly + sinA * (hotReach * 0.45) + cosA * (-leftSpread * 0.25),
+                lx + cosA * hotReach - sinA * (-leftSpread * 0.3),
+                ly + sinA * hotReach + cosA * (-leftSpread * 0.3)
+              );
+              lCtx.lineTo(
+                lx + cosA * (hotReach * 1.08) - sinA * hotSpread,
+                ly + sinA * (hotReach * 1.08) + cosA * hotSpread
+              );
+              lCtx.quadraticCurveTo(
+                lx + cosA * (hotReach * 0.5) - sinA * (hotSpread * 0.6),
+                ly + sinA * (hotReach * 0.5) + cosA * (hotSpread * 0.6),
+                startRX, startRY
+              );
+              lCtx.closePath();
+
+              const hotGrad = lCtx.createRadialGradient(
+                lx, ly, 1,
+                lx + cosA * (hotReach * 0.4) - sinA * 4,
+                ly + sinA * (hotReach * 0.4) + cosA * 4,
+                hotReach * 1.1
+              );
+              hotGrad.addColorStop(0.00, 'rgba(0, 0, 0, 0.85)');
+              hotGrad.addColorStop(0.45, 'rgba(0, 0, 0, 0.45)');
+              hotGrad.addColorStop(1.00, 'rgba(0, 0, 0, 0.00)');
+              lCtx.fillStyle = hotGrad;
+              lCtx.fill();
+              lCtx.restore();
+            } else {
+              // High Beam: Symmetrical, high-power penetrating field
+              const forwardX = lx + cosA * beamReach;
+              const forwardY = ly + sinA * beamReach;
+
+              const startLX = lx - sinA * -2.2;
+              const startLY = ly + cosA * -2.2;
+              const startRX = lx - sinA * 2.2;
+              const startRY = ly + cosA * 2.2;
+
+              const endLX = forwardX - sinA * -leftSpread;
+              const endLY = forwardY + cosA * -leftSpread;
+              const endRX = forwardX - sinA * rightSpread;
+              const endRY = forwardY + cosA * rightSpread;
+
+              lCtx.save();
+              lCtx.beginPath();
+              lCtx.moveTo(startLX, startLY);
+
+              const ctrlDist = beamReach * 0.48;
+              lCtx.quadraticCurveTo(
+                lx + cosA * ctrlDist - sinA * (-leftSpread * 0.6),
+                ly + sinA * ctrlDist + cosA * (-leftSpread * 0.6),
+                endLX, endLY
+              );
+              lCtx.bezierCurveTo(
+                endLX + cosA * 25, endLY + sinA * 25,
+                endRX + cosA * 25, endRY + sinA * 25,
+                endRX, endRY
+              );
+              lCtx.quadraticCurveTo(
+                lx + cosA * ctrlDist - sinA * (rightSpread * 0.6),
+                ly + sinA * ctrlDist + cosA * (rightSpread * 0.6),
+                startRX, startRY
+              );
+              lCtx.closePath();
+
+              const highGrad = lCtx.createRadialGradient(
+                lx, ly, 2,
+                lx + cosA * (beamReach * 0.40),
+                ly + sinA * (beamReach * 0.40),
+                beamReach
+              );
+              highGrad.addColorStop(0.00, 'rgba(0, 0, 0, 1.00)');
+              highGrad.addColorStop(0.22, 'rgba(0, 0, 0, 0.95)');
+              highGrad.addColorStop(0.52, 'rgba(0, 0, 0, 0.68)');
+              highGrad.addColorStop(0.78, 'rgba(0, 0, 0, 0.28)');
+              highGrad.addColorStop(0.92, 'rgba(0, 0, 0, 0.06)');
+              highGrad.addColorStop(1.00, 'rgba(0, 0, 0, 0.00)');
+
+              lCtx.fillStyle = highGrad;
+              lCtx.fill();
+
+              // Penetrating high-beam center core
+              const coreReach = beamReach * 0.70;
+              const coreSpread = baseSpreadWidth * 0.22;
+              lCtx.beginPath();
+              lCtx.moveTo(startLX, startLY);
+              lCtx.lineTo(lx + cosA * coreReach - sinA * -coreSpread, ly + sinA * coreReach + cosA * -coreSpread);
+              lCtx.lineTo(lx + cosA * coreReach - sinA * coreSpread, ly + sinA * coreReach + cosA * coreSpread);
+              lCtx.lineTo(startRX, startRY);
+              lCtx.closePath();
+
+              const coreGrad = lCtx.createRadialGradient(lx, ly, 1, lx + cosA * (coreReach * 0.5), ly + sinA * (coreReach * 0.5), coreReach);
+              coreGrad.addColorStop(0.00, 'rgba(0, 0, 0, 0.85)');
+              coreGrad.addColorStop(0.60, 'rgba(0, 0, 0, 0.35)');
+              coreGrad.addColorStop(1.00, 'rgba(0, 0, 0, 0.00)');
+              lCtx.fillStyle = coreGrad;
+              lCtx.fill();
+              lCtx.restore();
+            }
+
+            // Crisp physical bulb emission cut on the glass
+            const bulbCut = lCtx.createRadialGradient(lx, ly, 0, lx, ly, 4.5);
+            bulbCut.addColorStop(0, 'rgba(0, 0, 0, 1.00)');
+            bulbCut.addColorStop(1, 'rgba(0, 0, 0, 0)');
+            lCtx.fillStyle = bulbCut;
+            lCtx.beginPath(); lCtx.arc(lx, ly, 4.5, 0, Math.PI * 2); lCtx.fill();
+          };
+
+          // Render individual physical beams
+          if (leftActive) renderHeadlampBeam(leftLampLX, leftLampLY, true);
+          if (rightActive) renderHeadlampBeam(rightLampLX, rightLampLY, false);
+
+          // Smooth near-field bumper apron (fills ground directly in front of radiator grille)
+          const bumperX = car.x + cosA * (halfL - fc);
+          const bumperY = car.y + sinA * (halfL - fc);
+          const apronRad = Math.max(28, halfW * 1.4) * fogFactor;
+          const apronGrad = lCtx.createRadialGradient(bumperX, bumperY, 1, bumperX + cosA * 15, bumperY + sinA * 15, apronRad);
+          apronGrad.addColorStop(0.0, 'rgba(0, 0, 0, 0.92)');
+          apronGrad.addColorStop(0.5, 'rgba(0, 0, 0, 0.45)');
+          apronGrad.addColorStop(1.0, 'rgba(0, 0, 0, 0.00)');
+          lCtx.fillStyle = apronGrad;
           lCtx.beginPath();
-          lCtx.moveTo(startLeftX, startLeftY);
-          const ctrlDist = beamReach * 0.45;
-          lCtx.quadraticCurveTo(
-            originX + cosA * ctrlDist - sinA * (beamSpreadWidth * 0.65),
-            originY + sinA * ctrlDist + cosA * (beamSpreadWidth * 0.65),
-            endLeftX, endLeftY
-          );
-          lCtx.bezierCurveTo(
-            endLeftX + cosA * 25, endLeftY + sinA * 25,
-            endRightX + cosA * 25, endRightY + sinA * 25,
-            endRightX, endRightY
-          );
-          lCtx.quadraticCurveTo(
-            originX + cosA * ctrlDist + sinA * (beamSpreadWidth * 0.65),
-            originY + sinA * ctrlDist - cosA * (beamSpreadWidth * 0.65),
-            startRightX, startRightY
-          );
-          lCtx.closePath();
-
-          // Multi-step smooth polynomial gradient decay with soft penumbra boundary
-          const beamGrad = lCtx.createRadialGradient(
-            originX, originY, 0,
-            originX + cosA * (beamReach * 0.35),
-            originY + sinA * (beamReach * 0.35),
-            beamReach
-          );
-          beamGrad.addColorStop(0.00, 'rgba(0, 0, 0, 0.90)');
-          beamGrad.addColorStop(0.18, 'rgba(0, 0, 0, 0.78)');
-          beamGrad.addColorStop(0.45, 'rgba(0, 0, 0, 0.46)');
-          beamGrad.addColorStop(0.72, 'rgba(0, 0, 0, 0.16)');
-          beamGrad.addColorStop(0.88, 'rgba(0, 0, 0, 0.03)');
-          beamGrad.addColorStop(1.00, 'rgba(0, 0, 0, 0.00)');
-
-          lCtx.fillStyle = beamGrad;
+          lCtx.arc(bumperX + cosA * 12, bumperY + sinA * 12, apronRad, 0, Math.PI * 2);
           lCtx.fill();
-          lCtx.restore();
 
-          // Tiny soft bulb cutouts directly at the lamp glass
-          if (leftActive) {
-            const lx = car.x + cosA * leftLampLX - sinA * leftLampLY;
-            const ly = car.y + sinA * leftLampLX + cosA * leftLampLY;
-            const bulbCut = lCtx.createRadialGradient(lx, ly, 0, lx, ly, 4);
-            bulbCut.addColorStop(0, 'rgba(0, 0, 0, 0.95)');
-            bulbCut.addColorStop(1, 'rgba(0, 0, 0, 0)');
-            lCtx.fillStyle = bulbCut;
-            lCtx.beginPath(); lCtx.arc(lx, ly, 4, 0, Math.PI * 2); lCtx.fill();
-          }
-          if (rightActive) {
-            const rx = car.x + cosA * rightLampLX - sinA * rightLampLY;
-            const ry = car.y + sinA * rightLampLX + cosA * rightLampLY;
-            const bulbCut = lCtx.createRadialGradient(rx, ry, 0, rx, ry, 4);
-            bulbCut.addColorStop(0, 'rgba(0, 0, 0, 0.95)');
-            bulbCut.addColorStop(1, 'rgba(0, 0, 0, 0)');
-            lCtx.fillStyle = bulbCut;
-            lCtx.beginPath(); lCtx.arc(rx, ry, 4, 0, Math.PI * 2); lCtx.fill();
+          // --- Dynamic 2D Shadow Occlusion for Buildings in Headlight Path ---
+          const maxOcclusionDist = baseBeamReach * 1.15;
+          const frontMidX = car.x + cosA * halfL;
+          const frontMidY = car.y + sinA * halfL;
+
+          for (const bld of world.buildings) {
+            if (bld.type === 'gas_station_canopy' || bld.type === 'gas_station_island' || bld.type === 'park_monument') {
+              continue;
+            }
+            const bCenterX = bld.x + bld.width * 0.5;
+            const bCenterY = bld.y + bld.height * 0.5;
+            const toBx = bCenterX - frontMidX;
+            const toBy = bCenterY - frontMidY;
+            const bDistSq = toBx * toBx + toBy * toBy;
+            const maxSearch = maxOcclusionDist + Math.max(bld.width, bld.height);
+            if (bDistSq > maxSearch * maxSearch) continue;
+
+            // Check if building is in front of or alongside the headlights (within ~160 deg forward cone)
+            const fwdDot = toBx * cosA + toBy * sinA;
+            if (fwdDot < -10) continue; // Behind vehicle headlights
+
+            // Compute the 4 corners of the building
+            const corners = [
+              { x: bld.x, y: bld.y },
+              { x: bld.x + bld.width, y: bld.y },
+              { x: bld.x + bld.width, y: bld.y + bld.height },
+              { x: bld.x, y: bld.y + bld.height }
+            ];
+
+            const centerAngle = Math.atan2(bCenterY - frontMidY, bCenterX - frontMidX);
+            let minDiff = Infinity;
+            let maxDiff = -Infinity;
+            let minIdx = 0;
+            let maxIdx = 0;
+
+            for (let ci = 0; ci < 4; ci++) {
+              const c = corners[ci];
+              const ang = Math.atan2(c.y - frontMidY, c.x - frontMidX);
+              let diff = ang - centerAngle;
+              while (diff > Math.PI) diff -= Math.PI * 2;
+              while (diff < -Math.PI) diff += Math.PI * 2;
+              if (diff < minDiff) { minDiff = diff; minIdx = ci; }
+              if (diff > maxDiff) { maxDiff = diff; maxIdx = ci; }
+            }
+
+            const vMin = corners[minIdx];
+            const vMax = corners[maxIdx];
+
+            const dMinX = vMin.x - frontMidX;
+            const dMinY = vMin.y - frontMidY;
+            const lenMin = Math.hypot(dMinX, dMinY) || 1;
+            const pMinProjX = vMin.x + (dMinX / lenMin) * maxOcclusionDist * 1.5;
+            const pMinProjY = vMin.y + (dMinY / lenMin) * maxOcclusionDist * 1.5;
+
+            const dMaxX = vMax.x - frontMidX;
+            const dMaxY = vMax.y - frontMidY;
+            const lenMax = Math.hypot(dMaxX, dMaxY) || 1;
+            const pMaxProjX = vMax.x + (dMaxX / lenMax) * maxOcclusionDist * 1.5;
+            const pMaxProjY = vMax.y + (dMaxY / lenMax) * maxOcclusionDist * 1.5;
+
+            // Occlude shadow volume with night darkness
+            lCtx.save();
+            lCtx.globalCompositeOperation = 'source-over';
+            lCtx.fillStyle = `${baseColor}${effectiveAlpha * 0.95})`;
+            lCtx.beginPath();
+            lCtx.moveTo(vMin.x, vMin.y);
+            lCtx.lineTo(pMinProjX, pMinProjY);
+            lCtx.lineTo(pMaxProjX, pMaxProjY);
+            lCtx.lineTo(vMax.x, vMax.y);
+            lCtx.closePath();
+            lCtx.fill();
+
+            // Also ensure building body remains dark inside
+            lCtx.fillRect(bld.x, bld.y, bld.width, bld.height);
+            lCtx.restore();
           }
         }
       } else if (isIgnitionOn) {
@@ -11481,19 +11687,47 @@ export class GameRenderer {
         ctx.save(); ctx.translate(rx, ry); ctx.beginPath(); ctx.arc(0, 0, targetRadius, 0, Math.PI * 2); ctx.fill(); ctx.restore();
       };
 
-      const drawHeadlightAdd = (lxOffset: number, lyOffset: number, broken: boolean) => {
+      const drawHeadlightAdd = (lxOffset: number, lyOffset: number, broken: boolean, isLeftHeadlamp: boolean) => {
         if (broken) return;
         const lx = car.x + cosFA * lxOffset - sinFA * lyOffset;
         const ly = car.y + sinFA * lxOffset + cosFA * lyOffset;
 
         // Lens Flare / Source Glow (Crisp, compact optical emitter directly on the lamp glass)
-        const flareSize = (isHighBeam ? 3.8 : 2.8);
+        const flareSize = (isHighBeam ? 4.2 : 3.0);
         const flare = ctx.createRadialGradient(lx, ly, 0, lx, ly, flareSize);
-        flare.addColorStop(0, isHighBeam ? 'rgba(255, 255, 255, 0.9)' : 'rgba(255, 250, 225, 0.85)');
-        flare.addColorStop(0.5, isHighBeam ? 'rgba(224, 242, 254, 0.4)' : 'rgba(255, 235, 175, 0.35)');
+        flare.addColorStop(0, isHighBeam ? 'rgba(255, 255, 255, 0.98)' : 'rgba(255, 252, 230, 0.92)');
+        flare.addColorStop(0.5, isHighBeam ? 'rgba(224, 242, 254, 0.45)' : 'rgba(255, 235, 175, 0.38)');
         flare.addColorStop(1, 'rgba(255, 255, 255, 0)');
         ctx.fillStyle = flare;
         ctx.beginPath(); ctx.arc(lx, ly, flareSize, 0, Math.PI * 2); ctx.fill();
+
+        // Wet Road Specular Reflection (Glistening sheen on rain / wet asphalt)
+        if (isRaining) {
+          const wetLen = (isHighBeam ? 210 : 140) * fogFactor;
+          const wetSheen = ctx.createRadialGradient(
+            lx + cosFA * (wetLen * 0.35),
+            ly + sinFA * (wetLen * 0.35),
+            2,
+            lx + cosFA * (wetLen * 0.5),
+            ly + sinFA * (wetLen * 0.5),
+            wetLen * 0.65
+          );
+          wetSheen.addColorStop(0.0, 'rgba(235, 245, 255, 0.12)');
+          wetSheen.addColorStop(0.5, 'rgba(215, 235, 255, 0.04)');
+          wetSheen.addColorStop(1.0, 'rgba(200, 225, 255, 0)');
+          ctx.fillStyle = wetSheen;
+          ctx.beginPath();
+          ctx.ellipse(
+            lx + cosFA * (wetLen * 0.45),
+            ly + sinFA * (wetLen * 0.45),
+            wetLen * 0.45,
+            12 * fogFactor,
+            frontAngle,
+            0,
+            Math.PI * 2
+          );
+          ctx.fill();
+        }
 
         // Atmospheric Volumetric Mist (ONLY drawn when foggy or rainy, with subtle alpha so traffic never blows out into solid white)
         if (isFog || isRaining) {
@@ -11524,11 +11758,82 @@ export class GameRenderer {
       };
 
       if (hasHeadlightsOn) {
+        const leftActive = !dmg.leftHeadlightBroken;
+        const rightActive = !isSoloMoto && !dmg.rightHeadlightBroken;
+
         if (isSoloMoto || car.type === 'roller_compact_sidewalk') {
-          drawHeadlightAdd(leftLampLX, leftLampLY, dmg.leftHeadlightBroken);
+          drawHeadlightAdd(leftLampLX, leftLampLY, dmg.leftHeadlightBroken, true);
         } else {
-          drawHeadlightAdd(leftLampLX, leftLampLY, dmg.leftHeadlightBroken);
-          drawHeadlightAdd(rightLampLX, rightLampLY, dmg.rightHeadlightBroken);
+          drawHeadlightAdd(leftLampLX, leftLampLY, dmg.leftHeadlightBroken, true);
+          drawHeadlightAdd(rightLampLX, rightLampLY, dmg.rightHeadlightBroken, false);
+        }
+
+        // Diegetic Glare / Blinding Effect on Player (When looking directly at oncoming vehicle headlights)
+        if (player && (leftActive || rightActive)) {
+          const toPlayerX = player.x - car.x;
+          const toPlayerY = player.y - car.y;
+          const distToPlayer = Math.hypot(toPlayerX, toPlayerY);
+          const maxGlareDist = (isHighBeam ? 460 : 250) * fogFactor;
+
+          if (distToPlayer > 18 && distToPlayer < maxGlareDist) {
+            const angToPlayer = Math.atan2(toPlayerY, toPlayerX);
+            let beamAngDiff = Math.abs(angToPlayer - car.angle);
+            while (beamAngDiff > Math.PI) beamAngDiff -= Math.PI * 2;
+            while (beamAngDiff < -Math.PI) beamAngDiff += Math.PI * 2;
+            beamAngDiff = Math.abs(beamAngDiff);
+
+            const maxGlareBeamAngle = isHighBeam ? 0.32 : 0.20;
+            if (beamAngDiff < maxGlareBeamAngle) {
+              let playerFaceAngle = player.angle;
+              if (player.isInVehicle) {
+                const pVeh = world.vehicles.find(v => v.id === player.currentVehicleId);
+                if (pVeh) playerFaceAngle = pVeh.angle;
+              } else if (player.aimAngle !== undefined) {
+                playerFaceAngle = player.aimAngle;
+              }
+
+              const angPlayerToCar = Math.atan2(-toPlayerY, -toPlayerX);
+              let lookDiff = Math.abs(angPlayerToCar - playerFaceAngle);
+              while (lookDiff > Math.PI) lookDiff -= Math.PI * 2;
+              while (lookDiff < -Math.PI) lookDiff += Math.PI * 2;
+              lookDiff = Math.abs(lookDiff);
+
+              if (lookDiff < Math.PI * 0.52) {
+                const proximity = 1.0 - (distToPlayer / maxGlareDist);
+                const lookFactor = Math.cos(lookDiff);
+                const glareIntensity = Math.min(1.0, proximity * lookFactor * (isHighBeam ? 1.0 : 0.40));
+
+                if (glareIntensity > 0.04) {
+                  const glareRadius = (isHighBeam ? 32 : 18) * (0.8 + glareIntensity * 0.8);
+                  const lampOffsets: { lx: number; ly: number }[] = [];
+                  if (leftActive) lampOffsets.push({ lx: leftLampLX, ly: leftLampLY });
+                  if (rightActive) lampOffsets.push({ lx: rightLampLX, ly: rightLampLY });
+
+                  for (const pt of lampOffsets) {
+                    const wx = car.x + cosFA * pt.lx - sinFA * pt.ly;
+                    const wy = car.y + sinFA * pt.lx + cosFA * pt.ly;
+
+                    // Brilliant optical starburst
+                    const gGrad = ctx.createRadialGradient(wx, wy, 0, wx, wy, glareRadius);
+                    gGrad.addColorStop(0.0, `rgba(255, 255, 255, ${0.92 * glareIntensity})`);
+                    gGrad.addColorStop(0.2, `rgba(255, 250, 220, ${0.55 * glareIntensity})`);
+                    gGrad.addColorStop(0.6, `rgba(210, 235, 255, ${0.15 * glareIntensity})`);
+                    gGrad.addColorStop(1.0, 'rgba(255, 255, 255, 0)');
+                    ctx.fillStyle = gGrad;
+                    ctx.beginPath();
+                    ctx.arc(wx, wy, glareRadius, 0, Math.PI * 2);
+                    ctx.fill();
+
+                    // Anamorphic horizontal optical flare streak
+                    const streakW = glareRadius * 2.8;
+                    const streakH = 1.6;
+                    ctx.fillStyle = `rgba(224, 242, 254, ${0.35 * glareIntensity})`;
+                    ctx.fillRect(wx - streakW * 0.5, wy - streakH * 0.5, streakW, streakH);
+                  }
+                }
+              }
+            }
+          }
         }
       } else if (isIgnitionOn) {
         // Front position lights (габариты / ДХО) subtle optical glow
