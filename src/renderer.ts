@@ -348,8 +348,10 @@ export class GameRenderer {
 
       // Apply Camera Shake if any
       if (camera.shakeTimer > 0) {
-        const shakeX = (Math.random() * 2 - 1) * camera.shakeIntensity;
-        const shakeY = (Math.random() * 2 - 1) * camera.shakeIntensity;
+        let shakeX = (Math.random() * 2 - 1) * camera.shakeIntensity;
+        let shakeY = (Math.random() * 2 - 1) * camera.shakeIntensity;
+        if (camera.shakeVx) shakeX += camera.shakeVx;
+        if (camera.shakeVy) shakeY += camera.shakeVy;
         ctx.translate(shakeX, shakeY);
       }
 
@@ -515,8 +517,10 @@ export class GameRenderer {
 
     // Apply Camera Shake if any
     if (camera.shakeTimer > 0) {
-      const shakeX = (Math.random() * 2 - 1) * camera.shakeIntensity;
-      const shakeY = (Math.random() * 2 - 1) * camera.shakeIntensity;
+      let shakeX = (Math.random() * 2 - 1) * camera.shakeIntensity;
+      let shakeY = (Math.random() * 2 - 1) * camera.shakeIntensity;
+      if (camera.shakeVx) shakeX += camera.shakeVx;
+      if (camera.shakeVy) shakeY += camera.shakeVy;
       ctx.translate(shakeX, shakeY);
     }
 
@@ -12839,5 +12843,77 @@ export class GameRenderer {
       }
     }
     ctx.restore();
+  }
+
+  private renderDetachedParts(
+    ctx: CanvasRenderingContext2D,
+    world: GameWorld,
+    minX: number,
+    minY: number,
+    maxX: number,
+    maxY: number
+  ) {
+    if (!world.detachedParts || world.detachedParts.length === 0) return;
+
+    for (const part of world.detachedParts) {
+      if (part.x < minX - 100 || part.x > maxX + 100 || part.y < minY - 100 || part.y > maxY + 100) {
+        continue;
+      }
+
+      ctx.save();
+      ctx.translate(part.x, part.y);
+      ctx.rotate(part.angle);
+
+      // Drop shadow for 2.5D elevation
+      ctx.fillStyle = 'rgba(15, 23, 42, 0.40)';
+      ctx.beginPath();
+      ctx.ellipse(2, 3, part.length * 0.5, part.width * 0.5, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Metallic body panel fill matching vehicle paint color
+      ctx.fillStyle = part.color || '#64748b';
+      ctx.strokeStyle = '#0f172a';
+      ctx.lineWidth = 1.35;
+
+      ctx.beginPath();
+      if (part.partType === 'hood') {
+        // Tapered hood profile
+        ctx.moveTo(part.length * 0.5, 0);
+        ctx.lineTo(part.length * 0.45, part.width * 0.45);
+        ctx.lineTo(-part.length * 0.45, part.width * 0.5);
+        ctx.lineTo(-part.length * 0.45, -part.width * 0.5);
+        ctx.lineTo(part.length * 0.45, -part.width * 0.45);
+      } else if (part.partType === 'bumper_front' || part.partType === 'bumper_rear') {
+        // Rounded bumper strip
+        ctx.roundRect(-part.length * 0.5, -part.width * 0.5, part.length, part.width, 2.5);
+      } else {
+        // Door panel
+        ctx.rect(-part.length * 0.5, -part.width * 0.5, part.length, part.width);
+      }
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+
+      // Metallic stress specular ridge highlights on crumpled regions
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.55)';
+      ctx.lineWidth = 1.0;
+      ctx.beginPath();
+      ctx.moveTo(-part.length * 0.35, -part.width * 0.25);
+      ctx.lineTo(part.length * 0.35, part.width * 0.25);
+      ctx.stroke();
+
+      // Ambient occlusion deep crease shadow
+      ctx.strokeStyle = 'rgba(15, 23, 42, 0.35)';
+      ctx.beginPath();
+      ctx.moveTo(-part.length * 0.35 + 2, -part.width * 0.25 + 1);
+      ctx.lineTo(part.length * 0.35 + 2, part.width * 0.25 + 1);
+      ctx.stroke();
+
+      // Severed hinge bracket marks
+      ctx.fillStyle = '#1e293b';
+      ctx.fillRect(-part.length * 0.5 - 1.5, -1.8, 1.8, 3.6);
+
+      ctx.restore();
+    }
   }
 }

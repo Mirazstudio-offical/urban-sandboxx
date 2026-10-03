@@ -417,6 +417,13 @@ export interface VehicleDamage {
   hoodRaisedAmount?: number;  // 0.0 to 1.0 buckled 2.5D hood height for rendering fold shadows
   bumperSagLeft?: number;     // 0.0 to 1.0 sagging front-left bumper corner
   bumperSagRight?: number;    // 0.0 to 1.0 sagging front-right bumper corner
+
+  // Physical Detachable Body Parts
+  hoodDetached?: boolean;
+  frontBumperDetached?: boolean;
+  rearBumperDetached?: boolean;
+  leftDoorDetached?: boolean;
+  rightDoorDetached?: boolean;
 }
 
 export interface Vehicle {
@@ -499,6 +506,8 @@ export interface Vehicle {
     contactX: number;
     contactY: number;
     preserveVelocity?: boolean; // If true (oblique/vehicle collision), do not clamp speed to 0
+    interlockingTimer?: number; // Plastic interlocking duration (metal entanglement)
+    interlockingFriction?: number; // Plastic shear friction coefficient during entanglement
   };
 
   // AI & State
@@ -1922,6 +1931,24 @@ export interface PedestrianPath {
   crosswalkRef?: string;
 }
 
+export interface DetachedVehiclePart {
+  id: string;
+  vehicleId: string;
+  partType: 'hood' | 'bumper_front' | 'bumper_rear' | 'door_left' | 'door_right';
+  color: string;
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  angle: number;
+  angularVelocity: number;
+  length: number;
+  width: number;
+  life: number;
+  maxLife: number;
+  strain?: number;
+}
+
 export interface GameWorld {
   player?: Player;
   timeOfDay?: any;
@@ -1973,6 +2000,8 @@ export interface GameWorld {
   gpsPath?: Vector2D[] | null;
   pedestrianPaths: PedestrianPath[];
   towingRopes?: TowingRope[];
+  detachedParts?: DetachedVehiclePart[];
+  impactFreezeTimer?: number;
 }
 
 export interface Camera {
@@ -1986,6 +2015,8 @@ export interface Camera {
   targetY: number;
   shakeTimer: number;
   shakeIntensity: number;
+  shakeVx?: number;
+  shakeVy?: number;
   gridMode?: boolean;
 }
 

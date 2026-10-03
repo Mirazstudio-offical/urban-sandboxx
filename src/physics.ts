@@ -1212,6 +1212,45 @@ export function applyVehicleDamageAndDeformation(
   const normX = Math.max(-1, Math.min(1, localX / halfL));
   const normY = Math.max(-1, Math.min(1, localY / halfW));
 
+  // --- PRECISE CONTACT POINT SPARKS & METAL SHARDS SPRAY ---
+  if (world.particles && (impactSpeed > 15 || scrapeSpeed > 12)) {
+    const sparkCount = Math.min(28, Math.floor(4 + (impactSpeed + scrapeSpeed) * 0.28));
+    for (let i = 0; i < sparkCount; i++) {
+      const ang = Math.atan2(-localY, -localX) + car.angle + (Math.random() - 0.5) * 1.3;
+      const spd = 35 + Math.random() * (impactSpeed * 2.2 + scrapeSpeed * 1.6);
+      world.particles.push({
+        x: contactX + (Math.random() * 6 - 3),
+        y: contactY + (Math.random() * 6 - 3),
+        vx: Math.cos(ang) * spd + car.vx * 0.3,
+        vy: Math.sin(ang) * spd + car.vy * 0.3,
+        radius: 1.2 + Math.random() * 2.2,
+        color: Math.random() < 0.65 ? '#f97316' : (Math.random() < 0.5 ? '#fef08a' : '#ef4444'),
+        alpha: 1.0,
+        life: 0,
+        maxLife: 0.15 + Math.random() * 0.25,
+        type: 'spark'
+      });
+    }
+    if (impactSpeed > 28) {
+      for (let i = 0; i < 8; i++) {
+        const ang = Math.random() * Math.PI * 2;
+        const spd = 20 + Math.random() * 70;
+        world.particles.push({
+          x: contactX + (Math.random() * 8 - 4),
+          y: contactY + (Math.random() * 8 - 4),
+          vx: Math.cos(ang) * spd + car.vx * 0.2,
+          vy: Math.sin(ang) * spd + car.vy * 0.2,
+          radius: 1.8 + Math.random() * 2.8,
+          color: Math.random() < 0.5 ? car.color : '#94a3b8',
+          alpha: 0.85,
+          life: 0,
+          maxLife: 0.35 + Math.random() * 0.3,
+          type: 'debris'
+        });
+      }
+    }
+  }
+
   // Dynamic Mass & Kinetic Momentum Factor
   const isExtremeStriker = strikerMass >= 40000;
   const maxMassRatioLimit = isExtremeStriker ? 45.0 : 3.5;
@@ -1791,55 +1830,156 @@ export function applyVehicleDamageAndDeformation(
     }
   }
 
-  // 5. Particle Emission on High-Speed Crash (Sparks, Glass shards, Debris)
-  if (impactSpeed > 35) {
-    const sparkCount = Math.floor(3 + severity * 8);
-    for (let s = 0; s < sparkCount; s++) {
+  // 5. Volumetric Glass Shrapnel & Body Part Detachment on High-Speed Crash
+  if (!world.detachedParts) world.detachedParts = [];
+
+  // Volumetric parabolic Glass Shards on glass/headlight break
+  if (severity > 0.35 || dmg.windshieldCracked || dmg.leftHeadlightBroken || dmg.rightHeadlightBroken) {
+    const glassCount = Math.floor(12 + severity * 18);
+    for (let g = 0; g < glassCount; g++) {
+      const spreadAng = car.angle + (Math.random() - 0.5) * 2.0;
+      const spd = 40 + Math.random() * (impactSpeed * 2.5 + 60);
       world.particles.push({
         x: contactX + (Math.random() * 8 - 4),
         y: contactY + (Math.random() * 8 - 4),
-        vx: (Math.random() * 120 - 60),
-        vy: (Math.random() * 120 - 60),
-        radius: 1.5 + Math.random() * 1.5,
-        color: '#fbbf24',
+        vx: Math.cos(spreadAng) * spd + car.vx * 0.3,
+        vy: Math.sin(spreadAng) * spd + car.vy * 0.3,
+        radius: 1.5 + Math.random() * 3.5,
+        color: Math.random() < 0.35 ? '#fef08a' : '#e0f2fe',
         alpha: 0.95,
         life: 0,
-        maxLife: 0.2 + Math.random() * 0.15,
-        type: 'spark'});
+        maxLife: 0.8 + Math.random() * 1.2,
+        type: 'glass_shard',
+        z: 1.8 + Math.random() * 2.5,
+        vz: 15 + Math.random() * 40,
+        splatted: false
+      });
+    }
+  }
+
+  // Physical Detachable Body Parts (Hood, Front Bumper, Rear Bumper, Left/Right Doors)
+  if (impactSpeed > 32 || severity > 0.50) {
+    // Hood detachment
+    if ((dmg.frontCrumple > 7.5 || (severity > 0.60 && normX > 0.20)) && !dmg.hoodDetached) {
+      dmg.hoodDetached = true;
+      dmg.hoodBuckled = true;
+      world.detachedParts.push({
+        id: 'hood_' + car.id + '_' + Date.now(),
+        vehicleId: car.id,
+        partType: 'hood',
+        color: car.color,
+        x: car.x + cosA * (halfL * 0.3),
+        y: car.y + sinA * (halfL * 0.3),
+        vx: car.vx * 0.5 + cosA * (60 + impactSpeed * 0.8) + (Math.random() - 0.5) * 40,
+        vy: car.vy * 0.5 + sinA * (60 + impactSpeed * 0.8) + (Math.random() - 0.5) * 40,
+        angle: car.angle + (Math.random() - 0.5) * 0.6,
+        angularVelocity: (Math.random() - 0.5) * 12.0,
+        length: halfL * 0.75,
+        width: halfW * 1.6,
+        life: 0,
+        maxLife: 240,
+        strain: severity
+      });
     }
 
-    if (severity > 0.45 || dmg.windshieldCracked || dmg.leftHeadlightBroken || dmg.rightHeadlightBroken) {
-      const glassCount = Math.floor(5 + severity * 10);
-      for (let g = 0; g < glassCount; g++) {
-        world.particles.push({
-          x: contactX + (Math.random() * 6 - 3),
-          y: contactY + (Math.random() * 6 - 3),
-          vx: (Math.random() * 90 - 45),
-          vy: (Math.random() * 90 - 45),
-          radius: 1.5 + Math.random() * 2.0,
-          color: '#bae6fd',
-          alpha: 0.85,
-          life: 0,
-          maxLife: 0.4 + Math.random() * 0.25,
-          type: 'glass_shard'});
-      }
+    // Front Bumper detachment
+    if ((dmg.frontCrumple > 6.0 || (severity > 0.48 && normX > 0.25)) && !dmg.frontBumperDetached) {
+      dmg.frontBumperDetached = true;
+      world.detachedParts.push({
+        id: 'bumper_f_' + car.id + '_' + Date.now(),
+        vehicleId: car.id,
+        partType: 'bumper_front',
+        color: car.color,
+        x: car.x + cosA * (halfL * 0.9),
+        y: car.y + sinA * (halfL * 0.9),
+        vx: car.vx * 0.4 + cosA * (50 + impactSpeed * 0.6) + (Math.random() - 0.5) * 30,
+        vy: car.vy * 0.4 + sinA * (50 + impactSpeed * 0.6) + (Math.random() - 0.5) * 30,
+        angle: car.angle + (Math.random() - 0.5) * 0.8,
+        angularVelocity: (Math.random() - 0.5) * 15.0,
+        length: 6,
+        width: halfW * 2.1,
+        life: 0,
+        maxLife: 240,
+        strain: severity
+      });
     }
 
-    if (severity > 0.35) {
-      const debrisCount = Math.floor(2 + severity * 4);
-      for (let d = 0; d < debrisCount; d++) {
-        world.particles.push({
-          x: contactX + (Math.random() * 6 - 3),
-          y: contactY + (Math.random() * 6 - 3),
-          vx: (Math.random() * 70 - 35),
-          vy: (Math.random() * 70 - 35),
-          radius: 2 + Math.random() * 2.5,
-          color: Math.random() > 0.5 ? car.color : '#334155',
-          alpha: 0.9,
-          life: 0,
-          maxLife: 0.45 + Math.random() * 0.35,
-          type: 'debris'});
-      }
+    // Rear Bumper detachment
+    if ((dmg.rearCrumple > 5.0 || (severity > 0.48 && normX < -0.25)) && !dmg.rearBumperDetached) {
+      dmg.rearBumperDetached = true;
+      world.detachedParts.push({
+        id: 'bumper_r_' + car.id + '_' + Date.now(),
+        vehicleId: car.id,
+        partType: 'bumper_rear',
+        color: car.color,
+        x: car.x - cosA * (halfL * 0.9),
+        y: car.y - sinA * (halfL * 0.9),
+        vx: car.vx * 0.4 - cosA * (50 + impactSpeed * 0.6) + (Math.random() - 0.5) * 30,
+        vy: car.vy * 0.4 - sinA * (50 + impactSpeed * 0.6) + (Math.random() - 0.5) * 30,
+        angle: car.angle + (Math.random() - 0.5) * 0.8,
+        angularVelocity: (Math.random() - 0.5) * 15.0,
+        length: 6,
+        width: halfW * 2.1,
+        life: 0,
+        maxLife: 240,
+        strain: severity
+      });
+    }
+
+    // Left Door detachment
+    if ((dmg.leftDent > 4.2 || (severity > 0.52 && normY < -0.35)) && !dmg.leftDoorDetached) {
+      dmg.leftDoorDetached = true;
+      world.detachedParts.push({
+        id: 'door_l_' + car.id + '_' + Date.now(),
+        vehicleId: car.id,
+        partType: 'door_left',
+        color: car.color,
+        x: car.x - sinA * (halfW * 0.8),
+        y: car.y + cosA * (halfW * 0.8),
+        vx: car.vx * 0.4 - sinA * (40 + impactSpeed * 0.5) + (Math.random() - 0.5) * 25,
+        vy: car.vy * 0.4 + cosA * (40 + impactSpeed * 0.5) + (Math.random() - 0.5) * 25,
+        angle: car.angle + (Math.random() - 0.5) * 0.9,
+        angularVelocity: (Math.random() - 0.5) * 10.0,
+        length: halfL * 0.6,
+        width: 5,
+        life: 0,
+        maxLife: 240,
+        strain: severity
+      });
+    }
+
+    // Right Door detachment
+    if ((dmg.rightDent > 4.2 || (severity > 0.52 && normY > 0.35)) && !dmg.rightDoorDetached) {
+      dmg.rightDoorDetached = true;
+      world.detachedParts.push({
+        id: 'door_r_' + car.id + '_' + Date.now(),
+        vehicleId: car.id,
+        partType: 'door_right',
+        color: car.color,
+        x: car.x + sinA * (halfW * 0.8),
+        y: car.y - cosA * (halfW * 0.8),
+        vx: car.vx * 0.4 + sinA * (40 + impactSpeed * 0.5) + (Math.random() - 0.5) * 25,
+        vy: car.vy * 0.4 - cosA * (40 + impactSpeed * 0.5) + (Math.random() - 0.5) * 25,
+        angle: car.angle + (Math.random() - 0.5) * 0.9,
+        angularVelocity: (Math.random() - 0.5) * 10.0,
+        length: halfL * 0.6,
+        width: 5,
+        life: 0,
+        maxLife: 240,
+        strain: severity
+      });
+    }
+  }
+
+  // 6. Camera Micro-Freeze & Directional Impact Shockwave
+  if (impactSpeed > 28 && (car.isPlayerControlled || (world as any)._lastPlayer?.currentVehicleId === car.id)) {
+    world.impactFreezeTimer = Math.min(0.045, 0.016 + impactSpeed * 0.0002);
+    if ((world as any).camera) {
+      const cam = (world as any).camera;
+      cam.shakeTimer = Math.min(0.85, 0.30 + impactSpeed * 0.005);
+      cam.shakeIntensity = Math.min(22.0, 5.0 + impactSpeed * 0.14);
+      cam.shakeVx = -cosA * Math.min(35.0, impactSpeed * 0.28);
+      cam.shakeVy = -sinA * Math.min(35.0, impactSpeed * 0.28);
     }
   }
 
@@ -8824,11 +8964,11 @@ export function updateVehiclePhysics(
 
           const invMassN = invMass1 + invMass2 + (r1CrossN * r1CrossN) / I_yaw_vehicle + (r2CrossN * r2CrossN) / I_yaw_other;
 
-          // High-speed impact restitution (mostly plastic crumple)
-          const restitution = Math.max(0.06, 0.20 - Math.min(0.14, impactSpeed / 300));
+          // High-speed plastic crumple (almost zero elastic bounceback for heavy metal deformation)
+          const restitution = Math.max(0.01, 0.08 - Math.min(0.07, impactSpeed / 300));
           const impulseNormalMag = -(1 + restitution) * velAlongNormal / invMassN;
 
-          // Tangential friction (Coulomb tearing/scraping friction of sheet metal)
+          // Plastic Interlocking Sheet Metal Friction
           const vNormalX = velAlongNormal * col.normalX;
           const vNormalY = velAlongNormal * col.normalY;
           const vTanX = relVx - vNormalX;
@@ -8848,7 +8988,9 @@ export function updateVehiclePhysics(
             const invMassT = invMass1 + invMass2 + (r1CrossT * r1CrossT) / I_yaw_vehicle + (r2CrossT * r2CrossT) / I_yaw_other;
             const jtIdeal = -vTanSpeed / invMassT;
 
-            const frictionLimit = 0.55 * impulseNormalMag;
+            // Sheet metal entanglement increases friction to 0.85 during heavy impacts!
+            const interlockingFrictionCoeff = impactSpeed > 22 ? 0.85 : 0.55;
+            const frictionLimit = interlockingFrictionCoeff * impulseNormalMag;
             const jt = Math.max(-frictionLimit, Math.min(frictionLimit, jtIdeal));
 
             impulseTanX = jt * tX;
@@ -9254,8 +9396,60 @@ export function updateVehiclePhysics(
   vehicle.y = Math.max(minVehY, Math.min(maxVehY, vehicle.y));
 }
 
+export function updateDetachedParts(world: GameWorld, dt: number) {
+  if (!world.detachedParts || world.detachedParts.length === 0) return;
+
+  const parts = world.detachedParts;
+  let writeIdx = 0;
+  for (let i = 0; i < parts.length; i++) {
+    const p = parts[i];
+    p.life += dt;
+    if (p.life > p.maxLife) continue;
+
+    // Motion & Asphalt Friction
+    const spd = Math.hypot(p.vx, p.vy);
+    const fric = Math.pow(0.91, dt * 60);
+    p.vx *= fric;
+    p.vy *= fric;
+    p.angularVelocity *= Math.pow(0.86, dt * 60);
+
+    p.x += p.vx * dt;
+    p.y += p.vy * dt;
+    p.angle += p.angularVelocity * dt;
+
+    // Spark trails when sliding fast on asphalt
+    if (spd > 15 && world.particles && Math.random() < 0.65) {
+      world.particles.push({
+        x: p.x + (Math.random() * p.length - p.length / 2),
+        y: p.y + (Math.random() * p.width - p.width / 2),
+        vx: -p.vx * 0.35 + (Math.random() - 0.5) * 20,
+        vy: -p.vy * 0.35 + (Math.random() - 0.5) * 20,
+        radius: 1.2 + Math.random() * 1.5,
+        color: Math.random() < 0.7 ? '#f97316' : '#fef08a',
+        alpha: 0.95,
+        life: 0,
+        maxLife: 0.15 + Math.random() * 0.2,
+        type: 'spark'
+      });
+    }
+
+    // Retain active part
+    parts[writeIdx++] = p;
+  }
+  parts.length = writeIdx;
+}
+
 export function updateSkidMarksAndParticles(world: GameWorld, player: Player, dt: number) {
   (world as any)._lastPlayer = player;
+
+  // Handle micro-stutter frame freeze on heavy impact
+  if (world.impactFreezeTimer && world.impactFreezeTimer > 0) {
+    world.impactFreezeTimer -= dt;
+    dt = dt * 0.15; // Slow down simulation tick during freeze frame
+  }
+
+  // Update physical detached body parts (hoods, bumpers, doors)
+  updateDetachedParts(world, dt);
 
   // 0. Update atmospheric wind vector and thermodynamic temperature state
   updateWorldWind(world, dt);

@@ -122,39 +122,15 @@ export function isRoadSegmentBlocked(
   return { isBlocked, hasAccident, hasJam, blockedVehicles };
 }
 
-// Find closest intersection to a given point, optionally avoiding immediately blocked directions
-function findClosestIntersection(
-  point: Vector2D,
-  intersections: Intersection[],
-  world?: GameWorld
-): Intersection | null {
-  if (intersections.length === 0) return null;
-
-  // Sort intersections by distance to point
-  const sorted = [...intersections].sort((a, b) => {
-    return getDistance(point, { x: a.x, y: a.y }) - getDistance(point, { x: b.x, y: b.y });
-  });
-
-  if (!world || sorted.length <= 1) {
-    return sorted[0] || null;
+// Extract all centerline waypoints of a road segment
+export function getRoadWaypoints(road: RoadSegment): Vector2D[] {
+  if (road.curvePoints && road.curvePoints.length >= 2) {
+    return road.curvePoints.map(p => ({ x: p.x, y: p.y }));
   }
-
-  // If closest intersection has an immediate crash or jam directly between point and it,
-  // prefer the alternate intersection along the road to lead the car away from the hazard
-  const first = sorted[0];
-  const firstBlocked = isRoadSegmentBlocked(world, point.x, point.y, first.x, first.y);
-
-  if (firstBlocked.isBlocked) {
-    for (let i = 1; i < Math.min(4, sorted.length); i++) {
-      const candidate = sorted[i];
-      const candBlocked = isRoadSegmentBlocked(world, point.x, point.y, candidate.x, candidate.y);
-      if (!candBlocked.isBlocked) {
-        return candidate;
-      }
-    }
+  if (road.x1 !== undefined && road.y1 !== undefined && road.x2 !== undefined && road.y2 !== undefined) {
+    return [{ x: road.x1, y: road.y1 }, { x: road.x2, y: road.y2 }];
   }
-
-  return first;
+  return [];
 }
 
 // Project point onto line segment
@@ -171,70 +147,162 @@ function projectPointOnSegment(p: Vector2D, a: Vector2D, b: Vector2D): { proj: V
   return { proj, t, dist: getDistance(p, proj) };
 }
 
-// Find direct connected neighbor intersections along roads
-function getIntersectionNeighbors(
-  current: Intersection,
-  allIntersections: Intersection[],
-  roads?: RoadSegment[]
-): Intersection[] {
-  const neighbors: Intersection[] = [];
-  const neighborSet = new Set<string>();
+// Check line segment intersection
+function getLineIntersection(p1: Vector2D, p2: Vector2D, p3: Vector2D, p4: Vector2D): Vector2D | null {
+  const denom = (p4.y - p3.y) * (p2.x - p1.x) - (p4.x - p3.x) * (p2.y - p1.y);
+  if (Math.abs(denom) < 0.0001) return null;
+  const ua = ((p4.x - p3.x) * (p1.y - p3.y) - (p4.y - p3.y) * (p1.x - p3.x)) / denom;
+  const ub = ((p2.x - p1.x) * (p1.y - p3.y) - (p2.y - p1.y) * (p1.x - p3.x)) / denom;
+  if (ua >= 0.001 && ua <= 0.999 && ub >= 0.001 && ub <= 0.999) {
+    return {
+      x: p1.x + ua * (p2.x - p1.x),
+      y: p1.y + ua * (p2.y - p1.y)
+    };
+  }
+  return null;
+}
 
-  if (roads && roads.length > 0) {
-    for (const road of roads) {
-      const p1 = { x: road.x1, y: road.y1 };
-      const p2 = { x: road.x2, y: road.y2 };
-      const maxConnDist = Math.max(160, road.width * 1.5 + 40);
+export interface NavGraphNode {
+  id: string;
+  x: number;
+  y: number;
+}
 
-      const d1 = getDistance({ x: current.x, y: current.y }, p1);
-      const d2 = getDistance({ x: current.x, y: current.y }, p2);
+export interface NavGraphEdge {
+  from: string;
+  to: string;
+  cost: number;
+  road?: RoadSegment;
+  waypoints: Vector2D[];
+}
 
-      // Check if current is near one end of the road
-      if (d1 < maxConnDist || d2 < maxConnDist) {
-        const targetEnd = d1 < maxConnDist ? p2 : p1;
+export interface BuiltNavGraph {
+  nodes: Map<string, NavGraphNode>;
+  adj: Map<string, NavGraphEdge[]>;
+}
 
-        // Find the intersection closest to targetEnd
-        let bestTarget: Intersection | null = null;
-        let bestDist = maxConnDist;
+/**
+ * Builds a complete road graph containing ALL road segments in world.roads,
+ * automatically connecting endpoints, T-junctions, road crossings, and explicit intersections.
+ */
+export function buildRoadNavGraph(world: GameWorld, ignoreBlocks: boolean = false): BuiltNavGraph {
+  const nodes = new Map<string, NavGraphNode>();
+  const adj = new Map<string, NavGraphEdge[]>();
+  const SNAP_DIST = 45; // max distance in px to snap nodes together into a unified junction
 
-        for (const other of allIntersections) {
-          if (other.id === current.id) continue;
-          const od = getDistance({ x: other.x, y: other.y }, targetEnd);
-          if (od < bestDist) {
-            bestDist = od;
-            bestTarget = other;
-          }
-        }
+  let autoNodeIdCounter = 1;
 
-        if (bestTarget && !neighborSet.has(bestTarget.id)) {
-          neighborSet.add(bestTarget.id);
-          neighbors.push(bestTarget);
-        }
+  function getOrCreateNodeId(pt: Vector2D, preferredId?: string): string {
+    if (preferredId && nodes.has(preferredId)) return preferredId;
+
+    // Look for existing node close by
+    for (const [id, node] of nodes.entries()) {
+      if (getDistance(pt, node) < SNAP_DIST) {
+        return id;
       }
+    }
 
-      // Also check if both current and other lie along this road segment
-      const projCurrent = projectPointOnSegment({ x: current.x, y: current.y }, p1, p2);
-      if (projCurrent.dist < road.width / 2 + 40) {
-        for (const other of allIntersections) {
-          if (other.id === current.id || neighborSet.has(other.id)) continue;
-          const projOther = projectPointOnSegment({ x: other.x, y: other.y }, p1, p2);
-          if (projOther.dist < road.width / 2 + 40) {
-            // Check if there is any intermediate intersection on this road between them
-            const tMin = Math.min(projCurrent.t, projOther.t);
-            const tMax = Math.max(projCurrent.t, projOther.t);
-            if (tMax - tMin > 0.01) {
-              let hasMid = false;
-              for (const mid of allIntersections) {
-                if (mid.id === current.id || mid.id === other.id) continue;
-                const projMid = projectPointOnSegment({ x: mid.x, y: mid.y }, p1, p2);
-                if (projMid.dist < road.width / 2 + 40 && projMid.t > tMin + 0.02 && projMid.t < tMax - 0.02) {
-                  hasMid = true;
-                  break;
-                }
+    const id = preferredId || `nav_node_${autoNodeIdCounter++}`;
+    nodes.set(id, { id, x: pt.x, y: pt.y });
+    adj.set(id, []);
+    return id;
+  }
+
+  // 1. Add explicit intersections from world
+  if (world.intersections) {
+    for (const inter of world.intersections) {
+      getOrCreateNodeId({ x: inter.x, y: inter.y }, inter.id);
+    }
+  }
+
+  // 2. Prepare road waypoint sequences
+  const roadsWithWps: { road: RoadSegment; wps: Vector2D[] }[] = [];
+  if (world.roads && world.roads.length > 0) {
+    for (const r of world.roads) {
+      const wps = getRoadWaypoints(r);
+      if (wps.length >= 2) {
+        roadsWithWps.push({ road: r, wps });
+      }
+    }
+  }
+
+  // Record split points along each road (distance along road -> node ID)
+  type SplitPoint = { distParam: number; nodeId: string; pt: Vector2D };
+  const roadSplitPoints = new Map<RoadSegment, SplitPoint[]>();
+
+  roadsWithWps.forEach(({ road }) => {
+    roadSplitPoints.set(road, []);
+  });
+
+  // Calculate cumulative distances for a road's waypoints
+  function getWpCumDists(wps: Vector2D[]): number[] {
+    const cd = [0];
+    for (let i = 1; i < wps.length; i++) {
+      cd.push(cd[i - 1] + getDistance(wps[i - 1], wps[i]));
+    }
+    return cd;
+  }
+
+  // Helper to add a split point to a road
+  function addSplitPoint(road: RoadSegment, cd: number[], segIdx: number, t: number, nodeId: string, pt: Vector2D) {
+    const splits = roadSplitPoints.get(road);
+    if (!splits) return;
+    const distParam = cd[segIdx] + t * (cd[segIdx + 1] - cd[segIdx]);
+    if (!splits.some(s => Math.abs(s.distParam - distParam) < 2)) {
+      splits.push({ distParam, nodeId, pt });
+    }
+  }
+
+  // 3. Process waypoints, endpoints, T-junctions, and crossings
+  roadsWithWps.forEach(({ road, wps }) => {
+    const cd = getWpCumDists(wps);
+
+    // Endpoints and intermediate control points
+    for (let i = 0; i < wps.length; i++) {
+      const pt = wps[i];
+      const nodeId = getOrCreateNodeId(pt);
+      addSplitPoint(road, cd, Math.min(i, wps.length - 2), i === wps.length - 1 ? 1 : 0, nodeId, pt);
+    }
+  });
+
+  // Check crossings and T-junctions between roads
+  for (let i = 0; i < roadsWithWps.length; i++) {
+    const { road: r1, wps: wps1 } = roadsWithWps[i];
+    const cd1 = getWpCumDists(wps1);
+
+    for (let j = i + 1; j < roadsWithWps.length; j++) {
+      const { road: r2, wps: wps2 } = roadsWithWps[j];
+      const cd2 = getWpCumDists(wps2);
+
+      for (let s1 = 0; s1 < wps1.length - 1; s1++) {
+        const p1 = wps1[s1], p2 = wps1[s1 + 1];
+        for (let s2 = 0; s2 < wps2.length - 1; s2++) {
+          const q1 = wps2[s2], q2 = wps2[s2 + 1];
+
+          // Direct segment crossing
+          const ix = getLineIntersection(p1, p2, q1, q2);
+          if (ix) {
+            const nodeId = getOrCreateNodeId(ix);
+            const proj1 = projectPointOnSegment(ix, p1, p2);
+            const proj2 = projectPointOnSegment(ix, q1, q2);
+            addSplitPoint(r1, cd1, s1, proj1.t, nodeId, ix);
+            addSplitPoint(r2, cd2, s2, proj2.t, nodeId, ix);
+          } else {
+            // T-junction check: endpoint of r1 on segment of r2
+            if (s1 === 0 || s1 === wps1.length - 2) {
+              const endPt = s1 === 0 ? p1 : p2;
+              const proj = projectPointOnSegment(endPt, q1, q2);
+              if (proj.dist < 50) {
+                const nodeId = getOrCreateNodeId(endPt);
+                addSplitPoint(r2, cd2, s2, proj.t, nodeId, proj.proj);
               }
-              if (!hasMid) {
-                neighborSet.add(other.id);
-                neighbors.push(other);
+            }
+            if (s2 === 0 || s2 === wps2.length - 2) {
+              const endPt = s2 === 0 ? q1 : q2;
+              const proj = projectPointOnSegment(endPt, p1, p2);
+              if (proj.dist < 50) {
+                const nodeId = getOrCreateNodeId(endPt);
+                addSplitPoint(r1, cd1, s1, proj.t, nodeId, proj.proj);
               }
             }
           }
@@ -243,116 +311,249 @@ function getIntersectionNeighbors(
     }
   }
 
-  // Fallback / supplement for city grid intersections:
-  for (const other of allIntersections) {
-    if (other.id === current.id || neighborSet.has(other.id)) continue;
+  // 4. Build edges from sorted split points
+  roadsWithWps.forEach(({ road, wps }) => {
+    const splits = roadSplitPoints.get(road);
+    if (!splits || splits.length < 2) return;
 
-    const isHoriz = Math.abs(other.y - current.y) < 55;
-    const isVert = Math.abs(other.x - current.x) < 55;
+    splits.sort((a, b) => a.distParam - b.distParam);
 
-    if (isHoriz || isVert) {
-      const dist = getDistance({ x: current.x, y: current.y }, { x: other.x, y: other.y });
-      if (dist < 4500) {
-        let hasMid = false;
-        const minX = Math.min(current.x, other.x) + 40;
-        const maxX = Math.max(current.x, other.x) - 40;
-        const minY = Math.min(current.y, other.y) + 40;
-        const maxY = Math.max(current.y, other.y) - 40;
+    const surfaceMultiplier = road.isDirt ? 1.15 : (road.isGravel ? 1.08 : 1.0);
 
-        for (const mid of allIntersections) {
-          if (mid.id === current.id || mid.id === other.id) continue;
-          if (isHoriz && Math.abs(mid.y - current.y) < 55 && mid.x > minX && mid.x < maxX) {
-            hasMid = true;
-            break;
-          }
-          if (isVert && Math.abs(mid.x - current.x) < 55 && mid.y > minY && mid.y < maxY) {
-            hasMid = true;
-            break;
-          }
+    for (let i = 0; i < splits.length - 1; i++) {
+      const sA = splits[i];
+      const sB = splits[i + 1];
+
+      if (sA.nodeId === sB.nodeId) continue;
+
+      const edgeWps: Vector2D[] = [sA.pt];
+
+      const cd = getWpCumDists(wps);
+      for (let w = 0; w < wps.length; w++) {
+        if (cd[w] > sA.distParam + 0.1 && cd[w] < sB.distParam - 0.1) {
+          edgeWps.push(wps[w]);
         }
+      }
+      edgeWps.push(sB.pt);
 
-        if (!hasMid) {
-          neighborSet.add(other.id);
-          neighbors.push(other);
+      let length = 0;
+      for (let k = 1; k < edgeWps.length; k++) {
+        length += getDistance(edgeWps[k - 1], edgeWps[k]);
+      }
+
+      if (length <= 0) continue;
+
+      let blockPenalty = 0;
+      const roadBlock = isRoadSegmentBlocked(world, sA.pt.x, sA.pt.y, sB.pt.x, sB.pt.y);
+      if (roadBlock.isBlocked && !ignoreBlocks) {
+        blockPenalty = 500000;
+      }
+
+      const cost = length * surfaceMultiplier + blockPenalty;
+
+      const fwdEdge: NavGraphEdge = {
+        from: sA.nodeId,
+        to: sB.nodeId,
+        cost,
+        road,
+        waypoints: edgeWps
+      };
+      adj.get(sA.nodeId)?.push(fwdEdge);
+
+      const revEdge: NavGraphEdge = {
+        from: sB.nodeId,
+        to: sA.nodeId,
+        cost,
+        road,
+        waypoints: [...edgeWps].reverse()
+      };
+      adj.get(sB.nodeId)?.push(revEdge);
+    }
+  });
+
+  return { nodes, adj };
+}
+
+// Module-level graph cache
+let cachedWorldRef: GameWorld | null = null;
+let cachedGraphObj: BuiltNavGraph | null = null;
+let cachedIgnoreBlocksState: boolean = false;
+
+function getNavGraph(world: GameWorld, ignoreBlocks: boolean): BuiltNavGraph {
+  if (cachedWorldRef === world && cachedGraphObj && cachedIgnoreBlocksState === ignoreBlocks) {
+    return cachedGraphObj;
+  }
+  cachedGraphObj = buildRoadNavGraph(world, ignoreBlocks);
+  cachedWorldRef = world;
+  cachedIgnoreBlocksState = ignoreBlocks;
+  return cachedGraphObj;
+}
+
+// Project point onto closest edge in graph
+function projectPointOntoGraph(pt: Vector2D, graph: BuiltNavGraph): {
+  nodeId: string;
+  projPt: Vector2D;
+  edge: NavGraphEdge;
+  dist: number;
+} | null {
+  let bestDist = Infinity;
+  let bestResult: { nodeId: string; projPt: Vector2D; edge: NavGraphEdge; dist: number } | null = null;
+
+  for (const [, edges] of graph.adj.entries()) {
+    for (const edge of edges) {
+      const wps = edge.waypoints;
+      for (let i = 0; i < wps.length - 1; i++) {
+        const { proj, dist } = projectPointOnSegment(pt, wps[i], wps[i + 1]);
+        if (dist < bestDist) {
+          bestDist = dist;
+          bestResult = {
+            nodeId: edge.from,
+            projPt: proj,
+            edge,
+            dist
+          };
         }
       }
     }
   }
 
-  return neighbors;
+  return bestResult;
 }
 
-// Helper to extract path waypoints along a road between two points/intersections
-function getRoadWaypointsBetween(pA: Vector2D, pB: Vector2D, roads: RoadSegment[]): Vector2D[] {
-  let bestRoad: RoadSegment | null = null;
-  let bestDistSum = Infinity;
-
-  for (const road of roads) {
-    const p1 = { x: road.x1, y: road.y1 };
-    const p2 = { x: road.x2, y: road.y2 };
-    const d1A = getDistance(pA, p1);
-    const d2B = getDistance(pB, p2);
-    const d2A = getDistance(pA, p2);
-    const d1B = getDistance(pB, p1);
-
-    const sumForward = d1A + d2B;
-    const sumReverse = d2A + d1B;
-    const minSum = Math.min(sumForward, sumReverse);
-
-    if (minSum < bestDistSum && minSum < Math.max(300, road.width * 2 + 100)) {
-      bestDistSum = minSum;
-      bestRoad = road;
-    }
-  }
-
-  if (bestRoad && bestRoad.lanePaths && bestRoad.lanePaths.length > 0) {
-    const lane = bestRoad.lanePaths[0];
-    if (lane && lane.waypoints && lane.waypoints.length > 2) {
-      const wps = [...lane.waypoints];
-      // Check if waypoints run from pA to pB or reverse
-      const startDist = getDistance(pA, wps[0]);
-      const endDist = getDistance(pA, wps[wps.length - 1]);
-      if (endDist < startDist) {
-        wps.reverse();
-      }
-      return wps;
-    }
-  }
-
-  return [pB];
-}
-
-// A* algorithm to compute path over intersection nodes avoiding traffic jams and accidents in either direction
-export function calculateGpsRoute(world: GameWorld, start: Vector2D, end: Vector2D, ignoreBlocks: boolean = false): Vector2D[] {
+/**
+ * High-precision A* algorithm to calculate navigation route along all roads in the game world.
+ * Guarantees smooth road pathing without cutting through buildings or terrain.
+ */
+export function calculateGpsRoute(
+  world: GameWorld,
+  start: Vector2D,
+  end: Vector2D,
+  ignoreBlocks: boolean = false
+): Vector2D[] {
   const directDist = getDistance(start, end);
-
-  // If destination is very close (within 250px), direct line
-  if (directDist < 250 || world.intersections.length < 2) {
+  if (directDist < 30) {
     return [start, end];
   }
 
-  const startInter = findClosestIntersection(start, world.intersections, world);
-  const endInter = findClosestIntersection(end, world.intersections);
-
-  if (!startInter || !endInter || startInter.id === endInter.id) {
+  if (!world.roads || world.roads.length === 0) {
     return [start, end];
   }
 
-  // A* implementation
-  const openSet = new Set<string>([startInter.id]);
-  const cameFrom = new Map<string, Intersection>();
+  const graph = getNavGraph(world, ignoreBlocks);
+
+  if (graph.nodes.size === 0) {
+    return [start, end];
+  }
+
+  const startProj = projectPointOntoGraph(start, graph);
+  const endProj = projectPointOntoGraph(end, graph);
+
+  if (!startProj || !endProj) {
+    return [start, end];
+  }
+
+  const startNodeId = 'temp_start_node';
+  const endNodeId = 'temp_end_node';
+
+  const nodeMap = new Map(graph.nodes);
+  nodeMap.set(startNodeId, { id: startNodeId, x: startProj.projPt.x, y: startProj.projPt.y });
+  nodeMap.set(endNodeId, { id: endNodeId, x: endProj.projPt.x, y: endProj.projPt.y });
+
+  const adjMap = new Map<string, NavGraphEdge[]>();
+  for (const [id, edges] of graph.adj.entries()) {
+    adjMap.set(id, [...edges]);
+  }
+  adjMap.set(startNodeId, []);
+  adjMap.set(endNodeId, []);
+
+  // Connect startNodeId to startProj's edge endpoints
+  {
+    const fromNode = graph.nodes.get(startProj.edge.from);
+    const toNode = graph.nodes.get(startProj.edge.to);
+    if (fromNode) {
+      const dist = getDistance(startProj.projPt, fromNode);
+      adjMap.get(startNodeId)?.push({
+        from: startNodeId,
+        to: fromNode.id,
+        cost: dist,
+        waypoints: [startProj.projPt, { x: fromNode.x, y: fromNode.y }]
+      });
+      adjMap.get(fromNode.id)?.push({
+        from: fromNode.id,
+        to: startNodeId,
+        cost: dist,
+        waypoints: [{ x: fromNode.x, y: fromNode.y }, startProj.projPt]
+      });
+    }
+    if (toNode) {
+      const dist = getDistance(startProj.projPt, toNode);
+      adjMap.get(startNodeId)?.push({
+        from: startNodeId,
+        to: toNode.id,
+        cost: dist,
+        waypoints: [startProj.projPt, { x: toNode.x, y: toNode.y }]
+      });
+      adjMap.get(toNode.id)?.push({
+        from: toNode.id,
+        to: startNodeId,
+        cost: dist,
+        waypoints: [{ x: toNode.x, y: toNode.y }, startProj.projPt]
+      });
+    }
+  }
+
+  // Connect endNodeId to endProj's edge endpoints
+  {
+    const fromNode = graph.nodes.get(endProj.edge.from);
+    const toNode = graph.nodes.get(endProj.edge.to);
+    if (fromNode) {
+      const dist = getDistance(fromNode, endProj.projPt);
+      adjMap.get(fromNode.id)?.push({
+        from: fromNode.id,
+        to: endNodeId,
+        cost: dist,
+        waypoints: [{ x: fromNode.x, y: fromNode.y }, endProj.projPt]
+      });
+      adjMap.get(endNodeId)?.push({
+        from: endNodeId,
+        to: fromNode.id,
+        cost: dist,
+        waypoints: [endProj.projPt, { x: fromNode.x, y: fromNode.y }]
+      });
+    }
+    if (toNode) {
+      const dist = getDistance(toNode, endProj.projPt);
+      adjMap.get(toNode.id)?.push({
+        from: toNode.id,
+        to: endNodeId,
+        cost: dist,
+        waypoints: [{ x: toNode.x, y: toNode.y }, endProj.projPt]
+      });
+      adjMap.get(endNodeId)?.push({
+        from: endNodeId,
+        to: toNode.id,
+        cost: dist,
+        waypoints: [endProj.projPt, { x: toNode.x, y: toNode.y }]
+      });
+    }
+  }
+
+  // A* Search
+  const openSet = new Set<string>([startNodeId]);
+  const cameFrom = new Map<string, { prevNodeId: string; edge: NavGraphEdge }>();
 
   const gScore = new Map<string, number>();
-  gScore.set(startInter.id, 0);
+  gScore.set(startNodeId, 0);
+
+  const endNodeObj = nodeMap.get(endNodeId)!;
 
   const fScore = new Map<string, number>();
-  fScore.set(startInter.id, getDistance({ x: startInter.x, y: startInter.y }, { x: endInter.x, y: endInter.y }));
+  fScore.set(startNodeId, getDistance(startProj.projPt, endNodeObj));
 
-  const idToInter = new Map<string, Intersection>();
-  world.intersections.forEach((i) => idToInter.set(i.id, i));
+  let bestReachedNodeId = startNodeId;
+  let bestDistToEnd = getDistance(startProj.projPt, endNodeObj);
 
   while (openSet.size > 0) {
-    // Get node in openSet with lowest fScore
     let currentId: string | null = null;
     let lowestF = Infinity;
 
@@ -366,59 +567,88 @@ export function calculateGpsRoute(world: GameWorld, start: Vector2D, end: Vector
 
     if (!currentId) break;
 
-    if (currentId === endInter.id) {
-      // Reconstruct path with curved road waypoints
-      const interSequence: Intersection[] = [];
-      let curr: Intersection | undefined = idToInter.get(endInter.id);
-
-      while (curr) {
-        interSequence.unshift(curr);
-        curr = cameFrom.get(curr.id);
+    const currNode = nodeMap.get(currentId);
+    if (currNode) {
+      const d = getDistance(currNode, endNodeObj);
+      if (d < bestDistToEnd) {
+        bestDistToEnd = d;
+        bestReachedNodeId = currentId;
       }
+    }
 
-      const detailedPath: Vector2D[] = [start];
-      for (let i = 0; i < interSequence.length; i++) {
-        const node = interSequence[i];
-        if (i === 0) {
-          detailedPath.push({ x: node.x, y: node.y });
-        } else {
-          const prev = interSequence[i - 1];
-          const segmentWps = getRoadWaypointsBetween(
-            { x: prev.x, y: prev.y },
-            { x: node.x, y: node.y },
-            world.roads
-          );
-          detailedPath.push(...segmentWps);
-        }
-      }
-      detailedPath.push(end);
-      return detailedPath;
+    if (currentId === endNodeId) {
+      return reconstructPath(start, end, startNodeId, endNodeId, cameFrom);
     }
 
     openSet.delete(currentId);
-    const currentInter = idToInter.get(currentId)!;
-    const neighbors = getIntersectionNeighbors(currentInter, world.intersections, world.roads);
 
-    for (const neighbor of neighbors) {
-      const dist = getDistance({ x: currentInter.x, y: currentInter.y }, { x: neighbor.x, y: neighbor.y });
+    const edges = adjMap.get(currentId) || [];
+    for (const edge of edges) {
+      const neighborId = edge.to;
+      const tentativeG = (gScore.get(currentId) ?? Infinity) + edge.cost;
 
-      // Check if this road segment in EITHER direction has an accident (авария) or traffic jam (затор)
-      const roadBlock = isRoadSegmentBlocked(world, currentInter.x, currentInter.y, neighbor.x, neighbor.y);
-      // Heavy penalty (500,000) guarantees A* completely routes cars around the accident/jam
-      const blockPenalty = (roadBlock.isBlocked && !ignoreBlocks) ? 500000 : 0;
-
-      const tentativeG = (gScore.get(currentId) ?? Infinity) + dist + blockPenalty;
-
-      if (tentativeG < (gScore.get(neighbor.id) ?? Infinity)) {
-        cameFrom.set(neighbor.id, currentInter);
-        gScore.set(neighbor.id, tentativeG);
-        const h = getDistance({ x: neighbor.x, y: neighbor.y }, { x: endInter.x, y: endInter.y });
-        fScore.set(neighbor.id, tentativeG + h);
-        openSet.add(neighbor.id);
+      if (tentativeG < (gScore.get(neighborId) ?? Infinity)) {
+        cameFrom.set(neighborId, { prevNodeId: currentId, edge });
+        gScore.set(neighborId, tentativeG);
+        const targetNode = nodeMap.get(endNodeId)!;
+        const nNode = nodeMap.get(neighborId);
+        const h = nNode ? getDistance(nNode, targetNode) : 0;
+        fScore.set(neighborId, tentativeG + h);
+        openSet.add(neighborId);
       }
     }
   }
 
-  // Fallback if pathfinding fails
-  return [start, { x: startInter.x, y: startInter.y }, { x: endInter.x, y: endInter.y }, end];
+  // Fallback if path to exact endNodeId was not found: return path to best reached node
+  if (bestReachedNodeId !== startNodeId) {
+    return reconstructPath(start, end, startNodeId, bestReachedNodeId, cameFrom);
+  }
+
+  return [start, startProj.projPt, endProj.projPt, end];
+}
+
+function reconstructPath(
+  start: Vector2D,
+  end: Vector2D,
+  startNodeId: string,
+  targetNodeId: string,
+  cameFrom: Map<string, { prevNodeId: string; edge: NavGraphEdge }>
+): Vector2D[] {
+  const edgeSeq: NavGraphEdge[] = [];
+  let curr = targetNodeId;
+
+  while (curr !== startNodeId) {
+    const entry = cameFrom.get(curr);
+    if (!entry) break;
+    edgeSeq.unshift(entry.edge);
+    curr = entry.prevNodeId;
+  }
+
+  const rawWaypoints: Vector2D[] = [start];
+
+  for (let i = 0; i < edgeSeq.length; i++) {
+    const edge = edgeSeq[i];
+    const wps = edge.waypoints;
+    for (let k = 0; k < wps.length; k++) {
+      rawWaypoints.push(wps[k]);
+    }
+  }
+
+  rawWaypoints.push(end);
+
+  // Clean up duplicate adjacent waypoints
+  const cleaned: Vector2D[] = [];
+  for (let i = 0; i < rawWaypoints.length; i++) {
+    if (i === 0) {
+      cleaned.push(rawWaypoints[i]);
+    } else {
+      const prev = cleaned[cleaned.length - 1];
+      const currPt = rawWaypoints[i];
+      if (getDistance(prev, currPt) > 3 || i === rawWaypoints.length - 1) {
+        cleaned.push(currPt);
+      }
+    }
+  }
+
+  return cleaned;
 }

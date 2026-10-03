@@ -476,40 +476,64 @@ export function createDefaultVehicleDamage(length: number = 42, width: number = 
   const halfL = length / 2;
   const halfW = width / 2;
 
-  const base16 = [
+  // 32 High-density softbody perimeter nodes for realistic accordion crumple & plastic yielding
+  const base32 = [
+    // Front Bumper & Grill (nodes 0..4)
     { localX: halfL, localY: 0, structuralType: 'bumper' },
-    { localX: halfL - 0.5, localY: halfW * 0.5, structuralType: 'bumper' },
-    { localX: halfL - 2.5, localY: halfW - 1.5, structuralType: 'fender' },
-    { localX: halfL * 0.5, localY: halfW, structuralType: 'fender' },
+    { localX: halfL - 0.2, localY: halfW * 0.25, structuralType: 'bumper' },
+    { localX: halfL - 0.5, localY: halfW * 0.50, structuralType: 'bumper' },
+    { localX: halfL - 1.0, localY: halfW * 0.75, structuralType: 'bumper' },
+    { localX: halfL - 1.8, localY: halfW * 0.90, structuralType: 'fender' },
+
+    // Front-Left Fender & Wheel Arch (nodes 5..7)
+    { localX: halfL - 2.8, localY: halfW - 0.5, structuralType: 'fender' },
+    { localX: halfL * 0.70, localY: halfW, structuralType: 'fender' },
+    { localX: halfL * 0.50, localY: halfW, structuralType: 'fender' },
+
+    // Left Doors & B-Pillar Flank (nodes 8..11)
+    { localX: halfL * 0.25, localY: halfW, structuralType: 'door' },
     { localX: 0, localY: halfW, structuralType: 'door' },
-    { localX: -halfL * 0.5, localY: halfW, structuralType: 'door' },
-    { localX: -halfL + 2.5, localY: halfW - 1.5, structuralType: 'quarter' },
-    { localX: -halfL + 0.5, localY: halfW * 0.5, structuralType: 'bumper' },
+    { localX: -halfL * 0.25, localY: halfW, structuralType: 'door' },
+    { localX: -halfL * 0.50, localY: halfW, structuralType: 'door' },
+
+    // Rear-Left Quarter & C-Pillar (nodes 12..14)
+    { localX: -halfL * 0.70, localY: halfW, structuralType: 'quarter' },
+    { localX: -halfL + 2.8, localY: halfW - 0.5, structuralType: 'quarter' },
+    { localX: -halfL + 1.8, localY: halfW * 0.90, structuralType: 'bumper' },
+
+    // Rear Bumper & Tailgate (nodes 15..19)
+    { localX: -halfL + 1.0, localY: halfW * 0.75, structuralType: 'bumper' },
+    { localX: -halfL + 0.5, localY: halfW * 0.50, structuralType: 'bumper' },
     { localX: -halfL, localY: 0, structuralType: 'bumper' },
-    { localX: -halfL + 0.5, localY: -halfW * 0.5, structuralType: 'bumper' },
-    { localX: -halfL + 2.5, localY: -halfW + 1.5, structuralType: 'quarter' },
-    { localX: -halfL * 0.5, localY: -halfW, structuralType: 'door' },
+    { localX: -halfL + 0.5, localY: -halfW * 0.50, structuralType: 'bumper' },
+    { localX: -halfL + 1.0, localY: -halfW * 0.75, structuralType: 'bumper' },
+
+    // Rear-Right Quarter & C-Pillar (nodes 20..22)
+    { localX: -halfL + 1.8, localY: -halfW * 0.90, structuralType: 'bumper' },
+    { localX: -halfL + 2.8, localY: -halfW + 0.5, structuralType: 'quarter' },
+    { localX: -halfL * 0.70, localY: -halfW, structuralType: 'quarter' },
+
+    // Right Doors & B-Pillar Flank (nodes 23..26)
+    { localX: -halfL * 0.50, localY: -halfW, structuralType: 'door' },
+    { localX: -halfL * 0.25, localY: -halfW, structuralType: 'door' },
     { localX: 0, localY: -halfW, structuralType: 'door' },
-    { localX: halfL * 0.5, localY: -halfW, structuralType: 'fender' },
-    { localX: halfL - 2.5, localY: -halfW + 1.5, structuralType: 'fender' },
-    { localX: halfL - 0.5, localY: -halfW * 0.5, structuralType: 'bumper' }
+    { localX: halfL * 0.25, localY: -halfW, structuralType: 'door' },
+
+    // Front-Right Fender & Wheel Arch (nodes 27..31)
+    { localX: halfL * 0.50, localY: -halfW, structuralType: 'fender' },
+    { localX: halfL * 0.70, localY: -halfW, structuralType: 'fender' },
+    { localX: halfL - 2.8, localY: -halfW + 0.5, structuralType: 'fender' },
+    { localX: halfL - 1.8, localY: -halfW * 0.90, structuralType: 'fender' },
+    { localX: halfL - 1.0, localY: -halfW * 0.75, structuralType: 'bumper' }
   ];
+
   const deformedVertices: DeformVertex[] = [];
-  for (let i = 0; i < base16.length; i++) {
+  for (let i = 0; i < base32.length; i++) {
     deformedVertices.push({
-      localX: base16[i].localX, localY: base16[i].localY, 
+      localX: base32[i].localX, localY: base32[i].localY, 
       offsetX: 0, offsetY: 0, plasticStrain: 0, elasticX: 0, elasticY: 0, velX: 0, velY: 0, 
-      structuralType: base16[i].structuralType as any
+      structuralType: base32[i].structuralType as any
     });
-    if (i === 15 || i === 0 || i === 7 || i === 8) {
-      const nextIdx = (i + 1) % 16;
-      deformedVertices.push({
-        localX: (base16[i].localX + base16[nextIdx].localX) / 2, 
-        localY: (base16[i].localY + base16[nextIdx].localY) / 2,
-        offsetX: 0, offsetY: 0, plasticStrain: 0, elasticX: 0, elasticY: 0, velX: 0, velY: 0, 
-        structuralType: 'bumper'
-      });
-    }
   }
 
   // Volumetric internal nodes for roof, cabin, windshield, rear glass, hood & trunk skeleton (indices 20 to 27)
@@ -593,7 +617,7 @@ export function ensureVehicleDamage(veh: { length?: number; width?: number; dama
   }
 
   const dmg = veh.damage;
-  if (!Array.isArray(dmg.deformedVertices) || dmg.deformedVertices.length < 28) {
+  if (!Array.isArray(dmg.deformedVertices) || dmg.deformedVertices.length < 40) {
     const fresh = createDefaultVehicleDamage(targetLen, targetWid);
     if (Array.isArray(dmg.deformedVertices)) {
       const copyCount = Math.min(dmg.deformedVertices.length, fresh.deformedVertices.length);

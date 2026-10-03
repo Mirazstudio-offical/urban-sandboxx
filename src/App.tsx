@@ -3171,7 +3171,14 @@ export default function App() {
           camera.y += (camera.targetY - camera.y) * camLerpSpeed * dt;
         }
         camera.zoom += (camera.targetZoom - camera.zoom) * 4.5 * dt;
-        if (camera.shakeTimer > 0) camera.shakeTimer = Math.max(0, camera.shakeTimer - dt);
+        if (camera.shakeTimer > 0) {
+          camera.shakeTimer = Math.max(0, camera.shakeTimer - dt);
+          if (camera.shakeVx) camera.shakeVx *= Math.pow(0.82, dt * 60);
+          if (camera.shakeVy) camera.shakeVy *= Math.pow(0.82, dt * 60);
+        } else {
+          camera.shakeVx = 0;
+          camera.shakeVy = 0;
+        }
 
         // Active Interactive Hospital Treatment Simulation
         if (player.isHospitalized) {
