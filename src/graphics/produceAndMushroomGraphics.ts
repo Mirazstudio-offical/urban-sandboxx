@@ -48,7 +48,8 @@ export function drawProduceAndMushroomItem(ctx: CanvasRenderingContext2D, itemId
       return true;
     }
 
-    case 'carrot_whole': {
+    case 'carrot_whole':
+    case 'carrot_fresh': {
       drawShadow(ctx, 7.5, 2.5, 7.8, 0.22);
 
       // Bright orange conical tapered carrot
@@ -92,7 +93,8 @@ export function drawProduceAndMushroomItem(ctx: CanvasRenderingContext2D, itemId
       return true;
     }
 
-    case 'beet_whole': {
+    case 'beet_whole':
+    case 'beet_fresh': {
       drawShadow(ctx, 7, 2.8, 7.8, 0.26);
 
       // Deep purple-magenta beetroot

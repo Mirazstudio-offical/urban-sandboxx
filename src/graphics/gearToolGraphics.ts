@@ -3865,9 +3865,17 @@ export function drawGearToolItem(ctx: CanvasRenderingContext2D, itemId: string, 
         drawItemModel2D(ctx, innerItem.itemId, 0, 0, innerSize, innerItem);
         ctx.restore();
       } else {
-        // Empty translucent vacuum pouch shadow core
-        ctx.fillStyle = 'rgba(203, 213, 225, 0.25)';
-        ctx.fillRect(-w + 1.2, -h / 2 + 1.2, (w - 1.2) * 2, h - 2.4);
+        // Representative vacuum-sealed food portion under film
+        ctx.save();
+        ctx.fillStyle = '#b91c1c'; // Meat red portion
+        ctx.beginPath();
+        ctx.ellipse(0, 0.5, w * 0.62, h * 0.35, -0.15, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#fca5a5';
+        ctx.beginPath();
+        ctx.ellipse(-w * 0.2, -0.2, w * 0.35, h * 0.18, -0.1, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
       }
 
       // 2. Translucent barrier plastic film overlay
@@ -3991,6 +3999,18 @@ export function drawGearToolItem(ctx: CanvasRenderingContext2D, itemId: string, 
         const inner = item.contents[0];
         drawItemModel2D(ctx, inner.itemId, 0, 0, 16, inner);
         ctx.restore();
+      } else {
+        // Representative fresh produce/meat portion inside tray
+        ctx.save();
+        ctx.fillStyle = '#991b1b'; // Fresh steak/cutlet red
+        ctx.beginPath();
+        ctx.roundRect(-6.5, -3.8, 13.0, 7.6, 2.0);
+        ctx.fill();
+        ctx.fillStyle = '#fca5a5';
+        ctx.beginPath();
+        ctx.ellipse(-2.0, -1.0, 3.8, 1.8, 0.2, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
       }
 
       // 2. Clear stretched barrier cling film overlay
@@ -4079,6 +4099,19 @@ export function drawGearToolItem(ctx: CanvasRenderingContext2D, itemId: string, 
         const inner = item.contents[0];
         drawItemModel2D(ctx, inner.itemId, 0, 0.5, 14, inner);
         ctx.restore();
+      } else {
+        // Representative dried fruit / nut / snack morsels inside window
+        ctx.save();
+        ctx.beginPath();
+        ctx.ellipse(0, 0.5, 4.0, 3.0, 0, 0, Math.PI * 2);
+        ctx.clip();
+        ctx.fillStyle = '#d97706'; // Amber snack color
+        ctx.beginPath();
+        ctx.arc(-1.5, 0, 1.4, 0, Math.PI * 2);
+        ctx.arc(1.5, 0.5, 1.2, 0, Math.PI * 2);
+        ctx.arc(0, -1.0, 1.0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
       }
 
       // Window gloss highlight
@@ -4123,7 +4156,9 @@ export function drawGearToolItem(ctx: CanvasRenderingContext2D, itemId: string, 
     }
 
     // Vegetable Mesh Bag (Сетка для овощей и фруктов)
-    case 'mesh_bag_vegetable': {
+    case 'mesh_bag_vegetable':
+    case 'package_mesh_bag':
+    case 'potato_mesh_bag_3k': {
       drawShadow(ctx, 9.0, 4.0, 8.0, 0.26);
 
       // 1. Inner Contents (3 clustered produce units inside net)
@@ -4165,7 +4200,9 @@ export function drawGearToolItem(ctx: CanvasRenderingContext2D, itemId: string, 
     }
 
     // Torn Vegetable Mesh (Разорванная овощная сетка)
-    case 'mesh_bag_vegetable_torn': {
+    case 'mesh_bag_vegetable_torn':
+    case 'package_mesh_bag_torn':
+    case 'potato_mesh_bag_3k_torn': {
       drawShadow(ctx, 6.0, 2.5, 5.0, 0.15);
 
       ctx.strokeStyle = '#ef4444';

@@ -51,7 +51,7 @@ export const ChatOverlay: React.FC<ChatOverlayProps> = ({
     const unsub = onlineManager.subscribe(() => {
       setMessages([...onlineManager.chatMessages]);
     });
-    return unsub;
+    return () => { unsub(); };
   }, []);
 
   // Auto-focus when focus requested

@@ -681,7 +681,7 @@ export default function App() {
         onlineManager.getRemotePlayersArray().length + (onlineManager.status === 'connected'? 1 : 0)
       );
     });
-    return unsub;
+    return () => { unsub(); };
   }, []);
 
   const [isMainMenuOpen, setIsMainMenuOpen] = useState<boolean>(true);
@@ -1386,6 +1386,8 @@ export default function App() {
       maxEnergy: 100,
       sleepiness: 0,
       maxSleepiness: 100,
+      fullness: 50,
+      nausea: 0,
       isSleeping: false
     };
     player.inventory = createDefaultPlayerInventory();
@@ -2948,20 +2950,42 @@ export default function App() {
                 vx: 0,
                 vy: 0,
                 angle: startAngle,
+                steerAngle: 0,
+                targetSteerAngle: 0,
                 speed: 250,
                 maxSpeed: 600,
+                lateralVelocity: 0,
+                angularVelocity: 0,
+                isDrifting: false,
+                driftFactor: 0,
+                mass: 2200,
                 acceleration: 400,
                 braking: 400,
                 color: '#f8fafc',
+                roofColor: '#f8fafc',
                 isParked: false,
                 isPlayerControlled: false,
                 headlightsOn: true,
+                headlightMode: 'high',
+                brakeLightsOn: false,
+                turnSignal: 'none',
+                turnSignalTimer: 0,
+                requiredFuel: 'ai95',
                 sirenOn: true,
                 sirenStrobe: 0,
+                targetSpeed: 250,
+                currentLaneId: null,
+                targetWaypointIndex: 0,
+                routeWaypoints: [],
+                aiState: 'driving',
+                stuckTimer: 0,
+                honkTimer: 0,
+                isHonking: false,
+                hornEffectTimer: 0,
                 engineState: createDefaultEngineState('ambulance_van', true, false),
                 fuelSystem: createDefaultFuelSystem('ambulance_van', false),
                 damage: createDefaultVehicleDamage()
-              };
+              } as Vehicle;
               world.vehicles.push(amb);
             } else {
               amb.x = hospX;
@@ -5099,7 +5123,7 @@ export default function App() {
           resolvedType = 'cafe';
           resolvedTitle = bld.nameRu || 'Кафе & Кофейня "Bean & Bistro"';
           hasStandaloneShop = true;
-        } else if (bld.type === 'car_dealership'|| bld.shopBrand === 'car_dealership') {
+        } else if (bld.type === 'car_dealership'|| (bld.shopBrand as any) === 'car_dealership') {
           setIsDealershipOpen(true);
           sound.playUseItem();
           return;
@@ -6242,7 +6266,7 @@ export default function App() {
           <MobileTouchControls
             inputRef={inputRef}
             isInVehicle={isInVehicle}
-            isNearVehicle={nearbyCarPrompt}
+            isNearVehicle={Boolean(nearbyCarPrompt)}
             onEnterExitVehicle={handleInteract}
             onResetVehicle={handleResetVehicle}
             onOpenMap={() => setIsFullMapOpen(true)}
@@ -6265,7 +6289,7 @@ export default function App() {
             onToggleEngine={handleToggleEngine}
             isEngineRunning={eng ? !!eng.engineRunning : true}
             onInteractE={handleInteractE}
-            canInteractF={isInVehicle || nearbyCarPrompt || !!canEnterBuilding || canExitBuilding || (playerRef.current?.isInsideBuilding === true)}
+            canInteractF={Boolean(isInVehicle || nearbyCarPrompt || canEnterBuilding || canExitBuilding || (playerRef.current?.isInsideBuilding === true))}
             canInteractE={isInVehicle || (!!nearShop && playerRef.current?.isInsideBuilding === true) || !!playerRef.current?.inventory?.[selectedHotbarIndex]?.usable || true}
             hasTransferCase={eng?.hasTransferCase}
             transferCaseMode={eng?.transferCaseMode}

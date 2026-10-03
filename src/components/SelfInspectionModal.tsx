@@ -28,7 +28,7 @@ export const SelfInspectionModal: React.FC<SelfInspectionModalProps> = ({
 
   const getPartColor = (partKey: keyof BodyPartsMap) => {
     const part = bs.bodyParts[partKey];
-    const injuries = Array.isArray(part) ? part : (part?.injuries || []);
+    const injuries = Array.isArray(part) ? part : ((part as any)?.injuries || []);
     if (!injuries || injuries.length === 0) return { fill: '#059669', stroke: '#10b981', pulse: false };
     if (injuries.some(i => i.type === 'fracture' && !i.treated)) return { fill: '#7f1d1d', stroke: '#ef4444', pulse: true };
     if (injuries.some(i => i.type === 'burn' && !i.treated)) {
@@ -68,8 +68,8 @@ export const SelfInspectionModal: React.FC<SelfInspectionModalProps> = ({
   };
 
   const currentPartRaw = bs.bodyParts[selectedPart];
-  const currentInjuries: Injury[] = Array.isArray(currentPartRaw) ? currentPartRaw : (currentPartRaw?.injuries || []);
-  const currentPartPain = !Array.isArray(currentPartRaw) ? (currentPartRaw?.pain ?? 0) : 0;
+  const currentInjuries: Injury[] = Array.isArray(currentPartRaw) ? currentPartRaw : ((currentPartRaw as any)?.injuries || []);
+  const currentPartPain = !Array.isArray(currentPartRaw) ? ((currentPartRaw as any)?.pain ?? 0) : 0;
 
   // Find med items in inventory
   const findItemIndex = (itemId: string) => {

@@ -310,7 +310,60 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     tasteMessages: ['Свежевыжатый цитрусовый вкус!', 'Витамин C бодрит тело...', 'Натуральная сладкая кислинка сока...']
   },
 
-  // === MEDICAL (МЕДИЦИНА) ===
+  // === FRESH PRODUCE (СВЕЖИЕ ОВОЩИ И КОРНЕПЛОДЫ) ===
+  potato_mesh_bag_3k: {
+    itemId: 'potato_mesh_bag_3k',
+    name: 'Potato Mesh Bag (3kg)',
+    nameRu: 'Сетка картофеля (3 кг)',
+    category: 'food',
+    maxStack: 1,
+    icon: '',
+    description: 'A 3kg mesh bag of fresh whole potatoes.',
+    descriptionRu: 'Фасованная дышащая сетка с отборным картофелем 3 кг.',
+    effects: {},
+    weight: 3.0,
+    volume: 3.5,
+    usable: true,
+    isContainer: true,
+    singleUseContainer: true,
+    isTransparentPackaging: true,
+    tornItemId: 'mesh_bag_vegetable_torn',
+    containerCapacityL: 3.5,
+    maxContainedItemVolumeL: 3.0,
+    maxContainedWeightKg: 5.0
+  },
+  carrot_fresh: {
+    itemId: 'carrot_fresh',
+    name: 'Fresh Orange Carrot',
+    nameRu: 'Морковь свежая',
+    category: 'food',
+    maxStack: 5,
+    icon: '',
+    description: 'Crisp juicy fresh orange carrot.',
+    descriptionRu: 'Сочная мытая сладкая морковь. Источник каротина.',
+    effects: { hunger: 12, health: 3 },
+    weight: 0.15,
+    volume: 0.15,
+    usable: true,
+    biteCount: 4,
+    biteDuration: 0.8
+  },
+  beet_fresh: {
+    itemId: 'beet_fresh',
+    name: 'Fresh Red Beetroot',
+    nameRu: 'Свекла свежая',
+    category: 'food',
+    maxStack: 5,
+    icon: '',
+    description: 'Fresh red beetroot for soups, salads, and cooking.',
+    descriptionRu: 'Плотный сладковатый корнеплод бордовой свеклы для борща и салатов.',
+    effects: { hunger: 15, health: 4 },
+    weight: 0.25,
+    volume: 0.25,
+    usable: true,
+    biteCount: 5,
+    biteDuration: 0.8
+  },
   medkit: {
     itemId: 'medkit',
     name: 'First Aid Medical Kit',

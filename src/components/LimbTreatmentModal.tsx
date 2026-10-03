@@ -71,7 +71,7 @@ export const LimbTreatmentModal: React.FC<LimbTreatmentModalProps> = ({
   const allCompatibleInjuries: { partKey: keyof BodyPartsMap; injury: Injury }[] = [];
   for (const partKey of ['head', 'torso', 'leftArm', 'rightArm', 'leftLeg', 'rightLeg'] as (keyof BodyPartsMap)[]) {
     const partRaw = bs.bodyParts[partKey];
-    const injuries: Injury[] = Array.isArray(partRaw) ? partRaw : (partRaw?.injuries || []);
+    const injuries: Injury[] = Array.isArray(partRaw) ? partRaw : ((partRaw as any)?.injuries || []);
     for (const inj of injuries) {
       if (isInjuryCompatible(inj)) {
         allCompatibleInjuries.push({ partKey, injury: inj });
@@ -81,7 +81,7 @@ export const LimbTreatmentModal: React.FC<LimbTreatmentModalProps> = ({
 
   const getPartColor = (partKey: keyof BodyPartsMap) => {
     const part = bs.bodyParts[partKey];
-    const injuries = Array.isArray(part) ? part : (part?.injuries || []);
+    const injuries = Array.isArray(part) ? part : ((part as any)?.injuries || []);
     if (!injuries || injuries.length === 0) return { fill: '#059669', stroke: '#10b981' };
     if (injuries.some(i => isInjuryCompatible(i))) return { fill: '#dc2626', stroke: '#ef4444' };
     if (injuries.some(i => !i.treated)) return { fill: '#d97706', stroke: '#f59e0b' };
@@ -89,7 +89,7 @@ export const LimbTreatmentModal: React.FC<LimbTreatmentModalProps> = ({
   };
 
   const currentPartRaw = bs.bodyParts[selectedPart];
-  const currentInjuries: Injury[] = Array.isArray(currentPartRaw) ? currentPartRaw : (currentPartRaw?.injuries || []);
+  const currentInjuries: Injury[] = Array.isArray(currentPartRaw) ? currentPartRaw : ((currentPartRaw as any)?.injuries || []);
 
   const getInjuryTypeName = (type: string) => {
     switch (type) {
@@ -118,7 +118,7 @@ export const LimbTreatmentModal: React.FC<LimbTreatmentModalProps> = ({
         <div className="flex items-center justify-between px-6 py-4 bg-slate-950/90 border-b border-slate-800">
           <div className="flex items-center gap-3">
             <div className="p-2.5 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-400">
-              <ItemIconCanvas itemId={targetItem.itemId} size={28} />
+              <ItemIconCanvas itemId={targetItem.itemId} item={targetItem} size={28} />
             </div>
             <div>
               <h2 className="text-base font-bold text-slate-100 flex items-center gap-2">

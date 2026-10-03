@@ -839,7 +839,7 @@ export interface ShopModalProps {
   world?: any;
   onBuyItem?: (item: ShopItem, count?: number) => void;
   onBuyItems?: (items: ShopItem[], totalCost: number) => void;
-  onRepairVehicle?: (alreadyPaid?: boolean) => void;
+  onRepairVehicle?: (alreadyPaid?: boolean, customCost?: number) => void;
   canRepairVehicle?: boolean;
   currentVehicle?: Vehicle | null;
   vehicles?: Vehicle[];
@@ -1458,7 +1458,7 @@ export const ShopModal: React.FC<ShopModalProps> = (props) => {
             currentVehicle.fuelSystem.gboCapacity = capacity;
             currentVehicle.fuelSystem.lpgTankLevel = 100;
             currentVehicle.fuelSystem.gboLevel = 100;
-            currentVehicle.fuelSystem.activeFuelSource = 'gasoline';
+            currentVehicle.fuelSystem.activeFuelSource = 'petrol';
           }
           currentVehicle.hasGBO = true;
           setInstallingLpg(false);
@@ -1479,7 +1479,7 @@ export const ShopModal: React.FC<ShopModalProps> = (props) => {
       currentVehicle.fuelSystem.gboInstalled = false;
       currentVehicle.fuelSystem.gboActive = false;
       currentVehicle.fuelSystem.gboLevel = 0;
-      currentVehicle.fuelSystem.activeFuelSource = 'gasoline';
+      currentVehicle.fuelSystem.activeFuelSource = 'petrol';
     }
     currentVehicle.hasGBO = false;
     if (onTuningVehicle) onTuningVehicle('gbo_remove');

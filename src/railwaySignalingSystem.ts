@@ -1498,7 +1498,7 @@ export class RailwaySignalingSystem {
 
       if (trainApproachingN) {
         // Eastbound train on West approach
-        const targetIsTrack3 = trainApproachingN.routeType === 'siding_track3' ||
+        const targetIsTrack3 = (trainApproachingN.routeType as string) === 'siding_track3' ||
           Boolean(trainApproachingN.schedule?.routeSteps?.some((step, idx) => idx >= (trainApproachingN.currentStepIndex || 0) && step.targetY === 8600));
 
         if (targetIsTrack3) {
@@ -1701,7 +1701,7 @@ export class RailwaySignalingSystem {
       });
 
       if (trainApproachingCh) {
-        const targetIsTrack4 = trainApproachingCh.routeType === 'siding_track4' ||
+        const targetIsTrack4 = (trainApproachingCh.routeType as string) === 'siding_track4' ||
           Boolean(trainApproachingCh.schedule?.routeSteps?.some((step, idx) => idx >= (trainApproachingCh.currentStepIndex || 0) && step.targetY === 9020));
 
         if (targetIsTrack4) {

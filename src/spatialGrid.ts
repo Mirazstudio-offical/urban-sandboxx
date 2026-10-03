@@ -32,6 +32,16 @@ export class SpatialGrid<T extends SpatialItem> {
     }
   }
 
+  public remove(item: T | { id: string }) {
+    const itemId = typeof item === 'string' ? item : item.id;
+    for (const cell of this.grid.values()) {
+      const idx = cell.findIndex(i => i.id === itemId);
+      if (idx !== -1) {
+        cell.splice(idx, 1);
+      }
+    }
+  }
+
   public insert(item: T) {
     const w = item.width || (item.radius ? item.radius * 2 : 20);
     const h = item.height || (item.radius ? item.radius * 2 : 20);

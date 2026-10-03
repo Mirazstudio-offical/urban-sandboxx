@@ -357,7 +357,7 @@ export const PlayerNeedsHUD: React.FC<PlayerNeedsHUDProps> = ({
 
                 {leftItem ? (
                   <>
-                    <ItemIconCanvas itemId={leftItem.itemId} size={28} />
+                    <ItemIconCanvas itemId={leftItem.itemId} item={leftItem} size={28} />
                     {/* Portion indicator if multi-portion */}
                     {leftItem.maxPortions && leftItem.maxPortions > 1 && (
                       <>
@@ -425,7 +425,7 @@ export const PlayerNeedsHUD: React.FC<PlayerNeedsHUDProps> = ({
 
                 {rightItem ? (
                   <>
-                    <ItemIconCanvas itemId={rightItem.itemId} size={28} />
+                    <ItemIconCanvas itemId={rightItem.itemId} item={rightItem} size={28} />
                     {/* Portion indicator if multi-portion */}
                     {rightItem.maxPortions && rightItem.maxPortions > 1 && (
                       <>

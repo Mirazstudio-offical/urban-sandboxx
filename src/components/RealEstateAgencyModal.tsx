@@ -27,6 +27,7 @@ interface RealEstateAgencyModalProps {
   player: Player;
   onSetGpsDestination?: (dest: { x: number; y: number; name?: string } | null) => void;
   world?: any;
+  onPropertyPurchased?: () => void;
 }
 
 export const RealEstateAgencyModal: React.FC<RealEstateAgencyModalProps> = ({

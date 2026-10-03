@@ -63,6 +63,8 @@ export interface InteractionTarget {
   detail?: string;
   x: number;
   y: number;
+  worldX?: number;
+  worldY?: number;
   dist: number;
   angleDiff: number;
   score: number;

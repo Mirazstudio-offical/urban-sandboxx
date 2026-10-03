@@ -422,6 +422,9 @@ export interface VehicleDamage {
 export interface Vehicle {
   id: string;
   type: CarType;
+  nameRu?: string;
+  licensePlate?: string;
+  distanceTraveled?: number;
   x: number;
   y: number;
   vx: number;
@@ -430,6 +433,9 @@ export interface Vehicle {
   steerAngle: number;      // Current wheel turn angle
   targetSteerAngle: number;// Target wheel angle from user/AI
   speed: number;           // Scalar velocity in forward direction (px/s)
+  maxSpeed?: number;
+  acceleration?: number;
+  braking?: number;
   lateralVelocity: number; // Sideways slip velocity
   angularVelocity: number; // Yaw rate
   isDrifting: boolean;
@@ -1223,7 +1229,7 @@ export type EquippedClothing = {
   };
 };
 
-export type ItemCategory = 'food' | 'drink' | 'med' | 'medical' | 'tool' | 'gear' | 'auto' | 'furniture' | 'valuable' | 'clothing' | 'electronics' | 'misc';
+export type ItemCategory = 'food' | 'drink' | 'med' | 'medical' | 'tool' | 'gear' | 'auto' | 'furniture' | 'valuable' | 'clothing' | 'electronics' | 'misc' | 'trash';
 
 export interface PhoneSpecs {
   modelId: string;
@@ -1248,6 +1254,9 @@ export interface PhoneSpecs {
   osName?: string;
   osVersion?: string;
   screenSizeInches?: number;
+  screenSize?: string;
+  refreshRateHz?: number;
+  cameraMegaPixels?: number;
   cameraSpecs?: string;
   networkType?: '5G' | 'LTE' | '4G' | 'No SIM';
   signalStrength?: number; // 0 to 4
@@ -1269,6 +1278,7 @@ export interface InventoryItem {
   icon: string;
   description: string;
   descriptionRu: string;
+  requiresLimbSelection?: boolean;
   effects: {
     health?: number;       // +/- HP (0-100)
     hunger?: number;       // + Food satiety (0-100)
@@ -1435,12 +1445,18 @@ export interface BodyState {
 
 export interface PlayerNeeds {
   health: number;      // 0 to 100
+  maxHealth?: number;
   hunger: number;      // 0 (starving) to 100 (full)
+  maxHunger?: number;
   thirst: number;      // 0 (dehydrated) to 100 (quenched)
+  maxThirst?: number;
   energy: number;      // 0 (exhausted) to 100 (full stamina)
+  maxEnergy?: number;
   sleepiness: number;  // 0 (wide awake) to 100 (drowsy/collapsing)
+  maxSleepiness?: number;
   fullness: number;    // 0 (empty stomach) to 100 (stuffed)
   nausea: number;      // 0 (fine) to 100 (vomiting)
+  isSleeping?: boolean;
 }
 
 export type BodyPartStatus = string;
@@ -1557,9 +1573,14 @@ export interface Player {
   needs: PlayerNeeds;
   bodyState?: BodyState;
   equippedClothing: EquippedClothing;
+  name?: string;
+  cash?: number;
+  activeHoseState?: any;
+  leftHandSlotIndex?: number;
+  rightHandSlotIndex?: number;
   inventory: InventoryItem[];
   maxInventorySlots: number;
-  selectedHotbarIndex: number;
+  selectedHotbarIndex?: number;
   heldItemId?: string | null;
   leftHandItem?: InventoryItem | null;
   rightHandItem?: InventoryItem | null;
@@ -1903,6 +1924,7 @@ export interface PedestrianPath {
 
 export interface GameWorld {
   player?: Player;
+  timeOfDay?: any;
   width: number;
   height: number;
   roads: RoadSegment[];

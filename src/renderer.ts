@@ -5434,7 +5434,7 @@ export class GameRenderer {
 
       // 2. Item 2D Procedural Model (Size 12 is realistic, sits flat on the ground)
       if (gi.item.itemId) {
-        drawItemModel2D(ctx, gi.item.itemId, 0, 0, 12);
+        drawItemModel2D(ctx, gi.item.itemId, 0, 0, 12, gi.item);
       }
 
       // 3. Tooltip pill above item removed per user request
@@ -7377,10 +7377,10 @@ export class GameRenderer {
 
     // Render items held in hands
     if (player.leftHandItem) {
-      drawItemModel2D(ctx, player.leftHandItem.itemId, armSwing + 2.5, -6.5, 9);
+      drawItemModel2D(ctx, player.leftHandItem.itemId, armSwing + 2.5, -6.5, 9, player.leftHandItem);
     }
     if (player.rightHandItem) {
-      drawItemModel2D(ctx, player.rightHandItem.itemId, -armSwing + 2.5, 6.5, 9);
+      drawItemModel2D(ctx, player.rightHandItem.itemId, -armSwing + 2.5, 6.5, 9, player.rightHandItem);
     }
 
     // Head
