@@ -1273,6 +1273,790 @@ export function drawProduceAndMushroomItem(ctx: CanvasRenderingContext2D, itemId
       return true;
     }
 
+    // ==========================================
+    // === NEW CUTS, PROCESSED & PACKAGED PRODUCE ===
+    // ==========================================
+
+    case 'potato_peeled': {
+      drawShadow(ctx, 6.8, 2.6, 7.8, 0.22);
+      // Smooth pale ivory-yellow peeled tuber
+      ctx.fillStyle = '#fef08a';
+      ctx.beginPath();
+      ctx.ellipse(0, 0, 6.8, 4.8, -0.1, 0, Math.PI * 2);
+      ctx.fill();
+      drawGlossBand(ctx, -2, -2, 4, 2, 0.45);
+      return true;
+    }
+
+    case 'potato_grated': {
+      drawShadow(ctx, 7.5, 2.8, 7.8, 0.2);
+      ctx.fillStyle = '#fef9c3';
+      for (const pt of [[-4, -2, 0.4], [0, -3, -0.2], [3, -1.5, 0.6], [-3, 1, -0.5], [2, 1.5, 0.3], [-1, 3.5, 0.1], [3.5, 3, -0.4]]) {
+        ctx.save();
+        ctx.translate(pt[0], pt[1]);
+        ctx.rotate(pt[2]);
+        ctx.fillRect(-2.5, -0.6, 5, 1.2);
+        ctx.strokeStyle = '#eab308';
+        ctx.lineWidth = 0.4;
+        ctx.strokeRect(-2.5, -0.6, 5, 1.2);
+        ctx.restore();
+      }
+      return true;
+    }
+
+    case 'potato_bag_5k': {
+      drawShadow(ctx, 8, 3.2, 8.5, 0.3);
+      // Mesh sack
+      ctx.fillStyle = '#b45309';
+      ctx.beginPath();
+      ctx.roundRect(-6.5, -5.5, 13, 12, 3);
+      ctx.fill();
+      // Mesh grid
+      ctx.strokeStyle = '#78350f';
+      ctx.lineWidth = 0.6;
+      for (let x = -5; x <= 5; x += 2.5) {
+        ctx.beginPath(); ctx.moveTo(x, -5.5); ctx.lineTo(x, 6.5); ctx.stroke();
+      }
+      for (let y = -4; y <= 5; y += 2.5) {
+        ctx.beginPath(); ctx.moveTo(-6.5, y); ctx.lineTo(6.5, y); ctx.stroke();
+      }
+      // Top tie
+      ctx.fillStyle = '#f59e0b';
+      ctx.fillRect(-2, -7, 4, 2);
+      return true;
+    }
+
+    case 'carrot_peeled': {
+      drawShadow(ctx, 7.5, 2.4, 7.8, 0.2);
+      ctx.fillStyle = '#f97316';
+      ctx.beginPath();
+      ctx.moveTo(-6.5, -1.8);
+      ctx.lineTo(7, 0.3);
+      ctx.lineTo(-6.5, 2.2);
+      ctx.quadraticCurveTo(-7.5, 0, -6.5, -1.8);
+      ctx.closePath();
+      ctx.fill();
+      drawGlossBand(ctx, -2, -1, 5, 1, 0.5);
+      return true;
+    }
+
+    case 'carrot_grated': {
+      drawShadow(ctx, 7.5, 2.8, 7.8, 0.2);
+      ctx.fillStyle = '#ea580c';
+      for (const pt of [[-4, -2, 0.3], [1, -2.5, -0.4], [3.5, -1, 0.5], [-2.5, 1, -0.2], [2, 1.8, 0.6], [-1, 3.5, 0.1]]) {
+        ctx.save();
+        ctx.translate(pt[0], pt[1]);
+        ctx.rotate(pt[2]);
+        ctx.fillRect(-2.8, -0.5, 5.6, 1.0);
+        ctx.restore();
+      }
+      return true;
+    }
+
+    case 'carrot_bag_1k': {
+      drawShadow(ctx, 7.5, 3.0, 8.0, 0.25);
+      // Clear plastic bag
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
+      ctx.beginPath();
+      ctx.roundRect(-6, -6, 12, 12, 2.5);
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.9)';
+      ctx.lineWidth = 0.8;
+      ctx.stroke();
+      // 3 carrots inside
+      ctx.fillStyle = '#ea580c';
+      for (const y of [-3, 0, 3]) {
+        ctx.beginPath();
+        ctx.ellipse(0, y, 4.5, 1.2, 0.1, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      return true;
+    }
+
+    case 'beet_peeled_boiled': {
+      drawShadow(ctx, 7, 2.8, 7.8, 0.25);
+      // Glossy deep ruby boiled sphere in vacuum wrap
+      ctx.fillStyle = '#4c0519';
+      ctx.beginPath();
+      ctx.arc(0, 0, 5.5, 0, Math.PI * 2);
+      ctx.fill();
+      drawGlossBand(ctx, -2, -2, 3, 2, 0.4);
+      // Vacuum plastic seal edge
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
+      ctx.lineWidth = 0.7;
+      ctx.beginPath();
+      ctx.roundRect(-6.8, -6.8, 13.6, 13.6, 2);
+      ctx.stroke();
+      return true;
+    }
+
+    case 'beet_grated': {
+      drawShadow(ctx, 7.5, 2.8, 7.8, 0.22);
+      ctx.fillStyle = '#831843';
+      for (const pt of [[-4, -2, 0.4], [0, -3, -0.3], [3, -1.5, 0.5], [-3, 1, -0.4], [2, 1.5, 0.2], [-1, 3.5, 0.1]]) {
+        ctx.save();
+        ctx.translate(pt[0], pt[1]);
+        ctx.rotate(pt[2]);
+        ctx.fillRect(-2.5, -0.6, 5, 1.2);
+        ctx.restore();
+      }
+      return true;
+    }
+
+    case 'turnip_sliced': {
+      drawShadow(ctx, 7, 2.6, 7.8, 0.2);
+      for (const pt of [[-3, -1.5, 0.2], [2.5, -0.5, -0.3], [0, 2.5, 0.1]]) {
+        ctx.save();
+        ctx.translate(pt[0], pt[1]);
+        ctx.rotate(pt[2]);
+        ctx.fillStyle = '#fef08a';
+        ctx.fillRect(-3, -1.2, 6, 2.4);
+        ctx.strokeStyle = '#ca8a04';
+        ctx.lineWidth = 0.5;
+        ctx.strokeRect(-3, -1.2, 6, 2.4);
+        ctx.restore();
+      }
+      return true;
+    }
+
+    case 'onion_peeled': {
+      drawShadow(ctx, 6.8, 2.6, 7.8, 0.22);
+      // Smooth pearlescent white/cream bulb
+      ctx.fillStyle = '#fefce8';
+      ctx.beginPath();
+      ctx.moveTo(0, -6);
+      ctx.bezierCurveTo(5.5, -3.5, 6, 3.5, 0, 5.5);
+      ctx.bezierCurveTo(-6, 3.5, -5.5, -3.5, 0, -6);
+      ctx.closePath();
+      ctx.fill();
+      drawGlossBand(ctx, -2, -1, 3, 3, 0.5);
+      return true;
+    }
+
+    case 'onion_rings': {
+      drawShadow(ctx, 7, 2.8, 7.8, 0.2);
+      for (const pt of [[-2, -0.5, 4.5], [2, 1, 3.8]]) {
+        ctx.strokeStyle = '#fef08a';
+        ctx.lineWidth = 1.4;
+        ctx.beginPath();
+        ctx.arc(pt[0], pt[1], pt[2], 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.strokeStyle = '#ca8a04';
+        ctx.lineWidth = 0.5;
+        ctx.stroke();
+      }
+      return true;
+    }
+
+    case 'onion_mesh_bag_2k': {
+      drawShadow(ctx, 7.8, 3.0, 8.2, 0.28);
+      // Red mesh sack
+      ctx.fillStyle = '#b91c1c';
+      ctx.beginPath();
+      ctx.roundRect(-6, -5, 12, 11, 3);
+      ctx.fill();
+      // Onions showing through
+      ctx.fillStyle = '#d97706';
+      for (const pt of [[-2.5, -2], [2.5, -1.5], [-1.5, 2], [2.5, 2.5]]) {
+        ctx.beginPath();
+        ctx.arc(pt[0], pt[1], 2.2, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      // Mesh diamond lines
+      ctx.strokeStyle = '#7f1d1d';
+      ctx.lineWidth = 0.6;
+      for (let i = -5; i <= 5; i += 3) {
+        ctx.beginPath(); ctx.moveTo(i, -5); ctx.lineTo(i + 2, 6); ctx.stroke();
+      }
+      return true;
+    }
+
+    case 'leek_sliced': {
+      drawShadow(ctx, 7, 2.6, 7.8, 0.2);
+      for (const pt of [[-3.5, -1], [2.5, -1.5], [0, 2]]) {
+        ctx.save();
+        ctx.translate(pt[0], pt[1]);
+        ctx.fillStyle = '#16a34a';
+        ctx.beginPath(); ctx.ellipse(0, 0, 3.5, 2.2, 0, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = '#f8fafc';
+        ctx.beginPath(); ctx.ellipse(0, 0, 2.2, 1.4, 0, 0, Math.PI * 2); ctx.fill();
+        ctx.restore();
+      }
+      return true;
+    }
+
+    case 'garlic_crushed': {
+      drawShadow(ctx, 6.5, 2.4, 7.8, 0.2);
+      ctx.fillStyle = '#fefce8';
+      ctx.beginPath();
+      ctx.ellipse(0, 0, 5, 3.5, 0, 0, Math.PI * 2);
+      ctx.fill();
+      drawGlossBand(ctx, -1, -1, 3, 2, 0.6);
+      return true;
+    }
+
+    case 'garlic_powder_jar':
+    case 'dill_dried_jar':
+    case 'basil_dried_jar':
+    case 'mint_dried_jar': {
+      drawShadow(ctx, 5.5, 2.4, 7.8, 0.22);
+      // Glass spice jar
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
+      ctx.beginPath();
+      ctx.roundRect(-4, -4.5, 8, 10, 1.5);
+      ctx.fill();
+      // Spice color contents
+      let spiceColor = '#fef08a'; // garlic
+      if (itemId === 'dill_dried_jar') spiceColor = '#4d7c0f';
+      if (itemId === 'basil_dried_jar') spiceColor = '#15803d';
+      if (itemId === 'mint_dried_jar') spiceColor = '#065f46';
+      ctx.fillStyle = spiceColor;
+      ctx.fillRect(-3.2, -2, 6.4, 7);
+      // Gold cap
+      ctx.fillStyle = '#eab308';
+      ctx.beginPath();
+      ctx.roundRect(-4.5, -6.5, 9, 2.2, 0.5);
+      ctx.fill();
+      return true;
+    }
+
+    case 'tomato_diced': {
+      drawShadow(ctx, 7.5, 2.8, 7.8, 0.2);
+      ctx.fillStyle = '#ef4444';
+      for (const pt of [[-4, -2], [0, -3], [3.5, -2], [-2, 1], [2, 1.5], [-3.5, 3], [1, 3.5]]) {
+        ctx.fillRect(pt[0], pt[1], 2.4, 2.4);
+        ctx.strokeStyle = '#b91c1c';
+        ctx.lineWidth = 0.5;
+        ctx.strokeRect(pt[0], pt[1], 2.4, 2.4);
+      }
+      return true;
+    }
+
+    case 'tomato_sundried_jar': {
+      drawShadow(ctx, 6, 2.5, 7.8, 0.24);
+      // Glass jar with golden oil
+      ctx.fillStyle = 'rgba(234, 179, 8, 0.65)';
+      ctx.beginPath();
+      ctx.roundRect(-4.5, -4, 9, 10, 1.5);
+      ctx.fill();
+      // Dark burgundy sun-dried tomato pieces
+      ctx.fillStyle = '#881337';
+      ctx.fillRect(-3, -1, 6, 2);
+      ctx.fillRect(-2.5, 2, 5, 2.5);
+      // Gold lid
+      ctx.fillStyle = '#ca8a04';
+      ctx.beginPath(); ctx.roundRect(-5, -6, 10, 2.5, 0.8); ctx.fill();
+      return true;
+    }
+
+    case 'tomato_paste_jar': {
+      drawShadow(ctx, 6, 2.5, 7.8, 0.24);
+      // Rich red paste inside glass jar
+      ctx.fillStyle = '#991b1b';
+      ctx.beginPath();
+      ctx.roundRect(-4.5, -4, 9, 10, 1.5);
+      ctx.fill();
+      // White label
+      ctx.fillStyle = '#f8fafc';
+      ctx.fillRect(-3.5, -1, 7, 4);
+      ctx.fillStyle = '#dc2626';
+      ctx.fillRect(-2, 0.5, 4, 1);
+      // Gold lid
+      ctx.fillStyle = '#eab308';
+      ctx.beginPath(); ctx.roundRect(-5, -6, 10, 2.5, 0.8); ctx.fill();
+      return true;
+    }
+
+    case 'cucumber_peeled': {
+      drawShadow(ctx, 7.5, 2.4, 7.8, 0.2);
+      // Pale jade translucent cylinder
+      ctx.fillStyle = '#bbf7d0';
+      ctx.beginPath();
+      ctx.roundRect(-6.5, -2, 13, 4, 1.8);
+      ctx.fill();
+      drawGlossBand(ctx, -2, -1, 6, 1, 0.5);
+      return true;
+    }
+
+    case 'cucumber_pickled_jar': {
+      drawShadow(ctx, 6.5, 2.8, 7.8, 0.25);
+      // Green brine
+      ctx.fillStyle = 'rgba(163, 230, 53, 0.4)';
+      ctx.beginPath();
+      ctx.roundRect(-5, -4, 10, 11, 2);
+      ctx.fill();
+      // Pickles inside
+      ctx.fillStyle = '#3f6212';
+      ctx.beginPath(); ctx.ellipse(-1.5, 1, 2.2, 4, 0.3, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.ellipse(2, 2, 1.8, 3.5, -0.2, 0, Math.PI * 2); ctx.fill();
+      // Gold lid
+      ctx.fillStyle = '#eab308';
+      ctx.beginPath(); ctx.roundRect(-5.5, -6.5, 11, 2.8, 0.8); ctx.fill();
+      return true;
+    }
+
+    case 'eggplant_sliced': {
+      drawShadow(ctx, 7, 2.6, 7.8, 0.2);
+      for (const pt of [[-2.5, -0.5], [2.2, 1]]) {
+        ctx.fillStyle = '#3b0764';
+        ctx.beginPath(); ctx.arc(pt[0], pt[1], 4.5, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = '#fef3c7';
+        ctx.beginPath(); ctx.arc(pt[0], pt[1], 3.5, 0, Math.PI * 2); ctx.fill();
+      }
+      return true;
+    }
+
+    case 'eggplant_caviar_jar':
+    case 'zucchini_caviar_jar': {
+      drawShadow(ctx, 6.5, 2.8, 7.8, 0.25);
+      // Caviar spread color
+      ctx.fillStyle = itemId === 'eggplant_caviar_jar' ? '#78350f' : '#ea580c';
+      ctx.beginPath();
+      ctx.roundRect(-5, -4, 10, 11, 2);
+      ctx.fill();
+      // Gold lid
+      ctx.fillStyle = '#eab308';
+      ctx.beginPath(); ctx.roundRect(-5.5, -6.5, 11, 2.8, 0.8); ctx.fill();
+      return true;
+    }
+
+    case 'zucchini_sliced': {
+      drawShadow(ctx, 7, 2.6, 7.8, 0.2);
+      for (const pt of [[-2.5, -0.5], [2.2, 1]]) {
+        ctx.fillStyle = '#15803d';
+        ctx.beginPath(); ctx.arc(pt[0], pt[1], 4.5, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = '#f0fdf4';
+        ctx.beginPath(); ctx.arc(pt[0], pt[1], 3.6, 0, Math.PI * 2); ctx.fill();
+      }
+      return true;
+    }
+
+    case 'pumpkin_diced': {
+      drawShadow(ctx, 7.5, 2.8, 7.8, 0.2);
+      ctx.fillStyle = '#f97316';
+      for (const pt of [[-4, -2], [0, -3], [3.5, -2], [-2, 1], [2, 1.5], [-3, 3.5], [1.5, 3.5]]) {
+        ctx.fillRect(pt[0], pt[1], 2.6, 2.6);
+        ctx.strokeStyle = '#c2410c';
+        ctx.lineWidth = 0.5;
+        ctx.strokeRect(pt[0], pt[1], 2.6, 2.6);
+      }
+      return true;
+    }
+
+    case 'pumpkin_seeds_bag': {
+      drawShadow(ctx, 6.5, 2.6, 7.8, 0.22);
+      // Transparent sachet
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+      ctx.beginPath();
+      ctx.roundRect(-4.5, -5.5, 9, 11, 2);
+      ctx.fill();
+      // Seeds inside
+      ctx.fillStyle = '#fef08a';
+      for (const pt of [[-2, -2], [1.5, -1.5], [-1, 1], [1.5, 2.5]]) {
+        ctx.beginPath(); ctx.ellipse(pt[0], pt[1], 1.4, 0.8, 0.4, 0, Math.PI * 2); ctx.fill();
+      }
+      return true;
+    }
+
+    case 'cabbage_half': {
+      drawShadow(ctx, 7.5, 2.8, 7.8, 0.25);
+      // Sliced half cabbage
+      ctx.fillStyle = '#86efac';
+      ctx.beginPath();
+      ctx.arc(0, 0, 6, Math.PI, 0);
+      ctx.closePath();
+      ctx.fill();
+      // Internal whorls
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 0.8;
+      ctx.beginPath();
+      ctx.arc(0, 0, 4, Math.PI, 0);
+      ctx.arc(0, 0, 2, Math.PI, 0);
+      ctx.stroke();
+      return true;
+    }
+
+    case 'cabbage_leaves': {
+      drawShadow(ctx, 7.5, 2.6, 7.8, 0.2);
+      ctx.fillStyle = '#4ade80';
+      ctx.beginPath();
+      ctx.ellipse(0, 0, 6.5, 4.5, -0.2, 0, Math.PI * 2);
+      ctx.fill();
+      // White veins
+      ctx.strokeStyle = '#f0fdf4';
+      ctx.lineWidth = 0.8;
+      ctx.beginPath();
+      ctx.moveTo(-5, 2); ctx.lineTo(5, -2);
+      ctx.stroke();
+      return true;
+    }
+
+    case 'cabbage_sauerkraut_jar': {
+      drawShadow(ctx, 6.5, 2.8, 7.8, 0.25);
+      // Sauerkraut inside
+      ctx.fillStyle = '#fef9c3';
+      ctx.beginPath();
+      ctx.roundRect(-5, -4, 10, 11, 2);
+      ctx.fill();
+      // Orange carrot specks
+      ctx.fillStyle = '#f97316';
+      for (const pt of [[-2, -1], [2, 1], [-1, 3], [1.5, -2]]) {
+        ctx.fillRect(pt[0], pt[1], 1.2, 0.6);
+      }
+      // Gold lid
+      ctx.fillStyle = '#eab308';
+      ctx.beginPath(); ctx.roundRect(-5.5, -6.5, 11, 2.8, 0.8); ctx.fill();
+      return true;
+    }
+
+    case 'cauliflower_florets': {
+      drawShadow(ctx, 7, 2.6, 7.8, 0.2);
+      for (const pt of [[-2.5, 0], [2.2, 0.5]]) {
+        ctx.fillStyle = '#ffffff';
+        ctx.beginPath(); ctx.arc(pt[0], pt[1] - 1, 3.2, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = '#86efac';
+        ctx.fillRect(pt[0] - 0.8, pt[1] + 1.5, 1.6, 2.5);
+      }
+      return true;
+    }
+
+    case 'broccoli_head': {
+      drawShadow(ctx, 7, 2.8, 7.8, 0.24);
+      // Thick pale green stalk
+      ctx.fillStyle = '#86efac';
+      ctx.fillRect(-2, 0, 4, 6);
+      // Large dark forest green dome floret
+      ctx.fillStyle = '#15803d';
+      ctx.beginPath();
+      ctx.arc(0, -2, 6, 0, Math.PI * 2);
+      ctx.fill();
+      return true;
+    }
+
+    case 'vegetable_mix_frozen':
+    case 'berries_mixed_frozen': {
+      drawShadow(ctx, 7, 2.8, 7.8, 0.22);
+      // Frosted frozen bag with ice shine
+      ctx.fillStyle = itemId === 'vegetable_mix_frozen' ? '#15803d' : '#881337';
+      ctx.beginPath();
+      ctx.roundRect(-5.5, -5.5, 11, 11, 2);
+      ctx.fill();
+      // Frost snowflakes / crystals
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.7)';
+      ctx.lineWidth = 0.8;
+      ctx.beginPath();
+      ctx.moveTo(-2, -2); ctx.lineTo(2, 2);
+      ctx.moveTo(2, -2); ctx.lineTo(-2, 2);
+      ctx.stroke();
+      return true;
+    }
+
+    case 'bell_pepper_sliced': {
+      drawShadow(ctx, 7, 2.6, 7.8, 0.2);
+      // Red & yellow pepper strips
+      ctx.strokeStyle = '#ef4444';
+      ctx.lineWidth = 1.8;
+      ctx.beginPath();
+      ctx.arc(-2, 0, 4.5, 0.2, Math.PI * 0.9);
+      ctx.stroke();
+      ctx.strokeStyle = '#eab308';
+      ctx.beginPath();
+      ctx.arc(2, 1, 4, 0.8, Math.PI * 1.4);
+      ctx.stroke();
+      return true;
+    }
+
+    case 'chili_pepper_dried': {
+      drawShadow(ctx, 7, 2.4, 7.8, 0.2);
+      // Dark red wrinkled curved pod
+      ctx.fillStyle = '#881337';
+      ctx.beginPath();
+      ctx.moveTo(-6, -1);
+      ctx.quadraticCurveTo(0, 3, 7, -2);
+      ctx.quadraticCurveTo(0, 1, -6, -1);
+      ctx.fill();
+      return true;
+    }
+
+    case 'jalapeno_pickled_jar': {
+      drawShadow(ctx, 6, 2.5, 7.8, 0.24);
+      // Glass jar with olive green rings
+      ctx.fillStyle = 'rgba(101, 163, 13, 0.5)';
+      ctx.beginPath(); ctx.roundRect(-4.5, -4, 9, 10, 1.5); ctx.fill();
+      ctx.strokeStyle = '#3f6212'; ctx.lineWidth = 1.2;
+      ctx.beginPath(); ctx.arc(0, 0, 2.5, 0, Math.PI * 2); ctx.stroke();
+      // Gold lid
+      ctx.fillStyle = '#ca8a04';
+      ctx.beginPath(); ctx.roundRect(-5, -6, 10, 2.5, 0.8); ctx.fill();
+      return true;
+    }
+
+    case 'ginger_grated': {
+      drawShadow(ctx, 6.5, 2.4, 7.8, 0.2);
+      ctx.fillStyle = '#fef08a';
+      ctx.beginPath(); ctx.ellipse(0, 0, 4.8, 3.2, 0, 0, Math.PI * 2); ctx.fill();
+      drawGlossBand(ctx, -1, -1, 3, 2, 0.5);
+      return true;
+    }
+
+    case 'ginger_pickled_box': {
+      drawShadow(ctx, 7, 2.6, 7.8, 0.22);
+      // Black bento tray
+      ctx.fillStyle = '#18181b';
+      ctx.beginPath(); ctx.roundRect(-6, -4, 12, 8, 1.5); ctx.fill();
+      // Pink ginger folds
+      ctx.fillStyle = '#f472b6';
+      ctx.beginPath(); ctx.ellipse(-1.5, 0, 3.5, 2.2, 0.3, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.ellipse(2, 0.5, 2.8, 1.8, -0.4, 0, Math.PI * 2); ctx.fill();
+      return true;
+    }
+
+    case 'apple_sliced':
+    case 'pear_sliced': {
+      drawShadow(ctx, 7, 2.6, 7.8, 0.2);
+      const isApple = itemId === 'apple_sliced';
+      for (const pt of [[-2.5, -1, -0.3], [2.2, 1, 0.2]]) {
+        ctx.save();
+        ctx.translate(pt[0], pt[1]);
+        ctx.rotate(pt[2]);
+        // Crescent skin
+        ctx.fillStyle = isApple ? '#ef4444' : '#eab308';
+        ctx.beginPath(); ctx.arc(0, 0, 4.5, 0, Math.PI); ctx.fill();
+        // White flesh
+        ctx.fillStyle = '#fefce8';
+        ctx.beginPath(); ctx.arc(0, -0.8, 3.8, 0, Math.PI); ctx.fill();
+        ctx.restore();
+      }
+      return true;
+    }
+
+    case 'apple_dried_rings': {
+      drawShadow(ctx, 7, 2.6, 7.8, 0.2);
+      for (const pt of [[-2.5, 0], [2.5, 0.5]]) {
+        ctx.fillStyle = '#d97706';
+        ctx.beginPath(); ctx.arc(pt[0], pt[1], 4, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = '#0f172a'; // cutout hole
+        ctx.beginPath(); ctx.arc(pt[0], pt[1], 1.2, 0, Math.PI * 2); ctx.fill();
+      }
+      return true;
+    }
+
+    case 'apple_puree_jar': {
+      drawShadow(ctx, 5.5, 2.4, 7.8, 0.22);
+      // Smooth honey-gold puree
+      ctx.fillStyle = '#fde047';
+      ctx.beginPath(); ctx.roundRect(-4, -4, 8, 9, 1.5); ctx.fill();
+      // Blue baby lid
+      ctx.fillStyle = '#38bdf8';
+      ctx.beginPath(); ctx.roundRect(-4.5, -6, 9, 2.2, 0.6); ctx.fill();
+      return true;
+    }
+
+    case 'plum_halves':
+    case 'apricot_halves': {
+      drawShadow(ctx, 7, 2.6, 7.8, 0.2);
+      const isPlum = itemId === 'plum_halves';
+      for (const pt of [[-2.5, 0], [2.5, 0.5]]) {
+        ctx.fillStyle = isPlum ? '#6b21a8' : '#ea580c';
+        ctx.beginPath(); ctx.arc(pt[0], pt[1], 4, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = isPlum ? '#fbbf24' : '#fed7aa'; // hollow interior
+        ctx.beginPath(); ctx.arc(pt[0], pt[1], 2.8, 0, Math.PI * 2); ctx.fill();
+      }
+      return true;
+    }
+
+    case 'prune_dried_bag':
+    case 'apricot_dried_bag':
+    case 'raisins_dried_bag':
+    case 'cranberry_dried_bag':
+    case 'banana_dried_chips': {
+      drawShadow(ctx, 6.5, 2.6, 7.8, 0.22);
+      // Transparent sachet
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.75)';
+      ctx.beginPath(); ctx.roundRect(-5, -5.5, 10, 11, 2); ctx.fill();
+      // Dried contents
+      let dColor = '#18181b'; // prune
+      if (itemId === 'apricot_dried_bag') dColor = '#f59e0b';
+      if (itemId === 'raisins_dried_bag') dColor = '#78350f';
+      if (itemId === 'cranberry_dried_bag') dColor = '#9f1239';
+      if (itemId === 'banana_dried_chips') dColor = '#fde047';
+      ctx.fillStyle = dColor;
+      for (const pt of [[-2, -2], [1.5, -1.5], [-1.5, 1.5], [1.5, 2]]) {
+        ctx.beginPath(); ctx.arc(pt[0], pt[1], 1.5, 0, Math.PI * 2); ctx.fill();
+      }
+      return true;
+    }
+
+    case 'peach_halves_canned': {
+      drawShadow(ctx, 6.5, 2.8, 7.8, 0.26);
+      // Golden tin can
+      ctx.fillStyle = '#e2e8f0';
+      ctx.beginPath(); ctx.roundRect(-4.5, -5, 9, 11, 1.5); ctx.fill();
+      // Peach label
+      ctx.fillStyle = '#f97316';
+      ctx.fillRect(-4.5, -2, 9, 5);
+      // Peach icon
+      ctx.fillStyle = '#fde047';
+      ctx.beginPath(); ctx.arc(0, 0.5, 1.8, 0, Math.PI * 2); ctx.fill();
+      return true;
+    }
+
+    case 'orange_segments': {
+      drawShadow(ctx, 7, 2.6, 7.8, 0.2);
+      for (const pt of [[-3, -1, -0.4], [2.2, 1, 0.3]]) {
+        ctx.save();
+        ctx.translate(pt[0], pt[1]);
+        ctx.rotate(pt[2]);
+        ctx.fillStyle = '#f97316';
+        ctx.beginPath(); ctx.arc(0, 0, 4.5, 0, Math.PI); ctx.fill();
+        drawGlossBand(ctx, -1, 1, 3, 1, 0.5);
+        ctx.restore();
+      }
+      return true;
+    }
+
+    case 'orange_mesh_bag_1k': {
+      drawShadow(ctx, 7.5, 2.8, 7.8, 0.26);
+      // Red mesh containing oranges
+      ctx.fillStyle = '#dc2626';
+      ctx.beginPath(); ctx.roundRect(-5.5, -5, 11, 10, 2.5); ctx.fill();
+      ctx.fillStyle = '#ea580c';
+      ctx.beginPath(); ctx.arc(-2, 0, 2.6, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(2.2, 0.5, 2.4, 0, Math.PI * 2); ctx.fill();
+      return true;
+    }
+
+    case 'lime_slice': {
+      drawShadow(ctx, 6, 2.4, 7.8, 0.2);
+      ctx.fillStyle = '#15803d';
+      ctx.beginPath(); ctx.arc(0, 0, 4.8, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#84cc16';
+      ctx.beginPath(); ctx.arc(0, 0, 4.0, 0, Math.PI * 2); ctx.fill();
+      // Radiating segments
+      ctx.strokeStyle = '#f7fee7';
+      ctx.lineWidth = 0.6;
+      for (let a = 0; a < Math.PI * 2; a += Math.PI / 3) {
+        ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(Math.cos(a) * 3.8, Math.sin(a) * 3.8); ctx.stroke();
+      }
+      return true;
+    }
+
+    case 'banana_peeled': {
+      drawShadow(ctx, 7.5, 2.5, 7.8, 0.2);
+      // Curved pale yellow banana
+      ctx.fillStyle = '#fef08a';
+      ctx.beginPath();
+      ctx.moveTo(-5.5, 2);
+      ctx.quadraticCurveTo(0, -3.5, 6, 1);
+      ctx.quadraticCurveTo(0, -1.5, -5.5, 2);
+      ctx.fill();
+      // Peels peeled at base
+      ctx.fillStyle = '#eab308';
+      ctx.beginPath();
+      ctx.moveTo(-5.5, 2); ctx.lineTo(-8, 4); ctx.lineTo(-6, 2);
+      ctx.fill();
+      return true;
+    }
+
+    case 'melon_slice': {
+      drawShadow(ctx, 8, 2.8, 7.8, 0.24);
+      // Tan ribbed rind
+      ctx.fillStyle = '#a16207';
+      ctx.beginPath();
+      ctx.arc(0, 1, 7.2, 0.2, Math.PI * 0.95);
+      ctx.lineTo(0, 1);
+      ctx.closePath();
+      ctx.fill();
+      // Pale green inner
+      ctx.fillStyle = '#86efac';
+      ctx.beginPath();
+      ctx.arc(0, 1, 6.4, 0.25, Math.PI * 0.92);
+      ctx.lineTo(0, 1);
+      ctx.closePath();
+      ctx.fill();
+      // Salmon-orange cantaloupe flesh
+      ctx.fillStyle = '#fb923c';
+      ctx.beginPath();
+      ctx.arc(0, 1, 5.6, 0.3, Math.PI * 0.9);
+      ctx.lineTo(0, 1);
+      ctx.closePath();
+      ctx.fill();
+      return true;
+    }
+
+    case 'melon_diced':
+    case 'watermelon_diced':
+    case 'pomegranate_seeds_cup':
+    case 'grapes_berries_cup':
+    case 'berries_tray_fresh': {
+      drawShadow(ctx, 7, 2.8, 7.8, 0.22);
+      // Clear plastic cup / tray
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+      ctx.beginPath(); ctx.roundRect(-5.5, -5, 11, 10, 2); ctx.fill();
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.9)'; ctx.lineWidth = 0.8; ctx.stroke();
+      // Internal treats
+      let cColor = '#fb923c'; // melon
+      if (itemId === 'watermelon_diced') cColor = '#ef4444';
+      if (itemId === 'pomegranate_seeds_cup') cColor = '#be123c';
+      if (itemId === 'grapes_berries_cup') cColor = '#84cc16';
+      if (itemId === 'berries_tray_fresh') cColor = '#dc2626';
+      ctx.fillStyle = cColor;
+      for (const pt of [[-2.5, -2], [2, -1.5], [-1.5, 1.5], [2, 2]]) {
+        ctx.beginPath(); ctx.arc(pt[0], pt[1], 1.8, 0, Math.PI * 2); ctx.fill();
+      }
+      return true;
+    }
+
+    case 'strawberry_jam_jar':
+    case 'raspberry_jam_jar': {
+      drawShadow(ctx, 6, 2.5, 7.8, 0.24);
+      // Luscious ruby/crimson jam
+      ctx.fillStyle = itemId === 'strawberry_jam_jar' ? '#e11d48' : '#be123c';
+      ctx.beginPath(); ctx.roundRect(-4.5, -4, 9, 10, 1.5); ctx.fill();
+      // Gold lid with check fabric top
+      ctx.fillStyle = '#eab308';
+      ctx.beginPath(); ctx.roundRect(-5, -6.5, 10, 2.8, 0.8); ctx.fill();
+      return true;
+    }
+
+    case 'kiwi_peeled': {
+      drawShadow(ctx, 6.5, 2.6, 7.8, 0.22);
+      ctx.fillStyle = '#84cc16';
+      ctx.beginPath(); ctx.ellipse(0, 0, 5.5, 4.2, 0, 0, Math.PI * 2); ctx.fill();
+      drawGlossBand(ctx, -1.5, -1.5, 3, 2, 0.5);
+      return true;
+    }
+
+    case 'kiwi_sliced': {
+      drawShadow(ctx, 6.5, 2.4, 7.8, 0.2);
+      for (const pt of [[-2.2, -0.5], [2.2, 0.8]]) {
+        ctx.fillStyle = '#84cc16';
+        ctx.beginPath(); ctx.arc(pt[0], pt[1], 4.2, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = '#f7fee7'; // white center
+        ctx.beginPath(); ctx.arc(pt[0], pt[1], 1.4, 0, Math.PI * 2); ctx.fill();
+        // Tiny black seeds
+        ctx.fillStyle = '#18181b';
+        for (let a = 0; a < Math.PI * 2; a += Math.PI / 3) {
+          ctx.fillRect(pt[0] + Math.cos(a) * 2.2 - 0.4, pt[1] + Math.sin(a) * 2.2 - 0.4, 0.8, 0.8);
+        }
+      }
+      return true;
+    }
+
+    case 'greens_chopped_mix': {
+      drawShadow(ctx, 7.5, 2.8, 7.8, 0.2);
+      // Bright colorful mix of chopped dill, parsley and scallions
+      ctx.fillStyle = '#15803d';
+      for (const pt of [[-4, -2], [0, -3], [3, -2], [-3, 1], [1, 1], [-2, 3.5], [2.5, 3]]) {
+        ctx.fillRect(pt[0], pt[1], 2, 2);
+      }
+      ctx.fillStyle = '#4ade80';
+      for (const pt of [[-2, -1], [2, -2.5], [0, 2], [3, 1]]) {
+        ctx.fillRect(pt[0], pt[1], 1.6, 1.6);
+      }
+      return true;
+    }
+
     default:
       return false;
   }

@@ -1,5 +1,6 @@
 // Procedural 2D Canvas Models for Tools, Auto, Gear, and Valuables
 import { drawShadow, drawGlossBand } from './itemGraphicShared';
+import { drawItemModel2D } from '../itemGraphic';
 
 export function drawGearToolItem(ctx: CanvasRenderingContext2D, itemId: string, item?: any): boolean {
   switch (itemId) {
@@ -3841,6 +3842,343 @@ export function drawGearToolItem(ctx: CanvasRenderingContext2D, itemId: string, 
       ctx.stroke();
 
       drawGlossBand(ctx, -4.5, -1.0, 1.2, 6.5, 0.3);
+      return true;
+    }
+
+    // Single-use Vacuum Sealed Pouches (Вакуумные пакеты 0.5L, 1.2L, 2.5L)
+    case 'vacuum_pack_small':
+    case 'vacuum_pack_medium':
+    case 'vacuum_pack_large': {
+      const isLg = itemId === 'vacuum_pack_large';
+      const isMd = itemId === 'vacuum_pack_medium';
+      const w = isLg ? 11.0 : (isMd ? 9.0 : 7.5);
+      const h = isLg ? 15.0 : (isMd ? 12.5 : 10.5);
+
+      drawShadow(ctx, w, h * 0.35, 8.0, 0.22);
+
+      // 1. Draw inner contents first if present (underneath vacuum film)
+      if (item?.contents && item.contents.length > 0) {
+        ctx.save();
+        ctx.translate(0, 0.4);
+        const innerItem = item.contents[0];
+        const innerSize = isLg ? 20 : (isMd ? 17 : 14);
+        drawItemModel2D(ctx, innerItem.itemId, 0, 0, innerSize, innerItem);
+        ctx.restore();
+      } else {
+        // Empty translucent vacuum pouch shadow core
+        ctx.fillStyle = 'rgba(203, 213, 225, 0.25)';
+        ctx.fillRect(-w + 1.2, -h / 2 + 1.2, (w - 1.2) * 2, h - 2.4);
+      }
+
+      // 2. Translucent barrier plastic film overlay
+      const vacuumGrad = ctx.createLinearGradient(-w, -h / 2, w, h / 2);
+      vacuumGrad.addColorStop(0, 'rgba(255, 255, 255, 0.42)');
+      vacuumGrad.addColorStop(0.4, 'rgba(241, 245, 249, 0.22)');
+      vacuumGrad.addColorStop(0.8, 'rgba(203, 213, 225, 0.35)');
+      vacuumGrad.addColorStop(1, 'rgba(255, 255, 255, 0.48)');
+
+      ctx.fillStyle = vacuumGrad;
+      ctx.beginPath();
+      ctx.roundRect(-w, -h / 2, w * 2, h, 1.2);
+      ctx.fill();
+
+      // 3. Heat-sealed crimped borders (top, bottom, and side seams with tear notch)
+      ctx.fillStyle = 'rgba(148, 163, 184, 0.65)';
+      ctx.fillRect(-w, -h / 2, w * 2, 1.5);   // Top seal
+      ctx.fillRect(-w, h / 2 - 1.5, w * 2, 1.5); // Bottom seal
+      ctx.fillRect(-w, -h / 2, 1.2, h);      // Left seal
+      ctx.fillRect(w - 1.2, -h / 2, 1.2, h); // Right seal
+
+      // Heat seal rib texture on borders
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.6)';
+      ctx.lineWidth = 0.5;
+      for (let x = -w + 0.5; x < w - 0.5; x += 1.2) {
+        ctx.beginPath();
+        ctx.moveTo(x, -h / 2); ctx.lineTo(x, -h / 2 + 1.5);
+        ctx.moveTo(x, h / 2 - 1.5); ctx.lineTo(x, h / 2);
+        ctx.stroke();
+      }
+
+      // Tear notch on left seam
+      ctx.fillStyle = '#0f172a';
+      ctx.beginPath();
+      ctx.moveTo(-w, -h / 2 + 3.0);
+      ctx.lineTo(-w + 1.4, -h / 2 + 3.5);
+      ctx.lineTo(-w, -h / 2 + 4.0);
+      ctx.closePath();
+      ctx.fill();
+
+      // 4. Vacuum shrink-wrap crease lines hugging item
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.55)';
+      ctx.lineWidth = 0.8;
+      ctx.beginPath();
+      ctx.moveTo(-w + 2.0, -h / 2 + 2.5);
+      ctx.quadraticCurveTo(0, -h / 4, w - 2.0, -h / 2 + 2.5);
+      ctx.moveTo(-w + 2.0, h / 2 - 2.5);
+      ctx.quadraticCurveTo(0, h / 4, w - 2.0, h / 2 - 2.5);
+      ctx.stroke();
+
+      // White barcode & weight sticker in bottom right corner
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+      ctx.fillRect(w - 4.5, h / 2 - 4.0, 3.8, 2.6);
+      ctx.fillStyle = '#0f172a';
+      ctx.fillRect(w - 4.1, h / 2 - 3.6, 0.4, 1.8);
+      ctx.fillRect(w - 3.5, h / 2 - 3.6, 0.6, 1.8);
+      ctx.fillRect(w - 2.6, h / 2 - 3.6, 0.4, 1.8);
+      ctx.fillRect(w - 1.9, h / 2 - 3.6, 0.8, 1.8);
+
+      return true;
+    }
+
+    // Torn Empty Vacuum Pouches (Вскрытые разорванные вакуумные пакеты)
+    case 'vacuum_pack_small_torn':
+    case 'vacuum_pack_medium_torn':
+    case 'vacuum_pack_large_torn': {
+      const isLg = itemId === 'vacuum_pack_large_torn';
+      const w = isLg ? 10.0 : 8.0;
+      const h = isLg ? 13.0 : 10.0;
+
+      drawShadow(ctx, w, h * 0.25, 5.0, 0.15);
+
+      // Crinkled, torn empty film shell
+      ctx.fillStyle = 'rgba(226, 232, 240, 0.35)';
+      ctx.strokeStyle = 'rgba(148, 163, 184, 0.7)';
+      ctx.lineWidth = 0.8;
+
+      ctx.beginPath();
+      ctx.moveTo(-w, h / 2);
+      ctx.lineTo(-w + 1.0, -h / 2 + 3.0);
+      // Jagged torn open top edge
+      ctx.lineTo(-w + 2.5, -h / 2 + 1.0);
+      ctx.lineTo(-w + 4.0, -h / 2 + 4.0);
+      ctx.lineTo(0, -h / 2 + 1.5);
+      ctx.lineTo(w - 3.5, -h / 2 + 5.0);
+      ctx.lineTo(w - 1.5, -h / 2 + 2.0);
+      ctx.lineTo(w, h / 2);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+
+      // Fold lines / crinkles
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.6)';
+      ctx.beginPath();
+      ctx.moveTo(-w + 2, 0); ctx.lineTo(w - 3, h / 4);
+      ctx.moveTo(-w + 4, h / 3); ctx.lineTo(0, -h / 4);
+      ctx.stroke();
+
+      return true;
+    }
+
+    // Sealed Food Tray (Пищевой подложка-лоток под запайку)
+    case 'tray_sealed_food': {
+      drawShadow(ctx, 10.0, 5.0, 8.0, 0.28);
+
+      // Black / dark rigid polystyrene tray base
+      ctx.fillStyle = '#18181b';
+      ctx.beginPath();
+      ctx.roundRect(-9.5, -6.5, 19.0, 13.0, 1.8);
+      ctx.fill();
+
+      // Molded tray inner cavity
+      ctx.fillStyle = '#09090b';
+      ctx.beginPath();
+      ctx.roundRect(-8.2, -5.2, 16.4, 10.4, 1.2);
+      ctx.fill();
+
+      // 1. Inner Contents Rendering (under barrier film)
+      if (item?.contents && item.contents.length > 0) {
+        ctx.save();
+        const inner = item.contents[0];
+        drawItemModel2D(ctx, inner.itemId, 0, 0, 16, inner);
+        ctx.restore();
+      }
+
+      // 2. Clear stretched barrier cling film overlay
+      const trayGrad = ctx.createLinearGradient(-9, -6, 9, 6);
+      trayGrad.addColorStop(0, 'rgba(255, 255, 255, 0.45)');
+      trayGrad.addColorStop(0.5, 'rgba(255, 255, 255, 0.15)');
+      trayGrad.addColorStop(1, 'rgba(255, 255, 255, 0.40)');
+
+      ctx.fillStyle = trayGrad;
+      ctx.beginPath();
+      ctx.roundRect(-8.2, -5.2, 16.4, 10.4, 1.2);
+      ctx.fill();
+
+      // Tray sealed rim flange border
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.6)';
+      ctx.lineWidth = 0.8;
+      ctx.strokeRect(-9.0, -6.0, 18.0, 12.0);
+
+      // White product / price sticker label
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(2.5, 1.5, 5.5, 3.8);
+      ctx.fillStyle = '#16a34a';
+      ctx.fillRect(2.8, 1.8, 2.0, 1.0); // Eco green mark
+
+      return true;
+    }
+
+    // Opened / Torn Food Tray (Вскрытый пищевой лоток)
+    case 'tray_sealed_food_torn': {
+      drawShadow(ctx, 10.0, 4.5, 7.0, 0.22);
+
+      // Empty black tray base
+      ctx.fillStyle = '#18181b';
+      ctx.beginPath();
+      ctx.roundRect(-9.5, -6.5, 19.0, 13.0, 1.8);
+      ctx.fill();
+
+      ctx.fillStyle = '#09090b';
+      ctx.beginPath();
+      ctx.roundRect(-8.2, -5.2, 16.4, 10.4, 1.2);
+      ctx.fill();
+
+      // Peeled-back, crumpled torn plastic film on edge
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.35)';
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.6)';
+      ctx.lineWidth = 0.8;
+
+      ctx.beginPath();
+      ctx.moveTo(-8.2, -5.2);
+      ctx.quadraticCurveTo(-4.0, -2.0, -3.0, -5.2);
+      ctx.quadraticCurveTo(-1.0, -3.0, -8.2, -1.0);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+
+      return true;
+    }
+
+    // Sealed Snack Doypack Pouch (Герметичный пакет-дойпак)
+    case 'pouch_sealed_snack': {
+      drawShadow(ctx, 8.0, 3.5, 7.5, 0.22);
+
+      // Metallic foil pouch body
+      const pouchGrad = ctx.createLinearGradient(-6, -7, 6, 8);
+      pouchGrad.addColorStop(0, '#f1f5f9');
+      pouchGrad.addColorStop(0.5, '#cbd5e1');
+      pouchGrad.addColorStop(1, '#94a3b8');
+
+      ctx.fillStyle = pouchGrad;
+      ctx.beginPath();
+      ctx.roundRect(-6.0, -7.5, 12.0, 15.0, 1.5);
+      ctx.fill();
+
+      // Clear window in middle
+      ctx.fillStyle = 'rgba(15, 23, 42, 0.85)';
+      ctx.beginPath();
+      ctx.ellipse(0, 0.5, 4.2, 3.2, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // 1. Inner Contents inside clear window
+      if (item?.contents && item.contents.length > 0) {
+        ctx.save();
+        ctx.beginPath();
+        ctx.ellipse(0, 0.5, 4.0, 3.0, 0, 0, Math.PI * 2);
+        ctx.clip();
+        const inner = item.contents[0];
+        drawItemModel2D(ctx, inner.itemId, 0, 0.5, 14, inner);
+        ctx.restore();
+      }
+
+      // Window gloss highlight
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.35)';
+      ctx.beginPath();
+      ctx.ellipse(-1.2, -0.8, 2.0, 1.0, -0.4, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Sealed top strip & tear notch
+      ctx.fillStyle = '#64748b';
+      ctx.fillRect(-6.0, -7.5, 12.0, 1.8);
+      ctx.fillStyle = '#0f172a';
+      ctx.fillRect(-6.0, -5.5, 0.8, 1.0); // Left tear notch
+
+      return true;
+    }
+
+    // Torn Snack Doypack (Вскрытый дойпак)
+    case 'pouch_sealed_snack_torn': {
+      drawShadow(ctx, 7.5, 3.0, 6.0, 0.18);
+
+      ctx.fillStyle = '#cbd5e1';
+      ctx.beginPath();
+      ctx.moveTo(-5.5, 7.0);
+      ctx.lineTo(-5.5, -5.0);
+      // Torn top edge
+      ctx.lineTo(-3.0, -3.5);
+      ctx.lineTo(0, -5.5);
+      ctx.lineTo(3.0, -3.0);
+      ctx.lineTo(5.5, -5.0);
+      ctx.lineTo(5.5, 7.0);
+      ctx.closePath();
+      ctx.fill();
+
+      // Empty inner cavity shadow
+      ctx.fillStyle = '#334155';
+      ctx.beginPath();
+      ctx.ellipse(0, -3.5, 3.8, 1.2, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      return true;
+    }
+
+    // Vegetable Mesh Bag (Сетка для овощей и фруктов)
+    case 'mesh_bag_vegetable': {
+      drawShadow(ctx, 9.0, 4.0, 8.0, 0.26);
+
+      // 1. Inner Contents (3 clustered produce units inside net)
+      if (item?.contents && item.contents.length > 0) {
+        ctx.save();
+        const inner = item.contents[0];
+        drawItemModel2D(ctx, inner.itemId, -2.5, -1.0, 12, inner);
+        drawItemModel2D(ctx, inner.itemId, 2.5, -1.0, 12, inner);
+        drawItemModel2D(ctx, inner.itemId, 0, 2.0, 12, inner);
+        ctx.restore();
+      } else {
+        // Fallback potatoes in mesh
+        ctx.fillStyle = '#a16207';
+        ctx.beginPath();
+        ctx.arc(-2.5, -1.0, 3.5, 0, Math.PI * 2);
+        ctx.arc(2.5, -1.0, 3.5, 0, Math.PI * 2);
+        ctx.arc(0, 2.0, 3.5, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      // 2. Diamond Mesh Net Grid Overlay
+      ctx.strokeStyle = '#ef4444'; // Red netting strand
+      ctx.lineWidth = 0.6;
+      const nw = 7.5;
+      const nh = 6.5;
+
+      ctx.beginPath();
+      for (let x = -nw; x <= nw; x += 2.2) {
+        ctx.moveTo(x, -nh); ctx.lineTo(x + nh, nh);
+        ctx.moveTo(x, -nh); ctx.lineTo(x - nh, nh);
+      }
+      ctx.stroke();
+
+      // Plastic tie clip on top
+      ctx.fillStyle = '#facc15';
+      ctx.fillRect(-2.0, -7.5, 4.0, 1.8);
+
+      return true;
+    }
+
+    // Torn Vegetable Mesh (Разорванная овощная сетка)
+    case 'mesh_bag_vegetable_torn': {
+      drawShadow(ctx, 6.0, 2.5, 5.0, 0.15);
+
+      ctx.strokeStyle = '#ef4444';
+      ctx.lineWidth = 0.7;
+      ctx.beginPath();
+      ctx.moveTo(-5, -4); ctx.lineTo(4, 5);
+      ctx.moveTo(-3, 4); ctx.lineTo(5, -3);
+      ctx.stroke();
+
+      // Clip tag
+      ctx.fillStyle = '#facc15';
+      ctx.fillRect(-1.5, -5.5, 3.0, 1.5);
+
       return true;
     }
 

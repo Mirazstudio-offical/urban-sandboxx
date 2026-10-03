@@ -64,6 +64,7 @@ import {
   cancelConsumption,
   createDefaultPlayerInventory, 
   createItem,
+  createPackagedItem,
   deductPlayerCash,
   getPlayerCash,
   pickupGroundItem, 
@@ -190,6 +191,7 @@ import {
   Shield,
   ShoppingBag,
   ShoppingCart,
+  Sliders,
   Smartphone,
   Sun, 
   Sunrise, 
@@ -540,6 +542,29 @@ export default function App() {
     if (typeof window === 'undefined') return false;
     return 'ontouchstart'in window || navigator.maxTouchPoints > 0 || window.innerWidth <= 900;
   });
+  const [touchUiScale, setTouchUiScale] = useState<number>(() => {
+    if (typeof window === 'undefined') return 0.75;
+    const saved = localStorage.getItem('urban_sandbox_ui_scale');
+    if (saved) {
+      const parsed = parseFloat(saved);
+      if (!isNaN(parsed) && parsed >= 0.5 && parsed <= 1.2) return parsed;
+    }
+    return 0.75; // Default calibrated compact 75%
+  });
+
+  const handleCycleTouchScale = useCallback(() => {
+    setTouchUiScale((prev) => {
+      let next = 0.75;
+      if (prev <= 0.68) next = 0.75;
+      else if (prev <= 0.78) next = 0.85;
+      else if (prev <= 0.9) next = 1.0;
+      else next = 0.65;
+      try {
+        localStorage.setItem('urban_sandbox_ui_scale', next.toString());
+      } catch {}
+      return next;
+    });
+  }, []);
   const [isMinimapCollapsed, setIsMinimapCollapsed] = useState<boolean>(false);
   const [timeHour, setTimeHour] = useState<number>(10.0); // 0 to 24 hours
   const [isTimeAutoCycling, setIsTimeAutoCycling] = useState<boolean>(true);
@@ -5890,6 +5915,22 @@ export default function App() {
               <span>Тач {isMobileTouch ? 'ВКЛ': 'ВЫКЛ'}</span>
             </button>
 
+            {isMobileTouch && (
+              <button
+                id="touch-scale-btn"
+                onClick={handleCycleTouchScale}
+                onTouchEnd={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  handleCycleTouchScale();
+                }}
+                className="border border-sky-500/40 rounded-lg px-2.5 py-1.5 text-xs flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer bg-sky-950/80 hover:bg-sky-900 text-sky-200"
+                title="Настроить масштаб сенсорных кнопок">
+                <Sliders className="w-3.5 h-3.5 text-sky-400" />
+                <span>Масштаб {Math.round(touchUiScale * 100)}%</span>
+              </button>
+            )}
+
             <button
               id="spawn-point-btn"onClick={() => {
                 setIsSpawnMenuOpen(true);
@@ -6183,6 +6224,7 @@ export default function App() {
               inputRef.current.diffLockToggle = true;
             }}
             onToggleAxleDiffLock={handleToggleAxleDiffLock}
+            isMobileTouch={isMobileTouch}
           />
         );
       })()}
@@ -6239,6 +6281,8 @@ export default function App() {
             isRoadTrainLightsOn={playerCar?.roadTrainLightsOn !== false}
             onToggleRoadTrainLights={handleToggleRoadTrainLights}
             tractorBrakeLatch={playerCar?.tractorBrakeLatch !== false}
+            uiScale={touchUiScale}
+            onCycleUiScale={handleCycleTouchScale}
             onToggleTransferCase={() => {
               inputRef.current.transferCaseToggle = true;
             }}
@@ -6606,7 +6650,7 @@ export default function App() {
                   }
                 } else {
                   regularItemsCount++;
-                  const boughtItem = createItem(item.itemId, 1);
+                  const boughtItem = createPackagedItem(item.itemId, 1);
                   const angle = (p.angle || 0) + (Math.random() * 0.9 - 0.45);
                   const dist = 28 + (idx * 14) % 40;
                   w.groundItems.push({

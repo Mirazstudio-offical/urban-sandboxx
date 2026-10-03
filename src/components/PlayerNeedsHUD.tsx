@@ -324,11 +324,13 @@ export const PlayerNeedsHUD: React.FC<PlayerNeedsHUDProps> = ({
 
       {/* 4. BOTTOM DUAL HANDS & POCKETS HUD */}
       {!player.isInVehicle && (
-        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-40 flex flex-col items-center gap-2 pointer-events-auto">
+        <div className={`fixed ${isMobileTouch ? 'bottom-1 sm:bottom-2' : 'bottom-4'} left-1/2 -translate-x-1/2 z-40 flex flex-col items-center gap-1 sm:gap-2 pointer-events-auto`}>
           {/* MAIN INTERFACE ROW: LEFT HAND | SWAP | RIGHT HAND | DIVIDER | POCKETS 1-6 | INVENTORY BUTTON */}
           <div 
             id="player-dual-hands-hotbar"
-            className="flex items-center gap-2 bg-slate-950/95 backdrop-blur-md border border-slate-800 p-2.5 rounded-2xl shadow-2xl"
+            className={`flex items-center gap-1.5 sm:gap-2 bg-slate-950/95 backdrop-blur-md border border-slate-800 shadow-2xl transition-all ${
+              isMobileTouch ? 'p-1.5 rounded-xl scale-75 sm:scale-85 md:scale-100 origin-bottom' : 'p-2.5 rounded-2xl'
+            }`}
           >
             {/* --- HANDS SECTION --- */}
             <div className="flex items-center gap-1.5 bg-slate-900/90 p-1 rounded-xl border border-slate-800/80">

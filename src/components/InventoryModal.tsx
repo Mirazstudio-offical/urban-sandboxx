@@ -23,6 +23,7 @@ import {
   canItemFitInPockets,
   addPlayerNotification,
   restoreStarterContainers,
+  unpackSingleUseContainer,
   handleCarKeyActivation,
   getTargetVehicleForKey,
   getPlayerCompartments,
@@ -60,7 +61,8 @@ import {
   Volume2,
   User,
   Luggage,
-  FileText
+  FileText,
+  Scissors
 } from 'lucide-react';
 
 interface InventoryModalProps {
@@ -1034,28 +1036,51 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
                           className="w-full py-2.5 bg-amber-500 hover:bg-amber-400 text-zinc-950 font-bold rounded-xl text-xs flex items-center justify-center gap-2 shadow min-h-[44px]"
                         >
                           <Package className="w-4 h-4" />
-                          <span>Открыть содержимое ({selectedEntry.item.contents?.length || 0})</span>
+                          <span>Просмотреть содержимое ({selectedEntry.item.contents?.length || 0})</span>
                         </button>
+                        {(selectedEntry.item.singleUseContainer || selectedEntry.item.tornItemId) && selectedEntry.item.contents && selectedEntry.item.contents.length > 0 && (
+                          <button
+                            onClick={() => {
+                              unpackSingleUseContainer(player, selectedEntry.item, world);
+                              setSelectedIndex(0);
+                              forceRender(n => n + 1);
+                            }}
+                            className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-2 shadow min-h-[44px]"
+                          >
+                            <Scissors className="w-4 h-4" />
+                            <span>Вскрыть упаковку ({selectedEntry.item.contents.length} предм.)</span>
+                          </button>
+                        )}
                       </div>
                     )}
 
                     {/* Stash into other container option */}
-                    {!selectedEntry.item.isContainer && availableContainers.length > 0 && (
+                    {availableContainers.filter(cont => cont.id !== selectedEntry.item.id).length > 0 && (
                       <div className="p-2.5 bg-zinc-900 border border-zinc-800 rounded-xl flex flex-col gap-1.5 text-xs">
                         <span className="text-zinc-400 font-semibold flex items-center gap-1">
                           <ArrowDownToLine className="w-3.5 h-3.5 text-amber-400" />
                           Спрятать в контейнер:
                         </span>
                         <div className="flex flex-wrap gap-1.5">
-                          {availableContainers.map(cont => (
-                            <button
-                              key={cont.id}
-                              onClick={() => handlePutIntoContainer(cont, selectedEntry.originalIndex)}
-                              className="px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 rounded-lg text-xs font-medium border border-zinc-700 min-h-[36px]"
-                            >
-                              В {cont.nameRu}
-                            </button>
-                          ))}
+                          {availableContainers
+                            .filter(cont => cont.id !== selectedEntry.item.id)
+                            .map(cont => {
+                              const check = canItemFitInContainer(cont, selectedEntry.item);
+                              return (
+                                <button
+                                  key={cont.id}
+                                  onClick={() => handlePutIntoContainer(cont, selectedEntry.originalIndex)}
+                                  disabled={!check.fits}
+                                  className="px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 disabled:opacity-30 disabled:cursor-not-allowed text-zinc-200 rounded-lg text-xs font-medium border border-zinc-700 min-h-[36px] flex items-center gap-1.5 transition"
+                                  title={check.fits ? `Положить ${selectedEntry.item.nameRu} в ${cont.nameRu}` : check.reason}
+                                >
+                                  <span>В {cont.nameRu}</span>
+                                  {cont.contents && cont.contents.length > 0 && (
+                                    <span className="text-[10px] font-mono text-amber-400">({cont.contents.length})</span>
+                                  )}
+                                </button>
+                              );
+                            })}
                         </div>
                       </div>
                     )}
@@ -1413,6 +1438,83 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
                   </div>
                 )}
               </div>
+
+              {/* Quick Deposit Section: Items from pockets & hands */}
+              {(() => {
+                const depositCandidates: { item: InventoryItem; source: 'inventory' | 'leftHand' | 'rightHand'; index?: number }[] = [];
+                (player.inventory || []).forEach((invItem, idx) => {
+                  if (invItem && invItem.id !== openContainer.id) {
+                    depositCandidates.push({ item: invItem, source: 'inventory', index: idx });
+                  }
+                });
+                if (player.leftHandItem && player.leftHandItem.id !== openContainer.id) {
+                  depositCandidates.push({ item: player.leftHandItem, source: 'leftHand' });
+                }
+                if (player.rightHandItem && player.rightHandItem.id !== openContainer.id) {
+                  depositCandidates.push({ item: player.rightHandItem, source: 'rightHand' });
+                }
+
+                if (depositCandidates.length === 0) return null;
+
+                return (
+                  <div className="p-3.5 bg-zinc-950/80 border border-zinc-800 rounded-xl flex flex-col gap-2.5 mt-2">
+                    <div className="flex items-center justify-between text-xs font-semibold text-zinc-300">
+                      <span className="flex items-center gap-1.5 text-amber-400">
+                        <ArrowDownToLine className="w-4 h-4" />
+                        Положить предмет из карманов или рук в {openContainer.nameRu}:
+                      </span>
+                      <span className="text-[11px] text-zinc-500">Нажмите, чтобы переместить</span>
+                    </div>
+
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2">
+                      {depositCandidates.map((cand, cIdx) => {
+                        const check = canItemFitInContainer(openContainer, cand.item);
+                        return (
+                          <button
+                            key={cIdx}
+                            disabled={!check.fits}
+                            onClick={() => {
+                              if (cand.source === 'inventory' && cand.index !== undefined) {
+                                handlePutIntoContainer(openContainer, cand.index);
+                              } else if (cand.source === 'leftHand' || cand.source === 'rightHand') {
+                                const hand = cand.source === 'leftHand' ? 'left' : 'right';
+                                const itemFromHand = takeItemFromHand(player, hand);
+                                if (itemFromHand) {
+                                  const res = addItemToContainer(openContainer, itemFromHand);
+                                  if (res.success) {
+                                    sound.playPickup();
+                                    addPlayerNotification(player, res.message, 'pickup');
+                                    forceRender(n => n + 1);
+                                  } else {
+                                    putItemInHand(player, hand, itemFromHand, world);
+                                    addPlayerNotification(player, res.message, 'warning');
+                                  }
+                                }
+                              }
+                            }}
+                            className={`p-2 rounded-xl border flex items-center gap-2 text-left transition ${
+                              check.fits
+                                ? 'bg-zinc-900 hover:bg-zinc-800 border-zinc-700/80 text-zinc-100 hover:border-amber-500/60'
+                                : 'bg-zinc-950/40 border-zinc-800/40 text-zinc-500 opacity-40 cursor-not-allowed'
+                            }`}
+                            title={check.fits ? `Положить ${cand.item.nameRu} в ${openContainer.nameRu}` : check.reason}
+                          >
+                            <div className="w-8 h-8 rounded-lg bg-zinc-950 border border-zinc-800 flex items-center justify-center shrink-0 p-0.5">
+                              <ItemIconCanvas itemId={cand.item.itemId} item={cand.item} size={22} />
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <div className="text-xs font-semibold truncate leading-tight">{cand.item.nameRu}</div>
+                              <div className="text-[10px] text-zinc-400 font-mono">
+                                {getItemTotalVolume(cand.item)}л • {getItemTotalWeight(cand.item)}кг
+                              </div>
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
           )}
 

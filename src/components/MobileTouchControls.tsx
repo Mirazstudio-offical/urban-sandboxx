@@ -74,6 +74,8 @@ interface MobileTouchControlsProps {
   isRoadTrainLightsOn?: boolean;
   onToggleRoadTrainLights?: () => void;
   tractorBrakeLatch?: boolean;
+  uiScale?: number;
+  onCycleUiScale?: () => void;
 }
 
 const triggerHaptic = (ms: number = 10) => {
@@ -93,6 +95,7 @@ interface TouchButtonProps {
   hapticMs?: number;
   className?: string;
   activeClassName?: string;
+  title?: string;
   children: React.ReactNode;
 }
 
@@ -102,6 +105,7 @@ const TouchButton: React.FC<TouchButtonProps> = ({
   hapticMs = 12,
   className = '',
   activeClassName = '',
+  title,
   children,
 }) => {
   const [isPressed, setIsPressed] = useState<boolean>(false);
@@ -151,6 +155,7 @@ const TouchButton: React.FC<TouchButtonProps> = ({
   return (
     <button
       type="button"
+      title={title}
       onTouchStart={handleTouchStart}
       onTouchEnd={handleTouchEnd}
       onTouchCancel={handleTouchEnd}
@@ -289,7 +294,7 @@ const VehicleWindshieldGlanceZone: React.FC<VehicleWindshieldGlanceZoneProps> = 
   return (
     <div
       id="touch-windshield-glance-zone"
-      className="absolute top-16 bottom-56 left-20 right-20 sm:left-32 sm:right-32 pointer-events-auto touch-none z-10 select-none"
+      className="absolute top-12 bottom-36 left-28 right-44 sm:left-36 sm:right-52 pointer-events-auto touch-none z-10 select-none"
       onTouchStart={handleTouchStart}
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
@@ -381,67 +386,63 @@ const GearStickLever: React.FC<GearStickLeverProps> = ({
 
   // Notch offsets along Y-axis for Automatic (strictly dx = 0)
   const AUTO_NOTCHES: Record<string, number> = {
-    P: -32,
-    R: -11,
-    N: 11,
-    D: 32,
+    P: -24,
+    R: -8,
+    N: 8,
+    D: 24,
   };
 
   // Notch offsets along Y-axis for Industrial Hydrostatic Drive (F: Forward, N: Neutral, R: Reverse)
   const MACHINERY_NOTCHES: Record<string, number> = {
-    D: -28,
+    D: -22,
     N: 0,
-    R: 28,
+    R: 22,
     P: 0,
   };
 
   // Standard 5-speed notches
   const MANUAL_5SPEED_NOTCHES: Record<string, { x: number; y: number }> = {
-    '1': { x: -20, y: -24 },
-    '2': { x: -20, y: 24 },
-    '3': { x: 0, y: -24 },
-    '4': { x: 0, y: 24 },
-    '5': { x: 20, y: -24 },
-    'R': { x: 20, y: 24 },
+    '1': { x: -15, y: -18 },
+    '2': { x: -15, y: 18 },
+    '3': { x: 0, y: -18 },
+    '4': { x: 0, y: 18 },
+    '5': { x: 15, y: -18 },
+    'R': { x: 15, y: 18 },
     'N': { x: 0, y: 0 },
   };
 
   // 6-speed commercial / sports notches (R top-left, 1-6 standard)
   const MANUAL_6SPEED_NOTCHES: Record<string, { x: number; y: number }> = {
-    'R': { x: -26, y: -24 },
-    '1': { x: -9, y: -24 },
-    '2': { x: -9, y: 24 },
-    '3': { x: 9, y: -24 },
-    '4': { x: 9, y: 24 },
-    '5': { x: 26, y: -24 },
-    '6': { x: 26, y: 24 },
+    'R': { x: -20, y: -18 },
+    '1': { x: -7, y: -18 },
+    '2': { x: -7, y: 18 },
+    '3': { x: 7, y: -18 },
+    '4': { x: 7, y: 18 },
+    '5': { x: 20, y: -18 },
+    '6': { x: 20, y: 18 },
     'N': { x: 0, y: 0 },
   };
 
   // MTZ-80 Soviet Tractor 4-track authentic culisse
-  // Track 0: Range I (up) / Range II (down)
-  // Track 1: 1/3 (up) / 4/7 (down)
-  // Track 2: 5/8 (up) / 2/6 (down)
-  // Track 3: 9 (up) / R (down)
   const MANUAL_MTZ_NOTCHES: Record<string, { x: number; y: number }> = {
-    'RANGE_I': { x: -32, y: -24 },
-    'RANGE_II': { x: -32, y: 24 },
-    '1': { x: -11, y: -24 },
-    '3': { x: -11, y: -24 },
-    '4': { x: -11, y: 24 },
-    '7': { x: -11, y: 24 },
-    '5': { x: 11, y: -24 },
-    '8': { x: 11, y: -24 },
-    '2': { x: 11, y: 24 },
-    '6': { x: 11, y: 24 },
-    '9': { x: 32, y: -24 },
-    'R': { x: 32, y: 24 },
+    'RANGE_I': { x: -24, y: -18 },
+    'RANGE_II': { x: -24, y: 18 },
+    '1': { x: -8, y: -18 },
+    '3': { x: -8, y: -18 },
+    '4': { x: -8, y: 18 },
+    '7': { x: -8, y: 18 },
+    '5': { x: 8, y: -18 },
+    '8': { x: 8, y: -18 },
+    '2': { x: 8, y: 18 },
+    '6': { x: 8, y: 18 },
+    '9': { x: 24, y: -18 },
+    'R': { x: 24, y: 18 },
     'N': { x: 0, y: 0 },
   };
 
   const getRestingOffset = () => {
     if (isMachinery) return { x: 0, y: MACHINERY_NOTCHES[currentGearKey] ?? 0 };
-    if (isAuto) return { x: 0, y: AUTO_NOTCHES[currentGearKey] ?? 32 };
+    if (isAuto) return { x: 0, y: AUTO_NOTCHES[currentGearKey] ?? 24 };
     if (isTractor) return MANUAL_MTZ_NOTCHES[currentGearKey] ?? { x: 0, y: 0 };
     if (is6Speed) return MANUAL_6SPEED_NOTCHES[currentGearKey] ?? { x: 0, y: 0 };
     return MANUAL_5SPEED_NOTCHES[currentGearKey] ?? { x: 0, y: 0 };
@@ -466,8 +467,8 @@ const GearStickLever: React.FC<GearStickLeverProps> = ({
     if (isMachinery) {
       // HYDROSTATIC LEVER: 1-AXIS SMOOTH FORWARD (D/F) / NEUTRAL (N) / REVERSE (R)
       let detectedNotch = 'N';
-      if (rawDY < -14) detectedNotch = 'D';
-      else if (rawDY > 14) detectedNotch = 'R';
+      if (rawDY < -11) detectedNotch = 'D';
+      else if (rawDY > 11) detectedNotch = 'R';
       else detectedNotch = 'N';
 
       setDragX(0);
@@ -482,9 +483,9 @@ const GearStickLever: React.FC<GearStickLeverProps> = ({
     } else if (isAuto) {
       // AUTOMATIC: STRICTLY ZERO SIDEWAYS DRIFT (dx = 0)
       let detectedNotch = 'D';
-      if (rawDY < -21) detectedNotch = 'P';
+      if (rawDY < -16) detectedNotch = 'P';
       else if (rawDY < 0) detectedNotch = 'R';
-      else if (rawDY < 21) detectedNotch = 'N';
+      else if (rawDY < 16) detectedNotch = 'N';
       else detectedNotch = 'D';
 
       setDragX(0);
@@ -498,16 +499,15 @@ const GearStickLever: React.FC<GearStickLeverProps> = ({
       }
     } else if (isTractor) {
       // MTZ-80 SOVIET 4-TRACK DUAL-RANGE CULISSE
-      // Free sideways movement in neutral corridor (Math.abs(rawDY) <= 8)
-      let clampedX = Math.max(-33, Math.min(33, rawDX));
-      let clampedY = Math.max(-25, Math.min(25, rawDY));
+      let clampedX = Math.max(-25, Math.min(25, rawDX));
+      let clampedY = Math.max(-19, Math.min(19, rawDY));
 
-      if (Math.abs(clampedY) > 7) {
+      if (Math.abs(clampedY) > 6) {
         // Snap to nearest vertical track
-        if (clampedX < -21) clampedX = -32; // Track 0: Range
-        else if (clampedX < 0) clampedX = -11; // Track 1: 1/3 and 4/7
-        else if (clampedX < 21) clampedX = 11; // Track 2: 5/8 and 2/6
-        else clampedX = 32; // Track 3: 9 and R
+        if (clampedX < -16) clampedX = -24; // Track 0: Range
+        else if (clampedX < 0) clampedX = -8; // Track 1: 1/3 and 4/7
+        else if (clampedX < 16) clampedX = 8; // Track 2: 5/8 and 2/6
+        else clampedX = 24; // Track 3: 9 and R
       } else {
         clampedY = 0; // Floating inside horizontal neutral groove
       }
@@ -516,28 +516,28 @@ const GearStickLever: React.FC<GearStickLeverProps> = ({
       setDragY(clampedY);
 
       let detectedNotch = 'N';
-      if (Math.abs(clampedY) <= 8) {
+      if (Math.abs(clampedY) <= 6) {
         detectedNotch = 'N';
-      } else if (clampedY < -10) {
+      } else if (clampedY < -8) {
         // Top row
-        if (clampedX === -32) {
+        if (clampedX === -24) {
           detectedNotch = 'RANGE_I';
           setLocalRange(1);
-        } else if (clampedX === -11) {
+        } else if (clampedX === -8) {
           detectedNotch = localRange === 1 ? '1' : '3';
-        } else if (clampedX === 11) {
+        } else if (clampedX === 8) {
           detectedNotch = localRange === 1 ? '5' : '8';
         } else {
           detectedNotch = '9';
         }
-      } else if (clampedY > 10) {
+      } else if (clampedY > 8) {
         // Bottom row
-        if (clampedX === -32) {
+        if (clampedX === -24) {
           detectedNotch = 'RANGE_II';
           setLocalRange(2);
-        } else if (clampedX === -11) {
+        } else if (clampedX === -8) {
           detectedNotch = localRange === 1 ? '4' : '7';
-        } else if (clampedX === 11) {
+        } else if (clampedX === 8) {
           detectedNotch = localRange === 1 ? '2' : '6';
         } else {
           detectedNotch = 'R';
@@ -557,15 +557,15 @@ const GearStickLever: React.FC<GearStickLeverProps> = ({
         }
       }
     } else if (is6Speed) {
-      // 6-SPEED MANUAL (R at -26 up, 1-2 at -9, 3-4 at 9, 5-6 at 26)
-      let clampedX = Math.max(-28, Math.min(28, rawDX));
-      let clampedY = Math.max(-25, Math.min(25, rawDY));
+      // 6-SPEED MANUAL (R at -20 up, 1-2 at -7, 3-4 at 7, 5-6 at 20)
+      let clampedX = Math.max(-22, Math.min(22, rawDX));
+      let clampedY = Math.max(-19, Math.min(19, rawDY));
 
-      if (Math.abs(clampedY) > 7) {
-        if (clampedX < -17) clampedX = -26;
-        else if (clampedX < 0) clampedX = -9;
-        else if (clampedX < 17) clampedX = 9;
-        else clampedX = 26;
+      if (Math.abs(clampedY) > 6) {
+        if (clampedX < -13) clampedX = -20;
+        else if (clampedX < 0) clampedX = -7;
+        else if (clampedX < 13) clampedX = 7;
+        else clampedX = 20;
       } else {
         clampedY = 0;
       }
@@ -574,13 +574,13 @@ const GearStickLever: React.FC<GearStickLeverProps> = ({
       setDragY(clampedY);
 
       let detectedNotch = 'N';
-      if (Math.abs(clampedY) <= 8) {
+      if (Math.abs(clampedY) <= 6) {
         detectedNotch = 'N';
-      } else if (clampedX === -26) {
+      } else if (clampedX === -20) {
         detectedNotch = clampedY < 0 ? 'R' : 'N';
-      } else if (clampedX === -9) {
+      } else if (clampedX === -7) {
         detectedNotch = clampedY < 0 ? '1' : '2';
-      } else if (clampedX === 9) {
+      } else if (clampedX === 7) {
         detectedNotch = clampedY < 0 ? '3' : '4';
       } else {
         detectedNotch = clampedY < 0 ? '5' : '6';
@@ -598,12 +598,12 @@ const GearStickLever: React.FC<GearStickLeverProps> = ({
       }
     } else {
       // STANDARD 5-SPEED MANUAL
-      let clampedX = Math.max(-22, Math.min(22, rawDX));
-      let clampedY = Math.max(-25, Math.min(25, rawDY));
+      let clampedX = Math.max(-17, Math.min(17, rawDX));
+      let clampedY = Math.max(-19, Math.min(19, rawDY));
 
-      if (Math.abs(clampedY) > 7) {
-        if (clampedX < -10) clampedX = -20;
-        else if (clampedX > 10) clampedX = 20;
+      if (Math.abs(clampedY) > 6) {
+        if (clampedX < -8) clampedX = -15;
+        else if (clampedX > 8) clampedX = 15;
         else clampedX = 0;
       } else {
         clampedY = 0;
@@ -613,11 +613,11 @@ const GearStickLever: React.FC<GearStickLeverProps> = ({
       setDragY(clampedY);
 
       let detectedNotch = 'N';
-      if (Math.abs(clampedY) <= 8) {
+      if (Math.abs(clampedY) <= 6) {
         detectedNotch = 'N';
-      } else if (clampedX < -10) {
+      } else if (clampedX < -8) {
         detectedNotch = clampedY < 0 ? '1' : '2';
-      } else if (clampedX > 10) {
+      } else if (clampedX > 8) {
         detectedNotch = clampedY < 0 ? '5' : 'R';
       } else {
         detectedNotch = clampedY < 0 ? '3' : '4';
@@ -692,16 +692,16 @@ const GearStickLever: React.FC<GearStickLeverProps> = ({
   };
 
   // Dimensions for console
-  const boxW = (isTractor || is6Speed) ? 96 : 84;
-  const boxH = 118;
+  const boxW = (isTractor || is6Speed) ? 72 : 60;
+  const boxH = 88;
   const cx = boxW / 2;
   const cy = boxH / 2;
 
   const knobX = cx + currentOffset.x;
   const knobY = cy + currentOffset.y;
 
-  const tiltY = (-currentOffset.y / 32) * 28;
-  const tiltX = (currentOffset.x / 24) * 22;
+  const tiltY = (-currentOffset.y / 24) * 26;
+  const tiltX = (currentOffset.x / 18) * 20;
 
   const theme = getVehicleControlTheme(carType);
   const themeMeta = CONTROL_THEME_META[theme];
@@ -714,8 +714,8 @@ const GearStickLever: React.FC<GearStickLeverProps> = ({
       onTouchEnd={handleTouchEnd}
       onTouchCancel={handleTouchEnd}
       onMouseDown={handleMouseDown}
-      className={`relative h-[112px] select-none touch-none flex items-center justify-center pointer-events-auto cursor-grab active:cursor-grabbing shrink-0 my-auto ${
-        isTractor || is6Speed ? 'w-[88px] sm:w-[96px]' : 'w-[72px] sm:w-[80px]'
+      className={`relative h-[84px] select-none touch-none flex items-center justify-center pointer-events-auto cursor-grab active:cursor-grabbing shrink-0 my-auto ${
+        isTractor || is6Speed ? 'w-[68px] sm:w-[72px]' : 'w-[56px] sm:w-[60px]'
       }`}
       title={`${themeMeta.knobName} (переключайте режимы свайпом)`}
     >
@@ -765,7 +765,7 @@ const GearStickLever: React.FC<GearStickLeverProps> = ({
         /* SOVIET TRACTOR 4-TRACK CULISSE GUIDE PLATE */
         <div className="absolute inset-0 pointer-events-none">
           {/* Top Notch Labels */}
-          <div className="absolute top-1.5 inset-x-1 flex justify-between text-[7px] font-mono font-bold px-1.5">
+          <div className="absolute top-1 inset-x-1 flex justify-between text-[6.5px] font-mono font-bold px-1">
             <span className={localRange === 1 ? 'text-amber-400 font-black' : 'text-slate-500'}>I</span>
             <span className={currentGearKey === '1' || currentGearKey === '3' ? 'text-sky-400 font-black' : 'text-slate-400'}>1/3</span>
             <span className={currentGearKey === '5' || currentGearKey === '8' ? 'text-sky-400 font-black' : 'text-slate-400'}>5/8</span>
@@ -774,16 +774,16 @@ const GearStickLever: React.FC<GearStickLeverProps> = ({
 
           <svg className="w-full h-full opacity-35">
             {/* 4 Vertical Slots */}
-            <line x1={cx - 32} y1={cy - 24} x2={cx - 32} y2={cy + 24} stroke="#cbd5e1" strokeWidth="1.6" strokeDasharray="2 2" strokeLinecap="round" />
-            <line x1={cx - 11} y1={cy - 24} x2={cx - 11} y2={cy + 24} stroke="#cbd5e1" strokeWidth="1.6" strokeDasharray="2 2" strokeLinecap="round" />
-            <line x1={cx + 11} y1={cy - 24} x2={cx + 11} y2={cy + 24} stroke="#cbd5e1" strokeWidth="1.6" strokeDasharray="2 2" strokeLinecap="round" />
-            <line x1={cx + 32} y1={cy - 24} x2={cx + 32} y2={cy + 24} stroke="#cbd5e1" strokeWidth="1.6" strokeDasharray="2 2" strokeLinecap="round" />
+            <line x1={cx - 24} y1={cy - 18} x2={cx - 24} y2={cy + 18} stroke="#cbd5e1" strokeWidth="1.6" strokeDasharray="2 2" strokeLinecap="round" />
+            <line x1={cx - 8} y1={cy - 18} x2={cx - 8} y2={cy + 18} stroke="#cbd5e1" strokeWidth="1.6" strokeDasharray="2 2" strokeLinecap="round" />
+            <line x1={cx + 8} y1={cy - 18} x2={cx + 8} y2={cy + 18} stroke="#cbd5e1" strokeWidth="1.6" strokeDasharray="2 2" strokeLinecap="round" />
+            <line x1={cx + 24} y1={cy - 18} x2={cx + 24} y2={cy + 18} stroke="#cbd5e1" strokeWidth="1.6" strokeDasharray="2 2" strokeLinecap="round" />
             {/* Horizontal Neutral Crossbar */}
-            <line x1={cx - 32} y1={cy} x2={cx + 32} y2={cy} stroke="#cbd5e1" strokeWidth="1.6" strokeDasharray="2 2" strokeLinecap="round" />
+            <line x1={cx - 24} y1={cy} x2={cx + 24} y2={cy} stroke="#cbd5e1" strokeWidth="1.6" strokeDasharray="2 2" strokeLinecap="round" />
           </svg>
 
           {/* Bottom Notch Labels */}
-          <div className="absolute bottom-1.5 inset-x-1 flex justify-between text-[7px] font-mono font-bold px-1.5">
+          <div className="absolute bottom-1 inset-x-1 flex justify-between text-[6.5px] font-mono font-bold px-1">
             <span className={localRange === 2 ? 'text-amber-400 font-black' : 'text-slate-500'}>II</span>
             <span className={currentGearKey === '4' || currentGearKey === '7' ? 'text-sky-400 font-black' : 'text-slate-400'}>4/7</span>
             <span className={currentGearKey === '2' || currentGearKey === '6' ? 'text-sky-400 font-black' : 'text-slate-400'}>2/6</span>
@@ -793,7 +793,7 @@ const GearStickLever: React.FC<GearStickLeverProps> = ({
       ) : is6Speed ? (
         /* 6-SPEED COMMERCIAL / SPORTS H-GATE */
         <div className="absolute inset-0 pointer-events-none">
-          <div className="absolute top-1.5 inset-x-1 flex justify-between text-[7.5px] font-mono font-bold px-2">
+          <div className="absolute top-1 inset-x-1 flex justify-between text-[7px] font-mono font-bold px-1.5">
             <span className={currentGearKey === 'R' ? 'text-rose-400 font-black' : 'text-slate-400'}>R</span>
             <span className={currentGearKey === '1' ? 'text-sky-400 font-black' : 'text-slate-400'}>1</span>
             <span className={currentGearKey === '3' ? 'text-sky-400 font-black' : 'text-slate-400'}>3</span>
@@ -801,14 +801,14 @@ const GearStickLever: React.FC<GearStickLeverProps> = ({
           </div>
 
           <svg className="w-full h-full opacity-30">
-            <line x1={cx - 26} y1={cy - 24} x2={cx - 26} y2={cy} stroke="#cbd5e1" strokeWidth="1.5" strokeDasharray="2 2" strokeLinecap="round" />
-            <line x1={cx - 9} y1={cy - 24} x2={cx - 9} y2={cy + 24} stroke="#cbd5e1" strokeWidth="1.5" strokeDasharray="2 2" strokeLinecap="round" />
-            <line x1={cx + 9} y1={cy - 24} x2={cx + 9} y2={cy + 24} stroke="#cbd5e1" strokeWidth="1.5" strokeDasharray="2 2" strokeLinecap="round" />
-            <line x1={cx + 26} y1={cy - 24} x2={cx + 26} y2={cy + 24} stroke="#cbd5e1" strokeWidth="1.5" strokeDasharray="2 2" strokeLinecap="round" />
-            <line x1={cx - 26} y1={cy} x2={cx + 26} y2={cy} stroke="#cbd5e1" strokeWidth="1.5" strokeDasharray="2 2" strokeLinecap="round" />
+            <line x1={cx - 20} y1={cy - 18} x2={cx - 20} y2={cy} stroke="#cbd5e1" strokeWidth="1.5" strokeDasharray="2 2" strokeLinecap="round" />
+            <line x1={cx - 7} y1={cy - 18} x2={cx - 7} y2={cy + 18} stroke="#cbd5e1" strokeWidth="1.5" strokeDasharray="2 2" strokeLinecap="round" />
+            <line x1={cx + 7} y1={cy - 18} x2={cx + 7} y2={cy + 18} stroke="#cbd5e1" strokeWidth="1.5" strokeDasharray="2 2" strokeLinecap="round" />
+            <line x1={cx + 20} y1={cy - 18} x2={cx + 20} y2={cy + 18} stroke="#cbd5e1" strokeWidth="1.5" strokeDasharray="2 2" strokeLinecap="round" />
+            <line x1={cx - 20} y1={cy} x2={cx + 20} y2={cy} stroke="#cbd5e1" strokeWidth="1.5" strokeDasharray="2 2" strokeLinecap="round" />
           </svg>
 
-          <div className="absolute bottom-1.5 inset-x-1 flex justify-between text-[7.5px] font-mono font-bold px-2">
+          <div className="absolute bottom-1 inset-x-1 flex justify-between text-[7px] font-mono font-bold px-1.5">
             <span className="opacity-0">·</span>
             <span className={currentGearKey === '2' ? 'text-sky-400 font-black' : 'text-slate-400'}>2</span>
             <span className={currentGearKey === '4' ? 'text-sky-400 font-black' : 'text-slate-400'}>4</span>
@@ -818,20 +818,20 @@ const GearStickLever: React.FC<GearStickLeverProps> = ({
       ) : (
         /* STANDARD 5-SPEED MANUAL SUBTLE H-GATE */
         <div className="absolute inset-0 pointer-events-none">
-          <div className="absolute top-1.5 inset-x-2 flex justify-between text-[7.5px] font-mono font-bold px-1">
+          <div className="absolute top-1 inset-x-1.5 flex justify-between text-[7px] font-mono font-bold px-1">
             <span className={currentGearKey === '1' ? 'text-sky-400 font-black' : 'text-slate-400'}>1</span>
             <span className={currentGearKey === '3' ? 'text-sky-400 font-black' : 'text-slate-400'}>3</span>
             <span className={currentGearKey === '5' ? 'text-sky-400 font-black' : 'text-slate-400'}>5</span>
           </div>
 
           <svg className="w-full h-full opacity-30">
-            <line x1={cx - 20} y1={cy - 24} x2={cx - 20} y2={cy + 24} stroke="#cbd5e1" strokeWidth="1.5" strokeDasharray="2 2" strokeLinecap="round" />
-            <line x1={cx} y1={cy - 24} x2={cx} y2={cy + 24} stroke="#cbd5e1" strokeWidth="1.5" strokeDasharray="2 2" strokeLinecap="round" />
-            <line x1={cx + 20} y1={cy - 24} x2={cx + 20} y2={cy + 24} stroke="#cbd5e1" strokeWidth="1.5" strokeDasharray="2 2" strokeLinecap="round" />
-            <line x1={cx - 20} y1={cy} x2={cx + 20} y2={cy} stroke="#cbd5e1" strokeWidth="1.5" strokeDasharray="2 2" strokeLinecap="round" />
+            <line x1={cx - 15} y1={cy - 18} x2={cx - 15} y2={cy + 18} stroke="#cbd5e1" strokeWidth="1.5" strokeDasharray="2 2" strokeLinecap="round" />
+            <line x1={cx} y1={cy - 18} x2={cx} y2={cy + 18} stroke="#cbd5e1" strokeWidth="1.5" strokeDasharray="2 2" strokeLinecap="round" />
+            <line x1={cx + 15} y1={cy - 18} x2={cx + 15} y2={cy + 18} stroke="#cbd5e1" strokeWidth="1.5" strokeDasharray="2 2" strokeLinecap="round" />
+            <line x1={cx - 15} y1={cy} x2={cx + 15} y2={cy} stroke="#cbd5e1" strokeWidth="1.5" strokeDasharray="2 2" strokeLinecap="round" />
           </svg>
 
-          <div className="absolute bottom-1.5 inset-x-2 flex justify-between text-[7.5px] font-mono font-bold px-1">
+          <div className="absolute bottom-1 inset-x-1.5 flex justify-between text-[7px] font-mono font-bold px-1">
             <span className={currentGearKey === '2' ? 'text-sky-400 font-black' : 'text-slate-400'}>2</span>
             <span className={currentGearKey === '4' ? 'text-sky-400 font-black' : 'text-slate-400'}>4</span>
             <span className={currentGearKey === 'R' ? 'text-rose-400 font-black' : 'text-slate-400'}>R</span>
@@ -923,7 +923,7 @@ const GearStickLever: React.FC<GearStickLeverProps> = ({
 
       {/* REALISTIC VEHICLE-SPECIFIC SHIFT KNOB */}
       <div
-        className="absolute z-20 pointer-events-none"
+        className="absolute z-20 pointer-events-none scale-75 origin-center"
         style={{
           left: `${knobX}px`,
           top: `${knobY}px`,
@@ -1018,8 +1018,8 @@ const VirtualSteeringWheel: React.FC<VirtualSteeringWheelProps> = ({
     }
     isInteractingRef.current = true;
 
-    // Center horn hub check (radius < 22px)
-    if (distSq < 22 * 22) {
+    // Center horn hub check (radius < 17px)
+    if (distSq < 17 * 17) {
       if (!hornActiveRef.current) {
         hornActiveRef.current = true;
         inputRef.current.hornH = true;
@@ -1047,7 +1047,7 @@ const VirtualSteeringWheel: React.FC<VirtualSteeringWheelProps> = ({
     const distSq = dx * dx + dy * dy;
 
     // Release horn if dragged outside center hub
-    if (hornActiveRef.current && distSq >= 24 * 24) {
+    if (hornActiveRef.current && distSq >= 19 * 19) {
       hornActiveRef.current = false;
       inputRef.current.hornH = false;
     }
@@ -1073,7 +1073,7 @@ const VirtualSteeringWheel: React.FC<VirtualSteeringWheelProps> = ({
     const deltaDeg = (deltaRad * 180) / Math.PI;
 
     // Only apply if finger is sufficiently away from dead center
-    if (distSq > 14 * 14) {
+    if (distSq > 11 * 11) {
       const prevDeg = rotationDegRef.current;
       const targetDeg = prevDeg + deltaDeg;
 
@@ -1263,19 +1263,19 @@ const VirtualSteeringWheel: React.FC<VirtualSteeringWheelProps> = ({
       onTouchEnd={handleTouchEnd}
       onTouchCancel={handleTouchEnd}
       onMouseDown={handleMouseDown}
-      className="relative w-36 h-36 select-none touch-none flex items-center justify-center pointer-events-auto cursor-grab active:cursor-grabbing shrink-0"
+      className="relative w-28 h-28 sm:w-30 sm:h-30 select-none touch-none flex items-center justify-center pointer-events-auto cursor-grab active:cursor-grabbing shrink-0"
       title={`${themeMeta.wheelName} (крутите по кругу для плавного управления)`}
     >
       {/* BACKGROUND DIAL RING & DEGREE NOTCHES */}
       <div 
-        className="absolute inset-0 rounded-full backdrop-blur-md shadow-[0_10px_25px_rgba(0,0,0,0.85)] flex items-center justify-center pointer-events-none transition-colors duration-300"
+        className="absolute inset-0 rounded-full backdrop-blur-md shadow-[0_6px_18px_rgba(0,0,0,0.85)] flex items-center justify-center pointer-events-none transition-colors duration-300"
         style={{
           backgroundColor: themeMeta.dialBgColor,
           border: `1.5px solid ${themeMeta.dialBorderColor}`,
         }}
       >
         {/* Subtle angle degree & vehicle theme badge */}
-        <div className="absolute top-1 flex items-center gap-1 text-[8.5px] font-mono font-bold">
+        <div className="absolute top-1 flex items-center gap-1 text-[7.5px] font-mono font-bold">
           <span style={{ color: themeMeta.accentColor }} className="font-black drop-shadow-[0_0_4px_rgba(0,0,0,0.8)]">
             {themeMeta.badgeText}
           </span>
@@ -1283,32 +1283,32 @@ const VirtualSteeringWheel: React.FC<VirtualSteeringWheelProps> = ({
           <span className={isAtLeftLock || isAtRightLock ? 'text-amber-400 font-black' : 'text-slate-300'}>
             {Math.abs(Math.round(rotationDeg))}°
           </span>
-          <span className="text-[7.5px] text-slate-500">
+          <span className="text-[6.5px] text-slate-500">
             ({turnsCount} об.)
           </span>
           {(isAtLeftLock || isAtRightLock) && (
-            <span className="px-1 py-0.2 text-[7px] bg-amber-500/20 text-amber-300 border border-amber-500/40 rounded font-black">
+            <span className="px-0.5 text-[6.5px] bg-amber-500/20 text-amber-300 border border-amber-500/40 rounded font-black">
               УПОР
             </span>
           )}
         </div>
-        <div className={`absolute left-2 text-[8px] font-mono font-bold ${isAtLeftLock ? 'text-amber-400 font-black scale-110' : 'text-slate-500'}`}>
+        <div className={`absolute left-1.5 text-[7px] font-mono font-bold ${isAtLeftLock ? 'text-amber-400 font-black scale-110' : 'text-slate-500'}`}>
           L
         </div>
-        <div className={`absolute right-2 text-[8px] font-mono font-bold ${isAtRightLock ? 'text-amber-400 font-black scale-110' : 'text-slate-500'}`}>
+        <div className={`absolute right-1.5 text-[7px] font-mono font-bold ${isAtRightLock ? 'text-amber-400 font-black scale-110' : 'text-slate-500'}`}>
           R
         </div>
 
         {/* Top 12 o'clock center tick notch */}
         <div 
-          className="absolute top-0 w-1.5 h-2 rounded-b-sm opacity-80"
+          className="absolute top-0 w-1 h-1.5 rounded-b-sm opacity-80"
           style={{ backgroundColor: themeMeta.accentColor }}
         />
       </div>
 
       {/* ROTATING VEHICLE-AUTHENTIC STEERING WHEEL */}
       <div
-        className="w-[132px] h-[132px] transition-transform duration-75 ease-out relative pointer-events-none"
+        className="w-[102px] h-[102px] sm:w-[108px] sm:h-[108px] transition-transform duration-75 ease-out relative pointer-events-none"
         style={{ transform: `rotate(${rotationDeg}deg)` }}
       >
         <SteeringWheelModel
@@ -1360,6 +1360,8 @@ export const MobileTouchControls: React.FC<MobileTouchControlsProps> = ({
   isRoadTrainLightsOn = false,
   onToggleRoadTrainLights,
   tractorBrakeLatch = true,
+  uiScale = 0.75,
+  onCycleUiScale,
 }) => {
   // Joystick State (Used for Pedestrian Walking)
   const [joystickActive, setJoystickActive] = useState<boolean>(false);
@@ -1396,7 +1398,7 @@ export const MobileTouchControls: React.FC<MobileTouchControlsProps> = ({
         const rawDx = touchX - joystickCenter.x;
         const rawDy = touchY - joystickCenter.y;
         const dist = Math.hypot(rawDx, rawDy);
-        const maxRadius = 45;
+        const maxRadius = 34;
 
         const clampedDist = Math.min(dist, maxRadius);
         const angle = Math.atan2(rawDy, rawDx);
@@ -1442,7 +1444,10 @@ export const MobileTouchControls: React.FC<MobileTouchControlsProps> = ({
     <div id="mobile-touch-overlay" className="fixed inset-0 pointer-events-none z-30 select-none overflow-hidden touch-none font-mono">
       
       {/* LEFT SIDE ACTION BUTTONS (F & E) SAFELY BELOW TOP-LEFT HUD */}
-      <div className="absolute top-[60px] left-3 flex flex-col gap-2 pointer-events-auto z-30">
+      <div 
+        className="absolute top-[52px] left-2.5 flex flex-col gap-1.5 pointer-events-auto z-30 origin-top-left"
+        style={uiScale ? { transform: `scale(${uiScale})` } : undefined}
+      >
         {/* Unified F Button (Enter/Exit/Doors) */}
         <button
           type="button"
@@ -1450,14 +1455,14 @@ export const MobileTouchControls: React.FC<MobileTouchControlsProps> = ({
             triggerHaptic(20);
             onEnterExitVehicle();
           }}
-          className={`w-12 h-12 rounded-2xl border flex items-center justify-center shadow-xl transition-all active:scale-90 cursor-pointer ${
+          className={`w-9.5 h-9.5 rounded-xl border flex items-center justify-center shadow-lg transition-all active:scale-90 cursor-pointer ${
             canInteractF
-              ? 'bg-slate-800 text-slate-100 border-slate-300 shadow-[0_0_12px_rgba(255,255,255,0.25)]'
-              : 'bg-slate-950/80 text-slate-500 border-slate-700/80 hover:border-slate-500'
+              ? 'bg-slate-800 text-slate-100 border-slate-300 shadow-[0_0_10px_rgba(255,255,255,0.25)]'
+              : 'bg-slate-950/85 text-slate-500 border-slate-700/80 hover:border-slate-500'
           }`}
           title="Действие F (Вход/Выход из транспорта)"
         >
-          {isInVehicle ? <LogOut className="w-5 h-5 text-slate-200" /> : <Car className="w-5 h-5 text-slate-200" />}
+          {isInVehicle ? <LogOut className="w-4.5 h-4.5 text-slate-200" /> : <Car className="w-4.5 h-4.5 text-slate-200" />}
         </button>
 
         {/* Unified E Button (Use/Interact/Pickup/Shop) */}
@@ -1479,14 +1484,14 @@ export const MobileTouchControls: React.FC<MobileTouchControlsProps> = ({
             e.stopPropagation();
             inputRef.current.actionE = false;
           }}
-          className={`w-12 h-12 rounded-2xl border flex items-center justify-center shadow-xl transition-all active:scale-90 cursor-pointer ${
+          className={`w-9.5 h-9.5 rounded-xl border flex items-center justify-center shadow-lg transition-all active:scale-90 cursor-pointer ${
             canInteractE
-              ? 'bg-slate-800 text-slate-100 border-slate-300 shadow-[0_0_12px_rgba(255,255,255,0.25)]'
-              : 'bg-slate-950/80 text-slate-500 border-slate-700/80 hover:border-slate-500'
+              ? 'bg-slate-800 text-slate-100 border-slate-300 shadow-[0_0_10px_rgba(255,255,255,0.25)]'
+              : 'bg-slate-950/85 text-slate-500 border-slate-700/80 hover:border-slate-500'
           }`}
           title="Действие E (Взаимодействие / Использовать)"
         >
-          <Hand className="w-5 h-5 text-slate-200" />
+          <Hand className="w-4.5 h-4.5 text-slate-200" />
         </button>
       </div>
 
@@ -1495,56 +1500,64 @@ export const MobileTouchControls: React.FC<MobileTouchControlsProps> = ({
 
       {/* LEFT BOTTOM ZONE: STEERING WHEEL (IN CAR) OR VIRTUAL JOYSTICK (ON FOOT) */}
       {isInVehicle ? (
-        <>
+        <div 
+          id="touch-steering-cluster" 
+          className="absolute bottom-2.5 left-2.5 pointer-events-auto flex flex-col items-center gap-1.5 z-40 touch-none origin-bottom-left"
+          style={uiScale ? { transform: `scale(${uiScale})` } : undefined}
+        >
           {/* TURN SIGNAL / INDICATORS BAR ABOVE STEERING WHEEL */}
-          <div id="touch-turn-signals" className="absolute bottom-[154px] left-4 pointer-events-auto flex items-center gap-2 z-40">
+          <div id="touch-turn-signals" className="flex items-center gap-1.5">
             <button
               type="button"
               onClick={() => { triggerHaptic(12); onToggleTurnSignal?.('left'); }}
-              className={`w-10 h-10 backdrop-blur-md border rounded-lg flex items-center justify-center shadow-lg transition-all ${
+              className={`w-8 h-8 backdrop-blur-md border rounded-lg flex items-center justify-center shadow-md transition-all ${
                 activeTurnSignal === 'left'
                   ? 'bg-slate-200 text-slate-950 border-white font-bold scale-95'
                   : 'bg-slate-950/95 text-slate-300 border-slate-700 hover:border-slate-500'
               }`}
+              title="Левый поворотник"
             >
-              <ChevronLeft className="w-5 h-5 stroke-[2.5]" />
+              <ChevronLeft className="w-4 h-4 stroke-[2.5]" />
             </button>
             
             <button
               type="button"
               onClick={() => { triggerHaptic(15); onToggleTurnSignal?.('hazard'); }}
-              className={`w-10 h-10 backdrop-blur-md border rounded-lg flex items-center justify-center shadow-lg transition-all ${
+              className={`w-8 h-8 backdrop-blur-md border rounded-lg flex items-center justify-center shadow-md transition-all ${
                 activeTurnSignal === 'hazard'
                   ? 'bg-rose-950 text-rose-300 border-rose-600 font-bold scale-95'
                   : 'bg-slate-950/95 text-slate-400 border-slate-700 hover:border-slate-500'
               }`}
+              title="Аварийка"
             >
-              <AlertTriangle className="w-4 h-4" />
+              <AlertTriangle className="w-3.5 h-3.5" />
             </button>
 
             <button
               type="button"
               onClick={() => { triggerHaptic(12); onToggleTurnSignal?.('right'); }}
-              className={`w-10 h-10 backdrop-blur-md border rounded-lg flex items-center justify-center shadow-lg transition-all ${
+              className={`w-8 h-8 backdrop-blur-md border rounded-lg flex items-center justify-center shadow-md transition-all ${
                 activeTurnSignal === 'right'
                   ? 'bg-slate-200 text-slate-950 border-white font-bold scale-95'
                   : 'bg-slate-950/95 text-slate-300 border-slate-700 hover:border-slate-500'
               }`}
+              title="Правый поворотник"
             >
-              <ChevronRight className="w-5 h-5 stroke-[2.5]" />
+              <ChevronRight className="w-4 h-4 stroke-[2.5]" />
             </button>
           </div>
 
           {/* IN VEHICLE: REALISTIC VIRTUAL STEERING WHEEL */}
-          <div id="touch-steering-zone" className="absolute bottom-3 left-3 pointer-events-auto flex items-center z-40 touch-none">
+          <div id="touch-steering-zone">
             <VirtualSteeringWheel inputRef={inputRef} speedKmh={speedKmh} carType={carType} />
           </div>
-        </>
+        </div>
       ) : (
         /* ON FOOT: VIRTUAL ANALOG JOYSTICK */
         <div
           id="touch-joystick-zone"
-          className="absolute bottom-0 left-0 w-44 h-44 sm:w-52 sm:h-52 pointer-events-auto touch-none"
+          className="absolute bottom-0 left-0 w-32 h-32 sm:w-36 sm:h-36 pointer-events-auto touch-none origin-bottom-left"
+          style={uiScale ? { transform: `scale(${uiScale})` } : undefined}
           onTouchStart={handleJoystickStart}
           onTouchMove={handleJoystickMove}
           onTouchEnd={handleJoystickEnd}
@@ -1552,34 +1565,49 @@ export const MobileTouchControls: React.FC<MobileTouchControlsProps> = ({
         >
           {joystickActive ? (
             <div
-              className="absolute -translate-x-1/2 -translate-y-1/2 w-28 h-28 rounded-full border border-slate-600 bg-slate-950/80 backdrop-blur-md flex items-center justify-center shadow-2xl pointer-events-none"
+              className="absolute -translate-x-1/2 -translate-y-1/2 w-22 h-22 rounded-full border border-slate-600 bg-slate-950/80 backdrop-blur-md flex items-center justify-center shadow-xl pointer-events-none"
               style={{ left: joystickCenter.x, top: joystickCenter.y }}
             >
               <div
-                className="w-12 h-12 rounded-full bg-slate-800 border border-slate-600 shadow-lg transition-transform duration-75"
+                className="w-9 h-9 rounded-full bg-slate-800 border border-slate-600 shadow-md transition-transform duration-75"
                 style={{
                   transform: `translate(${joystickKnob.x}px, ${joystickKnob.y}px)`,
                 }}
               />
             </div>
           ) : (
-            <div className="absolute bottom-8 left-8 w-20 h-20 rounded-full border border-slate-800 bg-slate-950/40 flex items-center justify-center pointer-events-none opacity-40">
-              <div className="w-6 h-6 rounded-full bg-slate-800" />
+            <div className="absolute bottom-4 left-4 w-14 h-14 rounded-full border border-slate-800 bg-slate-950/40 flex items-center justify-center pointer-events-none opacity-40">
+              <div className="w-5 h-5 rounded-full bg-slate-800" />
             </div>
           )}
         </div>
       )}
 
       {/* RIGHT BOTTOM ZONE: ERGONOMIC ACTION BUTTONS */}
-      <div id="touch-actions-zone" className="absolute bottom-4 right-4 pointer-events-auto flex flex-col items-end gap-2.5 z-40 touch-none">
-        
-        {/* VEHICLE QUICK LIGHTING TOOLBAR (HEADLIGHTS / FRONT FOG / REAR FOG) */}
+      <div 
+        id="touch-actions-zone" 
+        className="absolute bottom-2.5 right-2.5 sm:bottom-3 sm:right-3 pointer-events-auto flex flex-col items-end gap-1.5 z-40 touch-none origin-bottom-right"
+        style={uiScale ? { transform: `scale(${uiScale})` } : undefined}
+      >
+        {/* COMPACT TOOLBAR FOR LIGHTS, AUXILIARY & UI SCALE */}
         {isInVehicle && (
-          <div className="flex items-center gap-1.5 bg-slate-950/90 p-1 rounded-xl border border-slate-700/80 shadow-lg">
+          <div className="flex items-center gap-1 bg-slate-950/90 p-1 rounded-xl border border-slate-800/80 shadow-lg">
+            {/* Quick UI Scale cycle badge */}
+            {onCycleUiScale && (
+              <button
+                type="button"
+                onClick={() => { triggerHaptic(10); onCycleUiScale(); }}
+                className="w-7 h-7 rounded-lg bg-slate-900 border border-slate-700 text-slate-300 font-mono text-[9px] font-black flex items-center justify-center active:scale-95 transition"
+                title="Настроить масштаб кнопок (65% / 75% / 85% / 100%)"
+              >
+                {Math.round((uiScale || 0.75) * 100)}%
+              </button>
+            )}
+
             <button
               type="button"
               onClick={() => { triggerHaptic(15); onToggleHeadlights?.(); }}
-              className={`w-10 h-10 rounded-lg flex items-center justify-center border transition-all active:scale-95 ${
+              className={`w-7.5 h-7.5 rounded-lg flex items-center justify-center border transition-all active:scale-95 ${
                 headlightMode === 'high' 
                   ? 'bg-sky-500/20 text-sky-300 border-sky-400 shadow-[0_0_8px_rgba(56,189,248,0.3)]' 
                   : headlightMode === 'low'
@@ -1589,118 +1617,109 @@ export const MobileTouchControls: React.FC<MobileTouchControlsProps> = ({
               title="Переключить фары (Выкл / Ближний / Дальний)"
             >
               {headlightMode === 'high' ? (
-                <Zap className="w-5 h-5 text-sky-300" />
+                <Zap className="w-4 h-4 text-sky-300" />
               ) : headlightMode === 'low' ? (
-                <Sun className="w-5 h-5 text-emerald-300" />
+                <Sun className="w-4 h-4 text-emerald-300" />
               ) : (
-                <Lightbulb className="w-5 h-5 text-slate-400" />
+                <Lightbulb className="w-4 h-4 text-slate-400" />
               )}
             </button>
 
             <button
               type="button"
               onClick={() => { triggerHaptic(15); onToggleFrontFog?.(); }}
-              className={`w-10 h-10 rounded-lg flex items-center justify-center border transition-all active:scale-95 ${
+              className={`w-7.5 h-7.5 rounded-lg flex items-center justify-center border transition-all active:scale-95 ${
                 isFrontFogOn
                   ? 'bg-amber-500/20 text-amber-300 border-amber-400 shadow-[0_0_8px_rgba(245,158,11,0.3)]'
                   : 'bg-slate-900 text-slate-400 border-slate-700'
               }`}
               title="Передние противотуманки (ПТФ)"
             >
-              <CloudFog className={`w-5 h-5 ${isFrontFogOn ? 'text-amber-300' : 'text-slate-400'}`} />
+              <CloudFog className={`w-4 h-4 ${isFrontFogOn ? 'text-amber-300' : 'text-slate-400'}`} />
             </button>
 
             <button
               type="button"
               onClick={() => { triggerHaptic(15); onToggleRearFog?.(); }}
-              className={`w-10 h-10 rounded-lg flex items-center justify-center border transition-all active:scale-95 ${
+              className={`w-7.5 h-7.5 rounded-lg flex items-center justify-center border transition-all active:scale-95 ${
                 isRearFogOn
                   ? 'bg-rose-500/20 text-rose-300 border-rose-400 shadow-[0_0_8px_rgba(244,63,94,0.3)]'
                   : 'bg-slate-900 text-slate-400 border-slate-700'
               }`}
               title="Задние противотуманки (ПТФ ЗАД)"
             >
-              <ShieldAlert className={`w-5 h-5 ${isRearFogOn ? 'text-rose-400' : 'text-slate-400'}`} />
+              <ShieldAlert className={`w-4 h-4 ${isRearFogOn ? 'text-rose-400' : 'text-slate-400'}`} />
             </button>
 
             {hasRoadTrainLights && (
               <button
                 type="button"
                 onClick={() => { triggerHaptic(15); onToggleRoadTrainLights?.(); }}
-                className={`w-10 h-10 rounded-lg flex items-center justify-center border transition-all active:scale-95 ${
+                className={`w-7.5 h-7.5 rounded-lg flex items-center justify-center border transition-all active:scale-95 ${
                   isRoadTrainLightsOn
                     ? 'bg-amber-500/20 text-amber-300 border-amber-400 shadow-[0_0_8px_rgba(245,158,11,0.3)]'
                     : 'bg-slate-900 text-slate-400 border-slate-700'
                 }`}
                 title="Огни автопоезда (крыша)"
               >
-                <Truck className={`w-5 h-5 ${isRoadTrainLightsOn ? 'text-amber-300' : 'text-slate-400'}`} />
+                <Truck className={`w-4 h-4 ${isRoadTrainLightsOn ? 'text-amber-300' : 'text-slate-400'}`} />
               </button>
             )}
-          </div>
-        )}
 
-        {/* TOP ROW OF AUXILIARY ACTIONS (MENU / HORN / TRANSFER CASE / MOTOR) */}
-        <div className="flex items-center gap-2">
-          {isInVehicle && (
-            <>
-              <button
-                type="button"
-                onClick={() => { triggerHaptic(15); onOpenRadialMenu?.(); }}
-                className="w-10 h-10 bg-slate-950/95 border border-slate-700 text-slate-300 active:bg-slate-800 active:text-white rounded-lg flex items-center justify-center shadow-lg font-bold transition-all"
-                title="Приборы / Меню"
-              >
-                <Gauge className="w-5 h-5 text-emerald-400" />
-              </button>
+            <button
+              type="button"
+              onClick={() => { triggerHaptic(15); onOpenRadialMenu?.(); }}
+              className="w-7.5 h-7.5 bg-slate-900 border border-slate-700 text-slate-300 active:bg-slate-800 active:text-white rounded-lg flex items-center justify-center shadow font-bold transition-all"
+              title="Приборы / Меню"
+            >
+              <Gauge className="w-4 h-4 text-emerald-400" />
+            </button>
 
+            <TouchButton
+              inputKey="hornH"
+              inputRef={inputRef}
+              hapticMs={15}
+              className="w-7.5 h-7.5 bg-slate-900 border border-slate-700 text-slate-300 rounded-lg flex items-center justify-center shadow font-bold"
+              activeClassName="bg-slate-800 text-white"
+            >
+              <Volume2 className="w-4 h-4 text-slate-300" />
+            </TouchButton>
+
+            {hasTransferCase && (
               <TouchButton
-                inputKey="hornH"
+                inputKey="transferCaseToggle"
                 inputRef={inputRef}
-                hapticMs={15}
-                className="w-10 h-10 bg-slate-950/95 border border-slate-700 text-slate-300 rounded-lg flex items-center justify-center shadow-lg font-bold"
-                activeClassName="bg-slate-800 text-white"
+                hapticMs={20}
+                className={`w-7.5 h-7.5 border rounded-lg flex items-center justify-center shadow font-black transition-all ${
+                  transferCaseMode === 'LOW'
+                    ? 'bg-amber-500/20 text-amber-400 border-amber-500/50 shadow-[0_0_10px_rgba(245,158,11,0.2)]'
+                    : 'bg-slate-900 text-slate-400 border-slate-700'
+                }`}
+                activeClassName="scale-95 brightness-125"
+                title="Делитель (Повышенная/Пониженная)"
               >
-                <Volume2 className="w-5 h-5 text-slate-300" />
+                <Compass className={`w-4 h-4 ${transferCaseMode === 'LOW' ? 'text-amber-400' : 'text-slate-400'}`} />
               </TouchButton>
+            )}
 
-              {hasTransferCase && (
-                <TouchButton
-                  inputKey="transferCaseToggle"
-                  inputRef={inputRef}
-                  hapticMs={20}
-                  className={`w-10 h-10 border rounded-lg flex items-center justify-center shadow-lg font-black transition-all ${
-                    transferCaseMode === 'LOW'
-                      ? 'bg-amber-500/20 text-amber-400 border-amber-500/50 shadow-[0_0_10px_rgba(245,158,11,0.2)]'
-                      : 'bg-slate-950/95 text-slate-400 border-slate-700'
-                  }`}
-                  activeClassName="scale-95 brightness-125"
-                  title="Делитель (Повышенная/Пониженная)"
-                >
-                  <Compass className={`w-5 h-5 ${transferCaseMode === 'LOW' ? 'text-amber-400' : 'text-slate-400'}`} />
-                </TouchButton>
-              )}
-            </>
-          )}
-
-          {/* ENGINE IGNITION (START / STOP / MOTOR) */}
-          {isInVehicle && (
+            {/* ENGINE IGNITION (START / STOP / MOTOR) */}
             <button
               type="button"
               onClick={() => {
                 triggerHaptic(20);
                 onToggleEngine?.();
               }}
-              className={`w-10 h-10 rounded-lg flex items-center justify-center font-bold shadow-xl border transition-all active:scale-95 ${
+              className={`w-7.5 h-7.5 rounded-lg flex items-center justify-center font-bold shadow border transition-all active:scale-95 ${
                 isEngineRunning
-                  ? 'bg-emerald-950/90 border-emerald-500 text-emerald-300 shadow-[0_0_10px_rgba(16,185,129,0.3)]'
+                  ? 'bg-emerald-950/90 border-emerald-500 text-emerald-300 shadow-[0_0_8px_rgba(16,185,129,0.3)]'
                   : 'bg-rose-950/90 border-rose-600 text-rose-300 animate-pulse'
               }`}
               title="Запустить/заглушить двигатель"
             >
-              <Power className="w-5 h-5" />
+              <Power className="w-4 h-4" />
             </button>
-          )}
-        </div>
+          </div>
+        )}
 
         {/* PRIMARY CONTROLS BLOCK */}
         {isInVehicle ? (
@@ -1720,25 +1739,25 @@ export const MobileTouchControls: React.FC<MobileTouchControlsProps> = ({
               inputKey="handbrake"
               inputRef={inputRef}
               hapticMs={20}
-              className="w-13 h-14 bg-slate-950/95 border border-slate-700 text-slate-300 rounded-xl flex items-center justify-center shadow-xl"
+              className="w-10 h-11 bg-slate-950/95 border border-slate-700 text-slate-300 rounded-xl flex items-center justify-center shadow-xl"
               activeClassName="bg-slate-800 text-white border-slate-500"
             >
-              <Flame className="w-6 h-6 text-slate-300" />
+              <Flame className="w-5 h-5 text-slate-300" />
             </TouchButton>
 
             {/* BRAKE PEDAL */}
             {carType && carType.startsWith('tractor_') && tractorBrakeLatch === false ? (
-              <div className="flex gap-1.5 h-22">
+              <div className="flex gap-1 h-18">
                 {/* LEFT BRAKE PEDAL */}
                 <TouchButton
                   inputKey="brakeLeft"
                   inputRef={inputRef}
                   hapticMs={15}
-                  className="w-10 h-22 bg-slate-950/95 border border-slate-700 text-slate-200 rounded-xl flex flex-col items-center justify-center shadow-2xl"
+                  className="w-8 h-18 bg-slate-950/95 border border-slate-700 text-slate-200 rounded-xl flex flex-col items-center justify-center shadow-2xl"
                   activeClassName="bg-rose-950 text-white border-rose-500"
                 >
-                  <ChevronDown className="w-5 h-5 text-rose-400 stroke-[2.5]" />
-                  <span className="text-[9px] font-extrabold font-mono text-rose-300">Л [,]</span>
+                  <ChevronDown className="w-4 h-4 text-rose-400 stroke-[2.5]" />
+                  <span className="text-[8px] font-extrabold font-mono text-rose-300">Л</span>
                 </TouchButton>
 
                 {/* RIGHT BRAKE PEDAL */}
@@ -1746,11 +1765,11 @@ export const MobileTouchControls: React.FC<MobileTouchControlsProps> = ({
                   inputKey="brakeRight"
                   inputRef={inputRef}
                   hapticMs={15}
-                  className="w-10 h-22 bg-slate-950/95 border border-slate-700 text-slate-200 rounded-xl flex flex-col items-center justify-center shadow-2xl"
+                  className="w-8 h-18 bg-slate-950/95 border border-slate-700 text-slate-200 rounded-xl flex flex-col items-center justify-center shadow-2xl"
                   activeClassName="bg-rose-950 text-white border-rose-500"
                 >
-                  <ChevronDown className="w-5 h-5 text-rose-400 stroke-[2.5]" />
-                  <span className="text-[9px] font-extrabold font-mono text-rose-300">П [.]</span>
+                  <ChevronDown className="w-4 h-4 text-rose-400 stroke-[2.5]" />
+                  <span className="text-[8px] font-extrabold font-mono text-rose-300">П</span>
                 </TouchButton>
               </div>
             ) : (
@@ -1758,10 +1777,10 @@ export const MobileTouchControls: React.FC<MobileTouchControlsProps> = ({
                 inputKey="backward"
                 inputRef={inputRef}
                 hapticMs={15}
-                className="w-16 h-22 bg-slate-950/95 border border-slate-700 text-slate-200 rounded-xl flex items-center justify-center shadow-2xl"
+                className="w-12 h-18 bg-slate-950/95 border border-slate-700 text-slate-200 rounded-xl flex items-center justify-center shadow-2xl"
                 activeClassName="bg-slate-800 text-white border-slate-500"
               >
-                <ChevronDown className="w-8 h-8 text-rose-400 stroke-[3]" />
+                <ChevronDown className="w-6 h-6 text-rose-400 stroke-[3]" />
               </TouchButton>
             )}
 
@@ -1770,24 +1789,35 @@ export const MobileTouchControls: React.FC<MobileTouchControlsProps> = ({
               inputKey="forward"
               inputRef={inputRef}
               hapticMs={15}
-              className="w-18 h-26 bg-slate-950/95 border border-slate-600 text-slate-100 rounded-xl flex items-center justify-center shadow-2xl"
+              className="w-14 h-21 bg-slate-950/95 border border-slate-600 text-slate-100 rounded-xl flex items-center justify-center shadow-2xl"
               activeClassName="bg-slate-800 text-white border-slate-400"
             >
-              <ChevronUp className="w-9 h-9 text-emerald-400 stroke-[3]" />
+              <ChevronUp className="w-7 h-7 text-emerald-400 stroke-[3]" />
             </TouchButton>
           </div>
         ) : (
           /* PEDESTRIAN ACTION BUTTONS */
-          <div className="flex items-end gap-2.5">
+          <div className="flex items-end gap-2">
+            {onCycleUiScale && (
+              <button
+                type="button"
+                onClick={() => { triggerHaptic(10); onCycleUiScale(); }}
+                className="w-7 h-7 rounded-lg bg-slate-950/95 border border-slate-700 text-slate-300 font-mono text-[9px] font-black flex items-center justify-center active:scale-95 transition shadow-lg self-center"
+                title="Настроить масштаб кнопок (65% / 75% / 85% / 100%)"
+              >
+                {Math.round((uiScale || 0.75) * 100)}%
+              </button>
+            )}
+
             {/* DODGE ROLL / QUICK DASH (SPACE) */}
             <TouchButton
               inputKey="handbrake"
               inputRef={inputRef}
               hapticMs={20}
-              className="w-16 h-16 bg-slate-950/95 border border-slate-700 text-slate-300 rounded-xl flex items-center justify-center shadow-xl"
+              className="w-11 h-11 bg-slate-950/95 border border-slate-700 text-slate-300 rounded-xl flex items-center justify-center shadow-xl"
               activeClassName="bg-slate-800 text-white border-slate-500"
             >
-              <RotateCcw className="w-6 h-6 text-slate-200" />
+              <RotateCcw className="w-5 h-5 text-slate-200" />
             </TouchButton>
 
             {/* SPRINT BUTTON (SHIFT) */}
@@ -1795,7 +1825,7 @@ export const MobileTouchControls: React.FC<MobileTouchControlsProps> = ({
               inputKey="sprint"
               inputRef={inputRef}
               hapticMs={20}
-              className="w-20 h-20 bg-slate-950/95 border border-slate-700 text-slate-200 rounded-xl flex items-center justify-center shadow-2xl"
+              className="w-14 h-14 bg-slate-950/95 border border-slate-700 text-slate-200 rounded-xl flex items-center justify-center shadow-2xl"
               activeClassName="bg-slate-800 text-white border-slate-500"
             >
               <Zap className="w-6 h-6 text-slate-200" />

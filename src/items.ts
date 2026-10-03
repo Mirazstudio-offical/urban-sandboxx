@@ -68,6 +68,9 @@ export interface ItemDefinition {
   tasteMessages?: string[];    // random taste sensations shown while eating
   fullnessPerBite?: number;    // how much fullness each bite adds
   isContainer?: boolean;
+  singleUseContainer?: boolean;
+  tornItemId?: string;
+  isTransparentPackaging?: boolean;
   containerCapacityL?: number;
   maxContainedItemVolumeL?: number;
   maxContainedWeightKg?: number;
@@ -1928,17 +1931,21 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     leftoverNameRu: 'Пустой мешок'},
   sack_empty: {
     itemId: 'sack_empty',
-    name: 'Empty Sack',
-    nameRu: 'Пустой мешок',
-    category: 'tool',
+    name: 'Empty Burlap Sack (12L)',
+    nameRu: 'Пустой джутовый мешок',
+    category: 'gear',
     maxStack: 1,
     icon: '',
-    description: 'Empty heavy canvas burlap bag. Light and durable. Used for storage, scrap canvas, or choking engine air intake.',
-    descriptionRu: 'Прочный пустой мешок из сурового брезента. Легкий и надежный. Можно применить для перекрытия воздухозаборника дизеля.',
+    description: 'Empty durable burlap canvas sack. Can store granular materials or be used as a rugged storage container.',
+    descriptionRu: 'Прочный пустой мешок из грубой мешковины. Можно использовать для переноски предметов или сыпучих материалов.',
     effects: {},
-    weight: 0.15,
-    volume: 0.3,
-    usable: true
+    weight: 0.05,
+    volume: 0.5,
+    usable: false,
+    isContainer: true,
+    containerCapacityL: 12.0,
+    maxContainedItemVolumeL: 10.0,
+    maxContainedWeightKg: 25.0
   },
   rag: {
     itemId: 'rag',
@@ -2453,10 +2460,16 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     maxStack: 1,
     icon: '',
     description: 'Open plastic medical emergency case with empty compartments.',
-    descriptionRu: 'Пустой красный пластиковый кейс автомобильной аптечки.',
+    descriptionRu: 'Пустой красный пластиковый кейс автомобильной аптечки для хранения медикаментов и перевязочных средств.',
     effects: {},
     weight: 0.2,
-    usable: false
+    volume: 3.5,
+    usable: false,
+    isContainer: true,
+    containerCapacityL: 3.5,
+    maxContainedItemVolumeL: 2.0,
+    maxContainedWeightKg: 5.0,
+    allowedItemCategories: ['med', 'medical', 'misc']
   },
 
   pocket_knife: {
@@ -3262,73 +3275,311 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
   },
   sack_cloth_large: {
     itemId: 'sack_cloth_large',
-    name: 'Cloth Sack (10L)',
-    nameRu: 'Тканевый мешок 10л',
+    name: 'Cloth Sack (15L)',
+    nameRu: 'Тканевый мешок 15л',
     category: 'gear',
     maxStack: 1,
     icon: '',
-    description: 'Unified 10L cloth sack.',
-    descriptionRu: 'Унифицированный тканевый мешок объемом 10 литров.',
+    description: 'Large 15L heavy-duty canvas sack.',
+    descriptionRu: 'Большой прочный холщовый мешок объемом 15 литров для переноски крупных грузов и припасов.',
     effects: {},
-    weight: 0.10,
-    volume: 10.0,
-    usable: true
+    weight: 0.15,
+    volume: 0.6,
+    usable: false,
+    isContainer: true,
+    containerCapacityL: 15.0,
+    maxContainedItemVolumeL: 12.0,
+    maxContainedWeightKg: 30.0
   },
   sack_cloth_medium: {
     itemId: 'sack_cloth_medium',
-    name: 'Cloth Sack (5L)',
-    nameRu: 'Тканевый мешок 5л',
+    name: 'Cloth Sack (7.5L)',
+    nameRu: 'Тканевый мешок 7.5л',
     category: 'gear',
     maxStack: 1,
     icon: '',
-    description: 'Unified 5L cloth sack.',
-    descriptionRu: 'Унифицированный тканевый мешок объемом 5 литров.',
+    description: 'Durable 7.5L linen canvas sack.',
+    descriptionRu: 'Плотный холщовый тканевый мешок объемом 7.5 литров для провизии, инструментов и вещей.',
     effects: {},
-    weight: 0.06,
-    volume: 5.0,
-    usable: true
+    weight: 0.08,
+    volume: 0.4,
+    usable: false,
+    isContainer: true,
+    containerCapacityL: 7.5,
+    maxContainedItemVolumeL: 6.0,
+    maxContainedWeightKg: 15.0
   },
   sack_cloth_small: {
     itemId: 'sack_cloth_small',
-    name: 'Cloth Sack (1L)',
-    nameRu: 'Тканевый мешок 1л',
+    name: 'Cloth Sack (2.0L)',
+    nameRu: 'Тканевый мешок 2л',
     category: 'gear',
     maxStack: 1,
     icon: '',
-    description: 'Unified 1L cloth sack.',
-    descriptionRu: 'Унифицированный тканевый мешок объемом 1 литр.',
+    description: 'Compact 2L cloth sack with drawstring.',
+    descriptionRu: 'Компактный тканевый мешок на завязках объемом 2 литра для хранения сыпучих припасов и мелочей.',
     effects: {},
-    weight: 0.02,
-    volume: 1.0,
-    usable: true
+    weight: 0.03,
+    volume: 0.2,
+    usable: false,
+    isContainer: true,
+    containerCapacityL: 2.0,
+    maxContainedItemVolumeL: 1.8,
+    maxContainedWeightKg: 5.0
   },
   lukoshko: {
     itemId: 'lukoshko',
-    name: 'Wicker Basket (2.0L)',
+    name: 'Wicker Basket (4.5L)',
     nameRu: 'Плетёное лукошко',
     category: 'gear',
     maxStack: 1,
     icon: '',
     description: 'Lightweight woven wicker basket with handle for forest berries, mushrooms, and provisions.',
-    descriptionRu: 'Легкое плетеное берестяное лукошко с ручкой для сбора лесных ягод, грибов и припасов.',
+    descriptionRu: 'Легкое плетеное берестяное лукошко с ручкой для сбора лесных ягод, грибов, провизии и подручных вещей.',
     effects: {},
-    weight: 0.15,
-    volume: 2.2,
-    usable: true
+    weight: 0.18,
+    volume: 4.5,
+    usable: false,
+    isContainer: true,
+    containerCapacityL: 4.5,
+    maxContainedItemVolumeL: 3.5,
+    maxContainedWeightKg: 7.0
   },
   package_bag: {
     itemId: 'package_bag',
-    name: 'Plastic Bag (1.5L)',
+    name: 'Plastic Bag (2.5L)',
     nameRu: 'Фасовочный пакет',
-    category: 'gear',
+    category: 'misc',
     maxStack: 1,
     icon: '',
-    description: 'Transparent thin polyethylene bag for granular products, grains, and sugar.',
-    descriptionRu: 'Прозрачный тонкий полиэтиленовый фасовочный пакет для сыпучих продуктов, круп и сахара.',
+    description: 'Transparent polyethylene food bag for provisions, groceries, medicines, and loose goods.',
+    descriptionRu: 'Прозрачный полиэтиленовый фасовочный пакет. Позволяет хранить и переносить продукты, медикаменты, овощи, фрукты и мелкие предметы.',
     effects: {},
     weight: 0.005,
-    volume: 1.5,
-    usable: true
+    volume: 0.05,
+    usable: false,
+    isContainer: true,
+    containerCapacityL: 2.5,
+    maxContainedItemVolumeL: 2.0,
+    maxContainedWeightKg: 4.0
+  },
+
+  // === SINGLE-USE VACUUM PACKAGING & DISPOSABLE CONTAINERS ===
+  vacuum_pack_small: {
+    itemId: 'vacuum_pack_small',
+    name: 'Vacuum Sealed Pouch (0.5L)',
+    nameRu: 'Вакуумный пакет (0.5L)',
+    category: 'misc',
+    maxStack: 1,
+    icon: '',
+    description: 'Airtight sealed vacuum pouch preserving peeled produce, cuts, and portions. Tears open upon unpacking.',
+    descriptionRu: 'Герметичный вакуумный пакет из плотной барьерной пленки. Сохраняет свежесть продуктов. При вскрытии разрывается.',
+    effects: {},
+    weight: 0.005,
+    volume: 0.05,
+    usable: true,
+    isContainer: true,
+    singleUseContainer: true,
+    isTransparentPackaging: true,
+    tornItemId: 'vacuum_pack_small_torn',
+    containerCapacityL: 0.6,
+    maxContainedItemVolumeL: 0.5,
+    maxContainedWeightKg: 2.0
+  },
+  vacuum_pack_small_torn: {
+    itemId: 'vacuum_pack_small_torn',
+    name: 'Torn Vacuum Pouch (0.5L)',
+    nameRu: 'Вскрытый вакуумный пакет',
+    category: 'misc',
+    maxStack: 10,
+    icon: '',
+    description: 'Torn disposable vacuum plastic pouch leftover. Household trash.',
+    descriptionRu: 'Разорванный полимерный вакуумный пакет с надорванным швом. Бытовой мусор / вторсырье.',
+    effects: {},
+    weight: 0.005,
+    volume: 0.02,
+    usable: false,
+    isContainer: false
+  },
+  vacuum_pack_medium: {
+    itemId: 'vacuum_pack_medium',
+    name: 'Vacuum Sealed Pouch (1.2L)',
+    nameRu: 'Вакуумный пакет (1.2L)',
+    category: 'misc',
+    maxStack: 1,
+    icon: '',
+    description: 'Durable airtight vacuum packaging for steaks, poultry, fish fillets and shredded vegetables.',
+    descriptionRu: 'Плотный прозрачный вакуумный пакет для мяса, рыбы, нарезки овощей. Защищает от порчи.',
+    effects: {},
+    weight: 0.01,
+    volume: 0.1,
+    usable: true,
+    isContainer: true,
+    singleUseContainer: true,
+    isTransparentPackaging: true,
+    tornItemId: 'vacuum_pack_medium_torn',
+    containerCapacityL: 1.5,
+    maxContainedItemVolumeL: 1.2,
+    maxContainedWeightKg: 4.0
+  },
+  vacuum_pack_medium_torn: {
+    itemId: 'vacuum_pack_medium_torn',
+    name: 'Torn Vacuum Pouch (1.2L)',
+    nameRu: 'Вскрытый вакуум-пакет (1.2L)',
+    category: 'misc',
+    maxStack: 10,
+    icon: '',
+    description: 'Torn vacuum plastic film leftover.',
+    descriptionRu: 'Вскрытая плотная вакуумная упаковка. Утилизируется в урну.',
+    effects: {},
+    weight: 0.01,
+    volume: 0.03,
+    usable: false,
+    isContainer: false
+  },
+  vacuum_pack_large: {
+    itemId: 'vacuum_pack_large',
+    name: 'Large Vacuum Bag (2.5L)',
+    nameRu: 'Большой вакуум-пакет (2.5L)',
+    category: 'misc',
+    maxStack: 1,
+    icon: '',
+    description: 'Heavy duty vacuum packaging for whole chickens, large roasts, and bulk harvests.',
+    descriptionRu: 'Крупногабаритный барьерный вакуумный пакет для цельных тушек птицы и крупных кусков мяса.',
+    effects: {},
+    weight: 0.02,
+    volume: 0.2,
+    usable: true,
+    isContainer: true,
+    singleUseContainer: true,
+    isTransparentPackaging: true,
+    tornItemId: 'vacuum_pack_large_torn',
+    containerCapacityL: 3.0,
+    maxContainedItemVolumeL: 2.5,
+    maxContainedWeightKg: 8.0
+  },
+  vacuum_pack_large_torn: {
+    itemId: 'vacuum_pack_large_torn',
+    name: 'Torn Large Vacuum Bag',
+    nameRu: 'Вскрытый большой вакуум-пакет',
+    category: 'misc',
+    maxStack: 10,
+    icon: '',
+    description: 'Ripped large vacuum polymer sack.',
+    descriptionRu: 'Разорванный крупный вакуумный пакет. Утиль.',
+    effects: {},
+    weight: 0.02,
+    volume: 0.05,
+    usable: false,
+    isContainer: false
+  },
+  tray_sealed_food: {
+    itemId: 'tray_sealed_food',
+    name: 'Sealed Food Tray (1.0L)',
+    nameRu: 'Пищевой лоток под пленкой',
+    category: 'misc',
+    maxStack: 1,
+    icon: '',
+    description: 'Rigid plastic food tray with transparent heat-sealed barrier film.',
+    descriptionRu: 'Пластиковый подложка-лоток с герметичной прозрачной запайкой пленкой. Используется для мяса, стейков, нарезки фруктов и овощей.',
+    effects: {},
+    weight: 0.02,
+    volume: 0.2,
+    usable: true,
+    isContainer: true,
+    singleUseContainer: true,
+    isTransparentPackaging: true,
+    tornItemId: 'tray_sealed_food_torn',
+    containerCapacityL: 1.2,
+    maxContainedItemVolumeL: 1.0,
+    maxContainedWeightKg: 3.0
+  },
+  tray_sealed_food_torn: {
+    itemId: 'tray_sealed_food_torn',
+    name: 'Opened Food Tray',
+    nameRu: 'Вскрытый пищевой лоток',
+    category: 'misc',
+    maxStack: 5,
+    icon: '',
+    description: 'Empty plastic food tray with peeled-off film.',
+    descriptionRu: 'Пустой пластиковый лоток со снятой защитной пленкой.',
+    effects: {},
+    weight: 0.02,
+    volume: 0.2,
+    usable: false,
+    isContainer: false
+  },
+  pouch_sealed_snack: {
+    itemId: 'pouch_sealed_snack',
+    name: 'Sealed Snack Doypack (0.8L)',
+    nameRu: 'Герметичный дой-пак',
+    category: 'misc',
+    maxStack: 1,
+    icon: '',
+    description: 'Airtight stand-up pouch with transparent window for dried fruits, nuts, and snacks.',
+    descriptionRu: 'Герметичный пакет-дойпак с прозрачным окном для сухофруктов, орехов и снеков.',
+    effects: {},
+    weight: 0.015,
+    volume: 0.1,
+    usable: true,
+    isContainer: true,
+    singleUseContainer: true,
+    isTransparentPackaging: true,
+    tornItemId: 'pouch_sealed_snack_torn',
+    containerCapacityL: 0.8,
+    maxContainedItemVolumeL: 0.7,
+    maxContainedWeightKg: 2.0
+  },
+  pouch_sealed_snack_torn: {
+    itemId: 'pouch_sealed_snack_torn',
+    name: 'Torn Snack Doypack',
+    nameRu: 'Вскрытый дой-пак',
+    category: 'misc',
+    maxStack: 10,
+    icon: '',
+    description: 'Opened empty doypack snack pouch.',
+    descriptionRu: 'Вскрытый пустой пакет-дойпак с оторванной верхней кромкой.',
+    effects: {},
+    weight: 0.015,
+    volume: 0.03,
+    usable: false,
+    isContainer: false
+  },
+  mesh_bag_vegetable: {
+    itemId: 'mesh_bag_vegetable',
+    name: 'Vegetable Mesh Bag (3.5L)',
+    nameRu: 'Сетка для овощей и фруктов',
+    category: 'misc',
+    maxStack: 1,
+    icon: '',
+    description: 'Breathable woven polymer mesh bag with clip for bulk produce like potatoes, onions, and oranges.',
+    descriptionRu: 'Дышащая полимерная сетка с клипсой для фасовки картофеля, лука, цитрусовых.',
+    effects: {},
+    weight: 0.01,
+    volume: 0.1,
+    usable: true,
+    isContainer: true,
+    singleUseContainer: true,
+    isTransparentPackaging: true,
+    tornItemId: 'mesh_bag_vegetable_torn',
+    containerCapacityL: 3.5,
+    maxContainedItemVolumeL: 3.0,
+    maxContainedWeightKg: 5.0
+  },
+  mesh_bag_vegetable_torn: {
+    itemId: 'mesh_bag_vegetable_torn',
+    name: 'Torn Vegetable Mesh',
+    nameRu: 'Разорванная овощная сетка',
+    category: 'misc',
+    maxStack: 10,
+    icon: '',
+    description: 'Torn empty vegetable mesh net.',
+    descriptionRu: 'Порванная пустая овощная сетка. Мусор.',
+    effects: {},
+    weight: 0.01,
+    volume: 0.02,
+    usable: false,
+    isContainer: false
   },
   soup_bowl: {
     itemId: 'soup_bowl',
@@ -4824,7 +5075,8 @@ export function createItem(itemId: string, count: number = 1, initialPortions?: 
   );
 
   let fluidStorage: FluidContainerState | undefined;
-  if (legacyMap) {
+  // If item is a physical item container (bag, sack, box, basket, medkit) and not a pre-filled fluid/bulk package, don't attach fluidStorage
+  if (legacyMap && (!isContainer || (legacyMap.liquidId && legacyMap.amountMl > 0))) {
     const cfg = CONTAINER_CONFIGS[legacyMap.containerId];
     if (cfg) {
       fluidStorage = {
@@ -4853,10 +5105,13 @@ export function createItem(itemId: string, count: number = 1, initialPortions?: 
     weight: def.weight,
     volume: baseVolume,
     clothingStats: stats,
-    usable: isContainer ? false : (fluidStorage ? true : def.usable),
+    usable: def.singleUseContainer ? true : (isContainer ? false : (fluidStorage ? true : def.usable)),
     portions: fluidStorage ? undefined : portions,
     maxPortions: fluidStorage ? undefined : maxPortions,
     isContainer,
+    singleUseContainer: def.singleUseContainer,
+    tornItemId: def.tornItemId,
+    isTransparentPackaging: def.isTransparentPackaging,
     contents: isContainer ? [] : undefined,
     containerCapacityL: containerCap,
     maxContainedItemVolumeL: maxContainedVol,
@@ -4879,6 +5134,149 @@ export function createItem(itemId: string, count: number = 1, initialPortions?: 
   }
 
   return createdItem;
+}
+
+export const ITEM_PACKAGING_MAP: Record<string, { containerId: string; countInside?: number }> = {
+  // 1. Peeled & Cut Vegetables in Vacuum / Sealed Trays
+  potato_peeled: { containerId: 'vacuum_pack_small' },
+  carrot_peeled: { containerId: 'vacuum_pack_small' },
+  beet_peeled: { containerId: 'vacuum_pack_small' },
+  onion_peeled: { containerId: 'vacuum_pack_small' },
+  garlic_peeled: { containerId: 'vacuum_pack_small' },
+  cabbage_cut: { containerId: 'vacuum_pack_medium' },
+  pumpkin_cut: { containerId: 'vacuum_pack_medium' },
+  zucchini_cut: { containerId: 'vacuum_pack_small' },
+  cucumber_sliced: { containerId: 'tray_sealed_food' },
+  tomato_sliced: { containerId: 'tray_sealed_food' },
+  bell_pepper_sliced: { containerId: 'tray_sealed_food' },
+  champignon_sliced: { containerId: 'tray_sealed_food' },
+
+  // 2. Fresh Fruit Slices and Cups in Trays
+  apple_slices: { containerId: 'tray_sealed_food' },
+  pear_slices: { containerId: 'tray_sealed_food' },
+  orange_slices: { containerId: 'tray_sealed_food' },
+  lemon_slices: { containerId: 'tray_sealed_food' },
+  watermelon_cubes: { containerId: 'tray_sealed_food' },
+  melon_slices: { containerId: 'tray_sealed_food' },
+  grape_cup: { containerId: 'tray_sealed_food' },
+
+  // 3. Fresh Raw Meats & Poultry in Trays / Vacuum
+  beef_steak: { containerId: 'tray_sealed_food' },
+  beef_rump_large: { containerId: 'vacuum_pack_medium' },
+  pork_chops: { containerId: 'tray_sealed_food' },
+  pork_belly: { containerId: 'vacuum_pack_medium' },
+  chicken_breast: { containerId: 'tray_sealed_food' },
+  chicken_thighs: { containerId: 'tray_sealed_food' },
+  chicken_wings: { containerId: 'tray_sealed_food' },
+  chicken_whole_raw: { containerId: 'vacuum_pack_large' },
+  turkey_fillet: { containerId: 'vacuum_pack_medium' },
+  minced_meat_beef: { containerId: 'tray_sealed_food' },
+  minced_meat_pork: { containerId: 'tray_sealed_food' },
+  minced_meat_chicken: { containerId: 'tray_sealed_food' },
+
+  // 4. Fish & Seafood in Vacuum / Trays
+  salmon_steak: { containerId: 'tray_sealed_food' },
+  salmon_fillet: { containerId: 'vacuum_pack_medium' },
+  cod_fillet: { containerId: 'vacuum_pack_medium' },
+  tuna_steak: { containerId: 'vacuum_pack_small' },
+  shrimps_raw: { containerId: 'vacuum_pack_medium' },
+  squid_tubes: { containerId: 'vacuum_pack_medium' },
+  mussels_meat: { containerId: 'vacuum_pack_small' },
+
+  // 5. Dried Fruits & Snack Pouches
+  dried_apricots: { containerId: 'pouch_sealed_snack' },
+  prunes_dried: { containerId: 'pouch_sealed_snack' },
+  raisins_dried: { containerId: 'pouch_sealed_snack' },
+  banana_chips: { containerId: 'pouch_sealed_snack' },
+  cranberries_dried: { containerId: 'pouch_sealed_snack' },
+  dates_dried: { containerId: 'pouch_sealed_snack' },
+  figs_dried: { containerId: 'pouch_sealed_snack' },
+  walnuts: { containerId: 'pouch_sealed_snack' },
+  sunflower_seeds: { containerId: 'pouch_sealed_snack' }
+};
+
+export function createPackagedItem(itemId: string, count: number = 1): InventoryItem {
+  const packInfo = ITEM_PACKAGING_MAP[itemId];
+  if (packInfo) {
+    const container = createItem(packInfo.containerId, 1);
+    const innerItem = createItem(itemId, count);
+    container.contents = [innerItem];
+    return container;
+  }
+  return createItem(itemId, count);
+}
+
+export function unpackSingleUseContainer(
+  player: Player,
+  container: InventoryItem,
+  world?: GameWorld,
+  onContainerConsumed?: () => void
+): { success: boolean; message: string } {
+  if (!container.contents || container.contents.length === 0) {
+    const tornId = container.tornItemId || ITEM_CATALOG[container.itemId]?.tornItemId;
+    if (tornId && ITEM_CATALOG[tornId]) {
+      const tornDef = ITEM_CATALOG[tornId];
+      container.itemId = tornDef.itemId;
+      container.name = tornDef.name;
+      container.nameRu = tornDef.nameRu;
+      container.category = 'misc';
+      container.isContainer = false;
+      container.contents = undefined;
+      container.usable = false;
+      container.description = tornDef.description;
+      container.descriptionRu = tornDef.descriptionRu;
+    }
+    return { success: false, message: 'Упаковка пуста.' };
+  }
+
+  const extractedItems = [...container.contents];
+  container.contents = [];
+
+  // Convert container to its torn leftover counterpart in-place
+  const tornId = container.tornItemId || ITEM_CATALOG[container.itemId]?.tornItemId;
+  if (tornId && ITEM_CATALOG[tornId]) {
+    const tornDef = ITEM_CATALOG[tornId];
+    container.itemId = tornDef.itemId;
+    container.name = tornDef.name;
+    container.nameRu = tornDef.nameRu;
+    container.category = 'misc';
+    container.isContainer = false;
+    container.usable = false;
+    container.description = tornDef.description;
+    container.descriptionRu = tornDef.descriptionRu;
+  }
+
+  // Distribute extracted items into player's inventory or hands or drop to ground
+  let droppedCount = 0;
+  for (const it of extractedItems) {
+    const added = addItemToPlayer(player, it);
+    if (!added && world) {
+      if (!world.groundItems) world.groundItems = [];
+      const angle = player.angle || 0;
+      const gx = player.x + Math.cos(angle) * (20 + Math.random() * 15);
+      const gy = player.y + Math.sin(angle) * (20 + Math.random() * 15);
+      world.groundItems.push({
+        id: `ground_${it.id}_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+        x: gx,
+        y: gy,
+        item: it,
+        spawnTime: Date.now()
+      });
+      droppedCount++;
+    }
+  }
+
+  sound.playUseItem();
+  if (onContainerConsumed) {
+    onContainerConsumed();
+  }
+
+  const itemsNames = extractedItems.map(i => i.nameRu).join(', ');
+  const dropMsg = droppedCount > 0 ? ` (${droppedCount} предм. упали на землю)` : '';
+  const notifMsg = `Упаковка вскрыта: извлечено ${itemsNames}${dropMsg}.`;
+  addPlayerNotification(player, notifMsg, 'pickup');
+
+  return { success: true, message: notifMsg };
 }
 
 // Start multi-step consumption (eating/drinking) - kept for backward compatibility if used
@@ -5568,6 +5966,24 @@ export function removeItemFromContainer(container: InventoryItem, contentIndex: 
   if (!item) return null;
 
   container.contents.splice(contentIndex, 1);
+
+  // If this was a single-use container (vacuum pouch, sealed tray, snack pouch, vegetable mesh), convert to torn version!
+  if (container.contents.length === 0 && (container.singleUseContainer || ITEM_CATALOG[container.itemId]?.singleUseContainer)) {
+    const tornId = container.tornItemId || ITEM_CATALOG[container.itemId]?.tornItemId;
+    if (tornId && ITEM_CATALOG[tornId]) {
+      const tornDef = ITEM_CATALOG[tornId];
+      container.itemId = tornDef.itemId;
+      container.name = tornDef.name;
+      container.nameRu = tornDef.nameRu;
+      container.category = 'misc';
+      container.isContainer = false;
+      container.contents = undefined;
+      container.usable = false;
+      container.description = tornDef.description;
+      container.descriptionRu = tornDef.descriptionRu;
+    }
+  }
+
   return { ...item, count: 1, maxStack: 1 };
 }
 
@@ -6652,6 +7068,11 @@ export function useItemOnPlayer(
     return { success: false, message: 'Этот предмет нельзя использовать напрямую'};
   }
 
+  // Single-use vacuum bags & disposable packaging unpack / tear open
+  if (item.singleUseContainer || ITEM_CATALOG[item.itemId]?.singleUseContainer) {
+    return unpackSingleUseContainer(player, item, world);
+  }
+
   // Safety: Containers must NEVER be consumed or deleted on use
   if (item.isContainer) {
     return { success: false, message: 'Это контейнер: откройте его, чтобы положить или достать вещи'};
@@ -7642,6 +8063,11 @@ export function useHandItemOnPlayer(
 
   if (!item.usable) {
     return { success: false, message: 'Этот предмет нельзя использовать напрямую'};
+  }
+
+  // Single-use vacuum bags & disposable packaging unpack / tear open from hand
+  if (item.singleUseContainer || ITEM_CATALOG[item.itemId]?.singleUseContainer) {
+    return unpackSingleUseContainer(player, item, world);
   }
 
   if (item.isContainer) {

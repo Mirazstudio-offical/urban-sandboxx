@@ -138,6 +138,7 @@ interface SpeedometerHUDProps {
   hasKeysInInventory?: ('gold' | 'iron')[];
   onToggleDiffLock?: () => void;
   onToggleAxleDiffLock?: (axle: 'center' | 'rear' | 'front') => void;
+  isMobileTouch?: boolean;
 }
 
 export const SpeedometerHUD: React.FC<SpeedometerHUDProps> = ({
@@ -159,9 +160,15 @@ export const SpeedometerHUD: React.FC<SpeedometerHUDProps> = ({
   onInsertKey,
   hasKeysInInventory = [],
   onToggleDiffLock,
-  onToggleAxleDiffLock
+  onToggleAxleDiffLock,
+  isMobileTouch = false
 }) => {
-  const [isMinimized, setIsMinimized] = useState<boolean>(false);
+  const [isMinimized, setIsMinimized] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      return isMobileTouch || window.innerWidth < 900;
+    }
+    return false;
+  });
   const [tripMode, setTripMode] = useState<TripComputerMode>('eco');
 
   if (!vehicle) return null;
@@ -574,40 +581,40 @@ export const SpeedometerHUD: React.FC<SpeedometerHUDProps> = ({
   return (
     <div
       id="speedometer-cluster"
-      className="fixed bottom-2 md:bottom-3 left-1/2 -translate-x-1/2 z-50 pointer-events-auto select-none transition-all duration-300 flex flex-col items-center"
-      style={{ maxWidth: 'calc(100vw - 20px)' }}
+      className="fixed bottom-1 sm:bottom-2 md:bottom-3 left-1/2 -translate-x-1/2 z-50 pointer-events-auto select-none transition-all duration-300 flex flex-col items-center"
+      style={{ maxWidth: 'calc(100vw - 16px)' }}
     >
       {/* MINIMIZE / EXPAND TOGGLE BAR */}
       <button
         type="button"
         onClick={() => setIsMinimized((prev) => !prev)}
-        className="mb-1 px-3 py-0.5 rounded-full bg-slate-950/80 hover:bg-slate-900 border border-slate-700/80 text-[10px] text-slate-300 font-mono flex items-center gap-1.5 shadow-lg active:scale-95 transition backdrop-blur-md"
+        className="mb-0.5 sm:mb-1 px-2.5 py-0.5 rounded-full bg-slate-950/85 hover:bg-slate-900 border border-slate-700/80 text-[9px] sm:text-[10px] text-slate-300 font-mono flex items-center gap-1.5 shadow-lg active:scale-95 transition backdrop-blur-md"
         title="Свернуть / Развернуть приборную панель"
       >
         <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-        <span className="uppercase font-bold tracking-wider">ПРИБОРНАЯ ПАНЕЛЬ</span>
-        {isMinimized ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+        <span className="uppercase font-bold tracking-wider">ПРИБОРЫ</span>
+        {isMinimized ? <ChevronUp className="w-3 h-3 sm:w-3.5 sm:h-3.5" /> : <ChevronDown className="w-3 h-3 sm:w-3.5 sm:h-3.5" />}
       </button>
 
       {/* COMPACT MINIMALIST BAR (IF MINIMIZED) */}
       {isMinimized ? (
-        <div className="flex items-center gap-3 px-4.5 py-2.5 rounded-2xl border border-slate-800 bg-slate-950/85 backdrop-blur-md shadow-2xl text-white whitespace-nowrap overflow-x-auto max-w-full animate-in fade-in duration-100">
+        <div className="flex items-center gap-2 sm:gap-3 px-3 py-1.5 sm:px-4 sm:py-2 rounded-xl sm:rounded-2xl border border-slate-800 bg-slate-950/85 backdrop-blur-md shadow-2xl text-white whitespace-nowrap overflow-x-auto max-w-full animate-in fade-in duration-100 text-xs sm:text-sm">
           <div className="flex items-baseline gap-1 font-mono whitespace-nowrap shrink-0">
-            <span className="text-2xl font-black text-sky-400">{speedKmh}</span>
-            <span className="text-[9px] text-slate-400 font-bold uppercase">КМ/Ч</span>
+            <span className="text-xl sm:text-2xl font-black text-sky-400">{speedKmh}</span>
+            <span className="text-[8px] sm:text-[9px] text-slate-400 font-bold uppercase">КМ/Ч</span>
           </div>
-          <div className="h-4 w-px bg-slate-800 shrink-0" />
-          <div className="flex items-center gap-2 font-mono text-xs whitespace-nowrap shrink-0">
-            <span className="text-slate-400 font-bold uppercase text-[9px] tracking-wider">RPM:</span>
+          <div className="h-3.5 w-px bg-slate-800 shrink-0" />
+          <div className="flex items-center gap-1.5 font-mono text-[11px] sm:text-xs whitespace-nowrap shrink-0">
+            <span className="text-slate-400 font-bold uppercase text-[8px] sm:text-[9px] tracking-wider">RPM:</span>
             <span className={`font-bold ${currentRPM > redlineRPM ? 'text-rose-400 animate-pulse' : 'text-slate-200'}`}>{currentRPM}</span>
           </div>
-          <div className="h-4 w-px bg-slate-800 shrink-0" />
-          <span className="px-2.5 py-1 rounded-xl font-mono font-black text-xs bg-slate-900 border border-slate-800 text-emerald-400 shrink-0">
+          <div className="h-3.5 w-px bg-slate-800 shrink-0" />
+          <span className="px-2 py-0.5 rounded-lg font-mono font-black text-xs bg-slate-900 border border-slate-800 text-emerald-400 shrink-0">
             {currentGearLabel}
           </span>
           {eng?.hasTransferCase && (
-            <div className="flex items-center px-2 py-1 bg-slate-900 border border-slate-800 rounded-xl gap-1 shrink-0 ml-1" title="Делитель [X]">
-              <span className={`text-[10px] font-black uppercase ${eng.transferCaseMode === 'LOW' ? 'text-amber-500' : 'text-slate-300'}`}>
+            <div className="flex items-center px-1.5 py-0.5 bg-slate-900 border border-slate-800 rounded-lg gap-1 shrink-0 ml-0.5" title="Делитель [X]">
+              <span className={`text-[9px] font-black uppercase ${eng.transferCaseMode === 'LOW' ? 'text-amber-500' : 'text-slate-300'}`}>
                 {eng.transferCaseMode === 'LOW' ? 'LO' : 'HI'}
               </span>
             </div>
@@ -616,7 +623,7 @@ export const SpeedometerHUD: React.FC<SpeedometerHUDProps> = ({
             <button
               type="button"
               onClick={handleCycleDiffLock}
-              className={`flex items-center px-2 py-1 border rounded-xl gap-1.5 shrink-0 ml-1 transition cursor-pointer active:scale-95 ${
+              className={`flex items-center px-1.5 py-0.5 border rounded-lg gap-1 shrink-0 ml-0.5 transition cursor-pointer active:scale-95 ${
                 isDiffLocked 
                   ? 'bg-amber-500/20 border-amber-500/60 text-amber-300 shadow-[0_0_8px_rgba(245,158,11,0.2)]'
                   : 'bg-slate-900 border-slate-800 text-slate-500 hover:text-slate-300'
@@ -624,17 +631,17 @@ export const SpeedometerHUD: React.FC<SpeedometerHUDProps> = ({
               title="Блокировка дифференциала [V]"
             >
               <ShieldAlert className={`w-3 h-3 ${isDiffLocked ? 'text-amber-400 animate-pulse' : 'text-slate-500'}`} />
-              <span className="text-[10px] font-black uppercase">
+              <span className="text-[9px] font-black uppercase">
                 {diffLockDesc}
               </span>
             </button>
           )}
-          <div className="h-4 w-px bg-slate-800 shrink-0" />
+          <div className="h-3.5 w-px bg-slate-800 shrink-0" />
           {/* Quick Engine start/stop */}
           <button
             type="button"
             onClick={onToggleEngine}
-            className={`p-1.5 rounded-xl border flex items-center justify-center transition active:scale-95 cursor-pointer shrink-0 ${
+            className={`p-1 sm:p-1.5 rounded-lg border flex items-center justify-center transition active:scale-95 cursor-pointer shrink-0 ${
               isEngineRunning ? 'bg-emerald-500/20 border-emerald-500 text-emerald-300' : 'bg-rose-500/20 border-rose-600 text-rose-300'
             }`}
             title="Зажигание [J]"
@@ -645,7 +652,7 @@ export const SpeedometerHUD: React.FC<SpeedometerHUDProps> = ({
       ) : (
         /* FULL ANALOG INSTRUMENT CLUSTER (BENTO PANEL DESIGN) */
         <div
-          className="relative bg-slate-950/85 border border-slate-800 rounded-2xl p-4 md:p-5 shadow-2xl backdrop-blur-xl flex flex-col items-center gap-3.5 w-full max-w-[480px] select-none animate-in fade-in duration-150"
+          className="relative bg-slate-950/85 border border-slate-800 rounded-2xl p-3 sm:p-4 md:p-5 shadow-2xl backdrop-blur-xl flex flex-col items-center gap-2.5 sm:gap-3.5 w-full max-w-[340px] sm:max-w-[420px] md:max-w-[480px] scale-[0.75] sm:scale-[0.88] md:scale-100 origin-bottom select-none animate-in fade-in duration-150"
         >
           {/* TOP ANNUNCIATOR STRIP & SHIFT LIGHTS */}
           <div className="w-full flex items-center justify-between text-slate-400 text-[9px] font-mono font-bold uppercase tracking-wider border-b border-slate-800/80 pb-2.5 gap-2">
