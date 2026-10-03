@@ -2525,8 +2525,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     effects: {},
     weight: 5.1,
     volume: 5.2,
-    usable: true,
-    isContainer: true
+    usable: true
   },
   kvas: {
     itemId: 'kvas',
@@ -2543,8 +2542,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     usable: true,
     portions: 5,
     maxPortions: 5,
-    leftoverId: 'bottle_plastic_1500',
-    isContainer: true
+    leftoverId: 'bottle_plastic_1500'
   },
   cola: {
     itemId: 'cola',
@@ -2629,8 +2627,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     usable: true,
     portions: 4,
     maxPortions: 4,
-    leftoverId: 'jar_glass_medium',
-    isContainer: true
+    leftoverId: 'jar_glass_medium'
   },
   jam_raspberry: {
     itemId: 'jam_raspberry',
@@ -2647,8 +2644,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     usable: true,
     portions: 4,
     maxPortions: 4,
-    leftoverId: 'jar_glass_small',
-    isContainer: true
+    leftoverId: 'jar_glass_small'
   },
   jam_strawberry: {
     itemId: 'jam_strawberry',
@@ -2665,8 +2661,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     usable: true,
     portions: 4,
     maxPortions: 4,
-    leftoverId: 'jar_glass_small',
-    isContainer: true
+    leftoverId: 'jar_glass_small'
   },
   jar_honey: {
     itemId: 'jar_honey',
@@ -2683,8 +2678,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     usable: true,
     portions: 4,
     maxPortions: 4,
-    leftoverId: 'jar_glass_small',
-    isContainer: true
+    leftoverId: 'jar_glass_small'
   },
   caviar_squash_jar: {
     itemId: 'caviar_squash_jar',
@@ -2701,8 +2695,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     usable: true,
     portions: 3,
     maxPortions: 3,
-    leftoverId: 'jar_glass_medium',
-    isContainer: true
+    leftoverId: 'jar_glass_medium'
   },
   caviar_eggplant_jar: {
     itemId: 'caviar_eggplant_jar',
@@ -2719,8 +2712,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     usable: true,
     portions: 3,
     maxPortions: 3,
-    leftoverId: 'jar_glass_medium',
-    isContainer: true
+    leftoverId: 'jar_glass_medium'
   },
   carton_milk: {
     itemId: 'carton_milk',
@@ -2737,8 +2729,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     usable: true,
     portions: 3,
     maxPortions: 3,
-    leftoverId: 'juice_box',
-    isContainer: true
+    leftoverId: 'juice_box'
   },
   sugar: {
     itemId: 'sugar',
@@ -3337,20 +3328,6 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     effects: {},
     weight: 0.005,
     volume: 1.5,
-    usable: true
-  },
-  plastic_bag: {
-    itemId: 'plastic_bag',
-    name: 'Carrier Bag (5.0L)',
-    nameRu: 'Пакет-майка',
-    category: 'gear',
-    maxStack: 1,
-    icon: '',
-    description: 'Universal plastic grocery shopping bag with handles.',
-    descriptionRu: 'Универсальный пластиковый пакет-майка с ручками для переноски продуктов и предметов.',
-    effects: {},
-    weight: 0.015,
-    volume: 5.0,
     usable: true
   },
   soup_bowl: {
@@ -4535,12 +4512,12 @@ export const LEGACY_CONTAINER_MAP: Record<string, { containerId: string; liquidI
   vodka_bottle: { containerId: 'glass_bottle_500', liquidId: 'vodka', amountMl: 500 },
   bottle_vodka: { containerId: 'glass_bottle_500', liquidId: 'vodka', amountMl: 500 },
   vodka: { containerId: 'glass_bottle_500', liquidId: 'vodka', amountMl: 500 },
-  bottle_wine: { containerId: 'bottle_glass_large', liquidId: 'wine_red', amountMl: 750 },
-  wine_bottle: { containerId: 'bottle_glass_large', liquidId: 'wine_red', amountMl: 750 },
-  wine_white_cooking: { containerId: 'bottle_glass_large', liquidId: 'wine_white', amountMl: 750 },
-  wine_white: { containerId: 'bottle_glass_large', liquidId: 'wine_white', amountMl: 750 },
-  wine_red_cooking: { containerId: 'bottle_glass_large', liquidId: 'wine_red', amountMl: 750 },
-  wine_red: { containerId: 'bottle_glass_large', liquidId: 'wine_red', amountMl: 750 },
+  bottle_wine: { containerId: 'bottle_glass_750', liquidId: 'wine_red', amountMl: 750 },
+  wine_bottle: { containerId: 'bottle_glass_750', liquidId: 'wine_red', amountMl: 750 },
+  wine_white_cooking: { containerId: 'bottle_glass_750', liquidId: 'wine_white', amountMl: 750 },
+  wine_white: { containerId: 'bottle_glass_750', liquidId: 'wine_white', amountMl: 750 },
+  wine_red_cooking: { containerId: 'bottle_glass_750', liquidId: 'wine_red', amountMl: 750 },
+  wine_red: { containerId: 'bottle_glass_750', liquidId: 'wine_red', amountMl: 750 },
   
   // Canisters & Technical Fluids
   canister_metal_20l: { containerId: 'canister_metal_20l', liquidId: null, amountMl: 0 },
@@ -4552,9 +4529,9 @@ export const LEGACY_CONTAINER_MAP: Record<string, { containerId: string; liquidI
   canister_water: { containerId: 'canister_metal_20l', liquidId: 'water', amountMl: 20000 },
   canister_plastic_10l: { containerId: 'canister_plastic_10l', liquidId: null, amountMl: 0 },
   canister_plastic_5l: { containerId: 'canister_plastic_5l', liquidId: null, amountMl: 0 },
-  motor_oil: { containerId: 'canister_plastic_5l', liquidId: 'motor_oil', amountMl: 4000 },
-  oil_canister: { containerId: 'canister_plastic_5l', liquidId: 'motor_oil', amountMl: 4000 },
-  canister_oil: { containerId: 'canister_plastic_5l', liquidId: 'motor_oil', amountMl: 4000 },
+  motor_oil: { containerId: 'canister_plastic_5l', liquidId: 'motor_oil', amountMl: 5000 },
+  oil_canister: { containerId: 'canister_plastic_5l', liquidId: 'motor_oil', amountMl: 5000 },
+  canister_oil: { containerId: 'canister_plastic_5l', liquidId: 'motor_oil', amountMl: 5000 },
   motor_oil_empty: { containerId: 'canister_plastic_5l', liquidId: null, amountMl: 0 },
   antifreeze: { containerId: 'canister_plastic_5l', liquidId: 'antifreeze', amountMl: 5000 },
   antifreeze_canister: { containerId: 'canister_plastic_5l', liquidId: 'antifreeze', amountMl: 5000 },
@@ -4638,26 +4615,26 @@ export const LEGACY_CONTAINER_MAP: Record<string, { containerId: string; liquidI
   jam_blueberry: { containerId: 'jar_glass_small', liquidId: 'jam_blueberry', amountMl: 200 },
   honey: { containerId: 'jar_glass_small', liquidId: 'honey', amountMl: 200 },
   jar_honey: { containerId: 'jar_glass_small', liquidId: 'honey', amountMl: 200 },
-  honey_wild_jar: { containerId: 'jar_glass_medium', liquidId: 'honey_wild', amountMl: 350 },
-  honey_wild: { containerId: 'jar_glass_medium', liquidId: 'honey_wild', amountMl: 350 },
-  honey_buckwheat: { containerId: 'jar_glass_medium', liquidId: 'honey_buckwheat', amountMl: 350 },
+  honey_wild_jar: { containerId: 'jar_glass_medium', liquidId: 'honey_wild', amountMl: 500 },
+  honey_wild: { containerId: 'jar_glass_medium', liquidId: 'honey_wild', amountMl: 500 },
+  honey_buckwheat: { containerId: 'jar_glass_medium', liquidId: 'honey_buckwheat', amountMl: 500 },
   maple_syrup_bottle: { containerId: 'bottle_glass_small', liquidId: 'maple_syrup', amountMl: 250 },
   maple_syrup: { containerId: 'bottle_glass_small', liquidId: 'maple_syrup', amountMl: 250 },
-  mustard_dijon_jar: { containerId: 'jar_glass_small', liquidId: 'mustard_dijon', amountMl: 180 },
-  mustard_dijon: { containerId: 'jar_glass_small', liquidId: 'mustard_dijon', amountMl: 180 },
+  mustard_dijon_jar: { containerId: 'jar_glass_small', liquidId: 'mustard_dijon', amountMl: 200 },
+  mustard_dijon: { containerId: 'jar_glass_small', liquidId: 'mustard_dijon', amountMl: 200 },
 
   // Dairy & Fats in Jars, Pots & Bottles
   milk_bottle_raw: { containerId: 'bottle_glass_large', liquidId: 'milk_raw', amountMl: 1000 },
-  cream_heavy_jar: { containerId: 'jar_glass_medium', liquidId: 'cream_heavy', amountMl: 380 },
-  sour_cream_pot: { containerId: 'jar_glass_medium', liquidId: 'sour_cream', amountMl: 430 },
+  cream_heavy_jar: { containerId: 'jar_glass_medium', liquidId: 'cream_heavy', amountMl: 500 },
+  sour_cream_pot: { containerId: 'jar_glass_medium', liquidId: 'sour_cream', amountMl: 500 },
   kefir_fermented_bottle: { containerId: 'bottle_glass_large', liquidId: 'kefir', amountMl: 1000 },
-  buttermilk_fermented_jar: { containerId: 'jar_glass_medium', liquidId: 'kefir', amountMl: 480 },
-  cottage_cheese_pack: { containerId: 'jar_glass_medium', liquidId: 'cottage_cheese', amountMl: 250 },
-  yogurt_natural_cup: { containerId: 'jar_glass_small', liquidId: 'yogurt', amountMl: 150 },
-  liquid_yeast_mixture: { containerId: 'jar_glass_small', liquidId: 'yeast_liquid', amountMl: 180 },
-  lard_pork_pot: { containerId: 'pot_clay_medium', liquidId: 'lard_pork', amountMl: 450 },
-  fat_beef_pot: { containerId: 'pot_clay_medium', liquidId: 'beef_tallow', amountMl: 450 },
-  ghee_butter_pot: { containerId: 'pot_clay_medium', liquidId: 'ghee', amountMl: 380 },
+  buttermilk_fermented_jar: { containerId: 'jar_glass_medium', liquidId: 'kefir', amountMl: 500 },
+  cottage_cheese_pack: { containerId: 'jar_glass_medium', liquidId: 'cottage_cheese', amountMl: 500 },
+  yogurt_natural_cup: { containerId: 'jar_glass_small', liquidId: 'yogurt', amountMl: 200 },
+  liquid_yeast_mixture: { containerId: 'jar_glass_small', liquidId: 'yeast_liquid', amountMl: 200 },
+  lard_pork_pot: { containerId: 'pot_clay_medium', liquidId: 'lard_pork', amountMl: 500 },
+  fat_beef_pot: { containerId: 'pot_clay_medium', liquidId: 'beef_tallow', amountMl: 500 },
+  ghee_butter_pot: { containerId: 'pot_clay_medium', liquidId: 'ghee', amountMl: 500 },
 
   // Culinary Oils, Vinegars & Sauces
   oil_sunflower_bottle: { containerId: 'bottle_glass_large', liquidId: 'oil_sunflower', amountMl: 1000 },
@@ -4676,13 +4653,13 @@ export const LEGACY_CONTAINER_MAP: Record<string, { containerId: string; liquidI
   vinegar_balsamic: { containerId: 'bottle_glass_small', liquidId: 'vinegar_balsamic', amountMl: 250 },
   soy_sauce_classic: { containerId: 'bottle_glass_small', liquidId: 'sauce_soy', amountMl: 250 },
   sauce_soy: { containerId: 'bottle_glass_small', liquidId: 'sauce_soy', amountMl: 250 },
-  sauce_fish_premium: { containerId: 'bottle_glass_small', liquidId: 'sauce_fish', amountMl: 200 },
-  sauce_fish: { containerId: 'bottle_glass_small', liquidId: 'sauce_fish', amountMl: 200 },
-  sauce_worcestershire: { containerId: 'bottle_glass_small', liquidId: 'sauce_worcestershire', amountMl: 290 },
+  sauce_fish_premium: { containerId: 'bottle_glass_small', liquidId: 'sauce_fish', amountMl: 250 },
+  sauce_fish: { containerId: 'bottle_glass_small', liquidId: 'sauce_fish', amountMl: 250 },
+  sauce_worcestershire: { containerId: 'bottle_glass_small', liquidId: 'sauce_worcestershire', amountMl: 250 },
   sauce_pomegranate_narsharab: { containerId: 'bottle_glass_small', liquidId: 'sauce_narsharab', amountMl: 250 },
   sauce_narsharab: { containerId: 'bottle_glass_small', liquidId: 'sauce_narsharab', amountMl: 250 },
-  sauce_teriyaki_bottle: { containerId: 'bottle_glass_small', liquidId: 'sauce_teriyaki', amountMl: 300 },
-  sauce_teriyaki: { containerId: 'bottle_glass_small', liquidId: 'sauce_teriyaki', amountMl: 300 },
+  sauce_teriyaki_bottle: { containerId: 'bottle_glass_small', liquidId: 'sauce_teriyaki', amountMl: 250 },
+  sauce_teriyaki: { containerId: 'bottle_glass_small', liquidId: 'sauce_teriyaki', amountMl: 250 },
 
   // Tin Cans & Preserves
   can_metal_large: { containerId: 'can_metal_large', liquidId: null, amountMl: 0 },

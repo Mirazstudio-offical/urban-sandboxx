@@ -1826,6 +1826,18 @@ export const CONTAINER_CONFIGS: Record<string, ContainerDefConfig> = {
     descriptionRu: 'Унифицированная стеклянная бутылка объемом 1 литр.',
     descriptionEn: 'Unified 1.0L glass bottle.'
   },
+  bottle_glass_750: {
+    itemId: 'bottle_glass_750',
+    name: 'Wine Glass Bottle (0.75L)',
+    nameRu: 'Стеклянная винная бутылка 0.75л',
+    maxMl: 750,
+    emptyWeightKg: 0.42,
+    emptyVolumeL: 0.8,
+    category: 'drink',
+    icon: 'Wine',
+    descriptionRu: 'Стандартная винная стеклянная бутылка объемом 0.75 литра.',
+    descriptionEn: 'Standard 0.75L wine glass bottle.'
+  },
   bottle_glass_medium: {
     itemId: 'bottle_glass_medium',
     name: 'Glass Bottle (0.5L)',
@@ -2084,25 +2096,34 @@ export function getFluidContainerDisplayName(item: InventoryItem): string {
   const storage = item.fluidStorage;
   const baseName = storage.baseItemNameRu || item.nameRu;
 
+  // Clean baseName if it already ends with static volume in parentheses e.g. "(1.5L)", "(0.5L)", "(1.5л)", "(20л)"
+  const cleanBaseName = baseName.replace(/\s*\([\d\.\,\s]+(?:L|л|ml|мл)\)\s*$/i, '').trim();
+
   if (!storage.liquidId || storage.currentMl <= 0) {
-    return `${baseName} (Пусто)`;
+    return `${cleanBaseName} (Пусто)`;
   }
 
   const liquid = LIQUID_REGISTRY[storage.liquidId] || LIQUID_REGISTRY.water;
   const liquidName = liquid.nameRu;
 
-  const baseLower = baseName.toLowerCase();
+  const baseLower = cleanBaseName.toLowerCase();
   const liquidLower = liquidName.toLowerCase();
   const alreadyMentionsLiquid = baseLower.includes(liquidLower) || liquidLower.includes(baseLower);
 
   const displayPrefix = alreadyMentionsLiquid ? '' : `${liquidName} `;
 
+  function formatLiters(ml: number): string {
+    const liters = ml / 1000;
+    if (Number.isInteger(liters)) return liters.toString();
+    return parseFloat(liters.toFixed(2)).toString();
+  }
+
   if (storage.maxMl >= 1000) {
-    const curL = (storage.currentMl / 1000).toFixed(1);
-    const maxL = (storage.maxMl / 1000).toFixed(0);
-    return `${baseName} (${displayPrefix}${curL}/${maxL} л)`;
+    const curL = formatLiters(storage.currentMl);
+    const maxL = formatLiters(storage.maxMl);
+    return `${cleanBaseName} (${displayPrefix}${curL}/${maxL} л)`;
   } else {
-    return `${baseName} (${displayPrefix}${Math.round(storage.currentMl)}/${storage.maxMl} мл)`;
+    return `${cleanBaseName} (${displayPrefix}${Math.round(storage.currentMl)}/${Math.round(storage.maxMl)} мл)`;
   }
 }
 

@@ -333,7 +333,7 @@ const GearStickLever: React.FC<GearStickLeverProps> = ({
   const isAuto = !isMachinery && transmissionType === 'AUTO';
   const isTractor = !isAuto && !isMachinery && (carType?.startsWith('tractor_') || false);
   const is6Speed = !isAuto && !isMachinery && !isTractor && [
-    'truck_semi', 'truck_box', 'truck_dump', 'truck_tanker', 'truck_water', 'truck_flatbed', 'truck_covered', 
+    'truck_semi', 'truck_box', 'truck_dump', 'truck_zil_dump', 'truck_tanker', 'truck_water', 'truck_flatbed', 'truck_covered', 
     'cement_mixer', 'garbage_truck', 'bus', 'delivery_truck', 'truck_tow', 
     'fire_engine', 'fire_ladder', 'fire_rescue', 'pickup_heavy', 'truck_armored', 
     'supercar', 'sports', 'hatch_hot', 'coupe_gt', 'moto_sport'

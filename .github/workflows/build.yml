@@ -28,7 +28,8 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git checkout --orphan build
           git rm -rf .
-          cp -r dist/* .
-          git add .
+          touch dist/.nojekyll
+          cp -r dist/. .
+          git add -A
           git commit -m "build"
           git push origin build --force

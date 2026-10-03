@@ -6,6 +6,7 @@ import { isPlayerNearGasStationCashier, getNearbyGasPump, getNearbyVehicleForFue
 import { getNearbyWaterVehicle } from './waterHoseSystem';
 import { getCityApartments, getApartmentById, getApartmentForPlot, hasPlayerApartmentKey, PropertyApartment } from './propertySystem';
 import { FURNITURE_STORAGE_CONFIGS } from './furnitureStorageSystem';
+import { getBusSeatPositions, getBusDoors, getTrainCoachSeats } from './busInteriorSystem';
 
 export type InteractionType =
   | 'enter_vehicle'
@@ -49,7 +50,11 @@ export type InteractionType =
   | 'furniture_rotate'
   | 'tow_rope_detach'
   | 'enter_passenger_car'
-  | 'exit_passenger_car';
+  | 'exit_passenger_car'
+  | 'enter_bus_saloon'
+  | 'exit_bus_saloon'
+  | 'sit_seat'
+  | 'stand_up';
 
 export interface InteractionTarget {
   type: InteractionType;
@@ -145,6 +150,101 @@ export function findActiveInteraction(
 ): InteractionTarget | null {
   if (!player) return null;
 
+  // 0. Active Sitting Posture (Bus seat, Train seat, or Apartment furniture chair/bench/sofa)
+  if (player.sittingState) {
+    return {
+      type: 'stand_up',
+      primaryKey: 'E',
+      actionTitle: 'Встать с места',
+      detail: `${player.sittingState.labelRu} — [E], [Пробел] или движение [WASD]`,
+      x: player.x,
+      y: player.y,
+      dist: 0,
+      angleDiff: 0,
+      score: 0,
+      availableKeys: [
+        { key: 'E', title: 'Встать' }
+      ]
+    };
+  }
+
+  // 0.5. Inside Bus Saloon (Хождение внутри автобуса / микроавтобуса)
+  if (player.insideBusId) {
+    const bus = (world.vehicles || []).find(v => v.id === player.insideBusId);
+    if (!bus) {
+      player.insideBusId = null;
+      return null;
+    }
+
+    const halfL = bus.length / 2;
+    const halfW = bus.width / 2;
+    const localX = player.busLocalX ?? (halfL - 14);
+    const localY = player.busLocalY ?? 5.5;
+    const cos = Math.cos(bus.angle);
+    const sin = Math.sin(bus.angle);
+
+    // 1. Check if near passenger exit doors
+    const doors = getBusDoors(bus.type, bus.length, bus.width);
+    for (const d of doors) {
+      const distToDoor = Math.hypot(localX - d.vestibuleLocalX, localY - d.vestibuleLocalY);
+      if (distToDoor < 18) {
+        return {
+          type: 'exit_bus_saloon',
+          primaryKey: 'F',
+          actionTitle: 'Спуститься из автобуса',
+          detail: `${d.nameRu} — на тротуар / остановку`,
+          x: player.x,
+          y: player.y,
+          dist: 0,
+          angleDiff: 0,
+          score: 0,
+          data: { bus, door: d }
+        };
+      }
+    }
+
+    // 2. Check if near passenger seats to sit down
+    const seats = getBusSeatPositions(bus.type);
+    let closestSeat: any = null;
+    let closestDist = 22;
+
+    for (const s of seats) {
+      const d = Math.hypot(localX - s.localX, localY - s.localY);
+      if (d < closestDist) {
+        closestDist = d;
+        closestSeat = s;
+      }
+    }
+
+    if (closestSeat) {
+      const seatWorldX = bus.x + closestSeat.localX * cos - closestSeat.localY * sin;
+      const seatWorldY = bus.y + closestSeat.localX * sin + closestSeat.localY * cos;
+      return {
+        type: 'sit_seat',
+        primaryKey: 'E',
+        actionTitle: closestSeat.isDriver ? 'Сесть за руль автобуса' : 'Сесть на сиденье',
+        detail: closestSeat.labelRu,
+        x: seatWorldX,
+        y: seatWorldY,
+        dist: closestDist,
+        angleDiff: 0,
+        score: closestDist,
+        data: {
+          seatType: 'bus_seat',
+          targetId: bus.id,
+          localX: closestSeat.localX,
+          localY: closestSeat.localY,
+          angle: bus.angle + closestSeat.angle,
+          labelRu: closestSeat.labelRu,
+          worldX: seatWorldX,
+          worldY: seatWorldY
+        }
+      };
+    }
+
+    return null;
+  }
+
   // If inside passenger carriage, exit carriage prompt ONLY when standing in a vestibule near an exit door
   if (player.insideCarId) {
     const car = (world.rollingStock || []).find(c => c.id === player.insideCarId);
@@ -158,7 +258,7 @@ export function findActiveInteraction(
     const localX = player.carLocalX ?? 0;
     const localY = player.carLocalY ?? 0;
 
-    // Check vestibules
+    // Check vestibules for exit doors
     // Working vestibule: localX > halfL - 33
     // Non-working vestibule: localX < -halfL + 36
     if (localX > halfL - 33) {
@@ -217,6 +317,47 @@ export function findActiveInteraction(
           data: { car, doorId: 'nonwork_south', exitLocalY: halfW + 14 }
         };
       }
+    }
+
+    // Check if near train compartment seats or berths to sit down
+    const trainSeats = getTrainCoachSeats(car);
+    let closestSeat: any = null;
+    let closestDist = 22;
+
+    for (const s of trainSeats) {
+      const d = Math.hypot(localX - s.localX, localY - s.localY);
+      if (d < closestDist) {
+        closestDist = d;
+        closestSeat = s;
+      }
+    }
+
+    if (closestSeat) {
+      const cosCar = Math.cos(car.angle);
+      const sinCar = Math.sin(car.angle);
+      const seatWorldX = car.x + closestSeat.localX * cosCar - closestSeat.localY * sinCar;
+      const seatWorldY = car.y + closestSeat.localX * sinCar + closestSeat.localY * cosCar;
+      return {
+        type: 'sit_seat',
+        primaryKey: 'E',
+        actionTitle: 'Сесть на место',
+        detail: closestSeat.labelRu,
+        x: seatWorldX,
+        y: seatWorldY,
+        dist: closestDist,
+        angleDiff: 0,
+        score: closestDist,
+        data: {
+          seatType: 'train_seat',
+          targetId: car.id,
+          localX: closestSeat.localX,
+          localY: closestSeat.localY,
+          angle: car.angle + closestSeat.angle,
+          labelRu: closestSeat.labelRu,
+          worldX: seatWorldX,
+          worldY: seatWorldY
+        }
+      };
     }
 
     // Inside saloon, compartment, corridor or toilet - cannot exit through walls or windows
@@ -567,6 +708,30 @@ export function findActiveInteraction(
       }
 
       // 3b. Vehicle Doors (Driver & Passenger side)
+      // If vehicle is a bus, provide dedicated boarding doors into the passenger saloon
+      if (veh.type === 'bus' || veh.type === 'bus_minibus') {
+        const busDoors = getBusDoors(veh.type, veh.length, veh.width);
+        for (const bd of busDoors) {
+          const doorWorldX = veh.x + bd.localX * cos - bd.localY * sin;
+          const doorWorldY = veh.y + bd.localX * sin + bd.localY * cos;
+          const bReach = isTargetInPhysicalReach(px, py, facing, doorWorldX, doorWorldY, 52, 1.45, mouseWorldPos);
+          if (bReach.inReach) {
+            candidates.push({
+              type: 'enter_bus_saloon',
+              primaryKey: 'F',
+              actionTitle: 'Войти в салон автобуса',
+              detail: `${bd.nameRu} — ${cfg.name}`,
+              x: doorWorldX,
+              y: doorWorldY,
+              dist: bReach.dist,
+              angleDiff: bReach.angleDiff,
+              score: bReach.score - 18,
+              data: { bus: veh, door: bd }
+            });
+          }
+        }
+      }
+
       // Driver side door:
       const sideOffset = cfg.width * 0.52 + 10;
       const longitudinalOffset = cfg.length * 0.08;
@@ -603,8 +768,8 @@ export function findActiveInteraction(
         candidates.push({
           type: 'enter_vehicle',
           primaryKey: 'F',
-          actionTitle: `Сесть в автомобиль (${cfg.name})`,
-          detail: `Дверь водителя / салон`,
+          actionTitle: (veh.type === 'bus' || veh.type === 'bus_minibus') ? `Сесть за руль (${cfg.name})` : `Сесть в автомобиль (${cfg.name})`,
+          detail: `Дверь водителя`,
           x: doorX,
           y: doorY,
           dist: bestDoorReach.dist,
@@ -726,6 +891,40 @@ export function findActiveInteraction(
           const reach = isTargetInPhysicalReach(px, py, facing, furnWorldX, furnWorldY, 52, 1.45, mouseWorldPos);
 
           if (reach.inReach) {
+            // Chair, Bench, Sofa, Beanbag, Exam Table Seating interaction
+            if (
+              furn.type === 'chair' ||
+              furn.type === 'bench' ||
+              furn.type === 'sofa' ||
+              furn.type === 'bean_bag' ||
+              furn.type === 'exam_table'
+            ) {
+              const label = furn.type === 'chair' ? 'Деревянный стул / кресло' :
+                furn.type === 'bench' ? 'Скамейка' :
+                furn.type === 'sofa' ? 'Мягкий диван' :
+                furn.type === 'bean_bag' ? 'Мягкое кресло-мешок' : 'Медицинская кушетка';
+              candidates.push({
+                type: 'sit_seat',
+                primaryKey: 'E',
+                actionTitle: (furn.type === 'chair' || furn.type === 'sofa' || furn.type === 'bean_bag') ? 'Сесть в кресло' : 'Присесть на место',
+                detail: label,
+                x: furnWorldX,
+                y: furnWorldY,
+                dist: reach.dist,
+                angleDiff: reach.angleDiff,
+                score: reach.score - 16,
+                data: {
+                  seatType: 'furniture_seat',
+                  targetId: bld.id,
+                  furnitureIndex: fIdx,
+                  worldX: furnWorldX,
+                  worldY: furnWorldY,
+                  angle: furn.angle || 0,
+                  labelRu: label
+                }
+              });
+            }
+
             // Bed / Sleep interaction
             if (
               furn.type === 'bed' ||
@@ -737,7 +936,7 @@ export function findActiveInteraction(
               const isSofa = furn.type === 'sofa';
               candidates.push({
                 type: 'bed_sleep',
-                primaryKey: 'E',
+                primaryKey: isSofa ? 'F' : 'E', // Allow [F] for sofa lying down to avoid conflicting with sitting
                 actionTitle: isSofa ? 'Прилечь на диван' : 'Лечь на кровать',
                 detail: 'Сон, отдых и восстановление сил',
                 x: furnWorldX,

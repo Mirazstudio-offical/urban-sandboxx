@@ -26,6 +26,7 @@ export type CarType =
   | 'ambulance_suv'
   | 'truck_box'
   | 'truck_dump'
+  | 'truck_zil_dump'
   | 'truck_semi'
   | 'trailer_semi'
   | 'trailer_semi_box'
@@ -86,6 +87,29 @@ export type CarType =
   | 'roller_compact_sidewalk'
   | 'roller_pneumatic';
 
+export type TurnSignalType = 
+  | 'incandescent_classic'      // Classic bulb with filament thermal inertia (warm fade in/out, bimetal relay cadence)
+  | 'incandescent_modern'       // Modern halogen/bulb with electronic BCM relay (rapid fade in/out)
+  | 'led_crisp'                 // Instant crisp digital LED matrix strobe (0ms rise/fall)
+  | 'dynamic_sequential_led';   // Modern sweeping sequential LED cascade ("змейка" from inner to outer corner)
+
+export type TurnSignalSoundType = 
+  | 'bimetal_relay'    // Deep warm mechanical click with slight housing resonance (VAZ, MTZ, vintage cars)
+  | 'bcm_relay'        // Crisp mechanical solenoid click (modern hatchbacks, sedans, utility trucks)
+  | 'electronic_click' // Clean digital high-pitch piezo tick (sportscars, modern crossovers)
+  | 'luxury_acoustic'; // Soft acoustic damped luxury tap (Audi, Lexus, Mercedes, luxury SUVs)
+
+export interface VehicleTurnSignalConfig {
+  type: TurnSignalType;
+  baseFrequency: number;          // Hz (e.g. 1.35 to 1.75 Hz)
+  dutyCycle: number;              // 0.45 to 0.60 fraction of cycle illuminated
+  sweepDuration: number;          // seconds for dynamic sequential sweep (0.26 - 0.34s)
+  hasSideMirrorRepeaters: boolean;// LED repeater strip on side mirror housing
+  hasFenderRepeaters: boolean;    // Amber bulb/lens on front fender
+  repeaterStyle: 'fender_round' | 'fender_rect' | 'mirror_led_static' | 'mirror_led_dynamic';
+  soundType: TurnSignalSoundType;
+}
+
 export interface CarConfig {
   type: CarType;
   width: number;
@@ -108,6 +132,8 @@ export interface CarConfig {
   hitchOffset?: number;    // Where the hitch/fifth wheel is located relative to the center of the towing vehicle
   couplerOffset?: number;  // Where the trailer connects to the towing vehicle relative to the center of the trailer
   color?: string;
+  roofColor?: string;
+  dumpColor?: string;
   massEmpty?: number;
 }
 
@@ -424,6 +450,7 @@ export interface Vehicle {
   wheelBase: number;
   color: string;
   roofColor: string;
+  dumpColor?: string;
   headlightsOn: boolean;
   headlightMode: 'off' | 'low' | 'high';
   positionLightsOn?: boolean;
@@ -470,6 +497,7 @@ export interface Vehicle {
 
   // AI & State
   isPlayerControlled: boolean;
+  isPlayerInsideSaloon?: boolean; // Whether the player or passengers are walking/sitting inside the bus cabin/saloon
   isParked: boolean;
   isDerelict?: boolean;        // Totaled, crushed, or abandoned wreck
   waterDepth?: number;         // Water depth at vehicle center (meters)
@@ -1150,6 +1178,25 @@ export interface Particle {
   splatted?: boolean;
   shapeSeed?: number;
   targetRadius?: number;
+
+  // Thermodynamic, condensation & atmospheric simulation properties:
+  isSteam?: boolean;          // True for water vapor / cold exhaust condensate / radiator steam / breath
+  tempC?: number;             // Emission gas temperature (°C)
+  buoyancy?: number;          // Upward thermal buoyancy factor
+  expansionRate?: number;     // Volumetric blooming rate
+  baseRadius?: number;        // Uncondensed initial radius
+  baseColor?: string;         // Underlying gas color before ambient condensation scattering
+}
+
+export interface WorldWind {
+  speed: number;       // Base wind speed in px/s (~10 px/s = 3.6 km/h)
+  angle: number;       // Radians direction wind is blowing towards
+  vx: number;          // Current effective wind vector X (px/s)
+  vy: number;          // Current effective wind vector Y (px/s)
+  gust: number;        // Dynamic instantaneous gust multiplier (0.5 to 2.0)
+  targetAngle?: number;// Slow macro weather shift in wind direction
+  targetSpeed?: number;// Target base speed based on weather
+  turbulenceTimer?: number;
 }
 
 export type ClothingLayer = 'skin' | 'underwear' | 'shirt' | 'jacket' | 'outerwear';
@@ -1434,6 +1481,19 @@ export interface ActivePlacement {
   count?: number;    // item stack count
 }
 
+export interface PlayerSeatState {
+  type: 'bus_seat' | 'train_seat' | 'furniture_seat';
+  targetId?: string; // vehicle.id, car.id, or building.id
+  furnitureIndex?: number;
+  seatIndex?: number;
+  localX?: number;
+  localY?: number;
+  worldX: number;
+  worldY: number;
+  angle: number;
+  labelRu: string;
+}
+
 export interface Player {
   x: number;
   y: number;
@@ -1461,6 +1521,14 @@ export interface Player {
   insideCarId?: string | null;
   carLocalX?: number;
   carLocalY?: number;
+
+  // Passenger Bus Saloon Interior
+  insideBusId?: string | null;
+  busLocalX?: number;
+  busLocalY?: number;
+
+  // Active Seated Posture (Bus, Train, Apartments/Furniture)
+  sittingState?: PlayerSeatState | null;
   
   // Creative / Sandbox Mode
   isCreativeMode?: boolean;
@@ -1865,6 +1933,7 @@ export interface GameWorld {
   cleanMode?: boolean;
   outsideTemp?: number;
   humidity?: number;
+  wind?: WorldWind;
   gasPumps?: GasPumpDispenser[];
   lightningFlashTimer?: number;
   lightningStrike?: {

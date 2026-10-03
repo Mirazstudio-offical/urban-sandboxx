@@ -20,7 +20,22 @@ import {
   CarType,
   RollingStockCar
 } from './types';
-import { CAR_CONFIGS, createDefaultEngineState, createDefaultFuelSystem, createDefaultVehicleDamage, ensureVehicleDamage, getVehicleFuelCapPosition, isTrailerVehicle, PX_S_TO_SPEED_KMH, hasRoadTrainLights, toggleAxleDiffLock, cycleVehicleDiffLock, getVehicleDiffCapabilities } from './vehicleHelpers';
+import { 
+  CAR_CONFIGS, 
+  createDefaultEngineState, 
+  createDefaultFuelSystem, 
+  createDefaultVehicleDamage, 
+  ensureVehicleDamage, 
+  getVehicleFuelCapPosition, 
+  isTrailerVehicle, 
+  PX_S_TO_SPEED_KMH, 
+  hasRoadTrainLights, 
+  toggleAxleDiffLock, 
+  cycleVehicleDiffLock, 
+  getVehicleDiffCapabilities,
+  getVehicleTurnSignalDynamicState,
+  getVehicleTurnSignalConfig
+} from './vehicleHelpers';
 import { loadMap, sanitizeWorldVehicles } from './loadMap';
 import { SpatialGrid } from './spatialGrid';
 import { updateAITraffic, updatePedestrians, updateTrafficLights } from './aiTraffic';
@@ -39,8 +54,10 @@ import {
 } from './physics';
 import { GameRenderer } from './renderer';
 import { getBuildingFloorsCount, getBuildingLayout, constrainPlayerToInterior, clearInteriorCanvasCache, getApartmentDoorSegment } from './buildingInteriors';
+import { sitPlayerOnSeat, standPlayerUp } from './busInteriorSystem';
 import { calculateGpsRoute } from './navigation';
 import { sound } from './audio';
+import { TaxiFleetSystem } from './taxiSystem';
 import { 
   addItemToPlayer,
   addPlayerNotification,
@@ -2318,7 +2335,7 @@ export default function App() {
               camera.targetX = player.x;
               camera.targetY = player.y;
               camera.targetAngle = 0;
-              if (player.insideCarId) {
+              if (player.insideCarId || player.insideBusId) {
                 camera.targetZoom = 2.4 * userZoomFactorRef.current;
               } else {
                 camera.targetZoom = 1.3 * userZoomFactorRef.current;
@@ -2619,12 +2636,16 @@ export default function App() {
         for (const veh of world.vehicles) {
           if (veh.isPlayerControlled) {
             playerCar = veh;
-            // Play ticking sound for player turn signals
+            // Play authentic acoustic relay tick/tock for player vehicle
             if (veh.turnSignal !== 'none') {
-              turnTickTimerRef.current += dt;
-              if (turnTickTimerRef.current >= 0.35) {
-                turnTickTimerRef.current = 0;
-                sound.playTurnSignalTick(Math.floor(veh.turnSignalTimer * 3) % 2 === 0);
+              const turnState = getVehicleTurnSignalDynamicState(veh);
+              const isHyperflash = (veh.turnSignal === 'left' && (veh.damage?.leftHeadlightBroken || veh.damage?.leftTaillightBroken)) ||
+                                   (veh.turnSignal === 'right' && (veh.damage?.rightHeadlightBroken || veh.damage?.rightTaillightBroken));
+
+              if (turnState.isTick) {
+                sound.playTurnSignalTick(true, turnState.config.soundType, isHyperflash);
+              } else if (turnState.isTock) {
+                sound.playTurnSignalTick(false, turnState.config.soundType, isHyperflash);
               }
             }
           }
@@ -2822,7 +2843,8 @@ export default function App() {
           // GPS Navigation Route recalculation & Arrival check
           if (world.gpsDestination) {
             const distToDest = Math.hypot(world.gpsDestination.x - player.x, world.gpsDestination.y - player.y);
-            if (distToDest < 60) {
+            const isTaxiActive = !!TaxiFleetSystem.getInstance().activeOrder;
+            if (distToDest < 60 && !isTaxiActive) {
               world.gpsDestination = null;
               world.gpsPath = null;
               setGpsDestination(null);
@@ -2854,6 +2876,15 @@ export default function App() {
         world.timeHour = timeHourRef.current;
         updateSkidMarksAndParticles(world, player, dt);
         updateBreakablePropsAndLivingWorld(world, player, dt, vehGrid);
+
+        // Taxi Fleet Driver System Simulation (Order dispatch, passenger boarding, comfort rating, physical cash)
+        TaxiFleetSystem.getInstance().update(
+          dt,
+          world,
+          player,
+          handleSetGpsTarget,
+          (msg, type) => addPlayerNotification(player, msg, type || 'info')
+        );
 
         // 8. Ambulance Evacuation & Specialized Hospital Treatment System (runs before camera lerp)
         if (player.needsHospitalEvacuation) {
@@ -3081,8 +3112,8 @@ export default function App() {
         }
 
         // 8.5. Smooth Camera Lerp with velocity-responsive tracking
-        if (player.insideCarId) {
-          // Direct rock-solid tracking while inside train eliminates all camera interpolation lag and jitter
+        if (player.insideCarId || player.insideBusId) {
+          // Direct rock-solid tracking while inside train or bus eliminates all camera interpolation lag and jitter
           camera.x = player.x;
           camera.y = player.y;
         } else {
@@ -3387,11 +3418,16 @@ export default function App() {
 
     if (veh.turnSignal === signal) {
       veh.turnSignal = 'none';
+      veh.turnSignalTimer = 0;
       setPlayerTurnSignal('none');
     } else {
       veh.turnSignal = signal;
+      veh.turnSignalTimer = 0;
       setPlayerTurnSignal(signal);
-      sound.playTurnSignalTick(true);
+      const turnCfg = getVehicleTurnSignalConfig(veh.type);
+      const isHyperflash = (signal === 'left' && (veh.damage?.leftHeadlightBroken || veh.damage?.leftTaillightBroken)) ||
+                           (signal === 'right' && (veh.damage?.rightHeadlightBroken || veh.damage?.rightTaillightBroken));
+      sound.playTurnSignalTick(true, turnCfg.soundType, isHyperflash);
     }
   };
 
@@ -3941,6 +3977,103 @@ export default function App() {
     if (!p || !world || !camera) return;
 
     switch (target.type) {
+      case 'enter_bus_saloon': {
+        const busData = target.data?.bus || target.data;
+        const door = target.data?.door;
+        const bus = busData as Vehicle;
+        if (bus) {
+          setFadeActive(true);
+          sound.playCarDoor();
+
+          p.insideBusId = bus.id;
+          p.sittingState = null;
+          world.player = p;
+
+          const cos = Math.cos(bus.angle);
+          const sin = Math.sin(bus.angle);
+          if (door) {
+            p.busLocalX = door.vestibuleLocalX;
+            p.busLocalY = door.vestibuleLocalY;
+          } else {
+            p.busLocalX = bus.length / 2 - 14;
+            p.busLocalY = 5.5;
+          }
+
+          p.x = bus.x + p.busLocalX * cos - p.busLocalY * sin;
+          p.y = bus.y + p.busLocalX * sin + p.busLocalY * cos;
+          p.vx = 0;
+          p.vy = 0;
+
+          camera.shakeTimer = 0;
+          camera.shakeIntensity = 0;
+          camera.x = p.x;
+          camera.y = p.y;
+          camera.targetX = p.x;
+          camera.targetY = p.y;
+          camera.zoom = 2.4 * userZoomFactorRef.current;
+          camera.targetZoom = 2.4 * userZoomFactorRef.current;
+
+          setTimeout(() => {
+            setFadeActive(false);
+          }, 180);
+        }
+        break;
+      }
+
+      case 'exit_bus_saloon': {
+        const bus = (world.vehicles || []).find(v => v.id === p.insideBusId);
+        if (bus) {
+          setFadeActive(true);
+          sound.playCarDoor();
+
+          const cos = Math.cos(bus.angle);
+          const sin = Math.sin(bus.angle);
+          const exitLocalX = p.busLocalX ?? (bus.length / 2 - 14);
+          const exitLocalY = bus.width / 2 + 12;
+
+          p.insideBusId = null;
+          p.sittingState = null;
+          world.player = p;
+
+          p.x = bus.x + exitLocalX * cos - exitLocalY * sin;
+          p.y = bus.y + exitLocalX * sin + exitLocalY * cos;
+          p.vx = 0;
+          p.vy = 0;
+
+          p.busLocalX = undefined;
+          p.busLocalY = undefined;
+
+          camera.x = p.x;
+          camera.y = p.y;
+          camera.targetX = p.x;
+          camera.targetY = p.y;
+          camera.zoom = 1.3 * userZoomFactorRef.current;
+          camera.targetZoom = 1.3 * userZoomFactorRef.current;
+
+          setTimeout(() => {
+            setFadeActive(false);
+          }, 180);
+        } else {
+          p.insideBusId = null;
+          p.sittingState = null;
+        }
+        break;
+      }
+
+      case 'sit_seat': {
+        if (target.data) {
+          sitPlayerOnSeat(p, target.data);
+          world.player = p;
+        }
+        break;
+      }
+
+      case 'stand_up': {
+        standPlayerUp(p);
+        world.player = p;
+        break;
+      }
+
       case 'enter_passenger_car': {
         const carData = target.data?.car || target.data;
         const door = target.data?.door;
@@ -6422,6 +6555,7 @@ export default function App() {
           item={activePhoneItem}
           player={playerRef.current}
           world={worldRef.current}
+          onSetGpsTarget={handleSetGpsTarget}
           onClose={() => setActivePhoneItem(null)}
         />
       )}

@@ -19,7 +19,11 @@ import {
   Key,
   Layers,
   Store,
-  Briefcase
+  Briefcase,
+  Bus,
+  Armchair,
+  LogOut,
+  UserCheck
 } from 'lucide-react';
 
 interface ContextInteractionHUDProps {
@@ -35,6 +39,16 @@ const getIconForType = (type: string) => {
       return <Car className="w-5 h-5 text-white" />;
     case 'exit_vehicle':
       return <ArrowRightLeft className="w-5 h-5 text-white" />;
+    case 'enter_bus_saloon':
+    case 'enter_passenger_car':
+      return <Bus className="w-5 h-5 text-white" />;
+    case 'exit_bus_saloon':
+    case 'exit_passenger_car':
+      return <LogOut className="w-5 h-5 text-white" />;
+    case 'sit_seat':
+      return <Armchair className="w-5 h-5 text-white" />;
+    case 'stand_up':
+      return <UserCheck className="w-5 h-5 text-white" />;
     case 'open_hood':
       return <Wrench className="w-5 h-5 text-white" />;
     case 'fuel_insert':

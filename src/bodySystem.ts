@@ -276,7 +276,7 @@ export function applyDriverVehicleCrashTrauma(
   if (vehicle) {
     const vType = vehicle.type;
     const isSuvOrPolice = ['suv', 'ambulance_suv', 'police', 'fire_rescue'].includes(vType);
-    const isHeavyTruck = ['truck_box', 'truck_dump', 'truck_semi', 'truck_tanker', 'truck_water', 'truck_flatbed', 'truck_covered', 'cement_mixer', 'fire_engine', 'fire_ladder', 'garbage_truck'].includes(vType);
+    const isHeavyTruck = ['truck_box', 'truck_dump', 'truck_zil_dump', 'truck_semi', 'truck_tanker', 'truck_water', 'truck_flatbed', 'truck_covered', 'cement_mixer', 'fire_engine', 'fire_ladder', 'garbage_truck'].includes(vType);
     const isSports = ['sports', 'muscle'].includes(vType);
     const isBus = vType === 'bus'|| vType === 'bus_minibus';
 

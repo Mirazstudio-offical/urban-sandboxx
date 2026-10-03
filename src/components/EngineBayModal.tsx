@@ -40,7 +40,7 @@ export const EngineBayModal: React.FC<EngineBayModalProps> = ({
     if (['sports', 'supercar', 'muscle', 'muscle_classic', 'coupe_gt', 'hatch_hot', 'moto_sport'].includes(type)) {
       return 'sports';
     }
-    if (['truck_box', 'truck_dump', 'truck_semi', 'truck_tanker', 'truck_water', 'truck_flatbed', 'truck_covered', 'cement_mixer', 'garbage_truck', 'pickup_heavy', 'pickup', 'bus', 'fire_engine', 'offroad_hardcore', 'truck_armored', 'truck_tow', 'tractor_mtz82', 'tractor_mtz80', 'tractor_mtz80_old'].includes(type)) {
+    if (['truck_box', 'truck_dump', 'truck_zil_dump', 'truck_semi', 'truck_tanker', 'truck_water', 'truck_flatbed', 'truck_covered', 'cement_mixer', 'garbage_truck', 'pickup_heavy', 'pickup', 'bus', 'fire_engine', 'offroad_hardcore', 'truck_armored', 'truck_tow', 'tractor_mtz82', 'tractor_mtz80', 'tractor_mtz80_old'].includes(type)) {
       return 'heavy';
     }
     if (['suv_luxury', 'crossover_compact', 'sedan_luxury', 'sedan_compact', 'sedan_polo', 'sedan_accent', 'sedan_logan', 'wagon_modern', 'wagon_allroad', 'ambulance_suv', 'van_camper', 'bus_minibus'].includes(type)) {

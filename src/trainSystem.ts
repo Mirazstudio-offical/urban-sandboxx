@@ -1,6 +1,6 @@
 import { GameWorld, RollingStockCar, RailwaySignal, TrainSchedule, Vehicle, Player, FluidStain } from './types';
 import { sound } from './audio';
-import { applyVehicleDamageAndDeformation } from './physics';
+import { applyVehicleDamageAndDeformation, getAtmosphereState } from './physics';
 import { applyDriverVehicleCrashTrauma, distributeImpactDamage } from './bodySystem';
 
 export interface TrainConsist {
@@ -1100,18 +1100,34 @@ export class TrainSystem {
           const exhaustOffset = headCar.type.includes('chme3') ? 10 : 25;
           const exX = headCar.x - consist.direction * exhaustOffset;
           const exY = headCar.y - 2;
-          if (Math.random() < (headCar.throttle > 0.8 ? 0.65 : 0.25)) {
+          const atmo = getAtmosphereState(world);
+          const isCold = atmo.isCold;
+          const spawnChance = (headCar.throttle > 0.8 ? 0.70 : 0.28) * (isCold ? 1.35 : 1.0);
+          if (Math.random() < spawnChance) {
+            const smokeColor = isCold
+              ? (atmo.outsideTemp < 3 ? '#f8fafc' : '#cbd5e1')
+              : (headCar.throttle > 0.8 ? 'rgba(30, 34, 42, 0.55)' : 'rgba(75, 85, 99, 0.35)');
+            const initAlpha = isCold ? (0.75 + atmo.condensationFactor * 0.20) : (0.50 + headCar.throttle * 0.15);
+            const initRadius = (4 + Math.random() * 5) * (1.0 + atmo.condensationFactor * 0.65);
+            const maxLife = (1.2 + Math.random() * 0.8) * (isCold ? 1.45 : 0.9);
+
             world.particles.push({
               x: exX + (Math.random() - 0.5) * 6,
               y: exY + (Math.random() - 0.5) * 6,
-              vx: -consist.direction * (consist.speed * 0.15 + Math.random() * 10) + (Math.random() - 0.5) * 5,
-              vy: -15 - Math.random() * 15,
-              radius: 4 + Math.random() * 5,
-              color: headCar.throttle > 0.8 ? 'rgba(30, 34, 42, 0.45)' : 'rgba(75, 85, 99, 0.3)',
-              alpha: 0.55,
+              vx: -consist.direction * (consist.speed * 0.15 + Math.random() * 10) + atmo.wind.vx * 0.22,
+              vy: -15 - Math.random() * 15 + atmo.wind.vy * 0.22,
+              radius: initRadius,
+              color: smokeColor,
+              alpha: initAlpha,
+              initialAlpha: initAlpha,
               life: 0,
-              maxLife: 1.2 + Math.random() * 0.8,
-              type: 'exhaust'
+              maxLife: maxLife,
+              type: 'exhaust',
+              underVehicle: false,
+              isSteam: isCold,
+              tempC: 135,
+              buoyancy: 24,
+              expansionRate: 11
             });
           }
         } else if (isElectric) {

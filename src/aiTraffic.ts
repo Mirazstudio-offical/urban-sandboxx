@@ -2426,6 +2426,13 @@ export function updateAITraffic(
       }
     }
 
+    // Update turn signal timer
+    if (car.turnSignal !== 'none') {
+      car.turnSignalTimer = (car.turnSignalTimer || 0) + dt;
+    } else {
+      car.turnSignalTimer = 0;
+    }
+
     // --- POST-COLLISION UNCONTROLLED SPINOUT & BALLISTIC SLIDE ---
     if (car.spinoutTimer && car.spinoutTimer > 0) {
       car.turnSignal = 'hazard';
@@ -4525,14 +4532,14 @@ export function updatePedestrians(
     }
 
     // Keep AI pedestrians off the private gas station fueling lot
-    if (ped.x >= 4920 && ped.x <= 5480 && ped.y >= 4890 && ped.y <= 5490 && !(ped as any).isPlayerControlled && !(ped as any).isFirefighter) {
+    if (ped.x >= 4920 && ped.x <= 5480 && ped.y >= 4890 && ped.y <= 5490 && !(ped as any).isPlayerControlled && !(ped as any).isFirefighter && !(ped as any).isTaxiPassenger) {
       pedsToDespawn.add(ped.id);
       continue;
     }
 
     // CULLING: Despawn pedestrians outside the player's active field of view!
     const distToPlayer = Math.hypot(ped.x - targetPos.x, ped.y - targetPos.y);
-    if (distToPlayer > 1300 && !(ped as any).isFirefighter && !(ped as any).isPlayerControlled) {
+    if (distToPlayer > 1300 && !(ped as any).isFirefighter && !(ped as any).isPlayerControlled && !(ped as any).isTaxiPassenger) {
       pedsToDespawn.add(ped.id);
       continue;
     }
@@ -6024,7 +6031,7 @@ export function spawnNewCarNearPlayer(playerPos: Vector2D, world: GameWorld): bo
     'police', 'fire_engine', 'fire_ladder', 'ambulance',
     // Commercial & Heavy trucks
     'delivery_truck', 'truck_tow', 'truck_armored',
-    'truck_box', 'truck_dump', 'truck_semi', 'truck_tanker', 'truck_water', 'truck_flatbed', 'truck_covered', 'cement_mixer', 'garbage_truck',
+    'truck_box', 'truck_dump', 'truck_zil_dump', 'truck_semi', 'truck_tanker', 'truck_water', 'truck_flatbed', 'truck_covered', 'cement_mixer', 'garbage_truck',
     // Agricultural Tractors
     'tractor_mtz82', 'tractor_mtz80', 'tractor_mtz80_old',
     // Motorcycles & Mopeds
@@ -6043,6 +6050,7 @@ export function spawnNewCarNearPlayer(playerPos: Vector2D, world: GameWorld): bo
   else if (cType === 'muscle'|| cType === 'muscle_classic') color = '#991b1b';
   else if (cType === 'garbage_truck') color = '#16a34a';
   else if (cType === 'truck_dump') color = '#d97706';
+  else if (cType === 'truck_zil_dump') color = '#0284c7';
   else if (cType === 'cement_mixer') color = '#2563eb';
   else if (cType === 'truck_box') color = '#0284c7';
   else if (cType === 'truck_water') color = '#0284c7';
@@ -6070,6 +6078,7 @@ export function spawnNewCarNearPlayer(playerPos: Vector2D, world: GameWorld): bo
                       cType === 'ambulance_suv'|| cType === 'fire_engine'|| cType === 'fire_ladder'|| 
                       cType === 'fire_rescue';
   let roofColor = isEmergency ? '#f8fafc': color;
+  if (cType === 'truck_zil_dump') roofColor = '#f8fafc';
   if (cType === 'suv_classic_box') roofColor = '#ffffff';
   if (cType === 'classic_compact') roofColor = '#f1f5f9';
   if (cType === 'wagon_allroad') roofColor = '#0f172a';
@@ -6102,6 +6111,7 @@ export function spawnNewCarNearPlayer(playerPos: Vector2D, world: GameWorld): bo
         wheelBase: cfg.wheelBase,
         color,
         roofColor,
+        dumpColor: cType === 'truck_zil_dump' ? (cfg.dumpColor || '#d97706') : undefined,
         headlightsOn: true,
         headlightMode: 'low',
         brakeLightsOn: false,

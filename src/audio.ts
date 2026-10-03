@@ -519,26 +519,115 @@ class SoundEngine {
     } catch {}
   }
 
-  // --- TURN SIGNAL RELAY TICK ---
-  public playTurnSignalTick(isTick: boolean) {
+  // --- TURN SIGNAL RELAY TICKS & ACOUSTIC CHIMES ---
+  public playTurnSignalTick(
+    isTick: boolean,
+    soundType: 'bimetal_relay' | 'bcm_relay' | 'electronic_click' | 'luxury_acoustic' = 'bcm_relay',
+    isHyperflash: boolean = false
+  ) {
     if (!this.ctx || this.isMuted) return;
     try {
       const now = this.ctx.currentTime;
-      const osc = this.ctx.createOscillator();
-      const gain = this.ctx.createGain();
+      const pitchMult = isHyperflash ? 1.25 : 1.0;
 
-      osc.type = 'triangle';
-      osc.frequency.setValueAtTime(isTick ? 1250 : 920, now);
-      osc.frequency.exponentialRampToValueAtTime(isTick ? 600 : 450, now + 0.025);
+      if (soundType === 'bimetal_relay') {
+        // Classic mechanical bi-metallic / thermal relay (VAZ, MTZ, vintage cars)
+        // Deep click with subtle metallic housing resonance
+        const osc = this.ctx.createOscillator();
+        const osc2 = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        const filter = this.ctx.createBiquadFilter();
 
-      gain.gain.setValueAtTime(0.06, now);
-      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.028);
+        osc.type = 'triangle';
+        osc2.type = 'sine';
 
-      osc.connect(gain);
-      gain.connect(this.ctx.destination);
+        const baseFreq = (isTick ? 720 : 540) * pitchMult;
+        osc.frequency.setValueAtTime(baseFreq, now);
+        osc.frequency.exponentialRampToValueAtTime(baseFreq * 0.45, now + 0.035);
 
-      osc.start(now);
-      osc.stop(now + 0.03);
+        osc2.frequency.setValueAtTime(baseFreq * 1.85, now);
+        osc2.frequency.exponentialRampToValueAtTime(baseFreq * 0.9, now + 0.02);
+
+        filter.type = 'bandpass';
+        filter.frequency.setValueAtTime(1100 * pitchMult, now);
+        filter.Q.setValueAtTime(2.2, now);
+
+        gain.gain.setValueAtTime(0.075, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.038);
+
+        osc.connect(filter);
+        osc2.connect(filter);
+        filter.connect(gain);
+        gain.connect(this.ctx.destination);
+
+        osc.start(now);
+        osc2.start(now);
+        osc.stop(now + 0.04);
+        osc2.stop(now + 0.04);
+
+      } else if (soundType === 'luxury_acoustic') {
+        // Modern premium luxury (Audi / Lexus / Mercedes / Range Rover)
+        // Damped soft acoustic tap with warm, high-end tactile feel
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        const filter = this.ctx.createBiquadFilter();
+
+        osc.type = 'sine';
+        const baseFreq = (isTick ? 1450 : 1180) * pitchMult;
+        osc.frequency.setValueAtTime(baseFreq, now);
+        osc.frequency.exponentialRampToValueAtTime(baseFreq * 0.6, now + 0.022);
+
+        filter.type = 'lowpass';
+        filter.frequency.setValueAtTime(1900 * pitchMult, now);
+
+        gain.gain.setValueAtTime(0.048, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.026);
+
+        osc.connect(filter);
+        filter.connect(gain);
+        gain.connect(this.ctx.destination);
+
+        osc.start(now);
+        osc.stop(now + 0.028);
+
+      } else if (soundType === 'electronic_click') {
+        // Crisp digital / piezo pulse (Sports cars, modern crossovers)
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+
+        osc.type = 'square';
+        const baseFreq = (isTick ? 2100 : 1650) * pitchMult;
+        osc.frequency.setValueAtTime(baseFreq, now);
+        osc.frequency.exponentialRampToValueAtTime(baseFreq * 0.4, now + 0.018);
+
+        gain.gain.setValueAtTime(0.035, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.020);
+
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+
+        osc.start(now);
+        osc.stop(now + 0.022);
+
+      } else {
+        // Standard Modern BCM electromechanical relay
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+
+        osc.type = 'triangle';
+        const baseFreq = (isTick ? 1320 : 960) * pitchMult;
+        osc.frequency.setValueAtTime(baseFreq, now);
+        osc.frequency.exponentialRampToValueAtTime(baseFreq * 0.5, now + 0.026);
+
+        gain.gain.setValueAtTime(0.065, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.029);
+
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+
+        osc.start(now);
+        osc.stop(now + 0.032);
+      }
     } catch {}
   }
 

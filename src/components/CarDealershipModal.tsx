@@ -1008,6 +1008,7 @@ export function generateUsedCars(count: number = 15): UsedCarModel[] {
     { type: 'tractor_mtz82', name: 'Трактор МТЗ-82.1 «Беларус»', basePrice: 380000 },
     { type: 'truck_flatbed', name: 'ГАЗ-53 Бортовой', basePrice: 150000 },
     { type: 'truck_covered', name: 'ГАЗ-53 Крытый (Шифер)', basePrice: 165000 },
+    { type: 'truck_zil_dump', name: 'ЗИЛ-130 Самосвал (ММЗ-555)', basePrice: 195000 },
     { type: 'truck_dump', name: 'КАМАЗ-5511 Самосвал', basePrice: 420000 },
     { type: 'sports', name: 'Спорткар GT (Убитый)', basePrice: 950000 },
     { type: 'sedan_luxury', name: 'Премиум Бизнес-Седан (Проблемный)', basePrice: 1200000 }

@@ -17,7 +17,15 @@ import {
   ParkingSpot,
   Particle
 } from './types';
-import { CAR_CONFIGS, canVehicleHaveHitch, PX_S_TO_SPEED_KMH, hasRoadTrainLights, isRoadMachinery } from './vehicleHelpers';
+import { 
+  CAR_CONFIGS, 
+  canVehicleHaveHitch, 
+  PX_S_TO_SPEED_KMH, 
+  hasRoadTrainLights, 
+  isRoadMachinery,
+  getVehicleTurnSignalDynamicState,
+  getVehicleTurnSignalConfig
+} from './vehicleHelpers';
 import { trafficDiagnostics } from './aiTraffic';
 import {
   renderSpecializedVehicleAttachments,
@@ -576,15 +584,15 @@ export class GameRenderer {
     // 12. Pedestrians (with Umbrellas during Rain)
     this.renderPedestrians(visiblePedestrians, world);
 
-    // 13. Player on Foot (if not inside vehicle and not inside train carriage)
-    if (!player.isInVehicle && !player.insideCarId) {
+    // 13. Player on Foot (if not inside vehicle and not inside train carriage or bus saloon)
+    if (!player.isInVehicle && !player.insideCarId && !player.insideBusId) {
       this.renderPlayerPedestrian(player);
     }
 
     // 13b. Remote Players on Foot
     if (remotePlayers && remotePlayers.length > 0) {
       for (const rp of remotePlayers) {
-        if (!rp.isInVehicle && !(rp as any).insideCarId) {
+        if (!rp.isInVehicle && !(rp as any).insideCarId && !(rp as any).insideBusId) {
           this.renderPlayerPedestrian(rp as unknown as Player, true);
         }
       }
@@ -594,7 +602,12 @@ export class GameRenderer {
     this.renderUnderVehicleParticles(world.particles, world.cleanMode);
 
     // 14. Vehicles (Cars with dynamic wheels, lights & wipers)
-    this.renderVehicles(visibleVehicles, nightAlpha, camera.gridMode);
+    this.renderVehicles(visibleVehicles, nightAlpha, camera.gridMode, player);
+
+    // 14-bus-player. Render Player inside bus saloon on top of bus interior floor & seats
+    if (player.insideBusId) {
+      this.renderPlayerPedestrian(player);
+    }
 
     // 14-rail. Railway Rolling Stock (Locomotives, passenger coaches, freight cars)
     RailwayRenderer.renderRollingStock(this.ctx, world, minX, minY, maxX, maxY, nightAlpha, player);
@@ -634,7 +647,7 @@ export class GameRenderer {
     const effectiveAlpha = Math.max(nightAlpha, isRaining ? 0.35 * weatherTransition : 0, isFog ? 0.45 * weatherTransition : 0);
 
     // 15b. Render Vehicle Cabins, Roofs, and Roof attachments (drawn ON TOP of lightmap to avoid headlight bleed)
-    this.renderVehicleCabins(visibleVehicles, effectiveAlpha, camera.gridMode);
+    this.renderVehicleCabins(visibleVehicles, effectiveAlpha, camera.gridMode, player);
 
     // 16. Building Roofs, Canopies, Balconies & Fire Escapes
     this.renderBuildingRoofsAndCanopies(visibleBuildings, nightAlpha, player, world);
@@ -7278,46 +7291,89 @@ export class GameRenderer {
       if (player.equippedClothing.hands?.outerwear) cHands = player.equippedClothing.hands.outerwear.clothingStats?.color || cHands;
     }
 
-    const legSwing = Math.sin(player.walkCycle) * 3.2;
+    const isSeated = !!(player as any).sittingState;
+    const legSwing = isSeated ? 0 : Math.sin(player.walkCycle) * 3.2;
+    const armSwing = isSeated ? 0 : Math.sin(player.walkCycle) * 2.8;
 
-    // Legs / Pants
-    ctx.fillStyle = cPants;
-    ctx.beginPath();
-    ctx.arc(legSwing, -1.8, 2.2, 0, Math.PI * 2);
-    ctx.arc(-legSwing, 1.8, 2.2, 0, Math.PI * 2);
-    ctx.fill();
+    if (isSeated) {
+      // Seated posture: thighs forward, knees bent, feet resting
+      ctx.fillStyle = cPants;
+      ctx.beginPath();
+      // Bent thighs extending forward
+      ctx.fillRect(-1.5, -3.2, 5.5, 2.4);
+      ctx.fillRect(-1.5, 0.8, 5.5, 2.4);
+      ctx.fill();
 
-    // Shoes
-    ctx.fillStyle = cShoes;
-    ctx.fillRect(-1.5 + legSwing, -3.5, 3, 3.2);
-    ctx.fillRect(-1.5 - legSwing, 0.5, 3, 3.2);
+      // Shoes at knees/feet
+      ctx.fillStyle = cShoes;
+      ctx.fillRect(3.2, -3.2, 2.8, 2.4);
+      ctx.fillRect(3.2, 0.8, 2.8, 2.4);
 
-    // Torso
-    ctx.fillStyle = cShirt;
-    ctx.beginPath();
-    ctx.ellipse(0, 0, 4.5, 6.0, 0, 0, Math.PI * 2);
-    ctx.fill();
+      // Torso comfortably leaning
+      ctx.fillStyle = cShirt;
+      ctx.beginPath();
+      ctx.ellipse(-1.0, 0, 4.2, 5.6, 0, 0, Math.PI * 2);
+      ctx.fill();
 
-    // Backpack
-    if (cBack) {
-      ctx.fillStyle = cBack;
-      ctx.fillRect(-4.5, -3, 3.5, 6);
+      // Backpack resting against seat back
+      if (cBack) {
+        ctx.fillStyle = cBack;
+        ctx.fillRect(-5.5, -2.8, 3.2, 5.6);
+      }
+
+      // Arms resting on thighs / armrests
+      ctx.fillStyle = cShirt;
+      ctx.beginPath();
+      ctx.arc(1.5, -4.5, 1.6, 0, Math.PI * 2);
+      ctx.arc(1.5, 4.5, 1.6, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Hands resting on knees
+      ctx.fillStyle = cHands;
+      ctx.beginPath();
+      ctx.arc(3.5, -4.2, 1.2, 0, Math.PI * 2);
+      ctx.arc(3.5, 4.2, 1.2, 0, Math.PI * 2);
+      ctx.fill();
+    } else {
+      // Standard Standing / Walking posture
+      // Legs / Pants
+      ctx.fillStyle = cPants;
+      ctx.beginPath();
+      ctx.arc(legSwing, -1.8, 2.2, 0, Math.PI * 2);
+      ctx.arc(-legSwing, 1.8, 2.2, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Shoes
+      ctx.fillStyle = cShoes;
+      ctx.fillRect(-1.5 + legSwing, -3.5, 3, 3.2);
+      ctx.fillRect(-1.5 - legSwing, 0.5, 3, 3.2);
+
+      // Torso
+      ctx.fillStyle = cShirt;
+      ctx.beginPath();
+      ctx.ellipse(0, 0, 4.5, 6.0, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Backpack
+      if (cBack) {
+        ctx.fillStyle = cBack;
+        ctx.fillRect(-4.5, -3, 3.5, 6);
+      }
+
+      // Arms swinging with walk cycle
+      ctx.fillStyle = cShirt;
+      ctx.beginPath();
+      ctx.arc(armSwing, -5.2, 1.8, 0, Math.PI * 2);
+      ctx.arc(-armSwing, 5.2, 1.8, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Hands
+      ctx.fillStyle = cHands;
+      ctx.beginPath();
+      ctx.arc(armSwing + 1, -5.2, 1.2, 0, Math.PI * 2);
+      ctx.arc(-armSwing + 1, 5.2, 1.2, 0, Math.PI * 2);
+      ctx.fill();
     }
-
-    // Arms swinging with walk cycle
-    const armSwing = Math.sin(player.walkCycle) * 2.8;
-    ctx.fillStyle = cShirt;
-    ctx.beginPath();
-    ctx.arc(armSwing, -5.2, 1.8, 0, Math.PI * 2);
-    ctx.arc(-armSwing, 5.2, 1.8, 0, Math.PI * 2);
-    ctx.fill();
-
-    // Hands
-    ctx.fillStyle = cHands;
-    ctx.beginPath();
-    ctx.arc(armSwing + 1, -5.2, 1.2, 0, Math.PI * 2);
-    ctx.arc(-armSwing + 1, 5.2, 1.2, 0, Math.PI * 2);
-    ctx.fill();
 
     // Render items held in hands
     if (player.leftHandItem) {
@@ -7877,7 +7933,7 @@ export class GameRenderer {
   }
 
   // --- VEHICLES ---
-  private renderVehicles(vehicles: Vehicle[], nightAlpha: number, gridMode?: boolean) {
+  private renderVehicles(vehicles: Vehicle[], nightAlpha: number, gridMode?: boolean, player?: Player) {
     const ctx = this.ctx;
 
     // Sort vehicles so towing vehicles (tractors) are rendered BEFORE their trailers,
@@ -7893,6 +7949,9 @@ export class GameRenderer {
     });
 
     for (const car of sortedVehicles) {
+      if (player) {
+        car.isPlayerInsideSaloon = !!(player.insideBusId === car.id || (player.sittingState?.type === 'bus_seat' && player.sittingState?.targetId === car.id));
+      }
       ctx.save();
       if (car.ghostingAlpha !== undefined) {
         ctx.globalAlpha = car.ghostingAlpha;
@@ -8088,7 +8147,7 @@ export class GameRenderer {
                           car.type === 'truck_dump' || car.type === 'garbage_truck' ||
                           car.type === 'fire_ladder' || car.type === 'truck_water' ||
                           car.type === 'truck_semi';
-      const isHeavyTruck = isThreeAxle || car.type === 'truck_water' || car.type === 'fire_engine' || 
+      const isHeavyTruck = isThreeAxle || car.type === 'truck_zil_dump' || car.type === 'truck_water' || car.type === 'fire_engine' || 
                            car.type === 'fire_rescue' || car.type === 'bus' || car.type === 'truck_tow' || 
                            car.type === 'truck_armored' || car.type === 'delivery_truck' || car.type === 'pickup_heavy';
 
@@ -8588,11 +8647,34 @@ export class GameRenderer {
 
       // Now draw body shell with high-fidelity softbody spline contour (skip for road machinery and motorcycles which have dedicated multi-component architecture)
       if (!isRoadMachinery(car.type) && !isSoloMoto && !isUralSidecar) {
-        ctx.fillStyle = car.color;
-        ctx.beginPath();
-        traceSoftbodyPath(ctx, bodyPoly, dmg.deformedVertices);
-        ctx.closePath();
-        ctx.fill();
+        if (car.type === 'truck_zil_dump') {
+          const dumpCol = car.dumpColor || '#d97706';
+          ctx.save();
+          ctx.beginPath();
+          traceSoftbodyPath(ctx, bodyPoly, dmg.deformedVertices);
+          ctx.closePath();
+          ctx.clip();
+
+          // Dark chassis frame underbody
+          ctx.fillStyle = '#1e293b';
+          ctx.fillRect(-halfL - 2, -halfW - 2, halfL * 2 + 4, halfW * 2 + 4);
+
+          // Rear dump body base (Authentic Soviet MMZ-555 Ochre-Orange)
+          ctx.fillStyle = dumpCol;
+          ctx.fillRect(-halfL - 2, -halfW - 2, halfL * 1.1 + 4, halfW * 2 + 4);
+
+          // Front cabin & hood base (Soviet Sky-Blue)
+          ctx.fillStyle = car.color;
+          ctx.fillRect(halfL * 0.08, -halfW - 2, halfL, halfW * 2 + 4);
+
+          ctx.restore();
+        } else {
+          ctx.fillStyle = car.color;
+          ctx.beginPath();
+          traceSoftbodyPath(ctx, bodyPoly, dmg.deformedVertices);
+          ctx.closePath();
+          ctx.fill();
+        }
 
         // Soot charring & fire heat glow overlays
         const fireProg = dmg.fireProgress || (dmg.isFullyBurnt ? 1.0 : (dmg.cabinFire ? 0.65 : ((dmg.engineFire || dmg.fuelTankFire) ? 0.28 : (dmg.underHoodSmolder ? 0.08 : 0))));
@@ -8852,51 +8934,251 @@ export class GameRenderer {
         drawRedReflectorTriangle(-halfL + 2.2, halfW * 0.74);
       }
 
-      // 9. Turn Indicators (Amber blinking corners)
-      if (car.turnSignal !== 'none') {
-        const isBlinkOn = Math.floor(car.turnSignalTimer * 4) % 2 === 0;
-        if (isBlinkOn) {
-          ctx.fillStyle = '#f59e0b';
-          const isLeft = car.turnSignal === 'left' || car.turnSignal === 'hazard';
-          const isRight = car.turnSignal === 'right' || car.turnSignal === 'hazard';
+      // 9. Ultra-Realistic Turn Indicators (Amber Lamps, Filament Inertia, Dynamic Sequential LED "Змейка", Side Repeaters)
+      let effectiveTurnSignal = car.turnSignal;
+      let effectiveTurnSignalTimer = car.turnSignalTimer || 0;
 
-          const frontTurnX = isTractor ? (car.type === 'tractor_mtz80_old' ? 0.6 : (halfL * 0.10 + 0.6)) : leftLampX;
-          const frontTurnY = isTractor ? (halfW * 0.76 * 0.48) : Math.abs(leftLampY);
+      if (isTrailer) {
+        const towedVeh = vehicles.find(v => v.id === car.towedById || v.trailerId === car.id);
+        const isPlugConnected = car.type !== 'trailer_barrel' && (car.trailerPlugConnected !== false);
+        if (towedVeh && isPlugConnected) {
+          effectiveTurnSignal = towedVeh.turnSignal;
+          effectiveTurnSignalTimer = towedVeh.turnSignalTimer || 0;
+        } else {
+          effectiveTurnSignal = 'none';
+        }
+      }
 
+      if (effectiveTurnSignal !== 'none') {
+        const turnVehicleProxy = isTrailer 
+          ? ({ ...car, type: 'sedan_logan', turnSignal: effectiveTurnSignal, turnSignalTimer: effectiveTurnSignalTimer } as Vehicle)
+          : car;
+        const turnState = getVehicleTurnSignalDynamicState(turnVehicleProxy, effectiveTurnSignalTimer);
+
+        if (turnState.intensity > 0.01 || turnState.sweepProgress > 0) {
+          const isLeft = effectiveTurnSignal === 'left' || effectiveTurnSignal === 'hazard';
+          const isRight = effectiveTurnSignal === 'right' || effectiveTurnSignal === 'hazard';
+          const cfg = turnState.config;
+
+          const frontTurnX = isTractor 
+            ? (car.type === 'tractor_mtz80_old' ? 0.6 : (halfL * 0.10 + 0.6)) 
+            : (isSoloMoto ? (halfL - fc - 2.5) : leftLampX);
+          const frontTurnY = isTractor 
+            ? (halfW * 0.76 * 0.48) 
+            : (isSoloMoto ? 3.5 : Math.abs(leftLampY));
+
+          const { cabinX, cabinL } = getVehicleCabinDimensions(car, halfL, halfW, ld, rd);
+          const mirrorX = cabinX + cabinL * 0.28;
+          const mirrorY = halfW + 1.8;
+          const fenderX = frontAxleX + 3.2;
+          const fenderY = halfW + 0.3;
+
+          // Helper: Render Dynamic Sequential Sweeping LED Strip ("Светодиодная змейка")
+          const renderSequentialLedStrip = (
+            startX: number, startY: number,
+            endX: number, endY: number,
+            segments: number,
+            progress: number,
+            broken: boolean
+          ) => {
+            if (broken) return;
+            const dx = (endX - startX) / Math.max(1, segments - 1);
+            const dy = (endY - startY) / Math.max(1, segments - 1);
+
+            for (let s = 0; s < segments; s++) {
+              const segThreshold = (s + 0.5) / segments;
+              const isSegLit = progress >= segThreshold;
+              const px = startX + dx * s;
+              const py = startY + dy * s;
+
+              if (isSegLit) {
+                // Outer amber flare
+                ctx.fillStyle = 'rgba(245, 158, 11, 0.40)';
+                ctx.beginPath();
+                ctx.arc(px, py, 4.0, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Saturated amber LED crystal
+                ctx.fillStyle = '#f59e0b';
+                ctx.fillRect(px - 0.7, py - 0.7, 1.4, 1.4);
+
+                // High-intensity white-hot LED emitter core
+                ctx.fillStyle = '#fef08a';
+                ctx.fillRect(px - 0.35, py - 0.35, 0.7, 0.7);
+              } else {
+                // Inactive dark LED micro-lens
+                ctx.fillStyle = '#1e293b';
+                ctx.fillRect(px - 0.5, py - 0.5, 1.0, 1.0);
+              }
+            }
+          };
+
+          // Helper: Render Front Turn Signal Cluster
+          const renderFrontTurnSignal = (sideSign: number, broken: boolean) => {
+            if (broken) return;
+            const tx = frontTurnX;
+            const ty = frontTurnY * sideSign;
+
+            if (cfg.type === 'dynamic_sequential_led') {
+              // Front dynamic LED sweeping blade: sweeps from inner grille out towards fender
+              const innerX = tx - 1.2;
+              const innerY = (frontTurnY - 2.8) * sideSign;
+              const outerX = tx + 0.6;
+              const outerY = (frontTurnY + 1.0) * sideSign;
+              renderSequentialLedStrip(innerX, innerY, outerX, outerY, 7, turnState.sweepProgress, broken);
+
+            } else if (cfg.type === 'led_crisp') {
+              // Crisp 3-dot LED matrix
+              if (turnState.intensity > 0.5) {
+                ctx.fillStyle = 'rgba(245, 158, 11, 0.45)';
+                ctx.beginPath();
+                ctx.arc(tx, ty, 5.5, 0, Math.PI * 2);
+                ctx.fill();
+
+                for (let d = -1; d <= 1; d++) {
+                  const dx = tx + d * 0.9;
+                  const dy = ty + d * 0.9 * sideSign;
+                  ctx.fillStyle = '#f59e0b';
+                  ctx.fillRect(dx - 0.6, dy - 0.6, 1.2, 1.2);
+                  ctx.fillStyle = '#fef08a';
+                  ctx.fillRect(dx - 0.25, dy - 0.25, 0.5, 0.5);
+                }
+              }
+
+            } else {
+              // Incandescent / Halogen Bulb with filament thermal inertia glow
+              const curIntensity = turnState.intensity;
+              if (curIntensity > 0.05) {
+                // Volumetric ambient halo
+                const glowR = 3.5 + curIntensity * 4.5;
+                ctx.fillStyle = `rgba(245, 158, 11, ${0.45 * curIntensity})`;
+                ctx.beginPath();
+                ctx.arc(tx, ty, glowR, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Amber lamp glass
+                ctx.fillStyle = '#d97706';
+                ctx.fillRect(tx - 1.0, ty - 1.0, 2.0, 2.0);
+
+                // Heated tungsten filament core
+                ctx.fillStyle = `rgba(254, 240, 138, ${curIntensity})`;
+                ctx.fillRect(tx - 0.5, ty - 0.5, 1.0, 1.0);
+              }
+            }
+          };
+
+          // Helper: Render Rear Turn Signal Cluster
+          const renderRearTurnSignal = (sideSign: number, broken: boolean) => {
+            if (broken) return;
+            const rx = sideSign < 0 ? rearLeftX : rearRightX;
+            const ry = sideSign < 0 ? rearLeftY : rearRightY;
+
+            if (cfg.type === 'dynamic_sequential_led') {
+              // Rear dynamic LED sweeping arrow: sweeps from inner boot lid out towards quarter panel
+              const innerX = rx + 0.6;
+              const innerY = (Math.abs(ry) - 2.8) * sideSign;
+              const outerX = rx - 1.0;
+              const outerY = (Math.abs(ry) + 1.0) * sideSign;
+              renderSequentialLedStrip(innerX, innerY, outerX, outerY, 7, turnState.sweepProgress, broken);
+
+            } else if (cfg.type === 'led_crisp') {
+              if (turnState.intensity > 0.5) {
+                ctx.fillStyle = 'rgba(245, 158, 11, 0.48)';
+                ctx.beginPath();
+                ctx.arc(rx, ry, 6.0, 0, Math.PI * 2);
+                ctx.fill();
+
+                for (let d = -1; d <= 1; d++) {
+                  ctx.fillStyle = '#f59e0b';
+                  ctx.fillRect(rx - 0.6, ry + d * 1.0 - 0.6, 1.2, 1.2);
+                  ctx.fillStyle = '#fef08a';
+                  ctx.fillRect(rx - 0.25, ry + d * 1.0 - 0.25, 0.5, 0.5);
+                }
+              }
+
+            } else {
+              // Incandescent / Halogen Rear Cluster
+              const curIntensity = turnState.intensity;
+              if (curIntensity > 0.05) {
+                const glowR = 4.0 + curIntensity * 5.0;
+                ctx.fillStyle = `rgba(245, 158, 11, ${0.48 * curIntensity})`;
+                ctx.beginPath();
+                ctx.arc(rx, ry, glowR, 0, Math.PI * 2);
+                ctx.fill();
+
+                ctx.fillStyle = '#d97706';
+                ctx.fillRect(rx - 1.1, ry - 1.1, 2.2, 2.2);
+
+                ctx.fillStyle = `rgba(254, 240, 138, ${curIntensity})`;
+                ctx.fillRect(rx - 0.55, ry - 0.55, 1.1, 1.1);
+              }
+            }
+          };
+
+          // Helper: Render Side Repeaters (Mirror LED or Fender Bulb)
+          const renderSideRepeater = (sideSign: number) => {
+            if (cfg.hasSideMirrorRepeaters) {
+              const mx = mirrorX;
+              const my = mirrorY * sideSign;
+              if (cfg.repeaterStyle === 'mirror_led_dynamic') {
+                const startX = mx - 1.0;
+                const startY = (halfW + 0.8) * sideSign;
+                const endX = mx + 1.2;
+                const endY = (halfW + 2.6) * sideSign;
+                renderSequentialLedStrip(startX, startY, endX, endY, 4, turnState.sweepProgress, false);
+              } else if (turnState.intensity > 0.5) {
+                ctx.fillStyle = 'rgba(245, 158, 11, 0.50)';
+                ctx.beginPath();
+                ctx.arc(mx, my, 3.2, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.fillStyle = '#f59e0b';
+                ctx.fillRect(mx - 0.6, my - 1.2, 1.2, 2.4);
+                ctx.fillStyle = '#fef08a';
+                ctx.fillRect(mx - 0.3, my - 0.6, 0.6, 1.2);
+              }
+            } else if (cfg.hasFenderRepeaters) {
+              const curIntensity = turnState.intensity;
+              if (curIntensity > 0.05) {
+                const fx = fenderX;
+                const fy = fenderY * sideSign;
+                ctx.fillStyle = `rgba(245, 158, 11, ${0.40 * curIntensity})`;
+                ctx.beginPath();
+                ctx.arc(fx, fy, 2.8, 0, Math.PI * 2);
+                ctx.fill();
+
+                if (cfg.repeaterStyle === 'fender_round') {
+                  ctx.fillStyle = '#f59e0b';
+                  ctx.beginPath();
+                  ctx.arc(fx, fy, 1.0, 0, Math.PI * 2);
+                  ctx.fill();
+                } else {
+                  ctx.fillStyle = '#f59e0b';
+                  ctx.fillRect(fx - 0.8, fy - 0.5, 1.6, 1.0);
+                }
+              }
+            }
+          };
+
+          // Draw Left Side
           if (isLeft) {
             if (!isTrailer) {
-              ctx.fillRect(frontTurnX - 1, -frontTurnY - 1.5, 1.8, 1.8);
+              renderFrontTurnSignal(-1, !!dmg.leftHeadlightBroken);
+              renderSideRepeater(-1);
             }
             if (car.type !== 'trailer_barrel') {
-              ctx.fillRect(rearLeftX - 1, rearLeftY - 2.5, 1.8, 1.8);
+              renderRearTurnSignal(-1, !!dmg.leftTaillightBroken);
             }
-            ctx.fillStyle = 'rgba(245, 158, 11, 0.45)';
-            ctx.beginPath();
-            if (!isTrailer) {
-              ctx.arc(frontTurnX, -frontTurnY - 0.6, 5, 0, Math.PI * 2);
-            }
-            if (car.type !== 'trailer_barrel') {
-              ctx.arc(rearLeftX, rearLeftY - 1.5, 6, 0, Math.PI * 2);
-            }
-            ctx.fill();
           }
+
+          // Draw Right Side
           if (isRight) {
-            ctx.fillStyle = '#f59e0b';
             if (!isTrailer) {
-              ctx.fillRect(frontTurnX - 1, frontTurnY - 0.3, 1.8, 1.8);
+              renderFrontTurnSignal(1, !!dmg.rightHeadlightBroken);
+              renderSideRepeater(1);
             }
             if (car.type !== 'trailer_barrel') {
-              ctx.fillRect(rearRightX - 1, rearRightY + 0.8, 1.8, 1.8);
+              renderRearTurnSignal(1, !!dmg.rightTaillightBroken);
             }
-            ctx.fillStyle = 'rgba(245, 158, 11, 0.45)';
-            ctx.beginPath();
-            if (!isTrailer) {
-              ctx.arc(frontTurnX, frontTurnY + 0.6, 5, 0, Math.PI * 2);
-            }
-            if (car.type !== 'trailer_barrel') {
-              ctx.arc(rearRightX, rearRightY + 1.5, 6, 0, Math.PI * 2);
-            }
-            ctx.fill();
           }
         }
       }
@@ -9369,10 +9651,13 @@ export class GameRenderer {
   }
 
   // --- VEHICLE CABINS, ROOFS & ROOF ATTACHMENTS (Drawn on top of lightmap) ---
-  private renderVehicleCabins(vehicles: Vehicle[], nightAlpha: number, gridMode?: boolean) {
+  private renderVehicleCabins(vehicles: Vehicle[], nightAlpha: number, gridMode?: boolean, player?: Player) {
     const ctx = this.ctx;
 
     for (const car of vehicles) {
+      if (player) {
+        car.isPlayerInsideSaloon = !!(player.insideBusId === car.id || (player.sittingState?.type === 'bus_seat' && player.sittingState?.targetId === car.id));
+      }
       ctx.save();
       if (car.ghostingAlpha !== undefined) {
         ctx.globalAlpha = car.ghostingAlpha;
@@ -9679,7 +9964,7 @@ export class GameRenderer {
         let zMultiplier = 1.0;
         if (car.type === 'bus' || car.type === 'bus_minibus') zMultiplier = 1.8;
         else if (car.type === 'fire_engine' || car.type === 'fire_ladder' || car.type === 'fire_rescue') zMultiplier = 1.7;
-        else if (car.type === 'truck_box' || car.type === 'truck_dump' || car.type === 'truck_semi' || car.type === 'truck_tanker' || car.type === 'truck_flatbed' || car.type === 'truck_covered') zMultiplier = 1.6;
+        else if (car.type === 'truck_box' || car.type === 'truck_dump' || car.type === 'truck_zil_dump' || car.type === 'truck_semi' || car.type === 'truck_tanker' || car.type === 'truck_flatbed' || car.type === 'truck_covered') zMultiplier = 1.6;
         else if (car.type === 'suv' || car.type === 'suv_luxury' || car.type === 'suv_classic_box' || car.type === 'ambulance' || car.type === 'ambulance_van') zMultiplier = 1.4;
         else if (car.type === 'supercar' || car.type === 'sports') zMultiplier = 0.75;
 
@@ -9946,11 +10231,7 @@ export class GameRenderer {
         // Mud clod in airborne 3D ballistic trajectory with contact shadow
         this.drawMudClodParticle(p);
       } else if (p.type === 'tire_smoke' && !p.underVehicle) {
-        ctx.globalAlpha = Math.max(0, Math.min(1.0, p.alpha));
-        ctx.fillStyle = p.color;
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
-        ctx.fill();
+        this.drawGasSmokeParticle(p);
       } else if (p.type === 'water_spray') {
         ctx.globalAlpha = Math.max(0, Math.min(1.0, p.alpha));
         ctx.fillStyle = p.color;
@@ -11775,8 +12056,9 @@ export class GameRenderer {
       ctx.fillStyle = isStorm ? 'rgba(10, 15, 30, 0.28)' : 'rgba(15, 23, 42, 0.14)';
       ctx.fillRect(minX, minY, viewW, viewH);
 
-      // Wind gust calculation
-      const windAngle = isStorm ? (0.24 + Math.sin(timeSec * 2.8) * 0.09) : 0.12;
+      // Unified atmospheric wind vector
+      const windAngle = world.wind ? (Math.sin(world.wind.angle) * 0.35 + (isStorm ? 0.15 : 0)) : (isStorm ? (0.24 + Math.sin(timeSec * 2.8) * 0.09) : 0.12);
+      const mistSpeed = world.wind ? (world.wind.vx * 0.75) : (isStorm ? 120 : 60);
 
       // --- A. Ground Impact Splashes & Puddle Ripples ---
       // In a top-down game, impact ripples on the asphalt and ground define the rain!
@@ -11840,7 +12122,7 @@ export class GameRenderer {
       // Fine vapor drifting across the streets during rain
       ctx.fillStyle = isStorm ? 'rgba(224, 242, 254, 0.055)' : 'rgba(224, 242, 254, 0.03)';
       for (let m = 0; m < 3; m++) {
-        const mistOffset = (timeSec * (isStorm ? 120 : 60) + m * 400) % (viewW + 600) - 300;
+        const mistOffset = (timeSec * mistSpeed + m * 400) % (viewW + 600) - 300;
         const mistY = minY + ((m + 0.5) / 3) * viewH + Math.sin(timeSec * 0.8 + m) * 40;
         ctx.beginPath();
         safeEllipse(ctx, minX + mistOffset, mistY, viewW * 0.6, 60, windAngle * 0.3, 0, Math.PI * 2);
@@ -11858,10 +12140,11 @@ export class GameRenderer {
 
       // Layer 1: Soft rolling ground mist banks
       const fogClusters = 8;
+      const baseFogDrift = world.wind ? (world.wind.vx * 0.40) : 18;
       for (let f = 0; f < fogClusters; f++) {
         const seedX = ((f * 37.19) % 1);
         const seedY = ((f * 73.82) % 1);
-        const driftSpeed = 18 + (f % 3) * 8;
+        const driftSpeed = baseFogDrift + (f % 3) * 6;
         
         const fcx = minX + ((seedX * viewW + timeSec * driftSpeed) % (viewW + 400)) - 200;
         const fcy = minY + ((seedY * viewH + Math.sin(timeSec * 0.4 + f) * 60) % viewH);

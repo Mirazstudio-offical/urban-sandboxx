@@ -7,6 +7,9 @@ import {
   FluidStorageTank,
   StoredLiquidType,
   FluidStainType,
+  TurnSignalType,
+  TurnSignalSoundType,
+  VehicleTurnSignalConfig,
   Vector2D, 
   Vehicle,
   VehicleDamage,
@@ -72,13 +75,13 @@ export function createDefaultEngineState(
     'hatch_samara', 'sedan_samara',
     'hatch_hot', 'micro_car', 'classic_compact', 'retro_bubble', 'offroad_hardcore',
     'suv_classic_box', 'muscle_classic', 'van_camper', 'van_cargo_old', 'truck_tow',
-    'delivery_truck', 'truck_box', 'truck_dump', 'truck_semi', 'truck_tanker', 'truck_water',
+    'delivery_truck', 'truck_box', 'truck_dump', 'truck_zil_dump', 'truck_semi', 'truck_tanker', 'truck_water',
     'truck_flatbed', 'truck_covered', 'cement_mixer', 'garbage_truck', 'bus',
     'tractor_mtz82', 'tractor_mtz80', 'tractor_mtz80_old',
     'moto_izh_jupiter', 'moto_ural_sidecar', 'moto_jawa350', 'moto_sport', 'moto_chopper', 'moped_soviet'
   ].includes(type);
   const transmissionType: 'MANUAL' | 'AUTO' = configTransmission || (isManual ? 'MANUAL' : 'AUTO');
-  const hasTransferCase = type.startsWith('tractor_') || ['truck_box', 'truck_dump', 'truck_semi', 'truck_tanker', 'truck_water', 'truck_flatbed', 'truck_covered', 'cement_mixer', 'garbage_truck', 'truck_armored', 'fire_engine', 'fire_ladder'].includes(type);
+  const hasTransferCase = type.startsWith('tractor_') || ['truck_box', 'truck_dump', 'truck_zil_dump', 'truck_semi', 'truck_tanker', 'truck_water', 'truck_flatbed', 'truck_covered', 'cement_mixer', 'garbage_truck', 'truck_armored', 'fire_engine', 'fire_ladder'].includes(type);
 
   return {
     radiatorWater,
@@ -103,7 +106,7 @@ export function createDefaultEngineState(
     gearRatios: (function() {
       if (['paver_asphalt_wheeled', 'roller_heavy_tandem', 'roller_compact_sidewalk', 'roller_pneumatic'].includes(type)) {
         return [-3.6, 0, 5.2, 2.0]; // Hydrostatic 2-Range (R: Реверс, N: Нейтраль, 1: Рабочий режим 0-5 км/ч, 2: Транспортный 0-14 км/ч)
-      } else if (['truck_box', 'truck_dump', 'truck_semi', 'truck_tanker', 'truck_water', 'truck_flatbed', 'truck_covered', 'cement_mixer', 'garbage_truck', 'bus', 'delivery_truck', 'truck_tow', 'fire_engine', 'fire_ladder', 'fire_rescue', 'pickup_heavy', 'truck_armored'].includes(type)) {
+      } else if (['truck_box', 'truck_dump', 'truck_zil_dump', 'truck_semi', 'truck_tanker', 'truck_water', 'truck_flatbed', 'truck_covered', 'cement_mixer', 'garbage_truck', 'bus', 'delivery_truck', 'truck_tow', 'fire_engine', 'fire_ladder', 'fire_rescue', 'pickup_heavy', 'truck_armored'].includes(type)) {
         return [-4.5, 0, 4.8, 3.1, 2.0, 1.42, 1.00, 0.75]; // Heavy 6-speed commercial
       } else if (type.startsWith('tractor_')) {
         return [-4.5, 0, 5.5, 4.3, 3.3, 2.5, 1.9, 1.4, 1.0, 0.8, 0.65]; // Heavy tractor 9-speed base (18 total with multiplier)
@@ -120,7 +123,7 @@ export function createDefaultEngineState(
     })(),
     finalDriveRatio: (function() {
       if (['paver_asphalt_wheeled', 'roller_heavy_tandem', 'roller_compact_sidewalk', 'roller_pneumatic'].includes(type)) return 6.2;
-      if (['truck_box', 'truck_dump', 'truck_semi', 'truck_tanker', 'truck_water', 'truck_flatbed', 'truck_covered', 'cement_mixer', 'garbage_truck', 'bus', 'fire_engine'].includes(type)) return 4.8;
+      if (['truck_box', 'truck_dump', 'truck_zil_dump', 'truck_semi', 'truck_tanker', 'truck_water', 'truck_flatbed', 'truck_covered', 'cement_mixer', 'garbage_truck', 'bus', 'fire_engine'].includes(type)) return 4.8;
       if (type.startsWith('tractor_')) return 5.4;
       if (['supercar', 'sports'].includes(type)) return 3.4;
       return 3.9;
@@ -206,7 +209,7 @@ export function createDefaultFuelSystem(type: CarType = 'sedan', isParkedOnStree
   ].includes(type);
   const isVintage92 = [
     'wagon_classic', 'sedan_classic', 'classic_compact', 'retro_bubble', 
-    'van_cargo_old', 'muscle_classic',
+    'van_cargo_old', 'muscle_classic', 'truck_zil_dump',
     'compact_matiz', 'sedan_logan', 'sedan_nexia', 'liftback_tavria', 'sedan_accent',
     'hatch_samara', 'sedan_samara', 'micro_car',
     'moto_izh_jupiter', 'moto_ural_sidecar', 'moto_jawa350', 'moto_chopper', 'moped_soviet'
@@ -223,7 +226,9 @@ export function createDefaultFuelSystem(type: CarType = 'sedan', isParkedOnStree
   }
 
   let tankCapacity = 55;
-  if (isDiesel) {
+  if (type === 'truck_zil_dump') {
+    tankCapacity = 170; // Authentic ZIL-130 170L steel tank
+  } else if (isDiesel) {
     tankCapacity = type === 'truck_semi' ? 350 : (type.startsWith('tractor_') ? 130 : 120);
   } else if (isBike) {
     tankCapacity = type === 'moped_soviet' ? 8 : (type === 'moto_ural_sidecar' ? 19 : 14);
@@ -265,7 +270,7 @@ export function isRoadMachinery(type?: string): boolean {
 }
 
 export function getLPGDefaultCapacity(type: string): number {
-  if (['truck_semi', 'truck_dump', 'truck_box', 'truck_tanker', 'truck_water', 'truck_flatbed', 'truck_covered', 'cement_mixer', 'garbage_truck', 'bus', 'fire_engine', 'fire_ladder'].includes(type) || type.includes('semi')) {
+  if (['truck_semi', 'truck_dump', 'truck_zil_dump', 'truck_box', 'truck_tanker', 'truck_water', 'truck_flatbed', 'truck_covered', 'cement_mixer', 'garbage_truck', 'bus', 'fire_engine', 'fire_ladder'].includes(type) || type.includes('semi')) {
     return 200;
   }
   if (['delivery_truck', 'van_cargo_old', 'van', 'bus_minibus', 'truck_armored', 'truck_tow'].includes(type)) {
@@ -636,7 +641,7 @@ export function getVehicleDriveType(type: string): 'FWD' | 'RWD' | 'AWD' {
     'sports', 'supercar', 'sedan_luxury', 'coupe_gt', 'muscle_classic', 
     'sedan_classic', 'classic_compact', 'retro_bubble', 'wagon_classic', 
     'ambulance', 'bus', 'fire_engine', 'fire_ladder', 'truck_tow', 'van_camper', 
-    'truck_box', 'truck_dump', 'truck_semi', 'truck_tanker', 'truck_water', 
+    'truck_box', 'truck_dump', 'truck_zil_dump', 'truck_semi', 'truck_tanker', 'truck_water', 
     'truck_flatbed', 'truck_covered', 'cement_mixer', 'garbage_truck'
   ];
   if (rwdTypes.includes(type)) return 'RWD';
@@ -660,13 +665,16 @@ export function getVehicleAxleGeometry(car: { type: string; length?: number }) {
   const isThreeAxle = car.type === 'truck_dump' || car.type === 'truck_semi' || car.type === 'truck_tanker' || car.type === 'truck_flatbed' || car.type === 'truck_covered' || car.type === 'cement_mixer' || car.type === 'garbage_truck';
   const isDually = car.type === 'pickup_heavy';
   const isMoto = car.type.startsWith('moto_') || car.type === 'moped_soviet';
-  const isHeavyTruck = isThreeAxle || car.type === 'truck_box' || car.type === 'truck_water' || car.type === 'truck_tow' || car.type === 'truck_armored' || car.type === 'delivery_truck' || car.type === 'fire_engine' || car.type === 'fire_ladder' || car.type === 'bus';
+  const isHeavyTruck = isThreeAxle || car.type === 'truck_box' || car.type === 'truck_zil_dump' || car.type === 'truck_water' || car.type === 'truck_tow' || car.type === 'truck_armored' || car.type === 'delivery_truck' || car.type === 'fire_engine' || car.type === 'fire_ladder' || car.type === 'bus';
 
   let rearAxleOffsetRatio = 0.65;
   let frontAxleOffsetRatio = 0.65;
 
   if (isTractor) {
     rearAxleOffsetRatio = 0.48;
+    frontAxleOffsetRatio = 0.70;
+  } else if (car.type === 'truck_zil_dump') {
+    rearAxleOffsetRatio = 0.58; // Short 3300mm wheelbase tipper rear axle
     frontAxleOffsetRatio = 0.70;
   } else if (isThreeAxle) {
     rearAxleOffsetRatio = 0.55; // center of tandem rear bogies
@@ -734,6 +742,7 @@ export const CAR_CONFIGS: Record<string, CarConfig> = {
   van_cargo_old: { type: 'van_cargo_old', width: 21, length: 46, wheelBase: 28, mass: 1700, maxSpeed: 135, reverseMaxSpeed: 35, acceleration: 18, brakingForce: 190, friction: 0.983, turnSpeed: 3.6, maxSteerAngle: 0.62, minSteerAngle: 0.11, grip: 0.968, driftGrip: 0.30, name: 'Вездеходный фургон («Буханка»)', transmission: 'MANUAL' },
   truck_box: { type: 'truck_box', width: 25, length: 68, wheelBase: 42, mass: 6200, maxSpeed: 125, reverseMaxSpeed: 32, acceleration: 15, brakingForce: 185, friction: 0.981, turnSpeed: 3.2, maxSteerAngle: 0.60, minSteerAngle: 0.09, grip: 0.958, driftGrip: 0.24, name: 'Фургон-Будка', transmission: 'MANUAL' },
   truck_dump: { type: 'truck_dump', width: 26, length: 72, wheelBase: 44, mass: 8500, maxSpeed: 115, reverseMaxSpeed: 30, acceleration: 14, brakingForce: 180, friction: 0.980, turnSpeed: 3.2, maxSteerAngle: 0.60, minSteerAngle: 0.08, grip: 0.955, driftGrip: 0.23, name: 'Самосвал', transmission: 'MANUAL' },
+  truck_zil_dump: { type: 'truck_zil_dump', width: 25, length: 58, wheelBase: 35, mass: 4800, maxSpeed: 110, reverseMaxSpeed: 28, acceleration: 18, brakingForce: 195, friction: 0.981, turnSpeed: 3.6, maxSteerAngle: 0.64, minSteerAngle: 0.09, grip: 0.965, driftGrip: 0.25, name: 'ЗИЛ-130 Самосвал (ММЗ-555)', transmission: 'MANUAL', color: '#0284c7', roofColor: '#f8fafc', dumpColor: '#d97706' },
   truck_semi: { type: 'truck_semi', width: 26, length: 64, wheelBase: 38, mass: 7500, maxSpeed: 125, reverseMaxSpeed: 30, acceleration: 18, brakingForce: 210, friction: 0.980, turnSpeed: 3.4, maxSteerAngle: 0.62, minSteerAngle: 0.08, grip: 0.960, driftGrip: 0.25, name: 'Седельный тягач КАМАЗ-5410', transmission: 'MANUAL', hitchOffset: -12, color: '#d94e16' },
   trailer_semi: { type: 'trailer_semi', width: 26, length: 120, wheelBase: 80, mass: 6500, maxSpeed: 120, reverseMaxSpeed: 30, acceleration: 0, brakingForce: 300, friction: 0.980, turnSpeed: 3.0, maxSteerAngle: 0, minSteerAngle: 0, grip: 0.975, driftGrip: 0.30, name: 'Полуприцеп бортовой НЕФАЗ', transmission: 'MANUAL', couplerOffset: 50, color: '#1e3a8a' },
   trailer_semi_box: { type: 'trailer_semi_box', width: 26, length: 124, wheelBase: 82, mass: 7200, maxSpeed: 120, reverseMaxSpeed: 30, acceleration: 0, brakingForce: 320, friction: 0.980, turnSpeed: 3.0, maxSteerAngle: 0, minSteerAngle: 0, grip: 0.975, driftGrip: 0.30, name: 'Полуприцеп-рефрижератор «Совтрансавто»', transmission: 'MANUAL', couplerOffset: 50, color: '#f8fafc' },
@@ -915,7 +924,7 @@ export function hasRoadTrainLights(car: Vehicle | CarType | string | null | unde
   if (typeStr.startsWith('trailer_')) return false;
 
   const heavyTypes = [
-    'truck_water', 'truck_tanker', 'truck_flatbed', 'truck_covered', 'truck_dump', 
+    'truck_water', 'truck_tanker', 'truck_flatbed', 'truck_covered', 'truck_dump', 'truck_zil_dump', 
     'truck_box', 'truck_semi', 'truck_tow', 'truck_armored',
     'cement_mixer', 'garbage_truck',
     'fire_engine', 'fire_ladder', 'fire_rescue',
@@ -1022,6 +1031,7 @@ export function getVehicleDiffCapabilities(carType: string): VehicleDiffLockCapa
   // 7. Heavy Commercial Trucks & Construction Vehicles (KamAZ, MAZ, Ural, Dump, Tanker, Mixer, etc.)
   if (
     type === 'truck_dump' || 
+    type === 'truck_zil_dump' || 
     type === 'truck_semi' || 
     type === 'truck_box' || 
     type === 'truck_tanker' || 
@@ -1241,6 +1251,192 @@ export function toggleAxleDiffLock(
   }
 
   return { success: false, state: false, message: 'Неизвестная ось' };
+}
+
+/**
+ * Returns authentic turn signal specifications per vehicle model/archetype
+ */
+export function getVehicleTurnSignalConfig(type?: CarType): VehicleTurnSignalConfig {
+  const t = type || 'sedan';
+
+  // 1. Dynamic Sequential Sweeping LED ("Светодиодная змейка") - Luxury & Modern High-End
+  if (['sedan_luxury', 'suv_luxury', 'wagon_modern', 'wagon_allroad', 'supercar', 'coupe_gt'].includes(t)) {
+    return {
+      type: 'dynamic_sequential_led',
+      baseFrequency: 1.30, // ~78 BPM luxury sweeping cadence
+      dutyCycle: 0.54,
+      sweepDuration: 0.28, // 280ms progressive outward cascade
+      hasSideMirrorRepeaters: true,
+      hasFenderRepeaters: false,
+      repeaterStyle: 'mirror_led_dynamic',
+      soundType: 'luxury_acoustic'
+    };
+  }
+
+  // 2. Crisp Instant Digital LED Matrix - Sports cars, modern crossovers, emergency vehicles
+  if (['sports', 'hatch_hot', 'police', 'ambulance', 'ambulance_van', 'ambulance_suv', 'suv', 'crossover_compact', 'sedan_compact', 'moto_sport'].includes(t)) {
+    return {
+      type: 'led_crisp',
+      baseFrequency: 1.62, // ~97 BPM modern crisp strobe
+      dutyCycle: 0.50,
+      sweepDuration: 0,
+      hasSideMirrorRepeaters: ['sports', 'police', 'ambulance_suv', 'crossover_compact', 'suv'].includes(t),
+      hasFenderRepeaters: ['ambulance', 'ambulance_van', 'sedan_compact'].includes(t),
+      repeaterStyle: ['sports', 'police', 'ambulance_suv', 'crossover_compact', 'suv'].includes(t) ? 'mirror_led_static' : 'fender_rect',
+      soundType: 'electronic_click'
+    };
+  }
+
+  // 3. Vintage / Classic Incandescent Filament Bulbs (Теплый нагрев и плавное угасание вольфрамовой нити, биметаллическое реле)
+  if ([
+    'sedan_classic', 'wagon_classic', 'classic_compact', 'retro_bubble', 'liftback_tavria',
+    'sedan_samara', 'hatch_samara', 'sedan_nexia', 'van_cargo_old', 'micro_car', 'muscle_classic',
+    'tractor_mtz80', 'tractor_mtz80_old', 'tractor_mtz82',
+    'moto_izh_jupiter', 'moto_ural_sidecar', 'moto_jawa350', 'moto_chopper'
+  ].includes(t)) {
+    const isTractorOrBike = t.startsWith('tractor_') || t.startsWith('moto_');
+    return {
+      type: 'incandescent_classic',
+      baseFrequency: isTractorOrBike ? 1.36 : 1.44, // ~82-86 BPM warm analog relay cadence
+      dutyCycle: 0.56, // Characteristic longer glow phase
+      sweepDuration: 0,
+      hasSideMirrorRepeaters: false,
+      hasFenderRepeaters: !isTractorOrBike,
+      repeaterStyle: ['classic_compact', 'retro_bubble', 'sedan_classic', 'wagon_classic'].includes(t) ? 'fender_round' : 'fender_rect',
+      soundType: 'bimetal_relay'
+    };
+  }
+
+  // 4. Modern Halogen/Incandescent with Electronic BCM Relay (Стандартные иномарки 2000-2015, коммерческие грузовики, автобусы)
+  return {
+    type: 'incandescent_modern',
+    baseFrequency: 1.52, // ~91 BPM standard automotive cadence
+    dutyCycle: 0.50,
+    sweepDuration: 0,
+    hasSideMirrorRepeaters: ['sedan_polo', 'taxi'].includes(t),
+    hasFenderRepeaters: !['sedan_polo'].includes(t) && !t.startsWith('trailer_'),
+    repeaterStyle: ['sedan_polo', 'taxi'].includes(t) ? 'mirror_led_static' : 'fender_rect',
+    soundType: 'bcm_relay'
+  };
+}
+
+export interface VehicleTurnSignalDynamicState {
+  intensity: number;          // 0.0 to 1.0 (actual optical brightness with filament thermal inertia)
+  sweepProgress: number;      // 0.0 to 1.0 (for dynamic sequential LED "snake" sweep)
+  isBlinkingActive: boolean;  // whether turnSignal is active ('left' | 'right' | 'hazard')
+  isPhaseOn: boolean;         // logical high in flash cycle
+  isTick: boolean;            // frame where relay switches ON
+  isTock: boolean;            // frame where relay switches OFF
+  frequency: number;          // actual effective frequency in Hz (includes hyperflash & voltage)
+  config: VehicleTurnSignalConfig;
+}
+
+/**
+ * Computes instantaneous turn signal optical intensity, sweeping animation progress,
+ * and audio relay tick/tock events based on real vehicle physics and lighting technology.
+ */
+export function getVehicleTurnSignalDynamicState(
+  car: Vehicle,
+  externalTimer?: number
+): VehicleTurnSignalDynamicState {
+  const config = getVehicleTurnSignalConfig(car.type);
+  const isBlinkingActive = car.turnSignal !== 'none';
+
+  if (!isBlinkingActive) {
+    return {
+      intensity: 0,
+      sweepProgress: 0,
+      isBlinkingActive: false,
+      isPhaseOn: false,
+      isTick: false,
+      isTock: false,
+      frequency: config.baseFrequency,
+      config
+    };
+  }
+
+  // 1. Subtle per-vehicle ID hash variance (+-4%) to avoid synchronized robotic NPC flashing
+  let idHash = 0;
+  if (car.id) {
+    for (let i = 0; i < car.id.length; i++) {
+      idHash = (idHash * 31 + car.id.charCodeAt(i)) % 1000;
+    }
+  }
+  const varianceFactor = 0.96 + (idHash / 1000) * 0.08;
+
+  // 2. Realistic Hyper-Flash (Частое мигание при перегорании одной из ламп в цепи)
+  let isHyperflash = false;
+  if (car.turnSignal === 'left' && (car.damage?.leftHeadlightBroken || car.damage?.leftTaillightBroken)) {
+    isHyperflash = true;
+  } else if (car.turnSignal === 'right' && (car.damage?.rightHeadlightBroken || car.damage?.rightTaillightBroken)) {
+    isHyperflash = true;
+  }
+
+  const effectiveFrequency = (config.baseFrequency * varianceFactor) * (isHyperflash ? 2.15 : 1.0);
+  const period = 1.0 / effectiveFrequency;
+
+  const timer = externalTimer !== undefined ? externalTimer : (car.turnSignalTimer || 0);
+  const cyclePhase = ((timer % period) + period) % period; // 0 to period
+  const normalizedPhase = cyclePhase / period;              // 0.0 to 1.0
+
+  const onDuration = period * config.dutyCycle;
+  const isPhaseOn = cyclePhase < onDuration;
+
+  let intensity = 0;
+  let sweepProgress = 0;
+
+  if (config.type === 'dynamic_sequential_led') {
+    // Dynamic Sweeping Sequential LED ("Змейка")
+    if (isPhaseOn) {
+      const sweepDur = Math.min(config.sweepDuration, onDuration * 0.85);
+      sweepProgress = Math.max(0, Math.min(1.0, cyclePhase / Math.max(0.01, sweepDur)));
+      intensity = 1.0;
+    } else {
+      sweepProgress = 0;
+      intensity = 0;
+    }
+  } else if (config.type === 'led_crisp') {
+    // Instant Crisp Digital Square Wave (0ms rise / 0ms decay)
+    intensity = isPhaseOn ? 1.0 : 0.0;
+    sweepProgress = isPhaseOn ? 1.0 : 0.0;
+  } else if (config.type === 'incandescent_classic') {
+    // Classic Incandescent Filament (Thermal inertia: ~60ms rise, ~110ms decay)
+    if (isPhaseOn) {
+      const tRise = cyclePhase;
+      intensity = Math.min(1.0, 1.0 - Math.exp(-tRise / 0.055));
+    } else {
+      const tDecay = cyclePhase - onDuration;
+      intensity = Math.max(0.0, Math.exp(-tDecay / 0.085));
+    }
+    sweepProgress = intensity;
+  } else {
+    // Modern Incandescent / Halogen (Fast rise ~30ms, fast decay ~50ms)
+    if (isPhaseOn) {
+      const tRise = cyclePhase;
+      intensity = Math.min(1.0, 1.0 - Math.exp(-tRise / 0.030));
+    } else {
+      const tDecay = cyclePhase - onDuration;
+      intensity = Math.max(0.0, Math.exp(-tDecay / 0.050));
+    }
+    sweepProgress = intensity;
+  }
+
+  // Edge detection for audio clicks
+  const prevPhase = (((timer - 0.016) % period) + period) % period;
+  const prevIsOn = prevPhase < onDuration;
+  const isTick = isPhaseOn && !prevIsOn;
+  const isTock = !isPhaseOn && prevIsOn;
+
+  return {
+    intensity,
+    sweepProgress,
+    isBlinkingActive: true,
+    isPhaseOn,
+    isTick,
+    isTock,
+    frequency: effectiveFrequency,
+    config
+  };
 }
 
 

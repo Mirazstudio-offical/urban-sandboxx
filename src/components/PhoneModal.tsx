@@ -36,7 +36,8 @@ import {
   AlertTriangle,
   Download,
   Image as ImageIcon,
-  CheckCircle2
+  CheckCircle2,
+  Wind
 } from 'lucide-react';
 import { InventoryItem, Player, PhoneSpecs, GameWorld } from '../types';
 import { sound } from '../audio';
@@ -50,15 +51,18 @@ import {
   getPhoneSpecsForItemId
 } from '../phoneData';
 import { addPlayerNotification } from '../items';
+import { PhoneTaxiApp } from './PhoneTaxiApp';
+import { TaxiFleetSystem } from '../taxiSystem';
 
 interface PhoneModalProps {
   item: InventoryItem | null;
   player: Player | null;
   world?: GameWorld | null;
+  onSetGpsTarget?: (dest: { x: number; y: number; name?: string } | null) => void;
   onClose: () => void;
 }
 
-type ActiveApp = 'home' | 'specs' | 'messages' | 'camera' | 'notes' | 'gps' | 'settings';
+type ActiveApp = 'home' | 'specs' | 'messages' | 'camera' | 'notes' | 'gps' | 'settings' | 'taxi';
 
 export interface PhoneChatMessage {
   id: string;
@@ -76,7 +80,7 @@ interface CapturedPhoto {
   locationName: string;
 }
 
-export const PhoneModal: React.FC<PhoneModalProps> = ({ item, player, world, onClose }) => {
+export const PhoneModal: React.FC<PhoneModalProps> = ({ item, player, world, onSetGpsTarget, onClose }) => {
   if (!item) return null;
 
   // Resolve specs from item or fallback
@@ -341,20 +345,22 @@ export const PhoneModal: React.FC<PhoneModalProps> = ({ item, player, world, onC
     }).sort((a, b) => a.distance - b.distance);
   };
 
-  // Real Weather Icon & Name
+  // Real Weather Icon & Name & Atmospheric Wind
   const getWeatherInfo = () => {
     const w = world?.weather || 'clear';
     const tempVal = Math.round(world ? getOutsideTemperature(world) : 20);
     const tempStr = `${tempVal >= 0 ? '+' : ''}${tempVal}°C`;
+    const windSpeedMs = Math.round((world?.wind ? (world.wind.speed * (world.wind.gust ?? 1.0)) * 0.1 : 2.4) * 10) / 10;
+    const windStr = `${windSpeedMs} м/с`;
     switch (w) {
       case 'storm':
-        return { icon: CloudLightning, label: 'Грозовой Шторм', temp: tempStr, color: 'text-amber-400' };
+        return { icon: CloudLightning, label: 'Грозовой Шторм', temp: tempStr, windStr, color: 'text-amber-400' };
       case 'rain':
-        return { icon: CloudRain, label: 'Дождь', temp: tempStr, color: 'text-blue-400' };
+        return { icon: CloudRain, label: 'Дождь', temp: tempStr, windStr, color: 'text-blue-400' };
       case 'fog':
-        return { icon: CloudFog, label: 'Густой Туман', temp: tempStr, color: 'text-slate-300' };
+        return { icon: CloudFog, label: 'Густой Туман', temp: tempStr, windStr, color: 'text-slate-300' };
       default:
-        return { icon: Sun, label: 'Ясно • Солнечно', temp: tempStr, color: 'text-amber-300' };
+        return { icon: Sun, label: 'Ясно • Солнечно', temp: tempStr, windStr, color: 'text-amber-300' };
     }
   };
 
@@ -480,8 +486,9 @@ export const PhoneModal: React.FC<PhoneModalProps> = ({ item, player, world, onC
                       </div>
                       <div className="text-right">
                         <div className="text-2xl font-semibold text-amber-300">{weather.temp}</div>
-                        <div className="text-[10px] text-white/60">
-                          {player?.isInVehicle ? 'Зарядка от авто' : 'Степной район'}
+                        <div className="text-[10px] text-white/70 flex items-center justify-end gap-1 mt-0.5">
+                          <Wind className="w-3 h-3 text-cyan-300" />
+                          <span>{weather.windStr}</span>
                         </div>
                       </div>
                     </div>
@@ -520,6 +527,21 @@ export const PhoneModal: React.FC<PhoneModalProps> = ({ item, player, world, onC
                       <span className="absolute top-0 right-3 w-4 h-4 bg-emerald-500 text-white rounded-full text-[9px] font-bold flex items-center justify-center ring-2 ring-black">
                         {contacts.length}
                       </span>
+                    </button>
+
+                    {/* Таксопарк */}
+                    <button
+                      id="app-taxi"
+                      onClick={() => handleAppOpen('taxi')}
+                      className="flex flex-col items-center gap-1.5 group relative"
+                    >
+                      <div className="w-13 h-13 rounded-2xl bg-gradient-to-tr from-amber-500 via-amber-400 to-yellow-400 p-3 shadow-md group-hover:scale-105 transition-transform flex items-center justify-center text-black">
+                        <Car className="w-6 h-6 text-black" />
+                      </div>
+                      <span className="text-[11px] font-medium text-white/90 drop-shadow">Таксопарк</span>
+                      {(TaxiFleetSystem.getInstance().profile.isShiftActive || TaxiFleetSystem.getInstance().pendingOffer) && (
+                        <span className="absolute top-0 right-3 w-3.5 h-3.5 bg-emerald-400 rounded-full ring-2 ring-black animate-pulse" />
+                      )}
                     </button>
 
                     {/* GPS Навигатор */}
@@ -1055,6 +1077,16 @@ export const PhoneModal: React.FC<PhoneModalProps> = ({ item, player, world, onC
                     })}
                   </div>
                 </div>
+              )}
+
+              {/* TAXI FLEET APP */}
+              {activeApp === 'taxi' && (
+                <PhoneTaxiApp
+                  player={player}
+                  world={world}
+                  onSetGpsTarget={onSetGpsTarget}
+                  onBack={handleBack}
+                />
               )}
 
               {/* SETTINGS APP */}

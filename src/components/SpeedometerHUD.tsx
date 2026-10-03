@@ -20,12 +20,20 @@ import {
   Activity,
   Key,
   Lock,
-  Unlock
+  Unlock,
+  Car
 } from 'lucide-react';
 import { sound } from '../audio';
+import { TaxiFleetSystem } from '../taxiSystem';
 import { getOutsideTemperature } from '../physics';
 import { getTerrainSlope } from '../terrainElevation';
-import { getVehicleDiffCapabilities, cycleVehicleDiffLock, toggleAxleDiffLock } from '../vehicleHelpers';
+import { 
+  getVehicleDiffCapabilities, 
+  cycleVehicleDiffLock, 
+  toggleAxleDiffLock,
+  getVehicleTurnSignalDynamicState,
+  getVehicleTurnSignalConfig
+} from '../vehicleHelpers';
 
 export type DashboardTheme = 'sport' | 'truck' | 'retro' | 'emergency' | 'luxury';
 
@@ -46,6 +54,7 @@ export function getVehicleDashboardTheme(type?: CarType): DashboardTheme {
 
     case 'truck_box':
     case 'truck_dump':
+    case 'truck_zil_dump':
     case 'truck_semi':
     case 'truck_tanker':
     case 'truck_water':
@@ -1699,6 +1708,46 @@ export const SpeedometerHUD: React.FC<SpeedometerHUDProps> = ({
                       })()}
                     </div>
                   )}
+                </div>
+              );
+            })()}
+
+            {/* Electronic Taximeter Unit */}
+            {(() => {
+              const taxi = TaxiFleetSystem.getInstance();
+              const order = taxi.activeOrder;
+              if (!order && !taxi.profile.isShiftActive) return null;
+              
+              if (order) {
+                const currentFare = Math.round(
+                  order.baseFare +
+                  (order.distanceDrivenMeters / 1000) * order.ratePerKm +
+                  order.paidWaitingFare
+                );
+                return (
+                  <div className="flex items-center gap-2 bg-amber-950/90 border border-amber-500/70 rounded-xl px-2.5 py-1 text-[10px] font-mono shrink-0 shadow-[0_0_12px_rgba(245,158,11,0.25)]">
+                    <div className="flex items-center gap-1 text-amber-400 font-bold">
+                      <Car className="w-3.5 h-3.5" />
+                      <span className="uppercase tracking-tight hidden sm:inline">ТАКСОМЕТР:</span>
+                    </div>
+                    <span className="text-amber-300 font-black text-xs font-mono">{currentFare} ₽</span>
+                    <span className="text-amber-500/80">|</span>
+                    <span className="text-zinc-300">
+                      {order.stage === 'driving_to_pickup' && 'ПОДАЧА'}
+                      {order.stage === 'waiting_for_passenger' && `ОЖИДАНИЕ (${Math.floor(order.waitingSeconds)}с)`}
+                      {order.stage === 'passenger_boarding' && 'ПОСАДКА'}
+                      {order.stage === 'in_transit' && `${(order.distanceDrivenMeters / 1000).toFixed(1)} км`}
+                      {order.stage === 'passenger_alighting' && 'ВЫСАДКА'}
+                    </span>
+                  </div>
+                );
+              }
+
+              return (
+                <div className="flex items-center gap-1.5 bg-slate-900 border border-emerald-500/40 rounded-xl px-2.5 py-1 text-[10px] font-mono shrink-0">
+                  <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                  <span className="text-emerald-400 font-bold hidden sm:inline">ТАКСИ: НА ЛИНИИ</span>
+                  <span className="text-emerald-400 font-bold sm:hidden">ТАКСИ</span>
                 </div>
               );
             })()}

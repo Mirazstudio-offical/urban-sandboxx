@@ -44,12 +44,12 @@ const firebaseConfig = {
 
 const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
 
-// Initialize Firestore with auto-detect long polling for maximum resilience in sandboxed/iframe environments
+// Initialize Firestore with forced long polling for maximum resilience in proxied/sandboxed iframe environments
 const dbId = firebaseConfigData.firestoreDatabaseId || undefined;
 export const db = (() => {
   try {
     return initializeFirestore(app, {
-      experimentalAutoDetectLongPolling: true,
+      experimentalForceLongPolling: true,
       ignoreUndefinedProperties: true
     }, dbId);
   } catch {
@@ -82,17 +82,12 @@ async function validateConnectivity() {
   }
 
   try {
-    const timeoutPromise = new Promise<never>((_, reject) => {
-      setTimeout(() => reject(new Error("Connectivity probe timeout")), 8000);
-    });
-
-    await Promise.race([
-      getDocFromServer(doc(db, 'test', 'connection')),
-      timeoutPromise
-    ]);
+    await getDocFromServer(doc(db, 'test', 'connection'));
     console.log("[Firestore] Successfully verified connection to Cloud Firestore backend.");
   } catch (error: any) {
-    // If initial probe times out due to cold start, do NOT disable network.
+    if (error instanceof Error && error.message.includes('the client is offline')) {
+      console.error("Please check your Firebase configuration.");
+    }
     // Firestore SDK handles its own background connection retry and offline cache gracefully.
     console.log("[Firestore] Background sync active; local cache ready.");
   }
@@ -137,6 +132,9 @@ export interface UserProfileData {
   nickname: string;
   avatarUrl: string;
   bio: string;
+  status?: 'online' | 'offline' | 'in_game';
+  currentRoomCode?: string | null;
+  lastSeen?: any;
   createdAt?: Timestamp | Date | number;
   updatedAt?: Timestamp | Date | number;
   stats: {
