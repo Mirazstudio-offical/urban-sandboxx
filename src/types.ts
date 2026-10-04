@@ -151,7 +151,7 @@ export interface DeformVertex {
   elasticY?: number;       // Transient elastic jiggle displacement Y (decays rapidly on impact)
   velX?: number;           // Transient elastic velocity X
   velY?: number;           // Transient elastic velocity Y
-  structuralType?: 'bumper' | 'fender' | 'door' | 'quarter' | 'pillar' | 'hood';
+  structuralType?: 'bumper' | 'fender' | 'door' | 'quarter' | 'pillar' | 'hood' | 'windshield' | 'roof' | 'trunk';
 }
 
 export interface ScratchMark {

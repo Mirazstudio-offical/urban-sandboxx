@@ -7977,14 +7977,14 @@ export class GameRenderer {
         fireProgress: 0, fireIntensity: 0, isFullyBurnt: false, scratches: [], deformedVertices: []
       } as unknown as VehicleDamage);
 
-      const fc = Math.min(halfL * 0.55, dmg.frontCrumple || 0);
-      const rc = Math.min(halfL * 0.45, dmg.rearCrumple || 0);
-      const ld = Math.min(halfW * 0.75, dmg.leftDent || 0);
-      const rd = Math.min(halfW * 0.75, dmg.rightDent || 0);
-      const fld = Math.min(halfL * 0.4, dmg.frontLeftDent || 0);
-      const frd = Math.min(halfL * 0.4, dmg.frontRightDent || 0);
-      const rld = Math.min(halfL * 0.35, dmg.rearLeftDent || 0);
-      const rrd = Math.min(halfL * 0.35, dmg.rearRightDent || 0);
+      const fc = Math.min(halfL * 0.68, dmg.frontCrumple || 0);
+      const rc = Math.min(halfL * 0.55, dmg.rearCrumple || 0);
+      const ld = Math.min(halfW * 0.65, dmg.leftDent || 0);
+      const rd = Math.min(halfW * 0.65, dmg.rightDent || 0);
+      const fld = Math.min(halfL * 0.50, dmg.frontLeftDent || 0);
+      const frd = Math.min(halfL * 0.50, dmg.frontRightDent || 0);
+      const rld = Math.min(halfL * 0.45, dmg.rearLeftDent || 0);
+      const rrd = Math.min(halfL * 0.45, dmg.rearRightDent || 0);
 
       const basePoly = getVehicleBasePolygon(car, halfL, halfW, fc, rc, ld, rd, fld, frd, rld, rrd);
 
@@ -7995,11 +7995,11 @@ export class GameRenderer {
           if (!dv) return bv;
           let ox = isFinite(dv.offsetX) ? dv.offsetX : 0;
           let oy = isFinite(dv.offsetY) ? dv.offsetY : 0;
-          let ex = isFinite(dv.elasticX) ? Math.max(-6.0, Math.min(6.0, dv.elasticX)) : 0;
-          let ey = isFinite(dv.elasticY) ? Math.max(-6.0, Math.min(6.0, dv.elasticY)) : 0;
+          let ex = isFinite(dv.elasticX) ? Math.max(-8.0, Math.min(8.0, dv.elasticX)) : 0;
+          let ey = isFinite(dv.elasticY) ? Math.max(-8.0, Math.min(8.0, dv.elasticY)) : 0;
 
           const dvLen = Math.hypot(dv.localX || bv.x, dv.localY || bv.y) || 1;
-          const maxAllowed = Math.min(12.0, Math.max(3.0, dvLen * 0.35));
+          const maxAllowed = Math.min(28.0, Math.max(6.0, dvLen * 0.75));
           const oDist = Math.hypot(ox, oy);
           if (oDist > maxAllowed) {
             ox = (ox / oDist) * maxAllowed;
@@ -9682,14 +9682,14 @@ export class GameRenderer {
         fireProgress: 0, fireIntensity: 0, isFullyBurnt: false, scratches: [], deformedVertices: []
       } as unknown as VehicleDamage);
 
-      const fc = Math.min(halfL * 0.55, dmg.frontCrumple || 0);
-      const rc = Math.min(halfL * 0.45, dmg.rearCrumple || 0);
-      const ld = Math.min(halfW * 0.75, dmg.leftDent || 0);
-      const rd = Math.min(halfW * 0.75, dmg.rightDent || 0);
-      const fld = Math.min(halfL * 0.4, dmg.frontLeftDent || 0);
-      const frd = Math.min(halfL * 0.4, dmg.frontRightDent || 0);
-      const rld = Math.min(halfL * 0.35, dmg.rearLeftDent || 0);
-      const rrd = Math.min(halfL * 0.35, dmg.rearRightDent || 0);
+      const fc = Math.min(halfL * 0.68, dmg.frontCrumple || 0);
+      const rc = Math.min(halfL * 0.55, dmg.rearCrumple || 0);
+      const ld = Math.min(halfW * 0.65, dmg.leftDent || 0);
+      const rd = Math.min(halfW * 0.65, dmg.rightDent || 0);
+      const fld = Math.min(halfL * 0.50, dmg.frontLeftDent || 0);
+      const frd = Math.min(halfL * 0.50, dmg.frontRightDent || 0);
+      const rld = Math.min(halfL * 0.45, dmg.rearLeftDent || 0);
+      const rrd = Math.min(halfL * 0.45, dmg.rearRightDent || 0);
 
       const basePoly = getVehicleBasePolygon(car, halfL, halfW, fc, rc, ld, rd, fld, frd, rld, rrd);
 
@@ -9700,11 +9700,11 @@ export class GameRenderer {
           if (!dv) return bv;
           let ox = isFinite(dv.offsetX) ? dv.offsetX : 0;
           let oy = isFinite(dv.offsetY) ? dv.offsetY : 0;
-          let ex = isFinite(dv.elasticX) ? Math.max(-6.0, Math.min(6.0, dv.elasticX)) : 0;
-          let ey = isFinite(dv.elasticY) ? Math.max(-6.0, Math.min(6.0, dv.elasticY)) : 0;
+          let ex = isFinite(dv.elasticX) ? Math.max(-8.0, Math.min(8.0, dv.elasticX)) : 0;
+          let ey = isFinite(dv.elasticY) ? Math.max(-8.0, Math.min(8.0, dv.elasticY)) : 0;
 
           const dvLen = Math.hypot(dv.localX || bv.x, dv.localY || bv.y) || 1;
-          const maxAllowed = Math.min(12.0, Math.max(3.0, dvLen * 0.35));
+          const maxAllowed = Math.min(28.0, Math.max(6.0, dvLen * 0.75));
           const oDist = Math.hypot(ox, oy);
           if (oDist > maxAllowed) {
             ox = (ox / oDist) * maxAllowed;
