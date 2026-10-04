@@ -418,12 +418,36 @@ export interface VehicleDamage {
   bumperSagLeft?: number;     // 0.0 to 1.0 sagging front-left bumper corner
   bumperSagRight?: number;    // 0.0 to 1.0 sagging front-right bumper corner
 
-  // Physical Detachable Body Parts
+  // Physical Detachable Body Panels & Mounting Points
   hoodDetached?: boolean;
   frontBumperDetached?: boolean;
   rearBumperDetached?: boolean;
   leftDoorDetached?: boolean;
   rightDoorDetached?: boolean;
+  fenderFLDetached?: boolean;
+  fenderFRDetached?: boolean;
+  fenderRLDetached?: boolean;
+  fenderRRDetached?: boolean;
+  trunkDetached?: boolean;
+
+  // Discrete Panel Mount Damage & Loose/Ajar States
+  doorFLAjar?: number;         // 0.0 to 1.0 (latch sheared, door pops open on hinges)
+  doorFRAjar?: number;         // 0.0 to 1.0
+  doorFLAjarVel?: number;      // Door swing angular velocity on surviving hinge
+  doorFRAjarVel?: number;
+  doorRLAjar?: number;         // 0.0 to 1.0 rear-left door ajar
+  doorRRAjar?: number;         // 0.0 to 1.0 rear-right door ajar
+  doorRLAjarVel?: number;
+  doorRRAjarVel?: number;
+  doorRLDetached?: boolean;
+  doorRRDetached?: boolean;
+  fenderFLLoose?: boolean;     // Front clip sheared, fender flares/rubs tire
+  fenderFRLoose?: boolean;
+  fenderRLLoose?: boolean;
+  fenderRRLoose?: boolean;
+  rearBumperSagLeft?: number;  // 0.0 to 1.0
+  rearBumperSagRight?: number; // 0.0 to 1.0
+  trunkAjar?: number;          // 0.0 to 1.0 trunk popped on latch
 }
 
 export interface Vehicle {
@@ -1201,6 +1225,16 @@ export interface Particle {
   expansionRate?: number;     // Volumetric blooming rate
   baseRadius?: number;        // Uncondensed initial radius
   baseColor?: string;         // Underlying gas color before ambient condensation scattering
+
+  // BeamNG-grade impact debris & spark dynamics:
+  angle?: number;             // Orientation / rotation angle (rad)
+  angularVelocity?: number;   // Spin rate (rad/s)
+  aspect?: number;            // Length-to-width aspect ratio for shards / flakes
+  secondaryColor?: string;    // Reverse side / primer / dark edge / ember core color
+  bounces?: number;           // Remaining ballistic bounces upon ground impact
+  streakLength?: number;      // High-velocity streak length multiplier
+  debrisSubtype?: 'metal_flake' | 'plastic_chunk' | 'concrete_chip' | 'wood_splinter';
+  glassSubtype?: 'safety_pebble' | 'headlight' | 'taillight' | 'mirror';
 }
 
 export interface WorldWind {
@@ -1931,10 +1965,26 @@ export interface PedestrianPath {
   crosswalkRef?: string;
 }
 
+export type DetachedPartType = 
+  | 'hood' 
+  | 'bumper_front' 
+  | 'bumper_rear' 
+  | 'door_left' 
+  | 'door_right' 
+  | 'door_front_left' 
+  | 'door_front_right' 
+  | 'door_rear_left' 
+  | 'door_rear_right' 
+  | 'fender_front_left' 
+  | 'fender_front_right' 
+  | 'fender_rear_left' 
+  | 'fender_rear_right' 
+  | 'trunk';
+
 export interface DetachedVehiclePart {
   id: string;
   vehicleId: string;
-  partType: 'hood' | 'bumper_front' | 'bumper_rear' | 'door_left' | 'door_right';
+  partType: DetachedPartType;
   color: string;
   x: number;
   y: number;

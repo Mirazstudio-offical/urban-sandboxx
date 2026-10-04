@@ -37,7 +37,11 @@ import {
   traceSoftbodyPath,
   renderSoftbodyStressLines,
   renderBuckledHoodOverlay,
-  renderSaggingBumpers
+  renderSaggingBumpers,
+  renderHollowChassisAndCavities,
+  renderExposedCavitiesOnDetachedPanels,
+  renderLoosePanelsAndDoors,
+  renderPanelShutlines
 } from './softbodyVisuals';
 import { performanceConfig } from './performanceConfig';
 import { getBuildingLayout, renderBuildingInterior } from './buildingInteriors';
@@ -8651,6 +8655,9 @@ export class GameRenderer {
 
       // Now draw body shell with high-fidelity softbody spline contour (skip for road machinery and motorcycles which have dedicated multi-component architecture)
       if (!isRoadMachinery(car.type) && !isSoloMoto && !isUralSidecar) {
+        // 1. Structural Hollow Chassis & Underbody Cavities (engine bay, cabin tub with seats, trunk well, crash bars)
+        renderHollowChassisAndCavities(ctx, car, halfL, halfW);
+
         if (car.type === 'truck_zil_dump') {
           const dumpCol = car.dumpColor || '#d97706';
           ctx.save();
@@ -8679,6 +8686,15 @@ export class GameRenderer {
           ctx.closePath();
           ctx.fill();
         }
+
+        // 2. Expose internal hollow cavities on detached panels (hood, bumpers, fenders, doors, trunk)
+        renderExposedCavitiesOnDetachedPanels(ctx, car, halfL, halfW);
+
+        // 3. Discrete stamped panel shutlines (panel gaps separating front bumper, fenders, hood, doors, trunk)
+        renderPanelShutlines(ctx, car, halfL, halfW);
+
+        // 4. Loose panels & ajar doors (swinging on hinges with centrifugal forces, flared fenders rubbing tires)
+        renderLoosePanelsAndDoors(ctx, car, halfL, halfW);
 
         // Soot charring & fire heat glow overlays
         const fireProg = dmg.fireProgress || (dmg.isFullyBurnt ? 1.0 : (dmg.cabinFire ? 0.65 : ((dmg.engineFire || dmg.fuelTankFire) ? 0.28 : (dmg.underHoodSmolder ? 0.08 : 0))));
@@ -10399,34 +10415,167 @@ export class GameRenderer {
       const p = neutral[i];
       ctx.globalAlpha = Math.max(0, Math.min(1.0, p.alpha));
       if (p.type === 'glass_shard') {
-        // Shards require translate and rotate, so they still need save/restore
+        // Airborne 3D drop shadow on asphalt
+        const isAirborne = (p.z !== undefined && p.z > 0.05);
+        if (isAirborne) {
+          const shadowAlpha = p.alpha * Math.max(0, 0.45 - p.z * 0.04);
+          if (shadowAlpha > 0.02) {
+            ctx.fillStyle = `rgba(15, 23, 42, ${shadowAlpha * 0.45})`;
+            ctx.beginPath();
+            ctx.ellipse(p.x, p.y + p.z * 1.6, Math.max(0.8, p.radius * 0.7), Math.max(0.4, p.radius * 0.35), 0, 0, Math.PI * 2);
+            ctx.fill();
+          }
+        }
+
+        // Shards require translate and rotate
         ctx.save();
         ctx.translate(p.x, p.y);
-        ctx.rotate((p.x + p.y) * 0.1);
+        const rot = p.angle ?? ((p.x + p.y) * 0.1);
+        ctx.rotate(rot);
 
-        ctx.fillStyle = 'rgba(186, 230, 253, 0.75)';
-        ctx.strokeStyle = '#ffffff';
-        ctx.lineWidth = 0.7;
-
-        ctx.beginPath();
+        // 3D tumbling compression along minor axis (simulates flat pebble flipping in 3D)
+        const tumbleScale = Math.max(0.22, Math.abs(Math.cos(rot * 1.6)));
         const r = p.radius;
-        ctx.moveTo(-r, -r * 0.5);
-        ctx.lineTo(r * 0.8, -r);
-        ctx.lineTo(r, r * 0.6);
-        ctx.lineTo(-r * 0.5, r);
+        const aspect = p.aspect ?? 1.25;
+        const rx = r * aspect;
+        const ry = r * tumbleScale;
+
+        const seed = p.shapeSeed ?? 0;
+        const subtype = p.glassSubtype ?? (p.color === '#ef4444' ? 'taillight' : (p.color === '#fbbf24' || p.color === '#fef08a' ? 'headlight' : 'safety_pebble'));
+
+        // Shard polygon based on shape seed: 4 varied crystalline safety facets
+        const pattern = seed % 4;
+        ctx.beginPath();
+        if (pattern === 0) {
+          // Tempered rhomboid pebble (safety glass pellet)
+          ctx.moveTo(-rx * 0.85, -ry * 0.45);
+          ctx.lineTo(rx * 0.75, -ry * 0.85);
+          ctx.lineTo(rx * 0.95, ry * 0.55);
+          ctx.lineTo(-rx * 0.65, ry * 0.85);
+        } else if (pattern === 1) {
+          // Triangular / wedge splinter
+          ctx.moveTo(-rx * 0.9, -ry * 0.7);
+          ctx.lineTo(rx * 0.95, -ry * 0.2);
+          ctx.lineTo(-rx * 0.2, ry * 0.9);
+        } else if (pattern === 2) {
+          // Trapezoid nugget
+          ctx.moveTo(-rx * 0.7, -ry * 0.8);
+          ctx.lineTo(rx * 0.65, -ry * 0.6);
+          ctx.lineTo(rx * 0.85, ry * 0.75);
+          ctx.lineTo(-rx * 0.9, ry * 0.4);
+        } else {
+          // Diamond facet
+          ctx.moveTo(0, -ry * 0.95);
+          ctx.lineTo(rx * 0.9, 0);
+          ctx.lineTo(0, ry * 0.95);
+          ctx.lineTo(-rx * 0.9, 0);
+        }
         ctx.closePath();
+
+        if (subtype === 'taillight') {
+          ctx.fillStyle = 'rgba(239, 68, 68, 0.88)';
+          ctx.strokeStyle = 'rgba(254, 202, 202, 0.92)';
+          ctx.lineWidth = 0.5;
+        } else if (subtype === 'headlight') {
+          ctx.fillStyle = (seed % 3 === 0) ? 'rgba(251, 191, 36, 0.90)' : 'rgba(240, 249, 255, 0.90)';
+          ctx.strokeStyle = '#ffffff';
+          ctx.lineWidth = 0.5;
+        } else {
+          // Safety glass pebble (windshield / side windows)
+          ctx.fillStyle = 'rgba(224, 242, 254, 0.85)';
+          ctx.strokeStyle = '#ffffff';
+          ctx.lineWidth = 0.55;
+        }
         ctx.fill();
         ctx.stroke();
 
-        ctx.fillStyle = '#ffffff';
-        ctx.beginPath();
-        ctx.arc(-r * 0.2, -r * 0.2, r * 0.35, 0, Math.PI * 2);
-        ctx.fill();
+        // Internal refraction crease
+        if (pattern === 0 || pattern === 2) {
+          ctx.strokeStyle = 'rgba(255, 255, 255, 0.65)';
+          ctx.lineWidth = 0.4;
+          ctx.beginPath();
+          ctx.moveTo(-rx * 0.4, -ry * 0.3);
+          ctx.lineTo(rx * 0.4, ry * 0.3);
+          ctx.stroke();
+        }
+
+        // BeamNG-style Specular gleam glint when facet catches direct light
+        const glintPhase = Math.sin(rot * 2.0 + seed);
+        if (glintPhase > 0.65) {
+          const glintPower = (glintPhase - 0.65) / 0.35;
+          ctx.fillStyle = '#ffffff';
+          const glintSize = Math.max(0.6, r * 0.55 * glintPower);
+          ctx.fillRect(-glintSize * 0.5, -glintSize * 0.5, glintSize, glintSize);
+        }
 
         ctx.restore();
       } else if (p.type === 'debris') {
-        ctx.fillStyle = p.color;
-        ctx.fillRect(p.x - p.radius * 0.5, p.y - p.radius * 0.5, p.radius, p.radius);
+        // Airborne 3D drop shadow on asphalt
+        const isAirborne = (p.z !== undefined && p.z > 0.05);
+        if (isAirborne) {
+          const shadowAlpha = p.alpha * Math.max(0, 0.45 - p.z * 0.04);
+          if (shadowAlpha > 0.02) {
+            ctx.fillStyle = `rgba(15, 23, 42, ${shadowAlpha * 0.45})`;
+            ctx.beginPath();
+            ctx.ellipse(p.x, p.y + p.z * 1.6, Math.max(0.9, p.radius * 0.75), Math.max(0.4, p.radius * 0.35), 0, 0, Math.PI * 2);
+            ctx.fill();
+          }
+        }
+
+        ctx.save();
+        ctx.translate(p.x, p.y);
+        const rot = p.angle ?? ((p.x * 0.07 + p.y * 0.13));
+        ctx.rotate(rot);
+
+        const r = p.radius;
+        const aspect = p.aspect ?? 1.4;
+        const rx = r * aspect;
+        // 3D tumbling flutter (simulates fluttering sheet metal or tumbling plastic)
+        const flip = Math.sin(rot * 2.2);
+        const scaleY = Math.max(0.25, Math.abs(flip));
+        const ry = r * scaleY;
+        const seed = p.shapeSeed ?? 0;
+        const subtype = p.debrisSubtype ?? (p.secondaryColor ? 'metal_flake' : 'plastic_chunk');
+
+        // Color based on tumbling side (metal flake shows body paint on exterior and primer on interior)
+        let fillColor = p.color;
+        if (subtype === 'metal_flake') {
+          fillColor = flip >= 0 ? p.color : (p.secondaryColor || '#475569');
+        }
+
+        // Varied irregular jagged polygon based on seed
+        const polyType = seed % 3;
+        ctx.beginPath();
+        if (polyType === 0) {
+          // Torn sheet metal sliver / angled fragment
+          ctx.moveTo(-rx * 0.9, -ry * 0.3);
+          ctx.lineTo(rx * 0.8, -ry * 0.8);
+          ctx.lineTo(rx * 0.95, ry * 0.5);
+          ctx.lineTo(-rx * 0.4, ry * 0.85);
+        } else if (polyType === 1) {
+          // Jagged triangular clip / chip
+          ctx.moveTo(-rx * 0.95, -ry * 0.6);
+          ctx.lineTo(rx * 0.85, 0);
+          ctx.lineTo(-rx * 0.7, ry * 0.9);
+          ctx.lineTo(-rx * 0.2, 0);
+        } else {
+          // Irregular quad chunk
+          ctx.moveTo(-rx * 0.75, -ry * 0.85);
+          ctx.lineTo(rx * 0.9, -ry * 0.45);
+          ctx.lineTo(rx * 0.7, ry * 0.8);
+          ctx.lineTo(-rx * 0.85, ry * 0.4);
+        }
+        ctx.closePath();
+
+        ctx.fillStyle = fillColor;
+        ctx.fill();
+
+        // Crisp edge highlight on torn metal or plastic bevel
+        ctx.strokeStyle = subtype === 'metal_flake' ? 'rgba(255, 255, 255, 0.45)' : 'rgba(0, 0, 0, 0.35)';
+        ctx.lineWidth = 0.5;
+        ctx.stroke();
+
+        ctx.restore();
       } else if (p.type === 'water_spray' || p.type === 'water_splash') {
         // High-velocity elongated water droplet streak or soft mist droplet
         const vSq = p.vx * p.vx + p.vy * p.vy;
@@ -10497,20 +10646,83 @@ export class GameRenderer {
       }
     }
 
-    // Pass 4: Render bright flying sparks/embers on the absolute top layer
+    // Pass 4: Render bright flying sparks/embers on the absolute top layer (BeamNG high-velocity incandescent streaks)
     for (let i = 0; i < sparks.length; i++) {
       const p = sparks[i];
-      ctx.globalAlpha = Math.max(0, Math.min(1.0, p.alpha));
-      ctx.fillStyle = p.color;
-      ctx.beginPath();
-      ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
-      ctx.fill();
+      const alpha = Math.max(0, Math.min(1.0, p.alpha));
+      ctx.globalAlpha = alpha;
 
-      // Inner hot core
-      ctx.fillStyle = '#ffffff';
-      ctx.beginPath();
-      ctx.arc(p.x, p.y, p.radius * 0.5, 0, Math.PI * 2);
-      ctx.fill();
+      const spdSq = p.vx * p.vx + p.vy * p.vy;
+      const progress = Math.min(1.0, Math.max(0, p.life / p.maxLife));
+
+      // BeamNG-grade Blackbody thermal cooling progression:
+      // White-hot incandescence -> golden flame -> fiery orange-red -> dull cooling cherry ember -> dark cinder
+      let outerColor: string;
+      let coreColor: string;
+      if (progress < 0.22) {
+        outerColor = '#fef08a'; // Radiant incandescent lemon
+        coreColor = '#ffffff';  // Blinding white-hot core
+      } else if (progress < 0.52) {
+        outerColor = '#f97316'; // Fiery golden orange
+        coreColor = '#fbbf24';  // Glowing electric amber
+      } else if (progress < 0.80) {
+        outerColor = '#dc2626'; // Deep ember red
+        coreColor = '#ea580c';  // Fiery crimson orange
+      } else {
+        outerColor = '#78350f'; // Dark cooling cinder
+        coreColor = '#991b1b';  // Dull cherry ember
+      }
+
+      if (spdSq > 25) {
+        // High-velocity elongated needle streak aligned with motion vector
+        const spd = Math.sqrt(spdSq);
+        const streakMul = p.streakLength ?? 0.045;
+        const streakLen = Math.min(24, Math.max(2.5, spd * streakMul));
+        const nx = p.vx / spd;
+        const ny = p.vy / spd;
+        const tailX = p.x - nx * streakLen;
+        const tailY = p.y - ny * streakLen;
+
+        // 1. Soft glowing outer streak
+        ctx.strokeStyle = outerColor;
+        ctx.lineWidth = Math.max(0.8, p.radius * 1.35);
+        ctx.lineCap = 'round';
+        ctx.beginPath();
+        ctx.moveTo(tailX, tailY);
+        ctx.lineTo(p.x, p.y);
+        ctx.stroke();
+
+        // 2. White-hot incandescent needle core
+        if (progress < 0.78) {
+          ctx.strokeStyle = coreColor;
+          ctx.lineWidth = Math.max(0.5, p.radius * 0.65);
+          ctx.beginPath();
+          ctx.moveTo(p.x - nx * (streakLen * 0.65), p.y - ny * (streakLen * 0.65));
+          ctx.lineTo(p.x, p.y);
+          ctx.stroke();
+        }
+
+        // 3. Incandescent head point
+        if (progress < 0.40) {
+          ctx.fillStyle = '#ffffff';
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, Math.max(0.5, p.radius * 0.45), 0, Math.PI * 2);
+          ctx.fill();
+        }
+      } else {
+        // Slow or resting spark / ember: glowing point
+        ctx.fillStyle = outerColor;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+        ctx.fill();
+
+        if (progress < 0.70) {
+          ctx.fillStyle = coreColor;
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, p.radius * 0.55, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
     }
 
     // Safely restore global alpha
@@ -12878,22 +13090,64 @@ export class GameRenderer {
 
       ctx.beginPath();
       if (part.partType === 'hood') {
-        // Tapered hood profile
+        // Tapered hood profile with center character crease
         ctx.moveTo(part.length * 0.5, 0);
-        ctx.lineTo(part.length * 0.45, part.width * 0.45);
-        ctx.lineTo(-part.length * 0.45, part.width * 0.5);
-        ctx.lineTo(-part.length * 0.45, -part.width * 0.5);
-        ctx.lineTo(part.length * 0.45, -part.width * 0.45);
-      } else if (part.partType === 'bumper_front' || part.partType === 'bumper_rear') {
-        // Rounded bumper strip
+        ctx.lineTo(part.length * 0.44, part.width * 0.46);
+        ctx.lineTo(-part.length * 0.44, part.width * 0.5);
+        ctx.lineTo(-part.length * 0.44, -part.width * 0.5);
+        ctx.lineTo(part.length * 0.44, -part.width * 0.46);
+      } else if (part.partType === 'bumper_front') {
+        // Aerodynamic curved front bumper fascia with grille cutout notch
         ctx.roundRect(-part.length * 0.5, -part.width * 0.5, part.length, part.width, 2.5);
+      } else if (part.partType === 'bumper_rear') {
+        // Rear bumper fascia with license recess
+        ctx.roundRect(-part.length * 0.5, -part.width * 0.5, part.length, part.width, 2.0);
+      } else if (part.partType.startsWith('fender')) {
+        // Stamped wing / fender with curved wheel arch cutout
+        const isLeft = part.partType.includes('left');
+        ctx.moveTo(part.length * 0.5, isLeft ? -part.width * 0.2 : part.width * 0.2);
+        ctx.lineTo(part.length * 0.45, isLeft ? -part.width * 0.5 : part.width * 0.5);
+        ctx.lineTo(-part.length * 0.45, isLeft ? -part.width * 0.5 : part.width * 0.5);
+        ctx.lineTo(-part.length * 0.5, isLeft ? -part.width * 0.2 : part.width * 0.2);
+        // Wheel arch inner curved cutout
+        ctx.quadraticCurveTo(0, isLeft ? part.width * 0.15 : -part.width * 0.15, part.length * 0.5, isLeft ? -part.width * 0.2 : part.width * 0.2);
+      } else if (part.partType === 'trunk') {
+        // Trunk decklid with stamping bevel
+        ctx.roundRect(-part.length * 0.5, -part.width * 0.5, part.length, part.width, 1.8);
       } else {
-        // Door panel
+        // Door panel with window aperture frame
         ctx.rect(-part.length * 0.5, -part.width * 0.5, part.length, part.width);
       }
       ctx.closePath();
       ctx.fill();
       ctx.stroke();
+
+      // Additional panel stamping details
+      if (part.partType.startsWith('door')) {
+        // Window glass aperture cutout inside detached door
+        ctx.fillStyle = 'rgba(56, 189, 248, 0.18)';
+        ctx.fillRect(-part.length * 0.35, -part.width * 0.35, part.length * 0.7, part.width * 0.7);
+        // Door handle indentation
+        ctx.fillStyle = '#1e293b';
+        ctx.fillRect(-part.length * 0.40, -1.2, 2.8, 2.4);
+      } else if (part.partType === 'bumper_front') {
+        // Front bumper lower grille matrix
+        ctx.fillStyle = '#0f172a';
+        ctx.fillRect(-part.length * 0.25, -part.width * 0.35, part.length * 0.5, part.width * 0.7);
+      } else if (part.partType === 'bumper_rear') {
+        // Rear bumper reflector markers
+        ctx.fillStyle = '#ef4444';
+        ctx.fillRect(-part.length * 0.25, -part.width * 0.45, 1.2, 2.5);
+        ctx.fillRect(-part.length * 0.25, part.width * 0.45 - 2.5, 1.2, 2.5);
+      } else if (part.partType === 'hood') {
+        // Center hood stamping ridge
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.35)';
+        ctx.lineWidth = 1.0;
+        ctx.beginPath();
+        ctx.moveTo(part.length * 0.45, 0);
+        ctx.lineTo(-part.length * 0.40, 0);
+        ctx.stroke();
+      }
 
       // Metallic stress specular ridge highlights on crumpled regions
       ctx.strokeStyle = 'rgba(255, 255, 255, 0.55)';
@@ -12910,9 +13164,11 @@ export class GameRenderer {
       ctx.lineTo(part.length * 0.35 + 2, part.width * 0.25 + 1);
       ctx.stroke();
 
-      // Severed hinge bracket marks
+      // Severed hinge bracket marks & mounting bolt scars
       ctx.fillStyle = '#1e293b';
       ctx.fillRect(-part.length * 0.5 - 1.5, -1.8, 1.8, 3.6);
+      ctx.fillStyle = '#f1f5f9'; // Sheared steel fracture highlight
+      ctx.fillRect(-part.length * 0.5 - 1.5, -0.8, 1.0, 1.6);
 
       ctx.restore();
     }

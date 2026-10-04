@@ -214,20 +214,47 @@ export class GuardrailPhysics {
       }
 
       // Spawn yellow plastic shards and silica sand dust particles
-      for (let p = 0; p < 6; p++) {
+      for (let p = 0; p < 8; p++) {
         const pAngle = Math.random() * Math.PI * 2;
-        const pSpeed = 12 + Math.random() * 35;
+        const pSpeed = 20 + Math.random() * 55;
+        world.particles.push({
+          x: closestX + (Math.random() - 0.5) * 6,
+          y: closestY + (Math.random() - 0.5) * 6,
+          vx: Math.cos(pAngle) * pSpeed,
+          vy: Math.sin(pAngle) * pSpeed,
+          radius: 1.2 + Math.random() * 1.6,
+          aspect: 1.3 + Math.random() * 0.8,
+          color: p % 3 === 0 ? '#facc15' : p % 3 === 1 ? '#eab308' : '#1e293b',
+          alpha: 0.92,
+          life: 0,
+          maxLife: 0.4 + Math.random() * 0.35,
+          type: 'debris',
+          debrisSubtype: 'plastic_chunk',
+          angle: Math.random() * Math.PI * 2,
+          angularVelocity: (Math.random() - 0.5) * 22,
+          shapeSeed: Math.floor(Math.random() * 10000),
+          z: 1.0 + Math.random() * 1.4,
+          vz: 18 + Math.random() * 30,
+          bounces: 2,
+          splatted: false
+        });
+      }
+
+      // Silica sand dust puff dislodged from impact attenuator barrel
+      for (let s = 0; s < 3; s++) {
         world.particles.push({
           x: closestX + (Math.random() - 0.5) * 8,
           y: closestY + (Math.random() - 0.5) * 8,
-          vx: Math.cos(pAngle) * pSpeed,
-          vy: Math.sin(pAngle) * pSpeed,
-          radius: 1.2 + Math.random() * 2.2,
-          color: p % 3 === 0 ? '#facc15' : p % 3 === 1 ? '#fef08a' : '#1e293b',
-          alpha: 0.9,
+          vx: (Math.random() - 0.5) * 35,
+          vy: (Math.random() - 0.5) * 35,
+          radius: 10 + Math.random() * 12,
+          targetRadius: 22 + Math.random() * 14,
+          color: '#d97706',
+          alpha: 0.38,
+          initialAlpha: 0.38,
           life: 0,
-          maxLife: 0.3 + Math.random() * 0.3,
-          type: 'debris',
+          maxLife: 0.65 + Math.random() * 0.45,
+          type: 'dust'
         });
       }
       return;
@@ -297,25 +324,30 @@ export class GuardrailPhysics {
         sound.playCollision(Math.min(0.5, rawSpeed / 90));
       }
 
-      // 8. Spawn golden friction sparks flying backwards along the rail
-      const sparkCount = Math.min(8, Math.floor(rawSpeed / 14) + 1);
+      // 8. Spawn incandescent friction sparks flying backwards along the rail
+      const sparkCount = Math.min(14, Math.floor(rawSpeed / 10) + 2);
       for (let s = 0; s < sparkCount; s++) {
-        const sparkSpeed = rawSpeed * 0.6 + Math.random() * 30;
-        const sparkDirX = -tx * Math.sign(velDotT || 1) + (Math.random() - 0.5) * 0.4;
-        const sparkDirY = -ty * Math.sign(velDotT || 1) + (Math.random() - 0.5) * 0.4;
+        const sparkSpeed = rawSpeed * 1.2 + 40 + Math.random() * 60;
+        const sparkDirX = -tx * Math.sign(velDotT || 1) * 0.7 + pushNx * 0.3 + (Math.random() - 0.5) * 0.35;
+        const sparkDirY = -ty * Math.sign(velDotT || 1) * 0.7 + pushNy * 0.3 + (Math.random() - 0.5) * 0.35;
         const sparkLen = Math.hypot(sparkDirX, sparkDirY) || 1;
 
         world.particles.push({
           x: closestX + (Math.random() - 0.5) * 4,
           y: closestY + (Math.random() - 0.5) * 4,
-          vx: (sparkDirX / sparkLen) * sparkSpeed,
-          vy: (sparkDirY / sparkLen) * sparkSpeed,
-          radius: 1.0 + Math.random() * 1.5,
-          color: Math.random() > 0.3 ? '#fef08a' : '#f97316',
+          vx: (sparkDirX / sparkLen) * sparkSpeed + veh.vx * 0.25,
+          vy: (sparkDirY / sparkLen) * sparkSpeed + veh.vy * 0.25,
+          radius: 0.8 + Math.random() * 1.1,
+          color: '#ffffff',
+          secondaryColor: Math.random() > 0.4 ? '#fef08a' : '#fbbf24',
           alpha: 1.0,
           life: 0,
-          maxLife: 0.15 + Math.random() * 0.2,
+          maxLife: 0.12 + Math.random() * 0.18,
           type: 'spark',
+          streakLength: 0.045,
+          z: 0.5 + Math.random() * 0.7,
+          vz: 10 + Math.random() * 22,
+          bounces: 1,
         });
       }
     }
