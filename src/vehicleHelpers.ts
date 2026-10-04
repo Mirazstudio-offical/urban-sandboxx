@@ -269,61 +269,6 @@ export function isRoadMachinery(type?: string): boolean {
   );
 }
 
-export function isMotorcycle(type?: string): boolean {
-  if (!type) return false;
-  return type.startsWith('moto_') || type === 'moped_soviet';
-}
-
-export function isTractorVehicle(type?: string): boolean {
-  if (!type) return false;
-  return type.startsWith('tractor_');
-}
-
-export interface VehicleBodyPanelsConfig {
-  hasHood: boolean;           // Front hood / bonnet (passenger cars, trucks, vans)
-  hasFrontBumper: boolean;    // Front bumper fascia (cars, trucks, vans)
-  hasRearBumper: boolean;     // Rear bumper fascia (cars, trucks, vans)
-  hasFenders: boolean;        // Front left/right wings/fenders (cars, pickups, vans, trucks)
-  hasDoors: boolean;          // Cab/side passenger doors (cars, trucks, vans, tractors)
-  hasTrunk: boolean;          // Rear trunk lid / bootlid (sedans, coupes, compacts)
-  isTractorBonnet?: boolean;  // Tractor narrow engine cowl / bonnet
-  isTractorDoors?: boolean;   // Tractor cab left/right doors
-}
-
-export function getVehicleBodyPanelsConfig(type?: string): VehicleBodyPanelsConfig {
-  if (!type) {
-    return { hasHood: true, hasFrontBumper: true, hasRearBumper: true, hasFenders: true, hasDoors: true, hasTrunk: true };
-  }
-  if (isTrailerVehicle({ type } as any)) {
-    return { hasHood: false, hasFrontBumper: false, hasRearBumper: false, hasFenders: false, hasDoors: false, hasTrunk: false };
-  }
-  if (isMotorcycle(type)) {
-    return { hasHood: false, hasFrontBumper: false, hasRearBumper: false, hasFenders: false, hasDoors: false, hasTrunk: false };
-  }
-  if (isRoadMachinery(type)) {
-    return { hasHood: false, hasFrontBumper: false, hasRearBumper: false, hasFenders: false, hasDoors: false, hasTrunk: false };
-  }
-  if (isTractorVehicle(type)) {
-    // Tractors have a narrow engine bonnet and cab doors, but NO car bumpers, NO car front fenders, NO car trunk!
-    return { hasHood: true, hasFrontBumper: false, hasRearBumper: false, hasFenders: false, hasDoors: true, hasTrunk: false, isTractorBonnet: true, isTractorDoors: true };
-  }
-  // Buses & Heavy trucks (ZIL, semi) have no car trunk
-  if (type === 'bus' || type === 'bus_minibus' || type === 'truck_semi' || type === 'truck_box' || type === 'truck_dump' || type === 'truck_zil_dump' || type === 'truck_tanker' || type === 'truck_water' || type === 'truck_flatbed' || type === 'truck_covered' || type === 'cement_mixer' || type === 'garbage_truck' || type === 'truck_tow' || type === 'fire_engine' || type === 'fire_ladder' || type === 'fire_rescue') {
-    return { hasHood: type !== 'bus' && type !== 'bus_minibus', hasFrontBumper: true, hasRearBumper: false, hasFenders: true, hasDoors: true, hasTrunk: false };
-  }
-  // Sedans, coupes, classic compacts have trunks
-  const hasTrunkLid = type.includes('sedan') || type === 'coupe_gt' || type === 'muscle' || type === 'muscle_classic' || type === 'classic_compact' || type === 'micro_car' || type === 'taxi' || type === 'police';
-
-  return {
-    hasHood: true,
-    hasFrontBumper: true,
-    hasRearBumper: true,
-    hasFenders: true,
-    hasDoors: true,
-    hasTrunk: hasTrunkLid
-  };
-}
-
 export function getLPGDefaultCapacity(type: string): number {
   if (['truck_semi', 'truck_dump', 'truck_zil_dump', 'truck_box', 'truck_tanker', 'truck_water', 'truck_flatbed', 'truck_covered', 'cement_mixer', 'garbage_truck', 'bus', 'fire_engine', 'fire_ladder'].includes(type) || type.includes('semi')) {
     return 200;
