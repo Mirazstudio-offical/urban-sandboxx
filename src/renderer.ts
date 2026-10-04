@@ -37,11 +37,7 @@ import {
   traceSoftbodyPath,
   renderSoftbodyStressLines,
   renderBuckledHoodOverlay,
-  renderSaggingBumpers,
-  renderHollowChassisAndCavities,
-  renderExposedCavitiesOnDetachedPanels,
-  renderLoosePanelsAndDoors,
-  renderPanelShutlines
+  renderSaggingBumpers
 } from './softbodyVisuals';
 import { performanceConfig } from './performanceConfig';
 import { getBuildingLayout, renderBuildingInterior } from './buildingInteriors';
@@ -7981,14 +7977,14 @@ export class GameRenderer {
         fireProgress: 0, fireIntensity: 0, isFullyBurnt: false, scratches: [], deformedVertices: []
       } as unknown as VehicleDamage);
 
-      const fc = Math.min(halfL * 0.85, dmg.frontCrumple || 0);
-      const rc = Math.min(halfL * 0.80, dmg.rearCrumple || 0);
-      const ld = Math.min(halfW * 0.80, dmg.leftDent || 0);
-      const rd = Math.min(halfW * 0.80, dmg.rightDent || 0);
-      const fld = Math.min(halfL * 0.80, dmg.frontLeftDent || 0);
-      const frd = Math.min(halfL * 0.80, dmg.frontRightDent || 0);
-      const rld = Math.min(halfL * 0.80, dmg.rearLeftDent || 0);
-      const rrd = Math.min(halfL * 0.80, dmg.rearRightDent || 0);
+      const fc = Math.min(halfL * 0.55, dmg.frontCrumple || 0);
+      const rc = Math.min(halfL * 0.45, dmg.rearCrumple || 0);
+      const ld = Math.min(halfW * 0.75, dmg.leftDent || 0);
+      const rd = Math.min(halfW * 0.75, dmg.rightDent || 0);
+      const fld = Math.min(halfL * 0.4, dmg.frontLeftDent || 0);
+      const frd = Math.min(halfL * 0.4, dmg.frontRightDent || 0);
+      const rld = Math.min(halfL * 0.35, dmg.rearLeftDent || 0);
+      const rrd = Math.min(halfL * 0.35, dmg.rearRightDent || 0);
 
       const basePoly = getVehicleBasePolygon(car, halfL, halfW, fc, rc, ld, rd, fld, frd, rld, rrd);
 
@@ -8003,7 +7999,7 @@ export class GameRenderer {
           let ey = isFinite(dv.elasticY) ? Math.max(-6.0, Math.min(6.0, dv.elasticY)) : 0;
 
           const dvLen = Math.hypot(dv.localX || bv.x, dv.localY || bv.y) || 1;
-          const maxAllowed = Math.min(halfL * 0.85, Math.max(4.0, dvLen * 0.85));
+          const maxAllowed = Math.min(12.0, Math.max(3.0, dvLen * 0.35));
           const oDist = Math.hypot(ox, oy);
           if (oDist > maxAllowed) {
             ox = (ox / oDist) * maxAllowed;
@@ -8655,9 +8651,6 @@ export class GameRenderer {
 
       // Now draw body shell with high-fidelity softbody spline contour (skip for road machinery and motorcycles which have dedicated multi-component architecture)
       if (!isRoadMachinery(car.type) && !isSoloMoto && !isUralSidecar) {
-        // 1. Structural Hollow Chassis & Underbody Cavities (engine bay, cabin tub with seats, trunk well, crash bars) - deformed organically with softbody impact
-        renderHollowChassisAndCavities(ctx, car, halfL, halfW, deform);
-
         if (car.type === 'truck_zil_dump') {
           const dumpCol = car.dumpColor || '#d97706';
           ctx.save();
@@ -8686,15 +8679,6 @@ export class GameRenderer {
           ctx.closePath();
           ctx.fill();
         }
-
-        // 2. Expose internal hollow cavities on detached panels (hood, bumpers, fenders, doors, trunk) - deformed with crash
-        renderExposedCavitiesOnDetachedPanels(ctx, car, halfL, halfW, deform);
-
-        // 3. Discrete stamped panel shutlines (panel gaps separating front bumper, fenders, hood, doors, trunk)
-        renderPanelShutlines(ctx, car, halfL, halfW);
-
-        // 4. Loose panels & ajar doors (swinging on hinges with centrifugal forces, flared fenders rubbing tires)
-        renderLoosePanelsAndDoors(ctx, car, halfL, halfW);
 
         // Soot charring & fire heat glow overlays
         const fireProg = dmg.fireProgress || (dmg.isFullyBurnt ? 1.0 : (dmg.cabinFire ? 0.65 : ((dmg.engineFire || dmg.fuelTankFire) ? 0.28 : (dmg.underHoodSmolder ? 0.08 : 0))));
@@ -13090,64 +13074,22 @@ export class GameRenderer {
 
       ctx.beginPath();
       if (part.partType === 'hood') {
-        // Tapered hood profile with center character crease
+        // Tapered hood profile
         ctx.moveTo(part.length * 0.5, 0);
-        ctx.lineTo(part.length * 0.44, part.width * 0.46);
-        ctx.lineTo(-part.length * 0.44, part.width * 0.5);
-        ctx.lineTo(-part.length * 0.44, -part.width * 0.5);
-        ctx.lineTo(part.length * 0.44, -part.width * 0.46);
-      } else if (part.partType === 'bumper_front') {
-        // Aerodynamic curved front bumper fascia with grille cutout notch
+        ctx.lineTo(part.length * 0.45, part.width * 0.45);
+        ctx.lineTo(-part.length * 0.45, part.width * 0.5);
+        ctx.lineTo(-part.length * 0.45, -part.width * 0.5);
+        ctx.lineTo(part.length * 0.45, -part.width * 0.45);
+      } else if (part.partType === 'bumper_front' || part.partType === 'bumper_rear') {
+        // Rounded bumper strip
         ctx.roundRect(-part.length * 0.5, -part.width * 0.5, part.length, part.width, 2.5);
-      } else if (part.partType === 'bumper_rear') {
-        // Rear bumper fascia with license recess
-        ctx.roundRect(-part.length * 0.5, -part.width * 0.5, part.length, part.width, 2.0);
-      } else if (part.partType.startsWith('fender')) {
-        // Stamped wing / fender with curved wheel arch cutout
-        const isLeft = part.partType.includes('left');
-        ctx.moveTo(part.length * 0.5, isLeft ? -part.width * 0.2 : part.width * 0.2);
-        ctx.lineTo(part.length * 0.45, isLeft ? -part.width * 0.5 : part.width * 0.5);
-        ctx.lineTo(-part.length * 0.45, isLeft ? -part.width * 0.5 : part.width * 0.5);
-        ctx.lineTo(-part.length * 0.5, isLeft ? -part.width * 0.2 : part.width * 0.2);
-        // Wheel arch inner curved cutout
-        ctx.quadraticCurveTo(0, isLeft ? part.width * 0.15 : -part.width * 0.15, part.length * 0.5, isLeft ? -part.width * 0.2 : part.width * 0.2);
-      } else if (part.partType === 'trunk') {
-        // Trunk decklid with stamping bevel
-        ctx.roundRect(-part.length * 0.5, -part.width * 0.5, part.length, part.width, 1.8);
       } else {
-        // Door panel with window aperture frame
+        // Door panel
         ctx.rect(-part.length * 0.5, -part.width * 0.5, part.length, part.width);
       }
       ctx.closePath();
       ctx.fill();
       ctx.stroke();
-
-      // Additional panel stamping details
-      if (part.partType.startsWith('door')) {
-        // Window glass aperture cutout inside detached door
-        ctx.fillStyle = 'rgba(56, 189, 248, 0.18)';
-        ctx.fillRect(-part.length * 0.35, -part.width * 0.35, part.length * 0.7, part.width * 0.7);
-        // Door handle indentation
-        ctx.fillStyle = '#1e293b';
-        ctx.fillRect(-part.length * 0.40, -1.2, 2.8, 2.4);
-      } else if (part.partType === 'bumper_front') {
-        // Front bumper lower grille matrix
-        ctx.fillStyle = '#0f172a';
-        ctx.fillRect(-part.length * 0.25, -part.width * 0.35, part.length * 0.5, part.width * 0.7);
-      } else if (part.partType === 'bumper_rear') {
-        // Rear bumper reflector markers
-        ctx.fillStyle = '#ef4444';
-        ctx.fillRect(-part.length * 0.25, -part.width * 0.45, 1.2, 2.5);
-        ctx.fillRect(-part.length * 0.25, part.width * 0.45 - 2.5, 1.2, 2.5);
-      } else if (part.partType === 'hood') {
-        // Center hood stamping ridge
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.35)';
-        ctx.lineWidth = 1.0;
-        ctx.beginPath();
-        ctx.moveTo(part.length * 0.45, 0);
-        ctx.lineTo(-part.length * 0.40, 0);
-        ctx.stroke();
-      }
 
       // Metallic stress specular ridge highlights on crumpled regions
       ctx.strokeStyle = 'rgba(255, 255, 255, 0.55)';
@@ -13164,11 +13106,9 @@ export class GameRenderer {
       ctx.lineTo(part.length * 0.35 + 2, part.width * 0.25 + 1);
       ctx.stroke();
 
-      // Severed hinge bracket marks & mounting bolt scars
+      // Severed hinge bracket marks
       ctx.fillStyle = '#1e293b';
       ctx.fillRect(-part.length * 0.5 - 1.5, -1.8, 1.8, 3.6);
-      ctx.fillStyle = '#f1f5f9'; // Sheared steel fracture highlight
-      ctx.fillRect(-part.length * 0.5 - 1.5, -0.8, 1.0, 1.6);
 
       ctx.restore();
     }
