@@ -1495,10 +1495,9 @@ export function applyVehicleDamageAndDeformation(
 
   const now = performance.now() / 1000;
 
-  // Real-world automobile safety threshold: Modern polyurethane/foam bumpers absorb very gentle nudges
-  // (< 18 px/s) completely without structural metal crumple or mechanical shock.
-  if (impactSpeed < 18 && scrapeSpeed < 18) {
-    if (scrapeSpeed > 12 && car.damage.scratches.length < 10) {
+  // Real-world automobile safety threshold: gentle bumps (< 10 px/s) only cause scratches
+  if (impactSpeed < 10 && scrapeSpeed < 10) {
+    if (scrapeSpeed > 6 && car.damage.scratches.length < 10) {
       const dx = contactX - car.x;
       const dy = contactY - car.y;
       const cosA = Math.cos(car.angle);
@@ -1515,7 +1514,7 @@ export function applyVehicleDamageAndDeformation(
         depth: 0.1
       });
     }
-    if (scrapeSpeed > 14 && world.particles) {
+    if (scrapeSpeed > 8 && world.particles) {
       const normDist = Math.hypot(contactX - car.x, contactY - car.y) || 1;
       emitBeamNGCrashParticles(world, {
         contactX,
@@ -1531,10 +1530,10 @@ export function applyVehicleDamageAndDeformation(
     return;
   }
 
-  // Damage Cooldown Protection (shortened so multi-car pileups or repeated hard wall impacts register properly)
-  if (car.lastDamageTime && now - car.lastDamageTime < 0.12) {
+  // Damage Cooldown Protection (only debounce minor ticks; severe impacts >= 25 px/s always process)
+  if (car.lastDamageTime && (now - car.lastDamageTime < 0.08) && impactSpeed < 25) {
     // Continuous scraping during cooldown still emits directional sparks
-    if (world.particles && scrapeSpeed > 14) {
+    if (world.particles && scrapeSpeed > 10) {
       const normDist = Math.hypot(contactX - car.x, contactY - car.y) || 1;
       emitBeamNGCrashParticles(world, {
         contactX,
@@ -9676,10 +9675,18 @@ export function updateVehiclePhysics(
 
         const relVx = vp2x - vp1x;
         const relVy = vp2y - vp1y;
-        const velAlongNormal = relVx * col.normalX + relVy * col.normalY;
+        const relSpeed = Math.hypot(relVx, relVy);
+        let velAlongNormal = relVx * col.normalX + relVy * col.normalY;
 
-        if (velAlongNormal < 0) {
-          const impactSpeed = Math.abs(velAlongNormal);
+        // Ensure collision normal is directed against relative approach velocity
+        if (velAlongNormal > 0 && relSpeed > 10) {
+          col.normalX = -col.normalX;
+          col.normalY = -col.normalY;
+          velAlongNormal = -velAlongNormal;
+        }
+
+        if (velAlongNormal < 0 || relSpeed > 15) {
+          const impactSpeed = Math.max(Math.abs(velAlongNormal), relSpeed * 0.75);
 
           const I_yaw_vehicle = vehicle.mass * (vehicle.width * vehicle.width + vehicle.length * vehicle.length) / 12;
           const I_yaw_other = other.mass * (other.width * other.width + other.length * other.length) / 12;
