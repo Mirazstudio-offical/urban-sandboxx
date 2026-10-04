@@ -8569,10 +8569,75 @@ export function updateVehiclePhysics(
   }
 
   // --- PROGRESSIVE MULTI-FRAME CRUMPLE ZONE CUSHIONING & DECELERATION ---
-  if (vehicle.activeCrumple && vehicle.activeCrumple.timer > 0) {
+  if (vehicle.activeCrumple && (vehicle.activeCrumple.timer > 0 || (vehicle.activeCrumple.interlockingTimer && vehicle.activeCrumple.interlockingTimer > 0))) {
     const c = vehicle.activeCrumple;
-    c.timer = Math.max(0, c.timer - dt);
-    const progress = 1 - c.timer / c.totalDuration; // 0.0 to 1.0
+    
+    // Decay standard crumple timer
+    if (c.timer > 0) {
+      c.timer = Math.max(0, c.timer - dt);
+    }
+    const progress = c.totalDuration > 0 ? (1 - c.timer / c.totalDuration) : 1.0; // 0.0 to 1.0
+
+    // Decay sheet metal interlocking timer
+    const wasInterlocking = c.interlockingTimer !== undefined && c.interlockingTimer > 0;
+    if (c.interlockingTimer && c.interlockingTimer > 0) {
+      c.interlockingTimer = Math.max(0, c.interlockingTimer - dt);
+      
+      // If interlocking has just ended, spawn dramatic tearing metal sparks
+      if (c.interlockingTimer <= 0 && wasInterlocking) {
+        if (world.particles) {
+          const snapCount = 15 + Math.floor(Math.random() * 10);
+          for (let s = 0; s < snapCount; s++) {
+            const spkAngle = Math.random() * Math.PI * 2;
+            const spkSpeed = 30 + Math.random() * 80;
+            world.particles.push({
+              x: c.contactX + (Math.random() - 0.5) * 12,
+              y: c.contactY + (Math.random() - 0.5) * 12,
+              vx: Math.cos(spkAngle) * spkSpeed + vehicle.vx * 0.4,
+              vy: Math.sin(spkAngle) * spkSpeed + vehicle.vy * 0.4,
+              radius: 1.4 + Math.random() * 2.2,
+              color: Math.random() > 0.4 ? '#f59e0b' : '#ef4444',
+              alpha: 0.95,
+              life: 0,
+              maxLife: 0.15 + Math.random() * 0.2,
+              type: 'spark'
+            });
+          }
+        }
+      }
+    }
+
+    // Apply interlocking sheet metal coupling physics
+    if (c.interlockingTimer && c.interlockingTimer > 0) {
+      const otherId = (c as any).interlockedVehicleId;
+      if (otherId) {
+        const other = world.vehicles.find(v => v.id === otherId);
+        if (other && other.activeCrumple && (other.activeCrumple as any).interlockedVehicleId === vehicle.id) {
+          const dist = Math.hypot(other.x - vehicle.x, other.y - vehicle.y);
+          // Only couple them if they are in close proximity (less than sum of half-lengths + cushion)
+          const idealDist = (vehicle.length + other.length) * 0.42;
+          if (dist < idealDist * 2.2) {
+            // Blending linear and angular velocities to simulate physical body entanglement/welding
+            const totalMass = vehicle.mass + other.mass;
+            const avgVx = (vehicle.vx * vehicle.mass + other.vx * other.mass) / totalMass;
+            const avgVy = (vehicle.vy * vehicle.mass + other.vy * other.mass) / totalMass;
+            const avgW = (vehicle.angularVelocity * vehicle.mass + other.angularVelocity * other.mass) / totalMass;
+
+            const blend = Math.pow(0.35, dt * 10); // very fast binding/sticking
+            vehicle.vx = vehicle.vx * blend + avgVx * (1 - blend);
+            vehicle.vy = vehicle.vy * blend + avgVy * (1 - blend);
+            vehicle.angularVelocity = vehicle.angularVelocity * blend + avgW * (1 - blend);
+
+            // Progressive mechanical spring tension to keep body panels locked/coupled
+            if (dist > idealDist) {
+              const pullForce = (dist - idealDist) * 16.0 * dt;
+              vehicle.vx += ((other.x - vehicle.x) / dist) * pullForce;
+              vehicle.vy += ((other.y - vehicle.y) / dist) * pullForce;
+            }
+          }
+        }
+      }
+    }
 
     // For head-on rigid obstacles, compress forward speed.
     // For vehicle-to-vehicle or glancing collisions (preserveVelocity=true), velocity is already physically computed by 2D impulse!
@@ -8610,7 +8675,8 @@ export function updateVehiclePhysics(
         type: 'spark'});
     }
 
-    if (c.timer <= 0) {
+    const hasInterlocking = c.interlockingTimer && c.interlockingTimer > 0;
+    if (c.timer <= 0 && !hasInterlocking) {
       vehicle.activeCrumple = undefined;
     }
   }
@@ -9073,6 +9139,8 @@ export function updateVehiclePhysics(
           // Mutual crumple zone cushion for deformation & sparks, PRESERVING velocity (preserveVelocity: true)
           if (impactSpeed > 20) {
             const crumpleDuration = 0.08 + Math.min(0.06, impactSpeed / 800);
+            const isHeavyInterlock = impactSpeed > 24;
+            const interlockingDuration = isHeavyInterlock ? 0.35 + Math.min(0.75, impactSpeed * 0.005) : 0;
             if (!vehicle.activeCrumple) {
               vehicle.activeCrumple = {
                 timer: crumpleDuration,
@@ -9083,8 +9151,13 @@ export function updateVehiclePhysics(
                 reboundSpeed: 0,
                 contactX: col.contactX,
                 contactY: col.contactY,
-                preserveVelocity: true
+                preserveVelocity: true,
+                interlockingTimer: interlockingDuration,
+                interlockingFriction: 0.85
               };
+              if (isHeavyInterlock) {
+                (vehicle.activeCrumple as any).interlockedVehicleId = other.id;
+              }
             }
             if (!other.activeCrumple) {
               other.activeCrumple = {
@@ -9096,8 +9169,13 @@ export function updateVehiclePhysics(
                 reboundSpeed: 0,
                 contactX: col.contactX,
                 contactY: col.contactY,
-                preserveVelocity: true
+                preserveVelocity: true,
+                interlockingTimer: interlockingDuration,
+                interlockingFriction: 0.85
               };
+              if (isHeavyInterlock) {
+                (other.activeCrumple as any).interlockedVehicleId = vehicle.id;
+              }
             }
           }
 
