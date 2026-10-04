@@ -1,4 +1,4 @@
-import { CAR_CONFIGS, canVehicleHaveHitch, createDefaultEngineState, createDefaultFuelSystem, createDefaultFluidTank, ensureVehicleFluidTank, liquidTypeToStainType, createDefaultVehicleDamage, ensureVehicleDamage, getVehicleFuelCapPosition, getVehicleAxleGeometry, isTrailerVehicle, isRoadMachinery, getVehicleDriveType, SPEED_KMH_TO_PX_S, PX_S_TO_SPEED_KMH, getLPGDefaultCapacity, cycleVehicleDiffLock, getVehicleDiffCapabilities, ensureVehicleDiffLock } from './vehicleHelpers';
+import { CAR_CONFIGS, canVehicleHaveHitch, createDefaultEngineState, createDefaultFuelSystem, createDefaultFluidTank, ensureVehicleFluidTank, liquidTypeToStainType, createDefaultVehicleDamage, ensureVehicleDamage, getVehicleFuelCapPosition, getVehicleAxleGeometry, isTrailerVehicle, isRoadMachinery, getVehicleDriveType, SPEED_KMH_TO_PX_S, PX_S_TO_SPEED_KMH, getLPGDefaultCapacity, cycleVehicleDiffLock, getVehicleDiffCapabilities, ensureVehicleDiffLock, getVehicleBodyPanelsConfig } from './vehicleHelpers';
 import { Building, GameWorld, InputState, Particle, Pedestrian, Player, SkidMark, Vehicle, StreetProp, FluidStainType, Roundabout, RollingStockCar, WorldWind } from './types';
 import { getBuildingLayout, constrainPlayerToInterior } from './buildingInteriors';
 import { constrainPlayerToBusInterior } from './busInteriorSystem';
@@ -1222,20 +1222,20 @@ export function emitBeamNGCrashParticles(
       const sparkInheritVy = vehicleA.vy * 0.32 + (vehicleB ? vehicleB.vy * 0.2 : 0);
 
       pList.push({
-        x: contactX + (Math.random() - 0.5) * 5,
-        y: contactY + (Math.random() - 0.5) * 5,
+        x: contactX + (Math.random() - 0.5) * 4,
+        y: contactY + (Math.random() - 0.5) * 4,
         vx: dirX * spd + sparkInheritVx,
         vy: dirY * spd + sparkInheritVy,
-        radius: 0.8 + Math.random() * 1.3, // Micro-scaled filings
+        radius: 0.45 + Math.random() * 0.45, // Micro-scaled filings (0.45 - 0.90px)
         color: '#ffffff', // Blackbody thermal cooling calculated by renderer
         secondaryColor: Math.random() < 0.6 ? '#fef08a' : '#fbbf24',
         alpha: 1.0,
         life: 0,
-        maxLife: 0.12 + Math.random() * 0.22,
+        maxLife: 0.10 + Math.random() * 0.16,
         type: 'spark',
-        streakLength: 0.035 + Math.random() * 0.035,
-        z: 0.6 + Math.random() * 1.2,
-        vz: 12 + Math.random() * 30,
+        streakLength: 0.025 + Math.random() * 0.025,
+        z: 0.5 + Math.random() * 0.9,
+        vz: 10 + Math.random() * 24,
         bounces: 1
       });
     }
@@ -1245,25 +1245,25 @@ export function emitBeamNGCrashParticles(
   if (hasWindshieldCrack || hasHeadlightBreak || hasTaillightBreak) {
     // Front windshield / side tempered glass nuggets (crystalline granules)
     if (hasWindshieldCrack) {
-      const pebbleCount = Math.floor(18 + Math.min(26, impactSpeed * 0.25));
+      const pebbleCount = Math.floor(14 + Math.min(20, impactSpeed * 0.20));
       for (let g = 0; g < pebbleCount; g++) {
         const spreadAngle = Math.atan2(normalY, normalX) + (Math.random() - 0.5) * 1.8;
-        const spd = 45 + Math.random() * (impactSpeed * 2.2 + 80);
+        const spd = 40 + Math.random() * (impactSpeed * 2.0 + 70);
         pList.push({
-          x: contactX + (Math.random() - 0.5) * 8,
-          y: contactY + (Math.random() - 0.5) * 8,
+          x: contactX + (Math.random() - 0.5) * 5,
+          y: contactY + (Math.random() - 0.5) * 5,
           vx: Math.cos(spreadAngle) * spd + vehicleA.vx * 0.25,
           vy: Math.sin(spreadAngle) * spd + vehicleA.vy * 0.25,
-          radius: 1.0 + Math.random() * 1.6, // Fine safety glass nuggets (1.0 - 2.6px)
-          aspect: 1.1 + Math.random() * 0.7,
+          radius: 0.45 + Math.random() * 0.45, // Fine safety glass nuggets (0.45 - 0.90px)
+          aspect: 1.05 + Math.random() * 0.35,
           color: 'rgba(224, 242, 254, 0.88)',
           alpha: 0.95,
           life: 0,
-          maxLife: 0.7 + Math.random() * 0.9,
+          maxLife: 0.6 + Math.random() * 0.7,
           type: 'glass_shard',
           glassSubtype: 'safety_pebble',
-          z: 1.4 + Math.random() * 1.8,
-          vz: 24 + Math.random() * 45,
+          z: 1.2 + Math.random() * 1.5,
+          vz: 20 + Math.random() * 35,
           angle: Math.random() * Math.PI * 2,
           angularVelocity: (Math.random() - 0.5) * 26,
           shapeSeed: Math.floor(Math.random() * 10000),
@@ -1275,26 +1275,26 @@ export function emitBeamNGCrashParticles(
 
     // Headlight clear & amber polycarbonate splinters
     if (hasHeadlightBreak) {
-      const hlCount = 10 + Math.floor(Math.random() * 8);
+      const hlCount = 8 + Math.floor(Math.random() * 6);
       for (let h = 0; h < hlCount; h++) {
         const spreadAngle = Math.atan2(normalY, normalX) + (Math.random() - 0.5) * 1.5;
-        const spd = 50 + Math.random() * (impactSpeed * 2.0 + 70);
+        const spd = 45 + Math.random() * (impactSpeed * 1.8 + 60);
         const isAmber = (h % 3 === 0);
         pList.push({
-          x: contactX + (Math.random() - 0.5) * 6,
-          y: contactY + (Math.random() - 0.5) * 6,
+          x: contactX + (Math.random() - 0.5) * 4,
+          y: contactY + (Math.random() - 0.5) * 4,
           vx: Math.cos(spreadAngle) * spd + vehicleA.vx * 0.25,
           vy: Math.sin(spreadAngle) * spd + vehicleA.vy * 0.25,
-          radius: 1.2 + Math.random() * 1.8,
-          aspect: 1.4 + Math.random() * 1.0,
+          radius: 0.50 + Math.random() * 0.45,
+          aspect: 1.1 + Math.random() * 0.35,
           color: isAmber ? '#fbbf24' : '#f8fafc',
           alpha: 0.92,
           life: 0,
-          maxLife: 0.65 + Math.random() * 0.85,
+          maxLife: 0.6 + Math.random() * 0.7,
           type: 'glass_shard',
           glassSubtype: 'headlight',
-          z: 1.2 + Math.random() * 1.6,
-          vz: 22 + Math.random() * 40,
+          z: 1.0 + Math.random() * 1.4,
+          vz: 18 + Math.random() * 32,
           angle: Math.random() * Math.PI * 2,
           angularVelocity: (Math.random() - 0.5) * 28,
           shapeSeed: Math.floor(Math.random() * 10000),
@@ -1306,25 +1306,25 @@ export function emitBeamNGCrashParticles(
 
     // Taillight ruby red splinters
     if (hasTaillightBreak) {
-      const tlCount = 10 + Math.floor(Math.random() * 8);
+      const tlCount = 8 + Math.floor(Math.random() * 6);
       for (let t = 0; t < tlCount; t++) {
         const spreadAngle = Math.atan2(normalY, normalX) + (Math.random() - 0.5) * 1.5;
-        const spd = 45 + Math.random() * (impactSpeed * 2.0 + 60);
+        const spd = 40 + Math.random() * (impactSpeed * 1.8 + 50);
         pList.push({
-          x: contactX + (Math.random() - 0.5) * 6,
-          y: contactY + (Math.random() - 0.5) * 6,
+          x: contactX + (Math.random() - 0.5) * 4,
+          y: contactY + (Math.random() - 0.5) * 4,
           vx: Math.cos(spreadAngle) * spd + vehicleA.vx * 0.25,
           vy: Math.sin(spreadAngle) * spd + vehicleA.vy * 0.25,
-          radius: 1.2 + Math.random() * 1.8,
-          aspect: 1.3 + Math.random() * 0.9,
+          radius: 0.50 + Math.random() * 0.45,
+          aspect: 1.1 + Math.random() * 0.35,
           color: '#ef4444',
           alpha: 0.92,
           life: 0,
-          maxLife: 0.65 + Math.random() * 0.85,
+          maxLife: 0.6 + Math.random() * 0.7,
           type: 'glass_shard',
           glassSubtype: 'taillight',
-          z: 1.2 + Math.random() * 1.6,
-          vz: 20 + Math.random() * 38,
+          z: 1.0 + Math.random() * 1.4,
+          vz: 16 + Math.random() * 30,
           angle: Math.random() * Math.PI * 2,
           angularVelocity: (Math.random() - 0.5) * 26,
           shapeSeed: Math.floor(Math.random() * 10000),
@@ -1338,26 +1338,26 @@ export function emitBeamNGCrashParticles(
   // 3. BODY PANEL DEBRIS: TORN PAINT FLAKES & DARK PLASTIC BUMPER CLIPS
   if (impactSpeed > 22 || scrapeSpeed > 20) {
     // Paint flakes (thin sheet metal flakes, matching vehicle body color with primer back)
-    const flakeCount = Math.min(18, Math.floor(4 + impactSpeed * 0.16));
+    const flakeCount = Math.min(14, Math.floor(3 + impactSpeed * 0.14));
     for (let f = 0; f < flakeCount; f++) {
       const ang = Math.atan2(normalY, normalX) + (Math.random() - 0.5) * 2.0;
-      const spd = 30 + Math.random() * (impactSpeed * 1.6 + 50);
+      const spd = 28 + Math.random() * (impactSpeed * 1.4 + 45);
       pList.push({
-        x: contactX + (Math.random() - 0.5) * 6,
-        y: contactY + (Math.random() - 0.5) * 6,
+        x: contactX + (Math.random() - 0.5) * 4,
+        y: contactY + (Math.random() - 0.5) * 4,
         vx: Math.cos(ang) * spd + vehicleA.vx * 0.2,
         vy: Math.sin(ang) * spd + vehicleA.vy * 0.2,
-        radius: 1.3 + Math.random() * 1.8,
-        aspect: 1.6 + Math.random() * 1.2,
+        radius: 0.55 + Math.random() * 0.45,
+        aspect: 1.15 + Math.random() * 0.4,
         color: vehicleA.color,
         secondaryColor: '#475569', // Bare metal / dark primer
         alpha: 0.90,
         life: 0,
-        maxLife: 0.5 + Math.random() * 0.6,
+        maxLife: 0.45 + Math.random() * 0.5,
         type: 'debris',
         debrisSubtype: 'metal_flake',
-        z: 1.0 + Math.random() * 1.5,
-        vz: 18 + Math.random() * 32,
+        z: 0.9 + Math.random() * 1.2,
+        vz: 15 + Math.random() * 26,
         angle: Math.random() * Math.PI * 2,
         angularVelocity: (Math.random() - 0.5) * 22,
         shapeSeed: Math.floor(Math.random() * 10000),
@@ -1367,25 +1367,25 @@ export function emitBeamNGCrashParticles(
     }
 
     // Plastic bumper clips & black fascia fragments
-    const clipCount = Math.min(10, Math.floor(2 + impactSpeed * 0.1));
+    const clipCount = Math.min(8, Math.floor(2 + impactSpeed * 0.08));
     for (let c = 0; c < clipCount; c++) {
       const ang = Math.atan2(normalY, normalX) + (Math.random() - 0.5) * 1.8;
-      const spd = 25 + Math.random() * (impactSpeed * 1.4 + 40);
+      const spd = 22 + Math.random() * (impactSpeed * 1.2 + 35);
       pList.push({
-        x: contactX + (Math.random() - 0.5) * 6,
-        y: contactY + (Math.random() - 0.5) * 6,
+        x: contactX + (Math.random() - 0.5) * 4,
+        y: contactY + (Math.random() - 0.5) * 4,
         vx: Math.cos(ang) * spd + vehicleA.vx * 0.2,
         vy: Math.sin(ang) * spd + vehicleA.vy * 0.2,
-        radius: 1.4 + Math.random() * 2.2,
-        aspect: 1.2 + Math.random() * 0.8,
+        radius: 0.55 + Math.random() * 0.45,
+        aspect: 1.1 + Math.random() * 0.35,
         color: '#1e293b', // Dark ABS plastic
         alpha: 0.92,
         life: 0,
-        maxLife: 0.45 + Math.random() * 0.55,
+        maxLife: 0.4 + Math.random() * 0.45,
         type: 'debris',
         debrisSubtype: 'plastic_chunk',
-        z: 1.0 + Math.random() * 1.4,
-        vz: 16 + Math.random() * 28,
+        z: 0.8 + Math.random() * 1.1,
+        vz: 14 + Math.random() * 22,
         angle: Math.random() * Math.PI * 2,
         angularVelocity: (Math.random() - 0.5) * 18,
         shapeSeed: Math.floor(Math.random() * 10000),
@@ -1396,25 +1396,25 @@ export function emitBeamNGCrashParticles(
 
     // Concrete chips if hitting concrete building, curb or post
     if (isConcrete) {
-      const chipCount = 6 + Math.floor(Math.random() * 6);
+      const chipCount = 5 + Math.floor(Math.random() * 4);
       for (let k = 0; k < chipCount; k++) {
         const ang = Math.atan2(normalY, normalX) + (Math.random() - 0.5) * 1.6;
-        const spd = 20 + Math.random() * 65;
+        const spd = 18 + Math.random() * 55;
         pList.push({
-          x: contactX + (Math.random() - 0.5) * 6,
-          y: contactY + (Math.random() - 0.5) * 6,
+          x: contactX + (Math.random() - 0.5) * 4,
+          y: contactY + (Math.random() - 0.5) * 4,
           vx: Math.cos(ang) * spd,
           vy: Math.sin(ang) * spd,
-          radius: 1.2 + Math.random() * 1.8,
-          aspect: 1.1 + Math.random() * 0.6,
+          radius: 0.50 + Math.random() * 0.45,
+          aspect: 1.05 + Math.random() * 0.3,
           color: '#94a3b8',
           alpha: 0.88,
           life: 0,
-          maxLife: 0.4 + Math.random() * 0.4,
+          maxLife: 0.35 + Math.random() * 0.35,
           type: 'debris',
           debrisSubtype: 'concrete_chip',
-          z: 0.8 + Math.random() * 1.2,
-          vz: 14 + Math.random() * 25,
+          z: 0.7 + Math.random() * 1.0,
+          vz: 12 + Math.random() * 20,
           angle: Math.random() * Math.PI * 2,
           angularVelocity: (Math.random() - 0.5) * 16,
           shapeSeed: Math.floor(Math.random() * 10000),
@@ -1427,20 +1427,20 @@ export function emitBeamNGCrashParticles(
 
   // 4. UNDERCARRIAGE DISLODGED ROAD DUST (BeamNG crash puff)
   if (impactSpeed > 36) {
-    const dustPuffCount = 2 + Math.floor(Math.random() * 3);
+    const dustPuffCount = 2 + Math.floor(Math.random() * 2);
     for (let d = 0; d < dustPuffCount; d++) {
       pList.push({
-        x: contactX + (Math.random() - 0.5) * 10,
-        y: contactY + (Math.random() - 0.5) * 10,
-        vx: vehicleA.vx * 0.25 + (Math.random() - 0.5) * 20,
-        vy: vehicleA.vy * 0.25 + (Math.random() - 0.5) * 20,
-        radius: 12 + Math.random() * 14,
-        targetRadius: 28 + Math.random() * 16,
+        x: contactX + (Math.random() - 0.5) * 6,
+        y: contactY + (Math.random() - 0.5) * 6,
+        vx: vehicleA.vx * 0.25 + (Math.random() - 0.5) * 15,
+        vy: vehicleA.vy * 0.25 + (Math.random() - 0.5) * 15,
+        radius: 2.2 + Math.random() * 2.8,
+        targetRadius: 4.8 + Math.random() * 3.8,
         color: '#78716c',
         alpha: 0.35,
         initialAlpha: 0.35,
         life: 0,
-        maxLife: 0.7 + Math.random() * 0.5,
+        maxLife: 0.6 + Math.random() * 0.4,
         type: 'dust'
       });
     }
@@ -1448,26 +1448,26 @@ export function emitBeamNGCrashParticles(
 
   // 5. RADIATOR COOLANT AEROSOL BURST (BeamNG pressurized radiator punch)
   if (hasRadiatorPuncture && impactSpeed > 28) {
-    const steamCount = 5 + Math.floor(Math.random() * 5);
+    const steamCount = 4 + Math.floor(Math.random() * 4);
     for (let s = 0; s < steamCount; s++) {
       const ang = Math.atan2(normalY, normalX) + (Math.random() - 0.5) * 1.2;
-      const spd = 30 + Math.random() * 60;
+      const spd = 25 + Math.random() * 45;
       pList.push({
-        x: contactX + (Math.random() - 0.5) * 8,
-        y: contactY + (Math.random() - 0.5) * 8,
-        vx: Math.cos(ang) * spd + vehicleA.vx * 0.3,
-        vy: Math.sin(ang) * spd + vehicleA.vy * 0.3,
-        radius: 6 + Math.random() * 8,
+        x: contactX + (Math.random() - 0.5) * 5,
+        y: contactY + (Math.random() - 0.5) * 5,
+        vx: Math.cos(ang) * spd + vehicleA.vx * 0.25,
+        vy: Math.sin(ang) * spd + vehicleA.vy * 0.25,
+        radius: 2.0 + Math.random() * 2.2,
         color: '#f8fafc',
         alpha: 0.65,
         initialAlpha: 0.65,
         life: 0,
-        maxLife: 1.0 + Math.random() * 0.8,
+        maxLife: 0.8 + Math.random() * 0.6,
         type: 'engine_smoke',
         isSteam: true,
         tempC: 108,
-        buoyancy: 16,
-        expansionRate: 15
+        buoyancy: 14,
+        expansionRate: 9
       });
     }
   }
@@ -2205,61 +2205,73 @@ export function applyVehicleDamageAndDeformation(
   });
 
   // Physical Detachable Body Panels & Mounting Points (Hood, Bumpers, Fenders, Doors, Trunk)
+  // Strictly validated against vehicle architecture (motorcycles, tractors, road machinery, trailers)
+  const panelsConfig = getVehicleBodyPanelsConfig(car.type);
+
   // 1. Partial mount failure (sheared clips): bumpers sag/dangle, doors pop ajar, loose fenders rub tires
   if (impactSpeed > 18 || severity > 0.25) {
     // Front Bumper clip shearing (asymmetric corner hits snap one side)
-    if (normX > 0.15 && normY < -0.12 && !dmg.frontBumperDetached) {
-      dmg.bumperSagLeft = Math.min(1.0, (dmg.bumperSagLeft || 0) + 0.65);
-    }
-    if (normX > 0.15 && normY > 0.12 && !dmg.frontBumperDetached) {
-      dmg.bumperSagRight = Math.min(1.0, (dmg.bumperSagRight || 0) + 0.65);
+    if (panelsConfig.hasFrontBumper) {
+      if (normX > 0.15 && normY < -0.12 && !dmg.frontBumperDetached) {
+        dmg.bumperSagLeft = Math.min(1.0, (dmg.bumperSagLeft || 0) + 0.65);
+      }
+      if (normX > 0.15 && normY > 0.12 && !dmg.frontBumperDetached) {
+        dmg.bumperSagRight = Math.min(1.0, (dmg.bumperSagRight || 0) + 0.65);
+      }
     }
     // Rear Bumper clip shearing
-    if (normX < -0.15 && normY < -0.12 && !dmg.rearBumperDetached) {
-      dmg.rearBumperSagLeft = Math.min(1.0, (dmg.rearBumperSagLeft || 0) + 0.65);
-    }
-    if (normX < -0.15 && normY > 0.12 && !dmg.rearBumperDetached) {
-      dmg.rearBumperSagRight = Math.min(1.0, (dmg.rearBumperSagRight || 0) + 0.65);
+    if (panelsConfig.hasRearBumper) {
+      if (normX < -0.15 && normY < -0.12 && !dmg.rearBumperDetached) {
+        dmg.rearBumperSagLeft = Math.min(1.0, (dmg.rearBumperSagLeft || 0) + 0.65);
+      }
+      if (normX < -0.15 && normY > 0.12 && !dmg.rearBumperDetached) {
+        dmg.rearBumperSagRight = Math.min(1.0, (dmg.rearBumperSagRight || 0) + 0.65);
+      }
     }
 
     // Door latch striker failure (moderate T-bone / side collision snaps latch, door springs ajar on hinges)
-    if (normY < -0.28 && !dmg.leftDoorDetached) {
-      dmg.doorFLAjar = Math.min(1.0, (dmg.doorFLAjar || 0) + 0.55);
-    }
-    if (normY > 0.28 && !dmg.rightDoorDetached) {
-      dmg.doorFRAjar = Math.min(1.0, (dmg.doorFRAjar || 0) + 0.55);
+    if (panelsConfig.hasDoors) {
+      if (normY < -0.28 && !dmg.leftDoorDetached) {
+        dmg.doorFLAjar = Math.min(1.0, (dmg.doorFLAjar || 0) + 0.55);
+      }
+      if (normY > 0.28 && !dmg.rightDoorDetached) {
+        dmg.doorFRAjar = Math.min(1.0, (dmg.doorFRAjar || 0) + 0.55);
+      }
     }
 
     // Fender front mounting bracket failure (fender flares loose and presses into tire)
-    if (normX > 0.12 && normY < -0.22 && !dmg.fenderFLDetached) {
-      dmg.fenderFLLoose = true;
-      dmg.wheelRubResistance = (dmg.wheelRubResistance || 0) + 4.5;
-    }
-    if (normX > 0.12 && normY > 0.22 && !dmg.fenderFRDetached) {
-      dmg.fenderFRLoose = true;
-      dmg.wheelRubResistance = (dmg.wheelRubResistance || 0) + 4.5;
+    if (panelsConfig.hasFenders) {
+      if (normX > 0.12 && normY < -0.22 && !dmg.fenderFLDetached) {
+        dmg.fenderFLLoose = true;
+        dmg.wheelRubResistance = (dmg.wheelRubResistance || 0) + 4.5;
+      }
+      if (normX > 0.12 && normY > 0.22 && !dmg.fenderFRDetached) {
+        dmg.fenderFRLoose = true;
+        dmg.wheelRubResistance = (dmg.wheelRubResistance || 0) + 4.5;
+      }
     }
   }
 
   // 2. Complete panel detachment (all mounts sheared under violent kinetic energy)
   if (impactSpeed > 28 || severity > 0.44) {
     // Hood detachment (front slam latch sheared + rear cowl hinges torn)
-    if ((dmg.frontCrumple > 7.0 || (severity > 0.58 && normX > 0.20)) && !dmg.hoodDetached) {
+    if (panelsConfig.hasHood && (dmg.frontCrumple > 7.0 || (severity > 0.58 && normX > 0.20)) && !dmg.hoodDetached) {
       dmg.hoodDetached = true;
       dmg.hoodBuckled = true;
+      const isTractorBonnet = panelsConfig.isTractorBonnet;
       world.detachedParts.push({
-        id: 'hood_' + car.id + '_' + Date.now(),
+        id: (isTractorBonnet ? 'tractor_bonnet_' : 'hood_') + car.id + '_' + Date.now(),
         vehicleId: car.id,
-        partType: 'hood',
+        partType: isTractorBonnet ? 'tractor_bonnet' : 'hood',
         color: car.color,
-        x: car.x + cosA * (halfL * 0.3),
-        y: car.y + sinA * (halfL * 0.3),
+        x: car.x + cosA * (halfL * (isTractorBonnet ? 0.2 : 0.3)),
+        y: car.y + sinA * (halfL * (isTractorBonnet ? 0.2 : 0.3)),
         vx: car.vx * 0.5 + cosA * (60 + impactSpeed * 0.8) + (Math.random() - 0.5) * 40,
         vy: car.vy * 0.5 + sinA * (60 + impactSpeed * 0.8) + (Math.random() - 0.5) * 40,
         angle: car.angle + (Math.random() - 0.5) * 0.6,
         angularVelocity: (Math.random() - 0.5) * 12.0,
-        length: halfL * 0.75,
-        width: halfW * 1.6,
+        length: halfL * (isTractorBonnet ? 0.55 : 0.75),
+        width: halfW * (isTractorBonnet ? 0.62 : 1.6),
         life: 0,
         maxLife: 240,
         strain: severity
@@ -2267,7 +2279,7 @@ export function applyVehicleDamageAndDeformation(
     }
 
     // Front Bumper detachment (both crash horns severed)
-    if ((dmg.frontCrumple > 5.5 || (severity > 0.45 && normX > 0.22) || ((dmg.bumperSagLeft || 0) > 0.5 && (dmg.bumperSagRight || 0) > 0.5)) && !dmg.frontBumperDetached) {
+    if (panelsConfig.hasFrontBumper && (dmg.frontCrumple > 5.5 || (severity > 0.45 && normX > 0.22) || ((dmg.bumperSagLeft || 0) > 0.5 && (dmg.bumperSagRight || 0) > 0.5)) && !dmg.frontBumperDetached) {
       dmg.frontBumperDetached = true;
       dmg.bumperSagLeft = 0;
       dmg.bumperSagRight = 0;
@@ -2291,7 +2303,7 @@ export function applyVehicleDamageAndDeformation(
     }
 
     // Rear Bumper detachment
-    if ((dmg.rearCrumple > 4.8 || (severity > 0.45 && normX < -0.22)) && !dmg.rearBumperDetached) {
+    if (panelsConfig.hasRearBumper && (dmg.rearCrumple > 4.8 || (severity > 0.45 && normX < -0.22)) && !dmg.rearBumperDetached) {
       dmg.rearBumperDetached = true;
       dmg.rearBumperSagLeft = 0;
       dmg.rearBumperSagRight = 0;
@@ -2315,7 +2327,7 @@ export function applyVehicleDamageAndDeformation(
     }
 
     // Front-Left Fender / Wing detachment (mounting bolts torn from apron and cowl)
-    if ((dmg.frontLeftDent > 4.2 || (severity > 0.46 && normX > 0.12 && normY < -0.24)) && !dmg.fenderFLDetached) {
+    if (panelsConfig.hasFenders && (dmg.frontLeftDent > 4.2 || (severity > 0.46 && normX > 0.12 && normY < -0.24)) && !dmg.fenderFLDetached) {
       dmg.fenderFLDetached = true;
       dmg.fenderFLLoose = false;
       world.detachedParts.push({
@@ -2338,7 +2350,7 @@ export function applyVehicleDamageAndDeformation(
     }
 
     // Front-Right Fender / Wing detachment
-    if ((dmg.frontRightDent > 4.2 || (severity > 0.46 && normX > 0.12 && normY > 0.24)) && !dmg.fenderFRDetached) {
+    if (panelsConfig.hasFenders && (dmg.frontRightDent > 4.2 || (severity > 0.46 && normX > 0.12 && normY > 0.24)) && !dmg.fenderFRDetached) {
       dmg.fenderFRDetached = true;
       dmg.fenderFRLoose = false;
       world.detachedParts.push({
@@ -2361,13 +2373,14 @@ export function applyVehicleDamageAndDeformation(
     }
 
     // Left Door detachment (both hinges sheared from A/B pillar)
-    if ((dmg.leftDent > 4.0 || (severity > 0.50 && normY < -0.32)) && !dmg.leftDoorDetached) {
+    if (panelsConfig.hasDoors && (dmg.leftDent > 4.0 || (severity > 0.50 && normY < -0.32)) && !dmg.leftDoorDetached) {
       dmg.leftDoorDetached = true;
       dmg.doorFLAjar = 0;
+      const isTractorDoor = panelsConfig.isTractorDoors;
       world.detachedParts.push({
-        id: 'door_l_' + car.id + '_' + Date.now(),
+        id: (isTractorDoor ? 'tractor_door_l_' : 'door_l_') + car.id + '_' + Date.now(),
         vehicleId: car.id,
-        partType: 'door_left',
+        partType: isTractorDoor ? 'tractor_door' : 'door_left',
         color: car.color,
         x: car.x - sinA * (halfW * 0.8),
         y: car.y + cosA * (halfW * 0.8),
@@ -2375,8 +2388,8 @@ export function applyVehicleDamageAndDeformation(
         vy: car.vy * 0.4 + cosA * (40 + impactSpeed * 0.5) + (Math.random() - 0.5) * 25,
         angle: car.angle + (Math.random() - 0.5) * 0.9,
         angularVelocity: (Math.random() - 0.5) * 10.0,
-        length: halfL * 0.6,
-        width: 5,
+        length: halfL * (isTractorDoor ? 0.38 : 0.6),
+        width: isTractorDoor ? 4.5 : 5,
         life: 0,
         maxLife: 240,
         strain: severity
@@ -2384,13 +2397,14 @@ export function applyVehicleDamageAndDeformation(
     }
 
     // Right Door detachment
-    if ((dmg.rightDent > 4.0 || (severity > 0.50 && normY > 0.32)) && !dmg.rightDoorDetached) {
+    if (panelsConfig.hasDoors && (dmg.rightDent > 4.0 || (severity > 0.50 && normY > 0.32)) && !dmg.rightDoorDetached) {
       dmg.rightDoorDetached = true;
       dmg.doorFRAjar = 0;
+      const isTractorDoor = panelsConfig.isTractorDoors;
       world.detachedParts.push({
-        id: 'door_r_' + car.id + '_' + Date.now(),
+        id: (isTractorDoor ? 'tractor_door_r_' : 'door_r_') + car.id + '_' + Date.now(),
         vehicleId: car.id,
-        partType: 'door_right',
+        partType: isTractorDoor ? 'tractor_door' : 'door_right',
         color: car.color,
         x: car.x + sinA * (halfW * 0.8),
         y: car.y - cosA * (halfW * 0.8),
@@ -2398,8 +2412,8 @@ export function applyVehicleDamageAndDeformation(
         vy: car.vy * 0.4 - cosA * (40 + impactSpeed * 0.5) + (Math.random() - 0.5) * 25,
         angle: car.angle + (Math.random() - 0.5) * 0.9,
         angularVelocity: (Math.random() - 0.5) * 10.0,
-        length: halfL * 0.6,
-        width: 5,
+        length: halfL * (isTractorDoor ? 0.38 : 0.6),
+        width: isTractorDoor ? 4.5 : 5,
         life: 0,
         maxLife: 240,
         strain: severity
@@ -2407,7 +2421,7 @@ export function applyVehicleDamageAndDeformation(
     }
 
     // Trunk Lid detachment
-    if ((dmg.rearCrumple > 5.2 && normX < -0.32) && !dmg.trunkDetached) {
+    if (panelsConfig.hasTrunk && (dmg.rearCrumple > 5.2 && normX < -0.32) && !dmg.trunkDetached) {
       dmg.trunkDetached = true;
       world.detachedParts.push({
         id: 'trunk_' + car.id + '_' + Date.now(),

@@ -1967,6 +1967,8 @@ export interface PedestrianPath {
 
 export type DetachedPartType = 
   | 'hood' 
+  | 'tractor_bonnet'
+  | 'tractor_door'
   | 'bumper_front' 
   | 'bumper_rear' 
   | 'door_left' 

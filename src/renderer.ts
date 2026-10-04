@@ -8655,8 +8655,8 @@ export class GameRenderer {
 
       // Now draw body shell with high-fidelity softbody spline contour (skip for road machinery and motorcycles which have dedicated multi-component architecture)
       if (!isRoadMachinery(car.type) && !isSoloMoto && !isUralSidecar) {
-        // 1. Structural Hollow Chassis & Underbody Cavities (engine bay, cabin tub with seats, trunk well, crash bars)
-        renderHollowChassisAndCavities(ctx, car, halfL, halfW);
+        // 1. Structural Hollow Chassis & Underbody Cavities (engine bay, cabin tub with seats, trunk well, crash bars) - deformed organically with softbody impact
+        renderHollowChassisAndCavities(ctx, car, halfL, halfW, deform);
 
         if (car.type === 'truck_zil_dump') {
           const dumpCol = car.dumpColor || '#d97706';
@@ -8687,8 +8687,8 @@ export class GameRenderer {
           ctx.fill();
         }
 
-        // 2. Expose internal hollow cavities on detached panels (hood, bumpers, fenders, doors, trunk)
-        renderExposedCavitiesOnDetachedPanels(ctx, car, halfL, halfW);
+        // 2. Expose internal hollow cavities on detached panels (hood, bumpers, fenders, doors, trunk) - deformed with crash
+        renderExposedCavitiesOnDetachedPanels(ctx, car, halfL, halfW, deform);
 
         // 3. Discrete stamped panel shutlines (panel gaps separating front bumper, fenders, hood, doors, trunk)
         renderPanelShutlines(ctx, car, halfL, halfW);

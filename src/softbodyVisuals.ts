@@ -1,4 +1,11 @@
 import { DeformVertex, Vehicle } from './types';
+import {
+  isRoadMachinery,
+  isTrailerVehicle,
+  isMotorcycle,
+  isTractorVehicle,
+  getVehicleBodyPanelsConfig
+} from './vehicleHelpers';
 
 /**
  * Traces a softbody perimeter contour using Catmull-Rom splines for smooth metal curves
@@ -65,106 +72,247 @@ export function traceSoftbodyPath(
 }
 
 /**
+ * Physical internal cavity deformation solver:
+ * Propagates kinetic collision crush waves from perimeter crumple zones directly into
+ * interior components (radiator, engine block, battery, strut towers, cabin tub, seats, trunk well).
+ * Internal components physically crush, bend, tilt, crack and compress rather than remaining static.
+ */
+function createInternalDeformSolver(
+  car: Vehicle,
+  halfL: number,
+  halfW: number,
+  deform?: (x: number, y: number) => [number, number]
+): (lx: number, ly: number) => [number, number] {
+  const dmg = car.damage;
+  const fc = dmg?.frontCrumple || 0;
+  const rc = dmg?.rearCrumple || 0;
+  const fld = dmg?.frontLeftDent || 0;
+  const frd = dmg?.frontRightDent || 0;
+  const ld = dmg?.leftDent || 0;
+  const rd = dmg?.rightDent || 0;
+
+  return (lx: number, ly: number): [number, number] => {
+    let dx = 0;
+    let dy = 0;
+
+    // 1. Frontal impact crush wave (radiator, crash horn, engine block, suspension strut towers)
+    if (lx > 0) {
+      const fReach = Math.max(0, Math.min(1.0, (lx - halfL * 0.05) / (halfL * 0.95)));
+      dx -= fc * fReach * 0.95;
+      if (ly < 0) {
+        dx -= fld * fReach * 0.85;
+      } else {
+        dx -= frd * fReach * 0.85;
+      }
+      // Lateral squish / wedge deflection of engine components
+      dy += (ly < 0 ? -1 : 1) * (fc * 0.16 + Math.abs(fld - frd) * 0.20) * fReach;
+    }
+
+    // 2. Rear impact crush wave (rear crash beam, luggage floor, spare tire well)
+    if (lx < 0) {
+      const rReach = Math.max(0, Math.min(1.0, (-lx - halfL * 0.10) / (halfL * 0.90)));
+      dx += rc * rReach * 0.95;
+    }
+
+    // 3. Side impact T-bone intrusion wave (door rocker sills, passenger cabin footwell, bucket seats)
+    if (ly < 0) {
+      const sReach = Math.max(0, Math.min(1.0, (-ly - halfW * 0.15) / (halfW * 0.85)));
+      dy += ld * sReach * 0.80;
+    } else {
+      const sReach = Math.max(0, Math.min(1.0, (ly - halfW * 0.15) / (halfW * 0.85)));
+      dy -= rd * sReach * 0.80;
+    }
+
+    if (deform) {
+      const [exX, exY] = deform(lx, ly);
+      return [exX + dx * 0.75, exY + dy * 0.75];
+    }
+    return [lx + dx, ly + dy];
+  };
+}
+
+/**
  * Renders the vehicle's hollow chassis framework, inner wheel wells, engine bay cavity,
  * and radiator crossmember underneath the outer body panels.
- * When panels (fenders, bumpers, doors, hood) are dented or detached, this hollow
- * mechanical skeleton is authentically exposed.
+ * Respects real vehicle archetypes (tractors, trailers, trucks, passenger cars).
+ * Internals deform organically with real impact softbody displacement.
  */
 export function renderHollowChassisAndCavities(
   ctx: CanvasRenderingContext2D,
   car: Vehicle,
   halfL: number,
-  halfW: number
+  halfW: number,
+  deform?: (x: number, y: number) => [number, number]
 ): void {
+  const isMoto = isMotorcycle(car.type);
+  const isMachinery = isRoadMachinery(car.type);
+  if (isMoto || isMachinery) return; // Motorcycles and heavy road rollers have dedicated custom architectures
+
+  const isTrailer = isTrailerVehicle(car);
+  const isTractor = isTractorVehicle(car.type);
+  const isTruckOrBus = car.type.startsWith('truck_') || car.type === 'bus' || car.type === 'garbage_truck';
   const dmg = car.damage;
 
   ctx.save();
 
-  // 1. Dark underbody floorpan & frame rails
-  ctx.fillStyle = '#0f172a';
-  ctx.fillRect(-halfL * 0.90, -halfW * 0.85, halfL * 1.80, halfW * 1.70);
+  // Internal deformation solver directly crunches inner components
+  const iDeform = createInternalDeformSolver(car, halfL, halfW, deform);
 
-  // Twin longitudinal steel subframe rails
-  ctx.fillStyle = '#1e293b';
-  ctx.fillRect(-halfL * 0.95, -halfW * 0.48, halfL * 1.90, 2.2);
-  ctx.fillRect(-halfL * 0.95, halfW * 0.48 - 2.2, halfL * 1.90, 2.2);
+  // Helper to draw deformed polygons
+  const dRect = (x: number, y: number, w: number, h: number, fill: string, stroke?: string, strokeW?: number) => {
+    const [p1x, p1y] = iDeform(x, y);
+    const [p2x, p2y] = iDeform(x + w, y);
+    const [p3x, p3y] = iDeform(x + w, y + h);
+    const [p4x, p4y] = iDeform(x, y + h);
+    ctx.beginPath();
+    ctx.moveTo(p1x, p1y);
+    ctx.lineTo(p2x, p2y);
+    ctx.lineTo(p3x, p3y);
+    ctx.lineTo(p4x, p4y);
+    ctx.closePath();
+    ctx.fillStyle = fill;
+    ctx.fill();
+    if (stroke) {
+      ctx.strokeStyle = stroke;
+      ctx.lineWidth = strokeW || 1;
+      ctx.stroke();
+    }
+  };
 
-  // 2. Hollow Engine Bay Cavity (Front compartment)
+  const dCircle = (cx: number, cy: number, r: number, fill: string, stroke?: string, strokeW?: number) => {
+    const [dcx, dcy] = iDeform(cx, cy);
+    ctx.beginPath();
+    ctx.arc(dcx, dcy, r, 0, Math.PI * 2);
+    ctx.fillStyle = fill;
+    ctx.fill();
+    if (stroke) {
+      ctx.strokeStyle = stroke;
+      ctx.lineWidth = strokeW || 1;
+      ctx.stroke();
+    }
+  };
+
+  // 1. TRAILERS: Only chassis frame floor and heavy longitudinal I-beams
+  if (isTrailer) {
+    dRect(-halfL * 0.95, -halfW * 0.88, halfL * 1.90, halfW * 1.76, '#0f172a');
+    dRect(-halfL * 0.95, -halfW * 0.45, halfL * 1.90, 2.5, '#1e293b');
+    dRect(-halfL * 0.95, halfW * 0.45 - 2.5, halfL * 1.90, 2.5, '#1e293b');
+    ctx.restore();
+    return;
+  }
+
+  // 2. TRACTORS (MTZ-80 / MTZ-82): Cast iron front diesel engine block, radiator & single cab seat
+  if (isTractor) {
+    // Tractor chassis floor
+    dRect(-halfL * 0.88, -halfW * 0.85, halfL * 1.76, halfW * 1.70, '#0f172a');
+    // Front diesel engine casting (MMZ D-240 cast iron block)
+    const d240X = halfL * 0.15;
+    const d240L = halfL * 0.55;
+    const d240W = halfW * 0.58;
+    dRect(d240X - d240L * 0.5, -d240W * 0.5, d240L, d240W, '#1e293b', '#334155', 0.8);
+    // Front tractor radiator & cooling fan shroud
+    dRect(halfL * 0.48, -halfW * 0.42, 2.5, halfW * 0.84, '#334155');
+    // Single tractor operator seat with high backrest inside rear cab
+    const cabX = -halfL * 0.32;
+    dRect(cabX - 4.5, -4.0, 9.0, 8.0, '#1e293b', '#334155', 0.8);
+    dCircle(cabX + 4.0, 0, 2.2, '#334155'); // Steering wheel
+    ctx.restore();
+    return;
+  }
+
+  // 3. HEAVY TRUCKS (ZIL, Semi, Bus): Heavy channel frame, diesel block, wide cabin seating
+  if (isTruckOrBus) {
+    dRect(-halfL * 0.95, -halfW * 0.88, halfL * 1.90, halfW * 1.76, '#0f172a');
+    dRect(-halfL * 0.95, -halfW * 0.42, halfL * 1.90, 3.2, '#1e293b');
+    dRect(-halfL * 0.95, halfW * 0.42 - 3.2, halfL * 1.90, 3.2, '#1e293b');
+    // Front diesel engine block
+    const engX = halfL * 0.35;
+    dRect(engX - halfL * 0.2, -halfW * 0.55, halfL * 0.4, halfW * 1.1, '#1e293b', '#334155', 0.9);
+    // Front radiator crossmember
+    dRect(halfL * 0.78, -halfW * 0.70, 3.5, halfW * 1.40, '#334155');
+    // Truck cabin driver & passenger bench seats
+    const cabX = halfL * 0.05;
+    dRect(cabX - 5.0, -halfW * 0.65, 8.5, halfW * 1.30, '#1e293b', '#334155', 0.8);
+    ctx.restore();
+    return;
+  }
+
+  // 4. PASSENGER CARS (Sedans, Wagons, Hatchbacks, SUVs, Pickups, Vans): Full hollow unibody
+  const fc = dmg?.frontCrumple || 0;
+  const rc = dmg?.rearCrumple || 0;
+  const isFrontCrushed = fc > 3.0 || (dmg?.frontLeftDent || 0) > 3.0 || (dmg?.frontRightDent || 0) > 3.0;
+  const isRearCrushed = rc > 3.0 || (dmg?.rearLeftDent || 0) > 3.0 || (dmg?.rearRightDent || 0) > 3.0;
+
+  // Underbody floorpan & frame rails (compressed along impact axis)
+  dRect(-halfL * 0.90, -halfW * 0.85, halfL * 1.80, halfW * 1.70, '#0f172a');
+  dRect(-halfL * 0.95, -halfW * 0.48, halfL * 1.90, 2.2, isFrontCrushed ? '#475569' : '#1e293b');
+  dRect(-halfL * 0.95, halfW * 0.48 - 2.2, halfL * 1.90, 2.2, isFrontCrushed ? '#475569' : '#1e293b');
+
+  // Hollow Engine Bay Cavity (Front compartment - compressed by front crumple)
   const engineBayX = halfL * 0.22;
-  const engineBayL = halfL * 0.65;
+  const engineBayL = Math.max(halfL * 0.20, halfL * 0.65 - fc * 0.8);
   const engineBayW = halfW * 1.45;
+  dRect(engineBayX, -engineBayW * 0.5, engineBayL, engineBayW, '#090d16');
 
-  ctx.fillStyle = '#090d16'; // Deep hollow engine bay shadow
-  ctx.fillRect(engineBayX, -engineBayW * 0.5, engineBayL, engineBayW);
+  // Front radiator core support crossmember & crash bar horns (crushes into V-shape)
+  if (fc > 5.0) {
+    const rX = halfL * 0.82 - fc * 0.85;
+    dRect(rX, -halfW * 0.65, 3.5, halfW * 1.30, '#475569', '#1e293b', 0.8);
+    // Leaking green antifreeze puddle
+    dCircle(rX - 2.0, 0, 3.5, 'rgba(34, 197, 94, 0.45)');
+  } else {
+    dRect(halfL * 0.82 - fc * 0.7, -halfW * 0.65, 2.8, halfW * 1.30, '#334155');
+    // Radiator cooling matrix
+    const radCol = (dmg?.underHoodSteam && dmg.underHoodSteam !== 'none') ? '#475569' : '#1e293b';
+    dRect(halfL * 0.77 - fc * 0.7, -halfW * 0.50, 2.0, halfW * 1.0, radCol);
+  }
 
-  // Front radiator core support crossmember & crash bar horns
-  ctx.fillStyle = '#334155';
-  ctx.fillRect(halfL * 0.82, -halfW * 0.65, 2.8, halfW * 1.30);
-  // Radiator cooling fins
-  ctx.fillStyle = (dmg?.underHoodSteam && dmg.underHoodSteam !== 'none') ? '#475569' : '#1e293b';
-  ctx.fillRect(halfL * 0.77, -halfW * 0.50, 2.0, halfW * 1.0);
-
-  // Engine block & cylinder head top silhouette
-  ctx.fillStyle = '#1e293b';
-  ctx.strokeStyle = '#334155';
-  ctx.lineWidth = 0.8;
-  const blockX = halfL * 0.40;
+  // Engine block & cylinder head top silhouette (displaced and skewed by impact)
+  const blockX = halfL * 0.40 - fc * 0.2;
   const blockW = halfW * 0.65;
-  const blockL = halfL * 0.32;
-  ctx.fillRect(blockX - blockL * 0.5, -blockW * 0.5, blockL, blockW);
-  ctx.strokeRect(blockX - blockL * 0.5, -blockW * 0.5, blockL, blockW);
+  const blockL = Math.max(halfL * 0.22, halfL * 0.32 - (fc > 6 ? 2.5 : 0));
+  dRect(blockX - blockL * 0.5, -blockW * 0.5, blockL, blockW, '#1e293b', isFrontCrushed ? '#ef4444' : '#334155', 0.8);
+
+  if (isFrontCrushed || car.engineState?.oilPunctured) {
+    // Engine oil spill stain over the cylinder head
+    dCircle(blockX, 0, 3.8, 'rgba(15, 23, 42, 0.70)');
+  }
 
   // Front suspension strut tower aprons
-  ctx.fillStyle = '#1e293b';
-  ctx.beginPath();
-  ctx.arc(halfL * 0.45, -halfW * 0.62, 3.2, 0, Math.PI * 2);
-  ctx.arc(halfL * 0.45, halfW * 0.62, 3.2, 0, Math.PI * 2);
-  ctx.fill();
+  dCircle(halfL * 0.45, -halfW * 0.62, 3.2, '#1e293b');
+  dCircle(halfL * 0.45, halfW * 0.62, 3.2, '#1e293b');
 
-  // 3. Hollow Passenger Cabin Tub (Footwells, transmission tunnel, seat tubs)
+  // Hollow Passenger Cabin Tub (Footwells, transmission tunnel, seat tubs)
   const cabinX = -halfL * 0.12;
   const cabinL = halfL * 0.75;
   const cabinW = halfW * 1.55;
+  dRect(cabinX - cabinL * 0.5, -cabinW * 0.5, cabinL, cabinW, '#0a0e17');
 
-  ctx.fillStyle = '#0a0e17'; // Dark cabin cavity
-  ctx.fillRect(cabinX - cabinL * 0.5, -cabinW * 0.5, cabinL, cabinW);
+  // Transmission center tunnel (buckles if side impact or severe front impact)
+  dRect(cabinX - cabinL * 0.5, -1.5, cabinL, 3.0, '#1e293b');
 
-  // Transmission center tunnel
-  ctx.fillStyle = '#1e293b';
-  ctx.fillRect(cabinX - cabinL * 0.5, -1.5, cabinL, 3.0);
+  // Driver and passenger seat outlines (deforms and skews under T-bone intrusion)
+  dRect(cabinX - cabinL * 0.3, -halfW * 0.55, cabinL * 0.35, halfW * 0.42, '#1e293b');
+  dRect(cabinX - cabinL * 0.3, halfW * 0.13, cabinL * 0.35, halfW * 0.42, '#1e293b');
 
-  // Driver and passenger seat outlines
-  ctx.fillStyle = '#1e293b';
-  ctx.fillRect(cabinX - cabinL * 0.3, -halfW * 0.55, cabinL * 0.35, halfW * 0.42);
-  ctx.fillRect(cabinX - cabinL * 0.3, halfW * 0.13, cabinL * 0.35, halfW * 0.42);
-
-  // 4. Hollow Trunk Well (Rear luggage cavity)
-  const trunkX = -halfL * 0.68;
-  const trunkL = halfL * 0.45;
+  // Hollow Trunk Well (Rear luggage cavity - crushes on rear impact)
+  const trunkX = -halfL * 0.68 + rc * 0.5;
+  const trunkL = Math.max(halfL * 0.15, halfL * 0.45 - rc * 0.8);
   const trunkW = halfW * 1.35;
-  ctx.fillStyle = '#090d16';
-  ctx.fillRect(trunkX - trunkL * 0.5, -trunkW * 0.5, trunkL, trunkW);
+  dRect(trunkX - trunkL * 0.5, -trunkW * 0.5, trunkL, trunkW, '#090d16');
 
-  // Spare tire well impression
-  ctx.strokeStyle = '#1e293b';
-  ctx.lineWidth = 1.0;
-  ctx.beginPath();
-  ctx.arc(trunkX, 0, halfW * 0.38, 0, Math.PI * 2);
-  ctx.stroke();
+  // Spare tire well impression (buckled / compressed on rear crash)
+  dCircle(trunkX, 0, Math.max(2.0, halfW * 0.38 - rc * 0.3), '#090d16', isRearCrushed ? '#475569' : '#1e293b', 1.0);
 
-  // 5. Wheel Well Inner Liners
-  ctx.fillStyle = '#05070d';
+  // Wheel Well Inner Liners
   const frontAxleX = halfL * 0.46;
   const rearAxleX = -halfL * 0.46;
   const wellL = halfL * 0.34;
   const wellDepth = halfW * 0.32;
-
-  // Front-Left and Front-Right inner wells
-  ctx.fillRect(frontAxleX - wellL * 0.5, -halfW, wellL, wellDepth);
-  ctx.fillRect(frontAxleX - wellL * 0.5, halfW - wellDepth, wellL, wellDepth);
-  // Rear-Left and Rear-Right inner wells
-  ctx.fillRect(rearAxleX - wellL * 0.5, -halfW, wellL, wellDepth);
-  ctx.fillRect(rearAxleX - wellL * 0.5, halfW - wellDepth, wellL, wellDepth);
+  dRect(frontAxleX - wellL * 0.5, -halfW, wellL, wellDepth, '#05070d');
+  dRect(frontAxleX - wellL * 0.5, halfW - wellDepth, wellL, wellDepth, '#05070d');
+  dRect(rearAxleX - wellL * 0.5, -halfW, wellL, wellDepth, '#05070d');
+  dRect(rearAxleX - wellL * 0.5, halfW - wellDepth, wellL, wellDepth, '#05070d');
 
   ctx.restore();
 }
@@ -179,7 +327,14 @@ export function renderPanelShutlines(
   halfL: number,
   halfW: number
 ): void {
+  const isMoto = isMotorcycle(car.type);
+  const isMachinery = isRoadMachinery(car.type);
+  const isTrailer = isTrailerVehicle(car);
+  if (isMoto || isMachinery || isTrailer) return; // Motorcycles, trailers, road rollers have no car body stamped panel shutlines
+
+  const isTractor = isTractorVehicle(car.type);
   const dmg = car.damage;
+  const panelsConfig = getVehicleBodyPanelsConfig(car.type);
 
   ctx.save();
   ctx.strokeStyle = 'rgba(15, 23, 42, 0.55)';
@@ -188,8 +343,43 @@ export function renderPanelShutlines(
   const fc = dmg?.frontCrumple || 0;
   const rc = dmg?.rearCrumple || 0;
 
+  // TRACTOR SHUTLINES: Narrow engine bonnet and cab doors only
+  if (isTractor) {
+    if (!dmg?.hoodDetached) {
+      const bFrontX = halfL * 0.46 - fc * 0.8;
+      const bRearX = -halfL * 0.12;
+      const bHalfW = halfW * 0.32;
+      ctx.beginPath();
+      ctx.moveTo(bFrontX, -bHalfW);
+      ctx.lineTo(bRearX, -bHalfW);
+      ctx.lineTo(bRearX, bHalfW);
+      ctx.lineTo(bFrontX, bHalfW);
+      ctx.stroke();
+    }
+    if (!dmg?.leftDoorDetached) {
+      const cFrontX = -halfL * 0.12;
+      const cRearX = -halfL * 0.52;
+      ctx.beginPath();
+      ctx.moveTo(cFrontX, -halfW * 0.86);
+      ctx.lineTo(cRearX, -halfW * 0.86);
+      ctx.stroke();
+    }
+    if (!dmg?.rightDoorDetached) {
+      const cFrontX = -halfL * 0.12;
+      const cRearX = -halfL * 0.52;
+      ctx.beginPath();
+      ctx.moveTo(cFrontX, halfW * 0.86);
+      ctx.lineTo(cRearX, halfW * 0.86);
+      ctx.stroke();
+    }
+    ctx.restore();
+    return;
+  }
+
+  // PASSENGER CARS & TRUCKS SHUTLINES (Validated per component capability):
+
   // 1. Hood Shutlines (U-shaped seam between hood, front fenders, and windshield cowl)
-  if (!dmg?.hoodDetached) {
+  if (panelsConfig.hasHood && !dmg?.hoodDetached) {
     const hoodFrontX = halfL * 0.82 - fc * 0.9;
     const hoodRearX = halfL * 0.20;
     const hoodHalfW = halfW * 0.65;
@@ -206,7 +396,7 @@ export function renderPanelShutlines(
   }
 
   // 2. Front Bumper Shutline (Seam separating front bumper fascia from fenders and hood)
-  if (!dmg?.frontBumperDetached) {
+  if (panelsConfig.hasFrontBumper && !dmg?.frontBumperDetached) {
     const bumperSeamX = halfL * 0.80 - fc * 0.8;
     ctx.beginPath();
     ctx.moveTo(bumperSeamX, -halfW * 0.95);
@@ -217,18 +407,20 @@ export function renderPanelShutlines(
   }
 
   // 3. Front Fender to Door Shutlines (A-pillar gap)
-  const aPillarX = halfL * 0.18;
-  if (!dmg?.fenderFLDetached && !dmg?.leftDoorDetached) {
-    ctx.beginPath();
-    ctx.moveTo(aPillarX, -halfW * 0.98);
-    ctx.lineTo(aPillarX - 2, -halfW * 0.72);
-    ctx.stroke();
-  }
-  if (!dmg?.fenderFRDetached && !dmg?.rightDoorDetached) {
-    ctx.beginPath();
-    ctx.moveTo(aPillarX, halfW * 0.98);
-    ctx.lineTo(aPillarX - 2, halfW * 0.72);
-    ctx.stroke();
+  if (panelsConfig.hasFenders && panelsConfig.hasDoors) {
+    const aPillarX = halfL * 0.18;
+    if (!dmg?.fenderFLDetached && !dmg?.leftDoorDetached) {
+      ctx.beginPath();
+      ctx.moveTo(aPillarX, -halfW * 0.98);
+      ctx.lineTo(aPillarX - 2, -halfW * 0.72);
+      ctx.stroke();
+    }
+    if (!dmg?.fenderFRDetached && !dmg?.rightDoorDetached) {
+      ctx.beginPath();
+      ctx.moveTo(aPillarX, halfW * 0.98);
+      ctx.lineTo(aPillarX - 2, halfW * 0.72);
+      ctx.stroke();
+    }
   }
 
   // 4. Door to Rear Quarter Shutlines (B/C pillar gap)
@@ -283,8 +475,15 @@ export function renderExposedCavitiesOnDetachedPanels(
   ctx: CanvasRenderingContext2D,
   car: Vehicle,
   halfL: number,
-  halfW: number
+  halfW: number,
+  deform?: (x: number, y: number) => [number, number]
 ): void {
+  const isMoto = car.type.startsWith('moto_') || car.type === 'moped_soviet';
+  const isMachinery = isRoadMachinery(car.type);
+  const isTrailer = isTrailerVehicle(car);
+  if (isMoto || isMachinery || isTrailer) return; // Trailers and bikes do not have car body cavities
+
+  const isTractor = car.type.startsWith('tractor_');
   const dmg = car.damage;
   if (!dmg) return;
 
@@ -293,117 +492,223 @@ export function renderExposedCavitiesOnDetachedPanels(
 
   ctx.save();
 
+  // Helper to draw deformed shapes inside cavities
+  const dRect = (x: number, y: number, w: number, h: number, fill: string, stroke?: string, strokeW?: number) => {
+    if (!deform) {
+      ctx.fillStyle = fill;
+      ctx.fillRect(x, y, w, h);
+      if (stroke) {
+        ctx.strokeStyle = stroke;
+        ctx.lineWidth = strokeW || 1;
+        ctx.strokeRect(x, y, w, h);
+      }
+      return;
+    }
+    const [p1x, p1y] = deform(x, y);
+    const [p2x, p2y] = deform(x + w, y);
+    const [p3x, p3y] = deform(x + w, y + h);
+    const [p4x, p4y] = deform(x, y + h);
+    ctx.beginPath();
+    ctx.moveTo(p1x, p1y);
+    ctx.lineTo(p2x, p2y);
+    ctx.lineTo(p3x, p3y);
+    ctx.lineTo(p4x, p4y);
+    ctx.closePath();
+    ctx.fillStyle = fill;
+    ctx.fill();
+    if (stroke) {
+      ctx.strokeStyle = stroke;
+      ctx.lineWidth = strokeW || 1;
+      ctx.stroke();
+    }
+  };
+
+  const dLine = (x1: number, y1: number, x2: number, y2: number, stroke: string, strokeW: number) => {
+    const [p1x, p1y] = deform ? deform(x1, y1) : [x1, y1];
+    const [p2x, p2y] = deform ? deform(x2, y2) : [x2, y2];
+    ctx.strokeStyle = stroke;
+    ctx.lineWidth = strokeW;
+    ctx.beginPath();
+    ctx.moveTo(p1x, p1y);
+    ctx.lineTo(p2x, p2y);
+    ctx.stroke();
+  };
+
+  const dCircle = (cx: number, cy: number, r: number, fill: string, stroke?: string, strokeW?: number) => {
+    const [dcx, dcy] = deform ? deform(cx, cy) : [cx, cy];
+    ctx.beginPath();
+    ctx.arc(dcx, dcy, r, 0, Math.PI * 2);
+    ctx.fillStyle = fill;
+    ctx.fill();
+    if (stroke) {
+      ctx.strokeStyle = stroke;
+      ctx.lineWidth = strokeW || 1;
+      ctx.stroke();
+    }
+  };
+
+  // TRACTOR DETACHED CAVITIES: Only engine cowl & cab doors
+  if (isTractor) {
+    if (dmg.hoodDetached) {
+      const d240X = halfL * 0.15;
+      const d240L = halfL * 0.55;
+      const d240W = halfW * 0.58;
+      dRect(d240X - d240L * 0.5, -d240W * 0.5, d240L, d240W, '#080c14', '#334155', 1.0);
+      dRect(halfL * 0.48, -halfW * 0.42, 2.5, halfW * 0.84, '#475569');
+    }
+    if (dmg.leftDoorDetached) {
+      dRect(-halfL * 0.35, -halfW * 0.88, halfL * 0.38, 3.5, '#070a11', '#334155', 0.9);
+    }
+    if (dmg.rightDoorDetached) {
+      dRect(-halfL * 0.35, halfW * 0.88 - 3.5, halfL * 0.38, 3.5, '#070a11', '#334155', 0.9);
+    }
+    ctx.restore();
+    return;
+  }
+
+  // PASSENGER CARS & TRUCKS DETACHED CAVITIES (Fully deformable with impact):
+
   // 1. HOOD DETACHED: Expose full hollow engine bay cavity & mechanical components
   if (dmg.hoodDetached) {
     const bayX = halfL * 0.20;
-    const bayL = halfL * 0.62 - fc * 0.7;
+    const bayL = Math.max(halfL * 0.18, halfL * 0.62 - fc * 0.85);
     const bayHalfW = halfW * 0.65;
+    const isCrushed = fc > 3.0 || (dmg.frontLeftDent || 0) > 3.0 || (dmg.frontRightDent || 0) > 3.0;
+    const isSevereCrush = fc > 6.5;
 
-    // Deep hollow engine bay shadow aperture
-    ctx.fillStyle = '#070a10';
-    ctx.fillRect(bayX, -bayHalfW, bayL, bayHalfW * 2);
+    // Deep hollow engine bay shadow aperture (compressed by frontal crush)
+    dRect(bayX, -bayHalfW, bayL, bayHalfW * 2, '#070a10', '#1e293b', 1.2);
 
-    // Inner cowl perimeter gutter & apron flanges
-    ctx.strokeStyle = '#334155';
-    ctx.lineWidth = 1.2;
-    ctx.strokeRect(bayX, -bayHalfW, bayL, bayHalfW * 2);
+    // Inner fender unibody apron metal (wrinkles under stress)
+    dLine(bayX, -bayHalfW, bayX + bayL, -bayHalfW, isCrushed ? '#475569' : '#1e293b', isCrushed ? 1.4 : 0.8);
+    dLine(bayX, bayHalfW, bayX + bayL, bayHalfW, isCrushed ? '#475569' : '#1e293b', isCrushed ? 1.4 : 0.8);
 
-    // Radiator core support crossmember & cooling matrix
-    ctx.fillStyle = '#1e293b';
-    ctx.fillRect(bayX + bayL - 4.5, -bayHalfW * 0.85, 4.0, bayHalfW * 1.7);
-    ctx.fillStyle = (dmg.underHoodSteam && dmg.underHoodSteam !== 'none') ? '#475569' : '#0f172a';
-    ctx.fillRect(bayX + bayL - 3.5, -bayHalfW * 0.75, 2.0, bayHalfW * 1.5);
-    // Radiator pressure cap
-    ctx.fillStyle = '#e2e8f0';
-    ctx.beginPath();
-    ctx.arc(bayX + bayL - 2.5, -bayHalfW * 0.55, 1.4, 0, Math.PI * 2);
-    ctx.fill();
-
-    // Engine block & cylinder head cover (cast aluminum or steel)
-    const engCenterX = bayX + bayL * 0.45;
-    const blockL = halfL * 0.32;
-    const blockW = halfW * 0.55;
-    ctx.fillStyle = '#1e293b';
-    ctx.strokeStyle = '#475569';
-    ctx.lineWidth = 0.9;
-    ctx.fillRect(engCenterX - blockL * 0.5, -blockW * 0.5, blockL, blockW);
-    ctx.strokeRect(engCenterX - blockL * 0.5, -blockW * 0.5, blockL, blockW);
-
-    // Cylinder head valve cover ribbed stamping lines
-    ctx.strokeStyle = '#64748b';
-    ctx.lineWidth = 0.6;
-    for (let i = -blockL * 0.35; i <= blockL * 0.35; i += blockL * 0.22) {
-      ctx.beginPath();
-      ctx.moveTo(engCenterX + i, -blockW * 0.4);
-      ctx.lineTo(engCenterX + i, blockW * 0.4);
-      ctx.stroke();
+    // Radiator core support crossmember & cooling matrix (severely crumpled/bent into V-wedge on impact!)
+    const radX = bayX + bayL - 2.5;
+    if (isSevereCrush) {
+      // Severely crushed & ruptured radiator matrix (collapsed inward)
+      const rPinchY = ((dmg.frontLeftDent || 0) - (dmg.frontRightDent || 0)) * 0.4;
+      dLine(radX + 1.5, -bayHalfW * 0.85, radX - 4.0, rPinchY, '#475569', 2.2);
+      dLine(radX - 4.0, rPinchY, radX + 1.5, bayHalfW * 0.85, '#475569', 2.2);
+      // Bent, crumpled aluminum cooling fins
+      for (let y = -bayHalfW * 0.7; y <= bayHalfW * 0.7; y += 2.2) {
+        dLine(radX - 2.0, y, radX + 0.5, y + (Math.sin(y) * 1.5), '#1e293b', 1.0);
+      }
+      // Green fluorescent antifreeze puddle stain spreading in engine bay
+      dCircle(radX - 3.0, rPinchY, 3.5, 'rgba(34, 197, 94, 0.45)');
+    } else if (isCrushed) {
+      // Moderately buckled radiator
+      dRect(radX - 3.5, -bayHalfW * 0.80, 3.2, bayHalfW * 1.6, '#334155', '#1e293b', 0.8);
+      dRect(radX - 2.5, -bayHalfW * 0.70, 1.8, bayHalfW * 1.4, '#1e293b');
+      // Antifreeze seep
+      dCircle(radX - 1.5, -bayHalfW * 0.35, 2.0, 'rgba(34, 197, 94, 0.40)');
+    } else {
+      // Intact radiator core & pressure cap
+      dRect(radX - 4.0, -bayHalfW * 0.85, 3.5, bayHalfW * 1.7, '#1e293b');
+      const steamCol = (dmg.underHoodSteam && dmg.underHoodSteam !== 'none') ? '#475569' : '#0f172a';
+      dRect(radX - 3.0, -bayHalfW * 0.75, 2.0, bayHalfW * 1.5, steamCol);
+      dCircle(radX - 2.0, -bayHalfW * 0.55, 1.4, '#e2e8f0');
     }
 
-    // 12V Automotive battery in corner tray
-    ctx.fillStyle = '#0f172a';
-    ctx.fillRect(bayX + 2.5, -bayHalfW * 0.82, 5.5, 4.2);
-    ctx.fillStyle = '#ef4444'; // Positive red terminal
-    ctx.fillRect(bayX + 3.0, -bayHalfW * 0.80, 1.2, 1.2);
-    ctx.fillStyle = '#94a3b8'; // Negative brass terminal
-    ctx.fillRect(bayX + 6.0, -bayHalfW * 0.80, 1.2, 1.2);
+    // Engine block & cylinder head cover (pushed back towards firewall, cocked/skewed on mounts)
+    const skewAng = ((dmg.frontLeftDent || 0) - (dmg.frontRightDent || 0)) * 0.08;
+    const engCenterX = bayX + bayL * 0.42 - fc * 0.15;
+    const blockL = Math.max(halfL * 0.20, halfL * 0.32 - (isSevereCrush ? 3.0 : 0));
+    const blockW = halfW * 0.55;
+
+    // Engine block silhouette (deformed & pushed back)
+    dRect(engCenterX - blockL * 0.5, -blockW * 0.5, blockL, blockW, '#1e293b', isSevereCrush ? '#ef4444' : '#475569', 0.9);
+
+    // Dark oil spill stain over crushed engine block
+    if (car.engineState?.oilPunctured || isCrushed) {
+      dCircle(engCenterX - 1.0, 1.5, 4.0, 'rgba(15, 23, 42, 0.75)');
+      dCircle(engCenterX + 2.0, -2.0, 2.8, 'rgba(51, 65, 85, 0.65)');
+    }
+
+    // Cylinder head valve cover ribbed lines (skewed / bent if damaged)
+    for (let i = -blockL * 0.32; i <= blockL * 0.32; i += blockL * 0.22) {
+      const lineSkew = isCrushed ? (Math.sin(i) * 1.8) : 0;
+      dLine(engCenterX + i, -blockW * 0.38 + lineSkew, engCenterX + i, blockW * 0.38 + lineSkew, isSevereCrush ? '#475569' : '#64748b', 0.6);
+    }
+
+    // Metallic fracture cracks across cast engine block if severely smashed
+    if (isSevereCrush) {
+      dLine(engCenterX - blockL * 0.3, -blockW * 0.3, engCenterX + blockL * 0.2, blockW * 0.2, '#f8fafc', 0.9);
+      dLine(engCenterX + blockL * 0.1, -blockW * 0.25, engCenterX - blockL * 0.1, blockW * 0.3, '#f8fafc', 0.7);
+    }
+
+    // 12V Automotive battery in corner tray (cracked / crushed if front-left hit)
+    const batX = bayX + 2.5;
+    const batY = -bayHalfW * 0.82;
+    if ((dmg.frontLeftDent || 0) > 3.5) {
+      // Cracked / tilted crushed battery with leaking electrolyte
+      dRect(batX - 1.0, batY - 1.0, 5.0, 3.8, '#0f172a', '#e2e8f0', 0.6);
+      dCircle(batX + 1.5, batY + 1.0, 2.5, 'rgba(254, 240, 138, 0.35)'); // Acid pool
+      dRect(batX, batY, 1.2, 1.2, '#ef4444'); // Broken positive terminal
+    } else {
+      dRect(batX, batY, 5.5, 4.2, '#0f172a');
+      dRect(batX + 0.5, batY + 0.5, 1.2, 1.2, '#ef4444');
+      dRect(batX + 3.5, batY + 0.5, 1.2, 1.2, '#94a3b8');
+    }
+
+    // Air filter intake box on opposite corner (crushed on front-right impact)
+    const airX = bayX + 3.0;
+    const airY = bayHalfW * 0.52;
+    if ((dmg.frontRightDent || 0) > 3.5) {
+      dRect(airX - 1.0, airY, 5.0, 3.5, '#1e293b', '#64748b', 0.8);
+      dLine(airX, airY + 1.5, airX + 3.5, airY + 2.0, '#94a3b8', 0.8); // Torn rubber intake duct
+    } else {
+      dRect(airX, airY, 6.0, 4.5, '#0f172a', '#334155', 0.8);
+      dLine(airX + 2.0, airY, engCenterX, 0, '#1e293b', 1.8); // Rubber air duct to throttle body
+    }
 
     // Front suspension strut tower aprons
-    ctx.fillStyle = '#1e293b';
-    ctx.strokeStyle = '#334155';
-    ctx.lineWidth = 0.8;
-    ctx.beginPath();
-    ctx.arc(bayX + bayL * 0.55, -bayHalfW * 0.88, 3.2, 0, Math.PI * 2);
-    ctx.arc(bayX + bayL * 0.55, bayHalfW * 0.88, 3.2, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.stroke();
+    const strutLeftY = -bayHalfW * 0.88;
+    const strutRightY = bayHalfW * 0.88;
+    const strutLeftX = bayX + bayL * 0.55 + ((dmg.frontLeftDent || 0) > 4 ? -2.0 : 0);
+    const strutRightX = bayX + bayL * 0.55 + ((dmg.frontRightDent || 0) > 4 ? -2.0 : 0);
+    dCircle(strutLeftX, strutLeftY, 3.2, '#1e293b', '#334155', 0.8);
+    dCircle(strutRightX, strutRightY, 3.2, '#1e293b', '#334155', 0.8);
+
+    // Severed dangling wiring harness & hoses
+    if (isCrushed) {
+      dLine(engCenterX - 2.0, -bayHalfW * 0.6, engCenterX - 6.0, -bayHalfW * 0.3, '#ef4444', 0.8);
+      dLine(engCenterX + 1.0, bayHalfW * 0.4, engCenterX + 4.0, bayHalfW * 0.7, '#3b82f6', 0.8);
+    }
 
     // Severed hood cowl hinge brackets with sheared metallic fracture marks
-    ctx.fillStyle = '#475569';
-    ctx.fillRect(bayX - 1.5, -bayHalfW * 0.82, 2.5, 2.0);
-    ctx.fillRect(bayX - 1.5, bayHalfW * 0.82 - 2.0, 2.5, 2.0);
+    dRect(bayX - 1.5, -bayHalfW * 0.82, 2.5, 2.0, '#475569');
+    dRect(bayX - 1.5, bayHalfW * 0.82 - 2.0, 2.5, 2.0, '#475569');
   }
 
-  // 2. FRONT BUMPER DETACHED: Expose structural crash bar & horns
+  // 2. FRONT BUMPER DETACHED: Expose structural crash bar & horns (deforms into V-shape on impact!)
   if (dmg.frontBumperDetached) {
     const barX = halfL * 0.82 - fc * 0.8;
     // Structural steel reinforcement crash beam
-    ctx.fillStyle = '#334155';
-    ctx.strokeStyle = '#1e293b';
-    ctx.lineWidth = 1.0;
-    ctx.fillRect(barX, -halfW * 0.85, 3.2, halfW * 1.70);
-    ctx.strokeRect(barX, -halfW * 0.85, 3.2, halfW * 1.70);
+    dRect(barX, -halfW * 0.85, 3.2, halfW * 1.70, '#334155', '#1e293b', 1.0);
 
     // Crash horn crumple box mounts
-    ctx.fillStyle = '#1e293b';
-    ctx.fillRect(barX - 4.5, -halfW * 0.48, 4.5, 2.8);
-    ctx.fillRect(barX - 4.5, halfW * 0.48 - 2.8, 4.5, 2.8);
+    dRect(barX - 4.5, -halfW * 0.48, 4.5, 2.8, '#1e293b');
+    dRect(barX - 4.5, halfW * 0.48 - 2.8, 4.5, 2.8, '#1e293b');
 
     // Severed plastic bumper clip fracture scars
-    ctx.fillStyle = '#f1f5f9';
-    ctx.fillRect(barX + 2.8, -halfW * 0.70, 1.2, 1.5);
-    ctx.fillRect(barX + 2.8, halfW * 0.70 - 1.5, 1.2, 1.5);
+    dRect(barX + 2.8, -halfW * 0.70, 1.2, 1.5, '#f1f5f9');
+    dRect(barX + 2.8, halfW * 0.70 - 1.5, 1.2, 1.5, '#f1f5f9');
   }
 
   // 3. REAR BUMPER DETACHED: Expose rear crash beam & exhaust
   if (dmg.rearBumperDetached) {
     const rBarX = -halfL * 0.84 + rc * 0.8;
     // Rear structural steel crash beam
-    ctx.fillStyle = '#334155';
-    ctx.strokeStyle = '#1e293b';
-    ctx.lineWidth = 1.0;
-    ctx.fillRect(rBarX - 3.2, -halfW * 0.85, 3.2, halfW * 1.70);
-    ctx.strokeRect(rBarX - 3.2, -halfW * 0.85, 3.2, halfW * 1.70);
+    dRect(rBarX - 3.2, -halfW * 0.85, 3.2, halfW * 1.70, '#334155', '#1e293b', 1.0);
 
     // Exhaust muffler canister & chrome exhaust tip
-    ctx.fillStyle = '#475569';
-    ctx.fillRect(rBarX - 10, halfW * 0.45, 7.5, 4.5);
-    ctx.fillStyle = '#cbd5e1'; // Chrome tailpipe tip
-    ctx.fillRect(rBarX - 3.5, halfW * 0.50, 4.5, 2.2);
+    dRect(rBarX - 10, halfW * 0.45, 7.5, 4.5, '#475569');
+    dRect(rBarX - 3.5, halfW * 0.50, 4.5, 2.2, '#cbd5e1');
 
     // Severed rear bracket tabs
-    ctx.fillStyle = '#f1f5f9';
-    ctx.fillRect(rBarX - 4.2, -halfW * 0.65, 1.2, 1.5);
-    ctx.fillRect(rBarX - 4.2, halfW * 0.65 - 1.5, 1.2, 1.5);
+    dRect(rBarX - 4.2, -halfW * 0.65, 1.2, 1.5, '#f1f5f9');
+    dRect(rBarX - 4.2, halfW * 0.65 - 1.5, 1.2, 1.5, '#f1f5f9');
   }
 
   // 4. FRONT-LEFT FENDER DETACHED: Expose wheel arch & suspension strut
@@ -414,30 +719,18 @@ export function renderExposedCavitiesOnDetachedPanels(
     const fW = halfW * 0.35;
 
     // Dark inner wheel arch cavity
-    ctx.fillStyle = '#06080e';
-    ctx.fillRect(fX, fY, fL, fW);
+    dRect(fX, fY, fL, fW, '#06080e');
 
     // Stamped unibody inner apron rail
-    ctx.fillStyle = '#1e293b';
-    ctx.fillRect(fX, fY + fW - 2.0, fL, 2.0);
+    dRect(fX, fY + fW - 2.0, fL, 2.0, '#1e293b');
 
     // Suspension coil spring & strut top
     const strutX = halfL * 0.46;
-    ctx.fillStyle = '#475569';
-    ctx.beginPath();
-    ctx.arc(strutX, fY + fW * 0.5, 2.8, 0, Math.PI * 2);
-    ctx.fill();
-    // Coil spring rib impressions
-    ctx.strokeStyle = '#94a3b8';
-    ctx.lineWidth = 0.8;
-    ctx.beginPath();
-    ctx.arc(strutX, fY + fW * 0.5, 3.6, 0, Math.PI * 2);
-    ctx.stroke();
+    dCircle(strutX, fY + fW * 0.5, 2.8, '#475569', '#94a3b8', 0.8);
 
     // Apron bolt holes where fender torn off
-    ctx.fillStyle = '#090d16';
     for (let bx = fX + 4; bx < fX + fL - 4; bx += 6) {
-      ctx.fillRect(bx, fY + fW - 1.6, 1.2, 1.2);
+      dRect(bx, fY + fW - 1.6, 1.2, 1.2, '#090d16');
     }
   }
 
@@ -448,26 +741,14 @@ export function renderExposedCavitiesOnDetachedPanels(
     const fY = halfW * 0.63;
     const fW = halfW * 0.35;
 
-    ctx.fillStyle = '#06080e';
-    ctx.fillRect(fX, fY, fL, fW);
-
-    ctx.fillStyle = '#1e293b';
-    ctx.fillRect(fX, fY, fL, 2.0);
+    dRect(fX, fY, fL, fW, '#06080e');
+    dRect(fX, fY, fL, 2.0, '#1e293b');
 
     const strutX = halfL * 0.46;
-    ctx.fillStyle = '#475569';
-    ctx.beginPath();
-    ctx.arc(strutX, fY + fW * 0.5, 2.8, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.strokeStyle = '#94a3b8';
-    ctx.lineWidth = 0.8;
-    ctx.beginPath();
-    ctx.arc(strutX, fY + fW * 0.5, 3.6, 0, Math.PI * 2);
-    ctx.stroke();
+    dCircle(strutX, fY + fW * 0.5, 2.8, '#475569', '#94a3b8', 0.8);
 
-    ctx.fillStyle = '#090d16';
     for (let bx = fX + 4; bx < fX + fL - 4; bx += 6) {
-      ctx.fillRect(bx, fY + 0.4, 1.2, 1.2);
+      dRect(bx, fY + 0.4, 1.2, 1.2, '#090d16');
     }
   }
 
@@ -479,40 +760,26 @@ export function renderExposedCavitiesOnDetachedPanels(
     const dW = halfW * 0.45;
 
     // Deep dark passenger cabin interior opening
-    ctx.fillStyle = '#070a11';
-    ctx.fillRect(dX, dY, dL, dW);
+    dRect(dX, dY, dL, dW, '#070a11');
 
     // Structural rocker panel / door threshold sill
-    ctx.fillStyle = '#1e293b';
-    ctx.fillRect(dX, dY, dL, 2.5);
-    ctx.fillStyle = '#475569'; // Stamped sill step plate
-    ctx.fillRect(dX + 2, dY + 0.6, dL - 4, 1.2);
+    dRect(dX, dY, dL, 2.5, '#1e293b');
+    dRect(dX + 2, dY + 0.6, dL - 4, 1.2, '#475569');
 
-    // Driver's bucket seat cushion & bolsters inside
+    // Driver's bucket seat cushion & bolsters inside (deforms with side T-bone impact!)
     const seatX = dX + dL * 0.5;
     const seatY = dY + dW * 0.7;
-    ctx.fillStyle = '#1e293b';
-    ctx.strokeStyle = '#334155';
-    ctx.lineWidth = 0.8;
-    ctx.fillRect(seatX - dL * 0.35, seatY - 3.5, dL * 0.7, 7.0);
-    ctx.strokeRect(seatX - dL * 0.35, seatY - 3.5, dL * 0.7, 7.0);
+    dRect(seatX - dL * 0.35, seatY - 3.5, dL * 0.7, 7.0, '#1e293b', '#334155', 0.8);
 
     // Steering column rim visible from side opening
-    ctx.strokeStyle = '#475569';
-    ctx.lineWidth = 1.2;
-    ctx.beginPath();
-    ctx.arc(dX + dL * 0.8, seatY, 2.5, 0, Math.PI * 2);
-    ctx.stroke();
+    dCircle(dX + dL * 0.8, seatY, 2.5, '#1e293b', '#475569', 1.2);
 
     // Severed A-pillar hinge brackets & sheared metal edges
-    ctx.fillStyle = '#475569';
-    ctx.fillRect(dX + dL - 1.5, dY, 2.0, 3.0);
-    ctx.fillStyle = '#f1f5f9'; // Bright stress shear highlight
-    ctx.fillRect(dX + dL - 1.0, dY, 1.0, 1.2);
+    dRect(dX + dL - 1.5, dY, 2.0, 3.0, '#475569');
+    dRect(dX + dL - 1.0, dY, 1.0, 1.2, '#f1f5f9');
 
     // B-pillar striker pin bracket
-    ctx.fillStyle = '#334155';
-    ctx.fillRect(dX - 1.0, dY + 0.5, 1.8, 2.2);
+    dRect(dX - 1.0, dY + 0.5, 1.8, 2.2, '#334155');
   }
 
   // 7. RIGHT DOOR DETACHED: Expose right doorway opening & passenger seat
@@ -522,32 +789,20 @@ export function renderExposedCavitiesOnDetachedPanels(
     const dY = halfW * 0.53;
     const dW = halfW * 0.45;
 
-    ctx.fillStyle = '#070a11';
-    ctx.fillRect(dX, dY, dL, dW);
-
-    ctx.fillStyle = '#1e293b';
-    ctx.fillRect(dX, dY + dW - 2.5, dL, 2.5);
-    ctx.fillStyle = '#475569';
-    ctx.fillRect(dX + 2, dY + dW - 1.8, dL - 4, 1.2);
+    dRect(dX, dY, dL, dW, '#070a11');
+    dRect(dX, dY + dW - 2.5, dL, 2.5, '#1e293b');
+    dRect(dX + 2, dY + dW - 1.8, dL - 4, 1.2, '#475569');
 
     const seatX = dX + dL * 0.5;
     const seatY = dY + dW * 0.3;
-    ctx.fillStyle = '#1e293b';
-    ctx.strokeStyle = '#334155';
-    ctx.lineWidth = 0.8;
-    ctx.fillRect(seatX - dL * 0.35, seatY - 3.5, dL * 0.7, 7.0);
-    ctx.strokeRect(seatX - dL * 0.35, seatY - 3.5, dL * 0.7, 7.0);
+    dRect(seatX - dL * 0.35, seatY - 3.5, dL * 0.7, 7.0, '#1e293b', '#334155', 0.8);
 
-    ctx.fillStyle = '#475569';
-    ctx.fillRect(dX + dL - 1.5, dY + dW - 3.0, 2.0, 3.0);
-    ctx.fillStyle = '#f1f5f9';
-    ctx.fillRect(dX + dL - 1.0, dY + dW - 1.2, 1.0, 1.2);
-
-    ctx.fillStyle = '#334155';
-    ctx.fillRect(dX - 1.0, dY + dW - 2.7, 1.8, 2.2);
+    dRect(dX + dL - 1.5, dY + dW - 3.0, 2.0, 3.0, '#475569');
+    dRect(dX + dL - 1.0, dY + dW - 1.2, 1.0, 1.2, '#f1f5f9');
+    dRect(dX - 1.0, dY + dW - 2.7, 1.8, 2.2, '#334155');
   }
 
-  // 8. TRUNK LID DETACHED: Expose luggage tub & spare wheel
+  // 8. TRUNK LID DETACHED: Expose luggage tub & spare wheel (deforms with rear crush!)
   if (dmg.trunkDetached) {
     const tFrontX = -halfL * 0.40;
     const tRearX = -halfL * 0.84 + rc * 0.8;
@@ -555,44 +810,22 @@ export function renderExposedCavitiesOnDetachedPanels(
     const tHalfW = halfW * 0.62;
 
     // Dark luggage cavity opening
-    ctx.fillStyle = '#080c14';
-    ctx.fillRect(tRearX, -tHalfW, tL, tHalfW * 2);
-
-    // Stamped inner trunk lip gutter
-    ctx.strokeStyle = '#334155';
-    ctx.lineWidth = 1.0;
-    ctx.strokeRect(tRearX, -tHalfW, tL, tHalfW * 2);
+    dRect(tRearX, -tHalfW, tL, tHalfW * 2, '#080c14', '#334155', 1.0);
 
     // Corrugated floor ribs
-    ctx.strokeStyle = '#1e293b';
-    ctx.lineWidth = 0.8;
     for (let y = -tHalfW * 0.7; y <= tHalfW * 0.7; y += tHalfW * 0.35) {
-      ctx.beginPath();
-      ctx.moveTo(tRearX + 2, y);
-      ctx.lineTo(tFrontX - 2, y);
-      ctx.stroke();
+      dLine(tRearX + 2, y, tFrontX - 2, y, '#1e293b', 0.8);
     }
 
     // Spare tire wheel well depression
     const spX = tRearX + tL * 0.5;
-    ctx.fillStyle = '#0f172a';
-    ctx.beginPath();
-    ctx.arc(spX, 0, halfW * 0.35, 0, Math.PI * 2);
-    ctx.fill();
-    // Spare steel wheel rim & center hub nut
-    ctx.fillStyle = '#334155';
-    ctx.beginPath();
-    ctx.arc(spX, 0, halfW * 0.22, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = '#1e293b';
-    ctx.beginPath();
-    ctx.arc(spX, 0, 1.4, 0, Math.PI * 2);
-    ctx.fill();
+    dCircle(spX, 0, halfW * 0.35, '#0f172a');
+    dCircle(spX, 0, halfW * 0.22, '#334155');
+    dCircle(spX, 0, 1.4, '#1e293b');
 
     // Severed decklid hinge ears
-    ctx.fillStyle = '#475569';
-    ctx.fillRect(tFrontX - 2.5, -tHalfW * 0.75, 2.5, 2.0);
-    ctx.fillRect(tFrontX - 2.5, tHalfW * 0.75 - 2.0, 2.5, 2.0);
+    dRect(tFrontX - 2.5, -tHalfW * 0.75, 2.5, 2.0, '#475569');
+    dRect(tFrontX - 2.5, tHalfW * 0.75 - 2.0, 2.5, 2.0, '#475569');
   }
 
   ctx.restore();
