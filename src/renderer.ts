@@ -10717,12 +10717,12 @@ export class GameRenderer {
 
         // Turn signal cutouts
         if (car.turnSignal && car.turnSignal !== 'none') {
-          const isBlinkOn = Math.floor((car.turnSignalTimer || 0) * 4) % 2 === 0;
-          if (isBlinkOn) {
+          const signalState = getVehicleTurnSignalDynamicState(car);
+          if (signalState.intensity > 0.05) {
             const isLeft = car.turnSignal === 'left' || car.turnSignal === 'hazard';
             const isRight = car.turnSignal === 'right' || car.turnSignal === 'hazard';
-            if (isLeft) cutTrailerLight(rLeftLX, rLeftLY - 1.5, 16, 0.65);
-            if (isRight) cutTrailerLight(rRightLX, rRightLY + 1.5, 16, 0.65);
+            if (isLeft) cutTrailerLight(rLeftLX, rLeftLY - 1.5, 16 * signalState.intensity, 0.65 * signalState.intensity);
+            if (isRight) cutTrailerLight(rRightLX, rRightLY + 1.5, 16 * signalState.intensity, 0.65 * signalState.intensity);
           }
         }
 
@@ -11205,18 +11205,18 @@ export class GameRenderer {
 
       // Turn signal cutouts
       if (car.turnSignal !== 'none') {
-        const isBlinkOn = Math.floor(car.turnSignalTimer * 4) % 2 === 0;
-        if (isBlinkOn) {
+        const signalState = getVehicleTurnSignalDynamicState(car);
+        if (signalState.intensity > 0.05) {
           const isLeft = car.turnSignal === 'left' || car.turnSignal === 'hazard';
           const isRight = car.turnSignal === 'right' || car.turnSignal === 'hazard';
           
           if (isLeft) {
-            cutSmoothRearLight(leftLampLX, leftLampLY - 1.5, 16, 0.65);
-            cutSmoothRearLight(rearLeftLX, rearLeftLY - 1.5, 16, 0.65);
+            cutSmoothRearLight(leftLampLX, leftLampLY - 1.5, 16 * signalState.intensity, 0.65 * signalState.intensity);
+            cutSmoothRearLight(rearLeftLX, rearLeftLY - 1.5, 16 * signalState.intensity, 0.65 * signalState.intensity);
           }
           if (isRight) {
-            cutSmoothRearLight(rightLampLX, rightLampLY + 1.5, 16, 0.65);
-            cutSmoothRearLight(rearRightLX, rearRightLY + 1.5, 16, 0.65);
+            cutSmoothRearLight(rightLampLX, rightLampLY + 1.5, 16 * signalState.intensity, 0.65 * signalState.intensity);
+            cutSmoothRearLight(rearRightLX, rearRightLY + 1.5, 16 * signalState.intensity, 0.65 * signalState.intensity);
           }
         }
       }
@@ -11601,12 +11601,12 @@ export class GameRenderer {
         }
 
         if (car.turnSignal && car.turnSignal !== 'none') {
-          const isBlinkOn = Math.floor((car.turnSignalTimer || 0) * 4) % 2 === 0;
-          if (isBlinkOn) {
+          const signalState = getVehicleTurnSignalDynamicState(car);
+          if (signalState.intensity > 0.05) {
             const isLeft = car.turnSignal === 'left' || car.turnSignal === 'hazard';
             const isRight = car.turnSignal === 'right' || car.turnSignal === 'hazard';
-            if (isLeft) drawTrailerAdditive(rLeftLX, rLeftLY - 1.5, 7.5, 'rgba(255, 160, 0, 0.70)');
-            if (isRight) drawTrailerAdditive(rRightLX, rRightLY + 1.5, 7.5, 'rgba(255, 160, 0, 0.70)');
+            if (isLeft) drawTrailerAdditive(rLeftLX, rLeftLY - 1.5, 7.5 * signalState.intensity, `rgba(255, 160, 0, ${0.70 * signalState.intensity})`);
+            if (isRight) drawTrailerAdditive(rRightLX, rRightLY + 1.5, 7.5 * signalState.intensity, `rgba(255, 160, 0, ${0.70 * signalState.intensity})`);
           }
         }
 
@@ -12013,22 +12013,23 @@ export class GameRenderer {
       }
 
       if (car.turnSignal !== 'none') {
-        const isBlinkOn = Math.floor(car.turnSignalTimer * 4) % 2 === 0;
-        if (isBlinkOn) {
+        const signalState = getVehicleTurnSignalDynamicState(car);
+        if (signalState.intensity > 0.05) {
           const isLeft = car.turnSignal === 'left' || car.turnSignal === 'hazard';
           const isRight = car.turnSignal === 'right' || car.turnSignal === 'hazard';
-          const amberColor = 'rgba(255, 160, 0, 0.65)';
+          const intensity = signalState.intensity;
+          const amberColor = `rgba(255, 160, 0, ${0.65 * intensity})`;
 
           const frontTurnLX = isTractor ? (car.type === 'tractor_mtz80_old' ? 0.6 : (halfL * 0.10 + 0.6)) : leftLampLX;
           const frontTurnLY = isTractor ? (halfW * 0.76 * 0.48) : Math.abs(leftLampLY);
 
           if (isLeft) {
-            drawRadialAdditive(frontTurnLX, -frontTurnLY, 6, amberColor);
-            drawRadialAdditive(rearLeftLX, rearLeftLY - 1.5, 7, amberColor);
+            drawRadialAdditive(frontTurnLX, -frontTurnLY, 6 * intensity, amberColor);
+            drawRadialAdditive(rearLeftLX, rearLeftLY - 1.5, 7 * intensity, amberColor);
           }
           if (isRight) {
-            drawRadialAdditive(frontTurnLX, frontTurnLY, 6, amberColor);
-            drawRadialAdditive(rearRightLX, rearRightLY + 1.5, 7, amberColor);
+            drawRadialAdditive(frontTurnLX, frontTurnLY, 6 * intensity, amberColor);
+            drawRadialAdditive(rearRightLX, rearRightLY + 1.5, 7 * intensity, amberColor);
           }
         }
       }

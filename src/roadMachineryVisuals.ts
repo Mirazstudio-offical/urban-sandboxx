@@ -1,5 +1,6 @@
 import type { VehicleRenderContext } from './vehicleArchetypes';
 import type { Vehicle } from './types';
+import { getVehicleTurnSignalDynamicState } from './vehicleHelpers';
 
 function isVehicleReverseGearActive(car: Vehicle): boolean {
   if (car.engineState) {
@@ -819,9 +820,9 @@ export function renderHeavyTandemRoller(vCtx: VehicleRenderContext): void {
 
   // Front turn indicators on front bumper corners
   if (car.turnSignal !== 'none') {
-    const isBlinkOn = Math.floor((car.turnSignalTimer || 0) * 4) % 2 === 0;
-    if (isBlinkOn) {
-      ctx.fillStyle = '#f59e0b';
+    const signalState = getVehicleTurnSignalDynamicState(car);
+    if (signalState.intensity > 0.05) {
+      ctx.fillStyle = `rgba(245, 158, 11, ${signalState.intensity})`;
       if (car.turnSignal === 'left' || car.turnSignal === 'hazard') {
         ctx.fillRect(fBumpX - 0.5, -fBumpW / 2 - 0.5, 2.0, 2.0);
       }
@@ -956,9 +957,9 @@ export function renderHeavyTandemRoller(vCtx: VehicleRenderContext): void {
 
   // Rear turn signals
   if (car.turnSignal !== 'none') {
-    const isBlinkOn = Math.floor((car.turnSignalTimer || 0) * 4) % 2 === 0;
-    if (isBlinkOn) {
-      ctx.fillStyle = '#f59e0b';
+    const signalState = getVehicleTurnSignalDynamicState(car);
+    if (signalState.intensity > 0.05) {
+      ctx.fillStyle = `rgba(245, 158, 11, ${signalState.intensity})`;
       if (car.turnSignal === 'left' || car.turnSignal === 'hazard') {
         ctx.fillRect(rBumpX - 1.2, -rBumpW * 0.38 - 2.5, 2.4, 1.8);
       }
