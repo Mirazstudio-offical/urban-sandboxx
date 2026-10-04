@@ -1119,6 +1119,123 @@ export function renderBuckledHoodOverlay(
 }
 
 /**
+ * Renders dark charcoal-grey exposed primer, torn sheet metal edges,
+ * and dark engine compartment cavities at crumpled vertices.
+ */
+export function renderTornBodyLining(
+  ctx: CanvasRenderingContext2D,
+  car: Vehicle,
+  bodyPoly: { x: number; y: number }[],
+  deformedVertices?: DeformVertex[]
+): void {
+  if (!deformedVertices || deformedVertices.length < 16) return;
+
+  const n = bodyPoly.length;
+  ctx.save();
+
+  // 1. Dark Engine/Underbody Cavities Exposed at Ruptured Vertices
+  for (let i = 0; i < n; i++) {
+    const dv = deformedVertices[i];
+    if (!dv) continue;
+
+    const strain = dv.plasticStrain || 0;
+    const offsetDist = Math.hypot(dv.offsetX || 0, dv.offsetY || 0);
+
+    // Require noticeable plastic deformation or offset displacement
+    if (strain < 0.14 && offsetDist < 1.4) continue;
+
+    const p = bodyPoly[i];
+    const pPrev = bodyPoly[(i - 1 + n) % n];
+    const pNext = bodyPoly[(i + 1) % n];
+
+    // Vector pointing inward toward vehicle center
+    const centerDist = Math.hypot(p.x, p.y) || 1;
+    const inX = -p.x / centerDist;
+    const inY = -p.y / centerDist;
+
+    // Normal vector perpendicular to boundary edge
+    const edgeX = pNext.x - pPrev.x;
+    const edgeY = pNext.y - pPrev.y;
+    const edgeLen = Math.hypot(edgeX, edgeY) || 1;
+    const normX = -edgeY / edgeLen;
+    const normY = edgeX / edgeLen;
+
+    // Ensure normal points inward
+    const dot = normX * inX + normY * inY;
+    const finalNormX = dot >= 0 ? normX : -normX;
+    const finalNormY = dot >= 0 ? normY : -normY;
+
+    // Exposed cavity depth scales with strain and offset
+    const depth = Math.min(6.5, 1.2 + strain * 2.8 + offsetDist * 0.45);
+
+    // Seed-based procedural jagged tooth for torn metal edge
+    const seed = (dv.shapeSeed || i * 17) % 100;
+    const jag1 = 0.8 + (seed % 5) * 0.12;
+    const jag2 = 0.7 + ((seed * 3) % 7) * 0.11;
+
+    // A. Dark Charcoal / Slate Engine Compartment Cavity (Blackish-grey #0f172a / #1e293b)
+    ctx.fillStyle = 'rgba(15, 23, 42, 0.92)';
+    ctx.beginPath();
+    ctx.moveTo(p.x - edgeX * 0.25, p.y - edgeY * 0.25);
+    ctx.lineTo(p.x + finalNormX * (depth * jag1), p.y + finalNormY * (depth * jag1));
+    ctx.lineTo(p.x + edgeX * 0.25 + finalNormX * (depth * 0.6), p.y + edgeY * 0.25 + finalNormY * (depth * 0.6));
+    ctx.lineTo(p.x + edgeX * 0.35, p.y + edgeY * 0.35);
+    ctx.closePath();
+    ctx.fill();
+
+    // B. Grey Zinc Primer Layer (#334155 / #475569) simulating peeled paint & raw inner lining
+    ctx.fillStyle = 'rgba(51, 65, 85, 0.85)';
+    ctx.beginPath();
+    ctx.moveTo(p.x - edgeX * 0.20, p.y - edgeY * 0.20);
+    ctx.lineTo(p.x + finalNormX * (depth * 0.42 * jag2), p.y + finalNormY * (depth * 0.42 * jag2));
+    ctx.lineTo(p.x + edgeX * 0.20, p.y + edgeY * 0.20);
+    ctx.closePath();
+    ctx.fill();
+
+    // C. Jagged Raw Steel Edge Highlight (#94a3b8 / #cbd5e1)
+    ctx.strokeStyle = 'rgba(148, 163, 184, 0.80)';
+    ctx.lineWidth = 0.8;
+    ctx.beginPath();
+    ctx.moveTo(p.x - edgeX * 0.20, p.y - edgeY * 0.20);
+    ctx.lineTo(p.x + finalNormX * (depth * 0.42 * jag2), p.y + finalNormY * (depth * 0.42 * jag2));
+    ctx.stroke();
+  }
+
+  // 2. Dark Grey/Charcoal Rim Border Along Severely Crumpled Edge Segments
+  for (let i = 0; i < n; i++) {
+    const idx0 = i;
+    const idx1 = (i + 1) % n;
+
+    const strain0 = deformedVertices[idx0]?.plasticStrain || 0;
+    const strain1 = deformedVertices[idx1]?.plasticStrain || 0;
+    const maxStrain = Math.max(strain0, strain1);
+
+    if (maxStrain < 0.16) continue;
+
+    const p0 = bodyPoly[idx0];
+    const p1 = bodyPoly[idx1];
+
+    // Dark charcoal border along torn metal seam
+    ctx.strokeStyle = 'rgba(15, 23, 42, 0.85)';
+    ctx.lineWidth = Math.min(2.8, 1.2 + maxStrain * 1.2);
+    ctx.beginPath();
+    ctx.moveTo(p0.x, p0.y);
+    ctx.lineTo(p1.x, p1.y);
+    ctx.stroke();
+
+    // Inner grey primer stripe
+    ctx.strokeStyle = 'rgba(71, 85, 105, 0.75)';
+    ctx.lineWidth = 0.9;
+    ctx.beginPath();
+    ctx.moveTo(p0.x, p0.y);
+    ctx.lineTo(p1.x, p1.y);
+    ctx.stroke();
+  }
+
+  ctx.restore();
+}
+
+/**
  * Renders sagging or dangling bumper ends on severe corner impacts when mounting clips shear.
  */
 export function renderSaggingBumpers(

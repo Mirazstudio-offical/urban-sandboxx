@@ -152,6 +152,7 @@ export interface DeformVertex {
   velX?: number;           // Transient elastic velocity X
   velY?: number;           // Transient elastic velocity Y
   structuralType?: 'bumper' | 'fender' | 'door' | 'quarter' | 'pillar' | 'hood' | 'windshield' | 'roof' | 'trunk';
+  shapeSeed?: number;
 }
 
 export interface ScratchMark {

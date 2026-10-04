@@ -37,7 +37,8 @@ import {
   traceSoftbodyPath,
   renderSoftbodyStressLines,
   renderBuckledHoodOverlay,
-  renderSaggingBumpers
+  renderSaggingBumpers,
+  renderTornBodyLining
 } from './softbodyVisuals';
 import { performanceConfig } from './performanceConfig';
 import { getBuildingLayout, renderBuildingInterior } from './buildingInteriors';
@@ -8742,6 +8743,7 @@ export class GameRenderer {
       // 2.5D buckled hood and sagging bumper attachments
       renderBuckledHoodOverlay(ctx, car, bodyPoly, halfL, halfW);
       renderSaggingBumpers(ctx, car, bodyPoly, halfL, halfW);
+      renderTornBodyLining(ctx, car, bodyPoly, dmg.deformedVertices);
 
       // 4. Crease Lines & Scratches
       if (fc > 2 || fld > 2 || frd > 2 || dmg.hoodBuckled) {

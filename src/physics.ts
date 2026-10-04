@@ -1822,23 +1822,37 @@ export function applyVehicleDamageAndDeformation(
       const transShock = (severity * (isExtremeStriker ? 70 : 28) + (dmg.frontCrumple / maxFrontCrush) * 35) * Math.sqrt(reducedMassRatio);
       eng.transmissionHealth = Math.max(0, (eng.transmissionHealth ?? 100) - transShock);
 
+      // --- IMMEDIATE ENGINE STALL ON IMPACT ---
+      // Transmission jerk / rotational flywheel shock / inertia fuel safety cutoff
+      if (impactKmh > 16.0 || severity > 0.12 || isExtremeStriker) {
+        eng.engineRunning = false;
+        eng.engineRPM = 0;
+      }
+
       // Radiator puncture (starts rapid coolant loss & overheating)
-      if (severity > 0.35 || dmg.frontCrumple > 3.5 || isExtremeStriker) {
+      if (severity > 0.25 || dmg.frontCrumple > 2.0 || isExtremeStriker) {
         eng.radiatorPunctured = true;
       }
 
       // Oil pan puncture (starts oil loss, knocking, then seizure)
-      if (severity > 0.55 || dmg.frontCrumple > 6.0 || isExtremeStriker) {
+      if (severity > 0.40 || dmg.frontCrumple > 3.8 || isExtremeStriker) {
         eng.oilPunctured = true;
       }
 
       // Engine knock from internal mechanical damage
-      if (eng.engineHealth <= 40 || severity > 0.60 || isExtremeStriker) {
+      if (eng.engineHealth <= 50 || severity > 0.42 || isExtremeStriker) {
         eng.engineKnocking = true;
       }
 
-      // Severe engine seizure & dead starter from direct engine bay smash
-      if (eng.engineHealth <= 10 || severity > 0.82 || dmg.frontCrumple > 9.5 || isExtremeStriker) {
+      // Battery disconnect / dead starter / severe engine bay smash
+      if (eng.engineHealth <= 30 || severity > 0.45 || dmg.frontCrumple > 4.2 || isExtremeStriker) {
+        eng.starterWorking = false;
+        eng.engineRunning = false;
+        eng.engineRPM = 0;
+      }
+
+      // Complete engine block seizure
+      if (eng.engineHealth <= 15 || severity > 0.55 || dmg.frontCrumple > 5.5 || isExtremeStriker) {
         eng.starterWorking = false;
         eng.engineRunning = false;
         eng.isSeized = true;
@@ -1846,7 +1860,7 @@ export function applyVehicleDamageAndDeformation(
       }
 
       // Transmission jamming / locking up
-      if (eng.transmissionHealth <= 15 || (severity > 0.72 && Math.random() < 0.75) || isExtremeStriker) {
+      if (eng.transmissionHealth <= 20 || (severity > 0.50 && Math.random() < 0.75) || isExtremeStriker) {
         eng.transmissionJammed = true;
       }
     }
@@ -1956,13 +1970,18 @@ export function applyVehicleDamageAndDeformation(
     }
 
     if (!isTrailer) {
-      if (severity > 0.42 || isExtremeStriker) {
+      if (impactKmh > 20.0 || severity > 0.16 || isExtremeStriker) {
+        eng.engineRunning = false;
+        eng.engineRPM = 0;
+      }
+
+      if (severity > 0.35 || isExtremeStriker) {
         eng.transmissionHealth = Math.max(0, (eng.transmissionHealth ?? 100) - severity * (isExtremeStriker ? 48 : 22));
         eng.engineHealth = Math.max(0, (eng.engineHealth ?? 100) - severity * (isExtremeStriker ? 44 : 18));
-        if (eng.transmissionHealth <= 15 || (severity > 0.78 && Math.random() < 0.55) || isExtremeStriker) {
+        if (eng.transmissionHealth <= 20 || (severity > 0.55 && Math.random() < 0.55) || isExtremeStriker) {
           eng.transmissionJammed = true;
         }
-        if (eng.engineHealth <= 10 || (severity > 0.82 && Math.random() < 0.45) || isExtremeStriker) {
+        if (eng.engineHealth <= 20 || (severity > 0.60 && Math.random() < 0.50) || isExtremeStriker) {
           eng.isSeized = true;
           eng.engineRunning = false;
           eng.starterWorking = false;
