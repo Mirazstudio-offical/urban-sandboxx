@@ -1569,42 +1569,53 @@ export function applyVehicleDamageAndDeformation(
   const normX = Math.max(-1, Math.min(1, localX / halfL));
   const normY = Math.max(-1, Math.min(1, localY / halfW));
 
-  // Dynamic Mass & Kinetic Momentum Factor
-  const isExtremeStriker = strikerMass >= 40000;
-  const maxMassRatioLimit = isExtremeStriker ? 45.0 : 3.5;
-  const massRatio = Math.max(0.5, Math.min(maxMassRatioLimit, strikerMass / car.mass));
-  const effectiveSpeed = impactSpeed * Math.sqrt(massRatio);
+  // Dynamic Mass & Kinetic Momentum Factor (Continuously scaled from first principles)
+  const isTrain = strikerMass >= 45000;
+  const isHeavyStriker = strikerMass >= 5000 || (strikerMass / car.mass) >= 2.5;
+  const isExtremeStriker = isTrain || (strikerMass / car.mass) >= 8.0;
+  const massRatio = Math.max(0.04, Math.min(50.0, strikerMass / car.mass));
+  
+  // Effective kinetic speed: scaled by square root of mass ratio and impact closing velocity
+  const effectiveSpeed = impactSpeed * Math.sqrt(Math.max(0.20, massRatio));
 
   const isHeavyRigidTrailer = car.type.startsWith('trailer_semi');
   const isMachinery = isRoadMachinery(car.type);
+  const isHeavyTruckOrBus = car.type.startsWith('truck_') || car.type === 'cement_mixer' || car.type === 'garbage_truck' || car.type === 'bus' || car.type === 'bus_minibus' || car.type === 'fire_engine' || car.type === 'fire_ladder' || car.type === 'fire_rescue' || car.type === 'truck_armored';
+  const isTractor = isTractorVehicle(car.type);
 
-  if ((isHeavyRigidTrailer || isMachinery) && impactSpeed < 45 && scrapeSpeed < 45) {
+  if ((isHeavyRigidTrailer || isMachinery) && impactSpeed < 35 && scrapeSpeed < 35) {
     return; // Heavy I-beam chassis / heavy cast iron road machinery does not dent or deform from minor nudges or scrapes
   }
 
   // Realistic Impact Severity calculation:
-  // Non-linear kinetic energy scaling: starts scaling from 18 px/s up to 108 px/s.
-  // Using quadratic curve to model E_k = 1/2 * m * v^2 so high-speed impacts are catastrophic and low-speed are minor.
-  const speedProgress = Math.max(0, effectiveSpeed - 18) / 90;
-  let severity = Math.min(1.0, Math.pow(speedProgress, 1.6));
+  // Non-linear kinetic energy scaling: E_k = 1/2 * m * v^2 so high-speed and heavy-mass impacts are catastrophic
+  const speedProgress = Math.max(0, effectiveSpeed - 12) / 75;
+  let severity = Math.min(1.0, Math.pow(speedProgress, 1.45));
   if ((car as any).hasHeavySuspension) {
-    severity *= 0.6; // Heavy-duty Bilstein suspension absorbs 40% of the shock energy!
+    severity *= 0.7; // Heavy-duty suspension absorbs shock energy
   }
   if (isHeavyRigidTrailer) {
     severity *= 0.12; // Massive heavy-duty industrial trailer frame absorbs shocks
   }
   if (isMachinery) {
     severity *= 0.05; // Heavy steel plate ballast chassis on rollers absorbs impacts without softbody crumpling
+  } else if (isHeavyTruckOrBus) {
+    severity *= 0.45; // Heavy channel ladder chassis frame absorbs major force, but bumper/radiator take damage
   }
 
-  // 1. Realistic Directional Softbody Mass-Spring Network with Plastic Strain & Poisson Wrinkling
-  if (dmg.deformedVertices && impactSpeed > ((isHeavyRigidTrailer || isMachinery) ? 45 : 18)) {
-    let pushStrength = Math.min(isExtremeStriker ? 32.0 : 6.5, (effectiveSpeed / 60) * 2.8 * Math.sqrt(massRatio));
+  // 1. Realistic Directional Softbody Mass-Spring Network with Plastic Strain & Accordion Crumpling
+  if (dmg.deformedVertices && impactSpeed > ((isHeavyRigidTrailer || isMachinery) ? 35 : 12)) {
+    let pushStrength = Math.min(
+      isExtremeStriker ? 42.0 : 28.0, 
+      (effectiveSpeed / 45) * 3.5 * Math.sqrt(Math.max(0.4, massRatio))
+    );
     if (isHeavyRigidTrailer) {
-      pushStrength *= 0.10; // Semi-trailer structural steel rails have massive yield resistance
+      pushStrength *= 0.10;
     }
     if (isMachinery) {
-      pushStrength *= 0.05; // Heavy road compaction machinery steel frame resists denting
+      pushStrength *= 0.05;
+    } else if (isHeavyTruckOrBus) {
+      pushStrength *= 0.40; // Heavy truck steel bumper and grill displace realistically without cabin collapse
     }
     
     // Determine local impact vector in car local coordinates
@@ -1641,7 +1652,7 @@ export function applyVehicleDamageAndDeformation(
     // Propagate plastic strain and elastic jiggle through softbody node lattice
     const perimeterCount = Math.min(32, totalNodes);
     const isPerimeter = closestIdx < perimeterCount;
-    const maxOffsetReach = isExtremeStriker ? 6 : 3;
+    const maxOffsetReach = isExtremeStriker ? 7 : (isHeavyStriker || severity > 0.5 ? 5 : 3);
 
     if (isPerimeter) {
       for (let offset = -maxOffsetReach; offset <= maxOffsetReach; offset++) {
@@ -1655,7 +1666,7 @@ export function applyVehicleDamageAndDeformation(
         // Node structural stiffness resistance multiplier based on panel type
         const structStiffness = v.structuralType === 'door'? 0.75 :
                                 (v.structuralType === 'quarter'? 0.85 :
-                                (v.structuralType === 'fender'? 1.0 : 1.25));
+                                (v.structuralType === 'fender'? 0.95 : 1.15));
 
         const absOffset = Math.abs(offset);
         let weight = 0;
@@ -1663,18 +1674,19 @@ export function applyVehicleDamageAndDeformation(
         if (absOffset === 0) {
           weight = 1.0;
         } else if (absOffset === 1) {
-          weight = 0.70 * structStiffness;
+          weight = 0.80 * structStiffness;
         } else if (absOffset === 2) {
-          weight = 0.40 * structStiffness;
+          weight = 0.55 * structStiffness;
         } else if (absOffset === 3) {
-          weight = 0.15 * structStiffness;
-        } else if (isExtremeStriker && absOffset <= 5) {
-          weight = 0.10 * structStiffness;
+          weight = 0.35 * structStiffness;
+        } else if (absOffset <= 5) {
+          weight = 0.20 * structStiffness;
+        } else if (absOffset <= 7) {
+          weight = 0.12 * structStiffness;
         }
 
         if (weight !== 0) {
           // Strictly enforce anti-ballooning: external impacts push INWARD into cavities or tangentially
-          // Remove any outward normal component from the impact impulse
           const outDot = impulseX * normX + impulseY * normY;
           let nodeImpulseX = impulseX;
           let nodeImpulseY = impulseY;
@@ -1684,7 +1696,21 @@ export function applyVehicleDamageAndDeformation(
           }
 
           const deltaPush = pushStrength * weight;
-          const maxOffset = (isHeavyRigidTrailer || isMachinery) ? 1.0 : isExtremeStriker ? Math.min(38.0, Math.max(16.0, origLen * 0.85)) : Math.min(10.0, Math.max(2.5, origLen * 0.32));
+          
+          // Max inward offset bounds:
+          // Passenger cars in high-speed crashes can crush inward up to 75-85% of radius (flattened front accordion!)
+          let maxOffset: number;
+          if (isHeavyRigidTrailer || isMachinery) {
+            maxOffset = 1.5;
+          } else if (isHeavyTruckOrBus) {
+            maxOffset = Math.min(origLen * 0.45, Math.max(3.0, (origLen * 0.18 + severity * origLen * 0.22) * Math.min(2.0, Math.sqrt(massRatio))));
+          } else if (isTractor) {
+            maxOffset = Math.min(origLen * 0.55, Math.max(3.5, (origLen * 0.22 + severity * origLen * 0.30) * Math.min(2.0, Math.sqrt(massRatio))));
+          } else {
+            // Passenger cars, pickups, vans: full collapse capability
+            const baseCap = isExtremeStriker ? 0.85 : (isHeavyStriker || severity > 0.6 ? 0.78 : 0.50);
+            maxOffset = Math.min(origLen * baseCap, Math.max(4.0, (origLen * 0.30 + severity * origLen * 0.50) * Math.min(2.5, Math.sqrt(massRatio))));
+          }
 
           // Apply permanent plastic offset with progressive multi-frame crumple targets
           const currentTargetX = v.targetOffsetX !== undefined && isFinite(v.targetOffsetX) ? v.targetOffsetX : (isFinite(v.offsetX) ? v.offsetX : 0);
@@ -1709,8 +1735,8 @@ export function applyVehicleDamageAndDeformation(
 
           v.targetOffsetX = newTargetX;
           v.targetOffsetY = newTargetY;
-          // Apply initial partial step so the impact registers immediately
-          const stepRatio = isExtremeStriker ? 0.65 : 0.25;
+          // Apply initial step so the impact registers immediately and visceral crumple occurs on first frame
+          const stepRatio = (isExtremeStriker || severity > 0.6) ? 0.85 : 0.50;
           v.offsetX = v.offsetX + (newTargetX - v.offsetX) * stepRatio;
           v.offsetY = v.offsetY + (newTargetY - v.offsetY) * stepRatio;
 
@@ -1733,13 +1759,13 @@ export function applyVehicleDamageAndDeformation(
           if (!isFinite(v.offsetY)) v.offsetY = 0;
 
           // Accumulate plastic strain (metal yield & crease severity)
-          const strainAdd = Math.abs(deltaPush) / (origLen * 0.25);
+          const strainAdd = Math.abs(deltaPush) / (origLen * 0.20);
           v.plasticStrain = Math.min(2.0, (v.plasticStrain || 0) + strainAdd);
 
           // Inject transient elastic jiggle velocity impulse
-          const jiggleStrength = Math.min(16.0, severity * 16.0 * Math.abs(weight));
-          v.velX = Math.max(-30, Math.min(30, (v.velX || 0) + nodeImpulseX * jiggleStrength));
-          v.velY = Math.max(-30, Math.min(30, (v.velY || 0) + nodeImpulseY * jiggleStrength));
+          const jiggleStrength = Math.min(24.0, severity * 24.0 * Math.abs(weight));
+          v.velX = Math.max(-40, Math.min(40, (v.velX || 0) + nodeImpulseX * jiggleStrength));
+          v.velY = Math.max(-40, Math.min(40, (v.velY || 0) + nodeImpulseY * jiggleStrength));
 
           if (!isFinite(v.offsetX)) v.offsetX = 0;
           if (!isFinite(v.offsetY)) v.offsetY = 0;
@@ -1749,9 +1775,9 @@ export function applyVehicleDamageAndDeformation(
       // Direct impact on internal structural node (hood/windshield/roof/trunk)
       const v = dmg.deformedVertices[closestIdx];
       if (v) {
-        v.plasticStrain = Math.min(2.0, (v.plasticStrain || 0) + 0.35);
-        v.velX = Math.max(-20, Math.min(20, (v.velX || 0) + impulseX * 10));
-        v.velY = Math.max(-20, Math.min(20, (v.velY || 0) + impulseY * 10));
+        v.plasticStrain = Math.min(2.0, (v.plasticStrain || 0) + 0.55);
+        v.velX = Math.max(-30, Math.min(30, (v.velX || 0) + impulseX * 15));
+        v.velY = Math.max(-30, Math.min(30, (v.velY || 0) + impulseY * 15));
       }
     }
 
@@ -1767,35 +1793,38 @@ export function applyVehicleDamageAndDeformation(
 
     // Frame twist angle drift
     const frontAsym = (strainFL - strainFR);
-    if (Math.abs(frontAsym) > 0.12 || isExtremeStriker) {
-      dmg.steeringDrift = Math.max(-1.0, Math.min(1.0, dmg.steeringDrift + frontAsym * 0.4 + (isExtremeStriker ? (Math.random() - 0.5) * 0.8 : 0)));
-      dmg.frameBentAngle = (dmg.frameBentAngle || 0) + frontAsym * 0.08 + (isExtremeStriker ? (Math.random() - 0.5) * 0.25 : 0);
+    if (Math.abs(frontAsym) > 0.08 || isExtremeStriker || isHeavyStriker) {
+      dmg.steeringDrift = Math.max(-1.0, Math.min(1.0, dmg.steeringDrift + frontAsym * 0.5 + (isExtremeStriker ? (Math.random() - 0.5) * 0.8 : 0)));
+      dmg.frameBentAngle = (dmg.frameBentAngle || 0) + frontAsym * 0.12 + (isExtremeStriker ? (Math.random() - 0.5) * 0.35 : 0);
     }
 
     // Buckled hood elevation
-    // Safe index access for polygon vertices
     const frontTotalStrain = 
       (dmg.deformedVertices[0]?.plasticStrain || 0) + 
       (dmg.deformedVertices[1]?.plasticStrain || 0) + 
       (dmg.deformedVertices[2]?.plasticStrain || 0) + 
       (dmg.deformedVertices[18]?.plasticStrain || 0) + 
       (dmg.deformedVertices[19]?.plasticStrain || 0);
-    if (frontTotalStrain > 0.25 || isExtremeStriker) {
+    if (frontTotalStrain > 0.20 || isExtremeStriker || (isHeavyStriker && severity > 0.3)) {
       dmg.hoodBuckled = true;
-      dmg.hoodRaisedAmount = Math.min(1.0, Math.max(isExtremeStriker ? 0.85 : 0, frontTotalStrain * 0.65));
+      dmg.hoodRaisedAmount = Math.min(1.0, Math.max(isExtremeStriker ? 0.90 : 0.3, frontTotalStrain * 0.75));
     }
 
     // Sagging bumper corners
-    if ((dmg.deformedVertices[3]?.plasticStrain || 0) > 0.4) dmg.bumperSagLeft = Math.min(1.0, (dmg.deformedVertices[3]?.plasticStrain || 0) * 0.8);
-    if ((dmg.deformedVertices[17]?.plasticStrain || 0) > 0.4) dmg.bumperSagRight = Math.min(1.0, (dmg.deformedVertices[17]?.plasticStrain || 0) * 0.8);
+    if ((dmg.deformedVertices[3]?.plasticStrain || 0) > 0.3 || severity > 0.35) {
+      dmg.bumperSagLeft = Math.min(1.0, Math.max(dmg.bumperSagLeft || 0, (dmg.deformedVertices[3]?.plasticStrain || 0) * 0.85 + severity * 0.4));
+    }
+    if ((dmg.deformedVertices[17]?.plasticStrain || 0) > 0.3 || severity > 0.35) {
+      dmg.bumperSagRight = Math.min(1.0, Math.max(dmg.bumperSagRight || 0, (dmg.deformedVertices[17]?.plasticStrain || 0) * 0.85 + severity * 0.4));
+    }
 
     // Wheel well clearance check & wheel rub resistance
     const checkWheelRub = (nodeIdx: number) => {
       const v = dmg.deformedVertices?.[nodeIdx];
       if (!v) return;
       const offsetMag = Math.hypot(v.offsetX || 0, v.offsetY || 0);
-      if (offsetMag > 3.5) {
-        dmg.wheelRubResistance += (offsetMag - 3.5) * 4.0;
+      if (offsetMag > 3.0) {
+        dmg.wheelRubResistance += (offsetMag - 3.0) * 6.0;
       }
     };
     checkWheelRub(3);  // Front-Left wheel well
@@ -1807,38 +1836,55 @@ export function applyVehicleDamageAndDeformation(
   const isTrailer = isTrailerVehicle(car);
 
   // 2. Structural crumple & component damage logic (Radiator, Oil pan, Fuel tank, Suspension, Engine & Transmission)
-  const crushFactor = severity * (1.2 + severity * 1.8) * Math.sqrt(massRatio) * (isExtremeStriker ? 1.5 : 0.4);
+  // Dynamic crush factor scales with speed, severity, and mass momentum
+  const crushFactor = (severity * 6.0 + severity * severity * 14.0) * Math.sqrt(Math.max(0.35, massRatio));
 
-  if (normX > 0.20 && impactSpeed > 20) {
+  if (normX > 0.15 && impactSpeed > 15) {
     // --- FRONTAL COLLISION ---
-    const maxFrontCrush = isMachinery ? 1.2 : (isExtremeStriker ? halfL * 0.75 : halfL * 0.24); // Massive crushing under multi-ton striker
+    let maxFrontCrush: number;
+    if (isMachinery) {
+      maxFrontCrush = 2.0;
+    } else if (isHeavyRigidTrailer) {
+      maxFrontCrush = 3.5;
+    } else if (isHeavyTruckOrBus) {
+      // Heavy trucks: front bumper, grille and radiator guard crumple (up to 30% of front length)
+      maxFrontCrush = halfL * Math.min(0.35, Math.max(0.12, 0.15 + severity * 0.20));
+    } else if (isTractor) {
+      maxFrontCrush = halfL * Math.min(0.45, Math.max(0.18, 0.20 + severity * 0.25));
+    } else {
+      // Passenger cars: Full accordion collapse up to 78-85% of front half-length at high speed!
+      const collapseCap = isExtremeStriker ? 0.85 : (isHeavyStriker || severity > 0.6 ? 0.80 : 0.60);
+      maxFrontCrush = halfL * Math.min(collapseCap, Math.max(0.30, 0.35 + severity * 0.40 + Math.min(0.15, (massRatio - 1) * 0.04)));
+    }
+
     dmg.frontCrumple = Math.min(maxFrontCrush, dmg.frontCrumple + crushFactor);
 
     if (!isTrailer) {
       // Mechanical engine and transmission shock / crushing
-      const engShock = (severity * (isExtremeStriker ? 75 : 30) + (dmg.frontCrumple / maxFrontCrush) * 35) * Math.sqrt(massRatio);
+      const shockScale = (isHeavyTruckOrBus ? 0.4 : 1.0);
+      const engShock = (severity * 55 + (dmg.frontCrumple / maxFrontCrush) * 45) * Math.sqrt(Math.max(0.4, massRatio)) * shockScale;
       eng.engineHealth = Math.max(0, (eng.engineHealth ?? 100) - engShock);
 
-      const transShock = (severity * (isExtremeStriker ? 65 : 25) + (dmg.frontCrumple / maxFrontCrush) * 30) * Math.sqrt(massRatio);
+      const transShock = (severity * 45 + (dmg.frontCrumple / maxFrontCrush) * 40) * Math.sqrt(Math.max(0.4, massRatio)) * shockScale;
       eng.transmissionHealth = Math.max(0, (eng.transmissionHealth ?? 100) - transShock);
 
       // Radiator puncture (starts rapid coolant loss & overheating)
-      if (severity > 0.42 || dmg.frontCrumple > 5.5 || isExtremeStriker) {
+      if (severity > 0.28 || dmg.frontCrumple > 3.8 || isHeavyStriker || impactSpeed > 40) {
         eng.radiatorPunctured = true;
       }
 
       // Oil pan puncture (starts oil loss, knocking, then seizure)
-      if (severity > 0.60 || dmg.frontCrumple > 8.0 || isExtremeStriker) {
+      if (severity > 0.48 || dmg.frontCrumple > 6.0 || isHeavyStriker || (impactSpeed > 60 && !isHeavyTruckOrBus)) {
         eng.oilPunctured = true;
       }
 
       // Engine knock from internal mechanical damage
-      if (eng.engineHealth <= 35 || severity > 0.65 || isExtremeStriker) {
+      if (eng.engineHealth <= 40 || severity > 0.55 || isHeavyStriker) {
         eng.engineKnocking = true;
       }
 
       // Severe engine seizure & dead starter from direct engine bay smash
-      if (eng.engineHealth <= 10 || severity > 0.85 || dmg.frontCrumple > 11.0 || isExtremeStriker) {
+      if (eng.engineHealth <= 15 || severity > 0.75 || dmg.frontCrumple > (maxFrontCrush * 0.65) || isExtremeStriker) {
         eng.starterWorking = false;
         eng.engineRunning = false;
         eng.isSeized = true;
@@ -1846,109 +1892,115 @@ export function applyVehicleDamageAndDeformation(
       }
 
       // Transmission jamming / locking up
-      if (eng.transmissionHealth <= 15 || (severity > 0.75 && Math.random() < 0.75) || isExtremeStriker) {
+      if (eng.transmissionHealth <= 20 || (severity > 0.65 && Math.random() < 0.8) || isExtremeStriker) {
         eng.transmissionJammed = true;
       }
     }
 
-    if (normY < -0.22) {
-      dmg.frontLeftDent = Math.min(maxFrontCrush * 0.75, dmg.frontLeftDent + crushFactor * 0.85);
-      dmg.frontLeftSuspensionDamage = Math.min(1.0, dmg.frontLeftSuspensionDamage + severity * 0.85);
-      dmg.steeringDrift = Math.max(-1.0, dmg.steeringDrift - severity * 0.7);
-      dmg.wheelRubResistance += severity * 18;
-      if (severity > 0.35 || isExtremeStriker) dmg.leftHeadlightBroken = true;
-    } else if (normY > 0.22) {
-      dmg.frontRightDent = Math.min(maxFrontCrush * 0.75, dmg.frontRightDent + crushFactor * 0.85);
-      dmg.frontRightSuspensionDamage = Math.min(1.0, dmg.frontRightSuspensionDamage + severity * 0.85);
-      dmg.steeringDrift = Math.min(1.0, dmg.steeringDrift + severity * 0.7);
-      dmg.wheelRubResistance += severity * 18;
-      if (severity > 0.35 || isExtremeStriker) dmg.rightHeadlightBroken = true;
+    if (normY < -0.18) {
+      dmg.frontLeftDent = Math.min(maxFrontCrush * 0.85, dmg.frontLeftDent + crushFactor * 0.90);
+      dmg.frontLeftSuspensionDamage = Math.min(1.0, dmg.frontLeftSuspensionDamage + severity * 0.95);
+      dmg.steeringDrift = Math.max(-1.0, dmg.steeringDrift - severity * 0.8);
+      dmg.wheelRubResistance += severity * 25;
+      if (severity > 0.25 || impactSpeed > 30 || isHeavyStriker) dmg.leftHeadlightBroken = true;
+    } else if (normY > 0.18) {
+      dmg.frontRightDent = Math.min(maxFrontCrush * 0.85, dmg.frontRightDent + crushFactor * 0.90);
+      dmg.frontRightSuspensionDamage = Math.min(1.0, dmg.frontRightSuspensionDamage + severity * 0.95);
+      dmg.steeringDrift = Math.min(1.0, dmg.steeringDrift + severity * 0.8);
+      dmg.wheelRubResistance += severity * 25;
+      if (severity > 0.25 || impactSpeed > 30 || isHeavyStriker) dmg.rightHeadlightBroken = true;
     } else {
-      dmg.frontLeftDent = Math.min(maxFrontCrush * 0.65, dmg.frontLeftDent + crushFactor * 0.6);
-      dmg.frontRightDent = Math.min(maxFrontCrush * 0.65, dmg.frontRightDent + crushFactor * 0.6);
-      dmg.frontLeftSuspensionDamage = Math.min(1.0, dmg.frontLeftSuspensionDamage + severity * 0.6);
-      dmg.frontRightSuspensionDamage = Math.min(1.0, dmg.frontRightSuspensionDamage + severity * 0.6);
-      dmg.wheelRubResistance += severity * 14;
-      if (severity > 0.45 || isExtremeStriker) {
+      dmg.frontLeftDent = Math.min(maxFrontCrush * 0.75, dmg.frontLeftDent + crushFactor * 0.75);
+      dmg.frontRightDent = Math.min(maxFrontCrush * 0.75, dmg.frontRightDent + crushFactor * 0.75);
+      dmg.frontLeftSuspensionDamage = Math.min(1.0, dmg.frontLeftSuspensionDamage + severity * 0.75);
+      dmg.frontRightSuspensionDamage = Math.min(1.0, dmg.frontRightSuspensionDamage + severity * 0.75);
+      dmg.wheelRubResistance += severity * 20;
+      if (severity > 0.30 || impactSpeed > 35 || isHeavyStriker) {
         dmg.leftHeadlightBroken = true;
         dmg.rightHeadlightBroken = true;
       }
     }
 
     if (!isTrailer) {
-      if (severity > 0.55 || dmg.frontCrumple > 8.0 || isExtremeStriker) {
+      if (severity > 0.35 || dmg.frontCrumple > 5.0 || isHeavyStriker || impactSpeed > 45) {
         dmg.hoodBuckled = true;
       }
     }
-    if (severity > 0.60 || dmg.frontCrumple > 8.5 || isExtremeStriker) {
+    if (severity > 0.40 || dmg.frontCrumple > 6.0 || isHeavyStriker || impactSpeed > 50) {
       dmg.windshieldCracked = true;
     }
-  } else if (normX < -0.25 && impactSpeed > 20) {
+  } else if (normX < -0.15 && impactSpeed > 15) {
     // --- REAR IMPACT ---
-    const maxRearCrush = isExtremeStriker ? halfL * 0.75 : halfL * 0.22; // Fuel tank & subframe restrict rear crumpling
+    let maxRearCrush: number;
+    if (isMachinery) {
+      maxRearCrush = 2.0;
+    } else if (isHeavyRigidTrailer) {
+      maxRearCrush = 4.0;
+    } else if (isHeavyTruckOrBus) {
+      maxRearCrush = halfL * Math.min(0.30, Math.max(0.10, 0.12 + severity * 0.18));
+    } else {
+      const rearCap = isExtremeStriker ? 0.80 : (isHeavyStriker || severity > 0.6 ? 0.75 : 0.45);
+      maxRearCrush = halfL * Math.min(rearCap, Math.max(0.25, 0.28 + severity * 0.35));
+    }
     dmg.rearCrumple = Math.min(maxRearCrush, dmg.rearCrumple + crushFactor);
 
     if (!isTrailer) {
       // Rear fuel tank puncture threshold
       const isPlayerInvolved = car.isPlayerControlled || ((world as any).player && (world as any).player.inVehicleId === car.id);
-      if (isPlayerInvolved || isExtremeStriker) {
-        if (severity > 0.65 || dmg.rearCrumple > 5.5 || isExtremeStriker) {
-          fuel.tankPunctured = true;
-        }
-      } else {
-        if (severity > 0.95 || dmg.rearCrumple > 12.0) {
-          fuel.tankPunctured = true;
-        }
+      if (isPlayerInvolved || isHeavyStriker || severity > 0.50 || dmg.rearCrumple > 4.5) {
+        fuel.tankPunctured = true;
       }
 
       // Rear impacts can shock transmission driveshaft and differential
-      const rearTransShock = (severity * 18 + (dmg.rearCrumple / maxRearCrush) * 15) * Math.sqrt(massRatio);
+      const rearTransShock = (severity * 30 + (dmg.rearCrumple / maxRearCrush) * 25) * Math.sqrt(Math.max(0.4, massRatio));
       eng.transmissionHealth = Math.max(0, (eng.transmissionHealth ?? 100) - rearTransShock);
-      if (eng.transmissionHealth <= 15 || (severity > 0.85 && Math.random() < 0.4) || isExtremeStriker) {
+      if (eng.transmissionHealth <= 20 || (severity > 0.70 && Math.random() < 0.6) || isExtremeStriker) {
         eng.transmissionJammed = true;
       }
     }
 
-    if (car.fluidTank && (severity > 0.45 || dmg.rearCrumple > 4.5 || isExtremeStriker)) {
+    if (car.fluidTank && (severity > 0.35 || dmg.rearCrumple > 3.5 || isHeavyStriker)) {
       car.fluidTank.isPunctured = true;
     }
 
-    if (normY < -0.22) {
-      dmg.rearLeftDent = Math.min(maxRearCrush * 0.75, dmg.rearLeftDent + crushFactor * 0.85);
-      dmg.rearLeftSuspensionDamage = Math.min(1.0, dmg.rearLeftSuspensionDamage + severity * 0.85);
-      if (severity > 0.45 || isExtremeStriker) dmg.leftTaillightBroken = true;
-    } else if (normY > 0.22) {
-      dmg.rearRightDent = Math.min(maxRearCrush * 0.75, dmg.rearRightDent + crushFactor * 0.85);
-      dmg.rearRightSuspensionDamage = Math.min(1.0, dmg.rearRightSuspensionDamage + severity * 0.85);
-      if (severity > 0.45 || isExtremeStriker) dmg.rightTaillightBroken = true;
+    if (normY < -0.18) {
+      dmg.rearLeftDent = Math.min(maxRearCrush * 0.85, dmg.rearLeftDent + crushFactor * 0.90);
+      dmg.rearLeftSuspensionDamage = Math.min(1.0, dmg.rearLeftSuspensionDamage + severity * 0.90);
+      if (severity > 0.30 || impactSpeed > 35 || isHeavyStriker) dmg.leftTaillightBroken = true;
+    } else if (normY > 0.18) {
+      dmg.rearRightDent = Math.min(maxRearCrush * 0.85, dmg.rearRightDent + crushFactor * 0.90);
+      dmg.rearRightSuspensionDamage = Math.min(1.0, dmg.rearRightSuspensionDamage + severity * 0.90);
+      if (severity > 0.30 || impactSpeed > 35 || isHeavyStriker) dmg.rightTaillightBroken = true;
     } else {
-      dmg.rearLeftSuspensionDamage = Math.min(1.0, dmg.rearLeftSuspensionDamage + severity * 0.6);
-      dmg.rearRightSuspensionDamage = Math.min(1.0, dmg.rearRightSuspensionDamage + severity * 0.6);
-      if (severity > 0.55 || isExtremeStriker) {
+      dmg.rearLeftSuspensionDamage = Math.min(1.0, dmg.rearLeftSuspensionDamage + severity * 0.7);
+      dmg.rearRightSuspensionDamage = Math.min(1.0, dmg.rearRightSuspensionDamage + severity * 0.7);
+      if (severity > 0.35 || impactSpeed > 40 || isHeavyStriker) {
         dmg.leftTaillightBroken = true;
         dmg.rightTaillightBroken = true;
       }
     }
 
-    if (severity > 0.75 || isExtremeStriker) {
+    if (severity > 0.50 || isHeavyStriker || dmg.rearCrumple > 5.0) {
       dmg.rearGlassCracked = true;
     }
-  } else if (impactSpeed > 20) {
+  } else if (impactSpeed > 15) {
     // --- SIDE IMPACT / T-BONE ---
-    const maxSideDent = isExtremeStriker ? halfW * 0.75 : halfW * 0.22; // Side door impact bars restrict intrusion
+    const sideCap = isExtremeStriker ? 0.80 : (isHeavyStriker || severity > 0.6 ? 0.70 : 0.40);
+    const maxSideDent = isMachinery ? 2.0 : (isHeavyTruckOrBus ? halfW * 0.30 : halfW * sideCap);
     const sideDent = crushFactor * 0.95;
 
     if (normY < 0) {
       dmg.leftDent = Math.min(maxSideDent, dmg.leftDent + sideDent);
-      dmg.frontLeftSuspensionDamage = Math.min(1.0, dmg.frontLeftSuspensionDamage + severity * 0.7);
-      dmg.rearLeftSuspensionDamage = Math.min(1.0, dmg.rearLeftSuspensionDamage + severity * 0.7);
-      dmg.steeringDrift = Math.max(-1.0, dmg.steeringDrift - severity * 0.5);
+      dmg.frontLeftSuspensionDamage = Math.min(1.0, dmg.frontLeftSuspensionDamage + severity * 0.8);
+      dmg.rearLeftSuspensionDamage = Math.min(1.0, dmg.rearLeftSuspensionDamage + severity * 0.8);
+      dmg.steeringDrift = Math.max(-1.0, dmg.steeringDrift - severity * 0.6);
     } else {
       dmg.rightDent = Math.min(maxSideDent, dmg.rightDent + sideDent);
-      dmg.frontRightSuspensionDamage = Math.min(1.0, dmg.frontRightSuspensionDamage + severity * 0.7);
-      dmg.rearRightSuspensionDamage = Math.min(1.0, dmg.rearRightSuspensionDamage + severity * 0.7);
-      dmg.steeringDrift = Math.min(1.0, dmg.steeringDrift + severity * 0.5);
+      dmg.frontRightSuspensionDamage = Math.min(1.0, dmg.frontRightSuspensionDamage + severity * 0.8);
+      dmg.rearRightSuspensionDamage = Math.min(1.0, dmg.rearRightSuspensionDamage + severity * 0.8);
+      dmg.steeringDrift = Math.min(1.0, dmg.steeringDrift + severity * 0.6);
     }
+
     dmg.wheelRubResistance += severity * 15;
 
     if (car.fluidTank && (severity > 0.48 || dmg.leftDent > 3.0 || dmg.rightDent > 3.0 || isExtremeStriker)) {
