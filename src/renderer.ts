@@ -10202,8 +10202,8 @@ export class GameRenderer {
     this.ctx.drawImage(sprite, p.x - r, p.y - r, r * 2, r * 2);
   }
 
-  // 13c. Under-Vehicle Ground Particles: Under-car exhaust gas and flat splatted mud stains on the ground
-  // Rendered on the ground BEFORE vehicles, roofs, and trees are drawn
+  // 13c. Under-Vehicle Ground Particles: Under-car exhaust gas, flat splatted mud stains, and grounded glass & debris
+  // Rendered on the asphalt BEFORE vehicles, roofs, and trees are drawn
   private renderUnderVehicleParticles(particles: GameWorld['particles'], cleanMode?: boolean) {
     if (cleanMode || !particles || particles.length === 0) return;
     const len = particles.length;
@@ -10215,6 +10215,12 @@ export class GameRenderer {
       } else if (p.type === 'mud_clod' && p.splatted) {
         // Mud that has already landed: stationary flat ground stain
         this.drawMudClodParticle(p);
+      } else if (p.type === 'glass_shard' && (p.splatted || (p.z !== undefined && p.z <= 0.05))) {
+        // Glass shards resting on the asphalt under vehicle wheels & body
+        this.drawGlassShardParticle(p);
+      } else if (p.type === 'debris' && (p.splatted || (p.z !== undefined && p.z <= 0.05))) {
+        // Plastic, metal and concrete debris resting on the asphalt under vehicle wheels & body
+        this.drawDebrisParticle(p);
       }
     }
     this.ctx.globalAlpha = 1.0;
@@ -10348,6 +10354,155 @@ export class GameRenderer {
     }
   }
 
+  // Micro-scaled crystalline glass shard (safety glass pebble / lens splinter)
+  private drawGlassShardParticle(p: Particle) {
+    const ctx = this.ctx;
+    ctx.globalAlpha = Math.max(0, Math.min(1.0, p.alpha));
+
+    // Airborne 3D drop shadow on asphalt
+    const isAirborne = (!p.splatted && p.z !== undefined && p.z > 0.05);
+    if (isAirborne) {
+      const shadowAlpha = p.alpha * Math.max(0, 0.45 - p.z * 0.04);
+      if (shadowAlpha > 0.02) {
+        ctx.fillStyle = `rgba(15, 23, 42, ${shadowAlpha * 0.45})`;
+        ctx.beginPath();
+        ctx.ellipse(p.x, p.y + p.z * 1.6, Math.max(0.6, p.radius * 0.6), Math.max(0.3, p.radius * 0.3), 0, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+
+    ctx.save();
+    ctx.translate(p.x, p.y);
+    const rot = p.angle ?? ((p.x + p.y) * 0.1);
+    ctx.rotate(rot);
+
+    // Micro-scaled bounds: glass shard diameter between 0.8px and 2.4px total width
+    const tumbleScale = Math.max(0.30, Math.abs(Math.cos(rot * 1.6)));
+    const r = Math.min(0.9, Math.max(0.4, p.radius));
+    const aspect = Math.min(1.4, p.aspect ?? 1.2);
+    const rx = Math.min(1.3, r * aspect);
+    const ry = Math.min(1.1, r * tumbleScale);
+
+    const seed = p.shapeSeed ?? 0;
+    const subtype = p.glassSubtype ?? (p.color === '#ef4444' ? 'taillight' : (p.color === '#fbbf24' || p.color === '#fef08a' ? 'headlight' : 'safety_pebble'));
+
+    // Shard polygon based on shape seed: 4 varied crystalline safety facets
+    const pattern = seed % 4;
+    ctx.beginPath();
+    if (pattern === 0) {
+      ctx.moveTo(-rx * 0.85, -ry * 0.45);
+      ctx.lineTo(rx * 0.75, -ry * 0.85);
+      ctx.lineTo(rx * 0.95, ry * 0.55);
+      ctx.lineTo(-rx * 0.65, ry * 0.85);
+    } else if (pattern === 1) {
+      ctx.moveTo(-rx * 0.9, -ry * 0.7);
+      ctx.lineTo(rx * 0.95, -ry * 0.2);
+      ctx.lineTo(-rx * 0.2, ry * 0.9);
+    } else if (pattern === 2) {
+      ctx.moveTo(-rx * 0.7, -ry * 0.8);
+      ctx.lineTo(rx * 0.65, -ry * 0.6);
+      ctx.lineTo(rx * 0.85, ry * 0.75);
+      ctx.lineTo(-rx * 0.9, ry * 0.4);
+    } else {
+      ctx.moveTo(0, -ry * 0.95);
+      ctx.lineTo(rx * 0.9, 0);
+      ctx.lineTo(0, ry * 0.95);
+      ctx.lineTo(-rx * 0.9, 0);
+    }
+    ctx.closePath();
+
+    if (subtype === 'taillight') {
+      ctx.fillStyle = 'rgba(239, 68, 68, 0.88)';
+      ctx.strokeStyle = 'rgba(254, 202, 202, 0.92)';
+      ctx.lineWidth = 0.4;
+    } else if (subtype === 'headlight') {
+      ctx.fillStyle = (seed % 3 === 0) ? 'rgba(251, 191, 36, 0.90)' : 'rgba(240, 249, 255, 0.90)';
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 0.4;
+    } else {
+      ctx.fillStyle = 'rgba(224, 242, 254, 0.85)';
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 0.4;
+    }
+    ctx.fill();
+    ctx.stroke();
+
+    // Specular gleam glint
+    const glintPhase = Math.sin(rot * 2.0 + seed);
+    if (glintPhase > 0.70) {
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(-0.3, -0.3, 0.6, 0.6);
+    }
+
+    ctx.restore();
+  }
+
+  // Micro-scaled body panel debris (sheet metal flake / plastic clip / concrete chip)
+  private drawDebrisParticle(p: Particle) {
+    const ctx = this.ctx;
+    ctx.globalAlpha = Math.max(0, Math.min(1.0, p.alpha));
+
+    const isAirborne = (!p.splatted && p.z !== undefined && p.z > 0.05);
+    if (isAirborne) {
+      const shadowAlpha = p.alpha * Math.max(0, 0.45 - p.z * 0.04);
+      if (shadowAlpha > 0.02) {
+        ctx.fillStyle = `rgba(15, 23, 42, ${shadowAlpha * 0.45})`;
+        ctx.beginPath();
+        ctx.ellipse(p.x, p.y + p.z * 1.6, Math.max(0.7, p.radius * 0.6), Math.max(0.3, p.radius * 0.3), 0, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+
+    ctx.save();
+    ctx.translate(p.x, p.y);
+    const rot = p.angle ?? ((p.x * 0.07 + p.y * 0.13));
+    ctx.rotate(rot);
+
+    // Micro-scaled bounds: debris total diameter between 1.0px and 2.8px
+    const r = Math.min(1.1, Math.max(0.5, p.radius));
+    const aspect = Math.min(1.4, p.aspect ?? 1.3);
+    const rx = Math.min(1.5, r * aspect);
+    const flip = Math.sin(rot * 2.2);
+    const scaleY = Math.max(0.30, Math.abs(flip));
+    const ry = Math.min(1.3, r * scaleY);
+    const seed = p.shapeSeed ?? 0;
+    const subtype = p.debrisSubtype ?? (p.secondaryColor ? 'metal_flake' : 'plastic_chunk');
+
+    let fillColor = p.color;
+    if (subtype === 'metal_flake') {
+      fillColor = flip >= 0 ? p.color : (p.secondaryColor || '#475569');
+    }
+
+    const polyType = seed % 3;
+    ctx.beginPath();
+    if (polyType === 0) {
+      ctx.moveTo(-rx * 0.9, -ry * 0.3);
+      ctx.lineTo(rx * 0.8, -ry * 0.8);
+      ctx.lineTo(rx * 0.95, ry * 0.5);
+      ctx.lineTo(-rx * 0.4, ry * 0.85);
+    } else if (polyType === 1) {
+      ctx.moveTo(-rx * 0.95, -ry * 0.6);
+      ctx.lineTo(rx * 0.85, 0);
+      ctx.lineTo(-rx * 0.7, ry * 0.9);
+      ctx.lineTo(-rx * 0.2, 0);
+    } else {
+      ctx.moveTo(-rx * 0.75, -ry * 0.85);
+      ctx.lineTo(rx * 0.9, -ry * 0.45);
+      ctx.lineTo(rx * 0.7, ry * 0.8);
+      ctx.lineTo(-rx * 0.85, ry * 0.4);
+    }
+    ctx.closePath();
+
+    ctx.fillStyle = fillColor;
+    ctx.fill();
+
+    ctx.strokeStyle = subtype === 'metal_flake' ? 'rgba(255, 255, 255, 0.40)' : 'rgba(0, 0, 0, 0.30)';
+    ctx.lineWidth = 0.4;
+    ctx.stroke();
+
+    ctx.restore();
+  }
+
   // Overhead Particles: Tractor hood stack exhaust (shoots UPWARDS into sky), Engine bay fire/steam, Sparks, Flames, Debris
   private renderOverheadParticles(particles: GameWorld['particles'], cleanMode?: boolean) {
     const len = particles.length;
@@ -10399,167 +10554,15 @@ export class GameRenderer {
       const p = neutral[i];
       ctx.globalAlpha = Math.max(0, Math.min(1.0, p.alpha));
       if (p.type === 'glass_shard') {
-        // Airborne 3D drop shadow on asphalt
-        const isAirborne = (p.z !== undefined && p.z > 0.05);
+        const isAirborne = (!p.splatted && p.z !== undefined && p.z > 0.05);
         if (isAirborne) {
-          const shadowAlpha = p.alpha * Math.max(0, 0.45 - p.z * 0.04);
-          if (shadowAlpha > 0.02) {
-            ctx.fillStyle = `rgba(15, 23, 42, ${shadowAlpha * 0.45})`;
-            ctx.beginPath();
-            ctx.ellipse(p.x, p.y + p.z * 1.6, Math.max(0.8, p.radius * 0.7), Math.max(0.4, p.radius * 0.35), 0, 0, Math.PI * 2);
-            ctx.fill();
-          }
+          this.drawGlassShardParticle(p);
         }
-
-        // Shards require translate and rotate
-        ctx.save();
-        ctx.translate(p.x, p.y);
-        const rot = p.angle ?? ((p.x + p.y) * 0.1);
-        ctx.rotate(rot);
-
-        // 3D tumbling compression along minor axis (simulates flat pebble flipping in 3D)
-        const tumbleScale = Math.max(0.22, Math.abs(Math.cos(rot * 1.6)));
-        const r = p.radius;
-        const aspect = p.aspect ?? 1.25;
-        const rx = r * aspect;
-        const ry = r * tumbleScale;
-
-        const seed = p.shapeSeed ?? 0;
-        const subtype = p.glassSubtype ?? (p.color === '#ef4444' ? 'taillight' : (p.color === '#fbbf24' || p.color === '#fef08a' ? 'headlight' : 'safety_pebble'));
-
-        // Shard polygon based on shape seed: 4 varied crystalline safety facets
-        const pattern = seed % 4;
-        ctx.beginPath();
-        if (pattern === 0) {
-          // Tempered rhomboid pebble (safety glass pellet)
-          ctx.moveTo(-rx * 0.85, -ry * 0.45);
-          ctx.lineTo(rx * 0.75, -ry * 0.85);
-          ctx.lineTo(rx * 0.95, ry * 0.55);
-          ctx.lineTo(-rx * 0.65, ry * 0.85);
-        } else if (pattern === 1) {
-          // Triangular / wedge splinter
-          ctx.moveTo(-rx * 0.9, -ry * 0.7);
-          ctx.lineTo(rx * 0.95, -ry * 0.2);
-          ctx.lineTo(-rx * 0.2, ry * 0.9);
-        } else if (pattern === 2) {
-          // Trapezoid nugget
-          ctx.moveTo(-rx * 0.7, -ry * 0.8);
-          ctx.lineTo(rx * 0.65, -ry * 0.6);
-          ctx.lineTo(rx * 0.85, ry * 0.75);
-          ctx.lineTo(-rx * 0.9, ry * 0.4);
-        } else {
-          // Diamond facet
-          ctx.moveTo(0, -ry * 0.95);
-          ctx.lineTo(rx * 0.9, 0);
-          ctx.lineTo(0, ry * 0.95);
-          ctx.lineTo(-rx * 0.9, 0);
-        }
-        ctx.closePath();
-
-        if (subtype === 'taillight') {
-          ctx.fillStyle = 'rgba(239, 68, 68, 0.88)';
-          ctx.strokeStyle = 'rgba(254, 202, 202, 0.92)';
-          ctx.lineWidth = 0.5;
-        } else if (subtype === 'headlight') {
-          ctx.fillStyle = (seed % 3 === 0) ? 'rgba(251, 191, 36, 0.90)' : 'rgba(240, 249, 255, 0.90)';
-          ctx.strokeStyle = '#ffffff';
-          ctx.lineWidth = 0.5;
-        } else {
-          // Safety glass pebble (windshield / side windows)
-          ctx.fillStyle = 'rgba(224, 242, 254, 0.85)';
-          ctx.strokeStyle = '#ffffff';
-          ctx.lineWidth = 0.55;
-        }
-        ctx.fill();
-        ctx.stroke();
-
-        // Internal refraction crease
-        if (pattern === 0 || pattern === 2) {
-          ctx.strokeStyle = 'rgba(255, 255, 255, 0.65)';
-          ctx.lineWidth = 0.4;
-          ctx.beginPath();
-          ctx.moveTo(-rx * 0.4, -ry * 0.3);
-          ctx.lineTo(rx * 0.4, ry * 0.3);
-          ctx.stroke();
-        }
-
-        // BeamNG-style Specular gleam glint when facet catches direct light
-        const glintPhase = Math.sin(rot * 2.0 + seed);
-        if (glintPhase > 0.65) {
-          const glintPower = (glintPhase - 0.65) / 0.35;
-          ctx.fillStyle = '#ffffff';
-          const glintSize = Math.max(0.6, r * 0.55 * glintPower);
-          ctx.fillRect(-glintSize * 0.5, -glintSize * 0.5, glintSize, glintSize);
-        }
-
-        ctx.restore();
       } else if (p.type === 'debris') {
-        // Airborne 3D drop shadow on asphalt
-        const isAirborne = (p.z !== undefined && p.z > 0.05);
+        const isAirborne = (!p.splatted && p.z !== undefined && p.z > 0.05);
         if (isAirborne) {
-          const shadowAlpha = p.alpha * Math.max(0, 0.45 - p.z * 0.04);
-          if (shadowAlpha > 0.02) {
-            ctx.fillStyle = `rgba(15, 23, 42, ${shadowAlpha * 0.45})`;
-            ctx.beginPath();
-            ctx.ellipse(p.x, p.y + p.z * 1.6, Math.max(0.9, p.radius * 0.75), Math.max(0.4, p.radius * 0.35), 0, 0, Math.PI * 2);
-            ctx.fill();
-          }
+          this.drawDebrisParticle(p);
         }
-
-        ctx.save();
-        ctx.translate(p.x, p.y);
-        const rot = p.angle ?? ((p.x * 0.07 + p.y * 0.13));
-        ctx.rotate(rot);
-
-        const r = p.radius;
-        const aspect = p.aspect ?? 1.4;
-        const rx = r * aspect;
-        // 3D tumbling flutter (simulates fluttering sheet metal or tumbling plastic)
-        const flip = Math.sin(rot * 2.2);
-        const scaleY = Math.max(0.25, Math.abs(flip));
-        const ry = r * scaleY;
-        const seed = p.shapeSeed ?? 0;
-        const subtype = p.debrisSubtype ?? (p.secondaryColor ? 'metal_flake' : 'plastic_chunk');
-
-        // Color based on tumbling side (metal flake shows body paint on exterior and primer on interior)
-        let fillColor = p.color;
-        if (subtype === 'metal_flake') {
-          fillColor = flip >= 0 ? p.color : (p.secondaryColor || '#475569');
-        }
-
-        // Varied irregular jagged polygon based on seed
-        const polyType = seed % 3;
-        ctx.beginPath();
-        if (polyType === 0) {
-          // Torn sheet metal sliver / angled fragment
-          ctx.moveTo(-rx * 0.9, -ry * 0.3);
-          ctx.lineTo(rx * 0.8, -ry * 0.8);
-          ctx.lineTo(rx * 0.95, ry * 0.5);
-          ctx.lineTo(-rx * 0.4, ry * 0.85);
-        } else if (polyType === 1) {
-          // Jagged triangular clip / chip
-          ctx.moveTo(-rx * 0.95, -ry * 0.6);
-          ctx.lineTo(rx * 0.85, 0);
-          ctx.lineTo(-rx * 0.7, ry * 0.9);
-          ctx.lineTo(-rx * 0.2, 0);
-        } else {
-          // Irregular quad chunk
-          ctx.moveTo(-rx * 0.75, -ry * 0.85);
-          ctx.lineTo(rx * 0.9, -ry * 0.45);
-          ctx.lineTo(rx * 0.7, ry * 0.8);
-          ctx.lineTo(-rx * 0.85, ry * 0.4);
-        }
-        ctx.closePath();
-
-        ctx.fillStyle = fillColor;
-        ctx.fill();
-
-        // Crisp edge highlight on torn metal or plastic bevel
-        ctx.strokeStyle = subtype === 'metal_flake' ? 'rgba(255, 255, 255, 0.45)' : 'rgba(0, 0, 0, 0.35)';
-        ctx.lineWidth = 0.5;
-        ctx.stroke();
-
-        ctx.restore();
       } else if (p.type === 'water_spray' || p.type === 'water_splash') {
         // High-velocity elongated water droplet streak or soft mist droplet
         const vSq = p.vx * p.vx + p.vy * p.vy;
