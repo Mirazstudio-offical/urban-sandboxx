@@ -10301,9 +10301,11 @@ export function updateSkidMarksAndParticles(world: GameWorld, player: Player, dt
       // Flying embers and sparks are carried swiftly by the wind
       p.vx += (wind.vx - p.vx) * Math.min(1.0, 1.2 * dt);
       p.vy += (wind.vy - p.vy) * Math.min(1.0, 1.2 * dt) - 8 * dt;
+      p.life += dt;
       p.alpha = Math.max(0, 1 - (p.life / p.maxLife));
     } else if (p.type === 'mud_clod') {
       // Solid heavy earth projectile with 3D ballistic arc, gravity and ground splatter
+      p.life += dt;
       if (!p.splatted) {
         p.vz = (p.vz ?? 40) - 460 * dt; // Strong gravity pulling heavy mud chunk downward
         p.z = (p.z ?? 1.5) + p.vz * dt;
@@ -10328,8 +10330,10 @@ export function updateSkidMarksAndParticles(world: GameWorld, player: Player, dt
       }
     } else if (p.type === 'water_fountain'|| p.type === 'water_splash') {
       p.radius += dt * 5;
+      p.life += dt;
       p.alpha = Math.max(0, 1 - (p.life / p.maxLife));
     } else {
+      p.life += dt;
       p.alpha = Math.max(0, 1 - (p.life / p.maxLife));
     }
 
