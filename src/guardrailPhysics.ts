@@ -227,7 +227,7 @@ export class GuardrailPhysics {
           color: p % 3 === 0 ? '#facc15' : p % 3 === 1 ? '#eab308' : '#1e293b',
           alpha: 0.92,
           life: 0,
-          maxLife: 0.4 + Math.random() * 0.35,
+          maxLife: 300.0,
           type: 'debris',
           debrisSubtype: 'plastic_chunk',
           angle: Math.random() * Math.PI * 2,

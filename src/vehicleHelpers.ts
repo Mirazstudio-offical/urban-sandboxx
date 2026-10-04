@@ -531,89 +531,58 @@ export function createDefaultVehicleDamage(length: number = 42, width: number = 
   const halfL = length / 2;
   const halfW = width / 2;
 
-  // 32 High-density softbody perimeter nodes for realistic accordion crumple & plastic yielding
-  const base32 = [
-    // Front Bumper & Grill (nodes 0..4)
-    { localX: halfL, localY: 0, structuralType: 'bumper' },
-    { localX: halfL - 0.2, localY: halfW * 0.25, structuralType: 'bumper' },
-    { localX: halfL - 0.5, localY: halfW * 0.50, structuralType: 'bumper' },
-    { localX: halfL - 1.0, localY: halfW * 0.75, structuralType: 'bumper' },
-    { localX: halfL - 1.8, localY: halfW * 0.90, structuralType: 'fender' },
+  // 16 Perimeter nodes matching 1:1 with basePoly perimeter vertices (0 = front center, 1..7 = right side (+halfW), 8 = rear center, 9..15 = left side (-halfW))
+  const base16 = [
+    // Front Bumper & Grill (nodes 0..1)
+    { localX: halfL, localY: 0, structuralType: 'bumper' },                           // 0: Front center
+    { localX: halfL - 0.8, localY: halfW * 0.78, structuralType: 'bumper' },           // 1: Front-Right corner
 
-    // Front-Left Fender & Wheel Arch (nodes 5..7)
-    { localX: halfL - 2.8, localY: halfW - 0.5, structuralType: 'fender' },
-    { localX: halfL * 0.70, localY: halfW, structuralType: 'fender' },
-    { localX: halfL * 0.50, localY: halfW, structuralType: 'fender' },
+    // Right Side Flank (nodes 2..6)
+    { localX: halfL - 2.0, localY: halfW, structuralType: 'fender' },                  // 2: Front-Right fender
+    { localX: halfL * 0.45, localY: halfW, structuralType: 'door' },                   // 3: Right front door
+    { localX: 0, localY: halfW, structuralType: 'door' },                              // 4: Right B-pillar
+    { localX: -halfL * 0.45, localY: halfW, structuralType: 'door' },                  // 5: Right rear door
+    { localX: -halfL + 1.2, localY: halfW * 0.95, structuralType: 'quarter' },         // 6: Rear-Right quarter
 
-    // Left Doors & B-Pillar Flank (nodes 8..11)
-    { localX: halfL * 0.25, localY: halfW, structuralType: 'door' },
-    { localX: 0, localY: halfW, structuralType: 'door' },
-    { localX: -halfL * 0.25, localY: halfW, structuralType: 'door' },
-    { localX: -halfL * 0.50, localY: halfW, structuralType: 'door' },
+    // Rear Bumper & Tailgate (nodes 7..9)
+    { localX: -halfL + 0.4, localY: halfW * 0.62, structuralType: 'bumper' },          // 7: Rear-Right bumper
+    { localX: -halfL, localY: 0, structuralType: 'bumper' },                           // 8: Rear center
+    { localX: -halfL + 0.4, localY: -halfW * 0.62, structuralType: 'bumper' },         // 9: Rear-Left bumper
 
-    // Rear-Left Quarter & C-Pillar (nodes 12..14)
-    { localX: -halfL * 0.70, localY: halfW, structuralType: 'quarter' },
-    { localX: -halfL + 2.8, localY: halfW - 0.5, structuralType: 'quarter' },
-    { localX: -halfL + 1.8, localY: halfW * 0.90, structuralType: 'bumper' },
+    // Left Side Flank (nodes 10..14)
+    { localX: -halfL + 1.2, localY: -halfW * 0.95, structuralType: 'quarter' },        // 10: Rear-Left quarter
+    { localX: -halfL * 0.45, localY: -halfW, structuralType: 'door' },                 // 11: Left rear door
+    { localX: 0, localY: -halfW, structuralType: 'door' },                             // 12: Left B-pillar
+    { localX: halfL * 0.45, localY: -halfW, structuralType: 'door' },                  // 13: Left front door
+    { localX: halfL - 2.0, localY: -halfW, structuralType: 'fender' },                 // 14: Front-Left fender
 
-    // Rear Bumper & Tailgate (nodes 15..19)
-    { localX: -halfL + 1.0, localY: halfW * 0.75, structuralType: 'bumper' },
-    { localX: -halfL + 0.5, localY: halfW * 0.50, structuralType: 'bumper' },
-    { localX: -halfL, localY: 0, structuralType: 'bumper' },
-    { localX: -halfL + 0.5, localY: -halfW * 0.50, structuralType: 'bumper' },
-    { localX: -halfL + 1.0, localY: -halfW * 0.75, structuralType: 'bumper' },
-
-    // Rear-Right Quarter & C-Pillar (nodes 20..22)
-    { localX: -halfL + 1.8, localY: -halfW * 0.90, structuralType: 'bumper' },
-    { localX: -halfL + 2.8, localY: -halfW + 0.5, structuralType: 'quarter' },
-    { localX: -halfL * 0.70, localY: -halfW, structuralType: 'quarter' },
-
-    // Right Doors & B-Pillar Flank (nodes 23..26)
-    { localX: -halfL * 0.50, localY: -halfW, structuralType: 'door' },
-    { localX: -halfL * 0.25, localY: -halfW, structuralType: 'door' },
-    { localX: 0, localY: -halfW, structuralType: 'door' },
-    { localX: halfL * 0.25, localY: -halfW, structuralType: 'door' },
-
-    // Front-Right Fender & Wheel Arch (nodes 27..31)
-    { localX: halfL * 0.50, localY: -halfW, structuralType: 'fender' },
-    { localX: halfL * 0.70, localY: -halfW, structuralType: 'fender' },
-    { localX: halfL - 2.8, localY: -halfW + 0.5, structuralType: 'fender' },
-    { localX: halfL - 1.8, localY: -halfW * 0.90, structuralType: 'fender' },
-    { localX: halfL - 1.0, localY: -halfW * 0.75, structuralType: 'bumper' }
+    // Front-Left Corner (node 15)
+    { localX: halfL - 0.8, localY: -halfW * 0.78, structuralType: 'bumper' }          // 15: Front-Left corner
   ];
 
   const deformedVertices: DeformVertex[] = [];
-  for (let i = 0; i < base32.length; i++) {
+  for (let i = 0; i < base16.length; i++) {
     deformedVertices.push({
-      localX: base32[i].localX, localY: base32[i].localY, 
+      localX: base16[i].localX, localY: base16[i].localY, 
       offsetX: 0, offsetY: 0, plasticStrain: 0, elasticX: 0, elasticY: 0, velX: 0, velY: 0, 
-      structuralType: base32[i].structuralType as any
+      structuralType: base16[i].structuralType as any
     });
   }
 
-  // Volumetric internal nodes for roof, cabin, windshield, rear glass, hood & trunk skeleton (indices 20 to 27)
-  // Indices:
-  // 20: Hood center
-  // 21: Windshield center (base of front glass)
-  // 22: Roof center
-  // 23: Roof front-left (A-pillar left top)
-  // 24: Roof front-right (A-pillar right top)
-  // 25: Roof rear-left (C-pillar left top)
-  // 26: Roof rear-right (C-pillar right top)
-  // 27: Rear window / trunk deck center
+  // Volumetric internal nodes for roof, cabin, windshield, rear glass, hood & trunk skeleton (indices 16 to 23)
   const roofHalfL = halfL * 0.28;
   const roofHalfW = halfW * 0.42;
   const cabinCenterX = -halfL * 0.04;
 
   const internalNodes = [
-    { localX: halfL * 0.42, localY: 0, structuralType: 'hood' },                  // 20: Hood center
-    { localX: cabinCenterX + roofHalfL * 1.5, localY: 0, structuralType: 'windshield' }, // 21: Windshield base/cowl center
-    { localX: cabinCenterX, localY: 0, structuralType: 'roof' },                  // 22: Roof center
-    { localX: cabinCenterX + roofHalfL, localY: -roofHalfW, structuralType: 'roof' }, // 23: Roof front-left corner
-    { localX: cabinCenterX + roofHalfL, localY: roofHalfW, structuralType: 'roof' },  // 24: Roof front-right corner
-    { localX: cabinCenterX - roofHalfL, localY: -roofHalfW, structuralType: 'roof' }, // 25: Roof rear-left corner
-    { localX: cabinCenterX - roofHalfL, localY: roofHalfW, structuralType: 'roof' },  // 26: Roof rear-right corner
-    { localX: cabinCenterX - roofHalfL * 1.6, localY: 0, structuralType: 'trunk' }    // 27: Rear glass base / trunk deck
+    { localX: halfL * 0.42, localY: 0, structuralType: 'hood' },                          // 16: Hood center
+    { localX: cabinCenterX + roofHalfL * 1.5, localY: 0, structuralType: 'windshield' },         // 17: Windshield base/cowl center
+    { localX: cabinCenterX, localY: 0, structuralType: 'roof' },                          // 18: Roof center
+    { localX: cabinCenterX + roofHalfL, localY: -roofHalfW, structuralType: 'roof' },         // 19: Roof front-left corner
+    { localX: cabinCenterX + roofHalfL, localY: roofHalfW, structuralType: 'roof' },          // 20: Roof front-right corner
+    { localX: cabinCenterX - roofHalfL, localY: -roofHalfW, structuralType: 'roof' },         // 21: Roof rear-left corner
+    { localX: cabinCenterX - roofHalfL, localY: roofHalfW, structuralType: 'roof' },          // 22: Roof rear-right corner
+    { localX: cabinCenterX - roofHalfL * 1.6, localY: 0, structuralType: 'trunk' }            // 23: Rear glass base / trunk deck
   ];
   for (const node of internalNodes) {
     deformedVertices.push({
@@ -672,7 +641,7 @@ export function ensureVehicleDamage(veh: { length?: number; width?: number; dama
   }
 
   const dmg = veh.damage;
-  if (!Array.isArray(dmg.deformedVertices) || dmg.deformedVertices.length < 40) {
+  if (!Array.isArray(dmg.deformedVertices) || dmg.deformedVertices.length < 24) {
     const fresh = createDefaultVehicleDamage(targetLen, targetWid);
     if (Array.isArray(dmg.deformedVertices)) {
       const copyCount = Math.min(dmg.deformedVertices.length, fresh.deformedVertices.length);

@@ -843,10 +843,10 @@ export function renderLoosePanelsAndDoors(
   const dmg = car.damage;
   if (!dmg) return;
 
-  const doorFL = dmg.doorFLAjar || 0;
-  const doorFR = dmg.doorFRAjar || 0;
-  const doorRL = dmg.doorRLAjar || 0;
-  const doorRR = dmg.doorRRAjar || 0;
+  const doorFL = typeof dmg.doorFLAjar === 'number' ? dmg.doorFLAjar : (dmg.doorFLAjar ? 1 : 0);
+  const doorFR = typeof dmg.doorFRAjar === 'number' ? dmg.doorFRAjar : (dmg.doorFRAjar ? 1 : 0);
+  const doorRL = typeof dmg.doorRLAjar === 'number' ? dmg.doorRLAjar : (dmg.doorRLAjar ? 1 : 0);
+  const doorRR = typeof dmg.doorRRAjar === 'number' ? dmg.doorRRAjar : (dmg.doorRRAjar ? 1 : 0);
   const fenderFLLoose = dmg.fenderFLLoose;
   const fenderFRLoose = dmg.fenderFRLoose;
 

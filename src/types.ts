@@ -424,6 +424,21 @@ export interface VehicleDamage {
   rearBumperDetached?: boolean;
   leftDoorDetached?: boolean;
   rightDoorDetached?: boolean;
+  doorRLDetached?: boolean;
+  doorRRDetached?: boolean;
+  fenderFLDetached?: boolean;
+  fenderFRDetached?: boolean;
+  trunkDetached?: boolean;
+
+  // Visual loose/ajar/sag states
+  doorFLAjar?: number | boolean;
+  doorFRAjar?: number | boolean;
+  doorRLAjar?: number | boolean;
+  doorRRAjar?: number | boolean;
+  fenderFLLoose?: boolean;
+  fenderFRLoose?: boolean;
+  rearBumperSagLeft?: number;
+  rearBumperSagRight?: number;
 }
 
 export interface Vehicle {
@@ -1211,6 +1226,7 @@ export interface Particle {
   streakLength?: number;      // High-velocity streak length multiplier
   debrisSubtype?: 'metal_flake' | 'plastic_chunk' | 'concrete_chip' | 'wood_splinter';
   glassSubtype?: 'safety_pebble' | 'headlight' | 'taillight' | 'mirror';
+  isGrounded?: boolean;
 }
 
 export interface WorldWind {

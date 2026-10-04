@@ -1259,7 +1259,7 @@ export function emitBeamNGCrashParticles(
           color: 'rgba(224, 242, 254, 0.88)',
           alpha: 0.95,
           life: 0,
-          maxLife: 0.7 + Math.random() * 0.9,
+          maxLife: 300.0,
           type: 'glass_shard',
           glassSubtype: 'safety_pebble',
           z: 1.4 + Math.random() * 1.8,
@@ -1268,7 +1268,8 @@ export function emitBeamNGCrashParticles(
           angularVelocity: (Math.random() - 0.5) * 26,
           shapeSeed: Math.floor(Math.random() * 10000),
           bounces: 2,
-          splatted: false
+          splatted: false,
+          isGrounded: false
         });
       }
     }
@@ -1290,7 +1291,7 @@ export function emitBeamNGCrashParticles(
           color: isAmber ? '#fbbf24' : '#f8fafc',
           alpha: 0.92,
           life: 0,
-          maxLife: 0.65 + Math.random() * 0.85,
+          maxLife: 300.0,
           type: 'glass_shard',
           glassSubtype: 'headlight',
           z: 1.2 + Math.random() * 1.6,
@@ -1299,7 +1300,8 @@ export function emitBeamNGCrashParticles(
           angularVelocity: (Math.random() - 0.5) * 28,
           shapeSeed: Math.floor(Math.random() * 10000),
           bounces: 2,
-          splatted: false
+          splatted: false,
+          isGrounded: false
         });
       }
     }
@@ -1320,7 +1322,7 @@ export function emitBeamNGCrashParticles(
           color: '#ef4444',
           alpha: 0.92,
           life: 0,
-          maxLife: 0.65 + Math.random() * 0.85,
+          maxLife: 300.0,
           type: 'glass_shard',
           glassSubtype: 'taillight',
           z: 1.2 + Math.random() * 1.6,
@@ -1329,7 +1331,8 @@ export function emitBeamNGCrashParticles(
           angularVelocity: (Math.random() - 0.5) * 26,
           shapeSeed: Math.floor(Math.random() * 10000),
           bounces: 2,
-          splatted: false
+          splatted: false,
+          isGrounded: false
         });
       }
     }
@@ -1353,7 +1356,7 @@ export function emitBeamNGCrashParticles(
         secondaryColor: '#475569', // Bare metal / dark primer
         alpha: 0.90,
         life: 0,
-        maxLife: 0.5 + Math.random() * 0.6,
+        maxLife: 300.0,
         type: 'debris',
         debrisSubtype: 'metal_flake',
         z: 1.0 + Math.random() * 1.5,
@@ -1362,7 +1365,8 @@ export function emitBeamNGCrashParticles(
         angularVelocity: (Math.random() - 0.5) * 22,
         shapeSeed: Math.floor(Math.random() * 10000),
         bounces: 2,
-        splatted: false
+        splatted: false,
+        isGrounded: false
       });
     }
 
@@ -1381,7 +1385,7 @@ export function emitBeamNGCrashParticles(
         color: '#1e293b', // Dark ABS plastic
         alpha: 0.92,
         life: 0,
-        maxLife: 0.45 + Math.random() * 0.55,
+        maxLife: 300.0,
         type: 'debris',
         debrisSubtype: 'plastic_chunk',
         z: 1.0 + Math.random() * 1.4,
@@ -1390,7 +1394,8 @@ export function emitBeamNGCrashParticles(
         angularVelocity: (Math.random() - 0.5) * 18,
         shapeSeed: Math.floor(Math.random() * 10000),
         bounces: 2,
-        splatted: false
+        splatted: false,
+        isGrounded: false
       });
     }
 
@@ -1410,7 +1415,7 @@ export function emitBeamNGCrashParticles(
           color: '#94a3b8',
           alpha: 0.88,
           life: 0,
-          maxLife: 0.4 + Math.random() * 0.4,
+          maxLife: 300.0,
           type: 'debris',
           debrisSubtype: 'concrete_chip',
           z: 0.8 + Math.random() * 1.2,
@@ -1419,7 +1424,8 @@ export function emitBeamNGCrashParticles(
           angularVelocity: (Math.random() - 0.5) * 16,
           shapeSeed: Math.floor(Math.random() * 10000),
           bounces: 2,
-          splatted: false
+          splatted: false,
+          isGrounded: false
         });
       }
     }
@@ -1575,10 +1581,11 @@ export function applyVehicleDamageAndDeformation(
 
   const isExtremeStriker = strikerMass >= 40000;
   const isHeavyRigidTrailer = car.type.startsWith('trailer_semi');
+  const isCommercialHeavy = car.type.startsWith('truck_') || car.type === 'cement_mixer' || car.type === 'garbage_truck' || car.type === 'fire_ladder' || car.type === 'fire_engine' || car.type === 'bus' || car.type === 'bus_minibus' || car.type === 'truck_tow' || car.type === 'truck_armored';
   const isMachinery = isRoadMachinery(car.type);
 
-  if ((isHeavyRigidTrailer || isMachinery) && impactKmh < 12 && scrapeKmh < 12) {
-    return; // Heavy I-beam chassis / heavy cast iron road machinery does not dent or deform from minor nudges or scrapes
+  if ((isHeavyRigidTrailer || isMachinery || isCommercialHeavy) && impactKmh < 10 && scrapeKmh < 10) {
+    return; // Heavy I-beam chassis / commercial truck frames do not dent from minor nudges or scrapes
   }
 
   // Reduced Mass: in two-body collisions, deformation work depends on reduced mass mu = (m1*m2)/(m1+m2)
@@ -1588,16 +1595,19 @@ export function applyVehicleDamageAndDeformation(
 
   // Non-linear kinetic energy scaling: E_k = 1/2 * m * v^2
   // Real automobile crash scaling (BeamNG standard):
-  // - 15 km/h: Minor bumper flex / plastic strain threshold just reached
-  // - 45-65 km/h: Standard crash test -> progressive accordion crumple of crash boxes
-  // - 90-130+ km/h: Catastrophic structural penetration into cabin / engine block crushing
-  const speedRef = 55.0; // km/h baseline
-  const speedNorm = Math.max(0, impactKmh - 4.0) / speedRef;
-  let severity = 1.0 - Math.exp(-Math.pow(speedNorm, 1.45) * Math.sqrt(reducedMassRatio));
+  // - 15 km/h: Minor bumper flex / plastic strain threshold just reached (0.5 - 1.5 px)
+  // - 40-50 km/h: Moderate crash test -> bumper flex, radiator grille & crash box fold (2 - 5 px)
+  // - 80-130+ km/h: Catastrophic structural penetration into cabin / engine block crushing (12 - 25 px)
+  const speedRef = 85.0; // km/h baseline
+  const speedNorm = Math.max(0, impactKmh - 5.0) / speedRef;
+  let severity = 1.0 - Math.exp(-Math.pow(speedNorm, 1.60) * Math.sqrt(reducedMassRatio));
   severity = Math.max(0, Math.min(1.0, severity));
 
   if ((car as any).hasHeavySuspension) {
     severity *= 0.75;
+  }
+  if (isCommercialHeavy) {
+    severity *= 0.38; // Heavy steel channel frame rails absorb heavy impacts without cabin collapse at moderate speeds
   }
   if (isHeavyRigidTrailer) {
     severity *= 0.22;
@@ -1609,12 +1619,13 @@ export function applyVehicleDamageAndDeformation(
   // 1. Realistic Directional Softbody Mass-Spring Network with Plastic Strain & Poisson Wrinkling
   if (dmg.deformedVertices && (impactKmh > 6.0 || isExtremeStriker)) {
     // Physical deformation displacement in pixels
-    let pushStrength = Math.pow(Math.max(0, impactKmh - 4.0) / 45.0, 1.35) * 14.0 * Math.sqrt(reducedMassRatio);
+    let pushStrength = Math.pow(Math.max(0, impactKmh - 5.0) / 75.0, 1.60) * 11.0 * Math.sqrt(reducedMassRatio);
     if (isExtremeStriker) {
       pushStrength = Math.min(48.0, pushStrength * 2.2);
     } else {
       pushStrength = Math.min(32.0, pushStrength);
     }
+    if (isCommercialHeavy) pushStrength *= 0.32;
     if (isHeavyRigidTrailer) pushStrength *= 0.18;
     if (isMachinery) pushStrength *= 0.08;
     
@@ -1750,9 +1761,9 @@ export function applyVehicleDamageAndDeformation(
     let strainFL = 0, strainFR = 0, strainRL = 0, strainRR = 0;
     for (let i = 0; i < totalNodes; i++) {
       const st = dmg.deformedVertices[i]?.plasticStrain || 0;
-      if (i >= 14 || i <= 1) strainFR += st;
-      else if (i >= 2 && i <= 5) strainFL += st;
-      else if (i >= 6 && i <= 9) strainRL += st;
+      if (i >= 13 || i === 15) strainFL += st;
+      else if (i <= 3) strainFR += st;
+      else if (i >= 8 && i <= 12) strainRL += st;
       else strainRR += st;
     }
 
@@ -1764,21 +1775,19 @@ export function applyVehicleDamageAndDeformation(
     }
 
     // Buckled hood elevation
-    // Safe index access for polygon vertices
     const frontTotalStrain = 
       (dmg.deformedVertices[0]?.plasticStrain || 0) + 
       (dmg.deformedVertices[1]?.plasticStrain || 0) + 
-      (dmg.deformedVertices[2]?.plasticStrain || 0) + 
-      (dmg.deformedVertices[18]?.plasticStrain || 0) + 
-      (dmg.deformedVertices[19]?.plasticStrain || 0);
+      (dmg.deformedVertices[15]?.plasticStrain || 0) + 
+      (dmg.deformedVertices[16]?.plasticStrain || 0);
     if (frontTotalStrain > 0.20 || isExtremeStriker) {
       dmg.hoodBuckled = true;
       dmg.hoodRaisedAmount = Math.min(1.0, Math.max(isExtremeStriker ? 0.85 : 0, frontTotalStrain * 0.70));
     }
 
     // Sagging bumper corners
-    if ((dmg.deformedVertices[3]?.plasticStrain || 0) > 0.35) dmg.bumperSagLeft = Math.min(1.0, (dmg.deformedVertices[3]?.plasticStrain || 0) * 0.85);
-    if ((dmg.deformedVertices[17]?.plasticStrain || 0) > 0.35) dmg.bumperSagRight = Math.min(1.0, (dmg.deformedVertices[17]?.plasticStrain || 0) * 0.85);
+    if ((dmg.deformedVertices[15]?.plasticStrain || 0) > 0.35) dmg.bumperSagLeft = Math.min(1.0, (dmg.deformedVertices[15]?.plasticStrain || 0) * 0.85);
+    if ((dmg.deformedVertices[1]?.plasticStrain || 0) > 0.35) dmg.bumperSagRight = Math.min(1.0, (dmg.deformedVertices[1]?.plasticStrain || 0) * 0.85);
 
     // Wheel well clearance check & wheel rub resistance
     const checkWheelRub = (nodeIdx: number) => {
@@ -1789,10 +1798,10 @@ export function applyVehicleDamageAndDeformation(
         dmg.wheelRubResistance += (offsetMag - 3.0) * 4.5;
       }
     };
-    checkWheelRub(3);  // Front-Left wheel well
-    checkWheelRub(17); // Front-Right wheel well
-    checkWheelRub(7);  // Rear-Left wheel well
-    checkWheelRub(13); // Rear-Right wheel well
+    checkWheelRub(14); // Front-Left wheel well
+    checkWheelRub(2);  // Front-Right wheel well
+    checkWheelRub(10); // Rear-Left wheel well
+    checkWheelRub(6);  // Rear-Right wheel well
   }
 
   const isTrailer = isTrailerVehicle(car);
@@ -3219,7 +3228,7 @@ export function updateVehicleSystems(car: Vehicle, dt: number, world: GameWorld)
           secondaryColor: '#334155',
           alpha: 1.0,
           life: 0,
-          maxLife: 1.4 + Math.random() * 1.2,
+          maxLife: 300.0,
           type: 'debris',
           debrisSubtype: 'metal_flake',
           angle: Math.random() * Math.PI * 2,
@@ -10702,68 +10711,91 @@ export function updateSkidMarksAndParticles(world: GameWorld, player: Player, dt
     } else if (p.type === 'glass_shard') {
       // BeamNG-grade tempered safety glass & lens shatter: 3D ballistic arc, rotational tumbling, asphalt bouncing and skidding
       p.life += dt;
-      p.angle = (p.angle ?? 0) + (p.angularVelocity ?? 0) * dt;
 
-      if (p.z === undefined) p.z = 1.4;
-      if (p.vz === undefined) p.vz = 25;
-      p.vz -= 360 * dt; // Gravity
-      p.z += p.vz * dt;
+      if (!p.splatted) {
+        p.angle = (p.angle ?? 0) + (p.angularVelocity ?? 0) * dt;
+        if (p.z === undefined) p.z = 1.4;
+        if (p.vz === undefined) p.vz = 25;
+        p.vz -= 360 * dt; // Gravity
+        p.z += p.vz * dt;
 
-      if (p.z <= 0) {
-        p.z = 0;
-        if ((p.bounces ?? 2) > 0) {
-          p.bounces = (p.bounces ?? 2) - 1;
-          p.vz = -p.vz * 0.28; // Low-restitution bounce on hard asphalt
-          p.vx *= 0.65;
-          p.vy *= 0.65;
-          p.angularVelocity = (p.angularVelocity ?? 0) * 0.75;
+        if (p.z <= 0) {
+          p.z = 0;
+          if ((p.bounces ?? 2) > 0) {
+            p.bounces = (p.bounces ?? 2) - 1;
+            p.vz = -p.vz * 0.28; // Low-restitution bounce on hard asphalt
+            p.vx *= 0.65;
+            p.vy *= 0.65;
+            p.angularVelocity = (p.angularVelocity ?? 0) * 0.75;
+          } else {
+            p.vz = 0;
+            p.vx = 0;
+            p.vy = 0;
+            p.angularVelocity = 0;
+            p.splatted = true;
+            p.isGrounded = true;
+          }
         } else {
-          p.vz = 0;
-          // Skidding across asphalt with friction
-          p.vx *= Math.pow(0.12, dt * 60);
-          p.vy *= Math.pow(0.12, dt * 60);
-          p.angularVelocity = (p.angularVelocity ?? 0) * Math.pow(0.15, dt * 60);
-          p.splatted = true;
+          // Air drag during flight
+          p.vx *= Math.pow(0.94, dt * 60);
+          p.vy *= Math.pow(0.94, dt * 60);
         }
-      }
 
-      // Air drag during flight
-      p.vx *= Math.pow(0.94, dt * 60);
-      p.vy *= Math.pow(0.94, dt * 60);
-      const progress = p.life / p.maxLife;
-      p.alpha = Math.max(0, (p.initialAlpha ?? 0.95) * (1.0 - Math.pow(progress, 2.0)));
+        const progress = Math.min(1.0, p.life / Math.min(2.5, p.maxLife));
+        p.alpha = Math.max(0, (p.initialAlpha ?? 0.95) * (1.0 - Math.pow(progress, 2.0)));
+      } else {
+        // Resting permanently on the asphalt ground
+        p.z = 0;
+        p.vz = 0;
+        p.vx = 0;
+        p.vy = 0;
+        p.angularVelocity = 0;
+        p.alpha = p.initialAlpha ?? 0.92;
+      }
     } else if (p.type === 'debris') {
       // BeamNG-grade vehicle body debris: torn sheet metal flakes, plastic clips, concrete chips
       p.life += dt;
-      p.angle = (p.angle ?? 0) + (p.angularVelocity ?? 0) * dt;
 
-      if (p.z === undefined) p.z = 1.2;
-      if (p.vz === undefined) p.vz = 20;
-      p.vz -= 380 * dt; // Gravity
-      p.z += p.vz * dt;
+      if (!p.splatted) {
+        p.angle = (p.angle ?? 0) + (p.angularVelocity ?? 0) * dt;
+        if (p.z === undefined) p.z = 1.2;
+        if (p.vz === undefined) p.vz = 20;
+        p.vz -= 380 * dt; // Gravity
+        p.z += p.vz * dt;
 
-      if (p.z <= 0) {
-        p.z = 0;
-        if ((p.bounces ?? 2) > 0) {
-          p.bounces = (p.bounces ?? 2) - 1;
-          p.vz = -p.vz * 0.24;
-          p.vx *= 0.60;
-          p.vy *= 0.60;
-          p.angularVelocity = (p.angularVelocity ?? 0) * 0.65;
+        if (p.z <= 0) {
+          p.z = 0;
+          if ((p.bounces ?? 2) > 0) {
+            p.bounces = (p.bounces ?? 2) - 1;
+            p.vz = -p.vz * 0.24;
+            p.vx *= 0.60;
+            p.vy *= 0.60;
+            p.angularVelocity = (p.angularVelocity ?? 0) * 0.65;
+          } else {
+            p.vz = 0;
+            p.vx = 0;
+            p.vy = 0;
+            p.angularVelocity = 0;
+            p.splatted = true;
+            p.isGrounded = true;
+          }
         } else {
-          p.vz = 0;
-          p.vx *= Math.pow(0.10, dt * 60);
-          p.vy *= Math.pow(0.10, dt * 60);
-          p.angularVelocity = (p.angularVelocity ?? 0) * Math.pow(0.12, dt * 60);
-          p.splatted = true;
+          // Air drag
+          p.vx *= Math.pow(0.92, dt * 60);
+          p.vy *= Math.pow(0.92, dt * 60);
         }
-      }
 
-      // Air drag
-      p.vx *= Math.pow(0.92, dt * 60);
-      p.vy *= Math.pow(0.92, dt * 60);
-      const progress = p.life / p.maxLife;
-      p.alpha = Math.max(0, (p.initialAlpha ?? 0.90) * (1.0 - Math.pow(progress, 2.2)));
+        const progress = Math.min(1.0, p.life / Math.min(2.5, p.maxLife));
+        p.alpha = Math.max(0, (p.initialAlpha ?? 0.90) * (1.0 - Math.pow(progress, 2.2)));
+      } else {
+        // Resting permanently on the asphalt ground
+        p.z = 0;
+        p.vz = 0;
+        p.vx = 0;
+        p.vy = 0;
+        p.angularVelocity = 0;
+        p.alpha = p.initialAlpha ?? 0.90;
+      }
     } else if (p.type === 'mud_clod') {
       // Solid heavy earth projectile with 3D ballistic arc, gravity and ground splatter
       p.life += dt;
@@ -10798,16 +10830,26 @@ export function updateSkidMarksAndParticles(world: GameWorld, player: Player, dt
       p.alpha = Math.max(0, 1 - (p.life / p.maxLife));
     }
 
-    // Dynamic off-screen early culling
+    // Dynamic off-screen early culling & persistent ground debris
     const dx = p.x - player.x;
     const dy = p.y - player.y;
-    const isOffscreen = (dx * dx + dy * dy > 1960000); // 1400^2 px
+    const isOffscreen = (dx * dx + dy * dy > 3240000); // 1800^2 px
+    const isGroundDebris = (p.type === 'glass_shard' || p.type === 'debris') && p.splatted;
 
-    if (p.life < p.maxLife && !isOffscreen) {
-      pList[pWrite++] = p;
+    if (isGroundDebris) {
+      // Glass & plastic debris remain on ground while in reasonable range around player
+      if (!isOffscreen && p.life < (p.maxLife || 600)) {
+        pList[pWrite++] = p;
+      } else if (particlePool.length < 250) {
+        particlePool.push(p);
+      }
     } else {
-      if (particlePool.length < 250) {
-        particlePool.push(p); // Recycle to pool without unbounded array growth
+      if (p.life < p.maxLife && !isOffscreen) {
+        pList[pWrite++] = p;
+      } else {
+        if (particlePool.length < 250) {
+          particlePool.push(p); // Recycle to pool without unbounded array growth
+        }
       }
     }
   }
@@ -10982,7 +11024,7 @@ export function updateBreakablePropsAndLivingWorld(world: GameWorld, player: Pla
             color: '#a8a29e',
             alpha: 0.90,
             life: 0,
-            maxLife: 0.4 + Math.random() * 0.35,
+            maxLife: 300.0,
             type: 'debris',
             debrisSubtype: 'concrete_chip',
             angle: Math.random() * Math.PI * 2,
@@ -11111,7 +11153,7 @@ export function updateBreakablePropsAndLivingWorld(world: GameWorld, player: Pla
           secondaryColor: '#334155',
           alpha: 0.92,
           life: 0,
-          maxLife: 0.45 + Math.random() * 0.45,
+          maxLife: 300.0,
           type: 'debris',
           debrisSubtype,
           angle: Math.random() * Math.PI * 2,
@@ -11140,7 +11182,7 @@ export function updateBreakablePropsAndLivingWorld(world: GameWorld, player: Pla
             color: 'rgba(224, 242, 254, 0.88)',
             alpha: 0.95,
             life: 0,
-            maxLife: 0.7 + Math.random() * 0.8,
+            maxLife: 300.0,
             type: 'glass_shard',
             glassSubtype: 'safety_pebble',
             angle: Math.random() * Math.PI * 2,
@@ -11169,7 +11211,7 @@ export function updateBreakablePropsAndLivingWorld(world: GameWorld, player: Pla
             color: (prop.type === 'traffic_light' && g % 2 === 0) ? '#fbbf24' : '#f8fafc',
             alpha: 0.95,
             life: 0,
-            maxLife: 0.6 + Math.random() * 0.6,
+            maxLife: 300.0,
             type: 'glass_shard',
             glassSubtype: 'headlight',
             angle: Math.random() * Math.PI * 2,
