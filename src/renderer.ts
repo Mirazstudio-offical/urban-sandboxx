@@ -194,48 +194,60 @@ export class GameRenderer {
   private static dirtPattern: CanvasPattern | null = null;
   private static shoulderPattern: CanvasPattern | null = null;
 
+  private static roadNoisePRNG(x: number, y: number, seed: number = 0): number {
+    let h = (Math.imul(x ^ 0x9e3779b9, 0x85ebca6b) ^ Math.imul(y ^ 0xc2b2ae35, 0x165667b1) ^ seed) | 0;
+    h = Math.imul(h ^ (h >>> 16), 0x7feb352d);
+    h = Math.imul(h ^ (h >>> 15), 0x846ca68b);
+    return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
+  }
+
   public static getAsphaltPattern(ctx: CanvasRenderingContext2D): CanvasPattern | string {
     if (this.asphaltPattern) return this.asphaltPattern;
     if (typeof document === 'undefined') return '#32343a';
+    const size = 256;
     const c = document.createElement('canvas');
-    c.width = 128;
-    c.height = 128;
+    c.width = size;
+    c.height = size;
     const pctx = c.getContext('2d');
     if (!pctx) return '#32343a';
 
-    // Base asphalt
-    pctx.fillStyle = '#32343a';
-    pctx.fillRect(0, 0, 128, 128);
+    const imgData = pctx.createImageData(size, size);
+    const d = imgData.data;
 
-    // Fine mineral aggregate specks & bitumen grain
-    for (let i = 0; i < 400; i++) {
-      const x = (i * 73 + 19) % 128;
-      const y = (i * 109 + 37) % 128;
-      const rand = (i * 193) % 100;
-      if (rand < 28) {
-        pctx.fillStyle = 'rgba(255, 255, 255, 0.11)'; // Light quartz / granite grain
-        pctx.fillRect(x, y, 1.4, 1.4);
-      } else if (rand < 58) {
-        pctx.fillStyle = 'rgba(18, 20, 24, 0.55)'; // Dark bitumen binder speck
-        pctx.fillRect(x, y, 2.0, 2.0);
-      } else if (rand < 82) {
-        pctx.fillStyle = 'rgba(88, 92, 102, 0.38)'; // Weathered mineral stone
-        pctx.fillRect(x, y, 1.6, 1.6);
-      } else {
-        pctx.fillStyle = 'rgba(12, 14, 18, 0.7)'; // Deep tar pore
-        pctx.fillRect(x, y, 1.0, 1.0);
+    // 1. Continuous per-pixel micro-roughness without any regular lattice or dot lines
+    for (let y = 0; y < size; y++) {
+      for (let x = 0; x < size; x++) {
+        const n1 = GameRenderer.roadNoisePRNG(x, y, 101);
+        const n2 = GameRenderer.roadNoisePRNG(x >> 1, y >> 1, 202);
+        const combined = n1 * 0.65 + n2 * 0.35;
+        const delta = Math.round((combined - 0.5) * 14); // subtle natural variation
+
+        const idx = (y * size + x) * 4;
+        d[idx] = Math.max(0, Math.min(255, 49 + delta));
+        d[idx + 1] = Math.max(0, Math.min(255, 52 + delta));
+        d[idx + 2] = Math.max(0, Math.min(255, 58 + delta));
+        d[idx + 3] = 255;
       }
     }
+    pctx.putImageData(imgData, 0, 0);
 
-    // Subtle bitumen roller streaks
-    pctx.strokeStyle = 'rgba(22, 24, 29, 0.22)';
-    pctx.lineWidth = 2.5;
-    for (let j = 0; j < 6; j++) {
-      const sy = (j * 22 + 7) % 128;
+    // 2. Fine organic mineral aggregate specks (scattered naturally with high entropy)
+    for (let i = 0; i < 140; i++) {
+      const px = GameRenderer.roadNoisePRNG(i, 11, 303) * (size - 4);
+      const py = GameRenderer.roadNoisePRNG(i, 22, 404) * (size - 4);
+      const prand = GameRenderer.roadNoisePRNG(i, 33, 505);
+      const pradius = 0.8 + prand * 1.0;
+
+      if (prand < 0.35) {
+        pctx.fillStyle = 'rgba(255, 255, 255, 0.14)'; // Light quartz speck
+      } else if (prand < 0.70) {
+        pctx.fillStyle = 'rgba(20, 22, 26, 0.5)'; // Dark bitumen spot
+      } else {
+        pctx.fillStyle = 'rgba(95, 100, 110, 0.35)'; // Basalt aggregate
+      }
       pctx.beginPath();
-      pctx.moveTo(0, sy);
-      pctx.bezierCurveTo(40, sy + 3, 85, sy - 3, 128, sy);
-      pctx.stroke();
+      safeArc(pctx, px, py, pradius, 0, Math.PI * 2);
+      pctx.fill();
     }
 
     this.asphaltPattern = ctx.createPattern(c, 'repeat') || null;
@@ -245,34 +257,50 @@ export class GameRenderer {
   public static getCountryAsphaltPattern(ctx: CanvasRenderingContext2D): CanvasPattern | string {
     if (this.countryAsphaltPattern) return this.countryAsphaltPattern;
     if (typeof document === 'undefined') return '#383a40';
+    const size = 256;
     const c = document.createElement('canvas');
-    c.width = 128;
-    c.height = 128;
+    c.width = size;
+    c.height = size;
     const pctx = c.getContext('2d');
     if (!pctx) return '#383a40';
 
-    // Weathered, slightly sun-bleached country asphalt
-    pctx.fillStyle = '#383a40';
-    pctx.fillRect(0, 0, 128, 128);
+    const imgData = pctx.createImageData(size, size);
+    const d = imgData.data;
 
-    // Coarser aggregate exposure on rural highways
-    for (let i = 0; i < 480; i++) {
-      const x = (i * 67 + 23) % 128;
-      const y = (i * 113 + 41) % 128;
-      const rand = (i * 211) % 100;
-      if (rand < 32) {
-        pctx.fillStyle = 'rgba(230, 225, 215, 0.14)'; // Dusty mineral chip
-        pctx.fillRect(x, y, 1.6, 1.6);
-      } else if (rand < 62) {
-        pctx.fillStyle = 'rgba(20, 22, 26, 0.6)'; // Tar binder
-        pctx.fillRect(x, y, 2.2, 2.2);
-      } else if (rand < 85) {
-        pctx.fillStyle = 'rgba(95, 98, 108, 0.42)'; // Exposed crushed basalt
-        pctx.fillRect(x, y, 1.8, 1.8);
-      } else {
-        pctx.fillStyle = 'rgba(15, 17, 20, 0.75)';
-        pctx.fillRect(x, y, 1.2, 1.2);
+    // Weathered country asphalt base
+    for (let y = 0; y < size; y++) {
+      for (let x = 0; x < size; x++) {
+        const n1 = GameRenderer.roadNoisePRNG(x, y, 601);
+        const n2 = GameRenderer.roadNoisePRNG(x >> 1, y >> 1, 702);
+        const combined = n1 * 0.6 + n2 * 0.4;
+        const delta = Math.round((combined - 0.5) * 16);
+
+        const idx = (y * size + x) * 4;
+        d[idx] = Math.max(0, Math.min(255, 55 + delta));
+        d[idx + 1] = Math.max(0, Math.min(255, 57 + delta));
+        d[idx + 2] = Math.max(0, Math.min(255, 63 + delta));
+        d[idx + 3] = 255;
       }
+    }
+    pctx.putImageData(imgData, 0, 0);
+
+    // Weathered rural aggregate flecks
+    for (let i = 0; i < 180; i++) {
+      const px = GameRenderer.roadNoisePRNG(i, 44, 808) * (size - 4);
+      const py = GameRenderer.roadNoisePRNG(i, 55, 909) * (size - 4);
+      const prand = GameRenderer.roadNoisePRNG(i, 66, 1010);
+      const pradius = 0.9 + prand * 1.2;
+
+      if (prand < 0.4) {
+        pctx.fillStyle = 'rgba(235, 230, 220, 0.16)'; // Dusty mineral
+      } else if (prand < 0.75) {
+        pctx.fillStyle = 'rgba(24, 26, 30, 0.55)'; // Tar
+      } else {
+        pctx.fillStyle = 'rgba(105, 108, 118, 0.4)'; // Stone
+      }
+      pctx.beginPath();
+      safeArc(pctx, px, py, pradius, 0, Math.PI * 2);
+      pctx.fill();
     }
 
     this.countryAsphaltPattern = ctx.createPattern(c, 'repeat') || null;
@@ -282,34 +310,48 @@ export class GameRenderer {
   public static getGravelPattern(ctx: CanvasRenderingContext2D): CanvasPattern | string {
     if (this.gravelPattern) return this.gravelPattern;
     if (typeof document === 'undefined') return '#5d5e62';
+    const size = 256;
     const c = document.createElement('canvas');
-    c.width = 128;
-    c.height = 128;
+    c.width = size;
+    c.height = size;
     const pctx = c.getContext('2d');
     if (!pctx) return '#5d5e62';
 
-    // Dusty crushed limestone / granite gravel base
-    pctx.fillStyle = '#5d5e62';
-    pctx.fillRect(0, 0, 128, 128);
+    const imgData = pctx.createImageData(size, size);
+    const d = imgData.data;
 
-    // Loose pebbles & crushed stones
-    for (let i = 0; i < 500; i++) {
-      const x = (i * 59 + 17) % 128;
-      const y = (i * 127 + 29) % 128;
-      const rand = (i * 179) % 100;
-      if (rand < 30) {
-        pctx.fillStyle = '#7a7c82'; // Light limestone chip
-        pctx.fillRect(x, y, 2.5, 2.2);
-      } else if (rand < 60) {
-        pctx.fillStyle = '#444548'; // Dark granite pebble
-        pctx.fillRect(x, y, 2.8, 2.5);
-      } else if (rand < 85) {
-        pctx.fillStyle = '#8e9096'; // Dusty stone grain
-        pctx.fillRect(x, y, 1.8, 1.8);
-      } else {
-        pctx.fillStyle = '#36373a';
-        pctx.fillRect(x, y, 3.2, 2.8);
+    for (let y = 0; y < size; y++) {
+      for (let x = 0; x < size; x++) {
+        const n1 = GameRenderer.roadNoisePRNG(x, y, 1101);
+        const n2 = GameRenderer.roadNoisePRNG(x >> 1, y >> 1, 1202);
+        const delta = Math.round(((n1 * 0.7 + n2 * 0.3) - 0.5) * 22);
+
+        const idx = (y * size + x) * 4;
+        d[idx] = Math.max(0, Math.min(255, 91 + delta));
+        d[idx + 1] = Math.max(0, Math.min(255, 93 + delta));
+        d[idx + 2] = Math.max(0, Math.min(255, 97 + delta));
+        d[idx + 3] = 255;
       }
+    }
+    pctx.putImageData(imgData, 0, 0);
+
+    // Scattered natural gravel stones
+    for (let i = 0; i < 220; i++) {
+      const px = GameRenderer.roadNoisePRNG(i, 77, 1303) * (size - 6);
+      const py = GameRenderer.roadNoisePRNG(i, 88, 1404) * (size - 6);
+      const prand = GameRenderer.roadNoisePRNG(i, 99, 1505);
+      const pradius = 1.2 + prand * 1.8;
+
+      if (prand < 0.45) {
+        pctx.fillStyle = '#7a7c82'; // Light limestone
+      } else if (prand < 0.8) {
+        pctx.fillStyle = '#48494d'; // Dark granite
+      } else {
+        pctx.fillStyle = '#a1a3a8'; // White quartz pebble
+      }
+      pctx.beginPath();
+      safeArc(pctx, px, py, pradius, 0, Math.PI * 2);
+      pctx.fill();
     }
 
     this.gravelPattern = ctx.createPattern(c, 'repeat') || null;
@@ -319,31 +361,46 @@ export class GameRenderer {
   public static getDirtPattern(ctx: CanvasRenderingContext2D): CanvasPattern | string {
     if (this.dirtPattern) return this.dirtPattern;
     if (typeof document === 'undefined') return '#553d2c';
+    const size = 256;
     const c = document.createElement('canvas');
-    c.width = 128;
-    c.height = 128;
+    c.width = size;
+    c.height = size;
     const pctx = c.getContext('2d');
     if (!pctx) return '#553d2c';
 
-    // Rich earth loam base
-    pctx.fillStyle = '#553d2c';
-    pctx.fillRect(0, 0, 128, 128);
+    const imgData = pctx.createImageData(size, size);
+    const d = imgData.data;
 
-    // Soil grain, clay crumb & humus flecks
-    for (let i = 0; i < 450; i++) {
-      const x = (i * 71 + 31) % 128;
-      const y = (i * 107 + 13) % 128;
-      const rand = (i * 197) % 100;
-      if (rand < 35) {
-        pctx.fillStyle = '#3e2c20'; // Dark damp humus
-        pctx.fillRect(x, y, 2.8, 2.5);
-      } else if (rand < 70) {
-        pctx.fillStyle = '#6a4d38'; // Dry sandy loam
-        pctx.fillRect(x, y, 2.2, 2.0);
-      } else {
-        pctx.fillStyle = '#2f2016'; // Deep earth pore
-        pctx.fillRect(x, y, 1.8, 1.8);
+    for (let y = 0; y < size; y++) {
+      for (let x = 0; x < size; x++) {
+        const n1 = GameRenderer.roadNoisePRNG(x, y, 1601);
+        const n2 = GameRenderer.roadNoisePRNG(x >> 1, y >> 1, 1702);
+        const delta = Math.round(((n1 * 0.65 + n2 * 0.35) - 0.5) * 20);
+
+        const idx = (y * size + x) * 4;
+        d[idx] = Math.max(0, Math.min(255, 83 + delta));
+        d[idx + 1] = Math.max(0, Math.min(255, 59 + delta));
+        d[idx + 2] = Math.max(0, Math.min(255, 42 + delta));
+        d[idx + 3] = 255;
       }
+    }
+    pctx.putImageData(imgData, 0, 0);
+
+    // Organic loam / humus flecks
+    for (let i = 0; i < 160; i++) {
+      const px = GameRenderer.roadNoisePRNG(i, 111, 1801) * (size - 6);
+      const py = GameRenderer.roadNoisePRNG(i, 122, 1902) * (size - 6);
+      const prand = GameRenderer.roadNoisePRNG(i, 133, 2003);
+      const pradius = 1.0 + prand * 1.6;
+
+      if (prand < 0.5) {
+        pctx.fillStyle = '#3a271c'; // Damp earth
+      } else {
+        pctx.fillStyle = '#6f4f39'; // Dry clay crumb
+      }
+      pctx.beginPath();
+      safeArc(pctx, px, py, pradius, 0, Math.PI * 2);
+      pctx.fill();
     }
 
     this.dirtPattern = ctx.createPattern(c, 'repeat') || null;
@@ -353,34 +410,49 @@ export class GameRenderer {
   public static getShoulderPattern(ctx: CanvasRenderingContext2D): CanvasPattern | string {
     if (this.shoulderPattern) return this.shoulderPattern;
     if (typeof document === 'undefined') return '#4a4338';
+    const size = 256;
     const c = document.createElement('canvas');
-    c.width = 128;
-    c.height = 128;
+    c.width = size;
+    c.height = size;
     const pctx = c.getContext('2d');
     if (!pctx) return '#4a4338';
 
+    const imgData = pctx.createImageData(size, size);
+    const d = imgData.data;
+
     // Unpaved roadside sandy gravel / crushed stone berm
-    pctx.fillStyle = '#4a4338';
-    pctx.fillRect(0, 0, 128, 128);
+    for (let y = 0; y < size; y++) {
+      for (let x = 0; x < size; x++) {
+        const n1 = GameRenderer.roadNoisePRNG(x, y, 2101);
+        const n2 = GameRenderer.roadNoisePRNG(x >> 1, y >> 1, 2202);
+        const delta = Math.round(((n1 * 0.65 + n2 * 0.35) - 0.5) * 18);
+
+        const idx = (y * size + x) * 4;
+        d[idx] = Math.max(0, Math.min(255, 74 + delta));
+        d[idx + 1] = Math.max(0, Math.min(255, 66 + delta));
+        d[idx + 2] = Math.max(0, Math.min(255, 54 + delta));
+        d[idx + 3] = 255;
+      }
+    }
+    pctx.putImageData(imgData, 0, 0);
 
     // Dense coarse crushed gravel & dusty sand
-    for (let i = 0; i < 550; i++) {
-      const x = (i * 79 + 23) % 128;
-      const y = (i * 131 + 47) % 128;
-      const rand = (i * 223) % 100;
-      if (rand < 30) {
+    for (let i = 0; i < 240; i++) {
+      const px = GameRenderer.roadNoisePRNG(i, 144, 2301) * (size - 6);
+      const py = GameRenderer.roadNoisePRNG(i, 155, 2402) * (size - 6);
+      const prand = GameRenderer.roadNoisePRNG(i, 166, 2503);
+      const pradius = 1.1 + prand * 1.8;
+
+      if (prand < 0.4) {
         pctx.fillStyle = 'rgba(195, 185, 165, 0.45)'; // Dusty crushed pebble
-        pctx.fillRect(x, y, 2.4, 2.2);
-      } else if (rand < 60) {
-        pctx.fillStyle = 'rgba(38, 34, 28, 0.65)'; // Dark earth speck
-        pctx.fillRect(x, y, 2.6, 2.4);
-      } else if (rand < 85) {
-        pctx.fillStyle = 'rgba(125, 115, 95, 0.4)'; // Sandy loam grain
-        pctx.fillRect(x, y, 1.8, 1.8);
+      } else if (prand < 0.75) {
+        pctx.fillStyle = 'rgba(40, 35, 28, 0.6)'; // Dark earth speck
       } else {
-        pctx.fillStyle = 'rgba(65, 55, 42, 0.8)';
-        pctx.fillRect(x, y, 3.0, 2.6);
+        pctx.fillStyle = 'rgba(125, 115, 95, 0.4)'; // Sandy loam grain
       }
+      pctx.beginPath();
+      safeArc(pctx, px, py, pradius, 0, Math.PI * 2);
+      pctx.fill();
     }
 
     this.shoulderPattern = ctx.createPattern(c, 'repeat') || null;
@@ -917,45 +989,54 @@ export class GameRenderer {
   ) {
     const { roads, intersections } = world;
 
-    // 1. First Pass: Country Road Shoulders (Обочины загородных дорог и трасс)
+    // 1. First Pass: Country Road Shoulders (Широкие многослойные обочины загородных дорог и трасс)
     const shoulderPattern = GameRenderer.getShoulderPattern(ctx);
-    const shoulderW = 14;
 
     for (const road of roads) {
       if (road.isRoundabout) continue;
       const isCountry = road.y1 > 3500 || road.y2 > 3500 || road.x1 > 5400 || road.x2 > 5400 || road.x1 < 1200 || road.x2 < 1200 || (road.curvePoints && road.curvePoints.some(p => p.y > 3500 || p.x > 5400 || p.x < 1200));
       if (!isCountry) continue;
 
+      const isHighway = road.width >= 120;
+      const shoulderW = isHighway ? 38 : 28; // Realistic wide shoulder ~2.5 - 3.5m in scale
+
       ctx.fillStyle = shoulderPattern;
 
       if (road.direction === 'horizontal') {
         const top = road.y1 - road.width / 2;
         if (road.x2 < minX || road.x1 > maxX || top + road.width + shoulderW < minY || top - shoulderW > maxY) continue;
+        
+        // 1a. Main wide crushed stone shoulder
         ctx.fillRect(road.x1, top - shoulderW, road.x2 - road.x1, road.width + shoulderW * 2);
 
-        // Coarse gravel aggregate specks along the outer shoulder edges
-        ctx.fillStyle = 'rgba(195, 185, 165, 0.55)';
-        for (let sx = road.x1 + 10; sx < road.x2; sx += 42) {
-          const seed = ((Math.floor(sx * 98765) ^ Math.floor(top * 54321)) >>> 0) % 5;
-          if (seed < 3) {
-            ctx.fillRect(sx, top - shoulderW + 2, 4, 3);
-            ctx.fillRect(sx + 18, top + road.width + shoulderW - 5, 5, 3);
-          }
-        }
+        // 1b. Inner compacted dark edge strip adjacent to asphalt (прикромочная полоса 6px)
+        ctx.fillStyle = 'rgba(42, 36, 26, 0.45)';
+        ctx.fillRect(road.x1, top - 6, road.x2 - road.x1, 6);
+        ctx.fillRect(road.x1, top + road.width, road.x2 - road.x1, 6);
+
+        // 1c. Outer verge transition to terrain grass (откос бровки кювета 8px)
+        ctx.fillStyle = 'rgba(55, 68, 36, 0.35)';
+        ctx.fillRect(road.x1, top - shoulderW, road.x2 - road.x1, 8);
+        ctx.fillRect(road.x1, top + road.width + shoulderW - 8, road.x2 - road.x1, 8);
+
         ctx.fillStyle = shoulderPattern;
       } else if (road.direction === 'vertical') {
         const left = road.x1 - road.width / 2;
         if (left + road.width + shoulderW < minX || left - shoulderW > maxX || road.y2 < minY || road.y1 > maxY) continue;
+        
+        // 1a. Main wide shoulder
         ctx.fillRect(left - shoulderW, road.y1, road.width + shoulderW * 2, road.y2 - road.y1);
 
-        ctx.fillStyle = 'rgba(195, 185, 165, 0.55)';
-        for (let sy = road.y1 + 10; sy < road.y2; sy += 42) {
-          const seed = ((Math.floor(sy * 98765) ^ Math.floor(left * 54321)) >>> 0) % 5;
-          if (seed < 3) {
-            ctx.fillRect(left - shoulderW + 2, sy, 3, 4);
-            ctx.fillRect(left + road.width + shoulderW - 5, sy + 18, 4, 3);
-          }
-        }
+        // 1b. Inner compacted edge strip (6px)
+        ctx.fillStyle = 'rgba(42, 36, 26, 0.45)';
+        ctx.fillRect(left - 6, road.y1, 6, road.y2 - road.y1);
+        ctx.fillRect(left + road.width, road.y1, 6, road.y2 - road.y1);
+
+        // 1c. Outer verge transition (8px)
+        ctx.fillStyle = 'rgba(55, 68, 36, 0.35)';
+        ctx.fillRect(left - shoulderW, road.y1, 8, road.y2 - road.y1);
+        ctx.fillRect(left + road.width + shoulderW - 8, road.y1, 8, road.y2 - road.y1);
+
         ctx.fillStyle = shoulderPattern;
       } else if (road.curvePoints && road.curvePoints.length > 1) {
         const pts = road.curvePoints;

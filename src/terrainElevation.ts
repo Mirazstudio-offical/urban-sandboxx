@@ -309,7 +309,7 @@ function getRoadbedEmbankmentOffset(x: number, y: number): number {
   for (let r = 0; r < registeredRoads.length; r++) {
     const road = registeredRoads[r];
     const halfW = (road.width || 60) / 2;
-    const searchMargin = halfW + 26;
+    const searchMargin = halfW + 38;
 
     // Quick AABB check
     const minX = (road._minX ?? Math.min(road.x1, road.x2)) - searchMargin;
