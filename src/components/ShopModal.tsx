@@ -457,7 +457,7 @@ export const SHOP_CATALOGS: Record<string, ShopItem[]> = {
     { id: 'sup_cod_fillet', itemId: 'cod_fillet', nameRu: 'Филе трески без кожи (500г)', price: 210, description: 'Свежее белое филе северной трески в вакууме.', category: 'food', effectText: 'Дикая рыба' },
 
     // 4. СВЕЖИЕ ГРИБЫ В УПАКОВКЕ
-    { id: 'sup_champignon_white', itemId: 'champignon_white_whole', nameRu: 'Шампиньоны свежие (лоток 300г)', price: 75, description: 'Белые упругие культивированные шампиньоны в лотке.', category: 'food', effectText: 'Свежие грибы' },
+    { id: 'sup_champignon_white', itemId: 'champignon_tray', nameRu: 'Шампиньоны свежие (лоток 300г)', price: 75, description: 'Белые упругие культивированные шампиньоны в лотке под пленкой.', category: 'food', effectText: 'Свежие грибы' },
     { id: 'sup_champignon_brown', itemId: 'champignon_brown_whole', nameRu: 'Королевские шампиньоны (300г)', price: 90, description: 'Бурые ароматные королевские шампиньоны.', category: 'food', effectText: 'Свежие грибы' },
     { id: 'sup_oyster_mushrooms', itemId: 'oyster_mushroom_cluster', nameRu: 'Вешенки свежие (лоток 300г)', price: 70, description: 'Гроздь свежих вешенок на подложке.', category: 'food', effectText: 'Свежие грибы' },
 

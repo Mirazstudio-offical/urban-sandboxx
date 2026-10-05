@@ -69,6 +69,7 @@ export interface ItemDefinition {
   fullnessPerBite?: number;    // how much fullness each bite adds
   isContainer?: boolean;
   singleUseContainer?: boolean;
+  containerItems?: string[];
   tornItemId?: string;
   isTransparentPackaging?: boolean;
   containerCapacityL?: number;
@@ -330,7 +331,8 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     tornItemId: 'mesh_bag_vegetable_torn',
     containerCapacityL: 3.5,
     maxContainedItemVolumeL: 3.0,
-    maxContainedWeightKg: 5.0
+    maxContainedWeightKg: 5.0,
+    containerItems: ['potato_whole', 'potato_whole', 'potato_whole', 'potato_whole', 'potato_whole', 'potato_whole']
   },
   carrot_fresh: {
     itemId: 'carrot_fresh',
@@ -2525,6 +2527,138 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     allowedItemCategories: ['med', 'medical', 'misc']
   },
 
+  // === GENERIC OPENED PACKAGING & TRASH ===
+  tray_plastic_empty: {
+    itemId: 'tray_plastic_empty',
+    name: 'Open Plastic Food Tray',
+    nameRu: 'Открытый пластиковый лоток',
+    category: 'misc',
+    maxStack: 5,
+    icon: '',
+    description: 'Empty opened food tray.',
+    descriptionRu: 'Пустой открытый пластиковый лоток от продуктов.',
+    effects: {},
+    weight: 0.02,
+    usable: false
+  },
+  mesh_bag_vegetable_torn: {
+    itemId: 'mesh_bag_vegetable_torn',
+    name: 'Torn Vegetable Mesh Bag',
+    nameRu: 'Порванная овощная сетка',
+    category: 'misc',
+    maxStack: 5,
+    icon: '',
+    description: 'Torn mesh netting bag.',
+    descriptionRu: 'Порванная сетка от овощей и фруктов.',
+    effects: {},
+    weight: 0.01,
+    usable: false
+  },
+  vacuum_pack_torn: {
+    itemId: 'vacuum_pack_torn',
+    name: 'Opened Vacuum Pouch',
+    nameRu: 'Вскрытая вакуумная упаковка',
+    category: 'misc',
+    maxStack: 5,
+    icon: '',
+    description: 'Opened vacuum pouch wrapper.',
+    descriptionRu: 'Вскрытая вакуумная упаковка.',
+    effects: {},
+    weight: 0.01,
+    usable: false
+  },
+
+  // === PACKAGED PRODUCE & MUSHROOM TRAYS ===
+  champignon_tray: {
+    itemId: 'champignon_tray',
+    name: 'Fresh Button Champignons Tray (300g)',
+    nameRu: 'Лоток шампиньонов (300г)',
+    category: 'food',
+    maxStack: 4,
+    icon: '',
+    description: 'Thermoformed tray with fresh cultivated button champignons under barrier film.',
+    descriptionRu: 'Пластиковый лоток со свежими отборными белыми шампиньонами под герметичной пленкой.',
+    effects: {},
+    weight: 0.32,
+    volume: 0.5,
+    usable: true,
+    singleUseContainer: true,
+    isTransparentPackaging: true,
+    tornItemId: 'tray_plastic_empty',
+    containerItems: ['champignon_white_whole', 'champignon_white_whole', 'champignon_white_whole', 'champignon_white_whole']
+  },
+  orange_mesh_bag_1k: {
+    itemId: 'orange_mesh_bag_1k',
+    name: 'Oranges Mesh Bag (1kg)',
+    nameRu: 'Сетка апельсинов (1 кг)',
+    category: 'food',
+    maxStack: 4,
+    icon: '',
+    description: 'Breathable mesh netting bag packed with fresh juicy sweet oranges.',
+    descriptionRu: 'Яркая сетка со спелыми сочными апельсинами (1 кг).',
+    effects: {},
+    weight: 1.02,
+    volume: 1.2,
+    usable: true,
+    singleUseContainer: true,
+    isTransparentPackaging: true,
+    tornItemId: 'mesh_bag_vegetable_torn',
+    containerItems: ['orange_citrus', 'orange_citrus', 'orange_citrus', 'orange_citrus']
+  },
+
+  // === SINGLE-PIECE UNBOXED FOOD ITEMS ===
+  nugget_single: {
+    itemId: 'nugget_single',
+    name: 'Crispy Chicken Nugget',
+    nameRu: 'Куриный наггетс (1 шт)',
+    category: 'food',
+    maxStack: 12,
+    icon: '',
+    description: 'Single golden chicken nugget.',
+    descriptionRu: 'Сочный куриный наггетс в панировке.',
+    effects: { hunger: 6, energy: 3 },
+    weight: 0.035,
+    usable: true,
+    biteCount: 2,
+    biteDuration: 0.5,
+    fullnessPerBite: 1,
+    tasteMessages: ['Хрустящий золотистый наггетс!']
+  },
+  cookie_single: {
+    itemId: 'cookie_single',
+    name: 'Chocolate Chip Cookie',
+    nameRu: 'Печенье с шоколадом (1 шт)',
+    category: 'food',
+    maxStack: 16,
+    icon: '',
+    description: 'Single cookie with Belgian chocolate.',
+    descriptionRu: 'Хрустящее печенье с кусочками шоколада.',
+    effects: { hunger: 4, energy: 3 },
+    weight: 0.025,
+    usable: true,
+    biteCount: 2,
+    biteDuration: 0.5,
+    fullnessPerBite: 1,
+    tasteMessages: ['Хрустящий сладкий укус печенья с шоколадом!']
+  },
+  sushi_roll_piece: {
+    itemId: 'sushi_roll_piece',
+    name: 'Philadelphia Sushi Roll Piece',
+    nameRu: 'Ролл Филадельфия (1 шт)',
+    category: 'food',
+    maxStack: 12,
+    icon: '',
+    description: 'Single piece of fresh Philadelphia roll.',
+    descriptionRu: 'Сочный ролл со свежим лососем и сливочным сыром.',
+    effects: { hunger: 8, health: 2, energy: 3 },
+    weight: 0.04,
+    usable: true,
+    biteCount: 2,
+    biteDuration: 0.5,
+    fullnessPerBite: 1,
+    tasteMessages: ['Нежный лосось и сливочный сыр!']
+  },
+
   pocket_knife: {
     itemId: 'pocket_knife',
     name: 'Folding Pocket Knife',
@@ -3618,21 +3752,6 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     containerCapacityL: 3.5,
     maxContainedItemVolumeL: 3.0,
     maxContainedWeightKg: 5.0
-  },
-  mesh_bag_vegetable_torn: {
-    itemId: 'mesh_bag_vegetable_torn',
-    name: 'Torn Vegetable Mesh',
-    nameRu: 'Разорванная овощная сетка',
-    category: 'misc',
-    maxStack: 10,
-    icon: '',
-    description: 'Torn empty vegetable mesh net.',
-    descriptionRu: 'Порванная пустая овощная сетка. Мусор.',
-    effects: {},
-    weight: 0.01,
-    volume: 0.02,
-    usable: false,
-    isContainer: false
   },
   soup_bowl: {
     itemId: 'soup_bowl',
@@ -5265,39 +5384,37 @@ export function unpackSingleUseContainer(
   world?: GameWorld,
   onContainerConsumed?: () => void
 ): { success: boolean; message: string } {
-  if (!container.contents || container.contents.length === 0) {
-    const tornId = container.tornItemId || ITEM_CATALOG[container.itemId]?.tornItemId;
-    if (tornId && ITEM_CATALOG[tornId]) {
-      const tornDef = ITEM_CATALOG[tornId];
-      container.itemId = tornDef.itemId;
-      container.name = tornDef.name;
-      container.nameRu = tornDef.nameRu;
-      container.category = 'misc';
-      container.isContainer = false;
-      container.contents = undefined;
-      container.usable = false;
-      container.description = tornDef.description;
-      container.descriptionRu = tornDef.descriptionRu;
+  const def = ITEM_CATALOG[container.itemId];
+  let extractedItems: InventoryItem[] = [];
+
+  if (container.contents && container.contents.length > 0) {
+    extractedItems = [...container.contents];
+    container.contents = [];
+  } else {
+    const list: string[] = container.containerItems || def?.containerItems || [];
+    for (const cId of list) {
+      extractedItems.push(createItem(cId, 1));
     }
+  }
+
+  if (extractedItems.length === 0) {
     return { success: false, message: 'Упаковка пуста.' };
   }
 
-  const extractedItems = [...container.contents];
-  container.contents = [];
-
   // Convert container to its torn leftover counterpart in-place
-  const tornId = container.tornItemId || ITEM_CATALOG[container.itemId]?.tornItemId;
-  if (tornId && ITEM_CATALOG[tornId]) {
-    const tornDef = ITEM_CATALOG[tornId];
-    container.itemId = tornDef.itemId;
-    container.name = tornDef.name;
-    container.nameRu = tornDef.nameRu;
-    container.category = 'misc';
-    container.isContainer = false;
-    container.usable = false;
-    container.description = tornDef.description;
-    container.descriptionRu = tornDef.descriptionRu;
-  }
+  const tornId = container.tornItemId || def?.tornItemId || def?.leftoverId || 'tray_plastic_empty';
+  const tornDef = ITEM_CATALOG[tornId] || ITEM_CATALOG.tray_plastic_empty;
+
+  container.itemId = tornDef.itemId;
+  container.name = tornDef.name;
+  container.nameRu = tornDef.nameRu;
+  container.category = 'misc';
+  container.isContainer = false;
+  container.usable = false;
+  container.singleUseContainer = false;
+  container.contents = undefined;
+  container.description = tornDef.description;
+  container.descriptionRu = tornDef.descriptionRu;
 
   // Distribute extracted items into player's inventory or hands or drop to ground
   let droppedCount = 0;
@@ -5326,7 +5443,7 @@ export function unpackSingleUseContainer(
 
   const itemsNames = extractedItems.map(i => i.nameRu).join(', ');
   const dropMsg = droppedCount > 0 ? ` (${droppedCount} предм. упали на землю)` : '';
-  const notifMsg = `Упаковка вскрыта: извлечено ${itemsNames}${dropMsg}.`;
+  const notifMsg = `Упаковка вскрыта: извлечено ${itemsNames}${dropMsg}. Мусор: ${tornDef.nameRu}.`;
   addPlayerNotification(player, notifMsg, 'pickup');
 
   return { success: true, message: notifMsg };

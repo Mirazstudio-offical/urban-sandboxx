@@ -1344,6 +1344,7 @@ export interface InventoryItem {
   // Container properties (recursive containers: backpack, wallet, plastic bag, pockets, etc.)
   isContainer?: boolean;
   singleUseContainer?: boolean;     // Single-use disposable packaging (tears open upon extracting)
+  containerItems?: string[];        // Specific item IDs contained inside single-use packaged goods
   tornItemId?: string;              // Item ID of torn leftover packaging (e.g. vacuum_pack_small_torn)
   isTransparentPackaging?: boolean; // Whether the inner contents are visible through transparent packaging
   containerCapacityL?: number;      // Total internal volume capacity in Liters

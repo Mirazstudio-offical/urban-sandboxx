@@ -1306,25 +1306,357 @@ export function drawProduceAndMushroomItem(ctx: CanvasRenderingContext2D, itemId
       return true;
     }
 
-    case 'potato_bag_5k': {
-      drawShadow(ctx, 8, 3.2, 8.5, 0.3);
-      // Mesh sack
+    case 'champignon_tray':
+    case 'tray_sealed_food': {
+      drawShadow(ctx, 9.2, 3.5, 7.8, 0.24);
+
+      // Deep dark thermoformed polypropylene tray
+      ctx.fillStyle = '#0f172a';
+      ctx.beginPath();
+      ctx.roundRect(-9.5, -6.5, 19, 13, 2.5);
+      ctx.fill();
+
+      // Raised rim flange bevel
+      ctx.fillStyle = '#1e293b';
+      ctx.beginPath();
+      ctx.roundRect(-9, -6, 18, 12, 2.2);
+      ctx.fill();
+
+      // Recessed tray floor
+      ctx.fillStyle = '#090d16';
+      ctx.beginPath();
+      ctx.roundRect(-7.8, -4.8, 15.6, 9.6, 1.8);
+      ctx.fill();
+
+      // VISIBLE PLUMP BUTTON CHAMPIGNONS INSIDE!
+      const shrooms = [
+        { sx: -4.0, sy: -2.0, r: 2.8, angle: -0.2 },
+        { sx: 3.2, sy: -2.2, r: 2.6, angle: 0.3 },
+        { sx: -1.8, sy: 2.0, r: 2.7, angle: 0.1 },
+        { sx: 3.5, sy: 2.2, r: 2.5, angle: -0.3 }
+      ];
+
+      shrooms.forEach(({ sx, sy, r, angle }) => {
+        // Mushroom stem base peeking beneath
+        ctx.fillStyle = '#d1d5db';
+        ctx.beginPath();
+        ctx.ellipse(sx, sy + 1.2, r * 0.45, r * 0.6, angle, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Delicate dark gills underneath cap
+        ctx.fillStyle = '#78350f';
+        ctx.beginPath();
+        ctx.ellipse(sx, sy + 0.8, r * 0.85, r * 0.4, angle, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Plump button mushroom cap
+        ctx.fillStyle = '#f8fafc';
+        ctx.beginPath();
+        ctx.arc(sx, sy, r, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Shaded mushroom side curve
+        ctx.fillStyle = '#e2e8f0';
+        ctx.beginPath();
+        ctx.arc(sx + 0.4, sy + 0.4, r * 0.9, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Velvety top cap highlight
+        ctx.fillStyle = '#ffffff';
+        ctx.beginPath();
+        ctx.arc(sx - 0.4, sy - 0.4, r * 0.65, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Subtle earthy spore specks
+        ctx.fillStyle = '#94a3b8';
+        ctx.fillRect(sx - 0.5, sy - 0.5, 0.6, 0.6);
+      });
+
+      // TIGHT STRETCHED BARRIER FILM OVER TRAY
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
+      ctx.beginPath();
+      ctx.roundRect(-8.5, -5.5, 17, 11, 2);
+      ctx.fill();
+
+      // Heat-sealed embossed crimp pattern along flange border
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
+      ctx.lineWidth = 0.6;
+      ctx.strokeRect(-8.5, -5.5, 17, 11);
+
+      // Sharp diagonal specular gloss streak
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
+      ctx.beginPath();
+      ctx.moveTo(-6, -6);
+      ctx.lineTo(-2.5, -6);
+      ctx.lineTo(3.5, 5.5);
+      ctx.lineTo(0, 5.5);
+      ctx.closePath();
+      ctx.fill();
+
+      // Supermarket thermal adhesive price & barcode sticker (top right)
+      ctx.fillStyle = '#f8fafc';
+      ctx.fillRect(3.2, -5.2, 5.2, 3.8);
+      ctx.strokeStyle = '#cbd5e1';
+      ctx.lineWidth = 0.4;
+      ctx.strokeRect(3.2, -5.2, 5.2, 3.8);
+
+      // Barcode lines on label
+      ctx.fillStyle = '#1e293b';
+      ctx.fillRect(3.8, -4.6, 0.6, 2.6);
+      ctx.fillRect(4.8, -4.6, 0.4, 2.6);
+      ctx.fillRect(5.6, -4.6, 0.8, 2.6);
+      ctx.fillRect(6.8, -4.6, 0.5, 2.6);
+
+      // Green certified freshness stamp dot
+      ctx.fillStyle = '#16a34a';
+      ctx.fillRect(7.4, -2.4, 0.8, 0.8);
+      return true;
+    }
+
+    case 'potato_bag_5k':
+    case 'potato_mesh_bag_3k':
+    case 'mesh_bag_vegetable': {
+      drawShadow(ctx, 9, 3.5, 8.2, 0.28);
+
+      // VISIBLE PLUMP EARTHY POTATO TUBERS INSIDE!
+      const potatos = [
+        { px: -3.8, py: -1.8, rx: 3.8, ry: 2.8, angle: -0.2, c: '#ca8a04', ch: '#eab308' },
+        { px: 3.2, py: -2.0, rx: 3.6, ry: 2.6, angle: 0.3, c: '#b45309', ch: '#d97706' },
+        { px: -1.8, py: 2.5, rx: 4.2, ry: 3.0, angle: 0.1, c: '#d97706', ch: '#eab308' },
+        { px: 3.5, py: 2.4, rx: 3.5, ry: 2.5, angle: -0.3, c: '#ca8a04', ch: '#facc15' },
+        { px: 0.2, py: -0.2, rx: 3.4, ry: 2.6, angle: 0.0, c: '#a16207', ch: '#ca8a04' }
+      ];
+
+      potatos.forEach(({ px, py, rx, ry, angle, c, ch }) => {
+        // Shadow behind each tuber
+        ctx.fillStyle = '#78350f';
+        ctx.beginPath();
+        ctx.ellipse(px + 0.4, py + 0.4, rx, ry, angle, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Tuber body
+        ctx.fillStyle = c;
+        ctx.beginPath();
+        ctx.ellipse(px, py, rx, ry, angle, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Tuber rounded light face
+        ctx.fillStyle = ch;
+        ctx.beginPath();
+        ctx.ellipse(px - 0.5, py - 0.4, rx * 0.75, ry * 0.7, angle, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Potato "eyes" / dimples
+        ctx.fillStyle = '#713f12';
+        ctx.fillRect(px - 1.2, py - 0.6, 0.8, 0.8);
+        ctx.fillRect(px + 1.0, py + 0.8, 0.8, 0.8);
+      });
+
+      // TIGHT STRETCHED RED DIAMOND POLYMER MESH NETTING
+      ctx.strokeStyle = '#dc2626';
+      ctx.lineWidth = 0.8;
+      for (let x = -8; x <= 8; x += 2.4) {
+        ctx.beginPath();
+        ctx.moveTo(x - 3, -6); ctx.lineTo(x + 3, 6.5);
+        ctx.moveTo(x + 3, -6); ctx.lineTo(x - 3, 6.5);
+        ctx.stroke();
+      }
+
+      // Netting volume silhouette contour
+      ctx.strokeStyle = 'rgba(220, 38, 38, 0.7)';
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      ctx.roundRect(-8, -6, 16, 12.5, 3.5);
+      ctx.stroke();
+
+      // Top gathered neck with crimped plastic closure clip & barcode tag
+      ctx.fillStyle = '#b91c1c';
+      ctx.beginPath();
+      ctx.roundRect(-2.8, -8, 5.6, 2.5, 0.8);
+      ctx.fill();
+
+      // White thermal label tag hanging from clip
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(-1.8, -7.5, 3.6, 1.5);
+      ctx.fillStyle = '#1e293b';
+      ctx.fillRect(-1.2, -7.3, 0.6, 1.1);
+      ctx.fillRect(-0.2, -7.3, 0.5, 1.1);
+      ctx.fillRect(0.6, -7.3, 0.6, 1.1);
+      return true;
+    }
+
+    case 'orange_mesh_bag_1k': {
+      drawShadow(ctx, 8.8, 3.4, 8.0, 0.26);
+
+      // VISIBLE PLUMP ROUND CITRUS ORANGES INSIDE!
+      const oranges = [
+        { ox: -3.6, oy: -1.8, r: 3.4, c: '#ea580c', ch: '#fb923c' },
+        { ox: 3.2, oy: -2.0, r: 3.2, c: '#f97316', ch: '#fdba74' },
+        { ox: -1.8, oy: 2.2, r: 3.5, c: '#ea580c', ch: '#fb923c' },
+        { ox: 3.4, oy: 2.2, r: 3.3, c: '#c2410c', ch: '#f97316' },
+        { ox: 0.0, oy: -0.2, r: 3.0, c: '#f97316', ch: '#fed7aa' }
+      ];
+
+      oranges.forEach(({ ox, oy, r, c, ch }) => {
+        // Shadow behind orange
+        ctx.fillStyle = '#7c2d12';
+        ctx.beginPath();
+        ctx.arc(ox + 0.4, oy + 0.4, r, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Spherical orange body
+        ctx.fillStyle = c;
+        ctx.beginPath();
+        ctx.arc(ox, oy, r, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Spherical citrus highlight
+        ctx.fillStyle = ch;
+        ctx.beginPath();
+        ctx.arc(ox - 0.6, oy - 0.6, r * 0.7, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Tiny green stem calyx on top orange
+        if (oy < 0) {
+          ctx.fillStyle = '#15803d';
+          ctx.fillRect(ox - 0.4, oy - r + 0.4, 0.8, 0.8);
+        }
+      });
+
+      // TIGHT STRETCHED RED MESH NETTING
+      ctx.strokeStyle = '#b91c1c';
+      ctx.lineWidth = 0.8;
+      for (let x = -8; x <= 8; x += 2.4) {
+        ctx.beginPath();
+        ctx.moveTo(x - 3, -6); ctx.lineTo(x + 3, 6.5);
+        ctx.moveTo(x + 3, -6); ctx.lineTo(x - 3, 6.5);
+        ctx.stroke();
+      }
+
+      // Top crimped fastener clip & price tag
+      ctx.fillStyle = '#dc2626';
+      ctx.fillRect(-2.5, -7.8, 5, 2.2);
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(-1.5, -7.4, 3, 1.4);
+      return true;
+    }
+
+    case 'pouch_sealed_snack': {
+      drawShadow(ctx, 8.2, 3.2, 7.8, 0.24);
+
+      // Matte kraft paper stand-up doypack pouch
       ctx.fillStyle = '#b45309';
       ctx.beginPath();
-      ctx.roundRect(-6.5, -5.5, 13, 12, 3);
+      ctx.moveTo(-6.5, -6.5);
+      ctx.lineTo(6.5, -6.5);
+      ctx.lineTo(5.5, 6.5);
+      ctx.lineTo(-5.5, 6.5);
+      ctx.closePath();
       ctx.fill();
-      // Mesh grid
-      ctx.strokeStyle = '#78350f';
-      ctx.lineWidth = 0.6;
-      for (let x = -5; x <= 5; x += 2.5) {
-        ctx.beginPath(); ctx.moveTo(x, -5.5); ctx.lineTo(x, 6.5); ctx.stroke();
+
+      // Pouch side shading
+      ctx.fillStyle = '#92400e';
+      ctx.fillRect(-6.5, -6.5, 1.2, 13);
+      ctx.fillRect(5.3, -6.5, 1.2, 13);
+
+      // Heat-sealed top rib with tear notch & zip line
+      ctx.fillStyle = '#78350f';
+      ctx.fillRect(-6.5, -6.5, 13, 2.4);
+      // Tear notch
+      ctx.fillStyle = '#0f172a';
+      ctx.beginPath();
+      ctx.moveTo(-6.5, -5.2); ctx.lineTo(-5.2, -4.6); ctx.lineTo(-6.5, -4.0);
+      ctx.closePath();
+      ctx.fill();
+
+      // CLEAR TRANSPARENT OVAL PREVIEW WINDOW IN CENTER
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
+      ctx.beginPath();
+      ctx.ellipse(0, 1.0, 4.2, 3.0, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = '#d97706';
+      ctx.lineWidth = 0.8;
+      ctx.stroke();
+
+      // VISIBLE DRIED FRUITS & NUTS INSIDE WINDOW!
+      // Golden dried apricots
+      ctx.fillStyle = '#ea580c';
+      ctx.beginPath();
+      ctx.arc(-1.8, 0.5, 1.6, 0, Math.PI * 2);
+      ctx.fill();
+      // Sweet dark prunes
+      ctx.fillStyle = '#311042';
+      ctx.beginPath();
+      ctx.arc(1.8, 0.8, 1.7, 0, Math.PI * 2);
+      ctx.fill();
+      // Raisins & sunflower seeds
+      ctx.fillStyle = '#78350f';
+      ctx.fillRect(-0.6, 1.8, 1.2, 1.0);
+      ctx.fillStyle = '#fde68a';
+      ctx.fillRect(0.8, -0.6, 0.8, 1.4);
+
+      // Clear window gloss reflection
+      drawGlossBand(ctx, -2.5, -0.5, 2, 2.5, 0.45);
+
+      // Brand label line
+      ctx.fillStyle = '#fef3c7';
+      ctx.fillRect(-3.5, 4.5, 7, 1);
+      return true;
+    }
+
+    case 'vacuum_pack_small':
+    case 'vacuum_pack_medium':
+    case 'vacuum_pack_large': {
+      drawShadow(ctx, 8.5, 3.2, 7.8, 0.22);
+
+      // Multi-layer vacuum pouch
+      // Silver rear foil sheet
+      ctx.fillStyle = '#94a3b8';
+      ctx.beginPath();
+      ctx.roundRect(-8, -6, 16, 12, 1.8);
+      ctx.fill();
+
+      ctx.fillStyle = '#cbd5e1';
+      ctx.beginPath();
+      ctx.roundRect(-7.5, -5.5, 15, 11, 1.5);
+      ctx.fill();
+
+      // Micro-embossed waffle-grid heat-seal margins
+      ctx.fillStyle = '#64748b';
+      for (let y = -4.5; y <= 4.5; y += 1.6) {
+        ctx.fillRect(-7.2, y, 1.2, 0.8);
+        ctx.fillRect(6.0, y, 1.2, 0.8);
       }
-      for (let y = -4; y <= 5; y += 2.5) {
-        ctx.beginPath(); ctx.moveTo(-6.5, y); ctx.lineTo(6.5, y); ctx.stroke();
+      for (let x = -5.5; x <= 5.5; x += 1.6) {
+        ctx.fillRect(x, -5.2, 0.8, 1.2);
+        ctx.fillRect(x, 4.2, 0.8, 1.2);
       }
-      // Top tie
-      ctx.fillStyle = '#f59e0b';
-      ctx.fillRect(-2, -7, 4, 2);
+
+      // V-notch on top edges
+      ctx.fillStyle = '#0f172a';
+      ctx.beginPath();
+      ctx.moveTo(-8, -4.5); ctx.lineTo(-6.5, -3.8); ctx.lineTo(-8, -3.1);
+      ctx.closePath();
+      ctx.fill();
+
+      // Clinging vacuum-sealed interior with food silhouette
+      ctx.fillStyle = '#b91c1c';
+      ctx.beginPath();
+      ctx.roundRect(-5.5, -3.5, 11, 7, 1.5);
+      ctx.fill();
+
+      // Tight polyethylene skin-tight vacuum cling wrinkles
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.7)';
+      ctx.lineWidth = 0.8;
+      ctx.beginPath();
+      ctx.moveTo(-5.5, -3.5); ctx.lineTo(-2, -1);
+      ctx.moveTo(5.5, -3.5); ctx.lineTo(2, -1);
+      ctx.moveTo(-5.5, 3.5); ctx.lineTo(-1.5, 1);
+      ctx.moveTo(5.5, 3.5); ctx.lineTo(1.5, 1);
+      ctx.stroke();
+
+      // Specular vacuum sheen
+      drawGlossBand(ctx, -3.5, -3.5, 2.5, 7, 0.4);
       return true;
     }
 
@@ -1989,8 +2321,7 @@ export function drawProduceAndMushroomItem(ctx: CanvasRenderingContext2D, itemId
     case 'melon_diced':
     case 'watermelon_diced':
     case 'pomegranate_seeds_cup':
-    case 'grapes_berries_cup':
-    case 'berries_tray_fresh': {
+    case 'grapes_berries_cup': {
       drawShadow(ctx, 7, 2.8, 7.8, 0.22);
       // Clear plastic cup / tray
       ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
@@ -2001,11 +2332,68 @@ export function drawProduceAndMushroomItem(ctx: CanvasRenderingContext2D, itemId
       if (itemId === 'watermelon_diced') cColor = '#ef4444';
       if (itemId === 'pomegranate_seeds_cup') cColor = '#be123c';
       if (itemId === 'grapes_berries_cup') cColor = '#84cc16';
-      if (itemId === 'berries_tray_fresh') cColor = '#dc2626';
       ctx.fillStyle = cColor;
       for (const pt of [[-2.5, -2], [2, -1.5], [-1.5, 1.5], [2, 2]]) {
         ctx.beginPath(); ctx.arc(pt[0], pt[1], 1.8, 0, Math.PI * 2); ctx.fill();
       }
+      return true;
+    }
+
+    case 'berries_tray_fresh': {
+      drawShadow(ctx, 8.8, 3.4, 7.8, 0.24);
+
+      // Thermoformed clear plastic berry clamshell punnet / tray
+      ctx.fillStyle = 'rgba(241, 245, 249, 0.7)';
+      ctx.beginPath();
+      ctx.roundRect(-8.5, -5.5, 17, 11, 2.2);
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.9)';
+      ctx.lineWidth = 0.8;
+      ctx.stroke();
+
+      // Molded bottom ventilation slots
+      ctx.fillStyle = '#94a3b8';
+      ctx.fillRect(-5, 4.2, 2.5, 0.8);
+      ctx.fillRect(2.5, 4.2, 2.5, 0.8);
+
+      // VISIBLE PLUMP RED STRAWBERRIES & INDIGO BLUEBERRIES INSIDE!
+      const berries = [
+        { bx: -4.2, by: -1.8, r: 2.6, c: '#e11d48', s: '#fca5a5' },
+        { bx: 3.2, by: -2.0, r: 2.7, c: '#dc2626', s: '#fca5a5' },
+        { bx: -1.5, by: 1.8, r: 2.8, c: '#e11d48', s: '#fca5a5' },
+        { bx: 3.8, by: 2.0, r: 2.6, c: '#dc2626', s: '#fca5a5' }
+      ];
+      berries.forEach(({ bx, by, r, c, s }) => {
+        ctx.fillStyle = c;
+        ctx.beginPath();
+        ctx.arc(bx, by, r, 0, Math.PI * 2);
+        ctx.fill();
+        // Strawberry seed dots
+        ctx.fillStyle = '#fef08a';
+        ctx.fillRect(bx - 0.8, by - 0.8, 0.6, 0.6);
+        ctx.fillRect(bx + 0.6, by + 0.4, 0.6, 0.6);
+        // Highlight
+        ctx.fillStyle = s;
+        ctx.beginPath();
+        ctx.arc(bx - 0.5, by - 0.5, r * 0.5, 0, Math.PI * 2);
+        ctx.fill();
+      });
+
+      // Wild blueberries nestled between strawberries
+      const blues = [
+        [-0.5, -2.5], [1.5, 0.5], [-3.8, 2.5]
+      ];
+      blues.forEach(([blx, bly]) => {
+        ctx.fillStyle = '#1e3a8a';
+        ctx.beginPath();
+        ctx.arc(blx, bly, 1.8, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#60a5fa';
+        ctx.fillRect(blx - 0.4, bly - 0.4, 0.8, 0.8);
+      });
+
+      // Transparent clamshell lid with diagonal gloss streak
+      drawGlossBand(ctx, -5, -5.5, 3, 11, 0.45);
       return true;
     }
 

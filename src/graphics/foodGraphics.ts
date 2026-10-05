@@ -677,6 +677,54 @@ export function drawFoodItem(ctx: CanvasRenderingContext2D, itemId: string): boo
       return true;
     }
 
+    case 'nugget_single': {
+      drawShadow(ctx, 6.5, 2.5, 6.8, 0.22);
+
+      // Single crispy golden chicken nugget with realistic panko crust
+      ctx.fillStyle = '#b45309';
+      ctx.beginPath();
+      ctx.moveTo(-5.5, -2.5);
+      ctx.quadraticCurveTo(-6.5, 2, -3.5, 4.5);
+      ctx.quadraticCurveTo(2, 5.5, 5.5, 3);
+      ctx.quadraticCurveTo(6.5, -1.5, 3.5, -4);
+      ctx.quadraticCurveTo(-1.5, -5.5, -5.5, -2.5);
+      ctx.closePath();
+      ctx.fill();
+
+      // Top golden-amber panko crust face
+      ctx.fillStyle = '#d97706';
+      ctx.beginPath();
+      ctx.moveTo(-4.5, -2);
+      ctx.quadraticCurveTo(-5.5, 1.5, -3, 3.8);
+      ctx.quadraticCurveTo(1.5, 4.6, 4.5, 2.5);
+      ctx.quadraticCurveTo(5.2, -1, 2.8, -3.2);
+      ctx.quadraticCurveTo(-1, -4.5, -4.5, -2);
+      ctx.closePath();
+      ctx.fill();
+
+      // Golden bubbly crisp highlights
+      ctx.fillStyle = '#f59e0b';
+      ctx.beginPath();
+      ctx.ellipse(-1.5, -0.5, 3.5, 2.2, -0.2, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Crunchy textured batter crumbs & blistered panko flakes
+      ctx.fillStyle = '#fef08a';
+      ctx.fillRect(-3, -1.5, 1.2, 1.2);
+      ctx.fillRect(1, 0.5, 1.4, 1.2);
+      ctx.fillRect(-0.5, 2, 1.2, 1);
+      ctx.fillRect(2.5, -2, 1, 1);
+
+      ctx.fillStyle = '#78350f';
+      ctx.fillRect(-2, 1.5, 0.9, 0.9);
+      ctx.fillRect(2.2, 1.2, 0.9, 0.9);
+      ctx.fillRect(-3.8, 0, 0.8, 0.8);
+
+      // Delicate hot oil sheen glint
+      drawGlossBand(ctx, -2.5, -2, 2.5, 1.2, 0.4);
+      return true;
+    }
+
     case 'hot_dog': {
       drawShadow(ctx, 9, 3.2, 7.5, 0.22);
 
@@ -829,6 +877,79 @@ export function drawFoodItem(ctx: CanvasRenderingContext2D, itemId: string): boo
       ctx.beginPath();
       ctx.roundRect(-8, 2.5, 3.5, 2.5, 1);
       ctx.fill();
+      return true;
+    }
+
+    case 'sushi_roll_piece': {
+      drawShadow(ctx, 7.2, 2.8, 7.0, 0.24);
+
+      // Outer jet-black nori seaweed wrap
+      ctx.fillStyle = '#09090b';
+      ctx.beginPath();
+      ctx.arc(0, 0, 6.2, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Dark seaweed sheen ring
+      ctx.strokeStyle = '#14532d';
+      ctx.lineWidth = 0.8;
+      ctx.beginPath();
+      ctx.arc(0, 0, 5.8, 0, Math.PI * 2);
+      ctx.stroke();
+
+      // Seasoned sushi rice circle with translucent grain texture
+      ctx.fillStyle = '#f8fafc';
+      ctx.beginPath();
+      ctx.arc(0, 0, 5.2, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Rice grains micro-detail
+      ctx.fillStyle = '#e2e8f0';
+      for (let a = 0; a < Math.PI * 2; a += Math.PI / 4) {
+        ctx.fillRect(Math.cos(a) * 4.2 - 0.4, Math.sin(a) * 4.2 - 0.4, 0.9, 0.9);
+      }
+
+      // Fresh vibrant orange Atlantic salmon drape / filling
+      ctx.fillStyle = '#ea580c';
+      ctx.beginPath();
+      ctx.arc(0.5, -0.5, 3.2, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#fb923c';
+      ctx.beginPath();
+      ctx.arc(0.3, -0.7, 2.7, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Salmon fat marbling striations
+      ctx.strokeStyle = '#fed7aa';
+      ctx.lineWidth = 0.5;
+      ctx.beginPath();
+      ctx.moveTo(-1.2, -2.5); ctx.lineTo(1.8, -0.5);
+      ctx.moveTo(-0.5, -1.8); ctx.lineTo(2.2, 0.2);
+      ctx.stroke();
+
+      // Creamy white Philadelphia cheese core
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.ellipse(-0.8, 0.8, 1.6, 1.2, 0.3, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Crisp dark green cucumber baton
+      ctx.fillStyle = '#15803d';
+      ctx.beginPath();
+      ctx.rect(0.6, 0.4, 1.4, 1.4);
+      ctx.fill();
+      ctx.fillStyle = '#86efac';
+      ctx.fillRect(0.9, 0.7, 0.8, 0.8);
+
+      // Toasted sesame seeds garnish
+      ctx.fillStyle = '#18181b';
+      ctx.fillRect(-2.5, -3.2, 0.7, 1.2);
+      ctx.fillRect(2.8, -2.2, 1.1, 0.7);
+      ctx.fillStyle = '#fef08a';
+      ctx.fillRect(-3.2, 1.5, 1.1, 0.7);
+      ctx.fillRect(1.5, 3.2, 0.7, 1.1);
+
+      // Delicate vinegar/oil gloss highlight
+      drawGlossBand(ctx, -2, -2, 2.5, 1.2, 0.4);
       return true;
     }
 
@@ -990,6 +1111,68 @@ export function drawFoodItem(ctx: CanvasRenderingContext2D, itemId: string): boo
       // White brand band
       ctx.fillStyle = '#ffffff';
       ctx.fillRect(-7.5, 2.5, 15, 1.2);
+      return true;
+    }
+
+    case 'cookie_single': {
+      drawShadow(ctx, 7, 2.8, 7.2, 0.24);
+
+      // Round artisanal chocolate chip cookie with rustic rough edges
+      ctx.fillStyle = '#b45309';
+      ctx.beginPath();
+      ctx.arc(0, 0, 6.2, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Golden baked buttery dough face
+      ctx.fillStyle = '#d97706';
+      ctx.beginPath();
+      ctx.arc(0, 0, 5.6, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.fillStyle = '#fde68a';
+      ctx.beginPath();
+      ctx.arc(-0.8, -0.8, 4.2, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Organic oven fissure / crack lines
+      ctx.strokeStyle = '#92400e';
+      ctx.lineWidth = 0.8;
+      ctx.beginPath();
+      ctx.moveTo(-3, -2); ctx.lineTo(-1, 0); ctx.lineTo(-2, 2.5);
+      ctx.moveTo(1, -3); ctx.lineTo(1.8, -0.5); ctx.lineTo(3.5, 1);
+      ctx.moveTo(-0.5, 1.5); ctx.lineTo(1.2, 3);
+      ctx.stroke();
+
+      // Chunky dark chocolate chips embedded in the cookie
+      const chips = [
+        { cx: -2.2, cy: -1.8, r: 1.6 },
+        { cx: 1.8, cy: -2.2, r: 1.8 },
+        { cx: -1.2, cy: 1.6, r: 1.7 },
+        { cx: 2.4, cy: 1.4, r: 1.5 },
+        { cx: 0.2, cy: -0.2, r: 1.4 },
+        { cx: -3.8, cy: 0.8, r: 1.2 }
+      ];
+      chips.forEach(({ cx, cy, r }) => {
+        // Dark chocolate body
+        ctx.fillStyle = '#1c1917';
+        ctx.beginPath();
+        ctx.arc(cx, cy, r, 0, Math.PI * 2);
+        ctx.fill();
+        // Melted chocolate sheen facet
+        ctx.fillStyle = '#451a03';
+        ctx.beginPath();
+        ctx.arc(cx - 0.3, cy - 0.3, r * 0.6, 0, Math.PI * 2);
+        ctx.fill();
+        // Specular glint
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(cx - 0.4, cy - 0.4, 0.6, 0.6);
+      });
+
+      // Flaky sea salt / sugar crystals
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+      ctx.fillRect(-1.5, -3.2, 0.7, 0.7);
+      ctx.fillRect(2.8, -0.8, 0.7, 0.7);
+      ctx.fillRect(0.8, 2.5, 0.7, 0.7);
       return true;
     }
 

@@ -511,7 +511,389 @@ export function drawLeftoverItem(ctx: CanvasRenderingContext2D, itemId: string):
       return true;
     }
 
-    // Empty bento sushi tray (matches sushi_set)
+    // Premium thermoformed polypropylene food tray (clean/empty)
+    case 'tray_plastic_empty': {
+      drawShadow(ctx, 9.2, 3.5, 7.8, 0.24);
+
+      // Rigid thermoformed plastic outer flange / perimeter rim
+      ctx.fillStyle = '#94a3b8';
+      ctx.beginPath();
+      ctx.roundRect(-9.5, -6.5, 19, 13, 2.5);
+      ctx.fill();
+
+      // Molded upper flange bevel
+      ctx.fillStyle = '#cbd5e1';
+      ctx.beginPath();
+      ctx.roundRect(-9, -6, 18, 12, 2.2);
+      ctx.fill();
+
+      // Recessed inner tray basin / cavity wall
+      ctx.fillStyle = '#64748b';
+      ctx.beginPath();
+      ctx.roundRect(-7.8, -4.8, 15.6, 9.6, 1.8);
+      ctx.fill();
+
+      // Deep floor of the tray with subtle translucent plastic gradient
+      ctx.fillStyle = '#e2e8f0';
+      ctx.beginPath();
+      ctx.roundRect(-7.2, -4.2, 14.4, 8.4, 1.5);
+      ctx.fill();
+
+      // Stiffening reinforcement ribs molded across tray floor
+      for (const rx of [-4, 0, 4]) {
+        // Rib groove shadow
+        ctx.strokeStyle = '#94a3b8';
+        ctx.lineWidth = 0.8;
+        ctx.beginPath();
+        ctx.moveTo(rx - 0.4, -3.5); ctx.lineTo(rx - 0.4, 3.5);
+        ctx.stroke();
+        // Rib groove highlight
+        ctx.strokeStyle = '#ffffff';
+        ctx.beginPath();
+        ctx.moveTo(rx + 0.4, -3.5); ctx.lineTo(rx + 0.4, 3.5);
+        ctx.stroke();
+      }
+
+      // Molded corner stacking lugs
+      ctx.fillStyle = '#cbd5e1';
+      ctx.fillRect(-6.5, -3.8, 1.2, 1.2);
+      ctx.fillRect(5.3, -3.8, 1.2, 1.2);
+      ctx.fillRect(-6.5, 2.6, 1.2, 1.2);
+      ctx.fillRect(5.3, 2.6, 1.2, 1.2);
+
+      // Clean diagonal specular gloss streak across polypropylene surface
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.45)';
+      ctx.beginPath();
+      ctx.moveTo(-5, -6);
+      ctx.lineTo(-2, -6);
+      ctx.lineTo(4, 5.5);
+      ctx.lineTo(1, 5.5);
+      ctx.closePath();
+      ctx.fill();
+      return true;
+    }
+
+    // Opened / torn food tray with peeled cellophane remnants and residue
+    case 'tray_torn':
+    case 'tray_sealed_food_torn': {
+      drawShadow(ctx, 9.2, 3.5, 7.8, 0.24);
+
+      // Outer thermoformed plastic flange
+      ctx.fillStyle = '#94a3b8';
+      ctx.beginPath();
+      ctx.roundRect(-9.5, -6.5, 19, 13, 2.5);
+      ctx.fill();
+
+      // Molded flange lip
+      ctx.fillStyle = '#cbd5e1';
+      ctx.beginPath();
+      ctx.roundRect(-9, -6, 18, 12, 2.2);
+      ctx.fill();
+
+      // Heat-seal adhesive border with micro-perforations
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.6)';
+      ctx.lineWidth = 0.6;
+      ctx.strokeRect(-8.5, -5.5, 17, 11);
+
+      // Recessed inner tray basin
+      ctx.fillStyle = '#475569';
+      ctx.beginPath();
+      ctx.roundRect(-7.8, -4.8, 15.6, 9.6, 1.8);
+      ctx.fill();
+
+      ctx.fillStyle = '#cbd5e1';
+      ctx.beginPath();
+      ctx.roundRect(-7.2, -4.2, 14.4, 8.4, 1.5);
+      ctx.fill();
+
+      // Molded bottom ribs
+      for (const rx of [-3.5, 0.5, 4.5]) {
+        ctx.strokeStyle = '#94a3b8';
+        ctx.lineWidth = 0.8;
+        ctx.beginPath(); ctx.moveTo(rx - 0.4, -3.2); ctx.lineTo(rx - 0.4, 3.2); ctx.stroke();
+        ctx.strokeStyle = '#f1f5f9';
+        ctx.beginPath(); ctx.moveTo(rx + 0.4, -3.2); ctx.lineTo(rx + 0.4, 3.2); ctx.stroke();
+      }
+
+      // Organic food juice residue / condensation droplets in corners
+      ctx.fillStyle = 'rgba(239, 68, 68, 0.35)'; // faint reddish juice stain
+      ctx.beginPath();
+      ctx.ellipse(-3.5, 1.5, 2.8, 1.6, 0.2, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
+      ctx.beginPath();
+      ctx.arc(-2, 1, 0.8, 0, Math.PI * 2);
+      ctx.arc(3.5, -2, 0.6, 0, Math.PI * 2);
+      ctx.fill();
+
+      // RAGGED TORN CELLOPHANE FILM remnants peeling and folded back
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.65)';
+      ctx.beginPath();
+      ctx.moveTo(-9.5, -6.5);
+      ctx.lineTo(-2, -6.5);
+      ctx.lineTo(-4.5, -3.5);
+      ctx.lineTo(-6.5, -2);
+      ctx.lineTo(-8.5, -4.5);
+      ctx.closePath();
+      ctx.fill();
+
+      // Jagged shreds along the perimeter where seal ripped
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 0.8;
+      ctx.beginPath();
+      ctx.moveTo(-2, -6.5);
+      ctx.lineTo(2, -5.5);
+      ctx.lineTo(5, -6.5);
+      ctx.lineTo(8.5, -4.5);
+      ctx.stroke();
+
+      // Wrinkled peeled film fold highlight
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.85)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(-9.5, -5.5); ctx.lineTo(-4.5, -3.5);
+      ctx.stroke();
+      return true;
+    }
+
+    case 'mesh_bag_vegetable_torn': {
+      drawShadow(ctx, 8.5, 3.2, 7.8, 0.22);
+
+      // Collapsed crinkled diamond mesh bag
+      ctx.fillStyle = 'rgba(220, 38, 38, 0.15)';
+      ctx.beginPath();
+      ctx.moveTo(-7.5, 2);
+      ctx.quadraticCurveTo(-6.5, -5, 0, -5.5);
+      ctx.quadraticCurveTo(6.5, -5, 7.5, 2);
+      ctx.quadraticCurveTo(5.5, 6, 0, 6.5);
+      ctx.quadraticCurveTo(-5.5, 6, -7.5, 2);
+      ctx.closePath();
+      ctx.fill();
+
+      // Woven diamond mesh netting lines
+      ctx.strokeStyle = '#dc2626';
+      ctx.lineWidth = 0.9;
+      for (let d = -6; d <= 6; d += 2.5) {
+        ctx.beginPath();
+        ctx.moveTo(d - 3, -4.5); ctx.lineTo(d + 3, 5.5);
+        ctx.moveTo(d + 3, -4.5); ctx.lineTo(d - 3, 5.5);
+        ctx.stroke();
+      }
+
+      // Large jagged torn hole in the center with frayed strands
+      ctx.fillStyle = 'rgba(15, 23, 42, 0.45)';
+      ctx.beginPath();
+      ctx.moveTo(-3, -1);
+      ctx.lineTo(0, -2.5);
+      ctx.lineTo(3.5, -0.5);
+      ctx.lineTo(2, 2.5);
+      ctx.lineTo(-2, 2);
+      ctx.closePath();
+      ctx.fill();
+
+      // Torn frayed polymer filaments sticking out around hole
+      ctx.strokeStyle = '#ef4444';
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      ctx.moveTo(-3, -1); ctx.lineTo(-4.5, -2);
+      ctx.moveTo(0, -2.5); ctx.lineTo(0.5, -4);
+      ctx.moveTo(3.5, -0.5); ctx.lineTo(5, -1.5);
+      ctx.moveTo(2, 2.5); ctx.lineTo(3.2, 3.8);
+      ctx.moveTo(-2, 2); ctx.lineTo(-3, 3.5);
+      ctx.stroke();
+
+      // Top crimped plastic seal clip & barcode label
+      ctx.fillStyle = '#b91c1c';
+      ctx.fillRect(-2.5, -6.8, 5, 2);
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(-1.5, -6.4, 3, 1.2);
+      return true;
+    }
+
+    case 'vacuum_pack_torn': {
+      drawShadow(ctx, 8.5, 3.2, 7.8, 0.22);
+
+      // Multi-layer metallized vacuum pouch
+      // Silver metallic foil backing sheet
+      ctx.fillStyle = '#94a3b8';
+      ctx.beginPath();
+      ctx.roundRect(-8, -6, 16, 12, 1.8);
+      ctx.fill();
+
+      ctx.fillStyle = '#cbd5e1';
+      ctx.beginPath();
+      ctx.roundRect(-7.5, -5.5, 15, 11, 1.5);
+      ctx.fill();
+
+      // Metallic foil specular reflection stripe
+      drawGlossBand(ctx, -5, -5.5, 3, 11, 0.35);
+
+      // Micro-embossed heat-seal waffle margins along bottom and sides
+      ctx.fillStyle = '#64748b';
+      for (let y = -4.5; y <= 4.5; y += 1.6) {
+        ctx.fillRect(-7.2, y, 1.2, 0.8);
+        ctx.fillRect(6.0, y, 1.2, 0.8);
+      }
+      for (let x = -5.5; x <= 5.5; x += 1.6) {
+        ctx.fillRect(x, 4.2, 0.8, 1.2);
+      }
+
+      // Top torn opening: V-notch on left edge
+      ctx.fillStyle = '#0f172a';
+      ctx.beginPath();
+      ctx.moveTo(-8, -4.5); ctx.lineTo(-6.5, -3.8); ctx.lineTo(-8, -3.1);
+      ctx.closePath();
+      ctx.fill();
+
+      // Open cavity shadow inside pouch
+      ctx.fillStyle = '#334155';
+      ctx.beginPath();
+      ctx.roundRect(-5.5, -3.5, 11, 7, 1);
+      ctx.fill();
+
+      // Front transparent plastic film torn horizontally and folded down
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.55)';
+      ctx.beginPath();
+      ctx.moveTo(-7.5, -1);
+      ctx.lineTo(-4, -2.5);
+      ctx.lineTo(0, -1);
+      ctx.lineTo(4, -2.8);
+      ctx.lineTo(7.5, -1);
+      ctx.lineTo(6.5, 4.5);
+      ctx.lineTo(-6.5, 4.5);
+      ctx.closePath();
+      ctx.fill();
+
+      // Crinkled plastic reflection creases
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 0.9;
+      ctx.beginPath();
+      ctx.moveTo(-6, 0); ctx.lineTo(-2, 2.5);
+      ctx.moveTo(1, 1); ctx.lineTo(5, 3);
+      ctx.stroke();
+      return true;
+    }
+
+    case 'box_cardboard_small': {
+      drawShadow(ctx, 9, 3.5, 7.8, 0.25);
+
+      // Realistic Kraft Corrugated Cardboard Box
+      // Deep shaded interior cavity
+      ctx.fillStyle = '#451a03';
+      ctx.beginPath();
+      ctx.roundRect(-6, -4, 12, 8, 1);
+      ctx.fill();
+
+      // Inner shadow of the box
+      ctx.fillStyle = '#290f02';
+      ctx.fillRect(-5.5, -3.5, 11, 2.5);
+
+      // Four open folded flaps (3D perspective)
+      // Left flap
+      ctx.fillStyle = '#b45309';
+      ctx.beginPath();
+      ctx.moveTo(-6, -4); ctx.lineTo(-8.8, -2.8); ctx.lineTo(-8.8, 2.8); ctx.lineTo(-6, 4);
+      ctx.closePath();
+      ctx.fill();
+      ctx.strokeStyle = '#78350f';
+      ctx.lineWidth = 0.6;
+      ctx.stroke();
+
+      // Right flap
+      ctx.fillStyle = '#d97706';
+      ctx.beginPath();
+      ctx.moveTo(6, -4); ctx.lineTo(8.8, -2.8); ctx.lineTo(8.8, 2.8); ctx.lineTo(6, 4);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+
+      // Top flap (angled upwards)
+      ctx.fillStyle = '#f59e0b';
+      ctx.beginPath();
+      ctx.moveTo(-6, -4); ctx.lineTo(-4.5, -7.5); ctx.lineTo(4.5, -7.5); ctx.lineTo(6, -4);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+
+      // Bottom flap (angled downwards)
+      ctx.fillStyle = '#b45309';
+      ctx.beginPath();
+      ctx.moveTo(-6, 4); ctx.lineTo(-4.8, 7.2); ctx.lineTo(4.8, 7.2); ctx.lineTo(6, 4);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+
+      // Corrugated fluting visible on flap edges
+      ctx.strokeStyle = '#451a03';
+      ctx.lineWidth = 0.5;
+      for (let x = -3.8; x <= 3.8; x += 1.2) {
+        ctx.beginPath();
+        ctx.moveTo(x, -7.5); ctx.lineTo(x + 0.6, -7.0);
+        ctx.stroke();
+      }
+
+      // Transparent packaging tape remnant stuck to top flap
+      ctx.fillStyle = 'rgba(254, 240, 138, 0.45)';
+      ctx.fillRect(-2.5, -6.8, 5, 2.2);
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.6)';
+      ctx.lineWidth = 0.5;
+      ctx.strokeRect(-2.5, -6.8, 5, 2.2);
+
+      // Printed shipping barcode mark on right flap
+      ctx.fillStyle = '#1c1917';
+      ctx.fillRect(6.8, -1.8, 1.2, 3.6);
+      ctx.fillRect(7.4, -1.8, 0.6, 3.6);
+      return true;
+    }
+
+    case 'pouch_sealed_snack_torn': {
+      drawShadow(ctx, 8.5, 3.2, 7.8, 0.22);
+
+      // Metallized stand-up doypack pouch with torn top
+      ctx.fillStyle = '#b45309'; // Kraft paper outer layer
+      ctx.beginPath();
+      ctx.moveTo(-6.5, -3.5);
+      ctx.lineTo(6.5, -3.5);
+      ctx.lineTo(5.5, 6.5);
+      ctx.lineTo(-5.5, 6.5);
+      ctx.closePath();
+      ctx.fill();
+
+      // Inner silver metallized lining showing at torn top edge
+      ctx.fillStyle = '#cbd5e1';
+      ctx.beginPath();
+      ctx.moveTo(-6.5, -3.5);
+      ctx.lineTo(-4, -5.2);
+      ctx.lineTo(0, -3.8);
+      ctx.lineTo(4, -5.5);
+      ctx.lineTo(6.5, -3.5);
+      ctx.lineTo(5, -2.5);
+      ctx.lineTo(-5, -2.5);
+      ctx.closePath();
+      ctx.fill();
+
+      // Red seal tear line
+      ctx.strokeStyle = '#ef4444';
+      ctx.lineWidth = 0.8;
+      ctx.beginPath();
+      ctx.moveTo(-6, -2.5); ctx.lineTo(6, -2.5);
+      ctx.stroke();
+
+      // Clear transparent window on front showing empty interior
+      ctx.fillStyle = 'rgba(15, 23, 42, 0.6)';
+      ctx.beginPath();
+      ctx.ellipse(0, 1.5, 3.8, 2.6, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = '#d97706';
+      ctx.lineWidth = 0.8;
+      ctx.stroke();
+
+      // Crinkled window reflection
+      drawGlossBand(ctx, -2, 0, 2, 2, 0.35);
+      return true;
+    }
+
     case 'sushi_tray_empty': {
       drawShadow(ctx, 9.2, 3.2, 7.8, 0.25);
 
