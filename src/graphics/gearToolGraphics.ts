@@ -3860,9 +3860,25 @@ export function drawGearToolItem(ctx: CanvasRenderingContext2D, itemId: string, 
       if (item?.contents && item.contents.length > 0) {
         ctx.save();
         ctx.translate(0, 0.4);
-        const innerItem = item.contents[0];
-        const innerSize = isLg ? 20 : (isMd ? 17 : 14);
-        drawItemModel2D(ctx, innerItem.itemId, 0, 0, innerSize, innerItem);
+        if (item.contents.length === 1) {
+          const innerItem = item.contents[0];
+          const innerSize = isLg ? 20 : (isMd ? 17 : 14);
+          drawItemModel2D(ctx, innerItem.itemId, 0, 0, innerSize, innerItem);
+        } else {
+          // Multiple items (e.g. 2 peeled beets, 2 carrots, 3 potatoes)
+          const count = Math.min(item.contents.length, 3);
+          const innerSize = isLg ? 13 : (isMd ? 11 : 9.5);
+          const spacing = isLg ? 5.2 : 3.8;
+          for (let i = 0; i < count; i++) {
+            const innerItem = item.contents[i];
+            const oy = (i - (count - 1) / 2) * spacing;
+            const ox = (i % 2 === 0 ? -1.2 : 1.2) * (count > 2 ? 0.8 : 0.4);
+            ctx.save();
+            ctx.translate(ox, oy);
+            drawItemModel2D(ctx, innerItem.itemId, 0, 0, innerSize, innerItem);
+            ctx.restore();
+          }
+        }
         ctx.restore();
       } else {
         // Representative vacuum-sealed food portion under film
@@ -3996,8 +4012,29 @@ export function drawGearToolItem(ctx: CanvasRenderingContext2D, itemId: string, 
       // 1. Inner Contents Rendering (under barrier film)
       if (item?.contents && item.contents.length > 0) {
         ctx.save();
-        const inner = item.contents[0];
-        drawItemModel2D(ctx, inner.itemId, 0, 0, 16, inner);
+        if (item.contents.length === 1) {
+          const inner = item.contents[0];
+          drawItemModel2D(ctx, inner.itemId, 0, 0, 16, inner);
+        } else {
+          // Multiple items in tray (e.g. 6 button mushrooms, 3 oyster clusters, 5 shiitake)
+          const count = Math.min(item.contents.length, 6);
+          const cols = count >= 4 ? 3 : count;
+          const rows = Math.ceil(count / cols);
+          const innerSize = count >= 4 ? 8.5 : 11;
+          const colSpacing = 4.8;
+          const rowSpacing = 4.2;
+          for (let i = 0; i < count; i++) {
+            const inner = item.contents[i];
+            const c = i % cols;
+            const r = Math.floor(i / cols);
+            const ox = (c - (cols - 1) / 2) * colSpacing;
+            const oy = (r - (rows - 1) / 2) * rowSpacing;
+            ctx.save();
+            ctx.translate(ox, oy);
+            drawItemModel2D(ctx, inner.itemId, 0, 0, innerSize, inner);
+            ctx.restore();
+          }
+        }
         ctx.restore();
       } else {
         // Representative fresh produce/meat portion inside tray

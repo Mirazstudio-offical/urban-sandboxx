@@ -1708,19 +1708,18 @@ export function drawProduceAndMushroomItem(ctx: CanvasRenderingContext2D, itemId
     }
 
     case 'beet_peeled_boiled': {
-      drawShadow(ctx, 7, 2.8, 7.8, 0.25);
-      // Glossy deep ruby boiled sphere in vacuum wrap
+      drawShadow(ctx, 6.5, 2.8, 7.5, 0.25);
+      // Tender glossy deep ruby boiled beetroot
       ctx.fillStyle = '#4c0519';
       ctx.beginPath();
       ctx.arc(0, 0, 5.5, 0, Math.PI * 2);
       ctx.fill();
-      drawGlossBand(ctx, -2, -2, 3, 2, 0.4);
-      // Vacuum plastic seal edge
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
-      ctx.lineWidth = 0.7;
+      // Cooked beetroot inner shine
+      ctx.fillStyle = '#831843';
       ctx.beginPath();
-      ctx.roundRect(-6.8, -6.8, 13.6, 13.6, 2);
-      ctx.stroke();
+      ctx.ellipse(-1.2, -1.0, 3.0, 2.2, -0.2, 0, Math.PI * 2);
+      ctx.fill();
+      drawGlossBand(ctx, -1.8, -1.8, 2.5, 1.8, 0.45);
       return true;
     }
 

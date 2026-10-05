@@ -5308,22 +5308,38 @@ export function createItem(itemId: string, count: number = 1, initialPortions?: 
   return createdItem;
 }
 
-export const ITEM_PACKAGING_MAP: Record<string, { containerId: string; countInside?: number }> = {
+export const ITEM_PACKAGING_MAP: Record<string, { containerId: string; countInside?: number; innerItemId?: string }> = {
   // 1. Peeled & Cut Vegetables in Vacuum / Sealed Trays
-  potato_peeled: { containerId: 'vacuum_pack_small' },
-  carrot_peeled: { containerId: 'vacuum_pack_small' },
-  beet_peeled: { containerId: 'vacuum_pack_small' },
-  onion_peeled: { containerId: 'vacuum_pack_small' },
-  garlic_peeled: { containerId: 'vacuum_pack_small' },
-  cabbage_cut: { containerId: 'vacuum_pack_medium' },
-  pumpkin_cut: { containerId: 'vacuum_pack_medium' },
-  zucchini_cut: { containerId: 'vacuum_pack_small' },
-  cucumber_sliced: { containerId: 'tray_sealed_food' },
-  tomato_sliced: { containerId: 'tray_sealed_food' },
-  bell_pepper_sliced: { containerId: 'tray_sealed_food' },
-  champignon_sliced: { containerId: 'tray_sealed_food' },
+  potato_peeled: { containerId: 'vacuum_pack_small', countInside: 3 },
+  carrot_peeled: { containerId: 'vacuum_pack_small', countInside: 2 },
+  beet_peeled: { containerId: 'vacuum_pack_small', countInside: 2 },
+  beet_peeled_boiled: { containerId: 'vacuum_pack_small', countInside: 2, innerItemId: 'beet_peeled_boiled' },
+  onion_peeled: { containerId: 'vacuum_pack_small', countInside: 2 },
+  garlic_peeled: { containerId: 'vacuum_pack_small', countInside: 3 },
+  cabbage_cut: { containerId: 'vacuum_pack_medium', countInside: 1 },
+  pumpkin_cut: { containerId: 'vacuum_pack_medium', countInside: 1 },
+  zucchini_cut: { containerId: 'vacuum_pack_small', countInside: 2 },
+  cucumber_sliced: { containerId: 'tray_sealed_food', countInside: 6 },
+  tomato_sliced: { containerId: 'tray_sealed_food', countInside: 5 },
+  bell_pepper_sliced: { containerId: 'tray_sealed_food', countInside: 6 },
+  cabbage_shredded: { containerId: 'tray_sealed_food', countInside: 1 },
 
-  // 2. Fresh Fruit Slices and Cups in Trays
+  // 2. All Cultivated & Forest Mushrooms in Food Trays (Лоток с несколькими грибами)
+  champignon_white_whole: { containerId: 'tray_sealed_food', countInside: 6 },
+  champignon_brown_whole: { containerId: 'tray_sealed_food', countInside: 6 },
+  champignon_tray: { containerId: 'tray_sealed_food', countInside: 6, innerItemId: 'champignon_white_whole' },
+  champignon_sliced: { containerId: 'tray_sealed_food', countInside: 6 },
+  oyster_mushroom_cluster: { containerId: 'tray_sealed_food', countInside: 3 },
+  shiitake_fresh: { containerId: 'tray_sealed_food', countInside: 5 },
+  cep_mushroom_whole: { containerId: 'tray_sealed_food', countInside: 3 },
+  boletus_mushroom_whole: { containerId: 'tray_sealed_food', countInside: 4 },
+  aspen_boletus_whole: { containerId: 'tray_sealed_food', countInside: 3 },
+  butter_boletus_whole: { containerId: 'tray_sealed_food', countInside: 5 },
+  morel_spring_mushroom: { containerId: 'tray_sealed_food', countInside: 4 },
+  enoki_mushroom_bunch: { containerId: 'tray_sealed_food', countInside: 2 },
+  portobello_mushroom: { containerId: 'tray_sealed_food', countInside: 2 },
+
+  // 3. Fresh Fruit Slices and Cups in Trays
   apple_slices: { containerId: 'tray_sealed_food' },
   pear_slices: { containerId: 'tray_sealed_food' },
   orange_slices: { containerId: 'tray_sealed_food' },
@@ -5332,13 +5348,16 @@ export const ITEM_PACKAGING_MAP: Record<string, { containerId: string; countInsi
   melon_slices: { containerId: 'tray_sealed_food' },
   grape_cup: { containerId: 'tray_sealed_food' },
 
-  // 3. Fresh Raw Meats & Poultry in Trays / Vacuum
+  // 4. Fresh Raw Meats & Poultry in Trays / Vacuum
   beef_steak: { containerId: 'tray_sealed_food' },
   beef_rump_large: { containerId: 'vacuum_pack_medium' },
   pork_chops: { containerId: 'tray_sealed_food' },
   pork_belly: { containerId: 'vacuum_pack_medium' },
+  pork_ribs_medium: { containerId: 'vacuum_pack_medium' },
   chicken_breast: { containerId: 'tray_sealed_food' },
+  chicken_breast_large: { containerId: 'tray_sealed_food' },
   chicken_thighs: { containerId: 'tray_sealed_food' },
+  chicken_thighs_medium: { containerId: 'tray_sealed_food' },
   chicken_wings: { containerId: 'tray_sealed_food' },
   chicken_whole_raw: { containerId: 'vacuum_pack_large' },
   turkey_fillet: { containerId: 'vacuum_pack_medium' },
@@ -5346,7 +5365,7 @@ export const ITEM_PACKAGING_MAP: Record<string, { containerId: string; countInsi
   minced_meat_pork: { containerId: 'tray_sealed_food' },
   minced_meat_chicken: { containerId: 'tray_sealed_food' },
 
-  // 4. Fish & Seafood in Vacuum / Trays
+  // 5. Fish & Seafood in Vacuum / Trays
   salmon_steak: { containerId: 'tray_sealed_food' },
   salmon_fillet: { containerId: 'vacuum_pack_medium' },
   cod_fillet: { containerId: 'vacuum_pack_medium' },
@@ -5355,7 +5374,7 @@ export const ITEM_PACKAGING_MAP: Record<string, { containerId: string; countInsi
   squid_tubes: { containerId: 'vacuum_pack_medium' },
   mussels_meat: { containerId: 'vacuum_pack_small' },
 
-  // 5. Dried Fruits & Snack Pouches
+  // 6. Dried Fruits & Snack Pouches
   dried_apricots: { containerId: 'pouch_sealed_snack' },
   prunes_dried: { containerId: 'pouch_sealed_snack' },
   raisins_dried: { containerId: 'pouch_sealed_snack' },
@@ -5371,8 +5390,19 @@ export function createPackagedItem(itemId: string, count: number = 1): Inventory
   const packInfo = ITEM_PACKAGING_MAP[itemId];
   if (packInfo) {
     const container = createItem(packInfo.containerId, 1);
-    const innerItem = createItem(itemId, count);
-    container.contents = [innerItem];
+    const innerId = packInfo.innerItemId || itemId;
+    const numInside = packInfo.countInside !== undefined ? packInfo.countInside : count;
+    container.contents = [];
+    for (let i = 0; i < numInside; i++) {
+      container.contents.push(createItem(innerId, 1));
+    }
+    const singleInner = ITEM_CATALOG[innerId];
+    if (singleInner) {
+      container.nameRu = `${container.nameRu} (${singleInner.nameRu}${numInside > 1 ? ` x${numInside}` : ''})`;
+      container.descriptionRu = `${container.descriptionRu} Внутри: ${singleInner.nameRu} (${numInside} шт.). Нажмите [E] в руках или используйте в инвентаре, чтобы вскрыть герметичную упаковку.`;
+      container.weight = Number(((container.weight || 0.04) + (singleInner.weight || 0.05) * numInside).toFixed(2));
+      container.volume = Number(((container.volume || 0.08) + (singleInner.volume || 0.05) * numInside).toFixed(2));
+    }
     return container;
   }
   return createItem(itemId, count);
