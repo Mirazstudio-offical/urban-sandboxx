@@ -4,6 +4,7 @@ import { ensureWorldGasStation } from './gasStationSystem';
 import { ensureWorldGuardrails } from './guardrails';
 import { createRealEstateAgencyLayout } from './buildingInteriors';
 import { initializeCityApartmentsFromWorld } from './propertySystem';
+import { setWorldRoadsForElevation } from './terrainElevation';
 import defaultMapData from '../public/map.json';
 
 export interface LoadedMapResult {
@@ -158,6 +159,7 @@ export function normalizeWorld(parsed: any): GameWorld {
   ensureTrailers(world);
   ensureWorldGuardrails(world);
   initializeCityApartmentsFromWorld(world);
+  setWorldRoadsForElevation(world.roads);
   return world;
 }
 

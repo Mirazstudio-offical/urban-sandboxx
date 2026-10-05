@@ -187,6 +187,206 @@ export class GameRenderer {
   private chunkCache = new Map<string, HTMLCanvasElement>();
   private chunkSize: number = 1000;
 
+  // Cached High-Fidelity Procedural Surface Patterns for Roads & Shoulders
+  private static asphaltPattern: CanvasPattern | null = null;
+  private static countryAsphaltPattern: CanvasPattern | null = null;
+  private static gravelPattern: CanvasPattern | null = null;
+  private static dirtPattern: CanvasPattern | null = null;
+  private static shoulderPattern: CanvasPattern | null = null;
+
+  public static getAsphaltPattern(ctx: CanvasRenderingContext2D): CanvasPattern | string {
+    if (this.asphaltPattern) return this.asphaltPattern;
+    if (typeof document === 'undefined') return '#32343a';
+    const c = document.createElement('canvas');
+    c.width = 128;
+    c.height = 128;
+    const pctx = c.getContext('2d');
+    if (!pctx) return '#32343a';
+
+    // Base asphalt
+    pctx.fillStyle = '#32343a';
+    pctx.fillRect(0, 0, 128, 128);
+
+    // Fine mineral aggregate specks & bitumen grain
+    for (let i = 0; i < 400; i++) {
+      const x = (i * 73 + 19) % 128;
+      const y = (i * 109 + 37) % 128;
+      const rand = (i * 193) % 100;
+      if (rand < 28) {
+        pctx.fillStyle = 'rgba(255, 255, 255, 0.11)'; // Light quartz / granite grain
+        pctx.fillRect(x, y, 1.4, 1.4);
+      } else if (rand < 58) {
+        pctx.fillStyle = 'rgba(18, 20, 24, 0.55)'; // Dark bitumen binder speck
+        pctx.fillRect(x, y, 2.0, 2.0);
+      } else if (rand < 82) {
+        pctx.fillStyle = 'rgba(88, 92, 102, 0.38)'; // Weathered mineral stone
+        pctx.fillRect(x, y, 1.6, 1.6);
+      } else {
+        pctx.fillStyle = 'rgba(12, 14, 18, 0.7)'; // Deep tar pore
+        pctx.fillRect(x, y, 1.0, 1.0);
+      }
+    }
+
+    // Subtle bitumen roller streaks
+    pctx.strokeStyle = 'rgba(22, 24, 29, 0.22)';
+    pctx.lineWidth = 2.5;
+    for (let j = 0; j < 6; j++) {
+      const sy = (j * 22 + 7) % 128;
+      pctx.beginPath();
+      pctx.moveTo(0, sy);
+      pctx.bezierCurveTo(40, sy + 3, 85, sy - 3, 128, sy);
+      pctx.stroke();
+    }
+
+    this.asphaltPattern = ctx.createPattern(c, 'repeat') || null;
+    return this.asphaltPattern || '#32343a';
+  }
+
+  public static getCountryAsphaltPattern(ctx: CanvasRenderingContext2D): CanvasPattern | string {
+    if (this.countryAsphaltPattern) return this.countryAsphaltPattern;
+    if (typeof document === 'undefined') return '#383a40';
+    const c = document.createElement('canvas');
+    c.width = 128;
+    c.height = 128;
+    const pctx = c.getContext('2d');
+    if (!pctx) return '#383a40';
+
+    // Weathered, slightly sun-bleached country asphalt
+    pctx.fillStyle = '#383a40';
+    pctx.fillRect(0, 0, 128, 128);
+
+    // Coarser aggregate exposure on rural highways
+    for (let i = 0; i < 480; i++) {
+      const x = (i * 67 + 23) % 128;
+      const y = (i * 113 + 41) % 128;
+      const rand = (i * 211) % 100;
+      if (rand < 32) {
+        pctx.fillStyle = 'rgba(230, 225, 215, 0.14)'; // Dusty mineral chip
+        pctx.fillRect(x, y, 1.6, 1.6);
+      } else if (rand < 62) {
+        pctx.fillStyle = 'rgba(20, 22, 26, 0.6)'; // Tar binder
+        pctx.fillRect(x, y, 2.2, 2.2);
+      } else if (rand < 85) {
+        pctx.fillStyle = 'rgba(95, 98, 108, 0.42)'; // Exposed crushed basalt
+        pctx.fillRect(x, y, 1.8, 1.8);
+      } else {
+        pctx.fillStyle = 'rgba(15, 17, 20, 0.75)';
+        pctx.fillRect(x, y, 1.2, 1.2);
+      }
+    }
+
+    this.countryAsphaltPattern = ctx.createPattern(c, 'repeat') || null;
+    return this.countryAsphaltPattern || '#383a40';
+  }
+
+  public static getGravelPattern(ctx: CanvasRenderingContext2D): CanvasPattern | string {
+    if (this.gravelPattern) return this.gravelPattern;
+    if (typeof document === 'undefined') return '#5d5e62';
+    const c = document.createElement('canvas');
+    c.width = 128;
+    c.height = 128;
+    const pctx = c.getContext('2d');
+    if (!pctx) return '#5d5e62';
+
+    // Dusty crushed limestone / granite gravel base
+    pctx.fillStyle = '#5d5e62';
+    pctx.fillRect(0, 0, 128, 128);
+
+    // Loose pebbles & crushed stones
+    for (let i = 0; i < 500; i++) {
+      const x = (i * 59 + 17) % 128;
+      const y = (i * 127 + 29) % 128;
+      const rand = (i * 179) % 100;
+      if (rand < 30) {
+        pctx.fillStyle = '#7a7c82'; // Light limestone chip
+        pctx.fillRect(x, y, 2.5, 2.2);
+      } else if (rand < 60) {
+        pctx.fillStyle = '#444548'; // Dark granite pebble
+        pctx.fillRect(x, y, 2.8, 2.5);
+      } else if (rand < 85) {
+        pctx.fillStyle = '#8e9096'; // Dusty stone grain
+        pctx.fillRect(x, y, 1.8, 1.8);
+      } else {
+        pctx.fillStyle = '#36373a';
+        pctx.fillRect(x, y, 3.2, 2.8);
+      }
+    }
+
+    this.gravelPattern = ctx.createPattern(c, 'repeat') || null;
+    return this.gravelPattern || '#5d5e62';
+  }
+
+  public static getDirtPattern(ctx: CanvasRenderingContext2D): CanvasPattern | string {
+    if (this.dirtPattern) return this.dirtPattern;
+    if (typeof document === 'undefined') return '#553d2c';
+    const c = document.createElement('canvas');
+    c.width = 128;
+    c.height = 128;
+    const pctx = c.getContext('2d');
+    if (!pctx) return '#553d2c';
+
+    // Rich earth loam base
+    pctx.fillStyle = '#553d2c';
+    pctx.fillRect(0, 0, 128, 128);
+
+    // Soil grain, clay crumb & humus flecks
+    for (let i = 0; i < 450; i++) {
+      const x = (i * 71 + 31) % 128;
+      const y = (i * 107 + 13) % 128;
+      const rand = (i * 197) % 100;
+      if (rand < 35) {
+        pctx.fillStyle = '#3e2c20'; // Dark damp humus
+        pctx.fillRect(x, y, 2.8, 2.5);
+      } else if (rand < 70) {
+        pctx.fillStyle = '#6a4d38'; // Dry sandy loam
+        pctx.fillRect(x, y, 2.2, 2.0);
+      } else {
+        pctx.fillStyle = '#2f2016'; // Deep earth pore
+        pctx.fillRect(x, y, 1.8, 1.8);
+      }
+    }
+
+    this.dirtPattern = ctx.createPattern(c, 'repeat') || null;
+    return this.dirtPattern || '#553d2c';
+  }
+
+  public static getShoulderPattern(ctx: CanvasRenderingContext2D): CanvasPattern | string {
+    if (this.shoulderPattern) return this.shoulderPattern;
+    if (typeof document === 'undefined') return '#4a4338';
+    const c = document.createElement('canvas');
+    c.width = 128;
+    c.height = 128;
+    const pctx = c.getContext('2d');
+    if (!pctx) return '#4a4338';
+
+    // Unpaved roadside sandy gravel / crushed stone berm
+    pctx.fillStyle = '#4a4338';
+    pctx.fillRect(0, 0, 128, 128);
+
+    // Dense coarse crushed gravel & dusty sand
+    for (let i = 0; i < 550; i++) {
+      const x = (i * 79 + 23) % 128;
+      const y = (i * 131 + 47) % 128;
+      const rand = (i * 223) % 100;
+      if (rand < 30) {
+        pctx.fillStyle = 'rgba(195, 185, 165, 0.45)'; // Dusty crushed pebble
+        pctx.fillRect(x, y, 2.4, 2.2);
+      } else if (rand < 60) {
+        pctx.fillStyle = 'rgba(38, 34, 28, 0.65)'; // Dark earth speck
+        pctx.fillRect(x, y, 2.6, 2.4);
+      } else if (rand < 85) {
+        pctx.fillStyle = 'rgba(125, 115, 95, 0.4)'; // Sandy loam grain
+        pctx.fillRect(x, y, 1.8, 1.8);
+      } else {
+        pctx.fillStyle = 'rgba(65, 55, 42, 0.8)';
+        pctx.fillRect(x, y, 3.0, 2.6);
+      }
+    }
+
+    this.shoulderPattern = ctx.createPattern(c, 'repeat') || null;
+    return this.shoulderPattern || '#4a4338';
+  }
+
   constructor(ctx: CanvasRenderingContext2D) {
     this.ctx = ctx;
     this.lightmapCanvas = document.createElement('canvas');
@@ -717,17 +917,109 @@ export class GameRenderer {
   ) {
     const { roads, intersections } = world;
 
-    // Asphalt, Dirt or Gravel Surfaces
+    // 1. First Pass: Country Road Shoulders (Обочины загородных дорог и трасс)
+    const shoulderPattern = GameRenderer.getShoulderPattern(ctx);
+    const shoulderW = 14;
+
+    for (const road of roads) {
+      if (road.isRoundabout) continue;
+      const isCountry = road.y1 > 3500 || road.y2 > 3500 || road.x1 > 5400 || road.x2 > 5400 || road.x1 < 1200 || road.x2 < 1200 || (road.curvePoints && road.curvePoints.some(p => p.y > 3500 || p.x > 5400 || p.x < 1200));
+      if (!isCountry) continue;
+
+      ctx.fillStyle = shoulderPattern;
+
+      if (road.direction === 'horizontal') {
+        const top = road.y1 - road.width / 2;
+        if (road.x2 < minX || road.x1 > maxX || top + road.width + shoulderW < minY || top - shoulderW > maxY) continue;
+        ctx.fillRect(road.x1, top - shoulderW, road.x2 - road.x1, road.width + shoulderW * 2);
+
+        // Coarse gravel aggregate specks along the outer shoulder edges
+        ctx.fillStyle = 'rgba(195, 185, 165, 0.55)';
+        for (let sx = road.x1 + 10; sx < road.x2; sx += 42) {
+          const seed = ((Math.floor(sx * 98765) ^ Math.floor(top * 54321)) >>> 0) % 5;
+          if (seed < 3) {
+            ctx.fillRect(sx, top - shoulderW + 2, 4, 3);
+            ctx.fillRect(sx + 18, top + road.width + shoulderW - 5, 5, 3);
+          }
+        }
+        ctx.fillStyle = shoulderPattern;
+      } else if (road.direction === 'vertical') {
+        const left = road.x1 - road.width / 2;
+        if (left + road.width + shoulderW < minX || left - shoulderW > maxX || road.y2 < minY || road.y1 > maxY) continue;
+        ctx.fillRect(left - shoulderW, road.y1, road.width + shoulderW * 2, road.y2 - road.y1);
+
+        ctx.fillStyle = 'rgba(195, 185, 165, 0.55)';
+        for (let sy = road.y1 + 10; sy < road.y2; sy += 42) {
+          const seed = ((Math.floor(sy * 98765) ^ Math.floor(left * 54321)) >>> 0) % 5;
+          if (seed < 3) {
+            ctx.fillRect(left - shoulderW + 2, sy, 3, 4);
+            ctx.fillRect(left + road.width + shoulderW - 5, sy + 18, 4, 3);
+          }
+        }
+        ctx.fillStyle = shoulderPattern;
+      } else if (road.curvePoints && road.curvePoints.length > 1) {
+        const pts = road.curvePoints;
+        const n = pts.length;
+        const totalHalfW = road.width / 2 + shoulderW;
+        const leftEdge: { x: number; y: number }[] = [];
+        const rightEdge: { x: number; y: number }[] = [];
+
+        for (let i = 0; i < n; i++) {
+          let dx = 0, dy = 0;
+          if (i === 0) { dx = pts[1].x - pts[0].x; dy = pts[1].y - pts[0].y; }
+          else if (i === n - 1) { dx = pts[n - 1].x - pts[n - 2].x; dy = pts[n - 1].y - pts[n - 2].y; }
+          else { dx = pts[i + 1].x - pts[i - 1].x; dy = pts[i + 1].y - pts[i - 1].y; }
+          const len = Math.hypot(dx, dy) || 1;
+          const nx = -dy / len;
+          const ny = dx / len;
+          leftEdge.push({ x: pts[i].x - nx * totalHalfW, y: pts[i].y - ny * totalHalfW });
+          rightEdge.push({ x: pts[i].x + nx * totalHalfW, y: pts[i].y + ny * totalHalfW });
+        }
+
+        ctx.beginPath();
+        ctx.moveTo(leftEdge[0].x, leftEdge[0].y);
+        for (let i = 1; i < n; i++) ctx.lineTo(leftEdge[i].x, leftEdge[i].y);
+        for (let i = n - 1; i >= 0; i--) ctx.lineTo(rightEdge[i].x, rightEdge[i].y);
+        ctx.closePath();
+        ctx.fill();
+
+        ctx.beginPath();
+        safeArc(ctx, pts[0].x, pts[0].y, totalHalfW, 0, Math.PI * 2);
+        safeArc(ctx, pts[n - 1].x, pts[n - 1].y, totalHalfW, 0, Math.PI * 2);
+        ctx.fill();
+      } else {
+        const dx = road.x2 - road.x1;
+        const dy = road.y2 - road.y1;
+        const len = Math.hypot(dx, dy);
+        if (len >= 0.5) {
+          const angle = Math.atan2(dy, dx);
+          ctx.save();
+          ctx.translate(road.x1, road.y1);
+          ctx.rotate(angle);
+          ctx.fillRect(0, -(road.width / 2 + shoulderW), len, road.width + shoulderW * 2);
+          ctx.beginPath();
+          safeArc(ctx, 0, 0, road.width / 2 + shoulderW, 0, Math.PI * 2);
+          safeArc(ctx, len, 0, road.width / 2 + shoulderW, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.restore();
+        }
+      }
+    }
+
+    // 2. Second Pass: Main Road Surfaces with Rich Procedural Grain & Texture
     for (const road of roads) {
       if (road.isRoundabout) continue; // Roundabouts rendered with dedicated circular geometry
       const isHoriz = road.direction === 'horizontal';
+      const isCountry = road.y1 > 3500 || road.y2 > 3500 || road.x1 > 5400 || road.x2 > 5400 || road.x1 < 1200 || road.x2 < 1200 || (road.curvePoints && road.curvePoints.some(p => p.y > 3500 || p.x > 5400 || p.x < 1200));
       
       if (road.isDirt) {
-        ctx.fillStyle = '#553d2c'; // Beautiful natural earth brown for dirt roads
+        ctx.fillStyle = GameRenderer.getDirtPattern(ctx);
       } else if (road.isGravel) {
-        ctx.fillStyle = '#5d5e62'; // Soft dusty limestone grey for gravel roads
+        ctx.fillStyle = GameRenderer.getGravelPattern(ctx);
+      } else if (isCountry) {
+        ctx.fillStyle = GameRenderer.getCountryAsphaltPattern(ctx);
       } else {
-        ctx.fillStyle = '#32343a'; // Realistic premium weathered charcoal tarmac for urban roads
+        ctx.fillStyle = GameRenderer.getAsphaltPattern(ctx);
       }
 
       if (isHoriz) {
@@ -756,6 +1048,29 @@ export class GameRenderer {
             ctx.arc(rx + 18, top + road.width - 1, 3.5, 0, Math.PI * 2);
             ctx.fill();
           }
+        } else if (!road.isGravel) {
+          // Asphalt longitudinal tire wear tracks (колейность / накат колес в полосах движения)
+          const lanes = road.lanes || 2;
+          const laneH = road.width / lanes;
+          ctx.fillStyle = 'rgba(16, 18, 22, 0.28)'; // Darker polished tyre tracks
+          for (let l = 0; l < lanes; l++) {
+            const laneCenterY = top + (l + 0.5) * laneH;
+            const rutOffset = laneH * 0.22;
+            ctx.fillRect(road.x1, laneCenterY - rutOffset - 3, road.x2 - road.x1, 6);
+            ctx.fillRect(road.x1, laneCenterY + rutOffset - 3, road.x2 - road.x1, 6);
+          }
+
+          // Lighter oxidized aggregate strip between wheel ruts
+          ctx.fillStyle = 'rgba(80, 84, 94, 0.15)';
+          for (let l = 0; l < lanes; l++) {
+            const laneCenterY = top + (l + 0.5) * laneH;
+            ctx.fillRect(road.x1, laneCenterY - 2, road.x2 - road.x1, 4);
+          }
+
+          // Chipped edge micro-texture
+          ctx.fillStyle = 'rgba(20, 22, 26, 0.35)';
+          ctx.fillRect(road.x1, top, road.x2 - road.x1, 1.5);
+          ctx.fillRect(road.x1, top + road.width - 1.5, road.x2 - road.x1, 1.5);
         }
       } else if (road.direction === 'vertical') {
         const left = road.x1 - road.width / 2;
@@ -783,6 +1098,29 @@ export class GameRenderer {
             ctx.arc(left + road.width - 1, ry + 18, 3.5, 0, Math.PI * 2);
             ctx.fill();
           }
+        } else if (!road.isGravel) {
+          // Asphalt longitudinal tire wear tracks (vertical)
+          const lanes = road.lanes || 2;
+          const laneW = road.width / lanes;
+          ctx.fillStyle = 'rgba(16, 18, 22, 0.28)'; // Darker polished tyre tracks
+          for (let l = 0; l < lanes; l++) {
+            const laneCenterX = left + (l + 0.5) * laneW;
+            const rutOffset = laneW * 0.22;
+            ctx.fillRect(laneCenterX - rutOffset - 3, road.y1, 6, road.y2 - road.y1);
+            ctx.fillRect(laneCenterX + rutOffset - 3, road.y1, 6, road.y2 - road.y1);
+          }
+
+          // Lighter oxidized aggregate strip
+          ctx.fillStyle = 'rgba(80, 84, 94, 0.15)';
+          for (let l = 0; l < lanes; l++) {
+            const laneCenterX = left + (l + 0.5) * laneW;
+            ctx.fillRect(laneCenterX - 2, road.y1, 4, road.y2 - road.y1);
+          }
+
+          // Chipped edge micro-texture
+          ctx.fillStyle = 'rgba(20, 22, 26, 0.35)';
+          ctx.fillRect(left, road.y1, 1.5, road.y2 - road.y1);
+          ctx.fillRect(left + road.width - 1.5, road.y1, 1.5, road.y2 - road.y1);
         }
       } else if (road.curvePoints && road.curvePoints.length > 1) {
         // True Bezier Curved Road Segment (Ribbon mesh with smooth normals)
@@ -871,6 +1209,33 @@ export class GameRenderer {
             ctx.moveTo(pts[0].x, pts[0].y);
             for (let i = 1; i < n; i++) ctx.lineTo(pts[i].x, pts[i].y);
             ctx.stroke();
+          } else if (!road.isGravel) {
+            // Tire wear curves on asphalt bends
+            ctx.strokeStyle = 'rgba(16, 18, 22, 0.25)';
+            ctx.lineWidth = 5;
+            ctx.beginPath();
+            for (let i = 0; i < n; i++) {
+              const p = pts[i];
+              const normX = leftEdge[i].x - p.x;
+              const normY = leftEdge[i].y - p.y;
+              const rx = p.x + normX * 0.45;
+              const ry = p.y + normY * 0.45;
+              if (i === 0) ctx.moveTo(rx, ry);
+              else ctx.lineTo(rx, ry);
+            }
+            ctx.stroke();
+
+            ctx.beginPath();
+            for (let i = 0; i < n; i++) {
+              const p = pts[i];
+              const normX = rightEdge[i].x - p.x;
+              const normY = rightEdge[i].y - p.y;
+              const rx = p.x + normX * 0.45;
+              const ry = p.y + normY * 0.45;
+              if (i === 0) ctx.moveTo(rx, ry);
+              else ctx.lineTo(rx, ry);
+            }
+            ctx.stroke();
           }
         }
       } else {
@@ -906,6 +1271,10 @@ export class GameRenderer {
           ctx.fillRect(0, -4, len, 8);
           ctx.fillStyle = '#5c7437';
           ctx.fillRect(0, -2, len, 4);
+        } else if (!road.isGravel) {
+          ctx.fillStyle = 'rgba(16, 18, 22, 0.26)';
+          ctx.fillRect(0, -road.width * 0.22 - 3, len, 6);
+          ctx.fillRect(0, road.width * 0.22 - 3, len, 6);
         }
         ctx.restore();
       }
@@ -967,11 +1336,11 @@ export class GameRenderer {
       }
 
       if (isDirt) {
-        ctx.fillStyle = '#553d2c'; // Natural clay brown dirt intersection
+        ctx.fillStyle = GameRenderer.getDirtPattern(ctx);
       } else if (isGravel) {
-        ctx.fillStyle = '#5d5e62'; // Dusty gravel intersection
+        ctx.fillStyle = GameRenderer.getGravelPattern(ctx);
       } else {
-        ctx.fillStyle = '#32343a'; // Standard premium weathered charcoal asphalt
+        ctx.fillStyle = GameRenderer.getAsphaltPattern(ctx);
       }
 
       // 1. Dedicated Turnaround (Cul-de-sac loop) rendering

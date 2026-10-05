@@ -259,42 +259,150 @@ export const AGRICULTURAL_FIELDS: AgriculturalField[] = [
   }
 ];
 
+// World roads cache for dynamic roadbed embankment heightmap calculation
+interface RegisteredRoadSegment {
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
+  width: number;
+  isDirt?: boolean;
+  isGravel?: boolean;
+  curvePoints?: { x: number; y: number }[];
+  _minX?: number;
+  _maxX?: number;
+  _minY?: number;
+  _maxY?: number;
+}
+
+let registeredRoads: RegisteredRoadSegment[] = [];
+
+/**
+ * Registers world roads to calculate realistic 3D roadbed embankments (земляное полотно / профиль насыпи)
+ * elevated above the terrain on the heightmap.
+ */
+export function setWorldRoadsForElevation(roads: any[]): void {
+  if (Array.isArray(roads)) {
+    registeredRoads = roads;
+  }
+}
+
+function getRoadbedEmbankmentOffset(x: number, y: number): number {
+  if (registeredRoads.length === 0) {
+    // Fallback: Analytical grid detection for standard city avenues and highways
+    // East-West Steppe Highway (y = 4000, x: 8000..50000)
+    if (x >= 7500 && x <= 50500 && Math.abs(y - 4000) <= 60) {
+      const dist = Math.abs(y - 4000);
+      const halfW = 42;
+      if (dist <= halfW) {
+        const crown = (1 - (dist / halfW) ** 2) * 0.25;
+        return 0.95 + crown;
+      }
+      const t = 1 - (dist - halfW) / 18;
+      return Math.max(0, 0.95 * t);
+    }
+    return 0;
+  }
+
+  let maxEmbankment = 0;
+
+  for (let r = 0; r < registeredRoads.length; r++) {
+    const road = registeredRoads[r];
+    const halfW = (road.width || 60) / 2;
+    const searchMargin = halfW + 26;
+
+    // Quick AABB check
+    const minX = (road._minX ?? Math.min(road.x1, road.x2)) - searchMargin;
+    const maxX = (road._maxX ?? Math.max(road.x1, road.x2)) + searchMargin;
+    const minY = (road._minY ?? Math.min(road.y1, road.y2)) - searchMargin;
+    const maxY = (road._maxY ?? Math.max(road.y1, road.y2)) + searchMargin;
+
+    if (x < minX || x > maxX || y < minY || y > maxY) continue;
+
+    if (road.curvePoints && road.curvePoints.length > 1) {
+      // Sample distance to piecewise polyline
+      const pts = road.curvePoints;
+      for (let i = 0; i < pts.length - 1; i++) {
+        const p1 = pts[i];
+        const p2 = pts[i + 1];
+        const segDx = p2.x - p1.x;
+        const segDy = p2.y - p1.y;
+        const segLenSq = segDx * segDx + segDy * segDy;
+        if (segLenSq < 1) continue;
+        const u = Math.max(0, Math.min(1, ((x - p1.x) * segDx + (y - p1.y) * segDy) / segLenSq));
+        const projX = p1.x + u * segDx;
+        const projY = p1.y + u * segDy;
+        const dist = Math.hypot(x - projX, y - projY);
+
+        if (dist <= halfW) {
+          const crown = (1 - (dist / halfW) ** 2) * 0.25;
+          const emb = 0.85 + crown;
+          if (emb > maxEmbankment) maxEmbankment = emb;
+        } else if (dist <= searchMargin) {
+          const t = 1 - (dist - halfW) / (searchMargin - halfW);
+          const emb = 0.85 * (t * t);
+          if (emb > maxEmbankment) maxEmbankment = emb;
+        }
+      }
+    } else if (typeof road.x1 === 'number' && typeof road.x2 === 'number') {
+      const segDx = road.x2 - road.x1;
+      const segDy = road.y2 - road.y1;
+      const segLenSq = segDx * segDx + segDy * segDy;
+      if (segLenSq < 1) continue;
+      const u = Math.max(0, Math.min(1, ((x - road.x1) * segDx + (y - road.y1) * segDy) / segLenSq));
+      const projX = road.x1 + u * segDx;
+      const projY = road.y1 + u * segDy;
+      const dist = Math.hypot(x - projX, y - projY);
+
+      if (dist <= halfW) {
+        const crown = (1 - (dist / halfW) ** 2) * 0.25;
+        const emb = 0.85 + crown;
+        if (emb > maxEmbankment) maxEmbankment = emb;
+      } else if (dist <= searchMargin) {
+        const t = 1 - (dist - halfW) / (searchMargin - halfW);
+        const emb = 0.85 * (t * t);
+        if (emb > maxEmbankment) maxEmbankment = emb;
+      }
+    }
+  }
+
+  return maxEmbankment;
+}
+
 // Continuous mathematical elevation function Z(x, y)
 export function getTerrainElevation(x: number, y: number): number {
   // 1. Broad regional baseline elevation
-  let baseZ = 0;
+  let baseZ = 4.0; // Strictly positive baseline elevation datum above sea level
 
-  // In urban zone (x: 0..8000, y: 0..3800), ground is leveled and graded (~0-2m)
+  // In urban zone (x: 0..8000, y: 0..3800), ground is leveled and graded (~3.5-5.5m above datum)
   const inUrbanZone = x >= 0 && x <= 8000 && y >= 0 && y <= 3800;
   if (inUrbanZone) {
-    return Math.sin(x * 0.001) * Math.cos(y * 0.001) * 1.5;
-  }
-
-  // Countryside / Village / Meadows Zone (x: 0..8000, y: 3800..8200)
-  if (x <= 8000 && y >= 3800) {
+    baseZ = 4.0 + Math.sin(x * 0.0008) * Math.cos(y * 0.0008) * 1.5;
+  } else if (x <= 8000 && y >= 3800) {
+    // Countryside / Village / Meadows Zone (x: 0..8000, y: 3800..8200)
     // Gentle rolling harmonic waves creating natural undulating topography
     const w1 = Math.sin(x * 0.0018 + 0.4) * Math.cos(y * 0.0015 - 0.2) * 12.0;
     const w2 = Math.sin(x * 0.0035 + y * 0.0028) * 6.5;
     const w3 = Math.cos(x * 0.0009 - y * 0.0012) * 8.0;
-    baseZ = 10 + w1 + w2 + w3;
+    baseZ = 12.0 + w1 + w2 + w3;
   } 
   // Vast Eastern Steppe & Highlands (x >= 8000)
   else if (x > 8000) {
     if (y < 2600) {
       // Northern Taiga & Rocky Alpine Ridge (rises up to 45-80m)
       const taigaGrad = (2600 - y) / 2600;
-      baseZ = 20 + taigaGrad * 45 + Math.sin(x * 0.0012) * 14.0;
+      baseZ = 22.0 + taigaGrad * 45 + Math.sin(x * 0.0012) * 14.0;
     } else if (y >= 7000 && y <= 12000 && x >= 13000 && x <= 42000) {
       // Salt Lake Basin (low depression, gently sloping down to water level)
       const distFromCenter = Math.hypot((x - 27500) / 14500, (y - 8500) / 2500);
-      baseZ = Math.max(1, 22 * (distFromCenter - 0.35));
+      baseZ = Math.max(1.8, 22 * (distFromCenter - 0.35));
     } else if (y >= 14000) {
       // Canyon & Dunes plateau with stepped terraces
       const canyonGrad = Math.min(1.0, (y - 14000) / 10000);
-      baseZ = 15 + canyonGrad * 40 + Math.sin(x * 0.0008 + y * 0.0006) * 16.0;
+      baseZ = 16.0 + canyonGrad * 40 + Math.sin(x * 0.0008 + y * 0.0006) * 16.0;
     } else {
       // Broad undulating steppe plains
-      baseZ = 14 + Math.sin(x * 0.0007) * 15.0 + Math.cos(y * 0.001) * 10.0;
+      baseZ = 15.0 + Math.sin(x * 0.0007) * 15.0 + Math.cos(y * 0.001) * 10.0;
     }
   }
 
@@ -332,7 +440,11 @@ export function getTerrainElevation(x: number, y: number): number {
     }
   }
 
-  return Math.max(0, baseZ);
+  // 3. Add engineered roadbed embankment profile (дорожное полотно / насыпь / поперечный профиль)
+  const roadbedOffset = getRoadbedEmbankmentOffset(x, y);
+  baseZ += roadbedOffset;
+
+  return Math.max(1.0, baseZ);
 }
 
 // Computes slope gradient and hillshading illumination
