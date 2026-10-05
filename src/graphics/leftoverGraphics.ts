@@ -657,60 +657,6 @@ export function drawLeftoverItem(ctx: CanvasRenderingContext2D, itemId: string):
       return true;
     }
 
-    case 'mesh_bag_vegetable_torn': {
-      drawShadow(ctx, 8.5, 3.2, 7.8, 0.22);
-
-      // Collapsed crinkled diamond mesh bag
-      ctx.fillStyle = 'rgba(220, 38, 38, 0.15)';
-      ctx.beginPath();
-      ctx.moveTo(-7.5, 2);
-      ctx.quadraticCurveTo(-6.5, -5, 0, -5.5);
-      ctx.quadraticCurveTo(6.5, -5, 7.5, 2);
-      ctx.quadraticCurveTo(5.5, 6, 0, 6.5);
-      ctx.quadraticCurveTo(-5.5, 6, -7.5, 2);
-      ctx.closePath();
-      ctx.fill();
-
-      // Woven diamond mesh netting lines
-      ctx.strokeStyle = '#dc2626';
-      ctx.lineWidth = 0.9;
-      for (let d = -6; d <= 6; d += 2.5) {
-        ctx.beginPath();
-        ctx.moveTo(d - 3, -4.5); ctx.lineTo(d + 3, 5.5);
-        ctx.moveTo(d + 3, -4.5); ctx.lineTo(d - 3, 5.5);
-        ctx.stroke();
-      }
-
-      // Large jagged torn hole in the center with frayed strands
-      ctx.fillStyle = 'rgba(15, 23, 42, 0.45)';
-      ctx.beginPath();
-      ctx.moveTo(-3, -1);
-      ctx.lineTo(0, -2.5);
-      ctx.lineTo(3.5, -0.5);
-      ctx.lineTo(2, 2.5);
-      ctx.lineTo(-2, 2);
-      ctx.closePath();
-      ctx.fill();
-
-      // Torn frayed polymer filaments sticking out around hole
-      ctx.strokeStyle = '#ef4444';
-      ctx.lineWidth = 1.2;
-      ctx.beginPath();
-      ctx.moveTo(-3, -1); ctx.lineTo(-4.5, -2);
-      ctx.moveTo(0, -2.5); ctx.lineTo(0.5, -4);
-      ctx.moveTo(3.5, -0.5); ctx.lineTo(5, -1.5);
-      ctx.moveTo(2, 2.5); ctx.lineTo(3.2, 3.8);
-      ctx.moveTo(-2, 2); ctx.lineTo(-3, 3.5);
-      ctx.stroke();
-
-      // Top crimped plastic seal clip & barcode label
-      ctx.fillStyle = '#b91c1c';
-      ctx.fillRect(-2.5, -6.8, 5, 2);
-      ctx.fillStyle = '#ffffff';
-      ctx.fillRect(-1.5, -6.4, 3, 1.2);
-      return true;
-    }
-
     case 'vacuum_pack_torn': {
       drawShadow(ctx, 8.5, 3.2, 7.8, 0.22);
 

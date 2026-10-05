@@ -456,21 +456,14 @@ export const SHOP_CATALOGS: Record<string, ShopItem[]> = {
     { id: 'sup_salmon_steak', itemId: 'salmon_steak', nameRu: 'Стейк лосося охлажденный (250г)', price: 290, description: 'Порционный стейк атлантического лосося на ледяной подложке.', category: 'food', effectText: 'Красная рыба' },
     { id: 'sup_cod_fillet', itemId: 'cod_fillet', nameRu: 'Филе трески без кожи (500г)', price: 210, description: 'Свежее белое филе северной трески в вакууме.', category: 'food', effectText: 'Дикая рыба' },
 
-    // 4. СВЕЖИЕ ГРИБЫ В ПИЩЕВЫХ ЛОТКАХ
-    { id: 'sup_champignon_white', itemId: 'champignon_white_whole', nameRu: 'Шампиньоны свежие белые (лоток)', price: 75, description: 'Пластиковый лоток под герметичной пленкой со свежими белыми шампиньонами (6 шт.).', category: 'food', effectText: 'Свежие грибы (6 шт.)' },
-    { id: 'sup_champignon_brown', itemId: 'champignon_brown_whole', nameRu: 'Королевские шампиньоны (лоток)', price: 90, description: 'Пластиковый лоток с ароматными бурыми королевскими шампиньонами (6 шт.).', category: 'food', effectText: 'Свежие грибы (6 шт.)' },
-    { id: 'sup_oyster_mushrooms', itemId: 'oyster_mushroom_cluster', nameRu: 'Вешенки свежие (лоток)', price: 70, description: 'Пищевой лоток со свежими культивированными вешенками (3 грозди).', category: 'food', effectText: 'Свежие грибы (3 шт.)' },
-    { id: 'sup_shiitake', itemId: 'shiitake_fresh', nameRu: 'Грибы Шиитаке свежие (лоток)', price: 85, description: 'Пластиковый лоток со свежими пряными грибами шиитаке (5 шт.).', category: 'food', effectText: 'Свежие грибы (5 шт.)' },
+    // 4. СВЕЖИЕ ГРИБЫ (В УНИФИЦИРОВАННЫХ ЛОТКАХ)
+    { id: 'sup_champignon', itemId: 'champignon_white_whole', nameRu: 'Шампиньоны (лоток 6 шт.)', price: 75, description: 'Свежие белые шампиньоны в пищевом лотке под герметичной пленкой (6 шт.).', category: 'food', effectText: 'Свежие грибы (6 шт.)' },
 
-    // 5. ОВОЩИ И КОРНЕПЛОДЫ (ПОШТУЧНО И В ВАКУУМЕ)
-    { id: 'sup_potato_pack', itemId: 'potato_whole', nameRu: 'Картофель мытый (1 шт.)', price: 20, description: 'Свежий отборный клубень мытого картофеля поштучно.', category: 'food', effectText: 'Овощи' },
-    { id: 'sup_potato_peeled', itemId: 'potato_peeled', nameRu: 'Картофель очищенный (вакуум)', price: 35, description: 'Очищенный картофель в вакуумном пакете (3 шт.). Готов к варке.', category: 'food', effectText: 'Готов к варке' },
+    // 5. ОВОЩИ И КОРНЕПЛОДЫ
+    { id: 'sup_potato', itemId: 'potato_whole', nameRu: 'Картофель', price: 20, description: 'Свежий картофельный клубень.', category: 'food', effectText: 'Овощи' },
+    { id: 'sup_beet', itemId: 'beet_fresh', nameRu: 'Свекла', price: 20, description: 'Свежая красная свекла.', category: 'food', effectText: 'Овощи' },
     { id: 'sup_carrot_fresh', itemId: 'carrot_fresh', nameRu: 'Морковь свежая (1 шт.)', price: 18, description: 'Сочная мытая сладкая морковь поштучно.', category: 'food', effectText: '+12% Сытость, каротин' },
-    { id: 'sup_carrot_peeled', itemId: 'carrot_peeled', nameRu: 'Морковь очищенная (вакуум)', price: 30, description: 'Очищенная сладкая морковь в вакуумном пакете (2 шт.).', category: 'food', effectText: 'Кулинария' },
-    { id: 'sup_beet_fresh', itemId: 'beet_fresh', nameRu: 'Свекла свежая (1 шт.)', price: 20, description: 'Плотный отборный корнеплод свеклы поштучно.', category: 'food', effectText: 'Овощи' },
-    { id: 'sup_beet_peeled_boiled', itemId: 'beet_peeled_boiled', nameRu: 'Свекла отварная в вакууме (пакет)', price: 45, description: 'Отварная очищенная свекла в вакуумном пакете (2 шт.). Готова к употреблению.', category: 'food', effectText: '+24% Сытость' },
     { id: 'sup_onion', itemId: 'onion_bulb', nameRu: 'Лук репчатый (1 шт.)', price: 15, description: 'Головка репчатого золотистого лука поштучно.', category: 'food', effectText: 'Кулинария' },
-    { id: 'sup_onion_peeled', itemId: 'onion_peeled', nameRu: 'Лук репчатый очищенный (вакуум)', price: 22, description: 'Очищенные луковицы в вакуумном пакете (2 шт.).', category: 'food', effectText: 'Кулинария' },
     { id: 'sup_garlic', itemId: 'garlic_bulb', nameRu: 'Чеснок свежий (1 головка)', price: 20, description: 'Плотная цельная головка свежего чеснока.', category: 'food', effectText: 'Фитонциды / специя' },
     { id: 'sup_tomato_fresh', itemId: 'tomato_whole', nameRu: 'Помидор грунтовой (1 шт.)', price: 30, description: 'Сочный красный спелый томат поштучно.', category: 'food', effectText: '+15% Сытость, сок' },
     { id: 'sup_cherry_bunch', itemId: 'tomato_cherry_bunch', nameRu: 'Ветка томатов черри (250г)', price: 85, description: 'Сладкие томаты черри на ветке в картонном боксе.', category: 'food', effectText: '+20% Сытость, сладость' },
@@ -513,7 +506,7 @@ export const SHOP_CATALOGS: Record<string, ShopItem[]> = {
     { id: 'sup_grapes_green', itemId: 'grapes_green_bunch', nameRu: 'Виноград зеленый кишмиш', price: 80, description: 'Гроздь сладкого бескосточкового винограда.', category: 'food', effectText: '+20% Сытость, сок' },
     { id: 'sup_grapes_cup', itemId: 'grapes_berries_cup', nameRu: 'Виноград россыпью в стаканчике', price: 55, description: 'Отборные ягоды винограда в стаканчике.', category: 'food', effectText: '+15% Сытость, +15% Гидратация' },
     { id: 'sup_raisins', itemId: 'raisins_dried_bag', nameRu: 'Изюм сушеный сладкий', price: 50, description: 'Пакетик отборного изюма без косточек.', category: 'food', effectText: '+25% Сытость' },
-    { id: 'sup_berries_tray', itemId: 'berries_tray_fresh', nameRu: 'Свежие ягоды (лоток 250г)', price: 140, description: 'Отборная клубника и черника в лотке.', category: 'food', effectText: '+20% Сытость, витамины' },
+    { id: 'sup_berries_tray', itemId: 'berries_tray_fresh', nameRu: 'Свежие ягоды (лоток)', price: 140, description: 'Отборная спелая клубника в пищевом лотке под герметичной пленкой (8 шт.).', category: 'food', effectText: '+20% Сытость, витамины' },
     { id: 'sup_berries_frozen', itemId: 'berries_mixed_frozen', nameRu: 'Замороженные лесные ягоды', price: 110, description: 'Пакет замороженных ягод (черника, малина).', category: 'food', effectText: 'Заморозка' },
     { id: 'sup_cranberry_dried', itemId: 'cranberry_dried_bag', nameRu: 'Вяленая клюква (пакетик)', price: 70, description: 'Сладкая вяленая клюква.', category: 'food', effectText: '+20% Сытость' },
     { id: 'sup_greens_chopped', itemId: 'greens_chopped_mix', nameRu: 'Свежая рубленая зелень (укроп/петрушка)', price: 30, description: 'Нарубленная свежая зелень в боксе.', category: 'food', effectText: 'Свежая зелень' },

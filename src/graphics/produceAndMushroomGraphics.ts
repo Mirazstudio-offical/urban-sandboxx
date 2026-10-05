@@ -874,6 +874,78 @@ export function drawProduceAndMushroomItem(ctx: CanvasRenderingContext2D, itemId
       return true;
     }
 
+    // Single Fresh Berries (Strawberry, Raspberry, Blueberry, Cherry)
+    case 'strawberry_fresh': {
+      drawShadow(ctx, 5.0, 2.0, 7.8, 0.2);
+      ctx.fillStyle = '#e11d48';
+      ctx.beginPath();
+      ctx.moveTo(-3, -2);
+      ctx.quadraticCurveTo(0, -3.5, 3, -2);
+      ctx.quadraticCurveTo(3.5, 2, 0, 4.5);
+      ctx.quadraticCurveTo(-3.5, 2, -3, -2);
+      ctx.closePath();
+      ctx.fill();
+      // Green sepals
+      ctx.fillStyle = '#15803d';
+      ctx.beginPath();
+      ctx.moveTo(0, -4);
+      ctx.lineTo(-2, -2);
+      ctx.lineTo(0, -1.5);
+      ctx.lineTo(2, -2);
+      ctx.closePath();
+      ctx.fill();
+      // Seed dots
+      ctx.fillStyle = '#fef08a';
+      for (const [sx, sy] of [[-1.5, 0], [1.5, 0], [0, 1.8], [-0.8, -1], [0.8, -1]]) {
+        ctx.fillRect(sx, sy, 0.5, 0.5);
+      }
+      return true;
+    }
+
+    case 'raspberry_fresh': {
+      drawShadow(ctx, 4.5, 1.8, 7.8, 0.18);
+      ctx.fillStyle = '#be123c';
+      for (const [rx, ry] of [[-1.5, -2], [0, -2.5], [1.5, -2], [-1.8, 0], [0, 0], [1.8, 0], [-1, 2], [1, 2], [0, 3.5]]) {
+        ctx.beginPath();
+        ctx.arc(rx, ry, 1.2, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      return true;
+    }
+
+    case 'blueberry_fresh': {
+      drawShadow(ctx, 4.0, 1.6, 7.8, 0.18);
+      ctx.fillStyle = '#1e3a8a';
+      ctx.beginPath();
+      ctx.arc(0, 0, 3.2, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#3b82f6';
+      ctx.beginPath();
+      ctx.arc(-0.8, -0.8, 1.4, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#0f172a';
+      ctx.beginPath();
+      ctx.arc(0, 0, 0.8, 0, Math.PI * 2);
+      ctx.fill();
+      return true;
+    }
+
+    case 'cherry_fresh': {
+      drawShadow(ctx, 4.8, 2.0, 7.8, 0.2);
+      ctx.fillStyle = '#881337';
+      ctx.beginPath();
+      ctx.arc(0, 0.5, 3.4, 0, Math.PI * 2);
+      ctx.fill();
+      // Curved green stalk
+      ctx.strokeStyle = '#65a30d';
+      ctx.lineWidth = 0.8;
+      ctx.beginPath();
+      ctx.moveTo(0, -2.5);
+      ctx.quadraticCurveTo(2, -5, 3, -7);
+      ctx.stroke();
+      return true;
+    }
+
     // Woven berry baskets (Blueberry, Lingonberry, Cranberry, Raspberry, Strawberry, Blackcurrant, Redcurrant, Cherry)
     case 'blueberry_basket':
     case 'lingonberry_basket':
@@ -1306,7 +1378,6 @@ export function drawProduceAndMushroomItem(ctx: CanvasRenderingContext2D, itemId
       return true;
     }
 
-    case 'champignon_tray':
     case 'tray_sealed_food': {
       drawShadow(ctx, 9.2, 3.5, 7.8, 0.24);
 
@@ -1410,134 +1481,6 @@ export function drawProduceAndMushroomItem(ctx: CanvasRenderingContext2D, itemId
       // Green certified freshness stamp dot
       ctx.fillStyle = '#16a34a';
       ctx.fillRect(7.4, -2.4, 0.8, 0.8);
-      return true;
-    }
-
-    case 'potato_bag_5k':
-    case 'potato_mesh_bag_3k':
-    case 'mesh_bag_vegetable': {
-      drawShadow(ctx, 9, 3.5, 8.2, 0.28);
-
-      // VISIBLE PLUMP EARTHY POTATO TUBERS INSIDE!
-      const potatos = [
-        { px: -3.8, py: -1.8, rx: 3.8, ry: 2.8, angle: -0.2, c: '#ca8a04', ch: '#eab308' },
-        { px: 3.2, py: -2.0, rx: 3.6, ry: 2.6, angle: 0.3, c: '#b45309', ch: '#d97706' },
-        { px: -1.8, py: 2.5, rx: 4.2, ry: 3.0, angle: 0.1, c: '#d97706', ch: '#eab308' },
-        { px: 3.5, py: 2.4, rx: 3.5, ry: 2.5, angle: -0.3, c: '#ca8a04', ch: '#facc15' },
-        { px: 0.2, py: -0.2, rx: 3.4, ry: 2.6, angle: 0.0, c: '#a16207', ch: '#ca8a04' }
-      ];
-
-      potatos.forEach(({ px, py, rx, ry, angle, c, ch }) => {
-        // Shadow behind each tuber
-        ctx.fillStyle = '#78350f';
-        ctx.beginPath();
-        ctx.ellipse(px + 0.4, py + 0.4, rx, ry, angle, 0, Math.PI * 2);
-        ctx.fill();
-
-        // Tuber body
-        ctx.fillStyle = c;
-        ctx.beginPath();
-        ctx.ellipse(px, py, rx, ry, angle, 0, Math.PI * 2);
-        ctx.fill();
-
-        // Tuber rounded light face
-        ctx.fillStyle = ch;
-        ctx.beginPath();
-        ctx.ellipse(px - 0.5, py - 0.4, rx * 0.75, ry * 0.7, angle, 0, Math.PI * 2);
-        ctx.fill();
-
-        // Potato "eyes" / dimples
-        ctx.fillStyle = '#713f12';
-        ctx.fillRect(px - 1.2, py - 0.6, 0.8, 0.8);
-        ctx.fillRect(px + 1.0, py + 0.8, 0.8, 0.8);
-      });
-
-      // TIGHT STRETCHED RED DIAMOND POLYMER MESH NETTING
-      ctx.strokeStyle = '#dc2626';
-      ctx.lineWidth = 0.8;
-      for (let x = -8; x <= 8; x += 2.4) {
-        ctx.beginPath();
-        ctx.moveTo(x - 3, -6); ctx.lineTo(x + 3, 6.5);
-        ctx.moveTo(x + 3, -6); ctx.lineTo(x - 3, 6.5);
-        ctx.stroke();
-      }
-
-      // Netting volume silhouette contour
-      ctx.strokeStyle = 'rgba(220, 38, 38, 0.7)';
-      ctx.lineWidth = 1.2;
-      ctx.beginPath();
-      ctx.roundRect(-8, -6, 16, 12.5, 3.5);
-      ctx.stroke();
-
-      // Top gathered neck with crimped plastic closure clip & barcode tag
-      ctx.fillStyle = '#b91c1c';
-      ctx.beginPath();
-      ctx.roundRect(-2.8, -8, 5.6, 2.5, 0.8);
-      ctx.fill();
-
-      // White thermal label tag hanging from clip
-      ctx.fillStyle = '#ffffff';
-      ctx.fillRect(-1.8, -7.5, 3.6, 1.5);
-      ctx.fillStyle = '#1e293b';
-      ctx.fillRect(-1.2, -7.3, 0.6, 1.1);
-      ctx.fillRect(-0.2, -7.3, 0.5, 1.1);
-      ctx.fillRect(0.6, -7.3, 0.6, 1.1);
-      return true;
-    }
-
-    case 'orange_mesh_bag_1k': {
-      drawShadow(ctx, 8.8, 3.4, 8.0, 0.26);
-
-      // VISIBLE PLUMP ROUND CITRUS ORANGES INSIDE!
-      const oranges = [
-        { ox: -3.6, oy: -1.8, r: 3.4, c: '#ea580c', ch: '#fb923c' },
-        { ox: 3.2, oy: -2.0, r: 3.2, c: '#f97316', ch: '#fdba74' },
-        { ox: -1.8, oy: 2.2, r: 3.5, c: '#ea580c', ch: '#fb923c' },
-        { ox: 3.4, oy: 2.2, r: 3.3, c: '#c2410c', ch: '#f97316' },
-        { ox: 0.0, oy: -0.2, r: 3.0, c: '#f97316', ch: '#fed7aa' }
-      ];
-
-      oranges.forEach(({ ox, oy, r, c, ch }) => {
-        // Shadow behind orange
-        ctx.fillStyle = '#7c2d12';
-        ctx.beginPath();
-        ctx.arc(ox + 0.4, oy + 0.4, r, 0, Math.PI * 2);
-        ctx.fill();
-
-        // Spherical orange body
-        ctx.fillStyle = c;
-        ctx.beginPath();
-        ctx.arc(ox, oy, r, 0, Math.PI * 2);
-        ctx.fill();
-
-        // Spherical citrus highlight
-        ctx.fillStyle = ch;
-        ctx.beginPath();
-        ctx.arc(ox - 0.6, oy - 0.6, r * 0.7, 0, Math.PI * 2);
-        ctx.fill();
-
-        // Tiny green stem calyx on top orange
-        if (oy < 0) {
-          ctx.fillStyle = '#15803d';
-          ctx.fillRect(ox - 0.4, oy - r + 0.4, 0.8, 0.8);
-        }
-      });
-
-      // TIGHT STRETCHED RED MESH NETTING
-      ctx.strokeStyle = '#b91c1c';
-      ctx.lineWidth = 0.8;
-      for (let x = -8; x <= 8; x += 2.4) {
-        ctx.beginPath();
-        ctx.moveTo(x - 3, -6); ctx.lineTo(x + 3, 6.5);
-        ctx.moveTo(x + 3, -6); ctx.lineTo(x - 3, 6.5);
-        ctx.stroke();
-      }
-
-      // Top crimped fastener clip & price tag
-      ctx.fillStyle = '#dc2626';
-      ctx.fillRect(-2.5, -7.8, 5, 2.2);
-      ctx.fillStyle = '#ffffff';
-      ctx.fillRect(-1.5, -7.4, 3, 1.4);
       return true;
     }
 
@@ -1777,29 +1720,6 @@ export function drawProduceAndMushroomItem(ctx: CanvasRenderingContext2D, itemId
         ctx.strokeStyle = '#ca8a04';
         ctx.lineWidth = 0.5;
         ctx.stroke();
-      }
-      return true;
-    }
-
-    case 'onion_mesh_bag_2k': {
-      drawShadow(ctx, 7.8, 3.0, 8.2, 0.28);
-      // Red mesh sack
-      ctx.fillStyle = '#b91c1c';
-      ctx.beginPath();
-      ctx.roundRect(-6, -5, 12, 11, 3);
-      ctx.fill();
-      // Onions showing through
-      ctx.fillStyle = '#d97706';
-      for (const pt of [[-2.5, -2], [2.5, -1.5], [-1.5, 2], [2.5, 2.5]]) {
-        ctx.beginPath();
-        ctx.arc(pt[0], pt[1], 2.2, 0, Math.PI * 2);
-        ctx.fill();
-      }
-      // Mesh diamond lines
-      ctx.strokeStyle = '#7f1d1d';
-      ctx.lineWidth = 0.6;
-      for (let i = -5; i <= 5; i += 3) {
-        ctx.beginPath(); ctx.moveTo(i, -5); ctx.lineTo(i + 2, 6); ctx.stroke();
       }
       return true;
     }
@@ -2245,17 +2165,6 @@ export function drawProduceAndMushroomItem(ctx: CanvasRenderingContext2D, itemId
         drawGlossBand(ctx, -1, 1, 3, 1, 0.5);
         ctx.restore();
       }
-      return true;
-    }
-
-    case 'orange_mesh_bag_1k': {
-      drawShadow(ctx, 7.5, 2.8, 7.8, 0.26);
-      // Red mesh containing oranges
-      ctx.fillStyle = '#dc2626';
-      ctx.beginPath(); ctx.roundRect(-5.5, -5, 11, 10, 2.5); ctx.fill();
-      ctx.fillStyle = '#ea580c';
-      ctx.beginPath(); ctx.arc(-2, 0, 2.6, 0, Math.PI * 2); ctx.fill();
-      ctx.beginPath(); ctx.arc(2.2, 0.5, 2.4, 0, Math.PI * 2); ctx.fill();
       return true;
     }
 

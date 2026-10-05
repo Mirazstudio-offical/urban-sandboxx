@@ -312,28 +312,6 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
   },
 
   // === FRESH PRODUCE (СВЕЖИЕ ОВОЩИ И КОРНЕПЛОДЫ) ===
-  potato_mesh_bag_3k: {
-    itemId: 'potato_mesh_bag_3k',
-    name: 'Potato Mesh Bag (3kg)',
-    nameRu: 'Сетка картофеля (3 кг)',
-    category: 'food',
-    maxStack: 1,
-    icon: '',
-    description: 'A 3kg mesh bag of fresh whole potatoes.',
-    descriptionRu: 'Фасованная дышащая сетка с отборным картофелем 3 кг.',
-    effects: {},
-    weight: 3.0,
-    volume: 3.5,
-    usable: true,
-    isContainer: true,
-    singleUseContainer: true,
-    isTransparentPackaging: true,
-    tornItemId: 'mesh_bag_vegetable_torn',
-    containerCapacityL: 3.5,
-    maxContainedItemVolumeL: 3.0,
-    maxContainedWeightKg: 5.0,
-    containerItems: ['potato_whole', 'potato_whole', 'potato_whole', 'potato_whole', 'potato_whole', 'potato_whole']
-  },
   carrot_fresh: {
     itemId: 'carrot_fresh',
     name: 'Fresh Orange Carrot',
@@ -353,7 +331,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
   beet_fresh: {
     itemId: 'beet_fresh',
     name: 'Fresh Red Beetroot',
-    nameRu: 'Свекла свежая',
+    nameRu: 'Свекла',
     category: 'food',
     maxStack: 5,
     icon: '',
@@ -2541,19 +2519,6 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     weight: 0.02,
     usable: false
   },
-  mesh_bag_vegetable_torn: {
-    itemId: 'mesh_bag_vegetable_torn',
-    name: 'Torn Vegetable Mesh Bag',
-    nameRu: 'Порванная овощная сетка',
-    category: 'misc',
-    maxStack: 5,
-    icon: '',
-    description: 'Torn mesh netting bag.',
-    descriptionRu: 'Порванная сетка от овощей и фруктов.',
-    effects: {},
-    weight: 0.01,
-    usable: false
-  },
   vacuum_pack_torn: {
     itemId: 'vacuum_pack_torn',
     name: 'Opened Vacuum Pouch',
@@ -2566,44 +2531,6 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     effects: {},
     weight: 0.01,
     usable: false
-  },
-
-  // === PACKAGED PRODUCE & MUSHROOM TRAYS ===
-  champignon_tray: {
-    itemId: 'champignon_tray',
-    name: 'Fresh Button Champignons Tray (300g)',
-    nameRu: 'Лоток шампиньонов (300г)',
-    category: 'food',
-    maxStack: 4,
-    icon: '',
-    description: 'Thermoformed tray with fresh cultivated button champignons under barrier film.',
-    descriptionRu: 'Пластиковый лоток со свежими отборными белыми шампиньонами под герметичной пленкой.',
-    effects: {},
-    weight: 0.32,
-    volume: 0.5,
-    usable: true,
-    singleUseContainer: true,
-    isTransparentPackaging: true,
-    tornItemId: 'tray_plastic_empty',
-    containerItems: ['champignon_white_whole', 'champignon_white_whole', 'champignon_white_whole', 'champignon_white_whole']
-  },
-  orange_mesh_bag_1k: {
-    itemId: 'orange_mesh_bag_1k',
-    name: 'Oranges Mesh Bag (1kg)',
-    nameRu: 'Сетка апельсинов (1 кг)',
-    category: 'food',
-    maxStack: 4,
-    icon: '',
-    description: 'Breathable mesh netting bag packed with fresh juicy sweet oranges.',
-    descriptionRu: 'Яркая сетка со спелыми сочными апельсинами (1 кг).',
-    effects: {},
-    weight: 1.02,
-    volume: 1.2,
-    usable: true,
-    singleUseContainer: true,
-    isTransparentPackaging: true,
-    tornItemId: 'mesh_bag_vegetable_torn',
-    containerItems: ['orange_citrus', 'orange_citrus', 'orange_citrus', 'orange_citrus']
   },
 
   // === SINGLE-PIECE UNBOXED FOOD ITEMS ===
@@ -3731,27 +3658,6 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     volume: 0.03,
     usable: false,
     isContainer: false
-  },
-  mesh_bag_vegetable: {
-    itemId: 'mesh_bag_vegetable',
-    name: 'Vegetable Mesh Bag (3.5L)',
-    nameRu: 'Сетка для овощей и фруктов',
-    category: 'misc',
-    maxStack: 1,
-    icon: '',
-    description: 'Breathable woven polymer mesh bag with clip for bulk produce like potatoes, onions, and oranges.',
-    descriptionRu: 'Дышащая полимерная сетка с клипсой для фасовки картофеля, лука, цитрусовых.',
-    effects: {},
-    weight: 0.01,
-    volume: 0.1,
-    usable: true,
-    isContainer: true,
-    singleUseContainer: true,
-    isTransparentPackaging: true,
-    tornItemId: 'mesh_bag_vegetable_torn',
-    containerCapacityL: 3.5,
-    maxContainedItemVolumeL: 3.0,
-    maxContainedWeightKg: 5.0
   },
   soup_bowl: {
     itemId: 'soup_bowl',
@@ -5310,11 +5216,7 @@ export function createItem(itemId: string, count: number = 1, initialPortions?: 
 
 export const ITEM_PACKAGING_MAP: Record<string, { containerId: string; countInside?: number; innerItemId?: string }> = {
   // 1. Peeled & Cut Vegetables in Vacuum / Sealed Trays
-  potato_peeled: { containerId: 'vacuum_pack_small', countInside: 3 },
   carrot_peeled: { containerId: 'vacuum_pack_small', countInside: 2 },
-  beet_peeled: { containerId: 'vacuum_pack_small', countInside: 2 },
-  beet_peeled_boiled: { containerId: 'vacuum_pack_small', countInside: 2, innerItemId: 'beet_peeled_boiled' },
-  onion_peeled: { containerId: 'vacuum_pack_small', countInside: 2 },
   garlic_peeled: { containerId: 'vacuum_pack_small', countInside: 3 },
   cabbage_cut: { containerId: 'vacuum_pack_medium', countInside: 1 },
   pumpkin_cut: { containerId: 'vacuum_pack_medium', countInside: 1 },
@@ -5324,10 +5226,9 @@ export const ITEM_PACKAGING_MAP: Record<string, { containerId: string; countInsi
   bell_pepper_sliced: { containerId: 'tray_sealed_food', countInside: 6 },
   cabbage_shredded: { containerId: 'tray_sealed_food', countInside: 1 },
 
-  // 2. All Cultivated & Forest Mushrooms in Food Trays (Лоток с несколькими грибами)
+  // 2. Cultivated & Forest Mushrooms in Unified Food Trays (Лоток с несколькими грибами)
   champignon_white_whole: { containerId: 'tray_sealed_food', countInside: 6 },
   champignon_brown_whole: { containerId: 'tray_sealed_food', countInside: 6 },
-  champignon_tray: { containerId: 'tray_sealed_food', countInside: 6, innerItemId: 'champignon_white_whole' },
   champignon_sliced: { containerId: 'tray_sealed_food', countInside: 6 },
   oyster_mushroom_cluster: { containerId: 'tray_sealed_food', countInside: 3 },
   shiitake_fresh: { containerId: 'tray_sealed_food', countInside: 5 },
@@ -5339,7 +5240,14 @@ export const ITEM_PACKAGING_MAP: Record<string, { containerId: string; countInsi
   enoki_mushroom_bunch: { containerId: 'tray_sealed_food', countInside: 2 },
   portobello_mushroom: { containerId: 'tray_sealed_food', countInside: 2 },
 
-  // 3. Fresh Fruit Slices and Cups in Trays
+  // 3. Fresh Berries in Unified Food Trays (Лоток с несколькими ягодами)
+  berries_tray_fresh: { containerId: 'tray_sealed_food', countInside: 8, innerItemId: 'strawberry_fresh' },
+  strawberry_fresh: { containerId: 'tray_sealed_food', countInside: 8 },
+  raspberry_fresh: { containerId: 'tray_sealed_food', countInside: 12 },
+  blueberry_fresh: { containerId: 'tray_sealed_food', countInside: 15 },
+  cherry_fresh: { containerId: 'tray_sealed_food', countInside: 10 },
+
+  // 4. Fresh Fruit Slices and Cups in Trays
   apple_slices: { containerId: 'tray_sealed_food' },
   pear_slices: { containerId: 'tray_sealed_food' },
   orange_slices: { containerId: 'tray_sealed_food' },
