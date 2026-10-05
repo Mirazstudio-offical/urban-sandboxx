@@ -69,32 +69,40 @@ for (const a of animals) {
     { sfx: 'intestines', name: `${a.name} Intestines`, nameRu: `${a.adjPl} очищенные кишки`, wt: 1.0, vol: 0.95 },
     { sfx: 'bone_marrow', name: `${a.name} Marrow Bone`, nameRu: `Мозговая кость (${a.adjF})`, wt: 0.8 * a.factor, vol: 0.7 * a.factor },
     { sfx: 'bone_soup', name: `${a.name} Soup Bone`, nameRu: `Суповая кость (${a.adjF})`, wt: 1.0 * a.factor, vol: 0.9 * a.factor },
-    { sfx: 'tallow', name: `${a.name} Tallow`, nameRu: `Чистый нутряной жир (${a.adjM})`, wt: 1.0, vol: 1.05 }
+    { sfx: 'tallow', name: `${a.name} Tallow`, nameRu: `Чистый нутряной жир (${a.adjM})`, wt: 1.0, vol: 1.05 },
+    { sfx: 'minced', name: `Ground ${a.name} Minced Meat (1kg)`, nameRu: `Фарш ${a.adjM} (1 кг)`, wt: 1.0, vol: 0.95 }
   ];
 
   for (const c of cuts) {
+    const isMinced = c.sfx === 'minced';
     const itemId = `${a.id}_${c.sfx}`;
     COOKING_INGREDIENTS_CATALOG[itemId] = {
       itemId,
       name: c.name,
       nameRu: c.nameRu,
       category: 'food',
-      maxStack: c.wt > 10 ? 1 : 5,
+      maxStack: isMinced ? 5 : (c.wt > 10 ? 1 : 5),
       icon: '',
-      description: `Raw unprocessed ${a.name} part. Part of anatomical carcass dressing.`,
-      descriptionRu: `Сырая необработанная часть туши (${a.nameRu.toLowerCase()}). Реалистичные физические параметры массы и объема.`,
-      effects: { health: -10, hunger: 15 },
-      weight: parseFloat(c.wt.toFixed(3)),
-      volume: parseFloat(c.vol.toFixed(3)),
+      description: isMinced ? `Fresh ground ${a.name} minced meat pack (1kg). 100 portions of 10g each.` : `Raw unprocessed ${a.name} part. Part of anatomical carcass dressing.`,
+      descriptionRu: isMinced ? `Свежий сырой прокрученный фарш (${a.nameRu.toLowerCase()}) в лотке (1 кг). Упаковка содержит 100 порций по 10 грамм.` : `Сырая необработанная часть туши (${a.nameRu.toLowerCase()}). Реалистичные физические параметры массы и объема.`,
+      effects: isMinced ? { health: -8, hunger: 200 } : { health: -10, hunger: 15 },
+      weight: isMinced ? 1.0 : parseFloat(c.wt.toFixed(3)),
+      volume: isMinced ? 0.95 : parseFloat(c.vol.toFixed(3)),
       usable: true,
-      biteCount: 5,
-      biteDuration: 1.0,
-      tasteMessages: [
+      biteCount: isMinced ? 100 : 5,
+      biteDuration: isMinced ? 0.1 : 1.0,
+      leftoverId: isMinced ? 'tray_sealed_food_torn' : undefined,
+      leftoverNameRu: isMinced ? 'Вскрытый пищевой лоток' : undefined,
+      tasteMessages: isMinced ? [
+        `Сырой фарш (${a.nameRu.toLowerCase()}, порция 10г)...`,
+        `Влажная перекрученная мясная масса (${a.nameRu.toLowerCase()})...`,
+        `Мелко перемолотые волокна сырого мяса (${a.nameRu.toLowerCase()})...`
+      ] : [
         `Сырое мясо (${a.nameRu.toLowerCase()})... Жутко склизко, вяло и небезопасно для желудка!`,
         `Вкус сырой крови и волокон... Вас слегка подташнивает от сыроедения.`,
         `Жевать сырую плоть крайне тяжело... Тягучая мышечная ткань.`
       ],
-      fullnessPerBite: 3
+      fullnessPerBite: isMinced ? 1 : 3
     };
   }
 }
@@ -129,31 +137,38 @@ for (const b of birds) {
     { sfx: 'necks_small', name: `Small Piece of ${b.name} Necks`, nameRu: `Шея (${b.adjF})`, wt: 0.1 * b.factor, vol: 0.09 * b.factor },
     { sfx: 'liver', name: `${b.name} Liver`, nameRu: `Печень (${b.adjF})`, wt: 0.15 * b.factor, vol: 0.14 * b.factor },
     { sfx: 'giblets', name: `${b.name} Giblets`, nameRu: `Потроха (${b.adjPl})`, wt: 0.2 * b.factor, vol: 0.19 * b.factor },
-    { sfx: 'bones', name: `${b.name} Bones`, nameRu: `Кости остова (${b.adjPl})`, wt: 0.3 * b.factor, vol: 0.28 * b.factor }
+    { sfx: 'bones', name: `${b.name} Bones`, nameRu: `Кости остова (${b.adjPl})`, wt: 0.3 * b.factor, vol: 0.28 * b.factor },
+    { sfx: 'minced', name: `Ground ${b.name} Minced Meat (1kg)`, nameRu: `Фарш ${b.adjF} (1 кг)`, wt: 1.0, vol: 0.95 }
   ];
 
   for (const c of cuts) {
+    const isMinced = c.sfx === 'minced';
     const itemId = `${b.id}_${c.sfx}`;
     COOKING_INGREDIENTS_CATALOG[itemId] = {
       itemId,
       name: c.name,
       nameRu: c.nameRu,
       category: 'food',
-      maxStack: 8,
+      maxStack: isMinced ? 5 : 8,
       icon: '',
-      description: `Raw poultry ${b.name} part. Highly realistic weight and density parameters.`,
-      descriptionRu: `Сырая разделанная часть домашней птицы (${b.nameRu.toLowerCase()}). Реалистичные масса и объем.`,
-      effects: { health: -8, hunger: 10 },
-      weight: parseFloat(c.wt.toFixed(3)),
-      volume: parseFloat(c.vol.toFixed(3)),
+      description: isMinced ? `Fresh ground ${b.name} poultry minced meat pack (1kg). 100 portions of 10g each.` : `Raw poultry ${b.name} part. Highly realistic weight and density parameters.`,
+      descriptionRu: isMinced ? `Свежий сырой прокрученный фарш из птицы (${b.nameRu.toLowerCase()}) в лотке (1 кг). 100 порций по 10 грамм.` : `Сырая разделанная часть домашней птицы (${b.nameRu.toLowerCase()}). Реалистичные масса и объем.`,
+      effects: isMinced ? { health: -6, hunger: 200 } : { health: -8, hunger: 10 },
+      weight: isMinced ? 1.0 : parseFloat(c.wt.toFixed(3)),
+      volume: isMinced ? 0.95 : parseFloat(c.vol.toFixed(3)),
       usable: true,
-      biteCount: 4,
-      biteDuration: 0.8,
-      tasteMessages: [
+      biteCount: isMinced ? 100 : 4,
+      biteDuration: isMinced ? 0.1 : 0.8,
+      leftoverId: isMinced ? 'tray_sealed_food_torn' : undefined,
+      leftoverNameRu: isMinced ? 'Вскрытый пищевой лоток' : undefined,
+      tasteMessages: isMinced ? [
+        `Сырой фарш из птицы (${b.nameRu.toLowerCase()}, порция 10г)...`,
+        `Влажная мелко перекрученная масса мяса птицы (${b.nameRu.toLowerCase()})...`
+      ] : [
         `Сырая птица (${b.nameRu.toLowerCase()})... Склизкое сырое мясо и риск подхватить сальмонеллу!`,
         `Холодный, склизкий укус сырого мяса птицы. Очень неприятно.`
       ],
-      fullnessPerBite: 2
+      fullnessPerBite: isMinced ? 1 : 2
     };
   }
 }
@@ -188,42 +203,51 @@ for (const f of fishes) {
     { sfx: 'steak', name: `${f.name} Steak`, nameRu: `Стейк (${f.adjM})`, wt: 0.25 * f.factor, vol: 0.23 * f.factor },
     { sfx: 'head', name: `${f.name} Head`, nameRu: `Голова (${f.adjF})`, wt: 0.25 * f.factor, vol: 0.2 * f.factor },
     { sfx: 'skeleton', name: `${f.name} Skeleton & Fins`, nameRu: `Хребет и плавники (${f.adjM})`, wt: 0.15 * f.factor, vol: 0.12 * f.factor },
-    { sfx: 'caviar_jar', name: `${f.name} Caviar (Jar)`, nameRu: `Икра (${f.adjF}) в баночке`, wt: 0.15, vol: 0.14 }
+    { sfx: 'caviar_jar', name: `${f.name} Caviar (Jar)`, nameRu: `Икра (${f.adjF}) в баночке`, wt: 0.15, vol: 0.14 },
+    { sfx: 'minced', name: `Ground ${f.name} Minced Fish (1kg)`, nameRu: `Фарш ${f.adjM} (1 кг)`, wt: 1.0, vol: 0.95 }
   ];
 
   for (const c of cuts) {
-    const itemId = `${f.id}_${c.sfx}`;
+    const isMinced = c.sfx === 'minced';
     const isCaviar = c.sfx === 'caviar_jar';
+    const itemId = `${f.id}_${c.sfx}`;
     COOKING_INGREDIENTS_CATALOG[itemId] = {
       itemId,
       name: c.name,
       nameRu: c.nameRu,
       category: 'food',
-      maxStack: 10,
+      maxStack: isMinced ? 5 : 10,
       icon: '',
-      description: isCaviar
-        ? `Fresh ${f.nameRu.toLowerCase()} caviar in a small sealed glass jar.`
-        : `Fresh raw ${f.name} anatomical component. Part of realistic fish preparation.`,
-      descriptionRu: isCaviar
-        ? `Свежая зернистая икра (${f.nameRu.toLowerCase()}) в малом стеклянном стекле (250 мл). Деликатес.`
-        : `Свежий сырой анатомический компонент рыбы (${f.nameRu.toLowerCase()}). Реалистичные масса и объем.`,
-      effects: isCaviar ? { health: 5, hunger: 30, energy: 12 } : { health: -5, hunger: 12 },
-      weight: parseFloat(c.wt.toFixed(3)),
-      volume: parseFloat(c.vol.toFixed(3)),
+      description: isMinced
+        ? `Fresh ground ${f.name} fish minced meat pack (1kg). 100 portions of 10g each.`
+        : (isCaviar
+          ? `Fresh ${f.nameRu.toLowerCase()} caviar in a small sealed glass jar.`
+          : `Fresh raw ${f.name} anatomical component. Part of realistic fish preparation.`),
+      descriptionRu: isMinced
+        ? `Свежий сырой рыбный фарш (${f.nameRu.toLowerCase()}) в лотке (1 кг). 100 порций по 10 грамм.`
+        : (isCaviar
+          ? `Свежая зернистая икра (${f.nameRu.toLowerCase()}) в малом стеклянном стекле (250 мл). Деликатес.`
+          : `Свежий сырой анатомический компонент рыбы (${f.nameRu.toLowerCase()}). Реалистичные масса и объем.`),
+      effects: isMinced ? { health: -5, hunger: 180 } : (isCaviar ? { health: 5, hunger: 30, energy: 12 } : { health: -5, hunger: 12 }),
+      weight: isMinced ? 1.0 : parseFloat(c.wt.toFixed(3)),
+      volume: isMinced ? 0.95 : parseFloat(c.vol.toFixed(3)),
       usable: true,
-      biteCount: isCaviar ? 20 : 4,
-      biteDuration: 0.8,
-      leftoverId: isCaviar ? 'jar_glass_small' : undefined,
-      leftoverNameRu: isCaviar ? 'Унифицированная стеклянная банка (0.2л)' : undefined,
-      tasteMessages: isCaviar ? [
+      biteCount: isMinced ? 100 : (isCaviar ? 20 : 4),
+      biteDuration: isMinced ? 0.1 : 0.8,
+      leftoverId: isMinced ? 'tray_sealed_food_torn' : (isCaviar ? 'jar_glass_small' : undefined),
+      leftoverNameRu: isMinced ? 'Вскрытый пищевой лоток' : (isCaviar ? 'Унифицированная стеклянная банка (0.2л)' : undefined),
+      tasteMessages: isMinced ? [
+        `Сырой рыбный фарш (${f.nameRu.toLowerCase()}, порция 10г)...`,
+        `Перекрученное филе рыбы (${f.nameRu.toLowerCase()}) с морским ароматом...`
+      ] : (isCaviar ? [
         `Соленое зернышко икры (${f.adjF}) лопается на языке... Деликатесный морской вкус!`,
         `Богатый сливочно-соленый вкус икры... Настоящий деликатес!`,
         `Маленькая ложечка икры с приятным морским ароматом.`
       ] : [
         `Сырая рыба (${f.nameRu.toLowerCase()})... Прохладный водянистый укус, пахнет тиной и солью.`,
         `Вкус сырого рыбьего жира... Скользкая текстура волокон.`
-      ],
-      fullnessPerBite: isCaviar ? 1 : 2
+      ]),
+      fullnessPerBite: isMinced ? 1 : (isCaviar ? 1 : 2)
     };
   }
 }
@@ -250,6 +274,7 @@ export const extraIngredients: {
   leftoverNameRu?: string;
   taste: string[];
 }[] = [
+  { id: 'minced_meat_mixed', name: 'Home Mixed Minced Meat (1kg)', nameRu: 'Фарш домашний (говядина + свинина, 1 кг)', desc: 'Classic 50/50 beef and pork minced meat pack (1kg).', descRu: 'Классический домашний свежий фарш (1 кг) из сочной говядины и свинины в лотке. 100 порций по 10 грамм.', wt: 1.0, vol: 0.95, usable: true, bites: 100, hunger: 200, leftoverId: 'tray_sealed_food_torn', leftoverNameRu: 'Вскрытый пищевой лоток', taste: ['Сырой домашний фарш из говядины и свинины (порция 10г)...', 'Сочная перекрученная смешанная мясная масса...'] },
   { id: 'squid_tubes', name: 'Raw Squid Tubes', nameRu: 'Тушки кальмара очищенные', desc: 'Raw squid mantle tubes.', descRu: 'Очищенные сырые тушки кальмара.', wt: 0.5, vol: 0.48, usable: true, hunger: 5, taste: ['Упругий, резиновый укус сырого кальмара...', 'Пахнет соленым морем.'] },
   { id: 'squid_tentacles', name: 'Raw Squid Tentacles', nameRu: 'Щупальца кальмара', desc: 'Raw squid tentacles.', descRu: 'Сырые щупальца кальмара.', wt: 0.3, vol: 0.28, usable: true, hunger: 4, taste: ['Сырые присоски и упругая плоть щупальца...'] },
   { id: 'octopus_whole', name: 'Whole Raw Octopus', nameRu: 'Цельный осьминог', desc: 'Whole raw octopus carcass.', descRu: 'Сырой цельный осьминог.', wt: 1.5, vol: 1.4, usable: true, hunger: 10, taste: ['Слизкое, резиновое тело сырого осьминога...', 'Тяжело прожевать.'] },

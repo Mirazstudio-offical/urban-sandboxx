@@ -676,12 +676,25 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
   cash_5000: {
     itemId: 'cash_5000',
     name: 'Banknote $5000',
-    nameRu: 'Купюра $5000',
+    nameRu: 'Купюра 5000 ₽',
     category: 'valuable',
     maxStack: 1,
     icon: '',
-    description: 'Large banknote of $5000. Double click or use to deposit into your cash wallet.',
-    descriptionRu: 'Крупная купюра номиналом в $5000. Используйте, чтобы положить её в кошелёк.',
+    description: 'Large banknote of 5000 Rubles. Double click or use to deposit into your cash wallet.',
+    descriptionRu: 'Крупная купюра номиналом в 5000 ₽. Используйте, чтобы положить её в кошелёк.',
+    effects: {},
+    weight: 0.001,
+    usable: true
+  },
+  cash_2000: {
+    itemId: 'cash_2000',
+    name: 'Banknote $2000',
+    nameRu: 'Купюра 2000 ₽',
+    category: 'valuable',
+    maxStack: 1,
+    icon: '',
+    description: 'Banknote of 2000 Rubles (Vladivostok). Double click or use to deposit into your cash wallet.',
+    descriptionRu: 'Купюра номиналом в 2000 ₽ (Владивосток). Используйте, чтобы положить её в кошелёк.',
     effects: {},
     weight: 0.001,
     usable: true
@@ -689,12 +702,12 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
   cash_1000: {
     itemId: 'cash_1000',
     name: 'Banknote $1000',
-    nameRu: 'Купюра $1000',
+    nameRu: 'Купюра 1000 ₽',
     category: 'valuable',
     maxStack: 1,
     icon: '',
-    description: 'Banknote of $1000. Double click or use to deposit into your cash wallet.',
-    descriptionRu: 'Купюра номиналом в $1000. Используйте, чтобы положить её в кошелёк.',
+    description: 'Banknote of 1000 Rubles. Double click or use to deposit into your cash wallet.',
+    descriptionRu: 'Купюра номиналом в 1000 ₽. Используйте, чтобы положить её в кошелёк.',
     effects: {},
     weight: 0.001,
     usable: true
@@ -702,12 +715,25 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
   cash_500: {
     itemId: 'cash_500',
     name: 'Banknote $500',
-    nameRu: 'Купюра $500',
+    nameRu: 'Купюра 500 ₽',
     category: 'valuable',
     maxStack: 1,
     icon: '',
-    description: 'Banknote of $500. Double click or use to deposit into your cash wallet.',
-    descriptionRu: 'Купюра номиналом в $500. Используйте, чтобы положить её в кошелёк.',
+    description: 'Banknote of 500 Rubles. Double click or use to deposit into your cash wallet.',
+    descriptionRu: 'Купюра номиналом в 500 ₽. Используйте, чтобы положить её в кошелёк.',
+    effects: {},
+    weight: 0.001,
+    usable: true
+  },
+  cash_200: {
+    itemId: 'cash_200',
+    name: 'Banknote $200',
+    nameRu: 'Купюра 200 ₽',
+    category: 'valuable',
+    maxStack: 1,
+    icon: '',
+    description: 'Banknote of 200 Rubles (Sevastopol). Double click or use to deposit into your cash wallet.',
+    descriptionRu: 'Купюра номиналом в 200 ₽ (Севастополь). Используйте, чтобы положить её в кошелёк.',
     effects: {},
     weight: 0.001,
     usable: true
@@ -715,7 +741,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
   cash_100: {
     itemId: 'cash_100',
     name: 'Banknote $100',
-    nameRu: 'Купюра $100',
+    nameRu: 'Купюра 100 ₽',
     category: 'valuable',
     maxStack: 1,
     icon: '',
@@ -5514,8 +5540,10 @@ export function getPlayerCash(player: Player | null): number {
     if (!i) return sum;
     if (i.itemId === 'cash') return sum + i.count;
     if (i.itemId === 'cash_5000') return sum + (5000 * i.count);
+    if (i.itemId === 'cash_2000') return sum + (2000 * i.count);
     if (i.itemId === 'cash_1000') return sum + (1000 * i.count);
     if (i.itemId === 'cash_500') return sum + (500 * i.count);
+    if (i.itemId === 'cash_200') return sum + (200 * i.count);
     if (i.itemId === 'cash_100') return sum + (100 * i.count);
     if (i.itemId === 'cash_50') return sum + (50 * i.count);
     if (i.itemId === 'cash_10') return sum + (10 * i.count);
@@ -5525,6 +5553,111 @@ export function getPlayerCash(player: Player | null): number {
     if (i.itemId === 'coin_1') return sum + (1 * i.count);
     return sum;
   }, 0);
+}
+
+export interface PlayerDenomInfo {
+  itemId: string;
+  nominal: number;
+  nameRu: string;
+  type: 'banknote' | 'coin';
+  count: number;
+}
+
+// Get breakdown of all physical banknotes and coins currently in player's wallet and inventory
+export function getPlayerDenominations(player: Player | null): PlayerDenomInfo[] {
+  if (!player) return [];
+  const allItems = getAllPlayerItemsFlat(player);
+
+  const counts: Record<string, number> = {};
+  for (const item of allItems) {
+    if (!item) continue;
+    counts[item.itemId] = (counts[item.itemId] || 0) + (item.count || 1);
+  }
+
+  const defs: Omit<PlayerDenomInfo, 'count'>[] = [
+    { itemId: 'cash_5000', nominal: 5000, nameRu: '5 000 ₽', type: 'banknote' },
+    { itemId: 'cash_2000', nominal: 2000, nameRu: '2 000 ₽', type: 'banknote' },
+    { itemId: 'cash_1000', nominal: 1000, nameRu: '1 000 ₽', type: 'banknote' },
+    { itemId: 'cash_500', nominal: 500, nameRu: '500 ₽', type: 'banknote' },
+    { itemId: 'cash_200', nominal: 200, nameRu: '200 ₽', type: 'banknote' },
+    { itemId: 'cash_100', nominal: 100, nameRu: '100 ₽', type: 'banknote' },
+    { itemId: 'cash_50', nominal: 50, nameRu: '50 ₽', type: 'banknote' },
+    { itemId: 'cash_10', nominal: 10, nameRu: '10 ₽', type: 'banknote' },
+    { itemId: 'coin_10', nominal: 10, nameRu: '10 ₽', type: 'coin' },
+    { itemId: 'coin_5', nominal: 5, nameRu: '5 ₽', type: 'coin' },
+    { itemId: 'coin_2', nominal: 2, nameRu: '2 ₽', type: 'coin' },
+    { itemId: 'coin_1', nominal: 1, nameRu: '1 ₽', type: 'coin' },
+  ];
+
+  return defs.map(d => ({
+    ...d,
+    count: counts[d.itemId] || 0
+  }));
+}
+
+// Calculate the optimal realistic selection of notes and coins from player inventory to pay cartTotal
+export function calcOptimalTrayPayment(player: Player | null, targetAmount: number): Record<string, number> {
+  const result: Record<string, number> = {};
+  if (!player || targetAmount <= 0) return result;
+
+  const denoms = getPlayerDenominations(player);
+  let remaining = targetAmount;
+
+  // Available pools: clone counts
+  const pool: Record<string, number> = {};
+  denoms.forEach(d => {
+    pool[d.itemId] = d.count;
+  });
+
+  // Sort ascending: smallest coins & notes first
+  const sortedAsc = [...denoms].sort((a, b) => a.nominal - b.nominal);
+
+  // 1. Try to take exact/smaller notes & coins
+  for (const d of sortedAsc) {
+    if (remaining <= 0) break;
+    const available = pool[d.itemId] || 0;
+    if (available <= 0) continue;
+
+    if (d.nominal <= remaining) {
+      const takeCount = Math.min(available, Math.floor(remaining / d.nominal));
+      if (takeCount > 0) {
+        result[d.itemId] = (result[d.itemId] || 0) + takeCount;
+        pool[d.itemId] -= takeCount;
+        remaining -= takeCount * d.nominal;
+      }
+    }
+  }
+
+  // 2. If still remaining, pick the smallest large note available to cover the rest
+  if (remaining > 0) {
+    for (const d of sortedAsc) {
+      const available = pool[d.itemId] || 0;
+      if (available > 0 && d.nominal >= remaining) {
+        result[d.itemId] = (result[d.itemId] || 0) + 1;
+        pool[d.itemId] -= 1;
+        remaining -= d.nominal;
+        break;
+      }
+    }
+  }
+
+  // 3. If still remaining (e.g. need multiple large notes), pick largest available descending
+  if (remaining > 0) {
+    const sortedDesc = [...denoms].sort((a, b) => b.nominal - a.nominal);
+    for (const d of sortedDesc) {
+      if (remaining <= 0) break;
+      const available = pool[d.itemId] || 0;
+      if (available <= 0) continue;
+      const take = Math.min(available, Math.ceil(remaining / d.nominal));
+      if (take > 0) {
+        result[d.itemId] = (result[d.itemId] || 0) + take;
+        pool[d.itemId] -= take;
+        remaining -= take * d.nominal;
+      }
+    }
+  }
+
+  return result;
 }
 
 // Find primary wallet container on the player
@@ -5539,8 +5672,10 @@ export function createChangeItems(amount: number): InventoryItem[] {
   const items: InventoryItem[] = [];
   const denoms: { id: string; val: number }[] = [
     { id: 'cash_5000', val: 5000 },
+    { id: 'cash_2000', val: 2000 },
     { id: 'cash_1000', val: 1000 },
     { id: 'cash_500', val: 500 },
+    { id: 'cash_200', val: 200 },
     { id: 'cash_100', val: 100 },
     { id: 'cash_50', val: 50 },
     { id: 'cash_10', val: 10 },
@@ -5590,8 +5725,10 @@ export function deductPlayerCash(player: Player | null, amount: number): boolean
 
   const DENOM_VALUES: Record<string, number> = {
     cash_5000: 5000,
+    cash_2000: 2000,
     cash_1000: 1000,
     cash_500: 500,
+    cash_200: 200,
     cash_100: 100,
     cash_50: 50,
     cash_10: 10,

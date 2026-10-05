@@ -37,7 +37,14 @@ import {
   Disc
 } from 'lucide-react';
 import { sound } from '../audio';
-import { getPlayerCash, getAllPlayerItemsFlat, deductPlayerCash } from '../items';
+import { 
+  getPlayerCash, 
+  getAllPlayerItemsFlat, 
+  deductPlayerCash, 
+  getPlayerDenominations, 
+  calcOptimalTrayPayment,
+  PlayerDenomInfo 
+} from '../items';
 import { FUEL_GRADES } from '../gasStationSystem';
 import { createDefaultVehicleDamage, isTrailerVehicle } from '../vehicleHelpers';
 
@@ -514,7 +521,12 @@ export const SHOP_CATALOGS: Record<string, ShopItem[]> = {
     { id: 'sup_basil_jar', itemId: 'basil_dried_jar', nameRu: 'Сушеный базилик в баночке', price: 45, description: 'Баночка ароматного сушеного базилика.', category: 'food', effectText: 'Пряность' },
     { id: 'sup_mint_jar', itemId: 'mint_dried_jar', nameRu: 'Сушеная мята для чая', price: 45, description: 'Баночка сушеной перечной мяты.', category: 'food', effectText: 'Травяной чай' },
 
-    // 6. МОЛОЧНЫЙ ОТДЕЛ, МАСЛА И БАКАЛЕЯ
+    // 6. МЯСНОЙ И МОЛОЧНЫЙ ОТДЕЛ, МАСЛА И БАКАЛЕЯ
+    { id: 'sup_minced_beef', itemId: 'beef_minced', nameRu: 'Фарш говяжий (1 кг)', price: 420, description: 'Свежий прокрученный говяжий фарш на подложке (1 кг). 100 порций по 10г.', category: 'food', effectText: '1 кг / 100 укусов' },
+    { id: 'sup_minced_pork', itemId: 'pork_minced', nameRu: 'Фарш свиной (1 кг)', price: 340, description: 'Свежий свиной фарш на подложке (1 кг). 100 порций по 10г.', category: 'food', effectText: '1 кг / 100 укусов' },
+    { id: 'sup_minced_mixed', itemId: 'minced_meat_mixed', nameRu: 'Фарш домашний (1 кг)', price: 380, description: 'Классический фарш 50/50 говядина и свинина (1 кг). 100 порций по 10г.', category: 'food', effectText: '1 кг / 100 укусов' },
+    { id: 'sup_minced_chicken', itemId: 'chicken_minced', nameRu: 'Фарш куриный (1 кг)', price: 290, description: 'Нежный нежирный куриный фарш (1 кг). 100 порций по 10г.', category: 'food', effectText: '1 кг / 100 укусов' },
+    { id: 'sup_minced_turkey', itemId: 'turkey_minced', nameRu: 'Фарш индюшачий (1 кг)', price: 390, description: 'Диетический фарш из филе индейки (1 кг). 100 порций по 10г.', category: 'food', effectText: '1 кг / 100 укусов' },
     { id: 'sup_milk_carton', itemId: 'carton_milk', nameRu: 'Молоко пастеризованное 3.2% (1.0L)', price: 65, description: 'Пакет питьевого пастеризованного молока.', category: 'food', effectText: '+35% Гидратация, +20% Сытость' },
     { id: 'sup_sour_cream', itemId: 'sour_cream_pot', nameRu: 'Сметана 20% (стаканчик 400г)', price: 75, description: 'Густая натуральная сметана с нежной кислинкой.', category: 'food', effectText: '+35% Сытость' },
     { id: 'sup_butter', itemId: 'butter_brick_salted', nameRu: 'Масло сливочное 82.5% (200г)', price: 95, description: 'Брикет натурального сладко-сливочного масла.', category: 'food', effectText: '+30% Сытость' },
@@ -852,7 +864,7 @@ export const ShopModal: React.FC<ShopModalProps> = (props) => {
 
   const [cart, setCart] = useState<{ item: ShopItem; count: number }[]>([]);
   const [activeTab, setActiveTab] = useState<'catalog' | 'diagnostics' | 'repair' | 'tuning' | 'cart' | 'pos' | 'lpg'>('catalog');
-  const [inTrayMoney, setInTrayMoney] = useState<number>(0);
+  const [trayDenoms, setTrayDenoms] = useState<Record<string, number>>({});
   const [posSuccess, setPosSuccess] = useState<boolean>(false);
 
   // Diagnostics states
@@ -929,7 +941,7 @@ export const ShopModal: React.FC<ShopModalProps> = (props) => {
     if (isOpen) {
       setCart([]);
       setActiveTab('catalog');
-      setInTrayMoney(0);
+      setTrayDenoms({});
       setPosSuccess(false);
       setInstallingLpg(false);
       setInstallingCamera(false);
@@ -980,34 +992,69 @@ export const ShopModal: React.FC<ShopModalProps> = (props) => {
     });
   };
 
+  const playerDenoms = getPlayerDenominations(player);
+
+  const inTrayMoney = Object.entries(trayDenoms).reduce((sum, [id, count]) => {
+    const found = playerDenoms.find(d => d.itemId === id);
+    return sum + (found ? found.nominal * count : 0);
+  }, 0);
+
   const handleClearCart = () => {
     sound.playUseItem();
     setCart([]);
-    setInTrayMoney(0);
+    setTrayDenoms({});
   };
 
-  const handleAddTrayMoney = (amount: number) => {
-    playCashRustle();
-    playCoinDrop();
-    setInTrayMoney(prev => Math.min(playerCash, prev + amount));
+  const handleAddTrayDenom = (itemId: string) => {
+    const d = playerDenoms.find(p => p.itemId === itemId);
+    if (!d) return;
+    const currentInTray = trayDenoms[itemId] || 0;
+    if (currentInTray < d.count) {
+      if (d.type === 'coin') {
+        sound.playCoinDrop();
+      } else {
+        sound.playCashRustle();
+      }
+      setTrayDenoms(prev => ({
+        ...prev,
+        [itemId]: (prev[itemId] || 0) + 1
+      }));
+    }
+  };
+
+  const handleRemoveTrayDenom = (itemId: string) => {
+    const currentInTray = trayDenoms[itemId] || 0;
+    if (currentInTray > 0) {
+      sound.playCashRustle();
+      setTrayDenoms(prev => {
+        const next = { ...prev };
+        if (next[itemId] <= 1) {
+          delete next[itemId];
+        } else {
+          next[itemId] -= 1;
+        }
+        return next;
+      });
+    }
   };
 
   const handleExactTrayMoney = () => {
-    playCashRustle();
-    setInTrayMoney(Math.min(playerCash, cartTotal));
+    sound.playCashRustle();
+    const optimal = calcOptimalTrayPayment(player, cartTotal);
+    setTrayDenoms(optimal);
   };
 
   const handleClearTray = () => {
-    playCashRustle();
-    setInTrayMoney(0);
+    sound.playCashRustle();
+    setTrayDenoms({});
   };
 
   const handleExecutePOSPayment = () => {
     if (inTrayMoney < cartTotal) return;
     if (playerCash < cartTotal) return;
 
-    playTerminalBeep();
-    playCashRegister();
+    sound.playTurnSignalTick(true);
+    sound.playBuySell();
 
     // Process all items in cart
     if (props.onBuyItems) {
@@ -1027,7 +1074,7 @@ export const ShopModal: React.FC<ShopModalProps> = (props) => {
     setPosSuccess(true);
     setTimeout(() => {
       setCart([]);
-      setInTrayMoney(0);
+      setTrayDenoms({});
       setPosSuccess(false);
       setActiveTab('catalog');
     }, 1200);
@@ -2679,14 +2726,14 @@ export const ShopModal: React.FC<ShopModalProps> = (props) => {
           {/* POS CASHIER PAYMENT TERMINAL */}
           {activeTab === 'pos' && (
             <div className="max-w-xl mx-auto space-y-4">
-              <div className="p-4 bg-zinc-900 border border-zinc-800 rounded-2xl space-y-3">
+              <div className="p-4 bg-zinc-900 border border-zinc-800 rounded-2xl space-y-4">
                 <div className="flex items-center justify-between pb-2 border-b border-zinc-800">
                   <h3 className="text-sm font-bold text-zinc-100 flex items-center gap-2">
                     <Receipt className="w-4 h-4 text-emerald-400" /> POS Кассовый терминал
                   </h3>
                   <button
                     onClick={() => setActiveTab('cart')}
-                    className="text-xs text-zinc-400 hover:text-zinc-200 flex items-center gap-1"
+                    className="text-xs text-zinc-400 hover:text-zinc-200 flex items-center gap-1 transition-colors"
                   >
                     <ArrowLeft className="w-3.5 h-3.5" /> Назад к корзине
                   </button>
@@ -2710,13 +2757,61 @@ export const ShopModal: React.FC<ShopModalProps> = (props) => {
                   </div>
                 </div>
 
+                {/* Cashier Money Tray (Внесенные в лоток деньги) */}
+                <div className="p-3 bg-zinc-950/60 border border-zinc-800/80 rounded-xl space-y-2">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="font-semibold text-zinc-300 flex items-center gap-1.5">
+                      <Coins className="w-3.5 h-3.5 text-amber-400" /> Лоток кассы (Внесено):
+                    </span>
+                    {Object.keys(trayDenoms).length > 0 && (
+                      <button
+                        onClick={handleClearTray}
+                        className="text-[11px] text-rose-400 hover:text-rose-300 transition-colors cursor-pointer"
+                      >
+                        Забрать все
+                      </button>
+                    )}
+                  </div>
+
+                  {Object.keys(trayDenoms).length === 0 ? (
+                    <div className="text-[11px] text-zinc-500 italic py-1 text-center">
+                      Лоток пуст. Нажмите на банкноту или монету ниже, чтобы положить её кассиру.
+                    </div>
+                  ) : (
+                    <div className="flex flex-wrap gap-1.5">
+                      {Object.entries(trayDenoms).map(([itemId, count]) => {
+                        const denom = playerDenoms.find(d => d.itemId === itemId);
+                        if (!denom || count <= 0) return null;
+                        return (
+                          <div
+                            key={itemId}
+                            className="flex items-center gap-1.5 px-2 py-1 bg-zinc-900 border border-emerald-500/30 rounded-lg text-xs"
+                          >
+                            <ItemIconCanvas itemId={itemId} size={22} />
+                            <span className="font-mono font-bold text-emerald-400">{denom.nameRu}</span>
+                            <span className="text-[11px] text-zinc-400 font-mono">×{count}</span>
+                            <button
+                              onClick={() => handleRemoveTrayDenom(itemId)}
+                              className="ml-1 p-0.5 rounded bg-zinc-800 hover:bg-rose-950 hover:text-rose-300 text-zinc-400 transition-colors"
+                              title="Забрать одну штуку назад в кошелек"
+                            >
+                              <Minus className="w-3 h-3" />
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+
                 {/* Quick Auto-Pay Trays */}
                 <div className="flex items-center gap-2">
                   <button
+                    disabled={playerCash < cartTotal}
                     onClick={handleExactTrayMoney}
-                    className="flex-1 py-2.5 min-h-[44px] bg-zinc-800 hover:bg-zinc-700 text-zinc-200 font-bold text-xs rounded-xl transition-colors"
+                    className="flex-1 py-2.5 min-h-[44px] bg-zinc-800 hover:bg-zinc-700 disabled:opacity-40 disabled:cursor-not-allowed text-zinc-200 font-bold text-xs rounded-xl transition-colors flex items-center justify-center gap-1.5"
                   >
-                    Внести ровно ({cartTotal} ₽)
+                    <Sparkles className="w-3.5 h-3.5 text-amber-400" /> Внести ровно ({cartTotal.toLocaleString()} ₽)
                   </button>
                   <button
                     onClick={handleClearTray}
@@ -2726,21 +2821,92 @@ export const ShopModal: React.FC<ShopModalProps> = (props) => {
                   </button>
                 </div>
 
-                {/* Banknotes / Coins Tray */}
-                <div className="pt-2">
-                  <span className="text-xs font-medium text-zinc-400 mb-2 block">Кошелек: Выберите купюры для внесения</span>
-                  <div className="grid grid-cols-3 gap-2">
-                    {[50, 100, 500, 1000, 2000, 5000].map(denom => (
-                      <button
-                        key={denom}
-                        onClick={() => handleAddTrayMoney(denom)}
-                        className="py-2.5 min-h-[44px] bg-zinc-950 hover:bg-zinc-800 border border-zinc-800 hover:border-emerald-500/50 rounded-xl flex flex-col items-center justify-center transition-all group"
-                      >
-                        <span className="text-xs font-mono font-bold text-emerald-400 group-hover:scale-105 transition-transform">
-                          +{denom} ₽
-                        </span>
-                      </button>
-                    ))}
+                {/* Banknotes Tray */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-semibold text-zinc-300">Банкноты в кошельке:</span>
+                    <span className="text-[11px] text-zinc-400 font-mono">
+                      Баланс: {playerCash.toLocaleString()} ₽
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                    {playerDenoms
+                      .filter(d => d.type === 'banknote')
+                      .map(denom => {
+                        const inTray = trayDenoms[denom.itemId] || 0;
+                        const remaining = Math.max(0, denom.count - inTray);
+                        const canAdd = remaining > 0;
+
+                        return (
+                          <button
+                            key={denom.itemId}
+                            disabled={!canAdd}
+                            onClick={() => handleAddTrayDenom(denom.itemId)}
+                            className={`p-2 min-h-[58px] rounded-xl border flex flex-col items-center justify-between transition-all group relative ${
+                              canAdd
+                                ? 'bg-zinc-950 hover:bg-zinc-800/90 border-zinc-800 hover:border-emerald-500/60 cursor-pointer'
+                                : 'bg-zinc-950/40 border-zinc-900/80 opacity-40 cursor-not-allowed'
+                            }`}
+                          >
+                            <div className="flex items-center gap-1.5 w-full justify-center">
+                              <ItemIconCanvas itemId={denom.itemId} size={30} />
+                              <span className={`text-xs font-mono font-bold ${canAdd ? 'text-emerald-400' : 'text-zinc-500'}`}>
+                                {denom.nameRu}
+                              </span>
+                            </div>
+
+                            <div className="flex items-center justify-between w-full text-[10px] pt-1 border-t border-zinc-800/40 mt-1">
+                              <span className="text-zinc-400">В наличии:</span>
+                              <span className={`font-mono font-bold ${remaining > 0 ? 'text-zinc-200' : 'text-zinc-600'}`}>
+                                {remaining} шт
+                              </span>
+                            </div>
+                          </button>
+                        );
+                      })}
+                  </div>
+                </div>
+
+                {/* Coins Tray */}
+                <div className="space-y-2 pt-1 border-t border-zinc-800/60">
+                  <span className="text-xs font-semibold text-zinc-300 block">Монеты в карманах:</span>
+
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                    {playerDenoms
+                      .filter(d => d.type === 'coin')
+                      .map(denom => {
+                        const inTray = trayDenoms[denom.itemId] || 0;
+                        const remaining = Math.max(0, denom.count - inTray);
+                        const canAdd = remaining > 0;
+
+                        return (
+                          <button
+                            key={denom.itemId}
+                            disabled={!canAdd}
+                            onClick={() => handleAddTrayDenom(denom.itemId)}
+                            className={`p-2 min-h-[52px] rounded-xl border flex flex-col items-center justify-between transition-all group ${
+                              canAdd
+                                ? 'bg-zinc-950 hover:bg-zinc-800/90 border-zinc-800 hover:border-amber-500/60 cursor-pointer'
+                                : 'bg-zinc-950/40 border-zinc-900/80 opacity-40 cursor-not-allowed'
+                            }`}
+                          >
+                            <div className="flex items-center gap-1.5 w-full justify-center">
+                              <ItemIconCanvas itemId={denom.itemId} size={24} />
+                              <span className={`text-xs font-mono font-bold ${canAdd ? 'text-amber-400' : 'text-zinc-500'}`}>
+                                {denom.nameRu}
+                              </span>
+                            </div>
+
+                            <div className="flex items-center justify-between w-full text-[10px] pt-1 border-t border-zinc-800/40 mt-1">
+                              <span className="text-zinc-400">В наличии:</span>
+                              <span className={`font-mono font-bold ${remaining > 0 ? 'text-zinc-200' : 'text-zinc-600'}`}>
+                                {remaining} шт
+                              </span>
+                            </div>
+                          </button>
+                        );
+                      })}
                   </div>
                 </div>
 
@@ -2752,8 +2918,8 @@ export const ShopModal: React.FC<ShopModalProps> = (props) => {
                     posSuccess
                       ? 'bg-emerald-500 text-zinc-950'
                       : inTrayMoney >= cartTotal
-                      ? 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg'
-                      : 'bg-zinc-800 text-zinc-500 opacity-60'
+                      ? 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg cursor-pointer'
+                      : 'bg-zinc-800 text-zinc-500 opacity-60 cursor-not-allowed'
                   }`}
                 >
                   {posSuccess ? (

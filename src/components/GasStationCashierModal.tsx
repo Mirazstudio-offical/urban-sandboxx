@@ -19,6 +19,7 @@ import { FuelType, GameWorld, GasPumpDispenser, GasPumpNozzle, Player, Vehicle }
 import { FUEL_GRADES, GAS_STATION_NOZZLES } from '../gasStationSystem';
 import { CAR_CONFIGS } from '../vehicleHelpers';
 import { sound } from '../audio';
+import { getPlayerCash } from '../items';
 
 interface GasStationCashierModalProps {
   isOpen: boolean;
@@ -97,18 +98,7 @@ export const GasStationCashierModal: React.FC<GasStationCashierModalProps> = ({
   const grade = FUEL_GRADES[activeFuelType] || FUEL_GRADES.ai95;
   const totalCost = Math.round(liters * grade.pricePerLiter);
 
-  const getPlayerCash = (): number => {
-    let money = 5000;
-    if (player.inventory) {
-      const cashItem = player.inventory.find(i => i && (i.id === 'money' || i.id === 'cash' || i.nameRu?.includes('Рубли') || i.nameRu?.includes('Деньги')));
-      if (cashItem && typeof cashItem.count === 'number') {
-        money = cashItem.count;
-      }
-    }
-    return money;
-  };
-
-  const playerCash = getPlayerCash();
+  const playerCash = getPlayerCash(player);
   const canAfford = playerCash >= totalCost;
 
   const handleSelectPump = (pump: GasPumpDispenser) => {

@@ -7,6 +7,526 @@ export function drawKitchenAndValuableItem(
 ): boolean {
   switch (itemId) {
     // ==========================================
+    // === 0. BANKNOTES AND COINS (НАЛИЧНЫЕ ДЕНЬГИ И МОНЕТЫ) ===
+    // ==========================================
+
+    // 5000 Rubles Banknote (Хабаровск, 5000 ₽)
+    case 'cash_5000': {
+      drawShadow(ctx, 10, 3.5, 9, 0.28);
+
+      // Banknote paper base (Khabarovsk Red-Orange / Terracotta)
+      const noteGrad = ctx.createLinearGradient(-9.5, -5.5, 9.5, 5.5);
+      noteGrad.addColorStop(0, '#7f1d1d');
+      noteGrad.addColorStop(0.2, '#c2410c');
+      noteGrad.addColorStop(0.6, '#ea580c');
+      noteGrad.addColorStop(0.85, '#f97316');
+      noteGrad.addColorStop(1, '#9a3412');
+      ctx.fillStyle = noteGrad;
+      ctx.beginPath();
+      ctx.roundRect(-9.5, -5.2, 19, 10.4, 0.8);
+      ctx.fill();
+
+      // Outer micro-guilloche border frame
+      ctx.strokeStyle = '#fca5a5';
+      ctx.lineWidth = 0.5;
+      ctx.strokeRect(-9.0, -4.7, 18, 9.4);
+
+      // Watermark oval field (pale cream)
+      ctx.fillStyle = 'rgba(254, 242, 242, 0.35)';
+      ctx.beginPath();
+      ctx.ellipse(-6.0, 0, 2.4, 4.0, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Iridescent / Optical Variable Green Hologram Emblem (Khabarovsk Crest)
+      const holoGrad = ctx.createRadialGradient(4.5, -1.5, 0.5, 4.5, -1.5, 3.0);
+      holoGrad.addColorStop(0, '#86efac');
+      holoGrad.addColorStop(0.5, '#15803d');
+      holoGrad.addColorStop(1, '#064e3b');
+      ctx.fillStyle = holoGrad;
+      ctx.beginPath();
+      ctx.ellipse(4.8, -1.2, 2.2, 2.2, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Vertical holographic security strip
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.45)';
+      ctx.fillRect(-1.5, -5.2, 1.2, 10.4);
+
+      // Khabarovsk Amur Bridge arches silhouette
+      ctx.strokeStyle = '#7c2d12';
+      ctx.lineWidth = 0.6;
+      ctx.beginPath();
+      ctx.moveTo(-3, 1.5);
+      ctx.quadraticCurveTo(-1.5, 0, 0, 1.5);
+      ctx.quadraticCurveTo(1.5, 0, 3, 1.5);
+      ctx.quadraticCurveTo(4.5, 0, 6, 1.5);
+      ctx.stroke();
+
+      // "5000" denomination numeral
+      ctx.fillStyle = '#fef2f2';
+      ctx.font = 'bold 3.6px monospace';
+      ctx.textAlign = 'right';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('5000', 8.2, 2.8);
+
+      // Bank of Russia small text
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
+      ctx.font = 'bold 1.4px sans-serif';
+      ctx.textAlign = 'left';
+      ctx.fillText('БР', -8.5, -3.2);
+
+      drawGlossBand(ctx, -7, -4.5, 2.0, 9.4, 0.18);
+      return true;
+    }
+
+    // 2000 Rubles Banknote (Владивосток, 2000 ₽)
+    case 'cash_2000': {
+      drawShadow(ctx, 10, 3.5, 9, 0.28);
+
+      // Pacific Ocean Blue / Cyan
+      const noteGrad = ctx.createLinearGradient(-9.5, -5.5, 9.5, 5.5);
+      noteGrad.addColorStop(0, '#0c4a6e');
+      noteGrad.addColorStop(0.3, '#0284c7');
+      noteGrad.addColorStop(0.7, '#0ea5e9');
+      noteGrad.addColorStop(1, '#0369a1');
+      ctx.fillStyle = noteGrad;
+      ctx.beginPath();
+      ctx.roundRect(-9.5, -5.2, 19, 10.4, 0.8);
+      ctx.fill();
+
+      // Border frame
+      ctx.strokeStyle = '#bae6fd';
+      ctx.lineWidth = 0.5;
+      ctx.strokeRect(-9.0, -4.7, 18, 9.4);
+
+      // Watermark field
+      ctx.fillStyle = 'rgba(240, 249, 255, 0.35)';
+      ctx.beginPath();
+      ctx.ellipse(-6.0, 0, 2.4, 4.0, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Russian Bridge cable pylon
+      ctx.strokeStyle = '#e0f2fe';
+      ctx.lineWidth = 0.7;
+      ctx.beginPath();
+      ctx.moveTo(1.5, -3.5); ctx.lineTo(1.5, 3.5);
+      ctx.moveTo(1.5, -2.5); ctx.lineTo(-2.0, 3.0);
+      ctx.moveTo(1.5, -2.5); ctx.lineTo(5.0, 3.0);
+      ctx.stroke();
+
+      // Optical ring / planet cosmodrome seal
+      ctx.strokeStyle = '#38bdf8';
+      ctx.lineWidth = 0.8;
+      ctx.beginPath();
+      ctx.arc(5.2, -1.5, 1.8, 0, Math.PI * 2);
+      ctx.stroke();
+
+      // "2000" numeral
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 3.6px monospace';
+      ctx.textAlign = 'right';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('2000', 8.2, 2.8);
+
+      drawGlossBand(ctx, -7, -4.5, 2.0, 9.4, 0.18);
+      return true;
+    }
+
+    // 1000 Rubles Banknote (Ярославль, 1000 ₽)
+    case 'cash_1000': {
+      drawShadow(ctx, 10, 3.5, 9, 0.28);
+
+      // Yaroslavl Teal / Emerald Green
+      const noteGrad = ctx.createLinearGradient(-9.5, -5.5, 9.5, 5.5);
+      noteGrad.addColorStop(0, '#064e3b');
+      noteGrad.addColorStop(0.3, '#059669');
+      noteGrad.addColorStop(0.7, '#10b981');
+      noteGrad.addColorStop(1, '#047857');
+      ctx.fillStyle = noteGrad;
+      ctx.beginPath();
+      ctx.roundRect(-9.5, -5.2, 19, 10.4, 0.8);
+      ctx.fill();
+
+      ctx.strokeStyle = '#a7f3d0';
+      ctx.lineWidth = 0.5;
+      ctx.strokeRect(-9.0, -4.7, 18, 9.4);
+
+      // Watermark field
+      ctx.fillStyle = 'rgba(236, 253, 245, 0.35)';
+      ctx.beginPath();
+      ctx.ellipse(-6.0, 0, 2.4, 4.0, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Yaroslav the Wise monument silhouette
+      ctx.fillStyle = '#064e3b';
+      ctx.fillRect(-0.5, -2.5, 2.0, 5.5);
+      ctx.beginPath();
+      ctx.arc(0.5, -3.2, 1.0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Holographic Bear Shield Crest
+      const bearGrad = ctx.createRadialGradient(4.8, -1.5, 0.5, 4.8, -1.5, 2.5);
+      bearGrad.addColorStop(0, '#5eead4');
+      bearGrad.addColorStop(0.5, '#0f766e');
+      bearGrad.addColorStop(1, '#134e4a');
+      ctx.fillStyle = bearGrad;
+      ctx.beginPath();
+      ctx.roundRect(3.5, -2.8, 2.8, 3.2, 0.6);
+      ctx.fill();
+
+      // "1000" numeral
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 3.6px monospace';
+      ctx.textAlign = 'right';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('1000', 8.2, 2.8);
+
+      drawGlossBand(ctx, -7, -4.5, 2.0, 9.4, 0.18);
+      return true;
+    }
+
+    // 500 Rubles Banknote (Архангельск, 500 ₽)
+    case 'cash_500': {
+      drawShadow(ctx, 10, 3.5, 9, 0.28);
+
+      // Arkhangelsk Violet / Purple
+      const noteGrad = ctx.createLinearGradient(-9.5, -5.5, 9.5, 5.5);
+      noteGrad.addColorStop(0, '#4c1d95');
+      noteGrad.addColorStop(0.3, '#7c3aed');
+      noteGrad.addColorStop(0.7, '#8b5cf6');
+      noteGrad.addColorStop(1, '#5b21b6');
+      ctx.fillStyle = noteGrad;
+      ctx.beginPath();
+      ctx.roundRect(-9.5, -5.2, 19, 10.4, 0.8);
+      ctx.fill();
+
+      ctx.strokeStyle = '#ddd6fe';
+      ctx.lineWidth = 0.5;
+      ctx.strokeRect(-9.0, -4.7, 18, 9.4);
+
+      // Watermark field
+      ctx.fillStyle = 'rgba(245, 243, 255, 0.35)';
+      ctx.beginPath();
+      ctx.ellipse(-6.0, 0, 2.4, 4.0, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Tall sailing ship "Sedov" mast silhouette
+      ctx.strokeStyle = '#f5f3ff';
+      ctx.lineWidth = 0.6;
+      ctx.beginPath();
+      ctx.moveTo(1.0, 3.0); ctx.lineTo(1.0, -3.2);
+      ctx.moveTo(-1.0, -1.5); ctx.lineTo(3.0, -1.5);
+      ctx.moveTo(-0.5, 0.5); ctx.lineTo(2.5, 0.5);
+      ctx.stroke();
+
+      // "500" numeral
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 3.6px monospace';
+      ctx.textAlign = 'right';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('500', 8.2, 2.8);
+
+      drawGlossBand(ctx, -7, -4.5, 2.0, 9.4, 0.18);
+      return true;
+    }
+
+    // 200 Rubles Banknote (Севастополь, 200 ₽)
+    case 'cash_200': {
+      drawShadow(ctx, 10, 3.5, 9, 0.28);
+
+      // Olive-Green
+      const noteGrad = ctx.createLinearGradient(-9.5, -5.5, 9.5, 5.5);
+      noteGrad.addColorStop(0, '#365314');
+      noteGrad.addColorStop(0.3, '#65a30d');
+      noteGrad.addColorStop(0.7, '#84cc16');
+      noteGrad.addColorStop(1, '#4d7c0f');
+      ctx.fillStyle = noteGrad;
+      ctx.beginPath();
+      ctx.roundRect(-9.5, -5.2, 19, 10.4, 0.8);
+      ctx.fill();
+
+      ctx.strokeStyle = '#d9f99d';
+      ctx.lineWidth = 0.5;
+      ctx.strokeRect(-9.0, -4.7, 18, 9.4);
+
+      // Sunken Ships column monument
+      ctx.fillStyle = '#f7fee7';
+      ctx.fillRect(0.5, -3.0, 1.4, 6.0);
+
+      // "200" numeral
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 3.6px monospace';
+      ctx.textAlign = 'right';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('200', 8.2, 2.8);
+
+      drawGlossBand(ctx, -7, -4.5, 2.0, 9.4, 0.18);
+      return true;
+    }
+
+    // 100 Rubles Banknote (Москва, 100 ₽)
+    case 'cash_100': {
+      drawShadow(ctx, 10, 3.5, 9, 0.28);
+
+      // Moscow Ochre / Brown-Gold
+      const noteGrad = ctx.createLinearGradient(-9.5, -5.5, 9.5, 5.5);
+      noteGrad.addColorStop(0, '#78350f');
+      noteGrad.addColorStop(0.3, '#b45309');
+      noteGrad.addColorStop(0.7, '#d97706');
+      noteGrad.addColorStop(1, '#92400e');
+      ctx.fillStyle = noteGrad;
+      ctx.beginPath();
+      ctx.roundRect(-9.5, -5.2, 19, 10.4, 0.8);
+      ctx.fill();
+
+      ctx.strokeStyle = '#fde68a';
+      ctx.lineWidth = 0.5;
+      ctx.strokeRect(-9.0, -4.7, 18, 9.4);
+
+      // Bolshoi Theatre Quadriga columns
+      ctx.fillStyle = '#451a03';
+      ctx.fillRect(-1.5, -1.0, 4.5, 4.0);
+      ctx.fillStyle = '#fef3c7';
+      ctx.fillRect(-1.0, -2.5, 3.5, 1.2);
+
+      // "100" numeral
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 3.6px monospace';
+      ctx.textAlign = 'right';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('100', 8.2, 2.8);
+
+      drawGlossBand(ctx, -7, -4.5, 2.0, 9.4, 0.18);
+      return true;
+    }
+
+    // 50 Rubles Banknote (Санкт-Петербург, 50 ₽)
+    case 'cash_50': {
+      drawShadow(ctx, 10, 3.5, 9, 0.28);
+
+      // Saint Petersburg Slate Blue
+      const noteGrad = ctx.createLinearGradient(-9.5, -5.5, 9.5, 5.5);
+      noteGrad.addColorStop(0, '#1e293b');
+      noteGrad.addColorStop(0.3, '#475569');
+      noteGrad.addColorStop(0.7, '#64748b');
+      noteGrad.addColorStop(1, '#334155');
+      ctx.fillStyle = noteGrad;
+      ctx.beginPath();
+      ctx.roundRect(-9.5, -5.2, 19, 10.4, 0.8);
+      ctx.fill();
+
+      ctx.strokeStyle = '#cbd5e1';
+      ctx.lineWidth = 0.5;
+      ctx.strokeRect(-9.0, -4.7, 18, 9.4);
+
+      // Rostral Column silhouette
+      ctx.fillStyle = '#f8fafc';
+      ctx.fillRect(0, -3.0, 1.8, 6.0);
+
+      // "50" numeral
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 3.6px monospace';
+      ctx.textAlign = 'right';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('50', 8.2, 2.8);
+
+      drawGlossBand(ctx, -7, -4.5, 2.0, 9.4, 0.18);
+      return true;
+    }
+
+    // 10 Rubles Banknote or Generic Cash (Красноярск, 10 ₽ / Пачка купюр)
+    case 'cash_10':
+    case 'cash': {
+      drawShadow(ctx, 10, 3.5, 9, 0.28);
+
+      // Krasnoyarsk Dark Olive / Green-Yellow
+      const noteGrad = ctx.createLinearGradient(-9.5, -5.5, 9.5, 5.5);
+      noteGrad.addColorStop(0, '#1c1917');
+      noteGrad.addColorStop(0.3, '#44403c');
+      noteGrad.addColorStop(0.7, '#57534e');
+      noteGrad.addColorStop(1, '#292524');
+      ctx.fillStyle = noteGrad;
+      ctx.beginPath();
+      ctx.roundRect(-9.5, -5.2, 19, 10.4, 0.8);
+      ctx.fill();
+
+      ctx.strokeStyle = '#a8a29e';
+      ctx.lineWidth = 0.5;
+      ctx.strokeRect(-9.0, -4.7, 18, 9.4);
+
+      // Chapel dome
+      ctx.fillStyle = '#e7e5e4';
+      ctx.fillRect(0, -2.5, 2.0, 5.0);
+
+      // "10" numeral
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 3.6px monospace';
+      ctx.textAlign = 'right';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('10', 8.2, 2.8);
+
+      drawGlossBand(ctx, -7, -4.5, 2.0, 9.4, 0.18);
+      return true;
+    }
+
+    // 10 Rubles Coin (Монета 10 ₽, латунная сталь)
+    case 'coin_10': {
+      drawShadow(ctx, 8, 8, 7.5, 0.28);
+
+      // Brass outer rim
+      const coinGrad = ctx.createRadialGradient(-2, -2, 1, 0, 0, 8);
+      coinGrad.addColorStop(0, '#fef08a');
+      coinGrad.addColorStop(0.4, '#eab308');
+      coinGrad.addColorStop(0.8, '#ca8a04');
+      coinGrad.addColorStop(1, '#78350f');
+      ctx.fillStyle = coinGrad;
+      ctx.beginPath();
+      ctx.arc(0, 0, 7.8, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Milled edge outer ring
+      ctx.strokeStyle = '#78350f';
+      ctx.lineWidth = 0.6;
+      ctx.stroke();
+
+      // Inner relief disk
+      ctx.fillStyle = '#ca8a04';
+      ctx.beginPath();
+      ctx.arc(0, 0, 6.4, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Laurel / oak branch relief on sides
+      ctx.strokeStyle = '#fef08a';
+      ctx.lineWidth = 0.6;
+      ctx.beginPath();
+      ctx.arc(-4.0, 0, 2.2, -Math.PI * 0.4, Math.PI * 0.4);
+      ctx.arc(4.0, 0, 2.2, Math.PI * 0.6, Math.PI * 1.4);
+      ctx.stroke();
+
+      // Relief embossed "10"
+      ctx.fillStyle = '#fef08a';
+      ctx.font = 'bold 4.8px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('10', 0, -1.2);
+
+      // "РУБ" inscription below
+      ctx.fillStyle = '#fef08a';
+      ctx.font = 'bold 1.8px sans-serif';
+      ctx.fillText('РУБ', 0, 3.2);
+
+      drawGlossBand(ctx, -4.5, -4.5, 2.0, 8.0, 0.25);
+      return true;
+    }
+
+    // 5 Rubles Coin (Монета 5 ₽, мельхиор/никель)
+    case 'coin_5': {
+      drawShadow(ctx, 8, 8, 7.5, 0.25);
+
+      const coinGrad = ctx.createRadialGradient(-2, -2, 1, 0, 0, 7.8);
+      coinGrad.addColorStop(0, '#ffffff');
+      coinGrad.addColorStop(0.4, '#e2e8f0');
+      coinGrad.addColorStop(0.8, '#94a3b8');
+      coinGrad.addColorStop(1, '#475569');
+      ctx.fillStyle = coinGrad;
+      ctx.beginPath();
+      ctx.arc(0, 0, 7.6, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.strokeStyle = '#475569';
+      ctx.lineWidth = 0.6;
+      ctx.stroke();
+
+      // Stylized plant tendril on right
+      ctx.strokeStyle = '#f8fafc';
+      ctx.lineWidth = 0.7;
+      ctx.beginPath();
+      ctx.moveTo(3.5, 4.5);
+      ctx.quadraticCurveTo(5.2, 0, 3.8, -4.0);
+      ctx.stroke();
+
+      // Relief embossed "5"
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 5.2px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('5', -1.0, -1.0);
+
+      // "РУБ" text
+      ctx.fillStyle = '#cbd5e1';
+      ctx.font = 'bold 1.7px sans-serif';
+      ctx.fillText('РУБ', -0.8, 3.2);
+
+      drawGlossBand(ctx, -4.5, -4.5, 2.0, 8.0, 0.25);
+      return true;
+    }
+
+    // 2 Rubles Coin (Монета 2 ₽, никель)
+    case 'coin_2': {
+      drawShadow(ctx, 7.5, 7.5, 7.0, 0.25);
+
+      const coinGrad = ctx.createRadialGradient(-2, -2, 1, 0, 0, 7.2);
+      coinGrad.addColorStop(0, '#ffffff');
+      coinGrad.addColorStop(0.4, '#e2e8f0');
+      coinGrad.addColorStop(0.8, '#94a3b8');
+      coinGrad.addColorStop(1, '#475569');
+      ctx.fillStyle = coinGrad;
+      ctx.beginPath();
+      ctx.arc(0, 0, 7.0, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.strokeStyle = '#475569';
+      ctx.lineWidth = 0.5;
+      ctx.stroke();
+
+      // Relief embossed "2"
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 5.0px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('2', -0.8, -1.0);
+
+      ctx.fillStyle = '#cbd5e1';
+      ctx.font = 'bold 1.6px sans-serif';
+      ctx.fillText('РУБ', -0.6, 3.0);
+
+      drawGlossBand(ctx, -4.0, -4.0, 1.8, 7.0, 0.25);
+      return true;
+    }
+
+    // 1 Ruble Coin (Монета 1 ₽, никель)
+    case 'coin_1': {
+      drawShadow(ctx, 7, 7, 6.5, 0.25);
+
+      const coinGrad = ctx.createRadialGradient(-2, -2, 1, 0, 0, 6.5);
+      coinGrad.addColorStop(0, '#ffffff');
+      coinGrad.addColorStop(0.4, '#e2e8f0');
+      coinGrad.addColorStop(0.8, '#94a3b8');
+      coinGrad.addColorStop(1, '#475569');
+      ctx.fillStyle = coinGrad;
+      ctx.beginPath();
+      ctx.arc(0, 0, 6.4, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.strokeStyle = '#475569';
+      ctx.lineWidth = 0.5;
+      ctx.stroke();
+
+      // Relief embossed "1"
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 4.6px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('1', -0.8, -0.8);
+
+      ctx.fillStyle = '#cbd5e1';
+      ctx.font = 'bold 1.5px sans-serif';
+      ctx.fillText('РУБ', -0.6, 2.8);
+
+      drawGlossBand(ctx, -3.8, -3.8, 1.8, 6.5, 0.25);
+      return true;
+    }
+
+    // ==========================================
     // === 1. VALUABLES (ЦЕННОСТИ) ===
     // ==========================================
 

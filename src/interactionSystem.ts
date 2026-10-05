@@ -141,6 +141,75 @@ export function isTargetInPhysicalReach(
   return { inReach: true, dist, angleDiff, score };
 }
 
+export function resolveBuildingShop(bld: Building, roomName: string = ''): { shopType: string; shopTitle: string } | null {
+  if (!bld) return null;
+
+  // Residential buildings, cottages, panel apartments, garages without explicit shop brands do NOT have commercial shops
+  const isResidential = bld.type === 'panel_apartment' || bld.type === 'brick_residential' || bld.type === 'modern_residential' || bld.type === 'suburban';
+  if (isResidential && !bld.shopBrand) {
+    return null;
+  }
+
+  const rm = roomName || '';
+
+  if (bld.shopBrand === 'pharmacy_36_6' || rm.includes('Аптека') || rm.includes('Панацея') || rm.includes('Медпункт') || bld.type === 'hospital') {
+    return { shopType: 'pharmacy', shopTitle: rm || bld.nameRu || 'Аптека "Панацея"' };
+  }
+  if (bld.shopBrand === 'cofix_bakery' || rm.includes('Урбан') || rm.includes('Пекарня')) {
+    return { shopType: 'cafe', shopTitle: rm || bld.nameRu || 'Кафе & Пекарня "Урбан & Бейкери"' };
+  }
+  if (bld.shopBrand === 'bean_bistro' || rm.includes('Bean & Bistro') || rm.includes('Кофейня') || rm.includes('Кафе')) {
+    return { shopType: 'cafe', shopTitle: rm || bld.nameRu || 'Кафе & Кофейня "Bean & Bistro"' };
+  }
+  if (bld.shopBrand === 'dodo_pizza' || rm.includes('Пиццерия') || rm.includes('Империя') || rm.includes('Пицца')) {
+    return { shopType: 'pizzeria', shopTitle: rm || bld.nameRu || 'Пиццерия "Пицца-Империя"' };
+  }
+  if (bld.shopBrand === 'vkusno_tochka' || rm.includes('Бургер-Клаб') || rm.includes('Бургерная') || rm.includes('Фастфуд')) {
+    return { shopType: 'fast_food', shopTitle: rm || bld.nameRu || 'Ресторан "Бургер-Клаб"' };
+  }
+  if (bld.shopBrand === 'mvideo' || rm.includes('Электро-Маркет') || rm.includes('Электроника') || rm.includes('Гаджет')) {
+    return { shopType: 'electronics', shopTitle: rm || bld.nameRu || 'Гипермаркет электроники "Электро-Маркет"' };
+  }
+  if (bld.shopBrand === 'sportmaster' || rm.includes('Спорт-Олимп') || rm.includes('Спорт')) {
+    return { shopType: 'sports_shop', shopTitle: rm || bld.nameRu || 'Спортивный гипермаркет "Спорт-Олимп"' };
+  }
+  if (bld.type === 'car_dealership' || rm.includes('Автосалон') || rm.includes('Шоурум')) {
+    return { shopType: 'car_dealership', shopTitle: rm || bld.nameRu || 'Автосалон "Премиум Арт"' };
+  }
+  if (bld.shopBrand === 'pitstop_service' || rm.includes('PIT-STOP') || rm.includes('Авто')) {
+    return { shopType: 'auto_shop', shopTitle: rm || bld.nameRu || 'Автомастерская & Сервис "PIT-STOP"' };
+  }
+  if (bld.shopBrand === 'splav_gear' || rm.includes('Тракт') || rm.includes('Туризм') || rm.includes('Охота') || rm.includes('Снаряжение')) {
+    return { shopType: 'gear_shop', shopTitle: rm || bld.nameRu || 'Магазин "Охота & Туризм Тракт"' };
+  }
+  if (bld.shopBrand === 'perekrestok' || rm.includes('Азимут')) {
+    return { shopType: 'supermarket', shopTitle: rm || bld.nameRu || 'Супермаркет "Азимут 24/7"' };
+  }
+  if (bld.shopBrand === 'pyaterochka' || rm.includes('Регуляр')) {
+    return { shopType: 'supermarket', shopTitle: rm || bld.nameRu || 'Супермаркет "Регуляр 24/7"' };
+  }
+  if (rm.includes('Суши') || rm.includes('WOK') || rm.includes('Сакура')) {
+    return { shopType: 'sushi_asian', shopTitle: rm || 'Суши-Бар "Сакура"' };
+  }
+  if (rm.includes('Кинобар') || rm.includes('Синема') || rm.includes('Попкорн')) {
+    return { shopType: 'cinema_bar', shopTitle: rm || 'Кинобар & Попкорн' };
+  }
+  if (rm.includes('Одежда') || rm.includes('Мода') || rm.includes('Бутик')) {
+    return { shopType: 'clothing', shopTitle: rm || 'Бутик Одежды & Обуви' };
+  }
+  if (rm.includes('Книжн') || rm.includes('Логос')) {
+    return { shopType: 'bookstore', shopTitle: rm || 'Книжная Лавка "Логос"' };
+  }
+  if (bld.type === 'police_station') {
+    return { shopType: 'gear_shop', shopTitle: 'Арсенал & Снаряжение полиции' };
+  }
+  if (bld.type === 'shopping_mall' || bld.type === 'commercial' || bld.type === 'shop') {
+    return { shopType: 'supermarket', shopTitle: rm || bld.nameRu || 'Супермаркет 24/7' };
+  }
+
+  return null;
+}
+
 /**
  * Resolves the single most relevant physical world interaction in front of the player.
  */
@@ -1000,19 +1069,33 @@ export function findActiveInteraction(
                   score: reach.score - 5,
                   data: { bld }
                 });
-              } else if (furn.type === 'cash_register' || furn.type === 'counter' || furn.type === 'vending_machine') {
-                candidates.push({
-                  type: 'building_shop',
-                  primaryKey: 'E',
-                  actionTitle: furn.type === 'vending_machine' ? 'Торговый автомат' : 'Касса / Прилавок',
-                  detail: bld.nameRu || 'Магазин',
-                  x: furnWorldX,
-                  y: furnWorldY,
-                  dist: reach.dist,
-                  angleDiff: reach.angleDiff,
-                  score: reach.score - 5,
-                  data: { zone: { shopType: bld.type === 'police_station' ? 'gear_shop' : 'supermarket' }, bld }
-                });
+              } else {
+                // Determine room name if furniture is inside a specific room
+                let furnRoomName = '';
+                if (layout.rooms && layout.rooms.length > 0) {
+                  const fx = furn.x + fw / 2;
+                  const fy = furn.y + fh / 2;
+                  const rmFound = layout.rooms.find(rm => fx >= rm.x && fx <= (rm.x + rm.width) && fy >= rm.y && fy <= (rm.y + rm.height));
+                  if (rmFound) furnRoomName = rmFound.name;
+                }
+
+                const shopInfo = resolveBuildingShop(bld, furnRoomName);
+                if (shopInfo || furn.type === 'vending_machine') {
+                  const resolvedShopType = shopInfo?.shopType || 'cafe';
+                  const resolvedShopTitle = shopInfo?.shopTitle || (furn.type === 'vending_machine' ? 'Торговый автомат снеков и напитков' : 'Магазин');
+                  candidates.push({
+                    type: 'building_shop',
+                    primaryKey: 'E',
+                    actionTitle: furn.type === 'vending_machine' ? 'Торговый автомат' : `Касса (${resolvedShopTitle})`,
+                    detail: resolvedShopTitle,
+                    x: furnWorldX,
+                    y: furnWorldY,
+                    dist: reach.dist,
+                    angleDiff: reach.angleDiff,
+                    score: reach.score - 5,
+                    data: { zone: { shopType: resolvedShopType }, shopTitle: resolvedShopTitle, bld }
+                  });
+                }
               }
             }
 
