@@ -91,8 +91,8 @@ for (const a of animals) {
       usable: true,
       biteCount: isMinced ? 100 : 5,
       biteDuration: isMinced ? 0.1 : 1.0,
-      leftoverId: isMinced ? 'tray_sealed_food_torn' : undefined,
-      leftoverNameRu: isMinced ? 'Вскрытый пищевой лоток' : undefined,
+      leftoverId: undefined,
+      leftoverNameRu: undefined,
       tasteMessages: isMinced ? [
         `Сырой фарш (${a.nameRu.toLowerCase()}, порция 10г)...`,
         `Влажная перекрученная мясная масса (${a.nameRu.toLowerCase()})...`,
@@ -159,8 +159,8 @@ for (const b of birds) {
       usable: true,
       biteCount: isMinced ? 100 : 4,
       biteDuration: isMinced ? 0.1 : 0.8,
-      leftoverId: isMinced ? 'tray_sealed_food_torn' : undefined,
-      leftoverNameRu: isMinced ? 'Вскрытый пищевой лоток' : undefined,
+      leftoverId: undefined,
+      leftoverNameRu: undefined,
       tasteMessages: isMinced ? [
         `Сырой фарш из птицы (${b.nameRu.toLowerCase()}, порция 10г)...`,
         `Влажная мелко перекрученная масса мяса птицы (${b.nameRu.toLowerCase()})...`
@@ -234,8 +234,8 @@ for (const f of fishes) {
       usable: true,
       biteCount: isMinced ? 100 : (isCaviar ? 20 : 4),
       biteDuration: isMinced ? 0.1 : 0.8,
-      leftoverId: isMinced ? 'tray_sealed_food_torn' : (isCaviar ? 'jar_glass_small' : undefined),
-      leftoverNameRu: isMinced ? 'Вскрытый пищевой лоток' : (isCaviar ? 'Унифицированная стеклянная банка (0.2л)' : undefined),
+      leftoverId: isMinced ? undefined : (isCaviar ? 'jar_glass_small' : undefined),
+      leftoverNameRu: isMinced ? undefined : (isCaviar ? 'Унифицированная стеклянная банка (0.2л)' : undefined),
       tasteMessages: isMinced ? [
         `Сырой рыбный фарш (${f.nameRu.toLowerCase()}, порция 10г)...`,
         `Перекрученное филе рыбы (${f.nameRu.toLowerCase()}) с морским ароматом...`
@@ -274,7 +274,7 @@ export const extraIngredients: {
   leftoverNameRu?: string;
   taste: string[];
 }[] = [
-  { id: 'minced_meat_mixed', name: 'Home Mixed Minced Meat (1kg)', nameRu: 'Фарш домашний (говядина + свинина, 1 кг)', desc: 'Classic 50/50 beef and pork minced meat pack (1kg).', descRu: 'Классический домашний свежий фарш (1 кг) из сочной говядины и свинины в лотке. 100 порций по 10 грамм.', wt: 1.0, vol: 0.95, usable: true, bites: 100, hunger: 200, leftoverId: 'tray_sealed_food_torn', leftoverNameRu: 'Вскрытый пищевой лоток', taste: ['Сырой домашний фарш из говядины и свинины (порция 10г)...', 'Сочная перекрученная смешанная мясная масса...'] },
+  { id: 'minced_meat_mixed', name: 'Home Mixed Minced Meat (1kg)', nameRu: 'Фарш домашний (говядина + свинина, 1 кг)', desc: 'Classic 50/50 beef and pork minced meat pack (1kg).', descRu: 'Классический домашний свежий фарш (1 кг) из сочной говядины и свинины в лотке. 100 порций по 10 грамм.', wt: 1.0, vol: 0.95, usable: true, bites: 100, hunger: 200, taste: ['Сырой домашний фарш из говядины и свинины (порция 10г)...', 'Сочная перекрученная смешанная мясная масса...'] },
   { id: 'squid_tubes', name: 'Raw Squid Tubes', nameRu: 'Тушки кальмара очищенные', desc: 'Raw squid mantle tubes.', descRu: 'Очищенные сырые тушки кальмара.', wt: 0.5, vol: 0.48, usable: true, hunger: 5, taste: ['Упругий, резиновый укус сырого кальмара...', 'Пахнет соленым морем.'] },
   { id: 'squid_tentacles', name: 'Raw Squid Tentacles', nameRu: 'Щупальца кальмара', desc: 'Raw squid tentacles.', descRu: 'Сырые щупальца кальмара.', wt: 0.3, vol: 0.28, usable: true, hunger: 4, taste: ['Сырые присоски и упругая плоть щупальца...'] },
   { id: 'octopus_whole', name: 'Whole Raw Octopus', nameRu: 'Цельный осьминог', desc: 'Whole raw octopus carcass.', descRu: 'Сырой цельный осьминог.', wt: 1.5, vol: 1.4, usable: true, hunger: 10, taste: ['Слизкое, резиновое тело сырого осьминога...', 'Тяжело прожевать.'] },
@@ -293,7 +293,6 @@ export const extraIngredients: {
   { id: 'carrot_peeled', name: 'Peeled Fresh Carrot', nameRu: 'Очищенная морковь', desc: 'Freshly scraped sweet carrot.', descRu: 'Очищенная от кожуры ярко-оранжевая морковь.', wt: 0.1, vol: 0.09, usable: true, hunger: 6, taste: ['Гладкая, сладкая и хрустящая чистая морковка!'] },
   { id: 'carrot_diced', name: 'Diced Carrot Pieces', nameRu: 'Нарезанная морковь (кубики)', desc: 'Diced carrot pieces.', descRu: 'Нарезанная кубиками оранжевая морковь.', wt: 0.12, vol: 0.11, usable: true, hunger: 6, taste: ['Хрустящие сочные кубики свежей моркови...'] },
   { id: 'carrot_grated', name: 'Julienne Shredded Carrot', nameRu: 'Тертая морковь (салатная)', desc: 'Shredded carrot strips.', descRu: 'Тонко натертая соломкой свежая оранжевая морковь.', wt: 0.15, vol: 0.14, usable: true, hunger: 7, taste: ['Сочная сладкая морковная соломка пускает сок...'] },
-  { id: 'carrot_bag_1k', name: 'Packaged Carrots Bag (1kg)', nameRu: 'Пакет мытой моркови (1кг)', desc: 'Bag of fresh washed carrots.', descRu: 'Прозрачный пакет с отборной мытой морковью (1 кг).', wt: 1.0, vol: 1.1, usable: true, leftoverId: 'package_bag', leftoverNameRu: 'Фасовочный пакет', taste: ['Пакет свежей моркови.'] },
 
   { id: 'beet_whole', name: 'Purple Beetroot', nameRu: 'Свекла красная', desc: 'Whole raw red beetroot.', descRu: 'Сырая цельная красная свекла.', wt: 0.25, vol: 0.23, usable: true, hunger: 5, taste: ['Сырая жесткая свекла со сладковато-землистым вкусом...'] },
   { id: 'beet_peeled_boiled', name: 'Boiled Peeled Beetroot', nameRu: 'Свекла отварная очищенная', desc: 'Whole peeled cooked red beetroot.', descRu: 'Цельная отварная очищенная красная свекла. Готова к употреблению или нарезке в борщ и салаты.', wt: 0.15, vol: 0.14, usable: true, hunger: 12, taste: ['Мягкая, сладкая и сочная отварная свекла!'] },
@@ -342,7 +341,6 @@ export const extraIngredients: {
   { id: 'pumpkin_whole', name: 'Giant Orange Pumpkin', nameRu: 'Тыква рыжая цельная', desc: 'Giant whole orange pumpkin.', descRu: 'Огромная цельная рыжая тыква.', wt: 5.0, vol: 4.8, usable: true, hunger: 30, taste: ['Очень жесткая волокнистая кожура тыквы... Прогрызть невозможно.'] },
   { id: 'pumpkin_cut', name: 'Large Cut of Pumpkin', nameRu: 'Нарезанный кусок тыквы', desc: 'Raw pumpkin cut.', descRu: 'Свежий плотный ломоть оранжевой тыквенной мякоти.', wt: 1.0, vol: 0.95, usable: true, hunger: 15, taste: ['Плотная, сладковатая волокнистая мякоть сырой тыквы...'] },
   { id: 'pumpkin_diced', name: 'Diced Pumpkin Cubes', nameRu: 'Нарезанная тыква (кубики)', desc: 'Diced sweet pumpkin cubes.', descRu: 'Очищенные сладкие оранжевые кубики тыквы для каши и запекания.', wt: 0.4, vol: 0.38, usable: true, hunger: 10, taste: ['Сладкие плотные тыквенные кубики.'] },
-  { id: 'pumpkin_seeds_bag', name: 'Roasted Pumpkin Seeds Bag', nameRu: 'Сушеные тыквенные семечки', desc: 'Roasted pumpkin seeds pack.', descRu: 'Пакетик отборных сушеных тыквенных семечек.', wt: 0.1, vol: 0.12, usable: true, hunger: 12, leftoverId: 'package_bag', leftoverNameRu: 'Фасовочный пакет', taste: ['Хрустящие, питательные семечки с ореховым вкусом.'] },
 
   { id: 'cabbage_white_head', name: 'White Cabbage Head', nameRu: 'Кочан белокочанной капусты', desc: 'Whole white cabbage.', descRu: 'Плотный кочан белокочанной капусты.', wt: 2.0, vol: 1.9, usable: true, hunger: 12, taste: ['Сочный хруст капустных листьев!', 'Горьковатая кочерыжка и хрустящая листва.'] },
   { id: 'cabbage_half', name: 'Half White Cabbage Head', nameRu: 'Половина кочана капусты', desc: 'Half white cabbage.', descRu: 'Половина разрезанного плотного кочана капусты.', wt: 1.0, vol: 0.95, usable: true, hunger: 8, taste: ['Свежий сочный срез капустного кочана.'] },
@@ -354,7 +352,6 @@ export const extraIngredients: {
   { id: 'cauliflower_florets', name: 'Cauliflower Florets Bunch', nameRu: 'Соцветия цветной капусты', desc: 'Cut cauliflower florets.', descRu: 'Разобранные нежные белые соцветия цветной капусты.', wt: 0.4, vol: 0.38, usable: true, hunger: 6, taste: ['Нежные белые хрустящие соцветия.'] },
   { id: 'broccoli_head', name: 'Whole Broccoli Head', nameRu: 'Кочан брокколи', desc: 'Whole fresh green broccoli.', descRu: 'Цельный свежий темно-зеленый кочан брокколи с плотным стеблем.', wt: 0.6, vol: 0.55, usable: true, hunger: 9, taste: ['Свежий сочный зеленый кочан брокколи.'] },
   { id: 'broccoli_florets', name: 'Broccoli Florets Bunch', nameRu: 'Соцветия брокколи', desc: 'Fresh broccoli florets bunch.', descRu: 'Зеленые кудрявые соцветия свежей брокколи.', wt: 0.4, vol: 0.38, usable: true, hunger: 6, taste: ['Хрустящие зеленые веточки брокколи с легким травяным ароматом...'] },
-  { id: 'vegetable_mix_frozen', name: 'Frozen Garden Vegetable Mix', nameRu: 'Замороженная овощная смесь', desc: 'Frozen broccoli, cauliflower and carrot bag.', descRu: 'Пакет с шоковой заморозкой брокколи, цветной капусты и моркови.', wt: 0.4, vol: 0.5, usable: true, hunger: 8, leftoverId: 'package_bag', leftoverNameRu: 'Фасовочный пакет', taste: ['Ледяные хрустящие замороженные овощи.'] },
 
   { id: 'bell_pepper_red', name: 'Red Bell Pepper', nameRu: 'Болгарский перец красный', desc: 'Sweet red bell pepper.', descRu: 'Сладкий красный болгарский перец.', wt: 0.18, vol: 0.17, usable: true, hunger: 8, thirst: 8, taste: ['Очень сочный, сладкий и хрустящий красный перец!', 'Приятный свежий вкус.'] },
   { id: 'bell_pepper_yellow', name: 'Yellow Bell Pepper', nameRu: 'Болгарский перец желтый', desc: 'Sweet yellow bell pepper.', descRu: 'Сладкий желтый болгарский перец.', wt: 0.18, vol: 0.17, usable: true, hunger: 8, thirst: 8, taste: ['Сладкий сочный хруст желтого перца...'] },
@@ -372,7 +369,6 @@ export const extraIngredients: {
   // === FRUITS & BERRIES ===
   { id: 'apple_green', name: 'Sour Green Apple', nameRu: 'Кислое зеленое яблоко', desc: 'Sour granny smith apple.', descRu: 'Сочное, кислое зеленое яблоко.', wt: 0.15, vol: 0.14, usable: true, hunger: 15, thirst: 12, taste: ['Крепкий, сочный укус яблока!', 'Яркая кислинка сводит челюсть и бодрит рецепторы!'] },
   { id: 'apple_sliced', name: 'Sliced Apple Wedges (Cored)', nameRu: 'Нарезанное яблоко (дольки)', desc: 'Crisp apple wedges without core.', descRu: 'Очищенные от сердцевины и косточек сочные дольки яблока.', wt: 0.15, vol: 0.14, usable: true, hunger: 15, thirst: 12, taste: ['Сладкие, хрустящие дольки яблока без огрызка.'] },
-  { id: 'apple_dried_rings', name: 'Dried Apple Rings Pack', nameRu: 'Сушеные яблочные кольца', desc: 'Dehydrated apple rings.', descRu: 'Пакетик мягких сладких сушеных яблочных колец (сухофрукты).', wt: 0.08, vol: 0.12, usable: true, hunger: 14, leftoverId: 'package_bag', leftoverNameRu: 'Фасовочный пакет', taste: ['Тягучие, сладко-кислые сушеные яблочные кольца.'] },
   { id: 'apple_puree_jar', name: 'Natural Apple Puree Jar', nameRu: 'Яблочное пюре в баночке', desc: 'Smooth baby apple puree.', descRu: 'Стеклянная баночка с нежнейшим протертым яблочным пюре.', wt: 0.25, vol: 0.22, usable: true, hunger: 16, thirst: 8, leftoverId: 'jar_glass_small', leftoverNameRu: 'Унифицированная стеклянная банка (0.2л)', taste: ['Бархатистое сладкое яблочное пюре тает во рту!'] },
 
   { id: 'pear_yellow', name: 'Juicy Duchess Pear', nameRu: 'Сочная груша Дюшес', desc: 'Sweet juicy yellow pear.', descRu: 'Сладкая сочная желтая груша сорта Дюшес.', wt: 0.18, vol: 0.17, usable: true, hunger: 18, thirst: 15, taste: ['Медовая сладость спелой сочной груши!', 'Мякоть тает во рту, сок стекает по подбородку.'] },
@@ -380,11 +376,9 @@ export const extraIngredients: {
 
   { id: 'plum_purple', name: 'Sweet Purple Plum', nameRu: 'Слива синяя сладкая', desc: 'Ripe sweet purple plum.', descRu: 'Спелая сладкая сине-фиолетовая слива.', wt: 0.04, vol: 0.038, usable: true, hunger: 4, thirst: 4, taste: ['Нежная сладкая мякоть с легкой кислинкой у шкурки.'] },
   { id: 'plum_halves', name: 'Pitted Plum Halves', nameRu: 'Сливы половинками (без косточек)', desc: 'Pitted sweet plum halves.', descRu: 'Сочные половинки сладкой сливы без косточек.', wt: 0.15, vol: 0.14, usable: true, hunger: 14, thirst: 12, taste: ['Мягкие сочные половинки сладких слив.'] },
-  { id: 'prune_dried_bag', name: 'Dried Black Prunes Bag', nameRu: 'Чернослив сушеный', desc: 'Sweet dried pitted prunes pack.', descRu: 'Пакетик отборного мягкого чернослива без косточек.', wt: 0.2, vol: 0.22, usable: true, hunger: 20, leftoverId: 'package_bag', leftoverNameRu: 'Фасовочный пакет', taste: ['Плотный, сладкий и ароматный сушеный чернослив.'] },
 
   { id: 'apricot_orange', name: 'Orange Apricot', nameRu: 'Абрикос спелый', desc: 'Velvety orange apricot.', descRu: 'Спелый бархатистый оранжевый абрикос.', wt: 0.03, vol: 0.028, usable: true, hunger: 3, thirst: 3, taste: ['Бархатистый сладкий абрикос...'] },
   { id: 'apricot_halves', name: 'Pitted Apricot Halves', nameRu: 'Абрикосы половинками (без косточек)', desc: 'Pitted ripe apricot halves.', descRu: 'Спелые сочные половинки абрикоса без косточек.', wt: 0.15, vol: 0.14, usable: true, hunger: 14, thirst: 12, taste: ['Сладкие, нежные абрикосовые дольки.'] },
-  { id: 'apricot_dried_bag', name: 'Selected Dried Apricots (Dried Fruits)', nameRu: 'Курага отборная', desc: 'Dried sweet apricots pack.', descRu: 'Пакетик золотистой отборной кураги (сушеных абрикосов).', wt: 0.2, vol: 0.22, usable: true, hunger: 22, leftoverId: 'package_bag', leftoverNameRu: 'Фасовочный пакет', taste: ['Медовая, тягучая сладость отборной кураги!'] },
 
   { id: 'peach_velvet', name: 'Fuzzy Velvet Peach', nameRu: 'Персик бархатистый', desc: 'Sweet fuzzy peach.', descRu: 'Спелый крупный бархатистый персик.', wt: 0.15, vol: 0.14, usable: true, hunger: 14, thirst: 12, taste: ['Невероятно сочный персиковый взрыв!', 'Ароматный сладкий сок и нежнейшая мякоть.'] },
   { id: 'peach_halves_canned', name: 'Canned Peach Halves in Light Syrup', nameRu: 'Консервированные персики в сиропе', desc: 'Sweet canned peach halves.', descRu: 'Жестяная банка с нежными половинками персиков в сладком прозрачном сиропе.', wt: 0.45, vol: 0.4, usable: true, hunger: 25, thirst: 20, leftoverId: 'tin_can_empty', leftoverNameRu: 'Банка из-под тушёнки', taste: ['Тающая во рту сладость консервированного персика в медовом сиропе!'] },
@@ -407,11 +401,9 @@ export const extraIngredients: {
 
   { id: 'watermelon_whole', name: 'Giant Striped Watermelon', nameRu: 'Арбуз полосатый цельный', desc: 'Giant ripe watermelon.', descRu: 'Огромный спелый полосатый арбуз.', wt: 6.5, vol: 6.2, usable: true, hunger: 30, thirst: 60, taste: ['Жесткая толстая корка арбуза. Нужно как-то разрезать...'] },
   { id: 'watermelon_slice', name: 'Watermelon Slice', nameRu: 'Сочный ломоть арбуза', desc: 'Juicy slice of watermelon.', descRu: 'Отрезанный сочный кусок сахарного арбуза.', wt: 0.5, vol: 0.48, usable: true, hunger: 15, thirst: 40, taste: ['Сахарная, крупитчатая мякоть арбуза! Потрясающее утоление жажды.'] },
-  { id: 'watermelon_diced', name: 'Diced Watermelon in Cup', nameRu: 'Кубики арбуза в стаканчике', desc: 'Seedless watermelon chunks in cup.', descRu: 'Прозрачный стаканчик со сладкими кубиками арбуза без косточек.', wt: 0.3, vol: 0.28, usable: true, hunger: 10, thirst: 35, leftoverId: 'box_cardboard_small', leftoverNameRu: 'Малая картонная коробка', taste: ['Холодный сахарный арбузный сок мгновенно утоляет жажду!'] },
 
   { id: 'cherry_basket', name: 'Sweet Cherries Basket', nameRu: 'Лукошко черешни', desc: 'Basket of ripe cherries.', descRu: 'Лукошко со спелой темной черешней.', wt: 0.3, vol: 0.28, usable: true, hunger: 14, thirst: 10, taste: ['Мясистая сладкая черешня! Аккуратнее с косточками.'] },
   { id: 'pomegranate_whole', name: 'Royal Pomegranate', nameRu: 'Гранат спелый', desc: 'Ripe pomegranate fruit.', descRu: 'Спелый крупный восточный гранат.', wt: 0.4, vol: 0.38, usable: true, hunger: 10, thirst: 12, taste: ['Вы прокусываете зернышко граната... Терпко-сладкий рубиновый сок!'] },
-  { id: 'pomegranate_seeds_cup', name: 'Peeled Pomegranate Seeds Cup', nameRu: 'Зерна граната в стаканчике', desc: 'Cup of fresh pomegranate arils.', descRu: 'Стаканчик с очищенными рубиновыми зернами спелого граната.', wt: 0.15, vol: 0.14, usable: true, hunger: 8, thirst: 10, leftoverId: 'box_cardboard_small', leftoverNameRu: 'Малая картонная коробка', taste: ['Горсть сочных рубиновых зерен граната сочным взрывом лопается во рту!'] },
 
   { id: 'kiwi_fruit', name: 'Fuzzy Kiwi Fruit', nameRu: 'Киви волосатый спелый', desc: 'Fuzzy green kiwi fruit.', descRu: 'Свежий спелый киви с волосатой шкуркой.', wt: 0.08, vol: 0.075, usable: true, hunger: 6, thirst: 6, taste: ['Нежно-зеленая кисло-сладкая мякоть с мелкими хрустящими семечками.'] },
   { id: 'kiwi_peeled', name: 'Peeled Emerald Kiwi', nameRu: 'Очищенный киви', desc: 'Peeled green kiwi.', descRu: 'Очищенный от мохнатой шкурки изумрудный плод киви.', wt: 0.07, vol: 0.065, usable: true, hunger: 6, thirst: 6, taste: ['Нежнейшая изумрудная кисло-сладкая мякоть.'] },
@@ -420,8 +412,6 @@ export const extraIngredients: {
   // === BERRIES & GRAPES ===
   { id: 'grapes_green_bunch', name: 'Green Grapes Bunch', nameRu: 'Гроздь зеленого винограда', desc: 'Bunch of sweet green grapes.', descRu: 'Гроздь сочного сладкого зеленого винограда кишмиш.', wt: 0.4, vol: 0.38, usable: true, hunger: 15, thirst: 12, taste: ['Упругие ягоды винограда сочным взрывом лопаются на языке!'] },
   { id: 'grapes_red_bunch', name: 'Red Grapes Bunch', nameRu: 'Гроздь красного винограда', desc: 'Bunch of sweet red grapes.', descRu: 'Гроздь спелого красного винограда с мускатным вкусом.', wt: 0.4, vol: 0.38, usable: true, hunger: 15, thirst: 12, taste: ['Богатый мускатный вкус спелого сладкого винограда...'] },
-  { id: 'grapes_berries_cup', name: 'Selected Grapes Cup', nameRu: 'Виноград россыпью в стаканчике', desc: 'Cup of fresh sweet grapes.', descRu: 'Стаканчик с отборными сочными ягодами винограда без веточек.', wt: 0.2, vol: 0.19, usable: true, hunger: 10, thirst: 10, leftoverId: 'box_cardboard_small', leftoverNameRu: 'Малая картонная коробка', taste: ['Упругие сладкие виноградины приятно лопаются на зубах!'] },
-  { id: 'raisins_dried_bag', name: 'Sweet Dried Raisins Bag', nameRu: 'Изюм сушеный', desc: 'Sweet dried seedless raisins pack.', descRu: 'Пакетик сладкого бескосточкового сушеного изюма.', wt: 0.15, vol: 0.16, usable: true, hunger: 18, leftoverId: 'package_bag', leftoverNameRu: 'Фасовочный пакет', taste: ['Очень сладкий, концентрированный ягодный вкус сушеного изюма.'] },
 
   { id: 'blueberry_basket', name: 'Wild Blueberries Basket', nameRu: 'Лукошко лесной черники', desc: 'Basket of sweet blueberries.', descRu: 'Плетёное лукошко со спелой лесной черникой.', wt: 0.3, vol: 0.28, usable: true, hunger: 12, thirst: 8, taste: ['Горсть черной лесной черники лопается во рту сладким соком...'] },
   { id: 'lingonberry_basket', name: 'Wild Lingonberries Basket', nameRu: 'Лукошко брусники', desc: 'Basket of tart lingonberries.', descRu: 'Лукошко с красной лесной брусникой.', wt: 0.3, vol: 0.28, usable: true, hunger: 10, thirst: 8, taste: ['Горьковато-кислый, освежающий дикий вкус таежной брусники...'] },
@@ -438,7 +428,6 @@ export const extraIngredients: {
   { id: 'raspberry_fresh', name: 'Fresh Raspberry', nameRu: 'Малина свежая', desc: 'Fresh garden raspberry.', descRu: 'Свежая душистая малина.', wt: 0.02, vol: 0.018, usable: true, hunger: 2, thirst: 2, taste: ['Нежная сладкая ягодка малины.'] },
   { id: 'blueberry_fresh', name: 'Fresh Blueberry', nameRu: 'Черника свежая', desc: 'Fresh forest blueberry.', descRu: 'Сочная лесная черника.', wt: 0.01, vol: 0.009, usable: true, hunger: 1, thirst: 1, taste: ['Сочная лесная черника.'] },
   { id: 'cherry_fresh', name: 'Sweet Cherry', nameRu: 'Черешня свежая', desc: 'Fresh dark sweet cherry.', descRu: 'Сладкая темная черешня.', wt: 0.02, vol: 0.018, usable: true, hunger: 2, thirst: 2, taste: ['Сладкая сочная черешня.'] },
-  { id: 'berries_mixed_frozen', name: 'Frozen Forest Berries Mix', nameRu: 'Замороженная смесь ягод', desc: 'Frozen mix of berries.', descRu: 'Пакет с шоковой заморозкой лесной черники, малины и смородины.', wt: 0.4, vol: 0.45, usable: true, hunger: 12, thirst: 6, leftoverId: 'package_bag', leftoverNameRu: 'Фасовочный пакет', taste: ['Ледяные сочные ягоды тают на языке освежающей кислинкой!'] },
 
   // === MUSHROOMS ===
   { id: 'cep_mushroom_whole', name: 'Porcini Wild Cep Mushroom', nameRu: 'Белый гриб лесной цельный', desc: 'King of wild forest mushrooms.', descRu: 'Свежий благородный белый гриб (боровик).', wt: 0.1, vol: 0.09, usable: true, hunger: 6, taste: ['Мясистая упругая ножка боровика с глубоким грибным ароматом.'] },
