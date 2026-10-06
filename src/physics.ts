@@ -891,11 +891,116 @@ export function checkVehicleVehicleCollision(carA: Vehicle, carB: Vehicle): Vehi
     contactY = (carA.y + carB.y) / 2;
   }
 
+  // --- FIRST-PRINCIPLES BUMPER & IMPACT PLANE NORMAL RESOLUTION ---
+  // In SAT on elongated boxes, an offset frontal collision (e.g. 25-40% overlap) has small lateral overlap
+  // but deep longitudinal crumple penetration. SAT naïvely picks the lateral axis because min(overlap)
+  // is smaller sideways, treating head-on impacts as glancing side-swipes and flinging cars sideways into ditches!
+  // Here, we identify genuine frontal and rear bumper collisions and align the contact normal with the
+  // true physical crash plane.
+  const cosA = Math.cos(carA.angle);
+  const sinA = Math.sin(carA.angle);
+  const cosB = Math.cos(carB.angle);
+  const sinB = Math.sin(carB.angle);
+
+  const headingDot = cosA * cosB + sinA * sinB;
+  const projDistA = cdx * cosA + cdy * sinA;
+  const projDistB = -cdx * cosB + -cdy * sinB;
+
+  const contactDistA = (contactX - carA.x) * cosA + (contactY - carA.y) * sinA;
+  const contactDistB = (contactX - carB.x) * cosB + (contactY - carB.y) * sinB;
+
+  const isHeadOnOrientation = headingDot < -0.30;
+  const isFrontToFront = isHeadOnOrientation && projDistA > -8 && projDistB > -8;
+  const isFrontalContact = isFrontToFront && contactDistA > -carA.length * 0.18 && contactDistB > -carB.length * 0.18;
+
+  let finalNormalX = bestCollision.normalX;
+  let finalNormalY = bestCollision.normalY;
+  let finalOverlap = bestCollision.overlap;
+
+  if (isFrontalContact) {
+    // Both front bumpers/crumple structures collided oncoming.
+    // The physical contact plane normal MUST oppose the oncoming velocity vector (longitudinally).
+    let frontalNormX = (cosA - cosB) * 0.5;
+    let frontalNormY = (sinA - sinB) * 0.5;
+    const fLen = Math.hypot(frontalNormX, frontalNormY);
+    if (fLen > 0.001) {
+      frontalNormX /= fLen;
+      frontalNormY /= fLen;
+    } else {
+      frontalNormX = cosA;
+      frontalNormY = sinA;
+    }
+    // Direct normal from carA towards carB
+    if (cdx * frontalNormX + cdy * frontalNormY < 0) {
+      frontalNormX = -frontalNormX;
+      frontalNormY = -frontalNormY;
+    }
+
+    // Determine actual longitudinal crush/penetration along this bumper normal
+    let minA = 999999, maxA = -999999;
+    for (const obbA of obbsA) {
+      for (const p of obbA.corners) {
+        const proj = p.x * frontalNormX + p.y * frontalNormY;
+        if (proj < minA) minA = proj;
+        if (proj > maxA) maxA = proj;
+      }
+    }
+    let minB = 999999, maxB = -999999;
+    for (const obbB of obbsB) {
+      for (const p of obbB.corners) {
+        const proj = p.x * frontalNormX + p.y * frontalNormY;
+        if (proj < minB) minB = proj;
+        if (proj > maxB) maxB = proj;
+      }
+    }
+    const longOverlap = Math.min(maxA, maxB) - Math.max(minA, minB);
+    if (longOverlap > 0) {
+      finalNormalX = frontalNormX;
+      finalNormalY = frontalNormY;
+      finalOverlap = longOverlap;
+    }
+  } else {
+    // Rear-end collision check (front of one car hits rear bumper of the other)
+    const isSameDirection = headingDot > 0.55;
+    const isRearEndAIntoB = isSameDirection && projDistA > 0 && projDistB < 0 && contactDistA > 0 && contactDistB < 0;
+    const isRearEndBIntoA = isSameDirection && projDistA < 0 && projDistB > 0 && contactDistA < 0 && contactDistB > 0;
+    if (isRearEndAIntoB || isRearEndBIntoA) {
+      let rearNormX = cosA;
+      let rearNormY = sinA;
+      if (cdx * rearNormX + cdy * rearNormY < 0) {
+        rearNormX = -rearNormX;
+        rearNormY = -rearNormY;
+      }
+      let minA = 999999, maxA = -999999;
+      for (const obbA of obbsA) {
+        for (const p of obbA.corners) {
+          const proj = p.x * rearNormX + p.y * rearNormY;
+          if (proj < minA) minA = proj;
+          if (proj > maxA) maxA = proj;
+        }
+      }
+      let minB = 999999, maxB = -999999;
+      for (const obbB of obbsB) {
+        for (const p of obbB.corners) {
+          const proj = p.x * rearNormX + p.y * rearNormY;
+          if (proj < minB) minB = proj;
+          if (proj > maxB) maxB = proj;
+        }
+      }
+      const longOverlap = Math.min(maxA, maxB) - Math.max(minA, minB);
+      if (longOverlap > 0) {
+        finalNormalX = rearNormX;
+        finalNormalY = rearNormY;
+        finalOverlap = longOverlap;
+      }
+    }
+  }
+
   return {
     collided: true,
-    normalX: bestCollision.normalX,
-    normalY: bestCollision.normalY,
-    overlap: bestCollision.overlap,
+    normalX: finalNormalX,
+    normalY: finalNormalY,
+    overlap: finalOverlap,
     contactX,
     contactY
   };
@@ -8221,7 +8326,19 @@ export function updateVehiclePhysics(
     // Power oversteer kick requires noticeable steering angle (> 0.12 rad / ~7 deg) and genuine power slip
     const isPowerOversteerKick = isRearPowerSlip && Math.abs(vehicle.steerAngle) > 0.12 && effectiveThrottle > 0.50;
 
-    if (isHandbraking && vSpeedKmh > 6.0) {
+    const isSpinningOutOrCrashed = (vehicle.spinoutTimer !== undefined && vehicle.spinoutTimer > 0) ||
+                                   (vehicle.activeCrumple !== undefined && vehicle.activeCrumple.timer > 0);
+
+    if (isSpinningOutOrCrashed) {
+      // Uncontrolled post-crash spinout/impact: disable intentional drift pumping.
+      // Kinetic energy is rapidly dissipated through tire scrub and soil plowing resistance.
+      isDriftingThisFrame = false;
+      const isOffroadSurf = surfFL.type === 'grass' || surfFL.type === 'dirt_road' || surfFL.type === 'mud' || surfFL.type === 'sand';
+      const plowDecay = (isOffroadSurf ? 8.5 : 5.0) * Math.max(0.4, effectiveGrip);
+      lateralSlip *= Math.max(0, 1.0 - plowDecay * dt);
+      vehicle.speed *= Math.max(0, 1.0 - (plowDecay * 0.6) * dt);
+      if (Math.abs(lateralSlip) < 0.4) lateralSlip = 0;
+    } else if (isHandbraking && vSpeedKmh > 6.0) {
       // Handbrake locks rear wheels, swinging rear out in forward or reverse
       isDriftingThisFrame = true;
       const swingSign = -Math.sign(vehicle.steerAngle || (vehicle.angularVelocity * moveDir) || 1) * moveDir;
@@ -8320,10 +8437,13 @@ export function updateVehiclePhysics(
       const scrubIntensity = (slipAbs / 120.0) * (isHandbraking ? 1.35 : 0.85);
       // Reduce speed scrubbing on slippery surfaces (lower effectiveGrip) to slide naturally
       const gripScrubMult = Math.max(0.30, effectiveGrip);
-      const speedLoss = 28.0 * scrubIntensity * gripScrubMult * dt;
+      const isOffroadSurf = surfFL.type === 'grass' || surfFL.type === 'dirt_road' || surfFL.type === 'mud' || surfFL.type === 'sand';
+      const offroadPlowDrag = isOffroadSurf ? 3.4 : 1.0;
+      const speedLoss = 28.0 * scrubIntensity * gripScrubMult * offroadPlowDrag * dt;
       vehicle.speed = Math.sign(vehicle.speed) * Math.max(0, Math.abs(vehicle.speed) - speedLoss);
       
-      lateralSlip *= Math.max(0, 1.0 - 1.8 * effectiveGrip * dt);
+      const latDecayRate = (isOffroadSurf ? 4.8 : 1.8) * effectiveGrip;
+      lateralSlip *= Math.max(0, 1.0 - latDecayRate * dt);
     }
 
     vehicle.lateralVelocity = lateralSlip;
@@ -9047,6 +9167,10 @@ export function updateVehiclePhysics(
       }
       vehicle.vx = Math.cos(vehicle.angle) * vehicle.speed;
       vehicle.vy = Math.sin(vehicle.angle) * vehicle.speed;
+      if (vehicle.lateralVelocity) {
+        vehicle.lateralVelocity *= Math.max(0, 1.0 - 8.0 * dt);
+        (vehicle as any).lateralSlip = vehicle.lateralVelocity;
+      }
     }
 
     // Continuous collision sparks along contact point while metal crumples over multiple frames
@@ -9451,8 +9575,8 @@ export function updateVehiclePhysics(
             const invMassT = invMass1 + invMass2 + (r1CrossT * r1CrossT) / I_yaw_vehicle + (r2CrossT * r2CrossT) / I_yaw_other;
             const jtIdeal = -vTanSpeed / invMassT;
 
-            // Sheet metal entanglement increases friction to 0.85 during heavy impacts!
-            const interlockingFrictionCoeff = impactSpeed > 22 ? 0.85 : 0.55;
+            // Sheet metal entanglement increases friction to 0.95 during heavy impacts!
+            const interlockingFrictionCoeff = impactSpeed > 18 ? 0.95 : 0.65;
             const frictionLimit = interlockingFrictionCoeff * impulseNormalMag;
             const jt = Math.max(-frictionLimit, Math.min(frictionLimit, jtIdeal));
 
@@ -9474,12 +9598,24 @@ export function updateVehiclePhysics(
           const tau_vehicle = -(rX_vehicle * totalImpulseY - rY_vehicle * totalImpulseX);
           const tau_other = (rX_other * totalImpulseY - rY_other * totalImpulseX);
 
-          const deltaW1 = tau_vehicle / I_yaw_vehicle;
-          const deltaW2 = tau_other / I_yaw_other;
+          const rawDeltaW1 = tau_vehicle / I_yaw_vehicle;
+          const rawDeltaW2 = tau_other / I_yaw_other;
+
+          // In real crashes, 4 wide tire contact patches on ground and progressive sheet metal crumple
+          // produce massive resisting torque that prevents spin like a toy top.
+          const maxDeltaW = 3.6;
+          const deltaW1 = Math.max(-maxDeltaW, Math.min(maxDeltaW, rawDeltaW1));
+          const deltaW2 = Math.max(-maxDeltaW, Math.min(maxDeltaW, rawDeltaW2));
 
           // Apply rotation directly to dynamic angular velocities
           vehicle.angularVelocity = (vehicle.angularVelocity || 0) + deltaW1;
           other.angularVelocity = (other.angularVelocity || 0) + deltaW2;
+
+          // Post-impact chassis and tire scrub rotational damping on heavy impacts
+          if (impactSpeed > 22) {
+            vehicle.angularVelocity *= 0.65;
+            other.angularVelocity *= 0.65;
+          }
 
           // Apply new world velocities
           const postV1x = vehicle.vx + deltaV1x;
@@ -9502,7 +9638,7 @@ export function updateVehiclePhysics(
           vehicle.speed = fwdSpeed1;
           vehicle.lateralVelocity = latSpeed1;
           (vehicle as any).lateralSlip = latSpeed1;
-          vehicle.isDrifting = Math.abs(latSpeed1) > 8.0;
+          vehicle.isDrifting = impactSpeed > 20 ? false : Math.abs(latSpeed1) > 8.0;
 
           const cos2 = Math.cos(other.angle);
           const sin2 = Math.sin(other.angle);
@@ -9512,7 +9648,7 @@ export function updateVehiclePhysics(
           other.speed = fwdSpeed2;
           other.lateralVelocity = latSpeed2;
           (other as any).lateralSlip = latSpeed2;
-          other.isDrifting = Math.abs(latSpeed2) > 8.0;
+          other.isDrifting = impactSpeed > 20 ? false : Math.abs(latSpeed2) > 8.0;
 
           // If vehicle or other is NPC AI, throw into full spinout / pileup state
           if (!vehicle.isPlayerControlled) {
@@ -9533,11 +9669,11 @@ export function updateVehiclePhysics(
 
           const scrapeSpeed = vTanSpeed;
 
-          // Mutual crumple zone cushion for deformation & sparks, PRESERVING velocity (preserveVelocity: true)
-          if (impactSpeed > 20) {
-            const crumpleDuration = 0.08 + Math.min(0.06, impactSpeed / 800);
-            const isHeavyInterlock = impactSpeed > 24;
-            const interlockingDuration = isHeavyInterlock ? 0.35 + Math.min(0.75, impactSpeed * 0.005) : 0;
+          // Mutual crumple zone cushion for plastic deformation & energy absorption
+          if (impactSpeed > 18) {
+            const crumpleDuration = 0.12 + Math.min(0.14, impactSpeed / 700);
+            const isHeavyInterlock = impactSpeed > 22;
+            const interlockingDuration = isHeavyInterlock ? 0.45 + Math.min(0.85, impactSpeed * 0.005) : 0;
             if (!vehicle.activeCrumple) {
               vehicle.activeCrumple = {
                 timer: crumpleDuration,
@@ -9548,9 +9684,9 @@ export function updateVehiclePhysics(
                 reboundSpeed: 0,
                 contactX: col.contactX,
                 contactY: col.contactY,
-                preserveVelocity: true,
+                preserveVelocity: false,
                 interlockingTimer: interlockingDuration,
-                interlockingFriction: 0.85
+                interlockingFriction: 0.95
               };
               if (isHeavyInterlock) {
                 (vehicle.activeCrumple as any).interlockedVehicleId = other.id;
@@ -9566,9 +9702,9 @@ export function updateVehiclePhysics(
                 reboundSpeed: 0,
                 contactX: col.contactX,
                 contactY: col.contactY,
-                preserveVelocity: true,
+                preserveVelocity: false,
                 interlockingTimer: interlockingDuration,
-                interlockingFriction: 0.85
+                interlockingFriction: 0.95
               };
               if (isHeavyInterlock) {
                 (other.activeCrumple as any).interlockedVehicleId = vehicle.id;
