@@ -1,87 +1,148 @@
 @import "tailwindcss";
 
 @layer base {
+  :root {
+    --beam-ochre: #c68a35;
+    --beam-ochre-hover: #d99a41;
+    --beam-ochre-glow: rgba(198, 138, 53, 0.35);
+    --bg-card: rgba(20, 22, 26, 0.88);
+    --bg-card-solid: #14161a;
+    --bg-card-hover: rgba(32, 35, 42, 0.95);
+    --text-main: #f0f3f6;
+    --text-muted: #8b929e;
+    --border-color: rgba(255, 255, 255, 0.08);
+    --border-ochre: rgba(198, 138, 53, 0.4);
+  }
+
   body {
-    background-color: #0b0d10;
+    background-color: #0b0c0e;
     color: #cbd5e1;
-    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    font-family: 'Noto Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     user-select: none;
     -webkit-font-smoothing: antialiased;
   }
 }
 
 /* ==========================================================================
-   TACTILE INDUSTRIAL / POST-SOVIET INSTRUMENT PANEL DESIGN SYSTEM
+   BEAMNG TECHNICAL INDUSTRIAL DESIGN SYSTEM (OCHRE THEME)
    ========================================================================== */
 
-/* Dark matte torpedo panel container */
+/* BeamNG Matte Card & Panel Container */
+.beam-panel,
 .industrial-panel {
-  background-color: #12151a;
-  background-image: radial-gradient(rgba(255, 255, 255, 0.02) 1px, transparent 0);
-  background-size: 8px 8px;
-  border: 1px solid #2d3748;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05), 0 10px 30px rgba(0, 0, 0, 0.85);
-  border-radius: 4px;
+  background-color: rgba(20, 22, 26, 0.92);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.85);
+  border-radius: 2px;
+}
+
+/* BeamNG Menu Item / Action Button */
+.beam-menu-item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  background: rgba(20, 22, 26, 0.82);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  padding: 12px 18px;
+  border-radius: 2px;
+  color: #f0f3f6;
+  cursor: pointer;
+  backdrop-filter: blur(12px);
+  transition: all 0.2s cubic-bezier(0.2, 0, 0, 1);
+  overflow: hidden;
+}
+
+.beam-menu-item::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: var(--beam-ochre);
+  opacity: 0;
+  transform: scaleY(0.4);
+  transition: all 0.2s ease;
+}
+
+.beam-menu-item:hover {
+  background: rgba(32, 35, 42, 0.95);
+  transform: translateX(4px);
+  border-color: rgba(198, 138, 53, 0.4);
+  box-shadow: 0 4px 20px var(--beam-ochre-glow);
+}
+
+.beam-menu-item:hover::before {
+  opacity: 1;
+  transform: scaleY(1);
 }
 
 /* Tactile physical rocker switch / keycap button style */
-.industrial-btn {
-  background: linear-gradient(180deg, #1f2733 0%, #161b22 100%);
-  border: 1px solid #374151;
+.industrial-btn,
+.beam-btn {
+  background: linear-gradient(180deg, #1e2128 0%, #13151a 100%);
+  border: 1px solid rgba(255, 255, 255, 0.08);
   color: #cbd5e1;
-  font-family: ui-monospace, SFMono-Regular, monospace;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  border-radius: 3px;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 2px 4px rgba(0, 0, 0, 0.6);
-  transition: all 0.05s ease-in-out;
+  border-radius: 2px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05), 0 2px 4px rgba(0, 0, 0, 0.6);
+  transition: all 0.1s ease-in-out;
   cursor: pointer;
 }
 
-.industrial-btn:hover {
-  background: linear-gradient(180deg, #2a3444 0%, #1e2530 100%);
-  border-color: #4b5563;
+.industrial-btn:hover,
+.beam-btn:hover {
+  background: linear-gradient(180deg, #282c36 0%, #1a1e26 100%);
+  border-color: rgba(198, 138, 53, 0.5);
   color: #f1f5f9;
 }
 
-.industrial-btn:active {
+.industrial-btn:active,
+.beam-btn:active {
   transform: translateY(1px);
   box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.9);
-  background: #11151c;
+  background: #0f1115;
 }
 
-.industrial-btn-amber {
-  background: linear-gradient(180deg, #3a2203 0%, #241401 100%);
-  border: 1px solid #b45309;
-  color: #f59e0b;
+.industrial-btn-amber,
+.beam-btn-ochre {
+  background: linear-gradient(180deg, #3d2b10 0%, #261905 100%);
+  border: 1px solid #c68a35;
+  color: #e5a94e;
 }
-.industrial-btn-amber:hover {
-  background: linear-gradient(180deg, #4d2d04 0%, #311c02 100%);
-  border-color: #f59e0b;
-  color: #fbbf24;
-}
-
-.industrial-btn-green {
-  background: linear-gradient(180deg, #063726 0%, #032117 100%);
-  border: 1px solid #047857;
-  color: #10b981;
-}
-.industrial-btn-green:hover {
-  background: linear-gradient(180deg, #094a34 0%, #052e20 100%);
-  border-color: #10b981;
-  color: #34d399;
+.industrial-btn-amber:hover,
+.beam-btn-ochre:hover {
+  background: linear-gradient(180deg, #523a15 0%, #362308 100%);
+  border-color: #d99a41;
+  color: #f6c878;
 }
 
-.industrial-btn-red {
-  background: linear-gradient(180deg, #3f0f0f 0%, #280808 100%);
-  border: 1px solid #b91c1c;
-  color: #ef4444;
+.industrial-btn-green,
+.beam-btn-green {
+  background: linear-gradient(180deg, #132b1e 0%, #0c1c14 100%);
+  border: 1px solid #2d6a4f;
+  color: #74c69d;
 }
-.industrial-btn-red:hover {
-  background: linear-gradient(180deg, #531414 0%, #350b0b 100%);
-  border-color: #ef4444;
-  color: #fca5a5;
+.industrial-btn-green:hover,
+.beam-btn-green:hover {
+  background: linear-gradient(180deg, #1b3d2b 0%, #11281c 100%);
+  border-color: #40916c;
+  color: #95d5b2;
+}
+
+.industrial-btn-red,
+.beam-btn-red {
+  background: linear-gradient(180deg, #381414 0%, #220b0b 100%);
+  border: 1px solid #852222;
+  color: #e57373;
+}
+.industrial-btn-red:hover,
+.beam-btn-red:hover {
+  background: linear-gradient(180deg, #4d1c1c 0%, #2f0f0f 100%);
+  border-color: #a82e2e;
+  color: #ff8a80;
 }
 
 /* Tell-tale indicator lamps */
@@ -97,20 +158,21 @@
   font-family: ui-monospace, monospace;
 }
 
-/* Custom industrial scrollbar */
+/* Custom BeamNG industrial scrollbar */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 5px;
+  height: 5px;
 }
 ::-webkit-scrollbar-track {
-  background: #0d1014;
-  border-left: 1px solid #1f2937;
+  background: #0b0c0e;
+  border-left: 1px solid rgba(255, 255, 255, 0.05);
 }
 ::-webkit-scrollbar-thumb {
-  background: #27303f;
-  border: 1px solid #374151;
-  border-radius: 2px;
+  background: #1e222a;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 1px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #374151;
+  background: #c68a35;
 }
+

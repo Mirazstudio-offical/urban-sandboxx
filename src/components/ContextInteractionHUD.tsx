@@ -36,54 +36,54 @@ interface ContextInteractionHUDProps {
 const getIconForType = (type: string) => {
   switch (type) {
     case 'enter_vehicle':
-      return <Car className="w-5 h-5 text-white" />;
+      return <Car className="w-4 h-4 text-[#e5a94e]" />;
     case 'exit_vehicle':
-      return <ArrowRightLeft className="w-5 h-5 text-white" />;
+      return <ArrowRightLeft className="w-4 h-4 text-[#e5a94e]" />;
     case 'enter_bus_saloon':
     case 'enter_passenger_car':
-      return <Bus className="w-5 h-5 text-white" />;
+      return <Bus className="w-4 h-4 text-[#e5a94e]" />;
     case 'exit_bus_saloon':
     case 'exit_passenger_car':
-      return <LogOut className="w-5 h-5 text-white" />;
+      return <LogOut className="w-4 h-4 text-[#e5a94e]" />;
     case 'sit_seat':
-      return <Armchair className="w-5 h-5 text-white" />;
+      return <Armchair className="w-4 h-4 text-[#e5a94e]" />;
     case 'stand_up':
-      return <UserCheck className="w-5 h-5 text-white" />;
+      return <UserCheck className="w-4 h-4 text-[#e5a94e]" />;
     case 'open_hood':
-      return <Wrench className="w-5 h-5 text-white" />;
+      return <Wrench className="w-4 h-4 text-[#e5a94e]" />;
     case 'fuel_insert':
     case 'pump_take_nozzle':
     case 'pump_return_nozzle':
-      return <Fuel className="w-5 h-5 text-white" />;
+      return <Fuel className="w-4 h-4 text-[#e5a94e]" />;
     case 'water_hose_take':
     case 'water_hose_stow':
-      return <Droplet className="w-5 h-5 text-white" />;
+      return <Droplet className="w-4 h-4 text-[#e5a94e]" />;
     case 'enter_building':
     case 'exit_building':
-      return <Home className="w-5 h-5 text-white" />;
+      return <Home className="w-4 h-4 text-[#e5a94e]" />;
     case 'building_elevator':
-      return <ChevronsUpDown className="w-5 h-5 text-white" />;
+      return <ChevronsUpDown className="w-4 h-4 text-[#e5a94e]" />;
     case 'building_shop':
-      return <Store className="w-5 h-5 text-white" />;
+      return <Store className="w-4 h-4 text-[#e5a94e]" />;
     case 'gas_cashier':
-      return <Coins className="w-5 h-5 text-white" />;
+      return <Coins className="w-4 h-4 text-[#e5a94e]" />;
     case 'pickup_item':
-      return <Sparkles className="w-5 h-5 text-white" />;
+      return <Sparkles className="w-4 h-4 text-[#e5a94e]" />;
     case 'pickup_litter':
-      return <Trash2 className="w-5 h-5 text-white" />;
+      return <Trash2 className="w-4 h-4 text-[#e5a94e]" />;
     case 'trailer_hitch':
     case 'trailer_unhitch':
-      return <Link className="w-5 h-5 text-white" />;
+      return <Link className="w-4 h-4 text-[#e5a94e]" />;
     case 'trailer_connect_plug':
     case 'trailer_connect_brakes':
-      return <Power className="w-5 h-5 text-white" />;
+      return <Power className="w-4 h-4 text-[#e5a94e]" />;
     case 'trailer_toggle_handbrake':
-      return <ShieldCheck className="w-5 h-5 text-white" />;
+      return <ShieldCheck className="w-4 h-4 text-[#e5a94e]" />;
     case 'eco_recycle':
     case 'trash_throw':
-      return <Trash2 className="w-5 h-5 text-white" />;
+      return <Trash2 className="w-4 h-4 text-[#e5a94e]" />;
     default:
-      return <Compass className="w-5 h-5 text-white" />;
+      return <Compass className="w-4 h-4 text-[#e5a94e]" />;
   }
 };
 
@@ -96,69 +96,48 @@ export const ContextInteractionHUD: React.FC<ContextInteractionHUDProps> = ({
     return null;
   }
 
-  const isF = target.primaryKey === 'F';
-  const glowClass = isF
-    ? 'shadow-[0_0_20px_rgba(52,211,153,0.3)] border-emerald-400'
-    : 'shadow-[0_0_20px_rgba(56,189,248,0.3)] border-sky-400';
-
-  const badgeBgClass = isF ? 'bg-emerald-950/90 border-emerald-500/50' : 'bg-sky-950/90 border-sky-500/50';
-
   return (
     <div
       id="context-interaction-hud-overlay"
       className="fixed pointer-events-none select-none z-50 flex flex-col items-center justify-center -translate-x-1/2 -translate-y-1/2 transition-opacity duration-150"
       style={{ left: 0, top: 0, display: 'none' }}
     >
-      {/* 1. Ground Radial Glow */}
-      <div className={`absolute w-12 h-12 rounded-full blur-md opacity-40 bg-gradient-to-r ${isF ? 'from-emerald-400 to-teal-500' : 'from-sky-400 to-blue-500'}`} />
+      {/* 1. BeamNG Crisp Technical Frame */}
+      <div className="relative flex items-center gap-2 bg-[rgba(20,22,26,0.92)] border border-[#c68a35]/60 shadow-[0_4px_20px_rgba(0,0,0,0.8)] px-2.5 py-1.5 rounded-[2px] backdrop-blur-md z-10">
+        
+        {/* Left Ochre Accent Tag */}
+        <div className="w-[3px] self-stretch bg-[#c68a35] -ml-1 rounded-[1px]" />
 
-      {/* 2. Double Rotating Outer Lace Rings */}
-      <div className="absolute w-14 h-14 flex items-center justify-center">
-        {/* Outer dashed spinning ring */}
-        <div
-          className={`absolute w-full h-full rounded-full border-2 border-dashed ${isF ? 'border-emerald-400/60' : 'border-sky-400/60'} animate-[spin_8s_linear_infinite]`}
-        />
-        {/* Inner reverse-spinning dashed ring */}
-        <div
-          className={`absolute w-11 h-11 rounded-full border border-dashed ${isF ? 'border-emerald-500/40' : 'border-sky-500/40'} animate-[spin_4s_linear_infinite_reverse]`}
-        />
-      </div>
-
-      {/* 3. Central Glassmorphic Disc with Vector Icon */}
-      <div
-        className={`relative w-10 h-10 rounded-full flex items-center justify-center bg-slate-900/95 border-2 ${glowClass} backdrop-blur-sm z-10`}
-      >
-        {getIconForType(target.type)}
-      </div>
-
-      {/* 4. Action Key Badges (Primary + Available Secondary Keys) */}
-      <div className="mt-2 flex items-center gap-1.5 z-10">
-        <div
-          className={`px-2 py-0.5 rounded border text-[10px] font-mono font-bold text-white tracking-wide shadow-md ${badgeBgClass}`}
-        >
-          [{target.primaryKey}]
+        {/* Icon Frame */}
+        <div className="p-1 bg-[#14161a] border border-white/[0.08] rounded-[2px] flex items-center justify-center">
+          {getIconForType(target.type)}
         </div>
-        {target.availableKeys && target.availableKeys.map(ak => {
-          const isAkF = ak.key === 'F';
-          const akBadgeBg = isAkF ? 'bg-emerald-950/85 border-emerald-500/50 text-emerald-200' : 'bg-amber-950/85 border-amber-500/50 text-amber-200';
-          const shortLabel = ak.key === 'F' ? 'Убрать' : ak.key === 'R' ? 'Повернуть' : ak.title;
-          return (
-            <div
-              key={ak.key}
-              className={`px-1.5 py-0.5 rounded border text-[9px] font-mono font-semibold tracking-wide shadow-sm ${akBadgeBg}`}
-            >
-              [{ak.key}] {shortLabel}
-            </div>
-          );
-        })}
-      </div>
 
-      {/* 5. Action Title below Badge */}
-      {target.actionTitle && (
-        <div className="mt-1 text-[11px] font-semibold text-slate-100 bg-slate-950/80 px-2 py-0.5 rounded-md border border-slate-800/60 backdrop-blur-sm shadow-md whitespace-nowrap z-10">
-          {target.actionTitle}
+        {/* Action Title & Key Badge */}
+        <div className="flex items-center gap-2">
+          {target.actionTitle && (
+            <span className="text-xs font-bold uppercase tracking-wider text-[#f0f3f6]">
+              {target.actionTitle}
+            </span>
+          )}
+
+          <div className="px-1.5 py-0.5 bg-[#c68a35]/15 border border-[#c68a35]/60 text-[#e5a94e] font-mono text-[10px] font-black rounded-[2px] tracking-wider">
+            [{target.primaryKey}]
+          </div>
+
+          {target.availableKeys && target.availableKeys.map(ak => {
+            const shortLabel = ak.key === 'F' ? 'Убрать' : ak.key === 'R' ? 'Повернуть' : ak.title;
+            return (
+              <div
+                key={ak.key}
+                className="px-1.5 py-0.5 bg-white/[0.05] border border-white/10 text-[#8b929e] font-mono text-[9px] font-bold rounded-[2px]"
+              >
+                [{ak.key}] {shortLabel}
+              </div>
+            );
+          })}
         </div>
-      )}
+      </div>
     </div>
   );
 };

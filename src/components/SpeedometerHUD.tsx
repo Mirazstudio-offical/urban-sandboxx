@@ -588,33 +588,33 @@ export const SpeedometerHUD: React.FC<SpeedometerHUDProps> = ({
       <button
         type="button"
         onClick={() => setIsMinimized((prev) => !prev)}
-        className="mb-0.5 sm:mb-1 px-2.5 py-0.5 rounded-full bg-slate-950/85 hover:bg-slate-900 border border-slate-700/80 text-[9px] sm:text-[10px] text-slate-300 font-mono flex items-center gap-1.5 shadow-lg active:scale-95 transition backdrop-blur-md"
+        className="mb-0.5 sm:mb-1 px-3 py-1 rounded-[2px] bg-[#14161a]/95 hover:bg-[#1c1f26] border border-[#2a2e38] text-[9px] sm:text-[10px] text-[#f0f3f6] font-mono flex items-center gap-2 shadow-lg active:scale-98 transition backdrop-blur-md cursor-pointer"
         title="Свернуть / Развернуть приборную панель"
       >
-        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+        <span className="w-1.5 h-1.5 rounded-none bg-[#c68a35]" />
         <span className="uppercase font-bold tracking-wider">ПРИБОРЫ</span>
-        {isMinimized ? <ChevronUp className="w-3 h-3 sm:w-3.5 sm:h-3.5" /> : <ChevronDown className="w-3 h-3 sm:w-3.5 sm:h-3.5" />}
+        {isMinimized ? <ChevronUp className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-[#c68a35]" /> : <ChevronDown className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-[#c68a35]" />}
       </button>
 
       {/* COMPACT MINIMALIST BAR (IF MINIMIZED) */}
       {isMinimized ? (
-        <div className="flex items-center gap-2 sm:gap-3 px-3 py-1.5 sm:px-4 sm:py-2 rounded-xl sm:rounded-2xl border border-slate-800 bg-slate-950/85 backdrop-blur-md shadow-2xl text-white whitespace-nowrap overflow-x-auto max-w-full animate-in fade-in duration-100 text-xs sm:text-sm">
+        <div className="flex items-center gap-2 sm:gap-3 px-3 py-1.5 sm:px-4 sm:py-2 rounded-[2px] border border-[#2a2e38] bg-[#14161a]/95 backdrop-blur-md shadow-2xl text-[#f0f3f6] whitespace-nowrap overflow-x-auto max-w-full animate-in fade-in duration-100 text-xs sm:text-sm">
           <div className="flex items-baseline gap-1 font-mono whitespace-nowrap shrink-0">
-            <span className="text-xl sm:text-2xl font-black text-sky-400">{speedKmh}</span>
-            <span className="text-[8px] sm:text-[9px] text-slate-400 font-bold uppercase">КМ/Ч</span>
+            <span className="text-xl sm:text-2xl font-black text-[#c68a35]">{speedKmh}</span>
+            <span className="text-[8px] sm:text-[9px] text-[#9ba3af] font-bold uppercase">КМ/Ч</span>
           </div>
-          <div className="h-3.5 w-px bg-slate-800 shrink-0" />
+          <div className="h-3.5 w-px bg-[#2a2e38] shrink-0" />
           <div className="flex items-center gap-1.5 font-mono text-[11px] sm:text-xs whitespace-nowrap shrink-0">
-            <span className="text-slate-400 font-bold uppercase text-[8px] sm:text-[9px] tracking-wider">RPM:</span>
-            <span className={`font-bold ${currentRPM > redlineRPM ? 'text-rose-400 animate-pulse' : 'text-slate-200'}`}>{currentRPM}</span>
+            <span className="text-[#9ba3af] font-bold uppercase text-[8px] sm:text-[9px] tracking-wider">RPM:</span>
+            <span className={`font-bold ${currentRPM > redlineRPM ? 'text-red-400 animate-pulse' : 'text-[#f0f3f6]'}`}>{currentRPM}</span>
           </div>
-          <div className="h-3.5 w-px bg-slate-800 shrink-0" />
-          <span className="px-2 py-0.5 rounded-lg font-mono font-black text-xs bg-slate-900 border border-slate-800 text-emerald-400 shrink-0">
+          <div className="h-3.5 w-px bg-[#2a2e38] shrink-0" />
+          <span className="px-2 py-0.5 rounded-[2px] font-mono font-black text-xs bg-[#0b0c0e] border border-[#2a2e38] text-[#c68a35] shrink-0">
             {currentGearLabel}
           </span>
           {eng?.hasTransferCase && (
-            <div className="flex items-center px-1.5 py-0.5 bg-slate-900 border border-slate-800 rounded-lg gap-1 shrink-0 ml-0.5" title="Делитель [X]">
-              <span className={`text-[9px] font-black uppercase ${eng.transferCaseMode === 'LOW' ? 'text-amber-500' : 'text-slate-300'}`}>
+            <div className="flex items-center px-1.5 py-0.5 bg-[#0b0c0e] border border-[#2a2e38] rounded-[2px] gap-1 shrink-0 ml-0.5" title="Делитель [X]">
+              <span className={`text-[9px] font-black uppercase ${eng.transferCaseMode === 'LOW' ? 'text-[#c68a35]' : 'text-[#9ba3af]'}`}>
                 {eng.transferCaseMode === 'LOW' ? 'LO' : 'HI'}
               </span>
             </div>
@@ -623,26 +623,26 @@ export const SpeedometerHUD: React.FC<SpeedometerHUDProps> = ({
             <button
               type="button"
               onClick={handleCycleDiffLock}
-              className={`flex items-center px-1.5 py-0.5 border rounded-lg gap-1 shrink-0 ml-0.5 transition cursor-pointer active:scale-95 ${
+              className={`flex items-center px-1.5 py-0.5 border rounded-[2px] gap-1 shrink-0 ml-0.5 transition cursor-pointer active:scale-98 ${
                 isDiffLocked 
-                  ? 'bg-amber-500/20 border-amber-500/60 text-amber-300 shadow-[0_0_8px_rgba(245,158,11,0.2)]'
-                  : 'bg-slate-900 border-slate-800 text-slate-500 hover:text-slate-300'
+                  ? 'bg-[#c68a35]/20 border-[#c68a35]/60 text-[#d99a41]'
+                  : 'bg-[#0b0c0e] border-[#2a2e38] text-[#9ba3af] hover:text-[#f0f3f6]'
               }`}
               title="Блокировка дифференциала [V]"
             >
-              <ShieldAlert className={`w-3 h-3 ${isDiffLocked ? 'text-amber-400 animate-pulse' : 'text-slate-500'}`} />
+              <ShieldAlert className={`w-3 h-3 ${isDiffLocked ? 'text-[#c68a35] animate-pulse' : 'text-[#9ba3af]'}`} />
               <span className="text-[9px] font-black uppercase">
                 {diffLockDesc}
               </span>
             </button>
           )}
-          <div className="h-3.5 w-px bg-slate-800 shrink-0" />
+          <div className="h-3.5 w-px bg-[#2a2e38] shrink-0" />
           {/* Quick Engine start/stop */}
           <button
             type="button"
             onClick={onToggleEngine}
-            className={`p-1 sm:p-1.5 rounded-lg border flex items-center justify-center transition active:scale-95 cursor-pointer shrink-0 ${
-              isEngineRunning ? 'bg-emerald-500/20 border-emerald-500 text-emerald-300' : 'bg-rose-500/20 border-rose-600 text-rose-300'
+            className={`p-1 sm:p-1.5 rounded-[2px] border flex items-center justify-center transition active:scale-98 cursor-pointer shrink-0 ${
+              isEngineRunning ? 'bg-[#c68a35]/20 border-[#c68a35] text-[#d99a41]' : 'bg-red-950/40 border-red-800/80 text-red-400'
             }`}
             title="Зажигание [J]"
           >
@@ -652,39 +652,37 @@ export const SpeedometerHUD: React.FC<SpeedometerHUDProps> = ({
       ) : (
         /* FULL ANALOG INSTRUMENT CLUSTER (BENTO PANEL DESIGN) */
         <div
-          className="relative bg-slate-950/85 border border-slate-800 rounded-2xl p-3 sm:p-4 md:p-5 shadow-2xl backdrop-blur-xl flex flex-col items-center gap-2.5 sm:gap-3.5 w-full max-w-[340px] sm:max-w-[420px] md:max-w-[480px] scale-[0.75] sm:scale-[0.88] md:scale-100 origin-bottom select-none animate-in fade-in duration-150"
+          className="relative bg-[#14161a]/95 border border-[#2a2e38] rounded-[2px] p-3 sm:p-4 md:p-5 shadow-2xl backdrop-blur-xl flex flex-col items-center gap-2.5 sm:gap-3.5 w-full max-w-[340px] sm:max-w-[420px] md:max-w-[480px] scale-[0.75] sm:scale-[0.88] md:scale-100 origin-bottom select-none animate-in fade-in duration-150"
         >
           {/* TOP ANNUNCIATOR STRIP & SHIFT LIGHTS */}
-          <div className="w-full flex items-center justify-between text-slate-400 text-[9px] font-mono font-bold uppercase tracking-wider border-b border-slate-800/80 pb-2.5 gap-2">
+          <div className="w-full flex items-center justify-between text-[#9ba3af] text-[9px] font-mono font-bold uppercase tracking-wider border-b border-[#2a2e38] pb-2.5 gap-2">
             {/* Left: Signal & In-Game Telemetry (Time, Outside Temp, Compass) */}
             <div className="flex items-center gap-1.5">
-              <span className={`p-1 rounded-lg ${playerTurnSignal === 'left' || playerTurnSignal === 'hazard' ? 'bg-emerald-500/20 text-emerald-400 animate-pulse border border-emerald-500/30' : 'text-slate-600 border border-transparent'}`}>
+              <span className={`p-1 rounded-[2px] ${playerTurnSignal === 'left' || playerTurnSignal === 'hazard' ? 'bg-[#c68a35]/20 text-[#d99a41] animate-pulse border border-[#c68a35]/40' : 'text-[#5a6272] border border-transparent'}`}>
                 <ArrowLeft className="w-3.5 h-3.5" />
               </span>
 
               {/* In-Game Time, Outside Temp & Compass chips */}
-              <div className="flex items-center gap-1.5 text-[9px] font-mono text-slate-300 bg-slate-900/40 px-2 py-1 rounded-xl border border-slate-800/50">
-                <span className="flex items-center gap-1 text-slate-200 font-bold" title="Игровое время">
-                  <Clock className="w-2.5 h-2.5 text-sky-400" />
+              <div className="flex items-center gap-1.5 text-[9px] font-mono text-[#cbd5e1] bg-[#0b0c0e]/80 px-2 py-1 rounded-[2px] border border-[#2a2e38]">
+                <span className="flex items-center gap-1 text-[#f0f3f6] font-bold" title="Игровое время">
+                  <Clock className="w-2.5 h-2.5 text-[#c68a35]" />
                   {gameTimeStr}
                 </span>
-                <span className="text-slate-700">|</span>
-                <span className="flex items-center gap-1 text-slate-200 font-bold" title="Температура за бортом">
-                  <Thermometer className="w-2.5 h-2.5 text-amber-400" />
+                <span className="text-[#3a3f4d]">|</span>
+                <span className="flex items-center gap-1 text-[#f0f3f6] font-bold" title="Температура за бортом">
+                  <Thermometer className="w-2.5 h-2.5 text-[#c68a35]" />
                   {ambientTempStr}
                 </span>
-                <span className="text-slate-700">|</span>
-                <span className="flex items-center gap-1 text-emerald-400 font-bold" title="Компас / Курс">
+                <span className="text-[#3a3f4d]">|</span>
+                <span className="flex items-center gap-1 text-[#c68a35] font-bold" title="Компас / Курс">
                   <Compass className="w-2.5 h-2.5" />
                   {compassHeading}
                 </span>
                 {Math.abs(gradePercent) >= 2 && (
                   <>
-                    <span className="text-slate-700">|</span>
+                    <span className="text-[#3a3f4d]">|</span>
                     <span
-                      className={`flex items-center gap-0.5 font-mono font-extrabold ${
-                        gradePercent > 0 ? 'text-amber-400' : 'text-cyan-400'
-                      }`}
+                      className="flex items-center gap-0.5 font-mono font-extrabold text-[#c68a35]"
                       title={gradePercent > 0 ? `Крутой подъём: +${gradePercent}%` : `Спуск: ${gradePercent}%`}
                     >
                       <span>{gradePercent > 0 ? '▲' : '▼'}</span>
@@ -698,40 +696,39 @@ export const SpeedometerHUD: React.FC<SpeedometerHUDProps> = ({
             {/* Right / Center: Sport RPM Shift Lights or Range & Consumption + Engine State */}
             <div className="flex items-center gap-2">
               {theme === 'sport' ? (
-                <div className="flex items-center gap-1.5 bg-slate-900/40 px-2 py-1 rounded-xl border border-slate-800/50">
+                <div className="flex items-center gap-1.5 bg-[#0b0c0e]/80 px-2 py-1 rounded-[2px] border border-[#2a2e38]">
                   {[0.6, 0.7, 0.8, 0.88, 0.95].map((thresh, idx) => {
                     const active = rpmRatio >= thresh;
-                    let dotColor = 'bg-emerald-500';
-                    if (idx >= 2) dotColor = 'bg-amber-500';
-                    if (idx >= 3) dotColor = 'bg-rose-500';
+                    let dotColor = 'bg-[#c68a35]';
+                    if (idx >= 3) dotColor = 'bg-red-500';
                     return (
                       <span
                         key={idx}
-                        className={`w-2 h-1 rounded-sm transition-all ${active ? `${dotColor} shadow-[0_0_8px_currentColor] animate-pulse` : 'bg-slate-800'}`}
+                        className={`w-2 h-1 rounded-none transition-all ${active ? `${dotColor} shadow-[0_0_6px_currentColor] animate-pulse` : 'bg-[#2a2e38]'}`}
                       />
                     );
                   })}
                 </div>
               ) : (
-                <div className="hidden sm:flex items-center gap-1.5 bg-slate-900/40 px-2.5 py-1 rounded-xl border border-slate-800/50 text-[9px] font-mono text-slate-300">
-                  <span className="flex items-center gap-1 text-amber-300 font-semibold" title="Запас хода">
-                    <Fuel className="w-2.5 h-2.5 text-amber-400" />
+                <div className="hidden sm:flex items-center gap-1.5 bg-[#0b0c0e]/80 px-2.5 py-1 rounded-[2px] border border-[#2a2e38] text-[9px] font-mono text-[#cbd5e1]">
+                  <span className="flex items-center gap-1 text-[#c68a35] font-semibold" title="Запас хода">
+                    <Fuel className="w-2.5 h-2.5 text-[#c68a35]" />
                     {estimatedRangeKm} км
                   </span>
-                  <span className="text-slate-700">|</span>
-                  <span className="flex items-center gap-1 text-sky-300 font-semibold" title="Мгновенный расход">
-                    <Droplet className="w-2.5 h-2.5 text-sky-400" />
+                  <span className="text-[#3a3f4d]">|</span>
+                  <span className="flex items-center gap-1 text-[#9ba3af] font-semibold" title="Мгновенный расход">
+                    <Droplet className="w-2.5 h-2.5 text-[#c68a35]" />
                     {instantConsumptionShort}
                   </span>
                 </div>
               )}
 
-              <span className={`text-[9px] font-mono font-bold px-2 py-1 rounded-xl border ${
+              <span className={`text-[9px] font-mono font-bold px-2 py-1 rounded-[2px] border ${
                 isEngineRunning 
-                  ? 'text-emerald-400 bg-emerald-950/40 border-emerald-500/20' 
+                  ? 'text-[#c68a35] bg-[#c68a35]/15 border-[#c68a35]/40' 
                   : isStalled 
                   ? 'text-amber-400 bg-amber-950/40 border-amber-500/20 animate-pulse' 
-                  : 'text-rose-400 bg-rose-950/40 border-rose-500/20'
+                  : 'text-red-400 bg-red-950/40 border-red-800/40'
               }`}>
                 {isEngineRunning ? 'МОТОР ВКЛ' : isStalled ? 'ЗАГЛОХ' : 'МОТОР ВЫКЛ'}
               </span>
@@ -739,11 +736,11 @@ export const SpeedometerHUD: React.FC<SpeedometerHUDProps> = ({
               {/* Headlights and Right Signal Indicator */}
               <div className="flex items-center gap-1.5">
                 {playerHeadlightMode !== 'off' && (
-                  <span className={`p-1 rounded-lg border ${playerHeadlightMode === 'high' ? 'bg-blue-500/20 text-blue-400 border-blue-500/30' : 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'}`}>
+                  <span className="p-1 rounded-[2px] border bg-[#c68a35]/20 text-[#d99a41] border-[#c68a35]/40">
                     <Lightbulb className="w-3.5 h-3.5" />
                   </span>
                 )}
-                <span className={`p-1 rounded-lg ${playerTurnSignal === 'right' || playerTurnSignal === 'hazard' ? 'bg-emerald-500/20 text-emerald-400 animate-pulse border border-emerald-500/30' : 'text-slate-600 border border-transparent'}`}>
+                <span className={`p-1 rounded-[2px] ${playerTurnSignal === 'right' || playerTurnSignal === 'hazard' ? 'bg-[#c68a35]/20 text-[#d99a41] animate-pulse border border-[#c68a35]/40' : 'text-[#5a6272] border border-transparent'}`}>
                   <ArrowRight className="w-3.5 h-3.5" />
                 </span>
               </div>
@@ -751,7 +748,7 @@ export const SpeedometerHUD: React.FC<SpeedometerHUDProps> = ({
           </div>
 
           {/* MAIN GAUGES SVG CANVAS BENTO CELL */}
-          <div className="w-full bg-slate-900/20 border border-slate-800/40 rounded-2xl p-2.5 sm:p-3 flex items-center justify-center relative shadow-inner">
+          <div className="w-full bg-[#0b0c0e]/60 border border-[#2a2e38] rounded-[2px] p-2.5 sm:p-3 flex items-center justify-center relative shadow-inner">
             <svg
               viewBox="0 0 460 135"
               className="w-[310px] sm:w-[380px] md:w-[440px] h-[95px] sm:h-[115px] md:h-[135px] overflow-visible"
@@ -1414,15 +1411,15 @@ export const SpeedometerHUD: React.FC<SpeedometerHUDProps> = ({
           </div>
 
           {/* BOTTOM QUICK CONTROLS BAR (LIGHTS, SIGNALS, IGNITION, RADIAL MENU) */}
-          <div className="w-full flex items-center justify-center gap-2 pt-2.5 border-t border-slate-800/80">
+          <div className="w-full flex items-center justify-center gap-2 pt-2.5 border-t border-[#2a2e38]">
             {/* Left Signal (Q) */}
             <button
               type="button"
               onClick={() => onToggleTurnSignal?.('left')}
-              className={`px-3 py-1.5 rounded-xl border text-[10px] font-bold font-mono flex items-center gap-1 transition-all active:scale-95 cursor-pointer ${
+              className={`px-3 py-1.5 rounded-[2px] border text-[10px] font-bold font-mono flex items-center gap-1 transition-all active:scale-98 cursor-pointer ${
                 playerTurnSignal === 'left' || playerTurnSignal === 'hazard'
-                  ? 'bg-amber-500/30 border-amber-400 text-amber-300 animate-pulse font-extrabold'
-                  : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-white'
+                  ? 'bg-[#c68a35]/30 border-[#c68a35] text-[#d99a41] animate-pulse font-extrabold'
+                  : 'bg-[#0b0c0e] border-[#2a2e38] text-[#9ba3af] hover:text-[#f0f3f6]'
               }`}
               title="Левый поворотник [Q]"
             >
@@ -1434,10 +1431,10 @@ export const SpeedometerHUD: React.FC<SpeedometerHUDProps> = ({
             <button
               type="button"
               onClick={() => onToggleTurnSignal?.('hazard')}
-              className={`px-3 py-1.5 rounded-xl border text-[10px] font-bold font-mono flex items-center gap-1 transition-all active:scale-95 cursor-pointer ${
+              className={`px-3 py-1.5 rounded-[2px] border text-[10px] font-bold font-mono flex items-center gap-1 transition-all active:scale-98 cursor-pointer ${
                 playerTurnSignal === 'hazard'
-                  ? 'bg-rose-500/30 border-rose-400 text-rose-300 animate-pulse font-extrabold'
-                  : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-white'
+                  ? 'bg-red-950/40 border-red-500 text-red-300 animate-pulse font-extrabold'
+                  : 'bg-[#0b0c0e] border-[#2a2e38] text-[#9ba3af] hover:text-[#f0f3f6]'
               }`}
               title="Аварийка [Z]"
             >
@@ -1449,10 +1446,10 @@ export const SpeedometerHUD: React.FC<SpeedometerHUDProps> = ({
             <button
               type="button"
               onClick={() => onToggleTurnSignal?.('right')}
-              className={`px-3 py-1.5 rounded-xl border text-[10px] font-bold font-mono flex items-center gap-1 transition-all active:scale-95 cursor-pointer ${
+              className={`px-3 py-1.5 rounded-[2px] border text-[10px] font-bold font-mono flex items-center gap-1 transition-all active:scale-98 cursor-pointer ${
                 playerTurnSignal === 'right' || playerTurnSignal === 'hazard'
-                  ? 'bg-amber-500/30 border-amber-400 text-amber-300 animate-pulse font-extrabold'
-                  : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-white'
+                  ? 'bg-[#c68a35]/30 border-[#c68a35] text-[#d99a41] animate-pulse font-extrabold'
+                  : 'bg-[#0b0c0e] border-[#2a2e38] text-[#9ba3af] hover:text-[#f0f3f6]'
               }`}
               title="Правый поворотник [E]"
             >
@@ -1460,18 +1457,18 @@ export const SpeedometerHUD: React.FC<SpeedometerHUDProps> = ({
               <ArrowRight className="w-3.5 h-3.5" />
             </button>
 
-            <div className="h-5 w-px bg-slate-800 mx-1" />
+            <div className="h-5 w-px bg-[#2a2e38] mx-1" />
 
             {/* Headlights Toggle (L) */}
             <button
               type="button"
               onClick={onToggleHeadlights}
-              className={`px-3 py-1.5 rounded-xl border text-[10px] font-bold font-mono flex items-center gap-1 transition-all active:scale-95 cursor-pointer ${
+              className={`px-3 py-1.5 rounded-[2px] border text-[10px] font-bold font-mono flex items-center gap-1 transition-all active:scale-98 cursor-pointer ${
                 playerHeadlightMode === 'high'
-                  ? 'bg-blue-600/30 border-blue-400 text-blue-300 font-extrabold shadow-[0_0_8px_rgba(59,130,246,0.2)]'
+                  ? 'bg-[#c68a35]/40 border-[#c68a35] text-[#f0f3f6] font-extrabold shadow-[0_0_8px_rgba(198,138,53,0.3)]'
                   : playerHeadlightMode === 'low'
-                  ? 'bg-emerald-600/30 border-emerald-400 text-emerald-300 font-extrabold shadow-[0_0_8px_rgba(16,185,129,0.2)]'
-                  : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-white'
+                  ? 'bg-[#c68a35]/20 border-[#c68a35]/60 text-[#d99a41] font-extrabold shadow-[0_0_8px_rgba(198,138,53,0.2)]'
+                  : 'bg-[#0b0c0e] border-[#2a2e38] text-[#9ba3af] hover:text-[#f0f3f6]'
               }`}
               title="Фары: Ближний / Дальний / Выкл [L]"
             >

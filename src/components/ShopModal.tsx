@@ -1610,37 +1610,37 @@ export const ShopModal: React.FC<ShopModalProps> = (props) => {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-2 sm:p-4 animate-in fade-in duration-200">
-      <div className="relative w-full max-w-4xl h-[92vh] sm:h-[85vh] bg-zinc-950 text-zinc-100 rounded-2xl border border-zinc-800 shadow-2xl flex flex-col overflow-hidden">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#0b0c0e]/85 backdrop-blur-md p-2 sm:p-4 animate-in fade-in duration-200 font-mono">
+      <div className="relative w-full max-w-4xl h-[92vh] sm:h-[85vh] bg-[#14161a] text-[#f0f3f6] rounded-[2px] border border-[#2a2e38] shadow-2xl flex flex-col overflow-hidden">
         
         {/* Top Header */}
-        <div className="px-4 py-3 bg-zinc-900/90 border-b border-zinc-800 flex items-center justify-between shrink-0">
+        <div className="px-4 py-3 bg-[#0b0c0e] border-b border-[#2a2e38] flex items-center justify-between shrink-0">
           <div className="flex items-center gap-3">
-            <div className="p-2.5 rounded-xl bg-zinc-800/80 border border-zinc-700/50 text-emerald-400">
+            <div className="p-2 rounded-[2px] bg-[#1c1f26] border border-[#2a2e38] text-[#c68a35]">
               <ShoppingBag className="w-5 h-5" />
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h2 className="text-base sm:text-lg font-bold text-zinc-100">{shop.nameRu}</h2>
-                <span className="text-[10px] font-mono uppercase px-2 py-0.5 rounded border border-emerald-500/30 bg-emerald-500/10 text-emerald-400 font-semibold">
+                <h2 className="text-base sm:text-lg font-bold text-[#f0f3f6] uppercase tracking-wider">{shop.nameRu}</h2>
+                <span className="text-[10px] font-mono uppercase px-2 py-0.5 rounded-[2px] border border-[#c68a35]/40 bg-[#c68a35]/15 text-[#c68a35] font-bold">
                   Торговля 24/7
                 </span>
               </div>
-              <p className="text-xs text-zinc-400 hidden sm:block">{shop.description}</p>
+              <p className="text-xs text-[#9ba3af] hidden sm:block">{shop.description}</p>
             </div>
           </div>
 
           <div className="flex items-center gap-3">
             {/* Player Cash Balance Badge */}
-            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-zinc-900 border border-zinc-800">
-              <Coins className="w-4 h-4 text-emerald-400" />
-              <span className="text-sm font-mono font-bold text-emerald-400">{playerCash.toLocaleString()} ₽</span>
+            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-[2px] bg-[#0b0c0e] border border-[#2a2e38]">
+              <Coins className="w-4 h-4 text-[#c68a35]" />
+              <span className="text-sm font-mono font-bold text-[#c68a35]">{playerCash.toLocaleString()} ₽</span>
             </div>
 
             {/* Close Button */}
             <button
               onClick={onClose}
-              className="p-2 min-h-[44px] min-w-[44px] flex items-center justify-center rounded-xl bg-zinc-900 border border-zinc-800 text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800 transition-colors"
+              className="p-2 rounded-[2px] bg-[#14161a] border border-[#2a2e38] text-[#9ba3af] hover:text-[#f0f3f6] hover:bg-[#1c1f26] transition-colors cursor-pointer"
               aria-label="Закрыть"
             >
               <X className="w-5 h-5" />
@@ -1649,14 +1649,14 @@ export const ShopModal: React.FC<ShopModalProps> = (props) => {
         </div>
 
         {/* Navigation Bar / Tabs */}
-        <div className="px-4 py-2 bg-zinc-900/50 border-b border-zinc-800/80 flex items-center justify-between gap-2 overflow-x-auto shrink-0">
+        <div className="px-4 py-2 bg-[#0b0c0e]/60 border-b border-[#2a2e38] flex items-center justify-between gap-2 overflow-x-auto shrink-0">
           <div className="flex items-center gap-2 min-w-max">
             <button
               onClick={() => setActiveTab('catalog')}
-              className={`px-4 py-2 min-h-[44px] rounded-xl font-medium text-xs sm:text-sm flex items-center gap-2 transition-all ${
+              className={`px-3.5 py-1.5 rounded-[2px] font-bold text-xs uppercase tracking-wider flex items-center gap-2 transition-all cursor-pointer ${
                 activeTab === 'catalog'
-                  ? 'bg-emerald-600 text-white shadow-md'
-                  : 'bg-zinc-900 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200'
+                  ? 'bg-[#c68a35] text-[#0b0c0e] shadow-sm'
+                  : 'bg-[#14161a] text-[#9ba3af] hover:bg-[#1c1f26] hover:text-[#f0f3f6] border border-[#2a2e38]'
               }`}
             >
               <Package className="w-4 h-4" />
@@ -1667,16 +1667,16 @@ export const ShopModal: React.FC<ShopModalProps> = (props) => {
               <>
                 <button
                   onClick={() => setActiveTab('diagnostics')}
-                  className={`px-4 py-2 min-h-[44px] rounded-xl font-medium text-xs sm:text-sm flex items-center gap-2 transition-all ${
+                  className={`px-3.5 py-1.5 rounded-[2px] font-bold text-xs uppercase tracking-wider flex items-center gap-2 transition-all cursor-pointer ${
                     activeTab === 'diagnostics'
-                      ? 'bg-sky-600 text-white shadow-md'
-                      : 'bg-zinc-900 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200'
+                      ? 'bg-[#c68a35] text-[#0b0c0e] shadow-sm'
+                      : 'bg-[#14161a] text-[#9ba3af] hover:bg-[#1c1f26] hover:text-[#f0f3f6] border border-[#2a2e38]'
                   }`}
                 >
-                  <Activity className="w-4 h-4 text-sky-400" />
+                  <Activity className="w-4 h-4" />
                   Диагностика
                   {dtcErrors.length > 0 && (
-                    <span className="px-1.5 py-0.2 text-[10px] font-bold rounded-full bg-rose-500/20 text-rose-300 border border-rose-500/40">
+                    <span className="px-1.5 py-0.2 text-[10px] font-bold rounded-[2px] bg-rose-500/20 text-rose-300 border border-rose-500/40">
                       {dtcErrors.length}
                     </span>
                   )}
@@ -1684,25 +1684,25 @@ export const ShopModal: React.FC<ShopModalProps> = (props) => {
 
                 <button
                   onClick={() => setActiveTab('repair')}
-                  className={`px-4 py-2 min-h-[44px] rounded-xl font-medium text-xs sm:text-sm flex items-center gap-2 transition-all ${
+                  className={`px-3.5 py-1.5 rounded-[2px] font-bold text-xs uppercase tracking-wider flex items-center gap-2 transition-all cursor-pointer ${
                     activeTab === 'repair'
-                      ? 'bg-emerald-600 text-white shadow-md'
-                      : 'bg-zinc-900 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200'
+                      ? 'bg-[#c68a35] text-[#0b0c0e] shadow-sm'
+                      : 'bg-[#14161a] text-[#9ba3af] hover:bg-[#1c1f26] hover:text-[#f0f3f6] border border-[#2a2e38]'
                   }`}
                 >
-                  <Wrench className="w-4 h-4 text-emerald-400" />
+                  <Wrench className="w-4 h-4" />
                   Починка & ТО
                 </button>
 
                 <button
                   onClick={() => setActiveTab('tuning')}
-                  className={`px-4 py-2 min-h-[44px] rounded-xl font-medium text-xs sm:text-sm flex items-center gap-2 transition-all ${
+                  className={`px-3.5 py-1.5 rounded-[2px] font-bold text-xs uppercase tracking-wider flex items-center gap-2 transition-all cursor-pointer ${
                     activeTab === 'tuning' || activeTab === 'lpg'
-                      ? 'bg-amber-600 text-white shadow-md'
-                      : 'bg-zinc-900 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200'
+                      ? 'bg-[#c68a35] text-[#0b0c0e] shadow-sm'
+                      : 'bg-[#14161a] text-[#9ba3af] hover:bg-[#1c1f26] hover:text-[#f0f3f6] border border-[#2a2e38]'
                   }`}
                 >
-                  <Zap className="w-4 h-4 text-amber-400" />
+                  <Zap className="w-4 h-4" />
                   Тюнинг
                 </button>
               </>
@@ -1710,16 +1710,16 @@ export const ShopModal: React.FC<ShopModalProps> = (props) => {
 
             <button
               onClick={() => setActiveTab('cart')}
-              className={`px-4 py-2 min-h-[44px] rounded-xl font-medium text-xs sm:text-sm flex items-center gap-2 transition-all relative ${
+              className={`px-3.5 py-1.5 rounded-[2px] font-bold text-xs uppercase tracking-wider flex items-center gap-2 transition-all relative cursor-pointer ${
                 activeTab === 'cart' || activeTab === 'pos'
-                  ? 'bg-emerald-600 text-white shadow-md'
-                  : 'bg-zinc-900 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200'
+                  ? 'bg-[#c68a35] text-[#0b0c0e] shadow-sm'
+                  : 'bg-[#14161a] text-[#9ba3af] hover:bg-[#1c1f26] hover:text-[#f0f3f6] border border-[#2a2e38]'
               }`}
             >
               <ShoppingCart className="w-4 h-4" />
               Корзина
               {totalCartItemsCount > 0 && (
-                <span className="px-1.5 py-0.5 text-[10px] font-bold rounded-full bg-emerald-500 text-zinc-950 font-mono">
+                <span className="px-1.5 py-0.5 text-[10px] font-bold rounded-[2px] bg-[#c68a35] text-[#0b0c0e] font-mono">
                   {totalCartItemsCount}
                 </span>
               )}
@@ -1728,12 +1728,12 @@ export const ShopModal: React.FC<ShopModalProps> = (props) => {
 
           {/* Cart Summary Header Widget */}
           {cartTotal > 0 && (
-            <div className="hidden sm:flex items-center gap-3 pl-3 border-l border-zinc-800">
-              <span className="text-xs text-zinc-400">Итого в корзине:</span>
-              <span className="text-sm font-mono font-bold text-amber-400">{cartTotal.toLocaleString()} ₽</span>
+            <div className="hidden sm:flex items-center gap-3 pl-3 border-l border-[#2a2e38]">
+              <span className="text-xs text-[#9ba3af]">Итого в корзине:</span>
+              <span className="text-sm font-mono font-bold text-[#c68a35]">{cartTotal.toLocaleString()} ₽</span>
               <button
                 onClick={() => setActiveTab('pos')}
-                className="px-3 py-1.5 min-h-[36px] bg-amber-500 hover:bg-amber-400 text-zinc-950 font-bold text-xs rounded-lg flex items-center gap-1.5 transition-colors"
+                className="px-3 py-1.5 bg-[#c68a35] hover:bg-[#d99a41] text-[#0b0c0e] font-bold text-xs rounded-[2px] flex items-center gap-1.5 transition-colors cursor-pointer uppercase tracking-wider"
               >
                 К оплате <Receipt className="w-3.5 h-3.5" />
               </button>
@@ -1753,42 +1753,42 @@ export const ShopModal: React.FC<ShopModalProps> = (props) => {
                 return (
                   <div
                     key={item.id}
-                    className="p-3 bg-zinc-900/80 border border-zinc-800 rounded-xl flex flex-col justify-between gap-3 hover:border-zinc-700 transition-colors"
+                    className="p-3 bg-[#0b0c0e] border border-[#2a2e38] rounded-[2px] flex flex-col justify-between gap-3 hover:border-[#c68a35]/40 transition-colors"
                   >
                     <div className="flex gap-3">
-                      <div className="w-16 h-16 rounded-xl bg-zinc-950 border border-zinc-800/80 flex items-center justify-center shrink-0 p-1">
+                      <div className="w-16 h-16 rounded-[2px] bg-[#14161a] border border-[#2a2e38] flex items-center justify-center shrink-0 p-1">
                         <ItemIconCanvas itemId={item.itemId} size={52} />
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-start justify-between gap-1">
-                          <h3 className="text-sm font-bold text-zinc-100 truncate">{item.nameRu}</h3>
+                          <h3 className="text-sm font-bold text-[#f0f3f6] truncate">{item.nameRu}</h3>
                         </div>
-                        <p className="text-xs text-zinc-400 line-clamp-2 mt-0.5">{item.description}</p>
+                        <p className="text-xs text-[#9ba3af] line-clamp-2 mt-0.5">{item.description}</p>
                         {item.effectText && (
-                          <div className="inline-block mt-1 px-1.5 py-0.5 rounded text-[10px] bg-zinc-800 text-emerald-400 font-mono">
+                          <div className="inline-block mt-1 px-1.5 py-0.5 rounded-[2px] text-[10px] bg-[#14161a] text-[#c68a35] font-mono border border-[#2a2e38]">
                             {item.effectText}
                           </div>
                         )}
                       </div>
                     </div>
 
-                    <div className="flex items-center justify-between pt-2 border-t border-zinc-800/60">
-                      <div className="text-base font-mono font-bold text-emerald-400">
+                    <div className="flex items-center justify-between pt-2 border-t border-[#2a2e38]">
+                      <div className="text-base font-mono font-bold text-[#c68a35]">
                         {item.price.toLocaleString()} ₽
                       </div>
 
                       {countInCart > 0 ? (
-                        <div className="flex items-center gap-2 bg-zinc-950 border border-zinc-800 rounded-lg p-1">
+                        <div className="flex items-center gap-2 bg-[#14161a] border border-[#2a2e38] rounded-[2px] p-1">
                           <button
                             onClick={() => handleRemoveOneFromCart(item.id)}
-                            className="p-1 min-h-[36px] min-w-[36px] flex items-center justify-center rounded-md bg-zinc-800 text-zinc-300 hover:text-white"
+                            className="p-1 min-h-[32px] min-w-[32px] flex items-center justify-center rounded-[2px] bg-[#1c1f26] text-[#cbd5e1] hover:text-[#f0f3f6] cursor-pointer"
                           >
                             <Minus className="w-4 h-4" />
                           </button>
-                          <span className="px-2 text-xs font-mono font-bold text-zinc-100">{countInCart}</span>
+                          <span className="px-2 text-xs font-mono font-bold text-[#f0f3f6]">{countInCart}</span>
                           <button
                             onClick={() => handleAddToCart(item)}
-                            className="p-1 min-h-[36px] min-w-[36px] flex items-center justify-center rounded-md bg-emerald-600 text-white hover:bg-emerald-500"
+                            className="p-1 min-h-[32px] min-w-[32px] flex items-center justify-center rounded-[2px] bg-[#c68a35] text-[#0b0c0e] hover:bg-[#d99a41] cursor-pointer font-bold"
                           >
                             <Plus className="w-4 h-4" />
                           </button>
@@ -1796,7 +1796,7 @@ export const ShopModal: React.FC<ShopModalProps> = (props) => {
                       ) : (
                         <button
                           onClick={() => handleAddToCart(item)}
-                          className="px-3 py-2 min-h-[42px] bg-zinc-800 hover:bg-emerald-600 text-zinc-200 hover:text-white font-medium text-xs rounded-xl flex items-center gap-1.5 transition-colors"
+                          className="px-3 py-1.5 bg-[#14161a] hover:bg-[#c68a35] text-[#cbd5e1] hover:text-[#0b0c0e] font-bold text-xs rounded-[2px] border border-[#2a2e38] hover:border-[#c68a35] flex items-center gap-1.5 transition-colors cursor-pointer uppercase tracking-wider"
                         >
                           <Plus className="w-4 h-4" />
                           В корзину

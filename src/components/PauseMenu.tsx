@@ -21,106 +21,131 @@ export const PauseMenu: React.FC<PauseMenuProps> = ({
   onOpenDiagnostics
 }) => {
   return (
-    <div className="absolute inset-0 z-50 flex items-center justify-center bg-[#070b14]/85 backdrop-blur-md text-slate-100 font-sans select-none animate-in fade-in duration-200">
+    <div className="absolute inset-0 z-50 flex items-center justify-center bg-[#0b0c0e]/90 backdrop-blur-md text-[#f0f3f6] font-sans select-none animate-in fade-in duration-150">
       
-      {/* Background glow */}
-      <div className="absolute w-[500px] h-[300px] bg-emerald-600/10 rounded-full blur-3xl pointer-events-none" />
-
-      {/* Container Card */}
-      <div className="relative z-10 w-full max-w-md bg-[#0f1523]/95 border border-slate-800/90 rounded-3xl shadow-2xl flex flex-col p-8 md:p-10">
+      {/* Container Card - BeamNG Rectangular Slate Panel */}
+      <div className="relative z-10 w-full max-w-md bg-[rgba(20,22,26,0.95)] border border-white/10 rounded-[2px] shadow-2xl flex flex-col p-6 md:p-8">
         
         {/* Header */}
-        <div className="text-center mb-8">
-          <div className="inline-flex items-center gap-2 px-3 py-1 bg-slate-900 border border-slate-700/60 rounded-full text-slate-300 text-xs font-bold tracking-widest uppercase mb-3 shadow-inner">
-            <Compass className="w-3.5 h-3.5 text-emerald-400" /> Симуляция на паузе
+        <div className="mb-6 border-b border-white/[0.08] pb-4">
+          <div className="inline-flex items-center gap-1.5 text-[10px] font-mono font-bold tracking-widest text-[#c68a35] uppercase mb-1">
+            <Compass className="w-3.5 h-3.5" />
+            <span>СИМУЛЯЦИЯ НА ПАУЗЕ</span>
           </div>
-          <h2 className="text-3xl font-black tracking-tight text-white">
+          <h2 className="text-2xl font-black tracking-tight text-white uppercase">
             МЕНЮ ПАУЗЫ
           </h2>
-          <p className="text-xs text-slate-400 mt-1">
-            Выберите дальнейшее действие в игре
+          <p className="text-xs text-[#8b929e] mt-0.5">
+            Выберите дальнейшее действие в симуляторе
           </p>
         </div>
 
         {/* Buttons List */}
-        <div className="flex flex-col gap-3">
+        <div className="flex flex-col gap-2">
+          {/* 1. Resume */}
           <button
             onClick={onResume}
-            className="flex items-center gap-4 px-5 py-4 bg-slate-900 hover:bg-slate-850 border border-slate-800 hover:border-slate-700 rounded-2xl transition-all font-bold text-sm text-white group cursor-pointer active:scale-[0.99] shadow-lg"
+            className="group relative flex items-center gap-3.5 px-4 py-3 bg-[rgba(20,22,26,0.82)] hover:bg-[rgba(35,38,45,0.95)] border border-white/[0.08] hover:border-[#c68a35]/40 hover:shadow-[0_4px_16px_rgba(198,138,53,0.25)] rounded-[2px] transition-all text-left cursor-pointer overflow-hidden"
           >
-            <Play className="w-5 h-5 text-emerald-400 group-hover:scale-110 transition-transform fill-emerald-400" />
-            <span>Продолжить игру</span>
+            <div className="absolute left-0 top-0 bottom-0 w-[3px] bg-[#c68a35] opacity-0 group-hover:opacity-100 transition-opacity" />
+            <Play className="w-4 h-4 text-[#8b929e] group-hover:text-[#c68a35] transition-colors fill-current/20" />
+            <div className="flex flex-col">
+              <span className="text-xs font-bold uppercase tracking-wider text-[#f0f3f6] group-hover:text-white">Продолжить поездку</span>
+              <span className="text-[10px] text-[#8b929e]">Вернуться к управлению</span>
+            </div>
           </button>
 
+          {/* 2. Profile */}
           {onOpenProfile && (
             <button
               onClick={onOpenProfile}
-              className="flex items-center gap-4 px-5 py-4 bg-slate-900 hover:bg-slate-850 border border-emerald-500/30 hover:border-emerald-500/60 rounded-2xl transition-all font-bold text-sm text-white group cursor-pointer active:scale-[0.99] shadow-lg"
+              className="group relative flex items-center gap-3.5 px-4 py-3 bg-[rgba(20,22,26,0.82)] hover:bg-[rgba(35,38,45,0.95)] border border-white/[0.08] hover:border-[#c68a35]/40 hover:shadow-[0_4px_16px_rgba(198,138,53,0.25)] rounded-[2px] transition-all text-left cursor-pointer overflow-hidden"
             >
-              <User className="w-5 h-5 text-emerald-400 group-hover:scale-110 transition-transform" />
-              <div className="text-left">
-                <div>Профиль & Облачные Сохранения</div>
-                <div className="text-[10px] text-slate-400 font-normal">Авторизация, мейнтейнер серверов, облако</div>
+              <div className="absolute left-0 top-0 bottom-0 w-[3px] bg-[#c68a35] opacity-0 group-hover:opacity-100 transition-opacity" />
+              <User className="w-4 h-4 text-[#8b929e] group-hover:text-[#c68a35] transition-colors" />
+              <div className="flex flex-col">
+                <span className="text-xs font-bold uppercase tracking-wider text-[#f0f3f6] group-hover:text-white">Профиль & Облако</span>
+                <span className="text-[10px] text-[#8b929e]">Личное дело водителя и синхронизация</span>
               </div>
             </button>
           )}
 
+          {/* 3. Online */}
           {onOpenOnline && (
             <button
               onClick={onOpenOnline}
-              className="flex items-center gap-4 px-5 py-4 bg-slate-900 hover:bg-slate-850 border border-sky-500/30 hover:border-sky-500/60 rounded-2xl transition-all font-bold text-sm text-white group cursor-pointer active:scale-[0.99] shadow-lg"
+              className="group relative flex items-center gap-3.5 px-4 py-3 bg-[rgba(20,22,26,0.82)] hover:bg-[rgba(35,38,45,0.95)] border border-white/[0.08] hover:border-[#c68a35]/40 hover:shadow-[0_4px_16px_rgba(198,138,53,0.25)] rounded-[2px] transition-all text-left cursor-pointer overflow-hidden"
             >
-              <Globe className="w-5 h-5 text-sky-400 group-hover:scale-110 transition-transform" />
-              <div className="text-left">
-                <div>Онлайн режим (P2P Сеть & Серверы)</div>
-                <div className="text-[10px] text-slate-400 font-normal">Браузер комнат, общий чат, синхронизация</div>
+              <div className="absolute left-0 top-0 bottom-0 w-[3px] bg-[#c68a35] opacity-0 group-hover:opacity-100 transition-opacity" />
+              <Globe className="w-4 h-4 text-[#8b929e] group-hover:text-[#c68a35] transition-colors" />
+              <div className="flex flex-col">
+                <span className="text-xs font-bold uppercase tracking-wider text-[#f0f3f6] group-hover:text-white">Онлайн режим P2P</span>
+                <span className="text-[10px] text-[#8b929e]">Диспетчерская комната и совместный заезд</span>
               </div>
             </button>
           )}
 
+          {/* 4. Save */}
           <button
             onClick={onSave}
-            className="flex items-center gap-4 px-5 py-4 bg-slate-900 hover:bg-slate-850 border border-slate-800 hover:border-slate-700 rounded-2xl transition-all font-bold text-sm text-white group cursor-pointer active:scale-[0.99] shadow-lg"
+            className="group relative flex items-center gap-3.5 px-4 py-3 bg-[rgba(20,22,26,0.82)] hover:bg-[rgba(35,38,45,0.95)] border border-white/[0.08] hover:border-[#c68a35]/40 hover:shadow-[0_4px_16px_rgba(198,138,53,0.25)] rounded-[2px] transition-all text-left cursor-pointer overflow-hidden"
           >
-            <Save className="w-5 h-5 text-sky-400 group-hover:scale-110 transition-transform" />
-            <span>Сохранить игру</span>
+            <div className="absolute left-0 top-0 bottom-0 w-[3px] bg-[#c68a35] opacity-0 group-hover:opacity-100 transition-opacity" />
+            <Save className="w-4 h-4 text-[#8b929e] group-hover:text-[#c68a35] transition-colors" />
+            <div className="flex flex-col">
+              <span className="text-xs font-bold uppercase tracking-wider text-[#f0f3f6] group-hover:text-white">Сохранить поездку</span>
+              <span className="text-[10px] text-[#8b929e]">Записать текущее состояние в архив</span>
+            </div>
           </button>
 
+          {/* 5. Settings */}
           <button
             onClick={onOpenSettings}
-            className="flex items-center gap-4 px-5 py-4 bg-slate-900 hover:bg-slate-850 border border-slate-800 hover:border-slate-700 rounded-2xl transition-all font-bold text-sm text-white group cursor-pointer active:scale-[0.99] shadow-lg"
+            className="group relative flex items-center gap-3.5 px-4 py-3 bg-[rgba(20,22,26,0.82)] hover:bg-[rgba(35,38,45,0.95)] border border-white/[0.08] hover:border-[#c68a35]/40 hover:shadow-[0_4px_16px_rgba(198,138,53,0.25)] rounded-[2px] transition-all text-left cursor-pointer overflow-hidden"
           >
-            <Settings className="w-5 h-5 text-indigo-400 group-hover:scale-110 transition-transform" />
-            <span>Настройки симулятора</span>
+            <div className="absolute left-0 top-0 bottom-0 w-[3px] bg-[#c68a35] opacity-0 group-hover:opacity-100 transition-opacity" />
+            <Settings className="w-4 h-4 text-[#8b929e] group-hover:text-[#c68a35] transition-colors" />
+            <div className="flex flex-col">
+              <span className="text-xs font-bold uppercase tracking-wider text-[#f0f3f6] group-hover:text-white">Настройка кабины</span>
+              <span className="text-[10px] text-[#8b929e]">Графика, звук, физика и управление</span>
+            </div>
           </button>
 
+          {/* 6. Diagnostics */}
           {onOpenDiagnostics && (
             <button
               onClick={onOpenDiagnostics}
-              className="flex items-center gap-4 px-5 py-4 bg-slate-900 hover:bg-slate-850 border border-indigo-500/30 hover:border-indigo-500/60 rounded-2xl transition-all font-bold text-sm text-indigo-300 group cursor-pointer active:scale-[0.99] shadow-lg"
+              className="group relative flex items-center gap-3.5 px-4 py-3 bg-[rgba(20,22,26,0.82)] hover:bg-[rgba(35,38,45,0.95)] border border-white/[0.08] hover:border-[#c68a35]/40 hover:shadow-[0_4px_16px_rgba(198,138,53,0.25)] rounded-[2px] transition-all text-left cursor-pointer overflow-hidden"
             >
-              <Activity className="w-5 h-5 text-indigo-400 group-hover:scale-110 transition-transform" />
-              <div className="text-left">
-                <div>Диагностика и Лог Сбоев [F2]</div>
-                <div className="text-[10px] text-slate-400 font-normal">Память вкладки, счетчик сущностей, лог падений</div>
+              <div className="absolute left-0 top-0 bottom-0 w-[3px] bg-[#c68a35] opacity-0 group-hover:opacity-100 transition-opacity" />
+              <Activity className="w-4 h-4 text-[#8b929e] group-hover:text-[#c68a35] transition-colors" />
+              <div className="flex flex-col">
+                <span className="text-xs font-bold uppercase tracking-wider text-[#f0f3f6] group-hover:text-white">Диагностика [F2]</span>
+                <span className="text-[10px] text-[#8b929e]">Лог производительности и сущностей</span>
               </div>
             </button>
           )}
 
-          <div className="h-px bg-slate-800/80 my-1" />
+          <div className="h-px bg-white/[0.08] my-1" />
 
+          {/* 7. Exit */}
           <button
             onClick={onExitToMainMenu}
-            className="flex items-center gap-4 px-5 py-4 bg-rose-950/30 hover:bg-rose-900/40 border border-rose-500/30 rounded-2xl transition-all font-bold text-sm text-rose-200 hover:text-white group cursor-pointer active:scale-[0.99]"
+            className="group relative flex items-center gap-3.5 px-4 py-3 bg-[rgba(20,22,26,0.82)] hover:bg-red-950/40 border border-white/[0.08] hover:border-red-600/40 text-left rounded-[2px] transition-all cursor-pointer overflow-hidden"
           >
-            <LogOut className="w-5 h-5 text-rose-400 group-hover:scale-110 transition-transform" />
-            <span>Выйти в главное меню</span>
+            <div className="absolute left-0 top-0 bottom-0 w-[3px] bg-red-600 opacity-0 group-hover:opacity-100 transition-opacity" />
+            <LogOut className="w-4 h-4 text-[#8b929e] group-hover:text-red-400 transition-colors" />
+            <div className="flex flex-col">
+              <span className="text-xs font-bold uppercase tracking-wider text-[#f0f3f6] group-hover:text-red-300">Выйти в главное меню</span>
+              <span className="text-[10px] text-[#8b929e]">Завершить текущую сессию</span>
+            </div>
           </button>
         </div>
 
         {/* Footer */}
-        <div className="mt-8 text-center text-[10px] text-slate-500">
-          Metropolis 2D // Нажмите Esc для возврата
+        <div className="mt-6 pt-3 border-t border-white/[0.08] flex items-center justify-between text-[10px] font-mono text-[#8b929e]">
+          <span>СТЕПНОЙ ТРАКТ 2D</span>
+          <span>Нажмите Esc для возврата</span>
         </div>
 
       </div>

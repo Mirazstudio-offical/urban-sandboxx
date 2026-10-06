@@ -121,7 +121,7 @@ export const PlayerNeedsHUD: React.FC<PlayerNeedsHUDProps> = ({
     <>
       {/* 1. SENSORY ALERTS & TINNITUS */}
       {tinnitusActive && (
-        <div className="fixed top-4 left-1/2 -translate-x-1/2 pointer-events-none z-50 px-4 py-1.5 rounded-full bg-amber-500/20 border border-amber-400/40 backdrop-blur-md text-amber-200 text-xs font-bold flex items-center gap-2 animate-bounce">
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 pointer-events-none z-50 px-4 py-1.5 rounded-[2px] bg-[#c68a35]/20 border border-[#c68a35]/50 backdrop-blur-md text-[#d99a41] text-xs font-bold flex items-center gap-2 animate-bounce font-mono">
           <Volume2 className="w-4 h-4 animate-spin" />
           <span>Звон в ушах... (Контузия)</span>
         </div>
@@ -146,94 +146,94 @@ export const PlayerNeedsHUD: React.FC<PlayerNeedsHUDProps> = ({
               e.stopPropagation();
               onOpenSelfInspection();
             }}
-            className="flex items-center gap-2 px-2.5 py-1.5 bg-slate-950/95 border border-slate-700/90 rounded-xl shadow-2xl text-slate-200 transition font-mono active:scale-95"
+            className="flex items-center gap-2 px-2.5 py-1.5 bg-[#14161a]/95 border border-[#2a2e38] rounded-[2px] shadow-2xl text-[#f0f3f6] transition font-mono active:scale-98 cursor-pointer"
             title="Открыть самоосмотр организма (Клавиша C)"
           >
-            <div className={`p-1 rounded bg-slate-900 ${isCritical ? 'text-rose-400 animate-pulse' : 'text-slate-300'}`}>
+            <div className={`p-1 rounded-[2px] bg-[#0b0c0e] ${isCritical ? 'text-red-400 animate-pulse' : 'text-[#c68a35]'}`}>
               <Activity className="w-3.5 h-3.5" />
             </div>
-            <div className="text-left text-[10px] font-bold uppercase tracking-wider text-slate-300">
+            <div className="text-left text-[10px] font-bold uppercase tracking-wider text-[#cbd5e1]">
               СОСТОЯНИЕ: {Math.round(player.needs.health)}% HP
             </div>
           </button>
         ) : (
           /* Premium Bento Diagnostics & Vitals Widget */
-          <div className="p-4 bg-slate-950/85 border border-slate-800 rounded-2xl shadow-2xl flex flex-col gap-3 w-[280px] sm:w-[320px] backdrop-blur-md animate-in fade-in slide-in-from-bottom-2 duration-150">
+          <div className="p-3.5 bg-[#14161a]/95 border border-[#2a2e38] rounded-[2px] shadow-2xl flex flex-col gap-2.5 w-[280px] sm:w-[320px] backdrop-blur-md animate-in fade-in slide-in-from-bottom-2 duration-150">
             {/* Title / Header */}
-            <div className="flex items-center justify-between text-slate-400 text-[9px] font-mono font-bold uppercase tracking-wider border-b border-slate-800/80 pb-2">
-              <span className="flex items-center gap-1.5"><Activity className="w-3.5 h-3.5 text-sky-400" /> ДИАГНОСТИКА</span>
-              <span className="font-mono text-slate-500">VITALS</span>
+            <div className="flex items-center justify-between text-[#9ba3af] text-[9px] font-mono font-bold uppercase tracking-wider border-b border-[#2a2e38] pb-2">
+              <span className="flex items-center gap-1.5"><Activity className="w-3.5 h-3.5 text-[#c68a35]" /> ДИАГНОСТИКА</span>
+              <span className="font-mono text-[#5a6272]">VITALS</span>
             </div>
             
             {/* Vitals Grid (2 Columns, 2 Rows) */}
             <div className="grid grid-cols-2 gap-2">
               {/* Health Cell */}
-              <div className="bg-slate-900/40 border border-slate-800/50 rounded-xl p-2 flex flex-col gap-1.5">
+              <div className="bg-[#0b0c0e]/60 border border-[#2a2e38] rounded-[2px] p-2 flex flex-col gap-1.5">
                 <div className="flex items-center justify-between">
-                  <span className="text-[9px] font-mono font-extrabold text-slate-400 flex items-center gap-1">
-                    <Heart className={`w-3 h-3 ${player.needs.health < 30 ? 'text-rose-500 animate-pulse' : 'text-rose-400'}`} /> HP
+                  <span className="text-[9px] font-mono font-extrabold text-[#9ba3af] flex items-center gap-1">
+                    <Heart className={`w-3 h-3 ${player.needs.health < 30 ? 'text-red-500 animate-pulse' : 'text-red-400'}`} /> HP
                   </span>
-                  <span className={`text-[10px] font-mono font-bold ${player.needs.health < 30 ? 'text-rose-400' : 'text-slate-200'}`}>
+                  <span className={`text-[10px] font-mono font-bold ${player.needs.health < 30 ? 'text-red-400' : 'text-[#f0f3f6]'}`}>
                     {Math.round(player.needs.health)}%
                   </span>
                 </div>
-                <div className="w-full h-1.5 bg-slate-950 rounded-full overflow-hidden">
+                <div className="w-full h-1.5 bg-[#0b0c0e] rounded-none overflow-hidden border border-[#2a2e38]">
                   <div 
-                    className={`h-full rounded-full transition-all duration-300 ${player.needs.health < 30 ? 'bg-rose-500 shadow-[0_0_8px_rgba(239,68,68,0.5)]' : 'bg-rose-600'}`}
+                    className={`h-full rounded-none transition-all duration-300 ${player.needs.health < 30 ? 'bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.5)]' : 'bg-red-700'}`}
                     style={{ width: `${player.needs.health}%` }}
                   />
                 </div>
               </div>
 
               {/* Energy Cell */}
-              <div className="bg-slate-900/40 border border-slate-800/50 rounded-xl p-2 flex flex-col gap-1.5">
+              <div className="bg-[#0b0c0e]/60 border border-[#2a2e38] rounded-[2px] p-2 flex flex-col gap-1.5">
                 <div className="flex items-center justify-between">
-                  <span className="text-[9px] font-mono font-extrabold text-slate-400 flex items-center gap-1">
-                    <Zap className={`w-3 h-3 ${player.needs.energy < 25 ? 'text-amber-500 animate-pulse' : 'text-amber-400'}`} /> ЭНЕРГИЯ
+                  <span className="text-[9px] font-mono font-extrabold text-[#9ba3af] flex items-center gap-1">
+                    <Zap className={`w-3 h-3 ${player.needs.energy < 25 ? 'text-[#c68a35] animate-pulse' : 'text-[#c68a35]'}`} /> ЭНЕРГИЯ
                   </span>
-                  <span className={`text-[10px] font-mono font-bold ${player.needs.energy < 25 ? 'text-amber-400' : 'text-slate-200'}`}>
+                  <span className={`text-[10px] font-mono font-bold ${player.needs.energy < 25 ? 'text-[#d99a41]' : 'text-[#f0f3f6]'}`}>
                     {Math.round(player.needs.energy)}%
                   </span>
                 </div>
-                <div className="w-full h-1.5 bg-slate-950 rounded-full overflow-hidden">
+                <div className="w-full h-1.5 bg-[#0b0c0e] rounded-none overflow-hidden border border-[#2a2e38]">
                   <div 
-                    className={`h-full rounded-full transition-all duration-300 ${player.needs.energy < 25 ? 'bg-amber-500 shadow-[0_0_8px_rgba(245,158,11,0.5)]' : 'bg-amber-500'}`}
+                    className={`h-full rounded-none transition-all duration-300 ${player.needs.energy < 25 ? 'bg-[#c68a35] shadow-[0_0_8px_rgba(198,138,53,0.5)]' : 'bg-[#c68a35]'}`}
                     style={{ width: `${player.needs.energy}%` }}
                   />
                 </div>
               </div>
 
               {/* Hunger Cell */}
-              <div className="bg-slate-900/40 border border-slate-800/50 rounded-xl p-2 flex flex-col gap-1.5">
+              <div className="bg-[#0b0c0e]/60 border border-[#2a2e38] rounded-[2px] p-2 flex flex-col gap-1.5">
                 <div className="flex items-center justify-between">
-                  <span className="text-[9px] font-mono font-extrabold text-slate-400 flex items-center gap-1">
-                    <Utensils className={`w-3 h-3 ${player.needs.hunger < 25 ? 'text-orange-500 animate-pulse' : 'text-orange-400'}`} /> СЫТОСТЬ
+                  <span className="text-[9px] font-mono font-extrabold text-[#9ba3af] flex items-center gap-1">
+                    <Utensils className={`w-3 h-3 ${player.needs.hunger < 25 ? 'text-[#d99a41] animate-pulse' : 'text-[#c68a35]'}`} /> СЫТОСТЬ
                   </span>
-                  <span className={`text-[10px] font-mono font-bold ${player.needs.hunger < 25 ? 'text-orange-400' : 'text-slate-200'}`}>
+                  <span className={`text-[10px] font-mono font-bold ${player.needs.hunger < 25 ? 'text-[#d99a41]' : 'text-[#f0f3f6]'}`}>
                     {Math.round(player.needs.hunger)}%
                   </span>
                 </div>
-                <div className="w-full h-1.5 bg-slate-950 rounded-full overflow-hidden">
+                <div className="w-full h-1.5 bg-[#0b0c0e] rounded-none overflow-hidden border border-[#2a2e38]">
                   <div 
-                    className={`h-full rounded-full transition-all duration-300 ${player.needs.hunger < 25 ? 'bg-orange-500 shadow-[0_0_8px_rgba(249,115,22,0.5)]' : 'bg-orange-500'}`}
+                    className={`h-full rounded-none transition-all duration-300 ${player.needs.hunger < 25 ? 'bg-[#c68a35] shadow-[0_0_8px_rgba(198,138,53,0.5)]' : 'bg-[#9a6a24]'}`}
                     style={{ width: `${player.needs.hunger}%` }}
                   />
                 </div>
               </div>
 
               {/* Thirst Cell */}
-              <div className="bg-slate-900/40 border border-slate-800/50 rounded-xl p-2 flex flex-col gap-1.5">
+              <div className="bg-[#0b0c0e]/60 border border-[#2a2e38] rounded-[2px] p-2 flex flex-col gap-1.5">
                 <div className="flex items-center justify-between">
-                  <span className="text-[9px] font-mono font-extrabold text-slate-400 flex items-center gap-1">
-                    <Droplet className={`w-3 h-3 ${player.needs.thirst < 25 ? 'text-sky-500 animate-pulse' : 'text-sky-400'}`} /> ВОДА
+                  <span className="text-[9px] font-mono font-extrabold text-[#9ba3af] flex items-center gap-1">
+                    <Droplet className={`w-3 h-3 ${player.needs.thirst < 25 ? 'text-[#cbd5e1] animate-pulse' : 'text-[#9ba3af]'}`} /> ВОДА
                   </span>
-                  <span className={`text-[10px] font-mono font-bold ${player.needs.thirst < 25 ? 'text-sky-400' : 'text-slate-200'}`}>
+                  <span className={`text-[10px] font-mono font-bold ${player.needs.thirst < 25 ? 'text-amber-400' : 'text-[#f0f3f6]'}`}>
                     {Math.round(player.needs.thirst)}%
                   </span>
                 </div>
-                <div className="w-full h-1.5 bg-slate-950 rounded-full overflow-hidden">
+                <div className="w-full h-1.5 bg-[#0b0c0e] rounded-none overflow-hidden border border-[#2a2e38]">
                   <div 
-                    className={`h-full rounded-full transition-all duration-300 ${player.needs.thirst < 25 ? 'bg-sky-500 shadow-[0_0_8px_rgba(14,165,233,0.5)]' : 'bg-sky-500'}`}
+                    className={`h-full rounded-none transition-all duration-300 ${player.needs.thirst < 25 ? 'bg-[#c68a35] shadow-[0_0_8px_rgba(198,138,53,0.5)]' : 'bg-slate-500'}`}
                     style={{ width: `${player.needs.thirst}%` }}
                   />
                 </div>
@@ -248,16 +248,16 @@ export const PlayerNeedsHUD: React.FC<PlayerNeedsHUDProps> = ({
                 e.stopPropagation();
                 onOpenSelfInspection();
               }}
-              className="w-full py-2 bg-slate-900 hover:bg-slate-800 active:scale-95 border border-slate-800 hover:border-slate-700 rounded-xl flex items-center justify-between px-3 transition font-mono group cursor-pointer"
+              className="w-full py-2 bg-[#0b0c0e] hover:bg-[#1c1f26] active:scale-98 border border-[#2a2e38] hover:border-[#c68a35]/40 rounded-[2px] flex items-center justify-between px-3 transition font-mono group cursor-pointer"
             >
-              <span className="text-[9px] font-extrabold uppercase text-slate-300 tracking-wider flex items-center gap-1.5">
+              <span className="text-[9px] font-extrabold uppercase text-[#cbd5e1] tracking-wider flex items-center gap-1.5">
                 <span className="relative flex h-2 w-2">
-                  <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${isCritical ? 'bg-rose-500' : 'bg-emerald-400'}`} />
-                  <span className={`relative inline-flex rounded-full h-2 w-2 ${isCritical ? 'bg-rose-500' : 'bg-emerald-500'}`} />
+                  <span className={`animate-ping absolute inline-flex h-full w-full rounded-none opacity-75 ${isCritical ? 'bg-red-500' : 'bg-[#c68a35]'}`} />
+                  <span className={`relative inline-flex rounded-none h-2 w-2 ${isCritical ? 'bg-red-500' : 'bg-[#c68a35]'}`} />
                 </span>
                 {detailed.healthText}
               </span>
-              <span className="px-1.5 py-0.5 bg-slate-800 group-hover:bg-slate-700 text-[9px] font-mono text-slate-400 rounded border border-slate-700">
+              <span className="px-1.5 py-0.5 bg-[#14161a] group-hover:bg-[#1c1f26] text-[9px] font-mono text-[#c68a35] rounded-[2px] border border-[#2a2e38]">
                 C
               </span>
             </button>
@@ -277,22 +277,22 @@ export const PlayerNeedsHUD: React.FC<PlayerNeedsHUDProps> = ({
                   e.stopPropagation();
                   onOpenSelfInspection();
                 }}
-                className={`flex items-center gap-1.5 px-2 py-0.5 sm:py-1 border rounded-lg text-[10px] sm:text-[11px] font-mono shadow backdrop-blur-sm transition active:scale-95 ${
+                className={`flex items-center gap-1.5 px-2 py-0.5 sm:py-1 border rounded-[2px] text-[10px] sm:text-[11px] font-mono shadow backdrop-blur-sm transition active:scale-98 cursor-pointer ${
                   isDanger 
-                    ? 'bg-rose-950/90 border-rose-700 text-rose-200 animate-pulse' 
-                    : 'bg-slate-950/95 border-slate-700 text-slate-200 hover:border-slate-500'
+                    ? 'bg-red-950/90 border-red-700 text-red-200 animate-pulse' 
+                    : 'bg-[#14161a]/95 border-[#2a2e38] text-[#cbd5e1] hover:border-[#c68a35]/60 hover:text-white'
                 }`}
                 title={`${symptom.label}: ${symptom.description}`}
               >
-                {symptom.iconType === 'leg' && <AlertCircle className="w-3.5 h-3.5 text-rose-400" />}
-                {symptom.iconType === 'drop' && <Droplet className="w-3.5 h-3.5 text-sky-400" />}
-                {symptom.iconType === 'cold' && <Thermometer className="w-3.5 h-3.5 text-cyan-400" />}
-                {symptom.iconType === 'wet' && <CloudRain className="w-3.5 h-3.5 text-blue-400" />}
-                {symptom.iconType === 'pain' && <Zap className="w-3.5 h-3.5 text-amber-400" />}
-                {symptom.iconType === 'energy' && <BatteryLow className="w-3.5 h-3.5 text-amber-400" />}
-                {symptom.iconType === 'heart' && <Heart className="w-3.5 h-3.5 text-purple-400" />}
-                {symptom.iconType === 'pill' && <Sparkles className="w-3.5 h-3.5 text-sky-400" />}
-                {symptom.iconType === 'cough' && <AlertCircle className="w-3.5 h-3.5 text-amber-400" />}
+                {symptom.iconType === 'leg' && <AlertCircle className="w-3.5 h-3.5 text-red-400" />}
+                {symptom.iconType === 'drop' && <Droplet className="w-3.5 h-3.5 text-[#c68a35]" />}
+                {symptom.iconType === 'cold' && <Thermometer className="w-3.5 h-3.5 text-slate-300" />}
+                {symptom.iconType === 'wet' && <CloudRain className="w-3.5 h-3.5 text-slate-300" />}
+                {symptom.iconType === 'pain' && <Zap className="w-3.5 h-3.5 text-[#c68a35]" />}
+                {symptom.iconType === 'energy' && <BatteryLow className="w-3.5 h-3.5 text-[#c68a35]" />}
+                {symptom.iconType === 'heart' && <Heart className="w-3.5 h-3.5 text-red-400" />}
+                {symptom.iconType === 'pill' && <Sparkles className="w-3.5 h-3.5 text-[#c68a35]" />}
+                {symptom.iconType === 'cough' && <AlertCircle className="w-3.5 h-3.5 text-[#d99a41]" />}
                 <span className="font-semibold uppercase">{symptom.label}</span>
               </button>
             );
@@ -303,20 +303,20 @@ export const PlayerNeedsHUD: React.FC<PlayerNeedsHUDProps> = ({
       {/* 3. CONSUMPTION PROGRESS BAR */}
       {isConsuming && player.consumption && (
         <div className="fixed bottom-28 left-1/2 -translate-x-1/2 z-40 pointer-events-none flex flex-col items-center gap-1">
-          <div className="px-3.5 py-1.5 bg-slate-950/95 border border-slate-700 rounded-xl text-xs font-mono text-slate-200 shadow-xl flex items-center gap-2">
-            <Package className="w-4 h-4 text-amber-400" />
+          <div className="px-3.5 py-1.5 bg-[#14161a]/95 border border-[#2a2e38] rounded-[2px] text-xs font-mono text-[#f0f3f6] shadow-xl flex items-center gap-2">
+            <Package className="w-4 h-4 text-[#c68a35]" />
             <span className="font-bold">{player.consumption.itemNameRu}</span>
             {player.consumption.tasteMessage && (
-              <span className="text-slate-400 italic">— {player.consumption.tasteMessage}</span>
+              <span className="text-[#9ba3af] italic">— {player.consumption.tasteMessage}</span>
             )}
           </div>
-          <div className="w-52 h-2 bg-slate-900 rounded-full overflow-hidden border border-slate-700">
+          <div className="w-52 h-2 bg-[#0b0c0e] rounded-none overflow-hidden border border-[#2a2e38]">
             <div 
-              className="h-full bg-amber-400 rounded-full transition-all duration-200"
+              className="h-full bg-[#c68a35] rounded-none transition-all duration-200"
               style={{ width: `${((player.consumption.totalBites - player.consumption.bitesRemaining) / player.consumption.totalBites) * 100}%` }}
             />
           </div>
-          <div className="text-[10px] text-slate-400 font-mono uppercase tracking-wider">
+          <div className="text-[10px] text-[#9ba3af] font-mono uppercase tracking-wider">
             ПРОЦЕСС: {player.consumption.totalBites - player.consumption.bitesRemaining}/{player.consumption.totalBites}
           </div>
         </div>
@@ -328,29 +328,29 @@ export const PlayerNeedsHUD: React.FC<PlayerNeedsHUDProps> = ({
           {/* MAIN INTERFACE ROW: LEFT HAND | SWAP | RIGHT HAND | DIVIDER | POCKETS 1-6 | INVENTORY BUTTON */}
           <div 
             id="player-dual-hands-hotbar"
-            className={`flex items-center gap-1.5 sm:gap-2 bg-slate-950/95 backdrop-blur-md border border-slate-800 shadow-2xl transition-all ${
-              isMobileTouch ? 'p-1.5 rounded-xl scale-75 sm:scale-85 md:scale-100 origin-bottom' : 'p-2.5 rounded-2xl'
+            className={`flex items-center gap-1.5 sm:gap-2 bg-[#14161a]/95 backdrop-blur-md border border-[#2a2e38] shadow-2xl transition-all ${
+              isMobileTouch ? 'p-1.5 rounded-[2px] scale-75 sm:scale-85 md:scale-100 origin-bottom' : 'p-2.5 rounded-[2px]'
             }`}
           >
             {/* --- HANDS SECTION --- */}
-            <div className="flex items-center gap-1.5 bg-slate-900/90 p-1 rounded-xl border border-slate-800/80">
+            <div className="flex items-center gap-1.5 bg-[#0b0c0e]/80 p-1 rounded-[2px] border border-[#2a2e38]">
               {/* LEFT HAND */}
               <div 
                 id="hud-left-hand-slot"
                 onClick={() => handleHandClick('left')}
                 onDoubleClick={() => onUseActiveHandItem?.()}
                 title={leftItem ? `Левая рука: ${leftItem.nameRu} [Клик - выбрать, Даблклик - использовать]` : 'Левая рука (Свободна) [Клик для выбора]'}
-                className={`relative w-14 h-14 rounded-xl border flex flex-col items-center justify-center transition-all cursor-pointer select-none ${
+                className={`relative w-14 h-14 rounded-[2px] border flex flex-col items-center justify-center transition-all cursor-pointer select-none ${
                   activeHand === 'left'
-                    ? 'border-sky-400 bg-sky-950/70 shadow-lg ring-2 ring-sky-400/50 scale-105 z-10'
-                    : 'border-slate-800 bg-slate-950/80 hover:border-slate-600 hover:bg-slate-900'
+                    ? 'border-[#c68a35] bg-[#c68a35]/20 shadow-lg ring-1 ring-[#c68a35]/50 scale-105 z-10'
+                    : 'border-[#2a2e38] bg-[#14161a] hover:border-white/20 hover:bg-[#1c1f26]'
                 }`}
               >
-                <div className="absolute top-1 left-1.5 text-[8px] font-mono font-bold tracking-tight text-slate-400 uppercase">
+                <div className="absolute top-1 left-1.5 text-[8px] font-mono font-bold tracking-tight text-[#9ba3af] uppercase">
                   ЛЕВ
                 </div>
                 {activeHand === 'left' && (
-                  <span className="absolute -top-1.5 -right-1.5 px-1 py-0.2 bg-sky-500 text-slate-950 text-[8px] font-mono font-extrabold rounded-full shadow">
+                  <span className="absolute -top-1.5 -right-1.5 px-1 py-0.2 bg-[#c68a35] text-[#0b0c0e] text-[8px] font-mono font-extrabold rounded-[2px] shadow">
                     АКТИВ
                   </span>
                 )}
@@ -361,33 +361,33 @@ export const PlayerNeedsHUD: React.FC<PlayerNeedsHUDProps> = ({
                     {/* Portion indicator if multi-portion */}
                     {leftItem.maxPortions && leftItem.maxPortions > 1 && (
                       <>
-                        <span className="absolute top-1 right-1.5 px-1 py-0.2 bg-slate-950/90 border border-slate-700/80 rounded text-[8px] font-mono font-bold text-sky-300">
+                        <span className="absolute top-1 right-1.5 px-1 py-0.2 bg-[#0b0c0e]/90 border border-[#2a2e38] rounded-[2px] text-[8px] font-mono font-bold text-[#d99a41]">
                           {leftItem.portions ?? leftItem.maxPortions}/{leftItem.maxPortions}
                         </span>
-                        <div className="absolute bottom-0.5 left-1 right-1 h-1 bg-slate-950/90 rounded-full overflow-hidden border border-slate-700/80">
+                        <div className="absolute bottom-0.5 left-1 right-1 h-1 bg-[#0b0c0e] rounded-none overflow-hidden border border-[#2a2e38]">
                           <div 
-                            className="h-full bg-sky-400 rounded-full transition-all"
+                            className="h-full bg-[#c68a35] rounded-none transition-all"
                             style={{ width: `${Math.max(0, Math.min(100, ((leftItem.portions ?? leftItem.maxPortions) / leftItem.maxPortions) * 100))}%` }}
                           />
                         </div>
                       </>
                     )}
                     {leftItem.count > 1 && (
-                      <span className="absolute bottom-1 right-1 px-1 bg-slate-950 border border-slate-700 rounded text-[9px] font-mono font-bold text-slate-300">
+                      <span className="absolute bottom-1 right-1 px-1 bg-[#0b0c0e] border border-[#2a2e38] rounded-[2px] text-[9px] font-mono font-bold text-[#f0f3f6]">
                         x{leftItem.count}
                       </span>
                     )}
                     {/* Quick stow icon button */}
                     <button
                       onClick={(e) => handleStowHand(e, 'left')}
-                      className="absolute bottom-1 left-1 p-0.5 rounded bg-slate-900/80 hover:bg-sky-600 text-slate-400 hover:text-white transition z-10"
+                      className="absolute bottom-1 left-1 p-0.5 rounded-[2px] bg-[#14161a] hover:bg-[#c68a35] text-[#9ba3af] hover:text-[#0b0c0e] transition z-10 cursor-pointer"
                       title="Убрать в карман"
                     >
                       <ArrowDownToLine className="w-2.5 h-2.5" />
                     </button>
                   </>
                 ) : (
-                  <Hand className="w-5 h-5 text-slate-700 stroke-[1.5]" />
+                  <Hand className="w-5 h-5 text-[#3a3f4d] stroke-[1.5]" />
                 )}
               </div>
 
@@ -395,7 +395,7 @@ export const PlayerNeedsHUD: React.FC<PlayerNeedsHUDProps> = ({
               <button
                 id="hud-swap-hands-btn"
                 onClick={handleSwapHands}
-                className="px-1.5 h-14 bg-slate-950 hover:bg-slate-800 active:scale-95 border border-slate-800 rounded-lg text-slate-400 hover:text-sky-300 flex flex-col items-center justify-center gap-0.5 transition"
+                className="px-1.5 h-14 bg-[#14161a] hover:bg-[#1c1f26] active:scale-98 border border-[#2a2e38] rounded-[2px] text-[#9ba3af] hover:text-[#c68a35] flex flex-col items-center justify-center gap-0.5 transition cursor-pointer"
                 title="Переключить / Поменять руки местами (Клавиша Q)"
               >
                 <ArrowLeftRight className="w-3.5 h-3.5" />
@@ -408,17 +408,17 @@ export const PlayerNeedsHUD: React.FC<PlayerNeedsHUDProps> = ({
                 onClick={() => handleHandClick('right')}
                 onDoubleClick={() => onUseActiveHandItem?.()}
                 title={rightItem ? `Правая рука: ${rightItem.nameRu} [Клик - выбрать, Даблклик - использовать]` : 'Правая рука (Свободна) [Клик для выбора]'}
-                className={`relative w-14 h-14 rounded-xl border flex flex-col items-center justify-center transition-all cursor-pointer select-none ${
+                className={`relative w-14 h-14 rounded-[2px] border flex flex-col items-center justify-center transition-all cursor-pointer select-none ${
                   activeHand === 'right'
-                    ? 'border-sky-400 bg-sky-950/70 shadow-lg ring-2 ring-sky-400/50 scale-105 z-10'
-                    : 'border-slate-800 bg-slate-950/80 hover:border-slate-600 hover:bg-slate-900'
+                    ? 'border-[#c68a35] bg-[#c68a35]/20 shadow-lg ring-1 ring-[#c68a35]/50 scale-105 z-10'
+                    : 'border-[#2a2e38] bg-[#14161a] hover:border-white/20 hover:bg-[#1c1f26]'
                 }`}
               >
-                <div className="absolute top-1 left-1.5 text-[8px] font-mono font-bold tracking-tight text-slate-400 uppercase">
+                <div className="absolute top-1 left-1.5 text-[8px] font-mono font-bold tracking-tight text-[#9ba3af] uppercase">
                   ПРАВ
                 </div>
                 {activeHand === 'right' && (
-                  <span className="absolute -top-1.5 -right-1.5 px-1 py-0.2 bg-sky-500 text-slate-950 text-[8px] font-mono font-extrabold rounded-full shadow">
+                  <span className="absolute -top-1.5 -right-1.5 px-1 py-0.2 bg-[#c68a35] text-[#0b0c0e] text-[8px] font-mono font-extrabold rounded-[2px] shadow">
                     АКТИВ
                   </span>
                 )}
@@ -429,49 +429,49 @@ export const PlayerNeedsHUD: React.FC<PlayerNeedsHUDProps> = ({
                     {/* Portion indicator if multi-portion */}
                     {rightItem.maxPortions && rightItem.maxPortions > 1 && (
                       <>
-                        <span className="absolute top-1 right-1.5 px-1 py-0.2 bg-slate-950/90 border border-slate-700/80 rounded text-[8px] font-mono font-bold text-sky-300">
+                        <span className="absolute top-1 right-1.5 px-1 py-0.2 bg-[#0b0c0e]/90 border border-[#2a2e38] rounded-[2px] text-[8px] font-mono font-bold text-[#d99a41]">
                           {rightItem.portions ?? rightItem.maxPortions}/{rightItem.maxPortions}
                         </span>
-                        <div className="absolute bottom-0.5 left-1 right-1 h-1 bg-slate-950/90 rounded-full overflow-hidden border border-slate-700/80">
+                        <div className="absolute bottom-0.5 left-1 right-1 h-1 bg-[#0b0c0e] rounded-none overflow-hidden border border-[#2a2e38]">
                           <div 
-                            className="h-full bg-sky-400 rounded-full transition-all"
+                            className="h-full bg-[#c68a35] rounded-none transition-all"
                             style={{ width: `${Math.max(0, Math.min(100, ((rightItem.portions ?? rightItem.maxPortions) / rightItem.maxPortions) * 100))}%` }}
                           />
                         </div>
                       </>
                     )}
                     {rightItem.count > 1 && (
-                      <span className="absolute bottom-1 right-1 px-1 bg-slate-950 border border-slate-700 rounded text-[9px] font-mono font-bold text-slate-300">
+                      <span className="absolute bottom-1 right-1 px-1 bg-[#0b0c0e] border border-[#2a2e38] rounded-[2px] text-[9px] font-mono font-bold text-[#f0f3f6]">
                         x{rightItem.count}
                       </span>
                     )}
                     {/* Quick stow icon button */}
                     <button
                       onClick={(e) => handleStowHand(e, 'right')}
-                      className="absolute bottom-1 left-1 p-0.5 rounded bg-slate-900/80 hover:bg-sky-600 text-slate-400 hover:text-white transition z-10"
+                      className="absolute bottom-1 left-1 p-0.5 rounded-[2px] bg-[#14161a] hover:bg-[#c68a35] text-[#9ba3af] hover:text-[#0b0c0e] transition z-10 cursor-pointer"
                       title="Убрать в карман"
                     >
                       <ArrowDownToLine className="w-2.5 h-2.5" />
                     </button>
                   </>
                 ) : (
-                  <Hand className="w-5 h-5 text-slate-700 stroke-[1.5]" />
+                  <Hand className="w-5 h-5 text-[#3a3f4d] stroke-[1.5]" />
                 )}
               </div>
             </div>
 
             {/* SEPARATOR */}
-            <div className="h-10 w-px bg-slate-800" />
+            <div className="h-10 w-px bg-[#2a2e38]" />
 
             {/* Dedicated Inventory Button */}
             <button
               id="hotbar-bag-toggle-btn"
               onClick={onOpenInventory}
-              className="px-3.5 h-14 bg-slate-900/90 hover:bg-slate-800 active:scale-95 text-slate-200 font-mono font-bold rounded-xl border border-slate-700/80 shadow-lg flex flex-col items-center justify-center gap-1 transition"
+              className="px-3.5 h-14 bg-[#14161a] hover:bg-[#1c1f26] active:scale-98 text-[#f0f3f6] font-mono font-bold rounded-[2px] border border-[#2a2e38] hover:border-[#c68a35]/50 shadow-lg flex flex-col items-center justify-center gap-1 transition cursor-pointer"
               title="Открыть полный инвентарь (Клавиша I или Tab)"
             >
-              <Package className="w-5 h-5 text-slate-300" />
-              <span className="text-[8px] tracking-widest uppercase text-slate-400">РЮКЗАК [I]</span>
+              <Package className="w-5 h-5 text-[#c68a35]" />
+              <span className="text-[8px] tracking-widest uppercase text-[#9ba3af]">РЮКЗАК [I]</span>
             </button>
           </div>
         </div>

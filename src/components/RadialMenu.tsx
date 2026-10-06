@@ -130,175 +130,167 @@ export const RadialMenu: React.FC<RadialMenuProps> = ({
   // Theme-specific material aesthetics for the physical dashboard panel
   const panelStyles = {
     tractor: {
-      panelBg: 'linear-gradient(180deg, #292524 0%, #1c1917 40%, #141210 100%)',
-      panelTexture: 'radial-gradient(#78350f 1px, transparent 1px)',
+      panelBg: 'linear-gradient(180deg, #181a20 0%, #14161a 100%)',
+      panelTexture: 'radial-gradient(#c68a35 0.5px, transparent 0.5px)',
       textureSize: '12px 12px',
-      casingBorder: 'border-amber-900 shadow-[0_20px_60px_rgba(0,0,0,0.9),inset_0_2px_4px_rgba(255,255,255,0.1)]',
-      plateBorder: 'border-amber-950/80 bg-stone-900/90',
-      headerBg: 'bg-stone-950/90 border-amber-900/60',
-      bezelStyle: 'brass',
+      casingBorder: 'border-[#2a2e38] shadow-2xl',
+      plateBorder: 'border-[#2a2e38] bg-[#14161a]',
+      headerBg: 'bg-[#0b0c0e] border-[#2a2e38]',
+      bezelStyle: 'steel',
       switchType: 'soviet_toggle',
-      accentColor: '#f59e0b',
-      screwColor: 'from-amber-600 via-amber-700 to-amber-900'
+      accentColor: '#c68a35',
+      screwColor: 'from-[#3a3f4d] to-[#14161a]'
     },
     truck: {
-      panelBg: 'linear-gradient(180deg, #1e293b 0%, #0f172a 40%, #090d16 100%)',
-      panelTexture: 'repeating-linear-gradient(90deg, rgba(255,255,255,0.015) 0, rgba(255,255,255,0.015) 1px, transparent 1px, transparent 4px)',
+      panelBg: 'linear-gradient(180deg, #181a20 0%, #14161a 100%)',
+      panelTexture: 'none',
       textureSize: '4px 4px',
-      casingBorder: 'border-slate-700 shadow-[0_20px_60px_rgba(0,0,0,0.9),inset_0_2px_4px_rgba(255,255,255,0.15)]',
-      plateBorder: 'border-slate-800 bg-slate-950/90',
-      headerBg: 'bg-slate-950/95 border-sky-900/60',
+      casingBorder: 'border-[#2a2e38] shadow-2xl',
+      plateBorder: 'border-[#2a2e38] bg-[#14161a]',
+      headerBg: 'bg-[#0b0c0e] border-[#2a2e38]',
       bezelStyle: 'steel',
       switchType: 'truck_rocker',
-      accentColor: '#38bdf8',
-      screwColor: 'from-slate-400 via-slate-600 to-slate-800'
+      accentColor: '#c68a35',
+      screwColor: 'from-[#3a3f4d] to-[#14161a]'
     },
     retro: {
-      panelBg: 'linear-gradient(180deg, #27272a 0%, #18181b 45%, #09090b 100%)',
-      panelTexture: 'radial-gradient(#b45309 1px, transparent 1px)',
+      panelBg: 'linear-gradient(180deg, #181a20 0%, #14161a 100%)',
+      panelTexture: 'none',
       textureSize: '16px 16px',
-      casingBorder: 'border-amber-700/60 shadow-[0_20px_60px_rgba(0,0,0,0.9),inset_0_2px_4px_rgba(245,230,211,0.2)]',
-      plateBorder: 'border-amber-900/60 bg-stone-950/90',
-      headerBg: 'bg-stone-950/95 border-amber-800/60',
-      bezelStyle: 'chrome',
+      casingBorder: 'border-[#2a2e38] shadow-2xl',
+      plateBorder: 'border-[#2a2e38] bg-[#14161a]',
+      headerBg: 'bg-[#0b0c0e] border-[#2a2e38]',
+      bezelStyle: 'steel',
       switchType: 'soviet_toggle',
-      accentColor: '#fbbf24',
-      screwColor: 'from-amber-200 via-amber-400 to-amber-700'
+      accentColor: '#c68a35',
+      screwColor: 'from-[#3a3f4d] to-[#14161a]'
     },
     sport: {
-      panelBg: 'linear-gradient(180deg, #18181b 0%, #09090b 50%, #020617 100%)',
-      panelTexture: 'repeating-linear-gradient(45deg, rgba(255,255,255,0.03) 0, rgba(255,255,255,0.03) 2px, transparent 2px, transparent 4px)',
+      panelBg: 'linear-gradient(180deg, #181a20 0%, #14161a 100%)',
+      panelTexture: 'none',
       textureSize: '6px 6px',
-      casingBorder: 'border-red-900/80 shadow-[0_20px_60px_rgba(239,68,68,0.2),inset_0_2px_4px_rgba(255,255,255,0.1)]',
-      plateBorder: 'border-zinc-800 bg-black/95',
-      headerBg: 'bg-black/95 border-red-900/60',
-      bezelStyle: 'anodized_red',
+      casingBorder: 'border-[#2a2e38] shadow-2xl',
+      plateBorder: 'border-[#2a2e38] bg-[#14161a]',
+      headerBg: 'bg-[#0b0c0e] border-[#2a2e38]',
+      bezelStyle: 'steel',
       switchType: 'missile_switch',
-      accentColor: '#ef4444',
-      screwColor: 'from-red-600 via-red-800 to-zinc-900'
+      accentColor: '#c68a35',
+      screwColor: 'from-[#3a3f4d] to-[#14161a]'
     },
     luxury: {
-      panelBg: 'linear-gradient(180deg, #1e293b 0%, #0f172a 45%, #020617 100%)',
-      panelTexture: 'radial-gradient(rgba(255,255,255,0.04) 1px, transparent 1px)',
+      panelBg: 'linear-gradient(180deg, #181a20 0%, #14161a 100%)',
+      panelTexture: 'none',
       textureSize: '14px 14px',
-      casingBorder: 'border-slate-500/60 shadow-[0_20px_60px_rgba(0,0,0,0.9),inset_0_2px_6px_rgba(255,255,255,0.25)]',
-      plateBorder: 'border-slate-700 bg-slate-950/90',
-      headerBg: 'bg-slate-950/95 border-slate-700',
-      bezelStyle: 'platinum',
+      casingBorder: 'border-[#2a2e38] shadow-2xl',
+      plateBorder: 'border-[#2a2e38] bg-[#14161a]',
+      headerBg: 'bg-[#0b0c0e] border-[#2a2e38]',
+      bezelStyle: 'steel',
       switchType: 'luxury_piano',
-      accentColor: '#e2e8f0',
-      screwColor: 'from-slate-200 via-slate-400 to-slate-600'
+      accentColor: '#c68a35',
+      screwColor: 'from-[#3a3f4d] to-[#14161a]'
     },
     offroad: {
-      panelBg: 'linear-gradient(180deg, #1c1917 0%, #0c0a09 45%, #020617 100%)',
-      panelTexture: 'repeating-linear-gradient(0deg, rgba(255,255,255,0.02) 0, rgba(255,255,255,0.02) 3px, transparent 3px, transparent 6px)',
+      panelBg: 'linear-gradient(180deg, #181a20 0%, #14161a 100%)',
+      panelTexture: 'none',
       textureSize: '6px 6px',
-      casingBorder: 'border-emerald-800/80 shadow-[0_20px_60px_rgba(16,185,129,0.15),inset_0_2px_4px_rgba(255,255,255,0.1)]',
-      plateBorder: 'border-stone-800 bg-stone-950/90',
-      headerBg: 'bg-stone-950/95 border-emerald-900/60',
-      bezelStyle: 'rubber_ring',
+      casingBorder: 'border-[#2a2e38] shadow-2xl',
+      plateBorder: 'border-[#2a2e38] bg-[#14161a]',
+      headerBg: 'bg-[#0b0c0e] border-[#2a2e38]',
+      bezelStyle: 'steel',
       switchType: 'offroad_rocker',
-      accentColor: '#10b981',
-      screwColor: 'from-emerald-600 via-stone-700 to-stone-900'
+      accentColor: '#c68a35',
+      screwColor: 'from-[#3a3f4d] to-[#14161a]'
     },
     emergency: {
-      panelBg: 'linear-gradient(180deg, #0f172a 0%, #020617 50%, #000000 100%)',
-      panelTexture: 'radial-gradient(#0891b2 1px, transparent 1px)',
+      panelBg: 'linear-gradient(180deg, #181a20 0%, #14161a 100%)',
+      panelTexture: 'none',
       textureSize: '10px 10px',
-      casingBorder: 'border-cyan-700/80 shadow-[0_20px_60px_rgba(6,182,212,0.25),inset_0_2px_4px_rgba(255,255,255,0.15)]',
-      plateBorder: 'border-cyan-900/60 bg-black/95',
-      headerBg: 'bg-black/95 border-cyan-800/60',
+      casingBorder: 'border-[#2a2e38] shadow-2xl',
+      plateBorder: 'border-[#2a2e38] bg-[#14161a]',
+      headerBg: 'bg-[#0b0c0e] border-[#2a2e38]',
       bezelStyle: 'steel',
       switchType: 'tactical_switch',
-      accentColor: '#06b6d4',
-      screwColor: 'from-cyan-400 via-slate-600 to-slate-900'
+      accentColor: '#c68a35',
+      screwColor: 'from-[#3a3f4d] to-[#14161a]'
     },
     standard: {
-      panelBg: 'linear-gradient(180deg, #1e293b 0%, #0f172a 40%, #020617 100%)',
-      panelTexture: 'radial-gradient(rgba(255,255,255,0.03) 1px, transparent 1px)',
+      panelBg: 'linear-gradient(180deg, #181a20 0%, #14161a 100%)',
+      panelTexture: 'none',
       textureSize: '10px 10px',
-      casingBorder: 'border-slate-700/80 shadow-[0_20px_60px_rgba(0,0,0,0.9),inset_0_2px_4px_rgba(255,255,255,0.1)]',
-      plateBorder: 'border-slate-800 bg-slate-950/90',
-      headerBg: 'bg-slate-950/95 border-slate-800',
+      casingBorder: 'border-[#2a2e38] shadow-2xl',
+      plateBorder: 'border-[#2a2e38] bg-[#14161a]',
+      headerBg: 'bg-[#0b0c0e] border-[#2a2e38]',
       bezelStyle: 'steel',
       switchType: 'standard_oem',
-      accentColor: '#94a3b8',
-      screwColor: 'from-slate-400 via-slate-600 to-slate-800'
+      accentColor: '#c68a35',
+      screwColor: 'from-[#3a3f4d] to-[#14161a]'
     }
   }[theme];
 
   // Screws renderer for the metal chassis
   const renderCornerScrew = (position: string) => (
     <div 
-      className={`absolute ${position} w-3 h-3 rounded-full bg-linear-to-br ${panelStyles.screwColor} border border-black/80 shadow-md flex items-center justify-center pointer-events-none z-20`}
+      className={`absolute ${position} w-2.5 h-2.5 rounded-[1px] bg-[#2a2e38] border border-[#14161a] flex items-center justify-center pointer-events-none z-20`}
     >
-      <div className="w-2 h-0.5 bg-black/80 transform rotate-45" />
+      <div className="w-1.5 h-0.5 bg-[#0b0c0e]" />
     </div>
   );
 
   return (
     <div 
       id="radial-menu-backdrop"
-      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-md select-none p-3 overflow-y-auto animate-in fade-in duration-200"
+      className="fixed inset-0 z-[100] flex items-center justify-center bg-[#0b0c0e]/85 backdrop-blur-md select-none p-3 overflow-y-auto animate-in fade-in duration-200 font-mono"
       onClick={onClose}
     >
       {/* COCKPIT SWITCHBOARD CONSOLE PANEL CHASSIS */}
       <div 
         id="cockpit-switchboard-panel"
-        className={`relative w-full max-w-[780px] rounded-3xl border-2 p-5 sm:p-6 transition-all duration-300 ${panelStyles.casingBorder}`}
-        style={{
-          background: panelStyles.panelBg,
-          backgroundImage: `${panelStyles.panelTexture}, ${panelStyles.panelBg}`,
-          backgroundSize: `${panelStyles.textureSize}, 100% 100%`,
-        }}
+        className="relative w-full max-w-[780px] rounded-[2px] border border-[#2a2e38] p-4 sm:p-6 transition-all duration-300 bg-[#14161a] shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Chassis Corner Screws */}
-        {renderCornerScrew('top-3 left-3')}
-        {renderCornerScrew('top-3 right-3')}
-        {renderCornerScrew('bottom-3 left-3')}
-        {renderCornerScrew('bottom-3 right-3')}
+        {renderCornerScrew('top-2 left-2')}
+        {renderCornerScrew('top-2 right-2')}
+        {renderCornerScrew('bottom-2 left-2')}
+        {renderCornerScrew('bottom-2 right-2')}
 
         {/* Top Header Plate: Cockpit Panel Title & Telemetry Status */}
-        <div className={`flex flex-wrap items-center justify-between gap-3 p-3 rounded-2xl border mb-5 ${panelStyles.headerBg} shadow-inner`}>
+        <div className="flex flex-wrap items-center justify-between gap-3 p-3 rounded-[2px] border mb-4 bg-[#0b0c0e]/95 border-[#2a2e38] shadow-inner font-mono">
           {/* Vehicle Identity & Archetype Stamped Badge */}
           <div className="flex items-center gap-2.5">
-            <div 
-              className="w-3.5 h-3.5 rounded-full flex items-center justify-center border border-black shadow-sm"
-              style={{ backgroundColor: panelStyles.accentColor }}
-            >
-              <div className="w-1.5 h-1.5 rounded-full bg-white/70" />
+            <div className="w-3 h-3 rounded-none flex items-center justify-center border border-[#c68a35] bg-[#c68a35]">
+              <div className="w-1.5 h-1.5 rounded-none bg-[#0b0c0e]" />
             </div>
             <div>
-              <div className="flex items-center gap-2 text-xs font-mono font-black uppercase tracking-wider text-white">
-                <span>{themeMeta.badgeText}</span>
-                <span className="text-slate-600">|</span>
-                <span className="text-slate-300">{veh.nameRu || veh.type}</span>
+              <div className="flex items-center gap-2 text-xs font-mono font-black uppercase tracking-wider text-[#f0f3f6]">
+                <span className="text-[#c68a35]">{themeMeta.badgeText}</span>
+                <span className="text-[#3a3f4d]">|</span>
+                <span className="text-[#cbd5e1]">{veh.nameRu || veh.type}</span>
               </div>
-              <div className="text-[10px] text-slate-400 font-mono flex items-center gap-2 mt-0.5">
-                <span>БОРТОВАЯ СЕТЬ: <strong className="text-sky-300">{voltage} В</strong></span>
+              <div className="text-[10px] text-[#9ba3af] font-mono flex items-center gap-2 mt-0.5">
+                <span>БОРТОВАЯ СЕТЬ: <strong className="text-[#c68a35]">{voltage} В</strong></span>
                 <span>•</span>
-                <span>САЛОН: <strong className="text-amber-300">{heaterTemp}°C</strong></span>
+                <span>САЛОН: <strong className="text-[#d99a41]">{heaterTemp}°C</strong></span>
                 <span>•</span>
-                <span>МОТОР: <strong className={engTemp > 100 ? 'text-rose-400 font-black' : 'text-emerald-400'}>{engTemp}°C</strong></span>
+                <span>МОТОР: <strong className={engTemp > 100 ? 'text-red-400 font-black' : 'text-[#c68a35]'}>{engTemp}°C</strong></span>
               </div>
             </div>
           </div>
 
           {/* Instrument Mini-Cluster & Close Button */}
           <div className="flex items-center gap-3">
-            <div className="flex items-baseline gap-1 bg-black/60 px-3 py-1 rounded-xl border border-white/10 font-mono">
-              <span className="text-lg font-black text-white">{speedKmh}</span>
-              <span className="text-[9px] text-slate-400 uppercase font-bold">км/ч</span>
-              <span className="text-slate-700 mx-1">|</span>
-              <span className="text-xs text-slate-300 font-bold">{rpm}</span>
-              <span className="text-[9px] text-slate-500 uppercase">об/мин</span>
+            <div className="flex items-baseline gap-1 bg-[#14161a] px-3 py-1 rounded-[2px] border border-[#2a2e38] font-mono">
+              <span className="text-lg font-black text-[#c68a35]">{speedKmh}</span>
+              <span className="text-[9px] text-[#9ba3af] uppercase font-bold">км/ч</span>
+              <span className="text-[#3a3f4d] mx-1">|</span>
+              <span className="text-xs text-[#cbd5e1] font-bold">{rpm}</span>
+              <span className="text-[9px] text-[#5a6272] uppercase">об/мин</span>
             </div>
 
             <button 
               id="radial-menu-close"
               onClick={onClose}
-              className="p-2 rounded-xl bg-slate-900/90 hover:bg-slate-800 border border-slate-700/80 text-slate-400 hover:text-white transition-all cursor-pointer active:scale-95 shadow-md"
+              className="p-2 rounded-[2px] bg-[#0b0c0e] hover:bg-[#1c1f26] border border-[#2a2e38] text-[#9ba3af] hover:text-[#f0f3f6] hover:border-[#c68a35]/50 transition-all cursor-pointer active:scale-98 shadow-md"
               title="Закрыть панель управления [Esc / E]"
             >
               <X className="w-4 h-4" />
@@ -309,26 +301,26 @@ export const RadialMenu: React.FC<RadialMenuProps> = ({
         {/* ========================================================================= */}
         {/* MAIN SWITCHBOARD GRID: PHYSICAL TOGGLES, ROCKERS & SWITCHES               */}
         {/* ========================================================================= */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3.5">
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
           
           {/* ================= 1. ENGINE IGNITION & STARTER ================= */}
-          <div className={`flex flex-col justify-between p-3.5 rounded-2xl border shadow-lg ${panelStyles.plateBorder}`}>
+          <div className="flex flex-col justify-between p-3.5 rounded-[2px] border border-[#2a2e38] bg-[#14161a] shadow-lg">
             <div className="flex items-center justify-between">
-              <span className="text-[9px] font-mono font-bold uppercase text-slate-400 tracking-wider">
+              <span className="text-[9px] font-mono font-bold uppercase text-[#9ba3af] tracking-wider">
                 ЗАЖИГАНИЕ [J]
               </span>
               <div 
-                className={`w-2.5 h-2.5 rounded-full border border-black ${
+                className={`w-2.5 h-2.5 rounded-none border border-black ${
                   isEngineRunning 
-                    ? 'bg-emerald-400 shadow-[0_0_8px_#34d399]' 
+                    ? 'bg-[#c68a35] shadow-[0_0_8px_#c68a35]' 
                     : isStalled 
                     ? 'bg-amber-400 shadow-[0_0_8px_#fbbf24] animate-pulse' 
-                    : 'bg-rose-500/40'
+                    : 'bg-[#2a2e38]'
                 }`} 
               />
             </div>
 
-            {/* Heavy Push-to-Start Button / Key Cylinder */}
+            {/* Push-to-Start Button */}
             <button
               type="button"
               onClick={() => {
@@ -336,12 +328,12 @@ export const RadialMenu: React.FC<RadialMenuProps> = ({
                 if (onToggleEngine) onToggleEngine();
                 if (navigator.vibrate) navigator.vibrate(25);
               }}
-              className={`w-full mt-3 py-2.5 px-3 rounded-xl border flex items-center justify-center gap-2 cursor-pointer transition-all duration-150 active:scale-95 shadow-md ${
+              className={`w-full mt-3 py-2.5 px-3 rounded-[2px] border flex items-center justify-center gap-2 cursor-pointer transition-all duration-150 active:scale-98 shadow-sm ${
                 isEngineRunning
-                  ? 'bg-linear-to-b from-emerald-800 to-emerald-950 border-emerald-500 text-emerald-100 shadow-[0_0_15px_rgba(16,185,129,0.35)]'
+                  ? 'bg-[#c68a35] border-[#d99a41] text-[#0b0c0e] font-black'
                   : isStalled
-                  ? 'bg-linear-to-b from-amber-800 to-amber-950 border-amber-500 text-amber-200 shadow-[0_0_15px_rgba(245,158,11,0.35)] animate-pulse'
-                  : 'bg-linear-to-b from-rose-900 via-rose-950 to-zinc-950 border-rose-700 text-rose-200'
+                  ? 'bg-amber-800/80 border-amber-500 text-amber-200 animate-pulse'
+                  : 'bg-[#1c1f26] hover:bg-[#232730] border-[#2a2e38] text-[#9ba3af] hover:text-[#f0f3f6]'
               }`}
             >
               <Power className="w-4 h-4" />
@@ -350,30 +342,30 @@ export const RadialMenu: React.FC<RadialMenuProps> = ({
               </span>
             </button>
 
-            <span className="text-[8px] text-center font-mono text-slate-400 mt-2">
+            <span className="text-[8px] text-center font-mono text-[#5a6272] mt-2">
               {isEngineRunning ? 'Холостой ход активен' : 'Двигатель заглушен'}
             </span>
           </div>
 
           {/* ================= 2. HEADLIGHTS MULTI-POSITION SWITCH ================= */}
-          <div className={`flex flex-col justify-between p-3.5 rounded-2xl border shadow-lg ${panelStyles.plateBorder}`}>
+          <div className="flex flex-col justify-between p-3.5 rounded-[2px] border border-[#2a2e38] bg-[#14161a] shadow-lg">
             <div className="flex items-center justify-between">
-              <span className="text-[9px] font-mono font-bold uppercase text-slate-400 tracking-wider">
+              <span className="text-[9px] font-mono font-bold uppercase text-[#9ba3af] tracking-wider">
                 ФАРЫ [L]
               </span>
               <div 
-                className={`w-2.5 h-2.5 rounded-full border border-black ${
+                className={`w-2.5 h-2.5 rounded-none border border-black ${
                   headlightsMode === 'high' 
-                    ? 'bg-sky-400 shadow-[0_0_8px_#38bdf8]' 
+                    ? 'bg-[#c68a35] shadow-[0_0_8px_#c68a35]' 
                     : headlightsMode === 'low' 
-                    ? 'bg-emerald-400 shadow-[0_0_8px_#34d399]' 
-                    : 'bg-slate-700'
+                    ? 'bg-[#d99a41]' 
+                    : 'bg-[#2a2e38]'
                 }`} 
               />
             </div>
 
             {/* 3-Position Rocker / Rotary Selector */}
-            <div className="grid grid-cols-3 gap-1 mt-2.5 bg-black/60 p-1 rounded-xl border border-white/10">
+            <div className="grid grid-cols-3 gap-1 mt-2.5 bg-[#0b0c0e] p-1 rounded-[2px] border border-[#2a2e38]">
               {(['off', 'low', 'high'] as const).map((mode) => {
                 const isActive = headlightsMode === mode;
                 const label = mode === 'off' ? 'ВЫКЛ' : mode === 'low' ? 'БЛИЖ' : 'ДАЛЬН';
@@ -385,14 +377,10 @@ export const RadialMenu: React.FC<RadialMenuProps> = ({
                       sound.playButtonPress();
                       if (headlightsMode !== mode) onToggleHeadlights();
                     }}
-                    className={`py-1.5 text-[9px] font-mono font-black rounded-lg transition-all cursor-pointer ${
+                    className={`py-1.5 text-[9px] font-mono font-black rounded-[2px] transition-all cursor-pointer ${
                       isActive 
-                        ? mode === 'high'
-                          ? 'bg-sky-500 text-slate-950 shadow-md font-black'
-                          : mode === 'low'
-                          ? 'bg-emerald-500 text-slate-950 shadow-md font-black'
-                          : 'bg-slate-700 text-white'
-                        : 'text-slate-400 hover:text-white'
+                        ? 'bg-[#c68a35] text-[#0b0c0e] font-black'
+                        : 'text-[#9ba3af] hover:text-[#f0f3f6]'
                     }`}
                   >
                     {label}
@@ -401,31 +389,30 @@ export const RadialMenu: React.FC<RadialMenuProps> = ({
               })}
             </div>
 
-            <div className="flex items-center justify-between mt-2 text-[8px] font-mono text-slate-400">
+            <div className="flex items-center justify-between mt-2 text-[8px] font-mono text-[#9ba3af]">
               <span className="flex items-center gap-1">
-                <Lightbulb className={`w-3 h-3 ${headlightsMode !== 'off' ? 'text-sky-400' : 'text-slate-600'}`} />
+                <Lightbulb className={`w-3 h-3 ${headlightsMode !== 'off' ? 'text-[#c68a35]' : 'text-[#5a6272]'}`} />
                 <span>РЕЖИМ:</span>
               </span>
-              <span className="font-bold text-white uppercase">
+              <span className="font-bold text-[#f0f3f6] uppercase">
                 {headlightsMode === 'off' ? 'ВЫКЛЮЧЕНЫ' : headlightsMode === 'low' ? 'БЛИЖНИЙ СВЕТ' : 'ДАЛЬНИЙ СВЕТ'}
               </span>
             </div>
           </div>
 
           {/* ================= 3. FRONT FOG LIGHTS (ПТФ) ================= */}
-          <div className={`flex flex-col justify-between p-3.5 rounded-2xl border shadow-lg ${panelStyles.plateBorder}`}>
+          <div className="flex flex-col justify-between p-3.5 rounded-[2px] border border-[#2a2e38] bg-[#14161a] shadow-lg">
             <div className="flex items-center justify-between">
-              <span className="text-[9px] font-mono font-bold uppercase text-slate-400 tracking-wider">
+              <span className="text-[9px] font-mono font-bold uppercase text-[#9ba3af] tracking-wider">
                 ПТФ ПЕРЕД [U]
               </span>
               <div 
-                className={`w-2.5 h-2.5 rounded-full border border-black ${
-                  veh.frontFogLightsOn ? 'bg-amber-400 shadow-[0_0_8px_#f59e0b]' : 'bg-slate-700'
+                className={`w-2.5 h-2.5 rounded-none border border-black ${
+                  veh.frontFogLightsOn ? 'bg-[#c68a35] shadow-[0_0_8px_#c68a35]' : 'bg-[#2a2e38]'
                 }`} 
               />
             </div>
 
-            {/* Heavy Toggle Switch Graphic & Button */}
             <button
               type="button"
               onClick={() => {
@@ -433,33 +420,33 @@ export const RadialMenu: React.FC<RadialMenuProps> = ({
                 if (onToggleFrontFogLights) onToggleFrontFogLights();
                 else veh.frontFogLightsOn = !veh.frontFogLightsOn;
               }}
-              className={`w-full mt-2.5 py-2 px-3 rounded-xl border flex items-center justify-between cursor-pointer transition-all duration-150 active:scale-95 shadow-md ${
+              className={`w-full mt-2.5 py-2 px-3 rounded-[2px] border flex items-center justify-between cursor-pointer transition-all duration-150 active:scale-98 shadow-sm ${
                 veh.frontFogLightsOn
-                  ? 'bg-linear-to-r from-amber-900/90 to-amber-950 border-amber-500 text-amber-200 shadow-[0_0_12px_rgba(245,158,11,0.3)]'
-                  : 'bg-black/60 border-white/10 text-slate-400 hover:text-white'
+                  ? 'bg-[#c68a35] border-[#d99a41] text-[#0b0c0e] font-black'
+                  : 'bg-[#1c1f26] hover:bg-[#232730] border-[#2a2e38] text-[#9ba3af] hover:text-[#f0f3f6]'
               }`}
             >
-              <Lightbulb className={`w-4 h-4 ${veh.frontFogLightsOn ? 'text-amber-400 animate-pulse' : 'text-slate-500'}`} />
+              <Lightbulb className={`w-4 h-4 ${veh.frontFogLightsOn ? 'text-[#0b0c0e]' : 'text-[#9ba3af]'}`} />
               <span className="text-[11px] font-mono font-black uppercase">
                 {veh.frontFogLightsOn ? 'ТУМБЛЕР: ВКЛ' : 'ТУМБЛЕР: ВЫКЛ'}
               </span>
-              {veh.frontFogLightsOn ? <ToggleRight className="w-4 h-4 text-amber-400" /> : <ToggleLeft className="w-4 h-4 text-slate-600" />}
+              {veh.frontFogLightsOn ? <ToggleRight className="w-4 h-4 text-[#0b0c0e]" /> : <ToggleLeft className="w-4 h-4 text-[#5a6272]" />}
             </button>
 
-            <span className="text-[8px] text-slate-400 font-mono mt-2">
+            <span className="text-[8px] text-[#5a6272] font-mono mt-2">
               Передние противотуманные фары
             </span>
           </div>
 
           {/* ================= 4. REAR FOG LIGHTS ================= */}
-          <div className={`flex flex-col justify-between p-3.5 rounded-2xl border shadow-lg ${panelStyles.plateBorder}`}>
+          <div className="flex flex-col justify-between p-3.5 rounded-[2px] border border-[#2a2e38] bg-[#14161a] shadow-lg">
             <div className="flex items-center justify-between">
-              <span className="text-[9px] font-mono font-bold uppercase text-slate-400 tracking-wider">
+              <span className="text-[9px] font-mono font-bold uppercase text-[#9ba3af] tracking-wider">
                 ПТФ ЗАДНИЕ [Y]
               </span>
               <div 
-                className={`w-2.5 h-2.5 rounded-full border border-black ${
-                  veh.rearFogLightsOn ? 'bg-rose-500 shadow-[0_0_8px_#f43f5e]' : 'bg-slate-700'
+                className={`w-2.5 h-2.5 rounded-none border border-black ${
+                  veh.rearFogLightsOn ? 'bg-[#c68a35] shadow-[0_0_8px_#c68a35]' : 'bg-[#2a2e38]'
                 }`} 
               />
             </div>
@@ -471,33 +458,33 @@ export const RadialMenu: React.FC<RadialMenuProps> = ({
                 if (onToggleRearFogLights) onToggleRearFogLights();
                 else veh.rearFogLightsOn = !veh.rearFogLightsOn;
               }}
-              className={`w-full mt-2.5 py-2 px-3 rounded-xl border flex items-center justify-between cursor-pointer transition-all duration-150 active:scale-95 shadow-md ${
+              className={`w-full mt-2.5 py-2 px-3 rounded-[2px] border flex items-center justify-between cursor-pointer transition-all duration-150 active:scale-98 shadow-sm ${
                 veh.rearFogLightsOn
-                  ? 'bg-linear-to-r from-rose-900/90 to-rose-950 border-rose-500 text-rose-200 shadow-[0_0_12px_rgba(244,63,94,0.3)]'
-                  : 'bg-black/60 border-white/10 text-slate-400 hover:text-white'
+                  ? 'bg-[#c68a35] border-[#d99a41] text-[#0b0c0e] font-black'
+                  : 'bg-[#1c1f26] hover:bg-[#232730] border-[#2a2e38] text-[#9ba3af] hover:text-[#f0f3f6]'
               }`}
             >
-              <Lightbulb className={`w-4 h-4 ${veh.rearFogLightsOn ? 'text-rose-400 animate-pulse' : 'text-slate-500'}`} />
+              <Lightbulb className={`w-4 h-4 ${veh.rearFogLightsOn ? 'text-[#0b0c0e]' : 'text-[#9ba3af]'}`} />
               <span className="text-[11px] font-mono font-black uppercase">
                 {veh.rearFogLightsOn ? 'ТУМБЛЕР: ВКЛ' : 'ТУМБЛЕР: ВЫКЛ'}
               </span>
-              {veh.rearFogLightsOn ? <ToggleRight className="w-4 h-4 text-rose-400" /> : <ToggleLeft className="w-4 h-4 text-slate-600" />}
+              {veh.rearFogLightsOn ? <ToggleRight className="w-4 h-4 text-[#0b0c0e]" /> : <ToggleLeft className="w-4 h-4 text-[#5a6272]" />}
             </button>
 
-            <span className="text-[8px] text-slate-400 font-mono mt-2">
+            <span className="text-[8px] text-[#5a6272] font-mono mt-2">
               Задний фонарь повышенной яркости
             </span>
           </div>
 
           {/* ================= 5. HAZARD WARNING FLASHER ================= */}
-          <div className={`flex flex-col justify-between p-3.5 rounded-2xl border shadow-lg ${panelStyles.plateBorder}`}>
+          <div className="flex flex-col justify-between p-3.5 rounded-[2px] border border-[#2a2e38] bg-[#14161a] shadow-lg">
             <div className="flex items-center justify-between">
-              <span className="text-[9px] font-mono font-bold uppercase text-slate-400 tracking-wider">
+              <span className="text-[9px] font-mono font-bold uppercase text-[#9ba3af] tracking-wider">
                 АВАРИЙКА [X]
               </span>
               <div 
-                className={`w-2.5 h-2.5 rounded-full border border-black ${
-                  turnSignal === 'hazard' ? 'bg-red-500 shadow-[0_0_10px_#ef4444] animate-ping' : 'bg-slate-700'
+                className={`w-2.5 h-2.5 rounded-none border border-black ${
+                  turnSignal === 'hazard' ? 'bg-red-500 shadow-[0_0_10px_#ef4444] animate-ping' : 'bg-[#2a2e38]'
                 }`} 
               />
             </div>
@@ -509,36 +496,35 @@ export const RadialMenu: React.FC<RadialMenuProps> = ({
                 sound.playButtonPress();
                 onToggleTurnSignal('hazard');
               }}
-              className={`w-full mt-2.5 py-2.5 px-3 rounded-xl border flex items-center justify-center gap-2 cursor-pointer transition-all duration-150 active:scale-95 shadow-md ${
+              className={`w-full mt-2.5 py-2.5 px-3 rounded-[2px] border flex items-center justify-center gap-2 cursor-pointer transition-all duration-150 active:scale-98 shadow-sm ${
                 turnSignal === 'hazard'
-                  ? 'bg-linear-to-b from-red-600 to-red-950 border-red-400 text-white shadow-[0_0_16px_rgba(239,68,68,0.5)] animate-pulse'
-                  : 'bg-linear-to-b from-red-950/60 to-black border-red-900/60 text-red-300 hover:border-red-600'
+                  ? 'bg-red-700 border-red-500 text-white animate-pulse'
+                  : 'bg-[#1c1f26] hover:bg-[#232730] border-[#2a2e38] text-red-400 hover:text-red-300'
               }`}
             >
-              <AlertTriangle className={`w-4 h-4 ${turnSignal === 'hazard' ? 'text-white' : 'text-red-400'}`} />
+              <AlertTriangle className="w-4 h-4" />
               <span className="text-xs font-mono font-black uppercase tracking-wider">
                 {turnSignal === 'hazard' ? 'АВАРИЙКА: ВКЛ' : 'АВАРИЙКА'}
               </span>
             </button>
 
-            <span className="text-[8px] text-center text-slate-400 font-mono mt-2">
+            <span className="text-[8px] text-center text-[#5a6272] font-mono mt-2">
               Синхронные указатели поворотов
             </span>
           </div>
 
-          {/* ================= 6. TURN SIGNALS (ПОБОРОТНИКИ) ================= */}
-          <div className={`flex flex-col justify-between p-3.5 rounded-2xl border shadow-lg ${panelStyles.plateBorder}`}>
+          {/* ================= 6. TURN SIGNALS ================= */}
+          <div className="flex flex-col justify-between p-3.5 rounded-[2px] border border-[#2a2e38] bg-[#14161a] shadow-lg">
             <div className="flex items-center justify-between">
-              <span className="text-[9px] font-mono font-bold uppercase text-slate-400 tracking-wider">
+              <span className="text-[9px] font-mono font-bold uppercase text-[#9ba3af] tracking-wider">
                 ПОВОРОТЫ [Z / C]
               </span>
               <div className="flex items-center gap-1">
-                <div className={`w-2 h-2 rounded-full ${turnSignal === 'left' ? 'bg-amber-400 animate-pulse shadow-[0_0_6px_#f59e0b]' : 'bg-slate-700'}`} />
-                <div className={`w-2 h-2 rounded-full ${turnSignal === 'right' ? 'bg-amber-400 animate-pulse shadow-[0_0_6px_#f59e0b]' : 'bg-slate-700'}`} />
+                <div className={`w-2 h-2 rounded-none ${turnSignal === 'left' ? 'bg-[#c68a35] animate-pulse' : 'bg-[#2a2e38]'}`} />
+                <div className={`w-2 h-2 rounded-none ${turnSignal === 'right' ? 'bg-[#c68a35] animate-pulse' : 'bg-[#2a2e38]'}`} />
               </div>
             </div>
 
-            {/* 3-Position Lever Rocker */}
             <div className="grid grid-cols-2 gap-1.5 mt-2.5">
               <button
                 type="button"
@@ -546,10 +532,10 @@ export const RadialMenu: React.FC<RadialMenuProps> = ({
                   sound.playButtonPress();
                   onToggleTurnSignal('left');
                 }}
-                className={`py-2 px-2 rounded-xl border flex items-center justify-center gap-1 text-[10px] font-mono font-black transition-all cursor-pointer ${
+                className={`py-2 px-2 rounded-[2px] border flex items-center justify-center gap-1 text-[10px] font-mono font-black transition-all cursor-pointer ${
                   turnSignal === 'left'
-                    ? 'bg-amber-500 text-slate-950 border-amber-400 shadow-[0_0_10px_rgba(245,158,11,0.3)]'
-                    : 'bg-black/60 border-white/10 text-slate-400 hover:text-white'
+                    ? 'bg-[#c68a35] text-[#0b0c0e] border-[#d99a41]'
+                    : 'bg-[#1c1f26] hover:bg-[#232730] border-[#2a2e38] text-[#9ba3af] hover:text-[#f0f3f6]'
                 }`}
               >
                 <ChevronLeft className="w-3.5 h-3.5" />
@@ -562,10 +548,10 @@ export const RadialMenu: React.FC<RadialMenuProps> = ({
                   sound.playButtonPress();
                   onToggleTurnSignal('right');
                 }}
-                className={`py-2 px-2 rounded-xl border flex items-center justify-center gap-1 text-[10px] font-mono font-black transition-all cursor-pointer ${
+                className={`py-2 px-2 rounded-[2px] border flex items-center justify-center gap-1 text-[10px] font-mono font-black transition-all cursor-pointer ${
                   turnSignal === 'right'
-                    ? 'bg-amber-500 text-slate-950 border-amber-400 shadow-[0_0_10px_rgba(245,158,11,0.3)]'
-                    : 'bg-black/60 border-white/10 text-slate-400 hover:text-white'
+                    ? 'bg-[#c68a35] text-[#0b0c0e] border-[#d99a41]'
+                    : 'bg-[#1c1f26] hover:bg-[#232730] border-[#2a2e38] text-[#9ba3af] hover:text-[#f0f3f6]'
                 }`}
               >
                 <span>ПРАВЫЙ [C]</span>
@@ -573,23 +559,23 @@ export const RadialMenu: React.FC<RadialMenuProps> = ({
               </button>
             </div>
 
-            <div className="flex items-center justify-between text-[8px] font-mono text-slate-400 mt-2">
+            <div className="flex items-center justify-between text-[8px] font-mono text-[#9ba3af] mt-2">
               <span>СТАТУС:</span>
-              <span className="font-bold text-white uppercase">
+              <span className="font-bold text-[#f0f3f6] uppercase">
                 {turnSignal === 'left' ? 'ЛЕВЫЙ БОРТ' : turnSignal === 'right' ? 'ПРАВЫЙ БОРТ' : turnSignal === 'hazard' ? 'АВАРИЙКА' : 'ВЫКЛЮЧЕНЫ'}
               </span>
             </div>
           </div>
 
           {/* ================= 7. WINDSHIELD WIPERS ================= */}
-          <div className={`flex flex-col justify-between p-3.5 rounded-2xl border shadow-lg ${panelStyles.plateBorder}`}>
+          <div className="flex flex-col justify-between p-3.5 rounded-[2px] border border-[#2a2e38] bg-[#14161a] shadow-lg">
             <div className="flex items-center justify-between">
-              <span className="text-[9px] font-mono font-bold uppercase text-slate-400 tracking-wider">
+              <span className="text-[9px] font-mono font-bold uppercase text-[#9ba3af] tracking-wider">
                 ДВОРНИКИ [K]
               </span>
               <div 
-                className={`w-2.5 h-2.5 rounded-full border border-black ${
-                  wipersActive ? 'bg-indigo-400 shadow-[0_0_8px_#818cf8]' : 'bg-slate-700'
+                className={`w-2.5 h-2.5 rounded-none border border-black ${
+                  wipersActive ? 'bg-[#c68a35]' : 'bg-[#2a2e38]'
                 }`} 
               />
             </div>
@@ -600,45 +586,45 @@ export const RadialMenu: React.FC<RadialMenuProps> = ({
                 sound.playButtonPress();
                 onToggleWipers();
               }}
-              className={`w-full mt-2.5 py-2 px-3 rounded-xl border flex items-center justify-between cursor-pointer transition-all duration-150 active:scale-95 shadow-md ${
+              className={`w-full mt-2.5 py-2 px-3 rounded-[2px] border flex items-center justify-between cursor-pointer transition-all duration-150 active:scale-98 shadow-sm ${
                 wipersActive
-                  ? 'bg-linear-to-r from-indigo-900/90 to-indigo-950 border-indigo-500 text-indigo-200 shadow-[0_0_12px_rgba(99,102,241,0.3)]'
-                  : 'bg-black/60 border-white/10 text-slate-400 hover:text-white'
+                  ? 'bg-[#c68a35] border-[#d99a41] text-[#0b0c0e] font-black'
+                  : 'bg-[#1c1f26] hover:bg-[#232730] border-[#2a2e38] text-[#9ba3af] hover:text-[#f0f3f6]'
               }`}
             >
-              <CloudRain className={`w-4 h-4 ${wipersActive ? 'text-indigo-400 animate-pulse' : 'text-slate-500'}`} />
+              <CloudRain className="w-4 h-4" />
               <span className="text-[11px] font-mono font-black uppercase">
                 {wipersActive ? 'ПРИВОД: ВКЛ' : 'ПРИВОД: ВЫКЛ'}
               </span>
-              {wipersActive ? <ToggleRight className="w-4 h-4 text-indigo-400" /> : <ToggleLeft className="w-4 h-4 text-slate-600" />}
+              {wipersActive ? <ToggleRight className="w-4 h-4 text-[#0b0c0e]" /> : <ToggleLeft className="w-4 h-4 text-[#5a6272]" />}
             </button>
 
-            <span className="text-[8px] text-slate-400 font-mono mt-2">
+            <span className="text-[8px] text-[#5a6272] font-mono mt-2">
               Очиститель лобового стекла
             </span>
           </div>
 
           {/* ================= 8. CLIMATE CONTROL / HEATER ================= */}
-          <div className={`flex flex-col justify-between p-3.5 rounded-2xl border shadow-lg ${panelStyles.plateBorder}`}>
+          <div className="flex flex-col justify-between p-3.5 rounded-[2px] border border-[#2a2e38] bg-[#14161a] shadow-lg">
             <div className="flex items-center justify-between">
-              <span className="text-[9px] font-mono font-bold uppercase text-slate-400 tracking-wider">
+              <span className="text-[9px] font-mono font-bold uppercase text-[#9ba3af] tracking-wider">
                 КЛИМАТ / ПЕЧКА
               </span>
               <div 
-                className={`w-2.5 h-2.5 rounded-full border border-black ${
+                className={`w-2.5 h-2.5 rounded-none border border-black ${
                   heaterMode === 'high' 
-                    ? 'bg-rose-500 shadow-[0_0_8px_#f43f5e]' 
+                    ? 'bg-[#c68a35]' 
                     : heaterMode === 'med' 
-                    ? 'bg-orange-400 shadow-[0_0_8px_#fb923c]' 
+                    ? 'bg-[#d99a41]' 
                     : heaterMode === 'low' 
-                    ? 'bg-amber-400 shadow-[0_0_8px_#f59e0b]' 
-                    : 'bg-slate-700'
+                    ? 'bg-[#9ba3af]' 
+                    : 'bg-[#2a2e38]'
                 }`} 
               />
             </div>
 
             {/* 4-Step Rotary Switch Selector */}
-            <div className="grid grid-cols-4 gap-1 mt-2 bg-black/60 p-1 rounded-xl border border-white/10">
+            <div className="grid grid-cols-4 gap-1 mt-2 bg-[#0b0c0e] p-1 rounded-[2px] border border-[#2a2e38]">
               {(['off', 'low', 'med', 'high'] as const).map((m) => {
                 const isActive = heaterMode === m;
                 return (
@@ -649,16 +635,10 @@ export const RadialMenu: React.FC<RadialMenuProps> = ({
                       sound.playButtonPress();
                       onChangeHeaterMode(m);
                     }}
-                    className={`py-1 text-[8.5px] font-mono font-black rounded-lg transition-all cursor-pointer ${
+                    className={`py-1 text-[8.5px] font-mono font-black rounded-[2px] transition-all cursor-pointer ${
                       isActive 
-                        ? m === 'high'
-                          ? 'bg-rose-500 text-white font-black'
-                          : m === 'med'
-                          ? 'bg-orange-500 text-white font-black'
-                          : m === 'low'
-                          ? 'bg-amber-500 text-slate-950 font-black'
-                          : 'bg-slate-700 text-white'
-                        : 'text-slate-400 hover:text-white'
+                        ? 'bg-[#c68a35] text-[#0b0c0e] font-black'
+                        : 'text-[#9ba3af] hover:text-[#f0f3f6]'
                     }`}
                   >
                     {m.toUpperCase()}
@@ -668,68 +648,66 @@ export const RadialMenu: React.FC<RadialMenuProps> = ({
             </div>
 
             {/* A/C & Recirculation Toggles */}
-            <div className="grid grid-cols-2 gap-1.5 mt-2 bg-black/40 p-1 rounded-xl border border-white/5">
-              {/* A/C Toggle */}
+            <div className="grid grid-cols-2 gap-1.5 mt-2 bg-[#0b0c0e] p-1 rounded-[2px] border border-[#2a2e38]">
               <button
                 type="button"
                 onClick={() => {
                   sound.playButtonPress();
                   if (onToggleAC) onToggleAC();
                 }}
-                className={`py-1 px-1.5 rounded-lg border flex items-center justify-between cursor-pointer transition-all duration-150 active:scale-95 text-[8.5px] font-mono font-black ${
+                className={`py-1 px-1.5 rounded-[2px] border flex items-center justify-between cursor-pointer transition-all duration-150 active:scale-98 text-[8.5px] font-mono font-black ${
                   acActive
-                    ? 'bg-linear-to-r from-sky-950 to-sky-900 border-sky-500 text-sky-200 shadow-[0_0_6px_rgba(14,165,233,0.3)]'
-                    : 'bg-black/50 border-white/10 text-slate-400 hover:text-white'
+                    ? 'bg-[#c68a35] border-[#d99a41] text-[#0b0c0e]'
+                    : 'bg-[#14161a] border-[#2a2e38] text-[#9ba3af] hover:text-[#f0f3f6]'
                 }`}
               >
                 <span className="flex items-center gap-1">
-                  <Snowflake className={`w-3 h-3 ${acActive ? 'text-sky-400 animate-spin' : 'text-slate-600'}`} style={{ animationDuration: '3s' }} />
+                  <Snowflake className="w-3 h-3" />
                   <span>A/C</span>
                 </span>
-                {acActive ? <span className="text-[7.5px] text-sky-400 font-bold">ВКЛ</span> : <span className="text-[7.5px] text-slate-600 font-normal">ВЫКЛ</span>}
+                {acActive ? <span className="text-[7.5px] font-bold">ВКЛ</span> : <span className="text-[7.5px] text-[#5a6272]">ВЫКЛ</span>}
               </button>
 
-              {/* Recirculation Toggle */}
               <button
                 type="button"
                 onClick={() => {
                   sound.playButtonPress();
                   if (onToggleRecirc) onToggleRecirc();
                 }}
-                className={`py-1 px-1.5 rounded-lg border flex items-center justify-between cursor-pointer transition-all duration-150 active:scale-95 text-[8.5px] font-mono font-black ${
+                className={`py-1 px-1.5 rounded-[2px] border flex items-center justify-between cursor-pointer transition-all duration-150 active:scale-98 text-[8.5px] font-mono font-black ${
                   recircActive
-                    ? 'bg-linear-to-r from-amber-950 to-amber-900 border-amber-500 text-amber-200 shadow-[0_0_6px_rgba(245,158,11,0.3)]'
-                    : 'bg-black/50 border-white/10 text-slate-400 hover:text-white'
+                    ? 'bg-[#c68a35] border-[#d99a41] text-[#0b0c0e]'
+                    : 'bg-[#14161a] border-[#2a2e38] text-[#9ba3af] hover:text-[#f0f3f6]'
                 }`}
               >
                 <span className="flex items-center gap-1">
-                  <RefreshCw className={`w-3 h-3 ${recircActive ? 'text-amber-400 animate-spin' : 'text-slate-600'}`} style={{ animationDuration: '4s' }} />
+                  <RefreshCw className="w-3 h-3" />
                   <span>РЕЦ.</span>
                 </span>
-                {recircActive ? <span className="text-[7.5px] text-amber-400 font-bold">ВНУТ</span> : <span className="text-[7.5px] text-slate-600 font-normal">УЛИЦ</span>}
+                {recircActive ? <span className="text-[7.5px] font-bold">ВНУТ</span> : <span className="text-[7.5px] text-[#5a6272]">УЛИЦ</span>}
               </button>
             </div>
 
-            <div className="flex items-center justify-between text-[8px] font-mono text-slate-400 mt-2">
+            <div className="flex items-center justify-between text-[8px] font-mono text-[#9ba3af] mt-2">
               <span className="flex items-center gap-1">
-                <Fan className={`w-3 h-3 ${heaterMode !== 'off' ? 'text-amber-400 animate-spin' : 'text-slate-600'}`} />
+                <Fan className="w-3 h-3 text-[#c68a35]" />
                 <span>САЛОН:</span>
               </span>
-              <span className="font-bold text-white">
+              <span className="font-bold text-[#f0f3f6]">
                 {heaterTemp}°C
               </span>
             </div>
           </div>
 
-          {/* ================= 9. POWER WINDOW (ОКНО) ================= */}
-          <div className={`flex flex-col justify-between p-3.5 rounded-2xl border shadow-lg ${panelStyles.plateBorder}`}>
+          {/* ================= 9. POWER WINDOW ================= */}
+          <div className="flex flex-col justify-between p-3.5 rounded-[2px] border border-[#2a2e38] bg-[#14161a] shadow-lg">
             <div className="flex items-center justify-between">
-              <span className="text-[9px] font-mono font-bold uppercase text-slate-400 tracking-wider">
+              <span className="text-[9px] font-mono font-bold uppercase text-[#9ba3af] tracking-wider">
                 ОКНО ДВЕРИ [O]
               </span>
               <div 
-                className={`w-2.5 h-2.5 rounded-full border border-black ${
-                  isWindowOpen ? 'bg-cyan-400 shadow-[0_0_8px_#22d3ee]' : 'bg-slate-700'
+                className={`w-2.5 h-2.5 rounded-none border border-black ${
+                  isWindowOpen ? 'bg-[#c68a35]' : 'bg-[#2a2e38]'
                 }`} 
               />
             </div>
@@ -741,39 +719,38 @@ export const RadialMenu: React.FC<RadialMenuProps> = ({
                 if (onToggleWindow) onToggleWindow();
                 else veh.windowOpen = !veh.windowOpen;
               }}
-              className={`w-full mt-2.5 py-2 px-3 rounded-xl border flex items-center justify-between cursor-pointer transition-all duration-150 active:scale-95 shadow-md ${
+              className={`w-full mt-2.5 py-2 px-3 rounded-[2px] border flex items-center justify-between cursor-pointer transition-all duration-150 active:scale-98 shadow-sm ${
                 isWindowOpen
-                  ? 'bg-linear-to-r from-cyan-900/90 to-cyan-950 border-cyan-500 text-cyan-200 shadow-[0_0_12px_rgba(6,182,212,0.3)]'
-                  : 'bg-black/60 border-white/10 text-slate-400 hover:text-white'
+                  ? 'bg-[#c68a35] border-[#d99a41] text-[#0b0c0e] font-black'
+                  : 'bg-[#1c1f26] hover:bg-[#232730] border-[#2a2e38] text-[#9ba3af] hover:text-[#f0f3f6]'
               }`}
             >
-              <Wind className={`w-4 h-4 ${isWindowOpen ? 'text-cyan-400 animate-pulse' : 'text-slate-500'}`} />
+              <Wind className="w-4 h-4" />
               <span className="text-[11px] font-mono font-black uppercase">
                 {isWindowOpen ? 'ОПУЩЕНО' : 'ПОДНЯТО'}
               </span>
-              {isWindowOpen ? <ToggleRight className="w-4 h-4 text-cyan-400" /> : <ToggleLeft className="w-4 h-4 text-slate-600" />}
+              {isWindowOpen ? <ToggleRight className="w-4 h-4 text-[#0b0c0e]" /> : <ToggleLeft className="w-4 h-4 text-[#5a6272]" />}
             </button>
 
-            <span className="text-[8px] text-slate-400 font-mono mt-2">
+            <span className="text-[8px] text-[#5a6272] font-mono mt-2">
               {isWindowOpen ? 'Стекло открыто (приток воздуха)' : 'Стекло закрыто (герметично)'}
             </span>
           </div>
 
-          {/* ================= 10. DIFFERENTIAL LOCK (ЕСЛИ ПОДДЕРЖИВАЕТСЯ) ================= */}
+          {/* ================= 10. DIFFERENTIAL LOCK ================= */}
           {diffCaps.supported && (
-            <div className={`flex flex-col justify-between p-3.5 rounded-2xl border shadow-lg ${panelStyles.plateBorder}`}>
+            <div className="flex flex-col justify-between p-3.5 rounded-[2px] border border-[#2a2e38] bg-[#14161a] shadow-lg">
               <div className="flex items-center justify-between">
-                <span className="text-[9px] font-mono font-bold uppercase text-slate-400 tracking-wider">
+                <span className="text-[9px] font-mono font-bold uppercase text-[#9ba3af] tracking-wider">
                   ДИФФЕРЕНЦИАЛ [V]
                 </span>
                 <div 
-                  className={`w-2.5 h-2.5 rounded-full border border-black ${
-                    isDiffLocked ? 'bg-amber-400 shadow-[0_0_10px_#f59e0b] animate-pulse' : 'bg-slate-700'
+                  className={`w-2.5 h-2.5 rounded-none border border-black ${
+                    isDiffLocked ? 'bg-[#c68a35]' : 'bg-[#2a2e38]'
                   }`} 
                 />
               </div>
 
-              {/* Safety Guarded Heavy Flip-Switch */}
               <button
                 type="button"
                 onClick={() => {
@@ -786,34 +763,34 @@ export const RadialMenu: React.FC<RadialMenuProps> = ({
                     else sound.playDiffLockWarning();
                   }
                 }}
-                className={`w-full mt-2.5 py-2 px-3 rounded-xl border flex items-center justify-between cursor-pointer transition-all duration-150 active:scale-95 shadow-md ${
+                className={`w-full mt-2.5 py-2 px-3 rounded-[2px] border flex items-center justify-between cursor-pointer transition-all duration-150 active:scale-98 shadow-sm ${
                   isDiffLocked
-                    ? 'bg-linear-to-r from-amber-900/90 via-amber-950 to-black border-amber-400 text-amber-200 shadow-[0_0_14px_rgba(245,158,11,0.35)]'
-                    : 'bg-black/60 border-white/10 text-slate-400 hover:text-white'
+                    ? 'bg-[#c68a35] border-[#d99a41] text-[#0b0c0e] font-black'
+                    : 'bg-[#1c1f26] hover:bg-[#232730] border-[#2a2e38] text-[#9ba3af] hover:text-[#f0f3f6]'
                 }`}
               >
-                <ShieldAlert className={`w-4 h-4 ${isDiffLocked ? 'text-amber-400' : 'text-slate-500'}`} />
+                <ShieldAlert className="w-4 h-4" />
                 <span className="text-[10.5px] font-mono font-black uppercase truncate max-w-[120px]">
                   {diffLockDesc}
                 </span>
-                {isDiffLocked ? <ToggleRight className="w-4 h-4 text-amber-400" /> : <ToggleLeft className="w-4 h-4 text-slate-600" />}
+                {isDiffLocked ? <ToggleRight className="w-4 h-4 text-[#0b0c0e]" /> : <ToggleLeft className="w-4 h-4 text-[#5a6272]" />}
               </button>
 
-              <span className="text-[8px] text-slate-400 font-mono mt-2">
-                Блокировка межосевого/межколесного
+              <span className="text-[8px] text-[#5a6272] font-mono mt-2">
+                Блокировка дифференциала
               </span>
             </div>
           )}
 
-          {/* ================= 11. TRAILER HITCH / COUPLING ================= */}
-          <div className={`flex flex-col justify-between p-3.5 rounded-2xl border shadow-lg ${panelStyles.plateBorder}`}>
+          {/* ================= 11. TRAILER HITCH ================= */}
+          <div className="flex flex-col justify-between p-3.5 rounded-[2px] border border-[#2a2e38] bg-[#14161a] shadow-lg">
             <div className="flex items-center justify-between">
-              <span className="text-[9px] font-mono font-bold uppercase text-slate-400 tracking-wider">
+              <span className="text-[9px] font-mono font-bold uppercase text-[#9ba3af] tracking-wider">
                 СЦЕПКА / ПРИЦЕП [H]
               </span>
               <div 
-                className={`w-2.5 h-2.5 rounded-full border border-black ${
-                  veh.trailerId ? 'bg-amber-400 shadow-[0_0_8px_#f59e0b]' : 'bg-slate-700'
+                className={`w-2.5 h-2.5 rounded-none border border-black ${
+                  veh.trailerId ? 'bg-[#c68a35]' : 'bg-[#2a2e38]'
                 }`} 
               />
             </div>
@@ -827,34 +804,34 @@ export const RadialMenu: React.FC<RadialMenuProps> = ({
                   toggleTrailerHitch(veh, world);
                 }
               }}
-              className={`w-full mt-2.5 py-2 px-3 rounded-xl border flex items-center justify-between cursor-pointer transition-all duration-150 active:scale-95 shadow-md ${
+              className={`w-full mt-2.5 py-2 px-3 rounded-[2px] border flex items-center justify-between cursor-pointer transition-all duration-150 active:scale-98 shadow-sm ${
                 veh.trailerId
-                  ? 'bg-linear-to-r from-amber-900/90 to-amber-950 border-amber-500 text-amber-200 shadow-[0_0_12px_rgba(245,158,11,0.3)]'
-                  : 'bg-black/60 border-white/10 text-slate-400 hover:text-white'
+                  ? 'bg-[#c68a35] border-[#d99a41] text-[#0b0c0e] font-black'
+                  : 'bg-[#1c1f26] hover:bg-[#232730] border-[#2a2e38] text-[#9ba3af] hover:text-[#f0f3f6]'
               }`}
             >
-              <Link2 className={`w-4 h-4 ${veh.trailerId ? 'text-amber-400' : 'text-slate-500'}`} />
+              <Link2 className="w-4 h-4" />
               <span className="text-[11px] font-mono font-black uppercase">
                 {veh.trailerId ? 'СЦЕПЛЕН' : 'РАСЦЕПЛЕН'}
               </span>
-              {veh.trailerId ? <ToggleRight className="w-4 h-4 text-amber-400" /> : <ToggleLeft className="w-4 h-4 text-slate-600" />}
+              {veh.trailerId ? <ToggleRight className="w-4 h-4 text-[#0b0c0e]" /> : <ToggleLeft className="w-4 h-4 text-[#5a6272]" />}
             </button>
 
-            <span className="text-[8px] text-slate-400 font-mono mt-2">
+            <span className="text-[8px] text-[#5a6272] font-mono mt-2">
               Тягово-сцепное устройство (ТСУ)
             </span>
           </div>
 
-          {/* ================= 12. SPECIAL: ROAD TRAIN LIGHTS ================= */}
+          {/* ================= 12. ROAD TRAIN LIGHTS ================= */}
           {hasRoadTrainLights(veh) && (
-            <div className={`flex flex-col justify-between p-3.5 rounded-2xl border shadow-lg ${panelStyles.plateBorder}`}>
+            <div className="flex flex-col justify-between p-3.5 rounded-[2px] border border-[#2a2e38] bg-[#14161a] shadow-lg">
               <div className="flex items-center justify-between">
-                <span className="text-[9px] font-mono font-bold uppercase text-slate-400 tracking-wider">
+                <span className="text-[9px] font-mono font-bold uppercase text-[#9ba3af] tracking-wider">
                   АВТОПОЕЗД [N]
                 </span>
                 <div 
-                  className={`w-2.5 h-2.5 rounded-full border border-black ${
-                    veh.roadTrainLightsOn !== false ? 'bg-amber-400 shadow-[0_0_8px_#f59e0b]' : 'bg-slate-700'
+                  className={`w-2.5 h-2.5 rounded-none border border-black ${
+                    veh.roadTrainLightsOn !== false ? 'bg-[#c68a35]' : 'bg-[#2a2e38]'
                   }`} 
                 />
               </div>
@@ -869,35 +846,35 @@ export const RadialMenu: React.FC<RadialMenuProps> = ({
                     veh.roadTrainLightsOn = !veh.roadTrainLightsOn;
                   }
                 }}
-                className={`w-full mt-2.5 py-2 px-3 rounded-xl border flex items-center justify-between cursor-pointer transition-all duration-150 active:scale-95 shadow-md ${
+                className={`w-full mt-2.5 py-2 px-3 rounded-[2px] border flex items-center justify-between cursor-pointer transition-all duration-150 active:scale-98 shadow-sm ${
                   veh.roadTrainLightsOn !== false
-                    ? 'bg-linear-to-r from-amber-900/90 to-amber-950 border-amber-500 text-amber-200 shadow-[0_0_12px_rgba(245,158,11,0.3)]'
-                    : 'bg-black/60 border-white/10 text-slate-400 hover:text-white'
+                    ? 'bg-[#c68a35] border-[#d99a41] text-[#0b0c0e] font-black'
+                    : 'bg-[#1c1f26] hover:bg-[#232730] border-[#2a2e38] text-[#9ba3af] hover:text-[#f0f3f6]'
                 }`}
               >
-                <Truck className="w-4 h-4 text-amber-400" />
+                <Truck className="w-4 h-4" />
                 <span className="text-[11px] font-mono font-black uppercase">
                   {veh.roadTrainLightsOn !== false ? 'ОГНИ: ВКЛ' : 'ОГНИ: ВЫКЛ'}
                 </span>
-                {veh.roadTrainLightsOn !== false ? <ToggleRight className="w-4 h-4 text-amber-400" /> : <ToggleLeft className="w-4 h-4 text-slate-600" />}
+                {veh.roadTrainLightsOn !== false ? <ToggleRight className="w-4 h-4 text-[#0b0c0e]" /> : <ToggleLeft className="w-4 h-4 text-[#5a6272]" />}
               </button>
 
-              <span className="text-[8px] text-slate-400 font-mono mt-2">
-                3 жёлтых опознавательных огня на крыше
+              <span className="text-[8px] text-[#5a6272] font-mono mt-2">
+                3 опознавательных огня автопоезда
               </span>
             </div>
           )}
 
-          {/* ================= 13. SPECIAL: SIREN / EMERGENCY BEACON ================= */}
+          {/* ================= 13. SPECIAL: SIREN ================= */}
           {['police', 'ambulance', 'ambulance_van', 'ambulance_suv', 'fire_engine', 'fire_ladder', 'fire_rescue'].includes(veh.type) && (
-            <div className={`flex flex-col justify-between p-3.5 rounded-2xl border shadow-lg ${panelStyles.plateBorder}`}>
+            <div className="flex flex-col justify-between p-3.5 rounded-[2px] border border-[#2a2e38] bg-[#14161a] shadow-lg">
               <div className="flex items-center justify-between">
-                <span className="text-[9px] font-mono font-bold uppercase text-slate-400 tracking-wider">
+                <span className="text-[9px] font-mono font-bold uppercase text-[#9ba3af] tracking-wider">
                   СПЕЦСИГНАЛ [B]
                 </span>
                 <div 
-                  className={`w-2.5 h-2.5 rounded-full border border-black ${
-                    sirenActive ? 'bg-cyan-400 shadow-[0_0_10px_#22d3ee] animate-ping' : 'bg-slate-700'
+                  className={`w-2.5 h-2.5 rounded-none border border-black ${
+                    sirenActive ? 'bg-cyan-400 shadow-[0_0_10px_#22d3ee] animate-ping' : 'bg-[#2a2e38]'
                   }`} 
                 />
               </div>
@@ -908,34 +885,34 @@ export const RadialMenu: React.FC<RadialMenuProps> = ({
                   sound.playButtonPress();
                   onToggleSiren();
                 }}
-                className={`w-full mt-2.5 py-2.5 px-3 rounded-xl border flex items-center justify-center gap-2 cursor-pointer transition-all duration-150 active:scale-95 shadow-md ${
+                className={`w-full mt-2.5 py-2.5 px-3 rounded-[2px] border flex items-center justify-center gap-2 cursor-pointer transition-all duration-150 active:scale-98 shadow-sm ${
                   sirenActive
-                    ? 'bg-linear-to-b from-cyan-600 to-cyan-950 border-cyan-400 text-white shadow-[0_0_16px_rgba(6,182,212,0.5)] animate-pulse'
-                    : 'bg-black/60 border-white/10 text-slate-400 hover:text-white'
+                    ? 'bg-[#c68a35] border-[#d99a41] text-[#0b0c0e] font-black'
+                    : 'bg-[#1c1f26] hover:bg-[#232730] border-[#2a2e38] text-[#9ba3af] hover:text-[#f0f3f6]'
                 }`}
               >
-                <Siren className={`w-4 h-4 ${sirenActive ? 'text-white animate-spin' : 'text-cyan-400'}`} />
+                <Siren className="w-4 h-4" />
                 <span className="text-xs font-mono font-black uppercase tracking-wider">
                   {sirenActive ? 'СИРЕНА: АКТИВНА' : 'СИРЕНА / МАЯК'}
                 </span>
               </button>
 
-              <span className="text-[8px] text-center text-slate-400 font-mono mt-2">
+              <span className="text-[8px] text-center text-[#5a6272] font-mono mt-2">
                 Проблесковые маяки и звуковой сигнал
               </span>
             </div>
           )}
 
-          {/* ================= 14. SPECIAL: GBO (LPG FUEL SYSTEM) ================= */}
+          {/* ================= 14. GBO (LPG) ================= */}
           {veh.hasGBO && (
-            <div className={`flex flex-col justify-between p-3.5 rounded-2xl border shadow-lg ${panelStyles.plateBorder}`}>
+            <div className="flex flex-col justify-between p-3.5 rounded-[2px] border border-[#2a2e38] bg-[#14161a] shadow-lg">
               <div className="flex items-center justify-between">
-                <span className="text-[9px] font-mono font-bold uppercase text-slate-400 tracking-wider">
+                <span className="text-[9px] font-mono font-bold uppercase text-[#9ba3af] tracking-wider">
                   ГБО (ПРОПАН) [K]
                 </span>
                 <div 
-                  className={`w-2.5 h-2.5 rounded-full border border-black ${
-                    veh.fuelSystem?.gboActive !== false ? 'bg-yellow-400 shadow-[0_0_8px_#facc15]' : 'bg-slate-700'
+                  className={`w-2.5 h-2.5 rounded-none border border-black ${
+                    veh.fuelSystem?.gboActive !== false ? 'bg-[#c68a35]' : 'bg-[#2a2e38]'
                   }`} 
                 />
               </div>
@@ -948,20 +925,20 @@ export const RadialMenu: React.FC<RadialMenuProps> = ({
                     veh.fuelSystem.gboActive = !veh.fuelSystem.gboActive;
                   }
                 }}
-                className={`w-full mt-2.5 py-2 px-3 rounded-xl border flex items-center justify-between cursor-pointer transition-all duration-150 active:scale-95 shadow-md ${
+                className={`w-full mt-2.5 py-2 px-3 rounded-[2px] border flex items-center justify-between cursor-pointer transition-all duration-150 active:scale-98 shadow-sm ${
                   veh.fuelSystem?.gboActive !== false
-                    ? 'bg-linear-to-r from-yellow-900/90 to-yellow-950 border-yellow-500 text-yellow-200 shadow-[0_0_12px_rgba(234,179,8,0.3)]'
-                    : 'bg-black/60 border-white/10 text-slate-400 hover:text-white'
+                    ? 'bg-[#c68a35] border-[#d99a41] text-[#0b0c0e] font-black'
+                    : 'bg-[#1c1f26] hover:bg-[#232730] border-[#2a2e38] text-[#9ba3af] hover:text-[#f0f3f6]'
                 }`}
               >
-                <Zap className="w-4 h-4 text-yellow-400" />
+                <Zap className="w-4 h-4" />
                 <span className="text-[11px] font-mono font-black uppercase">
                   {veh.fuelSystem?.gboActive !== false ? 'ГАЗ: ВКЛ' : 'БЕНЗИН'}
                 </span>
-                {veh.fuelSystem?.gboActive !== false ? <ToggleRight className="w-4 h-4 text-yellow-400" /> : <ToggleLeft className="w-4 h-4 text-slate-600" />}
+                {veh.fuelSystem?.gboActive !== false ? <ToggleRight className="w-4 h-4 text-[#0b0c0e]" /> : <ToggleLeft className="w-4 h-4 text-[#5a6272]" />}
               </button>
 
-              <span className="text-[8px] text-slate-400 font-mono mt-2">
+              <span className="text-[8px] text-[#5a6272] font-mono mt-2">
                 Запас газа: {Math.round(veh.fuelSystem?.gboLevel ?? 0)}%
               </span>
             </div>
@@ -969,14 +946,14 @@ export const RadialMenu: React.FC<RadialMenuProps> = ({
 
           {/* ================= 15. SPECIAL: TRUCK WATER PTO PUMP ================= */}
           {(veh.type === 'truck_water' || veh.type === 'fire_engine') && (
-            <div className={`flex flex-col justify-between p-3.5 rounded-2xl border shadow-lg ${panelStyles.plateBorder}`}>
+            <div className="flex flex-col justify-between p-3.5 rounded-[2px] border border-[#2a2e38] bg-[#14161a] shadow-lg">
               <div className="flex items-center justify-between">
-                <span className="text-[9px] font-mono font-bold uppercase text-slate-400 tracking-wider">
+                <span className="text-[9px] font-mono font-bold uppercase text-[#9ba3af] tracking-wider">
                   КОМ / ВОДОНАСОС
                 </span>
                 <div 
-                  className={`w-2.5 h-2.5 rounded-full border border-black ${
-                    veh.isPtoActive ? 'bg-sky-400 shadow-[0_0_8px_#38bdf8]' : 'bg-slate-700'
+                  className={`w-2.5 h-2.5 rounded-none border border-black ${
+                    veh.isPtoActive ? 'bg-[#c68a35]' : 'bg-[#2a2e38]'
                   }`} 
                 />
               </div>
@@ -987,35 +964,35 @@ export const RadialMenu: React.FC<RadialMenuProps> = ({
                   sound.playButtonPress();
                   veh.isPtoActive = !veh.isPtoActive;
                 }}
-                className={`w-full mt-2.5 py-2 px-3 rounded-xl border flex items-center justify-between cursor-pointer transition-all duration-150 active:scale-95 shadow-md ${
+                className={`w-full mt-2.5 py-2 px-3 rounded-[2px] border flex items-center justify-between cursor-pointer transition-all duration-150 active:scale-98 shadow-sm ${
                   veh.isPtoActive
-                    ? 'bg-linear-to-r from-sky-900/90 to-sky-950 border-sky-500 text-sky-200 shadow-[0_0_12px_rgba(56,189,248,0.3)]'
-                    : 'bg-black/60 border-white/10 text-slate-400 hover:text-white'
+                    ? 'bg-[#c68a35] border-[#d99a41] text-[#0b0c0e] font-black'
+                    : 'bg-[#1c1f26] hover:bg-[#232730] border-[#2a2e38] text-[#9ba3af] hover:text-[#f0f3f6]'
                 }`}
               >
-                <Gauge className="w-4 h-4 text-sky-400" />
+                <Gauge className="w-4 h-4" />
                 <span className="text-[11px] font-mono font-black uppercase">
                   {veh.isPtoActive ? 'НАСОС: ВКЛ' : 'НАСОС: ВЫКЛ'}
                 </span>
-                {veh.isPtoActive ? <ToggleRight className="w-4 h-4 text-sky-400" /> : <ToggleLeft className="w-4 h-4 text-slate-600" />}
+                {veh.isPtoActive ? <ToggleRight className="w-4 h-4 text-[#0b0c0e]" /> : <ToggleLeft className="w-4 h-4 text-[#5a6272]" />}
               </button>
 
-              <span className="text-[8px] text-slate-400 font-mono mt-2">
+              <span className="text-[8px] text-[#5a6272] font-mono mt-2">
                 Коробка отбора мощности
               </span>
             </div>
           )}
 
-          {/* ================= 16. SPECIAL: FLUID TANK DRAIN VALVE ================= */}
+          {/* ================= 16. FLUID TANK DRAIN VALVE ================= */}
           {veh.fluidTank && veh.fluidTank.capacity > 0 && (
-            <div className={`flex flex-col justify-between p-3.5 rounded-2xl border shadow-lg ${panelStyles.plateBorder}`}>
+            <div className="flex flex-col justify-between p-3.5 rounded-[2px] border border-[#2a2e38] bg-[#14161a] shadow-lg">
               <div className="flex items-center justify-between">
-                <span className="text-[9px] font-mono font-bold uppercase text-slate-400 tracking-wider truncate max-w-[130px]">
+                <span className="text-[9px] font-mono font-bold uppercase text-[#9ba3af] tracking-wider truncate max-w-[130px]">
                   СЛИВ {getLiquidNameRu(veh.fluidTank.liquidType)}
                 </span>
                 <div 
-                  className={`w-2.5 h-2.5 rounded-full border border-black ${
-                    veh.fluidTank.drainValveOpen ? 'bg-rose-500 shadow-[0_0_8px_#f43f5e] animate-ping' : 'bg-slate-700'
+                  className={`w-2.5 h-2.5 rounded-none border border-black ${
+                    veh.fluidTank.drainValveOpen ? 'bg-[#c68a35]' : 'bg-[#2a2e38]'
                   }`} 
                 />
               </div>
@@ -1026,20 +1003,20 @@ export const RadialMenu: React.FC<RadialMenuProps> = ({
                   sound.playButtonPress();
                   veh.fluidTank!.drainValveOpen = !veh.fluidTank!.drainValveOpen;
                 }}
-                className={`w-full mt-2.5 py-2 px-3 rounded-xl border flex items-center justify-between cursor-pointer transition-all duration-150 active:scale-95 shadow-md ${
+                className={`w-full mt-2.5 py-2 px-3 rounded-[2px] border flex items-center justify-between cursor-pointer transition-all duration-150 active:scale-98 shadow-sm ${
                   veh.fluidTank.drainValveOpen
-                    ? 'bg-linear-to-r from-rose-900/90 to-rose-950 border-rose-500 text-rose-200 shadow-[0_0_12px_rgba(244,63,94,0.35)]'
-                    : 'bg-black/60 border-white/10 text-slate-400 hover:text-white'
+                    ? 'bg-[#c68a35] border-[#d99a41] text-[#0b0c0e] font-black'
+                    : 'bg-[#1c1f26] hover:bg-[#232730] border-[#2a2e38] text-[#9ba3af] hover:text-[#f0f3f6]'
                 }`}
               >
-                <Droplet className="w-4 h-4 text-sky-400" />
+                <Droplet className="w-4 h-4" />
                 <span className="text-[11px] font-mono font-black uppercase">
                   {veh.fluidTank.drainValveOpen ? 'КРАН: ОТКРЫТ' : 'КРАН: ЗАКРЫТ'}
                 </span>
-                {veh.fluidTank.drainValveOpen ? <ToggleRight className="w-4 h-4 text-rose-400" /> : <ToggleLeft className="w-4 h-4 text-slate-600" />}
+                {veh.fluidTank.drainValveOpen ? <ToggleRight className="w-4 h-4 text-[#0b0c0e]" /> : <ToggleLeft className="w-4 h-4 text-[#5a6272]" />}
               </button>
 
-              <span className="text-[8px] text-slate-400 font-mono mt-2">
+              <span className="text-[8px] text-[#5a6272] font-mono mt-2">
                 Объём: {Math.round(veh.fluidTank.currentVolume ?? veh.fluidTank.currentAmount ?? 0)} / {veh.fluidTank.capacity} л
               </span>
             </div>
@@ -1048,14 +1025,14 @@ export const RadialMenu: React.FC<RadialMenuProps> = ({
         </div>
 
         {/* Bottom Status / Instructions Bar */}
-        <div className="mt-5 pt-3 border-t border-white/10 flex flex-wrap items-center justify-between gap-2 text-[9px] font-mono text-slate-500">
+        <div className="mt-5 pt-3 border-t border-[#2a2e38] flex flex-wrap items-center justify-between gap-2 text-[9px] font-mono text-[#9ba3af]">
           <div>
-            Управление: клик мыши по тумблеру или клавиши на клавиатуре <span className="text-slate-300 font-bold">[J, L, U, Y, X, Z, C, K, P, O, V, H]</span>
+            Управление: клик мыши по тумблеру или клавиши на клавиатуре <span className="text-[#c68a35] font-bold">[J, L, U, Y, X, Z, C, K, P, O, V, H]</span>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="px-3 py-1 bg-slate-900 hover:bg-slate-800 text-slate-300 rounded-lg border border-slate-700 cursor-pointer font-bold"
+            className="px-3 py-1 bg-[#14161a] hover:bg-[#1c1f26] text-[#cbd5e1] hover:text-[#f0f3f6] rounded-[2px] border border-[#2a2e38] hover:border-[#c68a35]/50 cursor-pointer font-bold"
           >
             Закрыть панель [Esc]
           </button>
