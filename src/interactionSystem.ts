@@ -152,13 +152,13 @@ export function resolveBuildingShop(bld: Building, roomName: string = ''): { sho
 
   const rm = roomName || '';
 
-  if (bld.shopBrand === 'pharmacy_36_6' || rm.includes('Аптека') || rm.includes('Панацея') || rm.includes('Медпункт') || bld.type === 'hospital') {
-    return { shopType: 'pharmacy', shopTitle: rm || bld.nameRu || 'Аптека "Панацея"' };
+  if (bld.shopBrand === 'pharmacy_36_6' || bld.type === 'pharmacy_store' || rm.includes('Аптека') || rm.includes('Панацея') || rm.includes('Медпункт') || bld.type === 'hospital') {
+    return { shopType: 'pharmacy', shopTitle: rm || bld.nameRu || 'Аптека "36.6"' };
   }
-  if (bld.shopBrand === 'cofix_bakery' || rm.includes('Урбан') || rm.includes('Пекарня')) {
-    return { shopType: 'cafe', shopTitle: rm || bld.nameRu || 'Кафе & Пекарня "Урбан & Бейкери"' };
+  if (bld.shopBrand === 'cofix_bakery' || bld.type === 'bakery_cafe' || rm.includes('Урбан') || rm.includes('Пекарня') || rm.includes('Cofix')) {
+    return { shopType: 'cafe', shopTitle: rm || bld.nameRu || 'Кафе & Пекарня "Cofix"' };
   }
-  if (bld.shopBrand === 'bean_bistro' || rm.includes('Bean & Bistro') || rm.includes('Кофейня') || rm.includes('Кафе')) {
+  if (bld.shopBrand === 'bean_bistro' || bld.type === 'coffee_bistro' || rm.includes('Bean & Bistro') || rm.includes('Кофейня') || rm.includes('Кафе')) {
     return { shopType: 'cafe', shopTitle: rm || bld.nameRu || 'Кафе & Кофейня "Bean & Bistro"' };
   }
   if (bld.shopBrand === 'dodo_pizza' || rm.includes('Пиццерия') || rm.includes('Империя') || rm.includes('Пицца')) {
@@ -185,8 +185,8 @@ export function resolveBuildingShop(bld: Building, roomName: string = ''): { sho
   if (bld.shopBrand === 'perekrestok' || rm.includes('Азимут')) {
     return { shopType: 'supermarket', shopTitle: rm || bld.nameRu || 'Супермаркет "Азимут 24/7"' };
   }
-  if (bld.shopBrand === 'pyaterochka' || rm.includes('Регуляр')) {
-    return { shopType: 'supermarket', shopTitle: rm || bld.nameRu || 'Супермаркет "Регуляр 24/7"' };
+  if (bld.shopBrand === 'pyaterochka' || bld.type === 'supermarket_store' || (bld.nameRu && (bld.nameRu.includes('Пятёрочк') || bld.nameRu.includes('Пятерочк'))) || rm.includes('Регуляр') || rm.includes('Пятёрочк') || rm.includes('Пятерочк')) {
+    return { shopType: 'supermarket', shopTitle: rm || bld.nameRu || 'Супермаркет "Пятёрочка 24/7"' };
   }
   if (rm.includes('Суши') || rm.includes('WOK') || rm.includes('Сакура')) {
     return { shopType: 'sushi_asian', shopTitle: rm || 'Суши-Бар "Сакура"' };

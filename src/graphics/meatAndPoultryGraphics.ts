@@ -34,9 +34,9 @@ const BIRD_PALETTES: Record<string, BirdPalette> = {
 };
 
 export function drawMeatAndPoultryItem(ctx: CanvasRenderingContext2D, itemId: string): boolean {
-  // Check Minced Meat Tray / Vacuum Pack
+  // Check Minced Meat
   if (itemId === 'minced_meat_mixed' || itemId.includes('minced')) {
-    return drawMincedMeatTray(ctx, itemId);
+    return drawMincedMeat(ctx, itemId);
   }
 
   // 1. Check Mammal Meats
@@ -867,104 +867,110 @@ function drawBirdCut(ctx: CanvasRenderingContext2D, cut: string, pal: BirdPalett
   }
 }
 
-function drawMincedMeatTray(ctx: CanvasRenderingContext2D, itemId: string): boolean {
+function drawMincedMeat(ctx: CanvasRenderingContext2D, itemId: string): boolean {
   drawShadow(ctx, 8.5, 3.5, 8.5, 0.28);
 
-  // 1. Black Styrofoam / Polymer tray base
-  ctx.fillStyle = '#0f172a';
-  ctx.beginPath();
-  ctx.roundRect(-8.5, -5.5, 17, 11, 2.2);
-  ctx.fill();
-  ctx.strokeStyle = '#334155';
-  ctx.lineWidth = 0.8;
-  ctx.stroke();
-
-  // 2. White absorbent butcher pad
-  ctx.fillStyle = '#f1f5f9';
-  ctx.beginPath();
-  ctx.roundRect(-7.8, -4.8, 15.6, 9.6, 1.8);
-  ctx.fill();
-
   // Color determination based on itemId
-  let primary = '#b91c1c';
-  let dark = '#7f1d1d';
-  let fat = '#fef2f2';
+  let primary = '#b91c1c'; // Deep rich red
+  let dark = '#7f1d1d';    // Dark shadow red
+  let light = '#ef4444';   // Fresh surface red
+  let fat = '#fef2f2';     // Creamy fat flecks
 
   if (itemId.startsWith('pork_')) {
-    primary = '#e11d48'; dark = '#9f1239'; fat = '#fff1f2';
+    primary = '#e11d48'; dark = '#9f1239'; light = '#fb7185'; fat = '#fff1f2';
   } else if (itemId.startsWith('chicken_') || itemId.startsWith('turkey_') || itemId.startsWith('duck_') || itemId.startsWith('goose_')) {
-    primary = '#f43f5e'; dark = '#be123c'; fat = '#fff1f2';
+    primary = '#f43f5e'; dark = '#be123c'; light = '#fda4af'; fat = '#fff1f2';
   } else if (itemId.startsWith('salmon_') || itemId.startsWith('tuna_') || itemId.startsWith('cod_') || itemId.includes('fish')) {
-    primary = '#f87171'; dark = '#dc2626'; fat = '#f8fafc';
-  } else if (itemId === 'minced_meat_mixed') {
-    primary = '#be123c'; dark = '#881337'; fat = '#fef2f2';
+    primary = '#f87171'; dark = '#dc2626'; light = '#fca5a5'; fat = '#f8fafc';
+  } else if (itemId === 'minced_meat_mixed' || itemId.includes('minced')) {
+    primary = '#be123c'; dark = '#881337'; light = '#f43f5e'; fat = '#fef2f2';
   }
 
-  // 3. Ground meat mass contour
+  // 1. Organic loose heap/mound base silhouette of ground meat
   ctx.fillStyle = primary;
   ctx.beginPath();
-  ctx.roundRect(-7.2, -4.2, 14.4, 8.4, 1.5);
+  ctx.moveTo(-7.5, 0);
+  ctx.quadraticCurveTo(-8.2, -4.5, -4.0, -5.8);
+  ctx.quadraticCurveTo(0, -6.5, 4.5, -5.2);
+  ctx.quadraticCurveTo(8.0, -3.8, 7.5, 0.8);
+  ctx.quadraticCurveTo(6.8, 5.5, 2.5, 6.2);
+  ctx.quadraticCurveTo(-2.5, 6.5, -6.5, 5.2);
+  ctx.quadraticCurveTo(-8.0, 3.5, -7.5, 0);
+  ctx.closePath();
   ctx.fill();
 
-  // 4. Extruded ground meat strands / worm texture
+  // 2. Inner shaded depth/shadow folds
+  ctx.fillStyle = dark;
+  ctx.beginPath();
+  ctx.ellipse(-1, 0.5, 6.2, 4.2, -0.1, 0, Math.PI * 2);
+  ctx.fill();
+
+  // 3. Dense extruded worm-like strands (ground meat grinder strands)
+  const strandRows = [
+    { y: -4.2, startX: -4.5, endX: 4.0, amp: 0.5 },
+    { y: -2.6, startX: -6.2, endX: 5.8, amp: 0.6 },
+    { y: -1.0, startX: -6.8, endX: 6.5, amp: 0.7 },
+    { y: 0.6,  startX: -6.5, endX: 6.2, amp: 0.65 },
+    { y: 2.2,  startX: -5.8, endX: 5.2, amp: 0.6 },
+    { y: 3.8,  startX: -4.8, endX: 3.8, amp: 0.5 }
+  ];
+
+  // Draw dark shadow lines beneath strands
   ctx.strokeStyle = dark;
-  ctx.lineWidth = 1.1;
-  for (let y = -3.2; y <= 3.2; y += 1.6) {
+  ctx.lineWidth = 1.2;
+  for (const row of strandRows) {
     ctx.beginPath();
-    for (let x = -6.5; x <= 6.5; x += 1.5) {
-      const wave = Math.sin(x * 1.2 + y) * 0.4;
-      if (x === -6.5) ctx.moveTo(x, y + wave);
-      else ctx.lineTo(x, y + wave);
+    for (let x = row.startX; x <= row.endX; x += 1.2) {
+      const wave = Math.sin(x * 1.5 + row.y * 2) * row.amp;
+      if (x === row.startX) ctx.moveTo(x, row.y + wave + 0.4);
+      else ctx.lineTo(x, row.y + wave + 0.4);
     }
     ctx.stroke();
   }
 
-  // 5. Interspersed fat flecks
-  ctx.fillStyle = fat;
-  const flecks: [number, number][] = [
-    [-4, -2.5], [1, -2.8], [4.5, -1.8],
-    [-2, -0.5], [2.5, -0.2], [-5, 1.2],
-    [0, 1.8], [5, 1.5], [-3, 3], [3, 2.8]
-  ];
-  for (const [fx, fy] of flecks) {
+  // Draw main extruded meat strands
+  ctx.strokeStyle = primary;
+  ctx.lineWidth = 1.1;
+  for (const row of strandRows) {
     ctx.beginPath();
-    ctx.ellipse(fx, fy, 0.7, 0.4, 0.2, 0, Math.PI * 2);
+    for (let x = row.startX; x <= row.endX; x += 1.2) {
+      const wave = Math.sin(x * 1.5 + row.y * 2) * row.amp;
+      if (x === row.startX) ctx.moveTo(x, row.y + wave);
+      else ctx.lineTo(x, row.y + wave);
+    }
+    ctx.stroke();
+  }
+
+  // Highlight upper edges of strands with fresh meat tone
+  ctx.strokeStyle = light;
+  ctx.lineWidth = 0.7;
+  for (const row of strandRows) {
+    ctx.beginPath();
+    for (let x = row.startX + 0.5; x <= row.endX - 0.5; x += 1.4) {
+      const wave = Math.sin(x * 1.5 + row.y * 2) * row.amp;
+      if (x === row.startX + 0.5) ctx.moveTo(x, row.y + wave - 0.3);
+      else ctx.lineTo(x, row.y + wave - 0.3);
+    }
+    ctx.stroke();
+  }
+
+  // 4. Interspersed fat flecks & marbling
+  ctx.fillStyle = fat;
+  const flecks: [number, number, number, number][] = [
+    [-4.5, -3.2, 0.8, 0.5], [1.2, -4.0, 0.7, 0.4], [4.2, -2.5, 0.9, 0.5],
+    [-2.8, -1.2, 0.8, 0.5], [2.8, -0.8, 0.7, 0.4], [-5.2, 0.8, 0.9, 0.5],
+    [0.2, 1.2, 0.8, 0.5], [4.8, 1.8, 0.7, 0.4], [-3.2, 3.2, 0.8, 0.5],
+    [2.2, 3.5, 0.7, 0.4], [-1.2, -4.8, 0.6, 0.4], [3.2, 0.2, 0.8, 0.5]
+  ];
+  for (const [fx, fy, rx, ry] of flecks) {
+    ctx.beginPath();
+    ctx.ellipse(fx, fy, rx, ry, 0.2, 0, Math.PI * 2);
     ctx.fill();
   }
 
-  // 6. Heat-sealed vacuum plastic wrap glare
-  const filmGrad = ctx.createLinearGradient(-8, -5, 8, 5);
-  filmGrad.addColorStop(0, 'rgba(255, 255, 255, 0.45)');
-  filmGrad.addColorStop(0.3, 'rgba(255, 255, 255, 0.08)');
-  filmGrad.addColorStop(0.65, 'rgba(255, 255, 255, 0.3)');
-  filmGrad.addColorStop(1, 'rgba(255, 255, 255, 0.05)');
-  ctx.fillStyle = filmGrad;
-  ctx.beginPath();
-  ctx.roundRect(-8.5, -5.5, 17, 11, 2.2);
-  ctx.fill();
-
-  // Tight vacuum film tension lines at corners
-  ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
-  ctx.lineWidth = 0.6;
-  ctx.beginPath();
-  ctx.moveTo(-8, -5); ctx.lineTo(-5.5, -2.5);
-  ctx.moveTo(8, -5);  ctx.lineTo(5.5, -2.5);
-  ctx.moveTo(-8, 5);  ctx.lineTo(-5.5, 2.5);
-  ctx.moveTo(8, 5);   ctx.lineTo(5.5, 2.5);
-  ctx.stroke();
-
-  // 7. Store price & barcode sticker on corner of vacuum pack
-  ctx.fillStyle = '#ffffff';
-  ctx.beginPath();
-  ctx.roundRect(2, -4.8, 5.8, 3.8, 0.5);
-  ctx.fill();
-
-  ctx.fillStyle = '#0f172a';
-  ctx.fillRect(2.5, -4.2, 0.6, 2.2);
-  ctx.fillRect(3.4, -4.2, 0.4, 2.2);
-  ctx.fillRect(4.1, -4.2, 0.8, 2.2);
-  ctx.fillRect(5.2, -4.2, 0.5, 2.2);
-  ctx.fillRect(6.0, -4.2, 0.7, 2.2);
+  // 5. Fresh raw meat glistening moisture (gloss highlights)
+  drawGlossBand(ctx, -3.5, -3.8, 3.2, 1.1, 0.35);
+  drawGlossBand(ctx, 1.2, -1.5, 2.8, 0.9, 0.3);
 
   return true;
 }
