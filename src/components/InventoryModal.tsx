@@ -258,21 +258,13 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
       }
       const removed = removeItemFromContainer(container, contentIdx, item.count);
       if (removed) {
-        if (!player.inventory) player.inventory = [];
-        let placed = false;
-        for (let i = 0; i < player.inventory.length; i++) {
-          if (!player.inventory[i]) {
-            player.inventory[i] = removed;
-            placed = true;
-            break;
-          }
+        const added = addItemToPlayer(player, removed, { preferPockets: true, skipHands: true });
+        if (!added) {
+          addItemToContainer(container, removed);
+        } else {
+          sound.playPickup();
+          forceRender(n => n + 1);
         }
-        if (!placed) {
-          player.inventory.push(removed);
-        }
-        sound.playPickup();
-        addPlayerNotification(player, `Перемещено в карман: ${removed.nameRu}`, 'pickup');
-        forceRender(n => n + 1);
       }
     } else {
       const handItem = target === 'leftHand' ? player.leftHandItem : player.rightHandItem;
@@ -280,11 +272,47 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
         addPlayerNotification(player, `${target === 'leftHand' ? 'Левая' : 'Правая'} рука занята!`, 'warning');
         return;
       }
-      removeItemFromContainer(container, contentIdx, item.count);
-      putItemInHand(player, target === 'leftHand' ? 'left' : 'right', item, world);
-      sound.playPickup();
-      forceRender(n => n + 1);
+      const removed = removeItemFromContainer(container, contentIdx, item.count);
+      if (removed) {
+        putItemInHand(player, target === 'leftHand' ? 'left' : 'right', removed, world);
+        sound.playPickup();
+        forceRender(n => n + 1);
+      }
     }
+  };
+
+  // Equip clothing item directly from hand
+  const handleEquipFromHand = (hand: 'left' | 'right') => {
+    if (!player) return;
+    const item = hand === 'left' ? player.leftHandItem : player.rightHandItem;
+    if (!item || !item.clothingStats) return;
+
+    const stats = item.clothingStats;
+    player.equippedClothing = player.equippedClothing || {};
+    player.equippedClothing[stats.slot] = player.equippedClothing[stats.slot] || {};
+
+    takeItemFromHand(player, hand);
+
+    if (player.equippedClothing[stats.slot]![stats.layer]) {
+      unequipClothing(player, stats.slot, stats.layer, world);
+    }
+
+    player.equippedClothing[stats.slot]![stats.layer] = item;
+
+    if (item.contents && item.contents.length > 0) {
+      const contentsToUnpack = [...item.contents];
+      item.contents = [];
+      for (const contItem of contentsToUnpack) {
+        addItemToPlayer(player, contItem, { preferPockets: true });
+      }
+    }
+
+    const totalSlots = getPlayerTotalSlots(player);
+    player.maxInventorySlots = totalSlots;
+
+    sound.playPickup();
+    addPlayerNotification(player, `Надето из руки: ${item.nameRu}`, 'pickup');
+    forceRender(n => n + 1);
   };
 
   // Drop item from container directly onto ground
@@ -557,6 +585,15 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
 
                       {player.leftHandItem && (
                         <div className="flex items-center gap-1 shrink-0">
+                          {player.leftHandItem.clothingStats && (
+                            <button
+                              onClick={() => handleEquipFromHand('left')}
+                              className="px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold min-h-[36px]"
+                              title="Надеть одежду из руки"
+                            >
+                              Надеть
+                            </button>
+                          )}
                           {player.leftHandItem.isContainer && (
                             <button
                               onClick={() => { setOpenContainer(player.leftHandItem); setSelectedContainerItemIdx(0); }}
@@ -608,6 +645,15 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
 
                       {player.rightHandItem && (
                         <div className="flex items-center gap-1 shrink-0">
+                          {player.rightHandItem.clothingStats && (
+                            <button
+                              onClick={() => handleEquipFromHand('right')}
+                              className="px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold min-h-[36px]"
+                              title="Надеть одежду из руки"
+                            >
+                              Надеть
+                            </button>
+                          )}
                           {player.rightHandItem.isContainer && (
                             <button
                               onClick={() => { setOpenContainer(player.rightHandItem); setSelectedContainerItemIdx(0); }}

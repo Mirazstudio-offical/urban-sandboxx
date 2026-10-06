@@ -6113,6 +6113,62 @@ export function getPlayerTotalCarriedWeight(player: Player): number {
   return Number(total.toFixed(2));
 }
 
+// Check if an item can fit into a specific clothing compartment slot
+export function canItemFitInCompartment(
+  player: Player,
+  slotIndex: number,
+  item: InventoryItem,
+  options?: { ignoreSlotIdx?: number }
+): { fits: boolean; reason?: string } {
+  const slotInfo = getSlotCompartment(player, slotIndex);
+  if (!slotInfo) {
+    return { fits: false, reason: 'Слот находится вне доступных карманов и отсеков одежды!' };
+  }
+
+  const { compartment: comp } = slotInfo;
+  const singleUnitVol = getItemTotalVolume({ ...item, count: 1 });
+  const itemVol = getItemTotalVolume(item);
+  const itemWt = getItemTotalWeight(item);
+
+  // 1. Check max single item volume limit for this specific compartment
+  if (singleUnitVol > comp.maxItemVolumeL + 0.001) {
+    return {
+      fits: false,
+      reason: `Предмет "${item.nameRu}" слишком громоздкий для отсека "${comp.nameRu}" (${singleUnitVol}л > макс. ${comp.maxItemVolumeL}л)!`
+    };
+  }
+
+  // 2. Calculate current used volume & weight in this compartment, ignoring ignoreSlotIdx if swapping
+  let usedVol = 0;
+  let usedWt = 0;
+  if (player.inventory) {
+    for (let i = comp.startIndex; i < comp.startIndex + comp.slotCount; i++) {
+      if (options?.ignoreSlotIdx !== undefined && i === options.ignoreSlotIdx) continue;
+      const slotItem = player.inventory[i];
+      if (slotItem) {
+        usedVol += getItemTotalVolume(slotItem);
+        usedWt += getItemTotalWeight(slotItem);
+      }
+    }
+  }
+
+  if (usedVol + itemVol > comp.capacityL + 0.001) {
+    return {
+      fits: false,
+      reason: `Недостаточно места в отсеке "${comp.nameRu}" (свободно ${(comp.capacityL - usedVol).toFixed(1)}л, нужно ${itemVol.toFixed(1)}л)!`
+    };
+  }
+
+  if (usedWt + itemWt > comp.maxWeightKg + 0.001) {
+    return {
+      fits: false,
+      reason: `Перегрузка по весу в отсеке "${comp.nameRu}" (свободно ${(comp.maxWeightKg - usedWt).toFixed(1)}кг, нужно ${itemWt.toFixed(1)}кг)!`
+    };
+  }
+
+  return { fits: true };
+}
+
 // Check if an item can fit in pockets
 export function canItemFitInPockets(player: Player, item: InventoryItem): { fits: boolean; reason?: string } {
   const cap = getPlayerPocketCapacity(player);
@@ -6121,22 +6177,25 @@ export function canItemFitInPockets(player: Player, item: InventoryItem): { fits
 
   // Check single item volume limit for pockets
   const singleUnitVol = getItemTotalVolume({ ...item, count: 1 });
-  if (singleUnitVol > cap.maxItemVolumeL) {
+  if (singleUnitVol > cap.maxItemVolumeL + 0.001) {
     return {
       fits: false,
-      reason: `Предмет слишком громоздкий для карманов (${singleUnitVol}л > макс. ${cap.maxItemVolumeL}л). Возьмите в руку, положите в рюкзак или пакет.`};
+      reason: `Предмет слишком громоздкий для карманов (${singleUnitVol}л > макс. ${cap.maxItemVolumeL}л). Возьмите в руку, положите в рюкзак или пакет.`
+    };
   }
 
-  if (cap.usedVolumeL + itemVol > cap.totalCapacityL) {
+  if (cap.usedVolumeL + itemVol > cap.totalCapacityL + 0.001) {
     return {
       fits: false,
-      reason: `В карманах недостаточно места (${(cap.totalCapacityL - cap.usedVolumeL).toFixed(1)}л свободно, нужно ${itemVol.toFixed(1)}л).`};
+      reason: `В карманах недостаточно места (${Math.max(0, cap.totalCapacityL - cap.usedVolumeL).toFixed(1)}л свободно, нужно ${itemVol.toFixed(1)}л).`
+    };
   }
 
-  if (cap.usedWeightKg + itemWt > cap.maxWeightKg) {
+  if (cap.usedWeightKg + itemWt > cap.maxWeightKg + 0.001) {
     return {
       fits: false,
-      reason: `Карманы перегружены по весу (${(cap.maxWeightKg - cap.usedWeightKg).toFixed(1)}кг свободно, нужно ${itemWt.toFixed(1)}кг).`};
+      reason: `Карманы перегружены по весу (${Math.max(0, cap.maxWeightKg - cap.usedWeightKg).toFixed(1)}кг свободно, нужно ${itemWt.toFixed(1)}кг).`
+    };
   }
 
   return { fits: true };
@@ -6272,33 +6331,52 @@ export function takeItemFromHand(player: Player, hand: 'left'| 'right'): Invento
   return item;
 }
 
-// Stow item from hand directly into player pockets (inventory) without loss
+// Stow item from hand directly into player pockets (inventory) with compartment validation
 export function stowItemFromHandToPockets(player: Player, hand: 'left'| 'right'): { success: boolean; message: string } {
   const item = hand === 'left'? player.leftHandItem : player.rightHandItem;
   if (!item) return { success: false, message: 'В этой руке ничего нет'};
 
   if (!player.inventory) player.inventory = [];
-  const maxSlots = player.maxInventorySlots || 24;
+  const maxSlots = getPlayerTotalSlots(player);
 
   item.count = 1;
   item.maxStack = 1;
 
-  // Find empty slot or push
-  const emptyIdx = player.inventory.findIndex(slot => !slot);
-  if (emptyIdx !== -1) {
-    takeItemFromHand(player, hand);
-    player.inventory[emptyIdx] = item;
-    addPlayerNotification(player, `Убрано в карман: ${item.nameRu}`, 'pickup');
-    return { success: true, message: `Убрано в карман: ${item.nameRu}`};
-  } else if (player.inventory.length < maxSlots) {
-    takeItemFromHand(player, hand);
-    player.inventory.push(item);
-    addPlayerNotification(player, `Убрано в карман: ${item.nameRu}`, 'pickup');
-    return { success: true, message: `Убрано в карман: ${item.nameRu}`};
+  // Bulky items or large volume items cannot go into clothing pockets
+  if (isItemBulky(item) && getItemTotalVolume(item) >= 1.5) {
+    const msg = `Предмет "${item.nameRu}" слишком громоздкий для карманов! Несите в руках или положите в рюкзак.`;
+    addPlayerNotification(player, msg, 'warning');
+    return { success: false, message: msg };
   }
 
-  addPlayerNotification(player, 'Карманы переполнены! Освободите место в инвентаре.', 'warning');
-  return { success: false, message: 'Карманы переполнены!'};
+  // Find empty slot that satisfies compartment constraints
+  let targetSlotIdx = -1;
+  let lastReason = '';
+
+  for (let i = 0; i < maxSlots; i++) {
+    if (!player.inventory[i]) {
+      const check = canItemFitInCompartment(player, i, item);
+      if (check.fits) {
+        targetSlotIdx = i;
+        break;
+      } else if (check.reason) {
+        lastReason = check.reason;
+      }
+    }
+  }
+
+  if (targetSlotIdx !== -1) {
+    takeItemFromHand(player, hand);
+    player.inventory[targetSlotIdx] = item;
+    const comp = getSlotCompartment(player, targetSlotIdx)?.compartment;
+    const targetName = comp ? comp.nameRu : 'карман';
+    addPlayerNotification(player, `Убрано в ${targetName}: ${item.nameRu}`, 'pickup');
+    return { success: true, message: `Убрано в ${targetName}: ${item.nameRu}`};
+  }
+
+  const failMsg = lastReason || 'Нет подходящих свободных карманов элемента одежды!';
+  addPlayerNotification(player, failMsg, 'warning');
+  return { success: false, message: failMsg };
 }
 
 // Swap items between left and right hand
@@ -6424,39 +6502,26 @@ export function addItemToPlayer(
     }
   }
 
-  // Helper to place into clothing pockets (player.inventory) - STRICT NO STACKING
+  // Helper to place into clothing pockets with slot compartment checks
   const tryPlaceInPockets = (): boolean => {
-    const pocketCheck = canItemFitInPockets(player, itemToAdd);
-    if (pocketCheck.fits) {
-      const maxSlots = getPlayerTotalSlots(player);
-      let placed = false;
-      for (let i = 0; i < player.inventory.length && i < maxSlots; i++) {
-        if (!player.inventory[i]) {
+    const maxSlots = getPlayerTotalSlots(player);
+    for (let i = 0; i < maxSlots; i++) {
+      if (!player.inventory[i]) {
+        const check = canItemFitInCompartment(player, i, itemToAdd);
+        if (check.fits) {
           player.inventory[i] = itemToAdd;
-          placed = true;
-          break;
+          const comp = getSlotCompartment(player, i)?.compartment;
+          const targetName = comp ? comp.nameRu : 'карман';
+          addPlayerNotification(player, `Положено в ${targetName}: ${itemToAdd.nameRu}`, 'pickup');
+          return true;
         }
-      }
-      if (!placed && player.inventory.length < maxSlots) {
-        player.inventory.push(itemToAdd);
-        placed = true;
-      }
-      if (placed) {
-        const slotIdx = player.inventory.indexOf(itemToAdd);
-        const comp = slotIdx !== -1 ? getSlotCompartment(player, slotIdx)?.compartment : null;
-        const targetName = comp ? comp.nameRu : 'инвентарь';
-        addPlayerNotification(player, `Положено в ${targetName}: ${itemToAdd.nameRu}`, 'pickup');
-        return true;
       }
     }
     return false;
   };
 
-  const tryPlaceInBackpack = (): boolean => {
-    return false;
-  };
-
   const activeHand = player.activeHand || 'right';
+  const otherHand = activeHand === 'left' ? 'right' : 'left';
 
   const tryPlaceInHand = (hand: 'left' | 'right'): boolean => {
     const handItem = hand === 'left' ? player.leftHandItem : player.rightHandItem;
@@ -6473,54 +6538,37 @@ export function addItemToPlayer(
     return false;
   };
 
-  // If preferPockets: try pockets -> backpack -> hands
+  // If preferPockets (e.g. unpacking inside container or currency): try pockets -> hands
   if (options?.preferPockets) {
     if (tryPlaceInPockets()) return true;
-    if (tryPlaceInBackpack()) return true;
     if (!options.skipHands) {
-      if (activeHand === 'left') {
-        if (tryPlaceInHand('left')) return true;
-        if (tryPlaceInHand('right')) return true;
-      } else {
-        if (tryPlaceInHand('right')) return true;
-        if (tryPlaceInHand('left')) return true;
-      }
-    }
-  } else {
-    // Default flow:
-    if (!options?.skipHands) {
-      if (activeHand === 'left') {
-        if (tryPlaceInHand('left')) return true;
-      } else {
-        if (tryPlaceInHand('right')) return true;
-      }
-    }
-
-    if (tryPlaceInPockets()) return true;
-    if (tryPlaceInBackpack()) return true;
-
-    if (!options?.skipHands) {
-      const otherHand = activeHand === 'left' ? 'right' : 'left';
+      if (tryPlaceInHand(activeHand)) return true;
       if (tryPlaceInHand(otherHand)) return true;
     }
+  } else {
+    // DEFAULT PHYSICAL REALISM: HANDS FIRST FOR WORLD PICKUPS / PURCHASES!
+    if (!options?.skipHands) {
+      if (tryPlaceInHand(activeHand)) return true;
+      if (tryPlaceInHand(otherHand)) return true;
+    }
+
+    // Secondary fallback: if hands are full, try placing into a valid pocket compartment
+    if (tryPlaceInPockets()) return true;
   }
 
-  // 5. No space anywhere
-  const pocketCheck = canItemFitInPockets(player, itemToAdd);
-  const reason = pocketCheck.reason || 'Нет места в карманах, рюкзаке и обе руки заняты!';
+  // Failed
+  const reason = (player.leftHandItem && player.rightHandItem)
+    ? 'Обе руки заняты! Освободите руку или положите предмет на землю.'
+    : 'Нет подходящих свободных карманов или места!';
   addPlayerNotification(player, reason, 'warning');
   return false;
 }
 
 export function moveInventoryItem(player: Player, fromIdx: number, toIdx: number): boolean {
   if (!player.inventory) player.inventory = [];
-  const maxSlots = player.maxInventorySlots || 18;
+  const maxSlots = getPlayerTotalSlots(player);
   if (fromIdx < 0 || toIdx < 0 || fromIdx >= maxSlots || toIdx >= maxSlots) {
     return false;
-  }
-
-  while (player.inventory.length < maxSlots) {
-    player.inventory.push(undefined as any);
   }
 
   const itemFrom = player.inventory[fromIdx];
@@ -6528,13 +6576,25 @@ export function moveInventoryItem(player: Player, fromIdx: number, toIdx: number
 
   if (!itemFrom) return false;
 
-  // Always swap slots without stacking
+  // Validate itemFrom fits in toIdx's compartment
+  const checkFrom = canItemFitInCompartment(player, toIdx, itemFrom, { ignoreSlotIdx: fromIdx });
+  if (!checkFrom.fits) {
+    addPlayerNotification(player, checkFrom.reason || 'Нельзя положить этот предмет в данный отсек!', 'warning');
+    return false;
+  }
+
+  // Validate itemTo (if present) fits in fromIdx's compartment
+  if (itemTo) {
+    const checkTo = canItemFitInCompartment(player, fromIdx, itemTo, { ignoreSlotIdx: toIdx });
+    if (!checkTo.fits) {
+      addPlayerNotification(player, checkTo.reason || 'Нельзя переместить ответный предмет в этот отсек!', 'warning');
+      return false;
+    }
+  }
+
+  // Swap
   player.inventory[fromIdx] = itemTo;
   player.inventory[toIdx] = itemFrom;
-
-  while (player.inventory.length > 0 && player.inventory[player.inventory.length - 1] === undefined) {
-    player.inventory.pop();
-  }
 
   return true;
 }
@@ -9657,8 +9717,8 @@ export function unequipClothing(
   // Remove from equipped
   delete player.equippedClothing[slot]![layer];
 
-  // If this item had a storage compartment (like backpack or jacket), pack the items from its slots into item.contents
-  if (targetComp && item.isContainer) {
+  // If this item provided storage slots (backpack, jacket pockets, pants pockets), pack items from those slots into item.contents
+  if (targetComp) {
     item.contents = item.contents || [];
     for (let i = targetComp.startIndex; i < targetComp.startIndex + targetComp.slotCount; i++) {
       const slotItem = player.inventory[i];
@@ -9678,36 +9738,49 @@ export function unequipClothing(
     for (let i = newTotalSlots; i < player.inventory.length; i++) {
       const extraItem = player.inventory[i];
       if (extraItem) {
-        if (item.isContainer) {
-          item.contents = item.contents || [];
-          item.contents.push(extraItem);
-        } else {
-          addItemToPlayer(player, extraItem);
-        }
+        item.contents = item.contents || [];
+        item.contents.push(extraItem);
         player.inventory[i] = null as any;
       }
     }
     player.inventory.length = newTotalSlots;
   }
 
-  // Place unequipped item into pockets or hands or ground
+  // PHYSICAL REALISM: WHEN TAKING OFF CLOTHING, IT GOES TO HANDS FIRST!
+  const activeHand = player.activeHand || 'right';
+  const otherHand = activeHand === 'left' ? 'right' : 'left';
   let placed = false;
-  for (let i = 0; i < newTotalSlots; i++) {
-    if (!player.inventory[i]) {
-      player.inventory[i] = item;
-      placed = true;
-      break;
+
+  // 1. Try active hand
+  if ((activeHand === 'left' && !player.leftHandItem) || (activeHand === 'right' && !player.rightHandItem)) {
+    if (activeHand === 'left') player.leftHandItem = item;
+    else player.rightHandItem = item;
+    placed = true;
+    addPlayerNotification(player, `Снято в ${activeHand === 'left' ? 'левую' : 'правую'} руку: ${item.nameRu}`, 'pickup');
+  } 
+  // 2. Try other hand
+  else if ((otherHand === 'left' && !player.leftHandItem) || (otherHand === 'right' && !player.rightHandItem)) {
+    if (otherHand === 'left') player.leftHandItem = item;
+    else player.rightHandItem = item;
+    placed = true;
+    addPlayerNotification(player, `Снято в ${otherHand === 'left' ? 'левую' : 'правую'} руку: ${item.nameRu}`, 'pickup');
+  } 
+  // 3. Fallback to free inventory slots if hands are full
+  else {
+    for (let i = 0; i < newTotalSlots; i++) {
+      if (!player.inventory[i]) {
+        const check = canItemFitInCompartment(player, i, item);
+        if (check.fits) {
+          player.inventory[i] = item;
+          placed = true;
+          addPlayerNotification(player, `Снято в карман/отсек: ${item.nameRu}`, 'pickup');
+          break;
+        }
+      }
     }
   }
-  if (!placed) {
-    if (!player.leftHandItem) {
-      player.leftHandItem = item;
-      placed = true;
-    } else if (!player.rightHandItem) {
-      player.rightHandItem = item;
-      placed = true;
-    }
-  }
+
+  // 4. Ground fallback if both hands and pockets are full
   if (!placed) {
     if (world) {
       if (!world.groundItems) world.groundItems = [];
@@ -9718,13 +9791,13 @@ export function unequipClothing(
         item,
         spawnTime: Date.now()
       });
-      addPlayerNotification(player, `Инвентарь полон! ${item.nameRu} упал на землю`, 'warning');
+      addPlayerNotification(player, `Обе руки и карманы заняты! ${item.nameRu} упал на землю`, 'warning');
     }
   }
 
   const packedCount = item.contents?.length || 0;
   const msg = packedCount > 0 
-    ? `${item.nameRu} снят (внутри сохранено ${packedCount} предм.)`
+    ? `${item.nameRu} снят (содержимое [${packedCount}] внутри)`
     : `${item.nameRu} снят`;
 
   return { success: true, message: msg };
