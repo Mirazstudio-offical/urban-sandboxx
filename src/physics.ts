@@ -55,8 +55,16 @@ export function isArticulatedRoller(car: Vehicle): boolean {
 }
 
 export function getVehicleCollisionOBBs(car: Vehicle, extraMargin = 0.5): VehicleCollisionOBB[] {
-  const effL = car.length - (car.damage ? (car.damage.frontCrumple + car.damage.rearCrumple) / 2 : 0);
-  const effW = car.width - (car.damage ? (car.damage.leftDent + car.damage.rightDent) / 2 : 0);
+  const frontC = car.damage ? (car.damage.frontCrumple || 0) : 0;
+  const rearC = car.damage ? (car.damage.rearCrumple || 0) : 0;
+  const leftD = car.damage ? (car.damage.leftDent || 0) : 0;
+  const rightD = car.damage ? (car.damage.rightDent || 0) : 0;
+
+  const effL = Math.max(car.length * 0.45, car.length - (frontC + rearC));
+  const effW = Math.max(car.width * 0.45, car.width - (leftD + rightD));
+
+  const centerLongShift = (-frontC + rearC) / 2;
+  const centerLatShift = (-rightD + leftD) / 2;
 
   if (isArticulatedRoller(car) && Math.abs(car.steerAngle || 0) > 0.001) {
     const gamma = car.steerAngle || 0;
@@ -115,22 +123,25 @@ export function getVehicleCollisionOBBs(car: Vehicle, extraMargin = 0.5): Vehicl
     ];
   }
 
-  const halfL = effL / 2 + extraMargin;
-  const halfW = effW / 2 + extraMargin;
   const cosA = Math.cos(car.angle);
   const sinA = Math.sin(car.angle);
+  const centerX = car.x + cosA * centerLongShift - sinA * centerLatShift;
+  const centerY = car.y + sinA * centerLongShift + cosA * centerLatShift;
+
+  const halfL = effL / 2 + extraMargin;
+  const halfW = effW / 2 + extraMargin;
 
   const corners = [
-    { x: car.x + cosA * halfL - sinA * halfW, y: car.y + sinA * halfL + cosA * halfW },
-    { x: car.x + cosA * halfL + sinA * halfW, y: car.y + sinA * halfL - cosA * halfW },
-    { x: car.x - cosA * halfL + sinA * halfW, y: car.y - sinA * halfL - cosA * halfW },
-    { x: car.x - cosA * halfL - sinA * halfW, y: car.y - sinA * halfL + cosA * halfW }
+    { x: centerX + cosA * halfL - sinA * halfW, y: centerY + sinA * halfL + cosA * halfW },
+    { x: centerX + cosA * halfL + sinA * halfW, y: centerY + sinA * halfL - cosA * halfW },
+    { x: centerX - cosA * halfL + sinA * halfW, y: centerY - sinA * halfL - cosA * halfW },
+    { x: centerX - cosA * halfL - sinA * halfW, y: centerY - sinA * halfL + cosA * halfW }
   ];
 
   return [
     {
-      centerX: car.x,
-      centerY: car.y,
+      centerX,
+      centerY,
       halfL,
       halfW,
       angle: car.angle,
@@ -372,32 +383,181 @@ export function checkPedestrianBuildingCollision(
   return { x: px, y: py, collided: false };
 }
 
-// Circle-OBB (Oriented Bounding Box) collision for pedestrian against vehicle
+// Circle-Vehicle collision for pedestrian, circular props, poles, and trees against vehicle body
 export function checkPedestrianVehicleCollision(
   px: number,
   py: number,
   radius: number,
   car: Vehicle
 ): { x: number; y: number; collided: boolean; normalX: number; normalY: number } {
+  // Broadphase distance check
+  const dx = px - car.x;
+  const dy = py - car.y;
+  const halfL = car.length / 2;
+  const halfW = car.width / 2;
+  const maxDim = halfL + radius + 15;
+  if (dx * dx + dy * dy > maxDim * maxDim) {
+    return { x: px, y: py, collided: false, normalX: 0, normalY: 0 };
+  }
+
+  const cosA = Math.cos(car.angle);
+  const sinA = Math.sin(car.angle);
+
+  // Transform circular obstacle/pedestrian into car local space
+  const localX = dx * cosA + dy * sinA;
+  const localY = -dx * sinA + dy * cosA;
+
+  // --- REALISTIC DEFORMED PERIMETER POLYGON COLLISION ---
+  // If the vehicle has softbody deformation vertices, check against the true 16-node perimeter polygon!
+  // This ensures that when a car wraps around a round pole or tree, the pole can nestle deeply inside
+  // the V-shaped crumpled metal cavity without being pushed out by a ghost un-deformed rectangle.
+  const dmg = car.damage;
+  const verts = dmg?.deformedVertices;
+  if (verts && verts.length >= 16 && !isArticulatedRoller(car)) {
+    let minDistSq = Infinity;
+    let closestX = localX;
+    let closestY = localY;
+    let bestSegIdx = 0;
+
+    for (let i = 0; i < 16; i++) {
+      const nextIdx = (i + 1) % 16;
+      const vi = verts[i];
+      const vj = verts[nextIdx];
+
+      const ax = vi.localX + (vi.offsetX || 0) + (vi.elasticX || 0);
+      const ay = vi.localY + (vi.offsetY || 0) + (vi.elasticY || 0);
+      const bx = vj.localX + (vj.offsetX || 0) + (vj.elasticX || 0);
+      const by = vj.localY + (vj.offsetY || 0) + (vj.elasticY || 0);
+
+      const abx = bx - ax;
+      const aby = by - ay;
+      const segLenSq = abx * abx + aby * aby;
+      let t = 0;
+      if (segLenSq > 0.0001) {
+        t = Math.max(0, Math.min(1, ((localX - ax) * abx + (localY - ay) * aby) / segLenSq));
+      }
+      const qx = ax + t * abx;
+      const qy = ay + t * aby;
+      const dSq = (localX - qx) * (localX - qx) + (localY - qy) * (localY - qy);
+      if (dSq < minDistSq) {
+        minDistSq = dSq;
+        closestX = qx;
+        closestY = qy;
+        bestSegIdx = i;
+      }
+    }
+
+    // 2D Ray-casting point-in-polygon test (is circle center inside vehicle sheet metal?)
+    let inside = false;
+    for (let i = 0, j = 15; i < 16; j = i++) {
+      const vi = verts[i];
+      const vj = verts[j];
+      const xi = vi.localX + (vi.offsetX || 0) + (vi.elasticX || 0);
+      const yi = vi.localY + (vi.offsetY || 0) + (vi.elasticY || 0);
+      const xj = vj.localX + (vj.offsetX || 0) + (vj.elasticX || 0);
+      const yj = vj.localY + (vj.offsetY || 0) + (vj.elasticY || 0);
+
+      const denom = (yj - yi) === 0 ? 0.0001 : (yj - yi);
+      const intersect = ((yi > localY) !== (yj > localY)) &&
+        (localX < (xj - xi) * (localY - yi) / denom + xi);
+      if (intersect) inside = !inside;
+    }
+
+    if (inside) {
+      // Circle center is inside the car body metal
+      const d = Math.sqrt(minDistSq);
+      let dirX = localX - closestX;
+      let dirY = localY - closestY;
+      let dLen = Math.hypot(dirX, dirY);
+      let outNx = 0;
+      let outNy = 0;
+      if (dLen > 0.001) {
+        // Points outward from surface toward circle center
+        outNx = -dirX / dLen;
+        outNy = -dirY / dLen;
+      } else {
+        const vi = verts[bestSegIdx];
+        const vj = verts[(bestSegIdx + 1) % 16];
+        const segX = (vj.localX + (vj.offsetX || 0)) - (vi.localX + (vi.offsetX || 0));
+        const segY = (vj.localY + (vj.offsetY || 0)) - (vi.localY + (vi.offsetY || 0));
+        const sLen = Math.hypot(segY, -segX) || 1;
+        outNx = segY / sLen;
+        outNy = -segX / sLen;
+      }
+
+      const overlap = radius + d;
+      const pushLocalX = outNx * overlap;
+      const pushLocalY = outNy * overlap;
+
+      const pushWorldX = pushLocalX * cosA - pushLocalY * sinA;
+      const pushWorldY = pushLocalX * sinA + pushLocalY * cosA;
+
+      const pDist = Math.hypot(pushWorldX, pushWorldY);
+      return {
+        x: px + pushWorldX,
+        y: py + pushWorldY,
+        collided: true,
+        normalX: pDist > 0.001 ? pushWorldX / pDist : 0,
+        normalY: pDist > 0.001 ? pushWorldY / pDist : 0
+      };
+    } else if (minDistSq < radius * radius) {
+      // Circle center is outside car body, but circle perimeter overlaps the deformed boundary
+      const dist = Math.sqrt(minDistSq);
+      const overlap = radius - dist;
+      let normLocalX = 0;
+      let normLocalY = 0;
+      if (dist > 0.0001) {
+        normLocalX = (localX - closestX) / dist;
+        normLocalY = (localY - closestY) / dist;
+      } else {
+        const vi = verts[bestSegIdx];
+        const vj = verts[(bestSegIdx + 1) % 16];
+        const segX = (vj.localX + (vj.offsetX || 0)) - (vi.localX + (vi.offsetX || 0));
+        const segY = (vj.localY + (vj.offsetY || 0)) - (vi.localY + (vi.offsetY || 0));
+        const sLen = Math.hypot(segY, -segX) || 1;
+        normLocalX = segY / sLen;
+        normLocalY = -segX / sLen;
+      }
+
+      const pushLocalX = normLocalX * overlap;
+      const pushLocalY = normLocalY * overlap;
+
+      const pushWorldX = pushLocalX * cosA - pushLocalY * sinA;
+      const pushWorldY = pushLocalX * sinA + pushLocalY * cosA;
+
+      const pDist = Math.hypot(pushWorldX, pushWorldY);
+      return {
+        x: px + pushWorldX,
+        y: py + pushWorldY,
+        collided: true,
+        normalX: pDist > 0.001 ? pushWorldX / pDist : 0,
+        normalY: pDist > 0.001 ? pushWorldY / pDist : 0
+      };
+    }
+
+    return { x: px, y: py, collided: false, normalX: 0, normalY: 0 };
+  }
+
+  // Fallback for articulated machinery or un-initialized meshes: OBB loop
   const obbs = getVehicleCollisionOBBs(car, 0);
   let curX = px;
   let curY = py;
   let hasCollided = false;
 
   for (const obb of obbs) {
-    const dx = curX - obb.centerX;
-    const dy = curY - obb.centerY;
-    const cosA = Math.cos(obb.angle);
-    const sinA = Math.sin(obb.angle);
+    const oDx = curX - obb.centerX;
+    const oDy = curY - obb.centerY;
+    const oCosA = Math.cos(obb.angle);
+    const oSinA = Math.sin(obb.angle);
 
-    const localX = dx * cosA + dy * sinA;
-    const localY = -dx * sinA + dy * cosA;
+    const oLocalX = oDx * oCosA + oDy * oSinA;
+    const oLocalY = -oDx * oSinA + oDy * oCosA;
 
-    const closestX = Math.max(-obb.halfL, Math.min(localX, obb.halfL));
-    const closestY = Math.max(-obb.halfW, Math.min(localY, obb.halfW));
+    const closestX = Math.max(-obb.halfL, Math.min(oLocalX, obb.halfL));
+    const closestY = Math.max(-obb.halfW, Math.min(oLocalY, obb.halfW));
 
-    const diffX = localX - closestX;
-    const diffY = localY - closestY;
+    const diffX = oLocalX - closestX;
+    const diffY = oLocalY - closestY;
     const distSq = diffX * diffX + diffY * diffY;
 
     if (distSq < radius * radius && distSq > 0.0001) {
@@ -407,17 +567,17 @@ export function checkPedestrianVehicleCollision(
       const localPushX = (diffX / dist) * overlap;
       const localPushY = (diffY / dist) * overlap;
 
-      const pushX = localPushX * cosA - localPushY * sinA;
-      const pushY = localPushX * sinA + localPushY * cosA;
+      const pushX = localPushX * oCosA - localPushY * oSinA;
+      const pushY = localPushX * oSinA + localPushY * oCosA;
 
       curX += pushX;
       curY += pushY;
       hasCollided = true;
     } else if (distSq <= 0.0001) {
-      const dLeft = localX + obb.halfL;
-      const dRight = obb.halfL - localX;
-      const dTop = localY + obb.halfW;
-      const dBottom = obb.halfW - localY;
+      const dLeft = oLocalX + obb.halfL;
+      const dRight = obb.halfL - oLocalX;
+      const dTop = oLocalY + obb.halfW;
+      const dBottom = obb.halfW - oLocalY;
       const minD = Math.min(dLeft, dRight, dTop, dBottom);
 
       let localPushX = 0;
@@ -433,8 +593,8 @@ export function checkPedestrianVehicleCollision(
         localPushY = radius + dBottom;
       }
 
-      const pushX = localPushX * cosA - localPushY * sinA;
-      const pushY = localPushX * sinA + localPushY * cosA;
+      const pushX = localPushX * oCosA - localPushY * oSinA;
+      const pushY = localPushX * oSinA + localPushY * oCosA;
 
       curX += pushX;
       curY += pushY;
@@ -9985,7 +10145,7 @@ export function updateVehiclePhysics(
           // Kinetic energy is absorbed over ~5-8 frames (0.08 - 0.12s),
           // generating continuous metal wrinkling and smooth deceleration!
           const crumpleDuration = 0.08 + Math.min(0.06, impactSpeed / 800);
-          const rebound = -0.12 * Math.sign(vehicle.speed || 1) * Math.min(25, Math.abs(vehicle.speed));
+          const rebound = 0; // Solid masonry/concrete: plastic deformation without rubber-band rebound
 
           if (isGlancingBlow && velDotN < 0) {
             // Glancing scrape against building wall: soft normal redirection & tangential friction
@@ -10027,17 +10187,22 @@ export function updateVehiclePhysics(
               normalX: col.normalX,
               normalY: col.normalY,
               initialSpeed: vehicle.speed,
-              reboundSpeed: rebound,
+              reboundSpeed: 0,
               contactX,
               contactY,
               preserveVelocity: false
             };
           }
 
-          vehicle.x += col.normalX * col.depth;
-          vehicle.y += col.normalY * col.depth;
-
+          // Apply physical plastic deformation to the car body
           applyVehicleDamageAndDeformation(vehicle, contactX, contactY, impactSpeed, 10, world, 12000, true);
+
+          // Re-evaluate collision against the newly crumpled hull so vehicle rests against the wall at its dented depth
+          const recheck = checkCarBuildingCollision(vehicle, bld);
+          if (recheck.collided) {
+            vehicle.x += recheck.normalX * recheck.depth;
+            vehicle.y += recheck.normalY * recheck.depth;
+          }
 
           if (vehicle.isPlayerControlled || (player && player.isInVehicle && player.currentVehicleId === vehicle.id)) {
             sound.playCollision(Math.min(1.0, impactSpeed / 120));
@@ -11260,8 +11425,7 @@ export function updateBreakablePropsAndLivingWorld(world: GameWorld, player: Pla
           const impactSpeed = Math.hypot(veh.vx, veh.vy);
 
           if (impactSpeed > 16) {
-            const crumpleDuration = 0.08 + Math.min(0.06, impactSpeed / 800);
-            const rebound = -0.12 * Math.sign(veh.speed || 1) * Math.min(25, Math.abs(veh.speed));
+            const crumpleDuration = 0.10 + Math.min(0.08, impactSpeed / 800);
 
             veh.activeCrumple = {
               timer: crumpleDuration,
@@ -11269,16 +11433,21 @@ export function updateBreakablePropsAndLivingWorld(world: GameWorld, player: Pla
               normalX: normX,
               normalY: normY,
               initialSpeed: veh.speed,
-              reboundSpeed: rebound,
+              reboundSpeed: 0, // Solid concrete pole / tree: plastic wrapping with zero bounceback
               contactX,
               contactY
             };
 
-            veh.x += col.pushX;
-            veh.y += col.pushY;
-
-            // Heavy vehicle damage & deformation proportional to impact speed
+            // First apply structural plastic deformation at contact point
             applyVehicleDamageAndDeformation(veh, contactX, contactY, impactSpeed, 12, world, 14000, true);
+
+            // Recheck collision against the freshly deformed metal so vehicle only clamps residual overlap,
+            // allowing the pole to remain deeply nestled inside the dent!
+            const recheck = checkPropVehicleCollision(prop, veh);
+            if (recheck.collided) {
+              veh.x += recheck.pushX;
+              veh.y += recheck.pushY;
+            }
 
             sound.playCollision(Math.min(1.0, impactSpeed / 80));
 
@@ -11296,8 +11465,8 @@ export function updateBreakablePropsAndLivingWorld(world: GameWorld, player: Pla
               }
             }
           } else {
-            veh.x += col.pushX * 1.02;
-            veh.y += col.pushY * 1.02;
+            veh.x += col.pushX;
+            veh.y += col.pushY;
             veh.speed *= 0.4;
             veh.vx *= 0.4;
             veh.vy *= 0.4;

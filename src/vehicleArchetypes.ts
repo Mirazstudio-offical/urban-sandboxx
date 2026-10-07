@@ -1972,17 +1972,5 @@ export function renderVehicleGreenhouseAndBodyPanels(vCtx: VehicleRenderContext)
 }
 
 export function getVehicleBasePolygon(car: Vehicle, halfL: number, halfW: number, fc: number, rc: number, ld: number, rd: number, fld: number, frd: number, rld: number, rrd: number): { x: number; y: number }[] {
-  const poly = getVehicleBasePolygonRaw(car, halfL, halfW, fc, rc, ld, rd, fld, frd, rld, rrd);
-  const newPoly: {x: number, y: number}[] = [];
-  for (let i = 0; i < poly.length; i++) {
-    newPoly.push(poly[i]);
-    if (i === 15 || i === 0 || i === 7 || i === 8) {
-      const nextIdx = (i + 1) % poly.length;
-      newPoly.push({
-        x: (poly[i].x + poly[nextIdx].x) / 2,
-        y: (poly[i].y + poly[nextIdx].y) / 2
-      });
-    }
-  }
-  return newPoly;
+  return getVehicleBasePolygonRaw(car, halfL, halfW, fc, rc, ld, rd, fld, frd, rld, rrd);
 }

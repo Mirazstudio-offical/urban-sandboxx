@@ -1025,7 +1025,8 @@ export function renderSoftbodyStressLines(
 
   const n = bodyPoly.length;
   for (let i = 0; i < n; i++) {
-    const dv = deformedVertices[i];
+    const dvIdx = n === 16 ? i : Math.min(15, Math.floor((i / n) * 16));
+    const dv = deformedVertices[dvIdx];
     if (!dv) continue;
     const strain = dv.plasticStrain || 0;
     if (strain < 0.12) continue;
@@ -1135,7 +1136,8 @@ export function renderTornBodyLining(
 
   // 1. Dark Engine/Underbody Cavities Exposed at Ruptured Vertices
   for (let i = 0; i < n; i++) {
-    const dv = deformedVertices[i];
+    const dvIdx = n === 16 ? i : Math.min(15, Math.floor((i / n) * 16));
+    const dv = deformedVertices[dvIdx];
     if (!dv) continue;
 
     const strain = dv.plasticStrain || 0;

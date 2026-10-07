@@ -7763,12 +7763,23 @@ export class GameRenderer {
       const rld = Math.min(halfL * 0.45, dmg.rearLeftDent || 0);
       const rrd = Math.min(halfL * 0.45, dmg.rearRightDent || 0);
 
-      const basePoly = getVehicleBasePolygon(car, halfL, halfW, fc, rc, ld, rd, fld, frd, rld, rrd);
+      const hasSoftbody = !!(dmg.deformedVertices && dmg.deformedVertices.length >= 16);
+      const effFc = hasSoftbody ? 0 : fc;
+      const effRc = hasSoftbody ? 0 : rc;
+      const effLd = hasSoftbody ? 0 : ld;
+      const effRd = hasSoftbody ? 0 : rd;
+      const effFld = hasSoftbody ? 0 : fld;
+      const effFrd = hasSoftbody ? 0 : frd;
+      const effRld = hasSoftbody ? 0 : rld;
+      const effRrd = hasSoftbody ? 0 : rrd;
+
+      const basePoly = getVehicleBasePolygon(car, halfL, halfW, effFc, effRc, effLd, effRd, effFld, effFrd, effRld, effRrd);
 
       let bodyPoly = basePoly;
-      if (dmg.deformedVertices && dmg.deformedVertices.length >= basePoly.length) {
+      if (hasSoftbody) {
         bodyPoly = basePoly.map((bv, idx) => {
-          const dv = dmg.deformedVertices![idx];
+          const dvIdx = basePoly.length === 16 ? idx : Math.min(15, Math.floor((idx / basePoly.length) * 16));
+          const dv = dmg.deformedVertices![dvIdx];
           if (!dv) return bv;
           let ox = isFinite(dv.offsetX) ? dv.offsetX : 0;
           let oy = isFinite(dv.offsetY) ? dv.offsetY : 0;
@@ -9469,12 +9480,23 @@ export class GameRenderer {
       const rld = Math.min(halfL * 0.45, dmg.rearLeftDent || 0);
       const rrd = Math.min(halfL * 0.45, dmg.rearRightDent || 0);
 
-      const basePoly = getVehicleBasePolygon(car, halfL, halfW, fc, rc, ld, rd, fld, frd, rld, rrd);
+      const hasSoftbody = !!(dmg.deformedVertices && dmg.deformedVertices.length >= 16);
+      const effFc = hasSoftbody ? 0 : fc;
+      const effRc = hasSoftbody ? 0 : rc;
+      const effLd = hasSoftbody ? 0 : ld;
+      const effRd = hasSoftbody ? 0 : rd;
+      const effFld = hasSoftbody ? 0 : fld;
+      const effFrd = hasSoftbody ? 0 : frd;
+      const effRld = hasSoftbody ? 0 : rld;
+      const effRrd = hasSoftbody ? 0 : rrd;
+
+      const basePoly = getVehicleBasePolygon(car, halfL, halfW, effFc, effRc, effLd, effRd, effFld, effFrd, effRld, effRrd);
 
       let bodyPoly = basePoly;
-      if (dmg.deformedVertices && dmg.deformedVertices.length >= basePoly.length) {
+      if (hasSoftbody) {
         bodyPoly = basePoly.map((bv, idx) => {
-          const dv = dmg.deformedVertices![idx];
+          const dvIdx = basePoly.length === 16 ? idx : Math.min(15, Math.floor((idx / basePoly.length) * 16));
+          const dv = dmg.deformedVertices![dvIdx];
           if (!dv) return bv;
           let ox = isFinite(dv.offsetX) ? dv.offsetX : 0;
           let oy = isFinite(dv.offsetY) ? dv.offsetY : 0;
@@ -9739,166 +9761,134 @@ export class GameRenderer {
         ctx.fill();
       }
 
-      // Grid Mode Mesh Visualization on top of cabin/roof (BeamNG-style 3D Projection)
-      if (gridMode && dmg.deformedVertices && dmg.deformedVertices.length > 0) {
+      // Grid Mode Mesh Visualization (Key G / BeamNG-style Softbody Lattice)
+      // Strict Visual Style: Nodes strictly in Ochre UI color (#c68a35), Beams strictly Black (#000000)
+      if (gridMode && dmg.deformedVertices && dmg.deformedVertices.length >= 24) {
         ctx.save();
-        
-        let zMultiplier = 1.0;
-        if (car.type === 'bus' || car.type === 'bus_minibus') zMultiplier = 1.8;
-        else if (car.type === 'fire_engine' || car.type === 'fire_ladder' || car.type === 'fire_rescue') zMultiplier = 1.7;
-        else if (car.type === 'truck_box' || car.type === 'truck_dump' || car.type === 'truck_zil_dump' || car.type === 'truck_semi' || car.type === 'truck_tanker' || car.type === 'truck_flatbed' || car.type === 'truck_covered') zMultiplier = 1.6;
-        else if (car.type === 'suv' || car.type === 'suv_luxury' || car.type === 'suv_classic_box' || car.type === 'ambulance' || car.type === 'ambulance_van') zMultiplier = 1.4;
-        else if (car.type === 'supercar' || car.type === 'sports') zMultiplier = 0.75;
 
-        const getNodeZ = (idx: number): number => {
-          if (idx < 20) return 0;
-          switch (idx) {
-            case 20: return 8;   // Hood center
-            case 21: return 12;  // Windshield cowl
-            case 22: return 22;  // Roof center
-            case 23: return 22;  // Roof front-left
-            case 24: return 22;  // Roof front-right
-            case 25: return 22;  // Roof rear-left
-            case 26: return 22;  // Roof rear-right
-            case 27: return 10;  // Trunk deck / rear base
-            default: return 0;
-          }
-        };
+        // 1. Gather all 24 physical softbody nodes in vehicle-local space
+        // Nodes 0..15: Perimeter contour & lower chassis ring
+        // Nodes 16..23: Volumetric internal structure (hood, cowl, roof, pillars, trunk)
+        const nodes: { x: number; y: number }[] = [];
 
-        const getDeformedNode = (idx: number) => {
-          if (idx < 20) {
-            return bodyPoly[idx];
+        for (let i = 0; i < 16; i++) {
+          if (bodyPoly.length === 16) {
+            nodes.push({ x: bodyPoly[i].x, y: bodyPoly[i].y });
           } else {
-            const dv = dmg.deformedVertices![idx];
-            if (!dv) return { x: 0, y: 0 };
+            const sampleIdx = Math.min(bodyPoly.length - 1, Math.floor((i / 16) * bodyPoly.length));
+            nodes.push({ x: bodyPoly[sampleIdx].x, y: bodyPoly[sampleIdx].y });
+          }
+        }
+
+        for (let i = 16; i < 24; i++) {
+          const dv = dmg.deformedVertices[i];
+          if (dv) {
             const ox = isFinite(dv.offsetX) ? dv.offsetX : 0;
             const oy = isFinite(dv.offsetY) ? dv.offsetY : 0;
             const ex = isFinite(dv.elasticX) ? dv.elasticX : 0;
             const ey = isFinite(dv.elasticY) ? dv.elasticY : 0;
-            return {
+            nodes.push({
               x: dv.localX + ox + ex,
               y: dv.localY + oy + ey
-            };
+            });
+          } else {
+            nodes.push({ x: 0, y: 0 });
           }
-        };
-
-        const getProjectedNode = (idx: number) => {
-          const node = getDeformedNode(idx);
-          const z = getNodeZ(idx) * zMultiplier;
-          
-          // Pure orthographic top-down projection aligned with the car geometry.
-          // (No arbitrary off-axis screen skew that shifts the roof sideways)
-          return {
-            x: node.x,
-            y: node.y,
-            z: z
-          };
-        };
-
-        const projNodes: { x: number; y: number; z: number }[] = [];
-        for (let i = 0; i < 28; i++) {
-          projNodes.push(getProjectedNode(i));
         }
 
-        // 1. Draw flat chassis base / perimeter (Z = 0) with a darker green shade
-        ctx.strokeStyle = 'rgba(0, 180, 80, 0.45)';
-        ctx.lineWidth = 1.0;
+        // 2. Automotive Structural Beam Topology (Closed Spring-Mass Network)
+        const beams: [number, number][] = [
+          // Lower Chassis & Body Shell Perimeter Ring
+          [0, 1], [1, 2], [2, 3], [3, 4], [4, 5], [5, 6], [6, 7], [7, 8],
+          [8, 9], [9, 10], [10, 11], [11, 12], [12, 13], [13, 14], [14, 15], [15, 0],
+
+          // Floor Rigidity Crossmembers & Diagonal Shear Braces
+          [2, 14], // Front subframe crossmember (Right fender <-> Left fender)
+          [4, 12], // Central floor crossmember (Right B-pillar base <-> Left B-pillar base)
+          [6, 10], // Rear subframe crossmember (Right quarter <-> Left quarter)
+          [0, 8],  // Central floor longitudinal backbone
+          [3, 12], [13, 4], // Cabin center shear braces
+          [5, 10], [11, 6], // Cabin rear shear braces
+
+          // Hood & Front Impact Structure (Node 16 = Hood center)
+          [16, 0],  // Hood center -> Front bumper center
+          [16, 1],  // Hood center -> Front-right corner
+          [16, 15], // Hood center -> Front-left corner
+          [16, 2],  // Hood center -> Right front fender
+          [16, 14], // Hood center -> Left front fender
+          [16, 17], // Hood center -> Windshield cowl
+
+          // Firewall & Windshield Cowl (Node 17 = Cowl center)
+          [17, 2],  // Cowl -> Right front fender
+          [17, 14], // Cowl -> Left front fender
+          [17, 3],  // Cowl -> Right front door sill
+          [17, 13], // Cowl -> Left front door sill
+
+          // A-Pillars (Windshield pillars: Cowl/Fenders up to Roof FL [19] & FR [20])
+          [14, 19], // Left A-pillar lower
+          [17, 19], // Left A-pillar cowl
+          [2, 20],  // Right A-pillar lower
+          [17, 20], // Right A-pillar cowl
+
+          // Roof Safety Cell (19: FL, 20: FR, 21: RL, 22: RR, 18: Roof Center)
+          [19, 20], // Front roof header
+          [20, 22], // Right roof rail
+          [22, 21], // Rear roof header
+          [21, 19], // Left roof rail
+          // Rollover X-truss reinforcement
+          [18, 19],
+          [18, 20],
+          [18, 21],
+          [18, 22],
+          [17, 18], // Central spine: Cowl -> Roof center
+          [18, 23], // Central spine: Roof center -> Trunk deck
+
+          // B-Pillars (Mid-Cabin Roll Hoop)
+          [12, 19], // Left B-pillar base -> Front-left roof
+          [12, 21], // Left B-pillar base -> Rear-left roof
+          [4, 20],  // Right B-pillar base -> Front-right roof
+          [4, 22],  // Right B-pillar base -> Rear-right roof
+
+          // C-Pillars & Rear Glass (21: Roof RL, 22: Roof RR)
+          [21, 10], // Left C-pillar to rear quarter
+          [22, 6],  // Right C-pillar to rear quarter
+          [21, 23], // Rear window frame: Left roof -> Trunk deck
+          [22, 23], // Rear window frame: Right roof -> Trunk deck
+
+          // Trunk & Rear Crash Structure (Node 23 = Trunk deck)
+          [23, 8],  // Trunk deck -> Rear bumper center
+          [23, 7],  // Trunk deck -> Rear-right bumper
+          [23, 9],  // Trunk deck -> Rear-left bumper
+          [23, 6],  // Trunk deck -> Right rear quarter
+          [23, 10]  // Trunk deck -> Left rear quarter
+        ];
+
+        // 3. Render Beams: STRICTLY BLACK (#000000)
+        ctx.strokeStyle = '#000000';
+        ctx.lineWidth = 1.35;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
         ctx.beginPath();
-        for (let i = 0; i < 20; i++) {
-          const p = projNodes[i];
-          const nextP = projNodes[(i + 1) % 20];
-          ctx.moveTo(p.x, p.y);
-          ctx.lineTo(nextP.x, nextP.y);
-        }
-        ctx.stroke();
-
-        // 2. Draw 3D wireframe connections and vertical pillars (Z > 0) with glowing neon green
-        ctx.strokeStyle = 'rgba(0, 255, 128, 0.85)';
-        ctx.lineWidth = 1.3;
-        ctx.beginPath();
-
-        // Hood connections (Node 20 to front bumper and cowl)
-        ctx.moveTo(projNodes[20].x, projNodes[20].y); ctx.lineTo(projNodes[0].x, projNodes[0].y);
-        ctx.moveTo(projNodes[20].x, projNodes[20].y); ctx.lineTo(projNodes[2].x, projNodes[2].y);
-        ctx.moveTo(projNodes[20].x, projNodes[20].y); ctx.lineTo(projNodes[18].x, projNodes[18].y);
-        ctx.moveTo(projNodes[20].x, projNodes[20].y); ctx.lineTo(projNodes[21].x, projNodes[21].y);
-
-        // Cowl / Base of windshield (Node 21) to front fenders
-        ctx.moveTo(projNodes[21].x, projNodes[21].y); ctx.lineTo(projNodes[3].x, projNodes[3].y);
-        ctx.moveTo(projNodes[21].x, projNodes[21].y); ctx.lineTo(projNodes[17].x, projNodes[17].y);
-
-        // A-pillars: windshield base & beltline up to front roof corners (23: FL, 24: FR)
-        ctx.moveTo(projNodes[3].x, projNodes[3].y); ctx.lineTo(projNodes[23].x, projNodes[23].y);
-        ctx.moveTo(projNodes[17].x, projNodes[17].y); ctx.lineTo(projNodes[24].x, projNodes[24].y);
-        ctx.moveTo(projNodes[21].x, projNodes[21].y); ctx.lineTo(projNodes[23].x, projNodes[23].y);
-        ctx.moveTo(projNodes[21].x, projNodes[21].y); ctx.lineTo(projNodes[24].x, projNodes[24].y);
-
-        // Full Roof Perimeter (23: FL, 24: FR, 26: RR, 25: RL)
-        ctx.moveTo(projNodes[23].x, projNodes[23].y); ctx.lineTo(projNodes[24].x, projNodes[24].y); // Front roof header
-        ctx.moveTo(projNodes[24].x, projNodes[24].y); ctx.lineTo(projNodes[26].x, projNodes[26].y); // Right roof rail
-        ctx.moveTo(projNodes[26].x, projNodes[26].y); ctx.lineTo(projNodes[25].x, projNodes[25].y); // Rear roof header
-        ctx.moveTo(projNodes[25].x, projNodes[25].y); ctx.lineTo(projNodes[23].x, projNodes[23].y); // Left roof rail
-
-        // Roof center X-brace structural truss (Node 22)
-        ctx.moveTo(projNodes[22].x, projNodes[22].y); ctx.lineTo(projNodes[23].x, projNodes[23].y);
-        ctx.moveTo(projNodes[22].x, projNodes[22].y); ctx.lineTo(projNodes[24].x, projNodes[24].y);
-        ctx.moveTo(projNodes[22].x, projNodes[22].y); ctx.lineTo(projNodes[25].x, projNodes[25].y);
-        ctx.moveTo(projNodes[22].x, projNodes[22].y); ctx.lineTo(projNodes[26].x, projNodes[26].y);
-
-        // B-pillars (mid-body sides up to roof rails)
-        ctx.moveTo(projNodes[5].x, projNodes[5].y); ctx.lineTo((projNodes[23].x + projNodes[25].x) * 0.5, (projNodes[23].y + projNodes[25].y) * 0.5);
-        ctx.moveTo(projNodes[15].x, projNodes[15].y); ctx.lineTo((projNodes[24].x + projNodes[26].x) * 0.5, (projNodes[24].y + projNodes[26].y) * 0.5);
-
-        // C-pillars: rear roof corners (25: RL, 26: RR) down to rear quarters
-        ctx.moveTo(projNodes[25].x, projNodes[25].y); ctx.lineTo(projNodes[7].x, projNodes[7].y);
-        ctx.moveTo(projNodes[26].x, projNodes[26].y); ctx.lineTo(projNodes[13].x, projNodes[13].y);
-        ctx.moveTo(projNodes[25].x, projNodes[25].y); ctx.lineTo(projNodes[27].x, projNodes[27].y);
-        ctx.moveTo(projNodes[26].x, projNodes[26].y); ctx.lineTo(projNodes[27].x, projNodes[27].y);
-
-        // Trunk & rear bumper connections (Node 27)
-        ctx.moveTo(projNodes[27].x, projNodes[27].y); ctx.lineTo(projNodes[9].x, projNodes[9].y);
-        ctx.moveTo(projNodes[27].x, projNodes[27].y); ctx.lineTo(projNodes[10].x, projNodes[10].y);
-        ctx.moveTo(projNodes[27].x, projNodes[27].y); ctx.lineTo(projNodes[11].x, projNodes[11].y);
-
-        ctx.stroke();
-
-        // 3. Draw base level node points (Z = 0, darker green/teal)
-        ctx.fillStyle = 'rgba(0, 220, 100, 0.75)';
-        for (let i = 0; i < 20; i++) {
-          const p = projNodes[i];
-          ctx.beginPath();
-          ctx.arc(p.x, p.y, 1.5, 0, Math.PI * 2);
-          ctx.fill();
-        }
-
-        // 4. Draw elevated 3D cabin node points (Z > 0, sky blue)
-        ctx.fillStyle = '#38bdf8';
-        for (let i = 20; i < 28; i++) {
-          const p = projNodes[i];
-          ctx.beginPath();
-          ctx.arc(p.x, p.y, 2.4, 0, Math.PI * 2);
-          ctx.fill();
-        }
-
-        // 5. Draw elastic displacement stress vectors
-        ctx.strokeStyle = 'rgba(239, 68, 68, 0.95)';
-        ctx.lineWidth = 1.3;
-        ctx.beginPath();
-        for (let i = 0; i < 28; i++) {
-          const dv = dmg.deformedVertices![i];
-          if (!dv) continue;
-          if (Math.abs(dv.elasticX || 0) > 0.1 || Math.abs(dv.elasticY || 0) > 0.1) {
-            const origX = dv.localX + (dv.offsetX || 0);
-            const origY = dv.localY + (dv.offsetY || 0);
-            
-            const pOrig = { x: origX, y: origY };
-            const pDeformed = projNodes[i];
-            
-            ctx.moveTo(pOrig.x, pOrig.y);
-            ctx.lineTo(pDeformed.x, pDeformed.y);
+        for (let b = 0; b < beams.length; b++) {
+          const [i, j] = beams[b];
+          const p1 = nodes[i];
+          const p2 = nodes[j];
+          if (p1 && p2 && isFinite(p1.x) && isFinite(p1.y) && isFinite(p2.x) && isFinite(p2.y)) {
+            ctx.moveTo(p1.x, p1.y);
+            ctx.lineTo(p2.x, p2.y);
           }
         }
         ctx.stroke();
+
+        // 4. Render Nodes: STRICTLY OCHRE (UI color: #c68a35)
+        ctx.fillStyle = '#c68a35';
+        for (let i = 0; i < nodes.length; i++) {
+          const p = nodes[i];
+          if (!p || !isFinite(p.x) || !isFinite(p.y)) continue;
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, 2.2, 0, Math.PI * 2);
+          ctx.fill();
+        }
 
         ctx.restore();
       }
