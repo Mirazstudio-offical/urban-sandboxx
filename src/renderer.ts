@@ -24,7 +24,8 @@ import {
   hasRoadTrainLights, 
   isRoadMachinery,
   getVehicleTurnSignalDynamicState,
-  getVehicleTurnSignalConfig
+  getVehicleTurnSignalConfig,
+  ensureVehicleDamage
 } from './vehicleHelpers';
 import { trafficDiagnostics } from './aiTraffic';
 import {
@@ -9761,16 +9762,24 @@ export class GameRenderer {
         ctx.fill();
       }
 
-      // Grid Mode Mesh Visualization (Key G / BeamNG-style Softbody Lattice)
+      // Grid Mode Mesh Visualization (Key G / BeamNG-style Hierarchical Softbody Lattice)
       // Strict Visual Style: Nodes strictly in Ochre UI color (#c68a35), Beams strictly Black (#000000)
-      if (gridMode && dmg.deformedVertices && dmg.deformedVertices.length >= 24) {
+      if (gridMode) {
         ctx.save();
 
+        const vDmg = ensureVehicleDamage(car);
+        const defVerts = vDmg.deformedVertices || [];
+
+        // Dynamic Cabin & Greenhouse Dimensions based on the vehicle archetype
+        const cabinDim = getVehicleCabinDimensions(car, halfL, halfW, ld, rd);
+        const cabL = cabinDim.cabinL;
+        const cabW = cabinDim.cabinW;
+        const cabX = cabinDim.cabinX;
+
         // 1. Gather all 24 physical softbody nodes in vehicle-local space
-        // Nodes 0..15: Perimeter contour & lower chassis ring
-        // Nodes 16..23: Volumetric internal structure (hood, cowl, roof, pillars, trunk)
         const nodes: { x: number; y: number }[] = [];
 
+        // Perimeter lower chassis ring nodes (0..15)
         for (let i = 0; i < 16; i++) {
           if (bodyPoly.length === 16) {
             nodes.push({ x: bodyPoly[i].x, y: bodyPoly[i].y });
@@ -9780,114 +9789,140 @@ export class GameRenderer {
           }
         }
 
-        for (let i = 16; i < 24; i++) {
-          const dv = dmg.deformedVertices[i];
-          if (dv) {
-            const ox = isFinite(dv.offsetX) ? dv.offsetX : 0;
-            const oy = isFinite(dv.offsetY) ? dv.offsetY : 0;
-            const ex = isFinite(dv.elasticX) ? dv.elasticX : 0;
-            const ey = isFinite(dv.elasticY) ? dv.elasticY : 0;
-            nodes.push({
-              x: dv.localX + ox + ex,
-              y: dv.localY + oy + ey
-            });
-          } else {
-            nodes.push({ x: 0, y: 0 });
-          }
-        }
-
-        // 2. Automotive Structural Beam Topology (Closed Spring-Mass Network)
-        const beams: [number, number][] = [
-          // Lower Chassis & Body Shell Perimeter Ring
-          [0, 1], [1, 2], [2, 3], [3, 4], [4, 5], [5, 6], [6, 7], [7, 8],
-          [8, 9], [9, 10], [10, 11], [11, 12], [12, 13], [13, 14], [14, 15], [15, 0],
-
-          // Floor Rigidity Crossmembers & Diagonal Shear Braces
-          [2, 14], // Front subframe crossmember (Right fender <-> Left fender)
-          [4, 12], // Central floor crossmember (Right B-pillar base <-> Left B-pillar base)
-          [6, 10], // Rear subframe crossmember (Right quarter <-> Left quarter)
-          [0, 8],  // Central floor longitudinal backbone
-          [3, 12], [13, 4], // Cabin center shear braces
-          [5, 10], [11, 6], // Cabin rear shear braces
-
-          // Hood & Front Impact Structure (Node 16 = Hood center)
-          [16, 0],  // Hood center -> Front bumper center
-          [16, 1],  // Hood center -> Front-right corner
-          [16, 15], // Hood center -> Front-left corner
-          [16, 2],  // Hood center -> Right front fender
-          [16, 14], // Hood center -> Left front fender
-          [16, 17], // Hood center -> Windshield cowl
-
-          // Firewall & Windshield Cowl (Node 17 = Cowl center)
-          [17, 2],  // Cowl -> Right front fender
-          [17, 14], // Cowl -> Left front fender
-          [17, 3],  // Cowl -> Right front door sill
-          [17, 13], // Cowl -> Left front door sill
-
-          // A-Pillars (Windshield pillars: Cowl/Fenders up to Roof FL [19] & FR [20])
-          [14, 19], // Left A-pillar lower
-          [17, 19], // Left A-pillar cowl
-          [2, 20],  // Right A-pillar lower
-          [17, 20], // Right A-pillar cowl
-
-          // Roof Safety Cell (19: FL, 20: FR, 21: RL, 22: RR, 18: Roof Center)
-          [19, 20], // Front roof header
-          [20, 22], // Right roof rail
-          [22, 21], // Rear roof header
-          [21, 19], // Left roof rail
-          // Rollover X-truss reinforcement
-          [18, 19],
-          [18, 20],
-          [18, 21],
-          [18, 22],
-          [17, 18], // Central spine: Cowl -> Roof center
-          [18, 23], // Central spine: Roof center -> Trunk deck
-
-          // B-Pillars (Mid-Cabin Roll Hoop)
-          [12, 19], // Left B-pillar base -> Front-left roof
-          [12, 21], // Left B-pillar base -> Rear-left roof
-          [4, 20],  // Right B-pillar base -> Front-right roof
-          [4, 22],  // Right B-pillar base -> Rear-right roof
-
-          // C-Pillars & Rear Glass (21: Roof RL, 22: Roof RR)
-          [21, 10], // Left C-pillar to rear quarter
-          [22, 6],  // Right C-pillar to rear quarter
-          [21, 23], // Rear window frame: Left roof -> Trunk deck
-          [22, 23], // Rear window frame: Right roof -> Trunk deck
-
-          // Trunk & Rear Crash Structure (Node 23 = Trunk deck)
-          [23, 8],  // Trunk deck -> Rear bumper center
-          [23, 7],  // Trunk deck -> Rear-right bumper
-          [23, 9],  // Trunk deck -> Rear-left bumper
-          [23, 6],  // Trunk deck -> Right rear quarter
-          [23, 10]  // Trunk deck -> Left rear quarter
+        // Volumetric upper internal & greenhouse nodes (16..23)
+        // Calculated relative to the specific vehicle archetype's cabin geometry
+        const internalBasePos: [number, number][] = [
+          // 16: Hood center
+          [(halfL + (cabX + cabL / 2)) * 0.5, 0],
+          // 17: Firewall / Windshield cowl
+          [cabX + cabL / 2, 0],
+          // 18: Roof center
+          [cabX, 0],
+          // 19: Roof front-left corner
+          [cabX + (cabL / 2) * 0.75, -cabW * 0.46],
+          // 20: Roof front-right corner
+          [cabX + (cabL / 2) * 0.75, cabW * 0.46],
+          // 21: Roof rear-left corner
+          [cabX - (cabL / 2) * 0.85, -cabW * 0.46],
+          // 22: Roof rear-right corner
+          [cabX - (cabL / 2) * 0.85, cabW * 0.46],
+          // 23: Rear glass base / trunk deck
+          [(-halfL + (cabX - cabL / 2)) * 0.5, 0]
         ];
 
-        // 3. Render Beams: STRICTLY BLACK (#000000)
+        for (let i = 16; i < 24; i++) {
+          const dv = defVerts[i];
+          const [baseX, baseY] = internalBasePos[i - 16];
+          const ox = dv && isFinite(dv.offsetX) ? dv.offsetX : 0;
+          const oy = dv && isFinite(dv.offsetY) ? dv.offsetY : 0;
+          const ex = dv && isFinite(dv.elasticX) ? dv.elasticX : 0;
+          const ey = dv && isFinite(dv.elasticY) ? dv.elasticY : 0;
+          nodes.push({
+            x: baseX + ox + ex,
+            y: baseY + oy + ey
+          });
+        }
+
+        // Helper to draw a batch of beams with specified line width
+        const drawBeamBatch = (beamList: [number, number][], lineWidth: number) => {
+          ctx.lineWidth = lineWidth;
+          ctx.beginPath();
+          for (let b = 0; b < beamList.length; b++) {
+            const [i, j] = beamList[b];
+            const p1 = nodes[i];
+            const p2 = nodes[j];
+            if (p1 && p2 && isFinite(p1.x) && isFinite(p1.y) && isFinite(p2.x) && isFinite(p2.y)) {
+              ctx.moveTo(p1.x, p1.y);
+              ctx.lineTo(p2.x, p2.y);
+            }
+          }
+          ctx.stroke();
+        };
+
+        // All beams strictly BLACK (#000000)
         ctx.strokeStyle = '#000000';
-        ctx.lineWidth = 1.35;
         ctx.lineCap = 'round';
         ctx.lineJoin = 'round';
-        ctx.beginPath();
-        for (let b = 0; b < beams.length; b++) {
-          const [i, j] = beams[b];
-          const p1 = nodes[i];
-          const p2 = nodes[j];
-          if (p1 && p2 && isFinite(p1.x) && isFinite(p1.y) && isFinite(p2.x) && isFinite(p2.y)) {
-            ctx.moveTo(p1.x, p1.y);
-            ctx.lineTo(p2.x, p2.y);
+
+        // TIER 4: DIAGONAL SHEAR BRACES & ROLLOVER TRUSSES (Width: 0.75px)
+        const tier4ShearBraces: [number, number][] = [
+          [18, 19], [18, 20], [18, 21], [18, 22], // Rollover roof X-brace
+          [17, 18], [18, 23],                     // Central spine
+          [3, 12], [13, 4],                       // Cabin center floor shear braces
+          [5, 10], [11, 6],                       // Cabin rear floor shear braces
+          [1, 14], [15, 2]                        // Front engine bay shear braces
+        ];
+        drawBeamBatch(tier4ShearBraces, 0.75);
+
+        // TIER 3: CROSSMEMBERS, BULKHEADS & HOOD/TRUNK FRAMES (Width: 1.15px)
+        const tier3Crossmembers: [number, number][] = [
+          [2, 14], // Front subframe / strut crossmember
+          [4, 12], // Central floor crossmember
+          [6, 10], // Rear subframe crossmember
+          [0, 8],  // Central floor longitudinal backbone
+          // Cowl / Firewall bulkheads
+          [17, 2], [17, 14], [17, 19], [17, 20],
+          // Hood crash structure
+          [16, 0], [16, 1], [16, 15], [16, 2], [16, 14], [16, 17],
+          // Trunk crash structure
+          [21, 23], [22, 23], [23, 8], [23, 7], [23, 9], [23, 6], [23, 10]
+        ];
+        drawBeamBatch(tier3Crossmembers, 1.15);
+
+        // TIER 2: PASSENGER SAFETY CELL & STRUCTURAL PILLARS (Width: 1.65px)
+        const tier2SafetyCell: [number, number][] = [
+          // Roof perimeter ring
+          [19, 20], [20, 22], [22, 21], [21, 19],
+          // A-Pillars (Windshield pillars)
+          [14, 19], [2, 20],
+          // B-Pillars (Central roll hoop)
+          [12, 19], [12, 21], [4, 20], [4, 22],
+          // C-Pillars (Rear roof quarters)
+          [21, 10], [22, 6]
+        ];
+        drawBeamBatch(tier2SafetyCell, 1.65);
+
+        // TIER 1: PRIMARY CHASSIS RAILS & LOWER BOX SILLS (Width: 2.2px)
+        const tier1ChassisRails: [number, number][] = [
+          [0, 1], [1, 2], [2, 3], [3, 4], [4, 5], [5, 6], [6, 7], [7, 8],
+          [8, 9], [9, 10], [10, 11], [11, 12], [12, 13], [13, 14], [14, 15], [15, 0]
+        ];
+        drawBeamBatch(tier1ChassisRails, 2.2);
+
+        // 3. Render Nodes: STRICTLY OCHRE (#c68a35) with Structural Hierarchy
+        ctx.fillStyle = '#c68a35';
+
+        // Major Hardpoints (A/B/C pillar roots, roof corners, suspension towers): 2.8px
+        const majorHardpointIndices = [2, 4, 6, 10, 12, 14, 19, 20, 21, 22];
+        for (const idx of majorHardpointIndices) {
+          const p = nodes[idx];
+          if (p && isFinite(p.x) && isFinite(p.y)) {
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, 2.8, 0, Math.PI * 2);
+            ctx.fill();
           }
         }
-        ctx.stroke();
 
-        // 4. Render Nodes: STRICTLY OCHRE (UI color: #c68a35)
-        ctx.fillStyle = '#c68a35';
-        for (let i = 0; i < nodes.length; i++) {
-          const p = nodes[i];
-          if (!p || !isFinite(p.x) || !isFinite(p.y)) continue;
-          ctx.beginPath();
-          ctx.arc(p.x, p.y, 2.2, 0, Math.PI * 2);
-          ctx.fill();
+        // Secondary Perimeter Nodes (Bumpers, doors, quarters): 1.9px
+        const secondaryIndices = [0, 1, 3, 5, 7, 8, 9, 11, 13, 15];
+        for (const idx of secondaryIndices) {
+          const p = nodes[idx];
+          if (p && isFinite(p.x) && isFinite(p.y)) {
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, 1.9, 0, Math.PI * 2);
+            ctx.fill();
+          }
+        }
+
+        // Tertiary Apex Nodes (Hood center, cowl center, roof center, trunk deck): 1.5px
+        const tertiaryIndices = [16, 17, 18, 23];
+        for (const idx of tertiaryIndices) {
+          const p = nodes[idx];
+          if (p && isFinite(p.x) && isFinite(p.y)) {
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, 1.5, 0, Math.PI * 2);
+            ctx.fill();
+          }
         }
 
         ctx.restore();
