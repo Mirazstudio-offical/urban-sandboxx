@@ -1028,14 +1028,15 @@ export function findActiveInteraction(
               });
             }
 
-            // Furniture Storage interaction (Wardrobe, Fridge, Kitchen cabinets, Nightstands, Bookshelves, Desks, etc.)
+            // Furniture Storage interaction (Wardrobe, Fridge, Radiator, Kitchen cabinets, Nightstands, Bookshelves, Desks, etc.)
             const storageCfg = FURNITURE_STORAGE_CONFIGS[furn.type];
             if (storageCfg) {
+              const isRadiator = furn.type === 'radiator';
               candidates.push({
                 type: 'furniture_storage',
                 primaryKey: 'E',
-                actionTitle: `Открыть ${storageCfg.nameRu.split(' / ')[0]}`,
-                detail: `Хранилище предметов (${storageCfg.capacityL} л / ${storageCfg.maxWeightKg} кг)`,
+                actionTitle: isRadiator ? 'Положить вещи на батарею' : `Открыть ${storageCfg.nameRu.split(' / ')[0]}`,
+                detail: isRadiator ? 'Сушка сырой одежды и прогрев вещей (+65°C)' : `Хранилище предметов (${storageCfg.capacityL} л / ${storageCfg.maxWeightKg} кг)`,
                 x: furnWorldX,
                 y: furnWorldY,
                 dist: reach.dist,

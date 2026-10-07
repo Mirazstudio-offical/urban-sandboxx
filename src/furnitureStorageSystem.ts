@@ -11,10 +11,22 @@ export interface FurnitureStorageConfig {
   maxItemVolumeL: number;
   allowedCategories?: ItemCategory[];
   isCold?: boolean; // Fridge / freezer preservation
+  isHot?: boolean;  // Heating radiator / convector drying & warming (+65°C)
+  heatingTemp?: number;
   iconName?: string;
 }
 
 export const FURNITURE_STORAGE_CONFIGS: Record<string, FurnitureStorageConfig> = {
+  radiator: {
+    type: 'radiator',
+    nameRu: 'Радиатор отопления (Сушка +65°C)',
+    capacityL: 25.0,
+    maxWeightKg: 15.0,
+    maxItemVolumeL: 15.0,
+    isHot: true,
+    heatingTemp: 65.0,
+    iconName: 'Flame'
+  },
   wardrobe: {
     type: 'wardrobe',
     nameRu: 'Платяной шкаф / Гардероб',

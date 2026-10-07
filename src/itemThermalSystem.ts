@@ -858,6 +858,10 @@ export function syncFurnitureStorageThermodynamics(
     containerAmbient = 4.0; // Refrigerator chamber (+4°C)
   } else if (storage.furnitureType === 'freezer') {
     containerAmbient = -18.0; // Deep freeze chamber (-18°C)
+  } else if (storage.furnitureType === 'radiator') {
+    containerAmbient = 65.0; // Hot heating radiator surface (+65°C)
+  } else if (storage.furnitureType === 'stove') {
+    containerAmbient = 95.0; // Cooking stovetop / oven surface (+95°C)
   }
 
   for (const item of storage.items) {

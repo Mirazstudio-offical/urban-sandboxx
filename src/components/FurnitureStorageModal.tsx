@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Player, InventoryItem, ItemCategory, GameWorld } from '../types';
 import { 
   FurnitureStorage, 
@@ -10,6 +10,7 @@ import {
   removeItemFromFurnitureStorage, 
   canItemFitInFurniture 
 } from '../furnitureStorageSystem';
+import { syncFurnitureStorageThermodynamics } from '../itemThermalSystem';
 import { 
   addItemToPlayer, 
   removeItemFromPlayer, 
@@ -44,7 +45,9 @@ import {
   Zap, 
   Coins, 
   Sparkles,
-  Info
+  Info,
+  Flame,
+  CloudRain
 } from 'lucide-react';
 
 interface FurnitureStorageModalProps {
@@ -89,9 +92,21 @@ export const FurnitureStorageModal: React.FC<FurnitureStorageModalProps> = (prop
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [, forceRender] = useState(0);
 
+  // Live real-time thermodynamic drying and heating tick while viewing storage
+  useEffect(() => {
+    if (!isOpen || !storage) return;
+    const interval = setInterval(() => {
+      syncFurnitureStorageThermodynamics(storage);
+      forceRender(n => n + 1);
+    }, 800);
+    return () => clearInterval(interval);
+  }, [isOpen, storage]);
+
   if (!isOpen || !storage || !player) return null;
 
   const cfg = FURNITURE_STORAGE_CONFIGS[storage.furnitureType] || FURNITURE_STORAGE_CONFIGS.wardrobe;
+  const isRadiator = storage.furnitureType === 'radiator';
+  const isHotSurface = !!cfg.isHot || isRadiator;
   const storageTotalVol = getFurnitureStorageTotalVolume(storage);
   const storageTotalWt = getFurnitureStorageTotalWeight(storage);
 
@@ -103,6 +118,7 @@ export const FurnitureStorageModal: React.FC<FurnitureStorageModalProps> = (prop
 
   const renderIcon = () => {
     switch (cfg.iconName) {
+      case 'Flame': return <Flame className="w-5 h-5 text-orange-400 animate-pulse" />;
       case 'Shirt': return <Shirt className="w-5 h-5 text-indigo-400" />;
       case 'Snowflake': return <Snowflake className="w-5 h-5 text-cyan-400" />;
       case 'Utensils': return <Utensils className="w-5 h-5 text-amber-400" />;
@@ -143,7 +159,7 @@ export const FurnitureStorageModal: React.FC<FurnitureStorageModalProps> = (prop
 
     addItemToFurnitureStorage(storage, removed, count);
     sound.playPickup();
-    addPlayerNotification(player, `Помещено в ${cfg.nameRu}: ${removed.nameRu} (x${removed.count})`, 'pickup');
+    addPlayerNotification(player, `Помещено ${isRadiator ? 'на батарею' : `в ${cfg.nameRu}`}: ${removed.nameRu} (x${removed.count})`, 'pickup');
     notifyChange();
   };
 
@@ -168,7 +184,7 @@ export const FurnitureStorageModal: React.FC<FurnitureStorageModalProps> = (prop
     }
 
     sound.playPickup();
-    addPlayerNotification(player, `Взято из ${cfg.nameRu}: ${removed.nameRu} (x${removed.count})`, 'pickup');
+    addPlayerNotification(player, `Взято ${isRadiator ? 'с батареи' : `из ${cfg.nameRu}`}: ${removed.nameRu} (x${removed.count})`, 'pickup');
     notifyChange();
   };
 
@@ -214,7 +230,7 @@ export const FurnitureStorageModal: React.FC<FurnitureStorageModalProps> = (prop
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-800 bg-slate-950/70">
           <div className="flex items-center gap-3">
-            <div className="p-2 bg-slate-800/90 rounded-lg border border-slate-700">
+            <div className={`p-2 rounded-lg border ${isHotSurface ? 'bg-orange-950/80 border-orange-700' : 'bg-slate-800/90 border-slate-700'}`}>
               {renderIcon()}
             </div>
             <div>
@@ -225,9 +241,17 @@ export const FurnitureStorageModal: React.FC<FurnitureStorageModalProps> = (prop
                     Охлаждение (+4°C)
                   </span>
                 )}
+                {isHotSurface && (
+                  <span className="text-xs px-2.5 py-0.5 rounded-full bg-orange-950 text-orange-300 border border-orange-600 flex items-center gap-1 font-semibold">
+                    <Flame className="w-3.5 h-3.5 text-orange-400 animate-pulse" />
+                    Нагрев и Сушка (+{cfg.heatingTemp || 65}°C)
+                  </span>
+                )}
               </h2>
               <p className="text-xs text-slate-400">
-                Физическое хранилище квартиры • {storage.items.length} предметов внутри
+                {isRadiator 
+                  ? `Поверхность радиатора • ${storage.items.length} предметов сушится` 
+                  : `Физическое хранилище квартиры • ${storage.items.length} предметов внутри`}
               </p>
             </div>
           </div>
@@ -263,7 +287,7 @@ export const FurnitureStorageModal: React.FC<FurnitureStorageModalProps> = (prop
               <div className="space-y-1">
                 <div className="flex justify-between text-xs">
                   <span className="text-slate-400 flex items-center gap-1.5">
-                    <Package className="w-3.5 h-3.5 text-indigo-400" /> Вместимость
+                    <Package className="w-3.5 h-3.5 text-indigo-400" /> {isRadiator ? 'Площадь сушки' : 'Вместимость'}
                   </span>
                   <span className="font-mono text-slate-200">
                     {storageTotalVol.toFixed(1)} / {cfg.capacityL.toFixed(1)} л ({volPercent}%)
@@ -271,7 +295,7 @@ export const FurnitureStorageModal: React.FC<FurnitureStorageModalProps> = (prop
                 </div>
                 <div className="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
                   <div 
-                    className={`h-full transition-all duration-300 ${volPercent > 90 ? 'bg-rose-500' : volPercent > 70 ? 'bg-amber-500' : 'bg-indigo-500'}`}
+                    className={`h-full transition-all duration-300 ${volPercent > 90 ? 'bg-rose-500' : volPercent > 70 ? 'bg-amber-500' : isHotSurface ? 'bg-orange-500' : 'bg-indigo-500'}`}
                     style={{ width: `${volPercent}%` }}
                   />
                 </div>
@@ -299,22 +323,37 @@ export const FurnitureStorageModal: React.FC<FurnitureStorageModalProps> = (prop
             <div className="flex-1 overflow-y-auto pr-1 space-y-1.5">
               {storage.items.length === 0 ? (
                 <div className="h-full flex flex-col items-center justify-center text-center p-6 text-slate-500">
-                  <Package className="w-12 h-12 stroke-[1.2] mb-2 opacity-40" />
-                  <p className="text-sm font-medium">Хранилище пусто</p>
-                  <p className="text-xs text-slate-500 mt-1">Выберите предметы из инвентаря справа, чтобы сложить их в шкаф.</p>
+                  {isRadiator ? (
+                    <>
+                      <Flame className="w-12 h-12 stroke-[1.2] mb-2 opacity-40 text-orange-400" />
+                      <p className="text-sm font-medium text-slate-300">На батарее ничего не сушится</p>
+                      <p className="text-xs text-slate-500 mt-1 max-w-xs">
+                        Положите сюда сырую одежду, мокрые носки, обувь или напитки для быстрого согревания и сушки.
+                      </p>
+                    </>
+                  ) : (
+                    <>
+                      <Package className="w-12 h-12 stroke-[1.2] mb-2 opacity-40" />
+                      <p className="text-sm font-medium">Хранилище пусто</p>
+                      <p className="text-xs text-slate-500 mt-1">Выберите предметы из инвентаря справа, чтобы сложить их в шкаф.</p>
+                    </>
+                  )}
                 </div>
               ) : (
                 storage.items.map((it, idx) => {
                   const isSelected = selectedStorageIdx === idx;
                   const itVol = getItemTotalVolume(it);
                   const itWt = getItemTotalWeight(it);
+                  const isWet = (it.wetness ?? 0) > 0;
+                  const itemTemp = it.surfaceTemperature ?? it.temperature ?? 20;
+
                   return (
                     <div
                       key={it.id || idx}
                       onClick={() => { setSelectedStorageIdx(idx); setSelectedInventoryIdx(null); }}
                       className={`flex items-center justify-between p-2 rounded-lg cursor-pointer border transition-all ${
                         isSelected 
-                          ? 'bg-indigo-950/60 border-indigo-500/80 shadow-md ring-1 ring-indigo-500/50' 
+                          ? isRadiator ? 'bg-orange-950/60 border-orange-500/80 shadow-md ring-1 ring-orange-500/50' : 'bg-indigo-950/60 border-indigo-500/80 shadow-md ring-1 ring-indigo-500/50' 
                           : 'bg-slate-800/50 border-slate-700/60 hover:bg-slate-800 hover:border-slate-600'
                       }`}
                     >
@@ -323,13 +362,30 @@ export const FurnitureStorageModal: React.FC<FurnitureStorageModalProps> = (prop
                           <ItemIconCanvas itemId={it.itemId} item={it} size={32} />
                         </div>
                         <div className="min-w-0">
-                          <div className="text-xs font-semibold text-slate-100 truncate">
-                            {it.nameRu} {it.count > 1 && <span className="text-amber-400 font-mono">x{it.count}</span>}
+                          <div className="text-xs font-semibold text-slate-100 truncate flex items-center gap-1.5">
+                            <span>{it.nameRu}</span>
+                            {it.count > 1 && <span className="text-amber-400 font-mono">x{it.count}</span>}
+                            {itemTemp >= 40 && (
+                              <span className="text-[10px] px-1 py-0.2 bg-orange-950 text-orange-300 rounded border border-orange-800 font-mono font-bold">
+                                +{Math.round(itemTemp)}°C
+                              </span>
+                            )}
                           </div>
                           <div className="text-[11px] text-slate-400 flex items-center gap-2 mt-0.5">
                             <span>{itWt.toFixed(2)} кг</span>
                             <span>•</span>
                             <span>{itVol.toFixed(1)} л</span>
+                            {isWet && (
+                              <span className="text-sky-300 font-medium flex items-center gap-0.5">
+                                <CloudRain className="w-3 h-3 text-sky-400" />
+                                Влажность: {Math.round(it.wetness!)}%
+                              </span>
+                            )}
+                            {isHotSurface && isWet && (
+                              <span className="text-amber-300 text-[10px] animate-pulse">
+                                [Сушится...]
+                              </span>
+                            )}
                           </div>
                         </div>
                       </div>
@@ -341,7 +397,7 @@ export const FurnitureStorageModal: React.FC<FurnitureStorageModalProps> = (prop
                           className="px-2.5 py-1 bg-slate-700 hover:bg-indigo-600 text-white rounded text-[11px] font-medium transition-colors"
                           title="Забрать предмет"
                         >
-                          Забрать
+                          {isRadiator ? 'Снять' : 'Забрать'}
                         </button>
                       </div>
                     </div>
@@ -375,7 +431,7 @@ export const FurnitureStorageModal: React.FC<FurnitureStorageModalProps> = (prop
                     onClick={() => handleTakeItem(selectedStorageIdx)}
                     className="flex items-center gap-1 px-3 py-1 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-medium rounded transition-colors"
                   >
-                    <ArrowRight className="w-3.5 h-3.5" /> В инвентарь
+                    <ArrowRight className="w-3.5 h-3.5" /> В карманы
                   </button>
                 </div>
               </div>
@@ -423,6 +479,9 @@ export const FurnitureStorageModal: React.FC<FurnitureStorageModalProps> = (prop
                   const isSelected = selectedInventoryIdx === originalIndex;
                   const itVol = getItemTotalVolume(item);
                   const itWt = getItemTotalWeight(item);
+                  const isWet = (item.wetness ?? 0) > 0;
+                  const itemTemp = item.surfaceTemperature ?? item.temperature ?? 20;
+
                   return (
                     <div
                       key={item.id || originalIndex}
@@ -438,13 +497,24 @@ export const FurnitureStorageModal: React.FC<FurnitureStorageModalProps> = (prop
                           <ItemIconCanvas itemId={item.itemId} item={item} size={32} />
                         </div>
                         <div className="min-w-0">
-                          <div className="text-xs font-semibold text-slate-100 truncate">
-                            {item.nameRu}
+                          <div className="text-xs font-semibold text-slate-100 truncate flex items-center gap-1.5">
+                            <span>{item.nameRu}</span>
+                            {itemTemp >= 40 && (
+                              <span className="text-[10px] px-1 py-0.2 bg-orange-950 text-orange-300 rounded border border-orange-800 font-mono font-bold">
+                                +{Math.round(itemTemp)}°C
+                              </span>
+                            )}
                           </div>
                           <div className="text-[11px] text-slate-400 flex items-center gap-2 mt-0.5">
                             <span>{itWt.toFixed(2)} кг</span>
                             <span>•</span>
                             <span>{itVol.toFixed(1)} л</span>
+                            {isWet && (
+                              <span className="text-sky-300 font-medium flex items-center gap-0.5">
+                                <CloudRain className="w-3 h-3 text-sky-400" />
+                                {Math.round(item.wetness!)}%
+                              </span>
+                            )}
                           </div>
                         </div>
                       </div>
@@ -453,10 +523,10 @@ export const FurnitureStorageModal: React.FC<FurnitureStorageModalProps> = (prop
                       <div className="flex items-center gap-1 shrink-0">
                         <button
                           onClick={(e) => { e.stopPropagation(); handleStoreItem(originalIndex, 1); }}
-                          className="px-2.5 py-1 bg-slate-700 hover:bg-blue-600 text-white rounded text-[11px] font-medium transition-colors flex items-center gap-1"
-                          title="Положить в хранилище"
+                          className={`px-2.5 py-1 text-white rounded text-[11px] font-medium transition-colors flex items-center gap-1 ${isRadiator ? 'bg-orange-700 hover:bg-orange-600' : 'bg-slate-700 hover:bg-blue-600'}`}
+                          title={isRadiator ? 'Положить на батарею' : 'Положить в хранилище'}
                         >
-                          <ArrowLeft className="w-3 h-3" /> В шкаф
+                          <ArrowLeft className="w-3 h-3" /> {isRadiator ? 'На батарею' : 'В шкаф'}
                         </button>
                       </div>
                     </div>
@@ -474,9 +544,9 @@ export const FurnitureStorageModal: React.FC<FurnitureStorageModalProps> = (prop
                 <div className="flex items-center gap-1.5 shrink-0">
                   <button
                     onClick={() => handleStoreItem(selectedInventoryIdx, 1)}
-                    className="flex items-center gap-1 px-3 py-1 bg-blue-600 hover:bg-blue-500 text-white text-xs font-medium rounded transition-colors"
+                    className={`flex items-center gap-1 px-3 py-1 text-white text-xs font-medium rounded transition-colors ${isRadiator ? 'bg-orange-600 hover:bg-orange-500' : 'bg-blue-600 hover:bg-blue-500'}`}
                   >
-                    <ArrowLeft className="w-3.5 h-3.5" /> Положить в шкаф
+                    <ArrowLeft className="w-3.5 h-3.5" /> {isRadiator ? 'Положить на батарею' : 'Положить в шкаф'}
                   </button>
                 </div>
               </div>
@@ -489,7 +559,7 @@ export const FurnitureStorageModal: React.FC<FurnitureStorageModalProps> = (prop
         <div className="px-5 py-2.5 border-t border-slate-800 bg-slate-950/80 flex items-center justify-between text-xs text-slate-400">
           <div className="flex items-center gap-4">
             <span>[E / Клик]: Взаимодействие</span>
-            <span>[Esc]: Закрыть хранилище</span>
+            <span>[Esc]: Закрыть</span>
           </div>
           <button
             onClick={onClose}
