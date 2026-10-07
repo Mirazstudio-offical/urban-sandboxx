@@ -9,6 +9,7 @@ import { createDefaultPlayerInventory, addPlayerNotification, getPlayerTotalCarr
 import { defaultBodyState } from './sensations';
 import { updateBodySystem, distributeImpactDamage, applyDriverVehicleCrashTrauma, addInjuryToPart } from './bodySystem';
 import { updateMedicineSystem } from './medicineSystem';
+import { updateWorldItemsThermodynamics } from './itemThermalSystem';
 import { GuardrailPhysics } from './guardrailPhysics';
 import { AGRICULTURAL_FIELDS, getTerrainSlope } from './terrainElevation';
 import { getRiverWaterAt, getUniversalWaterDepthAt } from './riverSystem';
@@ -6047,6 +6048,9 @@ export function updatePlayerNeedsAndVitals(
   // 4. Update Pharmacokinetics & Body Physiology Systems
   updateMedicineSystem(player, dt);
   updateBodySystem(player, input, dt, Date.now() / 1000);
+
+  // 4.1. Update Item Thermodynamics & Thermal Contact Burns
+  updateWorldItemsThermodynamics(world, player, dt);
 
   // 5. Audio symptom triggers & timers
   // Cold Teeth Chattering & Shivering

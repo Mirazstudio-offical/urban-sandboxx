@@ -527,6 +527,33 @@ export function getDetailedBodySensations(player?: Player): DetailedBodySensatio
     });
   }
 
+  // 14. Thermal item contact sensations in hands and pockets
+  const handItems = [player?.leftHandItem, player?.rightHandItem].filter(Boolean);
+  const hotHandItem = handItems.find(i => (i?.surfaceTemperature ?? 0) >= 50);
+  if (hotHandItem) {
+    const sTemp = Math.round(hotHandItem.surfaceTemperature || 50);
+    activeSymptoms.push({
+      id: 'hot_hand_item',
+      label: 'Обжигающий предмет в руках',
+      description: `«${hotHandItem.nameRu}» раскален (${sTemp}°C), сильное жжение ладоней`,
+      severity: sTemp >= 65 ? 'danger' : 'warning',
+      iconType: 'pain'
+    });
+  }
+
+  const pocketItems = (player?.inventory || []).filter(Boolean);
+  const hotPocketItem = pocketItems.find(i => (i?.surfaceTemperature ?? 0) >= 50);
+  if (hotPocketItem) {
+    const sTemp = Math.round(hotPocketItem.surfaceTemperature || 50);
+    activeSymptoms.push({
+      id: 'hot_pocket_item',
+      label: 'Горячий предмет в кармане',
+      description: `«${hotPocketItem.nameRu}» (${sTemp}°C) жжет кожу через ткань кармана`,
+      severity: sTemp >= 65 ? 'danger' : 'warning',
+      iconType: 'pain'
+    });
+  }
+
   // Overall summary & health text
   let healthText = 'Организм в норме';
   const hp = needs?.health ?? 100;

@@ -39,6 +39,7 @@ import {
   pourLiquidBetweenContainers,
   fillContainerWithLiquid
 } from './liquidSystem';
+import { initItemThermalProperties, applyConsumptionThermodynamics, calculateSurfaceTemperature } from './itemThermalSystem';
 
 export interface ItemDefinition {
   itemId: string;
@@ -76,6 +77,11 @@ export interface ItemDefinition {
   maxContainedItemVolumeL?: number;
   maxContainedWeightKg?: number;
   allowedItemCategories?: ItemCategory[];
+  // Thermal physics properties
+  temperature?: number;          // Initial / spawn core temperature in °C
+  surfaceTemperature?: number;   // Initial external surface temperature in °C
+  heatLossRate?: number;         // Rate of heat dissipation / cooling per second
+  heatRetention?: number;        // Thermal insulation / retention factor (0.0 to 1.0)
 }
 
 export const ITEM_CATALOG: Record<string, ItemDefinition> = {
@@ -5227,6 +5233,21 @@ export function createItem(itemId: string, count: number = 1, initialPortions?: 
     syncItemContainerProperties(createdItem);
   }
 
+  // Initialize thermal properties & surface temperature
+  if (def.temperature !== undefined) {
+    createdItem.temperature = def.temperature;
+  }
+  if (def.heatLossRate !== undefined) {
+    createdItem.heatLossRate = def.heatLossRate;
+  }
+  if (def.heatRetention !== undefined) {
+    createdItem.heatRetention = def.heatRetention;
+  }
+  if (def.surfaceTemperature !== undefined) {
+    createdItem.surfaceTemperature = def.surfaceTemperature;
+  }
+  initItemThermalProperties(createdItem, 20.0);
+
   return createdItem;
 }
 
@@ -5343,6 +5364,13 @@ export function createPackagedItem(itemId: string, count: number = 1): Inventory
       container.descriptionRu = `${container.descriptionRu} Внутри: ${singleInner.nameRu} (${numInside} шт.). Нажмите [E] в руках или используйте в инвентаре, чтобы вскрыть герметичную упаковку.`;
       container.weight = Number(((container.weight || 0.04) + (singleInner.weight || 0.05) * numInside).toFixed(2));
       container.volume = Number(((container.volume || 0.08) + (singleInner.volume || 0.05) * numInside).toFixed(2));
+    }
+    if (container.contents && container.contents.length > 0) {
+      const firstInner = container.contents[0];
+      if (firstInner && typeof firstInner.temperature === 'number') {
+        container.temperature = firstInner.temperature;
+        container.surfaceTemperature = calculateSurfaceTemperature(firstInner.temperature, 20.0, container.heatRetention ?? 0.4);
+      }
     }
     return container;
   }
@@ -8196,6 +8224,12 @@ export function useItemOnPlayer(
     else if (item.category === 'drink') soothePanic(player, 25);
     else soothePanic(player, 35);
 
+    // Apply oral/body temperature thermodynamics when eating or drinking
+    if (item.category === 'food' || item.category === 'drink') {
+      const itemTemp = item.temperature ?? 20.0;
+      applyConsumptionThermodynamics(player, itemTemp, item.nameRu, item.category === 'drink');
+    }
+
     // Play sound
     if (item.category === 'food') {
       sound.playEat();
@@ -8343,6 +8377,12 @@ export function useItemOnPlayer(
   if (item.category === 'food') soothePanic(player, 30);
   else if (item.category === 'drink') soothePanic(player, 40);
   else soothePanic(player, 50);
+
+  // Apply oral/body temperature thermodynamics when eating or drinking
+  if (item.category === 'food' || item.category === 'drink') {
+    const itemTemp = item.temperature ?? 20.0;
+    applyConsumptionThermodynamics(player, itemTemp, item.nameRu, item.category === 'drink');
+  }
 
   // Play appropriate procedural sound
   if (item.category === 'med') {
@@ -9296,6 +9336,12 @@ export function useHandItemOnPlayer(
     else if (item.category === 'drink') soothePanic(player, 25);
     else soothePanic(player, 35);
 
+    // Apply oral/body temperature thermodynamics when eating or drinking from hand
+    if (item.category === 'food' || item.category === 'drink') {
+      const itemTemp = item.temperature ?? 20.0;
+      applyConsumptionThermodynamics(player, itemTemp, item.nameRu, item.category === 'drink');
+    }
+
     if (item.category === 'food') sound.playEat();
     else if (item.category === 'drink') sound.playDrink();
     else sound.playUseItem();
@@ -9384,6 +9430,12 @@ export function useHandItemOnPlayer(
   if (item.category === 'food') soothePanic(player, 30);
   else if (item.category === 'drink') soothePanic(player, 40);
   else soothePanic(player, 50);
+
+  // Apply oral/body temperature thermodynamics when eating or drinking from hand
+  if (item.category === 'food' || item.category === 'drink') {
+    const itemTemp = item.temperature ?? 20.0;
+    applyConsumptionThermodynamics(player, itemTemp, item.nameRu, item.category === 'drink');
+  }
 
   if (item.category === 'med') {
     sound.playUseItem();

@@ -1328,6 +1328,14 @@ export interface InventoryItem {
   clothingStats?: ClothingStats;
   portions?: number;       // Current remaining bites/sips/doses in this unit
   maxPortions?: number;    // Maximum/initial bites/sips/doses
+  // Item Thermodynamics & Surface Heat Contact
+  temperature?: number;          // Core internal temperature in °C
+  surfaceTemperature?: number;   // External surface temperature in °C (outer surface touching hands/pockets)
+  heatLossRate?: number;         // Heat loss / cooling coefficient per second (0.001 to 0.50)
+  heatRetention?: number;        // Heat retention / insulation factor (0.0 bare metal, 1.0 vacuum thermos)
+  ambientTemperature?: number;   // Surrounding ambient medium temperature in °C
+  lastThermalUpdate?: number;    // Timestamp (seconds) of last thermal simulation update
+  isThermalStable?: boolean;     // Performance optimization flag: item in thermal equilibrium with environment
   // Fluid & Energy metadata
   batteryCharge?: number;   // Battery charge level 0 to 100 (%)
   fluidLiters?: number;     // Remaining fluid volume in liters (L)

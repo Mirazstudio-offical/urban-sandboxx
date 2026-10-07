@@ -12,7 +12,7 @@ import { drawMeatAndPoultryItem } from './graphics/meatAndPoultryGraphics';
 import { drawFishAndSeafoodItem } from './graphics/fishAndSeafoodGraphics';
 import { drawProduceAndMushroomItem } from './graphics/produceAndMushroomGraphics';
 import { drawPantryAndDairyItem } from './graphics/pantryAndDairyGraphics';
-import { drawShadow } from './graphics/itemGraphicShared';
+import { drawShadow, drawFrostAndThermalOverlay } from './graphics/itemGraphicShared';
 
 export function drawItemModel2D(
   ctx: CanvasRenderingContext2D,
@@ -54,6 +54,11 @@ export function drawItemModel2D(
     ctx.fillRect(-6.5, -6.5, 13, 2);
     ctx.fillStyle = '#f59e0b';
     ctx.fillRect(-1.5, -6.5, 3, 13);
+  }
+
+  // Procedural thermal overlay (frost rime, condensation droplets, steam wisps)
+  if (item) {
+    drawFrostAndThermalOverlay(ctx, item, 8.5);
   }
 
   ctx.restore();

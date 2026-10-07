@@ -31,6 +31,7 @@ import {
   getSlotCompartment,
   InventoryCompartment
 } from '../items';
+import { getItemThermalDisplayInfo } from '../itemThermalSystem';
 import { ItemIconCanvas } from './ItemIconCanvas';
 import { sound } from '../audio';
 import { 
@@ -62,7 +63,9 @@ import {
   User,
   Luggage,
   FileText,
-  Scissors
+  Scissors,
+  Flame,
+  Thermometer
 } from 'lucide-react';
 
 interface InventoryModalProps {
@@ -576,8 +579,14 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
                             {player.leftHandItem ? player.leftHandItem.nameRu : 'Пусто'}
                           </div>
                           {player.leftHandItem && (
-                            <div className="text-[10px] text-[#9ba3af] font-mono">
-                              {getItemTotalWeight(player.leftHandItem)} кг • {getItemTotalVolume(player.leftHandItem)} л
+                            <div className="text-[10px] text-[#9ba3af] font-mono flex items-center gap-1.5 flex-wrap">
+                              <span>{getItemTotalWeight(player.leftHandItem)} кг • {getItemTotalVolume(player.leftHandItem)} л</span>
+                              {player.leftHandItem.surfaceTemperature !== undefined && (
+                                <span className={`flex items-center gap-0.5 ${player.leftHandItem.surfaceTemperature >= 52 ? 'text-amber-400 font-bold' : player.leftHandItem.surfaceTemperature <= 4 ? 'text-sky-300' : 'text-[#cbd5e1]'}`}>
+                                  {player.leftHandItem.surfaceTemperature >= 52 ? <Flame className="w-3 h-3 text-amber-400 animate-pulse" /> : <Thermometer className="w-3 h-3 text-[#9ba3af]" />}
+                                  {player.leftHandItem.surfaceTemperature > 0 ? '+' : ''}{player.leftHandItem.surfaceTemperature.toFixed(1)}°C
+                                </span>
+                              )}
                             </div>
                           )}
                         </div>
@@ -636,8 +645,14 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
                             {player.rightHandItem ? player.rightHandItem.nameRu : 'Пусто'}
                           </div>
                           {player.rightHandItem && (
-                            <div className="text-[10px] text-[#9ba3af] font-mono">
-                              {getItemTotalWeight(player.rightHandItem)} кг • {getItemTotalVolume(player.rightHandItem)} л
+                            <div className="text-[10px] text-[#9ba3af] font-mono flex items-center gap-1.5 flex-wrap">
+                              <span>{getItemTotalWeight(player.rightHandItem)} кг • {getItemTotalVolume(player.rightHandItem)} л</span>
+                              {player.rightHandItem.surfaceTemperature !== undefined && (
+                                <span className={`flex items-center gap-0.5 ${player.rightHandItem.surfaceTemperature >= 52 ? 'text-amber-400 font-bold' : player.rightHandItem.surfaceTemperature <= 4 ? 'text-sky-300' : 'text-[#cbd5e1]'}`}>
+                                  {player.rightHandItem.surfaceTemperature >= 52 ? <Flame className="w-3 h-3 text-amber-400 animate-pulse" /> : <Thermometer className="w-3 h-3 text-[#9ba3af]" />}
+                                  {player.rightHandItem.surfaceTemperature > 0 ? '+' : ''}{player.rightHandItem.surfaceTemperature.toFixed(1)}°C
+                                </span>
+                              )}
                             </div>
                           )}
                         </div>
@@ -822,6 +837,15 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
                                 {item ? (
                                   <>
                                     <ItemIconCanvas itemId={item.itemId} item={item} size={36} className="transform hover:scale-105 transition" />
+                                    {/* Thermal Heat Hazard Indicator */}
+                                    {item.surfaceTemperature !== undefined && item.surfaceTemperature >= 52 && (
+                                      <span 
+                                        className="absolute top-1 left-1 p-0.5 bg-[#0b0c0e]/95 border border-amber-500/70 rounded-[2px] text-amber-400 z-10 pointer-events-none" 
+                                        title={`Горячо! Снаружи: ${item.surfaceTemperature}°C`}
+                                      >
+                                        <Flame className="w-2.5 h-2.5 text-amber-400 animate-pulse" />
+                                      </span>
+                                    )}
                                     {item.count > 1 && (
                                       <span className="absolute top-1 right-1 px-1.5 py-0.2 bg-[#0b0c0e] border border-[#2a2e38] rounded-[2px] text-[10px] font-mono font-bold text-[#f0f3f6]">
                                         {item.count}
@@ -995,6 +1019,45 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
                         <span className="text-[#c68a35] font-bold">{getItemTotalVolume(selectedEntry.item)} л</span>
                       </div>
                     </div>
+
+                    {/* Thermodynamics Card */}
+                    {(() => {
+                      const thermalInfo = getItemThermalDisplayInfo(selectedEntry.item);
+                      return (
+                        <div className="p-2.5 bg-[#14161a] border border-[#2a2e38] rounded-[2px] flex flex-col gap-1.5 font-mono text-xs">
+                          <div className="flex items-center justify-between">
+                            <span className="text-[#9ba3af] flex items-center gap-1.5 font-bold">
+                              <Thermometer className="w-3.5 h-3.5 text-[#c68a35]" />
+                              Термодинамика:
+                            </span>
+                            {thermalInfo.hazardBadge && (
+                              <span className={`px-1.5 py-0.5 rounded-[2px] text-[10px] font-black border flex items-center gap-1 ${thermalInfo.hazardBadge.bgClass} ${thermalInfo.hazardBadge.textClass} ${thermalInfo.hazardBadge.borderClass}`}>
+                                <Flame className="w-2.5 h-2.5" />
+                                {thermalInfo.hazardBadge.text}
+                              </span>
+                            )}
+                          </div>
+                          <div className="grid grid-cols-2 gap-1.5 text-[11px]">
+                            <div className="bg-[#0b0c0e] p-1.5 rounded-[2px] border border-[#2a2e38] flex justify-between items-center">
+                              <span className="text-[#9ba3af]">Темп. предмета:</span>
+                              <span className={`font-mono font-bold ${thermalInfo.tempColorClass}`}>{thermalInfo.coreTempText}</span>
+                            </div>
+                            <div className="bg-[#0b0c0e] p-1.5 rounded-[2px] border border-[#2a2e38] flex justify-between items-center">
+                              <span className="text-[#9ba3af]">Снаружи:</span>
+                              <span className={`font-mono font-bold ${thermalInfo.tempColorClass}`}>{thermalInfo.surfaceTempText}</span>
+                            </div>
+                            <div className="bg-[#0b0c0e] p-1.5 rounded-[2px] border border-[#2a2e38] flex justify-between items-center">
+                              <span className="text-[#9ba3af]">Потеря тепла:</span>
+                              <span className="font-mono text-[#cbd5e1]">{thermalInfo.heatLossText}</span>
+                            </div>
+                            <div className="bg-[#0b0c0e] p-1.5 rounded-[2px] border border-[#2a2e38] flex justify-between items-center">
+                              <span className="text-[#9ba3af]">Удержание:</span>
+                              <span className="font-mono text-[#cbd5e1]">{thermalInfo.retentionText}</span>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })()}
 
                     {/* Description */}
                     <div className="p-3 bg-[#14161a] border border-[#2a2e38] rounded-[2px] text-xs text-[#cbd5e1] leading-relaxed">

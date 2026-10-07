@@ -3,6 +3,7 @@ import { sound } from './audio';
 import { addPlayerNotification } from './items';
 import { soothePanic } from './bodySystem';
 import { getBuildingLayout } from './buildingInteriors';
+import { applyConsumptionThermodynamics } from './itemThermalSystem';
 
 export type LiquidId =
   | 'water'
@@ -2335,6 +2336,10 @@ export function handleConsumeFluid(
   }
 
   syncItemContainerProperties(container);
+
+  // Apply oral & internal temperature thermodynamics for beverages/liquids
+  const liquidTemp = container.temperature ?? 20.0;
+  applyConsumptionThermodynamics(player, liquidTemp, liquid.nameRu, true);
 
   sound.playDrink();
 

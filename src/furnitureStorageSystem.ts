@@ -1,6 +1,7 @@
 import { InventoryItem, ItemCategory, Player } from './types';
 import { createItem, getItemTotalWeight, getItemTotalVolume } from './items';
 import { sound } from './audio';
+import { syncFurnitureStorageThermodynamics } from './itemThermalSystem';
 
 export interface FurnitureStorageConfig {
   type: string;
@@ -355,6 +356,9 @@ export function getFurnitureStorage(
     furnitureStorageDb.set(id, storage);
     saveFurnitureStoragesToLocalStorage();
   }
+
+  // Synchronize thermodynamics based on elapsed time since last inspection
+  syncFurnitureStorageThermodynamics(storage);
 
   return storage;
 }

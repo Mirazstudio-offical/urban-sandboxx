@@ -19,7 +19,8 @@ import {
   Hand,
   ArrowLeftRight,
   ArrowDownToLine,
-  Utensils
+  Utensils,
+  Flame
 } from 'lucide-react';
 
 interface PlayerNeedsHUDProps {
@@ -358,6 +359,14 @@ export const PlayerNeedsHUD: React.FC<PlayerNeedsHUDProps> = ({
                 {leftItem ? (
                   <>
                     <ItemIconCanvas itemId={leftItem.itemId} item={leftItem} size={28} />
+                    {leftItem.surfaceTemperature !== undefined && leftItem.surfaceTemperature >= 52 && (
+                      <span 
+                        className="absolute -top-1 left-7 p-0.5 bg-[#0b0c0e]/95 border border-amber-500/70 rounded-[2px] text-amber-400 z-10" 
+                        title={`Горячо! ${leftItem.surfaceTemperature}°C`}
+                      >
+                        <Flame className="w-2.5 h-2.5 text-amber-400 animate-pulse" />
+                      </span>
+                    )}
                     {/* Portion indicator if multi-portion */}
                     {leftItem.maxPortions && leftItem.maxPortions > 1 && (
                       <>
@@ -426,6 +435,14 @@ export const PlayerNeedsHUD: React.FC<PlayerNeedsHUDProps> = ({
                 {rightItem ? (
                   <>
                     <ItemIconCanvas itemId={rightItem.itemId} item={rightItem} size={28} />
+                    {rightItem.surfaceTemperature !== undefined && rightItem.surfaceTemperature >= 52 && (
+                      <span 
+                        className="absolute -top-1 left-7 p-0.5 bg-[#0b0c0e]/95 border border-amber-500/70 rounded-[2px] text-amber-400 z-10" 
+                        title={`Горячо! ${rightItem.surfaceTemperature}°C`}
+                      >
+                        <Flame className="w-2.5 h-2.5 text-amber-400 animate-pulse" />
+                      </span>
+                    )}
                     {/* Portion indicator if multi-portion */}
                     {rightItem.maxPortions && rightItem.maxPortions > 1 && (
                       <>
