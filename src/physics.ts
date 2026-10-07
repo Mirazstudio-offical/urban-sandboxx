@@ -5768,13 +5768,48 @@ export function updatePlayerNeedsAndVitals(
 
   // 1. Wetness accumulation / drying
   if (isExposedToRain) {
-    const wetRate = Math.max(0, 5.0 - (totalWaterResist * 0.05));
+    const wetRate = Math.max(0.5, 4.0 - (totalWaterResist * 0.038));
     bs.wetness = Math.min(100, bs.wetness + wetRate * dt);
   } else {
-    // In heated cabin/building, clothes dry much faster
-    const cabinWarmth = curVehicle ? Math.max(0, (curVehicle.heaterTemp ?? 18) - 18) * 0.4 : 0;
-    const dryRate = player.isInsideBuilding ? 4.5 : (player.isInVehicle ? (2.8 + cabinWarmth) : 2.0);
+    // Realistic slow drying:
+    // Natural room temp (20°C): 0.025 - 0.035 %/sec (40-50 minutes for completely soaked wool/jeans)
+    // Heated building (21°C): 0.055 %/sec
+    // In vehicle:
+    //   If blower is blowing warm (>60°C): 0.18 + fanSpeed * 0.45 %/sec (~3-5 minutes to dry)
+    //   If A/C is active (dehumidification): +0.15 %/sec
+    //   If open window draft: +0.06 %/sec
+    //   If cold blower or heater off: 0.015 %/sec
+    // Near campfire / barrel fire / stove: 0.6 - 1.4 %/sec
+    let dryRate = 0.028; // base natural air drying
+    if (player.isInsideBuilding) {
+      dryRate = 0.055;
+    } else if (curVehicle) {
+      const heaterMode = curVehicle.heaterMode || 'off';
+      const fanSpeed = heaterMode === 'high' ? 1.0 : heaterMode === 'med' ? 0.65 : heaterMode === 'low' ? 0.35 : 0.0;
+      const engTemp = curVehicle.engineTemp ?? 20;
+      let blowerDry = 0;
+      if (fanSpeed > 0 && engTemp > 60) {
+        blowerDry = fanSpeed * (0.15 + Math.min(0.40, (engTemp - 60) / 35));
+      }
+      const acDry = (curVehicle.acOn && fanSpeed > 0) ? 0.15 : 0;
+      const draftDry = curVehicle.windowOpen ? 0.06 : 0;
+      dryRate = 0.015 + blowerDry + acDry + draftDry;
+    }
     bs.wetness = Math.max(0, bs.wetness - dryRate * dt);
+  }
+
+  // Keep equipped clothing items synchronized with the player's clothing wetness
+  if (player.equippedClothing) {
+    for (const slot of Object.values(player.equippedClothing)) {
+      for (const item of Object.values(slot || {})) {
+        if (item) {
+          item.wetness = Math.round(bs.wetness * 10) / 10;
+          if (item.clothingStats) {
+            item.clothingStats.wetness = item.wetness;
+          }
+        }
+      }
+    }
   }
 
   // 2. Body Temperature dynamics (Freezing in cold cars, outdoors, or warming by heater)
@@ -5824,7 +5859,7 @@ export function updatePlayerNeedsAndVitals(
           if (dFire < 130) {
             const fireProx = 1.0 - (dFire / 130);
             ambientTemp = Math.max(ambientTemp, 22.0 + fireProx * 38.0);
-            bs.wetness = Math.max(0, bs.wetness - 9.0 * fireProx * dt);
+            bs.wetness = Math.max(0, bs.wetness - 1.2 * fireProx * dt);
           }
         }
       }
@@ -5835,34 +5870,93 @@ export function updatePlayerNeedsAndVitals(
     }
   }
 
-  
-  // Adjust ambient temp based on clothes
-  // If cold outside, clothes keep you warm (increases effective ambient temp)
-  const effectiveAmbientTemp = ambientTemp < 18.0 ? ambientTemp + (totalInsulation * 0.25) : ambientTemp;
-  const isTooHotClothes = ambientTemp >= 25.0 && totalInsulation > 30;
+  // 1.5 Indoor heating radiators, convector stoves & radiant sources
+  let isNearRadiator = false;
+  let radiatorProximity = 0;
+  let indoorRadiatorTempBoost = 0;
 
+  if (player.isInsideBuilding && player.insideBuildingId) {
+    const bld = world.buildings?.find(b => b.id === player.insideBuildingId);
+    if (bld) {
+      const layout = getBuildingLayout(bld, player.currentFloor || 0, player.insideApartmentId || undefined);
+      if (layout && layout.furniture) {
+        for (const f of layout.furniture) {
+          if (f.type === 'radiator' || f.type === 'stove') {
+            const fx = f.x + f.width / 2;
+            const fy = f.y + f.height / 2;
+            const dist = Math.hypot(player.x - fx, player.y - fy);
+            if (dist < 42) {
+              const prox = 1.0 - (dist / 42);
+              if (prox > radiatorProximity) {
+                radiatorProximity = prox;
+                isNearRadiator = true;
+                indoorRadiatorTempBoost = (f.type === 'stove' ? 45.0 : 38.0) * prox;
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  bs.nearRadiator = isNearRadiator;
+  if (isNearRadiator && indoorRadiatorTempBoost > 0) {
+    ambientTemp = Math.max(ambientTemp, 22.0 + indoorRadiatorTempBoost);
+    // Accelerated drying right in front of radiator / stove (~1.4 to 3.2% per sec)
+    const radiatorDryRate = 1.4 + radiatorProximity * 1.8;
+    bs.wetness = Math.max(0, bs.wetness - radiatorDryRate * dt);
+  }
+
+  // Adjust ambient temp based on clothes
+  // If clothes are wet, evaporative chilling draws substantial body heat (2260 kJ/kg latent heat)
+  const evaporativeChilling = (bs.wetness / 100) * 6.5; // up to 6.5°C cooling sensation from wet fabric!
+  const feltAmbient = ambientTemp - evaporativeChilling;
+
+  const wetInsulationRatio = Math.max(0.08, 1.0 - (bs.wetness / 100) * 0.90);
+  const effectiveInsulation = totalInsulation * wetInsulationRatio;
+  const effectiveAmbientTemp = feltAmbient < 18.0 ? feltAmbient + (effectiveInsulation * 0.20) : feltAmbient;
+  const isTooHotClothes = feltAmbient >= 25.0 && totalInsulation > 30;
+
+  let sweatRate = 0;
   if (isTooHotClothes && !player.isInVehicle) {
-      // Hot day in heavy clothes
-      const sweatRate = Math.max(0, (totalInsulation * 0.05) - (totalBreathability * 0.02));
-      player.needs.thirst = Math.max(0, player.needs.thirst - sweatRate * dt);
-      player.needs.energy = Math.max(0, player.needs.energy - (totalMobilityPenalty * 0.05) * dt);
-      bs.temperature = Math.min(38.5, bs.temperature + (sweatRate * 0.01) * dt);
+    // Hot day in heavy clothes
+    sweatRate = Math.max(0, (totalInsulation * 0.035) - (totalBreathability * 0.015));
+    player.needs.thirst = Math.max(0, player.needs.thirst - sweatRate * dt);
+    player.needs.energy = Math.max(0, player.needs.energy - (totalMobilityPenalty * 0.04) * dt);
+    bs.temperature = Math.min(39.0, bs.temperature + (sweatRate * 0.008) * dt);
   }
 
   if (effectiveAmbientTemp < 18.0) {
-    ambientTemp = effectiveAmbientTemp; // Use effective temp for the rest of the cold calculation
+    ambientTemp = effectiveAmbientTemp;
 
-    // Player is exposed to cold (whether in cold unheated car, open window, or outside)
-    const coldDeficit = (18.0 - ambientTemp) / 10; // e.g. 1.0 at 8°C, 1.4 at 4°C
-    const wetMultiplier = 1.0 + (bs.wetness / 100) * 3.0; // wet clothes cause severe evaporative cooling
+    // Player is exposed to cold
+    const coldDeficit = (18.0 - ambientTemp) / 10;
+    const wetConductiveMultiplier = 1.0 + (bs.wetness / 100) * 4.2; // wet clothes cause severe evaporative cooling
     const draftMultiplier = hasDraft ? 1.45 : (isEnclosed ? 0.85 : 1.15);
 
-    const coolingRate = 0.042 * coldDeficit * wetMultiplier * draftMultiplier;
-    bs.temperature = Math.max(34.0, bs.temperature - coolingRate * dt);
+    // Shivering thermogenesis attempt by the body
+    let shiveringHeatProduction = 0;
+    if (bs.temperature < 36.5 && bs.temperature > 33.5) {
+      shiveringHeatProduction = 0.018 * Math.min(1.0, (36.5 - bs.temperature) / 1.5);
+      // Shivering burns energy & calories
+      player.needs.hunger = Math.max(0, player.needs.hunger - 0.022 * dt);
+      player.needs.energy = Math.max(0, player.needs.energy - 0.8 * dt);
+    }
 
-    // Severe hypothermia penalty
+    const coolingRate = Math.max(0.004, 0.038 * coldDeficit * wetConductiveMultiplier * draftMultiplier - shiveringHeatProduction);
+    bs.temperature = Math.max(28.0, bs.temperature - coolingRate * dt);
+
+    // Hypothermia stages
     if (bs.temperature < 35.0) {
-      player.needs.health = Math.max(5, (player.needs.health ?? 100) - 0.75 * dt);
+      const hypothermiaSeverity = (35.0 - bs.temperature);
+      player.needs.health = Math.max(0, (player.needs.health ?? 100) - (0.25 + hypothermiaSeverity * 0.45) * dt);
+
+      if (bs.temperature < 32.5 && !player.isFainting && !player.isHospitalized && !player.needsHospitalEvacuation) {
+        player.isFainting = true;
+        player.faintTimer = 16;
+        sound.playGroan();
+        addPlayerNotification(player, `ВЫ ПОТЕРЯЛИ СОЗНАНИЕ ОТ ТЯЖЕЛОЙ ГИПОТЕРМИИ (${bs.temperature.toFixed(1)}°C)! Срочно требуется тепло!`, 'warning');
+      }
     }
   } else if (!player.isInvincible && !player.isCleanMode && (ambientTemp >= 38.0 || (player.isInVehicle && (curVehicle?.cabinSmoke ?? 0) > 0))) {
     // -------------------------------------------------------------------------
@@ -6034,11 +6128,33 @@ export function updatePlayerNeedsAndVitals(
         }
       }
     }
-  } else if (ambientTemp >= 19.5 && bs.temperature < 36.6) {
-    // Warm up in heated car or heated building
-    const warmFactor = Math.min(1.8, (ambientTemp - 18.0) / 12);
-    const heatRate = 0.12 + 0.32 * warmFactor;
-    bs.temperature = Math.min(36.6, bs.temperature + heatRate * dt);
+  } else if (bs.temperature < 36.6) {
+    // Rewarming condition: only if clothes are dry (wetness < 20%) OR we are near a heat source / radiator / fire / ambient > 28°C!
+    if (bs.wetness < 20 || isNearRadiator || ambientTemp > 28.0) {
+      const warmFactor = Math.min(1.8, Math.max(0, (ambientTemp - 18.0) / 12));
+      const radiatorBonus = isNearRadiator ? (0.22 + radiatorProximity * 0.40) : 0;
+      const heatRate = 0.06 + 0.16 * warmFactor + radiatorBonus;
+      bs.temperature = Math.min(36.6, bs.temperature + heatRate * dt);
+    }
+  }
+
+  // 2.5 Compute Psychological & Physical Comfort index (0 to 100%)
+  const isPlayerMoving = Math.hypot(player.vx, player.vy) > 8;
+  const dryScore = Math.max(0, 1.0 - (bs.wetness || 0) / 25) * 25; // up to 25 pts
+  const thermalScore = Math.max(0, 1.0 - Math.abs(bs.temperature - 36.6) / 1.0) * 25; // up to 25 pts
+  const radiatorScore = isNearRadiator ? 15 : 0; // up to 15 pts bonus for cozy radiant heat
+  const nutritionScore = ((Math.min(100, player.needs.hunger) / 100) * 0.5 + (Math.min(100, player.needs.thirst) / 100) * 0.5) * 20; // up to 20 pts
+  const seatScore = (player.sittingState || player.isInVehicle ? 15 : (isPlayerMoving ? 0 : 8)); // up to 15 pts
+  const painPenalty = Math.min(1.0, (bs.effectivePain || 0) / 35 + (bs.panicLevel || 0) / 35 + (player.needs.nausea || 0) / 40);
+  const healthScore = Math.max(0, (1.0 - painPenalty)) * 15; // up to 15 pts
+
+  const rawComfort = dryScore + thermalScore + radiatorScore + nutritionScore + seatScore + healthScore;
+  bs.comfort = Math.min(100, Math.max(0, Math.round(rawComfort)));
+
+  // Comfort benefits:
+  if (bs.comfort > 50) {
+    // Soothe panic faster in comfortable conditions
+    bs.panicLevel = Math.max(0, (bs.panicLevel || 0) - 2.5 * dt);
   }
 
   // 3. Hydration & Energy sync
@@ -6119,26 +6235,39 @@ export function updatePlayerNeedsAndVitals(
     return;
   }
 
-  // 1. Drain Hunger (Голод)
-  let hungerDrain = 0.06;
+  // 1. Drain Hunger (Голод) - Physiological Basal Metabolic Rate + physical work
+  let hungerDrain = 0.009; // Resting BMR
   if (input.sprint && !player.isInVehicle && player.speed > 50) {
-    hungerDrain = 0.16;
+    hungerDrain = 0.038;
+  } else if (isPlayerMoving && !player.isInVehicle) {
+    hungerDrain = 0.016;
   }
   player.needs.hunger = Math.max(0, player.needs.hunger - hungerDrain * dt);
 
-  // 2. Drain Thirst (Жажда)
-  let thirstDrain = 0.10;
+  // 2. Drain Thirst (Жажда) - Depletes ~2.5x faster than food, accelerates with physical exertion & heat sweating
+  let thirstDrain = 0.020; // Resting hydration consumption
   if (input.sprint && !player.isInVehicle && player.speed > 50) {
-    thirstDrain = 0.24;
+    thirstDrain = 0.075;
+  } else if (isPlayerMoving && !player.isInVehicle) {
+    thirstDrain = 0.035;
+  }
+  // Ambient heat sweating adds to fluid loss
+  if (ambientTemp > 24.0 && !player.isInVehicle) {
+    thirstDrain += Math.min(0.18, (ambientTemp - 24.0) * 0.012);
   }
   player.needs.thirst = Math.max(0, player.needs.thirst - thirstDrain * dt);
 
   // 3. Energy / Stamina (Усталость / Выносливость)
   const isDrowsy = player.needs.sleepiness > 75;
-  const maxEnergy = isDrowsy ? 70 : 100;
+  const isDehydrated = player.needs.thirst < 25;
+  const isStarving = player.needs.hunger < 15;
+
+  let maxEnergy = 100;
+  if (isDrowsy) maxEnergy = Math.min(maxEnergy, 70);
+  if (isDehydrated) maxEnergy = Math.min(maxEnergy, 55);
+  if (isStarving) maxEnergy = Math.min(maxEnergy, 60);
 
   if (input.sprint && !player.isInVehicle && (input.forward || input.backward || input.left || input.right)) {
-    
     let mPenalty = 0;
     if (player.equippedClothing) {
       for (const slot of Object.values(player.equippedClothing)) {
@@ -6152,7 +6281,10 @@ export function updatePlayerNeedsAndVitals(
   } else if (player.isDashing) {
     player.needs.energy = Math.max(0, player.needs.energy - 8 * dt);
   } else {
-    const recoveryRate = isDrowsy ? 15 : 28;
+    let recoveryRate = 26;
+    if (isDrowsy) recoveryRate *= 0.65;
+    if (isDehydrated) recoveryRate *= 0.45;
+    if (isStarving) recoveryRate *= 0.70;
     if (player.needs.energy < maxEnergy) {
       player.needs.energy = Math.min(maxEnergy, player.needs.energy + recoveryRate * dt);
     }
@@ -6297,19 +6429,22 @@ export function updatePlayerNeedsAndVitals(
 
   // 5. Health & Survival Effects (Здоровье и Выживание)
   if (player.needs.hunger <= 0) {
-    player.needs.health = Math.max(0, player.needs.health - 2.5 * dt);
+    // Starvation damage (gradual organ & tissue depletion)
+    player.needs.health = Math.max(0, player.needs.health - 0.25 * dt);
   }
   if (player.needs.thirst <= 0) {
-    player.needs.health = Math.max(0, player.needs.health - 3.5 * dt);
+    // Dehydration damage (severe cellular dehydration & circulatory collapse)
+    player.needs.health = Math.max(0, player.needs.health - 0.65 * dt);
   }
   if (
-    player.needs.hunger > 65 &&
-    player.needs.thirst > 65 &&
+    player.needs.hunger > 60 &&
+    player.needs.thirst > 60 &&
     player.needs.energy > 30 &&
+    (bs.temperature >= 36.2 && bs.temperature <= 37.3) &&
     player.needs.health < 100 &&
     player.needs.health > 0
   ) {
-    player.needs.health = Math.min(100, player.needs.health + 1.2 * dt);
+    player.needs.health = Math.min(100, player.needs.health + 0.85 * dt);
   }
 
   // Hospital emergency revival if health <= 0

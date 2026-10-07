@@ -23,6 +23,8 @@ export interface DetailedBodySensations {
   temperatureSeverity: 'normal' | 'chilly' | 'freezing' | 'fever';
   wetnessText: string;
   wetnessSeverity: 'dry' | 'damp' | 'soaked';
+  comfortText: string;
+  comfortSeverity: 'none' | 'mild' | 'cozy' | 'bliss';
   painText: string;
   painSeverity: 'none' | 'mild' | 'moderate' | 'severe';
   energyText: string;
@@ -173,23 +175,26 @@ export function getDetailedBodySensations(player?: Player): DetailedBodySensatio
   const temp = bodyState.temperature ?? 36.6;
   let temperatureText = `Нормальная температура (${temp.toFixed(1)}°C)`;
   let temperatureSeverity: DetailedBodySensations['temperatureSeverity'] = 'normal';
-  if (temp >= 36.2 && temp <= 37.1) {
+  if (temp >= 36.3 && temp <= 37.2) {
     temperatureText = `Комфортная температура тела (${temp.toFixed(1)}°C)`;
     temperatureSeverity = 'normal';
-  } else if (temp < 36.2 && temp >= 35.2) {
+  } else if (temp < 36.3 && temp >= 35.0) {
     temperatureText = `Прохладно, ощущается озноб и дрожь (${temp.toFixed(1)}°C)`;
     temperatureSeverity = 'chilly';
-  } else if (temp < 35.2) {
-    temperatureText = `Опасное переохлаждение / Гипотермия (${temp.toFixed(1)}°C)!`;
+  } else if (temp < 35.0 && temp >= 33.0) {
+    temperatureText = `Умеренная гипотермия: онемение пальцев, угасание дрожи (${temp.toFixed(1)}°C)!`;
     temperatureSeverity = 'freezing';
-  } else if (temp >= 39.5) {
-    temperatureText = `ОБЖИГАЮЩИЙ ЖАР! Опустошающий тепловой удар и ожоги кожи (${temp.toFixed(1)}°C)!`;
+  } else if (temp < 33.0) {
+    temperatureText = `ТЯЖЕЛАЯ ГИПОТЕРМИЯ: помрачение сознания, опасное переохлаждение (${temp.toFixed(1)}°C)!`;
+    temperatureSeverity = 'freezing';
+  } else if (temp >= 40.5) {
+    temperatureText = `ОБЖИГАЮЩИЙ ТЕПЛОВОЙ УДАР: гипертермический коллапс (${temp.toFixed(1)}°C)!`;
     temperatureSeverity = 'fever';
-  } else if (temp >= 37.8) {
-    temperatureText = `Мучительный зной и палящая жара (${temp.toFixed(1)}°C)!`;
+  } else if (temp >= 38.5) {
+    temperatureText = `Гипертермия / Жар: учащенный пульс, палящий зной (${temp.toFixed(1)}°C)!`;
     temperatureSeverity = 'fever';
   } else {
-    temperatureText = `Повышенная температура / Лихорадка (${temp.toFixed(1)}°C)`;
+    temperatureText = `Повышенная температура тела (${temp.toFixed(1)}°C)`;
     temperatureSeverity = 'fever';
   }
 
@@ -368,15 +373,15 @@ export function getDetailedBodySensations(player?: Player): DetailedBodySensatio
     });
   }
 
-  // 2.4 Dizziness / Vertigo from Hypoxia and Pain ("Головокружение")
+  // 2.4 Dizziness / Vertigo from Hypoxia and Pain ("Головокружение & Двоение в глазах")
   const dizziness = Math.max(bodyState.dizziness || 0, co * 1.15);
-  if (dizziness > 15) {
+  if (dizziness > 10) {
     activeSymptoms.push({
       id: 'dizziness_symptom',
       label: 'Головокружение',
       description: dizziness > 65
-        ? 'Сильное вертиго, предметы плывут перед глазами, земля уходит из-под ног'
-        : 'Лёгкое помутнение в голове, пошатывание и дезориентация',
+        ? 'Сильное вертиго, выраженное двоение в глазах, предметы двоятся и плывут'
+        : 'Лёгкая расфокусировка зрачков, раздвоение контуров предметов',
       severity: dizziness > 50 ? 'danger' : 'warning',
       iconType: 'heart'
     });
@@ -588,6 +593,24 @@ export function getDetailedBodySensations(player?: Player): DetailedBodySensatio
   else if (nausea > 40) { nauseaText = 'Тошнит, слабость в теле'; nauseaSeverity = 'nauseous'; }
   else if (nausea > 15) { nauseaText = 'Лёгкая тошнота'; nauseaSeverity = 'uneasy'; }
 
+  // Comfort
+  const comfortVal = bodyState.comfort ?? 50;
+  let comfortText = 'Умеренный комфорт';
+  let comfortSeverity: DetailedBodySensations['comfortSeverity'] = 'mild';
+  if (comfortVal >= 80) {
+    comfortText = bodyState.nearRadiator ? 'Уют и благодать у теплого радиатора' : 'Глубокий уют, тепло и покой';
+    comfortSeverity = 'bliss';
+  } else if (comfortVal >= 60) {
+    comfortText = 'Приятное чувство уюта и защищенности';
+    comfortSeverity = 'cozy';
+  } else if (comfortVal >= 35) {
+    comfortText = 'Нейтральное состояние';
+    comfortSeverity = 'mild';
+  } else {
+    comfortText = 'Острый дискомфорт (холод, сырость или боль)';
+    comfortSeverity = 'none';
+  }
+
   return {
     healthText,
     overallSensorySummary,
@@ -597,6 +620,8 @@ export function getDetailedBodySensations(player?: Player): DetailedBodySensatio
     temperatureSeverity,
     wetnessText,
     wetnessSeverity,
+    comfortText,
+    comfortSeverity,
     painText,
     painSeverity,
     energyText,

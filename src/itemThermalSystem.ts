@@ -18,109 +18,109 @@ export const ITEM_THERMAL_CONFIGS: Record<string, ItemThermalConfig> = {
   // === HOT BEVERAGES & FAST FOOD (CAFE, PIZZERIA, ASIAN, BAKERY) ===
   hot_coffee: {
     temperature: 82.0,
-    heatLossRate: 0.045,
+    heatLossRate: 0.0035,
     heatRetention: 0.35, // Disposable paper cup conducts significant heat to the outer surface
     surfaceTemperature: 60.5
   },
   cappuccino: {
     temperature: 74.0,
-    heatLossRate: 0.042,
+    heatLossRate: 0.0032,
     heatRetention: 0.36,
     surfaceTemperature: 55.0
   },
   tea_green: {
     temperature: 80.0,
-    heatLossRate: 0.040,
+    heatLossRate: 0.0030,
     heatRetention: 0.38,
     surfaceTemperature: 57.0
   },
   tea: {
     temperature: 80.0,
-    heatLossRate: 0.040,
+    heatLossRate: 0.0030,
     heatRetention: 0.38,
     surfaceTemperature: 57.0
   },
   soup: {
     temperature: 78.0,
-    heatLossRate: 0.032,
+    heatLossRate: 0.0025,
     heatRetention: 0.42,
     surfaceTemperature: 54.0
   },
   soup_bowl: {
     temperature: 78.0,
-    heatLossRate: 0.032,
+    heatLossRate: 0.0025,
     heatRetention: 0.42,
     surfaceTemperature: 54.0
   },
   pizza_slice: {
     temperature: 72.0,
-    heatLossRate: 0.048,
+    heatLossRate: 0.0040,
     heatRetention: 0.28,
     surfaceTemperature: 57.5
   },
   burger: {
     temperature: 68.0,
-    heatLossRate: 0.038,
+    heatLossRate: 0.0030,
     heatRetention: 0.35,
     surfaceTemperature: 51.0
   },
   hot_dog: {
     temperature: 70.0,
-    heatLossRate: 0.040,
+    heatLossRate: 0.0032,
     heatRetention: 0.32,
     surfaceTemperature: 54.0
   },
   french_fries: {
     temperature: 74.0,
-    heatLossRate: 0.055,
+    heatLossRate: 0.0045,
     heatRetention: 0.25,
     surfaceTemperature: 60.0
   },
   nuggets: {
     temperature: 72.0,
-    heatLossRate: 0.046,
+    heatLossRate: 0.0038,
     heatRetention: 0.30,
     surfaceTemperature: 56.0
   },
   wok_box: {
     temperature: 76.0,
-    heatLossRate: 0.035,
+    heatLossRate: 0.0028,
     heatRetention: 0.40,
     surfaceTemperature: 53.0
   },
   shawarma: {
     temperature: 72.0,
-    heatLossRate: 0.036,
+    heatLossRate: 0.0028,
     heatRetention: 0.38,
     surfaceTemperature: 52.0
   },
   pie_meat: {
     temperature: 75.0,
-    heatLossRate: 0.038,
+    heatLossRate: 0.0030,
     heatRetention: 0.35,
     surfaceTemperature: 56.0
   },
   cheburek: {
     temperature: 76.0,
-    heatLossRate: 0.040,
+    heatLossRate: 0.0032,
     heatRetention: 0.32,
     surfaceTemperature: 58.0
   },
   samsa: {
     temperature: 75.0,
-    heatLossRate: 0.038,
+    heatLossRate: 0.0030,
     heatRetention: 0.35,
     surfaceTemperature: 56.0
   },
   popcorn_caramel: {
     temperature: 46.0,
-    heatLossRate: 0.050,
+    heatLossRate: 0.0040,
     heatRetention: 0.35,
     surfaceTemperature: 38.0
   },
   nachos: {
     temperature: 42.0,
-    heatLossRate: 0.055,
+    heatLossRate: 0.0045,
     heatRetention: 0.32,
     surfaceTemperature: 36.0
   },
@@ -128,199 +128,199 @@ export const ITEM_THERMAL_CONFIGS: Record<string, ItemThermalConfig> = {
   // === REFRIGERATED SUPERMARKET & BEVERAGE SECTION (+2°C to +5°C) ===
   carton_milk: {
     temperature: 3.5,
-    heatLossRate: 0.038,
-    heatRetention: 0.32,
+    heatLossRate: 0.0022,
+    heatRetention: 0.35,
     surfaceTemperature: 5.0
   },
   sour_cream_pot: {
     temperature: 3.5,
-    heatLossRate: 0.035,
-    heatRetention: 0.35,
-    surfaceTemperature: 5.0
+    heatLossRate: 0.0020,
+    heatRetention: 0.40,
+    surfaceTemperature: 4.8
   },
   butter_brick_salted: {
     temperature: 3.5,
-    heatLossRate: 0.030,
-    heatRetention: 0.40,
+    heatLossRate: 0.0018,
+    heatRetention: 0.42,
     surfaceTemperature: 4.8
   },
   cheese_cheddar_block: {
     temperature: 4.0,
-    heatLossRate: 0.032,
-    heatRetention: 0.38,
+    heatLossRate: 0.0020,
+    heatRetention: 0.40,
     surfaceTemperature: 5.2
   },
   cola: {
     temperature: 4.0,
-    heatLossRate: 0.075,
-    heatRetention: 0.16,
+    heatLossRate: 0.0040,
+    heatRetention: 0.18,
     surfaceTemperature: 5.2
   },
   cola_zero: {
     temperature: 4.0,
-    heatLossRate: 0.075,
-    heatRetention: 0.16,
+    heatLossRate: 0.0040,
+    heatRetention: 0.18,
     surfaceTemperature: 5.2
   },
   energy_drink: {
     temperature: 4.0,
-    heatLossRate: 0.075,
-    heatRetention: 0.16,
+    heatLossRate: 0.0040,
+    heatRetention: 0.18,
     surfaceTemperature: 5.2
   },
   beer: {
     temperature: 4.0,
-    heatLossRate: 0.065,
+    heatLossRate: 0.0038,
     heatRetention: 0.20,
     surfaceTemperature: 5.2
   },
   kvas: {
     temperature: 5.0,
-    heatLossRate: 0.060,
-    heatRetention: 0.22,
+    heatLossRate: 0.0035,
+    heatRetention: 0.25,
     surfaceTemperature: 6.0
   },
   fresh_juice: {
     temperature: 5.0,
-    heatLossRate: 0.055,
-    heatRetention: 0.25,
+    heatLossRate: 0.0032,
+    heatRetention: 0.28,
     surfaceTemperature: 6.2
   },
   soda_can: {
     temperature: 4.0,
-    heatLossRate: 0.075,
-    heatRetention: 0.16,
+    heatLossRate: 0.0040,
+    heatRetention: 0.18,
     surfaceTemperature: 5.2
   },
   sushi_set: {
     temperature: 8.0,
-    heatLossRate: 0.045,
+    heatLossRate: 0.0030,
     heatRetention: 0.30,
     surfaceTemperature: 9.0
   },
 
-  // === REFRIGERATED FRESH BUTCHERY & MEAT DISPLAY (+3°C) ===
+  // === FROZEN SUPERMARKET MEAT, POULTRY & SEAFOOD SECTION (-16°C) ===
   beef_minced: {
-    temperature: 3.0,
-    heatLossRate: 0.036,
-    heatRetention: 0.34,
-    surfaceTemperature: 4.5
+    temperature: -16.0,
+    heatLossRate: 0.0012,
+    heatRetention: 0.45,
+    surfaceTemperature: -13.5
   },
   pork_minced: {
-    temperature: 3.0,
-    heatLossRate: 0.036,
-    heatRetention: 0.34,
-    surfaceTemperature: 4.5
+    temperature: -16.0,
+    heatLossRate: 0.0012,
+    heatRetention: 0.45,
+    surfaceTemperature: -13.5
   },
   chicken_minced: {
-    temperature: 3.0,
-    heatLossRate: 0.036,
-    heatRetention: 0.34,
-    surfaceTemperature: 4.5
+    temperature: -16.0,
+    heatLossRate: 0.0012,
+    heatRetention: 0.45,
+    surfaceTemperature: -13.5
   },
   turkey_minced: {
-    temperature: 3.0,
-    heatLossRate: 0.036,
-    heatRetention: 0.34,
-    surfaceTemperature: 4.5
+    temperature: -16.0,
+    heatLossRate: 0.0012,
+    heatRetention: 0.45,
+    surfaceTemperature: -13.5
   },
   minced_meat_mixed: {
-    temperature: 3.0,
-    heatLossRate: 0.036,
-    heatRetention: 0.34,
-    surfaceTemperature: 4.5
+    temperature: -16.0,
+    heatLossRate: 0.0012,
+    heatRetention: 0.45,
+    surfaceTemperature: -13.5
   },
   beef_rump_large: {
-    temperature: 3.0,
-    heatLossRate: 0.025,
-    heatRetention: 0.45,
-    surfaceTemperature: 4.2
+    temperature: -16.0,
+    heatLossRate: 0.0010,
+    heatRetention: 0.50,
+    surfaceTemperature: -14.0
   },
   chicken_breast_large: {
-    temperature: 3.0,
-    heatLossRate: 0.030,
-    heatRetention: 0.40,
-    surfaceTemperature: 4.4
+    temperature: -16.0,
+    heatLossRate: 0.0012,
+    heatRetention: 0.45,
+    surfaceTemperature: -13.5
   },
   chicken_thighs_medium: {
-    temperature: 3.0,
-    heatLossRate: 0.032,
-    heatRetention: 0.38,
-    surfaceTemperature: 4.5
+    temperature: -16.0,
+    heatLossRate: 0.0012,
+    heatRetention: 0.45,
+    surfaceTemperature: -13.5
   },
   pork_ribs_medium: {
-    temperature: 3.0,
-    heatLossRate: 0.028,
-    heatRetention: 0.42,
-    surfaceTemperature: 4.3
+    temperature: -16.0,
+    heatLossRate: 0.0010,
+    heatRetention: 0.48,
+    surfaceTemperature: -14.0
   },
   salmon_steak: {
-    temperature: 2.0,
-    heatLossRate: 0.035,
-    heatRetention: 0.35,
-    surfaceTemperature: 3.2
+    temperature: -16.0,
+    heatLossRate: 0.0012,
+    heatRetention: 0.45,
+    surfaceTemperature: -13.5
   },
   cod_fillet: {
-    temperature: 2.0,
-    heatLossRate: 0.035,
-    heatRetention: 0.35,
-    surfaceTemperature: 3.2
+    temperature: -16.0,
+    heatLossRate: 0.0012,
+    heatRetention: 0.45,
+    surfaceTemperature: -13.5
   },
 
   // === DEEP FREEZE & FROZEN SECTION (-18°C to -6°C) ===
   ice_cream: {
-    temperature: -6.0,
-    heatLossRate: 0.042,
+    temperature: -12.0,
+    heatLossRate: 0.0028,
     heatRetention: 0.30,
-    surfaceTemperature: -3.0
+    surfaceTemperature: -9.0
   },
   milkshake: {
-    temperature: -2.0,
-    heatLossRate: 0.045,
+    temperature: -3.0,
+    heatLossRate: 0.0035,
     heatRetention: 0.32,
-    surfaceTemperature: -0.5
+    surfaceTemperature: -1.5
   },
   vegetable_mix_frozen: {
     temperature: -16.0,
-    heatLossRate: 0.038,
-    heatRetention: 0.35,
+    heatLossRate: 0.0015,
+    heatRetention: 0.40,
     surfaceTemperature: -13.5
   },
   berries_mixed_frozen: {
     temperature: -16.0,
-    heatLossRate: 0.038,
-    heatRetention: 0.35,
+    heatLossRate: 0.0015,
+    heatRetention: 0.40,
     surfaceTemperature: -13.5
   },
 
   // === THERMOS & INSULATED DRINKWARE ===
   thermos: {
     temperature: 20.0,
-    heatLossRate: 0.003,       // Ultra-low heat loss due to vacuum flask
-    heatRetention: 0.95,      // 95% thermal retention: exterior remains cool even with boiling content!
+    heatLossRate: 0.00015,     // Ultra-low heat loss due to vacuum flask (hours of heat retention)
+    heatRetention: 0.96,       // 96% thermal retention: exterior remains cool even with boiling content!
     surfaceTemperature: 20.0
   },
   camp_flask: {
     temperature: 20.0,
-    heatLossRate: 0.065,
+    heatLossRate: 0.0045,
     heatRetention: 0.22,
     surfaceTemperature: 20.0
   },
   paper_cup: {
     temperature: 20.0,
-    heatLossRate: 0.045,
+    heatLossRate: 0.0035,
     heatRetention: 0.35,
     surfaceTemperature: 20.0
   },
   glass_mug: {
     temperature: 20.0,
-    heatLossRate: 0.040,
+    heatLossRate: 0.0030,
     heatRetention: 0.40,
     surfaceTemperature: 20.0
   },
   can_alu_330: {
     temperature: 20.0,
-    heatLossRate: 0.080,
+    heatLossRate: 0.0050,
     heatRetention: 0.14,
     surfaceTemperature: 20.0
   },
@@ -328,19 +328,19 @@ export const ITEM_THERMAL_CONFIGS: Record<string, ItemThermalConfig> = {
   // === HEATED METAL / COOKWARE ===
   kitchen_kettle_steel: {
     temperature: 20.0,
-    heatLossRate: 0.065,
+    heatLossRate: 0.0050,
     heatRetention: 0.20,
     surfaceTemperature: 20.0
   },
   kitchen_kettle_enamel: {
     temperature: 20.0,
-    heatLossRate: 0.055,
+    heatLossRate: 0.0040,
     heatRetention: 0.25,
     surfaceTemperature: 20.0
   },
   kitchen_kettle_electric: {
     temperature: 20.0,
-    heatLossRate: 0.045,
+    heatLossRate: 0.0030,
     heatRetention: 0.35,
     surfaceTemperature: 20.0
   }
@@ -350,19 +350,19 @@ export const ITEM_THERMAL_CONFIGS: Record<string, ItemThermalConfig> = {
  * Category-level thermal properties fallback
  */
 export const CATEGORY_THERMAL_DEFAULTS: Record<ItemCategory, { heatLossRate: number; heatRetention: number }> = {
-  drink: { heatLossRate: 0.040, heatRetention: 0.35 },
-  food: { heatLossRate: 0.035, heatRetention: 0.40 },
-  tool: { heatLossRate: 0.075, heatRetention: 0.16 },       // Bare steel / tools lose/gain heat rapidly
-  auto: { heatLossRate: 0.070, heatRetention: 0.18 },       // Automotive metal components
-  clothing: { heatLossRate: 0.012, heatRetention: 0.85 },   // Insulating fabric / wool / down
-  gear: { heatLossRate: 0.030, heatRetention: 0.50 },
-  electronics: { heatLossRate: 0.028, heatRetention: 0.52 },
-  med: { heatLossRate: 0.030, heatRetention: 0.45 },
-  medical: { heatLossRate: 0.030, heatRetention: 0.45 },
-  furniture: { heatLossRate: 0.020, heatRetention: 0.65 },
-  valuable: { heatLossRate: 0.080, heatRetention: 0.15 },
-  misc: { heatLossRate: 0.040, heatRetention: 0.40 },
-  trash: { heatLossRate: 0.050, heatRetention: 0.30 }
+  drink: { heatLossRate: 0.0030, heatRetention: 0.35 },
+  food: { heatLossRate: 0.0020, heatRetention: 0.40 },
+  tool: { heatLossRate: 0.0060, heatRetention: 0.16 },       // Bare steel / tools lose/gain heat rapidly
+  auto: { heatLossRate: 0.0055, heatRetention: 0.18 },       // Automotive metal components
+  clothing: { heatLossRate: 0.0010, heatRetention: 0.85 },   // Insulating fabric / wool / down
+  gear: { heatLossRate: 0.0025, heatRetention: 0.50 },
+  electronics: { heatLossRate: 0.0022, heatRetention: 0.52 },
+  med: { heatLossRate: 0.0025, heatRetention: 0.45 },
+  medical: { heatLossRate: 0.0025, heatRetention: 0.45 },
+  furniture: { heatLossRate: 0.0012, heatRetention: 0.65 },
+  valuable: { heatLossRate: 0.0060, heatRetention: 0.15 },
+  misc: { heatLossRate: 0.0030, heatRetention: 0.40 },
+  trash: { heatLossRate: 0.0040, heatRetention: 0.30 }
 };
 
 /**
@@ -444,7 +444,7 @@ export function updateItemThermodynamics(
   }
 
   const core = item.temperature ?? ambientTemp;
-  const lossRate = item.heatLossRate ?? 0.04;
+  const lossRate = item.heatLossRate ?? 0.003;
   const retention = Math.max(0, Math.min(0.98, item.heatRetention ?? 0.35));
   item.ambientTemperature = ambientTemp;
 
@@ -454,11 +454,16 @@ export function updateItemThermodynamics(
     return false;
   }
 
+  // Thermal mass scaling: heavier objects (e.g. 1kg brick of meat vs 30g snack) heat up & cool down much slower
+  // Reference mass is 0.25 kg. Heavier items have greater thermal inertia.
+  const weightKg = Math.max(0.04, item.weight ?? 0.25);
+  const massScaling = Math.max(0.12, Math.min(3.0, 0.25 / weightKg));
+
   // Effective cooling speed: retention slows down core heat loss.
   // Each enclosing packaging layer (parentInsulationMultiplier) provides additional thermal barrier.
-  const effectiveLoss = lossRate * (1.0 - (retention * 0.85)) * parentInsulationMultiplier;
+  const effectiveLoss = lossRate * massScaling * (1.0 - (retention * 0.85)) * parentInsulationMultiplier;
   
-  // Exact analytical solution to Newton's law of cooling: T(t) = T_env + (T_0 - T_env) * exp(-k * dt)
+  // Analytical solution to Newton's law of cooling: T(t) = T_env + (T_0 - T_env) * exp(-k * dt)
   const decay = Math.exp(-effectiveLoss * Math.max(0, dt));
   const newCore = ambientTemp + (core - ambientTemp) * decay;
 
@@ -468,6 +473,25 @@ export function updateItemThermodynamics(
   item.surfaceTemperature = Number(newSurface.toFixed(1));
   item.lastThermalUpdate = Date.now() / 1000;
   item.isThermalStable = Math.abs(newCore - ambientTemp) < 0.2;
+
+  // Wetness drying & moisture dissipation on garments and fabrics
+  if (item.wetness !== undefined && item.wetness > 0) {
+    // Base evaporation in ambient air (slow, physically realistic)
+    let dryRate = 0.025; // ~0.025% per sec at 20°C (approx 40-50 min to fully dry)
+    if (ambientTemp > 22.0) {
+      // Rapid thermal evaporation near heat sources, fires, and hot vehicle blowers
+      const excessHeat = ambientTemp - 22.0;
+      dryRate += excessHeat * 0.035; // scales up to ~1.5 - 2.5%/sec near fires/stoves
+    } else if (ambientTemp < 10.0) {
+      // Freezing / damp cold air severely retards evaporation
+      dryRate = Math.max(0.005, dryRate * 0.4);
+    }
+    const updatedWetness = Math.max(0, item.wetness - dryRate * dt);
+    item.wetness = Math.round(updatedWetness * 10) / 10;
+    if (item.clothingStats) {
+      item.clothingStats.wetness = item.wetness;
+    }
+  }
 
   // Recursively update contained items if container exists (e.g., bag in bag, box in bag)
   if (item.contents && item.contents.length > 0) {
@@ -719,6 +743,17 @@ export function updateWorldItemsThermodynamics(
               }
             }
           }
+        }
+      }
+
+      // Rain wetting for ground items outdoors
+      const isRaining = world.weather === 'rain' || world.weather === 'storm';
+      if (isRaining && gItem.item.category === 'clothing') {
+        const waterResist = gItem.item.clothingStats?.waterResistance ?? 0;
+        const wetRate = Math.max(0.5, 4.0 - waterResist * 0.04);
+        gItem.item.wetness = Math.min(100, (gItem.item.wetness || 0) + wetRate * effectiveDt);
+        if (gItem.item.clothingStats) {
+          gItem.item.clothingStats.wetness = gItem.item.wetness;
         }
       }
 

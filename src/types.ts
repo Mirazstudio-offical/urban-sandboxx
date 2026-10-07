@@ -1257,6 +1257,7 @@ export interface ClothingStats {
   pocketCapacityL?: number; // Volume capacity of pockets in Liters (e.g. 2.5L for jacket, 1.4L for jeans)
   maxPocketItemVolumeL?: number; // Max size of a single item that fits through pocket opening (e.g. 0.45L)
   maxPocketWeightKg?: number; // Max load capacity of pockets in kg (e.g. 3.0 kg)
+  wetness?: number;         // Current moisture level 0 to 100 (%) for this specific garment
 }
 
 export type EquippedClothing = {
@@ -1331,6 +1332,7 @@ export interface InventoryItem {
   // Item Thermodynamics & Surface Heat Contact
   temperature?: number;          // Core internal temperature in °C
   surfaceTemperature?: number;   // External surface temperature in °C (outer surface touching hands/pockets)
+  wetness?: number;              // Moisture / soaked water percentage 0 to 100 (%)
   heatLossRate?: number;         // Heat loss / cooling coefficient per second (0.001 to 0.50)
   heatRetention?: number;        // Heat retention / insulation factor (0.0 bare metal, 1.0 vacuum thermos)
   ambientTemperature?: number;   // Surrounding ambient medium temperature in °C
@@ -1479,6 +1481,8 @@ export interface BodyState {
   bodyParts: BodyPartsMap;
   coPoisoning?: number;        // 0 to 100% carbon monoxide poisoning (hypoxia)
   dizziness?: number;          // 0 to 100% dizziness / vertigo from hypoxia & trauma
+  comfort?: number;            // 0 to 100% psychological and physical comfort sensation
+  nearRadiator?: boolean;      // whether player is currently basking near an indoor radiator or heat source
   suffocationLevel?: number;   // 0 to 100% respiratory distress & choking
   coughTimer?: number;
   groanTimer?: number;

@@ -5369,6 +5369,7 @@ export function createPackagedItem(itemId: string, count: number = 1): Inventory
       const firstInner = container.contents[0];
       if (firstInner && typeof firstInner.temperature === 'number') {
         container.temperature = firstInner.temperature;
+        container.heatLossRate = firstInner.heatLossRate;
         container.surfaceTemperature = calculateSurfaceTemperature(firstInner.temperature, 20.0, container.heatRetention ?? 0.4);
       }
     }
@@ -9729,6 +9730,12 @@ export function equipClothing(player: Player, inventoryIndex: number, world?: Ga
   player.inventory[inventoryIndex] = null as any;
   player.equippedClothing[stats.slot]![stats.layer] = item;
 
+  // Transfer item wetness to player body state
+  const itemWetness = item.wetness ?? stats.wetness ?? 0;
+  if (player.bodyState) {
+    player.bodyState.wetness = Math.max(player.bodyState.wetness || 0, itemWetness);
+  }
+
   // If this item had stored contents (e.g. backpack was unequipped with items inside), unpack them into inventory!
   if (item.contents && item.contents.length > 0) {
     const contentsToUnpack = [...item.contents];
@@ -9742,7 +9749,8 @@ export function equipClothing(player: Player, inventoryIndex: number, world?: Ga
   const totalSlots = getPlayerTotalSlots(player);
   player.maxInventorySlots = totalSlots;
 
-  return { success: true, message: `Надето: ${item.nameRu}` };
+  const wetNotice = itemWetness > 35 ? ' (мокрая ткань холодит тело)' : itemWetness > 10 ? ' (влажная)' : '';
+  return { success: true, message: `Надето: ${item.nameRu}${wetNotice}` };
 }
 
 export function unequipClothing(
@@ -9757,6 +9765,14 @@ export function unequipClothing(
   
   const item = player.equippedClothing[slot]![layer]!;
   
+  // PRESERVE WETNESS: Clothing retains its soaked wetness when stripped off as an item!
+  const currentBodyWetness = player.bodyState?.wetness ?? 0;
+  const retainedWetness = item.wetness !== undefined ? Math.max(item.wetness, currentBodyWetness) : currentBodyWetness;
+  item.wetness = Math.round(retainedWetness * 10) / 10;
+  if (item.clothingStats) {
+    item.clothingStats.wetness = item.wetness;
+  }
+
   // Find compartment corresponding to this clothing before removing
   const beforeCompartments = getPlayerCompartments(player);
   const targetComp = beforeCompartments.find(c => {
@@ -9848,9 +9864,10 @@ export function unequipClothing(
   }
 
   const packedCount = item.contents?.length || 0;
+  const wetLabel = (item.wetness || 0) > 40 ? ' [насквозь мокрая]' : (item.wetness || 0) > 10 ? ' [влажная]' : '';
   const msg = packedCount > 0 
-    ? `${item.nameRu} снят (содержимое [${packedCount}] внутри)`
-    : `${item.nameRu} снят`;
+    ? `${item.nameRu}${wetLabel} снят (содержимое [${packedCount}] внутри)`
+    : `${item.nameRu}${wetLabel} снят`;
 
   return { success: true, message: msg };
 }

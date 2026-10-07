@@ -12,6 +12,8 @@ import { Camera, Player, GameWorld } from './types';
 export class ScreenEffectsSystem {
   private noiseSeed: number = 0;
   private breathTimer: number = 0;
+  private dizzinessTimer: number = 0;
+  private nauseaTimer: number = 0;
 
   /**
    * Applies pre-render camera modifications (e.g. from cold shivering or panic hyperventilation)
@@ -19,8 +21,11 @@ export class ScreenEffectsSystem {
   public applyPreRenderCameraModifiers(camera: Camera, player: Player, dt: number) {
     if (!player.bodyState) return;
     const bs = player.bodyState;
+    const needs = player.needs;
     const shiver = bs.shiverIntensity || 0;
     const panicLevel = bs.panicLevel || 0;
+    const dizziness = Math.max(bs.dizziness || 0, (bs.coPoisoning || 0) * 1.15);
+    const nausea = needs?.nausea || 0;
 
     if (shiver > 0.05) {
       // Extremely high-frequency, chaotic muscle shivering/tremor (55-80 Hz) to simulate real physical shuddering
@@ -32,6 +37,30 @@ export class ScreenEffectsSystem {
       camera.x += jitterX;
       camera.y += jitterY;
       camera.angle += rotJitter;
+    }
+
+    // Dizziness / Vertigo horizon disorientation & slow rolling sway ("двоение в глазах / вертиго")
+    if (dizziness > 8) {
+      const dNorm = Math.min(1.0, (dizziness - 8) / 72);
+      this.dizzinessTimer += dt * (1.2 + dNorm * 1.8);
+      const dizzyAngleSway = Math.sin(this.dizzinessTimer) * (dNorm * 0.024);
+      const dizzyOrbitX = Math.cos(this.dizzinessTimer * 0.7) * (dNorm * 3.2);
+      const dizzyOrbitY = Math.sin(this.dizzinessTimer * 0.7) * (dNorm * 3.2);
+
+      camera.angle += dizzyAngleSway;
+      camera.x += dizzyOrbitX;
+      camera.y += dizzyOrbitY;
+    }
+
+    // Nausea undulating gastric wave & visceral heave ("тошнота / желудочный спазм")
+    if (nausea > 12) {
+      const nauseaNorm = Math.min(1.0, (nausea - 12) / 78);
+      this.nauseaTimer += dt * (1.5 + nauseaNorm * 1.6);
+      const nauseaHeave = Math.sin(this.nauseaTimer) * (nauseaNorm * 0.055);
+      const nauseaSwayY = Math.sin(this.nauseaTimer) * (nauseaNorm * 3.0);
+
+      camera.zoom *= (1.0 + nauseaHeave);
+      camera.y += nauseaSwayY;
     }
 
     // Frantic breathing zoom & camera disorientation from acute Panic & Fear ("бешенный зум от дыхания")
@@ -212,29 +241,104 @@ export class ScreenEffectsSystem {
     }
 
     // =========================================================================
-    // 4. FEVER / EXHAUSTION / NAUSEA HEAT WAVE & AMBER TINT
+    // 3.5. DIZZINESS / VERTIRO DIPLOPIA & DOUBLE VISION ("ДВОЕНИЕ В ГЛАЗАХ")
     // =========================================================================
-    const isFeverOrSick = temp > 37.8 || energy < 18 || nausea > 35;
-    if (isFeverOrSick) {
+    const dizziness = Math.max(bs.dizziness || 0, (bs.coPoisoning || 0) * 1.15);
+    if (dizziness > 10) {
       ctx.save();
-      const sickSeverity = Math.min(1.0, Math.max(
-        (temp - 37.5) / 2.0,
-        (20 - energy) / 20,
-        (nausea - 25) / 60
-      ));
-
-      // Amber/yellowish fever tint
-      ctx.fillStyle = `rgba(217, 119, 6, ${sickSeverity * 0.18})`;
-      ctx.fillRect(0, 0, width, height);
-
-      // Subtle heat-wave swaying / vignette
+      const dNorm = Math.min(1.0, (dizziness - 10) / 75);
+      const timeMs = Date.now();
       const cx = width / 2;
       const cy = height / 2;
-      const maxR = Math.hypot(width, height) * 0.55;
-      const heatGrad = ctx.createRadialGradient(cx, cy, maxR * 0.5, cx, cy, maxR);
-      heatGrad.addColorStop(0, 'rgba(245, 158, 11, 0)');
-      heatGrad.addColorStop(1, `rgba(180, 83, 9, ${sickSeverity * 0.35})`);
-      ctx.fillStyle = heatGrad;
+      const maxR = Math.hypot(width, height) * 0.72;
+
+      // Chromatic ghosting diplopia offset
+      const splitX = Math.sin(timeMs * 0.0022) * (dNorm * 16);
+      const splitY = Math.cos(timeMs * 0.0018) * (dNorm * 8);
+
+      // Cyan / Magenta chromatic aberration split ghosting layers
+      ctx.save();
+      ctx.globalCompositeOperation = 'screen';
+      ctx.fillStyle = `rgba(34, 211, 238, ${dNorm * 0.14})`;
+      ctx.fillRect(splitX, splitY, width, height);
+      ctx.fillStyle = `rgba(244, 63, 94, ${dNorm * 0.14})`;
+      ctx.fillRect(-splitX, -splitY, width, height);
+      ctx.restore();
+
+      // Peripheral swimming vertigo blur & optical dispersion vignette
+      const vertInnerR = Math.max(20, maxR * (0.8 - dNorm * 0.5));
+      const vertGrad = ctx.createRadialGradient(cx, cy, vertInnerR, cx, cy, maxR);
+      vertGrad.addColorStop(0, 'rgba(15, 23, 42, 0)');
+      vertGrad.addColorStop(0.55, `rgba(30, 41, 59, ${dNorm * 0.28})`);
+      vertGrad.addColorStop(1.0, `rgba(15, 23, 42, ${Math.min(0.85, dNorm * 0.75)})`);
+      ctx.fillStyle = vertGrad;
+      ctx.fillRect(0, 0, width, height);
+
+      ctx.restore();
+    }
+
+    // =========================================================================
+    // 4. FEVER / EXHAUSTION / NAUSEA VISCERAL SICKNESS WAVES
+    // =========================================================================
+    const isFeverOrSick = temp > 37.8 || energy < 18 || nausea > 15;
+    if (isFeverOrSick) {
+      ctx.save();
+      const cx = width / 2;
+      const cy = height / 2;
+      const maxR = Math.hypot(width, height) * 0.65;
+
+      // 4a. Sickly greenish-yellow bile wash for nausea ("эффект тошноты")
+      if (nausea > 15) {
+        const nauseaNorm = Math.min(1.0, (nausea - 15) / 70);
+        const bilePulse = 0.8 + Math.sin(Date.now() * 0.003) * 0.2;
+
+        ctx.fillStyle = `rgba(84, 107, 28, ${nauseaNorm * 0.14 * bilePulse})`;
+        ctx.fillRect(0, 0, width, height);
+
+        const bileInnerR = Math.max(20, maxR * (0.82 - nauseaNorm * 0.45));
+        const bileGrad = ctx.createRadialGradient(cx, cy, bileInnerR, cx, cy, maxR);
+        bileGrad.addColorStop(0, 'rgba(68, 102, 34, 0)');
+        bileGrad.addColorStop(0.5, `rgba(101, 138, 34, ${nauseaNorm * 0.35 * bilePulse})`);
+        bileGrad.addColorStop(0.85, `rgba(68, 92, 24, ${nauseaNorm * 0.65 * bilePulse})`);
+        bileGrad.addColorStop(1.0, `rgba(30, 48, 10, ${nauseaNorm * 0.88})`);
+        ctx.fillStyle = bileGrad;
+        ctx.fillRect(0, 0, width, height);
+      }
+
+      // 4b. Amber/yellowish fever tint
+      if (temp > 37.8 || energy < 18) {
+        const sickSeverity = Math.min(1.0, Math.max(
+          (temp - 37.5) / 2.0,
+          (20 - energy) / 20
+        ));
+        ctx.fillStyle = `rgba(217, 119, 6, ${sickSeverity * 0.15})`;
+        ctx.fillRect(0, 0, width, height);
+
+        const heatGrad = ctx.createRadialGradient(cx, cy, maxR * 0.5, cx, cy, maxR);
+        heatGrad.addColorStop(0, 'rgba(245, 158, 11, 0)');
+        heatGrad.addColorStop(1, `rgba(180, 83, 9, ${sickSeverity * 0.32})`);
+        ctx.fillStyle = heatGrad;
+        ctx.fillRect(0, 0, width, height);
+      }
+
+      ctx.restore();
+    }
+
+    // =========================================================================
+    // 4.2. COMFORT WARM GLOW & REPOSE ("ЧУВСТВО КОМФОРТА И УЮТА")
+    // =========================================================================
+    const comfort = bs.comfort || 0;
+    if (comfort > 55 && !player.isFainting && hp > 50) {
+      ctx.save();
+      const comfortNorm = Math.min(1.0, (comfort - 55) / 45);
+      const cx = width / 2;
+      const cy = height / 2;
+      const maxR = Math.hypot(width, height) * 0.7;
+      const comfGrad = ctx.createRadialGradient(cx, cy, maxR * 0.55, cx, cy, maxR);
+      comfGrad.addColorStop(0, 'rgba(251, 191, 36, 0)');
+      comfGrad.addColorStop(0.7, `rgba(245, 158, 11, ${comfortNorm * 0.045})`);
+      comfGrad.addColorStop(1.0, `rgba(217, 119, 6, ${comfortNorm * 0.085})`);
+      ctx.fillStyle = comfGrad;
       ctx.fillRect(0, 0, width, height);
       ctx.restore();
     }
