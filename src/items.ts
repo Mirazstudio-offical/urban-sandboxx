@@ -3927,7 +3927,8 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
   },
 
   // === KRAFT PAPER PACKAGING & TAKEOUT WOK BOXES (БУМАЖНАЯ УПАКОВКА С ЦВЕТНОЙ ЭТИКЕТКОЙ) ===
-  // 1. MINI (МИНИ 0.4L) - 1st smaller size
+  // === FACTORY WRAPPED PAPER PACKAGING (ЗАВОДСКАЯ БУМАЖНАЯ УПАКОВКА ДЛЯ МАСЛА, СЫРА И ПРОДУКТОВ) ===
+  // 1. MINI (МИНИ 0.4L) - 1st smaller size (порционный брикет / сырок)
   paper_packaging_mini: {
     itemId: 'paper_packaging_mini',
     name: 'Mini Paper Packaging (0.4L)',
@@ -3935,8 +3936,8 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     category: 'misc',
     maxStack: 1,
     icon: '',
-    description: 'Compact eco-friendly kraft paper container (0.4L mini box) sealed with a colored brand sticker. Ideal for single snacks, dumplings, and sauces.',
-    descriptionRu: 'Компактная крафтовая эко-упаковка (мини-бокс 0.4L) с фирменной цветной этикеткой-пломбой. Отлично подходит для снеков, гедза и порционных закусок. Нажмите [E] для вскрытия.',
+    description: 'Factory-wrapped miniature parchment paper block with sealed envelope folds and branded color label. Ideal for small portion butter, curd bars, or cheese snacks.',
+    descriptionRu: 'Заводская пергаментная упаковка (мини-брикет 0.4L) с конвертными складками и цветной этикеткой-пломбой. Отлично подходит для порционного масла, деликатесов и сырков. Нажмите [E] для вскрытия.',
     effects: {},
     weight: 0.01,
     volume: 0.08,
@@ -3949,7 +3950,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     maxContainedWeightKg: 0.8,
     labelColor: '#e11d48',
     packagingSize: 'mini',
-    temperature: 55.0,
+    temperature: 20.0,
     heatRetention: 0.75,
     heatLossRate: 0.02
   },
@@ -3960,8 +3961,8 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     category: 'misc',
     maxStack: 5,
     icon: '',
-    description: 'Opened mini kraft paper container with torn colored seal. Great for keeping small items or coins.',
-    descriptionRu: 'Вскрытая мини-упаковка из крафт-бумаги с разорванной цветной пломбой. Удобна для хранения мелочей.',
+    description: 'Unfolded miniature factory parchment paper wrapper with creased flaps and waxy grease imprint.',
+    descriptionRu: 'Развернутая мини-обертка из пищевого пергамента со складками и масляным оттиском. Удобна для хранения мелочей.',
     effects: {},
     weight: 0.01,
     volume: 0.09,
@@ -3975,7 +3976,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     packagingSize: 'mini'
   },
 
-  // 2. SMALL (МАЛАЯ 0.8L) - 2nd smaller size
+  // 2. SMALL (МАЛАЯ 0.8L) - 2nd smaller size (стандартный брикет масла 180-200г / сыр)
   paper_packaging_small: {
     itemId: 'paper_packaging_small',
     name: 'Small Paper Packaging (0.8L)',
@@ -3983,8 +3984,8 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     category: 'misc',
     maxStack: 1,
     icon: '',
-    description: 'Small portion kraft paper takeout container (0.8L) sealed with a brand sticker. Holds single noodle or rice dishes.',
-    descriptionRu: 'Малая крафтовая бумажная упаковка (0.8L) с цветной этикеткой-пломбой. Оптимальна для стандартной порции вок-лапши или риса. Нажмите [E] для вскрытия.',
+    description: 'Standard factory greaseproof butter wrapper (0.8L) with authentic envelope tuck folds, embossed measurement marks, and branded label band.',
+    descriptionRu: 'Классическая заводская бумажная упаковка (брикет 0.8L) из подпергамента с аккуратными складками-конвертом и цветной этикеткой. Стандарт для сливочного масла и сыра. Нажмите [E] для вскрытия.',
     effects: {},
     weight: 0.015,
     volume: 0.14,
@@ -3997,7 +3998,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     maxContainedWeightKg: 1.6,
     labelColor: '#e11d48',
     packagingSize: 'small',
-    temperature: 55.0,
+    temperature: 20.0,
     heatRetention: 0.75,
     heatLossRate: 0.018
   },
@@ -4008,8 +4009,8 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     category: 'misc',
     maxStack: 5,
     icon: '',
-    description: 'Opened small kraft paper takeout box with torn colored seal and folded flaps.',
-    descriptionRu: 'Вскрытая малая крафтовая упаковка с разорванной этикеткой. Экологичный контейнер для еды.',
+    description: 'Unfolded small factory paper wrapper with torn label, grease imprint and creased side flaps.',
+    descriptionRu: 'Развернутая малая пергаментная обертка с надорванной этикеткой, масляным следом от бруска и замятыми уголками.',
     effects: {},
     weight: 0.015,
     volume: 0.16,
@@ -4023,7 +4024,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     packagingSize: 'small'
   },
 
-  // 3. MEDIUM / STANDARD (СТАНДАРТ 1.2L)
+  // 3. MEDIUM / STANDARD (СТАНДАРТ 1.2L) - брусок сыра / семейная пачка
   paper_packaging: {
     itemId: 'paper_packaging',
     name: 'Paper Packaging',
@@ -4031,8 +4032,8 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     category: 'misc',
     maxStack: 1,
     icon: '',
-    description: 'Eco-friendly kraft paper takeout box (wok container / food pouch) sealed with a premium colored brand sticker label. Keeps food warm and fresh. Press [E] in hands or use to unseal.',
-    descriptionRu: 'Крафтовая бумажная упаковка (вок-бокс / пакет) из плотной эко-бумаги с фирменной цветной этикеткой-пломбой. Надежно сохраняет тепло и свежесть. Нажмите [E] в руках или используйте для вскрытия.',
+    description: 'Factory-wrapped rectangular brick in durable greaseproof food paper. Sealed with folded side envelope corners and a printed brand label band. Press [E] in hands or use to unwrap.',
+    descriptionRu: 'Заводская бумажная упаковка (пергаментная обертка брикета) со сложенными конвертом краями и фирменной цветной этикеткой-лентой. Надежно защищает масло и сыр. Нажмите [E] в руках или используйте для вскрытия.',
     effects: {},
     weight: 0.02,
     volume: 0.2,
@@ -4045,7 +4046,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     maxContainedWeightKg: 2.5,
     labelColor: '#e11d48',
     packagingSize: 'medium',
-    temperature: 55.0,
+    temperature: 20.0,
     heatRetention: 0.75,
     heatLossRate: 0.015
   },
@@ -4056,8 +4057,8 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     category: 'misc',
     maxStack: 5,
     icon: '',
-    description: 'Unsealed kraft paper takeout packaging with torn colored sticker and folded flaps. Reusable container for food or small items.',
-    descriptionRu: 'Вскрытая крафтовая бумажная упаковка с разорванной цветной этикеткой и отогнутыми створками. Вместительный экологичный контейнер для продуктов или вещей.',
+    description: 'Unwrapped factory parchment paper with torn printed label band, creased envelope wings, and greasy butter/cheese imprint. Reusable paper bed.',
+    descriptionRu: 'Развернутая заводская бумажная обертка с разорванной цветной этикеткой, распахнутыми уголками и масляным оттиском от продукта.',
     effects: {},
     weight: 0.02,
     volume: 0.25,
@@ -4071,7 +4072,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     packagingSize: 'medium'
   },
 
-  // 4. LARGE (БОЛЬШАЯ 2.4L) - 1 larger size
+  // 4. LARGE (БОЛЬШАЯ 2.4L) - 1 larger size (крупный блок сыра / весовой брус)
   paper_packaging_large: {
     itemId: 'paper_packaging_large',
     name: 'Large Paper Packaging (2.4L)',
@@ -4079,8 +4080,8 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     category: 'misc',
     maxStack: 1,
     icon: '',
-    description: 'Generous family-size kraft paper takeout container (2.4L) with reinforced wire bail handle and luxury colored seal label.',
-    descriptionRu: 'Большая семейная крафтовая упаковка (вок-бокс макси 2.4L) с усиленной ручкой и фирменной цветной пломбой. Для комбо-наборов и больших порций. Нажмите [E] для вскрытия.',
+    description: 'Large factory-wrapped deli block (2.4L) in heavy-duty food parchment with double-sealed envelope folds and premium brand label band.',
+    descriptionRu: 'Большая заводская бумажная упаковка (крупный брус 2.4L) из плотного подпергамента с двойными складками и широкой цветной этикеткой. Для цельных сырных блоков. Нажмите [E] для вскрытия.',
     effects: {},
     weight: 0.035,
     volume: 0.42,
@@ -4093,7 +4094,7 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     maxContainedWeightKg: 5.0,
     labelColor: '#e11d48',
     packagingSize: 'large',
-    temperature: 60.0,
+    temperature: 20.0,
     heatRetention: 0.80,
     heatLossRate: 0.012
   },
@@ -4104,8 +4105,8 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     category: 'misc',
     maxStack: 5,
     icon: '',
-    description: 'Opened large kraft takeout box with torn colored seal. Generous reusable storage box.',
-    descriptionRu: 'Вскрытая большая крафтовая упаковка с разорванной пломбой и широкими створками. Вместительный контейнер.',
+    description: 'Unwrapped large factory deli parchment paper with torn label and wide creased paper flaps.',
+    descriptionRu: 'Развернутая крупная пергаментная обертка сырного блока с надорванной этикеткой и широкими складками.',
     effects: {},
     weight: 0.035,
     volume: 0.45,
@@ -4125,8 +4126,8 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     category: 'misc',
     maxStack: 1,
     icon: '',
-    description: 'Craft paper takeout packaging with a vibrant ruby red seal label.',
-    descriptionRu: 'Крафтовая эко-упаковка с ярко-красной фирменной этикеткой-пломбой.',
+    description: 'Factory-wrapped paper block with a vibrant ruby red seal label.',
+    descriptionRu: 'Заводская пергаментная упаковка с рубиновой фирменной этикеткой-лентой.',
     effects: {},
     weight: 0.02,
     volume: 0.2,
@@ -4146,8 +4147,8 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     category: 'misc',
     maxStack: 5,
     icon: '',
-    description: 'Opened craft paper packaging with torn ruby red label.',
-    descriptionRu: 'Вскрытая крафтовая упаковка с разорванной рубиновой пломбой.',
+    description: 'Unfolded factory paper wrapper with torn ruby red label.',
+    descriptionRu: 'Развернутая пергаментная обертка с разорванной рубиновой этикеткой.',
     effects: {},
     weight: 0.02,
     volume: 0.25,

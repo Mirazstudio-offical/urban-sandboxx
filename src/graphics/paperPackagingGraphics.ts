@@ -1,10 +1,9 @@
-// Procedural 2D Canvas Models for Premium Kraft Paper Packaging (Wok Box / Takeout Container)
-// Features unbleached kraft paper textures, origami score lines, branded seal label with customizable labelColor,
-// 4 authentic sizes (mini 0.4L, small 0.8L, medium 1.2L, large 2.4L), and realistic torn-open variants with
-// greaseproof parchment lining and delicious wok food details.
+// Procedural 2D Canvas Models for Factory Wrapped Paper Packaging (Butter / Cheese / Dairy Brick)
+// Authentic factory packaging: greaseproof parchment / wax paper wrapper with envelope tuck folds,
+// customizable printed label band (labelColor), dairy quality seal, measurement tick marks,
+// and realistic unfolded/peeled wrapper variants with creased flaps and waxy grease imprints.
 
 import { drawShadow } from './itemGraphicShared';
-import { drawItemModel2D } from '../itemGraphic';
 
 export type PackagingSize = 'mini' | 'small' | 'medium' | 'large';
 
@@ -15,14 +14,14 @@ export function getPackagingLabelColor(itemId: string, item?: any): string {
   if (item?.labelColor && typeof item.labelColor === 'string') {
     return item.labelColor;
   }
-  if (itemId.includes('_green')) return '#16a34a';   // Emerald Jade
-  if (itemId.includes('_blue')) return '#2563eb';    // Sapphire Cobalt
-  if (itemId.includes('_amber') || itemId.includes('_gold') || itemId.includes('_yellow')) return '#d97706'; // Artisan Amber Gold
-  if (itemId.includes('_purple') || itemId.includes('_violet')) return '#9333ea'; // Imperial Violet
-  if (itemId.includes('_black') || itemId.includes('_noir')) return '#1e293b';   // Obsidian Noir
-  if (itemId.includes('_teal')) return '#0d9488';    // Mediterranean Teal
-  if (itemId.includes('_coral') || itemId.includes('_orange')) return '#ea580c'; // Vibrant Coral
-  return '#e11d48'; // Default Signature Ruby Carmine
+  if (itemId.includes('_green')) return '#16a34a';   // Emerald / Farm Fresh
+  if (itemId.includes('_blue')) return '#2563eb';    // Classic Dairy Cobalt
+  if (itemId.includes('_amber') || itemId.includes('_gold') || itemId.includes('_yellow')) return '#facc15'; // Butter Gold / Gouda
+  if (itemId.includes('_purple') || itemId.includes('_violet')) return '#9333ea'; // Royal Violet
+  if (itemId.includes('_black') || itemId.includes('_noir')) return '#1e293b';   // Premium Noir
+  if (itemId.includes('_teal')) return '#0d9488';    // Artisan Teal
+  if (itemId.includes('_coral') || itemId.includes('_orange')) return '#ea580c'; // Aged Cheddar
+  return '#e11d48'; // Signature Ruby Carmine
 }
 
 /**
@@ -74,14 +73,14 @@ export function drawPaperPackagingItem(
 }
 
 const SCALE_BY_SIZE: Record<PackagingSize, number> = {
-  mini: 0.72,
-  small: 0.86,
+  mini: 0.74,
+  small: 0.88,
   medium: 1.0,
-  large: 1.24
+  large: 1.22
 };
 
 /**
- * 1. CLOSED KRAFT PAPER PACKAGING (Запечатанная бумажная вок-упаковка с целой пломбой)
+ * 1. CLOSED FACTORY WRAPPED BRICK (Заводской брикет в пергаментной обертке со складками и этикеткой)
  */
 function drawClosedPaperPackaging(
   ctx: CanvasRenderingContext2D,
@@ -92,264 +91,316 @@ function drawClosedPaperPackaging(
   const scale = SCALE_BY_SIZE[sizeTier] || 1.0;
 
   ctx.save();
-  // Adjust baseline slightly so all sizes rest realistically on surface
-  ctx.translate(0, (1.0 - scale) * 2.2);
+  // Center brick neatly on the canvas
   ctx.scale(scale, scale);
 
-  // --- 1. Soft Ambient + Core Contact Shadows ---
-  const shadowSpread = sizeTier === 'large' ? 10.2 : (sizeTier === 'mini' ? 6.5 : (sizeTier === 'small' ? 7.6 : 8.5));
-  drawShadow(ctx, shadowSpread, 3.2, 8.2, 0.28, 0.4);
-  drawShadow(ctx, shadowSpread * 0.7, 1.4, 7.5, 0.38, 0.2);
+  // Brick proportions in axonometric 2.5D view
+  // Front face rectangle: leftX to rightX, topY to botY
+  // Depth skew: dX to the right, dY upwards
+  const leftX = -8.2;
+  const rightX = 4.8;
+  const topY = -1.2;
+  const botY = 5.8;
+  const dX = 3.4;
+  const dY = 3.6;
 
-  // --- 2. Wire Bail Handle (Arched Above Pail) ---
+  // --- 1. Soft Ambient & Ground Contact Shadow ---
+  drawShadow(ctx, 9.2, 3.4, 7.8, 0.32, 0.35);
+  drawShadow(ctx, 6.5, 1.6, 6.8, 0.42, 0.15);
+
+  // --- 2. Top Face of the Brick (Receding upper parchment plane) ---
   ctx.save();
-  ctx.strokeStyle = sizeTier === 'large' ? '#cbd5e1' : '#94a3b8';
-  ctx.lineWidth = sizeTier === 'large' ? 1.0 : (sizeTier === 'mini' ? 0.75 : 0.85);
-  ctx.beginPath();
-  ctx.moveTo(-6.2, 0.5);
-  ctx.bezierCurveTo(-7.8, -11.5, 7.8, -11.5, 6.2, 0.5);
-  ctx.stroke();
+  const topGrad = ctx.createLinearGradient(leftX, topY, rightX + dX, topY - dY);
+  topGrad.addColorStop(0.0, '#ffffff'); // Crisp lit front corner
+  topGrad.addColorStop(0.35, '#faf7ee'); // Smooth greaseproof parchment
+  topGrad.addColorStop(0.75, '#f4ece0'); // Natural paper tone
+  topGrad.addColorStop(1.0, '#e8ded0');  // Rear shaded edge
 
-  // Subtle metallic specular glint on upper arc of wire
-  ctx.strokeStyle = 'rgba(255, 255, 255, 0.75)';
-  ctx.lineWidth = 0.45;
+  ctx.fillStyle = topGrad;
   ctx.beginPath();
-  ctx.moveTo(-2.5, -9.2);
-  ctx.bezierCurveTo(-1.0, -9.8, 1.0, -9.8, 2.5, -9.2);
-  ctx.stroke();
-  ctx.restore();
-
-  // --- 3. Main Kraft Board Trapezoidal Body ---
-  ctx.save();
-  const kraftGrad = ctx.createLinearGradient(-7.5, -4.5, 7.5, 7.2);
-  kraftGrad.addColorStop(0.0, '#e5b27e'); // Warm top highlight
-  kraftGrad.addColorStop(0.25, '#d49b64'); // Smooth unbleached kraft
-  kraftGrad.addColorStop(0.65, '#bc824b'); // Natural organic fiber body
-  kraftGrad.addColorStop(1.0, '#9e6634'); // Shaded lower right base
-
-  ctx.fillStyle = kraftGrad;
-  ctx.beginPath();
-  // Tapered origami box silhouette: wider top rim, narrower base
-  ctx.moveTo(-7.4, -4.5);
-  ctx.lineTo(7.4, -4.5);
-  ctx.lineTo(5.4, 7.0);
-  ctx.quadraticCurveTo(5.1, 7.4, 4.4, 7.4);
-  ctx.lineTo(-4.4, 7.4);
-  ctx.quadraticCurveTo(-5.1, 7.4, -5.4, 7.0);
+  ctx.moveTo(leftX, topY);
+  ctx.lineTo(rightX, topY);
+  ctx.lineTo(rightX + dX, topY - dY);
+  ctx.lineTo(leftX + dX, topY - dY);
   ctx.closePath();
   ctx.fill();
 
-  // Fine perimeter contour line
-  ctx.strokeStyle = 'rgba(100, 50, 15, 0.28)';
-  ctx.lineWidth = 0.5;
-  ctx.stroke();
-
-  // --- 4. Micro Paper Pulp Fibers (Recycled Natural Texture) ---
-  ctx.fillStyle = 'rgba(75, 40, 10, 0.08)';
-  ctx.fillRect(-4.5, -1.2, 0.8, 0.4);
-  ctx.fillRect(-1.8, 2.4, 0.6, 0.4);
-  ctx.fillRect(3.2, 0.6, 0.7, 0.3);
-  ctx.fillRect(2.1, 4.8, 0.5, 0.4);
-  ctx.fillRect(-3.4, 5.1, 0.6, 0.3);
-
-  ctx.fillStyle = 'rgba(255, 250, 240, 0.16)';
-  ctx.fillRect(-2.5, -3.0, 1.2, 0.3);
-  ctx.fillRect(1.5, -2.0, 1.0, 0.3);
-  ctx.fillRect(3.8, 3.2, 0.9, 0.3);
-  ctx.fillRect(-5.0, 2.0, 0.8, 0.3);
-
-  // Large feast box: additional micro-embossing texture
-  if (sizeTier === 'large') {
-    ctx.fillStyle = 'rgba(75, 40, 10, 0.06)';
-    ctx.fillRect(-5.2, 0.4, 1.1, 0.35);
-    ctx.fillRect(4.5, -0.8, 1.0, 0.35);
-    ctx.fillRect(0.5, 5.6, 1.2, 0.35);
-  }
-
-  // --- 5. Origami Scored Fold Lines (Creases) ---
-  ctx.strokeStyle = 'rgba(70, 35, 10, 0.22)';
+  // Subtle bevel highlight along the front-top folded ridge
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.9)';
   ctx.lineWidth = 0.55;
   ctx.beginPath();
-  ctx.moveTo(-5.0, 6.8);
-  ctx.lineTo(-2.2, -4.5);
-  ctx.moveTo(5.0, 6.8);
-  ctx.lineTo(2.2, -4.5);
+  ctx.moveTo(leftX, topY);
+  ctx.lineTo(rightX, topY);
   ctx.stroke();
 
-  // Subtle highlight ridge next to fold
-  ctx.strokeStyle = 'rgba(255, 245, 225, 0.32)';
+  // Outer paper perimeter seam
+  ctx.strokeStyle = 'rgba(160, 135, 110, 0.35)';
   ctx.lineWidth = 0.45;
   ctx.beginPath();
-  ctx.moveTo(-4.6, 6.8);
-  ctx.lineTo(-1.8, -4.5);
-  ctx.moveTo(4.6, 6.8);
-  ctx.lineTo(1.8, -4.5);
+  ctx.moveTo(rightX, topY);
+  ctx.lineTo(rightX + dX, topY - dY);
+  ctx.lineTo(leftX + dX, topY - dY);
+  ctx.lineTo(leftX, topY);
   ctx.stroke();
+  ctx.restore();
 
-  // Bottom baseline crease
-  ctx.strokeStyle = 'rgba(70, 35, 10, 0.25)';
+  // --- 3. Right Side Face (FACTORY ENVELOPE FOLDS / Уголки-конверты) ---
+  ctx.save();
+  const sideGrad = ctx.createLinearGradient(rightX, topY, rightX + dX, botY);
+  sideGrad.addColorStop(0.0, '#eedfcb');
+  sideGrad.addColorStop(0.6, '#decaba');
+  sideGrad.addColorStop(1.0, '#cbbaa8');
+
+  ctx.fillStyle = sideGrad;
+  ctx.beginPath();
+  ctx.moveTo(rightX, topY);
+  ctx.lineTo(rightX + dX, topY - dY);
+  ctx.lineTo(rightX + dX, botY - dY);
+  ctx.lineTo(rightX, botY);
+  ctx.closePath();
+  ctx.fill();
+
+  // Envelope Fold Geometry (Заводская запечатка конвертиком на торце):
+  // Triangular fold meeting in the center tuck
+  const tuckX = rightX + dX * 0.52;
+  const tuckY = (topY + botY - dY) * 0.48;
+
+  // Upper diagonal fold crease
+  ctx.strokeStyle = 'rgba(120, 95, 75, 0.45)';
   ctx.lineWidth = 0.5;
   ctx.beginPath();
-  ctx.moveTo(-4.8, 6.8);
-  ctx.lineTo(4.8, 6.8);
+  ctx.moveTo(rightX, topY);
+  ctx.lineTo(tuckX, tuckY);
+  ctx.lineTo(rightX + dX, topY - dY);
   ctx.stroke();
 
-  // --- 6. Interlocking Folded Top Flaps (Origami Closure) ---
-  // Rear fold shadow
-  ctx.fillStyle = 'rgba(80, 45, 15, 0.22)';
+  // Lower diagonal fold crease
   ctx.beginPath();
-  ctx.moveTo(-7.4, -4.5);
-  ctx.lineTo(7.4, -4.5);
-  ctx.lineTo(4.8, -2.8);
-  ctx.lineTo(-4.8, -2.8);
+  ctx.moveTo(rightX, botY);
+  ctx.lineTo(tuckX, tuckY);
+  ctx.lineTo(rightX + dX, botY - dY);
+  ctx.stroke();
+
+  // Highlight along upper folded paper flap
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.55)';
+  ctx.lineWidth = 0.4;
+  ctx.beginPath();
+  ctx.moveTo(rightX + 0.3, topY + 0.3);
+  ctx.lineTo(tuckX, tuckY - 0.2);
+  ctx.stroke();
+
+  // Embossed factory seal dots / crimp points at tuck seam
+  ctx.fillStyle = 'rgba(140, 110, 85, 0.35)';
+  ctx.beginPath();
+  ctx.arc(tuckX, tuckY, 0.45, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+
+  // --- 4. Front Face of the Brick ---
+  ctx.save();
+  const frontGrad = ctx.createLinearGradient(leftX, topY, leftX, botY);
+  frontGrad.addColorStop(0.0, '#faf6ee'); // Warm bright top
+  frontGrad.addColorStop(0.4, '#f2ece0'); // Parchment midtone
+  frontGrad.addColorStop(0.85, '#e5d9c7'); // Lower ambient shade
+  frontGrad.addColorStop(1.0, '#d9cbba'); // Bottom contact shade
+
+  ctx.fillStyle = frontGrad;
+  ctx.beginPath();
+  // Soft rounded micro-corners of wrapped butter block
+  ctx.moveTo(leftX, topY);
+  ctx.lineTo(rightX, topY);
+  ctx.lineTo(rightX, botY - 0.4);
+  ctx.quadraticCurveTo(rightX, botY, rightX - 0.4, botY);
+  ctx.lineTo(leftX + 0.4, botY);
+  ctx.quadraticCurveTo(leftX, botY, leftX, botY - 0.4);
   ctx.closePath();
   ctx.fill();
 
-  // Left flap crease
-  ctx.fillStyle = '#caa16e';
-  ctx.beginPath();
-  ctx.moveTo(-7.4, -4.5);
-  ctx.lineTo(-2.0, -2.8);
-  ctx.lineTo(-4.5, -1.2);
-  ctx.closePath();
-  ctx.fill();
-
-  // Right flap crease
-  ctx.fillStyle = '#b68350';
-  ctx.beginPath();
-  ctx.moveTo(7.4, -4.5);
-  ctx.lineTo(2.0, -2.8);
-  ctx.lineTo(4.5, -1.2);
-  ctx.closePath();
-  ctx.fill();
-
-  // Front top overlapping flap
-  const topFlapGrad = ctx.createLinearGradient(-4.5, -4.5, 4.5, -1.2);
-  topFlapGrad.addColorStop(0.0, '#edd1b0');
-  topFlapGrad.addColorStop(1.0, '#d19962');
-  ctx.fillStyle = topFlapGrad;
-  ctx.beginPath();
-  ctx.moveTo(-5.5, -4.5);
-  ctx.lineTo(5.5, -4.5);
-  ctx.lineTo(3.2, -1.4);
-  ctx.lineTo(-3.2, -1.4);
-  ctx.closePath();
-  ctx.fill();
-
-  // Highlight along front flap folded lip
-  ctx.strokeStyle = 'rgba(255, 250, 240, 0.55)';
+  // Subtle perimeter stroke
+  ctx.strokeStyle = 'rgba(160, 135, 110, 0.4)';
   ctx.lineWidth = 0.5;
-  ctx.beginPath();
-  ctx.moveTo(-3.2, -1.4);
-  ctx.lineTo(3.2, -1.4);
   ctx.stroke();
 
-  // Shadow underneath the folded lip
-  ctx.fillStyle = 'rgba(60, 30, 10, 0.25)';
-  ctx.fillRect(-3.2, -1.1, 6.4, 0.5);
-
-  // --- 7. The Branded Seal Label (Цветная защитная этикетка-пломба) ---
-  const stickerW = sizeTier === 'large' ? 5.0 : (sizeTier === 'mini' ? 3.6 : 4.4);
-  const stickerTop = -6.0;
-  const stickerBottom = 4.2;
-  const stickerH = stickerBottom - stickerTop;
-
-  // Label soft shadow on kraft paper
-  ctx.fillStyle = 'rgba(20, 10, 5, 0.22)';
+  // Bottom edge contact shadow line
+  ctx.strokeStyle = 'rgba(100, 75, 55, 0.25)';
+  ctx.lineWidth = 0.4;
   ctx.beginPath();
-  ctx.roundRect(-stickerW / 2 + 0.3, stickerTop + 0.3, stickerW, stickerH, 0.8);
+  ctx.moveTo(leftX, botY);
+  ctx.lineTo(rightX, botY);
+  ctx.stroke();
+  ctx.restore();
+
+  // --- 5. Traditional Butter / Cheese Measurement Cut Marks (Разметочные деления) ---
+  ctx.save();
+  // Embossed measurement ruler ticks on the left portion of the wrapper
+  ctx.strokeStyle = 'rgba(150, 125, 100, 0.35)';
+  ctx.lineWidth = 0.4;
+  ctx.setLineDash([0.6, 0.6]);
+
+  const tickPositions = [-7.0, -5.7, -4.4];
+  tickPositions.forEach(x => {
+    ctx.beginPath();
+    ctx.moveTo(x, topY + 0.5);
+    ctx.lineTo(x, botY - 0.5);
+    ctx.stroke();
+
+    // Solid micro-tick at the top and bottom edge
+    ctx.save();
+    ctx.setLineDash([]);
+    ctx.beginPath();
+    ctx.moveTo(x - 0.3, topY + 0.6);
+    ctx.lineTo(x + 0.3, topY + 0.6);
+    ctx.moveTo(x - 0.3, botY - 0.6);
+    ctx.lineTo(x + 0.3, botY - 0.6);
+    ctx.stroke();
+    ctx.restore();
+  });
+  ctx.restore();
+
+  // --- 6. The Central Printed Factory Label Band (Фирменная этикетка с labelColor) ---
+  // Band wraps continuously from Top Face down across Front Face
+  const bandLeft = -3.2;
+  const bandRight = 2.4;
+  const bandW = bandRight - bandLeft;
+
+  // 6a. Band on Top Face
+  ctx.save();
+  const topBandGrad = ctx.createLinearGradient(bandLeft, topY, bandRight + dX, topY - dY);
+  topBandGrad.addColorStop(0.0, labelColor);
+  topBandGrad.addColorStop(0.5, labelColor);
+  topBandGrad.addColorStop(1.0, adjustBrightness(labelColor, -0.15));
+
+  ctx.fillStyle = topBandGrad;
+  ctx.beginPath();
+  ctx.moveTo(bandLeft, topY);
+  ctx.lineTo(bandRight, topY);
+  ctx.lineTo(bandRight + dX, topY - dY);
+  ctx.lineTo(bandLeft + dX, topY - dY);
+  ctx.closePath();
   ctx.fill();
 
-  // Main sticker base gradient (featuring custom labelColor!)
-  const stickerGrad = ctx.createLinearGradient(-stickerW / 2, 0, stickerW / 2, 0);
-  stickerGrad.addColorStop(0.0, adjustColor(labelColor, -30)); // Deep shadow on left curl
-  stickerGrad.addColorStop(0.28, adjustColor(labelColor, 25)); // Specular satin crest
-  stickerGrad.addColorStop(0.70, labelColor);                  // Pure vibrant base color
-  stickerGrad.addColorStop(1.0, adjustColor(labelColor, -35)); // Shadow on right edge
-
-  ctx.fillStyle = stickerGrad;
-  ctx.beginPath();
-  ctx.roundRect(-stickerW / 2, stickerTop, stickerW, stickerH, 0.7);
-  ctx.fill();
-
-  // Luxurious Metallic Gold / Foil Pinstripe Border
-  ctx.strokeStyle = 'rgba(254, 240, 138, 0.85)'; // Warm 24K gold foil trim
+  // Gold / White foil pinstripe borders on top band
+  ctx.strokeStyle = 'rgba(255, 245, 200, 0.85)';
   ctx.lineWidth = 0.45;
+  ctx.beginPath();
+  ctx.moveTo(bandLeft, topY);
+  ctx.lineTo(bandLeft + dX, topY - dY);
+  ctx.moveTo(bandRight, topY);
+  ctx.lineTo(bandRight + dX, topY - dY);
   ctx.stroke();
 
-  // Inner glossy reflection sheen band
-  ctx.fillStyle = 'rgba(255, 255, 255, 0.32)';
-  ctx.fillRect(-stickerW / 2 + 0.5, stickerTop + 0.4, 0.9, stickerH - 0.8);
-
-  // Circular Brand Emblem / Medallion at top of sticker
-  const emblemRadius = sizeTier === 'mini' ? 1.05 : (sizeTier === 'large' ? 1.55 : 1.35);
-  ctx.fillStyle = 'rgba(254, 240, 138, 0.95)'; // Gold medallion
+  // Top Face Gold Dairy Crest / Medallion
+  const topCrestX = (bandLeft + bandRight + dX) * 0.5;
+  const topCrestY = topY - dY * 0.5;
+  ctx.fillStyle = 'rgba(255, 245, 200, 0.9)';
   ctx.beginPath();
-  ctx.arc(0, -1.6, emblemRadius, 0, Math.PI * 2);
+  ctx.ellipse(topCrestX, topCrestY, 1.2, 0.7, -0.45, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+
+  // 6b. Band on Front Face
+  ctx.save();
+  const frontBandGrad = ctx.createLinearGradient(bandLeft, topY, bandLeft, botY);
+  frontBandGrad.addColorStop(0.0, adjustBrightness(labelColor, 0.12));
+  frontBandGrad.addColorStop(0.35, labelColor);
+  frontBandGrad.addColorStop(1.0, adjustBrightness(labelColor, -0.18));
+
+  ctx.fillStyle = frontBandGrad;
+  ctx.beginPath();
+  ctx.rect(bandLeft, topY, bandW, botY - topY);
   ctx.fill();
 
-  ctx.fillStyle = labelColor;
+  // Gold foil trim borders down the sides of the front band
+  ctx.strokeStyle = 'rgba(255, 245, 200, 0.85)';
+  ctx.lineWidth = 0.5;
   ctx.beginPath();
-  ctx.arc(0, -1.6, emblemRadius - 0.35, 0, Math.PI * 2);
-  ctx.fill();
+  ctx.moveTo(bandLeft, topY);
+  ctx.lineTo(bandLeft, botY);
+  ctx.moveTo(bandRight, topY);
+  ctx.lineTo(bandRight, botY);
+  ctx.stroke();
 
-  // Minimalist Stylized Steam / Wok Crest Motif inside medallion
-  ctx.strokeStyle = '#fef08a';
+  // Inner contrasting border lines
+  ctx.strokeStyle = 'rgba(0, 0, 0, 0.2)';
   ctx.lineWidth = 0.35;
   ctx.beginPath();
-  // Wok bowl arc
-  ctx.arc(0, -1.4, 0.65, 0.2, Math.PI - 0.2);
-  // Steam lines rising
-  ctx.moveTo(-0.35, -1.9); ctx.lineTo(-0.25, -2.3);
-  ctx.moveTo(0.2, -1.9); ctx.lineTo(0.3, -2.3);
+  ctx.moveTo(bandLeft + 0.35, topY);
+  ctx.lineTo(bandLeft + 0.35, botY);
+  ctx.moveTo(bandRight - 0.35, topY);
+  ctx.lineTo(bandRight - 0.35, botY);
   ctx.stroke();
 
-  // Minimalist typography lines below medallion
-  ctx.fillStyle = 'rgba(255, 255, 255, 0.92)';
-  const lineW = sizeTier === 'mini' ? 2.0 : (sizeTier === 'large' ? 3.4 : 2.8);
-  ctx.fillRect(-lineW / 2, 0.2, lineW, 0.35); // Title line
-  ctx.fillRect(-lineW / 2 + 0.3, 0.85, lineW - 0.6, 0.3); // Subtitle line
-  ctx.fillRect(-lineW / 2 + 0.1, 1.45, lineW - 0.2, 0.3); // Origin line
+  // --- Front Label Typography & Graphics ---
+  const bandCenterX = (bandLeft + bandRight) * 0.5;
 
-  // Miniature Barcode / Batch verification notches at bottom of label
-  ctx.fillStyle = 'rgba(15, 23, 42, 0.85)';
-  ctx.fillRect(-1.5, 2.4, 0.3, 1.2);
-  ctx.fillRect(-1.0, 2.4, 0.45, 1.2);
-  ctx.fillRect(-0.3, 2.4, 0.25, 1.2);
-  ctx.fillRect(0.2, 2.4, 0.4, 1.2);
-  ctx.fillRect(0.8, 2.4, 0.25, 1.2);
-  ctx.fillRect(1.2, 2.4, 0.35, 1.2);
+  // Upper brand header box (crisp ivory/gold banner)
+  ctx.fillStyle = '#ffffff';
+  ctx.beginPath();
+  ctx.roundRect(bandLeft + 0.6, topY + 0.6, bandW - 1.2, 0.85, 0.3);
+  ctx.fill();
 
-  // Security serration / micro-perforation notches on sticker flanks
-  ctx.fillStyle = 'rgba(50, 25, 5, 0.35)';
-  ctx.fillRect(-stickerW / 2, -3.2, 0.4, 0.4);
-  ctx.fillRect(stickerW / 2 - 0.4, -3.2, 0.4, 0.4);
-  ctx.fillRect(-stickerW / 2, 1.2, 0.4, 0.4);
-  ctx.fillRect(stickerW / 2 - 0.4, 1.2, 0.4, 0.4);
+  // Quality medallion (круглая / овальная эмблема качества)
+  const medalY = topY + 2.5;
+  ctx.fillStyle = '#fef08a'; // Golden seal
+  ctx.beginPath();
+  ctx.arc(bandCenterX, medalY, 1.1, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = '#b45309';
+  ctx.lineWidth = 0.3;
+  ctx.stroke();
 
-  // --- 8. Metal Rivets & Wire Mounts ---
-  // Left eyelet rivet
-  ctx.fillStyle = '#64748b';
-  ctx.beginPath(); ctx.arc(-6.2, 0.5, 0.85, 0, Math.PI * 2); ctx.fill();
-  ctx.fillStyle = '#0f172a';
-  ctx.beginPath(); ctx.arc(-6.2, 0.5, 0.4, 0, Math.PI * 2); ctx.fill();
-  ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
-  ctx.beginPath(); ctx.arc(-6.4, 0.3, 0.25, 0, Math.PI * 2); ctx.fill();
+  // Inner star / seal mark inside medallion
+  ctx.fillStyle = labelColor;
+  ctx.beginPath();
+  ctx.arc(bandCenterX, medalY, 0.55, 0, Math.PI * 2);
+  ctx.fill();
 
-  // Right eyelet rivet
-  ctx.fillStyle = '#64748b';
-  ctx.beginPath(); ctx.arc(6.2, 0.5, 0.85, 0, Math.PI * 2); ctx.fill();
-  ctx.fillStyle = '#0f172a';
-  ctx.beginPath(); ctx.arc(6.2, 0.5, 0.4, 0, Math.PI * 2); ctx.fill();
-  ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
-  ctx.beginPath(); ctx.arc(6.0, 0.3, 0.25, 0, Math.PI * 2); ctx.fill();
+  // Product classification bars (stylized "82.5% ГОСТ / ПРЕМИУМ")
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(bandLeft + 0.8, topY + 4.0, bandW - 1.6, 0.5);
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.75)';
+  ctx.fillRect(bandLeft + 1.1, topY + 4.8, bandW - 2.2, 0.4);
 
+  // Micro-barcode on lower left of the band
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+  ctx.fillRect(bandLeft + 0.6, botY - 1.2, 2.2, 0.9);
+  ctx.fillStyle = '#1e293b';
+  // Barcode thin stripes
+  for (let bx = 0; bx < 1.8; bx += 0.32) {
+    ctx.fillRect(bandLeft + 0.8 + bx, botY - 1.1, 0.16, 0.7);
+  }
+
+  // Weight / grade mark on lower right of band ("200g")
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+  ctx.fillRect(bandRight - 1.6, botY - 1.0, 1.1, 0.6);
   ctx.restore();
+
+  // --- 7. Subtle Paper Pulp Fibers & Waxy Sheen Overlay ---
+  ctx.save();
+  // Soft diagonal sheen across the entire wrapped block
+  const sheenGrad = ctx.createLinearGradient(leftX - 2, topY - 2, rightX + 4, botY + 4);
+  sheenGrad.addColorStop(0.0, 'rgba(255, 255, 255, 0.25)');
+  sheenGrad.addColorStop(0.3, 'rgba(255, 255, 255, 0.05)');
+  sheenGrad.addColorStop(0.5, 'rgba(255, 255, 255, 0.2)');
+  sheenGrad.addColorStop(1.0, 'rgba(255, 255, 255, 0.0)');
+
+  ctx.fillStyle = sheenGrad;
+  ctx.beginPath();
+  ctx.moveTo(leftX, topY);
+  ctx.lineTo(leftX + dX, topY - dY);
+  ctx.lineTo(rightX + dX, topY - dY);
+  ctx.lineTo(rightX + dX, botY - dY);
+  ctx.lineTo(rightX, botY);
+  ctx.lineTo(leftX, botY);
+  ctx.closePath();
+  ctx.fill();
+  ctx.restore();
+
   ctx.restore();
 }
 
 /**
- * 2. OPEN KRAFT PAPER PACKAGING (Вскрытая бумажная упаковка с надорванной этикеткой и отогнутыми створками)
+ * 2. OPEN FACTORY WRAPPER (Развернутая пергаментная обертка с масляным оттиском, складками и рваной этикеткой)
  */
 function drawOpenPaperPackaging(
   ctx: CanvasRenderingContext2D,
@@ -360,332 +411,310 @@ function drawOpenPaperPackaging(
   const scale = SCALE_BY_SIZE[sizeTier] || 1.0;
 
   ctx.save();
-  ctx.translate(0, (1.0 - scale) * 2.2);
   ctx.scale(scale, scale);
 
-  // --- 1. Soft Ambient & Base Contact Shadows ---
-  const shadowSpread = sizeTier === 'large' ? 11.0 : (sizeTier === 'mini' ? 7.2 : (sizeTier === 'small' ? 8.2 : 9.2));
-  drawShadow(ctx, shadowSpread, 3.4, 8.5, 0.26, 0.5);
-  drawShadow(ctx, shadowSpread * 0.65, 1.5, 7.8, 0.35, 0.2);
+  // Geometry of the unfolded paper wrapper:
+  // Central rectangular cradle where the butter/cheese rested
+  const baseW = 12.0;
+  const baseH = 6.4;
+  const bLeft = -baseW / 2;
+  const bRight = baseW / 2;
+  const bTop = -baseH / 2 + 0.6;
+  const bBot = baseH / 2 + 0.6;
 
-  // --- 2. Wire Bail Handle (Pivoted to Back / Resting) ---
+  // --- 1. Soft Ambient & Wide Contact Shadow Under Unfolded Paper ---
+  drawShadow(ctx, 10.5, 3.8, 8.2, 0.26, 0.4);
+  drawShadow(ctx, 7.2, 1.8, 7.2, 0.35, 0.18);
+
+  // --- 2. BACK UNFOLDED FLAP (Откинутый назад верхний клапан бумаги) ---
   ctx.save();
-  ctx.strokeStyle = '#64748b';
-  ctx.lineWidth = sizeTier === 'large' ? 0.95 : 0.8;
+  const backFlapTop = bTop - 5.5;
+  const backFlapLeft = bLeft - 1.2;
+  const backFlapRight = bRight + 1.2;
+
+  const backFlapGrad = ctx.createLinearGradient(0, backFlapTop, 0, bTop);
+  backFlapGrad.addColorStop(0.0, '#ede4d4'); // Outer side curled
+  backFlapGrad.addColorStop(0.5, '#f5efe3'); // Inner parchment
+  backFlapGrad.addColorStop(1.0, '#e8ded0'); // Crease valley
+
+  ctx.fillStyle = backFlapGrad;
   ctx.beginPath();
-  ctx.moveTo(-6.2, 1.2);
-  ctx.bezierCurveTo(-8.2, -8.0, 8.2, -8.0, 6.2, 1.2);
+  ctx.moveTo(bLeft, bTop);
+  // Slightly crinkled/zigzag outer paper edge
+  ctx.lineTo(backFlapLeft + 0.8, backFlapTop + 0.6);
+  ctx.lineTo(backFlapLeft + 2.0, backFlapTop);
+  ctx.lineTo(0, backFlapTop - 0.4);
+  ctx.lineTo(backFlapRight - 2.0, backFlapTop);
+  ctx.lineTo(backFlapRight - 0.8, backFlapTop + 0.6);
+  ctx.lineTo(bRight, bTop);
+  ctx.closePath();
+  ctx.fill();
+
+  ctx.strokeStyle = 'rgba(160, 135, 110, 0.35)';
+  ctx.lineWidth = 0.45;
+  ctx.stroke();
+
+  // Upper torn portion of the factory label band on the back flap
+  const bandHalfW = 2.4;
+  ctx.fillStyle = labelColor;
+  ctx.beginPath();
+  ctx.moveTo(-bandHalfW - 0.4, backFlapTop + 0.2);
+  ctx.lineTo(bandHalfW + 0.4, backFlapTop + 0.2);
+  ctx.lineTo(bandHalfW, bTop);
+  ctx.lineTo(-bandHalfW, bTop);
+  ctx.closePath();
+  ctx.fill();
+
+  // Gold pinstripe on upper label fragment
+  ctx.strokeStyle = 'rgba(255, 245, 200, 0.8)';
+  ctx.lineWidth = 0.4;
+  ctx.beginPath();
+  ctx.moveTo(-bandHalfW - 0.3, backFlapTop + 0.3);
+  ctx.lineTo(-bandHalfW, bTop);
+  ctx.moveTo(bandHalfW + 0.3, backFlapTop + 0.3);
+  ctx.lineTo(bandHalfW, bTop);
+  ctx.stroke();
+
+  // White torn fibrous edge where label was peeled/torn
+  ctx.fillStyle = '#ffffff';
+  ctx.beginPath();
+  for (let x = -bandHalfW - 0.3; x <= bandHalfW + 0.3; x += 0.4) {
+    ctx.lineTo(x, bTop - 0.2 + (Math.sin(x * 12) * 0.25));
+  }
+  ctx.lineTo(bandHalfW + 0.3, bTop + 0.3);
+  ctx.lineTo(-bandHalfW - 0.3, bTop + 0.3);
+  ctx.closePath();
+  ctx.fill();
+  ctx.restore();
+
+  // --- 3. LEFT & RIGHT UNFOLDED ENVELOPE WINGS (Распахнутые боковые уголки) ---
+  ctx.save();
+  // 3a. Left Wing (Unfolded envelope fold with crease lines)
+  const wingLeftX = bLeft - 4.6;
+  ctx.fillStyle = '#f3ebe0';
+  ctx.beginPath();
+  ctx.moveTo(bLeft, bTop);
+  ctx.lineTo(wingLeftX + 0.8, bTop - 1.2);
+  ctx.lineTo(wingLeftX, (bTop + bBot) * 0.5);
+  ctx.lineTo(wingLeftX + 0.8, bBot + 1.2);
+  ctx.lineTo(bLeft, bBot);
+  ctx.closePath();
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(160, 135, 110, 0.35)';
+  ctx.lineWidth = 0.45;
+  ctx.stroke();
+
+  // Crease memory lines radiating from corner
+  ctx.strokeStyle = 'rgba(130, 105, 80, 0.3)';
+  ctx.lineWidth = 0.4;
+  ctx.beginPath();
+  ctx.moveTo(bLeft, bTop);
+  ctx.lineTo(wingLeftX, (bTop + bBot) * 0.5);
+  ctx.moveTo(bLeft, bBot);
+  ctx.lineTo(wingLeftX, (bTop + bBot) * 0.5);
+  ctx.stroke();
+
+  // 3b. Right Wing (Unfolded envelope fold with crease lines)
+  const wingRightX = bRight + 4.6;
+  ctx.fillStyle = '#ede3d5';
+  ctx.beginPath();
+  ctx.moveTo(bRight, bTop);
+  ctx.lineTo(wingRightX - 0.8, bTop - 1.2);
+  ctx.lineTo(wingRightX, (bTop + bBot) * 0.5);
+  ctx.lineTo(wingRightX - 0.8, bBot + 1.2);
+  ctx.lineTo(bRight, bBot);
+  ctx.closePath();
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(160, 135, 110, 0.35)';
+  ctx.lineWidth = 0.45;
+  ctx.stroke();
+
+  // Crease lines on right wing
+  ctx.beginPath();
+  ctx.moveTo(bRight, bTop);
+  ctx.lineTo(wingRightX, (bTop + bBot) * 0.5);
+  ctx.moveTo(bRight, bBot);
+  ctx.lineTo(wingRightX, (bTop + bBot) * 0.5);
   ctx.stroke();
   ctx.restore();
 
-  // --- 3. Flared Open Origami Flaps (Background & Wings) ---
+  // --- 4. FRONT UNFOLDED FLAP (Отогнутый вперед нижний клапан) ---
   ctx.save();
+  const frontFlapBot = bBot + 4.2;
+  const frontFlapLeft = bLeft - 1.0;
+  const frontFlapRight = bRight + 1.0;
 
-  // 3a. Back standing flap (shows inner greaseproof wax parchment)
-  const parchmentGrad = ctx.createLinearGradient(0, -9.0, 0, -2.0);
-  parchmentGrad.addColorStop(0.0, '#fffaf0'); // Clean parchment edge
-  parchmentGrad.addColorStop(0.6, '#f7ede2'); // Waxed food-grade liner
-  parchmentGrad.addColorStop(1.0, '#e5d0ba'); // Shadowed inner fold
+  const frontFlapGrad = ctx.createLinearGradient(0, bBot, 0, frontFlapBot);
+  frontFlapGrad.addColorStop(0.0, '#f7f1e6');
+  frontFlapGrad.addColorStop(0.6, '#ede3d3');
+  frontFlapGrad.addColorStop(1.0, '#dfd2bf');
 
-  ctx.fillStyle = parchmentGrad;
+  ctx.fillStyle = frontFlapGrad;
   ctx.beginPath();
-  ctx.moveTo(-5.2, -2.5);
-  ctx.lineTo(-4.2, -8.8); // Top-left of back flap
-  ctx.lineTo(4.2, -8.8);  // Top-right of back flap
-  ctx.lineTo(5.2, -2.5);
+  ctx.moveTo(bLeft, bBot);
+  ctx.lineTo(bRight, bBot);
+  ctx.lineTo(frontFlapRight, frontFlapBot - 0.4);
+  ctx.lineTo(frontFlapRight - 1.5, frontFlapBot);
+  ctx.lineTo(0, frontFlapBot + 0.3);
+  ctx.lineTo(frontFlapLeft + 1.5, frontFlapBot);
+  ctx.lineTo(frontFlapLeft, frontFlapBot - 0.4);
   ctx.closePath();
   ctx.fill();
-
-  ctx.strokeStyle = 'rgba(180, 140, 100, 0.45)';
+  ctx.strokeStyle = 'rgba(160, 135, 110, 0.35)';
   ctx.lineWidth = 0.45;
   ctx.stroke();
 
-  // 3b. Left Flap (bent wide outwards like a wing)
-  ctx.fillStyle = '#eedac3';
-  ctx.beginPath();
-  ctx.moveTo(-7.2, -2.5);
-  ctx.lineTo(-11.0, -6.8); // Outer wing point
-  ctx.lineTo(-5.2, -5.8);
-  ctx.lineTo(-3.0, -2.5);
-  ctx.closePath();
-  ctx.fill();
-  ctx.stroke();
-
-  // 3c. Right Flap (bent wide outwards like a wing)
-  ctx.fillStyle = '#e4ceb5';
-  ctx.beginPath();
-  ctx.moveTo(7.2, -2.5);
-  ctx.lineTo(11.0, -6.8); // Outer wing point
-  ctx.lineTo(5.2, -5.8);
-  ctx.lineTo(3.0, -2.5);
-  ctx.closePath();
-  ctx.fill();
-  ctx.stroke();
-
-  // --- 4. Upper Torn Half of the Seal Label (on Back Flap) ---
-  const stickerW = sizeTier === 'large' ? 4.8 : (sizeTier === 'mini' ? 3.4 : 4.2);
-  const topSealH = 4.8;
-  const topSealY = -8.2;
-
-  // Upper sticker fragment on the standing flap
+  // Lower torn portion of label on front flap
   ctx.fillStyle = labelColor;
   ctx.beginPath();
-  ctx.roundRect(-stickerW / 2, topSealY, stickerW, topSealH, [0.8, 0.8, 0, 0]);
+  ctx.moveTo(-bandHalfW, bBot);
+  ctx.lineTo(bandHalfW, bBot);
+  ctx.lineTo(bandHalfW + 0.2, frontFlapBot - 0.2);
+  ctx.lineTo(-bandHalfW - 0.2, frontFlapBot - 0.2);
+  ctx.closePath();
   ctx.fill();
 
-  // Gold foil border on top fragment
-  ctx.strokeStyle = 'rgba(254, 240, 138, 0.85)';
+  // Barcode / gold markings on lower torn fragment
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
+  ctx.fillRect(-1.4, bBot + 0.8, 2.8, 0.6);
+  ctx.fillStyle = '#1e293b';
+  for (let bx = -1.1; bx < 1.1; bx += 0.35) {
+    ctx.fillRect(bx, bBot + 0.9, 0.18, 0.4);
+  }
+  ctx.restore();
+
+  // --- 5. CENTRAL BASE RECTANGLE (Дно упаковки с маслянистым оттиском бруска) ---
+  ctx.save();
+  const baseGrad = ctx.createLinearGradient(bLeft, bTop, bRight, bBot);
+  baseGrad.addColorStop(0.0, '#fdfbf6'); // Clean inner parchment
+  baseGrad.addColorStop(0.5, '#f8f3e8');
+  baseGrad.addColorStop(1.0, '#ede5d5');
+
+  ctx.fillStyle = baseGrad;
+  ctx.beginPath();
+  ctx.rect(bLeft, bTop, baseW, baseH);
+  ctx.fill();
+
+  // Sharp creased perimeter lines around base
+  ctx.strokeStyle = 'rgba(140, 115, 90, 0.45)';
+  ctx.lineWidth = 0.55;
+  ctx.stroke();
+
+  // Realistic greasy/waxy imprint of the butter/cheese brick (Маслянистый след)
+  const pad = 1.0;
+  const butterWellGrad = ctx.createRadialGradient(0, (bTop + bBot) * 0.5, 1.5, 0, (bTop + bBot) * 0.5, baseW * 0.45);
+  butterWellGrad.addColorStop(0.0, 'rgba(253, 224, 71, 0.28)'); // Translucent butter oil sheen
+  butterWellGrad.addColorStop(0.65, 'rgba(251, 191, 36, 0.15)');
+  butterWellGrad.addColorStop(1.0, 'rgba(245, 158, 11, 0.0)');
+
+  ctx.fillStyle = butterWellGrad;
+  ctx.beginPath();
+  ctx.roundRect(bLeft + pad, bTop + pad, baseW - pad * 2, baseH - pad * 2, 0.8);
+  ctx.fill();
+
+  // Glossy specular highlight streak on the waxy imprint
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.65)';
+  ctx.lineWidth = 0.5;
+  ctx.beginPath();
+  ctx.moveTo(bLeft + pad + 1.2, bTop + pad + 0.8);
+  ctx.lineTo(bRight - pad - 1.2, bTop + pad + 0.8);
+  ctx.stroke();
+
+  // Corner crease indentations where the solid brick edges were pressed into the paper
+  ctx.strokeStyle = 'rgba(170, 140, 105, 0.35)';
   ctx.lineWidth = 0.45;
-  ctx.stroke();
+  ctx.strokeRect(bLeft + pad, bTop + pad, baseW - pad * 2, baseH - pad * 2);
+  ctx.restore();
 
-  // Top emblem on upper sticker
-  const emblemRadius = sizeTier === 'mini' ? 0.85 : 1.1;
-  ctx.fillStyle = 'rgba(254, 240, 138, 0.95)';
-  ctx.beginPath(); ctx.arc(0, -6.2, emblemRadius, 0, Math.PI * 2); ctx.fill();
-  ctx.fillStyle = labelColor;
-  ctx.beginPath(); ctx.arc(0, -6.2, emblemRadius - 0.35, 0, Math.PI * 2); ctx.fill();
-
-  // RAGGED TORN FIBER EDGE at bottom of upper sticker
-  ctx.fillStyle = '#ffffff'; // Exposed raw white paper fiber core
-  ctx.beginPath();
-  ctx.moveTo(-stickerW / 2, topSealY + topSealH);
-  ctx.lineTo(-stickerW / 2 + 0.8, topSealY + topSealH - 0.7);
-  ctx.lineTo(-stickerW / 2 + 1.6, topSealY + topSealH + 0.2);
-  ctx.lineTo(-stickerW / 2 + 2.4, topSealY + topSealH - 0.8);
-  ctx.lineTo(-stickerW / 2 + 3.2, topSealY + topSealH + 0.1);
-  ctx.lineTo(stickerW / 2, topSealY + topSealH - 0.6);
-  ctx.lineTo(stickerW / 2, topSealY + topSealH);
-  ctx.closePath();
-  ctx.fill();
-
-  // --- 5. Main Kraft Body (Lower Half) ---
-  const kraftGrad = ctx.createLinearGradient(-7.5, -2.5, 7.5, 7.2);
-  kraftGrad.addColorStop(0.0, '#dfa874');
-  kraftGrad.addColorStop(0.35, '#cf955f');
-  kraftGrad.addColorStop(0.70, '#b87c45');
-  kraftGrad.addColorStop(1.0, '#9e6634');
-
-  ctx.fillStyle = kraftGrad;
-  ctx.beginPath();
-  ctx.moveTo(-7.4, -2.5);
-  ctx.lineTo(7.4, -2.5);
-  ctx.lineTo(5.4, 7.2);
-  ctx.quadraticCurveTo(5.1, 7.6, 4.4, 7.6);
-  ctx.lineTo(-4.4, 7.6);
-  ctx.quadraticCurveTo(-5.1, 7.6, -5.4, 7.2);
-  ctx.closePath();
-  ctx.fill();
-
-  ctx.strokeStyle = 'rgba(100, 50, 15, 0.28)';
-  ctx.lineWidth = 0.5;
-  ctx.stroke();
-
-  // Fold creases on lower body
-  ctx.strokeStyle = 'rgba(70, 35, 10, 0.2)';
-  ctx.lineWidth = 0.5;
-  ctx.beginPath();
-  ctx.moveTo(-5.0, 7.0); ctx.lineTo(-2.2, -2.5);
-  ctx.moveTo(5.0, 7.0); ctx.lineTo(2.2, -2.5);
-  ctx.stroke();
-
-  // --- 6. Front Flap (Folded slightly forward) ---
-  ctx.fillStyle = '#f3e5d4'; // Parchment wax inside of front flap
-  ctx.beginPath();
-  ctx.moveTo(-5.2, -2.5);
-  ctx.lineTo(-4.0, 0.2);
-  ctx.lineTo(4.0, 0.2);
-  ctx.lineTo(5.2, -2.5);
-  ctx.closePath();
-  ctx.fill();
-  ctx.strokeStyle = 'rgba(160, 120, 80, 0.4)';
-  ctx.lineWidth = 0.4;
-  ctx.stroke();
-
-  // --- 7. Deep Interior Cavity (Open Box Throat) ---
-  ctx.fillStyle = '#1e1108'; // Deep ambient darkness inside box
-  ctx.beginPath();
-  ctx.ellipse(0, -1.8, 5.0, 2.0, 0, 0, Math.PI * 2);
-  ctx.fill();
-
-  // --- 8. Interior Contents Display ---
+  // --- 6. NESTLED PRODUCT BRICK (If package has items inside) ---
   if (item?.contents && item.contents.length > 0) {
-    // If container holds actual in-game items, render them nestled in the open box!
-    ctx.save();
-    ctx.beginPath();
-    ctx.ellipse(0, -1.8, 4.8, 2.2, 0, 0, Math.PI * 2);
-    ctx.clip();
-
-    const inner = item.contents[0];
-    drawItemModel2D(ctx, inner.itemId, 0, -1.8, 14, inner);
-    ctx.restore();
-  } else {
-    // Mouth-watering WOK food contents inside the open paper packaging!
-    ctx.save();
-    ctx.beginPath();
-    ctx.ellipse(0, -1.8, 4.7, 1.8, 0, 0, Math.PI * 2);
-    ctx.clip();
-
-    // Dark rich teriyaki sauce bed
-    ctx.fillStyle = '#451a03';
-    ctx.fillRect(-5, -4, 10, 5);
-
-    // Golden fried egg noodles swirls
-    ctx.strokeStyle = '#eab308';
-    ctx.lineWidth = 0.9;
-    ctx.beginPath();
-    ctx.moveTo(-3.5, -1.2); ctx.bezierCurveTo(-2.0, -3.0, 1.0, -1.0, 3.5, -2.4);
-    ctx.moveTo(-3.0, -2.6); ctx.bezierCurveTo(-0.5, -0.8, 2.0, -3.2, 3.2, -1.2);
-    ctx.moveTo(-2.2, -1.8); ctx.bezierCurveTo(0.2, -3.4, 1.8, -1.6, 2.6, -2.8);
-    ctx.stroke();
-
-    // Amber noodle highlights
-    ctx.strokeStyle = '#fef08a';
-    ctx.lineWidth = 0.55;
-    ctx.beginPath();
-    ctx.moveTo(-2.8, -1.5); ctx.bezierCurveTo(-1.2, -2.6, 1.5, -1.2, 3.0, -2.2);
-    ctx.stroke();
-
-    // Tender grilled chicken pieces
-    ctx.fillStyle = '#d97706';
-    ctx.beginPath(); ctx.ellipse(-1.8, -2.2, 0.85, 0.65, 0.3, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = '#b45309';
-    ctx.beginPath(); ctx.ellipse(1.6, -1.6, 0.95, 0.7, -0.2, 0, Math.PI * 2); ctx.fill();
-
-    // Fresh chopped scallion green rings
-    ctx.fillStyle = '#22c55e';
-    ctx.fillRect(-2.6, -1.6, 0.6, 0.6);
-    ctx.fillRect(0.4, -2.4, 0.6, 0.6);
-    ctx.fillRect(2.0, -2.2, 0.5, 0.5);
-    ctx.fillRect(-0.6, -1.2, 0.5, 0.5);
-
-    // Large feast box: vibrant red bell pepper strips
-    if (sizeTier === 'large') {
-      ctx.fillStyle = '#ef4444';
-      ctx.fillRect(-1.5, -2.8, 1.6, 0.45);
-      ctx.fillRect(1.2, -2.6, 1.4, 0.45);
-    }
-
-    // Sprinkle of toasted sesame seeds
-    ctx.fillStyle = '#fef9c3';
-    ctx.fillRect(-1.0, -2.6, 0.3, 0.4);
-    ctx.fillRect(1.1, -1.2, 0.3, 0.4);
-    ctx.fillRect(-2.2, -2.8, 0.3, 0.3);
-    ctx.fillRect(2.8, -1.8, 0.3, 0.4);
-
-    // Sauce glossy glint
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.45)';
-    ctx.beginPath();
-    ctx.ellipse(0.2, -1.8, 1.4, 0.4, 0.2, 0, Math.PI * 2);
-    ctx.fill();
-
-    ctx.restore();
-
-    // Pair of Bamboo Wooden Chopsticks laid across open rim
-    ctx.save();
-    ctx.shadowColor = 'rgba(0, 0, 0, 0.35)';
-    ctx.shadowBlur = 1.5;
-    ctx.shadowOffsetY = 0.8;
-
-    // Chopstick 1
-    ctx.strokeStyle = '#b45309';
-    ctx.lineWidth = 0.85;
-    ctx.beginPath();
-    ctx.moveTo(-6.8, -4.2);
-    ctx.lineTo(6.8, 0.8);
-    ctx.stroke();
-
-    // Chopstick 2
-    ctx.strokeStyle = '#d97706';
-    ctx.lineWidth = 0.85;
-    ctx.beginPath();
-    ctx.moveTo(-5.8, -2.4);
-    ctx.lineTo(7.6, 2.4);
-    ctx.stroke();
-
-    // Clean white paper wrapper band around chopsticks
-    ctx.fillStyle = '#f8fafc';
-    ctx.fillRect(-0.8, -1.6, 1.6, 1.5);
-    ctx.strokeStyle = 'rgba(15, 23, 42, 0.3)';
-    ctx.lineWidth = 0.3;
-    ctx.strokeRect(-0.8, -1.6, 1.6, 1.5);
-    ctx.restore();
+    drawContainedProductBrick(ctx, bLeft, bRight, bTop, bBot, item.contents[0]);
   }
 
-  // --- 9. Lower Torn Half of the Seal Label (on Front Body) ---
-  const bottomSealTop = 0.2;
-  const bottomSealH = 4.0;
-
-  // Label shadow
-  ctx.fillStyle = 'rgba(20, 10, 5, 0.2)';
-  ctx.fillRect(-stickerW / 2 + 0.3, bottomSealTop + 0.3, stickerW, bottomSealH);
-
-  // Lower sticker body with custom labelColor!
-  ctx.fillStyle = labelColor;
-  ctx.beginPath();
-  ctx.roundRect(-stickerW / 2, bottomSealTop, stickerW, bottomSealH, [0, 0, 0.7, 0.7]);
-  ctx.fill();
-
-  // Gold foil border on lower half
-  ctx.strokeStyle = 'rgba(254, 240, 138, 0.85)';
-  ctx.lineWidth = 0.45;
-  ctx.stroke();
-
-  // RAGGED TORN FIBER EDGE at top of lower sticker
-  ctx.fillStyle = '#ffffff'; // Jagged torn paper fiber
-  ctx.beginPath();
-  ctx.moveTo(-stickerW / 2, bottomSealTop);
-  ctx.lineTo(-stickerW / 2 + 0.7, bottomSealTop + 0.6);
-  ctx.lineTo(-stickerW / 2 + 1.5, bottomSealTop - 0.2);
-  ctx.lineTo(-stickerW / 2 + 2.3, bottomSealTop + 0.7);
-  ctx.lineTo(-stickerW / 2 + 3.1, bottomSealTop - 0.1);
-  ctx.lineTo(stickerW / 2, bottomSealTop + 0.5);
-  ctx.lineTo(stickerW / 2, bottomSealTop);
-  ctx.closePath();
-  ctx.fill();
-
-  // Micro-text lines & barcode preserved on lower fragment
-  ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
-  ctx.fillRect(-1.3, bottomSealTop + 1.2, 2.6, 0.35);
-  ctx.fillRect(-1.0, bottomSealTop + 1.8, 2.0, 0.3);
-
-  // Barcode notches
-  ctx.fillStyle = 'rgba(15, 23, 42, 0.85)';
-  ctx.fillRect(-1.4, bottomSealTop + 2.5, 0.3, 1.0);
-  ctx.fillRect(-0.9, bottomSealTop + 2.5, 0.45, 1.0);
-  ctx.fillRect(-0.2, bottomSealTop + 2.5, 0.25, 1.0);
-  ctx.fillRect(0.3, bottomSealTop + 2.5, 0.4, 1.0);
-  ctx.fillRect(0.9, bottomSealTop + 2.5, 0.35, 1.0);
-
-  // --- 10. Eyelet Rivets on Open Box Flanks ---
-  ctx.fillStyle = '#64748b';
-  ctx.beginPath(); ctx.arc(-6.2, 1.2, 0.8, 0, Math.PI * 2); ctx.fill();
-  ctx.beginPath(); ctx.arc(6.2, 1.2, 0.8, 0, Math.PI * 2); ctx.fill();
-  ctx.fillStyle = '#0f172a';
-  ctx.beginPath(); ctx.arc(-6.2, 1.2, 0.35, 0, Math.PI * 2); ctx.fill();
-  ctx.beginPath(); ctx.arc(6.2, 1.2, 0.35, 0, Math.PI * 2); ctx.fill();
-
-  ctx.restore();
   ctx.restore();
 }
 
 /**
- * Utility: Adjust hex color brightness
+ * Draws a clean block of fresh butter / cheese resting neatly inside the opened paper cradle
  */
-function adjustColor(color: string, amount: number): string {
-  if (!color || typeof color !== 'string' || !color.startsWith('#')) {
-    return color;
+function drawContainedProductBrick(
+  ctx: CanvasRenderingContext2D,
+  bLeft: number,
+  bRight: number,
+  bTop: number,
+  bBot: number,
+  innerItem: any
+) {
+  const padX = 2.0;
+  const padY = 1.2;
+  const pw = (bRight - bLeft) - padX * 2;
+  const ph = (bBot - bTop) - padY * 2;
+  const px = bLeft + padX;
+  const py = bTop + padY - 1.2; // Slight height relief
+  const brickH = 3.6;
+
+  // Determine product tone: Butter (creamy golden), Cheddar (rich orange), White cheese (ivory)
+  const innerId: string = innerItem?.itemId || '';
+  let prodColor = '#fef08a'; // Butter yellow default
+  let shadeColor = '#fde047';
+
+  if (innerId.includes('cheddar')) {
+    prodColor = '#f59e0b';
+    shadeColor = '#d97706';
+  } else if (innerId.includes('gouda')) {
+    prodColor = '#fde047';
+    shadeColor = '#eab308';
+  } else if (innerId.includes('feta') || innerId.includes('mozzarella')) {
+    prodColor = '#ffffff';
+    shadeColor = '#f1f5f9';
   }
-  let hex = color.slice(1);
-  if (hex.length === 3) {
-    hex = hex.split('').map(c => c + c).join('');
-  }
-  if (hex.length !== 6) return color;
-  const num = parseInt(hex, 16);
-  let r = (num >> 16) + amount;
-  let g = ((num >> 8) & 0x00ff) + amount;
-  let b = (num & 0x0000ff) + amount;
+
+  ctx.save();
+  // Small drop shadow from product onto inner paper bed
+  ctx.fillStyle = 'rgba(80, 50, 20, 0.22)';
+  ctx.beginPath();
+  ctx.roundRect(px, py + brickH - 0.4, pw, 1.4, 0.6);
+  ctx.fill();
+
+  // Top Face of product
+  ctx.fillStyle = prodColor;
+  ctx.beginPath();
+  ctx.roundRect(px, py, pw, ph, 0.6);
+  ctx.fill();
+
+  // Front Face of product
+  ctx.fillStyle = shadeColor;
+  ctx.beginPath();
+  ctx.roundRect(px, py + ph - 0.6, pw, brickH, [0, 0, 0.6, 0.6]);
+  ctx.fill();
+
+  // Cut bevel highlight on top edge
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.7)';
+  ctx.lineWidth = 0.5;
+  ctx.beginPath();
+  ctx.moveTo(px + 0.5, py + 0.5);
+  ctx.lineTo(px + pw - 0.5, py + 0.5);
+  ctx.stroke();
+  ctx.restore();
+}
+
+/**
+ * Utility to adjust hex color brightness
+ */
+function adjustBrightness(hex: string, percent: number): string {
+  // Normalize hex
+  let c = hex.replace('#', '');
+  if (c.length === 3) c = c.split('').map(x => x + x).join('');
+  const num = parseInt(c, 16);
+  if (isNaN(num)) return hex;
+
+  let r = (num >> 16) + Math.round(255 * percent);
+  let g = ((num >> 8) & 0x00FF) + Math.round(255 * percent);
+  let b = (num & 0x0000FF) + Math.round(255 * percent);
+
   r = Math.min(255, Math.max(0, r));
   g = Math.min(255, Math.max(0, g));
   b = Math.min(255, Math.max(0, b));
+
   return `#${((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1)}`;
 }
