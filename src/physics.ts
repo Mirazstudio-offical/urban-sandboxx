@@ -6395,25 +6395,25 @@ export function updatePlayerNeedsAndVitals(
     return;
   }
 
-  // 1. Drain Hunger (Голод) - Physiological Basal Metabolic Rate + physical work
-  let hungerDrain = 0.009; // Resting BMR
+  // 1. Drain Hunger (Голод) - Physiological Basal Metabolic Rate + physical work (balanced for 24-min full day)
+  let hungerDrain = 0.035; // Resting BMR (~2.1 units per in-game hour)
   if (input.sprint && !player.isInVehicle && player.speed > 50) {
-    hungerDrain = 0.038;
+    hungerDrain = 0.13; // Intense running exertion
   } else if (isPlayerMoving && !player.isInVehicle) {
-    hungerDrain = 0.016;
+    hungerDrain = 0.065; // Walking / standard physical effort
   }
   player.needs.hunger = Math.max(0, player.needs.hunger - hungerDrain * dt);
 
-  // 2. Drain Thirst (Жажда) - Depletes ~2.5x faster than food, accelerates with physical exertion & heat sweating
-  let thirstDrain = 0.020; // Resting hydration consumption
+  // 2. Drain Thirst (Жажда) - Depletes ~2x faster than food, accelerates with physical exertion & heat sweating
+  let thirstDrain = 0.065; // Resting hydration consumption (~3.9 units per in-game hour)
   if (input.sprint && !player.isInVehicle && player.speed > 50) {
-    thirstDrain = 0.075;
+    thirstDrain = 0.22; // High-intensity sprinting
   } else if (isPlayerMoving && !player.isInVehicle) {
-    thirstDrain = 0.035;
+    thirstDrain = 0.11; // Active walking
   }
   // Ambient heat sweating adds to fluid loss
   if (ambientTemp > 24.0 && !player.isInVehicle) {
-    thirstDrain += Math.min(0.18, (ambientTemp - 24.0) * 0.012);
+    thirstDrain += Math.min(0.20, (ambientTemp - 24.0) * 0.02);
   }
   player.needs.thirst = Math.max(0, player.needs.thirst - thirstDrain * dt);
 
@@ -6461,7 +6461,7 @@ export function updatePlayerNeedsAndVitals(
     if (deltaHours < -12) {
       deltaHours += 24; // Handle passing midnight
     }
-    // If the skip is positive and exceeds a normal frame tick (which is usually dt * 0.12 <= 0.05)
+    // If the skip is positive and exceeds a normal frame tick (which is dt / 60 <= 0.005)
     if (deltaHours > 0.08 && !player.isSleeping) {
       // Dynamic sleepiness accumulation for skipped hours (approx 3.8 units per hour)
       const skippedSleepiness = deltaHours * 3.8;
@@ -6471,8 +6471,8 @@ export function updatePlayerNeedsAndVitals(
       player.consecutiveWakeHours = (player.consecutiveWakeHours || 0) + deltaHours;
 
       // Also adjust hunger and thirst during the skipped hours so skipping time has physiological costs!
-      const hungerDrainPerHour = 1.0;
-      const thirstDrainPerHour = 1.6;
+      const hungerDrainPerHour = 2.1;
+      const thirstDrainPerHour = 3.9;
       player.needs.hunger = Math.max(0, player.needs.hunger - deltaHours * hungerDrainPerHour);
       player.needs.thirst = Math.max(0, player.needs.thirst - deltaHours * thirstDrainPerHour);
 
@@ -6488,13 +6488,13 @@ export function updatePlayerNeedsAndVitals(
   if (player.isSleeping) {
     player.consecutiveWakeHours = 0;
   } else {
-    // 1 in-game second is 0.12 in-game hours in normal gameplay
-    const elapsedHours = dt * 0.12;
+    // 24 real minutes = 24 in-game hours (1 in-game hour per 60 real seconds)
+    const elapsedHours = dt * (1 / 60);
     player.consecutiveWakeHours = (player.consecutiveWakeHours || 0) + elapsedHours;
   }
 
-  // A. Base fatigue accumulation rate
-  let baseRate = 0.038;
+  // A. Base fatigue accumulation rate (calibrated for 24-minute full day cycle)
+  let baseRate = 0.082;
 
   // B. Circadian Rhythm Multiplier based on biological clock
   let circadianMultiplier = 1.0;

@@ -3273,9 +3273,10 @@ export default function App() {
         );
         const tVpEnd = performance.now();
 
-        // Advance simulation time
+        // Advance simulation time (Realistic 24-minute full day cycle: 1 in-game hour = 60 real seconds, 1 in-game min = 1 real sec)
+        const GAME_HOURS_PER_REAL_SECOND = 1 / 60;
         if (isTimeAutoCyclingRef.current) {
-          timeHourRef.current = (timeHourRef.current + dt * 0.12) % 24;
+          timeHourRef.current = (timeHourRef.current + dt * GAME_HOURS_PER_REAL_SECOND) % 24;
         }
 
         if (weatherTransitionRef.current < 1.0) {
