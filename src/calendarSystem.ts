@@ -34,23 +34,23 @@ export interface ClimateAtmosphere {
   isSnowCovered: boolean;   // ground snow persistence
 }
 
-const MONTH_DAYS_NORMAL = [0, 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
-const MONTH_DAYS_LEAP   = [0, 31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+export const MONTH_DAYS_NORMAL = [0, 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+export const MONTH_DAYS_LEAP   = [0, 31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
 
-const MONTH_NAMES_NOMINATIVE = [
+export const MONTH_NAMES_NOMINATIVE = [
   '',
   'Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь',
   'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'
 ];
 
-const MONTH_NAMES_GENITIVE = [
+export const MONTH_NAMES_GENITIVE = [
   '',
   'января', 'февраля', 'марта', 'апреля', 'мая', 'июня',
   'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'
 ];
 
-const DAY_OF_WEEK_SHORT = ['', 'ПН', 'ВТ', 'СР', 'ЧТ', 'ПТ', 'СБ', 'ВС'];
-const DAY_OF_WEEK_FULL = [
+export const DAY_OF_WEEK_SHORT = ['', 'ПН', 'ВТ', 'СР', 'ЧТ', 'ПТ', 'СБ', 'ВС'];
+export const DAY_OF_WEEK_FULL = [
   '',
   'Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница', 'Суббота', 'Воскресенье'
 ];

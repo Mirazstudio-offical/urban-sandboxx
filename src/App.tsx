@@ -27,6 +27,7 @@ import {
   formatGameTime, 
   pickRandomSeasonalWeather, 
   calculateClimateAtmosphere,
+  getRussianSeasonName,
   GameCalendarState
 } from './calendarSystem';
 import { 
@@ -126,6 +127,7 @@ import { RealEstateAgencyModal } from './components/RealEstateAgencyModal';
 import { PropertyDocumentModal } from './components/PropertyDocumentModal';
 import { FurnitureStorageModal } from './components/FurnitureStorageModal';
 import { BedSleepOverlay } from './components/BedSleepOverlay';
+import { DateTimePickerModal } from './components/DateTimePickerModal';
 import { 
   BedSleepState, 
   startLyingOnBed, 
@@ -174,9 +176,16 @@ import {
   Briefcase,
   Car,
   Check,
+  ChevronLeft,
+  ChevronRight,
+  Calendar,
   Cloud,
+  CloudDrizzle,
+  CloudSun,
   CloudLightning,
   CloudRain,
+  Snowflake,
+  Wind,
   Compass, 
   Eye, 
   Flame,
@@ -581,6 +590,7 @@ export default function App() {
   const [isTimeAutoCycling, setIsTimeAutoCycling] = useState<boolean>(true);
   const [weather, setWeather] = useState<WeatherType>('clear');
   const [weatherTransition, setWeatherTransition] = useState<number>(1.0);
+  const [isDateTimePickerOpen, setIsDateTimePickerOpen] = useState<boolean>(false);
   const [damageDetails, setDamageDetails] = useState<{
     engineSmoking: boolean;
     engineFire: boolean;
@@ -867,7 +877,11 @@ export default function App() {
     timeHourRef.current = nextCal.timeHour;
     setTimeHour(next);
     setCalendar({ ...nextCal });
-    setIsTimeAutoCycling((prev) => !prev);
+    if (worldRef.current) {
+      worldRef.current.calendar = nextCal;
+      worldRef.current.season = nextCal.season;
+      worldRef.current.timeHour = next;
+    }
   };
 
   const cycleWeather = () => {
@@ -877,17 +891,91 @@ export default function App() {
     
     setWeather(nextWeather);
     weatherRef.current = nextWeather;
+    if (worldRef.current) {
+      worldRef.current.weather = nextWeather;
+    }
     setWeatherTransition(0.0);
     weatherTransitionRef.current = 0.0;
 
     sound.setRainAudio(nextWeather === 'rain' || nextWeather === 'storm' || nextWeather === 'drizzle');
+    
+    const p = playerRef.current;
+    if (p) {
+      const weatherRu = 
+        nextWeather === 'clear' ? 'Ясно' :
+        nextWeather === 'overcast' ? 'Пасмурно' :
+        nextWeather === 'drizzle' ? 'Морось' :
+        nextWeather === 'rain' ? 'Дождь' :
+        nextWeather === 'storm' ? 'Гроза' :
+        nextWeather === 'fog' ? 'Туман' :
+        nextWeather === 'snow' ? 'Снегопад' : 'Метель';
+      addPlayerNotification(p, `Погода: ${weatherRu}`, 'info');
+    }
+  };
+
+  const handleApplyDateAndTimeAndWeather = (
+    year: number, 
+    month: number, 
+    day: number, 
+    hour: number, 
+    newWeather: WeatherType
+  ) => {
+    const newCal = createInitialCalendarState(year, month, day, hour);
+    calendarRef.current = newCal;
+    setCalendar(newCal);
+    timeHourRef.current = newCal.timeHour;
+    setTimeHour(newCal.timeHour);
+    
+    if (worldRef.current) {
+      worldRef.current.calendar = newCal;
+      worldRef.current.season = newCal.season;
+      worldRef.current.timeHour = newCal.timeHour;
+      worldRef.current.weather = newWeather;
+    }
+    
+    setWeather(newWeather);
+    weatherRef.current = newWeather;
+    setWeatherTransition(0.0);
+    weatherTransitionRef.current = 0.0;
+    
+    sound.setRainAudio(newWeather === 'rain' || newWeather === 'storm' || newWeather === 'drizzle');
+    
+    const p = playerRef.current;
+    if (p) {
+      addPlayerNotification(
+        p, 
+        `Установлено: ${formatGameDate(newCal, 'medium')} • ${formatGameTime(newCal.timeHour)} (${getRussianSeasonName(newCal.season)})`, 
+        'info'
+      );
+    }
+  };
+
+  const handleStepGameDay = (deltaDays: number) => {
+    const { calendar: nextCal } = advanceCalendar(calendarRef.current, deltaDays * 24.0);
+    calendarRef.current = nextCal;
+    timeHourRef.current = nextCal.timeHour;
+    setTimeHour(nextCal.timeHour);
+    setCalendar({ ...nextCal });
+    if (worldRef.current) {
+      worldRef.current.calendar = nextCal;
+      worldRef.current.season = nextCal.season;
+      worldRef.current.timeHour = nextCal.timeHour;
+    }
+    const p = playerRef.current;
+    if (p) {
+      addPlayerNotification(
+        p, 
+        `Дата: ${formatGameDate(nextCal, 'medium')} (${getRussianSeasonName(nextCal.season)})`, 
+        'info'
+      );
+    }
   };
 
   const getTimeLabelName = (h: number) => {
-    if (h >= 5 && h < 8) return 'Morning';
-    if (h >= 8 && h < 17) return 'Day';
-    if (h >= 17 && h < 20) return 'Sunset';
-    return 'Night';
+    if (h >= 5 && h < 8) return 'Рассвет';
+    if (h >= 8 && h < 17) return 'День';
+    if (h >= 17 && h < 21) return 'Закат';
+    return 'Ночь';
   };
 
   // --- REAL SAVE & LOAD ENGINE ---
@@ -5915,6 +6003,69 @@ export default function App() {
         {/* Quick Settings Dropdown */}
         {isQuickMenuOpen && (
           <div className="bg-slate-900/95 backdrop-blur-md border border-slate-700 rounded-xl p-2.5 shadow-2xl flex flex-wrap gap-2 pointer-events-auto animate-in fade-in slide-in-from-top-2 duration-150 max-w-xs sm:max-w-sm max-h-[75vh] overflow-y-auto z-50">
+            {/* Calendar & Any Day/Year Selector Button */}
+            <button
+              id="calendar-picker-btn"
+              onClick={() => {
+                sound.playButtonPress();
+                setIsDateTimePickerOpen(true);
+                setIsQuickMenuOpen(false);
+              }}
+              onTouchEnd={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                sound.playButtonPress();
+                setIsDateTimePickerOpen(true);
+                setIsQuickMenuOpen(false);
+              }}
+              className="w-full bg-amber-950/80 hover:bg-amber-900 active:bg-amber-800 border border-amber-500/50 rounded-lg px-2.5 py-2 text-xs text-amber-200 flex items-center justify-between transition-all active:scale-95 cursor-pointer shadow-sm"
+              title="Выбрать любой день любого года, время суток и погоду">
+              <div className="flex items-center gap-2">
+                <Calendar className="w-4 h-4 text-amber-400" />
+                <div className="text-left">
+                  <div className="font-bold text-slate-100 flex items-center gap-1.5">
+                    <span>{formatGameDate(calendar, 'medium')}</span>
+                    <span className="text-amber-400 font-mono text-[11px]">• {formatGameTime(timeHour)}</span>
+                  </div>
+                  <div className="text-[10px] text-amber-400/80">
+                    {getRussianSeasonName(calendar.season)} • Выбор даты и года
+                  </div>
+                </div>
+              </div>
+              <ChevronRight className="w-4 h-4 text-amber-400 shrink-0" />
+            </button>
+
+            {/* Quick Day Stepper (-1 день / +1 день) */}
+            <div className="w-full flex items-center gap-1.5">
+              <button
+                id="prev-day-btn"
+                onClick={() => handleStepGameDay(-1)}
+                onTouchEnd={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  handleStepGameDay(-1);
+                }}
+                className="flex-1 bg-slate-800 hover:bg-slate-700 active:bg-slate-600 border border-slate-700 rounded-lg py-1.5 px-2 text-xs text-slate-200 flex items-center justify-center gap-1 transition-all active:scale-95 cursor-pointer"
+                title="Переключить на предыдущий день (-1)">
+                <ChevronLeft className="w-3.5 h-3.5 text-slate-400" />
+                <span>-1 день</span>
+              </button>
+
+              <button
+                id="next-day-btn"
+                onClick={() => handleStepGameDay(1)}
+                onTouchEnd={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  handleStepGameDay(1);
+                }}
+                className="flex-1 bg-slate-800 hover:bg-slate-700 active:bg-slate-600 border border-slate-700 rounded-lg py-1.5 px-2 text-xs text-slate-200 flex items-center justify-center gap-1 transition-all active:scale-95 cursor-pointer"
+                title="Переключить на следующий день (+1)">
+                <span>+1 день</span>
+                <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
+              </button>
+            </div>
+
             <button
               id="time-toggle-btn"onClick={cycleTimePreset}
               onTouchEnd={(e) => {
@@ -5923,11 +6074,11 @@ export default function App() {
                 cycleTimePreset();
               }}
               className="bg-slate-800 hover:bg-slate-700 active:bg-slate-600 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer"title="Переключить время суток (T)">
-              {getTimeLabelName(timeHour) === 'Morning'&& <Sunrise className="w-3.5 h-3.5 text-amber-400"/>}
-              {getTimeLabelName(timeHour) === 'Day'&& <Sun className="w-3.5 h-3.5 text-amber-300"/>}
-              {getTimeLabelName(timeHour) === 'Sunset'&& <Sunrise className="w-3.5 h-3.5 text-orange-400"/>}
-              {getTimeLabelName(timeHour) === 'Night'&& <Moon className="w-3.5 h-3.5 text-sky-300"/>}
-              <span className="capitalize">{getTimeLabelName(timeHour)}</span>
+              {getTimeLabelName(timeHour) === 'Рассвет'&& <Sunrise className="w-3.5 h-3.5 text-amber-400"/>}
+              {getTimeLabelName(timeHour) === 'День'&& <Sun className="w-3.5 h-3.5 text-amber-300"/>}
+              {getTimeLabelName(timeHour) === 'Закат'&& <Sunrise className="w-3.5 h-3.5 text-orange-400"/>}
+              {getTimeLabelName(timeHour) === 'Ночь'&& <Moon className="w-3.5 h-3.5 text-sky-300"/>}
+              <span>{getTimeLabelName(timeHour)}</span>
             </button>
 
             <button
@@ -5939,10 +6090,22 @@ export default function App() {
               }}
               className="bg-slate-800 hover:bg-slate-700 active:bg-slate-600 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer"title="Переключить погоду">
               {weather === 'clear'&& <Sun className="w-3.5 h-3.5 text-amber-300"/>}
+              {weather === 'overcast'&& <CloudSun className="w-3.5 h-3.5 text-slate-300"/>}
+              {weather === 'drizzle'&& <CloudDrizzle className="w-3.5 h-3.5 text-cyan-400"/>}
               {weather === 'rain'&& <CloudRain className="w-3.5 h-3.5 text-blue-400"/>}
-              {weather === 'fog'&& <Cloud className="w-3.5 h-3.5 text-slate-300"/>}
               {weather === 'storm'&& <CloudLightning className="w-3.5 h-3.5 text-purple-400"/>}
-              <span className="capitalize">{weather}</span>
+              {weather === 'fog'&& <Cloud className="w-3.5 h-3.5 text-slate-300"/>}
+              {weather === 'snow'&& <Snowflake className="w-3.5 h-3.5 text-sky-300"/>}
+              {weather === 'blizzard'&& <Wind className="w-3.5 h-3.5 text-indigo-300"/>}
+              <span>{
+                weather === 'clear' ? 'Ясно' :
+                weather === 'overcast' ? 'Пасмурно' :
+                weather === 'drizzle' ? 'Морось' :
+                weather === 'rain' ? 'Дождь' :
+                weather === 'storm' ? 'Гроза' :
+                weather === 'fog' ? 'Туман' :
+                weather === 'snow' ? 'Снег' : 'Метель'
+              }</span>
             </button>
 
             <button
@@ -7715,6 +7878,41 @@ export default function App() {
                   <span>Выдать ₽100,000</span>
                 </button>
 
+                {/* Calendar & Date/Weather Picker Button */}
+                <button
+                  onClick={() => {
+                    sound.playButtonPress();
+                    setIsDateTimePickerOpen(true);
+                  }}
+                  className="w-full py-2.5 px-3 bg-amber-950/60 hover:bg-amber-900/80 active:scale-[0.98] border border-amber-500/40 rounded-xl text-amber-200 text-xs font-bold flex items-center justify-between transition-all cursor-pointer">
+                  <div className="flex items-center gap-2">
+                    <Calendar className="w-4 h-4 text-amber-400" />
+                    <div className="text-left">
+                      <div>Выбрать день, год и погоду</div>
+                      <div className="text-[10px] text-amber-400/70 font-normal">
+                        {formatGameDate(calendar, 'medium')} • {formatGameTime(timeHour)}
+                      </div>
+                    </div>
+                  </div>
+                  <ChevronRight className="w-4 h-4 text-amber-400" />
+                </button>
+
+                {/* Day steppers in cheats tab */}
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    onClick={() => handleStepGameDay(-1)}
+                    className="py-2 px-2.5 bg-slate-800 hover:bg-slate-700 border border-slate-700/60 rounded-xl text-slate-200 text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer">
+                    <ChevronLeft className="w-3.5 h-3.5 text-slate-400" />
+                    <span>-1 день</span>
+                  </button>
+                  <button
+                    onClick={() => handleStepGameDay(1)}
+                    className="py-2 px-2.5 bg-slate-800 hover:bg-slate-700 border border-slate-700/60 rounded-xl text-slate-200 text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer">
+                    <span>+1 день</span>
+                    <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
+                  </button>
+                </div>
+
                 {/* Fix Car Button */}
                 <button
                   onClick={() => {
@@ -8082,6 +8280,24 @@ export default function App() {
             sound.purgeAudioGraph();
             clearInteriorCanvasCache();
           }}
+        />
+      )}
+
+      {/* Date, Time & Astronomical Calendar Picker Modal */}
+      {isDateTimePickerOpen && (
+        <DateTimePickerModal
+          currentCalendar={calendar}
+          currentWeather={weather}
+          isTimeAutoCycling={isTimeAutoCycling}
+          onApply={handleApplyDateAndTimeAndWeather}
+          onToggleTimeAutoCycling={() => {
+            setIsTimeAutoCycling((prev) => !prev);
+            const p = playerRef.current;
+            if (p) {
+              addPlayerNotification(p, !isTimeAutoCycling ? 'Ход времени: ВКЛ' : 'Ход времени: ПАУЗА', 'info');
+            }
+          }}
+          onClose={() => setIsDateTimePickerOpen(false)}
         />
       )}
     </div>
