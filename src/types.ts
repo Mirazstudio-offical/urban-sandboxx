@@ -1,5 +1,20 @@
 export type TimeOfDay = 'morning' | 'day' | 'sunset' | 'night';
-export type WeatherType = 'clear' | 'rain' | 'fog' | 'storm';
+export type WeatherType = 'clear' | 'overcast' | 'rain' | 'drizzle' | 'storm' | 'fog' | 'snow' | 'blizzard';
+export type Season = 'winter' | 'spring' | 'summer' | 'autumn';
+
+export interface GameCalendarState {
+  year: number;          // e.g. 2026
+  month: number;         // 1..12
+  day: number;           // 1..31
+  timeHour: number;      // 0.0 .. 23.999
+  season: Season;
+  dayOfYear: number;     // 1..365 (or 366 in leap year)
+  dayOfWeek: number;     // 1 = Понедельник .. 7 = Воскресенье
+  isLeapYear: boolean;
+  sunriseHour: number;   // Calculated from solar declination
+  sunsetHour: number;    // Calculated from solar declination
+  daylightHours: number; // Duration of daylight
+}
 
 export interface Vector2D {
   x: number;
@@ -2025,6 +2040,8 @@ export interface GameWorld {
   particles: Particle[];
   weather: WeatherType;
   timeHour?: number;
+  calendar?: GameCalendarState;
+  season?: Season;
   cleanMode?: boolean;
   outsideTemp?: number;
   humidity?: number;

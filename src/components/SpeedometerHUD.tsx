@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { Vehicle, CarType, WeatherType } from '../types';
+import { Vehicle, CarType, WeatherType, GameCalendarState } from '../types';
 import { getVehicleRequiredKeyType } from '../items';
+import { formatGameDate, getRussianSeasonName } from '../calendarSystem';
 import { 
   Fuel, 
   Thermometer, 
@@ -21,7 +22,9 @@ import {
   Key,
   Lock,
   Unlock,
-  Car
+  Car,
+  Calendar,
+  Snowflake
 } from 'lucide-react';
 import { sound } from '../audio';
 import { TaxiFleetSystem } from '../taxiSystem';
@@ -127,6 +130,7 @@ interface SpeedometerHUDProps {
   playerTurnSignal?: 'none' | 'left' | 'right' | 'hazard';
   playerHeadlightMode?: 'off' | 'low' | 'high';
   timeHour?: number;
+  calendar?: GameCalendarState;
   weather?: WeatherType;
   onToggleTurnSignal?: (signal: 'left' | 'right' | 'hazard') => void;
   onToggleHeadlights?: () => void;
@@ -150,6 +154,7 @@ export const SpeedometerHUD: React.FC<SpeedometerHUDProps> = ({
   playerTurnSignal = 'none',
   playerHeadlightMode = 'off',
   timeHour = 12.0,
+  calendar,
   weather = 'clear',
   onToggleTurnSignal,
   onToggleHeadlights,
@@ -264,8 +269,11 @@ export const SpeedometerHUD: React.FC<SpeedometerHUDProps> = ({
   const gameTimeStr = `${String(gameHours).padStart(2, '0')}:${String(gameMinutes).padStart(2, '0')}`;
 
   // In-Game Ambient Temperature calculation based on unified getOutsideTemperature function
-  const currentTempC = Math.round(getOutsideTemperature({ weather } as any, safeTimeHour));
+  const currentTempC = Math.round(getOutsideTemperature({ weather, calendar } as any, safeTimeHour));
   const ambientTempStr = `${currentTempC >= 0 ? '+' : ''}${currentTempC}°C`;
+  const isIcyRoad = currentTempC <= 0;
+  const gameDateStr = calendar ? formatGameDate(calendar, 'dashboard') : '08.10.26';
+  const seasonName = calendar ? getRussianSeasonName(calendar.season) : 'Осень';
 
   // Instant fuel consumption logic (л/100км в движении, л/ч на холостом ходу, 0.0 при торможении двигателем ПХХ)
   let instantConsumptionText = '0.0 L/100';
@@ -662,8 +670,13 @@ export const SpeedometerHUD: React.FC<SpeedometerHUDProps> = ({
                 <ArrowLeft className="w-3.5 h-3.5" />
               </span>
 
-              {/* In-Game Time, Outside Temp & Compass chips */}
+              {/* In-Game Date, Time, Outside Temp & Compass chips */}
               <div className="flex items-center gap-1.5 text-[9px] font-mono text-[#cbd5e1] bg-[#0b0c0e]/80 px-2 py-1 rounded-[2px] border border-[#2a2e38]">
+                <span className="flex items-center gap-1 text-[#f0f3f6] font-bold" title="Календарная дата">
+                  <Calendar className="w-2.5 h-2.5 text-[#c68a35]" />
+                  {gameDateStr}
+                </span>
+                <span className="text-[#3a3f4d]">|</span>
                 <span className="flex items-center gap-1 text-[#f0f3f6] font-bold" title="Игровое время">
                   <Clock className="w-2.5 h-2.5 text-[#c68a35]" />
                   {gameTimeStr}
@@ -673,6 +686,15 @@ export const SpeedometerHUD: React.FC<SpeedometerHUDProps> = ({
                   <Thermometer className="w-2.5 h-2.5 text-[#c68a35]" />
                   {ambientTempStr}
                 </span>
+                {isIcyRoad && (
+                  <>
+                    <span className="text-[#3a3f4d]">|</span>
+                    <span className="flex items-center gap-0.5 text-cyan-400 font-extrabold animate-pulse" title="Внимание: Гололёд / Обледенение дороги!">
+                      <Snowflake className="w-2.5 h-2.5" />
+                      <span>ГОЛОЛЁД</span>
+                    </span>
+                  </>
+                )}
                 <span className="text-[#3a3f4d]">|</span>
                 <span className="flex items-center gap-1 text-[#c68a35] font-bold" title="Компас / Курс">
                   <Compass className="w-2.5 h-2.5" />

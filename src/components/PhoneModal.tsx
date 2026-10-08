@@ -37,11 +37,23 @@ import {
   Download,
   Image as ImageIcon,
   CheckCircle2,
-  Wind
+  Wind,
+  Cloud,
+  CloudDrizzle,
+  Snowflake,
+  Calendar
 } from 'lucide-react';
 import { InventoryItem, Player, PhoneSpecs, GameWorld } from '../types';
 import { sound } from '../audio';
 import { getOutsideTemperature } from '../physics';
+import { 
+  formatGameDate, 
+  formatGameTime, 
+  getRussianSeasonName, 
+  getRussianWeatherDescription, 
+  calculateClimateAtmosphere, 
+  createInitialCalendarState 
+} from '../calendarSystem';
 import {
   PHONE_WALLPAPERS,
   PHONE_CONTACTS,
@@ -136,16 +148,12 @@ export const PhoneModal: React.FC<PhoneModalProps> = ({ item, player, world, onS
   const [viewingPhoto, setViewingPhoto] = useState<CapturedPhoto | null>(null);
   const [liveCanvasSnapshot, setLiveCanvasSnapshot] = useState<string | null>(null);
 
-  // Derive real game time
+  // Derive real game time & astronomical calendar
+  const calendar = world?.calendar || createInitialCalendarState(2026, 10, 8, typeof world?.timeHour === 'number' ? world.timeHour : 12);
+  const atmo = calculateClimateAtmosphere(calendar, world?.weather || 'clear');
+
   const getGameTimeStr = () => {
-    if (world && typeof world.timeOfDay === 'number') {
-      const totalMinutes = Math.floor(world.timeOfDay * 24 * 60);
-      const hours = Math.floor(totalMinutes / 60) % 24;
-      const minutes = totalMinutes % 60;
-      return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
-    }
-    const d = new Date();
-    return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+    return formatGameTime(calendar.timeHour);
   };
 
   const [currentTimeStr, setCurrentTimeStr] = useState<string>(getGameTimeStr());
@@ -156,9 +164,9 @@ export const PhoneModal: React.FC<PhoneModalProps> = ({ item, player, world, onS
       setCurrentTimeStr(getGameTimeStr());
     };
     updateTime();
-    const interval = setInterval(updateTime, 3000);
+    const interval = setInterval(updateTime, 1000);
     return () => clearInterval(interval);
-  }, [world?.timeOfDay]);
+  }, [world?.calendar, world?.timeHour]);
 
   // Battery drain & in-car charging
   useEffect(() => {
@@ -348,19 +356,30 @@ export const PhoneModal: React.FC<PhoneModalProps> = ({ item, player, world, onS
   // Real Weather Icon & Name & Atmospheric Wind
   const getWeatherInfo = () => {
     const w = world?.weather || 'clear';
-    const tempVal = Math.round(world ? getOutsideTemperature(world) : 20);
+    const tempVal = Math.round(atmo.temperature);
     const tempStr = `${tempVal >= 0 ? '+' : ''}${tempVal}°C`;
     const windSpeedMs = Math.round((world?.wind ? (world.wind.speed * (world.wind.gust ?? 1.0)) * 0.1 : 2.4) * 10) / 10;
     const windStr = `${windSpeedMs} м/с`;
+    const desc = getRussianWeatherDescription(w, atmo.isFreezing);
+    const seasonStr = getRussianSeasonName(calendar.season);
+
     switch (w) {
+      case 'blizzard':
+        return { icon: Snowflake, label: desc, temp: tempStr, windStr, color: 'text-cyan-300', seasonStr };
+      case 'snow':
+        return { icon: Snowflake, label: desc, temp: tempStr, windStr, color: 'text-sky-200', seasonStr };
       case 'storm':
-        return { icon: CloudLightning, label: 'Грозовой Шторм', temp: tempStr, windStr, color: 'text-amber-400' };
+        return { icon: CloudLightning, label: desc, temp: tempStr, windStr, color: 'text-amber-400', seasonStr };
       case 'rain':
-        return { icon: CloudRain, label: 'Дождь', temp: tempStr, windStr, color: 'text-blue-400' };
+        return { icon: CloudRain, label: desc, temp: tempStr, windStr, color: 'text-blue-400', seasonStr };
+      case 'drizzle':
+        return { icon: CloudDrizzle, label: desc, temp: tempStr, windStr, color: 'text-blue-300', seasonStr };
       case 'fog':
-        return { icon: CloudFog, label: 'Густой Туман', temp: tempStr, windStr, color: 'text-slate-300' };
+        return { icon: CloudFog, label: desc, temp: tempStr, windStr, color: 'text-slate-300', seasonStr };
+      case 'overcast':
+        return { icon: Cloud, label: desc, temp: tempStr, windStr, color: 'text-slate-200', seasonStr };
       default:
-        return { icon: Sun, label: 'Ясно • Солнечно', temp: tempStr, windStr, color: 'text-amber-300' };
+        return { icon: Sun, label: desc, temp: tempStr, windStr, color: 'text-amber-300', seasonStr };
     }
   };
 
@@ -479,9 +498,14 @@ export const PhoneModal: React.FC<PhoneModalProps> = ({ item, player, world, onS
                     <div className="flex justify-between items-start">
                       <div>
                         <div className="text-3xl font-light tracking-tight">{currentTimeStr}</div>
-                        <div className="text-xs text-white/80 font-medium mt-0.5 flex items-center gap-1">
+                        <div className="text-[11px] text-amber-300 font-medium mt-0.5">
+                          {formatGameDate(calendar, 'full')}
+                        </div>
+                        <div className="text-[11px] text-white/80 font-medium mt-1 flex items-center gap-1">
                           <WeatherIcon className={`w-3.5 h-3.5 ${weather.color}`} />
                           <span>{weather.label}</span>
+                          <span className="text-white/40">•</span>
+                          <span className="text-emerald-300 font-semibold">{weather.seasonStr}</span>
                         </div>
                       </div>
                       <div className="text-right">
@@ -490,11 +514,23 @@ export const PhoneModal: React.FC<PhoneModalProps> = ({ item, player, world, onS
                           <Wind className="w-3 h-3 text-cyan-300" />
                           <span>{weather.windStr}</span>
                         </div>
+                        <div className="text-[9px] text-white/60 font-mono mt-0.5">
+                          {atmo.pressureMmHg} мм • {atmo.humidity}%
+                        </div>
                       </div>
                     </div>
 
+                    {/* Astronomical Ephemeris Bar */}
+                    <div className="mt-2.5 pt-2 border-t border-white/10 flex items-center justify-between text-[10px] text-white/75 font-mono">
+                      <span>Восход: {formatGameTime(calendar.sunriseHour)}</span>
+                      <span>•</span>
+                      <span>Закат: {formatGameTime(calendar.sunsetHour)}</span>
+                      <span>•</span>
+                      <span>Свет: {calendar.daylightHours.toFixed(1)}ч</span>
+                    </div>
+
                     {/* Quick Specs Pill */}
-                    <div className="mt-3 pt-2.5 border-t border-white/10 flex items-center justify-between text-[11px] text-white/80">
+                    <div className="mt-2 pt-2 border-t border-white/10 flex items-center justify-between text-[11px] text-white/80">
                       <span className="font-medium text-cyan-300">{specs.modelName}</span>
                       <span className="text-white/60">{specs.storageGb} ГБ • {specs.ramGb} ГБ RAM</span>
                     </div>

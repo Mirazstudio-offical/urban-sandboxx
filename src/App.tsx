@@ -21,6 +21,15 @@ import {
   RollingStockCar
 } from './types';
 import { 
+  advanceCalendar, 
+  createInitialCalendarState, 
+  formatGameDate, 
+  formatGameTime, 
+  pickRandomSeasonalWeather, 
+  calculateClimateAtmosphere,
+  GameCalendarState
+} from './calendarSystem';
+import { 
   CAR_CONFIGS, 
   createDefaultEngineState, 
   createDefaultFuelSystem, 
@@ -50,7 +59,8 @@ import {
   updateVehiclePhysics,
   toggleTrailerHitch,
   hitchTrailerToVehicle,
-  unhitchTrailerFromVehicle
+  unhitchTrailerFromVehicle,
+  getOutsideTemperature
 } from './physics';
 import { GameRenderer } from './renderer';
 import { getBuildingFloorsCount, getBuildingLayout, constrainPlayerToInterior, clearInteriorCanvasCache, getApartmentDoorSegment } from './buildingInteriors';
@@ -566,6 +576,7 @@ export default function App() {
     });
   }, []);
   const [isMinimapCollapsed, setIsMinimapCollapsed] = useState<boolean>(false);
+  const [calendar, setCalendar] = useState<GameCalendarState>(() => createInitialCalendarState(2026, 10, 8, 10.0));
   const [timeHour, setTimeHour] = useState<number>(10.0); // 0 to 24 hours
   const [isTimeAutoCycling, setIsTimeAutoCycling] = useState<boolean>(true);
   const [weather, setWeather] = useState<WeatherType>('clear');
@@ -819,6 +830,9 @@ export default function App() {
   const [creativeVehicleColor, setCreativeVehicleColor] = useState<string>('#38bdf8');
 
   // Engine Refs (persistent across renders)
+  const calendarRef = useRef<GameCalendarState>(calendar);
+  calendarRef.current = calendar;
+
   const timeHourRef = useRef<number>(10.0);
   timeHourRef.current = timeHour;
 
@@ -846,13 +860,18 @@ export default function App() {
     else if (current < 21) next = 23.0;
     else next = 7.0;
 
+    let diff = next - current;
+    if (diff < 0) diff += 24;
+    const { calendar: nextCal } = advanceCalendar(calendarRef.current, diff);
+    calendarRef.current = nextCal;
+    timeHourRef.current = nextCal.timeHour;
     setTimeHour(next);
-    timeHourRef.current = next;
+    setCalendar({ ...nextCal });
     setIsTimeAutoCycling((prev) => !prev);
   };
 
   const cycleWeather = () => {
-    const types: WeatherType[] = ['clear', 'rain', 'fog', 'storm'];
+    const types: WeatherType[] = ['clear', 'overcast', 'drizzle', 'rain', 'storm', 'fog', 'snow', 'blizzard'];
     const idx = types.indexOf(weather);
     const nextWeather = types[(idx + 1) % types.length];
     
@@ -861,7 +880,7 @@ export default function App() {
     setWeatherTransition(0.0);
     weatherTransitionRef.current = 0.0;
 
-    sound.setRainAudio(nextWeather === 'rain'|| nextWeather === 'storm');
+    sound.setRainAudio(nextWeather === 'rain' || nextWeather === 'storm' || nextWeather === 'drizzle');
   };
 
   const getTimeLabelName = (h: number) => {
@@ -902,16 +921,9 @@ export default function App() {
     // Get current street name
     const currentStreet = findStreetNameAtPosition(world, player.x, player.y);
 
-    let timeString = '12:00';
-    let dateString = '01.01.2026';
-    try {
-      timeString = new Date().toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit'});
-      dateString = new Date().toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric'});
-    } catch (err) {
-      const now = new Date();
-      timeString = now.toTimeString().slice(0, 5);
-      dateString = now.toISOString().slice(0, 10).split('-').reverse().join('.');
-    }
+    const currentCal = calendarRef.current;
+    const timeString = formatGameTime(currentCal.timeHour);
+    const dateString = formatGameDate(currentCal, 'short');
     
     const saveName = customName || `Улица: ${currentStreet}`;
 
@@ -1002,6 +1014,8 @@ export default function App() {
       isInVehicle: player.isInVehicle,
       currentVehicleId: player.currentVehicleId,
       timeHour: timeHourRef.current,
+      calendar: { ...currentCal },
+      season: currentCal.season,
       weather: weatherRef.current,
       streetName: currentStreet,
       gpsDestination: gpsDestination,
@@ -1059,11 +1073,20 @@ export default function App() {
     inputRef.current.handbrake = false;
     inputRef.current.sprint = false;
 
-    // Restore environmental state
-    setTimeHour(save.timeHour);
-    timeHourRef.current = save.timeHour;
-    setWeather(save.weather);
-    weatherRef.current = save.weather;
+    // Restore environmental state & calendar
+    if (save.calendar) {
+      calendarRef.current = { ...save.calendar };
+      setCalendar({ ...save.calendar });
+    } else {
+      const savedH = typeof save.timeHour === 'number' ? save.timeHour : 10.0;
+      const restored = createInitialCalendarState(2026, 10, 8, savedH);
+      calendarRef.current = restored;
+      setCalendar(restored);
+    }
+    setTimeHour(calendarRef.current.timeHour);
+    timeHourRef.current = calendarRef.current.timeHour;
+    setWeather(save.weather || 'clear');
+    weatherRef.current = save.weather || 'clear';
     handleSetGpsTarget(save.gpsDestination);
 
     // Restore player status & survival needs
@@ -1397,6 +1420,9 @@ export default function App() {
     setActiveCarName('');
     sound.stopEngine();
 
+    const initialCal = createInitialCalendarState(2026, 10, 8, 10.0);
+    calendarRef.current = initialCal;
+    setCalendar(initialCal);
     setTimeHour(10.0);
     timeHourRef.current = 10.0;
     setWeather('clear');
@@ -2768,8 +2794,13 @@ export default function App() {
             dt,
             timeHourRef.current,
             (newHour) => {
-              timeHourRef.current = newHour;
-              setTimeHour(newHour);
+              let diff = newHour - timeHourRef.current;
+              if (diff < 0) diff += 24;
+              const { calendar: nextCal } = advanceCalendar(calendarRef.current, diff);
+              calendarRef.current = nextCal;
+              timeHourRef.current = nextCal.timeHour;
+              setTimeHour(nextCal.timeHour);
+              setCalendar({ ...nextCal });
             }
           );
           bedSleepStateRef.current = nextSleepState;
@@ -2901,6 +2932,29 @@ export default function App() {
         // 7. Update Skid marks, Particles & Breakables / Living World
         world.weather = weatherRef.current;
         world.timeHour = timeHourRef.current;
+        world.calendar = calendarRef.current;
+        world.season = calendarRef.current.season;
+
+        // Dynamic seasonal weather adaptation
+        const curOutsideTemp = getOutsideTemperature(world, timeHourRef.current);
+        world.outsideTemp = curOutsideTemp;
+
+        if (curOutsideTemp <= 0.0 && (weatherRef.current === 'rain' || weatherRef.current === 'drizzle')) {
+          setWeather('snow');
+          weatherRef.current = 'snow';
+          setWeatherTransition(0.0);
+          weatherTransitionRef.current = 0.0;
+        } else if (Math.random() < 0.0015 * dt) {
+          const nextSeasonalWeather = pickRandomSeasonalWeather(calendarRef.current, curOutsideTemp);
+          if (nextSeasonalWeather !== weatherRef.current) {
+            setWeather(nextSeasonalWeather);
+            weatherRef.current = nextSeasonalWeather;
+            setWeatherTransition(0.0);
+            weatherTransitionRef.current = 0.0;
+            sound.setRainAudio(nextSeasonalWeather === 'rain' || nextSeasonalWeather === 'storm' || nextSeasonalWeather === 'drizzle');
+          }
+        }
+
         updateSkidMarksAndParticles(world, player, dt);
         updateBreakablePropsAndLivingWorld(world, player, dt, vehGrid);
 
@@ -3276,7 +3330,14 @@ export default function App() {
         // Advance simulation time (Realistic 24-minute full day cycle: 1 in-game hour = 60 real seconds, 1 in-game min = 1 real sec)
         const GAME_HOURS_PER_REAL_SECOND = 1 / 60;
         if (isTimeAutoCyclingRef.current) {
-          timeHourRef.current = (timeHourRef.current + dt * GAME_HOURS_PER_REAL_SECOND) % 24;
+          const deltaHours = dt * GAME_HOURS_PER_REAL_SECOND;
+          const { calendar: nextCal, wrappedDays } = advanceCalendar(calendarRef.current, deltaHours);
+          calendarRef.current = nextCal;
+          timeHourRef.current = nextCal.timeHour;
+
+          if (wrappedDays !== 0) {
+            setCalendar({ ...nextCal });
+          }
         }
 
         if (weatherTransitionRef.current < 1.0) {
@@ -6214,6 +6275,7 @@ export default function App() {
             playerTurnSignal={playerTurnSignal}
             playerHeadlightMode={playerHeadlightMode}
             timeHour={timeHour}
+            calendar={calendar}
             weather={weather}
             onToggleTurnSignal={toggleTurnSignal}
             onToggleHeadlights={toggleHeadlights}

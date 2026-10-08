@@ -27,6 +27,7 @@ import {
   Check,
   Wrench
 } from 'lucide-react';
+import { formatGameDate, formatGameTime, getRussianSeasonName } from '../calendarSystem';
 
 export interface SaveSlot {
   id: string;
@@ -40,6 +41,8 @@ export interface SaveSlot {
   timeHour: number;
   weather: string;
   streetName: string;
+  calendar?: any;
+  season?: string;
   gpsDestination?: any;
   needs?: any;
   inventory?: any;
@@ -352,11 +355,13 @@ export const MainMenu: React.FC<MainMenuProps> = ({
                         {save.name}
                       </span>
                       <div className="flex items-center gap-2 text-[10px] text-[#8b929e] font-mono mt-0.5">
-                        <span>{save.date}</span>
+                        <span>{save.calendar ? formatGameDate(save.calendar, 'medium') : (save.date || '08.10.2026')}</span>
+                        <span>•</span>
+                        <span>{save.calendar?.season ? getRussianSeasonName(save.calendar.season) : (save.season || 'Осень')}</span>
                         <span>•</span>
                         <span>{save.streetName || (save.isInVehicle ? 'За рулём' : 'Пешком')}</span>
                         <span>•</span>
-                        <span className="text-[#c68a35]">{save.timeHour?.toFixed(1) || '10.0'}ч</span>
+                        <span className="text-[#c68a35]">{formatGameTime(save.timeHour ?? 10.0)}</span>
                       </div>
                     </div>
 

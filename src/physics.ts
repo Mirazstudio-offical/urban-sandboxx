@@ -14,6 +14,7 @@ import { GuardrailPhysics } from './guardrailPhysics';
 import { AGRICULTURAL_FIELDS, getTerrainSlope } from './terrainElevation';
 import { getRiverWaterAt, getUniversalWaterDepthAt } from './riverSystem';
 import { getBiomeSampleAt } from './biomeSystem';
+import { calculateClimateAtmosphere, createInitialCalendarState } from './calendarSystem';
 
 export interface CollisionResult {
   collided: boolean;
@@ -5465,30 +5466,28 @@ export function updateWorldWind(world: GameWorld, dt: number): WorldWind {
 }
 
 /**
- * Calculates ambient outside air temperature in °C based on time of day and weather.
+ * Calculates ambient outside air temperature in °C based on time of day, calendar date, season, and weather.
  */
 export function getOutsideTemperature(world: GameWorld, timeHour?: number): number {
-  if (typeof (world as any)?.outsideTemp === 'number'&& Number.isFinite((world as any).outsideTemp)) {
+  if (typeof (world as any)?.outsideTemp === 'number' && Number.isFinite((world as any).outsideTemp)) {
     return (world as any).outsideTemp;
   }
   let hour = 12;
-  if (typeof timeHour === 'number'&& Number.isFinite(timeHour)) {
+  if (typeof timeHour === 'number' && Number.isFinite(timeHour)) {
     hour = timeHour;
-  } else if (world && typeof world.timeHour === 'number'&& Number.isFinite(world.timeHour)) {
+  } else if (world && typeof world.timeHour === 'number' && Number.isFinite(world.timeHour)) {
     hour = world.timeHour;
   }
-  // Diurnal sinusoidal temperature curve:
-  // - Night / Early morning 04:30: Coolest (~9.5°C to 11°C)
-  // - Midday / Afternoon 14:30: Warmest (~22.5°C to 25°C on clear sunny dry day)
-  const diurnal = Math.sin(((hour - 8.5) / 24) * 2 * Math.PI);
-  let temp = 16.5 + diurnal * 7.0;
 
-  if (world?.weather === 'clear') temp += 2.0; // solar radiation warming
-  else if (world?.weather === 'rain') temp -= 4.5; // cool precipitation
-  else if (world?.weather === 'storm') temp -= 7.5; // cold storm front
-  else if (world?.weather === 'fog') temp -= 3.5; // damp fog cooling
+  if (world?.calendar) {
+    const cal = { ...world.calendar, timeHour: hour };
+    const atmo = calculateClimateAtmosphere(cal, world.weather || 'clear');
+    return atmo.temperature;
+  }
 
-  return Math.round(temp * 10) / 10;
+  // Fallback to default calendar state (October 8, 2026)
+  const defaultCal = createInitialCalendarState(2026, 10, 8, hour);
+  return calculateClimateAtmosphere(defaultCal, world?.weather || 'clear').temperature;
 }
 
 /**
@@ -5510,7 +5509,7 @@ export function getAtmosphereState(world: GameWorld, timeHour?: number): Atmosph
     targetSpeed: 24
   };
 
-  const isHumid = world.weather === 'rain' || world.weather === 'storm' || world.weather === 'fog';
+  const isHumid = world.weather === 'rain' || world.weather === 'storm' || world.weather === 'fog' || world.weather === 'snow' || world.weather === 'blizzard' || world.weather === 'drizzle';
   // Clausius-Clapeyron condensation curve:
   // Starts triggering below 14°C, reaches ~1.0 around 0°C, and >1.3 in severe cold.
   let condensationFactor = Math.max(0, (14.0 - outsideTemp) / 12.0);
@@ -5537,7 +5536,7 @@ export function getAtmosphereState(world: GameWorld, timeHour?: number): Atmosph
     dissipationRate,
     airDensityRatio,
     isCold: outsideTemp < 12.0,
-    isFreezing: outsideTemp <= 2.0
+    isFreezing: outsideTemp <= 0.0
   };
 }
 

@@ -15,7 +15,8 @@ import {
   Vehicle,
   VehicleDamage,
   ParkingSpot,
-  Particle
+  Particle,
+  Season
 } from './types';
 import { 
   CAR_CONFIGS, 
@@ -584,19 +585,23 @@ export class GameRenderer {
     const minY = camera.y - viewDiag;
     const maxY = camera.y + viewDiag;
 
-    // Calculate continuous nightAlpha from timeHour with smooth transitions
+    // Calculate continuous nightAlpha from timeHour with seasonal astronomical ephemeris
+    const sunrise = world.calendar?.sunriseHour ?? 6.0;
+    const sunset = world.calendar?.sunsetHour ?? 19.0;
+    const dawnStart = Math.max(0, sunrise - 1.8);
+    const dawnEnd = sunrise + 1.0;
+    const duskStart = sunset - 1.5;
+    const duskEnd = Math.min(24, sunset + 1.8);
+
     let nightAlpha = 0;
-    if (timeHour >= 8 && timeHour < 17) {
+    if (timeHour >= dawnEnd && timeHour < duskStart) {
       nightAlpha = 0;
-    } else if (timeHour >= 17 && timeHour < 21) {
-      // Smooth sunset transition (17:00-21:00)
-      nightAlpha = ((timeHour - 17) / 4) * 0.82;
-    } else if (timeHour >= 21 || timeHour < 4) {
-      // Night (21:00-04:00)
+    } else if (timeHour >= duskStart && timeHour < duskEnd) {
+      nightAlpha = ((timeHour - duskStart) / (duskEnd - duskStart)) * 0.82;
+    } else if (timeHour >= duskEnd || timeHour < dawnStart) {
       nightAlpha = 0.82;
-    } else if (timeHour >= 4 && timeHour < 8) {
-      // Smooth sunrise transition (04:00-08:00)
-      nightAlpha = (1 - ((timeHour - 4) / 4)) * 0.82;
+    } else {
+      nightAlpha = (1 - ((timeHour - dawnStart) / (dawnEnd - dawnStart))) * 0.82;
     }
 
     const vpProps = visibleProps || world.props.filter(p => p.x >= minX - 120 && p.x <= maxX + 120 && p.y >= minY - 120 && p.y <= maxY + 120);
@@ -737,7 +742,7 @@ export class GameRenderer {
           this.renderPedestrians(visiblePedestrians, world);
           this.renderUnderVehicleParticles(world.particles, world.cleanMode);
           this.renderVehicles(visibleVehicles, nightAlpha, camera.gridMode);
-          this.renderTreesAndTallProps(vpTrees, vpProps, sMinX, sMinY, sMaxX, sMaxY, nightAlpha);
+          this.renderTreesAndTallProps(vpTrees, vpProps, sMinX, sMinY, sMaxX, sMaxY, nightAlpha, world.calendar?.season);
           this.renderOverheadParticles(world.particles, world.cleanMode);
 
           if (nightAlpha > 0) {
@@ -920,7 +925,7 @@ export class GameRenderer {
     this.renderBuildingRoofsAndCanopies(visibleBuildings, nightAlpha, player, world);
 
     // 16b. Tall Intact Props (Intact trees, and intact lampposts!)
-    this.renderTreesAndTallProps(vpTrees, vpProps, minX, minY, maxX, maxY, nightAlpha);
+    this.renderTreesAndTallProps(vpTrees, vpProps, minX, minY, maxX, maxY, nightAlpha, world.calendar?.season);
 
     // 16b2. Overhead Sagging Electrical Wires (СИП between poles and garage roofs)
     GarageCooperativeRenderer.renderOverheadWires(this.ctx, world, minX, minY, maxX, maxY);
@@ -5257,7 +5262,8 @@ export class GameRenderer {
     trees: GameWorld['trees'],
     props: StreetProp[],
     minX: number, minY: number, maxX: number, maxY: number,
-    nightAlpha: number = 0
+    nightAlpha: number = 0,
+    season?: Season
   ) {
     const ctx = this.ctx;
 
@@ -5454,8 +5460,8 @@ export class GameRenderer {
         ctx.closePath();
         ctx.fill();
 
-        // Top Apex Tier
-        ctx.fillStyle = '#2a8750';
+        // Top Apex Tier (Snow cap in winter)
+        ctx.fillStyle = season === 'winter' ? '#f8fafc' : '#2a8750';
         ctx.beginPath();
         ctx.arc(tree.x - r * 0.1, tree.y - r * 0.1, r * 0.35, 0, Math.PI * 2);
         ctx.fill();
@@ -5474,7 +5480,7 @@ export class GameRenderer {
           ctx.fill();
         }
       } else if (isBirch) {
-        // --- RUSSIAN BIRCH TREE (БЕРЁЗА: БЕЛЫЙ СТВОЛ С ЧЁРНЫМИ ЧЕЧЕВИЧКАМИ И НЕЖНАЯ ЛИСТВА) ---
+        // --- RUSSIAN BIRCH TREE (БЕРЁЗА: БЕЛЫЙ СТВОЛ С ЧЁРНЫМИ ЧЕЧЕВИЧКАМИ И СЕЗОННАЯ ЛИСТВА) ---
         const r = tree.radius;
 
         // Birch Dappled Shadow
@@ -5485,8 +5491,25 @@ export class GameRenderer {
           ctx.fill();
         }
 
+        // Seasonal foliage palette for deciduous Russian birch
+        let foliageColors = ['#4d7c0f', '#65a30d', '#84cc16'];
+        let highlight1 = '#a3e635';
+        let highlight2 = '#bef264';
+        if (season === 'autumn') {
+          foliageColors = ['#9a3412', '#c2410c', '#ea580c'];
+          highlight1 = '#f59e0b';
+          highlight2 = '#fbbf24';
+        } else if (season === 'winter') {
+          foliageColors = ['#94a3b8', '#cbd5e1', '#e2e8f0'];
+          highlight1 = '#f1f5f9';
+          highlight2 = '#ffffff';
+        } else if (season === 'spring') {
+          foliageColors = ['#3f6212', '#4d7c0f', '#84cc16'];
+          highlight1 = '#a3e635';
+          highlight2 = '#d9f99d';
+        }
+
         // Outer Foliage Puffs (Layered organic clusters)
-        const foliageColors = ['#4d7c0f', '#65a30d', '#84cc16'];
         foliageColors.forEach((col, idx) => {
           ctx.fillStyle = col;
           const puffRadius = r * (0.85 - idx * 0.16);
@@ -5500,12 +5523,12 @@ export class GameRenderer {
         });
 
         // Top Soft Leafy Canopy Highlights
-        ctx.fillStyle = '#a3e635';
+        ctx.fillStyle = highlight1;
         ctx.beginPath();
         ctx.arc(tree.x - r * 0.18, tree.y - r * 0.18, r * 0.42, 0, Math.PI * 2);
         ctx.fill();
 
-        ctx.fillStyle = '#bef264';
+        ctx.fillStyle = highlight2;
         ctx.beginPath();
         ctx.arc(tree.x - r * 0.26, tree.y - r * 0.26, r * 0.24, 0, Math.PI * 2);
         ctx.fill();
@@ -10535,23 +10558,38 @@ export class GameRenderer {
   ) {
     let nightAlpha = 0;
     const baseColor = 'rgba(6, 11, 24, ';
-    if (timeHour >= 8 && timeHour < 17) {
+    const sunrise = world.calendar?.sunriseHour ?? 6.0;
+    const sunset = world.calendar?.sunsetHour ?? 19.0;
+    const dawnStart = Math.max(0, sunrise - 1.8);
+    const dawnEnd = sunrise + 1.0;
+    const duskStart = sunset - 1.5;
+    const duskEnd = Math.min(24, sunset + 1.8);
+
+    if (timeHour >= dawnEnd && timeHour < duskStart) {
       nightAlpha = 0;
-    } else if (timeHour >= 17 && timeHour < 21) {
-      nightAlpha = ((timeHour - 17) / 4) * 0.82;
-    } else if (timeHour >= 21 || timeHour < 4) {
+    } else if (timeHour >= duskStart && timeHour < duskEnd) {
+      nightAlpha = ((timeHour - duskStart) / (duskEnd - duskStart)) * 0.82;
+    } else if (timeHour >= duskEnd || timeHour < dawnStart) {
       nightAlpha = 0.82;
-    } else if (timeHour >= 4 && timeHour < 8) {
-      nightAlpha = (1 - ((timeHour - 4) / 4)) * 0.82;
+    } else {
+      nightAlpha = (1 - ((timeHour - dawnStart) / (dawnEnd - dawnStart))) * 0.82;
     }
 
-    const isRaining = (world.weather === 'rain' || world.weather === 'storm');
+    const isRaining = (world.weather === 'rain' || world.weather === 'storm' || world.weather === 'drizzle');
+    const isSnowing = (world.weather === 'snow' || world.weather === 'blizzard');
     const isFog = world.weather === 'fog';
-    const effectiveAlpha = Math.max(nightAlpha, isRaining ? 0.35 * weatherTransition : 0, isFog ? 0.45 * weatherTransition : 0);
+    const isOvercast = world.weather === 'overcast';
+    const effectiveAlpha = Math.max(
+      nightAlpha,
+      isRaining ? (world.weather === 'storm' ? 0.40 : 0.28) * weatherTransition : 0,
+      isSnowing ? (world.weather === 'blizzard' ? 0.35 : 0.18) * weatherTransition : 0,
+      isFog ? 0.45 * weatherTransition : 0,
+      isOvercast ? 0.20 * weatherTransition : 0
+    );
 
     const fogFactor = isFog ? (1.0 - 0.55 * weatherTransition) : 1.0;
 
-    if (effectiveAlpha <= 0.02 && !isRaining && !isFog && (world.lightningFlashTimer ?? 0) <= 0) {
+    if (effectiveAlpha <= 0.02 && !isRaining && !isSnowing && !isFog && !isOvercast && (world.lightningFlashTimer ?? 0) <= 0) {
       return;
     }
 
@@ -12055,12 +12093,16 @@ export class GameRenderer {
 
   private renderWeatherOverlay(world: GameWorld, minX: number, minY: number, maxX: number, maxY: number) {
     const ctx = this.ctx;
-    const isRaining = world.weather === 'rain' || world.weather === 'storm';
+    const isRaining = world.weather === 'rain' || world.weather === 'storm' || world.weather === 'drizzle';
     const isStorm = world.weather === 'storm';
+    const isDrizzle = world.weather === 'drizzle';
+    const isSnowing = world.weather === 'snow' || world.weather === 'blizzard';
+    const isBlizzard = world.weather === 'blizzard';
     const isFog = world.weather === 'fog';
+    const isOvercast = world.weather === 'overcast';
     const hasLightning = (world.lightningFlashTimer ?? 0) > 0;
 
-    if (!isRaining && !isFog && !hasLightning) return;
+    if (!isRaining && !isSnowing && !isFog && !isOvercast && !hasLightning) return;
 
     ctx.save();
     ctx.globalCompositeOperation = 'source-over';
@@ -12071,43 +12113,47 @@ export class GameRenderer {
     const viewH = Math.max(100, maxY - minY);
 
     // =========================================================================
+    // 0. OVERCAST LEADEN SKY VEIL
+    // =========================================================================
+    if (isOvercast) {
+      ctx.fillStyle = 'rgba(15, 23, 42, 0.09)';
+      ctx.fillRect(minX, minY, viewW, viewH);
+    }
+
+    // =========================================================================
     // 1. RAIN & STORM (TOP-DOWN REALISTIC PRECIPITATION & GROUND RIPPLES)
     // =========================================================================
     if (isRaining && performanceConfig.enableRainDroplets) {
       // Atmospheric overcast ambient tint
-      ctx.fillStyle = isStorm ? 'rgba(10, 15, 30, 0.28)' : 'rgba(15, 23, 42, 0.14)';
+      ctx.fillStyle = isStorm ? 'rgba(10, 15, 30, 0.28)' : (isDrizzle ? 'rgba(15, 23, 42, 0.08)' : 'rgba(15, 23, 42, 0.14)');
       ctx.fillRect(minX, minY, viewW, viewH);
 
       // Unified atmospheric wind vector
       const windAngle = world.wind ? (Math.sin(world.wind.angle) * 0.35 + (isStorm ? 0.15 : 0)) : (isStorm ? (0.24 + Math.sin(timeSec * 2.8) * 0.09) : 0.12);
-      const mistSpeed = world.wind ? (world.wind.vx * 0.75) : (isStorm ? 120 : 60);
+      const mistSpeed = world.wind ? (world.wind.vx * 0.75) : (isStorm ? 120 : (isDrizzle ? 35 : 60));
 
       // --- A. Ground Impact Splashes & Puddle Ripples ---
-      // In a top-down game, impact ripples on the asphalt and ground define the rain!
-      const numRipples = isStorm ? 55 : 28;
+      const numRipples = isStorm ? 55 : (isDrizzle ? 12 : 28);
       ctx.lineWidth = 1.0;
 
       for (let s = 0; s < numRipples; s++) {
-        // Deterministic pseudo-random seed per ripple
         const seedX = ((s * 47.382) % 1);
         const seedY = ((s * 91.137) % 1);
-        const speed = 1.2 + ((s * 13.7) % 1) * 0.8; // cycle frequency
+        const speed = 1.2 + ((s * 13.7) % 1) * 0.8;
         const phase = (timeSec * speed + (s * 0.23)) % 1.0;
 
         const rx = minX + seedX * viewW;
         const ry = minY + seedY * viewH;
-        const maxR = isStorm ? 14 : 10;
+        const maxR = isStorm ? 14 : (isDrizzle ? 5 : 10);
         const r = 1.5 + phase * maxR;
-        const alpha = Math.max(0, (1.0 - phase) * (isStorm ? 0.42 : 0.28));
+        const alpha = Math.max(0, (1.0 - phase) * (isStorm ? 0.42 : (isDrizzle ? 0.18 : 0.28)));
 
         ctx.strokeStyle = `rgba(224, 242, 254, ${alpha})`;
         ctx.beginPath();
-        // Top-down perspective aspect ratio 1.5 : 0.85
         safeEllipse(ctx, rx, ry, r * 1.3, r * 0.72, 0, 0, Math.PI * 2);
         ctx.stroke();
 
-        // Fresh impact micro-splash droplets (during initial 25% of ripple cycle)
-        if (phase < 0.25) {
+        if (phase < 0.25 && !isDrizzle) {
           const splashAlpha = (1.0 - phase / 0.25) * 0.55;
           ctx.fillStyle = `rgba(240, 249, 255, ${splashAlpha})`;
           const sparkDist = phase * 6.0;
@@ -12116,22 +12162,20 @@ export class GameRenderer {
         }
       }
 
-      // --- B. Fast Aerodynamic Falling Micro-Drops (No platformer sticks!) ---
-      // Top-down droplets fall rapidly through the camera frame: short streaks 4-8px
-      const numDrops = isStorm ? 280 : 160;
+      // --- B. Fast Aerodynamic Falling Micro-Drops ---
+      const numDrops = isStorm ? 280 : (isDrizzle ? 80 : 160);
       ctx.strokeStyle = isStorm ? 'rgba(219, 234, 254, 0.48)' : 'rgba(224, 242, 254, 0.32)';
       ctx.lineWidth = isStorm ? 1.3 : 1.0;
       ctx.beginPath();
 
-      const fallSpeed = isStorm ? 1300 : 950;
+      const fallSpeed = isStorm ? 1300 : (isDrizzle ? 650 : 950);
       for (let r = 0; r < numDrops; r++) {
         const seedX = ((r * 157.61) % 1);
         const seedY = ((r * 283.47) % 1);
         const rx = minX + seedX * viewW;
         const ry = minY + ((seedY * viewH + timeSec * fallSpeed) % viewH);
         
-        // Fast, short aerodynamic streak (4 to 9px)
-        const len = isStorm ? (6 + (r % 5) * 0.9) : (4 + (r % 4) * 0.8);
+        const len = isStorm ? (6 + (r % 5) * 0.9) : (isDrizzle ? (2.5 + (r % 3) * 0.6) : (4 + (r % 4) * 0.8));
         const dx = len * windAngle;
         const dy = len * 0.95;
 
@@ -12141,7 +12185,6 @@ export class GameRenderer {
       ctx.stroke();
 
       // --- C. Wind-Blown Rain Mist Sheets ---
-      // Fine vapor drifting across the streets during rain
       ctx.fillStyle = isStorm ? 'rgba(224, 242, 254, 0.055)' : 'rgba(224, 242, 254, 0.03)';
       for (let m = 0; m < 3; m++) {
         const mistOffset = (timeSec * mistSpeed + m * 400) % (viewW + 600) - 300;
@@ -12149,6 +12192,55 @@ export class GameRenderer {
         ctx.beginPath();
         safeEllipse(ctx, minX + mistOffset, mistY, viewW * 0.6, 60, windAngle * 0.3, 0, Math.PI * 2);
         ctx.fill();
+      }
+    }
+
+    // =========================================================================
+    // 1b. ASTRONOMICAL WINTER SNOW & BLIZZARD (SWIRLING DRIFTING CRYSTALS)
+    // =========================================================================
+    if (isSnowing && performanceConfig.enableRainDroplets) {
+      // Atmospheric winter sky tint (cool frosted silver-grey)
+      ctx.fillStyle = isBlizzard ? 'rgba(219, 234, 254, 0.22)' : 'rgba(241, 245, 249, 0.09)';
+      ctx.fillRect(minX, minY, viewW, viewH);
+
+      const windAngle = world.wind ? (Math.sin(world.wind.angle) * 0.5 + (isBlizzard ? 0.35 : 0)) : (isBlizzard ? 0.45 : 0.15);
+      const snowSpeed = isBlizzard ? 550 : 220;
+      const numFlakes = isBlizzard ? 360 : 180;
+
+      for (let s = 0; s < numFlakes; s++) {
+        const seedX = ((s * 137.49) % 1);
+        const seedY = ((s * 269.83) % 1);
+        const swayFreq = 1.8 + ((s * 19.3) % 1) * 2.2;
+        const swayAmp = isBlizzard ? 12 : 22;
+        const sway = Math.sin(timeSec * swayFreq + s) * swayAmp;
+
+        const rx = minX + ((seedX * viewW + timeSec * (windAngle * snowSpeed) + sway) % viewW);
+        const ry = minY + ((seedY * viewH + timeSec * snowSpeed) % viewH);
+
+        const flakeR = isBlizzard ? (1.0 + (s % 4) * 0.7) : (1.2 + (s % 5) * 0.8);
+        const flakeAlpha = isBlizzard ? (0.45 + (s % 3) * 0.22) : (0.55 + (s % 3) * 0.25);
+
+        ctx.fillStyle = `rgba(255, 255, 255, ${flakeAlpha})`;
+        ctx.beginPath();
+        ctx.arc(rx, ry, flakeR, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Blizzard horizontal snow wind streaks
+        if (isBlizzard && s % 3 === 0) {
+          ctx.strokeStyle = `rgba(240, 249, 255, ${flakeAlpha * 0.5})`;
+          ctx.lineWidth = 1.0;
+          ctx.beginPath();
+          ctx.moveTo(rx, ry);
+          ctx.lineTo(rx - 14 * windAngle, ry + 7);
+          ctx.stroke();
+        }
+      }
+
+      // Blizzard whiteout gale gusts
+      if (isBlizzard) {
+        const gale = Math.sin(timeSec * 1.5) * 0.5 + 0.5;
+        ctx.fillStyle = `rgba(255, 255, 255, ${0.08 + gale * 0.08})`;
+        ctx.fillRect(minX, minY, viewW, viewH);
       }
     }
 

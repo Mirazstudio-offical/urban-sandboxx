@@ -109,6 +109,21 @@ export class TerrainRenderer {
             }
           }
 
+          // 4. Seasonal ecological ground transformation (Winter snow blanket, Autumn golden soil, Spring thaw)
+          const season = world.calendar?.season;
+          if (season === 'winter') {
+            const snowRatio = 0.58;
+            r = r * (1 - snowRatio) + 236 * snowRatio;
+            g = g * (1 - snowRatio) + 242 * snowRatio;
+            b = b * (1 - snowRatio) + 252 * snowRatio;
+          } else if (season === 'autumn') {
+            r = Math.min(255, r * 1.14 + 10);
+            g = g * 0.94;
+            b = b * 0.84;
+          } else if (season === 'spring') {
+            g = Math.min(255, g * 1.08 + 4);
+          }
+
           const pIdx = (iy * size + ix) * 4;
           data[pIdx] = Math.min(255, Math.max(0, Math.round(r)));
           data[pIdx + 1] = Math.min(255, Math.max(0, Math.round(g)));
