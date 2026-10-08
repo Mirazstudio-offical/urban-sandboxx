@@ -12,6 +12,7 @@ import { drawMeatAndPoultryItem } from './graphics/meatAndPoultryGraphics';
 import { drawFishAndSeafoodItem } from './graphics/fishAndSeafoodGraphics';
 import { drawProduceAndMushroomItem } from './graphics/produceAndMushroomGraphics';
 import { drawPantryAndDairyItem } from './graphics/pantryAndDairyGraphics';
+import { drawPaperPackagingItem } from './graphics/paperPackagingGraphics';
 import { drawShadow, drawFrostAndThermalOverlay } from './graphics/itemGraphicShared';
 
 export function drawItemModel2D(
@@ -29,6 +30,7 @@ export function drawItemModel2D(
   ctx.scale(scale, scale);
 
   const drawn =
+    drawPaperPackagingItem(ctx, itemId, item) ||
     drawSmartphoneItem(ctx, itemId) ||
     drawFoodItem(ctx, itemId) ||
     drawDrinkItem(ctx, itemId) ||

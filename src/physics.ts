@@ -6524,12 +6524,13 @@ export function updatePlayerNeedsAndVitals(
   }
 
   // D. Daytime Napping "Circadian Crash" Penalty (Дневной сон и сбой биоритма):
-  // If you sleep during the day and wake up in the evening, your sleep pressure (wakeHours) is low,
-  // but when night falls (22:00 to 06:00), your body clock expects sleep, causing an unnatural fatigue surge.
+  // Applies ONLY if the player took a daytime nap (woke up between 09:00 and 20:00)
+  // and then tries to stay awake at night. It must NOT trigger if the player just woke up from normal night sleep!
   let circadianCrashModifier = 1.0;
   const isNightTime = timeHour >= 22 || timeHour < 6;
-  if (isNightTime && wakeHours < 6.0) {
-    circadianCrashModifier = 1.95; // fast-tracks sleepiness at night to realign biological rhythms
+  const lastSleepWasDaytime = player.lastSleepEndHour !== undefined && (player.lastSleepEndHour >= 9.0 && player.lastSleepEndHour <= 20.0);
+  if (isNightTime && wakeHours < 6.0 && lastSleepWasDaytime) {
+    circadianCrashModifier = 1.30; // mild adjustment for waking up from an extended afternoon nap
   }
 
   // E. Physical Exertion & Driving Factors

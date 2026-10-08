@@ -73,6 +73,8 @@ export interface ItemDefinition {
   containerItems?: string[];
   tornItemId?: string;
   isTransparentPackaging?: boolean;
+  labelColor?: string;              // Custom brand seal label / sticker color
+  packagingSize?: 'mini' | 'small' | 'medium' | 'large';
   containerCapacityL?: number;
   maxContainedItemVolumeL?: number;
   maxContainedWeightKg?: number;
@@ -212,6 +214,234 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     leftoverNameRu: 'Банка из-под тушёнки',
     fullnessPerBite: 5,
     tasteMessages: ['Густой мясной бульон...', 'Нежная тушеная говядина...', 'Пряный лавровый лист и перец...', 'Сытный кусок мяса...', 'Классическая армейская тушёнка!', 'Очень сытно и калорийно...']
+  },
+
+  // === FROZEN MEATS, SEAFOOD & GROCERIES (-16°C) ===
+  beef_minced: {
+    itemId: 'beef_minced',
+    name: 'Minced Beef (1kg)',
+    nameRu: 'Фарш говяжий (1 кг)',
+    category: 'food',
+    maxStack: 1,
+    icon: '',
+    description: 'Frozen fresh minced beef on a sealed tray (-16°C). High calories when cooked.',
+    descriptionRu: 'Свежий замороженный говяжий фарш на подложке (-16°C). Сытная основа для блюд.',
+    effects: { hunger: 90, health: 10, energy: 20 },
+    weight: 1.0,
+    usable: true,
+    biteCount: 20,
+    biteDuration: 1.0,
+    fullnessPerBite: 5,
+    tasteMessages: ['Ледяной фарш обжигает язык...', 'Холодный кусочек мяса...']
+  },
+  pork_minced: {
+    itemId: 'pork_minced',
+    name: 'Minced Pork (1kg)',
+    nameRu: 'Фарш свиной (1 кг)',
+    category: 'food',
+    maxStack: 1,
+    icon: '',
+    description: 'Frozen fresh minced pork on a sealed tray (-16°C).',
+    descriptionRu: 'Свежий замороженный свиной фарш на подложке (-16°C).',
+    effects: { hunger: 85, health: 8, energy: 20 },
+    weight: 1.0,
+    usable: true,
+    biteCount: 20,
+    biteDuration: 1.0,
+    fullnessPerBite: 4,
+    tasteMessages: ['Ледяной фарш обжигает язык...']
+  },
+  chicken_minced: {
+    itemId: 'chicken_minced',
+    name: 'Minced Chicken (1kg)',
+    nameRu: 'Фарш куриный (1 кг)',
+    category: 'food',
+    maxStack: 1,
+    icon: '',
+    description: 'Frozen tender minced chicken breast (-16°C).',
+    descriptionRu: 'Свежий замороженный куриный фарш на подложке (-16°C).',
+    effects: { hunger: 75, health: 12, energy: 15 },
+    weight: 1.0,
+    usable: true,
+    biteCount: 20,
+    biteDuration: 1.0,
+    fullnessPerBite: 4
+  },
+  turkey_minced: {
+    itemId: 'turkey_minced',
+    name: 'Minced Turkey (1kg)',
+    nameRu: 'Фарш индюшачий (1 кг)',
+    category: 'food',
+    maxStack: 1,
+    icon: '',
+    description: 'Frozen dietary turkey mince (-16°C).',
+    descriptionRu: 'Диетический замороженный фарш из индейки (-16°C).',
+    effects: { hunger: 80, health: 15, energy: 15 },
+    weight: 1.0,
+    usable: true,
+    biteCount: 20,
+    biteDuration: 1.0,
+    fullnessPerBite: 4
+  },
+  minced_meat_mixed: {
+    itemId: 'minced_meat_mixed',
+    name: 'Mixed Minced Meat (1kg)',
+    nameRu: 'Фарш домашний (1 кг)',
+    category: 'food',
+    maxStack: 1,
+    icon: '',
+    description: 'Frozen mixed beef and pork mince (-16°C).',
+    descriptionRu: 'Замороженный домашний фарш (говядина и свинина) (-16°C).',
+    effects: { hunger: 90, health: 10, energy: 20 },
+    weight: 1.0,
+    usable: true,
+    biteCount: 20,
+    biteDuration: 1.0,
+    fullnessPerBite: 5
+  },
+  beef_rump_large: {
+    itemId: 'beef_rump_large',
+    name: 'Beef Rump Cut (1.5kg)',
+    nameRu: 'Говяжий окрок (1.5 кг)',
+    category: 'food',
+    maxStack: 1,
+    icon: '',
+    description: 'Deep frozen cut of prime beef rump (-16°C).',
+    descriptionRu: 'Крупный замок свежей говядины глубокой заморозки (-16°C).',
+    effects: { hunger: 120, health: 15, energy: 30 },
+    weight: 1.5,
+    usable: true,
+    biteCount: 30,
+    biteDuration: 1.2,
+    fullnessPerBite: 4
+  },
+  chicken_breast_large: {
+    itemId: 'chicken_breast_large',
+    name: 'Chicken Breast Fillet (1kg)',
+    nameRu: 'Куриное филе (1 кг)',
+    category: 'food',
+    maxStack: 1,
+    icon: '',
+    description: 'Frozen chicken breast fillets (-16°C).',
+    descriptionRu: 'Замороженное белое куриное филе (-16°C).',
+    effects: { hunger: 80, health: 15, energy: 20 },
+    weight: 1.0,
+    usable: true,
+    biteCount: 20,
+    biteDuration: 1.0,
+    fullnessPerBite: 4
+  },
+  chicken_thighs_medium: {
+    itemId: 'chicken_thighs_medium',
+    name: 'Chicken Thighs Pack (1kg)',
+    nameRu: 'Куриные бедра (1 кг)',
+    category: 'food',
+    maxStack: 1,
+    icon: '',
+    description: 'Frozen juicy chicken thighs (-16°C).',
+    descriptionRu: 'Сочные замороженные куриные бедра (-16°C).',
+    effects: { hunger: 85, health: 12, energy: 20 },
+    weight: 1.0,
+    usable: true,
+    biteCount: 20,
+    biteDuration: 1.0,
+    fullnessPerBite: 4
+  },
+  pork_ribs_medium: {
+    itemId: 'pork_ribs_medium',
+    name: 'Pork Ribs Rack (1.2kg)',
+    nameRu: 'Свиные ребрышки (1.2 кг)',
+    category: 'food',
+    maxStack: 1,
+    icon: '',
+    description: 'Frozen rack of pork ribs (-16°C).',
+    descriptionRu: 'Замороженные свиные ребрышки в вакууме (-16°C).',
+    effects: { hunger: 100, health: 10, energy: 25 },
+    weight: 1.2,
+    usable: true,
+    biteCount: 25,
+    biteDuration: 1.1,
+    fullnessPerBite: 4
+  },
+  salmon_steak: {
+    itemId: 'salmon_steak',
+    name: 'Atlantic Salmon Steaks (0.8kg)',
+    nameRu: 'Стейки лосося (0.8 кг)',
+    category: 'food',
+    maxStack: 1,
+    icon: '',
+    description: 'Frozen wild salmon steaks (-16°C). High omega-3.',
+    descriptionRu: 'Замороженные стейки дикого лосося (-16°C). Богаты Омега-3.',
+    effects: { hunger: 75, health: 25, energy: 18 },
+    weight: 0.8,
+    usable: true,
+    biteCount: 16,
+    biteDuration: 1.0,
+    fullnessPerBite: 5
+  },
+  cod_fillet: {
+    itemId: 'cod_fillet',
+    name: 'Cod Fillet Block (0.8kg)',
+    nameRu: 'Филе трески (0.8 кг)',
+    category: 'food',
+    maxStack: 1,
+    icon: '',
+    description: 'Frozen white cod fillet block (-16°C).',
+    descriptionRu: 'Замороженное филе атлантической трески (-16°C).',
+    effects: { hunger: 65, health: 20, energy: 15 },
+    weight: 0.8,
+    usable: true,
+    biteCount: 16,
+    biteDuration: 1.0,
+    fullnessPerBite: 4
+  },
+  berries_mixed_frozen: {
+    itemId: 'berries_mixed_frozen',
+    name: 'Frozen Wild Berries Pack',
+    nameRu: 'Замороженные лесные ягоды',
+    category: 'food',
+    maxStack: 1,
+    icon: '',
+    description: 'Deep frozen wild berries (raspberries, blueberries, blackberries) (-16°C).',
+    descriptionRu: 'Смесь глубокой заморозки из малины, черники и ежевики (-16°C).',
+    effects: { hunger: 30, thirst: 15, health: 12, energy: 15 },
+    weight: 0.4,
+    usable: true,
+    biteCount: 10,
+    biteDuration: 0.8,
+    fullnessPerBite: 3
+  },
+  vegetable_mix_frozen: {
+    itemId: 'vegetable_mix_frozen',
+    name: 'Frozen Spring Vegetables',
+    nameRu: 'Замороженные овощи',
+    category: 'food',
+    maxStack: 1,
+    icon: '',
+    description: 'Frozen vegetable mix (peas, corn, carrots, broccoli) (-16°C).',
+    descriptionRu: 'Замороженное овощное ассорти (-16°C).',
+    effects: { hunger: 35, health: 15, energy: 10 },
+    weight: 0.5,
+    usable: true,
+    biteCount: 12,
+    biteDuration: 0.8,
+    fullnessPerBite: 3
+  },
+  ice_cream: {
+    itemId: 'ice_cream',
+    name: 'Creamy Vanilla Ice Cream',
+    nameRu: 'Мороженое Пломбир',
+    category: 'food',
+    maxStack: 1,
+    icon: '',
+    description: 'Chilled sweet vanilla ice cream (-12°C). Refreshing treat.',
+    descriptionRu: 'Настоящий сливочный пломбир в стаканчике (-12°C). Быстро охлаждает.',
+    effects: { hunger: 25, thirst: 10, energy: 20 },
+    weight: 0.12,
+    usable: true,
+    biteCount: 8,
+    biteDuration: 0.7,
+    fullnessPerBite: 3
   },
 
   // === DRINKS (НАПИТКИ) ===
@@ -3696,6 +3926,445 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     usable: true
   },
 
+  // === KRAFT PAPER PACKAGING & TAKEOUT WOK BOXES (БУМАЖНАЯ УПАКОВКА С ЦВЕТНОЙ ЭТИКЕТКОЙ) ===
+  // 1. MINI (МИНИ 0.4L) - 1st smaller size
+  paper_packaging_mini: {
+    itemId: 'paper_packaging_mini',
+    name: 'Mini Paper Packaging (0.4L)',
+    nameRu: 'Бумажная упаковка (Мини 0.4L)',
+    category: 'misc',
+    maxStack: 1,
+    icon: '',
+    description: 'Compact eco-friendly kraft paper container (0.4L mini box) sealed with a colored brand sticker. Ideal for single snacks, dumplings, and sauces.',
+    descriptionRu: 'Компактная крафтовая эко-упаковка (мини-бокс 0.4L) с фирменной цветной этикеткой-пломбой. Отлично подходит для снеков, гедза и порционных закусок. Нажмите [E] для вскрытия.',
+    effects: {},
+    weight: 0.01,
+    volume: 0.08,
+    usable: true,
+    isContainer: true,
+    singleUseContainer: true,
+    tornItemId: 'paper_packaging_mini_open',
+    containerCapacityL: 0.45,
+    maxContainedItemVolumeL: 0.4,
+    maxContainedWeightKg: 0.8,
+    labelColor: '#e11d48',
+    packagingSize: 'mini',
+    temperature: 55.0,
+    heatRetention: 0.75,
+    heatLossRate: 0.02
+  },
+  paper_packaging_mini_open: {
+    itemId: 'paper_packaging_mini_open',
+    name: 'Open Mini Paper Packaging',
+    nameRu: 'Открытая бумажная упаковка (Мини)',
+    category: 'misc',
+    maxStack: 5,
+    icon: '',
+    description: 'Opened mini kraft paper container with torn colored seal. Great for keeping small items or coins.',
+    descriptionRu: 'Вскрытая мини-упаковка из крафт-бумаги с разорванной цветной пломбой. Удобна для хранения мелочей.',
+    effects: {},
+    weight: 0.01,
+    volume: 0.09,
+    usable: false,
+    isContainer: true,
+    singleUseContainer: false,
+    containerCapacityL: 0.45,
+    maxContainedItemVolumeL: 0.4,
+    maxContainedWeightKg: 0.8,
+    labelColor: '#e11d48',
+    packagingSize: 'mini'
+  },
+
+  // 2. SMALL (МАЛАЯ 0.8L) - 2nd smaller size
+  paper_packaging_small: {
+    itemId: 'paper_packaging_small',
+    name: 'Small Paper Packaging (0.8L)',
+    nameRu: 'Бумажная упаковка (Малая 0.8L)',
+    category: 'misc',
+    maxStack: 1,
+    icon: '',
+    description: 'Small portion kraft paper takeout container (0.8L) sealed with a brand sticker. Holds single noodle or rice dishes.',
+    descriptionRu: 'Малая крафтовая бумажная упаковка (0.8L) с цветной этикеткой-пломбой. Оптимальна для стандартной порции вок-лапши или риса. Нажмите [E] для вскрытия.',
+    effects: {},
+    weight: 0.015,
+    volume: 0.14,
+    usable: true,
+    isContainer: true,
+    singleUseContainer: true,
+    tornItemId: 'paper_packaging_small_open',
+    containerCapacityL: 0.85,
+    maxContainedItemVolumeL: 0.75,
+    maxContainedWeightKg: 1.6,
+    labelColor: '#e11d48',
+    packagingSize: 'small',
+    temperature: 55.0,
+    heatRetention: 0.75,
+    heatLossRate: 0.018
+  },
+  paper_packaging_small_open: {
+    itemId: 'paper_packaging_small_open',
+    name: 'Open Small Paper Packaging',
+    nameRu: 'Открытая бумажная упаковка (Малая)',
+    category: 'misc',
+    maxStack: 5,
+    icon: '',
+    description: 'Opened small kraft paper takeout box with torn colored seal and folded flaps.',
+    descriptionRu: 'Вскрытая малая крафтовая упаковка с разорванной этикеткой. Экологичный контейнер для еды.',
+    effects: {},
+    weight: 0.015,
+    volume: 0.16,
+    usable: false,
+    isContainer: true,
+    singleUseContainer: false,
+    containerCapacityL: 0.85,
+    maxContainedItemVolumeL: 0.75,
+    maxContainedWeightKg: 1.6,
+    labelColor: '#e11d48',
+    packagingSize: 'small'
+  },
+
+  // 3. MEDIUM / STANDARD (СТАНДАРТ 1.2L)
+  paper_packaging: {
+    itemId: 'paper_packaging',
+    name: 'Paper Packaging',
+    nameRu: 'Бумажная упаковка',
+    category: 'misc',
+    maxStack: 1,
+    icon: '',
+    description: 'Eco-friendly kraft paper takeout box (wok container / food pouch) sealed with a premium colored brand sticker label. Keeps food warm and fresh. Press [E] in hands or use to unseal.',
+    descriptionRu: 'Крафтовая бумажная упаковка (вок-бокс / пакет) из плотной эко-бумаги с фирменной цветной этикеткой-пломбой. Надежно сохраняет тепло и свежесть. Нажмите [E] в руках или используйте для вскрытия.',
+    effects: {},
+    weight: 0.02,
+    volume: 0.2,
+    usable: true,
+    isContainer: true,
+    singleUseContainer: true,
+    tornItemId: 'paper_packaging_open',
+    containerCapacityL: 1.2,
+    maxContainedItemVolumeL: 1.0,
+    maxContainedWeightKg: 2.5,
+    labelColor: '#e11d48',
+    packagingSize: 'medium',
+    temperature: 55.0,
+    heatRetention: 0.75,
+    heatLossRate: 0.015
+  },
+  paper_packaging_open: {
+    itemId: 'paper_packaging_open',
+    name: 'Open Paper Packaging',
+    nameRu: 'Открытая бумажная упаковка',
+    category: 'misc',
+    maxStack: 5,
+    icon: '',
+    description: 'Unsealed kraft paper takeout packaging with torn colored sticker and folded flaps. Reusable container for food or small items.',
+    descriptionRu: 'Вскрытая крафтовая бумажная упаковка с разорванной цветной этикеткой и отогнутыми створками. Вместительный экологичный контейнер для продуктов или вещей.',
+    effects: {},
+    weight: 0.02,
+    volume: 0.25,
+    usable: false,
+    isContainer: true,
+    singleUseContainer: false,
+    containerCapacityL: 1.2,
+    maxContainedItemVolumeL: 1.0,
+    maxContainedWeightKg: 2.5,
+    labelColor: '#e11d48',
+    packagingSize: 'medium'
+  },
+
+  // 4. LARGE (БОЛЬШАЯ 2.4L) - 1 larger size
+  paper_packaging_large: {
+    itemId: 'paper_packaging_large',
+    name: 'Large Paper Packaging (2.4L)',
+    nameRu: 'Бумажная упаковка (Большая 2.4L)',
+    category: 'misc',
+    maxStack: 1,
+    icon: '',
+    description: 'Generous family-size kraft paper takeout container (2.4L) with reinforced wire bail handle and luxury colored seal label.',
+    descriptionRu: 'Большая семейная крафтовая упаковка (вок-бокс макси 2.4L) с усиленной ручкой и фирменной цветной пломбой. Для комбо-наборов и больших порций. Нажмите [E] для вскрытия.',
+    effects: {},
+    weight: 0.035,
+    volume: 0.42,
+    usable: true,
+    isContainer: true,
+    singleUseContainer: true,
+    tornItemId: 'paper_packaging_large_open',
+    containerCapacityL: 2.6,
+    maxContainedItemVolumeL: 2.3,
+    maxContainedWeightKg: 5.0,
+    labelColor: '#e11d48',
+    packagingSize: 'large',
+    temperature: 60.0,
+    heatRetention: 0.80,
+    heatLossRate: 0.012
+  },
+  paper_packaging_large_open: {
+    itemId: 'paper_packaging_large_open',
+    name: 'Open Large Paper Packaging (2.4L)',
+    nameRu: 'Открытая бумажная упаковка (Большая)',
+    category: 'misc',
+    maxStack: 5,
+    icon: '',
+    description: 'Opened large kraft takeout box with torn colored seal. Generous reusable storage box.',
+    descriptionRu: 'Вскрытая большая крафтовая упаковка с разорванной пломбой и широкими створками. Вместительный контейнер.',
+    effects: {},
+    weight: 0.035,
+    volume: 0.45,
+    usable: false,
+    isContainer: true,
+    singleUseContainer: false,
+    containerCapacityL: 2.6,
+    maxContainedItemVolumeL: 2.3,
+    maxContainedWeightKg: 5.0,
+    labelColor: '#e11d48',
+    packagingSize: 'large'
+  },
+  paper_packaging_red: {
+    itemId: 'paper_packaging_red',
+    name: 'Paper Packaging (Ruby Label)',
+    nameRu: 'Бумажная упаковка (рубиновая этикетка)',
+    category: 'misc',
+    maxStack: 1,
+    icon: '',
+    description: 'Craft paper takeout packaging with a vibrant ruby red seal label.',
+    descriptionRu: 'Крафтовая эко-упаковка с ярко-красной фирменной этикеткой-пломбой.',
+    effects: {},
+    weight: 0.02,
+    volume: 0.2,
+    usable: true,
+    isContainer: true,
+    singleUseContainer: true,
+    tornItemId: 'paper_packaging_open_red',
+    containerCapacityL: 1.2,
+    maxContainedItemVolumeL: 1.0,
+    maxContainedWeightKg: 2.5,
+    labelColor: '#e11d48'
+  },
+  paper_packaging_open_red: {
+    itemId: 'paper_packaging_open_red',
+    name: 'Open Paper Packaging (Ruby Label)',
+    nameRu: 'Открытая бумажная упаковка (красная)',
+    category: 'misc',
+    maxStack: 5,
+    icon: '',
+    description: 'Opened craft paper packaging with torn ruby red label.',
+    descriptionRu: 'Вскрытая крафтовая упаковка с разорванной рубиновой пломбой.',
+    effects: {},
+    weight: 0.02,
+    volume: 0.25,
+    usable: false,
+    isContainer: true,
+    singleUseContainer: false,
+    containerCapacityL: 1.2,
+    maxContainedItemVolumeL: 1.0,
+    maxContainedWeightKg: 2.5,
+    labelColor: '#e11d48'
+  },
+  paper_packaging_green: {
+    itemId: 'paper_packaging_green',
+    name: 'Paper Packaging (Jade Label)',
+    nameRu: 'Бумажная упаковка (изумрудная этикетка)',
+    category: 'misc',
+    maxStack: 1,
+    icon: '',
+    description: 'Craft paper packaging with a rich emerald green brand seal.',
+    descriptionRu: 'Крафтовая эко-упаковка с изумрудно-зеленой фирменной этикеткой-пломбой.',
+    effects: {},
+    weight: 0.02,
+    volume: 0.2,
+    usable: true,
+    isContainer: true,
+    singleUseContainer: true,
+    tornItemId: 'paper_packaging_open_green',
+    containerCapacityL: 1.2,
+    maxContainedItemVolumeL: 1.0,
+    maxContainedWeightKg: 2.5,
+    labelColor: '#16a34a'
+  },
+  paper_packaging_open_green: {
+    itemId: 'paper_packaging_open_green',
+    name: 'Open Paper Packaging (Jade Label)',
+    nameRu: 'Открытая бумажная упаковка (зеленая)',
+    category: 'misc',
+    maxStack: 5,
+    icon: '',
+    description: 'Opened craft paper packaging with torn emerald label.',
+    descriptionRu: 'Вскрытая крафтовая упаковка с разорванной зеленой пломбой.',
+    effects: {},
+    weight: 0.02,
+    volume: 0.25,
+    usable: false,
+    isContainer: true,
+    singleUseContainer: false,
+    containerCapacityL: 1.2,
+    maxContainedItemVolumeL: 1.0,
+    maxContainedWeightKg: 2.5,
+    labelColor: '#16a34a'
+  },
+  paper_packaging_blue: {
+    itemId: 'paper_packaging_blue',
+    name: 'Paper Packaging (Cobalt Label)',
+    nameRu: 'Бумажная упаковка (синяя этикетка)',
+    category: 'misc',
+    maxStack: 1,
+    icon: '',
+    description: 'Craft paper packaging with a royal cobalt blue brand seal.',
+    descriptionRu: 'Крафтовая эко-упаковка с благородной синей фирменной этикеткой-пломбой.',
+    effects: {},
+    weight: 0.02,
+    volume: 0.2,
+    usable: true,
+    isContainer: true,
+    singleUseContainer: true,
+    tornItemId: 'paper_packaging_open_blue',
+    containerCapacityL: 1.2,
+    maxContainedItemVolumeL: 1.0,
+    maxContainedWeightKg: 2.5,
+    labelColor: '#2563eb'
+  },
+  paper_packaging_open_blue: {
+    itemId: 'paper_packaging_open_blue',
+    name: 'Open Paper Packaging (Cobalt Label)',
+    nameRu: 'Открытая бумажная упаковка (синяя)',
+    category: 'misc',
+    maxStack: 5,
+    icon: '',
+    description: 'Opened craft paper packaging with torn blue label.',
+    descriptionRu: 'Вскрытая крафтовая упаковка с разорванной синей пломбой.',
+    effects: {},
+    weight: 0.02,
+    volume: 0.25,
+    usable: false,
+    isContainer: true,
+    singleUseContainer: false,
+    containerCapacityL: 1.2,
+    maxContainedItemVolumeL: 1.0,
+    maxContainedWeightKg: 2.5,
+    labelColor: '#2563eb'
+  },
+  paper_packaging_amber: {
+    itemId: 'paper_packaging_amber',
+    name: 'Paper Packaging (Gold Label)',
+    nameRu: 'Бумажная упаковка (золотая этикетка)',
+    category: 'misc',
+    maxStack: 1,
+    icon: '',
+    description: 'Craft paper packaging with an artisan amber gold seal.',
+    descriptionRu: 'Крафтовая эко-упаковка с янтарно-золотой фирменной этикеткой-пломбой.',
+    effects: {},
+    weight: 0.02,
+    volume: 0.2,
+    usable: true,
+    isContainer: true,
+    singleUseContainer: true,
+    tornItemId: 'paper_packaging_open_amber',
+    containerCapacityL: 1.2,
+    maxContainedItemVolumeL: 1.0,
+    maxContainedWeightKg: 2.5,
+    labelColor: '#d97706'
+  },
+  paper_packaging_open_amber: {
+    itemId: 'paper_packaging_open_amber',
+    name: 'Open Paper Packaging (Gold Label)',
+    nameRu: 'Открытая бумажная упаковка (золотая)',
+    category: 'misc',
+    maxStack: 5,
+    icon: '',
+    description: 'Opened craft paper packaging with torn gold label.',
+    descriptionRu: 'Вскрытая крафтовая упаковка с разорванной золотистой пломбой.',
+    effects: {},
+    weight: 0.02,
+    volume: 0.25,
+    usable: false,
+    isContainer: true,
+    singleUseContainer: false,
+    containerCapacityL: 1.2,
+    maxContainedItemVolumeL: 1.0,
+    maxContainedWeightKg: 2.5,
+    labelColor: '#d97706'
+  },
+  paper_packaging_purple: {
+    itemId: 'paper_packaging_purple',
+    name: 'Paper Packaging (Violet Label)',
+    nameRu: 'Бумажная упаковка (фиолетовая этикетка)',
+    category: 'misc',
+    maxStack: 1,
+    icon: '',
+    description: 'Craft paper packaging with an imperial violet brand seal.',
+    descriptionRu: 'Крафтовая эко-упаковка с фиолетовой фирменной этикеткой-пломбой.',
+    effects: {},
+    weight: 0.02,
+    volume: 0.2,
+    usable: true,
+    isContainer: true,
+    singleUseContainer: true,
+    tornItemId: 'paper_packaging_open_purple',
+    containerCapacityL: 1.2,
+    maxContainedItemVolumeL: 1.0,
+    maxContainedWeightKg: 2.5,
+    labelColor: '#9333ea'
+  },
+  paper_packaging_open_purple: {
+    itemId: 'paper_packaging_open_purple',
+    name: 'Open Paper Packaging (Violet Label)',
+    nameRu: 'Открытая бумажная упаковка (фиолетовая)',
+    category: 'misc',
+    maxStack: 5,
+    icon: '',
+    description: 'Opened craft paper packaging with torn violet label.',
+    descriptionRu: 'Вскрытая крафтовая упаковка с разорванной фиолетовой пломбой.',
+    effects: {},
+    weight: 0.02,
+    volume: 0.25,
+    usable: false,
+    isContainer: true,
+    singleUseContainer: false,
+    containerCapacityL: 1.2,
+    maxContainedItemVolumeL: 1.0,
+    maxContainedWeightKg: 2.5,
+    labelColor: '#9333ea'
+  },
+  paper_packaging_black: {
+    itemId: 'paper_packaging_black',
+    name: 'Paper Packaging (Noir Label)',
+    nameRu: 'Бумажная упаковка (черная этикетка)',
+    category: 'misc',
+    maxStack: 1,
+    icon: '',
+    description: 'Craft paper packaging with a minimalist obsidian noir seal.',
+    descriptionRu: 'Крафтовая эко-упаковка со стильной черной матовой этикеткой-пломбой.',
+    effects: {},
+    weight: 0.02,
+    volume: 0.2,
+    usable: true,
+    isContainer: true,
+    singleUseContainer: true,
+    tornItemId: 'paper_packaging_open_black',
+    containerCapacityL: 1.2,
+    maxContainedItemVolumeL: 1.0,
+    maxContainedWeightKg: 2.5,
+    labelColor: '#1e293b'
+  },
+  paper_packaging_open_black: {
+    itemId: 'paper_packaging_open_black',
+    name: 'Open Paper Packaging (Noir Label)',
+    nameRu: 'Открытая бумажная упаковка (черная)',
+    category: 'misc',
+    maxStack: 5,
+    icon: '',
+    description: 'Opened craft paper packaging with torn noir label.',
+    descriptionRu: 'Вскрытая крафтовая упаковка с разорванной черной пломбой.',
+    effects: {},
+    weight: 0.02,
+    volume: 0.25,
+    usable: false,
+    isContainer: true,
+    singleUseContainer: false,
+    containerCapacityL: 1.2,
+    maxContainedItemVolumeL: 1.0,
+    maxContainedWeightKg: 2.5,
+    labelColor: '#1e293b'
+  },
+
   // === FURNITURE (МЕБЕЛЬ ДЛЯ КВАРТИРЫ) ===
   furn_chair: {
     itemId: 'furn_chair',
@@ -5192,9 +5861,9 @@ export function createItem(itemId: string, count: number = 1, initialPortions?: 
 
   const createdItem: InventoryItem = {
     id: `item_${itemId}_${Date.now()}_${itemCounter}`,
-    itemId: def.itemId,
-    name: def.name,
-    nameRu: def.nameRu,
+    itemId: ITEM_CATALOG[itemId] ? def.itemId : itemId,
+    name: ITEM_CATALOG[itemId] ? def.name : itemId,
+    nameRu: ITEM_CATALOG[itemId] ? def.nameRu : itemId,
     category: def.category,
     count: 1,
     maxStack: 1,
@@ -5212,6 +5881,8 @@ export function createItem(itemId: string, count: number = 1, initialPortions?: 
     singleUseContainer: def.singleUseContainer,
     tornItemId: def.tornItemId,
     isTransparentPackaging: def.isTransparentPackaging,
+    labelColor: def.labelColor,
+    packagingSize: def.packagingSize,
     contents: isContainer ? [] : undefined,
     containerCapacityL: containerCap,
     maxContainedItemVolumeL: maxContainedVol,
@@ -5251,7 +5922,7 @@ export function createItem(itemId: string, count: number = 1, initialPortions?: 
   return createdItem;
 }
 
-export const ITEM_PACKAGING_MAP: Record<string, { containerId: string; countInside?: number; innerItemId?: string }> = {
+export const ITEM_PACKAGING_MAP: Record<string, { containerId: string; countInside?: number; innerItemId?: string; labelColor?: string }> = {
   // 1. Peeled & Cut Vegetables in Vacuum / Sealed Trays
   carrot_peeled: { containerId: 'vacuum_pack_small', countInside: 2 },
   garlic_peeled: { containerId: 'vacuum_pack_small', countInside: 3 },
@@ -5345,13 +6016,27 @@ export const ITEM_PACKAGING_MAP: Record<string, { containerId: string; countInsi
   dates_dried: { containerId: 'pouch_sealed_snack' },
   figs_dried: { containerId: 'pouch_sealed_snack' },
   walnuts: { containerId: 'pouch_sealed_snack' },
-  sunflower_seeds: { containerId: 'pouch_sealed_snack' }
+  sunflower_seeds: { containerId: 'pouch_sealed_snack' },
+
+  // 7. Butter & Cheeses in Premium Paper Packaging with Dedicated Label Colors
+  butter_brick_salted: { containerId: 'paper_packaging_small', labelColor: '#facc15' }, // Sweet Cream Butter 82.5% (Golden Yellow Label)
+  ghee_butter_pot: { containerId: 'paper_packaging', labelColor: '#eab308' }, // Ghee Butter (Amber Gold Label)
+  cheese_cheddar_block: { containerId: 'paper_packaging', labelColor: '#f59e0b' }, // Cheddar Cheese (Deep Orange Label)
+  cheese_gouda_wheel: { containerId: 'paper_packaging_large', labelColor: '#eab308' }, // Gouda Wheel (Rich Yellow Label)
+  cheese_parmesan_wedge: { containerId: 'paper_packaging', labelColor: '#d97706' }, // Parmesan Wedge (Aged Amber Label)
+  cheese_mozzarella_ball: { containerId: 'paper_packaging_small', labelColor: '#0284c7' }, // Mozzarella (Sky Blue Label)
+  cheese_suluguni_braid: { containerId: 'paper_packaging', labelColor: '#b45309' }, // Smoked Suluguni (Bronze Smoke Label)
+  cheese_feta_block: { containerId: 'paper_packaging_small', labelColor: '#059669' }, // Greek Feta (Emerald Green Label)
+  cottage_cheese_pack: { containerId: 'paper_packaging', labelColor: '#2563eb' } // Cottage Cheese (Royal Blue Dairy Label)
 };
 
 export function createPackagedItem(itemId: string, count: number = 1): InventoryItem {
   const packInfo = ITEM_PACKAGING_MAP[itemId];
   if (packInfo) {
     const container = createItem(packInfo.containerId, 1);
+    if (packInfo.labelColor) {
+      container.labelColor = packInfo.labelColor;
+    }
     const innerId = packInfo.innerItemId || itemId;
     const numInside = packInfo.countInside !== undefined ? packInfo.countInside : count;
     container.contents = [];
@@ -5397,7 +6082,32 @@ export function unpackSingleUseContainer(
     }
   }
 
+  const isPaperPack = container.itemId.startsWith('paper_packaging') || container.tornItemId?.startsWith('paper_packaging_open');
+  const existingLabelColor = container.labelColor || def?.labelColor;
+
   if (extractedItems.length === 0) {
+    if (isPaperPack) {
+      const tornId = container.tornItemId || def?.tornItemId || 'paper_packaging_open';
+      const tornDef = ITEM_CATALOG[tornId] || ITEM_CATALOG.paper_packaging_open;
+      container.itemId = tornDef.itemId;
+      container.name = tornDef.name;
+      container.nameRu = tornDef.nameRu;
+      container.category = tornDef.category || 'misc';
+      container.isContainer = true;
+      container.usable = false;
+      container.singleUseContainer = false;
+      container.contents = [];
+      container.description = tornDef.description;
+      container.descriptionRu = tornDef.descriptionRu;
+      if (existingLabelColor) {
+        container.labelColor = existingLabelColor;
+      }
+      sound.playUseItem();
+      if (onContainerConsumed) onContainerConsumed();
+      const notifMsg = `Упаковка вскрыта: теперь это ${tornDef.nameRu}.`;
+      addPlayerNotification(player, notifMsg, 'pickup');
+      return { success: true, message: notifMsg };
+    }
     return { success: false, message: 'Упаковка пуста.' };
   }
 
@@ -5408,13 +6118,16 @@ export function unpackSingleUseContainer(
   container.itemId = tornDef.itemId;
   container.name = tornDef.name;
   container.nameRu = tornDef.nameRu;
-  container.category = 'misc';
-  container.isContainer = false;
-  container.usable = false;
+  container.category = tornDef.category || 'misc';
+  container.isContainer = tornDef.isContainer ?? false;
+  container.usable = tornDef.usable ?? false;
   container.singleUseContainer = false;
-  container.contents = undefined;
+  container.contents = tornDef.isContainer ? [] : undefined;
   container.description = tornDef.description;
   container.descriptionRu = tornDef.descriptionRu;
+  if (existingLabelColor) {
+    container.labelColor = existingLabelColor;
+  }
 
   // Distribute extracted items into player's inventory or hands or drop to ground
   let droppedCount = 0;
@@ -5447,6 +6160,33 @@ export function unpackSingleUseContainer(
   addPlayerNotification(player, notifMsg, 'pickup');
 
   return { success: true, message: notifMsg };
+}
+
+export function createPaperPackaging(options?: {
+  size?: 'mini' | 'small' | 'medium' | 'large';
+  labelColor?: string;
+  contents?: InventoryItem[];
+  isOpen?: boolean;
+}): InventoryItem {
+  const size = options?.size || 'medium';
+  let baseId = 'paper_packaging';
+  if (size === 'mini') {
+    baseId = options?.isOpen ? 'paper_packaging_mini_open' : 'paper_packaging_mini';
+  } else if (size === 'small') {
+    baseId = options?.isOpen ? 'paper_packaging_small_open' : 'paper_packaging_small';
+  } else if (size === 'large') {
+    baseId = options?.isOpen ? 'paper_packaging_large_open' : 'paper_packaging_large';
+  } else {
+    baseId = options?.isOpen ? 'paper_packaging_open' : 'paper_packaging';
+  }
+  const item = createItem(baseId, 1);
+  if (options?.labelColor) {
+    item.labelColor = options.labelColor;
+  }
+  if (options?.contents && options.contents.length > 0) {
+    item.contents = [...options.contents];
+  }
+  return item;
 }
 
 // Start multi-step consumption (eating/drinking) - kept for backward compatibility if used
@@ -6307,20 +7047,25 @@ export function removeItemFromContainer(container: InventoryItem, contentIndex: 
 
   container.contents.splice(contentIndex, 1);
 
-  // If this was a single-use container (vacuum pouch, sealed tray, snack pouch, vegetable mesh), convert to torn version!
+  // If this was a single-use container (vacuum pouch, sealed tray, snack pouch, vegetable mesh, paper packaging), convert to torn version!
   if (container.contents.length === 0 && (container.singleUseContainer || ITEM_CATALOG[container.itemId]?.singleUseContainer)) {
     const tornId = container.tornItemId || ITEM_CATALOG[container.itemId]?.tornItemId;
     if (tornId && ITEM_CATALOG[tornId]) {
       const tornDef = ITEM_CATALOG[tornId];
+      const existingLabelColor = container.labelColor || ITEM_CATALOG[container.itemId]?.labelColor;
       container.itemId = tornDef.itemId;
       container.name = tornDef.name;
       container.nameRu = tornDef.nameRu;
-      container.category = 'misc';
-      container.isContainer = false;
-      container.contents = undefined;
-      container.usable = false;
+      container.category = tornDef.category || 'misc';
+      container.isContainer = tornDef.isContainer ?? false;
+      container.contents = tornDef.isContainer ? [] : undefined;
+      container.usable = tornDef.usable ?? false;
+      container.singleUseContainer = false;
       container.description = tornDef.description;
       container.descriptionRu = tornDef.descriptionRu;
+      if (existingLabelColor) {
+        container.labelColor = existingLabelColor;
+      }
     }
   }
 
@@ -6479,6 +7224,11 @@ export function createDefaultPlayerInventory(): InventoryItem[] {
     wallet,
     plasticBag,
     createItem('phone_aura_pro_black', 1),
+    createItem('paper_packaging_mini', 1),
+    createItem('paper_packaging_small', 1),
+    createItem('paper_packaging', 1),
+    createItem('paper_packaging_large', 1),
+    createItem('paper_packaging_open', 1),
     createItem('water_bottle', 1),
     createItem('sandwich', 1),
     createItem('hot_coffee', 1),
@@ -7409,9 +8159,15 @@ export function useItemOnPlayer(
     return { success: false, message: 'Этот предмет нельзя использовать напрямую'};
   }
 
-  // Single-use vacuum bags & disposable packaging unpack / tear open
-  if (item.singleUseContainer || ITEM_CATALOG[item.itemId]?.singleUseContainer) {
+  // Single-use vacuum bags, kraft paper packaging & disposable packaging unpack / tear open
+  if (item.singleUseContainer || ITEM_CATALOG[item.itemId]?.singleUseContainer || item.itemId.startsWith('paper_packaging')) {
     return unpackSingleUseContainer(player, item, world);
+  }
+
+  // Open paper packaging container safety check
+  if (item.itemId.startsWith('paper_packaging_open')) {
+    addPlayerNotification(player, 'Это открытая бумажная упаковка: перетаскивайте в неё предметы для хранения.', 'info');
+    return { success: false, message: 'Открытая упаковка: используйте инвентарь для перемещения предметов' };
   }
 
   // Safety: Containers must NEVER be consumed or deleted on use
@@ -8418,9 +9174,15 @@ export function useHandItemOnPlayer(
     return { success: false, message: 'Этот предмет нельзя использовать напрямую'};
   }
 
-  // Single-use vacuum bags & disposable packaging unpack / tear open from hand
-  if (item.singleUseContainer || ITEM_CATALOG[item.itemId]?.singleUseContainer) {
+  // Single-use vacuum bags, kraft paper packaging & disposable packaging unpack / tear open from hand
+  if (item.singleUseContainer || ITEM_CATALOG[item.itemId]?.singleUseContainer || item.itemId.startsWith('paper_packaging')) {
     return unpackSingleUseContainer(player, item, world);
+  }
+
+  // Open paper packaging container in hand
+  if (item.itemId.startsWith('paper_packaging_open')) {
+    addPlayerNotification(player, 'Это открытая бумажная упаковка в руке: используйте инвентарь, чтобы сложить или достать вещи.', 'info');
+    return { success: false, message: 'Открытая упаковка: используйте инвентарь для перемещения предметов' };
   }
 
   if (item.isContainer) {

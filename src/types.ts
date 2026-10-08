@@ -1357,6 +1357,8 @@ export interface InventoryItem {
   containerItems?: string[];        // Specific item IDs contained inside single-use packaged goods
   tornItemId?: string;              // Item ID of torn leftover packaging (e.g. vacuum_pack_small_torn)
   isTransparentPackaging?: boolean; // Whether the inner contents are visible through transparent packaging
+  labelColor?: string;              // Brand seal label / sticker color (hex or CSS color) for paper packaging
+  packagingSize?: 'mini' | 'small' | 'medium' | 'large'; // Physical form factor size of packaging
   containerCapacityL?: number;      // Total internal volume capacity in Liters
   maxContainedItemVolumeL?: number; // Max single item volume that fits in this container
   maxContainedWeightKg?: number;    // Max total weight of contained items in kg
@@ -1638,6 +1640,7 @@ export interface Player {
   isSleeping?: boolean;
   sleepTimer?: number;
   consecutiveWakeHours?: number;
+  lastSleepEndHour?: number;
   prevTimeHour?: number;
   isFainting?: boolean;
   faintTimer?: number;

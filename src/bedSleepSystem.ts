@@ -139,6 +139,10 @@ export function standUpFromBed(
   sound.playUseItem();
   addPlayerNotification(player, 'Вы встали с кровати.', 'info');
 
+  if (bedState.totalSleptHours > 0) {
+    finishSleep(bedState, player);
+  }
+
   return { ...initialBedSleepState, isActive: false };
 }
 
@@ -187,7 +191,7 @@ export function updateBedSleepCycle(
         const pain = player.bodyState?.painLevel || 0;
         
         // 1. Extreme alertness check - too awake to sleep
-        if (sleepiness < 25) {
+        if (sleepiness < 20 && bedState.totalSleptHours === 0) {
           nextState.phase = 'lying_down';
           nextState.phaseTimer = 0;
           addPlayerNotification(player, 'Вы слишком бодры, чтобы уснуть. Организм полон энергии.', 'warning');
@@ -202,8 +206,8 @@ export function updateBedSleepCycle(
           break;
         }
 
-        // 3. Random insomnia / low sleepiness check
-        if (sleepiness < 45 && Math.random() < 0.4) {
+        // 3. Random insomnia / low sleepiness check (only when starting sleep from scratch)
+        if (bedState.totalSleptHours === 0 && sleepiness < 40 && Math.random() < 0.35) {
           nextState.phase = 'lying_down';
           nextState.phaseTimer = 0;
           addPlayerNotification(player, 'Вы долго ворочались в темноте, но сон так и не пришел. Мысли мешают уснуть.', 'info');
@@ -216,29 +220,31 @@ export function updateBedSleepCycle(
         player.isSleeping = true;
         sound.playSleep();
 
-        // Calculate dynamic sleep duration based on physiological needs
-        let targetHours = 8.0;
-        if (sleepiness >= 80) {
-          targetHours = 8.5 + Math.random() * 2.0; // 8.5 to 10.5 hours of heavy sleep
-        } else if (sleepiness >= 50) {
-          targetHours = 7.0 + Math.random() * 1.5; // 7.0 to 8.5 hours
-        } else {
-          targetHours = 3.5 + Math.random() * 2.0; // 3.5 to 5.5 hours of light rest
-        }
+        // Calculate dynamic total target sleep duration based on physiological needs
+        if (bedState.totalSleptHours === 0) {
+          let targetHours = 8.0;
+          if (sleepiness >= 80) {
+            targetHours = 8.0 + Math.random() * 1.5; // 8.0 to 9.5 hours of heavy recovery sleep
+          } else if (sleepiness >= 50) {
+            targetHours = 7.0 + Math.random() * 1.0; // 7.0 to 8.0 hours
+          } else {
+            targetHours = 4.5 + Math.random() * 1.5; // 4.5 to 6.0 hours of light rest
+          }
 
-        // Sofa/Couch comfort penalty (shorter sleep and early wakeup)
-        const isSofa = nextState.furnitureType === 'sofa';
-        if (isSofa) {
-          targetHours = Math.max(3.0, targetHours - (1.2 + Math.random() * 0.8));
-        }
+          // Sofa/Couch comfort penalty (shorter sleep and early wakeup)
+          const isSofa = nextState.furnitureType === 'sofa';
+          if (isSofa) {
+            targetHours = Math.max(3.5, targetHours - (0.8 + Math.random() * 0.5));
+          }
 
-        // Physical pain penalty (disrupts sleep earlier)
-        if (pain > 10) {
-          targetHours = Math.max(2.0, targetHours - (pain / 15.0));
-        }
+          // Physical pain penalty (disrupts sleep earlier)
+          if (pain > 10) {
+            targetHours = Math.max(2.5, targetHours - (pain / 20.0));
+          }
 
-        nextState.targetSleepHours = targetHours;
-        nextState.totalSleptHours = 0; // reset
+          nextState.targetSleepHours = targetHours;
+        }
+        // If continuing sleep after a night awakening, retain existing totalSleptHours and targetSleepHours!
       }
       break;
     }
@@ -253,23 +259,23 @@ export function updateBedSleepCycle(
       nextState.totalSleptHours += hourStep;
       nextState.lastTimeHour = newHour;
 
-      // Restore sleepiness and energy
-      player.needs.sleepiness = Math.max(0, player.needs.sleepiness - 13.0 * hourStep);
-      player.needs.energy = Math.min(100, player.needs.energy + 14.5 * hourStep);
+      // Restore sleepiness and energy proportionally
+      player.needs.sleepiness = Math.max(0, player.needs.sleepiness - 16.0 * hourStep);
+      player.needs.energy = Math.min(100, player.needs.energy + 16.0 * hourStep);
       player.needs.health = Math.min(100, player.needs.health + 10.0 * hourStep);
 
       // Realistic slow hunger & thirst drain over sleeping hours
-      player.needs.hunger = Math.max(0, player.needs.hunger - 1.8 * hourStep);
-      player.needs.thirst = Math.max(0, player.needs.thirst - 2.6 * hourStep);
+      player.needs.hunger = Math.max(0, player.needs.hunger - 1.2 * hourStep);
+      player.needs.thirst = Math.max(0, player.needs.thirst - 1.8 * hourStep);
 
       // Heal physical injuries and alleviate pain during deep rest
       if (player.bodyState) {
-        player.bodyState.painLevel = Math.max(0, player.bodyState.painLevel - 8.0 * hourStep);
+        player.bodyState.painLevel = Math.max(0, player.bodyState.painLevel - 10.0 * hourStep);
         if (player.bodyState.dizziness) {
-          player.bodyState.dizziness = Math.max(0, player.bodyState.dizziness - 15.0 * hourStep);
+          player.bodyState.dizziness = Math.max(0, player.bodyState.dizziness - 20.0 * hourStep);
         }
         if (player.bodyState.panicLevel) {
-          player.bodyState.panicLevel = Math.max(0, player.bodyState.panicLevel - 20.0 * hourStep);
+          player.bodyState.panicLevel = Math.max(0, player.bodyState.panicLevel - 25.0 * hourStep);
         }
       }
 
@@ -278,12 +284,12 @@ export function updateBedSleepCycle(
       nextState.dreamText = DREAM_THOUGHTS[dreamIndex];
 
       // Realistic Night Awakening Chance:
-      // If sleeping at night (between 02:00 and 04:30) and has slept at least 1.5 hours, and haven't awakened tonight yet
+      // If sleeping at night (between 02:00 and 04:30) and has slept at least 1.8 hours, and haven't awakened tonight yet
       const isNightTime = (newHour >= 2.0 && newHour <= 4.5);
-      const isThirstyOrHungry = player.needs.thirst < 35 || player.needs.hunger < 35;
-      const hasPain = (player.bodyState?.painLevel || 0) > 15;
+      const isThirstyOrHungry = player.needs.thirst < 28 || player.needs.hunger < 28;
+      const hasPain = (player.bodyState?.painLevel || 0) > 20;
 
-      if (!nextState.awokeAtNight && nextState.totalSleptHours >= 1.8 && (isNightTime && (Math.random() < 0.08 * dt || isThirstyOrHungry || hasPain))) {
+      if (!nextState.awokeAtNight && nextState.totalSleptHours >= 2.0 && (isNightTime && (Math.random() < 0.04 * dt || isThirstyOrHungry || hasPain))) {
         nextState.phase = 'night_awakening';
         nextState.phaseTimer = 0;
         nextState.awokeAtNight = true;
@@ -298,8 +304,8 @@ export function updateBedSleepCycle(
         return nextState;
       }
 
-      // Normal target sleep completion (e.g. 7.5 - 8 hours or morning 07:00-08:00)
-      if (nextState.totalSleptHours >= nextState.targetSleepHours || (newHour >= 7.0 && newHour <= 7.5 && nextState.totalSleptHours >= 5.0)) {
+      // Normal target sleep completion (e.g. 7.5 - 8.5 hours total or morning 06:30-08:00)
+      if (nextState.totalSleptHours >= nextState.targetSleepHours || (newHour >= 6.8 && newHour <= 7.5 && nextState.totalSleptHours >= 5.5)) {
         return finishSleep(nextState, player);
       }
       break;
@@ -328,17 +334,22 @@ export function finishSleep(bedState: BedSleepState, player: Player): BedSleepSt
   let mood: 'well_rested' | 'slightly_tired' | 'exhausted' | 'overslept' = 'well_rested';
   let message = '';
 
-  if (sleptHours < 3.5) {
+  player.consecutiveWakeHours = 0; // Reset wakefulness clock upon finishing sleep
+  player.lastSleepEndHour = bedState.lastTimeHour; // Track wake-up time of day
+
+  if (sleptHours < 3.0) {
     mood = 'exhausted';
-    player.needs.sleepiness = Math.max(45, player.needs.sleepiness);
-    player.needs.energy = Math.min(55, player.needs.energy);
-    message = `Вы поспали всего ${sleptHours.toFixed(1)}ч и проснулись совершенно разбитым и не выспавшимся.`;
+    const remainingDeficit = Math.round(100 - (sleptHours / 7.5) * 100);
+    player.needs.sleepiness = Math.min(80, Math.max(30, remainingDeficit));
+    player.needs.energy = Math.min(65, Math.max(30, Math.round((sleptHours / 7.5) * 100)));
+    message = `Вы поспали всего ${sleptHours.toFixed(1)}ч и проснулись не выспавшимся.`;
     addPlayerNotification(player, message, 'warning');
   } else if (sleptHours < 6.0) {
     mood = 'slightly_tired';
-    player.needs.sleepiness = Math.max(20, player.needs.sleepiness);
-    player.needs.energy = Math.min(80, player.needs.energy);
-    message = `Вы поспали ${sleptHours.toFixed(1)}ч. Чувствуется легкий недосып и усталость.`;
+    const remainingDeficit = Math.round(100 - (sleptHours / 7.5) * 100);
+    player.needs.sleepiness = Math.min(35, Math.max(10, remainingDeficit));
+    player.needs.energy = Math.min(90, Math.max(60, Math.round((sleptHours / 7.5) * 100)));
+    message = `Вы поспали ${sleptHours.toFixed(1)}ч. Чувствуется легкий недосып.`;
     addPlayerNotification(player, message, 'info');
   } else if (sleptHours <= 9.5) {
     mood = 'well_rested';
@@ -349,9 +360,9 @@ export function finishSleep(bedState: BedSleepState, player: Player): BedSleepSt
     addPlayerNotification(player, message, 'sleep');
   } else {
     mood = 'overslept';
-    player.needs.sleepiness = 5;
-    player.needs.energy = 88;
-    message = `Вы проспали слишком долго (${sleptHours.toFixed(1)}ч) — в голове легкая тяжесть от долгого сна.`;
+    player.needs.sleepiness = 0;
+    player.needs.energy = 90;
+    message = `Вы проспали с запасом (${sleptHours.toFixed(1)}ч) — в голове легкая тяжесть от долгого сна.`;
     addPlayerNotification(player, message, 'info');
   }
 

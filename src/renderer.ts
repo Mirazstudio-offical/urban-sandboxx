@@ -909,23 +909,11 @@ export class GameRenderer {
     // Rendered AFTER vehicle chassis, but BEFORE vehicle cabins, building roofs, and trees!
     this.renderWheelGroundParticles(world.particles, world.cleanMode);
 
-    // 15. Professional Two-Pass 2D Lightmap System
-    // Moved up to be BELOW roofs/trees so lights don't "draw" on top of foliage/buildings
-    this.renderLightmap(
-      world,
-      timeHour, 
-      weatherTransition,
-      visibleVehicles, 
-      vpProps, 
-      minX, minY, maxX, maxY,
-      player
-    );
-
     const isRaining = world.weather === 'rain' || world.weather === 'storm';
     const isFog = world.weather === 'fog';
     const effectiveAlpha = Math.max(nightAlpha, isRaining ? 0.35 * weatherTransition : 0, isFog ? 0.45 * weatherTransition : 0);
 
-    // 15b. Render Vehicle Cabins, Roofs, and Roof attachments (drawn ON TOP of lightmap to avoid headlight bleed)
+    // 15. Render Vehicle Cabins, Roofs, and Roof attachments
     this.renderVehicleCabins(visibleVehicles, effectiveAlpha, camera.gridMode, player);
 
     // 16. Building Roofs, Canopies, Balconies & Fire Escapes
@@ -948,6 +936,17 @@ export class GameRenderer {
 
     // 16d. Flying Birds
     this.renderBirds(world.birds.filter((b) => b.state === 'flying'), minX, minY, maxX, maxY, nightAlpha);
+
+    // 16e. Unified Night Shroud & Physical Lighting (Покров ночи и чистый свет)
+    this.renderLightmap(
+      world,
+      timeHour, 
+      weatherTransition,
+      visibleVehicles, 
+      vpProps, 
+      minX, minY, maxX, maxY,
+      player
+    );
 
     // 17. Overhead Particles (Tractor Stack Exhaust, Engine Bay Steam/Smoke, Flames, Sparks, Debris)
     this.renderOverheadParticles(world.particles, world.cleanMode);
@@ -10535,20 +10534,15 @@ export class GameRenderer {
     player?: Player | null
   ) {
     let nightAlpha = 0;
-    let baseColor = 'rgba(5, 10, 24, ';
+    const baseColor = 'rgba(6, 11, 24, ';
     if (timeHour >= 8 && timeHour < 17) {
       nightAlpha = 0;
-    } else if (timeHour >= 17 && timeHour < 20) {
-      const p = (timeHour - 17) / 3;
-      nightAlpha = p * 0.45;
-      baseColor = 'rgba(70, 25, 10, ';
-    } else if (timeHour >= 20 || timeHour < 5) {
-      nightAlpha = 0.85; // Slightly reduced from 0.92 for better visibility
-      baseColor = 'rgba(5, 10, 25, ';
-    } else if (timeHour >= 5 && timeHour < 8) {
-      const p = (timeHour - 5) / 3;
-      nightAlpha = (1 - p) * 0.45;
-      baseColor = 'rgba(30, 40, 70, ';
+    } else if (timeHour >= 17 && timeHour < 21) {
+      nightAlpha = ((timeHour - 17) / 4) * 0.82;
+    } else if (timeHour >= 21 || timeHour < 4) {
+      nightAlpha = 0.82;
+    } else if (timeHour >= 4 && timeHour < 8) {
+      nightAlpha = (1 - ((timeHour - 4) / 4)) * 0.82;
     }
 
     const isRaining = (world.weather === 'rain' || world.weather === 'storm');
@@ -10995,83 +10989,6 @@ export class GameRenderer {
           lCtx.beginPath();
           lCtx.arc(bumperX + cosA * 12, bumperY + sinA * 12, apronRad, 0, Math.PI * 2);
           lCtx.fill();
-
-          // --- Dynamic 2D Shadow Occlusion for Buildings in Headlight Path ---
-          const maxOcclusionDist = baseBeamReach * 1.15;
-          const frontMidX = car.x + cosA * halfL;
-          const frontMidY = car.y + sinA * halfL;
-
-          for (const bld of world.buildings) {
-            if (bld.type === 'gas_station_canopy' || bld.type === 'gas_station_island' || bld.type === 'park_monument') {
-              continue;
-            }
-            const bCenterX = bld.x + bld.width * 0.5;
-            const bCenterY = bld.y + bld.height * 0.5;
-            const toBx = bCenterX - frontMidX;
-            const toBy = bCenterY - frontMidY;
-            const bDistSq = toBx * toBx + toBy * toBy;
-            const maxSearch = maxOcclusionDist + Math.max(bld.width, bld.height);
-            if (bDistSq > maxSearch * maxSearch) continue;
-
-            // Check if building is in front of or alongside the headlights (within ~160 deg forward cone)
-            const fwdDot = toBx * cosA + toBy * sinA;
-            if (fwdDot < -10) continue; // Behind vehicle headlights
-
-            // Compute the 4 corners of the building
-            const corners = [
-              { x: bld.x, y: bld.y },
-              { x: bld.x + bld.width, y: bld.y },
-              { x: bld.x + bld.width, y: bld.y + bld.height },
-              { x: bld.x, y: bld.y + bld.height }
-            ];
-
-            const centerAngle = Math.atan2(bCenterY - frontMidY, bCenterX - frontMidX);
-            let minDiff = Infinity;
-            let maxDiff = -Infinity;
-            let minIdx = 0;
-            let maxIdx = 0;
-
-            for (let ci = 0; ci < 4; ci++) {
-              const c = corners[ci];
-              const ang = Math.atan2(c.y - frontMidY, c.x - frontMidX);
-              let diff = ang - centerAngle;
-              while (diff > Math.PI) diff -= Math.PI * 2;
-              while (diff < -Math.PI) diff += Math.PI * 2;
-              if (diff < minDiff) { minDiff = diff; minIdx = ci; }
-              if (diff > maxDiff) { maxDiff = diff; maxIdx = ci; }
-            }
-
-            const vMin = corners[minIdx];
-            const vMax = corners[maxIdx];
-
-            const dMinX = vMin.x - frontMidX;
-            const dMinY = vMin.y - frontMidY;
-            const lenMin = Math.hypot(dMinX, dMinY) || 1;
-            const pMinProjX = vMin.x + (dMinX / lenMin) * maxOcclusionDist * 1.5;
-            const pMinProjY = vMin.y + (dMinY / lenMin) * maxOcclusionDist * 1.5;
-
-            const dMaxX = vMax.x - frontMidX;
-            const dMaxY = vMax.y - frontMidY;
-            const lenMax = Math.hypot(dMaxX, dMaxY) || 1;
-            const pMaxProjX = vMax.x + (dMaxX / lenMax) * maxOcclusionDist * 1.5;
-            const pMaxProjY = vMax.y + (dMaxY / lenMax) * maxOcclusionDist * 1.5;
-
-            // Occlude shadow volume with night darkness
-            lCtx.save();
-            lCtx.globalCompositeOperation = 'source-over';
-            lCtx.fillStyle = `${baseColor}${effectiveAlpha * 0.95})`;
-            lCtx.beginPath();
-            lCtx.moveTo(vMin.x, vMin.y);
-            lCtx.lineTo(pMinProjX, pMinProjY);
-            lCtx.lineTo(pMaxProjX, pMaxProjY);
-            lCtx.lineTo(vMax.x, vMax.y);
-            lCtx.closePath();
-            lCtx.fill();
-
-            // Also ensure building body remains dark inside
-            lCtx.fillRect(bld.x, bld.y, bld.width, bld.height);
-            lCtx.restore();
-          }
         }
       } else if (isIgnitionOn) {
         // Front position lights (габариты / ДХО) gentle soft clearance
@@ -11316,108 +11233,9 @@ export class GameRenderer {
       }
     }
 
-    // E. Building Entrance, Balcony, and Fire Escape Light Cutouts
-    for (const bld of world.buildings) {
-      if (bld.x + bld.width < minX || bld.x > maxX || bld.y + bld.height < minY || bld.y > maxY) continue;
-
-      // 1. Entrance Light Cutout
-      if (bld.entranceSide) {
-        let lightCX = 0, lightCY = 0;
-        if (bld.entranceSide === 'north') {
-          lightCX = bld.x + bld.width / 2;
-          lightCY = bld.y - 6;
-        } else if (bld.entranceSide === 'south') {
-          lightCX = bld.x + bld.width / 2;
-          lightCY = bld.y + bld.height + 6;
-        } else if (bld.entranceSide === 'west') {
-          lightCX = bld.x - 6;
-          lightCY = bld.y + bld.height / 2;
-        } else if (bld.entranceSide === 'east') {
-          lightCX = bld.x + bld.width + 6;
-          lightCY = bld.y + bld.height / 2;
-        }
-
-        const entRadius = 45 * fogFactor;
-        const entGrad = lCtx.createRadialGradient(lightCX, lightCY, 1, lightCX, lightCY, entRadius);
-        entGrad.addColorStop(0.0, 'rgba(0, 0, 0, 0.95)');
-        entGrad.addColorStop(0.35, 'rgba(0, 0, 0, 0.60)');
-        entGrad.addColorStop(0.75, 'rgba(0, 0, 0, 0.18)');
-        entGrad.addColorStop(1.0, 'rgba(0, 0, 0, 0)');
-        lCtx.fillStyle = entGrad;
-        lCtx.beginPath();
-        lCtx.arc(lightCX, lightCY, entRadius, 0, Math.PI * 2);
-        lCtx.fill();
-      }
-
-      // 2. Balcony Light Cutout
-      if (bld.balconies && performanceConfig.enableBalconyDetails) {
-        for (const bal of bld.balconies) {
-          let cx = 0, cy = 0;
-          if (bal.side === 'north') {
-            cx = bld.x + bld.width * bal.offset;
-            cy = bld.y - bal.depth / 2;
-          } else if (bal.side === 'south') {
-            cx = bld.x + bld.width * bal.offset;
-            cy = bld.y + bld.height + bal.depth / 2;
-          } else if (bal.side === 'west') {
-            cx = bld.x - bal.depth / 2;
-            cy = bld.y + bld.height * bal.offset;
-          } else if (bal.side === 'east') {
-            cx = bld.x + bld.width + bal.depth / 2;
-            cy = bld.y + bld.height * bal.offset;
-          }
-
-          const balRadius = 35 * fogFactor;
-          const balGrad = lCtx.createRadialGradient(cx, cy, 1, cx, cy, balRadius);
-          balGrad.addColorStop(0.0, 'rgba(0, 0, 0, 0.80)');
-          balGrad.addColorStop(0.4, 'rgba(0, 0, 0, 0.40)');
-          balGrad.addColorStop(1.0, 'rgba(0, 0, 0, 0)');
-          lCtx.fillStyle = balGrad;
-          lCtx.beginPath();
-          lCtx.arc(cx, cy, balRadius, 0, Math.PI * 2);
-          lCtx.fill();
-        }
-      }
-
-      // 3. Fire Escape Light Cutout
-      if (bld.fireEscapes) {
-        for (const fe of bld.fireEscapes) {
-          let cx = 0, cy = 0;
-          if (fe.side === 'north') {
-            cx = bld.x + bld.width * fe.offset;
-            cy = bld.y - fe.depth / 2;
-          } else if (fe.side === 'south') {
-            cx = bld.x + bld.width * fe.offset;
-            cy = bld.y + bld.height + fe.depth / 2;
-          } else if (fe.side === 'west') {
-            cx = bld.x - fe.depth / 2;
-            cy = bld.y + bld.height * fe.offset;
-          } else if (fe.side === 'east') {
-            cx = bld.x + bld.width + fe.depth / 2;
-            cy = bld.y + bld.height * fe.offset;
-          }
-
-          const feRadius = 30 * fogFactor;
-          const feGrad = lCtx.createRadialGradient(cx, cy, 1, cx, cy, feRadius);
-          feGrad.addColorStop(0.0, 'rgba(0, 0, 0, 0.70)');
-          feGrad.addColorStop(0.4, 'rgba(0, 0, 0, 0.30)');
-          feGrad.addColorStop(1.0, 'rgba(0, 0, 0, 0)');
-          lCtx.fillStyle = feGrad;
-          lCtx.beginPath();
-          lCtx.arc(cx, cy, feRadius, 0, Math.PI * 2);
-          lCtx.fill();
-        }
-      }
-    }
-
-    // F. Gas Station Nighttime Light Cutouts
+    // F. Gas Station Nighttime Light Cutouts (real canopy lighting)
     if (maxX >= 4800 && minX <= 5520 && maxY >= 4800 && minY <= 5520) {
       GasStationRenderer.renderLightmapCutouts(lCtx, nightAlpha, fogFactor);
-    }
-
-    // F2. Garage Cooperative Nighttime Bulkhead Light Cutouts
-    if (minX <= 2000 && maxX >= 50 && minY <= 2400 && maxY >= 800) {
-      GarageCooperativeRenderer.renderLightmapCutouts(lCtx, world, nightAlpha, fogFactor);
     }
 
     // G. Player Handheld & Smartphone Flashlight Cutout (Pass 1)
@@ -12182,117 +12000,9 @@ export class GameRenderer {
       }
     }
 
-    // E. Building Entrance, Balcony, and Fire Escape Additive Glow Pools
-    for (const bld of world.buildings) {
-      if (bld.x + bld.width < minX || bld.x > maxX || bld.y + bld.height < minY || bld.y > maxY) continue;
-
-      // 1. Entrance warm porch light
-      if (bld.entranceSide) {
-        let lightCX = 0, lightCY = 0;
-        if (bld.entranceSide === 'north') {
-          lightCX = bld.x + bld.width / 2;
-          lightCY = bld.y - 6;
-        } else if (bld.entranceSide === 'south') {
-          lightCX = bld.x + bld.width / 2;
-          lightCY = bld.y + bld.height + 6;
-        } else if (bld.entranceSide === 'west') {
-          lightCX = bld.x - 6;
-          lightCY = bld.y + bld.height / 2;
-        } else if (bld.entranceSide === 'east') {
-          lightCX = bld.x + bld.width + 6;
-          lightCY = bld.y + bld.height / 2;
-        }
-
-        const poolRadius = 35 * fogFactor;
-        const poolGrad = ctx.createRadialGradient(lightCX, lightCY, 1, lightCX, lightCY, poolRadius);
-        poolGrad.addColorStop(0, `rgba(254, 240, 138, ${0.25 * fogFactor})`);
-        poolGrad.addColorStop(0.4, `rgba(251, 191, 36, ${0.08 * fogFactor})`);
-        poolGrad.addColorStop(1, 'rgba(251, 191, 36, 0)');
-        ctx.fillStyle = poolGrad;
-        ctx.beginPath();
-        ctx.arc(lightCX, lightCY, poolRadius, 0, Math.PI * 2);
-        ctx.fill();
-
-        // Little glowing bulb core
-        const bulbGrad = ctx.createRadialGradient(lightCX, lightCY, 0.5, lightCX, lightCY, 3.5);
-        bulbGrad.addColorStop(0, `rgba(255, 255, 255, ${0.9 * fogFactor})`);
-        bulbGrad.addColorStop(0.6, `rgba(254, 240, 138, ${0.4 * fogFactor})`);
-        bulbGrad.addColorStop(1, 'rgba(254, 240, 138, 0)');
-        ctx.fillStyle = bulbGrad;
-        ctx.beginPath();
-        ctx.arc(lightCX, lightCY, 3.5, 0, Math.PI * 2);
-        ctx.fill();
-      }
-
-      // 2. Balcony soft light
-      if (bld.balconies && performanceConfig.enableBalconyDetails) {
-        for (const bal of bld.balconies) {
-          let cx = 0, cy = 0;
-          if (bal.side === 'north') {
-            cx = bld.x + bld.width * bal.offset;
-            cy = bld.y - bal.depth / 2;
-          } else if (bal.side === 'south') {
-            cx = bld.x + bld.width * bal.offset;
-            cy = bld.y + bld.height + bal.depth / 2;
-          } else if (bal.side === 'west') {
-            cx = bld.x - bal.depth / 2;
-            cy = bld.y + bld.height * bal.offset;
-          } else if (bal.side === 'east') {
-            cx = bld.x + bld.width + bal.depth / 2;
-            cy = bld.y + bld.height * bal.offset;
-          }
-
-          const poolRadius = 24 * fogFactor;
-          const poolGrad = ctx.createRadialGradient(cx, cy, 1, cx, cy, poolRadius);
-          poolGrad.addColorStop(0, `rgba(165, 243, 252, ${0.18 * fogFactor})`);
-          poolGrad.addColorStop(0.5, `rgba(56, 189, 248, ${0.05 * fogFactor})`);
-          poolGrad.addColorStop(1, 'rgba(56, 189, 248, 0)');
-          ctx.fillStyle = poolGrad;
-          ctx.beginPath();
-          ctx.arc(cx, cy, poolRadius, 0, Math.PI * 2);
-          ctx.fill();
-        }
-      }
-
-      // 3. Fire Escape soft orange security light
-      if (bld.fireEscapes) {
-        for (const fe of bld.fireEscapes) {
-          let cx = 0, cy = 0;
-          if (fe.side === 'north') {
-            cx = bld.x + bld.width * fe.offset;
-            cy = bld.y - fe.depth / 2;
-          } else if (fe.side === 'south') {
-            cx = bld.x + bld.width * fe.offset;
-            cy = bld.y + bld.height + fe.depth / 2;
-          } else if (fe.side === 'west') {
-            cx = bld.x - fe.depth / 2;
-            cy = bld.y + bld.height * fe.offset;
-          } else if (fe.side === 'east') {
-            cx = bld.x + bld.width + fe.depth / 2;
-            cy = bld.y + bld.height * fe.offset;
-          }
-
-          const poolRadius = 20 * fogFactor;
-          const poolGrad = ctx.createRadialGradient(cx, cy, 1, cx, cy, poolRadius);
-          poolGrad.addColorStop(0, `rgba(253, 186, 116, ${0.15 * fogFactor})`);
-          poolGrad.addColorStop(0.6, `rgba(249, 115, 22, ${0.04 * fogFactor})`);
-          poolGrad.addColorStop(1, 'rgba(249, 115, 22, 0)');
-          ctx.fillStyle = poolGrad;
-          ctx.beginPath();
-          ctx.arc(cx, cy, poolRadius, 0, Math.PI * 2);
-          ctx.fill();
-        }
-      }
-    }
-
     // F. Gas Station Additive Glow & Optics
     if (maxX >= 4800 && minX <= 5520 && maxY >= 4800 && minY <= 5520) {
       GasStationRenderer.renderAdditiveGlow(ctx, nightAlpha, fogFactor);
-    }
-
-    // F2. Garage Cooperative Additive Light Glow
-    if (minX <= 2000 && maxX >= 50 && minY <= 2400 && maxY >= 800) {
-      GarageCooperativeRenderer.renderAdditiveGlow(ctx, world, nightAlpha, fogFactor);
     }
 
     // G. Player Handheld & Smartphone Flashlight Volumetric Cone & LED Flare (Pass 2)

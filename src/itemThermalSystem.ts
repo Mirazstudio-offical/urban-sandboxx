@@ -515,7 +515,7 @@ let lastBurnNotifTime = 0;
 
 /**
  * Evaluates thermal contact between hot/cold items and player body parts.
- * Triggers burns, pain pulses, diegetic sensations, and involuntary drop reflexes.
+ * Triggers burns, frostbite, pain pulses, diegetic sensations, and involuntary drop reflexes.
  */
 export function processPlayerItemThermalBurns(
   player: Player,
@@ -527,7 +527,11 @@ export function processPlayerItemThermalBurns(
   const bs = player.bodyState;
   const now = Date.now() / 1000;
 
-  // Helper to apply localized thermal injury
+  // Check if player is wearing thermal insulated gloves
+  const handGear = player.equippedClothing?.hands?.outerwear;
+  const hasInsulatedGloves = !!handGear && (handGear.clothingStats?.insulation ?? 0) >= 15;
+
+  // Helper to apply localized thermal injury (burn or frostbite)
   const applyContactBurn = (
     part: 'leftArm' | 'rightArm' | 'leftLeg' | 'rightLeg' | 'torso',
     item: InventoryItem,
@@ -566,14 +570,51 @@ export function processPlayerItemThermalBurns(
     }
   };
 
-  // Helper to handle involuntary drop reflex for scorching hand items
-  const checkHandInvoluntaryDrop = (hand: 'left' | 'right', item: InventoryItem | null | undefined) => {
+  // Helper to apply localized cold contact / frostbite
+  const applyContactCold = (
+    part: 'leftArm' | 'rightArm' | 'leftLeg' | 'rightLeg' | 'torso',
+    item: InventoryItem,
+    coreTemp: number,
+    surfaceTemp: number,
+    contactLocationName: string
+  ) => {
+    const isFreezing = surfaceTemp <= 0.0 || coreTemp <= -5.0;
+    const isDeepFreeze = coreTemp <= -12.0;
+
+    // Apply frostbite injury to body part
+    const severity = isDeepFreeze ? 30 : (isFreezing ? 18 : 10);
+    addInjuryToPart(bs, part, 'burn', severity * dt * 0.7, 1);
+
+    // Cool down internal body core temperature
+    bs.temperature = Math.max(33.5, bs.temperature - (isDeepFreeze ? 0.04 : 0.02) * dt);
+    bs.shiverIntensity = Math.min(1.0, (bs.shiverIntensity || 0) + 0.05 * dt);
+    bs.painLevel = Math.min(100, (bs.painLevel || 0) + (isDeepFreeze ? 2.5 : 1.0) * dt);
+
+    if (now - lastDropSoundTime > 2.0 && isFreezing) {
+      sound.playShiver();
+      lastDropSoundTime = now;
+    }
+
+    if (now - lastBurnNotifTime > 3.5) {
+      const tempRound = Math.round(coreTemp);
+      addPlayerNotification(
+        player,
+        `Замороженный продукт «${item.nameRu}» (${tempRound}°C) в ${contactLocationName} леденит плоть! Судорога от холода.`,
+        'warning'
+      );
+      lastBurnNotifTime = now;
+    }
+  };
+
+  // Helper to handle involuntary drop reflex for scorching or freezing hand items
+  const checkHandThermalEffects = (hand: 'left' | 'right', item: InventoryItem | null | undefined) => {
     if (!item) return;
-    const surfaceTemp = item.surfaceTemperature ?? item.temperature ?? 20;
+    const coreTemp = item.temperature ?? 20;
+    const surfaceTemp = item.surfaceTemperature ?? coreTemp;
 
     // 1. Scalding heat: involuntary drop reflex! (T >= 68°C)
-    // First-principles human physiology: bare hand involuntarily opens from excruciating pain
-    if (surfaceTemp >= 68.0) {
+    // Insulated gloves insulate bare palm against burns
+    if (surfaceTemp >= 68.0 && !hasInsulatedGloves) {
       const dropped = takeItemFromHand(player, hand);
       if (dropped) {
         if (!world.groundItems) world.groundItems = [];
@@ -603,16 +644,55 @@ export function processPlayerItemThermalBurns(
     }
 
     // 2. High heat: sustained contact burns (T >= 52°C)
-    if (surfaceTemp >= 52.0) {
+    if (surfaceTemp >= 52.0 && !hasInsulatedGloves) {
       const partKey = hand === 'left' ? 'leftArm' : 'rightArm';
       const handName = hand === 'left' ? 'ладонь левой руки' : 'ладонь правой руки';
       applyContactBurn(partKey, item, surfaceTemp, handName);
+      return;
+    }
+
+    // 3. Freezing Cold: bare hand holding frozen/deep-freeze item (T <= 0°C or coreTemp <= -8°C)
+    if ((surfaceTemp <= 1.0 || coreTemp <= -4.0) && !hasInsulatedGloves) {
+      // Freezing hands: involuntary drop if severely frozen (T <= -10°C)
+      if (coreTemp <= -10.0 && Math.random() < 0.08 * dt) {
+        const dropped = takeItemFromHand(player, hand);
+        if (dropped) {
+          if (!world.groundItems) world.groundItems = [];
+          const angle = player.angle || 0;
+          world.groundItems.push({
+            id: `ground_frozen_${dropped.id}_${Date.now()}`,
+            x: player.x + Math.cos(angle) * 16,
+            y: player.y + Math.sin(angle) * 16,
+            item: dropped,
+            spawnTime: Date.now()
+          });
+
+          sound.playHurt();
+          sound.playShiver();
+          lastDropSoundTime = now;
+
+          const partKey = hand === 'left' ? 'leftArm' : 'rightArm';
+          addInjuryToPart(bs, partKey, 'burn', 25, 1);
+
+          addPlayerNotification(
+            player,
+            `Ой! Замороженный «${dropped.nameRu}» (${Math.round(coreTemp)}°C) сжёг пальцы ледяной болью! Онемевшая рука выронила его!`,
+            'warning'
+          );
+          return;
+        }
+      }
+
+      // Sustained cold contact in hand
+      const partKey = hand === 'left' ? 'leftArm' : 'rightArm';
+      const handName = hand === 'left' ? 'голой ладони левой руки' : 'голой ладони правой руки';
+      applyContactCold(partKey, item, coreTemp, surfaceTemp, handName);
     }
   };
 
   // 1. Hands check
-  checkHandInvoluntaryDrop('left', player.leftHandItem);
-  checkHandInvoluntaryDrop('right', player.rightHandItem);
+  checkHandThermalEffects('left', player.leftHandItem);
+  checkHandThermalEffects('right', player.rightHandItem);
 
   // 2. Inventory slots check (Pockets & Compartments)
   if (player.inventory) {
@@ -620,24 +700,35 @@ export function processPlayerItemThermalBurns(
       const item = player.inventory[slotIdx];
       if (!item) continue;
 
-      const surfaceTemp = item.surfaceTemperature ?? item.temperature ?? 20;
-      if (surfaceTemp < 50.0) continue; // Below burn threshold
+      const coreTemp = item.temperature ?? 20;
+      const surfaceTemp = item.surfaceTemperature ?? coreTemp;
 
       const slotInfo = getSlotCompartment(player, slotIdx);
       if (!slotInfo) continue;
 
       const compId = slotInfo.compartment.id;
 
-      if (compId === 'legs') {
-        // Trouser / Jeans pocket: conducts directly to thighs/legs
-        const legPart = slotIdx % 2 === 0 ? 'leftLeg' : 'rightLeg';
-        applyContactBurn(legPart, item, surfaceTemp, 'бедро через карман брюк');
-      } else if (compId === 'torso') {
-        // Jacket / Hoodie / Shirt pocket: conducts directly to chest
-        applyContactBurn('torso', item, surfaceTemp, 'грудь через карман куртки');
-      } else if (compId === 'base') {
-        // Inner baseline pocket / belt: conducts to torso
-        applyContactBurn('torso', item, surfaceTemp, 'тело через внутренний карман');
+      // HOT items in pockets (T >= 50°C)
+      if (surfaceTemp >= 50.0) {
+        if (compId === 'legs') {
+          const legPart = slotIdx % 2 === 0 ? 'leftLeg' : 'rightLeg';
+          applyContactBurn(legPart, item, surfaceTemp, 'бедро через карман брюк');
+        } else if (compId === 'torso') {
+          applyContactBurn('torso', item, surfaceTemp, 'грудь через карман куртки');
+        } else if (compId === 'base') {
+          applyContactBurn('torso', item, surfaceTemp, 'тело через внутренний карман');
+        }
+      }
+      // COLD / FROZEN items in pockets (coreTemp <= -2°C or surfaceTemp <= 2°C)
+      else if (coreTemp <= -2.0 || surfaceTemp <= 2.0) {
+        if (compId === 'legs') {
+          const legPart = slotIdx % 2 === 0 ? 'leftLeg' : 'rightLeg';
+          applyContactCold(legPart, item, coreTemp, surfaceTemp, 'кармане брюк');
+        } else if (compId === 'torso') {
+          applyContactCold('torso', item, coreTemp, surfaceTemp, 'кармане куртки');
+        } else if (compId === 'base') {
+          applyContactCold('torso', item, coreTemp, surfaceTemp, 'внутреннем кармане');
+        }
       }
     }
   }
