@@ -2111,41 +2111,8 @@ export function renderBuildingInterior(
 
   const isHospital = bld.type === 'hospital';
 
-  // Render static floor & furniture from cached bitmap
-  const furnAnglesSum = layout.furniture?.reduce((acc, f) => acc + (f.angle || 0), 0) || 0;
-  const cacheKey = `${bld.id}_${layout.floor ?? (bld as any).currentFloor ?? 0}_${layout.width}_${layout.height}_${layout.rooms?.length || 0}_${layout.furniture?.length || 0}_${furnAnglesSum.toFixed(2)}`;
-  let cachedCanvas = interiorCanvasCache.get(cacheKey);
-  if (!cachedCanvas && typeof document !== 'undefined') {
-    if (interiorCanvasCache.size >= MAX_INTERIOR_CANVASES) {
-      const firstKey = interiorCanvasCache.keys().next().value;
-      if (firstKey !== undefined) {
-        const oldC = interiorCanvasCache.get(firstKey);
-        if (oldC) {
-          oldC.width = 0;
-          oldC.height = 0;
-        }
-        interiorCanvasCache.delete(firstKey);
-      }
-    }
-    cachedCanvas = document.createElement('canvas');
-    cachedCanvas.width = layout.width;
-    cachedCanvas.height = layout.height;
-    const cCtx = cachedCanvas.getContext('2d');
-    if (cCtx) {
-      renderStaticInteriorLayout(cCtx, bld, layout, windows, isHospital);
-      interiorCanvasCache.set(cacheKey, cachedCanvas);
-    }
-  } else if (cachedCanvas) {
-    // Refresh LRU order
-    interiorCanvasCache.delete(cacheKey);
-    interiorCanvasCache.set(cacheKey, cachedCanvas);
-  }
-
-  if (cachedCanvas) {
-    ctx.drawImage(cachedCanvas, 0, 0);
-  } else {
-    renderStaticInteriorLayout(ctx, bld, layout, windows, isHospital);
-  }
+  // Render static floor & furniture directly to ctx with full native resolution (sharp vector graphics)
+  renderStaticInteriorLayout(ctx, bld, layout, windows, isHospital);
 
   // Dynamic Layer 1: Volumetric daylight beams from windows
   if (dayIntensity > 0) {
