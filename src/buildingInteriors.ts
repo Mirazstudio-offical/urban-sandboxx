@@ -1679,7 +1679,11 @@ export function constrainPlayerToInterior(
       furn.type === 'tv' ||
       furn.type === 'blackboard' ||
       furn.type === 'whiteboard' ||
-      furn.type === 'mirror'
+      furn.type === 'mirror' ||
+      furn.type === 'radiator' ||
+      furn.type === 'coat_rack' ||
+      furn.type === 'trash_can' ||
+      furn.type === 'floor_lamp'
     ) continue;
 
     const fx1 = furn.x;
