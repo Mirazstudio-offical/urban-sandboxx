@@ -30,6 +30,7 @@ import {
   getRussianSeasonName,
   GameCalendarState
 } from './calendarSystem';
+import { getEffectiveWeatherWeights } from './weatherTransition';
 import { 
   CAR_CONFIGS, 
   createDefaultEngineState, 
@@ -852,6 +853,8 @@ export default function App() {
   const weatherRef = useRef<WeatherType>('clear');
   weatherRef.current = weather;
 
+  const previousWeatherRef = useRef<WeatherType>('clear');
+
   const weatherTransitionRef = useRef<number>(1.0);
   weatherTransitionRef.current = weatherTransition;
 
@@ -889,15 +892,17 @@ export default function App() {
     const idx = types.indexOf(weather);
     const nextWeather = types[(idx + 1) % types.length];
     
+    const prev = weatherRef.current;
+    previousWeatherRef.current = prev;
     setWeather(nextWeather);
     weatherRef.current = nextWeather;
     if (worldRef.current) {
+      worldRef.current.previousWeather = prev;
       worldRef.current.weather = nextWeather;
+      worldRef.current.weatherTransition = 0.0;
     }
     setWeatherTransition(0.0);
     weatherTransitionRef.current = 0.0;
-
-    sound.setRainAudio(nextWeather === 'rain' || nextWeather === 'storm' || nextWeather === 'drizzle');
     
     const p = playerRef.current;
     if (p) {
@@ -909,7 +914,7 @@ export default function App() {
         nextWeather === 'storm' ? 'Гроза' :
         nextWeather === 'fog' ? 'Туман' :
         nextWeather === 'snow' ? 'Снегопад' : 'Метель';
-      addPlayerNotification(p, `Погода: ${weatherRu}`, 'info');
+      addPlayerNotification(p, `Погода меняется: ${weatherRu}`, 'info');
     }
   };
 
@@ -926,19 +931,21 @@ export default function App() {
     timeHourRef.current = newCal.timeHour;
     setTimeHour(newCal.timeHour);
     
+    const prev = weatherRef.current;
+    previousWeatherRef.current = prev;
     if (worldRef.current) {
       worldRef.current.calendar = newCal;
       worldRef.current.season = newCal.season;
       worldRef.current.timeHour = newCal.timeHour;
+      worldRef.current.previousWeather = prev;
       worldRef.current.weather = newWeather;
+      worldRef.current.weatherTransition = 0.0;
     }
     
     setWeather(newWeather);
     weatherRef.current = newWeather;
     setWeatherTransition(0.0);
     weatherTransitionRef.current = 0.0;
-    
-    sound.setRainAudio(newWeather === 'rain' || newWeather === 'storm' || newWeather === 'drizzle');
     
     const p = playerRef.current;
     if (p) {
@@ -3018,7 +3025,9 @@ export default function App() {
         }
 
         // 7. Update Skid marks, Particles & Breakables / Living World
+        world.previousWeather = previousWeatherRef.current;
         world.weather = weatherRef.current;
+        world.weatherTransition = weatherTransitionRef.current;
         world.timeHour = timeHourRef.current;
         world.calendar = calendarRef.current;
         world.season = calendarRef.current.season;
@@ -3028,18 +3037,25 @@ export default function App() {
         world.outsideTemp = curOutsideTemp;
 
         if (curOutsideTemp <= 0.0 && (weatherRef.current === 'rain' || weatherRef.current === 'drizzle')) {
+          previousWeatherRef.current = weatherRef.current;
           setWeather('snow');
           weatherRef.current = 'snow';
           setWeatherTransition(0.0);
           weatherTransitionRef.current = 0.0;
+          world.previousWeather = previousWeatherRef.current;
+          world.weather = 'snow';
+          world.weatherTransition = 0.0;
         } else if (Math.random() < 0.0015 * dt) {
           const nextSeasonalWeather = pickRandomSeasonalWeather(calendarRef.current, curOutsideTemp);
           if (nextSeasonalWeather !== weatherRef.current) {
+            previousWeatherRef.current = weatherRef.current;
             setWeather(nextSeasonalWeather);
             weatherRef.current = nextSeasonalWeather;
             setWeatherTransition(0.0);
             weatherTransitionRef.current = 0.0;
-            sound.setRainAudio(nextSeasonalWeather === 'rain' || nextSeasonalWeather === 'storm' || nextSeasonalWeather === 'drizzle');
+            world.previousWeather = previousWeatherRef.current;
+            world.weather = nextSeasonalWeather;
+            world.weatherTransition = 0.0;
           }
         }
 
@@ -3429,8 +3445,15 @@ export default function App() {
         }
 
         if (weatherTransitionRef.current < 1.0) {
-          weatherTransitionRef.current = Math.min(1.0, weatherTransitionRef.current + dt * 0.5);
+          // Atmospheric gradual weather evolution: ~16 seconds smooth natural blending
+          const transitionSpeed = 1.0 / 16.0;
+          weatherTransitionRef.current = Math.min(1.0, weatherTransitionRef.current + dt * transitionSpeed);
+          world.weatherTransition = weatherTransitionRef.current;
         }
+
+        // Continuously modulate rain volume with smooth weather weights
+        const curWeatherWeights = getEffectiveWeatherWeights(world);
+        sound.setRainVolume(curWeatherWeights.rain);
 
         // Calculate mouse world position for placement preview
         let currentMouseWorldPos = null;

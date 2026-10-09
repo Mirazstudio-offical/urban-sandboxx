@@ -15,6 +15,7 @@ import { AGRICULTURAL_FIELDS, getTerrainSlope } from './terrainElevation';
 import { getRiverWaterAt, getUniversalWaterDepthAt } from './riverSystem';
 import { getBiomeSampleAt } from './biomeSystem';
 import { calculateClimateAtmosphere, createInitialCalendarState, isWorldFreezing } from './calendarSystem';
+import { getEffectiveWeatherWeights } from './weatherTransition';
 
 export { isWorldFreezing };
 
@@ -6998,13 +6999,22 @@ export function updateVehiclePhysics(
     const speedRatio = Math.min(1.0, currentSpeedKmh / cfg.maxSpeed);
     
     // Check if the vehicle is currently sliding or handbraking to adjust steering limits
-    const isSliding = Math.abs(vehicle.lateralVelocity || 0) > 12.0 || (input.handbrake && currentSpeedKmh > 10.0);
+    const isSliding = Math.abs(vehicle.lateralVelocity || 0) > 8.0 || (input.handbrake && currentSpeedKmh > 8.0);
+
+    // Front axle lateral velocity and motion angle relative to vehicle heading (Caster & Slip Angle)
+    // Front axle is offset by wheelbase along heading; yaw rotation adds angular velocity * wheelbase
+    const steerWheelBase = cfg.wheelBase || 40;
+    const frontAxleLatVel = (vehicle.lateralVelocity || 0) + (vehicle.angularVelocity || 0) * steerWheelBase;
+    const vForward = Math.max(8.0, Math.abs(vehicle.speed));
+    const frontMotionAngle = (Math.abs(vehicle.speed) > 2.0)
+      ? Math.atan2(frontAxleLatVel, vForward) * Math.sign(vehicle.speed || 1)
+      : 0;
 
     // Determine if the player is actively counter-steering to catch a slide
-    // - Positive lateralVelocity (sliding right): must steer right (input.right) to catch it.
-    // - Negative lateralVelocity (sliding left): must steer left (input.left) to catch it.
-    const isCounterSteerLeft = (vehicle.lateralVelocity || 0) < -12.0 && input.left;
-    const isCounterSteerRight = (vehicle.lateralVelocity || 0) > 12.0 && input.right;
+    // - Positive frontAxleLatVel (sliding right): counter-steer is right (input.right / steer > 0).
+    // - Negative frontAxleLatVel (sliding left): counter-steer is left (input.left / steer < 0).
+    const isCounterSteerLeft = frontAxleLatVel < -8.0 && input.left;
+    const isCounterSteerRight = frontAxleLatVel > 8.0 && input.right;
     const isCounterSteeringForLimit = isCounterSteerLeft || isCounterSteerRight;
 
     // 1. Steering Limit at Speed (Driver Assist)
@@ -7034,15 +7044,20 @@ export function updateVehiclePhysics(
     }
 
     const isCounterSteering = isSliding && (
-      (targetDesiredSteerTemp < -0.01 && (vehicle.lateralVelocity || 0) < -8.0) ||
-      (targetDesiredSteerTemp > 0.01 && (vehicle.lateralVelocity || 0) > 8.0)
+      (targetDesiredSteerTemp < -0.01 && frontAxleLatVel < -6.0) ||
+      (targetDesiredSteerTemp > 0.01 && frontAxleLatVel > 6.0)
+    );
+
+    const isFightingCaster = isSliding && (
+      (targetDesiredSteerTemp > 0.05 && frontAxleLatVel < -8.0) ||
+      (targetDesiredSteerTemp < -0.05 && frontAxleLatVel > 8.0)
     );
 
     const isArticulatedMachinery = vehicle.type === 'roller_heavy_tandem' || 
                                     vehicle.type === 'roller_compact_sidewalk' || 
                                     vehicle.type === 'roller_pneumatic';
 
-    const steerRateMultiplier = isCounterSteering ? 2.6 : 1.0;
+    const steerRateMultiplier = isCounterSteering ? 2.8 : (isFightingCaster ? 0.65 : 1.0);
     let steerRate = cfg.turnSpeed * (isArticulatedMachinery ? 0.90 : 0.40) * steerRateMultiplier; 
     if (currentSpeedKmh < 10.0 && !isArticulatedMachinery) {
       // Extremely heavy steering at standstill for standard cars
@@ -7071,20 +7086,38 @@ export function updateVehiclePhysics(
         vehicle.steerAngle = Math.max(desiredSteer, vehicle.steerAngle - maxDelta);
       }
     } else {
-      // 3. Caster Effect (Auto-centering)
-      // The steering wheel only returns to center due to rolling tire forces (caster angle).
-      // Articulated hydraulic machines stay locked at turned angle when stopped or releasing steer keys!
-      if (Math.abs(vehicle.steerAngle) > 0.005 && !isArticulatedMachinery) {
-        // Caster centering rate maxes out around 30 km/h
-        const casterForce = Math.min(1.0, currentSpeedKmh / 30.0);
-        const casterRate = steerRate * 1.4 * casterForce;
-        
+      // 3. Physical Caster Trail & Self-Aligning Torque (SAT / Самовозврат и контр-руление)
+      // When rolling straight, caster returns wheels to center (0).
+      // During a slide or drift, the front tires experience lateral force behind the kingpin axis,
+      // which creates self-aligning torque pulling the front wheels directly into the slip angle
+      // (the direction of motion of the front axle, i.e., authentic automatic counter-steering!).
+      // Articulated hydraulic machines stay locked at turned angle when stopped or releasing steer keys.
+      if (!isArticulatedMachinery && Math.abs(vehicle.speed) > 2.0) {
+        // Dynamic caster target: in straight line it's 0; in slide it is the front trajectory angle
+        const casterTargetAngle = isSliding
+          ? Math.max(-dynamicMaxSteer, Math.min(dynamicMaxSteer, frontMotionAngle * 1.15))
+          : 0;
+
+        // Caster force scales with vehicle rolling speed and slide intensity
+        const speedCasterFactor = Math.min(1.0, currentSpeedKmh / 20.0);
+        const slideCasterMultiplier = isSliding ? 2.8 : 1.4;
+        const casterRate = steerRate * slideCasterMultiplier * speedCasterFactor;
+
         if (casterRate > 0) {
-          if (vehicle.steerAngle > 0) {
-            vehicle.steerAngle = Math.max(0, vehicle.steerAngle - casterRate * dt);
-          } else if (vehicle.steerAngle < 0) {
-            vehicle.steerAngle = Math.min(0, vehicle.steerAngle + casterRate * dt);
+          const casterDelta = casterRate * dt;
+          if (vehicle.steerAngle < casterTargetAngle) {
+            vehicle.steerAngle = Math.min(casterTargetAngle, vehicle.steerAngle + casterDelta);
+          } else if (vehicle.steerAngle > casterTargetAngle) {
+            vehicle.steerAngle = Math.max(casterTargetAngle, vehicle.steerAngle - casterDelta);
           }
+        }
+      } else if (Math.abs(vehicle.steerAngle) > 0.005 && !isArticulatedMachinery && currentSpeedKmh > 0.5) {
+        // Low speed gentle return to center
+        const casterRate = steerRate * 0.8 * (currentSpeedKmh / 10.0);
+        if (vehicle.steerAngle > 0) {
+          vehicle.steerAngle = Math.max(0, vehicle.steerAngle - casterRate * dt);
+        } else if (vehicle.steerAngle < 0) {
+          vehicle.steerAngle = Math.min(0, vehicle.steerAngle + casterRate * dt);
         }
       }
     }
@@ -8069,13 +8102,8 @@ export function updateVehiclePhysics(
       const isFreezingAtBrake = curAtmo.isFreezing || curAtmo.surfaceTemp <= 0;
       const isSnowCoveredAtBrake = curAtmo.isSnowCovered;
 
-      let localWeatherGrip = 1.0;
-      if (world.weather === 'blizzard') localWeatherGrip = 0.24;
-      else if (world.weather === 'snow') localWeatherGrip = 0.35;
-      else if (world.weather === 'storm') localWeatherGrip = 0.44;
-      else if (world.weather === 'rain') localWeatherGrip = 0.58;
-      else if (world.weather === 'drizzle') localWeatherGrip = isFreezingAtBrake ? 0.20 : 0.72;
-      else if (world.weather === 'fog') localWeatherGrip = isFreezingAtBrake ? 0.30 : 0.88;
+      const localWeatherWeights = getEffectiveWeatherWeights(world, isFreezingAtBrake);
+      let localWeatherGrip = localWeatherWeights.effectiveGrip;
       if (isSnowCoveredAtBrake) localWeatherGrip = Math.min(localWeatherGrip, 0.36);
       else if (isFreezingAtBrake && curAtmo.surfaceTemp <= 0) localWeatherGrip = Math.min(localWeatherGrip, 0.45);
 
@@ -8312,34 +8340,11 @@ export function updateVehiclePhysics(
     const isFreezing = curAtmo.isFreezing || curAtmo.surfaceTemp <= 0;
     const isSnowCovered = curAtmo.isSnowCovered;
 
-    let weatherGrip = 1.0;
-    let isWetSurface = false;
-    let isSnowySurface = false;
-    let isIcySurface = false;
-
-    if (world.weather === 'blizzard') {
-      weatherGrip = 0.24; // Arctic blizzard: snowpack, ice, strong wind drift
-      isWetSurface = true;
-      isSnowySurface = true;
-      isIcySurface = true;
-    } else if (world.weather === 'snow') {
-      weatherGrip = 0.35; // Falling snow on road: loose snow slippery layer
-      isWetSurface = true;
-      isSnowySurface = true;
-    } else if (world.weather === 'storm') {
-      weatherGrip = 0.44; // Storm makes asphalt super slick, drift is effortless!
-      isWetSurface = true;
-    } else if (world.weather === 'rain') {
-      weatherGrip = 0.58; // Rain decreases grip significantly!
-      isWetSurface = true;
-    } else if (world.weather === 'drizzle') {
-      weatherGrip = isFreezing ? 0.20 : 0.72; // Freezing drizzle causes instant black ice!
-      isWetSurface = true;
-      if (isFreezing) isIcySurface = true;
-    } else if (world.weather === 'fog') {
-      weatherGrip = isFreezing ? 0.30 : 0.88; // Freezing fog (гололедица)
-      if (isFreezing) { isWetSurface = true; isIcySurface = true; }
-    }
+    const weatherWeights = getEffectiveWeatherWeights(world, isFreezing);
+    let weatherGrip = weatherWeights.effectiveGrip;
+    let isWetSurface = weatherWeights.isWetSurface;
+    let isSnowySurface = weatherWeights.snow > 0.1 || weatherWeights.blizzard > 0.1;
+    let isIcySurface = (isFreezing && isWetSurface) || weatherWeights.blizzard > 0.2;
 
     if (isSnowCovered) {
       // Persistent winter ground snowpack and packed icy crust
@@ -11474,12 +11479,13 @@ export function updateSkidMarksAndParticles(world: GameWorld, player: Player, dt
 const scratchVehicleSet = new Set<Vehicle>();
 
 export function updateBreakablePropsAndLivingWorld(world: GameWorld, player: Player, dt: number, vehGrid?: any) {
-  const isRaining = world.weather === 'rain'|| world.weather === 'storm';
+  const weatherWeights = getEffectiveWeatherWeights(world);
+  const isRaining = weatherWeights.rain > 0.15;
 
   // Spawn new puddles dynamically if it's raining
   if (isRaining) {
     const nonPondPuddles = world.puddles.filter(p => !p.isPond);
-    if (nonPondPuddles.length < 50 && Math.random() < 0.05) { // Slow gradual puddle spawn up to 50 max
+    if (nonPondPuddles.length < 50 && Math.random() < 0.05 * weatherWeights.rain) {
       const roads = world.roads || [];
       if (roads.length > 0) {
         const road = roads[Math.floor(Math.random() * roads.length)];

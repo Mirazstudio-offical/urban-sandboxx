@@ -793,6 +793,31 @@ class SoundEngine {
     }
   }
 
+  /**
+   * Smoothly adjusts rain volume during atmospheric weather transitions.
+   * If volume is near zero, audio is faded out and stopped.
+   * If volume increases, audio is started and gain is smoothly interpolated.
+   */
+  public setRainVolume(volume: number) {
+    if (!this.ctx || this.isMuted) return;
+    const clamped = Math.max(0, Math.min(1, volume));
+
+    if (clamped > 0.02 && !this.isRainPlaying) {
+      this.setRainAudio(true);
+    }
+
+    if (this.rainGain && this.isRainPlaying) {
+      const targetGain = 0.07 * clamped;
+      try {
+        this.rainGain.gain.setTargetAtTime(targetGain, this.ctx.currentTime, 0.25);
+      } catch {}
+    }
+
+    if (clamped <= 0.02 && this.isRainPlaying) {
+      this.setRainAudio(false);
+    }
+  }
+
   public playThunder() {
     if (!this.ctx || this.isMuted) return;
     try {

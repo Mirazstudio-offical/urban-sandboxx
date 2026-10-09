@@ -2041,6 +2041,8 @@ export interface GameWorld {
   stains: FluidStain[];
   particles: Particle[];
   weather: WeatherType;
+  previousWeather?: WeatherType;
+  weatherTransition?: number;
   timeHour?: number;
   calendar?: GameCalendarState;
   season?: Season;

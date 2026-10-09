@@ -62,6 +62,22 @@ import { isWorldFreezing } from './calendarSystem';
 import { RemotePlayerState, SpeechBubble } from './onlineSystem';
 import { InteractionTarget } from './interactionSystem';
 import { getCityApartments } from './propertySystem';
+import { getEffectiveWeatherWeights } from './weatherTransition';
+
+interface CloudShadowLobe {
+  relX: number;
+  relY: number;
+  radius: number;
+  opacityMultiplier: number;
+}
+
+interface CloudShadowCluster {
+  baseX: number;
+  baseY: number;
+  speedMult: number;
+  baseScale: number;
+  lobes: CloudShadowLobe[];
+}
 
 const hashString = (str: string): number => {
   let hash = 0;
@@ -181,7 +197,7 @@ export class GameRenderer {
   private ctx: CanvasRenderingContext2D;
   private width: number = window.innerWidth;
   private height: number = window.innerHeight;
-  private cloudShadows: {x: number, y: number, size: number}[] = [];
+  private cloudShadows: CloudShadowCluster[] = [];
 
   // Offscreen buffer for the Lightmap (prevents punching holes in the world)
   private lightmapCanvas: HTMLCanvasElement;
@@ -470,8 +486,45 @@ export class GameRenderer {
     this.lightmapCtx = this.lightmapCanvas.getContext('2d')!;
     this.resize(this.width, this.height);
     
-    for(let i=0; i<60; i++) {
-      this.cloudShadows.push({x: Math.random() * 52000, y: Math.random() * 30000, size: 150 + Math.random() * 300});
+    this.cloudShadows = [];
+    const MAP_W = 54000;
+    const MAP_H = 32000;
+    for (let i = 0; i < 38; i++) {
+      const baseX = Math.random() * MAP_W;
+      const baseY = Math.random() * MAP_H;
+      const baseScale = 280 + Math.random() * 260;
+      const speedMult = 0.85 + Math.random() * 0.30;
+
+      // 5 to 8 organically distributed overlapping lobes forming a billowy cloud silhouette
+      const lobeCount = 5 + Math.floor(Math.random() * 4);
+      const lobes: CloudShadowLobe[] = [];
+
+      // Central core
+      lobes.push({
+        relX: 0,
+        relY: 0,
+        radius: baseScale * (0.55 + Math.random() * 0.20),
+        opacityMultiplier: 1.0
+      });
+
+      for (let j = 0; j < lobeCount; j++) {
+        const angle = (j / lobeCount) * Math.PI * 2 + (Math.random() * 0.5 - 0.25);
+        const dist = (0.22 + Math.random() * 0.44) * baseScale;
+        lobes.push({
+          relX: Math.cos(angle) * dist,
+          relY: Math.sin(angle) * dist * 0.72,
+          radius: baseScale * (0.35 + Math.random() * 0.32),
+          opacityMultiplier: 0.60 + Math.random() * 0.40
+        });
+      }
+
+      this.cloudShadows.push({
+        baseX,
+        baseY,
+        speedMult,
+        baseScale,
+        lobes
+      });
     }
   }
 
@@ -836,7 +889,7 @@ export class GameRenderer {
     GarageCooperativeRenderer.renderGroundApron(this.ctx, world, minX, minY, maxX, maxY, nightAlpha);
 
     // 3a. Cloud Shadows (Atmosphere)
-    this.renderCloudShadows(minX, minY, maxX, maxY);
+    this.renderCloudShadows(world, minX, minY, maxX, maxY, nightAlpha);
 
     // 4b. Post-Soviet Atmosphere & Cyrillic Signage
     this.renderPostSovietAtmosphereAndSignage(world, minX, minY, maxX, maxY);
@@ -10870,21 +10923,22 @@ export class GameRenderer {
       nightAlpha = (1 - ((timeHour - dawnStart) / (dawnEnd - dawnStart))) * 0.82;
     }
 
-    const isRaining = (world.weather === 'rain' || world.weather === 'storm' || world.weather === 'drizzle');
-    const isSnowing = (world.weather === 'snow' || world.weather === 'blizzard');
-    const isFog = world.weather === 'fog';
-    const isOvercast = world.weather === 'overcast';
+    const weights = getEffectiveWeatherWeights(world);
+    const isRaining = weights.rain > 0.15;
+    const isFog = weights.fog > 0.15;
+    const isSnowing = weights.snow > 0.15;
+    const isOvercast = weights.overcast > 0.30;
     const effectiveAlpha = Math.max(
       nightAlpha,
-      isRaining ? (world.weather === 'storm' ? 0.40 : 0.28) * weatherTransition : 0,
-      isSnowing ? (world.weather === 'blizzard' ? 0.35 : 0.18) * weatherTransition : 0,
-      isFog ? 0.45 * weatherTransition : 0,
-      isOvercast ? 0.20 * weatherTransition : 0
+      (0.28 + weights.storm * 0.12) * weights.rain,
+      (0.18 + weights.blizzard * 0.17) * weights.snow,
+      0.45 * weights.fog,
+      0.20 * weights.overcast
     );
 
-    const fogFactor = isFog ? (1.0 - 0.55 * weatherTransition) : 1.0;
+    const fogFactor = 1.0 - 0.55 * weights.fog;
 
-    if (effectiveAlpha <= 0.02 && !isRaining && !isSnowing && !isFog && !isOvercast && (world.lightningFlashTimer ?? 0) <= 0) {
+    if (effectiveAlpha <= 0.02 && weights.rain <= 0.02 && weights.snow <= 0.02 && weights.fog <= 0.02 && weights.overcast <= 0.02 && (world.lightningFlashTimer ?? 0) <= 0) {
       return;
     }
 
@@ -12396,16 +12450,12 @@ export class GameRenderer {
     isFreezing: boolean
   ) {
     const ctx = this.ctx;
-    const isRaining = world.weather === 'rain' || world.weather === 'storm' || world.weather === 'drizzle';
-    const isStorm = world.weather === 'storm';
-    const isDrizzle = world.weather === 'drizzle';
-    const isSnowing = world.weather === 'snow' || world.weather === 'blizzard';
-    const isBlizzard = world.weather === 'blizzard';
-    const isFog = world.weather === 'fog';
-    const isOvercast = world.weather === 'overcast';
-    const hasLightning = (world.lightningFlashTimer ?? 0) > 0;
+    const weights = getEffectiveWeatherWeights(world, isFreezing);
+    const hasLightning = (world.lightningFlashTimer ?? 0) > 0 && weights.storm > 0.35;
 
-    if (!isRaining && !isSnowing && !isFog && !isOvercast && !hasLightning) return;
+    if (weights.rain <= 0.01 && weights.snow <= 0.01 && weights.fog <= 0.01 && weights.overcast <= 0.01 && !hasLightning) {
+      return;
+    }
 
     const now = performance.now();
     const timeSec = now * 0.001;
@@ -12416,33 +12466,36 @@ export class GameRenderer {
     ctx.save();
     ctx.globalCompositeOperation = 'source-over';
 
-    if (isOvercast) {
-      ctx.fillStyle = isFreezing ? 'rgba(30, 41, 59, 0.16)' : 'rgba(15, 23, 42, 0.12)';
+    if (weights.overcast > 0.02) {
+      const overcastAlpha = (isFreezing ? 0.16 : 0.12) * weights.overcast;
+      ctx.fillStyle = isFreezing ? `rgba(30, 41, 59, ${overcastAlpha.toFixed(3)})` : `rgba(15, 23, 42, ${overcastAlpha.toFixed(3)})`;
       ctx.fillRect(0, 0, this.width, this.height);
     }
 
-    if (isRaining) {
-      if (isFreezing) {
-        // Freezing rain / sleet ambient tint: cold steel blue-grey
-        ctx.fillStyle = isStorm ? 'rgba(15, 23, 42, 0.32)' : (isDrizzle ? 'rgba(30, 41, 59, 0.12)' : 'rgba(30, 41, 59, 0.20)');
-      } else {
-        ctx.fillStyle = isStorm ? 'rgba(10, 15, 30, 0.28)' : (isDrizzle ? 'rgba(15, 23, 42, 0.08)' : 'rgba(15, 23, 42, 0.15)');
-      }
+    if (weights.rain > 0.02) {
+      const rainBaseAlpha = isFreezing
+        ? (0.14 + weights.storm * 0.16)
+        : (0.10 + weights.storm * 0.16);
+      const rainAlpha = rainBaseAlpha * weights.rain;
+      ctx.fillStyle = isFreezing ? `rgba(20, 30, 48, ${rainAlpha.toFixed(3)})` : `rgba(10, 15, 30, ${rainAlpha.toFixed(3)})`;
       ctx.fillRect(0, 0, this.width, this.height);
     }
 
-    if (isSnowing) {
-      ctx.fillStyle = isBlizzard ? 'rgba(219, 234, 254, 0.24)' : 'rgba(241, 245, 249, 0.10)';
+    if (weights.snow > 0.02) {
+      const snowAlpha = (0.10 + weights.blizzard * 0.14) * weights.snow;
+      ctx.fillStyle = `rgba(219, 234, 254, ${snowAlpha.toFixed(3)})`;
       ctx.fillRect(0, 0, this.width, this.height);
-      if (isBlizzard) {
+      if (weights.blizzard > 0.1) {
         const gale = Math.sin(timeSec * 1.5) * 0.5 + 0.5;
-        ctx.fillStyle = `rgba(255, 255, 255, ${0.08 + gale * 0.09})`;
+        const galeAlpha = (0.06 + gale * 0.08) * weights.blizzard;
+        ctx.fillStyle = `rgba(255, 255, 255, ${galeAlpha.toFixed(3)})`;
         ctx.fillRect(0, 0, this.width, this.height);
       }
     }
 
-    if (isFog) {
-      ctx.fillStyle = isFreezing ? 'rgba(219, 234, 254, 0.26)' : 'rgba(203, 213, 225, 0.24)';
+    if (weights.fog > 0.02) {
+      const fogAlpha = (isFreezing ? 0.26 : 0.24) * weights.fog;
+      ctx.fillStyle = isFreezing ? `rgba(219, 234, 254, ${fogAlpha.toFixed(3)})` : `rgba(203, 213, 225, ${fogAlpha.toFixed(3)})`;
       ctx.fillRect(0, 0, this.width, this.height);
     }
 
@@ -12461,7 +12514,7 @@ export class GameRenderer {
         lightningFlashAlpha = Math.max(0, 0.45 * (1.0 - (progress - 0.45) / 0.55));
       }
       if (lightningFlashAlpha > 0.02) {
-        ctx.fillStyle = `rgba(224, 242, 254, ${lightningFlashAlpha * 0.70})`;
+        ctx.fillStyle = `rgba(224, 242, 254, ${(lightningFlashAlpha * 0.70 * weights.storm).toFixed(3)})`;
         ctx.fillRect(0, 0, this.width, this.height);
       }
     }
@@ -12478,11 +12531,12 @@ export class GameRenderer {
     ctx.rotate(-camera.angle - Math.PI / 2);
     ctx.translate(-camera.x, -camera.y);
 
-    const windVx = world.wind ? world.wind.vx : (isStorm ? 110 : (isDrizzle ? 20 : 45));
-    const windVy = world.wind ? world.wind.vy : (isStorm ? 30 : 5);
+    const windBaseVx = 25 + weights.storm * 85 + weights.blizzard * 95;
+    const windVx = world.wind ? world.wind.vx : windBaseVx;
+    const windVy = world.wind ? world.wind.vy : (weights.storm > 0.3 ? 28 : 5);
 
     // --- A. GROUND IMPACT SPLASHES & PUDDLE RIPPLES (Anchored to fixed geographic world cells) ---
-    if (isRaining && performanceConfig.enableRainDroplets) {
+    if (weights.rain > 0.02 && performanceConfig.enableRainDroplets) {
       const cellS = 75;
       const cMinX = Math.floor((minX - 60) / cellS);
       const cMaxX = Math.floor((maxX + 60) / cellS);
@@ -12492,7 +12546,7 @@ export class GameRenderer {
       const countX = cMaxX - cMinX + 1;
       const countY = cMaxY - cMinY + 1;
       const totalCells = countX * countY;
-      const maxSampled = isStorm ? 220 : (isDrizzle ? 75 : 150);
+      const maxSampled = Math.max(12, Math.round((75 + weights.storm * 145) * weights.rain));
       const stride = Math.max(1, Math.floor(Math.sqrt(totalCells / maxSampled)));
 
       for (let cy = cMinY; cy <= cMaxY; cy += stride) {
@@ -12500,36 +12554,40 @@ export class GameRenderer {
           const seed = Math.abs(((cx * 73856093) ^ (cy * 19349663) ^ 83492791) | 0);
           const hx = ((seed * 48271) % 10000) / 10000;
           const hy = (((seed ^ 0x5bf03635) * 16807) % 10000) / 10000;
-          const speed = isStorm ? 1.6 : (isDrizzle ? 1.05 : 1.3);
+          const speed = 1.1 + weights.storm * 0.5;
           const phase = (timeSec * speed + hy) % 1.0;
 
           const wx = cx * cellS + hx * cellS;
           const wy = cy * cellS + hy * cellS;
 
+          // Expanding rain impact ripples on the ground
+          const maxR = 6 + weights.storm * 8;
+          const r = 1.5 + phase * maxR;
+          const baseRippleAlpha = 0.16 + weights.storm * 0.22;
+          const alpha = Math.max(0, (1.0 - phase) * baseRippleAlpha * Math.min(1.0, weights.rain * 1.5));
+
+          ctx.strokeStyle = isFreezing
+            ? `rgba(203, 226, 245, ${(alpha * 0.75).toFixed(3)})`
+            : `rgba(224, 242, 254, ${alpha.toFixed(3)})`;
+          ctx.lineWidth = isFreezing ? 0.8 : 1.0;
+          ctx.beginPath();
+          ctx.ellipse(wx, wy, r * 1.25, r * 0.75, 0, 0, Math.PI * 2);
+          ctx.stroke();
+
           if (isFreezing) {
-            // Freezing rain impacts on sub-zero ground: crystalline glint spark and rime speckle
-            if (phase < 0.20) {
-              const sparkAlpha = (1.0 - phase / 0.20) * 0.85;
-              ctx.fillStyle = `rgba(255, 255, 255, ${sparkAlpha})`;
-              ctx.fillRect(wx - 1, wy - 1, 2, 2);
-              ctx.fillStyle = `rgba(219, 234, 254, ${sparkAlpha * 0.6})`;
-              ctx.fillRect(wx - 2.5, wy - 0.75, 5, 1.5);
+            // Supercooled rain glazing over the cold ground
+            if (phase < 0.25) {
+              const glazeAlpha = (1.0 - phase / 0.25) * 0.20 * weights.rain;
+              ctx.fillStyle = `rgba(224, 242, 254, ${glazeAlpha.toFixed(3)})`;
+              ctx.beginPath();
+              ctx.ellipse(wx, wy, 2.5, 1.5, 0, 0, Math.PI * 2);
+              ctx.fill();
             }
           } else {
-            // Liquid expanding circular/elliptical ripples on the ground
-            const maxR = isStorm ? 14 : (isDrizzle ? 5 : 10);
-            const r = 1.5 + phase * maxR;
-            const alpha = Math.max(0, (1.0 - phase) * (isStorm ? 0.38 : (isDrizzle ? 0.16 : 0.26)));
-
-            ctx.strokeStyle = `rgba(224, 242, 254, ${alpha})`;
-            ctx.lineWidth = 1.0;
-            ctx.beginPath();
-            ctx.ellipse(wx, wy, r * 1.25, r * 0.75, 0, 0, Math.PI * 2);
-            ctx.stroke();
-
-            if (phase < 0.22 && !isDrizzle) {
-              const splashAlpha = (1.0 - phase / 0.22) * 0.55;
-              ctx.fillStyle = `rgba(240, 249, 255, ${splashAlpha})`;
+            // Warm liquid micro-droplet splash
+            if (phase < 0.22 && weights.drizzle < 0.6) {
+              const splashAlpha = (1.0 - phase / 0.22) * 0.55 * weights.rain;
+              ctx.fillStyle = `rgba(240, 249, 255, ${splashAlpha.toFixed(3)})`;
               const sparkDist = phase * 6.5;
               ctx.fillRect(wx - sparkDist, wy - sparkDist * 0.6, 1.2, 1.2);
               ctx.fillRect(wx + sparkDist, wy - sparkDist * 0.4, 1.2, 1.2);
@@ -12539,10 +12597,19 @@ export class GameRenderer {
       }
     }
 
-    // --- B. FALLING PRECIPITATION (Multi-layer 3D depth volume wrapped in world space) ---
-    if ((isRaining || isSnowing) && performanceConfig.enableRainDroplets) {
-      const volW = Math.max(1600, (maxX - minX) + 300);
-      const volH = Math.max(1600, (maxY - minY) + 300);
+    // --- B. FALLING PRECIPITATION (Multi-layer 3D depth volume anchored in world space) ---
+    if ((weights.rain > 0.02 || weights.snow > 0.02) && performanceConfig.enableRainDroplets) {
+      // Spatial periodicity cell anchored strictly to global world coordinate grid
+      const WORLD_CELL = 2400;
+      const baseTileX = Math.floor((minX - 250) / WORLD_CELL) * WORLD_CELL;
+      const baseTileY = Math.floor((minY - 250) / WORLD_CELL) * WORLD_CELL;
+
+      // Player vehicle velocity for relative aerodynamic streaking
+      const playerVeh = (world.player && world.player.isInVehicle && world.player.currentVehicleId)
+        ? world.vehicles.find(v => v.id === world.player?.currentVehicleId)
+        : null;
+      const pVx = playerVeh ? (playerVeh.vx || 0) : ((world.player && world.player.vx) || 0);
+      const pVy = playerVeh ? (playerVeh.vy || 0) : ((world.player && world.player.vy) || 0);
 
       // Pre-calculate active vehicle headlights for dynamic beam illumination
       const activeHeadlights: { x: number; y: number; angle: number; reach: number }[] = [];
@@ -12554,35 +12621,38 @@ export class GameRenderer {
         }
       }
 
-      if (isRaining) {
+      if (weights.rain > 0.02) {
         // Multi-depth rain layers:
         // Layer 0: Background distant drops
         // Layer 1: Midground standard drops
         // Layer 2: Foreground close-range fast streaks
         const rainLayers = [
-          { count: isStorm ? 240 : (isDrizzle ? 65 : 140), fallSpeed: 950, len: 6, lw: 0.8, alpha: 0.20, windMult: 0.65 },
-          { count: isStorm ? 180 : (isDrizzle ? 50 : 110), fallSpeed: 1350, len: 11, lw: 1.2, alpha: 0.35, windMult: 0.85 },
-          { count: isStorm ? 75 : (isDrizzle ? 20 : 45), fallSpeed: 1750, len: 18, lw: 1.6, alpha: 0.50, windMult: 1.0 }
+          { count: Math.max(1, Math.round((70 + weights.storm * 190) * weights.rain)), fallSpeed: 950, len: 7, lw: 0.8, alpha: 0.20 * Math.min(1.0, weights.rain * 1.5), windMult: 0.65 },
+          { count: Math.max(1, Math.round((55 + weights.storm * 145) * weights.rain)), fallSpeed: 1350, len: 12, lw: 1.2, alpha: 0.35 * Math.min(1.0, weights.rain * 1.5), windMult: 0.85 },
+          { count: Math.max(1, Math.round((22 + weights.storm * 58) * weights.rain)), fallSpeed: 1750, len: 19, lw: 1.6, alpha: 0.50 * Math.min(1.0, weights.rain * 1.5), windMult: 1.0 }
         ];
 
         for (let l = 0; l < rainLayers.length; l++) {
           const layer = rainLayers[l];
-          const totalVel = Math.hypot(windVx * layer.windMult, layer.fallSpeed);
-          const dx = layer.len * ((windVx * layer.windMult) / totalVel);
-          const dy = layer.len * (layer.fallSpeed / totalVel);
+          const streakVx = (windVx * layer.windMult) - (pVx * 0.40);
+          const streakVy = (layer.fallSpeed) - (pVy * 0.40);
+          const streakMag = Math.hypot(streakVx, streakVy);
+          const dx = layer.len * (streakVx / streakMag);
+          const dy = layer.len * (streakVy / streakMag);
 
           for (let i = 0; i < layer.count; i++) {
             const seed = (i * 157.61 + l * 73.19);
-            const sX = (seed % 1) * volW;
-            const sY = ((seed * 1.618) % 1) * volH;
+            const sX = (seed % 1) * WORLD_CELL;
+            const sY = ((seed * 1.618) % 1) * WORLD_CELL;
 
-            const rawX = sX + windVx * layer.windMult * timeSec;
-            const rawY = sY + (windVy * layer.windMult + layer.fallSpeed) * timeSec;
+            // Pure world coordinates advancing only with physical wind and gravity:
+            const localX = (((sX + windVx * layer.windMult * timeSec) % WORLD_CELL) + WORLD_CELL) % WORLD_CELL;
+            const localY = (((sY + (windVy * layer.windMult + layer.fallSpeed) * timeSec) % WORLD_CELL) + WORLD_CELL) % WORLD_CELL;
 
-            let dropX = camera.x - volW * 0.5 + ((rawX - (camera.x - volW * 0.5)) % volW);
-            if (dropX < camera.x - volW * 0.5) dropX += volW;
-            let dropY = camera.y - volH * 0.5 + ((rawY - (camera.y - volH * 0.5)) % volH);
-            if (dropY < camera.y - volH * 0.5) dropY += volH;
+            let dropX = baseTileX + localX;
+            if (dropX < minX - 100) dropX += WORLD_CELL;
+            let dropY = baseTileY + localY;
+            if (dropY < minY - 100) dropY += WORLD_CELL;
 
             // Test if drop falls inside active vehicle headlight cone
             let inHeadlight = false;
@@ -12607,61 +12677,54 @@ export class GameRenderer {
 
             ctx.lineWidth = dropWidth;
 
-            if (isFreezing && (i % 4 === 0) && l > 0) {
-              // Freezing sleet / ice pellet (ледяная крупа)
-              ctx.fillStyle = inHeadlight ? 'rgba(255, 255, 255, 0.95)' : `rgba(224, 242, 254, ${dropAlpha * 1.4})`;
-              ctx.beginPath();
-              ctx.arc(dropX, dropY, 1.4, 0, Math.PI * 2);
-              ctx.fill();
-            } else {
-              // Aerodynamic rain streak
-              ctx.strokeStyle = inHeadlight
-                ? 'rgba(255, 255, 255, 0.95)'
-                : (isFreezing ? `rgba(224, 242, 254, ${dropAlpha})` : `rgba(219, 234, 254, ${dropAlpha})`);
-              ctx.beginPath();
-              ctx.moveTo(dropX, dropY);
-              ctx.lineTo(dropX - dx, dropY - dy);
-              ctx.stroke();
-            }
+            // Aerodynamic liquid rain streak anchored in world space
+            ctx.strokeStyle = inHeadlight
+              ? 'rgba(255, 255, 255, 0.95)'
+              : (isFreezing ? `rgba(214, 230, 248, ${(dropAlpha * 0.9).toFixed(3)})` : `rgba(219, 234, 254, ${dropAlpha.toFixed(3)})`);
+            ctx.beginPath();
+            ctx.moveTo(dropX, dropY);
+            ctx.lineTo(dropX - dx, dropY - dy);
+            ctx.stroke();
           }
         }
 
-        // Wind-blown mist sheets rolling across the terrain
-        ctx.fillStyle = isStorm ? 'rgba(224, 242, 254, 0.045)' : 'rgba(224, 242, 254, 0.025)';
+        // Wind-blown mist sheets rolling across the terrain in world coordinates
+        const mistAlpha = (0.025 + weights.storm * 0.025) * weights.rain;
+        ctx.fillStyle = `rgba(224, 242, 254, ${mistAlpha.toFixed(3)})`;
         for (let m = 0; m < 3; m++) {
-          const mistW = volW * 0.55;
-          const mistOffset = (timeSec * (windVx * 0.6) + m * 500) % (volW + 600) - 300;
-          const mistX = camera.x - volW * 0.5 + mistOffset;
-          const mistY = camera.y - volH * 0.5 + ((m + 0.5) / 3) * volH + Math.sin(timeSec * 0.7 + m) * 50;
+          const mistW = 1200;
+          const mistLocal = (((timeSec * (windVx * 0.6) + m * 800) % 3600) + 3600) % 3600;
+          const mistX = Math.floor(minX / 3600) * 3600 + mistLocal;
+          const mistY = minY + ((m + 0.5) / 3) * (maxY - minY) + Math.sin(timeSec * 0.7 + m) * 50;
           ctx.beginPath();
-          safeEllipse(ctx, mistX, mistY, mistW, 70, (windVx > 0 ? 0.2 : -0.2), 0, Math.PI * 2);
+          safeEllipse(ctx, mistX, mistY, mistW * 0.5, 70, (windVx > 0 ? 0.2 : -0.2), 0, Math.PI * 2);
           ctx.fill();
         }
       }
 
-      if (isSnowing) {
+      if (weights.snow > 0.02) {
         // Multi-depth snowflake layers
         const snowLayers = [
-          { count: isBlizzard ? 360 : 180, speed: isBlizzard ? 380 : 180, r: isBlizzard ? 1.0 : 1.2, swayAmp: 8, swayFreq: 1.8, alpha: 0.35, windMult: 0.75 },
-          { count: isBlizzard ? 240 : 120, speed: isBlizzard ? 480 : 240, r: isBlizzard ? 1.5 : 1.8, swayAmp: 16, swayFreq: 2.3, alpha: 0.50, windMult: 0.90 },
-          { count: isBlizzard ? 80 : 40, speed: isBlizzard ? 560 : 300, r: isBlizzard ? 2.2 : 2.6, swayAmp: 24, swayFreq: 3.1, alpha: 0.65, windMult: 1.0 }
+          { count: Math.max(1, Math.round((180 + weights.blizzard * 180) * weights.snow)), speed: 180 + weights.blizzard * 200, r: 1.2, swayAmp: 8, swayFreq: 1.8, alpha: 0.35 * weights.snow, windMult: 0.75 },
+          { count: Math.max(1, Math.round((120 + weights.blizzard * 120) * weights.snow)), speed: 240 + weights.blizzard * 240, r: 1.8, swayAmp: 16, swayFreq: 2.3, alpha: 0.50 * weights.snow, windMult: 0.90 },
+          { count: Math.max(1, Math.round((40 + weights.blizzard * 40) * weights.snow)), speed: 300 + weights.blizzard * 260, r: 2.6, swayAmp: 24, swayFreq: 3.1, alpha: 0.65 * weights.snow, windMult: 1.0 }
         ];
 
         for (let l = 0; l < snowLayers.length; l++) {
           const layer = snowLayers[l];
           for (let s = 0; s < layer.count; s++) {
             const seed = (s * 137.49 + l * 83.71);
-            const sX = (seed % 1) * volW;
-            const sY = ((seed * 1.618) % 1) * volH;
+            const sX = (seed % 1) * WORLD_CELL;
+            const sY = ((seed * 1.618) % 1) * WORLD_CELL;
             const sway = Math.sin(timeSec * layer.swayFreq + s) * layer.swayAmp;
 
-            const rawX = sX + (windVx * layer.windMult) * timeSec + sway;
-            const rawY = sY + (windVy * layer.windMult + layer.speed) * timeSec;
+            const localX = (((sX + (windVx * layer.windMult) * timeSec + sway) % WORLD_CELL) + WORLD_CELL) % WORLD_CELL;
+            const localY = (((sY + (windVy * layer.windMult + layer.speed) * timeSec) % WORLD_CELL) + WORLD_CELL) % WORLD_CELL;
 
-            let flakeX = camera.x - volW * 0.5 + ((rawX - (camera.x - volW * 0.5)) % volW);
-            if (flakeX < camera.x - volW * 0.5) flakeX += volW;
-            let flakeY = camera.y - volH * 0.5 + ((rawY - (camera.y - volH * 0.5)) % volH);
-            if (flakeY < camera.y - volH * 0.5) flakeY += volH;
+            let flakeX = baseTileX + localX;
+            if (flakeX < minX - 100) flakeX += WORLD_CELL;
+            let flakeY = baseTileY + localY;
+            if (flakeY < minY - 100) flakeY += WORLD_CELL;
 
             // Headlight illumination test
             let inHeadlight = false;
@@ -12690,8 +12753,8 @@ export class GameRenderer {
             ctx.fill();
 
             // Blizzard horizontal snow wind streaks
-            if (isBlizzard && (s % 4 === 0)) {
-              ctx.strokeStyle = `rgba(240, 249, 255, ${flakeAlpha * 0.45})`;
+            if (weights.blizzard > 0.2 && (s % 4 === 0)) {
+              ctx.strokeStyle = `rgba(240, 249, 255, ${(flakeAlpha * 0.45 * weights.blizzard).toFixed(3)})`;
               ctx.lineWidth = 1.0;
               ctx.beginPath();
               ctx.moveTo(flakeX, flakeY);
@@ -12704,30 +12767,33 @@ export class GameRenderer {
     }
 
     // --- C. VOLUMETRIC LAYERED FOG (Anchored to world coordinates) ---
-    if (isFog) {
+    if (weights.fog > 0.02) {
       const fogClusters = 8;
       const baseFogDrift = world.wind ? (world.wind.vx * 0.35) : 16;
-      const volW = Math.max(1600, (maxX - minX) + 400);
-      const volH = Math.max(1600, (maxY - minY) + 400);
+      const FOG_CELL = 2800;
+      const baseFogX = Math.floor((minX - 300) / FOG_CELL) * FOG_CELL;
+      const baseFogY = Math.floor((minY - 300) / FOG_CELL) * FOG_CELL;
 
       for (let f = 0; f < fogClusters; f++) {
         const seedX = ((f * 37.19) % 1);
         const seedY = ((f * 73.82) % 1);
         const driftSpeed = baseFogDrift + (f % 3) * 5;
 
-        const rawX = seedX * volW + timeSec * driftSpeed;
-        const rawY = seedY * volH + Math.sin(timeSec * 0.35 + f) * 60;
+        const localX = (((seedX * FOG_CELL + timeSec * driftSpeed) % FOG_CELL) + FOG_CELL) % FOG_CELL;
+        const localY = (((seedY * FOG_CELL + Math.sin(timeSec * 0.35 + f) * 60) % FOG_CELL) + FOG_CELL) % FOG_CELL;
 
-        let fcx = camera.x - volW * 0.5 + ((rawX - (camera.x - volW * 0.5)) % volW);
-        if (fcx < camera.x - volW * 0.5) fcx += volW;
-        let fcy = camera.y - volH * 0.5 + ((rawY - (camera.y - volH * 0.5)) % volH);
-        if (fcy < camera.y - volH * 0.5) fcy += volH;
+        let fcx = baseFogX + localX;
+        if (fcx < minX - 200) fcx += FOG_CELL;
+        let fcy = baseFogY + localY;
+        if (fcy < minY - 200) fcy += FOG_CELL;
 
-        const radius = 180 + (f % 4) * 45;
+        const radius = (180 + (f % 4) * 45) * (0.8 + weights.fog * 0.2);
 
         const fogGrad = ctx.createRadialGradient(fcx, fcy, 0, fcx, fcy, radius);
-        fogGrad.addColorStop(0, isFreezing ? 'rgba(241, 245, 249, 0.22)' : 'rgba(241, 245, 249, 0.18)');
-        fogGrad.addColorStop(0.55, isFreezing ? 'rgba(226, 232, 240, 0.10)' : 'rgba(226, 232, 240, 0.08)');
+        const centerAlpha = (isFreezing ? 0.22 : 0.18) * weights.fog;
+        const midAlpha = (isFreezing ? 0.10 : 0.08) * weights.fog;
+        fogGrad.addColorStop(0, isFreezing ? `rgba(219, 234, 254, ${centerAlpha.toFixed(3)})` : `rgba(241, 245, 249, ${centerAlpha.toFixed(3)})`);
+        fogGrad.addColorStop(0.55, isFreezing ? `rgba(226, 232, 240, ${midAlpha.toFixed(3)})` : `rgba(226, 232, 240, ${midAlpha.toFixed(3)})`);
         fogGrad.addColorStop(1, 'rgba(226, 232, 240, 0)');
 
         ctx.fillStyle = fogGrad;
@@ -12742,8 +12808,8 @@ export class GameRenderer {
         const forwardX = veh.x + Math.cos(veh.angle) * 35;
         const forwardY = veh.y + Math.sin(veh.angle) * 35;
         const haloGrad = ctx.createRadialGradient(forwardX, forwardY, 5, forwardX, forwardY, 70);
-        haloGrad.addColorStop(0, 'rgba(254, 243, 199, 0.24)');
-        haloGrad.addColorStop(0.6, 'rgba(253, 230, 138, 0.08)');
+        haloGrad.addColorStop(0, `rgba(254, 243, 199, ${(0.24 * weights.fog).toFixed(3)})`);
+        haloGrad.addColorStop(0.6, `rgba(253, 230, 138, ${(0.08 * weights.fog).toFixed(3)})`);
         haloGrad.addColorStop(1, 'rgba(253, 230, 138, 0)');
         ctx.fillStyle = haloGrad;
         ctx.beginPath();
@@ -13041,24 +13107,66 @@ export class GameRenderer {
     ctx.restore();
   }
 
-  private renderCloudShadows(minX: number, minY: number, maxX: number, maxY: number) {
+  private renderCloudShadows(
+    world: GameWorld,
+    minX: number,
+    minY: number,
+    maxX: number,
+    maxY: number,
+    nightAlpha: number
+  ) {
+    // Fades during night: sunlight-cast cloud shadows naturally vanish after dusk
+    const daylight = Math.max(0, 1.0 - nightAlpha * 1.25);
+    if (daylight <= 0.01) return;
+
+    const weights = getEffectiveWeatherWeights(world);
+    const baseAlpha = weights.cloudShadowAlpha * daylight;
+    if (baseAlpha <= 0.004) return;
+
+    const scaleMult = weights.cloudShadowScale;
     const ctx = this.ctx;
-    const time = Date.now() * 0.00005;
-    
+    const timeSec = performance.now() * 0.001;
+
+    // Atmospheric upper wind drift (slow, majestic movement across the world)
+    const windVx = world.wind ? (world.wind.vx * 0.35) : 24;
+    const windVy = world.wind ? (world.wind.vy * 0.35) : 7;
+    const MAP_W = 54000;
+    const MAP_H = 32000;
+
     ctx.save();
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.04)';
-    
-    for (const shadow of this.cloudShadows) {
-      // Move shadow
-      shadow.x = (shadow.x + time * 50) % 52000;
-      shadow.y = (shadow.y + time * 20) % 30000;
-      
-      // Draw if in view
-      if (shadow.x + shadow.size > minX && shadow.x - shadow.size < maxX &&
-          shadow.y + shadow.size > minY && shadow.y - shadow.size < maxY) {
-        
+    for (let c = 0; c < this.cloudShadows.length; c++) {
+      const cluster = this.cloudShadows[c];
+      const maxRadius = cluster.baseScale * scaleMult;
+
+      // Pure continuous coordinates advancing smoothly with high-altitude atmospheric wind
+      const cx = (((cluster.baseX + timeSec * windVx * cluster.speedMult) % MAP_W) + MAP_W) % MAP_W;
+      const cy = (((cluster.baseY + timeSec * windVy * cluster.speedMult) % MAP_H) + MAP_H) % MAP_H;
+
+      // Viewport culling against bounding radius
+      if (cx + maxRadius < minX || cx - maxRadius > maxX || cy + maxRadius < minY || cy - maxRadius > maxY) {
+        continue;
+      }
+
+      // Draw each organic puff with a soft, feathered radial penumbra gradient
+      for (let l = 0; l < cluster.lobes.length; l++) {
+        const lobe = cluster.lobes[l];
+        const lx = cx + lobe.relX * scaleMult;
+        const ly = cy + lobe.relY * scaleMult;
+        const lr = lobe.radius * scaleMult;
+
+        if (lx + lr < minX || lx - lr > maxX || ly + lr < minY || ly - lr > maxY) {
+          continue;
+        }
+
+        const lobeAlpha = baseAlpha * lobe.opacityMultiplier;
+        const grad = ctx.createRadialGradient(lx, ly, 0, lx, ly, lr);
+        grad.addColorStop(0, `rgba(15, 23, 42, ${lobeAlpha.toFixed(3)})`);
+        grad.addColorStop(0.55, `rgba(15, 23, 42, ${(lobeAlpha * 0.55).toFixed(3)})`);
+        grad.addColorStop(1, 'rgba(15, 23, 42, 0)');
+
+        ctx.fillStyle = grad;
         ctx.beginPath();
-        safeEllipse(ctx, shadow.x, shadow.y, shadow.size, shadow.size * 0.6, Math.PI / 4, 0, Math.PI * 2);
+        ctx.arc(lx, ly, lr, 0, Math.PI * 2);
         ctx.fill();
       }
     }
