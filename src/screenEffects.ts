@@ -241,6 +241,71 @@ export class ScreenEffectsSystem {
     }
 
     // =========================================================================
+    // 3.2. SOAKING WET RAIN DROPS & TRICKLES ON SCREEN ("ПРОМОКАНИЕ / СТЕКАЮЩИЕ КАПЛИ")
+    // =========================================================================
+    if (wetness > 15) {
+      ctx.save();
+      const wetProgress = Math.min(1.0, (wetness - 15) / 75); // 0.0 to 1.0
+      const nowSec = Date.now() * 0.001;
+      const dropCount = Math.floor(8 + wetProgress * 16);
+
+      // Peripheral damp vignette (cold blurred rain mist around outer rim)
+      const cx = width / 2;
+      const cy = height / 2;
+      const maxR = Math.hypot(width, height) * 0.65;
+      const innerR = Math.max(30, maxR * (0.88 - wetProgress * 0.35));
+      const rainMistGrad = ctx.createRadialGradient(cx, cy, innerR, cx, cy, maxR);
+      rainMistGrad.addColorStop(0, 'rgba(203, 213, 225, 0)');
+      rainMistGrad.addColorStop(0.65, `rgba(186, 230, 253, ${(0.14 * wetProgress).toFixed(3)})`);
+      rainMistGrad.addColorStop(1.0, `rgba(148, 163, 184, ${(0.32 * wetProgress).toFixed(3)})`);
+      ctx.fillStyle = rainMistGrad;
+      ctx.fillRect(0, 0, width, height);
+
+      // Optical droplets running down the lens/eyes
+      for (let i = 0; i < dropCount; i++) {
+        const seedX = Math.abs(Math.sin(i * 127.1 + 311.7));
+        const seedSpeed = 0.35 + Math.abs(Math.cos(i * 269.5)) * 0.55;
+        const trailPhase = (nowSec * seedSpeed + i * 0.37) % 1.0;
+
+        // Position primarily along upper & side margins of the view
+        let dropX = 0;
+        if (i % 3 === 0) {
+          dropX = seedX * (width * 0.22); // left margin
+        } else if (i % 3 === 1) {
+          dropX = width - seedX * (width * 0.22); // right margin
+        } else {
+          dropX = seedX * width; // top spread
+        }
+
+        const dropY = trailPhase * (height * 0.85);
+        const dropR = 2.0 + (i % 4) * 1.2;
+
+        // Draw translucent water bead with highlight
+        ctx.fillStyle = `rgba(224, 242, 254, ${(0.28 * wetProgress).toFixed(3)})`;
+        ctx.beginPath();
+        ctx.ellipse(dropX, dropY, dropR * 0.85, dropR * 1.4, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Droplet specular glint
+        ctx.fillStyle = `rgba(255, 255, 255, ${(0.55 * wetProgress).toFixed(3)})`;
+        ctx.beginPath();
+        ctx.arc(dropX - dropR * 0.3, dropY - dropR * 0.4, dropR * 0.35, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Downward vertical water run streak
+        if (trailPhase > 0.15) {
+          ctx.strokeStyle = `rgba(203, 226, 245, ${(0.16 * wetProgress * (1.0 - trailPhase * 0.6)).toFixed(3)})`;
+          ctx.lineWidth = dropR * 0.5;
+          ctx.beginPath();
+          ctx.moveTo(dropX, Math.max(0, dropY - dropR * 4.5));
+          ctx.lineTo(dropX, dropY);
+          ctx.stroke();
+        }
+      }
+      ctx.restore();
+    }
+
+    // =========================================================================
     // 3.5. DIZZINESS / VERTIRO DIPLOPIA & DOUBLE VISION ("ДВОЕНИЕ В ГЛАЗАХ")
     // =========================================================================
     const dizziness = Math.max(bs.dizziness || 0, (bs.coPoisoning || 0) * 1.15);

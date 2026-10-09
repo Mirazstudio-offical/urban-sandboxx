@@ -5419,24 +5419,31 @@ export interface AtmosphereState {
 }
 
 /**
- * Updates the global atmospheric wind simulation vector based on weather, macro direction shifts, and micro-turbulence.
+ * Updates the global atmospheric wind simulation vector based on weather weights,
+ * macro direction shifts, and boundary layer multi-frequency turbulence.
  */
 export function updateWorldWind(world: GameWorld, dt: number): WorldWind {
   const safeDt = Number.isFinite(dt) ? Math.min(0.1, Math.max(0.001, dt)) : 0.016;
+  const weights = getEffectiveWeatherWeights(world);
+
   if (!world.wind) {
-    const isStorm = world.weather === 'storm';
-    const isRain = world.weather === 'rain';
-    const isFog = world.weather === 'fog';
-    const baseSpeed = isStorm ? 145 : (isRain ? 68 : (isFog ? 7 : 24));
-    const initAngle = 0.38; // natural prevailing wind
+    const initSpeed = 22 * weights.clear 
+      + 34 * weights.overcast 
+      + 26 * weights.drizzle 
+      + 72 * weights.rain 
+      + 155 * weights.storm 
+      + 38 * weights.snow 
+      + 168 * weights.blizzard 
+      + 6 * weights.fog;
+    const initAngle = 0.42; // natural prevailing westerly/southwesterly wind
     world.wind = {
-      speed: baseSpeed,
+      speed: Math.max(5, initSpeed),
       angle: initAngle,
-      vx: Math.cos(initAngle) * baseSpeed,
-      vy: Math.sin(initAngle) * baseSpeed,
+      vx: Math.cos(initAngle) * initSpeed,
+      vy: Math.sin(initAngle) * initSpeed,
       gust: 1.0,
       targetAngle: initAngle,
-      targetSpeed: baseSpeed,
+      targetSpeed: initSpeed,
       turbulenceTimer: 0
     };
   }
@@ -5445,38 +5452,47 @@ export function updateWorldWind(world: GameWorld, dt: number): WorldWind {
   wind.turbulenceTimer = (wind.turbulenceTimer || 0) + safeDt;
   const t = wind.turbulenceTimer;
 
-  // Determine weather-appropriate target speed (px/s, ~10 px/s = 3.6 km/h)
-  let targetSpeed = 24; // ~8.6 km/h gentle breeze
-  if (world.weather === 'storm') {
-    targetSpeed = 150; // ~54 km/h gale
-  } else if (world.weather === 'rain') {
-    targetSpeed = 70; // ~25 km/h blustery rain
-  } else if (world.weather === 'fog') {
-    targetSpeed = 7; // ~2.5 km/h stagnant fog inversion (almost zero wind)
-  }
+  // Determine continuous target speed based on smooth weather profile (px/s, ~10 px/s = 3.6 km/h)
+  let targetSpeed = 22 * weights.clear 
+    + 34 * weights.overcast 
+    + 26 * weights.drizzle 
+    + 72 * weights.rain 
+    + 155 * weights.storm 
+    + 38 * weights.snow 
+    + 168 * weights.blizzard 
+    + 6 * weights.fog;
+  targetSpeed = Math.max(5, Math.min(195, targetSpeed));
   wind.targetSpeed = targetSpeed;
 
-  // Slowly steer towards target speed
-  wind.speed += (targetSpeed - wind.speed) * Math.min(1.0, 0.4 * safeDt);
+  // Severe storms and blizzards accelerate wind transitions; calm weather changes lazily
+  const stormFactor = Math.max(weights.storm, weights.blizzard);
+  const steerRate = 0.35 + stormFactor * 0.45;
+  wind.speed += (targetSpeed - wind.speed) * Math.min(1.0, steerRate * safeDt);
 
-  // Slow macro shift in wind direction (every few minutes winds drift slightly)
-  if (Math.random() < 0.02 * safeDt) {
-    wind.targetAngle = (wind.targetAngle ?? wind.angle) + (Math.random() - 0.5) * 0.75;
+  // Slow macro shift in prevailing wind direction (squall fronts create stronger directional shifts)
+  const shiftChance = (0.015 + stormFactor * 0.05) * safeDt;
+  if (Math.random() < shiftChance) {
+    const maxShift = 0.35 + stormFactor * 0.65;
+    wind.targetAngle = (wind.targetAngle ?? wind.angle) + (Math.random() - 0.5) * maxShift;
   }
   if (wind.targetAngle !== undefined) {
     let diff = wind.targetAngle - wind.angle;
     while (diff < -Math.PI) diff += Math.PI * 2;
     while (diff > Math.PI) diff -= Math.PI * 2;
-    wind.angle += diff * Math.min(1.0, 0.25 * safeDt);
+    wind.angle += diff * Math.min(1.0, 0.28 * safeDt);
   }
 
-  // Multi-frequency natural gust turbulence
-  const isStorm = world.weather === 'storm';
-  const gustFreq1 = isStorm ? 3.6 : 1.3;
-  const gustFreq2 = isStorm ? 7.2 : 2.6;
-  const gustMag = isStorm ? 0.45 : 0.22;
-  const rawGust = 1.0 + Math.sin(t * gustFreq1) * (gustMag * 0.65) + Math.cos(t * gustFreq2 + 1.2) * (gustMag * 0.35);
-  wind.gust = Math.max(0.4, Math.min(2.0, rawGust));
+  // Multi-frequency boundary-layer turbulence (macro surge, convective eddy, high-freq buffeting)
+  const gustFreq1 = 0.55 + stormFactor * 1.6;  // Long atmospheric wave (period ~5-11s)
+  const gustFreq2 = 1.8 + stormFactor * 3.2;   // Intermediate eddy (period ~1.5-3.5s)
+  const gustFreq3 = 4.5 + stormFactor * 5.8;   // Rapid micro-flutter (period ~0.6-1.4s)
+  const gustMag = 0.14 + 0.52 * stormFactor + 0.18 * weights.rain;
+
+  const rawGust = 1.0 
+    + Math.sin(t * gustFreq1) * (gustMag * 0.52) 
+    + Math.sin(t * gustFreq2 + 1.25) * (gustMag * 0.34) 
+    + Math.cos(t * gustFreq3 + 2.70) * (gustMag * 0.14);
+  wind.gust = Math.max(0.35, Math.min(2.35, rawGust));
 
   // Compute effective velocity vector
   const effectiveSpeed = wind.speed * wind.gust;
@@ -5830,8 +5846,29 @@ export function updatePlayerNeedsAndVitals(
 
   // --- BODY STATE & PHYSIOLOGICAL SIMULATION ---
   const bs = player.bodyState;
-  const isRaining = world.weather === 'rain'|| world.weather === 'storm';
-  const isExposedToRain = isRaining && !player.isInsideBuilding && !player.isInVehicle;
+  const weights = getEffectiveWeatherWeights(world);
+  const liquidPrecip = weights.rain * 1.0 + weights.drizzle * 0.45 + weights.storm * 1.45;
+  const frozenPrecip = weights.snow * 0.70 + weights.blizzard * 1.50;
+  const isRaining = liquidPrecip > 0.05;
+
+  // Shelter detection: vehicles, indoor buildings, or protective canopies/roofs overhead
+  const isVehicleSheltered = !!(player.isInVehicle && player.currentVehicleId);
+  const isBuildingSheltered = !!player.isInsideBuilding;
+  let isCanopySheltered = false;
+  if (!isVehicleSheltered && !isBuildingSheltered && world.buildings) {
+    for (const b of world.buildings) {
+      if (b.type === 'gas_station_canopy' || (b as any).hasCanopy || (b.type as string) === 'canopy') {
+        if (player.x >= b.x && player.x <= b.x + b.width && player.y >= b.y && player.y <= b.y + b.height) {
+          isCanopySheltered = true;
+          break;
+        }
+      }
+    }
+  }
+
+  const isSheltered = isVehicleSheltered || isBuildingSheltered || isCanopySheltered;
+  const isExposedToRain = !isSheltered && (liquidPrecip > 0.04);
+  const isExposedToSnow = !isSheltered && (frozenPrecip > 0.05);
 
   // Find vehicle if player is inside one
   const curVehicle = player.isInVehicle && player.currentVehicleId
@@ -5908,18 +5945,31 @@ export function updatePlayerNeedsAndVitals(
       }
     }
 
-    // Wipers and windshield rain level (exterior water on the glass)
+    // Wipers and windshield rain level (exterior water on the glass with aerodynamic airflow)
     if (isRaining) {
+      const carSpeedKmh = Math.abs(curVehicle.speed || 0) * 3.6;
+      // Faster forward travel sweeps through more volumetric raindrops per second
+      const speedAccFlux = 1.0 + Math.min(2.2, carSpeedKmh / 50.0);
+
       if (!curVehicle.wipersOn) {
         // Build up water on the screen
-        curVehicle.windshieldRainLevel = Math.min(100, curVehicle.windshieldRainLevel + 16 * dt);
+        curVehicle.windshieldRainLevel = Math.min(100, curVehicle.windshieldRainLevel + 16 * speedAccFlux * dt);
       } else {
-        // Clear rain quickly
+        // Clear rain quickly with wipers
         curVehicle.windshieldRainLevel = Math.max(0, curVehicle.windshieldRainLevel - 45 * dt);
       }
+
+      // High-speed aerodynamic shear blow-off: beyond ~65 km/h, the rush of air over the windshield
+      // shears and blows away surface water beads
+      if (carSpeedKmh > 65) {
+        const aeroBlowOff = Math.min(28, (carSpeedKmh - 65) * 0.45);
+        curVehicle.windshieldRainLevel = Math.max(0, curVehicle.windshieldRainLevel - aeroBlowOff * dt);
+      }
     } else {
-      // Dry out gradually
-      curVehicle.windshieldRainLevel = Math.max(0, curVehicle.windshieldRainLevel - 15 * dt);
+      // Dry out gradually; ambient wind and forward travel accelerate drying
+      const carSpeedKmh = Math.abs(curVehicle.speed || 0) * 3.6;
+      const windDryBonus = (world.wind ? (world.wind.speed * 0.05) : 0) + Math.min(25, carSpeedKmh * 0.25);
+      curVehicle.windshieldRainLevel = Math.max(0, curVehicle.windshieldRainLevel - (15 + windDryBonus) * dt);
     }
 
     // Mathematical update of windshield fogging (moisture & temperature balance)
@@ -5947,9 +5997,31 @@ export function updatePlayerNeedsAndVitals(
   }
 
   // 1. Wetness accumulation / drying
-  if (isExposedToRain) {
-    const wetRate = Math.max(0.5, 4.0 - (totalWaterResist * 0.038));
-    bs.wetness = Math.min(100, bs.wetness + wetRate * dt);
+  if (!isSheltered && (isExposedToRain || isExposedToSnow)) {
+    // Water resistance of equipped clothing across body parts
+    const torsoWaterResist = player.equippedClothing?.torso?.outerwear?.clothingStats?.waterResistance
+      ?? player.equippedClothing?.torso?.jacket?.clothingStats?.waterResistance
+      ?? player.equippedClothing?.torso?.shirt?.clothingStats?.waterResistance
+      ?? 0;
+    const legsWaterResist = player.equippedClothing?.legs?.outerwear?.clothingStats?.waterResistance
+      ?? player.equippedClothing?.legs?.shirt?.clothingStats?.waterResistance
+      ?? 0;
+    const headWaterResist = player.equippedClothing?.head?.outerwear?.clothingStats?.waterResistance ?? 0;
+    const bodyWaterResist = (torsoWaterResist * 0.50 + legsWaterResist * 0.35 + headWaterResist * 0.15);
+
+    let wetFlux = 0;
+    if (isExposedToRain) {
+      // Liquid rain directly penetrates and soaks non-waterproof fabric rapidly
+      const rainPenetration = Math.max(0.04, 1.0 - (bodyWaterResist / 100));
+      wetFlux += liquidPrecip * 5.4 * rainPenetration;
+    }
+    if (isExposedToSnow) {
+      // Driving snow cakes onto clothes; body temperature (36°C) melts surface snow into ice water
+      const snowPenetration = Math.max(0.06, 1.0 - (bodyWaterResist / 100));
+      wetFlux += frozenPrecip * 3.4 * snowPenetration;
+    }
+
+    bs.wetness = Math.min(100, bs.wetness + wetFlux * dt);
   } else {
     // Realistic slow drying:
     // Natural room temp (20°C): 0.025 - 0.035 %/sec (40-50 minutes for completely soaked wool/jeans)
@@ -5992,21 +6064,34 @@ export function updatePlayerNeedsAndVitals(
     }
   }
 
-  // 2. Body Temperature dynamics (Freezing in cold cars, outdoors, or warming by heater)
+  // 2. Body Temperature dynamics (Thermodynamic heat balance, wind chill, clothing wind shear, hypothermia)
   const outsideTemp = getOutsideTemperature(world, timeHour);
   let ambientTemp = outsideTemp;
   let isEnclosed = false;
   let hasDraft = false;
+  let windKmh = 0;
 
   if (curVehicle) {
     ambientTemp = curVehicle.heaterTemp ?? outsideTemp;
     isEnclosed = !curVehicle.windowOpen;
     hasDraft = !!curVehicle.windowOpen;
+    windKmh = curVehicle.windowOpen ? 15 : 0;
   } else if (player.isInsideBuilding) {
     ambientTemp = 21.0; // heated indoor environment
     isEnclosed = true;
+    windKmh = 0;
   } else {
-    hasDraft = world.weather === 'storm'|| world.weather === 'rain';
+    const rawWindSpeed = world.wind ? (world.wind.speed * (world.wind.gust ?? 1.0)) : 24;
+    windKmh = rawWindSpeed * 0.36;
+    hasDraft = windKmh > 12;
+
+    // Atmospheric Wind Chill Index (JAG/TI standard formula):
+    // In sub-zero weather and gale wind (blizzard/storm), wind shear strips skin boundary heat massively
+    if (outsideTemp <= 10.0 && windKmh > 4.5) {
+      const vPow = Math.pow(windKmh, 0.16);
+      const windChill = 13.12 + 0.6215 * outsideTemp - 11.37 * vPow + 0.3965 * outsideTemp * vPow;
+      ambientTemp = Math.min(outsideTemp, windChill);
+    }
     
     // Standing near or in burning puddles
     if (world.stains) {
@@ -6087,14 +6172,38 @@ export function updatePlayerNeedsAndVitals(
     bs.wetness = Math.max(0, bs.wetness - radiatorDryRate * dt);
   }
 
-  // Adjust ambient temp based on clothes
-  // If clothes are wet, evaporative chilling draws substantial body heat (2260 kJ/kg latent heat)
-  const evaporativeChilling = (bs.wetness / 100) * 6.5; // up to 6.5°C cooling sensation from wet fabric!
+  // Realistic Clothing Thermal Dynamics:
+  // A. Wind Penetration (Ветропродуваемость): loose knitted wool sweaters / t-shirts (windResistance 15)
+  // allow high wind to penetrate and flush out trapped air, destroying up to 85% of their insulation!
+  const torsoWindResist = player.equippedClothing?.torso?.outerwear?.clothingStats?.windResistance
+    ?? player.equippedClothing?.torso?.jacket?.clothingStats?.windResistance
+    ?? player.equippedClothing?.torso?.shirt?.clothingStats?.windResistance
+    ?? 5;
+  const legsWindResist = player.equippedClothing?.legs?.outerwear?.clothingStats?.windResistance
+    ?? player.equippedClothing?.legs?.shirt?.clothingStats?.windResistance
+    ?? 10;
+  const avgWindResist = (torsoWindResist * 0.60 + legsWindResist * 0.40);
+  const windRetention = isSheltered ? 1.0 : ((avgWindResist / 100) + (1.0 - (avgWindResist / 100)) * Math.exp(-windKmh / 14.0));
+
+  // B. Bare Head & Hands Penalty: In freezing weather (<4°C), uncovered head radiates 35% of heat, bare hands 22%
+  const hasHat = !!player.equippedClothing?.head?.outerwear;
+  const hasGloves = !!player.equippedClothing?.hands?.outerwear;
+  let exposurePenalty = 0;
+  if (ambientTemp < 4.0 && !isSheltered) {
+    if (!hasHat) exposurePenalty += 0.35;
+    if (!hasGloves) exposurePenalty += 0.22;
+  }
+
+  // C. Wet Fabric Conductivity: water conducts heat 24x faster than dry still air.
+  // Soaked clothes crush insulation and draw substantial latent heat of evaporation (2260 kJ/kg)
+  const wetConductiveLoss = (bs.wetness / 100) * 0.90;
+  const wetInsulationRatio = Math.max(0.06, 1.0 - wetConductiveLoss);
+  const evaporativeChilling = (bs.wetness / 100) * 6.8;
   const feltAmbient = ambientTemp - evaporativeChilling;
 
-  const wetInsulationRatio = Math.max(0.08, 1.0 - (bs.wetness / 100) * 0.90);
-  const effectiveInsulation = totalInsulation * wetInsulationRatio;
-  const effectiveAmbientTemp = feltAmbient < 18.0 ? feltAmbient + (effectiveInsulation * 0.20) : feltAmbient;
+  // Effective thermal envelope
+  const effectiveInsulation = totalInsulation * windRetention * wetInsulationRatio * Math.max(0.12, 1.0 - exposurePenalty);
+  const effectiveAmbientTemp = feltAmbient < 18.0 ? feltAmbient + (effectiveInsulation * 0.22) : feltAmbient;
   const isTooHotClothes = feltAmbient >= 25.0 && totalInsulation > 30;
 
   let sweatRate = 0;
@@ -6111,8 +6220,8 @@ export function updatePlayerNeedsAndVitals(
 
     // Player is exposed to cold
     const coldDeficit = (18.0 - ambientTemp) / 10;
-    const wetConductiveMultiplier = 1.0 + (bs.wetness / 100) * 4.2; // wet clothes cause severe evaporative cooling
-    const draftMultiplier = hasDraft ? 1.45 : (isEnclosed ? 0.85 : 1.15);
+    const wetConductiveMultiplier = 1.0 + (bs.wetness / 100) * 3.6; // wet clothes cause severe conductive cooling
+    const draftMultiplier = hasDraft ? (1.35 + Math.min(1.2, windKmh / 35)) : (isEnclosed ? 0.85 : 1.15);
 
     // Shivering thermogenesis attempt by the body
     let shiveringHeatProduction = 0;
@@ -6123,7 +6232,7 @@ export function updatePlayerNeedsAndVitals(
       player.needs.energy = Math.max(0, player.needs.energy - 0.8 * dt);
     }
 
-    const coolingRate = Math.max(0.004, 0.038 * coldDeficit * wetConductiveMultiplier * draftMultiplier - shiveringHeatProduction);
+    const coolingRate = Math.max(0.012, 0.048 * coldDeficit * wetConductiveMultiplier * draftMultiplier - shiveringHeatProduction);
     bs.temperature = Math.max(28.0, bs.temperature - coolingRate * dt);
 
     // Hypothermia stages

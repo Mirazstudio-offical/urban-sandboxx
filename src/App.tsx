@@ -846,6 +846,7 @@ export default function App() {
 
   const timeHourRef = useRef<number>(10.0);
   timeHourRef.current = timeHour;
+  const displayTimeHourRef = useRef<number>(10.0);
 
   const isTimeAutoCyclingRef = useRef<boolean>(true);
   isTimeAutoCyclingRef.current = isTimeAutoCycling;
@@ -3444,6 +3445,18 @@ export default function App() {
           }
         }
 
+        // Smooth visual celestial clock time interpolation:
+        // Glides day/night sky, shadows, and lighting seamlessly without abrupt jarring jumps
+        let timeDelta = timeHourRef.current - displayTimeHourRef.current;
+        while (timeDelta < -12) timeDelta += 24;
+        while (timeDelta > 12) timeDelta -= 24;
+        if (Math.abs(timeDelta) > 0.0005) {
+          const glideSpeed = Math.abs(timeDelta) > 1.2 ? 3.2 : 10.0;
+          displayTimeHourRef.current = ((displayTimeHourRef.current + timeDelta * Math.min(1.0, dt * glideSpeed)) % 24 + 24) % 24;
+        } else {
+          displayTimeHourRef.current = timeHourRef.current;
+        }
+
         if (weatherTransitionRef.current < 1.0) {
           // Atmospheric gradual weather evolution: ~16 seconds smooth natural blending
           const transitionSpeed = 1.0 / 16.0;
@@ -3468,7 +3481,7 @@ export default function App() {
             world,
             player,
             camera,
-            timeHourRef.current,
+            displayTimeHourRef.current,
             weatherTransitionRef.current,
             vpBuildings,
             vpVehicles,

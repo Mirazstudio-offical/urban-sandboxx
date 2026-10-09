@@ -79,6 +79,115 @@ interface CloudShadowCluster {
   lobes: CloudShadowLobe[];
 }
 
+export interface AstronomicalAtmosphere {
+  nightAlpha: number;          // 0.0 (day) to 0.82 (pitch night)
+  goldenHourWeight: number;    // 0.0 to 1.0 (warm golden/amber daylight)
+  sunsetWeight: number;        // 0.0 to 1.0 (deep crimson/terracotta/violet dusk)
+  dawnWeight: number;          // 0.0 to 1.0 (soft peach/lavender morning)
+  baseColorR: number;          // Red component of darkness veil
+  baseColorG: number;          // Green component of darkness veil
+  baseColorB: number;          // Blue component of darkness veil
+  ambientColorStyle: string;   // 'rgba(R, G, B, '
+}
+
+export function calculateAstronomicalAtmosphere(
+  timeHour: number,
+  calendar?: { sunriseHour?: number; sunsetHour?: number }
+): AstronomicalAtmosphere {
+  const sunrise = calendar?.sunriseHour ?? 6.0;
+  const sunset = calendar?.sunsetHour ?? 19.0;
+
+  // Dawn twilight window: starts ~2.2h before sunrise, completes ~1.2h after sunrise
+  const dawnStart = Math.max(0, sunrise - 2.2);
+  const dawnEnd = sunrise + 1.2;
+
+  // Dusk twilight window: starts ~1.6h before sunset, completes ~2.0h after sunset
+  const duskStart = sunset - 1.6;
+  const duskEnd = Math.min(24, sunset + 2.0);
+
+  let nightAlpha = 0;
+  let goldenHourWeight = 0;
+  let sunsetWeight = 0;
+  let dawnWeight = 0;
+
+  if (timeHour >= dawnEnd && timeHour < duskStart) {
+    // Pure Daytime
+    nightAlpha = 0;
+  } else if (timeHour >= duskStart && timeHour < duskEnd) {
+    // Sunset / Dusk progression with smooth Hermite/cosine ease:
+    const t = (timeHour - duskStart) / (duskEnd - duskStart);
+    const smoothT = 0.5 - 0.5 * Math.cos(Math.PI * t);
+    nightAlpha = smoothT * 0.82;
+
+    // Golden hour peaks around sunset start (t ~ 0.15 - 0.50)
+    if (t < 0.60) {
+      goldenHourWeight = Math.sin((t / 0.60) * Math.PI);
+    }
+    // Deep crimson/violet twilight peaks in mid-dusk (t ~ 0.25 - 0.85)
+    if (t > 0.20) {
+      sunsetWeight = Math.sin(((t - 0.20) / 0.80) * Math.PI);
+    }
+  } else if (timeHour >= duskEnd || timeHour < dawnStart) {
+    // Pure Night (Starlight / Midnight)
+    nightAlpha = 0.82;
+  } else {
+    // Dawn progression with smooth cosine ease:
+    const t = (timeHour - dawnStart) / (dawnEnd - dawnStart);
+    const smoothT = 0.5 - 0.5 * Math.cos(Math.PI * t);
+    nightAlpha = (1.0 - smoothT) * 0.82;
+
+    // Soft peach/lavender morning glow
+    dawnWeight = Math.sin(t * Math.PI);
+    if (t > 0.60) {
+      goldenHourWeight = Math.sin(((t - 0.60) / 0.40) * Math.PI * 0.5);
+    }
+  }
+
+  // Chromatic Atmospheric Scattering:
+  // Night: Deep Midnight Navy [5, 9, 22]
+  // Sunset: Deep Violet / Twilight Plum [28, 12, 36]
+  // Dawn: Cool Slate / Lavender [18, 16, 32]
+  let r = 5;
+  let g = 9;
+  let b = 22;
+
+  if (sunsetWeight > 0.05) {
+    r = Math.round(5 + sunsetWeight * 26);
+    g = Math.round(9 + sunsetWeight * 4);
+    b = Math.round(22 + sunsetWeight * 14);
+  } else if (dawnWeight > 0.05) {
+    r = Math.round(5 + dawnWeight * 16);
+    g = Math.round(9 + dawnWeight * 8);
+    b = Math.round(22 + dawnWeight * 12);
+  }
+
+  return {
+    nightAlpha,
+    goldenHourWeight,
+    sunsetWeight,
+    dawnWeight,
+    baseColorR: r,
+    baseColorG: g,
+    baseColorB: b,
+    ambientColorStyle: `rgba(${r}, ${g}, ${b}, `
+  };
+}
+
+export function darkenHexColor(hex: string, factor: number): string {
+  if (!hex || typeof hex !== 'string' || !hex.startsWith('#')) return hex;
+  let clean = hex.slice(1);
+  if (clean.length === 3) {
+    clean = clean.split('').map(c => c + c).join('');
+  }
+  if (clean.length !== 6) return hex;
+  const num = parseInt(clean, 16);
+  if (isNaN(num)) return hex;
+  const r = Math.max(0, Math.min(255, Math.round(((num >> 16) & 0xff) * factor)));
+  const g = Math.max(0, Math.min(255, Math.round(((num >> 8) & 0xff) * factor)));
+  const b = Math.max(0, Math.min(255, Math.round((num & 0xff) * factor)));
+  return `rgb(${r}, ${g}, ${b})`;
+}
+
 const hashString = (str: string): number => {
   let hash = 0;
   for (let i = 0; i < str.length; i++) {
@@ -649,24 +758,9 @@ export class GameRenderer {
     const minY = camera.y - viewDiag;
     const maxY = camera.y + viewDiag;
 
-    // Calculate continuous nightAlpha from timeHour with seasonal astronomical ephemeris
-    const sunrise = world.calendar?.sunriseHour ?? 6.0;
-    const sunset = world.calendar?.sunsetHour ?? 19.0;
-    const dawnStart = Math.max(0, sunrise - 1.8);
-    const dawnEnd = sunrise + 1.0;
-    const duskStart = sunset - 1.5;
-    const duskEnd = Math.min(24, sunset + 1.8);
-
-    let nightAlpha = 0;
-    if (timeHour >= dawnEnd && timeHour < duskStart) {
-      nightAlpha = 0;
-    } else if (timeHour >= duskStart && timeHour < duskEnd) {
-      nightAlpha = ((timeHour - duskStart) / (duskEnd - duskStart)) * 0.82;
-    } else if (timeHour >= duskEnd || timeHour < dawnStart) {
-      nightAlpha = 0.82;
-    } else {
-      nightAlpha = (1 - ((timeHour - dawnStart) / (dawnEnd - dawnStart))) * 0.82;
-    }
+    // Calculate continuous astronomical lighting & chromatic sky atmosphere
+    const atmo = calculateAstronomicalAtmosphere(timeHour, world.calendar);
+    const nightAlpha = atmo.nightAlpha;
 
     const vpProps = visibleProps || world.props.filter(p => p.x >= minX - 120 && p.x <= maxX + 120 && p.y >= minY - 120 && p.y <= maxY + 120);
     const vpTrees = visibleTrees || world.trees.filter(t => t.x >= minX - 120 && t.x <= maxX + 120 && t.y >= minY - 120 && t.y <= maxY + 120);
@@ -7443,6 +7537,17 @@ export class GameRenderer {
       if (player.equippedClothing.hands?.outerwear) cHands = player.equippedClothing.hands.outerwear.clothingStats?.color || cHands;
     }
 
+    // Wet fabric darkening: when clothing is soaked in rain or melting snow, fabrics absorb more light and darken
+    const wetness = (player as any).bodyState?.wetness || 0;
+    if (wetness > 8) {
+      const wetDarkenFactor = Math.max(0.55, 1.0 - (wetness / 100) * 0.40);
+      cPants = darkenHexColor(cPants, wetDarkenFactor);
+      cShirt = darkenHexColor(cShirt, wetDarkenFactor);
+      if (cHat) cHat = darkenHexColor(cHat, wetDarkenFactor);
+      if (cBack) cBack = darkenHexColor(cBack, wetDarkenFactor);
+      if (cShoes) cShoes = darkenHexColor(cShoes, wetDarkenFactor);
+    }
+
     const isSeated = !!(player as any).sittingState;
     const legSwing = isSeated ? 0 : Math.sin(player.walkCycle) * 3.2;
     const armSwing = isSeated ? 0 : Math.sin(player.walkCycle) * 2.8;
@@ -10904,24 +11009,9 @@ export class GameRenderer {
     minX: number, minY: number, maxX: number, maxY: number,
     player?: Player | null
   ) {
-    let nightAlpha = 0;
-    const baseColor = 'rgba(6, 11, 24, ';
-    const sunrise = world.calendar?.sunriseHour ?? 6.0;
-    const sunset = world.calendar?.sunsetHour ?? 19.0;
-    const dawnStart = Math.max(0, sunrise - 1.8);
-    const dawnEnd = sunrise + 1.0;
-    const duskStart = sunset - 1.5;
-    const duskEnd = Math.min(24, sunset + 1.8);
-
-    if (timeHour >= dawnEnd && timeHour < duskStart) {
-      nightAlpha = 0;
-    } else if (timeHour >= duskStart && timeHour < duskEnd) {
-      nightAlpha = ((timeHour - duskStart) / (duskEnd - duskStart)) * 0.82;
-    } else if (timeHour >= duskEnd || timeHour < dawnStart) {
-      nightAlpha = 0.82;
-    } else {
-      nightAlpha = (1 - ((timeHour - dawnStart) / (dawnEnd - dawnStart))) * 0.82;
-    }
+    const atmo = calculateAstronomicalAtmosphere(timeHour, world.calendar);
+    const nightAlpha = atmo.nightAlpha;
+    const baseColor = atmo.ambientColorStyle;
 
     const weights = getEffectiveWeatherWeights(world);
     const isRaining = weights.rain > 0.15;
@@ -10938,7 +11028,7 @@ export class GameRenderer {
 
     const fogFactor = 1.0 - 0.55 * weights.fog;
 
-    if (effectiveAlpha <= 0.02 && weights.rain <= 0.02 && weights.snow <= 0.02 && weights.fog <= 0.02 && weights.overcast <= 0.02 && (world.lightningFlashTimer ?? 0) <= 0) {
+    if (effectiveAlpha <= 0.003 && weights.rain <= 0.02 && weights.snow <= 0.02 && weights.fog <= 0.02 && weights.overcast <= 0.02 && (world.lightningFlashTimer ?? 0) <= 0) {
       return;
     }
 
@@ -12533,7 +12623,13 @@ export class GameRenderer {
 
     const windBaseVx = 25 + weights.storm * 85 + weights.blizzard * 95;
     const windVx = world.wind ? world.wind.vx : windBaseVx;
-    const windVy = world.wind ? world.wind.vy : (weights.storm > 0.3 ? 28 : 5);
+    const windVy = world.wind ? world.wind.vy : (weights.storm > 0.3 ? 28 : (weights.blizzard > 0.3 ? 32 : 5));
+    const windSpeed = Math.hypot(windVx, windVy) || 1;
+    const normWx = windVx / windSpeed;
+    const normWy = windVy / windSpeed;
+    // Perpendicular cross-stream vector for turbulent vortex shedding
+    const perpWx = -normWy;
+    const perpWy = normWx;
 
     // --- A. GROUND IMPACT SPLASHES & PUDDLE RIPPLES (Anchored to fixed geographic world cells) ---
     if (weights.rain > 0.02 && performanceConfig.enableRainDroplets) {
@@ -12560,7 +12656,7 @@ export class GameRenderer {
           const wx = cx * cellS + hx * cellS;
           const wy = cy * cellS + hy * cellS;
 
-          // Expanding rain impact ripples on the ground
+          // Expanding rain impact ripples on the ground (wind shears ripples slightly downwind)
           const maxR = 6 + weights.storm * 8;
           const r = 1.5 + phase * maxR;
           const baseRippleAlpha = 0.16 + weights.storm * 0.22;
@@ -12571,7 +12667,9 @@ export class GameRenderer {
             : `rgba(224, 242, 254, ${alpha.toFixed(3)})`;
           ctx.lineWidth = isFreezing ? 0.8 : 1.0;
           ctx.beginPath();
-          ctx.ellipse(wx, wy, r * 1.25, r * 0.75, 0, 0, Math.PI * 2);
+          // Downwind elongated ripple geometry under wind surface shear
+          const windShearR = Math.min(0.35, (windSpeed / 180) * 0.35);
+          ctx.ellipse(wx, wy, r * (1.15 + windShearR), r * (0.85 - windShearR * 0.5), Math.atan2(normWy, normWx), 0, Math.PI * 2);
           ctx.stroke();
 
           if (isFreezing) {
@@ -12623,31 +12721,34 @@ export class GameRenderer {
 
       if (weights.rain > 0.02) {
         // Multi-depth rain layers:
-        // Layer 0: Background distant drops
+        // Layer 0: Background distant drops (lighter drag, lower perspective speed)
         // Layer 1: Midground standard drops
-        // Layer 2: Foreground close-range fast streaks
+        // Layer 2: Foreground close-range fast streaks (full drag, dramatic stretch)
         const rainLayers = [
-          { count: Math.max(1, Math.round((70 + weights.storm * 190) * weights.rain)), fallSpeed: 950, len: 7, lw: 0.8, alpha: 0.20 * Math.min(1.0, weights.rain * 1.5), windMult: 0.65 },
-          { count: Math.max(1, Math.round((55 + weights.storm * 145) * weights.rain)), fallSpeed: 1350, len: 12, lw: 1.2, alpha: 0.35 * Math.min(1.0, weights.rain * 1.5), windMult: 0.85 },
-          { count: Math.max(1, Math.round((22 + weights.storm * 58) * weights.rain)), fallSpeed: 1750, len: 19, lw: 1.6, alpha: 0.50 * Math.min(1.0, weights.rain * 1.5), windMult: 1.0 }
+          { count: Math.max(1, Math.round((70 + weights.storm * 190) * weights.rain)), perspectiveFall: 340, len: 7, lw: 0.8, alpha: 0.20 * Math.min(1.0, weights.rain * 1.5), windMult: 0.70 },
+          { count: Math.max(1, Math.round((55 + weights.storm * 145) * weights.rain)), perspectiveFall: 520, len: 12, lw: 1.2, alpha: 0.35 * Math.min(1.0, weights.rain * 1.5), windMult: 0.88 },
+          { count: Math.max(1, Math.round((22 + weights.storm * 58) * weights.rain)), perspectiveFall: 750, len: 18, lw: 1.6, alpha: 0.50 * Math.min(1.0, weights.rain * 1.5), windMult: 1.00 }
         ];
 
         for (let l = 0; l < rainLayers.length; l++) {
           const layer = rainLayers[l];
-          const streakVx = (windVx * layer.windMult) - (pVx * 0.40);
-          const streakVy = (layer.fallSpeed) - (pVy * 0.40);
-          const streakMag = Math.hypot(streakVx, streakVy);
-          const dx = layer.len * (streakVx / streakMag);
-          const dy = layer.len * (streakVy / streakMag);
+          // True 2D relative aerodynamic streak vector (horizontal wind + perspective fall - observer speed)
+          const streakVx = (windVx * layer.windMult) - (pVx * 0.45);
+          const streakVy = (windVy * layer.windMult + layer.perspectiveFall) - (pVy * 0.45);
+          const streakMag = Math.hypot(streakVx, streakVy) || 1;
+          const speedRatio = Math.min(2.4, streakMag / 480);
+          const dynamicStreakLen = layer.len * (0.65 + speedRatio * 0.65);
+          const dx = dynamicStreakLen * (streakVx / streakMag);
+          const dy = dynamicStreakLen * (streakVy / streakMag);
 
           for (let i = 0; i < layer.count; i++) {
             const seed = (i * 157.61 + l * 73.19);
             const sX = (seed % 1) * WORLD_CELL;
             const sY = ((seed * 1.618) % 1) * WORLD_CELL;
 
-            // Pure world coordinates advancing only with physical wind and gravity:
+            // Pure world coordinates advancing with physical 2D wind vector and perspective descent:
             const localX = (((sX + windVx * layer.windMult * timeSec) % WORLD_CELL) + WORLD_CELL) % WORLD_CELL;
-            const localY = (((sY + (windVy * layer.windMult + layer.fallSpeed) * timeSec) % WORLD_CELL) + WORLD_CELL) % WORLD_CELL;
+            const localY = (((sY + (windVy * layer.windMult + layer.perspectiveFall) * timeSec) % WORLD_CELL) + WORLD_CELL) % WORLD_CELL;
 
             let dropX = baseTileX + localX;
             if (dropX < minX - 100) dropX += WORLD_CELL;
@@ -12677,7 +12778,7 @@ export class GameRenderer {
 
             ctx.lineWidth = dropWidth;
 
-            // Aerodynamic liquid rain streak anchored in world space
+            // Aerodynamic liquid rain streak oriented along true relative velocity vector
             ctx.strokeStyle = inHeadlight
               ? 'rgba(255, 255, 255, 0.95)'
               : (isFreezing ? `rgba(214, 230, 248, ${(dropAlpha * 0.9).toFixed(3)})` : `rgba(219, 234, 254, ${dropAlpha.toFixed(3)})`);
@@ -12688,26 +12789,28 @@ export class GameRenderer {
           }
         }
 
-        // Wind-blown mist sheets rolling across the terrain in world coordinates
+        // Wind-blown mist sheets rolling across the terrain in 2D world coordinates
         const mistAlpha = (0.025 + weights.storm * 0.025) * weights.rain;
         ctx.fillStyle = `rgba(224, 242, 254, ${mistAlpha.toFixed(3)})`;
+        const mistAngle = Math.atan2(normWy, normWx);
         for (let m = 0; m < 3; m++) {
           const mistW = 1200;
-          const mistLocal = (((timeSec * (windVx * 0.6) + m * 800) % 3600) + 3600) % 3600;
-          const mistX = Math.floor(minX / 3600) * 3600 + mistLocal;
-          const mistY = minY + ((m + 0.5) / 3) * (maxY - minY) + Math.sin(timeSec * 0.7 + m) * 50;
+          const mistLocalX = (((timeSec * (windVx * 0.65) + m * 800) % 3600) + 3600) % 3600;
+          const mistLocalY = (((timeSec * (windVy * 0.65) + m * 600) % 2400) + 2400) % 2400;
+          const mistX = Math.floor(minX / 3600) * 3600 + mistLocalX;
+          const mistY = Math.floor(minY / 2400) * 2400 + mistLocalY + Math.sin(timeSec * 0.7 + m) * 45;
           ctx.beginPath();
-          safeEllipse(ctx, mistX, mistY, mistW * 0.5, 70, (windVx > 0 ? 0.2 : -0.2), 0, Math.PI * 2);
+          safeEllipse(ctx, mistX, mistY, mistW * 0.5, 75, mistAngle, 0, Math.PI * 2);
           ctx.fill();
         }
       }
 
       if (weights.snow > 0.02) {
-        // Multi-depth snowflake layers
+        // Multi-depth snowflake layers (low terminal descent, horizontal wind dominance)
         const snowLayers = [
-          { count: Math.max(1, Math.round((180 + weights.blizzard * 180) * weights.snow)), speed: 180 + weights.blizzard * 200, r: 1.2, swayAmp: 8, swayFreq: 1.8, alpha: 0.35 * weights.snow, windMult: 0.75 },
-          { count: Math.max(1, Math.round((120 + weights.blizzard * 120) * weights.snow)), speed: 240 + weights.blizzard * 240, r: 1.8, swayAmp: 16, swayFreq: 2.3, alpha: 0.50 * weights.snow, windMult: 0.90 },
-          { count: Math.max(1, Math.round((40 + weights.blizzard * 40) * weights.snow)), speed: 300 + weights.blizzard * 260, r: 2.6, swayAmp: 24, swayFreq: 3.1, alpha: 0.65 * weights.snow, windMult: 1.0 }
+          { count: Math.max(1, Math.round((180 + weights.blizzard * 180) * weights.snow)), fallSpeed: 45 + weights.blizzard * 40, r: 1.2, swayAmp: 8, swayFreq: 1.8, alpha: 0.35 * weights.snow, windMult: 0.85 },
+          { count: Math.max(1, Math.round((120 + weights.blizzard * 120) * weights.snow)), fallSpeed: 65 + weights.blizzard * 55, r: 1.8, swayAmp: 16, swayFreq: 2.3, alpha: 0.50 * weights.snow, windMult: 0.95 },
+          { count: Math.max(1, Math.round((40 + weights.blizzard * 40) * weights.snow)), fallSpeed: 90 + weights.blizzard * 75, r: 2.6, swayAmp: 24, swayFreq: 3.1, alpha: 0.65 * weights.snow, windMult: 1.00 }
         ];
 
         for (let l = 0; l < snowLayers.length; l++) {
@@ -12716,10 +12819,13 @@ export class GameRenderer {
             const seed = (s * 137.49 + l * 83.71);
             const sX = (seed % 1) * WORLD_CELL;
             const sY = ((seed * 1.618) % 1) * WORLD_CELL;
+            // Micro-turbulence flutter perpendicular to the prevailing wind vector
             const sway = Math.sin(timeSec * layer.swayFreq + s) * layer.swayAmp;
+            const swayX = perpWx * sway;
+            const swayY = perpWy * sway;
 
-            const localX = (((sX + (windVx * layer.windMult) * timeSec + sway) % WORLD_CELL) + WORLD_CELL) % WORLD_CELL;
-            const localY = (((sY + (windVy * layer.windMult + layer.speed) * timeSec) % WORLD_CELL) + WORLD_CELL) % WORLD_CELL;
+            const localX = (((sX + (windVx * layer.windMult) * timeSec + swayX) % WORLD_CELL) + WORLD_CELL) % WORLD_CELL;
+            const localY = (((sY + (windVy * layer.windMult + layer.fallSpeed) * timeSec + swayY) % WORLD_CELL) + WORLD_CELL) % WORLD_CELL;
 
             let flakeX = baseTileX + localX;
             if (flakeX < minX - 100) flakeX += WORLD_CELL;
@@ -12752,13 +12858,14 @@ export class GameRenderer {
             ctx.arc(flakeX, flakeY, flakeR, 0, Math.PI * 2);
             ctx.fill();
 
-            // Blizzard horizontal snow wind streaks
-            if (weights.blizzard > 0.2 && (s % 4 === 0)) {
-              ctx.strokeStyle = `rgba(240, 249, 255, ${(flakeAlpha * 0.45 * weights.blizzard).toFixed(3)})`;
+            // Blizzard horizontal snow wind streaks (tail streaming strictly downwind)
+            if (weights.blizzard > 0.15 && (s % 3 === 0)) {
+              const blizzardStreakLen = (12 + Math.min(38, windSpeed * 0.22)) * weights.blizzard;
+              ctx.strokeStyle = `rgba(240, 249, 255, ${(flakeAlpha * 0.55 * weights.blizzard).toFixed(3)})`;
               ctx.lineWidth = 1.0;
               ctx.beginPath();
               ctx.moveTo(flakeX, flakeY);
-              ctx.lineTo(flakeX - (windVx > 0 ? 18 : -18), flakeY + 8);
+              ctx.lineTo(flakeX - normWx * blizzardStreakLen, flakeY - normWy * blizzardStreakLen);
               ctx.stroke();
             }
           }
@@ -12769,7 +12876,8 @@ export class GameRenderer {
     // --- C. VOLUMETRIC LAYERED FOG (Anchored to world coordinates) ---
     if (weights.fog > 0.02) {
       const fogClusters = 8;
-      const baseFogDrift = world.wind ? (world.wind.vx * 0.35) : 16;
+      const driftVx = world.wind ? (world.wind.vx * 0.35) : 16;
+      const driftVy = world.wind ? (world.wind.vy * 0.35) : 5;
       const FOG_CELL = 2800;
       const baseFogX = Math.floor((minX - 300) / FOG_CELL) * FOG_CELL;
       const baseFogY = Math.floor((minY - 300) / FOG_CELL) * FOG_CELL;
@@ -12777,10 +12885,10 @@ export class GameRenderer {
       for (let f = 0; f < fogClusters; f++) {
         const seedX = ((f * 37.19) % 1);
         const seedY = ((f * 73.82) % 1);
-        const driftSpeed = baseFogDrift + (f % 3) * 5;
+        const clusterSpeed = 1.0 + (f % 3) * 0.15;
 
-        const localX = (((seedX * FOG_CELL + timeSec * driftSpeed) % FOG_CELL) + FOG_CELL) % FOG_CELL;
-        const localY = (((seedY * FOG_CELL + Math.sin(timeSec * 0.35 + f) * 60) % FOG_CELL) + FOG_CELL) % FOG_CELL;
+        const localX = (((seedX * FOG_CELL + timeSec * driftVx * clusterSpeed) % FOG_CELL) + FOG_CELL) % FOG_CELL;
+        const localY = (((seedY * FOG_CELL + timeSec * driftVy * clusterSpeed + Math.sin(timeSec * 0.35 + f) * 45) % FOG_CELL) + FOG_CELL) % FOG_CELL;
 
         let fcx = baseFogX + localX;
         if (fcx < minX - 200) fcx += FOG_CELL;
