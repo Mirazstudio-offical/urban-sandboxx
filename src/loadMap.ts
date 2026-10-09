@@ -409,13 +409,14 @@ export async function loadMap(): Promise<GameWorld> {
 
   const baseUrl = (import.meta as any).env?.BASE_URL || '/';
   const cleanBase = baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`;
-  const url = `${cleanBase}map.json`;
+  const url = `${cleanBase}map.json?v=interiors_v2`;
 
   try {
     const res = await fetch(url, {
+      cache: 'no-store',
       headers: {
         'Accept': 'application/json',
-        'Cache-Control': 'no-cache'
+        'Cache-Control': 'no-cache, no-store, must-revalidate'
       }
     });
 
