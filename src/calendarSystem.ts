@@ -499,6 +499,21 @@ export function getRussianSeasonName(season: Season): string {
 }
 
 /**
+ * Universal query function to determine if the world environment is sub-zero freezing.
+ */
+export function isWorldFreezing(world: any, timeHour?: number): boolean {
+  if (world && typeof world.outsideTemp === 'number' && Number.isFinite(world.outsideTemp)) {
+    return world.outsideTemp <= 0;
+  }
+  const hour = typeof timeHour === 'number' && Number.isFinite(timeHour)
+    ? timeHour
+    : (world && typeof world.timeHour === 'number' && Number.isFinite(world.timeHour) ? world.timeHour : 12);
+  const cal = world?.calendar || createInitialCalendarState(2026, 10, 8, hour);
+  const atmo = calculateClimateAtmosphere(cal, world?.weather || 'clear');
+  return atmo.isFreezing || atmo.surfaceTemp <= 0;
+}
+
+/**
  * Returns human-readable meteorological description in Russian.
  */
 export function getRussianWeatherDescription(weather: WeatherType, isFreezing: boolean): string {
@@ -508,11 +523,11 @@ export function getRussianWeatherDescription(weather: WeatherType, isFreezing: b
     case 'overcast':
       return isFreezing ? 'Пасмурно • Свинцовые тучи' : 'Пасмурно';
     case 'drizzle':
-      return 'Сырая морось';
+      return isFreezing ? 'Ледяная морось • Гололедица' : 'Сырая морось';
     case 'rain':
-      return 'Обложной дождь';
+      return isFreezing ? 'Ледяной дождь • Гололёд' : 'Обложной дождь';
     case 'storm':
-      return 'Грозовой шторм';
+      return isFreezing ? 'Зимний ледяной шторм' : 'Грозовой шторм';
     case 'fog':
       return isFreezing ? 'Морозный ледяной туман' : 'Густой туман';
     case 'snow':

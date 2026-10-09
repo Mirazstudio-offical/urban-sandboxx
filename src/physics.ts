@@ -14,7 +14,9 @@ import { GuardrailPhysics } from './guardrailPhysics';
 import { AGRICULTURAL_FIELDS, getTerrainSlope } from './terrainElevation';
 import { getRiverWaterAt, getUniversalWaterDepthAt } from './riverSystem';
 import { getBiomeSampleAt } from './biomeSystem';
-import { calculateClimateAtmosphere, createInitialCalendarState } from './calendarSystem';
+import { calculateClimateAtmosphere, createInitialCalendarState, isWorldFreezing } from './calendarSystem';
+
+export { isWorldFreezing };
 
 export interface CollisionResult {
   collided: boolean;
@@ -5151,8 +5153,26 @@ export function updatePlayerPedestrianPhysics(
       // Responsive acceleration lerp
       const targetVx = worldMoveX * targetSpeed;
       const targetVy = worldMoveY * targetSpeed;
-      player.vx += (targetVx - player.vx) * Math.min(1.0, 10 * dt);
-      player.vy += (targetVy - player.vy) * Math.min(1.0, 10 * dt);
+
+      let isStandingOnIce = false;
+      if (isWorldFreezing(world)) {
+        const river = getRiverWaterAt(player.x, player.y);
+        if (river.inWater && !river.isBridge) {
+          isStandingOnIce = true;
+        } else if (world.puddles && world.puddles.length > 0) {
+          for (let i = 0; i < world.puddles.length; i++) {
+            const pud = world.puddles[i];
+            if (Math.hypot(player.x - pud.x, player.y - pud.y) < Math.max(pud.radiusX, pud.radiusY)) {
+              isStandingOnIce = true;
+              break;
+            }
+          }
+        }
+      }
+
+      const accelRate = isStandingOnIce ? (canSprint ? 2.2 : 3.5) : 10;
+      player.vx += (targetVx - player.vx) * Math.min(1.0, accelRate * dt);
+      player.vy += (targetVy - player.vy) * Math.min(1.0, accelRate * dt);
 
       // Panic stumble velocity jitter
       if (panicLevel > 25) {
@@ -6673,7 +6693,16 @@ function isPointInRoadSegment(
 export function getSurfaceTypeAt(world: GameWorld, x: number, y: number): { type: string; grip: number; extraDrag: number } {
   // 0. Check River "Быстрица" and aquatic fluid bodies
   const riverWater = getRiverWaterAt(x, y);
+  const isFreezing = isWorldFreezing(world);
   if (riverWater.inWater && !riverWater.isBridge) {
+    if (isFreezing) {
+      // Solid frozen northern river ice sheet: driftable glaze ice surface
+      return {
+        type: 'ice',
+        grip: 0.12,
+        extraDrag: 0.5
+      };
+    }
     const d = riverWater.depth;
     return {
       type: 'water',
@@ -6681,9 +6710,9 @@ export function getSurfaceTypeAt(world: GameWorld, x: number, y: number): { type
       extraDrag: 45 + d * 150
     };
   } else if (!riverWater.inWater && riverWater.surfaceType === 'river_mud') {
-    return { type: 'mud', grip: 0.55, extraDrag: 10 };
+    return { type: isFreezing ? 'frozen_ground' : 'mud', grip: isFreezing ? 0.45 : 0.55, extraDrag: isFreezing ? 2 : 10 };
   } else if (!riverWater.inWater && riverWater.surfaceType === 'river_sand') {
-    return { type: 'sand', grip: 0.68, extraDrag: 5 };
+    return { type: isFreezing ? 'frozen_sand' : 'sand', grip: isFreezing ? 0.50 : 0.68, extraDrag: isFreezing ? 1 : 5 };
   }
 
   // 1. Check if the point is within any road segment (including curved and diagonal highways)
@@ -6851,7 +6880,7 @@ export function getSurfaceTypeAt(world: GameWorld, x: number, y: number): { type
   };
 }
 
-export function getSurfaceOffroadProps(surfType: string, isWet: boolean, isStormWeather: boolean) {
+export function getSurfaceOffroadProps(surfType: string, isWet: boolean, isStormWeather: boolean, isSnowy: boolean = false) {
   let baseSink = 0.0;
   let wetExtraDrag = 0;
   let wetGripMult = 1.0;
@@ -6865,54 +6894,54 @@ export function getSurfaceOffroadProps(surfType: string, isWet: boolean, isStorm
       baseSink = isWet ? (isStormWeather ? 1.35 : 1.10) : 0.70;
       wetExtraDrag = isWet ? (isStormWeather ? 120 : 90) : 38;
       wetGripMult = isWet ? 0.35 : 0.62;
-      bermColor = '#3a200f';
-      grooveColor = '#150c05';
+      bermColor = isSnowy ? '#cbd5e1' : '#3a200f';
+      grooveColor = isSnowy ? '#334155' : '#150c05';
       break;
     case 'dirt_road':
       isOffroad = true;
-      baseSink = isWet ? (isStormWeather ? 0.85 : 0.65) : 0.10;
-      wetExtraDrag = isWet ? (isStormWeather ? 55 : 38) : 2;
-      wetGripMult = isWet ? 0.55 : 0.98;
-      bermColor = isWet ? '#442614' : '#6e4726';
-      grooveColor = isWet ? '#1c1007' : '#3d2514';
+      baseSink = isSnowy ? 0.45 : (isWet ? (isStormWeather ? 0.85 : 0.65) : 0.10);
+      wetExtraDrag = isSnowy ? 25 : (isWet ? (isStormWeather ? 55 : 38) : 2);
+      wetGripMult = isSnowy ? 0.50 : (isWet ? 0.55 : 0.98);
+      bermColor = isSnowy ? '#e2e8f0' : (isWet ? '#442614' : '#6e4726');
+      grooveColor = isSnowy ? '#475569' : (isWet ? '#1c1007' : '#3d2514');
       break;
     case 'grass':
       isOffroad = true;
-      baseSink = isWet ? (isStormWeather ? 0.70 : 0.52) : 0.24;
-      wetExtraDrag = isWet ? (isStormWeather ? 48 : 34) : 9;
-      wetGripMult = isWet ? 0.52 : 0.92;
-      bermColor = isWet ? '#2f3b1b' : '#3f5922';
-      grooveColor = isWet ? '#1b1f0e' : '#1e3810';
+      baseSink = isSnowy ? 0.55 : (isWet ? (isStormWeather ? 0.70 : 0.52) : 0.24);
+      wetExtraDrag = isSnowy ? 32 : (isWet ? (isStormWeather ? 48 : 34) : 9);
+      wetGripMult = isSnowy ? 0.45 : (isWet ? 0.52 : 0.92);
+      bermColor = isSnowy ? '#f1f5f9' : (isWet ? '#2f3b1b' : '#3f5922');
+      grooveColor = isSnowy ? '#cbd5e1' : (isWet ? '#1b1f0e' : '#1e3810');
       break;
     case 'sand':
       isOffroad = true;
       baseSink = isWet ? 0.72 : 0.58;
       wetExtraDrag = isWet ? 42 : 24;
       wetGripMult = isWet ? 0.60 : 0.85;
-      bermColor = isWet ? '#78350f' : '#b45309';
-      grooveColor = isWet ? '#451a03' : '#78350f';
+      bermColor = isSnowy ? '#f1f5f9' : (isWet ? '#78350f' : '#b45309');
+      grooveColor = isSnowy ? '#94a3b8' : (isWet ? '#451a03' : '#78350f');
       break;
     case 'gravel_road':
       isOffroad = true;
-      baseSink = isWet ? 0.22 : 0.06;
-      wetExtraDrag = isWet ? 12 : 2;
-      wetGripMult = isWet ? 0.78 : 0.98;
-      bermColor = '#64748b';
-      grooveColor = '#334155';
+      baseSink = isSnowy ? 0.25 : (isWet ? 0.22 : 0.06);
+      wetExtraDrag = isSnowy ? 18 : (isWet ? 12 : 2);
+      wetGripMult = isSnowy ? 0.60 : (isWet ? 0.78 : 0.98);
+      bermColor = isSnowy ? '#e2e8f0' : '#64748b';
+      grooveColor = isSnowy ? '#94a3b8' : '#334155';
       break;
     case 'rock':
       baseSink = 0.05;
       wetExtraDrag = 2;
-      wetGripMult = isWet ? 0.80 : 1.0;
-      bermColor = '#78716c';
-      grooveColor = '#44403c';
+      wetGripMult = isSnowy ? 0.45 : (isWet ? 0.80 : 1.0);
+      bermColor = isSnowy ? '#e2e8f0' : '#78716c';
+      grooveColor = isSnowy ? '#64748b' : '#44403c';
       break;
     default: // asphalt, concrete
       baseSink = 0.0;
       wetExtraDrag = 0;
-      wetGripMult = isWet ? 0.65 : 1.0;
-      bermColor = '#1e293b';
-      grooveColor = '#0f172a';
+      wetGripMult = isSnowy ? 0.40 : (isWet ? 0.65 : 1.0);
+      bermColor = isSnowy ? '#cbd5e1' : '#1e293b';
+      grooveColor = isSnowy ? '#475569' : '#0f172a';
       break;
   }
   return { baseSink, wetExtraDrag, wetGripMult, isOffroad, bermColor, grooveColor };
@@ -7930,14 +7959,20 @@ export function updateVehiclePhysics(
     let massRatio = 1.0;
     let extraDrag = ((frontSurf.extraDrag + rearSurf.extraDrag) / 2.0) * speedScaleFactor;
 
-    const isRainingWeather = world.weather === 'rain' || world.weather === 'storm';
-    const isStormWeather = world.weather === 'storm';
+    const curCal = world.calendar || createInitialCalendarState(2026, 10, 8, typeof world.timeHour === 'number' ? world.timeHour : 12);
+    const curAtmo = calculateClimateAtmosphere(curCal, world.weather || 'clear');
+    const isFreezingAtStart = curAtmo.isFreezing || curAtmo.surfaceTemp <= 0;
+    const isSnowCoveredAtStart = curAtmo.isSnowCovered;
+    const isRainingWeather = world.weather === 'rain' || world.weather === 'storm' || world.weather === 'drizzle';
+    const isStormWeather = world.weather === 'storm' || world.weather === 'blizzard';
+    const isSnowyWeather = world.weather === 'snow' || world.weather === 'blizzard' || isSnowCoveredAtStart;
+
     const isOffroaderVeh = ['offroad_hardcore', 'suv', 'suv_luxury', 'suv_classic_box', 'pickup', 'pickup_heavy', 'tractor_mtz82', 'tractor_mtz80', 'tractor_mtz80_old', 'truck_armored', 'truck_dump'].includes(cfg.type);
     const isLowClearanceVeh = ['supercar', 'sports', 'coupe_gt', 'hatch_hot', 'micro_car', 'retro_bubble', 'sedan_compact', 'moto_sport'].includes(cfg.type);
     const clearanceFactor = isOffroaderVeh ? 0.50 : (isLowClearanceVeh ? 1.85 : 1.0);
 
-    const frontOffroad = getSurfaceOffroadProps(frontSurf.type, isRainingWeather, isStormWeather);
-    const rearOffroad = getSurfaceOffroadProps(rearSurf.type, isRainingWeather, isStormWeather);
+    const frontOffroad = getSurfaceOffroadProps(frontSurf.type, isRainingWeather, isStormWeather, isSnowyWeather);
+    const rearOffroad = getSurfaceOffroadProps(rearSurf.type, isRainingWeather, isStormWeather, isSnowyWeather);
 
     // Wet washed-out offroad terrain adds heavy rolling resistance (размытая земля)
     const wetOffroadDrag = ((frontOffroad.wetExtraDrag + rearOffroad.wetExtraDrag) / 2.0) * clearanceFactor * speedScaleFactor;
@@ -8028,6 +8063,44 @@ export function updateVehiclePhysics(
       vehicle.brakeLightsOn = true;
       const avgBrake = isTractor ? (brakeLeftVal + brakeRightVal) / 2 : brake;
       let bForce = cfg.brakingForce * speedScaleFactor * avgBrake;
+
+      // Surface adhesion and weather grip limit calculation
+      const centerSurf = getSurfaceTypeAt(world, vehicle.x, vehicle.y);
+      const isFreezingAtBrake = curAtmo.isFreezing || curAtmo.surfaceTemp <= 0;
+      const isSnowCoveredAtBrake = curAtmo.isSnowCovered;
+
+      let localWeatherGrip = 1.0;
+      if (world.weather === 'blizzard') localWeatherGrip = 0.24;
+      else if (world.weather === 'snow') localWeatherGrip = 0.35;
+      else if (world.weather === 'storm') localWeatherGrip = 0.44;
+      else if (world.weather === 'rain') localWeatherGrip = 0.58;
+      else if (world.weather === 'drizzle') localWeatherGrip = isFreezingAtBrake ? 0.20 : 0.72;
+      else if (world.weather === 'fog') localWeatherGrip = isFreezingAtBrake ? 0.30 : 0.88;
+      if (isSnowCoveredAtBrake) localWeatherGrip = Math.min(localWeatherGrip, 0.36);
+      else if (isFreezingAtBrake && curAtmo.surfaceTemp <= 0) localWeatherGrip = Math.min(localWeatherGrip, 0.45);
+
+      const surfaceAdhesion = localWeatherGrip * centerSurf.grip;
+      const maxAdhesionBrake = cfg.brakingForce * speedScaleFactor * surfaceAdhesion;
+
+      // Modern ABS electronically pulses brakes right at peak adhesion limit
+      const hasABS = ['supercar', 'sports', 'coupe_gt', 'sedan_luxury', 'suv_luxury', 'crossover_compact', 'wagon_modern', 'sedan_polo'].includes(cfg.type);
+
+      if (bForce > maxAdhesionBrake * 1.02 && Math.abs(vehicle.speed) > 2.0) {
+        if (hasABS) {
+          vehicle.isBrakeLocked = false;
+          vehicle.absActive = true;
+          bForce = maxAdhesionBrake * 0.95;
+        } else {
+          // Classic hydraulic brakes without ABS lock the wheels ("юз")!
+          vehicle.isBrakeLocked = true;
+          vehicle.absActive = false;
+          // Kinetic sliding friction is lower than peak static grip
+          bForce = maxAdhesionBrake * 0.82;
+        }
+      } else {
+        vehicle.isBrakeLocked = false;
+        vehicle.absActive = false;
+      }
       
       if (vehicle.trailerId) {
         const trailer = world.vehicles.find(v => v.id === vehicle.trailerId);
@@ -8236,16 +8309,46 @@ export function updateVehiclePhysics(
     }
 
     // Surface & Weather grip calculations
+    const isFreezing = curAtmo.isFreezing || curAtmo.surfaceTemp <= 0;
+    const isSnowCovered = curAtmo.isSnowCovered;
+
     let weatherGrip = 1.0;
     let isWetSurface = false;
-    if (world.weather === 'rain') {
-      weatherGrip = 0.58; // Rain decreases grip significantly!
+    let isSnowySurface = false;
+    let isIcySurface = false;
+
+    if (world.weather === 'blizzard') {
+      weatherGrip = 0.24; // Arctic blizzard: snowpack, ice, strong wind drift
       isWetSurface = true;
+      isSnowySurface = true;
+      isIcySurface = true;
+    } else if (world.weather === 'snow') {
+      weatherGrip = 0.35; // Falling snow on road: loose snow slippery layer
+      isWetSurface = true;
+      isSnowySurface = true;
     } else if (world.weather === 'storm') {
       weatherGrip = 0.44; // Storm makes asphalt super slick, drift is effortless!
       isWetSurface = true;
+    } else if (world.weather === 'rain') {
+      weatherGrip = 0.58; // Rain decreases grip significantly!
+      isWetSurface = true;
+    } else if (world.weather === 'drizzle') {
+      weatherGrip = isFreezing ? 0.20 : 0.72; // Freezing drizzle causes instant black ice!
+      isWetSurface = true;
+      if (isFreezing) isIcySurface = true;
     } else if (world.weather === 'fog') {
-      weatherGrip = 0.88;
+      weatherGrip = isFreezing ? 0.30 : 0.88; // Freezing fog (гололедица)
+      if (isFreezing) { isWetSurface = true; isIcySurface = true; }
+    }
+
+    if (isSnowCovered) {
+      // Persistent winter ground snowpack and packed icy crust
+      weatherGrip = Math.min(weatherGrip, 0.36);
+      isSnowySurface = true;
+    } else if (isFreezing && curAtmo.surfaceTemp <= 0) {
+      // Freezing pavement with condensation: black ice
+      weatherGrip = Math.min(weatherGrip, 0.45);
+      isIcySurface = true;
     }
 
     // Check puddles / oil / fuel / coolant / sand stains with per-tire contact & heavy vehicle mass physics
@@ -8279,10 +8382,10 @@ export function updateVehiclePhysics(
     const surfRL = getSurfaceTypeAt(world, tRLX, tRLY);
     const surfRR = getSurfaceTypeAt(world, tRRX, tRRY);
 
-    const offroadFL = getSurfaceOffroadProps(surfFL.type, isRainingWeather, isStormWeather);
-    const offroadFR = getSurfaceOffroadProps(surfFR.type, isRainingWeather, isStormWeather);
-    const offroadRL = getSurfaceOffroadProps(surfRL.type, isRainingWeather, isStormWeather);
-    const offroadRR = getSurfaceOffroadProps(surfRR.type, isRainingWeather, isStormWeather);
+    const offroadFL = getSurfaceOffroadProps(surfFL.type, isWetSurface, isStormWeather, isSnowySurface);
+    const offroadFR = getSurfaceOffroadProps(surfFR.type, isWetSurface, isStormWeather, isSnowySurface);
+    const offroadRL = getSurfaceOffroadProps(surfRL.type, isWetSurface, isStormWeather, isSnowySurface);
+    const offroadRR = getSurfaceOffroadProps(surfRR.type, isWetSurface, isStormWeather, isSnowySurface);
 
     // Combined vehicle & trailer mass load factor
     let combinedMass = cfg.mass || 1500;
@@ -8315,7 +8418,7 @@ export function updateVehiclePhysics(
         } else if (st.type === 'coolant') {
           baseGripReduction = 0.42;
         } else if (st.type === 'water') {
-          baseGripReduction = 0.55;
+          baseGripReduction = isFreezing ? 0.12 : 0.55;
         } else if (st.type === 'sand') {
           baseGripReduction = 0.68;
         }
@@ -8325,19 +8428,54 @@ export function updateVehiclePhysics(
 
         if (Math.hypot(tFLX - st.x, tFLY - st.y) < rSt + 6) {
           stainFL = Math.min(stainFL, effectiveStainGripOnTire);
-          if (st.type === 'water') isWetSurface = true;
+          if (st.type === 'water') {
+            if (isFreezing) isIcySurface = true; else isWetSurface = true;
+          }
         }
         if (Math.hypot(tFRX - st.x, tFRY - st.y) < rSt + 6) {
           stainFR = Math.min(stainFR, effectiveStainGripOnTire);
-          if (st.type === 'water') isWetSurface = true;
+          if (st.type === 'water') {
+            if (isFreezing) isIcySurface = true; else isWetSurface = true;
+          }
         }
         if (Math.hypot(tRLX - st.x, tRLY - st.y) < rSt + 6) {
           stainRL = Math.min(stainRL, effectiveStainGripOnTire);
-          if (st.type === 'water') isWetSurface = true;
+          if (st.type === 'water') {
+            if (isFreezing) isIcySurface = true; else isWetSurface = true;
+          }
         }
         if (Math.hypot(tRRX - st.x, tRRY - st.y) < rSt + 6) {
           stainRR = Math.min(stainRR, effectiveStainGripOnTire);
-          if (st.type === 'water') isWetSurface = true;
+          if (st.type === 'water') {
+            if (isFreezing) isIcySurface = true; else isWetSurface = true;
+          }
+        }
+      }
+    }
+
+    if (world.puddles && world.puddles.length > 0) {
+      for (let i = 0; i < world.puddles.length; i++) {
+        const pud = world.puddles[i];
+        const rPud = Math.max(pud.radiusX, pud.radiusY);
+        // Liquid puddle hydroplaning grip vs frozen glaze ice grip (наледь)
+        const pudGripBase = isFreezing ? 0.12 : (isWetSurface ? 0.62 : 0.70);
+        const effectivePudGrip = pudGripBase + (1.0 - pudGripBase) * heavyMassLoadDamping;
+
+        if (Math.hypot(tFLX - pud.x, tFLY - pud.y) < rPud + 4) {
+          stainFL = Math.min(stainFL, effectivePudGrip);
+          if (isFreezing) isIcySurface = true; else isWetSurface = true;
+        }
+        if (Math.hypot(tFRX - pud.x, tFRY - pud.y) < rPud + 4) {
+          stainFR = Math.min(stainFR, effectivePudGrip);
+          if (isFreezing) isIcySurface = true; else isWetSurface = true;
+        }
+        if (Math.hypot(tRLX - pud.x, tRLY - pud.y) < rPud + 4) {
+          stainRL = Math.min(stainRL, effectivePudGrip);
+          if (isFreezing) isIcySurface = true; else isWetSurface = true;
+        }
+        if (Math.hypot(tRRX - pud.x, tRRY - pud.y) < rPud + 4) {
+          stainRR = Math.min(stainRR, effectivePudGrip);
+          if (isFreezing) isIcySurface = true; else isWetSurface = true;
         }
       }
     }
@@ -8413,6 +8551,12 @@ export function updateVehiclePhysics(
     // Separate front and rear axle grip factors incorporating surface, weather, stains, and dynamic normal load
     let frontGripFactor = cfg.grip * surfaceGripFront * dynamicWeightTransferFront;
     let rearGripFactor = (isHandbraking ? cfg.driftGrip * 0.48 : cfg.grip) * surfaceGripRear * dynamicWeightTransferRear;
+
+    if (vehicle.isBrakeLocked) {
+      // Locked skidding tires suffer severe friction circle loss of lateral cornering stiffness
+      frontGripFactor *= 0.45;
+      rearGripFactor *= 0.25;
+    }
 
     const vSpeedKmh = Math.abs(vehicle.speed) * PX_S_TO_SPEED_KMH;
     const vSpeedAbs = Math.abs(vehicle.speed);
@@ -8574,6 +8718,10 @@ export function updateVehiclePhysics(
     if (isFrontPowerSlip) {
       understeerFactor = Math.max(understeerFactor, Math.min(0.50, effectiveThrottle * 0.35));
     }
+    if (vehicle.isBrakeLocked) {
+      // Locked front wheels sliding across ice or snow lose directional steering response
+      understeerFactor = Math.max(understeerFactor, 0.70);
+    }
 
     // --- REALISTIC DIFFERENTIAL LOCK RESISTANCE & UNDERSTEER (МАТЕМАТИКА СОПРОТИВЛЕНИЯ ПОВОРОТУ) ---
     // When cross-axle diffs are locked, wheels must rotate at identical speeds.
@@ -8637,21 +8785,23 @@ export function updateVehiclePhysics(
       lateralSlip *= Math.max(0, 1.0 - plowDecay * dt);
       vehicle.speed *= Math.max(0, 1.0 - (plowDecay * 0.6) * dt);
       if (Math.abs(lateralSlip) < 0.4) lateralSlip = 0;
-    } else if (isHandbraking && vSpeedKmh > 6.0) {
-      // Handbrake locks rear wheels, swinging rear out in forward or reverse
+    } else if ((isHandbraking || vehicle.isBrakeLocked) && vSpeedKmh > 5.0) {
+      // Handbrake or hard locked brakes without ABS on slick surface (колеса блокируются юзом, зад заносит вбок)
       isDriftingThisFrame = true;
-      const swingSign = -Math.sign(vehicle.steerAngle || (vehicle.angularVelocity * moveDir) || 1) * moveDir;
-      
-      // Proportional handbrake slip: sliding is triggered by steering or existing drift angle.
-      // If going perfectly straight, locking the rear wheels does not force the tail sideways out of nowhere.
       const steerInfluence = Math.min(1.0, Math.abs(vehicle.steerAngle) * 3.5);
-      const existingSlipInfluence = Math.min(1.0, Math.abs(lateralSlip) / 25.0);
-      const handbrakeInfluence = Math.max(steerInfluence, existingSlipInfluence);
-      
-      const targetSlip = swingSign * Math.min(140, vSpeedAbs * 0.65) * handbrakeInfluence;
-      
-      // Build up the slide at a progressive, manageable rate
-      lateralSlip += (targetSlip - lateralSlip) * Math.min(1.0, 6.0 * dt);
+      const existingSlipInfluence = Math.min(1.0, Math.abs(lateralSlip) / 20.0);
+      const yawInfluence = Math.min(1.0, Math.abs(vehicle.angularVelocity || 0) * 1.5);
+      const gripAsymInfluence = Math.min(1.0, Math.abs(gripRL - gripRR) * 3.5);
+
+      // On ice/snow with locked wheels, dynamic weight transfer unloads the rear, inducing immediate yaw instability
+      const lockBias = vehicle.isBrakeLocked ? 0.35 : 0;
+      const destabilizeInfluence = Math.max(lockBias, steerInfluence, existingSlipInfluence, yawInfluence, gripAsymInfluence);
+
+      const swingSign = -Math.sign(vehicle.steerAngle || (vehicle.angularVelocity * moveDir) || (gripRL - gripRR) || 1) * moveDir;
+      const targetSlip = swingSign * Math.min(140, vSpeedAbs * (vehicle.isBrakeLocked ? 0.55 : 0.65)) * destabilizeInfluence;
+
+      // Build up the slide at an organic progressive rate
+      lateralSlip += (targetSlip - lateralSlip) * Math.min(1.0, (vehicle.isBrakeLocked ? 4.8 : 6.0) * dt);
     } else if (vSpeedAbs > 2.0 && (Math.abs(lateralDemand) > lateralRearGripLimit || isPowerOversteerKick)) {
       // Oversteer drift from centrifugal force, Scandinavian flick, or genuine RWD power kick
       isDriftingThisFrame = true;
@@ -8704,8 +8854,8 @@ export function updateVehiclePhysics(
         const steerDiff = (vehicle.steerAngle || 0) - prevSteer;
         finalAngularSpeed = (steerDiff / dt) * 0.5;
       }
-    } else if (Math.abs(lateralSlip) > 6.0 || isHandbraking) {
-      // DRIFT REGIME: Vehicle is sliding sideways
+    } else if (Math.abs(lateralSlip) > 6.0 || isHandbraking || vehicle.isBrakeLocked) {
+      // DRIFT & BRAKE LOCK REGIME: Vehicle is sliding sideways
       // Front wheels exert counter-steering torque; sliding rear axle exerts swing torque
       const isHeavyVehicle = (cfg.mass || 1500) >= 4500 || vehicle.type === 'truck_semi' || vehicle.type.startsWith('truck_') || vehicle.type.startsWith('tractor_') || vehicle.type === 'bus' || !!vehicle.trailerId;
       const trailerYawDamping = vehicle.trailerId ? 0.32 : (isHeavyVehicle ? 0.55 : 1.0);
@@ -8776,6 +8926,7 @@ export function updateVehiclePhysics(
     const slipMagnitude = Math.abs(lateralSlip);
     vehicle.isDrifting = (isHandbraking && vSpeedKmh > 8.0) || 
                          (slipMagnitude > 22.0 && vSpeedKmh > 12.0) ||
+                         (vehicle.isBrakeLocked && vSpeedKmh > 8.0) ||
                          (isBurnoutHolding);
 
     const isFrontSlipping = isFrontPowerSlip && effectiveThrottle > 0.60 && (vSpeedKmh < 45.0 || isWetSurface || frontStainGrip < 0.85);
@@ -8784,8 +8935,9 @@ export function updateVehiclePhysics(
     // Locked differential tire scrubbing on hard dry asphalt in turns
     const isLockedTireScrubbing = onHardRoad && (isRearLocked || isFrontLocked) && Math.abs(vehicle.steerAngle) > 0.08 && vSpeedKmh > 3.0 && vSpeedKmh < 60.0;
 
-    // 2. Screech Sound - only screech on hard pavement (asphalt/concrete/rock), NEVER on soft mud or wet grass!
-    if (onHardRoad && (vehicle.isDrifting || isFrontSlipping || isRearSlipping || isLockedTireScrubbing)) {
+    // 2. Screech Sound - only screech on dry hard pavement, NEVER on soft mud, snow or ice!
+    const isScreechAllowed = onHardRoad && !isSnowySurface && !isIcySurface;
+    if (isScreechAllowed && (vehicle.isDrifting || isFrontSlipping || isRearSlipping || isLockedTireScrubbing)) {
       const screechIntensity = Math.max(
         vehicle.isDrifting ? Math.min(1.0, slipMagnitude / 70.0) : 0,
         (isFrontSlipping || isRearSlipping) ? Math.min(1.0, effectiveThrottle * 0.75) : 0,
@@ -8861,16 +9013,17 @@ export function updateVehiclePhysics(
             grooveColor: offroad.grooveColor
           });
         } else {
-          // Asphalt or concrete: marks only appear on drift, power slip, or hard braking
-          if (vehicle.isDrifting || isSlippingAxle || isHandbraking || isBurnoutHolding) {
-            const markAlpha = Math.max(0.12, Math.min(0.72, (slipMagnitude / 65) + (isHandbraking ? 0.28 : 0) + (isSlippingAxle ? 0.32 : 0)));
+          // Asphalt or concrete: marks only appear on drift, power slip, hard braking or wheel lockup
+          if (vehicle.isDrifting || isSlippingAxle || isHandbraking || isBurnoutHolding || vehicle.isBrakeLocked) {
+            const markAlpha = Math.max(0.12, Math.min(0.72, (slipMagnitude / 65) + (isHandbraking ? 0.28 : 0) + (isSlippingAxle ? 0.32 : 0) + (vehicle.isBrakeLocked ? 0.35 : 0)));
+            const markColor = isSnowySurface ? 'rgba(235, 242, 250, 0.75)' : '#111827';
             world.skidMarks.push({
               x1: prevX,
               y1: prevY,
               x2: currX,
               y2: currY,
               alpha: markAlpha,
-              color: '#111827',
+              color: markColor,
               width: baseTireWidth,
               depth: 0,
               surfaceType: 'asphalt',
@@ -11783,12 +11936,15 @@ export function updateBreakablePropsAndLivingWorld(world: GameWorld, player: Pla
   }
 
   // 3. PUDDLE SPLASHES & EVAPORATION
+  const isFreezing = isWorldFreezing(world);
   for (let i = world.puddles.length - 1; i >= 0; i--) {
     const puddle = world.puddles[i];
-    puddle.rippleTimer += dt;
+    if (!isFreezing) {
+      puddle.rippleTimer += dt;
+    }
     
-    // Evaporation if not raining and not a pond
-    if (!isRaining && !puddle.isPond) {
+    // Evaporation if not raining, NOT freezing, and not a pond
+    if (!isRaining && !isFreezing && !puddle.isPond) {
       puddle.radiusX -= dt * 0.5;
       puddle.radiusY -= dt * 0.5;
       if (puddle.radiusX <= 0 || puddle.radiusY <= 0) {
@@ -11800,18 +11956,37 @@ export function updateBreakablePropsAndLivingWorld(world: GameWorld, player: Pla
     for (const veh of world.vehicles) {
       if (Math.abs(veh.speed) > 25) {
         if (Math.hypot(veh.x - puddle.x, veh.y - puddle.y) < puddle.radiusX + 10) {
-          if (Math.random() < 0.3) {
-            world.particles.push({
-              x: veh.x + (Math.random() * 12 - 6),
-              y: veh.y + (Math.random() * 12 - 6),
-              vx: (Math.random() * 60 - 30),
-              vy: (Math.random() * 60 - 30),
-              radius: 3 + Math.random() * 3,
-              color: '#93c5fd',
-              alpha: 0.75,
-              life: 0,
-              maxLife: 0.35,
-              type: 'water_splash'});
+          if (isFreezing) {
+            // Chipped ice particles & frost spray instead of liquid blue splashes
+            if (Math.random() < 0.25) {
+              world.particles.push({
+                x: veh.x + (Math.random() * 12 - 6),
+                y: veh.y + (Math.random() * 12 - 6),
+                vx: (Math.random() * 40 - 20),
+                vy: (Math.random() * 40 - 20),
+                radius: 1.5 + Math.random() * 1.5,
+                color: '#f8fafc',
+                alpha: 0.8,
+                life: 0,
+                maxLife: 0.25,
+                type: 'dust'
+              });
+            }
+          } else {
+            if (Math.random() < 0.3) {
+              world.particles.push({
+                x: veh.x + (Math.random() * 12 - 6),
+                y: veh.y + (Math.random() * 12 - 6),
+                vx: (Math.random() * 60 - 30),
+                vy: (Math.random() * 60 - 30),
+                radius: 3 + Math.random() * 3,
+                color: '#93c5fd',
+                alpha: 0.75,
+                life: 0,
+                maxLife: 0.35,
+                type: 'water_splash'
+              });
+            }
           }
         }
       }

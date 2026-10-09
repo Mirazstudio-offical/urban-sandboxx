@@ -112,16 +112,16 @@ export class TerrainRenderer {
           // 4. Seasonal ecological ground transformation (Winter snow blanket, Autumn golden soil, Spring thaw)
           const season = world.calendar?.season;
           if (season === 'winter') {
-            const snowRatio = 0.58;
-            r = r * (1 - snowRatio) + 236 * snowRatio;
-            g = g * (1 - snowRatio) + 242 * snowRatio;
-            b = b * (1 - snowRatio) + 252 * snowRatio;
+            const snowRatio = 0.90;
+            r = r * (1 - snowRatio) + 240 * snowRatio;
+            g = g * (1 - snowRatio) + 245 * snowRatio;
+            b = b * (1 - snowRatio) + 253 * snowRatio;
           } else if (season === 'autumn') {
-            r = Math.min(255, r * 1.14 + 10);
-            g = g * 0.94;
-            b = b * 0.84;
+            r = Math.min(255, r * 1.18 + 12);
+            g = g * 0.90;
+            b = b * 0.78;
           } else if (season === 'spring') {
-            g = Math.min(255, g * 1.08 + 4);
+            g = Math.min(255, g * 1.12 + 6);
           }
 
           const pIdx = (iy * size + ix) * 4;
@@ -149,19 +149,19 @@ export class TerrainRenderer {
     this.renderSaltLakeWaters(ctx, minX, minY, maxX, maxY);
 
     // 3. Central City Parks (Downtown Greenery)
-    this.renderUrbanParks(ctx, minX, minY, maxX, maxY);
+    this.renderUrbanParks(ctx, world, minX, minY, maxX, maxY);
 
     // 4. Industrial Yard Heavy Concrete Slabs (5600..8000, 0..3300)
     this.renderIndustrialZone(ctx, minX, minY, maxX, maxY);
 
     // 5. Agricultural Field Parcels with 3D Furrows, Crops & Headlands
-    this.renderAgriculturalFieldParcels(ctx, minX, minY, maxX, maxY);
+    this.renderAgriculturalFieldParcels(ctx, world, minX, minY, maxX, maxY);
 
     // 6. Volumetric Landmark Hills, Kurgans & Mounds (Topographic Hillshade & Contour Overlay)
     this.renderLandmarkHillsAndRelief(ctx, minX, minY, maxX, maxY);
 
     // 7. Agricultural Micro-Props (Round Hay Bales / Straw Rolls)
-    this.renderHayBales(ctx, minX, minY, maxX, maxY);
+    this.renderHayBales(ctx, world, minX, minY, maxX, maxY);
   }
 
   // --- 2. SALT LAKE MINERAL WATERS ---
@@ -193,6 +193,7 @@ export class TerrainRenderer {
   // --- 6. DOWNTOWN PARKS ---
   private static renderUrbanParks(
     ctx: CanvasRenderingContext2D,
+    world: GameWorld,
     minX: number, minY: number, maxX: number, maxY: number
   ) {
     const pX1 = Math.max(minX, 4200);
@@ -200,7 +201,16 @@ export class TerrainRenderer {
     const pX2 = Math.min(maxX, 5000);
     const pY2 = Math.min(maxY, 2600);
     if (pX2 > pX1 && pY2 > pY1) {
-      ctx.fillStyle = '#15803d';
+      const season = world.calendar?.season;
+      if (season === 'winter') {
+        ctx.fillStyle = '#e2e8f0'; // Snow covered city park
+      } else if (season === 'autumn') {
+        ctx.fillStyle = '#78541a'; // Autumn dry lawn
+      } else if (season === 'spring') {
+        ctx.fillStyle = '#4d7c0f'; // Fresh tender lawn
+      } else {
+        ctx.fillStyle = '#15803d'; // Summer lush green
+      }
       ctx.fillRect(pX1, pY1, pX2 - pX1, pY2 - pY1);
     }
   }
@@ -260,8 +270,10 @@ export class TerrainRenderer {
   // --- 8. AGRICULTURAL FIELD PARCELS WITH 3D FURROWS & CROPS ---
   private static renderAgriculturalFieldParcels(
     ctx: CanvasRenderingContext2D,
+    world: GameWorld,
     minX: number, minY: number, maxX: number, maxY: number
   ) {
+    const isWinter = world.calendar?.season === 'winter';
     for (const field of AGRICULTURAL_FIELDS) {
       const b = field.bounds;
       // Check chunk intersection
@@ -295,6 +307,12 @@ export class TerrainRenderer {
           break;
         default:
           break;
+      }
+
+      // Winter field snow blanket overlay
+      if (isWinter) {
+        ctx.fillStyle = 'rgba(241, 245, 249, 0.62)';
+        ctx.fillRect(b.x, b.y, b.width, b.height);
       }
 
       ctx.restore();
@@ -707,8 +725,10 @@ export class TerrainRenderer {
   // --- 10. SCATTERED ROUND HAY BALES / STRAW ROLLS (Рулоны сена) ---
   private static renderHayBales(
     ctx: CanvasRenderingContext2D,
+    world: GameWorld,
     minX: number, minY: number, maxX: number, maxY: number
   ) {
+    const isWinter = world.calendar?.season === 'winter';
     for (const field of AGRICULTURAL_FIELDS) {
       if (!field.hasHayBales || !field.hayBalePositions) continue;
 
@@ -761,6 +781,14 @@ export class TerrainRenderer {
         ctx.moveTo(baleL * 0.25, -baleW / 2);
         ctx.lineTo(baleL * 0.25, baleW / 2);
         ctx.stroke();
+
+        // 7. Winter snow cap on top of the roll
+        if (isWinter) {
+          ctx.fillStyle = '#f8fafc';
+          ctx.beginPath();
+          ctx.roundRect(-baleL / 2 - 1, -baleW / 2 - 2, baleL + 2, 4.5, 2);
+          ctx.fill();
+        }
 
         ctx.restore();
       }

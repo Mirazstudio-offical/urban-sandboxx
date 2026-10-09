@@ -4,6 +4,7 @@
 // floating drift debris/leaves/foam, and dynamic obstacle wake hydrodynamics.
 
 import { GameWorld, Vehicle } from './types';
+import { isWorldFreezing } from './calendarSystem';
 
 export interface RiverWaypoint {
   x: number;
@@ -427,6 +428,11 @@ export function getRiverWaterAt(x: number, y: number): RiverWaterInfo {
  * Universal water depth query function across the entire world
  */
 export function getUniversalWaterDepthAt(world: GameWorld | null | undefined, x: number, y: number): number {
+  if (world && isWorldFreezing(world)) {
+    // In sub-zero freezing temperatures, water bodies (river, ponds, puddles) are frozen solid into ice
+    return 0;
+  }
+
   const river = getRiverWaterAt(x, y);
   if (river.inWater && !river.isBridge) {
     return river.depth;
@@ -477,7 +483,8 @@ export function renderRiverSystem(
   timeHour: number = 12,
   nightAlpha: number = 0,
   weather: string = 'clear',
-  vehicles?: Vehicle[]
+  vehicles?: Vehicle[],
+  isFreezing: boolean = false
 ) {
   if (maxX < RIVER_MIN_X || minX > RIVER_MAX_X || maxY < RIVER_MIN_Y - 140 || minY > RIVER_MAX_Y + 140) {
     return;
@@ -615,92 +622,221 @@ export function renderRiverSystem(
   }
   ctx.closePath();
 
-  // Water Surface Base Color (Emerald-teal northern river)
-  if (nightAlpha > 0.6) {
-    ctx.fillStyle = '#0b1320';
+  if (isFreezing) {
+    // =========================================================================
+    // FROZEN NORTHERN RIVER ICE SHEET (ЛЕДЯНОЙ ПОКРОВ РЕКИ "БЫСТРИЦА")
+    // =========================================================================
+    // Solid thick river ice: pale frosted cyan-slate with crystalline depth
+    ctx.fillStyle = nightAlpha > 0.6 ? '#1e293b' : '#7e9aa8';
+    ctx.fill();
+
+    // Layer 3b: Mid-Depth Channel Band (dense blue glaze ice)
+    ctx.beginPath();
+    for (let k = kStart; k <= kEnd; k++) {
+      const pt = RIVER_SPLINE_POINTS[k];
+      const wx = pt.x + pt.nx * (pt.halfWidth * 0.82);
+      const wy = pt.y + pt.ny * (pt.halfWidth * 0.82);
+      if (k === kStart) ctx.moveTo(wx, wy);
+      else ctx.lineTo(wx, wy);
+    }
+    for (let k = kEnd; k >= kStart; k--) {
+      const pt = RIVER_SPLINE_POINTS[k];
+      const wx = pt.x - pt.nx * (pt.halfWidth * 0.82);
+      const wy = pt.y - pt.ny * (pt.halfWidth * 0.82);
+      ctx.lineTo(wx, wy);
+    }
+    ctx.closePath();
+    ctx.fillStyle = nightAlpha > 0.6 ? 'rgba(30, 41, 59, 0.85)' : 'rgba(148, 178, 194, 0.85)';
+    ctx.fill();
+
+    // Layer 3c: Deep Thalweg Core (translucent frozen core)
+    ctx.beginPath();
+    for (let k = kStart; k <= kEnd; k++) {
+      const pt = RIVER_SPLINE_POINTS[k];
+      const wx = pt.x + pt.nx * (pt.halfWidth * 0.52);
+      const wy = pt.y + pt.ny * (pt.halfWidth * 0.52);
+      if (k === kStart) ctx.moveTo(wx, wy);
+      else ctx.lineTo(wx, wy);
+    }
+    for (let k = kEnd; k >= kStart; k--) {
+      const pt = RIVER_SPLINE_POINTS[k];
+      const wx = pt.x - pt.nx * (pt.halfWidth * 0.52);
+      const wy = pt.y - pt.ny * (pt.halfWidth * 0.52);
+      ctx.lineTo(wx, wy);
+    }
+    ctx.closePath();
+    ctx.fillStyle = nightAlpha > 0.6 ? 'rgba(15, 23, 42, 0.90)' : 'rgba(125, 155, 172, 0.90)';
+    ctx.fill();
+
+    // Clip to ice surface for stress cracks, frozen bubbles & snow drift ribbons
+    ctx.save();
+    ctx.beginPath();
+    for (let k = kStart; k <= kEnd; k++) {
+      const pt = RIVER_SPLINE_POINTS[k];
+      const wx = pt.x + pt.nx * pt.halfWidth;
+      const wy = pt.y + pt.ny * pt.halfWidth;
+      if (k === kStart) ctx.moveTo(wx, wy);
+      else ctx.lineTo(wx, wy);
+    }
+    for (let k = kEnd; k >= kStart; k--) {
+      const pt = RIVER_SPLINE_POINTS[k];
+      const wx = pt.x - pt.nx * pt.halfWidth;
+      const wy = pt.y - pt.ny * pt.halfWidth;
+      ctx.lineTo(wx, wy);
+    }
+    ctx.closePath();
+    ctx.clip();
+
+    // Crystalline stress fractures & river ice cracks (трещины во льду)
+    ctx.strokeStyle = 'rgba(241, 245, 249, 0.72)';
+    ctx.lineWidth = 1.3;
+    ctx.beginPath();
+    for (let k = kStart; k <= kEnd; k += 4) {
+      const pt = RIVER_SPLINE_POINTS[k];
+      const crackSeed = Math.sin(k * 13.7);
+      const startDist = pt.halfWidth * (0.2 + crackSeed * 0.6);
+      let cx = pt.x + pt.nx * startDist;
+      let cy = pt.y + pt.ny * startDist;
+      ctx.moveTo(cx, cy);
+      for (let s = 0; s < 6; s++) {
+        const segLen = 18 + Math.abs(Math.cos(k * 7.1 + s)) * 24;
+        const segAngle = Math.atan2(pt.ty, pt.tx) + (Math.sin(k * 3.3 + s * 2.1) * 0.9);
+        cx += Math.cos(segAngle) * segLen;
+        cy += Math.sin(segAngle) * segLen;
+        ctx.lineTo(cx, cy);
+      }
+    }
+    ctx.stroke();
+
+    // Frozen air bubble clusters trapped inside ice
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.45)';
+    for (let k = kStart; k <= kEnd; k += 3) {
+      const pt = RIVER_SPLINE_POINTS[k];
+      for (let b = 0; b < 5; b++) {
+        const bOff = Math.sin(k * 19.3 + b * 5.7) * (pt.halfWidth * 0.7);
+        const bx = pt.x + pt.nx * bOff;
+        const by = pt.y + pt.ny * bOff;
+        const bRad = 1.0 + Math.abs(Math.sin(k + b)) * 2.2;
+        ctx.beginPath();
+        ctx.arc(bx, by, bRad, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+
+    // Windswept snow drifts & ribbons over the river ice
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.22)';
+    for (let k = kStart; k <= kEnd; k += 5) {
+      const pt = RIVER_SPLINE_POINTS[k];
+      const driftOff = Math.cos(k * 11.2) * (pt.halfWidth * 0.55);
+      const dx = pt.x + pt.nx * driftOff;
+      const dy = pt.y + pt.ny * driftOff;
+      ctx.beginPath();
+      ctx.ellipse(dx, dy, 75, 14, Math.atan2(pt.ty, pt.tx) + 0.15, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // Shore ice shelves (забереги) along left and right banks
+    ctx.fillStyle = 'rgba(241, 245, 249, 0.65)';
+    for (let k = kStart; k <= kEnd; k++) {
+      const pt = RIVER_SPLINE_POINTS[k];
+      const shelfW = 12 + Math.abs(Math.sin(k * 2.3)) * 8;
+      const lx = pt.x + pt.nx * (pt.halfWidth - shelfW * 0.5);
+      const ly = pt.y + pt.ny * (pt.halfWidth - shelfW * 0.5);
+      ctx.fillRect(lx - 4, ly - 4, 8, 8);
+      const rx = pt.x - pt.nx * (pt.halfWidth - shelfW * 0.5);
+      const ry = pt.y - pt.ny * (pt.halfWidth - shelfW * 0.5);
+      ctx.fillRect(rx - 4, ry - 4, 8, 8);
+    }
+
+    ctx.restore(); // Restore clip
   } else {
-    ctx.fillStyle = '#1b3f42'; // Translucent clear shallow teal
+    // Water Surface Base Color (Emerald-teal northern river)
+    if (nightAlpha > 0.6) {
+      ctx.fillStyle = '#0b1320';
+    } else {
+      ctx.fillStyle = '#1b3f42'; // Translucent clear shallow teal
+    }
+    ctx.fill();
+
+    // Layer 3b: Mid-Depth Channel Band (Rich turquoise-olive)
+    ctx.beginPath();
+    for (let k = kStart; k <= kEnd; k++) {
+      const pt = RIVER_SPLINE_POINTS[k];
+      const wx = pt.x + pt.nx * (pt.halfWidth * 0.78);
+      const wy = pt.y + pt.ny * (pt.halfWidth * 0.78);
+      if (k === kStart) ctx.moveTo(wx, wy);
+      else ctx.lineTo(wx, wy);
+    }
+    for (let k = kEnd; k >= kStart; k--) {
+      const pt = RIVER_SPLINE_POINTS[k];
+      const wx = pt.x - pt.nx * (pt.halfWidth * 0.78);
+      const wy = pt.y - pt.ny * (pt.halfWidth * 0.78);
+      ctx.lineTo(wx, wy);
+    }
+    ctx.closePath();
+    ctx.fillStyle = (nightAlpha > 0.6) ? 'rgba(8, 14, 26, 0.65)' : 'rgba(18, 48, 54, 0.70)';
+    ctx.fill();
+
+    // Layer 3c: Deep Thalweg Core (Deep mysterious northern indigo-olive)
+    ctx.beginPath();
+    for (let k = kStart; k <= kEnd; k++) {
+      const pt = RIVER_SPLINE_POINTS[k];
+      const wx = pt.x + pt.nx * (pt.halfWidth * 0.48);
+      const wy = pt.y + pt.ny * (pt.halfWidth * 0.48);
+      if (k === kStart) ctx.moveTo(wx, wy);
+      else ctx.lineTo(wx, wy);
+    }
+    for (let k = kEnd; k >= kStart; k--) {
+      const pt = RIVER_SPLINE_POINTS[k];
+      const wx = pt.x - pt.nx * (pt.halfWidth * 0.48);
+      const wy = pt.y - pt.ny * (pt.halfWidth * 0.48);
+      ctx.lineTo(wx, wy);
+    }
+    ctx.closePath();
+    ctx.fillStyle = (nightAlpha > 0.6) ? 'rgba(3, 7, 18, 0.75)' : 'rgba(10, 26, 32, 0.75)';
+    ctx.fill();
+
+    // Clip to River Water Surface for all internal fluid rendering
+    ctx.save();
+    ctx.beginPath();
+    for (let k = kStart; k <= kEnd; k++) {
+      const pt = RIVER_SPLINE_POINTS[k];
+      const wx = pt.x + pt.nx * pt.halfWidth;
+      const wy = pt.y + pt.ny * pt.halfWidth;
+      if (k === kStart) ctx.moveTo(wx, wy);
+      else ctx.lineTo(wx, wy);
+    }
+    for (let k = kEnd; k >= kStart; k--) {
+      const pt = RIVER_SPLINE_POINTS[k];
+      const wx = pt.x - pt.nx * pt.halfWidth;
+      const wy = pt.y - pt.ny * pt.halfWidth;
+      ctx.lineTo(wx, wy);
+    }
+    ctx.closePath();
+    ctx.clip();
+
+    // --- PASS 4: ORGANIC PROCEDURAL RIVERBED STONES & BOULDERS (Каменистое дно и перекаты) ---
+    // Replaces the unnatural linear 3-dot grid with realistic organic boulder clusters & gravel beds
+    renderOrganicRiverbedStones(ctx, kStart, kEnd, animTime);
+
+    // --- PASS 5: DYNAMIC SWAYING UNDERWATER RIVERWEED & ALGAE (Колеблющиеся речные водоросли) ---
+    renderDynamicRiverweed(ctx, kStart, kEnd, animTime);
+
+    // --- PASS 6: ORGANIC MULTI-FREQUENCY CURRENT STREAMLINES & CAUSTICS ---
+    renderFluidCurrentStreamlines(ctx, kStart, kEnd, animTime, nightAlpha);
+
+    // --- PASS 7: WATER LILIES & DUCKWEED IN CALM POOLS (Тихий Плёс) ---
+    renderWaterLilies(ctx, kStart, kEnd, animTime);
+
+    // --- PASS 8: DYNAMIC FLOATING RIVER DEBRIS (Ветки, сучья, осенние листья, хлопья пены) ---
+    renderFloatingRiverDebris(ctx, minX, minY, maxX, maxY, animTime);
+
+    // --- PASS 9: DYNAMIC OBSTACLE COLLISION WAKES & HYDRODYNAMICS ---
+    // Renders upstream stagnation bow wave foam and downstream turbulent V-wakes for bridge pillars, boulders & submerged vehicles
+    renderObstacleWakes(ctx, kStart, kEnd, animTime, vehicles);
+
+    ctx.restore(); // Restore water surface clip
   }
-  ctx.fill();
-
-  // Layer 3b: Mid-Depth Channel Band (Rich turquoise-olive)
-  ctx.beginPath();
-  for (let k = kStart; k <= kEnd; k++) {
-    const pt = RIVER_SPLINE_POINTS[k];
-    const wx = pt.x + pt.nx * (pt.halfWidth * 0.78);
-    const wy = pt.y + pt.ny * (pt.halfWidth * 0.78);
-    if (k === kStart) ctx.moveTo(wx, wy);
-    else ctx.lineTo(wx, wy);
-  }
-  for (let k = kEnd; k >= kStart; k--) {
-    const pt = RIVER_SPLINE_POINTS[k];
-    const wx = pt.x - pt.nx * (pt.halfWidth * 0.78);
-    const wy = pt.y - pt.ny * (pt.halfWidth * 0.78);
-    ctx.lineTo(wx, wy);
-  }
-  ctx.closePath();
-  ctx.fillStyle = (nightAlpha > 0.6) ? 'rgba(8, 14, 26, 0.65)' : 'rgba(18, 48, 54, 0.70)';
-  ctx.fill();
-
-  // Layer 3c: Deep Thalweg Core (Deep mysterious northern indigo-olive)
-  ctx.beginPath();
-  for (let k = kStart; k <= kEnd; k++) {
-    const pt = RIVER_SPLINE_POINTS[k];
-    const wx = pt.x + pt.nx * (pt.halfWidth * 0.48);
-    const wy = pt.y + pt.ny * (pt.halfWidth * 0.48);
-    if (k === kStart) ctx.moveTo(wx, wy);
-    else ctx.lineTo(wx, wy);
-  }
-  for (let k = kEnd; k >= kStart; k--) {
-    const pt = RIVER_SPLINE_POINTS[k];
-    const wx = pt.x - pt.nx * (pt.halfWidth * 0.48);
-    const wy = pt.y - pt.ny * (pt.halfWidth * 0.48);
-    ctx.lineTo(wx, wy);
-  }
-  ctx.closePath();
-  ctx.fillStyle = (nightAlpha > 0.6) ? 'rgba(3, 7, 18, 0.75)' : 'rgba(10, 26, 32, 0.75)';
-  ctx.fill();
-
-  // Clip to River Water Surface for all internal fluid rendering
-  ctx.save();
-  ctx.beginPath();
-  for (let k = kStart; k <= kEnd; k++) {
-    const pt = RIVER_SPLINE_POINTS[k];
-    const wx = pt.x + pt.nx * pt.halfWidth;
-    const wy = pt.y + pt.ny * pt.halfWidth;
-    if (k === kStart) ctx.moveTo(wx, wy);
-    else ctx.lineTo(wx, wy);
-  }
-  for (let k = kEnd; k >= kStart; k--) {
-    const pt = RIVER_SPLINE_POINTS[k];
-    const wx = pt.x - pt.nx * pt.halfWidth;
-    const wy = pt.y - pt.ny * pt.halfWidth;
-    ctx.lineTo(wx, wy);
-  }
-  ctx.closePath();
-  ctx.clip();
-
-  // --- PASS 4: ORGANIC PROCEDURAL RIVERBED STONES & BOULDERS (Каменистое дно и перекаты) ---
-  // Replaces the unnatural linear 3-dot grid with realistic organic boulder clusters & gravel beds
-  renderOrganicRiverbedStones(ctx, kStart, kEnd, animTime);
-
-  // --- PASS 5: DYNAMIC SWAYING UNDERWATER RIVERWEED & ALGAE (Колеблющиеся речные водоросли) ---
-  renderDynamicRiverweed(ctx, kStart, kEnd, animTime);
-
-  // --- PASS 6: ORGANIC MULTI-FREQUENCY CURRENT STREAMLINES & CAUSTICS ---
-  renderFluidCurrentStreamlines(ctx, kStart, kEnd, animTime, nightAlpha);
-
-  // --- PASS 7: WATER LILIES & DUCKWEED IN CALM POOLS (Тихий Плёс) ---
-  renderWaterLilies(ctx, kStart, kEnd, animTime);
-
-  // --- PASS 8: DYNAMIC FLOATING RIVER DEBRIS (Ветки, сучья, осенние листья, хлопья пены) ---
-  renderFloatingRiverDebris(ctx, minX, minY, maxX, maxY, animTime);
-
-  // --- PASS 9: DYNAMIC OBSTACLE COLLISION WAKES & HYDRODYNAMICS ---
-  // Renders upstream stagnation bow wave foam and downstream turbulent V-wakes for bridge pillars, boulders & submerged vehicles
-  renderObstacleWakes(ctx, kStart, kEnd, animTime, vehicles);
-
-  ctx.restore(); // Restore water surface clip
 
   // --- PASS 10: SHORELINE REEDS & CATTAILS ALONG BANKS (Камышовые заросли) ---
   renderShorelineReeds(ctx, kStart, kEnd, animTime);

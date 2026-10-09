@@ -58,6 +58,7 @@ import { GuardrailRenderer } from './guardrailRenderer';
 import { TerrainRenderer } from './terrainRenderer';
 import { RoofRenderer } from './roofRenderer';
 import { renderRiverSystem } from './riverSystem';
+import { isWorldFreezing } from './calendarSystem';
 import { RemotePlayerState, SpeechBubble } from './onlineSystem';
 import { InteractionTarget } from './interactionSystem';
 import { getCityApartments } from './propertySystem';
@@ -188,6 +189,7 @@ export class GameRenderer {
 
   // Offscreen Chunk Cache for static world geometry (Ground, Sidewalks, Roads, Parkings)
   private chunkCache = new Map<string, HTMLCanvasElement>();
+  private lastChunkSeasonKey: string = '';
   private chunkSize: number = 1000;
 
   // Cached High-Fidelity Procedural Surface Patterns for Roads & Shoulders
@@ -497,7 +499,7 @@ export class GameRenderer {
     const chunkSidewalks = world.sidewalks.filter(sw => 
       sw.x + sw.width >= minX && sw.x <= maxX && sw.y + sw.height >= minY && sw.y <= maxY
     );
-    this.renderSidewalks(chunkCtx, chunkSidewalks, minX, minY, maxX, maxY);
+    this.renderSidewalks(chunkCtx, chunkSidewalks, minX, minY, maxX, maxY, world);
 
     // 2b. Static Driveways from map.json
     this.renderStaticDriveways(chunkCtx, world, minX, minY, maxX, maxY);
@@ -520,7 +522,16 @@ export class GameRenderer {
 
   private static readonly MAX_CHUNKS = 48;
   private getChunkCanvas(cx: number, cy: number, world: GameWorld): HTMLCanvasElement {
-    const key = `${cx},${cy}`;
+    const seasonKey = world.calendar ? `${world.calendar.season}_${world.calendar.month}` : 'default';
+    if (this.lastChunkSeasonKey !== seasonKey) {
+      for (const oldCanvas of this.chunkCache.values()) {
+        oldCanvas.width = 0;
+        oldCanvas.height = 0;
+      }
+      this.chunkCache.clear();
+      this.lastChunkSeasonKey = seasonKey;
+    }
+    const key = `${cx},${cy}_${seasonKey}`;
     let canvas = this.chunkCache.get(key);
     if (!canvas) {
       if (this.chunkCache.size >= GameRenderer.MAX_CHUNKS) {
@@ -737,7 +748,8 @@ export class GameRenderer {
             }
           }
 
-          this.renderPuddles(world.puddles, sMinX, sMinY, sMaxX, sMaxY);
+          const isMirrorFreezing = isWorldFreezing(world, timeHour);
+          this.renderPuddles(world.puddles, sMinX, sMinY, sMaxX, sMaxY, isMirrorFreezing);
           GuardrailRenderer.renderGuardrails(ctx, world, sMinX, sMinY, sMaxX, sMaxY, nightAlpha);
           this.renderPedestrians(visiblePedestrians, world);
           this.renderUnderVehicleParticles(world.particles, world.cleanMode);
@@ -829,17 +841,19 @@ export class GameRenderer {
     // 4b. Post-Soviet Atmosphere & Cyrillic Signage
     this.renderPostSovietAtmosphereAndSignage(world, minX, minY, maxX, maxY);
 
+    const isFreezing = isWorldFreezing(world, timeHour);
+
     // 4c. River "Быстрица" (Flowing water, animated currents, riverbanks, ford, obstacles & logging bridge)
-    renderRiverSystem(this.ctx, minX, minY, maxX, maxY, timeHour, nightAlpha, world.weather, visibleVehicles);
+    renderRiverSystem(this.ctx, minX, minY, maxX, maxY, timeHour, nightAlpha, world.weather, visibleVehicles, isFreezing);
 
     // 5. Puddles (Road wet spots)
-    this.renderPuddles(world.puddles, minX, minY, maxX, maxY);
+    this.renderPuddles(world.puddles, minX, minY, maxX, maxY, isFreezing);
 
     // 6. Skid Marks
     this.renderSkidMarks(world.skidMarks, minX, minY, maxX, maxY);
 
     // 6b. Fluid Stains (Oil, Coolant, Fuel on road surface - Layer 0)
-    this.renderStains(world.stains, minX, minY, maxX, maxY);
+    this.renderStains(world.stains, minX, minY, maxX, maxY, isFreezing);
 
     // 8. Buildings Base Structure & Entrances
     this.renderBuildingBases(visibleBuildings, nightAlpha, player, timeHour);
@@ -978,6 +992,9 @@ export class GameRenderer {
 
     ctx.restore();
 
+    // Call dynamic weather overlay (Rain drops, ground ripples, volumetric fog, lightning bolts)
+    this.renderWeatherOverlay(world, minX, minY, maxX, maxY, camera, timeHour, nightAlpha, visibleVehicles, isFreezing);
+
     // Render full physiological screen effects pass (Pain vignette, Shock desaturation, Frost cyan, Amber wave)
     screenEffectsSystem.render(ctx, this.width, this.height, player, world);
   }
@@ -994,9 +1011,12 @@ export class GameRenderer {
     minX: number, minY: number, maxX: number, maxY: number
   ) {
     const { roads, intersections } = world;
+    const isWinter = world.calendar?.season === 'winter';
+    const isAutumn = world.calendar?.season === 'autumn';
+    const isSpring = world.calendar?.season === 'spring';
 
     // 1. First Pass: Country Road Shoulders (Широкие многослойные обочины загородных дорог и трасс)
-    const shoulderPattern = GameRenderer.getShoulderPattern(ctx);
+    const shoulderPattern = isWinter ? 'rgba(232, 238, 245, 0.88)' : GameRenderer.getShoulderPattern(ctx);
 
     for (const road of roads) {
       if (road.isRoundabout) continue;
@@ -1016,12 +1036,12 @@ export class GameRenderer {
         ctx.fillRect(road.x1, top - shoulderW, road.x2 - road.x1, road.width + shoulderW * 2);
 
         // 1b. Inner compacted dark edge strip adjacent to asphalt (прикромочная полоса 6px)
-        ctx.fillStyle = 'rgba(42, 36, 26, 0.45)';
+        ctx.fillStyle = isWinter ? 'rgba(80, 90, 105, 0.40)' : 'rgba(42, 36, 26, 0.45)';
         ctx.fillRect(road.x1, top - 6, road.x2 - road.x1, 6);
         ctx.fillRect(road.x1, top + road.width, road.x2 - road.x1, 6);
 
         // 1c. Outer verge transition to terrain grass (откос бровки кювета 8px)
-        ctx.fillStyle = 'rgba(55, 68, 36, 0.35)';
+        ctx.fillStyle = isWinter ? 'rgba(241, 245, 249, 0.80)' : (isAutumn ? 'rgba(85, 75, 45, 0.45)' : 'rgba(55, 68, 36, 0.35)');
         ctx.fillRect(road.x1, top - shoulderW, road.x2 - road.x1, 8);
         ctx.fillRect(road.x1, top + road.width + shoulderW - 8, road.x2 - road.x1, 8);
 
@@ -1034,12 +1054,12 @@ export class GameRenderer {
         ctx.fillRect(left - shoulderW, road.y1, road.width + shoulderW * 2, road.y2 - road.y1);
 
         // 1b. Inner compacted edge strip (6px)
-        ctx.fillStyle = 'rgba(42, 36, 26, 0.45)';
+        ctx.fillStyle = isWinter ? 'rgba(80, 90, 105, 0.40)' : 'rgba(42, 36, 26, 0.45)';
         ctx.fillRect(left - 6, road.y1, 6, road.y2 - road.y1);
         ctx.fillRect(left + road.width, road.y1, 6, road.y2 - road.y1);
 
         // 1c. Outer verge transition (8px)
-        ctx.fillStyle = 'rgba(55, 68, 36, 0.35)';
+        ctx.fillStyle = isWinter ? 'rgba(241, 245, 249, 0.80)' : (isAutumn ? 'rgba(85, 75, 45, 0.45)' : 'rgba(55, 68, 36, 0.35)');
         ctx.fillRect(left - shoulderW, road.y1, 8, road.y2 - road.y1);
         ctx.fillRect(left + road.width + shoulderW - 8, road.y1, 8, road.y2 - road.y1);
 
@@ -1116,19 +1136,19 @@ export class GameRenderer {
 
         // Detailed realistic dirt road texturing (overgrown center grass ridge & worn wheel ruts)
         if (road.isDirt) {
-          // Worn muddy wheel ruts
-          ctx.fillStyle = '#3d2b1f';
+          // Worn muddy or frozen wheel ruts
+          ctx.fillStyle = isWinter ? '#334155' : (isSpring ? '#2a1a0f' : '#3d2b1f');
           ctx.fillRect(road.x1, road.y1 - road.width * 0.28, road.x2 - road.x1, 6);
           ctx.fillRect(road.x1, road.y1 + road.width * 0.16, road.x2 - road.x1, 6);
 
-          // Overgrown grassy center ridge
-          ctx.fillStyle = '#4f642f';
+          // Overgrown center ridge (snow in winter, dry in autumn, fresh in spring)
+          ctx.fillStyle = isWinter ? '#cbd5e1' : (isAutumn ? '#78541a' : '#4f642f');
           ctx.fillRect(road.x1, road.y1 - 4, road.x2 - road.x1, 8);
-          ctx.fillStyle = '#5c7437';
+          ctx.fillStyle = isWinter ? '#f1f5f9' : (isAutumn ? '#926a27' : '#5c7437');
           ctx.fillRect(road.x1, road.y1 - 2, road.x2 - road.x1, 4);
 
-          // Ragged grassy tufts along road edges
-          ctx.fillStyle = '#4f642f';
+          // Ragged edge tufts along road edges
+          ctx.fillStyle = isWinter ? '#e2e8f0' : (isAutumn ? '#855b1a' : '#4f642f');
           for (let rx = road.x1 + 10; rx < road.x2; rx += 38) {
             ctx.beginPath();
             ctx.arc(rx, top + 1, 3.5, 0, Math.PI * 2);
@@ -1139,7 +1159,7 @@ export class GameRenderer {
           // Asphalt longitudinal tire wear tracks (колейность / накат колес в полосах движения)
           const lanes = road.lanes || 2;
           const laneH = road.width / lanes;
-          ctx.fillStyle = 'rgba(16, 18, 22, 0.28)'; // Darker polished tyre tracks
+          ctx.fillStyle = isWinter ? 'rgba(20, 24, 32, 0.45)' : 'rgba(16, 18, 22, 0.28)'; // Darker polished tyre tracks
           for (let l = 0; l < lanes; l++) {
             const laneCenterY = top + (l + 0.5) * laneH;
             const rutOffset = laneH * 0.22;
@@ -1147,17 +1167,24 @@ export class GameRenderer {
             ctx.fillRect(road.x1, laneCenterY + rutOffset - 3, road.x2 - road.x1, 6);
           }
 
-          // Lighter oxidized aggregate strip between wheel ruts
-          ctx.fillStyle = 'rgba(80, 84, 94, 0.15)';
+          // Lighter aggregate / winter snow slush strip between wheel ruts
+          ctx.fillStyle = isWinter ? 'rgba(235, 242, 250, 0.35)' : 'rgba(80, 84, 94, 0.15)';
           for (let l = 0; l < lanes; l++) {
             const laneCenterY = top + (l + 0.5) * laneH;
             ctx.fillRect(road.x1, laneCenterY - 2, road.x2 - road.x1, 4);
           }
 
-          // Chipped edge micro-texture
-          ctx.fillStyle = 'rgba(20, 22, 26, 0.35)';
-          ctx.fillRect(road.x1, top, road.x2 - road.x1, 1.5);
-          ctx.fillRect(road.x1, top + road.width - 1.5, road.x2 - road.x1, 1.5);
+          // Road edge snow berms in winter
+          if (isWinter) {
+            ctx.fillStyle = 'rgba(241, 245, 249, 0.55)';
+            ctx.fillRect(road.x1, top, road.x2 - road.x1, 3.5);
+            ctx.fillRect(road.x1, top + road.width - 3.5, road.x2 - road.x1, 3.5);
+          } else {
+            // Chipped edge micro-texture
+            ctx.fillStyle = 'rgba(20, 22, 26, 0.35)';
+            ctx.fillRect(road.x1, top, road.x2 - road.x1, 1.5);
+            ctx.fillRect(road.x1, top + road.width - 1.5, road.x2 - road.x1, 1.5);
+          }
         }
       } else if (road.direction === 'vertical') {
         const left = road.x1 - road.width / 2;
@@ -1166,19 +1193,19 @@ export class GameRenderer {
 
         // Detailed realistic dirt road texturing (vertical)
         if (road.isDirt) {
-          // Worn muddy wheel ruts
-          ctx.fillStyle = '#3d2b1f';
+          // Worn muddy or frozen wheel ruts
+          ctx.fillStyle = isWinter ? '#334155' : (isSpring ? '#2a1a0f' : '#3d2b1f');
           ctx.fillRect(road.x1 - road.width * 0.28, road.y1, 6, road.y2 - road.y1);
           ctx.fillRect(road.x1 + road.width * 0.16, road.y1, 6, road.y2 - road.y1);
 
-          // Overgrown grassy center ridge
-          ctx.fillStyle = '#4f642f';
+          // Overgrown center ridge (snow in winter, dry in autumn, fresh in spring)
+          ctx.fillStyle = isWinter ? '#cbd5e1' : (isAutumn ? '#78541a' : '#4f642f');
           ctx.fillRect(road.x1 - 4, road.y1, 8, road.y2 - road.y1);
-          ctx.fillStyle = '#5c7437';
+          ctx.fillStyle = isWinter ? '#f1f5f9' : (isAutumn ? '#926a27' : '#5c7437');
           ctx.fillRect(road.x1 - 2, road.y1, 4, road.y2 - road.y1);
 
-          // Ragged grassy tufts along road edges
-          ctx.fillStyle = '#4f642f';
+          // Ragged edge tufts along road edges
+          ctx.fillStyle = isWinter ? '#e2e8f0' : (isAutumn ? '#855b1a' : '#4f642f');
           for (let ry = road.y1 + 10; ry < road.y2; ry += 38) {
             ctx.beginPath();
             ctx.arc(left + 1, ry, 3.5, 0, Math.PI * 2);
@@ -1189,7 +1216,7 @@ export class GameRenderer {
           // Asphalt longitudinal tire wear tracks (vertical)
           const lanes = road.lanes || 2;
           const laneW = road.width / lanes;
-          ctx.fillStyle = 'rgba(16, 18, 22, 0.28)'; // Darker polished tyre tracks
+          ctx.fillStyle = isWinter ? 'rgba(20, 24, 32, 0.45)' : 'rgba(16, 18, 22, 0.28)'; // Darker polished tyre tracks
           for (let l = 0; l < lanes; l++) {
             const laneCenterX = left + (l + 0.5) * laneW;
             const rutOffset = laneW * 0.22;
@@ -1197,17 +1224,24 @@ export class GameRenderer {
             ctx.fillRect(laneCenterX + rutOffset - 3, road.y1, 6, road.y2 - road.y1);
           }
 
-          // Lighter oxidized aggregate strip
-          ctx.fillStyle = 'rgba(80, 84, 94, 0.15)';
+          // Lighter aggregate / winter snow slush strip
+          ctx.fillStyle = isWinter ? 'rgba(235, 242, 250, 0.35)' : 'rgba(80, 84, 94, 0.15)';
           for (let l = 0; l < lanes; l++) {
             const laneCenterX = left + (l + 0.5) * laneW;
             ctx.fillRect(laneCenterX - 2, road.y1, 4, road.y2 - road.y1);
           }
 
-          // Chipped edge micro-texture
-          ctx.fillStyle = 'rgba(20, 22, 26, 0.35)';
-          ctx.fillRect(left, road.y1, 1.5, road.y2 - road.y1);
-          ctx.fillRect(left + road.width - 1.5, road.y1, 1.5, road.y2 - road.y1);
+          // Road edge snow berms in winter
+          if (isWinter) {
+            ctx.fillStyle = 'rgba(241, 245, 249, 0.55)';
+            ctx.fillRect(left, road.y1, 3.5, road.y2 - road.y1);
+            ctx.fillRect(left + road.width - 3.5, road.y1, 3.5, road.y2 - road.y1);
+          } else {
+            // Chipped edge micro-texture
+            ctx.fillStyle = 'rgba(20, 22, 26, 0.35)';
+            ctx.fillRect(left, road.y1, 1.5, road.y2 - road.y1);
+            ctx.fillRect(left + road.width - 1.5, road.y1, 1.5, road.y2 - road.y1);
+          }
         }
       } else if (road.curvePoints && road.curvePoints.length > 1) {
         // True Bezier Curved Road Segment (Ribbon mesh with smooth normals)
@@ -2414,7 +2448,7 @@ export class GameRenderer {
   }
 
   // --- FLUID STAINS (OIL, COOLANT, FUEL ON ROAD SURFACE) ---
-  private renderStains(stains: GameWorld['stains'], minX: number, minY: number, maxX: number, maxY: number) {
+  private renderStains(stains: GameWorld['stains'], minX: number, minY: number, maxX: number, maxY: number, isFreezing: boolean = false) {
     if (!stains || stains.length === 0) return;
     const ctx = this.ctx;
 
@@ -2575,27 +2609,55 @@ export class GameRenderer {
         }
 
       } else if (stain.type === 'water') {
-        // Realistic clear water puddle: glassy sky reflection, gentle blue-slate refraction, bright specular highlights
-        const grad = safeRadialGradient(ctx, -rx * 0.1, -ry * 0.1, 0, 0, 0, rx);
-        grad.addColorStop(0, `rgba(14, 116, 144, ${stainAlpha * 0.55})`); // Deep water refraction tint
-        grad.addColorStop(0.35, `rgba(56, 189, 248, ${stainAlpha * 0.4})`); // Clear translucent water
-        grad.addColorStop(0.75, `rgba(186, 230, 253, ${stainAlpha * 0.22})`); // Thin meniscus boundary film
-        grad.addColorStop(1, `rgba(224, 242, 254, 0)`);
+        if (isFreezing) {
+          // Frozen glaze ice spot / rime crust (наледь на асфальте)
+          const grad = safeRadialGradient(ctx, -rx * 0.1, -ry * 0.1, 0, 0, 0, rx);
+          grad.addColorStop(0, `rgba(219, 234, 254, ${stainAlpha * 0.70})`); // Pale milky cyan ice
+          grad.addColorStop(0.5, `rgba(186, 230, 253, ${stainAlpha * 0.50})`); // Crystalline rime
+          grad.addColorStop(0.85, `rgba(148, 163, 184, ${stainAlpha * 0.35})`); // Dark frozen rim
+          grad.addColorStop(1, `rgba(224, 242, 254, 0)`);
 
-        ctx.fillStyle = grad;
-        this.drawOrganicBlob(ctx, rx, ry, seed);
-        ctx.fill();
+          ctx.fillStyle = grad;
+          this.drawOrganicBlob(ctx, rx, ry, seed);
+          ctx.fill();
 
-        // Wet glossy specular reflection on puddle surface
-        ctx.fillStyle = `rgba(255, 255, 255, ${stainAlpha * 0.55})`;
-        ctx.beginPath();
-        safeEllipse(ctx, -rx * 0.28, -ry * 0.22, rx * 0.28, ry * 0.12, -0.15, 0, Math.PI * 2);
-        ctx.fill();
-        // Secondary soft sky gleam
-        ctx.fillStyle = `rgba(224, 242, 254, ${stainAlpha * 0.3})`;
-        ctx.beginPath();
-        safeEllipse(ctx, rx * 0.2, ry * 0.18, rx * 0.15, ry * 0.08, 0.2, 0, Math.PI * 2);
-        ctx.fill();
+          // Crystalline micro-fracture
+          ctx.strokeStyle = `rgba(255, 255, 255, ${stainAlpha * 0.75})`;
+          ctx.lineWidth = 0.8;
+          ctx.beginPath();
+          ctx.moveTo(-rx * 0.3, -ry * 0.1);
+          ctx.lineTo(0, 0);
+          ctx.lineTo(rx * 0.35, ry * 0.2);
+          ctx.stroke();
+
+          // Glaze specular reflection
+          ctx.fillStyle = `rgba(255, 255, 255, ${stainAlpha * 0.75})`;
+          ctx.beginPath();
+          safeEllipse(ctx, -rx * 0.2, -ry * 0.18, rx * 0.3, ry * 0.1, -0.2, 0, Math.PI * 2);
+          ctx.fill();
+        } else {
+          // Realistic clear water puddle: glassy sky reflection, gentle blue-slate refraction, bright specular highlights
+          const grad = safeRadialGradient(ctx, -rx * 0.1, -ry * 0.1, 0, 0, 0, rx);
+          grad.addColorStop(0, `rgba(14, 116, 144, ${stainAlpha * 0.55})`); // Deep water refraction tint
+          grad.addColorStop(0.35, `rgba(56, 189, 248, ${stainAlpha * 0.4})`); // Clear translucent water
+          grad.addColorStop(0.75, `rgba(186, 230, 253, ${stainAlpha * 0.22})`); // Thin meniscus boundary film
+          grad.addColorStop(1, `rgba(224, 242, 254, 0)`);
+
+          ctx.fillStyle = grad;
+          this.drawOrganicBlob(ctx, rx, ry, seed);
+          ctx.fill();
+
+          // Wet glossy specular reflection on puddle surface
+          ctx.fillStyle = `rgba(255, 255, 255, ${stainAlpha * 0.55})`;
+          ctx.beginPath();
+          safeEllipse(ctx, -rx * 0.28, -ry * 0.22, rx * 0.28, ry * 0.12, -0.15, 0, Math.PI * 2);
+          ctx.fill();
+          // Secondary soft sky gleam
+          ctx.fillStyle = `rgba(224, 242, 254, ${stainAlpha * 0.3})`;
+          ctx.beginPath();
+          safeEllipse(ctx, rx * 0.2, ry * 0.18, rx * 0.15, ry * 0.08, 0.2, 0, Math.PI * 2);
+          ctx.fill();
+        }
       }
 
       if ((stain as any).onFire) {
@@ -2625,8 +2687,11 @@ export class GameRenderer {
     minX: number,
     minY: number,
     maxX: number,
-    maxY: number
+    maxY: number,
+    world?: GameWorld
   ) {
+    const isWinter = world?.calendar?.season === 'winter';
+    const season = world?.calendar?.season;
 
     for (const sw of sidewalks) {
       if (sw.x + sw.width < minX || sw.x > maxX || sw.y + sw.height < minY || sw.y > maxY) {
@@ -2652,6 +2717,11 @@ export class GameRenderer {
         curbDark = '#374151';
       }
 
+      if (isWinter) {
+        paveColor = '#94a3b8';
+        curbHighlight = '#f8fafc';
+      }
+
       // Outer sidewalk footprint with rounded corners (curb returns)
       const swRadius = 20;
       ctx.fillStyle = paveColor;
@@ -2662,6 +2732,27 @@ export class GameRenderer {
         ctx.rect(sw.x, sw.y, sw.width, sw.height);
       }
       ctx.fill();
+
+      // Winter sidewalk snow crust & trampled walkway
+      if (isWinter) {
+        ctx.fillStyle = 'rgba(241, 245, 249, 0.72)';
+        ctx.beginPath();
+        if (ctx.roundRect) {
+          ctx.roundRect(sw.x, sw.y, sw.width, sw.height, swRadius);
+        } else {
+          ctx.rect(sw.x, sw.y, sw.width, sw.height);
+        }
+        ctx.fill();
+
+        // Worn grey pedestrian trampled footpath in the middle
+        ctx.fillStyle = 'rgba(100, 116, 139, 0.42)';
+        const pathThickness = Math.max(16, sw.sidewalkWidth * 0.55);
+        if (sw.width > sw.height) {
+          ctx.fillRect(sw.x + 8, sw.y + sw.height / 2 - pathThickness / 2, sw.width - 16, pathThickness);
+        } else {
+          ctx.fillRect(sw.x + sw.width / 2 - pathThickness / 2, sw.y + 8, pathThickness, sw.height - 16);
+        }
+      }
 
       // 2. Concrete slab expansion joint lines (tile grid texture on walkway)
       ctx.strokeStyle = 'rgba(15, 23, 42, 0.20)';
@@ -2714,8 +2805,16 @@ export class GameRenderer {
 
       if (innerW > 0 && innerH > 0) {
         const innerRadius = Math.max(4, swRadius - sw.sidewalkWidth * 0.4);
-        // Inner grass lawn
-        ctx.fillStyle = sw.innerLawnColor || '#15803d';
+        // Inner seasonal lawn
+        if (isWinter) {
+          ctx.fillStyle = '#e2e8f0'; // Snowy courtyard lawn
+        } else if (season === 'autumn') {
+          ctx.fillStyle = '#78541a'; // Autumn dry leaves lawn
+        } else if (season === 'spring') {
+          ctx.fillStyle = '#4d7c0f'; // Fresh tender lawn
+        } else {
+          ctx.fillStyle = sw.innerLawnColor || '#15803d';
+        }
         ctx.beginPath();
         if (ctx.roundRect) {
           ctx.roundRect(innerX, innerY, innerW, innerH, innerRadius);
@@ -5371,16 +5470,18 @@ export class GameRenderer {
           ctx.lineTo(tx - 0.5, ty - 0.5);
           ctx.stroke();
 
-          // Occasional dry colored leaves clinging to the twigs (Gold, Bronze, or Amber)
+          // Occasional dry colored leaves clinging to the twigs (or frost/snow in winter)
           if ((seed + b) % 2 === 0) {
-            const leafColor = (seed + b) % 3 === 0 ? '#ea580c' : (seed + b) % 3 === 1 ? '#ca8a04' : '#b45309';
+            const leafColor = season === 'winter' ? '#f8fafc' : ((seed + b) % 3 === 0 ? '#ea580c' : (seed + b) % 3 === 1 ? '#ca8a04' : '#b45309');
             ctx.fillStyle = leafColor;
             ctx.beginPath();
             ctx.arc(tx, ty, Math.max(2.5, r * 0.12), 0, Math.PI * 2);
             ctx.fill();
-            ctx.strokeStyle = '#292524';
-            ctx.lineWidth = 0.5;
-            ctx.stroke();
+            if (season !== 'winter') {
+              ctx.strokeStyle = '#292524';
+              ctx.lineWidth = 0.5;
+              ctx.stroke();
+            }
           }
         }
 
@@ -5459,6 +5560,18 @@ export class GameRenderer {
         }
         ctx.closePath();
         ctx.fill();
+
+        // Snow deposits on pine tiers in winter
+        if (season === 'winter') {
+          ctx.fillStyle = 'rgba(241, 245, 249, 0.75)';
+          ctx.beginPath();
+          for (let a = 0; a < Math.PI * 2; a += Math.PI / 3) {
+            const px = tree.x + Math.cos(a + 0.25) * (r * 0.52);
+            const py = tree.y + Math.sin(a + 0.25) * (r * 0.52);
+            ctx.arc(px, py, r * 0.18, 0, Math.PI * 2);
+          }
+          ctx.fill();
+        }
 
         // Top Apex Tier (Snow cap in winter)
         ctx.fillStyle = season === 'winter' ? '#f8fafc' : '#2a8750';
@@ -5551,39 +5664,163 @@ export class GameRenderer {
       } else {
         // --- DECIDUOUS / OAK / MAPLE / AUTUMN BROADLEAF TREE ---
         const r = tree.radius;
+        const seed = Math.abs(Math.floor(tree.x * 12.9898 + tree.y * 78.233));
 
-        // Shadow
-        if (performanceConfig.enableShadows) {
-          ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+        if (season === 'winter') {
+          // --- BARE WINTER SKELETON (Deciduous broadleaf trees shed all leaves in Russian winter) ---
+          // 1. Bare Branch Ground Shadow
+          if (performanceConfig.enableShadows) {
+            ctx.strokeStyle = 'rgba(0, 0, 0, 0.22)';
+            ctx.lineWidth = Math.max(1.8, r * 0.12);
+            for (let b = 0; b < 5; b++) {
+              const ang = (b / 5) * Math.PI * 2 + (seed % 10) * 0.14;
+              const len = r * (0.65 + ((seed + b) % 5) * 0.08);
+              ctx.beginPath();
+              ctx.moveTo(tree.x + tree.shadowOffset * 0.8, tree.y + tree.shadowOffset * 0.8);
+              ctx.lineTo(tree.x + tree.shadowOffset * 0.8 + Math.cos(ang) * len, tree.y + tree.shadowOffset * 0.8 + Math.sin(ang) * len);
+              ctx.stroke();
+            }
+          }
+
+          // 2. Main Spreading Woody Boughs
+          const numBranches = 5;
+          for (let b = 0; b < numBranches; b++) {
+            const ang = (b / numBranches) * Math.PI * 2 + ((seed * (b + 1)) % 10) * 0.14;
+            const len = r * (0.75 + ((seed + b * 5) % 6) * 0.08);
+            const bx = tree.x + Math.cos(ang) * len;
+            const by = tree.y + Math.sin(ang) * len;
+            const midX = tree.x + Math.cos(ang + 0.22) * (len * 0.52);
+            const midY = tree.y + Math.sin(ang + 0.22) * (len * 0.52);
+
+            // Dark bark bough
+            ctx.strokeStyle = '#3b2f2f';
+            ctx.lineWidth = Math.max(2.8, r * 0.22);
+            ctx.lineCap = 'round';
+            ctx.beginPath();
+            ctx.moveTo(tree.x, tree.y);
+            ctx.quadraticCurveTo(midX, midY, bx, by);
+            ctx.stroke();
+
+            // Snow cap resting along top ridge of bough
+            ctx.strokeStyle = '#f8fafc';
+            ctx.lineWidth = Math.max(1.2, r * 0.10);
+            ctx.beginPath();
+            ctx.moveTo(tree.x - 0.8, tree.y - 0.8);
+            ctx.quadraticCurveTo(midX - 0.8, midY - 0.8, bx - 0.8, by - 0.8);
+            ctx.stroke();
+
+            // Sub-twigs with frost
+            const subAng = ang + (b % 2 === 0 ? 0.42 : -0.42);
+            const subLen = r * 0.34;
+            const tx = bx + Math.cos(subAng) * subLen;
+            const ty = by + Math.sin(subAng) * subLen;
+            ctx.strokeStyle = '#4a3b32';
+            ctx.lineWidth = Math.max(1.5, r * 0.10);
+            ctx.beginPath();
+            ctx.moveTo(bx, by);
+            ctx.lineTo(tx, ty);
+            ctx.stroke();
+
+            ctx.strokeStyle = '#e2e8f0';
+            ctx.lineWidth = Math.max(0.8, r * 0.05);
+            ctx.beginPath();
+            ctx.moveTo(bx - 0.5, by - 0.5);
+            ctx.lineTo(tx - 0.5, ty - 0.5);
+            ctx.stroke();
+          }
+
+          // 3. Central Trunk with Snow Cap
+          const trunkR = Math.max(3.5, r * 0.26);
+          ctx.fillStyle = '#2d241e';
           ctx.beginPath();
-          ctx.ellipse(tree.x + tree.shadowOffset, tree.y + tree.shadowOffset, r * 1.1, r * 0.9, 0.2, 0, Math.PI * 2);
+          ctx.arc(tree.x, tree.y, trunkR, 0, Math.PI * 2);
           ctx.fill();
-        }
 
-        // Multi-cluster overlapping leafy canopy puffs
-        const baseColor = tree.color || '#15803d';
-        ctx.fillStyle = baseColor;
-
-        for (let a = 0; a < Math.PI * 2; a += Math.PI / 2) {
-          const px = tree.x + Math.cos(a + tree.x) * (r * 0.35);
-          const py = tree.y + Math.sin(a + tree.y) * (r * 0.35);
+          ctx.fillStyle = '#f8fafc';
           ctx.beginPath();
-          ctx.arc(px, py, r * 0.7, 0, Math.PI * 2);
+          ctx.arc(tree.x - trunkR * 0.15, tree.y - trunkR * 0.15, trunkR * 0.65, 0, Math.PI * 2);
           ctx.fill();
-        }
 
-        // Central canopy highlight
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.18)';
-        ctx.beginPath();
-        ctx.arc(tree.x - r * 0.22, tree.y - r * 0.22, r * 0.48, 0, Math.PI * 2);
-        ctx.fill();
+          if (nightAlpha > 0.05) {
+            ctx.fillStyle = `rgba(0, 5, 20, ${nightAlpha * 0.75})`;
+            ctx.beginPath();
+            ctx.arc(tree.x, tree.y, r * 1.05, 0, Math.PI * 2);
+            ctx.fill();
+          }
+        } else {
+          // Foliage Shadow
+          if (performanceConfig.enableShadows) {
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+            ctx.beginPath();
+            ctx.ellipse(tree.x + tree.shadowOffset, tree.y + tree.shadowOffset, r * 1.1, r * 0.9, 0.2, 0, Math.PI * 2);
+            ctx.fill();
+          }
 
-        // Night Tint
-        if (nightAlpha > 0.05) {
-          ctx.fillStyle = `rgba(0, 5, 20, ${nightAlpha * 0.75})`;
+          // Seasonal Foliage Colors
+          let baseColors: string[];
+          let highlightCol: string;
+
+          if (season === 'autumn') {
+            const autumnPalette = seed % 4;
+            if (autumnPalette === 0) {
+              // Golden Oak / Linden
+              baseColors = ['#ca8a04', '#d97706', '#b45309'];
+              highlightCol = 'rgba(254, 240, 138, 0.35)';
+            } else if (autumnPalette === 1) {
+              // Flame Maple / Rowan
+              baseColors = ['#dc2626', '#b91c1c', '#991b1b'];
+              highlightCol = 'rgba(254, 202, 202, 0.35)';
+            } else if (autumnPalette === 2) {
+              // Amber Elm / Beech
+              baseColors = ['#ea580c', '#c2410c', '#9a3412'];
+              highlightCol = 'rgba(253, 186, 116, 0.35)';
+            } else {
+              // Russet / Copper
+              baseColors = ['#b45309', '#9a3412', '#78350f'];
+              highlightCol = 'rgba(251, 191, 36, 0.32)';
+            }
+          } else if (season === 'spring') {
+            baseColors = ['#4d7c0f', '#65a30d', '#84cc16'];
+            highlightCol = 'rgba(217, 249, 157, 0.35)';
+          } else {
+            // Summer
+            const rawCol = tree.color || '#15803d';
+            baseColors = [rawCol, '#166534', '#15803d'];
+            highlightCol = 'rgba(255, 255, 255, 0.18)';
+          }
+
+          // Multi-cluster overlapping leafy canopy puffs
+          for (let idx = 0; idx < 3; idx++) {
+            ctx.fillStyle = baseColors[idx % baseColors.length];
+            const puffRad = r * (0.75 - idx * 0.10);
+            for (let a = 0; a < Math.PI * 2; a += Math.PI / 2) {
+              const px = tree.x + Math.cos(a + tree.x + idx * 0.6) * (r * 0.35);
+              const py = tree.y + Math.sin(a + tree.y + idx * 0.6) * (r * 0.35);
+              ctx.beginPath();
+              ctx.arc(px, py, puffRad, 0, Math.PI * 2);
+              ctx.fill();
+            }
+          }
+
+          // Central canopy highlight
+          ctx.fillStyle = highlightCol;
           ctx.beginPath();
-          ctx.arc(tree.x, tree.y, tree.radius, 0, Math.PI * 2);
+          ctx.arc(tree.x - r * 0.22, tree.y - r * 0.22, r * 0.48, 0, Math.PI * 2);
           ctx.fill();
+
+          // Visible woody trunk center
+          ctx.fillStyle = '#292524';
+          ctx.beginPath();
+          ctx.arc(tree.x, tree.y, Math.max(2.5, r * 0.14), 0, Math.PI * 2);
+          ctx.fill();
+
+          // Night Tint
+          if (nightAlpha > 0.05) {
+            ctx.fillStyle = `rgba(0, 5, 20, ${nightAlpha * 0.75})`;
+            ctx.beginPath();
+            ctx.arc(tree.x, tree.y, tree.radius, 0, Math.PI * 2);
+            ctx.fill();
+          }
         }
       }
     }
@@ -5986,7 +6223,7 @@ export class GameRenderer {
   }
 
   // --- PUDDLES ---
-  private renderPuddles(puddles: Puddle[], minX: number, minY: number, maxX: number, maxY: number) {
+  private renderPuddles(puddles: Puddle[], minX: number, minY: number, maxX: number, maxY: number, isFreezing: boolean = false) {
     const ctx = this.ctx;
     for (const p of puddles) {
       if (p.x < minX || p.x > maxX || p.y < minY || p.y > maxY) continue;
@@ -5998,35 +6235,93 @@ export class GameRenderer {
       const rY = Math.max(0.1, p.radiusY);
       const seed = hashString(p.id);
 
-      // Deep sky reflection body with wet border transition
-      const grad = safeRadialGradient(ctx, -rX * 0.1, -rY * 0.1, 0, 0, 0, rX);
-      grad.addColorStop(0, 'rgba(56, 189, 248, 0.25)'); // Sky-blue reflection core
-      grad.addColorStop(0.55, 'rgba(30, 41, 59, 0.38)'); // Dark asphalt wet surface visible through water
-      grad.addColorStop(0.92, 'rgba(15, 23, 42, 0.52)'); // Edge refraction ring
-      grad.addColorStop(1, 'rgba(15, 23, 42, 0)');
+      if (isFreezing) {
+        // =====================================================================
+        // FROZEN PUDDLE (НАЛЕДЬ / ТОНКИЙ ЛЁД НА ДОРОГЕ)
+        // =====================================================================
+        // Solid frozen ice plate: frosted sky-blue/grey core with crystalline perimeter
+        const grad = safeRadialGradient(ctx, -rX * 0.1, -rY * 0.1, 0, 0, 0, rX);
+        grad.addColorStop(0, 'rgba(219, 234, 254, 0.68)'); // Dense milky cyan ice core
+        grad.addColorStop(0.55, 'rgba(186, 230, 253, 0.48)'); // Translucent ice body
+        grad.addColorStop(0.88, 'rgba(71, 85, 105, 0.45)'); // Dark cold asphalt rim
+        grad.addColorStop(1, 'rgba(71, 85, 105, 0)');
 
-      ctx.fillStyle = grad;
-      this.drawOrganicBlob(ctx, rX, rY, seed);
-      ctx.fill();
+        ctx.fillStyle = grad;
+        this.drawOrganicBlob(ctx, rX, rY, seed);
+        ctx.fill();
 
-      // Sky reflection of dynamic cloud outline
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.22)';
-      ctx.save();
-      ctx.translate(-rX * 0.25, -rY * 0.2);
-      this.drawOrganicBlob(ctx, rX * 0.45, rY * 0.32, seed + 1);
-      ctx.fill();
-      ctx.restore();
-
-      // Animated realistic organic water ripples
-      if (performanceConfig.enableRainDroplets) {
-        const rippleR = Math.abs((p.rippleTimer * 12) % rX);
-        const rippleRY = Math.abs(rippleR * (rY / rX));
-        const alpha = Math.max(0, 0.35 * (1 - rippleR / rX));
-        ctx.strokeStyle = `rgba(255, 255, 255, ${alpha})`;
-        ctx.lineWidth = 1;
+        // Crystalline stress fractures (паутина трещин на льду)
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.65)';
+        ctx.lineWidth = 0.9;
         ctx.beginPath();
-        this.drawOrganicBlob(ctx, rippleR, rippleRY, seed + p.rippleTimer);
+        for (let c = 0; c < 3; c++) {
+          const crackAngle = (seed * 1.7 + c * 2.1) % (Math.PI * 2);
+          let cx = Math.cos(crackAngle) * rX * 0.12;
+          let cy = Math.sin(crackAngle) * rY * 0.12;
+          ctx.moveTo(cx, cy);
+          for (let s = 0; s < 4; s++) {
+            const segAngle = crackAngle + (Math.sin(seed + s * 2.3) * 0.6);
+            const segLen = (rX / 4) * 0.7;
+            cx += Math.cos(segAngle) * segLen;
+            cy += Math.sin(segAngle) * segLen;
+            ctx.lineTo(cx, cy);
+          }
+        }
         ctx.stroke();
+
+        // Trapped frozen air bubbles
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.55)';
+        for (let b = 0; b < 5; b++) {
+          const bx = Math.sin(seed + b * 2.3) * rX * 0.6;
+          const by = Math.cos(seed + b * 3.7) * rY * 0.6;
+          const bRad = 0.8 + Math.abs(Math.sin(b * 1.7)) * 1.3;
+          ctx.beginPath();
+          ctx.arc(bx, by, bRad, 0, Math.PI * 2);
+          ctx.fill();
+        }
+
+        // Glaze ice glossy specular reflection
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.62)';
+        ctx.beginPath();
+        safeEllipse(ctx, -rX * 0.25, -rY * 0.2, rX * 0.35, rY * 0.14, -0.2, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Frosted white perimeter ring
+        ctx.strokeStyle = 'rgba(241, 245, 249, 0.40)';
+        ctx.lineWidth = 1.0;
+        this.drawOrganicBlob(ctx, rX * 0.96, rY * 0.96, seed);
+        ctx.stroke();
+      } else {
+        // Deep sky reflection body with wet border transition
+        const grad = safeRadialGradient(ctx, -rX * 0.1, -rY * 0.1, 0, 0, 0, rX);
+        grad.addColorStop(0, 'rgba(56, 189, 248, 0.25)'); // Sky-blue reflection core
+        grad.addColorStop(0.55, 'rgba(30, 41, 59, 0.38)'); // Dark asphalt wet surface visible through water
+        grad.addColorStop(0.92, 'rgba(15, 23, 42, 0.52)'); // Edge refraction ring
+        grad.addColorStop(1, 'rgba(15, 23, 42, 0)');
+
+        ctx.fillStyle = grad;
+        this.drawOrganicBlob(ctx, rX, rY, seed);
+        ctx.fill();
+
+        // Sky reflection of dynamic cloud outline
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.22)';
+        ctx.save();
+        ctx.translate(-rX * 0.25, -rY * 0.2);
+        this.drawOrganicBlob(ctx, rX * 0.45, rY * 0.32, seed + 1);
+        ctx.fill();
+        ctx.restore();
+
+        // Animated realistic organic water ripples
+        if (performanceConfig.enableRainDroplets) {
+          const rippleR = Math.abs((p.rippleTimer * 12) % rX);
+          const rippleRY = Math.abs(rippleR * (rY / rX));
+          const alpha = Math.max(0, 0.35 * (1 - rippleR / rX));
+          ctx.strokeStyle = `rgba(255, 255, 255, ${alpha})`;
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          this.drawOrganicBlob(ctx, rippleR, rippleRY, seed + p.rippleTimer);
+          ctx.stroke();
+        }
       }
 
       ctx.restore();
@@ -12086,12 +12381,20 @@ export class GameRenderer {
     RollingStockRenderer.renderLightmapOptics(ctx, world, minX, minY, maxX, maxY, effectiveAlpha, fogFactor);
 
     ctx.restore();
-
-    // Call dynamic weather overlay (Rain drops, ground ripples, volumetric fog, lightning bolts)
-    this.renderWeatherOverlay(world, minX, minY, maxX, maxY);
   }
 
-  private renderWeatherOverlay(world: GameWorld, minX: number, minY: number, maxX: number, maxY: number) {
+  private renderWeatherOverlay(
+    world: GameWorld,
+    minX: number,
+    minY: number,
+    maxX: number,
+    maxY: number,
+    camera: Camera,
+    timeHour: number,
+    nightAlpha: number,
+    visibleVehicles: Vehicle[],
+    isFreezing: boolean
+  ) {
     const ctx = this.ctx;
     const isRaining = world.weather === 'rain' || world.weather === 'storm' || world.weather === 'drizzle';
     const isStorm = world.weather === 'storm';
@@ -12104,169 +12407,327 @@ export class GameRenderer {
 
     if (!isRaining && !isSnowing && !isFog && !isOvercast && !hasLightning) return;
 
+    const now = performance.now();
+    const timeSec = now * 0.001;
+
+    // =========================================================================
+    // 0. SCREEN-SPACE AMBIENT SKY VEIL & LIGHTNING STROBE
+    // =========================================================================
     ctx.save();
     ctx.globalCompositeOperation = 'source-over';
 
-    const now = performance.now();
-    const timeSec = now * 0.001;
-    const viewW = Math.max(100, maxX - minX);
-    const viewH = Math.max(100, maxY - minY);
-
-    // =========================================================================
-    // 0. OVERCAST LEADEN SKY VEIL
-    // =========================================================================
     if (isOvercast) {
-      ctx.fillStyle = 'rgba(15, 23, 42, 0.09)';
-      ctx.fillRect(minX, minY, viewW, viewH);
+      ctx.fillStyle = isFreezing ? 'rgba(30, 41, 59, 0.16)' : 'rgba(15, 23, 42, 0.12)';
+      ctx.fillRect(0, 0, this.width, this.height);
     }
 
-    // =========================================================================
-    // 1. RAIN & STORM (TOP-DOWN REALISTIC PRECIPITATION & GROUND RIPPLES)
-    // =========================================================================
-    if (isRaining && performanceConfig.enableRainDroplets) {
-      // Atmospheric overcast ambient tint
-      ctx.fillStyle = isStorm ? 'rgba(10, 15, 30, 0.28)' : (isDrizzle ? 'rgba(15, 23, 42, 0.08)' : 'rgba(15, 23, 42, 0.14)');
-      ctx.fillRect(minX, minY, viewW, viewH);
-
-      // Unified atmospheric wind vector
-      const windAngle = world.wind ? (Math.sin(world.wind.angle) * 0.35 + (isStorm ? 0.15 : 0)) : (isStorm ? (0.24 + Math.sin(timeSec * 2.8) * 0.09) : 0.12);
-      const mistSpeed = world.wind ? (world.wind.vx * 0.75) : (isStorm ? 120 : (isDrizzle ? 35 : 60));
-
-      // --- A. Ground Impact Splashes & Puddle Ripples ---
-      const numRipples = isStorm ? 55 : (isDrizzle ? 12 : 28);
-      ctx.lineWidth = 1.0;
-
-      for (let s = 0; s < numRipples; s++) {
-        const seedX = ((s * 47.382) % 1);
-        const seedY = ((s * 91.137) % 1);
-        const speed = 1.2 + ((s * 13.7) % 1) * 0.8;
-        const phase = (timeSec * speed + (s * 0.23)) % 1.0;
-
-        const rx = minX + seedX * viewW;
-        const ry = minY + seedY * viewH;
-        const maxR = isStorm ? 14 : (isDrizzle ? 5 : 10);
-        const r = 1.5 + phase * maxR;
-        const alpha = Math.max(0, (1.0 - phase) * (isStorm ? 0.42 : (isDrizzle ? 0.18 : 0.28)));
-
-        ctx.strokeStyle = `rgba(224, 242, 254, ${alpha})`;
-        ctx.beginPath();
-        safeEllipse(ctx, rx, ry, r * 1.3, r * 0.72, 0, 0, Math.PI * 2);
-        ctx.stroke();
-
-        if (phase < 0.25 && !isDrizzle) {
-          const splashAlpha = (1.0 - phase / 0.25) * 0.55;
-          ctx.fillStyle = `rgba(240, 249, 255, ${splashAlpha})`;
-          const sparkDist = phase * 6.0;
-          ctx.fillRect(rx - sparkDist, ry - sparkDist * 0.6, 1.2, 1.2);
-          ctx.fillRect(rx + sparkDist, ry - sparkDist * 0.4, 1.2, 1.2);
-        }
+    if (isRaining) {
+      if (isFreezing) {
+        // Freezing rain / sleet ambient tint: cold steel blue-grey
+        ctx.fillStyle = isStorm ? 'rgba(15, 23, 42, 0.32)' : (isDrizzle ? 'rgba(30, 41, 59, 0.12)' : 'rgba(30, 41, 59, 0.20)');
+      } else {
+        ctx.fillStyle = isStorm ? 'rgba(10, 15, 30, 0.28)' : (isDrizzle ? 'rgba(15, 23, 42, 0.08)' : 'rgba(15, 23, 42, 0.15)');
       }
-
-      // --- B. Fast Aerodynamic Falling Micro-Drops ---
-      const numDrops = isStorm ? 280 : (isDrizzle ? 80 : 160);
-      ctx.strokeStyle = isStorm ? 'rgba(219, 234, 254, 0.48)' : 'rgba(224, 242, 254, 0.32)';
-      ctx.lineWidth = isStorm ? 1.3 : 1.0;
-      ctx.beginPath();
-
-      const fallSpeed = isStorm ? 1300 : (isDrizzle ? 650 : 950);
-      for (let r = 0; r < numDrops; r++) {
-        const seedX = ((r * 157.61) % 1);
-        const seedY = ((r * 283.47) % 1);
-        const rx = minX + seedX * viewW;
-        const ry = minY + ((seedY * viewH + timeSec * fallSpeed) % viewH);
-        
-        const len = isStorm ? (6 + (r % 5) * 0.9) : (isDrizzle ? (2.5 + (r % 3) * 0.6) : (4 + (r % 4) * 0.8));
-        const dx = len * windAngle;
-        const dy = len * 0.95;
-
-        ctx.moveTo(rx, ry);
-        ctx.lineTo(rx - dx, ry + dy);
-      }
-      ctx.stroke();
-
-      // --- C. Wind-Blown Rain Mist Sheets ---
-      ctx.fillStyle = isStorm ? 'rgba(224, 242, 254, 0.055)' : 'rgba(224, 242, 254, 0.03)';
-      for (let m = 0; m < 3; m++) {
-        const mistOffset = (timeSec * mistSpeed + m * 400) % (viewW + 600) - 300;
-        const mistY = minY + ((m + 0.5) / 3) * viewH + Math.sin(timeSec * 0.8 + m) * 40;
-        ctx.beginPath();
-        safeEllipse(ctx, minX + mistOffset, mistY, viewW * 0.6, 60, windAngle * 0.3, 0, Math.PI * 2);
-        ctx.fill();
-      }
+      ctx.fillRect(0, 0, this.width, this.height);
     }
 
-    // =========================================================================
-    // 1b. ASTRONOMICAL WINTER SNOW & BLIZZARD (SWIRLING DRIFTING CRYSTALS)
-    // =========================================================================
-    if (isSnowing && performanceConfig.enableRainDroplets) {
-      // Atmospheric winter sky tint (cool frosted silver-grey)
-      ctx.fillStyle = isBlizzard ? 'rgba(219, 234, 254, 0.22)' : 'rgba(241, 245, 249, 0.09)';
-      ctx.fillRect(minX, minY, viewW, viewH);
-
-      const windAngle = world.wind ? (Math.sin(world.wind.angle) * 0.5 + (isBlizzard ? 0.35 : 0)) : (isBlizzard ? 0.45 : 0.15);
-      const snowSpeed = isBlizzard ? 550 : 220;
-      const numFlakes = isBlizzard ? 360 : 180;
-
-      for (let s = 0; s < numFlakes; s++) {
-        const seedX = ((s * 137.49) % 1);
-        const seedY = ((s * 269.83) % 1);
-        const swayFreq = 1.8 + ((s * 19.3) % 1) * 2.2;
-        const swayAmp = isBlizzard ? 12 : 22;
-        const sway = Math.sin(timeSec * swayFreq + s) * swayAmp;
-
-        const rx = minX + ((seedX * viewW + timeSec * (windAngle * snowSpeed) + sway) % viewW);
-        const ry = minY + ((seedY * viewH + timeSec * snowSpeed) % viewH);
-
-        const flakeR = isBlizzard ? (1.0 + (s % 4) * 0.7) : (1.2 + (s % 5) * 0.8);
-        const flakeAlpha = isBlizzard ? (0.45 + (s % 3) * 0.22) : (0.55 + (s % 3) * 0.25);
-
-        ctx.fillStyle = `rgba(255, 255, 255, ${flakeAlpha})`;
-        ctx.beginPath();
-        ctx.arc(rx, ry, flakeR, 0, Math.PI * 2);
-        ctx.fill();
-
-        // Blizzard horizontal snow wind streaks
-        if (isBlizzard && s % 3 === 0) {
-          ctx.strokeStyle = `rgba(240, 249, 255, ${flakeAlpha * 0.5})`;
-          ctx.lineWidth = 1.0;
-          ctx.beginPath();
-          ctx.moveTo(rx, ry);
-          ctx.lineTo(rx - 14 * windAngle, ry + 7);
-          ctx.stroke();
-        }
-      }
-
-      // Blizzard whiteout gale gusts
+    if (isSnowing) {
+      ctx.fillStyle = isBlizzard ? 'rgba(219, 234, 254, 0.24)' : 'rgba(241, 245, 249, 0.10)';
+      ctx.fillRect(0, 0, this.width, this.height);
       if (isBlizzard) {
         const gale = Math.sin(timeSec * 1.5) * 0.5 + 0.5;
-        ctx.fillStyle = `rgba(255, 255, 255, ${0.08 + gale * 0.08})`;
-        ctx.fillRect(minX, minY, viewW, viewH);
+        ctx.fillStyle = `rgba(255, 255, 255, ${0.08 + gale * 0.09})`;
+        ctx.fillRect(0, 0, this.width, this.height);
       }
     }
 
-    // =========================================================================
-    // 2. VOLUMETRIC LAYERED FOG (ORGANIC DRIFTING VAPOR CLOUDS & LIGHT HALOS)
-    // =========================================================================
     if (isFog) {
-      // Atmospheric cool-slate desaturating base
-      ctx.fillStyle = 'rgba(203, 213, 225, 0.22)';
-      ctx.fillRect(minX, minY, viewW, viewH);
+      ctx.fillStyle = isFreezing ? 'rgba(219, 234, 254, 0.26)' : 'rgba(203, 213, 225, 0.24)';
+      ctx.fillRect(0, 0, this.width, this.height);
+    }
 
-      // Layer 1: Soft rolling ground mist banks
+    // Sky illumination flash from lightning
+    let lightningFlashAlpha = 0;
+    if (hasLightning) {
+      const strikeTimer = world.lightningFlashTimer ?? 0;
+      const progress = Math.max(0, Math.min(1.0, 1.0 - (strikeTimer / 0.38)));
+      if (progress < 0.12) {
+        lightningFlashAlpha = (progress / 0.12) * 0.85;
+      } else if (progress < 0.24) {
+        lightningFlashAlpha = 0.25;
+      } else if (progress < 0.45) {
+        lightningFlashAlpha = 0.95 - (progress - 0.24) * 1.2;
+      } else {
+        lightningFlashAlpha = Math.max(0, 0.45 * (1.0 - (progress - 0.45) / 0.55));
+      }
+      if (lightningFlashAlpha > 0.02) {
+        ctx.fillStyle = `rgba(224, 242, 254, ${lightningFlashAlpha * 0.70})`;
+        ctx.fillRect(0, 0, this.width, this.height);
+      }
+    }
+
+    ctx.restore();
+
+    // =========================================================================
+    // 1. WORLD-SPACE PRECIPITATION, GROUND RIPPLES, ICE GLAZE, AND FOG
+    // =========================================================================
+    ctx.save();
+    // Apply camera transform to match world coordinates exactly:
+    ctx.translate(this.width / 2, this.height / 2);
+    ctx.scale(camera.zoom, camera.zoom);
+    ctx.rotate(-camera.angle - Math.PI / 2);
+    ctx.translate(-camera.x, -camera.y);
+
+    const windVx = world.wind ? world.wind.vx : (isStorm ? 110 : (isDrizzle ? 20 : 45));
+    const windVy = world.wind ? world.wind.vy : (isStorm ? 30 : 5);
+
+    // --- A. GROUND IMPACT SPLASHES & PUDDLE RIPPLES (Anchored to fixed geographic world cells) ---
+    if (isRaining && performanceConfig.enableRainDroplets) {
+      const cellS = 75;
+      const cMinX = Math.floor((minX - 60) / cellS);
+      const cMaxX = Math.floor((maxX + 60) / cellS);
+      const cMinY = Math.floor((minY - 60) / cellS);
+      const cMaxY = Math.floor((maxY + 60) / cellS);
+
+      const countX = cMaxX - cMinX + 1;
+      const countY = cMaxY - cMinY + 1;
+      const totalCells = countX * countY;
+      const maxSampled = isStorm ? 220 : (isDrizzle ? 75 : 150);
+      const stride = Math.max(1, Math.floor(Math.sqrt(totalCells / maxSampled)));
+
+      for (let cy = cMinY; cy <= cMaxY; cy += stride) {
+        for (let cx = cMinX; cx <= cMaxX; cx += stride) {
+          const seed = Math.abs(((cx * 73856093) ^ (cy * 19349663) ^ 83492791) | 0);
+          const hx = ((seed * 48271) % 10000) / 10000;
+          const hy = (((seed ^ 0x5bf03635) * 16807) % 10000) / 10000;
+          const speed = isStorm ? 1.6 : (isDrizzle ? 1.05 : 1.3);
+          const phase = (timeSec * speed + hy) % 1.0;
+
+          const wx = cx * cellS + hx * cellS;
+          const wy = cy * cellS + hy * cellS;
+
+          if (isFreezing) {
+            // Freezing rain impacts on sub-zero ground: crystalline glint spark and rime speckle
+            if (phase < 0.20) {
+              const sparkAlpha = (1.0 - phase / 0.20) * 0.85;
+              ctx.fillStyle = `rgba(255, 255, 255, ${sparkAlpha})`;
+              ctx.fillRect(wx - 1, wy - 1, 2, 2);
+              ctx.fillStyle = `rgba(219, 234, 254, ${sparkAlpha * 0.6})`;
+              ctx.fillRect(wx - 2.5, wy - 0.75, 5, 1.5);
+            }
+          } else {
+            // Liquid expanding circular/elliptical ripples on the ground
+            const maxR = isStorm ? 14 : (isDrizzle ? 5 : 10);
+            const r = 1.5 + phase * maxR;
+            const alpha = Math.max(0, (1.0 - phase) * (isStorm ? 0.38 : (isDrizzle ? 0.16 : 0.26)));
+
+            ctx.strokeStyle = `rgba(224, 242, 254, ${alpha})`;
+            ctx.lineWidth = 1.0;
+            ctx.beginPath();
+            ctx.ellipse(wx, wy, r * 1.25, r * 0.75, 0, 0, Math.PI * 2);
+            ctx.stroke();
+
+            if (phase < 0.22 && !isDrizzle) {
+              const splashAlpha = (1.0 - phase / 0.22) * 0.55;
+              ctx.fillStyle = `rgba(240, 249, 255, ${splashAlpha})`;
+              const sparkDist = phase * 6.5;
+              ctx.fillRect(wx - sparkDist, wy - sparkDist * 0.6, 1.2, 1.2);
+              ctx.fillRect(wx + sparkDist, wy - sparkDist * 0.4, 1.2, 1.2);
+            }
+          }
+        }
+      }
+    }
+
+    // --- B. FALLING PRECIPITATION (Multi-layer 3D depth volume wrapped in world space) ---
+    if ((isRaining || isSnowing) && performanceConfig.enableRainDroplets) {
+      const volW = Math.max(1600, (maxX - minX) + 300);
+      const volH = Math.max(1600, (maxY - minY) + 300);
+
+      // Pre-calculate active vehicle headlights for dynamic beam illumination
+      const activeHeadlights: { x: number; y: number; angle: number; reach: number }[] = [];
+      if (visibleVehicles && visibleVehicles.length > 0) {
+        for (const veh of visibleVehicles) {
+          if (veh.headlightsOn) {
+            activeHeadlights.push({ x: veh.x, y: veh.y, angle: veh.angle, reach: 240 });
+          }
+        }
+      }
+
+      if (isRaining) {
+        // Multi-depth rain layers:
+        // Layer 0: Background distant drops
+        // Layer 1: Midground standard drops
+        // Layer 2: Foreground close-range fast streaks
+        const rainLayers = [
+          { count: isStorm ? 240 : (isDrizzle ? 65 : 140), fallSpeed: 950, len: 6, lw: 0.8, alpha: 0.20, windMult: 0.65 },
+          { count: isStorm ? 180 : (isDrizzle ? 50 : 110), fallSpeed: 1350, len: 11, lw: 1.2, alpha: 0.35, windMult: 0.85 },
+          { count: isStorm ? 75 : (isDrizzle ? 20 : 45), fallSpeed: 1750, len: 18, lw: 1.6, alpha: 0.50, windMult: 1.0 }
+        ];
+
+        for (let l = 0; l < rainLayers.length; l++) {
+          const layer = rainLayers[l];
+          const totalVel = Math.hypot(windVx * layer.windMult, layer.fallSpeed);
+          const dx = layer.len * ((windVx * layer.windMult) / totalVel);
+          const dy = layer.len * (layer.fallSpeed / totalVel);
+
+          for (let i = 0; i < layer.count; i++) {
+            const seed = (i * 157.61 + l * 73.19);
+            const sX = (seed % 1) * volW;
+            const sY = ((seed * 1.618) % 1) * volH;
+
+            const rawX = sX + windVx * layer.windMult * timeSec;
+            const rawY = sY + (windVy * layer.windMult + layer.fallSpeed) * timeSec;
+
+            let dropX = camera.x - volW * 0.5 + ((rawX - (camera.x - volW * 0.5)) % volW);
+            if (dropX < camera.x - volW * 0.5) dropX += volW;
+            let dropY = camera.y - volH * 0.5 + ((rawY - (camera.y - volH * 0.5)) % volH);
+            if (dropY < camera.y - volH * 0.5) dropY += volH;
+
+            // Test if drop falls inside active vehicle headlight cone
+            let inHeadlight = false;
+            for (let h = 0; h < activeHeadlights.length; h++) {
+              const hl = activeHeadlights[h];
+              const hdx = dropX - hl.x;
+              const hdy = dropY - hl.y;
+              const distSq = hdx * hdx + hdy * hdy;
+              if (distSq < hl.reach * hl.reach) {
+                const angleToDrop = Math.atan2(hdy, hdx);
+                let diff = Math.abs(angleToDrop - hl.angle);
+                if (diff > Math.PI) diff = Math.PI * 2 - diff;
+                if (diff < 0.65) {
+                  inHeadlight = true;
+                  break;
+                }
+              }
+            }
+
+            const dropAlpha = inHeadlight ? Math.min(1.0, layer.alpha * 2.4) : layer.alpha;
+            const dropWidth = inHeadlight ? layer.lw * 1.4 : layer.lw;
+
+            ctx.lineWidth = dropWidth;
+
+            if (isFreezing && (i % 4 === 0) && l > 0) {
+              // Freezing sleet / ice pellet (ледяная крупа)
+              ctx.fillStyle = inHeadlight ? 'rgba(255, 255, 255, 0.95)' : `rgba(224, 242, 254, ${dropAlpha * 1.4})`;
+              ctx.beginPath();
+              ctx.arc(dropX, dropY, 1.4, 0, Math.PI * 2);
+              ctx.fill();
+            } else {
+              // Aerodynamic rain streak
+              ctx.strokeStyle = inHeadlight
+                ? 'rgba(255, 255, 255, 0.95)'
+                : (isFreezing ? `rgba(224, 242, 254, ${dropAlpha})` : `rgba(219, 234, 254, ${dropAlpha})`);
+              ctx.beginPath();
+              ctx.moveTo(dropX, dropY);
+              ctx.lineTo(dropX - dx, dropY - dy);
+              ctx.stroke();
+            }
+          }
+        }
+
+        // Wind-blown mist sheets rolling across the terrain
+        ctx.fillStyle = isStorm ? 'rgba(224, 242, 254, 0.045)' : 'rgba(224, 242, 254, 0.025)';
+        for (let m = 0; m < 3; m++) {
+          const mistW = volW * 0.55;
+          const mistOffset = (timeSec * (windVx * 0.6) + m * 500) % (volW + 600) - 300;
+          const mistX = camera.x - volW * 0.5 + mistOffset;
+          const mistY = camera.y - volH * 0.5 + ((m + 0.5) / 3) * volH + Math.sin(timeSec * 0.7 + m) * 50;
+          ctx.beginPath();
+          safeEllipse(ctx, mistX, mistY, mistW, 70, (windVx > 0 ? 0.2 : -0.2), 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+
+      if (isSnowing) {
+        // Multi-depth snowflake layers
+        const snowLayers = [
+          { count: isBlizzard ? 360 : 180, speed: isBlizzard ? 380 : 180, r: isBlizzard ? 1.0 : 1.2, swayAmp: 8, swayFreq: 1.8, alpha: 0.35, windMult: 0.75 },
+          { count: isBlizzard ? 240 : 120, speed: isBlizzard ? 480 : 240, r: isBlizzard ? 1.5 : 1.8, swayAmp: 16, swayFreq: 2.3, alpha: 0.50, windMult: 0.90 },
+          { count: isBlizzard ? 80 : 40, speed: isBlizzard ? 560 : 300, r: isBlizzard ? 2.2 : 2.6, swayAmp: 24, swayFreq: 3.1, alpha: 0.65, windMult: 1.0 }
+        ];
+
+        for (let l = 0; l < snowLayers.length; l++) {
+          const layer = snowLayers[l];
+          for (let s = 0; s < layer.count; s++) {
+            const seed = (s * 137.49 + l * 83.71);
+            const sX = (seed % 1) * volW;
+            const sY = ((seed * 1.618) % 1) * volH;
+            const sway = Math.sin(timeSec * layer.swayFreq + s) * layer.swayAmp;
+
+            const rawX = sX + (windVx * layer.windMult) * timeSec + sway;
+            const rawY = sY + (windVy * layer.windMult + layer.speed) * timeSec;
+
+            let flakeX = camera.x - volW * 0.5 + ((rawX - (camera.x - volW * 0.5)) % volW);
+            if (flakeX < camera.x - volW * 0.5) flakeX += volW;
+            let flakeY = camera.y - volH * 0.5 + ((rawY - (camera.y - volH * 0.5)) % volH);
+            if (flakeY < camera.y - volH * 0.5) flakeY += volH;
+
+            // Headlight illumination test
+            let inHeadlight = false;
+            for (let h = 0; h < activeHeadlights.length; h++) {
+              const hl = activeHeadlights[h];
+              const hdx = flakeX - hl.x;
+              const hdy = flakeY - hl.y;
+              const distSq = hdx * hdx + hdy * hdy;
+              if (distSq < hl.reach * hl.reach) {
+                const angleToFlake = Math.atan2(hdy, hdx);
+                let diff = Math.abs(angleToFlake - hl.angle);
+                if (diff > Math.PI) diff = Math.PI * 2 - diff;
+                if (diff < 0.65) {
+                  inHeadlight = true;
+                  break;
+                }
+              }
+            }
+
+            const flakeAlpha = inHeadlight ? 0.95 : layer.alpha;
+            const flakeR = inHeadlight ? layer.r * 1.25 : layer.r;
+
+            ctx.fillStyle = inHeadlight ? 'rgba(255, 255, 255, 0.98)' : `rgba(255, 255, 255, ${flakeAlpha})`;
+            ctx.beginPath();
+            ctx.arc(flakeX, flakeY, flakeR, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Blizzard horizontal snow wind streaks
+            if (isBlizzard && (s % 4 === 0)) {
+              ctx.strokeStyle = `rgba(240, 249, 255, ${flakeAlpha * 0.45})`;
+              ctx.lineWidth = 1.0;
+              ctx.beginPath();
+              ctx.moveTo(flakeX, flakeY);
+              ctx.lineTo(flakeX - (windVx > 0 ? 18 : -18), flakeY + 8);
+              ctx.stroke();
+            }
+          }
+        }
+      }
+    }
+
+    // --- C. VOLUMETRIC LAYERED FOG (Anchored to world coordinates) ---
+    if (isFog) {
       const fogClusters = 8;
-      const baseFogDrift = world.wind ? (world.wind.vx * 0.40) : 18;
+      const baseFogDrift = world.wind ? (world.wind.vx * 0.35) : 16;
+      const volW = Math.max(1600, (maxX - minX) + 400);
+      const volH = Math.max(1600, (maxY - minY) + 400);
+
       for (let f = 0; f < fogClusters; f++) {
         const seedX = ((f * 37.19) % 1);
         const seedY = ((f * 73.82) % 1);
-        const driftSpeed = baseFogDrift + (f % 3) * 6;
-        
-        const fcx = minX + ((seedX * viewW + timeSec * driftSpeed) % (viewW + 400)) - 200;
-        const fcy = minY + ((seedY * viewH + Math.sin(timeSec * 0.4 + f) * 60) % viewH);
-        const radius = 160 + (f % 4) * 40;
+        const driftSpeed = baseFogDrift + (f % 3) * 5;
+
+        const rawX = seedX * volW + timeSec * driftSpeed;
+        const rawY = seedY * volH + Math.sin(timeSec * 0.35 + f) * 60;
+
+        let fcx = camera.x - volW * 0.5 + ((rawX - (camera.x - volW * 0.5)) % volW);
+        if (fcx < camera.x - volW * 0.5) fcx += volW;
+        let fcy = camera.y - volH * 0.5 + ((rawY - (camera.y - volH * 0.5)) % volH);
+        if (fcy < camera.y - volH * 0.5) fcy += volH;
+
+        const radius = 180 + (f % 4) * 45;
 
         const fogGrad = ctx.createRadialGradient(fcx, fcy, 0, fcx, fcy, radius);
-        fogGrad.addColorStop(0, 'rgba(241, 245, 249, 0.20)');
-        fogGrad.addColorStop(0.5, 'rgba(226, 232, 240, 0.10)');
+        fogGrad.addColorStop(0, isFreezing ? 'rgba(241, 245, 249, 0.22)' : 'rgba(241, 245, 249, 0.18)');
+        fogGrad.addColorStop(0.55, isFreezing ? 'rgba(226, 232, 240, 0.10)' : 'rgba(226, 232, 240, 0.08)');
         fogGrad.addColorStop(1, 'rgba(226, 232, 240, 0)');
 
         ctx.fillStyle = fogGrad;
@@ -12275,79 +12736,33 @@ export class GameRenderer {
         ctx.fill();
       }
 
-      // Layer 2: Fast swirling wisps
-      for (let w = 0; w < 4; w++) {
-        const wcx = minX + ((timeSec * 35 + w * 320) % (viewW + 300)) - 150;
-        const wcy = minY + ((w + 0.5) / 4) * viewH + Math.cos(timeSec * 0.5 + w) * 35;
-        const wRad = 90 + w * 20;
-
-        const wispGrad = ctx.createRadialGradient(wcx, wcy, 0, wcx, wcy, wRad);
-        wispGrad.addColorStop(0, 'rgba(248, 250, 252, 0.12)');
-        wispGrad.addColorStop(1, 'rgba(248, 250, 252, 0)');
-        ctx.fillStyle = wispGrad;
-        ctx.beginPath();
-        safeEllipse(ctx, wcx, wcy, wRad * 1.5, wRad * 0.7, 0.15, 0, Math.PI * 2);
-        ctx.fill();
-      }
-
-      // Layer 3: Headlight volumetric halos through fog
-      for (const veh of world.vehicles) {
+      // Headlight volumetric halos through fog
+      for (const veh of visibleVehicles) {
         if (!veh.headlightsOn) continue;
-        const vx = veh.x;
-        const vy = veh.y;
-        if (vx < minX - 100 || vx > maxX + 100 || vy < minY - 100 || vy > maxY + 100) continue;
-
-        // Soft luminous diffusion halo in front of vehicle
-        const forwardX = vx + Math.cos(veh.angle) * 35;
-        const forwardY = vy + Math.sin(veh.angle) * 35;
-        const haloGrad = ctx.createRadialGradient(forwardX, forwardY, 5, forwardX, forwardY, 65);
-        haloGrad.addColorStop(0, 'rgba(254, 243, 199, 0.22)');
+        const forwardX = veh.x + Math.cos(veh.angle) * 35;
+        const forwardY = veh.y + Math.sin(veh.angle) * 35;
+        const haloGrad = ctx.createRadialGradient(forwardX, forwardY, 5, forwardX, forwardY, 70);
+        haloGrad.addColorStop(0, 'rgba(254, 243, 199, 0.24)');
         haloGrad.addColorStop(0.6, 'rgba(253, 230, 138, 0.08)');
         haloGrad.addColorStop(1, 'rgba(253, 230, 138, 0)');
         ctx.fillStyle = haloGrad;
         ctx.beginPath();
-        ctx.arc(forwardX, forwardY, 65, 0, Math.PI * 2);
+        ctx.arc(forwardX, forwardY, 70, 0, Math.PI * 2);
         ctx.fill();
       }
     }
 
-    // =========================================================================
-    // 3. STORM LIGHTNING (PROCEDURAL BRANCHING BOLTS & REALISTIC STROBE FLASH)
-    // =========================================================================
-    if (hasLightning) {
-      const strikeTimer = world.lightningFlashTimer ?? 0;
-      const progress = Math.max(0, Math.min(1.0, 1.0 - (strikeTimer / 0.38)));
-
-      // Realistic double-pulse strobe curve (pre-flash -> return stroke peak -> exponential afterglow)
-      let flashAlpha = 0;
-      if (progress < 0.12) {
-        flashAlpha = progress / 0.12 * 0.85; // Initial spike
-      } else if (progress < 0.24) {
-        flashAlpha = 0.25; // Brief return stroke lull
-      } else if (progress < 0.45) {
-        flashAlpha = 0.95 - (progress - 0.24) * 1.2; // Main return stroke blast
-      } else {
-        flashAlpha = Math.max(0, 0.45 * (1.0 - (progress - 0.45) / 0.55)); // Decaying sky glow
-      }
-
-      // Sky illumination flash
-      if (flashAlpha > 0.02) {
-        ctx.fillStyle = `rgba(224, 242, 254, ${flashAlpha * 0.65})`;
-        ctx.fillRect(minX, minY, viewW, viewH);
-      }
-
-      // Draw procedural branching lightning bolt if strike data exists
-      if (world.lightningStrike && flashAlpha > 0.1) {
-        this.renderLightningBolt(
-          ctx,
-          world.lightningStrike.startX,
-          world.lightningStrike.startY,
-          world.lightningStrike.endX,
-          world.lightningStrike.endY,
-          world.lightningStrike.seed,
-          flashAlpha
-        );
-      }
+    // --- D. PROCEDURAL LIGHTNING BOLT (In world space) ---
+    if (hasLightning && world.lightningStrike && lightningFlashAlpha > 0.1) {
+      this.renderLightningBolt(
+        ctx,
+        world.lightningStrike.startX,
+        world.lightningStrike.startY,
+        world.lightningStrike.endX,
+        world.lightningStrike.endY,
+        world.lightningStrike.seed,
+        lightningFlashAlpha
+      );
     }
 
     ctx.restore();

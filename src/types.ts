@@ -502,6 +502,8 @@ export interface Vehicle {
   rearFogLightsOn?: boolean;
   roadTrainLightsOn?: boolean;
   brakeLightsOn: boolean;
+  isBrakeLocked?: boolean;     // Tires locked up sliding without ABS under heavy braking
+  absActive?: boolean;         // ABS electronic modulation active
   isReversing?: boolean;
   turnSignal: 'none' | 'left' | 'right' | 'hazard';
   turnSignalTimer: number;
