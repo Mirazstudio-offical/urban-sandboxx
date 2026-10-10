@@ -45,6 +45,7 @@ export type InteractionType =
   | 'gate_lock_unlock'
   | 'gate_locked_nokey'
   | 'furniture_storage'
+  | 'kitchen_station'
   | 'bed_sleep'
   | 'furniture_pickup'
   | 'furniture_rotate'
@@ -1028,13 +1029,41 @@ export function findActiveInteraction(
               });
             }
 
+            // Kitchen Cooking & Preparation Workstation (Kitchen Counter, Stove, Table)
+            const isKitchenStation = furn.type === 'kitchen_counter' || furn.type === 'stove' || furn.type === 'table';
+            if (isKitchenStation) {
+              const isStove = furn.type === 'stove';
+              candidates.push({
+                type: 'kitchen_station',
+                primaryKey: 'E',
+                actionTitle: isStove 
+                  ? 'Кухонная плита (варка, жарка, готовка)' 
+                  : (furn.type === 'table' ? 'Обеденный стол (готовка, нарезка)' : 'Кухонный гарнитур (готовка, нарезка, смешивание)'),
+                detail: 'Кулинарная термодинамика, разделка, реакции Майяра & БЖУ',
+                x: furnWorldX,
+                y: furnWorldY,
+                dist: reach.dist,
+                angleDiff: reach.angleDiff,
+                score: reach.score - 10,
+                data: {
+                  bld,
+                  currentFloor,
+                  furn,
+                  furnitureIndex: fIdx,
+                  furnitureType: furn.type,
+                  aptId: player.insideApartmentId,
+                  stationName: isStove ? 'Кухонная плита и духовка' : 'Кухонный гарнитур (столешница)'
+                }
+              });
+            }
+
             // Furniture Storage interaction (Wardrobe, Fridge, Radiator, Kitchen cabinets, Nightstands, Bookshelves, Desks, etc.)
             const storageCfg = FURNITURE_STORAGE_CONFIGS[furn.type];
             if (storageCfg) {
               const isRadiator = furn.type === 'radiator';
               candidates.push({
                 type: 'furniture_storage',
-                primaryKey: 'E',
+                primaryKey: isKitchenStation ? 'F' : 'E',
                 actionTitle: isRadiator ? 'Положить вещи на батарею' : `Открыть ${storageCfg.nameRu.split(' / ')[0]}`,
                 detail: isRadiator ? 'Сушка сырой одежды и прогрев вещей (+65°C)' : `Хранилище предметов (${storageCfg.capacityL} л / ${storageCfg.maxWeightKg} кг)`,
                 x: furnWorldX,

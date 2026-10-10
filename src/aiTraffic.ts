@@ -1,5 +1,5 @@
 import { Building, CarType, GameWorld, Intersection, Pedestrian, PedestrianPath, RoadSegment, Vector2D, Vehicle, StreetProp } from './types';
-import { CAR_CONFIGS, CAR_PALETTE, createDefaultVehicleDamage, generateRandomPedestrianAppearance, createDefaultFuelSystem, createDefaultEngineState, PX_S_TO_SPEED_KMH } from './vehicleHelpers';
+import { CAR_CONFIGS, CAR_PALETTE, createDefaultVehicleDamage, generateRandomPedestrianAppearance, createDefaultFuelSystem, createDefaultEngineState, PX_S_TO_SPEED_KMH, SPEED_KMH_TO_PX_S } from './vehicleHelpers';
 import { sound } from './audio';
 import { checkPedestrianBuildingCollision, getBuildingEntrancePos, checkPedestrianVehicleCollision, getPropHitbox } from './physics';
 import { SpatialGrid } from './spatialGrid';
@@ -1366,6 +1366,266 @@ export function findRoadByLaneId(world: GameWorld, laneId: string | null): RoadS
     }
   }
   return null;
+}
+
+/**
+ * Calculates authentic speed limit (in km/h) based on road hierarchy, width, lanes and territory.
+ */
+export function getRoadSpeedLimitKmh(road: RoadSegment | null): number {
+  if (!road) return 55;
+
+  const name = road.name || '';
+  const isHighSpeedRoad = road.isAvenue || (road.lanes || 2) >= 4 || (road.width || 96) >= 140 ||
+    name.includes('Трасса') || name.includes('Шоссе') || name.includes('Highway') ||
+    name.includes('Вектор') || name.includes('Boulevard') || name.includes('проспект');
+
+  if (isHighSpeedRoad) {
+    // Intercity highway (M-12, Pacific Highway, canyon / sand routes)
+    if (name.includes('М-12') || name.includes('Pacific Highway') || name.includes('Каньонное Шоссе') || name.includes('Барханная Трасса')) {
+      return 95;
+    }
+    // Urban wide avenues & boulevards (Grand Blvd, Central Ave, Silicon Hwy, Metro Ave, Station Ave)
+    return 80;
+  }
+
+  // Roundabouts
+  if (road.isRoundabout) {
+    return 35;
+  }
+
+  // Narrow residential, garages, dacha and riverside alleys
+  const isNarrowOrResidential = (road.width || 96) <= 96 ||
+    name.includes('тупик') || name.includes('гараж') || name.includes('Дачн') ||
+    name.includes('Садов') || name.includes('Луговой') || name.includes('Березов') ||
+    name.includes('Кленов') || name.includes('Моторный') || name.includes('Автомобилистов') ||
+    name.includes('пакгауз');
+
+  if (isNarrowOrResidential) {
+    return 38;
+  }
+
+  // Standard urban 2-lane avenues and city connectors (Broadway, Parkside, Commerce, Financial, etc.)
+  return 60;
+}
+
+/**
+ * Computes authentic cruising speed (in px/s) tailored to vehicle type and road speed limit.
+ * First-principles simulation: heavy machinery & tractors maintain realistic low cruising speeds,
+ * sedans & crossovers cruise near the limit, sports cars cruise briskly, mopeds keep to their capability.
+ */
+export function getVehicleCruiseSpeedPx(car: Vehicle, road: RoadSegment | null): number {
+  const roadLimitKmh = getRoadSpeedLimitKmh(road);
+  const type = car.type;
+  let vehicleCruiseKmh = roadLimitKmh;
+
+  // Agricultural Tractors: strictly low working cruise (25 - 30 km/h)
+  if (type.startsWith('tractor_')) {
+    vehicleCruiseKmh = Math.min(28, roadLimitKmh * 0.5);
+  }
+  // Soviet Moped: ~35 - 40 km/h
+  else if (type === 'moped_soviet') {
+    vehicleCruiseKmh = Math.min(38, roadLimitKmh * 0.65);
+  }
+  // Heavy dump trucks, concrete mixers, garbage trucks, ZIL-130
+  else if (['truck_dump', 'truck_zil_dump', 'cement_mixer', 'garbage_truck', 'truck_water', 'truck_tanker'].includes(type)) {
+    vehicleCruiseKmh = Math.min(68, roadLimitKmh * 0.85);
+  }
+  // Long-haul semi trucks, delivery trucks, city buses, old cargo vans
+  else if (['truck_semi', 'truck_box', 'truck_covered', 'truck_flatbed', 'bus', 'bus_minibus', 'delivery_truck', 'van_cargo_old'].includes(type)) {
+    vehicleCruiseKmh = Math.min(78, roadLimitKmh * 0.90);
+  }
+  // Sports cars & supercars & sport motorcycles
+  else if (['sports', 'supercar', 'coupe_gt', 'moto_sport'].includes(type)) {
+    vehicleCruiseKmh = roadLimitKmh + 10;
+  }
+  // Taxis: brisk urban driving
+  else if (type === 'taxi') {
+    vehicleCruiseKmh = roadLimitKmh + 4;
+  }
+  // Police in normal patrol
+  else if (type === 'police' && car.emergencyState !== 'chase') {
+    vehicleCruiseKmh = roadLimitKmh + 2;
+  }
+  // Standard civilian passenger cars, crossovers, wagons, pickups, vintage cars
+  else {
+    // Minor individual variation based on vehicle ID hash (-3 to +3 km/h)
+    const idCode = (car.id ? car.id.charCodeAt(car.id.length - 1) : 0) % 7;
+    const variation = idCode - 3;
+    vehicleCruiseKmh = Math.max(30, roadLimitKmh + variation);
+  }
+
+  // Police in active chase
+  if (car.emergencyState === 'chase' && type === 'police') {
+    vehicleCruiseKmh = Math.max(115, roadLimitKmh + 35);
+  }
+
+  // Dispatched fire engine
+  if ((car as any).isFireDispatch) {
+    vehicleCruiseKmh = Math.max(85, roadLimitKmh + 15);
+  }
+
+  return vehicleCruiseKmh * SPEED_KMH_TO_PX_S;
+}
+
+/**
+ * Realistic turning speeds: prevents crawling pile-ups while preserving stability.
+ */
+export function getTurnSpeedPx(car: Vehicle, isRightTurn: boolean, isTurnaround: boolean): number {
+  const isHeavy = car.length > 52 || (car.wheelBase || 28) > 34 || car.type.startsWith('truck_') || car.type.startsWith('tractor_') || car.type === 'bus';
+  const isMoto = car.type.startsWith('moto_') || car.type === 'moped_soviet';
+  const isSports = car.type === 'sports' || car.type === 'supercar' || car.type === 'coupe_gt';
+
+  if (isTurnaround) {
+    return 16 * SPEED_KMH_TO_PX_S;
+  }
+
+  if (isHeavy) {
+    const turnKmh = isRightTurn ? 15 : 22;
+    return turnKmh * SPEED_KMH_TO_PX_S;
+  }
+
+  if (isMoto) {
+    const turnKmh = isRightTurn ? 22 : 28;
+    return turnKmh * SPEED_KMH_TO_PX_S;
+  }
+
+  if (isSports) {
+    const turnKmh = isRightTurn ? 24 : 32;
+    return turnKmh * SPEED_KMH_TO_PX_S;
+  }
+
+  // Standard passenger car
+  const turnKmh = isRightTurn ? 20 : 26;
+  return turnKmh * SPEED_KMH_TO_PX_S;
+}
+
+/**
+ * Returns weighted vehicle archetype distribution tailored to the territory and road hierarchy.
+ */
+export function getTerritoryVehicleArchetypes(road: RoadSegment | null, x: number, y: number): { type: CarType; weight: number }[] {
+  const name = road?.name || '';
+  const isAvenueOrHighway = road?.isAvenue || (road?.lanes || 2) >= 4 || (road?.width || 96) >= 140 ||
+    name.includes('Трасса') || name.includes('Шоссе') || name.includes('Highway') ||
+    name.includes('Вектор') || name.includes('Boulevard') || name.includes('проспект');
+
+  const isIndustrialOrCargo = name.includes('пакгауз') || name.includes('Карьер') ||
+    name.includes('МТС') || name.includes('Грузов') || (x < 1600 && y < 1600);
+
+  const isResidentialOrGarages = (road?.width || 96) <= 96 ||
+    name.includes('тупик') || name.includes('гараж') || name.includes('Дачн') ||
+    name.includes('Садов') || name.includes('Луговой') || name.includes('Березов') ||
+    name.includes('Кленов') || name.includes('Речн') || name.includes('Моторный') ||
+    name.includes('Автомобилистов');
+
+  // 1. HIGHWAYS, EXPRESSWAYS & MAIN AVENUES (M-12, Pacific Hwy, Grand Blvd, Metro Ave)
+  if (isAvenueOrHighway) {
+    return [
+      { type: 'sedan', weight: 14 },
+      { type: 'sedan_compact', weight: 10 },
+      { type: 'sedan_polo', weight: 10 },
+      { type: 'sedan_accent', weight: 8 },
+      { type: 'wagon_modern', weight: 7 },
+      { type: 'crossover_compact', weight: 8 },
+      { type: 'suv', weight: 8 },
+      { type: 'suv_luxury', weight: 4 },
+      { type: 'truck_semi', weight: 5 },
+      { type: 'truck_box', weight: 4 },
+      { type: 'truck_tanker', weight: 3 },
+      { type: 'truck_covered', weight: 3 },
+      { type: 'truck_flatbed', weight: 2 },
+      { type: 'pickup_heavy', weight: 3 },
+      { type: 'bus', weight: 5 },
+      { type: 'bus_minibus', weight: 2 },
+      { type: 'sports', weight: 3 },
+      { type: 'coupe_gt', weight: 2 },
+      { type: 'supercar', weight: 1 },
+      { type: 'moto_sport', weight: 1 },
+      { type: 'taxi', weight: 4 },
+      { type: 'police', weight: 2 }
+    ];
+  }
+
+  // 2. INDUSTRIAL DEPOT, FREIGHT TERMINAL & QUARRY ACCESS
+  if (isIndustrialOrCargo) {
+    return [
+      { type: 'truck_zil_dump', weight: 14 },
+      { type: 'truck_dump', weight: 10 },
+      { type: 'truck_flatbed', weight: 9 },
+      { type: 'truck_covered', weight: 7 },
+      { type: 'truck_box', weight: 6 },
+      { type: 'cement_mixer', weight: 4 },
+      { type: 'truck_water', weight: 3 },
+      { type: 'truck_tow', weight: 2 },
+      { type: 'van_cargo_old', weight: 10 },
+      { type: 'delivery_truck', weight: 8 },
+      { type: 'pickup_heavy', weight: 4 },
+      { type: 'van', weight: 3 },
+      { type: 'sedan_logan', weight: 4 },
+      { type: 'sedan_classic', weight: 4 },
+      { type: 'wagon_classic', weight: 4 },
+      { type: 'tractor_mtz82', weight: 5 },
+      { type: 'tractor_mtz80', weight: 3 }
+    ];
+  }
+
+  // 3. RESIDENTIAL LANES, DACHAS, GARAGES & OUTSKIRTS
+  if (isResidentialOrGarages) {
+    return [
+      { type: 'sedan_classic', weight: 10 },
+      { type: 'wagon_classic', weight: 9 },
+      { type: 'sedan_samara', weight: 8 },
+      { type: 'hatch_samara', weight: 7 },
+      { type: 'sedan_logan', weight: 7 },
+      { type: 'sedan_nexia', weight: 6 },
+      { type: 'liftback_tavria', weight: 5 },
+      { type: 'compact_matiz', weight: 5 },
+      { type: 'classic_compact', weight: 3 },
+      { type: 'suv_classic_box', weight: 7 },
+      { type: 'van_cargo_old', weight: 5 },
+      { type: 'pickup', weight: 4 },
+      { type: 'moto_izh_jupiter', weight: 5 },
+      { type: 'moto_ural_sidecar', weight: 4 },
+      { type: 'moto_jawa350', weight: 3 },
+      { type: 'moped_soviet', weight: 4 },
+      { type: 'tractor_mtz80_old', weight: 3 },
+      { type: 'tractor_mtz80', weight: 2 },
+      { type: 'truck_flatbed', weight: 3 }
+    ];
+  }
+
+  // 4. CENTRAL CITY STREETS, SHOPPING DISTRICT & COMMERCIAL CORRIDORS (Broadway, Parkside, Commerce, Financial, etc.)
+  return [
+    { type: 'sedan', weight: 12 },
+    { type: 'sedan_compact', weight: 10 },
+    { type: 'sedan_accent', weight: 9 },
+    { type: 'sedan_polo', weight: 9 },
+    { type: 'sedan_logan', weight: 7 },
+    { type: 'hatchback', weight: 7 },
+    { type: 'hatch_hot', weight: 4 },
+    { type: 'compact_matiz', weight: 5 },
+    { type: 'crossover_compact', weight: 7 },
+    { type: 'suv', weight: 6 },
+    { type: 'wagon_modern', weight: 4 },
+    { type: 'taxi', weight: 14 },
+    { type: 'delivery_truck', weight: 6 },
+    { type: 'van', weight: 4 },
+    { type: 'bus', weight: 3 },
+    { type: 'garbage_truck', weight: 2 },
+    { type: 'police', weight: 2 },
+    { type: 'ambulance', weight: 1 }
+  ];
+}
+
+export function pickWeightedVehicleType(candidates: { type: CarType; weight: number }[]): CarType {
+  const totalWeight = candidates.reduce((sum, item) => sum + item.weight, 0);
+  let randomVal = Math.random() * totalWeight;
+  for (const item of candidates) {
+    if (randomVal < item.weight) {
+      return item.type;
+    }
+    randomVal -= item.weight;
+  }
+  return candidates[0].type;
 }
 
 // Find adjacent lanes travelling in the same direction (for multi-lane roads: avenues, ring-roads, highways)
@@ -3538,18 +3798,13 @@ export function updateAITraffic(
     }
 
     // 5. Intelligent Driver Model (IDM) Target Speed Calculation
-    const defaultCruiseSpeed = 155 + (car.type === 'sports'? 45 : 0) + (car.type === 'taxi'? 15 : 0);
-    // Smooth realistic urban turning speeds: prevents overshooting and wide swinging into oncoming lanes
-    const isHeavyCar = car.length > 52 || (car.wheelBase || 28) > 34;
-    const isRightTurn = car.currentConnection?.turnType === 'right'|| car.plannedTurn === 'right';
+    const road = findRoadByLaneId(world, car.currentLaneId || car.currentConnection?.targetLaneId || null);
+    const defaultCruiseSpeed = getVehicleCruiseSpeedPx(car, road);
 
-    // Right turns are extremely tight and require much lower speeds to prevent lateral overshoot.
-    const turnMaxSpeed = car.currentConnection?.turnType === 'turnaround'? 36
-      : (isHeavyCar 
-          ? (isRightTurn ? 20 : 28) 
-          : (isRightTurn 
-              ? (car.type === 'sports'? 38 : (car.type === 'suv'|| car.type === 'pickup'? 30 : 34)) 
-              : (car.type === 'sports'? 55 : (car.type === 'suv'|| car.type === 'pickup'? 40 : 44))));
+    const isRightTurn = car.currentConnection?.turnType === 'right' || car.plannedTurn === 'right';
+    const isTurnaround = car.currentConnection?.turnType === 'turnaround';
+    const turnMaxSpeed = getTurnSpeedPx(car, isRightTurn, isTurnaround);
+
     const v0 = (car.inIntersection || car.currentConnection || car.plannedTurn !== 'straight') ? turnMaxSpeed : defaultCruiseSpeed;
 
     // Ghosting recovery alpha handling
@@ -3584,11 +3839,13 @@ export function updateAITraffic(
     }
 
     // 5. Intelligent Driver Model (IDM) Acceleration computation
-    const a_max = 140; // Maximum acceleration (px/s^2)
-    const b_comf = 160; // Comfortable deceleration (px/s^2)
+    const isHeavyCar = car.length > 52 || (car.wheelBase || 28) > 34 || car.type.startsWith('truck_') || car.type.startsWith('tractor_') || car.type === 'bus';
+    const isAgile = car.type === 'sports' || car.type === 'supercar' || car.type.startsWith('moto_');
+    const a_max = isAgile ? 200 : (isHeavyCar ? 85 : 140); // Maximum acceleration (px/s^2)
+    const b_comf = isAgile ? 210 : (isHeavyCar ? 115 : 160); // Comfortable deceleration (px/s^2)
     const delta_exp = 4; // Acceleration exponent
-    const s0 = 24; // Safe minimum distance buffer (px)
-    const T_headway = 1.0; // Safe time headway (seconds)
+    const s0 = Math.max(22, (car.length || 42) * 0.45); // Safe minimum distance buffer (px)
+    const T_headway = v0 > 300 ? 1.3 : 1.0; // Safe time headway (seconds)
 
     const v = Math.max(0, car.speed);
     
@@ -5843,10 +6100,14 @@ function respawnCarNearPlayer(car: Vehicle, playerPos: Vector2D, world: GameWorl
       const chosen = candidates[Math.floor(Math.random() * candidates.length)];
 
       if (isSpawnPositionClear(chosen.spawnX, chosen.spawnY, world)) {
+        const road = findRoadByLaneId(world, chosen.lane.laneId);
+        const targetCruisePx = getVehicleCruiseSpeedPx(car, road);
+        const speedVal = targetCruisePx * (0.85 + Math.random() * 0.12);
+
         car.x = chosen.spawnX;
         car.y = chosen.spawnY;
         car.angle = chosen.angle;
-        car.speed = 30 + Math.random() * 25;
+        car.speed = speedVal;
         car.vx = Math.cos(car.angle) * car.speed;
         car.vy = Math.sin(car.angle) * car.speed;
         car.steerAngle = 0;
@@ -5859,7 +6120,7 @@ function respawnCarNearPlayer(car: Vehicle, playerPos: Vector2D, world: GameWorl
         car.aiState = 'driving';
         car.stuckTimer = 0;
         car.reverseTimer = 0;
-        car.targetSpeed = 100 + Math.random() * 35;
+        car.targetSpeed = targetCruisePx;
         car.idmAcceleration = 0;
         car.turnSignal = 'none';
         car.turnSignalTimer = 0;
@@ -6012,83 +6273,63 @@ export function spawnNewCarNearPlayer(playerPos: Vector2D, world: GameWorld): bo
   const candidates = getCandidateSpawnPoints(playerPos, world, 600, 1400);
   if (candidates.length === 0) return false;
 
-  const carTypes: CarType[] = [
-    // Standard civilian & budget models
-    'sedan', 'sedan_compact', 'sedan_classic', 'classic_compact',
-    'compact_matiz', 'sedan_logan', 'sedan_nexia', 'liftback_tavria',
-    'sedan_accent', 'sedan_polo', 'hatch_samara', 'sedan_samara',
-    'hatchback', 'hatch_hot', 'micro_car', 'retro_bubble',
-    'wagon_classic',
-    // Crossovers & SUVs
-    'suv', 'suv_luxury', 'suv_classic_box', 'offroad_hardcore',
-    // Performance & Muscle
-    'sports', 'supercar', 'muscle_classic', 'coupe_gt',
-    // Pickups & Vans
-    'pickup', 'pickup_heavy', 'van', 'van_camper', 'van_cargo_old',
-    // Public & City services
-    'taxi', 'bus',
-    // Emergency services
-    'police', 'fire_engine', 'fire_ladder', 'ambulance',
-    // Commercial & Heavy trucks
-    'delivery_truck', 'truck_tow', 'truck_armored',
-    'truck_box', 'truck_dump', 'truck_zil_dump', 'truck_semi', 'truck_tanker', 'truck_water', 'truck_flatbed', 'truck_covered', 'cement_mixer', 'garbage_truck',
-    // Agricultural Tractors
-    'tractor_mtz82', 'tractor_mtz80', 'tractor_mtz80_old',
-    // Motorcycles & Mopeds
-    'moto_izh_jupiter', 'moto_ural_sidecar', 'moto_jawa350', 'moto_sport', 'moto_chopper', 'moped_soviet'];
-  const cType = carTypes[Math.floor(Math.random() * carTypes.length)];
-  const cfg = CAR_CONFIGS[cType] || CAR_CONFIGS.sedan;
-  let color = CAR_PALETTE[Math.floor(Math.random() * CAR_PALETTE.length)];
-  if (cType === 'taxi') color = '#eab308';
-  else if (cType === 'police') color = '#0f172a';
-  else if (cType === 'fire_engine'|| cType === 'fire_ladder'|| cType === 'fire_rescue') color = '#dc2626';
-  else if (cType === 'bus') color = '#eab308';
-  else if (cType === 'bus_minibus') color = '#f59e0b';
-  else if (cType === 'ambulance'|| cType === 'ambulance_van'|| cType === 'ambulance_suv') color = '#f8fafc';
-  else if (cType === 'van_camper') color = '#fef08a';
-  else if (cType === 'van_cargo_old') color = '#94a3b8';
-  else if (cType === 'muscle'|| cType === 'muscle_classic') color = '#991b1b';
-  else if (cType === 'garbage_truck') color = '#16a34a';
-  else if (cType === 'truck_dump') color = '#d97706';
-  else if (cType === 'truck_zil_dump') color = '#0284c7';
-  else if (cType === 'cement_mixer') color = '#2563eb';
-  else if (cType === 'truck_box') color = '#0284c7';
-  else if (cType === 'truck_water') color = '#0284c7';
-  else if (cType === 'truck_tanker') color = '#0369a1';
-  else if (cType === 'truck_flatbed' || cType === 'truck_covered') color = '#0284c7';
-  else if (cType === 'truck_tow') color = '#eab308';
-  else if (cType === 'truck_armored') color = '#334155';
-  else if (cType === 'delivery_truck') color = '#78350f';
-  else if (cType === 'supercar') color = '#ef4444';
-  else if (cType === 'retro_bubble') color = '#38bdf8';
-  else if (cType === 'sedan_luxury') color = '#1e293b';
-  // Tractors Authentic Colors
-  else if (cType === 'tractor_mtz82') color = '#2563eb'; // Belarus Blue
-  else if (cType === 'tractor_mtz80') color = '#dc2626'; // Red
-  else if (cType === 'tractor_mtz80_old') color = '#0284c7'; // Faded Blue
-  // Motorcycles & Mopeds
-  else if (cType === 'moto_jawa350') color = '#991b1b'; // Cherry Red
-  else if (cType === 'moto_izh_jupiter') color = '#0284c7'; // Soviet Sky Blue
-  else if (cType === 'moto_ural_sidecar') color = '#3f6212'; // Military Khaki Olive
-  else if (cType === 'moto_sport') color = '#10b981'; // Green Kawasaki / Racing
-  else if (cType === 'moto_chopper') color = '#0f172a'; // Midnight Black
-  else if (cType === 'moped_soviet') color = '#f97316'; // Orange-Red Karpaty
-
-  const isEmergency = cType === 'police'|| cType === 'ambulance'|| cType === 'ambulance_van'|| 
-                      cType === 'ambulance_suv'|| cType === 'fire_engine'|| cType === 'fire_ladder'|| 
-                      cType === 'fire_rescue';
-  let roofColor = isEmergency ? '#f8fafc': color;
-  if (cType === 'truck_zil_dump') roofColor = '#f8fafc';
-  if (cType === 'suv_classic_box') roofColor = '#ffffff';
-  if (cType === 'classic_compact') roofColor = '#f1f5f9';
-  if (cType === 'wagon_allroad') roofColor = '#0f172a';
-
   for (let attempts = 0; attempts < 15; attempts++) {
     const chosen = candidates[Math.floor(Math.random() * candidates.length)];
 
     if (isSpawnPositionClear(chosen.spawnX, chosen.spawnY, world)) {
+      const road = findRoadByLaneId(world, chosen.lane.laneId);
+      const archetypes = getTerritoryVehicleArchetypes(road, chosen.spawnX, chosen.spawnY);
+      const cType = pickWeightedVehicleType(archetypes);
+      const cfg = CAR_CONFIGS[cType] || CAR_CONFIGS.sedan;
+
+      let color = CAR_PALETTE[Math.floor(Math.random() * CAR_PALETTE.length)];
+      if (cType === 'taxi') color = '#eab308';
+      else if (cType === 'police') color = '#0f172a';
+      else if (cType === 'fire_engine'|| cType === 'fire_ladder'|| cType === 'fire_rescue') color = '#dc2626';
+      else if (cType === 'bus') color = '#eab308';
+      else if (cType === 'bus_minibus') color = '#f59e0b';
+      else if (cType === 'ambulance'|| cType === 'ambulance_van'|| cType === 'ambulance_suv') color = '#f8fafc';
+      else if (cType === 'van_camper') color = '#fef08a';
+      else if (cType === 'van_cargo_old') color = '#94a3b8';
+      else if (cType === 'muscle'|| cType === 'muscle_classic') color = '#991b1b';
+      else if (cType === 'garbage_truck') color = '#16a34a';
+      else if (cType === 'truck_dump') color = '#d97706';
+      else if (cType === 'truck_zil_dump') color = '#0284c7';
+      else if (cType === 'cement_mixer') color = '#2563eb';
+      else if (cType === 'truck_box') color = '#0284c7';
+      else if (cType === 'truck_water') color = '#0284c7';
+      else if (cType === 'truck_tanker') color = '#0369a1';
+      else if (cType === 'truck_flatbed' || cType === 'truck_covered') color = '#0284c7';
+      else if (cType === 'truck_tow') color = '#eab308';
+      else if (cType === 'truck_armored') color = '#334155';
+      else if (cType === 'delivery_truck') color = '#78350f';
+      else if (cType === 'supercar') color = '#ef4444';
+      else if (cType === 'retro_bubble') color = '#38bdf8';
+      else if (cType === 'sedan_luxury') color = '#1e293b';
+      // Tractors Authentic Colors
+      else if (cType === 'tractor_mtz82') color = '#2563eb'; // Belarus Blue
+      else if (cType === 'tractor_mtz80') color = '#dc2626'; // Red
+      else if (cType === 'tractor_mtz80_old') color = '#0284c7'; // Faded Blue
+      // Motorcycles & Mopeds
+      else if (cType === 'moto_jawa350') color = '#991b1b'; // Cherry Red
+      else if (cType === 'moto_izh_jupiter') color = '#0284c7'; // Soviet Sky Blue
+      else if (cType === 'moto_ural_sidecar') color = '#3f6212'; // Military Khaki Olive
+      else if (cType === 'moto_sport') color = '#10b981'; // Green Kawasaki / Racing
+      else if (cType === 'moto_chopper') color = '#0f172a'; // Midnight Black
+      else if (cType === 'moped_soviet') color = '#f97316'; // Orange-Red Karpaty
+
+      const isEmergency = cType === 'police'|| cType === 'ambulance'|| cType === 'ambulance_van'|| 
+                          cType === 'ambulance_suv'|| cType === 'fire_engine'|| cType === 'fire_ladder'|| 
+                          cType === 'fire_rescue';
+      let roofColor = isEmergency ? '#f8fafc': color;
+      if (cType === 'truck_zil_dump') roofColor = '#f8fafc';
+      if (cType === 'suv_classic_box') roofColor = '#ffffff';
+      if (cType === 'classic_compact') roofColor = '#f1f5f9';
+      if (cType === 'wagon_allroad') roofColor = '#0f172a';
+
       const id = `veh_dynamic_${Date.now()}_${Math.floor(Math.random() * 10000)}`;
-      const speedVal = 30 + Math.random() * 25;
+      const targetCruisePx = getVehicleCruiseSpeedPx({ type: cType, id } as any, road);
+      const speedVal = targetCruisePx * (0.85 + Math.random() * 0.12);
 
       world.vehicles.push({
         id,
@@ -6124,7 +6365,7 @@ export function spawnNewCarNearPlayer(playerPos: Vector2D, world: GameWorld): bo
         hasGBO: ['sedan_classic', 'wagon_classic', 'taxi_yellow', 'delivery_truck', 'van_cargo_old'].includes(cType) ? Math.random() < 0.4 : false,
         engineState: createDefaultEngineState(cType, true, false),
         fuelSystem: createDefaultFuelSystem(cType, false),
-        targetSpeed: speedVal,
+        targetSpeed: targetCruisePx,
         currentLaneId: chosen.lane.laneId,
         targetWaypointIndex: chosen.targetWpIndex,
         routeWaypoints: [...chosen.lane.waypoints],

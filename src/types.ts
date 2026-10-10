@@ -1368,6 +1368,30 @@ export interface InventoryItem {
     baseItemNameRu: string;
     baseItemNameEn?: string;
   };
+  // Nutrition & Biochemical Culinary Simulation
+  nutrients?: {
+    calories: number; // kcal
+    proteins: number; // g
+    fats: number;     // g
+    carbs: number;    // g
+    sugars: number;   // g
+    fiber?: number;   // g
+    salt?: number;    // g
+    water?: number;   // g
+  };
+  culinaryData?: {
+    isPreparedDish?: boolean;
+    dishType?: 'fried' | 'boiled' | 'soup' | 'salad' | 'stew' | 'baked' | 'burnt_mess';
+    denaturation?: number;  // 0.0 to 1.5+ (cooked state)
+    maillard?: number;      // 0.0 to 1.5+ (browning/crust)
+    charring?: number;      // 0.0 to 1.0 (pyrolysis / burnt level)
+    hydrolysis?: number;    // 0.0 to 1.5+ (tenderness / softness)
+    cutPieces?: number;
+    ingredientsCount?: number;
+    ingredientsList?: string[];
+    cookingLiquid?: string;
+    tasteNotes?: string[];
+  };
   // Container properties (recursive containers: backpack, wallet, plastic bag, pockets, etc.)
   isContainer?: boolean;
   singleUseContainer?: boolean;     // Single-use disposable packaging (tears open upon extracting)

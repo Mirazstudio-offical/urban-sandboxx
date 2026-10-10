@@ -127,6 +127,7 @@ import { WorldInviteToast } from './components/WorldInviteToast';
 import { RealEstateAgencyModal } from './components/RealEstateAgencyModal';
 import { PropertyDocumentModal } from './components/PropertyDocumentModal';
 import { FurnitureStorageModal } from './components/FurnitureStorageModal';
+import { KitchenStationModal } from './components/KitchenStationModal';
 import { BedSleepOverlay } from './components/BedSleepOverlay';
 import { DateTimePickerModal } from './components/DateTimePickerModal';
 import { 
@@ -755,6 +756,17 @@ export default function App() {
     customTitle?: string;
   } | null>(null);
   const [isFurnitureStorageOpen, setIsFurnitureStorageOpen] = useState<boolean>(false);
+
+  // Kitchen Workstation & Cooking Simulation Modal State
+  const [isKitchenStationOpen, setIsKitchenStationOpen] = useState<boolean>(false);
+  const [kitchenStationData, setKitchenStationData] = useState<{
+    stationName: string;
+    furnitureType: string;
+    buildingId?: string;
+    floor?: number;
+    furnitureIndex?: number;
+    aptId?: string;
+  } | null>(null);
 
   // Apartment Bed Sleeping & Relaxation State
   const [bedSleepState, setBedSleepState] = useState<BedSleepState | null>(null);
@@ -4900,6 +4912,21 @@ export default function App() {
         break;
       }
 
+      case 'kitchen_station': {
+        const { bld, currentFloor, furnitureIndex, furnitureType, aptId, stationName } = target.data || {};
+        setKitchenStationData({
+          stationName: stationName || 'Кухонный гарнитур и плита',
+          furnitureType: furnitureType || 'kitchen_counter',
+          buildingId: bld?.id,
+          floor: currentFloor ?? 0,
+          furnitureIndex: furnitureIndex ?? 0,
+          aptId
+        });
+        setIsKitchenStationOpen(true);
+        sound.playUseItem();
+        break;
+      }
+
       case 'bed_sleep': {
         const { furn, aptId, bld, furnitureType } = target.data || {};
         const bedType = furnitureType || (furn ? furn.type : 'bed');
@@ -8205,6 +8232,65 @@ export default function App() {
           onVitalsChange={() => {
             setVitalsRefreshTick(t => t + 1);
             saveFurnitureStoragesToLocalStorage();
+          }}
+          onOpenKitchenStation={() => {
+            const bldId = furnitureStorageData.buildingId;
+            const fIdx = furnitureStorageData.furnitureIndex;
+            const fType = furnitureStorageData.furnitureType;
+            const cTitle = furnitureStorageData.customTitle;
+            const aId = furnitureStorageData.aptId;
+            setIsFurnitureStorageOpen(false);
+            setKitchenStationData({
+              stationName: cTitle || (fType === 'stove' ? 'Кухонная плита и духовка' : 'Кухонный гарнитур (столешница)'),
+              furnitureType: fType,
+              buildingId: bldId,
+              floor: furnitureStorageData.floor,
+              furnitureIndex: fIdx,
+              aptId: aId
+            });
+            setIsKitchenStationOpen(true);
+            sound.playUseItem();
+          }}
+        />
+      )}
+
+      {/* Kitchen Cooking Workstation Modal (Tactile First-Principles Culinary) */}
+      {isKitchenStationOpen && kitchenStationData && playerRef.current && (
+        <KitchenStationModal
+          isOpen={isKitchenStationOpen}
+          onClose={() => {
+            setIsKitchenStationOpen(false);
+            setKitchenStationData(null);
+          }}
+          player={playerRef.current}
+          world={worldRef.current}
+          stationName={kitchenStationData.stationName}
+          furnitureType={kitchenStationData.furnitureType}
+          onInventoryUpdated={() => {
+            setVitalsRefreshTick(t => t + 1);
+            saveFurnitureStoragesToLocalStorage();
+          }}
+          onVitalsChange={() => {
+            setVitalsRefreshTick(t => t + 1);
+            saveFurnitureStoragesToLocalStorage();
+          }}
+          onOpenStorage={() => {
+            if (kitchenStationData.buildingId && kitchenStationData.furnitureType) {
+              const bldId = kitchenStationData.buildingId;
+              const fIdx = kitchenStationData.furnitureIndex ?? 0;
+              const fType = kitchenStationData.furnitureType;
+              const aId = kitchenStationData.aptId;
+              setIsKitchenStationOpen(false);
+              setFurnitureStorageData({
+                buildingId: bldId,
+                floor: kitchenStationData.floor ?? 0,
+                furnitureIndex: fIdx,
+                furnitureType: fType,
+                aptId: aId
+              });
+              setIsFurnitureStorageOpen(true);
+              sound.playUseItem();
+            }
           }}
         />
       )}

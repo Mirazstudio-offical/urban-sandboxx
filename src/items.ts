@@ -9002,8 +9002,13 @@ export function useItemOnPlayer(
     item.maxPortions = maxPortions;
 
     let taste = '';
-    if (def?.tasteMessages && def.tasteMessages.length > 0) {
+    if (item.culinaryData?.tasteNotes && item.culinaryData.tasteNotes.length > 0) {
+      taste = item.culinaryData.tasteNotes[Math.floor(Math.random() * item.culinaryData.tasteNotes.length)];
+    } else if (def?.tasteMessages && def.tasteMessages.length > 0) {
       taste = def.tasteMessages[Math.floor(Math.random() * def.tasteMessages.length)];
+    }
+    if (item.culinaryData?.charring && item.culinaryData.charring >= 0.45) {
+      player.needs.nausea = Math.min(100, (player.needs.nausea || 0) + 12);
     }
 
     const unitLabel = item.category === 'drink'? 'глотков': item.category === 'food'? 'укусов': (item.itemId === 'painkillers'|| item.itemId === 'vitamins'? 'таблеток': 'применений');
@@ -10115,8 +10120,13 @@ export function useHandItemOnPlayer(
     item.maxPortions = maxPortions;
 
     let taste = '';
-    if (def?.tasteMessages && def.tasteMessages.length > 0) {
+    if (item.culinaryData?.tasteNotes && item.culinaryData.tasteNotes.length > 0) {
+      taste = item.culinaryData.tasteNotes[Math.floor(Math.random() * item.culinaryData.tasteNotes.length)];
+    } else if (def?.tasteMessages && def.tasteMessages.length > 0) {
       taste = def.tasteMessages[Math.floor(Math.random() * def.tasteMessages.length)];
+    }
+    if (item.culinaryData?.charring && item.culinaryData.charring >= 0.45) {
+      player.needs.nausea = Math.min(100, (player.needs.nausea || 0) + 12);
     }
 
     const unitLabel = item.category === 'drink'? 'глотков': item.category === 'food'? 'укусов': (item.itemId === 'painkillers'|| item.itemId === 'vitamins'? 'таблеток': 'применений');

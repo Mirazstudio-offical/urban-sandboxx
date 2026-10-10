@@ -1064,6 +1064,45 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
                       {selectedEntry.item.descriptionRu}
                     </div>
 
+                    {/* Nutritional Profile (БЖУ, сахара, соль) */}
+                    {selectedEntry.item.nutrients && (
+                      <div className="p-3 bg-[#14161a] border border-[#2a2e38] rounded-[2px] flex flex-col gap-2">
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="font-bold text-[#c68a35] flex items-center gap-1.5">
+                            <Utensils className="w-3.5 h-3.5" />
+                            Пищевая ценность (БЖУ)
+                          </span>
+                          <span className="text-[11px] font-mono font-bold text-amber-400">
+                            {selectedEntry.item.nutrients.calories} ккал
+                          </span>
+                        </div>
+                        <div className="grid grid-cols-2 gap-1.5 text-[11px] text-[#cbd5e1]">
+                          <div className="bg-[#0b0c0e] p-1.5 rounded-[2px] border border-[#2a2e38] flex justify-between">
+                            <span className="text-[#9ba3af]">Белки:</span>
+                            <span className="font-mono text-[#f0f3f6] font-semibold">{selectedEntry.item.nutrients.proteins} г</span>
+                          </div>
+                          <div className="bg-[#0b0c0e] p-1.5 rounded-[2px] border border-[#2a2e38] flex justify-between">
+                            <span className="text-[#9ba3af]">Жиры:</span>
+                            <span className="font-mono text-amber-400 font-semibold">{selectedEntry.item.nutrients.fats} г</span>
+                          </div>
+                          <div className="bg-[#0b0c0e] p-1.5 rounded-[2px] border border-[#2a2e38] flex justify-between">
+                            <span className="text-[#9ba3af]">Углеводы:</span>
+                            <span className="font-mono text-cyan-400 font-semibold">{selectedEntry.item.nutrients.carbs} г</span>
+                          </div>
+                          <div className="bg-[#0b0c0e] p-1.5 rounded-[2px] border border-[#2a2e38] flex justify-between">
+                            <span className="text-[#9ba3af]">Сахара:</span>
+                            <span className="font-mono text-pink-400 font-semibold">{selectedEntry.item.nutrients.sugars} г</span>
+                          </div>
+                          {selectedEntry.item.nutrients.salt !== undefined && (
+                            <div className="bg-[#0b0c0e] p-1.5 rounded-[2px] border border-[#2a2e38] flex justify-between col-span-2">
+                              <span className="text-[#9ba3af]">Соль (NaCl):</span>
+                              <span className="font-mono text-[#f0f3f6]">{selectedEntry.item.nutrients.salt} г</span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
                     {/* Smartphone Specs Card */}
                     {selectedEntry.item.phoneSpecs && (
                       <div className="p-3 bg-[#14161a] border border-[#2a2e38] rounded-[2px] flex flex-col gap-2">

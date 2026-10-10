@@ -64,6 +64,7 @@ interface FurnitureStorageModalProps {
   furnitureType?: string;
   aptId?: string;
   customTitle?: string;
+  onOpenKitchenStation?: () => void;
 }
 
 export const FurnitureStorageModal: React.FC<FurnitureStorageModalProps> = (props) => {
@@ -255,13 +256,27 @@ export const FurnitureStorageModal: React.FC<FurnitureStorageModalProps> = (prop
               </p>
             </div>
           </div>
-          <button
-            onClick={onClose}
-            className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors"
-            title="Закрыть (Esc)"
-          >
-            <X className="w-5 h-5" />
-          </button>
+          <div className="flex items-center gap-2">
+            {props.onOpenKitchenStation && (cfg.type === 'kitchen_counter' || cfg.type === 'stove' || cfg.type === 'table') && (
+              <button
+                onClick={() => {
+                  props.onOpenKitchenStation?.();
+                }}
+                className="px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs flex items-center gap-1.5 transition-all shadow-md shadow-amber-500/20"
+                title="Перейти к рабочей поверхности гарнитура для нарезки и готовки"
+              >
+                <Utensils className="w-3.5 h-3.5" />
+                <span>Готовка и нарезка</span>
+              </button>
+            )}
+            <button
+              onClick={onClose}
+              className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors"
+              title="Закрыть (Esc)"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
         </div>
 
         {/* Error banner if any */}
