@@ -8,7 +8,7 @@
 // - Diegetic sensory feedback: Sight (cut, crust, char), Hearing (sizzle, boil, crackle), Smell/Smoke.
 // =====================================================================
 
-import { InventoryItem } from './types';
+import { InventoryItem, CookingAttributes } from './types';
 import { COOKING_INGREDIENTS_CATALOG } from './cookingIngredients';
 
 export interface NutrientProfile {
@@ -42,6 +42,7 @@ export interface CulinaryIngredient {
   initialMassGrams: number;
   nutrients: NutrientProfile;
   bioState: BiochemicalState;
+  cookingAttributes: CookingAttributes;
   surfaceTemp: number; // °C
   coreTemp: number;    // °C
   icon: string;
@@ -274,6 +275,26 @@ export function createStoveCookwareVessel(placedCookwareItem?: InventoryItem): C
     }
   }
 
+  const restoredIngredients: CulinaryIngredient[] = [];
+  if (placedCookwareItem?.culinaryData?.ingredients) {
+    for (const ing of placedCookwareItem.culinaryData.ingredients) {
+      restoredIngredients.push({
+        ...ing,
+        id: `ing_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+        nutrients: { ...ing.nutrients },
+        bioState: { ...ing.bioState },
+        cookingAttributes: { ...ing.cookingAttributes }
+      });
+    }
+  }
+
+  const restoredLiquids: LiquidPortion[] = [];
+  if (placedCookwareItem?.culinaryData?.liquids) {
+    for (const liq of placedCookwareItem.culinaryData.liquids) {
+      restoredLiquids.push({ ...liq });
+    }
+  }
+
   return {
     id: `stove_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
     vesselType,
@@ -281,15 +302,15 @@ export function createStoveCookwareVessel(placedCookwareItem?: InventoryItem): C
     sourceItem: placedCookwareItem,
     hasBurner: true,
     capacityMl,
-    temperature: 20.0,
+    temperature: placedCookwareItem?.temperature ?? 20.0,
     heatSourcePower: 0,
     hasLid: false,
-    ingredients: [],
-    liquids: [],
+    ingredients: restoredIngredients,
+    liquids: restoredLiquids,
     smokeIntensity: 0.0,
     isFlaming: false,
     saltGrams: 0,
-    seasoningNotes: []
+    seasoningNotes: placedCookwareItem?.culinaryData?.tasteNotes || []
   };
 }
 
@@ -338,6 +359,15 @@ export function itemToCulinaryIngredient(item: InventoryItem): CulinaryIngredien
     isStirredRecently: false
   };
 
+  const cookingAttributes: CookingAttributes = item.culinaryData?.cookingAttributes ?? {
+    boiled: item.culinaryData?.dishType === 'boiled' || item.culinaryData?.dishType === 'soup' ? 1.0 : 0.0,
+    fried: item.culinaryData?.dishType === 'fried' ? 1.0 : 0.0,
+    baked: item.culinaryData?.dishType === 'baked' ? 1.0 : 0.0,
+    doneness: item.culinaryData?.denaturation ?? (item.itemId.includes('raw') ? 0.0 : 0.05),
+    charring: item.culinaryData?.charring ?? 0.0,
+    cutLevel
+  };
+
   return {
     id: `ing_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
     sourceItemId: item.itemId,
@@ -347,6 +377,7 @@ export function itemToCulinaryIngredient(item: InventoryItem): CulinaryIngredien
     initialMassGrams: massGrams,
     nutrients,
     bioState,
+    cookingAttributes,
     surfaceTemp: item.surfaceTemperature ?? item.temperature ?? 18.0,
     coreTemp: item.temperature ?? 18.0,
     icon: item.icon || ''
@@ -575,6 +606,27 @@ export function simulateCookwareTick(
       const smokeFromIng = Math.min(1.0, (ing.bioState.charring * 0.7) + (excessCharHeat / 80.0));
       maxSmoke = Math.max(maxSmoke, smokeFromIng);
     }
+
+    // E. Dynamic Cooking Attributes update
+    if (!ing.cookingAttributes) {
+      ing.cookingAttributes = {
+        boiled: 0,
+        fried: 0,
+        baked: 0,
+        doneness: ing.bioState.denaturation,
+        charring: ing.bioState.charring,
+        cutLevel: ing.bioState.cutLevel
+      };
+    }
+    if (isWetSubmerged && ing.coreTemp >= 70.0) {
+      ing.cookingAttributes.boiled = Math.min(1.0, (ing.cookingAttributes.boiled || 0) + 0.04 * dtSeconds);
+      ing.cookingAttributes.doneness = Math.min(1.5, Math.max(ing.cookingAttributes.doneness || 0, ing.bioState.denaturation));
+    } else if (isOilFrying || (!isWetSubmerged && ing.surfaceTemp >= 115.0)) {
+      ing.cookingAttributes.fried = Math.min(1.0, (ing.cookingAttributes.fried || 0) + 0.04 * dtSeconds);
+      ing.cookingAttributes.doneness = Math.min(1.5, Math.max(ing.cookingAttributes.doneness || 0, ing.bioState.denaturation));
+    }
+    ing.cookingAttributes.charring = ing.bioState.charring;
+    ing.cookingAttributes.cutLevel = ing.bioState.cutLevel;
 
     if (ing.bioState.isStirredRecently) {
       ing.bioState.isStirredRecently = false;
@@ -807,13 +859,41 @@ export function finishCookwareToInventoryItem(
   const hungerEffect = Math.min(100, Math.round(totalKcal / 7));
   const thirstEffect = isSoup ? 45 : (totalSalt > 6.0 ? -25 : -5);
 
-  const containerSuffix = platingItem ? ` (на ${platingItem.nameRu.toLowerCase()})` : '';
+  const containerSuffix = platingItem ? ` (в ${platingItem.nameRu.toLowerCase()})` : '';
+
+  let finalItemId = 'custom_cooked_dish';
+  let finalNameRu = `${mainBaseName}${containerSuffix}`;
+  let finalNameEn = `${mainBaseName}${containerSuffix}`;
+
+  if (platingItem) {
+    finalItemId = platingItem.itemId;
+    finalNameRu = `${platingItem.nameRu} (${mainBaseName})`;
+    finalNameEn = `${platingItem.name} (${mainBaseName})`;
+  } else if (vessel.sourceItem) {
+    finalItemId = vessel.sourceItem.itemId;
+    if (vessel.vesselType === 'pot') {
+      const summary = namesList.length > 0 ? namesList.slice(0, 3).join(', ') : 'кипяток';
+      finalNameRu = isSoup || vessel.liquids.length > 0
+        ? `${vessel.sourceItem.nameRu} (Варево: ${summary})`
+        : `${vessel.sourceItem.nameRu} (${mainBaseName})`;
+    } else if (vessel.vesselType === 'pan') {
+      const summary = namesList.length > 0 ? namesList.slice(0, 3).join(', ') : 'масло';
+      finalNameRu = `${vessel.sourceItem.nameRu} (Жареное: ${summary})`;
+    } else {
+      finalNameRu = `${vessel.sourceItem.nameRu} (${mainBaseName})`;
+    }
+    finalNameEn = finalNameRu;
+  }
+
+  const containerType = platingItem 
+    ? (platingItem.itemId.startsWith('kitchen_pan_') ? 'pan' : (platingItem.itemId.startsWith('kitchen_pot_') || platingItem.itemId === 'pot_clay_medium' ? 'pot' : (platingItem.itemId.startsWith('kitchen_bowl_') || platingItem.itemId === 'soup_bowl_empty' ? 'bowl' : 'plate')))
+    : (vessel.vesselType === 'pan' ? 'pan' : (vessel.vesselType === 'pot' ? 'pot' : (vessel.vesselType === 'bowl' ? 'bowl' : 'plate')));
 
   const dishItem: InventoryItem = {
     id: `dish_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
-    itemId: 'custom_cooked_dish',
-    name: `${mainBaseName}${containerSuffix}`,
-    nameRu: `${mainBaseName}${containerSuffix}`,
+    itemId: finalItemId,
+    name: finalNameEn,
+    nameRu: finalNameRu,
     category: 'food',
     count: 1,
     maxStack: 1,
@@ -845,9 +925,8 @@ export function finishCookwareToInventoryItem(
     },
     culinaryData: {
       isPreparedDish: true,
-      containerType: platingItem 
-        ? (platingItem.itemId.startsWith('kitchen_pan_') ? 'pan' : (platingItem.itemId.startsWith('kitchen_pot_') || platingItem.itemId === 'pot_clay_medium' ? 'pot' : (platingItem.itemId.startsWith('kitchen_bowl_') || platingItem.itemId === 'soup_bowl_empty' ? 'bowl' : 'plate')))
-        : (vessel.vesselType === 'pan' ? 'pan' : (vessel.vesselType === 'pot' ? 'pot' : (vessel.vesselType === 'bowl' ? 'bowl' : 'plate'))),
+      sourceCookwareItemId: vessel.sourceItem?.itemId || platingItem?.itemId,
+      containerType,
       dishType: isCharred ? 'burnt_mess' : (isSoup ? 'soup' : (isFried ? 'fried' : 'stew')),
       denaturation: Number(avgDenat.toFixed(2)),
       maillard: Number(avgMaillard.toFixed(2)),
@@ -858,7 +937,8 @@ export function finishCookwareToInventoryItem(
       ingredients: vessel.ingredients.map(i => ({
         ...i,
         nutrients: { ...i.nutrients },
-        bioState: { ...i.bioState }
+        bioState: { ...i.bioState },
+        cookingAttributes: { ...i.cookingAttributes }
       })),
       liquids: vessel.liquids.map(l => ({ ...l })),
       tasteNotes
@@ -866,6 +946,102 @@ export function finishCookwareToInventoryItem(
   };
 
   return dishItem;
+}
+
+/**
+ * Creates Dry / Raw Ingredient Mix (Смесь ингредиентов)
+ * Attributes store the constituent items with their cooking attributes,
+ * and texture is dynamically generated from these items!
+ */
+export function createDryMixFromVessel(vessel: CookwareVessel): InventoryItem | null {
+  if (vessel.ingredients.length === 0) {
+    return null;
+  }
+
+  let totalMassGrams = 0;
+  let totalKcal = 0;
+  let totalP = 0;
+  let totalF = 0;
+  let totalC = 0;
+  let totalSugar = 0;
+  let totalFiber = 0;
+  let totalSalt = vessel.saltGrams;
+  let totalWater = 0;
+  const namesList: string[] = [];
+
+  for (const ing of vessel.ingredients) {
+    totalMassGrams += ing.massGrams;
+    totalKcal += ing.nutrients.calories;
+    totalP += ing.nutrients.proteins;
+    totalF += ing.nutrients.fats;
+    totalC += ing.nutrients.carbs;
+    totalSugar += ing.nutrients.sugars;
+    totalFiber += ing.nutrients.fiber || 0;
+    totalSalt += ing.nutrients.salt || 0;
+    totalWater += ing.nutrients.water || 0;
+    namesList.push(ing.nameRu);
+  }
+
+  const mixTitle = `Смесь: ${namesList.slice(0, 3).join(', ')}${namesList.length > 3 ? '...' : ''}`;
+  const totalWeightKg = Number((totalMassGrams / 1000).toFixed(2));
+
+  return {
+    id: `mix_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+    itemId: 'food_mix',
+    name: `Mix (${namesList.slice(0, 3).join(', ')})`,
+    nameRu: mixTitle,
+    category: 'food',
+    count: 1,
+    maxStack: 1,
+    icon: '',
+    description: `Culinary mixture of dry ingredients: ${namesList.join(', ')}. Ready to boil in pot or fry in pan.`,
+    descriptionRu: `Кулинарная смесь ингредиентов: ${namesList.join(', ')}. Готова к варке в кастрюле с водой или жарке на сковороде.`,
+    effects: {
+      health: 0,
+      hunger: Math.max(5, Math.round(totalKcal / 10)),
+      thirst: -5,
+      energy: 5
+    },
+    weight: totalWeightKg,
+    volume: Number((totalWeightKg * 1.1).toFixed(2)),
+    usable: true,
+    portions: 6,
+    maxPortions: 6,
+    temperature: 20,
+    surfaceTemperature: 20,
+    nutrients: {
+      calories: Math.round(totalKcal),
+      proteins: Number(totalP.toFixed(1)),
+      fats: Number(totalF.toFixed(1)),
+      carbs: Number(totalC.toFixed(1)),
+      sugars: Number(totalSugar.toFixed(1)),
+      fiber: Number(totalFiber.toFixed(1)),
+      salt: Number(totalSalt.toFixed(2)),
+      water: Number(totalWater.toFixed(1))
+    },
+    culinaryData: {
+      isPreparedDish: false,
+      isWorkpiece: true,
+      isMix: true,
+      containerType: 'bowl',
+      dishType: 'mix',
+      denaturation: 0,
+      maillard: 0,
+      charring: 0,
+      hydrolysis: 0,
+      cutPieces: vessel.ingredients.length,
+      ingredientsCount: vessel.ingredients.length,
+      ingredientsList: namesList,
+      ingredients: vessel.ingredients.map(i => ({
+        ...i,
+        nutrients: { ...i.nutrients },
+        bioState: { ...i.bioState },
+        cookingAttributes: { ...i.cookingAttributes }
+      })),
+      liquids: vessel.liquids.map(l => ({ ...l })),
+      tasteNotes: ['Сухая смесь ингредиентов со свежими ароматами пряностей и овощей.']
+    }
+  };
 }
 
 /**

@@ -8,7 +8,7 @@
 import { drawShadow } from './itemGraphicShared';
 import { CookwareVessel, CulinaryIngredient } from '../cookingEngine';
 
-// Pseudo-random stable hash for ingredient placement
+// Stable pseudo-random seed
 function hashSeed(str: string): number {
   let hash = 0;
   for (let i = 0; i < str.length; i++) {
@@ -18,78 +18,356 @@ function hashSeed(str: string): number {
   return Math.abs(hash);
 }
 
-// Determines ingredient category & colors based on name/id & biochemistry
-function getIngredientColorProfile(ing: CulinaryIngredient | any) {
-  const name = (ing.nameRu || ing.name || '').toLowerCase();
-  const id = (ing.sourceItemId || ing.itemId || '').toLowerCase();
-  const denat = ing.bioState?.denaturation ?? ing.denaturation ?? 0.0;
-  const maillard = ing.bioState?.maillard ?? ing.maillard ?? 0.0;
-  const char = ing.bioState?.charring ?? ing.charring ?? 0.0;
+export type CulinaryFoodType =
+  | 'potato'
+  | 'carrot'
+  | 'onion'
+  | 'cabbage'
+  | 'mushroom'
+  | 'pasta'
+  | 'rice'
+  | 'egg'
+  | 'bread'
+  | 'cheese'
+  | 'flour'
+  | 'sugar'
+  | 'salt'
+  | 'pepper'
+  | 'fish'
+  | 'poultry'
+  | 'meat'
+  | 'tomato'
+  | 'greens'
+  | 'generic';
 
-  // 1. Meat (Beef, Pork, Lamb)
-  if (name.includes('говядин') || name.includes('свинин') || name.includes('баран') || name.includes('мяс') || id.includes('meat') || id.includes('beef') || id.includes('pork')) {
-    if (char >= 0.4) return { base: '#18181b', crust: '#09090b', highlight: '#27272a' };
-    if (char >= 0.15) return { base: '#451a03', crust: '#1c1917', highlight: '#78350f' };
-    if (maillard >= 0.35) return { base: '#854d0e', crust: '#78350f', highlight: '#b45309' };
-    if (denat >= 0.55) return { base: '#a8a29e', crust: '#78716c', highlight: '#d6d3d1' };
-    if (denat >= 0.2) return { base: '#fb7185', crust: '#f43f5e', highlight: '#fecdd3' };
-    return { base: '#e11d48', crust: '#be123c', highlight: '#fda4af' }; // Fresh raw red
+export function identifyIngredientType(ing: any): CulinaryFoodType {
+  const name = (ing?.nameRu || ing?.name || '').toLowerCase();
+  const id = (ing?.sourceItemId || ing?.itemId || '').toLowerCase();
+
+  if (name.includes('картоф') || id.includes('potato')) return 'potato';
+  if (name.includes('морков') || id.includes('carrot')) return 'carrot';
+  if (name.includes('лук') || name.includes('чеснок') || id.includes('onion') || id.includes('garlic')) return 'onion';
+  if (name.includes('капуст') || id.includes('cabbage')) return 'cabbage';
+  if (name.includes('гриб') || id.includes('mushroom')) return 'mushroom';
+  if (name.includes('макарон') || name.includes('паст') || name.includes('лапш') || id.includes('pasta') || id.includes('noodle')) return 'pasta';
+  if (name.includes('рис') || name.includes('гречк') || name.includes('круп') || id.includes('rice') || id.includes('grain')) return 'rice';
+  if (name.includes('яйц') || id.includes('egg')) return 'egg';
+  if (name.includes('хлеб') || name.includes('сухар') || name.includes('батон') || id.includes('bread')) return 'bread';
+  if (name.includes('сыр') || id.includes('cheese')) return 'cheese';
+  if (name.includes('мук') || id.includes('flour')) return 'flour';
+  if (name.includes('сахар') || id.includes('sugar')) return 'sugar';
+  if (name.includes('сол') || id.includes('salt')) return 'salt';
+  if (name.includes('перец') || id.includes('pepper')) return 'pepper';
+  if (name.includes('зелен') || name.includes('укроп') || name.includes('петрушк') || id.includes('herb')) return 'greens';
+  if (name.includes('томат') || name.includes('помидор') || id.includes('tomato')) return 'tomato';
+  if (name.includes('рыб') || name.includes('лосос') || name.includes('окунь') || id.includes('fish') || id.includes('salmon')) return 'fish';
+  if (name.includes('куриц') || name.includes('цыпл') || name.includes('индейк') || name.includes('утк') || id.includes('chicken') || id.includes('poultry')) return 'poultry';
+  if (name.includes('говядин') || name.includes('свинин') || name.includes('баран') || name.includes('мяс') || name.includes('фарш') || name.includes('колбас') || id.includes('meat') || id.includes('beef') || id.includes('pork')) return 'meat';
+
+  return 'generic';
+}
+
+/**
+ * Procedural rendering of an individual ingredient with its REAL item texture & cooking state.
+ * No generic steak fallback! Vegetables look like vegetables, pasta looks like pasta!
+ */
+export function drawProceduralIngredient(
+  ctx: CanvasRenderingContext2D,
+  ing: any,
+  scale: number = 1.0
+): void {
+  const type = identifyIngredientType(ing);
+  const cutLevel = ing.cookingAttributes?.cutLevel ?? ing.bioState?.cutLevel ?? (ing.itemId?.includes('minced') ? 2 : 0);
+  const isBoiled = (ing.cookingAttributes?.boiled ?? 0) > 0.2;
+  const isFried = (ing.cookingAttributes?.fried ?? 0) > 0.2;
+  const isBurnt = (ing.cookingAttributes?.charring ?? ing.bioState?.charring ?? 0) > 0.35;
+
+  ctx.save();
+  ctx.scale(scale, scale);
+
+  switch (type) {
+    case 'potato': {
+      if (cutLevel >= 2) {
+        // Mashed / pureed potato
+        ctx.fillStyle = isBoiled ? '#fef9c3' : '#fef08a';
+        ctx.beginPath();
+        ctx.arc(0, 0, 3.8, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#ca8a04';
+        ctx.beginPath();
+        ctx.arc(-1, -1, 1.2, 0, Math.PI * 2);
+        ctx.fill();
+      } else if (cutLevel === 1) {
+        // Potato wedges / slices
+        ctx.fillStyle = isFried ? '#fde047' : (isBoiled ? '#fef9c3' : '#fef08a');
+        ctx.beginPath();
+        ctx.ellipse(0, 0, 4.2, 2.6, 0.2, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = isFried ? (isBurnt ? '#451a03' : '#a16207') : '#b45309';
+        ctx.lineWidth = isFried ? 0.9 : 0.6;
+        ctx.stroke();
+      } else {
+        // Whole potato tuber
+        ctx.fillStyle = '#b45309';
+        ctx.beginPath();
+        ctx.ellipse(0, 0, 6.0, 4.2, -0.1, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#78350f';
+        ctx.beginPath();
+        ctx.arc(-2.5, -1, 0.6, 0, Math.PI * 2);
+        ctx.arc(2.0, 1.2, 0.5, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      break;
+    }
+
+    case 'carrot': {
+      if (cutLevel >= 2) {
+        // Minced orange dice
+        ctx.fillStyle = '#ea580c';
+        ctx.fillRect(-2.5, -2, 2, 2);
+        ctx.fillRect(0.5, -1.5, 2, 2);
+        ctx.fillRect(-1.5, 0.8, 2, 2);
+      } else if (cutLevel === 1) {
+        // Sliced carrot round coin
+        ctx.fillStyle = isBoiled ? '#c2410c' : '#ea580c';
+        ctx.beginPath();
+        ctx.arc(0, 0, 3.5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#fb923c';
+        ctx.beginPath();
+        ctx.arc(0, 0, 1.8, 0, Math.PI * 2);
+        ctx.fill();
+        if (isFried) {
+          ctx.strokeStyle = '#7c2d12';
+          ctx.lineWidth = 0.8;
+          ctx.stroke();
+        }
+      } else {
+        // Whole tapered orange carrot
+        ctx.fillStyle = '#ea580c';
+        ctx.beginPath();
+        ctx.moveTo(-6, -1.8);
+        ctx.lineTo(6, 0.2);
+        ctx.lineTo(-6, 1.8);
+        ctx.closePath();
+        ctx.fill();
+        // Green top stem
+        ctx.fillStyle = '#16a34a';
+        ctx.fillRect(-7.5, -0.8, 2, 1.6);
+      }
+      break;
+    }
+
+    case 'onion': {
+      // Translucent ivory / golden crescents
+      const onionBase = isFried ? '#d97706' : (isBoiled ? '#fef08a' : '#fef9c3');
+      const onionRim = isFried ? '#78350f' : '#ca8a04';
+      ctx.strokeStyle = onionRim;
+      ctx.fillStyle = onionBase;
+      ctx.lineWidth = 0.7;
+      ctx.beginPath();
+      ctx.arc(0, 0, 3.6, 0.3, Math.PI * 1.7);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(0, 0, 2.2, 0.5, Math.PI * 1.5);
+      ctx.stroke();
+      break;
+    }
+
+    case 'cabbage':
+    case 'greens': {
+      // Thin crisp ribbon strips of cabbage/greens
+      ctx.strokeStyle = isBoiled ? '#4d7c0f' : '#16a34a';
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      ctx.moveTo(-3.5, -1.5);
+      ctx.quadraticCurveTo(0, 2, 3.5, -1);
+      ctx.stroke();
+      ctx.strokeStyle = '#86efac';
+      ctx.lineWidth = 0.8;
+      ctx.beginPath();
+      ctx.moveTo(-2, 1.5);
+      ctx.quadraticCurveTo(1, -2, 3, 1);
+      ctx.stroke();
+      break;
+    }
+
+    case 'mushroom': {
+      // Sliced mushroom umbrella profile
+      ctx.fillStyle = '#78350f';
+      ctx.beginPath();
+      ctx.arc(0, -1, 3.8, Math.PI, 0);
+      ctx.fill();
+      ctx.fillStyle = '#f5f5f4';
+      ctx.fillRect(-1.2, -1, 2.4, 3.8);
+      ctx.fillStyle = '#a8a29e';
+      ctx.fillRect(-3, -1, 6, 0.8);
+      break;
+    }
+
+    case 'pasta': {
+      // Golden yellow pasta noodle curl
+      ctx.strokeStyle = isBoiled ? '#fef08a' : '#fde047';
+      ctx.lineWidth = 1.6;
+      ctx.beginPath();
+      ctx.moveTo(-3.5, -1);
+      ctx.bezierCurveTo(-1.5, 3, 1.5, -3, 3.5, 1);
+      ctx.stroke();
+      break;
+    }
+
+    case 'rice': {
+      // Cluster of white/cream grains
+      ctx.fillStyle = isBoiled ? '#f8fafc' : '#ffffff';
+      for (const pt of [[-2, -1.2], [1.5, -1.5], [-1, 1.5], [2, 1]]) {
+        ctx.beginPath();
+        ctx.ellipse(pt[0], pt[1], 1.8, 0.9, 0.4, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = '#cbd5e1';
+        ctx.lineWidth = 0.3;
+        ctx.stroke();
+      }
+      break;
+    }
+
+    case 'egg': {
+      // White albumen with rich sunny yolk
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.ellipse(0, 0, 4.8, 3.6, 0.1, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#eab308';
+      ctx.beginPath();
+      ctx.arc(0, 0, 2.0, 0, Math.PI * 2);
+      ctx.fill();
+      if (isFried) {
+        ctx.strokeStyle = '#ca8a04';
+        ctx.lineWidth = 0.6;
+        ctx.beginPath();
+        ctx.ellipse(0, 0, 4.8, 3.6, 0.1, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+      break;
+    }
+
+    case 'bread': {
+      // Golden toasted bread cube / crouton
+      ctx.fillStyle = isFried ? '#b45309' : '#fef08a';
+      ctx.beginPath();
+      ctx.roundRect(-3.5, -3.5, 7, 7, 1);
+      ctx.fill();
+      ctx.strokeStyle = '#78350f';
+      ctx.lineWidth = 0.8;
+      ctx.stroke();
+      break;
+    }
+
+    case 'cheese': {
+      // Pale yellow cheese with tiny holes
+      ctx.fillStyle = '#fde047';
+      ctx.beginPath();
+      ctx.moveTo(-3.5, -3);
+      ctx.lineTo(4, 0);
+      ctx.lineTo(-3.5, 3);
+      ctx.closePath();
+      ctx.fill();
+      ctx.fillStyle = '#ca8a04';
+      ctx.beginPath();
+      ctx.arc(-1, -0.5, 0.7, 0, Math.PI * 2);
+      ctx.arc(1.5, 0.2, 0.5, 0, Math.PI * 2);
+      ctx.fill();
+      break;
+    }
+
+    case 'flour':
+    case 'sugar':
+    case 'salt':
+    case 'pepper': {
+      // Fine powdery granular dust
+      const dustColor = type === 'pepper' ? '#18181b' : (type === 'sugar' ? '#f8fafc' : (type === 'salt' ? '#ffffff' : '#fef9c3'));
+      ctx.fillStyle = dustColor;
+      ctx.beginPath();
+      ctx.arc(0, 0, 4.0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = type === 'pepper' ? '#52525b' : '#cbd5e1';
+      for (const p of [[-2, -1], [1.5, -2], [0, 2], [2.2, 1]]) {
+        ctx.fillRect(p[0], p[1], 0.8, 0.8);
+      }
+      break;
+    }
+
+    case 'fish': {
+      // Flaky salmon cutlet
+      ctx.fillStyle = isBoiled || isFried ? '#fed7aa' : '#fb7185';
+      ctx.beginPath();
+      ctx.roundRect(-4.5, -2.5, 9, 5, 1.2);
+      ctx.fill();
+      ctx.strokeStyle = isFried ? '#9a3412' : '#94a3b8';
+      ctx.lineWidth = 0.7;
+      ctx.stroke();
+      break;
+    }
+
+    case 'poultry': {
+      // Pale tender poultry / chicken breast
+      ctx.fillStyle = isFried ? '#fde68a' : (isBoiled ? '#fef3c7' : '#fbcfe8');
+      ctx.beginPath();
+      ctx.roundRect(-4.2, -2.8, 8.4, 5.6, 1.5);
+      ctx.fill();
+      if (isFried) {
+        ctx.strokeStyle = '#b45309';
+        ctx.lineWidth = 0.8;
+        ctx.stroke();
+      }
+      break;
+    }
+
+    case 'meat': {
+      // Beef / pork / meat chunks (ONLY for actual meat items!)
+      const meatColor = isFried
+        ? (isBurnt ? '#18181b' : '#78350f')
+        : (isBoiled ? '#a8a29e' : '#e11d48');
+      ctx.fillStyle = meatColor;
+      ctx.beginPath();
+      ctx.roundRect(-4.5, -3.0, 9, 6, 1.5);
+      ctx.fill();
+      ctx.strokeStyle = isBurnt ? '#09090b' : (isFried ? '#451a03' : '#be123c');
+      ctx.lineWidth = 0.8;
+      ctx.stroke();
+      break;
+    }
+
+    case 'tomato': {
+      ctx.fillStyle = '#dc2626';
+      ctx.beginPath();
+      ctx.arc(0, 0, 3.8, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#16a34a';
+      ctx.fillRect(-0.8, -4.5, 1.6, 1.4);
+      break;
+    }
+
+    default: {
+      // Clean neutral grocery produce cube/slice
+      ctx.fillStyle = isFried ? '#ca8a04' : (isBoiled ? '#fed7aa' : '#fb923c');
+      ctx.beginPath();
+      ctx.roundRect(-3.5, -2.5, 7, 5, 1);
+      ctx.fill();
+      ctx.strokeStyle = '#78350f';
+      ctx.lineWidth = 0.5;
+      ctx.stroke();
+    }
   }
 
-  // 2. Poultry (Chicken, Turkey, Duck)
-  if (name.includes('куриц') || name.includes('цыпл') || name.includes('индейк') || name.includes('утк') || id.includes('chicken') || id.includes('poultry')) {
-    if (char >= 0.4) return { base: '#18181b', crust: '#09090b', highlight: '#27272a' };
-    if (char >= 0.15) return { base: '#573010', crust: '#291807', highlight: '#78350f' };
-    if (maillard >= 0.35) return { base: '#b45309', crust: '#78350f', highlight: '#d97706' };
-    if (denat >= 0.5) return { base: '#fef3c7', crust: '#fde68a', highlight: '#ffffff' };
-    return { base: '#fbcfe8', crust: '#f472b6', highlight: '#fdf2f8' }; // Raw pale poultry pink
+  // Burnt crust specks if charred
+  if (isBurnt) {
+    ctx.fillStyle = '#09090b';
+    ctx.fillRect(-2, -1, 1.2, 1.2);
+    ctx.fillRect(1.5, 0.8, 1.0, 1.0);
   }
 
-  // 3. Fish & Seafood
-  if (name.includes('рыб') || name.includes('лосос') || name.includes('окунь') || name.includes('щук') || name.includes('форел') || id.includes('fish') || id.includes('salmon')) {
-    if (char >= 0.35) return { base: '#18181b', crust: '#09090b', highlight: '#27272a' };
-    if (maillard >= 0.3) return { base: '#d97706', crust: '#92400e', highlight: '#fbbf24' };
-    if (denat >= 0.5) return { base: '#ffedd5', crust: '#fed7aa', highlight: '#fff7ed' };
-    return { base: '#fb7185', crust: '#f43f5e', highlight: '#ffe4e6' }; // Coral salmon pink
-  }
-
-  // 4. Onion & Garlic
-  if (name.includes('лук') || name.includes('чеснок') || id.includes('onion') || id.includes('garlic')) {
-    if (char >= 0.35) return { base: '#27272a', crust: '#09090b', highlight: '#52525b' };
-    if (maillard >= 0.35) return { base: '#d97706', crust: '#b45309', highlight: '#fef08a' }; // Caramelized onion
-    return { base: '#fef9c3', crust: '#fef08a', highlight: '#ffffff' }; // Translucent ivory-white
-  }
-
-  // 5. Carrot
-  if (name.includes('морков') || id.includes('carrot')) {
-    if (char >= 0.35) return { base: '#27272a', crust: '#09090b', highlight: '#c2410c' };
-    if (maillard >= 0.35) return { base: '#c2410c', crust: '#7c2d12', highlight: '#ea580c' };
-    return { base: '#ea580c', crust: '#c2410c', highlight: '#fb923c' }; // Vibrant orange
-  }
-
-  // 6. Potato
-  if (name.includes('картоф') || id.includes('potato')) {
-    if (char >= 0.35) return { base: '#27272a', crust: '#09090b', highlight: '#78350f' };
-    if (maillard >= 0.35) return { base: '#b45309', crust: '#78350f', highlight: '#fef08a' }; // Golden roasted crust
-    return { base: '#fef08a', crust: '#fde047', highlight: '#fef9c3' }; // Pale potato
-  }
-
-  // 7. Mushrooms
-  if (name.includes('гриб') || id.includes('mushroom')) {
-    if (char >= 0.35) return { base: '#18181b', crust: '#09090b', highlight: '#3f3f46' };
-    if (maillard >= 0.3) return { base: '#573010', crust: '#3b1d06', highlight: '#78350f' };
-    return { base: '#78350f', crust: '#451a03', highlight: '#a8a29e' };
-  }
-
-  // 8. Cabbage & Greenery
-  if (name.includes('капуст') || name.includes('зелен') || name.includes('укроп') || name.includes('петрушк') || id.includes('cabbage')) {
-    if (char >= 0.35) return { base: '#18181b', crust: '#09090b', highlight: '#14532d' };
-    if (maillard >= 0.3) return { base: '#4d7c0f', crust: '#365314', highlight: '#84cc16' };
-    return { base: '#16a34a', crust: '#15803d', highlight: '#4ade80' };
-  }
-
-  // Fallback
-  return { base: '#f43f5e', crust: '#e11d48', highlight: '#fda4af' };
+  ctx.restore();
 }
 
 /**
@@ -103,6 +381,7 @@ export function drawCulinaryDishItem(
   const isDish =
     itemId === 'custom_cooked_dish' ||
     itemId === 'prep_workpiece' ||
+    itemId === 'food_mix' ||
     itemId.startsWith('cooked_') ||
     itemId.startsWith('prep_') ||
     Boolean(item?.culinaryData);
@@ -110,30 +389,39 @@ export function drawCulinaryDishItem(
   if (!isDish) return false;
 
   const data = item?.culinaryData || {};
-  const isWorkpiece = Boolean(data.isWorkpiece || itemId === 'prep_workpiece');
-  const denat = data.denaturation ?? 0.0;
-  const maillard = data.maillard ?? 0.0;
-  const char = data.charring ?? 0.0;
-  const dishType = data.dishType || (isWorkpiece ? 'salad' : 'fried');
-  const containerType = data.containerType || (isWorkpiece ? 'board' : (dishType === 'soup' ? 'pot' : (dishType === 'stew' ? 'bowl' : 'plate')));
+  const isMix = Boolean(data.isMix || itemId === 'food_mix');
+  const isWorkpiece = Boolean(data.isWorkpiece || itemId === 'prep_workpiece') && !isMix;
+  const ingredientsList: any[] = data.ingredients || [];
+  const dishType = data.dishType || (isWorkpiece ? 'salad' : (isMix ? 'mix' : 'fried'));
+
+  // Container Type Detection
+  let containerType = data.containerType;
+  if (!containerType) {
+    if (itemId.startsWith('kitchen_pot_') || itemId === 'pot_clay_medium') containerType = 'pot';
+    else if (itemId.startsWith('kitchen_pan_')) containerType = 'pan';
+    else if (itemId.startsWith('kitchen_bowl_') || itemId === 'soup_bowl_empty') containerType = 'bowl';
+    else if (itemId.startsWith('kitchen_plate_')) containerType = 'plate';
+    else if (isMix) containerType = 'bowl';
+    else if (isWorkpiece) containerType = 'board';
+    else if (dishType === 'soup') containerType = 'pot';
+    else containerType = 'plate';
+  }
 
   // 1. Drop Shadow
   drawShadow(ctx, 8.5, 3.5, 8.5, 0.3);
 
   // 2. Outer Vessel / Surface
   if (containerType === 'board') {
-    // === WOODEN CUTTING BOARD (WORKPIECE) ===
+    // === OAK CUTTING BOARD (WORKPIECE) ===
     ctx.fillStyle = '#92400e';
     ctx.beginPath();
     ctx.roundRect(-8.5, -7.5, 17, 15, 2.5);
     ctx.fill();
 
-    // Woodgrain planks
     ctx.fillStyle = '#78350f';
     ctx.fillRect(-8.5, -3.8, 17, 0.7);
     ctx.fillRect(-8.5, 2.2, 17, 0.7);
 
-    // Knife chop marks on wood
     ctx.strokeStyle = '#451a03';
     ctx.lineWidth = 0.5;
     ctx.beginPath();
@@ -143,7 +431,6 @@ export function drawCulinaryDishItem(
     ctx.lineTo(4, -0.5);
     ctx.stroke();
 
-    // Board hanging hole
     ctx.fillStyle = '#451a03';
     ctx.beginPath();
     ctx.arc(6.2, 0, 1.3, 0, Math.PI * 2);
@@ -169,9 +456,9 @@ export function drawCulinaryDishItem(
     ctx.arc(-1.5, 0, 7.2, 0, Math.PI * 2);
     ctx.fill();
 
-    // Oil sheen
+    // Sizzling oil sheen
     const grad = ctx.createRadialGradient(-2, -2, 1, -1.5, 0, 7);
-    grad.addColorStop(0, 'rgba(250, 204, 21, 0.4)');
+    grad.addColorStop(0, 'rgba(250, 204, 21, 0.45)');
     grad.addColorStop(1, 'rgba(180, 83, 9, 0.15)');
     ctx.fillStyle = grad;
     ctx.beginPath();
@@ -179,58 +466,83 @@ export function drawCulinaryDishItem(
     ctx.fill();
 
   } else if (containerType === 'pot') {
-    // === ENAMEL / STEEL SOUP POT ===
-    ctx.fillStyle = '#334155';
+    // === ENAMEL RED POT (MATCHES KITCHEN_POT_ENAMEL) ===
+    ctx.fillStyle = '#1e293b';
     ctx.beginPath();
-    ctx.roundRect(-9.5, -2, 19, 4, 1.5);
+    ctx.roundRect(-9.8, -2, 19.6, 4, 1.5);
     ctx.fill();
 
-    ctx.fillStyle = '#991b1b';
+    ctx.fillStyle = '#ef4444';
     ctx.beginPath();
     ctx.arc(0, 0, 8.5, 0, Math.PI * 2);
     ctx.fill();
 
-    ctx.strokeStyle = '#cbd5e1';
-    ctx.lineWidth = 0.8;
+    // Enamel white polka dots
+    ctx.fillStyle = '#ffffff';
     ctx.beginPath();
-    ctx.arc(0, 0, 8.2, 0, Math.PI * 2);
-    ctx.stroke();
-
-    const brothGrad = ctx.createRadialGradient(-1, -1, 1, 0, 0, 7.5);
-    brothGrad.addColorStop(0, '#f59e0b');
-    brothGrad.addColorStop(0.7, '#b45309');
-    brothGrad.addColorStop(1, '#78350f');
-    ctx.fillStyle = brothGrad;
-    ctx.beginPath();
-    ctx.arc(0, 0, 7.5, 0, Math.PI * 2);
+    ctx.arc(-5, -4, 0.9, 0, Math.PI * 2);
+    ctx.arc(5, -4, 0.9, 0, Math.PI * 2);
+    ctx.arc(0, 5, 0.9, 0, Math.PI * 2);
     ctx.fill();
 
-    // Floating lipid droplets
-    ctx.fillStyle = '#fef08a';
-    ctx.beginPath();
-    ctx.arc(-3, -2, 1.1, 0, Math.PI * 2);
-    ctx.arc(2.5, -3, 0.8, 0, Math.PI * 2);
-    ctx.arc(-2, 3, 0.9, 0, Math.PI * 2);
-    ctx.arc(3.5, 2, 1.2, 0, Math.PI * 2);
-    ctx.fill();
-
-  } else if (containerType === 'bowl') {
-    // === DEEP BOWL ===
-    ctx.fillStyle = '#f8fafc';
-    ctx.beginPath();
-    ctx.arc(0, 0, 8.5, 0, Math.PI * 2);
-    ctx.fill();
-
-    ctx.strokeStyle = '#1d4ed8';
+    // Black rim
+    ctx.strokeStyle = '#0f172a';
     ctx.lineWidth = 0.9;
     ctx.beginPath();
     ctx.arc(0, 0, 8.2, 0, Math.PI * 2);
     ctx.stroke();
 
-    ctx.fillStyle = '#e2e8f0';
+    // Liquid Layer (Water / Simmering Broth)
+    const hasLiquids = (data.liquids && data.liquids.length > 0) || dishType === 'soup';
+    const brothGrad = ctx.createRadialGradient(-1, -1, 1, 0, 0, 7.5);
+    if (dishType === 'soup' || hasLiquids) {
+      brothGrad.addColorStop(0, '#f59e0b');
+      brothGrad.addColorStop(0.7, '#b45309');
+      brothGrad.addColorStop(1, '#78350f');
+    } else {
+      brothGrad.addColorStop(0, '#38bdf8');
+      brothGrad.addColorStop(0.7, '#0284c7');
+      brothGrad.addColorStop(1, '#0369a1');
+    }
+    ctx.fillStyle = brothGrad;
+    ctx.beginPath();
+    ctx.arc(0, 0, 7.3, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Floating lipid droplets
+    ctx.fillStyle = '#fef08a';
+    ctx.beginPath();
+    ctx.arc(-3, -2, 0.9, 0, Math.PI * 2);
+    ctx.arc(2.5, -3, 0.7, 0, Math.PI * 2);
+    ctx.arc(-2, 3, 0.8, 0, Math.PI * 2);
+    ctx.arc(3.5, 2, 1.0, 0, Math.PI * 2);
+    ctx.fill();
+
+  } else if (containerType === 'bowl') {
+    // === DEEP BOWL (CLAY / CERAMIC) ===
+    ctx.fillStyle = isMix ? '#78350f' : '#f8fafc';
+    ctx.beginPath();
+    ctx.arc(0, 0, 8.5, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.strokeStyle = isMix ? '#b45309' : '#1d4ed8';
+    ctx.lineWidth = 0.9;
+    ctx.beginPath();
+    ctx.arc(0, 0, 8.2, 0, Math.PI * 2);
+    ctx.stroke();
+
+    ctx.fillStyle = isMix ? '#92400e' : '#e2e8f0';
     ctx.beginPath();
     ctx.arc(0, 0, 7.2, 0, Math.PI * 2);
     ctx.fill();
+
+    if (isMix) {
+      // Flour / powdered spices bed
+      ctx.fillStyle = '#fef9c3';
+      ctx.beginPath();
+      ctx.arc(0, 0, 6.2, 0, Math.PI * 2);
+      ctx.fill();
+    }
 
   } else {
     // === CERAMIC DINNER PLATE ===
@@ -251,138 +563,54 @@ export function drawCulinaryDishItem(
     ctx.fill();
   }
 
-  // 3. Render Solid Ingredients inside container
+  // 3. Render Real Constituent Ingredients inside container
   const offsetCenterX = containerType === 'pan' ? -1.5 : (containerType === 'board' ? -1 : 0);
-  const cutLevel = data.cutPieces && data.cutPieces > 12 ? 2 : (data.cutPieces && data.cutPieces > 2 ? 1 : 0);
-
-  // Check if we have specific ingredients stored in culinaryData
-  const ingredientsList: any[] = data.ingredients || [];
 
   if (ingredientsList.length > 0) {
-    // Draw real specific components
-    for (let i = 0; i < Math.min(6, ingredientsList.length); i++) {
+    const renderLimit = Math.min(6, ingredientsList.length);
+    for (let i = 0; i < renderLimit; i++) {
       const ing = ingredientsList[i];
-      const colors = getIngredientColorProfile(ing);
-      const angle = (i / Math.min(6, ingredientsList.length)) * Math.PI * 2;
-      const radius = 2.2 + (i % 2) * 1.5;
+      const angle = (i / renderLimit) * Math.PI * 2 + 0.3;
+      const radius = 2.4 + (i % 2) * 1.5;
       const px = offsetCenterX + Math.cos(angle) * radius;
       const py = Math.sin(angle) * radius;
 
       ctx.save();
       ctx.translate(px, py);
-
-      if (ing.bioState?.cutLevel >= 2) {
-        // Minced granules
-        ctx.fillStyle = colors.base;
-        ctx.beginPath();
-        ctx.arc(0, 0, 1.8, 0, Math.PI * 2);
-        ctx.fill();
-      } else if (ing.bioState?.cutLevel === 1) {
-        // Sliced chunk
-        ctx.fillStyle = colors.base;
-        ctx.beginPath();
-        ctx.roundRect(-1.8, -1.5, 3.6, 3.0, 0.7);
-        ctx.fill();
-        ctx.strokeStyle = colors.crust;
-        ctx.lineWidth = 0.5;
-        ctx.stroke();
-      } else {
-        // Whole cut
-        ctx.fillStyle = colors.base;
-        ctx.beginPath();
-        ctx.roundRect(-3.5, -2.5, 7.0, 5.0, 1.5);
-        ctx.fill();
-        ctx.strokeStyle = colors.crust;
-        ctx.lineWidth = 0.6;
-        ctx.stroke();
-      }
+      drawProceduralIngredient(ctx, ing, 0.72);
       ctx.restore();
     }
   } else {
-    // Fallback: general procedural food mesh
-    const colors = getIngredientColorProfile({
-      nameRu: data.dishType === 'soup' ? 'говядина' : 'мясо',
-      bioState: { denaturation: denat, maillard, charring: char }
-    });
-
-    if (cutLevel === 0) {
-      // Whole cut steak / fillet
-      ctx.fillStyle = colors.base;
-      ctx.beginPath();
-      ctx.roundRect(offsetCenterX - 4.5, -3.2, 9, 6.4, 2.2);
-      ctx.fill();
-
-      ctx.strokeStyle = colors.crust;
-      ctx.lineWidth = 1.0;
-      ctx.beginPath();
-      ctx.moveTo(offsetCenterX - 3, -2.5);
-      ctx.lineTo(offsetCenterX + 3, -1.0);
-      ctx.moveTo(offsetCenterX - 3.5, 0.2);
-      ctx.lineTo(offsetCenterX + 2.5, 1.6);
-      ctx.stroke();
-
-    } else if (cutLevel === 1) {
-      // Sliced chunks
-      const chunks = [
-        { x: -3.0, y: -2.5, w: 3.2, h: 2.8, rot: 0.2 },
-        { x: 1.0, y: -3.0, w: 3.5, h: 2.6, rot: -0.3 },
-        { x: -3.5, y: 1.0, w: 3.0, h: 3.0, rot: -0.1 },
-        { x: 0.5, y: 0.8, w: 3.8, h: 3.2, rot: 0.4 },
-        { x: -1.2, y: -0.8, w: 3.2, h: 2.5, rot: 0.05 }
-      ];
-
-      for (const ch of chunks) {
-        ctx.save();
-        ctx.translate(offsetCenterX + ch.x, ch.y);
-        ctx.rotate(ch.rot);
-
-        ctx.fillStyle = colors.base;
-        ctx.beginPath();
-        ctx.roundRect(-ch.w / 2, -ch.h / 2, ch.w, ch.h, 0.8);
-        ctx.fill();
-
-        ctx.strokeStyle = colors.crust;
-        ctx.lineWidth = 0.5;
-        ctx.stroke();
-
-        ctx.restore();
+    // If no ingredients stored in array, synthesize based on nameRu/itemId
+    const pseudoIng = {
+      nameRu: item?.nameRu || item?.name || '',
+      sourceItemId: itemId,
+      cookingAttributes: data.cookingAttributes || {
+        boiled: dishType === 'soup' ? 1 : 0,
+        fried: dishType === 'fried' ? 1 : 0,
+        baked: dishType === 'baked' ? 1 : 0,
+        doneness: data.denaturation ?? 0.5,
+        charring: data.charring ?? 0,
+        cutLevel: 1
       }
-    } else {
-      // Minced meat
-      ctx.fillStyle = colors.base;
-      ctx.beginPath();
-      ctx.arc(offsetCenterX, 0, 4.5, 0, Math.PI * 2);
-      ctx.fill();
-
-      ctx.fillStyle = colors.crust;
-      for (let i = 0; i < 7; i++) {
-        const angle = (i / 7) * Math.PI * 2;
-        ctx.beginPath();
-        ctx.arc(offsetCenterX + Math.cos(angle) * 2.5, Math.sin(angle) * 2.5, 0.7, 0, Math.PI * 2);
-        ctx.fill();
-      }
-    }
+    };
+    ctx.save();
+    ctx.translate(offsetCenterX, 0);
+    drawProceduralIngredient(ctx, pseudoIng, 0.9);
+    ctx.restore();
   }
 
-  // Garnish: onion rings & greenery
-  ctx.strokeStyle = '#fef08a';
-  ctx.lineWidth = 0.6;
-  ctx.beginPath();
-  ctx.arc(offsetCenterX + 1.5, 2.0, 1.2, 0, Math.PI);
-  ctx.stroke();
-
-  ctx.fillStyle = '#16a34a';
-  ctx.fillRect(offsetCenterX - 0.5, -2.5, 0.9, 0.9);
-  ctx.fillRect(offsetCenterX + 2.0, 1.0, 0.8, 0.8);
-  ctx.fillRect(offsetCenterX - 2.5, -0.5, 0.8, 0.8);
-
-  // Char specks if burnt
-  if (char > 0.2) {
-    ctx.fillStyle = '#09090b';
+  // 4. Steam Wisps if Hot
+  const itemTemp = item?.temperature ?? 20;
+  if (itemTemp >= 60) {
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.45)';
+    ctx.lineWidth = 0.7;
     ctx.beginPath();
-    ctx.arc(offsetCenterX - 1.5, -1.8, 0.9, 0, Math.PI * 2);
-    ctx.arc(offsetCenterX + 2.0, 0.5, 0.8, 0, Math.PI * 2);
-    ctx.fill();
+    ctx.moveTo(offsetCenterX - 2, -4);
+    ctx.quadraticCurveTo(offsetCenterX - 4, -7, offsetCenterX - 2, -9);
+    ctx.moveTo(offsetCenterX + 2, -3.5);
+    ctx.quadraticCurveTo(offsetCenterX + 4, -6.5, offsetCenterX + 2, -8.5);
+    ctx.stroke();
   }
 
   return true;
@@ -390,8 +618,8 @@ export function drawCulinaryDishItem(
 
 /**
  * HIGH-FIDELITY LIVE CULINARY VIEWPORT (Interactive Workstation Canvas)
- * Renders the live top-down cutting board, frying pan or cooking pot with all ingredients,
- * dynamic liquids, heat shimmer, and real-time Maillard/browning reactions.
+ * Renders top-down cutting board, frying pan or pot with truthful procedural ingredients,
+ * dynamic simmering broth/oil, heat glow, and Maillard reactions.
  */
 export function drawLiveCulinaryViewport(
   ctx: CanvasRenderingContext2D,
@@ -433,25 +661,11 @@ export function drawLiveCulinaryViewport(
 
     ctx.shadowColor = 'transparent';
 
-    // Woodgrain planks
     ctx.fillStyle = '#92400e';
     ctx.fillRect(-100, -40, 200, 2.5);
     ctx.fillRect(-100, 15, 200, 2.5);
     ctx.fillRect(-100, 55, 200, 2.5);
 
-    // Subtle woodgrain fiber lines
-    ctx.strokeStyle = '#78350f';
-    ctx.lineWidth = 1.0;
-    ctx.beginPath();
-    ctx.moveTo(-90, -60);
-    ctx.lineTo(90, -58);
-    ctx.moveTo(-85, -10);
-    ctx.lineTo(85, -8);
-    ctx.moveTo(-90, 35);
-    ctx.lineTo(90, 36);
-    ctx.stroke();
-
-    // Knife chop marks from slicing
     ctx.strokeStyle = 'rgba(69, 26, 3, 0.5)';
     ctx.lineWidth = 0.8;
     ctx.beginPath();
@@ -459,25 +673,15 @@ export function drawLiveCulinaryViewport(
     ctx.lineTo(-20, 10);
     ctx.moveTo(10, -35);
     ctx.lineTo(35, 5);
-    ctx.moveTo(-15, 20);
-    ctx.lineTo(15, 45);
     ctx.stroke();
 
-    // Hanging grip handle hole
     ctx.fillStyle = '#451a03';
     ctx.beginPath();
     ctx.arc(80, 0, 10, 0, Math.PI * 2);
     ctx.fill();
 
-    // Inner workspace bevel
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)';
-    ctx.lineWidth = 1.5;
-    ctx.beginPath();
-    ctx.roundRect(-96, -81, 192, 162, 10);
-    ctx.stroke();
-
   } else if (isStoveBare) {
-    // === BARE STOVE BURNER (SPIRAL COIL / CAST IRON DISC) ===
+    // === BARE STOVE BURNER ===
     ctx.fillStyle = '#1e293b';
     ctx.beginPath();
     ctx.arc(0, 0, 95, 0, Math.PI * 2);
@@ -485,141 +689,83 @@ export function drawLiveCulinaryViewport(
 
     ctx.shadowColor = 'transparent';
 
-    // Stainless steel drip pan rim
     ctx.strokeStyle = '#64748b';
     ctx.lineWidth = 4;
     ctx.beginPath();
     ctx.arc(0, 0, 92, 0, Math.PI * 2);
     ctx.stroke();
 
-    // Dark cast iron burner plate
     ctx.fillStyle = '#0f172a';
     ctx.beginPath();
     ctx.arc(0, 0, 80, 0, Math.PI * 2);
     ctx.fill();
 
-    // Heating spiral grooves / coils
-    const glowPower = vessel.heatSourcePower;
-    const coilColor = glowPower > 0 
-      ? glowPower >= 4 ? '#ef4444' : '#f97316'
-      : '#334155';
-
-    ctx.strokeStyle = coilColor;
-    ctx.lineWidth = glowPower > 0 ? 4.5 : 3.5;
-    ctx.beginPath();
-    ctx.arc(0, 0, 65, 0, Math.PI * 2);
-    ctx.arc(0, 0, 48, 0, Math.PI * 2);
-    ctx.arc(0, 0, 30, 0, Math.PI * 2);
-    ctx.stroke();
-
-    // Glowing heat aura if turned on
-    if (glowPower > 0) {
-      const pulse = Math.sin(Date.now() / 200) * 0.15 + 0.85;
-      const glowGrad = ctx.createRadialGradient(0, 0, 10, 0, 0, 85);
-      glowGrad.addColorStop(0, `rgba(239, 68, 68, ${0.4 * pulse})`);
-      glowGrad.addColorStop(0.7, `rgba(249, 115, 22, ${0.25 * pulse})`);
-      glowGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
-      ctx.fillStyle = glowGrad;
+    if (vessel.temperature >= 60) {
+      const glow = Math.min(1.0, (vessel.temperature - 60) / 200);
+      ctx.fillStyle = `rgba(239, 68, 68, ${glow * 0.75})`;
       ctx.beginPath();
-      ctx.arc(0, 0, 85, 0, Math.PI * 2);
+      ctx.arc(0, 0, 68, 0, Math.PI * 2);
       ctx.fill();
     }
 
-    // Center burner hub
-    ctx.fillStyle = '#1e293b';
-    ctx.beginPath();
-    ctx.arc(0, 0, 14, 0, Math.PI * 2);
-    ctx.fill();
-
   } else if (isPan) {
-    // === HEAVY CAST IRON FRYING PAN ===
-    // Long handle with wood grip
+    // === HEAVY CAST IRON PAN ===
     ctx.fillStyle = '#0f172a';
     ctx.beginPath();
-    ctx.roundRect(75, -14, 65, 28, 8);
+    ctx.roundRect(65, -16, 75, 32, 8);
     ctx.fill();
 
     ctx.fillStyle = '#78350f';
-    ctx.beginPath();
-    ctx.roundRect(90, -10, 42, 20, 5);
-    ctx.fill();
+    ctx.fillRect(80, -11, 55, 22);
 
-    // Hanging loop hole
     ctx.fillStyle = '#0f172a';
     ctx.beginPath();
-    ctx.arc(130, 0, 5, 0, Math.PI * 2);
-    ctx.fill();
-
-    // Outer pan body
-    ctx.fillStyle = '#090d16';
-    ctx.beginPath();
-    ctx.arc(-10, 0, 88, 0, Math.PI * 2);
+    ctx.arc(-10, 0, 92, 0, Math.PI * 2);
     ctx.fill();
 
     ctx.shadowColor = 'transparent';
 
-    // Outer pan rim highlight
-    ctx.strokeStyle = '#334155';
-    ctx.lineWidth = 3.5;
-    ctx.beginPath();
-    ctx.arc(-10, 0, 85, 0, Math.PI * 2);
-    ctx.stroke();
-
-    // Inner cooking surface
     ctx.fillStyle = '#1e293b';
     ctx.beginPath();
-    ctx.arc(-10, 0, 78, 0, Math.PI * 2);
+    ctx.arc(-10, 0, 82, 0, Math.PI * 2);
     ctx.fill();
 
-    // Bottom thermal heat shimmer if hot
-    if (vessel.temperature >= 100) {
-      const heatGrad = ctx.createRadialGradient(-10, 0, 5, -10, 0, 75);
-      heatGrad.addColorStop(0, 'rgba(239, 68, 68, 0.2)');
-      heatGrad.addColorStop(0.7, 'rgba(249, 115, 22, 0.1)');
-      heatGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
-      ctx.fillStyle = heatGrad;
-      ctx.beginPath();
-      ctx.arc(-10, 0, 78, 0, Math.PI * 2);
-      ctx.fill();
-    }
-
   } else if (isPot) {
-    // === ENAMEL / STEEL SOUP POT ===
-    // Dual side handles
-    ctx.fillStyle = '#334155';
+    // === RED ENAMEL STOCKPOT WITH SIDE HANDLES ===
+    ctx.fillStyle = '#1e293b';
     ctx.beginPath();
     ctx.roundRect(-108, -14, 216, 28, 8);
     ctx.fill();
 
-    ctx.fillStyle = '#0f172a';
+    ctx.fillStyle = '#dc2626';
     ctx.beginPath();
-    ctx.roundRect(-98, -8, 20, 16, 4);
-    ctx.roundRect(78, -8, 20, 16, 4);
-    ctx.fill();
-
-    // Pot outer body (Burgundy red enamel)
-    ctx.fillStyle = '#881337';
-    ctx.beginPath();
-    ctx.arc(0, 0, 88, 0, Math.PI * 2);
+    ctx.arc(0, 0, 90, 0, Math.PI * 2);
     ctx.fill();
 
     ctx.shadowColor = 'transparent';
 
-    // Stainless rim
-    ctx.strokeStyle = '#cbd5e1';
-    ctx.lineWidth = 3.5;
+    // White polka dots
+    ctx.fillStyle = '#ffffff';
+    for (const dot of [[-45, -45], [45, -45], [-50, 45], [50, 45], [0, 65], [0, -65]]) {
+      ctx.beginPath();
+      ctx.arc(dot[0], dot[1], 4.5, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // Black rim
+    ctx.strokeStyle = '#0f172a';
+    ctx.lineWidth = 4;
     ctx.beginPath();
-    ctx.arc(0, 0, 85, 0, Math.PI * 2);
+    ctx.arc(0, 0, 86, 0, Math.PI * 2);
     ctx.stroke();
 
-    // Pot interior
-    ctx.fillStyle = '#4c0519';
+    ctx.fillStyle = '#450a0a';
     ctx.beginPath();
-    ctx.arc(0, 0, 78, 0, Math.PI * 2);
+    ctx.arc(0, 0, 80, 0, Math.PI * 2);
     ctx.fill();
 
   } else if (isBowl) {
-    // === DEEP CERAMIC / WOODEN BOWL ===
+    // === DEEP BOWL ===
     ctx.fillStyle = '#f8fafc';
     ctx.beginPath();
     ctx.arc(0, 0, 88, 0, Math.PI * 2);
@@ -659,44 +805,46 @@ export function drawLiveCulinaryViewport(
     ctx.fill();
   }
 
-  // 3. Liquid Layer (Oil pool or Broth)
+  // 3. Liquid Layer (Broth or Sizzling Oil)
   const offsetCenterX = isPan ? -10 : 0;
-  const liquidRadius = isCuttingBoard ? 65 : 74;
+  const liquidRadius = isCuttingBoard ? 65 : 75;
 
   const hasOil = vessel.liquids.some(l => l.isFatOrOil);
   const hasWater = vessel.liquids.some(l => !l.isFatOrOil);
 
   if (vessel.liquids.length > 0) {
     if (hasWater) {
-      // Golden shimmering broth / water
+      // Golden broth or clear water
+      const isSimmering = vessel.temperature >= 70;
       const brothGrad = ctx.createRadialGradient(offsetCenterX - 10, -10, 10, offsetCenterX, 0, liquidRadius);
-      brothGrad.addColorStop(0, 'rgba(245, 158, 11, 0.7)');
-      brothGrad.addColorStop(0.6, 'rgba(180, 83, 9, 0.85)');
-      brothGrad.addColorStop(1, 'rgba(120, 53, 15, 0.95)');
+      if (isSimmering) {
+        brothGrad.addColorStop(0, 'rgba(245, 158, 11, 0.75)');
+        brothGrad.addColorStop(0.7, 'rgba(180, 83, 9, 0.88)');
+        brothGrad.addColorStop(1, 'rgba(120, 53, 15, 0.95)');
+      } else {
+        brothGrad.addColorStop(0, 'rgba(56, 189, 248, 0.55)');
+        brothGrad.addColorStop(0.7, 'rgba(2, 132, 199, 0.7)');
+        brothGrad.addColorStop(1, 'rgba(3, 105, 161, 0.8)');
+      }
       ctx.fillStyle = brothGrad;
       ctx.beginPath();
       ctx.arc(offsetCenterX, 0, liquidRadius, 0, Math.PI * 2);
       ctx.fill();
 
-      // Floating gold lipid droplet rings
+      // Lipid droplets
       ctx.fillStyle = '#fef08a';
       const bubblePositions = [
         { x: -30, y: -20, r: 8 },
         { x: 25, y: -28, r: 6 },
         { x: -22, y: 32, r: 7 },
-        { x: 35, y: 22, r: 9 },
-        { x: 5, y: 38, r: 5 }
+        { x: 35, y: 22, r: 9 }
       ];
       for (const bp of bubblePositions) {
         ctx.beginPath();
         ctx.arc(offsetCenterX + bp.x, bp.y, bp.r, 0, Math.PI * 2);
         ctx.fill();
-        ctx.strokeStyle = 'rgba(217, 119, 6, 0.8)';
-        ctx.lineWidth = 1;
-        ctx.stroke();
       }
     } else if (hasOil) {
-      // Golden vegetable / sunflower oil sheen
       const oilGrad = ctx.createRadialGradient(offsetCenterX - 15, -15, 10, offsetCenterX, 0, liquidRadius);
       oilGrad.addColorStop(0, 'rgba(253, 224, 71, 0.6)');
       oilGrad.addColorStop(0.7, 'rgba(234, 179, 8, 0.45)');
@@ -709,28 +857,26 @@ export function drawLiveCulinaryViewport(
   }
 
   // Sizzling / Boiling micro-bubbles
-  if (vessel.temperature >= 120 && (hasOil || hasWater)) {
+  if (vessel.temperature >= 85 && (hasOil || hasWater)) {
     ctx.fillStyle = 'rgba(254, 240, 138, 0.85)';
     for (let i = 0; i < 16; i++) {
-      const angle = (i / 16) * Math.PI * 2 + (Date.now() / 300);
-      const dist = 35 + ((i * 7) % 30);
+      const angle = (i / 16) * Math.PI * 2 + (Date.now() / 250);
+      const dist = 28 + ((i * 7) % 35);
       const bx = offsetCenterX + Math.cos(angle) * dist;
       const by = Math.sin(angle) * dist;
       ctx.beginPath();
-      ctx.arc(bx, by, 2.2, 0, Math.PI * 2);
+      ctx.arc(bx, by, 2.4, 0, Math.PI * 2);
       ctx.fill();
     }
   }
 
-  // 4. Solid Ingredients Rendering
+  // 4. Solid Ingredients Rendering with Truthful Procedural Models
   const ings = vessel.ingredients;
   for (let idx = 0; idx < ings.length; idx++) {
     const ing = ings[idx];
     const isSelected = selectedIdx === idx;
-    const colors = getIngredientColorProfile(ing);
     const seed = hashSeed(ing.id);
 
-    // Calculate stable center placement for this ingredient on the surface
     const totalIngs = Math.max(1, ings.length);
     const angle = (idx / totalIngs) * Math.PI * 2 + ((seed % 100) / 100) * 0.4;
     const dist = totalIngs === 1 ? 0 : 25 + (idx % 3) * 16;
@@ -740,130 +886,44 @@ export function drawLiveCulinaryViewport(
     ctx.save();
     ctx.translate(basePx, basePy);
 
-    // If selected, draw glowing highlight aura
     if (isSelected) {
       ctx.strokeStyle = '#f59e0b';
-      ctx.lineWidth = 2.5;
+      ctx.lineWidth = 3;
       ctx.shadowColor = '#f59e0b';
-      ctx.shadowBlur = 10;
+      ctx.shadowBlur = 12;
       ctx.beginPath();
       ctx.arc(0, 0, 32, 0, Math.PI * 2);
       ctx.stroke();
       ctx.shadowColor = 'transparent';
     }
 
-    if (ing.bioState.cutLevel === 0) {
-      // === WHOLE CUT (STEAK, FILLET, WHOLE ROOT) ===
-      ctx.rotate(((seed % 60) - 30) * (Math.PI / 180));
-
-      // Meat body
-      ctx.fillStyle = colors.base;
-      ctx.beginPath();
-      ctx.roundRect(-28, -18, 56, 36, 12);
-      ctx.fill();
-
-      // Sear crust rim
-      ctx.strokeStyle = colors.crust;
-      ctx.lineWidth = 2.5;
-      ctx.stroke();
-
-      // Sear / Grill / Fiber stripes
-      ctx.strokeStyle = colors.crust;
-      ctx.lineWidth = 2.0;
-      ctx.beginPath();
-      ctx.moveTo(-18, -12);
-      ctx.lineTo(18, -4);
-      ctx.moveTo(-20, 2);
-      ctx.lineTo(16, 10);
-      ctx.moveTo(-15, 14);
-      ctx.lineTo(12, 18);
-      ctx.stroke();
-
-      // Meat moisture gloss highlight
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.25)';
-      ctx.fillRect(-16, -10, 22, 6);
-
-    } else if (ing.bioState.cutLevel === 1) {
-      // === SLICED / DICED CHUNKS ===
-      const chunkCount = Math.min(8, Math.max(4, ing.bioState.cutPieces || 6));
-      for (let c = 0; c < chunkCount; c++) {
-        const cAngle = (c / chunkCount) * Math.PI * 2 + ((c * 17) % 5);
-        const cDist = 8 + (c % 3) * 8;
-        const cx = Math.cos(cAngle) * cDist;
-        const cy = Math.sin(cAngle) * cDist;
-
-        ctx.save();
-        ctx.translate(cx, cy);
-        ctx.rotate(((c * 37) % 60) * (Math.PI / 180));
-
-        ctx.fillStyle = colors.base;
-        ctx.beginPath();
-        ctx.roundRect(-8, -7, 16, 14, 3);
-        ctx.fill();
-
-        ctx.strokeStyle = colors.crust;
-        ctx.lineWidth = 1.2;
-        ctx.stroke();
-
-        ctx.restore();
-      }
-
-    } else {
-      // === MINCED / GROUND PUREE ===
-      ctx.fillStyle = colors.base;
-      ctx.beginPath();
-      ctx.arc(0, 0, 24, 0, Math.PI * 2);
-      ctx.fill();
-
-      ctx.fillStyle = colors.crust;
-      for (let m = 0; m < 18; m++) {
-        const mAngle = (m / 18) * Math.PI * 2;
-        const mDist = 6 + (m % 4) * 4.5;
-        ctx.beginPath();
-        ctx.arc(Math.cos(mAngle) * mDist, Math.sin(mAngle) * mDist, 2.5, 0, Math.PI * 2);
-        ctx.fill();
-      }
-    }
+    // Scale up for live high-res workstation
+    drawProceduralIngredient(ctx, ing, 3.8);
 
     ctx.restore();
   }
 
-  // 5. Seasonings & Char Overlay
+  // 5. Seasonings Overlay
   if (vessel.saltGrams > 0) {
     ctx.fillStyle = '#ffffff';
-    for (let s = 0; s < 24; s++) {
-      const sx = offsetCenterX - 50 + ((s * 23) % 100);
-      const sy = -45 + ((s * 19) % 90);
-      ctx.fillRect(sx, sy, 1.8, 1.8);
+    for (let s = 0; s < 20; s++) {
+      const sx = offsetCenterX - 45 + ((s * 23) % 90);
+      const sy = -40 + ((s * 19) % 80);
+      ctx.fillRect(sx, sy, 2, 2);
     }
   }
 
-  // Fresh green herb garnish
-  ctx.fillStyle = '#16a34a';
-  for (let h = 0; h < 12; h++) {
-    const hx = offsetCenterX - 40 + ((h * 31) % 80);
-    const hy = -35 + ((h * 29) % 70);
-    ctx.fillRect(hx, hy, 2.2, 2.2);
-  }
-
-  // 6. Thermal Overlay: Steam Wisps & Smoke Puffs
-  if (vessel.temperature >= 70) {
-    const steamPulse = Math.sin(Date.now() / 350) * 0.15 + 0.35;
-    ctx.fillStyle = `rgba(255, 255, 255, ${steamPulse})`;
-    ctx.beginPath();
-    ctx.arc(offsetCenterX - 20, -15, 28, 0, Math.PI * 2);
-    ctx.arc(offsetCenterX + 25, -25, 32, 0, Math.PI * 2);
-    ctx.arc(offsetCenterX, 15, 30, 0, Math.PI * 2);
-    ctx.fill();
-  }
-
-  if (vessel.smokeIntensity > 0.2) {
-    const smokePulse = Math.sin(Date.now() / 250) * 0.2 + 0.5;
-    ctx.fillStyle = `rgba(30, 41, 59, ${smokePulse * vessel.smokeIntensity})`;
-    ctx.beginPath();
-    ctx.arc(offsetCenterX - 10, -20, 45, 0, Math.PI * 2);
-    ctx.arc(offsetCenterX + 15, -35, 50, 0, Math.PI * 2);
-    ctx.fill();
+  // 6. Thermal Overlay: Steam Wisps
+  if (vessel.temperature >= 65) {
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
+    ctx.lineWidth = 2.5;
+    for (let st = 0; st < 3; st++) {
+      const sx = offsetCenterX - 25 + st * 25;
+      ctx.beginPath();
+      ctx.moveTo(sx, 10);
+      ctx.quadraticCurveTo(sx - 15, -30, sx + 5, -60);
+      ctx.stroke();
+    }
   }
 
   ctx.restore();

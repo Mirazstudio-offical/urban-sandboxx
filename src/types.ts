@@ -1321,6 +1321,15 @@ export interface PhoneSpecs {
   unreadSmsCount?: number;
 }
 
+export interface CookingAttributes {
+  boiled: number;      // 0.0 to 1.0 (extent of boiling/simmering in liquid)
+  fried: number;       // 0.0 to 1.0 (extent of frying in oil / searing)
+  baked: number;       // 0.0 to 1.0 (extent of baking in oven)
+  doneness: number;    // 0.0 (raw) to 1.0 (cooked) to 2.0+ (overcooked)
+  charring: number;    // 0.0 to 1.0 (burnt / carbon level)
+  cutLevel: number;    // 0 = whole, 1 = sliced, 2 = minced
+}
+
 export interface InventoryItem {
   id: string;
   itemId: string;
@@ -1379,11 +1388,15 @@ export interface InventoryItem {
     salt?: number;    // g
     water?: number;   // g
   };
+
   culinaryData?: {
     isPreparedDish?: boolean;
     isWorkpiece?: boolean;
+    isMix?: boolean;
+    sourceCookwareItemId?: string;
+    cookingAttributes?: CookingAttributes;
     containerType?: 'board' | 'pan' | 'pot' | 'bowl' | 'plate' | 'paper';
-    dishType?: 'fried' | 'boiled' | 'soup' | 'salad' | 'stew' | 'baked' | 'burnt_mess';
+    dishType?: 'fried' | 'boiled' | 'soup' | 'salad' | 'stew' | 'baked' | 'burnt_mess' | 'mix';
     denaturation?: number;  // 0.0 to 1.5+ (cooked state)
     maillard?: number;      // 0.0 to 1.5+ (browning/crust)
     charring?: number;      // 0.0 to 1.0 (pyrolysis / burnt level)

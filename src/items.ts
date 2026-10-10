@@ -122,6 +122,23 @@ export const ITEM_CATALOG: Record<string, ItemDefinition> = {
     fullnessPerBite: 3,
     tasteMessages: ['Сырые нарезанные ингредиенты со свежими соками...']
   },
+  food_mix: {
+    itemId: 'food_mix',
+    name: 'Dry Ingredient Mix',
+    nameRu: 'Смесь ингредиентов',
+    category: 'food',
+    maxStack: 1,
+    icon: '',
+    description: 'A blend of dry food ingredients ready for cooking or baking.',
+    descriptionRu: 'Кулинарная смесь ингредиентов. Готова к варке в кастрюле, жарке на сковороде или запеканию.',
+    effects: { hunger: 20, health: 0, energy: 8 },
+    weight: 0.35,
+    usable: true,
+    biteCount: 6,
+    biteDuration: 1.0,
+    fullnessPerBite: 3,
+    tasteMessages: ['Сухая смесь ингредиентов...', 'Пряный сбалансированный вкус смеси!']
+  },
   sandwich: {
     itemId: 'sandwich',
     name: 'Ham & Cheese Sandwich',
@@ -9048,7 +9065,32 @@ export function useItemOnPlayer(
     const unitLabel = item.category === 'drink'? 'глотков': item.category === 'food'? 'укусов': (item.itemId === 'painkillers'|| item.itemId === 'vitamins'? 'таблеток': 'применений');
 
     if (remaining <= 0) {
-      // Completely finished!
+      // Cookware preservation: pots, pans, and tableware must NEVER be destroyed when eaten empty!
+      const isCookware = Boolean(
+        item.culinaryData?.containerType === 'pot' ||
+        item.culinaryData?.containerType === 'pan' ||
+        item.itemId.startsWith('kitchen_pot_') ||
+        item.itemId.startsWith('kitchen_pan_') ||
+        item.itemId.startsWith('kitchen_plate_') ||
+        item.itemId.startsWith('kitchen_bowl_') ||
+        item.itemId === 'soup_bowl_empty' ||
+        item.itemId === 'pot_clay_medium'
+      );
+
+      if (isCookware) {
+        item.portions = undefined;
+        item.maxPortions = undefined;
+        item.culinaryData = undefined;
+        item.usable = false;
+        item.effects = { hunger: 0 };
+        item.nameRu = ITEM_CATALOG[item.itemId]?.nameRu || item.nameRu.replace(/\s*\(.*\)/, '');
+        item.name = ITEM_CATALOG[item.itemId]?.name || item.name;
+        sound.playPickup();
+        addPlayerNotification(player, `Вы съели всё дочиста! Посуда (${item.nameRu}) теперь пуста.`, 'food');
+        return { success: true, message: `Посуда опустела: ${item.nameRu}` };
+      }
+
+      // Completely finished standard food/drink!
       if (item.count > 1) {
         item.count -= 1;
         item.portions = maxPortions;
@@ -10166,6 +10208,31 @@ export function useHandItemOnPlayer(
     const unitLabel = item.category === 'drink'? 'глотков': item.category === 'food'? 'укусов': (item.itemId === 'painkillers'|| item.itemId === 'vitamins'? 'таблеток': 'применений');
 
     if (remaining <= 0) {
+      // Cookware preservation: pots, pans, and tableware must NEVER be destroyed when eaten empty from hands!
+      const isCookware = Boolean(
+        item.culinaryData?.containerType === 'pot' ||
+        item.culinaryData?.containerType === 'pan' ||
+        item.itemId.startsWith('kitchen_pot_') ||
+        item.itemId.startsWith('kitchen_pan_') ||
+        item.itemId.startsWith('kitchen_plate_') ||
+        item.itemId.startsWith('kitchen_bowl_') ||
+        item.itemId === 'soup_bowl_empty' ||
+        item.itemId === 'pot_clay_medium'
+      );
+
+      if (isCookware) {
+        item.portions = undefined;
+        item.maxPortions = undefined;
+        item.culinaryData = undefined;
+        item.usable = false;
+        item.effects = { hunger: 0 };
+        item.nameRu = ITEM_CATALOG[item.itemId]?.nameRu || item.nameRu.replace(/\s*\(.*\)/, '');
+        item.name = ITEM_CATALOG[item.itemId]?.name || item.name;
+        sound.playPickup();
+        addPlayerNotification(player, `Вы съели всё дочиста! Посуда (${item.nameRu}) в руке теперь пуста.`, 'food');
+        return { success: true, message: `Посуда опустела: ${item.nameRu}` };
+      }
+
       if (item.count > 1) {
         item.count -= 1;
         item.portions = maxPortions;

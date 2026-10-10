@@ -6,6 +6,7 @@ import {
   createCountertopVessel,
   itemToCulinaryIngredient, 
   createWorkpieceFromVessel,
+  createDryMixFromVessel,
   unpackWorkpieceIntoVessel,
   cutIngredientAction, 
   stirVesselAction, 
@@ -227,13 +228,27 @@ export const KitchenStationModal: React.FC<KitchenStationModalProps> = ({
     onInventoryUpdated?.();
   };
 
-  // Take cookware off stove back into player inventory
+  // Take cookware off stove back into player inventory (with contents or empty)
   const handleRemoveCookwareFromBurner = () => {
     if (!vessel.sourceItem) return;
 
     if (vessel.ingredients.length > 0 || vessel.liquids.length > 0) {
-      addPlayerNotification(player, 'В посуде есть продукты. Сначала переложите их в тарелку или соберите заготовку.', 'warning');
-      return;
+      // Cookware contains water, broth or food: pick up the actual pot or pan with its contents!
+      const loadedCookware = finishCookwareToInventoryItem(vessel);
+      if (loadedCookware) {
+        const added = addItemToPlayer(player, loadedCookware);
+        if (added) {
+          sound.playPickup();
+          addPlayerNotification(player, `Снято с плиты: «${loadedCookware.nameRu}».`, 'heal');
+          setLastSensoryLog(`«${loadedCookware.nameRu}» снята с плиты вместе со всем содержимым.`);
+          setVessel(createStoveCookwareVessel(undefined));
+          onInventoryUpdated?.();
+          return;
+        } else {
+          addPlayerNotification(player, 'В инвентаре нет места для посуды!', 'warning');
+          return;
+        }
+      }
     }
 
     addItemToPlayer(player, vessel.sourceItem);
@@ -243,7 +258,7 @@ export const KitchenStationModal: React.FC<KitchenStationModalProps> = ({
     onInventoryUpdated?.();
   };
 
-  // Add food item or unpack prep workpiece from inventory into cookware/counter
+  // Add food item or unpack prep workpiece / dry mix from inventory into cookware/counter
   const handlePlaceFoodItem = (invItem: InventoryItem) => {
     if (isStove && vessel.vesselType === 'surface') {
       addPlayerNotification(player, 'Нельзя класть продукты на открытую конфорку! Сначала поставьте сковороду или кастрюлю.', 'warning');
@@ -251,16 +266,16 @@ export const KitchenStationModal: React.FC<KitchenStationModalProps> = ({
       return;
     }
 
-    if (invItem.category !== 'food' && invItem.category !== 'drink' && invItem.itemId !== 'prep_workpiece') {
-      addPlayerNotification(player, 'На рабочую поверхность можно выкладывать только продукты питания и заготовки.', 'warning');
+    if (invItem.category !== 'food' && invItem.category !== 'drink' && invItem.itemId !== 'prep_workpiece' && invItem.itemId !== 'food_mix') {
+      addPlayerNotification(player, 'На рабочую поверхность можно выкладывать только продукты питания, смеси и заготовки.', 'warning');
       return;
     }
 
     const invIdx = player.inventory.findIndex(i => Boolean(i && i.id === invItem.id));
     if (invIdx < 0) return;
 
-    // Check if this is a composite workpiece (полуфабрикат/заготовка)
-    if (invItem.itemId === 'prep_workpiece' || invItem.culinaryData?.isWorkpiece) {
+    // Check if this is a composite workpiece or dry mix (полуфабрикат/заготовка/сухая смесь)
+    if (invItem.itemId === 'prep_workpiece' || invItem.itemId === 'food_mix' || invItem.culinaryData?.isWorkpiece || invItem.culinaryData?.isMix) {
       const res = unpackWorkpieceIntoVessel(vessel, invItem);
       removeItemFromPlayer(player, invIdx, 1);
       sound.playUseItem();
@@ -470,6 +485,33 @@ export const KitchenStationModal: React.FC<KitchenStationModalProps> = ({
     }
   };
 
+  // CREATE DRY MIX ACTION (Смешать сухие ингредиенты в смесь)
+  const handleCreateDryMix = () => {
+    if (vessel.ingredients.length === 0) {
+      addPlayerNotification(player, 'На рабочей поверхности нет ингредиентов для смешивания.', 'warning');
+      return;
+    }
+
+    const mix = createDryMixFromVessel(vessel);
+    if (!mix) return;
+
+    const ok = addItemToPlayer(player, mix);
+    if (ok) {
+      sound.playPickup();
+      addPlayerNotification(player, `Смешано: «${mix.nameRu}».`, 'heal');
+      vessel.ingredients = [];
+      vessel.liquids = [];
+      vessel.saltGrams = 0;
+      vessel.seasoningNotes = [];
+      setSelectedIngredientIdx(null);
+      setLastSensoryLog(`Ингредиенты тщательно смешаны в единую смесь «${mix.nameRu}». Текстура сформирована из её состава.`);
+      setVessel({ ...vessel });
+      onInventoryUpdated?.();
+    } else {
+      addPlayerNotification(player, 'В инвентаре нет места для смеси!', 'warning');
+    }
+  };
+
   // TRANSFER INTO FRYING PAN (В сковороду)
   const handleTransferToPan = () => {
     if (vessel.ingredients.length === 0 && vessel.liquids.length === 0) {
@@ -608,18 +650,24 @@ export const KitchenStationModal: React.FC<KitchenStationModalProps> = ({
         'heal'
       );
 
+      if (!plateItem && vessel.sourceItem) {
+        vessel.sourceItem = undefined;
+        vessel.vesselType = 'surface';
+        vessel.nameRu = isStove ? 'Пустая конфорка плиты' : 'Столешница гарнитура';
+      }
+
       vessel.ingredients = [];
       vessel.liquids = [];
       vessel.saltGrams = 0;
       vessel.seasoningNotes = [];
       setSelectedIngredientIdx(null);
 
-      setLastSensoryLog(`Блюдо «${dish.nameRu}» готово и переложено в инвентарь.`);
+      setLastSensoryLog(`«${dish.nameRu}» готово и переложено в инвентарь.`);
       setVessel({ ...vessel });
       onInventoryUpdated?.();
       onVitalsChange?.();
     } else {
-      addPlayerNotification(player, 'В инвентаре нет места для готового блюда!', 'warning');
+      addPlayerNotification(player, 'В инвентаре нет места для блюда!', 'warning');
     }
   };
 
@@ -1192,8 +1240,42 @@ export const KitchenStationModal: React.FC<KitchenStationModalProps> = ({
                   title="Собрать нарезанный полуфабрикат в карман как предмет-заготовку"
                 >
                   <Package className="w-3.5 h-3.5 shrink-0" />
-                  <span className="truncate">Собрать заготовку</span>
+                  <span className="truncate">Заготовка</span>
                 </button>
+              </div>
+
+              {/* Second Action Bar: Dry Mix & Cookware Pick up */}
+              <div className="grid grid-cols-2 gap-1.5 text-[11px] pt-1">
+                {/* Create Dry Mix Button */}
+                <button
+                  onClick={handleCreateDryMix}
+                  disabled={vessel.ingredients.length === 0}
+                  className={`py-2 px-2 rounded-lg border flex items-center justify-center gap-1.5 min-h-[38px] transition-colors ${
+                    vessel.ingredients.length > 0
+                      ? 'bg-slate-800 hover:bg-slate-750 border-emerald-500/40 text-emerald-300 font-semibold'
+                      : 'bg-slate-900/50 border-slate-800 text-slate-600 cursor-not-allowed'
+                  }`}
+                  title="Смешать сухие ингредиенты в предмет-смесь с динамической текстурой"
+                >
+                  <Sparkles className="w-3.5 h-3.5 shrink-0 text-emerald-400" />
+                  <span className="truncate">Смешать сухую смесь</span>
+                </button>
+
+                {/* Take Loaded Cookware Off Burner / Workstation */}
+                {isStove && vessel.sourceItem ? (
+                  <button
+                    onClick={handleRemoveCookwareFromBurner}
+                    className="py-2 px-2 rounded-lg bg-slate-800 hover:bg-slate-750 border border-slate-700 text-slate-200 font-semibold flex items-center justify-center gap-1.5 min-h-[38px] transition-colors"
+                    title="Снять посуду с плиты (вместе с водой/бульоном и продуктами)"
+                  >
+                    <Utensils className="w-3.5 h-3.5 shrink-0 text-amber-400" />
+                    <span className="truncate">Снять {vessel.vesselType === 'pot' ? 'кастрюлю' : 'сковороду'}</span>
+                  </button>
+                ) : (
+                  <div className="flex items-center justify-center text-[10px] text-slate-500 px-2">
+                    {vessel.ingredients.length > 0 ? `${vessel.ingredients.length} ингред.` : 'Готово к работе'}
+                  </div>
+                )}
               </div>
 
               {/* Service & Plate Food */}
@@ -1205,7 +1287,7 @@ export const KitchenStationModal: React.FC<KitchenStationModalProps> = ({
                 <span className="truncate">
                   {carriedPlates.length > 0 
                     ? `Выложить на ${carriedPlates[0].nameRu.toLowerCase()}` 
-                    : 'Снять готовое блюдо в карман'}
+                    : (vessel.sourceItem ? `Забрать ${vessel.sourceItem.nameRu.toLowerCase()} с содержимым` : 'Снять готовое блюдо в карман')}
                 </span>
               </button>
             </div>
