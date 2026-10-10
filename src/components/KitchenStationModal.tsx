@@ -2,7 +2,6 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Player, InventoryItem, GameWorld } from '../types';
 import { 
   CookwareVessel, 
-  CulinaryIngredient, 
   createStoveCookwareVessel,
   createCountertopVessel,
   itemToCulinaryIngredient, 
@@ -42,10 +41,7 @@ import {
   Activity, 
   Sparkles,
   Disc,
-  Package,
-  Eye,
-  Volume2,
-  Wind
+  Volume2
 } from 'lucide-react';
 
 interface KitchenStationModalProps {
@@ -75,12 +71,13 @@ export const KitchenStationModal: React.FC<KitchenStationModalProps> = ({
 
   const isStove = furnitureType === 'stove';
 
+  // Safe inventory array filtering out empty/null slots
+  const safeInventory: InventoryItem[] = (player.inventory || []).filter((i): i is InventoryItem => Boolean(i && i.itemId));
+
   // Active Cookware / Surface State
   const [vessel, setVessel] = useState<CookwareVessel>(() => {
     if (isStove) {
-      // Find if player already holds a pan/pot in hands or inventory to pre-place
-      const carriedCookware = player.inventory.find(i => isCookwareItem(i.itemId));
-      return createStoveCookwareVessel(carriedCookware ? undefined : undefined);
+      return createStoveCookwareVessel(undefined);
     } else {
       return createCountertopVessel('Кухонная столешница (Разделочный стол)');
     }
@@ -94,15 +91,16 @@ export const KitchenStationModal: React.FC<KitchenStationModalProps> = ({
   );
   const lastSoundTickRef = useRef<number>(0);
 
-  // Check physical tools and resources in player inventory
-  const carriedKnife = player.inventory.find(i => isKnifeItem(i.itemId)) || 
-    (player.leftHandItem && isKnifeItem(player.leftHandItem.itemId) ? player.leftHandItem : null) ||
-    (player.rightHandItem && isKnifeItem(player.rightHandItem.itemId) ? player.rightHandItem : null);
+  // Check physical tools and resources in player inventory with robust null checks
+  const carriedKnife = safeInventory.find(i => isKnifeItem(i.itemId)) || 
+    (player.leftHandItem && player.leftHandItem.itemId && isKnifeItem(player.leftHandItem.itemId) ? player.leftHandItem : null) ||
+    (player.rightHandItem && player.rightHandItem.itemId && isKnifeItem(player.rightHandItem.itemId) ? player.rightHandItem : null);
 
-  const carriedSalt = player.inventory.find(i => isSaltItem(i.itemId));
-  const carriedOil = player.inventory.find(i => isOilOrFatItem(i.itemId));
-  const carriedPlates = player.inventory.filter(i => isPlateOrBowlItem(i.itemId));
-  const carriedCookwareList = player.inventory.filter(i => isCookwareItem(i.itemId));
+  const carriedSalt = safeInventory.find(i => isSaltItem(i.itemId));
+  const carriedOil = safeInventory.find(i => isOilOrFatItem(i.itemId));
+  const carriedPlates = safeInventory.filter(i => isPlateOrBowlItem(i.itemId));
+  const carriedCookwareList = safeInventory.filter(i => isCookwareItem(i.itemId));
+  const foodItems = safeInventory.filter(i => i.category === 'food' || i.category === 'drink');
 
   // Check if a kitchen sink is physically near the player
   let hasNearbySink = false;
@@ -168,11 +166,14 @@ export const KitchenStationModal: React.FC<KitchenStationModalProps> = ({
   }, []);
 
   // Place physical cookware on stove burner
-  const handlePlaceCookwareOnBurner = (cookwareItem: InventoryItem, invIdx: number) => {
+  const handlePlaceCookwareOnBurner = (cookwareItem: InventoryItem) => {
     if (vessel.ingredients.length > 0 || vessel.liquids.length > 0) {
       addPlayerNotification(player, 'Сначала снимите текущую посуду или освободите ее содержимое.', 'warning');
       return;
     }
+
+    const invIdx = player.inventory.findIndex(i => Boolean(i && i.id === cookwareItem.id));
+    if (invIdx < 0) return;
 
     // Return previous cookware if was placed
     if (vessel.sourceItem) {
@@ -204,19 +205,20 @@ export const KitchenStationModal: React.FC<KitchenStationModalProps> = ({
   };
 
   // Add food item from inventory into cookware/counter
-  const handlePlaceFoodItem = (invItem: InventoryItem, invIdx: number) => {
-    // If stove and no cookware placed, you cannot throw raw meat on bare burner coils!
+  const handlePlaceFoodItem = (invItem: InventoryItem) => {
     if (isStove && vessel.vesselType === 'surface') {
       addPlayerNotification(player, 'Нельзя класть продукты на открытую конфорку! Сначала поставьте сковороду или кастрюлю.', 'warning');
       sound.playUseItem();
       return;
     }
 
-    // Check category: allowed food/drink only
     if (invItem.category !== 'food' && invItem.category !== 'drink') {
       addPlayerNotification(player, 'На рабочую поверхность можно выкладывать только продукты питания и ингредиенты.', 'warning');
       return;
     }
+
+    const invIdx = player.inventory.findIndex(i => Boolean(i && i.id === invItem.id));
+    if (invIdx < 0) return;
 
     const ing = itemToCulinaryIngredient(invItem);
     vessel.ingredients.push(ing);
@@ -284,8 +286,7 @@ export const KitchenStationModal: React.FC<KitchenStationModalProps> = ({
   // Pour Water (From real water container or nearby sink)
   const handlePourWater = () => {
     if (!hasNearbySink) {
-      // Check if player has carried water
-      const waterBottle = player.inventory.find(i => i.itemId.includes('water'));
+      const waterBottle = safeInventory.find(i => i.itemId && i.itemId.includes('water'));
       if (!waterBottle) {
         addPlayerNotification(player, 'Рядом нет мойки с краном, и у вас нет бутылки с водой!', 'warning');
         sound.playUseItem();
@@ -371,15 +372,12 @@ export const KitchenStationModal: React.FC<KitchenStationModalProps> = ({
       return;
     }
 
-    // Check if player has a real plate/bowl to serve
     const plateItem = carriedPlates.length > 0 ? carriedPlates[0] : undefined;
-
     const dish = finishCookwareToInventoryItem(vessel, plateItem);
     if (!dish) return;
 
-    // If plated into real plate, remove empty plate from inventory
     if (plateItem) {
-      const plateIdx = player.inventory.findIndex(i => i.id === plateItem.id);
+      const plateIdx = player.inventory.findIndex(i => Boolean(i && i.id === plateItem.id));
       if (plateIdx >= 0) {
         removeItemFromPlayer(player, plateIdx, 1);
       }
@@ -394,7 +392,6 @@ export const KitchenStationModal: React.FC<KitchenStationModalProps> = ({
         'heal'
       );
 
-      // Clean ingredients from current vessel
       vessel.ingredients = [];
       vessel.liquids = [];
       vessel.saltGrams = 0;
@@ -490,7 +487,7 @@ export const KitchenStationModal: React.FC<KitchenStationModalProps> = ({
                     carriedCookwareList.map((cw, cwIdx) => (
                       <button
                         key={cw.id || cwIdx}
-                        onClick={() => handlePlaceCookwareOnBurner(cw, player.inventory.findIndex(i => i.id === cw.id))}
+                        onClick={() => handlePlaceCookwareOnBurner(cw)}
                         className="px-2.5 py-1 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-300 font-medium transition-colors flex items-center gap-1"
                       >
                         <Plus className="w-3 h-3" />
@@ -514,25 +511,22 @@ export const KitchenStationModal: React.FC<KitchenStationModalProps> = ({
                 Ваши продукты
               </span>
               <span className="text-[11px] text-slate-500">
-                {player.inventory.filter(i => i.category === 'food' || i.category === 'drink').length} предм.
+                {foodItems.length} предм.
               </span>
             </div>
 
             <div className="flex-1 p-3 overflow-y-auto space-y-2">
-              {player.inventory.filter(i => i.category === 'food' || i.category === 'drink').length === 0 ? (
+              {foodItems.length === 0 ? (
                 <div className="p-6 text-center text-xs text-slate-500">
                   В карманах нет еды и ингредиентов
                 </div>
               ) : (
-                player.inventory.map((item, idx) => {
-                  const isFoodOrDrink = item.category === 'food' || item.category === 'drink';
-                  if (!isFoodOrDrink) return null;
-
+                foodItems.map((item, idx) => {
                   return (
                     <div
                       key={item.id || idx}
                       className="p-2.5 rounded-xl border border-slate-800 bg-slate-900/70 hover:border-amber-500/50 hover:bg-slate-800/80 cursor-pointer flex items-center justify-between gap-3 transition-all"
-                      onClick={() => handlePlaceFoodItem(item, idx)}
+                      onClick={() => handlePlaceFoodItem(item)}
                     >
                       <div className="flex items-center gap-2.5 min-w-0">
                         <div className="w-10 h-10 rounded-lg bg-slate-950 border border-slate-700 flex items-center justify-center shrink-0">
@@ -552,7 +546,7 @@ export const KitchenStationModal: React.FC<KitchenStationModalProps> = ({
                         className="px-2.5 py-1 rounded-lg bg-amber-500/10 hover:bg-amber-500/25 border border-amber-500/30 text-[11px] font-semibold text-amber-300 shrink-0 flex items-center gap-1 transition-colors"
                         onClick={(e) => {
                           e.stopPropagation();
-                          handlePlaceFoodItem(item, idx);
+                          handlePlaceFoodItem(item);
                         }}
                       >
                         <Plus className="w-3 h-3" />
@@ -800,7 +794,7 @@ export const KitchenStationModal: React.FC<KitchenStationModalProps> = ({
                 <button
                   onClick={handlePourWater}
                   className={`px-2.5 py-1.5 rounded-lg border font-medium transition-colors flex items-center justify-center gap-1.5 ${
-                    hasNearbySink || player.inventory.some(i => i.itemId.includes('water'))
+                    hasNearbySink || safeInventory.some(i => i.itemId && i.itemId.includes('water'))
                       ? 'bg-slate-800 hover:bg-slate-700 border-slate-700 text-slate-200'
                       : 'bg-slate-900/60 border-slate-800 text-slate-600 cursor-not-allowed'
                   }`}

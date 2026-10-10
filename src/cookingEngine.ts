@@ -75,7 +75,8 @@ export interface CookwareVessel {
 }
 
 // Physical Item Filters
-export function isCookwareItem(itemId: string): boolean {
+export function isCookwareItem(itemId?: string | null): boolean {
+  if (!itemId) return false;
   return (
     itemId.startsWith('kitchen_pan_') ||
     itemId.startsWith('kitchen_pot_') ||
@@ -85,15 +86,18 @@ export function isCookwareItem(itemId: string): boolean {
   );
 }
 
-export function isKnifeItem(itemId: string): boolean {
+export function isKnifeItem(itemId?: string | null): boolean {
+  if (!itemId) return false;
   return itemId === 'kitchen_knife_chef' || itemId === 'pocket_knife';
 }
 
-export function isSaltItem(itemId: string): boolean {
+export function isSaltItem(itemId?: string | null): boolean {
+  if (!itemId) return false;
   return itemId === 'salt_shaker' || itemId === 'salt';
 }
 
-export function isOilOrFatItem(itemId: string): boolean {
+export function isOilOrFatItem(itemId?: string | null): boolean {
+  if (!itemId) return false;
   return (
     itemId.includes('oil') ||
     itemId.includes('butter') ||
@@ -103,7 +107,8 @@ export function isOilOrFatItem(itemId: string): boolean {
   );
 }
 
-export function isPlateOrBowlItem(itemId: string): boolean {
+export function isPlateOrBowlItem(itemId?: string | null): boolean {
+  if (!itemId) return false;
   return (
     itemId.startsWith('kitchen_plate_') ||
     itemId.startsWith('kitchen_bowl_')

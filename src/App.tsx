@@ -1018,7 +1018,17 @@ export default function App() {
 
   const syncSavesToStorage = (updatedSaves: any[]) => {
     setSaves(updatedSaves);
-    localStorage.setItem('neon_city_saves', JSON.stringify(updatedSaves));
+    try {
+      localStorage.setItem('neon_city_saves', JSON.stringify(updatedSaves));
+    } catch (e) {
+      console.warn('Failed to save to localStorage (quota exceeded), pruning old saves:', e);
+      try {
+        const pruned = updatedSaves.slice(-2);
+        localStorage.setItem('neon_city_saves', JSON.stringify(pruned));
+      } catch (err2) {
+        console.warn('Could not persist saves even after pruning:', err2);
+      }
+    }
   };
 
   const handleCreateSave = (customName?: string) => {
