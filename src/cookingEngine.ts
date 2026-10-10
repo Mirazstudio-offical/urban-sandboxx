@@ -1,11 +1,11 @@
 // =====================================================================
 // FIRST-PRINCIPLES CULINARY ENGINE (HARDCORE THERMODYNAMICS & BIOCHEMISTRY)
 // =====================================================================
-// Models continuous multi-phase cooking:
-// - Physical mass, water content, lipids, proteins, carbs, sugars, salt
-// - Conduction, convection, evaporation, fat rendering, smoke point
-// - Biochemical kinetics: Denaturation, Maillard reaction, Pyrolysis (charring), Hydrolysis
-// - Direct tactile agency: cutting, mixing, seasoning, lid toggle, heat adjustment
+// Strict Realism Architecture:
+// - Physical objects only: cookware, knives, salt shakers, oil bottles must physically exist!
+// - Stoves have burners. Wooden tables & counters DO NOT have burners!
+// - Zero abstract arcade UI: No grams HUD, no sci-fi lab nutritional overlays while cooking.
+// - Diegetic sensory feedback: Sight (cut, crust, char), Hearing (sizzle, boil, crackle), Smell/Smoke.
 // =====================================================================
 
 import { InventoryItem } from './types';
@@ -58,8 +58,10 @@ export interface LiquidPortion {
 
 export interface CookwareVessel {
   id: string;
-  vesselType: 'pan' | 'pot' | 'tray' | 'cutting_board' | 'bowl';
+  vesselType: 'surface' | 'pan' | 'pot' | 'kettle' | 'bowl';
   nameRu: string;
+  sourceItem?: InventoryItem; // Physical cookware item placed by the player
+  hasBurner: boolean;        // True ONLY if placed on a stove!
   capacityMl: number;
   temperature: number;       // Vessel metal/surface temperature in °C
   heatSourcePower: number;   // 0 to 6 (0 = off, 6 = max burner ~260-290°C)
@@ -68,9 +70,44 @@ export interface CookwareVessel {
   liquids: LiquidPortion[];
   smokeIntensity: number;    // 0.0 to 1.0
   isFlaming: boolean;
-  lastSensoryMessage?: string;
   saltGrams: number;
   seasoningNotes: string[];
+}
+
+// Physical Item Filters
+export function isCookwareItem(itemId: string): boolean {
+  return (
+    itemId.startsWith('kitchen_pan_') ||
+    itemId.startsWith('kitchen_pot_') ||
+    itemId.startsWith('kitchen_kettle_') ||
+    itemId === 'kitchen_plate_enamel' ||
+    itemId === 'kitchen_bowl_wooden'
+  );
+}
+
+export function isKnifeItem(itemId: string): boolean {
+  return itemId === 'kitchen_knife_chef' || itemId === 'pocket_knife';
+}
+
+export function isSaltItem(itemId: string): boolean {
+  return itemId === 'salt_shaker' || itemId === 'salt';
+}
+
+export function isOilOrFatItem(itemId: string): boolean {
+  return (
+    itemId.includes('oil') ||
+    itemId.includes('butter') ||
+    itemId.includes('tallow') ||
+    itemId.includes('lard') ||
+    itemId.includes('fat')
+  );
+}
+
+export function isPlateOrBowlItem(itemId: string): boolean {
+  return (
+    itemId.startsWith('kitchen_plate_') ||
+    itemId.startsWith('kitchen_bowl_')
+  );
 }
 
 // Baseline nutrient database per 100g of raw product
@@ -143,7 +180,6 @@ export function inferNutrientsFromItem(item: InventoryItem, massGrams?: number):
   const mass = massGrams || (item.weight ? item.weight * 1000 : 250);
   const factor = mass / 100;
 
-  // 1. Explicit item nutrients if already assigned
   if (item.nutrients) {
     const scale = massGrams ? massGrams / ((item.nutrients.proteins + item.nutrients.fats + item.nutrients.carbs + (item.nutrients.water || 50)) || 100) : 1;
     return {
@@ -158,7 +194,6 @@ export function inferNutrientsFromItem(item: InventoryItem, massGrams?: number):
     };
   }
 
-  // 2. Keyword heuristic matching from catalog
   const id = item.itemId.toLowerCase();
   let ref: FoodNutrientRef = NUTRIENT_REFERENCE_PER_100G.beef;
 
@@ -203,33 +238,62 @@ export function inferNutrientsFromItem(item: InventoryItem, massGrams?: number):
 }
 
 /**
- * Creates an empty culinary vessel
+ * Creates Stove vessel state (burner with or without placed physical cookware)
  */
-export function createCookwareVessel(
-  vesselType: 'pan' | 'pot' | 'tray' | 'cutting_board' | 'bowl',
-  nameRu?: string
-): CookwareVessel {
-  const titles = {
-    pan: 'Чугунная сковорода (жарка, пассерование)',
-    pot: 'Эмалированная кастрюля (варка, тушение, супы)',
-    tray: 'Противень духовой',
-    cutting_board: 'Разделочная доска (нарезка, измельчение)',
-    bowl: 'Глубокая миска (смешивание, маринование)'
-  };
+export function createStoveCookwareVessel(placedCookwareItem?: InventoryItem): CookwareVessel {
+  let vesselType: 'surface' | 'pan' | 'pot' | 'kettle' | 'bowl' = 'surface';
+  let nameRu = 'Пустая конфорка плиты (посуда не поставлена)';
+  let capacityMl = 0;
 
-  const caps = {
-    pan: 2500,
-    pot: 4500,
-    tray: 3500,
-    cutting_board: 1500,
-    bowl: 2000
-  };
+  if (placedCookwareItem) {
+    if (placedCookwareItem.itemId.startsWith('kitchen_pan_')) {
+      vesselType = 'pan';
+      capacityMl = 2500;
+      nameRu = placedCookwareItem.nameRu;
+    } else if (placedCookwareItem.itemId.startsWith('kitchen_pot_')) {
+      vesselType = 'pot';
+      capacityMl = 4500;
+      nameRu = placedCookwareItem.nameRu;
+    } else if (placedCookwareItem.itemId.startsWith('kitchen_kettle_')) {
+      vesselType = 'kettle';
+      capacityMl = 2200;
+      nameRu = placedCookwareItem.nameRu;
+    } else if (placedCookwareItem.itemId.includes('bowl')) {
+      vesselType = 'bowl';
+      capacityMl = 2000;
+      nameRu = placedCookwareItem.nameRu;
+    }
+  }
 
   return {
-    id: `vessel_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+    id: `stove_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
     vesselType,
-    nameRu: nameRu || titles[vesselType],
-    capacityMl: caps[vesselType],
+    nameRu,
+    sourceItem: placedCookwareItem,
+    hasBurner: true,
+    capacityMl,
+    temperature: 20.0,
+    heatSourcePower: 0,
+    hasLid: false,
+    ingredients: [],
+    liquids: [],
+    smokeIntensity: 0.0,
+    isFlaming: false,
+    saltGrams: 0,
+    seasoningNotes: []
+  };
+}
+
+/**
+ * Creates Countertop / Table preparation surface (NO BURNERS!)
+ */
+export function createCountertopVessel(nameRu: string = 'Кухонная столешница / Разделочная зона'): CookwareVessel {
+  return {
+    id: `counter_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+    vesselType: 'surface',
+    nameRu,
+    hasBurner: false,
+    capacityMl: 5000,
     temperature: 20.0,
     heatSourcePower: 0,
     hasLid: false,
@@ -250,12 +314,10 @@ export function itemToCulinaryIngredient(item: InventoryItem): CulinaryIngredien
   const massGrams = Math.max(20, Math.round((item.weight || 0.25) * 1000));
   const nutrients = inferNutrientsFromItem(item, massGrams);
 
-  // Is item pre-ground or pre-cut?
   const isMinced = item.itemId.includes('minced') || item.itemId.includes('фарш');
   const cutLevel = isMinced ? 2 : 0;
   const cutPieces = isMinced ? 50 : 1;
 
-  // Check if item was already pre-cooked in inventory
   const bioState: BiochemicalState = {
     denaturation: item.culinaryData?.denaturation ?? (item.itemId.includes('raw') ? 0.0 : (isMinced ? 0.0 : 0.05)),
     maillard: item.culinaryData?.maillard ?? 0.0,
@@ -283,13 +345,23 @@ export function itemToCulinaryIngredient(item: InventoryItem): CulinaryIngredien
 }
 
 /**
- * Direct tactile action: Cutting / Slicing an ingredient on the board/counter
+ * Direct tactile action: Cutting / Slicing an ingredient (Requires Knife!)
  */
-export function cutIngredientAction(ing: CulinaryIngredient): { success: boolean; message: string } {
+export function cutIngredientAction(
+  ing: CulinaryIngredient,
+  hasKnife: boolean
+): { success: boolean; message: string } {
+  if (!hasKnife) {
+    return {
+      success: false,
+      message: 'У вас нет ножа! Для нарезки нужен кухонный нож шеф-повара или складной нож в инвентаре.'
+    };
+  }
+
   if (ing.bioState.cutLevel >= 2) {
     return {
       success: false,
-      message: `«${ing.nameRu}» уже мелко измельчен(а) в однородную массу (фарш/пюре). Дальше резать некуда.`
+      message: `«${ing.nameRu}» уже порублено(а) в мелкий фарш/пюре. Дальше резать некуда.`
     };
   }
 
@@ -299,7 +371,7 @@ export function cutIngredientAction(ing: CulinaryIngredient): { success: boolean
     ing.bioState.surfaceAreaMult = 1.9;
     return {
       success: true,
-      message: `Острый кухонный нож аккуратно нарезал «${ing.nameRu}» на ${ing.bioState.cutPieces} аккуратных ломтиков/кубиков.`
+      message: `Острым лезвием ножа кусок нарезан на аккуратные ломти: «${ing.nameRu}».`
     };
   } else {
     ing.bioState.cutLevel = 2;
@@ -307,14 +379,13 @@ export function cutIngredientAction(ing: CulinaryIngredient): { success: boolean
     ing.bioState.surfaceAreaMult = 2.9;
     return {
       success: true,
-      message: `Мелко порублено и измельчено: «${ing.nameRu}» превратилась в нежную рубленую массу.`
+      message: `Ножом мелко порублено: «${ing.nameRu}» превратилась в рубленую массу.`
     };
   }
 }
 
 /**
- * Direct tactile action: Mechanical stirring / flipping with spatula
- * Equalizes temperature between contact surface and top, preventing localized bottom charring.
+ * Direct tactile action: Stirring / flipping with spatula
  */
 export function stirVesselAction(vessel: CookwareVessel): string {
   if (vessel.ingredients.length === 0) {
@@ -323,71 +394,55 @@ export function stirVesselAction(vessel: CookwareVessel): string {
 
   for (const ing of vessel.ingredients) {
     ing.bioState.isStirredRecently = true;
-    // Equalize surface and core temperatures
     const avg = (ing.surfaceTemp * 2 + ing.coreTemp) / 3;
     ing.surfaceTemp = avg;
     ing.coreTemp = (ing.coreTemp * 2 + avg) / 3;
   }
 
-  // Slightly dissipate extreme local smoke build up
   vessel.smokeIntensity = Math.max(0, vessel.smokeIntensity - 0.2);
-
-  return 'Лопатка перевернула ломтики со дна: жар распределился равномерно, прилипание устранено.';
+  return 'Лопаткой перевернуты куски со дна: жар перераспределен, прилипание устранено.';
 }
 
 /**
- * Direct tactile action: Add seasoning (Salt, Pepper, Sugar, Spices)
+ * Direct tactile action: Add seasoning from real salt shaker or spice item
  */
-export function addSeasoningAction(
+export function addRealSeasoningAction(
   vessel: CookwareVessel,
-  seasoningType: 'salt' | 'black_pepper' | 'sugar' | 'paprika' | 'bay_leaf' | 'garlic_dry'
+  seasoningItemName: string,
+  isSalt: boolean
 ): string {
-  const notes = {
-    salt: 'Крупная пищевая соль (щепотка ~4г)',
-    black_pepper: 'Свежемолотый черный перец',
-    sugar: 'Сахарный песок (баланс кислотности)',
-    paprika: 'Копченая сладкая паприка',
-    bay_leaf: 'Ароматный сушеный лавровый лист',
-    garlic_dry: 'Сушеный гранулированный чеснок'
-  };
+  vessel.seasoningNotes.push(seasoningItemName);
 
-  vessel.seasoningNotes.push(notes[seasoningType]);
-
-  if (seasoningType === 'salt') {
-    vessel.saltGrams += 4.0;
-    // Add to all ingredients proportionally
+  if (isSalt) {
+    vessel.saltGrams += 3.5;
     for (const ing of vessel.ingredients) {
-      ing.nutrients.salt += 0.8;
+      ing.nutrients.salt += 0.7;
     }
-  } else if (seasoningType === 'sugar') {
-    for (const ing of vessel.ingredients) {
-      ing.nutrients.sugars += 2.0;
-      ing.nutrients.calories += 8;
-    }
+    return `Посолено из солонки: «${seasoningItemName}».`;
   }
 
-  return `Добавлено: ${notes[seasoningType]}.`;
+  return `Добавлена приправа: «${seasoningItemName}».`;
 }
 
 /**
- * Direct tactile action: Pour liquid into vessel
+ * Direct tactile action: Pour real liquid from carried container
  */
-export function pourLiquidToVessel(
+export function pourRealLiquidToVessel(
   vessel: CookwareVessel,
   liquidId: string,
-  volumeMl: number,
-  liquidNameRu?: string
+  liquidNameRu: string,
+  volumeMl: number
 ): void {
-  const isOil = liquidId.includes('oil') || liquidId.includes('fat') || liquidId.includes('butter');
+  const isOil = isOilOrFatItem(liquidId);
   const smokePt = isOil ? 210 : 100;
-  
+
   const existing = vessel.liquids.find(l => l.liquidId === liquidId);
   if (existing) {
     existing.volumeMl += volumeMl;
   } else {
     vessel.liquids.push({
       liquidId,
-      nameRu: liquidNameRu || (isOil ? 'Подсолнечное масло' : 'Вода'),
+      nameRu: liquidNameRu,
       volumeMl,
       temperature: 20.0,
       isFatOrOil: isOil,
@@ -398,7 +453,6 @@ export function pourLiquidToVessel(
 
 /**
  * FIRST-PRINCIPLES SIMULATION TICK
- * Models thermal conduction, phase change, Maillard kinetics, and pyrolysis
  */
 export function simulateCookwareTick(
   vessel: CookwareVessel,
@@ -407,45 +461,39 @@ export function simulateCookwareTick(
 ): void {
   if (dtSeconds <= 0) return;
 
-  // 1. Calculate Target Burner Heat based on heat power (0..6)
-  // 0: Off (cools to ambient)
-  // 1: Warm / Simmer plate (~55°C)
-  // 2: Gentle Simmer (~85°C)
-  // 3: Rolling Boil (~105°C)
-  // 4: Saute / Medium Fry (~155°C)
-  // 5: Heavy Sear / Sizzle (~195°C)
-  // 6: Maximum Blast (~265°C - easily chars if unattended!)
-  const burnerTargetTemps = [ambientTemp, 55.0, 85.0, 105.0, 155.0, 195.0, 265.0];
-  const targetBurnerTemp = burnerTargetTemps[vessel.heatSourcePower] ?? ambientTemp;
+  // Stoves heat up according to burner power. Tables/counters ALWAYS cool to ambient!
+  if (vessel.hasBurner && vessel.vesselType !== 'surface') {
+    const burnerTargetTemps = [ambientTemp, 55.0, 85.0, 105.0, 155.0, 195.0, 265.0];
+    const targetBurnerTemp = burnerTargetTemps[vessel.heatSourcePower] ?? ambientTemp;
+    const thermalInertia = vessel.vesselType === 'pot' ? 0.08 : 0.15;
 
-  // 2. Heat transfer to Vessel Metal
-  const thermalInertia = vessel.vesselType === 'pot' ? 0.08 : 0.15; // Pan conducts faster
-  if (vessel.heatSourcePower > 0) {
-    vessel.temperature += (targetBurnerTemp - vessel.temperature) * thermalInertia * dtSeconds;
+    if (vessel.heatSourcePower > 0) {
+      vessel.temperature += (targetBurnerTemp - vessel.temperature) * thermalInertia * dtSeconds;
+    } else {
+      vessel.temperature += (ambientTemp - vessel.temperature) * 0.04 * dtSeconds;
+    }
   } else {
-    // Natural cooling to ambient
-    vessel.temperature += (ambientTemp - vessel.temperature) * 0.04 * dtSeconds;
+    // No burner: surface naturally settles to ambient room temperature
+    vessel.temperature += (ambientTemp - vessel.temperature) * 0.08 * dtSeconds;
+    vessel.heatSourcePower = 0;
   }
 
-  // 3. Liquid Phase Thermodynamics
+  // Liquid Phase
   let totalWaterVolumeMl = 0;
   let totalOilVolumeMl = 0;
 
   for (const liq of vessel.liquids) {
     if (liq.isFatOrOil) {
       totalOilVolumeMl += liq.volumeMl;
-      // Oil heats towards pan temperature
       liq.temperature += (vessel.temperature - liq.temperature) * 0.3 * dtSeconds;
     } else {
       totalWaterVolumeMl += liq.volumeMl;
-      // Water heats up, but cannot exceed 100°C under normal atmospheric pressure
       const maxWaterT = 100.0;
       if (liq.temperature < maxWaterT) {
         liq.temperature += (vessel.temperature - liq.temperature) * 0.25 * dtSeconds;
         liq.temperature = Math.min(maxWaterT, liq.temperature);
       } else {
         liq.temperature = maxWaterT;
-        // Latent heat of vaporization: boil-off water!
         if (vessel.temperature > 100.0) {
           const excessHeat = vessel.temperature - 100.0;
           const boilRate = (excessHeat * 0.45 * (vessel.hasLid ? 0.12 : 1.0)) * dtSeconds;
@@ -455,22 +503,17 @@ export function simulateCookwareTick(
     }
   }
 
-  // Clean empty liquids
   vessel.liquids = vessel.liquids.filter(l => l.volumeMl > 0.5);
 
-  // If there is liquid water at 100°C, the bottom contact layer is buffered by water
   const isWetSubmerged = totalWaterVolumeMl > 15;
   const isOilFrying = !isWetSubmerged && totalOilVolumeMl > 5;
-  const isDryScorching = !isWetSubmerged && !isOilFrying;
 
-  // 4. Ingredient Biochemical Kinetics
   let maxSmoke = 0.0;
   let hasActivePyrolysis = false;
 
   for (const ing of vessel.ingredients) {
     const area = ing.bioState.surfaceAreaMult;
 
-    // Contact medium temperature:
     let mediumTemp = vessel.temperature;
     if (isWetSubmerged) {
       mediumTemp = Math.min(100.0, vessel.temperature);
@@ -478,40 +521,34 @@ export function simulateCookwareTick(
       mediumTemp = Math.min(vessel.temperature, 215.0);
     }
 
-    // Heat transfer to ingredient surface & core
     const surfaceConductivity = (isOilFrying ? 0.35 : (isWetSubmerged ? 0.25 : 0.20)) * area;
     ing.surfaceTemp += (mediumTemp - ing.surfaceTemp) * surfaceConductivity * dtSeconds;
 
-    // Internal core conduction
     const internalDiffusion = 0.10 * area;
     ing.coreTemp += (ing.surfaceTemp - ing.coreTemp) * internalDiffusion * dtSeconds;
 
-    // A. Protein Denaturation (cooking raw meat/fish/egg)
-    // Starts at 52°C, peaks between 65°C and 78°C
+    // A. Denaturation (52-80°C)
     if (ing.coreTemp >= 52.0 && ing.bioState.denaturation < 1.0) {
       const denatRate = Math.min(1.0, (ing.coreTemp - 50.0) / 25.0) * 0.08 * dtSeconds;
       ing.bioState.denaturation = Math.min(1.0, ing.bioState.denaturation + denatRate);
     } else if (ing.coreTemp >= 82.0 && ing.bioState.denaturation >= 1.0) {
-      // Overcooking / tightening fibers
       ing.bioState.denaturation = Math.min(1.6, ing.bioState.denaturation + 0.015 * dtSeconds);
     }
 
-    // B. Maillard Reaction (browning / crust)
-    // Requires Surface Temp >= 135°C AND absence of deep water
+    // B. Maillard Reaction (>= 135°C without deep water)
     if (!isWetSubmerged && ing.surfaceTemp >= 135.0 && ing.bioState.charring < 0.6) {
       const maillardIntensity = Math.min(1.0, (ing.surfaceTemp - 130.0) / 45.0);
       const rate = maillardIntensity * (isOilFrying ? 0.05 : 0.035) * dtSeconds;
       ing.bioState.maillard = Math.min(1.0, ing.bioState.maillard + rate);
     }
 
-    // C. Hydrolysis / Collagen breakdown (simmering & stewing tenderness)
+    // C. Hydrolysis / Tenderness in liquid
     if (isWetSubmerged && ing.coreTemp >= 80.0) {
       const tenderRate = 0.02 * (vessel.hasLid ? 1.4 : 1.0) * dtSeconds;
       ing.bioState.hydrolysis = Math.min(1.5, ing.bioState.hydrolysis + tenderRate);
     }
 
-    // D. Pyrolysis & Charring (Пригорание и обугливание)
-    // High heat on dry pan or un-stirred bottom (>190°C)
+    // D. Pyrolysis / Charring (>= 185-205°C)
     const isStationaryBottom = !ing.bioState.isStirredRecently;
     const charThreshold = isOilFrying ? 205.0 : 185.0;
 
@@ -523,29 +560,24 @@ export function simulateCookwareTick(
       ing.bioState.charring = Math.min(1.0, ing.bioState.charring + charRate);
       hasActivePyrolysis = true;
 
-      // Charring destroys nutritional value and evaporates bound moisture
       ing.nutrients.water = Math.max(0, ing.nutrients.water - charRate * 25);
       ing.nutrients.calories = Math.max(10, ing.nutrients.calories - charRate * 15);
 
-      // Local smoke emission
       const smokeFromIng = Math.min(1.0, (ing.bioState.charring * 0.7) + (excessCharHeat / 80.0));
       maxSmoke = Math.max(maxSmoke, smokeFromIng);
     }
 
-    // Reset temporary stir shield gradually
     if (ing.bioState.isStirredRecently) {
       ing.bioState.isStirredRecently = false;
     }
   }
 
-  // 5. Environmental Smoke & Fire
   if (hasActivePyrolysis) {
     vessel.smokeIntensity = Math.min(1.0, vessel.smokeIntensity + maxSmoke * 0.2 * dtSeconds);
   } else {
     vessel.smokeIntensity = Math.max(0, vessel.smokeIntensity - 0.1 * dtSeconds);
   }
 
-  // Oil flash point hazard (T > 290°C with open burner)
   if (totalOilVolumeMl > 0 && vessel.temperature >= 295.0 && vessel.heatSourcePower >= 5) {
     vessel.isFlaming = true;
     vessel.smokeIntensity = 1.0;
@@ -555,14 +587,98 @@ export function simulateCookwareTick(
 }
 
 /**
+ * Diegetic Sensory Visual Description of an ingredient
+ */
+export function getVisualAppearanceDescription(ing: CulinaryIngredient): string {
+  const isCut = ing.bioState.cutLevel;
+  const cutText = isCut === 0 ? 'Цельный кусок' : (isCut === 1 ? 'Нарезанные ломтики' : 'Рубленая масса');
+
+  const char = ing.bioState.charring;
+  const maillard = ing.bioState.maillard;
+  const denat = ing.bioState.denaturation;
+
+  let stateText = 'сырое';
+  if (char >= 0.5) stateText = 'черный обугленный нагар (горький уголь)';
+  else if (char >= 0.2) stateText = 'потемневшие пригоревшие края';
+  else if (maillard >= 0.35) stateText = 'золотисто-румяная зажаристая корочка';
+  else if (denat >= 0.6) stateText = 'схватившийся серый срез (сварено)';
+  else if (denat >= 0.25) stateText = 'начало белеть от жара';
+  else stateText = 'сырой бледно-розовый срез';
+
+  return `${cutText}: ${stateText}`;
+}
+
+/**
+ * Diegetic Sensory Sound, Surface & Atmosphere Descriptors
+ */
+export function getSensoryObservations(vessel: CookwareVessel): {
+  soundText: string;
+  panSurfaceText: string;
+  smokeText: string;
+} {
+  const hasOil = vessel.liquids.some(l => l.isFatOrOil);
+  const hasWater = vessel.liquids.some(l => !l.isFatOrOil);
+  const hasItems = vessel.ingredients.length > 0;
+
+  let soundText = 'Тишина';
+  let panSurfaceText = vessel.vesselType === 'surface' ? 'Сухая чистая столешница' : 'Сухое чистое дно';
+  let smokeText = 'Воздух чистый, запаха нет';
+
+  if (!vessel.hasBurner || vessel.heatSourcePower === 0) {
+    if (vessel.temperature > 50) {
+      soundText = 'Тихое остывание металла';
+      panSurfaceText = 'Посуда горячая на ощупь, медленно остывает';
+    }
+  } else {
+    if (vessel.temperature > 80 && hasWater) {
+      if (vessel.temperature >= 100) {
+        soundText = 'Бурное кипение ключом, рокот воды';
+        panSurfaceText = 'Вода кипит и бурлит, клубы белого пара';
+      } else {
+        soundText = 'Редкое глухое бульканье со дна';
+        panSurfaceText = 'Вода согрелась, поднимаются первые пузырьки';
+      }
+    } else if (vessel.temperature >= 130 && hasOil) {
+      if (vessel.temperature >= 170) {
+        soundText = 'Яростное шкворчание и треск раскаленного масла';
+        panSurfaceText = 'Масло мерцает рябью, брызги жира шипят';
+      } else {
+        soundText = 'Ровное шипение сока на масле';
+        panSurfaceText = 'Масло прогрелось, медленно шкворчит';
+      }
+    } else if (vessel.temperature >= 180 && !hasWater && !hasOil && hasItems) {
+      soundText = 'Сухой треск и шкворчание пригара';
+      panSurfaceText = 'Дно раскалено, сухой контакт с металлом';
+    } else if (vessel.temperature >= 100) {
+      soundText = 'Гул разогретого металла';
+      panSurfaceText = 'Сухое дно раскаляется от пламени конфорки';
+    }
+
+    if (vessel.smokeIntensity > 0.6) {
+      smokeText = 'Густой сизый дым! Едкий чад режет глаза и першит в горле';
+    } else if (vessel.smokeIntensity > 0.25) {
+      smokeText = 'Тонкая струйка серого дымка, запах пригара';
+    } else if (hasWater && vessel.temperature >= 95) {
+      smokeText = 'Клубится влажный белый пар';
+    } else if (hasItems && vessel.temperature > 120) {
+      smokeText = 'Аппетитный аромат поджаристой еды';
+    }
+  }
+
+  return { soundText, panSurfaceText, smokeText };
+}
+
+/**
  * Creates a finished, dynamic composite dish item from cookware contents
  */
-export function finishCookwareToInventoryItem(vessel: CookwareVessel): InventoryItem | null {
+export function finishCookwareToInventoryItem(
+  vessel: CookwareVessel,
+  platingItem?: InventoryItem
+): InventoryItem | null {
   if (vessel.ingredients.length === 0 && vessel.liquids.length === 0) {
     return null;
   }
 
-  // 1. Calculate aggregated nutrients
   let totalKcal = 0;
   let totalP = 0;
   let totalF = 0;
@@ -615,7 +731,6 @@ export function finishCookwareToInventoryItem(vessel: CookwareVessel): Inventory
   const avgChar = sumChar / ingCount;
   const avgHydrolysis = sumHydrolysis / ingCount;
 
-  // 2. Dynamic naming logic
   const isCharred = avgChar >= 0.35;
   const isSoup = totalWater > 200 && vessel.vesselType === 'pot';
   const isFried = avgMaillard >= 0.3 && !isSoup;
@@ -626,7 +741,6 @@ export function finishCookwareToInventoryItem(vessel: CookwareVessel): Inventory
   const hasPoultry = namesList.some(n => n.includes('Куриц') || n.includes('цыпл') || n.includes('Индейк'));
   const hasFish = namesList.some(n => n.includes('Рыб') || n.includes('Лосос') || n.includes('Окунь'));
   const hasPotato = namesList.some(n => n.includes('Картоф'));
-  const hasVeggies = namesList.some(n => n.includes('Овощ') || n.includes('Лук') || n.includes('Морков') || n.includes('Томат'));
 
   if (isSoup) {
     if (hasMeat) mainBaseName = 'Наваристый мясной суп';
@@ -648,7 +762,6 @@ export function finishCookwareToInventoryItem(vessel: CookwareVessel): Inventory
     mainBaseName = 'Приготовленное домашнее блюдо';
   }
 
-  // Prepend descriptor if charred or exceptional
   if (avgChar >= 0.65) {
     mainBaseName = `Обуглившийся ${mainBaseName.toLowerCase()}`;
   } else if (avgChar >= 0.35) {
@@ -657,7 +770,6 @@ export function finishCookwareToInventoryItem(vessel: CookwareVessel): Inventory
     mainBaseName = `Золотистый(-ая) ${mainBaseName.toLowerCase()}`;
   }
 
-  // 3. Assemble dynamic taste notes
   const tasteNotes: string[] = [];
   if (isCharred) {
     tasteNotes.push('Едкая горечь пригоревшего нагара...');
@@ -675,30 +787,30 @@ export function finishCookwareToInventoryItem(vessel: CookwareVessel): Inventory
     tasteNotes.push('Пресный вкус, не хватает соли...');
   }
 
-  // 4. Portions & Weight
   const totalWeightKg = Number((totalMassGrams / 1000).toFixed(2));
   const portions = Math.max(3, Math.min(20, Math.round(totalMassGrams / 70)));
 
-  // Health effect logic: good food heals; raw or heavily charred hurts
   let hpEffect = 5;
   if (avgChar >= 0.5) hpEffect = -12;
-  else if (isRaw && (hasMeat || hasPoultry)) hpEffect = -15; // Risk of food poisoning
-  else if (avgDenat >= 0.8 && avgChar < 0.25) hpEffect = 18; // Wholesome meal
+  else if (isRaw && (hasMeat || hasPoultry)) hpEffect = -15;
+  else if (avgDenat >= 0.8 && avgChar < 0.25) hpEffect = 18;
 
   const hungerEffect = Math.min(100, Math.round(totalKcal / 7));
   const thirstEffect = isSoup ? 45 : (totalSalt > 6.0 ? -25 : -5);
 
+  const containerSuffix = platingItem ? ` (на ${platingItem.nameRu.toLowerCase()})` : '';
+
   const dishItem: InventoryItem = {
     id: `dish_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
     itemId: 'custom_cooked_dish',
-    name: mainBaseName,
-    nameRu: mainBaseName,
+    name: `${mainBaseName}${containerSuffix}`,
+    nameRu: `${mainBaseName}${containerSuffix}`,
     category: 'food',
     count: 1,
     maxStack: 1,
     icon: '',
     description: `Freshly prepared dish: ${namesList.join(', ')}.`,
-    descriptionRu: `Свежеприготовленное блюдо на кухонном гарнитуре. Содержит: ${namesList.slice(0, 4).join(', ')}${namesList.length > 4 ? ' и др.' : ''}.`,
+    descriptionRu: `Свежеприготовленное блюдо на кухне. Содержит: ${namesList.slice(0, 4).join(', ')}${namesList.length > 4 ? ' и др.' : ''}.`,
     effects: {
       health: hpEffect,
       hunger: hungerEffect,
