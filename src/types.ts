@@ -1381,6 +1381,8 @@ export interface InventoryItem {
   };
   culinaryData?: {
     isPreparedDish?: boolean;
+    isWorkpiece?: boolean;
+    containerType?: 'board' | 'pan' | 'pot' | 'bowl' | 'plate' | 'paper';
     dishType?: 'fried' | 'boiled' | 'soup' | 'salad' | 'stew' | 'baked' | 'burnt_mess';
     denaturation?: number;  // 0.0 to 1.5+ (cooked state)
     maillard?: number;      // 0.0 to 1.5+ (browning/crust)
@@ -1389,6 +1391,8 @@ export interface InventoryItem {
     cutPieces?: number;
     ingredientsCount?: number;
     ingredientsList?: string[];
+    ingredients?: any[];
+    liquids?: any[];
     cookingLiquid?: string;
     tasteNotes?: string[];
   };

@@ -5,6 +5,8 @@ import {
   createStoveCookwareVessel,
   createCountertopVessel,
   itemToCulinaryIngredient, 
+  createWorkpieceFromVessel,
+  unpackWorkpieceIntoVessel,
   cutIngredientAction, 
   stirVesselAction, 
   addRealSeasoningAction, 
@@ -19,6 +21,7 @@ import {
   getVisualAppearanceDescription,
   getSensoryObservations
 } from '../cookingEngine';
+import { drawLiveCulinaryViewport } from '../graphics/culinaryGraphics';
 import { 
   addItemToPlayer, 
   removeItemFromPlayer, 
@@ -42,7 +45,9 @@ import {
   Sparkles,
   Disc,
   Volume2,
-  Package
+  Package,
+  ArrowRight,
+  Eye
 } from 'lucide-react';
 
 interface KitchenStationModalProps {
@@ -72,8 +77,8 @@ export const KitchenStationModal: React.FC<KitchenStationModalProps> = ({
 
   const isStove = furnitureType === 'stove';
 
-  // Mobile navigation tabs state ('station' | 'products' | 'sensory')
-  const [mobileTab, setMobileTab] = useState<'station' | 'products' | 'sensory'>('station');
+  // Mobile navigation tabs state ('station' | 'products' | 'actions' | 'sensory')
+  const [mobileTab, setMobileTab] = useState<'station' | 'products' | 'actions' | 'sensory'>('station');
 
   // Safe inventory array filtering out empty/null slots
   const safeInventory: InventoryItem[] = (player.inventory || []).filter((i): i is InventoryItem => Boolean(i && i.itemId));
@@ -90,10 +95,12 @@ export const KitchenStationModal: React.FC<KitchenStationModalProps> = ({
   const [selectedIngredientIdx, setSelectedIngredientIdx] = useState<number | null>(null);
   const [lastSensoryLog, setLastSensoryLog] = useState<string>(
     isStove 
-      ? 'Конфорка плиты готова к работе. Поставьте сковороду или кастрюлю.' 
-      : 'Разделочная столешница готова. Выложите продукты для нарезки и смешивания.'
+      ? 'Конфорка плиты готова к работе. Установите сковороду или кастрюлю.' 
+      : 'Разделочная доска на столешнице готова. Выложите продукты для нарезки и смешивания.'
   );
+  const [tickCounter, setTickCounter] = useState<number>(0);
   const lastSoundTickRef = useRef<number>(0);
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
   // Check physical tools and resources in player inventory with robust null checks
   const carriedKnife = safeInventory.find(i => isKnifeItem(i.itemId)) || 
@@ -104,7 +111,12 @@ export const KitchenStationModal: React.FC<KitchenStationModalProps> = ({
   const carriedOil = safeInventory.find(i => isOilOrFatItem(i.itemId));
   const carriedPlates = safeInventory.filter(i => isPlateOrBowlItem(i.itemId));
   const carriedCookwareList = safeInventory.filter(i => isCookwareItem(i.itemId));
-  const foodItems = safeInventory.filter(i => i.category === 'food' || i.category === 'drink');
+  const foodItems = safeInventory.filter(i => i.category === 'food' || i.category === 'drink' || i.itemId === 'prep_workpiece');
+
+  // Check available cookware categories
+  const availablePans = carriedCookwareList.filter(c => c.itemId.startsWith('kitchen_pan_'));
+  const availablePots = carriedCookwareList.filter(c => c.itemId.startsWith('kitchen_pot_') || c.itemId === 'pot_clay_medium');
+  const availableBowls = carriedPlates.filter(c => c.itemId.startsWith('kitchen_bowl_') || c.itemId === 'soup_bowl_empty');
 
   // Check if a kitchen sink is physically near the player
   let hasNearbySink = false;
@@ -142,13 +154,13 @@ export const KitchenStationModal: React.FC<KitchenStationModalProps> = ({
         // Diegetic Sound cues:
         const now = Date.now();
         if (now - lastSoundTickRef.current > 3000) {
-          const hasOil = next.liquids.some(l => l.isFatOrOil);
-          const hasWater = next.liquids.some(l => !l.isFatOrOil);
+          const hasOilLiquid = next.liquids.some(l => l.isFatOrOil);
+          const hasWaterLiquid = next.liquids.some(l => !l.isFatOrOil);
 
-          if (hasOil && next.temperature >= 140) {
+          if (hasOilLiquid && next.temperature >= 140) {
             sound.playUseItem();
             lastSoundTickRef.current = now;
-          } else if (hasWater && next.temperature >= 95) {
+          } else if (hasWaterLiquid && next.temperature >= 95) {
             sound.playDrink();
             lastSoundTickRef.current = now;
           }
@@ -164,10 +176,34 @@ export const KitchenStationModal: React.FC<KitchenStationModalProps> = ({
 
         return next;
       });
+      setTickCounter(c => c + 1);
     }, 1000);
 
     return () => clearInterval(timer);
   }, []);
+
+  // Redraw Live Culinary Viewport Canvas
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const dpr = window.devicePixelRatio || 1;
+    const rect = canvas.getBoundingClientRect();
+    const w = Math.max(200, Math.floor(rect.width));
+    const h = Math.max(160, Math.floor(rect.height));
+
+    if (canvas.width !== Math.floor(w * dpr) || canvas.height !== Math.floor(h * dpr)) {
+      canvas.width = Math.floor(w * dpr);
+      canvas.height = Math.floor(h * dpr);
+    }
+
+    ctx.save();
+    ctx.scale(dpr, dpr);
+    drawLiveCulinaryViewport(ctx, vessel, w, h, isStove, selectedIngredientIdx, tickCounter);
+    ctx.restore();
+  }, [vessel, selectedIngredientIdx, tickCounter, isStove]);
 
   // Place physical cookware on stove burner
   const handlePlaceCookwareOnBurner = (cookwareItem: InventoryItem) => {
@@ -196,18 +232,18 @@ export const KitchenStationModal: React.FC<KitchenStationModalProps> = ({
     if (!vessel.sourceItem) return;
 
     if (vessel.ingredients.length > 0 || vessel.liquids.length > 0) {
-      addPlayerNotification(player, 'В посуде есть продукты. Сначала переложите их в тарелку или завершите блюдо.', 'warning');
+      addPlayerNotification(player, 'В посуде есть продукты. Сначала переложите их в тарелку или соберите заготовку.', 'warning');
       return;
     }
 
     addItemToPlayer(player, vessel.sourceItem);
     sound.playPickup();
-    setLastSensoryLog(`«${vessel.sourceItem.nameRu}» снята с плиты и убрана в инвентарь.`);
+    setLastSensoryLog(`«${vessel.sourceItem.nameRu}» снята с плиты и убрана в карман.`);
     setVessel(createStoveCookwareVessel(undefined));
     onInventoryUpdated?.();
   };
 
-  // Add food item from inventory into cookware/counter
+  // Add food item or unpack prep workpiece from inventory into cookware/counter
   const handlePlaceFoodItem = (invItem: InventoryItem) => {
     if (isStove && vessel.vesselType === 'surface') {
       addPlayerNotification(player, 'Нельзя класть продукты на открытую конфорку! Сначала поставьте сковороду или кастрюлю.', 'warning');
@@ -215,24 +251,34 @@ export const KitchenStationModal: React.FC<KitchenStationModalProps> = ({
       return;
     }
 
-    if (invItem.category !== 'food' && invItem.category !== 'drink') {
-      addPlayerNotification(player, 'На рабочую поверхность можно выкладывать только продукты питания и ингредиенты.', 'warning');
+    if (invItem.category !== 'food' && invItem.category !== 'drink' && invItem.itemId !== 'prep_workpiece') {
+      addPlayerNotification(player, 'На рабочую поверхность можно выкладывать только продукты питания и заготовки.', 'warning');
       return;
     }
 
     const invIdx = player.inventory.findIndex(i => Boolean(i && i.id === invItem.id));
     if (invIdx < 0) return;
 
+    // Check if this is a composite workpiece (полуфабрикат/заготовка)
+    if (invItem.itemId === 'prep_workpiece' || invItem.culinaryData?.isWorkpiece) {
+      const res = unpackWorkpieceIntoVessel(vessel, invItem);
+      removeItemFromPlayer(player, invIdx, 1);
+      sound.playUseItem();
+      setLastSensoryLog(res.message);
+      setVessel({ ...vessel });
+      onInventoryUpdated?.();
+      setMobileTab('station');
+      return;
+    }
+
     const ing = itemToCulinaryIngredient(invItem);
     vessel.ingredients.push(ing);
     sound.playUseItem();
-    setLastSensoryLog(`На поверхность выложен(а) «${ing.nameRu}».`);
+    setLastSensoryLog(`На рабочую поверхность выложен(а) «${ing.nameRu}».`);
     removeItemFromPlayer(player, invIdx, 1);
 
     setVessel({ ...vessel });
     onInventoryUpdated?.();
-
-    // On mobile, automatically return to active surface tab to see what was placed
     setMobileTab('station');
   };
 
@@ -251,6 +297,32 @@ export const KitchenStationModal: React.FC<KitchenStationModalProps> = ({
     sound.playUseItem();
     setLastSensoryLog(res.message);
     setVessel({ ...vessel });
+  };
+
+  // Cut All Ingredients on Board Action
+  const handleCutAllOnBoard = () => {
+    if (vessel.ingredients.length === 0) return;
+    if (!carriedKnife) {
+      addPlayerNotification(player, 'У вас нет кухонного или складного ножа для нарезки!', 'warning');
+      sound.playUseItem();
+      return;
+    }
+
+    let modified = 0;
+    for (const ing of vessel.ingredients) {
+      if (ing.bioState.cutLevel < 2) {
+        cutIngredientAction(ing, true);
+        modified++;
+      }
+    }
+
+    if (modified > 0) {
+      sound.playUseItem();
+      setLastSensoryLog('Ножом аккуратно нарезаны и измельчены все ингредиенты на рабочей доске.');
+      setVessel({ ...vessel });
+    } else {
+      setLastSensoryLog('Все ингредиенты на доске уже мелко порублены.');
+    }
   };
 
   // Tactile Stirring Action (Flips bottom layer, redistributes heat)
@@ -371,6 +443,144 @@ export const KitchenStationModal: React.FC<KitchenStationModalProps> = ({
     onInventoryUpdated?.();
   };
 
+  // PACK WORKPIECE ACTION (Собрать заготовку / полуфабрикат в инвентарь)
+  const handleCollectWorkpiece = () => {
+    if (vessel.ingredients.length === 0 && vessel.liquids.length === 0) {
+      addPlayerNotification(player, 'Рабочая поверхность пуста — нечего собирать.', 'warning');
+      return;
+    }
+
+    const wp = createWorkpieceFromVessel(vessel, !isStove ? 'board' : 'paper');
+    if (!wp) return;
+
+    const ok = addItemToPlayer(player, wp);
+    if (ok) {
+      sound.playPickup();
+      addPlayerNotification(player, `Собрана заготовка: «${wp.nameRu}».`, 'heal');
+      vessel.ingredients = [];
+      vessel.liquids = [];
+      vessel.saltGrams = 0;
+      vessel.seasoningNotes = [];
+      setSelectedIngredientIdx(null);
+      setLastSensoryLog(`Заготовка «${wp.nameRu}» собрана в руки/карман. Её можно переложить в сковороду или кастрюлю.`);
+      setVessel({ ...vessel });
+      onInventoryUpdated?.();
+    } else {
+      addPlayerNotification(player, 'В инвентаре нет места для заготовки!', 'warning');
+    }
+  };
+
+  // TRANSFER INTO FRYING PAN (В сковороду)
+  const handleTransferToPan = () => {
+    if (vessel.ingredients.length === 0 && vessel.liquids.length === 0) {
+      addPlayerNotification(player, 'На столе пусто — нечего перекладывать в сковороду.', 'warning');
+      return;
+    }
+
+    if (vessel.vesselType === 'pan') {
+      addPlayerNotification(player, 'Ингредиенты уже находятся в сковороде.', 'info');
+      return;
+    }
+
+    const targetPan = availablePans[0];
+    if (!targetPan) {
+      addPlayerNotification(player, 'У вас в карманах нет сковороды (чугунной или тефлоновой)!', 'warning');
+      sound.playUseItem();
+      return;
+    }
+
+    const panInvIdx = player.inventory.findIndex(i => Boolean(i && i.id === targetPan.id));
+    if (panInvIdx >= 0) {
+      removeItemFromPlayer(player, panInvIdx, 1);
+    }
+
+    if (vessel.sourceItem) {
+      addItemToPlayer(player, vessel.sourceItem);
+    }
+
+    vessel.vesselType = 'pan';
+    vessel.nameRu = targetPan.nameRu;
+    vessel.sourceItem = targetPan;
+    sound.playPickup();
+    setLastSensoryLog(`Все ингредиенты переложены со стола в «${targetPan.nameRu}».`);
+    setVessel({ ...vessel });
+    onInventoryUpdated?.();
+  };
+
+  // TRANSFER INTO POT (В кастрюлю)
+  const handleTransferToPot = () => {
+    if (vessel.ingredients.length === 0 && vessel.liquids.length === 0) {
+      addPlayerNotification(player, 'На столе пусто — нечего перекладывать в кастрюлю.', 'warning');
+      return;
+    }
+
+    if (vessel.vesselType === 'pot') {
+      addPlayerNotification(player, 'Ингредиенты уже находятся в кастрюле.', 'info');
+      return;
+    }
+
+    const targetPot = availablePots[0];
+    if (!targetPot) {
+      addPlayerNotification(player, 'У вас в карманах нет кастрюли или горшочка!', 'warning');
+      sound.playUseItem();
+      return;
+    }
+
+    const potInvIdx = player.inventory.findIndex(i => Boolean(i && i.id === targetPot.id));
+    if (potInvIdx >= 0) {
+      removeItemFromPlayer(player, potInvIdx, 1);
+    }
+
+    if (vessel.sourceItem) {
+      addItemToPlayer(player, vessel.sourceItem);
+    }
+
+    vessel.vesselType = 'pot';
+    vessel.nameRu = targetPot.nameRu;
+    vessel.sourceItem = targetPot;
+    sound.playPickup();
+    setLastSensoryLog(`Ингредиенты переложены со стола в «${targetPot.nameRu}».`);
+    setVessel({ ...vessel });
+    onInventoryUpdated?.();
+  };
+
+  // TRANSFER INTO BOWL (В миску)
+  const handleTransferToBowl = () => {
+    if (vessel.ingredients.length === 0 && vessel.liquids.length === 0) {
+      addPlayerNotification(player, 'На столе пусто — нечего перекладывать в миску.', 'warning');
+      return;
+    }
+
+    if (vessel.vesselType === 'bowl') {
+      addPlayerNotification(player, 'Ингредиенты уже находятся в миске.', 'info');
+      return;
+    }
+
+    const targetBowl = availableBowls[0];
+    if (!targetBowl) {
+      addPlayerNotification(player, 'У вас в карманах нет глубокой миски!', 'warning');
+      sound.playUseItem();
+      return;
+    }
+
+    const bowlInvIdx = player.inventory.findIndex(i => Boolean(i && i.id === targetBowl.id));
+    if (bowlInvIdx >= 0) {
+      removeItemFromPlayer(player, bowlInvIdx, 1);
+    }
+
+    if (vessel.sourceItem) {
+      addItemToPlayer(player, vessel.sourceItem);
+    }
+
+    vessel.vesselType = 'bowl';
+    vessel.nameRu = targetBowl.nameRu;
+    vessel.sourceItem = targetBowl;
+    sound.playPickup();
+    setLastSensoryLog(`Ингредиенты переложены в «${targetBowl.nameRu}».`);
+    setVessel({ ...vessel });
+    onInventoryUpdated?.();
+  };
+
   // Finish and Plate Dish into Real Plate/Bowl or Take Away
   const handleFinishAndPlateDish = () => {
     if (vessel.ingredients.length === 0 && vessel.liquids.length === 0) {
@@ -416,8 +626,8 @@ export const KitchenStationModal: React.FC<KitchenStationModalProps> = ({
   const observations = getSensoryObservations(vessel);
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-0 sm:p-3 md:p-4 select-none animate-fadeIn">
-      <div className="w-full max-w-5xl h-full sm:h-auto sm:max-h-[94vh] flex flex-col bg-slate-950 border-0 sm:border border-slate-800 rounded-none sm:rounded-2xl shadow-2xl shadow-black/95 overflow-hidden text-slate-100 font-sans">
+    <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-0 sm:p-2 md:p-4 select-none animate-fadeIn">
+      <div className="w-full max-w-5xl h-full sm:h-auto sm:max-h-[96vh] flex flex-col bg-slate-950 border-0 sm:border border-slate-800 rounded-none sm:rounded-2xl shadow-2xl shadow-black/95 overflow-hidden text-slate-100 font-sans">
         
         {/* Header Bar */}
         <div className="flex items-center justify-between px-3 sm:px-5 py-2.5 sm:py-3 bg-slate-900 border-b border-slate-800 shrink-0">
@@ -430,14 +640,14 @@ export const KitchenStationModal: React.FC<KitchenStationModalProps> = ({
                 <h2 className="text-sm sm:text-base font-bold tracking-tight text-slate-100 truncate">
                   {isStove ? 'Кухонная плита' : 'Столешница гарнитура'}
                 </h2>
-                <span className="text-[10px] sm:text-xs px-2 py-0.5 rounded-full bg-slate-800 border border-slate-700 text-slate-300 truncate max-w-[130px] sm:max-w-none">
-                  {isStove ? (vessel.sourceItem ? vessel.nameRu : 'Нет посуды') : 'Холодный стол'}
+                <span className="text-[10px] sm:text-xs px-2 py-0.5 rounded-full bg-slate-800 border border-slate-700 text-slate-300 truncate max-w-[150px] sm:max-w-none">
+                  {vessel.nameRu}
                 </span>
               </div>
               <p className="text-[10px] sm:text-xs text-slate-400 truncate hidden xs:block">
                 {isStove 
-                  ? 'Конфорка плиты • Установите сковороду или кастрюлю'
-                  : 'Холодная зона • Нарезка ножом, миска, специи'}
+                  ? 'Конфорка плиты • Поставьте сковороду или кастрюлю'
+                  : 'Холодная зона • Разделочная доска, нарезка ножом, миска'}
               </p>
             </div>
           </div>
@@ -468,14 +678,14 @@ export const KitchenStationModal: React.FC<KitchenStationModalProps> = ({
         <div className="flex lg:hidden items-center bg-slate-900 border-b border-slate-800 text-xs shrink-0 select-none">
           <button
             onClick={() => setMobileTab('station')}
-            className={`flex-1 py-2.5 px-2 flex items-center justify-center gap-1.5 font-bold transition-colors border-b-2 min-h-[44px] ${
+            className={`flex-1 py-2.5 px-1 flex items-center justify-center gap-1 font-bold transition-colors border-b-2 min-h-[44px] ${
               mobileTab === 'station'
                 ? 'border-amber-500 text-amber-300 bg-amber-500/10'
                 : 'border-transparent text-slate-400 hover:text-slate-200'
             }`}
           >
             {isStove ? <Flame className="w-4 h-4 text-amber-400 shrink-0" /> : <Utensils className="w-4 h-4 text-amber-400 shrink-0" />}
-            <span>{isStove ? 'Плита / Посуда' : 'Стол'}</span>
+            <span className="truncate">{isStove ? 'Плита' : 'Стол'}</span>
             {vessel.ingredients.length > 0 && (
               <span className="ml-0.5 px-1.5 py-0.2 rounded-full bg-amber-500 text-[10px] text-slate-950 font-black">
                 {vessel.ingredients.length}
@@ -485,29 +695,38 @@ export const KitchenStationModal: React.FC<KitchenStationModalProps> = ({
 
           <button
             onClick={() => setMobileTab('products')}
-            className={`flex-1 py-2.5 px-2 flex items-center justify-center gap-1.5 font-bold transition-colors border-b-2 min-h-[44px] ${
+            className={`flex-1 py-2.5 px-1 flex items-center justify-center gap-1 font-bold transition-colors border-b-2 min-h-[44px] ${
               mobileTab === 'products'
                 ? 'border-amber-500 text-amber-300 bg-amber-500/10'
                 : 'border-transparent text-slate-400 hover:text-slate-200'
             }`}
           >
             <Package className="w-4 h-4 text-amber-400 shrink-0" />
-            <span>Продукты ({foodItems.length})</span>
+            <span className="truncate">Продукты ({foodItems.length})</span>
+          </button>
+
+          <button
+            onClick={() => setMobileTab('actions')}
+            className={`flex-1 py-2.5 px-1 flex items-center justify-center gap-1 font-bold transition-colors border-b-2 min-h-[44px] ${
+              mobileTab === 'actions'
+                ? 'border-amber-500 text-amber-300 bg-amber-500/10'
+                : 'border-transparent text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            <ArrowRight className="w-4 h-4 text-amber-400 shrink-0" />
+            <span className="truncate">Посуда</span>
           </button>
 
           <button
             onClick={() => setMobileTab('sensory')}
-            className={`flex-1 py-2.5 px-2 flex items-center justify-center gap-1.5 font-bold transition-colors border-b-2 min-h-[44px] ${
+            className={`flex-1 py-2.5 px-1 flex items-center justify-center gap-1 font-bold transition-colors border-b-2 min-h-[44px] ${
               mobileTab === 'sensory'
                 ? 'border-amber-500 text-amber-300 bg-amber-500/10'
                 : 'border-transparent text-slate-400 hover:text-slate-200'
             }`}
           >
             <Activity className="w-4 h-4 text-amber-400 shrink-0" />
-            <span>Чувства</span>
-            {vessel.smokeIntensity > 0.3 && (
-              <span className="w-2 h-2 rounded-full bg-rose-500 animate-ping ml-0.5 shrink-0" />
-            )}
+            <span className="truncate">Чувства</span>
           </button>
         </div>
 
@@ -515,9 +734,9 @@ export const KitchenStationModal: React.FC<KitchenStationModalProps> = ({
         {isStove && (
           <div className="px-3 sm:px-5 py-2 sm:py-2.5 bg-slate-900/60 border-b border-slate-800 flex flex-wrap items-center justify-between text-xs gap-2 shrink-0">
             <div className="flex items-center gap-2">
-              <span className="text-slate-400 font-medium">Посуда:</span>
+              <span className="text-slate-400 font-medium">Посуда на конфорке:</span>
               <span className="font-semibold text-amber-300">
-                {vessel.sourceItem ? vessel.sourceItem.nameRu : 'Конфорка свободна'}
+                {vessel.sourceItem ? vessel.sourceItem.nameRu : 'Конфорка свободна (спираль)'}
               </span>
             </div>
 
@@ -528,14 +747,14 @@ export const KitchenStationModal: React.FC<KitchenStationModalProps> = ({
                   className="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 font-medium transition-colors flex items-center gap-1 min-h-[34px]"
                 >
                   <Trash2 className="w-3.5 h-3.5 text-slate-400" />
-                  <span>Снять посуду</span>
+                  <span>Снять посуду в карман</span>
                 </button>
               ) : (
                 <div className="flex items-center gap-1.5 flex-wrap">
                   <span className="text-slate-500 text-[11px]">Поставить:</span>
                   {carriedCookwareList.length === 0 ? (
                     <span className="text-amber-500/90 text-[11px] italic">
-                      Нет сковороды в карманах
+                      Нет сковороды/кастрюли в карманах
                     </span>
                   ) : (
                     carriedCookwareList.map((cw, cwIdx) => (
@@ -562,7 +781,7 @@ export const KitchenStationModal: React.FC<KitchenStationModalProps> = ({
           <div className={`${mobileTab === 'products' ? 'flex' : 'hidden'} lg:flex lg:col-span-4 border-r border-slate-800 flex-col min-h-0 bg-slate-950/50`}>
             <div className="px-3 sm:px-4 py-2 sm:py-2.5 bg-slate-900/40 border-b border-slate-800 flex items-center justify-between shrink-0">
               <span className="text-xs font-semibold uppercase tracking-wider text-slate-300">
-                Ваши продукты в карманах
+                Ваши продукты и заготовки
               </span>
               <span className="text-[11px] text-slate-500">
                 {foodItems.length} предм.
@@ -572,14 +791,19 @@ export const KitchenStationModal: React.FC<KitchenStationModalProps> = ({
             <div className="flex-1 p-2.5 sm:p-3 overflow-y-auto space-y-2">
               {foodItems.length === 0 ? (
                 <div className="p-8 text-center text-xs text-slate-500">
-                  В карманах нет еды и кулинарных ингредиентов.
+                  В карманах нет еды, заготовок и кулинарных ингредиентов.
                 </div>
               ) : (
                 foodItems.map((item, idx) => {
+                  const isWp = item.itemId === 'prep_workpiece';
                   return (
                     <div
                       key={item.id || idx}
-                      className="p-2.5 rounded-xl border border-slate-800 bg-slate-900/70 hover:border-amber-500/50 hover:bg-slate-800/80 cursor-pointer flex items-center justify-between gap-2.5 transition-all active:scale-[0.99]"
+                      className={`p-2.5 rounded-xl border flex items-center justify-between gap-2.5 transition-all active:scale-[0.99] cursor-pointer ${
+                        isWp 
+                          ? 'border-amber-500/60 bg-amber-500/10 hover:bg-amber-500/20'
+                          : 'border-slate-800 bg-slate-900/70 hover:border-amber-500/50 hover:bg-slate-800/80'
+                      }`}
                       onClick={() => handlePlaceFoodItem(item)}
                     >
                       <div className="flex items-center gap-2.5 min-w-0">
@@ -587,8 +811,13 @@ export const KitchenStationModal: React.FC<KitchenStationModalProps> = ({
                           <ItemIconCanvas itemId={item.itemId} item={item} size={32} />
                         </div>
                         <div className="min-w-0">
-                          <div className="text-xs font-semibold text-slate-200 truncate">
-                            {item.nameRu || item.name}
+                          <div className="text-xs font-semibold text-slate-200 truncate flex items-center gap-1.5">
+                            <span className="truncate">{item.nameRu || item.name}</span>
+                            {isWp && (
+                              <span className="text-[9px] px-1.5 py-0.2 rounded bg-amber-500/30 text-amber-300 font-bold uppercase shrink-0">
+                                Полуфабрикат
+                              </span>
+                            )}
                           </div>
                           <div className="text-[11px] text-slate-400 truncate">
                             {item.descriptionRu?.split('.')[0] || 'Ингредиент'}
@@ -604,7 +833,7 @@ export const KitchenStationModal: React.FC<KitchenStationModalProps> = ({
                         }}
                       >
                         <Plus className="w-3.5 h-3.5" />
-                        <span>Выложить</span>
+                        <span>{isWp ? 'Выложить' : 'Нарезать/положить'}</span>
                       </button>
                     </div>
                   );
@@ -613,7 +842,7 @@ export const KitchenStationModal: React.FC<KitchenStationModalProps> = ({
             </div>
           </div>
 
-          {/* Center Column: The Cooking Surface / Pan (5 cols desktop; shown on mobile if mobileTab === 'station') */}
+          {/* Center Column: The Cooking Surface / Pan / Board (5 cols desktop; shown on mobile if mobileTab === 'station') */}
           <div className={`${mobileTab === 'station' ? 'flex' : 'hidden'} lg:flex lg:col-span-5 flex-col min-h-0 bg-slate-900/20 border-r border-slate-800`}>
             
             {/* Surface Header */}
@@ -626,15 +855,13 @@ export const KitchenStationModal: React.FC<KitchenStationModalProps> = ({
                     <Utensils className="w-3.5 h-3.5 text-slate-400 shrink-0" />
                   )}
                   <span className="truncate">
-                    {isStove 
-                      ? (vessel.sourceItem ? vessel.nameRu : 'Открытая конфорка плиты') 
-                      : 'Разделочная доска на столешнице'}
+                    {vessel.nameRu}
                   </span>
                 </div>
                 <div className="text-[11px] text-slate-400 truncate">
                   {isStove 
-                    ? (vessel.heatSourcePower > 0 ? `Нагрев от конфорки: положение ${vessel.heatSourcePower}` : 'Конфорка выключена (0)')
-                    : 'Холодная поверхность без нагрева'}
+                    ? (vessel.heatSourcePower > 0 ? `Нагрев: положение ${vessel.heatSourcePower}` : 'Конфорка выключена (0)')
+                    : 'Холодная столешница • Разделочная доска'}
                 </div>
               </div>
 
@@ -664,23 +891,59 @@ export const KitchenStationModal: React.FC<KitchenStationModalProps> = ({
               </button>
             </div>
 
+            {/* HIGH-FIDELITY LIVE PROCEDURAL CULINARY VIEWPORT (Interactive Visual Texture) */}
+            <div className="px-2.5 sm:px-3 pt-2 shrink-0">
+              <div className="relative w-full aspect-[16/10] max-h-[220px] sm:max-h-[250px] bg-slate-950 rounded-xl border border-slate-800 flex items-center justify-center overflow-hidden shadow-inner shadow-black/80">
+                <canvas
+                  ref={canvasRef}
+                  className="w-full h-full object-contain"
+                />
+                
+                {/* Visual Status Badges */}
+                <div className="absolute top-2 left-2 flex items-center gap-1.5 pointer-events-none">
+                  <span className="px-2 py-0.5 rounded-md bg-black/70 backdrop-blur-sm border border-white/10 text-[10px] font-medium text-slate-300">
+                    {vessel.vesselType === 'pan' ? 'Сковорода' : vessel.vesselType === 'pot' ? 'Кастрюля' : vessel.vesselType === 'bowl' ? 'Миска' : isStove ? 'Спираль' : 'Доска'}
+                  </span>
+                  {vessel.temperature > 40 && (
+                    <span className="px-2 py-0.5 rounded-md bg-rose-950/80 backdrop-blur-sm border border-rose-800/40 text-[10px] font-bold text-rose-300 flex items-center gap-1">
+                      <Flame className="w-3 h-3 text-rose-400" />
+                      <span>{Math.round(vessel.temperature)}°C</span>
+                    </span>
+                  )}
+                </div>
+
+                {vessel.ingredients.length > 0 && !isStove && carriedKnife && (
+                  <div className="absolute bottom-2 right-2">
+                    <button
+                      onClick={handleCutAllOnBoard}
+                      className="px-2.5 py-1 rounded-lg bg-slate-900/85 hover:bg-slate-850 border border-amber-500/40 text-amber-300 text-[11px] font-semibold shadow-md flex items-center gap-1 min-h-[30px]"
+                      title="Нарезать все ингредиенты на доске ножом"
+                    >
+                      <Utensils className="w-3 h-3" />
+                      <span>Нарезать всё</span>
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+
             {/* In-Vessel Contents View */}
-            <div className="flex-1 p-2.5 sm:p-3.5 overflow-y-auto space-y-2.5 min-h-[120px]">
+            <div className="flex-1 p-2.5 sm:p-3 overflow-y-auto space-y-2 min-h-[100px]">
               
               {/* Bare Stove Warning */}
               {isStove && !vessel.sourceItem && (
-                <div className="h-40 sm:h-48 flex flex-col items-center justify-center border-2 border-dashed border-slate-800 rounded-2xl text-center p-4 sm:p-6 text-slate-500">
-                  <Disc className="w-8 h-8 sm:w-9 sm:h-9 text-slate-600 mb-2" />
-                  <p className="text-xs font-medium text-slate-400">Конфорка пуста</p>
-                  <p className="text-[11px] text-slate-500 mt-1 max-w-xs">
-                    На открытые спирали конфорки нельзя сыпать продукты. Поставьте сковороду или кастрюлю сверху.
+                <div className="py-4 flex flex-col items-center justify-center border-2 border-dashed border-slate-800 rounded-xl text-center px-4 text-slate-500">
+                  <Disc className="w-7 h-7 text-slate-600 mb-1" />
+                  <p className="text-xs font-medium text-slate-400">Спираль конфорки пуста</p>
+                  <p className="text-[11px] text-slate-500 mt-0.5 max-w-xs">
+                    На открытую спираль нельзя класть продукты. Установите сковороду или кастрюлю.
                   </p>
                 </div>
               )}
 
               {/* Liquids Layer */}
               {vessel.liquids.length > 0 && (
-                <div className="p-2 sm:p-2.5 rounded-xl bg-slate-900 border border-slate-800 text-xs">
+                <div className="p-2 rounded-xl bg-slate-900 border border-slate-800 text-xs">
                   <div className="text-[11px] font-semibold text-slate-400 mb-1 flex items-center gap-1">
                     <Droplets className="w-3.5 h-3.5 text-cyan-400" />
                     <span>Среда на дне:</span>
@@ -695,17 +958,18 @@ export const KitchenStationModal: React.FC<KitchenStationModalProps> = ({
                 </div>
               )}
 
-              {/* Ingredients List */}
+              {/* Empty Surface Helper */}
               {(!isStove || vessel.sourceItem) && vessel.ingredients.length === 0 && (
-                <div className="h-36 sm:h-44 flex flex-col items-center justify-center border-2 border-dashed border-slate-800 rounded-2xl text-center p-4 sm:p-6 text-slate-500">
-                  <Utensils className="w-8 h-8 text-slate-600 mb-2" />
+                <div className="py-4 flex flex-col items-center justify-center border-2 border-dashed border-slate-800 rounded-xl text-center px-4 text-slate-500">
+                  <Utensils className="w-7 h-7 text-slate-600 mb-1" />
                   <p className="text-xs font-medium text-slate-400">Поверхность пуста</p>
-                  <p className="text-[11px] text-slate-500 mt-1">
-                    Выберите продукты и нажмите «Выложить».
+                  <p className="text-[11px] text-slate-500 mt-0.5">
+                    Выберите продукты слева и нажмите «Выложить».
                   </p>
                 </div>
               )}
 
+              {/* Ingredients List */}
               {vessel.ingredients.map((ing, idx) => {
                 const isSelected = selectedIngredientIdx === idx;
                 const appearance = getVisualAppearanceDescription(ing);
@@ -714,7 +978,7 @@ export const KitchenStationModal: React.FC<KitchenStationModalProps> = ({
                   <div
                     key={ing.id}
                     onClick={() => setSelectedIngredientIdx(idx)}
-                    className={`p-2.5 sm:p-3 rounded-xl border transition-all cursor-pointer ${
+                    className={`p-2 sm:p-2.5 rounded-xl border transition-all cursor-pointer ${
                       isSelected
                         ? 'bg-slate-900 border-amber-500/70 shadow-lg'
                         : 'bg-slate-900/60 border-slate-800 hover:border-slate-700'
@@ -722,7 +986,6 @@ export const KitchenStationModal: React.FC<KitchenStationModalProps> = ({
                   >
                     <div className="flex items-center justify-between gap-2 mb-1">
                       <div className="flex items-center gap-2 min-w-0">
-                        {/* Visual Color Dot */}
                         <div 
                           className="w-3.5 h-3.5 rounded-full shrink-0 border border-black/40"
                           style={{
@@ -747,7 +1010,7 @@ export const KitchenStationModal: React.FC<KitchenStationModalProps> = ({
                             e.stopPropagation();
                             handleCutIngredient(idx);
                           }}
-                          className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors min-h-[36px] min-w-[75px] active:scale-95 flex items-center justify-center ${
+                          className={`px-2.5 py-1 rounded-lg text-xs font-medium border transition-colors min-h-[34px] min-w-[70px] active:scale-95 flex items-center justify-center ${
                             carriedKnife
                               ? 'bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700'
                               : 'bg-slate-900 text-slate-600 border-slate-800 cursor-not-allowed'
@@ -764,7 +1027,7 @@ export const KitchenStationModal: React.FC<KitchenStationModalProps> = ({
                               e.stopPropagation();
                               handleTakeBackIngredient(idx);
                             }}
-                            className="p-2 rounded-lg bg-slate-800 hover:bg-rose-950 text-slate-400 hover:text-rose-300 transition-colors min-h-[36px] min-w-[36px] flex items-center justify-center active:scale-95"
+                            className="p-1.5 rounded-lg bg-slate-800 hover:bg-rose-950 text-slate-400 hover:text-rose-300 transition-colors min-h-[34px] min-w-[34px] flex items-center justify-center active:scale-95"
                             title="Убрать обратно в инвентарь"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
@@ -773,7 +1036,6 @@ export const KitchenStationModal: React.FC<KitchenStationModalProps> = ({
                       </div>
                     </div>
 
-                    {/* Diegetic Visual Observation */}
                     <div className="text-[11px] text-slate-300 italic">
                       {appearance}
                     </div>
@@ -782,7 +1044,7 @@ export const KitchenStationModal: React.FC<KitchenStationModalProps> = ({
               })}
             </div>
 
-            {/* Direct Physical Actions Bar */}
+            {/* Direct Physical Actions & Transfer Bar */}
             <div className="p-2.5 sm:p-3 bg-slate-950/80 border-t border-slate-800 space-y-2 shrink-0">
               
               {/* Burner Dial (ONLY on Stove with Cookware!) */}
@@ -793,7 +1055,6 @@ export const KitchenStationModal: React.FC<KitchenStationModalProps> = ({
                     <span>Ручка конфорки:</span>
                   </span>
                   
-                  {/* Big touch-friendly rotary selector */}
                   <div className="flex items-center gap-1 sm:gap-1.5 w-full sm:w-auto">
                     {[0, 1, 2, 3, 4, 5, 6].map(p => (
                       <button
@@ -822,7 +1083,7 @@ export const KitchenStationModal: React.FC<KitchenStationModalProps> = ({
                 {/* Stir / Flip */}
                 <button
                   onClick={handleStirVessel}
-                  className="px-2.5 py-2.5 sm:py-1.5 min-h-[44px] rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 font-medium transition-colors flex items-center justify-center gap-1.5 active:scale-95"
+                  className="px-2 py-2 min-h-[42px] rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 font-medium transition-colors flex items-center justify-center gap-1.5 active:scale-95"
                   title="Перевернуть куски лопаткой"
                 >
                   <RotateCw className="w-4 h-4 text-amber-400 shrink-0" />
@@ -832,7 +1093,7 @@ export const KitchenStationModal: React.FC<KitchenStationModalProps> = ({
                 {/* Salt (Requires real salt shaker) */}
                 <button
                   onClick={handleAddSaltFromShaker}
-                  className={`px-2.5 py-2.5 sm:py-1.5 min-h-[44px] rounded-lg border font-medium transition-colors flex items-center justify-center gap-1.5 active:scale-95 ${
+                  className={`px-2 py-2 min-h-[42px] rounded-lg border font-medium transition-colors flex items-center justify-center gap-1.5 active:scale-95 ${
                     carriedSalt
                       ? 'bg-slate-800 hover:bg-slate-700 border-slate-700 text-slate-200'
                       : 'bg-slate-900/60 border-slate-800 text-slate-600 cursor-not-allowed'
@@ -846,12 +1107,12 @@ export const KitchenStationModal: React.FC<KitchenStationModalProps> = ({
                 {/* Oil (Requires real oil) */}
                 <button
                   onClick={handlePourRealOil}
-                  className={`px-2.5 py-2.5 sm:py-1.5 min-h-[44px] rounded-lg border font-medium transition-colors flex items-center justify-center gap-1.5 active:scale-95 ${
+                  className={`px-2 py-2 min-h-[42px] rounded-lg border font-medium transition-colors flex items-center justify-center gap-1.5 active:scale-95 ${
                     carriedOil
                       ? 'bg-slate-800 hover:bg-slate-700 border-slate-700 text-slate-200'
                       : 'bg-slate-900/60 border-slate-800 text-slate-600 cursor-not-allowed'
                   }`}
-                  title={carriedOil ? 'Добавить масло из бутылки' : 'Нужно растительное масло в инвентаре'}
+                  title={carriedOil ? 'Добавить масло из бутылки' : 'Нужно растительное масло в кармане'}
                 >
                   <Droplets className="w-4 h-4 text-amber-400 shrink-0" />
                   <span>Масло</span>
@@ -860,7 +1121,7 @@ export const KitchenStationModal: React.FC<KitchenStationModalProps> = ({
                 {/* Water (Requires sink or water container) */}
                 <button
                   onClick={handlePourWater}
-                  className={`px-2.5 py-2.5 sm:py-1.5 min-h-[44px] rounded-lg border font-medium transition-colors flex items-center justify-center gap-1.5 active:scale-95 ${
+                  className={`px-2 py-2 min-h-[42px] rounded-lg border font-medium transition-colors flex items-center justify-center gap-1.5 active:scale-95 ${
                     hasNearbySink || safeInventory.some(i => i.itemId && i.itemId.includes('water'))
                       ? 'bg-slate-800 hover:bg-slate-700 border-slate-700 text-slate-200'
                       : 'bg-slate-900/60 border-slate-800 text-slate-600 cursor-not-allowed'
@@ -872,26 +1133,89 @@ export const KitchenStationModal: React.FC<KitchenStationModalProps> = ({
                 </button>
               </div>
 
+              {/* Cookware Transfer & Workpiece Packaging Buttons (How to put into pan, pot, plate, bowl) */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 text-[11px] pt-1">
+                {/* Into Pan */}
+                <button
+                  onClick={handleTransferToPan}
+                  disabled={vessel.vesselType === 'pan' || availablePans.length === 0}
+                  className={`py-2 px-1.5 rounded-lg border flex items-center justify-center gap-1 min-h-[38px] transition-colors ${
+                    vessel.vesselType !== 'pan' && availablePans.length > 0
+                      ? 'bg-slate-800 hover:bg-slate-700 border-amber-500/40 text-amber-300 font-semibold'
+                      : 'bg-slate-900/50 border-slate-800 text-slate-600 cursor-not-allowed'
+                  }`}
+                  title={availablePans.length > 0 ? 'Переложить ингредиенты со стола в сковороду' : 'Нет сковороды в карманах'}
+                >
+                  <Utensils className="w-3.5 h-3.5 shrink-0" />
+                  <span className="truncate">В сковороду</span>
+                </button>
+
+                {/* Into Pot */}
+                <button
+                  onClick={handleTransferToPot}
+                  disabled={vessel.vesselType === 'pot' || availablePots.length === 0}
+                  className={`py-2 px-1.5 rounded-lg border flex items-center justify-center gap-1 min-h-[38px] transition-colors ${
+                    vessel.vesselType !== 'pot' && availablePots.length > 0
+                      ? 'bg-slate-800 hover:bg-slate-700 border-amber-500/40 text-amber-300 font-semibold'
+                      : 'bg-slate-900/50 border-slate-800 text-slate-600 cursor-not-allowed'
+                  }`}
+                  title={availablePots.length > 0 ? 'Переложить ингредиенты в кастрюлю' : 'Нет кастрюли в карманах'}
+                >
+                  <Utensils className="w-3.5 h-3.5 shrink-0" />
+                  <span className="truncate">В кастрюлю</span>
+                </button>
+
+                {/* Into Bowl */}
+                <button
+                  onClick={handleTransferToBowl}
+                  disabled={vessel.vesselType === 'bowl' || availableBowls.length === 0}
+                  className={`py-2 px-1.5 rounded-lg border flex items-center justify-center gap-1 min-h-[38px] transition-colors ${
+                    vessel.vesselType !== 'bowl' && availableBowls.length > 0
+                      ? 'bg-slate-800 hover:bg-slate-700 border-amber-500/40 text-amber-300 font-semibold'
+                      : 'bg-slate-900/50 border-slate-800 text-slate-600 cursor-not-allowed'
+                  }`}
+                  title={availableBowls.length > 0 ? 'Переложить ингредиенты в глубокую миску' : 'Нет миски в карманах'}
+                >
+                  <Disc className="w-3.5 h-3.5 shrink-0" />
+                  <span className="truncate">В миску</span>
+                </button>
+
+                {/* Collect Workpiece (Заготовка) */}
+                <button
+                  onClick={handleCollectWorkpiece}
+                  disabled={vessel.ingredients.length === 0 && vessel.liquids.length === 0}
+                  className={`py-2 px-1.5 rounded-lg border flex items-center justify-center gap-1 min-h-[38px] transition-colors ${
+                    vessel.ingredients.length > 0 || vessel.liquids.length > 0
+                      ? 'bg-amber-500/20 hover:bg-amber-500/30 border-amber-500/50 text-amber-200 font-bold'
+                      : 'bg-slate-900/50 border-slate-800 text-slate-600 cursor-not-allowed'
+                  }`}
+                  title="Собрать нарезанный полуфабрикат в карман как предмет-заготовку"
+                >
+                  <Package className="w-3.5 h-3.5 shrink-0" />
+                  <span className="truncate">Собрать заготовку</span>
+                </button>
+              </div>
+
               {/* Service & Plate Food */}
               <button
                 onClick={handleFinishAndPlateDish}
-                className="w-full py-3 sm:py-2.5 min-h-[46px] rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs sm:text-sm uppercase tracking-wider shadow-md shadow-amber-500/20 flex items-center justify-center gap-2 transition-all active:scale-[0.98]"
+                className="w-full py-2.5 min-h-[44px] rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs sm:text-sm uppercase tracking-wider shadow-md shadow-amber-500/20 flex items-center justify-center gap-2 transition-all active:scale-[0.98]"
               >
                 <Check className="w-4 h-4 stroke-[3] shrink-0" />
                 <span className="truncate">
                   {carriedPlates.length > 0 
-                    ? `Сервировать на ${carriedPlates[0].nameRu.toLowerCase()}` 
-                    : 'Снять готовое блюдо в инвентарь'}
+                    ? `Выложить на ${carriedPlates[0].nameRu.toLowerCase()}` 
+                    : 'Снять готовое блюдо в карман'}
                 </span>
               </button>
             </div>
           </div>
 
-          {/* Right Column: Sensory Feedback (3 cols desktop; shown on mobile if mobileTab === 'sensory') */}
-          <div className={`${mobileTab === 'sensory' ? 'flex' : 'hidden'} lg:flex lg:col-span-3 flex-col min-h-0 bg-slate-950/70 p-3 sm:p-4 space-y-3 sm:space-y-4 overflow-y-auto`}>
+          {/* Right Column: Sensory & Tool Inspection (3 cols desktop; shown on mobile if mobileTab === 'sensory' or 'actions') */}
+          <div className={`${mobileTab === 'sensory' || mobileTab === 'actions' ? 'flex' : 'hidden'} lg:flex lg:col-span-3 flex-col min-h-0 bg-slate-950/70 p-3 sm:p-4 space-y-3 overflow-y-auto`}>
             
             {/* Real-time Diegetic Sensory Observation */}
-            <div className="p-3 sm:p-3.5 rounded-xl bg-slate-900/80 border border-slate-800 text-xs shrink-0">
+            <div className="p-3 rounded-xl bg-slate-900/80 border border-slate-800 text-xs shrink-0">
               <div className="flex items-center gap-1.5 text-amber-400 font-semibold mb-1.5 uppercase tracking-wider text-[11px]">
                 <Activity className="w-3.5 h-3.5" />
                 <span>Органолептика и чувства</span>
@@ -902,7 +1226,7 @@ export const KitchenStationModal: React.FC<KitchenStationModalProps> = ({
             </div>
 
             {/* Diegetic Sound & Vapor Inspection */}
-            <div className="p-3 sm:p-3.5 rounded-xl bg-slate-900/60 border border-slate-800 text-xs space-y-2.5 shrink-0">
+            <div className="p-3 rounded-xl bg-slate-900/60 border border-slate-800 text-xs space-y-2 shrink-0">
               <div className="text-[11px] font-bold text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
                 <Volume2 className="w-3.5 h-3.5 text-amber-400" />
                 <span>Сенсорный фон</span>
@@ -925,7 +1249,7 @@ export const KitchenStationModal: React.FC<KitchenStationModalProps> = ({
             </div>
 
             {/* Inventory Real Tool Presence Status */}
-            <div className="p-3 sm:p-3.5 rounded-xl bg-slate-900/40 border border-slate-800 text-xs space-y-2 shrink-0">
+            <div className="p-3 rounded-xl bg-slate-900/40 border border-slate-800 text-xs space-y-2 shrink-0">
               <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
                 Предметы в руках и карманах
               </div>
@@ -934,6 +1258,20 @@ export const KitchenStationModal: React.FC<KitchenStationModalProps> = ({
                 <span className="text-slate-400">Нож:</span>
                 <span className={carriedKnife ? 'text-emerald-400 font-medium' : 'text-slate-500'}>
                   {carriedKnife ? carriedKnife.nameRu : 'Нет ножа'}
+                </span>
+              </div>
+
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-slate-400">Сковорода:</span>
+                <span className={availablePans.length > 0 ? 'text-emerald-400 font-medium' : 'text-slate-500'}>
+                  {availablePans.length > 0 ? availablePans[0].nameRu : 'Нет сковороды'}
+                </span>
+              </div>
+
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-slate-400">Кастрюля:</span>
+                <span className={availablePots.length > 0 ? 'text-emerald-400 font-medium' : 'text-slate-500'}>
+                  {availablePots.length > 0 ? availablePots[0].nameRu : 'Нет кастрюли'}
                 </span>
               </div>
 

@@ -81,8 +81,10 @@ export function isCookwareItem(itemId?: string | null): boolean {
     itemId.startsWith('kitchen_pan_') ||
     itemId.startsWith('kitchen_pot_') ||
     itemId.startsWith('kitchen_kettle_') ||
+    itemId === 'pot_clay_medium' ||
     itemId === 'kitchen_plate_enamel' ||
-    itemId === 'kitchen_bowl_wooden'
+    itemId === 'kitchen_bowl_wooden' ||
+    itemId === 'soup_bowl_empty'
   );
 }
 
@@ -111,7 +113,9 @@ export function isPlateOrBowlItem(itemId?: string | null): boolean {
   if (!itemId) return false;
   return (
     itemId.startsWith('kitchen_plate_') ||
-    itemId.startsWith('kitchen_bowl_')
+    itemId.startsWith('kitchen_bowl_') ||
+    itemId === 'soup_bowl_empty' ||
+    itemId === 'pot_clay_medium'
   );
 }
 
@@ -841,6 +845,9 @@ export function finishCookwareToInventoryItem(
     },
     culinaryData: {
       isPreparedDish: true,
+      containerType: platingItem 
+        ? (platingItem.itemId.startsWith('kitchen_pan_') ? 'pan' : (platingItem.itemId.startsWith('kitchen_pot_') || platingItem.itemId === 'pot_clay_medium' ? 'pot' : (platingItem.itemId.startsWith('kitchen_bowl_') || platingItem.itemId === 'soup_bowl_empty' ? 'bowl' : 'plate')))
+        : (vessel.vesselType === 'pan' ? 'pan' : (vessel.vesselType === 'pot' ? 'pot' : (vessel.vesselType === 'bowl' ? 'bowl' : 'plate'))),
       dishType: isCharred ? 'burnt_mess' : (isSoup ? 'soup' : (isFried ? 'fried' : 'stew')),
       denaturation: Number(avgDenat.toFixed(2)),
       maillard: Number(avgMaillard.toFixed(2)),
@@ -848,9 +855,203 @@ export function finishCookwareToInventoryItem(
       hydrolysis: Number(avgHydrolysis.toFixed(2)),
       ingredientsCount: vessel.ingredients.length,
       ingredientsList: namesList,
+      ingredients: vessel.ingredients.map(i => ({
+        ...i,
+        nutrients: { ...i.nutrients },
+        bioState: { ...i.bioState }
+      })),
+      liquids: vessel.liquids.map(l => ({ ...l })),
       tasteNotes
     }
   };
 
   return dishItem;
+}
+
+/**
+ * Creates a raw culinary workpiece (заготовка / полуфабрикат) from vessel contents.
+ * Can be packed onto a cutting board, into butcher paper, pan, pot, bowl or plate.
+ */
+export function createWorkpieceFromVessel(
+  vessel: CookwareVessel,
+  containerType: 'board' | 'paper' | 'pan' | 'pot' | 'bowl' | 'plate' = 'board',
+  containerItem?: InventoryItem
+): InventoryItem | null {
+  if (vessel.ingredients.length === 0 && vessel.liquids.length === 0) {
+    return null;
+  }
+
+  let totalMassGrams = 0;
+  let totalKcal = 0;
+  let totalP = 0;
+  let totalF = 0;
+  let totalC = 0;
+  let totalSugar = 0;
+  let totalFiber = 0;
+  let totalSalt = vessel.saltGrams;
+  let totalWater = 0;
+  let totalCutPieces = 0;
+  let sumDenat = 0;
+  let sumMaillard = 0;
+  let sumChar = 0;
+  let sumHydrolysis = 0;
+  const namesList: string[] = [];
+
+  for (const ing of vessel.ingredients) {
+    totalMassGrams += ing.massGrams;
+    totalKcal += ing.nutrients.calories;
+    totalP += ing.nutrients.proteins;
+    totalF += ing.nutrients.fats;
+    totalC += ing.nutrients.carbs;
+    totalSugar += ing.nutrients.sugars;
+    totalFiber += ing.nutrients.fiber || 0;
+    totalSalt += ing.nutrients.salt || 0;
+    totalWater += ing.nutrients.water || 0;
+    totalCutPieces += ing.bioState.cutPieces || 1;
+    sumDenat += ing.bioState.denaturation;
+    sumMaillard += ing.bioState.maillard;
+    sumChar += ing.bioState.charring;
+    sumHydrolysis += ing.bioState.hydrolysis;
+    namesList.push(ing.nameRu);
+  }
+
+  for (const liq of vessel.liquids) {
+    totalMassGrams += liq.volumeMl;
+    if (liq.isFatOrOil) {
+      totalF += (liq.volumeMl * 0.9);
+      totalKcal += Math.round(liq.volumeMl * 8.5);
+    } else {
+      totalWater += liq.volumeMl;
+    }
+  }
+
+  const ingCount = Math.max(1, vessel.ingredients.length);
+  const avgDenat = sumDenat / ingCount;
+  const avgMaillard = sumMaillard / ingCount;
+  const avgChar = sumChar / ingCount;
+  const avgHydrolysis = sumHydrolysis / ingCount;
+
+  // Generate realistic culinary workpiece name
+  const hasMeat = namesList.some(n => n.includes('Говядина') || n.includes('Свинина') || n.includes('мяс') || n.includes('фарш'));
+  const hasPoultry = namesList.some(n => n.includes('Куриц') || n.includes('цыпл') || n.includes('Индейк'));
+  const hasFish = namesList.some(n => n.includes('Рыб') || n.includes('Лосос') || n.includes('Окунь'));
+  const hasVeg = namesList.some(n => n.includes('Картоф') || n.includes('Морков') || n.includes('Лук') || n.includes('Капуст'));
+  const isMinced = vessel.ingredients.some(i => i.bioState.cutLevel >= 2);
+  const isSliced = vessel.ingredients.some(i => i.bioState.cutLevel >= 1);
+
+  let prepTitle = 'Кулинарная заготовка';
+  if (isMinced && hasMeat) prepTitle = 'Заготовка: Рубленый мясной фарш';
+  else if (hasMeat && hasVeg) prepTitle = 'Заготовка: Мясо с овощами для жарки/рагу';
+  else if (hasMeat && isSliced) prepTitle = 'Заготовка: Нарезанное мясо со специями';
+  else if (hasFish && isSliced) prepTitle = 'Заготовка: Нарезанное рыбное филе';
+  else if (hasPoultry && isSliced) prepTitle = 'Заготовка: Кусочки птицы для жарки';
+  else if (hasVeg && isSliced) prepTitle = 'Заготовка: Овощная нарезка';
+  else if (namesList.length === 1) prepTitle = `Заготовка: ${namesList[0]}`;
+
+  const containerSuffix = containerItem ? ` (в ${containerItem.nameRu.toLowerCase()})` : '';
+  const totalWeightKg = Number((totalMassGrams / 1000).toFixed(2));
+
+  const workpieceItem: InventoryItem = {
+    id: `prep_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+    itemId: 'prep_workpiece',
+    name: `${prepTitle}${containerSuffix}`,
+    nameRu: `${prepTitle}${containerSuffix}`,
+    category: 'food',
+    count: 1,
+    maxStack: 1,
+    icon: '',
+    description: `Culinary prep workpiece (${namesList.join(', ')}). Ready to be transferred into pan, pot or oven.`,
+    descriptionRu: `Кулинарный полуфабрикат/заготовка на разделочной доске: ${namesList.slice(0, 4).join(', ')}${namesList.length > 4 ? ' и др.' : ''}. Готов к выкладыванию в сковороду, кастрюлю или запеканию.`,
+    effects: {
+      health: avgDenat < 0.4 && (hasMeat || hasPoultry) ? -10 : 0,
+      hunger: Math.max(5, Math.round(totalKcal / 10)),
+      thirst: -5,
+      energy: 5
+    },
+    weight: totalWeightKg,
+    volume: Number((totalWeightKg * 1.1).toFixed(2)),
+    usable: true,
+    portions: Math.max(2, Math.min(10, Math.round(totalMassGrams / 80))),
+    maxPortions: Math.max(2, Math.min(10, Math.round(totalMassGrams / 80))),
+    temperature: Math.round(vessel.temperature),
+    surfaceTemperature: Math.round(vessel.temperature * 0.9),
+    nutrients: {
+      calories: Math.round(totalKcal),
+      proteins: Number(totalP.toFixed(1)),
+      fats: Number(totalF.toFixed(1)),
+      carbs: Number(totalC.toFixed(1)),
+      sugars: Number(totalSugar.toFixed(1)),
+      fiber: Number(totalFiber.toFixed(1)),
+      salt: Number(totalSalt.toFixed(2)),
+      water: Number(totalWater.toFixed(1))
+    },
+    culinaryData: {
+      isPreparedDish: false,
+      isWorkpiece: true,
+      containerType,
+      denaturation: Number(avgDenat.toFixed(2)),
+      maillard: Number(avgMaillard.toFixed(2)),
+      charring: Number(avgChar.toFixed(2)),
+      hydrolysis: Number(avgHydrolysis.toFixed(2)),
+      cutPieces: totalCutPieces,
+      ingredientsCount: vessel.ingredients.length,
+      ingredientsList: namesList,
+      ingredients: vessel.ingredients.map(i => ({
+        ...i,
+        nutrients: { ...i.nutrients },
+        bioState: { ...i.bioState }
+      })),
+      liquids: vessel.liquids.map(l => ({ ...l })),
+      tasteNotes: ['Сырая кулинарная заготовка со свежими соками... Требуется термообработка.']
+    }
+  };
+
+  return workpieceItem;
+}
+
+/**
+ * Unpacks an existing workpiece item (заготовка) into a cookware vessel
+ */
+export function unpackWorkpieceIntoVessel(
+  vessel: CookwareVessel,
+  workpieceItem: InventoryItem
+): { success: boolean; message: string; count: number } {
+  const data = workpieceItem.culinaryData;
+  if (!data || !data.ingredients || data.ingredients.length === 0) {
+    const single = itemToCulinaryIngredient(workpieceItem);
+    vessel.ingredients.push(single);
+    return {
+      success: true,
+      message: `Заготовка «${workpieceItem.nameRu}» выложена на рабочую поверхность.`,
+      count: 1
+    };
+  }
+
+  let addedCount = 0;
+  for (const ing of data.ingredients) {
+    vessel.ingredients.push({
+      ...ing,
+      id: `ing_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+      nutrients: { ...ing.nutrients },
+      bioState: { ...ing.bioState }
+    });
+    addedCount++;
+  }
+
+  if (data.liquids && Array.isArray(data.liquids)) {
+    for (const liq of data.liquids) {
+      const existing = vessel.liquids.find(l => l.liquidId === liq.liquidId);
+      if (existing) {
+        existing.volumeMl += liq.volumeMl;
+      } else {
+        vessel.liquids.push({ ...liq });
+      }
+    }
+  }
+
+  return {
+    success: true,
+    message: `Заготовка «${workpieceItem.nameRu}» (${addedCount} компонентов) переложена в «${vessel.nameRu}».`,
+    count: addedCount
+  };
 }

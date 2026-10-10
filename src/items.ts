@@ -88,6 +88,40 @@ export interface ItemDefinition {
 
 export const ITEM_CATALOG: Record<string, ItemDefinition> = {
   // === FOOD (ЕДА) ===
+  custom_cooked_dish: {
+    itemId: 'custom_cooked_dish',
+    name: 'Cooked Culinary Dish',
+    nameRu: 'Приготовленное блюдо',
+    category: 'food',
+    maxStack: 1,
+    icon: '',
+    description: 'Hot freshly prepared culinary dish cooked from real ingredients.',
+    descriptionRu: 'Горячее свежеприготовленное блюдо на кухне из натуральных продуктов.',
+    effects: { hunger: 50, health: 15, energy: 20 },
+    weight: 0.45,
+    usable: true,
+    biteCount: 12,
+    biteDuration: 1.0,
+    fullnessPerBite: 5,
+    tasteMessages: ['Аппетитное свежеприготовленное блюдо...', 'Насыщенный домашний вкус!']
+  },
+  prep_workpiece: {
+    itemId: 'prep_workpiece',
+    name: 'Culinary Prep Workpiece',
+    nameRu: 'Кулинарная заготовка',
+    category: 'food',
+    maxStack: 1,
+    icon: '',
+    description: 'Sliced and mixed food workpiece on cutting board. Ready for frying or boiling.',
+    descriptionRu: 'Нарезанный и подготовленный полуфабрикат на разделочной доске. Готов к жарке в сковороде или варке.',
+    effects: { hunger: 15, health: 0, energy: 5 },
+    weight: 0.35,
+    usable: true,
+    biteCount: 6,
+    biteDuration: 1.0,
+    fullnessPerBite: 3,
+    tasteMessages: ['Сырые нарезанные ингредиенты со свежими соками...']
+  },
   sandwich: {
     itemId: 'sandwich',
     name: 'Ham & Cheese Sandwich',
