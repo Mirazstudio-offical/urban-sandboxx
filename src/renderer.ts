@@ -9087,8 +9087,12 @@ export class GameRenderer {
           ctx.fillStyle = '#1e293b';
           ctx.beginPath(); ctx.arc(lx, ly, 1.8, 0, Math.PI * 2); ctx.fill();
         } else {
-          ctx.fillStyle = hasHeadlightsOn ? '#fef08a' : '#cbd5e1';
-          ctx.beginPath(); ctx.arc(lx, ly, 1.8, 0, Math.PI * 2); ctx.fill();
+          ctx.fillStyle = hasHeadlightsOn ? (isHighBeam ? '#ffffff' : '#fef08a') : '#cbd5e1';
+          ctx.beginPath(); ctx.arc(lx, ly, hasHeadlightsOn ? 2.2 : 1.8, 0, Math.PI * 2); ctx.fill();
+          if (hasHeadlightsOn) {
+            ctx.fillStyle = isHighBeam ? 'rgba(255, 255, 255, 0.95)' : 'rgba(254, 240, 138, 0.85)';
+            ctx.beginPath(); ctx.arc(lx, ly, 3.2, 0, Math.PI * 2); ctx.fill();
+          }
           ctx.strokeStyle = 'rgba(0, 0, 0, 0.3)';
           ctx.lineWidth = 0.5;
           ctx.stroke();
@@ -11028,23 +11032,21 @@ export class GameRenderer {
 
     const fogFactor = 1.0 - 0.55 * weights.fog;
 
-    if (effectiveAlpha <= 0.003 && weights.rain <= 0.02 && weights.snow <= 0.02 && weights.fog <= 0.02 && weights.overcast <= 0.02 && (world.lightningFlashTimer ?? 0) <= 0) {
-      return;
-    }
-
     const ctx = this.ctx;
     const lCtx = this.lightmapCtx;
 
-    // --- PASS 1: Generate Cutout Darkness Layer Offscreen ---
-    lCtx.clearRect(0, 0, this.width, this.height);
-    // Slightly reduced opacity for better nighttime texture visibility
-    lCtx.fillStyle = `${baseColor}${effectiveAlpha * 0.95})`;
-    lCtx.fillRect(0, 0, this.width, this.height);
-
-    lCtx.save();
-    // Synchronize offscreen transform with main camera
-    lCtx.setTransform(ctx.getTransform());
-    lCtx.globalCompositeOperation = 'destination-out';
+    const p = player;
+    const isPlayerFlashlightOn = !!(
+      p &&
+      !p.isInVehicle &&
+      (p.phoneFlashlightOn ||
+        p.flashlightOn ||
+        p.leftHandItem?.phoneSpecs?.flashlightOn ||
+        p.rightHandItem?.phoneSpecs?.flashlightOn ||
+        (p.leftHandItem?.itemId === 'flashlight' && (p.leftHandItem as any).isOn) ||
+        (p.rightHandItem?.itemId === 'flashlight' && (p.rightHandItem as any).isOn) ||
+        p.inventory?.some(it => it && (it.phoneSpecs?.flashlightOn || (it.itemId === 'flashlight' && (it as any).isOn))))
+    );
 
     const getStreetLampOn = (prop: StreetProp) => {
       if ((prop.type !== 'lamp' && prop.type !== 'lamp_highway' && prop.type !== 'lamp_concrete') || prop.isBroken) return false;
@@ -11073,7 +11075,7 @@ export class GameRenderer {
       if (car.isPlayerControlled) return car.headlightsOn;
       if (car.headlightsOn) return true;
       if (car.isParked) return false;
-      if (isRaining || isFog) return true;
+      if (isRaining || isFog || weights.overcast > 0.50) return true;
 
       // Dynamic sunset/sunrise headlights
       const stringId = car.id || 'car';
@@ -11082,11 +11084,28 @@ export class GameRenderer {
       const carHash = Math.sin(sum * 12.9898) * 43758.5453;
       const randVal = carHash - Math.floor(carHash);
 
+      // European/Russian DRL standard: ~35% of daytime traffic runs with DRL / dipped headlights
+      if (randVal < 0.35) return true;
+
       const sunsetHour = 17.0 + randVal * 1.6; // Turn on between 17:00 and 18:36
       const sunriseHour = 5.2 + randVal * 1.6; // Turn off between 05:12 and 06:48
 
       return (timeHour >= sunsetHour || timeHour < sunriseHour);
     };
+
+    const hasDarknessShroud = effectiveAlpha > 0.003 || weights.rain > 0.02 || weights.snow > 0.02 || weights.fog > 0.02 || weights.overcast > 0.02 || (world.lightningFlashTimer ?? 0) > 0;
+
+    // --- PASS 1: Generate Cutout Darkness Layer Offscreen ---
+    if (hasDarknessShroud) {
+      lCtx.clearRect(0, 0, this.width, this.height);
+      // Slightly reduced opacity for better nighttime texture visibility
+      lCtx.fillStyle = `${baseColor}${effectiveAlpha * 0.95})`;
+      lCtx.fillRect(0, 0, this.width, this.height);
+
+      lCtx.save();
+      // Synchronize offscreen transform with main camera
+      lCtx.setTransform(ctx.getTransform());
+      lCtx.globalCompositeOperation = 'destination-out';
 
     // A. Automotive Headlight, Trailer & Vehicle Light Cutouts (Pass 1 - Organic illumination footprints)
     for (const car of nearbyVehicles) {
@@ -11214,8 +11233,14 @@ export class GameRenderer {
       }
 
       const isHighBeam = car.headlightMode === 'high';
-      const baseBeamReach = (isHighBeam ? 500 : 340) * pitchFactor * fogFactor;
-      const baseSpreadWidth = (isHighBeam ? 120 : 80) * fogFactor;
+      // First-principles fog extinction & Mie lateral scatter:
+      // Low beam aims under fog boundary layer with moderate extinction;
+      // High beam hits upper droplet strata directly -> severe extinction & forward scattering!
+      const fogSpreadMult = 1.0 + 0.45 * weights.fog;
+      const baseBeamReach = (isHighBeam 
+        ? 500 * Math.max(0.24, 1.0 - 0.74 * weights.fog)
+        : 340 * (1.0 - 0.42 * weights.fog)) * pitchFactor;
+      const baseSpreadWidth = (isHighBeam ? 120 : 80) * fogSpreadMult;
       const dmg = car.damage || { leftHeadlightBroken: false, rightHeadlightBroken: false, frontCrumple: 0, rearCrumple: 0, leftDent: 0, rightDent: 0, frontLeftDent: 0, frontRightDent: 0, rearLeftDent: 0, rearRightDent: 0 };
       
       const fc = Math.min(14, dmg.frontCrumple || 0);
@@ -11494,8 +11519,9 @@ export class GameRenderer {
           if (broken) return;
           const lx = car.x + cosA * lxOffset - sinA * lyOffset;
           const ly = car.y + sinA * lxOffset + cosA * lyOffset;
-          const fogBeamLen = 140 * fogFactor;
-          const fogSpread = 90 * fogFactor;
+          const fogSpreadMult = 1.0 + 0.20 * weights.fog;
+          const fogBeamLen = 140 * (1.0 - 0.25 * weights.fog);
+          const fogSpread = 90 * fogSpreadMult;
 
           const beamGrad = lCtx.createRadialGradient(lx, ly, 0, lx + cosA * (fogBeamLen * 0.4), ly + sinA * (fogBeamLen * 0.4), fogBeamLen);
           beamGrad.addColorStop(0.0, 'rgba(0, 0, 0, 0.82)');
@@ -11716,19 +11742,6 @@ export class GameRenderer {
     }
 
     // G. Player Handheld & Smartphone Flashlight Cutout (Pass 1)
-    const p = player;
-    const isPlayerFlashlightOn = !!(
-      p &&
-      !p.isInVehicle &&
-      (p.phoneFlashlightOn ||
-        p.flashlightOn ||
-        p.leftHandItem?.phoneSpecs?.flashlightOn ||
-        p.rightHandItem?.phoneSpecs?.flashlightOn ||
-        (p.leftHandItem?.itemId === 'flashlight' && (p.leftHandItem as any).isOn) ||
-        (p.rightHandItem?.itemId === 'flashlight' && (p.rightHandItem as any).isOn) ||
-        p.inventory?.some(it => it && (it.phoneSpecs?.flashlightOn || (it.itemId === 'flashlight' && (it as any).isOn))))
-    );
-
     if (p && isPlayerFlashlightOn && p.x >= minX - 300 && p.x <= maxX + 300 && p.y >= minY - 300 && p.y <= maxY + 300) {
       const aimAngle = p.aimAngle !== undefined ? p.aimAngle : p.angle;
       const fRange = 280 * fogFactor;
@@ -11779,6 +11792,7 @@ export class GameRenderer {
     ctx.setTransform(1, 0, 0, 1, 0, 0); // Reset to screen space to draw the lightmap
     ctx.drawImage(this.lightmapCanvas, 0, 0);
     ctx.restore();
+    }
 
     // --- PASS 2: Additive Glow / Optics (lighter) ---
     // Pure optical flares and subtle atmospheric mist (Zero white blowouts or concentric circle rings!)
@@ -11911,8 +11925,11 @@ export class GameRenderer {
       }
 
       const isHighBeam = car.headlightMode === 'high';
-      const beamLen = (isHighBeam ? 360 : 230) * fogFactor;
-      const beamSpread = (isHighBeam ? 85 : 56) * fogFactor;
+      const fogSpreadMult = 1.0 + 0.45 * weights.fog;
+      const beamLen = isHighBeam 
+        ? 360 * Math.max(0.28, 1.0 - 0.70 * weights.fog)
+        : 230 * (1.0 - 0.42 * weights.fog);
+      const beamSpread = (isHighBeam ? 85 : 56) * fogSpreadMult;
       const dmg = car.damage || { leftHeadlightBroken: false, rightHeadlightBroken: false, frontCrumple: 0, rearCrumple: 0, leftDent: 0, rightDent: 0, frontLeftDent: 0, frontRightDent: 0, rearLeftDent: 0, rearRightDent: 0 };
       
       const fc = Math.min(14, dmg.frontCrumple || 0);
@@ -11993,14 +12010,19 @@ export class GameRenderer {
         const lx = car.x + cosFA * lxOffset - sinFA * lyOffset;
         const ly = car.y + sinFA * lxOffset + cosFA * lyOffset;
 
-        // Lens Flare / Source Glow (Crisp, compact optical emitter directly on the lamp glass)
-        const flareSize = (isHighBeam ? 4.2 : 3.0);
+        // Lens Flare / Source Glow (Crisp, high-intensity optical emitter directly on the lamp glass)
+        const flareSize = (isHighBeam ? 5.2 : 3.8);
         const flare = ctx.createRadialGradient(lx, ly, 0, lx, ly, flareSize);
-        flare.addColorStop(0, isHighBeam ? 'rgba(255, 255, 255, 0.98)' : 'rgba(255, 252, 230, 0.92)');
-        flare.addColorStop(0.5, isHighBeam ? 'rgba(224, 242, 254, 0.45)' : 'rgba(255, 235, 175, 0.38)');
+        flare.addColorStop(0, isHighBeam ? 'rgba(255, 255, 255, 1.00)' : 'rgba(255, 252, 230, 0.95)');
+        flare.addColorStop(0.4, isHighBeam ? 'rgba(224, 242, 254, 0.65)' : 'rgba(255, 235, 175, 0.55)');
         flare.addColorStop(1, 'rgba(255, 255, 255, 0)');
         ctx.fillStyle = flare;
         ctx.beginPath(); ctx.arc(lx, ly, flareSize, 0, Math.PI * 2); ctx.fill();
+
+        // Photometric core micro-sparkle for authentic ignited bulb emitter in daylight & nighttime
+        ctx.fillStyle = isHighBeam ? 'rgba(255, 255, 255, 0.98)' : 'rgba(255, 250, 200, 0.92)';
+        ctx.fillRect(lx - 0.75, ly - 2.2, 1.5, 4.4);
+        ctx.fillRect(lx - 2.2, ly - 0.75, 4.4, 1.5);
 
         // Wet Road Specular Reflection (Glistening sheen on rain / wet asphalt)
         if (isRaining) {
@@ -12030,10 +12052,11 @@ export class GameRenderer {
           ctx.fill();
         }
 
-        // Atmospheric Volumetric Mist (ONLY drawn when foggy or rainy, with subtle alpha so traffic never blows out into solid white)
+        // Atmospheric Volumetric Mist & Mie Scattering
         if (isFog || isRaining) {
-          const mistAlpha = (isFog ? 0.05 : 0.025) * weatherTransition;
-          if (mistAlpha > 0.005) {
+          if (isHighBeam && isFog) {
+            // HIGH BEAM IN FOG: Dense, blinding Mie backscatter "White Wall" directly ahead of car!
+            const mistAlpha = Math.min(0.40, (0.16 + 0.22 * weights.fog) * weatherTransition);
             const hGlow = ctx.createRadialGradient(
               lx, ly, 2,
               lx + cosFA * (beamLen * 0.4),
@@ -12041,7 +12064,7 @@ export class GameRenderer {
               beamLen
             );
             hGlow.addColorStop(0, `rgba(240, 248, 255, ${mistAlpha})`);
-            hGlow.addColorStop(0.4, `rgba(224, 242, 254, ${mistAlpha * 0.4})`);
+            hGlow.addColorStop(0.4, `rgba(224, 242, 254, ${mistAlpha * 0.5})`);
             hGlow.addColorStop(1, 'rgba(224, 242, 254, 0)');
 
             ctx.fillStyle = hGlow;
@@ -12054,6 +12077,56 @@ export class GameRenderer {
             ctx.lineTo(lx, ly);
             ctx.closePath();
             ctx.fill();
+
+            // Dense impenetrable forward backscatter bank (the infamous blinding white fog wall)
+            if (weights.fog > 0.08) {
+              const wallDist = 115 * (1.0 - 0.25 * weights.fog);
+              const wallSpread = beamSpread * 1.15;
+              const wallPeakAlpha = (0.36 + 0.36 * weights.fog) * weatherTransition;
+              const wallGrad = ctx.createRadialGradient(
+                lx + cosFA * 15, ly + sinFA * 15, 3,
+                lx + cosFA * (wallDist * 0.5), ly + sinFA * (wallDist * 0.5), wallDist
+              );
+              wallGrad.addColorStop(0.0, `rgba(255, 255, 255, ${wallPeakAlpha.toFixed(3)})`);
+              wallGrad.addColorStop(0.35, `rgba(245, 250, 255, ${(wallPeakAlpha * 0.72).toFixed(3)})`);
+              wallGrad.addColorStop(0.70, `rgba(224, 242, 254, ${(wallPeakAlpha * 0.28).toFixed(3)})`);
+              wallGrad.addColorStop(1.0, 'rgba(224, 242, 254, 0)');
+
+              ctx.fillStyle = wallGrad;
+              ctx.beginPath();
+              ctx.moveTo(lx, ly);
+              const wEndLX = lx + cosFA * wallDist;
+              const wEndLY = ly + sinFA * wallDist;
+              ctx.lineTo(wEndLX - sinFA * wallSpread, wEndLY + cosFA * wallSpread);
+              ctx.lineTo(wEndLX + sinFA * wallSpread, wEndLY - cosFA * wallSpread);
+              ctx.closePath();
+              ctx.fill();
+            }
+          } else {
+            // LOW BEAM IN FOG / RAIN: Soft, clean, ground-hugging mist without self-blinding backscatter
+            const mistAlpha = (isFog ? (0.045 + 0.04 * weights.fog) : 0.025) * weatherTransition;
+            if (mistAlpha > 0.005) {
+              const hGlow = ctx.createRadialGradient(
+                lx, ly, 2,
+                lx + cosFA * (beamLen * 0.4),
+                ly + sinFA * (beamLen * 0.4),
+                beamLen
+              );
+              hGlow.addColorStop(0, `rgba(240, 248, 255, ${mistAlpha})`);
+              hGlow.addColorStop(0.4, `rgba(224, 242, 254, ${mistAlpha * 0.4})`);
+              hGlow.addColorStop(1, 'rgba(224, 242, 254, 0)');
+
+              ctx.fillStyle = hGlow;
+              ctx.beginPath();
+              ctx.moveTo(lx, ly);
+              const endLX = lx + cosFA * beamLen;
+              const endLY = ly + sinFA * beamLen;
+              ctx.lineTo(endLX - sinFA * beamSpread, endLY + cosFA * beamSpread);
+              ctx.arc(lx, ly, beamLen, Math.atan2(sinFA * beamLen + cosFA * beamSpread, cosFA * beamLen - sinFA * beamSpread), Math.atan2(sinFA * beamLen - cosFA * beamSpread, cosFA * beamLen + sinFA * beamSpread), true);
+              ctx.lineTo(lx, ly);
+              ctx.closePath();
+              ctx.fill();
+            }
           }
         }
       };
@@ -12212,9 +12285,10 @@ export class GameRenderer {
           ctx.beginPath(); ctx.arc(lx, ly, 3.5, 0, Math.PI * 2); ctx.fill();
 
           if (isFog || isRaining) {
-            const fogBeamLen = 140 * fogFactor;
-            const fogBeamSpread = 90 * fogFactor;
-            const fogMistAlpha = (isFog ? 0.06 : 0.03) * weatherTransition;
+            const fogSpreadMult = 1.0 + 0.20 * weights.fog;
+            const fogBeamLen = 140 * (1.0 - 0.25 * weights.fog);
+            const fogBeamSpread = 90 * fogSpreadMult;
+            const fogMistAlpha = (isFog ? 0.055 : 0.03) * weatherTransition;
 
             const fogGrad = ctx.createRadialGradient(lx, ly, 0, lx + cosA * (fogBeamLen * 0.4), ly + sinA * (fogBeamLen * 0.4), fogBeamLen);
             fogGrad.addColorStop(0.00, `rgba(255, 235, 140, ${fogMistAlpha})`);
@@ -12714,7 +12788,11 @@ export class GameRenderer {
       if (visibleVehicles && visibleVehicles.length > 0) {
         for (const veh of visibleVehicles) {
           if (veh.headlightsOn) {
-            activeHeadlights.push({ x: veh.x, y: veh.y, angle: veh.angle, reach: 240 });
+            const isHigh = veh.headlightMode === 'high';
+            const reach = isHigh
+              ? (weights.fog > 0.1 ? 160 : 420)
+              : (weights.fog > 0.1 ? 190 : 280);
+            activeHeadlights.push({ x: veh.x, y: veh.y, angle: veh.angle, reach });
           }
         }
       }
