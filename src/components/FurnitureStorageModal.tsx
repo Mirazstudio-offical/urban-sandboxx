@@ -262,11 +262,12 @@ export const FurnitureStorageModal: React.FC<FurnitureStorageModalProps> = (prop
                 onClick={() => {
                   props.onOpenKitchenStation?.();
                 }}
-                className="px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs flex items-center gap-1.5 transition-all shadow-md shadow-amber-500/20"
+                className="px-2.5 sm:px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs flex items-center gap-1.5 transition-all shadow-md shadow-amber-500/20 shrink-0"
                 title="Перейти к рабочей поверхности гарнитура для нарезки и готовки"
               >
-                <Utensils className="w-3.5 h-3.5" />
-                <span>Готовка и нарезка</span>
+                <Utensils className="w-3.5 h-3.5 shrink-0" />
+                <span className="hidden sm:inline">Готовка и нарезка</span>
+                <span className="sm:hidden">Готовка</span>
               </button>
             )}
             <button

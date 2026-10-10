@@ -41,7 +41,8 @@ import {
   Activity, 
   Sparkles,
   Disc,
-  Volume2
+  Volume2,
+  Package
 } from 'lucide-react';
 
 interface KitchenStationModalProps {
@@ -70,6 +71,9 @@ export const KitchenStationModal: React.FC<KitchenStationModalProps> = ({
   if (!isOpen || !player) return null;
 
   const isStove = furnitureType === 'stove';
+
+  // Mobile navigation tabs state ('station' | 'products' | 'sensory')
+  const [mobileTab, setMobileTab] = useState<'station' | 'products' | 'sensory'>('station');
 
   // Safe inventory array filtering out empty/null slots
   const safeInventory: InventoryItem[] = (player.inventory || []).filter((i): i is InventoryItem => Boolean(i && i.itemId));
@@ -175,7 +179,6 @@ export const KitchenStationModal: React.FC<KitchenStationModalProps> = ({
     const invIdx = player.inventory.findIndex(i => Boolean(i && i.id === cookwareItem.id));
     if (invIdx < 0) return;
 
-    // Return previous cookware if was placed
     if (vessel.sourceItem) {
       addItemToPlayer(player, vessel.sourceItem);
     }
@@ -228,6 +231,9 @@ export const KitchenStationModal: React.FC<KitchenStationModalProps> = ({
 
     setVessel({ ...vessel });
     onInventoryUpdated?.();
+
+    // On mobile, automatically return to active surface tab to see what was placed
+    setMobileTab('station');
   };
 
   // Tactile Cutting Action (Requires Knife in inventory or hand)
@@ -410,87 +416,135 @@ export const KitchenStationModal: React.FC<KitchenStationModalProps> = ({
   const observations = getSensoryObservations(vessel);
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-2 sm:p-4 select-none animate-fadeIn">
-      <div className="w-full max-w-5xl max-h-[96vh] flex flex-col bg-slate-950 border border-slate-800 rounded-2xl shadow-2xl shadow-black/95 overflow-hidden text-slate-100 font-sans">
+    <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-0 sm:p-3 md:p-4 select-none animate-fadeIn">
+      <div className="w-full max-w-5xl h-full sm:h-auto sm:max-h-[94vh] flex flex-col bg-slate-950 border-0 sm:border border-slate-800 rounded-none sm:rounded-2xl shadow-2xl shadow-black/95 overflow-hidden text-slate-100 font-sans">
         
         {/* Header Bar */}
-        <div className="flex items-center justify-between px-5 py-3.5 bg-slate-900 border-b border-slate-800">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400">
-              <ChefHat className="w-5 h-5" />
+        <div className="flex items-center justify-between px-3 sm:px-5 py-2.5 sm:py-3 bg-slate-900 border-b border-slate-800 shrink-0">
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+            <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400 shrink-0">
+              <ChefHat className="w-4 h-4 sm:w-5 sm:h-5" />
             </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h2 className="text-base font-bold tracking-tight text-slate-100">
-                  {isStove ? 'Кухонная плита (Конфорки)' : 'Разделочная столешница / Стол'}
+            <div className="min-w-0">
+              <div className="flex items-center gap-1.5 sm:gap-2">
+                <h2 className="text-sm sm:text-base font-bold tracking-tight text-slate-100 truncate">
+                  {isStove ? 'Кухонная плита' : 'Столешница гарнитура'}
                 </h2>
-                <span className="text-xs px-2 py-0.5 rounded-full bg-slate-800 border border-slate-700 text-slate-300">
-                  {isStove ? (vessel.sourceItem ? vessel.nameRu : 'Нет посуды на конфорке') : 'Деревянная / каменная поверхность'}
+                <span className="text-[10px] sm:text-xs px-2 py-0.5 rounded-full bg-slate-800 border border-slate-700 text-slate-300 truncate max-w-[130px] sm:max-w-none">
+                  {isStove ? (vessel.sourceItem ? vessel.nameRu : 'Нет посуды') : 'Холодный стол'}
                 </span>
               </div>
-              <p className="text-xs text-slate-400">
+              <p className="text-[10px] sm:text-xs text-slate-400 truncate hidden xs:block">
                 {isStove 
-                  ? 'Термическая обработка на конфорке (требуется сковорода или кастрюля)'
-                  : 'Холодная зона: нарезка ножом, смешивание в миске, разделка продуктов'}
+                  ? 'Конфорка плиты • Установите сковороду или кастрюлю'
+                  : 'Холодная зона • Нарезка ножом, миска, специи'}
               </p>
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
             {onOpenStorage && (
               <button
                 onClick={onOpenStorage}
-                className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs font-medium text-slate-300 transition-colors flex items-center gap-1.5"
+                className="px-2.5 sm:px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs font-medium text-slate-300 transition-colors flex items-center gap-1.5 min-h-[36px]"
                 title="Открыть шкафы кухонного гарнитура"
               >
-                <Layers className="w-3.5 h-3.5 text-slate-400" />
-                <span>Шкафы гарнитура</span>
+                <Layers className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                <span className="hidden sm:inline">Шкафы</span>
               </button>
             )}
 
             <button
               onClick={onClose}
-              className="w-9 h-9 rounded-xl bg-slate-800 hover:bg-rose-950 hover:text-rose-300 border border-slate-700 flex items-center justify-center text-slate-400 transition-colors"
+              className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-slate-800 hover:bg-rose-950 hover:text-rose-300 border border-slate-700 flex items-center justify-center text-slate-400 transition-colors min-w-[36px] min-h-[36px]"
+              title="Закрыть"
             >
-              <X className="w-5 h-5" />
+              <X className="w-4 h-4 sm:w-5 sm:h-5" />
             </button>
           </div>
         </div>
 
-        {/* Physical Cookware Bar on Stove (Only if Stove!) */}
+        {/* Mobile Navigation Tabs (< lg screens) */}
+        <div className="flex lg:hidden items-center bg-slate-900 border-b border-slate-800 text-xs shrink-0 select-none">
+          <button
+            onClick={() => setMobileTab('station')}
+            className={`flex-1 py-2.5 px-2 flex items-center justify-center gap-1.5 font-bold transition-colors border-b-2 min-h-[44px] ${
+              mobileTab === 'station'
+                ? 'border-amber-500 text-amber-300 bg-amber-500/10'
+                : 'border-transparent text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            {isStove ? <Flame className="w-4 h-4 text-amber-400 shrink-0" /> : <Utensils className="w-4 h-4 text-amber-400 shrink-0" />}
+            <span>{isStove ? 'Плита / Посуда' : 'Стол'}</span>
+            {vessel.ingredients.length > 0 && (
+              <span className="ml-0.5 px-1.5 py-0.2 rounded-full bg-amber-500 text-[10px] text-slate-950 font-black">
+                {vessel.ingredients.length}
+              </span>
+            )}
+          </button>
+
+          <button
+            onClick={() => setMobileTab('products')}
+            className={`flex-1 py-2.5 px-2 flex items-center justify-center gap-1.5 font-bold transition-colors border-b-2 min-h-[44px] ${
+              mobileTab === 'products'
+                ? 'border-amber-500 text-amber-300 bg-amber-500/10'
+                : 'border-transparent text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            <Package className="w-4 h-4 text-amber-400 shrink-0" />
+            <span>Продукты ({foodItems.length})</span>
+          </button>
+
+          <button
+            onClick={() => setMobileTab('sensory')}
+            className={`flex-1 py-2.5 px-2 flex items-center justify-center gap-1.5 font-bold transition-colors border-b-2 min-h-[44px] ${
+              mobileTab === 'sensory'
+                ? 'border-amber-500 text-amber-300 bg-amber-500/10'
+                : 'border-transparent text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            <Activity className="w-4 h-4 text-amber-400 shrink-0" />
+            <span>Чувства</span>
+            {vessel.smokeIntensity > 0.3 && (
+              <span className="w-2 h-2 rounded-full bg-rose-500 animate-ping ml-0.5 shrink-0" />
+            )}
+          </button>
+        </div>
+
+        {/* Cookware Placement Bar on Stove (Shown only if Stove!) */}
         {isStove && (
-          <div className="px-5 py-2.5 bg-slate-900/60 border-b border-slate-800 flex items-center justify-between text-xs overflow-x-auto gap-3">
-            <div className="flex items-center gap-2 shrink-0">
-              <span className="text-slate-400 font-medium">Посуда на плите:</span>
+          <div className="px-3 sm:px-5 py-2 sm:py-2.5 bg-slate-900/60 border-b border-slate-800 flex flex-wrap items-center justify-between text-xs gap-2 shrink-0">
+            <div className="flex items-center gap-2">
+              <span className="text-slate-400 font-medium">Посуда:</span>
               <span className="font-semibold text-amber-300">
                 {vessel.sourceItem ? vessel.sourceItem.nameRu : 'Конфорка свободна'}
               </span>
             </div>
 
-            <div className="flex items-center gap-2 shrink-0">
+            <div className="flex items-center gap-1.5 flex-wrap">
               {vessel.sourceItem ? (
                 <button
                   onClick={handleRemoveCookwareFromBurner}
-                  className="px-3 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 font-medium transition-colors flex items-center gap-1"
+                  className="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 font-medium transition-colors flex items-center gap-1 min-h-[34px]"
                 >
-                  <Trash2 className="w-3 h-3 text-slate-400" />
-                  <span>Снять посуду с плиты</span>
+                  <Trash2 className="w-3.5 h-3.5 text-slate-400" />
+                  <span>Снять посуду</span>
                 </button>
               ) : (
-                <div className="flex items-center gap-2">
-                  <span className="text-slate-500">Поставить из инвентаря:</span>
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <span className="text-slate-500 text-[11px]">Поставить:</span>
                   {carriedCookwareList.length === 0 ? (
-                    <span className="text-amber-500/80 italic">
-                      У вас нет сковороды или кастрюли (найдите в шкафах или магазине)
+                    <span className="text-amber-500/90 text-[11px] italic">
+                      Нет сковороды в карманах
                     </span>
                   ) : (
                     carriedCookwareList.map((cw, cwIdx) => (
                       <button
                         key={cw.id || cwIdx}
                         onClick={() => handlePlaceCookwareOnBurner(cw)}
-                        className="px-2.5 py-1 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-300 font-medium transition-colors flex items-center gap-1"
+                        className="px-2.5 py-1.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-300 font-medium transition-colors flex items-center gap-1 min-h-[34px]"
                       >
-                        <Plus className="w-3 h-3" />
+                        <Plus className="w-3.5 h-3.5" />
                         <span>{cw.nameRu}</span>
                       </button>
                     ))
@@ -504,28 +558,28 @@ export const KitchenStationModal: React.FC<KitchenStationModalProps> = ({
         {/* Main Workstation Layout */}
         <div className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-12 overflow-hidden">
           
-          {/* Left Column: Player Inventory Ingredients (4 cols) */}
-          <div className="lg:col-span-4 border-r border-slate-800 flex flex-col min-h-0 bg-slate-950/50">
-            <div className="px-4 py-2.5 bg-slate-900/40 border-b border-slate-800 flex items-center justify-between">
+          {/* Left Column: Player Inventory Ingredients (4 cols desktop; shown on mobile if mobileTab === 'products') */}
+          <div className={`${mobileTab === 'products' ? 'flex' : 'hidden'} lg:flex lg:col-span-4 border-r border-slate-800 flex-col min-h-0 bg-slate-950/50`}>
+            <div className="px-3 sm:px-4 py-2 sm:py-2.5 bg-slate-900/40 border-b border-slate-800 flex items-center justify-between shrink-0">
               <span className="text-xs font-semibold uppercase tracking-wider text-slate-300">
-                Ваши продукты
+                Ваши продукты в карманах
               </span>
               <span className="text-[11px] text-slate-500">
                 {foodItems.length} предм.
               </span>
             </div>
 
-            <div className="flex-1 p-3 overflow-y-auto space-y-2">
+            <div className="flex-1 p-2.5 sm:p-3 overflow-y-auto space-y-2">
               {foodItems.length === 0 ? (
-                <div className="p-6 text-center text-xs text-slate-500">
-                  В карманах нет еды и ингредиентов
+                <div className="p-8 text-center text-xs text-slate-500">
+                  В карманах нет еды и кулинарных ингредиентов.
                 </div>
               ) : (
                 foodItems.map((item, idx) => {
                   return (
                     <div
                       key={item.id || idx}
-                      className="p-2.5 rounded-xl border border-slate-800 bg-slate-900/70 hover:border-amber-500/50 hover:bg-slate-800/80 cursor-pointer flex items-center justify-between gap-3 transition-all"
+                      className="p-2.5 rounded-xl border border-slate-800 bg-slate-900/70 hover:border-amber-500/50 hover:bg-slate-800/80 cursor-pointer flex items-center justify-between gap-2.5 transition-all active:scale-[0.99]"
                       onClick={() => handlePlaceFoodItem(item)}
                     >
                       <div className="flex items-center gap-2.5 min-w-0">
@@ -536,20 +590,20 @@ export const KitchenStationModal: React.FC<KitchenStationModalProps> = ({
                           <div className="text-xs font-semibold text-slate-200 truncate">
                             {item.nameRu || item.name}
                           </div>
-                          <div className="text-[11px] text-slate-400">
+                          <div className="text-[11px] text-slate-400 truncate">
                             {item.descriptionRu?.split('.')[0] || 'Ингредиент'}
                           </div>
                         </div>
                       </div>
 
                       <button
-                        className="px-2.5 py-1 rounded-lg bg-amber-500/10 hover:bg-amber-500/25 border border-amber-500/30 text-[11px] font-semibold text-amber-300 shrink-0 flex items-center gap-1 transition-colors"
+                        className="px-3 py-1.5 rounded-lg bg-amber-500/15 hover:bg-amber-500/30 border border-amber-500/35 text-xs font-semibold text-amber-300 shrink-0 flex items-center gap-1 transition-colors min-h-[36px]"
                         onClick={(e) => {
                           e.stopPropagation();
                           handlePlaceFoodItem(item);
                         }}
                       >
-                        <Plus className="w-3 h-3" />
+                        <Plus className="w-3.5 h-3.5" />
                         <span>Выложить</span>
                       </button>
                     </div>
@@ -559,27 +613,27 @@ export const KitchenStationModal: React.FC<KitchenStationModalProps> = ({
             </div>
           </div>
 
-          {/* Center Column: The Cooking Surface / Pan (5 cols) */}
-          <div className="lg:col-span-5 flex flex-col min-h-0 bg-slate-900/20 border-r border-slate-800">
+          {/* Center Column: The Cooking Surface / Pan (5 cols desktop; shown on mobile if mobileTab === 'station') */}
+          <div className={`${mobileTab === 'station' ? 'flex' : 'hidden'} lg:flex lg:col-span-5 flex-col min-h-0 bg-slate-900/20 border-r border-slate-800`}>
             
-            {/* Surface Header (Strict Physical State) */}
-            <div className="p-3.5 bg-slate-900/50 border-b border-slate-800 flex items-center justify-between">
-              <div>
-                <div className="text-xs font-bold text-slate-200 flex items-center gap-1.5">
+            {/* Surface Header */}
+            <div className="p-2.5 sm:p-3 bg-slate-900/50 border-b border-slate-800 flex items-center justify-between shrink-0">
+              <div className="min-w-0">
+                <div className="text-xs font-bold text-slate-200 flex items-center gap-1.5 truncate">
                   {isStove ? (
-                    <Flame className={`w-3.5 h-3.5 ${vessel.heatSourcePower > 0 ? 'text-amber-500 animate-pulse' : 'text-slate-500'}`} />
+                    <Flame className={`w-3.5 h-3.5 shrink-0 ${vessel.heatSourcePower > 0 ? 'text-amber-500 animate-pulse' : 'text-slate-500'}`} />
                   ) : (
-                    <Utensils className="w-3.5 h-3.5 text-slate-400" />
+                    <Utensils className="w-3.5 h-3.5 text-slate-400 shrink-0" />
                   )}
-                  <span>
+                  <span className="truncate">
                     {isStove 
                       ? (vessel.sourceItem ? vessel.nameRu : 'Открытая конфорка плиты') 
                       : 'Разделочная доска на столешнице'}
                   </span>
                 </div>
-                <div className="text-[11px] text-slate-400">
+                <div className="text-[11px] text-slate-400 truncate">
                   {isStove 
-                    ? (vessel.heatSourcePower > 0 ? `Нагрев от конфорки (положение ${vessel.heatSourcePower})` : 'Конфорка выключена (остывание)')
+                    ? (vessel.heatSourcePower > 0 ? `Нагрев от конфорки: положение ${vessel.heatSourcePower}` : 'Конфорка выключена (0)')
                     : 'Холодная поверхность без нагрева'}
                 </div>
               </div>
@@ -588,24 +642,35 @@ export const KitchenStationModal: React.FC<KitchenStationModalProps> = ({
               {isStove && vessel.sourceItem && (
                 <button
                   onClick={handleToggleLid}
-                  className={`px-2.5 py-1 rounded-lg border text-xs font-medium transition-colors ${
+                  className={`px-2.5 py-1.5 rounded-lg border text-xs font-medium transition-colors shrink-0 min-h-[34px] ${
                     vessel.hasLid
                       ? 'bg-emerald-950/70 border-emerald-700 text-emerald-300'
                       : 'bg-slate-800 border-slate-700 text-slate-400 hover:text-slate-200'
                   }`}
                 >
-                  {vessel.hasLid ? 'Крышка: Накрыто' : 'Крышка: Открыто'}
+                  {vessel.hasLid ? 'С крышкой' : 'Без крышки'}
                 </button>
               )}
             </div>
 
+            {/* Quick Add Product Button for Mobile (Opens Products Tab) */}
+            <div className="lg:hidden px-3 pt-2 shrink-0">
+              <button
+                onClick={() => setMobileTab('products')}
+                className="w-full py-2 px-3 rounded-lg bg-slate-900 hover:bg-slate-850 border border-amber-600/30 text-amber-300 text-xs font-semibold flex items-center justify-center gap-1.5 min-h-[38px] active:scale-[0.99]"
+              >
+                <Plus className="w-4 h-4 text-amber-400" />
+                <span>Выложить продукты из карманов ({foodItems.length})</span>
+              </button>
+            </div>
+
             {/* In-Vessel Contents View */}
-            <div className="flex-1 p-3.5 overflow-y-auto space-y-2.5">
+            <div className="flex-1 p-2.5 sm:p-3.5 overflow-y-auto space-y-2.5 min-h-[120px]">
               
               {/* Bare Stove Warning */}
               {isStove && !vessel.sourceItem && (
-                <div className="h-48 flex flex-col items-center justify-center border-2 border-dashed border-slate-800 rounded-2xl text-center p-6 text-slate-500">
-                  <Disc className="w-9 h-9 text-slate-600 mb-2" />
+                <div className="h-40 sm:h-48 flex flex-col items-center justify-center border-2 border-dashed border-slate-800 rounded-2xl text-center p-4 sm:p-6 text-slate-500">
+                  <Disc className="w-8 h-8 sm:w-9 sm:h-9 text-slate-600 mb-2" />
                   <p className="text-xs font-medium text-slate-400">Конфорка пуста</p>
                   <p className="text-[11px] text-slate-500 mt-1 max-w-xs">
                     На открытые спирали конфорки нельзя сыпать продукты. Поставьте сковороду или кастрюлю сверху.
@@ -615,7 +680,7 @@ export const KitchenStationModal: React.FC<KitchenStationModalProps> = ({
 
               {/* Liquids Layer */}
               {vessel.liquids.length > 0 && (
-                <div className="p-2.5 rounded-xl bg-slate-900 border border-slate-800 text-xs">
+                <div className="p-2 sm:p-2.5 rounded-xl bg-slate-900 border border-slate-800 text-xs">
                   <div className="text-[11px] font-semibold text-slate-400 mb-1 flex items-center gap-1">
                     <Droplets className="w-3.5 h-3.5 text-cyan-400" />
                     <span>Среда на дне:</span>
@@ -630,13 +695,13 @@ export const KitchenStationModal: React.FC<KitchenStationModalProps> = ({
                 </div>
               )}
 
-              {/* Ingredients List (Diegetic observations only) */}
+              {/* Ingredients List */}
               {(!isStove || vessel.sourceItem) && vessel.ingredients.length === 0 && (
-                <div className="h-44 flex flex-col items-center justify-center border-2 border-dashed border-slate-800 rounded-2xl text-center p-6 text-slate-500">
+                <div className="h-36 sm:h-44 flex flex-col items-center justify-center border-2 border-dashed border-slate-800 rounded-2xl text-center p-4 sm:p-6 text-slate-500">
                   <Utensils className="w-8 h-8 text-slate-600 mb-2" />
                   <p className="text-xs font-medium text-slate-400">Поверхность пуста</p>
                   <p className="text-[11px] text-slate-500 mt-1">
-                    Выберите продукты слева и нажмите «Выложить».
+                    Выберите продукты и нажмите «Выложить».
                   </p>
                 </div>
               )}
@@ -649,15 +714,15 @@ export const KitchenStationModal: React.FC<KitchenStationModalProps> = ({
                   <div
                     key={ing.id}
                     onClick={() => setSelectedIngredientIdx(idx)}
-                    className={`p-3 rounded-xl border transition-all cursor-pointer ${
+                    className={`p-2.5 sm:p-3 rounded-xl border transition-all cursor-pointer ${
                       isSelected
                         ? 'bg-slate-900 border-amber-500/70 shadow-lg'
                         : 'bg-slate-900/60 border-slate-800 hover:border-slate-700'
                     }`}
                   >
-                    <div className="flex items-center justify-between gap-2 mb-1.5">
+                    <div className="flex items-center justify-between gap-2 mb-1">
                       <div className="flex items-center gap-2 min-w-0">
-                        {/* Visual Dot */}
+                        {/* Visual Color Dot */}
                         <div 
                           className="w-3.5 h-3.5 rounded-full shrink-0 border border-black/40"
                           style={{
@@ -676,13 +741,13 @@ export const KitchenStationModal: React.FC<KitchenStationModalProps> = ({
                       </div>
 
                       <div className="flex items-center gap-1.5 shrink-0">
-                        {/* Physical action button: Cut/Chop (Uses real knife) */}
+                        {/* Physical Cut Action Button */}
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
                             handleCutIngredient(idx);
                           }}
-                          className={`px-2.5 py-0.5 rounded-md text-[11px] font-medium border transition-colors ${
+                          className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors min-h-[36px] min-w-[75px] active:scale-95 flex items-center justify-center ${
                             carriedKnife
                               ? 'bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700'
                               : 'bg-slate-900 text-slate-600 border-slate-800 cursor-not-allowed'
@@ -699,16 +764,16 @@ export const KitchenStationModal: React.FC<KitchenStationModalProps> = ({
                               e.stopPropagation();
                               handleTakeBackIngredient(idx);
                             }}
-                            className="p-1 rounded-md bg-slate-800 hover:bg-rose-950 text-slate-400 hover:text-rose-300 transition-colors"
+                            className="p-2 rounded-lg bg-slate-800 hover:bg-rose-950 text-slate-400 hover:text-rose-300 transition-colors min-h-[36px] min-w-[36px] flex items-center justify-center active:scale-95"
                             title="Убрать обратно в инвентарь"
                           >
-                            <Trash2 className="w-3 h-3" />
+                            <Trash2 className="w-3.5 h-3.5" />
                           </button>
                         )}
                       </div>
                     </div>
 
-                    {/* Diegetic Visual Observation (No numbers!) */}
+                    {/* Diegetic Visual Observation */}
                     <div className="text-[11px] text-slate-300 italic">
                       {appearance}
                     </div>
@@ -718,27 +783,29 @@ export const KitchenStationModal: React.FC<KitchenStationModalProps> = ({
             </div>
 
             {/* Direct Physical Actions Bar */}
-            <div className="p-3 bg-slate-950/80 border-t border-slate-800 space-y-2.5">
+            <div className="p-2.5 sm:p-3 bg-slate-950/80 border-t border-slate-800 space-y-2 shrink-0">
               
               {/* Burner Dial (ONLY on Stove with Cookware!) */}
               {isStove && vessel.sourceItem && (
-                <div className="flex items-center justify-between text-xs pb-1 border-b border-slate-800/80">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between text-xs pb-1.5 border-b border-slate-800/80 gap-1.5">
                   <span className="text-slate-400 font-medium flex items-center gap-1">
-                    <Flame className="w-3.5 h-3.5 text-amber-500" />
+                    <Flame className="w-3.5 h-3.5 text-amber-500 shrink-0" />
                     <span>Ручка конфорки:</span>
                   </span>
-                  <div className="flex items-center gap-1">
+                  
+                  {/* Big touch-friendly rotary selector */}
+                  <div className="flex items-center gap-1 sm:gap-1.5 w-full sm:w-auto">
                     {[0, 1, 2, 3, 4, 5, 6].map(p => (
                       <button
                         key={p}
                         onClick={() => handleSetBurnerPower(p)}
-                        className={`w-7 h-7 rounded-lg font-bold text-xs font-mono transition-all ${
+                        className={`flex-1 sm:w-8 sm:h-8 py-2 sm:py-0 min-h-[40px] sm:min-h-0 rounded-lg font-bold text-xs sm:text-sm font-mono transition-all active:scale-95 flex items-center justify-center ${
                           vessel.heatSourcePower === p
                             ? p === 0
-                              ? 'bg-slate-700 text-white'
+                              ? 'bg-slate-700 text-white shadow-inner'
                               : p <= 3
-                              ? 'bg-amber-500 text-slate-950'
-                              : 'bg-rose-600 text-white'
+                              ? 'bg-amber-500 text-slate-950 font-black shadow-md shadow-amber-500/30'
+                              : 'bg-rose-600 text-white font-black shadow-md shadow-rose-600/40'
                             : 'bg-slate-900 text-slate-400 hover:bg-slate-800 border border-slate-800'
                         }`}
                         title={p === 0 ? 'Выкл' : `Положение ${p}`}
@@ -751,56 +818,56 @@ export const KitchenStationModal: React.FC<KitchenStationModalProps> = ({
               )}
 
               {/* Physical Interactions Bar */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 sm:gap-2 text-xs">
                 {/* Stir / Flip */}
                 <button
                   onClick={handleStirVessel}
-                  className="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 font-medium transition-colors flex items-center justify-center gap-1.5"
+                  className="px-2.5 py-2.5 sm:py-1.5 min-h-[44px] rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 font-medium transition-colors flex items-center justify-center gap-1.5 active:scale-95"
                   title="Перевернуть куски лопаткой"
                 >
-                  <RotateCw className="w-3.5 h-3.5 text-amber-400" />
+                  <RotateCw className="w-4 h-4 text-amber-400 shrink-0" />
                   <span>Перемешать</span>
                 </button>
 
                 {/* Salt (Requires real salt shaker) */}
                 <button
                   onClick={handleAddSaltFromShaker}
-                  className={`px-2.5 py-1.5 rounded-lg border font-medium transition-colors flex items-center justify-center gap-1.5 ${
+                  className={`px-2.5 py-2.5 sm:py-1.5 min-h-[44px] rounded-lg border font-medium transition-colors flex items-center justify-center gap-1.5 active:scale-95 ${
                     carriedSalt
                       ? 'bg-slate-800 hover:bg-slate-700 border-slate-700 text-slate-200'
                       : 'bg-slate-900/60 border-slate-800 text-slate-600 cursor-not-allowed'
                   }`}
                   title={carriedSalt ? 'Посолить из солонки' : 'Нужна солонка в инвентаре'}
                 >
-                  <Sparkles className="w-3.5 h-3.5 text-slate-300" />
+                  <Sparkles className="w-4 h-4 text-slate-300 shrink-0" />
                   <span>Посолить</span>
                 </button>
 
                 {/* Oil (Requires real oil) */}
                 <button
                   onClick={handlePourRealOil}
-                  className={`px-2.5 py-1.5 rounded-lg border font-medium transition-colors flex items-center justify-center gap-1.5 ${
+                  className={`px-2.5 py-2.5 sm:py-1.5 min-h-[44px] rounded-lg border font-medium transition-colors flex items-center justify-center gap-1.5 active:scale-95 ${
                     carriedOil
                       ? 'bg-slate-800 hover:bg-slate-700 border-slate-700 text-slate-200'
                       : 'bg-slate-900/60 border-slate-800 text-slate-600 cursor-not-allowed'
                   }`}
                   title={carriedOil ? 'Добавить масло из бутылки' : 'Нужно растительное масло в инвентаре'}
                 >
-                  <Droplets className="w-3.5 h-3.5 text-amber-400" />
+                  <Droplets className="w-4 h-4 text-amber-400 shrink-0" />
                   <span>Масло</span>
                 </button>
 
                 {/* Water (Requires sink or water container) */}
                 <button
                   onClick={handlePourWater}
-                  className={`px-2.5 py-1.5 rounded-lg border font-medium transition-colors flex items-center justify-center gap-1.5 ${
+                  className={`px-2.5 py-2.5 sm:py-1.5 min-h-[44px] rounded-lg border font-medium transition-colors flex items-center justify-center gap-1.5 active:scale-95 ${
                     hasNearbySink || safeInventory.some(i => i.itemId && i.itemId.includes('water'))
                       ? 'bg-slate-800 hover:bg-slate-700 border-slate-700 text-slate-200'
                       : 'bg-slate-900/60 border-slate-800 text-slate-600 cursor-not-allowed'
                   }`}
                   title="Налить воду из мойки или бутылки"
                 >
-                  <Droplets className="w-3.5 h-3.5 text-cyan-400" />
+                  <Droplets className="w-4 h-4 text-cyan-400 shrink-0" />
                   <span>Вода</span>
                 </button>
               </div>
@@ -808,10 +875,10 @@ export const KitchenStationModal: React.FC<KitchenStationModalProps> = ({
               {/* Service & Plate Food */}
               <button
                 onClick={handleFinishAndPlateDish}
-                className="w-full py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs uppercase tracking-wider shadow-md shadow-amber-500/20 flex items-center justify-center gap-2 transition-all"
+                className="w-full py-3 sm:py-2.5 min-h-[46px] rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs sm:text-sm uppercase tracking-wider shadow-md shadow-amber-500/20 flex items-center justify-center gap-2 transition-all active:scale-[0.98]"
               >
-                <Check className="w-4 h-4 stroke-[3]" />
-                <span>
+                <Check className="w-4 h-4 stroke-[3] shrink-0" />
+                <span className="truncate">
                   {carriedPlates.length > 0 
                     ? `Сервировать на ${carriedPlates[0].nameRu.toLowerCase()}` 
                     : 'Снять готовое блюдо в инвентарь'}
@@ -820,22 +887,22 @@ export const KitchenStationModal: React.FC<KitchenStationModalProps> = ({
             </div>
           </div>
 
-          {/* Right Column: Sensory Feedback (Sight, Sound, Atmosphere) (3 cols) */}
-          <div className="lg:col-span-3 flex flex-col min-h-0 bg-slate-950/70 p-4 space-y-4 overflow-y-auto">
+          {/* Right Column: Sensory Feedback (3 cols desktop; shown on mobile if mobileTab === 'sensory') */}
+          <div className={`${mobileTab === 'sensory' ? 'flex' : 'hidden'} lg:flex lg:col-span-3 flex-col min-h-0 bg-slate-950/70 p-3 sm:p-4 space-y-3 sm:space-y-4 overflow-y-auto`}>
             
             {/* Real-time Diegetic Sensory Observation */}
-            <div className="p-3.5 rounded-xl bg-slate-900/80 border border-slate-800 text-xs">
-              <div className="flex items-center gap-1.5 text-amber-400 font-semibold mb-2 uppercase tracking-wider text-[11px]">
+            <div className="p-3 sm:p-3.5 rounded-xl bg-slate-900/80 border border-slate-800 text-xs shrink-0">
+              <div className="flex items-center gap-1.5 text-amber-400 font-semibold mb-1.5 uppercase tracking-wider text-[11px]">
                 <Activity className="w-3.5 h-3.5" />
                 <span>Органолептика и чувства</span>
               </div>
-              <p className="text-slate-300 leading-relaxed italic text-[11px]">
+              <p className="text-slate-300 leading-relaxed italic text-xs">
                 «{lastSensoryLog}»
               </p>
             </div>
 
             {/* Diegetic Sound & Vapor Inspection */}
-            <div className="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800 text-xs space-y-3">
+            <div className="p-3 sm:p-3.5 rounded-xl bg-slate-900/60 border border-slate-800 text-xs space-y-2.5 shrink-0">
               <div className="text-[11px] font-bold text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
                 <Volume2 className="w-3.5 h-3.5 text-amber-400" />
                 <span>Сенсорный фон</span>
@@ -843,50 +910,50 @@ export const KitchenStationModal: React.FC<KitchenStationModalProps> = ({
 
               <div>
                 <div className="text-[10px] text-slate-500 uppercase">Звук:</div>
-                <div className="text-slate-300 text-xs font-medium">{observations.soundText}</div>
+                <div className="text-slate-200 text-xs font-medium">{observations.soundText}</div>
               </div>
 
               <div>
                 <div className="text-[10px] text-slate-500 uppercase">Поведение среды:</div>
-                <div className="text-slate-300 text-xs font-medium">{observations.panSurfaceText}</div>
+                <div className="text-slate-200 text-xs font-medium">{observations.panSurfaceText}</div>
               </div>
 
               <div>
                 <div className="text-[10px] text-slate-500 uppercase">Воздух и пар:</div>
-                <div className="text-slate-300 text-xs font-medium">{observations.smokeText}</div>
+                <div className="text-slate-200 text-xs font-medium">{observations.smokeText}</div>
               </div>
             </div>
 
             {/* Inventory Real Tool Presence Status */}
-            <div className="p-3.5 rounded-xl bg-slate-900/40 border border-slate-800 text-xs space-y-2">
+            <div className="p-3 sm:p-3.5 rounded-xl bg-slate-900/40 border border-slate-800 text-xs space-y-2 shrink-0">
               <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
                 Предметы в руках и карманах
               </div>
               
-              <div className="flex items-center justify-between text-[11px]">
+              <div className="flex items-center justify-between text-xs">
                 <span className="text-slate-400">Нож:</span>
-                <span className={carriedKnife ? 'text-emerald-400' : 'text-slate-500'}>
+                <span className={carriedKnife ? 'text-emerald-400 font-medium' : 'text-slate-500'}>
                   {carriedKnife ? carriedKnife.nameRu : 'Нет ножа'}
                 </span>
               </div>
 
-              <div className="flex items-center justify-between text-[11px]">
+              <div className="flex items-center justify-between text-xs">
                 <span className="text-slate-400">Соль:</span>
-                <span className={carriedSalt ? 'text-emerald-400' : 'text-slate-500'}>
+                <span className={carriedSalt ? 'text-emerald-400 font-medium' : 'text-slate-500'}>
                   {carriedSalt ? carriedSalt.nameRu : 'Нет солонки'}
                 </span>
               </div>
 
-              <div className="flex items-center justify-between text-[11px]">
+              <div className="flex items-center justify-between text-xs">
                 <span className="text-slate-400">Масло / Жир:</span>
-                <span className={carriedOil ? 'text-emerald-400' : 'text-slate-500'}>
+                <span className={carriedOil ? 'text-emerald-400 font-medium' : 'text-slate-500'}>
                   {carriedOil ? carriedOil.nameRu : 'Нет масла'}
                 </span>
               </div>
 
-              <div className="flex items-center justify-between text-[11px]">
+              <div className="flex items-center justify-between text-xs">
                 <span className="text-slate-400">Тарелка / Посуда:</span>
-                <span className={carriedPlates.length > 0 ? 'text-emerald-400' : 'text-slate-500'}>
+                <span className={carriedPlates.length > 0 ? 'text-emerald-400 font-medium' : 'text-slate-500'}>
                   {carriedPlates.length > 0 ? carriedPlates[0].nameRu : 'Нет тарелки'}
                 </span>
               </div>
@@ -894,7 +961,7 @@ export const KitchenStationModal: React.FC<KitchenStationModalProps> = ({
 
             {/* Added Seasonings */}
             {vessel.seasoningNotes.length > 0 && (
-              <div className="p-3 rounded-xl bg-slate-900/30 border border-slate-800 text-[11px]">
+              <div className="p-3 rounded-xl bg-slate-900/30 border border-slate-800 text-xs shrink-0">
                 <div className="text-slate-400 font-semibold mb-1">Добавлено в блюдо:</div>
                 <div className="text-slate-300 space-y-0.5">
                   {vessel.seasoningNotes.map((sn, sIdx) => (
