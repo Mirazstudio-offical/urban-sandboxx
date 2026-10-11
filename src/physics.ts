@@ -12687,16 +12687,25 @@ export function updateTowingRopesPhysics(world: GameWorld, dt: number, player: P
           
           towedCar.angle += turnRate * dt;
 
-          // Align towed car velocity along its rolling axis with high lateral tire grip (no sideways ice skating)
+          // Align towed car velocity along its rolling axis with realistic tire cornering grip (no ice skating)
           const headCos = Math.cos(towedCar.angle);
           const headSin = Math.sin(towedCar.angle);
           const longSpeed = towedCar.vx * headCos + towedCar.vy * headSin;
           const latSpeed = -towedCar.vx * headSin + towedCar.vy * headCos;
 
-          const lateralDamp = 0.88; // 88% lateral slip damping per frame
+          // Realistic tire lateral cornering stiffness: tires resist sideways motion firmly, creating authentic tracking
+          const lateralDamp = 0.22; // 78% lateral friction damping per frame (firm asphalt grip instead of 88% slip)
           towedCar.vx = headCos * longSpeed + (-headSin * latSpeed * (1 - lateralDamp));
           towedCar.vy = headSin * longSpeed + (headCos * latSpeed * (1 - lateralDamp));
           towedCar.speed = longSpeed;
+
+          // Apply rolling resistance and tire scrub drag to both towing and towed vehicles so they don't slide freely like on ice
+          towedCar.vx *= 0.985;
+          towedCar.vy *= 0.985;
+          vehA.vx *= 0.992;
+          vehA.vy *= 0.992;
+          vehB.vx *= 0.992;
+          vehB.vy *= 0.992;
         } else {
           // Attached to rear bumper of towed car (backward towing)
           let revAngleDiff = pullAngle - (towedCar.angle + Math.PI);
