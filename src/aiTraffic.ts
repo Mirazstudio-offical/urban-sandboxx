@@ -2693,14 +2693,18 @@ export function updateAITraffic(
       car.turnSignalTimer = 0;
     }
 
-    // --- POST-COLLISION UNCONTROLLED SPINOUT & BALLISTIC SLIDE ---
-    if (car.spinoutTimer && car.spinoutTimer > 0) {
+    // --- POST-COLLISION UNCONTROLLED SPINOUT, PUSHED & SHOCKED STATE ---
+    if ((car.spinoutTimer && car.spinoutTimer > 0) || (car.pushedTimer && car.pushedTimer > 0) || (car.stunnedTimer && car.stunnedTimer > 0)) {
       car.turnSignal = 'hazard';
       car.brakeLightsOn = true;
-      car.aiState = 'spinout';
-      // In spinout mode, steering and autonomous braking are bypassed.
-      // Dynamic momentum, angular spin, and asphalt tire friction are resolved in physics.ts!
-      totalSpeed += Math.hypot(car.vx, car.vy);
+      car.targetSpeed = 0;
+      car.idmAcceleration = 0;
+      if (car.spinoutTimer && car.spinoutTimer > 0) {
+        car.aiState = 'spinout';
+      }
+      // In spinout/pushed mode, steering and autonomous engine throttle are disengaged.
+      // Dynamic momentum, angular spin, external push forces, and asphalt tire friction are resolved in physics.ts!
+      totalSpeed += Math.hypot(car.vx || 0, car.vy || 0);
       movingCars++;
       continue;
     }
@@ -2710,26 +2714,16 @@ export function updateAITraffic(
       car.turnSignal = 'hazard';
       car.brakeLightsOn = true;
       car.targetSpeed = 0;
-      car.idmAcceleration = -450;
-      if (car.speed !== 0) {
-        const stopDecel = 400 * dt;
-        if (Math.abs(car.speed) <= stopDecel) {
-          car.speed = 0;
-        } else {
-          car.speed -= Math.sign(car.speed) * stopDecel;
-        }
-      }
-      if (car.speed === 0) {
-        car.angularVelocity = 0;
-        car.steerAngle = 0;
-        car.vx = 0;
-        car.vy = 0;
-      }
+      car.idmAcceleration = 0;
       car.aiState = 'stopping_obstacle';
       if (car.engineState) {
         car.engineState.engineRunning = false;
         car.engineState.engineRPM = 0;
       }
+      // Note: Tire friction and external push momentum are physically integrated in physics.ts.
+      // We do NOT artificially clamp vx/vy to zero here, allowing the crashed vehicle to be pushed or plowed by other cars.
+      totalSpeed += Math.hypot(car.vx || 0, car.vy || 0);
+      movingCars++;
       continue;
     }
 

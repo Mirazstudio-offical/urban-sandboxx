@@ -1057,34 +1057,36 @@ export function checkVehicleVehicleCollision(carA: Vehicle, carB: Vehicle): Vehi
   }
 
   // --- FIRST-PRINCIPLES BUMPER & IMPACT PLANE NORMAL RESOLUTION ---
-  // In SAT on elongated boxes, an offset frontal collision (e.g. 25-40% overlap) has small lateral overlap
-  // but deep longitudinal crumple penetration. SAT naïvely picks the lateral axis because min(overlap)
-  // is smaller sideways, treating head-on impacts as glancing side-swipes and flinging cars sideways into ditches!
-  // Here, we identify genuine frontal and rear bumper collisions and align the contact normal with the
-  // true physical crash plane.
+  // In SAT on elongated vehicle boxes (~48px long by ~22px wide), an offset frontal/rear impact
+  // has a small lateral overlap (1-3px) but deep longitudinal penetration (8-20px).
+  // Naive SAT picks the lateral axis because min(overlap) is smaller sideways, treating
+  // bumper collisions as glancing side-swipes, flinging cars laterally across lanes into oncoming traffic!
+  // Here, we identify genuine physical contact features (bumpers vs doors vs approach vectors)
+  // and align the contact normal with the physical impact plane.
   const cosA = Math.cos(carA.angle);
   const sinA = Math.sin(carA.angle);
   const cosB = Math.cos(carB.angle);
   const sinB = Math.sin(carB.angle);
 
   const headingDot = cosA * cosB + sinA * sinB;
-  const projDistA = cdx * cosA + cdy * sinA;
-  const projDistB = -cdx * cosB + -cdy * sinB;
+  const relVx = (carB.vx || 0) - (carA.vx || 0);
+  const relVy = (carB.vy || 0) - (carA.vy || 0);
+  const relSpeed = Math.hypot(relVx, relVy);
 
   const contactDistA = (contactX - carA.x) * cosA + (contactY - carA.y) * sinA;
   const contactDistB = (contactX - carB.x) * cosB + (contactY - carB.y) * sinB;
 
-  const isHeadOnOrientation = headingDot < -0.30;
-  const isFrontToFront = isHeadOnOrientation && projDistA > -8 && projDistB > -8;
-  const isFrontalContact = isFrontToFront && contactDistA > -carA.length * 0.18 && contactDistB > -carB.length * 0.18;
+  const isAFront = contactDistA > -carA.length * 0.10;
+  const isARear = contactDistA < carA.length * 0.10;
+  const isBFront = contactDistB > -carB.length * 0.10;
+  const isBRear = contactDistB < carB.length * 0.10;
 
-  let finalNormalX = bestCollision.normalX;
-  let finalNormalY = bestCollision.normalY;
-  let finalOverlap = bestCollision.overlap;
+  let resolvedNormalX = bestCollision.normalX;
+  let resolvedNormalY = bestCollision.normalY;
+  let hasResolvedNormal = false;
 
-  if (isFrontalContact) {
-    // Both front bumpers/crumple structures collided oncoming.
-    // The physical contact plane normal MUST oppose the oncoming velocity vector (longitudinally).
+  // 1. Head-on / Oncoming Collision (approaching with opposing headings)
+  if (headingDot < -0.25 && (isAFront || isBFront)) {
     let frontalNormX = (cosA - cosB) * 0.5;
     let frontalNormY = (sinA - sinB) * 0.5;
     const fLen = Math.hypot(frontalNormX, frontalNormY);
@@ -1095,17 +1097,89 @@ export function checkVehicleVehicleCollision(carA: Vehicle, carB: Vehicle): Vehi
       frontalNormX = cosA;
       frontalNormY = sinA;
     }
-    // Direct normal from carA towards carB
     if (cdx * frontalNormX + cdy * frontalNormY < 0) {
       frontalNormX = -frontalNormX;
       frontalNormY = -frontalNormY;
     }
+    resolvedNormalX = frontalNormX;
+    resolvedNormalY = frontalNormY;
+    hasResolvedNormal = true;
+  }
+  // 2. Rear-End Collision / Same-Direction Longitudinal Shove
+  else if (headingDot > 0.25 && ((isAFront && isBRear) || (isARear && isBFront) || Math.abs(cdx * cosA + cdy * sinA) > Math.abs(-cdx * sinA + cdy * cosA))) {
+    let longNormX = (cosA + cosB) * 0.5;
+    let longNormY = (sinA + sinB) * 0.5;
+    const lLen = Math.hypot(longNormX, longNormY);
+    if (lLen > 0.001) {
+      longNormX /= lLen;
+      longNormY /= lLen;
+    } else {
+      longNormX = cosA;
+      longNormY = sinA;
+    }
+    if (cdx * longNormX + cdy * longNormY < 0) {
+      longNormX = -longNormX;
+      longNormY = -longNormY;
+    }
+    resolvedNormalX = longNormX;
+    resolvedNormalY = longNormY;
+    hasResolvedNormal = true;
+  }
+  // 3. T-Bone Collision (Front of one car strikes flank of another car at an angle)
+  else if (Math.abs(headingDot) <= 0.35) {
+    if (isAFront && Math.abs(contactDistB) <= carB.length * 0.38) {
+      // Car A nose hits Car B door: contact plane is Car B's door (Car B's lateral axis)
+      let doorNormX = -sinB;
+      let doorNormY = cosB;
+      if (cdx * doorNormX + cdy * doorNormY < 0) {
+        doorNormX = -doorNormX;
+        doorNormY = -doorNormY;
+      }
+      resolvedNormalX = doorNormX;
+      resolvedNormalY = doorNormY;
+      hasResolvedNormal = true;
+    } else if (isBFront && Math.abs(contactDistA) <= carA.length * 0.38) {
+      // Car B nose hits Car A door: contact plane is Car A's door (Car A's lateral axis)
+      let doorNormX = -sinA;
+      let doorNormY = cosA;
+      if (cdx * doorNormX + cdy * doorNormY < 0) {
+        doorNormX = -doorNormX;
+        doorNormY = -doorNormY;
+      }
+      resolvedNormalX = doorNormX;
+      resolvedNormalY = doorNormY;
+      hasResolvedNormal = true;
+    }
+  }
 
-    // Determine actual longitudinal crush/penetration along this bumper normal
+  // 4. Relative approach vector verification:
+  // If moving at high speed, ensure the normal is not perpendicular to the crash approach!
+  if (relSpeed > 3.0) {
+    const appX = -relVx / relSpeed;
+    const appY = -relVy / relSpeed;
+    const dotApp = resolvedNormalX * appX + resolvedNormalY * appY;
+    if (dotApp < 0.20 && hasResolvedNormal) {
+      // Fallback: blend towards approach vector to ensure impulse opposes actual crash motion
+      let blendNormX = resolvedNormalX * 0.6 + appX * 0.4;
+      let blendNormY = resolvedNormalY * 0.6 + appY * 0.4;
+      const bLen = Math.hypot(blendNormX, blendNormY);
+      if (bLen > 0.001) {
+        resolvedNormalX = blendNormX / bLen;
+        resolvedNormalY = blendNormY / bLen;
+      }
+    }
+  }
+
+  // Calculate actual penetration depth along the resolved normal
+  let finalNormalX = resolvedNormalX;
+  let finalNormalY = resolvedNormalY;
+  let finalOverlap = bestCollision.overlap;
+
+  if (hasResolvedNormal) {
     let minA = 999999, maxA = -999999;
     for (const obbA of obbsA) {
       for (const p of obbA.corners) {
-        const proj = p.x * frontalNormX + p.y * frontalNormY;
+        const proj = p.x * finalNormalX + p.y * finalNormalY;
         if (proj < minA) minA = proj;
         if (proj > maxA) maxA = proj;
       }
@@ -1113,51 +1187,14 @@ export function checkVehicleVehicleCollision(carA: Vehicle, carB: Vehicle): Vehi
     let minB = 999999, maxB = -999999;
     for (const obbB of obbsB) {
       for (const p of obbB.corners) {
-        const proj = p.x * frontalNormX + p.y * frontalNormY;
+        const proj = p.x * finalNormalX + p.y * finalNormalY;
         if (proj < minB) minB = proj;
         if (proj > maxB) maxB = proj;
       }
     }
     const longOverlap = Math.min(maxA, maxB) - Math.max(minA, minB);
     if (longOverlap > 0) {
-      finalNormalX = frontalNormX;
-      finalNormalY = frontalNormY;
       finalOverlap = longOverlap;
-    }
-  } else {
-    // Rear-end collision check (front of one car hits rear bumper of the other)
-    const isSameDirection = headingDot > 0.55;
-    const isRearEndAIntoB = isSameDirection && projDistA > 0 && projDistB < 0 && contactDistA > 0 && contactDistB < 0;
-    const isRearEndBIntoA = isSameDirection && projDistA < 0 && projDistB > 0 && contactDistA < 0 && contactDistB > 0;
-    if (isRearEndAIntoB || isRearEndBIntoA) {
-      let rearNormX = cosA;
-      let rearNormY = sinA;
-      if (cdx * rearNormX + cdy * rearNormY < 0) {
-        rearNormX = -rearNormX;
-        rearNormY = -rearNormY;
-      }
-      let minA = 999999, maxA = -999999;
-      for (const obbA of obbsA) {
-        for (const p of obbA.corners) {
-          const proj = p.x * rearNormX + p.y * rearNormY;
-          if (proj < minA) minA = proj;
-          if (proj > maxA) maxA = proj;
-        }
-      }
-      let minB = 999999, maxB = -999999;
-      for (const obbB of obbsB) {
-        for (const p of obbB.corners) {
-          const proj = p.x * rearNormX + p.y * rearNormY;
-          if (proj < minB) minB = proj;
-          if (proj > maxB) maxB = proj;
-        }
-      }
-      const longOverlap = Math.min(maxA, maxB) - Math.max(minA, minB);
-      if (longOverlap > 0) {
-        finalNormalX = rearNormX;
-        finalNormalY = rearNormY;
-        finalOverlap = longOverlap;
-      }
     }
   }
 
@@ -2625,7 +2662,7 @@ export function applyVehicleDamageAndDeformation(
     car.brakeLightsOn = true;
     car.targetSpeed = 0;
     car.idmAcceleration = 0;
-    if (Math.abs(car.speed) < 1.0) {
+    if (Math.hypot(car.vx || 0, car.vy || 0) < 0.5) {
       car.speed = 0;
       car.angularVelocity = 0;
       car.steerAngle = 0;
@@ -9569,73 +9606,89 @@ export function updateVehiclePhysics(
         vehicle.spinoutTimer = 0;
       }
     } else {
-      if (!vehicle.isPlayerControlled && isVehicleDisabledOrCrashed(vehicle)) {
+      if ((vehicle.pushedTimer && vehicle.pushedTimer > 0) || (vehicle.stunnedTimer && vehicle.stunnedTimer > 0) || (!vehicle.isPlayerControlled && isVehicleDisabledOrCrashed(vehicle))) {
+        // Pushed, stunned, or disabled/crashed NPC: physics momentum and asphalt Coulomb tire friction
         vehicle.targetSpeed = 0;
         vehicle.idmAcceleration = 0;
-        if (Math.abs(vehicle.speed) < 1.0) {
+        const cosA = Math.cos(vehicle.angle);
+        const sinA = Math.sin(vehicle.angle);
+        const curSpeed = Math.hypot(vehicle.vx, vehicle.vy);
+        if (curSpeed > 0.8) {
+          const tireFrictionDecel = 140 * dt; // px/s^2 natural Coulomb tire drag on asphalt
+          const newSpeed = Math.max(0, curSpeed - tireFrictionDecel);
+          const ratio = newSpeed / curSpeed;
+          vehicle.vx *= ratio;
+          vehicle.vy *= ratio;
+          vehicle.speed = vehicle.vx * cosA + vehicle.vy * sinA;
+          vehicle.lateralVelocity = -vehicle.vx * sinA + vehicle.vy * cosA;
+          (vehicle as any).lateralSlip = vehicle.lateralVelocity;
+        } else {
+          vehicle.vx = 0;
+          vehicle.vy = 0;
           vehicle.speed = 0;
+          vehicle.lateralVelocity = 0;
+          vehicle.angularVelocity = 0;
         }
-        if (vehicle.speed === 0) {
+        if (!vehicle.isPlayerControlled && isVehicleDisabledOrCrashed(vehicle)) {
+          vehicle.aiState = 'stopping_obstacle';
+          vehicle.turnSignal = 'hazard';
+          vehicle.brakeLightsOn = true;
+          if (vehicle.engineState) {
+            vehicle.engineState.engineRunning = false;
+            vehicle.engineState.engineRPM = 0;
+          }
+        }
+      } else {
+        // Smooth, gentle acceleration and polite braking for AI
+        const speedScaleFactor = SPEED_KMH_TO_PX_S / 2.7778; // 1.6
+        const accelRate = 90 * speedScaleFactor; // px/s^2 (no rapid jerking or shoving)
+        const brakeRate = 180 * speedScaleFactor; // px/s^2
+
+        if (vehicle.aiState === 'reversing') {
+          // Smoothly reverse
+          if (vehicle.speed > vehicle.targetSpeed) {
+            vehicle.speed = Math.max(vehicle.targetSpeed, vehicle.speed - accelRate * 1.2 * dt);
+          } else {
+            vehicle.speed = Math.min(vehicle.targetSpeed, vehicle.speed + accelRate * dt);
+          }
+          vehicle.brakeLightsOn = false;
+          vehicle.isReversing = true;
+        } else {
+          vehicle.isReversing = vehicle.speed * PX_S_TO_SPEED_KMH < -0.7;
+          if (vehicle.idmAcceleration !== undefined) {
+            // IDM Controlled speed and brake lights
+            vehicle.speed = Math.max(0, vehicle.speed + vehicle.idmAcceleration * dt);
+            vehicle.brakeLightsOn = vehicle.idmAcceleration < -20 * speedScaleFactor || vehicle.speed * PX_S_TO_SPEED_KMH < 1.4;
+          } else {
+            if (vehicle.speed < vehicle.targetSpeed) {
+              vehicle.speed = Math.min(vehicle.targetSpeed, vehicle.speed + accelRate * dt);
+              vehicle.brakeLightsOn = false;
+            } else if (vehicle.speed > vehicle.targetSpeed) {
+              vehicle.speed = Math.max(vehicle.targetSpeed, vehicle.speed - brakeRate * dt);
+              vehicle.brakeLightsOn = ((vehicle.speed - vehicle.targetSpeed) * PX_S_TO_SPEED_KMH > 3.6) || (vehicle.targetSpeed * PX_S_TO_SPEED_KMH < 1.8);
+            } else {
+              vehicle.brakeLightsOn = false;
+            }
+          }
+        }
+
+        // Kinematic velocity aligned with vehicle heading and rear-axle pivot rotation
+        const { rearAxleDist: npcRearAxleDist } = getVehicleAxleGeometry(vehicle);
+        const cosA = Math.cos(vehicle.angle);
+        const sinA = Math.sin(vehicle.angle);
+        let yawRate = vehicle.angularVelocity || 0;
+        if (Math.abs(vehicle.speed) < 0.5) {
+          yawRate = 0;
           vehicle.angularVelocity = 0;
           vehicle.steerAngle = 0;
+        }
+        vehicle.vx = cosA * vehicle.speed - sinA * (yawRate * npcRearAxleDist);
+        vehicle.vy = sinA * vehicle.speed + cosA * (yawRate * npcRearAxleDist);
+
+        if (Math.abs(vehicle.speed) < 0.1 && yawRate === 0 && (!vehicle.knockbackVx || Math.abs(vehicle.knockbackVx) < 0.1) && (!vehicle.knockbackVy || Math.abs(vehicle.knockbackVy) < 0.1)) {
           vehicle.vx = 0;
           vehicle.vy = 0;
         }
-        vehicle.aiState = 'stopping_obstacle';
-      }
-
-      // Smooth, gentle acceleration and polite braking for AI
-      const speedScaleFactor = SPEED_KMH_TO_PX_S / 2.7778; // 1.6
-      const accelRate = 90 * speedScaleFactor; // px/s^2 (no rapid jerking or shoving)
-      const brakeRate = 180 * speedScaleFactor; // px/s^2
-
-      if (vehicle.stunnedTimer && vehicle.stunnedTimer > 0) {
-        // AI is temporarily stunned/recoiling from severe impact momentum
-        vehicle.speed = Math.hypot(vehicle.vx, vehicle.vy) * Math.sign(vehicle.speed || 1);
-      } else if (vehicle.aiState === 'reversing') {
-        // Smoothly reverse
-        if (vehicle.speed > vehicle.targetSpeed) {
-          vehicle.speed = Math.max(vehicle.targetSpeed, vehicle.speed - accelRate * 1.2 * dt);
-        } else {
-          vehicle.speed = Math.min(vehicle.targetSpeed, vehicle.speed + accelRate * dt);
-        }
-        vehicle.brakeLightsOn = false;
-        vehicle.isReversing = true;
-      } else {
-        vehicle.isReversing = vehicle.speed * PX_S_TO_SPEED_KMH < -0.7;
-        if (vehicle.idmAcceleration !== undefined) {
-          // IDM Controlled speed and brake lights
-          vehicle.speed = Math.max(0, vehicle.speed + vehicle.idmAcceleration * dt);
-          vehicle.brakeLightsOn = vehicle.idmAcceleration < -20 * speedScaleFactor || vehicle.speed * PX_S_TO_SPEED_KMH < 1.4;
-        } else {
-          if (vehicle.speed < vehicle.targetSpeed) {
-            vehicle.speed = Math.min(vehicle.targetSpeed, vehicle.speed + accelRate * dt);
-            vehicle.brakeLightsOn = false;
-          } else if (vehicle.speed > vehicle.targetSpeed) {
-            vehicle.speed = Math.max(vehicle.targetSpeed, vehicle.speed - brakeRate * dt);
-            vehicle.brakeLightsOn = ((vehicle.speed - vehicle.targetSpeed) * PX_S_TO_SPEED_KMH > 3.6) || (vehicle.targetSpeed * PX_S_TO_SPEED_KMH < 1.8);
-          } else {
-            vehicle.brakeLightsOn = false;
-          }
-        }
-      }
-
-      // Kinematic velocity aligned with vehicle heading and rear-axle pivot rotation
-      const { rearAxleDist: npcRearAxleDist } = getVehicleAxleGeometry(vehicle);
-      const cosA = Math.cos(vehicle.angle);
-      const sinA = Math.sin(vehicle.angle);
-      let yawRate = vehicle.angularVelocity || 0;
-      if (Math.abs(vehicle.speed) < 0.5) {
-        yawRate = 0;
-        vehicle.angularVelocity = 0;
-        vehicle.steerAngle = 0;
-      }
-      vehicle.vx = cosA * vehicle.speed - sinA * (yawRate * npcRearAxleDist);
-      vehicle.vy = sinA * vehicle.speed + cosA * (yawRate * npcRearAxleDist);
-
-      if (Math.abs(vehicle.speed) < 0.1 && yawRate === 0 && (!vehicle.knockbackVx || Math.abs(vehicle.knockbackVx) < 0.1) && (!vehicle.knockbackVy || Math.abs(vehicle.knockbackVy) < 0.1)) {
-        vehicle.vx = 0;
-        vehicle.vy = 0;
       }
     }
   }
@@ -9790,6 +9843,10 @@ export function updateVehiclePhysics(
   if (vehicle.stunnedTimer && vehicle.stunnedTimer > 0) {
     vehicle.stunnedTimer -= dt;
     if (vehicle.stunnedTimer <= 0) vehicle.stunnedTimer = 0;
+  }
+  if (vehicle.pushedTimer && vehicle.pushedTimer > 0) {
+    vehicle.pushedTimer -= dt;
+    if (vehicle.pushedTimer <= 0) vehicle.pushedTimer = 0;
   }
 
   // --- WATER IMMERSION, HYDRODYNAMIC DRAG & REALISTIC HYDROLOCK (ГИДРОУДАР) ---
@@ -10076,7 +10133,7 @@ export function updateVehiclePhysics(
 
       if (isPlayerInvolved) {
         // Player or spinout-involved: full rigid body momentum, metal friction, torque and angular impulse
-        const sepFactor = Math.min(col.overlap, 4.0 + col.overlap * 0.4);
+        const sepFactor = Math.min(col.overlap * 0.45, 3.2);
         vehicle.x -= col.normalX * sepFactor * ratioSelf;
         vehicle.y -= col.normalY * sepFactor * ratioSelf;
         other.x += col.normalX * sepFactor * ratioOther;
@@ -10220,6 +10277,8 @@ export function updateVehiclePhysics(
           if (!vehicle.isPlayerControlled) {
             const relSpdKmh = Math.hypot(relVx, relVy) * PX_S_TO_SPEED_KMH;
             vehicle.spinoutTimer = Math.min(5.0, Math.max(1.8, 1.0 + Math.abs(deltaW1) * 0.4 + relSpdKmh / 70));
+            vehicle.pushedTimer = Math.max(vehicle.pushedTimer || 0, 2.0);
+            vehicle.stunnedTimer = Math.max(vehicle.stunnedTimer || 0, 2.0);
             vehicle.aiState = 'spinout';
             vehicle.turnSignal = 'hazard';
             vehicle.brakeLightsOn = true;
@@ -10228,6 +10287,8 @@ export function updateVehiclePhysics(
           if (!other.isPlayerControlled) {
             const relSpdKmh = Math.hypot(relVx, relVy) * PX_S_TO_SPEED_KMH;
             other.spinoutTimer = Math.min(5.0, Math.max(1.8, 1.0 + Math.abs(deltaW2) * 0.4 + relSpdKmh / 70));
+            other.pushedTimer = Math.max(other.pushedTimer || 0, 2.0);
+            other.stunnedTimer = Math.max(other.stunnedTimer || 0, 2.0);
             other.aiState = 'spinout';
             other.turnSignal = 'hazard';
             other.brakeLightsOn = true;
@@ -10250,7 +10311,7 @@ export function updateVehiclePhysics(
                 reboundSpeed: 0,
                 contactX: col.contactX,
                 contactY: col.contactY,
-                preserveVelocity: false,
+                preserveVelocity: true,
                 interlockingTimer: interlockingDuration,
                 interlockingFriction: 0.95
               };
@@ -10268,7 +10329,7 @@ export function updateVehiclePhysics(
                 reboundSpeed: 0,
                 contactX: col.contactX,
                 contactY: col.contactY,
-                preserveVelocity: false,
+                preserveVelocity: true,
                 interlockingTimer: interlockingDuration,
                 interlockingFriction: 0.95
               };
@@ -10292,6 +10353,31 @@ export function updateVehiclePhysics(
           const impactIntensity = Math.min(1.0, impactSpeed / 160);
           if (impactIntensity > 0.1) {
             sound.playCollision(impactIntensity);
+          }
+        } else {
+          // Continuous contact push transmission (plowing/shoving in direct vehicle contact)
+          const vPushSelf = vehicle.vx * col.normalX + vehicle.vy * col.normalY;
+          const vPushOther = other.vx * col.normalX + other.vy * col.normalY;
+          const pushDiff = vPushSelf - vPushOther;
+          if (pushDiff > 0) {
+            const pushRatio = other.mass / totalMass;
+            const transfer = pushDiff * (1 - pushRatio * 0.35) * Math.min(1.0, dt * 20.0);
+            other.vx += col.normalX * transfer;
+            other.vy += col.normalY * transfer;
+            other.speed = other.vx * Math.cos(other.angle) + other.vy * Math.sin(other.angle);
+            other.lateralVelocity = -other.vx * Math.sin(other.angle) + other.vy * Math.cos(other.angle);
+            (other as any).lateralSlip = other.lateralVelocity;
+
+            vehicle.vx -= col.normalX * transfer * (other.mass / vehicle.mass) * 0.25;
+            vehicle.vy -= col.normalY * transfer * (other.mass / vehicle.mass) * 0.25;
+            vehicle.speed = vehicle.vx * Math.cos(vehicle.angle) + vehicle.vy * Math.sin(vehicle.angle);
+
+            if (!other.isPlayerControlled) {
+              other.pushedTimer = Math.max(other.pushedTimer || 0, 1.2);
+              other.stunnedTimer = Math.max(other.stunnedTimer || 0, 1.2);
+              other.turnSignal = 'hazard';
+              other.brakeLightsOn = true;
+            }
           }
         }
       } else {
@@ -10509,11 +10595,17 @@ export function updateVehiclePhysics(
           vehicle.x += col.normalX * (col.depth + 0.5);
           vehicle.y += col.normalY * (col.depth + 0.5);
           if (!vehicle.isPlayerControlled && (isVehicleDisabledOrCrashed(vehicle) || vehicle.aiState === 'stopping_obstacle')) {
-            vehicle.speed = 0;
-            vehicle.vx = 0;
-            vehicle.vy = 0;
-            vehicle.angularVelocity = 0;
-            vehicle.steerAngle = 0;
+            if (Math.hypot(vehicle.vx, vehicle.vy) < 2.0) {
+              vehicle.speed = 0;
+              vehicle.vx = 0;
+              vehicle.vy = 0;
+              vehicle.angularVelocity = 0;
+              vehicle.steerAngle = 0;
+            } else {
+              vehicle.speed *= 0.4;
+              vehicle.vx *= 0.4;
+              vehicle.vy *= 0.4;
+            }
           } else {
             vehicle.speed *= 0.4;
             vehicle.vx *= 0.4;
@@ -11770,16 +11862,18 @@ export function updateBreakablePropsAndLivingWorld(world: GameWorld, player: Pla
         continue; // Indestructible: remains standing and intact
       }
 
-      if (!veh.isPlayerControlled && (isVehicleDisabledOrCrashed(veh) || (veh.aiState === 'stopping_obstacle'&& Math.abs(veh.speed) < 2.0))) {
+      if (!veh.isPlayerControlled && (isVehicleDisabledOrCrashed(veh) || (veh.aiState === 'stopping_obstacle' && Math.abs(veh.speed) < 2.0))) {
         // Stopped/crashed NPC cannot break props or gain speed from prop pushing
         veh.x += col.pushX * 1.02;
         veh.y += col.pushY * 1.02;
-        veh.speed = 0;
-        veh.vx = 0;
-        veh.vy = 0;
-        veh.angularVelocity = 0;
-        veh.steerAngle = 0;
-        continue;
+        if (Math.hypot(veh.vx, veh.vy) < 2.0) {
+          veh.speed = 0;
+          veh.vx = 0;
+          veh.vy = 0;
+          veh.angularVelocity = 0;
+          veh.steerAngle = 0;
+          continue;
+        }
       }
 
       if (Math.abs(veh.speed) < 12) {
@@ -11795,11 +11889,15 @@ export function updateBreakablePropsAndLivingWorld(world: GameWorld, player: Pla
           veh.vx += nx * velInto;
           veh.vy += ny * velInto;
           if (!veh.isPlayerControlled && (isVehicleDisabledOrCrashed(veh) || veh.aiState === 'stopping_obstacle')) {
-            veh.speed = 0;
-            veh.vx = 0;
-            veh.vy = 0;
-            veh.angularVelocity = 0;
-            veh.steerAngle = 0;
+            if (Math.hypot(veh.vx, veh.vy) < 2.0) {
+              veh.speed = 0;
+              veh.vx = 0;
+              veh.vy = 0;
+              veh.angularVelocity = 0;
+              veh.steerAngle = 0;
+            } else {
+              veh.speed = Math.hypot(veh.vx, veh.vy) * Math.sign(veh.speed || 1);
+            }
           } else {
             veh.speed = Math.hypot(veh.vx, veh.vy) * Math.sign(veh.speed || 1);
           }

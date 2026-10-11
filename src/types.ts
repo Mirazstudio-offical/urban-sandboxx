@@ -526,6 +526,7 @@ export interface Vehicle {
   knockbackVy?: number;
   knockbackSpin?: number;
   stunnedTimer?: number;
+  pushedTimer?: number;        // Duration during/after external push where AI throttle & steering are disengaged
   spinoutTimer?: number;       // Duration of post-collision uncontrolled spinout/drift physics
 
   // Progressive Softbody Impact Cushioning (multi-frame crumple zone dynamics)
