@@ -22,7 +22,11 @@ import {
   RotateCcw,
   PlusCircle,
   X,
-  Compass
+  Compass,
+  Car,
+  MapPin,
+  Calendar,
+  AlertTriangle
 } from 'lucide-react';
 import { formatGameDate, formatGameTime, getRussianSeasonName } from '../calendarSystem';
 import { hasCustomSavedMap, clearCustomMapStorage } from '../loadMap';
@@ -84,8 +88,8 @@ const DEFAULT_SPAWNS: SpawnLocation[] = [
     nameRu: 'Городской Сквер (Фонтан & Сквер)',
     x: 4400,
     y: 2800,
-    description: 'Парковый фонтан, аллеи со скамейками, пешеходная зона и кольцевые проезды.',
-    icon: <TreePine className="w-4 h-4 text-[#c68a35]" />
+    description: 'Парковый фонтан, асфальтированные аллеи, пешеходная зона и кольцевые проезды.',
+    icon: <TreePine className="w-5 h-5 text-[#c68a35]" />
   },
   {
     id: 'downtown_plaza',
@@ -93,8 +97,8 @@ const DEFAULT_SPAWNS: SpawnLocation[] = [
     nameRu: 'Площадь Администрации (Центр)',
     x: 4350,
     y: 2000,
-    description: 'Официальный центр города, парковка перед госучреждениями и широкий проспект.',
-    icon: <Building2 className="w-4 h-4 text-[#c68a35]" />
+    description: 'Официальный центр города, парковка перед госучреждениями и широкий центральный проспект.',
+    icon: <Building2 className="w-5 h-5 text-[#c68a35]" />
   },
   {
     id: 'residential_courtyard',
@@ -103,7 +107,7 @@ const DEFAULT_SPAWNS: SpawnLocation[] = [
     x: 2750,
     y: 2750,
     description: 'Панельные пятиэтажки, детская площадка, гаражные боксы и узкие дворовые проезды.',
-    icon: <Home className="w-4 h-4 text-[#c68a35]" />
+    icon: <Home className="w-5 h-5 text-[#c68a35]" />
   },
   {
     id: 'industrial_district',
@@ -111,8 +115,8 @@ const DEFAULT_SPAWNS: SpawnLocation[] = [
     nameRu: 'Промзона (Автобаза №4 & Склады)',
     x: 6530,
     y: 1030,
-    description: 'Грузовые ангары, ремонтные ямы, стоянка спецтехники и бетонные плиты.',
-    icon: <Truck className="w-4 h-4 text-[#c68a35]" />
+    description: 'Грузовые ангары, ремонтные ямы, стоянка спецтехники и дорожные бетонные плиты.',
+    icon: <Truck className="w-5 h-5 text-[#c68a35]" />
   }
 ];
 
@@ -394,19 +398,22 @@ export const MainMenu: React.FC<MainMenuProps> = ({
       )}
 
       {/* ========================================================================= */}
-      {/* 4. MODAL: PLAY (CLEAN NON-OVERFLOWING SAVES ARCHIVE & NEW GAME)           */}
+      {/* 4. MODAL: PLAY (MODERN TILE GRIDS FOR SAVES & SPAWN POINTS)               */}
       {/* ========================================================================= */}
       {activeModal === 'play' && !isLoading && (
-        <div className="fixed inset-0 z-40 flex items-center justify-center p-4 bg-black/75 backdrop-blur-md animate-in fade-in duration-150">
-          <div className="relative w-full max-w-2xl bg-[#12151b] border-2 border-[#c68a35] rounded-[2px] shadow-2xl flex flex-col max-h-[88vh] overflow-hidden">
+        <div className="fixed inset-0 z-40 flex items-center justify-center p-3 sm:p-6 bg-black/80 backdrop-blur-md animate-in fade-in duration-150">
+          <div className="relative w-full max-w-4xl bg-[#12151b] border-2 border-[#c68a35] rounded-[3px] shadow-2xl flex flex-col max-h-[92vh] overflow-hidden">
             
             {/* Modal Header */}
             <div className="px-6 py-4 border-b border-white/10 flex items-center justify-between bg-[#161a22]">
               <div className="flex items-center gap-2.5">
-                <div className="w-2 h-5 bg-[#c68a35] -skew-x-12 shrink-0" />
-                <h2 className="text-lg font-black italic uppercase tracking-wider text-white font-sans">
+                <div className="w-2.5 h-6 bg-[#c68a35] -skew-x-12 shrink-0 shadow-[0_0_10px_rgba(198,138,53,0.5)]" />
+                <h2 className="text-lg sm:text-xl font-black italic uppercase tracking-wider text-white font-sans">
                   ВЫЕЗД НА ТРАССУ
                 </h2>
+                <span className="text-[11px] font-mono text-[#8b929e] hidden sm:inline">
+                  · Выберите сохранённую сессию или создайте новый рейс
+                </span>
               </div>
               <button
                 onClick={() => {
@@ -420,20 +427,20 @@ export const MainMenu: React.FC<MainMenuProps> = ({
             </div>
 
             {/* Play Tabs Switcher */}
-            <div className="px-6 pt-4 pb-2 flex gap-2 border-b border-white/[0.08] bg-[#12151b]">
+            <div className="px-6 pt-4 pb-3 flex gap-3 border-b border-white/[0.08] bg-[#12151b]">
               <button
                 onClick={() => {
                   playUiSound(700);
                   setPlayTab('saves');
                 }}
-                className={`flex items-center gap-2 px-5 py-2.5 font-mono text-xs font-bold uppercase tracking-wider rounded-[2px] transition-all cursor-pointer border ${
+                className={`flex items-center gap-2 px-6 py-2.5 font-mono text-xs font-bold uppercase tracking-wider rounded-[2px] transition-all cursor-pointer border ${
                   playTab === 'saves'
-                    ? 'bg-[#c68a35] text-black border-[#c68a35] font-black'
+                    ? 'bg-[#c68a35] text-black border-[#c68a35] font-black shadow-[0_0_12px_rgba(198,138,53,0.3)]'
                     : 'bg-[#181c24] text-[#8b929e] border-white/10 hover:text-white hover:bg-[#1e232d]'
                 }`}
               >
                 <HardDrive className="w-3.5 h-3.5" />
-                <span>Сохранённые поездки ({saves.length})</span>
+                <span>Архив сохранений ({saves.length})</span>
               </button>
 
               <button
@@ -441,112 +448,153 @@ export const MainMenu: React.FC<MainMenuProps> = ({
                   playUiSound(700);
                   setPlayTab('new_game');
                 }}
-                className={`flex items-center gap-2 px-5 py-2.5 font-mono text-xs font-bold uppercase tracking-wider rounded-[2px] transition-all cursor-pointer border ${
+                className={`flex items-center gap-2 px-6 py-2.5 font-mono text-xs font-bold uppercase tracking-wider rounded-[2px] transition-all cursor-pointer border ${
                   playTab === 'new_game'
-                    ? 'bg-[#c68a35] text-black border-[#c68a35] font-black'
+                    ? 'bg-[#c68a35] text-black border-[#c68a35] font-black shadow-[0_0_12px_rgba(198,138,53,0.3)]'
                     : 'bg-[#181c24] text-[#8b929e] border-white/10 hover:text-white hover:bg-[#1e232d]'
                 }`}
               >
                 <PlusCircle className="w-3.5 h-3.5" />
-                <span>Новый выезд</span>
+                <span>Новый заезд</span>
               </button>
             </div>
 
-            {/* Tab 1: Saves Archive */}
+            {/* TAB 1: SAVES ARCHIVE AS MODERN TILES */}
             {playTab === 'saves' && (
-              <div className="p-6 flex-1 overflow-y-auto space-y-2.5">
+              <div className="p-6 flex-1 overflow-y-auto">
                 {saves.length === 0 ? (
-                  <div className="py-12 px-6 text-center bg-[#181c24] border border-white/10 rounded-[2px] space-y-3">
-                    <p className="text-xs font-mono text-[#8b929e]">
-                      В архиве нет зарегистрированных рейсов. Создайте новый выезд!
-                    </p>
+                  <div className="py-16 px-6 text-center bg-[#161a22] border border-white/10 rounded-[3px] space-y-4">
+                    <div className="w-12 h-12 mx-auto rounded-full bg-[#c68a35]/10 border border-[#c68a35]/30 flex items-center justify-center text-[#c68a35]">
+                      <HardDrive className="w-6 h-6" />
+                    </div>
+                    <div>
+                      <h3 className="text-sm font-bold uppercase tracking-wider text-white font-sans">
+                        Архив поездок пуст
+                      </h3>
+                      <p className="text-xs font-mono text-[#8b929e] mt-1 max-w-md mx-auto">
+                        У вас пока нет сохранённых рейсов на Степном Тракте. Начните первый заезд!
+                      </p>
+                    </div>
                     <button
                       onClick={() => {
                         playUiSound(700);
                         setPlayTab('new_game');
                       }}
-                      className="px-5 py-2.5 bg-[#c68a35] text-black font-mono text-xs font-black uppercase rounded-[2px] hover:bg-[#d8963e] transition-colors cursor-pointer"
+                      className="px-6 py-2.5 bg-[#c68a35] text-black font-mono text-xs font-black uppercase rounded-[2px] hover:bg-[#d8963e] transition-colors cursor-pointer shadow-md inline-flex items-center gap-2"
                     >
-                      Начать новую поездку
+                      <PlusCircle className="w-4 h-4" />
+                      <span>Начать первую поездку</span>
                     </button>
                   </div>
                 ) : (
-                  saves.map((save) => {
-                    const isConfirming = confirmDeleteId === save.id;
-                    return (
-                      <div
-                        key={save.id}
-                        className="group flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 bg-[#181c24] hover:bg-[#1e232e] border border-white/[0.08] hover:border-[#c68a35] rounded-[2px] transition-all"
-                      >
-                        <div className="flex flex-col flex-1 min-w-0">
-                          <div className="flex items-center gap-2">
-                            <span className="text-sm font-black uppercase text-white truncate font-sans">
-                              {save.name}
-                            </span>
-                            <span className="text-[10px] font-mono text-[#c68a35] font-bold">
-                              {save.isInVehicle ? 'За рулём' : 'Пешком'}
-                            </span>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    {saves.map((save) => {
+                      const isConfirming = confirmDeleteId === save.id;
+                      return (
+                        <div
+                          key={save.id}
+                          className="group relative flex flex-col justify-between bg-[#161a22] hover:bg-[#1a1f29] border border-white/10 hover:border-[#c68a35] hover:shadow-[0_4px_20px_rgba(198,138,53,0.18)] rounded-[3px] p-4 transition-all"
+                        >
+                          {/* Ochre Accent Edge */}
+                          <div className="absolute left-0 top-0 bottom-0 w-[3px] bg-[#c68a35] opacity-0 group-hover:opacity-100 transition-opacity rounded-l-[3px]" />
+
+                          {/* Tile Header: Name & Mode */}
+                          <div>
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="flex items-center gap-2.5 min-w-0">
+                                <div className="p-2 rounded-[2px] bg-[#c68a35]/15 border border-[#c68a35]/30 text-[#c68a35] shrink-0">
+                                  {save.isInVehicle ? <Car className="w-4 h-4" /> : <User className="w-4 h-4" />}
+                                </div>
+                                <div className="min-w-0">
+                                  <h3 className="text-sm font-black uppercase tracking-wider text-white truncate font-sans group-hover:text-[#c68a35] transition-colors">
+                                    {save.name}
+                                  </h3>
+                                  <div className="text-[10px] font-mono text-[#c68a35] font-bold">
+                                    {save.isInVehicle ? 'За рулём техники' : 'Пеший режим'}
+                                  </div>
+                                </div>
+                              </div>
+
+                              {/* Delete Action with Confirmation */}
+                              {isConfirming ? (
+                                <div className="flex items-center gap-1 shrink-0">
+                                  <button
+                                    onClick={() => {
+                                      playUiSound(500);
+                                      onDeleteSave(save.id);
+                                      setConfirmDeleteId(null);
+                                    }}
+                                    className="px-2 py-1 bg-rose-600 hover:bg-rose-700 text-white font-mono text-[10px] font-bold uppercase rounded-[2px] transition-all cursor-pointer"
+                                  >
+                                    Удалить?
+                                  </button>
+                                  <button
+                                    onClick={() => setConfirmDeleteId(null)}
+                                    className="p-1 text-[#8b929e] hover:text-white"
+                                  >
+                                    <X className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
+                              ) : (
+                                <button
+                                  onClick={() => {
+                                    playUiSound(500);
+                                    setConfirmDeleteId(save.id);
+                                  }}
+                                  className="p-1.5 bg-white/[0.04] hover:bg-rose-950/60 text-[#8b929e] hover:text-rose-400 border border-white/10 hover:border-rose-900/40 rounded-[2px] transition-all cursor-pointer"
+                                  title="Удалить слот"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              )}
+                            </div>
+
+                            {/* Tile Details Deck */}
+                            <div className="grid grid-cols-2 gap-2 mt-3 pt-3 border-t border-white/[0.07] text-[11px] font-mono">
+                              <div className="flex items-center gap-1.5 text-[#8b929e]">
+                                <MapPin className="w-3.5 h-3.5 text-[#c68a35] shrink-0" />
+                                <span className="truncate text-[#d0d5dc]">{save.streetName || 'Степной Тракт'}</span>
+                              </div>
+                              <div className="flex items-center gap-1.5 text-[#8b929e]">
+                                <Clock className="w-3.5 h-3.5 text-[#c68a35] shrink-0" />
+                                <span className="text-white font-bold">{formatGameTime(save.timeHour ?? 10.0)}</span>
+                              </div>
+                              <div className="flex items-center gap-1.5 text-[#8b929e]">
+                                <Calendar className="w-3.5 h-3.5 text-[#c68a35] shrink-0" />
+                                <span>{save.calendar ? formatGameDate(save.calendar, 'medium') : (save.date || '08.10.2026')}</span>
+                              </div>
+                              <div className="text-[10px] text-[#c68a35] font-bold text-right self-center">
+                                {save.calendar?.season ? getRussianSeasonName(save.calendar.season) : (save.season || 'Осень')}
+                              </div>
+                            </div>
                           </div>
-                          
-                          <div className="flex flex-wrap items-center gap-2 text-[11px] text-[#8b929e] font-mono mt-1">
-                            <span>{save.calendar ? formatGameDate(save.calendar, 'medium') : (save.date || '08.10.2026')}</span>
-                            <span aria-hidden="true">·</span>
-                            <span>{save.calendar?.season ? getRussianSeasonName(save.calendar.season) : (save.season || 'Осень')}</span>
-                            <span aria-hidden="true">·</span>
-                            <span>{save.streetName || 'Степной Тракт'}</span>
-                            <span aria-hidden="true">·</span>
-                            <span className="text-white font-bold">{formatGameTime(save.timeHour ?? 10.0)}</span>
+
+                          {/* Launch Button */}
+                          <div className="mt-4 pt-3 border-t border-white/[0.07]">
+                            <button
+                              onClick={() => handleLoadSaveSlot(save.id)}
+                              className="w-full py-2.5 bg-[#c68a35] hover:bg-[#d8963e] text-black font-mono text-xs font-black uppercase rounded-[2px] transition-all cursor-pointer flex items-center justify-center gap-2 shadow-md group-hover:shadow-[0_0_12px_rgba(198,138,53,0.35)]"
+                            >
+                              <Play className="w-3.5 h-3.5 fill-current" />
+                              <span>ВЫЕХАТЬ В РЕЙС</span>
+                            </button>
                           </div>
                         </div>
-
-                        <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
-                          <button
-                            onClick={() => handleLoadSaveSlot(save.id)}
-                            className="px-4 py-2 bg-[#c68a35] hover:bg-[#d8963e] text-black font-mono text-xs font-black uppercase rounded-[2px] transition-all cursor-pointer flex items-center gap-1.5 shadow-sm"
-                          >
-                            <Play className="w-3.5 h-3.5 fill-current" />
-                            <span>В рейс</span>
-                          </button>
-
-                          {isConfirming ? (
-                            <button
-                              onClick={() => {
-                                playUiSound(500);
-                                onDeleteSave(save.id);
-                                setConfirmDeleteId(null);
-                              }}
-                              className="px-3 py-2 bg-rose-600 hover:bg-rose-700 text-white font-mono text-xs font-bold uppercase rounded-[2px] transition-all cursor-pointer"
-                            >
-                              Удалить?
-                            </button>
-                          ) : (
-                            <button
-                              onClick={() => {
-                                playUiSound(500);
-                                setConfirmDeleteId(save.id);
-                              }}
-                              className="p-2 bg-white/[0.04] hover:bg-rose-950/60 text-[#8b929e] hover:text-rose-400 border border-white/10 hover:border-rose-900/40 rounded-[2px] transition-all cursor-pointer"
-                              title="Удалить слот"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })
+                      );
+                    })}
+                  </div>
                 )}
               </div>
             )}
 
-            {/* Tab 2: New Game Setup */}
+            {/* TAB 2: NEW GAME AS MODERN TILES */}
             {playTab === 'new_game' && (
-              <form onSubmit={handleStartNewGame} className="p-6 flex-1 overflow-y-auto space-y-4">
+              <form onSubmit={handleStartNewGame} className="p-6 flex-1 overflow-y-auto space-y-5">
                 
                 {/* Driver Name Input */}
                 <div className="flex flex-col gap-1.5">
                   <label className="text-[10px] font-mono font-bold uppercase tracking-widest text-[#8b929e]">
-                    ИМЯ ВОДИТЕЛЯ В ПТС:
+                    ИМЯ ВОДИТЕЛЯ В ПТС / ПОЗЫВНОЙ:
                   </label>
                   <input
                     type="text"
@@ -555,17 +603,17 @@ export const MainMenu: React.FC<MainMenuProps> = ({
                     maxLength={32}
                     required
                     placeholder="Введите позывной водителя..."
-                    className="w-full bg-[#181c24] border border-white/10 focus:border-[#c68a35] rounded-[2px] px-3.5 py-2.5 text-white text-xs font-mono font-bold focus:outline-none transition-colors"
+                    className="w-full bg-[#161a22] border border-white/10 focus:border-[#c68a35] rounded-[2px] px-4 py-3 text-white text-xs font-mono font-bold focus:outline-none transition-colors"
                   />
                 </div>
 
-                {/* Spawn Locations */}
-                <div className="flex flex-col gap-1.5">
+                {/* Spawn Locations as Large Modern Tiles */}
+                <div className="flex flex-col gap-2">
                   <label className="text-[10px] font-mono font-bold uppercase tracking-widest text-[#8b929e]">
-                    ВЫБЕРИТЕ ТОЧКУ ВЫЕЗДА:
+                    ВЫБЕРИТЕ ТОЧКУ ВЫЕЗДА НА КАРТУ:
                   </label>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                     {spawnLocations.map((loc) => {
                       const isSelected = selectedSpawnId === loc.id;
                       return (
@@ -575,22 +623,50 @@ export const MainMenu: React.FC<MainMenuProps> = ({
                             setSelectedSpawnId(loc.id);
                             playUiSound(700);
                           }}
-                          className={`group relative flex items-start gap-3 p-3 rounded-[2px] transition-all cursor-pointer border ${
+                          className={`group relative flex flex-col justify-between p-4 rounded-[3px] transition-all cursor-pointer border ${
                             isSelected
-                              ? 'bg-[#1e232e] border-[#c68a35] shadow-[0_0_12px_rgba(198,138,53,0.25)]'
-                              : 'bg-[#181c24] border-white/[0.08] hover:border-white/20'
+                              ? 'bg-[#1e2430] border-2 border-[#c68a35] shadow-[0_0_20px_rgba(198,138,53,0.25)]'
+                              : 'bg-[#161a22] border-white/10 hover:border-white/20 hover:bg-[#1a1f29]'
                           }`}
                         >
-                          <div className={`absolute left-0 top-0 bottom-0 w-[3px] bg-[#c68a35] ${isSelected ? 'opacity-100' : 'opacity-0'}`} />
-                          <div className="mt-0.5 text-[#c68a35]">
-                            {loc.icon}
-                          </div>
-                          <div className="flex flex-col flex-1 min-w-0">
-                            <span className={`text-xs font-bold uppercase tracking-wider truncate ${isSelected ? 'text-white' : 'text-[#d0d5dc]'}`}>
-                              {loc.nameRu}
-                            </span>
-                            <span className="text-[10px] text-[#8b929e] mt-0.5 leading-relaxed">
+                          {/* Corner selected badge */}
+                          {isSelected && (
+                            <div className="absolute top-3 right-3 flex items-center gap-1 text-[9px] font-mono font-bold uppercase text-[#c68a35] bg-[#c68a35]/15 border border-[#c68a35]/40 px-2 py-0.5 rounded-[2px]">
+                              <Check className="w-3 h-3 text-[#c68a35]" />
+                              <span>ВЫБРАНО</span>
+                            </div>
+                          )}
+
+                          <div>
+                            <div className="flex items-center gap-3">
+                              <div className={`p-2.5 rounded-[2px] border ${
+                                isSelected 
+                                  ? 'bg-[#c68a35]/20 border-[#c68a35] text-[#c68a35]' 
+                                  : 'bg-white/[0.04] border-white/10 text-[#8b929e] group-hover:text-white'
+                              }`}>
+                                {loc.icon}
+                              </div>
+                              <div className="min-w-0 pr-16">
+                                <h3 className={`text-sm font-black uppercase tracking-wider truncate font-sans ${
+                                  isSelected ? 'text-white' : 'text-[#d0d5dc] group-hover:text-white'
+                                }`}>
+                                  {loc.nameRu}
+                                </h3>
+                                <div className="text-[10px] font-mono text-[#8b929e]">
+                                  {loc.name}
+                                </div>
+                              </div>
+                            </div>
+
+                            <p className="text-xs text-[#8b929e] mt-3 leading-relaxed">
                               {loc.description}
+                            </p>
+                          </div>
+
+                          <div className="mt-3 pt-2.5 border-t border-white/[0.07] flex items-center justify-between text-[10px] font-mono text-[#8b929e]">
+                            <span>КООРДИНАТЫ:</span>
+                            <span className={isSelected ? 'text-[#c68a35] font-bold' : 'text-white/60'}>
+                              X: {loc.x} · Y: {loc.y}
                             </span>
                           </div>
                         </div>
@@ -603,10 +679,10 @@ export const MainMenu: React.FC<MainMenuProps> = ({
                 <div className="pt-2">
                   <button
                     type="submit"
-                    className="w-full py-3 bg-[#c68a35] hover:bg-[#d8963e] text-black font-mono text-xs font-black uppercase tracking-wider rounded-[2px] transition-all cursor-pointer shadow-md flex items-center justify-center gap-2"
+                    className="w-full py-3.5 bg-[#c68a35] hover:bg-[#d8963e] text-black font-mono text-xs font-black uppercase tracking-wider rounded-[2px] transition-all cursor-pointer shadow-[0_4px_16px_rgba(198,138,53,0.3)] flex items-center justify-center gap-2"
                   >
                     <Play className="w-4 h-4 fill-current" />
-                    <span>НАЧАТЬ ПОЕЗДКУ</span>
+                    <span>ВЫЕХАТЬ В СИМУЛЯЦИЮ</span>
                   </button>
                 </div>
 
@@ -614,16 +690,17 @@ export const MainMenu: React.FC<MainMenuProps> = ({
             )}
 
             {/* Modal Footer */}
-            <div className="px-6 py-3 border-t border-white/10 bg-[#161a22] flex items-center justify-between text-[11px] font-mono text-[#8b929e]">
+            <div className="px-6 py-3.5 border-t border-white/10 bg-[#161a22] flex items-center justify-between text-[11px] font-mono text-[#8b929e]">
               <span>СТЕПНОЙ ТРАКТ 2D</span>
               <button
                 onClick={() => {
                   playUiSound(500);
                   setActiveModal('none');
                 }}
-                className="hover:text-white transition-colors cursor-pointer"
+                className="hover:text-white transition-colors cursor-pointer flex items-center gap-1.5"
               >
-                Назад в меню [ESC]
+                <ArrowLeft className="w-3.5 h-3.5" />
+                <span>Назад в главное меню [ESC]</span>
               </button>
             </div>
 
@@ -636,12 +713,12 @@ export const MainMenu: React.FC<MainMenuProps> = ({
       {/* ========================================================================= */}
       {activeModal === 'settings' && !isLoading && (
         <div className="fixed inset-0 z-40 flex items-center justify-center p-4 bg-black/75 backdrop-blur-md animate-in fade-in duration-150">
-          <div className="relative w-full max-w-xl bg-[#12151b] border-2 border-[#c68a35] rounded-[2px] shadow-2xl flex flex-col max-h-[88vh] overflow-hidden">
+          <div className="relative w-full max-w-xl bg-[#12151b] border-2 border-[#c68a35] rounded-[3px] shadow-2xl flex flex-col max-h-[88vh] overflow-hidden">
             
             {/* Header */}
             <div className="px-6 py-4 border-b border-white/10 flex items-center justify-between bg-[#161a22]">
               <div className="flex items-center gap-2.5">
-                <div className="w-2 h-5 bg-[#c68a35] -skew-x-12 shrink-0" />
+                <div className="w-2.5 h-6 bg-[#c68a35] -skew-x-12 shrink-0 shadow-[0_0_10px_rgba(198,138,53,0.5)]" />
                 <h2 className="text-lg font-black italic uppercase tracking-wider text-white font-sans">
                   НАСТРОЙКИ СИМУЛЯЦИИ
                 </h2>
