@@ -587,6 +587,9 @@ export default function App() {
     });
   }, []);
   const [isMinimapCollapsed, setIsMinimapCollapsed] = useState<boolean>(false);
+  const [timeScale, setTimeScale] = useState<number>(1.0);
+  const timeScaleRef = useRef<number>(1.0);
+  timeScaleRef.current = timeScale;
   const [calendar, setCalendar] = useState<GameCalendarState>(() => createInitialCalendarState(2026, 10, 8, 10.0));
   const [timeHour, setTimeHour] = useState<number>(10.0); // 0 to 24 hours
   const [isTimeAutoCycling, setIsTimeAutoCycling] = useState<boolean>(true);
@@ -1918,6 +1921,17 @@ export default function App() {
         return;
       }
 
+      if (code === 'KeyT') {
+        setTimeScale((prev) => {
+          if (prev >= 1.0) return 0.5;
+          if (prev >= 0.5) return 0.2;
+          if (prev >= 0.2) return 0.05;
+          return 1.0;
+        });
+        e.preventDefault();
+        return;
+      }
+
       if (code === 'F2') {
         setIsCrashDiagnosticsOpen((prev) => !prev);
         e.preventDefault();
@@ -2390,8 +2404,9 @@ export default function App() {
       }
 
       const frameStart = performance.now();
-      const dt = Math.min((now - lastTime) / 1000, 0.05);
+      const rawDt = Math.min((now - lastTime) / 1000, 0.05);
       lastTime = now;
+      const dt = rawDt * timeScaleRef.current;
 
       // FPS calculation
       frameCount++;
@@ -6452,6 +6467,25 @@ export default function App() {
                 className="w-6 h-6 sm:w-7 sm:h-7 flex items-center justify-center text-slate-300 hover:text-white active:bg-slate-800 rounded-lg transition"title="Отдалить камеру">
                 <ZoomOut className="w-3 h-3 sm:w-3.5 sm:h-3.5"/>
               </button>
+            </div>
+
+            {/* Time Scale / Slow-Motion Control Bar */}
+            <div className="flex items-center gap-1 bg-slate-950/90 backdrop-blur-xl border border-white/15 rounded-xl px-2 py-1 shadow-2xl pointer-events-auto">
+              <span className="text-[10px] font-bold text-slate-400 mr-1">⏱️ СКОРОСТЬ:</span>
+              {[1.0, 0.5, 0.2, 0.05].map((scale) => {
+                const active = timeScale === scale;
+                return (
+                  <button
+                    key={scale}
+                    onClick={() => setTimeScale(scale)}
+                    className={`px-1.5 py-0.5 rounded text-[10px] font-extrabold transition ${
+                      active ? 'bg-sky-600 text-white shadow-lg' : 'bg-slate-900/80 text-slate-300 hover:bg-slate-800'
+                    }`}
+                    title={`Установить скорость ${scale}x (Клавиша T)`}>
+                    {scale === 0.05 ? '0.05x 🎬' : `${scale}x`}
+                  </button>
+                );
+              })}
             </div>
 
             {/* Radar Minimap Box (Compact & Elegant) */}

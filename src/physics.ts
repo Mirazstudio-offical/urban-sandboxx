@@ -1927,16 +1927,16 @@ export function applyVehicleDamageAndDeformation(
 
   // 1. Realistic Directional Softbody Mass-Spring Network with Plastic Strain & Poisson Wrinkling
   if (dmg.deformedVertices && (impactKmh > 6.0 || isExtremeStriker)) {
-    // Physical deformation displacement in pixels
-    let pushStrength = Math.pow(Math.max(0, impactKmh - 5.0) / 75.0, 1.60) * 11.0 * Math.sqrt(reducedMassRatio);
+    // Physical deformation displacement in pixels (significantly enhanced for deep, soft malleable crumple)
+    let pushStrength = Math.pow(Math.max(0, impactKmh - 3.0) / 60.0, 1.45) * 24.0 * Math.sqrt(reducedMassRatio);
     if (isExtremeStriker) {
-      pushStrength = Math.min(48.0, pushStrength * 2.2);
+      pushStrength = Math.min(65.0, pushStrength * 2.5);
     } else {
-      pushStrength = Math.min(32.0, pushStrength);
+      pushStrength = Math.min(48.0, pushStrength);
     }
-    if (isCommercialHeavy) pushStrength *= 0.32;
-    if (isHeavyRigidTrailer) pushStrength *= 0.18;
-    if (isMachinery) pushStrength *= 0.08;
+    if (isCommercialHeavy) pushStrength *= 0.45;
+    if (isHeavyRigidTrailer) pushStrength *= 0.25;
+    if (isMachinery) pushStrength *= 0.12;
     
     // Determine local impact vector in car local coordinates
     const contactDist = Math.hypot(localX, localY) || 1;
@@ -1944,11 +1944,11 @@ export function applyVehicleDamageAndDeformation(
     let impulseY = -localY / contactDist;
 
     // Add tangential scrape component if scraping along surface
-    if (scrapeSpeed > 10) {
+    if (scrapeSpeed > 8) {
       const tangentX = -impulseY;
       const tangentY = impulseX;
-      impulseX = impulseX * 0.75 + tangentX * 0.25;
-      impulseY = impulseY * 0.75 + tangentY * 0.25;
+      impulseX = impulseX * 0.70 + tangentX * 0.30;
+      impulseY = impulseY * 0.70 + tangentY * 0.30;
       const impLen = Math.hypot(impulseX, impulseY) || 1;
       impulseX /= impLen;
       impulseY /= impLen;
@@ -1969,8 +1969,8 @@ export function applyVehicleDamageAndDeformation(
       }
     }
 
-    // Spatial spread radius for Gaussian impulse propagation
-    const spreadRadius = Math.max(6.0, Math.min(24.0, 7.5 + severity * 14.0));
+    // Spatial spread radius for Gaussian impulse propagation (wider spread for organic softbody wave propagation)
+    const spreadRadius = Math.max(8.0, Math.min(32.0, 10.0 + severity * 18.0));
 
     // Propagate plastic strain and elastic jiggle through softbody node lattice
     for (let i = 0; i < totalNodes; i++) {
@@ -1979,28 +1979,28 @@ export function applyVehicleDamageAndDeformation(
       const curY = v.localY + v.offsetY;
       const dist = Math.hypot(curX - localX, curY - localY);
 
-      if (dist > spreadRadius * 1.8) continue;
+      if (dist > spreadRadius * 2.0) continue;
 
       const len = Math.hypot(v.localX, v.localY) || 1;
       const weight = Math.exp(-(dist * dist) / (2 * spreadRadius * spreadRadius));
       
-      // Node structural stiffness resistance multiplier based on panel type
-      const structStiffness = v.structuralType === 'bumper' ? 0.65 :
-                              (v.structuralType === 'door' ? 0.75 :
-                              (v.structuralType === 'fender' ? 0.82 :
-                              (v.structuralType === 'quarter' ? 0.88 :
-                              (v.structuralType === 'hood' ? 0.72 :
-                              (v.structuralType === 'windshield' ? 0.95 : 1.35)))));
+      // Node structural stiffness resistance multiplier based on panel type (lower stiffness for ultra-soft malleable feel)
+      const structStiffness = v.structuralType === 'bumper' ? 0.45 :
+                              (v.structuralType === 'door' ? 0.55 :
+                              (v.structuralType === 'fender' ? 0.62 :
+                              (v.structuralType === 'quarter' ? 0.68 :
+                              (v.structuralType === 'hood' ? 0.52 :
+                              (v.structuralType === 'windshield' ? 0.75 : 1.05)))));
 
       // POISSON'S EFFECT / ACCORDION FOLDING:
       // Compression in the impact direction causes orthogonal bulging of adjacent sheet metal
       let nodeImpulseX = impulseX;
       let nodeImpulseY = impulseY;
 
-      if (weight > 0.08 && weight < 0.65 && !isExtremeStriker) {
+      if (weight > 0.05 && weight < 0.75 && !isExtremeStriker) {
         const outNormX = v.localX / len;
         const outNormY = v.localY / len;
-        const poissonRatio = 0.28 * (1.0 - weight);
+        const poissonRatio = 0.35 * (1.0 - weight);
         nodeImpulseX = impulseX * (1.0 - poissonRatio) + outNormX * poissonRatio;
         nodeImpulseY = impulseY * (1.0 - poissonRatio) + outNormY * poissonRatio;
         const nLen = Math.hypot(nodeImpulseX, nodeImpulseY) || 1;
@@ -2010,17 +2010,14 @@ export function applyVehicleDamageAndDeformation(
 
       const deltaPush = (pushStrength * weight) / structStiffness;
 
-      // Realistic physical maximum crush depth based on vehicle body dimensions:
-      // Front: up to 68% of half-length (deep into engine bay / firewall)
-      // Rear: up to 55% of half-length (trunk folded to rear axle)
-      // Side: up to 60% of half-width (door pushed to center tunnel)
+      // Deep realistic maximum crush depth based on vehicle body dimensions:
       const maxOffset = (isHeavyRigidTrailer || isMachinery) 
-        ? 2.5 
+        ? 3.5 
         : isExtremeStriker 
-          ? Math.min(42.0, len * 0.90) 
+          ? Math.min(52.0, len * 0.95) 
           : (v.structuralType === 'door' 
-              ? Math.min(halfW * 0.62, Math.max(4.0, len * 0.55)) 
-              : Math.min(halfL * 0.68, Math.max(5.0, len * 0.65)));
+              ? Math.min(halfW * 0.72, Math.max(6.0, len * 0.68)) 
+              : Math.min(halfL * 0.78, Math.max(7.0, len * 0.78)));
 
       // Apply permanent plastic offset with progressive multi-frame crumple targets
       const currentTargetX = v.targetOffsetX !== undefined && isFinite(v.targetOffsetX) ? v.targetOffsetX : (isFinite(v.offsetX) ? v.offsetX : 0);
@@ -2036,8 +2033,8 @@ export function applyVehicleDamageAndDeformation(
 
       v.targetOffsetX = newTargetX;
       v.targetOffsetY = newTargetY;
-      // Immediate partial displacement step for crisp collision feedback
-      const stepRatio = isExtremeStriker ? 0.70 : 0.40;
+      // Immediate partial displacement step for instant soft tactile feedback
+      const stepRatio = isExtremeStriker ? 0.85 : 0.55;
       v.offsetX = v.offsetX + (newTargetX - v.offsetX) * stepRatio;
       v.offsetY = v.offsetY + (newTargetY - v.offsetY) * stepRatio;
 
@@ -2054,13 +2051,13 @@ export function applyVehicleDamageAndDeformation(
       if (!isFinite(v.offsetY)) v.offsetY = 0;
 
       // Accumulate plastic strain (metal yield & crease severity)
-      const strainAdd = Math.abs(deltaPush) / (len * 0.22);
-      v.plasticStrain = Math.min(3.0, (v.plasticStrain || 0) + strainAdd);
+      const strainAdd = Math.abs(deltaPush) / (len * 0.18);
+      v.plasticStrain = Math.min(3.5, (v.plasticStrain || 0) + strainAdd);
 
-      // Inject transient elastic jiggle velocity impulse (BeamNG metal shudder)
-      const jiggleStrength = Math.min(32.0, severity * 28.0 * weight);
-      v.velX = Math.max(-45, Math.min(45, (v.velX || 0) + nodeImpulseX * jiggleStrength));
-      v.velY = Math.max(-45, Math.min(45, (v.velY || 0) + nodeImpulseY * jiggleStrength));
+      // Inject intense transient elastic jiggle velocity impulse (juicy BeamNG metal wobble)
+      const jiggleStrength = Math.min(48.0, severity * 42.0 * weight);
+      v.velX = Math.max(-60, Math.min(60, (v.velX || 0) + nodeImpulseX * jiggleStrength));
+      v.velY = Math.max(-60, Math.min(60, (v.velY || 0) + nodeImpulseY * jiggleStrength));
 
       if (!isFinite(v.offsetX)) v.offsetX = 0;
       if (!isFinite(v.offsetY)) v.offsetY = 0;
@@ -3141,10 +3138,10 @@ export function updateVehicleSystems(car: Vehicle, dt: number, world: GameWorld)
 
   // Step progressive softbody plastic crumple & transient elastic jiggle dynamics
   if (needsDeformSimulation && dmg.deformedVertices) {
-    const kSpring = 190;  // Spring stiffness
-    const cDamping = 24;  // Damping factor
+    const kSpring = 95;   // Softer spring stiffness for rich elastic wobble
+    const cDamping = 14;  // Lower damping for sustained soft jiggle
     const clampedDt = Math.min(0.05, Math.max(0.001, dt));
-    const crumpleRate = Math.min(1.0, 22.0 * clampedDt); // Smooth multi-frame crumple progression (~80-120ms)
+    const crumpleRate = Math.min(1.0, 28.0 * clampedDt); // Faster, more fluid multi-frame crumple progression
 
     for (const v of dmg.deformedVertices) {
       if (!v) continue;
@@ -3152,8 +3149,8 @@ export function updateVehicleSystems(car: Vehicle, dt: number, world: GameWorld)
       const vLen = Math.hypot(v.localX, v.localY) || 1;
       const isDoor = v.structuralType === 'door';
       const maxAllowedOffset = isDoor
-        ? Math.min(car.width * 0.55, Math.max(4.5, vLen * 0.60))
-        : Math.min(car.length * 0.68, Math.max(5.5, vLen * 0.70));
+        ? Math.min(car.width * 0.72, Math.max(6.0, vLen * 0.68))
+        : Math.min(car.length * 0.78, Math.max(7.0, vLen * 0.78));
 
       // Sanitize non-finite values
       if (!isFinite(v.targetOffsetX || 0)) v.targetOffsetX = 0;
@@ -3206,9 +3203,9 @@ export function updateVehicleSystems(car: Vehicle, dt: number, world: GameWorld)
           elX += vx * clampedDt;
           elY += vy * clampedDt;
 
-          // Clamp max elastic displacement to 8.0px so it can never blow up
-          elX = Math.max(-8.0, Math.min(8.0, elX));
-          elY = Math.max(-8.0, Math.min(8.0, elY));
+          // Clamp max elastic displacement to 14.0px for deep malleable wobble
+          elX = Math.max(-14.0, Math.min(14.0, elX));
+          elY = Math.max(-14.0, Math.min(14.0, elY));
 
           // Heavy velocity damping clamp
           vx = Math.max(-45.0, Math.min(45.0, vx));

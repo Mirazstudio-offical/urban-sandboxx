@@ -3292,8 +3292,8 @@ export function updateAITraffic(
       if (isDirectlyAheadInCorridor) {
         const isBeingBypassed = (car.avoidancePhase === 'passing' || car.avoidancePhase === 'swerving' || car.aiState === 'avoiding_obstacle') && 
           (car.avoidanceObstacleId === other.id || Math.abs(car.avoidanceOffset || 0) > 2.0);
-        const netGap = Math.max(0.1, distLong - combinedHalfL);
-        if (isBeingBypassed && netGap > 4) {
+        const netGap = Math.max(0.1, distLong - combinedHalfL - 18); // 18px safe bumper clearance buffer
+        if (isBeingBypassed && netGap > 12) {
           // Bypass in progress! Keep moving forward to allow lateral shift
         } else {
           if (netGap < minGapToLeadCar) {
@@ -3855,8 +3855,8 @@ export function updateAITraffic(
     const a_max = isAgile ? 200 : (isHeavyCar ? 85 : 140); // Maximum acceleration (px/s^2)
     const b_comf = isAgile ? 210 : (isHeavyCar ? 115 : 160); // Comfortable deceleration (px/s^2)
     const delta_exp = 4; // Acceleration exponent
-    const s0 = Math.max(24, (car.length || 42) * 0.48); // Safe minimum distance buffer (px)
-    const T_headway = v0 > 260 ? 1.4 : 1.1; // Safe time headway (seconds)
+    const s0 = Math.max(45, (car.length || 42) * 0.75 + 16); // Safe minimum distance buffer (px) - comfortable inter-vehicle gap (~45-55px)
+    const T_headway = v0 > 260 ? 1.6 : 1.3; // Safe time headway (seconds)
 
     const v = Math.max(0, car.speed);
     
