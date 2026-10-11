@@ -3,6 +3,7 @@ import { applyVehicleDamageAndDeformation } from './physics';
 import { applyDriverVehicleCrashTrauma } from './bodySystem';
 import { isVehicleDisabledOrCrashed } from './aiTraffic';
 import { sound } from './audio';
+import { normalAndTangential } from './damageModel';
 
 export class GuardrailPhysics {
   /**
@@ -170,6 +171,10 @@ export class GuardrailPhysics {
     let pushNx = dist > 0.001 ? distVecX / dist : nx;
     let pushNy = dist > 0.001 ? distVecY / dist : ny;
 
+    // Разложение скорости: нормальная (сближение с отбойником) — в урон/травму,
+    // касательная — скольжение вдоль рейки (см. damageModel.ts)
+    const approachParts = normalAndTangential(veh.vx, veh.vy, pushNx, pushNy);
+
     // -----------------------------------------------------------------------
     // MANDATORY SOLID POSITION CORRECTION (Clamps vehicle outside rail / buffer)
     // Guarantees zero clipping or passing through guardrails or sand barrels!
@@ -200,12 +205,14 @@ export class GuardrailPhysics {
       veh.vy *= absorbFactor;
       veh.speed *= absorbFactor;
 
-      // Vehicle crumple & damage with HIGH trauma mitigation for occupants
-      applyVehicleDamageAndDeformation(veh, closestX, closestY, rawSpeed * 0.35, 10, world, 800, true);
+      // Vehicle crumple & damage with HIGH trauma mitigation for occupants.
+      // Масса 12000 — «объект жёстко стоит на грунте»: вся мягкость буфера
+      // задаётся явным множителем скорости (×0.35), а не фиктивной массой.
+      applyVehicleDamageAndDeformation(veh, closestX, closestY, approachParts.normalApproach * 0.35, Math.abs(approachParts.tangential), world, 12000, true);
 
       // Driver trauma is drastically reduced compared to concrete walls (only 0.10x trauma multiplier)
       if (player && (veh.isPlayerControlled || (player.isInVehicle && player.currentVehicleId === veh.id))) {
-        applyDriverVehicleCrashTrauma(player, rawSpeed * 0.25, 'песчаный буфер отбойника', 0.10, veh);
+        applyDriverVehicleCrashTrauma(player, approachParts.normalApproach * 0.25, 'песчаный буфер отбойника', 0.10, veh);
       }
 
       // Play plastic barrel & sand impact sound
@@ -316,8 +323,9 @@ export class GuardrailPhysics {
         });
       }
 
-      // Mild vehicle body scrape (cosmetic surface scratch)
-      applyVehicleDamageAndDeformation(veh, closestX, closestY, Math.abs(velDotN) * 0.2, 6, world, 80, false);
+      // Mild vehicle body scrape (косательная скорость — скольжение по рейке).
+      // Рейка стоит на грунте (масса 12000), мягкость — явный множитель ×0.2.
+      applyVehicleDamageAndDeformation(veh, closestX, closestY, Math.abs(velDotN) * 0.2, Math.abs(velDotT), world, 12000, false);
 
       // Play soft metal contact sound
       if (rawSpeed > 10) {

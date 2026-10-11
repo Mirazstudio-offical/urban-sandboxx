@@ -541,6 +541,8 @@ export interface Vehicle {
     contactX: number;
     contactY: number;
     preserveVelocity?: boolean; // If true (oblique/vehicle collision), do not clamp speed to 0
+    initialNormalSpeed?: number;   // нормальная (к контакту) составляющая скорости в момент удара, px/s (≥ 0)
+    initialTangentialSpeed?: number; // касательная составляющая скорости в момент удара, px/s (сохраняется с трением)
     interlockingTimer?: number; // Plastic interlocking duration (metal entanglement)
     interlockingFriction?: number; // Plastic shear friction coefficient during entanglement
   };

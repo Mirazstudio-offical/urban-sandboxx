@@ -16,6 +16,15 @@ import { getRiverWaterAt, getUniversalWaterDepthAt } from './riverSystem';
 import { getBiomeSampleAt } from './biomeSystem';
 import { calculateClimateAtmosphere, createInitialCalendarState, isWorldFreezing } from './calendarSystem';
 import { getEffectiveWeatherWeights } from './weatherTransition';
+import {
+  ImpactZone,
+  crushFromEnergy,
+  nodeZone,
+  normalAndTangential,
+  severityFromEnergy,
+  strikeEnergy,
+  totalCapPx
+} from './damageModel';
 
 export { isWorldFreezing };
 
@@ -1343,6 +1352,23 @@ export function getPropHitbox(prop: StreetProp): PropHitbox {
   }
 }
 
+/**
+ * Ширина пятна контакта пропа, px — «тень» хитбокса на нормаль удара.
+ * Передаётся в урон как contactWidthPx: узкий столб (круг r=3.2 → 6.4 px)
+ * продавливает кузов глубже, чем стена на ту же энергию (см. CONE_SPREAD
+ * в damageModel.ts). Box: полу-ширина тени = |hw·(n·u)| + |hh·(n·v)|.
+ */
+export function propContactWidthPx(hitbox: PropHitbox, propAngle: number, nx: number, ny: number): number {
+  if (hitbox.shape === 'circle') {
+    return Math.max(1, (hitbox.radius ?? 3) * 2);
+  }
+  const cos = Math.cos(propAngle);
+  const sin = Math.sin(propAngle);
+  const shadowHalf = Math.abs((hitbox.halfWidth ?? 3) * (nx * cos + ny * sin)) +
+    Math.abs((hitbox.halfHeight ?? 3) * (-nx * sin + ny * cos));
+  return Math.max(1, shadowHalf * 2);
+}
+
 export function checkPropVehicleCollision(
   prop: StreetProp,
   veh: Vehicle
@@ -1797,7 +1823,9 @@ export function applyVehicleDamageAndDeformation(
   scrapeSpeed: number,
   world: GameWorld,
   strikerMass: number = 1400,
-  isNarrowImpact: boolean = false
+  isNarrowImpact: boolean = false,
+  /** Ширина пятна контакта препятствия, px (узкий столб → глубже; стена — не передаётся). */
+  contactWidthPx?: number
 ) {
   car.damage = ensureVehicleDamage(car);
   if (!car.engineState) {
@@ -1897,20 +1925,16 @@ export function applyVehicleDamageAndDeformation(
     return; // Heavy I-beam chassis / commercial truck frames do not dent from minor nudges or scrapes
   }
 
-  // Reduced Mass: in two-body collisions, deformation work depends on reduced mass mu = (m1*m2)/(m1+m2)
-  // For fixed walls/obstacles, mu -> car.mass
-  const reducedMassRatio = Math.max(0.25, Math.min(isExtremeStriker ? 40.0 : 4.0, (2.0 * strikerMass) / (car.mass + strikerMass)));
-  const massRatio = Math.max(0.35, Math.min(isExtremeStriker ? 45.0 : 4.0, strikerMass / car.mass));
+  // --- ENERGY-BASED CRASH MODEL (подробности в src/damageModel.ts) ---
+  // impactSpeed здесь — нормальная (к контакту) составляющая скорости сближения,
+  // касательная передаётся как scrapeSpeed (скольжение/царапины, не деформация):
+  // касательный удар по столбу не считается лобовым.
+  // Энергия делится по честному: E = ½·m·(v_n·m_s/(m+m_s))² — доля
+  // скорости, идущая на деформацию ЭТОГО кузова (стена → вся, встречка
+  // равных машин → половина энергии на каждую).
+  const crashE = strikeEnergy(car.mass, strikerMass, impactSpeed);
 
-  // Non-linear kinetic energy scaling: E_k = 1/2 * m * v^2
-  // Real automobile crash scaling (BeamNG standard):
-  // - 15 km/h: Minor bumper flex / plastic strain threshold just reached (0.5 - 1.5 px)
-  // - 40-50 km/h: Moderate crash test -> bumper flex, radiator grille & crash box fold (2 - 5 px)
-  // - 80-130+ km/h: Catastrophic structural penetration into cabin / engine block crushing (12 - 25 px)
-  const speedRef = 85.0; // km/h baseline
-  const speedNorm = Math.max(0, impactKmh - 5.0) / speedRef;
-  let severity = 1.0 - Math.exp(-Math.pow(speedNorm, 1.60) * Math.sqrt(reducedMassRatio));
-  severity = Math.max(0, Math.min(1.0, severity));
+  let severity = severityFromEnergy(crashE);
 
   if ((car as any).hasHeavySuspension) {
     severity *= 0.75;
@@ -1925,19 +1949,31 @@ export function applyVehicleDamageAndDeformation(
     severity *= 0.10;
   }
 
+  // Направление удара по точке контакта — тот же геометрический тест,
+  // что и в блоках FRONT/REAR/SIDE ниже.
+  const impactZone: ImpactZone = normX > 0.20 ? 'front' : (normX < -0.25 ? 'rear' : 'side');
+
+  // Жёсткость структуры: рамы грузовиков/техники сопротивляются сильнее.
+  const structureStiffness = isMachinery ? 10.0 : (isHeavyRigidTrailer ? 5.0 : (isCommercialHeavy ? 2.86 : 1.0));
+
+  // Глубина деформации = энергия / средняя сила зоны, ограничена длиной зоны
+  // + вмятиной кабины (см. crushFromEnergy).
+  const crush = crushFromEnergy({
+    energy: crashE,
+    zone: impactZone,
+    length: car.length,
+    width: car.width,
+    contactWidthPx,
+    structureStiffness,
+    intrusionZoneFraction: isExtremeStriker ? 1.0 : 0.45,
+    maxZoneLengthPx: (isMachinery || isHeavyRigidTrailer) ? 3.5 : undefined
+  });
+
   // 1. Realistic Directional Softbody Mass-Spring Network with Plastic Strain & Poisson Wrinkling
   if (dmg.deformedVertices && (impactKmh > 6.0 || isExtremeStriker)) {
-    // Physical deformation displacement in pixels (significantly enhanced for deep, soft malleable crumple)
-    let pushStrength = Math.pow(Math.max(0, impactKmh - 5.0) / 75.0, 1.50) * 16.0 * Math.sqrt(reducedMassRatio);
-    if (isExtremeStriker) {
-      pushStrength = Math.min(50.0, pushStrength * 2.0);
-    } else {
-      pushStrength = Math.min(35.0, pushStrength);
-    }
-    if (isCommercialHeavy) pushStrength *= 0.35;
-    if (isHeavyRigidTrailer) pushStrength *= 0.20;
-    if (isMachinery) pushStrength *= 0.10;
-    
+    // Глубина деформации данного удара (px), посчитанная из энергии E/F_zone.
+    const eventDepth = crush.depthPx;
+
     // Determine local impact vector in car local coordinates
     const contactDist = Math.hypot(localX, localY) || 1;
     let impulseX = -localX / contactDist;
@@ -1954,25 +1990,24 @@ export function applyVehicleDamageAndDeformation(
       impulseY /= impLen;
     }
 
-    // Find closest vertex node index
-    let closestIdx = 0;
-    let minNodeDist = 999999;
-    const totalNodes = dmg.deformedVertices.length;
-    for (let i = 0; i < totalNodes; i++) {
-      const v = dmg.deformedVertices[i];
-      const curX = v.localX + v.offsetX;
-      const curY = v.localY + v.offsetY;
-      const dist = Math.hypot(curX - localX, curY - localY);
-      if (dist < minNodeDist) {
-        minNodeDist = dist;
-        closestIdx = i;
-      }
-    }
+    // Spatial spread radius for impulse propagation: узкий контакт (столб,
+    // бордюр, узкий проп) даёт локальную вмятину; широкий (стена, борт
+    // встречной машины) распределяет деформацию по всей ширине контакта.
+    const spreadRadius = isNarrowImpact
+      ? Math.max(5.0, Math.min(12.0, 5.0 + severity * 6.0))
+      : Math.max(10.0, Math.min(26.0, 10.0 + severity * 14.0));
 
-    // Spatial spread radius for Gaussian impulse propagation (wider spread for organic softbody wave propagation)
-    const spreadRadius = Math.max(8.0, Math.min(32.0, 10.0 + severity * 18.0));
+    // Потолок смещения узла = полная длина зоны деформации его региона
+    // (перед/зад/бок), а не доля длины кузова: физический ход зоны
+    // ≈ 0.75 м спереди, 0.55 м сзади, ≈ 0.7 · halfW боком.
+    const intrusionFraction = isExtremeStriker ? 1.0 : 0.45;
+    const nodeCap = (nz: ImpactZone): number => {
+      const base = totalCapPx(car, nz, intrusionFraction);
+      return (isMachinery || isHeavyRigidTrailer) ? Math.min(3.5, base) : base;
+    };
 
     // Propagate plastic strain and elastic jiggle through softbody node lattice
+    const totalNodes = dmg.deformedVertices.length;
     for (let i = 0; i < totalNodes; i++) {
       const v = dmg.deformedVertices[i];
       const curX = v.localX + v.offsetX;
@@ -1983,14 +2018,11 @@ export function applyVehicleDamageAndDeformation(
 
       const len = Math.hypot(v.localX, v.localY) || 1;
       const weight = Math.exp(-(dist * dist) / (2 * spreadRadius * spreadRadius));
-      
-      // Node structural stiffness resistance multiplier based on panel type (lower stiffness for ultra-soft malleable feel)
-      const structStiffness = v.structuralType === 'bumper' ? 0.55 :
-                              (v.structuralType === 'door' ? 0.65 :
-                              (v.structuralType === 'fender' ? 0.72 :
-                              (v.structuralType === 'quarter' ? 0.80 :
-                              (v.structuralType === 'hood' ? 0.60 :
-                              (v.structuralType === 'windshield' ? 0.85 : 1.2)))));
+
+      // Смещение узла пропорционально поглощённой энергии (глубине деформации)
+      // и весу расстояния — без эмпирических коэффициентов скорости.
+      const deltaPush = eventDepth * weight;
+      if (deltaPush <= 0.0001) continue;
 
       // POISSON'S EFFECT / ACCORDION FOLDING:
       // Compression in the impact direction causes orthogonal bulging of adjacent sheet metal
@@ -2008,16 +2040,7 @@ export function applyVehicleDamageAndDeformation(
         nodeImpulseY /= nLen;
       }
 
-      const deltaPush = (pushStrength * weight) / structStiffness;
-
-      // Deep realistic maximum crush depth based on vehicle body dimensions:
-      const maxOffset = (isHeavyRigidTrailer || isMachinery) 
-        ? 3.5 
-        : isExtremeStriker 
-          ? Math.min(52.0, len * 0.95) 
-          : (v.structuralType === 'door' 
-              ? Math.min(halfW * 0.72, Math.max(6.0, len * 0.68)) 
-              : Math.min(halfL * 0.78, Math.max(7.0, len * 0.78)));
+      const maxOffset = nodeCap(nodeZone(v.localX, v.structuralType, halfL));
 
       // Apply permanent plastic offset with progressive multi-frame crumple targets
       const currentTargetX = v.targetOffsetX !== undefined && isFinite(v.targetOffsetX) ? v.targetOffsetX : (isFinite(v.offsetX) ? v.offsetX : 0);
@@ -2113,19 +2136,25 @@ export function applyVehicleDamageAndDeformation(
   const isTrailer = isTrailerVehicle(car);
 
   // 2. Structural crumple & component damage logic (Radiator, Oil pan, Fuel tank, Suspension, Engine & Transmission)
-  const crushFactor = severity * (2.8 + severity * 4.5) * Math.sqrt(reducedMassRatio) * (isExtremeStriker ? 2.5 : 1.0);
+  // Глубина деформации направления: energy / F_zone, ограничена зоной + кабиной
+  // (см. crushFromEnergy). Масса ударителя уже учтена в энергии, поэтому
+  // отдельные множители sqrt(reducedMassRatio) здесь больше не нужны.
 
   if (normX > 0.20 && impactKmh > 8.0) {
     // --- FRONTAL COLLISION ---
-    const maxFrontCrush = isMachinery ? 2.0 : (isExtremeStriker ? halfL * 0.85 : halfL * 0.65);
-    dmg.frontCrumple = Math.min(maxFrontCrush, dmg.frontCrumple + crushFactor);
+    // maxFrontCrush = полный ход (зона деформации + вмятина кабины)
+    const maxFrontCrush = crush.totalCapPx;
+    const zoneFront = Math.max(0.001, crush.zoneLengthPx);
+    dmg.frontCrumple = Math.min(maxFrontCrush, dmg.frontCrumple + crush.depthPx);
 
     if (!isTrailer) {
       // Mechanical engine and transmission shock / crushing
-      const engShock = (severity * (isExtremeStriker ? 80 : 35) + (dmg.frontCrumple / maxFrontCrush) * 40) * Math.sqrt(reducedMassRatio);
+      // (fill = доля исчерпанной зоны деформации, > 1 = деформация пошла в кабину)
+      const frontFill = dmg.frontCrumple / zoneFront;
+      const engShock = severity * (isExtremeStriker ? 80 : 35) + frontFill * 25;
       eng.engineHealth = Math.max(0, (eng.engineHealth ?? 100) - engShock);
 
-      const transShock = (severity * (isExtremeStriker ? 70 : 28) + (dmg.frontCrumple / maxFrontCrush) * 35) * Math.sqrt(reducedMassRatio);
+      const transShock = severity * (isExtremeStriker ? 70 : 28) + frontFill * 20;
       eng.transmissionHealth = Math.max(0, (eng.transmissionHealth ?? 100) - transShock);
 
       // --- IMMEDIATE ENGINE STALL ON IMPACT ---
@@ -2172,20 +2201,20 @@ export function applyVehicleDamageAndDeformation(
     }
 
     if (normY < -0.22) {
-      dmg.frontLeftDent = Math.min(maxFrontCrush * 0.75, dmg.frontLeftDent + crushFactor * 0.85);
+      dmg.frontLeftDent = Math.min(zoneFront * 0.85, dmg.frontLeftDent + crush.depthPx * 0.85);
       dmg.frontLeftSuspensionDamage = Math.min(1.0, dmg.frontLeftSuspensionDamage + severity * 0.85);
       dmg.steeringDrift = Math.max(-1.0, dmg.steeringDrift - severity * 0.7);
       dmg.wheelRubResistance += severity * 18;
       if (severity > 0.30 || isExtremeStriker) dmg.leftHeadlightBroken = true;
     } else if (normY > 0.22) {
-      dmg.frontRightDent = Math.min(maxFrontCrush * 0.75, dmg.frontRightDent + crushFactor * 0.85);
+      dmg.frontRightDent = Math.min(zoneFront * 0.85, dmg.frontRightDent + crush.depthPx * 0.85);
       dmg.frontRightSuspensionDamage = Math.min(1.0, dmg.frontRightSuspensionDamage + severity * 0.85);
       dmg.steeringDrift = Math.min(1.0, dmg.steeringDrift + severity * 0.7);
       dmg.wheelRubResistance += severity * 18;
       if (severity > 0.30 || isExtremeStriker) dmg.rightHeadlightBroken = true;
     } else {
-      dmg.frontLeftDent = Math.min(maxFrontCrush * 0.65, dmg.frontLeftDent + crushFactor * 0.6);
-      dmg.frontRightDent = Math.min(maxFrontCrush * 0.65, dmg.frontRightDent + crushFactor * 0.6);
+      dmg.frontLeftDent = Math.min(zoneFront * 0.65, dmg.frontLeftDent + crush.depthPx * 0.6);
+      dmg.frontRightDent = Math.min(zoneFront * 0.65, dmg.frontRightDent + crush.depthPx * 0.6);
       dmg.frontLeftSuspensionDamage = Math.min(1.0, dmg.frontLeftSuspensionDamage + severity * 0.6);
       dmg.frontRightSuspensionDamage = Math.min(1.0, dmg.frontRightSuspensionDamage + severity * 0.6);
       dmg.wheelRubResistance += severity * 14;
@@ -2205,8 +2234,9 @@ export function applyVehicleDamageAndDeformation(
     }
   } else if (normX < -0.25 && impactKmh > 8.0) {
     // --- REAR IMPACT ---
-    const maxRearCrush = isMachinery ? 1.8 : (isExtremeStriker ? halfL * 0.80 : halfL * 0.52);
-    dmg.rearCrumple = Math.min(maxRearCrush, dmg.rearCrumple + crushFactor);
+    const maxRearCrush = crush.totalCapPx;
+    const zoneRear = Math.max(0.001, crush.zoneLengthPx);
+    dmg.rearCrumple = Math.min(maxRearCrush, dmg.rearCrumple + crush.depthPx);
 
     if (!isTrailer) {
       // Rear fuel tank puncture threshold
@@ -2222,7 +2252,7 @@ export function applyVehicleDamageAndDeformation(
       }
 
       // Rear impacts can shock transmission driveshaft and differential
-      const rearTransShock = (severity * 22 + (dmg.rearCrumple / maxRearCrush) * 20) * Math.sqrt(reducedMassRatio);
+      const rearTransShock = severity * 22 + (dmg.rearCrumple / zoneRear) * 15;
       eng.transmissionHealth = Math.max(0, (eng.transmissionHealth ?? 100) - rearTransShock);
       if (eng.transmissionHealth <= 15 || (severity > 0.80 && Math.random() < 0.45) || isExtremeStriker) {
         eng.transmissionJammed = true;
@@ -2234,11 +2264,11 @@ export function applyVehicleDamageAndDeformation(
     }
 
     if (normY < -0.22) {
-      dmg.rearLeftDent = Math.min(maxRearCrush * 0.75, dmg.rearLeftDent + crushFactor * 0.85);
+      dmg.rearLeftDent = Math.min(zoneRear * 0.85, dmg.rearLeftDent + crush.depthPx * 0.85);
       dmg.rearLeftSuspensionDamage = Math.min(1.0, dmg.rearLeftSuspensionDamage + severity * 0.85);
       if (severity > 0.38 || isExtremeStriker) dmg.leftTaillightBroken = true;
     } else if (normY > 0.22) {
-      dmg.rearRightDent = Math.min(maxRearCrush * 0.75, dmg.rearRightDent + crushFactor * 0.85);
+      dmg.rearRightDent = Math.min(zoneRear * 0.85, dmg.rearRightDent + crush.depthPx * 0.85);
       dmg.rearRightSuspensionDamage = Math.min(1.0, dmg.rearRightSuspensionDamage + severity * 0.85);
       if (severity > 0.38 || isExtremeStriker) dmg.rightTaillightBroken = true;
     } else {
@@ -2255,8 +2285,11 @@ export function applyVehicleDamageAndDeformation(
     }
   } else if (impactKmh > 8.0) {
     // --- SIDE IMPACT / T-BONE ---
-    const maxSideDent = isMachinery ? 1.5 : (isExtremeStriker ? halfW * 0.80 : halfW * 0.58);
-    const sideDent = crushFactor * 0.90;
+    // Глубина бока считается той же моделью E/F, но с силой дверной структуры
+    // (MEAN_FORCE.side в damageModel.ts) — направление различается только
+    // физикой зоны, а не эмпирическими коэффициентами.
+    const maxSideDent = crush.totalCapPx;
+    const sideDent = crush.depthPx;
 
     if (normY < 0) {
       dmg.leftDent = Math.min(maxSideDent, dmg.leftDent + sideDent);
@@ -2526,7 +2559,11 @@ export function applyVehicleDamageAndDeformation(
     hasHeadlightBreak,
     hasTaillightBreak,
     hasRadiatorPuncture,
-    isConcrete: isNarrowImpact || strikerMass > 10000
+    // Бетонная крошка — только от узких жёстких препятствий (столб, стена,
+    // проп, отбойник — все они передают isNarrowImpact=true). Масса удара
+    // для этого НЕ используется: «встречка» с грузовиком (mass>10000) или
+    // царапание рейки отбойника не должны ронять бетонные сколы.
+    isConcrete: isNarrowImpact
   });
 
   // Physical Detachable Body Parts (Hood, Front Bumper, Rear Bumper, Left/Right Doors)
@@ -2598,8 +2635,8 @@ export function applyVehicleDamageAndDeformation(
       });
     }
 
-    // Left Door detachment
-    if ((dmg.leftDent > 4.2 || (severity > 0.52 && normY < -0.35)) && !dmg.leftDoorDetached) {
+    // Left Door detachment (порог ≈ 0.58 м вмятины двери — дверь срывает с петель)
+    if ((dmg.leftDent > 5.5 || (severity > 0.52 && normY < -0.35)) && !dmg.leftDoorDetached) {
       dmg.leftDoorDetached = true;
       world.detachedParts.push({
         id: 'door_l_' + car.id + '_' + Date.now(),
@@ -2620,8 +2657,8 @@ export function applyVehicleDamageAndDeformation(
       });
     }
 
-    // Right Door detachment
-    if ((dmg.rightDent > 4.2 || (severity > 0.52 && normY > 0.35)) && !dmg.rightDoorDetached) {
+    // Right Door detachment (порог ≈ 0.58 м вмятины двери — дверь срывает с петель)
+    if ((dmg.rightDent > 5.5 || (severity > 0.52 && normY > 0.35)) && !dmg.rightDoorDetached) {
       dmg.rightDoorDetached = true;
       world.detachedParts.push({
         id: 'door_r_' + car.id + '_' + Date.now(),
@@ -9783,20 +9820,44 @@ export function updateVehiclePhysics(
       // Smooth softbody deceleration curve:
       // Phase 1 (0.0 to 0.72): Progressive plastic compression & kinetic energy absorption
       // Phase 2 (0.72 to 1.0): Gentle elastic rebound as chassis springs back
+      let phaseSpeed: number;
       if (progress < 0.72) {
         const compressProgress = progress / 0.72;
         // Cosine easing creates gradual entry, peak resistance at max penetration, then zero speed
         const decel = Math.cos(compressProgress * Math.PI * 0.5);
-        vehicle.speed = c.initialSpeed * decel;
+        phaseSpeed = (c.initialNormalSpeed !== undefined ? c.initialNormalSpeed : c.initialSpeed) * decel;
       } else {
         const reboundProgress = (progress - 0.72) / 0.28;
-        vehicle.speed = c.reboundSpeed * Math.sin(reboundProgress * Math.PI * 0.5);
+        phaseSpeed = c.reboundSpeed * Math.sin(reboundProgress * Math.PI * 0.5);
       }
-      vehicle.vx = Math.cos(vehicle.angle) * vehicle.speed;
-      vehicle.vy = Math.sin(vehicle.angle) * vehicle.speed;
-      if (vehicle.lateralVelocity) {
-        vehicle.lateralVelocity *= Math.max(0, 1.0 - 8.0 * dt);
-        (vehicle as any).lateralSlip = vehicle.lateralVelocity;
+
+      if (c.initialNormalSpeed !== undefined) {
+        // Честная кинематика удара об упор: гасится только нормальная
+        // составляющая (сжатие металла), касательная сохраняется с трением
+        // шин/металла — касательный удар не останавливает машину как лобовый.
+        const nX = c.normalX;
+        const nY = c.normalY;
+        const tX = -c.normalY;
+        const tY = c.normalX;
+        const tanVel = (c.initialTangentialSpeed ?? 0) * Math.max(0, 1.0 - 1.5 * dt);
+        c.initialTangentialSpeed = tanVel;
+        // velocity = -n̂ · phaseSpeed + t̂ · tanVel (phaseSpeed ≥ 0 — сближение)
+        vehicle.vx = -nX * phaseSpeed + tX * tanVel;
+        vehicle.vy = -nY * phaseSpeed + tY * tanVel;
+        const cCos = Math.cos(vehicle.angle);
+        const cSin = Math.sin(vehicle.angle);
+        vehicle.speed = vehicle.vx * cCos + vehicle.vy * cSin;
+        const lat = -vehicle.vx * cSin + vehicle.vy * cCos;
+        vehicle.lateralVelocity = lat;
+        (vehicle as any).lateralSlip = lat;
+      } else {
+        vehicle.speed = phaseSpeed;
+        vehicle.vx = Math.cos(vehicle.angle) * vehicle.speed;
+        vehicle.vy = Math.sin(vehicle.angle) * vehicle.speed;
+        if (vehicle.lateralVelocity) {
+          vehicle.lateralVelocity *= Math.max(0, 1.0 - 8.0 * dt);
+          (vehicle as any).lateralSlip = vehicle.lateralVelocity;
+        }
       }
     }
 
@@ -10480,8 +10541,11 @@ export function updateVehiclePhysics(
         // This keeps low-speed queue touches smooth, damage-free, and avoids CPU particle spam on mobile!
         if (impactSpeed > 35) {
           const scrapeSpeed = Math.abs(relVx * -col.normalY + relVy * col.normalX);
-          applyVehicleDamageAndDeformation(vehicle, col.contactX, col.contactY, impactSpeed, scrapeSpeed, world, other.mass, false);
-          applyVehicleDamageAndDeformation(other, col.contactX, col.contactY, impactSpeed, scrapeSpeed, world, vehicle.mass, false);
+          // Урон — от нормальной составляющей относительной скорости (сжатие металла),
+          // касательная уходит в scrapeSpeed (скольжение).
+          const normalSpeed = Math.abs(relVx * col.normalX + relVy * col.normalY);
+          applyVehicleDamageAndDeformation(vehicle, col.contactX, col.contactY, normalSpeed, scrapeSpeed, world, other.mass, false);
+          applyVehicleDamageAndDeformation(other, col.contactX, col.contactY, normalSpeed, scrapeSpeed, world, vehicle.mass, false);
         }
       }
     }
@@ -10512,6 +10576,11 @@ export function updateVehiclePhysics(
           const tx = -col.normalY;
           const ty = col.normalX;
           const velDotT = vehicle.vx * tx + vehicle.vy * ty;
+
+          // Нормальная составляющая (сближение со стеной) идёт в урон и травму,
+          // касательная — это скольжение вдоль стены (царапины, а не вмятина).
+          const normalImpactSpeed = Math.max(0, -velDotN);
+          const tangentialSpeed = Math.abs(velDotT);
 
           const isPlayerVeh = vehicle.isPlayerControlled || (player && player.isInVehicle && player.currentVehicleId === vehicle.id);
           const isGlancingBlow = isPlayerVeh && (Math.abs(velDotT) > Math.abs(velDotN) * 0.9);
@@ -10562,6 +10631,8 @@ export function updateVehiclePhysics(
               normalX: col.normalX,
               normalY: col.normalY,
               initialSpeed: vehicle.speed,
+              initialNormalSpeed: normalImpactSpeed,
+              initialTangentialSpeed: velDotT,
               reboundSpeed: 0,
               contactX,
               contactY,
@@ -10570,7 +10641,7 @@ export function updateVehiclePhysics(
           }
 
           // Apply physical plastic deformation to the car body
-          applyVehicleDamageAndDeformation(vehicle, contactX, contactY, impactSpeed, 10, world, 12000, true);
+          applyVehicleDamageAndDeformation(vehicle, contactX, contactY, normalImpactSpeed, tangentialSpeed, world, 12000, true);
 
           // Re-evaluate collision against the newly crumpled hull so vehicle rests against the wall at its dented depth
           const recheck = checkCarBuildingCollision(vehicle, bld);
@@ -10582,7 +10653,7 @@ export function updateVehiclePhysics(
           if (vehicle.isPlayerControlled || (player && player.isInVehicle && player.currentVehicleId === vehicle.id)) {
             sound.playCollision(Math.min(1.0, impactSpeed / 120));
             if (player) {
-              applyDriverVehicleCrashTrauma(player, impactSpeed, 'здание', 1.0, vehicle);
+              applyDriverVehicleCrashTrauma(player, normalImpactSpeed, 'здание', 1.0, vehicle);
             }
           } else {
             // For AI cars: Trigger hazard stop if disabled/crashed, otherwise trigger smart reverse recovery
@@ -10655,12 +10726,19 @@ export function updateVehiclePhysics(
             const crumpleDuration = 0.08 + Math.min(0.06, impactSpeed / 800);
             const rebound = -0.12 * Math.sign(vehicle.speed || 1) * Math.min(25, Math.abs(vehicle.speed));
 
+            // Нормальная/касательная составляющие относительно острова АЗС
+            const stationParts = normalAndTangential(vehicle.vx, vehicle.vy, col.normalX, col.normalY);
+            const stationNormalSpeed = stationParts.normalApproach;
+            const stationTangentialSpeed = Math.abs(stationParts.tangential);
+
             vehicle.activeCrumple = {
               timer: crumpleDuration,
               totalDuration: crumpleDuration,
               normalX: col.normalX,
               normalY: col.normalY,
               initialSpeed: vehicle.speed,
+              initialNormalSpeed: stationNormalSpeed,
+              initialTangentialSpeed: stationParts.tangential,
               reboundSpeed: rebound,
               contactX,
               contactY
@@ -10669,7 +10747,7 @@ export function updateVehiclePhysics(
             vehicle.x += col.normalX * col.depth;
             vehicle.y += col.normalY * col.depth;
 
-            applyVehicleDamageAndDeformation(vehicle, contactX, contactY, impactSpeed, 10, world, 12000, true);
+            applyVehicleDamageAndDeformation(vehicle, contactX, contactY, stationNormalSpeed, stationTangentialSpeed, world, 12000, true);
           } else {
             vehicle.x += col.normalX * (col.depth + 0.5);
             vehicle.y += col.normalY * (col.depth + 0.5);
@@ -11809,19 +11887,28 @@ export function updateBreakablePropsAndLivingWorld(world: GameWorld, player: Pla
           if (impactSpeed > 16) {
             const crumpleDuration = 0.10 + Math.min(0.08, impactSpeed / 800);
 
+            // Столб/дерево: в урон и травму идёт только нормальная составляющая
+            // (касательная — скольжение вдоль столба), см. damageModel.ts.
+            const poleParts = normalAndTangential(veh.vx, veh.vy, normX, normY);
+            const poleNormalSpeed = poleParts.normalApproach;
+            const poleTangentialSpeed = Math.abs(poleParts.tangential);
+
             veh.activeCrumple = {
               timer: crumpleDuration,
               totalDuration: crumpleDuration,
               normalX: normX,
               normalY: normY,
               initialSpeed: veh.speed,
+              initialNormalSpeed: poleNormalSpeed,
+              initialTangentialSpeed: poleParts.tangential,
               reboundSpeed: 0, // Solid concrete pole / tree: plastic wrapping with zero bounceback
               contactX,
               contactY
             };
 
             // First apply structural plastic deformation at contact point
-            applyVehicleDamageAndDeformation(veh, contactX, contactY, impactSpeed, 12, world, 14000, true);
+            applyVehicleDamageAndDeformation(veh, contactX, contactY, poleNormalSpeed, poleTangentialSpeed, world, 14000, true,
+              propContactWidthPx(hitbox, prop.angle || 0, normX, normY));
 
             // Recheck collision against the freshly deformed metal so vehicle only clamps residual overlap,
             // allowing the pole to remain deeply nestled inside the dent!
@@ -11834,7 +11921,7 @@ export function updateBreakablePropsAndLivingWorld(world: GameWorld, player: Pla
             sound.playCollision(Math.min(1.0, impactSpeed / 80));
 
             if (player && (veh.isPlayerControlled || (player.isInVehicle && player.currentVehicleId === veh.id))) {
-              applyDriverVehicleCrashTrauma(player, impactSpeed, hitbox.displayNameRu, 1.2, veh);
+              applyDriverVehicleCrashTrauma(player, poleNormalSpeed, hitbox.displayNameRu, 1.2, veh);
             } else {
               if (isVehicleDisabledOrCrashed(veh)) {
                 veh.turnSignal = 'hazard';
@@ -11942,6 +12029,12 @@ export function updateBreakablePropsAndLivingWorld(world: GameWorld, player: Pla
       const rawImpactSpeed = Math.abs(veh.speed);
       const propResistance = hitbox.resistance;
 
+      // Нормальная составляющая — в урон/травму, касательная — скольжение
+      const propPushLen = Math.hypot(col.pushX, col.pushY) || 1;
+      const propParts = normalAndTangential(veh.vx, veh.vy, col.pushX / propPushLen, col.pushY / propPushLen);
+      const propNormalSpeed = propParts.normalApproach;
+      const propTangentialSpeed = Math.abs(propParts.tangential);
+
       prop.breakVX = Math.cos(veh.angle) * Math.max(35, rawImpactSpeed) * 0.8;
       prop.breakVY = Math.sin(veh.angle) * Math.max(35, rawImpactSpeed) * 0.8;
       prop.breakAngle = veh.angle + (Math.random() - 0.5) * 0.4;
@@ -11949,11 +12042,16 @@ export function updateBreakablePropsAndLivingWorld(world: GameWorld, player: Pla
 
       sound.playPropBreak(prop.type);
 
-      // Vehicle damage & deformation scaled by prop resistance
-      applyVehicleDamageAndDeformation(veh, col.contactX, col.contactY, rawImpactSpeed * propResistance, 15, world, 120, true);
+      // Vehicle damage & deformation scaled by prop resistance.
+      // Масса 12000 — проп стоит на грунте: его слабость задаётся
+      // множителем propResistance на скорость, а не фиктивной массой.
+      // contactWidthPx — «тень» хитбокса: узкий столбик продавливает глубже,
+      // чем широкий контейнер, на ту же энергию.
+      applyVehicleDamageAndDeformation(veh, col.contactX, col.contactY, propNormalSpeed * propResistance, propTangentialSpeed, world, 12000, true,
+        propContactWidthPx(hitbox, prop.angle || 0, col.pushX / propPushLen, col.pushY / propPushLen));
 
       if (player && (veh.isPlayerControlled || (player.isInVehicle && player.currentVehicleId === veh.id))) {
-        applyDriverVehicleCrashTrauma(player, rawImpactSpeed, hitbox.displayNameRu, propResistance, veh);
+        applyDriverVehicleCrashTrauma(player, propNormalSpeed, hitbox.displayNameRu, propResistance, veh);
       }
 
       if (prop.type === 'hydrant') {
