@@ -1487,4 +1487,90 @@ export function getVehicleTurnSignalDynamicState(
   };
 }
 
+export type HeadlightBulbType = 'vintage_sealed_beam' | 'halogen_standard' | 'hid_xenon' | 'led_matrix';
+
+export interface VehicleHeadlightConfig {
+  bulbType: HeadlightBulbType;
+  riseTime: number;   // seconds to warm up / fade in
+  decayTime: number;  // seconds to cool down / fade out
+  colorTemp: string;
+  hasIgnitionFlicker: boolean;
+}
+
+export interface VehicleHeadlightDynamicState {
+  intensity: number;      // 0.0 to 1.0 optical brightness with thermal inertia
+  isOn: boolean;
+  config: VehicleHeadlightConfig;
+}
+
+export function getVehicleHeadlightConfig(type?: CarType): VehicleHeadlightConfig {
+  const t = type || 'sedan';
+  if (['tractor_mtz80', 'tractor_mtz80_old', 'tractor_mtz82', 'sedan_classic', 'classic_compact', 'retro_bubble', 'van_cargo_old', 'suv_classic_box', 'muscle_classic'].includes(t)) {
+    return {
+      bulbType: 'vintage_sealed_beam',
+      riseTime: 0.28,
+      decayTime: 0.40,
+      colorTemp: '#fef08a',
+      hasIgnitionFlicker: false
+    };
+  }
+  if (['sedan_luxury', 'supercar', 'sports', 'coupe_gt', 'police'].includes(t)) {
+    return {
+      bulbType: 'hid_xenon',
+      riseTime: 0.35,
+      decayTime: 0.22,
+      colorTemp: '#f0fdf4',
+      hasIgnitionFlicker: true
+    };
+  }
+  if (['hatch_hot', 'crossover_compact', 'suv', 'van', 'sedan_compact', 'wagon_allroad'].includes(t)) {
+    return {
+      bulbType: 'led_matrix',
+      riseTime: 0.04,
+      decayTime: 0.06,
+      colorTemp: '#ffffff',
+      hasIgnitionFlicker: false
+    };
+  }
+  return {
+    bulbType: 'halogen_standard',
+    riseTime: 0.18,
+    decayTime: 0.26,
+    colorTemp: '#fef3c7',
+    hasIgnitionFlicker: false
+  };
+}
+
+export function getVehicleHeadlightDynamicState(car: Vehicle, dt: number = 0.016): VehicleHeadlightDynamicState {
+  const config = getVehicleHeadlightConfig(car.type);
+  const targetOn = !!car.headlightsOn;
+
+  if (car.headlightIntensity === undefined) {
+    car.headlightIntensity = targetOn ? 1.0 : 0.0;
+  }
+
+  let intensity = car.headlightIntensity;
+
+  if (targetOn) {
+    const rate = 1.0 / Math.max(0.01, config.riseTime);
+    intensity = Math.min(1.0, intensity + rate * dt);
+
+    if (config.hasIgnitionFlicker && intensity > 0.12 && intensity < 0.82) {
+      const flicker = Math.sin(Date.now() * 0.04) * 0.14;
+      intensity = Math.max(0.05, Math.min(1.0, intensity + flicker));
+    }
+  } else {
+    const rate = 1.0 / Math.max(0.01, config.decayTime);
+    intensity = Math.max(0.0, intensity - rate * dt);
+  }
+
+  car.headlightIntensity = intensity;
+
+  return {
+    intensity,
+    isOn: targetOn,
+    config
+  };
+}
+
 

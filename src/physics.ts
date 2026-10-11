@@ -1,4 +1,4 @@
-import { CAR_CONFIGS, canVehicleHaveHitch, createDefaultEngineState, createDefaultFuelSystem, createDefaultFluidTank, ensureVehicleFluidTank, liquidTypeToStainType, createDefaultVehicleDamage, ensureVehicleDamage, getVehicleFuelCapPosition, getVehicleAxleGeometry, isTrailerVehicle, isRoadMachinery, getVehicleDriveType, SPEED_KMH_TO_PX_S, PX_S_TO_SPEED_KMH, getLPGDefaultCapacity, cycleVehicleDiffLock, getVehicleDiffCapabilities, ensureVehicleDiffLock } from './vehicleHelpers';
+import { CAR_CONFIGS, canVehicleHaveHitch, createDefaultEngineState, createDefaultFuelSystem, createDefaultFluidTank, ensureVehicleFluidTank, liquidTypeToStainType, createDefaultVehicleDamage, ensureVehicleDamage, getVehicleFuelCapPosition, getVehicleAxleGeometry, isTrailerVehicle, isRoadMachinery, getVehicleDriveType, SPEED_KMH_TO_PX_S, PX_S_TO_SPEED_KMH, getLPGDefaultCapacity, cycleVehicleDiffLock, getVehicleDiffCapabilities, ensureVehicleDiffLock, getVehicleHeadlightDynamicState } from './vehicleHelpers';
 import { Building, GameWorld, InputState, Particle, Pedestrian, Player, SkidMark, Vehicle, StreetProp, FluidStainType, Roundabout, RollingStockCar, WorldWind } from './types';
 import { getBuildingLayout, constrainPlayerToInterior } from './buildingInteriors';
 import { constrainPlayerToBusInterior } from './busInteriorSystem';
@@ -1928,15 +1928,15 @@ export function applyVehicleDamageAndDeformation(
   // 1. Realistic Directional Softbody Mass-Spring Network with Plastic Strain & Poisson Wrinkling
   if (dmg.deformedVertices && (impactKmh > 6.0 || isExtremeStriker)) {
     // Physical deformation displacement in pixels (significantly enhanced for deep, soft malleable crumple)
-    let pushStrength = Math.pow(Math.max(0, impactKmh - 3.0) / 60.0, 1.45) * 24.0 * Math.sqrt(reducedMassRatio);
+    let pushStrength = Math.pow(Math.max(0, impactKmh - 5.0) / 75.0, 1.50) * 16.0 * Math.sqrt(reducedMassRatio);
     if (isExtremeStriker) {
-      pushStrength = Math.min(65.0, pushStrength * 2.5);
+      pushStrength = Math.min(50.0, pushStrength * 2.0);
     } else {
-      pushStrength = Math.min(48.0, pushStrength);
+      pushStrength = Math.min(35.0, pushStrength);
     }
-    if (isCommercialHeavy) pushStrength *= 0.45;
-    if (isHeavyRigidTrailer) pushStrength *= 0.25;
-    if (isMachinery) pushStrength *= 0.12;
+    if (isCommercialHeavy) pushStrength *= 0.35;
+    if (isHeavyRigidTrailer) pushStrength *= 0.20;
+    if (isMachinery) pushStrength *= 0.10;
     
     // Determine local impact vector in car local coordinates
     const contactDist = Math.hypot(localX, localY) || 1;
@@ -1985,12 +1985,12 @@ export function applyVehicleDamageAndDeformation(
       const weight = Math.exp(-(dist * dist) / (2 * spreadRadius * spreadRadius));
       
       // Node structural stiffness resistance multiplier based on panel type (lower stiffness for ultra-soft malleable feel)
-      const structStiffness = v.structuralType === 'bumper' ? 0.45 :
-                              (v.structuralType === 'door' ? 0.55 :
-                              (v.structuralType === 'fender' ? 0.62 :
-                              (v.structuralType === 'quarter' ? 0.68 :
-                              (v.structuralType === 'hood' ? 0.52 :
-                              (v.structuralType === 'windshield' ? 0.75 : 1.05)))));
+      const structStiffness = v.structuralType === 'bumper' ? 0.55 :
+                              (v.structuralType === 'door' ? 0.65 :
+                              (v.structuralType === 'fender' ? 0.72 :
+                              (v.structuralType === 'quarter' ? 0.80 :
+                              (v.structuralType === 'hood' ? 0.60 :
+                              (v.structuralType === 'windshield' ? 0.85 : 1.2)))));
 
       // POISSON'S EFFECT / ACCORDION FOLDING:
       // Compression in the impact direction causes orthogonal bulging of adjacent sheet metal
@@ -2033,8 +2033,8 @@ export function applyVehicleDamageAndDeformation(
 
       v.targetOffsetX = newTargetX;
       v.targetOffsetY = newTargetY;
-      // Immediate partial displacement step for instant soft tactile feedback
-      const stepRatio = isExtremeStriker ? 0.85 : 0.55;
+      // Progressive displacement step for smooth, tactile collision feedback
+      const stepRatio = isExtremeStriker ? 0.30 : 0.15;
       v.offsetX = v.offsetX + (newTargetX - v.offsetX) * stepRatio;
       v.offsetY = v.offsetY + (newTargetY - v.offsetY) * stepRatio;
 
@@ -7108,6 +7108,9 @@ export function updateVehiclePhysics(
   } else {
     vehicle.turnSignalTimer = 0;
   }
+
+  // Update headlight thermal inertia / fade state
+  getVehicleHeadlightDynamicState(vehicle, dt);
 
   // Smoothly recover ghosting alpha over time for all vehicles if below 1.0
   if (vehicle.ghostingAlpha !== undefined && vehicle.ghostingAlpha < 1.0) {

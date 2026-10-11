@@ -497,6 +497,7 @@ export interface Vehicle {
   dumpColor?: string;
   headlightsOn: boolean;
   headlightMode: 'off' | 'low' | 'high';
+  headlightIntensity?: number;
   positionLightsOn?: boolean;
   frontFogLightsOn?: boolean;
   rearFogLightsOn?: boolean;
