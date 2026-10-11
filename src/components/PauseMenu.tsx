@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { 
   Play, 
   Save, 
@@ -6,7 +6,10 @@ import {
   LogOut, 
   User, 
   Globe, 
-  Activity
+  Activity,
+  Check,
+  ChevronRight,
+  ShieldAlert
 } from 'lucide-react';
 
 interface PauseMenuProps {
@@ -28,160 +31,270 @@ export const PauseMenu: React.FC<PauseMenuProps> = ({
   onOpenProfile,
   onOpenDiagnostics
 }) => {
+  const [savedFeedback, setSavedFeedback] = useState<boolean>(false);
+  const [confirmExit, setConfirmExit] = useState<boolean>(false);
+
+  const handleSaveClick = () => {
+    onSave();
+    setSavedFeedback(true);
+    setTimeout(() => setSavedFeedback(false), 2200);
+  };
+
   return (
-    <div className="absolute inset-0 z-50 flex flex-col justify-between items-center p-8 sm:p-14 bg-[#080a0e]/85 backdrop-blur-xl text-[#f0f3f6] font-sans select-none animate-in fade-in duration-200">
+    <div className="fixed inset-0 z-50 flex flex-col justify-between items-center p-6 sm:p-12 md:p-16 bg-[#080a0e]/90 backdrop-blur-2xl text-[#f0f3f6] font-sans select-none overflow-y-auto animate-in fade-in duration-200">
       
-      {/* Top Banner: Logo & Pause Indicator with generous clearance */}
-      <div className="pt-6 sm:pt-10 flex flex-col items-center">
-        <div className="flex items-center gap-3 px-6 py-3.5 bg-[#12151d]/90 border border-white/10 rounded-[3px] shadow-2xl">
-          <div className="w-2.5 h-7 bg-[#c68a35] -skew-x-12 shrink-0 shadow-[0_0_14px_rgba(198,138,53,0.5)]" />
-          <div className="flex flex-col pr-2">
-            <h1 className="text-xl sm:text-2xl font-black italic tracking-widest text-white uppercase font-sans leading-none">
-              СТЕПНОЙ ТРАКТ <span className="text-[#c68a35]">2D</span>
-            </h1>
-            <span className="text-[10px] font-mono font-bold tracking-widest text-[#8b929e] uppercase mt-1">
-              СИМУЛЯЦИЯ НА ПАУЗЕ
-            </span>
-          </div>
-          <div className="w-2.5 h-7 bg-[#c68a35] -skew-x-12 shrink-0 shadow-[0_0_14px_rgba(198,138,53,0.5)]" />
-        </div>
+      {/* Background Subtle Tech Lines */}
+      <div className="absolute inset-0 pointer-events-none opacity-[0.03]">
+        <svg className="w-full h-full" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <pattern id="pauseGridPattern" width="60" height="60" patternUnits="userSpaceOnUse">
+              <path d="M 60 0 L 0 0 0 60" fill="none" stroke="#ffffff" strokeWidth="1" />
+            </pattern>
+          </defs>
+          <rect width="100%" height="100%" fill="url(#pauseGridPattern)" />
+        </svg>
       </div>
 
-      {/* Spacious Horizontal Dock (Generous gaps, comfortable breathing room) */}
-      <div className="pb-16 sm:pb-24 w-full flex flex-col items-center">
-        <div className="flex flex-wrap items-center justify-center gap-4 max-w-5xl w-full">
+      {/* TOP HEADER: Clean Brand Emblem with Generous Clearance */}
+      <header className="relative z-10 w-full max-w-4xl flex items-center justify-between pb-8 pt-2 border-b border-white/[0.08]">
+        <div className="flex items-center gap-4">
+          <div className="w-3 h-8 bg-[#c68a35] -skew-x-12 shrink-0 shadow-[0_0_16px_rgba(198,138,53,0.6)]" />
+          <div>
+            <h1 className="text-2xl sm:text-3xl font-black italic tracking-widest text-white uppercase font-sans leading-none">
+              СТЕПНОЙ ТРАКТ <span className="text-[#c68a35]">2D</span>
+            </h1>
+            <p className="text-xs font-mono font-bold tracking-widest text-[#8b929e] uppercase mt-1">
+              СИМУЛЯЦИЯ НА ПАУЗЕ
+            </p>
+          </div>
+        </div>
+
+        <div className="hidden sm:flex items-center gap-3 px-4 py-2 bg-[#12151d] border border-white/10 rounded-lg text-xs font-mono text-[#8b929e]">
+          <span>ГОРЯЧАЯ КЛАВИША:</span>
+          <kbd className="px-2 py-0.5 bg-white/10 text-white rounded text-[11px] font-bold border border-white/10">
+            ESC
+          </kbd>
+        </div>
+      </header>
+
+      {/* CENTER CONTENT: Spacious Modern Tile Grid */}
+      <main className="relative z-10 my-auto py-8 w-full max-w-4xl flex flex-col gap-6">
+        
+        {/* 1. DOMINANT HERO RESUME TILE */}
+        <button
+          onClick={onResume}
+          className="group relative flex items-center justify-between w-full p-6 sm:p-7 bg-gradient-to-r from-[#141822] via-[#161b26] to-[#12151d] hover:from-[#1a2030] hover:to-[#171c26] border-2 border-[#c68a35] hover:shadow-[0_0_35px_rgba(198,138,53,0.35)] rounded-xl transition-all duration-200 cursor-pointer text-left overflow-hidden"
+        >
+          {/* Subtle Ambient Glow */}
+          <div className="absolute top-0 right-0 w-64 h-full bg-gradient-to-l from-[#c68a35]/15 to-transparent pointer-events-none" />
+
+          <div className="flex items-center gap-5 sm:gap-6 min-w-0">
+            <div className="w-14 h-14 rounded-lg bg-[#c68a35] text-black flex items-center justify-center shrink-0 shadow-[0_0_20px_rgba(198,138,53,0.5)] group-hover:scale-105 transition-transform duration-200">
+              <Play className="w-7 h-7 fill-current translate-x-0.5" />
+            </div>
+            <div>
+              <h2 className="text-xl sm:text-2xl font-black italic tracking-wide text-white uppercase font-sans leading-tight group-hover:text-[#c68a35] transition-colors">
+                ПРОДОЛЖИТЬ РЕЙС
+              </h2>
+              <p className="text-xs sm:text-sm text-[#8b929e] mt-1 font-mono">
+                Вернуться к прямому управлению транспортом и персонажем
+              </p>
+            </div>
+          </div>
+
+          <div className="hidden sm:flex items-center gap-3 shrink-0 pr-2">
+            <span className="text-xs font-mono font-bold text-[#c68a35] tracking-wider uppercase">
+              В ИГРУ
+            </span>
+            <div className="w-9 h-9 rounded-md bg-white/5 border border-white/10 flex items-center justify-center text-white/80 group-hover:text-white group-hover:bg-[#c68a35]/20 group-hover:border-[#c68a35]/40 transition-colors">
+              <ChevronRight className="w-5 h-5 group-hover:translate-x-0.5 transition-transform" />
+            </div>
+          </div>
+        </button>
+
+        {/* 2. SECONDARY ACTION TILES (Spacious 2-column grid with breathing room) */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 sm:gap-6">
           
-          {/* 1. Large Primary Resume Tile */}
+          {/* Tile A: Quick Save */}
           <button
-            onClick={onResume}
-            className="group relative flex items-center justify-center gap-5 px-10 py-6 min-w-[240px] sm:min-w-[280px] bg-[#141720]/95 hover:bg-[#1a1e2a] border-2 border-[#c68a35] hover:shadow-[0_0_30px_rgba(198,138,53,0.4)] rounded-[4px] transition-all cursor-pointer overflow-hidden"
+            onClick={handleSaveClick}
+            className="group relative flex flex-col justify-between p-6 bg-[#121620] hover:bg-[#181d2a] border border-white/10 hover:border-[#c68a35] rounded-xl transition-all duration-200 cursor-pointer text-left shadow-lg hover:shadow-[0_8px_25px_rgba(198,138,53,0.15)]"
           >
-            <div className="w-0 h-0 border-t-[10px] border-t-transparent border-b-[10px] border-b-transparent border-l-[16px] border-l-[#c68a35] group-hover:scale-115 transition-transform shrink-0" />
-            <div className="flex flex-col text-left">
-              <span className="text-lg sm:text-xl font-black italic uppercase tracking-wider text-white font-sans leading-tight">
-                ПРОДОЛЖИТЬ
-              </span>
-              <span className="text-[11px] text-[#c68a35] font-mono tracking-wide mt-0.5">
-                Вернуться к управлению
-              </span>
+            <div>
+              <div className="flex items-center justify-between">
+                <div className="p-3 rounded-lg bg-[#c68a35]/15 border border-[#c68a35]/30 text-[#c68a35] group-hover:bg-[#c68a35] group-hover:text-black transition-colors">
+                  {savedFeedback ? <Check className="w-6 h-6 stroke-[3]" /> : <Save className="w-6 h-6" />}
+                </div>
+                {savedFeedback && (
+                  <span className="text-[11px] font-mono font-bold text-emerald-400 bg-emerald-950/60 border border-emerald-500/30 px-2 py-0.5 rounded">
+                    СОХРАНЕНО
+                  </span>
+                )}
+              </div>
+              <h3 className="text-base font-black uppercase tracking-wider text-white mt-4 font-sans group-hover:text-[#c68a35] transition-colors">
+                СОХРАНИТЬ ИГРУ
+              </h3>
+              <p className="text-xs text-[#8b929e] mt-1.5 leading-relaxed font-mono">
+                Записать текущую позицию, состояние авто и мира в архив
+              </p>
+            </div>
+            <div className="mt-5 pt-3 border-t border-white/[0.08] flex items-center justify-between text-[11px] font-mono text-[#8b929e]">
+              <span>СЛОТ СОХРАНЕНИЯ</span>
+              <span className="text-[#c68a35] font-bold">БЫСТРАЯ ЗАПИСЬ</span>
             </div>
           </button>
 
-          {/* 2. Quick Save Tile */}
-          <button
-            onClick={onSave}
-            className="group relative flex items-center justify-center gap-3.5 px-7 py-6 min-w-[160px] bg-[#141720]/90 hover:bg-[#1a1e2a] border border-white/10 hover:border-[#c68a35] hover:shadow-[0_4px_20px_rgba(198,138,53,0.15)] rounded-[4px] transition-all cursor-pointer"
-          >
-            <Save className="w-5 h-5 text-[#8b929e] group-hover:text-[#c68a35] transition-colors" />
-            <div className="flex flex-col text-left">
-              <span className="text-sm font-black italic uppercase tracking-wider text-[#d0d5dc] group-hover:text-white font-sans">
-                СОХРАНИТЬ
-              </span>
-              <span className="text-[10px] text-[#8b929e] font-mono mt-0.5">
-                Быстрая запись
-              </span>
-            </div>
-          </button>
-
-          {/* 3. Settings Tile */}
+          {/* Tile B: Settings */}
           <button
             onClick={onOpenSettings}
-            className="group relative flex items-center justify-center gap-3.5 px-7 py-6 min-w-[160px] bg-[#141720]/90 hover:bg-[#1a1e2a] border border-white/10 hover:border-[#c68a35] hover:shadow-[0_4px_20px_rgba(198,138,53,0.15)] rounded-[4px] transition-all cursor-pointer"
+            className="group relative flex flex-col justify-between p-6 bg-[#121620] hover:bg-[#181d2a] border border-white/10 hover:border-[#c68a35] rounded-xl transition-all duration-200 cursor-pointer text-left shadow-lg hover:shadow-[0_8px_25px_rgba(198,138,53,0.15)]"
           >
-            <Sliders className="w-5 h-5 text-[#8b929e] group-hover:text-[#c68a35] transition-colors" />
-            <div className="flex flex-col text-left">
-              <span className="text-sm font-black italic uppercase tracking-wider text-[#d0d5dc] group-hover:text-white font-sans">
+            <div>
+              <div className="p-3 rounded-lg bg-white/5 border border-white/10 text-[#8b929e] group-hover:text-[#c68a35] group-hover:border-[#c68a35]/40 transition-colors w-fit">
+                <Sliders className="w-6 h-6" />
+              </div>
+              <h3 className="text-base font-black uppercase tracking-wider text-white mt-4 font-sans group-hover:text-[#c68a35] transition-colors">
                 НАСТРОЙКИ
-              </span>
-              <span className="text-[10px] text-[#8b929e] font-mono mt-0.5">
-                Звук и видео
-              </span>
+              </h3>
+              <p className="text-xs text-[#8b929e] mt-1.5 leading-relaxed font-mono">
+                Видео, аудио, раскладка клавиатуры и параметры симуляции
+              </p>
+            </div>
+            <div className="mt-5 pt-3 border-t border-white/[0.08] flex items-center justify-between text-[11px] font-mono text-[#8b929e]">
+              <span>КОНФИГУРАЦИЯ</span>
+              <span className="text-white/80">ОПЦИИ</span>
             </div>
           </button>
 
-          {/* 4. Profile Tile */}
+          {/* Tile C: Profile / Account */}
           {onOpenProfile && (
             <button
               onClick={onOpenProfile}
-              className="group relative flex items-center justify-center gap-3.5 px-6 py-6 min-w-[150px] bg-[#141720]/90 hover:bg-[#1a1e2a] border border-white/10 hover:border-[#c68a35] hover:shadow-[0_4px_20px_rgba(198,138,53,0.15)] rounded-[4px] transition-all cursor-pointer"
+              className="group relative flex flex-col justify-between p-6 bg-[#121620] hover:bg-[#181d2a] border border-white/10 hover:border-[#c68a35] rounded-xl transition-all duration-200 cursor-pointer text-left shadow-lg hover:shadow-[0_8px_25px_rgba(198,138,53,0.15)]"
             >
-              <User className="w-5 h-5 text-[#8b929e] group-hover:text-[#c68a35] transition-colors" />
-              <div className="flex flex-col text-left">
-                <span className="text-sm font-black italic uppercase tracking-wider text-[#d0d5dc] group-hover:text-white font-sans">
-                  АККАУНТ
-                </span>
-                <span className="text-[10px] text-[#8b929e] font-mono mt-0.5">
-                  Личное дело
-                </span>
+              <div>
+                <div className="p-3 rounded-lg bg-white/5 border border-white/10 text-[#8b929e] group-hover:text-[#c68a35] group-hover:border-[#c68a35]/40 transition-colors w-fit">
+                  <User className="w-6 h-6" />
+                </div>
+                <h3 className="text-base font-black uppercase tracking-wider text-white mt-4 font-sans group-hover:text-[#c68a35] transition-colors">
+                  ДОСЬЕ ВОДИТЕЛЯ
+                </h3>
+                <p className="text-xs text-[#8b929e] mt-1.5 leading-relaxed font-mono">
+                  Личное дело, баланс, статистика и синхронизация облака
+                </p>
+              </div>
+              <div className="mt-5 pt-3 border-t border-white/[0.08] flex items-center justify-between text-[11px] font-mono text-[#8b929e]">
+                <span>ПРОФИЛЬ</span>
+                <span className="text-white/80">ВОДИТЕЛЬ</span>
               </div>
             </button>
           )}
 
-          {/* 5. Online Tile */}
+          {/* Tile D: Online P2P */}
           {onOpenOnline && (
             <button
               onClick={onOpenOnline}
-              className="group relative flex items-center justify-center gap-3.5 px-6 py-6 min-w-[150px] bg-[#141720]/90 hover:bg-[#1a1e2a] border border-white/10 hover:border-[#c68a35] hover:shadow-[0_4px_20px_rgba(198,138,53,0.15)] rounded-[4px] transition-all cursor-pointer"
+              className="group relative flex flex-col justify-between p-6 bg-[#121620] hover:bg-[#181d2a] border border-white/10 hover:border-[#c68a35] rounded-xl transition-all duration-200 cursor-pointer text-left shadow-lg hover:shadow-[0_8px_25px_rgba(198,138,53,0.15)]"
             >
-              <Globe className="w-5 h-5 text-[#8b929e] group-hover:text-[#c68a35] transition-colors" />
-              <div className="flex flex-col text-left">
-                <span className="text-sm font-black italic uppercase tracking-wider text-[#d0d5dc] group-hover:text-white font-sans">
-                  ОНЛАЙН
-                </span>
-                <span className="text-[10px] text-[#8b929e] font-mono mt-0.5">
-                  P2P комната
-                </span>
+              <div>
+                <div className="p-3 rounded-lg bg-white/5 border border-white/10 text-[#8b929e] group-hover:text-[#c68a35] group-hover:border-[#c68a35]/40 transition-colors w-fit">
+                  <Globe className="w-6 h-6" />
+                </div>
+                <h3 className="text-base font-black uppercase tracking-wider text-white mt-4 font-sans group-hover:text-[#c68a35] transition-colors">
+                  СЕТЕВАЯ ИГРА
+                </h3>
+                <p className="text-xs text-[#8b929e] mt-1.5 leading-relaxed font-mono">
+                  Сетевая P2P комната, синхронизация трафика и список друзей
+                </p>
+              </div>
+              <div className="mt-5 pt-3 border-t border-white/[0.08] flex items-center justify-between text-[11px] font-mono text-[#8b929e]">
+                <span>МУЛЬТИПЛЕЕР</span>
+                <span className="text-white/80">P2P СЕТЬ</span>
               </div>
             </button>
           )}
 
-          {/* 6. Diagnostics Tile */}
+          {/* Tile E: Diagnostics [F2] */}
           {onOpenDiagnostics && (
             <button
               onClick={onOpenDiagnostics}
-              className="group relative flex items-center justify-center gap-3.5 px-5 py-6 min-w-[140px] bg-[#141720]/90 hover:bg-[#1a1e2a] border border-white/10 hover:border-[#c68a35] rounded-[4px] transition-all cursor-pointer"
-              title="Диагностика производительности [F2]"
+              className="group relative flex flex-col justify-between p-6 bg-[#121620] hover:bg-[#181d2a] border border-white/10 hover:border-[#c68a35] rounded-xl transition-all duration-200 cursor-pointer text-left shadow-lg hover:shadow-[0_8px_25px_rgba(198,138,53,0.15)]"
             >
-              <Activity className="w-5 h-5 text-[#8b929e] group-hover:text-[#c68a35] transition-colors" />
-              <div className="flex flex-col text-left">
-                <span className="text-sm font-black italic uppercase tracking-wider text-[#d0d5dc] group-hover:text-white font-sans">
-                  ЛОГИ [F2]
-                </span>
-                <span className="text-[10px] text-[#8b929e] font-mono mt-0.5">
-                  Диагностика
-                </span>
+              <div>
+                <div className="p-3 rounded-lg bg-white/5 border border-white/10 text-[#8b929e] group-hover:text-[#c68a35] group-hover:border-[#c68a35]/40 transition-colors w-fit">
+                  <Activity className="w-6 h-6" />
+                </div>
+                <h3 className="text-base font-black uppercase tracking-wider text-white mt-4 font-sans group-hover:text-[#c68a35] transition-colors">
+                  ДИАГНОСТИКА [F2]
+                </h3>
+                <p className="text-xs text-[#8b929e] mt-1.5 leading-relaxed font-mono">
+                  Монитор частоты кадров, физических сущностей и аудит крашей
+                </p>
+              </div>
+              <div className="mt-5 pt-3 border-t border-white/[0.08] flex items-center justify-between text-[11px] font-mono text-[#8b929e]">
+                <span>ТЕЛЕМЕТРИЯ</span>
+                <span className="text-white/80">F2 КЛАВИША</span>
               </div>
             </button>
           )}
 
-          {/* 7. Exit to Main Menu (Red Tile like Quit Game) */}
-          <button
-            onClick={onExitToMainMenu}
-            className="group relative flex items-center justify-center gap-4 px-8 py-6 min-w-[170px] bg-red-950/80 hover:bg-red-900 border border-red-700/60 hover:border-red-500 rounded-[4px] transition-all cursor-pointer shadow-xl shadow-red-950/50"
-          >
-            <LogOut className="w-5 h-5 text-red-300 group-hover:text-white transition-colors" />
-            <div className="flex flex-col text-left">
-              <span className="text-sm font-black italic uppercase tracking-wider text-white font-sans">
-                В МЕНЮ
-              </span>
-              <span className="text-[10px] text-red-300 font-mono mt-0.5">
-                Выйти из рейса
-              </span>
+          {/* Tile F: Exit to Main Menu */}
+          <div className="flex flex-col justify-between p-6 bg-[#141014] hover:bg-[#1c1218] border border-rose-900/40 hover:border-rose-600/60 rounded-xl transition-all duration-200 shadow-lg text-left">
+            <div>
+              <div className="p-3 rounded-lg bg-rose-950/50 border border-rose-800/40 text-rose-400 w-fit">
+                {confirmExit ? <ShieldAlert className="w-6 h-6 text-rose-300" /> : <LogOut className="w-6 h-6" />}
+              </div>
+              <h3 className="text-base font-black uppercase tracking-wider text-rose-100 mt-4 font-sans">
+                В ГЛАВНОЕ МЕНЮ
+              </h3>
+              <p className="text-xs text-rose-300/70 mt-1.5 leading-relaxed font-mono">
+                {confirmExit ? 'Несохранённый прогресс текущей сессии может быть утерян!' : 'Завершить поездку и вернуться на стартовый экран'}
+              </p>
             </div>
-          </button>
+
+            <div className="mt-5 pt-3 border-t border-rose-900/30 flex items-center justify-between">
+              {confirmExit ? (
+                <div className="flex items-center gap-2 w-full">
+                  <button
+                    onClick={onExitToMainMenu}
+                    className="flex-1 py-2 bg-rose-600 hover:bg-rose-500 text-white font-mono text-xs font-bold uppercase rounded-lg transition-colors cursor-pointer text-center"
+                  >
+                    Да, выйти
+                  </button>
+                  <button
+                    onClick={() => setConfirmExit(false)}
+                    className="px-3 py-2 bg-white/10 hover:bg-white/15 text-white/80 font-mono text-xs font-bold uppercase rounded-lg transition-colors cursor-pointer"
+                  >
+                    Отмена
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={() => setConfirmExit(true)}
+                  className="w-full py-2 bg-rose-950/60 hover:bg-rose-900/80 border border-rose-800/50 text-rose-200 font-mono text-xs font-bold uppercase tracking-wider rounded-lg transition-colors cursor-pointer text-center flex items-center justify-center gap-2"
+                >
+                  <LogOut className="w-4 h-4" />
+                  <span>ВЫЙТИ ИЗ РЕЙСА</span>
+                </button>
+              )}
+            </div>
+          </div>
 
         </div>
 
-        {/* Hotkey hint with spacious margin */}
-        <div className="mt-8 text-xs font-mono text-[#8b929e]">
-          Нажмите <span className="text-white font-bold">ESC</span> для возврата в поездку
-        </div>
-      </div>
+      </main>
 
-      {/* Footer */}
-      <footer className="w-full flex justify-between items-center text-xs font-mono text-[#8b929e] border-t border-white/[0.08] pt-4">
-        <span>СТЕПНОЙ ТРАКТ 2D</span>
-        <span className="text-[#c68a35] font-bold">РЕЖИМ ПАУЗЫ</span>
+      {/* FOOTER: Minimalist Editorial Status */}
+      <footer className="relative z-10 w-full max-w-4xl flex items-center justify-between pt-6 pb-2 border-t border-white/[0.08] text-xs font-mono text-[#8b929e]">
+        <div>
+          <span>СТЕПНОЙ ТРАКТ 2D</span>
+          <span className="mx-2 text-white/20">·</span>
+          <span>ТРАНСПОРТНАЯ СИМУЛЯЦИЯ</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="w-2 h-2 rounded-full bg-[#c68a35]" />
+          <span className="text-[#c68a35] font-bold">СЕАНС ПРИОСТАНОВЛЕН</span>
+        </div>
       </footer>
 
     </div>

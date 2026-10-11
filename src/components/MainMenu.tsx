@@ -2,8 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { 
   Play, 
   Trash2, 
-  Volume2, 
-  VolumeX, 
   HardDrive, 
   Gamepad2, 
   ArrowLeft,
@@ -22,7 +20,10 @@ import {
   X,
   Car,
   MapPin,
-  Calendar
+  Calendar,
+  Volume2,
+  Compass,
+  AlertTriangle
 } from 'lucide-react';
 import { formatGameDate, formatGameTime, getRussianSeasonName } from '../calendarSystem';
 
@@ -138,7 +139,7 @@ export const MainMenu: React.FC<MainMenuProps> = ({
   onOpenProfile
 }) => {
   // Navigation State
-  const [activeModal, setActiveModal] = useState<'none' | 'play' | 'settings' | 'account'>('none');
+  const [activeModal, setActiveModal] = useState<'none' | 'play' | 'settings'>('none');
   const [playTab, setPlayTab] = useState<'saves' | 'new_game'>('saves');
   const [settingsTab, setSettingsTab] = useState<'graphics' | 'audio' | 'gameplay' | 'controls'>('graphics');
   
@@ -193,29 +194,29 @@ export const MainMenu: React.FC<MainMenuProps> = ({
   // Trigger Authentic Game Loading Screen
   const executeWithLoading = (onComplete: () => void) => {
     setIsLoading(true);
-    setLoadingProgress(10);
+    setLoadingProgress(15);
     setLoadingTipIndex(Math.floor(Math.random() * LOADING_TIPS.length));
     setLoadingStageText('Инициализация физики шасси и подвески...');
 
     setTimeout(() => {
-      setLoadingProgress(45);
+      setLoadingProgress(50);
       setLoadingStageText('Построение дорожного полотна и перекрёстков...');
-    }, 200);
+    }, 180);
 
     setTimeout(() => {
-      setLoadingProgress(75);
+      setLoadingProgress(80);
       setLoadingStageText('Синхронизация светофоров и трафика...');
-    }, 450);
+    }, 380);
 
     setTimeout(() => {
       setLoadingProgress(100);
       setLoadingStageText('Прогрев двигателя. Выезд на трассу...');
-    }, 700);
+    }, 580);
 
     setTimeout(() => {
       setIsLoading(false);
       onComplete();
-    }, 900);
+    }, 750);
   };
 
   const handleStartNewGame = (e?: React.FormEvent) => {
@@ -235,147 +236,144 @@ export const MainMenu: React.FC<MainMenuProps> = ({
   };
 
   return (
-    <div className="absolute inset-0 z-50 flex flex-col justify-between text-[#f0f3f6] font-sans select-none overflow-hidden bg-[#080a0e]/85 backdrop-blur-xl">
+    <div className="fixed inset-0 z-50 flex flex-col justify-between text-[#f0f3f6] font-sans select-none overflow-hidden bg-[#080a0e]/85 backdrop-blur-2xl">
       
-      {/* ========================================================================= */}
-      {/* 1. REAL IN-GAME MAP CANVAS / TOPOGRAPHIC SCHEMATIC BACKGROUND             */}
-      {/* ========================================================================= */}
+      {/* Background Stylized Topographic Map Grid */}
       <div className="absolute inset-0 pointer-events-none overflow-hidden">
-        {/* Subtle Map Road Network Grid */}
-        <svg className="w-full h-full opacity-[0.07]" xmlns="http://www.w3.org/2000/svg">
+        <svg className="w-full h-full opacity-[0.06]" xmlns="http://www.w3.org/2000/svg">
           <defs>
-            <pattern id="roadGridPattern" width="180" height="180" patternUnits="userSpaceOnUse">
-              <path d="M 0 90 L 180 90 M 90 0 L 90 180" stroke="#ffffff" strokeWidth="6" strokeDasharray="18 10" />
-              <circle cx="90" cy="90" r="16" fill="none" stroke="#c68a35" strokeWidth="3" />
+            <pattern id="steppeMapGrid" width="160" height="160" patternUnits="userSpaceOnUse">
+              <path d="M 0 80 L 160 80 M 80 0 L 80 160" stroke="#ffffff" strokeWidth="4" strokeDasharray="16 10" />
+              <circle cx="80" cy="80" r="14" fill="none" stroke="#c68a35" strokeWidth="2.5" />
             </pattern>
           </defs>
-          <rect width="100%" height="100%" fill="url(#roadGridPattern)" />
+          <rect width="100%" height="100%" fill="url(#steppeMapGrid)" />
         </svg>
 
         {/* Cinematic Vignette */}
-        <div className="absolute inset-0 bg-gradient-to-t from-[#080a0e] via-transparent to-[#080a0e]/85" />
+        <div className="absolute inset-0 bg-gradient-to-t from-[#080a0e] via-transparent to-[#080a0e]/90" />
         <div className="absolute inset-0 bg-gradient-to-r from-[#080a0e]/95 via-transparent to-[#080a0e]/95" />
       </div>
 
-      {/* ========================================================================= */}
-      {/* 2. TOP BANNER: STEPPE HIGHWAY 2D WITH GENEROUS AIRY MARGINS               */}
-      {/* ========================================================================= */}
-      <div className="relative z-10 pt-12 sm:pt-16 flex flex-col items-center justify-center pointer-events-auto">
-        <div className="flex items-center gap-3 px-6 py-3.5 bg-[#12151d]/90 border border-white/10 rounded-[3px] shadow-2xl">
-          <div className="w-2.5 h-7 bg-[#c68a35] -skew-x-12 shrink-0 shadow-[0_0_14px_rgba(198,138,53,0.5)]" />
+      {/* TOP HEADER: Clean Brand Emblem with Generous Breathing Room */}
+      <header className="relative z-10 pt-12 sm:pt-16 px-8 flex flex-col items-center justify-center pointer-events-auto">
+        <div className="flex items-center gap-4 px-7 py-4 bg-[#121620]/95 border border-white/10 rounded-xl shadow-2xl backdrop-blur-md">
+          <div className="w-3 h-8 bg-[#c68a35] -skew-x-12 shrink-0 shadow-[0_0_16px_rgba(198,138,53,0.6)]" />
           <div className="flex flex-col pr-2">
-            <h1 className="text-xl sm:text-2xl font-black italic tracking-widest text-white uppercase font-sans leading-none">
+            <h1 className="text-2xl sm:text-3xl font-black italic tracking-widest text-white uppercase font-sans leading-none">
               СТЕПНОЙ ТРАКТ <span className="text-[#c68a35]">2D</span>
             </h1>
-            <span className="text-[10px] font-mono font-bold tracking-widest text-[#8b929e] uppercase mt-1">
+            <span className="text-[11px] font-mono font-bold tracking-widest text-[#8b929e] uppercase mt-1">
               РЕАЛИСТИЧНЫЙ ТРАНСПОРТНЫЙ СИМУЛЯТОР
             </span>
           </div>
-          <div className="w-2.5 h-7 bg-[#c68a35] -skew-x-12 shrink-0 shadow-[0_0_14px_rgba(198,138,53,0.5)]" />
+          <div className="w-3 h-8 bg-[#c68a35] -skew-x-12 shrink-0 shadow-[0_0_16px_rgba(198,138,53,0.6)]" />
         </div>
-      </div>
+      </header>
 
-      {/* ========================================================================= */}
-      {/* 3. CENTRAL HORIZONTAL BUTTON DOCK (SPACIOUS, NO TIGHT CRAMMING)           */}
-      {/* ========================================================================= */}
+      {/* MAIN SCREEN ACTION TILES (Spacious Dock with Generous Clearance) */}
       {activeModal === 'none' && !isLoading && (
-        <div className="relative z-20 pb-20 sm:pb-28 px-6 flex flex-col items-center justify-center animate-in fade-in duration-200">
+        <main className="relative z-20 pb-20 sm:pb-28 px-6 flex flex-col items-center justify-center animate-in fade-in duration-200">
           
-          <div className="flex flex-wrap items-center justify-center gap-4 max-w-5xl w-full">
+          <div className="flex flex-wrap items-center justify-center gap-6 max-w-5xl w-full">
             
-            {/* 1. LARGE PRIMARY PLAY BUTTON */}
+            {/* 1. LARGE PRIMARY PLAY BUTTON TILE */}
             <button
               onClick={() => {
                 playUiSound(880);
                 setActiveModal('play');
                 setPlayTab(saves.length > 0 ? 'saves' : 'new_game');
               }}
-              className="group relative flex items-center justify-center gap-5 px-10 py-6 min-w-[240px] sm:min-w-[280px] bg-[#141720]/95 hover:bg-[#1a1e2a] border-2 border-[#c68a35] hover:shadow-[0_0_30px_rgba(198,138,53,0.4)] rounded-[4px] transition-all cursor-pointer overflow-hidden"
+              className="group relative flex items-center justify-center gap-6 px-10 py-7 min-w-[280px] sm:min-w-[320px] bg-gradient-to-r from-[#151924] via-[#1a2030] to-[#141824] hover:from-[#1b2234] hover:to-[#171d2b] border-2 border-[#c68a35] hover:shadow-[0_0_35px_rgba(198,138,53,0.4)] rounded-2xl transition-all duration-200 cursor-pointer overflow-hidden shadow-2xl"
             >
-              <div className="w-0 h-0 border-t-[10px] border-t-transparent border-b-[10px] border-b-transparent border-l-[16px] border-l-[#c68a35] group-hover:scale-115 transition-transform shrink-0" />
+              <div className="w-12 h-12 rounded-xl bg-[#c68a35] text-black flex items-center justify-center shrink-0 shadow-[0_0_20px_rgba(198,138,53,0.5)] group-hover:scale-105 transition-transform duration-200">
+                <Play className="w-6 h-6 fill-current translate-x-0.5" />
+              </div>
               <div className="flex flex-col text-left">
-                <span className="text-xl sm:text-2xl font-black italic uppercase tracking-wider text-white font-sans leading-tight">
+                <span className="text-2xl sm:text-3xl font-black italic uppercase tracking-wider text-white font-sans leading-tight">
                   ИГРАТЬ
                 </span>
-                <span className="text-[11px] text-[#c68a35] font-mono tracking-wide mt-0.5">
-                  {saves.length > 0 ? `Рейсов в архиве: ${saves.length}` : 'Новый выезд'}
+                <span className="text-xs text-[#c68a35] font-mono tracking-wide mt-1 font-bold">
+                  {saves.length > 0 ? `Архив рейсов: ${saves.length}` : 'Начать новую поездку'}
                 </span>
               </div>
             </button>
 
-            {/* 2. SETTINGS BUTTON */}
+            {/* 2. SETTINGS TILE */}
             <button
               onClick={() => {
                 playUiSound(750);
                 setActiveModal('settings');
               }}
-              className="group relative flex items-center justify-center gap-3.5 px-7 py-6 min-w-[160px] bg-[#141720]/90 hover:bg-[#1a1e2a] border border-white/10 hover:border-[#c68a35] hover:shadow-[0_4px_20px_rgba(198,138,53,0.15)] rounded-[4px] transition-all cursor-pointer"
+              className="group relative flex items-center justify-center gap-4 px-8 py-7 min-w-[200px] bg-[#121620] hover:bg-[#181d2a] border border-white/10 hover:border-[#c68a35] hover:shadow-[0_8px_25px_rgba(198,138,53,0.2)] rounded-2xl transition-all duration-200 cursor-pointer shadow-xl text-left"
             >
-              <Sliders className="w-5 h-5 text-[#8b929e] group-hover:text-[#c68a35] transition-colors" />
-              <div className="flex flex-col text-left">
-                <span className="text-sm font-black italic uppercase tracking-wider text-[#d0d5dc] group-hover:text-white font-sans">
+              <div className="p-3.5 rounded-xl bg-white/5 border border-white/10 text-[#8b929e] group-hover:text-[#c68a35] group-hover:border-[#c68a35]/40 transition-colors shrink-0">
+                <Sliders className="w-6 h-6" />
+              </div>
+              <div className="flex flex-col">
+                <span className="text-base font-black italic uppercase tracking-wider text-[#d0d5dc] group-hover:text-white font-sans">
                   НАСТРОЙКИ
                 </span>
-                <span className="text-[10px] text-[#8b929e] font-mono mt-0.5">
-                  Графика, звук, клавиши
+                <span className="text-[11px] text-[#8b929e] font-mono mt-0.5">
+                  Видео, звук, клавиши
                 </span>
               </div>
             </button>
 
-            {/* 3. ACCOUNT BUTTON */}
+            {/* 3. ACCOUNT TILE */}
             <button
               onClick={() => {
                 playUiSound(750);
-                if (onOpenProfile) {
-                  onOpenProfile();
-                } else {
-                  setActiveModal('account');
-                }
+                if (onOpenProfile) onOpenProfile();
               }}
-              className="group relative flex items-center justify-center gap-3.5 px-6 py-6 min-w-[150px] bg-[#141720]/90 hover:bg-[#1a1e2a] border border-white/10 hover:border-[#c68a35] hover:shadow-[0_4px_20px_rgba(198,138,53,0.15)] rounded-[4px] transition-all cursor-pointer"
+              className="group relative flex items-center justify-center gap-4 px-8 py-7 min-w-[200px] bg-[#121620] hover:bg-[#181d2a] border border-white/10 hover:border-[#c68a35] hover:shadow-[0_8px_25px_rgba(198,138,53,0.2)] rounded-2xl transition-all duration-200 cursor-pointer shadow-xl text-left"
             >
-              <User className="w-5 h-5 text-[#8b929e] group-hover:text-[#c68a35] transition-colors" />
-              <div className="flex flex-col text-left">
-                <span className="text-sm font-black italic uppercase tracking-wider text-[#d0d5dc] group-hover:text-white font-sans">
+              <div className="p-3.5 rounded-xl bg-white/5 border border-white/10 text-[#8b929e] group-hover:text-[#c68a35] group-hover:border-[#c68a35]/40 transition-colors shrink-0">
+                <User className="w-6 h-6" />
+              </div>
+              <div className="flex flex-col">
+                <span className="text-base font-black italic uppercase tracking-wider text-[#d0d5dc] group-hover:text-white font-sans">
                   АККАУНТ
                 </span>
-                <span className="text-[10px] text-[#8b929e] font-mono mt-0.5">
-                  Профиль & Облако
+                <span className="text-[11px] text-[#8b929e] font-mono mt-0.5">
+                  Досье водителя & облако
                 </span>
               </div>
             </button>
 
-            {/* 4. ONLINE P2P BUTTON */}
+            {/* 4. ONLINE P2P TILE */}
             {onOpenOnline && (
               <button
                 onClick={() => {
                   playUiSound(750);
                   onOpenOnline();
                 }}
-                className="group relative flex items-center justify-center gap-3.5 px-6 py-6 min-w-[150px] bg-[#141720]/90 hover:bg-[#1a1e2a] border border-white/10 hover:border-[#c68a35] hover:shadow-[0_4px_20px_rgba(198,138,53,0.15)] rounded-[4px] transition-all cursor-pointer"
+                className="group relative flex items-center justify-center gap-4 px-8 py-7 min-w-[200px] bg-[#121620] hover:bg-[#181d2a] border border-white/10 hover:border-[#c68a35] hover:shadow-[0_8px_25px_rgba(198,138,53,0.2)] rounded-2xl transition-all duration-200 cursor-pointer shadow-xl text-left"
               >
-                <Globe className="w-5 h-5 text-[#8b929e] group-hover:text-[#c68a35] transition-colors" />
-                <div className="flex flex-col text-left">
-                  <span className="text-sm font-black italic uppercase tracking-wider text-[#d0d5dc] group-hover:text-white font-sans">
+                <div className="p-3.5 rounded-xl bg-white/5 border border-white/10 text-[#8b929e] group-hover:text-[#c68a35] group-hover:border-[#c68a35]/40 transition-colors shrink-0">
+                  <Globe className="w-6 h-6" />
+                </div>
+                <div className="flex flex-col">
+                  <span className="text-base font-black italic uppercase tracking-wider text-[#d0d5dc] group-hover:text-white font-sans">
                     ОНЛАЙН
                   </span>
-                  <span className="text-[10px] text-[#8b929e] font-mono mt-0.5">
+                  <span className="text-[11px] text-[#8b929e] font-mono mt-0.5">
                     Сетевая комната P2P
                   </span>
                 </div>
               </button>
             )}
 
-            {/* 5. RESUME CURRENT RUN (IF APPLICABLE) */}
+            {/* 5. RESUME CURRENT RUN */}
             <button
               onClick={() => {
                 playUiSound(900);
                 onResume();
               }}
-              className="group relative flex items-center justify-center gap-3 px-6 py-6 bg-[#141720]/90 hover:bg-[#1a1e2a] border border-white/10 hover:border-white/30 rounded-[4px] transition-all cursor-pointer"
-              title="Вернуться к текущей симуляции (ESC)"
+              className="group relative flex items-center justify-center gap-3 px-6 py-7 bg-[#121620] hover:bg-[#181d2a] border border-white/10 hover:border-white/30 rounded-2xl transition-all duration-200 cursor-pointer shadow-xl"
+              title="Вернуться к текущей симуляции [ESC]"
             >
-              <RotateCcw className="w-4 h-4 text-[#8b929e] group-hover:text-white transition-colors" />
+              <RotateCcw className="w-5 h-5 text-[#8b929e] group-hover:text-white transition-colors" />
               <span className="text-xs font-bold uppercase tracking-wider text-[#8b929e] group-hover:text-white font-mono">
                 В ИГРУ
               </span>
@@ -383,32 +381,30 @@ export const MainMenu: React.FC<MainMenuProps> = ({
 
           </div>
 
-          {/* Quick Controls Tip with generous margin */}
-          <div className="mt-8 flex items-center gap-4 text-xs font-mono text-[#8b929e]">
+          {/* Quick Subtitle with Generous Margin */}
+          <div className="mt-10 flex items-center gap-4 text-xs font-mono text-[#8b929e]">
             <span>ВЫБОР КНОПКИ МЫШЬЮ</span>
-            <span aria-hidden="true">·</span>
-            <span>ESC: ЗАКРЫТЬ / ВЕРНУТЬСЯ В ИГРУ</span>
+            <span aria-hidden="true" className="text-white/20">·</span>
+            <span>ESC: ВЕРНУТЬСЯ В ИГРУ</span>
           </div>
-        </div>
+        </main>
       )}
 
-      {/* ========================================================================= */}
-      {/* 4. MODAL: PLAY (EXPANSIVE, AIRY TILES, NO CRAMMING)                       */}
-      {/* ========================================================================= */}
+      {/* MODAL 1: PLAY (SAVES ARCHIVE & NEW GAME WITH RICH MODERN TILES) */}
       {activeModal === 'play' && !isLoading && (
-        <div className="fixed inset-0 z-40 flex items-center justify-center p-4 sm:p-8 bg-black/85 backdrop-blur-xl animate-in fade-in duration-200">
-          <div className="relative w-full max-w-5xl bg-[#12151d] border-2 border-[#c68a35] rounded-[4px] shadow-2xl flex flex-col max-h-[92vh] overflow-hidden">
+        <div className="fixed inset-0 z-40 flex items-center justify-center p-4 sm:p-8 md:p-10 bg-black/85 backdrop-blur-2xl animate-in fade-in duration-200">
+          <div className="relative w-full max-w-6xl bg-[#10141d] border-2 border-[#c68a35] rounded-2xl shadow-[0_20px_60px_rgba(0,0,0,0.8)] flex flex-col max-h-[92vh] overflow-hidden">
             
-            {/* Modal Header with generous clearance */}
-            <div className="px-8 py-5 border-b border-white/10 flex items-center justify-between bg-[#161a24]">
-              <div className="flex items-center gap-3.5">
-                <div className="w-2.5 h-7 bg-[#c68a35] -skew-x-12 shrink-0 shadow-[0_0_12px_rgba(198,138,53,0.5)]" />
+            {/* Header with Generous Clearance */}
+            <div className="px-8 sm:px-10 py-6 border-b border-white/10 flex items-center justify-between bg-[#141924]">
+              <div className="flex items-center gap-4">
+                <div className="w-3 h-8 bg-[#c68a35] -skew-x-12 shrink-0 shadow-[0_0_14px_rgba(198,138,53,0.6)]" />
                 <div>
-                  <h2 className="text-xl sm:text-2xl font-black italic uppercase tracking-wider text-white font-sans leading-none">
+                  <h2 className="text-2xl sm:text-3xl font-black italic uppercase tracking-wider text-white font-sans leading-none">
                     ВЫЕЗД НА ТРАССУ
                   </h2>
-                  <p className="text-xs font-mono text-[#8b929e] mt-1 hidden sm:block">
-                    Выберите ранее сохранённый рейс или инициализируйте новую сессию
+                  <p className="text-xs font-mono text-[#8b929e] mt-1.5 hidden sm:block">
+                    Выберите ранее сохранённый рейс из архива или инициализируйте новую поездку
                   </p>
                 </div>
               </div>
@@ -417,23 +413,23 @@ export const MainMenu: React.FC<MainMenuProps> = ({
                   playUiSound(500);
                   setActiveModal('none');
                 }}
-                className="p-2 text-[#8b929e] hover:text-white hover:bg-white/10 rounded-[3px] transition-colors cursor-pointer"
+                className="p-2.5 text-[#8b929e] hover:text-white hover:bg-white/10 rounded-lg transition-colors cursor-pointer"
               >
-                <X className="w-5 h-5" />
+                <X className="w-6 h-6" />
               </button>
             </div>
 
             {/* Play Tabs Switcher */}
-            <div className="px-8 pt-5 pb-3 flex gap-4 border-b border-white/[0.08] bg-[#12151d]">
+            <div className="px-8 sm:px-10 pt-6 pb-4 flex gap-4 border-b border-white/[0.08] bg-[#10141d]">
               <button
                 onClick={() => {
                   playUiSound(700);
                   setPlayTab('saves');
                 }}
-                className={`flex items-center gap-2.5 px-7 py-3 font-mono text-xs font-bold uppercase tracking-wider rounded-[3px] transition-all cursor-pointer border ${
+                className={`flex items-center gap-3 px-8 py-3.5 font-mono text-xs font-bold uppercase tracking-wider rounded-xl transition-all cursor-pointer border ${
                   playTab === 'saves'
-                    ? 'bg-[#c68a35] text-black border-[#c68a35] font-black shadow-[0_0_16px_rgba(198,138,53,0.35)]'
-                    : 'bg-[#181c26] text-[#8b929e] border-white/10 hover:text-white hover:bg-[#1e2330]'
+                    ? 'bg-[#c68a35] text-black border-[#c68a35] font-black shadow-[0_0_20px_rgba(198,138,53,0.4)]'
+                    : 'bg-[#151924] text-[#8b929e] border-white/10 hover:text-white hover:bg-[#1a202e]'
                 }`}
               >
                 <HardDrive className="w-4 h-4" />
@@ -445,10 +441,10 @@ export const MainMenu: React.FC<MainMenuProps> = ({
                   playUiSound(700);
                   setPlayTab('new_game');
                 }}
-                className={`flex items-center gap-2.5 px-7 py-3 font-mono text-xs font-bold uppercase tracking-wider rounded-[3px] transition-all cursor-pointer border ${
+                className={`flex items-center gap-3 px-8 py-3.5 font-mono text-xs font-bold uppercase tracking-wider rounded-xl transition-all cursor-pointer border ${
                   playTab === 'new_game'
-                    ? 'bg-[#c68a35] text-black border-[#c68a35] font-black shadow-[0_0_16px_rgba(198,138,53,0.35)]'
-                    : 'bg-[#181c26] text-[#8b929e] border-white/10 hover:text-white hover:bg-[#1e2330]'
+                    ? 'bg-[#c68a35] text-black border-[#c68a35] font-black shadow-[0_0_20px_rgba(198,138,53,0.4)]'
+                    : 'bg-[#151924] text-[#8b929e] border-white/10 hover:text-white hover:bg-[#1a202e]'
                 }`}
               >
                 <PlusCircle className="w-4 h-4" />
@@ -456,20 +452,20 @@ export const MainMenu: React.FC<MainMenuProps> = ({
               </button>
             </div>
 
-            {/* TAB 1: SAVES ARCHIVE AS EXPANSIVE TILES */}
+            {/* TAB 1: SAVES ARCHIVE (EXPANSIVE TILES WITH BREATHING ROOM) */}
             {playTab === 'saves' && (
-              <div className="p-8 flex-1 overflow-y-auto">
+              <div className="p-8 sm:p-10 flex-1 overflow-y-auto">
                 {saves.length === 0 ? (
-                  <div className="py-20 px-8 text-center bg-[#161a24] border border-white/10 rounded-[4px] space-y-5 max-w-xl mx-auto">
-                    <div className="w-16 h-16 mx-auto rounded-full bg-[#c68a35]/15 border border-[#c68a35]/30 flex items-center justify-center text-[#c68a35]">
-                      <HardDrive className="w-8 h-8" />
+                  <div className="py-24 px-8 text-center bg-[#141924] border border-white/10 rounded-2xl space-y-6 max-w-xl mx-auto shadow-2xl">
+                    <div className="w-20 h-20 mx-auto rounded-2xl bg-[#c68a35]/15 border border-[#c68a35]/30 flex items-center justify-center text-[#c68a35]">
+                      <HardDrive className="w-10 h-10" />
                     </div>
                     <div>
-                      <h3 className="text-base font-bold uppercase tracking-wider text-white font-sans">
+                      <h3 className="text-xl font-bold uppercase tracking-wider text-white font-sans">
                         Архив поездок пуст
                       </h3>
-                      <p className="text-xs font-mono text-[#8b929e] mt-1.5 leading-relaxed">
-                        У вас пока нет сохранённых рейсов на Степном Тракте. Вы можете инициализировать первый заезд прямо сейчас.
+                      <p className="text-xs font-mono text-[#8b929e] mt-2 leading-relaxed max-w-md mx-auto">
+                        У вас пока нет сохранённых рейсов. Перейдите во вкладку «Новый заезд» для выбора стартовой точки и выхода на трассу.
                       </p>
                     </div>
                     <button
@@ -477,37 +473,37 @@ export const MainMenu: React.FC<MainMenuProps> = ({
                         playUiSound(700);
                         setPlayTab('new_game');
                       }}
-                      className="px-8 py-3 bg-[#c68a35] text-black font-mono text-xs font-black uppercase rounded-[3px] hover:bg-[#d8963e] transition-colors cursor-pointer shadow-lg inline-flex items-center gap-2"
+                      className="px-8 py-3.5 bg-[#c68a35] text-black font-mono text-xs font-black uppercase tracking-wider rounded-xl hover:bg-[#d8963e] transition-colors cursor-pointer shadow-lg inline-flex items-center gap-2.5"
                     >
                       <PlusCircle className="w-4 h-4" />
-                      <span>Начать первую поездку</span>
+                      <span>Инициализировать новую поездку</span>
                     </button>
                   </div>
                 ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                     {saves.map((save) => {
                       const isConfirming = confirmDeleteId === save.id;
                       return (
                         <div
                           key={save.id}
-                          className="group relative flex flex-col justify-between bg-[#161a24] hover:bg-[#1b202c] border border-white/10 hover:border-[#c68a35] hover:shadow-[0_8px_30px_rgba(198,138,53,0.2)] rounded-[4px] p-6 transition-all"
+                          className="group relative flex flex-col justify-between bg-gradient-to-b from-[#151924] to-[#10131c] hover:from-[#1a2030] hover:to-[#121622] border border-white/10 hover:border-[#c68a35] hover:shadow-[0_12px_32px_rgba(198,138,53,0.25)] rounded-2xl p-6 transition-all duration-200"
                         >
-                          {/* Ochre Accent Edge */}
-                          <div className="absolute left-0 top-0 bottom-0 w-[4px] bg-[#c68a35] opacity-0 group-hover:opacity-100 transition-opacity rounded-l-[4px]" />
+                          {/* Ochre Accent Top Line */}
+                          <div className="absolute top-0 left-0 right-0 h-1 bg-[#c68a35] opacity-0 group-hover:opacity-100 transition-opacity rounded-t-2xl" />
 
-                          {/* Tile Header: Name & Mode */}
+                          {/* Top Row: Mode badge & Delete Button */}
                           <div>
                             <div className="flex items-start justify-between gap-3">
                               <div className="flex items-center gap-3.5 min-w-0">
-                                <div className="p-3 rounded-[3px] bg-[#c68a35]/15 border border-[#c68a35]/30 text-[#c68a35] shrink-0">
-                                  {save.isInVehicle ? <Car className="w-5 h-5" /> : <User className="w-5 h-5" />}
+                                <div className="p-3 rounded-xl bg-[#c68a35]/15 border border-[#c68a35]/30 text-[#c68a35] shrink-0 group-hover:bg-[#c68a35] group-hover:text-black transition-colors">
+                                  {save.isInVehicle ? <Car className="w-6 h-6" /> : <User className="w-6 h-6" />}
                                 </div>
                                 <div className="min-w-0">
-                                  <h3 className="text-base font-black uppercase tracking-wider text-white truncate font-sans group-hover:text-[#c68a35] transition-colors">
+                                  <h3 className="text-base sm:text-lg font-black uppercase tracking-wider text-white truncate font-sans group-hover:text-[#c68a35] transition-colors">
                                     {save.name}
                                   </h3>
                                   <div className="text-[11px] font-mono text-[#c68a35] font-bold mt-0.5">
-                                    {save.isInVehicle ? 'За рулём техники' : 'Пеший режим'}
+                                    {save.isInVehicle ? 'За рулём техники' : 'Пеший маршрут'}
                                   </div>
                                 </div>
                               </div>
@@ -521,7 +517,7 @@ export const MainMenu: React.FC<MainMenuProps> = ({
                                       onDeleteSave(save.id);
                                       setConfirmDeleteId(null);
                                     }}
-                                    className="px-2.5 py-1 bg-rose-600 hover:bg-rose-700 text-white font-mono text-[10px] font-bold uppercase rounded-[2px] transition-all cursor-pointer"
+                                    className="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white font-mono text-[10px] font-bold uppercase rounded-lg transition-all cursor-pointer shadow-md"
                                   >
                                     Удалить?
                                   </button>
@@ -529,7 +525,7 @@ export const MainMenu: React.FC<MainMenuProps> = ({
                                     onClick={() => setConfirmDeleteId(null)}
                                     className="p-1 text-[#8b929e] hover:text-white"
                                   >
-                                    <X className="w-3.5 h-3.5" />
+                                    <X className="w-4 h-4" />
                                   </button>
                                 </div>
                               ) : (
@@ -538,7 +534,7 @@ export const MainMenu: React.FC<MainMenuProps> = ({
                                     playUiSound(500);
                                     setConfirmDeleteId(save.id);
                                   }}
-                                  className="p-2 bg-white/[0.04] hover:bg-rose-950/60 text-[#8b929e] hover:text-rose-400 border border-white/10 hover:border-rose-900/40 rounded-[3px] transition-all cursor-pointer"
+                                  className="p-2.5 bg-white/[0.04] hover:bg-rose-950/60 text-[#8b929e] hover:text-rose-400 border border-white/10 hover:border-rose-900/40 rounded-lg transition-all cursor-pointer"
                                   title="Удалить слот"
                                 >
                                   <Trash2 className="w-4 h-4" />
@@ -546,8 +542,8 @@ export const MainMenu: React.FC<MainMenuProps> = ({
                               )}
                             </div>
 
-                            {/* Tile Details Deck with generous margins */}
-                            <div className="grid grid-cols-2 gap-3 mt-4 pt-4 border-t border-white/[0.08] text-xs font-mono">
+                            {/* Details Grid Deck with Generous Air */}
+                            <div className="grid grid-cols-2 gap-3.5 mt-5 pt-4 border-t border-white/[0.08] text-xs font-mono">
                               <div className="flex items-center gap-2 text-[#8b929e]">
                                 <MapPin className="w-4 h-4 text-[#c68a35] shrink-0" />
                                 <span className="truncate text-[#d0d5dc]">{save.streetName || 'Степной Тракт'}</span>
@@ -566,11 +562,11 @@ export const MainMenu: React.FC<MainMenuProps> = ({
                             </div>
                           </div>
 
-                          {/* Launch Button */}
-                          <div className="mt-5 pt-4 border-t border-white/[0.08]">
+                          {/* Launch Action */}
+                          <div className="mt-6 pt-4 border-t border-white/[0.08]">
                             <button
                               onClick={() => handleLoadSaveSlot(save.id)}
-                              className="w-full py-3 bg-[#c68a35] hover:bg-[#d8963e] text-black font-mono text-xs font-black uppercase rounded-[3px] transition-all cursor-pointer flex items-center justify-center gap-2.5 shadow-md group-hover:shadow-[0_0_16px_rgba(198,138,53,0.4)]"
+                              className="w-full py-3.5 bg-[#c68a35] hover:bg-[#d8963e] text-black font-mono text-xs font-black uppercase tracking-wider rounded-xl transition-all cursor-pointer flex items-center justify-center gap-2.5 shadow-md group-hover:shadow-[0_0_20px_rgba(198,138,53,0.45)]"
                             >
                               <Play className="w-4 h-4 fill-current" />
                               <span>ВЫЕХАТЬ В РЕЙС</span>
@@ -584,13 +580,13 @@ export const MainMenu: React.FC<MainMenuProps> = ({
               </div>
             )}
 
-            {/* TAB 2: NEW GAME AS EXPANSIVE TILES */}
+            {/* TAB 2: NEW GAME (EXPANSIVE TILES FOR SPAWN POINTS WITH BREATHING ROOM) */}
             {playTab === 'new_game' && (
-              <form onSubmit={handleStartNewGame} className="p-8 flex-1 overflow-y-auto space-y-6">
+              <form onSubmit={handleStartNewGame} className="p-8 sm:p-10 flex-1 overflow-y-auto space-y-8">
                 
-                {/* Driver Name Input */}
-                <div className="flex flex-col gap-2 max-w-xl">
-                  <label className="text-[11px] font-mono font-bold uppercase tracking-widest text-[#8b929e]">
+                {/* Driver Name Input with Comfortable Air */}
+                <div className="flex flex-col gap-2.5 max-w-xl">
+                  <label className="text-xs font-mono font-bold uppercase tracking-wider text-[#8b929e]">
                     ИМЯ ВОДИТЕЛЯ В ПТС / ПОЗЫВНОЙ:
                   </label>
                   <input
@@ -600,19 +596,25 @@ export const MainMenu: React.FC<MainMenuProps> = ({
                     maxLength={32}
                     required
                     placeholder="Введите позывной водителя..."
-                    className="w-full bg-[#161a24] border border-white/10 focus:border-[#c68a35] rounded-[3px] px-5 py-3.5 text-white text-sm font-mono font-bold focus:outline-none transition-colors"
+                    className="w-full h-14 bg-[#141924] border border-white/10 focus:border-[#c68a35] rounded-xl px-5 text-white text-base font-mono font-bold focus:outline-none transition-colors shadow-inner"
                   />
                 </div>
 
                 {/* Spawn Locations as Expansive Tiles with Generous Margins */}
-                <div className="flex flex-col gap-3">
-                  <label className="text-[11px] font-mono font-bold uppercase tracking-widest text-[#8b929e]">
-                    ВЫБЕРИТЕ ТОЧКУ ВЫЕЗДА НА КАРТУ:
-                  </label>
+                <div className="flex flex-col gap-4">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-mono font-bold uppercase tracking-wider text-[#8b929e]">
+                      ВЫБЕРИТЕ ТОЧКУ ВЫЕЗДА НА КАРТУ:
+                    </label>
+                    <span className="text-xs font-mono text-[#c68a35]">
+                      {spawnLocations.length} СЕКТОРА ДОСТУПНО
+                    </span>
+                  </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                    {spawnLocations.map((loc) => {
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {spawnLocations.map((loc, idx) => {
                       const isSelected = selectedSpawnId === loc.id;
+                      const sectorNum = String(idx + 1).padStart(2, '0');
                       return (
                         <div
                           key={loc.id}
@@ -620,31 +622,36 @@ export const MainMenu: React.FC<MainMenuProps> = ({
                             setSelectedSpawnId(loc.id);
                             playUiSound(700);
                           }}
-                          className={`group relative flex flex-col justify-between p-6 rounded-[4px] transition-all cursor-pointer border ${
+                          className={`group relative flex flex-col justify-between p-6 sm:p-7 rounded-2xl transition-all duration-200 cursor-pointer border shadow-lg ${
                             isSelected
-                              ? 'bg-[#1d2330] border-2 border-[#c68a35] shadow-[0_0_24px_rgba(198,138,53,0.3)]'
-                              : 'bg-[#161a24] border-white/10 hover:border-white/20 hover:bg-[#1a1f2c]'
+                              ? 'bg-gradient-to-b from-[#1b2332] to-[#141a26] border-2 border-[#c68a35] shadow-[0_0_30px_rgba(198,138,53,0.3)] ring-1 ring-[#c68a35]/50'
+                              : 'bg-[#141924] border-white/10 hover:border-white/20 hover:bg-[#181e2b] hover:-translate-y-0.5'
                           }`}
                         >
-                          {/* Selected badge in top corner */}
-                          {isSelected && (
-                            <div className="absolute top-4 right-4 flex items-center gap-1.5 text-[10px] font-mono font-bold uppercase text-[#c68a35] bg-[#c68a35]/15 border border-[#c68a35]/40 px-2.5 py-1 rounded-[2px]">
-                              <Check className="w-3.5 h-3.5 text-[#c68a35]" />
-                              <span>ВЫБРАНО</span>
-                            </div>
-                          )}
+                          {/* Sector Badge & Selected Indicator */}
+                          <div className="flex items-center justify-between mb-4">
+                            <span className="text-[11px] font-mono font-bold text-[#8b929e] uppercase tracking-widest">
+                              СЕКТОР {sectorNum}
+                            </span>
+                            {isSelected && (
+                              <div className="flex items-center gap-1.5 text-[11px] font-mono font-bold uppercase text-[#c68a35] bg-[#c68a35]/15 border border-[#c68a35]/40 px-3 py-1 rounded-md">
+                                <Check className="w-3.5 h-3.5 text-[#c68a35]" />
+                                <span>ВЫБРАНО</span>
+                              </div>
+                            )}
+                          </div>
 
                           <div>
                             <div className="flex items-center gap-4">
-                              <div className={`p-3 rounded-[3px] border ${
+                              <div className={`p-3.5 rounded-xl border ${
                                 isSelected 
                                   ? 'bg-[#c68a35]/20 border-[#c68a35] text-[#c68a35]' 
                                   : 'bg-white/[0.04] border-white/10 text-[#8b929e] group-hover:text-white'
                               }`}>
                                 {loc.icon}
                               </div>
-                              <div className="min-w-0 pr-16">
-                                <h3 className={`text-base font-black uppercase tracking-wider truncate font-sans ${
+                              <div className="min-w-0 pr-4">
+                                <h3 className={`text-lg font-black uppercase tracking-wider truncate font-sans ${
                                   isSelected ? 'text-white' : 'text-[#d0d5dc] group-hover:text-white'
                                 }`}>
                                   {loc.nameRu}
@@ -655,13 +662,13 @@ export const MainMenu: React.FC<MainMenuProps> = ({
                               </div>
                             </div>
 
-                            <p className="text-xs text-[#8b929e] mt-4 leading-relaxed">
+                            <p className="text-xs text-[#8b929e] mt-4 leading-relaxed font-sans">
                               {loc.description}
                             </p>
                           </div>
 
-                          <div className="mt-4 pt-3 border-t border-white/[0.08] flex items-center justify-between text-[11px] font-mono text-[#8b929e]">
-                            <span>КООРДИНАТЫ ЛОКАЦИИ:</span>
+                          <div className="mt-5 pt-3.5 border-t border-white/[0.08] flex items-center justify-between text-xs font-mono text-[#8b929e]">
+                            <span>КООРДИНАТЫ:</span>
                             <span className={isSelected ? 'text-[#c68a35] font-bold' : 'text-white/60'}>
                               X: {loc.x} · Y: {loc.y}
                             </span>
@@ -672,11 +679,11 @@ export const MainMenu: React.FC<MainMenuProps> = ({
                   </div>
                 </div>
 
-                {/* Submit Launch */}
-                <div className="pt-3">
+                {/* Submit Launch Action */}
+                <div className="pt-2">
                   <button
                     type="submit"
-                    className="w-full py-4 bg-[#c68a35] hover:bg-[#d8963e] text-black font-mono text-sm font-black uppercase tracking-wider rounded-[3px] transition-all cursor-pointer shadow-[0_6px_20px_rgba(198,138,53,0.35)] flex items-center justify-center gap-3"
+                    className="w-full py-4.5 bg-[#c68a35] hover:bg-[#d8963e] text-black font-mono text-sm font-black uppercase tracking-wider rounded-xl transition-all cursor-pointer shadow-[0_8px_25px_rgba(198,138,53,0.4)] flex items-center justify-center gap-3"
                   >
                     <Play className="w-5 h-5 fill-current" />
                     <span>ВЫЕХАТЬ В СИМУЛЯЦИЮ</span>
@@ -686,8 +693,8 @@ export const MainMenu: React.FC<MainMenuProps> = ({
               </form>
             )}
 
-            {/* Modal Footer with generous clearance */}
-            <div className="px-8 py-4 border-t border-white/10 bg-[#161a24] flex items-center justify-between text-xs font-mono text-[#8b929e]">
+            {/* Footer with Generous Clearance */}
+            <div className="px-8 sm:px-10 py-5 border-t border-white/10 bg-[#141924] flex items-center justify-between text-xs font-mono text-[#8b929e]">
               <span>СТЕПНОЙ ТРАКТ 2D</span>
               <button
                 onClick={() => {
@@ -705,18 +712,16 @@ export const MainMenu: React.FC<MainMenuProps> = ({
         </div>
       )}
 
-      {/* ========================================================================= */}
-      {/* 5. MODAL: SETTINGS (SPACIOUS, GENEROUS BREATHING ROOM)                    */}
-      {/* ========================================================================= */}
+      {/* MODAL 2: SETTINGS (SPACIOUS, GENEROUS BREATHING ROOM) */}
       {activeModal === 'settings' && !isLoading && (
-        <div className="fixed inset-0 z-40 flex items-center justify-center p-4 sm:p-8 bg-black/85 backdrop-blur-xl animate-in fade-in duration-200">
-          <div className="relative w-full max-w-2xl bg-[#12151d] border-2 border-[#c68a35] rounded-[4px] shadow-2xl flex flex-col max-h-[90vh] overflow-hidden">
+        <div className="fixed inset-0 z-40 flex items-center justify-center p-4 sm:p-8 bg-black/85 backdrop-blur-2xl animate-in fade-in duration-200">
+          <div className="relative w-full max-w-3xl bg-[#10141d] border-2 border-[#c68a35] rounded-2xl shadow-[0_20px_60px_rgba(0,0,0,0.8)] flex flex-col max-h-[90vh] overflow-hidden">
             
             {/* Header */}
-            <div className="px-8 py-5 border-b border-white/10 flex items-center justify-between bg-[#161a24]">
-              <div className="flex items-center gap-3">
-                <div className="w-2.5 h-7 bg-[#c68a35] -skew-x-12 shrink-0 shadow-[0_0_12px_rgba(198,138,53,0.5)]" />
-                <h2 className="text-xl font-black italic uppercase tracking-wider text-white font-sans">
+            <div className="px-8 sm:px-10 py-6 border-b border-white/10 flex items-center justify-between bg-[#141924]">
+              <div className="flex items-center gap-4">
+                <div className="w-3 h-8 bg-[#c68a35] -skew-x-12 shrink-0 shadow-[0_0_14px_rgba(198,138,53,0.6)]" />
+                <h2 className="text-2xl font-black italic uppercase tracking-wider text-white font-sans">
                   НАСТРОЙКИ СИМУЛЯЦИИ
                 </h2>
               </div>
@@ -725,14 +730,14 @@ export const MainMenu: React.FC<MainMenuProps> = ({
                   playUiSound(500);
                   setActiveModal('none');
                 }}
-                className="p-2 text-[#8b929e] hover:text-white hover:bg-white/10 rounded-[3px] transition-colors cursor-pointer"
+                className="p-2.5 text-[#8b929e] hover:text-white hover:bg-white/10 rounded-lg transition-colors cursor-pointer"
               >
-                <X className="w-5 h-5" />
+                <X className="w-6 h-6" />
               </button>
             </div>
 
-            {/* Settings Tabs */}
-            <div className="grid grid-cols-4 gap-2.5 p-5 border-b border-white/[0.08] bg-[#12151d]">
+            {/* Settings Tabs Switcher */}
+            <div className="grid grid-cols-4 gap-3 p-6 border-b border-white/[0.08] bg-[#10141d]">
               {[
                 { id: 'graphics', label: 'ВИДЕО', icon: Monitor },
                 { id: 'audio', label: 'АУДИО', icon: Volume2 },
@@ -749,10 +754,10 @@ export const MainMenu: React.FC<MainMenuProps> = ({
                       setSettingsTab(tab.id as any);
                       playUiSound(700);
                     }}
-                    className={`flex items-center justify-center gap-2 py-3 px-2 text-xs font-mono font-bold uppercase tracking-wider rounded-[3px] transition-all cursor-pointer border ${
+                    className={`flex items-center justify-center gap-2.5 py-3 rounded-xl text-xs font-mono font-bold tracking-wider transition-all cursor-pointer border ${
                       isActive
-                        ? 'bg-[#c68a35] text-black border-[#c68a35] font-black'
-                        : 'bg-[#181c26] border-white/10 text-[#8b929e] hover:text-white'
+                        ? 'bg-[#c68a35] text-black border-[#c68a35] font-black shadow-[0_0_15px_rgba(198,138,53,0.3)]'
+                        : 'bg-[#151924] text-[#8b929e] border-white/10 hover:text-white hover:bg-[#1a202e]'
                     }`}
                   >
                     <Icon className="w-4 h-4" />
@@ -762,100 +767,99 @@ export const MainMenu: React.FC<MainMenuProps> = ({
               })}
             </div>
 
-            {/* Settings Body with comfortable spacing */}
-            <div className="p-8 flex-1 overflow-y-auto space-y-5">
+            {/* Settings Content Deck */}
+            <div className="p-8 sm:p-10 flex-1 overflow-y-auto space-y-6">
               
               {/* Graphics Tab */}
               {settingsTab === 'graphics' && (
-                <div className="flex items-center justify-between flex-wrap gap-4 p-5 bg-[#161a24] border border-white/[0.08] rounded-[3px]">
-                  <div>
-                    <div className="text-sm font-bold uppercase tracking-wider text-white">Лимит частоты кадров (FPS)</div>
-                    <div className="text-xs text-[#8b929e] mt-0.5">Ограничение частоты обновления физического тика</div>
-                  </div>
-                  <div className="flex gap-2">
-                    {[60, 120, 0].map((limit) => (
-                      <button
-                        key={limit}
-                        type="button"
-                        onClick={() => {
-                          onUpdateSettings({ ...settings, fpsLimit: limit });
-                          playUiSound(800);
-                        }}
-                        className={`px-4 py-2 rounded-[3px] text-xs font-mono font-bold transition-all cursor-pointer border ${
-                          settings.fpsLimit === limit 
-                            ? 'bg-[#c68a35] text-black border-[#c68a35] font-black' 
-                            : 'bg-white/[0.04] text-[#8b929e] border-white/10 hover:bg-white/[0.08]'
-                        }`}
-                      >
-                        {limit === 0 ? 'Без лимита' : `${limit} FPS`}
-                      </button>
-                    ))}
+                <div className="space-y-6">
+                  <div className="flex items-center justify-between flex-wrap gap-4 p-6 bg-[#141924] border border-white/[0.08] rounded-xl shadow-lg">
+                    <div>
+                      <div className="text-base font-bold uppercase tracking-wider text-white">Ограничение частоты кадров (FPS)</div>
+                      <div className="text-xs text-[#8b929e] mt-1 font-mono">Фиксация вертикальной синхронизации рендера</div>
+                    </div>
+                    <div className="flex gap-2">
+                      {[30, 60, 120, 0].map((fps) => (
+                        <button
+                          key={fps}
+                          type="button"
+                          onClick={() => {
+                            onUpdateSettings({ ...settings, fpsLimit: fps });
+                            playUiSound(800);
+                          }}
+                          className={`px-4 py-2 rounded-lg text-xs font-mono font-bold transition-all cursor-pointer border ${
+                            settings.fpsLimit === fps
+                              ? 'bg-[#c68a35] text-black border-[#c68a35] font-black'
+                              : 'bg-white/[0.04] text-[#8b929e] border-white/10 hover:text-white'
+                          }`}
+                        >
+                          {fps === 0 ? 'Без лимита' : `${fps} FPS`}
+                        </button>
+                      ))}
+                    </div>
                   </div>
                 </div>
               )}
 
               {/* Audio Tab */}
               {settingsTab === 'audio' && (
-                <div className="flex items-center justify-between flex-wrap gap-4 p-5 bg-[#161a24] border border-white/[0.08] rounded-[3px]">
-                  <div>
-                    <div className="text-sm font-bold uppercase tracking-wider text-white">Общее воспроизведение звука</div>
-                    <div className="text-xs text-[#8b929e] mt-0.5">Двигатель, подвеска, шины и радио</div>
+                <div className="space-y-6">
+                  <div className="flex items-center justify-between flex-wrap gap-4 p-6 bg-[#141924] border border-white/[0.08] rounded-xl shadow-lg">
+                    <div>
+                      <div className="text-base font-bold uppercase tracking-wider text-white">Звуковые эффекты двигателя и мира</div>
+                      <div className="text-xs text-[#8b929e] mt-1 font-mono">Шум мотора, скрип шин, переключение КПП, интерфейс</div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onToggleMute();
+                        playUiSound(800);
+                      }}
+                      className={`px-6 py-2.5 rounded-xl text-xs font-mono font-bold transition-all cursor-pointer border ${
+                        !isMuted
+                          ? 'bg-[#c68a35] text-black border-[#c68a35] font-black'
+                          : 'bg-rose-950/60 text-rose-300 border-rose-800/40'
+                      }`}
+                    >
+                      {!isMuted ? 'Звук включен' : 'Звук заглушен'}
+                    </button>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      onToggleMute();
-                      playUiSound(800);
-                    }}
-                    className={`px-5 py-2.5 rounded-[3px] text-xs font-bold flex items-center gap-2 transition-all cursor-pointer border ${
-                      isMuted 
-                        ? 'bg-rose-950/40 text-rose-300 border-rose-800/40' 
-                        : 'bg-[#c68a35] text-black border-[#c68a35] font-black'
-                    }`}
-                  >
-                    {isMuted ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
-                    <span>{isMuted ? 'Выключен' : 'Включен'}</span>
-                  </button>
                 </div>
               )}
 
-              {/* Gameplay Tab */}
+              {/* Gameplay / World Tab */}
               {settingsTab === 'gameplay' && (
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between flex-wrap gap-4 p-5 bg-[#161a24] border border-white/[0.08] rounded-[3px]">
+                <div className="space-y-6">
+                  <div className="flex items-center justify-between flex-wrap gap-4 p-6 bg-[#141924] border border-white/[0.08] rounded-xl shadow-lg">
                     <div>
-                      <div className="text-sm font-bold uppercase tracking-wider text-white">Автосохранение рейса</div>
-                      <div className="text-xs text-[#8b929e] mt-0.5">Периодичность записи координат и состояния авто</div>
+                      <div className="text-base font-bold uppercase tracking-wider text-white">Интервал автосохранения</div>
+                      <div className="text-xs text-[#8b929e] mt-1 font-mono">Периодичность записи состояния в секундах</div>
                     </div>
                     <div className="flex gap-2">
-                      {[
-                        { val: 25, label: '25 сек' },
-                        { val: 60, label: '1 мин' },
-                        { val: 0, label: 'Выкл' }
-                      ].map((opt) => (
+                      {[30, 60, 120, 300].map((sec) => (
                         <button
-                          key={opt.val}
+                          key={sec}
                           type="button"
                           onClick={() => {
-                            onUpdateSettings({ ...settings, autoSaveInterval: opt.val });
+                            onUpdateSettings({ ...settings, autoSaveInterval: sec });
                             playUiSound(800);
                           }}
-                          className={`px-4 py-2 rounded-[3px] text-xs font-mono font-bold transition-all cursor-pointer border ${
-                            settings.autoSaveInterval === opt.val 
-                              ? 'bg-[#c68a35] text-black border-[#c68a35] font-black' 
-                              : 'bg-white/[0.04] text-[#8b929e] border-white/10 hover:bg-white/[0.08]'
+                          className={`px-3.5 py-2 rounded-lg text-xs font-mono font-bold transition-all cursor-pointer border ${
+                            settings.autoSaveInterval === sec
+                              ? 'bg-[#c68a35] text-black border-[#c68a35] font-black'
+                              : 'bg-white/[0.04] text-[#8b929e] border-white/10 hover:text-white'
                           }`}
                         >
-                          {opt.label}
+                          {sec} сек
                         </button>
                       ))}
                     </div>
                   </div>
 
-                  <div className="flex items-center justify-between flex-wrap gap-4 p-5 bg-[#161a24] border border-white/[0.08] rounded-[3px]">
+                  <div className="flex items-center justify-between flex-wrap gap-4 p-6 bg-[#141924] border border-white/[0.08] rounded-xl shadow-lg">
                     <div>
-                      <div className="text-sm font-bold uppercase tracking-wider text-white">Суточный ход времени</div>
-                      <div className="text-xs text-[#8b929e] mt-0.5">Цикл смены дня и ночи</div>
+                      <div className="text-base font-bold uppercase tracking-wider text-white">Суточный ход времени</div>
+                      <div className="text-xs text-[#8b929e] mt-1 font-mono">Автоматический цикл смены дня и ночи</div>
                     </div>
                     <button
                       type="button"
@@ -863,7 +867,7 @@ export const MainMenu: React.FC<MainMenuProps> = ({
                         onUpdateSettings({ ...settings, timeAutoCycle: !settings.timeAutoCycle });
                         playUiSound(800);
                       }}
-                      className={`px-5 py-2 rounded-[3px] text-xs font-mono font-bold transition-all cursor-pointer border ${
+                      className={`px-6 py-2.5 rounded-xl text-xs font-mono font-bold transition-all cursor-pointer border ${
                         settings.timeAutoCycle
                           ? 'bg-[#c68a35] text-black border-[#c68a35] font-black'
                           : 'bg-white/[0.04] text-[#8b929e] border-white/10'
@@ -877,10 +881,10 @@ export const MainMenu: React.FC<MainMenuProps> = ({
 
               {/* Controls Tab */}
               {settingsTab === 'controls' && (
-                <div className="space-y-4">
-                  <div className="p-5 bg-[#161a24] border border-white/[0.08] rounded-[3px]">
-                    <div className="text-sm font-bold uppercase tracking-wider text-white">Чувствительность мыши</div>
-                    <div className="flex items-center gap-4 mt-3">
+                <div className="space-y-6">
+                  <div className="p-6 bg-[#141924] border border-white/[0.08] rounded-xl shadow-lg">
+                    <div className="text-base font-bold uppercase tracking-wider text-white">Чувствительность мыши</div>
+                    <div className="flex items-center gap-5 mt-4">
                       <input
                         type="range"
                         min="0.5"
@@ -888,13 +892,13 @@ export const MainMenu: React.FC<MainMenuProps> = ({
                         step="0.1"
                         value={settings.mouseSensitivity}
                         onChange={(e) => onUpdateSettings({ ...settings, mouseSensitivity: parseFloat(e.target.value) })}
-                        className="w-full accent-[#c68a35] cursor-pointer h-2 bg-[#0b0c0e] rounded-[1px] appearance-none"
+                        className="w-full accent-[#c68a35] cursor-pointer h-2 bg-[#0b0c0e] rounded-lg appearance-none"
                       />
                       <span className="text-sm font-mono font-bold text-[#c68a35] shrink-0">{settings.mouseSensitivity.toFixed(1)}x</span>
                     </div>
                   </div>
 
-                  <div className="p-5 bg-[#161a24] border border-white/[0.08] rounded-[3px] text-xs font-mono leading-relaxed text-[#8b929e] space-y-2">
+                  <div className="p-6 bg-[#141924] border border-white/[0.08] rounded-xl text-xs font-mono leading-relaxed text-[#8b929e] space-y-3 shadow-lg">
                     <div><span className="text-white font-bold">W / A / S / D</span> — Движение и рулевое управление</div>
                     <div><span className="text-white font-bold">ПРОБЕЛ</span> — Ручной стояночный тормоз</div>
                     <div><span className="text-white font-bold">E</span> — Действие (сесть в авто, открыть дверь, капот)</div>
@@ -907,7 +911,7 @@ export const MainMenu: React.FC<MainMenuProps> = ({
             </div>
 
             {/* Footer */}
-            <div className="px-8 py-4 border-t border-white/10 bg-[#161a24] flex items-center justify-between text-xs font-mono text-[#8b929e]">
+            <div className="px-8 sm:px-10 py-5 border-t border-white/10 bg-[#141924] flex items-center justify-between text-xs font-mono text-[#8b929e]">
               <span>Параметры сохраняются автоматически</span>
               <button
                 onClick={() => {
@@ -924,25 +928,23 @@ export const MainMenu: React.FC<MainMenuProps> = ({
         </div>
       )}
 
-      {/* ========================================================================= */}
-      {/* 6. AUTHENTIC GAME LOADING SCREEN OVERLAY                                  */}
-      {/* ========================================================================= */}
+      {/* LOADING SCREEN OVERLAY (BEAMNG SIMULATION STYLE) */}
       {isLoading && (
         <div className="fixed inset-0 z-50 flex flex-col items-center justify-center p-8 bg-[#080a0e] select-none animate-in fade-in duration-150">
           
           <div className="w-full max-w-lg flex flex-col items-center text-center space-y-8">
             
             {/* Loading Brand Emblem */}
-            <div className="flex items-center gap-3 px-6 py-3 bg-[#12151d] border border-white/10 rounded-[3px]">
-              <div className="w-2.5 h-7 bg-[#c68a35] -skew-x-12 shrink-0 shadow-[0_0_14px_rgba(198,138,53,0.5)]" />
-              <span className="text-xl font-black italic tracking-widest text-white uppercase font-sans">
+            <div className="flex items-center gap-4 px-7 py-3.5 bg-[#121620] border border-white/10 rounded-xl shadow-2xl">
+              <div className="w-3 h-8 bg-[#c68a35] -skew-x-12 shrink-0 shadow-[0_0_16px_rgba(198,138,53,0.6)]" />
+              <span className="text-2xl font-black italic tracking-widest text-white uppercase font-sans">
                 СТЕПНОЙ ТРАКТ 2D
               </span>
-              <div className="w-2.5 h-7 bg-[#c68a35] -skew-x-12 shrink-0 shadow-[0_0_14px_rgba(198,138,53,0.5)]" />
+              <div className="w-3 h-8 bg-[#c68a35] -skew-x-12 shrink-0 shadow-[0_0_16px_rgba(198,138,53,0.6)]" />
             </div>
 
             {/* Stage Title */}
-            <div className="space-y-1.5">
+            <div className="space-y-2">
               <h3 className="text-base font-bold uppercase tracking-wider text-white font-mono">
                 {loadingStageText}
               </h3>
@@ -952,10 +954,10 @@ export const MainMenu: React.FC<MainMenuProps> = ({
             </div>
 
             {/* Ochre Progress Bar */}
-            <div className="w-full space-y-2">
-              <div className="w-full h-2.5 bg-[#181c26] border border-white/10 rounded-[2px] overflow-hidden">
+            <div className="w-full space-y-2.5">
+              <div className="w-full h-3 bg-[#181d2a] border border-white/10 rounded-lg overflow-hidden p-0.5">
                 <div 
-                  className="h-full bg-[#c68a35] transition-all duration-300 ease-out shadow-[0_0_12px_rgba(198,138,53,0.7)]"
+                  className="h-full bg-[#c68a35] rounded transition-all duration-300 ease-out shadow-[0_0_16px_rgba(198,138,53,0.8)]"
                   style={{ width: `${loadingProgress}%` }}
                 />
               </div>
@@ -965,8 +967,8 @@ export const MainMenu: React.FC<MainMenuProps> = ({
               </div>
             </div>
 
-            {/* Helpful Driver Tip with comfortable padding */}
-            <div className="p-4 bg-[#12151d] border border-white/[0.08] rounded-[3px] text-xs font-mono text-[#8b929e] leading-relaxed max-w-md">
+            {/* Helpful Driver Tip */}
+            <div className="p-5 bg-[#121620] border border-white/[0.08] rounded-xl text-xs font-mono text-[#8b929e] leading-relaxed max-w-md shadow-lg">
               {LOADING_TIPS[loadingTipIndex]}
             </div>
 
@@ -975,13 +977,11 @@ export const MainMenu: React.FC<MainMenuProps> = ({
         </div>
       )}
 
-      {/* ========================================================================= */}
-      {/* 7. CLEAN BOTTOM FOOTER BAR WITH SPACIOUS MARGINS                          */}
-      {/* ========================================================================= */}
-      <footer className="relative z-10 px-8 py-3.5 flex items-center justify-between text-xs font-mono text-[#8b929e] border-t border-white/[0.08] bg-[#080a0e]/95">
+      {/* BOTTOM FOOTER BAR WITH SPACIOUS MARGINS */}
+      <footer className="relative z-10 px-8 py-4 flex items-center justify-between text-xs font-mono text-[#8b929e] border-t border-white/[0.08] bg-[#080a0e]/95">
         <div>
           <span>СТЕПНОЙ ТРАКТ 2D</span>
-          <span className="mx-2.5">·</span>
+          <span className="mx-2.5 text-white/20">·</span>
           <span>ТРАНСПОРТНЫЙ СИМУЛЯТОР</span>
         </div>
         <div>
