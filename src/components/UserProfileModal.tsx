@@ -209,14 +209,14 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
             <div>
               <div className="flex items-center gap-2">
                 <h2 className="text-lg font-black tracking-wide text-white uppercase">
-                  Профиль & Облачная БД
+                  Профиль Водителя
                 </h2>
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 font-mono">
-                  Firebase Auth & Firestore
+                <span className="text-[10px] font-mono font-bold text-[#c68a35] uppercase">
+                  · Личное дело
                 </span>
               </div>
               <p className="text-xs text-slate-400">
-                Настройка данных игрока, кастомных тегов метаданных и синхронизация прогресса
+                Управление позывным водителя и синхронизация прогресса поездки
               </p>
             </div>
           </div>
@@ -271,8 +271,8 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
               </div>
             ) : (
               <div className="text-xs text-slate-400 flex items-center gap-2">
-                <ShieldCheck className="w-5 h-5 text-amber-400" />
-                <span>Авторизация не выполнена. Войдите через Google или как гость для доступа к облаку.</span>
+                <ShieldCheck className="w-5 h-5 text-[#c68a35]" />
+                <span>Авторизация не выполнена. Войдите в аккаунт или продолжите как гость.</span>
               </div>
             )}
 
@@ -288,16 +288,16 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
                 <button
                   onClick={handleLoginGoogle}
                   disabled={loading}
-                  className="flex-1 sm:flex-initial px-4 py-2.5 bg-sky-600 hover:bg-sky-500 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 shadow-lg shadow-sky-600/20 transition-all cursor-pointer"
+                  className="flex-1 sm:flex-initial px-4 py-2.5 bg-[#c68a35] hover:bg-[#d8963e] text-slate-950 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all cursor-pointer font-mono"
                 >
-                  <Globe className="w-4 h-4" /> Google Вход
+                  <Globe className="w-4 h-4" /> Войти в сеть
                 </button>
                 <button
                   onClick={handleLoginAnon}
                   disabled={loading}
-                  className="flex-1 sm:flex-initial px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all cursor-pointer"
+                  className="flex-1 sm:flex-initial px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all cursor-pointer font-mono"
                 >
-                  <UserIcon className="w-4 h-4 text-emerald-400" /> Гость
+                  <UserIcon className="w-4 h-4 text-[#c68a35]" /> Локальный профиль
                 </button>
               </div>
             )}

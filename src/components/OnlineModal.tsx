@@ -207,14 +207,14 @@ export const OnlineModal: React.FC<OnlineModalProps> = ({ isOpen, onClose, onOpe
             <div>
               <div className="flex items-center gap-2">
                 <h2 className="text-lg font-black tracking-wide text-white uppercase">
-                  P2P Мультиплеер & Серверы
+                  Сетевой Режим
                 </h2>
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase bg-sky-500/20 text-sky-300 border border-sky-500/40">
-                  Firestore Lobby
+                <span className="text-[10px] font-mono font-bold text-[#c68a35] uppercase">
+                  · P2P Сессия
                 </span>
               </div>
               <p className="text-xs text-slate-400">
-                Запуск своих серверов, браузер комнат и метаданные заездов
+                Запуск совместного выезда, подключение по коду комнаты и совместные рейсы
               </p>
             </div>
           </div>
