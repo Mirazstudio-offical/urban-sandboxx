@@ -10945,16 +10945,18 @@ export class GameRenderer {
       if (spdSq > 25) {
         // High-velocity elongated needle streak aligned with motion vector
         const spd = Math.sqrt(spdSq);
-        const streakMul = p.streakLength ?? 0.045;
-        const streakLen = Math.min(24, Math.max(2.5, spd * streakMul));
+        const streakMul = p.streakLength ?? 0.030;
+        const streakLen = Math.min(14, Math.max(1.5, spd * streakMul));
         const nx = p.vx / spd;
         const ny = p.vy / spd;
         const tailX = p.x - nx * streakLen;
         const tailY = p.y - ny * streakLen;
 
-        // 1. Soft glowing outer streak
+        const pRadius = p.radius ?? 1.0;
+
+        // 1. Soft glowing outer streak (fine & sharp)
         ctx.strokeStyle = outerColor;
-        ctx.lineWidth = Math.max(0.8, p.radius * 1.35);
+        ctx.lineWidth = Math.max(0.35, pRadius * 0.6);
         ctx.lineCap = 'round';
         ctx.beginPath();
         ctx.moveTo(tailX, tailY);
@@ -10964,7 +10966,7 @@ export class GameRenderer {
         // 2. White-hot incandescent needle core
         if (progress < 0.78) {
           ctx.strokeStyle = coreColor;
-          ctx.lineWidth = Math.max(0.5, p.radius * 0.65);
+          ctx.lineWidth = Math.max(0.2, pRadius * 0.3);
           ctx.beginPath();
           ctx.moveTo(p.x - nx * (streakLen * 0.65), p.y - ny * (streakLen * 0.65));
           ctx.lineTo(p.x, p.y);
@@ -10975,20 +10977,21 @@ export class GameRenderer {
         if (progress < 0.40) {
           ctx.fillStyle = '#ffffff';
           ctx.beginPath();
-          ctx.arc(p.x, p.y, Math.max(0.5, p.radius * 0.45), 0, Math.PI * 2);
+          ctx.arc(p.x, p.y, Math.max(0.3, pRadius * 0.3), 0, Math.PI * 2);
           ctx.fill();
         }
       } else {
         // Slow or resting spark / ember: glowing point
+        const pRadius = p.radius ?? 1.0;
         ctx.fillStyle = outerColor;
         ctx.beginPath();
-        ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+        ctx.arc(p.x, p.y, Math.max(0.3, pRadius * 0.5), 0, Math.PI * 2);
         ctx.fill();
 
         if (progress < 0.70) {
           ctx.fillStyle = coreColor;
           ctx.beginPath();
-          ctx.arc(p.x, p.y, p.radius * 0.55, 0, Math.PI * 2);
+          ctx.arc(p.x, p.y, Math.max(0.2, pRadius * 0.3), 0, Math.PI * 2);
           ctx.fill();
         }
       }

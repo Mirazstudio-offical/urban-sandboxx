@@ -2253,11 +2253,12 @@ export function renderSpecializedVehicleAttachments(vCtx: VehicleRenderContext):
     drawDeformedLine(halfL - fc - 1.5, -halfW * 0.52, halfL - fc - 1.5, halfW * 0.52, '#cbd5e1', 1.0);
     drawDeformedRect(halfL - fc - 1.8, -1, 1.4, 2, '#dc2626'); // Red classic badge
 
-    // Twin round chrome headlight housings on each side (bezel framing base lamps)
-    drawDeformedCircle(halfL - fc - 1.2, -halfW * 0.74, 1.8, 'rgba(0,0,0,0)', '#cbd5e1', 1.0);
-    drawDeformedCircle(halfL - fc - 1.2, -halfW * 0.52, 1.6, 'rgba(0,0,0,0)', '#cbd5e1', 1.0);
-    drawDeformedCircle(halfL - fc - 1.2, halfW * 0.52, 1.6, 'rgba(0,0,0,0)', '#cbd5e1', 1.0);
-    drawDeformedCircle(halfL - fc - 1.2, halfW * 0.74, 1.8, 'rgba(0,0,0,0)', '#cbd5e1', 1.0);
+    // Sleek low-profile rectangular headlights for top-down view (glowing when headlightsOn)
+    const hColor = car.headlightsOn ? '#fef08a' : '#cbd5e1';
+    drawDeformedRect(halfL - fc - 1.4, -halfW * 0.78, 1.4, 2.2, hColor);
+    drawDeformedRect(halfL - fc - 1.4, -halfW * 0.52, 1.4, 2.2, hColor);
+    drawDeformedRect(halfL - fc - 1.4, halfW * 0.52 - 2.2, 1.4, 2.2, hColor);
+    drawDeformedRect(halfL - fc - 1.4, halfW * 0.78 - 2.2, 1.4, 2.2, hColor);
 
     // Chrome side body molding strip with orange front turn signal repeaters
     drawDeformedLine(-halfL + rc + 3, -halfW + 0.6, halfL - fc - 3, -halfW + 0.6, '#cbd5e1', 1.0);
@@ -2446,9 +2447,10 @@ export function renderSpecializedVehicleAttachments(vCtx: VehicleRenderContext):
     drawDeformedLine(cX - cabinL * 0.42, cabinW * 0.44, cX + cabinL * 0.32, cabinW * 0.44, tridionColor, 2.2);
     drawDeformedLine(cX - cabinL * 0.42, -cabinW * 0.44, cX - cabinL * 0.42, cabinW * 0.44, tridionColor, 2.4);
 
-    // Cute rounded projector front headlight bezels
-    drawDeformedCircle(halfL - fc - 1.2, -halfW * 0.62, 2.0, 'rgba(0,0,0,0)', '#64748b', 1.0);
-    drawDeformedCircle(halfL - fc - 1.2, halfW * 0.62, 2.0, 'rgba(0,0,0,0)', '#64748b', 1.0);
+    // Sleek low-profile rectangular headlights for top-down view
+    const hColorMicro = car.headlightsOn ? '#fef08a' : '#cbd5e1';
+    drawDeformedRect(halfL - fc - 1.2, -halfW * 0.68, 1.4, 2.4, hColorMicro);
+    drawDeformedRect(halfL - fc - 1.2, halfW * 0.68 - 2.4, 1.4, 2.4, hColorMicro);
 
     // Micro rear window with wiper
     drawDeformedLine(cX - cabinL * 0.38, 0, cX - cabinL * 0.38 + 2.5, 2.5, '#0f172a', 1.0);
@@ -2457,9 +2459,10 @@ export function renderSpecializedVehicleAttachments(vCtx: VehicleRenderContext):
     drawDeformedCircle(-halfL + rc - 1.0, 0, 1.2, '#cbd5e1', '#0f172a', 0.8);
   } else if (car.type === 'classic_compact') {
     // Vintage Compact Sedan («Копейка» / ВАЗ-2101 / Fiat 124)
-    // Single large circular chrome headlight bezels (framing base headlights)
-    drawDeformedCircle(halfL - fc - 1.2, -halfW * 0.68, 2.2, 'rgba(0,0,0,0)', '#cbd5e1', 1.2);
-    drawDeformedCircle(halfL - fc - 1.2, halfW * 0.68, 2.2, 'rgba(0,0,0,0)', '#cbd5e1', 1.2);
+    // Sleek low-profile rectangular headlights for top-down view
+    const hColorClassic = car.headlightsOn ? '#fef08a' : '#cbd5e1';
+    drawDeformedRect(halfL - fc - 1.2, -halfW * 0.72, 1.4, 2.6, hColorClassic);
+    drawDeformedRect(halfL - fc - 1.2, halfW * 0.72 - 2.6, 1.4, 2.6, hColorClassic);
 
     // Chrome horizontal grille slats
     drawDeformedRect(halfL - fc - 2.5, -halfW * 0.48, 2.0, halfW * 0.96, '#334155');
@@ -2482,9 +2485,10 @@ export function renderSpecializedVehicleAttachments(vCtx: VehicleRenderContext):
     drawDeformedCircle(cabinX + cabinL * 0.18, -cabinW * 0.22, 2.2, 'rgba(0,0,0,0)', '#f8fafc', 0.9);
   } else if (car.type === 'retro_bubble') {
     // Retro Rear-Engine Bubble Microcar («Горбатый» ЗАЗ-965)
-    // Rounded cute teardrop nose chrome bezels
-    drawDeformedCircle(halfL - fc - 1.0, -halfW * 0.65, 2.0, 'rgba(0,0,0,0)', '#cbd5e1', 1.0);
-    drawDeformedCircle(halfL - fc - 1.0, halfW * 0.65, 2.0, 'rgba(0,0,0,0)', '#cbd5e1', 1.0);
+    // Sleek low-profile rectangular headlights for top-down view
+    const hColorBubble = car.headlightsOn ? '#fef08a' : '#cbd5e1';
+    drawDeformedRect(halfL - fc - 1.0, -halfW * 0.70, 1.4, 2.4, hColorBubble);
+    drawDeformedRect(halfL - fc - 1.0, halfW * 0.70 - 2.4, 1.4, 2.4, hColorBubble);
     drawDeformedRect(halfL - fc - 0.8, -1.2, 1.2, 2.4, '#cbd5e1'); // Front chrome chevron
 
     // Iconic lateral rear air intake scoops («уши») on left and right rear fenders!
@@ -2591,9 +2595,10 @@ export function renderSpecializedVehicleAttachments(vCtx: VehicleRenderContext):
     drawDeformedRect(halfL - fc + 0.2, -halfW * 0.45, 1.8, halfW * 0.90, '#1e293b');
     drawDeformedLine(halfL - fc + 0.4, -halfW * 0.45, halfL - fc - 1.6, -halfW * 0.45, '#334155', 1.8);
     drawDeformedLine(halfL - fc + 0.4, halfW * 0.45, halfL - fc - 1.6, halfW * 0.45, '#334155', 1.8);
-    // Protective headlight cages (tubular loops framing outer lamps)
-    drawDeformedCircle(halfL - fc - 1.2, -halfW * 0.66, 2.2, 'rgba(0,0,0,0)', '#334155', 1.2);
-    drawDeformedCircle(halfL - fc - 1.2, halfW * 0.66, 2.2, 'rgba(0,0,0,0)', '#334155', 1.2);
+    // Sleek low-profile rectangular headlights for top-down view
+    const hColorSuv = car.headlightsOn ? '#fef08a' : '#cbd5e1';
+    drawDeformedRect(halfL - fc - 1.2, -halfW * 0.72, 1.4, 2.6, hColorSuv);
+    drawDeformedRect(halfL - fc - 1.2, halfW * 0.72 - 2.6, 1.4, 2.6, hColorSuv);
 
     // Heavy steel spare tire carrier frame securely anchoring tire to rear tailgate door
     drawDeformedRect(-halfL + rc - 2.0, -1.8, 3.2, 3.6, '#0f172a');
@@ -2920,8 +2925,9 @@ export function renderSpecializedVehicleAttachments(vCtx: VehicleRenderContext):
 
     // Rounded retro nose with front stamped cooling slots & chrome headlight bezels
     drawDeformedRect(halfL - fc - 2.2, -halfW * 0.45, 1.8, halfW * 0.90, '#1e293b');
-    drawDeformedCircle(halfL - fc - 1.2, -halfW * 0.65, 2.0, 'rgba(0,0,0,0)', '#cbd5e1', 1.0);
-    drawDeformedCircle(halfL - fc - 1.2, halfW * 0.65, 2.0, 'rgba(0,0,0,0)', '#cbd5e1', 1.0);
+    const hColorVan = car.headlightsOn ? '#fef08a' : '#cbd5e1';
+    drawDeformedRect(halfL - fc - 1.2, -halfW * 0.70, 1.4, 2.4, hColorVan);
+    drawDeformedRect(halfL - fc - 1.2, halfW * 0.70 - 2.4, 1.4, 2.4, hColorVan);
 
     // Full-length steel tubular expedition roof rack with ladder
     const rackX1 = cabinX - cabinL * 0.40;
