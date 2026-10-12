@@ -276,6 +276,12 @@ interface RegisteredRoadSegment {
 }
 
 let registeredRoads: RegisteredRoadSegment[] = [];
+const ROAD_ELEV_CELL_SIZE = 500;
+const registeredRoadsGrid = new Map<number, RegisteredRoadSegment[]>();
+
+function getRoadElevGridKey(cx: number, cy: number): number {
+  return ((cx & 0xffff) << 16) | (cy & 0xffff);
+}
 
 /**
  * Registers world roads to calculate realistic 3D roadbed embankments (земляное полотно / профиль насыпи)
@@ -284,6 +290,57 @@ let registeredRoads: RegisteredRoadSegment[] = [];
 export function setWorldRoadsForElevation(roads: any[]): void {
   if (Array.isArray(roads)) {
     registeredRoads = roads;
+    registeredRoadsGrid.clear();
+
+    for (let r = 0; r < registeredRoads.length; r++) {
+      const road = registeredRoads[r];
+      const halfW = (road.width || 60) / 2;
+      const searchMargin = halfW + 38;
+
+      let minX = road._minX;
+      let maxX = road._maxX;
+      let minY = road._minY;
+      let maxY = road._maxY;
+
+      if (minX === undefined || maxX === undefined || minY === undefined || maxY === undefined) {
+        if (road.curvePoints && road.curvePoints.length > 0) {
+          minX = Infinity; maxX = -Infinity; minY = Infinity; maxY = -Infinity;
+          for (let k = 0; k < road.curvePoints.length; k++) {
+            const pt = road.curvePoints[k];
+            if (pt.x < minX) minX = pt.x;
+            if (pt.x > maxX) maxX = pt.x;
+            if (pt.y < minY) minY = pt.y;
+            if (pt.y > maxY) maxY = pt.y;
+          }
+          road._minX = minX;
+          road._maxX = maxX;
+          road._minY = minY;
+          road._maxY = maxY;
+        } else {
+          road._minX = minX = Math.min(road.x1 ?? 0, road.x2 ?? 0);
+          road._maxX = maxX = Math.max(road.x1 ?? 0, road.x2 ?? 0);
+          road._minY = minY = Math.min(road.y1 ?? 0, road.y2 ?? 0);
+          road._maxY = maxY = Math.max(road.y1 ?? 0, road.y2 ?? 0);
+        }
+      }
+
+      const minCx = Math.floor((minX - searchMargin) / ROAD_ELEV_CELL_SIZE);
+      const maxCx = Math.floor((maxX + searchMargin) / ROAD_ELEV_CELL_SIZE);
+      const minCy = Math.floor((minY - searchMargin) / ROAD_ELEV_CELL_SIZE);
+      const maxCy = Math.floor((maxY + searchMargin) / ROAD_ELEV_CELL_SIZE);
+
+      for (let cx = minCx; cx <= maxCx; cx++) {
+        for (let cy = minCy; cy <= maxCy; cy++) {
+          const key = getRoadElevGridKey(cx, cy);
+          let list = registeredRoadsGrid.get(key);
+          if (!list) {
+            list = [];
+            registeredRoadsGrid.set(key, list);
+          }
+          list.push(road);
+        }
+      }
+    }
   }
 }
 
@@ -304,10 +361,17 @@ function getRoadbedEmbankmentOffset(x: number, y: number): number {
     return 0;
   }
 
+  const cx = Math.floor(x / ROAD_ELEV_CELL_SIZE);
+  const cy = Math.floor(y / ROAD_ELEV_CELL_SIZE);
+  const candidates = registeredRoadsGrid.get(getRoadElevGridKey(cx, cy));
+  if (!candidates || candidates.length === 0) {
+    return 0;
+  }
+
   let maxEmbankment = 0;
 
-  for (let r = 0; r < registeredRoads.length; r++) {
-    const road = registeredRoads[r];
+  for (let r = 0; r < candidates.length; r++) {
+    const road = candidates[r];
     const halfW = (road.width || 60) / 2;
     const searchMargin = halfW + 38;
 

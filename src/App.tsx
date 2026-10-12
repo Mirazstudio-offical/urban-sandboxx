@@ -62,7 +62,8 @@ import {
   toggleTrailerHitch,
   hitchTrailerToVehicle,
   unhitchTrailerFromVehicle,
-  getOutsideTemperature
+  getOutsideTemperature,
+  getRoadsNearPoint
 } from './physics';
 import { GameRenderer } from './renderer';
 import { getBuildingFloorsCount, getBuildingLayout, constrainPlayerToInterior, clearInteriorCanvasCache, getApartmentDoorSegment } from './buildingInteriors';
@@ -503,8 +504,9 @@ export function getAllSpawnLocations(world: GameWorld | null): SpawnLocation[] {
 
 function findStreetNameAtPosition(world: GameWorld | null, px: number, py: number): string {
   if (!world || !world.roads) return 'Grand Boulevard';
-  for (let i = 0; i < world.roads.length; i++) {
-    const road = world.roads[i];
+  const candidateRoads = getRoadsNearPoint(world, px, py);
+  for (let i = 0; i < candidateRoads.length; i++) {
+    const road = candidateRoads[i];
     const halfW = road.width / 2 + 25;
     const rMinX = road._minX ?? Math.min(road.x1, road.x2);
     const rMaxX = road._maxX ?? Math.max(road.x1, road.x2);
@@ -789,6 +791,8 @@ export default function App() {
   const [vitalsRefreshTick, setVitalsRefreshTick] = useState<number>(0);
   const [isConsoleOpen, setIsConsoleOpen] = useState<boolean>(false);
   const [isPerfConsoleOpen, setIsPerfConsoleOpen] = useState<boolean>(false);
+  const isPerfConsoleOpenRef = useRef<boolean>(false);
+  isPerfConsoleOpenRef.current = isPerfConsoleOpen;
   const [isCrashDiagnosticsOpen, setIsCrashDiagnosticsOpen] = useState<boolean>(false);
   const [crashToastReport, setCrashToastReport] = useState<CrashReport | null>(() => crashLogger.getPreviousCrashDetected());
   const [currentPerfStats, setCurrentPerfStats] = useState({
@@ -2978,7 +2982,6 @@ export default function App() {
         hudUpdateTimerRef.current += dt;
         if (hudUpdateTimerRef.current >= 0.08) {
           hudUpdateTimerRef.current = 0;
-          setVitalsRefreshTick((t) => t + 1);
 
           if (playerCar) {
             const currentSpeedKmh = Math.round(Math.abs(playerCar.speed) * PX_S_TO_SPEED_KMH);
@@ -2986,17 +2989,34 @@ export default function App() {
             setIsDrifting(playerCar.isDrifting);
             setPlayerTurnSignal(playerCar.turnSignal);
             if (playerCar.damage) {
-              setDamageDetails({
-                engineSmoking: !!playerCar.damage.engineSmoking,
-                engineFire: !!(playerCar.damage.engineFire || playerCar.damage.fuelTankFire || playerCar.damage.cabinFire),
-                windshieldCracked: !!playerCar.damage.windshieldCracked,
-                hoodBuckled: !!playerCar.damage.hoodBuckled,
-                lightsBroken: !!(
-                  playerCar.damage.leftHeadlightBroken || 
-                  playerCar.damage.rightHeadlightBroken || 
-                  playerCar.damage.leftTaillightBroken || 
-                  playerCar.damage.rightTaillightBroken
-                )
+              const isSmoking = !!playerCar.damage.engineSmoking;
+              const isFire = !!(playerCar.damage.engineFire || playerCar.damage.fuelTankFire || playerCar.damage.cabinFire);
+              const isWindshield = !!playerCar.damage.windshieldCracked;
+              const isHood = !!playerCar.damage.hoodBuckled;
+              const isLights = !!(
+                playerCar.damage.leftHeadlightBroken || 
+                playerCar.damage.rightHeadlightBroken || 
+                playerCar.damage.leftTaillightBroken || 
+                playerCar.damage.rightTaillightBroken
+              );
+              setDamageDetails(prev => {
+                if (
+                  prev &&
+                  prev.engineSmoking === isSmoking &&
+                  prev.engineFire === isFire &&
+                  prev.windshieldCracked === isWindshield &&
+                  prev.hoodBuckled === isHood &&
+                  prev.lightsBroken === isLights
+                ) {
+                  return prev;
+                }
+                return {
+                  engineSmoking: isSmoking,
+                  engineFire: isFire,
+                  windshieldCracked: isWindshield,
+                  hoodBuckled: isHood,
+                  lightsBroken: isLights
+                };
               });
             }
 
@@ -3596,11 +3616,13 @@ export default function App() {
           perfHistoryRef.current.shift();
         }
 
-        // Trigger throttled state update for UI
+        // Trigger throttled state update for UI (only when profiler is open)
         perfUiTimerRef.current += dt;
         if (perfUiTimerRef.current >= 0.15) {
           perfUiTimerRef.current = 0;
-          setCurrentPerfStats({ ...performanceStatsRef.current });
+          if (isPerfConsoleOpenRef.current) {
+            setCurrentPerfStats({ ...performanceStatsRef.current });
+          }
         }
 
         // Blackbox Flight Recorder Telemetry Snapshot (~2 Hz)

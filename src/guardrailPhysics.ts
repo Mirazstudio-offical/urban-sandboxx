@@ -25,10 +25,15 @@ export class GuardrailPhysics {
       this.updatePlayerGuardrailCollisions(world, player);
     }
 
-    // 2. Vehicles Solid Collision
+    // 2. Vehicles Solid Collision (Only check moving vehicles or player vehicle)
     if (world.vehicles && world.vehicles.length > 0) {
       for (const veh of world.vehicles) {
         const vehSpeed = Math.abs(veh.speed);
+        const isMoving = vehSpeed > 0.5 || Math.abs(veh.vx || 0) > 0.5 || Math.abs(veh.vy || 0) > 0.5;
+        if (!veh.isPlayerControlled && !isMoving) {
+          continue;
+        }
+
         const vehRadius = Math.max(veh.width || 20, veh.length || 38) * 0.55;
 
         for (const rail of world.guardrails) {
@@ -204,6 +209,23 @@ export class GuardrailPhysics {
       veh.vx *= absorbFactor;
       veh.vy *= absorbFactor;
       veh.speed *= absorbFactor;
+
+      if (!veh.activeCrumple) {
+        veh.activeCrumple = {
+          timer: 0.14,
+          totalDuration: 0.14,
+          normalX: pushNx,
+          normalY: pushNy,
+          initialSpeed: veh.speed,
+          initialNormalSpeed: approachParts.normalApproach * 0.35,
+          initialTangentialSpeed: approachParts.tangential,
+          reboundSpeed: 0,
+          contactX: closestX,
+          contactY: closestY,
+          isNarrowImpact: true,
+          contactWidthPx: 12.0
+        };
+      }
 
       // Vehicle crumple & damage with HIGH trauma mitigation for occupants.
       // Масса 12000 — «объект жёстко стоит на грунте»: вся мягкость буфера

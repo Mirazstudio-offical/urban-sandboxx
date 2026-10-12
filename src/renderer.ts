@@ -16,8 +16,11 @@ import {
   VehicleDamage,
   ParkingSpot,
   Particle,
-  Season
+  Season,
+  RoadSegment
 } from './types';
+
+type Road = RoadSegment;
 import { 
   CAR_CONFIGS, 
   canVehicleHaveHitch, 
@@ -651,6 +654,8 @@ export class GameRenderer {
     const maxY = chunkY + this.chunkSize;
 
     chunkCtx.save();
+    // Clear chunk canvas for reuse
+    chunkCtx.clearRect(0, 0, this.chunkSize, this.chunkSize);
     // Translate standard world coordinates so standard draw functions draw directly into chunk canvas
     chunkCtx.translate(-chunkX, -chunkY);
 
@@ -661,14 +666,31 @@ export class GameRenderer {
     const chunkSidewalks = world.sidewalks.filter(sw => 
       sw.x + sw.width >= minX && sw.x <= maxX && sw.y + sw.height >= minY && sw.y <= maxY
     );
-    this.renderSidewalks(chunkCtx, chunkSidewalks, minX, minY, maxX, maxY, world);
+    if (chunkSidewalks.length > 0) {
+      this.renderSidewalks(chunkCtx, chunkSidewalks, minX, minY, maxX, maxY, world);
+    }
 
     // 2b. Static Driveways from map.json
     this.renderStaticDriveways(chunkCtx, world, minX, minY, maxX, maxY);
 
-    // 3. Roads & Markings
-    this.renderRoadsAndMarkings(chunkCtx, world, minX, minY, maxX, maxY);
-    this.renderRoadSurfaceTextureAndDefects(chunkCtx, world, minX, minY, maxX, maxY);
+    // 3. Roads & Markings (Pre-cull to only roads in this chunk's envelope)
+    const chunkRoads = (world.roads || []).filter(road => {
+      const margin = (road.width || 60) / 2 + 55;
+      const rMinX = (road._minX ?? Math.min(road.x1, road.x2)) - margin;
+      const rMaxX = (road._maxX ?? Math.max(road.x1, road.x2)) + margin;
+      const rMinY = (road._minY ?? Math.min(road.y1, road.y2)) - margin;
+      const rMaxY = (road._maxY ?? Math.max(road.y1, road.y2)) + margin;
+      return rMaxX >= minX && rMinX <= maxX && rMaxY >= minY && rMinY <= maxY;
+    });
+
+    const hasIntersections = world.intersections && world.intersections.some(
+      i => i.x + i.width / 2 >= minX && i.x - i.width / 2 <= maxX && i.y + i.height / 2 >= minY && i.y - i.height / 2 <= maxY
+    );
+
+    if (chunkRoads.length > 0 || hasIntersections) {
+      this.renderRoadsAndMarkings(chunkCtx, world, minX, minY, maxX, maxY, chunkRoads);
+      this.renderRoadSurfaceTextureAndDefects(chunkCtx, world, minX, minY, maxX, maxY, chunkRoads);
+    }
 
     // 3b. Railway Superstructure (Ballast, sleepers, steel rails, switches, buffer stops)
     RailwayRenderer.renderTrackSuperstructure(chunkCtx, world, minX, minY, maxX, maxY);
@@ -682,7 +704,7 @@ export class GameRenderer {
     chunkCtx.restore();
   }
 
-  private static readonly MAX_CHUNKS = 48;
+  private static readonly MAX_CHUNKS = 128;
   private getChunkCanvas(cx: number, cy: number, world: GameWorld): HTMLCanvasElement {
     const seasonKey = world.calendar ? `${world.calendar.season}_${world.calendar.month}` : 'default';
     if (this.lastChunkSeasonKey !== seasonKey) {
@@ -699,17 +721,18 @@ export class GameRenderer {
       if (this.chunkCache.size >= GameRenderer.MAX_CHUNKS) {
         const firstKey = this.chunkCache.keys().next().value;
         if (firstKey !== undefined) {
-          const oldCanvas = this.chunkCache.get(firstKey);
-          if (oldCanvas) {
-            oldCanvas.width = 0;
-            oldCanvas.height = 0;
-          }
+          const recycledCanvas = this.chunkCache.get(firstKey);
           this.chunkCache.delete(firstKey);
+          if (recycledCanvas) {
+            canvas = recycledCanvas;
+          }
         }
       }
-      canvas = document.createElement('canvas');
-      canvas.width = this.chunkSize;
-      canvas.height = this.chunkSize;
+      if (!canvas) {
+        canvas = document.createElement('canvas');
+        canvas.width = this.chunkSize;
+        canvas.height = this.chunkSize;
+      }
       const chunkCtx = canvas.getContext('2d', { alpha: false })!;
       this.renderChunkStatic(chunkCtx, cx, cy, world);
       this.chunkCache.set(key, canvas);
@@ -1155,9 +1178,11 @@ export class GameRenderer {
   private renderRoadsAndMarkings(
     ctx: CanvasRenderingContext2D,
     world: GameWorld,
-    minX: number, minY: number, maxX: number, maxY: number
+    minX: number, minY: number, maxX: number, maxY: number,
+    candidateRoads?: Road[]
   ) {
-    const { roads, intersections } = world;
+    const roads = candidateRoads || world.roads;
+    const { intersections } = world;
     const isWinter = world.calendar?.season === 'winter';
     const isAutumn = world.calendar?.season === 'autumn';
     const isSpring = world.calendar?.season === 'spring';
@@ -2265,9 +2290,10 @@ export class GameRenderer {
   private renderRoadSurfaceTextureAndDefects(
     ctx: CanvasRenderingContext2D,
     world: GameWorld,
-    minX: number, minY: number, maxX: number, maxY: number
+    minX: number, minY: number, maxX: number, maxY: number,
+    candidateRoads?: Road[]
   ) {
-    const { roads } = world;
+    const roads = candidateRoads || world.roads;
 
     for (const road of roads) {
       if (road.isRoundabout) continue;

@@ -237,6 +237,8 @@ export interface NodeBeamStructure {
   totalPlasticDeform: number;
   maxStress: number;
   lastSimTime?: number;
+  isSleeping?: boolean;
+  activeTimer?: number;
 }
 
 export interface ScratchMark {
@@ -619,6 +621,8 @@ export interface Vehicle {
     initialTangentialSpeed?: number; // касательная составляющая скорости в момент удара, px/s (сохраняется с трением)
     interlockingTimer?: number; // Plastic interlocking duration (metal entanglement)
     interlockingFriction?: number; // Plastic shear friction coefficient during entanglement
+    isNarrowImpact?: boolean;
+    contactWidthPx?: number;
   };
 
   // AI & State

@@ -424,7 +424,9 @@ export function createVehicleNodeBeamSystem(
     brokenBeamCount: 0,
     totalPlasticDeform: 0,
     maxStress: 0,
-    lastSimTime: performance.now() / 1000
+    lastSimTime: performance.now() / 1000,
+    isSleeping: true,
+    activeTimer: 0
   };
 }
 
@@ -808,9 +810,14 @@ export function applyNodeBeamImpact(
     }
   }
 
-  // Run immediate relaxation solver burst (4 micro-steps) so plastic crush occurs instantly on impact
-  for (let burst = 0; burst < 4; burst++) {
-    stepNodeBeamSimulation(system, 0.016, car);
+  // If activeCrumple is NOT active (e.g. manual diagnostics test or instant scrape), run burst immediately
+  if (!car.activeCrumple || car.activeCrumple.timer <= 0) {
+    for (let burst = 0; burst < 4; burst++) {
+      stepNodeBeamSimulation(system, 0.016, car);
+    }
+  } else {
+    // Single sub-step shock to initiate wave
+    stepNodeBeamSimulation(system, 0.005, car);
   }
 
   // Powertrain and component mechanical damage consequences
@@ -848,3 +855,138 @@ export function applyNodeBeamImpact(
     }
   }
 }
+
+/**
+ * Continuous Dynamic Contact Solver for multi-frame crumple zone collapse.
+ *
+ * In slow-motion (e.g. timeScale 0.1 or 0.05) or normal speed, as the car
+ * penetrates an obstacle (wall, pole, vehicle) over multiple frames/seconds:
+ * 1. Nodes in contact are continuously forced back by the obstacle penetration constraint.
+ * 2. Connected beams compress incrementally each physics tick with delta time `dt`.
+ * 3. Plastic yielding and accordion folds accumulate continuously over time.
+ * 4. Stresses rise progressively, snapping breakable latches mid-impact.
+ * 5. Beam compression forces decelerate the vehicle organically until kinetic energy is dissipated.
+ */
+export function stepNodeBeamContinuousContact(
+  car: Vehicle,
+  dt: number,
+  world?: GameWorld
+): void {
+  const c = car.activeCrumple;
+  if (!c || c.timer <= 0) return;
+
+  const dmg = car.damage;
+  if (!dmg) return;
+  const system = ensureVehicleNodeBeam(car);
+  const nodes = system.nodes;
+  if (!nodes || nodes.length < 30) return;
+
+  const halfL = car.length / 2;
+  const halfW = car.width / 2;
+  const cosA = Math.cos(car.angle);
+  const sinA = Math.sin(car.angle);
+
+  // Contact normal pointing OUT of obstacle toward car
+  const normX = c.normalX;
+  const normY = c.normalY;
+
+  // Local impact direction vector into car interior
+  let locImpulseX = -(normX * cosA + normY * sinA);
+  let locImpulseY = -(-normX * sinA + normY * cosA);
+  const impLen = Math.hypot(locImpulseX, locImpulseY) || 1;
+  locImpulseX /= impLen;
+  locImpulseY /= impLen;
+
+  // Progress of the active crumple cycle (0.0 = contact onset, 1.0 = completed stroke)
+  const progress = c.totalDuration > 0
+    ? Math.max(0, Math.min(1.0, 1.0 - c.timer / c.totalDuration))
+    : 1.0;
+
+  // Initial impact speed
+  const initNormalSpeed = Math.abs(c.initialNormalSpeed !== undefined ? c.initialNormalSpeed : c.initialSpeed) || 60;
+
+  // During the compression stroke (phase 0.0 -> 0.74):
+  if (progress < 0.74) {
+    const isNarrow = c.isNarrowImpact ?? false;
+    const penetrationRate = Math.max(10, initNormalSpeed * (1.0 - progress * 0.85));
+    const deltaDisplacement = penetrationRate * dt * 0.45;
+
+    if (isNarrow) {
+      // True Soft-Body Pole / Tree / Bollard Wrapping:
+      // Every node tests distance directly against the obstacle center (c.contactX, c.contactY).
+      // Nodes that penetrate the pole radius get pushed outward/around the obstacle naturally!
+      const poleRadius = Math.max(6.0, (c.contactWidthPx || 14) * 0.6);
+      const poleX = c.contactX;
+      const poleY = c.contactY;
+
+      for (let i = 0; i < nodes.length; i++) {
+        const n = nodes[i];
+        if (n.isFixed) continue;
+
+        // Node position in world space
+        const worldX = n.x * cosA - n.y * sinA + car.x;
+        const worldY = n.x * sinA + n.y * cosA + car.y;
+
+        const toNodeX = worldX - poleX;
+        const toNodeY = worldY - poleY;
+        const distToPole = Math.hypot(toNodeX, toNodeY) || 0.0001;
+
+        if (distToPole < poleRadius * 1.6) {
+          // Penetration depth into pole
+          const overlap = (poleRadius * 1.4) - distToPole;
+          if (overlap > 0) {
+            const pushDirX = toNodeX / distToPole;
+            const pushDirY = toNodeY / distToPole;
+
+            // Convert world push vector into car local space
+            const localPushX = pushDirX * cosA + pushDirY * sinA;
+            const localPushY = -pushDirX * sinA + pushDirY * cosA;
+
+            const crushAmount = overlap * Math.min(1.0, 15.0 * dt);
+            n.x += localPushX * crushAmount;
+            n.y += localPushY * crushAmount;
+            n.vx += localPushX * 35;
+            n.vy += localPushY * 35;
+          }
+        }
+      }
+    } else {
+      // Wide Surface Impact (Walls, flat barriers):
+      const effectiveContactWidth = c.contactWidthPx !== undefined
+        ? Math.max(2.0, Math.min(car.width, c.contactWidthPx))
+        : car.width;
+
+      const spreadRadius = Math.max(10.0, effectiveContactWidth * 0.48);
+
+      // Transform contact point into car local space
+      const dx = c.contactX - car.x;
+      const dy = c.contactY - car.y;
+      const localContactX = dx * cosA + dy * sinA;
+      const localContactY = -dx * sinA + dy * cosA;
+
+      // Progressively push contact nodes into vehicle interior
+      for (let i = 0; i < nodes.length; i++) {
+        const n = nodes[i];
+        if (n.isFixed) continue;
+
+        const dist = Math.hypot(n.x - localContactX, n.y - localContactY);
+        if (dist > spreadRadius * 2.2) continue;
+
+        const w = Math.exp(-(dist * dist) / (2 * spreadRadius * spreadRadius));
+        if (w <= 0.002) continue;
+
+        const nodePush = deltaDisplacement * w;
+
+        // Nudge node position and apply compression velocity
+        n.x += locImpulseX * nodePush;
+        n.y += locImpulseY * nodePush;
+        n.vx += locImpulseX * (nodePush / Math.max(0.001, dt)) * 0.25;
+        n.vy += locImpulseY * (nodePush / Math.max(0.001, dt)) * 0.25;
+      }
+    }
+  }
+
+  // Step the viscoelastic elastoplastic node-beam solver
+  stepNodeBeamSimulation(system, dt, car);
+}
+

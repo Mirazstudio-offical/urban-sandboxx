@@ -22,8 +22,7 @@ import {
   MapPin,
   Calendar,
   Volume2,
-  Compass,
-  AlertTriangle
+  Bell
 } from 'lucide-react';
 import { formatGameDate, formatGameTime, getRussianSeasonName } from '../calendarSystem';
 
@@ -85,7 +84,7 @@ const DEFAULT_SPAWNS: SpawnLocation[] = [
     x: 4400,
     y: 2800,
     description: 'Парковый фонтан, асфальтированные широкие аллеи, пешеходная зона и кольцевые проезды.',
-    icon: <TreePine className="w-6 h-6 text-[#c68a35]" />
+    icon: <TreePine className="w-5 h-5 text-[#c9922b]" />
   },
   {
     id: 'downtown_plaza',
@@ -94,7 +93,7 @@ const DEFAULT_SPAWNS: SpawnLocation[] = [
     x: 4350,
     y: 2000,
     description: 'Официальный центр города, парковка перед госучреждениями и широкий центральный проспект.',
-    icon: <Building2 className="w-6 h-6 text-[#c68a35]" />
+    icon: <Building2 className="w-5 h-5 text-[#c9922b]" />
   },
   {
     id: 'residential_courtyard',
@@ -103,7 +102,7 @@ const DEFAULT_SPAWNS: SpawnLocation[] = [
     x: 2750,
     y: 2750,
     description: 'Панельные пятиэтажки, детская площадка, гаражные боксы и узкие дворовые проезды.',
-    icon: <Home className="w-6 h-6 text-[#c68a35]" />
+    icon: <Home className="w-5 h-5 text-[#c9922b]" />
   },
   {
     id: 'industrial_district',
@@ -112,7 +111,7 @@ const DEFAULT_SPAWNS: SpawnLocation[] = [
     x: 6530,
     y: 1030,
     description: 'Грузовые ангары, ремонтные ямы, стоянка спецтехники и дорожные бетонные плиты.',
-    icon: <Truck className="w-6 h-6 text-[#c68a35]" />
+    icon: <Truck className="w-5 h-5 text-[#c9922b]" />
   }
 ];
 
@@ -138,10 +137,9 @@ export const MainMenu: React.FC<MainMenuProps> = ({
   onOpenOnline,
   onOpenProfile
 }) => {
-  // Navigation State
-  const [activeModal, setActiveModal] = useState<'none' | 'play' | 'settings'>('none');
-  const [playTab, setPlayTab] = useState<'saves' | 'new_game'>('saves');
-  const [settingsTab, setSettingsTab] = useState<'graphics' | 'audio' | 'gameplay' | 'controls'>('graphics');
+  // Navigation & Modals State matching reference layout
+  const [activeModal, setActiveModal] = useState<'none' | 'saves' | 'new' | 'settings'>('none');
+  const [settingsTab, setSettingsTab] = useState<'gfx' | 'sound' | 'ctrl' | 'game'>('gfx');
   
   // New Game Form
   const [newGameName, setNewGameName] = useState<string>('Водитель #1');
@@ -235,565 +233,436 @@ export const MainMenu: React.FC<MainMenuProps> = ({
     });
   };
 
+  const latestSave = saves.length > 0 ? saves[0] : null;
+
   return (
-    <div className="fixed inset-0 z-50 flex flex-col justify-between text-[#f0f3f6] font-sans select-none overflow-hidden bg-[#080a0e]/85 backdrop-blur-2xl">
-      
-      {/* Background Stylized Topographic Map Grid */}
-      <div className="absolute inset-0 pointer-events-none overflow-hidden">
-        <svg className="w-full h-full opacity-[0.06]" xmlns="http://www.w3.org/2000/svg">
-          <defs>
-            <pattern id="steppeMapGrid" width="160" height="160" patternUnits="userSpaceOnUse">
-              <path d="M 0 80 L 160 80 M 80 0 L 80 160" stroke="#ffffff" strokeWidth="4" strokeDasharray="16 10" />
-              <circle cx="80" cy="80" r="14" fill="none" stroke="#c68a35" strokeWidth="2.5" />
-            </pattern>
-          </defs>
-          <rect width="100%" height="100%" fill="url(#steppeMapGrid)" />
-        </svg>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#0d0e10] overflow-hidden select-none font-['Barlow',system-ui,sans-serif] text-[#e9e6df] text-[15px]">
+      <div className="relative w-full max-w-[1440px] aspect-[1440/900] max-h-screen overflow-hidden bg-[#121315]">
+        
+        {/* Background Atmosphere & Gradient Glow matching reference */}
+        <div className="absolute inset-0 bg-gradient-to-b from-[#17140f] via-[#2b2218] to-[#120f0b]" />
+        <div className="absolute -left-[200px] top-0 w-[1840px] h-[900px] bg-[radial-gradient(900px_520px_at_70%_82%,rgba(201,146,43,0.42),transparent_62%)] pointer-events-none" />
+        <div className="absolute inset-0 bg-black/40 pointer-events-none" />
 
-        {/* Cinematic Vignette */}
-        <div className="absolute inset-0 bg-gradient-to-t from-[#080a0e] via-transparent to-[#080a0e]/90" />
-        <div className="absolute inset-0 bg-gradient-to-r from-[#080a0e]/95 via-transparent to-[#080a0e]/95" />
-      </div>
-
-      {/* TOP HEADER: Clean Brand Emblem with Generous Breathing Room */}
-      <header className="relative z-10 pt-12 sm:pt-16 px-8 flex flex-col items-center justify-center pointer-events-auto">
-        <div className="flex items-center gap-4 px-7 py-4 bg-[#121620]/95 border border-white/10 rounded-xl shadow-2xl backdrop-blur-md">
-          <div className="w-3 h-8 bg-[#c68a35] -skew-x-12 shrink-0 shadow-[0_0_16px_rgba(198,138,53,0.6)]" />
-          <div className="flex flex-col pr-2">
-            <h1 className="text-2xl sm:text-3xl font-black italic tracking-widest text-white uppercase font-sans leading-none">
-              СТЕПНОЙ ТРАКТ <span className="text-[#c68a35]">2D</span>
-            </h1>
-            <span className="text-[11px] font-mono font-bold tracking-widest text-[#8b929e] uppercase mt-1">
-              РЕАЛИСТИЧНЫЙ ТРАНСПОРТНЫЙ СИМУЛЯТОР
-            </span>
+        {/* LOADING SCREEN OVERLAY */}
+        {isLoading && (
+          <div className="absolute inset-0 z-50 flex flex-col items-center justify-center p-8 bg-[#080a0e]">
+            <div className="w-full max-w-lg flex flex-col items-center text-center space-y-8 animate-in fade-in duration-150">
+              <div className="flex items-center gap-4 px-7 py-3.5 bg-[#121620] border border-white/10 rounded-xl shadow-2xl">
+                <div className="w-3 h-8 bg-[#c9922b] -skew-x-12 shrink-0 shadow-[0_0_16px_rgba(201,146,43,0.6)]" />
+                <span className="text-2xl font-black italic tracking-widest text-white uppercase font-['Barlow_Condensed',sans-serif]">
+                  СТЕПНОЙ ТРАКТ 2D
+                </span>
+                <div className="w-3 h-8 bg-[#c9922b] -skew-x-12 shrink-0 shadow-[0_0_16px_rgba(201,146,43,0.6)]" />
+              </div>
+              <div className="space-y-2">
+                <h3 className="text-base font-bold uppercase tracking-wider text-white font-mono">
+                  {loadingStageText}
+                </h3>
+                <p className="text-xs font-mono text-[#a29e93]">
+                  Подготовка транспортной симуляции...
+                </p>
+              </div>
+              <div className="w-full space-y-2.5">
+                <div className="w-full h-3 bg-[#181d2a] border border-white/10 rounded-lg overflow-hidden p-0.5">
+                  <div 
+                    className="h-full bg-[#c9922b] rounded transition-all duration-300 ease-out shadow-[0_0_16px_rgba(201,146,43,0.8)]"
+                    style={{ width: `${loadingProgress}%` }}
+                  />
+                </div>
+                <div className="flex justify-between text-xs font-mono text-[#a29e93]">
+                  <span>ЗАГРУЗКА РЕСУРСОВ</span>
+                  <span className="text-[#c9922b] font-bold">{loadingProgress}%</span>
+                </div>
+              </div>
+              <div className="p-5 bg-[#121620] border border-white/[0.08] rounded-xl text-xs font-mono text-[#a29e93] leading-relaxed max-w-md shadow-lg">
+                {LOADING_TIPS[loadingTipIndex]}
+              </div>
+            </div>
           </div>
-          <div className="w-3 h-8 bg-[#c68a35] -skew-x-12 shrink-0 shadow-[0_0_16px_rgba(198,138,53,0.6)]" />
-        </div>
-      </header>
+        )}
 
-      {/* MAIN SCREEN ACTION TILES (Spacious Dock with Generous Clearance) */}
-      {activeModal === 'none' && !isLoading && (
-        <main className="relative z-20 pb-20 sm:pb-28 px-6 flex flex-col items-center justify-center animate-in fade-in duration-200">
-          
-          <div className="flex flex-wrap items-center justify-center gap-6 max-w-5xl w-full">
-            
-            {/* 1. LARGE PRIMARY PLAY BUTTON TILE */}
-            <button
-              onClick={() => {
-                playUiSound(880);
-                setActiveModal('play');
-                setPlayTab(saves.length > 0 ? 'saves' : 'new_game');
-              }}
-              className="group relative flex items-center justify-center gap-6 px-10 py-7 min-w-[280px] sm:min-w-[320px] bg-gradient-to-r from-[#151924] via-[#1a2030] to-[#141824] hover:from-[#1b2234] hover:to-[#171d2b] border-2 border-[#c68a35] hover:shadow-[0_0_35px_rgba(198,138,53,0.4)] rounded-2xl transition-all duration-200 cursor-pointer overflow-hidden shadow-2xl"
-            >
-              <div className="w-12 h-12 rounded-xl bg-[#c68a35] text-black flex items-center justify-center shrink-0 shadow-[0_0_20px_rgba(198,138,53,0.5)] group-hover:scale-105 transition-transform duration-200">
-                <Play className="w-6 h-6 fill-current translate-x-0.5" />
+        {/* 1. MAIN MENU SCREEN */}
+        {activeModal === 'none' && !isLoading && (
+          <div className="absolute inset-0 bg-gradient-to-r from-[#090a0e]/90 via-[#090a0e]/60 to-transparent">
+            {/* Top Bar */}
+            <div className="absolute left-[64px] right-[64px] top-[34px] h-[44px] flex items-center justify-between z-10">
+              <div className="flex items-center gap-[14px]">
+                <svg width="36" height="36" viewBox="0 0 36 36"><path d="M18 2 32 10v16L18 34 4 26V10z" fill="none" stroke="#c9922b" strokeWidth="2.5"/><path d="M11 22 18 11l7 11z" fill="#c9922b"/></svg>
+                <span className="font-['Barlow_Condensed',sans-serif] text-[15px] font-semibold uppercase tracking-[0.08em]">Главное меню</span>
               </div>
-              <div className="flex flex-col text-left">
-                <span className="text-2xl sm:text-3xl font-black italic uppercase tracking-wider text-white font-sans leading-tight">
-                  ИГРАТЬ
-                </span>
-                <span className="text-xs text-[#c68a35] font-mono tracking-wide mt-1 font-bold">
-                  {saves.length > 0 ? `Архив рейсов: ${saves.length}` : 'Начать новую поездку'}
-                </span>
+              <div className="flex gap-3">
+                <button 
+                  onClick={() => playUiSound(700)} 
+                  className="flex items-center gap-[10px] h-[44px] px-[16px] rounded-[10px] bg-[#161618]/70 border border-white/10 hover:border-[#c9922b]/50 transition-all cursor-pointer"
+                  title="Уведомления"
+                >
+                  <Bell className="w-5 h-5 text-[#cfcbc1]" />
+                  <span className="text-[#a29e93] text-[14px]">0</span>
+                </button>
+                <button 
+                  onClick={() => {
+                    playUiSound(700);
+                    if (onOpenProfile) onOpenProfile();
+                  }}
+                  className="flex items-center gap-[10px] h-[44px] px-[16px] rounded-[10px] bg-[#161618]/70 border border-white/10 hover:border-[#c9922b]/50 transition-all cursor-pointer"
+                >
+                  <span className="w-[26px] h-[26px] rounded-full bg-[#c9922b] text-[#1a1409] inline-flex items-center justify-center font-bold text-[13px]">И</span>
+                  <span className="font-medium">Игрок_0417</span>
+                </button>
               </div>
-            </button>
+            </div>
 
-            {/* 2. SETTINGS TILE */}
-            <button
-              onClick={() => {
-                playUiSound(750);
-                setActiveModal('settings');
-              }}
-              className="group relative flex items-center justify-center gap-4 px-8 py-7 min-w-[200px] bg-[#121620] hover:bg-[#181d2a] border border-white/10 hover:border-[#c68a35] hover:shadow-[0_8px_25px_rgba(198,138,53,0.2)] rounded-2xl transition-all duration-200 cursor-pointer shadow-xl text-left"
-            >
-              <div className="p-3.5 rounded-xl bg-white/5 border border-white/10 text-[#8b929e] group-hover:text-[#c68a35] group-hover:border-[#c68a35]/40 transition-colors shrink-0">
-                <Sliders className="w-6 h-6" />
-              </div>
-              <div className="flex flex-col">
-                <span className="text-base font-black italic uppercase tracking-wider text-[#d0d5dc] group-hover:text-white font-sans">
-                  НАСТРОЙКИ
+            {/* Left Vertical Menu */}
+            <div className="absolute left-[64px] top-[176px] w-[420px] flex flex-col gap-[6px]">
+              {/* Continue Latest Save */}
+              <button
+                onClick={() => {
+                  playUiSound(900);
+                  if (latestSave) {
+                    handleLoadSaveSlot(latestSave.id);
+                  } else {
+                    setActiveModal('new');
+                  }
+                }}
+                className="flex flex-col justify-center items-start gap-[2px] h-[84px] px-[22px] bg-[rgba(201,146,43,0.16)] border-l-[3px] border-[#c9922b] text-white font-['Barlow_Condensed',sans-serif] text-[27px] font-semibold uppercase tracking-[0.08em] hover:bg-white/15 transition-all cursor-pointer"
+              >
+                <span>Продолжить</span>
+                <span className="font-['Barlow',sans-serif] font-normal text-[14px] text-[#a29e93] normal-case tracking-normal">
+                  {latestSave ? `«${latestSave.name}» — последняя сессия` : 'Нет сохранений · Начать новую'}
                 </span>
-                <span className="text-[11px] text-[#8b929e] font-mono mt-0.5">
-                  Видео, звук, клавиши
-                </span>
-              </div>
-            </button>
+              </button>
 
-            {/* 3. ACCOUNT TILE */}
-            <button
-              onClick={() => {
-                playUiSound(750);
-                if (onOpenProfile) onOpenProfile();
-              }}
-              className="group relative flex items-center justify-center gap-4 px-8 py-7 min-w-[200px] bg-[#121620] hover:bg-[#181d2a] border border-white/10 hover:border-[#c68a35] hover:shadow-[0_8px_25px_rgba(198,138,53,0.2)] rounded-2xl transition-all duration-200 cursor-pointer shadow-xl text-left"
-            >
-              <div className="p-3.5 rounded-xl bg-white/5 border border-white/10 text-[#8b929e] group-hover:text-[#c68a35] group-hover:border-[#c68a35]/40 transition-colors shrink-0">
-                <User className="w-6 h-6" />
-              </div>
-              <div className="flex flex-col">
-                <span className="text-base font-black italic uppercase tracking-wider text-[#d0d5dc] group-hover:text-white font-sans">
-                  АККАУНТ
-                </span>
-                <span className="text-[11px] text-[#8b929e] font-mono mt-0.5">
-                  Досье водителя & облако
-                </span>
-              </div>
-            </button>
-
-            {/* 4. ONLINE P2P TILE */}
-            {onOpenOnline && (
               <button
                 onClick={() => {
                   playUiSound(750);
-                  onOpenOnline();
+                  setActiveModal('new');
                 }}
-                className="group relative flex items-center justify-center gap-4 px-8 py-7 min-w-[200px] bg-[#121620] hover:bg-[#181d2a] border border-white/10 hover:border-[#c68a35] hover:shadow-[0_8px_25px_rgba(198,138,53,0.2)] rounded-2xl transition-all duration-200 cursor-pointer shadow-xl text-left"
+                className="flex items-center gap-[18px] h-[62px] px-[22px] border-l-[3px] border-transparent font-['Barlow_Condensed',sans-serif] text-[27px] font-semibold uppercase tracking-[0.08em] text-[#cfcbc1] hover:bg-white/[0.06] hover:text-white hover:border-l-[#c9922b] hover:pl-[30px] transition-all cursor-pointer"
               >
-                <div className="p-3.5 rounded-xl bg-white/5 border border-white/10 text-[#8b929e] group-hover:text-[#c68a35] group-hover:border-[#c68a35]/40 transition-colors shrink-0">
-                  <Globe className="w-6 h-6" />
-                </div>
-                <div className="flex flex-col">
-                  <span className="text-base font-black italic uppercase tracking-wider text-[#d0d5dc] group-hover:text-white font-sans">
-                    ОНЛАЙН
-                  </span>
-                  <span className="text-[11px] text-[#8b929e] font-mono mt-0.5">
-                    Сетевая комната P2P
-                  </span>
-                </div>
+                <PlusCircle className="w-6 h-6 text-[#c9922b]" />
+                <span>Новая сессия</span>
               </button>
-            )}
 
-            {/* 5. RESUME CURRENT RUN */}
-            <button
-              onClick={() => {
-                playUiSound(900);
-                onResume();
-              }}
-              className="group relative flex items-center justify-center gap-3 px-6 py-7 bg-[#121620] hover:bg-[#181d2a] border border-white/10 hover:border-white/30 rounded-2xl transition-all duration-200 cursor-pointer shadow-xl"
-              title="Вернуться к текущей симуляции [ESC]"
-            >
-              <RotateCcw className="w-5 h-5 text-[#8b929e] group-hover:text-white transition-colors" />
-              <span className="text-xs font-bold uppercase tracking-wider text-[#8b929e] group-hover:text-white font-mono">
-                В ИГРУ
-              </span>
-            </button>
+              <button
+                onClick={() => {
+                  playUiSound(750);
+                  setActiveModal('saves');
+                }}
+                className="flex items-center gap-[18px] h-[62px] px-[22px] border-l-[3px] border-transparent font-['Barlow_Condensed',sans-serif] text-[27px] font-semibold uppercase tracking-[0.08em] text-[#cfcbc1] hover:bg-white/[0.06] hover:text-white hover:border-l-[#c9922b] hover:pl-[30px] transition-all cursor-pointer"
+              >
+                <HardDrive className="w-6 h-6 text-[#c9922b]" />
+                <span>Загрузить</span>
+              </button>
 
-          </div>
+              {onOpenOnline && (
+                <button
+                  onClick={() => {
+                    playUiSound(750);
+                    onOpenOnline();
+                  }}
+                  className="flex items-center gap-[18px] h-[62px] px-[22px] border-l-[3px] border-transparent font-['Barlow_Condensed',sans-serif] text-[27px] font-semibold uppercase tracking-[0.08em] text-[#cfcbc1] hover:bg-white/[0.06] hover:text-white hover:border-l-[#c9922b] hover:pl-[30px] transition-all cursor-pointer"
+                >
+                  <Globe className="w-6 h-6 text-[#c9922b]" />
+                  <span>Онлайн</span>
+                </button>
+              )}
 
-          {/* Quick Subtitle with Generous Margin */}
-          <div className="mt-10 flex items-center gap-4 text-xs font-mono text-[#8b929e]">
-            <span>ВЫБОР КНОПКИ МЫШЬЮ</span>
-            <span aria-hidden="true" className="text-white/20">·</span>
-            <span>ESC: ВЕРНУТЬСЯ В ИГРУ</span>
-          </div>
-        </main>
-      )}
+              <button
+                onClick={() => {
+                  playUiSound(750);
+                  if (onOpenProfile) onOpenProfile();
+                }}
+                className="flex items-center gap-[18px] h-[62px] px-[22px] border-l-[3px] border-transparent font-['Barlow_Condensed',sans-serif] text-[27px] font-semibold uppercase tracking-[0.08em] text-[#cfcbc1] hover:bg-white/[0.06] hover:text-white hover:border-l-[#c9922b] hover:pl-[30px] transition-all cursor-pointer"
+              >
+                <User className="w-6 h-6 text-[#c9922b]" />
+                <span>Аккаунт</span>
+              </button>
 
-      {/* MODAL 1: PLAY (SAVES ARCHIVE & NEW GAME WITH RICH MODERN TILES) */}
-      {activeModal === 'play' && !isLoading && (
-        <div className="fixed inset-0 z-40 flex items-center justify-center p-4 sm:p-8 md:p-10 bg-black/85 backdrop-blur-2xl animate-in fade-in duration-200">
-          <div className="relative w-full max-w-6xl bg-[#10141d] border-2 border-[#c68a35] rounded-2xl shadow-[0_20px_60px_rgba(0,0,0,0.8)] flex flex-col max-h-[92vh] overflow-hidden">
-            
-            {/* Header with Generous Clearance */}
-            <div className="px-8 sm:px-10 py-6 border-b border-white/10 flex items-center justify-between bg-[#141924]">
-              <div className="flex items-center gap-4">
-                <div className="w-3 h-8 bg-[#c68a35] -skew-x-12 shrink-0 shadow-[0_0_14px_rgba(198,138,53,0.6)]" />
-                <div>
-                  <h2 className="text-2xl sm:text-3xl font-black italic uppercase tracking-wider text-white font-sans leading-none">
-                    ВЫЕЗД НА ТРАССУ
-                  </h2>
-                  <p className="text-xs font-mono text-[#8b929e] mt-1.5 hidden sm:block">
-                    Выберите ранее сохранённый рейс из архива или инициализируйте новую поездку
-                  </p>
-                </div>
+              <button
+                onClick={() => {
+                  playUiSound(750);
+                  setActiveModal('settings');
+                }}
+                className="flex items-center gap-[18px] h-[62px] px-[22px] border-l-[3px] border-transparent font-['Barlow_Condensed',sans-serif] text-[27px] font-semibold uppercase tracking-[0.08em] text-[#cfcbc1] hover:bg-white/[0.06] hover:text-white hover:border-l-[#c9922b] hover:pl-[30px] transition-all cursor-pointer"
+              >
+                <Sliders className="w-6 h-6 text-[#c9922b]" />
+                <span>Настройки</span>
+              </button>
+
+              <button
+                onClick={() => {
+                  playUiSound(600);
+                  onResume();
+                }}
+                className="flex items-center gap-[18px] h-[62px] px-[22px] border-l-[3px] border-transparent font-['Barlow_Condensed',sans-serif] text-[27px] font-semibold uppercase tracking-[0.08em] text-[#a29e93] hover:bg-white/[0.06] hover:text-white hover:border-l-[#a29e93] hover:pl-[30px] transition-all cursor-pointer mt-[14px]"
+              >
+                <ArrowLeft className="w-6 h-6 text-[#a29e93]" />
+                <span>В игру [ESC]</span>
+              </button>
+            </div>
+
+            {/* Right Panel: Last Session Preview Card */}
+            <div className="absolute left-[880px] top-[176px] w-[496px] bg-[rgba(20,20,22,0.82)] border border-white/10 rounded-[14px] p-[14px]">
+              <div className="h-[268px] rounded-[10px] bg-gradient-to-b from-[#3b2a1b] to-[#c47a2a] relative overflow-hidden flex items-center justify-center">
+                <Car className="w-20 h-20 text-white/30" />
               </div>
-              <button
-                onClick={() => {
-                  playUiSound(500);
-                  setActiveModal('none');
-                }}
-                className="p-2.5 text-[#8b929e] hover:text-white hover:bg-white/10 rounded-lg transition-colors cursor-pointer"
-              >
-                <X className="w-6 h-6" />
-              </button>
+              <div className="p-[16px_8px_6px]">
+                <div className="font-['Barlow_Condensed',sans-serif] text-[#a29e93] text-[13px] uppercase tracking-[0.08em]">Последняя сессия</div>
+                <div className="font-['Barlow_Condensed',sans-serif] text-[30px] font-bold uppercase tracking-[0.08em] mt-[4px]">
+                  {latestSave ? latestSave.name : 'Степной Тракт · Свободная езда'}
+                </div>
+                <div className="text-[#a29e93] flex gap-[26px] mt-[12px] text-[14px]">
+                  <span>Карта: Степной регион</span>
+                  <span>Время: {latestSave ? formatGameTime(latestSave.timeHour || 10) : '10:00'}</span>
+                </div>
+                <button
+                  onClick={() => {
+                    playUiSound(900);
+                    if (latestSave) handleLoadSaveSlot(latestSave.id);
+                    else setActiveModal('new');
+                  }}
+                  className="mt-[18px] inline-flex items-center justify-center gap-[8px] h-[46px] px-[24px] rounded-[10px] bg-[#c9922b] text-[#1a1409] font-bold text-[16px] hover:brightness-115 transition-all cursor-pointer"
+                >
+                  <Play className="w-4 h-4 fill-current" />
+                  <span>Продолжить</span>
+                </button>
+              </div>
             </div>
 
-            {/* Play Tabs Switcher */}
-            <div className="px-8 sm:px-10 pt-6 pb-4 flex gap-4 border-b border-white/[0.08] bg-[#10141d]">
-              <button
-                onClick={() => {
-                  playUiSound(700);
-                  setPlayTab('saves');
-                }}
-                className={`flex items-center gap-3 px-8 py-3.5 font-mono text-xs font-bold uppercase tracking-wider rounded-xl transition-all cursor-pointer border ${
-                  playTab === 'saves'
-                    ? 'bg-[#c68a35] text-black border-[#c68a35] font-black shadow-[0_0_20px_rgba(198,138,53,0.4)]'
-                    : 'bg-[#151924] text-[#8b929e] border-white/10 hover:text-white hover:bg-[#1a202e]'
-                }`}
-              >
-                <HardDrive className="w-4 h-4" />
-                <span>Архив сохранений ({saves.length})</span>
-              </button>
+            {/* Hint Bar */}
+            <div className="absolute left-[64px] right-[64px] bottom-[34px] flex items-center justify-between text-[13px] text-[#a29e93]">
+              <div className="flex items-center">
+                <span className="inline-flex items-center justify-center min-w-[28px] h-[26px] px-[8px] rounded-[6px] border border-white/22 font-semibold text-[12px] mr-[8px]">↑↓</span>Навигация
+                <span className="inline-flex items-center justify-center min-w-[28px] h-[26px] px-[8px] rounded-[6px] border border-white/22 font-semibold text-[12px] ml-[22px] mr-[8px]">Enter</span>Выбрать
+                <span className="inline-flex items-center justify-center min-w-[28px] h-[26px] px-[8px] rounded-[6px] border border-white/22 font-semibold text-[12px] ml-[22px] mr-[8px]">Esc</span>Назад
+              </div>
+              <div>{new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} · Степной Тракт</div>
+            </div>
+          </div>
+        )}
 
-              <button
-                onClick={() => {
-                  playUiSound(700);
-                  setPlayTab('new_game');
-                }}
-                className={`flex items-center gap-3 px-8 py-3.5 font-mono text-xs font-bold uppercase tracking-wider rounded-xl transition-all cursor-pointer border ${
-                  playTab === 'new_game'
-                    ? 'bg-[#c68a35] text-black border-[#c68a35] font-black shadow-[0_0_20px_rgba(198,138,53,0.4)]'
-                    : 'bg-[#151924] text-[#8b929e] border-white/10 hover:text-white hover:bg-[#1a202e]'
-                }`}
-              >
-                <PlusCircle className="w-4 h-4" />
-                <span>Новый заезд</span>
-              </button>
+        {/* 2. SAVES / LOAD MODAL SCREEN */}
+        {activeModal === 'saves' && !isLoading && (
+          <div className="absolute inset-0 bg-[#121315] z-30 flex flex-col">
+            <div className="absolute left-[64px] right-[64px] top-[34px] h-[44px] flex items-center justify-between">
+              <div className="flex items-center gap-[16px]">
+                <button 
+                  onClick={() => setActiveModal('none')}
+                  className="flex items-center justify-center w-[44px] h-[44px] rounded-[10px] bg-[#161618] border border-white/10 hover:border-[#c9922b] transition-all cursor-pointer"
+                >
+                  <ArrowLeft className="w-5 h-5 text-[#e9e6df]" />
+                </button>
+                <span className="font-['Barlow_Condensed',sans-serif] text-[26px] font-bold uppercase tracking-[0.08em]">Загрузить сессию</span>
+              </div>
             </div>
 
-            {/* TAB 1: SAVES ARCHIVE (EXPANSIVE TILES WITH BREATHING ROOM) */}
-            {playTab === 'saves' && (
-              <div className="p-8 sm:p-10 flex-1 overflow-y-auto">
-                {saves.length === 0 ? (
-                  <div className="py-24 px-8 text-center bg-[#141924] border border-white/10 rounded-2xl space-y-6 max-w-xl mx-auto shadow-2xl">
-                    <div className="w-20 h-20 mx-auto rounded-2xl bg-[#c68a35]/15 border border-[#c68a35]/30 flex items-center justify-center text-[#c68a35]">
-                      <HardDrive className="w-10 h-10" />
-                    </div>
-                    <div>
-                      <h3 className="text-xl font-bold uppercase tracking-wider text-white font-sans">
-                        Архив поездок пуст
-                      </h3>
-                      <p className="text-xs font-mono text-[#8b929e] mt-2 leading-relaxed max-w-md mx-auto">
-                        У вас пока нет сохранённых рейсов. Перейдите во вкладку «Новый заезд» для выбора стартовой точки и выхода на трассу.
-                      </p>
-                    </div>
-                    <button
-                      onClick={() => {
-                        playUiSound(700);
-                        setPlayTab('new_game');
-                      }}
-                      className="px-8 py-3.5 bg-[#c68a35] text-black font-mono text-xs font-black uppercase tracking-wider rounded-xl hover:bg-[#d8963e] transition-colors cursor-pointer shadow-lg inline-flex items-center gap-2.5"
+            <div className="absolute left-[64px] right-[64px] top-[112px] bottom-[100px] overflow-y-auto pr-4">
+              {saves.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-32 text-center space-y-6">
+                  <HardDrive className="w-16 h-16 text-[#c9922b]" />
+                  <div className="font-['Barlow_Condensed',sans-serif] text-2xl uppercase tracking-wider">Сохранений не найдено</div>
+                  <button
+                    onClick={() => setActiveModal('new')}
+                    className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-[#c9922b] text-[#1a1409] font-bold text-base cursor-pointer"
+                  >
+                    <PlusCircle className="w-5 h-5" />
+                    <span>Создать новую сессию</span>
+                  </button>
+                </div>
+              ) : (
+                <div className="grid grid-cols-4 gap-[20px]">
+                  {saves.map((s, idx) => (
+                    <div 
+                      key={s.id} 
+                      onClick={() => handleLoadSaveSlot(s.id)}
+                      className="group bg-[rgba(20,20,22,0.86)] border border-white/10 hover:border-[#c9922b] rounded-[13px] overflow-hidden transition-all cursor-pointer hover:-translate-y-1"
                     >
-                      <PlusCircle className="w-4 h-4" />
-                      <span>Инициализировать новую поездку</span>
-                    </button>
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {saves.map((save) => {
-                      const isConfirming = confirmDeleteId === save.id;
-                      return (
-                        <div
-                          key={save.id}
-                          className="group relative flex flex-col justify-between bg-gradient-to-b from-[#151924] to-[#10131c] hover:from-[#1a2030] hover:to-[#121622] border border-white/10 hover:border-[#c68a35] hover:shadow-[0_12px_32px_rgba(198,138,53,0.25)] rounded-2xl p-6 transition-all duration-200"
-                        >
-                          {/* Ochre Accent Top Line */}
-                          <div className="absolute top-0 left-0 right-0 h-1 bg-[#c68a35] opacity-0 group-hover:opacity-100 transition-opacity rounded-t-2xl" />
-
-                          {/* Top Row: Mode badge & Delete Button */}
-                          <div>
-                            <div className="flex items-start justify-between gap-3">
-                              <div className="flex items-center gap-3.5 min-w-0">
-                                <div className="p-3 rounded-xl bg-[#c68a35]/15 border border-[#c68a35]/30 text-[#c68a35] shrink-0 group-hover:bg-[#c68a35] group-hover:text-black transition-colors">
-                                  {save.isInVehicle ? <Car className="w-6 h-6" /> : <User className="w-6 h-6" />}
-                                </div>
-                                <div className="min-w-0">
-                                  <h3 className="text-base sm:text-lg font-black uppercase tracking-wider text-white truncate font-sans group-hover:text-[#c68a35] transition-colors">
-                                    {save.name}
-                                  </h3>
-                                  <div className="text-[11px] font-mono text-[#c68a35] font-bold mt-0.5">
-                                    {save.isInVehicle ? 'За рулём техники' : 'Пеший маршрут'}
-                                  </div>
-                                </div>
-                              </div>
-
-                              {/* Delete Action with Confirmation */}
-                              {isConfirming ? (
-                                <div className="flex items-center gap-1.5 shrink-0">
-                                  <button
-                                    onClick={() => {
-                                      playUiSound(500);
-                                      onDeleteSave(save.id);
-                                      setConfirmDeleteId(null);
-                                    }}
-                                    className="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white font-mono text-[10px] font-bold uppercase rounded-lg transition-all cursor-pointer shadow-md"
-                                  >
-                                    Удалить?
-                                  </button>
-                                  <button
-                                    onClick={() => setConfirmDeleteId(null)}
-                                    className="p-1 text-[#8b929e] hover:text-white"
-                                  >
-                                    <X className="w-4 h-4" />
-                                  </button>
-                                </div>
-                              ) : (
-                                <button
-                                  onClick={() => {
-                                    playUiSound(500);
-                                    setConfirmDeleteId(save.id);
-                                  }}
-                                  className="p-2.5 bg-white/[0.04] hover:bg-rose-950/60 text-[#8b929e] hover:text-rose-400 border border-white/10 hover:border-rose-900/40 rounded-lg transition-all cursor-pointer"
-                                  title="Удалить слот"
-                                >
-                                  <Trash2 className="w-4 h-4" />
-                                </button>
-                              )}
-                            </div>
-
-                            {/* Details Grid Deck with Generous Air */}
-                            <div className="grid grid-cols-2 gap-3.5 mt-5 pt-4 border-t border-white/[0.08] text-xs font-mono">
-                              <div className="flex items-center gap-2 text-[#8b929e]">
-                                <MapPin className="w-4 h-4 text-[#c68a35] shrink-0" />
-                                <span className="truncate text-[#d0d5dc]">{save.streetName || 'Степной Тракт'}</span>
-                              </div>
-                              <div className="flex items-center gap-2 text-[#8b929e]">
-                                <Clock className="w-4 h-4 text-[#c68a35] shrink-0" />
-                                <span className="text-white font-bold">{formatGameTime(save.timeHour ?? 10.0)}</span>
-                              </div>
-                              <div className="flex items-center gap-2 text-[#8b929e]">
-                                <Calendar className="w-4 h-4 text-[#c68a35] shrink-0" />
-                                <span>{save.calendar ? formatGameDate(save.calendar, 'medium') : (save.date || '08.10.2026')}</span>
-                              </div>
-                              <div className="text-xs text-[#c68a35] font-bold text-right self-center">
-                                {save.calendar?.season ? getRussianSeasonName(save.calendar.season) : (save.season || 'Осень')}
-                              </div>
-                            </div>
-                          </div>
-
-                          {/* Launch Action */}
-                          <div className="mt-6 pt-4 border-t border-white/[0.08]">
-                            <button
-                              onClick={() => handleLoadSaveSlot(save.id)}
-                              className="w-full py-3.5 bg-[#c68a35] hover:bg-[#d8963e] text-black font-mono text-xs font-black uppercase tracking-wider rounded-xl transition-all cursor-pointer flex items-center justify-center gap-2.5 shadow-md group-hover:shadow-[0_0_20px_rgba(198,138,53,0.45)]"
-                            >
-                              <Play className="w-4 h-4 fill-current" />
-                              <span>ВЫЕХАТЬ В РЕЙС</span>
-                            </button>
-                          </div>
+                      <div className="h-[178px] bg-gradient-to-b from-[#2b2218] to-[#120f0b] flex items-center justify-center">
+                        <Car className="w-14 h-14 text-white/30 group-hover:scale-110 transition-transform" />
+                      </div>
+                      <div className="p-[14px_16px]">
+                        <div className="font-['Barlow_Condensed',sans-serif] text-[22px] font-bold uppercase tracking-[0.08em] truncate">{s.name}</div>
+                        <div className="flex justify-between text-[13px] text-[#a29e93] mt-[8px]">
+                          <span>{s.streetName || 'Степной Тракт'}</span>
+                          <span>{formatGameTime(s.timeHour || 10)}</span>
                         </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            )}
+                        <div className="flex justify-between text-[13px] text-[#a29e93] mt-[4px]">
+                          <span>{s.calendar ? formatGameDate(s.calendar, 'medium') : '08.10.2026'}</span>
+                          <span className="text-[#c9922b] font-semibold">{idx === 0 ? 'Последнее' : ''}</span>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
 
-            {/* TAB 2: NEW GAME (EXPANSIVE TILES FOR SPAWN POINTS WITH BREATHING ROOM) */}
-            {playTab === 'new_game' && (
-              <form onSubmit={handleStartNewGame} className="p-8 sm:p-10 flex-1 overflow-y-auto space-y-8">
-                
-                {/* Driver Name Input with Comfortable Air */}
-                <div className="flex flex-col gap-2.5 max-w-xl">
-                  <label className="text-xs font-mono font-bold uppercase tracking-wider text-[#8b929e]">
-                    ИМЯ ВОДИТЕЛЯ В ПТС / ПОЗЫВНОЙ:
-                  </label>
+            <div className="absolute left-[64px] right-[64px] bottom-[34px] flex items-center justify-between text-[13px] text-[#a29e93]">
+              <div>Нажмите на сохранение для загрузки сессии</div>
+              <button onClick={() => setActiveModal('none')} className="hover:text-white transition-colors cursor-pointer">Назад [Esc]</button>
+            </div>
+          </div>
+        )}
+
+        {/* 3. NEW SESSION / MAP & SPAWN MODAL SCREEN */}
+        {activeModal === 'new' && !isLoading && (
+          <div className="absolute inset-0 bg-[#121315] z-30 flex flex-col">
+            <div className="absolute left-[64px] right-[64px] top-[34px] h-[44px] flex items-center justify-between">
+              <div className="flex items-center gap-[16px]">
+                <button 
+                  onClick={() => setActiveModal('none')}
+                  className="flex items-center justify-center w-[44px] h-[44px] rounded-[10px] bg-[#161618] border border-white/10 hover:border-[#c9922b] transition-all cursor-pointer"
+                >
+                  <ArrowLeft className="w-5 h-5 text-[#e9e6df]" />
+                </button>
+                <span className="font-['Barlow_Condensed',sans-serif] text-[26px] font-bold uppercase tracking-[0.08em]">Новая сессия</span>
+              </div>
+              <div className="text-[#a29e93] text-[14px]">
+                <b className="text-[#c9922b]">1</b> Выбор точки выезда <span className="mx-2">—</span> <b className="text-[#c9922b]">2</b> Запуск симуляции
+              </div>
+            </div>
+
+            <div className="absolute left-[64px] top-[112px] w-[880px] bottom-[90px] overflow-y-auto pr-4">
+              <div className="font-['Barlow_Condensed',sans-serif] text-[18px] font-bold uppercase tracking-[0.08em] mb-[16px]">Доступные сектора спавна на карте</div>
+              <div className="grid grid-cols-2 gap-[20px]">
+                {spawnLocations.map((loc) => {
+                  const isSelected = selectedSpawnId === loc.id;
+                  return (
+                    <div
+                      key={loc.id}
+                      onClick={() => {
+                        setSelectedSpawnId(loc.id);
+                        playUiSound(700);
+                      }}
+                      className={`group p-[20px] rounded-[14px] border transition-all cursor-pointer bg-[rgba(20,20,22,0.86)] ${
+                        isSelected 
+                          ? 'border-[#c9922b] shadow-[0_0_20px_rgba(201,146,43,0.3)] bg-[rgba(201,146,43,0.08)]' 
+                          : 'border-white/10 hover:border-[#c9922b]/50'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between mb-3">
+                        <div className="p-2 rounded-lg bg-white/5 border border-white/10 text-[#c9922b]">
+                          {loc.icon}
+                        </div>
+                        {isSelected && (
+                          <span className="px-3 py-1 rounded bg-[#c9922b] text-[#1a1409] font-bold text-[11px] font-mono uppercase">
+                            Выбрано
+                          </span>
+                        )}
+                      </div>
+                      <div className="font-['Barlow_Condensed',sans-serif] text-[22px] font-bold uppercase tracking-[0.08em]">{loc.nameRu}</div>
+                      <div className="text-[#a29e93] text-[13px] mt-2">{loc.description}</div>
+                      <div className="mt-4 pt-3 border-t border-white/10 text-[12px] font-mono text-[#a29e93] flex justify-between">
+                        <span>Координаты: X:{loc.x} Y:{loc.y}</span>
+                        <span className="text-[#c9922b]">Степной Тракт</span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Right configuration panel for new game */}
+            <div className="absolute right-[64px] top-[112px] w-[400px] bottom-[90px] bg-[rgba(20,20,22,0.82)] border border-white/10 rounded-[14px] p-[20px] flex flex-col justify-between">
+              <div className="space-y-[20px]">
+                <div className="font-['Barlow_Condensed',sans-serif] text-[24px] font-bold uppercase tracking-[0.08em]">Параметры поездки</div>
+                <div>
+                  <div className="text-[12px] text-[#a29e93] mb-[8px] uppercase tracking-wider font-mono">Имя водителя / позывной</div>
                   <input
                     type="text"
                     value={newGameName}
                     onChange={(e) => setNewGameName(e.target.value)}
                     maxLength={32}
-                    required
-                    placeholder="Введите позывной водителя..."
-                    className="w-full h-14 bg-[#141924] border border-white/10 focus:border-[#c68a35] rounded-xl px-5 text-white text-base font-mono font-bold focus:outline-none transition-colors shadow-inner"
+                    className="w-full h-[52px] px-[16px] rounded-[10px] bg-white/[0.06] border-[1.5px] border-[#c9922b] text-[18px] font-medium text-white focus:outline-none"
                   />
                 </div>
-
-                {/* Spawn Locations as Expansive Tiles with Generous Margins */}
-                <div className="flex flex-col gap-4">
-                  <div className="flex items-center justify-between">
-                    <label className="text-xs font-mono font-bold uppercase tracking-wider text-[#8b929e]">
-                      ВЫБЕРИТЕ ТОЧКУ ВЫЕЗДА НА КАРТУ:
-                    </label>
-                    <span className="text-xs font-mono text-[#c68a35]">
-                      {spawnLocations.length} СЕКТОРА ДОСТУПНО
-                    </span>
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    {spawnLocations.map((loc, idx) => {
-                      const isSelected = selectedSpawnId === loc.id;
-                      const sectorNum = String(idx + 1).padStart(2, '0');
-                      return (
-                        <div
-                          key={loc.id}
-                          onClick={() => {
-                            setSelectedSpawnId(loc.id);
-                            playUiSound(700);
-                          }}
-                          className={`group relative flex flex-col justify-between p-6 sm:p-7 rounded-2xl transition-all duration-200 cursor-pointer border shadow-lg ${
-                            isSelected
-                              ? 'bg-gradient-to-b from-[#1b2332] to-[#141a26] border-2 border-[#c68a35] shadow-[0_0_30px_rgba(198,138,53,0.3)] ring-1 ring-[#c68a35]/50'
-                              : 'bg-[#141924] border-white/10 hover:border-white/20 hover:bg-[#181e2b] hover:-translate-y-0.5'
-                          }`}
-                        >
-                          {/* Sector Badge & Selected Indicator */}
-                          <div className="flex items-center justify-between mb-4">
-                            <span className="text-[11px] font-mono font-bold text-[#8b929e] uppercase tracking-widest">
-                              СЕКТОР {sectorNum}
-                            </span>
-                            {isSelected && (
-                              <div className="flex items-center gap-1.5 text-[11px] font-mono font-bold uppercase text-[#c68a35] bg-[#c68a35]/15 border border-[#c68a35]/40 px-3 py-1 rounded-md">
-                                <Check className="w-3.5 h-3.5 text-[#c68a35]" />
-                                <span>ВЫБРАНО</span>
-                              </div>
-                            )}
-                          </div>
-
-                          <div>
-                            <div className="flex items-center gap-4">
-                              <div className={`p-3.5 rounded-xl border ${
-                                isSelected 
-                                  ? 'bg-[#c68a35]/20 border-[#c68a35] text-[#c68a35]' 
-                                  : 'bg-white/[0.04] border-white/10 text-[#8b929e] group-hover:text-white'
-                              }`}>
-                                {loc.icon}
-                              </div>
-                              <div className="min-w-0 pr-4">
-                                <h3 className={`text-lg font-black uppercase tracking-wider truncate font-sans ${
-                                  isSelected ? 'text-white' : 'text-[#d0d5dc] group-hover:text-white'
-                                }`}>
-                                  {loc.nameRu}
-                                </h3>
-                                <div className="text-xs font-mono text-[#8b929e] mt-0.5">
-                                  {loc.name}
-                                </div>
-                              </div>
-                            </div>
-
-                            <p className="text-xs text-[#8b929e] mt-4 leading-relaxed font-sans">
-                              {loc.description}
-                            </p>
-                          </div>
-
-                          <div className="mt-5 pt-3.5 border-t border-white/[0.08] flex items-center justify-between text-xs font-mono text-[#8b929e]">
-                            <span>КООРДИНАТЫ:</span>
-                            <span className={isSelected ? 'text-[#c68a35] font-bold' : 'text-white/60'}>
-                              X: {loc.x} · Y: {loc.y}
-                            </span>
-                          </div>
-                        </div>
-                      );
-                    })}
+                <div>
+                  <div className="text-[12px] text-[#a29e93] mb-[8px] uppercase tracking-wider font-mono">Режим симуляции</div>
+                  <div className="flex rounded-[10px] overflow-hidden border border-white/14">
+                    <span className="flex-1 flex items-center justify-center h-[40px] bg-[#c9922b] text-[#1a1409] font-semibold text-[14px]">Свободная езда</span>
                   </div>
                 </div>
-
-                {/* Submit Launch Action */}
-                <div className="pt-2">
-                  <button
-                    type="submit"
-                    className="w-full py-4.5 bg-[#c68a35] hover:bg-[#d8963e] text-black font-mono text-sm font-black uppercase tracking-wider rounded-xl transition-all cursor-pointer shadow-[0_8px_25px_rgba(198,138,53,0.4)] flex items-center justify-center gap-3"
-                  >
-                    <Play className="w-5 h-5 fill-current" />
-                    <span>ВЫЕХАТЬ В СИМУЛЯЦИЮ</span>
-                  </button>
-                </div>
-
-              </form>
-            )}
-
-            {/* Footer with Generous Clearance */}
-            <div className="px-8 sm:px-10 py-5 border-t border-white/10 bg-[#141924] flex items-center justify-between text-xs font-mono text-[#8b929e]">
-              <span>СТЕПНОЙ ТРАКТ 2D</span>
-              <button
-                onClick={() => {
-                  playUiSound(500);
-                  setActiveModal('none');
-                }}
-                className="hover:text-white transition-colors cursor-pointer flex items-center gap-2"
-              >
-                <ArrowLeft className="w-4 h-4" />
-                <span>Назад в главное меню [ESC]</span>
-              </button>
-            </div>
-
-          </div>
-        </div>
-      )}
-
-      {/* MODAL 2: SETTINGS (SPACIOUS, GENEROUS BREATHING ROOM) */}
-      {activeModal === 'settings' && !isLoading && (
-        <div className="fixed inset-0 z-40 flex items-center justify-center p-4 sm:p-8 bg-black/85 backdrop-blur-2xl animate-in fade-in duration-200">
-          <div className="relative w-full max-w-3xl bg-[#10141d] border-2 border-[#c68a35] rounded-2xl shadow-[0_20px_60px_rgba(0,0,0,0.8)] flex flex-col max-h-[90vh] overflow-hidden">
-            
-            {/* Header */}
-            <div className="px-8 sm:px-10 py-6 border-b border-white/10 flex items-center justify-between bg-[#141924]">
-              <div className="flex items-center gap-4">
-                <div className="w-3 h-8 bg-[#c68a35] -skew-x-12 shrink-0 shadow-[0_0_14px_rgba(198,138,53,0.6)]" />
-                <h2 className="text-2xl font-black italic uppercase tracking-wider text-white font-sans">
-                  НАСТРОЙКИ СИМУЛЯЦИИ
-                </h2>
               </div>
+
               <button
-                onClick={() => {
-                  playUiSound(500);
-                  setActiveModal('none');
-                }}
-                className="p-2.5 text-[#8b929e] hover:text-white hover:bg-white/10 rounded-lg transition-colors cursor-pointer"
+                onClick={() => handleStartNewGame()}
+                className="w-full h-[52px] rounded-[10px] bg-[#c9922b] text-[#1a1409] font-bold text-[17px] inline-flex items-center justify-center gap-[8px] hover:brightness-115 transition-all cursor-pointer shadow-lg"
               >
-                <X className="w-6 h-6" />
+                <Play className="w-5 h-5 fill-current" />
+                <span>Начать сессию</span>
               </button>
             </div>
 
-            {/* Settings Tabs Switcher */}
-            <div className="grid grid-cols-4 gap-3 p-6 border-b border-white/[0.08] bg-[#10141d]">
-              {[
-                { id: 'graphics', label: 'ВИДЕО', icon: Monitor },
-                { id: 'audio', label: 'АУДИО', icon: Volume2 },
-                { id: 'gameplay', label: 'МИР', icon: Clock },
-                { id: 'controls', label: 'КЛАВИШИ', icon: Gamepad2 }
-              ].map((tab) => {
-                const Icon = tab.icon;
-                const isActive = settingsTab === tab.id;
-                return (
-                  <button
-                    key={tab.id}
-                    type="button"
-                    onClick={() => {
-                      setSettingsTab(tab.id as any);
-                      playUiSound(700);
-                    }}
-                    className={`flex items-center justify-center gap-2.5 py-3 rounded-xl text-xs font-mono font-bold tracking-wider transition-all cursor-pointer border ${
-                      isActive
-                        ? 'bg-[#c68a35] text-black border-[#c68a35] font-black shadow-[0_0_15px_rgba(198,138,53,0.3)]'
-                        : 'bg-[#151924] text-[#8b929e] border-white/10 hover:text-white hover:bg-[#1a202e]'
-                    }`}
-                  >
-                    <Icon className="w-4 h-4" />
-                    <span>{tab.label}</span>
-                  </button>
-                );
-              })}
+            <div className="absolute left-[64px] right-[64px] bottom-[34px] flex items-center justify-between text-[13px] text-[#a29e93]">
+              <div>Выберите стартовую точку и введите имя для выезда на трассу</div>
+              <button onClick={() => setActiveModal('none')} className="hover:text-white transition-colors cursor-pointer">Назад [Esc]</button>
+            </div>
+          </div>
+        )}
+
+        {/* 4. SETTINGS MODAL SCREEN */}
+        {activeModal === 'settings' && !isLoading && (
+          <div className="absolute inset-0 bg-[#121315] z-30 flex flex-col">
+            <div className="absolute left-[64px] right-[64px] top-[34px] h-[44px] flex items-center justify-between">
+              <div className="flex items-center gap-[16px]">
+                <button 
+                  onClick={() => setActiveModal('none')}
+                  className="flex items-center justify-center w-[44px] h-[44px] rounded-[10px] bg-[#161618] border border-white/10 hover:border-[#c9922b] transition-all cursor-pointer"
+                >
+                  <ArrowLeft className="w-5 h-5 text-[#e9e6df]" />
+                </button>
+                <span className="font-['Barlow_Condensed',sans-serif] text-[26px] font-bold uppercase tracking-[0.08em]">Настройки</span>
+              </div>
             </div>
 
-            {/* Settings Content Deck */}
-            <div className="p-8 sm:p-10 flex-1 overflow-y-auto space-y-6">
-              
-              {/* Graphics Tab */}
-              {settingsTab === 'graphics' && (
-                <div className="space-y-6">
-                  <div className="flex items-center justify-between flex-wrap gap-4 p-6 bg-[#141924] border border-white/[0.08] rounded-xl shadow-lg">
-                    <div>
-                      <div className="text-base font-bold uppercase tracking-wider text-white">Ограничение частоты кадров (FPS)</div>
-                      <div className="text-xs text-[#8b929e] mt-1 font-mono">Фиксация вертикальной синхронизации рендера</div>
-                    </div>
+            {/* Sub-navigation tabs for Settings matching reference */}
+            <div className="absolute left-[64px] top-[112px] w-[260px] flex flex-col gap-[4px]">
+              {[
+                { id: 'gfx', label: 'Графика' },
+                { id: 'sound', label: 'Звук' },
+                { id: 'ctrl', label: 'Управление' },
+                { id: 'game', label: 'Геймплей' }
+              ].map((tab) => (
+                <button
+                  key={tab.id}
+                  onClick={() => {
+                    setSettingsTab(tab.id as any);
+                    playUiSound(700);
+                  }}
+                  className={`flex items-center h-[52px] px-[20px] font-['Barlow_Condensed',sans-serif] text-[22px] font-semibold uppercase tracking-[0.08em] border-l-[3px] transition-all cursor-pointer ${
+                    settingsTab === tab.id 
+                      ? 'bg-[rgba(201,146,43,0.16)] border-l-[#c9922b] text-white' 
+                      : 'border-l-transparent text-[#cfcbc1] hover:bg-white/[0.05]'
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Settings Content Panel */}
+            <div className="absolute left-[350px] top-[112px] w-[700px] bottom-[90px] bg-[rgba(20,20,22,0.82)] border border-white/10 rounded-[14px] overflow-y-auto">
+              {settingsTab === 'gfx' && (
+                <div className="p-6 space-y-6">
+                  <div className="font-['Barlow_Condensed',sans-serif] text-[#c9922b] text-[16px] uppercase tracking-wider">Производительность и FPS</div>
+                  <div className="flex items-center justify-between py-3 border-t border-white/10">
+                    <span className="font-medium">Лимит кадров (FPS)</span>
                     <div className="flex gap-2">
                       {[30, 60, 120, 0].map((fps) => (
                         <button
                           key={fps}
-                          type="button"
                           onClick={() => {
                             onUpdateSettings({ ...settings, fpsLimit: fps });
                             playUiSound(800);
                           }}
-                          className={`px-4 py-2 rounded-lg text-xs font-mono font-bold transition-all cursor-pointer border ${
+                          className={`px-3.5 py-2 rounded-lg text-xs font-mono font-bold transition-all cursor-pointer border ${
                             settings.fpsLimit === fps
-                              ? 'bg-[#c68a35] text-black border-[#c68a35] font-black'
-                              : 'bg-white/[0.04] text-[#8b929e] border-white/10 hover:text-white'
+                              ? 'bg-[#c9922b] text-[#1a1409] border-[#c9922b]'
+                              : 'bg-white/[0.04] text-[#a29e93] border-white/10 hover:text-white'
                           }`}
                         >
-                          {fps === 0 ? 'Без лимита' : `${fps} FPS`}
+                          {fps === 0 ? 'Без лимита' : `${fps}`}
                         </button>
                       ))}
                     </div>
@@ -801,76 +670,63 @@ export const MainMenu: React.FC<MainMenuProps> = ({
                 </div>
               )}
 
-              {/* Audio Tab */}
-              {settingsTab === 'audio' && (
-                <div className="space-y-6">
-                  <div className="flex items-center justify-between flex-wrap gap-4 p-6 bg-[#141924] border border-white/[0.08] rounded-xl shadow-lg">
-                    <div>
-                      <div className="text-base font-bold uppercase tracking-wider text-white">Звуковые эффекты двигателя и мира</div>
-                      <div className="text-xs text-[#8b929e] mt-1 font-mono">Шум мотора, скрип шин, переключение КПП, интерфейс</div>
-                    </div>
+              {settingsTab === 'sound' && (
+                <div className="p-6 space-y-6">
+                  <div className="font-['Barlow_Condensed',sans-serif] text-[#c9922b] text-[16px] uppercase tracking-wider">Аудиосистема</div>
+                  <div className="flex items-center justify-between py-3 border-t border-white/10">
+                    <span className="font-medium">Звуки двигателя и эффекты мира</span>
                     <button
-                      type="button"
                       onClick={() => {
                         onToggleMute();
                         playUiSound(800);
                       }}
-                      className={`px-6 py-2.5 rounded-xl text-xs font-mono font-bold transition-all cursor-pointer border ${
-                        !isMuted
-                          ? 'bg-[#c68a35] text-black border-[#c68a35] font-black'
-                          : 'bg-rose-950/60 text-rose-300 border-rose-800/40'
+                      className={`px-5 py-2.5 rounded-xl text-xs font-mono font-bold transition-all cursor-pointer border ${
+                        !isMuted ? 'bg-[#c9922b] text-[#1a1409] border-[#c9922b]' : 'bg-rose-950/60 text-rose-300 border-rose-800'
                       }`}
                     >
-                      {!isMuted ? 'Звук включен' : 'Звук заглушен'}
+                      {!isMuted ? 'Звук включен' : 'Заглушено'}
                     </button>
                   </div>
                 </div>
               )}
 
-              {/* Gameplay / World Tab */}
-              {settingsTab === 'gameplay' && (
-                <div className="space-y-6">
-                  <div className="flex items-center justify-between flex-wrap gap-4 p-6 bg-[#141924] border border-white/[0.08] rounded-xl shadow-lg">
-                    <div>
-                      <div className="text-base font-bold uppercase tracking-wider text-white">Интервал автосохранения</div>
-                      <div className="text-xs text-[#8b929e] mt-1 font-mono">Периодичность записи состояния в секундах</div>
+              {settingsTab === 'ctrl' && (
+                <div className="p-6 space-y-6">
+                  <div className="font-['Barlow_Condensed',sans-serif] text-[#c9922b] text-[16px] uppercase tracking-wider">Управление и мышь</div>
+                  <div className="py-3 border-t border-white/10 space-y-3">
+                    <div className="flex justify-between font-medium">
+                      <span>Чувствительность мыши</span>
+                      <span className="text-[#c9922b] font-mono font-bold">{settings.mouseSensitivity.toFixed(1)}x</span>
                     </div>
-                    <div className="flex gap-2">
-                      {[30, 60, 120, 300].map((sec) => (
-                        <button
-                          key={sec}
-                          type="button"
-                          onClick={() => {
-                            onUpdateSettings({ ...settings, autoSaveInterval: sec });
-                            playUiSound(800);
-                          }}
-                          className={`px-3.5 py-2 rounded-lg text-xs font-mono font-bold transition-all cursor-pointer border ${
-                            settings.autoSaveInterval === sec
-                              ? 'bg-[#c68a35] text-black border-[#c68a35] font-black'
-                              : 'bg-white/[0.04] text-[#8b929e] border-white/10 hover:text-white'
-                          }`}
-                        >
-                          {sec} сек
-                        </button>
-                      ))}
-                    </div>
+                    <input
+                      type="range"
+                      min="0.5"
+                      max="2.0"
+                      step="0.1"
+                      value={settings.mouseSensitivity}
+                      onChange={(e) => onUpdateSettings({ ...settings, mouseSensitivity: parseFloat(e.target.value) })}
+                      className="w-full accent-[#c9922b] cursor-pointer h-2 bg-[#0b0c0e] rounded-lg appearance-none"
+                    />
                   </div>
+                </div>
+              )}
 
-                  <div className="flex items-center justify-between flex-wrap gap-4 p-6 bg-[#141924] border border-white/[0.08] rounded-xl shadow-lg">
-                    <div>
-                      <div className="text-base font-bold uppercase tracking-wider text-white">Суточный ход времени</div>
-                      <div className="text-xs text-[#8b929e] mt-1 font-mono">Автоматический цикл смены дня и ночи</div>
-                    </div>
+              {settingsTab === 'game' && (
+                <div className="p-6 space-y-6">
+                  <div className="font-['Barlow_Condensed',sans-serif] text-[#c9922b] text-[16px] uppercase tracking-wider">Параметры мира</div>
+                  <div className="flex items-center justify-between py-3 border-t border-white/10">
+                    <span className="font-medium">Автосохранение</span>
+                    <span className="text-[#c9922b] font-mono">{settings.autoSaveInterval} сек</span>
+                  </div>
+                  <div className="flex items-center justify-between py-3 border-t border-white/10">
+                    <span className="font-medium">Суточный цикл времени</span>
                     <button
-                      type="button"
                       onClick={() => {
                         onUpdateSettings({ ...settings, timeAutoCycle: !settings.timeAutoCycle });
                         playUiSound(800);
                       }}
-                      className={`px-6 py-2.5 rounded-xl text-xs font-mono font-bold transition-all cursor-pointer border ${
-                        settings.timeAutoCycle
-                          ? 'bg-[#c68a35] text-black border-[#c68a35] font-black'
-                          : 'bg-white/[0.04] text-[#8b929e] border-white/10'
+                      className={`px-4 py-2 rounded-lg text-xs font-mono font-bold transition-all cursor-pointer border ${
+                        settings.timeAutoCycle ? 'bg-[#c9922b] text-[#1a1409] border-[#c9922b]' : 'bg-white/5 text-[#a29e93] border-white/10'
                       }`}
                     >
                       {settings.timeAutoCycle ? 'Активен' : 'Отключен'}
@@ -878,117 +734,16 @@ export const MainMenu: React.FC<MainMenuProps> = ({
                   </div>
                 </div>
               )}
-
-              {/* Controls Tab */}
-              {settingsTab === 'controls' && (
-                <div className="space-y-6">
-                  <div className="p-6 bg-[#141924] border border-white/[0.08] rounded-xl shadow-lg">
-                    <div className="text-base font-bold uppercase tracking-wider text-white">Чувствительность мыши</div>
-                    <div className="flex items-center gap-5 mt-4">
-                      <input
-                        type="range"
-                        min="0.5"
-                        max="2.0"
-                        step="0.1"
-                        value={settings.mouseSensitivity}
-                        onChange={(e) => onUpdateSettings({ ...settings, mouseSensitivity: parseFloat(e.target.value) })}
-                        className="w-full accent-[#c68a35] cursor-pointer h-2 bg-[#0b0c0e] rounded-lg appearance-none"
-                      />
-                      <span className="text-sm font-mono font-bold text-[#c68a35] shrink-0">{settings.mouseSensitivity.toFixed(1)}x</span>
-                    </div>
-                  </div>
-
-                  <div className="p-6 bg-[#141924] border border-white/[0.08] rounded-xl text-xs font-mono leading-relaxed text-[#8b929e] space-y-3 shadow-lg">
-                    <div><span className="text-white font-bold">W / A / S / D</span> — Движение и рулевое управление</div>
-                    <div><span className="text-white font-bold">ПРОБЕЛ</span> — Ручной стояночный тормоз</div>
-                    <div><span className="text-white font-bold">E</span> — Действие (сесть в авто, открыть дверь, капот)</div>
-                    <div><span className="text-white font-bold">L</span> — Фары • <span className="text-white font-bold">Z / C</span> — Поворотники • <span className="text-white font-bold">X</span> — Аварийка</div>
-                    <div><span className="text-white font-bold">I</span> — Инвентарь • <span className="text-white font-bold">M</span> — Карта • <span className="text-white font-bold">ESC</span> — Пауза</div>
-                  </div>
-                </div>
-              )}
-
             </div>
 
-            {/* Footer */}
-            <div className="px-8 sm:px-10 py-5 border-t border-white/10 bg-[#141924] flex items-center justify-between text-xs font-mono text-[#8b929e]">
-              <span>Параметры сохраняются автоматически</span>
-              <button
-                onClick={() => {
-                  playUiSound(500);
-                  setActiveModal('none');
-                }}
-                className="hover:text-white transition-colors cursor-pointer"
-              >
-                Закрыть [ESC]
-              </button>
+            <div className="absolute left-[64px] right-[64px] bottom-[34px] flex items-center justify-between text-[13px] text-[#a29e93]">
+              <div>Изменения применяются мгновенно</div>
+              <button onClick={() => setActiveModal('none')} className="hover:text-white transition-colors cursor-pointer">Назад [Esc]</button>
             </div>
-
           </div>
-        </div>
-      )}
+        )}
 
-      {/* LOADING SCREEN OVERLAY (BEAMNG SIMULATION STYLE) */}
-      {isLoading && (
-        <div className="fixed inset-0 z-50 flex flex-col items-center justify-center p-8 bg-[#080a0e] select-none animate-in fade-in duration-150">
-          
-          <div className="w-full max-w-lg flex flex-col items-center text-center space-y-8">
-            
-            {/* Loading Brand Emblem */}
-            <div className="flex items-center gap-4 px-7 py-3.5 bg-[#121620] border border-white/10 rounded-xl shadow-2xl">
-              <div className="w-3 h-8 bg-[#c68a35] -skew-x-12 shrink-0 shadow-[0_0_16px_rgba(198,138,53,0.6)]" />
-              <span className="text-2xl font-black italic tracking-widest text-white uppercase font-sans">
-                СТЕПНОЙ ТРАКТ 2D
-              </span>
-              <div className="w-3 h-8 bg-[#c68a35] -skew-x-12 shrink-0 shadow-[0_0_16px_rgba(198,138,53,0.6)]" />
-            </div>
-
-            {/* Stage Title */}
-            <div className="space-y-2">
-              <h3 className="text-base font-bold uppercase tracking-wider text-white font-mono">
-                {loadingStageText}
-              </h3>
-              <p className="text-xs font-mono text-[#8b929e]">
-                Подготовка транспортной симуляции...
-              </p>
-            </div>
-
-            {/* Ochre Progress Bar */}
-            <div className="w-full space-y-2.5">
-              <div className="w-full h-3 bg-[#181d2a] border border-white/10 rounded-lg overflow-hidden p-0.5">
-                <div 
-                  className="h-full bg-[#c68a35] rounded transition-all duration-300 ease-out shadow-[0_0_16px_rgba(198,138,53,0.8)]"
-                  style={{ width: `${loadingProgress}%` }}
-                />
-              </div>
-              <div className="flex justify-between text-xs font-mono text-[#8b929e]">
-                <span>ЗАГРУЗКА РЕСУРСОВ</span>
-                <span className="text-[#c68a35] font-bold">{loadingProgress}%</span>
-              </div>
-            </div>
-
-            {/* Helpful Driver Tip */}
-            <div className="p-5 bg-[#121620] border border-white/[0.08] rounded-xl text-xs font-mono text-[#8b929e] leading-relaxed max-w-md shadow-lg">
-              {LOADING_TIPS[loadingTipIndex]}
-            </div>
-
-          </div>
-
-        </div>
-      )}
-
-      {/* BOTTOM FOOTER BAR WITH SPACIOUS MARGINS */}
-      <footer className="relative z-10 px-8 py-4 flex items-center justify-between text-xs font-mono text-[#8b929e] border-t border-white/[0.08] bg-[#080a0e]/95">
-        <div>
-          <span>СТЕПНОЙ ТРАКТ 2D</span>
-          <span className="mx-2.5 text-white/20">·</span>
-          <span>ТРАНСПОРТНЫЙ СИМУЛЯТОР</span>
-        </div>
-        <div>
-          <span className="text-[#c68a35] font-bold">СБОРКА 0.33.2</span>
-        </div>
-      </footer>
-
+      </div>
     </div>
   );
 };

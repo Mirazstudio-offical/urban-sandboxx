@@ -1,5 +1,5 @@
 import { CAR_CONFIGS, canVehicleHaveHitch, createDefaultEngineState, createDefaultFuelSystem, createDefaultFluidTank, ensureVehicleFluidTank, liquidTypeToStainType, createDefaultVehicleDamage, ensureVehicleDamage, getVehicleFuelCapPosition, getVehicleAxleGeometry, isTrailerVehicle, isRoadMachinery, getVehicleDriveType, SPEED_KMH_TO_PX_S, PX_S_TO_SPEED_KMH, getLPGDefaultCapacity, cycleVehicleDiffLock, getVehicleDiffCapabilities, ensureVehicleDiffLock, getVehicleHeadlightDynamicState } from './vehicleHelpers';
-import { Building, GameWorld, InputState, Particle, Pedestrian, Player, SkidMark, Vehicle, StreetProp, FluidStainType, Roundabout, RollingStockCar, WorldWind } from './types';
+import { Building, GameWorld, InputState, Particle, Pedestrian, Player, SkidMark, Vehicle, StreetProp, FluidStainType, Roundabout, RollingStockCar, WorldWind, RoadSegment, Intersection } from './types';
 import { getBuildingLayout, constrainPlayerToInterior } from './buildingInteriors';
 import { constrainPlayerToBusInterior } from './busInteriorSystem';
 import { sound } from './audio';
@@ -28,7 +28,8 @@ import {
 import {
   ensureVehicleNodeBeam,
   stepNodeBeamSimulation,
-  applyNodeBeamImpact
+  applyNodeBeamImpact,
+  stepNodeBeamContinuousContact
 } from './nodeBeamPhysics';
 
 export { isWorldFreezing };
@@ -6665,6 +6666,203 @@ function isPointInRoadSegment(
   return dSq <= halfWidth * halfWidth;
 }
 
+type Road = RoadSegment;
+
+interface StaticSurfaceCell {
+  roads: Road[];
+  intersections: Intersection[];
+  roundabouts: any[];
+  parkings: any[];
+  sidewalks: any[];
+  driveways: any[];
+  fields: any[];
+}
+
+const SURFACE_CELL_SIZE = 500;
+let lastIndexedWorldForSurface: GameWorld | null = null;
+const surfaceSpatialGrid = new Map<number, StaticSurfaceCell>();
+
+function getSurfaceGridKey(cx: number, cy: number): number {
+  return ((cx & 0xffff) << 16) | (cy & 0xffff);
+}
+
+function getOrCreateSurfaceCell(cx: number, cy: number): StaticSurfaceCell {
+  const key = getSurfaceGridKey(cx, cy);
+  let cell = surfaceSpatialGrid.get(key);
+  if (!cell) {
+    cell = {
+      roads: [],
+      intersections: [],
+      roundabouts: [],
+      parkings: [],
+      sidewalks: [],
+      driveways: [],
+      fields: []
+    };
+    surfaceSpatialGrid.set(key, cell);
+  }
+  return cell;
+}
+
+export function ensureSurfaceSpatialIndex(world: GameWorld): void {
+  if (lastIndexedWorldForSurface === world && surfaceSpatialGrid.size > 0) {
+    return;
+  }
+  lastIndexedWorldForSurface = world;
+  surfaceSpatialGrid.clear();
+
+  // Index Roads
+  const roads = world.roads || [];
+  for (let i = 0; i < roads.length; i++) {
+    const road = roads[i];
+    const halfWidth = road.width / 2 + 10;
+    let rMinX = road._minX;
+    let rMaxX = road._maxX;
+    let rMinY = road._minY;
+    let rMaxY = road._maxY;
+
+    if (rMinX === undefined || rMaxX === undefined || rMinY === undefined || rMaxY === undefined) {
+      if (road.curvePoints && road.curvePoints.length > 0) {
+        let mx = Infinity, Mx = -Infinity, my = Infinity, My = -Infinity;
+        for (let k = 0; k < road.curvePoints.length; k++) {
+          const pt = road.curvePoints[k];
+          if (pt.x < mx) mx = pt.x;
+          if (pt.x > Mx) Mx = pt.x;
+          if (pt.y < my) my = pt.y;
+          if (pt.y > My) My = pt.y;
+        }
+        road._minX = rMinX = mx;
+        road._maxX = rMaxX = Mx;
+        road._minY = rMinY = my;
+        road._maxY = rMaxY = My;
+      } else {
+        road._minX = rMinX = Math.min(road.x1, road.x2);
+        road._maxX = rMaxX = Math.max(road.x1, road.x2);
+        road._minY = rMinY = Math.min(road.y1, road.y2);
+        road._maxY = rMaxY = Math.max(road.y1, road.y2);
+      }
+    }
+
+    const minCx = Math.floor((rMinX - halfWidth) / SURFACE_CELL_SIZE);
+    const maxCx = Math.floor((rMaxX + halfWidth) / SURFACE_CELL_SIZE);
+    const minCy = Math.floor((rMinY - halfWidth) / SURFACE_CELL_SIZE);
+    const maxCy = Math.floor((rMaxY + halfWidth) / SURFACE_CELL_SIZE);
+
+    for (let cx = minCx; cx <= maxCx; cx++) {
+      for (let cy = minCy; cy <= maxCy; cy++) {
+        getOrCreateSurfaceCell(cx, cy).roads.push(road);
+      }
+    }
+  }
+
+  // Index Intersections
+  const intersections = world.intersections || [];
+  for (let i = 0; i < intersections.length; i++) {
+    const inter = intersections[i];
+    const halfW = inter.width / 2 + 4;
+    const halfH = inter.height / 2 + 4;
+    const minCx = Math.floor((inter.x - halfW) / SURFACE_CELL_SIZE);
+    const maxCx = Math.floor((inter.x + halfW) / SURFACE_CELL_SIZE);
+    const minCy = Math.floor((inter.y - halfH) / SURFACE_CELL_SIZE);
+    const maxCy = Math.floor((inter.y + halfH) / SURFACE_CELL_SIZE);
+
+    for (let cx = minCx; cx <= maxCx; cx++) {
+      for (let cy = minCy; cy <= maxCy; cy++) {
+        getOrCreateSurfaceCell(cx, cy).intersections.push(inter);
+      }
+    }
+  }
+
+  // Index Roundabouts
+  const roundabouts = world.roundabouts || [];
+  for (let i = 0; i < roundabouts.length; i++) {
+    const rb = roundabouts[i];
+    const r = rb.radius + 6;
+    const minCx = Math.floor((rb.x - r) / SURFACE_CELL_SIZE);
+    const maxCx = Math.floor((rb.x + r) / SURFACE_CELL_SIZE);
+    const minCy = Math.floor((rb.y - r) / SURFACE_CELL_SIZE);
+    const maxCy = Math.floor((rb.y + r) / SURFACE_CELL_SIZE);
+
+    for (let cx = minCx; cx <= maxCx; cx++) {
+      for (let cy = minCy; cy <= maxCy; cy++) {
+        getOrCreateSurfaceCell(cx, cy).roundabouts.push(rb);
+      }
+    }
+  }
+
+  // Index Parkings
+  const parkings = world.parkings || [];
+  for (let i = 0; i < parkings.length; i++) {
+    const pk = parkings[i];
+    const minCx = Math.floor(pk.x / SURFACE_CELL_SIZE);
+    const maxCx = Math.floor((pk.x + pk.width) / SURFACE_CELL_SIZE);
+    const minCy = Math.floor(pk.y / SURFACE_CELL_SIZE);
+    const maxCy = Math.floor((pk.y + pk.height) / SURFACE_CELL_SIZE);
+
+    for (let cx = minCx; cx <= maxCx; cx++) {
+      for (let cy = minCy; cy <= maxCy; cy++) {
+        getOrCreateSurfaceCell(cx, cy).parkings.push(pk);
+      }
+    }
+  }
+
+  // Index Sidewalks
+  const sidewalks = world.sidewalks || [];
+  for (let i = 0; i < sidewalks.length; i++) {
+    const sw = sidewalks[i];
+    const minCx = Math.floor(sw.x / SURFACE_CELL_SIZE);
+    const maxCx = Math.floor((sw.x + sw.width) / SURFACE_CELL_SIZE);
+    const minCy = Math.floor(sw.y / SURFACE_CELL_SIZE);
+    const maxCy = Math.floor((sw.y + sw.height) / SURFACE_CELL_SIZE);
+
+    for (let cx = minCx; cx <= maxCx; cx++) {
+      for (let cy = minCy; cy <= maxCy; cy++) {
+        getOrCreateSurfaceCell(cx, cy).sidewalks.push(sw);
+      }
+    }
+  }
+
+  // Index Driveways
+  const driveways = world.driveways || [];
+  for (let i = 0; i < driveways.length; i++) {
+    const dw = driveways[i];
+    const minCx = Math.floor(dw.x / SURFACE_CELL_SIZE);
+    const maxCx = Math.floor((dw.x + dw.width) / SURFACE_CELL_SIZE);
+    const minCy = Math.floor(dw.y / SURFACE_CELL_SIZE);
+    const maxCy = Math.floor((dw.y + dw.height) / SURFACE_CELL_SIZE);
+
+    for (let cx = minCx; cx <= maxCx; cx++) {
+      for (let cy = minCy; cy <= maxCy; cy++) {
+        getOrCreateSurfaceCell(cx, cy).driveways.push(dw);
+      }
+    }
+  }
+
+  // Index Agricultural fields
+  for (let i = 0; i < AGRICULTURAL_FIELDS.length; i++) {
+    const f = AGRICULTURAL_FIELDS[i];
+    const b = f.bounds;
+    const minCx = Math.floor(b.x / SURFACE_CELL_SIZE);
+    const maxCx = Math.floor((b.x + b.width) / SURFACE_CELL_SIZE);
+    const minCy = Math.floor(b.y / SURFACE_CELL_SIZE);
+    const maxCy = Math.floor((b.y + b.height) / SURFACE_CELL_SIZE);
+
+    for (let cx = minCx; cx <= maxCx; cx++) {
+      for (let cy = minCy; cy <= maxCy; cy++) {
+        getOrCreateSurfaceCell(cx, cy).fields.push(f);
+      }
+    }
+  }
+}
+
+export function getRoadsNearPoint(world: GameWorld, px: number, py: number): Road[] {
+  ensureSurfaceSpatialIndex(world);
+  const cx = Math.floor(px / SURFACE_CELL_SIZE);
+  const cy = Math.floor(py / SURFACE_CELL_SIZE);
+  const cell = surfaceSpatialGrid.get(getSurfaceGridKey(cx, cy));
+  return cell ? cell.roads : (world.roads || []);
+}
+
 export function getSurfaceTypeAt(world: GameWorld, x: number, y: number): { type: string; grip: number; extraDrag: number } {
   // 0. Check River "Быстрица" and aquatic fluid bodies
   const riverWater = getRiverWaterAt(x, y);
@@ -6690,158 +6888,142 @@ export function getSurfaceTypeAt(world: GameWorld, x: number, y: number): { type
     return { type: isFreezing ? 'frozen_sand' : 'sand', grip: isFreezing ? 0.50 : 0.68, extraDrag: isFreezing ? 1 : 5 };
   }
 
-  // 1. Check if the point is within any road segment (including curved and diagonal highways)
-  const roads = world.roads || [];
-  for (let i = 0; i < roads.length; i++) {
-    const road = roads[i];
-    // Shoulder buffer of +6px so tires riding the edge line don't abruptly sink
-    const halfWidth = road.width / 2 + 6;
+  ensureSurfaceSpatialIndex(world);
+  const cx = Math.floor(x / SURFACE_CELL_SIZE);
+  const cy = Math.floor(y / SURFACE_CELL_SIZE);
+  const cell = surfaceSpatialGrid.get(getSurfaceGridKey(cx, cy));
 
-    // Fast bounding box test
-    let rMinX = road._minX;
-    let rMaxX = road._maxX;
-    let rMinY = road._minY;
-    let rMaxY = road._maxY;
+  if (cell) {
+    // 1. Check roads in this cell
+    const roads = cell.roads;
+    for (let i = 0; i < roads.length; i++) {
+      const road = roads[i];
+      const halfWidth = road.width / 2 + 6;
 
-    if (rMinX === undefined) {
-      if (road.curvePoints && road.curvePoints.length > 0) {
-        let mx = Infinity, Mx = -Infinity, my = Infinity, My = -Infinity;
-        for (let k = 0; k < road.curvePoints.length; k++) {
-          const pt = road.curvePoints[k];
-          if (pt.x < mx) mx = pt.x;
-          if (pt.x > Mx) Mx = pt.x;
-          if (pt.y < my) my = pt.y;
-          if (pt.y > My) My = pt.y;
-        }
-        road._minX = rMinX = mx;
-        road._maxX = rMaxX = Mx;
-        road._minY = rMinY = my;
-        road._maxY = rMaxY = My;
-      } else {
-        road._minX = rMinX = Math.min(road.x1, road.x2);
-        road._maxX = rMaxX = Math.max(road.x1, road.x2);
-        road._minY = rMinY = Math.min(road.y1, road.y2);
-        road._maxY = rMaxY = Math.max(road.y1, road.y2);
+      const rMinX = road._minX ?? Math.min(road.x1, road.x2);
+      const rMaxX = road._maxX ?? Math.max(road.x1, road.x2);
+      const rMinY = road._minY ?? Math.min(road.y1, road.y2);
+      const rMaxY = road._maxY ?? Math.max(road.y1, road.y2);
+
+      if (x < rMinX - halfWidth || x > rMaxX + halfWidth || y < rMinY - halfWidth || y > rMaxY + halfWidth) {
+        continue;
       }
-    }
 
-    if (x < rMinX - halfWidth || x > rMaxX + halfWidth || y < rMinY - halfWidth || y > rMaxY + halfWidth) {
-      continue;
-    }
+      let onThisRoad = false;
 
-    let onThisRoad = false;
+      if (road.curvePoints && road.curvePoints.length > 1) {
+        const pts = road.curvePoints;
+        const n = pts.length;
+        for (let j = 0; j < n - 1; j++) {
+          const pA = pts[j];
+          const pB = pts[j + 1];
+          const segMinX = pA.x < pB.x ? pA.x : pB.x;
+          const segMaxX = pA.x > pB.x ? pA.x : pB.x;
+          const segMinY = pA.y < pB.y ? pA.y : pB.y;
+          const segMaxY = pA.y > pB.y ? pA.y : pB.y;
 
-    if (road.curvePoints && road.curvePoints.length > 1) {
-      const pts = road.curvePoints;
-      const n = pts.length;
-      for (let j = 0; j < n - 1; j++) {
-        const pA = pts[j];
-        const pB = pts[j + 1];
-        const segMinX = pA.x < pB.x ? pA.x : pB.x;
-        const segMaxX = pA.x > pB.x ? pA.x : pB.x;
-        const segMinY = pA.y < pB.y ? pA.y : pB.y;
-        const segMaxY = pA.y > pB.y ? pA.y : pB.y;
+          if (x < segMinX - halfWidth || x > segMaxX + halfWidth || y < segMinY - halfWidth || y > segMaxY + halfWidth) {
+            continue;
+          }
 
-        if (x < segMinX - halfWidth || x > segMaxX + halfWidth || y < segMinY - halfWidth || y > segMaxY + halfWidth) {
-          continue;
+          if (isPointInRoadSegment(x, y, pA.x, pA.y, pB.x, pB.y, halfWidth)) {
+            onThisRoad = true;
+            break;
+          }
         }
-
-        if (isPointInRoadSegment(x, y, pA.x, pA.y, pB.x, pB.y, halfWidth)) {
+      } else if (road.direction === 'horizontal') {
+        const minRoadX = Math.min(road.x1, road.x2);
+        const maxRoadX = Math.max(road.x1, road.x2);
+        if (x >= minRoadX - 6 && x <= maxRoadX + 6 && y >= road.y1 - halfWidth && y <= road.y1 + halfWidth) {
           onThisRoad = true;
-          break;
+        }
+      } else if (road.direction === 'vertical') {
+        const minRoadY = Math.min(road.y1, road.y2);
+        const maxRoadY = Math.max(road.y1, road.y2);
+        if (y >= minRoadY - 6 && y <= maxRoadY + 6 && x >= road.x1 - halfWidth && x <= road.x1 + halfWidth) {
+          onThisRoad = true;
+        }
+      } else {
+        // Diagonal or angled straight segment
+        if (isPointInRoadSegment(x, y, road.x1, road.y1, road.x2, road.y2, halfWidth)) {
+          onThisRoad = true;
         }
       }
-    } else if (road.direction === 'horizontal') {
-      const minRoadX = Math.min(road.x1, road.x2);
-      const maxRoadX = Math.max(road.x1, road.x2);
-      if (x >= minRoadX - 6 && x <= maxRoadX + 6 && y >= road.y1 - halfWidth && y <= road.y1 + halfWidth) {
-        onThisRoad = true;
-      }
-    } else if (road.direction === 'vertical') {
-      const minRoadY = Math.min(road.y1, road.y2);
-      const maxRoadY = Math.max(road.y1, road.y2);
-      if (y >= minRoadY - 6 && y <= maxRoadY + 6 && x >= road.x1 - halfWidth && x <= road.x1 + halfWidth) {
-        onThisRoad = true;
-      }
-    } else {
-      // Diagonal or angled straight segment
-      if (isPointInRoadSegment(x, y, road.x1, road.y1, road.x2, road.y2, halfWidth)) {
-        onThisRoad = true;
+
+      if (onThisRoad) {
+        if (road.isDirt) return { type: 'dirt_road', grip: 0.82, extraDrag: 3 };
+        if (road.isGravel) return { type: 'gravel_road', grip: 0.88, extraDrag: 2 };
+        return { type: 'asphalt', grip: 1.00, extraDrag: 0 };
       }
     }
 
-    if (onThisRoad) {
-      if (road.isDirt) return { type: 'dirt_road', grip: 0.82, extraDrag: 3 };
-      if (road.isGravel) return { type: 'gravel_road', grip: 0.88, extraDrag: 2 };
-      return { type: 'asphalt', grip: 1.00, extraDrag: 0 };
+    // 2. Check intersections in this cell
+    const intersections = cell.intersections;
+    for (let i = 0; i < intersections.length; i++) {
+      const inter = intersections[i];
+      const halfW = inter.width / 2;
+      const halfH = inter.height / 2;
+      if (x >= inter.x - halfW && x <= inter.x + halfW && y >= inter.y - halfH && y <= inter.y + halfH) {
+        if (inter.isDirt) return { type: 'dirt_road', grip: 0.82, extraDrag: 3 };
+        if (inter.isGravel) return { type: 'gravel_road', grip: 0.88, extraDrag: 2 };
+        return { type: 'asphalt', grip: 1.00, extraDrag: 0 };
+      }
     }
-  }
 
-  // 2. Check if within any intersection
-  const intersections = world.intersections || [];
-  for (let i = 0; i < intersections.length; i++) {
-    const inter = intersections[i];
-    const halfW = inter.width / 2;
-    const halfH = inter.height / 2;
-    if (x >= inter.x - halfW && x <= inter.x + halfW && y >= inter.y - halfH && y <= inter.y + halfH) {
-      if (inter.isDirt) return { type: 'dirt_road', grip: 0.82, extraDrag: 3 };
-      if (inter.isGravel) return { type: 'gravel_road', grip: 0.88, extraDrag: 2 };
-      return { type: 'asphalt', grip: 1.00, extraDrag: 0 };
+    // 3. Check roundabouts in this cell
+    const roundabouts = cell.roundabouts;
+    for (let i = 0; i < roundabouts.length; i++) {
+      const rb = roundabouts[i];
+      const dx = x - rb.x;
+      const dy = y - rb.y;
+      const dist = Math.hypot(dx, dy);
+      if (dist <= rb.radius && dist >= rb.innerRadius) {
+        return { type: 'asphalt', grip: 1.00, extraDrag: 0 };
+      }
     }
-  }
 
-  // 3. Check roundabouts (always paved asphalt)
-  const roundabouts = world.roundabouts || [];
-  for (let i = 0; i < roundabouts.length; i++) {
-    const rb = roundabouts[i];
-    const dx = x - rb.x;
-    const dy = y - rb.y;
-    const dist = Math.hypot(dx, dy);
-    if (dist <= rb.radius && dist >= rb.innerRadius) {
-      return { type: 'asphalt', grip: 1.00, extraDrag: 0 };
+    // 4. Check parking areas & sidewalks & driveways in this cell
+    const parkings = cell.parkings;
+    for (let i = 0; i < parkings.length; i++) {
+      const pk = parkings[i];
+      if (x >= pk.x && x <= pk.x + pk.width && y >= pk.y && y <= pk.y + pk.height) {
+        return { type: 'concrete', grip: 0.98, extraDrag: 0 };
+      }
     }
-  }
 
-  // 4. Check parking areas & sidewalks & driveways (paved concrete/asphalt)
-  const parkings = world.parkings || [];
-  for (let i = 0; i < parkings.length; i++) {
-    const pk = parkings[i];
-    if (x >= pk.x && x <= pk.x + pk.width && y >= pk.y && y <= pk.y + pk.height) {
-      return { type: 'concrete', grip: 0.98, extraDrag: 0 };
+    const sidewalks = cell.sidewalks;
+    for (let i = 0; i < sidewalks.length; i++) {
+      const sw = sidewalks[i];
+      if (x >= sw.x && x <= sw.x + sw.width && y >= sw.y && y <= sw.y + sw.height) {
+        return { type: 'concrete', grip: 0.98, extraDrag: 1 };
+      }
     }
-  }
 
-  const sidewalks = world.sidewalks || [];
-  for (let i = 0; i < sidewalks.length; i++) {
-    const sw = sidewalks[i];
-    if (x >= sw.x && x <= sw.x + sw.width && y >= sw.y && y <= sw.y + sw.height) {
-      return { type: 'concrete', grip: 0.98, extraDrag: 1 };
+    const driveways = cell.driveways;
+    for (let i = 0; i < driveways.length; i++) {
+      const dw = driveways[i];
+      if (x >= dw.x && x <= dw.x + dw.width && y >= dw.y && y <= dw.y + dw.height) {
+        return { type: 'concrete', grip: 0.98, extraDrag: 0 };
+      }
     }
-  }
 
-  const driveways = world.driveways || [];
-  for (let i = 0; i < driveways.length; i++) {
-    const dw = driveways[i];
-    if (x >= dw.x && x <= dw.x + dw.width && y >= dw.y && y <= dw.y + dw.height) {
-      return { type: 'concrete', grip: 0.98, extraDrag: 0 };
-    }
-  }
-
-  // 5. Check Agricultural Fields (Plowed Arable Chernozem, Wheat, Clover, Sunflowers)
-  for (let i = 0; i < AGRICULTURAL_FIELDS.length; i++) {
-    const f = AGRICULTURAL_FIELDS[i];
-    const b = f.bounds;
-    if (x >= b.x && x <= b.x + b.width && y >= b.y && y <= b.y + b.height) {
-      if (f.type === 'plowed') {
-        return { type: 'dirt_road', grip: 0.50, extraDrag: 36 }; // Heavy plowed loam resistance
-      } else if (f.type === 'wheat') {
-        return { type: 'grass', grip: 0.58, extraDrag: 24 }; // Ripe grain crop
-      } else if (f.type === 'clover') {
-        return { type: 'grass', grip: 0.60, extraDrag: 20 }; // Clover meadow
-      } else if (f.type === 'sunflower') {
-        return { type: 'dirt_road', grip: 0.54, extraDrag: 28 }; // Sunflower rows & soil
-      } else if (f.type === 'pasture') {
-        return { type: 'grass', grip: 0.58, extraDrag: 20 }; // Grassy knoll pasture
+    // 5. Check Agricultural Fields in this cell
+    const fields = cell.fields;
+    for (let i = 0; i < fields.length; i++) {
+      const f = fields[i];
+      const b = f.bounds;
+      if (x >= b.x && x <= b.x + b.width && y >= b.y && y <= b.y + b.height) {
+        if (f.type === 'plowed') {
+          return { type: 'dirt_road', grip: 0.50, extraDrag: 36 };
+        } else if (f.type === 'wheat') {
+          return { type: 'grass', grip: 0.58, extraDrag: 24 };
+        } else if (f.type === 'clover') {
+          return { type: 'grass', grip: 0.60, extraDrag: 20 };
+        } else if (f.type === 'sunflower') {
+          return { type: 'dirt_road', grip: 0.54, extraDrag: 28 };
+        } else if (f.type === 'pasture') {
+          return { type: 'grass', grip: 0.58, extraDrag: 20 };
+        }
       }
     }
   }
@@ -9534,6 +9716,9 @@ export function updateVehiclePhysics(
     }
     const progress = c.totalDuration > 0 ? (1 - c.timer / c.totalDuration) : 1.0; // 0.0 to 1.0
 
+    // Step continuous soft-body deformation in sync with deceleration stroke
+    stepNodeBeamContinuousContact(vehicle, dt, world);
+
     // Decay sheet metal interlocking timer
     const wasInterlocking = c.interlockingTimer !== undefined && c.interlockingTimer > 0;
     if (c.interlockingTimer && c.interlockingTimer > 0) {
@@ -10188,7 +10373,9 @@ export function updateVehiclePhysics(
                 contactY: col.contactY,
                 preserveVelocity: true,
                 interlockingTimer: interlockingDuration,
-                interlockingFriction: 0.65
+                interlockingFriction: 0.65,
+                isNarrowImpact: false,
+                contactWidthPx: vehicle.width * 0.75
               };
               if (isHeavyInterlock) {
                 (vehicle.activeCrumple as any).interlockedVehicleId = other.id;
@@ -10206,7 +10393,9 @@ export function updateVehiclePhysics(
                 contactY: col.contactY,
                 preserveVelocity: true,
                 interlockingTimer: interlockingDuration,
-                interlockingFriction: 0.65
+                interlockingFriction: 0.65,
+                isNarrowImpact: false,
+                contactWidthPx: other.width * 0.75
               };
               if (isHeavyInterlock) {
                 (other.activeCrumple as any).interlockedVehicleId = vehicle.id;
@@ -10414,7 +10603,9 @@ export function updateVehiclePhysics(
               reboundSpeed: 0,
               contactX,
               contactY,
-              preserveVelocity: true
+              preserveVelocity: true,
+              isNarrowImpact: false,
+              contactWidthPx: vehicle.width
             };
           } else {
             vehicle.activeCrumple = {
@@ -10428,7 +10619,9 @@ export function updateVehiclePhysics(
               reboundSpeed: 0,
               contactX,
               contactY,
-              preserveVelocity: false
+              preserveVelocity: false,
+              isNarrowImpact: false,
+              contactWidthPx: vehicle.width
             };
           }
 
@@ -10533,7 +10726,9 @@ export function updateVehiclePhysics(
               initialTangentialSpeed: stationParts.tangential,
               reboundSpeed: rebound,
               contactX,
-              contactY
+              contactY,
+              isNarrowImpact: true,
+              contactWidthPx: 14.0
             };
 
             vehicle.x += col.normalX * col.depth;
@@ -11695,7 +11890,9 @@ export function updateBreakablePropsAndLivingWorld(world: GameWorld, player: Pla
               initialTangentialSpeed: poleParts.tangential,
               reboundSpeed: 0, // Solid concrete pole / tree: plastic wrapping with zero bounceback
               contactX,
-              contactY
+              contactY,
+              isNarrowImpact: true,
+              contactWidthPx: propContactWidthPx(hitbox, prop.angle || 0, normX, normY)
             };
 
             // First apply structural plastic deformation at contact point

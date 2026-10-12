@@ -15,7 +15,7 @@ export class TerrainRenderer {
   private static sharedBufferCanvas: HTMLCanvasElement | null = null;
   private static sharedBufferCtx: CanvasRenderingContext2D | null = null;
   private static sharedImageData: ImageData | null = null;
-  private static readonly BUFFER_SIZE = 64; // High-density 64x64 continuous sampling grid with bilinear hardware smoothing
+  private static readonly BUFFER_SIZE = 32; // Optimized 32x32 continuous sampling grid with bilinear hardware smoothing
 
   private static getSharedBuffer(): { canvas: HTMLCanvasElement; ctx: CanvasRenderingContext2D; imgData: ImageData } | null {
     if (typeof document === 'undefined') return null;
