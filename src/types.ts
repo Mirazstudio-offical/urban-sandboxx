@@ -170,6 +170,75 @@ export interface DeformVertex {
   shapeSeed?: number;
 }
 
+export type BeamNodeType =
+  | 'bumper'
+  | 'fender'
+  | 'door'
+  | 'quarter'
+  | 'pillar'
+  | 'hood'
+  | 'windshield'
+  | 'roof'
+  | 'trunk'
+  | 'engine'
+  | 'subframe'
+  | 'chassis_core';
+
+export type BeamLinkType =
+  | 'structural'
+  | 'cross'
+  | 'chassis_rail'
+  | 'support'
+  | 'latch';
+
+export interface BeamNode {
+  id: number;
+  origX: number;
+  origY: number;
+  localX: number;
+  localY: number;
+  x: number;
+  y: number;
+  offsetX?: number;
+  offsetY?: number;
+  elasticX?: number;
+  elasticY?: number;
+  vx: number;
+  vy: number;
+  fx: number;
+  fy: number;
+  mass: number;
+  plasticStrain: number;
+  group: BeamNodeType;
+  isFixed?: boolean;
+}
+
+export interface BeamLink {
+  id: number;
+  nodeA: number;
+  nodeB: number;
+  restLength: number;
+  origLength: number;
+  spring: number;
+  damp: number;
+  yieldDist: number;
+  breakDist: number;
+  broken: boolean;
+  type: BeamLinkType;
+  partTag?: 'hood' | 'front_bumper' | 'rear_bumper' | 'door_fl' | 'door_fr' | 'door_rl' | 'door_rr' | 'trunk';
+  currentStress?: number;
+  plasticDeform?: number;
+}
+
+export interface NodeBeamStructure {
+  nodes: BeamNode[];
+  beams: BeamLink[];
+  brokenBeamCount: number;
+  totalPlasticDeform: number;
+  maxStress: number;
+  lastSimTime?: number;
+}
+
 export interface ScratchMark {
   x: number; // Local car coordinate X (-halfL to +halfL)
   y: number; // Local car coordinate Y (-halfW to +halfW)
@@ -429,6 +498,9 @@ export interface VehicleDamage {
 
   // Dynamic 3D/2D mesh vertices for organic deformation
   deformedVertices?: DeformVertex[];
+
+  // BeamNG.drive-style 2D Node-Beam deformation structure
+  nodeBeam?: NodeBeamStructure;
 
   // Realistic Softbody Frame Alignment & Visual Mechanics
   frameBentAngle?: number;    // Frame twist angle drift (radians) from asymmetric impact

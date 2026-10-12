@@ -8413,6 +8413,7 @@ export default function App() {
         <CrashDiagnosticsModal
           isOpen={isCrashDiagnosticsOpen}
           onClose={() => setIsCrashDiagnosticsOpen(false)}
+          activeVehicle={worldRef.current?.vehicles?.find(v => v.id === playerRef.current?.currentVehicleId) || worldRef.current?.vehicles?.[0] || null}
           currentSnapshot={{
             timestamp: new Date().toLocaleTimeString(),
             timeMs: Date.now(),

@@ -15,6 +15,7 @@ import {
   VehicleDamage,
   VehicleDiffLockState 
 } from './types';
+import { createVehicleNodeBeamSystem } from './nodeBeamPhysics';
 
 export const SPEED_KMH_TO_PX_S = 4.4444; // 1.6x speedup for realistic screen motion (formerly 2.7778)
 export const PX_S_TO_SPEED_KMH = 0.225;  // 1 / 4.4444 (formerly 0.36)
@@ -629,11 +630,12 @@ export function createDefaultVehicleDamage(length: number = 42, width: number = 
     fuelTankBurntThrough: false,
     isFullyBurnt: false,
     scratches: [],
-    deformedVertices
+    deformedVertices,
+    nodeBeam: createVehicleNodeBeamSystem({ type: 'sedan', length, width })
   };
 }
 
-export function ensureVehicleDamage(veh: { length?: number; width?: number; damage?: VehicleDamage }): VehicleDamage {
+export function ensureVehicleDamage(veh: { length?: number; width?: number; damage?: VehicleDamage; type?: string; mass?: number }): VehicleDamage {
   const targetLen = veh.length || 42;
   const targetWid = veh.width || 20;
   if (!veh.damage) {
@@ -641,6 +643,15 @@ export function ensureVehicleDamage(veh: { length?: number; width?: number; dama
   }
 
   const dmg = veh.damage;
+  if (!dmg.nodeBeam || !Array.isArray(dmg.nodeBeam.nodes) || dmg.nodeBeam.nodes.length < 30) {
+    dmg.nodeBeam = createVehicleNodeBeamSystem({
+      type: veh.type || 'sedan',
+      length: targetLen,
+      width: targetWid,
+      mass: veh.mass
+    });
+  }
+
   if (!Array.isArray(dmg.deformedVertices) || dmg.deformedVertices.length < 24) {
     const fresh = createDefaultVehicleDamage(targetLen, targetWid);
     if (Array.isArray(dmg.deformedVertices)) {
@@ -663,7 +674,8 @@ export function ensureVehicleDamage(veh: { length?: number; width?: number; dama
     return {
       ...fresh,
       ...dmg,
-      deformedVertices: fresh.deformedVertices
+      deformedVertices: fresh.deformedVertices,
+      nodeBeam: dmg.nodeBeam || fresh.nodeBeam
     };
   }
 

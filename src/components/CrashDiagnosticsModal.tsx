@@ -5,42 +5,204 @@ import {
   AlertTriangle, 
   Check, 
   Copy, 
+  Cpu, 
   Download, 
   Flame, 
   Info, 
   Layers, 
   RefreshCw, 
+  RotateCcw, 
   Server, 
   Trash2, 
   Volume2, 
   Wrench, 
-  X 
+  X, 
+  Zap 
 } from 'lucide-react';
 import { crashLogger, LogEntry, CrashReport, TelemetrySnapshot } from '../crashLogger';
 import { performanceConfig } from '../performanceConfig';
 import { clearInteriorCanvasCache } from '../buildingInteriors';
 import { sound } from '../audio';
+import { Vehicle } from '../types';
+import { 
+  ensureVehicleNodeBeam, 
+  applyNodeBeamImpact, 
+  createVehicleNodeBeamSystem 
+} from '../nodeBeamPhysics';
 
 interface CrashDiagnosticsModalProps {
   isOpen: boolean;
   onClose: () => void;
   currentSnapshot?: TelemetrySnapshot | null;
   onEmergencyPurge?: () => void;
+  activeVehicle?: Vehicle | null;
 }
 
 export const CrashDiagnosticsModal: React.FC<CrashDiagnosticsModalProps> = ({
   isOpen,
   onClose,
   currentSnapshot,
-  onEmergencyPurge
+  onEmergencyPurge,
+  activeVehicle
 }) => {
-  const [activeTab, setActiveTab] = useState<'live' | 'logs' | 'crashes' | 'system'>('live');
+  const [activeTab, setActiveTab] = useState<'live' | 'logs' | 'crashes' | 'nodebeam' | 'system'>('live');
   const [logFilter, setLogFilter] = useState<'all' | 'error' | 'warn' | 'memory' | 'info'>('all');
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [savedCrashes, setSavedCrashes] = useState<CrashReport[]>([]);
   const [copiedToast, setCopiedToast] = useState<boolean>(false);
   const [purgeSuccess, setPurgeSuccess] = useState<boolean>(false);
   const [memoryInfo, setMemoryInfo] = useState(crashLogger.getMemoryInfo());
+  const [simTick, setSimTick] = useState<number>(0);
+  const canvasRef = React.useRef<HTMLCanvasElement | null>(null);
+
+  // Initialize nodeBeam if activeVehicle present
+  const nodeBeamSystem = activeVehicle ? ensureVehicleNodeBeam(activeVehicle) : null;
+
+  useEffect(() => {
+    if (!isOpen || activeTab !== 'nodebeam' || !nodeBeamSystem || !canvasRef.current) return;
+    const canvas = canvasRef.current;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    let animId: number;
+    const renderWireframe = () => {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      const cx = canvas.width / 2;
+      const cy = canvas.height / 2;
+      const scale = 6.8;
+
+      // Dark background grid
+      ctx.fillStyle = '#090d16';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      ctx.strokeStyle = '#1e293b';
+      ctx.lineWidth = 1;
+      const gridSize = 25;
+      for (let x = 0; x < canvas.width; x += gridSize) {
+        ctx.beginPath();
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x, canvas.height);
+        ctx.stroke();
+      }
+      for (let y = 0; y < canvas.height; y += gridSize) {
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(canvas.width, y);
+        ctx.stroke();
+      }
+
+      // Draw Center Axis
+      ctx.strokeStyle = 'rgba(71, 85, 105, 0.4)';
+      ctx.setLineDash([4, 4]);
+      ctx.beginPath();
+      ctx.moveTo(cx - 160, cy);
+      ctx.lineTo(cx + 160, cy);
+      ctx.moveTo(cx, cy - 100);
+      ctx.lineTo(cx, cy + 100);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      const nodes = nodeBeamSystem.nodes;
+      const beams = nodeBeamSystem.beams;
+
+      // Draw Beams
+      for (const b of beams) {
+        const nA = nodes[b.nodeA];
+        const nB = nodes[b.nodeB];
+        if (!nA || !nB) continue;
+
+        const x1 = cx + nA.x * scale;
+        const y1 = cy + nA.y * scale;
+        const x2 = cx + nB.x * scale;
+        const y2 = cy + nB.y * scale;
+
+        ctx.beginPath();
+        ctx.moveTo(x1, y1);
+        ctx.lineTo(x2, y2);
+
+        if (b.broken) {
+          // Snapped Beam
+          ctx.strokeStyle = 'rgba(239, 68, 68, 0.65)';
+          ctx.setLineDash([3, 4]);
+          ctx.lineWidth = 1.0;
+          ctx.stroke();
+          ctx.setLineDash([]);
+        } else {
+          // Stress-colored beam
+          const stress = b.currentStress || 0;
+          if (b.type === 'support') {
+            ctx.strokeStyle = 'rgba(56, 189, 248, 0.4)';
+            ctx.setLineDash([2, 2]);
+            ctx.lineWidth = 1.0;
+          } else if (b.type === 'chassis_rail') {
+            ctx.lineWidth = 2.4;
+            if (stress > 0.15) ctx.strokeStyle = '#ef4444';
+            else if (stress > 0.08) ctx.strokeStyle = '#f97316';
+            else if (stress > 0.03) ctx.strokeStyle = '#eab308';
+            else ctx.strokeStyle = '#38bdf8';
+          } else {
+            ctx.lineWidth = b.type === 'cross' ? 1.1 : 1.8;
+            if (stress > 0.20) ctx.strokeStyle = '#ef4444';
+            else if (stress > 0.10) ctx.strokeStyle = '#f97316';
+            else if (stress > 0.04) ctx.strokeStyle = '#eab308';
+            else ctx.strokeStyle = b.type === 'cross' ? 'rgba(52, 211, 153, 0.6)' : '#10b981';
+          }
+          ctx.stroke();
+          ctx.setLineDash([]);
+        }
+      }
+
+      // Draw Nodes
+      for (const n of nodes) {
+        const nx = cx + n.x * scale;
+        const ny = cy + n.y * scale;
+
+        let nodeColor = '#06b6d4';
+        let radius = 3.2;
+
+        if (n.group === 'engine') {
+          nodeColor = '#f59e0b';
+          radius = 5.0;
+        } else if (n.group === 'subframe') {
+          nodeColor = '#3b82f6';
+          radius = 4.2;
+        } else if (n.group === 'chassis_core') {
+          nodeColor = '#818cf8';
+          radius = 4.5;
+        } else if (n.group === 'roof') {
+          nodeColor = '#10b981';
+          radius = 3.0;
+        } else if (n.group === 'door' || n.group === 'pillar') {
+          nodeColor = '#a855f7';
+          radius = 3.4;
+        }
+
+        // Plastic yield red halo
+        if ((n.plasticStrain || 0) > 0.2) {
+          ctx.fillStyle = `rgba(239, 68, 68, ${Math.min(0.7, n.plasticStrain * 0.35)})`;
+          ctx.beginPath();
+          ctx.arc(nx, ny, radius + 4.5, 0, Math.PI * 2);
+          ctx.fill();
+        }
+
+        // Main node dot
+        ctx.fillStyle = nodeColor;
+        ctx.beginPath();
+        ctx.arc(nx, ny, radius, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Node ID label
+        ctx.fillStyle = 'rgba(203, 213, 225, 0.75)';
+        ctx.font = '8px monospace';
+        ctx.fillText(String(n.id), nx + 4, ny - 3);
+      }
+
+      animId = requestAnimationFrame(renderWireframe);
+    };
+
+    renderWireframe();
+    return () => cancelAnimationFrame(animId);
+  }, [isOpen, activeTab, simTick, activeVehicle]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -209,6 +371,23 @@ export const CrashDiagnosticsModal: React.FC<CrashDiagnosticsModalProps> = ({
           >
             <AlertOctagon className="w-3.5 h-3.5" />
             <span>Сбои и Краши ({savedCrashes.length})</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('nodebeam')}
+            className={`px-3 py-1.5 rounded-lg transition cursor-pointer flex items-center gap-1.5 ${
+              activeTab === 'nodebeam'
+                ? 'bg-indigo-600 text-white shadow-sm'
+                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+            }`}
+          >
+            <Cpu className="w-3.5 h-3.5 text-cyan-400" />
+            <span>BeamNG 2D Софтбоди</span>
+            {activeVehicle?.damage?.nodeBeam && (
+              <span className="text-[10px] px-1.5 py-0.2 rounded bg-cyan-950 text-cyan-300 font-mono border border-cyan-800">
+                {activeVehicle.damage.nodeBeam.nodes.length}N
+              </span>
+            )}
           </button>
         </div>
 
@@ -490,6 +669,245 @@ export const CrashDiagnosticsModal: React.FC<CrashDiagnosticsModalProps> = ({
                     )}
                   </div>
                 ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* TAB 4: BEAMNG 2D NODE-BEAM SOFTBODY */}
+        {activeTab === 'nodebeam' && (
+          <div className="flex-1 overflow-y-auto p-5 space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-sm font-semibold text-white flex items-center gap-2">
+                  <Cpu className="w-4 h-4 text-cyan-400" />
+                  Модель упругопластической деформации Node-Beam 2D (BeamNG.drive)
+                </h3>
+                <p className="text-xs text-slate-400">
+                  Реальная физика связей с пределом текучести (Yield Stress), разрывом балок (Break) и демпфированием
+                </p>
+              </div>
+
+              {activeVehicle && (
+                <div className="text-right">
+                  <span className="text-xs font-mono text-cyan-300 bg-cyan-950/80 px-2 py-1 rounded border border-cyan-800">
+                    {activeVehicle.nameRu || activeVehicle.type} ({(activeVehicle.mass || 1400)} кг)
+                  </span>
+                </div>
+              )}
+            </div>
+
+            {/* Wireframe Canvas */}
+            <div className="relative bg-slate-950 rounded-xl border border-slate-800 overflow-hidden flex flex-col items-center p-2">
+              <canvas
+                ref={canvasRef}
+                width={620}
+                height={260}
+                className="w-full max-w-[620px] h-[260px] rounded-lg shadow-inner"
+              />
+
+              {/* Canvas Legend */}
+              <div className="flex flex-wrap items-center justify-center gap-4 text-[10px] text-slate-400 mt-2 font-mono">
+                <span className="flex items-center gap-1.5">
+                  <span className="w-2.5 h-2.5 rounded-full bg-cyan-400" /> Бампер / Периметр
+                </span>
+                <span className="flex items-center gap-1.5">
+                  <span className="w-2.5 h-2.5 rounded-full bg-blue-500" /> Подрамник / Лонжероны
+                </span>
+                <span className="flex items-center gap-1.5">
+                  <span className="w-2.5 h-2.5 rounded-full bg-amber-500" /> Двигатель (Блок)
+                </span>
+                <span className="flex items-center gap-1.5">
+                  <span className="w-2.5 h-2.5 rounded-full bg-purple-500" /> Двери / Стойки
+                </span>
+                <span className="flex items-center gap-1.5">
+                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-400" /> Каркас крыши
+                </span>
+                <span className="flex items-center gap-1.5">
+                  <span className="w-3 h-0.5 border-t-2 border-dashed border-rose-500" /> Разрыв связи (Snap)
+                </span>
+              </div>
+            </div>
+
+            {/* Metrics Grid */}
+            {activeVehicle?.damage?.nodeBeam ? (
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+                <div className="bg-slate-950/60 border border-slate-800 rounded-xl p-3">
+                  <div className="text-slate-500 text-[10px] uppercase font-semibold">Узлы (Nodes)</div>
+                  <div className="text-lg font-bold text-cyan-400 font-mono">
+                    {activeVehicle.damage.nodeBeam.nodes.length}
+                  </div>
+                  <div className="text-[10px] text-slate-400">Точечные массы кузова</div>
+                </div>
+
+                <div className="bg-slate-950/60 border border-slate-800 rounded-xl p-3">
+                  <div className="text-slate-500 text-[10px] uppercase font-semibold">Связи (Beams)</div>
+                  <div className="text-lg font-bold text-emerald-400 font-mono">
+                    {activeVehicle.damage.nodeBeam.beams.filter(b => !b.broken).length} / {activeVehicle.damage.nodeBeam.beams.length}
+                  </div>
+                  <div className="text-[10px] text-slate-400">
+                    Разорвано: <span className="text-rose-400 font-bold">{activeVehicle.damage.nodeBeam.brokenBeamCount || 0}</span>
+                  </div>
+                </div>
+
+                <div className="bg-slate-950/60 border border-slate-800 rounded-xl p-3">
+                  <div className="text-slate-500 text-[10px] uppercase font-semibold">Смятие (Crumple)</div>
+                  <div className="text-sm font-bold text-amber-400 font-mono">
+                    F: {(activeVehicle.damage.frontCrumple || 0).toFixed(1)} px | R: {(activeVehicle.damage.rearCrumple || 0).toFixed(1)} px
+                  </div>
+                  <div className="text-[10px] text-slate-400">
+                    Бока: L: {(activeVehicle.damage.leftDent || 0).toFixed(1)} / R: {(activeVehicle.damage.rightDent || 0).toFixed(1)} px
+                  </div>
+                </div>
+
+                <div className="bg-slate-950/60 border border-slate-800 rounded-xl p-3">
+                  <div className="text-slate-500 text-[10px] uppercase font-semibold">Геометрия рамы</div>
+                  <div className="text-sm font-bold text-purple-400 font-mono">
+                    Увод: {((activeVehicle.damage.steeringDrift || 0) * 100).toFixed(0)}%
+                  </div>
+                  <div className="text-[10px] text-slate-400">
+                    {Math.abs(activeVehicle.damage.steeringDrift || 0) > 0.15 ? 'Искривление подрамника' : 'Лонжероны в допуске'}
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="p-4 bg-slate-950/40 border border-slate-800 rounded-xl text-center text-slate-400 text-xs">
+                Транспортное средство не выбрано. Сядьте в машину или выберите автомобиль для анализа софтбоди.
+              </div>
+            )}
+
+            {/* Test Simulation Controls */}
+            {activeVehicle && (
+              <div className="bg-slate-950/60 border border-slate-800 rounded-xl p-3">
+                <div className="text-xs font-semibold text-slate-300 mb-2 flex items-center gap-1.5">
+                  <Zap className="w-3.5 h-3.5 text-amber-400" />
+                  Лабораторные краш-тесты (Direct Impulse Injection)
+                </div>
+
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    onClick={() => {
+                      if (!activeVehicle) return;
+                      const cosA = Math.cos(activeVehicle.angle);
+                      const sinA = Math.sin(activeVehicle.angle);
+                      const halfL = activeVehicle.length / 2;
+                      applyNodeBeamImpact(
+                        activeVehicle,
+                        activeVehicle.x + cosA * halfL,
+                        activeVehicle.y + sinA * halfL,
+                        cosA,
+                        sinA,
+                        50 * 4.4444,
+                        0,
+                        {} as any,
+                        1400,
+                        true,
+                        6.4
+                      );
+                      setSimTick(t => t + 1);
+                    }}
+                    className="px-3 py-1.5 bg-rose-950/80 hover:bg-rose-900 border border-rose-700/60 text-rose-200 text-xs font-medium rounded-lg transition cursor-pointer flex items-center gap-1.5 active:scale-95"
+                  >
+                    <AlertTriangle className="w-3.5 h-3.5 text-rose-400" />
+                    Лобовой в столб (50 км/ч)
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      if (!activeVehicle) return;
+                      const cosA = Math.cos(activeVehicle.angle);
+                      const sinA = Math.sin(activeVehicle.angle);
+                      const halfW = activeVehicle.width / 2;
+                      applyNodeBeamImpact(
+                        activeVehicle,
+                        activeVehicle.x - sinA * halfW,
+                        activeVehicle.y + cosA * halfW,
+                        -sinA,
+                        cosA,
+                        45 * 4.4444,
+                        0,
+                        {} as any,
+                        1400,
+                        false,
+                        activeVehicle.length * 0.4
+                      );
+                      setSimTick(t => t + 1);
+                    }}
+                    className="px-3 py-1.5 bg-amber-950/80 hover:bg-amber-900 border border-amber-700/60 text-amber-200 text-xs font-medium rounded-lg transition cursor-pointer flex items-center gap-1.5 active:scale-95"
+                  >
+                    <AlertTriangle className="w-3.5 h-3.5 text-amber-400" />
+                    Боковой Т-бон (45 км/ч)
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      if (!activeVehicle) return;
+                      const cosA = Math.cos(activeVehicle.angle);
+                      const sinA = Math.sin(activeVehicle.angle);
+                      const halfL = activeVehicle.length / 2;
+                      applyNodeBeamImpact(
+                        activeVehicle,
+                        activeVehicle.x - cosA * halfL,
+                        activeVehicle.y - sinA * halfL,
+                        -cosA,
+                        -sinA,
+                        40 * 4.4444,
+                        0,
+                        {} as any,
+                        1400,
+                        true,
+                        activeVehicle.width
+                      );
+                      setSimTick(t => t + 1);
+                    }}
+                    className="px-3 py-1.5 bg-purple-950/80 hover:bg-purple-900 border border-purple-700/60 text-purple-200 text-xs font-medium rounded-lg transition cursor-pointer flex items-center gap-1.5 active:scale-95"
+                  >
+                    <AlertTriangle className="w-3.5 h-3.5 text-purple-400" />
+                    Задний удар (40 км/ч)
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      if (!activeVehicle) return;
+                      activeVehicle.damage.nodeBeam = createVehicleNodeBeamSystem(activeVehicle);
+                      if (activeVehicle.damage.deformedVertices) {
+                        for (const v of activeVehicle.damage.deformedVertices) {
+                          v.offsetX = 0;
+                          v.offsetY = 0;
+                          v.targetOffsetX = 0;
+                          v.targetOffsetY = 0;
+                          v.elasticX = 0;
+                          v.elasticY = 0;
+                          v.velX = 0;
+                          v.velY = 0;
+                          v.plasticStrain = 0;
+                        }
+                      }
+                      activeVehicle.damage.frontCrumple = 0;
+                      activeVehicle.damage.rearCrumple = 0;
+                      activeVehicle.damage.leftDent = 0;
+                      activeVehicle.damage.rightDent = 0;
+                      activeVehicle.damage.frontLeftDent = 0;
+                      activeVehicle.damage.frontRightDent = 0;
+                      activeVehicle.damage.rearLeftDent = 0;
+                      activeVehicle.damage.rearRightDent = 0;
+                      activeVehicle.damage.hoodBuckled = false;
+                      activeVehicle.damage.hoodDetached = false;
+                      activeVehicle.damage.frontBumperDetached = false;
+                      activeVehicle.damage.rearBumperDetached = false;
+                      activeVehicle.damage.bumperSagLeft = 0;
+                      activeVehicle.damage.bumperSagRight = 0;
+                      activeVehicle.damage.steeringDrift = 0;
+                      activeVehicle.damage.frameBentAngle = 0;
+                      activeVehicle.damage.wheelRubResistance = 0;
+                      setSimTick(t => t + 1);
+                    }}
+                    className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-xs font-medium rounded-lg transition cursor-pointer flex items-center gap-1.5 ml-auto active:scale-95"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5" />
+                    Сбросить в завод (Reset)
+                  </button>
+                </div>
               </div>
             )}
           </div>
