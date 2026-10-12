@@ -1814,6 +1814,33 @@ export function emitBeamNGCrashParticles(
   }
 }
 
+function subdivideNodes(car: Vehicle) {
+  if (!car.damage?.deformedVertices) return;
+  const verts = car.damage.deformedVertices;
+  if (verts.length >= 64) return;
+
+  for (let i = 0; i < verts.length; i++) {
+    const nextIdx = (i + 1) % verts.length;
+    const v1 = verts[i];
+    const v2 = verts[nextIdx];
+
+    if ((v1.plasticStrain || 0) > 1.2 || (v2.plasticStrain || 0) > 1.2) {
+      const newNode: any = {
+        localX: (v1.localX + v2.localX) / 2,
+        localY: (v1.localY + v2.localY) / 2,
+        offsetX: (v1.offsetX + v2.offsetX) / 2,
+        offsetY: (v1.offsetY + v2.offsetY) / 2,
+        targetOffsetX: ((v1.targetOffsetX || 0) + (v2.targetOffsetX || 0)) / 2,
+        targetOffsetY: ((v1.targetOffsetY || 0) + (v2.targetOffsetY || 0)) / 2,
+        plasticStrain: 0,
+        structuralType: v1.structuralType
+      };
+      verts.splice(i + 1, 0, newNode);
+      i++;
+    }
+  }
+}
+
 // --- DYNAMIC DAMAGE & DEFORMATION APPLICATION ---
 export function applyVehicleDamageAndDeformation(
   car: Vehicle,
@@ -1828,6 +1855,7 @@ export function applyVehicleDamageAndDeformation(
   contactWidthPx?: number
 ) {
   car.damage = ensureVehicleDamage(car);
+  subdivideNodes(car);
   if (!car.engineState) {
     car.engineState = createDefaultEngineState(car.type);
   }
@@ -1979,6 +2007,17 @@ export function applyVehicleDamageAndDeformation(
     let impulseX = -localX / contactDist;
     let impulseY = -localY / contactDist;
 
+    // Normal smoothing (temporal EMA)
+    if (car.damage.lastNormalX !== undefined) {
+      impulseX = impulseX * 0.7 + (car.damage.lastNormalX || 0) * 0.3;
+      impulseY = impulseY * 0.7 + (car.damage.lastNormalY || 0) * 0.3;
+      const len = Math.hypot(impulseX, impulseY) || 1;
+      impulseX /= len;
+      impulseY /= len;
+    }
+    car.damage.lastNormalX = impulseX;
+    car.damage.lastNormalY = impulseY;
+
     // Add tangential scrape component if scraping along surface
     if (scrapeSpeed > 8) {
       const tangentX = -impulseY;
@@ -2056,10 +2095,6 @@ export function applyVehicleDamageAndDeformation(
 
       v.targetOffsetX = newTargetX;
       v.targetOffsetY = newTargetY;
-      // Progressive displacement step for smooth, tactile collision feedback
-      const stepRatio = isExtremeStriker ? 0.30 : 0.15;
-      v.offsetX = v.offsetX + (newTargetX - v.offsetX) * stepRatio;
-      v.offsetY = v.offsetY + (newTargetY - v.offsetY) * stepRatio;
 
       // Hard bound check for offset values
       const curOffLen = Math.hypot(v.offsetX, v.offsetY);

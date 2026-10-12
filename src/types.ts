@@ -388,6 +388,8 @@ export interface VehicleDamage {
   frontRightDent: number;   // 0 to 10 px
   rearLeftDent: number;     // 0 to 8 px
   rearRightDent: number;    // 0 to 8 px
+  lastNormalX?: number;
+  lastNormalY?: number;
 
   // Suspension & Steering damage
   frontLeftSuspensionDamage: number;  // 0 to 1
