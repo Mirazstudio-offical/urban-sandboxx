@@ -264,13 +264,18 @@ export const MainMenu: React.FC<MainMenuProps> = ({
           background: rgba(20,20,22,.88); border: 1px solid rgba(255,255,255,.09); border-radius: 12px;
         }
         .menu-i {
-          display: flex; align-items: center; gap: 14px; min-height: 48px; padding: 10px 16px;
-          border-left: 3px solid transparent; font-size: 18px; font-weight: 600; color: #cfcbc1; width: 100%;
+          display: flex; align-items: center; gap: 10px; min-height: 38px; padding: 6px 12px;
+          border-left: 3px solid transparent; font-size: 15px; font-weight: 600; color: #cfcbc1; width: 100%;
           border-radius: 0 8px 8px 0;
           transition: all .15s; cursor: pointer; text-align: left;
         }
+        @media (min-width: 640px) {
+          .menu-i {
+            min-height: 48px; padding: 10px 16px; font-size: 18px; gap: 14px;
+          }
+        }
         .menu-i:hover {
-          background: rgba(255,255,255,.06); color: #fff; border-left-color: rgba(201,146,43,.8); padding-left: 20px;
+          background: rgba(255,255,255,.06); color: #fff; border-left-color: rgba(201,146,43,.8); padding-left: 16px;
         }
         .nav-i {
           display: flex; align-items: center; height: 42px; padding: 0 14px;
@@ -396,33 +401,33 @@ export const MainMenu: React.FC<MainMenuProps> = ({
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8 items-start">
               
               {/* Left Column: Navigation Buttons */}
-              <div className="lg:col-span-5 flex flex-col gap-2">
+              <div className="lg:col-span-5 flex flex-col gap-1.5 sm:gap-2">
                 {saves.length > 0 ? (
                   <button 
                     onClick={() => {
                       if (saves[0]) onLoadSave(saves[0].id);
                       else onResume();
                     }}
-                    className="menu-i cn bg-[rgba(201,146,43,0.18)] border-l-[#c9922b] text-white flex-col items-start justify-center gap-0.5 min-h-[68px]"
+                    className="menu-i cn bg-[rgba(201,146,43,0.18)] border-l-[#c9922b] text-white flex-col items-start justify-center gap-0.5 min-h-[52px] sm:min-h-[68px]"
                   >
                     <div className="flex items-center gap-2">
-                      <Play className="w-5 h-5 fill-current text-[#e0ab45]" />
-                      <span className="text-xl sm:text-2xl">Продолжить</span>
+                      <Play className="w-4 h-4 sm:w-5 sm:h-5 fill-current text-[#e0ab45]" />
+                      <span className="text-lg sm:text-2xl">Продолжить</span>
                     </div>
-                    <span className="mut font-normal text-xs font-sans normal-case tracking-normal pl-7 truncate max-w-[340px]">
+                    <span className="mut font-normal text-[11px] sm:text-xs font-sans normal-case tracking-normal pl-6 sm:pl-7 truncate max-w-[340px]">
                       «{saves[0].name}» — {saves[0].date}
                     </span>
                   </button>
                 ) : (
                   <button 
                     onClick={onResume}
-                    className="menu-i cn bg-[rgba(201,146,43,0.18)] border-l-[#c9922b] text-white flex-col items-start justify-center gap-0.5 min-h-[68px]"
+                    className="menu-i cn bg-[rgba(201,146,43,0.18)] border-l-[#c9922b] text-white flex-col items-start justify-center gap-0.5 min-h-[52px] sm:min-h-[68px]"
                   >
                     <div className="flex items-center gap-2">
-                      <Play className="w-5 h-5 fill-current text-[#e0ab45]" />
-                      <span className="text-xl sm:text-2xl">В игру</span>
+                      <Play className="w-4 h-4 sm:w-5 sm:h-5 fill-current text-[#e0ab45]" />
+                      <span className="text-lg sm:text-2xl">В игру</span>
                     </div>
-                    <span className="mut font-normal text-xs font-sans normal-case tracking-normal pl-7">
+                    <span className="mut font-normal text-[11px] sm:text-xs font-sans normal-case tracking-normal pl-6 sm:pl-7">
                       Центральный Парк · Свободная езда
                     </span>
                   </button>
