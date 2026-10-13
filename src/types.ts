@@ -239,6 +239,17 @@ export interface NodeBeamStructure {
   lastSimTime?: number;
   isSleeping?: boolean;
   activeTimer?: number;
+  /** Солвер уже сделал шаг в этом кадре (stepNodeBeamContinuousContact) — updateVehicleSystems второй раз не шагает. */
+  steppedThisTick?: boolean;
+  /** Упор глубины вмятины (локальные координаты кузова): узлы зоны контакта не уходят вглубь дальше depth. */
+  crushLimit?: {
+    dirX: number;   // направление «внутрь кузова», единичный вектор
+    dirY: number;
+    depth: number;  // максимально допустимое смещение узла вдоль dir от исходной позиции, px
+    cx: number;     // центр зоны контакта (локальные координаты)
+    cy: number;
+    radius: number; // радиус зоны действия по ИСХОДНЫМ позициям узлов
+  };
 }
 
 export interface ScratchMark {
@@ -623,6 +634,8 @@ export interface Vehicle {
     interlockingFriction?: number; // Plastic shear friction coefficient during entanglement
     isNarrowImpact?: boolean;
     contactWidthPx?: number;
+    /** Целевая глубина вмятины из энергетической модели (damageModel.crushFromEnergy), px. Ограничивает ход сжатия softbody. */
+    targetCrushPx?: number;
   };
 
   // AI & State

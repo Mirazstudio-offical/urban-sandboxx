@@ -2003,6 +2003,11 @@ export function applyVehicleDamageAndDeformation(
     maxZoneLengthPx: (isMachinery || isHeavyRigidTrailer) ? 3.5 : undefined
   });
 
+  // Целевая глубина вмятины для многокадрового сжатия softbody (см. stepNodeBeamContinuousContact)
+  if (car.activeCrumple) {
+    car.activeCrumple.targetCrushPx = crush.depthPx;
+  }
+
   // 1. BEAMNG.DRIVE 2D NODE-BEAM PHYSICAL DEFORMATION ENGINE
   if (dmg.deformedVertices && (impactKmh > 5.0 || isExtremeStriker || scrapeKmh > 10.0)) {
     const contactDist = Math.hypot(contactX - car.x, contactY - car.y) || 1;
@@ -2017,7 +2022,8 @@ export function applyVehicleDamageAndDeformation(
       world,
       strikerMass,
       isNarrowImpact,
-      contactWidthPx
+      contactWidthPx,
+      crush.depthPx
     );
   }
 
@@ -3055,8 +3061,14 @@ export function updateVehicleSystems(car: Vehicle, dt: number, world: GameWorld)
   const dmg = car.damage;
 
   // Step BeamNG 2D Node-Beam simulation (viscoelastic spring-dampers, plastic flow & elastic recovery)
+  // Во время активного сжатия (stepNodeBeamContinuousContact) солвер уже сделал шаг в этом кадре —
+  // второй шаг с тем же dt удваивал бы пластику и скорость отскока.
   if (dmg.nodeBeam) {
-    stepNodeBeamSimulation(dmg.nodeBeam, dt, car);
+    if (dmg.nodeBeam.steppedThisTick) {
+      dmg.nodeBeam.steppedThisTick = false;
+    } else {
+      stepNodeBeamSimulation(dmg.nodeBeam, dt, car);
+    }
   }
 
   // Trailers do not have engines, fuel systems, radiators, or internal thermal/fire mechanics
