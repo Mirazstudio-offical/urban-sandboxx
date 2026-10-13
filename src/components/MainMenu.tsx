@@ -305,163 +305,45 @@ export const MainMenu: React.FC<MainMenuProps> = ({
         {/* SCREEN 1: MAIN MENU (RESPONSIVE FLUID DASHBOARD) */}
         {/* ========================================================= */}
         {cur === 'main' && (
-          <main className="my-auto py-6 sm:py-8 w-full flex-1 flex flex-col justify-center">
-            <div className="grid grid-cols-1 lg:grid-cols-[380px_1fr] gap-6 lg:gap-10 items-start w-full">
-              
-              {/* Left Column: Navigation Buttons */}
-              <div className="flex flex-col gap-1.5 sm:gap-2">
+          <main className="reference-main flex-1 min-h-0 w-full relative">
+            <div className="reference-layout">
+              <nav className="reference-nav" aria-label="Главное меню">
+                <div className="reference-nav-label">ГЛАВНОЕ МЕНЮ <span>01 / 06</span></div>
                 {saves.length > 0 ? (
-                  <button 
-                    onClick={() => {
-                      if (saves[0]) onLoadSave(saves[0].id);
-                      else onResume();
-                    }}
-                    className="menu-i cn bg-[rgba(201,146,43,0.18)] border-l-[#c9922b] text-white flex-col items-start justify-center gap-0.5 min-h-[52px] sm:min-h-[68px]"
-                  >
-                    <div className="flex items-center gap-2">
-                      <Play className="w-4 h-4 sm:w-5 sm:h-5 fill-current text-[#e0ab45]" />
-                      <span className="text-lg sm:text-2xl">Продолжить</span>
-                    </div>
-                    <span className="mut font-normal text-[11px] sm:text-xs font-sans normal-case tracking-normal pl-6 sm:pl-7 truncate max-w-[340px]">
-                      «{saves[0].name}» — {saves[0].date}
-                    </span>
+                  <button onClick={() => onLoadSave(saves[0].id)} className="reference-menu-item reference-featured">
+                    <span className="reference-item-icon"><Play className="w-5 h-5 fill-current" /></span>
+                    <span className="reference-item-copy"><strong>Продолжить</strong><small>{saves[0].name}</small><em>{saves[0].date}</em></span>
+                    <ArrowRight className="reference-item-arrow w-4 h-4" />
                   </button>
                 ) : (
-                  <button 
-                    onClick={onResume}
-                    className="menu-i cn bg-[rgba(201,146,43,0.18)] border-l-[#c9922b] text-white flex-col items-start justify-center gap-0.5 min-h-[52px] sm:min-h-[68px]"
-                  >
-                    <div className="flex items-center gap-2">
-                      <Play className="w-4 h-4 sm:w-5 sm:h-5 fill-current text-[#e0ab45]" />
-                      <span className="text-lg sm:text-2xl">В игру</span>
-                    </div>
-                    <span className="mut font-normal text-[11px] sm:text-xs font-sans normal-case tracking-normal pl-6 sm:pl-7">
-                      Центральный Парк · Свободная езда
-                    </span>
+                  <button onClick={onResume} className="reference-menu-item reference-featured">
+                    <span className="reference-item-icon"><Play className="w-5 h-5 fill-current" /></span>
+                    <span className="reference-item-copy"><strong>В игру</strong><small>Свободная езда</small><em>Продолжить текущую сессию</em></span>
+                    <ArrowRight className="reference-item-arrow w-4 h-4" />
                   </button>
                 )}
+                <button onClick={() => go('new')} className="reference-menu-item"><span className="reference-item-icon"><Plus className="w-5 h-5" /></span><span className="reference-item-copy"><strong>Новая сессия</strong><small>Выбрать стартовую локацию</small></span><ArrowRight className="reference-item-arrow w-4 h-4" /></button>
+                <button onClick={() => go('saves')} className="reference-menu-item"><span className="reference-item-icon"><FolderOpen className="w-5 h-5" /></span><span className="reference-item-copy"><strong>Сохранения</strong><small>{saves.length} сохранённых сессий</small></span><ArrowRight className="reference-item-arrow w-4 h-4" /></button>
+                <button onClick={() => go('servers')} className="reference-menu-item"><span className="reference-item-icon"><Globe className="w-5 h-5" /></span><span className="reference-item-copy"><strong>Онлайн</strong><small>{servers.length ? `${servers.length} доступных комнат` : 'Играть с другими'}</small></span><ArrowRight className="reference-item-arrow w-4 h-4" /></button>
+                <button onClick={() => go('account')} className="reference-menu-item"><span className="reference-item-icon"><User className="w-5 h-5" /></span><span className="reference-item-copy"><strong>Профиль</strong><small>{playerNickname}</small></span><ArrowRight className="reference-item-arrow w-4 h-4" /></button>
+                <button onClick={() => go('settings')} className="reference-menu-item"><span className="reference-item-icon"><Settings className="w-5 h-5" /></span><span className="reference-item-copy"><strong>Настройки</strong><small>Управление симуляцией</small></span><ArrowRight className="reference-item-arrow w-4 h-4" /></button>
+                <button onClick={onResume} className="reference-exit"><LogOut className="w-4 h-4" /><span>Вернуться к управлению</span></button>
+              </nav>
 
-                <button onClick={() => go('new')} className="menu-i cn">
-                  <Plus className="w-5 h-5 text-[#c9922b]" />
-                  <span>Новая сессия</span>
-                </button>
-
-                <button onClick={() => go('saves')} className="menu-i cn">
-                  <FolderOpen className="w-5 h-5 text-[#c9922b]" />
-                  <span>Сохранения ({saves.length})</span>
-                </button>
-
-                <button onClick={() => go('servers')} className="menu-i cn">
-                  <Globe className="w-5 h-5 text-[#c9922b]" />
-                  <span>Онлайн-серверы ({servers.length})</span>
-                </button>
-
-                <button onClick={() => go('account')} className="menu-i cn">
-                  <User className="w-5 h-5 text-[#c9922b]" />
-                  <span>Профиль игрока</span>
-                </button>
-
-                <button onClick={() => go('settings')} className="menu-i cn">
-                  <Settings className="w-5 h-5 text-[#c9922b]" />
-                  <span>Настройки симуляции</span>
-                </button>
-
-                <button 
-                  onClick={onResume}
-                  className="menu-i cn mt-2 text-[#a29e93] hover:text-white"
-                >
-                  <LogOut className="w-5 h-5 text-[#a29e93]" />
-                  <span>Вернуться к управлению</span>
-                </button>
-              </div>
-
-              {/* Right Column: Dynamic Status & Info Panels */}
-              <div className="flex flex-col gap-4 w-full">
-                
-                {/* Save Slot Card */}
-                <div className="panel p-5">
-                  <div className="flex items-center justify-between pb-3 border-b border-white/10">
-                    <span className="cn text-xs font-bold text-[#c9922b] flex items-center gap-2">
-                      <FolderOpen className="w-4 h-4" />
-                      <span>{saves.length > 0 ? 'АКТИВНЫЙ СЛОТ СОХРАНЕНИЯ' : 'СОХРАНЕНИЯ МИРА'}</span>
-                    </span>
-                    <span className="mut text-xs font-mono">{saves.length} слот(ов)</span>
+              <section className="reference-feature-area">
+                <div className="reference-section-heading"><div><span className="reference-kicker">ВАШ МИР · ВАШ МАРШРУТ</span><h2>Продолжить путь</h2></div><span className="reference-live"><i /> СИМУЛЯЦИЯ ГОТОВА</span></div>
+                <article className="reference-save-card">
+                  <div className="reference-landscape" aria-hidden="true"><div className="reference-sun"/><div className="reference-ridge ridge-back"/><div className="reference-ridge ridge-front"/><div className="reference-road"/><div className="reference-landscape-tag">СТЕПНОЙ ТРАКТ 2D <span>•</span> ОТКРЫТЫЙ МИР</div></div>
+                  <div className="reference-save-content">
+                    <div className="reference-save-top"><span>ПОСЛЕДНЯЯ СЕССИЯ</span><span className="reference-save-status"><i /> {saves.length ? 'СОХРАНЕНО' : 'НОВАЯ ПОЕЗДКА'}</span></div>
+                    <h3>{saves.length > 0 ? saves[0].name : 'Свободная езда'}</h3>
+                    <p>{saves.length > 0 ? `${saves[0].streetName || 'Степной Тракт'} · ${saves[0].date}` : 'Начните новую поездку по открытому миру.'}</p>
+                    <div className="reference-stats"><div><span>ЛОКАЦИЯ</span><strong>{saves[0]?.streetName || 'Степной Тракт'}</strong></div><div><span>СОСТОЯНИЕ</span><strong>{saves[0] ? (saves[0].isInVehicle ? 'В автомобиле' : 'Пешком') : 'Готово к старту'}</strong></div><div><span>СОХРАНЕНИЙ</span><strong>{saves.length}</strong></div></div>
+                    <button onClick={() => saves.length > 0 ? onLoadSave(saves[0].id) : onResume()} className="reference-primary-action"><Play className="w-4 h-4 fill-current" /> {saves.length > 0 ? 'ПРОДОЛЖИТЬ СЕССИЮ' : 'ВОЙТИ В ИГРУ'} <ArrowRight className="w-4 h-4" /></button>
                   </div>
-
-                  {saves.length > 0 ? (
-                    <div className="pt-3.5 flex flex-col gap-3">
-                      <div className="cn text-xl sm:text-2xl font-bold text-white truncate">{saves[0].name}</div>
-                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 text-xs font-mono text-[#cfcbc1] bg-white/[0.03] p-3 rounded-lg border border-white/5">
-                        <div>
-                          <span className="text-[#a29e93] block text-[11px]">Локация:</span>
-                          <span className="font-semibold text-white truncate block">{saves[0].streetName || 'Степной Тракт'}</span>
-                        </div>
-                        <div>
-                          <span className="text-[#a29e93] block text-[11px]">Запись:</span>
-                          <span className="font-semibold text-white truncate block">{saves[0].date.split(' в ')[0]}</span>
-                        </div>
-                        <div>
-                          <span className="text-[#a29e93] block text-[11px]">Позиция:</span>
-                          <span className="font-semibold text-white">{saves[0].isInVehicle ? 'В авто' : 'Пешком'}</span>
-                        </div>
-                        <div>
-                          <span className="text-[#a29e93] block text-[11px]">Капитал:</span>
-                          <span className="font-semibold text-[#7fbf6a]">
-                            {saves[0].cash !== undefined ? `${saves[0].cash.toLocaleString()} ₽` : '0 ₽'}
-                          </span>
-                        </div>
-                      </div>
-                      <button 
-                        onClick={() => onLoadSave(saves[0].id)}
-                        className="btn btn-p w-full"
-                      >
-                        <Play className="w-4 h-4 fill-current" />
-                        <span>Загрузить последнее сохранение</span>
-                      </button>
-                    </div>
-                  ) : (
-                    <div className="pt-3.5 flex flex-col gap-2">
-                      <div className="cn text-xl font-bold text-white">Степной Тракт — 48 км открытых дорог</div>
-                      <p className="text-xs text-[#a29e93] leading-relaxed">
-                        Единый бесшовный мир с симуляцией софтбоди Node-Beam, живым трафиком, сетью АЗС, магазинами и поездами РЖД.
-                      </p>
-                      <button 
-                        onClick={() => go('new')}
-                        className="btn btn-p w-full mt-2"
-                      >
-                        <Plus className="w-4 h-4" />
-                        <span>Создать первую сессию</span>
-                      </button>
-                    </div>
-                  )}
-                </div>
-
-                {/* Online P2P Multiplayer Card */}
-                <button 
-                  onClick={() => go('servers')}
-                  className="panel p-5 block text-left cursor-pointer hover:border-[rgba(201,146,43,0.5)] transition-all"
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="cn text-xs font-bold text-[#c9922b] flex items-center gap-2">
-                      <Globe className="w-4 h-4" />
-                      <span>МУЛЬТИПЛЕЕР (P2P FIRESTORE)</span>
-                    </span>
-                    <span className={`text-xs font-mono font-bold ${servers.length > 0 ? 'text-[#7fbf6a]' : 'text-[#a29e93]'}`}>
-                      {servers.length > 0 ? 'СЕРВЕРЫ В СЕТИ' : 'КОМНАТА P2P'}
-                    </span>
-                  </div>
-                  <div className="cn text-2xl sm:text-3xl font-bold mt-2 text-white">
-                    {servers.length} {servers.length === 1 ? 'АКТИВНЫЙ СЕРВЕР' : servers.length > 1 && servers.length < 5 ? 'АКТИВНЫХ СЕРВЕРА' : 'АКТИВНЫХ СЕРВЕРОВ'}
-                  </div>
-                  <p className="mut text-xs mt-1 font-mono">
-                    {servers.length > 0 
-                      ? 'Нажмите для просмотра комнат и прямого подключения' 
-                      : 'Создайте свою комнату или подключитесь по коду сессии друга'}
-                  </p>
-                </button>
-
-              </div>
-
+                </article>
+                <button onClick={() => go('servers')} className="reference-online-card"><span className="reference-online-icon"><Globe className="w-5 h-5" /></span><span className="reference-online-copy"><small>СЕТЕВАЯ ИГРА</small><strong>Мир не заканчивается здесь</strong><em>{servers.length ? `${servers.length} доступных серверов — нажмите, чтобы подключиться` : 'Создайте комнату или подключитесь к друзьям'}</em></span><span className="reference-online-action">ОТКРЫТЬ <ArrowRight className="w-4 h-4" /></span></button>
+              </section>
             </div>
           </main>
         )}
