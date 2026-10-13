@@ -452,6 +452,33 @@ export function ensureVehicleNodeBeam(
 }
 
 /**
+ * Упор глубины вмятины: узлы зоны контакта не могут уйти вглубь кузова дальше, чем разрешает
+ * энергетическая модель (damageModel.crushFromEnergy). Без него импульс + многокадровое сжатие
+ * продавливали узлы в 2-4 раза глубже расчётной вмятины.
+ */
+function enforceCrushLimit(system: NodeBeamStructure): void {
+  const lim = system.crushLimit;
+  if (!lim) return;
+  const nodes = system.nodes;
+  for (let i = 0; i < nodes.length; i++) {
+    const n = nodes[i];
+    if (n.isFixed) continue;
+    if (Math.hypot(n.origX - lim.cx, n.origY - lim.cy) > lim.radius) continue;
+    const depth = (n.x - n.origX) * lim.dirX + (n.y - n.origY) * lim.dirY;
+    if (depth > lim.depth) {
+      const excess = depth - lim.depth;
+      n.x -= lim.dirX * excess;
+      n.y -= lim.dirY * excess;
+      const vIn = n.vx * lim.dirX + n.vy * lim.dirY;
+      if (vIn > 0) {
+        n.vx -= vIn * lim.dirX;
+        n.vy -= vIn * lim.dirY;
+      }
+    }
+  }
+}
+
+/**
  * Sub-stepped BeamNG elastoplastic physics solver tick.
  * Propagates forces, yields plastic strain, snaps broken latches, and updates vehicle geometry.
  */
@@ -510,9 +537,13 @@ export function stepNodeBeamSimulation(
       }
 
       // --- ELASTOPLASTIC YIELDING (BEAMNG PLASTIC METAL FLOW) ---
-      if (absDelta > beam.yieldDist) {
+      // Листовой металл кузова необратимо сминается только при СЖАТИИ (delta < 0).
+      // Раньше текучесть работала и на растяжение: упругий отскок/волна после удара тянул балки
+      // дальше порога 0.35-0.8 px, restLength навсегда вырастал (до x8) и кузов «вытягивался».
+      // Растяжение теперь только упругое; предельное растяжение по-прежнему рвёт балку (breakDist).
+      if (delta < 0 && absDelta > beam.yieldDist) {
         const excess = absDelta - beam.yieldDist;
-        const plasticFlowRate = 16.0 * subDt;
+        const plasticFlowRate = 40.0 * subDt; // было 16: пластика отставала от хода сжатия, и упругий возврат стирал до 55% вмятины
         const shift = Math.sign(delta) * excess * Math.min(0.55, plasticFlowRate);
 
         beam.restLength += shift;
@@ -622,6 +653,8 @@ export function stepNodeBeamSimulation(
       node.elasticX = node.x - node.localX;
       node.elasticY = node.y - node.localY;
     }
+
+    enforceCrushLimit(system);
   }
 
   system.maxStress = maxStressThisTick;
@@ -661,8 +694,11 @@ export function stepNodeBeamSimulation(
     dv.offsetY = n.offsetY;
     dv.targetOffsetX = n.offsetX;
     dv.targetOffsetY = n.offsetY;
-    dv.elasticX = n.elasticX;
-    dv.elasticY = n.elasticY;
+    // offsetX/offsetY — это уже ПОЛНОЕ смещение узла (пластика + упругая часть). Потребители
+    // (renderer.ts, physics.ts) складывают localX + offsetX + elasticX, поэтому упругую часть
+    // отдаём нулём: иначе она учитывалась дважды и фигура рисовалась «растянутой/сжатой» сильнее узлов.
+    dv.elasticX = 0;
+    dv.elasticY = 0;
     dv.velX = n.vx;
     dv.velY = n.vy;
     dv.plasticStrain = n.plasticStrain;
@@ -714,7 +750,9 @@ export function applyNodeBeamImpact(
   world: GameWorld,
   strikerMass: number = 1400,
   isNarrowImpact: boolean = false,
-  contactWidthPx?: number
+  contactWidthPx?: number,
+  /** Расчётная глубина вмятины от энергетической модели, px. Если задана — ограничивает проседание узлов. */
+  crushLimitPx?: number
 ): void {
   const system = ensureVehicleNodeBeam(car);
   const nodes = system.nodes;
@@ -810,6 +848,48 @@ export function applyNodeBeamImpact(
     }
   }
 
+  // Поступательное движение кузова обрабатывает сама машина (физика твёрдого тела), поэтому
+  // узлам оставляем только ОТНОСИТЕЛЬНУЮ часть импульса. Иначе весь каркас целиком съезжает
+  // относительно закреплённого узла 29 (до 6 px после удара), что выглядит как вытянутость.
+  {
+    let sumM = 0, sumPx = 0, sumPy = 0;
+    for (let i = 0; i < nodes.length; i++) {
+      if (nodes[i].isFixed) continue;
+      sumM += nodes[i].mass;
+      sumPx += nodes[i].vx * nodes[i].mass;
+      sumPy += nodes[i].vy * nodes[i].mass;
+    }
+    if (sumM > 0) {
+      const mvx = sumPx / sumM;
+      const mvy = sumPy / sumM;
+      for (let i = 0; i < nodes.length; i++) {
+        if (nodes[i].isFixed) continue;
+        nodes[i].vx -= mvx;
+        nodes[i].vy -= mvy;
+      }
+    }
+  }
+
+  // Упор глубины: уже имеющаяся вмятина в зоне контакта + расчётная глубина этого удара
+  if (crushLimitPx !== undefined && crushLimitPx > 0) {
+    let curDepth = 0;
+    for (let i = 0; i < nodes.length; i++) {
+      if (weights[i] <= 0.3) continue;
+      const d = (nodes[i].x - nodes[i].origX) * localImpulseX + (nodes[i].y - nodes[i].origY) * localImpulseY;
+      if (d > curDepth) curDepth = d;
+    }
+    system.crushLimit = {
+      dirX: localImpulseX,
+      dirY: localImpulseY,
+      depth: curDepth + crushLimitPx * 1.15,
+      cx: localContactX,
+      cy: localContactY,
+      radius: spreadRadius * 2.2
+    };
+  } else {
+    system.crushLimit = undefined;
+  }
+
   // If activeCrumple is NOT active (e.g. manual diagnostics test or instant scrape), run burst immediately
   if (!car.activeCrumple || car.activeCrumple.timer <= 0) {
     for (let burst = 0; burst < 4; burst++) {
@@ -886,13 +966,17 @@ export function stepNodeBeamContinuousContact(
   const cosA = Math.cos(car.angle);
   const sinA = Math.sin(car.angle);
 
-  // Contact normal pointing OUT of obstacle toward car
+  // activeCrumple.normal направлена ОТ препятствия К машине (см. создание activeCrumple в physics.ts:
+  // contactX = vehicle.x - normalX * L/2, выталкивание vehicle.x += normalX * depth).
   const normX = c.normalX;
   const normY = c.normalY;
 
-  // Local impact direction vector into car interior
-  let locImpulseX = -(normX * cosA + normY * sinA);
-  let locImpulseY = -(-normX * sinA + normY * cosA);
+  // Направление «внутрь кузова» — это и есть эта нормаль, переведённая в локальные координаты машины.
+  // Раньше здесь стоял минус (знак скопирован из applyNodeBeamImpact, где нормаль идёт от машины К
+  // препятствию): узлы зоны контакта выдавливались В СТОРОНУ препятствия, вмятина «выпрямлялась»
+  // и бампер уезжал вперёд за исходное положение.
+  let locImpulseX = normX * cosA + normY * sinA;
+  let locImpulseY = -normX * sinA + normY * cosA;
   const impLen = Math.hypot(locImpulseX, locImpulseY) || 1;
   locImpulseX /= impLen;
   locImpulseY /= impLen;
@@ -910,6 +994,10 @@ export function stepNodeBeamContinuousContact(
     const isNarrow = c.isNarrowImpact ?? false;
     const penetrationRate = Math.max(10, initNormalSpeed * (1.0 - progress * 0.85));
     const deltaDisplacement = penetrationRate * dt * 0.45;
+    // Целевая глубина вмятины: из энергетической модели, иначе консервативный предел
+    const targetCrush = c.targetCrushPx !== undefined && c.targetCrushPx > 0
+      ? c.targetCrushPx
+      : halfL * 0.30;
 
     if (isNarrow) {
       // True Soft-Body Pole / Tree / Bollard Wrapping:
@@ -964,8 +1052,21 @@ export function stepNodeBeamContinuousContact(
       const localContactX = dx * cosA + dy * sinA;
       const localContactY = -dx * sinA + dy * cosA;
 
+      // Достигнутая глубина вмятины в зоне контакта (по узлам с заметным весом)
+      let achievedDepth = 0;
+      for (let i = 0; i < nodes.length; i++) {
+        const n = nodes[i];
+        if (n.isFixed) continue;
+        const d0 = Math.hypot(n.origX - localContactX, n.origY - localContactY);
+        if (d0 > spreadRadius * 1.2) continue;
+        const depth = (n.x - n.origX) * locImpulseX + (n.y - n.origY) * locImpulseY;
+        if (depth > achievedDepth) achievedDepth = depth;
+      }
+      const remainingCrush = Math.max(0, targetCrush - achievedDepth);
+
       // Progressively push contact nodes into vehicle interior
       for (let i = 0; i < nodes.length; i++) {
+        if (remainingCrush <= 0) break;
         const n = nodes[i];
         if (n.isFixed) continue;
 
@@ -975,7 +1076,7 @@ export function stepNodeBeamContinuousContact(
         const w = Math.exp(-(dist * dist) / (2 * spreadRadius * spreadRadius));
         if (w <= 0.002) continue;
 
-        const nodePush = deltaDisplacement * w;
+        const nodePush = Math.min(deltaDisplacement, remainingCrush) * w;
 
         // Nudge node position and apply compression velocity
         n.x += locImpulseX * nodePush;
@@ -988,5 +1089,7 @@ export function stepNodeBeamContinuousContact(
 
   // Step the viscoelastic elastoplastic node-beam solver
   stepNodeBeamSimulation(system, dt, car);
+  // Сообщаем updateVehicleSystems, что за этот кадр шаг уже сделан (иначе dt обрабатывался дважды)
+  system.steppedThisTick = true;
 }
 
