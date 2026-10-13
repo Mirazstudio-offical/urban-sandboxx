@@ -364,14 +364,14 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
   return (
     <div 
       id="inventory-modal-overlay"
-      className="fixed inset-0 z-50 overflow-y-auto overflow-x-hidden flex items-start sm:items-center justify-center p-1 sm:p-3 md:p-4 bg-[#0b0c0e]/85 backdrop-blur-md animate-fadeIn"
+      className="fixed inset-0 z-50 overflow-hidden flex items-center justify-center p-1 sm:p-3 md:p-4 bg-[#0b0c0e]/85 backdrop-blur-md animate-fadeIn"
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
     >
       <div 
         id="inventory-modal-window"
-        className="my-auto relative w-full max-w-5xl max-h-[94vh] sm:max-h-[90vh] bg-[#14161a] border border-[#2a2e38] rounded-[2px] shadow-2xl overflow-hidden flex flex-col"
+        className="relative w-full max-w-5xl max-h-[94vh] sm:max-h-[90vh] bg-[#14161a] border border-[#2a2e38] rounded-[2px] shadow-2xl overflow-hidden flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
         {/* HEADER BAR */}

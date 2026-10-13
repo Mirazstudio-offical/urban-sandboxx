@@ -41,8 +41,8 @@ export const PauseMenu: React.FC<PauseMenuProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto overflow-x-hidden bg-[#080a0e]/90 backdrop-blur-2xl text-[#f0f3f6] font-sans select-none p-3 sm:p-6 md:p-8 animate-in fade-in duration-200">
-      <div className="min-h-full w-full max-w-4xl mx-auto flex flex-col justify-between items-center py-2 sm:py-4 gap-4">
+    <div className="fixed inset-0 z-50 overflow-hidden bg-[#080a0e]/90 backdrop-blur-2xl text-[#f0f3f6] font-sans select-none p-3 sm:p-6 md:p-8 animate-in fade-in duration-200 flex flex-col items-center justify-center">
+      <div className="w-full max-w-4xl max-h-[92vh] flex flex-col justify-between items-center gap-4 overflow-y-auto pr-1">
       {/* Background Subtle Tech Lines */}
       <div className="absolute inset-0 pointer-events-none opacity-[0.03]">
         <svg className="w-full h-full" xmlns="http://www.w3.org/2000/svg">

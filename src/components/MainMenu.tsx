@@ -245,7 +245,7 @@ export const MainMenu: React.FC<MainMenuProps> = ({
   const selectedSave = saves.find(s => s.id === selectedSaveId) || saves[0] || null;
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto overflow-x-hidden bg-[#0d0e10] text-[#e9e6df] font-sans select-none">
+    <div className="fixed inset-0 z-50 overflow-hidden bg-[#0d0e10] text-[#e9e6df] font-sans select-none flex flex-col justify-between">
       {/* Universal Responsive Styles */}
       <style>{`
         .cn {
@@ -351,7 +351,7 @@ export const MainMenu: React.FC<MainMenuProps> = ({
       </svg>
 
       {/* Main Responsive Container */}
-      <div className="relative z-10 w-full max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-3 sm:py-6 flex flex-col min-h-screen justify-between gap-4">
+      <div className="relative z-10 w-full max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-3 sm:py-6 flex flex-col h-full justify-between gap-3 overflow-hidden">
         
         {/* TOP HEADER BAR */}
         <header className="w-full flex items-center justify-between pb-3 sm:pb-4 border-b border-white/10 shrink-0">
