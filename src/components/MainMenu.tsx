@@ -11,6 +11,7 @@ import {
   ChevronLeft, 
   Check, 
   Volume2, 
+  VolumeX, 
   Monitor, 
   Gamepad2, 
   Sliders, 
@@ -22,10 +23,39 @@ import {
   RefreshCw,
   X,
   Compass,
-  Key
+  Key,
+  Trash2,
+  MapPin,
+  Clock,
+  CloudSun,
+  Radio,
+  Users,
+  Eye,
+  Sparkles,
+  Wifi,
+  WifiOff,
+  Flame,
+  ArrowRight,
+  Sun,
+  CloudRain,
+  Cloud,
+  Snowflake,
+  Car
 } from 'lucide-react';
+import { SPAWN_LOCATIONS, SpawnLocation } from '../spawnLocations';
+import { performanceConfig, savePerformanceConfig } from '../performanceConfig';
+import { sound } from '../audio';
+import { onlineManager, OnlineStatus } from '../onlineSystem';
+import { 
+  subscribeToP2PServers, 
+  createP2PServerDoc, 
+  P2PServerRoom, 
+  auth, 
+  type User as FirebaseUser 
+} from '../firebase';
+import { WeatherType } from '../types';
 
-export interface SaveSlot {
+export interface SaveSlotData {
   id: string;
   name: string;
   date: string;
@@ -33,110 +63,111 @@ export interface SaveSlot {
   playerY: number;
   playerAngle?: number;
   isInVehicle: boolean;
-  currentVehicleId: string | null;
-  timeHour: number;
-  weather: string;
-  streetName: string;
-  calendar?: any;
+  currentVehicleId?: string | null;
+  timeHour?: number;
+  weather?: string;
+  streetName?: string;
+  cash?: number;
+  vehicles?: any[];
   season?: string;
-  gpsDestination?: any;
-  needs?: any;
-  inventory?: any;
-}
-
-export interface SpawnLocation {
-  id: string;
-  name: string;
-  nameRu: string;
-  x: number;
-  y: number;
-  description: string;
-  icon: React.ReactNode;
 }
 
 export interface MainMenuProps {
   onResume: () => void;
-  onNewGame?: (saveName: string) => void;
+  saves: SaveSlotData[];
+  onLoadSave: (saveId: string) => void;
+  onDeleteSave: (saveId: string) => void;
+  onNewGame: (options: {
+    spawnId: string;
+    saveName: string;
+    timeHour: number;
+    weather: WeatherType;
+  }) => void;
+  currentSettings: {
+    fpsLimit: number;
+    autoSaveInterval: number;
+    timeAutoCycle: boolean;
+    mouseSensitivity: number;
+  };
+  onUpdateSettings: (newSettings: any) => void;
+  currentUser?: FirebaseUser | null;
 }
 
 type ScreenType = 'main' | 'new' | 'saves' | 'servers' | 'account' | 'settings' | 'notif' | 'create';
 
-const MAPS = [
-  ['Каньон', 'Серпантины, 94 км дорог', 'm1'],
-  ['Побережье', 'Скоростные трассы', 'm2'],
-  ['Северный лес', 'Грунтовки и лесовозы', 'm3'],
-  ['Город', 'Плотный трафик', 'm4'],
-  ['Перевал', 'Горы, снег, туман', 'm5'],
-  ['Солончак', 'Открытое пространство', 'm6'],
-  ['Полигон', 'Тесты и трюки', 'm7'],
-  ['Остров', 'Побережье и бездорожье', 'm8']
-];
-
-const SAVES = [
-  ['Серпантин · утро', 'Каньон', '14 ч 20 мин', '2 ч назад', 'm1'],
-  ['Дорога вдоль берега', 'Побережье', '31 ч 05 мин', 'Вчера', 'm2'],
-  ['Лесовоз · испытания', 'Северный лес', '8 ч 40 мин', '3 дня назад', 'm3'],
-  ['Ночной город', 'Город', '19 ч 15 мин', '5 дней назад', 'm4'],
-  ['Зимний перевал', 'Перевал', '6 ч 10 мин', '12 окт', 'm5'],
-  ['Рекорд скорости', 'Солончак', '3 ч 55 мин', '2 окт', 'm6'],
-  ['Остров · отпуск', 'Остров', '11 ч 30 мин', '28 сен', 'm8']
-];
-
-const SRV: [string, string, string, number, number, number, number, number, string, string][] = [
-  ['Перевал · свободная езда', 'Alex_Dune', 'Перевал', 14, 24, 32, 0, 1, 'm5', 'Спокойная езда по серпантину без ограничений. Столкновения включены, без ночного режима.'],
-  ['Дрифт-площадка №2', 'driftclub', 'Полигон', 22, 32, 41, 0, 0, 'm7', 'Открытая площадка для дрифта. Новичкам рады, правила в чате.'],
-  ['Каньон: ралли-вечер', 'MariaK', 'Каньон', 8, 16, 55, 1, 0, 'm1', 'Закрытая гонка по каньону на закате. Вход по паролю от хоста.'],
-  ['Город · неспешная езда', 'night_cruise', 'Город', 31, 32, 78, 0, 0, 'm4', 'Ночные покатушки по городу. Сервер почти полон.'],
-  ['Грузовики и бездорожье', 'heavy_duty', 'Солончак', 5, 20, 92, 0, 0, 'm6', 'Тяжелая техника, груз и свободные просторы.'],
-  ['Тест подвески (моды)', 'lab_rat', 'Полигон', 3, 8, 104, 1, 0, 'm7', 'Лаборатория для тестов. Требуются установленные моды.'],
-  ['Горный серпантин', 'pass_hunter', 'Перевал', 11, 16, 148, 0, 0, 'm5', 'Горные дороги, снег и туман. Высокий пинг для вашего региона.'],
-  ['Остров · фотосессия', 'lenscape', 'Остров', 2, 12, 163, 0, 0, 'm8', 'Тихий сервер для съёмки и скриншотов.']
-];
-
-const FR_NAMES = ['Alex_Dune', 'MariaK', 'tormoz_pro'];
-
-const BADGE_ICONS = [
-  'M12 6v6l3 2M12 3a9 9 0 1 0 0 18a9 9 0 0 0 0-18',
-  'M3 18l6-10 4 6 3-4 5 8z',
-  'M4 16h16M6 16l1-5h10l1 5M8 19h.01M16 19h.01',
-  'M12 3l2.5 6 6 .5-4.6 4 1.5 6.2L12 16.5 6.6 19.7l1.5-6.2-4.6-4 6-.5z',
-  'M7 11h10v9H7zM9 11V8a3 3 0 0 1 6 0v3',
-  'M7 11h10v9H7zM9 11V8a3 3 0 0 1 6 0v3',
-  'M7 11h10v9H7zM9 11V8a3 3 0 0 1 6 0v3',
-  'M7 11h10v9H7zM9 11V8a3 3 0 0 1 6 0v3'
-];
-
-const FRIENDS = [
-  { initial: 'А', color: '#e0ab45', name: 'Alex_Dune', status: 'На сервере «Перевал»', dot: '#7fbf6a' },
-  { initial: 'М', color: '#c9b98f', name: 'MariaK', status: 'Свободная езда', dot: '#7fbf6a' },
-  { initial: 'Т', color: '#b98a4a', name: 'tormoz_pro', status: 'В главном меню', dot: '#7fbf6a' },
-  { initial: 'Д', color: '#4a4741', name: 'Dimitri', status: 'Был в сети вчера', dot: '#5c5a54' }
-];
-
-export const MainMenu: React.FC<MainMenuProps> = ({ onResume, onNewGame }) => {
+export const MainMenu: React.FC<MainMenuProps> = ({ 
+  onResume, 
+  saves = [], 
+  onLoadSave, 
+  onDeleteSave, 
+  onNewGame,
+  currentSettings,
+  onUpdateSettings,
+  currentUser
+}) => {
   const [cur, setCur] = useState<ScreenType>('main');
   const [isTransitioning, setIsTransitioning] = useState<boolean>(false);
   const [directionBack, setDirectionBack] = useState<boolean>(false);
-  const [selectedMap, setSelectedMap] = useState<number>(0);
-  const [selectedSave, setSelectedSave] = useState<number>(0);
-  const [selectedSrv, setSelectedSrv] = useState<number>(0);
-  const [srvFilter, setSrvFilter] = useState<string>('all');
+
+  // New Game Creation States
+  const [selectedSpawnIndex, setSelectedSpawnIndex] = useState<number>(0);
+  const [spawnCategory, setSpawnCategory] = useState<string>('all');
+  const [newGameName, setNewGameName] = useState<string>('Новый рейс: ' + SPAWN_LOCATIONS[0].nameRu);
+  const [newGameTimeHour, setNewGameTimeHour] = useState<number>(12.0);
+  const [newGameWeather, setNewGameWeather] = useState<WeatherType>('clear');
+
+  // Saves Management States
+  const [selectedSaveId, setSelectedSaveId] = useState<string>(saves[0]?.id || '');
+
+  // Online & P2P Servers States
+  const [servers, setServers] = useState<P2PServerRoom[]>([]);
+  const [selectedServerId, setSelectedServerId] = useState<string>('');
+  const [directRoomCode, setDirectRoomCode] = useState<string>('');
+  const [serverSearchQuery, setServerSearchQuery] = useState<string>('');
+  
+  // Host Server Form States
+  const [hostServerName, setHostServerName] = useState<string>('Сервер ' + onlineManager.localPlayerName);
+  const [hostRoomCode, setHostRoomCode] = useState<string>('room-' + Math.floor(1000 + Math.random() * 9000));
+  const [hostMaxPlayers, setHostMaxPlayers] = useState<number>(8);
+  const [hostGameMode, setHostGameMode] = useState<string>('free_roam');
+  const [isCreatingServer, setIsCreatingServer] = useState<boolean>(false);
+
+  // Settings State (Graphics / Sound / Controls / Gameplay)
+  const [settingsTab, setSettingsTab] = useState<'set-gfx' | 'set-sound' | 'set-ctrl' | 'set-game'>('set-gfx');
+  const [perfConfig, setPerfConfig] = useState(() => ({ ...performanceConfig }));
+  const [audioMuted, setAudioMuted] = useState<boolean>(() => sound.getMuted());
+  const [masterVol, setMasterVol] = useState<number>(() => Math.round(sound.getMasterVolume() * 100));
+  const [engineVol, setEngineVol] = useState<number>(() => Math.round(sound.getEngineVolume() * 100));
+  const [localSettings, setLocalSettings] = useState(() => ({ ...currentSettings }));
+
+  // Account State
   const [accTab, setAccTab] = useState<string>('acc-profile');
-  const [settingsTab, setSettingsTab] = useState<string>('set-gfx');
-  const [newGameName, setNewGameName] = useState<string>('Каньон · первая поездка');
-  
-  // Settings state
-  const [vsync, setVsync] = useState<boolean>(true);
-  const [refl, setRefl] = useState<boolean>(true);
-  const [blur, setBlur] = useState<boolean>(false);
-  const [renderDistance, setRenderDistance] = useState<number>(1600);
-  const [brightness, setBrightness] = useState<number>(50);
+  const [playerNickname, setPlayerNickname] = useState<string>(onlineManager.localPlayerName);
+  const [nicknameSavedFeedback, setNicknameSavedFeedback] = useState<boolean>(false);
+
   const [scale, setScale] = useState<number>(1);
-  
   const containerRef = useRef<HTMLDivElement>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
 
-  // Calculate scaling
+  // Keep selected save ID in sync with available saves
+  useEffect(() => {
+    if (saves.length > 0 && (!selectedSaveId || !saves.some(s => s.id === selectedSaveId))) {
+      setSelectedSaveId(saves[0].id);
+    }
+  }, [saves, selectedSaveId]);
+
+  // Subscribe to real Firestore P2P servers
+  useEffect(() => {
+    const unsub = subscribeToP2PServers((fetched) => {
+      setServers(fetched);
+      if (fetched.length > 0 && !selectedServerId) {
+        setSelectedServerId(fetched[0].id);
+      }
+    });
+    return unsub;
+  }, [selectedServerId]);
+
+  // Viewport scaling
   useEffect(() => {
     const updateScale = () => {
       if (!wrapperRef.current) return;
@@ -152,10 +183,19 @@ export const MainMenu: React.FC<MainMenuProps> = ({ onResume, onNewGame }) => {
     return () => window.removeEventListener('resize', updateScale);
   }, []);
 
-  // Update newGameName when map changes
-  useEffect(() => {
-    setNewGameName(MAPS[selectedMap][0] + ' · первая поездка');
-  }, [selectedMap]);
+  // Update default new save name when location selection changes
+  const filteredSpawnLocations = SPAWN_LOCATIONS.filter(loc => {
+    if (spawnCategory === 'all') return true;
+    return loc.category === spawnCategory;
+  });
+
+  const selectedSpawn = SPAWN_LOCATIONS[selectedSpawnIndex] || SPAWN_LOCATIONS[0];
+
+  const handleSelectSpawn = (index: number) => {
+    setSelectedSpawnIndex(index);
+    const loc = SPAWN_LOCATIONS[index] || SPAWN_LOCATIONS[0];
+    setNewGameName('Старт: ' + loc.nameRu.split('(')[0].trim());
+  };
 
   const go = (target: ScreenType, back: boolean = false) => {
     if (isTransitioning || target === cur) return;
@@ -165,10 +205,10 @@ export const MainMenu: React.FC<MainMenuProps> = ({ onResume, onNewGame }) => {
     setTimeout(() => {
       setCur(target);
       setIsTransitioning(false);
-    }, 240);
+    }, 200);
   };
 
-  // Keyboard navigation
+  // Keyboard navigation: Escape key handling
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
@@ -185,22 +225,70 @@ export const MainMenu: React.FC<MainMenuProps> = ({ onResume, onNewGame }) => {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [cur, isTransitioning, onResume]);
 
-  const calcFps = () => {
-    return 128 - (vsync ? 8 : 0) - (refl ? 22 : 0) - (blur ? 14 : 0);
+  // Helper to update performance configuration directly
+  const handleUpdatePerf = (patch: Partial<typeof perfConfig>) => {
+    const updated = { ...perfConfig, ...patch };
+    setPerfConfig(updated);
+    Object.assign(performanceConfig, updated);
+    savePerformanceConfig(performanceConfig);
   };
 
-  const getPingClass = (p: number) => {
-    return p < 60 ? 'text-[#9ac985]' : p < 120 ? 'text-[#e0ab45]' : 'text-[#d9745a]';
+  // Helper to update gameplay settings
+  const handleUpdateGameplaySettings = (patch: Partial<typeof localSettings>) => {
+    const updated = { ...localSettings, ...patch };
+    setLocalSettings(updated);
+    onUpdateSettings(updated);
   };
 
-  const filteredServers = SRV.filter((v, i) => {
-    if (srvFilter === 'fav') return !!v[7];
-    if (srvFilter === 'recent') return i < 4;
-    if (srvFilter === 'friends') return FR_NAMES.includes(v[1]);
-    return true;
+  // Connect to P2P server
+  const handleConnectToServer = (roomCode: string) => {
+    const clean = onlineManager.sanitizeRoomCode(roomCode);
+    if (!clean) return;
+    onlineManager.joinOrCreateRoom(clean, playerNickname, false);
+    onResume();
+  };
+
+  // Host new server
+  const handleCreateAndHostServer = async () => {
+    if (isCreatingServer) return;
+    setIsCreatingServer(true);
+    try {
+      const cleanRoom = onlineManager.sanitizeRoomCode(hostRoomCode);
+      await createP2PServerDoc({
+        name: hostServerName.trim() || 'Сервер ' + playerNickname,
+        peerId: cleanRoom,
+        hostUid: currentUser?.uid || 'guest_' + Date.now(),
+        hostName: playerNickname,
+        mapName: 'Степной Тракт 2D',
+        gameMode: hostGameMode,
+        isPrivate: false,
+        currentPlayers: 1,
+        maxPlayers: hostMaxPlayers,
+        status: 'active'
+      });
+      onlineManager.joinOrCreateRoom(cleanRoom, playerNickname, true);
+      onResume();
+    } catch (err) {
+      console.error('Failed to create server', err);
+      // Fallback: connect anyway in local room
+      onlineManager.joinOrCreateRoom(hostRoomCode, playerNickname, true);
+      onResume();
+    } finally {
+      setIsCreatingServer(false);
+    }
+  };
+
+  // Filtered servers
+  const filteredServers = servers.filter(s => {
+    if (!serverSearchQuery.trim()) return true;
+    const q = serverSearchQuery.toLowerCase();
+    return s.name.toLowerCase().includes(q) || s.hostName.toLowerCase().includes(q) || (s.peerId && s.peerId.toLowerCase().includes(q));
   });
 
-  const selectedServerData = SRV[selectedSrv] || SRV[0];
+  const selectedServer = servers.find(s => s.id === selectedServerId) || filteredServers[0] || null;
+
+  // Selected save
+  const selectedSave = saves.find(s => s.id === selectedSaveId) || saves[0] || null;
 
   return (
     <div 
@@ -224,16 +312,6 @@ export const MainMenu: React.FC<MainMenuProps> = ({ onResume, onNewGame }) => {
           letter-spacing: .08em;
         }
         .mut { color: #a29e93; }
-        .wipe {
-          position: absolute; left: 0; top: 0; width: 100%; height: 3px; z-index: 9;
-          opacity: 0; background: linear-gradient(90deg, transparent, #e0ab45 50%, transparent);
-        }
-        .wipe.on { animation: sweep .3s linear; }
-        @keyframes sweep { 0% { opacity: 1; transform: translateX(-100%); } 100% { opacity: 1; transform: translateX(100%); } }
-        @keyframes inF { from { opacity: 0; transform: translateX(48px); } to { opacity: 1; transform: none; } }
-        @keyframes inB { from { opacity: 0; transform: translateX(-48px); } to { opacity: 1; transform: none; } }
-        .scr-anim-in { animation: inF .35s cubic-bezier(.2,.8,.2,1) both; }
-        .scr-anim-in-back { animation: inB .35s cubic-bezier(.2,.8,.2,1) both; }
         .chip {
           display: flex; align-items: center; gap: 10px; height: 44px; padding: 0 16px; border-radius: 10px;
           background: rgba(22,22,24,.75); border: 1px solid rgba(255,255,255,.09); transition: filter .15s, border-color .15s;
@@ -244,90 +322,78 @@ export const MainMenu: React.FC<MainMenuProps> = ({ onResume, onNewGame }) => {
           background: rgba(20,20,22,.85); border: 1px solid rgba(255,255,255,.09); border-radius: 14px;
         }
         .menu-i {
-          display: flex; align-items: center; gap: 18px; height: 60px; padding: 0 22px;
-          border-left: 3px solid transparent; font-size: 26px; font-weight: 600; color: #cfcbc1; width: 100%;
+          display: flex; align-items: center; gap: 18px; height: 58px; padding: 0 22px;
+          border-left: 3px solid transparent; font-size: 24px; font-weight: 600; color: #cfcbc1; width: 100%;
           transition: background .18s, border-color .18s, color .18s, padding .18s; cursor: pointer; text-align: left;
         }
         .menu-i:hover {
           background: rgba(255,255,255,.06); color: #fff; border-left-color: rgba(201,146,43,.8); padding-left: 28px;
         }
         .nav-i {
-          display: flex; align-items: center; height: 50px; padding: 0 20px;
-          border-left: 3px solid transparent; font-size: 20px; font-weight: 600; color: #cfcbc1; width: 100%;
+          display: flex; align-items: center; height: 48px; padding: 0 18px;
+          border-left: 3px solid transparent; font-size: 18px; font-weight: 600; color: #cfcbc1; width: 100%;
           transition: background .18s, border-color .18s, color .18s, padding .18s; cursor: pointer; text-align: left;
         }
-        .nav-i:hover { background: rgba(255,255,255,.05); padding-left: 24px; }
+        .nav-i:hover { background: rgba(255,255,255,.05); padding-left: 22px; }
         .nav-on { background: rgba(201,146,43,.16); border-left-color: #c9922b; color: #fff; }
         .tab-btn {
-          height: 44px; padding: 0 20px; display: inline-flex; align-items: center; font-size: 19px; font-weight: 600;
+          height: 40px; padding: 0 18px; display: inline-flex; align-items: center; font-size: 18px; font-weight: 600;
           color: #a29e93; border-bottom: 3px solid transparent; transition: color .15s, border-color .15s; cursor: pointer;
         }
         .tab-btn:hover { color: #fff; }
         .tab-btn-on { color: #fff; border-bottom-color: #c9922b; }
         .pill-btn {
-          display: inline-flex; align-items: center; height: 34px; padding: 0 16px; border-radius: 17px;
-          background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.1); font-size: 14px; cursor: pointer;
+          display: inline-flex; align-items: center; height: 32px; padding: 0 14px; border-radius: 16px;
+          background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.1); font-size: 13px; cursor: pointer; transition: all .15s;
         }
         .pill-btn:hover { background: rgba(255,255,255,.1); }
-        .pill-btn-on { background: rgba(201,146,43,.2); border-color: rgba(201,146,43,.6); color: #f0c264; }
+        .pill-btn-on { background: rgba(201,146,43,.25); border-color: rgba(201,146,43,.7); color: #f0c264; font-weight: 600; }
         .btn {
-          display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: 46px; padding: 0 24px;
+          display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: 44px; padding: 0 22px;
           border-radius: 10px; font-weight: 600; font-size: 15px; transition: filter .15s, transform .15s; cursor: pointer;
         }
         .btn:hover { filter: brightness(1.15); transform: translateY(-1px); }
-        .btn-p { background: #c9922b; color: #1a1409; font-weight: 700; font-size: 16px; }
+        .btn-p { background: #c9922b; color: #1a1409; font-weight: 700; font-size: 15px; }
         .btn-s { background: rgba(255,255,255,.07); border: 1px solid rgba(255,255,255,.14); color: #e9e6df; }
         .card {
-          display: block; width: 100%; border-radius: 13px; overflow: hidden; background: rgba(20,20,22,.86);
-          border: 1px solid rgba(255,255,255,.09); transition: transform .2s, border-color .2s, box-shadow .2s; cursor: pointer; text-align: left;
+          display: block; width: 100%; border-radius: 12px; overflow: hidden; background: rgba(20,20,22,.86);
+          border: 1px solid rgba(255,255,255,.09); transition: transform .18s, border-color .18s, box-shadow .18s; cursor: pointer; text-align: left;
         }
-        .card:hover { transform: translateY(-3px); border-color: rgba(201,146,43,.6); }
-        .card-on { border-color: #c9922b; box-shadow: 0 0 0 1px #c9922b, 0 14px 40px rgba(201,146,43,.22); }
+        .card:hover { transform: translateY(-2px); border-color: rgba(201,146,43,.6); }
+        .card-on { border-color: #c9922b; box-shadow: 0 0 0 1px #c9922b, 0 10px 30px rgba(201,146,43,.2); }
         .tg {
-          position: relative; width: 48px; height: 26px; border-radius: 13px; background: rgba(255,255,255,.14);
-          transition: background .25s; flex: none; cursor: pointer;
+          position: relative; width: 44px; height: 24px; border-radius: 12px; background: rgba(255,255,255,.14);
+          transition: background .2s; flex: none; cursor: pointer;
         }
         .tg::after {
-          content: ''; position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; border-radius: 50%;
-          background: #cfcbc1; transition: left .25s cubic-bezier(.3,.7,.2,1), background .25s;
+          content: ''; position: absolute; top: 2px; left: 2px; width: 20px; height: 20px; border-radius: 50%;
+          background: #cfcbc1; transition: left .2s cubic-bezier(.3,.7,.2,1), background .2s;
         }
         .tg.on { background: #c9922b; }
-        .tg.on::after { left: 25px; background: #1a1409; }
-        .seg { display: flex; border-radius: 10px; overflow: hidden; border: 1px solid rgba(255,255,255,.14); }
+        .tg.on::after { left: 22px; background: #1a1409; }
+        .seg { display: flex; border-radius: 8px; overflow: hidden; border: 1px solid rgba(255,255,255,.14); }
         .seg > button {
-          flex: 1; display: flex; align-items: center; justify-content: center; height: 38px; padding: 0 16px;
-          font-size: 13px; font-weight: 600; background: rgba(255,255,255,.04); border-left: 1px solid rgba(255,255,255,.1);
-          color: #cfcbc1; cursor: pointer;
+          flex: 1; display: flex; align-items: center; justify-content: center; height: 36px; padding: 0 12px;
+          font-size: 12px; font-weight: 600; background: rgba(255,255,255,.04); border-left: 1px solid rgba(255,255,255,.1);
+          color: #cfcbc1; cursor: pointer; transition: background .15s, color .15s;
         }
         .seg > button:first-child { border-left: 0; }
-        .seg > button.on { background: #c9922b; color: #1a1409; }
+        .seg > button.on { background: #c9922b; color: #1a1409; font-weight: 700; }
         .key {
-          display: inline-flex; align-items: center; justify-content: center; min-width: 26px; height: 24px; padding: 0 8px;
-          border-radius: 6px; border: 1px solid rgba(255,255,255,.22); font-size: 12px; font-weight: 600; margin-right: 8px;
+          display: inline-flex; align-items: center; justify-content: center; min-width: 24px; height: 22px; padding: 0 6px;
+          border-radius: 5px; border: 1px solid rgba(255,255,255,.22); font-size: 11px; font-weight: 600; margin-right: 6px;
         }
-        .th { position: relative; overflow: hidden; }
-        .th::before {
-          content: ''; position: absolute; inset: 0; background: radial-gradient(circle at 70% 35%, rgba(255,200,120,.35), transparent 45%);
-        }
-        .th::after {
-          content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 55%;
-          background: rgba(8,8,9,.5); clip-path: polygon(0 60%,14% 28%,27% 52%,44% 12%,61% 48%,77% 22%,100% 54%,100% 100%,0 100%);
-        }
-        .m1 { background: linear-gradient(180deg,#3b2a1b,#c47a2a 75%); }
-        .m2 { background: linear-gradient(180deg,#1c2a33,#6b8794 75%); }
-        .m3 { background: linear-gradient(180deg,#18241b,#587a48 75%)}
-        .m4 { background: linear-gradient(180deg,#14151c,#4a4468 75%); }
-        .m5 { background: linear-gradient(180deg,#2a303a,#b3bcc6 78%); }
-        .m6 { background: linear-gradient(180deg,#3b3326,#dcc48f 78%); }
-        .m7 { background: linear-gradient(180deg,#2b2b2e,#7a6a58 78%); }
-        .m8 { background: linear-gradient(180deg,#123036,#4fa0a5 75%); }
         .row-hover {
-          display: grid; grid-template-columns: 34px 1fr 140px 90px 70px 40px; align-items: center; gap: 12px;
-          width: 100%; height: 56px; padding: 0 18px; border-left: 3px solid transparent; border-bottom: 1px solid rgba(255,255,255,.05);
+          display: grid; grid-template-columns: 28px 1fr 140px 90px 40px; align-items: center; gap: 12px;
+          width: 100%; height: 52px; padding: 0 16px; border-left: 3px solid transparent; border-bottom: 1px solid rgba(255,255,255,.05);
           transition: background .15s; cursor: pointer; text-align: left;
         }
         .row-hover:hover { background: rgba(255,255,255,.05); }
         .row-on { background: rgba(201,146,43,.15); border-left-color: #c9922b; }
+        @keyframes inF { from { opacity: 0; transform: translateX(36px); } to { opacity: 1; transform: none; } }
+        @keyframes inB { from { opacity: 0; transform: translateX(-36px); } to { opacity: 1; transform: none; } }
+        .scr-anim-in { animation: inF .28s cubic-bezier(.2,.8,.2,1) both; }
+        .scr-anim-in-back { animation: inB .28s cubic-bezier(.2,.8,.2,1) both; }
       `}</style>
 
       {/* Main 1440x900 viewport wrapper scaled smoothly */}
@@ -340,31 +406,29 @@ export const MainMenu: React.FC<MainMenuProps> = ({ onResume, onNewGame }) => {
         }}
       >
         {/* Parallax Background & Atmospheric Sky */}
-        <div className="absolute inset-0 bg-gradient-to-b from-[#17140f] via-[#2b2218] to-[#120f0b]" />
+        <div className="absolute inset-0 bg-gradient-to-b from-[#14120e] via-[#241c14] to-[#0f0d0a]" />
         
         {/* Glow */}
         <div 
-          className="absolute -left-[200px] top-0 w-[1840px] h-[900px] pointer-events-none transition-transform duration-1000"
+          className="absolute -left-[200px] top-0 w-[1840px] h-[900px] pointer-events-none"
           style={{
-            background: 'radial-gradient(900px 520px at 70% 82%, rgba(201,146,43,0.38), transparent 62%)'
+            background: 'radial-gradient(900px 520px at 70% 82%, rgba(201,146,43,0.32), transparent 62%)'
           }}
         />
 
         {/* Mountain Silhouette Layers */}
-        <svg className="absolute left-0 top-0 w-[1760px] h-[900px] pointer-events-none opacity-75" viewBox="0 0 1760 900" preserveAspectRatio="none">
-          <path d="M0 640 180 520 330 600 520 430 700 580 880 470 1080 600 1260 500 1440 590 1600 520 1760 600V900H0Z" fill="#2a1f14" />
+        <svg className="absolute left-0 top-0 w-[1760px] h-[900px] pointer-events-none opacity-60" viewBox="0 0 1760 900" preserveAspectRatio="none">
+          <path d="M0 640 180 520 330 600 520 430 700 580 880 470 1080 600 1260 500 1440 590 1600 520 1760 600V900H0Z" fill="#241a10" />
+        </svg>
+        <svg className="absolute left-0 top-0 w-[1760px] h-[900px] pointer-events-none opacity-80" viewBox="0 0 1760 900" preserveAspectRatio="none">
+          <path d="M0 720 220 610 420 700 640 590 860 710 1060 630 1260 720 1440 650 1600 700 1760 640V900H0Z" fill="#18130c" />
         </svg>
         <svg className="absolute left-0 top-0 w-[1760px] h-[900px] pointer-events-none" viewBox="0 0 1760 900" preserveAspectRatio="none">
-          <path d="M0 720 220 610 420 700 640 590 860 710 1060 630 1260 720 1440 650 1600 700 1760 640V900H0Z" fill="#1a140e" />
-        </svg>
-        <svg className="absolute left-0 top-0 w-[1760px] h-[900px] pointer-events-none" viewBox="0 0 1760 900" preserveAspectRatio="none">
-          <path d="M0 800 300 740 620 800 980 750 1440 810 1760 770V900H0Z" fill="#0f0c09" />
+          <path d="M0 800 300 740 620 800 980 750 1440 810 1760 770V900H0Z" fill="#0d0a07" />
         </svg>
 
         {/* Dark Vignette Overlay */}
-        <div className="absolute inset-0 bg-[rgba(9,9,10,0.5)] pointer-events-none" />
-        <div className="absolute left-0 right-0 top-0 h-36 bg-gradient-to-b from-black/50 to-transparent pointer-events-none" />
-        <div className="wipe on" />
+        <div className="absolute inset-0 bg-[rgba(9,9,10,0.55)] pointer-events-none" />
 
         {/* ========================================================= */}
         {/* SCREEN 1: MAIN MENU */}
@@ -376,126 +440,201 @@ export const MainMenu: React.FC<MainMenuProps> = ({ onResume, onNewGame }) => {
             {/* Header */}
             <div className="absolute left-16 right-16 top-9 h-11 flex items-center justify-between z-10">
               <div className="flex items-center gap-3.5">
-                <div className="w-9 h-9 border-2 border-[#c9922b] flex items-center justify-center -skew-x-6">
+                <div className="w-9 h-9 border-2 border-[#c9922b] flex items-center justify-center -skew-x-6 shadow-[0_0_15px_rgba(201,146,43,0.4)]">
                   <div className="w-4 h-4 bg-[#c9922b]" />
                 </div>
-                <span className="cn text-base font-bold text-white tracking-wider">МЕТРОПОЛИС 2D</span>
+                <div>
+                  <span className="cn text-base font-bold text-white tracking-wider">СТЕПНОЙ ТРАКТ 2D</span>
+                  <div className="text-[10px] text-[#a29e93] font-mono tracking-widest uppercase">HARDCORE VEHICULAR SIMULATION</div>
+                </div>
               </div>
               <div className="flex gap-3">
                 <button 
                   onClick={() => go('notif')}
                   className="chip"
-                  title="Уведомления"
+                  title="Статус системы"
                 >
-                  <Bell className="w-5 h-5 text-[#cfcbc1]" />
-                  <span className="mut text-sm font-bold">3</span>
+                  <Activity className="w-4 h-4 text-[#c9922b]" />
+                  <span className="mut text-xs font-mono font-bold">СИСТЕМА</span>
                 </button>
                 <button 
                   onClick={() => go('account')}
                   className="chip"
                 >
                   <span className="w-6 h-6 rounded-full bg-[#c9922b] text-[#1a1409] inline-flex items-center justify-center font-bold text-xs">
-                    И
+                    {playerNickname.charAt(0).toUpperCase()}
                   </span>
-                  <span className="font-medium text-sm text-white">Игрок_0417</span>
+                  <span className="font-medium text-sm text-white">{playerNickname}</span>
                 </button>
               </div>
             </div>
 
             {/* Navigation Menu Links */}
-            <div className="absolute left-16 top-44 w-[420px] flex flex-col gap-1.5 z-10">
-              <button 
-                onClick={onResume}
-                className="menu-i cn bg-[rgba(201,146,43,0.16)] border-l-[#c9922b] text-white flex-col items-start justify-center gap-0.5 h-[84px]"
-              >
-                <div className="flex items-center gap-2">
-                  <Play className="w-5 h-5 fill-current text-[#e0ab45]" />
-                  <span>Продолжить</span>
-                </div>
-                <span className="mut font-normal text-sm font-sans normal-case tracking-normal pl-7">
-                  «Серпантин · утро» — 2 ч назад
-                </span>
-              </button>
+            <div className="absolute left-16 top-40 w-[420px] flex flex-col gap-1.5 z-10">
+              {/* Primary Resume / Start Button */}
+              {saves.length > 0 ? (
+                <button 
+                  onClick={() => {
+                    if (saves[0]) {
+                      onLoadSave(saves[0].id);
+                    } else {
+                      onResume();
+                    }
+                  }}
+                  className="menu-i cn bg-[rgba(201,146,43,0.16)] border-l-[#c9922b] text-white flex-col items-start justify-center gap-0.5 h-[80px]"
+                >
+                  <div className="flex items-center gap-2">
+                    <Play className="w-5 h-5 fill-current text-[#e0ab45]" />
+                    <span>Продолжить</span>
+                  </div>
+                  <span className="mut font-normal text-xs font-sans normal-case tracking-normal pl-7 truncate max-w-[360px]">
+                    «{saves[0].name}» — {saves[0].date}
+                  </span>
+                </button>
+              ) : (
+                <button 
+                  onClick={onResume}
+                  className="menu-i cn bg-[rgba(201,146,43,0.16)] border-l-[#c9922b] text-white flex-col items-start justify-center gap-0.5 h-[80px]"
+                >
+                  <div className="flex items-center gap-2">
+                    <Play className="w-5 h-5 fill-current text-[#e0ab45]" />
+                    <span>В игру</span>
+                  </div>
+                  <span className="mut font-normal text-xs font-sans normal-case tracking-normal pl-7">
+                    Центральный Парк · Свободная езда
+                  </span>
+                </button>
+              )}
 
               <button onClick={() => go('new')} className="menu-i cn">
-                <Plus className="w-6 h-6 text-[#c9922b]" />
+                <Plus className="w-5 h-5 text-[#c9922b]" />
                 <span>Новая сессия</span>
               </button>
 
               <button onClick={() => go('saves')} className="menu-i cn">
-                <FolderOpen className="w-6 h-6 text-[#c9922b]" />
-                <span>Загрузить</span>
+                <FolderOpen className="w-5 h-5 text-[#c9922b]" />
+                <span>Сохранения ({saves.length})</span>
               </button>
 
               <button onClick={() => go('servers')} className="menu-i cn">
-                <Globe className="w-6 h-6 text-[#c9922b]" />
-                <span>Онлайн</span>
+                <Globe className="w-5 h-5 text-[#c9922b]" />
+                <span>Онлайн-серверы</span>
               </button>
 
               <button onClick={() => go('account')} className="menu-i cn">
-                <User className="w-6 h-6 text-[#c9922b]" />
-                <span>Аккаунт</span>
+                <User className="w-5 h-5 text-[#c9922b]" />
+                <span>Профиль игрока</span>
               </button>
 
               <button onClick={() => go('settings')} className="menu-i cn">
-                <Settings className="w-6 h-6 text-[#c9922b]" />
-                <span>Настройки</span>
+                <Settings className="w-5 h-5 text-[#c9922b]" />
+                <span>Настройки симуляции</span>
               </button>
 
               <button 
                 onClick={onResume}
-                className="menu-i cn mt-3.5 text-[#a29e93] hover:text-white"
+                className="menu-i cn mt-2 text-[#a29e93] hover:text-white"
               >
-                <LogOut className="w-6 h-6 text-[#a29e93]" />
-                <span>В игру</span>
+                <LogOut className="w-5 h-5 text-[#a29e93]" />
+                <span>Вернуться к управлению</span>
               </button>
             </div>
 
-            {/* Right Side: Session Card & Online Stats */}
-            <div className="panel absolute left-[880px] top-44 w-[496px] p-4 z-10">
-              <div className="th m1 h-64 rounded-xl" />
-              <div className="pt-4 px-2 pb-1">
-                <div className="cn mut text-xs">Последняя сохраненная сессия</div>
-                <div className="cn text-3xl font-bold mt-1 text-white">Серпантин · утро</div>
-                <div className="mut flex gap-6 mt-3 text-sm">
-                  <span>Карта: Каньон</span>
-                  <span>Время в игре: 14 ч 20 мин</span>
+            {/* Right Side: Real Save Snapshot Card & Online Stats */}
+            <div className="panel absolute left-[880px] top-40 w-[496px] p-5 z-10">
+              <div className="flex items-center justify-between pb-3 border-b border-white/10">
+                <div className="cn text-xs font-bold text-[#c9922b] flex items-center gap-2">
+                  <FolderOpen className="w-4 h-4" />
+                  <span>{saves.length > 0 ? 'ПОСЛЕДНЕЕ СОХРАНЕНИЕ' : 'СТАТУС МИРА'}</span>
                 </div>
-                <button 
-                  onClick={onResume}
-                  className="btn btn-p mt-5"
-                >
-                  <Play className="w-4 h-4 fill-current" />
-                  <span>Продолжить</span>
-                </button>
+                <span className="mut text-xs font-mono">{saves.length} слот(ов)</span>
               </div>
+
+              {saves.length > 0 ? (
+                <div className="pt-4 flex flex-col gap-3">
+                  <div className="cn text-2xl font-bold text-white truncate">{saves[0].name}</div>
+                  <div className="grid grid-cols-2 gap-3 text-xs font-mono text-[#cfcbc1] bg-white/[0.03] p-3 rounded-lg border border-white/5">
+                    <div>
+                      <span className="text-[#a29e93] block">Локация:</span>
+                      <span className="font-semibold text-white">{saves[0].streetName || 'Степной Тракт'}</span>
+                    </div>
+                    <div>
+                      <span className="text-[#a29e93] block">Дата записи:</span>
+                      <span className="font-semibold text-white">{saves[0].date}</span>
+                    </div>
+                    <div>
+                      <span className="text-[#a29e93] block">Статус:</span>
+                      <span className="font-semibold text-white">{saves[0].isInVehicle ? 'В автомобиле' : 'Пешком'}</span>
+                    </div>
+                    <div>
+                      <span className="text-[#a29e93] block">Капитал:</span>
+                      <span className="font-semibold text-[#7fbf6a]">{saves[0].cash !== undefined ? `${saves[0].cash.toLocaleString()} ₽` : '0 ₽'}</span>
+                    </div>
+                  </div>
+                  <button 
+                    onClick={() => onLoadSave(saves[0].id)}
+                    className="btn btn-p w-full mt-2"
+                  >
+                    <Play className="w-4 h-4 fill-current" />
+                    <span>Загрузить и продолжить</span>
+                  </button>
+                </div>
+              ) : (
+                <div className="pt-4 flex flex-col gap-3">
+                  <div className="cn text-2xl font-bold text-white">Степной Тракт — Открытый Мир</div>
+                  <p className="text-xs text-[#a29e93] leading-relaxed font-sans">
+                    Единая бесшовная карта с более чем 48 км дорог, реалистичной физикой деформации Node-Beam, живым ИИ-трафиком, сетью АЗС и интерактивными объектами.
+                  </p>
+                  <button 
+                    onClick={() => go('new')}
+                    className="btn btn-p w-full mt-2"
+                  >
+                    <Plus className="w-4 h-4" />
+                    <span>Создать первое сохранение</span>
+                  </button>
+                </div>
+              )}
             </div>
 
-            <div className="absolute left-[880px] top-[508px] w-[496px] flex gap-4 z-10">
+            {/* Online Status Card */}
+            <div className="absolute left-[880px] top-[470px] w-[496px] z-10">
               <button 
                 onClick={() => go('servers')}
-                className="panel flex-1 p-5 block text-left cursor-pointer hover:border-[rgba(201,146,43,0.5)] transition-all"
+                className="panel w-full p-5 block text-left cursor-pointer hover:border-[rgba(201,146,43,0.5)] transition-all"
               >
-                <div className="cn mut text-xs">Онлайн-мультиплеер</div>
-                <div className="cn text-4xl font-bold mt-1.5 text-[#e0ab45]">1 248</div>
-                <div className="mut text-sm mt-1">активных игроков на 128 серверах</div>
+                <div className="flex items-center justify-between">
+                  <span className="cn text-xs font-bold text-[#c9922b] flex items-center gap-2">
+                    <Globe className="w-4 h-4" />
+                    <span>СЕТЬ МУЛЬТИПЛЕЕРА (P2P FIRESTORE)</span>
+                  </span>
+                  <span className={`text-xs font-mono font-bold ${servers.length > 0 ? 'text-[#7fbf6a]' : 'text-[#a29e93]'}`}>
+                    {servers.length > 0 ? 'СЕРВЕРЫ В СЕТИ' : 'ОЖИДАНИЕ ХОСТА'}
+                  </span>
+                </div>
+                <div className="cn text-3xl font-bold mt-2 text-white">
+                  {servers.length} {servers.length === 1 ? 'АКТИВНЫЙ СЕРВЕР' : servers.length > 1 && servers.length < 5 ? 'АКТИВНЫХ СЕРВЕРА' : 'АКТИВНЫХ СЕРВЕРОВ'}
+                </div>
+                <div className="mut text-xs mt-1 font-mono">
+                  {servers.length > 0 
+                    ? 'Нажмите для просмотра открытых комнат и подключения'
+                    : 'Создайте свою комнату или подключитесь по коду друга'}
+                </div>
               </button>
             </div>
 
             {/* Bottom Hints */}
             <div className="absolute left-16 right-16 bottom-8 flex items-center justify-between text-xs text-[#a29e93] font-mono z-10">
               <div className="flex items-center">
-                <span className="key">↑↓</span>Навигация
+                <span className="key">Esc</span>В игру
                 <span className="key ml-4">Enter</span>Выбрать
-                <span className="key ml-4">Esc</span>В игру
               </div>
-              <div>МЕТРОПОЛИС 2D · РЕЖИМ СИМУЛЯЦИИ</div>
+              <div>МЕТРОПОЛИС 2D · РЕАЛИСТИЧНАЯ СИМУЛЯЦИЯ</div>
             </div>
           </section>
         )}
 
         {/* ========================================================= */}
-        {/* SCREEN 2: NEW SESSION */}
+        {/* SCREEN 2: NEW SESSION (REAL OPEN WORLD SPAWN LOCATIONS) */}
         {/* ========================================================= */}
         {cur === 'new' && (
           <section className={`absolute inset-0 ${directionBack ? 'scr-anim-in-back' : 'scr-anim-in'}`}>
@@ -504,85 +643,170 @@ export const MainMenu: React.FC<MainMenuProps> = ({ onResume, onNewGame }) => {
                 <button onClick={() => go('main', true)} className="chip w-11 justify-center p-0" title="Назад">
                   <ChevronLeft className="w-5 h-5 text-white" />
                 </button>
-                <span className="cn text-2xl font-bold text-white">Новая сессия</span>
+                <div>
+                  <span className="cn text-2xl font-bold text-white">Новая сессия</span>
+                  <span className="mut text-xs ml-3 font-mono">Выбор стартовой локации в открытом мире</span>
+                </div>
               </div>
-              <div className="mut text-sm flex items-center gap-2.5 font-mono">
-                <b className="text-[#e0ab45]">1</b> Выбор карты <span className="w-7 h-[1px] bg-white/20" /> <b className="text-[#e0ab45]">2</b> Параметры
+              <div className="mut text-xs flex items-center gap-2 font-mono">
+                <b className="text-[#e0ab45]">1</b> Точка старта <span className="w-6 h-[1px] bg-white/20" /> <b className="text-[#e0ab45]">2</b> Параметры
               </div>
             </div>
 
-            {/* Map selection grid */}
-            <div className="absolute left-16 top-28 w-[880px] z-10">
-              <div className="flex gap-2.5 mb-5">
-                <span className="pill-btn pill-btn-on">Все карты</span>
-                <span className="pill-btn">Дороги</span>
-                <span className="pill-btn">Бездорожье</span>
-                <span className="pill-btn">Города</span>
-                <span className="pill-btn">Полигоны</span>
-              </div>
-              
-              <div className="grid grid-cols-4 grid-rows-2 gap-5 h-[560px]">
-                {MAPS.map((m, idx) => (
+            {/* Category Filter and Locations Grid */}
+            <div className="absolute left-16 top-24 w-[880px] z-10">
+              <div className="flex gap-2 mb-4">
+                {[
+                  { id: 'all', label: 'Все локации' },
+                  { id: 'city', label: 'Город & Центр' },
+                  { id: 'highway', label: 'Трасса М-12' },
+                  { id: 'nature', label: 'Природа & Деревни' },
+                  { id: 'mountain', label: 'Горы & Каньоны' },
+                  { id: 'industrial', label: 'Промзона & Гаражи' }
+                ].map(cat => (
                   <button
-                    key={m[0]}
-                    onClick={() => setSelectedMap(idx)}
-                    className={`card ${selectedMap === idx ? 'card-on' : ''}`}
+                    key={cat.id}
+                    onClick={() => setSpawnCategory(cat.id)}
+                    className={`pill-btn ${spawnCategory === cat.id ? 'pill-btn-on' : ''}`}
                   >
-                    <div className={`th ${m[2]} h-40`} />
-                    <div className="p-3">
-                      <div className="cn text-lg font-bold text-white">{m[0]}</div>
-                      <div className="mut text-xs mt-1">{m[1]}</div>
-                    </div>
+                    {cat.label}
                   </button>
                 ))}
+              </div>
+              
+              <div className="grid grid-cols-3 gap-3.5 h-[590px] overflow-y-auto pr-2">
+                {filteredSpawnLocations.map((loc, idx) => {
+                  const globalIdx = SPAWN_LOCATIONS.findIndex(s => s.id === loc.id);
+                  const isSelected = selectedSpawnIndex === globalIdx;
+                  return (
+                    <button
+                      key={loc.id}
+                      onClick={() => handleSelectSpawn(globalIdx)}
+                      className={`card p-3.5 flex flex-col justify-between ${isSelected ? 'card-on' : ''}`}
+                    >
+                      <div>
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="p-2 rounded-lg bg-white/5 border border-white/10">
+                            {loc.icon}
+                          </div>
+                          <span className="mut text-[11px] font-mono">
+                            X: {Math.round(loc.x)} | Y: {Math.round(loc.y)}
+                          </span>
+                        </div>
+                        <div className="cn text-base font-bold text-white line-clamp-1">{loc.nameRu}</div>
+                        <p className="mut text-xs mt-1 line-clamp-2 leading-relaxed">{loc.description}</p>
+                      </div>
+
+                      <div className="mt-3 pt-2 border-t border-white/[0.06] flex items-center justify-between text-xs font-mono">
+                        <span className="text-[#a29e93] capitalize">{loc.category || 'открытый мир'}</span>
+                        {isSelected && <span className="text-[#e0ab45] font-bold">Выбрано</span>}
+                      </div>
+                    </button>
+                  );
+                })}
               </div>
             </div>
 
             {/* Right Configuration panel */}
-            <div className="panel absolute left-[976px] top-28 w-[400px] h-[730px] p-4 flex flex-col z-10">
-              <div className={`th ${MAPS[selectedMap][2]} h-36 rounded-xl shrink-0`} />
-              <div className="pt-4 px-2 flex-1 flex flex-col">
-                <div className="cn mut text-xs">Выбранная локация</div>
-                <div className="cn text-2xl font-bold text-white mt-1">{MAPS[selectedMap][0]}</div>
+            <div className="panel absolute left-[976px] top-24 w-[400px] h-[670px] p-5 flex flex-col z-10">
+              <div className="flex items-center gap-3 pb-3 border-b border-white/10">
+                <div className="p-2.5 bg-[#c9922b]/20 border border-[#c9922b]/40 rounded-xl text-[#c9922b]">
+                  {selectedSpawn.icon}
+                </div>
+                <div className="min-w-0">
+                  <div className="cn mut text-[11px]">Стартовая точка</div>
+                  <div className="cn text-xl font-bold text-white truncate">{selectedSpawn.nameRu}</div>
+                </div>
+              </div>
 
-                <div className="mt-5">
-                  <div className="text-xs text-[#a29e93] mb-2 font-mono">Название сохранения</div>
+              <div className="mt-4 flex-1 flex flex-col gap-4 overflow-y-auto pr-1">
+                <div>
+                  <label className="text-xs text-[#a29e93] mb-1.5 block font-mono">Название нового сохранения</label>
                   <input
                     type="text"
                     value={newGameName}
                     onChange={(e) => setNewGameName(e.target.value)}
-                    className="w-full h-11 px-3 rounded-lg bg-white/[0.06] border border-[#c9922b] text-white text-base font-sans outline-none focus:ring-1 focus:ring-[#e0ab45]"
+                    className="w-full h-10 px-3 rounded-lg bg-white/[0.06] border border-[#c9922b]/50 text-white text-sm outline-none focus:border-[#c9922b]"
                   />
                 </div>
 
-                <div className="mt-4">
-                  <div className="text-xs text-[#a29e93] mb-2 font-mono">Режим поездки</div>
+                <div>
+                  <label className="text-xs text-[#a29e93] mb-1.5 block font-mono">Время суток при старте</label>
                   <div className="seg">
-                    <button className="on">Свободная езда</button>
-                    <button>Сценарий</button>
+                    <button 
+                      onClick={() => setNewGameTimeHour(6.0)}
+                      className={newGameTimeHour === 6.0 ? 'on' : ''}
+                    >
+                      Рассвет 06:00
+                    </button>
+                    <button 
+                      onClick={() => setNewGameTimeHour(12.0)}
+                      className={newGameTimeHour === 12.0 ? 'on' : ''}
+                    >
+                      День 12:00
+                    </button>
+                    <button 
+                      onClick={() => setNewGameTimeHour(19.0)}
+                      className={newGameTimeHour === 19.0 ? 'on' : ''}
+                    >
+                      Закат 19:00
+                    </button>
+                    <button 
+                      onClick={() => setNewGameTimeHour(23.5)}
+                      className={newGameTimeHour === 23.5 ? 'on' : ''}
+                    >
+                      Ночь 23:30
+                    </button>
                   </div>
                 </div>
 
-                <div className="mt-4">
-                  <div className="flex justify-between items-center text-xs text-[#a29e93] mb-2 font-mono">
-                    <span>Погодные условия</span>
-                  </div>
+                <div>
+                  <label className="text-xs text-[#a29e93] mb-1.5 block font-mono">Погодные условия</label>
                   <div className="seg">
-                    <button className="on">Ясно</button>
-                    <button>Облачно</button>
-                    <button>Дождь</button>
-                    <button>Туман</button>
+                    <button 
+                      onClick={() => setNewGameWeather('clear')}
+                      className={newGameWeather === 'clear' ? 'on' : ''}
+                    >
+                      Ясно
+                    </button>
+                    <button 
+                      onClick={() => setNewGameWeather('overcast')}
+                      className={newGameWeather === 'overcast' ? 'on' : ''}
+                    >
+                      Пасмурно
+                    </button>
+                    <button 
+                      onClick={() => setNewGameWeather('rain')}
+                      className={newGameWeather === 'rain' ? 'on' : ''}
+                    >
+                      Дождь
+                    </button>
+                    <button 
+                      onClick={() => setNewGameWeather('fog')}
+                      className={newGameWeather === 'fog' ? 'on' : ''}
+                    >
+                      Туман
+                    </button>
                   </div>
                 </div>
 
-                <div className="flex-1" />
+                <div className="p-3 bg-white/[0.02] border border-white/5 rounded-lg text-xs font-mono text-[#a29e93] leading-relaxed">
+                  <div className="text-white font-semibold mb-1">Справка о локации:</div>
+                  {selectedSpawn.description}
+                </div>
+              </div>
 
+              <div className="pt-3 border-t border-white/10 mt-2">
                 <button
                   onClick={() => {
-                    if (onNewGame) onNewGame(newGameName);
-                    else onResume();
+                    onNewGame({
+                      spawnId: selectedSpawn.id,
+                      saveName: newGameName.trim() || 'Старт: ' + selectedSpawn.nameRu,
+                      timeHour: newGameTimeHour,
+                      weather: newGameWeather
+                    });
                   }}
-                  className="btn btn-p w-full h-12 text-base mb-2"
+                  className="btn btn-p w-full h-11 text-base cursor-pointer"
                 >
                   <Play className="w-4 h-4 fill-current" />
                   <span>Начать сессию</span>
@@ -590,18 +814,17 @@ export const MainMenu: React.FC<MainMenuProps> = ({ onResume, onNewGame }) => {
               </div>
             </div>
 
-            <div className="absolute left-16 right-16 bottom-8 flex items-center justify-between text-xs text-[#a29e93] font-mono z-10">
+            <div className="absolute left-16 right-16 bottom-6 flex items-center justify-between text-xs text-[#a29e93] font-mono z-10">
               <div className="flex items-center">
-                <span className="key">←→↑↓</span>Выбор карты
-                <span className="key ml-4">Enter</span>Начать
-                <span className="key ml-4">Esc</span>Назад
+                <span className="key">Esc</span>Назад в главное меню
               </div>
+              <div>Единая карта мира Степной Тракт · 48 км открытых дорог</div>
             </div>
           </section>
         )}
 
         {/* ========================================================= */}
-        {/* SCREEN 3: SAVES */}
+        {/* SCREEN 3: SAVES (REAL USER SAVES FROM LOCALSTORAGE) */}
         {/* ========================================================= */}
         {cur === 'saves' && (
           <section className={`absolute inset-0 ${directionBack ? 'scr-anim-in-back' : 'scr-anim-in'}`}>
@@ -610,77 +833,139 @@ export const MainMenu: React.FC<MainMenuProps> = ({ onResume, onNewGame }) => {
                 <button onClick={() => go('main', true)} className="chip w-11 justify-center p-0" title="Назад">
                   <ChevronLeft className="w-5 h-5 text-white" />
                 </button>
-                <span className="cn text-2xl font-bold text-white">Загрузить сессию</span>
+                <div>
+                  <span className="cn text-2xl font-bold text-white">Список сохранений</span>
+                  <span className="mut text-xs ml-3 font-mono">Реальные слоты сохранения в хранилище</span>
+                </div>
               </div>
-              <button className="chip">
-                <span className="mut text-sm font-mono">Сначала новые</span>
+              <button 
+                onClick={() => go('new')}
+                className="chip bg-[#c9922b]/20 border-[#c9922b]/50 text-white"
+              >
+                <Plus className="w-4 h-4 text-[#e0ab45]" />
+                <span className="font-semibold text-sm">Новая сессия</span>
               </button>
             </div>
 
-            <div className="absolute left-16 top-24 w-[1312px] flex items-end justify-between border-b border-white/10 pb-1 z-10">
-              <div className="flex gap-2">
-                <button className="tab-btn tab-btn-on cn">Все сохранения</button>
-                <button className="tab-btn cn">Свободная езда</button>
-                <button className="tab-btn cn">Сценарии</button>
-                <button className="tab-btn cn">Избранные</button>
-              </div>
-              <div className="mut text-xs font-mono pb-2">7 из 24 слотов</div>
-            </div>
+            {/* List of real saves */}
+            <div className="absolute left-16 top-24 w-[1312px] h-[640px] z-10 flex flex-col justify-between">
+              {saves.length > 0 ? (
+                <>
+                  <div className="grid grid-cols-4 gap-4 max-h-[550px] overflow-y-auto pr-2">
+                    {saves.map((save) => {
+                      const isSelected = selectedSaveId === save.id;
+                      return (
+                        <button
+                          key={save.id}
+                          onClick={() => setSelectedSaveId(save.id)}
+                          className={`card p-4 flex flex-col justify-between min-h-[160px] ${isSelected ? 'card-on' : ''}`}
+                        >
+                          <div>
+                            <div className="flex items-center justify-between mb-2">
+                              <span className="cn text-xs font-bold text-[#c9922b] truncate max-w-[180px]">
+                                {save.streetName || 'Степной Тракт'}
+                              </span>
+                              <span className="text-[10px] text-[#a29e93] font-mono">{save.date.split(' в ')[0]}</span>
+                            </div>
+                            <div className="cn text-lg font-bold text-white truncate">{save.name}</div>
+                            
+                            <div className="mt-3 flex flex-col gap-1 text-xs font-mono text-[#a29e93]">
+                              <div className="flex justify-between">
+                                <span>Время в мире:</span>
+                                <span className="text-white">
+                                  {save.timeHour !== undefined ? `${Math.floor(save.timeHour)}:${Math.floor((save.timeHour % 1) * 60).toString().padStart(2, '0')}` : 'День'}
+                                </span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span>Позиция:</span>
+                                <span className="text-white">{save.isInVehicle ? 'В автомобиле' : 'Пешком'}</span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span>Капитал:</span>
+                                <span className="text-[#7fbf6a] font-semibold">{save.cash !== undefined ? `${save.cash.toLocaleString()} ₽` : '—'}</span>
+                              </div>
+                            </div>
+                          </div>
 
-            {/* Grid of saves */}
-            <div className="absolute left-16 top-44 w-[1312px] grid grid-cols-4 grid-rows-2 gap-5 h-[580px] z-10">
-              {SAVES.map((save, idx) => (
-                <button
-                  key={save[0]}
-                  onClick={() => setSelectedSave(idx)}
-                  className={`card ${selectedSave === idx ? 'card-on' : ''}`}
-                >
-                  <div className={`th ${save[4]} h-40`} />
-                  <div className="p-3.5">
-                    <div className="cn text-xl font-bold text-white truncate">{save[0]}</div>
-                    <div className="flex justify-between text-xs text-[#a29e93] mt-2 font-mono">
-                      <span>{save[1]}</span>
-                      <span>{save[2]}</span>
+                          <div className="mt-3 pt-2 border-t border-white/[0.08] flex items-center justify-between text-xs font-mono">
+                            <span className="text-[#8f8b81]">{save.date.split(' в ')[1] ? `в ${save.date.split(' в ')[1]}` : ''}</span>
+                            {isSelected && <span className="text-[#e0ab45] font-bold">Выбрано</span>}
+                          </div>
+                        </button>
+                      );
+                    })}
+
+                    {/* New session slot card */}
+                    <button
+                      onClick={() => go('new')}
+                      className="flex flex-col items-center justify-center gap-3 border-2 border-dashed border-[#c9922b]/40 bg-[#c9922b]/[0.04] hover:bg-[#c9922b]/[0.1] rounded-xl text-[#e0ab45] transition-all cursor-pointer min-h-[160px]"
+                    >
+                      <Plus className="w-8 h-8" />
+                      <span className="cn text-base font-bold">Создать новое сохранение</span>
+                    </button>
+                  </div>
+
+                  {/* Actions Bar */}
+                  <div className="flex items-center justify-between pt-4 border-t border-white/10">
+                    <div className="mut text-sm font-mono flex items-center gap-2">
+                      <span>Выбрано:</span>
+                      <span className="text-white font-bold">{selectedSave ? selectedSave.name : '—'}</span>
                     </div>
-                    <div className="flex justify-between text-xs text-[#a29e93] mt-1 font-mono">
-                      <span>{save[3]}</span>
-                      {selectedSave === idx && <span className="text-[#e0ab45] font-bold">Выбрано</span>}
+
+                    <div className="flex gap-3">
+                      {selectedSave && (
+                        <button 
+                          onClick={() => {
+                            if (confirm(`Удалить сохранение «${selectedSave.name}»?`)) {
+                              onDeleteSave(selectedSave.id);
+                            }
+                          }}
+                          className="btn btn-s text-rose-400 hover:text-rose-300 border-rose-900/40 hover:border-rose-700/60"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                          <span>Удалить слот</span>
+                        </button>
+                      )}
+                      <button 
+                        onClick={() => {
+                          if (selectedSave) {
+                            onLoadSave(selectedSave.id);
+                          }
+                        }}
+                        disabled={!selectedSave}
+                        className="btn btn-p disabled:opacity-50"
+                      >
+                        <Play className="w-4 h-4 fill-current" />
+                        <span>Загрузить сохранение</span>
+                      </button>
                     </div>
                   </div>
-                </button>
-              ))}
-
-              {/* Add New Session Slot */}
-              <button
-                onClick={() => go('new')}
-                className="flex flex-col items-center justify-center gap-3 border-2 border-dashed border-[#c9922b]/50 bg-[#c9922b]/[0.05] hover:bg-[#c9922b]/[0.12] rounded-xl text-[#e0ab45] transition-all cursor-pointer"
-              >
-                <Plus className="w-10 h-10" />
-                <span className="cn text-lg font-bold">Новая сессия</span>
-              </button>
-            </div>
-
-            {/* Bottom Actions */}
-            <div className="absolute left-16 right-16 bottom-16 flex items-center justify-between z-10">
-              <div className="mut text-sm font-mono">
-                Выбрано: <span className="text-white font-bold">{SAVES[selectedSave] ? SAVES[selectedSave][0] : ''}</span>
-              </div>
-              <div className="flex gap-3">
-                <button className="btn btn-s">Дублировать</button>
-                <button 
-                  onClick={onResume}
-                  className="btn btn-p"
-                >
-                  <Play className="w-4 h-4 fill-current" />
-                  <span>Загрузить</span>
-                </button>
-              </div>
+                </>
+              ) : (
+                /* Empty Saves State */
+                <div className="panel flex-1 flex flex-col items-center justify-center p-12 text-center">
+                  <div className="w-16 h-16 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center text-[#c9922b] mb-4">
+                    <FolderOpen className="w-8 h-8" />
+                  </div>
+                  <h3 className="cn text-2xl font-bold text-white">Сохраненных сессий пока нет</h3>
+                  <p className="mut text-sm max-w-md mt-2 leading-relaxed">
+                    Начните новую сессию и исследуйте открытый мир. Во время игры вы можете сохранить текущий прогресс через меню паузы [Esc] или дождаться автосохранения.
+                  </p>
+                  <button 
+                    onClick={() => go('new')}
+                    className="btn btn-p mt-6"
+                  >
+                    <Plus className="w-4 h-4" />
+                    <span>Начать новую игру</span>
+                  </button>
+                </div>
+              )}
             </div>
           </section>
         )}
 
         {/* ========================================================= */}
-        {/* SCREEN 4: SERVERS */}
+        {/* SCREEN 4: SERVERS (REAL FIRESTORE P2P MULTIPLAYER) */}
         {/* ========================================================= */}
         {cur === 'servers' && (
           <section className={`absolute inset-0 ${directionBack ? 'scr-anim-in-back' : 'scr-anim-in'}`}>
@@ -689,281 +974,283 @@ export const MainMenu: React.FC<MainMenuProps> = ({ onResume, onNewGame }) => {
                 <button onClick={() => go('main', true)} className="chip w-11 justify-center p-0" title="Назад">
                   <ChevronLeft className="w-5 h-5 text-white" />
                 </button>
-                <span className="cn text-2xl font-bold text-white">Онлайн серверы</span>
+                <div>
+                  <span className="cn text-2xl font-bold text-white">Онлайн-мультиплеер P2P</span>
+                  <span className="mut text-xs ml-3 font-mono">Живой список комнат в реальном времени</span>
+                </div>
               </div>
               <div className="flex gap-3">
-                <button onClick={() => go('create')} className="chip">
+                <button onClick={() => go('create')} className="chip bg-[#c9922b]/20 border-[#c9922b]/50 text-white">
                   <Plus className="w-4 h-4 text-[#e0ab45]" />
                   <span className="font-semibold text-sm">Создать сервер</span>
                 </button>
-                <button onClick={() => go('account')} className="chip">
+                <div className="chip">
                   <span className="w-6 h-6 rounded-full bg-[#c9922b] text-[#1a1409] inline-flex items-center justify-center font-bold text-xs">
-                    И
+                    {playerNickname.charAt(0).toUpperCase()}
                   </span>
-                  <span className="font-medium text-sm">Игрок_0417</span>
+                  <span className="font-medium text-sm">{playerNickname}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Direct Connect & Search Bar */}
+            <div className="absolute left-16 top-24 w-[1312px] flex items-center justify-between gap-4 z-10">
+              <div className="flex items-center gap-2 flex-1 max-w-md">
+                <div className="relative w-full">
+                  <Search className="w-4 h-4 absolute left-3 top-3 text-[#a29e93]" />
+                  <input
+                    type="text"
+                    value={serverSearchQuery}
+                    onChange={(e) => setServerSearchQuery(e.target.value)}
+                    placeholder="Поиск по названию или хосту..."
+                    className="w-full h-10 pl-9 pr-3 rounded-lg bg-white/[0.06] border border-white/10 text-white text-xs outline-none focus:border-[#c9922b]"
+                  />
+                </div>
+              </div>
+
+              {/* Direct Code Join */}
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  value={directRoomCode}
+                  onChange={(e) => setDirectRoomCode(e.target.value)}
+                  placeholder="Ввести код комнаты..."
+                  className="w-56 h-10 px-3 rounded-lg bg-white/[0.06] border border-white/10 text-white text-xs outline-none focus:border-[#c9922b] font-mono"
+                />
+                <button
+                  onClick={() => handleConnectToServer(directRoomCode)}
+                  disabled={!directRoomCode.trim()}
+                  className="btn btn-s h-10 px-4 text-xs font-mono disabled:opacity-40"
+                >
+                  <ArrowRight className="w-4 h-4" />
+                  <span>Подключиться по коду</span>
                 </button>
               </div>
             </div>
 
-            {/* Filter Tabs */}
-            <div className="absolute left-16 top-24 w-[1312px] flex items-end justify-between border-b border-white/10 pb-1 z-10">
-              <div className="flex gap-2">
-                <button 
-                  onClick={() => setSrvFilter('all')} 
-                  className={`tab-btn cn ${srvFilter === 'all' ? 'tab-btn-on' : ''}`}
-                >
-                  Все серверы
-                </button>
-                <button 
-                  onClick={() => setSrvFilter('fav')} 
-                  className={`tab-btn cn ${srvFilter === 'fav' ? 'tab-btn-on' : ''}`}
-                >
-                  Избранные
-                </button>
-                <button 
-                  onClick={() => setSrvFilter('recent')} 
-                  className={`tab-btn cn ${srvFilter === 'recent' ? 'tab-btn-on' : ''}`}
-                >
-                  Недавние
-                </button>
-                <button 
-                  onClick={() => setSrvFilter('friends')} 
-                  className={`tab-btn cn ${srvFilter === 'friends' ? 'tab-btn-on' : ''}`}
-                >
-                  Друзья
-                </button>
-              </div>
-            </div>
-
-            {/* Table of servers */}
-            <div className="panel absolute left-16 top-36 w-[850px] h-[610px] overflow-hidden flex flex-col z-10">
-              <div className="grid grid-cols-[34px_1fr_140px_90px_70px_40px] items-center gap-3 px-4 h-10 border-b border-white/10 text-xs font-mono text-[#8f8b81] shrink-0">
+            {/* Table of real servers */}
+            <div className="panel absolute left-16 top-38 w-[860px] h-[610px] overflow-hidden flex flex-col z-10">
+              <div className="grid grid-cols-[28px_1fr_140px_90px_40px] items-center gap-3 px-4 h-10 border-b border-white/10 text-xs font-mono text-[#8f8b81] shrink-0">
                 <span />
-                <span>Название</span>
-                <span>Карта</span>
+                <span>Название и хост</span>
+                <span>Режим</span>
                 <span>Игроки</span>
-                <span>Пинг</span>
                 <span />
               </div>
+
               <div className="overflow-y-auto flex-1">
-                {filteredServers.map((srv, idx) => (
-                  <div
-                    key={srv[0]}
-                    onClick={() => setSelectedSrv(idx)}
-                    className={`row-hover ${selectedSrv === idx ? 'row-on' : ''}`}
-                  >
-                    <Star className={`w-4 h-4 ${srv[7] ? 'text-[#e0ab45] fill-current' : 'text-[#6f6c65]'}`} />
-                    <div className="truncate">
-                      <div className="font-semibold text-white truncate text-sm">{srv[0]}</div>
-                      <div className="mut text-xs font-mono truncate">Хост: {srv[1]}</div>
-                    </div>
-                    <span className="text-xs text-[#cfcbc1] truncate">{srv[2]}</span>
-                    <span className="text-xs font-mono text-[#cfcbc1]">{srv[3]} / {srv[4]}</span>
-                    <span className={`text-xs font-mono font-bold ${getPingClass(srv[5])}`}>{srv[5]} мс</span>
-                    <span>
-                      {srv[6] ? <Lock className="w-3.5 h-3.5 text-[#a29e93]" /> : null}
-                    </span>
+                {filteredServers.length > 0 ? (
+                  filteredServers.map((srv) => {
+                    const isSelected = selectedServer?.id === srv.id;
+                    return (
+                      <div
+                        key={srv.id}
+                        onClick={() => setSelectedServerId(srv.id)}
+                        className={`row-hover ${isSelected ? 'row-on' : ''}`}
+                      >
+                        <Radio className={`w-3.5 h-3.5 ${srv.status === 'active' ? 'text-emerald-400' : 'text-amber-400'}`} />
+                        <div className="truncate">
+                          <div className="font-semibold text-white truncate text-sm">{srv.name}</div>
+                          <div className="mut text-xs font-mono truncate">Хост: {srv.hostName} · Код: {srv.peerId}</div>
+                        </div>
+                        <span className="text-xs text-[#cfcbc1] truncate capitalize">
+                          {srv.gameMode === 'free_roam' ? 'Свободная езда' : srv.gameMode}
+                        </span>
+                        <span className="text-xs font-mono text-[#cfcbc1]">{srv.currentPlayers || 1} / {srv.maxPlayers || 8}</span>
+                        <ArrowRight className="w-4 h-4 text-[#a29e93]" />
+                      </div>
+                    );
+                  })
+                ) : (
+                  <div className="flex flex-col items-center justify-center h-full text-center p-8">
+                    <WifiOff className="w-10 h-10 text-[#a29e93] mb-3" />
+                    <div className="cn text-lg font-bold text-white">В данный момент нет открытых серверов</div>
+                    <p className="mut text-xs max-w-sm mt-1 leading-relaxed">
+                      Создайте собственную комнату кнопкой «Создать сервер» выше, либо введите код комнаты для прямого P2P-подключения к сессии друга.
+                    </p>
                   </div>
-                ))}
+                )}
               </div>
             </div>
 
             {/* Right Server details card */}
-            <div className="panel absolute left-[938px] top-36 w-[438px] h-[610px] p-4 flex flex-col z-10">
-              <div className={`th ${selectedServerData[8]} h-48 rounded-xl shrink-0`} />
-              <div className="pt-4 px-2 flex-1">
-                <div className="cn mut text-xs">Выбранный сервер</div>
-                <div className="cn text-2xl font-bold text-white mt-1 leading-snug">{selectedServerData[0]}</div>
-                <div className="mut text-xs mt-2 leading-relaxed font-sans">{selectedServerData[9]}</div>
+            <div className="panel absolute left-[948px] top-38 w-[428px] h-[610px] p-5 flex flex-col justify-between z-10">
+              {selectedServer ? (
+                <>
+                  <div className="flex flex-col gap-3">
+                    <div className="flex items-center gap-2 text-xs font-mono text-[#c9922b]">
+                      <Radio className="w-3.5 h-3.5 text-emerald-400" />
+                      <span>АКТИВНАЯ СЕССИЯ FIRESTORE</span>
+                    </div>
 
-                <div className="grid grid-cols-2 gap-3 mt-5 text-xs font-mono">
-                  <div>
-                    <div className="mut">Регион</div>
-                    <div className="text-white font-medium">Европа · Франкфурт</div>
+                    <div className="cn text-2xl font-bold text-white leading-tight">{selectedServer.name}</div>
+                    <div className="text-xs font-mono text-[#a29e93]">
+                      Прямой P2P-канал по протоколу WebRTC / PeerJS
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3 mt-4 text-xs font-mono bg-white/[0.03] p-3.5 rounded-xl border border-white/5">
+                      <div>
+                        <div className="mut">Хост сервера:</div>
+                        <div className="text-white font-medium">{selectedServer.hostName}</div>
+                      </div>
+                      <div>
+                        <div className="mut">Код комнаты:</div>
+                        <div className="text-white font-medium">{selectedServer.peerId}</div>
+                      </div>
+                      <div>
+                        <div className="mut">Игровая карта:</div>
+                        <div className="text-white font-medium">{selectedServer.mapName || 'Степной Тракт'}</div>
+                      </div>
+                      <div>
+                        <div className="mut">Режим:</div>
+                        <div className="text-white font-medium capitalize">
+                          {selectedServer.gameMode === 'free_roam' ? 'Свободная езда' : selectedServer.gameMode}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="mt-2">
+                      <div className="flex justify-between text-xs font-mono mb-1.5">
+                        <span className="mut">Заполненность</span>
+                        <span className="text-white font-bold">{selectedServer.currentPlayers || 1} / {selectedServer.maxPlayers || 8}</span>
+                      </div>
+                      <div className="w-full h-1.5 bg-white/10 rounded-full overflow-hidden">
+                        <div 
+                          className="h-full bg-[#c9922b]"
+                          style={{ width: `${Math.min(100, ((selectedServer.currentPlayers || 1) / (selectedServer.maxPlayers || 8)) * 100)}%` }}
+                        />
+                      </div>
+                    </div>
                   </div>
-                  <div>
-                    <div className="mut">Пинг</div>
-                    <div className={`font-bold ${getPingClass(selectedServerData[5])}`}>{selectedServerData[5]} мс</div>
+
+                  <div className="pt-3 border-t border-white/10">
+                    <button 
+                      onClick={() => handleConnectToServer(selectedServer.peerId)}
+                      className="btn btn-p w-full h-11"
+                    >
+                      <Play className="w-4 h-4 fill-current" />
+                      <span>Подключиться к серверу</span>
+                    </button>
                   </div>
-                  <div>
-                    <div className="mut">Карта</div>
-                    <div className="text-white font-medium">{selectedServerData[2]}</div>
-                  </div>
-                  <div>
-                    <div className="mut">Хост</div>
-                    <div className="text-white font-medium">{selectedServerData[1]}</div>
-                  </div>
+                </>
+              ) : (
+                <div className="flex flex-col items-center justify-center h-full text-center p-6">
+                  <Globe className="w-12 h-12 text-[#a29e93]/50 mb-3" />
+                  <div className="cn text-lg font-bold text-white">Выберите сервер</div>
+                  <p className="mut text-xs mt-1">
+                    Выберите сервер из списка слева или создайте новый для совместной езды.
+                  </p>
+                  <button 
+                    onClick={() => go('create')}
+                    className="btn btn-p mt-4 text-xs"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>Создать новый сервер</span>
+                  </button>
                 </div>
-
-                <div className="mt-5">
-                  <div className="flex justify-between text-xs font-mono mb-1.5">
-                    <span className="mut">Заполненность</span>
-                    <span className="text-white font-bold">{selectedServerData[3]} / {selectedServerData[4]}</span>
-                  </div>
-                  <div className="w-full h-1.5 bg-white/10 rounded-full overflow-hidden">
-                    <div 
-                      className="h-full bg-[#c9922b]"
-                      style={{ width: `${(selectedServerData[3] / selectedServerData[4]) * 100}%` }}
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex gap-3 pt-2">
-                <button 
-                  onClick={onResume}
-                  className="btn btn-p flex-1"
-                >
-                  <span>Подключиться</span>
-                </button>
-              </div>
+              )}
             </div>
           </section>
         )}
 
         {/* ========================================================= */}
-        {/* SCREEN 5: ACCOUNT */}
+        {/* SCREEN 5: CREATE SERVER (REAL FIRESTORE & WEBRTC ROOM) */}
         {/* ========================================================= */}
-        {cur === 'account' && (
+        {cur === 'create' && (
           <section className={`absolute inset-0 ${directionBack ? 'scr-anim-in-back' : 'scr-anim-in'}`}>
             <div className="absolute left-16 right-16 top-9 h-11 flex items-center justify-between z-10">
               <div className="flex items-center gap-4">
-                <button onClick={() => go('main', true)} className="chip w-11 justify-center p-0" title="Назад">
+                <button onClick={() => go('servers', true)} className="chip w-11 justify-center p-0" title="Назад">
                   <ChevronLeft className="w-5 h-5 text-white" />
                 </button>
-                <span className="cn text-2xl font-bold text-white">Аккаунт</span>
-              </div>
-              <div className="chip">
-                <span className="w-6 h-6 rounded-full bg-[#c9922b] text-[#1a1409] inline-flex items-center justify-center font-bold text-xs">
-                  И
-                </span>
-                <span className="font-medium text-sm">Игрок_0417</span>
+                <div>
+                  <span className="cn text-2xl font-bold text-white">Создать игровой сервер</span>
+                  <span className="mut text-xs ml-3 font-mono">Хостинг открытой сессии мультиплеера</span>
+                </div>
               </div>
             </div>
 
-            {/* Left Tabs */}
-            <div className="absolute left-16 top-32 w-[280px] flex flex-col gap-1 z-10">
-              <button 
-                onClick={() => setAccTab('acc-profile')}
-                className={`nav-i cn ${accTab === 'acc-profile' ? 'nav-on' : ''}`}
-              >
-                Профиль
-              </button>
-              <button 
-                onClick={() => setAccTab('acc-friends')}
-                className={`nav-i cn ${accTab === 'acc-friends' ? 'nav-on' : ''}`}
-              >
-                Друзья
-              </button>
-              <button 
-                onClick={() => setAccTab('acc-security')}
-                className={`nav-i cn ${accTab === 'acc-security' ? 'nav-on' : ''}`}
-              >
-                Безопасность
-              </button>
+            <div className="panel absolute left-16 top-24 w-[880px] h-[670px] p-7 flex flex-col justify-between z-10">
+              <div className="flex flex-col gap-4">
+                <div>
+                  <label className="text-xs text-[#a29e93] mb-1.5 block font-mono">Название сервера</label>
+                  <input
+                    type="text"
+                    value={hostServerName}
+                    onChange={(e) => setHostServerName(e.target.value)}
+                    className="w-full h-11 px-3.5 rounded-lg bg-white/[0.06] border border-[#c9922b]/60 text-white text-sm outline-none focus:border-[#c9922b]"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs text-[#a29e93] mb-1.5 block font-mono">Код P2P-комнаты (для приглашения друзей)</label>
+                  <input
+                    type="text"
+                    value={hostRoomCode}
+                    onChange={(e) => setHostRoomCode(e.target.value)}
+                    className="w-full h-11 px-3.5 rounded-lg bg-white/[0.06] border border-white/10 text-white text-sm outline-none font-mono focus:border-[#c9922b]"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs text-[#a29e93] mb-1.5 block font-mono">Игровой режим</label>
+                  <div className="seg">
+                    {[
+                      { id: 'free_roam', name: 'Свободная езда' },
+                      { id: 'drift', name: 'Дрифт движ' },
+                      { id: 'street_race', name: 'Стрит-рейсинг' },
+                      { id: 'delivery', name: 'Грузоперевозки' }
+                    ].map(m => (
+                      <button
+                        key={m.id}
+                        onClick={() => setHostGameMode(m.id)}
+                        className={hostGameMode === m.id ? 'on' : ''}
+                      >
+                        {m.name}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <div className="flex justify-between text-xs text-[#a29e93] mb-1.5 font-mono">
+                    <span>Максимум игроков: {hostMaxPlayers}</span>
+                  </div>
+                  <input 
+                    type="range" 
+                    min="2" 
+                    max="16" 
+                    value={hostMaxPlayers}
+                    onChange={(e) => setHostMaxPlayers(Number(e.target.value))}
+                    className="w-full accent-[#c9922b]" 
+                  />
+                </div>
+
+                <div className="p-3.5 bg-white/[0.02] border border-white/5 rounded-xl text-xs font-mono text-[#a29e93] leading-relaxed">
+                  <div className="text-white font-semibold mb-1">Сетевая синхронизация:</div>
+                  Сервер публикуется в базе Firestore и регистрируется как хост в P2P-сети PeerJS. Подключенные игроки синхронизируют автомобили, физические повреждения софтбоди, свет фар, поворотники и звуковые сигналы.
+                </div>
+              </div>
+
+              <div className="flex gap-3 pt-4 border-t border-white/10">
+                <button onClick={() => go('servers', true)} className="btn btn-s flex-1">
+                  Отмена
+                </button>
+                <button 
+                  onClick={handleCreateAndHostServer} 
+                  disabled={isCreatingServer}
+                  className="btn btn-p flex-1"
+                >
+                  <Play className="w-4 h-4 fill-current" />
+                  <span>{isCreatingServer ? 'Регистрация сервера...' : 'Запустить сервер'}</span>
+                </button>
+              </div>
             </div>
-
-            {/* Tab: Profile */}
-            {accTab === 'acc-profile' && (
-              <div className="absolute left-[370px] top-32 w-[980px] flex flex-col gap-5 z-10">
-                <div className="panel p-7 flex items-center gap-6">
-                  <div className="w-24 h-24 rounded-full bg-gradient-to-tr from-[#e0ab45] to-[#a8741c] flex items-center justify-center font-bold text-4xl text-[#1a1409]">
-                    И
-                  </div>
-                  <div className="flex-1">
-                    <div className="cn text-3xl font-bold text-white">Игрок_0417</div>
-                    <div className="mut text-sm mt-1 font-mono">ID 0417-2291 · Профиль синхронизирован</div>
-                    <div className="flex items-center gap-2 mt-2 text-xs text-[#9ac985]">
-                      <span className="w-2 h-2 rounded-full bg-[#7fbf6a]" />
-                      <span>В сети · Степной Тракт 2D</span>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-5">
-                  <div className="panel p-6">
-                    <div className="flex justify-between items-baseline mb-4">
-                      <span className="cn text-lg font-bold text-white">Достижения</span>
-                      <span className="mut text-xs font-mono">4 из 24</span>
-                    </div>
-                    <div className="grid grid-cols-4 gap-3">
-                      {BADGE_ICONS.map((d, i) => (
-                        <div 
-                          key={i} 
-                          className={`w-16 h-16 rounded-xl border flex items-center justify-center ${i < 4 ? 'border-[#c9922b]/50 bg-[#c9922b]/10' : 'border-white/10 bg-white/[0.02]'}`}
-                        >
-                          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke={i < 4 ? '#e0ab45' : '#6f6c65'} strokeWidth="1.8">
-                            <path d={d} />
-                          </svg>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div className="panel p-6">
-                    <div className="flex justify-between items-baseline mb-4">
-                      <span className="cn text-lg font-bold text-white">Друзья онлайн</span>
-                      <span className="mut text-xs font-mono">3 в сети</span>
-                    </div>
-                    <div className="flex flex-col gap-2">
-                      {FRIENDS.map(f => (
-                        <div key={f.name} className="flex items-center gap-3 py-2 border-b border-white/[0.06] last:border-0">
-                          <span className="w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs text-[#1a1409]" style={{ backgroundColor: f.color }}>
-                            {f.initial}
-                          </span>
-                          <div className="flex-1">
-                            <div className="text-sm font-semibold text-white">{f.name}</div>
-                            <div className="mut text-xs">{f.status}</div>
-                          </div>
-                          <span className="w-2 h-2 rounded-full" style={{ backgroundColor: f.dot }} />
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Tab: Friends */}
-            {accTab === 'acc-friends' && (
-              <div className="panel absolute left-[370px] top-32 w-[980px] p-6 z-10">
-                <div className="cn text-xl font-bold text-white mb-4">Список друзей</div>
-                <div className="flex flex-col divide-y divide-white/10">
-                  {FRIENDS.map(f => (
-                    <div key={f.name} className="flex items-center gap-4 py-3">
-                      <span className="w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm text-[#1a1409]" style={{ backgroundColor: f.color }}>
-                        {f.initial}
-                      </span>
-                      <div className="flex-1">
-                        <div className="font-semibold text-white">{f.name}</div>
-                        <div className="mut text-xs font-mono">{f.status}</div>
-                      </div>
-                      <button className="btn btn-s text-xs h-8 px-3">Сообщение</button>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Tab: Security */}
-            {accTab === 'acc-security' && (
-              <div className="panel absolute left-[370px] top-32 w-[980px] p-6 flex flex-col gap-4 z-10">
-                <div className="cn text-xl font-bold text-white mb-2">Безопасность профиля</div>
-                <div className="flex justify-between items-center py-3 border-b border-white/10">
-                  <span>Двухфакторная авторизация</span>
-                  <div className="tg on" />
-                </div>
-                <div className="flex justify-between items-center py-3 border-b border-white/10">
-                  <span>Облачная синхронизация сохранений</span>
-                  <div className="tg on" />
-                </div>
-              </div>
-            )}
           </section>
         )}
 
         {/* ========================================================= */}
-        {/* SCREEN 6: SETTINGS */}
+        {/* SCREEN 6: REAL SETTINGS (PERFORMANCE, SOUND, CONTROLS, GAMEPLAY) */}
         {/* ========================================================= */}
         {cur === 'settings' && (
           <section className={`absolute inset-0 ${directionBack ? 'scr-anim-in-back' : 'scr-anim-in'}`}>
@@ -972,23 +1259,26 @@ export const MainMenu: React.FC<MainMenuProps> = ({ onResume, onNewGame }) => {
                 <button onClick={() => go('main', true)} className="chip w-11 justify-center p-0" title="Назад">
                   <ChevronLeft className="w-5 h-5 text-white" />
                 </button>
-                <span className="cn text-2xl font-bold text-white">Параметры симуляции</span>
+                <div>
+                  <span className="cn text-2xl font-bold text-white">Параметры симуляции</span>
+                  <span className="mut text-xs ml-3 font-mono">Реальная конфигурация физики, графики и звука</span>
+                </div>
               </div>
             </div>
 
             {/* Navigation Categories */}
-            <div className="absolute left-16 top-32 w-[260px] flex flex-col gap-1 z-10">
+            <div className="absolute left-16 top-24 w-[240px] flex flex-col gap-1 z-10">
               <button 
                 onClick={() => setSettingsTab('set-gfx')}
                 className={`nav-i cn ${settingsTab === 'set-gfx' ? 'nav-on' : ''}`}
               >
-                Графика
+                Графика и рендер
               </button>
               <button 
                 onClick={() => setSettingsTab('set-sound')}
                 className={`nav-i cn ${settingsTab === 'set-sound' ? 'nav-on' : ''}`}
               >
-                Звук
+                Звук и аудио
               </button>
               <button 
                 onClick={() => setSettingsTab('set-ctrl')}
@@ -1000,139 +1290,310 @@ export const MainMenu: React.FC<MainMenuProps> = ({ onResume, onNewGame }) => {
                 onClick={() => setSettingsTab('set-game')}
                 className={`nav-i cn ${settingsTab === 'set-game' ? 'nav-on' : ''}`}
               >
-                Геймплей
+                Геймплей и время
               </button>
             </div>
 
-            {/* Graphics Settings Panel */}
+            {/* REAL GRAPHICS SETTINGS */}
             {settingsTab === 'set-gfx' && (
-              <>
-                <div className="panel absolute left-[350px] top-32 w-[700px] h-[714px] p-6 overflow-y-auto flex flex-col gap-4 z-10">
-                  <div className="cn text-sm text-[#e0ab45] font-bold">Дисплей и рендеринг</div>
-                  
-                  <div className="flex justify-between items-center py-2.5 border-b border-white/[0.06]">
-                    <span className="font-medium text-sm">Вертикальная синхронизация (V-Sync)</span>
-                    <button 
-                      onClick={() => setVsync(!vsync)} 
-                      className={`tg ${vsync ? 'on' : ''}`} 
+              <div className="panel absolute left-[320px] top-24 w-[1008px] h-[670px] p-6 overflow-y-auto flex flex-col gap-4 z-10">
+                <div className="cn text-sm text-[#e0ab45] font-bold">Настройки рендеринга и графической производительности</div>
+                
+                <div className="flex justify-between items-center py-2.5 border-b border-white/[0.06]">
+                  <div>
+                    <div className="font-medium text-sm text-white">Режим оптимизации для слабых устройств (Low Quality)</div>
+                    <div className="text-xs text-[#a29e93]">Отключение мелких декоративных линий и фоновых деталей крыш</div>
+                  </div>
+                  <button 
+                    onClick={() => handleUpdatePerf({ lowQualityRendering: !perfConfig.lowQualityRendering })} 
+                    className={`tg ${perfConfig.lowQualityRendering ? 'on' : ''}`} 
+                  />
+                </div>
+
+                <div className="flex justify-between items-center py-2.5 border-b border-white/[0.06]">
+                  <div>
+                    <div className="font-medium text-sm text-white">Динамические тени (Shadows)</div>
+                    <div className="text-xs text-[#a29e93]">Рендеринг мягких теней от зданий, автомобилей и деревьев</div>
+                  </div>
+                  <button 
+                    onClick={() => handleUpdatePerf({ enableShadows: !perfConfig.enableShadows })} 
+                    className={`tg ${perfConfig.enableShadows ? 'on' : ''}`} 
+                  />
+                </div>
+
+                <div className="flex justify-between items-center py-2.5 border-b border-white/[0.06]">
+                  <div>
+                    <div className="font-medium text-sm text-white">Капли дождя на лобовом стекле / экране</div>
+                    <div className="text-xs text-[#a29e93]">Анимированные брызги и капли воды при осадках</div>
+                  </div>
+                  <button 
+                    onClick={() => handleUpdatePerf({ enableRainDroplets: !perfConfig.enableRainDroplets })} 
+                    className={`tg ${perfConfig.enableRainDroplets ? 'on' : ''}`} 
+                  />
+                </div>
+
+                <div className="flex justify-between items-center py-2.5 border-b border-white/[0.06]">
+                  <div>
+                    <div className="font-medium text-sm text-white">Архитектурная детализация зданий</div>
+                    <div className="text-xs text-[#a29e93]">Отрисовка балконов, пожарных лестниц и кондиционеров</div>
+                  </div>
+                  <button 
+                    onClick={() => handleUpdatePerf({ enableBalconyDetails: !perfConfig.enableBalconyDetails })} 
+                    className={`tg ${perfConfig.enableBalconyDetails ? 'on' : ''}`} 
+                  />
+                </div>
+
+                <div className="flex justify-between items-center py-2.5 border-b border-white/[0.06]">
+                  <div>
+                    <div className="font-medium text-sm text-white">Мини-карта (HUD Радар)</div>
+                    <div className="text-xs text-[#a29e93]">Отображение радара с дорожной разметкой в углу экрана</div>
+                  </div>
+                  <button 
+                    onClick={() => handleUpdatePerf({ enableMinimap: !perfConfig.enableMinimap })} 
+                    className={`tg ${perfConfig.enableMinimap ? 'on' : ''}`} 
+                  />
+                </div>
+
+                <div className="flex justify-between items-center py-2.5 border-b border-white/[0.06]">
+                  <div>
+                    <div className="font-medium text-sm text-white">Лимит частиц дыма, пара и огня</div>
+                    <div className="text-xs text-[#a29e93]">Максимальное число частиц физических повреждений в кадре</div>
+                  </div>
+                  <div className="flex items-center gap-3 w-72">
+                    <input 
+                      type="range" 
+                      min="100" 
+                      max="600" 
+                      step="50"
+                      value={perfConfig.particleLimit}
+                      onChange={(e) => handleUpdatePerf({ particleLimit: Number(e.target.value) })}
+                      className="flex-1 accent-[#c9922b]"
                     />
-                  </div>
-
-                  <div className="flex justify-between items-center py-2.5 border-b border-white/[0.06]">
-                    <span className="font-medium text-sm">Дальность прорисовки мира (px)</span>
-                    <div className="flex items-center gap-4 w-72">
-                      <input 
-                        type="range" 
-                        min="800" 
-                        max="2400" 
-                        step="100"
-                        value={renderDistance}
-                        onChange={(e) => setRenderDistance(Number(e.target.value))}
-                        className="flex-1 accent-[#c9922b]"
-                      />
-                      <span className="text-xs font-mono font-bold w-12 text-right">{renderDistance}</span>
-                    </div>
-                  </div>
-
-                  <div className="flex justify-between items-center py-2.5 border-b border-white/[0.06]">
-                    <span className="font-medium text-sm">Яркость и экспозиция</span>
-                    <div className="flex items-center gap-4 w-72">
-                      <input 
-                        type="range" 
-                        min="10" 
-                        max="100" 
-                        value={brightness}
-                        onChange={(e) => setBrightness(Number(e.target.value))}
-                        className="flex-1 accent-[#c9922b]"
-                      />
-                      <span className="text-xs font-mono font-bold w-12 text-right">{brightness}%</span>
-                    </div>
-                  </div>
-
-                  <div className="flex justify-between items-center py-2.5 border-b border-white/[0.06]">
-                    <span className="font-medium text-sm">Отражения в лужах и кузове</span>
-                    <button 
-                      onClick={() => setRefl(!refl)} 
-                      className={`tg ${refl ? 'on' : ''}`} 
-                    />
-                  </div>
-
-                  <div className="flex justify-between items-center py-2.5 border-b border-white/[0.06]">
-                    <span className="font-medium text-sm">Эффект скорости и размытие</span>
-                    <button 
-                      onClick={() => setBlur(!blur)} 
-                      className={`tg ${blur ? 'on' : ''}`} 
-                    />
+                    <span className="text-xs font-mono font-bold w-12 text-right">{perfConfig.particleLimit}</span>
                   </div>
                 </div>
 
-                {/* Right Performance Estimation */}
-                <div className="absolute left-[1074px] top-32 w-[302px] flex flex-col gap-4 z-10">
-                  <div className="panel p-5">
-                    <div className="cn mut text-xs">Ожидаемая частота кадров</div>
-                    <div className="flex items-baseline gap-2 mt-2">
-                      <span className="font-bold text-5xl text-[#e0ab45] font-sans">{calcFps()}</span>
-                      <span className="mut text-sm font-mono">кадров/с</span>
-                    </div>
-                    <div className="w-full h-1.5 bg-white/10 rounded-full mt-3 overflow-hidden">
-                      <div 
-                        className="h-full bg-[#c9922b] transition-all"
-                        style={{ width: `${Math.round((calcFps() / 128) * 100)}%` }}
-                      />
-                    </div>
+                <div className="flex justify-between items-center py-2.5 border-b border-white/[0.06]">
+                  <div>
+                    <div className="font-medium text-sm text-white">Плотность ИИ-автомобилей в трафике</div>
+                    <div className="text-xs text-[#a29e93]">Количество симулируемых машин в активной зоне</div>
+                  </div>
+                  <div className="flex items-center gap-3 w-72">
+                    <input 
+                      type="range" 
+                      min="5" 
+                      max="45" 
+                      step="1"
+                      value={perfConfig.maxVehicles}
+                      onChange={(e) => handleUpdatePerf({ maxVehicles: Number(e.target.value) })}
+                      className="flex-1 accent-[#c9922b]"
+                    />
+                    <span className="text-xs font-mono font-bold w-12 text-right">{perfConfig.maxVehicles}</span>
                   </div>
                 </div>
-              </>
+
+                <div className="flex justify-between items-center py-2.5">
+                  <div>
+                    <div className="font-medium text-sm text-white">Плотность пешеходов</div>
+                    <div className="text-xs text-[#a29e93]">Количество пешеходов на тротуарах и переходах</div>
+                  </div>
+                  <div className="flex items-center gap-3 w-72">
+                    <input 
+                      type="range" 
+                      min="20" 
+                      max="200" 
+                      step="10"
+                      value={perfConfig.maxActivePedestrians}
+                      onChange={(e) => handleUpdatePerf({ maxActivePedestrians: Number(e.target.value) })}
+                      className="flex-1 accent-[#c9922b]"
+                    />
+                    <span className="text-xs font-mono font-bold w-12 text-right">{perfConfig.maxActivePedestrians}</span>
+                  </div>
+                </div>
+              </div>
             )}
 
-            {/* Sound Settings */}
+            {/* REAL SOUND SETTINGS */}
             {settingsTab === 'set-sound' && (
-              <div className="panel absolute left-[350px] top-32 w-[700px] h-[714px] p-6 flex flex-col gap-4 z-10">
-                <div className="cn text-sm text-[#e0ab45] font-bold">Громкость звукового движка</div>
+              <div className="panel absolute left-[320px] top-24 w-[1008px] h-[670px] p-6 flex flex-col gap-5 z-10">
+                <div className="cn text-sm text-[#e0ab45] font-bold">Процедурный синтез звука (Web Audio API)</div>
+                
                 <div className="flex justify-between items-center py-2.5 border-b border-white/[0.06]">
-                  <span className="text-sm">Общий уровень</span>
-                  <input type="range" defaultValue={80} className="w-64 accent-[#c9922b]" />
+                  <div>
+                    <div className="font-medium text-sm text-white">Общий звук симулятора</div>
+                    <div className="text-xs text-[#a29e93]">Мгновенное отключение / включение всех аудиоканалов</div>
+                  </div>
+                  <button 
+                    onClick={() => {
+                      const res = sound.toggleMute();
+                      setAudioMuted(res);
+                    }} 
+                    className={`tg ${!audioMuted ? 'on' : ''}`} 
+                  />
                 </div>
-                <div className="flex justify-between items-center py-2.5 border-b border-white/[0.06]">
-                  <span className="text-sm">Рев двигателя и трансмиссия</span>
-                  <input type="range" defaultValue={90} className="w-64 accent-[#c9922b]" />
-                </div>
-                <div className="flex justify-between items-center py-2.5 border-b border-white/[0.06]">
-                  <span className="text-sm">Шум ветра и покрышек</span>
-                  <input type="range" defaultValue={75} className="w-64 accent-[#c9922b]" />
-                </div>
-              </div>
-            )}
 
-            {/* Controls Settings */}
-            {settingsTab === 'set-ctrl' && (
-              <div className="panel absolute left-[350px] top-32 w-[700px] h-[714px] p-6 flex flex-col gap-4 z-10">
-                <div className="cn text-sm text-[#e0ab45] font-bold">Настройки управления</div>
                 <div className="flex justify-between items-center py-2.5 border-b border-white/[0.06]">
-                  <span className="text-sm">Автоматическая трансмиссия</span>
-                  <div className="tg on" />
-                </div>
-                <div className="flex justify-between items-center py-2.5 border-b border-white/[0.06]">
-                  <span className="text-sm">Мягкий возврат руля к нулю</span>
-                  <div className="tg on" />
-                </div>
-              </div>
-            )}
-
-            {/* Gameplay Settings */}
-            {settingsTab === 'set-game' && (
-              <div className="panel absolute left-[350px] top-32 w-[700px] h-[714px] p-6 flex flex-col gap-4 z-10">
-                <div className="cn text-sm text-[#e0ab45] font-bold">Геймплей и симуляция</div>
-                <div className="flex justify-between items-center py-2.5 border-b border-white/[0.06]">
-                  <span className="text-sm">Единицы скорости</span>
-                  <div className="seg">
-                    <button className="on">км/ч</button>
-                    <button>mph</button>
+                  <div>
+                    <div className="font-medium text-sm text-white">Общая громкость (Master Volume)</div>
+                    <div className="text-xs text-[#a29e93]">Мастер-уровень звукового тракта</div>
+                  </div>
+                  <div className="flex items-center gap-3 w-72">
+                    <input 
+                      type="range" 
+                      min="0" 
+                      max="100" 
+                      value={masterVol}
+                      onChange={(e) => {
+                        const val = Number(e.target.value);
+                        setMasterVol(val);
+                        sound.setMasterVolume(val / 100);
+                      }}
+                      className="flex-1 accent-[#c9922b]"
+                    />
+                    <span className="text-xs font-mono font-bold w-12 text-right">{masterVol}%</span>
                   </div>
                 </div>
+
                 <div className="flex justify-between items-center py-2.5 border-b border-white/[0.06]">
-                  <span className="text-sm">Отображение спидометра</span>
-                  <div className="tg on" />
+                  <div>
+                    <div className="font-medium text-sm text-white">Громкость двигателя и выхлопа (Engine Layer)</div>
+                    <div className="text-xs text-[#a29e93]">Синтез поршневых импульсов, резонанса выхлопа и турбины</div>
+                  </div>
+                  <div className="flex items-center gap-3 w-72">
+                    <input 
+                      type="range" 
+                      min="0" 
+                      max="100" 
+                      value={engineVol}
+                      onChange={(e) => {
+                        const val = Number(e.target.value);
+                        setEngineVol(val);
+                        sound.setEngineVolume(val / 100);
+                      }}
+                      className="flex-1 accent-[#c9922b]"
+                    />
+                    <span className="text-xs font-mono font-bold w-12 text-right">{engineVol}%</span>
+                  </div>
+                </div>
+
+                <div className="p-4 bg-white/[0.02] border border-white/5 rounded-xl text-xs font-mono text-[#a29e93] leading-relaxed mt-2">
+                  <div className="text-white font-semibold mb-1">Диегетическая звуковая модель:</div>
+                  Игра использует гармонические осцилляторы и шумовые генераторы Web Audio API без предзаписанных аудиодорожек: обороты двигателя, трение покрышек об асфальт, свист нагнетателя и удары металла рассчитываются по физическим уравнениям в реальном времени.
+                </div>
+              </div>
+            )}
+
+            {/* REAL CONTROLS KEYBINDINGS */}
+            {settingsTab === 'set-ctrl' && (
+              <div className="panel absolute left-[320px] top-24 w-[1008px] h-[670px] p-6 flex flex-col gap-4 z-10 overflow-y-auto">
+                <div className="cn text-sm text-[#e0ab45] font-bold">Раскладка управления и чувствительность</div>
+
+                <div className="flex justify-between items-center py-2.5 border-b border-white/[0.06]">
+                  <div>
+                    <div className="font-medium text-sm text-white">Чувствительность обзора мыши</div>
+                    <div className="text-xs text-[#a29e93]">Скорость вращения прицела и взаимодействия</div>
+                  </div>
+                  <div className="flex items-center gap-3 w-72">
+                    <input 
+                      type="range" 
+                      min="0.5" 
+                      max="2.5" 
+                      step="0.1"
+                      value={localSettings.mouseSensitivity}
+                      onChange={(e) => handleUpdateGameplaySettings({ mouseSensitivity: Number(e.target.value) })}
+                      className="flex-1 accent-[#c9922b]"
+                    />
+                    <span className="text-xs font-mono font-bold w-12 text-right">{localSettings.mouseSensitivity.toFixed(1)}x</span>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4 mt-2">
+                  <div className="p-4 bg-white/[0.02] border border-white/5 rounded-xl flex flex-col gap-2.5 text-xs font-mono">
+                    <div className="text-[#c9922b] font-bold pb-1 border-b border-white/10 uppercase">Управление автомобилем</div>
+                    <div className="flex justify-between"><span className="text-[#a29e93]">Газ / Тормоз</span><span className="text-white font-bold">[W] / [S] или [↑] / [↓]</span></div>
+                    <div className="flex justify-between"><span className="text-[#a29e93]">Руление</span><span className="text-white font-bold">[A] / [D] или [←] / [→]</span></div>
+                    <div className="flex justify-between"><span className="text-[#a29e93]">Ручной тормоз (Дрифт)</span><span className="text-white font-bold">[Пробел]</span></div>
+                    <div className="flex justify-between"><span className="text-[#a29e93]">Свет фар (Выкл / Ближний / Дальний)</span><span className="text-white font-bold">[L]</span></div>
+                    <div className="flex justify-between"><span className="text-[#a29e93]">Звуковой сигнал (Клаксон)</span><span className="text-white font-bold">[H]</span></div>
+                    <div className="flex justify-between"><span className="text-[#a29e93]">Поворотники (Левый / Правый)</span><span className="text-white font-bold">[Q] / [Z]</span></div>
+                    <div className="flex justify-between"><span className="text-[#a29e93]">Аварийная сигнализация</span><span className="text-white font-bold">[X]</span></div>
+                  </div>
+
+                  <div className="p-4 bg-white/[0.02] border border-white/5 rounded-xl flex flex-col gap-2.5 text-xs font-mono">
+                    <div className="text-[#c9922b] font-bold pb-1 border-b border-white/10 uppercase">Персонаж и взаимодействие</div>
+                    <div className="flex justify-between"><span className="text-[#a29e93]">Действие / Сесть в авто / Взять</span><span className="text-white font-bold">[E]</span></div>
+                    <div className="flex justify-between"><span className="text-[#a29e93]">Быстрый инвентарь / Карманы</span><span className="text-white font-bold">[Tab] / [1-6]</span></div>
+                    <div className="flex justify-between"><span className="text-[#a29e93]">Самодиагностика травм и тела</span><span className="text-white font-bold">[F]</span></div>
+                    <div className="flex justify-between"><span className="text-[#a29e93]">Карта навигации (GPS)</span><span className="text-white font-bold">[M]</span></div>
+                    <div className="flex justify-between"><span className="text-[#a29e93]">Масштаб камеры</span><span className="text-white font-bold">[C]</span></div>
+                    <div className="flex justify-between"><span className="text-[#a29e93]">Сетка деформации кузова BeamNG</span><span className="text-white font-bold">[G]</span></div>
+                    <div className="flex justify-between"><span className="text-[#a29e93]">Меню паузы / Выход в меню</span><span className="text-white font-bold">[Esc]</span></div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* REAL GAMEPLAY SETTINGS */}
+            {settingsTab === 'set-game' && (
+              <div className="panel absolute left-[320px] top-24 w-[1008px] h-[670px] p-6 flex flex-col gap-5 z-10">
+                <div className="cn text-sm text-[#e0ab45] font-bold">Параметры игрового процесса и симуляции</div>
+
+                <div className="flex justify-between items-center py-2.5 border-b border-white/[0.06]">
+                  <div>
+                    <div className="font-medium text-sm text-white">Интервал автосохранения</div>
+                    <div className="text-xs text-[#a29e93]">Фоновая периодическая запись позиции и состояния мира</div>
+                  </div>
+                  <div className="seg w-72">
+                    {[
+                      { val: 0, label: 'Выкл' },
+                      { val: 15, label: '15 с' },
+                      { val: 25, label: '25 с' },
+                      { val: 60, label: '1 мин' },
+                      { val: 120, label: '2 мин' }
+                    ].map(opt => (
+                      <button
+                        key={opt.val}
+                        onClick={() => handleUpdateGameplaySettings({ autoSaveInterval: opt.val })}
+                        className={localSettings.autoSaveInterval === opt.val ? 'on' : ''}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="flex justify-between items-center py-2.5 border-b border-white/[0.06]">
+                  <div>
+                    <div className="font-medium text-sm text-white">Автоматический суточный ход времени</div>
+                    <div className="text-xs text-[#a29e93]">Плавная смена дня, заката, ночи и рассвета</div>
+                  </div>
+                  <button 
+                    onClick={() => handleUpdateGameplaySettings({ timeAutoCycle: !localSettings.timeAutoCycle })} 
+                    className={`tg ${localSettings.timeAutoCycle ? 'on' : ''}`} 
+                  />
+                </div>
+
+                <div className="flex justify-between items-center py-2.5 border-b border-white/[0.06]">
+                  <div>
+                    <div className="font-medium text-sm text-white">Целевой лимит кадров (FPS Cap)</div>
+                    <div className="text-xs text-[#a29e93]">Ограничение частоты кадров для экономии батареи</div>
+                  </div>
+                  <div className="seg w-72">
+                    {[30, 60, 120, 0].map(limit => (
+                      <button
+                        key={limit}
+                        onClick={() => handleUpdateGameplaySettings({ fpsLimit: limit })}
+                        className={localSettings.fpsLimit === limit ? 'on' : ''}
+                      >
+                        {limit === 0 ? 'Max' : `${limit}`}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="p-4 bg-white/[0.02] border border-white/5 rounded-xl text-xs font-mono text-[#a29e93] leading-relaxed mt-2">
+                  <div className="text-white font-semibold mb-1">Принцип реализма и разделения воли:</div>
+                  В симуляторе отсутствуют искусственные мета-кнопки для прерывания биологических процессов (сна, потери сознания, приступа боли, голода). Все параметры тела и погоды симулируются независимо от действий игрока.
                 </div>
               </div>
             )}
@@ -1140,7 +1601,7 @@ export const MainMenu: React.FC<MainMenuProps> = ({ onResume, onNewGame }) => {
         )}
 
         {/* ========================================================= */}
-        {/* SCREEN 7: NOTIFICATIONS */}
+        {/* SCREEN 7: NOTIFICATIONS & SYSTEM STATUS */}
         {/* ========================================================= */}
         {cur === 'notif' && (
           <section className={`absolute inset-0 ${directionBack ? 'scr-anim-in-back' : 'scr-anim-in'}`}>
@@ -1149,104 +1610,121 @@ export const MainMenu: React.FC<MainMenuProps> = ({ onResume, onNewGame }) => {
                 <button onClick={() => go('main', true)} className="chip w-11 justify-center p-0" title="Назад">
                   <ChevronLeft className="w-5 h-5 text-white" />
                 </button>
-                <span className="cn text-2xl font-bold text-white">Уведомления</span>
+                <div>
+                  <span className="cn text-2xl font-bold text-white">Статус симуляции и служб</span>
+                  <span className="mut text-xs ml-3 font-mono">Телеметрия подсистем движка</span>
+                </div>
               </div>
-              <button className="chip">
-                <span className="mut text-xs font-mono">Прочитать все</span>
-              </button>
             </div>
 
-            <div className="absolute left-16 top-32 w-[1312px] flex flex-col gap-3.5 z-10">
-              <div className="panel flex items-center gap-4 p-4">
-                <span className="w-10 h-10 rounded-full bg-[#c9b98f] text-[#1a1409] font-bold flex items-center justify-center text-sm">
-                  Д
-                </span>
-                <div className="flex-1">
-                  <div className="font-semibold text-white text-sm">Dimitri отправил запрос на добавление в друзья</div>
-                  <div className="mut text-xs font-mono mt-0.5">5 минут назад</div>
+            <div className="absolute left-16 top-24 w-[1312px] flex flex-col gap-3.5 z-10">
+              <div className="panel p-4 flex items-center justify-between">
+                <div className="flex items-center gap-3.5">
+                  <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
+                    <Activity className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <div className="font-semibold text-white text-sm">Физический движок Node-Beam (BeamNG 2D)</div>
+                    <div className="mut text-xs font-mono mt-0.5">Упругопластические связи, зоны деформации кузова и непрерывный солвер активны</div>
+                  </div>
                 </div>
-                <button className="btn btn-s text-xs h-9 px-4">Отклонить</button>
-                <button className="btn btn-p text-xs h-9 px-4">Принять</button>
+                <span className="text-xs font-mono font-bold text-emerald-400 bg-emerald-950/40 border border-emerald-500/30 px-3 py-1 rounded">
+                  ОНЛАЙН · 60 HZ
+                </span>
               </div>
 
-              <div className="panel flex items-center gap-4 p-4">
-                <span className="w-10 h-10 rounded-full bg-[#e0ab45] text-[#1a1409] font-bold flex items-center justify-center text-sm">
-                  А
-                </span>
-                <div className="flex-1">
-                  <div className="font-semibold text-white text-sm">Alex_Dune пригласил вас на сервер «Перевал»</div>
-                  <div className="mut text-xs font-mono mt-0.5">1 час назад</div>
+              <div className="panel p-4 flex items-center justify-between">
+                <div className="flex items-center gap-3.5">
+                  <div className="w-10 h-10 rounded-xl bg-sky-500/10 border border-sky-500/30 flex items-center justify-center text-sky-400">
+                    <Globe className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <div className="font-semibold text-white text-sm">Сетевой протокол P2P (PeerJS / WebRTC)</div>
+                    <div className="mut text-xs font-mono mt-0.5">Статус: {onlineManager.status} · Локальный позывной: {playerNickname}</div>
+                  </div>
                 </div>
-                <button onClick={onResume} className="btn btn-p text-xs h-9 px-4">Присоединиться</button>
+                <span className="text-xs font-mono font-bold text-sky-400 bg-sky-950/40 border border-sky-500/30 px-3 py-1 rounded">
+                  {onlineManager.status.toUpperCase()}
+                </span>
+              </div>
+
+              <div className="panel p-4 flex items-center justify-between">
+                <div className="flex items-center gap-3.5">
+                  <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400">
+                    <FolderOpen className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <div className="font-semibold text-white text-sm">Хранилище сохранений (LocalStorage)</div>
+                    <div className="mut text-xs font-mono mt-0.5">Записано {saves.length} слот(ов) сохранений мира</div>
+                  </div>
+                </div>
+                <button onClick={() => go('saves')} className="btn btn-s text-xs h-8 px-3">
+                  Открыть сохраненные игры
+                </button>
               </div>
             </div>
           </section>
         )}
 
         {/* ========================================================= */}
-        {/* SCREEN 8: CREATE SERVER */}
+        {/* SCREEN 8: ACCOUNT & PROFILE */}
         {/* ========================================================= */}
-        {cur === 'create' && (
+        {cur === 'account' && (
           <section className={`absolute inset-0 ${directionBack ? 'scr-anim-in-back' : 'scr-anim-in'}`}>
             <div className="absolute left-16 right-16 top-9 h-11 flex items-center justify-between z-10">
               <div className="flex items-center gap-4">
-                <button onClick={() => go('servers', true)} className="chip w-11 justify-center p-0" title="Назад">
+                <button onClick={() => go('main', true)} className="chip w-11 justify-center p-0" title="Назад">
                   <ChevronLeft className="w-5 h-5 text-white" />
                 </button>
-                <span className="cn text-2xl font-bold text-white">Создать игровой сервер</span>
+                <div>
+                  <span className="cn text-2xl font-bold text-white">Профиль игрока</span>
+                  <span className="mut text-xs ml-3 font-mono">Позывной и синхронизация</span>
+                </div>
               </div>
             </div>
 
-            <div className="panel absolute left-16 top-28 w-[880px] h-[730px] p-7 flex flex-col gap-5 z-10">
-              <div>
-                <div className="text-xs text-[#a29e93] mb-2 font-mono">Имя сервера</div>
-                <input
-                  type="text"
-                  defaultValue="Свободная езда · Сессия"
-                  className="w-full h-11 px-3 rounded-lg bg-white/[0.06] border border-[#c9922b] text-white text-base font-sans outline-none"
-                />
-              </div>
-
-              <div>
-                <div className="text-xs text-[#a29e93] mb-2 font-mono">Локация мира</div>
-                <div className="flex flex-wrap gap-2">
-                  {MAPS.map((m, i) => (
-                    <span 
-                      key={m[0]} 
-                      onClick={() => setSelectedMap(i)}
-                      className={`pill-btn ${selectedMap === i ? 'pill-btn-on' : ''}`}
-                    >
-                      {m[0]}
-                    </span>
-                  ))}
+            {/* Account Card */}
+            <div className="panel absolute left-16 top-24 w-[1312px] p-7 flex flex-col gap-6 z-10">
+              <div className="flex items-center gap-6 pb-6 border-b border-white/10">
+                <div className="w-20 h-20 rounded-2xl bg-gradient-to-tr from-[#e0ab45] to-[#a8741c] flex items-center justify-center font-bold text-3xl text-[#1a1409]">
+                  {playerNickname.charAt(0).toUpperCase()}
+                </div>
+                <div className="flex-1">
+                  <div className="cn text-3xl font-bold text-white">{playerNickname}</div>
+                  <div className="mut text-xs mt-1 font-mono">
+                    {currentUser ? `Связано с аккаунтом: ${currentUser.email || currentUser.displayName}` : 'Гостевой локальный профиль (P2P)'}
+                  </div>
+                  <div className="flex items-center gap-2 mt-2 text-xs text-[#9ac985]">
+                    <span className="w-2 h-2 rounded-full bg-[#7fbf6a]" />
+                    <span>Степной Тракт 2D · Готов к рейсу</span>
+                  </div>
                 </div>
               </div>
 
-              <div>
-                <div className="text-xs text-[#a29e93] mb-2 font-mono">Максимум игроков: 16</div>
-                <input type="range" min="2" max="32" defaultValue="16" className="w-full accent-[#c9922b]" />
-              </div>
-
-              <div className="flex flex-col gap-3 pt-2">
-                <div className="flex justify-between items-center py-2 border-b border-white/[0.06]">
-                  <span className="text-sm">Физические столкновения между авто</span>
-                  <div className="tg on" />
+              <div className="max-w-md">
+                <label className="text-xs text-[#a29e93] mb-1.5 block font-mono">Изменить игровой позывной (Nickname)</label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={playerNickname}
+                    maxLength={20}
+                    onChange={(e) => setPlayerNickname(e.target.value)}
+                    className="flex-1 h-11 px-3.5 rounded-lg bg-white/[0.06] border border-white/10 text-white text-sm outline-none focus:border-[#c9922b]"
+                  />
+                  <button
+                    onClick={() => {
+                      onlineManager.setPlayerName(playerNickname);
+                      setNicknameSavedFeedback(true);
+                      setTimeout(() => setNicknameSavedFeedback(false), 2000);
+                    }}
+                    className="btn btn-p h-11 px-5"
+                  >
+                    {nicknameSavedFeedback ? <Check className="w-4 h-4 stroke-[3]" /> : 'Сохранить'}
+                  </button>
                 </div>
-                <div className="flex justify-between items-center py-2 border-b border-white/[0.06]">
-                  <span className="text-sm">Динамическая смена погоды и времени</span>
-                  <div className="tg on" />
-                </div>
-              </div>
-
-              <div className="flex-1" />
-
-              <div className="flex gap-3">
-                <button onClick={() => go('servers', true)} className="btn btn-s flex-1">
-                  Отмена
-                </button>
-                <button onClick={onResume} className="btn btn-p flex-1">
-                  Запустить сервер
-                </button>
+                {nicknameSavedFeedback && (
+                  <span className="text-xs text-emerald-400 font-mono mt-1.5 block">Позывной успешно сохранен!</span>
+                )}
               </div>
             </div>
           </section>

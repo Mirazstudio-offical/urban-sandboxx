@@ -38,25 +38,65 @@ class SoundEngine {
   private isHornPlaying: boolean = false;
 
   private distortionCurve: Float32Array | null = null;
+  private masterVolume: number = Number(localStorage.getItem('city_sim_master_volume') || '0.8');
+  private engineVolume: number = Number(localStorage.getItem('city_sim_engine_volume') || '0.8');
+  private mainMasterGain: GainNode | null = null;
 
   public init() {
     if (this.ctx) return;
     try {
       const AudioCtxClass = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
       this.ctx = new AudioCtxClass();
+      this.ensureMasterGain();
     } catch (e) {
       console.warn('Web Audio API not supported', e);
     }
   }
 
-  public resume() {
-    if (this.ctx && this.ctx.state === 'suspended') {
-      this.ctx.resume();
+  public ensureMasterGain(): GainNode | null {
+    if (!this.ctx) return null;
+    if (!this.mainMasterGain) {
+      this.mainMasterGain = this.ctx.createGain();
+      this.mainMasterGain.gain.setValueAtTime(this.isMuted ? 0 : this.masterVolume, this.ctx.currentTime);
+      this.mainMasterGain.connect(this.ctx.destination);
+    }
+    return this.mainMasterGain;
+  }
+
+  public getOutNode(): AudioNode {
+    return this.ensureMasterGain() || (this.ctx ? this.ctx.destination : null as any);
+  }
+
+  public setMasterVolume(val: number) {
+    this.masterVolume = Math.max(0, Math.min(1, val));
+    try {
+      localStorage.setItem('city_sim_master_volume', this.masterVolume.toString());
+    } catch {}
+    if (this.mainMasterGain && this.ctx) {
+      this.mainMasterGain.gain.setTargetAtTime(this.isMuted ? 0 : this.masterVolume, this.ctx.currentTime, 0.05);
     }
   }
 
-  public toggleMute(): boolean {
-    this.isMuted = !this.isMuted;
+  public getMasterVolume(): number {
+    return this.masterVolume;
+  }
+
+  public setEngineVolume(val: number) {
+    this.engineVolume = Math.max(0, Math.min(1, val));
+    try {
+      localStorage.setItem('city_sim_engine_volume', this.engineVolume.toString());
+    } catch {}
+  }
+
+  public getEngineVolume(): number {
+    return this.engineVolume;
+  }
+
+  public setMuted(muted: boolean) {
+    this.isMuted = muted;
+    if (this.mainMasterGain && this.ctx) {
+      this.mainMasterGain.gain.setTargetAtTime(this.isMuted ? 0 : this.masterVolume, this.ctx.currentTime, 0.05);
+    }
     if (this.isMuted) {
       this.stopEngine();
       this.stopTireScreech();
@@ -65,6 +105,17 @@ class SoundEngine {
       this.updateWheelRubScrape(0, 0);
       this.updateEngineFireSound(false, 0);
     }
+  }
+
+  public resume() {
+    if (this.ctx && this.ctx.state === 'suspended') {
+      this.ctx.resume();
+    }
+    this.ensureMasterGain();
+  }
+
+  public toggleMute(): boolean {
+    this.setMuted(!this.isMuted);
     return this.isMuted;
   }
 
@@ -176,7 +227,7 @@ class SoundEngine {
       this.engineTurboGain.connect(this.engineMasterGain);
 
       this.engineFilter.connect(this.engineMasterGain);
-      this.engineMasterGain.connect(this.ctx.destination);
+      this.engineMasterGain.connect(this.getOutNode());
 
       this.engineSubOsc.start(now);
       this.engineHarmonicOsc.start(now);
