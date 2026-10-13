@@ -191,29 +191,29 @@ export const OnlineModal: React.FC<OnlineModalProps> = ({ isOpen, onClose, onOpe
   const totalPlayers = remotePlayers.length + (status === 'connected' ? 1 : 0);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-md p-4 animate-in fade-in duration-200 select-none">
-      <div className="relative w-full max-w-2xl bg-slate-900 border border-slate-700/80 rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+    <div className="fixed inset-0 z-50 overflow-y-auto overflow-x-hidden flex items-start sm:items-center justify-center bg-slate-950/80 backdrop-blur-md p-2 sm:p-4 animate-in fade-in duration-200 select-none">
+      <div className="my-auto relative w-full max-w-2xl bg-slate-900 border border-slate-700/80 rounded-2xl sm:rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[94vh] sm:max-h-[90vh]">
         
         {/* Header */}
-        <div className="px-6 py-5 border-b border-slate-800 flex items-center justify-between bg-slate-950/60">
-          <div className="flex items-center gap-3">
-            <div className={`p-2.5 rounded-2xl flex items-center justify-center ${
+        <div className="px-4 sm:px-6 py-3.5 sm:py-5 border-b border-slate-800 flex items-center justify-between bg-slate-950/60 shrink-0">
+          <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+            <div className={`p-2 sm:p-2.5 rounded-xl sm:rounded-2xl flex items-center justify-center shrink-0 ${
               status === 'connected' 
                 ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30' 
                 : 'bg-sky-500/10 text-sky-400 border border-sky-500/30'
             }`}>
-              {status === 'connected' ? <Radio className="w-6 h-6 animate-pulse" /> : <Globe className="w-6 h-6" />}
+              {status === 'connected' ? <Radio className="w-5 h-5 sm:w-6 sm:h-6 animate-pulse" /> : <Globe className="w-5 h-5 sm:w-6 sm:h-6" />}
             </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h2 className="text-lg font-black tracking-wide text-white uppercase">
+            <div className="min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <h2 className="text-base sm:text-lg font-black tracking-wide text-white uppercase truncate">
                   Сетевой Режим
                 </h2>
                 <span className="text-[10px] font-mono font-bold text-[#c68a35] uppercase">
                   · P2P Сессия
                 </span>
               </div>
-              <p className="text-xs text-slate-400">
+              <p className="text-xs text-slate-400 truncate hidden sm:block">
                 Запуск совместного выезда, подключение по коду комнаты и совместные рейсы
               </p>
             </div>
@@ -224,7 +224,7 @@ export const OnlineModal: React.FC<OnlineModalProps> = ({ isOpen, onClose, onOpe
               sound.playButtonPress();
               onClose();
             }}
-            className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
+            className="p-1.5 sm:p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer shrink-0"
           >
             <X className="w-5 h-5" />
           </button>

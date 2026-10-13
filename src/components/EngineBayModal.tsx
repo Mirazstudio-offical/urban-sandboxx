@@ -361,24 +361,24 @@ export const EngineBayModal: React.FC<EngineBayModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-zinc-950/95 backdrop-blur-md p-1 sm:p-3 md:p-4 select-none text-zinc-100 font-sans">
+    <div className="fixed inset-0 z-[1000] overflow-y-auto overflow-x-hidden flex items-start sm:items-center justify-center bg-zinc-950/95 backdrop-blur-md p-1 sm:p-3 md:p-4 select-none text-zinc-100 font-sans">
       {/* Container Card */}
-      <div className="relative w-full max-w-6xl h-[96vh] sm:h-[92vh] max-h-[900px] bg-zinc-900 border border-zinc-800 rounded-2xl shadow-2xl flex flex-col overflow-hidden">
+      <div className="my-auto relative w-full max-w-6xl max-h-[96vh] sm:max-h-[92vh] bg-zinc-900 border border-zinc-800 rounded-2xl shadow-2xl flex flex-col overflow-hidden">
         
         {/* Header Bar */}
         <div className="flex items-center justify-between px-3 py-2 sm:px-5 sm:py-3 bg-zinc-950 border-b border-zinc-800 shrink-0">
-          <div className="flex items-center gap-2 sm:gap-3">
-            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-zinc-800 border border-zinc-700 flex items-center justify-center text-amber-400 shadow-inner shrink-0">
-              <Wrench className="w-5 h-5" />
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+            <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl bg-zinc-800 border border-zinc-700 flex items-center justify-center text-amber-400 shadow-inner shrink-0">
+              <Wrench className="w-4 h-4 sm:w-5 sm:h-5" />
             </div>
-            <div>
-              <div className="flex items-center gap-2">
+            <div className="min-w-0">
+              <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
                 <h2 className="text-sm sm:text-lg font-bold tracking-tight text-zinc-100 truncate">{cfg.name}</h2>
-                <span className="hidden xs:inline-block px-2 py-0.5 text-[10px] sm:text-[11px] font-bold rounded-full bg-zinc-800 text-amber-400 border border-zinc-700 uppercase tracking-wider">
+                <span className="hidden xs:inline-block px-2 py-0.5 text-[10px] sm:text-[11px] font-bold rounded-full bg-zinc-800 text-amber-400 border border-zinc-700 uppercase tracking-wider shrink-0">
                   ({category === 'sports'? 'Twin-Turbo': category === 'heavy'? 'Diesel': category === 'modern'? 'DOHC': 'Carb'})
                 </span>
               </div>
-              <p className="hidden md:block text-xs text-zinc-400">
+              <p className="hidden md:block text-xs text-zinc-400 truncate">
                 Нажимайте прямо на компоненты под капотом для снятия, обслуживания и проверки жидкостей
               </p>
             </div>
@@ -387,10 +387,11 @@ export const EngineBayModal: React.FC<EngineBayModalProps> = ({
           {/* Close Hood Button */}
           <button
             onClick={handleClose}
-            className="flex items-center gap-2 px-3 py-2 sm:px-4 sm:py-2.5 bg-amber-500 hover:bg-amber-400 text-zinc-950 font-bold rounded-xl text-xs sm:text-sm transition-all shadow-md active:scale-95 shrink-0 min-h-[44px]"
+            className="flex items-center gap-1.5 sm:gap-2 px-2.5 py-1.5 sm:px-4 sm:py-2.5 bg-amber-500 hover:bg-amber-400 text-zinc-950 font-bold rounded-xl text-xs sm:text-sm transition-all shadow-md active:scale-95 shrink-0 min-h-[38px] sm:min-h-[44px]"
           >
-            <Lock className="w-4 h-4" />
-            <span>Закрыть капот (Esc)</span>
+            <Lock className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+            <span className="hidden xs:inline">Закрыть капот (Esc)</span>
+            <span className="xs:hidden">Закрыть</span>
           </button>
         </div>
 

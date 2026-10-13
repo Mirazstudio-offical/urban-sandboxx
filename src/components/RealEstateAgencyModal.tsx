@@ -119,31 +119,31 @@ export const RealEstateAgencyModal: React.FC<RealEstateAgencyModalProps> = ({
   return (
     <div
       id="real-estate-modal-overlay"
-      className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/85 backdrop-blur-md animate-fade-in"
+      className="fixed inset-0 z-50 overflow-y-auto overflow-x-hidden flex items-start sm:items-center justify-center p-1 sm:p-3 md:p-4 bg-black/85 backdrop-blur-md animate-fade-in"
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
     >
       <div
         id="real-estate-modal-container"
-        className="w-full max-w-5xl bg-zinc-950 border border-zinc-800 rounded-2xl shadow-2xl overflow-hidden text-zinc-100 flex flex-col max-h-[92vh] sm:max-h-[88vh]"
+        className="my-auto relative w-full max-w-5xl bg-zinc-950 border border-zinc-800 rounded-2xl shadow-2xl overflow-hidden text-zinc-100 flex flex-col max-h-[94vh] sm:max-h-[88vh]"
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-5 py-4 bg-zinc-900 border-b border-zinc-800">
-          <div className="flex items-center gap-3">
-            <div className="p-2.5 rounded-xl bg-amber-500/10 text-amber-400 border border-amber-500/30">
-              <Building2 className="w-6 h-6" />
+        <div className="flex items-center justify-between px-3 sm:px-5 py-3 sm:py-4 bg-zinc-900 border-b border-zinc-800 shrink-0">
+          <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+            <div className="p-2 sm:p-2.5 rounded-xl bg-amber-500/10 text-amber-400 border border-amber-500/30 shrink-0">
+              <Building2 className="w-5 h-5 sm:w-6 sm:h-6" />
             </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h2 className="text-lg font-bold text-zinc-100">
+            <div className="min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <h2 className="text-base sm:text-lg font-bold text-zinc-100 truncate">
                   Агентство Недвижимости «ГлавНедвижимость»
                 </h2>
-                <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
+                <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 shrink-0">
                   Гос. реестр Росреестра
                 </span>
               </div>
-              <p className="text-xs text-zinc-400">
+              <p className="text-xs text-zinc-400 truncate hidden sm:block">
                 Купля-продажа квартир с государственной регистрацией права и выдачей документов
               </p>
             </div>

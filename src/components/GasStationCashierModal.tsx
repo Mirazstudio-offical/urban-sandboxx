@@ -146,31 +146,31 @@ export const GasStationCashierModal: React.FC<GasStationCashierModalProps> = ({
   return (
     <div
       id="gas-station-cashier-modal-overlay"
-      className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-[#0b0c0e]/85 backdrop-blur-md animate-fadeIn font-mono"
+      className="fixed inset-0 z-50 overflow-y-auto overflow-x-hidden flex items-start sm:items-center justify-center p-1 sm:p-3 md:p-4 bg-[#0b0c0e]/85 backdrop-blur-md animate-fadeIn font-mono"
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
     >
       <div
         id="gas-station-cashier-container"
-        className="w-full max-w-4xl bg-[#14161a] border border-[#2a2e38] rounded-[2px] shadow-2xl overflow-hidden text-[#f0f3f6] flex flex-col max-h-[92vh] sm:max-h-[85vh]"
+        className="my-auto relative w-full max-w-4xl bg-[#14161a] border border-[#2a2e38] rounded-[2px] shadow-2xl overflow-hidden text-[#f0f3f6] flex flex-col max-h-[94vh] sm:max-h-[88vh]"
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-4 py-3 bg-[#0b0c0e] border-b border-[#2a2e38]">
-          <div className="flex items-center gap-3">
-            <div className="p-2 rounded-[2px] bg-[#1c1f26] text-[#c68a35] border border-[#2a2e38]">
+        <div className="flex items-center justify-between px-3 sm:px-4 py-2.5 sm:py-3 bg-[#0b0c0e] border-b border-[#2a2e38] shrink-0">
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+            <div className="p-2 rounded-[2px] bg-[#1c1f26] text-[#c68a35] border border-[#2a2e38] shrink-0">
               <Receipt className="w-5 h-5" />
             </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h2 className="text-base sm:text-lg font-bold text-[#f0f3f6] uppercase tracking-wider">
+            <div className="min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <h2 className="text-sm sm:text-lg font-bold text-[#f0f3f6] uppercase tracking-wider truncate">
                   АЗС "Гранд-Ойл 24/7"
                 </h2>
-                <span className="px-2 py-0.5 rounded-[2px] text-[10px] font-bold bg-[#c68a35]/15 text-[#c68a35] border border-[#c68a35]/40 uppercase">
+                <span className="px-2 py-0.5 rounded-[2px] text-[10px] font-bold bg-[#c68a35]/15 text-[#c68a35] border border-[#c68a35]/40 uppercase shrink-0">
                   Касса АЗС
                 </span>
               </div>
-              <p className="text-xs text-[#9ba3af] hidden sm:block">
+              <p className="text-xs text-[#9ba3af] truncate hidden sm:block">
                 Управление заправочными колонками и выбор марки топлива
               </p>
             </div>

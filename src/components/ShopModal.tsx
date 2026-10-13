@@ -1624,37 +1624,37 @@ export const ShopModal: React.FC<ShopModalProps> = (props) => {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#0b0c0e]/85 backdrop-blur-md p-2 sm:p-4 animate-in fade-in duration-200 font-mono">
-      <div className="relative w-full max-w-4xl h-[92vh] sm:h-[85vh] bg-[#14161a] text-[#f0f3f6] rounded-[2px] border border-[#2a2e38] shadow-2xl flex flex-col overflow-hidden">
+    <div className="fixed inset-0 z-50 overflow-y-auto overflow-x-hidden flex items-start sm:items-center justify-center p-1 sm:p-3 md:p-4 bg-[#0b0c0e]/85 backdrop-blur-md animate-in fade-in duration-200 font-mono">
+      <div className="my-auto relative w-full max-w-4xl max-h-[94vh] sm:max-h-[88vh] bg-[#14161a] text-[#f0f3f6] rounded-[2px] border border-[#2a2e38] shadow-2xl flex flex-col overflow-hidden">
         
         {/* Top Header */}
-        <div className="px-4 py-3 bg-[#0b0c0e] border-b border-[#2a2e38] flex items-center justify-between shrink-0">
-          <div className="flex items-center gap-3">
-            <div className="p-2 rounded-[2px] bg-[#1c1f26] border border-[#2a2e38] text-[#c68a35]">
+        <div className="px-3 sm:px-4 py-2.5 sm:py-3 bg-[#0b0c0e] border-b border-[#2a2e38] flex items-center justify-between shrink-0">
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+            <div className="p-2 rounded-[2px] bg-[#1c1f26] border border-[#2a2e38] text-[#c68a35] shrink-0">
               <ShoppingBag className="w-5 h-5" />
             </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h2 className="text-base sm:text-lg font-bold text-[#f0f3f6] uppercase tracking-wider">{shop.nameRu}</h2>
-                <span className="text-[10px] font-mono uppercase px-2 py-0.5 rounded-[2px] border border-[#c68a35]/40 bg-[#c68a35]/15 text-[#c68a35] font-bold">
+            <div className="min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <h2 className="text-sm sm:text-lg font-bold text-[#f0f3f6] uppercase tracking-wider truncate">{shop.nameRu}</h2>
+                <span className="text-[10px] font-mono uppercase px-2 py-0.5 rounded-[2px] border border-[#c68a35]/40 bg-[#c68a35]/15 text-[#c68a35] font-bold shrink-0">
                   Торговля 24/7
                 </span>
               </div>
-              <p className="text-xs text-[#9ba3af] hidden sm:block">{shop.description}</p>
+              <p className="text-xs text-[#9ba3af] truncate hidden sm:block">{shop.description}</p>
             </div>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 sm:gap-3 shrink-0">
             {/* Player Cash Balance Badge */}
-            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-[2px] bg-[#0b0c0e] border border-[#2a2e38]">
+            <div className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-[2px] bg-[#0b0c0e] border border-[#2a2e38]">
               <Coins className="w-4 h-4 text-[#c68a35]" />
-              <span className="text-sm font-mono font-bold text-[#c68a35]">{playerCash.toLocaleString()} ₽</span>
+              <span className="text-xs sm:text-sm font-mono font-bold text-[#c68a35]">{playerCash.toLocaleString()} ₽</span>
             </div>
 
             {/* Close Button */}
             <button
               onClick={onClose}
-              className="p-2 rounded-[2px] bg-[#14161a] border border-[#2a2e38] text-[#9ba3af] hover:text-[#f0f3f6] hover:bg-[#1c1f26] transition-colors cursor-pointer"
+              className="p-1.5 sm:p-2 rounded-[2px] bg-[#14161a] border border-[#2a2e38] text-[#9ba3af] hover:text-[#f0f3f6] hover:bg-[#1c1f26] transition-colors cursor-pointer"
               aria-label="Закрыть"
             >
               <X className="w-5 h-5" />

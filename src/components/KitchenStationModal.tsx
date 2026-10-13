@@ -674,8 +674,8 @@ export const KitchenStationModal: React.FC<KitchenStationModalProps> = ({
   const observations = getSensoryObservations(vessel);
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-0 sm:p-2 md:p-4 select-none animate-fadeIn">
-      <div className="w-full max-w-5xl h-full sm:h-auto sm:max-h-[96vh] flex flex-col bg-slate-950 border-0 sm:border border-slate-800 rounded-none sm:rounded-2xl shadow-2xl shadow-black/95 overflow-hidden text-slate-100 font-sans">
+    <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md overflow-y-auto overflow-x-hidden flex items-start sm:items-center justify-center p-0 sm:p-2 md:p-4 select-none animate-fadeIn">
+      <div className="my-auto w-full max-w-5xl h-full sm:h-auto sm:max-h-[94vh] flex flex-col bg-slate-950 border-0 sm:border border-slate-800 rounded-none sm:rounded-2xl shadow-2xl shadow-black/95 overflow-hidden text-slate-100 font-sans">
         
         {/* Header Bar */}
         <div className="flex items-center justify-between px-3 sm:px-5 py-2.5 sm:py-3 bg-slate-900 border-b border-slate-800 shrink-0">

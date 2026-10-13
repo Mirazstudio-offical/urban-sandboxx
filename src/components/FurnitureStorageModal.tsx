@@ -225,27 +225,27 @@ export const FurnitureStorageModal: React.FC<FurnitureStorageModalProps> = (prop
   });
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-4 animate-in fade-in duration-150">
-      <div className="bg-slate-900 border border-slate-700 rounded-xl shadow-2xl w-full max-w-4xl max-h-[92vh] flex flex-col overflow-hidden text-slate-100">
+    <div className="fixed inset-0 z-50 overflow-y-auto overflow-x-hidden flex items-start sm:items-center justify-center bg-black/75 backdrop-blur-sm p-2 sm:p-4 animate-in fade-in duration-150">
+      <div className="my-auto relative bg-slate-900 border border-slate-700 rounded-xl shadow-2xl w-full max-w-4xl max-h-[94vh] sm:max-h-[90vh] flex flex-col overflow-hidden text-slate-100">
         
         {/* Header */}
-        <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-800 bg-slate-950/70">
-          <div className="flex items-center gap-3">
-            <div className={`p-2 rounded-lg border ${isHotSurface ? 'bg-orange-950/80 border-orange-700' : 'bg-slate-800/90 border-slate-700'}`}>
+        <div className="flex items-center justify-between px-3.5 sm:px-5 py-2.5 sm:py-3.5 border-b border-slate-800 bg-slate-950/70 shrink-0">
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+            <div className={`p-1.5 sm:p-2 rounded-lg border shrink-0 ${isHotSurface ? 'bg-orange-950/80 border-orange-700' : 'bg-slate-800/90 border-slate-700'}`}>
               {renderIcon()}
             </div>
-            <div>
-              <h2 className="text-lg font-semibold tracking-wide flex items-center gap-2 text-white">
-                {storage.customTitle || cfg.nameRu}
+            <div className="min-w-0">
+              <h2 className="text-base sm:text-lg font-semibold tracking-wide flex items-center gap-2 text-white truncate">
+                <span className="truncate">{storage.customTitle || cfg.nameRu}</span>
                 {cfg.isCold && (
-                  <span className="text-xs px-2 py-0.5 rounded-full bg-cyan-950 text-cyan-300 border border-cyan-800">
+                  <span className="text-[10px] sm:text-xs px-2 py-0.5 rounded-full bg-cyan-950 text-cyan-300 border border-cyan-800 shrink-0">
                     Охлаждение (+4°C)
                   </span>
                 )}
                 {isHotSurface && (
-                  <span className="text-xs px-2.5 py-0.5 rounded-full bg-orange-950 text-orange-300 border border-orange-600 flex items-center gap-1 font-semibold">
+                  <span className="text-[10px] sm:text-xs px-2 sm:px-2.5 py-0.5 rounded-full bg-orange-950 text-orange-300 border border-orange-600 flex items-center gap-1 font-semibold shrink-0">
                     <Flame className="w-3.5 h-3.5 text-orange-400 animate-pulse" />
-                    Нагрев и Сушка (+{cfg.heatingTemp || 65}°C)
+                    Нагрев (+{cfg.heatingTemp || 65}°C)
                   </span>
                 )}
               </h2>

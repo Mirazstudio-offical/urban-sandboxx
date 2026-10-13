@@ -1764,40 +1764,40 @@ export const CarDealershipModal: React.FC<Props> = ({
   };
 
   return (
-    <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-2 sm:p-4 font-sans text-zinc-100">
-      <div className="bg-zinc-950 border border-zinc-800 rounded-2xl w-full max-w-5xl max-h-[94vh] sm:max-h-[88vh] flex flex-col shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+    <div className="fixed inset-0 overflow-y-auto overflow-x-hidden bg-black/80 backdrop-blur-md z-50 flex items-start sm:items-center justify-center p-1 sm:p-3 md:p-4 font-sans text-zinc-100">
+      <div className="my-auto relative bg-zinc-950 border border-zinc-800 rounded-2xl w-full max-w-5xl max-h-[94vh] sm:max-h-[88vh] flex flex-col shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
         
         {/* Modal Header */}
-        <div className="px-4 py-3 bg-zinc-900 border-b border-zinc-800 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="p-2.5 rounded-xl bg-zinc-800 text-emerald-400 border border-zinc-700/50">
+        <div className="px-3 sm:px-4 py-2.5 sm:py-3 bg-zinc-900 border-b border-zinc-800 flex items-center justify-between shrink-0">
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+            <div className="p-2 sm:p-2.5 rounded-xl bg-zinc-800 text-emerald-400 border border-zinc-700/50 shrink-0">
               <Car className="w-5 h-5" />
             </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h2 className="text-base sm:text-lg font-bold text-zinc-100">
+            <div className="min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <h2 className="text-sm sm:text-lg font-bold text-zinc-100 truncate">
                   Автосалон "Премиум Моторс"
                 </h2>
-                <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
+                <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 shrink-0">
                   Продажа ТС
                 </span>
               </div>
-              <p className="text-xs text-zinc-400 hidden sm:block">
+              <p className="text-xs text-zinc-400 truncate hidden sm:block">
                 Новые автомобили из салона и подержанные авто с авторынка
               </p>
             </div>
           </div>
 
-          <div className="flex items-center gap-3">
-            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-zinc-900 border border-zinc-800">
+          <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+            <div className="flex items-center gap-1.5 px-2.5 sm:px-3.5 py-1 sm:py-1.5 rounded-xl bg-zinc-900 border border-zinc-800">
               <Coins className="w-4 h-4 text-emerald-400" />
-              <span className="text-sm font-mono font-bold text-emerald-400">
+              <span className="text-xs sm:text-sm font-mono font-bold text-emerald-400">
                 {playerCash.toLocaleString('ru-RU')} ₽
               </span>
             </div>
             <button
               onClick={onClose}
-              className="p-2 min-h-[44px] min-w-[44px] flex items-center justify-center rounded-xl bg-zinc-900 border border-zinc-800 text-zinc-400 hover:text-zinc-100 transition-colors"
+              className="p-1.5 sm:p-2 min-h-[38px] min-w-[38px] sm:min-h-[44px] sm:min-w-[44px] flex items-center justify-center rounded-xl bg-zinc-900 border border-zinc-800 text-zinc-400 hover:text-zinc-100 transition-colors"
             >
               <X className="w-5 h-5" />
             </button>

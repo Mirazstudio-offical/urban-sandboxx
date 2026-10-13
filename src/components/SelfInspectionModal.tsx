@@ -124,28 +124,30 @@ export const SelfInspectionModal: React.FC<SelfInspectionModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 md:p-6 bg-slate-950/85 backdrop-blur-md animate-fadeIn pointer-events-auto select-none">
-      <div className="relative w-full max-w-5xl bg-slate-900 border border-slate-700/80 rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[95vh] md:max-h-[90vh]">
+    <div className="fixed inset-0 z-50 overflow-y-auto overflow-x-hidden flex items-start sm:items-center justify-center p-2 sm:p-4 md:p-6 bg-slate-950/85 backdrop-blur-md animate-fadeIn pointer-events-auto select-none">
+      <div className="my-auto relative w-full max-w-5xl bg-slate-900 border border-slate-700/80 rounded-2xl sm:rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[95vh] md:max-h-[90vh]">
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 bg-slate-950/90 border-b border-slate-800">
-          <div className="flex items-center gap-3">
-            <div className="p-2.5 rounded-2xl bg-rose-500/10 border border-rose-500/30 text-rose-400">
+        <div className="flex items-center justify-between px-4 sm:px-6 py-3.5 sm:py-4 bg-slate-950/90 border-b border-slate-800 shrink-0">
+          <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+            <div className="p-2 sm:p-2.5 rounded-xl sm:rounded-2xl bg-rose-500/10 border border-rose-500/30 text-rose-400 shrink-0">
               <Stethoscope className="w-5 h-5" />
             </div>
-            <div>
-              <h2 className="text-base font-bold text-slate-100 flex items-center gap-2">
-                <span>Клинический самоосмотр и фармакотерапия</span>
-                <span className="px-2 py-0.5 rounded-md bg-slate-800 text-slate-400 font-mono text-xs border border-slate-700">
+            <div className="min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <h2 className="text-sm sm:text-base font-bold text-slate-100 truncate">
+                  Клинический самоосмотр и фармакотерапия
+                </h2>
+                <span className="px-2 py-0.5 rounded-md bg-slate-800 text-slate-400 font-mono text-xs border border-slate-700 shrink-0">
                   Клавиша C
                 </span>
-              </h2>
-              <p className="text-xs text-slate-400">Анатомическая карта травм, волновой порог боли и мониторинг действия медикаментов</p>
+              </div>
+              <p className="text-[11px] sm:text-xs text-slate-400 truncate hidden sm:block">Анатомическая карта травм, волновой порог боли и мониторинг действия медикаментов</p>
             </div>
           </div>
 
           <button
             onClick={onClose}
-            className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition cursor-pointer"
+            className="p-1.5 sm:p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition cursor-pointer shrink-0"
             title="Закрыть (Esc)"
           >
             <X className="w-5 h-5" />

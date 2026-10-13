@@ -364,40 +364,40 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
   return (
     <div 
       id="inventory-modal-overlay"
-      className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-[#0b0c0e]/85 backdrop-blur-md animate-fadeIn"
+      className="fixed inset-0 z-50 overflow-y-auto overflow-x-hidden flex items-start sm:items-center justify-center p-1 sm:p-3 md:p-4 bg-[#0b0c0e]/85 backdrop-blur-md animate-fadeIn"
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
     >
       <div 
         id="inventory-modal-window"
-        className="relative w-full max-w-5xl max-h-[92vh] bg-[#14161a] border border-[#2a2e38] rounded-[2px] shadow-2xl overflow-hidden flex flex-col"
+        className="my-auto relative w-full max-w-5xl max-h-[94vh] sm:max-h-[90vh] bg-[#14161a] border border-[#2a2e38] rounded-[2px] shadow-2xl overflow-hidden flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
         {/* HEADER BAR */}
-        <div className="flex items-center justify-between px-4 sm:px-6 py-3 border-b border-[#2a2e38] bg-[#0b0c0e]/95">
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-[#c68a35]/15 border border-[#c68a35]/40 rounded-[2px] text-[#c68a35]">
+        <div className="flex items-center justify-between px-3 sm:px-6 py-2.5 sm:py-3 border-b border-[#2a2e38] bg-[#0b0c0e]/95 shrink-0">
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+            <div className="p-1.5 sm:p-2 bg-[#c68a35]/15 border border-[#c68a35]/40 rounded-[2px] text-[#c68a35] shrink-0">
               <Package className="w-5 h-5 sm:w-6 sm:h-6" />
             </div>
-            <div>
-              <h2 className="text-base sm:text-lg font-bold text-[#f0f3f6] tracking-wide flex items-center gap-2 font-mono">
+            <div className="min-w-0">
+              <h2 className="text-sm sm:text-lg font-bold text-[#f0f3f6] tracking-wide flex items-center gap-2 font-mono truncate">
                 ИНВЕНТАРЬ И НАГРУЗКА
               </h2>
-              <p className="text-[11px] sm:text-xs text-[#9ba3af] font-mono">
+              <p className="text-[10px] sm:text-xs text-[#9ba3af] font-mono truncate">
                 Физический объем (л), вес (кг), карманы и активные руки
               </p>
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 shrink-0">
             <button
               id="inventory-close-btn"
               onClick={onClose}
-              className="w-10 h-10 flex items-center justify-center rounded-[2px] bg-[#14161a] border border-[#2a2e38] text-[#9ba3af] hover:text-[#f0f3f6] hover:bg-[#1c1f26] hover:border-[#c68a35]/50 transition cursor-pointer"
+              className="w-8 h-8 sm:w-10 sm:h-10 flex items-center justify-center rounded-[2px] bg-[#14161a] border border-[#2a2e38] text-[#9ba3af] hover:text-[#f0f3f6] hover:bg-[#1c1f26] hover:border-[#c68a35]/50 transition cursor-pointer"
               title="Закрыть (Esc / I)"
             >
-              <X className="w-5 h-5" />
+              <X className="w-4 h-4 sm:w-5 sm:h-5" />
             </button>
           </div>
         </div>
