@@ -287,3 +287,43 @@
 
 
 
+
+
+/* MainMenu: BeamNG-inspired industrial ochre skin, matched to menu.html */
+:root { --beam-ochre:#c68a35; --beam-ochre-hover:#d99a41; --beam-ochre-glow:rgba(198,138,53,.28); }
+.cn { font-family:'Barlow Condensed','Arial Narrow',sans-serif; text-transform:uppercase; letter-spacing:.08em; }
+.mut { color:#a29e93; }
+.chip,.panel,.card,.menu-i,.nav-i,.btn,.key,input,select,textarea { border-radius:2px !important; }
+.chip { height:42px; padding:0 14px; gap:10px; background:rgba(20,22,26,.82); border:1px solid rgba(255,255,255,.08); color:#e9e6df; transition:background .2s,border-color .2s,transform .2s; }
+.chip:hover { background:rgba(32,35,42,.95); border-color:rgba(198,138,53,.45); }
+.panel { background:rgba(20,22,26,.92); border:1px solid rgba(255,255,255,.08); box-shadow:0 10px 30px rgba(0,0,0,.55); }
+.menu-i { position:relative; display:flex; align-items:center; gap:14px; min-height:48px; padding:10px 16px; border:1px solid rgba(255,255,255,.08); border-left:3px solid transparent; background:rgba(20,22,26,.82); color:#cfcbc1; font-size:18px; font-weight:600; width:100%; transition:background .2s cubic-bezier(.2,0,0,1),transform .2s,border-color .2s,color .2s; overflow:hidden; text-align:left; }
+.menu-i:hover { background:rgba(32,35,42,.95); color:#fff; transform:translateX(4px); border-color:rgba(198,138,53,.4); box-shadow:0 4px 20px var(--beam-ochre-glow); }
+.menu-i:active,.nav-i:active,.btn:active { transform:translateY(1px); }
+.menu-i::before { content:''; position:absolute; left:0; top:0; bottom:0; width:3px; background:var(--beam-ochre); opacity:0; transform:scaleY(.4); transition:all .2s ease; }
+.menu-i:hover::before { opacity:1; transform:scaleY(1); }
+.nav-i { display:flex; align-items:center; min-height:42px; padding:0 14px; border-left:3px solid transparent; color:#cfcbc1; font-size:15px; font-weight:600; transition:all .15s; text-align:left; }
+.nav-i:hover { background:rgba(255,255,255,.05); padding-left:18px; }
+.nav-on { background:rgba(198,138,53,.18); border-left-color:#c68a35; color:#fff; }
+.btn { height:40px; padding:0 18px; gap:8px; font-size:13px; font-weight:700; text-transform:uppercase; letter-spacing:.05em; border:1px solid rgba(255,255,255,.08); background:linear-gradient(180deg,#1e2128 0%,#13151a 100%); color:#cbd5e1; box-shadow:inset 0 1px 0 rgba(255,255,255,.05),0 2px 4px rgba(0,0,0,.5); transition:all .12s ease-in-out; }
+.btn:hover { filter:none; transform:none; background:linear-gradient(180deg,#282c36 0%,#1a1e26 100%); border-color:rgba(198,138,53,.5); color:#f1f5f9; }
+.btn-p { background:linear-gradient(180deg,#3d2b10 0%,#261905 100%); border-color:#c68a35; color:#e5a94e; }
+.btn-p:hover { background:linear-gradient(180deg,#523a15 0%,#362308 100%); border-color:#d99a41; color:#f6c878; }
+.btn-s { background:linear-gradient(180deg,#1e2128 0%,#13151a 100%); border-color:rgba(255,255,255,.1); color:#cbd5e1; }
+.card { background:rgba(20,22,26,.86); border:1px solid rgba(255,255,255,.08); transition:transform .2s,border-color .2s,box-shadow .2s; }
+.card:hover { transform:translateY(-2px); border-color:rgba(198,138,53,.55); }
+.card-on { border-color:#c68a35; box-shadow:0 0 0 1px #c68a35,0 8px 24px rgba(198,138,53,.2); }
+.key { border:1px solid rgba(255,255,255,.2); border-radius:2px; background:rgba(20,22,26,.8); }
+@keyframes beamRise { from { opacity:0; transform:translateY(14px); } to { opacity:1; transform:translateY(0); } }
+@keyframes beamSlide { from { opacity:0; transform:translateX(-22px); } to { opacity:1; transform:translateX(0); } }
+main > div > div,main > div > section { animation:beamRise .45s cubic-bezier(.2,.8,.2,1) both; }
+main > div > div:nth-child(2) { animation-delay:.08s; }
+main button.menu-i { animation:beamSlide .42s cubic-bezier(.2,.8,.2,1) both; }
+main button.menu-i:nth-child(1) { animation-delay:.04s; }
+main button.menu-i:nth-child(2) { animation-delay:.08s; }
+main button.menu-i:nth-child(3) { animation-delay:.12s; }
+main button.menu-i:nth-child(4) { animation-delay:.16s; }
+main button.menu-i:nth-child(5) { animation-delay:.20s; }
+main button.menu-i:nth-child(6) { animation-delay:.24s; }
+main button.menu-i:nth-child(7) { animation-delay:.28s; }
+@media (prefers-reduced-motion:reduce) { *,*::before,*::after { animation-duration:.01ms !important; transition-duration:.01ms !important; } }
