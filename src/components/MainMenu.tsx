@@ -1004,8 +1004,8 @@ export const MainMenu: React.FC<MainMenuProps> = ({
         {/* SCREEN 5: CREATE SERVER FORM */}
         {/* ========================================================= */}
         {cur === 'create' && (
-          <div className="py-4 flex-1 flex flex-col min-h-0 gap-4">
-            <div className="flex items-center gap-3 pb-2 border-b border-white/10 shrink-0">
+          <div className="py-4 flex-1 flex flex-col items-center justify-center min-h-0 gap-4 w-full my-auto">
+            <div className="max-w-2xl w-full flex items-center gap-3 pb-2 border-b border-white/10 shrink-0">
               <button onClick={() => go('servers', true)} className="chip" title="Назад">
                 <ChevronLeft className="w-4 h-4 text-white" />
                 <span className="text-xs">Назад</span>
@@ -1016,7 +1016,7 @@ export const MainMenu: React.FC<MainMenuProps> = ({
               </div>
             </div>
 
-            <div className="max-w-2xl mx-auto w-full panel p-6 sm:p-8 flex flex-col gap-4 my-auto">
+            <div className="max-w-2xl w-full panel p-6 sm:p-8 flex flex-col gap-4">
               <div>
                 <label className="text-xs text-[#a29e93] mb-1 block font-mono">Название сервера</label>
                 <input
@@ -1410,8 +1410,8 @@ export const MainMenu: React.FC<MainMenuProps> = ({
         {/* SCREEN 7: SYSTEM TELEMETRY */}
         {/* ========================================================= */}
         {cur === 'notif' && (
-          <div className="py-4 flex-1 flex flex-col min-h-0 gap-4">
-            <div className="flex items-center gap-3 pb-2 border-b border-white/10 shrink-0">
+          <div className="py-4 flex-1 flex flex-col items-center justify-center min-h-0 gap-4 w-full my-auto">
+            <div className="max-w-2xl w-full flex items-center gap-3 pb-2 border-b border-white/10 shrink-0">
               <button onClick={() => go('main', true)} className="chip" title="Назад">
                 <ChevronLeft className="w-4 h-4 text-white" />
                 <span className="text-xs">Назад</span>
@@ -1422,7 +1422,7 @@ export const MainMenu: React.FC<MainMenuProps> = ({
               </div>
             </div>
 
-            <div className="max-w-2xl mx-auto w-full flex flex-col gap-3 my-auto">
+            <div className="max-w-2xl w-full flex flex-col gap-3">
               <div className="panel p-4 flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <div className="w-9 h-9 rounded-lg bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
@@ -1475,8 +1475,8 @@ export const MainMenu: React.FC<MainMenuProps> = ({
         {/* SCREEN 8: ACCOUNT PROFILE */}
         {/* ========================================================= */}
         {cur === 'account' && (
-          <div className="py-4 flex-1 flex flex-col min-h-0 gap-4">
-            <div className="flex items-center gap-3 pb-2 border-b border-white/10 shrink-0">
+          <div className="py-4 flex-1 flex flex-col items-center justify-center min-h-0 gap-4 w-full my-auto">
+            <div className="max-w-2xl w-full flex items-center gap-3 pb-2 border-b border-white/10 shrink-0">
               <button onClick={() => go('main', true)} className="chip" title="Назад">
                 <ChevronLeft className="w-4 h-4 text-white" />
                 <span className="text-xs">Назад</span>
@@ -1487,7 +1487,7 @@ export const MainMenu: React.FC<MainMenuProps> = ({
               </div>
             </div>
 
-            <div className="max-w-2xl mx-auto w-full panel p-6 sm:p-8 flex flex-col gap-5 my-auto">
+            <div className="max-w-2xl w-full panel p-6 sm:p-8 flex flex-col gap-5">
               <div className="flex items-center gap-4 pb-4 border-b border-white/10">
                 <div className="w-16 h-16 rounded-xl bg-gradient-to-tr from-[#e0ab45] to-[#a8741c] flex items-center justify-center font-bold text-2xl text-[#1a1409]">
                   {playerNickname.charAt(0).toUpperCase()}
