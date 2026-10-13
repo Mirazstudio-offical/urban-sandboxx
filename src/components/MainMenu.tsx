@@ -356,7 +356,7 @@ export const MainMenu: React.FC<MainMenuProps> = ({
       </svg>
 
       {/* Main Responsive Container */}
-      <div className="relative z-10 w-full max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-3 sm:py-6 flex flex-col h-full justify-between gap-3 overflow-hidden">
+      <div className="relative z-10 w-full max-w-[1500px] mx-auto px-4 sm:px-8 lg:px-12 py-3 sm:py-6 flex flex-col h-full justify-between gap-3 overflow-hidden">
         
         {/* TOP HEADER BAR */}
         <header className="w-full flex items-center justify-between pb-3 sm:pb-4 border-b border-white/10 shrink-0">
@@ -398,10 +398,10 @@ export const MainMenu: React.FC<MainMenuProps> = ({
         {/* ========================================================= */}
         {cur === 'main' && (
           <main className="my-auto py-6 sm:py-8 w-full flex-1 flex flex-col justify-center">
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8 items-start">
+            <div className="grid grid-cols-1 lg:grid-cols-[380px_1fr] gap-6 lg:gap-10 items-start w-full">
               
               {/* Left Column: Navigation Buttons */}
-              <div className="lg:col-span-5 flex flex-col gap-1.5 sm:gap-2">
+              <div className="flex flex-col gap-1.5 sm:gap-2">
                 {saves.length > 0 ? (
                   <button 
                     onClick={() => {
@@ -468,7 +468,7 @@ export const MainMenu: React.FC<MainMenuProps> = ({
               </div>
 
               {/* Right Column: Dynamic Status & Info Panels */}
-              <div className="lg:col-span-7 flex flex-col gap-4">
+              <div className="flex flex-col gap-4 w-full">
                 
                 {/* Save Slot Card */}
                 <div className="panel p-5">
