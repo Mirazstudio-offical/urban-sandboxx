@@ -191,6 +191,55 @@ export type BeamLinkType =
   | 'support'
   | 'latch';
 
+export interface NodeTemplate {
+  id: number;
+  xFrac: number;    // -0.5 to 0.5 relative to vehicle length (front is +0.5, rear is -0.5)
+  yFrac: number;    // -0.5 to 0.5 relative to vehicle width (right is +0.5, left is -0.5)
+  xOffset?: number; // optional absolute px offset
+  yOffset?: number; // optional absolute px offset
+  group: BeamNodeType;
+  massFrac: number; // fraction of car total mass (e.g. 0.02 for skin, 0.20 for engine block)
+  isFixed?: boolean;
+  name?: string;
+}
+
+export interface BeamTemplate {
+  id?: number;
+  nodeA: number;
+  nodeB: number;
+  type: BeamLinkType;
+  spring?: number;     // Hookean spring stiffness (N/px), if omitted uses default for type
+  damp?: number;       // Viscous damping coefficient, if omitted uses default
+  yieldDist?: number;  // Yield distance (px) before plastic metal flow occurs
+  breakDist?: number;  // Break distance (px) where beam fractures/snaps
+  partTag?: 'hood' | 'front_bumper' | 'rear_bumper' | 'door_fl' | 'door_fr' | 'door_rl' | 'door_rr' | 'trunk';
+}
+
+export interface VehicleNodeBeamDefinition {
+  presetId: string;
+  name: string;
+  perimeterCount: number; // Number of outer perimeter nodes forming the collision/visual hull
+  nodes: NodeTemplate[];
+  beams: BeamTemplate[];
+  springScale?: number;
+  dampScale?: number;
+  yieldScale?: number;
+  breakScale?: number;
+  chassisStiffness?: number;
+  tracking?: {
+    frontNodeIds?: number[];
+    rearNodeIds?: number[];
+    leftNodeIds?: number[];
+    rightNodeIds?: number[];
+    subframeLeftFL?: number;
+    subframeRightFR?: number;
+    subframeLeftRL?: number;
+    subframeRightRR?: number;
+    engineNodeId?: number;
+    chassisCoreNodeId?: number;
+  };
+}
+
 export interface BeamNode {
   id: number;
   origX: number;
@@ -211,6 +260,7 @@ export interface BeamNode {
   plasticStrain: number;
   group: BeamNodeType;
   isFixed?: boolean;
+  name?: string;
 }
 
 export interface BeamLink {
@@ -239,17 +289,10 @@ export interface NodeBeamStructure {
   lastSimTime?: number;
   isSleeping?: boolean;
   activeTimer?: number;
-  /** Солвер уже сделал шаг в этом кадре (stepNodeBeamContinuousContact) — updateVehicleSystems второй раз не шагает. */
-  steppedThisTick?: boolean;
-  /** Упор глубины вмятины (локальные координаты кузова): узлы зоны контакта не уходят вглубь дальше depth. */
-  crushLimit?: {
-    dirX: number;   // направление «внутрь кузова», единичный вектор
-    dirY: number;
-    depth: number;  // максимально допустимое смещение узла вдоль dir от исходной позиции, px
-    cx: number;     // центр зоны контакта (локальные координаты)
-    cy: number;
-    radius: number; // радиус зоны действия по ИСХОДНЫМ позициям узлов
-  };
+  presetId?: string;
+  presetName?: string;
+  perimeterCount?: number;
+  definition?: VehicleNodeBeamDefinition;
 }
 
 export interface ScratchMark {
@@ -634,9 +677,10 @@ export interface Vehicle {
     interlockingFriction?: number; // Plastic shear friction coefficient during entanglement
     isNarrowImpact?: boolean;
     contactWidthPx?: number;
-    /** Целевая глубина вмятины из энергетической модели (damageModel.crushFromEnergy), px. Ограничивает ход сжатия softbody. */
-    targetCrushPx?: number;
   };
+
+  // Customizable Node-Beam Softbody Definition Override
+  customMeshConfig?: Partial<VehicleNodeBeamDefinition>;
 
   // AI & State
   isPlayerControlled: boolean;

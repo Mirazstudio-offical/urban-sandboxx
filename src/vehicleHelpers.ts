@@ -643,16 +643,17 @@ export function ensureVehicleDamage(veh: { length?: number; width?: number; dama
   }
 
   const dmg = veh.damage;
-  if (!dmg.nodeBeam || !Array.isArray(dmg.nodeBeam.nodes) || dmg.nodeBeam.nodes.length < 30) {
+  if (!dmg.nodeBeam || !Array.isArray(dmg.nodeBeam.nodes) || dmg.nodeBeam.nodes.length < 8) {
     dmg.nodeBeam = createVehicleNodeBeamSystem({
       type: veh.type || 'sedan',
       length: targetLen,
       width: targetWid,
-      mass: veh.mass
+      mass: veh.mass,
+      customMeshConfig: (veh as any).customMeshConfig
     });
   }
 
-  if (!Array.isArray(dmg.deformedVertices) || dmg.deformedVertices.length < 24) {
+  if (!Array.isArray(dmg.deformedVertices) || dmg.deformedVertices.length < 8) {
     const fresh = createDefaultVehicleDamage(targetLen, targetWid);
     if (Array.isArray(dmg.deformedVertices)) {
       const copyCount = Math.min(dmg.deformedVertices.length, fresh.deformedVertices.length);

@@ -7,7 +7,8 @@ import {
   GameWorld,
   NodeBeamStructure,
   Vehicle,
-  VehicleDamage
+  VehicleDamage,
+  VehicleNodeBeamDefinition
 } from './types';
 import {
   isRoadMachinery,
@@ -16,6 +17,19 @@ import {
   isTractorVehicle
 } from './vehicleHelpers';
 import { crashEnergy, reducedMass, strikeEnergy } from './damageModel';
+import {
+  getVehicleNodeBeamDefinition,
+  DEFAULT_K_STRUCTURAL,
+  DEFAULT_C_STRUCTURAL,
+  DEFAULT_K_CHASSIS,
+  DEFAULT_C_CHASSIS,
+  DEFAULT_K_CROSS,
+  DEFAULT_C_CROSS,
+  DEFAULT_K_SUPPORT,
+  DEFAULT_C_SUPPORT,
+  DEFAULT_K_LATCH,
+  DEFAULT_C_LATCH
+} from './vehicleMeshConfigs';
 
 /**
  * ============================================================================
@@ -23,12 +37,13 @@ import { crashEnergy, reducedMass, strikeEnergy } from './damageModel';
  * ============================================================================
  *
  * Implements a physically authentic 2D Node-Beam structural simulation
- * equivalent to BeamNG.drive's core physics:
+ * equivalent to BeamNG.drive's core physics with individual vehicle mesh configs:
  *
  * 1. NODES:
  *    - Point masses with position (x, y), velocity (vx, vy), and force accumulators.
- *    - 30 nodes per vehicle: 16 perimeter body nodes, 8 internal greenhouse/cowl nodes,
- *      and 6 chassis rails, engine cradle, and subframe nodes.
+ *    - Modular node layout defined per vehicle archetype or custom configuration
+ *      (motorcycle 14 nodes, tractor 24 nodes, compact 26 nodes, sedan 30 nodes,
+ *      cabover truck 34 nodes).
  *
  * 2. BEAMS:
  *    - Viscoelastic, elastoplastic structural links between pairs of nodes.
@@ -58,365 +73,116 @@ export interface NodeBeamConfig {
 }
 
 /**
- * Derives material properties and structural stiffness for different vehicle archetypes.
- */
-function getVehicleNodeBeamConfig(carType: string): NodeBeamConfig {
-  const isMachinery = isRoadMachinery(carType);
-  const isHeavyTrailer = carType.startsWith('trailer_semi') || carType === 'trailer_flatbed_2axle';
-  const isTruck = carType.startsWith('truck_') || carType === 'cement_mixer' ||
-                  carType === 'garbage_truck' || carType === 'bus' ||
-                  carType === 'fire_engine' || carType === 'fire_ladder';
-  const isTractor = isTractorVehicle(carType);
-  const isSupercar = carType === 'supercar' || carType === 'sports';
-  const isVintage = carType === 'classic_compact' || carType === 'sedan_classic' ||
-                    carType === 'muscle_classic' || carType === 'retro_bubble' ||
-                    carType === 'sedan_samara' || carType === 'moped_soviet';
-
-  if (isMachinery || isHeavyTrailer) {
-    return {
-      springScale: 3.2,
-      dampScale: 2.2,
-      yieldScale: 2.8,
-      breakScale: 2.5,
-      chassisStiffness: 3.5
-    };
-  }
-
-  if (isTruck || isTractor) {
-    return {
-      springScale: 2.2,
-      dampScale: 1.8,
-      yieldScale: 2.2,
-      breakScale: 2.0,
-      chassisStiffness: 2.6
-    };
-  }
-
-  if (isSupercar) {
-    return {
-      springScale: 1.6,
-      dampScale: 1.3,
-      yieldScale: 1.4,
-      breakScale: 1.1,
-      chassisStiffness: 1.8
-    };
-  }
-
-  if (isVintage) {
-    return {
-      springScale: 0.85,
-      dampScale: 0.90,
-      yieldScale: 0.75,
-      breakScale: 0.90,
-      chassisStiffness: 0.80
-    };
-  }
-
-  // Standard passenger car unibody
-  return {
-    springScale: 1.0,
-    dampScale: 1.0,
-    yieldScale: 1.0,
-    breakScale: 1.0,
-    chassisStiffness: 1.0
-  };
-}
-
-/**
- * Creates the complete 30-node, ~85-beam 2D softbody network for a vehicle.
+ * Creates the complete softbody network for a vehicle based on its individual mesh configuration.
  */
 export function createVehicleNodeBeamSystem(
-  car: { type?: string; length?: number; width?: number; mass?: number }
+  car: {
+    type?: string;
+    length?: number;
+    width?: number;
+    mass?: number;
+    customMeshConfig?: Partial<VehicleNodeBeamDefinition>;
+  }
 ): NodeBeamStructure {
   const length = car.length || 42;
   const width = car.width || 20;
-  const halfL = length / 2;
-  const halfW = width / 2;
   const totalMass = car.mass || 1400;
-  const cfg = getVehicleNodeBeamConfig(car.type || 'sedan');
+
+  // Resolve custom or archetype definition from mesh preset registry
+  const def = getVehicleNodeBeamDefinition(car.type, car.customMeshConfig);
+
+  const springScale = def.springScale ?? 1.0;
+  const dampScale = def.dampScale ?? 1.0;
+  const yieldScale = def.yieldScale ?? 1.0;
+  const breakScale = def.breakScale ?? 1.0;
 
   // -------------------------------------------------------------------------
-  // 1. NODE LAYOUT (30 Nodes)
+  // 1. NODE LAYOUT (Dynamic per-model nodes)
   // -------------------------------------------------------------------------
-  const nodes: BeamNode[] = [];
-
-  // Group 1: 16 Perimeter Nodes (0..15) - exactly matching basePoly & deformedVertices 0..15
-  const base16Coords: { x: number; y: number; group: BeamNodeType; massFrac: number }[] = [
-    // Front Bumper (nodes 0..1)
-    { x: halfL, y: 0, group: 'bumper', massFrac: 0.025 },                      // 0: Front center
-    { x: halfL - 0.8, y: halfW * 0.78, group: 'bumper', massFrac: 0.020 },      // 1: Front-Right corner
-    // Right Flank (nodes 2..6)
-    { x: halfL - 2.0, y: halfW, group: 'fender', massFrac: 0.022 },             // 2: Front-Right fender
-    { x: halfL * 0.45, y: halfW, group: 'door', massFrac: 0.024 },              // 3: Right front door
-    { x: 0, y: halfW, group: 'pillar', massFrac: 0.026 },                       // 4: Right B-pillar
-    { x: -halfL * 0.45, y: halfW, group: 'door', massFrac: 0.024 },             // 5: Right rear door
-    { x: -halfL + 1.2, y: halfW * 0.95, group: 'quarter', massFrac: 0.024 },    // 6: Rear-Right quarter
-    // Rear Bumper (nodes 7..9)
-    { x: -halfL + 0.4, y: halfW * 0.62, group: 'bumper', massFrac: 0.018 },     // 7: Rear-Right bumper
-    { x: -halfL, y: 0, group: 'bumper', massFrac: 0.022 },                      // 8: Rear center
-    { x: -halfL + 0.4, y: -halfW * 0.62, group: 'bumper', massFrac: 0.018 },    // 9: Rear-Left bumper
-    // Left Flank (nodes 10..14)
-    { x: -halfL + 1.2, y: -halfW * 0.95, group: 'quarter', massFrac: 0.024 },   // 10: Rear-Left quarter
-    { x: -halfL * 0.45, y: -halfW, group: 'door', massFrac: 0.024 },            // 11: Left rear door
-    { x: 0, y: -halfW, group: 'pillar', massFrac: 0.026 },                      // 12: Left B-pillar
-    { x: halfL * 0.45, y: -halfW, group: 'door', massFrac: 0.024 },             // 13: Left front door
-    { x: halfL - 2.0, y: -halfW, group: 'fender', massFrac: 0.022 },            // 14: Front-Left fender
-    // Front-Left Corner (node 15)
-    { x: halfL - 0.8, y: -halfW * 0.78, group: 'bumper', massFrac: 0.020 }     // 15: Front-Left corner
-  ];
-
-  for (let i = 0; i < base16Coords.length; i++) {
-    const c = base16Coords[i];
-    nodes.push({
-      id: i,
-      origX: c.x,
-      origY: c.y,
-      localX: c.x,
-      localY: c.y,
-      x: c.x,
-      y: c.y,
+  const nodes: BeamNode[] = def.nodes.map((nt) => {
+    const lx = nt.xFrac * length + (nt.xOffset || 0);
+    const ly = nt.yFrac * width + (nt.yOffset || 0);
+    const nodeMass = totalMass * (nt.massFrac || (1 / def.nodes.length));
+    return {
+      id: nt.id,
+      origX: lx,
+      origY: ly,
+      localX: lx,
+      localY: ly,
+      x: lx,
+      y: ly,
       vx: 0,
       vy: 0,
       fx: 0,
       fy: 0,
-      mass: totalMass * c.massFrac,
+      mass: Math.max(10, nodeMass),
       plasticStrain: 0,
-      group: c.group
-    });
-  }
-
-  // Group 2: 8 Upper Body & Greenhouse Nodes (16..23)
-  const roofHalfL = halfL * 0.28;
-  const roofHalfW = halfW * 0.42;
-  const cabinCenterX = -halfL * 0.04;
-
-  const internalCoords: { x: number; y: number; group: BeamNodeType; massFrac: number }[] = [
-    { x: halfL * 0.42, y: 0, group: 'hood', massFrac: 0.028 },                         // 16: Hood center
-    { x: cabinCenterX + roofHalfL * 1.5, y: 0, group: 'windshield', massFrac: 0.030 },  // 17: Cowl / Windshield base
-    { x: cabinCenterX, y: 0, group: 'roof', massFrac: 0.035 },                         // 18: Roof center
-    { x: cabinCenterX + roofHalfL, y: -roofHalfW, group: 'roof', massFrac: 0.022 },    // 19: Roof front-left
-    { x: cabinCenterX + roofHalfL, y: roofHalfW, group: 'roof', massFrac: 0.022 },     // 20: Roof front-right
-    { x: cabinCenterX - roofHalfL, y: -roofHalfW, group: 'roof', massFrac: 0.022 },    // 21: Roof rear-left
-    { x: cabinCenterX - roofHalfL, y: roofHalfW, group: 'roof', massFrac: 0.022 },     // 22: Roof rear-right
-    { x: cabinCenterX - roofHalfL * 1.6, y: 0, group: 'trunk', massFrac: 0.026 }       // 23: Trunk deck / Rear shelf
-  ];
-
-  for (let i = 0; i < internalCoords.length; i++) {
-    const c = internalCoords[i];
-    const id = 16 + i;
-    nodes.push({
-      id,
-      origX: c.x,
-      origY: c.y,
-      localX: c.x,
-      localY: c.y,
-      x: c.x,
-      y: c.y,
-      vx: 0,
-      vy: 0,
-      fx: 0,
-      fy: 0,
-      mass: totalMass * c.massFrac,
-      plasticStrain: 0,
-      group: c.group
-    });
-  }
-
-  // Group 3: 6 Subframe & Powertrain Core Nodes (24..29)
-  const subframeCoords: { x: number; y: number; group: BeamNodeType; massFrac: number; isFixed?: boolean }[] = [
-    // 24: Engine block core (heavy mass)
-    { x: halfL * 0.50, y: 0, group: 'engine', massFrac: 0.20 },
-    // 25: Front-Left strut tower / subframe rail
-    { x: halfL * 0.45, y: -halfW * 0.55, group: 'subframe', massFrac: 0.065 },
-    // 26: Front-Right strut tower / subframe rail
-    { x: halfL * 0.45, y: halfW * 0.55, group: 'subframe', massFrac: 0.065 },
-    // 27: Rear-Left axle mount / luggage well rail
-    { x: -halfL * 0.50, y: -halfW * 0.55, group: 'subframe', massFrac: 0.055 },
-    // 28: Rear-Right axle mount / luggage well rail
-    { x: -halfL * 0.50, y: halfW * 0.55, group: 'subframe', massFrac: 0.055 },
-    // 29: Center cabin floor tunnel / unibody core (high inertia reference spine)
-    { x: cabinCenterX, y: 0, group: 'chassis_core', massFrac: 0.16, isFixed: true }
-  ];
-
-  for (let i = 0; i < subframeCoords.length; i++) {
-    const c = subframeCoords[i];
-    const id = 24 + i;
-    nodes.push({
-      id,
-      origX: c.x,
-      origY: c.y,
-      localX: c.x,
-      localY: c.y,
-      x: c.x,
-      y: c.y,
-      vx: 0,
-      vy: 0,
-      fx: 0,
-      fy: 0,
-      mass: totalMass * c.massFrac,
-      plasticStrain: 0,
-      group: c.group,
-      isFixed: c.isFixed
-    });
-  }
+      group: nt.group,
+      isFixed: nt.isFixed,
+      name: nt.name
+    };
+  });
 
   // -------------------------------------------------------------------------
-  // 2. BEAM LAYOUT (~85 Beams)
+  // 2. BEAM LAYOUT (Dynamic per-model beams)
   // -------------------------------------------------------------------------
-  const beams: BeamLink[] = [];
   let beamIdCounter = 0;
-
-  const addBeam = (
-    nodeA: number,
-    nodeB: number,
-    type: BeamLinkType,
-    springK: number,
-    dampC: number,
-    yieldDistance: number,
-    breakDistance: number,
-    partTag?: BeamLink['partTag']
-  ): BeamLink => {
-    const nA = nodes[nodeA];
-    const nB = nodes[nodeB];
-    const dx = nB.origX - nA.origX;
-    const dy = nB.origY - nA.origY;
+  const beams: BeamLink[] = def.beams.map((bt) => {
+    const nA = nodes[bt.nodeA];
+    const nB = nodes[bt.nodeB];
+    const dx = (nB ? nB.origX : 0) - (nA ? nA.origX : 0);
+    const dy = (nB ? nB.origY : 0) - (nA ? nA.origY : 0);
     const dist = Math.hypot(dx, dy) || 1;
 
-    const b: BeamLink = {
-      id: beamIdCounter++,
-      nodeA,
-      nodeB,
+    let baseK = DEFAULT_K_STRUCTURAL;
+    let baseC = DEFAULT_C_STRUCTURAL;
+    let baseYield = 0.50;
+    let baseBreak = 18.0;
+
+    if (bt.type === 'chassis_rail') {
+      baseK = DEFAULT_K_CHASSIS * (def.chassisStiffness ?? 1.0);
+      baseC = DEFAULT_C_CHASSIS;
+      baseYield = 0.70;
+      baseBreak = 26.0;
+    } else if (bt.type === 'cross') {
+      baseK = DEFAULT_K_CROSS;
+      baseC = DEFAULT_C_CROSS;
+      baseYield = 0.45;
+      baseBreak = 16.0;
+    } else if (bt.type === 'support') {
+      baseK = DEFAULT_K_SUPPORT;
+      baseC = DEFAULT_C_SUPPORT;
+      baseYield = 0.80;
+      baseBreak = 40.0;
+    } else if (bt.type === 'latch') {
+      baseK = DEFAULT_K_LATCH;
+      baseC = DEFAULT_C_LATCH;
+      baseYield = 0.40;
+      baseBreak = 6.5;
+    }
+
+    const springK = (bt.spring !== undefined ? bt.spring : baseK) * springScale;
+    const dampC = (bt.damp !== undefined ? bt.damp : baseC) * dampScale;
+    const yieldDistance = (bt.yieldDist !== undefined ? bt.yieldDist : baseYield) * yieldScale;
+    const breakDistance = (bt.breakDist !== undefined ? bt.breakDist : baseBreak) * breakScale;
+
+    return {
+      id: bt.id !== undefined ? bt.id : beamIdCounter++,
+      nodeA: bt.nodeA,
+      nodeB: bt.nodeB,
       origLength: dist,
       restLength: dist,
-      spring: springK * cfg.springScale,
-      damp: dampC * cfg.dampScale,
-      yieldDist: yieldDistance * cfg.yieldScale,
-      breakDist: breakDistance * cfg.breakScale,
+      spring: springK,
+      damp: dampC,
+      yieldDist: yieldDistance,
+      breakDist: breakDistance,
       broken: false,
-      type,
-      partTag,
+      type: bt.type,
+      partTag: bt.partTag,
       currentStress: 0,
       plasticDeform: 0
     };
-    beams.push(b);
-    return b;
-  };
-
-  // Base stiffness factors
-  const kStructural = 2800; // N/px standard outer sheet metal
-  const cStructural = 85;
-  const kChassis = 5200 * cfg.chassisStiffness; // Frame rails & crossmembers
-  const cChassis = 150;
-  const kCross = 2200; // Diagonal shear stiffness
-  const cCross = 70;
-  const kSupport = 3400; // One-way anti-collapse springs
-  const cSupport = 90;
-
-  // A. Perimeter Structural Beams (16 outer skin segments)
-  for (let i = 0; i < 16; i++) {
-    const next = (i + 1) % 16;
-    const isFrontBumper = i === 0 || i === 15;
-    const isRearBumper = i === 7 || i === 8;
-    const yieldD = isFrontBumper ? 0.35 : isRearBumper ? 0.40 : 0.50;
-    const breakD = 18.0;
-    addBeam(i, next, 'structural', kStructural, cStructural, yieldD, breakD);
-  }
-
-  // B. Diagonal Shear Bracing Beams (Perimeter Quads) - Gives true shear rigidity
-  const perimeterCrossQuads: [number, number][] = [
-    [0, 2], [15, 14], [1, 3], [15, 13],
-    [2, 4], [14, 12], [3, 5], [13, 11],
-    [4, 6], [12, 10], [5, 7], [11, 9],
-    [6, 8], [10, 8], [7, 9], [1, 15]
-  ];
-  for (const [a, b] of perimeterCrossQuads) {
-    addBeam(a, b, 'cross', kCross, cCross, 0.45, 16.0);
-  }
-
-  // C. Longitudinal Chassis Rails (BeamNG Ladder / Unibody Rails)
-  // Left Rail: Front Bumper Corner -> FL Subframe -> Firewall -> Floor -> RL Subframe -> Rear Bumper
-  const leftRailSequence: [number, number][] = [
-    [15, 25], [25, 14], [25, 17], [17, 12], [12, 27], [27, 10], [27, 9]
-  ];
-  for (const [a, b] of leftRailSequence) {
-    addBeam(a, b, 'chassis_rail', kChassis, cChassis, 0.70, 26.0);
-  }
-
-  // Right Rail: Front Bumper Corner -> FR Subframe -> Firewall -> Floor -> RR Subframe -> Rear Bumper
-  const rightRailSequence: [number, number][] = [
-    [1, 26], [26, 2], [26, 17], [17, 4], [4, 28], [28, 6], [28, 7]
-  ];
-  for (const [a, b] of rightRailSequence) {
-    addBeam(a, b, 'chassis_rail', kChassis, cChassis, 0.70, 26.0);
-  }
-
-  // Center Tunnel Rail: Front Radiator -> Engine Core -> Cowl -> Center Spine -> Trunk Deck -> Rear Center
-  const centerRailSequence: [number, number][] = [
-    [0, 24], [24, 17], [17, 29], [29, 23], [23, 8]
-  ];
-  for (const [a, b] of centerRailSequence) {
-    addBeam(a, b, 'chassis_rail', kChassis * 1.1, cChassis * 1.1, 0.80, 28.0);
-  }
-
-  // D. Crossmembers & Powertrain Cradle
-  addBeam(25, 26, 'chassis_rail', kChassis, cChassis, 0.60, 22.0); // Front subframe crossmember
-  addBeam(24, 25, 'chassis_rail', kChassis * 0.9, cChassis, 0.50, 18.0); // Left engine mount
-  addBeam(24, 26, 'chassis_rail', kChassis * 0.9, cChassis, 0.50, 18.0); // Right engine mount
-  addBeam(27, 28, 'chassis_rail', kChassis, cChassis, 0.60, 22.0); // Rear subframe crossmember
-  addBeam(12, 29, 'chassis_rail', kChassis, cChassis, 0.65, 24.0); // Floor cross sill left
-  addBeam(4, 29, 'chassis_rail', kChassis, cChassis, 0.65, 24.0);  // Floor cross sill right
-
-  // E. Upper Greenhouse, Roof Cage & Pillars
-  // A-Pillars & Cowl:
-  addBeam(17, 19, 'structural', kStructural * 1.2, cStructural, 0.50, 20.0);
-  addBeam(17, 20, 'structural', kStructural * 1.2, cStructural, 0.50, 20.0);
-  addBeam(14, 19, 'structural', kStructural * 1.1, cStructural, 0.45, 18.0);
-  addBeam(2, 20, 'structural', kStructural * 1.1, cStructural, 0.45, 18.0);
-
-  // Roof Frame & Diagonals:
-  addBeam(19, 20, 'structural', kStructural, cStructural, 0.45, 16.0);
-  addBeam(20, 22, 'structural', kStructural, cStructural, 0.45, 16.0);
-  addBeam(22, 21, 'structural', kStructural, cStructural, 0.45, 16.0);
-  addBeam(21, 19, 'structural', kStructural, cStructural, 0.45, 16.0);
-  addBeam(18, 19, 'cross', kCross, cCross, 0.40, 15.0);
-  addBeam(18, 20, 'cross', kCross, cCross, 0.40, 15.0);
-  addBeam(18, 21, 'cross', kCross, cCross, 0.40, 15.0);
-  addBeam(18, 22, 'cross', kCross, cCross, 0.40, 15.0);
-  addBeam(19, 22, 'cross', kCross, cCross, 0.40, 15.0);
-  addBeam(20, 21, 'cross', kCross, cCross, 0.40, 15.0);
-
-  // B-Pillars to Roof:
-  addBeam(12, 19, 'structural', kStructural, cStructural, 0.50, 18.0);
-  addBeam(4, 20, 'structural', kStructural, cStructural, 0.50, 18.0);
-  addBeam(12, 21, 'structural', kStructural, cStructural, 0.50, 18.0);
-  addBeam(4, 22, 'structural', kStructural, cStructural, 0.50, 18.0);
-
-  // C-Pillars & Rear Glass:
-  addBeam(21, 23, 'structural', kStructural, cStructural, 0.50, 18.0);
-  addBeam(22, 23, 'structural', kStructural, cStructural, 0.50, 18.0);
-  addBeam(10, 21, 'structural', kStructural, cStructural, 0.45, 18.0);
-  addBeam(6, 22, 'structural', kStructural, cStructural, 0.45, 18.0);
-
-  // F. Breakable Latches & Detachable Mounts
-  // Front Bumper brackets:
-  addBeam(15, 25, 'latch', kStructural * 0.9, cStructural, 0.40, 6.5, 'front_bumper');
-  addBeam(1, 26, 'latch', kStructural * 0.9, cStructural, 0.40, 6.5, 'front_bumper');
-  addBeam(0, 16, 'latch', kStructural * 0.8, cStructural, 0.35, 5.5, 'hood'); // Hood latch
-  addBeam(16, 17, 'latch', kStructural * 0.85, cStructural, 0.45, 7.5, 'hood'); // Hood hinge
-  addBeam(13, 12, 'latch', kStructural * 0.75, cStructural, 0.40, 5.8, 'door_fl'); // Driver door latch
-  addBeam(3, 4, 'latch', kStructural * 0.75, cStructural, 0.40, 5.8, 'door_fr'); // Pass door latch
-  addBeam(8, 23, 'latch', kStructural * 0.8, cStructural, 0.40, 6.0, 'trunk'); // Trunk latch
-  addBeam(9, 27, 'latch', kStructural * 0.9, cStructural, 0.40, 6.5, 'rear_bumper');
-  addBeam(7, 28, 'latch', kStructural * 0.9, cStructural, 0.40, 6.5, 'rear_bumper');
-
-  // G. Support Beams (Anti-Collapse One-Way Springs)
-  // Prevent doors from completely punching across center spine
-  addBeam(3, 13, 'support', kSupport, cSupport, 0.8, 40.0);
-  addBeam(5, 11, 'support', kSupport, cSupport, 0.8, 40.0);
-  // Prevent front bumper from pushing past firewall
-  addBeam(0, 17, 'support', kSupport * 1.2, cSupport, 0.9, 45.0);
-  // Prevent engine from punching into rear seats
-  addBeam(24, 29, 'support', kSupport * 1.5, cSupport, 1.0, 50.0);
+  });
 
   return {
     nodes,
@@ -426,7 +192,11 @@ export function createVehicleNodeBeamSystem(
     maxStress: 0,
     lastSimTime: performance.now() / 1000,
     isSleeping: true,
-    activeTimer: 0
+    activeTimer: 0,
+    presetId: def.presetId,
+    presetName: def.name,
+    perimeterCount: def.perimeterCount,
+    definition: def
   };
 }
 
@@ -434,18 +204,26 @@ export function createVehicleNodeBeamSystem(
  * Ensures that a vehicle has a fully initialized Node-Beam structure.
  */
 export function ensureVehicleNodeBeam(
-  veh: { length?: number; width?: number; damage?: VehicleDamage; type?: string; mass?: number }
+  veh: {
+    length?: number;
+    width?: number;
+    damage?: VehicleDamage;
+    type?: string;
+    mass?: number;
+    customMeshConfig?: Partial<VehicleNodeBeamDefinition>;
+  }
 ): NodeBeamStructure {
   if (!veh.damage) {
     veh.damage = {} as VehicleDamage;
   }
   const dmg = veh.damage;
-  if (!dmg.nodeBeam || !Array.isArray(dmg.nodeBeam.nodes) || dmg.nodeBeam.nodes.length < 30) {
+  if (!dmg.nodeBeam || !Array.isArray(dmg.nodeBeam.nodes) || dmg.nodeBeam.nodes.length < 8) {
     dmg.nodeBeam = createVehicleNodeBeamSystem({
       type: veh.type || 'sedan',
       length: veh.length,
       width: veh.width,
-      mass: veh.mass
+      mass: veh.mass,
+      customMeshConfig: veh.customMeshConfig
     });
   }
   return dmg.nodeBeam;
@@ -489,7 +267,7 @@ export function stepNodeBeamSimulation(
 ): void {
   const nodes = system.nodes;
   const beams = system.beams;
-  if (!nodes || nodes.length < 30 || !beams || beams.length < 20) return;
+  if (!nodes || nodes.length < 8 || !beams || beams.length < 6) return;
 
   // BeamNG sub-stepping: split physics frame into 3 micro-ticks for stiffness stability
   const clampedDt = Math.max(0.001, Math.min(0.045, dt));
@@ -666,12 +444,15 @@ export function stepNodeBeamSimulation(
   const dmg = car.damage;
   if (!dmg) return;
 
-  if (!dmg.deformedVertices || dmg.deformedVertices.length < 24) {
+  const vertCount = Math.max(system.perimeterCount || 14, Math.min(nodes.length, 34));
+
+  if (!dmg.deformedVertices || dmg.deformedVertices.length !== vertCount) {
     dmg.deformedVertices = [];
-    for (let i = 0; i < 24; i++) {
+    for (let i = 0; i < vertCount; i++) {
+      const n = nodes[i] || nodes[0];
       dmg.deformedVertices.push({
-        localX: nodes[i].origX,
-        localY: nodes[i].origY,
+        localX: n.origX,
+        localY: n.origY,
         offsetX: 0,
         offsetY: 0,
         plasticStrain: 0,
@@ -679,13 +460,13 @@ export function stepNodeBeamSimulation(
         elasticY: 0,
         velX: 0,
         velY: 0,
-        structuralType: nodes[i].group as any
+        structuralType: n.group as any
       });
     }
   }
 
-  // Update 24 vertex slots directly from physical simulated nodes
-  for (let i = 0; i < 24; i++) {
+  // Update vertex slots directly from physical simulated nodes
+  for (let i = 0; i < vertCount; i++) {
     const n = nodes[i];
     const dv = dmg.deformedVertices[i];
     if (!n || !dv) continue;
@@ -707,31 +488,68 @@ export function stepNodeBeamSimulation(
   // -------------------------------------------------------------------------
   // 5. UPDATE AGGREGATE DAMAGE METRICS FROM PHYSICAL NODE POSITIONS
   // -------------------------------------------------------------------------
-  // Front crumple: intrusion of front bumper node 0 and corners 1, 15
-  dmg.frontCrumple = Math.max(0, -nodes[0].offsetX);
-  dmg.frontLeftDent = Math.hypot(nodes[15].offsetX, nodes[15].offsetY);
-  dmg.frontRightDent = Math.hypot(nodes[1].offsetX, nodes[1].offsetY);
+  const tracking = system.definition?.tracking;
 
-  // Rear crumple: intrusion of rear bumper node 8 and corners 7, 9
-  dmg.rearCrumple = Math.max(0, nodes[8].offsetX);
-  dmg.rearLeftDent = Math.hypot(nodes[9].offsetX, nodes[9].offsetY);
-  dmg.rearRightDent = Math.hypot(nodes[7].offsetX, nodes[7].offsetY);
+  // Front crumple:
+  if (tracking?.frontNodeIds && tracking.frontNodeIds.length > 0) {
+    const frontOffsets = tracking.frontNodeIds.map(id => nodes[id] ? -nodes[id].offsetX : 0);
+    dmg.frontCrumple = Math.max(0, ...frontOffsets);
+    const leftCornerNode = nodes[tracking.frontNodeIds[tracking.frontNodeIds.length - 1]];
+    const rightCornerNode = nodes[tracking.frontNodeIds[1] ?? tracking.frontNodeIds[0]];
+    dmg.frontLeftDent = leftCornerNode ? Math.hypot(leftCornerNode.offsetX, leftCornerNode.offsetY) : 0;
+    dmg.frontRightDent = rightCornerNode ? Math.hypot(rightCornerNode.offsetX, rightCornerNode.offsetY) : 0;
+  } else {
+    const frontNode = nodes.reduce((prev, curr) => (curr.origX > prev.origX ? curr : prev), nodes[0]);
+    dmg.frontCrumple = Math.max(0, -(frontNode.offsetX || 0));
+    dmg.frontLeftDent = Math.hypot(frontNode.offsetX, frontNode.offsetY);
+    dmg.frontRightDent = dmg.frontLeftDent;
+  }
 
-  // Side flanks: intrusion of door & pillar nodes
-  dmg.leftDent = Math.max(0, nodes[12].offsetY);
-  dmg.rightDent = Math.max(0, -nodes[4].offsetY);
+  // Rear crumple:
+  if (tracking?.rearNodeIds && tracking.rearNodeIds.length > 0) {
+    const rearOffsets = tracking.rearNodeIds.map(id => nodes[id] ? nodes[id].offsetX : 0);
+    dmg.rearCrumple = Math.max(0, ...rearOffsets);
+    const rearRightNode = nodes[tracking.rearNodeIds[0]];
+    const rearLeftNode = nodes[tracking.rearNodeIds[tracking.rearNodeIds.length - 1]];
+    dmg.rearRightDent = rearRightNode ? Math.hypot(rearRightNode.offsetX, rearRightNode.offsetY) : 0;
+    dmg.rearLeftDent = rearLeftNode ? Math.hypot(rearLeftNode.offsetX, rearLeftNode.offsetY) : 0;
+  } else {
+    const rearNode = nodes.reduce((prev, curr) => (curr.origX < prev.origX ? curr : prev), nodes[0]);
+    dmg.rearCrumple = Math.max(0, rearNode.offsetX || 0);
+    dmg.rearLeftDent = Math.hypot(rearNode.offsetX, rearNode.offsetY);
+    dmg.rearRightDent = dmg.rearLeftDent;
+  }
 
-  // Steering drift & frame twist calculated from asymmetric subframe rails (nodes 25 & 26)
-  const subframeAsym = (nodes[25].offsetX - nodes[26].offsetX) * 0.12;
-  dmg.steeringDrift = Math.max(-1.0, Math.min(1.0, subframeAsym));
-  dmg.frameBentAngle = subframeAsym * 0.08;
+  // Side flanks:
+  if (tracking?.leftNodeIds && tracking.leftNodeIds.length > 0) {
+    dmg.leftDent = Math.max(0, ...tracking.leftNodeIds.map(id => nodes[id] ? nodes[id].offsetY : 0));
+  } else {
+    const leftNode = nodes.reduce((prev, curr) => (curr.origY < prev.origY ? curr : prev), nodes[0]);
+    dmg.leftDent = Math.max(0, -(leftNode.offsetY || 0));
+  }
 
-  // Wheel rub resistance: when fender nodes compress close to wheel well geometry
-  const flRub = Math.max(0, Math.hypot(nodes[14].offsetX, nodes[14].offsetY) - 3.0);
-  const frRub = Math.max(0, Math.hypot(nodes[2].offsetX, nodes[2].offsetY) - 3.0);
-  const rlRub = Math.max(0, Math.hypot(nodes[10].offsetX, nodes[10].offsetY) - 3.0);
-  const rrRub = Math.max(0, Math.hypot(nodes[6].offsetX, nodes[6].offsetY) - 3.0);
-  dmg.wheelRubResistance = (flRub + frRub + rlRub + rrRub) * 3.5;
+  if (tracking?.rightNodeIds && tracking.rightNodeIds.length > 0) {
+    dmg.rightDent = Math.max(0, ...tracking.rightNodeIds.map(id => nodes[id] ? -nodes[id].offsetY : 0));
+  } else {
+    const rightNode = nodes.reduce((prev, curr) => (curr.origY > prev.origY ? curr : prev), nodes[0]);
+    dmg.rightDent = Math.max(0, rightNode.offsetY || 0);
+  }
+
+  // Steering drift & frame twist:
+  const flId = tracking?.subframeLeftFL;
+  const frId = tracking?.subframeRightFR;
+  if (flId !== undefined && frId !== undefined && nodes[flId] && nodes[frId]) {
+    const subframeAsym = (nodes[flId].offsetX - nodes[frId].offsetX) * 0.12;
+    dmg.steeringDrift = Math.max(-1.0, Math.min(1.0, subframeAsym));
+    dmg.frameBentAngle = subframeAsym * 0.08;
+  }
+
+  // Wheel rub resistance: check fender / wheel well nodes
+  const fenderNodes = nodes.filter(n => n.group === 'fender' || n.group === 'quarter');
+  if (fenderNodes.length > 0) {
+    const rubSum = fenderNodes.reduce((acc, fn) => acc + Math.max(0, Math.hypot(fn.offsetX, fn.offsetY) - 3.0), 0);
+    dmg.wheelRubResistance = rubSum * 3.5;
+  }
 }
 
 /**
@@ -756,7 +574,7 @@ export function applyNodeBeamImpact(
 ): void {
   const system = ensureVehicleNodeBeam(car);
   const nodes = system.nodes;
-  if (!nodes || nodes.length < 30) return;
+  if (!nodes || nodes.length < 8) return;
 
   const halfL = car.length / 2;
   const halfW = car.width / 2;
@@ -959,7 +777,7 @@ export function stepNodeBeamContinuousContact(
   if (!dmg) return;
   const system = ensureVehicleNodeBeam(car);
   const nodes = system.nodes;
-  if (!nodes || nodes.length < 30) return;
+  if (!nodes || nodes.length < 8) return;
 
   const halfL = car.length / 2;
   const halfW = car.width / 2;

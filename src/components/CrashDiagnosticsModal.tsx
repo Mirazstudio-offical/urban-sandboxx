@@ -17,7 +17,8 @@ import {
   Volume2, 
   Wrench, 
   X, 
-  Zap 
+  Zap,
+  Sliders
 } from 'lucide-react';
 import { crashLogger, LogEntry, CrashReport, TelemetrySnapshot } from '../crashLogger';
 import { performanceConfig } from '../performanceConfig';
@@ -29,6 +30,10 @@ import {
   applyNodeBeamImpact, 
   createVehicleNodeBeamSystem 
 } from '../nodeBeamPhysics';
+import {
+  listAllMeshPresets,
+  getVehicleNodeBeamDefinition
+} from '../vehicleMeshConfigs';
 
 interface CrashDiagnosticsModalProps {
   isOpen: boolean;
@@ -728,6 +733,60 @@ export const CrashDiagnosticsModal: React.FC<CrashDiagnosticsModalProps> = ({
                 </span>
               </div>
             </div>
+
+            {/* Mesh Configuration & Archetype Presets */}
+            {activeVehicle && (
+              <div className="bg-slate-950/60 border border-slate-800 rounded-xl p-3 flex flex-col gap-2">
+                <div className="flex items-center justify-between text-xs">
+                  <div className="flex items-center gap-1.5 font-semibold text-slate-300">
+                    <Sliders className="w-3.5 h-3.5 text-cyan-400" />
+                    <span>Конфигурация сетки модели (Vehicle Mesh Preset)</span>
+                  </div>
+                  <div className="text-[11px] font-mono text-cyan-400 bg-cyan-950/40 border border-cyan-800/40 px-2 py-0.5 rounded">
+                    {activeVehicle.damage?.nodeBeam?.presetName || 'Стандартная сетка'}
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap gap-1.5 pt-1">
+                  {listAllMeshPresets().map((preset) => {
+                    const isSelected = (activeVehicle.damage?.nodeBeam?.presetId || '') === preset.presetId;
+                    return (
+                      <button
+                        key={preset.presetId}
+                        onClick={() => {
+                          if (!activeVehicle) return;
+                          activeVehicle.customMeshConfig = { ...preset };
+                          activeVehicle.damage.nodeBeam = createVehicleNodeBeamSystem(activeVehicle);
+                          if (activeVehicle.damage.deformedVertices) {
+                            for (const v of activeVehicle.damage.deformedVertices) {
+                              v.offsetX = 0;
+                              v.offsetY = 0;
+                              v.targetOffsetX = 0;
+                              v.targetOffsetY = 0;
+                              v.elasticX = 0;
+                              v.elasticY = 0;
+                              v.velX = 0;
+                              v.velY = 0;
+                              v.plasticStrain = 0;
+                            }
+                          }
+                          setSimTick(t => t + 1);
+                        }}
+                        className={`px-2.5 py-1 rounded-lg text-[11px] font-medium border transition cursor-pointer flex items-center gap-1.5 ${
+                          isSelected
+                            ? 'bg-cyan-500/20 border-cyan-500 text-cyan-200'
+                            : 'bg-slate-900/60 border-slate-800 hover:border-slate-700 text-slate-400 hover:text-slate-200'
+                        }`}
+                      >
+                        {isSelected && <Check className="w-3 h-3 text-cyan-400" />}
+                        <span>{preset.name}</span>
+                        <span className="text-[10px] opacity-60">({preset.nodes.length}N / {preset.beams.length}B)</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
 
             {/* Metrics Grid */}
             {activeVehicle?.damage?.nodeBeam ? (
