@@ -293,6 +293,15 @@ export interface NodeBeamStructure {
   presetName?: string;
   perimeterCount?: number;
   definition?: VehicleNodeBeamDefinition;
+  crushLimit?: {
+    dirX: number;
+    dirY: number;
+    depth: number;
+    cx: number;
+    cy: number;
+    radius: number;
+  };
+  steppedThisTick?: boolean;
 }
 
 export interface ScratchMark {
@@ -677,6 +686,7 @@ export interface Vehicle {
     interlockingFriction?: number; // Plastic shear friction coefficient during entanglement
     isNarrowImpact?: boolean;
     contactWidthPx?: number;
+    targetCrushPx?: number;
   };
 
   // Customizable Node-Beam Softbody Definition Override
