@@ -268,4 +268,22 @@
 .row-hover:hover { background: rgba(255,255,255,.05); }
 .row-on { background: rgba(201,146,43,.15); border-left-color: #c9922b; }
 
+@keyframes sweep{0%{opacity:1;transform:translateX(-100%)}100%{opacity:1;transform:translateX(100%)}}
+.wipe{position:absolute;left:0;top:0;width:100%;height:3px;z-index:9;opacity:0;background:linear-gradient(90deg,transparent,#e0ab45 50%,transparent)}
+.wipe.on{animation:sweep .3s linear}
+.glow,.lay{transition:transform 1.1s cubic-bezier(.3,.7,.2,1)}
+.lay{position:absolute;left:0;top:0;width:1760px;height:900px}
+.th{position:relative;overflow:hidden}
+.th::before{content:'';position:absolute;inset:0;background:radial-gradient(circle at 70% 35%,rgba(255,200,120,.35),transparent 45%)}
+.th::after{content:'';position:absolute;left:0;right:0;bottom:0;height:55%;background:rgba(8,8,9,.5);clip-path:polygon(0 60%,14% 28%,27% 52%,44% 12%,61% 48%,77% 22%,100% 54%,100% 100%,0 100%)}
+.m1{background:linear-gradient(180deg,#3b2a1b,#c47a2a 75%)}
+.m2{background:linear-gradient(180deg,#1c2a33,#6b8794 75%)}
+.m3{background:linear-gradient(180deg,#18241b,#587a48 75%)}
+.m4{background:linear-gradient(180deg,#14151c,#4a4468 75%)}
+.m5{background:linear-gradient(180deg,#2a303a,#b3bcc6 78%)}
+.m6{background:linear-gradient(180deg,#3b3326,#dcc48f 78%)}
+.m7{background:linear-gradient(180deg,#2b2b2e,#7a6a58 78%)}
+.m8{background:linear-gradient(180deg,#123036,#4fa0a5 75%)}
+
+
 
