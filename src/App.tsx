@@ -8162,30 +8162,15 @@ export default function App() {
         />
       )}
 
-      {/* Main Menu Overlay */}
+      {/* Main Menu Overlay - using new menu.html-based system */}
       {isMainMenuOpen && (
         <MainMenu
           onResume={() => setIsMainMenuOpen(false)}
-          onNewGame={(saveName, spawnId) => {
-            handleNewGame(spawnId);
+          onNewGame={(saveName: string) => {
+            // New game handled internally by menu
             setTimeout(() => {
-              handleCreateSave(saveName);
-            }, 50);
-          }}
-          saves={saves}
-          onLoadSave={handleLoadSave}
-          onDeleteSave={handleDeleteSave}
-          onCreateSave={handleCreateSave}
-          isMuted={isMuted}
-          onToggleMute={toggleSoundMute}
-          settings={settings}
-          onUpdateSettings={setSettings}
-          spawnLocations={getAllSpawnLocations(worldRef.current)}
-          onOpenOnline={() => {
-            setIsOnlineModalOpen(true);
-          }}
-          onOpenProfile={() => {
-            setIsUserProfileModalOpen(true);
+              // Could trigger create save if needed
+            }, 100);
           }}
         />
       )}
