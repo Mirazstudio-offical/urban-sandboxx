@@ -132,6 +132,7 @@ import { FurnitureStorageModal } from './components/FurnitureStorageModal';
 import { KitchenStationModal } from './components/KitchenStationModal';
 import { BedSleepOverlay } from './components/BedSleepOverlay';
 import { DateTimePickerModal } from './components/DateTimePickerModal';
+import { CreativeMenuModal, CreativePlacementHud } from './components/CreativeMenuModal';
 import { 
   BedSleepState, 
   startLyingOnBed, 
@@ -1478,6 +1479,75 @@ export default function App() {
       spatialGridPropsRef.current.insert(newProp);
       addPlayerNotification(player, `Проп ${placement.nameRu} установлен!`, 'info');
     }
+  };
+
+  const handleSpawnVehicleDirectly = (carType: string, color: string) => {
+    const world = worldRef.current;
+    const player = playerRef.current;
+    if (!world || !player) return;
+    const config = CAR_CONFIGS[carType];
+    if (!config) return;
+
+    const angle = player.isInVehicle ? (player.currentVehicleId ? (world.vehicles.find(v => v.id === player.currentVehicleId)?.angle || 0) : 0) : (player.angle || 0);
+    const spawnDist = 110;
+    const spawnX = player.x + Math.cos(angle) * spawnDist;
+    const spawnY = player.y + Math.sin(angle) * spawnDist;
+
+    const fs = createDefaultFuelSystem(carType as any, false);
+    const newVehicle: Vehicle = {
+      id: `spawn_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
+      type: carType as any,
+      x: spawnX,
+      y: spawnY,
+      vx: 0,
+      vy: 0,
+      angle: angle,
+      steerAngle: 0,
+      targetSteerAngle: 0,
+      speed: 0,
+      lateralVelocity: 0,
+      angularVelocity: 0,
+      isDrifting: false,
+      driftFactor: 0,
+      mass: config.mass,
+      width: config.width,
+      length: config.length,
+      wheelBase: config.wheelBase,
+      color: color || '#c68a35',
+      roofColor: color || '#c68a35',
+      headlightsOn: false,
+      headlightMode: 'off',
+      brakeLightsOn: false,
+      isReversing: false,
+      turnSignal: 'none',
+      turnSignalTimer: 0,
+      requiredFuel: fs.fuelType === 'diesel' ? 'diesel' : (fs.octaneNumber === 92 ? 'ai92' : 'ai95'),
+      hasGBO: ['sedan_classic', 'wagon_classic', 'taxi_yellow', 'delivery_truck', 'van_cargo_old'].includes(carType) ? Math.random() < 0.4 : false,
+      engineState: createDefaultEngineState(carType as any, false, false),
+      fuelSystem: fs,
+      damage: createDefaultVehicleDamage(config.length, config.width),
+      isPlayerControlled: false,
+      isParked: false,
+      targetSpeed: 0,
+      currentLaneId: null,
+      targetWaypointIndex: 0,
+      routeWaypoints: [],
+      aiState: 'parked',
+      inIntersection: false,
+      plannedTurn: 'straight',
+      recentTurns: [],
+      justTurnedAround: false,
+      ghostingAlpha: 1.0,
+      stuckTimer: 0,
+      honkTimer: 0,
+      isHonking: false,
+      hornEffectTimer: 0
+    };
+
+    world.vehicles.push(newVehicle);
+    spatialGridVehiclesRef.current.insert(newVehicle);
+    sound.playHorn();
+    addPlayerNotification(player, `Транспорт ${config.name} заспавнен рядом!`, 'pickup');
   };
 
   // Periodic autosave based on settings.autoSaveInterval
@@ -5842,7 +5912,7 @@ export default function App() {
         id="main-canvas"ref={canvasRef}
         className="absolute inset-0 w-full h-full block cursor-crosshair"/>
 
-      {/* TOP-LEFT: PAUSE BUTTON + GAME MENU (BeamNG style) */}
+      {/* TOP-LEFT: PAUSE BUTTON + GAME MENU + SIMULATION SPEED (BeamNG style) */}
       <div id="hud-top-left" className="absolute top-3 left-3 sm:top-4 sm:left-4 z-50 flex flex-col items-start gap-2 pointer-events-none select-none">
         <div className="flex items-center gap-2">
           <button
@@ -5864,6 +5934,23 @@ export default function App() {
             <MenuIcon className="w-5 h-5" />
             <span>Меню</span>
           </button>
+          <button
+            id="hud-sim-speed-btn"
+            type="button"
+            className={`hud-btn ${timeScale < 1.0 ? 'on' : ''}`}
+            onClick={() => {
+              setTimeScale((prev) => {
+                if (prev >= 1.0) return 0.5;
+                if (prev >= 0.5) return 0.2;
+                if (prev >= 0.2) return 0.05;
+                return 1.0;
+              });
+            }}
+            title="Скорость симуляции [Клавиша T]"
+            aria-label="Скорость симуляции">
+            <Gauge className="w-4 h-4 text-[#c9922b]" />
+            <span className="font-mono font-bold tracking-tight">{timeScale === 1.0 ? '1.0x' : `${timeScale}x`}</span>
+          </button>
         </div>
 
         {isQuickMenuOpen && (
@@ -5872,6 +5959,8 @@ export default function App() {
             timeHour={timeHour}
             weather={weather}
             isTimeAutoCycling={isTimeAutoCycling}
+            timeScale={timeScale}
+            onSetTimeScale={setTimeScale}
             isMuted={isMuted}
             isCreativeMode={isCreativeMode}
             onlineStatus={onlineStatus}
@@ -5932,6 +6021,19 @@ export default function App() {
           />
         )}
       </div>
+
+      {/* TOP-CENTER: CINEMATIC SLOW-MOTION INDICATOR (BeamNG Style) */}
+      {timeScale < 1.0 && !isMainMenuOpen && (
+        <div className="fixed top-3 left-1/2 -translate-x-1/2 z-40 pointer-events-none flex items-center gap-2.5 px-4 py-1.5 bg-[#101216]/92 border border-[#c68a35]/60 rounded-lg shadow-2xl backdrop-blur-md animate-in fade-in slide-in-from-top-2 duration-150 select-none">
+          <Gauge className="w-4 h-4 text-[#c68a35] animate-spin" style={{ animationDuration: '4s' }} />
+          <span className="font-sans font-black text-xs uppercase tracking-wider text-white">
+            ЗАМЕДЛЕНИЕ ВРЕМЕНИ: <span className="text-[#f0c264] font-mono">{timeScale}x ({Math.round(timeScale * 100)}%)</span>
+          </span>
+          <span className="text-[10px] font-mono text-[#8b929e] tracking-widest uppercase pl-2 border-l border-white/10">
+            КЛ. [T] — СБРОС
+          </span>
+        </div>
+      )}
 
       {/* TOP-RIGHT: GPS NAVIGATOR MINIMAP */}
       <div id="hud-top-right"className="absolute top-3 right-3 sm:top-4 sm:right-4 z-40 flex flex-col items-end gap-1.5 pointer-events-auto select-none">
@@ -6002,25 +6104,6 @@ export default function App() {
                 className="w-6 h-6 sm:w-7 sm:h-7 flex items-center justify-center text-slate-300 hover:text-white active:bg-slate-800 rounded-lg transition"title="Отдалить камеру">
                 <ZoomOut className="w-3 h-3 sm:w-3.5 sm:h-3.5"/>
               </button>
-            </div>
-
-            {/* Time Scale / Slow-Motion Control Bar */}
-            <div className="flex items-center gap-1 bg-slate-950/90 backdrop-blur-xl border border-white/15 rounded-xl px-2 py-1 shadow-2xl pointer-events-auto">
-              <span className="text-[10px] font-bold text-slate-400 mr-1">⏱️ СКОРОСТЬ:</span>
-              {[1.0, 0.5, 0.2, 0.05].map((scale) => {
-                const active = timeScale === scale;
-                return (
-                  <button
-                    key={scale}
-                    onClick={() => setTimeScale(scale)}
-                    className={`px-1.5 py-0.5 rounded text-[10px] font-extrabold transition ${
-                      active ? 'bg-sky-600 text-white shadow-lg' : 'bg-slate-900/80 text-slate-300 hover:bg-slate-800'
-                    }`}
-                    title={`Установить скорость ${scale}x (Клавиша T)`}>
-                    {scale === 0.05 ? '0.05x 🎬' : `${scale}x`}
-                  </button>
-                );
-              })}
             </div>
 
             {/* Radar Minimap Box (Compact & Elegant) */}
@@ -7119,527 +7202,175 @@ export default function App() {
         </div>
       )}
 
-      {/* CREATIVE MODE SIDEBAR & CONTROL PANEL */}
-      {isCreativeMode && !isMainMenuOpen && (
-        <div 
-          id="creative-sidebar-panel"className="absolute top-24 left-4 z-20 w-80 max-h-[calc(100vh-140px)] bg-slate-900/90 backdrop-blur-md border border-slate-700/80 rounded-2xl shadow-2xl flex flex-col pointer-events-auto overflow-hidden animate-in slide-in-from-left duration-200 text-white">
-          {/* Header */}
-          <div className="p-4 bg-slate-950/60 border-b border-slate-800 flex items-center justify-between shrink-0">
-            <div className="flex items-center gap-2">
-              <Sparkles className="w-5 h-5 text-amber-400 animate-pulse animate-duration-1000"/>
-              <span className="font-bold text-sm tracking-wide text-slate-100 uppercase">Режим Творчества</span>
-            </div>
-            <button 
-              onClick={() => {
-                setIsCreativeMode(false);
-                setIsFlying(false);
-                setIsInvincible(false);
-                setActivePlacement(null);
-                activePlacementRef.current = null;
-                const player = playerRef.current;
-                if (player) {
-                  addPlayerNotification(player, 'Режим Творчества выключен.', 'warning');
-                }
-              }}
-              className="p-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition-all cursor-pointer"title="Закрыть режим творчества">
-              <X className="w-4 h-4"/>
-            </button>
-          </div>
+      {/* MODERN CREATIVE MODE MODAL */}
+      <CreativeMenuModal
+        isOpen={isCreativeMode && !isMainMenuOpen}
+        onClose={() => {
+          setIsCreativeMode(false);
+          setIsFlying(false);
+          setIsInvincible(false);
+          setActivePlacement(null);
+          activePlacementRef.current = null;
+          const p = playerRef.current;
+          if (p) {
+            addPlayerNotification(p, 'Режим Творчества выключен.', 'warning');
+          }
+        }}
+        creativeTab={creativeTab}
+        setCreativeTab={setCreativeTab}
+        creativeVehicleColor={creativeVehicleColor}
+        setCreativeVehicleColor={(col) => {
+          setCreativeVehicleColor(col);
+          if (activePlacement && activePlacement.type === 'vehicle') {
+            setActivePlacement({ ...activePlacement, color: col });
+          }
+        }}
+        onSelectVehicleForPlacement={(key, nameRu, color) => {
+          setActivePlacement({
+            type: 'vehicle',
+            id: key,
+            nameRu,
+            angle: 0,
+            color
+          });
+        }}
+        onSpawnVehicleNearPlayer={(key, color) => {
+          handleSpawnVehicleDirectly(key, color);
+        }}
+        activePlacement={activePlacement}
+        onSelectPropForPlacement={(propId, nameRu) => {
+          setActivePlacement({
+            type: 'prop',
+            id: propId,
+            nameRu,
+            angle: 0
+          });
+        }}
+        itemSearch={creativeItemSearch}
+        setItemSearch={setCreativeItemSearch}
+        onGiveItem={(key, count) => {
+          const p = playerRef.current;
+          if (!p) return;
+          const created = createItem(key, count);
+          const success = addItemToPlayer(p, created);
+          if (success) {
+            addPlayerNotification(p, `Получено: ${created.nameRu || created.name} x${count}`, 'pickup');
+            sound.playUseItem();
+          } else {
+            addPlayerNotification(p, 'Инвентарь заполнен!', 'warning');
+          }
+        }}
+        isFlying={isFlying}
+        onToggleFlying={() => {
+          const val = !isFlying;
+          setIsFlying(val);
+          const p = playerRef.current;
+          if (p) {
+            addPlayerNotification(p, val ? 'Полёт активирован!' : 'Режим ходьбы.', val ? 'info' : 'warning');
+          }
+        }}
+        isInvincible={isInvincible}
+        onToggleInvincible={() => {
+          const val = !isInvincible;
+          setIsInvincible(val);
+          const p = playerRef.current;
+          if (p) {
+            addPlayerNotification(p, val ? 'Вы бессмертны! Травмы очищены.' : 'Режим смертности включен.', val ? 'heal' : 'warning');
+          }
+        }}
+        isGridMode={isGridMode}
+        onToggleGridMode={() => {
+          const cam = cameraRef.current;
+          cam.gridMode = !cam.gridMode;
+          const val = !!cam.gridMode;
+          setIsGridMode(val);
+          const p = playerRef.current;
+          if (p) {
+            addPlayerNotification(p, `Режим сетки (Grid Mode) ${val ? 'ВКЛ' : 'ВЫКЛ'}`, val ? 'info' : 'warning');
+          }
+        }}
+        isCleanMode={isCleanMode}
+        onToggleCleanMode={() => {
+          const val = !isCleanMode;
+          setIsCleanMode(val);
+          isCleanModeRef.current = val;
+          const world = worldRef.current;
+          if (world) {
+            world.cleanMode = val;
+            if (val && world.particles) {
+              world.particles = world.particles.filter(p => p.type !== 'engine_smoke' && p.type !== 'tire_smoke' && p.type !== 'exhaust');
+            }
+          }
+          const p = playerRef.current;
+          if (p) {
+            p.isCleanMode = val;
+            if (val) {
+              p.needs.health = 100;
+              if (p.bodyState) {
+                p.bodyState.painLevel = 0;
+                p.bodyState.bloodLoss = 0;
+                p.bodyState.shockLevel = 0;
+              }
+            }
+            addPlayerNotification(p, val ? 'Чистый режим ВКЛ! Дым/пар убраны, урон отключен.' : 'Чистый режим ВЫКЛ.', val ? 'info' : 'warning');
+          }
+        }}
+        onGiveCash={(amount) => {
+          const p = playerRef.current;
+          if (p) {
+            addPlayerCash(p, amount);
+            addPlayerNotification(p, `Получено ₽${amount.toLocaleString('ru-RU')} из резерва!`, 'pickup');
+            sound.playTurnSignalTick(true);
+            setVitalsRefreshTick(t => t + 1);
+          }
+        }}
+        onOpenCalendar={() => {
+          sound.playButtonPress();
+          setIsDateTimePickerOpen(true);
+        }}
+        calendar={calendar}
+        timeHour={timeHour}
+        onStepDay={handleStepGameDay}
+        onRepairAllVehicles={() => {
+          handleResetAllVehiclesDamage();
+          const p = playerRef.current;
+          if (p) {
+            addPlayerNotification(p, 'Все повреждения транспорта устранены!', 'info');
+          }
+        }}
+        onClearCreatedSpawns={() => {
+          const world = worldRef.current;
+          if (!world) return;
+          world.vehicles = world.vehicles.filter(v => {
+            if (v.id.startsWith('spawn_')) {
+              spatialGridVehiclesRef.current.remove(v);
+              return false;
+            }
+            return true;
+          });
+          world.props = world.props.filter(p => {
+            if (p.id.startsWith('spawn_prop_')) {
+              spatialGridPropsRef.current.remove(p);
+              return false;
+            }
+            return true;
+          });
+          const p = playerRef.current;
+          if (p) {
+            addPlayerNotification(p, 'Все созданные объекты удалены!', 'info');
+          }
+        }}
+      />
 
-          {/* Tab Selection */}
-          <div className="flex border-b border-slate-800/80 bg-slate-950/30 p-1 shrink-0">
-            {(['vehicles', 'props', 'items', 'cheats'] as const).map((tab) => {
-              const label = 
-                tab === 'vehicles'? 'Авто':
-                tab === 'props'? 'Пропы':
-                tab === 'items'? 'Вещи': 'Читы';
-              return (
-                <button
-                  key={tab}
-                  onClick={() => setCreativeTab(tab)}
-                  className={`flex-1 py-1.5 text-[11px] font-bold rounded-lg transition-all cursor-pointer ${
-                    creativeTab === tab
-                      ? 'bg-amber-500/15 border border-amber-500/30 text-amber-300 shadow-inner': 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/30 border border-transparent'}`}
-                >
-                  {label}
-                </button>
-              );
-            })}
-          </div>
-
-          {/* Content Area */}
-          <div className="flex-1 overflow-y-auto p-3 space-y-3 scrollbar-thin scrollbar-thumb-slate-800">
-            {creativeTab === 'vehicles'&& (
-              <div className="space-y-3">
-                {/* Color Picker Row */}
-                <div>
-                  <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider block mb-1.5">Цвет спавна авто:</span>
-                  <div className="flex flex-wrap gap-2 p-2 bg-slate-950/40 rounded-xl border border-slate-800/60">
-                    {[
-                      { hex: '#f43f5e', name: 'Красный'},
-                      { hex: '#f97316', name: 'Оранжевый'},
-                      { hex: '#eab308', name: 'Жёлтый'},
-                      { hex: '#22c55e', name: 'Зелёный'},
-                      { hex: '#06b6d4', name: 'Бирюзовый'},
-                      { hex: '#38bdf8', name: 'Голубой'},
-                      { hex: '#a855f7', name: 'Фиолетовый'},
-                      { hex: '#ffffff', name: 'Белый'},
-                      { hex: '#1e293b', name: 'Чёрный'}
-                    ].map((col) => (
-                      <button
-                        key={col.hex}
-                        onClick={() => {
-                          setCreativeVehicleColor(col.hex);
-                          if (activePlacement && activePlacement.type === 'vehicle') {
-                            setActivePlacement({ ...activePlacement, color: col.hex });
-                          }
-                        }}
-                        style={{ backgroundColor: col.hex }}
-                        className={`w-5 h-5 rounded-full border transition-all cursor-pointer ${
-                          creativeVehicleColor === col.hex 
-                            ? 'scale-110 border-white shadow-[0_0_8px_rgba(255,255,255,0.4)]': 'border-slate-800 hover:scale-[1.05]'}`}
-                        title={col.name}
-                      />
-                    ))}
-                  </div>
-                </div>
-
-                {/* Vehicles list */}
-                <div>
-                  <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider block mb-1.5">Выберите транспорт:</span>
-                  <div className="grid grid-cols-1 gap-1.5">
-                    {Object.entries(CAR_CONFIGS).map(([key, config]) => (
-                      <button
-                        key={key}
-                        onClick={() => {
-                          setActivePlacement({
-                            type: 'vehicle',
-                            id: key,
-                            nameRu: config.name,
-                            angle: 0,
-                            color: creativeVehicleColor
-                          });
-                        }}
-                        className={`w-full p-2 text-left bg-slate-950/40 hover:bg-slate-800/40 border transition-all rounded-xl flex items-center justify-between cursor-pointer group ${
-                          activePlacement?.type === 'vehicle'&& activePlacement.id === key
-                            ? 'border-amber-500 bg-amber-500/5 text-amber-200 shadow-sm shadow-amber-500/20': 'border-slate-800/80 text-slate-300'}`}
-                      >
-                        <div className="flex items-center gap-2 overflow-hidden">
-                          <span className="text-sm">
-                            {(config.type || '').includes('bus') ? '': (config.type || '').includes('fire') ? '': (config.type || '').includes('police') ? '': ''}
-                          </span>
-                          <span className="text-xs font-medium truncate group-hover:text-slate-100">{config.name}</span>
-                        </div>
-                        <span className="text-[10px] font-mono text-slate-500 group-hover:text-amber-400/80 shrink-0">Spawn</span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {creativeTab === 'props'&& (
-              <div>
-                <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider block mb-1.5">Выберите проп / объект:</span>
-                <div className="grid grid-cols-1 gap-1.5">
-                  {[
-                    { id: 'cone', label: 'Дорожный конус '},
-                    { id: 'bollard', label: 'Столбик ограждения '},
-                    { id: 'bench', label: 'Уличная скамейка '},
-                    { id: 'trash_can', label: 'Мусорный бак '},
-                    { id: 'dumpster', label: 'Мусорный контейнер '},
-                    { id: 'hydrant', label: 'Пожарный гидрант '},
-                    { id: 'mailbox', label: 'Почтовый ящик '},
-                    { id: 'lamp_highway', label: 'Автомобильный фонарь (с выносом) '},
-                    { id: 'lamp_concrete', label: 'Старый бетонный столб (несбиваемый) '},
-                    { id: 'lamp', label: 'Парковый фонарь '},
-                    { id: 'bus_stop', label: 'Автобусная остановка '},
-                    { id: 'kiosk', label: 'Газетный киоск '},
-                    { id: 'flowerbed', label: 'Клумба с цветами '},
-                    { id: 'tire_flowerbed', label: 'Клумба из покрышки '}
-                  ].map((prop) => (
-                    <button
-                      key={prop.id}
-                      onClick={() => {
-                        setActivePlacement({
-                          type: 'prop',
-                          id: prop.id,
-                          nameRu: prop.label.split('')[0],
-                          angle: 0
-                        });
-                      }}
-                      className={`w-full p-2 text-left bg-slate-950/40 hover:bg-slate-800/40 border transition-all rounded-xl flex items-center justify-between cursor-pointer group ${
-                        activePlacement?.type === 'prop'&& activePlacement.id === prop.id
-                          ? 'border-amber-500 bg-amber-500/5 text-amber-200 shadow-sm shadow-amber-500/20': 'border-slate-800/80 text-slate-300'}`}
-                    >
-                      <span className="text-xs font-medium truncate group-hover:text-slate-100">{prop.label}</span>
-                      <span className="text-[10px] font-mono text-slate-500 group-hover:text-amber-400/80 shrink-0">Place</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {creativeTab === 'items'&& (
-              <div className="space-y-3">
-                {/* Search Bar */}
-                <div className="relative">
-                  <Search className="absolute left-2.5 top-2.5 w-3.5 h-3.5 text-slate-500"/>
-                  <input
-                    type="text"value={creativeItemSearch}
-                    onChange={(e) => setCreativeItemSearch(e.target.value)}
-                    placeholder="Поиск предметов..."className="w-full pl-8 pr-3 py-1.5 text-xs bg-slate-950/50 border border-slate-800 rounded-xl text-slate-200 placeholder-slate-500 focus:outline-none focus:border-amber-500/50"/>
-                </div>
-
-                {/* Items Catalog List */}
-                <div className="space-y-4">
-                  {[
-                    { title: 'Еда и напитки', cat: 'food_drink'},
-                    { title: 'Медикаменты', cat: 'med'},
-                    { title: 'Автоинструменты', cat: 'tool'},
-                    { title: 'Ценности и валюта', cat: 'valuable'}
-                  ].map((group) => {
-                    const filteredItems = Object.entries(ITEM_CATALOG).filter(([key, item]) => {
-                      const matchesCategory = 
-                        group.cat === 'food_drink'? (item.category === 'food'|| item.category === 'drink') :
-                        group.cat === 'med'? (item.category === 'med') :
-                        group.cat === 'valuable'? (item.category === 'valuable') :
-                        (item.category === 'tool');
-
-                      if (!matchesCategory) return false;
-                      if (!creativeItemSearch) return true;
-
-                      const query = creativeItemSearch.toLowerCase();
-                      return (
-                        item.nameRu?.toLowerCase().includes(query) ||
-                        item.name.toLowerCase().includes(query) ||
-                        key.toLowerCase().includes(query)
-                      );
-                    });
-
-                    if (filteredItems.length === 0) return null;
-
-                    return (
-                      <div key={group.cat} className="space-y-1.5">
-                        <span className="text-[10px] uppercase font-black text-slate-400 tracking-wider flex items-center gap-1">
-                          {group.title}
-                        </span>
-                        <div className="grid grid-cols-1 gap-1.5">
-                          {filteredItems.map(([key, item]) => (
-                            <div 
-                              key={key} 
-                              className="p-2 bg-slate-950/30 border border-slate-800/80 rounded-xl flex items-center justify-between gap-2 text-xs">
-                              <div className="flex items-center gap-2 overflow-hidden">
-                                <span className="text-lg shrink-0">{item.icon || ''}</span>
-                                <div className="overflow-hidden">
-                                  <div className="font-semibold text-slate-200 truncate">{item.nameRu || item.name}</div>
-                                  <div className="text-[9px] text-slate-500 truncate">{item.descriptionRu || item.description}</div>
-                                </div>
-                              </div>
-                              <div className="flex gap-1 shrink-0">
-                                <button
-                                  onClick={() => {
-                                    const p = playerRef.current;
-                                    if (!p) return;
-                                    const created = createItem(key, 1);
-                                    const success = addItemToPlayer(p, created);
-                                    if (success) {
-                                      addPlayerNotification(p, `Получено: ${created.nameRu || created.name} x1`, 'pickup');
-                                      sound.playUseItem();
-                                    } else {
-                                      addPlayerNotification(p, 'Инвентарь заполнен!', 'warning');
-                                    }
-                                  }}
-                                  className="px-1.5 py-1 rounded bg-slate-800 hover:bg-amber-500 hover:text-slate-950 text-[10px] text-slate-300 font-bold transition-all cursor-pointer"title="Выдать 1 шт">
-                                  +1
-                                </button>
-                                <button
-                                  onClick={() => {
-                                    const p = playerRef.current;
-                                    if (!p) return;
-                                    const created = createItem(key, item.maxStack || 5);
-                                    const success = addItemToPlayer(p, created);
-                                    if (success) {
-                                      addPlayerNotification(p, `Получено: ${created.nameRu || created.name} x${item.maxStack || 5}`, 'pickup');
-                                      sound.playUseItem();
-                                    } else {
-                                      addPlayerNotification(p, 'Инвентарь заполнен!', 'warning');
-                                    }
-                                  }}
-                                  className="px-1.5 py-1 rounded bg-amber-600 hover:bg-amber-500 text-[10px] text-white font-bold transition-all cursor-pointer"title={`Выдать полный стак (${item.maxStack || 5} шт)`}
-                                >
-                                  +Stack
-                                </button>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-
-            {creativeTab === 'cheats'&& (
-              <div className="space-y-3">
-                <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider block mb-1">Чит-коды и управление:</span>
-                
-                {/* Flight / Noclip Switch */}
-                <div className="flex items-center justify-between p-2.5 bg-slate-950/40 border border-slate-800/80 rounded-xl">
-                  <div className="flex items-center gap-2">
-                    <Plane className={`w-4 h-4 ${isFlying ? 'text-amber-400 animate-bounce': 'text-slate-500'}`} />
-                    <div className="text-xs">
-                      <div className="font-semibold text-slate-200">Режим полёта (Noclip)</div>
-                      <div className="text-[9px] text-slate-400">Shift — ускорение полёта</div>
-                    </div>
-                  </div>
-                  <button
-                    onClick={() => {
-                      const val = !isFlying;
-                      setIsFlying(val);
-                      const p = playerRef.current;
-                      if (p) {
-                        addPlayerNotification(p, val ? 'Полёт активирован!': 'Режим ходьбы.', val ? 'info': 'warning');
-                      }
-                    }}
-                    className={`w-10 h-5 rounded-full p-0.5 transition-all cursor-pointer ${
-                      isFlying ? 'bg-amber-500 flex justify-end': 'bg-slate-800 flex justify-start'}`}
-                  >
-                    <div className="w-4 h-4 rounded-full bg-slate-100 shadow"/>
-                  </button>
-                </div>
-
-                {/* Invincibility Switch */}
-                <div className="flex items-center justify-between p-2.5 bg-slate-950/40 border border-slate-800/80 rounded-xl">
-                  <div className="flex items-center gap-2">
-                    <ShieldAlert className={`w-4 h-4 ${isInvincible ? 'text-emerald-400 animate-pulse animate-duration-1000': 'text-slate-500'}`} />
-                    <div className="text-xs">
-                      <div className="font-semibold text-slate-200">Бессмертие и вечные нужды</div>
-                      <div className="text-[9px] text-slate-400">Вайп травм и 100% показатели</div>
-                    </div>
-                  </div>
-                  <button
-                    onClick={() => {
-                      const val = !isInvincible;
-                      setIsInvincible(val);
-                      const p = playerRef.current;
-                      if (p) {
-                        addPlayerNotification(p, val ? 'Вы бессмертны! Травмы очищены.': 'Режим смертности включен.', val ? 'heal': 'warning');
-                      }
-                    }}
-                    className={`w-10 h-5 rounded-full p-0.5 transition-all cursor-pointer ${
-                      isInvincible ? 'bg-emerald-500 flex justify-end': 'bg-slate-800 flex justify-start'}`}
-                  >
-                    <div className="w-4 h-4 rounded-full bg-slate-100 shadow"/>
-                  </button>
-                </div>
-
-                {/* Grid Mode (G) Switch */}
-                <div className="flex items-center justify-between p-2.5 bg-slate-950/40 border border-slate-800/80 rounded-xl">
-                  <div className="flex items-center gap-2">
-                    <Grid className={`w-4 h-4 ${isGridMode ? 'text-cyan-400 animate-pulse': 'text-slate-500'}`} />
-                    <div className="text-xs">
-                      <div className="font-semibold text-slate-200">Сетка деформации (Grid G)</div>
-                      <div className="text-[9px] text-slate-400">Визуализация 3D-сетки BeamNG</div>
-                    </div>
-                  </div>
-                  <button
-                    onClick={() => {
-                      const cam = cameraRef.current;
-                      cam.gridMode = !cam.gridMode;
-                      const val = !!cam.gridMode;
-                      setIsGridMode(val);
-                      const p = playerRef.current;
-                      if (p) {
-                        addPlayerNotification(p, `Режим сетки (Grid Mode) ${val ? 'ВКЛ': 'ВЫКЛ'}`, val ? 'info': 'warning');
-                      }
-                    }}
-                    className={`w-10 h-5 rounded-full p-0.5 transition-all cursor-pointer ${
-                      isGridMode ? 'bg-cyan-500 flex justify-end': 'bg-slate-800 flex justify-start'}`}
-                  >
-                    <div className="w-4 h-4 rounded-full bg-slate-100 shadow"/>
-                  </button>
-                </div>
-
-                {/* Clean Crash Test Mode Switch */}
-                <div className="flex items-center justify-between p-2.5 bg-slate-950/40 border border-slate-800/80 rounded-xl">
-                  <div className="flex items-center gap-2">
-                    <Sparkles className={`w-4 h-4 ${isCleanMode ? 'text-amber-300 animate-spin': 'text-slate-500'}`} />
-                    <div className="text-xs">
-                      <div className="font-semibold text-slate-200">Чистый режим (Краштест)</div>
-                      <div className="text-[9px] text-slate-400">Без дыма/пара (огонь остаётся) + 0 урон игроку</div>
-                    </div>
-                  </div>
-                  <button
-                    onClick={() => {
-                      const val = !isCleanMode;
-                      setIsCleanMode(val);
-                      isCleanModeRef.current = val;
-                      const world = worldRef.current;
-                      if (world) {
-                        world.cleanMode = val;
-                        if (val && world.particles) {
-                          world.particles = world.particles.filter(p => p.type !== 'engine_smoke'&& p.type !== 'tire_smoke'&& p.type !== 'exhaust');
-                        }
-                      }
-                      const p = playerRef.current;
-                      if (p) {
-                        p.isCleanMode = val;
-                        if (val) {
-                          p.needs.health = 100;
-                          if (p.bodyState) {
-                            p.bodyState.painLevel = 0;
-                            p.bodyState.bloodLoss = 0;
-                            p.bodyState.shockLevel = 0;
-                          }
-                        }
-                        addPlayerNotification(p, val ? 'Чистый режим ВКЛ! Дым/пар убраны, урон отключен.': 'Чистый режим ВЫКЛ.', val ? 'info': 'warning');
-                      }
-                    }}
-                    className={`w-10 h-5 rounded-full p-0.5 transition-all cursor-pointer ${
-                      isCleanMode ? 'bg-amber-500 flex justify-end': 'bg-slate-800 flex justify-start'}`}
-                  >
-                    <div className="w-4 h-4 rounded-full bg-slate-100 shadow"/>
-                  </button>
-                </div>
-
-                {/* Give Cash Button */}
-                <button
-                  onClick={() => {
-                    const p = playerRef.current;
-                    if (p) {
-                      addPlayerCash(p, 100000);
-                      addPlayerNotification(p, 'Получено ₽100,000 из резерва!', 'pickup');
-                      sound.playTurnSignalTick(true);
-                      setVitalsRefreshTick(t => t + 1);
-                    }
-                  }}
-                  className="w-full py-2.5 px-3 bg-slate-800 hover:bg-slate-700 active:scale-[0.98] border border-slate-700/60 rounded-xl text-slate-200 text-xs font-bold flex items-center justify-center gap-2 transition-all cursor-pointer">
-                  <Coins className="w-4 h-4 text-amber-400 animate-bounce"/>
-                  <span>Выдать ₽100,000</span>
-                </button>
-
-                {/* Calendar & Date/Weather Picker Button */}
-                <button
-                  onClick={() => {
-                    sound.playButtonPress();
-                    setIsDateTimePickerOpen(true);
-                  }}
-                  className="w-full py-2.5 px-3 bg-amber-950/60 hover:bg-amber-900/80 active:scale-[0.98] border border-amber-500/40 rounded-xl text-amber-200 text-xs font-bold flex items-center justify-between transition-all cursor-pointer">
-                  <div className="flex items-center gap-2">
-                    <Calendar className="w-4 h-4 text-amber-400" />
-                    <div className="text-left">
-                      <div>Выбрать день, год и погоду</div>
-                      <div className="text-[10px] text-amber-400/70 font-normal">
-                        {formatGameDate(calendar, 'medium')} • {formatGameTime(timeHour)}
-                      </div>
-                    </div>
-                  </div>
-                  <ChevronRight className="w-4 h-4 text-amber-400" />
-                </button>
-
-                {/* Day steppers in cheats tab */}
-                <div className="grid grid-cols-2 gap-2">
-                  <button
-                    onClick={() => handleStepGameDay(-1)}
-                    className="py-2 px-2.5 bg-slate-800 hover:bg-slate-700 border border-slate-700/60 rounded-xl text-slate-200 text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer">
-                    <ChevronLeft className="w-3.5 h-3.5 text-slate-400" />
-                    <span>-1 день</span>
-                  </button>
-                  <button
-                    onClick={() => handleStepGameDay(1)}
-                    className="py-2 px-2.5 bg-slate-800 hover:bg-slate-700 border border-slate-700/60 rounded-xl text-slate-200 text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer">
-                    <span>+1 день</span>
-                    <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
-                  </button>
-                </div>
-
-                {/* Fix Car Button */}
-                <button
-                  onClick={() => {
-                    handleResetAllVehiclesDamage();
-                    const p = playerRef.current;
-                    if (p) {
-                      addPlayerNotification(p, 'Все повреждения транспорта устранены!', 'info');
-                    }
-                  }}
-                  className="w-full py-2.5 px-3 bg-slate-800 hover:bg-slate-700 active:scale-[0.98] border border-slate-700/60 rounded-xl text-slate-200 text-xs font-bold flex items-center justify-center gap-2 transition-all cursor-pointer">
-                  <Wrench className="w-4 h-4 text-sky-400"/>
-                  <span>Починить весь транспорт</span>
-                </button>
-
-                {/* Clear Spawned Items */}
-                <button
-                  onClick={() => {
-                    const world = worldRef.current;
-                    if (!world) return;
-                    
-                    world.vehicles = world.vehicles.filter(v => {
-                      if (v.id.startsWith('spawn_')) {
-                        spatialGridVehiclesRef.current.remove(v);
-                        return false;
-                      }
-                      return true;
-                    });
-
-                    world.props = world.props.filter(p => {
-                      if (p.id.startsWith('spawn_prop_')) {
-                        spatialGridPropsRef.current.remove(p);
-                        return false;
-                      }
-                      return true;
-                    });
-
-                    const p = playerRef.current;
-                    if (p) {
-                      addPlayerNotification(p, 'Все созданные объекты удалены!', 'info');
-                    }
-                  }}
-                  className="w-full py-2.5 px-3 bg-rose-950/50 hover:bg-rose-900/60 border border-rose-500/25 text-rose-300 hover:text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all cursor-pointer">
-                  <Trash2 className="w-4 h-4"/>
-                  <span>Очистить созданный спавн</span>
-                </button>
-              </div>
-            )}
-          </div>
-          
-          {/* Footer instruction */}
-          <div className="p-2 bg-slate-950/40 border-t border-slate-800 text-[9px] text-slate-500 text-center shrink-0">
-            Для установки выберите авто/проп и кликните на карте.
-          </div>
-        </div>
-      )}
-
-      {/* PLACEMENT WORLD PREVIEW HUD GUIDE */}
+      {/* PLACEMENT WORLD PREVIEW HUD */}
       {isCreativeMode && activePlacement && !isMainMenuOpen && (
-        <div className="absolute bottom-28 left-1/2 -translate-x-1/2 z-20 bg-slate-950/90 border border-amber-500/40 rounded-2xl p-4 shadow-2xl flex flex-col items-center gap-1.5 text-center pointer-events-auto max-w-sm animate-in fade-in slide-in-from-bottom-4 duration-150 text-white">
-          <div className="flex items-center gap-2 text-amber-300 font-extrabold text-sm uppercase tracking-wider">
-            <Wand2 className="w-4 h-4 animate-spin"/>
-            Установка: {activePlacement.nameRu}
-          </div>
-          <div className="text-xs text-slate-300 leading-relaxed max-w-xs">
-            Перемещайте курсор по экрану для предпросмотра в мире.
-          </div>
-          <div className="grid grid-cols-2 gap-2 mt-2 w-full text-xs">
-            <div className="bg-slate-900/80 border border-slate-800 p-1.5 rounded-xl text-slate-400 flex flex-col items-center">
-              <span className="font-bold text-slate-300">Левый клик</span>
-              <span>Разместить на карте</span>
-            </div>
-            <div className="bg-slate-900/80 border border-slate-800 p-1.5 rounded-xl text-slate-400 flex flex-col items-center">
-              <span className="font-bold text-slate-300">Колёсико / Кл. [R]</span>
-              <span>Вращение ({Math.round(activePlacement.angle * (180 / Math.PI))}°)</span>
-            </div>
-          </div>
-          <button
-            onClick={() => {
-              setActivePlacement(null);
-              activePlacementRef.current = null;
-            }}
-            className="mt-1 px-3 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 text-[10px] font-bold rounded-lg border border-slate-700 cursor-pointer">
-            Отмена (Правый клик / Esc)
-          </button>
-        </div>
+        <CreativePlacementHud
+          placement={activePlacement}
+          onCancel={() => {
+            setActivePlacement(null);
+            activePlacementRef.current = null;
+          }}
+        />
       )}
 
       {/* Pause Menu Overlay */}
@@ -7666,6 +7397,19 @@ export default function App() {
           onOpenDiagnostics={() => {
             setIsPauseMenuOpen(false);
             setIsCrashDiagnosticsOpen(true);
+          }}
+          onOpenCreative={() => {
+            setIsPauseMenuOpen(false);
+            setIsCreativeMode(true);
+            setIsFlying(true);
+            setIsInvincible(true);
+            const p = playerRef.current;
+            if (p) addPlayerNotification(p, 'Режим Творчества активирован!', 'info');
+          }}
+          onOpenCalendar={() => {
+            setIsPauseMenuOpen(false);
+            sound.playButtonPress();
+            setIsDateTimePickerOpen(true);
           }}
           onExitToMainMenu={() => {
             setIsPauseMenuOpen(false);

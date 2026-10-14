@@ -22,7 +22,10 @@ import {
   Award,
   Coins,
   Heart,
-  Package
+  Package,
+  AlertCircle,
+  Copy,
+  ExternalLink
 } from 'lucide-react';
 import type { User } from 'firebase/auth';
 import { 
@@ -65,6 +68,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
   const [loading, setLoading] = useState<boolean>(false);
   const [saving, setSaving] = useState<boolean>(false);
   const [saveSuccess, setSaveSuccess] = useState<string | null>(null);
+  const [authError, setAuthError] = useState<{ message: string; domain?: string } | null>(null);
 
   // Profile Form States
   const [displayName, setDisplayName] = useState<string>('');
@@ -79,6 +83,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
   useEffect(() => {
     if (currentUser) {
       loadProfile(currentUser.uid);
+      setAuthError(null);
     } else {
       setProfile(null);
     }
@@ -110,12 +115,18 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
   const handleLoginGoogle = async () => {
     sound.playButtonPress();
     setLoading(true);
+    setAuthError(null);
     try {
       await loginWithGoogle();
       setSaveSuccess('Успешный вход через Google!');
       setTimeout(() => setSaveSuccess(null), 3000);
     } catch (err: any) {
-      alert(`Ошибка входа: ${err.message || err}`);
+      const host = typeof window !== 'undefined' ? window.location.hostname : '';
+      const isUnauthDomain = err?.code === 'auth/unauthorized-domain' || err?.message?.includes('unauthorized-domain') || err?.unauthorizedDomain;
+      setAuthError({
+        message: err.message || 'Ошибка авторизации Google',
+        domain: isUnauthDomain ? (err.unauthorizedDomain || host) : undefined
+      });
     } finally {
       setLoading(false);
     }
@@ -124,12 +135,15 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
   const handleLoginAnon = async () => {
     sound.playButtonPress();
     setLoading(true);
+    setAuthError(null);
     try {
       await loginAnonymously();
       setSaveSuccess('Гостевой вход выполнен!');
       setTimeout(() => setSaveSuccess(null), 3000);
     } catch (err: any) {
-      alert(`Ошибка входа: ${err.message || err}`);
+      setAuthError({
+        message: err.message || 'Ошибка локального входа'
+      });
     } finally {
       setLoading(false);
     }
@@ -302,6 +316,43 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
               </div>
             )}
           </div>
+
+          {authError && (
+            <div className="bg-amber-950/40 border border-amber-600/40 rounded-xl p-3 text-xs text-amber-200 flex flex-col gap-2">
+              <div className="flex items-start gap-2">
+                <AlertCircle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                <div className="flex-1 font-mono">{authError.message}</div>
+              </div>
+              {authError.domain && (
+                <div className="bg-black/40 border border-amber-500/20 rounded-lg p-2.5 mt-1 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
+                  <div className="flex flex-col">
+                    <span className="text-[10px] text-amber-400 uppercase tracking-wider font-bold">Домен для авторизации в Firebase:</span>
+                    <code className="text-white font-mono text-xs select-all bg-black/60 px-1.5 py-0.5 rounded mt-0.5">{authError.domain}</code>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => {
+                        navigator.clipboard.writeText(authError.domain || '');
+                        setSaveSuccess('Домен скопирован в буфер обмена!');
+                        setTimeout(() => setSaveSuccess(null), 3000);
+                      }}
+                      className="px-2.5 py-1 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/30 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer"
+                    >
+                      <Copy className="w-3.5 h-3.5" /> Копировать
+                    </button>
+                    <a
+                      href="https://console.firebase.google.com/project/gen-lang-client-0888101069/authentication/settings"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="px-2.5 py-1 bg-amber-600 hover:bg-amber-500 text-slate-950 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer"
+                    >
+                      <ExternalLink className="w-3.5 h-3.5" /> Открыть консоль
+                    </a>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Navigation Tabs */}
           {currentUser && (

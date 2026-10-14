@@ -178,7 +178,17 @@ export const loginWithGoogle = async () => {
     const result = await signInWithPopup(auth, googleProvider);
     await ensureUserProfileExists(result.user);
     return result.user;
-  } catch (err) {
+  } catch (err: any) {
+    if (err?.code === 'auth/unauthorized-domain' || err?.message?.includes('unauthorized-domain')) {
+      const host = typeof window !== 'undefined' ? window.location.hostname : '';
+      const customErr = new Error(
+        `Домен "${host}" не добавлен в список авторизованных доменов Firebase (Authorized domains).`
+      );
+      (customErr as any).code = 'auth/unauthorized-domain';
+      (customErr as any).unauthorizedDomain = host;
+      console.warn(`[Firebase Auth] Unauthorized domain error for host: ${host}`);
+      throw customErr;
+    }
     console.error("Google Auth error:", err);
     throw err;
   }

@@ -12,13 +12,14 @@ import {
   Snowflake, 
   Wind, 
   Thermometer, 
-  Compass, 
   RotateCcw, 
   Check, 
   ChevronLeft, 
   ChevronRight,
   Play,
   Pause,
+  Sunrise,
+  Sunset,
   Sparkles
 } from 'lucide-react';
 import { WeatherType } from '../types';
@@ -31,7 +32,6 @@ import {
   getRussianWeatherDescription, 
   calculateClimateAtmosphere,
   MONTH_NAMES_NOMINATIVE,
-  DAY_OF_WEEK_SHORT,
   isLeapYear
 } from '../calendarSystem';
 
@@ -97,63 +97,82 @@ export const DateTimePickerModal: React.FC<DateTimePickerModalProps> = ({
   };
 
   // Weather list definition with strictly Lucide icons
-  const weatherOptions: { id: WeatherType; name: string; icon: React.ComponentType<{ className?: string }>; color: string }[] = [
-    { id: 'clear', name: 'Ясно', icon: Sun, color: 'text-amber-400' },
-    { id: 'overcast', name: 'Пасмурно', icon: CloudSun, color: 'text-slate-300' },
-    { id: 'drizzle', name: 'Морось', icon: CloudDrizzle, color: 'text-cyan-400' },
-    { id: 'rain', name: 'Дождь', icon: CloudRain, color: 'text-blue-400' },
-    { id: 'storm', name: 'Гроза', icon: CloudLightning, color: 'text-purple-400' },
-    { id: 'fog', name: 'Туман', icon: Cloud, color: 'text-zinc-400' },
-    { id: 'snow', name: 'Снег', icon: Snowflake, color: 'text-sky-300' },
-    { id: 'blizzard', name: 'Метель', icon: Wind, color: 'text-indigo-300' }
+  const weatherOptions: { id: WeatherType; name: string; icon: React.ComponentType<{ className?: string }>; desc: string }[] = [
+    { id: 'clear', name: 'Ясно', icon: Sun, desc: 'Безоблачное небо, высокая видимость' },
+    { id: 'overcast', name: 'Пасмурно', icon: CloudSun, desc: 'Плотный серый покров облаков' },
+    { id: 'drizzle', name: 'Морось', icon: CloudDrizzle, desc: 'Мелкая водяная взвесь, сырой асфальт' },
+    { id: 'rain', name: 'Дождь', icon: CloudRain, desc: 'Умеренные осадки, лужи на тракте' },
+    { id: 'storm', name: 'Гроза', icon: CloudLightning, desc: 'Ливень, раскаты грома и молнии' },
+    { id: 'fog', name: 'Туман', icon: Cloud, desc: 'Низкая видимость, рассеянный свет' },
+    { id: 'snow', name: 'Снег', icon: Snowflake, desc: 'Зимний снегопад, накат на дорогах' },
+    { id: 'blizzard', name: 'Метель', icon: Wind, desc: 'Шквальный снежный буран и заносы' }
   ];
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto overflow-x-hidden flex items-start sm:items-center justify-center bg-black/80 backdrop-blur-md p-2 sm:p-4 select-none animate-in fade-in duration-150">
-      <div className="my-auto relative w-full max-w-2xl bg-slate-900 border border-slate-700/80 rounded-2xl shadow-2xl flex flex-col max-h-[94vh] sm:max-h-[90vh] overflow-hidden text-slate-100">
-        
-        {/* Header */}
-        <div className="px-3.5 sm:px-4 py-3 sm:py-4 bg-slate-950/80 border-b border-slate-800 flex items-center justify-between shrink-0">
-          <div className="flex items-center gap-2 sm:gap-2.5 min-w-0">
-            <div className="p-1.5 sm:p-2 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-400 shrink-0">
-              <Calendar className="w-5 h-5" />
-            </div>
-            <div className="min-w-0">
-              <h2 className="text-sm sm:text-base font-bold text-white tracking-wide uppercase flex items-center gap-2 truncate">
-                <span>Управление датой, временем и погодой</span>
-              </h2>
-              <p className="text-[11px] sm:text-xs text-slate-400 truncate">
-                Астрономический календарь, любой год и симуляция климата
+    <div
+      id="calendar-modal-backdrop"
+      className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/75 backdrop-blur-md select-none animate-in fade-in duration-150"
+      onClick={onClose}
+    >
+      <div
+        id="calendar-modal-container"
+        className="relative w-full max-w-3xl max-h-[92vh] flex flex-col bg-[#111317]/95 border border-white/10 rounded-2xl shadow-[0_25px_60px_rgba(0,0,0,0.85)] text-[#e9e6df] overflow-hidden"
+        onClick={e => e.stopPropagation()}
+      >
+        {/* Top Header Bar */}
+        <header className="px-5 py-3.5 bg-[#16181e] border-b border-white/[0.08] flex items-center justify-between shrink-0">
+          <div className="flex items-center gap-3">
+            <div className="w-2.5 h-7 bg-[#c68a35] -skew-x-12 shrink-0 shadow-[0_0_12px_rgba(198,138,53,0.5)]" />
+            <div>
+              <div className="flex items-center gap-2">
+                <h2 className="text-lg sm:text-xl font-bold tracking-wider uppercase font-sans text-white">
+                  КАЛЕНДАРЬ И КЛИМАТ
+                </h2>
+                <span className="hidden sm:inline-block px-2 py-0.5 rounded bg-[#c68a35]/15 border border-[#c68a35]/40 text-[#f0c264] text-[10px] font-mono font-bold tracking-widest uppercase">
+                  SIMULATION TIME
+                </span>
+              </div>
+              <p className="text-[11px] font-mono text-[#8b929e] tracking-wider uppercase">
+                Астрономический календарь, сезонный климат и точное время суток
               </p>
             </div>
           </div>
-          <button 
-            onClick={onClose}
-            className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition-all cursor-pointer shrink-0"
-            title="Закрыть"
-          >
-            <X className="w-5 h-5" />
-          </button>
-        </div>
+
+          <div className="flex items-center gap-2">
+            <div className="hidden md:flex items-center gap-1.5 px-2.5 py-1 bg-white/5 border border-white/10 rounded-lg text-[11px] font-mono text-[#8b929e]">
+              <span>ЗАКРЫТЬ:</span>
+              <kbd className="px-1.5 py-0.5 bg-white/10 text-white rounded text-[10px] font-bold border border-white/10">
+                ESC
+              </kbd>
+            </div>
+            <button
+              onClick={onClose}
+              className="p-2 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-[#8b929e] hover:text-white transition-colors cursor-pointer"
+              title="Закрыть [ESC]"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        </header>
 
         {/* Scrollable Body */}
-        <div className="p-4 overflow-y-auto space-y-4 scrollbar-thin scrollbar-thumb-slate-700">
+        <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-4 scrollbar-thin scrollbar-thumb-white/10">
           
           {/* Real-time Environment Preview Card */}
-          <div className="p-3.5 bg-slate-950/60 border border-slate-800 rounded-xl flex flex-wrap items-center justify-between gap-3">
-            <div className="flex items-center gap-3">
-              <div className="p-2.5 rounded-xl bg-slate-800/80 border border-slate-700 text-amber-400 flex flex-col items-center justify-center min-w-[56px]">
-                <Clock className="w-4 h-4 mb-0.5" />
-                <span className="text-xs font-mono font-bold text-white">
+          <div className="p-4 bg-[#141720] border border-white/[0.08] rounded-xl flex flex-wrap items-center justify-between gap-4">
+            <div className="flex items-center gap-3.5">
+              <div className="px-3 py-2 rounded-xl bg-white/5 border border-white/10 flex flex-col items-center justify-center min-w-[68px]">
+                <Clock className="w-4 h-4 text-[#c68a35] mb-0.5" />
+                <span className="text-sm font-mono font-bold text-white tabular-nums">
                   {String(selectedHour).padStart(2, '0')}:{String(selectedMinute).padStart(2, '0')}
                 </span>
               </div>
               <div>
-                <div className="text-xs font-bold text-white">
+                <div className="text-sm font-bold uppercase tracking-wider text-white font-sans">
                   {validatedDay} {MONTH_NAMES_NOMINATIVE[selectedMonth]} {selectedYear} года
                 </div>
-                <div className="text-[11px] text-slate-400 flex items-center gap-2 mt-0.5">
-                  <span className={`px-1.5 py-0.2 rounded font-semibold ${
+                <div className="text-xs text-[#8b929e] flex items-center gap-2 mt-1 font-mono">
+                  <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${
                     previewCalendar.season === 'winter' ? 'bg-sky-950/60 text-sky-300 border border-sky-500/30' :
                     previewCalendar.season === 'spring' ? 'bg-emerald-950/60 text-emerald-300 border border-emerald-500/30' :
                     previewCalendar.season === 'summer' ? 'bg-amber-950/60 text-amber-300 border border-amber-500/30' :
@@ -161,88 +180,162 @@ export const DateTimePickerModal: React.FC<DateTimePickerModalProps> = ({
                   }`}>
                     {getRussianSeasonName(previewCalendar.season)}
                   </span>
+                  <span>·</span>
                   <span>{getRussianWeatherDescription(selectedWeather, atmosphere.isFreezing)}</span>
                 </div>
               </div>
             </div>
 
-            {/* Micro stats */}
-            <div className="flex items-center gap-4 text-xs font-mono">
-              <div className="flex items-center gap-1.5 text-slate-300">
+            {/* Micro stats & Auto-Cycling Toggle */}
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-1.5 text-xs font-mono">
                 <Thermometer className="w-4 h-4 text-rose-400" />
-                <span className="font-bold text-white">{atmosphere.temperature > 0 ? `+${atmosphere.temperature}` : atmosphere.temperature}°C</span>
+                <span className="font-bold text-white text-sm">
+                  {atmosphere.temperature > 0 ? `+${atmosphere.temperature}` : atmosphere.temperature}°C
+                </span>
               </div>
-              <div className="flex items-center gap-1.5 text-slate-400 text-[11px]">
-                <span>Восход: {Math.floor(previewCalendar.sunriseHour)}:{String(Math.floor((previewCalendar.sunriseHour % 1) * 60)).padStart(2, '0')}</span>
-                <span>•</span>
-                <span>Закат: {Math.floor(previewCalendar.sunsetHour)}:{String(Math.floor((previewCalendar.sunsetHour % 1) * 60)).padStart(2, '0')}</span>
+
+              <div className="hidden sm:flex items-center gap-3 text-xs font-mono text-[#8b929e]">
+                <div className="flex items-center gap-1">
+                  <Sunrise className="w-3.5 h-3.5 text-amber-400" />
+                  <span>{Math.floor(previewCalendar.sunriseHour)}:{String(Math.floor((previewCalendar.sunriseHour % 1) * 60)).padStart(2, '0')}</span>
+                </div>
+                <span>·</span>
+                <div className="flex items-center gap-1">
+                  <Sunset className="w-3.5 h-3.5 text-orange-400" />
+                  <span>{Math.floor(previewCalendar.sunsetHour)}:{String(Math.floor((previewCalendar.sunsetHour % 1) * 60)).padStart(2, '0')}</span>
+                </div>
+              </div>
+
+              {/* Time auto cycle toggle */}
+              <button
+                onClick={onToggleTimeAutoCycling}
+                className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-mono font-bold uppercase tracking-wider transition-all cursor-pointer border ${
+                  isTimeAutoCycling
+                    ? 'bg-emerald-950/60 border-emerald-500/40 text-emerald-300'
+                    : 'bg-white/5 border-white/10 text-[#8b929e]'
+                }`}
+              >
+                {isTimeAutoCycling ? <Play className="w-3 h-3 fill-current" /> : <Pause className="w-3 h-3" />}
+                <span>{isTimeAutoCycling ? 'Ход: ВКЛ' : 'Ход: ПАУЗА'}</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Time Scrubber (24 Hours) */}
+          <div className="p-4 bg-[#141720] border border-white/[0.08] rounded-xl space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-mono font-bold uppercase tracking-wider text-[#8b929e]">
+                Время суток (24 часа):
+              </span>
+              <div className="flex items-center gap-1">
+                {[
+                  { label: '06:00 Рассвет', h: 6, m: 0 },
+                  { label: '12:00 Полдень', h: 12, m: 0 },
+                  { label: '19:00 Закат', h: 19, m: 0 },
+                  { label: '00:00 Ночь', h: 0, m: 0 }
+                ].map(p => (
+                  <button
+                    key={p.label}
+                    onClick={() => { setSelectedHour(p.h); setSelectedMinute(p.m); }}
+                    className="px-2.5 py-1 bg-white/5 hover:bg-white/15 border border-white/10 text-[10px] font-mono text-[#e9e6df] rounded-lg transition-colors cursor-pointer"
+                  >
+                    {p.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Draggable sky track slider */}
+            <div className="space-y-1.5">
+              <div className="relative h-4 rounded-lg overflow-hidden border border-white/20 bg-gradient-to-r from-[#0b0f1a] via-[#1b2440] via-20% via-[#d9944f] via-28% via-[#7fb2e0] via-40% via-[#8ec3ee] via-55% via-[#e0a85a] via-72% via-[#7a4a5c] via-82% to-[#0b0f1a] p-0.5">
+                <input
+                  type="range"
+                  min="0"
+                  max="23"
+                  value={selectedHour}
+                  onChange={e => setSelectedHour(parseInt(e.target.value, 10))}
+                  className="w-full h-full opacity-0 cursor-pointer absolute inset-0 z-10"
+                />
+                <div
+                  className="absolute top-1/2 -translate-y-1/2 w-4 h-4 rounded-full bg-white border-2 border-[#c68a35] shadow-[0_2px_8px_rgba(0,0,0,0.6)] pointer-events-none transition-all"
+                  style={{ left: `calc(${(selectedHour / 23) * 100}% - 8px)` }}
+                />
+              </div>
+
+              <div className="flex justify-between text-[10px] font-mono text-[#8b929e]">
+                <span>00:00</span>
+                <span>06:00</span>
+                <span>12:00</span>
+                <span>18:00</span>
+                <span>23:59</span>
               </div>
             </div>
           </div>
 
-          {/* Quick Presets (Seasons & Typical Scenarios) */}
-          <div>
-            <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-2">
-              Быстрые сезонные пресеты:
+          {/* Quick Seasonal Presets */}
+          <div className="space-y-2">
+            <span className="text-xs font-mono font-bold uppercase tracking-wider text-[#8b929e] block">
+              Быстрые климатические сценарии:
             </span>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
               <button
                 onClick={() => handleApplyPreset(2026, 1, 15, 12, 'snow')}
-                className="p-2 bg-slate-950/40 hover:bg-sky-950/50 border border-slate-800 hover:border-sky-500/40 rounded-xl text-left transition-all cursor-pointer group"
+                className="p-3 bg-[#141720] hover:bg-sky-950/40 border border-white/[0.08] hover:border-sky-500/40 rounded-xl text-left transition-all cursor-pointer group"
               >
-                <div className="flex items-center gap-1.5 text-sky-400 text-xs font-bold mb-0.5">
+                <div className="flex items-center gap-1.5 text-sky-400 text-xs font-bold uppercase tracking-wider mb-0.5">
                   <Snowflake className="w-3.5 h-3.5" />
                   <span>Зима (Снег)</span>
                 </div>
-                <div className="text-[10px] text-slate-400">15 янв • 12:00 • Мороз</div>
+                <div className="text-[10px] font-mono text-[#8b929e]">15 янв · 12:00 · Мороз</div>
               </button>
 
               <button
                 onClick={() => handleApplyPreset(2026, 4, 25, 10, 'clear')}
-                className="p-2 bg-slate-950/40 hover:bg-emerald-950/50 border border-slate-800 hover:border-emerald-500/40 rounded-xl text-left transition-all cursor-pointer group"
+                className="p-3 bg-[#141720] hover:bg-emerald-950/40 border border-white/[0.08] hover:border-emerald-500/40 rounded-xl text-left transition-all cursor-pointer group"
               >
-                <div className="flex items-center gap-1.5 text-emerald-400 text-xs font-bold mb-0.5">
+                <div className="flex items-center gap-1.5 text-emerald-400 text-xs font-bold uppercase tracking-wider mb-0.5">
                   <Sparkles className="w-3.5 h-3.5" />
                   <span>Весна (Ясно)</span>
                 </div>
-                <div className="text-[10px] text-slate-400">25 апр • 10:00 • Тепло</div>
+                <div className="text-[10px] font-mono text-[#8b929e]">25 апр · 10:00 · Тепло</div>
               </button>
 
               <button
                 onClick={() => handleApplyPreset(2026, 7, 15, 14, 'clear')}
-                className="p-2 bg-slate-950/40 hover:bg-amber-950/50 border border-slate-800 hover:border-amber-500/40 rounded-xl text-left transition-all cursor-pointer group"
+                className="p-3 bg-[#141720] hover:bg-amber-950/40 border border-white/[0.08] hover:border-amber-500/40 rounded-xl text-left transition-all cursor-pointer group"
               >
-                <div className="flex items-center gap-1.5 text-amber-400 text-xs font-bold mb-0.5">
+                <div className="flex items-center gap-1.5 text-[#f0c264] text-xs font-bold uppercase tracking-wider mb-0.5">
                   <Sun className="w-3.5 h-3.5" />
                   <span>Лето (Жара)</span>
                 </div>
-                <div className="text-[10px] text-slate-400">15 июл • 14:00 • Солнце</div>
+                <div className="text-[10px] font-mono text-[#8b929e]">15 июл · 14:00 · Солнце</div>
               </button>
 
               <button
                 onClick={() => handleApplyPreset(2026, 10, 8, 10, 'rain')}
-                className="p-2 bg-slate-950/40 hover:bg-orange-950/50 border border-slate-800 hover:border-orange-500/40 rounded-xl text-left transition-all cursor-pointer group"
+                className="p-3 bg-[#141720] hover:bg-orange-950/40 border border-white/[0.08] hover:border-orange-500/40 rounded-xl text-left transition-all cursor-pointer group"
               >
-                <div className="flex items-center gap-1.5 text-orange-400 text-xs font-bold mb-0.5">
+                <div className="flex items-center gap-1.5 text-orange-400 text-xs font-bold uppercase tracking-wider mb-0.5">
                   <CloudRain className="w-3.5 h-3.5" />
                   <span>Осень (Дождь)</span>
                 </div>
-                <div className="text-[10px] text-slate-400">8 окт • 10:00 • Ливень</div>
+                <div className="text-[10px] font-mono text-[#8b929e]">8 окт · 10:00 · Ливень</div>
               </button>
             </div>
           </div>
 
-          {/* Section 1: Year & Month Selectors */}
+          {/* Section: Year & Month Selectors */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             
-            {/* Year Selector with Steppers */}
-            <div className="p-3 bg-slate-950/40 border border-slate-800 rounded-xl space-y-2">
-              <div className="flex items-center justify-between text-xs font-bold text-slate-300">
-                <span className="flex items-center gap-1.5">
-                  <Calendar className="w-3.5 h-3.5 text-amber-400" />
-                  Год симуляции
+            {/* Year Selector */}
+            <div className="p-4 bg-[#141720] border border-white/[0.08] rounded-xl space-y-3">
+              <div className="flex items-center justify-between text-xs font-mono font-bold uppercase tracking-wider text-[#8b929e]">
+                <span className="flex items-center gap-1.5 text-white">
+                  <Calendar className="w-3.5 h-3.5 text-[#c68a35]" />
+                  Год симуляции:
                 </span>
-                <span className="text-[10px] text-slate-500 font-normal">
+                <span className="text-[10px] text-[#8b929e]">
                   {isLeapYear(selectedYear) ? 'Високосный (366 дн)' : 'Обычный (365 дн)'}
                 </span>
               </div>
@@ -250,14 +343,14 @@ export const DateTimePickerModal: React.FC<DateTimePickerModalProps> = ({
               <div className="flex items-center gap-1.5">
                 <button
                   onClick={() => setSelectedYear(y => Math.max(1900, y - 10))}
-                  className="px-2 py-1.5 bg-slate-800 hover:bg-slate-700 text-[11px] font-bold text-slate-300 rounded-lg cursor-pointer transition"
+                  className="px-2.5 py-1.5 bg-white/5 hover:bg-white/10 border border-white/10 text-xs font-mono font-bold text-white rounded-lg cursor-pointer transition-colors"
                   title="На 10 лет назад"
                 >
                   -10
                 </button>
                 <button
                   onClick={() => setSelectedYear(y => Math.max(1900, y - 1))}
-                  className="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg cursor-pointer transition"
+                  className="p-1.5 bg-white/5 hover:bg-white/10 border border-white/10 text-white rounded-lg cursor-pointer transition-colors"
                   title="Предыдущий год"
                 >
                   <ChevronLeft className="w-4 h-4" />
@@ -272,19 +365,19 @@ export const DateTimePickerModal: React.FC<DateTimePickerModalProps> = ({
                     const val = parseInt(e.target.value, 10);
                     if (!isNaN(val)) setSelectedYear(val);
                   }}
-                  className="flex-1 py-1.5 px-2 bg-slate-900 border border-slate-700 rounded-lg text-center font-mono font-bold text-white text-sm focus:outline-none focus:border-amber-500"
+                  className="flex-1 py-1.5 px-2 bg-[#0d0e12] border border-white/15 focus:border-[#c68a35] rounded-lg text-center font-mono font-bold text-white text-sm focus:outline-none transition-colors"
                 />
 
                 <button
                   onClick={() => setSelectedYear(y => Math.min(2100, y + 1))}
-                  className="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg cursor-pointer transition"
+                  className="p-1.5 bg-white/5 hover:bg-white/10 border border-white/10 text-white rounded-lg cursor-pointer transition-colors"
                   title="Следующий год"
                 >
                   <ChevronRight className="w-4 h-4" />
                 </button>
                 <button
                   onClick={() => setSelectedYear(y => Math.min(2100, y + 10))}
-                  className="px-2 py-1.5 bg-slate-800 hover:bg-slate-700 text-[11px] font-bold text-slate-300 rounded-lg cursor-pointer transition"
+                  className="px-2.5 py-1.5 bg-white/5 hover:bg-white/10 border border-white/10 text-xs font-mono font-bold text-white rounded-lg cursor-pointer transition-colors"
                   title="На 10 лет вперед"
                 >
                   +10
@@ -292,104 +385,52 @@ export const DateTimePickerModal: React.FC<DateTimePickerModalProps> = ({
               </div>
             </div>
 
-            {/* Time of Day Clock */}
-            <div className="p-3 bg-slate-950/40 border border-slate-800 rounded-xl space-y-2">
-              <div className="flex items-center justify-between text-xs font-bold text-slate-300">
-                <span className="flex items-center gap-1.5">
-                  <Clock className="w-3.5 h-3.5 text-amber-400" />
-                  Время суток (ЧЧ:ММ)
+            {/* Steppers for precise Minute */}
+            <div className="p-4 bg-[#141720] border border-white/[0.08] rounded-xl space-y-3">
+              <div className="flex items-center justify-between text-xs font-mono font-bold uppercase tracking-wider text-[#8b929e]">
+                <span className="flex items-center gap-1.5 text-white">
+                  <Clock className="w-3.5 h-3.5 text-[#c68a35]" />
+                  Точная минута:
                 </span>
-                <button
-                  onClick={onToggleTimeAutoCycling}
-                  className={`text-[10px] px-2 py-0.5 rounded flex items-center gap-1 transition ${
-                    isTimeAutoCycling ? 'bg-emerald-950/80 text-emerald-300 border border-emerald-500/30' : 'bg-slate-800 text-slate-400'
-                  }`}
-                  title="Автоматический ход игрового времени"
-                >
-                  {isTimeAutoCycling ? <Play className="w-2.5 h-2.5 fill-current" /> : <Pause className="w-2.5 h-2.5" />}
-                  <span>{isTimeAutoCycling ? 'Ход времени: ВКЛ' : 'Ход времени: ПАУЗА'}</span>
-                </button>
+                <span className="text-[10px] text-[#f0c264]">
+                  {String(selectedHour).padStart(2, '0')}:{String(selectedMinute).padStart(2, '0')}
+                </span>
               </div>
 
               <div className="flex items-center gap-2">
-                <div className="flex-1 flex items-center gap-1.5 bg-slate-900 border border-slate-700 rounded-lg p-1 px-2">
-                  <input
-                    type="range"
-                    min="0"
-                    max="23"
-                    value={selectedHour}
-                    onChange={(e) => setSelectedHour(parseInt(e.target.value, 10))}
-                    className="flex-1 accent-amber-500 cursor-pointer"
-                  />
-                  <span className="text-xs font-mono font-bold text-amber-300 min-w-[24px] text-right">
-                    {String(selectedHour).padStart(2, '0')}ч
-                  </span>
-                </div>
-
-                <div className="flex items-center gap-1 bg-slate-900 border border-slate-700 rounded-lg p-1 px-2">
-                  <input
-                    type="number"
-                    min="0"
-                    max="59"
-                    step="5"
-                    value={selectedMinute}
-                    onChange={(e) => {
-                      const v = Math.max(0, Math.min(59, parseInt(e.target.value, 10) || 0));
-                      setSelectedMinute(v);
-                    }}
-                    className="w-10 bg-transparent text-center font-mono font-bold text-white text-xs focus:outline-none"
-                  />
-                  <span className="text-xs text-slate-400">м</span>
-                </div>
-              </div>
-
-              {/* Time presets */}
-              <div className="flex items-center justify-between gap-1 pt-0.5">
-                {[
-                  { label: '06:00', h: 6, m: 0 },
-                  { label: '12:00', h: 12, m: 0 },
-                  { label: '18:00', h: 18, m: 0 },
-                  { label: '23:00', h: 23, m: 0 }
-                ].map(p => (
-                  <button
-                    key={p.label}
-                    onClick={() => { setSelectedHour(p.h); setSelectedMinute(p.m); }}
-                    className="flex-1 py-1 bg-slate-800/80 hover:bg-slate-700 text-[10px] font-mono text-slate-300 rounded cursor-pointer transition"
-                  >
-                    {p.label}
-                  </button>
-                ))}
+                <input
+                  type="range"
+                  min="0"
+                  max="59"
+                  step="1"
+                  value={selectedMinute}
+                  onChange={e => setSelectedMinute(parseInt(e.target.value, 10))}
+                  className="flex-1 accent-[#c68a35] cursor-pointer"
+                />
+                <span className="text-sm font-mono font-bold text-white min-w-[36px] text-right">
+                  {String(selectedMinute).padStart(2, '0')} м
+                </span>
               </div>
             </div>
           </div>
 
-          {/* Section 2: Month Grid */}
-          <div className="p-3 bg-slate-950/40 border border-slate-800 rounded-xl space-y-2">
-            <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">
+          {/* Month Selector Grid */}
+          <div className="p-4 bg-[#141720] border border-white/[0.08] rounded-xl space-y-2.5">
+            <span className="text-xs font-mono font-bold uppercase tracking-wider text-[#8b929e] block">
               Выберите месяц:
             </span>
-            <div className="grid grid-cols-3 sm:grid-cols-6 gap-1.5">
+            <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
               {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map(m => {
-                const isWinter = m === 12 || m === 1 || m === 2;
-                const isSpring = m >= 3 && m <= 5;
-                const isSummer = m >= 6 && m <= 8;
-                const isAutumn = m >= 9 && m <= 11;
                 const isSelected = selectedMonth === m;
 
                 return (
                   <button
                     key={m}
                     onClick={() => setSelectedMonth(m)}
-                    className={`py-1.5 px-2 rounded-lg text-xs font-semibold text-center transition-all cursor-pointer border ${
+                    className={`py-2 px-2.5 rounded-lg text-xs font-bold uppercase tracking-wider text-center transition-all cursor-pointer border ${
                       isSelected 
-                        ? 'bg-amber-500 text-slate-950 border-amber-400 font-bold shadow-md shadow-amber-500/20' 
-                        : isWinter
-                        ? 'bg-sky-950/30 hover:bg-sky-900/40 border-sky-500/20 text-sky-200'
-                        : isSpring
-                        ? 'bg-emerald-950/30 hover:bg-emerald-900/40 border-emerald-500/20 text-emerald-200'
-                        : isSummer
-                        ? 'bg-amber-950/30 hover:bg-amber-900/40 border-amber-500/20 text-amber-200'
-                        : 'bg-orange-950/30 hover:bg-orange-900/40 border-orange-500/20 text-orange-200'
+                        ? 'bg-[#c68a35] text-black border-[#c68a35] shadow-[0_0_12px_rgba(198,138,53,0.35)]' 
+                        : 'bg-white/5 hover:bg-white/10 border-white/[0.08] text-[#e9e6df]'
                     }`}
                   >
                     {MONTH_NAMES_NOMINATIVE[m]}
@@ -399,22 +440,22 @@ export const DateTimePickerModal: React.FC<DateTimePickerModalProps> = ({
             </div>
           </div>
 
-          {/* Section 3: Interactive Day Grid for selected Month */}
-          <div className="p-3 bg-slate-950/40 border border-slate-800 rounded-xl space-y-2">
+          {/* Interactive Day Grid */}
+          <div className="p-4 bg-[#141720] border border-white/[0.08] rounded-xl space-y-2.5">
             <div className="flex items-center justify-between">
-              <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+              <span className="text-xs font-mono font-bold uppercase tracking-wider text-[#8b929e]">
                 Выберите день ({MONTH_NAMES_NOMINATIVE[selectedMonth]} {selectedYear}):
               </span>
               <div className="flex items-center gap-1.5">
                 <button
                   onClick={() => setSelectedDay(d => Math.max(1, d - 1))}
-                  className="px-2 py-0.5 bg-slate-800 hover:bg-slate-700 rounded text-[10px] text-slate-300 font-bold cursor-pointer"
+                  className="px-2.5 py-1 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg text-[10px] font-mono text-white font-bold cursor-pointer"
                 >
                   -1 день
                 </button>
                 <button
                   onClick={() => setSelectedDay(d => Math.min(maxDays, d + 1))}
-                  className="px-2 py-0.5 bg-slate-800 hover:bg-slate-700 rounded text-[10px] text-slate-300 font-bold cursor-pointer"
+                  className="px-2.5 py-1 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg text-[10px] font-mono text-white font-bold cursor-pointer"
                 >
                   +1 день
                 </button>
@@ -422,17 +463,17 @@ export const DateTimePickerModal: React.FC<DateTimePickerModalProps> = ({
             </div>
 
             {/* Weekday headers */}
-            <div className="grid grid-cols-7 gap-1 text-center text-[10px] font-mono text-slate-500 font-bold">
+            <div className="grid grid-cols-7 gap-1 text-center text-[10px] font-mono text-[#8b929e] font-bold uppercase tracking-wider">
               {['ПН', 'ВТ', 'СР', 'ЧТ', 'ПТ', 'СБ', 'ВС'].map(dayName => (
-                <div key={dayName} className="py-0.5">{dayName}</div>
+                <div key={dayName} className="py-1">{dayName}</div>
               ))}
             </div>
 
             {/* Calendar Days Matrix */}
-            <div className="grid grid-cols-7 gap-1">
+            <div className="grid grid-cols-7 gap-1.5">
               {/* Empty leading offset days */}
               {Array.from({ length: firstDayOfWeek - 1 }).map((_, idx) => (
-                <div key={`empty-${idx}`} className="h-7 rounded opacity-0 pointer-events-none" />
+                <div key={`empty-${idx}`} className="h-8 rounded opacity-0 pointer-events-none" />
               ))}
 
               {/* Day buttons */}
@@ -442,10 +483,10 @@ export const DateTimePickerModal: React.FC<DateTimePickerModalProps> = ({
                   <button
                     key={d}
                     onClick={() => setSelectedDay(d)}
-                    className={`h-7 rounded-lg text-xs font-mono font-bold transition-all cursor-pointer flex items-center justify-center border ${
+                    className={`h-8 rounded-lg text-xs font-mono font-bold transition-all cursor-pointer flex items-center justify-center border ${
                       isSelected
-                        ? 'bg-amber-500 text-slate-950 border-amber-300 shadow-md shadow-amber-500/30 scale-105'
-                        : 'bg-slate-900/80 hover:bg-slate-800 border-slate-800 hover:border-slate-700 text-slate-300'
+                        ? 'bg-[#c68a35] text-black border-[#c68a35] shadow-[0_0_12px_rgba(198,138,53,0.4)] scale-105'
+                        : 'bg-white/5 hover:bg-white/10 border-white/[0.08] text-[#e9e6df]'
                     }`}
                   >
                     {d}
@@ -455,12 +496,12 @@ export const DateTimePickerModal: React.FC<DateTimePickerModalProps> = ({
             </div>
           </div>
 
-          {/* Section 4: All 8 Weather Types */}
-          <div className="p-3 bg-slate-950/40 border border-slate-800 rounded-xl space-y-2">
-            <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">
-              Новые типы погоды и атмосферные явления:
+          {/* Weather Types (8 Variants) */}
+          <div className="p-4 bg-[#141720] border border-white/[0.08] rounded-xl space-y-2.5">
+            <span className="text-xs font-mono font-bold uppercase tracking-wider text-[#8b929e] block">
+              Тип погоды и осадки:
             </span>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
               {weatherOptions.map(opt => {
                 const IconComponent = opt.icon;
                 const isSelected = selectedWeather === opt.id;
@@ -469,16 +510,20 @@ export const DateTimePickerModal: React.FC<DateTimePickerModalProps> = ({
                   <button
                     key={opt.id}
                     onClick={() => setSelectedWeather(opt.id)}
-                    className={`p-2.5 rounded-xl border flex items-center gap-2.5 text-left transition-all cursor-pointer ${
+                    className={`p-3 rounded-xl border flex items-center gap-3 text-left transition-all cursor-pointer ${
                       isSelected
-                        ? 'bg-amber-500/20 border-amber-500 text-white shadow-md shadow-amber-500/20'
-                        : 'bg-slate-900/60 hover:bg-slate-800 border-slate-800 text-slate-300 hover:text-white'
+                        ? 'bg-[#c68a35]/15 border-[#c68a35] text-white shadow-[0_0_15px_rgba(198,138,53,0.25)]'
+                        : 'bg-white/5 hover:bg-white/10 border-white/[0.08] text-[#8b929e] hover:text-white'
                     }`}
                   >
-                    <IconComponent className={`w-4 h-4 shrink-0 ${opt.color}`} />
-                    <div className="overflow-hidden">
-                      <div className="text-xs font-bold truncate">{opt.name}</div>
-                      <div className="text-[9px] text-slate-500 uppercase tracking-wider">{opt.id}</div>
+                    <IconComponent className={`w-5 h-5 shrink-0 ${isSelected ? 'text-[#f0c264]' : 'text-[#8b929e]'}`} />
+                    <div className="overflow-hidden min-w-0">
+                      <div className="text-xs font-bold uppercase tracking-wider text-white truncate font-sans">
+                        {opt.name}
+                      </div>
+                      <div className="text-[10px] font-mono text-[#8b929e] truncate">
+                        {opt.desc}
+                      </div>
                     </div>
                   </button>
                 );
@@ -488,8 +533,8 @@ export const DateTimePickerModal: React.FC<DateTimePickerModalProps> = ({
 
         </div>
 
-        {/* Footer with Apply button */}
-        <div className="p-4 bg-slate-950/90 border-t border-slate-800 flex items-center justify-between shrink-0 gap-3">
+        {/* Footer with Reset & Apply */}
+        <footer className="px-5 py-3.5 bg-[#16181e] border-t border-white/[0.08] flex items-center justify-between gap-3 shrink-0">
           <button
             onClick={() => {
               const def = createInitialCalendarState(2026, 10, 8, 10.0);
@@ -500,29 +545,29 @@ export const DateTimePickerModal: React.FC<DateTimePickerModalProps> = ({
               setSelectedMinute(0);
               setSelectedWeather('clear');
             }}
-            className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold rounded-xl flex items-center gap-1.5 transition cursor-pointer"
-            title="Сбросить на начальную дату (8 окт 2026, 10:00)"
+            className="px-3.5 py-2 bg-white/5 hover:bg-white/10 border border-white/10 text-[#8b929e] hover:text-white text-xs font-bold uppercase tracking-wider rounded-lg flex items-center gap-1.5 transition-colors cursor-pointer"
+            title="Сбросить на исходную дату (8 окт 2026, 10:00)"
           >
             <RotateCcw className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">Сброс</span>
+            <span>Сброс</span>
           </button>
 
           <div className="flex items-center gap-2">
             <button
               onClick={onClose}
-              className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold rounded-xl transition cursor-pointer"
+              className="px-4 py-2 bg-white/5 hover:bg-white/10 border border-white/10 text-white text-xs font-bold uppercase tracking-wider rounded-lg transition-colors cursor-pointer"
             >
               Отмена
             </button>
             <button
               onClick={handleApply}
-              className="px-5 py-2 bg-amber-500 hover:bg-amber-400 active:scale-95 text-slate-950 text-xs font-bold rounded-xl flex items-center gap-1.5 shadow-lg shadow-amber-500/25 transition cursor-pointer"
+              className="px-5 py-2 bg-[#c68a35] hover:bg-[#d99a41] active:scale-95 text-black text-xs font-bold uppercase tracking-wider rounded-lg flex items-center gap-1.5 shadow-[0_0_20px_rgba(198,138,53,0.4)] transition-all cursor-pointer"
             >
               <Check className="w-4 h-4 stroke-[2.5]" />
-              <span>Применить дату и погоду</span>
+              <span>Применить параметры</span>
             </button>
           </div>
-        </div>
+        </footer>
 
       </div>
     </div>

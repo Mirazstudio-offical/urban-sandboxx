@@ -585,7 +585,43 @@ export const MainMenu: React.FC<MainMenuProps> = ({
                         ? <button className="btn btn-s" onClick={signOut} disabled={authBusy}>Выйти из аккаунта</button>
                         : <button className="btn btn-p" onClick={signIn} disabled={authBusy}>{authBusy ? 'Вход...' : 'Войти через Google'}</button>}
                     </div>
-                    {authError && <div className="err" style={{ marginTop: -8 }}>{authError}</div>}
+                    {authError && (
+                      <div className="panel st" style={{ padding: '16px 20px', borderColor: 'rgba(224,171,69,.4)', background: 'rgba(224,171,69,.06)', marginTop: -6 }}>
+                        <div style={{ color: '#e0ab45', fontWeight: 600, fontSize: 14 }}>{authError}</div>
+                        {(authError.includes('авторизованных доменов') || authError.includes('Authorized domains')) && (
+                          <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid rgba(255,255,255,.08)', display: 'flex', flexDirection: 'column', gap: 8 }}>
+                            <div className="mut" style={{ fontSize: 13 }}>
+                              Добавьте домен ниже в консоли Firebase (Authentication → Settings → Authorized domains):
+                            </div>
+                            <div className="row2" style={{ alignItems: 'center', gap: 10 }}>
+                              <span style={{ fontFamily: 'ui-monospace,monospace', background: 'rgba(0,0,0,.45)', padding: '6px 12px', borderRadius: 6, border: '1px solid rgba(255,255,255,.12)', fontSize: 13, color: '#fff', userSelect: 'all' }}>
+                                {typeof window !== 'undefined' ? window.location.hostname : ''}
+                              </span>
+                              <button
+                                className="btn btn-s"
+                                style={{ height: 34, fontSize: 13 }}
+                                onClick={() => {
+                                  if (typeof window !== 'undefined') {
+                                    navigator.clipboard.writeText(window.location.hostname);
+                                  }
+                                }}
+                              >
+                                Копировать
+                              </button>
+                              <a
+                                href="https://console.firebase.google.com/project/gen-lang-client-0888101069/authentication/settings"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="btn btn-p"
+                                style={{ height: 34, fontSize: 13, textDecoration: 'none' }}
+                              >
+                                Открыть Firebase Console
+                              </a>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
                     <div style={{ display: 'flex', gap: 20 }}>
                       <div className="panel st d3" style={{ flex: 1.15, padding: '22px 24px' }}>
                         <div className="cn" style={{ fontSize: 20, fontWeight: 700 }}>Позывной</div>
