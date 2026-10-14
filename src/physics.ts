@@ -7170,7 +7170,7 @@ export function updateVehiclePhysics(
     const speedRatio = Math.min(1.0, currentSpeedKmh / cfg.maxSpeed);
     
     // Check if the vehicle is currently sliding or handbraking to adjust steering limits
-    const isSliding = Math.abs(vehicle.lateralVelocity || 0) > 8.0 || (input.handbrake && currentSpeedKmh > 6.0) || Math.abs(vehicle.angularVelocity || 0) > 1.0;
+    const isSliding = Math.abs(vehicle.lateralVelocity || 0) > 12.0 || (input.handbrake && currentSpeedKmh > 6.0);
 
     // Front axle lateral velocity and motion angle relative to vehicle heading (Caster & Slip Angle)
     // Front axle is offset by wheelbase along heading; yaw rotation adds angular velocity * wheelbase
@@ -8950,19 +8950,9 @@ export function updateVehiclePhysics(
     // FWD natural mild stabilization without killing drift inertia
     const fwdStabilization = (driveType === 'FWD' && vehicle.speed > 5 && effectiveThrottle > 0.3) ? 1.25 : 1.0;
 
-    // --- CONTINUOUS BICYCLE SLIP-ANGLE & OVERSTEER DRIFT DYNAMICS ---
-    const vFwd = Math.max(8.0, vSpeedAbs);
+    // --- REALISTIC DUAL REGIME: GRIP TURNING vs OVERSTEER DRIFT ---
+    const vFwd = Math.max(6.0, vSpeedAbs);
     const currentYaw = vehicle.angularVelocity || 0;
-    const frontAxleLatVelNow = lateralSlip + currentYaw * wheelBase;
-
-    // Local slip angles at front and rear axles (Pacejka Bicycle Model):
-    // In our coordinate system:
-    // +Y is to the right of the car.
-    // lateralSlip > 0 = rear sliding right; lateralSlip < 0 = rear sliding left.
-    // steerAngle > 0 = steering right; steerAngle < 0 = steering left.
-    const rearSlipAngle = Math.atan2(lateralSlip, vFwd) * moveDir;
-    const frontMotionAngleNow = Math.atan2(frontAxleLatVelNow, vFwd) * moveDir;
-    const frontSlipAngle = frontMotionAngleNow - (vehicle.steerAngle || 0);
 
     // Rear axle grip degradation (Handbrake, Brakes Locked, Power Wheelspin):
     let rearGripAvailable = rearGripFactor;
@@ -8976,56 +8966,86 @@ export function updateVehiclePhysics(
       rearGripAvailable *= powerGripReduction;
     }
 
-    const isRearCurrentlySliding = Math.abs(rearSlipAngle) > 0.08 || Math.abs(lateralSlip) > 10.0;
+    const isRearCurrentlySliding = Math.abs(lateralSlip) > 12.0;
     if (isRearCurrentlySliding) {
       rearGripAvailable *= 0.82; // Kinetic sliding friction drop
     }
 
+    const dynamicRearGripLimit = rearGripAvailable * 780.0;
+
     // Oversteer drift triggers:
-    const isCentrifugalOversteer = vSpeedAbs > 5.0 && Math.abs(lateralDemand) > lateralRearGripLimit;
+    const isCentrifugalOversteer = vSpeedAbs > 8.0 && Math.abs(lateralDemand) > dynamicRearGripLimit * 1.05;
     const isPowerOversteerKick = isRearPowerSlip && Math.abs(vehicle.steerAngle) > 0.08 && effectiveThrottle > 0.40;
     const hasPowerToMaintainDrift = isHighPower || vehicle.hasChiptuning || isWetSurface || surfaceGripRear < 0.72 || isBurnoutHolding;
 
-    const isDriftingState = (isHandbraking && vSpeedKmh > 5.0) ||
-                            (vehicle.isBrakeLocked && vSpeedKmh > 5.0) ||
-                            isRearCurrentlySliding ||
-                            isCentrifugalOversteer ||
-                            isPowerOversteerKick ||
-                            Math.abs(currentYaw) > 1.0;
+    const isRearGripLost = (isHandbraking && vSpeedKmh > 5.0) ||
+                           (vehicle.isBrakeLocked && vSpeedKmh > 5.0) ||
+                           isRearCurrentlySliding ||
+                           isCentrifugalOversteer ||
+                           isPowerOversteerKick;
 
-    if (isDriftingState && vSpeedAbs > 1.8 && !isRoadMachinery(vehicle.type)) {
-      // DRIFT REGIME: Continuous physical slip evolution without artificial sign-flipping
-      // 1. Centrifugal push pushing the tail outward
-      const centPush = -kinematicYawRate * vehicle.speed;
+    let finalAngularSpeed = effectiveYawRate;
 
-      // 2. Rear tire restoring force (opposing rear slip direction):
-      const rearMaxForce = rearGripAvailable * 780.0;
-      const rearRestoringForce = -Math.sign(rearSlipAngle || lateralSlip || 1) * Math.min(rearMaxForce, (Math.abs(rearSlipAngle) / 0.12) * rearMaxForce);
+    if (isRearGripLost && vSpeedAbs > 2.0 && !isRoadMachinery(vehicle.type)) {
+      // --- DRIFT REGIME: Rear axle has broken traction ---
+      // 1. Centrifugal push pushing the tail outward (only excess beyond tire adhesion limit)
+      const excessCentrifugal = Math.max(0, Math.abs(lateralDemand) - dynamicRearGripLimit);
+      const centPush = -Math.sign(currentYaw || kinematicYawRate || 1) * excessCentrifugal;
+
+      // 2. Sliding rear tires exert kinetic friction resisting the lateral slip:
+      const rearFriction = -Math.sign(lateralSlip || 1) * dynamicRearGripLimit * 0.85;
 
       // 3. Throttle power drift assist for RWD/AWD: maintains slide angle smoothly when power is held
       let powerDriftPush = 0;
-      if ((driveType === 'RWD' || driveType === 'AWD') && isRearPowerSlip && hasPowerToMaintainDrift && effectiveThrottle > 0.3) {
-        powerDriftPush = Math.sign(lateralSlip || currentYaw || 1) * effectiveThrottle * 38.0;
+      if ((driveType === 'RWD' || driveType === 'AWD') && isRearPowerSlip && hasPowerToMaintainDrift && effectiveThrottle > 0.35) {
+        powerDriftPush = -Math.sign(currentYaw || kinematicYawRate || 1) * effectiveThrottle * 40.0;
       }
 
-      const totalLatAccel = (centPush * 0.42 + rearRestoringForce + powerDriftPush);
+      const totalLatAccel = centPush * 0.48 + rearFriction * 0.58 + powerDriftPush;
       lateralSlip += totalLatAccel * dt;
-
-      // Natural tire friction scrub decay
       lateralSlip *= Math.max(0, 1.0 - (1.1 * effectiveGrip) * dt);
+
+      // Yaw dynamics during a drift:
+      // - Driver's steering input (effectiveYawRate) directs the front wheels.
+      // - Rear axle stepping out adds an oversteer moment:
+      //   When tail slides left (lateralSlip < 0 in right turn), the tail stepping out increases clockwise yaw rate!
+      const isHeavyVehicle = (cfg.mass || 1500) >= 4500 || vehicle.type === 'truck_semi' || vehicle.type.startsWith('truck_') || vehicle.type.startsWith('tractor_') || vehicle.type === 'bus' || !!vehicle.trailerId;
+      const trailerYawDamping = vehicle.trailerId ? 0.35 : (isHeavyVehicle ? 0.55 : 1.0);
+
+      // If tail slides left (lateralSlip < 0), oversteerKick is positive (increases clockwise spin).
+      // If tail slides right (lateralSlip > 0), oversteerKick is negative (increases counter-clockwise spin).
+      const oversteerKick = -Math.sign(lateralSlip) * Math.min(2.4, Math.abs(lateralSlip) / 32.0) * moveDir * trailerYawDamping;
+
+      // When the driver counter-steers (steers left, steerAngle < 0), effectiveYawRate becomes negative,
+      // directly balancing oversteerKick and allowing the driver to hold and control the drift angle!
+      const targetYaw = effectiveYawRate + oversteerKick;
+
+      let newYaw = currentYaw;
+      newYaw += (targetYaw - newYaw) * Math.min(1.0, 11.0 * dt);
+      newYaw *= Math.max(0, 1.0 - 0.35 * dt);
+
+      // Physical sanity clamp on yaw rate (prevents unphysical blender spins)
+      const maxPossibleYaw = Math.max(3.0, (frontGripLimit / Math.max(25.0, vSpeedAbs)) * 2.2);
+      finalAngularSpeed = Math.max(-maxPossibleYaw, Math.min(maxPossibleYaw, newYaw));
     } else {
-      // GRIP REGIME: Smooth progressive alignment with vehicle heading
-      const recoveryRate = (7.5 + effectiveGrip * 11.0) * fwdStabilization;
-      lateralSlip *= Math.max(0, 1.0 - recoveryRate * dt);
-      if (Math.abs(lateralSlip) < 0.3 || vSpeedAbs < 0.6) lateralSlip = 0;
+      // --- GRIP REGIME: Direct Ackerman geometrical turning with understeer grip limits ---
+      // Rear tires have 100% lateral traction and follow the car heading:
+      lateralSlip *= Math.max(0, 1.0 - 24.0 * dt);
+      if (Math.abs(lateralSlip) < 0.2 || vSpeedAbs < 0.6) lateralSlip = 0;
+
+      // In Grip Regime, the car turns directly where the front wheels are steered:
+      // When steering right, targetYaw > 0 (turns right).
+      // When steering left, targetYaw < 0 (turns left).
+      let targetYaw = effectiveYawRate;
+      let newYaw = currentYaw;
+      newYaw += (targetYaw - newYaw) * Math.min(1.0, 16.0 * dt);
+      newYaw *= Math.max(0, 1.0 - 0.25 * dt);
+      finalAngularSpeed = newYaw;
     }
 
     if (isRoadMachinery(vehicle.type)) {
       lateralSlip = 0;
     }
-
-    // Dynamic Yaw Rate with authentic Counter-Steering Balance:
-    let finalAngularSpeed = effectiveYawRate;
 
     if (vSpeedAbs < 0.8 && !isBurnoutHolding) {
       lateralSlip = 0;
@@ -9036,36 +9056,6 @@ export function updateVehiclePhysics(
         const steerDiff = (vehicle.steerAngle || 0) - prevSteer;
         finalAngularSpeed = (steerDiff / dt) * 0.5;
       }
-    } else if (Math.abs(lateralSlip) > 6.0 || isHandbraking || vehicle.isBrakeLocked || Math.abs(currentYaw) > 0.75) {
-      // DRIFT & BRAKE LOCK REGIME:
-      // Front wheels generate counter-steering torque based on front tire slip angle:
-      // When the driver counter-steers into the slide, frontSlipAngle -> 0, eliminating spin torque and holding the drift!
-      // When the driver counter-steers further, front tires exert restoring torque pulling the car out!
-      // If the driver does not counter-steer, the car spins out naturally into a 360 / donut.
-      const isHeavyVehicle = (cfg.mass || 1500) >= 4500 || vehicle.type === 'truck_semi' || vehicle.type.startsWith('truck_') || vehicle.type.startsWith('tractor_') || vehicle.type === 'bus' || !!vehicle.trailerId;
-      const trailerYawDamping = vehicle.trailerId ? 0.35 : (isHeavyVehicle ? 0.55 : 1.0);
-
-      // Front steering control torque: scales with front wheel slip angle relative to slide trajectory
-      const frontControlTorque = -frontSlipAngle * 6.8 * (frontGripFactor / 1.0);
-
-      // Rear swing torque: sliding rear axle swings the tail
-      const rearSwingTorque = (lateralSlip / Math.max(20.0, wheelBase)) * 2.8 * moveDir * trailerYawDamping;
-
-      const totalYawMoment = (frontControlTorque + rearSwingTorque);
-
-      let newYaw = currentYaw;
-      newYaw += (totalYawMoment - newYaw) * Math.min(1.0, 9.5 * dt);
-      newYaw *= Math.max(0, 1.0 - 0.40 * dt); // Rotational damping
-
-      // Physical sanity clamp on yaw rate (prevents unphysical blender spins)
-      const maxPossibleYaw = Math.max(3.0, (frontGripFactor * 780.0 / Math.max(25.0, vSpeedAbs)) * 2.2);
-      finalAngularSpeed = Math.max(-maxPossibleYaw, Math.min(maxPossibleYaw, newYaw));
-    } else {
-      // GRIP REGIME: Responsive geometrical turning tracking front wheels
-      let newYaw = currentYaw;
-      newYaw += (effectiveYawRate - newYaw) * Math.min(1.0, 15.0 * dt);
-      newYaw *= Math.max(0, 1.0 - 0.35 * dt);
-      finalAngularSpeed = newYaw;
     }
 
     // 3. Sliding Tire Friction Scrubbing (Speed Bleed)
