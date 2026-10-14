@@ -1266,44 +1266,20 @@ const VirtualSteeringWheel: React.FC<VirtualSteeringWheelProps> = ({
       className="relative w-28 h-28 sm:w-30 sm:h-30 select-none touch-none flex items-center justify-center pointer-events-auto cursor-grab active:cursor-grabbing shrink-0"
       title={`${themeMeta.wheelName} (крутите по кругу для плавного управления)`}
     >
-      {/* BACKGROUND DIAL RING & DEGREE NOTCHES */}
-      <div 
-        className="absolute inset-0 rounded-full backdrop-blur-md shadow-[0_6px_18px_rgba(0,0,0,0.85)] flex items-center justify-center pointer-events-none transition-colors duration-300"
-        style={{
-          backgroundColor: themeMeta.dialBgColor,
-          border: `1.5px solid ${themeMeta.dialBorderColor}`,
-        }}
-      >
-        {/* Subtle angle degree & vehicle theme badge */}
-        <div className="absolute top-1 flex items-center gap-1 text-[7.5px] font-mono font-bold">
-          <span style={{ color: themeMeta.accentColor }} className="font-black drop-shadow-[0_0_4px_rgba(0,0,0,0.8)]">
+      {/* ANGLE READOUT (no background) */}
+      <div className="absolute inset-x-0 top-0 flex items-center justify-center pointer-events-none">
+        <div className="flex items-center gap-1 text-[7.5px] font-mono font-bold [text-shadow:0_1px_3px_rgba(0,0,0,0.9)]">
+          <span style={{ color: themeMeta.accentColor }} className="font-black">
             {themeMeta.badgeText}
           </span>
-          <span className="text-slate-500">·</span>
-          <span className={isAtLeftLock || isAtRightLock ? 'text-amber-400 font-black' : 'text-slate-300'}>
+          <span className="text-white/50">·</span>
+          <span className={isAtLeftLock || isAtRightLock ? 'text-amber-400 font-black' : 'text-white/80'}>
             {Math.abs(Math.round(rotationDeg))}°
           </span>
-          <span className="text-[6.5px] text-slate-500">
-            ({turnsCount} об.)
-          </span>
           {(isAtLeftLock || isAtRightLock) && (
-            <span className="px-0.5 text-[6.5px] bg-amber-500/20 text-amber-300 border border-amber-500/40 rounded font-black">
-              УПОР
-            </span>
+            <span className="text-[6.5px] text-amber-300 font-black">УПОР</span>
           )}
         </div>
-        <div className={`absolute left-1.5 text-[7px] font-mono font-bold ${isAtLeftLock ? 'text-amber-400 font-black scale-110' : 'text-slate-500'}`}>
-          L
-        </div>
-        <div className={`absolute right-1.5 text-[7px] font-mono font-bold ${isAtRightLock ? 'text-amber-400 font-black scale-110' : 'text-slate-500'}`}>
-          R
-        </div>
-
-        {/* Top 12 o'clock center tick notch */}
-        <div 
-          className="absolute top-0 w-1 h-1.5 rounded-b-sm opacity-80"
-          style={{ backgroundColor: themeMeta.accentColor }}
-        />
       </div>
 
       {/* ROTATING VEHICLE-AUTHENTIC STEERING WHEEL */}
@@ -1457,8 +1433,8 @@ export const MobileTouchControls: React.FC<MobileTouchControlsProps> = ({
           }}
           className={`w-9.5 h-9.5 rounded-xl border flex items-center justify-center shadow-lg transition-all active:scale-90 cursor-pointer ${
             canInteractF
-              ? 'bg-slate-800 text-slate-100 border-slate-300 shadow-[0_0_10px_rgba(255,255,255,0.25)]'
-              : 'bg-slate-950/85 text-slate-500 border-slate-700/80 hover:border-slate-500'
+              ? 'bg-white/30 text-white border-white/50'
+              : 'bg-[rgba(110,110,115,0.34)] text-slate-200 border-white/15 backdrop-blur-sm hover:border-white/30'
           }`}
           title="Действие F (Вход/Выход из транспорта)"
         >
@@ -1486,8 +1462,8 @@ export const MobileTouchControls: React.FC<MobileTouchControlsProps> = ({
           }}
           className={`w-9.5 h-9.5 rounded-xl border flex items-center justify-center shadow-lg transition-all active:scale-90 cursor-pointer ${
             canInteractE
-              ? 'bg-slate-800 text-slate-100 border-slate-300 shadow-[0_0_10px_rgba(255,255,255,0.25)]'
-              : 'bg-slate-950/85 text-slate-500 border-slate-700/80 hover:border-slate-500'
+              ? 'bg-white/30 text-white border-white/50'
+              : 'bg-[rgba(110,110,115,0.34)] text-slate-200 border-white/15 backdrop-blur-sm hover:border-white/30'
           }`}
           title="Действие E (Взаимодействие / Использовать)"
         >
@@ -1512,8 +1488,8 @@ export const MobileTouchControls: React.FC<MobileTouchControlsProps> = ({
               onClick={() => { triggerHaptic(12); onToggleTurnSignal?.('left'); }}
               className={`w-8 h-8 backdrop-blur-md border rounded-lg flex items-center justify-center shadow-md transition-all ${
                 activeTurnSignal === 'left'
-                  ? 'bg-slate-200 text-slate-950 border-white font-bold scale-95'
-                  : 'bg-slate-950/95 text-slate-300 border-slate-700 hover:border-slate-500'
+                  ? 'bg-[#c9922b]/45 text-white border-[#c9922b] font-bold scale-95'
+                  : 'bg-[rgba(110,110,115,0.34)] text-slate-200 border-white/15 hover:border-white/30'
               }`}
               title="Левый поворотник"
             >
@@ -1525,8 +1501,8 @@ export const MobileTouchControls: React.FC<MobileTouchControlsProps> = ({
               onClick={() => { triggerHaptic(15); onToggleTurnSignal?.('hazard'); }}
               className={`w-8 h-8 backdrop-blur-md border rounded-lg flex items-center justify-center shadow-md transition-all ${
                 activeTurnSignal === 'hazard'
-                  ? 'bg-rose-950 text-rose-300 border-rose-600 font-bold scale-95'
-                  : 'bg-slate-950/95 text-slate-400 border-slate-700 hover:border-slate-500'
+                  ? 'bg-rose-500/35 text-rose-100 border-rose-400 font-bold scale-95'
+                  : 'bg-[rgba(110,110,115,0.34)] text-slate-200 border-white/15 hover:border-white/30'
               }`}
               title="Аварийка"
             >
@@ -1538,8 +1514,8 @@ export const MobileTouchControls: React.FC<MobileTouchControlsProps> = ({
               onClick={() => { triggerHaptic(12); onToggleTurnSignal?.('right'); }}
               className={`w-8 h-8 backdrop-blur-md border rounded-lg flex items-center justify-center shadow-md transition-all ${
                 activeTurnSignal === 'right'
-                  ? 'bg-slate-200 text-slate-950 border-white font-bold scale-95'
-                  : 'bg-slate-950/95 text-slate-300 border-slate-700 hover:border-slate-500'
+                  ? 'bg-[#c9922b]/45 text-white border-[#c9922b] font-bold scale-95'
+                  : 'bg-[rgba(110,110,115,0.34)] text-slate-200 border-white/15 hover:border-white/30'
               }`}
               title="Правый поворотник"
             >
@@ -1565,19 +1541,19 @@ export const MobileTouchControls: React.FC<MobileTouchControlsProps> = ({
         >
           {joystickActive ? (
             <div
-              className="absolute -translate-x-1/2 -translate-y-1/2 w-22 h-22 rounded-full border border-slate-600 bg-slate-950/80 backdrop-blur-md flex items-center justify-center shadow-xl pointer-events-none"
+              className="absolute -translate-x-1/2 -translate-y-1/2 w-22 h-22 rounded-full border border-white/20 bg-white/10 backdrop-blur-sm flex items-center justify-center pointer-events-none"
               style={{ left: joystickCenter.x, top: joystickCenter.y }}
             >
               <div
-                className="w-9 h-9 rounded-full bg-slate-800 border border-slate-600 shadow-md transition-transform duration-75"
+                className="w-9 h-9 rounded-full bg-white/30 border border-white/40 shadow-md transition-transform duration-75"
                 style={{
                   transform: `translate(${joystickKnob.x}px, ${joystickKnob.y}px)`,
                 }}
               />
             </div>
           ) : (
-            <div className="absolute bottom-4 left-4 w-14 h-14 rounded-full border border-slate-800 bg-slate-950/40 flex items-center justify-center pointer-events-none opacity-40">
-              <div className="w-5 h-5 rounded-full bg-slate-800" />
+            <div className="absolute bottom-4 left-4 w-14 h-14 rounded-full border border-white/20 bg-white/10 flex items-center justify-center pointer-events-none opacity-40">
+              <div className="w-5 h-5 rounded-full bg-white/25" />
             </div>
           )}
         </div>
@@ -1591,13 +1567,13 @@ export const MobileTouchControls: React.FC<MobileTouchControlsProps> = ({
       >
         {/* COMPACT TOOLBAR FOR LIGHTS, AUXILIARY & UI SCALE */}
         {isInVehicle && (
-          <div className="flex items-center gap-1 bg-slate-950/90 p-1 rounded-xl border border-slate-800/80 shadow-lg">
+          <div className="flex items-center gap-1.5">
             {/* Quick UI Scale cycle badge */}
             {onCycleUiScale && (
               <button
                 type="button"
                 onClick={() => { triggerHaptic(10); onCycleUiScale(); }}
-                className="w-7 h-7 rounded-lg bg-slate-900 border border-slate-700 text-slate-300 font-mono text-[9px] font-black flex items-center justify-center active:scale-95 transition"
+                className="w-7 h-7 rounded-lg bg-[rgba(110,110,115,0.34)] border border-white/15 backdrop-blur-sm text-slate-300 font-mono text-[9px] font-black flex items-center justify-center active:scale-95 transition"
                 title="Настроить масштаб кнопок (65% / 75% / 85% / 100%)"
               >
                 {Math.round((uiScale || 0.75) * 100)}%
@@ -1612,7 +1588,7 @@ export const MobileTouchControls: React.FC<MobileTouchControlsProps> = ({
                   ? 'bg-sky-500/20 text-sky-300 border-sky-400 shadow-[0_0_8px_rgba(56,189,248,0.3)]' 
                   : headlightMode === 'low'
                   ? 'bg-emerald-500/20 text-emerald-300 border-emerald-400'
-                  : 'bg-slate-900 text-slate-400 border-slate-700'
+                  : 'bg-[rgba(110,110,115,0.34)] text-slate-200 border-white/15 backdrop-blur-sm'
               }`}
               title="Переключить фары (Выкл / Ближний / Дальний)"
             >
@@ -1631,7 +1607,7 @@ export const MobileTouchControls: React.FC<MobileTouchControlsProps> = ({
               className={`w-7.5 h-7.5 rounded-lg flex items-center justify-center border transition-all active:scale-95 ${
                 isFrontFogOn
                   ? 'bg-amber-500/20 text-amber-300 border-amber-400 shadow-[0_0_8px_rgba(245,158,11,0.3)]'
-                  : 'bg-slate-900 text-slate-400 border-slate-700'
+                  : 'bg-[rgba(110,110,115,0.34)] text-slate-200 border-white/15 backdrop-blur-sm'
               }`}
               title="Передние противотуманки (ПТФ)"
             >
@@ -1644,7 +1620,7 @@ export const MobileTouchControls: React.FC<MobileTouchControlsProps> = ({
               className={`w-7.5 h-7.5 rounded-lg flex items-center justify-center border transition-all active:scale-95 ${
                 isRearFogOn
                   ? 'bg-rose-500/20 text-rose-300 border-rose-400 shadow-[0_0_8px_rgba(244,63,94,0.3)]'
-                  : 'bg-slate-900 text-slate-400 border-slate-700'
+                  : 'bg-[rgba(110,110,115,0.34)] text-slate-200 border-white/15 backdrop-blur-sm'
               }`}
               title="Задние противотуманки (ПТФ ЗАД)"
             >
@@ -1658,7 +1634,7 @@ export const MobileTouchControls: React.FC<MobileTouchControlsProps> = ({
                 className={`w-7.5 h-7.5 rounded-lg flex items-center justify-center border transition-all active:scale-95 ${
                   isRoadTrainLightsOn
                     ? 'bg-amber-500/20 text-amber-300 border-amber-400 shadow-[0_0_8px_rgba(245,158,11,0.3)]'
-                    : 'bg-slate-900 text-slate-400 border-slate-700'
+                    : 'bg-[rgba(110,110,115,0.34)] text-slate-200 border-white/15 backdrop-blur-sm'
                 }`}
                 title="Огни автопоезда (крыша)"
               >
@@ -1669,7 +1645,7 @@ export const MobileTouchControls: React.FC<MobileTouchControlsProps> = ({
             <button
               type="button"
               onClick={() => { triggerHaptic(15); onOpenRadialMenu?.(); }}
-              className="w-7.5 h-7.5 bg-slate-900 border border-slate-700 text-slate-300 active:bg-slate-800 active:text-white rounded-lg flex items-center justify-center shadow font-bold transition-all"
+              className="w-7.5 h-7.5 bg-[rgba(110,110,115,0.34)] border border-white/15 backdrop-blur-sm text-slate-300 active:bg-white/30 active:text-white rounded-lg flex items-center justify-center shadow font-bold transition-all"
               title="Приборы / Меню"
             >
               <Gauge className="w-4 h-4 text-emerald-400" />
@@ -1679,8 +1655,8 @@ export const MobileTouchControls: React.FC<MobileTouchControlsProps> = ({
               inputKey="hornH"
               inputRef={inputRef}
               hapticMs={15}
-              className="w-7.5 h-7.5 bg-slate-900 border border-slate-700 text-slate-300 rounded-lg flex items-center justify-center shadow font-bold"
-              activeClassName="bg-slate-800 text-white"
+              className="w-7.5 h-7.5 bg-[rgba(110,110,115,0.34)] border border-white/15 backdrop-blur-sm text-slate-300 rounded-lg flex items-center justify-center shadow font-bold"
+              activeClassName="bg-white/30 text-white"
             >
               <Volume2 className="w-4 h-4 text-slate-300" />
             </TouchButton>
@@ -1693,7 +1669,7 @@ export const MobileTouchControls: React.FC<MobileTouchControlsProps> = ({
                 className={`w-7.5 h-7.5 border rounded-lg flex items-center justify-center shadow font-black transition-all ${
                   transferCaseMode === 'LOW'
                     ? 'bg-amber-500/20 text-amber-400 border-amber-500/50 shadow-[0_0_10px_rgba(245,158,11,0.2)]'
-                    : 'bg-slate-900 text-slate-400 border-slate-700'
+                    : 'bg-[rgba(110,110,115,0.34)] text-slate-200 border-white/15 backdrop-blur-sm'
                 }`}
                 activeClassName="scale-95 brightness-125"
                 title="Делитель (Повышенная/Пониженная)"
@@ -1711,8 +1687,8 @@ export const MobileTouchControls: React.FC<MobileTouchControlsProps> = ({
               }}
               className={`w-7.5 h-7.5 rounded-lg flex items-center justify-center font-bold shadow border transition-all active:scale-95 ${
                 isEngineRunning
-                  ? 'bg-emerald-950/90 border-emerald-500 text-emerald-300 shadow-[0_0_8px_rgba(16,185,129,0.3)]'
-                  : 'bg-rose-950/90 border-rose-600 text-rose-300 animate-pulse'
+                  ? 'bg-emerald-500/25 border-emerald-400 text-emerald-200 backdrop-blur-sm'
+                  : 'bg-rose-500/25 border-rose-400 text-rose-200 backdrop-blur-sm animate-pulse'
               }`}
               title="Запустить/заглушить двигатель"
             >
@@ -1739,8 +1715,8 @@ export const MobileTouchControls: React.FC<MobileTouchControlsProps> = ({
               inputKey="handbrake"
               inputRef={inputRef}
               hapticMs={20}
-              className="w-10 h-11 bg-slate-950/95 border border-slate-700 text-slate-300 rounded-xl flex items-center justify-center shadow-xl"
-              activeClassName="bg-slate-800 text-white border-slate-500"
+              className="w-10 h-11 bg-[rgba(110,110,115,0.34)] border border-white/15 backdrop-blur-sm text-slate-300 rounded-xl flex items-center justify-center "
+              activeClassName="bg-white/30 text-white border-white/45"
             >
               <Flame className="w-5 h-5 text-slate-300" />
             </TouchButton>
@@ -1753,8 +1729,8 @@ export const MobileTouchControls: React.FC<MobileTouchControlsProps> = ({
                   inputKey="brakeLeft"
                   inputRef={inputRef}
                   hapticMs={15}
-                  className="w-8 h-18 bg-slate-950/95 border border-slate-700 text-slate-200 rounded-xl flex flex-col items-center justify-center shadow-2xl"
-                  activeClassName="bg-rose-950 text-white border-rose-500"
+                  className="w-8 h-18 bg-[rgba(110,110,115,0.34)] border border-white/15 backdrop-blur-sm text-slate-200 rounded-xl flex flex-col items-center justify-center "
+                  activeClassName="bg-rose-500/40 text-white border-rose-400"
                 >
                   <ChevronDown className="w-4 h-4 text-rose-400 stroke-[2.5]" />
                   <span className="text-[8px] font-extrabold font-mono text-rose-300">Л</span>
@@ -1765,8 +1741,8 @@ export const MobileTouchControls: React.FC<MobileTouchControlsProps> = ({
                   inputKey="brakeRight"
                   inputRef={inputRef}
                   hapticMs={15}
-                  className="w-8 h-18 bg-slate-950/95 border border-slate-700 text-slate-200 rounded-xl flex flex-col items-center justify-center shadow-2xl"
-                  activeClassName="bg-rose-950 text-white border-rose-500"
+                  className="w-8 h-18 bg-[rgba(110,110,115,0.34)] border border-white/15 backdrop-blur-sm text-slate-200 rounded-xl flex flex-col items-center justify-center "
+                  activeClassName="bg-rose-500/40 text-white border-rose-400"
                 >
                   <ChevronDown className="w-4 h-4 text-rose-400 stroke-[2.5]" />
                   <span className="text-[8px] font-extrabold font-mono text-rose-300">П</span>
@@ -1777,8 +1753,8 @@ export const MobileTouchControls: React.FC<MobileTouchControlsProps> = ({
                 inputKey="backward"
                 inputRef={inputRef}
                 hapticMs={15}
-                className="w-12 h-18 bg-slate-950/95 border border-slate-700 text-slate-200 rounded-xl flex items-center justify-center shadow-2xl"
-                activeClassName="bg-slate-800 text-white border-slate-500"
+                className="w-12 h-18 bg-[rgba(110,110,115,0.34)] border border-white/15 backdrop-blur-sm text-slate-200 rounded-xl flex items-center justify-center "
+                activeClassName="bg-white/30 text-white border-white/45"
               >
                 <ChevronDown className="w-6 h-6 text-rose-400 stroke-[3]" />
               </TouchButton>
@@ -1789,8 +1765,8 @@ export const MobileTouchControls: React.FC<MobileTouchControlsProps> = ({
               inputKey="forward"
               inputRef={inputRef}
               hapticMs={15}
-              className="w-14 h-21 bg-slate-950/95 border border-slate-600 text-slate-100 rounded-xl flex items-center justify-center shadow-2xl"
-              activeClassName="bg-slate-800 text-white border-slate-400"
+              className="w-14 h-21 bg-[rgba(110,110,115,0.34)] border border-white/20 backdrop-blur-sm text-slate-100 rounded-xl flex items-center justify-center "
+              activeClassName="bg-white/30 text-white border-white/45"
             >
               <ChevronUp className="w-7 h-7 text-emerald-400 stroke-[3]" />
             </TouchButton>
@@ -1802,7 +1778,7 @@ export const MobileTouchControls: React.FC<MobileTouchControlsProps> = ({
               <button
                 type="button"
                 onClick={() => { triggerHaptic(10); onCycleUiScale(); }}
-                className="w-7 h-7 rounded-lg bg-slate-950/95 border border-slate-700 text-slate-300 font-mono text-[9px] font-black flex items-center justify-center active:scale-95 transition shadow-lg self-center"
+                className="w-7 h-7 rounded-lg bg-[rgba(110,110,115,0.34)] border border-white/15 backdrop-blur-sm text-slate-300 font-mono text-[9px] font-black flex items-center justify-center active:scale-95 transition shadow-lg self-center"
                 title="Настроить масштаб кнопок (65% / 75% / 85% / 100%)"
               >
                 {Math.round((uiScale || 0.75) * 100)}%
@@ -1814,8 +1790,8 @@ export const MobileTouchControls: React.FC<MobileTouchControlsProps> = ({
               inputKey="handbrake"
               inputRef={inputRef}
               hapticMs={20}
-              className="w-11 h-11 bg-slate-950/95 border border-slate-700 text-slate-300 rounded-xl flex items-center justify-center shadow-xl"
-              activeClassName="bg-slate-800 text-white border-slate-500"
+              className="w-11 h-11 bg-[rgba(110,110,115,0.34)] border border-white/15 backdrop-blur-sm text-slate-300 rounded-xl flex items-center justify-center "
+              activeClassName="bg-white/30 text-white border-white/45"
             >
               <RotateCcw className="w-5 h-5 text-slate-200" />
             </TouchButton>
@@ -1825,8 +1801,8 @@ export const MobileTouchControls: React.FC<MobileTouchControlsProps> = ({
               inputKey="sprint"
               inputRef={inputRef}
               hapticMs={20}
-              className="w-14 h-14 bg-slate-950/95 border border-slate-700 text-slate-200 rounded-xl flex items-center justify-center shadow-2xl"
-              activeClassName="bg-slate-800 text-white border-slate-500"
+              className="w-14 h-14 bg-[rgba(110,110,115,0.34)] border border-white/15 backdrop-blur-sm text-slate-200 rounded-xl flex items-center justify-center "
+              activeClassName="bg-white/30 text-white border-white/45"
             >
               <Zap className="w-6 h-6 text-slate-200" />
             </TouchButton>

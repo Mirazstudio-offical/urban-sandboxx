@@ -101,6 +101,7 @@ import { FullScreenMap } from './components/FullScreenMap';
 import { LandscapeGuard } from './components/LandscapeGuard';
 import { MobileTouchControls } from './components/MobileTouchControls';
 import { MainMenu } from './components/MainMenu';
+import { GameHudMenu } from './components/GameHudMenu';
 import { PauseMenu } from './components/PauseMenu';
 import { PlayerNeedsHUD } from './components/PlayerNeedsHUD';
 import { InventoryModal } from './components/InventoryModal';
@@ -240,7 +241,9 @@ import {
   Users,
   Globe,
   MessageSquare,
-  Train
+  Train,
+  Pause,
+  Menu as MenuIcon
 } from 'lucide-react';
 
 import { SPAWN_LOCATIONS, getAllSpawnLocations, type SpawnLocation } from './spawnLocations';
@@ -652,11 +655,8 @@ export default function App() {
     }
   };
 
-  const cycleWeather = () => {
-    const types: WeatherType[] = ['clear', 'overcast', 'drizzle', 'rain', 'storm', 'fog', 'snow', 'blizzard'];
-    const idx = types.indexOf(weather);
-    const nextWeather = types[(idx + 1) % types.length];
-    
+  const setWeatherType = (nextWeather: WeatherType) => {
+    if (nextWeather === weatherRef.current) return;
     const prev = weatherRef.current;
     previousWeatherRef.current = prev;
     setWeather(nextWeather);
@@ -668,7 +668,14 @@ export default function App() {
     }
     setWeatherTransition(0.0);
     weatherTransitionRef.current = 0.0;
-    
+  };
+
+  const cycleWeather = () => {
+    const types: WeatherType[] = ['clear', 'overcast', 'drizzle', 'rain', 'storm', 'fog', 'snow', 'blizzard'];
+    const idx = types.indexOf(weather);
+    const nextWeather = types[(idx + 1) % types.length];
+    setWeatherType(nextWeather);
+
     const p = playerRef.current;
     if (p) {
       const weatherRu = 
@@ -681,6 +688,33 @@ export default function App() {
         nextWeather === 'snow' ? 'Снегопад' : 'Метель';
       addPlayerNotification(p, `Погода меняется: ${weatherRu}`, 'info');
     }
+  };
+
+  // Set the time of day directly (HUD scrubber / presets). The calendar date stays the same.
+  const setTimeOfDay = (hour: number) => {
+    const h = ((hour % 24) + 24) % 24;
+    const c = calendarRef.current;
+    const nextCal = createInitialCalendarState(c.year, c.month, c.day, h);
+    calendarRef.current = nextCal;
+    timeHourRef.current = nextCal.timeHour;
+    setTimeHour(nextCal.timeHour);
+    setCalendar({ ...nextCal });
+    if (worldRef.current) {
+      worldRef.current.calendar = nextCal;
+      worldRef.current.season = nextCal.season;
+      worldRef.current.timeHour = nextCal.timeHour;
+    }
+  };
+
+  const openPauseMenu = () => {
+    inputRef.current.forward = false;
+    inputRef.current.backward = false;
+    inputRef.current.left = false;
+    inputRef.current.right = false;
+    inputRef.current.handbrake = false;
+    inputRef.current.sprint = false;
+    setIsQuickMenuOpen(false);
+    setIsPauseMenuOpen(true);
   };
 
   const handleApplyDateAndTimeAndWeather = (
@@ -5808,360 +5842,94 @@ export default function App() {
         id="main-canvas"ref={canvasRef}
         className="absolute inset-0 w-full h-full block cursor-crosshair"/>
 
-      {/* TOP-LEFT: CITY HUD & ATMOSPHERE */}
-      <div id="hud-top-left"className="absolute top-3 left-3 sm:top-4 sm:left-4 z-50 flex flex-col gap-2 pointer-events-none select-none">
-        <div className="bg-slate-900/90 backdrop-blur-md border border-slate-700/80 rounded-xl px-2.5 py-1.5 sm:px-4 sm:py-2.5 shadow-xl text-white flex items-center gap-2 sm:gap-3 pointer-events-auto">
-          <div className="flex items-center gap-1.5 sm:gap-2">
-            <Compass className="w-4 h-4 sm:w-5 sm:h-5 text-sky-400 animate-pulse"/>
-            <span className="font-semibold text-xs sm:text-sm tracking-wide line-clamp-1 max-w-[110px] sm:max-w-[180px]">{streetName}</span>
-          </div>
-          <div className="h-4 w-px bg-slate-700"/>
+      {/* TOP-LEFT: PAUSE BUTTON + GAME MENU (BeamNG style) */}
+      <div id="hud-top-left" className="absolute top-3 left-3 sm:top-4 sm:left-4 z-50 flex flex-col items-start gap-2 pointer-events-none select-none">
+        <div className="flex items-center gap-2">
           <button
-            onClick={() => setIsPerfConsoleOpen((prev) => !prev)}
-            onTouchEnd={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              setIsPerfConsoleOpen((prev) => !prev);
-            }}
-            className={`flex items-center gap-1 sm:gap-1.5 text-[11px] sm:text-xs rounded-lg px-2 py-1 transition-all duration-200 border cursor-pointer active:scale-95 ${
-              isPerfConsoleOpen
-                ? 'bg-indigo-950/80 border-indigo-500 text-indigo-400 font-semibold shadow-inner': 'bg-slate-800/40 border-slate-700 text-slate-300 hover:bg-slate-800/60 hover:text-white'}`}
-            title="Профайлер нагрузки [~]"id="perf-profiler-btn">
-            <span className={`w-2 h-2 rounded-full ${
-              fps >= 45 ? 'bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.5)]':
-              fps >= 25 ? 'bg-amber-400 shadow-[0_0_8px_rgba(251,191,36,0.5)] animate-pulse':
-              'bg-red-400 shadow-[0_0_8px_rgba(248,113,113,0.5)] animate-ping'}`} />
-            <span>{fps} FPS</span>
+            id="hud-pause-btn"
+            type="button"
+            className="hud-btn hud-sq"
+            onClick={openPauseMenu}
+            title="Пауза [Esc]"
+            aria-label="Пауза">
+            <Pause className="w-5 h-5" />
           </button>
-          <div className="hidden md:block h-4 w-px bg-slate-700"/>
-          <div className="hidden md:block text-xs text-slate-400">
-            {trafficCount} Cars · {pedCount} Peds
-          </div>
-
-          <div className="h-4 w-px bg-slate-700"/>
-          {/* Menu dropdown trigger */}
           <button
-            id="quick-settings-toggle-btn"onClick={(e) => {
-              e.stopPropagation();
-              setIsQuickMenuOpen((prev) => !prev);
-            }}
-            onTouchEnd={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              setIsQuickMenuOpen((prev) => !prev);
-            }}
-            className="w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 active:bg-slate-600 text-slate-200 hover:text-white transition-all flex items-center justify-center cursor-pointer shadow active:scale-95"title="Настройки среды / Чит-меню">
-            <Settings className="w-4 h-4 text-slate-200"/>
+            id="quick-settings-toggle-btn"
+            type="button"
+            className={`hud-btn ${isQuickMenuOpen ? 'on' : ''}`}
+            onClick={() => setIsQuickMenuOpen((prev) => !prev)}
+            title="Меню: время, погода, мир"
+            aria-expanded={isQuickMenuOpen}>
+            <MenuIcon className="w-5 h-5" />
+            <span>Меню</span>
           </button>
         </div>
 
-        {/* Quick Settings Dropdown */}
         {isQuickMenuOpen && (
-          <div className="bg-slate-900/95 backdrop-blur-md border border-slate-700 rounded-xl p-2.5 shadow-2xl flex flex-wrap gap-2 pointer-events-auto animate-in fade-in slide-in-from-top-2 duration-150 max-w-xs sm:max-w-sm max-h-[75vh] overflow-y-auto z-50">
-            {/* Calendar & Any Day/Year Selector Button */}
-            <button
-              id="calendar-picker-btn"
-              onClick={() => {
-                sound.playButtonPress();
-                setIsDateTimePickerOpen(true);
-                setIsQuickMenuOpen(false);
-              }}
-              onTouchEnd={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                sound.playButtonPress();
-                setIsDateTimePickerOpen(true);
-                setIsQuickMenuOpen(false);
-              }}
-              className="w-full bg-amber-950/80 hover:bg-amber-900 active:bg-amber-800 border border-amber-500/50 rounded-lg px-2.5 py-2 text-xs text-amber-200 flex items-center justify-between transition-all active:scale-95 cursor-pointer shadow-sm"
-              title="Выбрать любой день любого года, время суток и погоду">
-              <div className="flex items-center gap-2">
-                <Calendar className="w-4 h-4 text-amber-400" />
-                <div className="text-left">
-                  <div className="font-bold text-slate-100 flex items-center gap-1.5">
-                    <span>{formatGameDate(calendar, 'medium')}</span>
-                    <span className="text-amber-400 font-mono text-[11px]">• {formatGameTime(timeHour)}</span>
-                  </div>
-                  <div className="text-[10px] text-amber-400/80">
-                    {getRussianSeasonName(calendar.season)} • Выбор даты и года
-                  </div>
-                </div>
-              </div>
-              <ChevronRight className="w-4 h-4 text-amber-400 shrink-0" />
-            </button>
-
-            {/* Quick Day Stepper (-1 день / +1 день) */}
-            <div className="w-full flex items-center gap-1.5">
-              <button
-                id="prev-day-btn"
-                onClick={() => handleStepGameDay(-1)}
-                onTouchEnd={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  handleStepGameDay(-1);
-                }}
-                className="flex-1 bg-slate-800 hover:bg-slate-700 active:bg-slate-600 border border-slate-700 rounded-lg py-1.5 px-2 text-xs text-slate-200 flex items-center justify-center gap-1 transition-all active:scale-95 cursor-pointer"
-                title="Переключить на предыдущий день (-1)">
-                <ChevronLeft className="w-3.5 h-3.5 text-slate-400" />
-                <span>-1 день</span>
-              </button>
-
-              <button
-                id="next-day-btn"
-                onClick={() => handleStepGameDay(1)}
-                onTouchEnd={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  handleStepGameDay(1);
-                }}
-                className="flex-1 bg-slate-800 hover:bg-slate-700 active:bg-slate-600 border border-slate-700 rounded-lg py-1.5 px-2 text-xs text-slate-200 flex items-center justify-center gap-1 transition-all active:scale-95 cursor-pointer"
-                title="Переключить на следующий день (+1)">
-                <span>+1 день</span>
-                <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
-              </button>
-            </div>
-
-            <button
-              id="time-toggle-btn"onClick={cycleTimePreset}
-              onTouchEnd={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                cycleTimePreset();
-              }}
-              className="bg-slate-800 hover:bg-slate-700 active:bg-slate-600 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer"title="Переключить время суток (T)">
-              {getTimeLabelName(timeHour) === 'Рассвет'&& <Sunrise className="w-3.5 h-3.5 text-amber-400"/>}
-              {getTimeLabelName(timeHour) === 'День'&& <Sun className="w-3.5 h-3.5 text-amber-300"/>}
-              {getTimeLabelName(timeHour) === 'Закат'&& <Sunrise className="w-3.5 h-3.5 text-orange-400"/>}
-              {getTimeLabelName(timeHour) === 'Ночь'&& <Moon className="w-3.5 h-3.5 text-sky-300"/>}
-              <span>{getTimeLabelName(timeHour)}</span>
-            </button>
-
-            <button
-              id="weather-toggle-btn"onClick={cycleWeather}
-              onTouchEnd={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                cycleWeather();
-              }}
-              className="bg-slate-800 hover:bg-slate-700 active:bg-slate-600 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer"title="Переключить погоду">
-              {weather === 'clear'&& <Sun className="w-3.5 h-3.5 text-amber-300"/>}
-              {weather === 'overcast'&& <CloudSun className="w-3.5 h-3.5 text-slate-300"/>}
-              {weather === 'drizzle'&& <CloudDrizzle className="w-3.5 h-3.5 text-cyan-400"/>}
-              {weather === 'rain'&& <CloudRain className="w-3.5 h-3.5 text-blue-400"/>}
-              {weather === 'storm'&& <CloudLightning className="w-3.5 h-3.5 text-purple-400"/>}
-              {weather === 'fog'&& <Cloud className="w-3.5 h-3.5 text-slate-300"/>}
-              {weather === 'snow'&& <Snowflake className="w-3.5 h-3.5 text-sky-300"/>}
-              {weather === 'blizzard'&& <Wind className="w-3.5 h-3.5 text-indigo-300"/>}
-              <span>{
-                weather === 'clear' ? 'Ясно' :
-                weather === 'overcast' ? 'Пасмурно' :
-                weather === 'drizzle' ? 'Морось' :
-                weather === 'rain' ? 'Дождь' :
-                weather === 'storm' ? 'Гроза' :
-                weather === 'fog' ? 'Туман' :
-                weather === 'snow' ? 'Снег' : 'Метель'
-              }</span>
-            </button>
-
-            <button
-              id="sound-toggle-btn"onClick={toggleSoundMute}
-              onTouchEnd={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                toggleSoundMute();
-              }}
-              className="bg-slate-800 hover:bg-slate-700 active:bg-slate-600 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer">
-              {isMuted ? <VolumeX className="w-3.5 h-3.5 text-rose-400"/> : <Volume2 className="w-3.5 h-3.5 text-emerald-400"/>}
-              <span>{isMuted ? 'Mute': 'Звук'}</span>
-            </button>
-
-            {/* Online Multiplayer Toggle Button */}
-            <button
-              id="online-toggle-btn"onClick={() => {
-                sound.playButtonPress();
-                setIsOnlineModalOpen((prev) => !prev);
-              }}
-              onTouchEnd={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                sound.playButtonPress();
-                setIsOnlineModalOpen((prev) => !prev);
-              }}
-              className={`border rounded-lg px-2.5 py-1.5 text-xs flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer ${
-                onlineStatus === 'connected'? 'bg-emerald-950/80 border-emerald-500/50 text-emerald-300 hover:border-emerald-400': 'bg-slate-800 border-slate-700 text-slate-400 hover:text-white'}`}
-              title="Онлайн режим (комнаты, чат, синхронизация) [O]">
-              <Radio className={`w-3.5 h-3.5 ${onlineStatus === 'connected'? 'text-emerald-400 animate-pulse': 'text-sky-400'}`} />
-              <span>{onlineStatus === 'connected'? `Онлайн (${onlinePlayerCount})`: 'Онлайн [O]'}</span>
-            </button>
-
-            {/* User Profile & Auth / Cloud Save Button */}
-            <button
-              id="user-profile-toggle-btn"onClick={() => {
-                sound.playButtonPress();
-                setIsUserProfileModalOpen(true);
-              }}
-              onTouchEnd={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                sound.playButtonPress();
-                setIsUserProfileModalOpen(true);
-              }}
-              className="border border-emerald-500/40 rounded-lg px-2.5 py-1.5 text-xs flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer bg-slate-800 hover:bg-slate-700 text-emerald-300 font-medium"title="Настройка профиля, облачные сохранения и серверы">
-              <Users className="w-3.5 h-3.5 text-emerald-400"/>
-              <span>{currentUser ? (currentUser.displayName || 'Профиль') : 'Войти'}</span>
-            </button>
-
-            <button
-              id="touch-toggle-btn"onClick={() => setIsMobileTouch((prev) => !prev)}
-              onTouchEnd={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                setIsMobileTouch((prev) => !prev);
-              }}
-              className={`border rounded-lg px-2.5 py-1.5 text-xs flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer ${
-                isMobileTouch
-                  ? 'bg-sky-950/80 border-sky-500/40 text-sky-200': 'bg-slate-800 border-slate-700 text-slate-400'}`}
-              title="Переключить сенсорный интерфейс">
-              <Smartphone className="w-3.5 h-3.5"/>
-              <span>Тач {isMobileTouch ? 'ВКЛ': 'ВЫКЛ'}</span>
-            </button>
-
-            {isMobileTouch && (
-              <button
-                id="touch-scale-btn"
-                onClick={handleCycleTouchScale}
-                onTouchEnd={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  handleCycleTouchScale();
-                }}
-                className="border border-sky-500/40 rounded-lg px-2.5 py-1.5 text-xs flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer bg-sky-950/80 hover:bg-sky-900 text-sky-200"
-                title="Настроить масштаб сенсорных кнопок">
-                <Sliders className="w-3.5 h-3.5 text-sky-400" />
-                <span>Масштаб {Math.round(touchUiScale * 100)}%</span>
-              </button>
-            )}
-
-            <button
-              id="spawn-point-btn"onClick={() => {
-                setIsSpawnMenuOpen(true);
-                setIsQuickMenuOpen(false);
-              }}
-              onTouchEnd={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                setIsSpawnMenuOpen(true);
-                setIsQuickMenuOpen(false);
-              }}
-              className="bg-emerald-950/80 hover:bg-emerald-900 active:bg-emerald-800 border border-emerald-500/40 rounded-lg px-2.5 py-1.5 text-xs text-emerald-200 flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer">
-              <MapPin className="w-3.5 h-3.5 text-emerald-400"/>
-              <span>Спавн</span>
-            </button>
-
-            <button
-              id="open-ai-console-btn"onClick={() => {
-                setIsConsoleOpen(true);
-                setIsQuickMenuOpen(false);
-              }}
-              onTouchEnd={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                setIsConsoleOpen(true);
-                setIsQuickMenuOpen(false);
-              }}
-              className="bg-indigo-950/80 hover:bg-indigo-900 active:bg-indigo-800 border border-indigo-500/40 rounded-lg px-2.5 py-1.5 text-xs text-indigo-200 flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer">
-              <Terminal className="w-3.5 h-3.5 text-indigo-400"/>
-              <span>AI Console</span>
-            </button>
-
-            <button
-              id="reset-all-damage-btn"onClick={handleResetAllVehiclesDamage}
-              onTouchEnd={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                handleResetAllVehiclesDamage();
-              }}
-              className="bg-rose-950/80 hover:bg-rose-900 active:bg-rose-800 border border-rose-500/40 rounded-lg px-2.5 py-1.5 text-xs text-rose-200 flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer"title="Сбросить повреждения всех транспортных средств">
-              <Wrench className="w-3.5 h-3.5 text-rose-400"/>
-              <span>Починить всё</span>
-            </button>
-
-            <button
-              id="reset-player-injuries-btn"onClick={handleResetPlayerInjuries}
-              onTouchEnd={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                handleResetPlayerInjuries();
-              }}
-              className="bg-emerald-950/80 hover:bg-emerald-900 active:bg-emerald-800 border border-emerald-500/40 rounded-lg px-2.5 py-1.5 text-xs text-emerald-200 flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer"title="Вылечить все травмы и переломы персонажа">
-              <Heart className="w-3.5 h-3.5 text-emerald-400 fill-emerald-400/20"/>
-              <span>Вылечить себя</span>
-            </button>
-
-            <button
-              id="creative-mode-toggle-btn"onClick={() => {
-                const newVal = !isCreativeMode;
-                setIsCreativeMode(newVal);
-                setIsFlying(newVal);
-                setIsInvincible(newVal);
-                if (!newVal) {
-                  setActivePlacement(null);
-                  activePlacementRef.current = null;
-                }
-                const player = playerRef.current;
-                if (player) {
-                  addPlayerNotification(
-                    player, 
-                    newVal ? 'Режим Творчества ВКЛЮЧЕН! Открыта панель управления.': 'Режим Творчества ВЫКЛЮЧЕН.', 
-                    newVal ? 'info': 'warning');
-                }
-              }}
-              onTouchEnd={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                const newVal = !isCreativeMode;
-                setIsCreativeMode(newVal);
-                setIsFlying(newVal);
-                setIsInvincible(newVal);
-                if (!newVal) {
-                  setActivePlacement(null);
-                  activePlacementRef.current = null;
-                }
-                const player = playerRef.current;
-                if (player) {
-                  addPlayerNotification(
-                    player, 
-                    newVal ? 'Режим Творчества ВКЛЮЧЕН! Открыта панель управления.': 'Режим Творчества ВЫКЛЮЧЕН.', 
-                    newVal ? 'info': 'warning');
-                }
-              }}
-              className={`border rounded-lg px-2.5 py-1.5 text-xs flex items-center gap-1.5 transition-all cursor-pointer active:scale-95 ${
-                isCreativeMode
-                  ? 'bg-amber-950/80 border-amber-500 text-amber-200': 'bg-slate-800 border-slate-700 text-slate-400 hover:text-white'}`}
-              title="Переключить Режим Творчества">
-              <Sparkles className={`w-3.5 h-3.5 ${isCreativeMode ? 'text-amber-400 animate-pulse': ''}`} />
-              <span>Творчество: {isCreativeMode ? 'ВКЛ': 'ВЫКЛ'}</span>
-            </button>
-
-            <button
-              id="open-diagnostics-btn"
-              onClick={() => {
-                setIsCrashDiagnosticsOpen(true);
-                setIsQuickMenuOpen(false);
-              }}
-              onTouchEnd={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                setIsCrashDiagnosticsOpen(true);
-                setIsQuickMenuOpen(false);
-              }}
-              className="bg-indigo-950/80 hover:bg-indigo-900 active:bg-indigo-800 border border-indigo-500/50 rounded-lg px-2.5 py-1.5 text-xs text-indigo-200 flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer"
-              title="Диагностика памяти, счетчики сущностей и журнал падений [F2]"
-            >
-              <Activity className="w-3.5 h-3.5 text-indigo-400 animate-pulse" />
-              <span>Лог Сбоев [F2]</span>
-            </button>
-          </div>
+          <GameHudMenu
+            calendar={calendar}
+            timeHour={timeHour}
+            weather={weather}
+            isTimeAutoCycling={isTimeAutoCycling}
+            isMuted={isMuted}
+            isCreativeMode={isCreativeMode}
+            onlineStatus={onlineStatus}
+            onlinePlayerCount={onlinePlayerCount}
+            userLabel={currentUser ? (currentUser.displayName || 'Профиль') : 'Войти'}
+            isMobileTouch={isMobileTouch}
+            touchUiScale={touchUiScale}
+            onSetTime={setTimeOfDay}
+            onStepDay={handleStepGameDay}
+            onOpenCalendar={() => {
+              sound.playButtonPress();
+              setIsDateTimePickerOpen(true);
+              setIsQuickMenuOpen(false);
+            }}
+            onSetWeather={setWeatherType}
+            onToggleTimeAuto={() => {
+              setIsTimeAutoCycling((prev) => !prev);
+              const pl = playerRef.current;
+              if (pl) {
+                addPlayerNotification(pl, !isTimeAutoCycling ? 'Ход времени: ВКЛ' : 'Ход времени: ПАУЗА', 'info');
+              }
+            }}
+            onToggleMute={toggleSoundMute}
+            onOpenOnline={() => {
+              sound.playButtonPress();
+              setIsOnlineModalOpen((prev) => !prev);
+            }}
+            onOpenProfile={() => {
+              sound.playButtonPress();
+              setIsUserProfileModalOpen(true);
+            }}
+            onOpenSpawn={() => {
+              setIsSpawnMenuOpen(true);
+              setIsQuickMenuOpen(false);
+            }}
+            onRepairAll={handleResetAllVehiclesDamage}
+            onHealSelf={handleResetPlayerInjuries}
+            onToggleCreative={() => {
+              const newVal = !isCreativeMode;
+              setIsCreativeMode(newVal);
+              setIsFlying(newVal);
+              setIsInvincible(newVal);
+              if (!newVal) {
+                setActivePlacement(null);
+                activePlacementRef.current = null;
+              }
+              const pl = playerRef.current;
+              if (pl) {
+                addPlayerNotification(
+                  pl,
+                  newVal ? 'Режим Творчества ВКЛЮЧЕН! Открыта панель управления.' : 'Режим Творчества ВЫКЛЮЧЕН.',
+                  newVal ? 'info' : 'warning');
+              }
+            }}
+            onToggleTouch={() => setIsMobileTouch((prev) => !prev)}
+            onCycleTouchScale={handleCycleTouchScale}
+            onClose={() => setIsQuickMenuOpen(false)}
+          />
         )}
       </div>
 

@@ -329,29 +329,29 @@ export const PlayerNeedsHUD: React.FC<PlayerNeedsHUDProps> = ({
           {/* MAIN INTERFACE ROW: LEFT HAND | SWAP | RIGHT HAND | DIVIDER | POCKETS 1-6 | INVENTORY BUTTON */}
           <div 
             id="player-dual-hands-hotbar"
-            className={`flex items-center gap-1.5 sm:gap-2 bg-[#14161a]/95 backdrop-blur-md border border-[#2a2e38] shadow-2xl transition-all ${
-              isMobileTouch ? 'p-1.5 rounded-[2px] scale-75 sm:scale-85 md:scale-100 origin-bottom' : 'p-2.5 rounded-[2px]'
+            className={`flex items-center gap-2 transition-all ${
+              isMobileTouch ? 'scale-75 sm:scale-85 md:scale-100 origin-bottom' : ''
             }`}
           >
             {/* --- HANDS SECTION --- */}
-            <div className="flex items-center gap-1.5 bg-[#0b0c0e]/80 p-1 rounded-[2px] border border-[#2a2e38]">
+            <div className="flex items-center gap-2">
               {/* LEFT HAND */}
               <div 
                 id="hud-left-hand-slot"
                 onClick={() => handleHandClick('left')}
                 onDoubleClick={() => onUseActiveHandItem?.()}
                 title={leftItem ? `Левая рука: ${leftItem.nameRu} [Клик - выбрать, Даблклик - использовать]` : 'Левая рука (Свободна) [Клик для выбора]'}
-                className={`relative w-14 h-14 rounded-[2px] border flex flex-col items-center justify-center transition-all cursor-pointer select-none ${
+                className={`relative w-14 h-14 rounded-md border backdrop-blur-sm flex flex-col items-center justify-center transition-all cursor-pointer select-none ${
                   activeHand === 'left'
-                    ? 'border-[#c68a35] bg-[#c68a35]/20 shadow-lg ring-1 ring-[#c68a35]/50 scale-105 z-10'
-                    : 'border-[#2a2e38] bg-[#14161a] hover:border-white/20 hover:bg-[#1c1f26]'
+                    ? 'border-[#c9922b]/80 bg-[#c9922b]/30'
+                    : 'border-white/15 bg-[rgba(110,110,115,0.34)] hover:bg-[rgba(140,140,146,0.46)] hover:border-white/30'
                 }`}
               >
-                <div className="absolute top-1 left-1.5 text-[8px] font-mono font-bold tracking-tight text-[#9ba3af] uppercase">
+                <div className="absolute top-1 left-1.5 text-[8px] font-mono font-bold tracking-tight text-white/60 uppercase">
                   ЛЕВ
                 </div>
                 {activeHand === 'left' && (
-                  <span className="absolute -top-1.5 -right-1.5 px-1 py-0.2 bg-[#c68a35] text-[#0b0c0e] text-[8px] font-mono font-extrabold rounded-[2px] shadow">
+                  <span className="absolute top-1 right-1.5 text-[8px] font-mono font-extrabold text-[#f0c264]">
                     АКТИВ
                   </span>
                 )}
@@ -361,7 +361,7 @@ export const PlayerNeedsHUD: React.FC<PlayerNeedsHUDProps> = ({
                     <ItemIconCanvas itemId={leftItem.itemId} item={leftItem} size={28} />
                     {leftItem.surfaceTemperature !== undefined && leftItem.surfaceTemperature >= 52 && (
                       <span 
-                        className="absolute -top-1 left-7 p-0.5 bg-[#0b0c0e]/95 border border-amber-500/70 rounded-[2px] text-amber-400 z-10" 
+                        className="absolute -top-1 left-7 text-amber-400 z-10" 
                         title={`Горячо! ${leftItem.surfaceTemperature}°C`}
                       >
                         <Flame className="w-2.5 h-2.5 text-amber-400 animate-pulse" />
@@ -370,33 +370,33 @@ export const PlayerNeedsHUD: React.FC<PlayerNeedsHUDProps> = ({
                     {/* Portion indicator if multi-portion */}
                     {leftItem.maxPortions && leftItem.maxPortions > 1 && (
                       <>
-                        <span className="absolute top-1 right-1.5 px-1 py-0.2 bg-[#0b0c0e]/90 border border-[#2a2e38] rounded-[2px] text-[8px] font-mono font-bold text-[#d99a41]">
+                        <span className="absolute top-1 right-1.5 text-[8px] font-mono font-bold text-[#f0c264] drop-shadow-[0_1px_2px_rgba(0,0,0,0.9)]">
                           {leftItem.portions ?? leftItem.maxPortions}/{leftItem.maxPortions}
                         </span>
-                        <div className="absolute bottom-0.5 left-1 right-1 h-1 bg-[#0b0c0e] rounded-none overflow-hidden border border-[#2a2e38]">
+                        <div className="absolute bottom-1 left-1.5 right-1.5 h-[3px] bg-white/20 rounded-full overflow-hidden">
                           <div 
-                            className="h-full bg-[#c68a35] rounded-none transition-all"
+                            className="h-full bg-[#c9922b] rounded-full transition-all"
                             style={{ width: `${Math.max(0, Math.min(100, ((leftItem.portions ?? leftItem.maxPortions) / leftItem.maxPortions) * 100))}%` }}
                           />
                         </div>
                       </>
                     )}
                     {leftItem.count > 1 && (
-                      <span className="absolute bottom-1 right-1 px-1 bg-[#0b0c0e] border border-[#2a2e38] rounded-[2px] text-[9px] font-mono font-bold text-[#f0f3f6]">
+                      <span className="absolute bottom-1 right-1.5 text-[9px] font-mono font-bold text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.9)]">
                         x{leftItem.count}
                       </span>
                     )}
                     {/* Quick stow icon button */}
                     <button
                       onClick={(e) => handleStowHand(e, 'left')}
-                      className="absolute bottom-1 left-1 p-0.5 rounded-[2px] bg-[#14161a] hover:bg-[#c68a35] text-[#9ba3af] hover:text-[#0b0c0e] transition z-10 cursor-pointer"
+                      className="absolute bottom-1 left-1 p-0.5 rounded text-white/60 hover:text-[#f0c264] transition z-10 cursor-pointer"
                       title="Убрать в карман"
                     >
                       <ArrowDownToLine className="w-2.5 h-2.5" />
                     </button>
                   </>
                 ) : (
-                  <Hand className="w-5 h-5 text-[#3a3f4d] stroke-[1.5]" />
+                  <Hand className="w-5 h-5 text-white/35 stroke-[1.5]" />
                 )}
               </div>
 
@@ -404,11 +404,11 @@ export const PlayerNeedsHUD: React.FC<PlayerNeedsHUDProps> = ({
               <button
                 id="hud-swap-hands-btn"
                 onClick={handleSwapHands}
-                className="px-1.5 h-14 bg-[#14161a] hover:bg-[#1c1f26] active:scale-98 border border-[#2a2e38] rounded-[2px] text-[#9ba3af] hover:text-[#c68a35] flex flex-col items-center justify-center gap-0.5 transition cursor-pointer"
+                className="hud-btn !h-14 !min-w-0 flex-col !gap-0.5 !px-2"
                 title="Переключить / Поменять руки местами (Клавиша Q)"
               >
                 <ArrowLeftRight className="w-3.5 h-3.5" />
-                <span className="text-[8px] font-mono font-bold">Q</span>
+                <span className="text-[9px]">Q</span>
               </button>
 
               {/* RIGHT HAND */}
@@ -417,17 +417,17 @@ export const PlayerNeedsHUD: React.FC<PlayerNeedsHUDProps> = ({
                 onClick={() => handleHandClick('right')}
                 onDoubleClick={() => onUseActiveHandItem?.()}
                 title={rightItem ? `Правая рука: ${rightItem.nameRu} [Клик - выбрать, Даблклик - использовать]` : 'Правая рука (Свободна) [Клик для выбора]'}
-                className={`relative w-14 h-14 rounded-[2px] border flex flex-col items-center justify-center transition-all cursor-pointer select-none ${
+                className={`relative w-14 h-14 rounded-md border backdrop-blur-sm flex flex-col items-center justify-center transition-all cursor-pointer select-none ${
                   activeHand === 'right'
-                    ? 'border-[#c68a35] bg-[#c68a35]/20 shadow-lg ring-1 ring-[#c68a35]/50 scale-105 z-10'
-                    : 'border-[#2a2e38] bg-[#14161a] hover:border-white/20 hover:bg-[#1c1f26]'
+                    ? 'border-[#c9922b]/80 bg-[#c9922b]/30'
+                    : 'border-white/15 bg-[rgba(110,110,115,0.34)] hover:bg-[rgba(140,140,146,0.46)] hover:border-white/30'
                 }`}
               >
-                <div className="absolute top-1 left-1.5 text-[8px] font-mono font-bold tracking-tight text-[#9ba3af] uppercase">
+                <div className="absolute top-1 left-1.5 text-[8px] font-mono font-bold tracking-tight text-white/60 uppercase">
                   ПРАВ
                 </div>
                 {activeHand === 'right' && (
-                  <span className="absolute -top-1.5 -right-1.5 px-1 py-0.2 bg-[#c68a35] text-[#0b0c0e] text-[8px] font-mono font-extrabold rounded-[2px] shadow">
+                  <span className="absolute top-1 right-1.5 text-[8px] font-mono font-extrabold text-[#f0c264]">
                     АКТИВ
                   </span>
                 )}
@@ -437,7 +437,7 @@ export const PlayerNeedsHUD: React.FC<PlayerNeedsHUDProps> = ({
                     <ItemIconCanvas itemId={rightItem.itemId} item={rightItem} size={28} />
                     {rightItem.surfaceTemperature !== undefined && rightItem.surfaceTemperature >= 52 && (
                       <span 
-                        className="absolute -top-1 left-7 p-0.5 bg-[#0b0c0e]/95 border border-amber-500/70 rounded-[2px] text-amber-400 z-10" 
+                        className="absolute -top-1 left-7 text-amber-400 z-10" 
                         title={`Горячо! ${rightItem.surfaceTemperature}°C`}
                       >
                         <Flame className="w-2.5 h-2.5 text-amber-400 animate-pulse" />
@@ -446,49 +446,46 @@ export const PlayerNeedsHUD: React.FC<PlayerNeedsHUDProps> = ({
                     {/* Portion indicator if multi-portion */}
                     {rightItem.maxPortions && rightItem.maxPortions > 1 && (
                       <>
-                        <span className="absolute top-1 right-1.5 px-1 py-0.2 bg-[#0b0c0e]/90 border border-[#2a2e38] rounded-[2px] text-[8px] font-mono font-bold text-[#d99a41]">
+                        <span className="absolute top-1 right-1.5 text-[8px] font-mono font-bold text-[#f0c264] drop-shadow-[0_1px_2px_rgba(0,0,0,0.9)]">
                           {rightItem.portions ?? rightItem.maxPortions}/{rightItem.maxPortions}
                         </span>
-                        <div className="absolute bottom-0.5 left-1 right-1 h-1 bg-[#0b0c0e] rounded-none overflow-hidden border border-[#2a2e38]">
+                        <div className="absolute bottom-1 left-1.5 right-1.5 h-[3px] bg-white/20 rounded-full overflow-hidden">
                           <div 
-                            className="h-full bg-[#c68a35] rounded-none transition-all"
+                            className="h-full bg-[#c9922b] rounded-full transition-all"
                             style={{ width: `${Math.max(0, Math.min(100, ((rightItem.portions ?? rightItem.maxPortions) / rightItem.maxPortions) * 100))}%` }}
                           />
                         </div>
                       </>
                     )}
                     {rightItem.count > 1 && (
-                      <span className="absolute bottom-1 right-1 px-1 bg-[#0b0c0e] border border-[#2a2e38] rounded-[2px] text-[9px] font-mono font-bold text-[#f0f3f6]">
+                      <span className="absolute bottom-1 right-1.5 text-[9px] font-mono font-bold text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.9)]">
                         x{rightItem.count}
                       </span>
                     )}
                     {/* Quick stow icon button */}
                     <button
                       onClick={(e) => handleStowHand(e, 'right')}
-                      className="absolute bottom-1 left-1 p-0.5 rounded-[2px] bg-[#14161a] hover:bg-[#c68a35] text-[#9ba3af] hover:text-[#0b0c0e] transition z-10 cursor-pointer"
+                      className="absolute bottom-1 left-1 p-0.5 rounded text-white/60 hover:text-[#f0c264] transition z-10 cursor-pointer"
                       title="Убрать в карман"
                     >
                       <ArrowDownToLine className="w-2.5 h-2.5" />
                     </button>
                   </>
                 ) : (
-                  <Hand className="w-5 h-5 text-[#3a3f4d] stroke-[1.5]" />
+                  <Hand className="w-5 h-5 text-white/35 stroke-[1.5]" />
                 )}
               </div>
             </div>
-
-            {/* SEPARATOR */}
-            <div className="h-10 w-px bg-[#2a2e38]" />
 
             {/* Dedicated Inventory Button */}
             <button
               id="hotbar-bag-toggle-btn"
               onClick={onOpenInventory}
-              className="px-3.5 h-14 bg-[#14161a] hover:bg-[#1c1f26] active:scale-98 text-[#f0f3f6] font-mono font-bold rounded-[2px] border border-[#2a2e38] hover:border-[#c68a35]/50 shadow-lg flex flex-col items-center justify-center gap-1 transition cursor-pointer"
+              className="hud-btn !h-14 flex-col !gap-1 !px-3.5"
               title="Открыть полный инвентарь (Клавиша I или Tab)"
             >
-              <Package className="w-5 h-5 text-[#c68a35]" />
-              <span className="text-[8px] tracking-widest uppercase text-[#9ba3af]">РЮКЗАК [I]</span>
+              <Package className="w-5 h-5" />
+              <span className="text-[9px]">Рюкзак [I]</span>
             </button>
           </div>
         </div>
