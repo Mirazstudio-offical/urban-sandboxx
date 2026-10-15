@@ -1,6 +1,5 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState } from 'react';
 import {
-  X,
   Sparkles,
   Car,
   Truck,
@@ -15,7 +14,6 @@ import {
   ChevronLeft,
   ChevronRight,
   Search,
-  Check,
   AlertTriangle,
   MinusCircle,
   Armchair,
@@ -24,12 +22,7 @@ import {
   Store,
   Flower2,
   Disc,
-  Clock,
-  Compass,
-  Sliders,
   MapPin,
-  Heart,
-  Wand2,
   Package,
   Layers,
   Zap
@@ -38,6 +31,7 @@ import { CAR_CONFIGS } from '../vehicleHelpers';
 import { ITEM_CATALOG } from '../items';
 import { ActivePlacement } from '../types';
 import { GameCalendarState, formatGameDate, formatGameTime } from '../calendarSystem';
+import { ModalShell, Tabs, Seg, Toggle, Hints } from './gameUi';
 
 export interface CreativeMenuModalProps {
   isOpen: boolean;
@@ -175,10 +169,7 @@ export const CreativeMenuModal: React.FC<CreativeMenuModalProps> = ({
     return true;
   });
 
-  const filteredProps = PROP_CATALOG.filter(prop => {
-    if (propCategoryFilter === 'all') return true;
-    return prop.category === propCategoryFilter;
-  });
+  const filteredProps = PROP_CATALOG.filter(prop => propCategoryFilter === 'all' || prop.category === propCategoryFilter);
 
   const filteredItems = Object.entries(ITEM_CATALOG).filter(([key, item]) => {
     const q = itemSearch.trim().toLowerCase();
@@ -196,619 +187,284 @@ export const CreativeMenuModal: React.FC<CreativeMenuModalProps> = ({
     return true;
   });
 
+  const cheats: { on: boolean; toggle: () => void; Icon: React.ComponentType<{ width?: number; height?: number }>; title: string; desc: string }[] = [
+    { on: isFlying, toggle: onToggleFlying, Icon: Plane, title: 'Полет (Noclip)', desc: 'Свободное перемещение сквозь стены. Ускорение: Shift' },
+    { on: isInvincible, toggle: onToggleInvincible, Icon: ShieldAlert, title: 'Бессмертие и виталы', desc: '100% показатели, иммунитет к переломам и голоду' },
+    { on: isGridMode, toggle: onToggleGridMode, Icon: Grid, title: 'Сетка деформации', desc: 'Визуализация узлов кузова в реальном времени' },
+    { on: isCleanMode, toggle: onToggleCleanMode, Icon: Sparkles, title: 'Чистый краш-тест', desc: 'Отключение дыма и пара для чистой записи физики' }
+  ];
+
+  const Search_ = (value: string, set: (v: string) => void, placeholder: string) => (
+    <label className="gu-search" style={{ flex: '1 1 220px', maxWidth: 340 }}>
+      <Search width={18} height={18} color="#a29e93" />
+      <input type="text" value={value} onChange={e => set(e.target.value)} placeholder={placeholder} />
+    </label>
+  );
+
   return (
-    <div
-      id="creative-modal-backdrop"
-      className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/75 backdrop-blur-md select-none animate-in fade-in duration-150"
-      onClick={onClose}
+    <ModalShell
+      id="creative-modal"
+      title="Режим творчества"
+      subtitle="Техника, объекты, экипировка и параметры мира"
+      width={1040}
+      tall
+      onClose={onClose}
+      wipeKey={creativeTab}
+      bodyKey={creativeTab}
+      headRight={
+        activePlacement ? (
+          <div className="gu-pill on gu-hide-s">
+            <MapPin width={16} height={16} />
+            <span>Установка: {activePlacement.nameRu}</span>
+          </div>
+        ) : undefined
+      }
+      tabs={
+        <Tabs
+          value={creativeTab}
+          onChange={setCreativeTab}
+          items={[
+            { id: 'vehicles', label: 'Транспорт', icon: <Car width={18} height={18} /> },
+            { id: 'props', label: 'Объекты', icon: <Layers width={18} height={18} /> },
+            { id: 'items', label: 'Предметы', icon: <Package width={18} height={18} /> },
+            { id: 'cheats', label: 'Читы и мир', icon: <Zap width={18} height={18} /> }
+          ]}
+        />
+      }
+      footerHints={[['Esc', 'Закрыть и выключить режим']]}
+      footerRight={<span>Выберите объект, затем кликните по карте</span>}
     >
-      <div
-        id="creative-modal-container"
-        className="relative w-full max-w-4xl max-h-[92vh] flex flex-col bg-[#111317]/95 border border-white/10 rounded-2xl shadow-[0_25px_60px_rgba(0,0,0,0.85)] text-[#e9e6df] overflow-hidden"
-        onClick={e => e.stopPropagation()}
-      >
-        {/* Top Header Bar */}
-        <header className="px-5 py-3.5 bg-[#16181e] border-b border-white/[0.08] flex items-center justify-between shrink-0">
-          <div className="flex items-center gap-3">
-            <div className="w-2.5 h-7 bg-[#c68a35] -skew-x-12 shrink-0 shadow-[0_0_12px_rgba(198,138,53,0.5)]" />
-            <div>
-              <div className="flex items-center gap-2">
-                <h2 className="text-lg sm:text-xl font-bold tracking-wider uppercase font-sans text-white">
-                  РЕЖИМ ТВОРЧЕСТВА
-                </h2>
-                <span className="hidden sm:inline-block px-2 py-0.5 rounded bg-[#c68a35]/15 border border-[#c68a35]/40 text-[#f0c264] text-[10px] font-mono font-bold tracking-widest uppercase">
-                  CREATIVE ENGINE
-                </span>
+      <div className="gu-stagger">
+        {/* ===================== VEHICLES ===================== */}
+        {creativeTab === 'vehicles' && (
+          <>
+            <div className="gu-panel gu-pad gu-row2 gu-wrap" style={{ justifyContent: 'space-between' }}>
+              <div className="gu-row2">
+                <span className="gu-cn gu-mut" style={{ fontSize: 14 }}>Цвет кузова</span>
+                <span style={{ width: 18, height: 18, borderRadius: '50%', border: '1px solid rgba(255,255,255,.35)', background: creativeVehicleColor }} />
               </div>
-              <p className="text-[11px] font-mono text-[#8b929e] tracking-wider uppercase">
-                Свободное создание техники, объектов, экипировки и параметров мира
-              </p>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <div className="hidden md:flex items-center gap-1.5 px-2.5 py-1 bg-white/5 border border-white/10 rounded-lg text-[11px] font-mono text-[#8b929e]">
-              <span>ЗАКРЫТЬ:</span>
-              <kbd className="px-1.5 py-0.5 bg-white/10 text-white rounded text-[10px] font-bold border border-white/10">
-                ESC
-              </kbd>
-            </div>
-            <button
-              onClick={onClose}
-              className="p-2 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-[#8b929e] hover:text-white transition-colors cursor-pointer"
-              title="Закрыть режим творчества [ESC]"
-            >
-              <X className="w-4 h-4" />
-            </button>
-          </div>
-        </header>
-
-        {/* Tab Navigation (Segmented Industrial Bar) */}
-        <div className="px-5 py-2.5 bg-[#14161c] border-b border-white/[0.08] flex items-center justify-between gap-3 shrink-0 overflow-x-auto">
-          <div className="flex items-center gap-1.5 p-1 bg-[#0d0e12] border border-white/[0.08] rounded-xl shrink-0">
-            <button
-              onClick={() => setCreativeTab('vehicles')}
-              className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider transition-all cursor-pointer ${
-                creativeTab === 'vehicles'
-                  ? 'bg-[#c68a35] text-black shadow-[0_0_12px_rgba(198,138,53,0.4)]'
-                  : 'text-[#8b929e] hover:text-white hover:bg-white/5'
-              }`}
-            >
-              <Car className="w-3.5 h-3.5" />
-              <span>Транспорт</span>
-            </button>
-
-            <button
-              onClick={() => setCreativeTab('props')}
-              className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider transition-all cursor-pointer ${
-                creativeTab === 'props'
-                  ? 'bg-[#c68a35] text-black shadow-[0_0_12px_rgba(198,138,53,0.4)]'
-                  : 'text-[#8b929e] hover:text-white hover:bg-white/5'
-              }`}
-            >
-              <Layers className="w-3.5 h-3.5" />
-              <span>Объекты и пропы</span>
-            </button>
-
-            <button
-              onClick={() => setCreativeTab('items')}
-              className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider transition-all cursor-pointer ${
-                creativeTab === 'items'
-                  ? 'bg-[#c68a35] text-black shadow-[0_0_12px_rgba(198,138,53,0.4)]'
-                  : 'text-[#8b929e] hover:text-white hover:bg-white/5'
-              }`}
-            >
-              <Package className="w-3.5 h-3.5" />
-              <span>Предметы</span>
-            </button>
-
-            <button
-              onClick={() => setCreativeTab('cheats')}
-              className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider transition-all cursor-pointer ${
-                creativeTab === 'cheats'
-                  ? 'bg-[#c68a35] text-black shadow-[0_0_12px_rgba(198,138,53,0.4)]'
-                  : 'text-[#8b929e] hover:text-white hover:bg-white/5'
-              }`}
-            >
-              <Zap className="w-3.5 h-3.5" />
-              <span>Читы и мир</span>
-            </button>
-          </div>
-
-          {activePlacement && (
-            <div className="hidden sm:flex items-center gap-2 px-3 py-1 bg-amber-500/15 border border-amber-500/40 rounded-lg text-xs font-mono text-amber-300">
-              <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping" />
-              <span className="truncate">Режим установки: {activePlacement.nameRu}</span>
-            </div>
-          )}
-        </div>
-
-        {/* Scrollable Main Content */}
-        <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-4 scrollbar-thin scrollbar-thumb-white/10">
-
-          {/* ===================== TAB 1: VEHICLES ===================== */}
-          {creativeTab === 'vehicles' && (
-            <div className="space-y-4">
-              {/* Color Swatches Strip */}
-              <div className="p-3.5 bg-[#141720] border border-white/[0.08] rounded-xl flex flex-wrap items-center justify-between gap-3">
-                <div className="flex items-center gap-2">
-                  <span className="text-xs font-mono uppercase tracking-wider font-bold text-[#8b929e]">
-                    Цвет кузова:
-                  </span>
-                  <div
-                    className="w-4 h-4 rounded-full border border-white/30"
-                    style={{ backgroundColor: creativeVehicleColor }}
-                  />
-                </div>
-
-                <div className="flex items-center gap-1.5 flex-wrap">
-                  {VEHICLE_COLORS.map(col => {
-                    const isSelected = creativeVehicleColor === col.hex;
-                    return (
-                      <button
-                        key={col.hex}
-                        onClick={() => setCreativeVehicleColor(col.hex)}
-                        className={`w-6 h-6 rounded-full border transition-all cursor-pointer ${
-                          isSelected
-                            ? 'scale-115 border-white shadow-[0_0_8px_rgba(255,255,255,0.7)]'
-                            : 'border-white/20 hover:scale-105'
-                        }`}
-                        style={{ backgroundColor: col.hex }}
-                        title={col.name}
-                      />
-                    );
-                  })}
-                </div>
-              </div>
-
-              {/* Filters & Search */}
-              <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5">
-                <div className="flex items-center gap-1 p-1 bg-[#141720] border border-white/[0.08] rounded-xl text-xs font-bold uppercase tracking-wider">
-                  {(['all', 'car', 'truck', 'bus', 'trailer'] as const).map(cat => (
-                    <button
-                      key={cat}
-                      onClick={() => setVehicleCategoryFilter(cat)}
-                      className={`px-3 py-1 rounded-lg transition-colors cursor-pointer ${
-                        vehicleCategoryFilter === cat
-                          ? 'bg-white/15 text-white'
-                          : 'text-[#8b929e] hover:text-white'
-                      }`}
-                    >
-                      {cat === 'all' ? 'Все' : cat === 'car' ? 'Легковые' : cat === 'truck' ? 'Грузовые' : cat === 'bus' ? 'Автобусы' : 'Прицепы'}
-                    </button>
-                  ))}
-                </div>
-
-                <div className="relative flex-1 sm:max-w-xs">
-                  <Search className="w-4 h-4 text-[#8b929e] absolute left-3 top-1/2 -translate-y-1/2" />
-                  <input
-                    type="text"
-                    value={vehicleSearch}
-                    onChange={e => setVehicleSearch(e.target.value)}
-                    placeholder="Поиск транспорта..."
-                    className="w-full pl-9 pr-3 py-1.5 bg-[#141720] border border-white/[0.08] focus:border-[#c68a35] rounded-xl text-xs text-white placeholder-[#8b929e] focus:outline-none transition-colors"
-                  />
-                </div>
-              </div>
-
-              {/* Vehicle Cards Grid */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                {filteredVehicles.map(([key, config]) => {
-                  const IconComponent = getVehicleTypeIcon(config.type);
-                  const isCurrentlyPlacing = activePlacement?.type === 'vehicle' && activePlacement.id === key;
-
-                  return (
-                    <div
-                      key={key}
-                      className={`p-3.5 bg-[#141720] border rounded-xl flex flex-col justify-between gap-3 transition-all ${
-                        isCurrentlyPlacing
-                          ? 'border-[#c68a35] shadow-[0_0_20px_rgba(198,138,53,0.25)]'
-                          : 'border-white/[0.08] hover:border-white/20'
-                      }`}
-                    >
-                      <div className="flex items-start gap-3">
-                        <div className="p-2.5 rounded-lg bg-white/5 border border-white/10 text-[#c68a35] shrink-0">
-                          <IconComponent className="w-5 h-5" />
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <h3 className="text-sm font-bold uppercase tracking-wider text-white font-sans truncate">
-                            {config.name}
-                          </h3>
-                          <div className="flex items-center gap-2 text-[11px] font-mono text-[#8b929e] mt-0.5">
-                            <span>ID: {key}</span>
-                            <span>·</span>
-                            <span>{config.mass} кг</span>
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-2 pt-2 border-t border-white/[0.06]">
-                        <button
-                          onClick={() => onSelectVehicleForPlacement(key, config.name, creativeVehicleColor)}
-                          className={`py-1.5 px-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-colors cursor-pointer flex items-center justify-center gap-1.5 ${
-                            isCurrentlyPlacing
-                              ? 'bg-[#c68a35] text-black'
-                              : 'bg-white/5 hover:bg-white/10 border border-white/10 text-white'
-                          }`}
-                        >
-                          <MapPin className="w-3.5 h-3.5" />
-                          <span>Разместить</span>
-                        </button>
-
-                        <button
-                          onClick={() => onSpawnVehicleNearPlayer && onSpawnVehicleNearPlayer(key, creativeVehicleColor)}
-                          className="py-1.5 px-2 bg-[#c68a35]/15 hover:bg-[#c68a35] border border-[#c68a35]/30 text-[#f0c264] hover:text-black rounded-lg text-xs font-bold uppercase tracking-wider transition-colors cursor-pointer flex items-center justify-center gap-1.5"
-                        >
-                          <Sparkles className="w-3.5 h-3.5" />
-                          <span>Рядом</span>
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
-          {/* ===================== TAB 2: PROPS ===================== */}
-          {creativeTab === 'props' && (
-            <div className="space-y-4">
-              {/* Category Filter */}
-              <div className="flex items-center gap-1 p-1 bg-[#141720] border border-white/[0.08] rounded-xl text-xs font-bold uppercase tracking-wider w-fit">
-                {(['all', 'road', 'urban', 'nature'] as const).map(cat => (
+              <div className="gu-row2 gu-wrap" style={{ gap: 10 }}>
+                {VEHICLE_COLORS.map(col => (
                   <button
-                    key={cat}
-                    onClick={() => setPropCategoryFilter(cat)}
-                    className={`px-3 py-1 rounded-lg transition-colors cursor-pointer ${
-                      propCategoryFilter === cat
-                        ? 'bg-white/15 text-white'
-                        : 'text-[#8b929e] hover:text-white'
-                    }`}
-                  >
-                    {cat === 'all' ? 'Все объекты' : cat === 'road' ? 'Дорожные' : cat === 'urban' ? 'Городские' : 'Озеленение'}
-                  </button>
+                    type="button"
+                    key={col.hex}
+                    className={'gu-sw' + (creativeVehicleColor === col.hex ? ' on' : '')}
+                    style={{ background: col.hex }}
+                    onClick={() => setCreativeVehicleColor(col.hex)}
+                    title={col.name}
+                    aria-label={col.name}
+                  />
                 ))}
               </div>
+            </div>
 
-              {/* Props Grid */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                {filteredProps.map(prop => {
-                  const IconComponent = prop.icon;
-                  const isCurrentlyPlacing = activePlacement?.type === 'prop' && activePlacement.id === prop.id;
+            <div className="gu-row2 gu-wrap" style={{ justifyContent: 'space-between' }}>
+              <Seg
+                value={vehicleCategoryFilter}
+                onChange={v => setVehicleCategoryFilter(v)}
+                options={[
+                  { v: 'all', label: 'Все' },
+                  { v: 'car', label: 'Легковые' },
+                  { v: 'truck', label: 'Грузовые' },
+                  { v: 'bus', label: 'Автобусы' },
+                  { v: 'trailer', label: 'Прицепы' }
+                ]}
+              />
+              {Search_(vehicleSearch, setVehicleSearch, 'Поиск транспорта')}
+            </div>
 
+            {filteredVehicles.length === 0 ? (
+              <div className="gu-panel gu-empty">Ничего не найдено</div>
+            ) : (
+              <div className="gu-grid gu-g3">
+                {filteredVehicles.map(([key, config]) => {
+                  const IconComponent = getVehicleTypeIcon(config.type);
+                  const placing = activePlacement?.type === 'vehicle' && activePlacement.id === key;
                   return (
-                    <div
-                      key={prop.id}
-                      className={`p-3.5 bg-[#141720] border rounded-xl flex flex-col justify-between gap-3 transition-all ${
-                        isCurrentlyPlacing
-                          ? 'border-[#c68a35] shadow-[0_0_20px_rgba(198,138,53,0.25)]'
-                          : 'border-white/[0.08] hover:border-white/20'
-                      }`}
-                    >
-                      <div className="flex items-start gap-3">
-                        <div className="p-2.5 rounded-lg bg-white/5 border border-white/10 text-[#c68a35] shrink-0">
-                          <IconComponent className="w-5 h-5" />
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <h3 className="text-sm font-bold uppercase tracking-wider text-white font-sans truncate">
-                            {prop.label}
-                          </h3>
-                          <p className="text-[11px] font-mono text-[#8b929e] mt-0.5 line-clamp-2">
-                            {prop.desc}
-                          </p>
+                    <div key={key} className={'gu-card' + (placing ? ' on' : '')}>
+                      <div className="gu-card-h">
+                        <span className="gu-ico"><IconComponent className="w-5 h-5" /></span>
+                        <div style={{ minWidth: 0, flex: 1 }}>
+                          <div className="gu-card-t">{config.name}</div>
+                          <div className="gu-card-d">{key} · {config.mass} кг</div>
                         </div>
                       </div>
-
-                      <button
-                        onClick={() => onSelectPropForPlacement(prop.id, prop.label)}
-                        className={`w-full py-1.5 px-3 rounded-lg text-xs font-bold uppercase tracking-wider transition-colors cursor-pointer flex items-center justify-center gap-1.5 ${
-                          isCurrentlyPlacing
-                            ? 'bg-[#c68a35] text-black'
-                            : 'bg-white/5 hover:bg-white/10 border border-white/10 text-white'
-                        }`}
-                      >
-                        <MapPin className="w-3.5 h-3.5" />
-                        <span>{isCurrentlyPlacing ? 'Выбрано для клика' : 'Установить в мир'}</span>
-                      </button>
+                      <div className="gu-card-a">
+                        <button
+                          type="button"
+                          className={'gu-btn gu-btn-sm ' + (placing ? 'gu-btn-p' : 'gu-btn-s')}
+                          onClick={() => onSelectVehicleForPlacement(key, config.name, creativeVehicleColor)}
+                        >
+                          <MapPin width={15} height={15} />Разместить
+                        </button>
+                        <button
+                          type="button"
+                          className="gu-btn gu-btn-sm gu-btn-p"
+                          onClick={() => onSpawnVehicleNearPlayer && onSpawnVehicleNearPlayer(key, creativeVehicleColor)}
+                        >
+                          <Sparkles width={15} height={15} />Рядом
+                        </button>
+                      </div>
                     </div>
                   );
                 })}
               </div>
+            )}
+          </>
+        )}
+
+        {/* ===================== PROPS ===================== */}
+        {creativeTab === 'props' && (
+          <>
+            <div>
+              <Seg
+                value={propCategoryFilter}
+                onChange={v => setPropCategoryFilter(v)}
+                options={[
+                  { v: 'all', label: 'Все объекты' },
+                  { v: 'road', label: 'Дорожные' },
+                  { v: 'urban', label: 'Городские' },
+                  { v: 'nature', label: 'Озеленение' }
+                ]}
+              />
             </div>
-          )}
+            <div className="gu-grid gu-g3">
+              {filteredProps.map(prop => {
+                const IconComponent = prop.icon;
+                const placing = activePlacement?.type === 'prop' && activePlacement.id === prop.id;
+                return (
+                  <div key={prop.id} className={'gu-card' + (placing ? ' on' : '')}>
+                    <div className="gu-card-h">
+                      <span className="gu-ico"><IconComponent className="w-5 h-5" /></span>
+                      <div style={{ minWidth: 0, flex: 1 }}>
+                        <div className="gu-card-t">{prop.label}</div>
+                        <div className="gu-card-d">{prop.desc}</div>
+                      </div>
+                    </div>
+                    <div className="gu-card-a">
+                      <button
+                        type="button"
+                        className={'gu-btn gu-btn-sm ' + (placing ? 'gu-btn-p' : 'gu-btn-s')}
+                        onClick={() => onSelectPropForPlacement(prop.id, prop.label)}
+                      >
+                        <MapPin width={15} height={15} />{placing ? 'Выбрано для клика' : 'Установить в мир'}
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </>
+        )}
 
-          {/* ===================== TAB 3: ITEMS ===================== */}
-          {creativeTab === 'items' && (
-            <div className="space-y-4">
-              {/* Category Filter & Search */}
-              <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5">
-                <div className="flex items-center gap-1 p-1 bg-[#141720] border border-white/[0.08] rounded-xl text-xs font-bold uppercase tracking-wider">
-                  {(['all', 'food', 'med', 'tool', 'valuable'] as const).map(cat => (
-                    <button
-                      key={cat}
-                      onClick={() => setItemCategoryFilter(cat)}
-                      className={`px-3 py-1 rounded-lg transition-colors cursor-pointer ${
-                        itemCategoryFilter === cat
-                          ? 'bg-white/15 text-white'
-                          : 'text-[#8b929e] hover:text-white'
-                      }`}
-                    >
-                      {cat === 'all' ? 'Все' : cat === 'food' ? 'Еда/Напитки' : cat === 'med' ? 'Аптечка' : cat === 'tool' ? 'Инструменты' : 'Ценности'}
-                    </button>
-                  ))}
-                </div>
+        {/* ===================== ITEMS ===================== */}
+        {creativeTab === 'items' && (
+          <>
+            <div className="gu-row2 gu-wrap" style={{ justifyContent: 'space-between' }}>
+              <Seg
+                value={itemCategoryFilter}
+                onChange={v => setItemCategoryFilter(v)}
+                options={[
+                  { v: 'all', label: 'Все' },
+                  { v: 'food', label: 'Еда и напитки' },
+                  { v: 'med', label: 'Аптечка' },
+                  { v: 'tool', label: 'Инструменты' },
+                  { v: 'valuable', label: 'Ценности' }
+                ]}
+              />
+              {Search_(itemSearch, setItemSearch, 'Поиск предметов')}
+            </div>
 
-                <div className="relative flex-1 sm:max-w-xs">
-                  <Search className="w-4 h-4 text-[#8b929e] absolute left-3 top-1/2 -translate-y-1/2" />
-                  <input
-                    type="text"
-                    value={itemSearch}
-                    onChange={e => setItemSearch(e.target.value)}
-                    placeholder="Поиск предметов..."
-                    className="w-full pl-9 pr-3 py-1.5 bg-[#141720] border border-white/[0.08] focus:border-[#c68a35] rounded-xl text-xs text-white placeholder-[#8b929e] focus:outline-none transition-colors"
-                  />
-                </div>
-              </div>
-
-              {/* Items List Grid */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            {filteredItems.length === 0 ? (
+              <div className="gu-panel gu-empty">Ничего не найдено</div>
+            ) : (
+              <div className="gu-grid gu-g3">
                 {filteredItems.map(([key, item]) => {
                   const maxStack = item.maxStack || 5;
                   return (
-                    <div
-                      key={key}
-                      className="p-3 bg-[#141720] border border-white/[0.08] hover:border-white/20 rounded-xl flex flex-col justify-between gap-2.5 transition-colors"
-                    >
-                      <div className="min-w-0">
-                        <div className="flex items-center justify-between gap-2">
-                          <h4 className="text-sm font-bold uppercase tracking-wide text-white truncate font-sans">
-                            {item.nameRu || item.name}
-                          </h4>
-                          <span className="text-[10px] font-mono text-[#8b929e] uppercase shrink-0">
-                            {item.category}
-                          </span>
+                    <div key={key} className="gu-card">
+                      <div style={{ minWidth: 0 }}>
+                        <div className="gu-row2" style={{ justifyContent: 'space-between', alignItems: 'baseline' }}>
+                          <div className="gu-card-t">{item.nameRu || item.name}</div>
+                          <span className="gu-cn gu-mut" style={{ fontSize: 11, flex: 'none' }}>{item.category}</span>
                         </div>
-                        <p className="text-[11px] font-mono text-[#8b929e] mt-1 line-clamp-2">
-                          {item.descriptionRu || item.description}
-                        </p>
+                        <div className="gu-card-d">{item.descriptionRu || item.description}</div>
                       </div>
-
-                      <div className="flex items-center justify-between gap-2 pt-2 border-t border-white/[0.06]">
-                        <span className="text-[10px] font-mono text-[#8b929e]">
-                          {item.weight ? `${item.weight} кг` : 'Легкий'}
-                        </span>
-
-                        <div className="flex items-center gap-1.5">
-                          <button
-                            onClick={() => onGiveItem(key, 1)}
-                            className="px-2.5 py-1 bg-white/5 hover:bg-white/15 border border-white/10 text-white rounded-lg text-xs font-mono font-bold transition-colors cursor-pointer"
-                            title="Выдать 1 шт в инвентарь"
-                          >
-                            +1
-                          </button>
-                          <button
-                            onClick={() => onGiveItem(key, maxStack)}
-                            className="px-2.5 py-1 bg-[#c68a35]/15 hover:bg-[#c68a35] border border-[#c68a35]/30 text-[#f0c264] hover:text-black rounded-lg text-xs font-mono font-bold transition-colors cursor-pointer"
-                            title={`Выдать полный стак (${maxStack} шт)`}
-                          >
-                            +Стак
-                          </button>
+                      <div className="gu-row2" style={{ justifyContent: 'space-between', paddingTop: 12, borderTop: '1px solid rgba(255,255,255,.06)' }}>
+                        <span className="gu-mut" style={{ fontSize: 13 }}>{item.weight ? `${item.weight} кг` : 'Легкий'}</span>
+                        <div className="gu-row2" style={{ gap: 8 }}>
+                          <button type="button" className="gu-btn gu-btn-sm gu-btn-s" onClick={() => onGiveItem(key, 1)} title="Выдать 1 шт в инвентарь">+1</button>
+                          <button type="button" className="gu-btn gu-btn-sm gu-btn-p" onClick={() => onGiveItem(key, maxStack)} title={`Выдать полный стак (${maxStack} шт)`}>+ Стак</button>
                         </div>
                       </div>
                     </div>
                   );
                 })}
               </div>
+            )}
+          </>
+        )}
+
+        {/* ===================== CHEATS & WORLD ===================== */}
+        {creativeTab === 'cheats' && (
+          <>
+            <div className="gu-panel" style={{ overflow: 'hidden' }}>
+              {cheats.map(c => (
+                <div className="gu-set" key={c.title}>
+                  <div className="gu-set-main">
+                    <span className={'gu-set-i' + (c.on ? ' on' : '')}><c.Icon width={20} height={20} /></span>
+                    <div>
+                      <div className="gu-set-t">{c.title}</div>
+                      <div className="gu-set-d">{c.desc}</div>
+                    </div>
+                  </div>
+                  <Toggle on={c.on} onChange={c.toggle} label={c.title} />
+                </div>
+              ))}
             </div>
-          )}
 
-          {/* ===================== TAB 4: CHEATS & SIM ===================== */}
-          {creativeTab === 'cheats' && (
-            <div className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
-
-                {/* Cheat Toggle 1: Flight */}
-                <div className="p-4 bg-[#141720] border border-white/[0.08] rounded-xl flex items-center justify-between gap-4">
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div className={`p-2.5 rounded-lg border shrink-0 ${
-                      isFlying ? 'bg-amber-500/20 border-amber-500 text-amber-400' : 'bg-white/5 border-white/10 text-[#8b929e]'
-                    }`}>
-                      <Plane className="w-5 h-5" />
-                    </div>
-                    <div>
-                      <h4 className="text-sm font-bold uppercase tracking-wider text-white font-sans">
-                        Полет (Noclip)
-                      </h4>
-                      <p className="text-[11px] font-mono text-[#8b929e] mt-0.5">
-                        Свободное перемещение сквозь стены. Ускорение: Shift
-                      </p>
-                    </div>
-                  </div>
-
-                  <button
-                    onClick={onToggleFlying}
-                    className={`w-12 h-6 rounded-full p-0.5 transition-colors cursor-pointer relative shrink-0 ${
-                      isFlying ? 'bg-[#c68a35]' : 'bg-white/15'
-                    }`}
-                  >
-                    <div className={`w-5 h-5 rounded-full bg-white transition-transform ${
-                      isFlying ? 'translate-x-6' : 'translate-x-0'
-                    }`} />
-                  </button>
+            <div className="gu-grid gu-g3">
+              <button type="button" className="gu-card" onClick={() => onGiveCash(100000)} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-start' }}>
+                <span className="gu-ico"><Coins width={20} height={20} /></span>
+                <div>
+                  <div className="gu-card-t">Выдать 100 000 ₽</div>
+                  <div className="gu-card-d" style={{ marginTop: 2 }}>Пополнить кошелек водителя</div>
                 </div>
-
-                {/* Cheat Toggle 2: God Mode */}
-                <div className="p-4 bg-[#141720] border border-white/[0.08] rounded-xl flex items-center justify-between gap-4">
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div className={`p-2.5 rounded-lg border shrink-0 ${
-                      isInvincible ? 'bg-emerald-500/20 border-emerald-500 text-emerald-400' : 'bg-white/5 border-white/10 text-[#8b929e]'
-                    }`}>
-                      <ShieldAlert className="w-5 h-5" />
-                    </div>
-                    <div>
-                      <h4 className="text-sm font-bold uppercase tracking-wider text-white font-sans">
-                        Бессмертие и виталы
-                      </h4>
-                      <p className="text-[11px] font-mono text-[#8b929e] mt-0.5">
-                        100% показатели, иммунитет к переломам и голоду
-                      </p>
-                    </div>
-                  </div>
-
-                  <button
-                    onClick={onToggleInvincible}
-                    className={`w-12 h-6 rounded-full p-0.5 transition-colors cursor-pointer relative shrink-0 ${
-                      isInvincible ? 'bg-emerald-500' : 'bg-white/15'
-                    }`}
-                  >
-                    <div className={`w-5 h-5 rounded-full bg-white transition-transform ${
-                      isInvincible ? 'translate-x-6' : 'translate-x-0'
-                    }`} />
-                  </button>
+              </button>
+              <button type="button" className="gu-card" onClick={onRepairAllVehicles} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-start' }}>
+                <span className="gu-ico"><Wrench width={20} height={20} /></span>
+                <div>
+                  <div className="gu-card-t">Починить технику</div>
+                  <div className="gu-card-d" style={{ marginTop: 2 }}>Устранить вмятины и поломки</div>
                 </div>
-
-                {/* Cheat Toggle 3: Grid Mode */}
-                <div className="p-4 bg-[#141720] border border-white/[0.08] rounded-xl flex items-center justify-between gap-4">
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div className={`p-2.5 rounded-lg border shrink-0 ${
-                      isGridMode ? 'bg-cyan-500/20 border-cyan-500 text-cyan-400' : 'bg-white/5 border-white/10 text-[#8b929e]'
-                    }`}>
-                      <Grid className="w-5 h-5" />
-                    </div>
-                    <div>
-                      <h4 className="text-sm font-bold uppercase tracking-wider text-white font-sans">
-                        3D-сетка деформации
-                      </h4>
-                      <p className="text-[11px] font-mono text-[#8b929e] mt-0.5">
-                        Визуализация узлов BeamNG кузова в реальном времени
-                      </p>
-                    </div>
-                  </div>
-
-                  <button
-                    onClick={onToggleGridMode}
-                    className={`w-12 h-6 rounded-full p-0.5 transition-colors cursor-pointer relative shrink-0 ${
-                      isGridMode ? 'bg-cyan-500' : 'bg-white/15'
-                    }`}
-                  >
-                    <div className={`w-5 h-5 rounded-full bg-white transition-transform ${
-                      isGridMode ? 'translate-x-6' : 'translate-x-0'
-                    }`} />
-                  </button>
+              </button>
+              <button type="button" className="gu-card" onClick={onClearCreatedSpawns} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-start', borderColor: 'rgba(217,116,90,.35)' }}>
+                <span className="gu-ico" style={{ borderColor: 'rgba(217,116,90,.5)', background: 'rgba(217,116,90,.1)', color: '#d9745a' }}><Trash2 width={20} height={20} /></span>
+                <div>
+                  <div className="gu-card-t" style={{ color: '#efa690' }}>Очистить спавн</div>
+                  <div className="gu-card-d" style={{ marginTop: 2 }}>Удалить созданные объекты</div>
                 </div>
-
-                {/* Cheat Toggle 4: Clean Test Mode */}
-                <div className="p-4 bg-[#141720] border border-white/[0.08] rounded-xl flex items-center justify-between gap-4">
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div className={`p-2.5 rounded-lg border shrink-0 ${
-                      isCleanMode ? 'bg-amber-500/20 border-amber-500 text-amber-400' : 'bg-white/5 border-white/10 text-[#8b929e]'
-                    }`}>
-                      <Sparkles className="w-5 h-5" />
-                    </div>
-                    <div>
-                      <h4 className="text-sm font-bold uppercase tracking-wider text-white font-sans">
-                        Чистый краш-тест
-                      </h4>
-                      <p className="text-[11px] font-mono text-[#8b929e] mt-0.5">
-                        Отключение дыма и пара для кристальной записи физики
-                      </p>
-                    </div>
-                  </div>
-
-                  <button
-                    onClick={onToggleCleanMode}
-                    className={`w-12 h-6 rounded-full p-0.5 transition-colors cursor-pointer relative shrink-0 ${
-                      isCleanMode ? 'bg-[#c68a35]' : 'bg-white/15'
-                    }`}
-                  >
-                    <div className={`w-5 h-5 rounded-full bg-white transition-transform ${
-                      isCleanMode ? 'translate-x-6' : 'translate-x-0'
-                    }`} />
-                  </button>
-                </div>
-
-              </div>
-
-              {/* Action Buttons Row */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <button
-                  onClick={() => onGiveCash(100000)}
-                  className="p-4 bg-[#141720] hover:bg-[#1a1f2b] border border-white/10 hover:border-[#c68a35] rounded-xl flex items-center gap-3 transition-all cursor-pointer group text-left"
-                >
-                  <div className="p-2.5 rounded-lg bg-[#c68a35]/15 border border-[#c68a35]/30 text-[#c68a35] group-hover:bg-[#c68a35] group-hover:text-black transition-colors shrink-0">
-                    <Coins className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <h5 className="text-xs font-bold uppercase tracking-wider text-white font-sans group-hover:text-[#c68a35] transition-colors">
-                      Выдать ₽100,000
-                    </h5>
-                    <p className="text-[11px] font-mono text-[#8b929e]">Пополнить кошелек водителя</p>
-                  </div>
-                </button>
-
-                <button
-                  onClick={onRepairAllVehicles}
-                  className="p-4 bg-[#141720] hover:bg-[#1a1f2b] border border-white/10 hover:border-[#c68a35] rounded-xl flex items-center gap-3 transition-all cursor-pointer group text-left"
-                >
-                  <div className="p-2.5 rounded-lg bg-white/5 border border-white/10 text-sky-400 group-hover:bg-sky-500 group-hover:text-black transition-colors shrink-0">
-                    <Wrench className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <h5 className="text-xs font-bold uppercase tracking-wider text-white font-sans group-hover:text-sky-300 transition-colors">
-                      Починить технику
-                    </h5>
-                    <p className="text-[11px] font-mono text-[#8b929e]">Устранить вмятины и поломки</p>
-                  </div>
-                </button>
-
-                <button
-                  onClick={onClearCreatedSpawns}
-                  className="p-4 bg-[#1a1215] hover:bg-[#24151b] border border-rose-900/40 hover:border-rose-600/60 rounded-xl flex items-center gap-3 transition-all cursor-pointer group text-left"
-                >
-                  <div className="p-2.5 rounded-lg bg-rose-950/50 border border-rose-800/40 text-rose-400 group-hover:bg-rose-600 group-hover:text-white transition-colors shrink-0">
-                    <Trash2 className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <h5 className="text-xs font-bold uppercase tracking-wider text-rose-200 font-sans group-hover:text-rose-100 transition-colors">
-                      Очистить спавн
-                    </h5>
-                    <p className="text-[11px] font-mono text-rose-300/70">Удалить созданные объекты</p>
-                  </div>
-                </button>
-              </div>
-
-              {/* Time and Date Controls Card */}
-              <div className="p-4 bg-[#141720] border border-white/[0.08] rounded-xl flex flex-wrap items-center justify-between gap-3">
-                <div className="flex items-center gap-3">
-                  <div className="p-2.5 rounded-lg bg-white/5 border border-white/10 text-[#c68a35] shrink-0">
-                    <Calendar className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <h5 className="text-xs font-bold uppercase tracking-wider text-white font-sans">
-                      Игровой календарь и климат
-                    </h5>
-                    <p className="text-[11px] font-mono text-[#8b929e]">
-                      {formatGameDate(calendar, 'medium')} · {formatGameTime(timeHour)}
-                    </p>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => onStepDay(-1)}
-                    className="p-2 bg-white/5 hover:bg-white/10 border border-white/10 text-white rounded-lg transition-colors cursor-pointer"
-                    title="-1 день"
-                  >
-                    <ChevronLeft className="w-4 h-4" />
-                  </button>
-                  <button
-                    onClick={() => onStepDay(1)}
-                    className="p-2 bg-white/5 hover:bg-white/10 border border-white/10 text-white rounded-lg transition-colors cursor-pointer"
-                    title="+1 день"
-                  >
-                    <ChevronRight className="w-4 h-4" />
-                  </button>
-                  <button
-                    onClick={onOpenCalendar}
-                    className="px-3.5 py-2 bg-[#c68a35]/15 hover:bg-[#c68a35] border border-[#c68a35]/30 text-[#f0c264] hover:text-black rounded-lg text-xs font-bold uppercase tracking-wider transition-colors cursor-pointer"
-                  >
-                    Открыть календарь
-                  </button>
-                </div>
-              </div>
-
+              </button>
             </div>
-          )}
 
-        </div>
-
-        {/* Footer info */}
-        <footer className="px-5 py-2.5 bg-[#14161c] border-t border-white/[0.08] flex items-center justify-between text-xs font-mono text-[#8b929e] shrink-0">
-          <span>СИМУЛЯТОР СТЕПНОЙ ТРАКТ 2D</span>
-          <span>ВЫБЕРИТЕ ОБЪЕКТ ДЛЯ РАЗМЕЩЕНИЯ НА КАРТЕ</span>
-        </footer>
+            <div className="gu-panel gu-pad gu-row2 gu-wrap" style={{ justifyContent: 'space-between' }}>
+              <div className="gu-set-main">
+                <span className="gu-set-i on"><Calendar width={20} height={20} /></span>
+                <div>
+                  <div className="gu-set-t">Календарь и климат</div>
+                  <div className="gu-set-d">{formatGameDate(calendar, 'medium')} · {formatGameTime(timeHour)}</div>
+                </div>
+              </div>
+              <div className="gu-row2" style={{ gap: 8 }}>
+                <button type="button" className="gu-btn gu-btn-s gu-btn-sm gu-btn-sq" onClick={() => onStepDay(-1)} title="-1 день" aria-label="Предыдущий день"><ChevronLeft width={18} height={18} /></button>
+                <button type="button" className="gu-btn gu-btn-s gu-btn-sm gu-btn-sq" onClick={() => onStepDay(1)} title="+1 день" aria-label="Следующий день"><ChevronRight width={18} height={18} /></button>
+                <button type="button" className="gu-btn gu-btn-p gu-btn-sm" onClick={onOpenCalendar}>Открыть календарь</button>
+              </div>
+            </div>
+          </>
+        )}
       </div>
-    </div>
+    </ModalShell>
   );
 };
 
@@ -817,30 +473,21 @@ export const CreativePlacementHud: React.FC<{
   onCancel: () => void;
 }> = ({ placement, onCancel }) => {
   return (
-    <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-40 bg-[#111317]/95 border border-[#c68a35]/60 rounded-xl px-5 py-3 shadow-[0_20px_50px_rgba(0,0,0,0.8)] backdrop-blur-md text-white flex items-center gap-4 animate-in fade-in slide-in-from-bottom-2 duration-150 pointer-events-auto">
-      <div className="flex items-center gap-2.5">
-        <div className="w-2 h-2 rounded-full bg-[#c68a35] animate-ping" />
+    <div
+      className="gu-backdrop"
+      style={{ inset: 'auto', left: '50%', bottom: 96, transform: 'translateX(-50%)', zIndex: 40, padding: 0, background: 'none', backdropFilter: 'none', WebkitBackdropFilter: 'none', width: 'auto', display: 'block' }}
+    >
+      <div className="gu-panel" style={{ display: 'flex', alignItems: 'center', gap: 20, padding: '12px 16px 12px 20px', background: 'rgba(20,20,22,.92)', borderColor: 'rgba(201,146,43,.55)', boxShadow: '0 20px 50px rgba(0,0,0,.7)', pointerEvents: 'auto' }}>
         <div>
-          <div className="text-xs font-bold uppercase tracking-wider text-white font-sans flex items-center gap-1.5">
-            <span className="text-[#f0c264]">УСТАНОВКА:</span>
-            <span>{placement.nameRu}</span>
+          <div className="gu-cn" style={{ fontSize: 18, fontWeight: 700, color: '#fff' }}>
+            <span style={{ color: '#f0c264' }}>Установка:</span> {placement.nameRu}
           </div>
-          <div className="text-[11px] font-mono text-[#8b929e] flex items-center gap-2 mt-0.5">
-            <span>[ЛКМ] Разместить</span>
-            <span>·</span>
-            <span>[R / Колесо] Поворот</span>
-            <span>·</span>
-            <span>[ESC] Отмена</span>
+          <div className="gu-mut" style={{ fontSize: 13, marginTop: 6, display: 'flex', alignItems: 'center' }}>
+            <Hints items={[['ЛКМ', 'Разместить'], ['R', 'Поворот'], ['Esc', 'Отмена']]} />
           </div>
         </div>
+        <button type="button" className="gu-btn gu-btn-s gu-btn-sm" onClick={onCancel}>Отмена</button>
       </div>
-
-      <button
-        onClick={onCancel}
-        className="px-3 py-1 bg-white/10 hover:bg-white/20 text-white rounded-lg text-xs font-bold uppercase tracking-wider transition-colors cursor-pointer"
-      >
-        Отмена
-      </button>
     </div>
   );
 };

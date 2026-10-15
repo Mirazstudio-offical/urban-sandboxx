@@ -1,31 +1,24 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { 
-  Globe, 
-  Users, 
-  Wifi, 
-  WifiOff, 
-  Copy, 
-  Check, 
-  X, 
-  Car, 
-  User, 
-  Sparkles, 
-  Shuffle, 
-  LogOut, 
-  Radio, 
-  ShieldCheck, 
-  MessageSquare,
+import {
+  Users,
+  Wifi,
+  WifiOff,
+  Copy,
+  Check,
+  Car,
+  User,
+  Shuffle,
+  LogOut,
+  Server,
   Plus,
   Search,
-  Filter,
-  Tag,
-  Server,
   Play,
   Crown,
-  Map
+  Hash
 } from 'lucide-react';
 import { onlineManager, OnlineStatus } from '../onlineSystem';
 import { sound } from '../audio';
+import { ModalShell, Tabs } from './gameUi';
 import { CAR_CONFIGS } from '../vehicleHelpers';
 import { 
   auth, 
@@ -190,444 +183,265 @@ export const OnlineModal: React.FC<OnlineModalProps> = ({ isOpen, onClose, onOpe
   const remotePlayers = onlineManager.getRemotePlayersArray();
   const totalPlayers = remotePlayers.length + (status === 'connected' ? 1 : 0);
 
-  return (
-    <div className="fixed inset-0 z-50 overflow-y-auto overflow-x-hidden flex items-start sm:items-center justify-center bg-slate-950/80 backdrop-blur-md p-2 sm:p-4 animate-in fade-in duration-200 select-none">
-      <div className="my-auto relative w-full max-w-2xl bg-slate-900 border border-slate-700/80 rounded-2xl sm:rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[94vh] sm:max-h-[90vh]">
-        
-        {/* Header */}
-        <div className="px-4 sm:px-6 py-3.5 sm:py-5 border-b border-slate-800 flex items-center justify-between bg-slate-950/60 shrink-0">
-          <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
-            <div className={`p-2 sm:p-2.5 rounded-xl sm:rounded-2xl flex items-center justify-center shrink-0 ${
-              status === 'connected' 
-                ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30' 
-                : 'bg-sky-500/10 text-sky-400 border border-sky-500/30'
-            }`}>
-              {status === 'connected' ? <Radio className="w-5 h-5 sm:w-6 sm:h-6 animate-pulse" /> : <Globe className="w-5 h-5 sm:w-6 sm:h-6" />}
-            </div>
-            <div className="min-w-0">
-              <div className="flex items-center gap-2 flex-wrap">
-                <h2 className="text-base sm:text-lg font-black tracking-wide text-white uppercase truncate">
-                  Сетевой Режим
-                </h2>
-                <span className="text-[10px] font-mono font-bold text-[#c68a35] uppercase">
-                  · P2P Сессия
-                </span>
-              </div>
-              <p className="text-xs text-slate-400 truncate hidden sm:block">
-                Запуск совместного выезда, подключение по коду комнаты и совместные рейсы
-              </p>
-            </div>
-          </div>
+  const modeName = (id: string) => GAME_MODES.find(g => g.id === id)?.name || id;
+  const mapName = (id: string) => MAP_NAMES.find(m => m.id === id)?.name || id;
+  const fillClass = (cur: number, max: number) => {
+    const r = cur / Math.max(1, max);
+    return r < 0.6 ? '#9ac985' : r < 0.9 ? '#e0ab45' : '#d9745a';
+  };
 
-          <button
-            onClick={() => {
-              sound.playButtonPress();
-              onClose();
-            }}
-            className="p-1.5 sm:p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer shrink-0"
-          >
-            <X className="w-5 h-5" />
-          </button>
+  const connected = status === 'connected';
+  const subtitle = connected
+    ? `Комната ${onlineManager.roomCode} · игроков: ${totalPlayers}`
+    : 'Серверы P2P, создание комнаты и вход по коду';
+
+  const NickRow = (
+    <div className="gu-panel gu-pad gu-row2 gu-wrap" style={{ justifyContent: 'space-between', gap: 14 }}>
+      <div className="gu-row2" style={{ flex: '1 1 320px', minWidth: 0 }}>
+        <span className="gu-av">{(nickname || '?').charAt(0).toUpperCase()}</span>
+        <div className="gu-grow">
+          <div className="gu-lbl" style={{ marginBottom: 4 }}>
+            {auth.currentUser ? `Аккаунт: ${auth.currentUser.displayName || nickname}` : 'Гостевой профиль'}
+          </div>
+          <div className="gu-row2" style={{ gap: 8 }}>
+            <input
+              type="text"
+              className="gu-inp"
+              style={{ height: 40, fontSize: 15 }}
+              value={nickname}
+              maxLength={20}
+              onChange={e => handleSaveNick(e.target.value)}
+              onKeyDown={e => e.stopPropagation()}
+              placeholder="Ваш позывной"
+              aria-label="Позывной"
+            />
+            <button type="button" className="gu-btn gu-btn-s gu-btn-sm gu-btn-sq" style={{ height: 40, width: 40 }} onClick={handleRandomizeNick} title="Случайный никнейм" aria-label="Случайный никнейм">
+              <Shuffle width={17} height={17} />
+            </button>
+          </div>
         </div>
+      </div>
+      {onOpenFriends && (
+        <button type="button" className="gu-btn gu-btn-s" onClick={() => { sound.playButtonPress(); onOpenFriends(); }}>
+          <Users width={18} height={18} color="#e0ab45" />Друзья
+        </button>
+      )}
+    </div>
+  );
 
-        {/* Content Body */}
-        <div className="p-6 overflow-y-auto space-y-5 flex-1 text-slate-200 text-sm">
-          
-          {/* Player Nickname Banner */}
-          <div className="bg-slate-950/70 border border-slate-800 p-3.5 rounded-2xl flex items-center justify-between gap-3">
-            <div className="flex items-center gap-2 flex-1">
-              <User className="w-4 h-4 text-emerald-400 shrink-0" />
-              <input
-                type="text"
-                value={nickname}
-                maxLength={20}
-                onChange={(e) => handleSaveNick(e.target.value)}
-                placeholder="Ваш позывной..."
-                className="bg-slate-900 border border-slate-700/80 rounded-xl px-3 py-1.5 text-white font-semibold text-xs focus:outline-none focus:border-sky-500"
-              />
-              <button
-                type="button"
-                onClick={handleRandomizeNick}
-                className="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-xs cursor-pointer"
-                title="Случайный никнейм"
-              >
-                <Shuffle className="w-3.5 h-3.5" />
-              </button>
-            </div>
+  return (
+    <ModalShell
+      id="online-modal"
+      title="Онлайн"
+      subtitle={subtitle}
+      width={920}
+      tall={!connected}
+      onClose={() => { sound.playButtonPress(); onClose(); }}
+      wipeKey={connected ? 'connected' : viewMode}
+      bodyKey={connected ? 'connected' : viewMode}
+      headRight={
+        <div className="gu-pill gu-hide-s" style={{ height: 44, borderRadius: 10 }}>
+          <span className={'gu-dot' + (connected ? ' gu-on' : '')} />
+          {connected ? 'В сети' : 'Не в сети'}
+        </div>
+      }
+      tabs={
+        !connected ? (
+          <Tabs
+            value={viewMode}
+            onChange={m => { sound.playButtonPress(); setViewMode(m); }}
+            items={[
+              { id: 'server_browser', label: 'Серверы', icon: <Server width={18} height={18} />, badge: servers.length || undefined },
+              { id: 'create_server', label: 'Создать', icon: <Plus width={18} height={18} /> },
+              { id: 'direct_code', label: 'По коду', icon: <Hash width={18} height={18} /> }
+            ]}
+          />
+        ) : undefined
+      }
+      footerHints={[['Esc', 'Закрыть'], ['O', 'Открыть и закрыть']]}
+      footerRight={<button type="button" className="gu-btn gu-btn-s gu-btn-sm" onClick={() => { sound.playButtonPress(); onClose(); }}>Готово</button>}
+    >
+      <div className="gu-stagger">
+        {NickRow}
 
-            <div className="flex items-center gap-2">
-              <span className="text-[11px] font-mono text-slate-400">
-                {auth.currentUser ? `Игрок: ${auth.currentUser.displayName || nickname}` : 'Гость'}
-              </span>
-              
-              {onOpenFriends && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    sound.playButtonPress();
-                    onOpenFriends();
-                  }}
-                  className="px-2.5 py-1 bg-indigo-600/30 hover:bg-indigo-600/50 text-indigo-300 border border-indigo-500/40 rounded-lg flex items-center gap-1 text-xs font-bold transition-all cursor-pointer"
-                >
-                  <Users className="w-3.5 h-3.5 text-indigo-400" />
-                  <span>Друзья</span>
-                </button>
-              )}
-            </div>
+        {errorMessage && (
+          <div className="gu-note gu-err gu-row2">
+            <WifiOff width={18} height={18} />
+            <span>{errorMessage}</span>
           </div>
+        )}
 
-          {/* VIEW IF CONNECTED TO A ROOM */}
-          {status === 'connected' ? (
-            <div className="space-y-4 animate-in fade-in duration-150">
-              <div className="bg-emerald-950/20 border border-emerald-500/30 rounded-2xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-                <div className="flex items-center gap-3">
-                  <div className="w-3 h-3 rounded-full bg-emerald-400 shadow-[0_0_10px_#10b981] animate-pulse" />
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs text-emerald-300 font-bold uppercase">В СЕТИ:</span>
-                      <span className="text-base font-black text-white font-mono bg-slate-950/60 px-2 py-0.5 rounded border border-emerald-500/40">
-                        {onlineManager.roomCode}
-                      </span>
-                    </div>
-                    <div className="text-[11px] text-slate-400 mt-0.5 flex items-center gap-1.5">
-                      {onlineManager.isHost ? (
-                        <span className="text-amber-400 font-bold flex items-center gap-1">
-                          <Crown className="w-3 h-3 text-amber-400" /> Хост сервера
-                        </span>
-                      ) : (
-                        <span>Участник</span>
-                      )}
-                      <span>•</span>
-                      <span>{totalPlayers} игроков онлайн</span>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-2 w-full sm:w-auto">
-                  <button
-                    type="button"
-                    onClick={handleCopyCode}
-                    className="flex-1 sm:flex-initial px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-600/60 rounded-xl flex items-center justify-center gap-1.5 text-xs font-semibold cursor-pointer"
-                  >
-                    {copied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5 text-sky-400" />}
-                    <span>{copied ? 'Скопировано' : 'Код комнаты'}</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={handleLeaveRoom}
-                    className="flex-1 sm:flex-initial px-3 py-2 bg-rose-950/40 hover:bg-rose-900/60 text-rose-300 border border-rose-500/40 rounded-xl flex items-center justify-center gap-1.5 text-xs font-semibold cursor-pointer"
-                  >
-                    <LogOut className="w-3.5 h-3.5" />
-                    <span>Покинуть</span>
-                  </button>
+        {/* ======================= CONNECTED ======================= */}
+        {connected && (
+          <>
+            <div className="gu-panel gu-pad gu-row2 gu-wrap" style={{ justifyContent: 'space-between', gap: 16 }}>
+              <div>
+                <div className="gu-lbl" style={{ marginBottom: 6 }}>Код комнаты</div>
+                <div className="gu-row2" style={{ gap: 12 }}>
+                  <span className="gu-num" style={{ fontSize: 32, color: '#fff', fontFamily: 'ui-monospace, monospace', fontWeight: 600 }}>{onlineManager.roomCode}</span>
+                  {onlineManager.isHost && (
+                    <span className="gu-pill on" style={{ height: 28, fontSize: 13 }}><Crown width={14} height={14} />Хост</span>
+                  )}
                 </div>
               </div>
-
-              {/* Connected Players List */}
-              <div className="bg-slate-950/60 border border-slate-800 rounded-2xl p-4 space-y-3">
-                <div className="flex items-center justify-between text-xs font-bold text-slate-400 uppercase tracking-wider">
-                  <span className="flex items-center gap-1.5">
-                    <Users className="w-3.5 h-3.5 text-sky-400" /> Игроки в комнате ({totalPlayers})
-                  </span>
-                  <span className="text-emerald-400 text-[11px]">WebRTC Active</span>
-                </div>
-
-                <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
-                  <div className="flex items-center justify-between p-2.5 bg-slate-900/90 border border-sky-500/30 rounded-xl">
-                    <div className="flex items-center gap-2.5">
-                      <div className="w-7 h-7 rounded-lg bg-sky-500/20 text-sky-400 flex items-center justify-center font-bold text-xs">
-                        Я
-                      </div>
-                      <div className="text-xs font-bold text-white flex items-center gap-1.5">
-                        <span>{onlineManager.localPlayerName}</span>
-                        <span className="text-[10px] px-1.5 py-0.2 bg-sky-950 text-sky-300 border border-sky-500/40 rounded">
-                          Вы {onlineManager.isHost && '• Хост'}
-                        </span>
-                      </div>
-                    </div>
-                    <span className="text-[11px] text-emerald-400 font-mono">0 ms</span>
-                  </div>
-
-                  {remotePlayers.map((player) => {
-                    const carCfg = player.vehicleState ? CAR_CONFIGS[player.vehicleState.type] : null;
-                    return (
-                      <div key={player.peerId} className="flex items-center justify-between p-2.5 bg-slate-900/50 border border-slate-800 rounded-xl">
-                        <div className="flex items-center gap-2.5">
-                          <div className="w-7 h-7 rounded-lg bg-emerald-500/20 text-emerald-400 flex items-center justify-center font-bold text-xs">
-                            {player.isInVehicle ? <Car className="w-4 h-4" /> : <User className="w-4 h-4" />}
-                          </div>
-                          <div>
-                            <div className="text-xs font-bold text-white flex items-center gap-1.5">
-                              <span>{player.name}</span>
-                              {player.isInVehicle && (
-                                <span className="text-[10px] px-1.5 py-0.2 bg-amber-950/60 text-amber-300 border border-amber-500/40 rounded">
-                                  {carCfg?.name || 'Авто'}
-                                </span>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                        <span className="w-2 h-2 rounded-full bg-emerald-400" />
-                      </div>
-                    );
-                  })}
-                </div>
+              <div className="gu-row2">
+                <button type="button" className="gu-btn gu-btn-s" onClick={handleCopyCode}>
+                  {copied ? <Check width={18} height={18} color="#9ac985" /> : <Copy width={18} height={18} />}
+                  {copied ? 'Скопировано' : 'Скопировать код'}
+                </button>
+                <button type="button" className="gu-btn gu-btn-d" onClick={handleLeaveRoom}>
+                  <LogOut width={18} height={18} />Покинуть
+                </button>
               </div>
             </div>
-          ) : (
-            /* VIEW IF DISCONNECTED: SERVER BROWSER OR HOST FORM */
-            <div className="space-y-4">
-              
-              {/* Navigation Tabs */}
-              <div className="grid grid-cols-3 gap-2 bg-slate-950/80 p-1.5 rounded-2xl border border-slate-800">
-                <button
-                  onClick={() => { sound.playButtonPress(); setViewMode('server_browser'); }}
-                  className={`py-2 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
-                    viewMode === 'server_browser' 
-                      ? 'bg-sky-600 text-white shadow-lg shadow-sky-600/20' 
-                      : 'text-slate-400 hover:text-white hover:bg-slate-900'
-                  }`}
-                >
-                  <Server className="w-4 h-4" /> Список Серверов ({servers.length})
-                </button>
 
-                <button
-                  onClick={() => { sound.playButtonPress(); setViewMode('create_server'); }}
-                  className={`py-2 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
-                    viewMode === 'create_server' 
-                      ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-600/20' 
-                      : 'text-slate-400 hover:text-white hover:bg-slate-900'
-                  }`}
-                >
-                  <Plus className="w-4 h-4" /> Создать Сервер
-                </button>
-
-                <button
-                  onClick={() => { sound.playButtonPress(); setViewMode('direct_code'); }}
-                  className={`py-2 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
-                    viewMode === 'direct_code' 
-                      ? 'bg-purple-600 text-white shadow-lg shadow-purple-600/20' 
-                      : 'text-slate-400 hover:text-white hover:bg-slate-900'
-                  }`}
-                >
-                  <Radio className="w-4 h-4" /> Вход по Коду
-                </button>
+            <div>
+              <div className="gu-row2" style={{ justifyContent: 'space-between', marginBottom: 10 }}>
+                <span className="gu-grp">Игроки в комнате</span>
+                <span className="gu-mut" style={{ fontSize: 13 }}>{totalPlayers}</span>
               </div>
-
-              {/* TAB 1: SERVER BROWSER (FIRESTORE REALTIME) */}
-              {viewMode === 'server_browser' && (
-                <div className="space-y-3 animate-in fade-in duration-150">
-                  
-                  {/* Search and Filter bar */}
-                  <div className="flex items-center gap-2">
-                    <div className="relative flex-1">
-                      <Search className="w-4 h-4 text-slate-500 absolute left-3 top-2.5" />
-                      <input
-                        type="text"
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                        placeholder="Поиск по названию или имени хоста..."
-                        className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-9 pr-3 py-2 text-xs text-white focus:outline-none focus:border-sky-500"
-                      />
-                    </div>
-
-                    <select
-                      value={filterMode}
-                      onChange={(e) => setFilterMode(e.target.value)}
-                      className="bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-300 focus:outline-none"
-                    >
-                      <option value="all">Все режимы</option>
-                      {GAME_MODES.map(m => (
-                        <option key={m.id} value={m.id}>{m.name}</option>
-                      ))}
-                    </select>
+              <div className="gu-list">
+                <div className="gu-rw on">
+                  <span className="gu-av">{(onlineManager.localPlayerName || '?').charAt(0).toUpperCase()}</span>
+                  <div className="gu-grow">
+                    <div className="gu-rw-t">{onlineManager.localPlayerName}</div>
+                    <div className="gu-rw-d">Вы{onlineManager.isHost ? ' · хост' : ''}</div>
                   </div>
+                  <div className="gu-rw-end"><span className="gu-dot gu-on" /></div>
+                </div>
+                {remotePlayers.map(player => {
+                  const carCfg = player.vehicleState ? CAR_CONFIGS[player.vehicleState.type] : null;
+                  return (
+                    <div key={player.peerId} className="gu-rw">
+                      <span className="gu-ico gu-off" style={{ width: 40, height: 40, borderRadius: '50%' }}>
+                        {player.isInVehicle ? <Car width={18} height={18} /> : <User width={18} height={18} />}
+                      </span>
+                      <div className="gu-grow">
+                        <div className="gu-rw-t">{player.name}</div>
+                        <div className="gu-rw-d">{player.isInVehicle ? (carCfg?.name || 'В автомобиле') : 'Пешком'}</div>
+                      </div>
+                      <div className="gu-rw-end"><span className="gu-dot gu-on" /></div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </>
+        )}
 
-                  {/* Server Cards List */}
-                  <div className="space-y-2.5 max-h-[280px] overflow-y-auto pr-1">
-                    {filteredServers.length === 0 ? (
-                      <div className="text-center py-10 bg-slate-950/40 border border-slate-800/80 rounded-2xl p-6 text-xs text-slate-500 italic space-y-2">
-                        <div>Активных P2P серверов в базе данных не найдено.</div>
-                        <button
-                          onClick={() => setViewMode('create_server')}
-                          className="px-3.5 py-1.5 bg-emerald-600/20 border border-emerald-500/40 text-emerald-300 font-bold rounded-xl text-xs hover:bg-emerald-600/30 transition-colors cursor-pointer"
-                        >
-                          + Создать первый сервер
+        {/* ======================= SERVER BROWSER ======================= */}
+        {!connected && viewMode === 'server_browser' && (
+          <>
+            <div className="gu-row2 gu-wrap" style={{ justifyContent: 'space-between' }}>
+              <div className="gu-pills">
+                <button type="button" className={'gu-pill' + (filterMode === 'all' ? ' on' : '')} onClick={() => setFilterMode('all')}>Все режимы</button>
+                {GAME_MODES.map(m => (
+                  <button type="button" key={m.id} className={'gu-pill' + (filterMode === m.id ? ' on' : '')} onClick={() => setFilterMode(m.id)}>{m.name}</button>
+                ))}
+              </div>
+              <label className="gu-search" style={{ flex: '1 1 240px', maxWidth: 320 }}>
+                <Search width={18} height={18} color="#a29e93" />
+                <input type="text" value={searchQuery} onChange={e => setSearchQuery(e.target.value)} onKeyDown={e => e.stopPropagation()} placeholder="Название или хост" />
+              </label>
+            </div>
+
+            <div className="gu-list">
+              {filteredServers.length === 0 ? (
+                <div className="gu-empty">
+                  <div className="gu-cn" style={{ fontSize: 22, fontWeight: 700, color: '#fff' }}>Нет открытых серверов</div>
+                  <div style={{ fontSize: 14, maxWidth: 380 }}>Создайте свой сервер или подключитесь к другу по коду комнаты.</div>
+                  <button type="button" className="gu-btn gu-btn-p" onClick={() => setViewMode('create_server')}>
+                    <Plus width={18} height={18} />Создать сервер
+                  </button>
+                </div>
+              ) : (
+                filteredServers.map(srv => {
+                  const cp = srv.currentPlayers || 1;
+                  const mp = srv.maxPlayers || 8;
+                  return (
+                    <div key={srv.id} className="gu-rw">
+                      <span className="gu-dot gu-on" />
+                      <div className="gu-grow">
+                        <div className="gu-rw-t">{srv.name}</div>
+                        <div className="gu-rw-d">Хост: {srv.hostName} · {mapName(srv.mapName)} · {modeName(srv.gameMode)}</div>
+                      </div>
+                      <div className="gu-rw-end">
+                        <span style={{ fontWeight: 600, color: fillClass(cp, mp), fontVariantNumeric: 'tabular-nums' }}>{cp} / {mp}</span>
+                        <button type="button" className="gu-btn gu-btn-p gu-btn-sm" onClick={() => handleJoinServerFromList(srv)} disabled={cp >= mp}>
+                          <Play width={14} height={14} fill="#1a1409" />Войти
                         </button>
                       </div>
-                    ) : (
-                      filteredServers.map((srv) => (
-                        <div key={srv.id} className="bg-slate-950/70 hover:bg-slate-950 border border-slate-800 hover:border-slate-700 rounded-2xl p-3.5 flex items-center justify-between gap-3 transition-all">
-                          <div className="space-y-1">
-                            <div className="flex items-center gap-2">
-                              <span className="font-extrabold text-sm text-white">{srv.name}</span>
-                              <span className="px-2 py-0.2 bg-sky-950 text-sky-300 border border-sky-500/40 rounded text-[10px] font-bold uppercase">
-                                {GAME_MODES.find(g => g.id === srv.gameMode)?.name || srv.gameMode}
-                              </span>
-                            </div>
-
-                            <div className="text-[11px] text-slate-400 flex items-center gap-3">
-                              <span className="flex items-center gap-1"><Crown className="w-3 h-3 text-amber-400" /> Хост: <strong>{srv.hostName}</strong></span>
-                              <span>•</span>
-                              <span className="flex items-center gap-1"><Map className="w-3 h-3 text-sky-400" /> Карта: {srv.mapName}</span>
-                            </div>
-                          </div>
-
-                          <div className="flex items-center gap-3 shrink-0">
-                            <div className="text-right">
-                              <div className="text-xs font-mono font-bold text-emerald-400">
-                                {srv.currentPlayers} / {srv.maxPlayers}
-                              </div>
-                              <div className="text-[10px] text-slate-500">Игроки</div>
-                            </div>
-
-                            <button
-                              onClick={() => handleJoinServerFromList(srv)}
-                              className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-xs rounded-xl shadow-lg transition-all cursor-pointer flex items-center gap-1"
-                            >
-                              <Play className="w-3.5 h-3.5 fill-white" /> Войти
-                            </button>
-                          </div>
-                        </div>
-                      ))
-                    )}
-                  </div>
-
-                </div>
+                    </div>
+                  );
+                })
               )}
-
-              {/* TAB 2: CREATE P2P SERVER FORM */}
-              {viewMode === 'create_server' && (
-                <form onSubmit={handleCreateServerSubmit} className="space-y-3.5 animate-in fade-in duration-150">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-xs font-bold text-slate-400 mb-1">Название сервера</label>
-                      <input
-                        type="text"
-                        value={serverName}
-                        onChange={(e) => setServerName(e.target.value)}
-                        required
-                        placeholder="Например: Дрифт Ночь Метрополис"
-                        className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-500"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-xs font-bold text-slate-400 mb-1">Макс. Игроков</label>
-                      <select
-                        value={maxPlayers}
-                        onChange={(e) => setMaxPlayers(parseInt(e.target.value))}
-                        className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none"
-                      >
-                        {[2, 4, 8, 12, 16].map(num => (
-                          <option key={num} value={num}>{num} Игроков</option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-xs font-bold text-slate-400 mb-1">Игровой Режим</label>
-                      <select
-                        value={selectedGameMode}
-                        onChange={(e) => setSelectedGameMode(e.target.value)}
-                        className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none"
-                      >
-                        {GAME_MODES.map(gm => (
-                          <option key={gm.id} value={gm.id}>{gm.name}</option>
-                        ))}
-                      </select>
-                    </div>
-
-                    <div>
-                      <label className="block text-xs font-bold text-slate-400 mb-1">Карта Локации</label>
-                      <select
-                        value={selectedMap}
-                        onChange={(e) => setSelectedMap(e.target.value)}
-                        className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none"
-                      >
-                        {MAP_NAMES.map(m => (
-                          <option key={m.id} value={m.id}>{m.name}</option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
-
-                  <button
-                    type="submit"
-                    className="w-full py-3 bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs uppercase tracking-wider rounded-xl shadow-lg shadow-emerald-600/20 transition-all flex items-center justify-center gap-2 cursor-pointer"
-                  >
-                    <Sparkles className="w-4 h-4" /> Запустить & Опубликовать Сервер
-                  </button>
-                </form>
-              )}
-
-              {/* TAB 3: DIRECT CODE ENTRY */}
-              {viewMode === 'direct_code' && (
-                <div className="space-y-4 animate-in fade-in duration-150 bg-slate-950/60 p-4 rounded-2xl border border-slate-800">
-                  <label className="text-xs font-semibold text-slate-400 block">
-                    Ввести прямой код или PeerJS ID комнаты:
-                  </label>
-                  
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="text"
-                      value={roomCode}
-                      maxLength={24}
-                      onChange={(e) => setRoomCode(e.target.value)}
-                      placeholder="Код комнаты..."
-                      className="flex-1 bg-slate-900 border border-slate-700/80 rounded-xl px-3.5 py-2.5 text-white font-mono text-sm focus:outline-none focus:border-sky-500"
-                    />
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      sound.playButtonPress();
-                      handleSaveNick(nickname);
-                      onlineManager.joinOrCreateRoom(roomCode, nickname, false);
-                    }}
-                    className="w-full py-3 bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs uppercase rounded-xl transition-colors cursor-pointer flex items-center justify-center gap-2"
-                  >
-                    <Wifi className="w-4 h-4" /> Присоединиться напрямую
-                  </button>
-                </div>
-              )}
-
             </div>
-          )}
+          </>
+        )}
 
-          {errorMessage && (
-            <div className="p-3 bg-rose-950/40 border border-rose-500/40 rounded-xl text-rose-300 text-xs flex items-center gap-2">
-              <WifiOff className="w-4 h-4 shrink-0 text-rose-400" />
-              <span>{errorMessage}</span>
+        {/* ======================= CREATE SERVER ======================= */}
+        {!connected && viewMode === 'create_server' && (
+          <form onSubmit={handleCreateServerSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+            <div className="gu-panel gu-pad">
+              <div className="gu-grid gu-g2" style={{ gap: 16 }}>
+                <div>
+                  <div className="gu-lbl">Название сервера</div>
+                  <input type="text" className="gu-inp" value={serverName} onChange={e => setServerName(e.target.value)} onKeyDown={e => e.stopPropagation()} required placeholder="Например: Ночной дрифт" />
+                </div>
+                <div>
+                  <div className="gu-lbl">Максимум игроков</div>
+                  <select className="gu-inp" value={maxPlayers} onChange={e => setMaxPlayers(parseInt(e.target.value))}>
+                    {[2, 4, 8, 12, 16].map(num => <option key={num} value={num}>{num} игроков</option>)}
+                  </select>
+                </div>
+                <div>
+                  <div className="gu-lbl">Игровой режим</div>
+                  <select className="gu-inp" value={selectedGameMode} onChange={e => setSelectedGameMode(e.target.value)}>
+                    {GAME_MODES.map(gm => <option key={gm.id} value={gm.id}>{gm.name}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <div className="gu-lbl">Карта</div>
+                  <select className="gu-inp" value={selectedMap} onChange={e => setSelectedMap(e.target.value)}>
+                    {MAP_NAMES.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+                  </select>
+                </div>
+              </div>
             </div>
-          )}
+            <button type="submit" className="gu-btn gu-btn-p gu-btn-block"><Plus width={18} height={18} />Запустить и опубликовать</button>
+          </form>
+        )}
 
-        </div>
-
-        {/* Footer */}
-        <div className="px-6 py-4 border-t border-slate-800 bg-slate-950/80 flex items-center justify-between text-xs text-slate-400">
-          <div className="flex items-center gap-1.5">
-            <span className="w-2 h-2 rounded-full bg-sky-400" />
-            <span>Горячая клавиша: <strong>[ O ]</strong></span>
+        {/* ======================= DIRECT CODE ======================= */}
+        {!connected && viewMode === 'direct_code' && (
+          <div className="gu-panel gu-pad" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <div>
+              <div className="gu-lbl">Код комнаты или PeerJS ID</div>
+              <input
+                type="text"
+                className="gu-inp gu-mono"
+                value={roomCode}
+                maxLength={24}
+                onChange={e => setRoomCode(e.target.value)}
+                onKeyDown={e => e.stopPropagation()}
+                placeholder="Код комнаты"
+              />
+            </div>
+            <button
+              type="button"
+              className="gu-btn gu-btn-p gu-btn-block"
+              disabled={!roomCode.trim()}
+              onClick={() => {
+                sound.playButtonPress();
+                handleSaveNick(nickname);
+                onlineManager.joinOrCreateRoom(roomCode, nickname, false);
+              }}
+            >
+              <Wifi width={18} height={18} />Присоединиться
+            </button>
           </div>
-
-          <button
-            type="button"
-            onClick={() => {
-              sound.playButtonPress();
-              onClose();
-            }}
-            className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-xl font-semibold transition-colors cursor-pointer"
-          >
-            Готово
-          </button>
-        </div>
-
+        )}
       </div>
-    </div>
+    </ModalShell>
   );
 };

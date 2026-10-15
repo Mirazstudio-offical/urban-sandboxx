@@ -1,31 +1,21 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  User as UserIcon, 
-  LogOut, 
-  Globe, 
-  Sparkles, 
-  Plus, 
-  Trash2, 
-  Save, 
-  Download, 
-  Upload, 
-  ShieldCheck, 
-  X, 
-  Edit3, 
-  Tag, 
-  Activity, 
-  HardDrive, 
-  Check, 
+import {
+  User as UserIcon,
+  LogOut,
+  Globe,
+  Upload,
+  Download,
+  Save,
+  Check,
   Loader2,
-  Key,
-  Flame,
-  Award,
   Coins,
   Heart,
   Package,
   AlertCircle,
   Copy,
-  ExternalLink
+  ExternalLink,
+  Edit3,
+  HardDrive
 } from 'lucide-react';
 import type { User } from 'firebase/auth';
 import { 
@@ -41,6 +31,7 @@ import {
   PlayerCloudSave 
 } from '../firebase';
 import { sound } from '../audio';
+import { ModalShell, Tabs, Avatar } from './gameUi';
 
 interface UserProfileModalProps {
   isOpen: boolean;
@@ -209,406 +200,209 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
     setTimeout(() => setSaveSuccess(null), 3000);
   };
 
-  return (
-    <div className="fixed inset-0 z-50 overflow-y-auto overflow-x-hidden flex items-start sm:items-center justify-center bg-slate-950/85 backdrop-blur-md p-2 sm:p-4 animate-in fade-in duration-200 select-none">
-      
-      <div className="my-auto relative w-full max-w-3xl bg-slate-900 border border-slate-700/80 rounded-2xl sm:rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[95vh] md:max-h-[90vh]">
-        
-        {/* Header */}
-        <div className="px-4 sm:px-6 py-3.5 sm:py-5 border-b border-slate-800 flex items-center justify-between bg-slate-950/60 shrink-0">
-          <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
-            <div className="p-2 sm:p-2.5 rounded-xl sm:rounded-2xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 shrink-0">
-              <UserIcon className="w-5 h-5 sm:w-6 sm:h-6" />
-            </div>
-            <div className="min-w-0">
-              <div className="flex items-center gap-2 flex-wrap">
-                <h2 className="text-base sm:text-lg font-black tracking-wide text-white uppercase truncate">
-                  Профиль Водителя
-                </h2>
-                <span className="text-[10px] font-mono font-bold text-[#c68a35] uppercase shrink-0">
-                  · Личное дело
-                </span>
-              </div>
-              <p className="text-xs text-slate-400 truncate hidden sm:block">
-                Управление позывным водителя и синхронизация прогресса поездки
-              </p>
-            </div>
-          </div>
+  const shownName = displayName || nickname || 'Пилот';
 
-          <button
-            onClick={() => {
+  return (
+    <ModalShell
+      id="profile-modal"
+      title="Аккаунт"
+      subtitle="Профиль водителя и облачные сохранения"
+      width={900}
+      tall={!!currentUser}
+      onClose={() => { sound.playButtonPress(); onClose(); }}
+      wipeKey={activeTab}
+      bodyKey={currentUser ? activeTab : 'guest'}
+      tabs={
+        currentUser ? (
+          <Tabs
+            value={activeTab}
+            onChange={t => {
               sound.playButtonPress();
-              onClose();
+              setActiveTab(t);
+              if (t === 'cloud_saves') handleFetchCloudSave();
             }}
-            className="p-1.5 sm:p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer shrink-0"
-          >
-            <X className="w-5 h-5" />
-          </button>
+            items={[
+              { id: 'profile', label: 'Профиль', icon: <Edit3 width={18} height={18} /> },
+              { id: 'cloud_saves', label: 'Облачный сейв', icon: <HardDrive width={18} height={18} /> }
+            ]}
+          />
+        ) : undefined
+      }
+      footerHints={[['Esc', 'Закрыть']]}
+      footerRight={
+        <span className="gu-row2 gu-mut" style={{ fontSize: 13, gap: 8 }}>
+          <span className="gu-dot gu-on" />Firestore подключён
+        </span>
+      }
+    >
+      <div className="gu-stagger">
+        {saveSuccess && (
+          <div className="gu-note gu-ok gu-row2"><Check width={18} height={18} /><span>{saveSuccess}</span></div>
+        )}
+
+        {/* identity */}
+        <div className="gu-panel gu-pad gu-row2 gu-wrap" style={{ gap: 22, padding: '24px 26px' }}>
+          <Avatar size="lg" name={shownName} url={currentUser ? avatarUrl : undefined} />
+          <div className="gu-grow">
+            {currentUser ? (
+              <>
+                <div className="gu-cn" style={{ fontSize: 34, fontWeight: 700, lineHeight: 1.05, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{shownName}</div>
+                <div className="gu-mut" style={{ marginTop: 6, fontSize: 14 }}>
+                  {currentUser.isAnonymous ? 'Гостевой вход' : 'Google'} · {currentUser.email || 'без e-mail'}
+                </div>
+                <div className="gu-mut" style={{ marginTop: 2, fontSize: 12 }}>UID {currentUser.uid.slice(0, 10)}</div>
+              </>
+            ) : (
+              <>
+                <div className="gu-cn" style={{ fontSize: 30, fontWeight: 700, lineHeight: 1.05, color: '#fff' }}>Вы не вошли</div>
+                <div className="gu-mut" style={{ marginTop: 8, fontSize: 14, maxWidth: 420 }}>
+                  Войдите через Google, чтобы сохранять прогресс в облаке и добавлять друзей, или продолжите с локальным профилем.
+                </div>
+              </>
+            )}
+          </div>
+          {currentUser ? (
+            <button type="button" className="gu-btn gu-btn-s" onClick={handleLogout}><LogOut width={18} height={18} />Выйти</button>
+          ) : (
+            <div className="gu-row2 gu-wrap">
+              <button type="button" className="gu-btn gu-btn-p" onClick={handleLoginGoogle} disabled={loading}>
+                {loading ? <Loader2 width={18} height={18} className="gu-spin" /> : <Globe width={18} height={18} />}Войти через Google
+              </button>
+              <button type="button" className="gu-btn gu-btn-s" onClick={handleLoginAnon} disabled={loading}>
+                <UserIcon width={18} height={18} />Локальный профиль
+              </button>
+            </div>
+          )}
         </div>
 
-        {/* Success Alert Banner */}
-        {saveSuccess && (
-          <div className="px-6 py-2.5 bg-emerald-500/20 border-b border-emerald-500/40 text-emerald-300 text-xs font-bold flex items-center gap-2">
-            <Check className="w-4 h-4 text-emerald-400" />
-            <span>{saveSuccess}</span>
+        {authError && (
+          <div className="gu-note gu-warn" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <div className="gu-row2" style={{ alignItems: 'flex-start' }}>
+              <AlertCircle width={18} height={18} style={{ flex: 'none', marginTop: 2 }} />
+              <div className="gu-grow">{authError.message}</div>
+            </div>
+            {authError.domain && (
+              <div className="gu-row2 gu-wrap" style={{ justifyContent: 'space-between', paddingTop: 12, borderTop: '1px solid rgba(255,255,255,.08)' }}>
+                <div>
+                  <div className="gu-lbl" style={{ marginBottom: 6 }}>Домен для авторизации в Firebase</div>
+                  <span className="gu-code">{authError.domain}</span>
+                </div>
+                <div className="gu-row2">
+                  <button
+                    type="button"
+                    className="gu-btn gu-btn-s gu-btn-sm"
+                    onClick={() => {
+                      navigator.clipboard.writeText(authError.domain || '');
+                      setSaveSuccess('Домен скопирован в буфер обмена');
+                      setTimeout(() => setSaveSuccess(null), 3000);
+                    }}
+                  >
+                    <Copy width={15} height={15} />Копировать
+                  </button>
+                  <a
+                    className="gu-btn gu-btn-p gu-btn-sm"
+                    href="https://console.firebase.google.com/project/gen-lang-client-0888101069/authentication/settings"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{ textDecoration: 'none' }}
+                  >
+                    <ExternalLink width={15} height={15} />Открыть консоль
+                  </a>
+                </div>
+              </div>
+            )}
           </div>
         )}
 
-        {/* Modal Content */}
-        <div className="p-6 overflow-y-auto space-y-5 flex-1 text-slate-200 text-sm">
-          
-          {/* Auth Status Bar (Bento Cell 1) */}
-          <div className="bg-slate-950/70 border border-slate-800 rounded-2xl p-4 flex flex-col sm:flex-row items-center justify-between gap-4">
-            {currentUser ? (
-              <div className="flex items-center gap-3">
-                <div className="relative">
-                  {avatarUrl ? (
-                    <img src={avatarUrl} alt="Avatar" className="w-12 h-12 rounded-2xl object-cover border border-slate-700" referrerPolicy="no-referrer" />
-                  ) : (
-                    <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-emerald-500/30 to-sky-500/30 border border-emerald-500/40 flex items-center justify-center text-emerald-400 font-black text-lg">
-                      {(displayName || nickname || 'P')[0]?.toUpperCase()}
-                    </div>
-                  )}
-                  <div className="absolute -bottom-1 -right-1 w-4 h-4 rounded-full bg-emerald-500 border-2 border-slate-900" title="В сети" />
+        {/* ======================= PROFILE ======================= */}
+        {currentUser && activeTab === 'profile' && (
+          <>
+            <div className="gu-panel gu-pad">
+              <div className="gu-grp" style={{ marginBottom: 14 }}>Статистика</div>
+              {profile?.stats ? (
+                <div className="gu-grid gu-g3">
+                  <div className="gu-stat"><span className="gu-lbl" style={{ margin: 0 }}>Сессий</span><span className="gu-num">{profile.stats.gamesPlayed || 0}</span></div>
+                  <div className="gu-stat"><span className="gu-lbl" style={{ margin: 0 }}>Пройдено, км</span><span className="gu-num">{(profile.stats.distanceDriven || 0).toFixed(1)}</span></div>
+                  <div className="gu-stat"><span className="gu-lbl" style={{ margin: 0 }}>Доход</span><span className="gu-num">${profile.stats.moneyEarned || 0}</span></div>
                 </div>
-                <div>
-                  <div className="font-extrabold text-white text-base flex items-center gap-2">
-                    <span>{displayName || nickname || 'Пилот'}</span>
-                    <span className="text-[10px] px-2 py-0.5 bg-slate-800 border border-slate-700 rounded-full text-slate-300 font-bold font-mono">
-                      {currentUser.isAnonymous ? 'Гость' : 'Google Auth'}
-                    </span>
-                  </div>
-                  <div className="text-xs text-slate-400 font-mono">
-                    UID: {currentUser.uid.slice(0, 10)}... | {currentUser.email || 'Без e-mail'}
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <div className="text-xs text-slate-400 flex items-center gap-2">
-                <ShieldCheck className="w-5 h-5 text-[#c68a35]" />
-                <span>Авторизация не выполнена. Войдите в аккаунт или продолжите как гость.</span>
-              </div>
-            )}
-
-            {currentUser ? (
-              <button
-                onClick={handleLogout}
-                className="px-3.5 py-2 bg-rose-950/40 hover:bg-rose-900/60 text-rose-300 border border-rose-500/40 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
-              >
-                <LogOut className="w-4 h-4" /> Выйти
-              </button>
-            ) : (
-              <div className="flex items-center gap-2 w-full sm:w-auto">
-                <button
-                  onClick={handleLoginGoogle}
-                  disabled={loading}
-                  className="flex-1 sm:flex-initial px-4 py-2.5 bg-[#c68a35] hover:bg-[#d8963e] text-slate-950 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all cursor-pointer font-mono"
-                >
-                  <Globe className="w-4 h-4" /> Войти в сеть
-                </button>
-                <button
-                  onClick={handleLoginAnon}
-                  disabled={loading}
-                  className="flex-1 sm:flex-initial px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all cursor-pointer font-mono"
-                >
-                  <UserIcon className="w-4 h-4 text-[#c68a35]" /> Локальный профиль
-                </button>
-              </div>
-            )}
-          </div>
-
-          {authError && (
-            <div className="bg-amber-950/40 border border-amber-600/40 rounded-xl p-3 text-xs text-amber-200 flex flex-col gap-2">
-              <div className="flex items-start gap-2">
-                <AlertCircle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
-                <div className="flex-1 font-mono">{authError.message}</div>
-              </div>
-              {authError.domain && (
-                <div className="bg-black/40 border border-amber-500/20 rounded-lg p-2.5 mt-1 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
-                  <div className="flex flex-col">
-                    <span className="text-[10px] text-amber-400 uppercase tracking-wider font-bold">Домен для авторизации в Firebase:</span>
-                    <code className="text-white font-mono text-xs select-all bg-black/60 px-1.5 py-0.5 rounded mt-0.5">{authError.domain}</code>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => {
-                        navigator.clipboard.writeText(authError.domain || '');
-                        setSaveSuccess('Домен скопирован в буфер обмена!');
-                        setTimeout(() => setSaveSuccess(null), 3000);
-                      }}
-                      className="px-2.5 py-1 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/30 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer"
-                    >
-                      <Copy className="w-3.5 h-3.5" /> Копировать
-                    </button>
-                    <a
-                      href="https://console.firebase.google.com/project/gen-lang-client-0888101069/authentication/settings"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="px-2.5 py-1 bg-amber-600 hover:bg-amber-500 text-slate-950 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer"
-                    >
-                      <ExternalLink className="w-3.5 h-3.5" /> Открыть консоль
-                    </a>
-                  </div>
-                </div>
+              ) : (
+                <div className="gu-mut" style={{ fontSize: 14 }}>Статистика пока пуста. Совершите первые заезды.</div>
               )}
             </div>
-          )}
 
-          {/* Navigation Tabs */}
-          {currentUser && (
-            <>
-              <div className="grid grid-cols-2 gap-2 bg-slate-950/80 p-1.5 rounded-2xl border border-slate-800">
-                <button
-                  onClick={() => { sound.playButtonPress(); setActiveTab('profile'); }}
-                  className={`py-2.5 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all cursor-pointer ${
-                    activeTab === 'profile' 
-                      ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-600/20' 
-                      : 'text-slate-400 hover:text-white hover:bg-slate-900'
-                  }`}
-                >
-                  <Edit3 className="w-4 h-4" /> Профиль
-                </button>
-
-                <button
-                  onClick={() => { 
-                    sound.playButtonPress(); 
-                    setActiveTab('cloud_saves'); 
-                    handleFetchCloudSave();
-                  }}
-                  className={`py-2.5 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all cursor-pointer ${
-                    activeTab === 'cloud_saves' 
-                      ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-600/20' 
-                      : 'text-slate-400 hover:text-white hover:bg-slate-900'
-                  }`}
-                >
-                  <HardDrive className="w-4 h-4" /> Облачный Сейв
+            <div className="gu-panel gu-pad" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              <div className="gu-grp">Данные водителя</div>
+              <div className="gu-grid gu-g2" style={{ gap: 16 }}>
+                <div>
+                  <div className="gu-lbl">Отображаемое имя</div>
+                  <input type="text" className="gu-inp" value={displayName} onChange={e => setDisplayName(e.target.value)} onKeyDown={e => e.stopPropagation()} placeholder="Например: Александр" />
+                </div>
+                <div>
+                  <div className="gu-lbl">Игровой позывной</div>
+                  <input type="text" className="gu-inp" value={nickname} onChange={e => setNickname(e.target.value)} onKeyDown={e => e.stopPropagation()} placeholder="Например: DriftKing_99" />
+                </div>
+              </div>
+              <div>
+                <div className="gu-lbl">Ссылка на аватар (квадратное изображение)</div>
+                <input type="url" className="gu-inp gu-mono" value={avatarUrl} onChange={e => setAvatarUrl(e.target.value)} onKeyDown={e => e.stopPropagation()} placeholder="https://..." />
+              </div>
+              <div>
+                <div className="gu-lbl">О себе (видно другим игрокам)</div>
+                <textarea className="gu-inp" rows={3} value={bio} onChange={e => setBio(e.target.value)} onKeyDown={e => e.stopPropagation()} placeholder="Опишите свой стиль вождения" />
+              </div>
+              <div>
+                <button type="button" className="gu-btn gu-btn-p" onClick={handleSaveProfile} disabled={saving}>
+                  {saving ? <Loader2 width={18} height={18} className="gu-spin" /> : <Save width={18} height={18} />}Сохранить профиль
                 </button>
               </div>
+            </div>
+          </>
+        )}
 
-              {/* TAB 1: PROFILE EDIT (Bento Grid) */}
-              {activeTab === 'profile' && (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 animate-in fade-in duration-150">
-                  
-                  {/* Card A: Game Statistics (Bento Cell) */}
-                  <div className="bg-slate-950/70 p-5 rounded-2xl border border-slate-800 flex flex-col justify-between min-h-[160px]">
-                    <div>
-                      <div className="text-xs font-extrabold text-slate-300 uppercase tracking-wider flex items-center gap-1.5 mb-3">
-                        <Activity className="w-4 h-4 text-emerald-400 animate-pulse" /> Игровая статистика
-                      </div>
-                      {profile?.stats ? (
-                        <div className="grid grid-cols-3 gap-2 text-center text-xs">
-                          <div className="bg-slate-900/60 p-2.5 rounded-xl border border-slate-800">
-                            <div className="text-[9px] font-bold text-slate-500 uppercase">Сессий</div>
-                            <div className="font-extrabold text-white mt-1 text-sm">{profile.stats.gamesPlayed || 0}</div>
-                          </div>
-                          <div className="bg-slate-900/60 p-2.5 rounded-xl border border-slate-800">
-                            <div className="text-[9px] font-bold text-slate-500 uppercase">Пройдено</div>
-                            <div className="font-extrabold text-emerald-400 mt-1 text-sm">{(profile.stats.distanceDriven || 0).toFixed(1)} км</div>
-                          </div>
-                          <div className="bg-slate-900/60 p-2.5 rounded-xl border border-slate-800">
-                            <div className="text-[9px] font-bold text-slate-500 uppercase">Доход</div>
-                            <div className="font-extrabold text-amber-400 mt-1 text-sm">${profile.stats.moneyEarned || 0}</div>
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="text-xs text-slate-500 italic py-4 text-center">
-                          Статистика пуста. Совершите свои первые заезды!
-                        </div>
-                      )}
-                    </div>
-                    <div className="text-[10px] text-slate-500 mt-3 border-t border-slate-800/60 pt-2 font-medium">
-                      Данные хранятся в облачной коллекции <code className="text-emerald-400 font-mono font-bold">user_profiles</code>.
-                    </div>
-                  </div>
-
-                  {/* Card B: Profile Names (Bento Cell) */}
-                  <div className="bg-slate-950/70 p-5 rounded-2xl border border-slate-800 flex flex-col gap-3 justify-between">
-                    <div>
-                      <div className="text-xs font-extrabold text-slate-300 uppercase tracking-wider flex items-center gap-1.5 mb-1">
-                        <Edit3 className="w-4 h-4 text-sky-400" /> Идентификация водителя
-                      </div>
-                      <div className="grid grid-cols-1 gap-2.5">
-                        <div>
-                          <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Отображаемое имя</label>
-                          <input
-                            type="text"
-                            value={displayName}
-                            onChange={(e) => setDisplayName(e.target.value)}
-                            placeholder="Например: Александр"
-                            className="w-full bg-slate-900 border border-slate-700/80 rounded-xl px-3.5 py-1.5 text-white text-xs font-semibold focus:outline-none focus:border-emerald-500 transition-colors"
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Игровой позывной (Nickname)</label>
-                          <input
-                            type="text"
-                            value={nickname}
-                            onChange={(e) => setNickname(e.target.value)}
-                            placeholder="Например: DriftKing_99"
-                            className="w-full bg-slate-900 border border-slate-700/80 rounded-xl px-3.5 py-1.5 text-white text-xs font-semibold focus:outline-none focus:border-emerald-500 transition-colors"
-                          />
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Card C: Avatar Personalization (Bento Cell) */}
-                  <div className="bg-slate-950/70 p-5 rounded-2xl border border-slate-800 flex flex-col justify-between min-h-[140px]">
-                    <div>
-                      <div className="text-xs font-extrabold text-slate-300 uppercase tracking-wider flex items-center gap-1.5 mb-2">
-                        <Sparkles className="w-4 h-4 text-amber-400" /> Аватар
-                      </div>
-                      <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">URL адрес изображения</label>
-                      <input
-                        type="url"
-                        value={avatarUrl}
-                        onChange={(e) => setAvatarUrl(e.target.value)}
-                        placeholder="https://images.unsplash.com/photo-..."
-                        className="w-full bg-slate-900 border border-slate-700/80 rounded-xl px-3.5 py-1.5 text-white text-xs font-mono focus:outline-none focus:border-emerald-500 transition-colors"
-                      />
-                    </div>
-                    <span className="text-[10px] text-slate-500 italic font-medium leading-normal mt-2 block">
-                      Рекомендуется вставлять ссылку на квадратный аватар.
-                    </span>
-                  </div>
-
-                  {/* Card D: Bio & Biography (Bento Cell) */}
-                  <div className="bg-slate-950/70 p-5 rounded-2xl border border-slate-800 flex flex-col justify-between min-h-[140px]">
-                    <div>
-                      <div className="text-xs font-extrabold text-slate-300 uppercase tracking-wider flex items-center gap-1.5 mb-2">
-                        <Award className="w-4 h-4 text-purple-400" /> Биография / Личный статус
-                      </div>
-                      <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Параграф о себе</label>
-                      <textarea
-                        value={bio}
-                        onChange={(e) => setBio(e.target.value)}
-                        rows={2}
-                        placeholder="Опишите ваши успехи или повадки за рулем..."
-                        className="w-full bg-slate-900 border border-slate-700/80 rounded-xl px-3.5 py-1.5 text-white text-xs font-medium focus:outline-none focus:border-emerald-500 resize-none transition-colors"
-                      />
-                    </div>
-                    <span className="text-[10px] text-slate-500 font-medium leading-normal mt-2 block">
-                      Информация доступна другим пользователям в списке комнат.
-                    </span>
-                  </div>
-
-                  {/* Centered Save Action Button */}
-                  <div className="md:col-span-2 pt-2">
-                    <button
-                      onClick={handleSaveProfile}
-                      disabled={saving}
-                      className="w-full py-3 bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-xs uppercase tracking-wider rounded-xl shadow-lg shadow-emerald-600/20 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
-                    >
-                      {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                      Сохранить изменения профиля
-                    </button>
-                  </div>
-
+        {/* ======================= CLOUD SAVES ======================= */}
+        {currentUser && activeTab === 'cloud_saves' && (
+          <div className="gu-grid gu-g2" style={{ alignItems: 'stretch' }}>
+            <div className="gu-panel gu-pad" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              <div className="gu-row2"><Upload width={18} height={18} color="#e0ab45" /><span className="gu-grp">Записать состояние</span></div>
+              <div className="gu-mut" style={{ fontSize: 14, lineHeight: 1.45 }}>Позиция, баланс, инвентарь и здоровье сохраняются в облачный аккаунт.</div>
+              {currentPlayerData && (
+                <div className="gu-stat" style={{ gap: 8, fontSize: 14 }}>
+                  <div className="gu-row2" style={{ gap: 10 }}><Coins width={16} height={16} color="#e0ab45" />Баланс: ${currentPlayerData.money}</div>
+                  <div className="gu-row2" style={{ gap: 10 }}><Heart width={16} height={16} color="#e0ab45" />Здоровье: {Math.round(currentPlayerData.health)}%</div>
+                  <div className="gu-row2" style={{ gap: 10 }}><Package width={16} height={16} color="#e0ab45" />Предметов: {currentPlayerData.inventory?.length || 0}</div>
                 </div>
               )}
+              <div style={{ marginTop: 'auto' }}>
+                <button type="button" className="gu-btn gu-btn-p gu-btn-block" onClick={handleSaveProgressToCloud} disabled={saving || !currentPlayerData}>
+                  {saving ? <Loader2 width={18} height={18} className="gu-spin" /> : <Upload width={18} height={18} />}Записать в облако
+                </button>
+              </div>
+            </div>
 
-              {/* TAB 3: CLOUD SAVES (Bento Grid) */}
-              {activeTab === 'cloud_saves' && (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 animate-in fade-in duration-150">
-                  
-                  {/* Card A: Save Current State (Bento Cell) */}
-                  <div className="p-5 bg-slate-950/70 border border-slate-800 rounded-2xl flex flex-col justify-between min-h-[220px]">
-                    <div>
-                      <div className="flex items-center gap-2 text-xs font-extrabold text-white uppercase tracking-wider mb-2">
-                        <Upload className="w-4 h-4 text-emerald-400" /> Записать состояние
-                      </div>
-                      <p className="text-[11px] text-slate-400 leading-relaxed mb-3">
-                        Записать текущую позицию, баланс, инвентарь и состояние здоровья напрямую в коллекцию Firestore <code className="text-emerald-400">player_saves</code>.
-                      </p>
-                    </div>
-
-                    {currentPlayerData && (
-                      <div className="text-[11px] text-slate-300 bg-slate-900 p-3 rounded-xl border border-slate-800 font-mono space-y-1 mb-4">
-                        <div className="flex items-center gap-1.5"><Coins className="w-3.5 h-3.5 text-amber-400 shrink-0" /> <span>Баланс: ${currentPlayerData.money}</span></div>
-                        <div className="flex items-center gap-1.5"><Heart className="w-3.5 h-3.5 text-rose-400 shrink-0" /> <span>Здоровье: {Math.round(currentPlayerData.health)}%</span></div>
-                        <div className="flex items-center gap-1.5"><Package className="w-3.5 h-3.5 text-slate-400 shrink-0" /> <span>Предметов в инвентаре: {currentPlayerData.inventory?.length || 0}</span></div>
-                      </div>
-                    )}
-
-                    <button
-                      onClick={handleSaveProgressToCloud}
-                      disabled={saving || !currentPlayerData}
-                      className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs uppercase tracking-wider rounded-xl shadow-lg transition-all flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
-                    >
-                      {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
-                      Записать в Firestore
-                    </button>
-                  </div>
-
-                  {/* Card B: Cloud Save Info & Load (Bento Cell) */}
-                  <div className="p-5 bg-slate-950/70 border border-slate-800 rounded-2xl flex flex-col justify-between min-h-[220px]">
-                    <div>
-                      <div className="flex items-center gap-2 text-xs font-extrabold text-white uppercase tracking-wider mb-2">
-                        <Download className="w-4 h-4 text-sky-400" /> Загрузить состояние
-                      </div>
-                      <p className="text-[11px] text-slate-400 leading-relaxed mb-3">
-                        Загрузить и активировать ранее сохраненную сессию игрока из вашего облачного аккаунта.
-                      </p>
-                    </div>
-
-                    <div className="mb-4">
-                      {loadingSave ? (
-                        <div className="py-6 flex items-center justify-center text-xs text-slate-400 gap-2">
-                          <Loader2 className="w-4 h-4 animate-spin text-sky-400" /> Чтение Firestore...
-                        </div>
-                      ) : cloudSave ? (
-                        <div className="text-[11px] text-slate-300 bg-slate-900 p-3 rounded-xl border border-slate-800 font-mono space-y-1">
-                          <div className="text-emerald-400 font-bold flex items-center gap-1">
-                            <Check className="w-3.5 h-3.5" /> Сейв обнаружен
-                          </div>
-                          <div className="flex items-center gap-1.5"><Coins className="w-3.5 h-3.5 text-amber-400 shrink-0" /> <span>Деньги: ${cloudSave.money}</span></div>
-                          <div className="flex items-center gap-1.5"><Heart className="w-3.5 h-3.5 text-rose-400 shrink-0" /> <span>Здоровье: {Math.round(cloudSave.health)}%</span></div>
-                          <div className="text-[10px] text-slate-500">
-                            Координаты: ({Math.round(cloudSave.position.x)}, {Math.round(cloudSave.position.y)})
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="py-6 text-center text-xs text-slate-500 italic bg-slate-900 p-3 rounded-xl border border-slate-800">
-                          Облачных сохранений в Firestore пока нет.
-                        </div>
-                      )}
-                    </div>
-
-                    <button
-                      onClick={handleApplyCloudSave}
-                      disabled={!cloudSave}
-                      className="w-full py-2.5 bg-sky-600 hover:bg-sky-500 text-white font-bold text-xs uppercase tracking-wider rounded-xl shadow-lg transition-all flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
-                    >
-                      <Download className="w-4 h-4" />
-                      Применить Облачный Сейв
-                    </button>
-                  </div>
-
+            <div className="gu-panel gu-pad" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              <div className="gu-row2"><Download width={18} height={18} color="#e0ab45" /><span className="gu-grp">Загрузить состояние</span></div>
+              <div className="gu-mut" style={{ fontSize: 14, lineHeight: 1.45 }}>Активирует ранее сохранённую сессию из вашего облачного аккаунта.</div>
+              {loadingSave ? (
+                <div className="gu-stat gu-row2" style={{ justifyContent: 'center', flexDirection: 'row' }}><Loader2 width={18} height={18} className="gu-spin" />Чтение облака</div>
+              ) : cloudSave ? (
+                <div className="gu-stat" style={{ gap: 8, fontSize: 14 }}>
+                  <div className="gu-row2" style={{ gap: 10, color: '#9ac985', fontWeight: 600 }}><Check width={16} height={16} />Сохранение найдено</div>
+                  <div className="gu-row2" style={{ gap: 10 }}><Coins width={16} height={16} color="#e0ab45" />Деньги: ${cloudSave.money}</div>
+                  <div className="gu-row2" style={{ gap: 10 }}><Heart width={16} height={16} color="#e0ab45" />Здоровье: {Math.round(cloudSave.health)}%</div>
+                  <div className="gu-mut" style={{ fontSize: 12 }}>Координаты: {Math.round(cloudSave.position.x)}, {Math.round(cloudSave.position.y)}</div>
                 </div>
+              ) : (
+                <div className="gu-stat gu-mut" style={{ fontSize: 14 }}>Облачных сохранений пока нет.</div>
               )}
-            </>
-          )}
-
-        </div>
-
-        {/* Footer */}
-        <div className="px-6 py-4 border-t border-slate-800 bg-slate-950/80 flex items-center justify-between text-xs text-slate-400">
-          <span className="font-mono text-emerald-400 flex items-center gap-1.5">
-            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-            <span>Firestore DB: Connected</span>
-          </span>
-          <button
-            onClick={() => {
-              sound.playButtonPress();
-              onClose();
-            }}
-            className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-xl font-semibold transition-colors cursor-pointer"
-          >
-            Закрыть
-          </button>
-        </div>
-
+              <div style={{ marginTop: 'auto' }}>
+                <button type="button" className="gu-btn gu-btn-s gu-btn-block" onClick={handleApplyCloudSave} disabled={!cloudSave}>
+                  <Download width={18} height={18} />Применить сохранение
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
-    </div>
+    </ModalShell>
   );
 };

@@ -25,10 +25,10 @@ import {
   VolumeX,
   Smartphone,
   Sliders,
-  Clock,
-  Gauge
+  Clock
 } from 'lucide-react';
 import { WeatherType } from '../types';
+import { TimeScalePicker, DEFAULT_SLOW_SCALE } from './TimeScaleControl';
 import { GameCalendarState, formatGameDate, formatGameTime, getRussianSeasonName } from '../calendarSystem';
 
 export interface GameHudMenuProps {
@@ -195,31 +195,12 @@ export const GameHudMenu: React.FC<GameHudMenuProps> = (p) => {
       {/* ---------------- SIMULATION SPEED ---------------- */}
       {p.onSetTimeScale && (
         <>
-          <div className="hud-sec">Скорость симуляции [T]</div>
-          <div className="hud-presets">
-            {[
-              { s: 1.0, label: '1.0x', desc: 'Реалтайм' },
-              { s: 0.5, label: '0.5x', desc: '1/2 скор' },
-              { s: 0.2, label: '0.2x', desc: '1/5 скор' },
-              { s: 0.05, label: '0.05x', desc: 'Слоу-мо' }
-            ].map(({ s, label, desc }) => {
-              const active = (p.timeScale ?? 1.0) === s;
-              return (
-                <button
-                  key={s}
-                  type="button"
-                  className={'hud-btn hud-preset' + (active ? ' on' : '')}
-                  onClick={() => p.onSetTimeScale!(s)}
-                  aria-pressed={active}
-                  title={`Скорость ${label} (${desc})`}
-                >
-                  <Gauge className="w-3.5 h-3.5" />
-                  <span className="font-bold text-[11px]">{label}</span>
-                  <span className="text-[9px] text-[#8b929e] tracking-tight">{desc}</span>
-                </button>
-              );
-            })}
-          </div>
+          <div className="hud-sec">Замедление времени [T]</div>
+          <TimeScalePicker
+            value={p.timeScale ?? 1}
+            onChange={p.onSetTimeScale}
+            onToggle={() => p.onSetTimeScale!((p.timeScale ?? 1) < 1 ? 1 : DEFAULT_SLOW_SCALE)}
+          />
         </>
       )}
 

@@ -102,6 +102,7 @@ import { LandscapeGuard } from './components/LandscapeGuard';
 import { MobileTouchControls } from './components/MobileTouchControls';
 import { MainMenu } from './components/MainMenu';
 import { GameHudMenu } from './components/GameHudMenu';
+import { TimeScaleButton, SlowMotionIndicator, DEFAULT_SLOW_SCALE } from './components/TimeScaleControl';
 import { PauseMenu } from './components/PauseMenu';
 import { PlayerNeedsHUD } from './components/PlayerNeedsHUD';
 import { InventoryModal } from './components/InventoryModal';
@@ -195,7 +196,6 @@ import {
   Eye, 
   Flame,
   Fuel,
-  Gauge, 
   Grid,
   Heart,
   HeartPulse,
@@ -341,6 +341,10 @@ export default function App() {
   const [timeScale, setTimeScale] = useState<number>(1.0);
   const timeScaleRef = useRef<number>(1.0);
   timeScaleRef.current = timeScale;
+  const smoothTimeScaleRef = useRef<number>(1.0);
+  const lastSlowScaleRef = useRef<number>(DEFAULT_SLOW_SCALE);
+  if (timeScale < 1.0) lastSlowScaleRef.current = timeScale;
+  const toggleSlowMotion = () => setTimeScale((prev) => (prev < 1.0 ? 1.0 : lastSlowScaleRef.current));
   const [calendar, setCalendar] = useState<GameCalendarState>(() => createInitialCalendarState(2026, 10, 8, 10.0));
   const [timeHour, setTimeHour] = useState<number>(10.0); // 0 to 24 hours
   const [isTimeAutoCycling, setIsTimeAutoCycling] = useState<boolean>(true);
@@ -1775,12 +1779,7 @@ export default function App() {
       }
 
       if (code === 'KeyT') {
-        setTimeScale((prev) => {
-          if (prev >= 1.0) return 0.5;
-          if (prev >= 0.5) return 0.2;
-          if (prev >= 0.2) return 0.05;
-          return 1.0;
-        });
+        setTimeScale((prev) => (prev < 1.0 ? 1.0 : lastSlowScaleRef.current));
         e.preventDefault();
         return;
       }
@@ -2259,7 +2258,11 @@ export default function App() {
       const frameStart = performance.now();
       const rawDt = Math.min((now - lastTime) / 1000, 0.05);
       lastTime = now;
-      const dt = rawDt * timeScaleRef.current;
+      // Ease toward the chosen speed instead of snapping, so slow motion ramps in and out
+      const targetScale = timeScaleRef.current;
+      const smoothScale = smoothTimeScaleRef.current + (targetScale - smoothTimeScaleRef.current) * (1 - Math.exp(-rawDt / 0.12));
+      smoothTimeScaleRef.current = Math.abs(targetScale - smoothScale) < 0.003 ? targetScale : smoothScale;
+      const dt = rawDt * smoothTimeScaleRef.current;
 
       // FPS calculation
       frameCount++;
@@ -5934,23 +5937,7 @@ export default function App() {
             <MenuIcon className="w-5 h-5" />
             <span>Меню</span>
           </button>
-          <button
-            id="hud-sim-speed-btn"
-            type="button"
-            className={`hud-btn ${timeScale < 1.0 ? 'on' : ''}`}
-            onClick={() => {
-              setTimeScale((prev) => {
-                if (prev >= 1.0) return 0.5;
-                if (prev >= 0.5) return 0.2;
-                if (prev >= 0.2) return 0.05;
-                return 1.0;
-              });
-            }}
-            title="Скорость симуляции [Клавиша T]"
-            aria-label="Скорость симуляции">
-            <Gauge className="w-4 h-4 text-[#c9922b]" />
-            <span className="font-mono font-bold tracking-tight">{timeScale === 1.0 ? '1.0x' : `${timeScale}x`}</span>
-          </button>
+          <TimeScaleButton value={timeScale} onToggle={toggleSlowMotion} />
         </div>
 
         {isQuickMenuOpen && (
@@ -6022,18 +6009,8 @@ export default function App() {
         )}
       </div>
 
-      {/* TOP-CENTER: CINEMATIC SLOW-MOTION INDICATOR (BeamNG Style) */}
-      {timeScale < 1.0 && !isMainMenuOpen && (
-        <div className="fixed top-3 left-1/2 -translate-x-1/2 z-40 pointer-events-none flex items-center gap-2.5 px-4 py-1.5 bg-[#101216]/92 border border-[#c68a35]/60 rounded-lg shadow-2xl backdrop-blur-md animate-in fade-in slide-in-from-top-2 duration-150 select-none">
-          <Gauge className="w-4 h-4 text-[#c68a35] animate-spin" style={{ animationDuration: '4s' }} />
-          <span className="font-sans font-black text-xs uppercase tracking-wider text-white">
-            ЗАМЕДЛЕНИЕ ВРЕМЕНИ: <span className="text-[#f0c264] font-mono">{timeScale}x ({Math.round(timeScale * 100)}%)</span>
-          </span>
-          <span className="text-[10px] font-mono text-[#8b929e] tracking-widest uppercase pl-2 border-l border-white/10">
-            КЛ. [T] — СБРОС
-          </span>
-        </div>
-      )}
+      {/* Slow-motion cue: small readout + soft vignette */}
+      {timeScale < 1.0 && !isMainMenuOpen && !isPauseMenuOpen && <SlowMotionIndicator value={timeScale} />}
 
       {/* TOP-RIGHT: GPS NAVIGATOR MINIMAP */}
       <div id="hud-top-right"className="absolute top-3 right-3 sm:top-4 sm:right-4 z-40 flex flex-col items-end gap-1.5 pointer-events-auto select-none">

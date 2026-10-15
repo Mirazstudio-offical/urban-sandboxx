@@ -1,0 +1,388 @@
+/* ==========================================================================
+   Shared in-game UI kit. Same visual language as the main menu (mainMenu.css):
+   amber accent, Barlow / Barlow Condensed, dark glass panels, left-accent rows.
+   Every class is prefixed with "gu-" so it cannot clash with Tailwind or the HUD.
+   ========================================================================== */
+
+:root {
+  --gu-amber: #c9922b;
+  --gu-amber-hi: #e0ab45;
+  --gu-amber-soft: #f0c264;
+  --gu-ink: #e9e6df;
+  --gu-ink-dim: #cfcbc1;
+  --gu-mut: #a29e93;
+  --gu-mut-2: #8f8b81;
+  --gu-line: rgba(255, 255, 255, 0.09);
+  --gu-line-2: rgba(255, 255, 255, 0.14);
+  --gu-panel: rgba(20, 20, 22, 0.9);
+  --gu-field: rgba(255, 255, 255, 0.06);
+  --gu-good: #9ac985;
+  --gu-bad: #d9745a;
+  --gu-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+/* ---------- scene / backdrop ---------- */
+.gu-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: max(12px, env(safe-area-inset-top, 0px)) max(12px, env(safe-area-inset-right, 0px)) max(12px, env(safe-area-inset-bottom, 0px)) max(12px, env(safe-area-inset-left, 0px));
+  background:
+    radial-gradient(900px 520px at 70% 90%, rgba(201, 146, 43, 0.2), transparent 62%),
+    linear-gradient(180deg, rgba(23, 20, 15, 0.9), rgba(18, 15, 11, 0.94));
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  color: var(--gu-ink);
+  font-family: 'Barlow', system-ui, sans-serif;
+  font-size: 15px;
+  user-select: none;
+  -webkit-user-select: none;
+  animation: gu-fade 0.22s ease both;
+}
+.gu-backdrop *,
+.gu-backdrop *::before,
+.gu-backdrop *::after { box-sizing: border-box; }
+.gu-backdrop button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; text-align: left; }
+.gu-backdrop button:disabled { opacity: 0.45; pointer-events: none; }
+.gu-backdrop input,
+.gu-backdrop select,
+.gu-backdrop textarea { font: inherit; color: inherit; user-select: text; -webkit-user-select: text; }
+.gu-backdrop input::placeholder,
+.gu-backdrop textarea::placeholder { color: var(--gu-mut-2); }
+
+@keyframes gu-fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes gu-rise { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: none; } }
+@keyframes gu-slide { from { opacity: 0; transform: translateX(-26px); } to { opacity: 1; transform: none; } }
+@keyframes gu-sweep { 0% { opacity: 1; transform: translateX(-100%); } 100% { opacity: 1; transform: translateX(100%); } }
+@keyframes gu-spin { to { transform: rotate(360deg); } }
+
+/* ---------- modal shell ---------- */
+.gu-modal {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: var(--gu-w, 880px);
+  max-height: min(92vh, 860px);
+  background: var(--gu-panel);
+  border: 1px solid var(--gu-line);
+  border-radius: 14px;
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.6);
+  overflow: hidden;
+  animation: gu-rise 0.42s var(--gu-ease) both;
+}
+.gu-modal.gu-tall { height: min(92vh, 860px); }
+.gu-wipe {
+  position: absolute; left: 0; top: 0; width: 100%; height: 3px; z-index: 5; pointer-events: none; opacity: 0;
+  background: linear-gradient(90deg, transparent, var(--gu-amber-hi) 50%, transparent);
+}
+.gu-wipe.on { animation: gu-sweep 0.3s linear; }
+
+.gu-head {
+  display: flex; align-items: center; justify-content: space-between; gap: 16px;
+  padding: 18px 22px 16px; border-bottom: 1px solid var(--gu-line); flex: none;
+}
+.gu-head-l { display: flex; align-items: center; gap: 14px; min-width: 0; }
+.gu-mark { flex: none; }
+.gu-title {
+  font-family: 'Barlow Condensed', 'Arial Narrow', sans-serif; text-transform: uppercase; letter-spacing: 0.08em;
+  font-size: 26px; font-weight: 700; line-height: 1.05; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.gu-sub { margin-top: 3px; font-size: 13px; color: var(--gu-mut); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.gu-head-r { display: flex; align-items: center; gap: 10px; flex: none; }
+
+.gu-chip {
+  display: inline-flex; align-items: center; justify-content: center; gap: 10px; height: 44px; padding: 0 16px; border-radius: 10px;
+  background: rgba(22, 22, 24, 0.7); border: 1px solid var(--gu-line);
+  transition: filter 0.15s, border-color 0.15s;
+}
+.gu-chip:hover { filter: brightness(1.2); border-color: rgba(201, 146, 43, 0.5); }
+.gu-chip.gu-sq { width: 44px; padding: 0; }
+
+.gu-body { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; padding: 20px 22px; scrollbar-width: thin; scrollbar-color: #3a352b transparent; }
+.gu-body::-webkit-scrollbar { width: 5px; }
+.gu-body::-webkit-scrollbar-thumb { background: #3a352b; border-radius: 3px; }
+.gu-body > * + * { margin-top: 16px; }
+.gu-stagger > * { animation: gu-rise 0.5s var(--gu-ease) both; }
+.gu-stagger > *:nth-child(1) { animation-delay: 0.04s; }
+.gu-stagger > *:nth-child(2) { animation-delay: 0.08s; }
+.gu-stagger > *:nth-child(3) { animation-delay: 0.12s; }
+.gu-stagger > *:nth-child(4) { animation-delay: 0.16s; }
+.gu-stagger > *:nth-child(5) { animation-delay: 0.2s; }
+.gu-stagger > *:nth-child(6) { animation-delay: 0.24s; }
+.gu-stagger > *:nth-child(n + 7) { animation-delay: 0.28s; }
+
+.gu-foot {
+  display: flex; align-items: center; justify-content: space-between; gap: 14px; flex: none;
+  padding: 14px 22px; border-top: 1px solid var(--gu-line); font-size: 13px; color: var(--gu-mut);
+}
+.gu-foot-l { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; min-width: 0; }
+.gu-foot-r { display: flex; align-items: center; gap: 10px; flex: none; }
+
+.gu-key {
+  display: inline-flex; align-items: center; justify-content: center; min-width: 28px; height: 26px; padding: 0 8px; margin-right: 8px;
+  border-radius: 6px; border: 1px solid rgba(255, 255, 255, 0.22); font-size: 12px; font-weight: 600; color: var(--gu-ink);
+}
+.gu-key + .gu-key { margin-left: 4px; }
+.gu-hint-gap { margin-left: 22px; }
+
+/* ---------- typography helpers ---------- */
+.gu-cn { font-family: 'Barlow Condensed', 'Arial Narrow', sans-serif; text-transform: uppercase; letter-spacing: 0.08em; }
+.gu-mut { color: var(--gu-mut); }
+.gu-grp { font-family: 'Barlow Condensed', 'Arial Narrow', sans-serif; text-transform: uppercase; letter-spacing: 0.16em; font-size: 14px; font-weight: 600; color: var(--gu-amber-hi); }
+.gu-lbl { font-size: 12px; color: var(--gu-mut); margin-bottom: 8px; }
+.gu-num { font-family: 'Barlow Condensed', sans-serif; font-weight: 700; color: var(--gu-amber-hi); line-height: 1; font-variant-numeric: tabular-nums; }
+
+/* ---------- surfaces ---------- */
+.gu-panel { background: rgba(20, 20, 22, 0.82); border: 1px solid var(--gu-line); border-radius: 14px; }
+.gu-panel.gu-pad { padding: 18px 20px; }
+.gu-row2 { display: flex; align-items: center; gap: 12px; }
+.gu-wrap { flex-wrap: wrap; }
+.gu-grow { flex: 1; min-width: 0; }
+.gu-grid { display: grid; gap: 12px; }
+.gu-g2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.gu-g3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.gu-g4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.gu-g6 { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+.gu-g7 { grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; }
+
+/* ---------- setting rows (label left, control right) ---------- */
+.gu-set {
+  display: flex; align-items: center; justify-content: space-between; gap: 18px; min-height: 58px; padding: 10px 20px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06); transition: background 0.15s;
+}
+.gu-set:first-child { border-top: 0; }
+.gu-set:hover { background: rgba(255, 255, 255, 0.04); }
+.gu-set-t { font-weight: 600; font-size: 16px; color: var(--gu-ink); }
+.gu-set-d { margin-top: 2px; font-size: 13px; color: var(--gu-mut); }
+.gu-set-i { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 38px; height: 38px; border-radius: 10px; background: rgba(255, 255, 255, 0.05); border: 1px solid var(--gu-line); color: var(--gu-mut); }
+.gu-set-i.on { background: rgba(201, 146, 43, 0.16); border-color: rgba(201, 146, 43, 0.55); color: var(--gu-amber-soft); }
+.gu-set-main { display: flex; align-items: center; gap: 14px; min-width: 0; }
+
+/* ---------- buttons ---------- */
+.gu-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: 46px; padding: 0 24px; border-radius: 10px;
+  font-weight: 600; font-size: 15px; white-space: nowrap; transition: filter 0.15s, transform 0.15s, background 0.15s, border-color 0.15s;
+}
+.gu-btn:hover { filter: brightness(1.15); transform: translateY(-1px); }
+.gu-btn:active { transform: none; }
+.gu-btn-p { background: var(--gu-amber); color: #1a1409; font-weight: 700; font-size: 16px; }
+.gu-btn-s { background: rgba(255, 255, 255, 0.07); border: 1px solid var(--gu-line-2); }
+.gu-btn-d { background: rgba(217, 116, 90, 0.12); border: 1px solid rgba(217, 116, 90, 0.5); color: #efa690; }
+.gu-btn-sm { height: 36px; padding: 0 14px; font-size: 14px; border-radius: 8px; }
+.gu-btn-block { width: 100%; }
+.gu-btn-sq { width: 36px; padding: 0; }
+
+/* ---------- pills / segmented / tabs ---------- */
+.gu-pill {
+  display: inline-flex; align-items: center; gap: 8px; height: 34px; padding: 0 16px; border-radius: 17px; font-size: 14px;
+  background: rgba(255, 255, 255, 0.06); border: 1px solid rgba(255, 255, 255, 0.1); transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+.gu-pill:not(.on):hover { background: rgba(255, 255, 255, 0.12); }
+.gu-pill.on { background: rgba(201, 146, 43, 0.2); border-color: rgba(201, 146, 43, 0.6); color: var(--gu-amber-soft); }
+.gu-pills { display: flex; flex-wrap: wrap; gap: 8px; }
+
+.gu-seg { display: inline-flex; max-width: 100%; border-radius: 10px; overflow: hidden; border: 1px solid var(--gu-line-2); }
+.gu-seg > button {
+  display: flex; align-items: center; justify-content: center; gap: 8px; height: 40px; padding: 0 18px; font-size: 14px; font-weight: 600; white-space: nowrap;
+  background: rgba(255, 255, 255, 0.04); border-left: 1px solid rgba(255, 255, 255, 0.1); transition: background 0.2s, color 0.2s;
+}
+.gu-seg > button:first-child { border-left: 0; }
+.gu-seg > button:not(.on):hover { background: rgba(255, 255, 255, 0.09); }
+.gu-seg > button.on { background: var(--gu-amber); color: #1a1409; }
+.gu-seg.gu-full { display: flex; }
+.gu-seg.gu-full > button { flex: 1; }
+
+.gu-tabs { display: flex; align-items: flex-end; gap: 2px; border-bottom: 1px solid rgba(255, 255, 255, 0.1); overflow-x: auto; scrollbar-width: none; flex: none; padding: 0 22px; }
+.gu-tabs::-webkit-scrollbar { display: none; }
+.gu-tab {
+  position: relative; display: inline-flex; align-items: center; gap: 8px; height: 46px; padding: 0 20px; font-size: 18px; font-weight: 600; color: var(--gu-mut);
+  border-bottom: 3px solid transparent; white-space: nowrap; transition: color 0.15s;
+}
+.gu-tab:hover { color: #fff; }
+.gu-tab.on { color: #fff; border-bottom-color: var(--gu-amber); }
+.gu-badge-n { display: inline-flex; align-items: center; justify-content: center; min-width: 20px; height: 20px; padding: 0 6px; border-radius: 10px; background: var(--gu-amber); color: #1a1409; font-size: 12px; font-weight: 700; }
+
+/* ---------- left nav list (pause menu, account) ---------- */
+.gu-nav { display: flex; flex-direction: column; gap: 4px; }
+.gu-nav-i {
+  display: flex; align-items: center; gap: 16px; width: 100%; height: 56px; padding: 0 22px; border-left: 3px solid transparent;
+  font-family: 'Barlow Condensed', 'Arial Narrow', sans-serif; text-transform: uppercase; letter-spacing: 0.08em; font-size: 24px; font-weight: 600; color: var(--gu-ink-dim);
+  transition: background 0.18s, border-color 0.18s, color 0.18s, padding 0.18s;
+  animation: gu-slide 0.5s var(--gu-ease) both;
+}
+.gu-nav-i:hover { background: rgba(255, 255, 255, 0.06); color: #fff; border-left-color: rgba(201, 146, 43, 0.8); padding-left: 30px; }
+.gu-nav-i.on { background: rgba(201, 146, 43, 0.16); border-left-color: var(--gu-amber); color: #fff; }
+.gu-nav-i.gu-big { height: 84px; flex-direction: column; align-items: flex-start; justify-content: center; gap: 2px; background: rgba(201, 146, 43, 0.16); border-left-color: var(--gu-amber); color: #fff; }
+.gu-nav-i.gu-danger:hover { border-left-color: var(--gu-bad); color: #efa690; }
+.gu-nav-i .gu-nav-d { font: 400 14px 'Barlow', sans-serif; text-transform: none; letter-spacing: 0; color: var(--gu-mut); }
+.gu-nav-i .gu-nav-k { margin-left: auto; font: 600 12px 'Barlow', sans-serif; letter-spacing: 0.02em; text-transform: none; color: var(--gu-mut); border: 1px solid rgba(255, 255, 255, 0.2); border-radius: 6px; padding: 3px 8px; }
+.gu-nav-i:nth-child(1) { animation-delay: 0.04s; } .gu-nav-i:nth-child(2) { animation-delay: 0.08s; } .gu-nav-i:nth-child(3) { animation-delay: 0.12s; }
+.gu-nav-i:nth-child(4) { animation-delay: 0.16s; } .gu-nav-i:nth-child(5) { animation-delay: 0.2s; }  .gu-nav-i:nth-child(6) { animation-delay: 0.24s; }
+.gu-nav-i:nth-child(7) { animation-delay: 0.28s; } .gu-nav-i:nth-child(8) { animation-delay: 0.32s; }  .gu-nav-i:nth-child(n + 9) { animation-delay: 0.36s; }
+.gu-nav-sep { height: 1px; background: var(--gu-line); margin: 10px 22px; }
+
+/* ---------- cards (vehicles / props / items / servers) ---------- */
+.gu-card {
+  display: flex; flex-direction: column; justify-content: space-between; gap: 12px; padding: 14px; border-radius: 13px;
+  background: rgba(20, 20, 22, 0.86); border: 1px solid var(--gu-line); transition: transform 0.2s, border-color 0.2s, box-shadow 0.2s;
+}
+.gu-card:hover { transform: translateY(-3px); border-color: rgba(201, 146, 43, 0.6); }
+.gu-card.on { border-color: var(--gu-amber); box-shadow: 0 0 0 1px var(--gu-amber), 0 14px 40px rgba(201, 146, 43, 0.22); }
+.gu-card-h { display: flex; align-items: flex-start; gap: 12px; min-width: 0; }
+.gu-card-t { font-family: 'Barlow Condensed', sans-serif; text-transform: uppercase; letter-spacing: 0.06em; font-size: 19px; font-weight: 700; line-height: 1.1; color: #fff; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gu-card-d { margin-top: 4px; font-size: 13px; color: var(--gu-mut); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.gu-card-a { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 8px; padding-top: 12px; border-top: 1px solid rgba(255, 255, 255, 0.06); }
+.gu-ico { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: 10px; border: 1px solid rgba(201, 146, 43, 0.5); background: rgba(201, 146, 43, 0.1); color: var(--gu-amber); }
+.gu-ico.gu-off { border-color: var(--gu-line); background: rgba(255, 255, 255, 0.03); color: var(--gu-mut); }
+
+/* ---------- list rows (servers / friends / players) ---------- */
+.gu-list { border-radius: 14px; overflow: hidden; background: rgba(20, 20, 22, 0.82); border: 1px solid var(--gu-line); }
+.gu-rw {
+  display: flex; align-items: center; gap: 14px; min-height: 64px; padding: 8px 18px; border-left: 3px solid transparent;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05); transition: background 0.15s;
+}
+.gu-rw:last-child { border-bottom: 0; }
+.gu-rw:hover { background: rgba(255, 255, 255, 0.05); }
+.gu-rw.on { background: rgba(201, 146, 43, 0.15); border-left-color: var(--gu-amber); }
+.gu-rw-t { font-weight: 600; font-size: 16px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gu-rw-d { font-size: 13px; color: var(--gu-mut); margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gu-rw-end { margin-left: auto; display: flex; align-items: center; gap: 10px; flex: none; }
+
+.gu-av { flex: none; position: relative; display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: 50%; background: var(--gu-amber); color: #1a1409; font-weight: 700; font-size: 15px; overflow: visible; }
+.gu-av img { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; }
+.gu-av.gu-lg { width: 104px; height: 104px; background: linear-gradient(135deg, #e0ab45, #a8741c); font: 700 52px 'Barlow Condensed', sans-serif; }
+.gu-dot { width: 9px; height: 9px; border-radius: 50%; flex: none; background: #5d5a52; }
+.gu-dot.gu-on { background: #7fbf6a; }
+.gu-dot.gu-game { background: var(--gu-amber-hi); }
+.gu-av .gu-dot { position: absolute; right: -1px; bottom: -1px; width: 12px; height: 12px; border: 2px solid #17140f; }
+
+/* ---------- form controls ---------- */
+.gu-inp {
+  display: block; width: 100%; height: 48px; padding: 0 16px; border-radius: 10px; font-size: 16px; font-weight: 500; outline: 0;
+  background: var(--gu-field); border: 1.5px solid rgba(201, 146, 43, 0.4); transition: border-color 0.2s;
+}
+.gu-inp:focus { border-color: var(--gu-amber); }
+textarea.gu-inp { height: auto; padding: 12px 16px; resize: none; line-height: 1.4; }
+select.gu-inp { appearance: none; -webkit-appearance: none; cursor: pointer; padding-right: 38px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%23a29e93' stroke-width='2.4'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: right 14px center; }
+select.gu-inp option { background: #1a1815; color: var(--gu-ink); }
+.gu-inp.gu-mono { font-family: ui-monospace, 'SFMono-Regular', Menlo, monospace; font-size: 15px; }
+.gu-inp.gu-center { text-align: center; }
+.gu-search { position: relative; display: flex; align-items: center; height: 44px; padding: 0 14px; gap: 10px; border-radius: 10px; background: rgba(22, 22, 24, 0.7); border: 1px solid var(--gu-line); transition: border-color 0.15s; }
+.gu-search:focus-within { border-color: rgba(201, 146, 43, 0.6); }
+.gu-search input { flex: 1; min-width: 0; height: 100%; background: none; border: 0; outline: 0; font-size: 14px; }
+
+.gu-tg { position: relative; display: block; flex: none; width: 48px; height: 26px; border-radius: 13px; background: rgba(255, 255, 255, 0.14); transition: background 0.25s; }
+.gu-tg::after { content: ''; position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; border-radius: 50%; background: var(--gu-ink-dim); transition: left 0.25s cubic-bezier(0.3, 0.7, 0.2, 1), background 0.25s; }
+.gu-tg.on { background: var(--gu-amber); }
+.gu-tg.on::after { left: 25px; background: #1a1409; }
+
+/* range slider (native input, restyled) */
+.gu-range { -webkit-appearance: none; appearance: none; width: 100%; height: 6px; border-radius: 3px; background: rgba(255, 255, 255, 0.12); outline: 0; cursor: pointer; --p: 0%;
+  background-image: linear-gradient(var(--gu-amber), var(--gu-amber)); background-repeat: no-repeat; background-size: var(--p) 100%; }
+.gu-range::-webkit-slider-thumb { -webkit-appearance: none; width: 18px; height: 18px; border-radius: 50%; background: var(--gu-amber-soft); border: 3px solid #1a1409; }
+.gu-range::-moz-range-thumb { width: 12px; height: 12px; border-radius: 50%; background: var(--gu-amber-soft); border: 3px solid #1a1409; }
+.gu-range:focus-visible { box-shadow: 0 0 0 3px rgba(224, 171, 69, 0.35); }
+
+/* sky scrubber for time of day */
+.gu-sky { position: relative; height: 14px; border-radius: 7px; border: 1px solid rgba(255, 255, 255, 0.18); cursor: pointer; touch-action: none; outline: 0;
+  background: linear-gradient(90deg, #0b0f1a 0%, #1b2440 20%, #d9944f 28%, #7fb2e0 40%, #8ec3ee 55%, #e0a85a 72%, #7a4a5c 82%, #0b0f1a 100%); }
+.gu-sky::before { content: ''; position: absolute; left: -9px; right: -9px; top: -14px; bottom: -14px; }
+.gu-sky-k { position: absolute; top: -5px; width: 22px; height: 22px; margin-left: -11px; border-radius: 50%; background: var(--gu-amber-soft); border: 3px solid #1a1409; pointer-events: none; }
+.gu-sky:focus-visible .gu-sky-k { box-shadow: 0 0 0 3px rgba(224, 171, 69, 0.45); }
+.gu-ticks { display: flex; justify-content: space-between; margin-top: 8px; font-size: 12px; color: var(--gu-mut-2); font-variant-numeric: tabular-nums; }
+
+/* calendar day cells */
+.gu-day { height: 40px; display: flex; align-items: center; justify-content: center; border-radius: 8px; font-weight: 600; font-size: 15px; background: rgba(255, 255, 255, 0.04); border: 1px solid transparent; transition: background 0.15s, border-color 0.15s; font-variant-numeric: tabular-nums; }
+.gu-day:hover { background: rgba(255, 255, 255, 0.1); }
+.gu-day.on { background: var(--gu-amber); color: #1a1409; font-weight: 700; }
+.gu-dow { text-align: center; font-size: 12px; color: var(--gu-mut-2); padding: 4px 0; letter-spacing: 0.08em; }
+
+/* notices */
+.gu-note { padding: 12px 16px; border-radius: 10px; font-size: 14px; border: 1px solid var(--gu-line); background: rgba(255, 255, 255, 0.04); }
+.gu-note.gu-ok { color: var(--gu-good); border-color: rgba(154, 201, 133, 0.35); background: rgba(154, 201, 133, 0.07); }
+.gu-note.gu-err { color: #e8a58f; border-color: rgba(217, 116, 90, 0.4); background: rgba(217, 116, 90, 0.07); }
+.gu-note.gu-warn { color: var(--gu-amber-soft); border-color: rgba(224, 171, 69, 0.4); background: rgba(224, 171, 69, 0.07); }
+.gu-code { display: inline-block; padding: 4px 10px; border-radius: 6px; background: rgba(0, 0, 0, 0.45); border: 1px solid rgba(255, 255, 255, 0.12); font-family: ui-monospace, monospace; font-size: 13px; color: #fff; user-select: all; -webkit-user-select: all; }
+.gu-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; text-align: center; padding: 40px 24px; color: var(--gu-mut); }
+.gu-stat { display: flex; flex-direction: column; gap: 6px; padding: 14px 16px; border-radius: 10px; background: rgba(255, 255, 255, 0.04); border: 1px solid var(--gu-line); }
+.gu-stat .gu-num { font-size: 34px; }
+.gu-spin { animation: gu-spin 0.9s linear infinite; }
+
+/* ---------- creative: colour swatches ---------- */
+.gu-sw { width: 28px; height: 28px; border-radius: 50%; border: 2px solid rgba(255, 255, 255, 0.18); transition: transform 0.15s, border-color 0.15s; }
+.gu-sw:hover { transform: scale(1.1); }
+.gu-sw.on { border-color: var(--gu-amber-soft); box-shadow: 0 0 0 3px rgba(201, 146, 43, 0.4); transform: scale(1.1); }
+
+/* ---------- simulation speed control (HUD menu, indicator) ---------- */
+.gu-speed { display: flex; flex-direction: column; gap: 10px; }
+.gu-speed-top { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+.gu-speed-val { font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: 30px; line-height: 1; color: #fff; font-variant-numeric: tabular-nums; }
+.gu-speed-val.slow { color: var(--gu-amber-soft); }
+.gu-speed-name { font-size: 12px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--gu-mut); font-family: 'Barlow Condensed', sans-serif; font-weight: 600; }
+.gu-speed-track { position: relative; display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; border-radius: 8px; overflow: hidden; border: 1px solid rgba(255, 255, 255, 0.16); background: rgba(110, 110, 115, 0.2); }
+.gu-speed-track > button { height: 34px; display: flex; align-items: center; justify-content: center; font: 600 13px 'Barlow Condensed', sans-serif; letter-spacing: 0.06em; color: #cfcbc1; border-left: 1px solid rgba(255, 255, 255, 0.1); transition: background 0.15s, color 0.15s; -webkit-tap-highlight-color: transparent; }
+.gu-speed-track > button:first-child { border-left: 0; }
+.gu-speed-track > button:hover { background: rgba(255, 255, 255, 0.1); }
+.gu-speed-track > button.on { background: rgba(201, 146, 43, 0.35); color: #f0c264; }
+.gu-speed-act { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+
+.gu-slowmo {
+  position: fixed; top: 14px; left: 50%; transform: translateX(-50%); z-index: 40; pointer-events: none; display: flex; align-items: center; gap: 12px;
+  height: 34px; padding: 0 14px; border-radius: 6px; background: rgba(20, 20, 22, 0.72); border: 1px solid rgba(255, 255, 255, 0.14);
+  -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); color: #e9e6df; user-select: none;
+  font: 600 13px 'Barlow Condensed', 'Arial Narrow', sans-serif; letter-spacing: 0.12em; text-transform: uppercase; animation: gu-fade 0.25s ease both;
+}
+.gu-slowmo b { color: #f0c264; font-weight: 700; font-size: 16px; letter-spacing: 0.04em; font-variant-numeric: tabular-nums; }
+.gu-slowmo .gu-pips { display: flex; gap: 3px; }
+.gu-slowmo .gu-pips i { width: 14px; height: 4px; border-radius: 2px; background: rgba(255, 255, 255, 0.18); }
+.gu-slowmo .gu-pips i.on { background: var(--gu-amber); }
+.gu-vignette { position: fixed; inset: 0; z-index: 30; pointer-events: none; transition: opacity 0.4s ease;
+  background: radial-gradient(ellipse at center, transparent 55%, rgba(201, 146, 43, 0.14) 82%, rgba(9, 9, 10, 0.5) 100%); }
+
+/* ---------- responsive ---------- */
+@media (max-width: 720px) {
+  .gu-backdrop { padding: 0; align-items: stretch; }
+  .gu-modal { max-width: none; max-height: none; height: 100%; border-radius: 0; border-left: 0; border-right: 0; }
+  .gu-head { padding: 14px 16px 12px; }
+  .gu-title { font-size: 22px; }
+  .gu-body { padding: 16px; }
+  .gu-foot { padding: 12px 16px; }
+  .gu-tabs { padding: 0 8px; }
+  .gu-tab { padding: 0 14px; font-size: 16px; }
+  .gu-g3, .gu-g4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .gu-g6 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .gu-g2.gu-keep { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .gu-g2:not(.gu-keep) { grid-template-columns: minmax(0, 1fr); }
+  .gu-set { padding: 10px 14px; flex-wrap: wrap; }
+  .gu-hide-s { display: none !important; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .gu-backdrop, .gu-modal, .gu-stagger > *, .gu-nav-i, .gu-slowmo { animation: none !important; }
+  .gu-card, .gu-btn, .gu-nav-i, .gu-tg, .gu-tg::after { transition: none !important; }
+}
+
+/* ---------- pause screen ---------- */
+.gu-pause { width: 100%; max-width: 1120px; max-height: 100%; overflow-y: auto; overflow-x: hidden; display: grid; grid-template-columns: minmax(340px, 440px) minmax(0, 1fr); gap: 64px; align-items: center; scrollbar-width: thin; scrollbar-color: #3a352b transparent; padding: 8px 0; }
+.gu-pause-brand { display: flex; align-items: center; gap: 14px; padding: 0 22px 18px; }
+.gu-pause-side { align-self: stretch; display: flex; flex-direction: column; justify-content: center; gap: 18px; animation: gu-rise 0.6s var(--gu-ease) 0.1s both; }
+.gu-pause-big { font-family: 'Barlow Condensed', sans-serif; text-transform: uppercase; letter-spacing: 0.1em; font-weight: 700; font-size: 72px; line-height: 0.95; color: #fff; }
+.gu-keys { display: grid; grid-template-columns: auto 1fr; column-gap: 16px; row-gap: 10px; align-items: center; font-size: 14px; color: var(--gu-mut); }
+.gu-keys .gu-key { margin: 0; justify-self: start; }
+.gu-confirm { display: flex; gap: 8px; padding: 0 22px; margin-top: 6px; animation: gu-rise 0.3s var(--gu-ease) both; }
+.gu-confirm .gu-btn { flex: 1; }
+@media (max-width: 900px) {
+  .gu-pause { grid-template-columns: minmax(0, 1fr); gap: 20px; max-width: 480px; align-items: start; }
+  .gu-pause-side { display: none; }
+  .gu-pause-big { font-size: 48px; }
+}
+@media (max-height: 640px) {
+  .gu-nav-i { height: 46px; font-size: 20px; }
+  .gu-nav-i.gu-big { height: 70px; }
+}
