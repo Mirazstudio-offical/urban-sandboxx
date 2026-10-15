@@ -2205,6 +2205,9 @@ export interface GameWorld {
   player?: Player;
   timeOfDay?: any;
   gameMode?: GameMode;
+  aiTrafficEnabled?: boolean;
+  aiTrafficDensity?: 'off' | 'low' | 'normal' | 'high';
+  aiPedestriansEnabled?: boolean;
   width: number;
   height: number;
   roads: RoadSegment[];
