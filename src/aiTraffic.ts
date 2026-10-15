@@ -2267,6 +2267,9 @@ export function updateAITraffic(
   player?: any,
   propGrid?: SpatialGrid<StreetProp>
 ) {
+  if (world.gameMode === 'freeroam') {
+    return;
+  }
   let totalSpeed = 0;
   let movingCars = 0;
   let deadlockedCars = 0;
@@ -2277,8 +2280,8 @@ export function updateAITraffic(
   const playerCar = world.vehicles.find((v) => v.isPlayerControlled);
   const targetPos: Vector2D = playerPos || (playerCar ? { x: playerCar.x, y: playerCar.y } : { x: 4400, y: 2800 });
 
-  // Filter active AI driving vehicles (excluding parked cars, player car, remote players, and special evacuation ambulance)
-  const activeAICars = world.vehicles.filter((v) => !v.isPlayerControlled && !(v as any).isRemoteControlled && !v.isParked && v.id !== 'evac_ambulance_special');
+  // Filter active AI driving vehicles (excluding parked cars, player car, remote players, player-owned/spawned cars, and special evacuation ambulance)
+  const activeAICars = world.vehicles.filter((v) => !v.isPlayerControlled && !(v as any).isRemoteControlled && !v.isParked && v.id !== 'evac_ambulance_special' && !v.keyId && v.ownerId !== 'player' && !(v as any).playerOwned && !(v as any).isSpawnedByPlayer);
   const totalActiveCount = activeAICars.length;
 
   // Maintain natural vehicle density around the player dynamically (balanced ~8-12 nearby, ~28 max active)
@@ -2335,7 +2338,7 @@ export function updateAITraffic(
   for (const car of world.vehicles) {
     const distToPlayer = Math.hypot(car.x - targetPos.x, car.y - targetPos.y);
     const isPlayerOrSpecial = car.isPlayerControlled || (car as any).isRemoteControlled || car.id === 'evac_ambulance_special' || (car as any).isFireDispatch;
-    const isOwnedOrKeyed = Boolean(car.keyId || car.ownerId === 'player' || (car as any).playerOwned);
+    const isOwnedOrKeyed = Boolean(car.keyId || car.ownerId === 'player' || (car as any).playerOwned || (car as any).isSpawnedByPlayer);
 
     // AI dynamic traffic vehicle that moved beyond field of view: DESPAWN IMMEDIATELY!
     if (!car.isParked && !isPlayerOrSpecial && !isOwnedOrKeyed && !car.isTrailer) {
@@ -2530,7 +2533,7 @@ export function updateAITraffic(
       }
     }
 
-    if (car.isPlayerControlled || (car as any).isRemoteControlled || car.isParked || car.id === 'evac_ambulance_special') continue;
+    if (car.isPlayerControlled || (car as any).isRemoteControlled || car.isParked || car.id === 'evac_ambulance_special' || isOwnedOrKeyed || car.ownerId === 'player' || (car as any).playerOwned || (car as any).isSpawnedByPlayer) continue;
 
      // --- EMERGENCY YIELDING FOR AI CARS ---
     let isEmergencyYielding = false;
@@ -4781,6 +4784,9 @@ export function updatePedestrians(
   propGrid?: SpatialGrid<StreetProp>,
   player?: any
 ) {
+  if (world.gameMode === 'freeroam') {
+    return;
+  }
   const isRaining = world.weather === 'rain'|| world.weather === 'storm';
   const UMBRELLA_COLORS = ['#ef4444', '#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899', '#06b6d4'];
 

@@ -917,6 +917,7 @@ export default function App() {
       id: Date.now().toString(),
       name: saveName,
       date: `${dateString} в ${timeString}`,
+      mode: world.gameMode || 'career',
       playerX: player.x,
       playerY: player.y,
       playerAngle: player.angle,
@@ -1253,6 +1254,17 @@ export default function App() {
       importFurnitureStorageData((save as any).furnitureStorageState);
     }
 
+    world.gameMode = save.mode || 'career';
+    if (world.gameMode === 'freeroam') {
+      setIsTimeAutoCycling(false);
+      isTimeAutoCyclingRef.current = false;
+      world.pedestrians = [];
+      world.vehicles = world.vehicles.filter(v => v.isParked || v.isDerelict || (v as any).playerOwned || v.ownerId === 'player' || Boolean(v.keyId));
+    } else {
+      setIsTimeAutoCycling(true);
+      isTimeAutoCyclingRef.current = true;
+    }
+
     setIsMainMenuOpen(false);
     setIsPauseMenuOpen(false);
   };
@@ -1262,11 +1274,20 @@ export default function App() {
     syncSavesToStorage(updated);
   };
 
-  const handleNewGame = (spawnId?: string) => {
+  const handleNewGame = (options?: {
+    spawnId?: string;
+    mode?: 'career' | 'freeroam';
+    vehicleType?: string;
+    vehicleColor?: string;
+  } | string) => {
+    const opts = typeof options === 'string' ? { spawnId: options, mode: 'career' as const } : (options || {});
+    const mode = opts.mode || 'career';
     const world = worldRef.current;
     const player = playerRef.current;
     const camera = cameraRef.current;
     if (!world || !player) return;
+
+    world.gameMode = mode;
 
     inputRef.current.forward = false;
     inputRef.current.backward = false;
@@ -1275,7 +1296,7 @@ export default function App() {
     inputRef.current.handbrake = false;
     inputRef.current.sprint = false;
 
-    const spawnLoc = getAllSpawnLocations(worldRef.current).find(s => s.id === spawnId) || SPAWN_LOCATIONS[0];
+    const spawnLoc = getAllSpawnLocations(worldRef.current).find(s => s.id === opts.spawnId) || SPAWN_LOCATIONS[0];
     setCurrentSpawnId(spawnLoc.id);
     setIsSpawnMenuOpen(false);
 
@@ -1329,14 +1350,102 @@ export default function App() {
     setActiveCarName('');
     sound.stopEngine();
 
-    const initialCal = createInitialCalendarState(2026, 10, 8, 10.0);
+    const initialCal = createInitialCalendarState(2026, 10, 8, 12.0);
     calendarRef.current = initialCal;
     setCalendar(initialCal);
-    setTimeHour(10.0);
-    timeHourRef.current = 10.0;
+    setTimeHour(12.0);
+    timeHourRef.current = 12.0;
     setWeather('clear');
     weatherRef.current = 'clear';
     handleSetGpsTarget(null);
+
+    if (mode === 'freeroam') {
+      setIsTimeAutoCycling(false);
+      isTimeAutoCyclingRef.current = false;
+      world.pedestrians = [];
+      // Clear dynamic AI traffic, keep only static/derelict or player-owned
+      world.vehicles = world.vehicles.filter(v => v.isParked || v.isDerelict || (v as any).playerOwned || v.ownerId === 'player');
+
+      if (opts.vehicleType) {
+        const carType = opts.vehicleType;
+        const config = CAR_CONFIGS[carType] || CAR_CONFIGS.sedan;
+        const fs = createDefaultFuelSystem(carType as any, false);
+        const keyId = `key_freeroam_${Date.now()}`;
+        const newVehicle: Vehicle = {
+          id: `freeroam_car_${Date.now()}`,
+          type: carType as any,
+          x: spawnLoc.x,
+          y: spawnLoc.y,
+          vx: 0,
+          vy: 0,
+          angle: 0,
+          steerAngle: 0,
+          targetSteerAngle: 0,
+          speed: 0,
+          lateralVelocity: 0,
+          angularVelocity: 0,
+          isDrifting: false,
+          driftFactor: 0,
+          mass: config.mass,
+          width: config.width,
+          length: config.length,
+          wheelBase: config.wheelBase,
+          color: opts.vehicleColor || '#38bdf8',
+          roofColor: opts.vehicleColor || '#38bdf8',
+          headlightsOn: false,
+          headlightMode: 'off',
+          brakeLightsOn: false,
+          isReversing: false,
+          turnSignal: 'none',
+          turnSignalTimer: 0,
+          requiredFuel: fs.fuelType === 'diesel' ? 'diesel' : (fs.octaneNumber === 92 ? 'ai92' : 'ai95'),
+          hasGBO: false,
+          engineState: createDefaultEngineState(carType as any, true, false),
+          fuelSystem: fs,
+          damage: createDefaultVehicleDamage(config.length, config.width),
+          isPlayerControlled: true,
+          isParked: false,
+          ownerId: 'player',
+          keyId: keyId,
+          insertedKeyType: 'car_key',
+          insertedKeyId: keyId,
+          targetSpeed: 0,
+          currentLaneId: null,
+          targetWaypointIndex: 0,
+          routeWaypoints: [],
+          aiState: 'parked',
+          inIntersection: false,
+          plannedTurn: 'straight',
+          recentTurns: [],
+          justTurnedAround: false,
+          ghostingAlpha: 1.0,
+          stuckTimer: 0,
+          honkTimer: 0,
+          isHonking: false,
+          hornEffectTimer: 0
+        };
+        (newVehicle as any).isSpawnedByPlayer = true;
+        (newVehicle as any).playerOwned = true;
+        world.vehicles.push(newVehicle);
+        spatialGridVehiclesRef.current.insert(newVehicle);
+
+        player.isInVehicle = true;
+        player.currentVehicleId = newVehicle.id;
+        setIsInVehicle(true);
+        setActiveCarName(config.name);
+
+        const carKeyItem = createItem('car_key', 1);
+        carKeyItem.nameRu = `Ключ (${config.name})`;
+        (carKeyItem as any).carKeyId = keyId;
+        (carKeyItem as any).vehicleId = newVehicle.id;
+        addItemToPlayer(player, carKeyItem);
+
+        sound.startEngine();
+      }
+    } else {
+      setIsTimeAutoCycling(true);
+      isTimeAutoCyclingRef.current = true;
+    }
 
     camera.x = spawnLoc.x;
     camera.y = spawnLoc.y;
@@ -1417,6 +1526,7 @@ export default function App() {
       const config = CAR_CONFIGS[placement.id];
       if (!config) return;
       const fs = createDefaultFuelSystem(placement.id as any, false);
+      const keyId = `key_spawn_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
       const newVehicle: Vehicle = {
         id: `spawn_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
         type: placement.id as any,
@@ -1444,13 +1554,17 @@ export default function App() {
         isReversing: false,
         turnSignal: 'none',
         turnSignalTimer: 0,
-        requiredFuel: fs.fuelType === 'diesel'? 'diesel': (fs.octaneNumber === 92 ? 'ai92': 'ai95'),
+        requiredFuel: fs.fuelType === 'diesel' ? 'diesel' : (fs.octaneNumber === 92 ? 'ai92' : 'ai95'),
         hasGBO: ['sedan_classic', 'wagon_classic', 'taxi_yellow', 'delivery_truck', 'van_cargo_old'].includes(placement.id) ? Math.random() < 0.4 : false,
         engineState: createDefaultEngineState(placement.id as any, false, false),
         fuelSystem: fs,
         damage: createDefaultVehicleDamage(config.length, config.width),
         isPlayerControlled: false,
-        isParked: false,
+        isParked: true,
+        ownerId: 'player',
+        keyId: keyId,
+        insertedKeyType: 'car_key',
+        insertedKeyId: keyId,
         targetSpeed: 0,
         currentLaneId: null,
         targetWaypointIndex: 0,
@@ -1466,10 +1580,21 @@ export default function App() {
         isHonking: false,
         hornEffectTimer: 0
       };
+      (newVehicle as any).isSpawnedByPlayer = true;
+      (newVehicle as any).playerOwned = true;
       world.vehicles.push(newVehicle);
       spatialGridVehiclesRef.current.insert(newVehicle);
+
+      // Issue player a matching key
+      const carKeyItem = createItem('car_key', 1);
+      carKeyItem.nameRu = `Ключ (${config.name})`;
+      (carKeyItem as any).carKeyId = keyId;
+      (carKeyItem as any).vehicleId = newVehicle.id;
+      addItemToPlayer(player, carKeyItem);
+
       sound.resume();
-      addPlayerNotification(player, `Автомобиль ${placement.nameRu} создан!`, 'info');
+      addPlayerNotification(player, `Автомобиль ${placement.nameRu} установлен! Ключ в инвентаре.`, 'info');
+      setActivePlacement(null);
     } else if (placement.type === 'prop') {
       const newProp: StreetProp = {
         id: `spawn_prop_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
@@ -1482,10 +1607,11 @@ export default function App() {
       world.props.push(newProp);
       spatialGridPropsRef.current.insert(newProp);
       addPlayerNotification(player, `Проп ${placement.nameRu} установлен!`, 'info');
+      setActivePlacement(null);
     }
   };
 
-  const handleSpawnVehicleDirectly = (carType: string, color: string) => {
+  const handleSpawnVehicleDirectly = (carType: string, color: string, autoEnter: boolean = false) => {
     const world = worldRef.current;
     const player = playerRef.current;
     if (!world || !player) return;
@@ -1493,11 +1619,12 @@ export default function App() {
     if (!config) return;
 
     const angle = player.isInVehicle ? (player.currentVehicleId ? (world.vehicles.find(v => v.id === player.currentVehicleId)?.angle || 0) : 0) : (player.angle || 0);
-    const spawnDist = 110;
-    const spawnX = player.x + Math.cos(angle) * spawnDist;
-    const spawnY = player.y + Math.sin(angle) * spawnDist;
+    const spawnDist = autoEnter ? 0 : 110;
+    const spawnX = autoEnter ? player.x : player.x + Math.cos(angle) * spawnDist;
+    const spawnY = autoEnter ? player.y : player.y + Math.sin(angle) * spawnDist;
 
     const fs = createDefaultFuelSystem(carType as any, false);
+    const keyId = `key_spawn_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
     const newVehicle: Vehicle = {
       id: `spawn_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
       type: carType as any,
@@ -1527,11 +1654,15 @@ export default function App() {
       turnSignalTimer: 0,
       requiredFuel: fs.fuelType === 'diesel' ? 'diesel' : (fs.octaneNumber === 92 ? 'ai92' : 'ai95'),
       hasGBO: ['sedan_classic', 'wagon_classic', 'taxi_yellow', 'delivery_truck', 'van_cargo_old'].includes(carType) ? Math.random() < 0.4 : false,
-      engineState: createDefaultEngineState(carType as any, false, false),
+      engineState: createDefaultEngineState(carType as any, autoEnter, false),
       fuelSystem: fs,
       damage: createDefaultVehicleDamage(config.length, config.width),
-      isPlayerControlled: false,
-      isParked: false,
+      isPlayerControlled: autoEnter,
+      isParked: !autoEnter,
+      ownerId: 'player',
+      keyId: keyId,
+      insertedKeyType: 'car_key',
+      insertedKeyId: keyId,
       targetSpeed: 0,
       currentLaneId: null,
       targetWaypointIndex: 0,
@@ -1547,11 +1678,40 @@ export default function App() {
       isHonking: false,
       hornEffectTimer: 0
     };
+    (newVehicle as any).isSpawnedByPlayer = true;
+    (newVehicle as any).playerOwned = true;
 
     world.vehicles.push(newVehicle);
     spatialGridVehiclesRef.current.insert(newVehicle);
-    sound.playHorn();
-    addPlayerNotification(player, `Транспорт ${config.name} заспавнен рядом!`, 'pickup');
+
+    // Give matching key to player
+    const carKeyItem = createItem('car_key', 1);
+    carKeyItem.nameRu = `Ключ (${config.name})`;
+    (carKeyItem as any).carKeyId = keyId;
+    (carKeyItem as any).vehicleId = newVehicle.id;
+    addItemToPlayer(player, carKeyItem);
+
+    if (autoEnter) {
+      if (player.isInVehicle && player.currentVehicleId) {
+        const oldV = world.vehicles.find(v => v.id === player.currentVehicleId);
+        if (oldV) {
+          oldV.isPlayerControlled = false;
+          oldV.isParked = true;
+        }
+      }
+      player.isInVehicle = true;
+      player.currentVehicleId = newVehicle.id;
+      player.x = newVehicle.x;
+      player.y = newVehicle.y;
+      player.angle = newVehicle.angle;
+      setIsInVehicle(true);
+      setActiveCarName(config.name);
+      sound.playCarDoor();
+      addPlayerNotification(player, `Вы сели за руль ${config.name}! Ключ в замке зажигания.`, 'pickup');
+    } else {
+      sound.playHorn();
+      addPlayerNotification(player, `Транспорт ${config.name} заспавнен рядом! Ключ в инвентаре.`, 'pickup');
+    }
   };
 
   // Periodic autosave based on settings.autoSaveInterval
@@ -2946,26 +3106,28 @@ export default function App() {
         const curOutsideTemp = getOutsideTemperature(world, timeHourRef.current);
         world.outsideTemp = curOutsideTemp;
 
-        if (curOutsideTemp <= 0.0 && (weatherRef.current === 'rain' || weatherRef.current === 'drizzle')) {
-          previousWeatherRef.current = weatherRef.current;
-          setWeather('snow');
-          weatherRef.current = 'snow';
-          setWeatherTransition(0.0);
-          weatherTransitionRef.current = 0.0;
-          world.previousWeather = previousWeatherRef.current;
-          world.weather = 'snow';
-          world.weatherTransition = 0.0;
-        } else if (Math.random() < 0.0015 * dt) {
-          const nextSeasonalWeather = pickRandomSeasonalWeather(calendarRef.current, curOutsideTemp);
-          if (nextSeasonalWeather !== weatherRef.current) {
+        if (world.gameMode !== 'freeroam') {
+          if (curOutsideTemp <= 0.0 && (weatherRef.current === 'rain' || weatherRef.current === 'drizzle')) {
             previousWeatherRef.current = weatherRef.current;
-            setWeather(nextSeasonalWeather);
-            weatherRef.current = nextSeasonalWeather;
+            setWeather('snow');
+            weatherRef.current = 'snow';
             setWeatherTransition(0.0);
             weatherTransitionRef.current = 0.0;
             world.previousWeather = previousWeatherRef.current;
-            world.weather = nextSeasonalWeather;
+            world.weather = 'snow';
             world.weatherTransition = 0.0;
+          } else if (Math.random() < 0.0015 * dt) {
+            const nextSeasonalWeather = pickRandomSeasonalWeather(calendarRef.current, curOutsideTemp);
+            if (nextSeasonalWeather !== weatherRef.current) {
+              previousWeatherRef.current = weatherRef.current;
+              setWeather(nextSeasonalWeather);
+              weatherRef.current = nextSeasonalWeather;
+              setWeatherTransition(0.0);
+              weatherTransitionRef.current = 0.0;
+              world.previousWeather = previousWeatherRef.current;
+              world.weather = nextSeasonalWeather;
+              world.weatherTransition = 0.0;
+            }
           }
         }
 
@@ -3343,7 +3505,7 @@ export default function App() {
 
         // Advance simulation time (Realistic 24-minute full day cycle: 1 in-game hour = 60 real seconds, 1 in-game min = 1 real sec)
         const GAME_HOURS_PER_REAL_SECOND = 1 / 60;
-        if (isTimeAutoCyclingRef.current) {
+        if (isTimeAutoCyclingRef.current && world.gameMode !== 'freeroam') {
           const deltaHours = dt * GAME_HOURS_PER_REAL_SECOND;
           const { calendar: nextCal, wrappedDays } = advanceCalendar(calendarRef.current, deltaHours);
           calendarRef.current = nextCal;
@@ -7211,8 +7373,8 @@ export default function App() {
             color
           });
         }}
-        onSpawnVehicleNearPlayer={(key, color) => {
-          handleSpawnVehicleDirectly(key, color);
+        onSpawnVehicleNearPlayer={(key, color, autoEnter) => {
+          handleSpawnVehicleDirectly(key, color, autoEnter);
         }}
         activePlacement={activePlacement}
         onSelectPropForPlacement={(propId, nameRu) => {
@@ -7403,8 +7565,8 @@ export default function App() {
           saves={saves}
           onLoadSave={handleLoadSave}
           onDeleteSave={handleDeleteSave}
-          onNewGame={({ spawnId, saveName, timeHour: newTime, weather: newWeather }) => {
-            handleNewGame(spawnId);
+          onNewGame={({ spawnId, saveName, timeHour: newTime, weather: newWeather, mode, vehicleType, vehicleColor }) => {
+            handleNewGame({ spawnId, mode, vehicleType, vehicleColor });
             if (newTime !== undefined) {
               setTimeHour(newTime);
               timeHourRef.current = newTime;

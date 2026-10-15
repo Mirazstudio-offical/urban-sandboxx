@@ -21,6 +21,8 @@ export interface Vector2D {
   y: number;
 }
 
+export type GameMode = 'career' | 'freeroam';
+
 export type CarType = 
   | 'sedan' 
   | 'hatchback' 
@@ -624,7 +626,7 @@ export interface Vehicle {
   keyId?: string;
   keyTier?: 'classic' | 'flip' | 'smart' | 'display';
   isLocked?: boolean;
-  insertedKeyType?: 'gold' | 'iron';
+  insertedKeyType?: 'gold' | 'iron' | 'car_key' | string;
   insertedKeyId?: string;
 
   // Physical dimensions & config
@@ -2202,6 +2204,7 @@ export interface DetachedVehiclePart {
 export interface GameWorld {
   player?: Player;
   timeOfDay?: any;
+  gameMode?: GameMode;
   width: number;
   height: number;
   roads: RoadSegment[];

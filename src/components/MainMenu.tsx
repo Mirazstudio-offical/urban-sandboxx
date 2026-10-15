@@ -18,6 +18,8 @@ import {
   type User as FirebaseUser
 } from '../firebase';
 import { WeatherType } from '../types';
+import { VehiclePreviewCanvas } from './VehiclePreviewCanvas';
+import { VEHICLE_CATALOG, VehicleCatalogEntry, DEFAULT_PALETTE } from '../vehicleCatalog';
 
 export interface SaveSlotData {
   id: string;
@@ -34,6 +36,9 @@ export interface SaveSlotData {
   cash?: number;
   vehicles?: any[];
   season?: string;
+  mode?: 'career' | 'freeroam';
+  vehicleType?: string;
+  vehicleName?: string;
 }
 
 export interface MainMenuProps {
@@ -46,6 +51,9 @@ export interface MainMenuProps {
     saveName: string;
     timeHour: number;
     weather: WeatherType;
+    mode: 'career' | 'freeroam';
+    vehicleType?: string;
+    vehicleColor?: string;
   }) => void;
   currentSettings: {
     fpsLimit: number;
@@ -57,10 +65,10 @@ export interface MainMenuProps {
   currentUser?: FirebaseUser | null;
 }
 
-type ScreenType = 'main' | 'new' | 'saves' | 'servers' | 'account' | 'settings' | 'create';
+type ScreenType = 'main' | 'new' | 'freeroam' | 'saves' | 'servers' | 'account' | 'settings' | 'create';
 
 // Parallax position of the scene behind each screen (see .p0 .. .p5 in the CSS)
-const POS: Record<ScreenType, number> = { main: 0, new: 1, saves: 2, servers: 3, account: 4, settings: 5, create: 4 };
+const POS: Record<ScreenType, number> = { main: 0, new: 1, freeroam: 1, saves: 2, servers: 3, account: 4, settings: 5, create: 4 };
 
 /* ------------------------------------------------------------------ */
 /* helpers                                                             */
@@ -308,25 +316,54 @@ export const MainMenu: React.FC<MainMenuProps> = ({
   const scrCls = 'scr on' + (back ? ' b' : '') + (out ? ' out' : '');
 
   /* ---------- saves ---------- */
+  const [saveModeFilter, setSaveModeFilter] = useState<'all' | 'career' | 'freeroam'>('all');
   const [selectedSaveId, setSelectedSaveId] = useState<string>(saves[0]?.id || '');
   useEffect(() => {
     if (saves.length > 0 && (!selectedSaveId || !saves.some(s => s.id === selectedSaveId))) setSelectedSaveId(saves[0].id);
   }, [saves, selectedSaveId]);
-  const selectedSave = saves.find(s => s.id === selectedSaveId) || saves[0] || null;
+
+  const filteredSaves = saves.filter(s => {
+    if (saveModeFilter === 'all') return true;
+    const m = s.mode || 'career';
+    return m === saveModeFilter;
+  });
+  const careerSavesCount = saves.filter(s => (s.mode || 'career') === 'career').length;
+  const freeroamSavesCount = saves.filter(s => s.mode === 'freeroam').length;
+
+  const selectedSave = filteredSaves.find(s => s.id === selectedSaveId) || filteredSaves[0] || saves.find(s => s.id === selectedSaveId) || saves[0] || null;
   const lastSave = saves[0] || null;
 
-  /* ---------- new session ---------- */
+  /* ---------- new session (career) ---------- */
   const [spawnCategory, setSpawnCategory] = useState<string>('all');
   const [spawnIndex, setSpawnIndex] = useState<number>(0);
-  const [newName, setNewName] = useState<string>('Старт: ' + SPAWN_LOCATIONS[0].nameRu.split('(')[0].trim());
+  const [newName, setNewName] = useState<string>('Карьера: ' + SPAWN_LOCATIONS[0].nameRu.split('(')[0].trim());
   const [newTime, setNewTime] = useState<number>(12);
   const [newWeather, setNewWeather] = useState<WeatherType>('clear');
   const spawn = SPAWN_LOCATIONS[spawnIndex] || SPAWN_LOCATIONS[0];
   const visibleSpawns = SPAWN_LOCATIONS.map((loc, i) => ({ loc, i })).filter(({ loc }) => spawnCategory === 'all' || loc.category === spawnCategory);
   const pickSpawn = (i: number) => {
     setSpawnIndex(i);
-    setNewName('Старт: ' + SPAWN_LOCATIONS[i].nameRu.split('(')[0].trim());
+    setNewName('Карьера: ' + SPAWN_LOCATIONS[i].nameRu.split('(')[0].trim());
   };
+
+  /* ---------- freeroam session ---------- */
+  const [freeroamCategory, setFreeroamCategory] = useState<string>('all');
+  const [freeroamSearch, setFreeroamSearch] = useState<string>('');
+  const [selectedFreeroamType, setSelectedFreeroamType] = useState<string>('sedan_samara');
+  const [freeroamColor, setFreeroamColor] = useState<string>('#38bdf8');
+  const [freeroamSpawnIndex, setFreeroamSpawnIndex] = useState<number>(0);
+  const [freeroamSaveName, setFreeroamSaveName] = useState<string>('');
+
+  const filteredFreeroamVehicles = VEHICLE_CATALOG.filter(v => {
+    const q = freeroamSearch.trim().toLowerCase();
+    const matchesSearch = !q || v.nameRu.toLowerCase().includes(q) || v.brand.toLowerCase().includes(q) || v.type.toLowerCase().includes(q);
+    if (!matchesSearch) return false;
+    if (freeroamCategory === 'all') return true;
+    return v.category === freeroamCategory;
+  });
+
+  const selectedFreeroamVehicle = VEHICLE_CATALOG.find(v => v.type === selectedFreeroamType) || filteredFreeroamVehicles[0] || VEHICLE_CATALOG[0];
+  const freeroamSpawn = SPAWN_LOCATIONS[freeroamSpawnIndex] || SPAWN_LOCATIONS[0];
 
   /* ---------- online servers ---------- */
   const [servers, setServers] = useState<P2PServerRoom[]>([]);
@@ -513,50 +550,81 @@ export const MainMenu: React.FC<MainMenuProps> = ({
                   <div className="row2">{AccountChip}</div>
                 </div>
 
-                <div className="a" style={{ left: 64, top: 176, width: 420, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <div className="a" style={{ left: 64, top: 156, width: 440, display: 'flex', flexDirection: 'column', gap: 6 }}>
                   {lastSave ? (
                     <button className="menu-i cn sl d1" onClick={() => onLoadSave(lastSave.id)}
-                      style={{ background: 'rgba(201,146,43,.16)', borderLeftColor: '#c9922b', color: '#fff', flexDirection: 'column', alignItems: 'flex-start', justifyContent: 'center', gap: 2, height: 84 }}>
-                      <span>Продолжить</span>
-                      <span className="mut" style={{ font: "400 14px 'Barlow',sans-serif", textTransform: 'none', letterSpacing: 0 }}>«{lastSave.name}» — {lastSave.date}</span>
+                      style={{ background: 'rgba(201,146,43,.16)', borderLeftColor: '#c9922b', color: '#fff', flexDirection: 'column', alignItems: 'flex-start', justifyContent: 'center', gap: 2, height: 78 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+                        <span>Продолжить</span>
+                        <span className={'mode-badge ' + (lastSave.mode === 'freeroam' ? 'mode-freeroam' : 'mode-career')}>
+                          {lastSave.mode === 'freeroam' ? 'Freeroam' : 'Карьера'}
+                        </span>
+                      </div>
+                      <span className="mut" style={{ font: "400 13px 'Barlow',sans-serif", textTransform: 'none', letterSpacing: 0 }}>«{lastSave.name}» — {lastSave.date}</span>
                     </button>
                   ) : (
                     <button className="menu-i cn sl d1" onClick={onResume}
-                      style={{ background: 'rgba(201,146,43,.16)', borderLeftColor: '#c9922b', color: '#fff', flexDirection: 'column', alignItems: 'flex-start', justifyContent: 'center', gap: 2, height: 84 }}>
+                      style={{ background: 'rgba(201,146,43,.16)', borderLeftColor: '#c9922b', color: '#fff', flexDirection: 'column', alignItems: 'flex-start', justifyContent: 'center', gap: 2, height: 78 }}>
                       <span>В игру</span>
                       <span className="mut" style={{ font: "400 14px 'Barlow',sans-serif", textTransform: 'none', letterSpacing: 0 }}>Свободная езда по открытому миру</span>
                     </button>
                   )}
-                  <button className="menu-i cn sl d2" onClick={() => go('new')}><Ic><path d="M12 5v14M5 12h14" /></Ic>Новая сессия</button>
-                  <button className="menu-i cn sl d3" onClick={() => go('saves')}><Ic><path d="M4 7h16M4 12h16M4 17h10" /></Ic>Загрузить</button>
-                  <button className="menu-i cn sl d4" onClick={() => go('servers')}><Ic><circle cx="12" cy="12" r="8" /><path d="M4 12h16M12 4c3 3 3 13 0 16M12 4c-3 3-3 13 0 16" /></Ic>Онлайн</button>
-                  <button className="menu-i cn sl d5" onClick={() => go('account')}><Ic><circle cx="12" cy="9" r="4" /><path d="M4 20c1-4 4-6 8-6s7 2 8 6" /></Ic>Аккаунт</button>
-                  <button className="menu-i cn sl d6" onClick={() => go('settings')}><Gear />Настройки</button>
+                  <button className="menu-i cn sl d2" onClick={() => go('new')} style={{ flexDirection: 'column', alignItems: 'flex-start', justifyContent: 'center', gap: 2, height: 68 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                      <Ic><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" /></Ic>
+                      <span>Карьера (Carrier)</span>
+                    </div>
+                    <span className="mut" style={{ font: "400 12px 'Barlow',sans-serif", textTransform: 'none', letterSpacing: 0, paddingLeft: 36 }}>Трафик, пешеходы, погода, экономика</span>
+                  </button>
+                  <button className="menu-i cn sl d3" onClick={() => go('freeroam')} style={{ flexDirection: 'column', alignItems: 'flex-start', justifyContent: 'center', gap: 2, height: 68 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                      <Ic><circle cx="12" cy="12" r="10" /><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20M2 12h20" /></Ic>
+                      <span>Свободная езда (Freeroam)</span>
+                    </div>
+                    <span className="mut" style={{ font: "400 12px 'Barlow',sans-serif", textTransform: 'none', letterSpacing: 0, paddingLeft: 36 }}>Выбор машины, без трафика и пешеходов</span>
+                  </button>
+                  <button className="menu-i cn sl d4" onClick={() => go('saves')}><Ic><path d="M4 7h16M4 12h16M4 17h10" /></Ic>Загрузить сессию</button>
+                  <button className="menu-i cn sl d5" onClick={() => go('servers')}><Ic><circle cx="12" cy="12" r="8" /><path d="M4 12h16M12 4c3 3 3 13 0 16M12 4c-3 3-3 13 0 16" /></Ic>Онлайн</button>
+                  <button className="menu-i cn sl d6" onClick={() => go('account')}><Ic><circle cx="12" cy="9" r="4" /><path d="M4 20c1-4 4-6 8-6s7 2 8 6" /></Ic>Аккаунт</button>
+                  <button className="menu-i cn sl d7" onClick={() => go('settings')}><Gear />Настройки</button>
                   {lastSave && (
-                    <button className="menu-i cn sl d7" onClick={onResume} style={{ marginTop: 14, color: '#a29e93' }}>
-                      <Ic c="#a29e93"><path d="M9 4H5v16h4M15 8l4 4-4 4M19 12H9" /></Ic>В игру
+                    <button className="menu-i cn sl d8" onClick={onResume} style={{ marginTop: 6, color: '#a29e93', height: 48 }}>
+                      <Ic c="#a29e93"><path d="M9 4H5v16h4M15 8l4 4-4 4M19 12H9" /></Ic>Вернуться в игру
                     </button>
                   )}
                 </div>
 
-                <div className="panel a st d3" style={{ left: 880, top: 176, width: 496, padding: 14 }}>
-                  <div className={'th ' + thumbAt(0)} style={{ height: 268, borderRadius: 10 }} />
+                <div className="panel a st d3" style={{ left: 880, top: 156, width: 496, padding: 14 }}>
+                  <div className={'th ' + thumbAt(lastSave?.mode === 'freeroam' ? 5 : 0)} style={{ height: 230, borderRadius: 10 }} />
                   <div style={{ padding: '16px 8px 6px' }}>
-                    <div className="cn mut" style={{ fontSize: 13 }}>{lastSave ? 'Последняя сессия' : 'Нет сохранений'}</div>
-                    <div className="cn" style={{ fontSize: 30, fontWeight: 700, marginTop: 4 }}>{lastSave ? lastSave.name : 'Свободная езда'}</div>
-                    <div className="mut" style={{ display: 'flex', gap: 26, marginTop: 12, fontSize: 14 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <div className="cn mut" style={{ fontSize: 13 }}>{lastSave ? 'Последняя сессия' : 'Режимы симулятора'}</div>
+                      {lastSave && (
+                        <span className={'mode-badge ' + (lastSave.mode === 'freeroam' ? 'mode-freeroam' : 'mode-career')}>
+                          {lastSave.mode === 'freeroam' ? 'Freeroam' : 'Карьера'}
+                        </span>
+                      )}
+                    </div>
+                    <div className="cn" style={{ fontSize: 28, fontWeight: 700, marginTop: 4 }}>{lastSave ? lastSave.name : 'Степной Тракт'}</div>
+                    <div className="mut" style={{ display: 'flex', gap: 20, marginTop: 10, fontSize: 13 }}>
                       {lastSave ? (
                         <>
                           <span>Локация: {lastSave.streetName || 'Степной Тракт'}</span>
                           <span>{lastSave.isInVehicle ? 'В автомобиле' : 'Пешком'}</span>
+                          {lastSave.cash !== undefined && <span>{lastSave.cash.toLocaleString('ru-RU')} ₽</span>}
                         </>
                       ) : (
-                        <span>Начните новую сессию, чтобы выбрать точку старта</span>
+                        <span>Выберите режим игры или загрузите сохранение</span>
                       )}
                     </div>
-                    <button className="btn btn-p" style={{ marginTop: 18 }} onClick={() => (lastSave ? onLoadSave(lastSave.id) : go('new'))}>
-                      <PlayIcon />{lastSave ? 'Продолжить' : 'Новая сессия'}
-                    </button>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 18 }}>
+                      <button className="btn btn-p" onClick={() => (lastSave ? onLoadSave(lastSave.id) : go('freeroam'))}>
+                        <PlayIcon />{lastSave ? 'Продолжить' : 'Freeroam'}
+                      </button>
+                      <button className="btn btn-s" onClick={() => go(lastSave ? 'freeroam' : 'new')}>
+                        {lastSave ? 'Свободная езда' : 'Карьера'}
+                      </button>
+                    </div>
                   </div>
                 </div>
                 {Hint([['Esc', 'В игру']])}
@@ -854,29 +922,60 @@ export const MainMenu: React.FC<MainMenuProps> = ({
               <section className={scrCls}>
                 {Top('Загрузить сессию', () => go('main', true))}
                 <div className="tabs st d1">
-                  <div className="row2" style={{ gap: 6 }}><span className="tab tab-on cn">Все сохранения</span></div>
-                  <div className="mut" style={{ paddingBottom: 12, fontSize: 13 }}>Сохранений: {saves.length}</div>
+                  <div className="row2" style={{ gap: 6 }}>
+                    <button className={'tab cn' + (saveModeFilter === 'all' ? ' tab-on' : '')} onClick={() => setSaveModeFilter('all')}>
+                      Все сохранения ({saves.length})
+                    </button>
+                    <button className={'tab cn' + (saveModeFilter === 'career' ? ' tab-on' : '')} onClick={() => setSaveModeFilter('career')}>
+                      Карьера ({careerSavesCount})
+                    </button>
+                    <button className={'tab cn' + (saveModeFilter === 'freeroam' ? ' tab-on' : '')} onClick={() => setSaveModeFilter('freeroam')}>
+                      Freeroam ({freeroamSavesCount})
+                    </button>
+                  </div>
+                  <div className="mut" style={{ paddingBottom: 12, fontSize: 13 }}>Показано: {filteredSaves.length}</div>
                 </div>
                 <div className="a scroll" style={{ left: 64, top: 182, width: 1312, height: 584, display: 'grid', gridTemplateColumns: 'repeat(4,minmax(0,1fr))', gridAutoRows: 280, gap: 20, alignContent: 'start' }}>
-                  {saves.map((v, i) => (
+                  {filteredSaves.map((v, i) => (
                     <button key={v.id} className={'card st d' + Math.min(i + 1, 9) + (v.id === selectedSave?.id ? ' card-on' : '')} onClick={() => setSelectedSaveId(v.id)} onDoubleClick={() => onLoadSave(v.id)}>
-                      <div className={'th ' + thumbAt(i)} style={{ height: 166 }} />
+                      <div className={'th ' + thumbAt(v.mode === 'freeroam' ? 5 : i)} style={{ height: 166, position: 'relative' }}>
+                        <span className={'mode-badge ' + (v.mode === 'freeroam' ? 'mode-freeroam' : 'mode-career')} style={{ position: 'absolute', top: 10, right: 10 }}>
+                          {v.mode === 'freeroam' ? 'Freeroam' : 'Карьера'}
+                        </span>
+                      </div>
                       <div style={{ padding: '14px 16px' }}>
-                        <div className="cn" style={{ fontSize: 22, fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{v.name}</div>
-                        <div className="meta"><span>{v.streetName || 'Степной Тракт'}</span><span>{v.isInVehicle ? 'В авто' : 'Пешком'}</span></div>
-                        <div className="meta"><span>{v.date}</span><span style={{ color: '#e0ab45' }}>{v.id === selectedSave?.id ? 'Выбрано' : v.cash !== undefined ? v.cash.toLocaleString('ru-RU') + ' ₽' : ''}</span></div>
+                        <div className="cn" style={{ fontSize: 20, fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{v.name}</div>
+                        <div className="meta">
+                          <span>{v.streetName || 'Степной Тракт'}</span>
+                          <span>{v.isInVehicle ? 'В авто' : 'Пешком'}</span>
+                        </div>
+                        <div className="meta">
+                          <span>{v.date}</span>
+                          <span style={{ color: '#e0ab45' }}>{v.id === selectedSave?.id ? 'Выбрано' : v.cash !== undefined ? v.cash.toLocaleString('ru-RU') + ' ₽' : ''}</span>
+                        </div>
                       </div>
                     </button>
                   ))}
-                  <div className="st d8" style={{ height: '100%' }}>
-                    <button className="card-new" onClick={() => go('new')}>
-                      <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="#e0ab45" strokeWidth="1.6"><circle cx="12" cy="12" r="9" /><path d="M12 8v8M8 12h8" /></svg>
-                      <span className="cn" style={{ fontSize: 20, fontWeight: 600 }}>Новая сессия</span>
+                  <div className="st d8" style={{ height: '100%', display: 'flex', flexDirection: 'column', gap: 12 }}>
+                    <button className="card-new" style={{ flex: 1 }} onClick={() => go('freeroam')}>
+                      <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#e0ab45" strokeWidth="1.6"><circle cx="12" cy="12" r="10" /><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20M2 12h20" /></svg>
+                      <span className="cn" style={{ fontSize: 16, fontWeight: 600 }}>Новый Freeroam</span>
+                    </button>
+                    <button className="card-new" style={{ flex: 1, borderColor: 'rgba(52,211,153,0.45)', color: '#34d399', background: 'rgba(16,185,129,0.06)' }} onClick={() => go('new')}>
+                      <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#34d399" strokeWidth="1.6"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" /></svg>
+                      <span className="cn" style={{ fontSize: 16, fontWeight: 600 }}>Новая Карьера</span>
                     </button>
                   </div>
                 </div>
                 <div className="a st d8" style={{ left: 64, right: 64, bottom: 76, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <div className="mut" style={{ fontSize: 14 }}>Выбрано: <span style={{ color: '#e9e6df', fontWeight: 600 }}>{selectedSave ? selectedSave.name : '—'}</span></div>
+                  <div className="mut" style={{ fontSize: 14 }}>
+                    Выбрано: <span style={{ color: '#e9e6df', fontWeight: 600 }}>{selectedSave ? selectedSave.name : '—'}</span>
+                    {selectedSave && (
+                      <span className={'mode-badge ' + (selectedSave.mode === 'freeroam' ? 'mode-freeroam' : 'mode-career')} style={{ marginLeft: 12 }}>
+                        {selectedSave.mode === 'freeroam' ? 'Freeroam' : 'Карьера'}
+                      </span>
+                    )}
+                  </div>
                   <div className="row2">
                     <button className="btn btn-s" style={{ color: '#e08a70' }} disabled={!selectedSave}
                       onClick={() => { if (selectedSave && window.confirm(`Удалить сохранение «${selectedSave.name}»?`)) onDeleteSave(selectedSave.id); }}>Удалить</button>
@@ -887,10 +986,17 @@ export const MainMenu: React.FC<MainMenuProps> = ({
               </section>
             )}
 
-            {/* ========================== NEW SESSION ========================== */}
+            {/* ========================== NEW CAREER SESSION ========================== */}
             {cur === 'new' && (
               <section className={scrCls}>
-                {Top('Новая сессия', () => go('main', true))}
+                {Top('Карьера: Новая сессия', () => go('main', true), (
+                  <div className="row2" style={{ alignItems: 'center', gap: 10 }}>
+                    <span className="mode-badge mode-career" style={{ fontSize: 13, padding: '4px 10px' }}>
+                      РЕЖИМ КАРЬЕРЫ
+                    </span>
+                    {AccountChip}
+                  </div>
+                ))}
                 <div className="a" style={{ left: 64, top: 112, width: 880 }}>
                   <div className="st d1" style={{ display: 'flex', gap: 10, marginBottom: 20, flexWrap: 'wrap' }}>
                     {[['all', 'Все локации'], ['city', 'Город'], ['highway', 'Трасса'], ['nature', 'Природа'], ['mountain', 'Горы'], ['industrial', 'Промзона']].map(([id, label]) => (
@@ -914,21 +1020,228 @@ export const MainMenu: React.FC<MainMenuProps> = ({
                     <div className="cn mut" style={{ fontSize: 12 }}>Точка старта</div>
                     <div className="cn" style={{ fontSize: 26, fontWeight: 700, marginTop: 2, lineHeight: 1.1 }}>{spawn.nameRu}</div>
                     <div className="mut" style={{ fontSize: 13, lineHeight: 1.45, marginTop: 8 }}>{spawn.description}</div>
-                    <div style={{ marginTop: 20 }}><div className="lbl">Название сохранения</div><input className="inp" value={newName} onChange={e => setNewName(e.target.value)} onKeyDown={e => e.stopPropagation()} /></div>
-                    <div style={{ marginTop: 20 }}>
+                    <div style={{ marginTop: 16 }}><div className="lbl">Название сохранения</div><input className="inp" value={newName} onChange={e => setNewName(e.target.value)} onKeyDown={e => e.stopPropagation()} /></div>
+                    <div style={{ marginTop: 16 }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between' }}><span className="lbl">Время суток</span><span style={{ fontSize: 13, fontWeight: 600 }}>{fmtHour(newTime)}</span></div>
                       <div style={{ marginRight: 9 }}><Track label="Время суток" value={newTime} min={0} max={23.5} step={0.5} onChange={setNewTime} /></div>
                     </div>
-                    <div style={{ marginTop: 20 }}>
+                    <div style={{ marginTop: 16 }}>
                       <div className="lbl">Погода</div>
                       <Seg value={newWeather} onChange={setNewWeather} options={[{ v: 'clear', label: 'Ясно' }, { v: 'overcast', label: 'Пасмурно' }, { v: 'rain', label: 'Дождь' }, { v: 'fog', label: 'Туман' }]} />
                     </div>
+                    <div style={{ marginTop: 12, padding: '8px 10px', background: 'rgba(16,185,129,0.08)', borderRadius: 8, border: '1px solid rgba(16,185,129,0.25)', fontSize: 12, color: '#34d399', lineHeight: 1.45 }}>
+                      Живой мир: активный трафик, пешеходы, смена дня/ночи и погоды, заработок и выживание.
+                    </div>
                     <div style={{ flex: 1 }} />
-                    <button className="btn btn-p" style={{ width: '100%', height: 52, fontSize: 17, marginBottom: 10 }}
-                      onClick={() => onNewGame({ spawnId: spawn.id, saveName: newName.trim() || 'Старт: ' + spawn.nameRu, timeHour: newTime, weather: newWeather })}>
-                      <PlayIcon />Начать сессию
+                    <button className="btn btn-p" style={{ width: '100%', height: 50, fontSize: 17, marginBottom: 10 }}
+                      onClick={() => onNewGame({ spawnId: spawn.id, saveName: newName.trim() || 'Карьера: ' + spawn.nameRu, timeHour: newTime, weather: newWeather, mode: 'career' })}>
+                      <PlayIcon />Начать карьеру
                     </button>
                   </div>
+                </div>
+                {Hint([['Esc', 'Назад']])}
+              </section>
+            )}
+
+            {/* ======================= FREEROAM VEHICLE SELECTION ======================= */}
+            {cur === 'freeroam' && (
+              <section className={scrCls}>
+                {Top('Свободная езда (Freeroam)', () => go('main', true), (
+                  <div className="row2" style={{ alignItems: 'center', gap: 10 }}>
+                    <span className="mode-badge mode-freeroam" style={{ fontSize: 13, padding: '4px 10px' }}>
+                      FREEROAM
+                    </span>
+                    {AccountChip}
+                  </div>
+                ))}
+
+                {/* Left Column: Category Pills, Search & Vehicle Cards Grid */}
+                <div className="a" style={{ left: 64, top: 104, width: 880 }}>
+                  <div className="st d1" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14, gap: 10 }}>
+                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                      {[
+                        { id: 'all', label: 'Все авто' },
+                        { id: 'passenger', label: 'Легковые' },
+                        { id: 'sport', label: 'Спорт' },
+                        { id: 'suv', label: '4x4' },
+                        { id: 'commercial', label: 'Грузовые' },
+                        { id: 'special', label: 'Спецтехника' },
+                        { id: 'emergency', label: 'Службы' },
+                        { id: 'bus', label: 'Автобусы' }
+                      ].map(cat => (
+                        <button
+                          key={cat.id}
+                          className={'pill' + (freeroamCategory === cat.id ? ' pill-on' : '')}
+                          onClick={() => setFreeroamCategory(cat.id)}
+                        >
+                          {cat.label}
+                        </button>
+                      ))}
+                    </div>
+
+                    <div className="chip" style={{ width: 220, height: 36, padding: '0 12px' }}>
+                      <SearchIcon />
+                      <input
+                        value={freeroamSearch}
+                        onChange={e => setFreeroamSearch(e.target.value)}
+                        placeholder="Поиск авто..."
+                        style={{ fontSize: 13 }}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Scrollable Vehicle Grid with Canvas Top-Down Renders */}
+                  <div className="scroll" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gridAutoRows: 225, gap: 14, alignContent: 'start', height: 650 }}>
+                    {filteredFreeroamVehicles.map((car, n) => {
+                      const isSelected = selectedFreeroamType === car.type;
+                      return (
+                        <button
+                          key={car.type}
+                          className={'card st d' + Math.min(n + 1, 9) + (isSelected ? ' card-on' : '')}
+                          onClick={() => {
+                            setSelectedFreeroamType(car.type);
+                            setFreeroamColor(car.colors[0]?.hex || '#38bdf8');
+                            setFreeroamSaveName(`Freeroam: ${car.nameRu}`);
+                          }}
+                          style={{ padding: 12, display: 'flex', flexDirection: 'column', justifyContent: 'space-between', textAlign: 'left' }}
+                        >
+                          <div style={{ height: 110, background: '#090a0d', borderRadius: 8, border: '1px solid rgba(255,255,255,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
+                            <VehiclePreviewCanvas
+                              carType={car.type}
+                              color={isSelected ? freeroamColor : (car.colors[0]?.hex || '#38bdf8')}
+                              roofColor={isSelected ? freeroamColor : (car.colors[0]?.roofHex || car.colors[0]?.hex || '#38bdf8')}
+                              width={150}
+                              height={95}
+                              showPedestal={true}
+                            />
+                          </div>
+                          <div style={{ marginTop: 6 }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                              <span className="mut" style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.06em' }}>{car.brand}</span>
+                              <span style={{ fontSize: 11, color: '#e0ab45', fontWeight: 600 }}>{car.powerHp} л.с.</span>
+                            </div>
+                            <div className="cn" style={{ fontSize: 17, fontWeight: 700, lineHeight: 1.15, marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              {car.nameRu}
+                            </div>
+                            <div className="mut" style={{ fontSize: 12, marginTop: 3, display: 'flex', justifyContent: 'space-between' }}>
+                              <span>{car.classType}</span>
+                              <span>{car.topSpeedKmh} км/ч</span>
+                            </div>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Right Column: Selected Vehicle Showcase & Start Game Config */}
+                <div className="panel a st d3" style={{ left: 976, top: 104, width: 400, height: 740, padding: 16, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                  <div>
+                    {/* Live Canvas Render with pedestal */}
+                    <div style={{ height: 160, background: '#090a0d', borderRadius: 10, border: '1px solid rgba(255,255,255,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
+                      <VehiclePreviewCanvas
+                        carType={selectedFreeroamVehicle.type}
+                        color={freeroamColor}
+                        roofColor={freeroamColor}
+                        width={260}
+                        height={140}
+                        showPedestal={true}
+                      />
+                      <span className="mode-badge mode-freeroam" style={{ position: 'absolute', top: 10, right: 10 }}>
+                        {selectedFreeroamVehicle.fuelTypeLabel}
+                      </span>
+                    </div>
+
+                    <div style={{ marginTop: 12 }}>
+                      <span className="cn mut" style={{ fontSize: 11, letterSpacing: '0.08em' }}>{selectedFreeroamVehicle.brand}</span>
+                      <div className="cn" style={{ fontSize: 24, fontWeight: 700, lineHeight: 1.1, marginTop: 2 }}>{selectedFreeroamVehicle.nameRu}</div>
+                      <div className="mut" style={{ fontSize: 12, lineHeight: 1.4, marginTop: 6 }}>{selectedFreeroamVehicle.descriptionRu}</div>
+                    </div>
+
+                    {/* Color Swatches */}
+                    <div style={{ marginTop: 12 }}>
+                      <div className="lbl" style={{ display: 'flex', justifyContent: 'space-between' }}>
+                        <span>Цвет кузова</span>
+                        <span style={{ color: '#e9e6df' }}>{freeroamColor}</span>
+                      </div>
+                      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 4 }}>
+                        {(selectedFreeroamVehicle.colors && selectedFreeroamVehicle.colors.length > 0 ? selectedFreeroamVehicle.colors : DEFAULT_PALETTE).map(c => (
+                          <button
+                            key={c.hex}
+                            onClick={() => setFreeroamColor(c.hex)}
+                            style={{
+                              width: 22,
+                              height: 22,
+                              borderRadius: '50%',
+                              backgroundColor: c.hex,
+                              border: freeroamColor === c.hex ? '2.5px solid #fff' : '1px solid rgba(255,255,255,0.25)',
+                              transform: freeroamColor === c.hex ? 'scale(1.18)' : 'scale(1)',
+                              transition: 'all 0.15s'
+                            }}
+                            title={c.name}
+                          />
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Specs Grid */}
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginTop: 12, background: 'rgba(255,255,255,0.03)', padding: '8px 10px', borderRadius: 10, border: '1px solid rgba(255,255,255,0.06)', textAlign: 'center' }}>
+                      <div>
+                        <span className="mut" style={{ fontSize: 10, display: 'block' }}>Мощность</span>
+                        <span style={{ fontSize: 13, fontWeight: 700, color: '#e0ab45' }}>{selectedFreeroamVehicle.powerHp} л.с.</span>
+                      </div>
+                      <div>
+                        <span className="mut" style={{ fontSize: 10, display: 'block' }}>Скорость</span>
+                        <span style={{ fontSize: 13, fontWeight: 700 }}>{selectedFreeroamVehicle.topSpeedKmh} км/ч</span>
+                      </div>
+                      <div>
+                        <span className="mut" style={{ fontSize: 10, display: 'block' }}>Масса</span>
+                        <span style={{ fontSize: 13, fontWeight: 700 }}>{selectedFreeroamVehicle.weightKg} кг</span>
+                      </div>
+                    </div>
+
+                    {/* Spawn Location Selector */}
+                    <div style={{ marginTop: 12 }}>
+                      <div className="lbl">Точка старта</div>
+                      <select
+                        value={freeroamSpawnIndex}
+                        onChange={e => setFreeroamSpawnIndex(Number(e.target.value))}
+                        style={{ width: '100%', height: 38, background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 8, color: '#e9e6df', padding: '0 12px', fontSize: 13, outline: 'none' }}
+                      >
+                        {SPAWN_LOCATIONS.map((loc, idx) => (
+                          <option key={loc.id} value={idx} style={{ background: '#1a1b1f', color: '#e9e6df' }}>
+                            {loc.nameRu}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {/* Freeroam Conditions Notice */}
+                    <div style={{ marginTop: 10, padding: '8px 10px', background: 'rgba(201,146,43,0.08)', borderRadius: 8, border: '1px solid rgba(201,146,43,0.25)', fontSize: 12, color: '#f0c264', lineHeight: 1.4 }}>
+                      <div>• Трафик и пешеходы полностью отключены</div>
+                      <div>• Погода и время суток статичные по умолчанию</div>
+                      <div>• Автомобиль заправлен, ключ зажигания на руках</div>
+                    </div>
+                  </div>
+
+                  <button
+                    className="btn btn-p"
+                    style={{ width: '100%', height: 48, fontSize: 16, marginTop: 10 }}
+                    onClick={() => {
+                      const saveName = freeroamSaveName.trim() || `Freeroam: ${selectedFreeroamVehicle.nameRu}`;
+                      onNewGame({
+                        spawnId: freeroamSpawn.id,
+                        saveName,
+                        timeHour: 12.0,
+                        weather: 'clear',
+                        mode: 'freeroam',
+                        vehicleType: selectedFreeroamVehicle.type,
+                        vehicleColor: freeroamColor
+                      });
+                    }}
+                  >
+                    <PlayIcon />Начать свободную езду
+                  </button>
                 </div>
                 {Hint([['Esc', 'Назад']])}
               </section>
