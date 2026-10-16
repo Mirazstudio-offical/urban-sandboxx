@@ -18,8 +18,7 @@ import {
   type User as FirebaseUser
 } from '../firebase';
 import { WeatherType } from '../types';
-import { VehiclePreviewCanvas } from './VehiclePreviewCanvas';
-import { VEHICLE_CATALOG, VehicleCatalogEntry, DEFAULT_PALETTE } from '../vehicleCatalog';
+import { VehicleSelect } from './VehicleSelect';
 
 export interface SaveSlotData {
   id: string;
@@ -42,6 +41,8 @@ export interface SaveSlotData {
 }
 
 export interface MainMenuProps {
+  /** Screen the menu opens on (defaults to the start screen). */
+  initialScreen?: 'main' | 'servers';
   onResume: () => void;
   saves: SaveSlotData[];
   onLoadSave: (saveId: string) => void;
@@ -231,6 +232,7 @@ const ShadowHost: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 /* ------------------------------------------------------------------ */
 
 export const MainMenu: React.FC<MainMenuProps> = ({
+  initialScreen = 'main',
   onResume,
   saves = [],
   onLoadSave,
@@ -241,8 +243,8 @@ export const MainMenu: React.FC<MainMenuProps> = ({
   currentUser
 }) => {
   /* ---------- navigation ---------- */
-  const [cur, setCur] = useState<ScreenType>('main');
-  const [pos, setPos] = useState(0);
+  const [cur, setCur] = useState<ScreenType>(initialScreen);
+  const [pos, setPos] = useState(POS[initialScreen]);
   const [out, setOut] = useState(false);
   const [back, setBack] = useState(false);
   const busy = useRef(false);
@@ -345,25 +347,6 @@ export const MainMenu: React.FC<MainMenuProps> = ({
     setSpawnIndex(i);
     setNewName('Карьера: ' + SPAWN_LOCATIONS[i].nameRu.split('(')[0].trim());
   };
-
-  /* ---------- freeroam session ---------- */
-  const [freeroamCategory, setFreeroamCategory] = useState<string>('all');
-  const [freeroamSearch, setFreeroamSearch] = useState<string>('');
-  const [selectedFreeroamType, setSelectedFreeroamType] = useState<string>('sedan_samara');
-  const [freeroamColor, setFreeroamColor] = useState<string>('#38bdf8');
-  const [freeroamSpawnIndex, setFreeroamSpawnIndex] = useState<number>(0);
-  const [freeroamSaveName, setFreeroamSaveName] = useState<string>('');
-
-  const filteredFreeroamVehicles = VEHICLE_CATALOG.filter(v => {
-    const q = freeroamSearch.trim().toLowerCase();
-    const matchesSearch = !q || v.nameRu.toLowerCase().includes(q) || v.brand.toLowerCase().includes(q) || v.type.toLowerCase().includes(q);
-    if (!matchesSearch) return false;
-    if (freeroamCategory === 'all') return true;
-    return v.category === freeroamCategory;
-  });
-
-  const selectedFreeroamVehicle = VEHICLE_CATALOG.find(v => v.type === selectedFreeroamType) || filteredFreeroamVehicles[0] || VEHICLE_CATALOG[0];
-  const freeroamSpawn = SPAWN_LOCATIONS[freeroamSpawnIndex] || SPAWN_LOCATIONS[0];
 
   /* ---------- online servers ---------- */
   const [servers, setServers] = useState<P2PServerRoom[]>([]);
@@ -523,6 +506,7 @@ export const MainMenu: React.FC<MainMenuProps> = ({
   /* render                                                              */
   /* ================================================================== */
   return (
+    <>
     <ShadowHost>
       <div className="gmw" ref={wrapRef}>
         <div className={'gm p' + pos} ref={gmRef}>
@@ -1043,210 +1027,6 @@ export const MainMenu: React.FC<MainMenuProps> = ({
               </section>
             )}
 
-            {/* ======================= FREEROAM VEHICLE SELECTION ======================= */}
-            {cur === 'freeroam' && (
-              <section className={scrCls}>
-                {Top('Свободная езда (Freeroam)', () => go('main', true), (
-                  <div className="row2" style={{ alignItems: 'center', gap: 10 }}>
-                    <span className="mode-badge mode-freeroam" style={{ fontSize: 13, padding: '4px 10px' }}>
-                      FREEROAM
-                    </span>
-                    {AccountChip}
-                  </div>
-                ))}
-
-                {/* Left Column: Category Pills, Search & Vehicle Cards Grid */}
-                <div className="a" style={{ left: 64, top: 104, width: 880 }}>
-                  <div className="st d1" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14, gap: 10 }}>
-                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                      {[
-                        { id: 'all', label: 'Все авто' },
-                        { id: 'passenger', label: 'Легковые' },
-                        { id: 'sport', label: 'Спорт' },
-                        { id: 'suv', label: '4x4' },
-                        { id: 'commercial', label: 'Грузовые' },
-                        { id: 'special', label: 'Спецтехника' },
-                        { id: 'emergency', label: 'Службы' },
-                        { id: 'bus', label: 'Автобусы' }
-                      ].map(cat => (
-                        <button
-                          key={cat.id}
-                          className={'pill' + (freeroamCategory === cat.id ? ' pill-on' : '')}
-                          onClick={() => setFreeroamCategory(cat.id)}
-                        >
-                          {cat.label}
-                        </button>
-                      ))}
-                    </div>
-
-                    <div className="chip" style={{ width: 220, height: 36, padding: '0 12px' }}>
-                      <SearchIcon />
-                      <input
-                        value={freeroamSearch}
-                        onChange={e => setFreeroamSearch(e.target.value)}
-                        placeholder="Поиск авто..."
-                        style={{ fontSize: 13 }}
-                      />
-                    </div>
-                  </div>
-
-                  {/* Scrollable Vehicle Grid with Canvas Top-Down Renders */}
-                  <div className="scroll" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gridAutoRows: 225, gap: 14, alignContent: 'start', height: 650 }}>
-                    {filteredFreeroamVehicles.map((car, n) => {
-                      const isSelected = selectedFreeroamType === car.type;
-                      return (
-                        <button
-                          key={car.type}
-                          className={'card st d' + Math.min(n + 1, 9) + (isSelected ? ' card-on' : '')}
-                          onClick={() => {
-                            setSelectedFreeroamType(car.type);
-                            setFreeroamColor(car.colors[0]?.hex || '#38bdf8');
-                            setFreeroamSaveName(`Freeroam: ${car.nameRu}`);
-                          }}
-                          style={{ padding: 12, display: 'flex', flexDirection: 'column', justifyContent: 'space-between', textAlign: 'left' }}
-                        >
-                          <div style={{ height: 110, background: '#090a0d', borderRadius: 8, border: '1px solid rgba(255,255,255,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
-                            <VehiclePreviewCanvas
-                              carType={car.type}
-                              color={isSelected ? freeroamColor : (car.colors[0]?.hex || '#38bdf8')}
-                              roofColor={isSelected ? freeroamColor : (car.colors[0]?.roofHex || car.colors[0]?.hex || '#38bdf8')}
-                              width={150}
-                              height={95}
-                              showPedestal={true}
-                            />
-                          </div>
-                          <div style={{ marginTop: 6 }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-                              <span className="mut" style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.06em' }}>{car.brand}</span>
-                              <span style={{ fontSize: 11, color: '#e0ab45', fontWeight: 600 }}>{car.powerHp} л.с.</span>
-                            </div>
-                            <div className="cn" style={{ fontSize: 17, fontWeight: 700, lineHeight: 1.15, marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                              {car.nameRu}
-                            </div>
-                            <div className="mut" style={{ fontSize: 12, marginTop: 3, display: 'flex', justifyContent: 'space-between' }}>
-                              <span>{car.classType}</span>
-                              <span>{car.topSpeedKmh} км/ч</span>
-                            </div>
-                          </div>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                {/* Right Column: Selected Vehicle Showcase & Start Game Config */}
-                <div className="panel a st d3" style={{ left: 976, top: 104, width: 400, height: 740, padding: 16, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
-                  <div>
-                    {/* Live Canvas Render with pedestal */}
-                    <div style={{ height: 160, background: '#090a0d', borderRadius: 10, border: '1px solid rgba(255,255,255,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
-                      <VehiclePreviewCanvas
-                        carType={selectedFreeroamVehicle.type}
-                        color={freeroamColor}
-                        roofColor={freeroamColor}
-                        width={260}
-                        height={140}
-                        showPedestal={true}
-                      />
-                      <span className="mode-badge mode-freeroam" style={{ position: 'absolute', top: 10, right: 10 }}>
-                        {selectedFreeroamVehicle.fuelTypeLabel}
-                      </span>
-                    </div>
-
-                    <div style={{ marginTop: 12 }}>
-                      <span className="cn mut" style={{ fontSize: 11, letterSpacing: '0.08em' }}>{selectedFreeroamVehicle.brand}</span>
-                      <div className="cn" style={{ fontSize: 24, fontWeight: 700, lineHeight: 1.1, marginTop: 2 }}>{selectedFreeroamVehicle.nameRu}</div>
-                      <div className="mut" style={{ fontSize: 12, lineHeight: 1.4, marginTop: 6 }}>{selectedFreeroamVehicle.descriptionRu}</div>
-                    </div>
-
-                    {/* Color Swatches */}
-                    <div style={{ marginTop: 12 }}>
-                      <div className="lbl" style={{ display: 'flex', justifyContent: 'space-between' }}>
-                        <span>Цвет кузова</span>
-                        <span style={{ color: '#e9e6df' }}>{freeroamColor}</span>
-                      </div>
-                      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 4 }}>
-                        {(selectedFreeroamVehicle.colors && selectedFreeroamVehicle.colors.length > 0 ? selectedFreeroamVehicle.colors : DEFAULT_PALETTE).map(c => (
-                          <button
-                            key={c.hex}
-                            onClick={() => setFreeroamColor(c.hex)}
-                            style={{
-                              width: 22,
-                              height: 22,
-                              borderRadius: '50%',
-                              backgroundColor: c.hex,
-                              border: freeroamColor === c.hex ? '2.5px solid #fff' : '1px solid rgba(255,255,255,0.25)',
-                              transform: freeroamColor === c.hex ? 'scale(1.18)' : 'scale(1)',
-                              transition: 'all 0.15s'
-                            }}
-                            title={c.name}
-                          />
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* Specs Grid */}
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginTop: 12, background: 'rgba(255,255,255,0.03)', padding: '8px 10px', borderRadius: 10, border: '1px solid rgba(255,255,255,0.06)', textAlign: 'center' }}>
-                      <div>
-                        <span className="mut" style={{ fontSize: 10, display: 'block' }}>Мощность</span>
-                        <span style={{ fontSize: 13, fontWeight: 700, color: '#e0ab45' }}>{selectedFreeroamVehicle.powerHp} л.с.</span>
-                      </div>
-                      <div>
-                        <span className="mut" style={{ fontSize: 10, display: 'block' }}>Скорость</span>
-                        <span style={{ fontSize: 13, fontWeight: 700 }}>{selectedFreeroamVehicle.topSpeedKmh} км/ч</span>
-                      </div>
-                      <div>
-                        <span className="mut" style={{ fontSize: 10, display: 'block' }}>Масса</span>
-                        <span style={{ fontSize: 13, fontWeight: 700 }}>{selectedFreeroamVehicle.weightKg} кг</span>
-                      </div>
-                    </div>
-
-                    {/* Spawn Location Selector */}
-                    <div style={{ marginTop: 12 }}>
-                      <div className="lbl">Точка старта</div>
-                      <select
-                        value={freeroamSpawnIndex}
-                        onChange={e => setFreeroamSpawnIndex(Number(e.target.value))}
-                        style={{ width: '100%', height: 38, background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 8, color: '#e9e6df', padding: '0 12px', fontSize: 13, outline: 'none' }}
-                      >
-                        {SPAWN_LOCATIONS.map((loc, idx) => (
-                          <option key={loc.id} value={idx} style={{ background: '#1a1b1f', color: '#e9e6df' }}>
-                            {loc.nameRu}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-
-                    {/* Freeroam Conditions Notice */}
-                    <div style={{ marginTop: 10, padding: '8px 10px', background: 'rgba(201,146,43,0.08)', borderRadius: 8, border: '1px solid rgba(201,146,43,0.25)', fontSize: 12, color: '#f0c264', lineHeight: 1.4 }}>
-                      <div>• Трафик и пешеходы полностью отключены</div>
-                      <div>• Погода и время суток статичные по умолчанию</div>
-                      <div>• Автомобиль заправлен, ключ зажигания на руках</div>
-                    </div>
-                  </div>
-
-                  <button
-                    className="btn btn-p"
-                    style={{ width: '100%', height: 48, fontSize: 16, marginTop: 10 }}
-                    onClick={() => {
-                      const saveName = freeroamSaveName.trim() || `Freeroam: ${selectedFreeroamVehicle.nameRu}`;
-                      onNewGame({
-                        spawnId: freeroamSpawn.id,
-                        saveName,
-                        timeHour: 12.0,
-                        weather: 'clear',
-                        mode: 'freeroam',
-                        vehicleType: selectedFreeroamVehicle.type,
-                        vehicleColor: freeroamColor
-                      });
-                    }}
-                  >
-                    <PlayIcon />Начать свободную езду
-                  </button>
-                </div>
-                {Hint([['Esc', 'Назад']])}
-              </section>
-            )}
-
             {/* ========================= CREATE SERVER ========================= */}
             {cur === 'create' && (
               <section className={scrCls}>
@@ -1283,5 +1063,14 @@ export const MainMenu: React.FC<MainMenuProps> = ({
         </div>
       </div>
     </ShadowHost>
+    {cur === 'freeroam' && (
+      <VehicleSelect
+        onBack={() => { setBack(true); setOut(false); setPos(POS.main); setCur('main'); }}
+        onStart={({ spawnId, saveName, vehicleType, vehicleColor }) => {
+          onNewGame({ spawnId, saveName, timeHour: 12.0, weather: 'clear', mode: 'freeroam', vehicleType, vehicleColor });
+        }}
+      />
+    )}
+    </>
   );
 };

@@ -10,7 +10,7 @@ import './gameUi.css';
 const escStack: number[] = [];
 let escCounter = 0;
 
-function useTopmostEscape(onEscape: () => void) {
+export function useTopmostEscape(onEscape: () => void) {
   const cb = useRef(onEscape);
   cb.current = onEscape;
   useEffect(() => {

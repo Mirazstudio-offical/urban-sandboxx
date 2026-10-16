@@ -103,7 +103,8 @@ import { MobileTouchControls } from './components/MobileTouchControls';
 import { MainMenu } from './components/MainMenu';
 import { GameHudMenu } from './components/GameHudMenu';
 import { TimeScaleButton, SlowMotionIndicator, DEFAULT_SLOW_SCALE } from './components/TimeScaleControl';
-import { PauseMenu } from './components/PauseMenu';
+import { PauseMenu, type PauseSessionInfo } from './components/PauseMenu';
+import { getVehicleCatalogItem } from './vehicleCatalog';
 import { PlayerNeedsHUD } from './components/PlayerNeedsHUD';
 import { InventoryModal } from './components/InventoryModal';
 import { SelfInspectionModal } from './components/SelfInspectionModal';
@@ -469,6 +470,18 @@ export default function App() {
   const [isPauseMenuOpen, setIsPauseMenuOpen] = useState<boolean>(false);
   const isPauseMenuOpenRef = useRef<boolean>(false);
   isPauseMenuOpenRef.current = isPauseMenuOpen;
+  // Which screen the main menu opens on (the pause menu can send the player straight to the server list)
+  const [mainMenuInitialScreen, setMainMenuInitialScreen] = useState<'main' | 'servers'>('main');
+  // Real session statistics shown on the pause screen (reset on new game / load)
+  const sessionStatsRef = useRef<{ playMs: number; distPx: number; maxKmh: number; lastX: number | null; lastY: number | null; lastSaveAt: number | null }>(
+    { playMs: 0, distPx: 0, maxKmh: 0, lastX: null, lastY: null, lastSaveAt: null }
+  );
+  useEffect(() => {
+    if (!isMainMenuOpen) setMainMenuInitialScreen('main');
+  }, [isMainMenuOpen]);
+  const resetSessionStats = () => {
+    sessionStatsRef.current = { playMs: 0, distPx: 0, maxKmh: 0, lastX: null, lastY: null, lastSaveAt: null };
+  };
 
   const [settings, setSettings] = useState({
     fpsLimit: 60,
@@ -709,6 +722,29 @@ export default function App() {
       worldRef.current.season = nextCal.season;
       worldRef.current.timeHour = nextCal.timeHour;
     }
+  };
+
+  const buildPauseSession = (): PauseSessionInfo => {
+    const ss = sessionStatsRef.current;
+    const world = worldRef.current;
+    const player = playerRef.current;
+    const veh = world && player && player.isInVehicle && player.currentVehicleId
+      ? world.vehicles.find(v => v.id === player.currentVehicleId) || null
+      : null;
+    const cat = veh ? getVehicleCatalogItem(veh.type) : undefined;
+    return {
+      locationName: world && player ? findStreetNameAtPosition(world, player.x, player.y) : '',
+      timeHour: timeHourRef.current,
+      vehicleType: veh ? veh.type : null,
+      vehicleName: veh ? (cat?.nameRu || veh.nameRu || CAR_CONFIGS[veh.type]?.name || null) : null,
+      vehicleColor: veh?.color,
+      vehicleRoofColor: veh?.roofColor,
+      // 1 px of the world = 0.0625 m (see PX_S_TO_SPEED_KMH)
+      distanceKm: ss.distPx * 0.0625 / 1000,
+      maxKmh: ss.maxKmh,
+      minutes: Math.floor(ss.playMs / 60000),
+      lastSaveAt: ss.lastSaveAt
+    };
   };
 
   const openPauseMenu = () => {
@@ -964,6 +1000,7 @@ export default function App() {
     }
     updated.unshift(newSave);
     syncSavesToStorage(updated);
+    sessionStatsRef.current.lastSaveAt = Date.now();
   };
 
   const handleLoadSave = (saveId: string) => {
@@ -974,6 +1011,7 @@ export default function App() {
 
     const save = savesRef.current.find(s => s.id === saveId);
     if (!save) return;
+    resetSessionStats();
 
     // Prevent stuck input keys
     inputRef.current.forward = false;
@@ -1286,6 +1324,7 @@ export default function App() {
     const player = playerRef.current;
     const camera = cameraRef.current;
     if (!world || !player) return;
+    resetSessionStats();
 
     world.gameMode = mode;
 
@@ -2989,6 +3028,22 @@ export default function App() {
 
         // Consumption timer (multi-step eating/drinking)
         updateConsumption(player, dt);
+
+        // Session statistics for the pause screen (real time, not scaled by slow motion)
+        {
+          const ss = sessionStatsRef.current;
+          ss.playMs += rawDt * 1000;
+          if (ss.lastX !== null && ss.lastY !== null) {
+            const moved = Math.hypot(player.x - ss.lastX, player.y - ss.lastY);
+            if (moved < 1500) ss.distPx += moved; // ignore teleports / respawns
+          }
+          ss.lastX = player.x;
+          ss.lastY = player.y;
+          if (playerCar) {
+            const kmh = Math.abs(playerCar.speed) * PX_S_TO_SPEED_KMH;
+            if (kmh > ss.maxKmh) ss.maxKmh = kmh;
+          }
+        }
 
         // 6. Throttled HUD State Updates (Run at ~12.5 Hz to prevent React re-render lag)
         hudUpdateTimerRef.current += dt;
@@ -7515,19 +7570,25 @@ export default function App() {
       {/* Pause Menu Overlay */}
       {isPauseMenuOpen && !isMainMenuOpen && (
         <PauseMenu
+          session={buildPauseSession()}
+          currentUser={currentUser}
+          settings={settings}
+          onUpdateSettings={(newSettings) => {
+            setSettings(newSettings);
+            try {
+              localStorage.setItem('city_sim_game_settings', JSON.stringify(newSettings));
+            } catch {}
+          }}
           onResume={() => setIsPauseMenuOpen(false)}
           onSave={() => {
             handleCreateSave();
             const p = playerRef.current;
             if (p) addPlayerNotification(p, 'Игра успешно сохранена!', 'info');
           }}
-          onOpenSettings={() => {
+          onOpenServers={() => {
             setIsPauseMenuOpen(false);
+            setMainMenuInitialScreen('servers');
             setIsMainMenuOpen(true);
-          }}
-          onOpenOnline={() => {
-            setIsPauseMenuOpen(false);
-            setIsOnlineModalOpen(true);
           }}
           onOpenProfile={() => {
             setIsPauseMenuOpen(false);
@@ -7552,6 +7613,7 @@ export default function App() {
           }}
           onExitToMainMenu={() => {
             setIsPauseMenuOpen(false);
+            setMainMenuInitialScreen('main');
             setIsMainMenuOpen(true);
             sound.stopEngine();
           }}
@@ -7561,6 +7623,7 @@ export default function App() {
       {/* Main Menu Overlay */}
       {isMainMenuOpen && (
         <MainMenu
+          initialScreen={mainMenuInitialScreen}
           onResume={() => setIsMainMenuOpen(false)}
           saves={saves}
           onLoadSave={handleLoadSave}
