@@ -93,7 +93,8 @@ import {
   addPlayerCash,
   getVehicleRequiredKeyType,
   takeOutKeyFromVehicle,
-  insertKeyToVehicle
+  insertKeyToVehicle,
+  playerHasKeyForVehicle
 } from './items';
 import { defaultBodyState } from './sensations';
 import { TrafficConsole } from './components/TrafficConsole';
@@ -903,6 +904,8 @@ export default function App() {
       .filter(v => 
         keyedVehicleIds.has(v.id) || 
         v.ownerId === 'player' || 
+        (v as any).playerOwned ||
+        (v as any).isSpawnedByPlayer ||
         Boolean(v.keyId) || 
         Boolean(v.insertedKeyType) || 
         Boolean(v.insertedKeyId) || 
@@ -917,7 +920,9 @@ export default function App() {
         insertedKeyType: v.insertedKeyType,
         insertedKeyId: v.insertedKeyId,
         ownerId: v.ownerId || 'player',
-        isLocked: v.isLocked,
+        playerOwned: (v as any).playerOwned ?? (v.ownerId === 'player'),
+        isSpawnedByPlayer: (v as any).isSpawnedByPlayer ?? (v.ownerId === 'player'),
+        isLocked: Boolean(v.isLocked),
         type: v.type,
         x: v.x,
         y: v.y,
@@ -1111,7 +1116,7 @@ export default function App() {
             isReversing: false,
             turnSignal: 'none',
             turnSignalTimer: 0,
-            isLocked: sv.isLocked !== undefined ? sv.isLocked : true,
+            isLocked: sv.isLocked === true,
             ownerId: sv.ownerId || 'player',
             tractorBrakeLatch: sv.tractorBrakeLatch,
             hasRearviewCamera: sv.hasRearviewCamera,
@@ -1137,6 +1142,8 @@ export default function App() {
             transferCaseMode: sv.transferCaseMode,
             isDerelict: sv.isDerelict
           } as Vehicle;
+          (v as any).playerOwned = sv.playerOwned ?? (sv.ownerId === 'player');
+          (v as any).isSpawnedByPlayer = sv.isSpawnedByPlayer ?? (sv.ownerId === 'player');
           world.vehicles.push(v);
         }
 
@@ -1149,7 +1156,15 @@ export default function App() {
           v.insertedKeyType = sv.insertedKeyType;
           v.insertedKeyId = sv.insertedKeyId;
           if (sv.ownerId) v.ownerId = sv.ownerId;
-          if (sv.isLocked !== undefined) v.isLocked = sv.isLocked;
+          (v as any).playerOwned = sv.playerOwned ?? (v.ownerId === 'player');
+          (v as any).isSpawnedByPlayer = sv.isSpawnedByPlayer ?? (v.ownerId === 'player');
+          if (v.ownerId === 'player' || (v as any).playerOwned || (v as any).isSpawnedByPlayer || v.id === save.currentVehicleId || playerHasKeyForVehicle(player, v)) {
+            v.isLocked = false;
+          } else if (sv.isLocked !== undefined) {
+            v.isLocked = sv.isLocked === true;
+          } else {
+            v.isLocked = false;
+          }
           if (sv.tractorBrakeLatch !== undefined) v.tractorBrakeLatch = sv.tractorBrakeLatch;
           if (sv.hasRearviewCamera !== undefined) v.hasRearviewCamera = sv.hasRearviewCamera;
           if (sv.fluidTank) v.fluidTank = JSON.parse(JSON.stringify(sv.fluidTank));
@@ -1562,13 +1577,12 @@ export default function App() {
     if (!mouseWorldPos) return;
 
     if (placement.type === 'vehicle') {
-      const config = CAR_CONFIGS[placement.id];
-      if (!config) return;
+      const config = CAR_CONFIGS[placement.id] || CAR_CONFIGS[placement.id.toLowerCase()] || CAR_CONFIGS.sedan;
       const fs = createDefaultFuelSystem(placement.id as any, false);
       const keyId = `key_spawn_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
       const newVehicle: Vehicle = {
         id: `spawn_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
-        type: placement.id as any,
+        type: (config.type || placement.id) as any,
         x: mouseWorldPos.x,
         y: mouseWorldPos.y,
         vx: 0,
@@ -1595,11 +1609,12 @@ export default function App() {
         turnSignalTimer: 0,
         requiredFuel: fs.fuelType === 'diesel' ? 'diesel' : (fs.octaneNumber === 92 ? 'ai92' : 'ai95'),
         hasGBO: ['sedan_classic', 'wagon_classic', 'taxi_yellow', 'delivery_truck', 'van_cargo_old'].includes(placement.id) ? Math.random() < 0.4 : false,
-        engineState: createDefaultEngineState(placement.id as any, false, false),
+        engineState: createDefaultEngineState((config.type || placement.id) as any, false, false),
         fuelSystem: fs,
         damage: createDefaultVehicleDamage(config.length, config.width),
         isPlayerControlled: false,
         isParked: true,
+        isLocked: false,
         ownerId: 'player',
         keyId: keyId,
         insertedKeyType: 'car_key',
@@ -1634,6 +1649,7 @@ export default function App() {
       sound.resume();
       addPlayerNotification(player, `Автомобиль ${placement.nameRu} установлен! Ключ в инвентаре.`, 'info');
       setActivePlacement(null);
+      activePlacementRef.current = null;
     } else if (placement.type === 'prop') {
       const newProp: StreetProp = {
         id: `spawn_prop_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
@@ -1647,6 +1663,7 @@ export default function App() {
       spatialGridPropsRef.current.insert(newProp);
       addPlayerNotification(player, `Проп ${placement.nameRu} установлен!`, 'info');
       setActivePlacement(null);
+      activePlacementRef.current = null;
     }
   };
 
@@ -1654,19 +1671,22 @@ export default function App() {
     const world = worldRef.current;
     const player = playerRef.current;
     if (!world || !player) return;
-    const config = CAR_CONFIGS[carType];
-    if (!config) return;
+    const config = CAR_CONFIGS[carType] || CAR_CONFIGS[carType.toLowerCase()] || CAR_CONFIGS.sedan;
+
+    // Clear any active placement mode
+    setActivePlacement(null);
+    activePlacementRef.current = null;
 
     const angle = player.isInVehicle ? (player.currentVehicleId ? (world.vehicles.find(v => v.id === player.currentVehicleId)?.angle || 0) : 0) : (player.angle || 0);
     const spawnDist = autoEnter ? 0 : 110;
     const spawnX = autoEnter ? player.x : player.x + Math.cos(angle) * spawnDist;
     const spawnY = autoEnter ? player.y : player.y + Math.sin(angle) * spawnDist;
 
-    const fs = createDefaultFuelSystem(carType as any, false);
+    const fs = createDefaultFuelSystem((config.type || carType) as any, false);
     const keyId = `key_spawn_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
     const newVehicle: Vehicle = {
       id: `spawn_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
-      type: carType as any,
+      type: (config.type || carType) as any,
       x: spawnX,
       y: spawnY,
       vx: 0,
@@ -1693,11 +1713,12 @@ export default function App() {
       turnSignalTimer: 0,
       requiredFuel: fs.fuelType === 'diesel' ? 'diesel' : (fs.octaneNumber === 92 ? 'ai92' : 'ai95'),
       hasGBO: ['sedan_classic', 'wagon_classic', 'taxi_yellow', 'delivery_truck', 'van_cargo_old'].includes(carType) ? Math.random() < 0.4 : false,
-      engineState: createDefaultEngineState(carType as any, autoEnter, false),
+      engineState: createDefaultEngineState((config.type || carType) as any, autoEnter, false),
       fuelSystem: fs,
       damage: createDefaultVehicleDamage(config.length, config.width),
       isPlayerControlled: autoEnter,
       isParked: !autoEnter,
+      isLocked: false,
       ownerId: 'player',
       keyId: keyId,
       insertedKeyType: 'car_key',
@@ -2008,6 +2029,15 @@ export default function App() {
         }
         if (activePhoneItemRef.current) {
           setActivePhoneItem(null);
+          e.preventDefault();
+          return;
+        }
+        if (isCreativeMode) {
+          setIsCreativeMode(false);
+          setIsFlying(false);
+          setIsInvincible(false);
+          setActivePlacement(null);
+          activePlacementRef.current = null;
           e.preventDefault();
           return;
         }
@@ -4218,7 +4248,11 @@ export default function App() {
   const handleEnterExitVehicle = () => {
     const world = worldRef.current;
     const player = playerRef.current;
-    if (!world) return;
+    // Cancel any active placement mode on entering/exiting vehicle
+    if (activePlacementRef.current) {
+      setActivePlacement(null);
+      activePlacementRef.current = null;
+    }
 
     if (player.isInVehicle) {
       // Exit current vehicle
@@ -4254,7 +4288,7 @@ export default function App() {
     } else {
       // Find closest vehicle within interaction radius
       let closestVeh: Vehicle | null = null;
-      let minDist = 75;
+      let minDist = 85;
 
       for (const veh of world.vehicles) {
         const dist = Math.hypot(veh.x - player.x, veh.y - player.y);
@@ -4271,10 +4305,18 @@ export default function App() {
           return;
         }
 
+        const canUnlock = playerHasKeyForVehicle(player, closestVeh);
         if (closestVeh.isLocked) {
-          sound.playAlert();
-          addPlayerNotification(player, 'Двери автомобиля заперты! Используйте ключ от машины [E] или отмычку.', 'warning');
-          return;
+          if (canUnlock) {
+            closestVeh.isLocked = false;
+            sound.playCarDoor();
+            const cfg = CAR_CONFIGS[closestVeh.type] || CAR_CONFIGS.sedan;
+            addPlayerNotification(player, `Двери (${cfg.name}) отперты ключом!`, 'pickup');
+          } else {
+            sound.playAlert();
+            addPlayerNotification(player, 'Двери автомобиля заперты! Используйте ключ от машины [E] или отмычку.', 'warning');
+            return;
+          }
         }
 
         if ((closestVeh as any).isUnderRepair) {
@@ -5234,6 +5276,17 @@ export default function App() {
     const player = playerRef.current;
     if (!world || !player) return;
 
+    // Disarm any active placement mode on interaction
+    if (activePlacementRef.current) {
+      setActivePlacement(null);
+      activePlacementRef.current = null;
+    }
+
+    if (player.isInVehicle) {
+      handleEnterExitVehicle();
+      return;
+    }
+
     // Check if there is an active contextual interaction with primaryKey 'F'
     const target = activeInteractionRef.current;
     if (target && target.primaryKey === 'F') {
@@ -5246,6 +5299,22 @@ export default function App() {
     const fTarget = findActiveInteraction(player, world, mouseWorld, 'F');
     if (fTarget) {
       handleExecuteActiveInteraction(fTarget);
+      return;
+    }
+
+    // Proximity fallback: If player is near any vehicle, enter it directly
+    let nearbyVeh: Vehicle | null = null;
+    let minDist = 85;
+    for (const veh of (world.vehicles || [])) {
+      if (veh.type.startsWith('trailer_') || veh.isTrailer) continue;
+      const d = Math.hypot(veh.x - player.x, veh.y - player.y);
+      if (d < minDist) {
+        minDist = d;
+        nearbyVeh = veh;
+      }
+    }
+    if (nearbyVeh) {
+      handleEnterExitVehicle();
       return;
     }
   };
@@ -7398,7 +7467,7 @@ export default function App() {
 
       {/* MODERN CREATIVE MODE MODAL */}
       <CreativeMenuModal
-        isOpen={isCreativeMode && !isMainMenuOpen}
+        isOpen={isCreativeMode && !isMainMenuOpen && !activePlacement}
         onClose={() => {
           setIsCreativeMode(false);
           setIsFlying(false);

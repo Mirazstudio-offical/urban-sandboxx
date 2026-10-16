@@ -828,7 +828,7 @@ export function findActiveInteraction(
 
       // If close to center of vehicle, also allow entering if close enough
       if (!bestDoorReach) {
-        const centerReach = isTargetInPhysicalReach(px, py, facing, veh.x, veh.y, cfg.width * 0.7 + 25, 1.45, mouseWorldPos);
+        const centerReach = isTargetInPhysicalReach(px, py, facing, veh.x, veh.y, Math.max(cfg.length * 0.68, cfg.width * 0.75 + 36), 1.65, mouseWorldPos);
         if (centerReach.inReach) {
           bestDoorReach = centerReach;
           doorX = veh.x;

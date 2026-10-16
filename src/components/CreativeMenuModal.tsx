@@ -495,7 +495,10 @@ export const CreativeMenuModal: React.FC<CreativeMenuModalProps> = ({
                       <div className="space-y-2 pt-1 border-t border-white/[0.08]">
                         <div className="grid grid-cols-2 gap-2">
                           <button
-                            onClick={() => onSpawnVehicleNearPlayer && onSpawnVehicleNearPlayer(selectedVehicle.type, creativeVehicleColor, false)}
+                            onClick={() => {
+                              if (onSpawnVehicleNearPlayer) onSpawnVehicleNearPlayer(selectedVehicle.type, creativeVehicleColor, false);
+                              onClose();
+                            }}
                             className="py-2.5 px-3 bg-[#c68a35]/20 hover:bg-[#c68a35] border border-[#c68a35]/40 text-[#f0c264] hover:text-black rounded-xl text-xs font-bold uppercase tracking-wider transition-colors cursor-pointer flex items-center justify-center gap-1.5 shadow-sm"
                           >
                             <Sparkles className="w-3.5 h-3.5" />
@@ -503,7 +506,10 @@ export const CreativeMenuModal: React.FC<CreativeMenuModalProps> = ({
                           </button>
 
                           <button
-                            onClick={() => onSpawnVehicleNearPlayer && onSpawnVehicleNearPlayer(selectedVehicle.type, creativeVehicleColor, true)}
+                            onClick={() => {
+                              if (onSpawnVehicleNearPlayer) onSpawnVehicleNearPlayer(selectedVehicle.type, creativeVehicleColor, true);
+                              onClose();
+                            }}
                             className="py-2.5 px-3 bg-emerald-600 hover:bg-emerald-500 border border-emerald-500 text-white rounded-xl text-xs font-bold uppercase tracking-wider transition-colors cursor-pointer flex items-center justify-center gap-1.5 shadow-sm"
                           >
                             <Car className="w-3.5 h-3.5" />
@@ -512,7 +518,10 @@ export const CreativeMenuModal: React.FC<CreativeMenuModalProps> = ({
                         </div>
 
                         <button
-                          onClick={() => onSelectVehicleForPlacement(selectedVehicle.type, selectedVehicle.nameRu, creativeVehicleColor)}
+                          onClick={() => {
+                            onSelectVehicleForPlacement(selectedVehicle.type, selectedVehicle.nameRu, creativeVehicleColor);
+                            onClose();
+                          }}
                           className={`w-full py-2 px-3 rounded-xl text-xs font-bold uppercase tracking-wider transition-colors cursor-pointer flex items-center justify-center gap-1.5 border ${
                             activePlacement?.type === 'vehicle' && activePlacement.id === selectedVehicle.type
                               ? 'bg-[#c68a35] text-black border-[#c68a35]'
@@ -588,7 +597,10 @@ export const CreativeMenuModal: React.FC<CreativeMenuModalProps> = ({
                       </div>
 
                       <button
-                        onClick={() => onSelectPropForPlacement(prop.id, prop.label)}
+                        onClick={() => {
+                          onSelectPropForPlacement(prop.id, prop.label);
+                          onClose();
+                        }}
                         className={`w-full py-1.5 px-3 rounded-lg text-xs font-bold uppercase tracking-wider transition-colors cursor-pointer flex items-center justify-center gap-1.5 ${
                           isCurrentlyPlacing
                             ? 'bg-[#c68a35] text-black'

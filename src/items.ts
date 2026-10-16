@@ -7483,6 +7483,37 @@ export function getCarKeyFeatures(tier: 'classic'| 'flip'| 'smart'| 'display'): 
   }
 }
 
+export function playerHasKeyForVehicle(player: Player, vehicle: Vehicle): boolean {
+  if (!player || !vehicle) return false;
+  // If player owns it or spawned it
+  if (vehicle.ownerId === 'player' || (vehicle as any).playerOwned || (vehicle as any).isSpawnedByPlayer) {
+    return true;
+  }
+  // If vehicle already has an inserted key in ignition
+  if (vehicle.insertedKeyId || vehicle.insertedKeyType) {
+    return true;
+  }
+  const checkItem = (item: any): boolean => {
+    if (!item) return false;
+    if (typeof item.itemId === 'string' && (item.itemId.startsWith('car_key') || item.itemId === 'car_key_gold' || item.itemId === 'car_key_iron')) {
+      if (item.vehicleId && item.vehicleId === vehicle.id) return true;
+      if (item.carKeyId && vehicle.keyId && item.carKeyId === vehicle.keyId) return true;
+      if (item.keyId && vehicle.keyId && item.keyId === vehicle.keyId) return true;
+      // If player has a master or generic car key created for this spawn
+      if (!item.vehicleId && !vehicle.keyId) return true;
+    }
+    if (Array.isArray(item.contents)) {
+      return item.contents.some(checkItem);
+    }
+    return false;
+  };
+  if (player.inventory?.some(checkItem)) return true;
+  if (checkItem(player.leftHandItem)) return true;
+  if (checkItem(player.rightHandItem)) return true;
+  if (player.equippedClothing && Object.values(player.equippedClothing).some(checkItem)) return true;
+  return false;
+}
+
 export function getTargetVehicleForKey(player: Player, keyItem: InventoryItem, world?: GameWorld): Vehicle | null {
   if (!world || !world.vehicles || world.vehicles.length === 0) return null;
 
