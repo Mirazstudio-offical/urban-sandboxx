@@ -66,10 +66,10 @@ export interface MainMenuProps {
   currentUser?: FirebaseUser | null;
 }
 
-type ScreenType = 'main' | 'new' | 'freeroam' | 'saves' | 'servers' | 'account' | 'settings' | 'create';
+type ScreenType = 'main' | 'new' | 'freeroam_map' | 'freeroam_car' | 'saves' | 'servers' | 'account' | 'settings' | 'create';
 
 // Parallax position of the scene behind each screen (see .p0 .. .p5 in the CSS)
-const POS: Record<ScreenType, number> = { main: 0, new: 1, freeroam: 1, saves: 2, servers: 3, account: 4, settings: 5, create: 4 };
+const POS: Record<ScreenType, number> = { main: 0, new: 1, freeroam_map: 1, freeroam_car: 1, saves: 2, servers: 3, account: 4, settings: 5, create: 4 };
 
 /* ------------------------------------------------------------------ */
 /* helpers                                                             */
@@ -560,7 +560,7 @@ export const MainMenu: React.FC<MainMenuProps> = ({
                     </div>
                     <span className="mut" style={{ font: "400 12px 'Barlow',sans-serif", textTransform: 'none', letterSpacing: 0, paddingLeft: 36 }}>Трафик, пешеходы, погода, экономика</span>
                   </button>
-                  <button className="menu-i cn sl d3" onClick={() => go('freeroam')} style={{ flexDirection: 'column', alignItems: 'flex-start', justifyContent: 'center', gap: 2, height: 68 }}>
+                  <button className="menu-i cn sl d3" onClick={() => go('freeroam_map')} style={{ flexDirection: 'column', alignItems: 'flex-start', justifyContent: 'center', gap: 2, height: 68 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                       <Ic><circle cx="12" cy="12" r="10" /><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20M2 12h20" /></Ic>
                       <span>Свободная езда (Freeroam)</span>
@@ -602,10 +602,10 @@ export const MainMenu: React.FC<MainMenuProps> = ({
                       )}
                     </div>
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 18 }}>
-                      <button className="btn btn-p" onClick={() => (lastSave ? onLoadSave(lastSave.id) : go('freeroam'))}>
+                      <button className="btn btn-p" onClick={() => (lastSave ? onLoadSave(lastSave.id) : go('freeroam_map'))}>
                         <PlayIcon />{lastSave ? 'Продолжить' : 'Freeroam'}
                       </button>
-                      <button className="btn btn-s" onClick={() => go(lastSave ? 'freeroam' : 'new')}>
+                      <button className="btn btn-s" onClick={() => go(lastSave ? 'freeroam_map' : 'new')}>
                         {lastSave ? 'Свободная езда' : 'Карьера'}
                       </button>
                     </div>
@@ -941,7 +941,7 @@ export const MainMenu: React.FC<MainMenuProps> = ({
                     </button>
                   ))}
                   <div className="st d8" style={{ height: '100%', display: 'flex', flexDirection: 'column', gap: 12 }}>
-                    <button className="card-new" style={{ flex: 1 }} onClick={() => go('freeroam')}>
+                    <button className="card-new" style={{ flex: 1 }} onClick={() => go('freeroam_map')}>
                       <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#e0ab45" strokeWidth="1.6"><circle cx="12" cy="12" r="10" /><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20M2 12h20" /></svg>
                       <span className="cn" style={{ fontSize: 16, fontWeight: 600 }}>Новый Freeroam</span>
                     </button>
@@ -1027,6 +1027,62 @@ export const MainMenu: React.FC<MainMenuProps> = ({
               </section>
             )}
 
+            {/* ========================== FREEROAM MAP SELECTION ========================== */}
+            {cur === 'freeroam_map' && (
+              <section className={scrCls}>
+                {Top('Freeroam: Выбор карты', () => go('main', true), (
+                  <div className="row2" style={{ alignItems: 'center', gap: 10 }}>
+                    <span className="mode-badge mode-freeroam" style={{ fontSize: 13, padding: '4px 10px' }}>
+                      FREEROAM
+                    </span>
+                    {AccountChip}
+                  </div>
+                ))}
+                <div className="a" style={{ left: 64, top: 112, width: 880 }}>
+                  <div className="st d1" style={{ display: 'flex', gap: 10, marginBottom: 20, flexWrap: 'wrap' }}>
+                    {[['all', 'Все локации'], ['city', 'Город'], ['highway', 'Трасса'], ['nature', 'Природа'], ['mountain', 'Горы'], ['industrial', 'Промзона']].map(([id, label]) => (
+                      <button key={id} className={'pill' + (spawnCategory === id ? ' pill-on' : '')} onClick={() => setSpawnCategory(id)}>{label}</button>
+                    ))}
+                  </div>
+                  <div className="scroll" style={{ display: 'grid', gridTemplateColumns: 'repeat(4,minmax(0,1fr))', gridAutoRows: 262, gap: 20, alignContent: 'start', height: 650 }}>
+                    {visibleSpawns.map(({ loc, i }, n) => (
+                      <button key={loc.id} className={'card st d' + Math.min(n + 2, 9) + (i === spawnIndex ? ' card-on' : '')} onClick={() => pickSpawn(i)}>
+                        <div className={'th ' + (CATEGORY_THUMB[loc.category || ''] || thumbAt(i))} style={{ height: 150 }} />
+                        <div style={{ padding: '12px 14px' }}>
+                          <div className="cn" style={{ fontSize: 18, fontWeight: 700, lineHeight: 1.1, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>{loc.nameRu}</div>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div className="panel a st d3" style={{ left: 976, top: 112, width: 400, height: 730, padding: 14, display: 'flex', flexDirection: 'column' }}>
+                  <div className={'th ' + (CATEGORY_THUMB[spawn.category || ''] || thumbAt(spawnIndex))} style={{ height: 150, borderRadius: 9, flex: 'none' }} />
+                  <div style={{ padding: '16px 10px 0', flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+                    <div className="cn mut" style={{ fontSize: 12 }}>Точка старта</div>
+                    <div className="cn" style={{ fontSize: 26, fontWeight: 700, marginTop: 2, lineHeight: 1.1 }}>{spawn.nameRu}</div>
+                    <div className="mut" style={{ fontSize: 13, lineHeight: 1.45, marginTop: 8 }}>{spawn.description}</div>
+                    <div style={{ marginTop: 16 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between' }}><span className="lbl">Время суток</span><span style={{ fontSize: 13, fontWeight: 600 }}>{fmtHour(newTime)}</span></div>
+                      <div style={{ marginRight: 9 }}><Track label="Время суток" value={newTime} min={0} max={23.5} step={0.5} onChange={setNewTime} /></div>
+                    </div>
+                    <div style={{ marginTop: 16 }}>
+                      <div className="lbl">Погода</div>
+                      <Seg value={newWeather} onChange={setNewWeather} options={[{ v: 'clear', label: 'Ясно' }, { v: 'overcast', label: 'Пасмурно' }, { v: 'rain', label: 'Дождь' }, { v: 'fog', label: 'Туман' }]} />
+                    </div>
+                    <div style={{ marginTop: 12, padding: '8px 10px', background: 'rgba(201,146,43,0.08)', borderRadius: 8, border: '1px solid rgba(201,146,43,0.25)', fontSize: 12, color: '#e0ab45', lineHeight: 1.45 }}>
+                      Свободная езда: без трафика и пешеходов. Выберите карту, затем настройте автомобиль.
+                    </div>
+                    <div style={{ flex: 1 }} />
+                    <button className="btn btn-p" style={{ width: '100%', height: 50, fontSize: 17, marginBottom: 10 }}
+                      onClick={() => go('freeroam_car')}>
+                      <PlayIcon />Далее: Выбор автомобиля
+                    </button>
+                  </div>
+                </div>
+                {Hint([['Esc', 'Назад']])}
+              </section>
+            )}
+
             {/* ========================= CREATE SERVER ========================= */}
             {cur === 'create' && (
               <section className={scrCls}>
@@ -1063,11 +1119,12 @@ export const MainMenu: React.FC<MainMenuProps> = ({
         </div>
       </div>
     </ShadowHost>
-    {cur === 'freeroam' && (
+    {cur === 'freeroam_car' && (
       <VehicleSelect
-        onBack={() => { setBack(true); setOut(false); setPos(POS.main); setCur('main'); }}
+        defaultSpawnId={spawn.id}
+        onBack={() => go('freeroam_map', true)}
         onStart={({ spawnId, saveName, vehicleType, vehicleColor }) => {
-          onNewGame({ spawnId, saveName, timeHour: 12.0, weather: 'clear', mode: 'freeroam', vehicleType, vehicleColor });
+          onNewGame({ spawnId, saveName, timeHour: newTime, weather: newWeather, mode: 'freeroam', vehicleType, vehicleColor });
         }}
       />
     )}

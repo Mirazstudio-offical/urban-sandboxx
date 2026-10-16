@@ -15,6 +15,7 @@ export interface VehicleSelectResult {
 }
 
 interface VehicleSelectProps {
+  defaultSpawnId?: string;
   onBack: () => void;
   onStart: (result: VehicleSelectResult) => void;
 }
@@ -77,13 +78,19 @@ const Fact: React.FC<{ l: string; v: string }> = ({ l, v }) => (<div className="
 /* component                                                           */
 /* ------------------------------------------------------------------ */
 
-export const VehicleSelect: React.FC<VehicleSelectProps> = ({ onBack, onStart }) => {
+export const VehicleSelect: React.FC<VehicleSelectProps> = ({ defaultSpawnId, onBack, onStart }) => {
   const [filt, setFilt] = useState<'all' | VehicleCategory>('all');
   const [query, setQuery] = useState('');
   const [view, setView] = useState<'cars' | 'cfgs'>('cars');
   const [ci, setCi] = useState(0);        // index in VEHICLE_CATALOG
   const [color, setColor] = useState(0);  // index in the vehicle's colours
-  const [spawn, setSpawn] = useState(0);  // index in SPAWN_LOCATIONS
+  const [spawn, setSpawn] = useState(() => {
+    if (defaultSpawnId) {
+      const idx = SPAWN_LOCATIONS.findIndex(s => s.id === defaultSpawnId);
+      return idx >= 0 ? idx : 0;
+    }
+    return 0;
+  });
   const [open, setOpen] = useState<Record<string, boolean>>({ look: true, paint: true });
   const [animate, setAnimate] = useState(true);
   const gmRef = useRef<HTMLDivElement>(null);

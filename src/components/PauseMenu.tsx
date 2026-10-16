@@ -175,7 +175,6 @@ export const PauseMenu: React.FC<PauseMenuProps> = ({
   const timers = useRef<number[]>([]);
   const later = (fn: () => void, ms: number) => { timers.current.push(window.setTimeout(fn, ms)); };
 
-  useLayoutEffect(() => attachStageFit(() => wrapRef.current, () => gmRef.current), []);
   useEffect(() => {
     const raf = requestAnimationFrame(() => requestAnimationFrame(() => setEntered(true)));
     const iv = window.setInterval(() => setTick(n => n + 1), 15000);
@@ -392,140 +391,142 @@ export const PauseMenu: React.FC<PauseMenuProps> = ({
             <div className="chip"><span className="dot" style={{ background: '#7fbf6a' }} /><span className="mut" style={{ fontSize: 14 }}>{where} · {phase} · {session.minutes} мин в игре</span></div>
           </div>
 
-          <nav className="a" style={{ left: 64, top: 176, width: 420, display: 'flex', flexDirection: 'column', gap: 6 }} aria-label="Меню паузы">
-            <button className="menu-i cn pri" onClick={leave}><svg width="24" height="24" viewBox="0 0 16 16"><path d="M3 2l11 6-11 6z" fill="#c9922b" /></svg>В игру</button>
-            <button className={'menu-i cn' + (cur === 'online' ? ' sel' : '')} onClick={() => show('online')}>
-              <Ic><circle cx="12" cy="12" r="8" /><path d="M4 12h16M12 4c3 3 3 13 0 16M12 4c-3 3-3 13 0 16" /></Ic>Онлайн
-            </button>
-            <button className={'menu-i cn' + (cur === 'settings' ? ' sel' : '')} onClick={() => show('settings')}>
-              <Ic><circle cx="12" cy="12" r="3" /><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1" /></Ic>Настройки
-            </button>
-            {onOpenCreative && <button className="menu-i cn" onClick={onOpenCreative}><Sparkles {...LIC} />Творчество</button>}
-            {onOpenCalendar && <button className="menu-i cn" onClick={onOpenCalendar}><Calendar {...LIC} />Календарь</button>}
-            {onOpenProfile && <button className="menu-i cn" onClick={onOpenProfile}><User {...LIC} />Аккаунт</button>}
-            {onOpenDiagnostics && <button className="menu-i cn" onClick={onOpenDiagnostics}><Activity {...LIC} />Диагностика</button>}
-            <button className="menu-i cn" onClick={() => setConfirmExit(true)} style={{ marginTop: 14, color: '#a29e93' }}>
-              <Ic c="#a29e93"><path d="M9 4H5v16h4M15 8l4 4-4 4M19 12H9" /></Ic>В меню
-            </button>
-          </nav>
+          <div className="main-content">
+            <nav className="nav-col" aria-label="Меню паузы">
+              <button className="menu-i cn pri" onClick={leave}><svg width="24" height="24" viewBox="0 0 16 16"><path d="M3 2l11 6-11 6z" fill="#c9922b" /></svg>В игру</button>
+              <button className={'menu-i cn' + (cur === 'online' ? ' sel' : '')} onClick={() => show('online')}>
+                <Ic><circle cx="12" cy="12" r="8" /><path d="M4 12h16M12 4c3 3 3 13 0 16M12 4c-3 3-3 13 0 16" /></Ic>Онлайн
+              </button>
+              <button className={'menu-i cn' + (cur === 'settings' ? ' sel' : '')} onClick={() => show('settings')}>
+                <Ic><circle cx="12" cy="12" r="3" /><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1" /></Ic>Настройки
+              </button>
+              {onOpenCreative && <button className="menu-i cn" onClick={onOpenCreative}><Sparkles {...LIC} />Творчество</button>}
+              {onOpenCalendar && <button className="menu-i cn" onClick={onOpenCalendar}><Calendar {...LIC} />Календарь</button>}
+              {onOpenProfile && <button className="menu-i cn" onClick={onOpenProfile}><User {...LIC} />Аккаунт</button>}
+              {onOpenDiagnostics && <button className="menu-i cn" onClick={onOpenDiagnostics}><Activity {...LIC} />Диагностика</button>}
+              <button className="menu-i cn" onClick={() => setConfirmExit(true)} style={{ marginTop: 14, color: '#a29e93' }}>
+                <Ic c="#a29e93"><path d="M9 4H5v16h4M15 8l4 4-4 4M19 12H9" /></Ic>В меню
+              </button>
+            </nav>
 
-          {/* сводка */}
-          {shown === 'sum' && (
-            <section className="pan panel fade" key="sum" style={{ padding: 14, width: 496, left: 880 }}>
-              <div className="th" style={{ height: 230, borderRadius: 10 }}>
-                {session.vehicleType && (
-                  <div className="car">
-                    <VehiclePreviewCanvas
-                      carType={session.vehicleType}
-                      color={session.vehicleColor || '#38bdf8'}
-                      roofColor={session.vehicleRoofColor || session.vehicleColor || '#38bdf8'}
-                      width={440}
-                      height={200}
-                      showPedestal={false}
-                    />
+            {/* сводка */}
+            {shown === 'sum' && (
+              <section className="pan panel fade" key="sum" style={{ padding: 14, maxWidth: 520 }}>
+                <div className="th" style={{ height: 210, borderRadius: 10 }}>
+                  {session.vehicleType && (
+                    <div className="car">
+                      <VehiclePreviewCanvas
+                        carType={session.vehicleType}
+                        color={session.vehicleColor || '#38bdf8'}
+                        roofColor={session.vehicleRoofColor || session.vehicleColor || '#38bdf8'}
+                        width={440}
+                        height={200}
+                        showPedestal={false}
+                      />
+                    </div>
+                  )}
+                </div>
+                <div style={{ padding: '16px 8px 6px' }}>
+                  <div className="cn mut" style={{ fontSize: 13 }}>Текущая сессия</div>
+                  <div className="cn" style={{ fontSize: 30, fontWeight: 700, marginTop: 4 }}>{where} · {phase}</div>
+                  <div className="mut" style={{ display: 'flex', gap: 22, marginTop: 10, fontSize: 14 }}><span>Карта: {MAP_NAME}</span><span>Авто: {vehicleLabel}</span></div>
+                  <div style={{ display: 'flex', gap: 34, marginTop: 20 }}>
+                    <div><div className="stat-n">{fmtKm(session.distanceKm)}</div><div className="mut" style={{ fontSize: 12, marginTop: 4 }}>км пройдено</div></div>
+                    <div><div className="stat-n">{Math.round(session.maxKmh)}</div><div className="mut" style={{ fontSize: 12, marginTop: 4 }}>макс. км/ч</div></div>
+                    <div><div className="stat-n">{session.minutes}</div><div className="mut" style={{ fontSize: 12, marginTop: 4 }}>мин в игре</div></div>
                   </div>
-                )}
-              </div>
-              <div style={{ padding: '16px 8px 6px' }}>
-                <div className="cn mut" style={{ fontSize: 13 }}>Текущая сессия</div>
-                <div className="cn" style={{ fontSize: 30, fontWeight: 700, marginTop: 4 }}>{where} · {phase}</div>
-                <div className="mut" style={{ display: 'flex', gap: 22, marginTop: 10, fontSize: 14 }}><span>Карта: {MAP_NAME}</span><span>Авто: {vehicleLabel}</span></div>
-                <div style={{ display: 'flex', gap: 34, marginTop: 20 }}>
-                  <div><div className="stat-n">{fmtKm(session.distanceKm)}</div><div className="mut" style={{ fontSize: 12, marginTop: 4 }}>км пройдено</div></div>
-                  <div><div className="stat-n">{Math.round(session.maxKmh)}</div><div className="mut" style={{ fontSize: 12, marginTop: 4 }}>макс. км/ч</div></div>
-                  <div><div className="stat-n">{session.minutes}</div><div className="mut" style={{ fontSize: 12, marginTop: 4 }}>мин в игре</div></div>
+                  <div className="row2" style={{ marginTop: 22 }}>
+                    <button className="btn btn-p" onClick={leave}><svg width="16" height="16" viewBox="0 0 16 16"><path d="M4 2l10 6-10 6z" fill="#1a1409" /></svg>Продолжить</button>
+                    <button className="btn btn-s" onClick={quickSave}>{qsDone ? 'Сохранено' : 'Быстрое сохранение'}</button>
+                  </div>
                 </div>
-                <div className="row2" style={{ marginTop: 22 }}>
-                  <button className="btn btn-p" onClick={leave}><svg width="16" height="16" viewBox="0 0 16 16"><path d="M4 2l10 6-10 6z" fill="#1a1409" /></svg>Продолжить</button>
-                  <button className="btn btn-s" onClick={quickSave}>{qsDone ? 'Сохранено' : 'Быстрое сохранение'}</button>
-                </div>
-              </div>
-            </section>
-          )}
+              </section>
+            )}
 
-          {/* онлайн */}
-          {shown === 'online' && (
-            <section className="pan fade" key="online">
-              <div className="panel" style={{ padding: '8px 0', marginBottom: 20 }}>
-                <div className="set">
-                  <div>
-                    <div style={{ fontWeight: 600 }}>Открыть сессию для друзей</div>
-                    <div className={st === 'error' ? 'err' : 'mut'} style={{ fontSize: 13, marginTop: 0 }}>{onSub}</div>
-                  </div>
-                  <button className={'tg' + (sessionOn ? ' on' : '')} role="switch" aria-checked={sessionOn} aria-label="Открыть сессию" onClick={toggleSession} disabled={hostBusy} />
-                </div>
-              </div>
-              <div className={isHost ? '' : 'dim'} style={{ display: 'flex', gap: 20 }}>
-                <div className="panel" style={{ flex: 1, padding: '8px 0' }}>
-                  <div className="set"><span>Кто может войти</span><Seg value={access} onChange={changeAccess} options={[{ v: 'all', label: 'Все' }, { v: 'code', label: 'По коду' }]} /></div>
+            {/* онлайн */}
+            {shown === 'online' && (
+              <section className="pan fade" key="online" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                <div className="panel" style={{ padding: '12px 20px', flex: 'none' }}>
                   <div className="set">
-                    <span>Код приглашения</span>
-                    <div className="row2" style={{ alignItems: 'center', gap: 12 }}>
-                      <span className="cn" style={{ fontSize: 22, fontWeight: 700, color: '#e0ab45' }}>{connected ? onlineManager.roomCode : '—'}</span>
-                      <button className="btn btn-s btn-sm" onClick={copyCode} disabled={!connected}>{copied ? 'Скопировано' : 'Копировать'}</button>
+                    <div>
+                      <div style={{ fontWeight: 600 }}>Открыть сессию для друзей</div>
+                      <div className={st === 'error' ? 'err' : 'mut'} style={{ fontSize: 13, marginTop: 0 }}>{onSub}</div>
+                    </div>
+                    <button className={'tg' + (sessionOn ? ' on' : '')} role="switch" aria-checked={sessionOn} aria-label="Открыть сессию" onClick={toggleSession} disabled={hostBusy} />
+                  </div>
+                </div>
+                <div className={isHost ? '' : 'dim'} style={{ display: 'flex', gap: 20, flex: 1, minHeight: 0 }}>
+                  <div className="panel" style={{ flex: 1, padding: '8px 0' }}>
+                    <div className="set"><span>Кто может войти</span><Seg value={access} onChange={changeAccess} options={[{ v: 'all', label: 'Все' }, { v: 'code', label: 'По коду' }]} /></div>
+                    <div className="set">
+                      <span>Код приглашения</span>
+                      <div className="row2" style={{ alignItems: 'center', gap: 12 }}>
+                        <span className="cn" style={{ fontSize: 22, fontWeight: 700, color: '#e0ab45' }}>{connected ? onlineManager.roomCode : '—'}</span>
+                        <button className="btn btn-s btn-sm" onClick={copyCode} disabled={!connected}>{copied ? 'Скопировано' : 'Копировать'}</button>
+                      </div>
+                    </div>
+                    <div className="set"><span>Игроков в сессии</span><b>{players} / {maxPlayers}</b></div>
+                  </div>
+                  <div className="panel" style={{ flex: 1, padding: '16px 22px 8px', display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', flex: 'none' }}>
+                      <span className="cn" style={{ fontSize: 20, fontWeight: 700 }}>Друзья в сети</span>
+                      <span className="mut" style={{ fontSize: 13 }}>{currentUser ? onlineFriends.length : ''}</span>
+                    </div>
+                    <div id="frl" className="scroll" style={{ marginTop: 6, flex: 1 }}>
+                      {!currentUser ? (
+                        <div className="empty">
+                          <div className="mut">Войдите через Google, чтобы видеть друзей.</div>
+                          {onOpenProfile && <button className="btn btn-s btn-sm" onClick={onOpenProfile}>Аккаунт</button>}
+                        </div>
+                      ) : onlineFriends.length === 0 ? (
+                        <div className="empty"><div className="mut">Сейчас никого из друзей нет в сети.</div></div>
+                      ) : onlineFriends.map(f => (
+                        <div className="fr" key={f.uid}>
+                          <span className="av" style={{ background: avatarColor(f.name) }}>{f.name.charAt(0).toUpperCase()}</span>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.name}</div>
+                            <div className="mut" style={{ fontSize: 13 }}>{f.status === 'in_game' && f.room ? 'В игре: ' + f.room : 'В сети'}</div>
+                          </div>
+                          <button className="btn btn-s btn-sm" onClick={() => invite(f.uid)} disabled={!connected || !!invited[f.uid]}>{invited[f.uid] ? 'Отправлено' : 'Позвать'}</button>
+                        </div>
+                      ))}
                     </div>
                   </div>
-                  <div className="set"><span>Игроков в сессии</span><b>{players} / {maxPlayers}</b></div>
                 </div>
-                <div className="panel" style={{ flex: 1, padding: '16px 22px 8px' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-                    <span className="cn" style={{ fontSize: 20, fontWeight: 700 }}>Друзья в сети</span>
-                    <span className="mut" style={{ fontSize: 13 }}>{currentUser ? onlineFriends.length : ''}</span>
-                  </div>
-                  <div id="frl" className="scroll" style={{ marginTop: 6 }}>
-                    {!currentUser ? (
-                      <div className="empty">
-                        <div className="mut">Войдите через Google, чтобы видеть друзей.</div>
-                        {onOpenProfile && <button className="btn btn-s btn-sm" onClick={onOpenProfile}>Аккаунт</button>}
-                      </div>
-                    ) : onlineFriends.length === 0 ? (
-                      <div className="empty"><div className="mut">Сейчас никого из друзей нет в сети.</div></div>
-                    ) : onlineFriends.map(f => (
-                      <div className="fr" key={f.uid}>
-                        <span className="av" style={{ background: avatarColor(f.name) }}>{f.name.charAt(0).toUpperCase()}</span>
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.name}</div>
-                          <div className="mut" style={{ fontSize: 13 }}>{f.status === 'in_game' && f.room ? 'В игре: ' + f.room : 'В сети'}</div>
-                        </div>
-                        <button className="btn btn-s btn-sm" onClick={() => invite(f.uid)} disabled={!connected || !!invited[f.uid]}>{invited[f.uid] ? 'Отправлено' : 'Позвать'}</button>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-              {onOpenServers && (
-                <div className="row2" style={{ marginTop: 20 }}><button className="btn btn-s" onClick={onOpenServers}>Найти сервер в каталоге</button></div>
-              )}
-            </section>
-          )}
+                {onOpenServers && (
+                  <div className="row2" style={{ flex: 'none' }}><button className="btn btn-s" onClick={onOpenServers}>Найти сервер в каталоге</button></div>
+                )}
+              </section>
+            )}
 
-          {/* настройки */}
-          {shown === 'settings' && (
-            <section className="pan fade" key="settings">
-              <div className="tb">
-                {TABS.map(([id, label]) => (
-                  <button key={id} className={'tab cn' + (id === tab ? ' tab-on' : '')} onClick={() => setTab(id)}>{label}</button>
-                ))}
-              </div>
-              <div className="panel scroll" id="rows" style={{ padding: '8px 0' }}>
-                {rows.map((r, i) => (
-                  <div className="set" key={tab + i}>
-                    <span>{r.l}</span>
-                    {r.t === 'tg' && <button className={'tg' + (r.v ? ' on' : '')} role="switch" aria-checked={r.v} aria-label={r.l} onClick={() => r.set(!r.v)} />}
-                    {r.t === 'seg' && <Seg value={r.v} onChange={r.set} options={r.o} />}
-                    {r.t === 'sld' && (
-                      <div className="sld">
-                        <Track label={r.l} value={r.v} min={r.min} max={r.max} step={r.step} onChange={r.set} />
-                        <span className="sld-v">{r.fmt(r.v)}</span>
-                      </div>
-                    )}
-                    {r.t === 'keys' && <span className="kv">{r.k.map(k => <span className="key" key={k}>{k}</span>)}</span>}
-                    {r.t === 'btn' && <button className="btn btn-s btn-sm" onClick={r.act}>{r.label}</button>}
-                  </div>
-                ))}
-              </div>
-            </section>
-          )}
+            {/* настройки */}
+            {shown === 'settings' && (
+              <section className="pan fade" key="settings" style={{ display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+                <div className="tb" style={{ flex: 'none' }}>
+                  {TABS.map(([id, label]) => (
+                    <button key={id} className={'tab cn' + (id === tab ? ' tab-on' : '')} onClick={() => setTab(id)}>{label}</button>
+                  ))}
+                </div>
+                <div className="panel scroll" id="rows" style={{ padding: '8px 0', flex: 1, maxHeight: 'none' }}>
+                  {rows.map((r, i) => (
+                    <div className="set" key={tab + i}>
+                      <span>{r.l}</span>
+                      {r.t === 'tg' && <button className={'tg' + (r.v ? ' on' : '')} role="switch" aria-checked={r.v} aria-label={r.l} onClick={() => r.set(!r.v)} />}
+                      {r.t === 'seg' && <Seg value={r.v} onChange={r.set} options={r.o} />}
+                      {r.t === 'sld' && (
+                        <div className="sld">
+                          <Track label={r.l} value={r.v} min={r.min} max={r.max} step={r.step} onChange={r.set} />
+                          <span className="sld-v">{r.fmt(r.v)}</span>
+                        </div>
+                      )}
+                      {r.t === 'keys' && <span className="kv">{r.k.map(k => <span className="key" key={k}>{k}</span>)}</span>}
+                      {r.t === 'btn' && <button className="btn btn-s btn-sm" onClick={r.act}>{r.label}</button>}
+                    </div>
+                  ))}
+                </div>
+              </section>
+            )}
+          </div>
 
           <div className="hint">
             <div style={{ display: 'flex', alignItems: 'center' }}><span className="key">↑↓</span>Навигация<span className="key">Enter</span>Выбрать<span className="key">Esc</span>В игру</div>

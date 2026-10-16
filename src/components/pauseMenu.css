@@ -1,8 +1,8 @@
 /* Verbatim from the supplied pause.html (inside the shadow root). Additions for the live version are at the bottom. */
 :host{display:block;width:100%;height:100%}
 *{box-sizing:border-box}
-#w{position:fixed;top:env(safe-area-inset-top,0px);right:env(safe-area-inset-right,0px);bottom:env(safe-area-inset-bottom,0px);left:env(safe-area-inset-left,0px);overflow:hidden}
-.gm{position:absolute;left:0;top:0;width:1440px;height:900px;transform-origin:0 0;overflow:hidden;background:#121315;font:15px 'Barlow',system-ui,sans-serif;color:#e9e6df;transition:opacity .4s}
+#w{position:fixed;inset:0;overflow:hidden}
+.gm{position:absolute;inset:0;width:100%;height:100%;overflow:hidden;background:rgba(18,19,21,0.94);font:15px 'Barlow',system-ui,sans-serif;color:#e9e6df;transition:opacity .4s;display:flex;flex-direction:column}
 .gm.gone{opacity:0;pointer-events:none}
 #rot{display:none;position:fixed;inset:0;z-index:10;flex-direction:column;align-items:center;justify-content:center;gap:18px;padding:24px;text-align:center;background:#0d0e10;color:#e9e6df;font:600 20px 'Barlow Condensed','Arial Narrow',sans-serif;letter-spacing:.08em;text-transform:uppercase}
 #rot svg{animation:rt 2.4s ease-in-out infinite}
@@ -16,7 +16,7 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer;paddin
 .row2{display:flex;gap:12px}
 .panel{background:rgba(20,20,22,.86);border:1px solid rgba(255,255,255,.09);border-radius:14px}
 .chip{display:flex;align-items:center;gap:10px;height:44px;padding:0 16px;border-radius:10px;background:rgba(22,22,24,.7);border:1px solid rgba(255,255,255,.09)}
-.top{position:absolute;left:64px;right:64px;top:34px;height:44px;display:flex;align-items:center;justify-content:space-between}
+.top{position:relative;width:100%;padding:28px 64px 0 64px;display:flex;align-items:center;justify-content:space-between;flex:none}
 .ttl{font-size:26px;font-weight:700}
 .menu-i{display:flex;align-items:center;gap:18px;height:62px;padding:0 22px;border-left:3px solid transparent;font-size:27px;font-weight:600;color:#cfcbc1;width:100%;transition:background .18s,border-color .18s,color .18s,padding .18s}
 .menu-i:hover{background:rgba(255,255,255,.06);color:#fff;border-left-color:rgba(201,146,43,.8);padding-left:30px}
@@ -30,7 +30,7 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer;paddin
 .btn[disabled]{opacity:.5;pointer-events:none}
 .key{display:inline-flex;align-items:center;justify-content:center;min-width:28px;height:26px;padding:0 8px;border-radius:6px;border:1px solid rgba(255,255,255,.22);font-size:12px;font-weight:600;margin-right:8px}
 .key+.key,.hint span+.key{margin-left:22px}
-.hint{position:absolute;left:64px;right:64px;bottom:34px;display:flex;align-items:center;justify-content:space-between;font-size:13px;color:#a29e93}
+.hint{position:relative;width:100%;padding:16px 64px;display:flex;align-items:center;justify-content:space-between;font-size:13px;color:#a29e93;flex:none;border-top:1px solid rgba(255,255,255,.06)}
 .th{position:relative;overflow:hidden;background:linear-gradient(180deg,#3b2a1b,#c47a2a 75%)}
 .th::before{content:'';position:absolute;inset:0;background:radial-gradient(circle at 70% 35%,rgba(255,200,120,.35),transparent 45%)}
 .th::after{content:'';position:absolute;left:0;right:0;bottom:0;height:55%;background:rgba(8,8,9,.5);clip-path:polygon(0 60%,14% 28%,27% 52%,44% 12%,61% 48%,77% 22%,100% 54%,100% 100%,0 100%)}
@@ -60,7 +60,9 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer;paddin
 .dot{width:9px;height:9px;border-radius:50%;flex:none}
 .fr{display:flex;align-items:center;gap:14px;height:62px;padding:0 4px;border-bottom:1px solid rgba(255,255,255,.06)}
 .dim{opacity:.4;pointer-events:none;transition:opacity .25s}
-.pan{position:absolute;left:520px;top:176px;width:856px}
+.main-content{position:relative;flex:1;display:flex;padding:24px 64px;gap:50px;overflow:hidden}
+.nav-col{width:400px;display:flex;flex-direction:column;gap:6px;flex:none}
+.pan{flex:1;height:100%;overflow-y:auto}
 .fade{animation:fd .35s cubic-bezier(.2,.8,.2,1) both}
 @keyframes fd{from{opacity:0;transform:translateX(24px)}to{opacity:1;transform:none}}
 #mod{position:absolute;inset:0;z-index:5;display:flex;align-items:center;justify-content:center;background:rgba(9,9,10,.72);transition:opacity .25s}
