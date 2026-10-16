@@ -490,49 +490,52 @@ export function stepNodeBeamSimulation(
   // -------------------------------------------------------------------------
   const tracking = system.definition?.tracking;
 
-  // Front crumple:
+  // Aggregate damage is the authoritative, monotonic record of energy the
+  // structure has absorbed; the node mesh is its live shape. Do not let a
+  // damped elastic rebound erase damage already recorded by damageModel.ts.
+  // Otherwise collisions, component damage and rendering diverge.
   if (tracking?.frontNodeIds && tracking.frontNodeIds.length > 0) {
     const frontOffsets = tracking.frontNodeIds.map(id => nodes[id] ? -nodes[id].offsetX : 0);
-    dmg.frontCrumple = Math.max(0, ...frontOffsets);
+    dmg.frontCrumple = Math.max(dmg.frontCrumple || 0, 0, ...frontOffsets);
     const leftCornerNode = nodes[tracking.frontNodeIds[tracking.frontNodeIds.length - 1]];
     const rightCornerNode = nodes[tracking.frontNodeIds[1] ?? tracking.frontNodeIds[0]];
-    dmg.frontLeftDent = leftCornerNode ? Math.hypot(leftCornerNode.offsetX, leftCornerNode.offsetY) : 0;
-    dmg.frontRightDent = rightCornerNode ? Math.hypot(rightCornerNode.offsetX, rightCornerNode.offsetY) : 0;
+    dmg.frontLeftDent = Math.max(dmg.frontLeftDent || 0, leftCornerNode ? Math.hypot(leftCornerNode.offsetX, leftCornerNode.offsetY) : 0);
+    dmg.frontRightDent = Math.max(dmg.frontRightDent || 0, rightCornerNode ? Math.hypot(rightCornerNode.offsetX, rightCornerNode.offsetY) : 0);
   } else {
     const frontNode = nodes.reduce((prev, curr) => (curr.origX > prev.origX ? curr : prev), nodes[0]);
-    dmg.frontCrumple = Math.max(0, -(frontNode.offsetX || 0));
-    dmg.frontLeftDent = Math.hypot(frontNode.offsetX, frontNode.offsetY);
-    dmg.frontRightDent = dmg.frontLeftDent;
+    dmg.frontCrumple = Math.max(dmg.frontCrumple || 0, 0, -(frontNode.offsetX || 0));
+    dmg.frontLeftDent = Math.max(dmg.frontLeftDent || 0, Math.hypot(frontNode.offsetX, frontNode.offsetY));
+    dmg.frontRightDent = Math.max(dmg.frontRightDent || 0, dmg.frontLeftDent);
   }
 
   // Rear crumple:
   if (tracking?.rearNodeIds && tracking.rearNodeIds.length > 0) {
     const rearOffsets = tracking.rearNodeIds.map(id => nodes[id] ? nodes[id].offsetX : 0);
-    dmg.rearCrumple = Math.max(0, ...rearOffsets);
+    dmg.rearCrumple = Math.max(dmg.rearCrumple || 0, 0, ...rearOffsets);
     const rearRightNode = nodes[tracking.rearNodeIds[0]];
     const rearLeftNode = nodes[tracking.rearNodeIds[tracking.rearNodeIds.length - 1]];
-    dmg.rearRightDent = rearRightNode ? Math.hypot(rearRightNode.offsetX, rearRightNode.offsetY) : 0;
-    dmg.rearLeftDent = rearLeftNode ? Math.hypot(rearLeftNode.offsetX, rearLeftNode.offsetY) : 0;
+    dmg.rearRightDent = Math.max(dmg.rearRightDent || 0, rearRightNode ? Math.hypot(rearRightNode.offsetX, rearRightNode.offsetY) : 0);
+    dmg.rearLeftDent = Math.max(dmg.rearLeftDent || 0, rearLeftNode ? Math.hypot(rearLeftNode.offsetX, rearLeftNode.offsetY) : 0);
   } else {
     const rearNode = nodes.reduce((prev, curr) => (curr.origX < prev.origX ? curr : prev), nodes[0]);
-    dmg.rearCrumple = Math.max(0, rearNode.offsetX || 0);
-    dmg.rearLeftDent = Math.hypot(rearNode.offsetX, rearNode.offsetY);
-    dmg.rearRightDent = dmg.rearLeftDent;
+    dmg.rearCrumple = Math.max(dmg.rearCrumple || 0, 0, rearNode.offsetX || 0);
+    dmg.rearLeftDent = Math.max(dmg.rearLeftDent || 0, Math.hypot(rearNode.offsetX, rearNode.offsetY));
+    dmg.rearRightDent = Math.max(dmg.rearRightDent || 0, dmg.rearLeftDent);
   }
 
   // Side flanks:
   if (tracking?.leftNodeIds && tracking.leftNodeIds.length > 0) {
-    dmg.leftDent = Math.max(0, ...tracking.leftNodeIds.map(id => nodes[id] ? nodes[id].offsetY : 0));
+    dmg.leftDent = Math.max(dmg.leftDent || 0, 0, ...tracking.leftNodeIds.map(id => nodes[id] ? nodes[id].offsetY : 0));
   } else {
     const leftNode = nodes.reduce((prev, curr) => (curr.origY < prev.origY ? curr : prev), nodes[0]);
-    dmg.leftDent = Math.max(0, -(leftNode.offsetY || 0));
+    dmg.leftDent = Math.max(dmg.leftDent || 0, 0, -(leftNode.offsetY || 0));
   }
 
   if (tracking?.rightNodeIds && tracking.rightNodeIds.length > 0) {
-    dmg.rightDent = Math.max(0, ...tracking.rightNodeIds.map(id => nodes[id] ? -nodes[id].offsetY : 0));
+    dmg.rightDent = Math.max(dmg.rightDent || 0, 0, ...tracking.rightNodeIds.map(id => nodes[id] ? -nodes[id].offsetY : 0));
   } else {
     const rightNode = nodes.reduce((prev, curr) => (curr.origY > prev.origY ? curr : prev), nodes[0]);
-    dmg.rightDent = Math.max(0, rightNode.offsetY || 0);
+    dmg.rightDent = Math.max(dmg.rightDent || 0, 0, rightNode.offsetY || 0);
   }
 
   // Steering drift & frame twist:
@@ -596,10 +599,16 @@ export function applyNodeBeamImpact(
   localImpulseX /= impLen;
   localImpulseY /= impLen;
 
-  // Physical kinetic momentum transfer (BeamNG reduced mass impulse)
+  // Physical kinetic momentum transfer (BeamNG reduced mass impulse).
+  // A real crash uses one contact force throughout the crush stroke.  In this
+  // 2D model activeCrumple is that contact force; injecting a second, instant
+  // spring impulse first made the perimeter flare/flatten for one frame and
+  // only then compress.  Keep burst impulses for diagnostics and small hits,
+  // but let an active crash be driven solely by the directional contact solver.
+  const isContinuousCrush = !!car.activeCrumple && car.activeCrumple.timer > 0;
   const mu = reducedMass(car.mass || 1400, strikerMass);
   const normalSpeed = Math.max(12, impactSpeed);
-  const impulseMag = mu * normalSpeed * 0.0022; // Scaled to 2D node mass units
+  const impulseMag = isContinuousCrush ? 0 : mu * normalSpeed * 0.0022; // Scaled to 2D node mass units
 
   // Contact radius: narrow pole concentrates impulse on 1-3 nodes, wide wall distributes it
   const carWidth = car.width;
@@ -696,10 +705,14 @@ export function applyNodeBeamImpact(
       const d = (nodes[i].x - nodes[i].origX) * localImpulseX + (nodes[i].y - nodes[i].origY) * localImpulseY;
       if (d > curDepth) curDepth = d;
     }
+    // targetCrushPx is cumulative across repeated impacts in one zone. Keep
+    // the constraint large enough for that target; otherwise energy damage
+    // accumulates while the rendered mesh is capped at the newest hit only.
+    const cumulativeTarget = car.activeCrumple?.targetCrushPx || 0;
     system.crushLimit = {
       dirX: localImpulseX,
       dirY: localImpulseY,
-      depth: curDepth + crushLimitPx * 1.15,
+      depth: Math.max(curDepth + crushLimitPx * 1.15, cumulativeTarget * 1.05),
       cx: localContactX,
       cy: localContactY,
       radius: spreadRadius * 2.2
@@ -708,14 +721,13 @@ export function applyNodeBeamImpact(
     system.crushLimit = undefined;
   }
 
-  // If activeCrumple is NOT active (e.g. manual diagnostics test or instant scrape), run burst immediately
-  if (!car.activeCrumple || car.activeCrumple.timer <= 0) {
+  // If activeCrumple is NOT active (e.g. manual diagnostics test or instant scrape), run burst immediately.
+  // During a real crash stepNodeBeamContinuousContact applies the contact displacement in the same direction
+  // on the regular physics tick.  Running a separate shock step here reintroduced the visual pre-flattening.
+  if (!isContinuousCrush) {
     for (let burst = 0; burst < 4; burst++) {
       stepNodeBeamSimulation(system, 0.016, car);
     }
-  } else {
-    // Single sub-step shock to initiate wave
-    stepNodeBeamSimulation(system, 0.005, car);
   }
 
   // Powertrain and component mechanical damage consequences

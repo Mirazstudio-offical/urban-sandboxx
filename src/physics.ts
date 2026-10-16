@@ -74,16 +74,65 @@ export function isArticulatedRoller(car: Vehicle): boolean {
 }
 
 export function getVehicleCollisionOBBs(car: Vehicle, extraMargin = 0.5): VehicleCollisionOBB[] {
-  const frontC = car.damage ? (car.damage.frontCrumple || 0) : 0;
-  const rearC = car.damage ? (car.damage.rearCrumple || 0) : 0;
-  const leftD = car.damage ? (car.damage.leftDent || 0) : 0;
-  const rightD = car.damage ? (car.damage.rightDent || 0) : 0;
+  const dmg = car.damage;
 
-  const effL = Math.max(car.length * 0.45, car.length - (frontC + rearC));
-  const effW = Math.max(car.width * 0.45, car.width - (leftD + rightD));
+  // The renderer uses the node-beam perimeter. Derive the collision proxy from
+  // that same live contour so a visibly crushed car cannot keep colliding as
+  // its original rectangle. The energy damage record also bounds the hull while
+  // a newly hit mesh is still settling. We retain an OBB for the SAT solver.
+  const perimeterCount = dmg?.nodeBeam?.perimeterCount ?? 16;
+  const perimeter = dmg?.deformedVertices?.slice(0, perimeterCount) ?? [];
+  let minLocalX = Infinity;
+  let maxLocalX = -Infinity;
+  let minLocalY = Infinity;
+  let maxLocalY = -Infinity;
 
-  const centerLongShift = (-frontC + rearC) / 2;
-  const centerLatShift = (-rightD + leftD) / 2;
+  for (const vertex of perimeter) {
+    const x = vertex.localX + (Number.isFinite(vertex.offsetX) ? vertex.offsetX : 0);
+    const y = vertex.localY + (Number.isFinite(vertex.offsetY) ? vertex.offsetY : 0);
+    if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
+    minLocalX = Math.min(minLocalX, x);
+    maxLocalX = Math.max(maxLocalX, x);
+    minLocalY = Math.min(minLocalY, y);
+    maxLocalY = Math.max(maxLocalY, y);
+  }
+
+  const hasLivePerimeter = perimeter.length >= 8 &&
+    Number.isFinite(minLocalX) && Number.isFinite(maxLocalX) &&
+    Number.isFinite(minLocalY) && Number.isFinite(maxLocalY) &&
+    maxLocalX - minLocalX > car.length * 0.20 &&
+    maxLocalY - minLocalY > car.width * 0.20;
+
+  const frontC = dmg?.frontCrumple || 0;
+  const rearC = dmg?.rearCrumple || 0;
+  const leftD = dmg?.leftDent || 0;
+  const rightD = dmg?.rightDent || 0;
+
+  // A hit records energy immediately, but the visual mesh reaches its target
+  // over subsequent microsteps. Never let that short settling interval restore
+  // the original collision hull.
+  const scalarMinX = -car.length / 2 + rearC;
+  const scalarMaxX = car.length / 2 - frontC;
+  const scalarMinY = -car.width / 2 + leftD;
+  const scalarMaxY = car.width / 2 - rightD;
+  const collisionMinX = hasLivePerimeter ? Math.max(minLocalX, scalarMinX) : scalarMinX;
+  const collisionMaxX = hasLivePerimeter ? Math.min(maxLocalX, scalarMaxX) : scalarMaxX;
+  const collisionMinY = hasLivePerimeter ? Math.max(minLocalY, scalarMinY) : scalarMinY;
+  const collisionMaxY = hasLivePerimeter ? Math.min(maxLocalY, scalarMaxY) : scalarMaxY;
+
+  const effL = hasLivePerimeter
+    ? Math.max(car.length * 0.45, collisionMaxX - collisionMinX)
+    : Math.max(car.length * 0.45, car.length - (frontC + rearC));
+  const effW = hasLivePerimeter
+    ? Math.max(car.width * 0.45, collisionMaxY - collisionMinY)
+    : Math.max(car.width * 0.45, car.width - (leftD + rightD));
+
+  const centerLongShift = hasLivePerimeter
+    ? (collisionMaxX + collisionMinX) / 2
+    : (-frontC + rearC) / 2;
+  const centerLatShift = hasLivePerimeter
+    ? (collisionMaxY + collisionMinY) / 2
+    : (-rightD + leftD) / 2;
 
   if (isArticulatedRoller(car) && Math.abs(car.steerAngle || 0) > 0.001) {
     const gamma = car.steerAngle || 0;
@@ -1949,9 +1998,20 @@ export function applyVehicleDamageAndDeformation(
     maxZoneLengthPx: (isMachinery || isHeavyRigidTrailer) ? 3.5 : undefined
   });
 
-  // Целевая глубина вмятины для многокадрового сжатия softbody (см. stepNodeBeamContinuousContact)
+  // Целевая глубина вмятины для многокадрового сжатия softbody (см. stepNodeBeamContinuousContact).
+  // This is an absolute stroke from the intact body, not the stroke of only
+  // this hit. Without the already absorbed depth, a repeated impact reset the
+  // visual target and the mesh stopped matching recorded damage.
   if (car.activeCrumple) {
-    car.activeCrumple.targetCrushPx = crush.depthPx;
+    const existingZoneDepth = impactZone === 'front'
+      ? dmg.frontCrumple
+      : impactZone === 'rear'
+        ? dmg.rearCrumple
+        : (normY < 0 ? dmg.leftDent : dmg.rightDent);
+    car.activeCrumple.targetCrushPx = Math.min(
+      crush.totalCapPx,
+      Math.max(car.activeCrumple.targetCrushPx || 0, existingZoneDepth + crush.depthPx)
+    );
   }
 
   // 1. BEAMNG.DRIVE 2D NODE-BEAM PHYSICAL DEFORMATION ENGINE
