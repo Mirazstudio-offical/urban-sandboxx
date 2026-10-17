@@ -7685,27 +7685,6 @@ export default function App() {
             setMainMenuInitialScreen('servers');
             setIsMainMenuOpen(true);
           }}
-          onOpenProfile={() => {
-            setIsPauseMenuOpen(false);
-            setIsUserProfileModalOpen(true);
-          }}
-          onOpenDiagnostics={() => {
-            setIsPauseMenuOpen(false);
-            setIsCrashDiagnosticsOpen(true);
-          }}
-          onOpenCreative={() => {
-            setIsPauseMenuOpen(false);
-            setIsCreativeMode(true);
-            setIsFlying(true);
-            setIsInvincible(true);
-            const p = playerRef.current;
-            if (p) addPlayerNotification(p, 'Режим Творчества активирован!', 'info');
-          }}
-          onOpenCalendar={() => {
-            setIsPauseMenuOpen(false);
-            sound.playButtonPress();
-            setIsDateTimePickerOpen(true);
-          }}
           onExitToMainMenu={() => {
             setIsPauseMenuOpen(false);
             setMainMenuInitialScreen('main');
