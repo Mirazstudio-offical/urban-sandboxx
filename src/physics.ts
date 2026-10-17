@@ -9180,6 +9180,10 @@ export function updateVehiclePhysics(
     const isNeutral = !isInGear;
 
     const emitDriveWheelParticles = (tireX: number, tireY: number, isFrontAxle: boolean) => {
+      if (vSpeedKmh < 2.0 && !isBurnoutHolding) {
+        return;
+      }
+
       const isAxleDriven = isFrontAxle ? isFrontDrive : isRearDrive;
       // Power is ONLY delivered if engine is running, gear is NOT neutral, and axle is driven
       const isApplyingPower = isAxleDriven && !isNeutral && isEngineRunning && drivePedal > 0.05;
