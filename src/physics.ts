@@ -1,5 +1,5 @@
 import { CAR_CONFIGS, canVehicleHaveHitch, createDefaultEngineState, createDefaultFuelSystem, createDefaultFluidTank, ensureVehicleFluidTank, liquidTypeToStainType, createDefaultVehicleDamage, ensureVehicleDamage, getVehicleFuelCapPosition, getVehicleAxleGeometry, isTrailerVehicle, isRoadMachinery, getVehicleDriveType, SPEED_KMH_TO_PX_S, PX_S_TO_SPEED_KMH, getLPGDefaultCapacity, cycleVehicleDiffLock, getVehicleDiffCapabilities, ensureVehicleDiffLock, getVehicleHeadlightDynamicState } from './vehicleHelpers';
-import { Building, GameWorld, InputState, Particle, Pedestrian, Player, SkidMark, Vehicle, StreetProp, FluidStainType, FluidStain, Roundabout, RollingStockCar, WorldWind, RoadSegment, Intersection } from './types';
+import { Building, GameWorld, InputState, Particle, Pedestrian, Player, SkidMark, Vehicle, WheelState, StreetProp, FluidStainType, FluidStain, Roundabout, RollingStockCar, WorldWind, RoadSegment, Intersection } from './types';
 import { getBuildingLayout, constrainPlayerToInterior } from './buildingInteriors';
 import { constrainPlayerToBusInterior } from './busInteriorSystem';
 import { sound } from './audio';
@@ -7260,14 +7260,12 @@ export function updateVehiclePhysics(
     const isCounterSteerRight = isSliding && yawVel < -0.25 && steerInputDir > 0;
     const isCounterSteeringForLimit = isCounterSteerLeft || isCounterSteerRight;
 
-    // 1. Steering Limit at Speed (Driver Assist)
-    // Limits the max lock at high speeds to prevent instant spin-outs since keyboards are binary.
-    // However, if the car is sliding or drifting, we give the player FULL lock access ONLY when actively counter-steering!
-    // At high speed turn-in, progressive lock reduction prevents slamming the rack into 45 deg lock.
-    const speedLockReduction = Math.max(0.18, 1.0 - Math.pow(speedRatio, 0.72) * 0.80);
+    // 1. Physical Steering Rack Limit: full lock authority for drifts, scandinavian flicks, and tight slides
+    // High-speed natural hydraulic damping provides smooth steering weight at top speed without blocking lock
+    const highSpeedDamp = Math.max(0.68, 1.0 - Math.pow(speedRatio, 1.25) * 0.32);
     const dynamicMaxSteer = isCounterSteeringForLimit
       ? cfg.maxSteerAngle 
-      : cfg.maxSteerAngle * speedLockReduction;
+      : cfg.maxSteerAngle * highSpeedDamp;
 
     // 2. Physical Steering Rack Speed (Steering Weight & Lack of Power Steering)
     // Without power steering (ГУР), turning wheels on the spot (0 km/h) is physically exhausting and slow.
@@ -8522,57 +8520,70 @@ export function updateVehiclePhysics(
       vehicle.speed = 0;
     }
 
-    // --- REALISTIC BICYCLE KINEMATICS WITH REAR-AXLE PIVOT & CONTROLLED DRIFT ---
-    const { rearAxleDist, wheelBase } = getVehicleAxleGeometry(vehicle);
+    // --- FIRST-PRINCIPLES 4-WHEEL DYNAMICS & PACEJKA BRUSH TIRE SIMULATION ---
+    const { rearAxleDist: geomRearAxleDist, wheelBase: geomWheelBase } = getVehicleAxleGeometry(vehicle);
+    const wheelBase = Math.max(16, geomWheelBase);
+    const isSoloMoto = cfg.type.startsWith('moto_') || cfg.type === 'moped_soviet';
+    const halfTrack = isSoloMoto ? 0 : Math.max(3.5, (cfg.width || 20) * 0.42);
+    const trackWidth = halfTrack * 2;
+    const baseTireWidth = (cfg.width || 20) * 0.16 + 2.0;
 
-    const initialAngle = vehicle.angle;
-    const initHeadingCos = Math.cos(initialAngle);
-    const initHeadingSin = Math.sin(initialAngle);
-
-    // Initial position of the rear axle in world space (the true pivot of front-steered vehicles)
-    const rearX = vehicle.x - initHeadingCos * rearAxleDist;
-    const rearY = vehicle.y - initHeadingSin * rearAxleDist;
-
-    // Angular rotation from front wheel steer angle or articulated center pivot
-    // Wheeled asphalt pavers have a rigid frame with steered front bogie wheels (NOT articulated!)
     const isArticulated = vehicle.type === 'roller_heavy_tandem' || 
                           vehicle.type === 'roller_compact_sidewalk' || 
                           vehicle.type === 'roller_pneumatic';
 
-    const maxSafeSteer = 0.82; // cap steer from asymptotic growth
-    const clampedSteer = Math.max(-maxSafeSteer, Math.min(maxSafeSteer, vehicle.steerAngle));
-    const tanSteer = Math.tan(clampedSteer);
+    // Mass properties & Moments of Inertia
+    const totalMass = Math.max(300, (cfg.mass || 1400) * massRatio);
+    const Iz = (totalMass / 12) * ((cfg.length || 45) ** 2 + (cfg.width || 20) ** 2) * 1.15;
 
-    let angularSpeed = 0;
-    if (isArticulated) {
-      // True Articulated Frame Kinematics: the front drum pivots by clampedSteer relative to the rear frame.
-      // The front drum traction yaws the rear frame around the rear axle: omega = (v / wheelbase) * sin(steer)
-      angularSpeed = (vehicle.speed / Math.max(10, wheelBase)) * Math.sin(clampedSteer);
+    // Center of gravity distances to axles (52% front, 48% rear)
+    const Lf = wheelBase * 0.52;
+    const Lr = wheelBase * 0.48;
 
-      // Hydrostatic Transmission Drag when throttle is released
-      if (!input.forward && !input.backward) {
-        vehicle.speed *= Math.pow(0.82, dt * 60);
-      }
-    } else {
-      // Standard front-steered Ackerman bicycle kinematics around rear axle
-      angularSpeed = (vehicle.speed / Math.max(1, wheelBase)) * tanSteer;
+    // Current vehicle orientation and velocity vectors
+    const curAngle = vehicle.angle;
+    const cosA = Math.cos(curAngle);
+    const sinA = Math.sin(curAngle);
 
-      // Hydrostatic drag for wheeled paver as well
-      if (vehicle.type === 'paver_asphalt_wheeled' && !input.forward && !input.backward) {
-        vehicle.speed *= Math.pow(0.82, dt * 60);
-      }
-    }
+    // Physical continuous velocities in world space (preserving ballistic momentum & collision impulses)
+    let curVx = Number.isFinite(vehicle.vx) ? vehicle.vx : cosA * (vehicle.speed || 0);
+    let curVy = Number.isFinite(vehicle.vy) ? vehicle.vy : sinA * (vehicle.speed || 0);
+    let curYaw = Number.isFinite(vehicle.angularVelocity) ? vehicle.angularVelocity : 0;
 
-    // MTZ Split Brakes pivot turning yaw moment
-    if (isTractor && !latchEnabled) {
-      const brakeDiff = brakeRightVal - brakeLeftVal; // positive: turn right, negative: turn left
-      if (Math.abs(brakeDiff) > 0.1 && Math.abs(vehicle.speed) > 1.0) {
-        const dir = Math.sign(vehicle.speed);
-        // Add robust turning force (pivoting on one wheel).
-        // Since standard turning is ~0.8-1.0 rad/s, we add a powerful 1.8 rad/s multiplier scaled by speed.
-        angularSpeed += brakeDiff * dir * 1.8 * Math.min(1.0, Math.abs(vehicle.speed) / 110.0);
-      }
-    }
+    // Body coordinate velocities: vLong (+ forward, - reverse), vLat (+ right, - left)
+    const vLong = curVx * cosA + curVy * sinA;
+    const vLat = -curVx * sinA + curVy * cosA;
+
+    // --- 1. DYNAMIC 3D WEIGHT TRANSFER (PACEJKA NORMAL LOAD Fz ON 4 WHEELS) ---
+    const g_acc = 580.0; // px/s^2 equivalent to ~9.81 m/s^2 in world scale
+    const hCg = 6.2;     // effective Center of Gravity height in pixels
+    const Fz_f0 = totalMass * g_acc * (Lr / wheelBase) * 0.5;
+    const Fz_r0 = totalMass * g_acc * (Lf / wheelBase) * 0.5;
+
+    // Body accelerations for weight transfer
+    const aLongEst = engineAccel;
+    const aLatEst = vLong * curYaw;
+
+    const dFz_long = totalMass * aLongEst * (hCg / wheelBase);
+    const dFz_lat_f = isSoloMoto ? 0 : totalMass * aLatEst * (hCg / Math.max(8, trackWidth)) * (Lr / wheelBase);
+    const dFz_lat_r = isSoloMoto ? 0 : totalMass * aLatEst * (hCg / Math.max(8, trackWidth)) * (Lf / wheelBase);
+
+    // 4 individual wheel normal loads (clamped to prevent negative unweighting)
+    const Fz_FL = Math.max(Fz_f0 * 0.06, Fz_f0 - dFz_long * 0.5 - dFz_lat_f);
+    const Fz_FR = Math.max(Fz_f0 * 0.06, Fz_f0 - dFz_long * 0.5 + dFz_lat_f);
+    const Fz_RL = Math.max(Fz_r0 * 0.06, Fz_r0 + dFz_long * 0.5 - dFz_lat_r);
+    const Fz_RR = Math.max(Fz_r0 * 0.06, Fz_r0 + dFz_long * 0.5 + dFz_lat_r);
+
+    // --- 2. 4-WHEEL CONTACT PATCH WORLD COORDINATES ---
+    const tFLX = vehicle.x + cosA * Lf - sinA * (-halfTrack);
+    const tFLY = vehicle.y + sinA * Lf + cosA * (-halfTrack);
+    const tFRX = isSoloMoto ? (vehicle.x + cosA * Lf) : (vehicle.x + cosA * Lf - sinA * halfTrack);
+    const tFRY = isSoloMoto ? (vehicle.y + sinA * Lf) : (vehicle.y + sinA * Lf + cosA * halfTrack);
+
+    const tRLX = vehicle.x - cosA * Lr - sinA * (-halfTrack);
+    const tRLY = vehicle.y - sinA * Lr + cosA * (-halfTrack);
+    const tRRX = isSoloMoto ? (vehicle.x - cosA * Lr) : (vehicle.x - cosA * Lr - sinA * halfTrack);
+    const tRRY = isSoloMoto ? (vehicle.y - sinA * Lr) : (vehicle.y - sinA * Lr + cosA * halfTrack);
 
     // Surface & Weather grip calculations
     const isFreezing = curAtmo.isFreezing || curAtmo.surfaceTemp <= 0;
@@ -8585,39 +8596,12 @@ export function updateVehiclePhysics(
     let isIcySurface = (isFreezing && isWetSurface) || weatherWeights.blizzard > 0.2;
 
     if (isSnowCovered) {
-      // Persistent winter ground snowpack and packed icy crust
       weatherGrip = Math.min(weatherGrip, 0.36);
       isSnowySurface = true;
     } else if (isFreezing && curAtmo.surfaceTemp <= 0) {
-      // Freezing pavement with condensation: black ice
       weatherGrip = Math.min(weatherGrip, 0.45);
       isIcySurface = true;
     }
-
-    // Check puddles / oil / fuel / coolant / sand stains with per-tire contact & heavy vehicle mass physics
-    let frontStainGrip = 1.0;
-    let rearStainGrip = 1.0;
-    
-    // Front and Rear axle world coordinates
-    const frontAxleX = rearX + initHeadingCos * wheelBase;
-    const frontAxleY = rearY + initHeadingSin * wheelBase;
-    const rearAxleX = rearX;
-    const rearAxleY = rearY;
-
-    // Solo motorcycle check
-    const isSoloMoto = cfg.type.startsWith('moto_') || cfg.type === 'moped_soviet';
-    const trackHalfForTires = isSoloMoto ? 0 : (cfg.width || 20) * 0.42;
-
-    // 4 Distinct Wheel Contact Patch coordinates (FL, FR, RL, RR)
-    const tFLX = isSoloMoto ? frontAxleX : (frontAxleX - initHeadingSin * trackHalfForTires);
-    const tFLY = isSoloMoto ? frontAxleY : (frontAxleY + initHeadingCos * trackHalfForTires);
-    const tFRX = isSoloMoto ? frontAxleX : (frontAxleX + initHeadingSin * trackHalfForTires);
-    const tFRY = isSoloMoto ? frontAxleY : (frontAxleY - initHeadingCos * trackHalfForTires);
-
-    const tRLX = isSoloMoto ? rearAxleX : (rearAxleX - initHeadingSin * trackHalfForTires);
-    const tRLY = isSoloMoto ? rearAxleY : (rearAxleY + initHeadingCos * trackHalfForTires);
-    const tRRX = isSoloMoto ? rearAxleX : (rearAxleX + initHeadingSin * trackHalfForTires);
-    const tRRY = isSoloMoto ? rearAxleY : (rearAxleY - initHeadingCos * trackHalfForTires);
 
     // Sample terrain surface under EACH individual wheel
     const surfFL = getSurfaceTypeAt(world, tFLX, tFLY);
@@ -8630,19 +8614,8 @@ export function updateVehiclePhysics(
     const offroadRL = getSurfaceOffroadProps(surfRL.type, isWetSurface, isStormWeather, isSnowySurface);
     const offroadRR = getSurfaceOffroadProps(surfRR.type, isWetSurface, isStormWeather, isSnowySurface);
 
-    // Combined vehicle & trailer mass load factor
-    let combinedMass = cfg.mass || 1500;
-    if (vehicle.trailerId) {
-      const trailer = world.vehicles.find(v => v.id === vehicle.trailerId);
-      if (trailer) {
-        const trailerCfg = CAR_CONFIGS[trailer.type] || CAR_CONFIGS.sedan;
-        combinedMass += (trailerCfg.mass || 1000) + (trailer.fluidTank?.currentVolume ?? 0) + ((trailer as any).cargoMass || 0);
-      }
-    }
-
-    // Heavy trucks & road trains have massive vertical tire load and multi-wheel contact patches
-    // that cut through small fluid stains instead of hydroplaning like a lightweight car
-    const heavyMassLoadDamping = Math.min(0.68, Math.max(0, (combinedMass - 1500) / 22000));
+    // Heavy mass load damping for commercial vehicles cutting through fluid films
+    const heavyMassLoadDamping = Math.min(0.68, Math.max(0, (totalMass - 1500) / 22000));
 
     let stainFL = 1.0;
     let stainFR = 1.0;
@@ -8653,46 +8626,18 @@ export function updateVehiclePhysics(
       for (let i = 0; i < world.stains.length; i++) {
         const st = world.stains[i];
         const rSt = st.radius || 15;
-        
-        // Base grip for a single standard tire on this stain type
         let baseGripReduction = 0.35;
-        if (st.type === 'oil' || st.type === 'fuel') {
-          baseGripReduction = 0.32;
-        } else if (st.type === 'coolant') {
-          baseGripReduction = 0.42;
-        } else if (st.type === 'water') {
-          baseGripReduction = isFreezing ? 0.12 : 0.55;
-        } else if (st.type === 'sand') {
-          baseGripReduction = 0.68;
-        }
+        if (st.type === 'oil' || st.type === 'fuel') baseGripReduction = 0.28;
+        else if (st.type === 'coolant') baseGripReduction = 0.38;
+        else if (st.type === 'water') baseGripReduction = isFreezing ? 0.12 : 0.52;
+        else if (st.type === 'sand') baseGripReduction = 0.65;
 
-        // Heavy vehicle mass & multi-tire grip compensation
-        const effectiveStainGripOnTire = baseGripReduction + (1.0 - baseGripReduction) * heavyMassLoadDamping;
+        const effectiveGrip = baseGripReduction + (1.0 - baseGripReduction) * heavyMassLoadDamping;
 
-        if (Math.hypot(tFLX - st.x, tFLY - st.y) < rSt + 6) {
-          stainFL = Math.min(stainFL, effectiveStainGripOnTire);
-          if (st.type === 'water') {
-            if (isFreezing) isIcySurface = true; else isWetSurface = true;
-          }
-        }
-        if (Math.hypot(tFRX - st.x, tFRY - st.y) < rSt + 6) {
-          stainFR = Math.min(stainFR, effectiveStainGripOnTire);
-          if (st.type === 'water') {
-            if (isFreezing) isIcySurface = true; else isWetSurface = true;
-          }
-        }
-        if (Math.hypot(tRLX - st.x, tRLY - st.y) < rSt + 6) {
-          stainRL = Math.min(stainRL, effectiveStainGripOnTire);
-          if (st.type === 'water') {
-            if (isFreezing) isIcySurface = true; else isWetSurface = true;
-          }
-        }
-        if (Math.hypot(tRRX - st.x, tRRY - st.y) < rSt + 6) {
-          stainRR = Math.min(stainRR, effectiveStainGripOnTire);
-          if (st.type === 'water') {
-            if (isFreezing) isIcySurface = true; else isWetSurface = true;
-          }
-        }
+        if (Math.hypot(tFLX - st.x, tFLY - st.y) < rSt + 6) { stainFL = Math.min(stainFL, effectiveGrip); if (st.type === 'water') { if (isFreezing) isIcySurface = true; else isWetSurface = true; } }
+        if (Math.hypot(tFRX - st.x, tFRY - st.y) < rSt + 6) { stainFR = Math.min(stainFR, effectiveGrip); if (st.type === 'water') { if (isFreezing) isIcySurface = true; else isWetSurface = true; } }
+        if (Math.hypot(tRLX - st.x, tRLY - st.y) < rSt + 6) { stainRL = Math.min(stainRL, effectiveGrip); if (st.type === 'water') { if (isFreezing) isIcySurface = true; else isWetSurface = true; } }
+        if (Math.hypot(tRRX - st.x, tRRY - st.y) < rSt + 6) { stainRR = Math.min(stainRR, effectiveGrip); if (st.type === 'water') { if (isFreezing) isIcySurface = true; else isWetSurface = true; } }
       }
     }
 
@@ -8700,505 +8645,386 @@ export function updateVehiclePhysics(
       for (let i = 0; i < world.puddles.length; i++) {
         const pud = world.puddles[i];
         const rPud = Math.max(pud.radiusX, pud.radiusY);
-        // Liquid puddle hydroplaning grip vs frozen glaze ice grip (наледь)
-        const pudGripBase = isFreezing ? 0.12 : (isWetSurface ? 0.62 : 0.70);
+        const pudGripBase = isFreezing ? 0.12 : (isWetSurface ? 0.58 : 0.66);
         const effectivePudGrip = pudGripBase + (1.0 - pudGripBase) * heavyMassLoadDamping;
 
-        if (Math.hypot(tFLX - pud.x, tFLY - pud.y) < rPud + 4) {
-          stainFL = Math.min(stainFL, effectivePudGrip);
-          if (isFreezing) isIcySurface = true; else isWetSurface = true;
-        }
-        if (Math.hypot(tFRX - pud.x, tFRY - pud.y) < rPud + 4) {
-          stainFR = Math.min(stainFR, effectivePudGrip);
-          if (isFreezing) isIcySurface = true; else isWetSurface = true;
-        }
-        if (Math.hypot(tRLX - pud.x, tRLY - pud.y) < rPud + 4) {
-          stainRL = Math.min(stainRL, effectivePudGrip);
-          if (isFreezing) isIcySurface = true; else isWetSurface = true;
-        }
-        if (Math.hypot(tRRX - pud.x, tRRY - pud.y) < rPud + 4) {
-          stainRR = Math.min(stainRR, effectivePudGrip);
-          if (isFreezing) isIcySurface = true; else isWetSurface = true;
-        }
+        if (Math.hypot(tFLX - pud.x, tFLY - pud.y) < rPud + 4) { stainFL = Math.min(stainFL, effectivePudGrip); if (isFreezing) isIcySurface = true; else isWetSurface = true; }
+        if (Math.hypot(tFRX - pud.x, tFRY - pud.y) < rPud + 4) { stainFR = Math.min(stainFR, effectivePudGrip); if (isFreezing) isIcySurface = true; else isWetSurface = true; }
+        if (Math.hypot(tRLX - pud.x, tRLY - pud.y) < rPud + 4) { stainRL = Math.min(stainRL, effectivePudGrip); if (isFreezing) isIcySurface = true; else isWetSurface = true; }
+        if (Math.hypot(tRRX - pud.x, tRRY - pud.y) < rPud + 4) { stainRR = Math.min(stainRR, effectivePudGrip); if (isFreezing) isIcySurface = true; else isWetSurface = true; }
       }
     }
 
-    frontStainGrip = (stainFL + stainFR) / 2.0;
-    rearStainGrip = (stainRL + stainRR) / 2.0;
+    // Tire puncture and flat tire damage penalty
+    const dmg = vehicle.damage as any;
+    const tireDmgFL = (dmg?.flatTireFL || dmg?.wheelPopFL) ? 0.35 : 1.0;
+    const tireDmgFR = (dmg?.flatTireFR || dmg?.wheelPopFR) ? 0.35 : 1.0;
+    const tireDmgRL = (dmg?.flatTireRL || dmg?.wheelPopRL) ? 0.35 : 1.0;
+    const tireDmgRR = (dmg?.flatTireRR || dmg?.wheelPopRR) ? 0.35 : 1.0;
 
-    // Individual wheel grip calculation: weather * stain * surface * offroad
-    const gripFL = weatherGrip * stainFL * surfFL.grip * offroadFL.wetGripMult;
-    const gripFR = weatherGrip * stainFR * surfFR.grip * offroadFR.wetGripMult;
-    const gripRL = weatherGrip * stainRL * surfRL.grip * offroadRL.wetGripMult;
-    const gripRR = weatherGrip * stainRR * surfRR.grip * offroadRR.wetGripMult;
+    // Combined coefficient of friction (mu) for each individual wheel contact patch
+    let muFL = weatherGrip * stainFL * surfFL.grip * offroadFL.wetGripMult * tireDmgFL;
+    let muFR = weatherGrip * stainFR * surfFR.grip * offroadFR.wetGripMult * tireDmgFR;
+    let muRL = weatherGrip * stainRL * surfRL.grip * offroadRL.wetGripMult * tireDmgRL;
+    let muRR = weatherGrip * stainRR * surfRR.grip * offroadRR.wetGripMult * tireDmgRR;
 
-    // Differential lock status
+    if (vehicle.isHeavySuspended) {
+      muFL *= 1.10; muFR *= 1.10; muRL *= 1.10; muRR *= 1.10;
+    }
+
+    // Differential lock states
     const dlState = vehicle.diffLock;
     const isRearLocked = !!dlState?.rear;
     const isFrontLocked = !!dlState?.front;
     const isCenterLocked = !!dlState?.center;
-
-    // Retrieve vehicle drive type (FWD, RWD, AWD)
     const driveType = getVehicleDriveType(vehicle.type);
 
-    // --- MATHEMATICAL REAR AXLE TORQUE & TRACTION (МКБ-З) ---
-    // In an OPEN differential, torque to each wheel is limited by the wheel with least grip:
-    // T_axle = 2 * min(grip_left, grip_right) + internal friction bias (5%).
-    // In a LOCKED differential, wheels are mechanically bound (w_left = w_right):
-    // T_axle = grip_left + grip_right!
-    let surfaceGripRear: number;
-    if (isRearLocked || isSoloMoto) {
-      surfaceGripRear = (gripRL + gripRR) / 2.0;
-    } else {
-      surfaceGripRear = Math.min(gripRL, gripRR) * 1.05;
-    }
+    // --- 3. POWERTRAIN DRIVE & BRAKE DISTRIBUTION ON 4 WHEELS ---
+    const totalPropulsionForce = engineAccel * totalMass;
+    let fDriveFL = 0, fDriveFR = 0, fDriveRL = 0, fDriveRR = 0;
 
-    // --- MATHEMATICAL FRONT AXLE TORQUE & TRACTION (МКБ-П) ---
-    let surfaceGripFront: number;
-    if (isFrontLocked || isSoloMoto) {
-      surfaceGripFront = (gripFL + gripFR) / 2.0;
-    } else {
-      surfaceGripFront = Math.min(gripFL, gripFR) * 1.05;
-    }
-
-    // --- MATHEMATICAL CENTER DIFFERENTIAL / TRANSFER CASE (МОБ) ---
-    // If Center Diff is LOCKED (or Transfer case is 4H/4L):
-    // Rigid 50:50 torque split between front and rear driveshafts:
-    // T_total = (surfaceGripFront + surfaceGripRear) / 2
-    // If Center Diff is OPEN (standard AWD):
-    // Torque slips through the axle with least grip:
-    let avgSurfaceGrip: number;
-    if (isCenterLocked || vehicle.transferCaseMode === '4H' || vehicle.transferCaseMode === '4L') {
-      avgSurfaceGrip = (surfaceGripFront + surfaceGripRear) / 2.0;
-    } else if (driveType === 'AWD') {
-      avgSurfaceGrip = Math.min(surfaceGripFront, surfaceGripRear) * 1.10;
-    } else {
-      avgSurfaceGrip = driveType === 'RWD' ? surfaceGripRear : surfaceGripFront;
-    }
-
-    // Calculate vehicle sink depth into muddy or soft soil based on surface, vehicle mass and clearance
-    const massFactor = Math.min(2.5, Math.max(0.65, (combinedMass || 1500) / 1400));
-    const frontSink = ((offroadFL.baseSink + offroadFR.baseSink) / 2.0) * massFactor * clearanceFactor;
-    const rearSink = ((offroadRL.baseSink + offroadRR.baseSink) / 2.0) * massFactor * clearanceFactor;
-    const currentSinkDepth = (frontSink + rearSink) / 2.0;
-    vehicle.offroadSinkDepth = currentSinkDepth;
-    vehicle.isBoggedDown = currentSinkDepth > 0.65 && Math.abs(vehicle.speed) < 18.0;
-
-    // --- REALISTIC DYNAMIC WEIGHT TRANSFER & NORMAL LOAD (Pacejka Tire Model) ---
-    // Longitudinal acceleration (engineAccel > 0) transfers normal weight to the rear axle, INCREASING rear tire grip.
-    // Braking (engineAccel < 0) transfers normal weight to the front axle.
-    const accelG = Math.max(-1.2, Math.min(1.2, engineAccel / 98.0));
-    const dynamicWeightTransferRear = Math.max(0.75, Math.min(1.28, 1.0 + accelG * 0.20));
-    const dynamicWeightTransferFront = Math.max(0.75, Math.min(1.28, 1.0 - accelG * 0.20));
-
-    // Separate front and rear axle grip factors incorporating surface, weather, stains, and dynamic normal load
-    let frontGripFactor = cfg.grip * surfaceGripFront * dynamicWeightTransferFront;
-    let rearGripFactor = (isHandbraking ? cfg.driftGrip * 0.48 : cfg.grip) * surfaceGripRear * dynamicWeightTransferRear;
-
-    if (vehicle.isBrakeLocked) {
-      // Locked skidding tires suffer severe friction circle loss of lateral cornering stiffness
-      frontGripFactor *= 0.45;
-      rearGripFactor *= 0.25;
-    }
-
-    const vSpeedKmh = Math.abs(vehicle.speed) * PX_S_TO_SPEED_KMH;
-    const vSpeedAbs = Math.abs(vehicle.speed);
-    const moveDir = Math.sign(vehicle.speed) || 1;
-
-    // --- REALISTIC FIRST-PRINCIPLES TRACTION & WHEEL TORQUE vs TIRE FRICTION ---
-    const isEngineRunning = !eng || (eng.engineRunning && !eng.isStalled && eng.engineRPM > 400);
-    const effectiveThrottle = isEngineRunning ? (throttle > 0 ? throttle : 0) : 0;
-
-    // 1. Transmission engagement check (No wheel torque in neutral/park or with depressed clutch)
-    const isClutchEngaged = eng ? (eng.transmissionType === 'MANUAL' ? Math.max(0, (eng.clutchPedal - 0.25) / 0.75) : 1.0) : 1.0;
-    const isInGear = eng ? (eng.currentGear !== 0 && (!eng.autoGearMode || (eng.autoGearMode !== 'N' && eng.autoGearMode !== 'P'))) : true;
-    const effectiveDriveTransmission = isClutchEngaged * (isInGear ? 1.0 : 0.0);
-
-    // 2. Power-to-weight and vehicle torque categorization (first principles):
-    // Standard cars (classic VAZ, Volga, Logan, Matiz, vans, commercial trucks, buses) have modest hp/kg (~0.05-0.09 hp/kg).
-    // They physically cannot spin driven wheels on dry clean asphalt under normal launch without high-RPM clutch dump.
-    // Sports cars, supercars, classic big-block muscle cars (0.20-0.50+ hp/kg) have enough raw torque to break traction on dry road.
-    const isHighPower = ['supercar', 'sports', 'coupe_gt', 'muscle', 'muscle_classic', 'moto_sport'].includes(cfg.type);
-    const isMediumSport = ['hatch_hot', 'sedan_luxury', 'suv_luxury'].includes(cfg.type);
-    
-    let vehicleTorqueRatio = isHighPower ? 2.15 : (isMediumSport ? 1.35 : 0.85);
-    if (vehicle.hasChiptuning) vehicleTorqueRatio *= 1.20;
-
-    // Automatic transmission torque converter damping
-    const autoTorqueDamping = (eng?.transmissionType === 'AUTO' && !isHighPower) ? 0.80 : 1.0;
-
-    // Wheel torque demand: engine torque curve * gear mechanical ratio * clutch engagement * throttle
-    const wheelTorqueFactor = effectiveThrottle * effectiveDriveTransmission * (gearAccelMult / 1.65) * T_factor * autoTorqueDamping;
-
-    // 3. Launch RPM clutch dump boost (only if revving above 4500 RPM with manual clutch dropped)
-    const isLaunchState = vSpeedKmh < 12.0 && (eng ? (eng.currentGear === 1 || eng.currentGear === -1) : true);
-    const isClutchDump = isLaunchState && eng && eng.transmissionType === 'MANUAL' && eng.engineRPM > 4500 && effectiveDriveTransmission > 0.7;
-    const launchRPMBoost = isClutchDump ? Math.min(1.65, 1.0 + (eng.engineRPM - 4500) / 3000) : 1.0;
-
-    // 4. Speed slip attenuation: at higher speeds, tire grip easily handles available engine power
-    const speedSlipFactor = Math.max(0, 1.0 - (vSpeedKmh / 42.0));
-
-    // Dynamic combined mass calculation (including vehicle cargo, fluid tank volumes, and connected trailers)
-    let dynamicCombinedMass = cfg.mass || 1500;
-    if (vehicle.fluidTank) {
-      dynamicCombinedMass += vehicle.fluidTank.currentVolume ?? vehicle.fluidTank.currentAmount ?? 0;
-    }
-    if ((vehicle as any).cargoMass) {
-      dynamicCombinedMass += (vehicle as any).cargoMass;
-    }
-    if (vehicle.trailerId) {
-      const trailer = world.vehicles.find(v => v.id === vehicle.trailerId);
-      if (trailer) {
-        const trailerCfg = CAR_CONFIGS[trailer.type] || CAR_CONFIGS.sedan;
-        let trailMass = trailerCfg.mass || 1000;
-        if (trailer.fluidTank) {
-          trailMass += trailer.fluidTank.currentVolume ?? trailer.fluidTank.currentAmount ?? 0;
+    if (driveType === 'RWD') {
+      const halfDrive = totalPropulsionForce * 0.5;
+      if (isRearLocked || isSoloMoto) {
+        fDriveRL = halfDrive;
+        fDriveRR = halfDrive;
+      } else {
+        // Open differential: torque bias limited by wheel with lesser grip
+        const maxTracRL = muRL * Fz_RL * (cfg.grip || 1.0);
+        const maxTracRR = muRR * Fz_RR * (cfg.grip || 1.0);
+        const minTrac = Math.min(maxTracRL, maxTracRR) * 1.15;
+        if (Math.abs(halfDrive) > minTrac) {
+          fDriveRL = Math.sign(halfDrive) * minTrac;
+          fDriveRR = Math.sign(halfDrive) * minTrac;
+        } else {
+          fDriveRL = halfDrive;
+          fDriveRR = halfDrive;
         }
-        if ((trailer as any).cargoMass) {
-          trailMass += (trailer as any).cargoMass;
+      }
+    } else if (driveType === 'FWD') {
+      const halfDrive = totalPropulsionForce * 0.5;
+      if (isFrontLocked || isSoloMoto) {
+        fDriveFL = halfDrive;
+        fDriveFR = halfDrive;
+      } else {
+        const maxTracFL = muFL * Fz_FL * (cfg.grip || 1.0);
+        const maxTracFR = muFR * Fz_FR * (cfg.grip || 1.0);
+        const minTrac = Math.min(maxTracFL, maxTracFR) * 1.15;
+        if (Math.abs(halfDrive) > minTrac) {
+          fDriveFL = Math.sign(halfDrive) * minTrac;
+          fDriveFR = Math.sign(halfDrive) * minTrac;
+        } else {
+          fDriveFL = halfDrive;
+          fDriveFR = halfDrive;
         }
-        dynamicCombinedMass += trailMass;
       }
+    } else {
+      // AWD / 4WD
+      const qDrive = totalPropulsionForce * 0.25;
+      fDriveFL = qDrive; fDriveFR = qDrive; fDriveRL = qDrive; fDriveRR = qDrive;
     }
 
-    // Dynamic mass scale relative to reference passenger vehicle (1400 kg)
-    const massScaleFactor = dynamicCombinedMass / 1400.0;
-    const tractiveDemand = wheelTorqueFactor * vehicleTorqueRatio * launchRPMBoost * (0.25 + 0.75 * speedSlipFactor);
+    // Brake force distribution (Standard: 60% front, 40% rear; MTZ tractor: split left/right)
+    const baseBrakeF = (brake || 0) * (cfg.brakingForce || 220) * speedScaleFactor * totalMass / 1400.0;
+    let fBrakeFL = baseBrakeF * 0.30;
+    let fBrakeFR = baseBrakeF * 0.30;
+    let fBrakeRL = baseBrakeF * 0.20;
+    let fBrakeRR = baseBrakeF * 0.20;
 
-    // Burnout on the spot (holding throttle + handbrake with running engine at low speed)
-    const isBurnoutHolding = isEngineRunning && isHandbraking && effectiveThrottle > 0.65 && vSpeedKmh < 12.0 &&
-                             (tractiveDemand > (surfaceGripRear * 0.95 * massScaleFactor));
-
-    // 5. Physical Traction Limits & Friction Circle (F_x^2 + F_y^2 <= F_max^2)
-    let isFrontPowerSlip = false;
-    let isRearPowerSlip = false;
-    let isAwdPowerSlip = false;
-    let longitudinalSlipRatio = 0; // 0 (pure grip) to 1.0 (full burnout/wheelspin)
-
-    if (driveType === 'FWD') {
-      const fwdTractionLimit = surfaceGripFront * 1.35 * massScaleFactor * dynamicWeightTransferFront;
-      
-      // On dry asphalt, standard FWD cars cannot spin tires without clutch dump or slick surface
-      isFrontPowerSlip = isEngineRunning && effectiveThrottle > 0.40 && (
-        isBurnoutHolding || (
-          tractiveDemand > fwdTractionLimit &&
-          (isClutchDump || isWetSurface || frontStainGrip < 0.75 || (isHighPower && vSpeedKmh < 25.0))
-        )
-      );
-
-      if (isFrontPowerSlip) {
-        longitudinalSlipRatio = Math.min(1.0, (tractiveDemand - fwdTractionLimit) / Math.max(0.2, fwdTractionLimit) + (isWetSurface ? 0.3 : 0));
-        // Friction Circle: modest 12-16% kinetic friction drop + lateral stiffness softening
-        const kineticDrop = 0.84 + 0.16 * (1.0 - longitudinalSlipRatio);
-        frontGripFactor *= kineticDrop;
-      }
-    } else if (driveType === 'RWD') {
-      const rwdTractionLimit = surfaceGripRear * 1.40 * massScaleFactor * dynamicWeightTransferRear;
-      
-      // On dry clean asphalt: only high-power cars, clutch dump launches, or slick surfaces break rear traction
-      const isSlickRearSurface = isWetSurface || rearStainGrip < 0.75;
-      const canOverpowerTraction = isHighPower || vehicle.hasChiptuning || (isMediumSport && vSpeedKmh < 15.0);
-
-      isRearPowerSlip = isEngineRunning && effectiveThrottle > 0.35 && (
-        isBurnoutHolding || (
-          tractiveDemand > rwdTractionLimit &&
-          (isClutchDump || isSlickRearSurface || (canOverpowerTraction && vSpeedKmh < 32.0))
-        )
-      );
-
-      if (isRearPowerSlip) {
-        longitudinalSlipRatio = Math.min(1.0, (tractiveDemand - rwdTractionLimit) / Math.max(0.2, rwdTractionLimit) + (isSlickRearSurface ? 0.35 : 0));
-        // Realistic dynamic kinetic friction drop (Pacejka model: 12% to 20% max drop, NOT 58%!)
-        // In turns, longitudinal tractive slip softens available lateral cornering stiffness per friction circle
-        const steerMagnitude = Math.abs(vehicle.steerAngle);
-        const frictionCircleLateralDrop = Math.sqrt(Math.max(0.40, 1.0 - Math.min(0.85, longitudinalSlipRatio * (0.5 + steerMagnitude))));
-        const kineticGripRatio = 0.85 * frictionCircleLateralDrop;
-        rearGripFactor *= Math.max(0.55, kineticGripRatio);
-      }
-    } else if (driveType === 'AWD') {
-      const awdTractionLimit = (surfaceGripFront + surfaceGripRear) * 1.85 * massScaleFactor;
-      
-      isAwdPowerSlip = isEngineRunning && effectiveThrottle > 0.60 && (
-        isBurnoutHolding || (
-          tractiveDemand > awdTractionLimit &&
-          (isWetSurface || rearStainGrip < 0.70 || (isHighPower && isClutchDump && vSpeedKmh < 15.0))
-        )
-      );
-
-      if (isAwdPowerSlip) {
-        longitudinalSlipRatio = Math.min(0.6, (tractiveDemand - awdTractionLimit) / Math.max(0.2, awdTractionLimit));
-        const awdGripDrop = 0.90 + 0.10 * (1.0 - longitudinalSlipRatio);
-        frontGripFactor *= awdGripDrop;
-        rearGripFactor *= awdGripDrop;
-      }
+    if (isTractor && !latchEnabled) {
+      fBrakeFL = (brakeLeftVal || 0) * (cfg.brakingForce || 220) * speedScaleFactor * 0.5;
+      fBrakeRL = (brakeLeftVal || 0) * (cfg.brakingForce || 220) * speedScaleFactor * 0.5;
+      fBrakeFR = (brakeRightVal || 0) * (cfg.brakingForce || 220) * speedScaleFactor * 0.5;
+      fBrakeRR = (brakeRightVal || 0) * (cfg.brakingForce || 220) * speedScaleFactor * 0.5;
     }
 
-    // Effective tire grip based on terrain surface properties
-    const currentBaseGrip = (frontGripFactor + rearGripFactor) / 2.0;
-    let effectiveGrip = Math.max(0.06, currentBaseGrip * (1 - Math.min(0.85, vehicle.driftFactor || 0)));
-    if (vehicle.isHeavySuspended) effectiveGrip *= 1.12; // +12% grip from reinforced suspension
+    // Handbrake: applies strictly to rear wheels (RL, RR)
+    const isHandbrakePulled = !!isHandbraking;
+    const handbrakeBrakeF = isHandbrakePulled ? (cfg.brakingForce || 220) * speedScaleFactor * totalMass / 1400.0 * 0.95 : 0;
+    fBrakeRL += handbrakeBrakeF * 0.5;
+    fBrakeRR += handbrakeBrakeF * 0.5;
 
-    let lateralSlip = vehicle.lateralVelocity || 0;
+    // --- 4. INDIVIDUAL WHEEL BRUSH TIRE SIMULATION ---
+    const steerAngle = vehicle.steerAngle || 0;
+    const cosSteer = Math.cos(steerAngle);
+    const sinSteer = Math.sin(steerAngle);
 
-    // Centripetal acceleration demand (v * omega)
-    const rawKinematicYaw = isRoadMachinery(vehicle.type)
-      ? ((vehicle.speed / Math.max(1, wheelBase)) * 2 * Math.sin((vehicle.steerAngle || 0) / 2))
-      : ((vehicle.speed / Math.max(1, wheelBase)) * tanSteer);
+    const computeWheelForce = (
+      xb: number, yb: number,
+      isFront: boolean, isLeft: boolean,
+      Fz: number, mu: number,
+      fDrive: number, fBrake: number
+    ): WheelState => {
+      // Linear hub velocity in body coordinates (V + omega x r)
+      const vHubX = vLong - curYaw * yb;
+      const vHubY = vLat + curYaw * xb;
 
-    // Physical front tire cornering grip limit:
-    // a_c = v * omega <= mu * g. At 100 km/h, tires cannot physically hold > 2.2 rad/s!
-    const frontGripLimit = frontGripFactor * 780.0;
-    const maxGripYawRate = (frontGripLimit / Math.max(25.0, vSpeedAbs)) * 1.35;
-    const kinematicYawRate = Math.sign(rawKinematicYaw) * Math.min(Math.abs(rawKinematicYaw), maxGripYawRate);
-    const lateralDemand = vehicle.speed * kinematicYawRate; // px/s^2
+      // Transform into wheel rolling direction
+      let vTireLong = vHubX;
+      let vTireLat = vHubY;
 
-    // Threshold of grip before tires slip laterally (px/s^2)
-    const rearGripLimit = rearGripFactor * 780.0;
+      if (isFront && !isArticulated) {
+        vTireLong = vHubX * cosSteer + vHubY * sinSteer;
+        vTireLat = -vHubX * sinSteer + vHubY * cosSteer;
+      }
 
-    // Dynamic kinetic sliding friction factor (Pacejka model: smooth 15-20% transition)
-    const slipFractionForK = Math.min(1.0, Math.abs(lateralSlip) / 100.0);
-    const kineticGripReduction = slipFractionForK * 0.18;
-    const lateralRearGripLimit = rearGripLimit * (1.0 - kineticGripReduction);
+      // Max friction capacity (Kamm friction circle radius)
+      const baseGrip = cfg.grip || 1.0;
+      const Fmax = Math.max(10.0, mu * Fz * baseGrip);
 
-    // UNDERSTEER (снос передней оси) расчет
-    // When turning demands more lateral grip than front tires have, front tires push wide instead of spinning
-    const excessFront = Math.max(0, (Math.abs(rawKinematicYaw) - maxGripYawRate) / Math.max(0.1, maxGripYawRate));
-    let understeerFactor = Math.min(0.65, excessFront * 0.40);
-    if (isFrontPowerSlip) {
-      understeerFactor = Math.max(understeerFactor, Math.min(0.55, effectiveThrottle * 0.40));
-    }
-    if (vehicle.isBrakeLocked) {
-      // Locked front wheels sliding across ice or snow lose directional steering response
-      understeerFactor = Math.max(understeerFactor, 0.75);
-    }
+      // Check for locked wheel state (handbrake on rear or locked brakes without ABS)
+      const isWheelLocked = (isHandbrakePulled && !isFront) || (vehicle.isBrakeLocked && fBrake > 0);
 
-    // --- REALISTIC DIFFERENTIAL LOCK RESISTANCE & UNDERSTEER (МАТЕМАТИКА СОПРОТИВЛЕНИЯ ПОВОРОТУ) ---
-    // When cross-axle diffs are locked, wheels must rotate at identical speeds.
-    // In turns, outer wheels must cover greater radius than inner wheels.
-    // The forced scrubbing resists yaw rotation (parasitic stabilizing moment).
+      let fx = 0;
+      let fy = 0;
+      let isSlipping = false;
+      let slipRatio = 0;
+      let slipAngle = 0;
+
+      const vFwd = Math.abs(vTireLong);
+
+      if (isWheelLocked) {
+        // Locked sliding tire: full kinetic friction opposing contact motion
+        const contactSpeed = Math.hypot(vTireLong, vTireLat);
+        isSlipping = contactSpeed > 2.0;
+        slipRatio = -1.0;
+        slipAngle = Math.atan2(vTireLat, Math.max(2.0, vFwd));
+
+        if (contactSpeed > 0.5) {
+          const kineticMu = 0.82;
+          fx = -(vTireLong / contactSpeed) * Fmax * kineticMu;
+          // Locked tires lose ~78% of lateral cornering stiffness!
+          fy = -(vTireLat / contactSpeed) * Fmax * kineticMu * (isHandbrakePulled && !isFront ? 0.22 : 0.28);
+        }
+      } else {
+        // Rolling tire under propulsion and service braking
+        // Rolling resistance
+        const c_rr = 0.015;
+        const fRollingDrag = Math.sign(vTireLong) * c_rr * Fz;
+
+        // Net longitudinal force demanded
+        const brakeDir = Math.sign(vTireLong) || 1;
+        const netDemand = fDrive - brakeDir * fBrake - fRollingDrag;
+
+        if (Math.abs(netDemand) > Fmax) {
+          // Longitudinal traction broken (wheelspin under power or brake skid)
+          isSlipping = true;
+          slipRatio = Math.sign(netDemand) * Math.min(2.0, Math.abs(netDemand) / Fmax);
+          fx = Math.sign(netDemand) * Fmax * 0.88; // dynamic kinetic friction
+        } else {
+          fx = netDemand;
+          slipRatio = vFwd > 1.0 ? (netDemand / Fmax) * 0.15 : 0;
+        }
+
+        // Available lateral cornering capacity per Kamm's friction circle: Fx^2 + Fy^2 <= Fmax^2
+        const fLatLimit = Math.sqrt(Math.max(0, Fmax * Fmax - fx * fx));
+
+        // Slip angle alpha = -atan2(vTireLat, |vTireLong|)
+        slipAngle = -Math.atan2(vTireLat, Math.max(4.0, vFwd));
+
+        // Brush tire model cornering curve
+        const alphaPeak = isFront ? 0.15 : 0.12; // ~7-8 degrees peak slip angle
+        const absAlpha = Math.abs(slipAngle);
+
+        if (absAlpha < alphaPeak) {
+          // Elastic static adhesion regime: smooth sinusoidal cornering stiffness
+          fy = fLatLimit * Math.sin((absAlpha / alphaPeak) * (Math.PI * 0.5)) * Math.sign(slipAngle);
+        } else {
+          // Kinetic slide regime: tire has broken traction into a drift or plow!
+          isSlipping = true;
+          const slideDecay = 0.84;
+          fy = fLatLimit * slideDecay * Math.sign(slipAngle);
+        }
+      }
+
+      // Calculate skid intensity for visuals, smoke, skid marks and tire screech
+      const lateralSlideSpeed = Math.abs(vTireLat);
+      const longSlideSpeed = Math.abs(vTireLong * slipRatio);
+      const totalSlideSpeed = Math.hypot(lateralSlideSpeed, longSlideSpeed);
+      const skidIntensity = Math.min(1.0, Math.max(
+        isWheelLocked && vFwd > 4.0 ? 0.75 : 0,
+        isSlipping ? Math.min(1.0, totalSlideSpeed / 55.0) : 0,
+        Math.abs(slipAngle) > 0.20 ? Math.min(1.0, Math.abs(slipAngle) / 0.55) : 0
+      ));
+
+      const contactWorldX = isFront
+        ? (isLeft ? tFLX : tFRX)
+        : (isLeft ? tRLX : tRRX);
+      const contactWorldY = isFront
+        ? (isLeft ? tFLY : tFRY)
+        : (isLeft ? tRLY : tRRY);
+
+      return {
+        angularVelocity: vFwd / 12.0,
+        slipRatio,
+        slipAngle,
+        normalLoad: Fz,
+        fx,
+        fy,
+        isSlipping,
+        skidIntensity,
+        surfaceGrip: mu,
+        x: contactWorldX,
+        y: contactWorldY
+      };
+    };
+
+    // Calculate forces on all 4 independent contact patches
+    const wheelFL = computeWheelForce(Lf, -halfTrack, true, true, Fz_FL, muFL, fDriveFL, fBrakeFL);
+    const wheelFR = isSoloMoto ? wheelFL : computeWheelForce(Lf, halfTrack, true, false, Fz_FR, muFR, fDriveFR, fBrakeFR);
+    const wheelRL = computeWheelForce(-Lr, -halfTrack, false, true, Fz_RL, muRL, fDriveRL, fBrakeRL);
+    const wheelRR = isSoloMoto ? wheelRL : computeWheelForce(-Lr, halfTrack, false, false, Fz_RR, muRR, fDriveRR, fBrakeRR);
+
+    // Save wheel states directly onto vehicle
+    vehicle.wheelFL = wheelFL;
+    vehicle.wheelFR = wheelFR;
+    vehicle.wheelRL = wheelRL;
+    vehicle.wheelRR = wheelRR;
+
+    // --- 5. TRANSFORM WHEEL FORCES INTO CHASSIS ACCELERATION & YAW MOMENT ---
+    // Rotate front wheel forces from steered tire frame into body frame
+    const fbx_FL = wheelFL.fx * cosSteer - wheelFL.fy * sinSteer;
+    const fby_FL = wheelFL.fx * sinSteer + wheelFL.fy * cosSteer;
+
+    const fbx_FR = wheelFR.fx * cosSteer - wheelFR.fy * sinSteer;
+    const fby_FR = wheelFR.fx * sinSteer + wheelFR.fy * cosSteer;
+
+    // Rear wheel forces (fixed along vehicle long axis)
+    const fbx_RL = wheelRL.fx;
+    const fby_RL = wheelRL.fy;
+
+    const fbx_RR = wheelRR.fx;
+    const fby_RR = wheelRR.fy;
+
+    // Center differential binding resistance when locked on dry asphalt
     const onHardRoad = surfFL.type === 'asphalt' || surfFL.type === 'concrete' || surfFL.type === 'rock' ||
                        surfRR.type === 'asphalt' || surfRR.type === 'concrete';
-
-    if (isRearLocked && !isSoloMoto) {
-      // Rear axle resists turning (pushes straight)
-      understeerFactor += onHardRoad ? 0.22 : 0.08;
-    }
-    if (isFrontLocked && !isSoloMoto) {
-      // Front axle locked makes steering extremely stiff and heavy
-      understeerFactor += onHardRoad ? 0.44 : 0.20;
+    let centerDiffDrag = 0;
+    if (isCenterLocked && onHardRoad && Math.abs(steerAngle) > 0.08) {
+      centerDiffDrag = Math.abs(steerAngle) * 45.0 * totalMass / 1400.0;
     }
 
-    // Center diff lock binding (циркуляция паразитной мощности) on hard dry surfaces in tight turns
-    if (isCenterLocked && onHardRoad && Math.abs(vehicle.steerAngle) > 0.10) {
-      const drivelineBindDrag = Math.abs(vehicle.steerAngle) * 35.0 * dt;
-      vehicle.speed = Math.sign(vehicle.speed) * Math.max(0, Math.abs(vehicle.speed) - drivelineBindDrag);
+    // Aerodynamic drag
+    const curSpeedAbs = Math.hypot(curVx, curVy);
+    let aeroCoeff = 0.000045;
+    if (['supercar', 'sports', 'coupe_gt', 'hatch_hot'].includes(cfg.type)) aeroCoeff = 0.000032;
+    else if (cfg.type.startsWith('truck_') || cfg.type === 'bus') aeroCoeff = 0.000085;
+    const fAero = aeroCoeff * curSpeedAbs * curSpeedAbs * Math.sign(vLong) * totalMass;
+
+    // Slope force along body axes
+    const terrainSlope = slope || getTerrainSlope(vehicle.x, vehicle.y);
+    const fSlopeLong = -(terrainSlope.slopeX * cosA + terrainSlope.slopeY * sinA) * g_acc * totalMass * 0.05;
+    const fSlopeLat = -(-terrainSlope.slopeX * sinA + terrainSlope.slopeY * cosA) * g_acc * totalMass * 0.05;
+
+    // Sum of body forces
+    const F_body_x = (fbx_FL + fbx_FR + fbx_RL + fbx_RR) - (Math.sign(vLong) * centerDiffDrag) - fAero + fSlopeLong;
+    const F_body_y = (fby_FL + fby_FR + fby_RL + fby_RR) + fSlopeLat;
+
+    // Sum of Yaw Moments around Center of Mass: Tau = r x F
+    // FL: pos (Lf, -halfTrack) -> tau = Lf * fby - (-halfTrack) * fbx
+    // FR: pos (Lf, halfTrack)  -> tau = Lf * fby - (halfTrack) * fbx
+    // RL: pos (-Lr, -halfTrack)-> tau = -Lr * fby - (-halfTrack) * fbx
+    // RR: pos (-Lr, halfTrack) -> tau = -Lr * fby - (halfTrack) * fbx
+    let Tau_z = (Lf * fby_FL + halfTrack * fbx_FL) +
+                (Lf * fby_FR - halfTrack * fbx_FR) +
+                (-Lr * fby_RL + halfTrack * fbx_RL) +
+                (-Lr * fby_RR - halfTrack * fbx_RR);
+
+    // Articulated hydraulic steering moment for rollers
+    if (isArticulated) {
+      const artYawDemand = (vLong / Math.max(10, wheelBase)) * Math.sin(steerAngle);
+      Tau_z += artYawDemand * Iz * 8.5;
     }
 
-    // Apply understeer: scales effective turning rate of the front wheels
-    let effectiveYawRate = kinematicYawRate * (1.0 - understeerFactor);
-    if (isRearLocked && !isSoloMoto) {
-      effectiveYawRate *= (onHardRoad ? 0.74 : 0.88);
-    }
-    if (isFrontLocked && !isSoloMoto) {
-      effectiveYawRate *= (onHardRoad ? 0.46 : 0.65);
-    }
+    // --- 6. RIGID BODY NEWTON-EULER INTEGRATION ---
+    const aBodyX = F_body_x / totalMass;
+    const aBodyY = F_body_y / totalMass;
+    const alphaYaw = Tau_z / Iz;
 
-    // FWD natural mild stabilization without killing drift inertia
-    const fwdStabilization = (driveType === 'FWD' && vehicle.speed > 5 && effectiveThrottle > 0.3) ? 1.25 : 1.0;
+    // Transform body accelerations into world coordinates
+    const aWorldX = aBodyX * cosA - aBodyY * sinA;
+    const aWorldY = aBodyX * sinA + aBodyY * cosA;
 
-    // --- REALISTIC DUAL REGIME: GRIP TURNING vs OVERSTEER DRIFT ---
-    const vFwd = Math.max(6.0, vSpeedAbs);
-    const currentYaw = vehicle.angularVelocity || 0;
+    curVx += aWorldX * dt;
+    curVy += aWorldY * dt;
+    curYaw += alphaYaw * dt;
 
-    // Rear axle grip degradation (Handbrake, Brakes Locked, Power Wheelspin):
-    let rearGripAvailable = rearGripFactor;
-    if (isHandbraking) {
-      rearGripAvailable *= 0.22; // rear wheels locked, slide breaks out easily
-    } else if (vehicle.isBrakeLocked) {
-      rearGripAvailable *= 0.32;
-    } else if (isRearPowerSlip) {
-      // Longitudinal tractive slip consumes lateral grip capacity (Friction Ellipse)
-      const powerGripReduction = Math.max(0.35, 1.0 - longitudinalSlipRatio * 0.65);
-      rearGripAvailable *= powerGripReduction;
+    // Low-speed static friction clean stop (prevents numerical jitter at 0 km/h)
+    const groundSpeed = Math.hypot(curVx, curVy);
+    if (groundSpeed < 0.8 && throttle === 0 && Math.abs(curYaw) < 0.06 && !input.handbrake) {
+      curVx = 0;
+      curVy = 0;
+      curYaw = 0;
     }
 
-    const isRearCurrentlySliding = Math.abs(lateralSlip) > 12.0;
-    if (isRearCurrentlySliding) {
-      rearGripAvailable *= 0.82; // Kinetic sliding friction drop
-    }
-
-    const dynamicRearGripLimit = rearGripAvailable * 780.0;
-
-    // Oversteer drift triggers:
-    const isCentrifugalOversteer = vSpeedAbs > 8.0 && Math.abs(lateralDemand) > dynamicRearGripLimit * 1.05;
-    const isPowerOversteerKick = isRearPowerSlip && Math.abs(vehicle.steerAngle) > 0.08 && effectiveThrottle > 0.40;
-    const hasPowerToMaintainDrift = isHighPower || vehicle.hasChiptuning || isWetSurface || surfaceGripRear < 0.72 || isBurnoutHolding;
-
-    const isRearGripLost = (isHandbraking && vSpeedKmh > 5.0) ||
-                           (vehicle.isBrakeLocked && vSpeedKmh > 5.0) ||
-                           isRearCurrentlySliding ||
-                           isCentrifugalOversteer ||
-                           isPowerOversteerKick;
-
-    let finalAngularSpeed = effectiveYawRate;
-
-    if (isRearGripLost && vSpeedAbs > 2.0 && !isRoadMachinery(vehicle.type)) {
-      // --- DRIFT REGIME: Rear axle has broken traction ---
-      // 1. Centrifugal push pushing the tail outward (only excess beyond tire adhesion limit)
-      const excessCentrifugal = Math.max(0, Math.abs(lateralDemand) - dynamicRearGripLimit);
-      const centPush = -Math.sign(currentYaw || kinematicYawRate || 1) * excessCentrifugal;
-
-      // 2. Sliding rear tires exert kinetic friction resisting the lateral slip:
-      const rearFriction = -Math.sign(lateralSlip || 1) * dynamicRearGripLimit * 0.85;
-
-      // 3. Throttle power drift assist for RWD/AWD: maintains slide angle smoothly when power is held
-      let powerDriftPush = 0;
-      if ((driveType === 'RWD' || driveType === 'AWD') && isRearPowerSlip && hasPowerToMaintainDrift && effectiveThrottle > 0.35) {
-        powerDriftPush = -Math.sign(currentYaw || kinematicYawRate || 1) * effectiveThrottle * 40.0;
-      }
-
-      const totalLatAccel = centPush * 0.48 + rearFriction * 0.58 + powerDriftPush;
-      lateralSlip += totalLatAccel * dt;
-      lateralSlip *= Math.max(0, 1.0 - (1.1 * effectiveGrip) * dt);
-
-      // Yaw dynamics during a drift:
-      // - Driver's steering input (effectiveYawRate) directs the front wheels.
-      // - Rear axle stepping out adds an oversteer moment:
-      //   When tail slides left (lateralSlip < 0 in right turn), the tail stepping out increases clockwise yaw rate!
-      const isHeavyVehicle = (cfg.mass || 1500) >= 4500 || vehicle.type === 'truck_semi' || vehicle.type.startsWith('truck_') || vehicle.type.startsWith('tractor_') || vehicle.type === 'bus' || !!vehicle.trailerId;
-      const trailerYawDamping = vehicle.trailerId ? 0.35 : (isHeavyVehicle ? 0.55 : 1.0);
-
-      // If tail slides left (lateralSlip < 0), oversteerKick is positive (increases clockwise spin).
-      // If tail slides right (lateralSlip > 0), oversteerKick is negative (increases counter-clockwise spin).
-      const oversteerKick = -Math.sign(lateralSlip) * Math.min(2.4, Math.abs(lateralSlip) / 32.0) * moveDir * trailerYawDamping;
-
-      // When the driver counter-steers (steers left, steerAngle < 0), effectiveYawRate becomes negative,
-      // directly balancing oversteerKick and allowing the driver to hold and control the drift angle!
-      const targetYaw = effectiveYawRate + oversteerKick;
-
-      let newYaw = currentYaw;
-      newYaw += (targetYaw - newYaw) * Math.min(1.0, 11.0 * dt);
-      newYaw *= Math.max(0, 1.0 - 0.35 * dt);
-
-      // Physical sanity clamp on yaw rate (prevents unphysical blender spins)
-      const maxPossibleYaw = Math.max(3.0, (frontGripLimit / Math.max(25.0, vSpeedAbs)) * 2.2);
-      finalAngularSpeed = Math.max(-maxPossibleYaw, Math.min(maxPossibleYaw, newYaw));
-    } else {
-      // --- GRIP REGIME: Direct Ackerman geometrical turning with understeer grip limits ---
-      // Rear tires have 100% lateral traction and follow the car heading:
-      lateralSlip *= Math.max(0, 1.0 - 24.0 * dt);
-      if (Math.abs(lateralSlip) < 0.2 || vSpeedAbs < 0.6) lateralSlip = 0;
-
-      // In Grip Regime, the car turns directly where the front wheels are steered:
-      // When steering right, targetYaw > 0 (turns right).
-      // When steering left, targetYaw < 0 (turns left).
-      let targetYaw = effectiveYawRate;
-      let newYaw = currentYaw;
-      newYaw += (targetYaw - newYaw) * Math.min(1.0, 16.0 * dt);
-      newYaw *= Math.max(0, 1.0 - 0.25 * dt);
-      finalAngularSpeed = newYaw;
-    }
-
-    if (isRoadMachinery(vehicle.type)) {
-      lateralSlip = 0;
-    }
-
-    if (vSpeedAbs < 0.8 && !isBurnoutHolding) {
-      lateralSlip = 0;
-      vehicle.angularVelocity = 0;
-      finalAngularSpeed = 0;
-      if (isRoadMachinery(vehicle.type) && dt > 0) {
-        const prevSteer = (vehicle as any)._prevSteerAngle ?? (vehicle.steerAngle || 0);
-        const steerDiff = (vehicle.steerAngle || 0) - prevSteer;
-        finalAngularSpeed = (steerDiff / dt) * 0.5;
-      }
-    }
-
-    // 3. Sliding Tire Friction Scrubbing (Speed Bleed)
-    const slipAbs = Math.abs(lateralSlip);
-    if (slipAbs > 10.0) {
-      const scrubIntensity = (slipAbs / 120.0) * (isHandbraking ? 1.35 : 0.85);
-      // Reduce speed scrubbing on slippery surfaces (lower effectiveGrip) to slide naturally
-      const gripScrubMult = Math.max(0.30, effectiveGrip);
-      const isOffroadSurf = surfFL.type === 'grass' || surfFL.type === 'dirt_road' || surfFL.type === 'mud' || surfFL.type === 'sand';
-      const offroadPlowDrag = isOffroadSurf ? 3.4 : 1.0;
-      const speedLoss = 28.0 * scrubIntensity * gripScrubMult * offroadPlowDrag * dt;
-      vehicle.speed = Math.sign(vehicle.speed) * Math.max(0, Math.abs(vehicle.speed) - speedLoss);
-      
-      const latDecayRate = (isOffroadSurf ? 4.8 : 1.8) * effectiveGrip;
-      lateralSlip *= Math.max(0, 1.0 - latDecayRate * dt);
-    }
-
-    vehicle.lateralVelocity = lateralSlip;
-
-    // Update yaw angle around the physical center (rear axle)
-    vehicle.angularVelocity = finalAngularSpeed;
+    // Update vehicle orientation and velocities
+    vehicle.angularVelocity = curYaw;
     vehicle.angle += vehicle.angularVelocity * dt;
     vehicle.angle = ((vehicle.angle + Math.PI) % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI) - Math.PI;
-    (vehicle as any)._prevSteerAngle = vehicle.steerAngle || 0;
 
-    // New heading after rotation
-    const newHeadingCos = Math.cos(vehicle.angle);
-    const newHeadingSin = Math.sin(vehicle.angle);
+    vehicle.vx = curVx;
+    vehicle.vy = curVy;
 
-    // Rear axle moves along forward heading at vehicle.speed, plus genuine lateral drift slip
-    const rearVelX = newHeadingCos * vehicle.speed - newHeadingSin * lateralSlip;
-    const rearVelY = newHeadingSin * vehicle.speed + newHeadingCos * lateralSlip;
+    // Scalar longitudinal & lateral speeds for dashboard, HUD, engine revs and transmission
+    const newCosA = Math.cos(vehicle.angle);
+    const newSinA = Math.sin(vehicle.angle);
+    vehicle.speed = vehicle.vx * newCosA + vehicle.vy * newSinA;
+    vehicle.lateralVelocity = -vehicle.vx * newSinA + vehicle.vy * newCosA;
+    (vehicle as any).lateralSlip = vehicle.lateralVelocity;
 
-    const newRearX = rearX + rearVelX * dt;
-    const newRearY = rearY + rearVelY * dt;
+    const vSpeedKmh = Math.abs(vehicle.speed) * PX_S_TO_SPEED_KMH;
+    const newHeadingCos = newCosA;
+    const newHeadingSin = newSinA;
+    const isEngineRunning = !eng || (eng.engineRunning && !eng.isStalled && (eng.engineRPM || 0) > 400);
+    const effectiveThrottle = isEngineRunning ? (throttle > 0 ? throttle : 0) : 0;
+    const isInGear = eng ? (eng.currentGear !== 0 && (!eng.autoGearMode || (eng.autoGearMode !== 'N' && eng.autoGearMode !== 'P'))) : true;
+    const massFactor = Math.min(2.5, Math.max(0.65, totalMass / 1400.0));
+    const isBurnoutHolding = isEngineRunning && isHandbrakePulled && effectiveThrottle > 0.65 && vSpeedKmh < 12.0;
 
-    // Reconstruct vehicle center from the newly translated & rotated rear axle
-    const newCenterX = newRearX + newHeadingCos * rearAxleDist;
-    const newCenterY = newRearY + newHeadingSin * rearAxleDist;
+    // Oversteer & Drift State
+    const rearSlipping = wheelRL.isSlipping || wheelRR.isSlipping;
+    const frontSlipping = wheelFL.isSlipping || wheelFR.isSlipping;
+    const slipMagnitude = Math.abs(vehicle.lateralVelocity);
+    const isDriftActive = (rearSlipping && (vSpeedKmh > 6.0 || isHandbrakePulled)) || (slipMagnitude > 18.0 && vSpeedKmh > 10.0);
+    vehicle.isDrifting = isDriftActive;
+    vehicle.driftFactor = Math.min(1.0, slipMagnitude / 80.0 + (rearSlipping ? 0.35 : 0));
 
-    // Velocity vector for the vehicle center
-    vehicle.vx = (newCenterX - vehicle.x) / dt;
-    vehicle.vy = (newCenterY - vehicle.y) / dt;
+    const isFrontSlipping = frontSlipping;
+    const isRearSlipping = rearSlipping;
 
-    // 1. Dual-Wheel Drift & Slip State
-    const slipMagnitude = Math.abs(lateralSlip);
-    vehicle.isDrifting = (isHandbraking && vSpeedKmh > 8.0) || 
-                         (slipMagnitude > 22.0 && vSpeedKmh > 12.0) ||
-                         (vehicle.isBrakeLocked && vSpeedKmh > 8.0) ||
-                         (isBurnoutHolding);
-
-    const isFrontSlipping = isFrontPowerSlip && effectiveThrottle > 0.60 && (vSpeedKmh < 45.0 || isWetSurface || frontStainGrip < 0.85);
-    const isRearSlipping = isRearPowerSlip && effectiveThrottle > 0.60 && (vSpeedKmh < 45.0 || isWetSurface || rearStainGrip < 0.85);
-
-    // Locked differential tire scrubbing on hard dry asphalt in turns
+    // Differential locked tire scrubbing in turns on dry asphalt
     const isLockedTireScrubbing = onHardRoad && (isRearLocked || isFrontLocked) && Math.abs(vehicle.steerAngle) > 0.08 && vSpeedKmh > 3.0 && vSpeedKmh < 60.0;
 
-    // 2. Screech Sound - only screech on dry hard pavement, NEVER on soft mud, snow or ice!
+    // --- 7. TIRE SCREECH AUDIO ---
+    const anyTireSkidding = wheelFL.skidIntensity > 0.22 || wheelFR.skidIntensity > 0.22 || wheelRL.skidIntensity > 0.22 || wheelRR.skidIntensity > 0.22;
     const isScreechAllowed = onHardRoad && !isSnowySurface && !isIcySurface;
-    if (isScreechAllowed && (vehicle.isDrifting || isFrontSlipping || isRearSlipping || isLockedTireScrubbing)) {
-      const screechIntensity = Math.max(
-        vehicle.isDrifting ? Math.min(1.0, slipMagnitude / 70.0) : 0,
-        (isFrontSlipping || isRearSlipping) ? Math.min(1.0, effectiveThrottle * 0.75) : 0,
-        isLockedTireScrubbing ? Math.min(0.55, Math.abs(vehicle.steerAngle) * 1.3) : 0
-      );
-      sound.startTireScreech(Math.min(1.0, screechIntensity));
+    if (isScreechAllowed && (anyTireSkidding || vehicle.isDrifting || isLockedTireScrubbing)) {
+      const maxSkid = Math.max(wheelFL.skidIntensity, wheelFR.skidIntensity, wheelRL.skidIntensity, wheelRR.skidIntensity);
+      const screechIntensity = Math.min(1.0, Math.max(
+        maxSkid,
+        vehicle.isDrifting ? 0.82 : 0,
+        isLockedTireScrubbing ? 0.45 : 0
+      ));
+      sound.startTireScreech(screechIntensity);
     } else {
       sound.stopTireScreech();
     }
 
-    // 3. Wheel Geometry & Positions
-    const trackHalf = isSoloMoto ? 0 : cfg.width * 0.42;
-    const baseTireWidth = cfg.width * 0.16 + 2.0;
+    // Geometry anchors for tire ruts, skid marks and particles
+    const newRearX = vehicle.x - newCosA * geomRearAxleDist;
+    const newRearY = vehicle.y - newSinA * geomRearAxleDist;
 
-    // Rear tires
-    const leftRearX = isSoloMoto ? newRearX : (newRearX - newHeadingSin * trackHalf);
-    const leftRearY = isSoloMoto ? newRearY : (newRearY + newHeadingCos * trackHalf);
-    const rightRearX = isSoloMoto ? newRearX : (newRearX + newHeadingSin * trackHalf);
-    const rightRearY = isSoloMoto ? newRearY : (newRearY - newHeadingCos * trackHalf);
+    const leftRearX = isSoloMoto ? newRearX : (newRearX - newSinA * halfTrack);
+    const leftRearY = isSoloMoto ? newRearY : (newRearY + newCosA * halfTrack);
+    const rightRearX = isSoloMoto ? newRearX : (newRearX + newSinA * halfTrack);
+    const rightRearY = isSoloMoto ? newRearY : (newRearY - newCosA * halfTrack);
 
-    // Front tires
-    const frontCenterX = newRearX + newHeadingCos * wheelBase;
-    const frontCenterY = newRearY + newHeadingSin * wheelBase;
-    const leftFrontX = isSoloMoto ? frontCenterX : (frontCenterX - newHeadingSin * trackHalf);
-    const leftFrontY = isSoloMoto ? frontCenterY : (frontCenterY + newHeadingCos * trackHalf);
-    const rightFrontX = isSoloMoto ? frontCenterX : (frontCenterX + newHeadingSin * trackHalf);
-    const rightFrontY = isSoloMoto ? frontCenterY : (frontCenterY - newHeadingCos * trackHalf);
+    const frontCenterX = newRearX + newCosA * wheelBase;
+    const frontCenterY = newRearY + newSinA * wheelBase;
+    const leftFrontX = isSoloMoto ? frontCenterX : (frontCenterX - newSinA * halfTrack);
+    const leftFrontY = isSoloMoto ? frontCenterY : (frontCenterY + newCosA * halfTrack);
+    const rightFrontX = isSoloMoto ? frontCenterX : (frontCenterX + newSinA * halfTrack);
+    const rightFrontY = isSoloMoto ? frontCenterY : (frontCenterY - newCosA * halfTrack);
 
     // 4. Continuous Volumetric Offroad Ruts & Skidmarks Tracking
     const vAny = vehicle as any;

@@ -598,6 +598,20 @@ export interface VehicleDamage {
   rearBumperSagRight?: number;
 }
 
+export interface WheelState {
+  angularVelocity: number; // rad/s
+  slipRatio: number; // -1.0 (lockup) to +1.0+ (power wheelspin)
+  slipAngle: number; // radians (angle between wheel plane and velocity)
+  normalLoad: number; // N (vertical load Fz with dynamic 3D weight transfer)
+  fx: number; // longitudinal force (N)
+  fy: number; // lateral cornering force (N)
+  isSlipping: boolean; // whether tire broke static friction limit
+  skidIntensity: number; // 0..1 for smoke/marks/audio
+  surfaceGrip: number; // local surface adhesion mu
+  x: number; // world position X
+  y: number; // world position Y
+}
+
 export interface Vehicle {
   id: string;
   type: CarType;
@@ -620,6 +634,12 @@ export interface Vehicle {
   isDrifting: boolean;
   driftFactor: number;
   mass: number;
+  
+  // 4-Wheel Contact Patch Simulation States
+  wheelFL?: WheelState;
+  wheelFR?: WheelState;
+  wheelRL?: WheelState;
+  wheelRR?: WheelState;
   
   // Ownership & Security
   ownerId?: string;
