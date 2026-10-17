@@ -1,5 +1,5 @@
 import { CAR_CONFIGS, canVehicleHaveHitch, createDefaultEngineState, createDefaultFuelSystem, createDefaultFluidTank, ensureVehicleFluidTank, liquidTypeToStainType, createDefaultVehicleDamage, ensureVehicleDamage, getVehicleFuelCapPosition, getVehicleAxleGeometry, isTrailerVehicle, isRoadMachinery, getVehicleDriveType, SPEED_KMH_TO_PX_S, PX_S_TO_SPEED_KMH, getLPGDefaultCapacity, cycleVehicleDiffLock, getVehicleDiffCapabilities, ensureVehicleDiffLock, getVehicleHeadlightDynamicState } from './vehicleHelpers';
-import { Building, GameWorld, InputState, Particle, Pedestrian, Player, SkidMark, Vehicle, StreetProp, FluidStainType, Roundabout, RollingStockCar, WorldWind, RoadSegment, Intersection } from './types';
+import { Building, GameWorld, InputState, Particle, Pedestrian, Player, SkidMark, Vehicle, StreetProp, FluidStainType, FluidStain, Roundabout, RollingStockCar, WorldWind, RoadSegment, Intersection } from './types';
 import { getBuildingLayout, constrainPlayerToInterior } from './buildingInteriors';
 import { constrainPlayerToBusInterior } from './busInteriorSystem';
 import { sound } from './audio';
@@ -2770,6 +2770,29 @@ export function addOrGrowFluidStain(
       maxLife: type === 'water'? (60 + Math.random() * 30) : (180 + Math.random() * 120)
     });
   }
+}
+
+// --- FLUID SPREADING: liquids flatten out into a thin film instead of staying round drops ---
+// Film growth slows as the fluid spreads (r grows ~ sqrt(t) like a real thin film) and as the spill ages.
+const FILM_SPREAD_RATE: Partial<Record<FluidStainType, number>> = { fuel: 2.6, water: 3.0, coolant: 1.8, oil: 0.9 };
+const FILM_CAP_MULT: Partial<Record<FluidStainType, number>> = { fuel: 3.4, water: 2.2, coolant: 2.8, oil: 2.6 };
+
+export function updateFluidSpread(st: FluidStain, dt: number) {
+  const rate = FILM_SPREAD_RATE[st.type];
+  if (rate === undefined) return; // sand and other granular spills don't flow
+  if (st.filmCap === undefined) {
+    const base = Math.max(st.maxRadius, 6);
+    st.filmCap = Math.min(90, base * (FILM_CAP_MULT[st.type] ?? 2.5) * (0.8 + Math.random() * 0.4));
+    st.spreadElong = 0.5 + Math.random() * 1.1;
+    st.spreadAngle = Math.random() * Math.PI * 2;
+  }
+  if (st.radius >= st.filmCap) return;
+  const ageFactor = Math.max(0, 1 - (st.life / Math.max(1, st.maxLife)) * 1.5);
+  if (ageFactor <= 0) return;
+  const growth = (rate * ageFactor * dt) / (1 + st.radius * 0.12);
+  st.radius = Math.min(st.filmCap, st.radius + growth);
+  // Let later merges grow the film up to its cap too
+  if (st.maxRadius < st.filmCap) st.maxRadius = st.filmCap;
 }
 
 // --- DYNAMIC REALISTIC EXHAUST SMOKE EMISSION SYSTEM ---
@@ -10840,6 +10863,8 @@ export function updateSkidMarksAndParticles(world: GameWorld, player: Player, dt
         }
       }
     } else {
+      updateFluidSpread(st, dt);
+
       // Normal drying out (water evaporates faster on asphalt, especially in warm weather)
       const dryMultiplier = st.type === 'water'? 1.5 : 1.0;
       st.life += dt * dryMultiplier;

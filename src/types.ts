@@ -1357,6 +1357,10 @@ export interface FluidStain {
   maxLife: number;
   onFire?: boolean;
   fireIntensity?: number;
+  // Spreading (liquids only): the film keeps growing until filmCap, stretched along spreadAngle
+  filmCap?: number;
+  spreadElong?: number;   // 0.5..1.6, how strongly the film stretches as it spreads
+  spreadAngle?: number;   // radians, direction the film stretches toward
 }
 
 export interface Particle {
