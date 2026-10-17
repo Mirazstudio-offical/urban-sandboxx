@@ -88,6 +88,21 @@ const triggerHaptic = (ms: number = 10) => {
   }
 };
 
+// Multi-touch safe press for plain action buttons. Browsers synthesize `click` only for a lone tap:
+// while another finger is already down, a tap on a button fires no click at all (touch and pointer
+// events still arrive). So these buttons act on pointerdown. `click` is kept only for keyboard
+// activation (detail === 0), so a pointer-driven press is never handled twice.
+const pressProps = (action: () => void) => ({
+  onPointerDown: (e: React.PointerEvent<HTMLElement>) => {
+    if (e.button !== 0) return;
+    action();
+  },
+  onClick: (e: React.MouseEvent<HTMLElement>) => {
+    if (e.detail !== 0) return;
+    action();
+  },
+});
+
 // Reusable Multi-Touch Button that supports pressing multiple controls simultaneously
 interface TouchButtonProps {
   inputKey: keyof InputState;
@@ -721,16 +736,18 @@ const GearStickLever: React.FC<GearStickLeverProps> = ({
     >
       {/* TRACTOR QUICK RANGE INDICATOR BADGE (TAPPABLE) */}
       {isTractor && (
+        // Presses on the badge must not start a drag of the gear lever underneath it
         <button
           type="button"
-          onClick={(e) => {
-            e.stopPropagation();
+          onTouchStart={(e) => e.stopPropagation()}
+          onMouseDown={(e) => e.stopPropagation()}
+          {...pressProps(() => {
             const nextR = localRange === 1 ? 2 : 1;
             setLocalRange(nextR);
             triggerHaptic(20);
             sound.playGearShift();
             onSelectGear?.(nextR === 1 ? 'RANGE_I' : 'RANGE_II');
-          }}
+          })}
           className="absolute -top-3.5 left-1/2 -translate-x-1/2 px-1.5 py-0.5 rounded-full bg-slate-950/90 border border-amber-500/50 text-[7.5px] font-mono font-black text-amber-400 whitespace-nowrap shadow-md cursor-pointer hover:bg-slate-900 active:scale-95 transition z-30 flex items-center gap-1"
           title="Нажмите для переключения диапазона МТЗ (I / II)"
         >
@@ -1427,10 +1444,10 @@ export const MobileTouchControls: React.FC<MobileTouchControlsProps> = ({
         {/* Unified F Button (Enter/Exit/Doors) */}
         <button
           type="button"
-          onClick={() => {
+          {...pressProps(() => {
             triggerHaptic(20);
             onEnterExitVehicle();
-          }}
+          })}
           className={`w-9.5 h-9.5 rounded-xl border flex items-center justify-center shadow-lg transition-all active:scale-90 cursor-pointer ${
             canInteractF
               ? 'bg-white/30 text-white border-white/50'
@@ -1485,7 +1502,7 @@ export const MobileTouchControls: React.FC<MobileTouchControlsProps> = ({
           <div id="touch-turn-signals" className="flex items-center gap-1.5">
             <button
               type="button"
-              onClick={() => { triggerHaptic(12); onToggleTurnSignal?.('left'); }}
+              {...pressProps(() => { triggerHaptic(12); onToggleTurnSignal?.('left'); })}
               className={`w-8 h-8 backdrop-blur-md border rounded-lg flex items-center justify-center shadow-md transition-all ${
                 activeTurnSignal === 'left'
                   ? 'bg-[#c9922b]/45 text-white border-[#c9922b] font-bold scale-95'
@@ -1498,7 +1515,7 @@ export const MobileTouchControls: React.FC<MobileTouchControlsProps> = ({
             
             <button
               type="button"
-              onClick={() => { triggerHaptic(15); onToggleTurnSignal?.('hazard'); }}
+              {...pressProps(() => { triggerHaptic(15); onToggleTurnSignal?.('hazard'); })}
               className={`w-8 h-8 backdrop-blur-md border rounded-lg flex items-center justify-center shadow-md transition-all ${
                 activeTurnSignal === 'hazard'
                   ? 'bg-rose-500/35 text-rose-100 border-rose-400 font-bold scale-95'
@@ -1511,7 +1528,7 @@ export const MobileTouchControls: React.FC<MobileTouchControlsProps> = ({
 
             <button
               type="button"
-              onClick={() => { triggerHaptic(12); onToggleTurnSignal?.('right'); }}
+              {...pressProps(() => { triggerHaptic(12); onToggleTurnSignal?.('right'); })}
               className={`w-8 h-8 backdrop-blur-md border rounded-lg flex items-center justify-center shadow-md transition-all ${
                 activeTurnSignal === 'right'
                   ? 'bg-[#c9922b]/45 text-white border-[#c9922b] font-bold scale-95'
@@ -1572,7 +1589,7 @@ export const MobileTouchControls: React.FC<MobileTouchControlsProps> = ({
             {onCycleUiScale && (
               <button
                 type="button"
-                onClick={() => { triggerHaptic(10); onCycleUiScale(); }}
+                {...pressProps(() => { triggerHaptic(10); onCycleUiScale(); })}
                 className="w-7 h-7 rounded-lg bg-[rgba(110,110,115,0.34)] border border-white/15 backdrop-blur-sm text-slate-300 font-mono text-[9px] font-black flex items-center justify-center active:scale-95 transition"
                 title="Настроить масштаб кнопок (65% / 75% / 85% / 100%)"
               >
@@ -1582,7 +1599,7 @@ export const MobileTouchControls: React.FC<MobileTouchControlsProps> = ({
 
             <button
               type="button"
-              onClick={() => { triggerHaptic(15); onToggleHeadlights?.(); }}
+              {...pressProps(() => { triggerHaptic(15); onToggleHeadlights?.(); })}
               className={`w-7.5 h-7.5 rounded-lg flex items-center justify-center border transition-all active:scale-95 ${
                 headlightMode === 'high' 
                   ? 'bg-sky-500/20 text-sky-300 border-sky-400 shadow-[0_0_8px_rgba(56,189,248,0.3)]' 
@@ -1603,7 +1620,7 @@ export const MobileTouchControls: React.FC<MobileTouchControlsProps> = ({
 
             <button
               type="button"
-              onClick={() => { triggerHaptic(15); onToggleFrontFog?.(); }}
+              {...pressProps(() => { triggerHaptic(15); onToggleFrontFog?.(); })}
               className={`w-7.5 h-7.5 rounded-lg flex items-center justify-center border transition-all active:scale-95 ${
                 isFrontFogOn
                   ? 'bg-amber-500/20 text-amber-300 border-amber-400 shadow-[0_0_8px_rgba(245,158,11,0.3)]'
@@ -1616,7 +1633,7 @@ export const MobileTouchControls: React.FC<MobileTouchControlsProps> = ({
 
             <button
               type="button"
-              onClick={() => { triggerHaptic(15); onToggleRearFog?.(); }}
+              {...pressProps(() => { triggerHaptic(15); onToggleRearFog?.(); })}
               className={`w-7.5 h-7.5 rounded-lg flex items-center justify-center border transition-all active:scale-95 ${
                 isRearFogOn
                   ? 'bg-rose-500/20 text-rose-300 border-rose-400 shadow-[0_0_8px_rgba(244,63,94,0.3)]'
@@ -1630,7 +1647,7 @@ export const MobileTouchControls: React.FC<MobileTouchControlsProps> = ({
             {hasRoadTrainLights && (
               <button
                 type="button"
-                onClick={() => { triggerHaptic(15); onToggleRoadTrainLights?.(); }}
+                {...pressProps(() => { triggerHaptic(15); onToggleRoadTrainLights?.(); })}
                 className={`w-7.5 h-7.5 rounded-lg flex items-center justify-center border transition-all active:scale-95 ${
                   isRoadTrainLightsOn
                     ? 'bg-amber-500/20 text-amber-300 border-amber-400 shadow-[0_0_8px_rgba(245,158,11,0.3)]'
@@ -1644,7 +1661,7 @@ export const MobileTouchControls: React.FC<MobileTouchControlsProps> = ({
 
             <button
               type="button"
-              onClick={() => { triggerHaptic(15); onOpenRadialMenu?.(); }}
+              {...pressProps(() => { triggerHaptic(15); onOpenRadialMenu?.(); })}
               className="w-7.5 h-7.5 bg-[rgba(110,110,115,0.34)] border border-white/15 backdrop-blur-sm text-slate-300 active:bg-white/30 active:text-white rounded-lg flex items-center justify-center shadow font-bold transition-all"
               title="Приборы / Меню"
             >
@@ -1681,10 +1698,10 @@ export const MobileTouchControls: React.FC<MobileTouchControlsProps> = ({
             {/* ENGINE IGNITION (START / STOP / MOTOR) */}
             <button
               type="button"
-              onClick={() => {
+              {...pressProps(() => {
                 triggerHaptic(20);
                 onToggleEngine?.();
-              }}
+              })}
               className={`w-7.5 h-7.5 rounded-lg flex items-center justify-center font-bold shadow border transition-all active:scale-95 ${
                 isEngineRunning
                   ? 'bg-emerald-500/25 border-emerald-400 text-emerald-200 backdrop-blur-sm'
@@ -1777,7 +1794,7 @@ export const MobileTouchControls: React.FC<MobileTouchControlsProps> = ({
             {onCycleUiScale && (
               <button
                 type="button"
-                onClick={() => { triggerHaptic(10); onCycleUiScale(); }}
+                {...pressProps(() => { triggerHaptic(10); onCycleUiScale(); })}
                 className="w-7 h-7 rounded-lg bg-[rgba(110,110,115,0.34)] border border-white/15 backdrop-blur-sm text-slate-300 font-mono text-[9px] font-black flex items-center justify-center active:scale-95 transition shadow-lg self-center"
                 title="Настроить масштаб кнопок (65% / 75% / 85% / 100%)"
               >

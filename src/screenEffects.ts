@@ -690,7 +690,10 @@ export class ScreenEffectsSystem {
         const rawFog = (typeof veh.fogLevel === 'number' && Number.isFinite(veh.fogLevel)) ? Math.max(0, veh.fogLevel) : 0;
         const fogLevel = rawFog <= 1.0 ? rawFog * 100 : rawFog;
 
-        if (rainLevel > 5 || fogLevel > 5) {
+        // Freeroam: no windshield fog or rain-blindness vignette, the glass is always clear
+        const isFreeroamMode = world.gameMode === 'freeroam';
+
+        if (!isFreeroamMode && (rainLevel > 5 || fogLevel > 5)) {
           ctx.save();
           const cx = width / 2;
           const cy = height / 2;

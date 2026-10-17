@@ -5852,8 +5852,14 @@ export function updatePlayerNeedsAndVitals(
       }
     }
 
+    // Freeroam: the windshield never fogs and precipitation never blinds the driver.
+    // Glass stays clear regardless of rain, humidity or wipers, so the rain/fog sim is skipped entirely.
+    const isFreeroamMode = world.gameMode === 'freeroam';
+
     // Wipers and windshield rain level (exterior water on the glass with aerodynamic airflow)
-    if (isRaining) {
+    if (isFreeroamMode) {
+      curVehicle.windshieldRainLevel = 0;
+    } else if (isRaining) {
       const carSpeedKmh = Math.abs(curVehicle.speed || 0) * 3.6;
       // Faster forward travel sweeps through more volumetric raindrops per second
       const speedAccFlux = 1.0 + Math.min(2.2, carSpeedKmh / 50.0);
@@ -5880,7 +5886,11 @@ export function updatePlayerNeedsAndVitals(
     }
 
     // Mathematical update of windshield fogging (moisture & temperature balance)
-    updateFog(curVehicle, player, world, dt, timeHour);
+    if (isFreeroamMode) {
+      curVehicle.fogLevel = 0;
+    } else {
+      updateFog(curVehicle, player, world, dt, timeHour);
+    }
   }
 
 
