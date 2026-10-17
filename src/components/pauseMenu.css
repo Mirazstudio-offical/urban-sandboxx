@@ -14,7 +14,10 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer;paddin
 .a{position:absolute}
 [hidden]{display:none!important}
 .row2{display:flex;gap:12px}
-.panel{background:rgba(20,20,22,.86);border:1px solid rgba(255,255,255,.09);border-radius:14px}
+.panel{background:rgba(20,20,22,.96);border:1px solid rgba(255,255,255,.09);border-radius:14px}
+/* затемнение на весь экран (не внутри масштабируемой сцены) — игра за меню читается только как фон */
+.bd{position:fixed;inset:0;background:rgba(9,9,10,.84);transition:opacity .4s}
+.bd.gone{opacity:0}
 .chip{display:flex;align-items:center;gap:10px;height:44px;padding:0 16px;border-radius:10px;background:rgba(22,22,24,.7);border:1px solid rgba(255,255,255,.09)}
 .top{position:absolute;left:64px;right:64px;top:34px;height:44px;display:flex;align-items:center;justify-content:space-between}
 .ttl{font-size:26px;font-weight:700}

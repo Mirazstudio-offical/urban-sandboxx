@@ -379,10 +379,11 @@ export const PauseMenu: React.FC<PauseMenuProps> = ({
   return (
     <ShadowHost css={pauseCss} zIndex={55} background="transparent">
       <div id="w" ref={wrapRef}>
+        {/* полноэкранное затемнение: закрывает весь экран при любом соотношении сторон */}
+        <div className={'bd' + (!entered || leaving ? ' gone' : '')} />
         <div className={'gm' + (!entered || leaving ? ' gone' : '')} id="gm" ref={gmRef}>
-          {/* фон поверх живой (замершей) игры — слои из макета */}
+          {/* светящийся акцент и затенение слева — слои из макета */}
           <div className="a" style={{ inset: 0, background: 'radial-gradient(900px 520px at 70% 82%,rgba(201,146,43,.4),transparent 62%)' }} />
-          <div className="a" style={{ inset: 0, background: 'rgba(9,9,10,.62)' }} />
           <div className="a" style={{ inset: 0, background: 'linear-gradient(90deg,rgba(9,9,10,.9),rgba(9,9,10,.45) 45%,transparent 80%)' }} />
 
           <div className="top">
