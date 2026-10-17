@@ -2670,7 +2670,8 @@ export class GameRenderer {
     ry: number,
     seed: number,
     alpha: number,
-    origin: { x: number; y: number; angle: number }
+    origin: { x: number; y: number; angle: number },
+    roughness: number = 0
   ) {
     const fx = this.liquidFx;
     const reflect = performanceConfig.enableLiquidReflections && fx.reflectBudget > 0 && performanceConfig.liquidReflectionStrength > 0;
@@ -2684,7 +2685,7 @@ export class GameRenderer {
     const toLocal = (wx: number, wy: number) => ({ x: wx * a - wy * b, y: wx * b + wy * a });
 
     ctx.save();
-    this.drawOrganicBlob(ctx, rx, ry, seed);
+    this.drawOrganicBlob(ctx, rx, ry, seed, roughness);
     ctx.clip();
 
     if (reflect) {
@@ -2739,14 +2740,17 @@ export class GameRenderer {
     ctx.restore();
   }
 
-  private drawOrganicBlob(ctx: CanvasRenderingContext2D, rx: number, ry: number, seed: number) {
+  private drawOrganicBlob(ctx: CanvasRenderingContext2D, rx: number, ry: number, seed: number, roughness: number = 0) {
     ctx.beginPath();
-    const numPoints = 16;
+    // roughness > 0 adds finer harmonics so spread films get ragged, fingered edges
+    const numPoints = roughness > 0 ? 28 : 16;
     for (let i = 0; i <= numPoints; i++) {
       const angle = (i / numPoints) * Math.PI * 2;
       const wave1 = Math.sin(angle * 3 + seed * 10) * 0.15;
       const wave2 = Math.cos(angle * 5 + seed * 17) * 0.08;
-      const rScale = 1 + wave1 + wave2;
+      const wave3 = roughness > 0 ? Math.sin(angle * 7 + seed * 23) * 0.2 * roughness : 0;
+      const wave4 = roughness > 0 ? Math.cos(angle * 11 + seed * 29) * 0.12 * roughness : 0;
+      const rScale = 1 + wave1 + wave2 + wave3 + wave4;
       const x = Math.cos(angle) * rx * rScale;
       const y = Math.sin(angle) * ry * rScale;
       if (i === 0) {
@@ -2767,15 +2771,27 @@ export class GameRenderer {
     const stainStart = Math.max(0, stains.length - performanceConfig.stainsLimit);
     for (let si = stainStart; si < stains.length; si++) {
       const stain = stains[si];
-      if (stain.x < minX - 30 || stain.x > maxX + 30 || stain.y < minY - 30 || stain.y > maxY + 30) continue;
-      const stainAlpha = typeof stain.alpha === 'number' && isFinite(stain.alpha) ? Math.max(0, Math.min(1, stain.alpha)) : 0.85;
+      // Spread progress 0..1 (films only): drives stretch, edge roughness and thinning
+      const grow = stain.filmCap ? Math.min(1, stain.radius / stain.filmCap) : 0;
+      const stretch = 1 + (stain.spreadElong ?? 0.6) * 0.8 * grow;
+      const pad = 30 + stain.radius * 0.8 * grow;
+      if (stain.x < minX - pad || stain.x > maxX + pad || stain.y < minY - pad || stain.y > maxY + pad) continue;
+      // A spread film is thinner: the same fluid covers more ground, so it gets fainter as it grows
+      const thin = stain.radius > 3 ? Math.max(0.3, Math.sqrt(3 / stain.radius)) : 1;
+      const baseAlpha = typeof stain.alpha === 'number' && isFinite(stain.alpha) ? Math.max(0, Math.min(1, stain.alpha)) : 0.85;
+      const stainAlpha = baseAlpha * thin;
       if (stainAlpha <= 0.01) continue;
 
       ctx.save();
       ctx.translate(stain.x, stain.y);
+      const filmAngle = grow > 0.02 ? (stain.spreadAngle ?? 0) : 0;
+      if (filmAngle !== 0) ctx.rotate(filmAngle);
 
-      const rx = Math.max(0.1, stain.radius);
-      const ry = rx * 0.85;
+      // Area-preserving stretch along the film direction
+      const rough = grow * 0.9;
+      const rOut = Math.max(0.1, stain.radius);
+      const rx = rOut * Math.sqrt(stretch);
+      const ry = rOut * 0.85 / Math.sqrt(stretch);
       const seed = hashString(stain.id);
 
       if (stain.type === 'oil') {
@@ -2788,7 +2804,7 @@ export class GameRenderer {
         grad.addColorStop(1, `rgba(56, 189, 248, 0)`);
 
         ctx.fillStyle = grad;
-        this.drawOrganicBlob(ctx, rx, ry, seed);
+        this.drawOrganicBlob(ctx, rx, ry, seed, rough);
         ctx.fill();
 
         // High gloss wet specular highlight
@@ -2806,7 +2822,7 @@ export class GameRenderer {
         grad.addColorStop(1, `rgba(234, 179, 8, 0)`);
 
         ctx.fillStyle = grad;
-        this.drawOrganicBlob(ctx, rx, ry, seed);
+        this.drawOrganicBlob(ctx, rx, ry, seed, rough);
         ctx.fill();
 
         // Wet specular shine
@@ -2828,7 +2844,7 @@ export class GameRenderer {
         grad.addColorStop(1, `rgba(236, 72, 153, 0)`);
 
         ctx.fillStyle = grad;
-        this.drawOrganicBlob(ctx, rx, ry, seed);
+        this.drawOrganicBlob(ctx, rx, ry, seed, rough);
         ctx.fill();
 
         // Soft sky sheen reflection on gasoline surface
@@ -2861,7 +2877,7 @@ export class GameRenderer {
         mainGrad.addColorStop(1, `rgba(120, 53, 4, 0)`);
 
         ctx.fillStyle = mainGrad;
-        this.drawOrganicBlob(ctx, rx, ry, seed);
+        this.drawOrganicBlob(ctx, rx, ry, seed, rough);
         ctx.fill();
 
         // --- 3. Steepness height ridges (concentric bevel circles to define depth) ---
@@ -2932,7 +2948,7 @@ export class GameRenderer {
           grad.addColorStop(1, `rgba(224, 242, 254, 0)`);
 
           ctx.fillStyle = grad;
-          this.drawOrganicBlob(ctx, rx, ry, seed);
+          this.drawOrganicBlob(ctx, rx, ry, seed, rough);
           ctx.fill();
 
           // Crystalline micro-fracture
@@ -2958,7 +2974,7 @@ export class GameRenderer {
           grad.addColorStop(1, `rgba(224, 242, 254, 0)`);
 
           ctx.fillStyle = grad;
-          this.drawOrganicBlob(ctx, rx, ry, seed);
+          this.drawOrganicBlob(ctx, rx, ry, seed, rough);
           ctx.fill();
 
           // Wet glossy specular reflection on puddle surface
@@ -2975,7 +2991,7 @@ export class GameRenderer {
       }
 
       if (stain.type !== 'sand') {
-        this.drawLiquidSurfaceFx(ctx, rx, ry, seed, stainAlpha, { x: stain.x, y: stain.y, angle: 0 });
+        this.drawLiquidSurfaceFx(ctx, rx, ry, seed, stainAlpha, { x: stain.x, y: stain.y, angle: filmAngle }, rough);
       }
 
       if ((stain as any).onFire) {
