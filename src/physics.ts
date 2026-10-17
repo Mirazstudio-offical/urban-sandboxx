@@ -8939,7 +8939,14 @@ export function updateVehiclePhysics(
     // --- 6. RIGID BODY NEWTON-EULER INTEGRATION ---
     const aBodyX = F_body_x / totalMass;
     const aBodyY = F_body_y / totalMass;
-    const alphaYaw = Tau_z / Iz;
+    let alphaYaw = Tau_z / Iz;
+
+    // Stationary steering scrub resistance (preventing on-spot rotation when turning steering wheel at standstill)
+    const vehSpeedKmh = Math.abs(vehicle.speed) * PX_S_TO_SPEED_KMH;
+    if (vehSpeedKmh < 3.0 && throttle === 0) {
+      alphaYaw *= 0.15;
+      if (Math.abs(curYaw) < 0.25) curYaw *= 0.75;
+    }
 
     // Transform body accelerations into world coordinates
     const aWorldX = aBodyX * cosA - aBodyY * sinA;
@@ -8949,12 +8956,17 @@ export function updateVehiclePhysics(
     curVy += aWorldY * dt;
     curYaw += alphaYaw * dt;
 
-    // Low-speed static friction clean stop (prevents numerical jitter at 0 km/h)
+    // Robust low-speed static friction / stiction lock (prevents drifting, creeping, and rotation on the spot)
     const groundSpeed = Math.hypot(curVx, curVy);
-    if (groundSpeed < 0.8 && throttle === 0 && Math.abs(curYaw) < 0.06 && !input.handbrake) {
-      curVx = 0;
-      curVy = 0;
-      curYaw = 0;
+    if ((groundSpeed < 2.8 && throttle === 0 && !isHandbrakePulled) || (vehSpeedKmh < 2.0 && throttle === 0)) {
+      curVx *= Math.pow(0.05, dt * 12);
+      curVy *= Math.pow(0.05, dt * 12);
+      curYaw *= Math.pow(0.05, dt * 12);
+      if (groundSpeed < 1.5) {
+        curVx = 0;
+        curVy = 0;
+        curYaw = 0;
+      }
     }
 
     // Update vehicle orientation and velocities
