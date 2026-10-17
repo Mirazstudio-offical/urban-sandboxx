@@ -6,7 +6,8 @@ import { useTopmostEscape } from './gameUi';
 import { VehiclePreviewCanvas } from './VehiclePreviewCanvas';
 import { onlineManager } from '../onlineSystem';
 import { sound } from '../audio';
-import { performanceConfig, savePerformanceConfig, DEFAULT_CONFIG } from '../performanceConfig';
+import { performanceConfig, savePerformanceConfig, DEFAULT_CONFIG, detectGraphicsPreset, PerformanceConfig, GraphicsPresetId } from '../performanceConfig';
+import { GFX_GROUPS, GFX_PRESET_OPTIONS, GfxItem, applyGfxPatch, applyGfxPreset } from '../graphicsSettings';
 import {
   subscribeToFriends,
   fetchUserProfile,
@@ -228,16 +229,24 @@ export const PauseMenu: React.FC<PauseMenuProps> = ({
   const [masterVol, setMasterVol] = useState<number>(() => Math.round(sound.getMasterVolume() * 100));
   const [engineVol, setEngineVol] = useState<number>(() => Math.round(sound.getEngineVolume() * 100));
   const [local, setLocal] = useState<PauseSettings>(() => ({ ...settings }));
-  const patchPerf = (patch: Partial<typeof perf>) => {
-    const next = { ...perf, ...patch };
-    setPerf(next);
-    Object.assign(performanceConfig, next);
-    savePerformanceConfig(performanceConfig);
+  const patchPerf = (patch: Partial<PerformanceConfig>) => {
+    applyGfxPatch(patch);
+    setPerf({ ...performanceConfig });
   };
   const resetPerf = () => {
-    Object.assign(performanceConfig, DEFAULT_CONFIG);
-    savePerformanceConfig(performanceConfig);
+    applyGfxPatch({ ...DEFAULT_CONFIG });
     setPerf({ ...performanceConfig });
+  };
+  // Maps a shared graphics spec entry onto this menu's row format
+  const gfxRow = (it: GfxItem): Row => {
+    if (it.kind === 'tg') {
+      return { t: 'tg', l: it.label, v: !!perf[it.key], set: v => patchPerf({ [it.key]: v } as Partial<PerformanceConfig>) };
+    }
+    if (it.kind === 'sld') {
+      return { t: 'sld', l: it.label, v: perf[it.key], min: it.min, max: it.max, step: it.step, fmt: it.fmt,
+        set: v => patchPerf({ [it.key]: v } as Partial<PerformanceConfig>) };
+    }
+    return { t: 'seg', l: it.label, v: perf[it.key], o: it.options, set: v => patchPerf({ [it.key]: v } as Partial<PerformanceConfig>) };
   };
   const patchGame = (patch: Partial<PauseSettings>) => {
     const next = { ...local, ...patch };
@@ -247,13 +256,9 @@ export const PauseMenu: React.FC<PauseMenuProps> = ({
 
   const rowsFor = (id: TabId): Row[] => {
     if (id === 'gfx') return [
-      { t: 'tg', l: 'Упрощённая графика', v: perf.lowQualityRendering, set: v => patchPerf({ lowQualityRendering: v }) },
-      { t: 'tg', l: 'Динамические тени', v: perf.enableShadows, set: v => patchPerf({ enableShadows: v }) },
-      { t: 'tg', l: 'Детали балконов', v: perf.enableBalconyDetails, set: v => patchPerf({ enableBalconyDetails: v }) },
-      { t: 'tg', l: 'Капли дождя на экране', v: perf.enableRainDroplets, set: v => patchPerf({ enableRainDroplets: v }) },
-      { t: 'tg', l: 'Мини-карта', v: perf.enableMinimap, set: v => patchPerf({ enableMinimap: v }) },
-      { t: 'sld', l: 'Лимит частиц', v: perf.particleLimit, min: 100, max: 600, step: 50, fmt: v => String(v), set: v => patchPerf({ particleLimit: v }) },
-      { t: 'sld', l: 'Машин в трафике', v: perf.maxVehicles, min: 5, max: 45, step: 1, fmt: v => String(v), set: v => patchPerf({ maxVehicles: v }) },
+      { t: 'seg', l: 'Быстрая настройка (пресет)', v: detectGraphicsPreset(perf), o: GFX_PRESET_OPTIONS,
+        set: v => { applyGfxPreset(v as GraphicsPresetId); setPerf({ ...performanceConfig }); } },
+      ...GFX_GROUPS.flatMap(g => g.items.map(gfxRow)),
       { t: 'btn', l: 'Параметры графики', label: 'Сбросить', act: resetPerf }
     ];
     if (id === 'sound') return [

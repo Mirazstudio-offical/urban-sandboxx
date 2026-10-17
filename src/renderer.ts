@@ -313,6 +313,13 @@ export class GameRenderer {
 
   // Offscreen buffer for the Lightmap (prevents punching holes in the world)
   private lightmapCanvas: HTMLCanvasElement;
+  private backingScale: number = 1;
+
+  /** Canvas particles to draw this frame: keeps only the newest `renderParticleLimit`. */
+  private capParticles(particles: GameWorld['particles']): GameWorld['particles'] {
+    const lim = performanceConfig.renderParticleLimit;
+    return particles.length > lim ? particles.slice(particles.length - lim) : particles;
+  }
   private lightmapCtx: CanvasRenderingContext2D;
 
   // Offscreen Chunk Cache for static world geometry (Ground, Sidewalks, Roads, Parkings)
@@ -744,9 +751,14 @@ export class GameRenderer {
     return canvas;
   }
 
-  public resize(width: number, height: number) {
+  /**
+   * width/height are CSS-pixel sizes of the viewport (the game's logical space).
+   * backingScale is canvas-pixels per CSS-pixel (renderScale * devicePixelRatio), applied as a base transform in render().
+   */
+  public resize(width: number, height: number, backingScale: number = 1) {
     this.width = width;
     this.height = height;
+    this.backingScale = backingScale > 0 ? backingScale : 1;
     this.lightmapCanvas.width = width;
     this.lightmapCanvas.height = height;
   }
@@ -771,11 +783,18 @@ export class GameRenderer {
   ) {
     const ctx = this.ctx;
 
+    // Base transform: map logical CSS-pixel space onto the (possibly scaled) backing store
+    const k = this.backingScale;
+    ctx.setTransform(k, 0, 0, k, 0, 0);
+    ctx.imageSmoothingEnabled = performanceConfig.imageSmoothing;
+
     // Apply pre-render physiological camera micro-jitter (cold shivering, shock tremors)
-    screenEffectsSystem.applyPreRenderCameraModifiers(camera, player, 0.016);
+    if (performanceConfig.enableCameraJitter) {
+      screenEffectsSystem.applyPreRenderCameraModifiers(camera, player, 0.016);
+    }
 
     // Viewport bounds in world coords (using diagonal distance to cover full screen when rotated)
-    const viewDiag = (Math.hypot(this.width, this.height) / (2 * camera.zoom)) + 150;
+    const viewDiag = ((Math.hypot(this.width, this.height) / (2 * camera.zoom)) + 150) * performanceConfig.drawDistance;
     const minX = camera.x - viewDiag;
     const maxX = camera.x + viewDiag;
     const minY = camera.y - viewDiag;
@@ -808,7 +827,7 @@ export class GameRenderer {
       ctx.translate(-camera.x, -camera.y);
 
       // Apply Camera Shake if any
-      if (camera.shakeTimer > 0) {
+      if (camera.shakeTimer > 0 && performanceConfig.enableScreenShake) {
         let shakeX = (Math.random() * 2 - 1) * camera.shakeIntensity;
         let shakeY = (Math.random() * 2 - 1) * camera.shakeIntensity;
         if (camera.shakeVx) shakeX += camera.shakeVx;
@@ -922,10 +941,10 @@ export class GameRenderer {
           this.renderPuddles(world.puddles, sMinX, sMinY, sMaxX, sMaxY, isMirrorFreezing);
           GuardrailRenderer.renderGuardrails(ctx, world, sMinX, sMinY, sMaxX, sMaxY, nightAlpha);
           this.renderPedestrians(visiblePedestrians, world);
-          this.renderUnderVehicleParticles(world.particles, world.cleanMode);
+          this.renderUnderVehicleParticles(this.capParticles(world.particles), world.cleanMode);
           this.renderVehicles(visibleVehicles, nightAlpha, camera.gridMode);
           this.renderTreesAndTallProps(vpTrees, vpProps, sMinX, sMinY, sMaxX, sMaxY, nightAlpha, world.calendar?.season);
-          this.renderOverheadParticles(world.particles, world.cleanMode);
+          this.renderOverheadParticles(this.capParticles(world.particles), world.cleanMode);
 
           if (nightAlpha > 0) {
             ctx.fillStyle = `rgba(15, 23, 42, ${nightAlpha})`;
@@ -961,7 +980,7 @@ export class GameRenderer {
       ctx.restore();
 
       // Render full physiological screen effects pass (Pain vignette, Shock desaturation, Frost cyan, Amber wave)
-      screenEffectsSystem.render(ctx, this.width, this.height, player, world);
+      if (performanceConfig.enableScreenEffects) screenEffectsSystem.render(ctx, this.width, this.height, player, world);
       return;
     }
 
@@ -978,7 +997,7 @@ export class GameRenderer {
     ctx.translate(-camera.x, -camera.y);
 
     // Apply Camera Shake if any
-    if (camera.shakeTimer > 0) {
+    if (camera.shakeTimer > 0 && performanceConfig.enableScreenShake) {
       let shakeX = (Math.random() * 2 - 1) * camera.shakeIntensity;
       let shakeY = (Math.random() * 2 - 1) * camera.shakeIntensity;
       if (camera.shakeVx) shakeX += camera.shakeVx;
@@ -1067,7 +1086,7 @@ export class GameRenderer {
     }
 
     // 13c. Under-Vehicle Ground Exhaust Smoke (rendered UNDER car chassis on asphalt)
-    this.renderUnderVehicleParticles(world.particles, world.cleanMode);
+    this.renderUnderVehicleParticles(this.capParticles(world.particles), world.cleanMode);
 
     // 14. Vehicles (Cars with dynamic wheels, lights & wipers)
     this.renderVehicles(visibleVehicles, nightAlpha, camera.gridMode, player);
@@ -1096,7 +1115,7 @@ export class GameRenderer {
 
     // 14e. Mid-Layer Wheel Ground Particles (flying mud clods, dust clouds, tire smoke & spray)
     // Rendered AFTER vehicle chassis, but BEFORE vehicle cabins, building roofs, and trees!
-    this.renderWheelGroundParticles(world.particles, world.cleanMode);
+    this.renderWheelGroundParticles(this.capParticles(world.particles), world.cleanMode);
 
     const isRaining = world.weather === 'rain' || world.weather === 'storm';
     const isFog = world.weather === 'fog';
@@ -1138,7 +1157,7 @@ export class GameRenderer {
     );
 
     // 17. Overhead Particles (Tractor Stack Exhaust, Engine Bay Steam/Smoke, Flames, Sparks, Debris)
-    this.renderOverheadParticles(world.particles, world.cleanMode);
+    this.renderOverheadParticles(this.capParticles(world.particles), world.cleanMode);
 
     // 18. Optional AI Telemetry & Debug Visualizer
     if (trafficDiagnostics.debugOverlayEnabled) {
@@ -1166,7 +1185,7 @@ export class GameRenderer {
     this.renderWeatherOverlay(world, minX, minY, maxX, maxY, camera, timeHour, nightAlpha, visibleVehicles, isFreezing);
 
     // Render full physiological screen effects pass (Pain vignette, Shock desaturation, Frost cyan, Amber wave)
-    screenEffectsSystem.render(ctx, this.width, this.height, player, world);
+    if (performanceConfig.enableScreenEffects) screenEffectsSystem.render(ctx, this.width, this.height, player, world);
   }
 
   // --- GROUND & BASE TERRAIN ---
@@ -2524,7 +2543,8 @@ export class GameRenderer {
     const ctx = this.ctx;
     ctx.save();
     ctx.lineCap = 'round';
-    for (let i = 0; i < skidMarks.length; i++) {
+    // Newest marks are appended last; keep only the newest `skidMarksLimit`
+    for (let i = Math.max(0, skidMarks.length - performanceConfig.skidMarksLimit); i < skidMarks.length; i++) {
       const sm = skidMarks[i];
       if (Math.max(sm.x1, sm.x2) < minX || Math.min(sm.x1, sm.x2) > maxX ||
           Math.max(sm.y1, sm.y2) < minY || Math.min(sm.y1, sm.y2) > maxY) continue;
@@ -2625,7 +2645,10 @@ export class GameRenderer {
     if (!stains || stains.length === 0) return;
     const ctx = this.ctx;
 
-    for (const stain of stains) {
+    // Newest stains are appended last; keep only the newest `stainsLimit`
+    const stainStart = Math.max(0, stains.length - performanceConfig.stainsLimit);
+    for (let si = stainStart; si < stains.length; si++) {
+      const stain = stains[si];
       if (stain.x < minX - 30 || stain.x > maxX + 30 || stain.y < minY - 30 || stain.y > maxY + 30) continue;
       const stainAlpha = typeof stain.alpha === 'number' && isFinite(stain.alpha) ? Math.max(0, Math.min(1, stain.alpha)) : 0.85;
       if (stainAlpha <= 0.01) continue;
@@ -5334,7 +5357,9 @@ export class GameRenderer {
     if (!litter) return;
     const ctx = this.ctx;
 
-    for (const lit of litter) {
+    const litterStart = Math.max(0, litter.length - performanceConfig.litterLimit);
+    for (let li = litterStart; li < litter.length; li++) {
+      const lit = litter[li];
       if (lit.x < minX || lit.x > maxX || lit.y < minY || lit.y > maxY) continue;
 
       const alt = lit.altitude || 0;
@@ -5418,7 +5443,7 @@ export class GameRenderer {
         // Add a glow effect for the phone screen
         if (lit.isGlowing && nightAlpha > 0.3) {
           ctx.shadowColor = '#38bdf8';
-          ctx.shadowBlur = 15;
+          ctx.shadowBlur = performanceConfig.enableSoftShadowBlur ? 15 : 0;
           ctx.fillStyle = 'rgba(56, 189, 248, 0.4)';
           ctx.fillRect(-lit.size / 2, -lit.size * 0.8, lit.size, lit.size * 1.6);
           ctx.shadowBlur = 0; // Reset
@@ -6398,7 +6423,9 @@ export class GameRenderer {
   // --- PUDDLES ---
   private renderPuddles(puddles: Puddle[], minX: number, minY: number, maxX: number, maxY: number, isFreezing: boolean = false) {
     const ctx = this.ctx;
-    for (const p of puddles) {
+    const puddleStart = Math.max(0, puddles.length - performanceConfig.puddlesLimit);
+    for (let pi = puddleStart; pi < puddles.length; pi++) {
+      const p = puddles[pi];
       if (p.x < minX || p.x > maxX || p.y < minY || p.y > maxY) continue;
       ctx.save();
       ctx.translate(p.x, p.y);
@@ -6503,6 +6530,7 @@ export class GameRenderer {
 
   // --- BIRDS FAUNA ---
   private renderBirds(birds: Bird[], minX: number, minY: number, maxX: number, maxY: number, nightAlpha: number = 0) {
+    if (!performanceConfig.enableBirds) return;
     const ctx = this.ctx;
     for (const b of birds) {
       if (b.x < minX || b.x > maxX || b.y < minY || b.y > maxY) continue;
@@ -7744,13 +7772,13 @@ export class GameRenderer {
           }
         }
 
-        const bubble = speechBubbles?.get(rp.peerId);
+        const bubble = performanceConfig.enableSpeechBubbles ? speechBubbles?.get(rp.peerId) : undefined;
         this.renderNametagAndSpeechBubble(rp.name, posX, posY, isDriving, bubble?.text);
       }
     }
 
     // 2. Local Player Overhead Speech Bubble (if chatting)
-    const localBubble = speechBubbles?.get('local');
+    const localBubble = performanceConfig.enableSpeechBubbles ? speechBubbles?.get('local') : undefined;
     if (localBubble && localBubble.text) {
       let posX = localPlayer.x;
       let posY = localPlayer.y;
@@ -7794,7 +7822,7 @@ export class GameRenderer {
     const tagBaseY = isDriving ? -26 : -18;
 
     // Only draw nametag for remote players or when explicitly desired
-    if (!isLocalPlayer) {
+    if (!isLocalPlayer && performanceConfig.enableNameTags) {
       ctx.font = 'bold 8.5px sans-serif';
       const tagText = isDriving ? `[CAR] ${name}` : name;
       const textW = ctx.measureText(tagText).width;
@@ -8099,7 +8127,7 @@ export class GameRenderer {
       ctx.font = 'bold 9px sans-serif';
       ctx.fillStyle = 'rgba(248, 250, 252, 0.95)';
       ctx.shadowColor = '#000000';
-      ctx.shadowBlur = 4;
+      ctx.shadowBlur = performanceConfig.enableSoftShadowBlur ? 4 : 0;
       ctx.fillText(target.actionTitle, 0, keyY + 13);
       ctx.shadowBlur = 0;
     }
@@ -11133,7 +11161,12 @@ export class GameRenderer {
 
       lCtx.save();
       // Synchronize offscreen transform with main camera
-      lCtx.setTransform(ctx.getTransform());
+      {
+        // Offscreen lightmap is CSS-sized: strip the base backing scale from the current transform
+        const t = ctx.getTransform();
+        const ik = 1 / this.backingScale;
+        lCtx.setTransform(t.a * ik, t.b * ik, t.c * ik, t.d * ik, t.e * ik, t.f * ik);
+      }
       lCtx.globalCompositeOperation = 'destination-out';
 
     // A. Automotive Headlight, Trailer & Vehicle Light Cutouts (Pass 1 - Organic illumination footprints)
@@ -11818,7 +11851,7 @@ export class GameRenderer {
 
     // --- Apply Lightmap to Main Canvas ---
     ctx.save();
-    ctx.setTransform(1, 0, 0, 1, 0, 0); // Reset to screen space to draw the lightmap
+    ctx.setTransform(this.backingScale, 0, 0, this.backingScale, 0, 0); // Screen space (CSS px) mapped to backing store
     ctx.drawImage(this.lightmapCanvas, 0, 0);
     ctx.restore();
     }
@@ -12745,7 +12778,7 @@ export class GameRenderer {
       const countX = cMaxX - cMinX + 1;
       const countY = cMaxY - cMinY + 1;
       const totalCells = countX * countY;
-      const maxSampled = Math.max(12, Math.round((75 + weights.storm * 145) * weights.rain));
+      const maxSampled = Math.max(12, Math.round((75 + weights.storm * 145) * weights.rain * (performanceConfig.rainDensity / 100)));
       const stride = Math.max(1, Math.floor(Math.sqrt(totalCells / maxSampled)));
 
       for (let cy = cMinY; cy <= cMaxY; cy += stride) {
@@ -12832,9 +12865,9 @@ export class GameRenderer {
         // Layer 1: Midground standard drops
         // Layer 2: Foreground close-range fast streaks (full drag, dramatic stretch)
         const rainLayers = [
-          { count: Math.max(1, Math.round((70 + weights.storm * 190) * weights.rain)), perspectiveFall: 340, len: 7, lw: 0.8, alpha: 0.20 * Math.min(1.0, weights.rain * 1.5), windMult: 0.70 },
-          { count: Math.max(1, Math.round((55 + weights.storm * 145) * weights.rain)), perspectiveFall: 520, len: 12, lw: 1.2, alpha: 0.35 * Math.min(1.0, weights.rain * 1.5), windMult: 0.88 },
-          { count: Math.max(1, Math.round((22 + weights.storm * 58) * weights.rain)), perspectiveFall: 750, len: 18, lw: 1.6, alpha: 0.50 * Math.min(1.0, weights.rain * 1.5), windMult: 1.00 }
+          { count: Math.max(1, Math.round(performanceConfig.rainDensity / 100 * (70 + weights.storm * 190) * weights.rain)), perspectiveFall: 340, len: 7, lw: 0.8, alpha: 0.20 * Math.min(1.0, weights.rain * 1.5), windMult: 0.70 },
+          { count: Math.max(1, Math.round(performanceConfig.rainDensity / 100 * (55 + weights.storm * 145) * weights.rain)), perspectiveFall: 520, len: 12, lw: 1.2, alpha: 0.35 * Math.min(1.0, weights.rain * 1.5), windMult: 0.88 },
+          { count: Math.max(1, Math.round(performanceConfig.rainDensity / 100 * (22 + weights.storm * 58) * weights.rain)), perspectiveFall: 750, len: 18, lw: 1.6, alpha: 0.50 * Math.min(1.0, weights.rain * 1.5), windMult: 1.00 }
         ];
 
         for (let l = 0; l < rainLayers.length; l++) {
@@ -12915,9 +12948,9 @@ export class GameRenderer {
       if (weights.snow > 0.02) {
         // Multi-depth snowflake layers (low terminal descent, horizontal wind dominance)
         const snowLayers = [
-          { count: Math.max(1, Math.round((180 + weights.blizzard * 180) * weights.snow)), fallSpeed: 45 + weights.blizzard * 40, r: 1.2, swayAmp: 8, swayFreq: 1.8, alpha: 0.35 * weights.snow, windMult: 0.85 },
-          { count: Math.max(1, Math.round((120 + weights.blizzard * 120) * weights.snow)), fallSpeed: 65 + weights.blizzard * 55, r: 1.8, swayAmp: 16, swayFreq: 2.3, alpha: 0.50 * weights.snow, windMult: 0.95 },
-          { count: Math.max(1, Math.round((40 + weights.blizzard * 40) * weights.snow)), fallSpeed: 90 + weights.blizzard * 75, r: 2.6, swayAmp: 24, swayFreq: 3.1, alpha: 0.65 * weights.snow, windMult: 1.00 }
+          { count: Math.max(1, Math.round(performanceConfig.rainDensity / 100 * (180 + weights.blizzard * 180) * weights.snow)), fallSpeed: 45 + weights.blizzard * 40, r: 1.2, swayAmp: 8, swayFreq: 1.8, alpha: 0.35 * weights.snow, windMult: 0.85 },
+          { count: Math.max(1, Math.round(performanceConfig.rainDensity / 100 * (120 + weights.blizzard * 120) * weights.snow)), fallSpeed: 65 + weights.blizzard * 55, r: 1.8, swayAmp: 16, swayFreq: 2.3, alpha: 0.50 * weights.snow, windMult: 0.95 },
+          { count: Math.max(1, Math.round(performanceConfig.rainDensity / 100 * (40 + weights.blizzard * 40) * weights.snow)), fallSpeed: 90 + weights.blizzard * 75, r: 2.6, swayAmp: 24, swayFreq: 3.1, alpha: 0.65 * weights.snow, windMult: 1.00 }
         ];
 
         for (let l = 0; l < snowLayers.length; l++) {
@@ -13269,7 +13302,7 @@ export class GameRenderer {
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
     ctx.shadowColor = '#22d3ee';
-    ctx.shadowBlur = 15;
+    ctx.shadowBlur = performanceConfig.enableSoftShadowBlur ? 15 : 0;
     ctx.globalAlpha = 0.65;
 
     ctx.beginPath();
@@ -13330,6 +13363,7 @@ export class GameRenderer {
     maxY: number,
     nightAlpha: number
   ) {
+    if (!performanceConfig.enableCloudShadows) return;
     // Fades during night: sunlight-cast cloud shadows naturally vanish after dusk
     const daylight = Math.max(0, 1.0 - nightAlpha * 1.25);
     if (daylight <= 0.01) return;

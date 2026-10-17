@@ -2,7 +2,8 @@ import React, { useState, useEffect, useRef, useLayoutEffect } from 'react';
 import { createPortal } from 'react-dom';
 import menuCss from './mainMenu.css?inline';
 import { SPAWN_LOCATIONS } from '../spawnLocations';
-import { performanceConfig, savePerformanceConfig, DEFAULT_CONFIG } from '../performanceConfig';
+import { performanceConfig, savePerformanceConfig, DEFAULT_CONFIG, detectGraphicsPreset, PerformanceConfig, GraphicsPresetId } from '../performanceConfig';
+import { GFX_GROUPS, GFX_PRESET_OPTIONS, GfxItem, applyGfxPatch, applyGfxPreset } from '../graphicsSettings';
 import { sound } from '../audio';
 import { onlineManager } from '../onlineSystem';
 import {
@@ -416,16 +417,43 @@ export const MainMenu: React.FC<MainMenuProps> = ({
   const [engineVol, setEngineVol] = useState<number>(() => Math.round(sound.getEngineVolume() * 100));
   const [local, setLocal] = useState(() => ({ ...currentSettings }));
 
-  const patchPerf = (patch: Partial<typeof perf>) => {
-    const next = { ...perf, ...patch };
-    setPerf(next);
-    Object.assign(performanceConfig, next);
-    savePerformanceConfig(performanceConfig);
+  const patchPerf = (patch: Partial<PerformanceConfig>) => {
+    applyGfxPatch(patch);
+    setPerf({ ...performanceConfig });
   };
   const resetPerf = () => {
-    Object.assign(performanceConfig, DEFAULT_CONFIG);
-    savePerformanceConfig(performanceConfig);
+    applyGfxPatch({ ...DEFAULT_CONFIG });
     setPerf({ ...performanceConfig });
+  };
+  const applyPreset = (id: GraphicsPresetId) => {
+    applyGfxPreset(id);
+    setPerf({ ...performanceConfig });
+  };
+  // Renders one entry of the shared graphics spec (see src/graphicsSettings.ts)
+  const renderGfxItem = (it: GfxItem) => {
+    if (it.kind === 'tg') {
+      return (
+        <div className="set" key={it.key}>
+          <span>{it.label}</span>
+          <Toggle on={!!perf[it.key]} onChange={() => patchPerf({ [it.key]: !perf[it.key] } as Partial<PerformanceConfig>)} label={it.label} />
+        </div>
+      );
+    }
+    if (it.kind === 'sld') {
+      return (
+        <div className="set" key={it.key}>
+          <span>{it.label}</span>
+          <Slider label={it.label} value={perf[it.key]} min={it.min} max={it.max} step={it.step}
+            onChange={v => patchPerf({ [it.key]: v } as Partial<PerformanceConfig>)} display={it.fmt(perf[it.key])} />
+        </div>
+      );
+    }
+    return (
+      <div className="set" key={it.key} style={{ height: 70 }}>
+        <span>{it.label}</span>
+        <Seg value={perf[it.key]} onChange={v => patchPerf({ [it.key]: v } as Partial<PerformanceConfig>)} options={it.options} />
+      </div>
+    );
   };
   const patchGame = (patch: Partial<typeof local>) => {
     const next = { ...local, ...patch };
@@ -828,15 +856,21 @@ export const MainMenu: React.FC<MainMenuProps> = ({
                 <div className="panel a sec st d2 scroll" key={'panel-' + setTab} style={{ left: 350, top: 128, width: 700, maxHeight: 714 }}>
                   {setTab === 'gfx' && (
                     <>
-                      <div className="grp cn" style={{ paddingTop: 18 }}>Детализация</div>
-                      <div className="set"><span>Упрощённая графика</span><Toggle on={perf.lowQualityRendering} onChange={() => patchPerf({ lowQualityRendering: !perf.lowQualityRendering })} label="Упрощённая графика" /></div>
-                      <div className="set"><span>Динамические тени</span><Toggle on={perf.enableShadows} onChange={() => patchPerf({ enableShadows: !perf.enableShadows })} label="Тени" /></div>
-                      <div className="set"><span>Детали балконов</span><Toggle on={perf.enableBalconyDetails} onChange={() => patchPerf({ enableBalconyDetails: !perf.enableBalconyDetails })} label="Балконы" /></div>
-                      <div className="set"><span>Капли дождя на экране</span><Toggle on={perf.enableRainDroplets} onChange={() => patchPerf({ enableRainDroplets: !perf.enableRainDroplets })} label="Капли дождя" /></div>
-                      <div className="set"><span>Мини-карта</span><Toggle on={perf.enableMinimap} onChange={() => patchPerf({ enableMinimap: !perf.enableMinimap })} label="Мини-карта" /></div>
-                      <div className="grp cn">Нагрузка</div>
-                      <div className="set"><span>Лимит частиц (дым, пар, огонь)</span><Slider label="Лимит частиц" value={perf.particleLimit} min={100} max={600} step={50} onChange={v => patchPerf({ particleLimit: v })} display={String(perf.particleLimit)} /></div>
-                      <div className="set"><span>Машин в трафике</span><Slider label="Машин в трафике" value={perf.maxVehicles} min={5} max={45} step={1} onChange={v => patchPerf({ maxVehicles: v })} display={String(perf.maxVehicles)} /></div>
+                      <div className="grp cn" style={{ paddingTop: 18 }}>Пресет</div>
+                      <div className="set" style={{ height: 70 }}>
+                        <span>Быстрая настройка</span>
+                        <Seg value={detectGraphicsPreset(perf)} onChange={v => applyPreset(v as GraphicsPresetId)} options={GFX_PRESET_OPTIONS} />
+                      </div>
+                      <div className="set" style={{ height: 70 }}>
+                        <span>Лимит кадров</span>
+                        <Seg value={local.fpsLimit} onChange={v => patchGame({ fpsLimit: v })} options={[{ v: 30, label: '30' }, { v: 60, label: '60' }, { v: 120, label: '120' }, { v: 0, label: 'Max' }]} />
+                      </div>
+                      {GFX_GROUPS.map(g => (
+                        <React.Fragment key={g.title}>
+                          <div className="grp cn">{g.title}</div>
+                          {g.items.map(renderGfxItem)}
+                        </React.Fragment>
+                      ))}
                     </>
                   )}
                   {setTab === 'sound' && (
@@ -869,11 +903,6 @@ export const MainMenu: React.FC<MainMenuProps> = ({
                         <Seg value={local.autoSaveInterval} onChange={v => patchGame({ autoSaveInterval: v })} options={[{ v: 0, label: 'Выкл' }, { v: 15, label: '15 с' }, { v: 25, label: '25 с' }, { v: 60, label: '1 мин' }, { v: 120, label: '2 мин' }]} />
                       </div>
                       <div className="set"><span>Смена дня и ночи</span><Toggle on={local.timeAutoCycle} onChange={() => patchGame({ timeAutoCycle: !local.timeAutoCycle })} label="Смена дня и ночи" /></div>
-                      <div className="grp cn">Дисплей</div>
-                      <div className="set" style={{ height: 70 }}>
-                        <span>Лимит кадров</span>
-                        <Seg value={local.fpsLimit} onChange={v => patchGame({ fpsLimit: v })} options={[{ v: 30, label: '30' }, { v: 60, label: '60' }, { v: 120, label: '120' }, { v: 0, label: 'Max' }]} />
-                      </div>
                     </>
                   )}
                 </div>
@@ -885,10 +914,10 @@ export const MainMenu: React.FC<MainMenuProps> = ({
                       <div className="cn mut" style={{ fontSize: 12 }}>{({ gfx: 'Графика', sound: 'Звук', ctrl: 'Управление', game: 'Геймплей' })[setTab]}</div>
                       <div className="mut" style={{ fontSize: 13, lineHeight: 1.45, marginTop: 6 }}>
                         {({
-                          gfx: 'Параметры сохраняются сразу. На слабых устройствах отключите тени и уменьшите число частиц и машин в трафике.',
+                          gfx: 'Изменения сохраняются сразу. Пресет меняет сразу несколько параметров. На слабых устройствах выберите «Низкие» или уменьшите масштаб рендера и дальность прорисовки.',
                           sound: 'Громкость меняется сразу. Звук двигателя синтезируется в реальном времени.',
                           ctrl: 'Чувствительность мыши применяется сразу. Список клавиш приведён для справки.',
-                          game: 'Автосохранение, смена времени суток и ограничение частоты кадров.'
+                          game: 'Автосохранение и смена времени суток.'
                         })[setTab]}
                       </div>
                     </div>

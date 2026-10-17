@@ -116,7 +116,7 @@ import { RadialMenu } from './components/RadialMenu';
 import { SpeedometerHUD } from './components/SpeedometerHUD';
 import { PerformanceProfiler } from './components/PerformanceProfiler';
 import { PhoneModal } from './components/PhoneModal';
-import { performanceConfig } from './performanceConfig';
+import { performanceConfig, capNearest } from './performanceConfig';
 import { crashLogger, CrashReport } from './crashLogger';
 import { CrashDiagnosticsModal } from './components/CrashDiagnosticsModal';
 import { CrashAlertToast } from './components/CrashAlertToast';
@@ -484,12 +484,17 @@ export default function App() {
     sessionStatsRef.current = { playMs: 0, distPx: 0, maxKmh: 0, lastX: null, lastY: null, lastSaveAt: null };
   };
 
-  const [settings, setSettings] = useState({
-    fpsLimit: 60,
-    autoSaveInterval: 25,
-    timeAutoCycle: true,
-    mouseSensitivity: 1.0
+  const [settings, setSettings] = useState(() => {
+    const base = { fpsLimit: 60, autoSaveInterval: 25, timeAutoCycle: true, mouseSensitivity: 1.0 };
+    try {
+      const raw = localStorage.getItem('city_sim_game_settings');
+      if (raw) return { ...base, ...JSON.parse(raw) };
+    } catch {}
+    return base;
   });
+  // Read by the game loop every frame (the loop is created once inside an effect)
+  const fpsLimitRef = useRef<number>(settings.fpsLimit);
+  fpsLimitRef.current = settings.fpsLimit;
 
   const [gpsDestination, setGpsDestination] = useState<{ x: number; y: number; name?: string } | null>(null);
 
@@ -1516,8 +1521,8 @@ export default function App() {
     if (!canvas || !camera) return null;
 
     // 1. Shift by screen center
-    let dx = sx - canvas.width / 2;
-    let dy = sy - canvas.height / 2;
+    let dx = sx - window.innerWidth / 2;
+    let dy = sy - window.innerHeight / 2;
 
     // 2. Inverse scale
     dx /= camera.zoom;
@@ -1960,9 +1965,15 @@ export default function App() {
 
       const handleResize = () => {
         if (!canvas || !rendererRef.current) return;
-        canvas.width = window.innerWidth;
-        canvas.height = window.innerHeight;
-        rendererRef.current.resize(canvas.width, canvas.height);
+        const cssW = window.innerWidth;
+        const cssH = window.innerHeight;
+        const dpr = performanceConfig.hiDpi ? Math.min(window.devicePixelRatio || 1, 2) : 1;
+        const scale = Math.min(1, Math.max(0.5, performanceConfig.renderScale)) * dpr;
+        canvas.width = Math.max(1, Math.round(cssW * scale));
+        canvas.height = Math.max(1, Math.round(cssH * scale));
+        canvas.style.width = cssW + 'px';
+        canvas.style.height = cssH + 'px';
+        rendererRef.current.resize(cssW, cssH, canvas.width / cssW);
       };
 
       window.addEventListener('resize', handleResize);
@@ -2349,8 +2360,8 @@ export default function App() {
       // Only update when mouse is moving directly over the world canvas, not UI buttons!
       const player = playerRef.current;
       if (!player.isInVehicle && canvas && e.target === canvas) {
-        const screenCenterX = canvas.width / 2;
-        const screenCenterY = canvas.height / 2;
+        const screenCenterX = window.innerWidth / 2;
+        const screenCenterY = window.innerHeight / 2;
         const screenDx = e.clientX - screenCenterX;
         const screenDy = e.clientY - screenCenterY;
         const camAngle = cameraRef.current.angle;
@@ -2416,8 +2427,8 @@ export default function App() {
         const touch = e.touches[0];
         const player = playerRef.current;
         if (!player.isInVehicle) {
-          const screenCenterX = canvas.width / 2;
-          const screenCenterY = canvas.height / 2;
+          const screenCenterX = window.innerWidth / 2;
+          const screenCenterY = window.innerHeight / 2;
           const screenDx = touch.clientX - screenCenterX;
           const screenDy = touch.clientY - screenCenterY;
           const camAngle = cameraRef.current.angle;
@@ -2464,6 +2475,8 @@ export default function App() {
     let lastTime = performance.now();
     let frameCount = 0;
     let fpsTimer = 0;
+    let lastFrameAt = -Infinity;
+    let lastMinimapDrawAt = -Infinity;
 
     const gameLoop = (now: number) => {
       if (isMainMenuOpenRef.current || isPauseMenuOpenRef.current) {
@@ -2483,6 +2496,15 @@ export default function App() {
         animationFrameId = requestAnimationFrame(gameLoop);
         return;
       }
+
+      // Frame cap (Графика → Лимит кадров). 0 = unlimited. Skipped frames don't advance lastTime,
+      // so the simulation time stays correct when the cap is active.
+      const capFps = fpsLimitRef.current;
+      if (capFps > 0 && now - lastFrameAt < 1000 / capFps - 1.5) {
+        animationFrameId = requestAnimationFrame(gameLoop);
+        return;
+      }
+      lastFrameAt = now;
 
       const frameStart = performance.now();
       const rawDt = Math.min((now - lastTime) / 1000, 0.05);
@@ -3549,37 +3571,37 @@ export default function App() {
 
         // 9. Query objects in Camera Viewport for high-performance rendering
         const tVpStart = performance.now();
-        const vpMargin = Math.hypot(window.innerWidth, window.innerHeight) / (2 * Math.max(0.4, camera.zoom)) + 150;
+        const vpMargin = (Math.hypot(window.innerWidth, window.innerHeight) / (2 * Math.max(0.4, camera.zoom)) + 150) * performanceConfig.drawDistance;
         const vpBuildings = bldGrid.queryRect(
           camera.x - vpMargin,
           camera.y - vpMargin,
           vpMargin * 2,
           vpMargin * 2
         );
-        const vpVehicles = vehGrid.queryRect(
+        const vpVehicles = capNearest(vehGrid.queryRect(
           camera.x - vpMargin,
           camera.y - vpMargin,
           vpMargin * 2,
           vpMargin * 2
-        );
-        const vpPedestrians = pedGrid.queryRect(
+        ), performanceConfig.maxVisibleVehicles, camera.x, camera.y);
+        const vpPedestrians = capNearest(pedGrid.queryRect(
           camera.x - vpMargin,
           camera.y - vpMargin,
           vpMargin * 2,
           vpMargin * 2
-        );
-        const vpTrees = spatialGridTreesRef.current.queryRect(
+        ), performanceConfig.maxVisiblePedestrians, camera.x, camera.y);
+        const vpTrees = capNearest(spatialGridTreesRef.current.queryRect(
           camera.x - vpMargin,
           camera.y - vpMargin,
           vpMargin * 2,
           vpMargin * 2
-        );
-        const vpProps = spatialGridPropsRef.current.queryRect(
+        ), performanceConfig.maxVisibleTrees, camera.x, camera.y);
+        const vpProps = capNearest(spatialGridPropsRef.current.queryRect(
           camera.x - vpMargin,
           camera.y - vpMargin,
           vpMargin * 2,
           vpMargin * 2
-        );
+        ), performanceConfig.maxVisibleProps, camera.x, camera.y);
         const vpSidewalks = spatialGridSidewalksRef.current.queryRect(
           camera.x - vpMargin,
           camera.y - vpMargin,
@@ -3677,7 +3699,11 @@ export default function App() {
         // 11. Render Minimap
         const tMinimapStart = performance.now();
         if (performanceConfig.enableMinimap) {
-          renderMinimap(world, player, camera, isMinimapExpandedRef.current);
+          const mmInterval = performanceConfig.minimapUpdateMs;
+          if (mmInterval <= 0 || now - lastMinimapDrawAt >= mmInterval) {
+            lastMinimapDrawAt = now;
+            renderMinimap(world, player, camera, isMinimapExpandedRef.current);
+          }
         } else {
           // Clear minimap canvas to prevent visual residues
           const mCanvas = document.getElementById('minimap-canvas') as HTMLCanvasElement;

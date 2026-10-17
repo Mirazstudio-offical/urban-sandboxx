@@ -104,7 +104,9 @@ export class ScreenEffectsSystem {
     const nausea = Number.isFinite(needs?.nausea) ? needs.nausea : 0;
 
     ctx.save();
-    ctx.setTransform(1, 0, 0, 1, 0, 0); // Guarantee screen coordinate space
+    // Guarantee screen (CSS px) coordinate space, mapped onto the backing store if it is scaled
+    const backingK = width > 0 ? ctx.canvas.width / width : 1;
+    ctx.setTransform(backingK, 0, 0, backingK, 0, 0);
 
     // =========================================================================
     // 1. SHOCK & BLOOD LOSS DESATURATION / CONTRAST DARKENING
