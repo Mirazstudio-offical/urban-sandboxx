@@ -1,12 +1,11 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { Sparkles, Calendar, User, Activity } from 'lucide-react';
 import pauseCss from './pauseMenu.css?inline';
 import { ShadowHost, attachStageFit } from './ShadowHost';
 import { useTopmostEscape } from './gameUi';
 import { VehiclePreviewCanvas } from './VehiclePreviewCanvas';
 import { onlineManager } from '../onlineSystem';
 import { sound } from '../audio';
-import { performanceConfig, savePerformanceConfig, DEFAULT_CONFIG, detectGraphicsPreset, PerformanceConfig, GraphicsPresetId } from '../performanceConfig';
+import { performanceConfig, DEFAULT_CONFIG, detectGraphicsPreset, PerformanceConfig, GraphicsPresetId } from '../performanceConfig';
 import { GFX_GROUPS, GFX_PRESET_OPTIONS, GfxItem, applyGfxPatch, applyGfxPreset } from '../graphicsSettings';
 import {
   subscribeToFriends,
@@ -61,10 +60,6 @@ interface PauseMenuProps {
   onResume: () => void;
   onSave: () => void;
   onExitToMainMenu: () => void;
-  onOpenProfile?: () => void;
-  onOpenDiagnostics?: () => void;
-  onOpenCreative?: () => void;
-  onOpenCalendar?: () => void;
   /** Opens the server catalogue (main menu, "Онлайн" screen). */
   onOpenServers?: () => void;
   settings: PauseSettings;
@@ -86,12 +81,11 @@ const fmtKm = (v: number) => v.toLocaleString('ru-RU', { minimumFractionDigits: 
 const AVATAR_COLORS = ['#e0ab45', '#c9b98f', '#b98a4a'];
 const avatarColor = (s: string) => AVATAR_COLORS[Array.from(s).reduce((a, c) => a + c.charCodeAt(0), 0) % AVATAR_COLORS.length];
 
-const Ic: React.FC<{ s?: number; c?: string; children: React.ReactNode }> = ({ s = 24, c = '#c9922b', children }) => (
-  <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2">{children}</svg>
+const Ic: React.FC<{ c?: string; children: React.ReactNode }> = ({ c = '#c9922b', children }) => (
+  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2">{children}</svg>
 );
-const LIC = { width: 24, height: 24, color: '#c9922b', strokeWidth: 2 } as const;
 
-/** Draggable slider track styled exactly like .sld-t in the mock-up. */
+/** Draggable slider track: markup and classes from the mock-up (.sld-t). */
 const Track: React.FC<{ value: number; min: number; max: number; step: number; onChange: (v: number) => void; label: string }> = ({
   value, min, max, step, onChange, label
 }) => {
@@ -161,8 +155,7 @@ const TABS: [TabId, string][] = [['gfx', 'Графика'], ['sound', 'Звук'
 /* ------------------------------------------------------------------ */
 
 export const PauseMenu: React.FC<PauseMenuProps> = ({
-  onResume, onSave, onExitToMainMenu, onOpenProfile, onOpenDiagnostics, onOpenCreative, onOpenCalendar, onOpenServers,
-  settings, onUpdateSettings, session, currentUser
+  onResume, onSave, onExitToMainMenu, onOpenServers, settings, onUpdateSettings, session, currentUser
 }) => {
   const [cur, setCur] = useState<'online' | 'settings' | null>(null);
   const [entered, setEntered] = useState(false);
@@ -175,6 +168,9 @@ export const PauseMenu: React.FC<PauseMenuProps> = ({
   const wrapRef = useRef<HTMLDivElement>(null);
   const timers = useRef<number[]>([]);
   const later = (fn: () => void, ms: number) => { timers.current.push(window.setTimeout(fn, ms)); };
+
+  /* масштаб фиксированной сцены 1440x900 под экран (как в макете) */
+  useLayoutEffect(() => attachStageFit(() => wrapRef.current, () => gmRef.current), []);
 
   useEffect(() => {
     const raf = requestAnimationFrame(() => requestAnimationFrame(() => setEntered(true)));
@@ -192,7 +188,7 @@ export const PauseMenu: React.FC<PauseMenuProps> = ({
 
   const show = (p: 'online' | 'settings') => setCur(c => (c === p ? null : p));
 
-  /* ---------- keyboard navigation of the left menu ---------- */
+  /* ---------- навигация стрелками по левому меню ---------- */
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (confirmExit || (e.key !== 'ArrowDown' && e.key !== 'ArrowUp')) return;
@@ -209,7 +205,7 @@ export const PauseMenu: React.FC<PauseMenuProps> = ({
     return () => window.removeEventListener('keydown', onKey);
   }, [confirmExit]);
 
-  /* ---------- save ---------- */
+  /* ---------- сохранение ---------- */
   const quickSave = () => {
     onSave();
     setQsDone(true);
@@ -222,7 +218,7 @@ export const PauseMenu: React.FC<PauseMenuProps> = ({
   };
   const minsSinceSave = session.lastSaveAt == null ? null : Math.max(0, Math.floor((Date.now() - session.lastSaveAt) / 60000));
 
-  /* ---------- settings (same sources as the main menu settings) ---------- */
+  /* ---------- настройки (те же источники, что в главном меню) ---------- */
   const [tab, setTab] = useState<TabId>('gfx');
   const [perf, setPerf] = useState(() => ({ ...performanceConfig }));
   const [muted, setMuted] = useState<boolean>(() => sound.getMuted());
@@ -237,7 +233,6 @@ export const PauseMenu: React.FC<PauseMenuProps> = ({
     applyGfxPatch({ ...DEFAULT_CONFIG });
     setPerf({ ...performanceConfig });
   };
-  // Maps a shared graphics spec entry onto this menu's row format
   const gfxRow = (it: GfxItem): Row => {
     if (it.kind === 'tg') {
       return { t: 'tg', l: it.label, v: !!perf[it.key], set: v => patchPerf({ [it.key]: v } as Partial<PerformanceConfig>) };
@@ -290,7 +285,7 @@ export const PauseMenu: React.FC<PauseMenuProps> = ({
     ];
   };
 
-  /* ---------- online ---------- */
+  /* ---------- онлайн ---------- */
   useEffect(() => {
     const bump = () => setTick(n => n + 1);
     const u1 = onlineManager.subscribe(bump);
@@ -370,7 +365,7 @@ export const PauseMenu: React.FC<PauseMenuProps> = ({
     }
   };
 
-  /* ---------- derived labels ---------- */
+  /* ---------- производные подписи ---------- */
   const phase = dayPhase(session.timeHour);
   const vehicleLabel = session.vehicleName || 'Пешком';
   const where = session.locationName || MAP_NAME;
@@ -382,10 +377,12 @@ export const PauseMenu: React.FC<PauseMenuProps> = ({
   const rows = rowsFor(tab);
 
   return (
-    <ShadowHost css={pauseCss} zIndex={55} background={entered && !leaving ? 'rgba(9,9,10,.62)' : 'rgba(9,9,10,0)'}>
+    <ShadowHost css={pauseCss} zIndex={55} background="transparent">
       <div id="w" ref={wrapRef}>
         <div className={'gm' + (!entered || leaving ? ' gone' : '')} id="gm" ref={gmRef}>
+          {/* фон поверх живой (замершей) игры — слои из макета */}
           <div className="a" style={{ inset: 0, background: 'radial-gradient(900px 520px at 70% 82%,rgba(201,146,43,.4),transparent 62%)' }} />
+          <div className="a" style={{ inset: 0, background: 'rgba(9,9,10,.62)' }} />
           <div className="a" style={{ inset: 0, background: 'linear-gradient(90deg,rgba(9,9,10,.9),rgba(9,9,10,.45) 45%,transparent 80%)' }} />
 
           <div className="top">
@@ -396,142 +393,135 @@ export const PauseMenu: React.FC<PauseMenuProps> = ({
             <div className="chip"><span className="dot" style={{ background: '#7fbf6a' }} /><span className="mut" style={{ fontSize: 14 }}>{where} · {phase} · {session.minutes} мин в игре</span></div>
           </div>
 
-          <div className="main-content">
-            <nav className="nav-col" aria-label="Меню паузы">
-              <button className="menu-i cn pri" onClick={leave}><svg width="24" height="24" viewBox="0 0 16 16"><path d="M3 2l11 6-11 6z" fill="#c9922b" /></svg>В игру</button>
-              <button className={'menu-i cn' + (cur === 'online' ? ' sel' : '')} onClick={() => show('online')}>
-                <Ic><circle cx="12" cy="12" r="8" /><path d="M4 12h16M12 4c3 3 3 13 0 16M12 4c-3 3-3 13 0 16" /></Ic>Онлайн
-              </button>
-              <button className={'menu-i cn' + (cur === 'settings' ? ' sel' : '')} onClick={() => show('settings')}>
-                <Ic><circle cx="12" cy="12" r="3" /><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1" /></Ic>Настройки
-              </button>
-              {onOpenCreative && <button className="menu-i cn" onClick={onOpenCreative}><Sparkles {...LIC} />Творчество</button>}
-              {onOpenCalendar && <button className="menu-i cn" onClick={onOpenCalendar}><Calendar {...LIC} />Календарь</button>}
-              {onOpenProfile && <button className="menu-i cn" onClick={onOpenProfile}><User {...LIC} />Аккаунт</button>}
-              {onOpenDiagnostics && <button className="menu-i cn" onClick={onOpenDiagnostics}><Activity {...LIC} />Диагностика</button>}
-              <button className="menu-i cn" onClick={() => setConfirmExit(true)} style={{ marginTop: 14, color: '#a29e93' }}>
-                <Ic c="#a29e93"><path d="M9 4H5v16h4M15 8l4 4-4 4M19 12H9" /></Ic>В меню
-              </button>
-            </nav>
+          <nav className="a" style={{ left: 64, top: 176, width: 420, display: 'flex', flexDirection: 'column', gap: 6 }} aria-label="Меню паузы">
+            <button className="menu-i cn pri" onClick={leave}>
+              <svg width="24" height="24" viewBox="0 0 16 16"><path d="M3 2l11 6-11 6z" fill="#c9922b" /></svg>В игру
+            </button>
+            <button className={'menu-i cn' + (cur === 'online' ? ' sel' : '')} onClick={() => show('online')}>
+              <Ic><circle cx="12" cy="12" r="8" /><path d="M4 12h16M12 4c3 3 3 13 0 16M12 4c-3 3-3 13 0 16" /></Ic>Онлайн
+            </button>
+            <button className={'menu-i cn' + (cur === 'settings' ? ' sel' : '')} onClick={() => show('settings')}>
+              <Ic><circle cx="12" cy="12" r="3" /><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1" /></Ic>Настройки
+            </button>
+            <button className="menu-i cn" onClick={() => setConfirmExit(true)} style={{ marginTop: 14, color: '#a29e93' }}>
+              <Ic c="#a29e93"><path d="M9 4H5v16h4M15 8l4 4-4 4M19 12H9" /></Ic>В меню
+            </button>
+          </nav>
 
-            {/* сводка */}
-            {shown === 'sum' && (
-              <section className="pan panel fade" key="sum" style={{ padding: 14, maxWidth: 520 }}>
-                <div className="th" style={{ height: 210, borderRadius: 10 }}>
-                  {session.vehicleType && (
-                    <div className="car">
-                      <VehiclePreviewCanvas
-                        carType={session.vehicleType}
-                        color={session.vehicleColor || '#38bdf8'}
-                        roofColor={session.vehicleRoofColor || session.vehicleColor || '#38bdf8'}
-                        width={440}
-                        height={200}
-                        showPedestal={false}
-                      />
-                    </div>
-                  )}
-                </div>
-                <div style={{ padding: '16px 8px 6px' }}>
-                  <div className="cn mut" style={{ fontSize: 13 }}>Текущая сессия</div>
-                  <div className="cn" style={{ fontSize: 30, fontWeight: 700, marginTop: 4 }}>{where} · {phase}</div>
-                  <div className="mut" style={{ display: 'flex', gap: 22, marginTop: 10, fontSize: 14 }}><span>Карта: {MAP_NAME}</span><span>Авто: {vehicleLabel}</span></div>
-                  <div style={{ display: 'flex', gap: 34, marginTop: 20 }}>
-                    <div><div className="stat-n">{fmtKm(session.distanceKm)}</div><div className="mut" style={{ fontSize: 12, marginTop: 4 }}>км пройдено</div></div>
-                    <div><div className="stat-n">{Math.round(session.maxKmh)}</div><div className="mut" style={{ fontSize: 12, marginTop: 4 }}>макс. км/ч</div></div>
-                    <div><div className="stat-n">{session.minutes}</div><div className="mut" style={{ fontSize: 12, marginTop: 4 }}>мин в игре</div></div>
+          {/* сводка */}
+          {shown === 'sum' && (
+            <section className="pan panel fade" key="sum" style={{ padding: 14, left: 880, width: 496 }}>
+              <div className="th" style={{ height: 230, borderRadius: 10 }}>
+                {session.vehicleType && (
+                  <div className="car">
+                    <VehiclePreviewCanvas
+                      carType={session.vehicleType}
+                      color={session.vehicleColor || '#38bdf8'}
+                      roofColor={session.vehicleRoofColor || session.vehicleColor || '#38bdf8'}
+                      width={468}
+                      height={230}
+                      showPedestal={false}
+                    />
                   </div>
-                  <div className="row2" style={{ marginTop: 22 }}>
-                    <button className="btn btn-p" onClick={leave}><svg width="16" height="16" viewBox="0 0 16 16"><path d="M4 2l10 6-10 6z" fill="#1a1409" /></svg>Продолжить</button>
-                    <button className="btn btn-s" onClick={quickSave}>{qsDone ? 'Сохранено' : 'Быстрое сохранение'}</button>
-                  </div>
-                </div>
-              </section>
-            )}
-
-            {/* онлайн */}
-            {shown === 'online' && (
-              <section className="pan fade" key="online" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                <div className="panel" style={{ padding: '12px 20px', flex: 'none' }}>
-                  <div className="set">
-                    <div>
-                      <div style={{ fontWeight: 600 }}>Открыть сессию для друзей</div>
-                      <div className={st === 'error' ? 'err' : 'mut'} style={{ fontSize: 13, marginTop: 0 }}>{onSub}</div>
-                    </div>
-                    <button className={'tg' + (sessionOn ? ' on' : '')} role="switch" aria-checked={sessionOn} aria-label="Открыть сессию" onClick={toggleSession} disabled={hostBusy} />
-                  </div>
-                </div>
-                <div className={isHost ? '' : 'dim'} style={{ display: 'flex', gap: 20, flex: 1, minHeight: 0 }}>
-                  <div className="panel" style={{ flex: 1, padding: '8px 0' }}>
-                    <div className="set"><span>Кто может войти</span><Seg value={access} onChange={changeAccess} options={[{ v: 'all', label: 'Все' }, { v: 'code', label: 'По коду' }]} /></div>
-                    <div className="set">
-                      <span>Код приглашения</span>
-                      <div className="row2" style={{ alignItems: 'center', gap: 12 }}>
-                        <span className="cn" style={{ fontSize: 22, fontWeight: 700, color: '#e0ab45' }}>{connected ? onlineManager.roomCode : '—'}</span>
-                        <button className="btn btn-s btn-sm" onClick={copyCode} disabled={!connected}>{copied ? 'Скопировано' : 'Копировать'}</button>
-                      </div>
-                    </div>
-                    <div className="set"><span>Игроков в сессии</span><b>{players} / {maxPlayers}</b></div>
-                  </div>
-                  <div className="panel" style={{ flex: 1, padding: '16px 22px 8px', display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', flex: 'none' }}>
-                      <span className="cn" style={{ fontSize: 20, fontWeight: 700 }}>Друзья в сети</span>
-                      <span className="mut" style={{ fontSize: 13 }}>{currentUser ? onlineFriends.length : ''}</span>
-                    </div>
-                    <div id="frl" className="scroll" style={{ marginTop: 6, flex: 1 }}>
-                      {!currentUser ? (
-                        <div className="empty">
-                          <div className="mut">Войдите через Google, чтобы видеть друзей.</div>
-                          {onOpenProfile && <button className="btn btn-s btn-sm" onClick={onOpenProfile}>Аккаунт</button>}
-                        </div>
-                      ) : onlineFriends.length === 0 ? (
-                        <div className="empty"><div className="mut">Сейчас никого из друзей нет в сети.</div></div>
-                      ) : onlineFriends.map(f => (
-                        <div className="fr" key={f.uid}>
-                          <span className="av" style={{ background: avatarColor(f.name) }}>{f.name.charAt(0).toUpperCase()}</span>
-                          <div style={{ flex: 1, minWidth: 0 }}>
-                            <div style={{ fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.name}</div>
-                            <div className="mut" style={{ fontSize: 13 }}>{f.status === 'in_game' && f.room ? 'В игре: ' + f.room : 'В сети'}</div>
-                          </div>
-                          <button className="btn btn-s btn-sm" onClick={() => invite(f.uid)} disabled={!connected || !!invited[f.uid]}>{invited[f.uid] ? 'Отправлено' : 'Позвать'}</button>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-                {onOpenServers && (
-                  <div className="row2" style={{ flex: 'none' }}><button className="btn btn-s" onClick={onOpenServers}>Найти сервер в каталоге</button></div>
                 )}
-              </section>
-            )}
+              </div>
+              <div style={{ padding: '16px 8px 6px' }}>
+                <div className="cn mut" style={{ fontSize: 13 }}>Текущая сессия</div>
+                <div className="cn" style={{ fontSize: 30, fontWeight: 700, marginTop: 4 }}>{where} · {phase}</div>
+                <div className="mut" style={{ display: 'flex', gap: 22, marginTop: 10, fontSize: 14 }}><span>Карта: {MAP_NAME}</span><span>Авто: {vehicleLabel}</span></div>
+                <div style={{ display: 'flex', gap: 34, marginTop: 20 }}>
+                  <div><div className="stat-n">{fmtKm(session.distanceKm)}</div><div className="mut" style={{ fontSize: 12, marginTop: 4 }}>км пройдено</div></div>
+                  <div><div className="stat-n">{Math.round(session.maxKmh)}</div><div className="mut" style={{ fontSize: 12, marginTop: 4 }}>макс. км/ч</div></div>
+                  <div><div className="stat-n">{session.minutes}</div><div className="mut" style={{ fontSize: 12, marginTop: 4 }}>мин в игре</div></div>
+                </div>
+                <div className="row2" style={{ marginTop: 22 }}>
+                  <button className="btn btn-p" onClick={leave}><svg width="16" height="16" viewBox="0 0 16 16"><path d="M4 2l10 6-10 6z" fill="#1a1409" /></svg>Продолжить</button>
+                  <button className="btn btn-s" onClick={quickSave}>{qsDone ? 'Сохранено' : 'Быстрое сохранение'}</button>
+                </div>
+              </div>
+            </section>
+          )}
 
-            {/* настройки */}
-            {shown === 'settings' && (
-              <section className="pan fade" key="settings" style={{ display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-                <div className="tb" style={{ flex: 'none' }}>
-                  {TABS.map(([id, label]) => (
-                    <button key={id} className={'tab cn' + (id === tab ? ' tab-on' : '')} onClick={() => setTab(id)}>{label}</button>
-                  ))}
+          {/* онлайн */}
+          {shown === 'online' && (
+            <section className="pan fade" key="online" style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+              <div className="panel" style={{ padding: '8px 0' }}>
+                <div className="set">
+                  <div>
+                    <div style={{ fontWeight: 600 }}>Открыть сессию для друзей</div>
+                    <div className={st === 'error' ? 'err' : 'mut'} style={{ fontSize: 13 }}>{onSub}</div>
+                  </div>
+                  <button className={'tg' + (sessionOn ? ' on' : '')} role="switch" aria-checked={sessionOn} aria-label="Открыть сессию" onClick={toggleSession} disabled={hostBusy} />
                 </div>
-                <div className="panel scroll" id="rows" style={{ padding: '8px 0', flex: 1, maxHeight: 'none' }}>
-                  {rows.map((r, i) => (
-                    <div className="set" key={tab + i}>
-                      <span>{r.l}</span>
-                      {r.t === 'tg' && <button className={'tg' + (r.v ? ' on' : '')} role="switch" aria-checked={r.v} aria-label={r.l} onClick={() => r.set(!r.v)} />}
-                      {r.t === 'seg' && <Seg value={r.v} onChange={r.set} options={r.o} />}
-                      {r.t === 'sld' && (
-                        <div className="sld">
-                          <Track label={r.l} value={r.v} min={r.min} max={r.max} step={r.step} onChange={r.set} />
-                          <span className="sld-v">{r.fmt(r.v)}</span>
-                        </div>
-                      )}
-                      {r.t === 'keys' && <span className="kv">{r.k.map(k => <span className="key" key={k}>{k}</span>)}</span>}
-                      {r.t === 'btn' && <button className="btn btn-s btn-sm" onClick={r.act}>{r.label}</button>}
+              </div>
+              <div id="onBody" className={isHost ? '' : 'dim'} style={{ display: 'flex', gap: 20 }}>
+                <div className="panel" style={{ flex: 1, padding: '8px 0' }}>
+                  <div className="set"><span>Кто может войти</span><Seg value={access} onChange={changeAccess} options={[{ v: 'all', label: 'Все' }, { v: 'code', label: 'По коду' }]} /></div>
+                  <div className="set">
+                    <span>Код приглашения</span>
+                    <div className="row2" style={{ alignItems: 'center', gap: 12 }}>
+                      <span className="cn" style={{ fontSize: 22, fontWeight: 700, color: '#e0ab45' }}>{connected ? onlineManager.roomCode : '—'}</span>
+                      <button className="btn btn-s btn-sm" onClick={copyCode} disabled={!connected}>{copied ? 'Скопировано' : 'Копировать'}</button>
                     </div>
-                  ))}
+                  </div>
+                  <div className="set"><span>Игроков в сессии</span><b>{players} / {maxPlayers}</b></div>
                 </div>
-              </section>
-            )}
-          </div>
+                <div className="panel" style={{ flex: 1, padding: '16px 22px 8px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                    <span className="cn" style={{ fontSize: 20, fontWeight: 700 }}>Друзья в сети</span>
+                    <span className="mut" style={{ fontSize: 13 }}>{currentUser ? onlineFriends.length : ''}</span>
+                  </div>
+                  <div id="frl" className="scroll" style={{ marginTop: 6 }}>
+                    {!currentUser ? (
+                      <div className="empty"><div className="mut">Войдите через Google, чтобы видеть друзей.</div></div>
+                    ) : onlineFriends.length === 0 ? (
+                      <div className="empty"><div className="mut">Сейчас никого из друзей нет в сети.</div></div>
+                    ) : onlineFriends.map(f => (
+                      <div className="fr" key={f.uid}>
+                        <span className="av" style={{ background: avatarColor(f.name) }}>{f.name.charAt(0).toUpperCase()}</span>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.name}</div>
+                          <div className="mut" style={{ fontSize: 13 }}>{f.status === 'in_game' && f.room ? 'В игре: ' + f.room : 'В сети'}</div>
+                        </div>
+                        <button className="btn btn-s btn-sm" onClick={() => invite(f.uid)} disabled={!connected || !!invited[f.uid]}>{invited[f.uid] ? 'Отправлено' : 'Позвать'}</button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+              {onOpenServers && (
+                <div className="row2"><button className="btn btn-s" onClick={onOpenServers}>Найти сервер в каталоге</button></div>
+              )}
+            </section>
+          )}
+
+          {/* настройки */}
+          {shown === 'settings' && (
+            <section className="pan fade" key="settings">
+              <div className="tb">
+                {TABS.map(([id, label]) => (
+                  <button key={id} className={'tab cn' + (id === tab ? ' tab-on' : '')} onClick={() => setTab(id)}>{label}</button>
+                ))}
+              </div>
+              <div className="panel scroll" id="rows" style={{ padding: '8px 0' }}>
+                {rows.map((r, i) => (
+                  <div className="set" key={tab + i}>
+                    <span>{r.l}</span>
+                    {r.t === 'tg' && <button className={'tg' + (r.v ? ' on' : '')} role="switch" aria-checked={r.v} aria-label={r.l} onClick={() => r.set(!r.v)} />}
+                    {r.t === 'seg' && <Seg value={r.v} onChange={r.set} options={r.o} />}
+                    {r.t === 'sld' && (
+                      <div className="sld">
+                        <Track label={r.l} value={r.v} min={r.min} max={r.max} step={r.step} onChange={r.set} />
+                        <span className="sld-v">{r.fmt(r.v)}</span>
+                      </div>
+                    )}
+                    {r.t === 'keys' && <span className="kv">{r.k.map(k => <span className="key" key={k}>{k}</span>)}</span>}
+                    {r.t === 'btn' && <button className="btn btn-s btn-sm" onClick={r.act}>{r.label}</button>}
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
 
           <div className="hint">
             <div style={{ display: 'flex', alignItems: 'center' }}><span className="key">↑↓</span>Навигация<span className="key">Enter</span>Выбрать<span className="key">Esc</span>В игру</div>
