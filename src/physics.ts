@@ -5510,6 +5510,10 @@ export function updateFog(
   const safeDt = Number.isFinite(dt) ? dt : 0.016;
   const delta = Math.min(0.2, Math.max(0.0, safeDt));
   const safeHour = (typeof timeHour === 'number'&& Number.isFinite(timeHour)) ? timeHour : 12;
+  if (world?.gameMode === 'freeroam') {
+    car.fogLevel = 0.0;
+    return 0.0;
+  }
   if (delta <= 0) return (typeof car.fogLevel === 'number'&& Number.isFinite(car.fogLevel)) ? car.fogLevel : 0.0;
 
   // 1. Environmental inputs
@@ -5731,8 +5735,10 @@ export function updatePlayerNeedsAndVitals(
     player.bodyState = defaultBodyState();
   }
 
-  // Invincibility / Creative Mode vitals override
-  if (player.isInvincible || player.isCreativeMode || player.isCleanMode) {
+  // Invincibility / Creative Mode / Freeroam vitals override
+  const isFreeroam = world?.gameMode === 'freeroam';
+  if (player.isInvincible || player.isCreativeMode || player.isCleanMode || isFreeroam) {
+    player.isInvincible = true;
     player.needs.health = 100;
     player.needs.hunger = 100;
     player.needs.thirst = 100;
@@ -5745,9 +5751,21 @@ export function updatePlayerNeedsAndVitals(
     if (player.bodyState) {
       player.bodyState.painLevel = 0;
       player.bodyState.effectivePain = 0;
+      player.bodyState.painPulse = 0;
       player.bodyState.shockLevel = 0;
       player.bodyState.bloodLoss = 0;
       player.bodyState.panicLevel = 0;
+      player.bodyState.dizziness = 0;
+      player.bodyState.coPoisoning = 0;
+      player.bodyState.temperature = 36.6;
+      player.bodyState.wetness = 0;
+      player.bodyState.shiverIntensity = 0;
+      player.bodyState.comfort = 100;
+      for (const k of ['head', 'torso', 'leftArm', 'rightArm', 'leftLeg', 'rightLeg'] as const) {
+        if (player.bodyState[k]) {
+          player.bodyState[k].injuries = [];
+        }
+      }
     }
   }
 
@@ -5852,35 +5870,44 @@ export function updatePlayerNeedsAndVitals(
       }
     }
 
-    // Wipers and windshield rain level (exterior water on the glass with aerodynamic airflow)
-    if (isRaining) {
-      const carSpeedKmh = Math.abs(curVehicle.speed || 0) * 3.6;
-      // Faster forward travel sweeps through more volumetric raindrops per second
-      const speedAccFlux = 1.0 + Math.min(2.2, carSpeedKmh / 50.0);
-
-      if (!curVehicle.wipersOn) {
-        // Build up water on the screen
-        curVehicle.windshieldRainLevel = Math.min(100, curVehicle.windshieldRainLevel + 16 * speedAccFlux * dt);
-      } else {
-        // Clear rain quickly with wipers
-        curVehicle.windshieldRainLevel = Math.max(0, curVehicle.windshieldRainLevel - 45 * dt);
-      }
-
-      // High-speed aerodynamic shear blow-off: beyond ~65 km/h, the rush of air over the windshield
-      // shears and blows away surface water beads
-      if (carSpeedKmh > 65) {
-        const aeroBlowOff = Math.min(28, (carSpeedKmh - 65) * 0.45);
-        curVehicle.windshieldRainLevel = Math.max(0, curVehicle.windshieldRainLevel - aeroBlowOff * dt);
-      }
+    if (isFreeroam) {
+      curVehicle.windshieldRainLevel = 0;
+      curVehicle.fogLevel = 0;
     } else {
-      // Dry out gradually; ambient wind and forward travel accelerate drying
-      const carSpeedKmh = Math.abs(curVehicle.speed || 0) * 3.6;
-      const windDryBonus = (world.wind ? (world.wind.speed * 0.05) : 0) + Math.min(25, carSpeedKmh * 0.25);
-      curVehicle.windshieldRainLevel = Math.max(0, curVehicle.windshieldRainLevel - (15 + windDryBonus) * dt);
-    }
+      // Wipers and windshield rain level (exterior water on the glass with aerodynamic airflow)
+      if (isRaining) {
+        const carSpeedKmh = Math.abs(curVehicle.speed || 0) * 3.6;
+        // Faster forward travel sweeps through more volumetric raindrops per second
+        const speedAccFlux = 1.0 + Math.min(2.2, carSpeedKmh / 50.0);
 
-    // Mathematical update of windshield fogging (moisture & temperature balance)
-    updateFog(curVehicle, player, world, dt, timeHour);
+        if (!curVehicle.wipersOn) {
+          // Build up water on the screen
+          curVehicle.windshieldRainLevel = Math.min(100, curVehicle.windshieldRainLevel + 16 * speedAccFlux * dt);
+        } else {
+          // Clear rain quickly with wipers
+          curVehicle.windshieldRainLevel = Math.max(0, curVehicle.windshieldRainLevel - 45 * dt);
+        }
+
+        // High-speed aerodynamic shear blow-off: beyond ~65 km/h, the rush of air over the windshield
+        // shears and blows away surface water beads
+        if (carSpeedKmh > 65) {
+          const aeroBlowOff = Math.min(28, (carSpeedKmh - 65) * 0.45);
+          curVehicle.windshieldRainLevel = Math.max(0, curVehicle.windshieldRainLevel - aeroBlowOff * dt);
+        }
+      } else {
+        // Dry out gradually; ambient wind and forward travel accelerate drying
+        const carSpeedKmh = Math.abs(curVehicle.speed || 0) * 3.6;
+        const windDryBonus = (world.wind ? (world.wind.speed * 0.05) : 0) + Math.min(25, carSpeedKmh * 0.25);
+        curVehicle.windshieldRainLevel = Math.max(0, curVehicle.windshieldRainLevel - (15 + windDryBonus) * dt);
+      }
+
+      // Mathematical update of windshield fogging (moisture & temperature balance)
+      updateFog(curVehicle, player, world, dt, timeHour);
+    }
+  }
+
+  if (isFreeroam) {
+    return;
   }
 
 
