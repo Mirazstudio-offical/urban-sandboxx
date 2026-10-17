@@ -759,7 +759,7 @@ export function getVehicleAxleGeometry(car: { type: string; length?: number }) {
 }
 
 export const CAR_CONFIGS: Record<string, CarConfig> = {
-  sedan: { type: 'sedan', width: 20, length: 42, wheelBase: 26, mass: 1400, maxSpeed: 180, reverseMaxSpeed: 45, acceleration: 30, brakingForce: 240, friction: 0.988, turnSpeed: 4.2, maxSteerAngle: 0.68, minSteerAngle: 0.14, grip: 0.985, driftGrip: 0.38, name: 'Compact Sedan', transmission: 'AUTO' },
+  sedan: { type: 'sedan', width: 20, length: 42, wheelBase: 26, mass: 1400, maxSpeed: 180, reverseMaxSpeed: 45, acceleration: 30, brakingForce: 240, friction: 0.988, turnSpeed: 4.2, maxSteerAngle: 0.68, minSteerAngle: 0.14, grip: 0.985, driftGrip: 0.38, name: 'Vortex Solstice 1.6', transmission: 'AUTO' },
   hatchback: { type: 'hatchback', width: 19, length: 38, wheelBase: 23, mass: 1150, maxSpeed: 175, reverseMaxSpeed: 45, acceleration: 32, brakingForce: 250, friction: 0.988, turnSpeed: 4.5, maxSteerAngle: 0.70, minSteerAngle: 0.15, grip: 0.988, driftGrip: 0.40, name: 'Vortex Nova 1.6', transmission: 'MANUAL' },
   pickup: { type: 'pickup', width: 22, length: 48, wheelBase: 30, mass: 2200, maxSpeed: 150, reverseMaxSpeed: 40, acceleration: 24, brakingForce: 220, friction: 0.985, turnSpeed: 3.6, maxSteerAngle: 0.64, minSteerAngle: 0.12, grip: 0.975, driftGrip: 0.32, name: 'Bison Utility 4x4', transmission: 'MANUAL' },
   sports: { type: 'sports', width: 21, length: 44, wheelBase: 27, mass: 1320, maxSpeed: 280, reverseMaxSpeed: 55, acceleration: 55, brakingForce: 290, friction: 0.990, turnSpeed: 4.6, maxSteerAngle: 0.65, minSteerAngle: 0.13, grip: 0.990, driftGrip: 0.44, name: 'Apex GT-Coupe 3.0', transmission: 'AUTO' },
