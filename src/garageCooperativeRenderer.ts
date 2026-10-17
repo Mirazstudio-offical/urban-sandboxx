@@ -39,9 +39,9 @@ export class GarageCooperativeRenderer {
 
     // Identify active cooperative zones
     const zones = [
-      { id: 'gsk_lada', x1: 70, y1: 870, x2: 730, y2: 1545, name: 'ГСК «Лада»' },
-      { id: 'gsk_auto', x1: 70, y1: 1655, x2: 730, y2: 2330, name: 'ГСК «Автомобилист»' },
-      { id: 'gsk_signal', x1: 865, y1: 870, x2: 1535, y2: 1545, name: 'ГСК «Сигнал»' }
+      { id: 'gsk_vanguard', x1: 70, y1: 870, x2: 730, y2: 1545, name: 'GSK Vanguard' },
+      { id: 'gsk_auto', x1: 70, y1: 1655, x2: 730, y2: 2330, name: 'GSK Motorist' },
+      { id: 'gsk_signal', x1: 865, y1: 870, x2: 1535, y2: 1545, name: 'GSK Signal' }
     ];
 
     for (const zone of zones) {
@@ -159,7 +159,7 @@ export class GarageCooperativeRenderer {
 
       // 3. PARALLEL DEEP MUD TIRE RUTS (Грязевые колеи вдоль проездов)
       // Every cooperative alley has twin worn mud grooves
-      const alleyYList = (zone.id === 'gsk_lada') 
+      const alleyYList = (zone.id === 'gsk_vanguard') 
         ? [1013, 1273] 
         : (zone.id === 'gsk_auto') 
         ? [1873, 2133] 
