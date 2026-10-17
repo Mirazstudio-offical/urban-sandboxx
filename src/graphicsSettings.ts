@@ -63,6 +63,16 @@ export const GFX_GROUPS: GfxGroup[] = [
     ],
   },
   {
+    title: 'Жидкости',
+    items: [
+      { kind: 'tg', key: 'enableLiquidReflections', label: 'Отражения на жидкостях' },
+      { kind: 'sld', key: 'liquidReflectionStrength', label: 'Сила отражений', min: 0, max: 100, step: 5, fmt: v => v + '%' },
+      { kind: 'sld', key: 'liquidReflectionLimit', label: 'Поверхностей с отражениями', min: 0, max: 600, step: 25, fmt: countOrAll(600) },
+      { kind: 'tg', key: 'enableLiquidShadows', label: 'Динамические тени на жидкостях' },
+      { kind: 'sld', key: 'liquidShadowStrength', label: 'Сила теней', min: 0, max: 100, step: 5, fmt: v => v + '%' },
+    ],
+  },
+  {
     title: 'Эффекты',
     items: [
       { kind: 'tg', key: 'enableRainDroplets', label: 'Дождь и брызги на экране' },

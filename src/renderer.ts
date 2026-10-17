@@ -803,6 +803,7 @@ export class GameRenderer {
     // Calculate continuous astronomical lighting & chromatic sky atmosphere
     const atmo = calculateAstronomicalAtmosphere(timeHour, world.calendar);
     const nightAlpha = atmo.nightAlpha;
+    this.updateLiquidFx(timeHour, nightAlpha, visibleVehicles, world.calendar);
 
     const vpProps = visibleProps || world.props.filter(p => p.x >= minX - 120 && p.x <= maxX + 120 && p.y >= minY - 120 && p.y <= maxY + 120);
     const vpTrees = visibleTrees || world.trees.filter(t => t.x >= minX - 120 && t.x <= maxX + 120 && t.y >= minY - 120 && t.y <= maxY + 120);
@@ -2621,6 +2622,123 @@ export class GameRenderer {
   }
 
   // --- ORGANIC BLOB PATH HELPER ---
+  /** Per-frame state for liquid surface effects. Refreshed once per render() from time of day and visible vehicles. */
+  private liquidFx: {
+    sunElev: number;          // 0..1 sun height (0 at night)
+    shadowDirX: number;       // unit world direction shadows fall toward
+    shadowDirY: number;
+    sky: { r: number; g: number; b: number };
+    vehicles: Vehicle[];
+    reflectBudget: number;    // liquid surfaces left to receive reflections this frame
+    shadowBudget: number;     // liquid surfaces left to receive shadows this frame
+  } = { sunElev: 0, shadowDirX: 0, shadowDirY: 1, sky: { r: 186, g: 230, b: 253 }, vehicles: [], reflectBudget: 0, shadowBudget: 0 };
+
+  private updateLiquidFx(timeHour: number, nightAlpha: number, vehicles: Vehicle[], calendar?: { sunriseHour?: number; sunsetHour?: number }) {
+    const sunrise = calendar?.sunriseHour ?? 6.0;
+    const sunset = calendar?.sunsetHour ?? 19.0;
+    const dayLen = Math.max(1, sunset - sunrise);
+    const dayFrac = Math.min(1, Math.max(0, (timeHour - sunrise) / dayLen));
+    const sunElev = timeHour > sunrise && timeHour < sunset ? Math.sin(Math.PI * dayFrac) : 0;
+    // Sun sweeps east to west: shadows start long toward the west at dawn, point north at noon, then flip east
+    let dx = -Math.cos(Math.PI * dayFrac);
+    let dy = -0.35;
+    const len = Math.hypot(dx, dy) || 1;
+    dx /= len;
+    dy /= len;
+    const day = 1 - Math.min(1, nightAlpha * 1.25);
+    const fx = this.liquidFx;
+    fx.sunElev = sunElev * day;
+    fx.shadowDirX = dx;
+    fx.shadowDirY = dy;
+    fx.sky = {
+      r: Math.round(186 + (30 - 186) * nightAlpha),
+      g: Math.round(230 + (41 - 230) * nightAlpha),
+      b: Math.round(253 + (59 - 253) * nightAlpha),
+    };
+    fx.vehicles = vehicles;
+    fx.reflectBudget = performanceConfig.liquidReflectionLimit;
+    fx.shadowBudget = performanceConfig.liquidReflectionLimit;
+  }
+
+  /**
+   * Draws reflections and dynamic shadows on one liquid surface. Call in local coordinates right after the
+   * liquid body is filled. origin/angle describe where the liquid sits and how it is rotated in world space.
+   */
+  private drawLiquidSurfaceFx(
+    ctx: CanvasRenderingContext2D,
+    rx: number,
+    ry: number,
+    seed: number,
+    alpha: number,
+    origin: { x: number; y: number; angle: number }
+  ) {
+    const fx = this.liquidFx;
+    const reflect = performanceConfig.enableLiquidReflections && fx.reflectBudget > 0 && performanceConfig.liquidReflectionStrength > 0;
+    const shadow = performanceConfig.enableLiquidShadows && fx.sunElev > 0.05 && fx.shadowBudget > 0
+      && fx.vehicles.length > 0 && performanceConfig.liquidShadowStrength > 0;
+    if (!reflect && !shadow) return;
+
+    const a = Math.cos(-origin.angle);
+    const b = Math.sin(-origin.angle);
+    // World vector -> local liquid space
+    const toLocal = (wx: number, wy: number) => ({ x: wx * a - wy * b, y: wx * b + wy * a });
+
+    ctx.save();
+    this.drawOrganicBlob(ctx, rx, ry, seed);
+    ctx.clip();
+
+    if (reflect) {
+      fx.reflectBudget--;
+      const strength = performanceConfig.liquidReflectionStrength / 100;
+      const { r, g, b: skyB } = fx.sky;
+      // Fresnel-style rim: clear centre, sky-coloured edge brightening toward grazing angles
+      const rim = safeRadialGradient(ctx, 0, 0, rx * 0.3, 0, 0, Math.max(rx, ry) * 1.05);
+      rim.addColorStop(0, `rgba(${r}, ${g}, ${skyB}, 0)`);
+      rim.addColorStop(0.7, `rgba(${r}, ${g}, ${skyB}, ${(0.08 * strength * alpha).toFixed(3)})`);
+      rim.addColorStop(1, `rgba(${r}, ${g}, ${skyB}, ${(0.4 * strength * alpha).toFixed(3)})`);
+      ctx.fillStyle = rim;
+      ctx.fillRect(-rx * 1.2, -ry * 1.2, rx * 2.4, ry * 2.4);
+
+      // Sun glint: specular spot on the side facing the sun, gently shimmering over time
+      if (fx.sunElev > 0.05) {
+        const sun = toLocal(-fx.shadowDirX, -fx.shadowDirY);
+        const shimmer = 0.85 + 0.15 * Math.sin(performance.now() * 0.002 + seed);
+        ctx.fillStyle = `rgba(255, 255, 255, ${(0.5 * fx.sunElev * strength * alpha * shimmer).toFixed(3)})`;
+        ctx.beginPath();
+        safeEllipse(ctx, sun.x * rx * 0.35, sun.y * ry * 0.35, rx * 0.22, ry * 0.1, Math.atan2(sun.y, sun.x), 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+
+    if (shadow) {
+      fx.shadowBudget--;
+      const strength = performanceConfig.liquidShadowStrength / 100;
+      // Shadows lengthen as the sun gets lower
+      const castLen = 14 / Math.max(0.25, fx.sunElev);
+      const reach = Math.max(rx, ry) + 40;
+      ctx.fillStyle = `rgba(2, 6, 23, ${(0.45 * fx.sunElev * strength * alpha).toFixed(3)})`;
+      for (const v of fx.vehicles) {
+        // Shadow centre in world space, then rejected early if it cannot touch this liquid
+        const scx = v.x + fx.shadowDirX * castLen;
+        const scy = v.y + fx.shadowDirY * castLen;
+        const ox = scx - origin.x;
+        const oy = scy - origin.y;
+        const maxReach = reach + v.length;
+        if (ox * ox + oy * oy > maxReach * maxReach) continue;
+        const local = toLocal(ox, oy);
+        const halfL = v.length / 2;
+        const halfW = (v.width || 16) / 2;
+        ctx.save();
+        ctx.translate(local.x, local.y);
+        ctx.rotate(v.angle - origin.angle);
+        ctx.fillRect(-halfL, -halfW, v.length, v.width || 16);
+        ctx.restore();
+      }
+    }
+
+    ctx.restore();
+  }
+
   private drawOrganicBlob(ctx: CanvasRenderingContext2D, rx: number, ry: number, seed: number) {
     ctx.beginPath();
     const numPoints = 16;
@@ -2854,6 +2972,10 @@ export class GameRenderer {
           safeEllipse(ctx, rx * 0.2, ry * 0.18, rx * 0.15, ry * 0.08, 0.2, 0, Math.PI * 2);
           ctx.fill();
         }
+      }
+
+      if (stain.type !== 'sand') {
+        this.drawLiquidSurfaceFx(ctx, rx, ry, seed, stainAlpha, { x: stain.x, y: stain.y, angle: 0 });
       }
 
       if ((stain as any).onFire) {
@@ -6510,6 +6632,8 @@ export class GameRenderer {
         this.drawOrganicBlob(ctx, rX * 0.45, rY * 0.32, seed + 1);
         ctx.fill();
         ctx.restore();
+
+        this.drawLiquidSurfaceFx(ctx, rX, rY, seed, 1, { x: p.x, y: p.y, angle: p.angle });
 
         // Animated realistic organic water ripples
         if (performanceConfig.enableRainDroplets) {

@@ -38,6 +38,13 @@ export interface PerformanceConfig {
   enableScreenEffects: boolean; // Full-screen vignette, frost, shock overlays (default true)
   enableSpeechBubbles: boolean; // Speech bubbles above players (default true)
   enableNameTags: boolean;      // Nametags above remote players (default true)
+
+  // --- Liquid surfaces (oil, coolant, fuel, water, puddles) ---
+  enableLiquidReflections: boolean; // Sky / sun reflections and wet rim on liquid surfaces (default true)
+  liquidReflectionStrength: number; // Reflection intensity in percent, 0..100 (default 60)
+  liquidReflectionLimit: number;    // Liquid surfaces that receive reflection & shadow effects per frame (default 200)
+  enableLiquidShadows: boolean;     // Dynamic vehicle shadows falling across liquids, driven by time of day (default true)
+  liquidShadowStrength: number;     // Shadow darkness in percent, 0..100 (default 50)
 }
 
 export type GraphicsPresetId = 'low' | 'medium' | 'high' | 'ultra';
@@ -80,6 +87,12 @@ export const DEFAULT_CONFIG: PerformanceConfig = {
   enableScreenEffects: true,
   enableSpeechBubbles: true,
   enableNameTags: true,
+
+  enableLiquidReflections: true,
+  liquidReflectionStrength: 60,
+  liquidReflectionLimit: 200,
+  enableLiquidShadows: true,
+  liquidShadowStrength: 50,
 };
 
 /** One-click presets. Each one overrides only the keys listed here. */
@@ -95,6 +108,8 @@ export const GRAPHICS_PRESETS: Record<GraphicsPresetId, Partial<PerformanceConfi
     enableBirds: false, enableCloudShadows: false, enableSoftShadowBlur: false,
     enableScreenShake: false, enableCameraJitter: false, enableScreenEffects: false,
     enableSpeechBubbles: true, enableNameTags: false,
+    enableLiquidReflections: false, liquidReflectionStrength: 0, liquidReflectionLimit: 0,
+    enableLiquidShadows: false, liquidShadowStrength: 0,
   },
   medium: {
     maxVehicles: 22, nearbyVehiclesTarget: 8, maxActivePedestrians: 90,
@@ -107,6 +122,8 @@ export const GRAPHICS_PRESETS: Record<GraphicsPresetId, Partial<PerformanceConfi
     enableBirds: true, enableCloudShadows: true, enableSoftShadowBlur: false,
     enableScreenShake: true, enableCameraJitter: true, enableScreenEffects: true,
     enableSpeechBubbles: true, enableNameTags: true,
+    enableLiquidReflections: true, liquidReflectionStrength: 50, liquidReflectionLimit: 100,
+    enableLiquidShadows: true, liquidShadowStrength: 35,
   },
   high: { ...DEFAULT_CONFIG },
   ultra: {
@@ -120,6 +137,8 @@ export const GRAPHICS_PRESETS: Record<GraphicsPresetId, Partial<PerformanceConfi
     enableBirds: true, enableCloudShadows: true, enableSoftShadowBlur: true,
     enableScreenShake: true, enableCameraJitter: true, enableScreenEffects: true,
     enableSpeechBubbles: true, enableNameTags: true,
+    enableLiquidReflections: true, liquidReflectionStrength: 80, liquidReflectionLimit: 400,
+    enableLiquidShadows: true, liquidShadowStrength: 70,
   },
 };
 
