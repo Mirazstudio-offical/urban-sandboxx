@@ -379,6 +379,13 @@ export const MainMenu: React.FC<MainMenuProps> = ({
   const [hostCode, setHostCode] = useState<string>('room-' + Math.floor(1000 + Math.random() * 9000));
   const [hostMax, setHostMax] = useState<number>(8);
   const [hostMode, setHostMode] = useState<string>('free_roam');
+  const [trafficEnabled, setTrafficEnabled] = useState<boolean>(true);
+  const [vehicleCount, setVehicleCount] = useState<number>(15);
+  const [pedestrianCount, setPedestrianCount] = useState<number>(10);
+  const [passwordRequired, setPasswordRequired] = useState<boolean>(false);
+  const [password, setPassword] = useState<string>('');
+  const [savePlayerData, setSavePlayerData] = useState<boolean>(true);
+  const [antiCheat, setAntiCheat] = useState<'none' | 'moderate' | 'strict'>('moderate');
   const [creating, setCreating] = useState(false);
 
   const createServer = async () => {
@@ -386,6 +393,15 @@ export const MainMenu: React.FC<MainMenuProps> = ({
     setCreating(true);
     try {
       const clean = onlineManager.sanitizeRoomCode(hostCode);
+      const settings = {
+        trafficEnabled,
+        vehicleCount,
+        pedestrianCount,
+        passwordRequired,
+        password: passwordRequired ? password : '',
+        savePlayerData,
+        antiCheat
+      };
       await createP2PServerDoc({
         name: hostName.trim() || 'Сервер ' + nickname,
         peerId: clean,
@@ -393,16 +409,31 @@ export const MainMenu: React.FC<MainMenuProps> = ({
         hostName: nickname,
         mapName: 'Степной Тракт 2D',
         gameMode: hostMode,
-        isPrivate: false,
+        isPrivate: passwordRequired,
         currentPlayers: 1,
         maxPlayers: hostMax,
-        status: 'active'
+        status: 'active',
+        trafficEnabled,
+        vehicleCount,
+        pedestrianCount,
+        hasPassword: passwordRequired,
+        savePlayerData,
+        antiCheat
       });
-      onlineManager.joinOrCreateRoom(clean, nickname, true);
+      onlineManager.joinOrCreateRoom(clean, nickname, true, passwordRequired ? password : undefined, settings);
       onResume();
     } catch (err) {
       console.error('Failed to create server', err);
-      onlineManager.joinOrCreateRoom(hostCode, nickname, true);
+      const settings = {
+        trafficEnabled,
+        vehicleCount,
+        pedestrianCount,
+        passwordRequired,
+        password: passwordRequired ? password : '',
+        savePlayerData,
+        antiCheat
+      };
+      onlineManager.joinOrCreateRoom(hostCode, nickname, true, passwordRequired ? password : undefined, settings);
       onResume();
     } finally {
       setCreating(false);
@@ -1117,7 +1148,7 @@ export const MainMenu: React.FC<MainMenuProps> = ({
             {cur === 'create' && (
               <section className={scrCls}>
                 {Top('Создать сервер', () => go('servers', true))}
-                <div className="panel a stg st d2" style={{ left: 64, top: 112, width: 880, padding: '28px 30px', display: 'flex', flexDirection: 'column', gap: 22 }}>
+                <div className="panel a stg st d2 scroll" style={{ left: 64, top: 112, width: 880, height: 740, padding: '28px 30px', display: 'flex', flexDirection: 'column', gap: 20 }}>
                   <div><div className="lbl">Название сервера</div><input className="inp" value={hostName} onChange={e => setHostName(e.target.value)} onKeyDown={e => e.stopPropagation()} /></div>
                   <div><div className="lbl">Код комнаты (его вводят друзья, чтобы подключиться)</div><input className="inp" value={hostCode} onChange={e => setHostCode(e.target.value)} onKeyDown={e => e.stopPropagation()} style={{ fontFamily: 'ui-monospace,monospace', borderColor: 'rgba(255,255,255,.14)' }} /></div>
                   <div>
@@ -1128,7 +1159,45 @@ export const MainMenu: React.FC<MainMenuProps> = ({
                     <div style={{ display: 'flex', justifyContent: 'space-between' }}><span className="lbl">Максимум игроков</span><span style={{ fontSize: 13, fontWeight: 600 }}>{hostMax}</span></div>
                     <div style={{ marginRight: 9 }}><Track label="Максимум игроков" value={hostMax} min={2} max={16} step={1} onChange={setHostMax} /></div>
                   </div>
-                  <div className="row2" style={{ gap: 12, marginTop: 10 }}>
+
+                  <div className="set" style={{ height: 60, padding: 0, border: 0 }}>
+                    <span>Трафик (машины и пешеходы)</span>
+                    <Toggle on={trafficEnabled} onChange={() => setTrafficEnabled(!trafficEnabled)} label="Трафик" />
+                  </div>
+
+                  {trafficEnabled && (
+                    <>
+                      <div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between' }}><span className="lbl">Количество машин</span><span style={{ fontSize: 13, fontWeight: 600 }}>{vehicleCount}</span></div>
+                        <div style={{ marginRight: 9 }}><Track label="Машины" value={vehicleCount} min={2} max={35} step={1} onChange={setVehicleCount} /></div>
+                      </div>
+                      <div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between' }}><span className="lbl">Количество пешеходов</span><span style={{ fontSize: 13, fontWeight: 600 }}>{pedestrianCount}</span></div>
+                        <div style={{ marginRight: 9 }}><Track label="Пешеходы" value={pedestrianCount} min={0} max={25} step={1} onChange={setPedestrianCount} /></div>
+                      </div>
+                    </>
+                  )}
+
+                  <div className="set" style={{ height: 60, padding: 0, border: 0 }}>
+                    <span>Требовать пароль (защита сохранения)</span>
+                    <Toggle on={passwordRequired} onChange={() => setPasswordRequired(!passwordRequired)} label="Пароль" />
+                  </div>
+
+                  {passwordRequired && (
+                    <div><div className="lbl">Пароль сервера</div><input className="inp" type="password" value={password} onChange={e => setPassword(e.target.value)} onKeyDown={e => e.stopPropagation()} placeholder="Введите пароль" /></div>
+                  )}
+
+                  <div className="set" style={{ height: 60, padding: 0, border: 0 }}>
+                    <span>Сохранять данные игрока</span>
+                    <Toggle on={savePlayerData} onChange={() => setSavePlayerData(!savePlayerData)} label="Сохранять данные" />
+                  </div>
+
+                  <div>
+                    <div className="lbl">Уровень античита</div>
+                    <Seg value={antiCheat} onChange={setAntiCheat} options={[{ v: 'none', label: 'Нет' }, { v: 'moderate', label: 'Умеренный' }, { v: 'strict', label: 'Строгий' }]} />
+                  </div>
+
+                  <div className="row2" style={{ gap: 12, marginTop: 10, paddingBottom: 20 }}>
                     <button className="btn btn-s" style={{ flex: 1 }} onClick={() => go('servers', true)}>Отмена</button>
                     <button className="btn btn-p" style={{ flex: 1 }} onClick={createServer} disabled={creating}>{creating ? 'Регистрация...' : 'Создать сервер'}</button>
                   </div>
