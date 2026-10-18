@@ -127,7 +127,7 @@ export const PerformanceTest: React.FC<PerformanceTestProps> = ({ worldRef, play
           r.t0 = now;
           r.lastT = now;
           r.distPx = 0;
-          r.samples = ['t_s;kmh;gear;auto;rpm;boost_pct;dist_m;temp_c'];
+          r.samples = ['t_s;kmh;gear;auto;rpm;boost_pct;dist_m;temp_c;power_mult;health;final_drive'];
         }
       }
 
@@ -150,7 +150,7 @@ export const PerformanceTest: React.FC<PerformanceTestProps> = ({ worldRef, play
             ? String(Math.max(0, eng.currentGear))
             : eng.transmissionType === 'AUTO' ? (eng.autoGearMode || '?')
             : eng.currentGear === -1 ? 'R' : String(eng.currentGear);
-          r.samples.push(`${elapsed.toFixed(2)};${kmh.toFixed(1)};${gearTxt};${eng.transmissionType === 'AUTO' ? 1 : 0};${Math.round(eng.engineRPM || 0)};${boost};${(r.distPx / PX_PER_M).toFixed(1)};${(eng.temperature ?? 85).toFixed(1)}`);
+          r.samples.push(`${elapsed.toFixed(2)};${kmh.toFixed(1)};${gearTxt};${eng.transmissionType === 'AUTO' ? 1 : 0};${Math.round(eng.engineRPM || 0)};${boost};${(r.distPx / PX_PER_M).toFixed(1)};${(eng.temperature ?? 85).toFixed(1)};${(eng.powerMult ?? 1).toFixed(2)};${Math.round(eng.engineHealth ?? 100)};${(eng.finalDriveRatio ?? 3.9).toFixed(2)}`);
         }
       }
       r.lastT = now;

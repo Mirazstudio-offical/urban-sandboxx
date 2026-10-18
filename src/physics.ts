@@ -7965,6 +7965,13 @@ export function updateVehiclePhysics(
         const topGearRatio = Math.abs(eng.gearRatios[topGearIdx] || 0.78);
         const firstGearRatio = Math.abs(eng.gearRatios[2] || 3.5);
 
+        // Final drive (главная пара) from powertrain variants: legacy cars without
+        // a variant transmissionKind keep historical behavior anchored at 3.9
+        const isLegacyPowertrain = eng.transmissionKind === undefined;
+        const fd = isLegacyPowertrain ? 3.9 : Math.max(2.0, eng.finalDriveRatio || 3.9);
+        const fdAccel = fd / 3.9;   // short pair multiplies wheel torque
+        const fdSpeed = 3.9 / fd;    // ... and lowers speed at redline per gear
+
         let currentGearRatio = eng.gearRatios[eng.currentGear + 1] !== undefined ? eng.gearRatios[eng.currentGear + 1] : 0;
         
         // Apply Transfer Case LOW multiplier
@@ -7985,7 +7992,7 @@ export function updateVehiclePhysics(
         if (eng.currentGear === -1) {
           speedAtRedline = reverseMaxSpeedPx;
         } else if (eng.currentGear > 0 && gearRatio > 0) {
-          speedAtRedline = maxSpeedPx * (topGearRatio / Math.max(0.2, gearRatio));
+          speedAtRedline = maxSpeedPx * (topGearRatio / Math.max(0.2, gearRatio)) * fdSpeed;
         }
 
         // Mechanical top speed allowable in current gear with over-rev margin before rev limiter cutoff
@@ -8229,8 +8236,9 @@ export function updateVehiclePhysics(
           gearAccelMult = 1.65;
         } else if (eng.currentGear > 1 && firstGearRatio > 0) {
           const ratioFraction = Math.min(1.0, Math.max(0.12, gearRatio / firstGearRatio));
-          // Direct mechanical ratio scaling
-          gearAccelMult = 0.25 + 0.80 * Math.pow(ratioFraction, 0.9);
+          // Direct mechanical ratio scaling with a raised floor so top gears
+          // (4-10-speed boxes) keep meaningful thrust for real top speed
+          gearAccelMult = 0.45 + 0.65 * Math.pow(ratioFraction, 0.9);
         }
 
         // Transfer case / Tractor range low-gear reduction (пониженная передача)
@@ -8240,6 +8248,9 @@ export function updateVehiclePhysics(
         if (eng.tractorRange === 1) {
           gearAccelMult *= 2.8; // 2.8x torque multiplier in Tractor Low Range!
         }
+
+        // Final drive torque scaling (short pair = more wheel thrust, long pair = less)
+        gearAccelMult *= fdAccel;
 
         // Fuel System Consequences
         let fuelFactor = 1.0;
@@ -8343,7 +8354,8 @@ export function updateVehiclePhysics(
 
           if (effectiveThrottle > 0) {
             // Engine power drops off smoothly as vehicle approaches top speed for current gear
-            const headroom = Math.max(12, gearMaxSpeedPx * 0.16);
+            // (fade only in the final ~5% of the gear's speed range, so usable speed stays close to redline)
+            const headroom = Math.max(6, gearMaxSpeedPx * 0.045);
             const speedCapFactor = Math.max(0, Math.min(1.0, (gearMaxSpeedPx - v_speed) / headroom));
             
             // Clutch Grip factor: pedal engagement + thermal fade + permanent lining wear
