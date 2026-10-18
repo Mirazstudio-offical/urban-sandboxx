@@ -5,13 +5,23 @@ import { useTopmostEscape } from './gameUi';
 import { VehiclePreviewCanvas } from './VehiclePreviewCanvas';
 import { VEHICLE_CATALOG, type VehicleCatalogEntry, type VehicleCategory } from '../vehicleCatalog';
 import { CAR_CONFIGS, getVehicleDriveType } from '../vehicleHelpers';
+import { ENGINE_VARIANTS, TRANSMISSION_VARIANTS, TUNE_VARIANTS, TIRE_SETS, TURBO_KITS, getVehiclePowertrainCategory } from '../powertrainVariants';
 import { SPAWN_LOCATIONS } from '../spawnLocations';
+
+export interface PowertrainSelection {
+  engineId?: string;
+  transmissionId?: string;
+  tuneId?: string;
+  tireSetId?: string;
+  turboKitId?: string;
+}
 
 export interface VehicleSelectResult {
   spawnId: string;
   saveName: string;
   vehicleType: string;
   vehicleColor: string;
+  powertrain?: PowertrainSelection;
 }
 
 interface VehicleSelectProps {
@@ -35,9 +45,8 @@ const FILTERS: { id: 'all' | VehicleCategory; label: string }[] = [
   { id: 'bus', label: 'Автобусы' }
 ];
 const TR_LABEL = { AUTO: 'Автомат', MANUAL: 'Механика' } as const;
-const TR_OPTIONS = ['Механика', 'Автомат'];
-const DR_OPTIONS = ['FWD', 'RWD', 'AWD'];
 const SPAWN_CAT: Record<string, string> = { city: 'Город', highway: 'Трасса', nature: 'Природа', mountain: 'Горы', industrial: 'Промзона' };
+const FUEL_LABEL: Record<string, string> = { ai92: 'АИ-92', ai95: 'АИ-95', ai98: 'АИ-98', ai100: 'АИ-100', diesel: 'ДТ' };
 
 const transmissionOf = (c: VehicleCatalogEntry) => TR_LABEL[CAR_CONFIGS[c.type]?.transmission || 'AUTO'];
 const driveOf = (c: VehicleCatalogEntry) => getVehicleDriveType(c.type);
@@ -65,13 +74,6 @@ const Node: React.FC<{ id: string; n: string; v: string; children: React.ReactNo
   );
 };
 
-const ReadSeg: React.FC<{ label: string; options: string[]; value: string }> = ({ label, options, value }) => (
-  <div className="lf ro">
-    <div className="lbl">{label}</div>
-    <div className="seg">{options.map(o => <span key={o} className={o === value ? 'on' : 'dis'}>{o}</span>)}</div>
-  </div>
-);
-
 const Fact: React.FC<{ l: string; v: string }> = ({ l, v }) => (<div className="lf tr"><span>{l}</span><b>{v}</b></div>);
 
 /* ------------------------------------------------------------------ */
@@ -93,6 +95,12 @@ export const VehicleSelect: React.FC<VehicleSelectProps> = ({ defaultSpawnId, on
   });
   const [open, setOpen] = useState<Record<string, boolean>>({ look: true, paint: true });
   const [animate, setAnimate] = useState(true);
+  // --- Powertrain configurator selections (null = случайный вариант из каталога) ---
+  const [pwEng, setPwEng] = useState<string | null>(null);
+  const [pwTrn, setPwTrn] = useState<string | null>(null);
+  const [pwTune, setPwTune] = useState<string | null>(null);
+  const [pwTire, setPwTire] = useState<string | null>(null);
+  const [pwTurbo, setPwTurbo] = useState<string | null>(null);
   const gmRef = useRef<HTMLDivElement>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
 
@@ -121,14 +129,58 @@ export const VehicleSelect: React.FC<VehicleSelectProps> = ({ defaultSpawnId, on
   const trans = transmissionOf(car);
   const drive = driveOf(car);
 
+  /* ---------- cascading powertrain options ---------- */
+  const pwCat = getVehiclePowertrainCategory(car.type);
+  const engPool = useMemo(() => ENGINE_VARIANTS.filter(e => e.cats.includes(pwCat)), [car.type, pwCat]);
+  const pickedEng = engPool.find(e => e.id === pwEng) || null;
+  const trnPool = useMemo(() => TRANSMISSION_VARIANTS.filter(t => t.cats.includes(pwCat)), [car.type, pwCat]);
+  const pickedTrn = trnPool.find(t => t.id === pwTrn) || null;
+  const tunePool = useMemo(() => TUNE_VARIANTS.filter(t => {
+    if (t.requiresTurbo && !(pickedEng ? pickedEng.turbo : false)) return false;
+    if (pickedEng) {
+      if (pickedEng.fuel === 'diesel') return !!t.isDieselTune;
+      if (t.isDieselTune || t.id === 'tune_agricultural') return false;
+    } else if (t.isDieselTune) {
+      // без выбранного двигателя дизельные карты и агро не предлагать
+      return !!(t.cats && (pwCat === 'truck' || pwCat === 'tractor' || pwCat === 'machinery') && t.cats.includes(pwCat));
+    }
+    return !t.cats || t.cats.includes(pwCat);
+  }), [pickedEng, pwCat]);
+  const pickedTune = tunePool.find(t => t.id === pwTune) || null;
+  const tirePool = useMemo(() => TIRE_SETS.filter(t => !t.cats || t.cats.includes(pwCat)), [pwCat]);
+  const pickedTire = tirePool.find(t => t.id === pwTire) || null;
+  const factoryTurbo = pickedEng?.turbo || null;
+  const pickedTurbo = TURBO_KITS.find(k => k.id === pwTurbo) || null;
+  const turboAllowed = !factoryTurbo;
+
+  // выбор сбрасывается при смене автомобиля (каскад несовместим)
+  useEffect(() => {
+    setPwEng(null); setPwTrn(null); setPwTune(null); setPwTire(null); setPwTurbo(null);
+  }, [car.type]);
+  // если у двигателя штатный наддув — ручной выбор турбо недоступен
+  useEffect(() => {
+    if (factoryTurbo) setPwTurbo(null);
+  }, [factoryTurbo]);
+
+  const powertrainSelection = (): PowertrainSelection => ({
+    engineId: pickedEng?.id,
+    transmissionId: pickedTrn?.id,
+    tuneId: pickedTune?.id,
+    tireSetId: pickedTire?.id,
+    turboKitId: factoryTurbo ? factoryTurbo.id : (pickedTurbo && pickedTurbo.id !== 'trb_none' ? pickedTurbo.id : undefined)
+  });
+
   const setCar = (i: number) => { setCi(i); setColor(0); };
   const drill = (i: number) => { setCar(i); setAnimate(true); setView('cfgs'); };
   const back = () => {
     if (view === 'cfgs') { setAnimate(true); setView('cars'); }
     else onBack();
   };
-  const reset = () => { setColor(0); };
-  const pick = () => onStart({ spawnId: loc.id, saveName: 'Freeroam: ' + car.nameRu, vehicleType: car.type, vehicleColor: colHex });
+  const reset = () => { setColor(0); setPwEng(null); setPwTrn(null); setPwTune(null); setPwTire(null); setPwTurbo(null); };
+  const pick = () => onStart({
+    spawnId: loc.id, saveName: 'Freeroam: ' + car.nameRu, vehicleType: car.type, vehicleColor: colHex,
+    powertrain: powertrainSelection()
+  });
 
   useTopmostEscape(back);
 
@@ -262,10 +314,86 @@ export const VehicleSelect: React.FC<VehicleSelectProps> = ({ defaultSpawnId, on
                   ))}
                 </div>
               </Node>
-              <Node id="pt" n="Силовая часть" v={car.powerHp + ' л.с.'}>
-                <div className="lf ro"><div className="lbl">Мощность</div><div className="seg"><span className="on">{car.powerHp} л.с.</span></div></div>
-                <ReadSeg label="Трансмиссия" options={TR_OPTIONS} value={trans} />
-                <ReadSeg label="Привод" options={DR_OPTIONS} value={drive} />
+              <Node id="pt" n="Силовая часть" v={pickedEng ? pickedEng.nameRu : 'Авто (случайно)'}>
+                <Node id="eng" n="Двигатель" v={pickedEng ? pickedEng.nameRu : 'Авто'}>
+                  <div className="lf" id="engOpts">
+                    <button className={'opt' + (!pickedEng ? ' on' : '')} onClick={() => setPwEng(null)}>
+                      <span style={{ fontWeight: 600 }}>Авто (случайно из каталога)</span>
+                    </button>
+                    {engPool.map(e => (
+                      <button key={e.id} className={'opt' + (e.id === pwEng ? ' on' : '')} onClick={() => setPwEng(e.id)} title={e.note || undefined}>
+                        <span style={{ fontWeight: 600, textAlign: 'left', flexShrink: 1 }}>{e.nameRu}</span>
+                        <span className="mut" style={{ fontSize: 12, marginLeft: 10, flex: 'none', whiteSpace: 'nowrap' }}>
+                          {FUEL_LABEL[e.fuel] || e.fuel}{e.turbo ? ' · наддув' : ''} · {e.massKg} кг
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </Node>
+                <Node id="trn" n="Коробка передач" v={pickedTrn ? pickedTrn.nameRu : 'Авто'}>
+                  <div className="lf" id="trnOpts">
+                    <button className={'opt' + (!pickedTrn ? ' on' : '')} onClick={() => setPwTrn(null)}>
+                      <span style={{ fontWeight: 600 }}>Авто (случайно из каталога)</span>
+                    </button>
+                    {trnPool.map(t => (
+                      <button key={t.id} className={'opt' + (t.id === pwTrn ? ' on' : '')} onClick={() => setPwTrn(t.id)} title={t.note || undefined}>
+                        <span style={{ fontWeight: 600, textAlign: 'left', flexShrink: 1 }}>{t.nameRu}</span>
+                        <span className="mut" style={{ fontSize: 12, marginLeft: 10, flex: 'none', whiteSpace: 'nowrap' }}>
+                          {t.ratios.length - 2} передач{t.divider ? ' · делитель' : ''} · КПД {Math.round(t.efficiency * 100)}%
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </Node>
+                <Node id="tune" n="Прошивка ЭБУ" v={pickedTune ? pickedTune.nameRu : (pickedEng && pickedEng.fuel === 'diesel' ? 'Дизель-авто' : 'Авто')}>
+                  <div className="lf" id="tuneOpts">
+                    <button className={'opt' + (!pickedTune ? ' on' : '')} onClick={() => setPwTune(null)}>
+                      <span style={{ fontWeight: 600 }}>Авто (случайно из каталога)</span>
+                    </button>
+                    {tunePool.map(t => (
+                      <button key={t.id} className={'opt' + (t.id === pwTune ? ' on' : '')} onClick={() => setPwTune(t.id)} title={t.note || undefined}>
+                        <span style={{ fontWeight: 600, textAlign: 'left', flexShrink: 1 }}>{t.nameRu}</span>
+                        <span className="mut" style={{ fontSize: 12, marginLeft: 10, flex: 'none', whiteSpace: 'nowrap' }}>
+                          {t.powerMult >= 1 ? '+' : ''}{Math.round((t.powerMult - 1) * 100)}% тяги{t.minOctane ? ` · ${t.minOctane}-й` : ''}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </Node>
+                <Node id="turbo" n="Турбонаддув" v={factoryTurbo ? factoryTurbo.nameRu : (pickedTurbo ? pickedTurbo.nameRu : 'Без наддува')}>
+                  <div className="lf" id="turboOpts">
+                    {factoryTurbo ? (
+                      <div className="lf ro"><div className="lbl">Штатная турбина</div><div className="seg"><span className="on">{factoryTurbo.nameRu}</span></div></div>
+                    ) : (
+                      <>
+                        <button className={'opt' + (!pickedTurbo ? ' on' : '')} onClick={() => setPwTurbo(null)}>
+                          <span style={{ fontWeight: 600 }}>Без наддува (атмо)</span>
+                        </button>
+                        {TURBO_KITS.filter(k => k.id !== 'trb_none').map(k => (
+                          <button key={k.id} className={'opt' + (k.id === pwTurbo ? ' on' : '')} onClick={() => setPwTurbo(k.id)}>
+                            <span style={{ fontWeight: 600, textAlign: 'left', flexShrink: 1 }}>{k.nameRu}</span>
+                            <span className="mut" style={{ fontSize: 12, marginLeft: 10, flex: 'none', whiteSpace: 'nowrap' }}>+{Math.round(k.boostMax * 100)}% тяги</span>
+                          </button>
+                        ))}
+                      </>
+                    )}
+                  </div>
+                </Node>
+                <Node id="tire" n="Комплект шин" v={pickedTire ? pickedTire.nameRu : 'Авто'}>
+                  <div className="lf" id="tireOpts">
+                    <button className={'opt' + (!pickedTire ? ' on' : '')} onClick={() => setPwTire(null)}>
+                      <span style={{ fontWeight: 600 }}>Авто (случайно из каталога)</span>
+                    </button>
+                    {tirePool.map(t => (
+                      <button key={t.id} className={'opt' + (t.id === pwTire ? ' on' : '')} onClick={() => setPwTire(t.id)} title={t.note || undefined}>
+                        <span style={{ fontWeight: 600, textAlign: 'left', flexShrink: 1 }}>{t.nameRu}</span>
+                        <span className="mut" style={{ fontSize: 12, marginLeft: 10, flex: 'none', whiteSpace: 'nowrap' }}>
+                          сцепл. {Math.round(t.gripMult * 100)}% · лёд {Math.round(t.iceGripMult * 100)}%
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </Node>
               </Node>
               <Node id="look" n="Внешний вид" v={col.name}>
                 <Node id="paint" n="Окраска" v={col.name}>

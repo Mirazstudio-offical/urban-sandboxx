@@ -11,6 +11,7 @@ import {
   VehicleDamage 
 } from './types';
 import { CAR_CONFIGS, createDefaultEngineState, createDefaultFuelSystem, ensureVehicleDamage } from './vehicleHelpers';
+import { applyPowertrain } from './powertrainVariants';
 import { sound } from './audio';
 
 export interface RemoteVehicleState {
@@ -919,6 +920,7 @@ class OnlineManager {
           };
           (veh as any).isRemoteControlled = true;
           (veh as any).remoteDriverName = p.name;
+          applyPowertrain(veh);
           world.vehicles.push(veh);
         }
 

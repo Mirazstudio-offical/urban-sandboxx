@@ -1,5 +1,6 @@
 import { Building, CarType, GameWorld, Intersection, Pedestrian, PedestrianPath, RoadSegment, Vector2D, Vehicle, StreetProp } from './types';
 import { CAR_CONFIGS, CAR_PALETTE, createDefaultVehicleDamage, generateRandomPedestrianAppearance, createDefaultFuelSystem, createDefaultEngineState, PX_S_TO_SPEED_KMH, SPEED_KMH_TO_PX_S } from './vehicleHelpers';
+import { applyPowertrain } from './powertrainVariants';
 import { sound } from './audio';
 import { checkPedestrianBuildingCollision, getBuildingEntrancePos, checkPedestrianVehicleCollision, getPropHitbox } from './physics';
 import { SpatialGrid } from './spatialGrid';
@@ -6180,6 +6181,7 @@ function respawnCarNearPlayer(car: Vehicle, playerPos: Vector2D, world: GameWorl
         car.engineState = createDefaultEngineState(car.type, true, false);
         car.hasGBO = ['sedan_classic', 'wagon_classic', 'taxi_yellow', 'delivery_truck', 'van_cargo_old'].includes(car.type) ? Math.random() < 0.4 : false;
         car.fuelSystem = createDefaultFuelSystem(car.type, false);
+        applyPowertrain(car);
         return true;
       }
     }
@@ -6235,7 +6237,7 @@ export function dispatchFireEngine(world: GameWorld, targetPos: Vector2D, fireX:
       const endPoint = { x: fireX, y: fireY };
       const gpsPath = calculateGpsRoute(world, startPoint, endPoint, true);
 
-      const fireEngine: Vehicle = {
+      const spawnedFireEngine: Vehicle = {
         id,
         type: cType,
         x: chosen.spawnX,
@@ -6286,13 +6288,14 @@ export function dispatchFireEngine(world: GameWorld, targetPos: Vector2D, fireX:
         sirenStrobe: 0,
         damage: createDefaultVehicleDamage(cfg.length, cfg.width)
       };
+      applyPowertrain(spawnedFireEngine);
 
-      (fireEngine as any).isFireDispatch = true;
-      (fireEngine as any).targetFireX = fireX;
-      (fireEngine as any).targetFireY = fireY;
-      (fireEngine as any).firefighterSpawned = false;
+      (spawnedFireEngine as any).isFireDispatch = true;
+      (spawnedFireEngine as any).targetFireX = fireX;
+      (spawnedFireEngine as any).targetFireY = fireY;
+      (spawnedFireEngine as any).firefighterSpawned = false;
 
-      world.vehicles.push(fireEngine);
+      world.vehicles.push(spawnedFireEngine);
 
       try {
         if (sound && typeof sound.startSiren === 'function') {
@@ -6381,7 +6384,7 @@ export function spawnNewCarNearPlayer(playerPos: Vector2D, world: GameWorld): bo
       const targetCruisePx = getVehicleCruiseSpeedPx({ type: cType, id } as any, road);
       const speedVal = targetCruisePx * (0.85 + Math.random() * 0.12);
 
-      world.vehicles.push({
+      const dynamicCar: Vehicle = {
         id,
         type: cType,
         x: chosen.spawnX,
@@ -6431,7 +6434,9 @@ export function spawnNewCarNearPlayer(playerPos: Vector2D, world: GameWorld): bo
         isHonking: false,
         hornEffectTimer: 0,
         damage: createDefaultVehicleDamage(cfg.length, cfg.width)
-      });
+      };
+      applyPowertrain(dynamicCar);
+      world.vehicles.push(dynamicCar);
       return true;
     }
   }

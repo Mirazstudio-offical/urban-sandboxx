@@ -47,6 +47,7 @@ import {
   getVehicleTurnSignalDynamicState,
   getVehicleTurnSignalConfig
 } from './vehicleHelpers';
+import { applyPowertrain, describePowertrain, getPowertrainPickByIds } from './powertrainVariants';
 import { loadMap, sanitizeWorldVehicles } from './loadMap';
 import { SpatialGrid } from './spatialGrid';
 import { updateAITraffic, updatePedestrians, updateTrafficLights } from './aiTraffic';
@@ -1216,7 +1217,12 @@ export default function App() {
           if (sv.hasChiptuning !== undefined) (v as any).hasChiptuning = sv.hasChiptuning;
 
           if (sv.fuelSystem) v.fuelSystem = { ...sv.fuelSystem };
-          if (sv.engineState) v.engineState = { ...sv.engineState };
+          if (sv.engineState) {
+            v.engineState = { ...sv.engineState };
+          } else {
+            // No persisted engine data: initialize a fresh randomized powertrain
+            applyPowertrain(v);
+          }
           if (sv.damage) {
             v.damage = ensureVehicleDamage({ length: v.length, width: v.width, damage: sv.damage });
           }
@@ -1337,6 +1343,7 @@ export default function App() {
     mode?: 'career' | 'freeroam';
     vehicleType?: string;
     vehicleColor?: string;
+    powertrain?: { engineId?: string; transmissionId?: string; tuneId?: string; tireSetId?: string; turboKitId?: string };
   } | string) => {
     const opts = typeof options === 'string' ? { spawnId: options, mode: 'career' as const } : (options || {});
     const mode = opts.mode || 'career';
@@ -1485,6 +1492,8 @@ export default function App() {
         };
         (newVehicle as any).isSpawnedByPlayer = true;
         (newVehicle as any).playerOwned = true;
+        const forcedPick = opts.powertrain ? getPowertrainPickByIds(opts.powertrain) : null;
+        applyPowertrain(newVehicle, forcedPick || undefined);
         world.vehicles.push(newVehicle);
         spatialGridVehiclesRef.current.insert(newVehicle);
 
@@ -1500,6 +1509,7 @@ export default function App() {
         addItemToPlayer(player, carKeyItem);
 
         sound.startEngine();
+        addPlayerNotification(player, newVehicle.powertrainLabel || describePowertrain(newVehicle), 'info');
       }
     } else {
       setIsTimeAutoCycling(true);
@@ -1641,6 +1651,7 @@ export default function App() {
       };
       (newVehicle as any).isSpawnedByPlayer = true;
       (newVehicle as any).playerOwned = true;
+      applyPowertrain(newVehicle);
       world.vehicles.push(newVehicle);
       spatialGridVehiclesRef.current.insert(newVehicle);
 
@@ -1653,6 +1664,7 @@ export default function App() {
 
       sound.resume();
       addPlayerNotification(player, `Автомобиль ${placement.nameRu} установлен! Ключ в инвентаре.`, 'info');
+      addPlayerNotification(player, newVehicle.powertrainLabel || describePowertrain(newVehicle), 'info');
       setActivePlacement(null);
       activePlacementRef.current = null;
     } else if (placement.type === 'prop') {
@@ -1745,6 +1757,7 @@ export default function App() {
     };
     (newVehicle as any).isSpawnedByPlayer = true;
     (newVehicle as any).playerOwned = true;
+    applyPowertrain(newVehicle);
 
     world.vehicles.push(newVehicle);
     spatialGridVehiclesRef.current.insert(newVehicle);
@@ -1773,9 +1786,11 @@ export default function App() {
       setActiveCarName(config.name);
       sound.playCarDoor();
       addPlayerNotification(player, `Вы сели за руль ${config.name}! Ключ в замке зажигания.`, 'pickup');
+      addPlayerNotification(player, newVehicle.powertrainLabel || describePowertrain(newVehicle), 'info');
     } else {
       sound.playHorn();
       addPlayerNotification(player, `Транспорт ${config.name} заспавнен рядом! Ключ в инвентаре.`, 'pickup');
+      addPlayerNotification(player, newVehicle.powertrainLabel || describePowertrain(newVehicle), 'info');
     }
   };
 
@@ -3323,6 +3338,7 @@ export default function App() {
                 fuelSystem: createDefaultFuelSystem('ambulance_van', false),
                 damage: createDefaultVehicleDamage()
               } as Vehicle;
+              applyPowertrain(amb);
               world.vehicles.push(amb);
             } else {
               amb.x = hospX;
@@ -4359,6 +4375,8 @@ export default function App() {
 
         if (!closestVeh.engineState) {
           closestVeh.engineState = createDefaultEngineState(closestVeh.type, false, true);
+          if (!closestVeh.fuelSystem) closestVeh.fuelSystem = createDefaultFuelSystem(closestVeh.type, !!closestVeh.isParked);
+          applyPowertrain(closestVeh);
         }
 
         closestVeh.isPlayerControlled = true;
@@ -5721,6 +5739,7 @@ export default function App() {
         veh.damage = createDefaultVehicleDamage(veh.length, veh.width);
         veh.engineState = createDefaultEngineState(veh.type);
         veh.fuelSystem = createDefaultFuelSystem(veh.type);
+        applyPowertrain(veh);
         setDamageDetails({
           engineSmoking: false,
           engineFire: false,
@@ -5741,6 +5760,7 @@ export default function App() {
       veh.damage = createDefaultVehicleDamage(veh.length, veh.width);
       veh.engineState = createDefaultEngineState(veh.type);
       veh.fuelSystem = createDefaultFuelSystem(veh.type);
+      applyPowertrain(veh);
     }
     setDamageDetails({
       engineSmoking: false,
@@ -5797,6 +5817,7 @@ export default function App() {
         veh.damage = createDefaultVehicleDamage(veh.length, veh.width);
         veh.engineState = createDefaultEngineState(veh.type);
         veh.fuelSystem = createDefaultFuelSystem(veh.type);
+        applyPowertrain(veh);
       }
     }
 
@@ -7702,8 +7723,8 @@ export default function App() {
           saves={saves}
           onLoadSave={handleLoadSave}
           onDeleteSave={handleDeleteSave}
-          onNewGame={({ spawnId, saveName, timeHour: newTime, weather: newWeather, mode, vehicleType, vehicleColor }) => {
-            handleNewGame({ spawnId, mode, vehicleType, vehicleColor });
+          onNewGame={({ spawnId, saveName, timeHour: newTime, weather: newWeather, mode, vehicleType, vehicleColor, powertrain }) => {
+            handleNewGame({ spawnId, mode, vehicleType, vehicleColor, powertrain });
             if (newTime !== undefined) {
               setTimeHour(newTime);
               timeHourRef.current = newTime;

@@ -1,4 +1,5 @@
-import { CAR_CONFIGS, canVehicleHaveHitch, createDefaultEngineState, createDefaultFuelSystem, createDefaultFluidTank, ensureVehicleFluidTank, liquidTypeToStainType, createDefaultVehicleDamage, ensureVehicleDamage, getVehicleFuelCapPosition, getVehicleAxleGeometry, isTrailerVehicle, isRoadMachinery, getVehicleDriveType, SPEED_KMH_TO_PX_S, PX_S_TO_SPEED_KMH, getLPGDefaultCapacity, cycleVehicleDiffLock, getVehicleDiffCapabilities, ensureVehicleDiffLock, getVehicleHeadlightDynamicState } from './vehicleHelpers';
+import { CAR_CONFIGS, canVehicleHaveHitch, createDefaultEngineState, createDefaultFuelSystem, createDefaultFluidTank, ensureVehicleFluidTank, liquidTypeToStainType, createDefaultVehicleDamage, ensureVehicleDamage, getVehicleFuelCapPosition, getVehicleAxleGeometry, isTrailerVehicle, isRoadMachinery, getVehicleDriveType, SPEED_KMH_TO_PX_S, PX_S_TO_SPEED_KMH, getLPGDefaultCapacity, cycleVehicleDiffLock, getVehicleDiffCapabilities, ensureVehicleDiffLock,   getVehicleHeadlightDynamicState } from './vehicleHelpers';
+import { applyPowertrain } from './powertrainVariants';
 import { Building, GameWorld, InputState, Particle, Pedestrian, Player, SkidMark, Vehicle, WheelState, StreetProp, FluidStainType, FluidStain, Roundabout, RollingStockCar, WorldWind, RoadSegment, Intersection } from './types';
 import { getBuildingLayout, constrainPlayerToInterior } from './buildingInteriors';
 import { constrainPlayerToBusInterior } from './busInteriorSystem';
@@ -1927,11 +1928,16 @@ export function applyVehicleDamageAndDeformation(
 ) {
   car.damage = ensureVehicleDamage(car);
   subdivideNodes(car);
+  let spawnedMissingPowertrain = false;
   if (!car.engineState) {
     car.engineState = createDefaultEngineState(car.type);
+    spawnedMissingPowertrain = true;
   }
   if (!car.fuelSystem) {
     car.fuelSystem = createDefaultFuelSystem(car.type);
+  }
+  if (spawnedMissingPowertrain) {
+    applyPowertrain(car);
   }
   ensureVehicleFluidTank(car);
 
@@ -3170,11 +3176,16 @@ export function emitVehicleExhaust(car: Vehicle, dt: number, world: GameWorld) {
 
 // --- MODULAR VEHICLE TICK SYSTEMS (ENGINE, COOLING, OIL, FUEL, SUSPENSION) ---
 export function updateVehicleSystems(car: Vehicle, dt: number, world: GameWorld) {
+  let spawnedMissingPowertrain = false;
   if (!car.engineState) {
     car.engineState = createDefaultEngineState(car.type, !car.isParked, !!car.isParked);
+    spawnedMissingPowertrain = true;
   }
   if (!car.fuelSystem) {
     car.fuelSystem = createDefaultFuelSystem(car.type, !!car.isParked);
+  }
+  if (spawnedMissingPowertrain && !isTrailerVehicle(car)) {
+    applyPowertrain(car);
   }
   car.damage = ensureVehicleDamage(car);
 
@@ -3270,9 +3281,11 @@ export function updateVehicleSystems(car: Vehicle, dt: number, world: GameWorld)
     const baseHeat = car.acOn ? 2.9 : 2.4; // A/C compressor adds extra load and heat generation
     // Combustion heat scales quadratically with RPM and linearly with throttle
     // Heavy road machinery runs with steady governed industrial diesel RPM without runaway heat spikes
+    // Powertrain variant: engine thermal character * firmware load (turbo boost adds extra heat)
+    const pwHeatMult = (eng.heatMult ?? 1.0) * (1 + (eng.turboBoost ?? 0) * 0.35);
     const heatGen = isMachinery
-      ? (1.2 + Math.pow(rpmNorm, 1.1) * 2.6) * (0.45 + throttleRatio * 0.55)
-      : (baseHeat + Math.pow(rpmNorm, 1.8) * 8.8) * (0.45 + throttleRatio * 0.55);
+      ? (1.2 + Math.pow(rpmNorm, 1.1) * 2.6) * (0.45 + throttleRatio * 0.55) * pwHeatMult
+      : (baseHeat + Math.pow(rpmNorm, 1.8) * 8.8) * (0.45 + throttleRatio * 0.55) * pwHeatMult;
 
     let cooling = 0;
     if (eng.radiatorWater > 10) {
@@ -3623,11 +3636,22 @@ export function updateVehicleSystems(car: Vehicle, dt: number, world: GameWorld)
   // --- REALISTIC DRIVING FUEL CONSUMPTION (Influenced by Chip Tuning & GBO/LPG) ---
   if (eng.engineRunning && fuel) {
     let consumptionRate = 0.0003 + (eng.engineRPM / 3000) * 0.0012; // liters per second
+    // Powertrain variant: engine appetite * firmware map
+    if (eng.consumptionMult !== undefined) {
+      consumptionRate *= eng.consumptionMult;
+    }
+    // Turbo enrichment under boost (spoken: fuel mixture goes richer under load)
+    if ((eng.turboBoost ?? 0) > 0.05) {
+      consumptionRate *= 1 + (eng.turboBoost ?? 0) * 0.6;
+    }
     if (car.acOn) {
       consumptionRate *= 1.15; // A/C compressor parasite load (+15% fuel consumption)
     }
-    if ((car as any).hasChiptuning) {
-      consumptionRate *= 0.85; // 15% fuel economy from optimized timing & AFR
+    // Firmware-aware chip tuning discount (only eco maps actually save fuel; power maps already cost more)
+    if (eng.chipLevel === 1) {
+      consumptionRate *= 0.88; // eco ECU map: optimized timing & AFR
+    } else if ((car as any).hasChiptuning && eng.chipLevel === undefined) {
+      consumptionRate *= 0.85; // legacy chiptuning vehicles
     }
 
     const isLpgRunning = car.hasGBO && fuel.gboActive !== false && (fuel.gboLevel ?? 0) > 0 && (eng.temperature ?? 20) >= 40;
@@ -7531,6 +7555,18 @@ export function updateVehiclePhysics(
         redlineRPM = 5200;
         maxRPM = 6200;
       }
+
+      // --- Powertrain Variant: engine-specific RPM bands (motor + firmware + governor) ---
+      if (eng.idleRPM !== undefined) {
+        idleRPM = eng.idleRPM;
+      }
+      if (eng.redlineRPM !== undefined) {
+        redlineRPM = Math.max(idleRPM + 600, eng.redlineRPM);
+      }
+      if (eng.maxRPMLimit !== undefined) {
+        maxRPM = Math.max(redlineRPM + 100, eng.maxRPMLimit);
+      }
+
       const stallThreshold = idleRPM * 0.55;
       
       // Transfer Case Toggle Logic
@@ -7635,7 +7671,11 @@ export function updateVehiclePhysics(
           if (eng.currentGear <= 0) eng.currentGear = 1;
 
           // Smooth automatic upshifts & downshifts with cooldown (only if engine is running)
-          if (eng.engineRunning && eng.shiftCooldown <= 0) {
+          // CVT: continuously variable belt — no stepped shifts at all (pulley ratio varies)
+          if (eng.transmissionKind === 'CVT') {
+            eng.shiftCooldown = 0;
+            // keep virtual first gear; ratio behavior handled in RPM coupling below
+          } else if (eng.engineRunning && eng.shiftCooldown <= 0) {
             const maxForwardGear = (eng.gearRatios?.length || 7) - 2;
             
             // Adaptive Shift Logic (Smart Automatic Transmission)
@@ -7651,12 +7691,19 @@ export function updateVehiclePhysics(
 
             if (eng.engineRPM > upshiftRPM && eng.currentGear < maxForwardGear) {
               eng.currentGear++;
-              eng.shiftCooldown = 0.35;
+              // DSG dual-clutch: nearly instant; AMT robot: slow and jerky; classic AT: torque-converter pace
+              eng.shiftCooldown = eng.transmissionKind === 'DSG' ? 0.11 : eng.transmissionKind === 'AMT' ? 0.8 : 0.35;
               sound.playGearShift();
+              if (eng.transmissionKind === 'AMT') {
+                vehicle.speed *= 0.86; // characteristic robotized "clunk" jolt on engagement
+              }
             } else if (eng.engineRPM < downshiftRPM && eng.currentGear > 1) {
               eng.currentGear--;
-              eng.shiftCooldown = 0.35;
+              eng.shiftCooldown = eng.transmissionKind === 'DSG' ? 0.11 : eng.transmissionKind === 'AMT' ? 0.8 : 0.35;
               sound.playGearShift();
+              if (eng.transmissionKind === 'AMT') {
+                vehicle.speed *= 0.88;
+              }
             }
           }
         }
@@ -7928,7 +7975,9 @@ export function updateVehiclePhysics(
         const gearRatio = Math.abs(currentGearRatio);
         const v_speed = Math.abs(vehicle.speed);
         
-        const maxSpeedPx = (cfg.maxSpeed || 150) * SPEED_KMH_TO_PX_S;
+        // Variant top-speed factors: tire speed rating + power reserve (powerPw)
+        const pwTopSpeedMult = (eng.tireTopSpeedMult ?? 1) * Math.pow(Math.max(0.5, eng.powerMult ?? 1), 0.35);
+        const maxSpeedPx = (cfg.maxSpeed || 150) * pwTopSpeedMult * SPEED_KMH_TO_PX_S;
         const reverseMaxSpeedPx = (cfg.reverseMaxSpeed || 35) * SPEED_KMH_TO_PX_S;
 
         // Speed corresponding to redline in current gear
@@ -7961,6 +8010,13 @@ export function updateVehiclePhysics(
         } else if (vehicle.type === 'supercar'|| vehicle.type === 'sports'|| vehicle.type === 'moto_sport') {
           rpmRiseRate = 22.0;
           rpmDecayRate = 16.0;
+        }
+
+        // Powertrain variant response: flywheel inertia / sport cams / ECU map
+        if (eng.rpmResponseMult !== undefined && eng.rpmResponseMult !== 1.0) {
+          const resp = eng.rpmResponseMult;
+          rpmRiseRate *= resp;
+          rpmDecayRate *= Math.max(0.45, 0.9 + (resp - 1.0) * 0.55);
         }
 
         // Full throttle (100%) allows RPM to reach into redline zone (up to 45% between redline & maxRPM)
@@ -7998,6 +8054,12 @@ export function updateVehiclePhysics(
             // Industrial hydrostatic diesel governor: RPM is governed smoothly around 1400-1650 RPM under load
             const governedRPM = idleRPM + (1600 - idleRPM) * Math.min(1.0, Math.max(0.15, effectiveThrottle * 1.05));
             coupledRPM = governedRPM;
+          } else if (eng.transmissionKind === 'CVT' && eng.transmissionType === 'AUTO') {
+            // Belt CVT: engine stays pinned in its power band while the pulley ratio
+            // varies continuously with speed. No stepped gears, no shift shock.
+            const cvtThrottle = eng.isDieselRunaway ? 1.0 : effectiveThrottle;
+            const cvtTargetRPM = idleRPM + (redlineRPM - idleRPM) * (0.16 + cvtThrottle * 0.52);
+            coupledRPM = Math.max(Math.min(wheelDrivenRPM, cvtTargetRPM), idleRPM + 120);
           } else if (eng.transmissionType === 'AUTO') {
             const launchRPM = idleRPM + effectiveThrottle * (maxThrottleRPM - idleRPM) * 0.32;
             coupledRPM = Math.max(launchRPM, wheelDrivenRPM);
@@ -8030,9 +8092,36 @@ export function updateVehiclePhysics(
         const normRPM = Math.max(0, Math.min(1.15, (eng.engineRPM - idleRPM) / Math.max(1, redlineRPM - idleRPM)));
         T_factor = eng.isDieselRunaway ? 1.25 : (0.75 + 0.25 * Math.sin(Math.min(1.0, normRPM) * Math.PI));
         
-        // Apply Chip Tuning torque boost (+15% torque)
-        if (vehicle.hasChiptuning) {
+        // Apply Chip Tuning torque boost (+15% torque) — only for legacy non-variant vehicles
+        if (vehicle.hasChiptuning && eng.chipLevel === undefined) {
           T_factor *= 1.15;
+        }
+
+        // --- Powertrain variant: engine & firmware base torque ---
+        if (eng.powerMult !== undefined) {
+          T_factor *= eng.powerMult;
+        }
+
+        // --- Turbocharger / supercharger boost dynamics (spool-up & lag) ---
+        if (eng.turboSpec && eng.turboSpec.boostMax > 0) {
+          const spec = eng.turboSpec;
+          const loadThrottle = eng.isDieselRunaway ? 1.0 : effectiveThrottle;
+          const rpmReady = Math.min(1.0, Math.max(0, (eng.engineRPM - spec.spoolRPM) / Math.max(500, spec.spoolRPM * 0.55)));
+          const boostTarget = loadThrottle > 0.05 ? spec.boostMax * rpmReady : 0;
+          const prevBoost = eng.turboBoost ?? 0;
+          eng.turboBoost = Math.max(0, prevBoost + (boostTarget - prevBoost) * Math.min(1.0, spec.lagRate * dt));
+          // Forced induction multiplies available torque (+ extra heat load)
+          T_factor *= 1 + eng.turboBoost;
+          if (eng.turboBoost > 0.02) {
+            eng.temperature = Math.min(145, (eng.temperature ?? 85) + eng.turboBoost * (spec.isSupercharged ? 1.5 : 3.0) * dt);
+          }
+        }
+
+        // --- Firmware knock risk at high sustained load (маловатый октан + агрессивные углы) ---
+        if ((eng.knockRisk ?? 0) > 0 && effectiveThrottle > 0.5 && eng.engineRPM > idleRPM + (redlineRPM - idleRPM) * 0.7
+            && Math.random() < (eng.knockRisk ?? 0) * 0.5 * dt) {
+          eng.engineKnocking = true;
+          T_factor *= 0.85;
         }
 
         if (normRPM > 1.0 && !eng.isDieselRunaway) {
@@ -8169,13 +8258,22 @@ export function updateVehiclePhysics(
                 radius: 4, color: '#e2e8f0', alpha: 0.8, life: 0, maxLife: 0.5, type: 'engine_smoke'});
             }
           }
-          // 2. Sub-Octane Fuel
-          if (vehicle.requiredFuel === 'ai95'&& fuel.octaneNumber === 92) {
-            fuelFactor *= 0.85;
-            if (throttle > 0.8 && Math.random() < 0.08 * dt) {
-              eng.temperature += 5;
+          // 2. Sub-Octane Fuel (generalized: engine/firmware minimum octane requirement)
+          const reqOctane = (eng.minOctaneRequirement !== undefined)
+            ? eng.minOctaneRequirement
+            : ((vehicle.requiredFuel as string) === 'ai98' ? 98
+              : (vehicle.requiredFuel as string) === 'ai100' ? 100
+              : vehicle.requiredFuel === 'ai95' ? 95
+              : vehicle.requiredFuel === 'ai92' ? 92 : 0);
+          const tankOctane = fuel.octaneNumber;
+          if (reqOctane > 0 && tankOctane > 0 && tankOctane < reqOctane) {
+            const octaneDeficit = Math.min(8, reqOctane - tankOctane);
+            fuelFactor *= Math.max(0.45, 1.0 - octaneDeficit * 0.06);
+            const knockChance = (0.02 + 0.05 * (eng.knockRisk ?? 0.15)) * dt;
+            if (throttle > 0.7 && Math.random() < knockChance) {
+              eng.temperature += 4 + octaneDeficit;
               eng.engineKnocking = true;
-              vehicle.speed *= 0.96;
+              vehicle.speed *= 0.965;
               sound.playHurt();
             }
           }
@@ -8265,7 +8363,7 @@ export function updateVehiclePhysics(
             }
 
             const speedScaleFactor = SPEED_KMH_TO_PX_S / 2.7778; // 1.6
-            driveAccel = (cfg.acceleration || 30) * speedScaleFactor * gearAccelMult * T_factor * fuelFactor * effectiveThrottle * clutchGrip * speedCapFactor;
+            driveAccel = (cfg.acceleration || 30) * speedScaleFactor * gearAccelMult * T_factor * fuelFactor * effectiveThrottle * clutchGrip * speedCapFactor * (eng.transmissionEfficiency ?? 0.97);
           }
         }
         
@@ -8523,7 +8621,8 @@ export function updateVehiclePhysics(
       } else {
         // Natural rolling resistance, cold transmission viscous drag (-30°C frost) and aerodynamic drag (v^2)
         const vAbs = Math.abs(vehicle.speed);
-        let rollingResistance = 3.0 + vAbs * 0.008;
+        const tireRollingMult = eng?.tireRollingMult ?? 1.0;
+        let rollingResistance = (3.0 + vAbs * 0.008) * tireRollingMult;
         
         // Cold gear oil / ATF viscosity drag (< 15°C)
         const transTemp = eng?.transmissionTemp ?? 20;
@@ -8533,7 +8632,7 @@ export function updateVehiclePhysics(
         }
 
         if (extraDrag > 0) {
-          rollingResistance += extraDrag;
+          rollingResistance += extraDrag * (0.55 + 0.45 * tireRollingMult);
         }
         
         let aeroCoeff = 0.000045;
@@ -8625,8 +8724,8 @@ export function updateVehiclePhysics(
                           vehicle.type === 'roller_compact_sidewalk' || 
                           vehicle.type === 'roller_pneumatic';
 
-    // Mass properties & Moments of Inertia
-    const totalMass = Math.max(300, (cfg.mass || 1400) * massRatio);
+    // Mass properties & Moments of Inertia (includes powertrain variant hard-parts mass)
+    const totalMass = Math.max(300, ((cfg.mass || 1400) + (vehicle.massBonusKg || 0)) * massRatio);
     const Iz = (totalMass / 12) * ((cfg.length || 45) ** 2 + (cfg.width || 20) ** 2) * 1.15;
 
     // Center of gravity distances to axles (52% front, 48% rear)
@@ -8756,10 +8855,23 @@ export function updateVehiclePhysics(
     const tireDmgRR = (dmg?.flatTireRR || dmg?.wheelPopRR) ? 0.35 : 1.0;
 
     // Combined coefficient of friction (mu) for each individual wheel contact patch
+    // Powertrain variant tire set: grip in dry / wet / ice conditions (studded advantage on ice)
+    const tireSetGripMult = eng?.tireGripMult ?? 1.0;
+    const tireSetWetMult = eng?.tireWetGripMult ?? 1.0;
+    const tireSetIceMult = eng?.tireIceGripMult ?? 1.0;
     let muFL = weatherGrip * stainFL * surfFL.grip * offroadFL.wetGripMult * tireDmgFL;
     let muFR = weatherGrip * stainFR * surfFR.grip * offroadFR.wetGripMult * tireDmgFR;
     let muRL = weatherGrip * stainRL * surfRL.grip * offroadRL.wetGripMult * tireDmgRL;
     let muRR = weatherGrip * stainRR * surfRR.grip * offroadRR.wetGripMult * tireDmgRR;
+    if (tireSetGripMult !== 1.0) {
+      muFL *= tireSetGripMult; muFR *= tireSetGripMult; muRL *= tireSetGripMult; muRR *= tireSetGripMult;
+    }
+    if (isWetSurface && tireSetWetMult !== 1.0) {
+      muFL *= tireSetWetMult; muFR *= tireSetWetMult; muRL *= tireSetWetMult; muRR *= tireSetWetMult;
+    }
+    if (isIcySurface && tireSetIceMult !== 1.0) {
+      muFL *= tireSetIceMult; muFR *= tireSetIceMult; muRL *= tireSetIceMult; muRR *= tireSetIceMult;
+    }
 
     if (vehicle.isHeavySuspended) {
       muFL *= 1.10; muFR *= 1.10; muRL *= 1.10; muRR *= 1.10;

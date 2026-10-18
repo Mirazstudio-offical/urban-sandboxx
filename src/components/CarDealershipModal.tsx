@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { CarType, Vehicle, Player, GameWorld } from '../types';
 import { CAR_CONFIGS, createDefaultEngineState, createDefaultFuelSystem, createDefaultVehicleDamage, isRoadMachinery } from '../vehicleHelpers';
+import { applyPowertrain } from '../powertrainVariants';
 import { 
   getVehicleBasePolygon, 
   getVehicleCabinDimensions, 
@@ -313,7 +314,7 @@ export const DEALERSHIP_CARS: DealershipCarModel[] = [
   },
   {
     id: 'deal_sedan_standard',
-    type: 'sedan_standard',
+    type: 'sedan_classic' as CarType,
     name: 'Apex Vantage 1.6L Family Sedan',
     nameRu: 'Apex Vantage',
     brand: 'Apex',
@@ -1610,6 +1611,13 @@ export const CarDealershipModal: React.FC<Props> = ({
       plannedTurn: 'straight'} as Vehicle;
 
     if (!world.vehicles) world.vehicles = [];
+    applyPowertrain(newVeh);
+    // Respect the transmission choice made in the dealership configurator
+    if (newVeh.engineState) {
+      newVeh.engineState.transmissionType = transmissionMode as any;
+      if (transmissionMode === 'AUTO') newVeh.engineState.autoGearMode = 'P';
+      else newVeh.engineState.autoGearMode = undefined;
+    }
     world.vehicles.push(newVeh);
 
     // Create & Add Items to Player: Key, PTS, Tech Passport

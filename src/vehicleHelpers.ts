@@ -16,6 +16,7 @@ import {
   VehicleDiffLockState 
 } from './types';
 import { createVehicleNodeBeamSystem } from './nodeBeamPhysics';
+import { getPowertrainPickByIds, TRANSMISSION_VARIANTS } from './powertrainVariants';
 
 export const SPEED_KMH_TO_PX_S = 4.4444; // 1.6x speedup for realistic screen motion (formerly 2.7778)
 export const PX_S_TO_SPEED_KMH = 0.225;  // 1 / 4.4444 (formerly 0.36)
@@ -148,12 +149,27 @@ export function ensureVehicleEngineState(veh: Vehicle): EngineState {
   }
   const eng = veh.engineState;
   
-  const defaultEng = createDefaultEngineState(veh.type);
-  
-  // Force update to ensure correct length for 9-speed/6-speed configs if mismatched
-  if (!eng.gearRatios || !Array.isArray(eng.gearRatios) || eng.gearRatios.length !== defaultEng.gearRatios.length) {
-    eng.gearRatios = defaultEng.gearRatios;
-    eng.finalDriveRatio = defaultEng.finalDriveRatio;
+  // Resolve defaults from the vehicle's stored powertrain variant (if any), otherwise from type
+  const storedPick = getPowertrainPickByIds({
+    engineId: eng.engineId,
+    transmissionId: eng.transmissionId,
+    tuneId: eng.tuneId,
+    tireSetId: eng.tireSetId,
+    turboKitId: eng.turboKitId
+  });
+  const hasVariant = storedPick !== null;
+
+  // Force update to ensure correct length for 9-speed/6-speed/config if mismatched
+  const expectedRatioLen = hasVariant ? storedPick!.transmission.ratios.length : createDefaultEngineState(veh.type).gearRatios?.length;
+  if (!eng.gearRatios || !Array.isArray(eng.gearRatios) || eng.gearRatios.length !== expectedRatioLen) {
+    if (hasVariant) {
+      eng.gearRatios = storedPick!.transmission.ratios.slice();
+      eng.finalDriveRatio = storedPick!.transmission.finalDrive;
+    } else {
+      const defaultEng = createDefaultEngineState(veh.type);
+      eng.gearRatios = defaultEng.gearRatios;
+      eng.finalDriveRatio = defaultEng.finalDriveRatio;
+    }
     // ensure currentGear is within bounds
     if (eng.currentGear > eng.gearRatios.length - 2) {
       eng.currentGear = eng.gearRatios.length - 2;
@@ -162,17 +178,52 @@ export function ensureVehicleEngineState(veh: Vehicle): EngineState {
 
   // Force update transfer case attributes
   if (eng.hasTransferCase === undefined) {
-    eng.hasTransferCase = defaultEng.hasTransferCase;
-    eng.transferCaseMode = defaultEng.transferCaseMode || 'HIGH';
+    eng.hasTransferCase = hasVariant
+      ? storedPick!.transmission.divider === 'divider'
+      : createDefaultEngineState(veh.type).hasTransferCase;
+    eng.transferCaseMode = eng.transferCaseMode || 'HIGH';
+  }
+
+  // Restore variant RPM/power overlays if lost (e.g. older save without variant fields)
+  if (hasVariant) {
+    const { engine, tune } = storedPick!;
+    if (eng.idleRPM === undefined) {
+      eng.idleRPM = engine.idleRPM;
+      eng.redlineRPM = Math.round(engine.redlineRPM * tune.redlineMult);
+      eng.maxRPMLimit = Math.round(engine.maxRPM * Math.max(1.0, tune.redlineMult));
+      eng.powerMult = engine.powerMult * tune.powerMult;
+      eng.consumptionMult = engine.consumptionMult * tune.consumptionMult;
+      eng.heatMult = engine.heatMult * tune.heatMult;
+      eng.rpmResponseMult = engine.rpmResponseMult * tune.rpmResponseMult;
+      eng.minOctaneRequirement = engine.fuel === 'diesel' ? 0 : Math.max(
+        engine.fuel === 'ai98' ? 98 : engine.fuel === 'ai100' ? 100 : engine.fuel === 'ai95' ? 95 : 92,
+        tune.minOctane
+      );
+      eng.knockRisk = tune.knockRisk;
+      eng.chipLevel = tune.chipLevel;
+    }
+    if (eng.turboSpec === undefined) eng.turboSpec = null;
+    if (eng.turboBoost === undefined) eng.turboBoost = 0;
+    if (eng.tireGripMult === undefined) eng.tireGripMult = storedPick!.tires.gripMult;
+    if (eng.tireWetGripMult === undefined) eng.tireWetGripMult = storedPick!.tires.wetGripMult;
+    if (eng.tireIceGripMult === undefined) eng.tireIceGripMult = storedPick!.tires.iceGripMult;
+    if (eng.tireRollingMult === undefined) eng.tireRollingMult = storedPick!.tires.rollingMult;
+    if (eng.tireTopSpeedMult === undefined) eng.tireTopSpeedMult = storedPick!.tires.topSpeedMult;
+    if (eng.transmissionKind === undefined) {
+      eng.transmissionKind = storedPick!.transmission.kind;
+      eng.transmissionEfficiency = storedPick!.transmission.efficiency;
+    }
   }
 
   const isMachinery = isRoadMachinery(veh.type);
   if (isMachinery) {
     // Road machinery is strictly hydrostatic drive (ГСТ): AUTO, F/N/R, no manual clutch or stepped gears
+    const hydroTrn = TRANSMISSION_VARIANTS.find(t => t.id === 'trn_hydro_2r');
     eng.transmissionType = 'AUTO';
     if (!eng.autoGearMode) eng.autoGearMode = veh.isParked ? 'P' : 'D';
-    eng.gearRatios = defaultEng.gearRatios;
-    eng.finalDriveRatio = defaultEng.finalDriveRatio;
+    eng.gearRatios = hydroTrn ? hydroTrn.ratios.slice() : [-3.6, 0, 5.2, 2.0];
+    eng.finalDriveRatio = hydroTrn ? hydroTrn.finalDrive : 6.2;
+    eng.transmissionKind = 'HYDRO';
     eng.tractorRange = undefined;
     eng.clutchPedal = 1.0;
   } else if (veh.type.startsWith('tractor_') && eng.tractorRange === undefined) {

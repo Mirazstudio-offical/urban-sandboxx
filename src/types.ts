@@ -409,12 +409,52 @@ export interface EngineState {
   isHeavySuspended?: boolean;
   hasGBO?: boolean;
 
+  // Powertrain Variant System (двигатели, КПП, прошивки, шины, турбо)
+  engineId?: string;                 // Engine variant id (powertrainVariants.ts)
+  transmissionId?: string;           // Transmission variant id
+  tuneId?: string;                   // ECU firmware/ECU map id
+  tireSetId?: string;                // Tire set id
+  turboKitId?: string;               // Turbo kit id ('trb_none' = naturally aspirated)
+  transmissionKind?: 'MT' | 'AT' | 'DSG' | 'AMT' | 'CVT' | 'HYDRO' | 'RANGE';
+  transmissionEfficiency?: number;   // 0.85 - 0.98 drivetrain mechanical efficiency
+  powerMult?: number;                // engine * tune torque/power factor
+  consumptionMult?: number;          // fuel consumption multiplier
+  heatMult?: number;                 // engine thermal load multiplier
+  rpmResponseMult?: number;          // flywheel inertia responsiveness multiplier
+  idleRPM?: number;                  // engine-specific idle
+  redlineRPM?: number;               // engine-specific governor cut-off (incl. tune extension)
+  maxRPMLimit?: number;              // engine-specific absolute mechanical RPM limit
+  minOctaneRequirement?: number;     // required octane (92/95/98/100); 0 for diesel
+  knockRisk?: number;                // 0..1 additional detonation probability at full load
+  chipLevel?: number;                // 0 = stock, 1 = eco, 2 = sport/aggressive ECU map
+  turboSpec?: TurboRuntimeSpec | null; // turbo kit specs (null = NA engine)
+  turboBoost?: number;               // current live boost level 0..boostMax
+
+  // Tire set characteristics (multipliers into friction circle / dragging)
+  tireGripMult?: number;             // dry grip multiplier into mu
+  tireWetGripMult?: number;          // grip multiplier when surface is wet
+  tireIceGripMult?: number;          // grip multiplier on ice (stud advantage)
+  tireRollingMult?: number;          // rolling resistance multiplier
+  tireTopSpeedMult?: number;         // tire speed rating effect on top speed
+  tireStudded?: boolean;
+  tireOffroad?: boolean;
+
   // Offroad Physics & Terrain Interaction
   offroadSinkDepth?: number;   // 0.0 to 1.5 (current depth sunken into mud/soil)
   isBoggedDown?: boolean;      // vehicle struggling in deep mud / high drag
 }
 
 export type FuelType = 'ai92' | 'ai95' | 'ai98' | 'ai100' | 'diesel' | 'lpg';
+
+export interface TurboRuntimeSpec {
+  id: string;
+  nameRu: string;
+  boostMax: number;      // fraction of extra torque at full boost
+  spoolRPM: number;      // RPM where boost starts building
+  lagRate: number;       // 1/s spool responsiveness
+  isSupercharged?: boolean;
+  isTwin?: boolean;
+}
 
 export interface GasPumpNozzle {
   fuelType: FuelType;
@@ -890,6 +930,8 @@ export interface Vehicle {
   // Tuning & Equipment
   hasChiptuning?: boolean;
   isHeavySuspended?: boolean;
+  powertrainLabel?: string;
+  massBonusKg?: number;              // hard-parts mass added by powertrain variants (engine+box+turbo+tires)
 
   // Offroad Physics & Terrain Interaction
   offroadSinkDepth?: number;         // Soil sink depth (0 = rigid surface, 1.0+ = deep mud/bog)

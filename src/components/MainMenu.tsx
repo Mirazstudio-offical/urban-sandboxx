@@ -19,7 +19,7 @@ import {
   type User as FirebaseUser
 } from '../firebase';
 import { WeatherType } from '../types';
-import { VehicleSelect } from './VehicleSelect';
+import { VehicleSelect, type PowertrainSelection } from './VehicleSelect';
 
 export interface SaveSlotData {
   id: string;
@@ -56,6 +56,7 @@ export interface MainMenuProps {
     mode: 'career' | 'freeroam';
     vehicleType?: string;
     vehicleColor?: string;
+    powertrain?: PowertrainSelection;
   }) => void;
   currentSettings: {
     fpsLimit: number;
@@ -1152,8 +1153,8 @@ export const MainMenu: React.FC<MainMenuProps> = ({
       <VehicleSelect
         defaultSpawnId={spawn.id}
         onBack={() => go('freeroam_map', true)}
-        onStart={({ spawnId, saveName, vehicleType, vehicleColor }) => {
-          onNewGame({ spawnId, saveName, timeHour: newTime, weather: newWeather, mode: 'freeroam', vehicleType, vehicleColor });
+        onStart={({ spawnId, saveName, vehicleType, vehicleColor, powertrain }) => {
+          onNewGame({ spawnId, saveName, timeHour: newTime, weather: newWeather, mode: 'freeroam', vehicleType, vehicleColor, powertrain });
         }}
       />
     )}
