@@ -8488,8 +8488,10 @@ export function updateVehiclePhysics(
         let driveAccel = 0;
         if (!isParkedMode && !isNeutralMode) {
           let effectiveThrottle = eng.isDieselRunaway ? 1.0 : throttle;
-          // Automatic transmission creep in D or R when no pedal is pressed
-          if (eng.transmissionType === 'AUTO'&& brake === 0 && throttle === 0 && Math.abs(vehicle.speed) * PX_S_TO_SPEED_KMH < 5.8) {
+          // Automatic transmission creep in D/R: только если машина уже катится.
+          // Крол с полного нуля давал «стоящие» машины, которые сами уезжали
+          // и дёргались на месте.
+          if (eng.transmissionType === 'AUTO'&& brake === 0 && throttle === 0 && Math.abs(vehicle.speed) > 0.6 && Math.abs(vehicle.speed) * PX_S_TO_SPEED_KMH < 5.8) {
             effectiveThrottle = 0.16;
           }
           if (eng.isDieselRunaway) {
@@ -9985,6 +9987,12 @@ export function updateVehiclePhysics(
           if (vehicle.idmAcceleration !== undefined) {
             // IDM Controlled speed and brake lights
             vehicle.speed = Math.max(0, vehicle.speed + vehicle.idmAcceleration * dt);
+            // AI на целевой нулевой скорости не должен «кролиться» от
+            // микроскопического плюса IDM: иначе стоящая машина дрожит и едет.
+            if ((vehicle.targetSpeed || 0) <= 0.25 && vehicle.speed < 0.6) {
+              vehicle.speed = 0;
+              vehicle.idmAcceleration = 0;
+            }
             vehicle.brakeLightsOn = vehicle.idmAcceleration < -20 * speedScaleFactor || vehicle.speed * PX_S_TO_SPEED_KMH < 1.4;
           } else {
             if (vehicle.speed < vehicle.targetSpeed) {
@@ -10486,8 +10494,13 @@ export function updateVehiclePhysics(
       const m1 = Math.max(100, vehicle.mass || 1400);
       const m2 = Math.max(100, other.mass || 1400);
       const totalMass = m1 + m2;
-      const ratioSelf = m2 / totalMass;
-      const ratioOther = m1 / totalMass;
+      // Припаркованную машину нельзя «сдувать» мелкими касаниями: на низкой
+      // скорости она работает как статическое препятствие и не начинает
+      // дрожать/уезжать от соседнего трафика.
+      const relSpeed = Math.hypot((vehicle.vx || 0) - (other.vx || 0), (vehicle.vy || 0) - (other.vy || 0));
+      const protectOther = !!other.isParked && relSpeed < 40;
+      const ratioSelf = protectOther ? 1 : m2 / totalMass;
+      const ratioOther = protectOther ? 0 : m1 / totalMass;
 
       // 1. Position Separation: resolve penetration smoothly and proportionally without artificial 3.2px clamp
       // Using Baumgarte position resolution factor (0.75 of overlap)
@@ -10518,16 +10531,17 @@ export function updateVehiclePhysics(
 
       // Moments of inertia
       const I1 = m1 * (vehicle.width * vehicle.width + vehicle.length * vehicle.length) / 12;
-      const I2 = m2 * (other.width * other.width + other.length * other.length) / 12;
+      const I2 = protectOther ? 1 : m2 * (other.width * other.width + other.length * other.length) / 12;
 
       const invMass1 = 1 / m1;
-      const invMass2 = 1 / m2;
+      const invMass2 = protectOther ? 0 : 1 / m2;
+      const invI2 = protectOther ? 0 : 1 / I2;
 
       // Cross products: r x n
       const r1CrossN = rX_vehicle * col.normalY - rY_vehicle * col.normalX;
       const r2CrossN = rX_other * col.normalY - rY_other * col.normalX;
 
-      const invMassN = invMass1 + invMass2 + (r1CrossN * r1CrossN) / I1 + (r2CrossN * r2CrossN) / I2;
+      const invMassN = invMass1 + invMass2 + (r1CrossN * r1CrossN) / I1 + (r2CrossN * r2CrossN) * invI2;
 
       if (velAlongNormal < 0) {
         // --- RIGID-BODY COLLISION IMPULSE ---
@@ -10552,7 +10566,7 @@ export function updateVehiclePhysics(
           const tY = vTanY / vTanSpeed;
           const r1CrossT = rX_vehicle * tY - rY_vehicle * tX;
           const r2CrossT = rX_other * tY - rY_other * tX;
-          const invMassT = invMass1 + invMass2 + (r1CrossT * r1CrossT) / I1 + (r2CrossT * r2CrossT) / I2;
+          const invMassT = invMass1 + invMass2 + (r1CrossT * r1CrossT) / I1 + (r2CrossT * r2CrossT) * invI2;
           const jtIdeal = -vTanSpeed / Math.max(0.00001, invMassT);
 
           // Dynamic friction coefficient between body panels (0.45 - 0.65)
@@ -10577,7 +10591,7 @@ export function updateVehiclePhysics(
         const tau1 = -(rX_vehicle * totalImpulseY - rY_vehicle * totalImpulseX);
         const tau2 = (rX_other * totalImpulseY - rY_other * totalImpulseX);
         vehicle.angularVelocity = (vehicle.angularVelocity || 0) + tau1 / I1;
-        other.angularVelocity = (other.angularVelocity || 0) + tau2 / I2;
+        other.angularVelocity = (other.angularVelocity || 0) + tau2 * invI2;
 
         const scrapeSpeed = vTanSpeed;
 
@@ -10664,6 +10678,15 @@ export function updateVehiclePhysics(
       (other as any).lateralSlip = other.lateralVelocity;
       other.isDrifting = Math.abs(other.lateralVelocity) > 10.0 || Math.abs(other.angularVelocity || 0) > 0.8;
 
+      if (protectOther) {
+        other.vx = 0;
+        other.vy = 0;
+        other.speed = 0;
+        other.lateralVelocity = 0;
+        other.angularVelocity = 0;
+        other.isParked = true;
+      }
+
       // Wake up and spin out cars
       const totalImpactSpdKmh = Math.hypot(vehicle.vx - other.vx, vehicle.vy - other.vy) * PX_S_TO_SPEED_KMH;
 
@@ -10682,7 +10705,7 @@ export function updateVehiclePhysics(
         }
       }
 
-      if (!other.isPlayerControlled) {
+      if (!protectOther && !other.isPlayerControlled) {
         if (totalImpactSpdKmh > 18 || Math.abs(other.angularVelocity || 0) > 0.8) {
           other.spinoutTimer = Math.min(6.0, Math.max(1.5, 0.8 + totalImpactSpdKmh / 45));
           other.pushedTimer = Math.max(other.pushedTimer || 0, Math.min(5.0, 1.2 + totalImpactSpdKmh / 55));
@@ -10839,8 +10862,8 @@ export function updateVehiclePhysics(
           }
         } else {
           // Low speed contact (< 16 px/s): gentle bumper nudge / resting contact
-          vehicle.x += col.normalX * (col.depth + 0.5);
-          vehicle.y += col.normalY * (col.depth + 0.5);
+          vehicle.x += col.normalX * (col.depth + 0.03);
+          vehicle.y += col.normalY * (col.depth + 0.03);
           if (!vehicle.isPlayerControlled && (isVehicleDisabledOrCrashed(vehicle) || vehicle.aiState === 'stopping_obstacle')) {
             if (Math.hypot(vehicle.vx, vehicle.vy) < 2.0) {
               vehicle.speed = 0;
@@ -10905,8 +10928,8 @@ export function updateVehiclePhysics(
 
             applyVehicleDamageAndDeformation(vehicle, contactX, contactY, stationNormalSpeed, stationTangentialSpeed, world, 12000, true);
           } else {
-            vehicle.x += col.normalX * (col.depth + 0.5);
-            vehicle.y += col.normalY * (col.depth + 0.5);
+            vehicle.x += col.normalX * (col.depth + 0.03);
+            vehicle.y += col.normalY * (col.depth + 0.03);
             vehicle.speed *= 0.4;
             vehicle.vx *= 0.4;
             vehicle.vy *= 0.4;
@@ -10914,6 +10937,35 @@ export function updateVehiclePhysics(
         }
         break;
       }
+    }
+  }
+
+  // Parking hold / anti-creep deadzone. Без него машина без водителя могла
+  // бесконечно «дрожать» от остаточных шинных сил, крола АКПП и мелких
+  // импульсов, хотя игрок не даёт тяги.
+  {
+    const playerWantsMotion = !!input && (input.forward || input.backward);
+    const aiWantsMotion = !vehicle.isPlayerControlled && (
+      (vehicle.targetSpeed || 0) > 0.3 ||
+      (vehicle.idmAcceleration || 0) > 1.0
+    );
+    const busy = !!vehicle.activeCrumple ||
+      (vehicle.pushedTimer || 0) > 0 ||
+      (vehicle.spinoutTimer || 0) > 0 ||
+      !!vehicle.towedById ||
+      !!vehicle.trailerId;
+    const lowSpeed = Math.abs(vehicle.speed) < 0.6 &&
+      Math.hypot(vehicle.vx || 0, vehicle.vy || 0) < 0.6 &&
+      Math.abs(vehicle.angularVelocity || 0) < 0.08;
+    if (!playerWantsMotion && !aiWantsMotion && !busy && lowSpeed) {
+      vehicle.speed = 0;
+      vehicle.vx = 0;
+      vehicle.vy = 0;
+      vehicle.lateralVelocity = 0;
+      vehicle.angularVelocity = 0;
+      vehicle.knockbackVx = 0;
+      vehicle.knockbackVy = 0;
+      vehicle.knockbackSpin = 0;
     }
   }
 
