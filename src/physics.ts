@@ -7859,7 +7859,7 @@ export function updateVehiclePhysics(
         // Game setting "КПП: Авто" — manual gearbox shifts by itself for the player,
         // exactly like a proper automatic: early up, low-rpm down, with a cooldown
         if (playerAutoShiftPref === 'auto' && eng.engineRunning && eng.currentGear !== -1
-            && player && player.vehicleId === vehicle.id) {
+            && (vehicle.isPlayerControlled || (player && (player.currentVehicleId === vehicle.id || player.vehicleId === vehicle.id)))) {
           const maxFwdGear = (eng.gearRatios?.length || 7) - 2;
           const autoT = ((eng as any)._autoShiftTimer || 0) - dt;
           if (autoT > 0) {
