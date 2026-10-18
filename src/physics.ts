@@ -74,6 +74,75 @@ export function isArticulatedRoller(car: Vehicle): boolean {
   return car.type === 'roller_heavy_tandem' || car.type === 'roller_compact_sidewalk' || car.type === 'roller_pneumatic';
 }
 
+/**
+ * Реальное пятно контакта кузова с прямоугольным препятствием (стена, здание).
+ * Раньше точка контакта бралась «по центру носа», а ширина — по всему кузову, поэтому удар
+ * правой половиной мял весь перед одинаково. Теперь пятно берётся по узлам живого контура,
+ * которые зашли в препятствие: центр и ширина вдоль стены. Нормаль направлена от препятствия к машине.
+ */
+function computeBoxContactPatch(
+  car: Vehicle,
+  box: { x: number; y: number; width: number; height: number },
+  nX: number,
+  nY: number
+): { x: number; y: number; widthPx: number } {
+  const fallback = {
+    x: car.x - nX * (car.length / 2),
+    y: car.y - nY * (car.width / 2),
+    widthPx: car.width
+  };
+  const nodes = car.damage?.nodeBeam?.nodes;
+  const pts: { x: number; y: number }[] = [];
+  const cosA = Math.cos(car.angle);
+  const sinA = Math.sin(car.angle);
+  if (nodes && nodes.length >= 8) {
+    const perim = car.damage!.nodeBeam!.perimeterCount ?? 16;
+    for (let i = 0; i < Math.min(perim, nodes.length); i++) {
+      const n = nodes[i];
+      pts.push({ x: car.x + n.x * cosA - n.y * sinA, y: car.y + n.x * sinA + n.y * cosA });
+    }
+  } else {
+    const hl = car.length / 2;
+    const hw = car.width / 2;
+    for (const [lx, ly] of [[hl, -hw], [hl, hw], [-hl, -hw], [-hl, hw], [hl, 0], [-hl, 0], [0, -hw], [0, hw]]) {
+      pts.push({ x: car.x + lx * cosA - ly * sinA, y: car.y + lx * sinA + ly * cosA });
+    }
+  }
+
+  const tX = -nY;
+  const tY = nX;
+  const margin = 1.0;
+  let inside = pts.filter(p =>
+    p.x >= box.x - margin && p.x <= box.x + box.width + margin &&
+    p.y >= box.y - margin && p.y <= box.y + box.height + margin
+  );
+  if (inside.length === 0) {
+    // Ни один узел не зашёл (касание рёбрами): берём ближайшие к препятствию вдоль нормали
+    let minProj = Infinity;
+    for (const p of pts) minProj = Math.min(minProj, p.x * nX + p.y * nY);
+    inside = pts.filter(p => p.x * nX + p.y * nY <= minProj + 1.5);
+  }
+  if (inside.length === 0) return fallback;
+
+  let minS = Infinity, maxS = -Infinity;
+  let deepest = inside[0];
+  let deepestProj = Infinity;
+  for (const p of inside) {
+    const sCoord = p.x * tX + p.y * tY;
+    if (sCoord < minS) minS = sCoord;
+    if (sCoord > maxS) maxS = sCoord;
+    const proj = p.x * nX + p.y * nY;
+    if (proj < deepestProj) { deepestProj = proj; deepest = p; }
+  }
+  const sCenter = (minS + maxS) / 2;
+  const sDeep = deepest.x * tX + deepest.y * tY;
+  return {
+    x: deepest.x + tX * (sCenter - sDeep),
+    y: deepest.y + tY * (sCenter - sDeep),
+    widthPx: Math.max(4, Math.min(car.width, maxS - minS + 3))
+  };
+}
+
 export function getVehicleCollisionOBBs(car: Vehicle, extraMargin = 0.5): VehicleCollisionOBB[] {
   const dmg = car.damage;
 
@@ -10433,8 +10502,10 @@ export function updateVehiclePhysics(
 
     const col = checkCarBuildingCollision(vehicle, bld);
     if (col.collided) {
-      const contactX = vehicle.x - col.normalX * (vehicle.length / 2);
-      const contactY = vehicle.y - col.normalY * (vehicle.width / 2);
+      // Реальное пятно контакта (центр и ширина), а не «центр носа на всю ширину кузова»
+      const patch = computeBoxContactPatch(vehicle, bld, col.normalX, col.normalY);
+      const contactX = patch.x;
+      const contactY = patch.y;
 
       if (vehicle.activeCrumple && vehicle.activeCrumple.timer > 0) {
         // Vehicle is actively absorbing collision energy in its crumple zone:
@@ -10497,7 +10568,7 @@ export function updateVehiclePhysics(
               contactY,
               preserveVelocity: true,
               isNarrowImpact: false,
-              contactWidthPx: vehicle.width
+              contactWidthPx: patch.widthPx
             };
           } else {
             vehicle.activeCrumple = {
@@ -10513,12 +10584,12 @@ export function updateVehiclePhysics(
               contactY,
               preserveVelocity: false,
               isNarrowImpact: false,
-              contactWidthPx: vehicle.width
+              contactWidthPx: patch.widthPx
             };
           }
 
           // Apply physical plastic deformation to the car body
-          applyVehicleDamageAndDeformation(vehicle, contactX, contactY, normalImpactSpeed, tangentialSpeed, world, 12000, true);
+          applyVehicleDamageAndDeformation(vehicle, contactX, contactY, normalImpactSpeed, tangentialSpeed, world, 12000, patch.widthPx < vehicle.width * 0.35, patch.widthPx);
 
           // Re-evaluate collision against the newly crumpled hull so vehicle rests against the wall at its dented depth
           const recheck = checkCarBuildingCollision(vehicle, bld);

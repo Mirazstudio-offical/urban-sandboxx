@@ -97,6 +97,17 @@ const PLASTIC_RATE = 700;
 const PLASTIC_HARDENING = 3.0;
 /** Минимальная доля исходной длины, до которой балка может быть смята пластически (дальше — «блок»). */
 const MIN_REST_FRACTION = 0.14;
+/**
+ * Текучесть на растяжение: порог выше, чем на сжатие (листовой металл вытягивается тяжелее, чем
+ * складывается), с упрочнением и потолком удлинения. Без неё при ударе половиной кузова балка
+ * поперёк бампера тащила дальний угол назад упругой силой, и «неударенная» сторона мялась так же
+ * глубоко, как ударенная.
+ */
+const TENSION_YIELD_MULT = 2.5;
+const TENSION_HARDENING = 4.0;
+const MAX_STRETCH_FRACTION = 0.35;
+/** Трение металла о стену: узлы в контакте не скользят вдоль неё, пока хватает нормального импульса. */
+const WALL_FRICTION = 0.6;
 /** Верхний предел числа подшагов интегратора за кадр. */
 const MAX_SUBSTEPS = 64;
 /** Внутреннее трение материала (множитель скорости за 1/60 с). */
@@ -434,11 +445,22 @@ function enforceContact(system: NodeBeamStructure, pen: number, penRate: number,
       n.x += dirX * corr;
       n.y += dirY * corr;
       const vu = n.vx * dirX + n.vy * dirY;
+      let dvN = Math.max(0, corr / subDt) * 0.5;
       if (vu < penRate) {
         const dv = penRate - vu;
         n.vx += dirX * dv;
         n.vy += dirY * dv;
         reaction += (n.mass * dv) / subDt;
+        dvN = Math.max(dvN, dv);
+      }
+      // Трение вдоль стены (кулон): гасим касательную скорость не больше μ·нормальной
+      const vl = -n.vx * dirY + n.vy * dirX;
+      const maxDvT = WALL_FRICTION * dvN;
+      const dvT = Math.min(Math.abs(vl), maxDvT);
+      if (dvT > 0) {
+        const sgn = vl > 0 ? -1 : 1;
+        n.vx += -dirY * sgn * dvT;
+        n.vy += dirX * sgn * dvT;
       }
     }
     return reaction;
@@ -567,6 +589,24 @@ function integrateStructure(
           nA.plasticStrain = Math.min(4.0, (nA.plasticStrain || 0) + strainAdd);
           nB.plasticStrain = Math.min(4.0, (nB.plasticStrain || 0) + strainAdd);
           delta = curDist - beam.restLength;
+        }
+      }
+
+      // Растяжение: пластическое вытягивание сверх повышенного порога (только настоящая конструкция,
+      // не опорные балки и не замки — те просто рвутся)
+      if (delta > 0 && beam.type !== 'latch' && beam.type !== 'support') {
+        const maxRest = beam.origLength * (1 + MAX_STRETCH_FRACTION);
+        if (beam.restLength < maxRest) {
+          const stretched = Math.max(0, beam.restLength - beam.origLength) / (beam.origLength * MAX_STRETCH_FRACTION);
+          const yT = beam.yieldDist * TENSION_YIELD_MULT * (1 + TENSION_HARDENING * Math.min(1, stretched));
+          if (delta > yT) {
+            let shift = (delta - yT) * plasticRelax;
+            if (beam.restLength + shift > maxRest) shift = maxRest - beam.restLength;
+            beam.restLength += shift;
+            beam.plasticDeform = (beam.plasticDeform || 0) + shift;
+            plasticShiftTotal += shift;
+            delta = curDist - beam.restLength;
+          }
         }
       }
 
