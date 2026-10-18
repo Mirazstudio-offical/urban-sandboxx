@@ -7561,7 +7561,11 @@ export function updateVehiclePhysics(
       } else if (vehicle.steerAngle > desiredSteer) {
         vehicle.steerAngle = Math.max(desiredSteer, vehicle.steerAngle - maxDelta);
       }
+    } else {
       // 3. Physical Caster Trail & Self-Aligning Torque (SAT / Самовозврат и контр-руление)
+      // Runs ONLY when the steering input is neutral: the same caster loop running
+      // while the player is actively steering would race the steering rack and
+      // collapse the steer angle back to zero, making the car impossible to steer.
       // When hands are off the wheel or steering is neutral, caster smoothly pulls the front wheels back to center (0).
       // During a deep power drift or slide (isDriftActive), dynamic caster helps maintain counter-steering smoothly without oscillation.
       if (!isArticulatedMachinery) {
