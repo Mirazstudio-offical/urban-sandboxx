@@ -28,7 +28,9 @@ interface RunState {
 }
 
 const TARGETS = [20, 40, 60, 80, 100, 120, 140, 160, 200, 250];
-const QUARTER_MILE_PX = 402.336 * 1.6; // 1 m = 1.6 px (100 km/h = 27.78 m/s = 44.44 px/s)
+// 1 m = 16 px: 100 km/h = 27.78 m/s = 444.4 px/s (SPEED_KMH_TO_PX_S = 4.4444 px per km/h)
+const PX_PER_M = 16;
+const QUARTER_MILE_PX = 402.336 * PX_PER_M;
 const KMH = (px: number) => Math.abs(px) * PX_S_TO_SPEED_KMH;
 
 const fmtS = (s: number) => s.toFixed(2) + ' с';
@@ -94,7 +96,7 @@ export const PerformanceTest: React.FC<PerformanceTestProps> = ({ worldRef, play
       const dt = r.lastT ? Math.min(0.5, (now - r.lastT) / 1000) : 0;
       const kmh = KMH(veh.speed);
       const boostMax = eng.turboSpec ? eng.turboSpec.boostMax : 0;
-      const boost = Math.round((eng.turboBoost || 0) * boostMax * 100);
+      const boost = Math.round((eng.turboBoost || 0) * 100);
 
       // remember vehicle identity for the report
       if (r.phase !== 'run' && r.phase !== 'ready') {
@@ -110,7 +112,7 @@ export const PerformanceTest: React.FC<PerformanceTestProps> = ({ worldRef, play
       }
 
       if (r.phase === 'idle' || r.phase === 'done') {
-        setInfo({ kmh, gear: gearLabel(eng), rpm: Math.round(eng.engineRPM || 0), redline: eng.redlineRPM || 6000, boost, boostMax, temp: eng.temperature ?? 85, distM: r.distPx / 1.6, elapsed: 0 });
+        setInfo({ kmh, gear: gearLabel(eng), rpm: Math.round(eng.engineRPM || 0), redline: eng.redlineRPM || 6000, boost, boostMax, temp: eng.temperature ?? 85, distM: r.distPx / PX_PER_M, elapsed: 0 });
         r.lastT = now;
         return;
       }
@@ -148,7 +150,7 @@ export const PerformanceTest: React.FC<PerformanceTestProps> = ({ worldRef, play
             ? String(Math.max(0, eng.currentGear))
             : eng.transmissionType === 'AUTO' ? (eng.autoGearMode || '?')
             : eng.currentGear === -1 ? 'R' : String(eng.currentGear);
-          r.samples.push(`${elapsed.toFixed(2)};${kmh.toFixed(1)};${gearTxt};${eng.transmissionType === 'AUTO' ? 1 : 0};${Math.round(eng.engineRPM || 0)};${boost};${(r.distPx / 1.6).toFixed(1)};${(eng.temperature ?? 85).toFixed(1)}`);
+          r.samples.push(`${elapsed.toFixed(2)};${kmh.toFixed(1)};${gearTxt};${eng.transmissionType === 'AUTO' ? 1 : 0};${Math.round(eng.engineRPM || 0)};${boost};${(r.distPx / PX_PER_M).toFixed(1)};${(eng.temperature ?? 85).toFixed(1)}`);
         }
       }
       r.lastT = now;
@@ -156,7 +158,7 @@ export const PerformanceTest: React.FC<PerformanceTestProps> = ({ worldRef, play
         kmh, gear: gearLabel(eng),
         rpm: Math.round(eng.engineRPM || 0), redline: eng.redlineRPM || 6000,
         boost, boostMax, temp: eng.temperature ?? 85,
-        distM: r.distPx / 1.6,
+        distM: r.distPx / PX_PER_M,
         elapsed: r.phase === 'run' ? (now - r.t0) / 1000 : 0
       });
       setRun({ ...r });
@@ -226,7 +228,7 @@ export const PerformanceTest: React.FC<PerformanceTestProps> = ({ worldRef, play
     L.push(`Макс. скорость в замере: ${Math.round(r.maxKmh)} км/ч`);
     L.push(`Макс. обороты: ${Math.round(r.maxRpm)} об/мин`);
     L.push(`Пик наддува: ${r.maxBoost}%`);
-    L.push(`Пройдено: ${(r.distPx / 1.6).toFixed(0)} м`);
+    L.push(`Пройдено: ${(r.distPx / PX_PER_M).toFixed(0)} м`);
     const txt = L.join('\r\n');
     download(`perf_report_${stamp()}.txt`, 'text/plain;charset=utf-8', txt);
   };
