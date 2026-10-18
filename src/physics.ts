@@ -71,6 +71,16 @@ export interface VehicleCollisionOBB {
   axes: { x: number; y: number }[];
 }
 
+/**
+ * Global player preference: when 'auto', manual (MT) gearboxes of the player's
+ * car shift up/down by themselves (PauseMenu > Game > "КПП: Авто").
+ * Lives at module scope because the fixed-timestep sim reads it every frame.
+ */
+let playerAutoShiftPref: 'auto' | 'manual' = 'manual';
+export function setManualAutoShiftPref(mode: 'auto' | 'manual'): void {
+  playerAutoShiftPref = mode;
+}
+
 export function isArticulatedRoller(car: Vehicle): boolean {
   return car.type === 'roller_heavy_tandem' || car.type === 'roller_compact_sidewalk' || car.type === 'roller_pneumatic';
 }
@@ -7844,6 +7854,27 @@ export function updateVehiclePhysics(
           eng.clutchPedal += (0.0 - eng.clutchPedal) * Math.min(1.0, 12 * dt);
         } else {
           eng.clutchPedal += (1.0 - eng.clutchPedal) * Math.min(1.0, 10 * dt);
+        }
+
+        // Game setting "КПП: Авто" — manual gearbox shifts by itself for the player,
+        // exactly like a proper automatic: early up, low-rpm down, with a cooldown
+        if (playerAutoShiftPref === 'auto' && eng.engineRunning && eng.currentGear !== -1
+            && player && player.vehicleId === vehicle.id) {
+          const maxFwdGear = (eng.gearRatios?.length || 7) - 2;
+          const autoT = ((eng as any)._autoShiftTimer || 0) - dt;
+          if (autoT > 0) {
+            (eng as any)._autoShiftTimer = autoT;
+          } else if (eng.shiftCooldown <= 0 && eng.engineRPM > redlineRPM * 0.94 && eng.currentGear >= 1 && eng.currentGear < maxFwdGear) {
+            eng.currentGear++;
+            eng.shiftCooldown = 0.45;
+            (eng as any)._autoShiftTimer = 0.7;
+            sound.playGearShift();
+          } else if (eng.shiftCooldown <= 0 && eng.engineRPM < redlineRPM * 0.30 && eng.currentGear > 1) {
+            eng.currentGear--;
+            eng.shiftCooldown = 0.45;
+            (eng as any)._autoShiftTimer = 0.7;
+            sound.playGearShift();
+          }
         }
 
         // --- CLUTCH THERMODYNAMICS, SLIPPING & BURNOUT (Перегрев, дым и выгорание сцепления) ---

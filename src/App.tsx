@@ -64,7 +64,8 @@ import {
   hitchTrailerToVehicle,
   unhitchTrailerFromVehicle,
   getOutsideTemperature,
-  getRoadsNearPoint
+  getRoadsNearPoint,
+  setManualAutoShiftPref
 } from './physics';
 import { GameRenderer } from './renderer';
 import { getBuildingFloorsCount, getBuildingLayout, constrainPlayerToInterior, clearInteriorCanvasCache, getApartmentDoorSegment } from './buildingInteriors';
@@ -488,7 +489,7 @@ export default function App() {
   };
 
   const [settings, setSettings] = useState(() => {
-    const base = { fpsLimit: 60, autoSaveInterval: 25, timeAutoCycle: true, mouseSensitivity: 1.0 };
+    const base = { fpsLimit: 60, autoSaveInterval: 25, timeAutoCycle: true, mouseSensitivity: 1.0, shiftMode: 'manual' as 'auto' | 'manual' };
     try {
       const raw = localStorage.getItem('city_sim_game_settings');
       if (raw) return { ...base, ...JSON.parse(raw) };
@@ -498,6 +499,11 @@ export default function App() {
   // Read by the game loop every frame (the loop is created once inside an effect)
   const fpsLimitRef = useRef<number>(settings.fpsLimit);
   fpsLimitRef.current = settings.fpsLimit;
+
+  // Transmission preference for the sim (manual MT cars shift themselves in 'auto')
+  useEffect(() => {
+    setManualAutoShiftPref(settings.shiftMode);
+  }, [settings.shiftMode]);
 
   const [gpsDestination, setGpsDestination] = useState<{ x: number; y: number; name?: string } | null>(null);
 

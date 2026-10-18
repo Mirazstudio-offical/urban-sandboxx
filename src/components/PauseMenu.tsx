@@ -54,6 +54,8 @@ export interface PauseSettings {
   autoSaveInterval: number;
   timeAutoCycle: boolean;
   mouseSensitivity: number;
+  /** Player transmission preference: 'manual' shifts by keys/lever, 'auto' shifts by itself. */
+  shiftMode: 'auto' | 'manual';
 }
 
 interface PauseMenuProps {
@@ -279,6 +281,9 @@ export const PauseMenu: React.FC<PauseMenuProps> = ({
       { t: 'keys', l: 'Меню паузы', k: ['Esc'] }
     ];
     return [
+      { t: 'seg', l: 'КПП (переключения)', v: local.shiftMode,
+        o: [{ v: 'manual', label: 'Ручная' }, { v: 'auto', label: 'Авто (сама)' }],
+        set: v => patchGame({ shiftMode: v }) },
       { t: 'seg', l: 'Автосохранение', v: local.autoSaveInterval, set: v => patchGame({ autoSaveInterval: v }),
         o: [{ v: 0, label: 'Выкл' }, { v: 15, label: '15 с' }, { v: 25, label: '25 с' }, { v: 60, label: '1 мин' }, { v: 120, label: '2 мин' }] },
       { t: 'tg', l: 'Смена дня и ночи', v: local.timeAutoCycle, set: v => patchGame({ timeAutoCycle: v }) },
