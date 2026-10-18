@@ -7561,39 +7561,25 @@ export function updateVehiclePhysics(
       } else if (vehicle.steerAngle > desiredSteer) {
         vehicle.steerAngle = Math.max(desiredSteer, vehicle.steerAngle - maxDelta);
       }
-    } else {
       // 3. Physical Caster Trail & Self-Aligning Torque (SAT / Самовозврат и контр-руление)
-      // When rolling straight, caster returns wheels to center (0).
-      // During a slide or drift, the front tires experience lateral force behind the kingpin axis,
-      // which creates self-aligning torque pulling the front wheels directly into the slip angle
-      // (the direction of motion of the front axle, i.e., authentic automatic counter-steering!).
-      // Articulated hydraulic machines stay locked at turned angle when stopped or releasing steer keys.
-      if (!isArticulatedMachinery && Math.abs(vehicle.speed) > 2.0) {
-        // Dynamic caster target: in straight line it's 0; in slide it is the front trajectory angle
-        const casterTargetAngle = isSliding
-          ? Math.max(-dynamicMaxSteer, Math.min(dynamicMaxSteer, frontMotionAngle * 1.15))
-          : 0;
-
-        // Caster force scales with vehicle rolling speed and slide intensity
-        const speedCasterFactor = Math.min(1.0, currentSpeedKmh / 20.0);
-        const slideCasterMultiplier = isSliding ? 2.8 : 1.4;
-        const casterRate = steerRate * slideCasterMultiplier * speedCasterFactor;
-
-        if (casterRate > 0) {
-          const casterDelta = casterRate * dt;
-          if (vehicle.steerAngle < casterTargetAngle) {
-            vehicle.steerAngle = Math.min(casterTargetAngle, vehicle.steerAngle + casterDelta);
-          } else if (vehicle.steerAngle > casterTargetAngle) {
-            vehicle.steerAngle = Math.max(casterTargetAngle, vehicle.steerAngle - casterDelta);
-          }
+      // When hands are off the wheel or steering is neutral, caster smoothly pulls the front wheels back to center (0).
+      // During a deep power drift or slide (isDriftActive), dynamic caster helps maintain counter-steering smoothly without oscillation.
+      if (!isArticulatedMachinery) {
+        const isTrueDrift = vehicle.isDrifting && currentSpeedKmh > 15.0 && Math.abs(vehicle.lateralVelocity || 0) > 28.0;
+        let casterTarget = 0;
+        if (isTrueDrift) {
+          // Counter-steer caster aligns gently with the front motion angle, clamped and damped (gain <= 0.65 to guarantee asymptotic stability)
+          const clampedMotionAngle = Math.max(-dynamicMaxSteer * 0.70, Math.min(dynamicMaxSteer * 0.70, frontMotionAngle * 0.60));
+          casterTarget = clampedMotionAngle;
         }
-      } else if (Math.abs(vehicle.steerAngle) > 0.005 && !isArticulatedMachinery && currentSpeedKmh > 0.5) {
-        // Low speed gentle return to center
-        const casterRate = steerRate * 0.8 * (currentSpeedKmh / 10.0);
-        if (vehicle.steerAngle > 0) {
-          vehicle.steerAngle = Math.max(0, vehicle.steerAngle - casterRate * dt);
-        } else if (vehicle.steerAngle < 0) {
-          vehicle.steerAngle = Math.min(0, vehicle.steerAngle + casterRate * dt);
+
+        const centerRate = steerRate * 1.35 * Math.max(0.35, Math.min(1.0, currentSpeedKmh / 15.0));
+        const delta = casterTarget - vehicle.steerAngle;
+        if (Math.abs(delta) > 0.002) {
+          const step = Math.sign(delta) * Math.min(Math.abs(delta), centerRate * dt);
+          vehicle.steerAngle += step;
+        } else {
+          vehicle.steerAngle = casterTarget;
         }
       }
     }
@@ -8548,6 +8534,13 @@ export function updateVehiclePhysics(
           eng.engineRPM -= 800 * dt;
           eng.engineRPM = Math.max(0, eng.engineRPM);
         }
+        // Engine-off in-gear mechanical compression drag (holding car on slope or coasting)
+        const inGear = eng.currentGear !== 0 && (!eng.autoGearMode || (eng.autoGearMode !== 'N' && eng.autoGearMode !== 'P'));
+        const clutchEngaged = (eng.clutchPedal ?? 1.0) > 0.45;
+        if (inGear && clutchEngaged && Math.abs(vehicle.speed) > 0.3) {
+          const compBrake = 180.0 * (SPEED_KMH_TO_PX_S / 2.7778) * (eng.clutchPedal ?? 1.0);
+          engineAccel -= Math.sign(vehicle.speed) * compBrake;
+        }
       }
 
       // Update isReversing strictly based on transmission selector engagement (regardless of vehicle speed)
@@ -8805,6 +8798,9 @@ export function updateVehiclePhysics(
         const aeroDrag = aeroCoeff * vAbs * vAbs;
         const totalDrag = rollingResistance + aeroDrag;
 
+        const isEngineActive = eng ? (eng.engineRunning || eng.isDieselRunaway) : false;
+        const activeThrottle = isEngineActive ? throttle : 0;
+
         if (vAbs > 1) {
           const safeDt = Math.max(0.0001, dt);
           if (vehicle.speed > 0) {
@@ -8818,7 +8814,7 @@ export function updateVehiclePhysics(
             const effectiveDrag = Math.min(totalDrag, maxDrag);
             engineAccel += effectiveDrag;
           }
-        } else if (throttle === 0 && !eng?.isDieselRunaway && (!eng || eng.transmissionType !== 'AUTO'|| eng.autoGearMode === 'P'|| eng.autoGearMode === 'N')) {
+        } else if (activeThrottle === 0 && (!eng || eng.transmissionType !== 'AUTO'|| eng.autoGearMode === 'P'|| eng.autoGearMode === 'N' || !isEngineActive)) {
           vehicle.speed = 0;
         }
       }
@@ -8842,20 +8838,8 @@ export function updateVehiclePhysics(
       }
     }
 
-    // Realistic downhill slope gravitational pull on hills and mounds
+    // Slope calculation for physical rigid-body gravity forces (applied in chassis force summation)
     const slope = getTerrainSlope(vehicle.x, vehicle.y);
-    if (slope.gradient > 0.005) {
-      const cosH = Math.cos(vehicle.angle);
-      const sinH = Math.sin(vehicle.angle);
-      // Downhill vector along the vehicle forward axis (slopeX/Y point uphill)
-      const slopeForceLongitudinal = -(slope.slopeX * cosH + slope.slopeY * sinH);
-      // Smooth gravitational slope grade force (scaled down so vehicles can easily climb steep hills)
-      const slopeAccelRaw = slopeForceLongitudinal * 28.0;
-      const slopeAccel = Math.max(-8.0, Math.min(8.0, slopeAccelRaw));
-      if (!isHandbraking && brake < 0.5) {
-        engineAccel += slopeAccel;
-      }
-    }
 
     // Apply engine acceleration
     vehicle.speed += engineAccel * dt;
@@ -8866,7 +8850,10 @@ export function updateVehiclePhysics(
     // Hard speed limits
     if (vehicle.speed > maxSpeedPx) vehicle.speed = maxSpeedPx;
     if (vehicle.speed < -reverseMaxSpeedPx) vehicle.speed = -reverseMaxSpeedPx;
-    if (Math.abs(vehicle.speed) * PX_S_TO_SPEED_KMH < 0.7 && !input.forward && !input.backward) {
+    const isEngineActiveForStop = eng ? (eng.engineRunning || eng.isDieselRunaway) : false;
+    const activeForward = isEngineActiveForStop && input.forward;
+    const activeBackward = isEngineActiveForStop && input.backward;
+    if (Math.abs(vehicle.speed) * PX_S_TO_SPEED_KMH < 0.7 && !activeForward && !activeBackward) {
       vehicle.speed = 0;
     }
 
@@ -9177,13 +9164,19 @@ export function updateVehiclePhysics(
         }
       } else {
         // Rolling tire under propulsion and service braking
-        // Rolling resistance
         const c_rr = 0.015;
-        const fRollingDrag = Math.sign(vTireLong) * c_rr * Fz;
 
-        // Net longitudinal force demanded
-        const brakeDir = Math.sign(vTireLong) || 1;
-        const netDemand = fDrive - brakeDir * fBrake - fRollingDrag;
+        // Service brake is strictly dissipative: it opposes existing wheel rolling velocity, never propels from rest
+        let effectiveBrakeForce = 0;
+        if (vFwd > 1.0) {
+          // Oppose existing wheel rolling velocity
+          effectiveBrakeForce = Math.sign(vTireLong) * fBrake;
+        } else if (fDrive !== 0 && fBrake > 0) {
+          // At rest, brakes oppose drive torque demand up to brake capacity
+          effectiveBrakeForce = Math.sign(fDrive) * Math.min(fBrake, Math.abs(fDrive));
+        }
+        const effectiveRollingDrag = vFwd > 0.5 ? Math.sign(vTireLong) * c_rr * Fz : 0;
+        const netDemand = fDrive - effectiveBrakeForce - effectiveRollingDrag;
 
         if (Math.abs(netDemand) > Fmax) {
           // Longitudinal traction broken (wheelspin under power or brake skid)
@@ -9198,21 +9191,26 @@ export function updateVehiclePhysics(
         // Available lateral cornering capacity per Kamm's friction circle: Fx^2 + Fy^2 <= Fmax^2
         const fLatLimit = Math.sqrt(Math.max(0, Fmax * Fmax - fx * fx));
 
-        // Slip angle alpha = -atan2(vTireLat, |vTireLong|)
-        slipAngle = -Math.atan2(vTireLat, Math.max(4.0, vFwd));
+        // Smooth slip angle calculation with speed-dependent regularization
+        // Below 25 px/s (~9 km/h), regularize the denominator to prevent high-frequency chatter
+        const vFwdDenom = Math.max(25.0, vFwd);
+        slipAngle = -Math.atan2(vTireLat, vFwdDenom);
 
         // Brush tire model cornering curve
-        const alphaPeak = isFront ? 0.15 : 0.12; // ~7-8 degrees peak slip angle
+        const alphaPeak = isFront ? 0.16 : 0.14; // ~8-9 degrees peak slip angle
         const absAlpha = Math.abs(slipAngle);
+
+        // Low-speed cornering force fade-in: prevents elastic chatter when creeping or parking
+        const speedGripFactor = Math.min(1.0, Math.max(0.08, vFwd / 20.0));
 
         if (absAlpha < alphaPeak) {
           // Elastic static adhesion regime: smooth sinusoidal cornering stiffness
-          fy = fLatLimit * Math.sin((absAlpha / alphaPeak) * (Math.PI * 0.5)) * Math.sign(slipAngle);
+          fy = fLatLimit * Math.sin((absAlpha / alphaPeak) * (Math.PI * 0.5)) * Math.sign(slipAngle) * speedGripFactor;
         } else {
           // Kinetic slide regime: tire has broken traction into a drift or plow!
           isSlipping = true;
           const slideDecay = 0.84;
-          fy = fLatLimit * slideDecay * Math.sign(slipAngle);
+          fy = fLatLimit * slideDecay * Math.sign(slipAngle) * speedGripFactor;
         }
       }
 
@@ -9318,11 +9316,18 @@ export function updateVehiclePhysics(
     // --- 6. RIGID BODY NEWTON-EULER INTEGRATION ---
     const aBodyX = F_body_x / totalMass;
     const aBodyY = F_body_y / totalMass;
-    let alphaYaw = Tau_z / Iz;
+    let alphaYaw = Math.max(-40.0, Math.min(40.0, Tau_z / Iz));
+
+    const isEngineActiveForEuler = eng ? (eng.engineRunning || eng.isDieselRunaway) : false;
+    const activeThrottleEuler = isEngineActiveForEuler ? throttle : 0;
+
+    // Physical tire yaw damping (guarantees asymptotic stability and eliminates discrete-step shimmy/shaking)
+    const vehSpeedKmh = Math.abs(vehicle.speed) * PX_S_TO_SPEED_KMH;
+    const yawDampRate = 9.5 + Math.min(18.0, vehSpeedKmh * 0.22);
+    curYaw *= Math.max(0.65, 1.0 - yawDampRate * dt);
 
     // Stationary steering scrub resistance (preventing on-spot rotation when turning steering wheel at standstill)
-    const vehSpeedKmh = Math.abs(vehicle.speed) * PX_S_TO_SPEED_KMH;
-    if (vehSpeedKmh < 3.0 && throttle === 0) {
+    if (vehSpeedKmh < 3.0 && activeThrottleEuler === 0) {
       alphaYaw *= 0.15;
       if (Math.abs(curYaw) < 0.25) curYaw *= 0.75;
     }
@@ -9337,7 +9342,7 @@ export function updateVehiclePhysics(
 
     // Robust low-speed static friction / stiction lock (prevents drifting, creeping, and rotation on the spot)
     const groundSpeed = Math.hypot(curVx, curVy);
-    if ((groundSpeed < 2.8 && throttle === 0 && !isHandbrakePulled) || (vehSpeedKmh < 2.0 && throttle === 0)) {
+    if ((groundSpeed < 2.8 && activeThrottleEuler === 0 && !isHandbrakePulled) || (vehSpeedKmh < 2.0 && activeThrottleEuler === 0)) {
       curVx *= Math.pow(0.05, dt * 12);
       curVy *= Math.pow(0.05, dt * 12);
       curYaw *= Math.pow(0.05, dt * 12);
@@ -10944,7 +10949,8 @@ export function updateVehiclePhysics(
   // бесконечно «дрожать» от остаточных шинных сил, крола АКПП и мелких
   // импульсов, хотя игрок не даёт тяги.
   {
-    const playerWantsMotion = !!input && (input.forward || input.backward);
+    const isEngineActiveForHold = vehicle.engineState ? (vehicle.engineState.engineRunning || vehicle.engineState.isDieselRunaway) : false;
+    const playerWantsMotion = !!input && isEngineActiveForHold && (input.forward || input.backward);
     const aiWantsMotion = !vehicle.isPlayerControlled && (
       (vehicle.targetSpeed || 0) > 0.3 ||
       (vehicle.idmAcceleration || 0) > 1.0

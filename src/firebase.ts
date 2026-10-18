@@ -144,6 +144,8 @@ export interface UserProfileData {
   };
 }
 
+export type AntiCheatLevel = 'none' | 'moderate' | 'strict';
+
 export interface P2PServerRoom {
   id?: string;
   hostUid: string;
@@ -158,6 +160,13 @@ export interface P2PServerRoom {
   status: "active" | "in_game" | "closed";
   createdAt?: any;
   updatedAt?: any;
+  trafficEnabled?: boolean;
+  vehicleCount?: number;
+  pedestrianCount?: number;
+  hasPassword?: boolean;
+  savePlayerData?: boolean;
+  antiCheat?: AntiCheatLevel;
+  metadata?: Record<string, any>;
 }
 
 export interface PlayerCloudSave {
@@ -361,6 +370,19 @@ export const updateP2PServerHeartbeat = async (serverId: string, currentPlayers:
     await updateDoc(serverRef, {
       currentPlayers,
       status,
+      updatedAt: serverTimestamp()
+    });
+  } catch (err) {
+    handleFirestoreError(err, OperationType.WRITE, `p2p_servers/${serverId}`);
+  }
+};
+
+export const updateP2PServerSettings = async (serverId: string, settings: Partial<P2PServerRoom>) => {
+  try {
+    const serverRef = doc(db, "p2p_servers", serverId);
+    const sanitized = sanitizeForFirestore(settings);
+    await updateDoc(serverRef, {
+      ...sanitized,
       updatedAt: serverTimestamp()
     });
   } catch (err) {

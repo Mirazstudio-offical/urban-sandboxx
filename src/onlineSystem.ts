@@ -117,6 +117,8 @@ export interface RemotePlayerState {
   // Metadata
   lastUpdated: number;
   ping?: number;
+  cash?: number;
+  inventoryCount?: number;
 }
 
 export interface ChatMessage {
@@ -134,12 +136,70 @@ export interface SpeechBubble {
   isVehicle?: boolean;
 }
 
+export type AntiCheatLevel = 'none' | 'moderate' | 'strict';
+
+export interface ServerSettings {
+  trafficEnabled: boolean;
+  vehicleCount: number;
+  pedestrianCount: number;
+  passwordRequired: boolean;
+  password?: string;
+  savePlayerData: boolean;
+  antiCheat: AntiCheatLevel;
+}
+
+export const DEFAULT_SERVER_SETTINGS: ServerSettings = {
+  trafficEnabled: true,
+  vehicleCount: 15,
+  pedestrianCount: 10,
+  passwordRequired: false,
+  password: '',
+  savePlayerData: true,
+  antiCheat: 'moderate'
+};
+
+export interface SyncTrafficVehicle {
+  id: string;
+  type: CarType;
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  angle: number;
+  speed: number;
+  steerAngle?: number;
+  color: string;
+  roofColor?: string;
+  headlightsOn?: boolean;
+  brakeLightsOn?: boolean;
+  turnSignal?: 'none' | 'left' | 'right' | 'hazard';
+  isParked?: boolean;
+}
+
+export interface SyncPedestrian {
+  id: string;
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  angle: number;
+  speed: number;
+  walkCycle: number;
+  skinColor: string;
+  shirtColor: string;
+  pantsColor: string;
+}
+
 export type NetworkPacket = 
-  | { type: 'join'; packetId: string; peerId: string; name: string }
+  | { type: 'join'; packetId: string; peerId: string; name: string; password?: string }
   | { type: 'leave'; packetId: string; peerId: string; name: string }
   | { type: 'sync'; packetId: string; peerId: string; player: RemotePlayerState }
   | { type: 'chat'; packetId: string; message: ChatMessage }
-  | { type: 'room_info'; packetId: string; hostPeerId: string; players: { peerId: string; name: string }[] };
+  | { type: 'room_info'; packetId: string; hostPeerId: string; players: { peerId: string; name: string }[]; settings?: ServerSettings }
+  | { type: 'auth_result'; packetId: string; success: boolean; reason?: string; settings?: ServerSettings }
+  | { type: 'server_settings'; packetId: string; settings: ServerSettings }
+  | { type: 'traffic_sync'; packetId: string; vehicles: SyncTrafficVehicle[]; pedestrians: SyncPedestrian[] }
+  | { type: 'kick'; packetId: string; reason: string };
 
 export type OnlineStatus = 'disconnected' | 'connecting' | 'connected' | 'error';
 
@@ -160,6 +220,12 @@ class OnlineManager {
   public remotePlayers: Map<string, RemotePlayerState> = new Map();
   public chatMessages: ChatMessage[] = [];
   public speechBubbles: Map<string, SpeechBubble> = new Map();
+
+  // Configurable server settings (traffic, password, save protection, anti-cheat)
+  public serverSettings: ServerSettings = { ...DEFAULT_SERVER_SETTINGS };
+  public joinPassword?: string;
+  private peerAntiCheatMap: Map<string, { lastX: number; lastY: number; lastTime: number; lastCash?: number; violations: number }> = new Map();
+  public lastTrafficSync: { vehicles: SyncTrafficVehicle[]; pedestrians: SyncPedestrian[] } | null = null;
 
   private listeners: Set<() => void> = new Set();
   private syncTimer: number = 0;
@@ -241,11 +307,24 @@ class OnlineManager {
    * 2. If host ID is taken, transparently joins as a client.
    * 3. If host is offline/unavailable, transparently takes over as the host.
    */
-  public async joinOrCreateRoom(rawRoomCode: string, playerName?: string, asHost: boolean = true) {
+  public async joinOrCreateRoom(
+    rawRoomCode: string,
+    playerName?: string,
+    asHost: boolean = true,
+    password?: string,
+    initialSettings?: Partial<ServerSettings>
+  ) {
     this.leaveRoom();
 
     if (playerName && playerName.trim()) {
       this.setPlayerName(playerName);
+    }
+
+    if (password !== undefined) {
+      this.joinPassword = password;
+    }
+    if (initialSettings) {
+      this.serverSettings = { ...this.serverSettings, ...initialSettings };
     }
 
     const cleanCode = this.sanitizeRoomCode(rawRoomCode);
@@ -298,7 +377,8 @@ class OnlineManager {
           type: 'join',
           packetId: this.nextPacketId(),
           peerId: this.localPeerId,
-          name: this.localPlayerName
+          name: this.localPlayerName,
+          password: this.joinPassword
         });
 
         // Add local system message
@@ -401,10 +481,11 @@ class OnlineManager {
         type: 'join',
         packetId: this.nextPacketId(),
         peerId: this.localPeerId,
-        name: this.localPlayerName
+        name: this.localPlayerName,
+        password: this.joinPassword
       });
 
-      // If host, send room info with all existing peers
+      // If host, send room info with all existing peers and current settings
       if (this.isHost) {
         const playerList = Array.from(this.remotePlayers.values()).map((p) => ({
           peerId: p.peerId,
@@ -416,7 +497,8 @@ class OnlineManager {
           type: 'room_info',
           packetId: this.nextPacketId(),
           hostPeerId: this.localPeerId,
-          players: playerList
+          players: playerList,
+          settings: this.serverSettings
         });
       }
 
