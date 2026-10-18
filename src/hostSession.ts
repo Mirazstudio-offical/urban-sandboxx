@@ -13,7 +13,7 @@ import { auth, createP2PServerDoc, removeP2PServerDoc, updateP2PServerHeartbeat 
  */
 export type HostAccess = 'all' | 'code';
 
-export const MAP_NAME = 'Степной Тракт 2D';
+export const MAP_NAME = 'Flatbody 2D';
 export const DEFAULT_MAX_PLAYERS = 8;
 
 interface HostSession {

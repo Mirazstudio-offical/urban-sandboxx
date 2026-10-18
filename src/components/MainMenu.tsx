@@ -407,7 +407,7 @@ export const MainMenu: React.FC<MainMenuProps> = ({
         peerId: clean,
         hostUid: currentUser?.uid || 'guest_' + Date.now(),
         hostName: nickname,
-        mapName: 'Степной Тракт 2D',
+        mapName: 'Flatbody 2D',
         gameMode: hostMode,
         isPrivate: passwordRequired,
         currentPlayers: 1,
@@ -649,11 +649,11 @@ export const MainMenu: React.FC<MainMenuProps> = ({
                         </span>
                       )}
                     </div>
-                    <div className="cn" style={{ fontSize: 28, fontWeight: 700, marginTop: 4 }}>{lastSave ? lastSave.name : 'Степной Тракт'}</div>
+                    <div className="cn" style={{ fontSize: 28, fontWeight: 700, marginTop: 4 }}>{lastSave ? lastSave.name : 'Flatbody'}</div>
                     <div className="mut" style={{ display: 'flex', gap: 20, marginTop: 10, fontSize: 13 }}>
                       {lastSave ? (
                         <>
-                          <span>Локация: {lastSave.streetName || 'Степной Тракт'}</span>
+                          <span>Локация: {lastSave.streetName || 'Flatbody'}</span>
                           <span>{lastSave.isInVehicle ? 'В автомобиле' : 'Пешком'}</span>
                           {lastSave.cash !== undefined && <span>{lastSave.cash.toLocaleString('ru-RU')} ₽</span>}
                         </>
@@ -855,7 +855,7 @@ export const MainMenu: React.FC<MainMenuProps> = ({
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px 20px', marginTop: 20, fontSize: 14 }}>
                           <div><div className="mut" style={{ fontSize: 12 }}>Хост</div>{selectedServer.hostName}</div>
                           <div><div className="mut" style={{ fontSize: 12 }}>Код комнаты</div>{selectedServer.peerId}</div>
-                          <div><div className="mut" style={{ fontSize: 12 }}>Карта</div>{selectedServer.mapName || 'Степной Тракт'}</div>
+                          <div><div className="mut" style={{ fontSize: 12 }}>Карта</div>{selectedServer.mapName || 'Flatbody'}</div>
                           <div><div className="mut" style={{ fontSize: 12 }}>Режим</div>{modeName(selectedServer.gameMode)}</div>
                         </div>
                         <div style={{ marginTop: 20 }}>
@@ -991,7 +991,7 @@ export const MainMenu: React.FC<MainMenuProps> = ({
                       <div style={{ padding: '14px 16px' }}>
                         <div className="cn" style={{ fontSize: 20, fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{v.name}</div>
                         <div className="meta">
-                          <span>{v.streetName || 'Степной Тракт'}</span>
+                          <span>{v.streetName || 'Flatbody'}</span>
                           <span>{v.isInVehicle ? 'В авто' : 'Пешком'}</span>
                         </div>
                         <div className="meta">

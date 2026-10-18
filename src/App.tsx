@@ -848,7 +848,7 @@ export default function App() {
 
   // Load saves list from storage on mount
   useEffect(() => {
-    const rawSaves = localStorage.getItem('neon_city_saves');
+    const rawSaves = localStorage.getItem('flatbody_saves');
     if (rawSaves) {
       try {
         const parsed = JSON.parse(rawSaves);
@@ -862,12 +862,12 @@ export default function App() {
   const syncSavesToStorage = (updatedSaves: any[]) => {
     setSaves(updatedSaves);
     try {
-      localStorage.setItem('neon_city_saves', JSON.stringify(updatedSaves));
+      localStorage.setItem('flatbody_saves', JSON.stringify(updatedSaves));
     } catch (e) {
       console.warn('Failed to save to localStorage (quota exceeded), pruning old saves:', e);
       try {
         const pruned = updatedSaves.slice(-2);
-        localStorage.setItem('neon_city_saves', JSON.stringify(pruned));
+        localStorage.setItem('flatbody_saves', JSON.stringify(pruned));
       } catch (err2) {
         console.warn('Could not persist saves even after pruning:', err2);
       }
