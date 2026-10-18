@@ -57,7 +57,7 @@ const SEVERITY_ENERGY_REF = 64_000_000;
 const CABIN_FORCE_MULT = 2.5;
 
 /** Доля зоны деформации, доступная для вмятины кабины после исчерпания зоны. */
-const DEFAULT_INTRUSION_ZONE_FRACTION = 0.45;
+const DEFAULT_INTRUSION_ZONE_FRACTION = 0.70;
 /** То же для экстремальных ударителей (поезд): кабина продавливается глубже. */
 const EXTREME_INTRUSION_ZONE_FRACTION = 1.0;
 
@@ -119,6 +119,133 @@ export interface CrushInput {
   intrusionZoneFraction?: number;
   /** Жёсткий потолок длины зоны (для дорожной техники и прицепов ≈ 3.5 px). */
   maxZoneLengthPx?: number;
+  /** Глубина, уже накопленная в этой зоне прежними ударами, px. */
+  existingDepthPx?: number;
+}
+
+/**
+ * Множитель силы после исчерпания зоны: перегородка/пороги/двигатель вступают в работу,
+ * сила растёт от CABIN_FORCE_MULT до CABIN_FORCE_MULT·CABIN_HARDENING к концу хода кабины.
+ */
+const CABIN_HARDENING = 2.0;
+/** Множитель силы при полностью сжатой конструкции (блок двигателя, кабина): достигается на длине ещё одной зоны за потолком. */
+const RIGID_FORCE_MULT = 40.0;
+/** Шаг табличного интегрирования работы деформации, px. */
+const PROFILE_STEP_PX = 0.05;
+
+/**
+ * Профиль «сила — смятие» конкретного препятствия и кузова.
+ *
+ * Раньше глубина считалась как E/F_const и упиралась в потолок: 80, 110 и 150 км/ч мялись
+ * одинаково, а остаток энергии просто пропадал. Здесь сила растёт с ходом (зона → кабина →
+ * упор), поэтому глубина монотонно растёт с энергией до предела конструкции, а торможение
+ * машины по ходу удара определяется той же кривой (a = F(d)/m) — энергия сохраняется.
+ */
+export interface CrushProfile {
+  zoneLengthPx: number;
+  totalCapPx: number;
+  /** Мгновенная сила сопротивления на глубине d, mass·px/s². */
+  force(depth: number): number;
+  /** Работа деформации от 0 до d, mass·px²/s². */
+  work(depth: number): number;
+  /** Глубина, на которой накопленная работа достигает energy. */
+  depthForEnergy(energy: number): number;
+}
+
+export function createCrushProfile(input: Omit<CrushInput, 'energy'>): CrushProfile {
+  const zoneLength = ZONE_LENGTH[input.zone]({ length: input.length, width: input.width });
+  const zoneLen = input.maxZoneLengthPx !== undefined
+    ? Math.min(zoneLength, input.maxZoneLengthPx)
+    : zoneLength;
+  const intrusionFraction = input.intrusionZoneFraction ?? DEFAULT_INTRUSION_ZONE_FRACTION;
+  let cap = zoneLen * (1.0 + intrusionFraction);
+  // Бок: вмятина не уходит дальше оси кузова (иначе узлы двух бортов «проходят» друг сквозь друга)
+  if (input.zone === 'side') cap = Math.min(cap, input.width * 0.48);
+  const meanForce = MEAN_FORCE[input.zone] * (input.structureStiffness ?? 1.0);
+  const carWidth = input.width;
+  const contact = Math.min(carWidth, Math.max(1, input.contactWidthPx ?? carWidth));
+
+  const force = (d: number): number => {
+    // Конус вовлечения: узкое препятствие нагружает всё более широкую полосу кузова.
+    const wFrac = Math.min(1, (contact + 2 * CONE_SPREAD * Math.max(0, d)) / carWidth);
+    let stage = 1.0;
+    if (d > cap) {
+      // Кабина и блок двигателя сжаты до предела: сила продолжает расти по мере «досжатия»
+      // (резкий скачок до «абсолютного» упора давал физически невозможные перегрузки).
+      const t = Math.min(1, (d - cap) / Math.max(0.001, zoneLen));
+      stage = CABIN_FORCE_MULT * CABIN_HARDENING * (1.0 + (RIGID_FORCE_MULT / (CABIN_FORCE_MULT * CABIN_HARDENING) - 1.0) * t);
+    } else if (d > zoneLen) {
+      const t = (d - zoneLen) / Math.max(0.001, cap - zoneLen);
+      stage = CABIN_FORCE_MULT * (1.0 + (CABIN_HARDENING - 1.0) * t);
+    }
+    return meanForce * wFrac * stage;
+  };
+
+  // Таблица накопленной работы до 1.5·cap (дальше упор настолько жёсткий, что ход ничтожен).
+  const maxDepth = cap * 1.5 + 1.0;
+  const n = Math.ceil(maxDepth / PROFILE_STEP_PX);
+  const table = new Float64Array(n + 1);
+  for (let i = 1; i <= n; i++) {
+    const mid = (i - 0.5) * PROFILE_STEP_PX;
+    table[i] = table[i - 1] + force(mid) * PROFILE_STEP_PX;
+  }
+
+  const work = (d: number): number => {
+    if (d <= 0) return 0;
+    const f = d / PROFILE_STEP_PX;
+    const i = Math.floor(f);
+    if (i >= n) return table[n] + force(maxDepth) * (d - n * PROFILE_STEP_PX);
+    return table[i] + (table[i + 1] - table[i]) * (f - i);
+  };
+
+  const depthForEnergy = (e: number): number => {
+    if (!(e > 0)) return 0;
+    if (e >= table[n]) return n * PROFILE_STEP_PX + (e - table[n]) / force(maxDepth);
+    let lo = 0;
+    let hi = n;
+    while (hi - lo > 1) {
+      const mid = (lo + hi) >> 1;
+      if (table[mid] <= e) lo = mid; else hi = mid;
+    }
+    const span = table[lo + 1] - table[lo];
+    const frac = span > 0 ? (e - table[lo]) / span : 0;
+    return (lo + frac) * PROFILE_STEP_PX;
+  };
+
+  return { zoneLengthPx: zoneLen, totalCapPx: cap, force, work, depthForEnergy };
+}
+
+/**
+ * Один кадр хода смятия: тормозит машину силой F(d) по пройденной глубине.
+ * Скорость и глубина интегрируются подшагами ≤ 0.25 px, чтобы на 150 км/ч (8 px за кадр)
+ * не проскакивать зоны разной жёсткости. Закон: v² = v₀² − 2·∫F dd / m.
+ */
+export function advanceCrushStroke(
+  profile: CrushProfile,
+  mass: number,
+  depth: number,
+  speed: number,
+  dt: number
+): { depth: number; speed: number; stopped: boolean } {
+  let d = depth;
+  let v = speed;
+  let remaining = dt;
+  let guard = 0;
+  while (remaining > 1e-9 && v > 1e-6 && guard++ < 400) {
+    const stepT = Math.min(remaining, 0.25 / v);
+    const dd = v * stepT;
+    const f = profile.force(d + dd * 0.5);
+    const v2 = v * v - (2 * f * dd) / mass;
+    if (v2 <= 0) {
+      // Остановка внутри подшага: остаток пути v²·m/(2F)
+      d += (v * v * mass) / (2 * f);
+      return { depth: d, speed: 0, stopped: true };
+    }
+    d += dd;
+    v = Math.sqrt(v2);
+    remaining -= stepT;
+  }
+  return { depth: d, speed: v, stopped: v <= 1e-6 };
 }
 
 export interface CrushResult {
@@ -185,7 +312,8 @@ export function totalCapPx(
   zone: ImpactZone,
   intrusionZoneFraction: number = DEFAULT_INTRUSION_ZONE_FRACTION
 ): number {
-  return zoneLengthPx(car, zone) * (1.0 + intrusionZoneFraction);
+  const cap = zoneLengthPx(car, zone) * (1.0 + intrusionZoneFraction);
+  return zone === 'side' ? Math.min(cap, car.width * 0.48) : cap;
 }
 
 /**
@@ -203,45 +331,19 @@ export function totalCapPx(
  * всю ширину кузова.
  */
 export function crushFromEnergy(input: CrushInput): CrushResult {
-  const zoneLength = ZONE_LENGTH[input.zone]({ length: input.length, width: input.width });
-  const zoneLengthPxClamped = input.maxZoneLengthPx !== undefined
-    ? Math.min(zoneLength, input.maxZoneLengthPx)
-    : zoneLength;
-  const intrusionFraction = input.intrusionZoneFraction ?? DEFAULT_INTRUSION_ZONE_FRACTION;
-  const totalCap = zoneLengthPxClamped * (1.0 + intrusionFraction);
+  const profile = createCrushProfile(input);
+  const existing = Math.max(0, Math.min(profile.totalCapPx, input.existingDepthPx ?? 0));
 
-  const meanForce = MEAN_FORCE[input.zone] * (input.structureStiffness ?? 1.0);
-  let depth = totalCap;
-  if (meanForce > 0) {
-    const carWidth = input.width;
-    // Пятно контакта зажато в (0; ширина кузова].
-    const contact = Math.min(carWidth, Math.max(1, input.contactWidthPx ?? carWidth));
-
-    if (contact >= carWidth) {
-      // Широкое препятствие: вся конструкция работает с первого пикселя.
-      depth = input.energy / meanForce;
-    } else {
-      // Глубина насыщения конуса и энергия, затраченная на неё.
-      const depthSat = (carWidth - contact) / (2 * CONE_SPREAD);
-      const energySat = (meanForce / carWidth) *
-        (contact * depthSat + CONE_SPREAD * depthSat * depthSat);
-      if (input.energy <= energySat) {
-        // s·D² + w·D − E·carWidth/F = 0
-        const c = (input.energy * carWidth) / meanForce;
-        depth = (-contact + Math.sqrt(contact * contact + 4 * CONE_SPREAD * c)) /
-          (2 * CONE_SPREAD);
-      } else {
-        depth = depthSat + (input.energy - energySat) / meanForce;
-      }
-    }
-    depth = Math.min(totalCap, depth);
-  }
+  // Повторный удар в ту же зону: уже смятый металл «не работает», новая энергия
+  // продвигает ход дальше по кривой силы (работа от existing до нового d).
+  const target = profile.depthForEnergy(input.energy + profile.work(existing));
+  const depth = Math.max(0, Math.min(profile.totalCapPx, target) - existing);
 
   return {
-    zoneLengthPx: zoneLengthPxClamped,
-    totalCapPx: totalCap,
+    zoneLengthPx: profile.zoneLengthPx,
+    totalCapPx: profile.totalCapPx,
     depthPx: depth,
-    fill: zoneLengthPxClamped > 0 ? depth / zoneLengthPxClamped : 0
+    fill: profile.zoneLengthPx > 0 ? depth / profile.zoneLengthPx : 0
   };
 }
 

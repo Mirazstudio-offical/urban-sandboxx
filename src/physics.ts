@@ -29,7 +29,8 @@ import {
   ensureVehicleNodeBeam,
   stepNodeBeamSimulation,
   applyNodeBeamImpact,
-  stepNodeBeamContinuousContact
+  stepNodeBeamContinuousContact,
+  advanceCrashStroke
 } from './nodeBeamPhysics';
 
 export { isWorldFreezing };
@@ -1985,17 +1986,29 @@ export function applyVehicleDamageAndDeformation(
   // Жёсткость структуры: рамы грузовиков/техники сопротивляются сильнее.
   const structureStiffness = isMachinery ? 10.0 : (isHeavyRigidTrailer ? 5.0 : (isCommercialHeavy ? 2.86 : 1.0));
 
-  // Глубина деформации = энергия / средняя сила зоны, ограничена длиной зоны
-  // + вмятиной кабины (см. crushFromEnergy).
-  const crush = crushFromEnergy({
-    energy: crashE,
+  // Уже накопленная глубина в зоне удара: повторный удар продолжает ход по кривой силы
+  // (смятый металл не работает заново), см. crushFromEnergy.existingDepthPx.
+  const existingZoneDepth = impactZone === 'front'
+    ? dmg.frontCrumple
+    : impactZone === 'rear'
+      ? dmg.rearCrumple
+      : (normY < 0 ? dmg.leftDent : dmg.rightDent);
+
+  const crushZoneParams = {
     zone: impactZone,
     length: car.length,
     width: car.width,
     contactWidthPx,
     structureStiffness,
-    intrusionZoneFraction: isExtremeStriker ? 1.0 : 0.45,
+    intrusionZoneFraction: isExtremeStriker ? 1.0 : 0.70,
     maxZoneLengthPx: (isMachinery || isHeavyRigidTrailer) ? 3.5 : undefined
+  };
+
+  // Глубина деформации по кривой «сила–смятие» (зона → кабина → упор), см. crushFromEnergy.
+  const crush = crushFromEnergy({
+    energy: crashE,
+    ...crushZoneParams,
+    existingDepthPx: existingZoneDepth
   });
 
   // Целевая глубина вмятины для многокадрового сжатия softbody (см. stepNodeBeamContinuousContact).
@@ -2003,15 +2016,26 @@ export function applyVehicleDamageAndDeformation(
   // this hit. Without the already absorbed depth, a repeated impact reset the
   // visual target and the mesh stopped matching recorded damage.
   if (car.activeCrumple) {
-    const existingZoneDepth = impactZone === 'front'
-      ? dmg.frontCrumple
-      : impactZone === 'rear'
-        ? dmg.rearCrumple
-        : (normY < 0 ? dmg.leftDent : dmg.rightDent);
-    car.activeCrumple.targetCrushPx = Math.min(
+    const ac = car.activeCrumple;
+    ac.targetCrushPx = Math.min(
       crush.totalCapPx,
-      Math.max(car.activeCrumple.targetCrushPx || 0, existingZoneDepth + crush.depthPx)
+      Math.max(ac.targetCrushPx || 0, existingZoneDepth + crush.depthPx)
     );
+    // Силовая модель хода: торможение и глубина считаются по той же кривой, что и урон.
+    // Только для удара о неподвижное препятствие (скорость решается здесь, а не импульсным контактом).
+    if (!ac.crushModel && !ac.preserveVelocity && ac.initialNormalSpeed !== undefined) {
+      ac.crushModel = {
+        zone: impactZone,
+        length: car.length,
+        width: car.width,
+        contactWidthPx,
+        structureStiffness,
+        intrusionZoneFraction: crushZoneParams.intrusionZoneFraction,
+        maxZoneLengthPx: crushZoneParams.maxZoneLengthPx,
+        share: strikerMass > 0 ? strikerMass / (car.mass + strikerMass) : 1
+      };
+      ac.crushStartPx = existingZoneDepth;
+    }
   }
 
   // 1. BEAMNG.DRIVE 2D NODE-BEAM PHYSICAL DEFORMATION ENGINE
@@ -9784,6 +9808,10 @@ export function updateVehiclePhysics(
     }
     const progress = c.totalDuration > 0 ? (1 - c.timer / c.totalDuration) : 1.0; // 0.0 to 1.0
 
+    // Ход смятия по кривой «сила–смятие»: тормозит машину и даёт инерционную нагрузку узлам.
+    // undefined — для этого удара силовой модели нет (удар между машинами и т.п.): прежний сценарий.
+    const strokePhase = advanceCrashStroke(vehicle, dt);
+
     // Step continuous soft-body deformation in sync with deceleration stroke
     stepNodeBeamContinuousContact(vehicle, dt, world);
 
@@ -9794,7 +9822,9 @@ export function updateVehiclePhysics(
       // Phase 1 (0.0 to 0.72): Progressive plastic compression & kinetic energy absorption
       // Phase 2 (0.72 to 1.0): Gentle elastic rebound as chassis springs back
       let phaseSpeed: number;
-      if (progress < 0.72) {
+      if (strokePhase !== undefined) {
+        phaseSpeed = strokePhase;
+      } else if (progress < 0.72) {
         const compressProgress = progress / 0.72;
         // Cosine easing creates gradual entry, peak resistance at max penetration, then zero speed
         const decel = Math.cos(compressProgress * Math.PI * 0.5);

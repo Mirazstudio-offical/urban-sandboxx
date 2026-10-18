@@ -304,6 +304,41 @@ export interface NodeBeamStructure {
     radius: number;
   };
   steppedThisTick?: boolean;
+  /** Версия шкалы сил балок (2 = реальные силы смятия; старые сохранения мигрируются на лету). */
+  forceScaleVersion?: number;
+  /** Максимальный устойчивый подшаг интегратора, с (из жёсткости и масс сетки). */
+  stableDt?: number;
+  /** Нужно ли синхронизировать deformedVertices/агрегаты урона после последнего шага. */
+  needsSync?: boolean;
+  /**
+   * Геометрия контакта с препятствием в системе координат кузова. Препятствие — односторонняя
+   * связь: узлы не могут зайти за плоскость (стена) или окружность (столб), которые движутся
+   * вглубь кузова на величину хода смятия.
+   */
+  contact?: {
+    /** Единичное направление «внутрь кузова» (локальные координаты). */
+    dirX: number;
+    dirY: number;
+    /** Координата поверхности контакта вдоль dir на момент касания (меньше = ближе к препятствию). */
+    plane0: number;
+    /** Поперечная координата центра пятна контакта. */
+    lat0: number;
+    /** Полуширина пятна контакта (стена) либо радиус столба (narrow). */
+    half: number;
+    narrow: boolean;
+    /** Глубина вмятины в зоне контакта на момент касания (прежние удары), px. */
+    depth0: number;
+    /** Текущий ход плоскости препятствия вглубь кузова от plane0, px. */
+    pen: number;
+  };
+  /** Ход смятия (px) в начале и в конце текущего шага — плоскость препятствия движется между ними. */
+  contactPen0?: number;
+  contactPen1?: number;
+  /** Ускорение системы отсчёта кузова (локальные координаты, px/s²): инерционная сила узлов. */
+  frameAx?: number;
+  frameAy?: number;
+  /** Диагностика: суммарная сила реакции контакта за последний шаг, mass·px/s². */
+  lastContactForce?: number;
 }
 
 export interface ScratchMark {
@@ -689,6 +724,30 @@ export interface Vehicle {
     isNarrowImpact?: boolean;
     contactWidthPx?: number;
     targetCrushPx?: number;
+    /**
+     * Силовая модель смятия (damageModel.createCrushProfile). Если задана и preserveVelocity=false,
+     * торможение машины и ход вмятины считаются по кривой «сила–смятие» (энергия сохраняется),
+     * а не по скриптовому косинусу фиксированной длительности.
+     */
+    crushModel?: {
+      zone: 'front' | 'rear' | 'side';
+      length: number;
+      width: number;
+      contactWidthPx?: number;
+      structureStiffness?: number;
+      intrusionZoneFraction?: number;
+      maxZoneLengthPx?: number;
+      /** Доля скорости, идущая в деформацию именно этого кузова (strikerMass/(m+strikerMass)). */
+      share: number;
+    };
+    /** Текущий абсолютный ход смятия от неповреждённого кузова, px. */
+    crushDepthPx?: number;
+    /** Ход смятия на момент начала этого удара (прежние вмятины), px. */
+    crushStartPx?: number;
+    /** Скорость сближения в долях initialNormalSpeed·share, px/s (внутреннее состояние интегратора). */
+    crushSpeed?: number;
+    /** Ход завершён: машина остановлена силами смятия. */
+    crushStopped?: boolean;
   };
 
   // Customizable Node-Beam Softbody Definition Override
