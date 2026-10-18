@@ -411,6 +411,54 @@ export function getPowertrainPickByIds(ids: { engineId?: string; transmissionId?
   return { engine, transmission, tune, tires, turboKit, turboIsAftermarket: false };
 }
 
+/**
+ * Compose a powertrain pick from a user configurator selection.
+ * Unspecified parts stay random (weighted per vehicle category), specified parts
+ * are forced even with a partial selection. Handles the turbo cascade:
+ * a factory-boosted engine always keeps its stock turbo unless the user picked none,
+ * and a 'requiresTurbo' firmware silently falls back to stock without a turbo.
+ */
+export function buildPowertrainPick(
+  type: CarType | string | undefined,
+  sel?: { engineId?: string; transmissionId?: string; tuneId?: string; tireSetId?: string; turboKitId?: string }
+): PowertrainPick {
+  const pick = pickPowertrain(type);
+  if (!sel) return pick;
+
+  const engine = (sel.engineId && ENGINE_VARIANTS.find(e => e.id === sel.engineId)) || pick.engine;
+  const transmission = (sel.transmissionId && TRANSMISSION_VARIANTS.find(t => t.id === sel.transmissionId)) || pick.transmission;
+  let tires = (sel.tireSetId && TIRE_SETS.find(t => t.id === sel.tireSetId)) || pick.tires;
+  let tune = (sel.tuneId && TUNE_VARIANTS.find(t => t.id === sel.tuneId)) || pick.tune;
+
+  // Turbo cascade: factory turbo wins; explicit kit only for non-factory engines
+  let turboKit: TurboSpecDef | null;
+  let turboIsAftermarket: boolean;
+  if (engine.turbo) {
+    turboKit = engine.turbo;
+    turboIsAftermarket = false;
+  } else if (sel.turboKitId && sel.turboKitId !== 'trb_none') {
+    turboKit = TURBO_KITS.find(k => k.id === sel.turboKitId) || null;
+    turboIsAftermarket = !!turboKit;
+  } else {
+    turboKit = null;
+  }
+
+  // Firmware compatibility guard: Stage-requires-turbo map without a physical turbo
+  if (tune.requiresTurbo && !(turboKit && turboKit.boostMax > 0)) {
+    tune = TUNE_VARIANTS.find(t => t.id === 'tune_stock')!;
+  }
+  // Diesel firmware on a petrol engine is meaningless
+  if ((tune.isDieselTune && engine.fuel !== 'diesel') || (!tune.isDieselTune && (tune.id === 'tune_diesel_eco' || tune.id === 'tune_diesel_power'))) {
+    tune = TUNE_VARIANTS.find(t => t.id === 'tune_stock')!;
+  }
+  // Agro tires on a passenger car fall back if not matched (persona choice is kept, but truck tires on a sedan are too extreme)
+  if (tires.cats && tires.cats.includes('tractor') && getVehiclePowertrainCategory(type) !== 'tractor') {
+    tires = TIRE_SETS.find(t => t.id === 'tir_summer_city')!;
+  }
+
+  return { engine, transmission, tune, tires, turboKit, turboIsAftermarket };
+}
+
 // ============================================================================
 // APPLY POWERTRAIN TO A FULLY-CONSTRUCTED VEHICLE
 // ============================================================================

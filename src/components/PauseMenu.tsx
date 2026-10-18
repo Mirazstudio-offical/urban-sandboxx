@@ -62,6 +62,8 @@ interface PauseMenuProps {
   onExitToMainMenu: () => void;
   /** Opens the server catalogue (main menu, "Онлайн" screen). */
   onOpenServers?: () => void;
+  /** Opens the in-game acceleration run tester. */
+  onOpenPerformanceTest?: () => void;
   settings: PauseSettings;
   onUpdateSettings: (next: PauseSettings) => void;
   session: PauseSessionInfo;
@@ -155,7 +157,7 @@ const TABS: [TabId, string][] = [['gfx', 'Графика'], ['sound', 'Звук'
 /* ------------------------------------------------------------------ */
 
 export const PauseMenu: React.FC<PauseMenuProps> = ({
-  onResume, onSave, onExitToMainMenu, onOpenServers, settings, onUpdateSettings, session, currentUser
+  onResume, onSave, onExitToMainMenu, onOpenServers, onOpenPerformanceTest, settings, onUpdateSettings, session, currentUser
 }) => {
   const [cur, setCur] = useState<'online' | 'settings' | null>(null);
   const [entered, setEntered] = useState(false);
@@ -404,6 +406,11 @@ export const PauseMenu: React.FC<PauseMenuProps> = ({
             <button className={'menu-i cn' + (cur === 'settings' ? ' sel' : '')} onClick={() => show('settings')}>
               <Ic><circle cx="12" cy="12" r="3" /><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1" /></Ic>Настройки
             </button>
+            {onOpenPerformanceTest && (
+              <button className="menu-i cn" onClick={onOpenPerformanceTest}>
+                <Ic><path d="M4 18a9 9 0 0 1 17 0" /><path d="M12 18l4-6" /><path d="M12 3v2" /></Ic>Замер разгона
+              </button>
+            )}
             <button className="menu-i cn" onClick={() => setConfirmExit(true)} style={{ marginTop: 14, color: '#a29e93' }}>
               <Ic c="#a29e93"><path d="M9 4H5v16h4M15 8l4 4-4 4M19 12H9" /></Ic>В меню
             </button>

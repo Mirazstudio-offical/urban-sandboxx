@@ -47,7 +47,7 @@ import {
   getVehicleTurnSignalDynamicState,
   getVehicleTurnSignalConfig
 } from './vehicleHelpers';
-import { applyPowertrain, describePowertrain, getPowertrainPickByIds } from './powertrainVariants';
+import { applyPowertrain, describePowertrain, buildPowertrainPick } from './powertrainVariants';
 import { loadMap, sanitizeWorldVehicles } from './loadMap';
 import { SpatialGrid } from './spatialGrid';
 import { updateAITraffic, updatePedestrians, updateTrafficLights } from './aiTraffic';
@@ -106,6 +106,7 @@ import { MainMenu } from './components/MainMenu';
 import { GameHudMenu } from './components/GameHudMenu';
 import { TimeScaleButton, SlowMotionIndicator, DEFAULT_SLOW_SCALE } from './components/TimeScaleControl';
 import { PauseMenu, type PauseSessionInfo } from './components/PauseMenu';
+import { PerformanceTest } from './components/PerformanceTest';
 import { getVehicleCatalogItem } from './vehicleCatalog';
 import { PlayerNeedsHUD } from './components/PlayerNeedsHUD';
 import { InventoryModal } from './components/InventoryModal';
@@ -470,6 +471,7 @@ export default function App() {
 
   const [isMainMenuOpen, setIsMainMenuOpen] = useState<boolean>(true);
   const [isPauseMenuOpen, setIsPauseMenuOpen] = useState<boolean>(false);
+  const [isPerfTestOpen, setIsPerfTestOpen] = useState<boolean>(false);
   const isPauseMenuOpenRef = useRef<boolean>(false);
   isPauseMenuOpenRef.current = isPauseMenuOpen;
   // Which screen the main menu opens on (the pause menu can send the player straight to the server list)
@@ -1492,8 +1494,7 @@ export default function App() {
         };
         (newVehicle as any).isSpawnedByPlayer = true;
         (newVehicle as any).playerOwned = true;
-        const forcedPick = opts.powertrain ? getPowertrainPickByIds(opts.powertrain) : null;
-        applyPowertrain(newVehicle, forcedPick || undefined);
+        applyPowertrain(newVehicle, buildPowertrainPick(carType, opts.powertrain));
         world.vehicles.push(newVehicle);
         spatialGridVehiclesRef.current.insert(newVehicle);
 
@@ -7712,6 +7713,10 @@ export default function App() {
             setIsMainMenuOpen(true);
             sound.stopEngine();
           }}
+          onOpenPerformanceTest={() => {
+            setIsPauseMenuOpen(false);
+            setIsPerfTestOpen(true);
+          }}
         />
       )}
 
@@ -7756,6 +7761,15 @@ export default function App() {
         onClose={() => setIsOnlineModalOpen(false)}
         onOpenFriends={() => setIsFriendsModalOpen(true)}
       />
+
+      {/* In-game acceleration run tester (time measurement + config + export) */}
+      {isPerfTestOpen && worldRef.current && (
+        <PerformanceTest
+          worldRef={worldRef}
+          playerRef={playerRef}
+          onClose={() => setIsPerfTestOpen(false)}
+        />
+      )}
 
       {/* Friends & Social System Modal */}
       <FriendsModal
