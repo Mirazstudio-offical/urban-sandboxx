@@ -29,7 +29,8 @@ import {
   ensureVehicleNodeBeam,
   stepNodeBeamSimulation,
   applyNodeBeamImpact,
-  stepNodeBeamContinuousContact
+  stepNodeBeamContinuousContact,
+  advanceCrashStroke
 } from './nodeBeamPhysics';
 
 export { isWorldFreezing };
@@ -71,6 +72,75 @@ export interface VehicleCollisionOBB {
 
 export function isArticulatedRoller(car: Vehicle): boolean {
   return car.type === 'roller_heavy_tandem' || car.type === 'roller_compact_sidewalk' || car.type === 'roller_pneumatic';
+}
+
+/**
+ * Реальное пятно контакта кузова с прямоугольным препятствием (стена, здание).
+ * Раньше точка контакта бралась «по центру носа», а ширина — по всему кузову, поэтому удар
+ * правой половиной мял весь перед одинаково. Теперь пятно берётся по узлам живого контура,
+ * которые зашли в препятствие: центр и ширина вдоль стены. Нормаль направлена от препятствия к машине.
+ */
+function computeBoxContactPatch(
+  car: Vehicle,
+  box: { x: number; y: number; width: number; height: number },
+  nX: number,
+  nY: number
+): { x: number; y: number; widthPx: number } {
+  const fallback = {
+    x: car.x - nX * (car.length / 2),
+    y: car.y - nY * (car.width / 2),
+    widthPx: car.width
+  };
+  const nodes = car.damage?.nodeBeam?.nodes;
+  const pts: { x: number; y: number }[] = [];
+  const cosA = Math.cos(car.angle);
+  const sinA = Math.sin(car.angle);
+  if (nodes && nodes.length >= 8) {
+    const perim = car.damage!.nodeBeam!.perimeterCount ?? 16;
+    for (let i = 0; i < Math.min(perim, nodes.length); i++) {
+      const n = nodes[i];
+      pts.push({ x: car.x + n.x * cosA - n.y * sinA, y: car.y + n.x * sinA + n.y * cosA });
+    }
+  } else {
+    const hl = car.length / 2;
+    const hw = car.width / 2;
+    for (const [lx, ly] of [[hl, -hw], [hl, hw], [-hl, -hw], [-hl, hw], [hl, 0], [-hl, 0], [0, -hw], [0, hw]]) {
+      pts.push({ x: car.x + lx * cosA - ly * sinA, y: car.y + lx * sinA + ly * cosA });
+    }
+  }
+
+  const tX = -nY;
+  const tY = nX;
+  const margin = 1.0;
+  let inside = pts.filter(p =>
+    p.x >= box.x - margin && p.x <= box.x + box.width + margin &&
+    p.y >= box.y - margin && p.y <= box.y + box.height + margin
+  );
+  if (inside.length === 0) {
+    // Ни один узел не зашёл (касание рёбрами): берём ближайшие к препятствию вдоль нормали
+    let minProj = Infinity;
+    for (const p of pts) minProj = Math.min(minProj, p.x * nX + p.y * nY);
+    inside = pts.filter(p => p.x * nX + p.y * nY <= minProj + 1.5);
+  }
+  if (inside.length === 0) return fallback;
+
+  let minS = Infinity, maxS = -Infinity;
+  let deepest = inside[0];
+  let deepestProj = Infinity;
+  for (const p of inside) {
+    const sCoord = p.x * tX + p.y * tY;
+    if (sCoord < minS) minS = sCoord;
+    if (sCoord > maxS) maxS = sCoord;
+    const proj = p.x * nX + p.y * nY;
+    if (proj < deepestProj) { deepestProj = proj; deepest = p; }
+  }
+  const sCenter = (minS + maxS) / 2;
+  const sDeep = deepest.x * tX + deepest.y * tY;
+  return {
+    x: deepest.x + tX * (sCenter - sDeep),
+    y: deepest.y + tY * (sCenter - sDeep),
+    widthPx: Math.max(4, Math.min(car.width, maxS - minS + 3))
+  };
 }
 
 export function getVehicleCollisionOBBs(car: Vehicle, extraMargin = 0.5): VehicleCollisionOBB[] {
@@ -1985,17 +2055,29 @@ export function applyVehicleDamageAndDeformation(
   // Жёсткость структуры: рамы грузовиков/техники сопротивляются сильнее.
   const structureStiffness = isMachinery ? 10.0 : (isHeavyRigidTrailer ? 5.0 : (isCommercialHeavy ? 2.86 : 1.0));
 
-  // Глубина деформации = энергия / средняя сила зоны, ограничена длиной зоны
-  // + вмятиной кабины (см. crushFromEnergy).
-  const crush = crushFromEnergy({
-    energy: crashE,
+  // Уже накопленная глубина в зоне удара: повторный удар продолжает ход по кривой силы
+  // (смятый металл не работает заново), см. crushFromEnergy.existingDepthPx.
+  const existingZoneDepth = impactZone === 'front'
+    ? dmg.frontCrumple
+    : impactZone === 'rear'
+      ? dmg.rearCrumple
+      : (normY < 0 ? dmg.leftDent : dmg.rightDent);
+
+  const crushZoneParams = {
     zone: impactZone,
     length: car.length,
     width: car.width,
     contactWidthPx,
     structureStiffness,
-    intrusionZoneFraction: isExtremeStriker ? 1.0 : 0.45,
+    intrusionZoneFraction: isExtremeStriker ? 1.0 : 0.70,
     maxZoneLengthPx: (isMachinery || isHeavyRigidTrailer) ? 3.5 : undefined
+  };
+
+  // Глубина деформации по кривой «сила–смятие» (зона → кабина → упор), см. crushFromEnergy.
+  const crush = crushFromEnergy({
+    energy: crashE,
+    ...crushZoneParams,
+    existingDepthPx: existingZoneDepth
   });
 
   // Целевая глубина вмятины для многокадрового сжатия softbody (см. stepNodeBeamContinuousContact).
@@ -2003,15 +2085,26 @@ export function applyVehicleDamageAndDeformation(
   // this hit. Without the already absorbed depth, a repeated impact reset the
   // visual target and the mesh stopped matching recorded damage.
   if (car.activeCrumple) {
-    const existingZoneDepth = impactZone === 'front'
-      ? dmg.frontCrumple
-      : impactZone === 'rear'
-        ? dmg.rearCrumple
-        : (normY < 0 ? dmg.leftDent : dmg.rightDent);
-    car.activeCrumple.targetCrushPx = Math.min(
+    const ac = car.activeCrumple;
+    ac.targetCrushPx = Math.min(
       crush.totalCapPx,
-      Math.max(car.activeCrumple.targetCrushPx || 0, existingZoneDepth + crush.depthPx)
+      Math.max(ac.targetCrushPx || 0, existingZoneDepth + crush.depthPx)
     );
+    // Силовая модель хода: торможение и глубина считаются по той же кривой, что и урон.
+    // Только для удара о неподвижное препятствие (скорость решается здесь, а не импульсным контактом).
+    if (!ac.crushModel && !ac.preserveVelocity && ac.initialNormalSpeed !== undefined) {
+      ac.crushModel = {
+        zone: impactZone,
+        length: car.length,
+        width: car.width,
+        contactWidthPx,
+        structureStiffness,
+        intrusionZoneFraction: crushZoneParams.intrusionZoneFraction,
+        maxZoneLengthPx: crushZoneParams.maxZoneLengthPx,
+        share: strikerMass > 0 ? strikerMass / (car.mass + strikerMass) : 1
+      };
+      ac.crushStartPx = existingZoneDepth;
+    }
   }
 
   // 1. BEAMNG.DRIVE 2D NODE-BEAM PHYSICAL DEFORMATION ENGINE
@@ -9653,6 +9746,10 @@ export function updateVehiclePhysics(
     }
     const progress = c.totalDuration > 0 ? (1 - c.timer / c.totalDuration) : 1.0; // 0.0 to 1.0
 
+    // Ход смятия по кривой «сила–смятие»: тормозит машину и даёт инерционную нагрузку узлам.
+    // undefined — для этого удара силовой модели нет (удар между машинами и т.п.): прежний сценарий.
+    const strokePhase = advanceCrashStroke(vehicle, dt);
+
     // Step continuous soft-body deformation in sync with deceleration stroke
     stepNodeBeamContinuousContact(vehicle, dt, world);
 
@@ -9663,7 +9760,9 @@ export function updateVehiclePhysics(
       // Phase 1 (0.0 to 0.72): Progressive plastic compression & kinetic energy absorption
       // Phase 2 (0.72 to 1.0): Gentle elastic rebound as chassis springs back
       let phaseSpeed: number;
-      if (progress < 0.72) {
+      if (strokePhase !== undefined) {
+        phaseSpeed = strokePhase;
+      } else if (progress < 0.72) {
         const compressProgress = progress / 0.72;
         // Cosine easing creates gradual entry, peak resistance at max penetration, then zero speed
         const decel = Math.cos(compressProgress * Math.PI * 0.5);
@@ -10272,8 +10371,10 @@ export function updateVehiclePhysics(
 
     const col = checkCarBuildingCollision(vehicle, bld);
     if (col.collided) {
-      const contactX = vehicle.x - col.normalX * (vehicle.length / 2);
-      const contactY = vehicle.y - col.normalY * (vehicle.width / 2);
+      // Реальное пятно контакта (центр и ширина), а не «центр носа на всю ширину кузова»
+      const patch = computeBoxContactPatch(vehicle, bld, col.normalX, col.normalY);
+      const contactX = patch.x;
+      const contactY = patch.y;
 
       if (vehicle.activeCrumple && vehicle.activeCrumple.timer > 0) {
         // Vehicle is actively absorbing collision energy in its crumple zone:
@@ -10336,7 +10437,7 @@ export function updateVehiclePhysics(
               contactY,
               preserveVelocity: true,
               isNarrowImpact: false,
-              contactWidthPx: vehicle.width
+              contactWidthPx: patch.widthPx
             };
           } else {
             vehicle.activeCrumple = {
@@ -10352,12 +10453,12 @@ export function updateVehiclePhysics(
               contactY,
               preserveVelocity: false,
               isNarrowImpact: false,
-              contactWidthPx: vehicle.width
+              contactWidthPx: patch.widthPx
             };
           }
 
           // Apply physical plastic deformation to the car body
-          applyVehicleDamageAndDeformation(vehicle, contactX, contactY, normalImpactSpeed, tangentialSpeed, world, 12000, true);
+          applyVehicleDamageAndDeformation(vehicle, contactX, contactY, normalImpactSpeed, tangentialSpeed, world, 12000, patch.widthPx < vehicle.width * 0.35, patch.widthPx);
 
           // Re-evaluate collision against the newly crumpled hull so vehicle rests against the wall at its dented depth
           const recheck = checkCarBuildingCollision(vehicle, bld);

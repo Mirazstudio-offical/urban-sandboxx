@@ -95,7 +95,7 @@ function buildStandardSedanBeams(): BeamTemplate[] {
 
   // Diagonal shear braces
   const crosses: [number, number][] = [
-    [0, 2], [15, 14], [1, 3], [15, 13],
+    [0, 2], [0, 14], [1, 3], [15, 13],
     [2, 4], [14, 12], [3, 5], [13, 11],
     [4, 6], [12, 10], [5, 7], [11, 9],
     [6, 8], [10, 8], [7, 9], [1, 15]
@@ -261,7 +261,7 @@ function buildHatchbackBeams(): BeamTemplate[] {
 
   // Crosses
   const crosses: [number, number][] = [
-    [0, 2], [13, 12], [1, 3], [13, 11],
+    [0, 2], [0, 12], [1, 3], [13, 11],
     [2, 4], [12, 10], [3, 5], [11, 9],
     [4, 6], [10, 8], [5, 7], [9, 7], [1, 13]
   ];
@@ -412,7 +412,7 @@ function buildSupercarBeams(): BeamTemplate[] {
 
   // Cross bracing
   const crosses: [number, number][] = [
-    [0, 2], [15, 14], [1, 3], [15, 13],
+    [0, 2], [0, 14], [1, 3], [15, 13],
     [2, 4], [14, 12], [3, 5], [13, 11],
     [4, 6], [12, 10], [5, 7], [11, 9],
     [6, 8], [10, 8], [7, 9], [1, 15]
@@ -547,7 +547,7 @@ function buildTruckCaboverBeams(): BeamTemplate[] {
 
   // Crosses
   const crosses: [number, number][] = [
-    [0, 2], [15, 14], [1, 3], [15, 13],
+    [0, 2], [0, 14], [1, 3], [15, 13],
     [2, 4], [14, 12], [3, 5], [13, 11],
     [4, 6], [12, 10], [5, 7], [11, 9],
     [6, 8], [10, 8], [7, 9], [1, 15]
