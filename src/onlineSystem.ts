@@ -117,6 +117,8 @@ export interface RemotePlayerState {
   // Metadata
   lastUpdated: number;
   ping?: number;
+  cash?: number;
+  inventoryCount?: number;
 }
 
 export interface ChatMessage {
@@ -134,12 +136,70 @@ export interface SpeechBubble {
   isVehicle?: boolean;
 }
 
+export type AntiCheatLevel = 'none' | 'moderate' | 'strict';
+
+export interface ServerSettings {
+  trafficEnabled: boolean;
+  vehicleCount: number;
+  pedestrianCount: number;
+  passwordRequired: boolean;
+  password?: string;
+  savePlayerData: boolean;
+  antiCheat: AntiCheatLevel;
+}
+
+export const DEFAULT_SERVER_SETTINGS: ServerSettings = {
+  trafficEnabled: true,
+  vehicleCount: 15,
+  pedestrianCount: 10,
+  passwordRequired: false,
+  password: '',
+  savePlayerData: true,
+  antiCheat: 'moderate'
+};
+
+export interface SyncTrafficVehicle {
+  id: string;
+  type: CarType;
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  angle: number;
+  speed: number;
+  steerAngle?: number;
+  color: string;
+  roofColor?: string;
+  headlightsOn?: boolean;
+  brakeLightsOn?: boolean;
+  turnSignal?: 'none' | 'left' | 'right' | 'hazard';
+  isParked?: boolean;
+}
+
+export interface SyncPedestrian {
+  id: string;
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  angle: number;
+  speed: number;
+  walkCycle: number;
+  skinColor: string;
+  shirtColor: string;
+  pantsColor: string;
+}
+
 export type NetworkPacket = 
-  | { type: 'join'; packetId: string; peerId: string; name: string }
+  | { type: 'join'; packetId: string; peerId: string; name: string; password?: string }
   | { type: 'leave'; packetId: string; peerId: string; name: string }
   | { type: 'sync'; packetId: string; peerId: string; player: RemotePlayerState }
   | { type: 'chat'; packetId: string; message: ChatMessage }
-  | { type: 'room_info'; packetId: string; hostPeerId: string; players: { peerId: string; name: string }[] };
+  | { type: 'room_info'; packetId: string; hostPeerId: string; players: { peerId: string; name: string }[]; settings?: ServerSettings }
+  | { type: 'auth_result'; packetId: string; success: boolean; reason?: string; settings?: ServerSettings }
+  | { type: 'server_settings'; packetId: string; settings: ServerSettings }
+  | { type: 'traffic_sync'; packetId: string; vehicles: SyncTrafficVehicle[]; pedestrians: SyncPedestrian[] }
+  | { type: 'kick'; packetId: string; reason: string };
 
 export type OnlineStatus = 'disconnected' | 'connecting' | 'connected' | 'error';
 
@@ -160,6 +220,12 @@ class OnlineManager {
   public remotePlayers: Map<string, RemotePlayerState> = new Map();
   public chatMessages: ChatMessage[] = [];
   public speechBubbles: Map<string, SpeechBubble> = new Map();
+
+  // Configurable server settings (traffic, password, save protection, anti-cheat)
+  public serverSettings: ServerSettings = { ...DEFAULT_SERVER_SETTINGS };
+  public joinPassword?: string;
+  private peerAntiCheatMap: Map<string, { lastX: number; lastY: number; lastTime: number; lastCash?: number; violations: number }> = new Map();
+  public lastTrafficSync: { vehicles: SyncTrafficVehicle[]; pedestrians: SyncPedestrian[] } | null = null;
 
   private listeners: Set<() => void> = new Set();
   private syncTimer: number = 0;
@@ -241,11 +307,24 @@ class OnlineManager {
    * 2. If host ID is taken, transparently joins as a client.
    * 3. If host is offline/unavailable, transparently takes over as the host.
    */
-  public async joinOrCreateRoom(rawRoomCode: string, playerName?: string, asHost: boolean = true) {
+  public async joinOrCreateRoom(
+    rawRoomCode: string,
+    playerName?: string,
+    asHost: boolean = true,
+    password?: string,
+    initialSettings?: Partial<ServerSettings>
+  ) {
     this.leaveRoom();
 
     if (playerName && playerName.trim()) {
       this.setPlayerName(playerName);
+    }
+
+    if (password !== undefined) {
+      this.joinPassword = password;
+    }
+    if (initialSettings) {
+      this.serverSettings = { ...this.serverSettings, ...initialSettings };
     }
 
     const cleanCode = this.sanitizeRoomCode(rawRoomCode);
@@ -298,7 +377,8 @@ class OnlineManager {
           type: 'join',
           packetId: this.nextPacketId(),
           peerId: this.localPeerId,
-          name: this.localPlayerName
+          name: this.localPlayerName,
+          password: this.joinPassword
         });
 
         // Add local system message
@@ -401,10 +481,11 @@ class OnlineManager {
         type: 'join',
         packetId: this.nextPacketId(),
         peerId: this.localPeerId,
-        name: this.localPlayerName
+        name: this.localPlayerName,
+        password: this.joinPassword
       });
 
-      // If host, send room info with all existing peers
+      // If host, send room info with all existing peers and current settings
       if (this.isHost) {
         const playerList = Array.from(this.remotePlayers.values()).map((p) => ({
           peerId: p.peerId,
@@ -416,7 +497,8 @@ class OnlineManager {
           type: 'room_info',
           packetId: this.nextPacketId(),
           hostPeerId: this.localPeerId,
-          players: playerList
+          players: playerList,
+          settings: this.serverSettings
         });
       }
 
@@ -505,15 +587,53 @@ class OnlineManager {
 
     switch (packet.type) {
       case 'join': {
+        if (this.isHost && this.serverSettings.passwordRequired && this.serverSettings.password) {
+          if (packet.password !== this.serverSettings.password) {
+            const conn = senderPeerId ? this.connections.get(senderPeerId) : null;
+            if (conn && conn.open) {
+              try {
+                conn.send({
+                  type: 'auth_result',
+                  packetId: this.nextPacketId(),
+                  success: false,
+                  reason: 'Неверный пароль сервера'
+                });
+              } catch {}
+            }
+            return;
+          }
+        }
         const existing = this.remotePlayers.get(packet.peerId);
         if (!existing) {
           this.addSystemMessage(`${packet.name} вошел в комнату.`);
         }
-        // If host, connect back or acknowledge
         if (this.isHost && !this.connections.has(packet.peerId)) {
           this.connectToPeer(packet.peerId);
         }
         this.notify();
+        break;
+      }
+
+      case 'auth_result': {
+        if (!packet.success) {
+          this.addSystemMessage(`Ошибка подключения: ${packet.reason || 'Отказано в доступе'}`);
+          this.leaveRoom();
+        }
+        break;
+      }
+
+      case 'server_settings': {
+        if (packet.settings) {
+          this.serverSettings = { ...this.serverSettings, ...packet.settings };
+          this.notify();
+        }
+        break;
+      }
+
+      case 'traffic_sync': {
+        if (!this.isHost && packet.vehicles && packet.pedestrians) {
+          this.lastTrafficSync = { vehicles: packet.vehicles, pedestrians: packet.pedestrians };
+        }
         break;
       }
 
@@ -531,6 +651,24 @@ class OnlineManager {
       case 'sync': {
         const p = packet.player;
         if (!p || p.peerId === this.localPeerId) return;
+
+        if (this.isHost && this.serverSettings.antiCheat !== 'none') {
+          let record = this.peerAntiCheatMap.get(p.peerId);
+          const nowTime = Date.now();
+          if (record) {
+            const distMoved = Math.hypot(p.x - record.lastX, p.y - record.lastY);
+            const timeDiff = (nowTime - record.lastTime) / 1000;
+            if (this.serverSettings.antiCheat === 'strict' && timeDiff > 0.02 && (distMoved / timeDiff) > 2500 && !p.isInVehicle) {
+              record.violations++;
+              if (record.violations > 5) return;
+            }
+            record.lastX = p.x;
+            record.lastY = p.y;
+            record.lastTime = nowTime;
+          } else {
+            this.peerAntiCheatMap.set(p.peerId, { lastX: p.x, lastY: p.y, lastTime: nowTime, violations: 0 });
+          }
+        }
 
         p.lastUpdated = Date.now();
         this.remotePlayers.set(p.peerId, p);
@@ -845,6 +983,72 @@ class OnlineManager {
     if (this.status !== 'connected') return;
 
     const now = Date.now();
+
+    // Host traffic broadcasting
+    if (this.isHost && this.serverSettings.trafficEnabled) {
+      this.syncTimer += dt;
+      if (this.syncTimer >= 0.1) {
+        this.syncTimer = 0;
+        const vehiclesToSync: SyncTrafficVehicle[] = world.vehicles
+          .filter(v => !v.isPlayerControlled && !(v as any).isRemoteControlled && !v.isParked && v.id !== 'evac_ambulance_special' && !v.keyId)
+          .slice(0, this.serverSettings.vehicleCount)
+          .map(v => ({
+            id: v.id,
+            type: v.type,
+            x: v.x,
+            y: v.y,
+            vx: v.vx,
+            vy: v.vy,
+            angle: v.angle,
+            speed: v.speed,
+            steerAngle: v.steerAngle,
+            color: v.color,
+            roofColor: v.roofColor,
+            headlightsOn: v.headlightsOn,
+            brakeLightsOn: v.brakeLightsOn,
+            turnSignal: v.turnSignal,
+            isParked: v.isParked
+          }));
+
+        const pedsToSync: SyncPedestrian[] = world.pedestrians
+          .slice(0, this.serverSettings.pedestrianCount)
+          .map(p => ({
+            id: p.id,
+            x: p.x,
+            y: p.y,
+            vx: p.vx,
+            vy: p.vy,
+            angle: p.angle,
+            speed: p.speed,
+            walkCycle: p.walkCycle,
+            skinColor: p.skinColor,
+            shirtColor: p.shirtColor,
+            pantsColor: p.pantsColor
+          }));
+
+        this.broadcastPacket({
+          type: 'traffic_sync',
+          packetId: this.nextPacketId(),
+          vehicles: vehiclesToSync,
+          pedestrians: pedsToSync
+        });
+      }
+    }
+
+    // Client applying traffic sync
+    if (!this.isHost && this.lastTrafficSync) {
+      this.lastTrafficSync.vehicles.forEach(sv => {
+        let v = world.vehicles.find(item => item.id === sv.id);
+        if (v && !v.isPlayerControlled) {
+          v.x += (sv.x - v.x) * Math.min(1, dt * 10);
+          v.y += (sv.y - v.y) * Math.min(1, dt * 10);
+          v.vx = sv.vx;
+          v.vy = sv.vy;
+          v.angle = sv.angle;
+          v.speed = sv.speed;
+        }
+      });
+    }
 
     // 1. Prune expired speech bubbles
     this.speechBubbles.forEach((bubble, key) => {

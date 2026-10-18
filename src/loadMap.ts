@@ -329,10 +329,10 @@ export function ensureTrailers(world: GameWorld): void {
 }
 
 export function clearCustomMapStorage(): void {
-  localStorage.removeItem('neon_city_custom_map');
-  localStorage.removeItem('neon_city_custom_map_indexeddb');
+  localStorage.removeItem('flatbody_custom_map');
+  localStorage.removeItem('flatbody_custom_map_indexeddb');
   try {
-    const req = indexedDB.open('NeonCityDB', 1);
+    const req = indexedDB.open('FlatbodyDB', 1);
     req.onsuccess = (e: any) => {
       const db = e.target.result;
       if (db.objectStoreNames.contains('maps')) {
@@ -344,13 +344,13 @@ export function clearCustomMapStorage(): void {
 }
 
 export function hasCustomSavedMap(): boolean {
-  return !!localStorage.getItem('neon_city_custom_map') || !!localStorage.getItem('neon_city_custom_map_indexeddb');
+  return !!localStorage.getItem('flatbody_custom_map') || !!localStorage.getItem('flatbody_custom_map_indexeddb');
 }
 
 function getMapFromIndexedDB(): Promise<any> {
   return new Promise((resolve) => {
     try {
-      const req = indexedDB.open('NeonCityDB', 1);
+      const req = indexedDB.open('FlatbodyDB', 1);
       req.onupgradeneeded = (e: any) => {
         e.target.result.createObjectStore('maps');
       };
@@ -377,7 +377,7 @@ function getMapFromIndexedDB(): Promise<any> {
  */
 export async function loadMap(): Promise<GameWorld> {
   // Check IndexedDB first if flagged
-  if (localStorage.getItem('neon_city_custom_map_indexeddb') === 'true') {
+  if (localStorage.getItem('flatbody_custom_map_indexeddb') === 'true') {
     try {
       const idbMap = await getMapFromIndexedDB();
       if (idbMap && Array.isArray(idbMap.roads) && idbMap.roads.length > 0) {
@@ -390,7 +390,7 @@ export async function loadMap(): Promise<GameWorld> {
     }
   }
 
-  const customMapRaw = localStorage.getItem('neon_city_custom_map');
+  const customMapRaw = localStorage.getItem('flatbody_custom_map');
   if (customMapRaw) {
     try {
       const parsed = JSON.parse(customMapRaw);
@@ -399,11 +399,11 @@ export async function loadMap(): Promise<GameWorld> {
         const world = normalizeWorld(parsed);
         return sanitizeWorldVehicles(world);
       } else {
-        localStorage.removeItem('neon_city_custom_map');
+        localStorage.removeItem('flatbody_custom_map');
       }
     } catch (e) {
       console.warn('[MapLoader] Ошибка парсинга карты из localStorage, загрузка из файла map.json', e);
-      localStorage.removeItem('neon_city_custom_map');
+      localStorage.removeItem('flatbody_custom_map');
     }
   }
 

@@ -60,9 +60,9 @@ export interface CrashReport {
   uptimeSeconds: number;
 }
 
-const STORAGE_KEY_CRASH_LOGS = 'neon_city_crash_history_v1';
-const STORAGE_KEY_HEARTBEAT = 'neon_city_heartbeat_watchdog_v1';
-const STORAGE_KEY_BLACKBOX = 'neon_city_blackbox_last_snapshot_v1';
+const STORAGE_KEY_CRASH_LOGS = 'flatbody_crash_history_v1';
+const STORAGE_KEY_HEARTBEAT = 'flatbody_heartbeat_watchdog_v1';
+const STORAGE_KEY_BLACKBOX = 'flatbody_blackbox_last_snapshot_v1';
 const MAX_IN_MEMORY_LOGS = 300;
 const MAX_PERSISTENT_CRASHES = 10;
 
@@ -453,7 +453,7 @@ class CrashLogger {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `neon_city_diagnostic_report_${Date.now()}.json`;
+    a.download = `flatbody_diagnostic_report_${Date.now()}.json`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);

@@ -924,7 +924,7 @@ export const CreativeMenuModal: React.FC<CreativeMenuModalProps> = ({
 
         {/* Footer info */}
         <footer className="px-5 py-2.5 bg-[#14161c] border-t border-white/[0.08] flex items-center justify-between text-xs font-mono text-[#8b929e] shrink-0">
-          <span>СИМУЛЯТОР СТЕПНОЙ ТРАКТ 2D</span>
+          <span>СИМУЛЯТОР FLATBODY 2D</span>
           <span>ВЫБЕРИТЕ ОБЪЕКТ ДЛЯ РАЗМЕЩЕНИЯ НА КАРТЕ</span>
         </footer>
       </div>

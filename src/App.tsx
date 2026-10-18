@@ -159,6 +159,7 @@ import {
 } from './furnitureStorageSystem';
 import { ChatOverlay } from './components/ChatOverlay';
 import { onlineManager, OnlineStatus } from './onlineSystem';
+import { closeHostSession } from './hostSession';
 import { auth, onAuthStateChanged, ensureUserProfileExists, updateUserOnlineStatus, type User } from './firebase';
 import { 
   getNearbyGasPump, 
@@ -886,7 +887,7 @@ export default function App() {
 
   // Load saves list from storage on mount
   useEffect(() => {
-    const rawSaves = localStorage.getItem('neon_city_saves');
+    const rawSaves = localStorage.getItem('flatbody_saves');
     if (rawSaves) {
       try {
         const parsed = JSON.parse(rawSaves);
@@ -900,12 +901,12 @@ export default function App() {
   const syncSavesToStorage = (updatedSaves: any[]) => {
     setSaves(updatedSaves);
     try {
-      localStorage.setItem('neon_city_saves', JSON.stringify(updatedSaves));
+      localStorage.setItem('flatbody_saves', JSON.stringify(updatedSaves));
     } catch (e) {
       console.warn('Failed to save to localStorage (quota exceeded), pruning old saves:', e);
       try {
         const pruned = updatedSaves.slice(-2);
-        localStorage.setItem('neon_city_saves', JSON.stringify(pruned));
+        localStorage.setItem('flatbody_saves', JSON.stringify(pruned));
       } catch (err2) {
         console.warn('Could not persist saves even after pruning:', err2);
       }
@@ -1061,7 +1062,38 @@ export default function App() {
     sessionStatsRef.current.lastSaveAt = Date.now();
   };
 
-  const handleLoadSave = (saveId: string) => {
+  const reloadFreshMap = async () => {
+    try {
+      const freshWorld = await loadMap();
+      worldRef.current = freshWorld;
+      const bldGrid = spatialGridBuildingsRef.current;
+      bldGrid.clear();
+      freshWorld.buildings.forEach((b) => bldGrid.insert(b));
+
+      const treeGrid = spatialGridTreesRef.current;
+      treeGrid.clear();
+      freshWorld.trees.forEach((t) => treeGrid.insert(t));
+
+      const propGrid = spatialGridPropsRef.current;
+      propGrid.clear();
+      freshWorld.props.forEach((p) => propGrid.insert(p));
+
+      const swGrid = spatialGridSidewalksRef.current;
+      swGrid.clear();
+      (freshWorld.sidewalks || []).forEach((sw) => swGrid.insert(sw));
+
+      seedInitialGroundItems(freshWorld);
+      setTrafficCount(freshWorld.vehicles.length);
+      setPedCount(freshWorld.pedestrians.length);
+    } catch (err) {
+      console.error('[App] Failed to reload map:', err);
+    }
+  };
+
+  const handleLoadSave = async (saveId: string) => {
+    onlineManager.leaveRoom();
+    closeHostSession();
+    await reloadFreshMap();
     const world = worldRef.current;
     const player = playerRef.current;
     const camera = cameraRef.current;
@@ -1386,13 +1418,16 @@ export default function App() {
     syncSavesToStorage(updated);
   };
 
-  const handleNewGame = (options?: {
+  const handleNewGame = async (options?: {
     spawnId?: string;
     mode?: 'career' | 'freeroam';
     vehicleType?: string;
     vehicleColor?: string;
     powertrain?: { engineId?: string; transmissionId?: string; tuneId?: string; tireSetId?: string; turboKitId?: string };
   } | string) => {
+    onlineManager.leaveRoom();
+    closeHostSession();
+    await reloadFreshMap();
     const opts = typeof options === 'string' ? { spawnId: options, mode: 'career' as const } : (options || {});
     const mode = opts.mode || 'career';
     const world = worldRef.current;
@@ -4175,16 +4210,9 @@ export default function App() {
           return;
         }
 
-        // Physical impulse from starter motor cranking directly against wheels and transmission
-        const currentSpeedInJerkDir = veh.speed * jerkDir;
-        const maxStarterLurchSpeed = 12.0; // ~4.3 km/h
-        if (currentSpeedInJerkDir < maxStarterLurchSpeed) {
-          const newSpeedAlongDir = Math.min(maxStarterLurchSpeed, currentSpeedInJerkDir + 6.5);
-          veh.speed = newSpeedAlongDir * jerkDir;
-        } else {
-          // If already moving faster than starter lurch speed, mechanical drag slows down the car
-          veh.speed *= 0.65;
-        }
+        // Brief physical shudder from starter motor cranking against wheels and transmission
+        const jerk = Math.min(2.5, 2.5 / (eng.starterOverloadCount || 1));
+        veh.speed = jerk * jerkDir;
         veh.vx = Math.cos(veh.angle) * veh.speed;
         veh.vy = Math.sin(veh.angle) * veh.speed;
 
@@ -7776,16 +7804,18 @@ export default function App() {
             const p = playerRef.current;
             if (p) addPlayerNotification(p, 'Игра успешно сохранена!', 'info');
           }}
-          onOpenServers={() => {
+
+          onExitToMainMenu={async () => {
             setIsPauseMenuOpen(false);
-            setMainMenuInitialScreen('servers');
-            setIsMainMenuOpen(true);
-          }}
-          onExitToMainMenu={() => {
-            setIsPauseMenuOpen(false);
+            onlineManager.leaveRoom();
+            closeHostSession();
+            resetSessionStats();
+            await reloadFreshMap();
             setMainMenuInitialScreen('main');
             setIsMainMenuOpen(true);
             sound.stopEngine();
+            sound.stopTireScreech();
+            sound.stopHorn();
           }}
           onOpenPerformanceTest={() => {
             setIsPauseMenuOpen(false);

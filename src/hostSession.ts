@@ -1,4 +1,4 @@
-import { onlineManager } from './onlineSystem';
+import { onlineManager, AntiCheatLevel } from './onlineSystem';
 import { auth, createP2PServerDoc, removeP2PServerDoc, updateP2PServerHeartbeat } from './firebase';
 
 /**
@@ -13,7 +13,7 @@ import { auth, createP2PServerDoc, removeP2PServerDoc, updateP2PServerHeartbeat 
  */
 export type HostAccess = 'all' | 'code';
 
-export const MAP_NAME = 'Степной Тракт 2D';
+export const MAP_NAME = 'Flatbody 2D';
 export const DEFAULT_MAX_PLAYERS = 8;
 
 interface HostSession {
@@ -60,7 +60,7 @@ function startHeartbeat() {
   }, 10000);
 }
 
-async function registerInCatalogue(s: HostSession, hostName: string): Promise<void> {
+async function registerInCatalogue(s: HostSession, hostName: string, settings?: any): Promise<void> {
   try {
     s.docId = await createP2PServerDoc({
       hostUid: auth.currentUser?.uid || 'guest_' + Date.now(),
@@ -71,8 +71,14 @@ async function registerInCatalogue(s: HostSession, hostName: string): Promise<vo
       currentPlayers: onlineManager.getRemotePlayersArray().length + 1,
       mapName: MAP_NAME,
       gameMode: 'free_roam',
-      isPrivate: false,
-      status: 'active'
+      isPrivate: settings?.passwordRequired || false,
+      status: 'active',
+      trafficEnabled: settings?.trafficEnabled ?? true,
+      vehicleCount: settings?.vehicleCount ?? 15,
+      pedestrianCount: settings?.pedestrianCount ?? 10,
+      hasPassword: settings?.passwordRequired || false,
+      savePlayerData: settings?.savePlayerData ?? true,
+      antiCheat: settings?.antiCheat ?? 'moderate'
     });
   } catch (err) {
     console.error('Failed to register server in the catalogue', err);
@@ -92,7 +98,18 @@ async function unregisterFromCatalogue(s: HostSession): Promise<void> {
 }
 
 /** Opens a new room as host. No-op when this client is already connected to a room. */
-export async function openHostSession(opts: { access: HostAccess; maxPlayers?: number; nickname?: string }): Promise<void> {
+export async function openHostSession(opts: {
+  access: HostAccess;
+  maxPlayers?: number;
+  nickname?: string;
+  trafficEnabled?: boolean;
+  vehicleCount?: number;
+  pedestrianCount?: number;
+  passwordRequired?: boolean;
+  password?: string;
+  savePlayerData?: boolean;
+  antiCheat?: AntiCheatLevel;
+}): Promise<void> {
   if (busy || onlineManager.status === 'connected' || onlineManager.status === 'connecting') return;
   busy = true;
   notify();
@@ -106,8 +123,17 @@ export async function openHostSession(opts: { access: HostAccess; maxPlayers?: n
       serverName: 'Сервер ' + nickname
     };
     session = s;
-    onlineManager.joinOrCreateRoom(code, nickname, true);
-    if (s.access === 'all') await registerInCatalogue(s, nickname);
+    const settings = {
+      trafficEnabled: opts.trafficEnabled ?? true,
+      vehicleCount: opts.vehicleCount ?? 15,
+      pedestrianCount: opts.pedestrianCount ?? 10,
+      passwordRequired: opts.passwordRequired ?? false,
+      password: opts.password || '',
+      savePlayerData: opts.savePlayerData ?? true,
+      antiCheat: opts.antiCheat ?? ('moderate' as AntiCheatLevel)
+    };
+    onlineManager.joinOrCreateRoom(code, nickname, true, opts.passwordRequired ? opts.password : undefined, settings);
+    if (s.access === 'all' && !opts.passwordRequired) await registerInCatalogue(s, nickname, settings);
     startHeartbeat();
   } finally {
     busy = false;

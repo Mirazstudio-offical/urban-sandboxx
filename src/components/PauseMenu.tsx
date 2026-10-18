@@ -62,8 +62,6 @@ interface PauseMenuProps {
   onResume: () => void;
   onSave: () => void;
   onExitToMainMenu: () => void;
-  /** Opens the server catalogue (main menu, "Онлайн" screen). */
-  onOpenServers?: () => void;
   /** Opens the in-game acceleration run tester. */
   onOpenPerformanceTest?: () => void;
   settings: PauseSettings;
@@ -159,7 +157,7 @@ const TABS: [TabId, string][] = [['gfx', 'Графика'], ['sound', 'Звук'
 /* ------------------------------------------------------------------ */
 
 export const PauseMenu: React.FC<PauseMenuProps> = ({
-  onResume, onSave, onExitToMainMenu, onOpenServers, onOpenPerformanceTest, settings, onUpdateSettings, session, currentUser
+  onResume, onSave, onExitToMainMenu, onOpenPerformanceTest, settings, onUpdateSettings, session, currentUser
 }) => {
   const [cur, setCur] = useState<'online' | 'settings' | null>(null);
   const [entered, setEntered] = useState(false);
@@ -502,9 +500,7 @@ export const PauseMenu: React.FC<PauseMenuProps> = ({
                   </div>
                 </div>
               </div>
-              {onOpenServers && (
-                <div className="row2"><button className="btn btn-s" onClick={onOpenServers}>Найти сервер в каталоге</button></div>
-              )}
+
             </section>
           )}
 

@@ -44,7 +44,7 @@ const GAME_MODES = [
 ];
 
 const MAP_NAMES = [
-  { id: 'metropolis', name: 'Мегаполис' },
+  { id: 'flatbody', name: 'Flatbody' },
   { id: 'steppe_highway', name: 'Степное Шоссе' },
   { id: 'industrial', name: 'Промзона' }
 ];
@@ -52,7 +52,7 @@ const MAP_NAMES = [
 export const OnlineModal: React.FC<OnlineModalProps> = ({ isOpen, onClose, onOpenFriends }) => {
   const [status, setStatus] = useState<OnlineStatus>(onlineManager.status);
   const [errorMessage, setErrorMessage] = useState<string | null>(onlineManager.errorMessage);
-  const [roomCode, setRoomCode] = useState<string>(onlineManager.roomCode || 'metropolis-1');
+  const [roomCode, setRoomCode] = useState<string>(onlineManager.roomCode || 'flatbody-1');
   const [nickname, setNickname] = useState<string>(onlineManager.localPlayerName);
   const [copied, setCopied] = useState<boolean>(false);
   const [, setTick] = useState<number>(0);
@@ -66,7 +66,7 @@ export const OnlineModal: React.FC<OnlineModalProps> = ({ isOpen, onClose, onOpe
   // Host Server Form States
   const [serverName, setServerName] = useState<string>('Сервер ' + (auth.currentUser?.displayName || 'Пилота'));
   const [maxPlayers, setMaxPlayers] = useState<number>(8);
-  const [selectedMap, setSelectedMap] = useState<string>('metropolis');
+  const [selectedMap, setSelectedMap] = useState<string>('flatbody');
   const [selectedGameMode, setSelectedGameMode] = useState<string>('free_roam');
 
   const activeDocIdRef = useRef<string | null>(null);

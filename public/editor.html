@@ -4857,7 +4857,7 @@ window.addEventListener('DOMContentLoaded', async () => {
   window.addEventListener('resize', resizeCanvas);
   
   // Try loading custom map from localStorage, or /map.json
-  const customMapRaw = localStorage.getItem('neon_city_custom_map');
+  const customMapRaw = localStorage.getItem('flatbody_custom_map');
   if (customMapRaw) {
     try {
       mapData = JSON.parse(customMapRaw);
@@ -5154,7 +5154,7 @@ async function loadMapFileFromServer() {
 
 function resetToDefaultMap() {
   if (confirm('Сбросить карту к исходному файлу /map.json и удалить изменения в браузере?')) {
-    localStorage.removeItem('neon_city_custom_map');
+    localStorage.removeItem('flatbody_custom_map');
     loadMapFileFromServer();
   }
 }
@@ -9439,7 +9439,7 @@ function isUndo() {
 function openMapDB() {
   return new Promise((resolve, reject) => {
     try {
-      const req = indexedDB.open('NeonCityDB', 1);
+      const req = indexedDB.open('FlatbodyDB', 1);
       req.onupgradeneeded = (e) => {
         e.target.result.createObjectStore('maps');
       };
@@ -9453,8 +9453,8 @@ function openMapDB() {
 
 async function saveCustomMapToStorage(data) {
   try {
-    localStorage.setItem('neon_city_custom_map', JSON.stringify(data));
-    localStorage.removeItem('neon_city_custom_map_indexeddb');
+    localStorage.setItem('flatbody_custom_map', JSON.stringify(data));
+    localStorage.removeItem('flatbody_custom_map_indexeddb');
   } catch (e) {
     console.warn('LocalStorage limit exceeded, falling back to IndexedDB...', e);
     const db = await openMapDB();
@@ -9464,8 +9464,8 @@ async function saveCustomMapToStorage(data) {
       tx.oncomplete = () => resolve();
       tx.onerror = () => reject(tx.error);
     });
-    localStorage.setItem('neon_city_custom_map_indexeddb', 'true');
-    localStorage.removeItem('neon_city_custom_map');
+    localStorage.setItem('flatbody_custom_map_indexeddb', 'true');
+    localStorage.removeItem('flatbody_custom_map');
   }
 }
 
