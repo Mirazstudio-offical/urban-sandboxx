@@ -104,7 +104,7 @@ import { FullScreenMap } from './components/FullScreenMap';
 import { LandscapeGuard } from './components/LandscapeGuard';
 import { MobileTouchControls } from './components/MobileTouchControls';
 import { MainMenu } from './components/MainMenu';
-import { GameHudMenu } from './components/GameHudMenu';
+import { VehicleBoardMenu } from './components/VehicleBoardMenu';
 import { TimeScaleButton, SlowMotionIndicator, DEFAULT_SLOW_SCALE } from './components/TimeScaleControl';
 import { PauseMenu, type PauseSessionInfo } from './components/PauseMenu';
 import { PerformanceTest } from './components/PerformanceTest';
@@ -524,7 +524,7 @@ export default function App() {
       }
     }
   };
-  const [isQuickMenuOpen, setIsQuickMenuOpen] = useState<boolean>(false);
+  const [isVehicleBoardOpen, setIsVehicleBoardOpen] = useState<boolean>(false);
   const [isInventoryOpen, setIsInventoryOpen] = useState<boolean>(false);
   const [isInspectionOpen, setIsInspectionOpen] = useState<boolean>(false);
   const [isRadialMenuOpen, setIsRadialMenuOpen] = useState<boolean>(false);
@@ -809,7 +809,8 @@ export default function App() {
     inputRef.current.right = false;
     inputRef.current.handbrake = false;
     inputRef.current.sprint = false;
-    setIsQuickMenuOpen(false);
+    setIsRadialMenuOpen(false);
+    setIsVehicleBoardOpen(false);
     setIsPauseMenuOpen(true);
   };
 
@@ -2149,13 +2150,14 @@ export default function App() {
           e.preventDefault();
           return;
         }
-        if (isInventoryOpen || isInspectionOpen || isConsoleOpen || isFullMapOpen || isSpawnMenuOpen || isQuickMenuOpen) {
+        if (isInventoryOpen || isInspectionOpen || isConsoleOpen || isFullMapOpen || isSpawnMenuOpen || isRadialMenuOpen || isVehicleBoardOpen) {
           setIsInventoryOpen(false);
           setIsInspectionOpen(false);
           setIsConsoleOpen(false);
           setIsFullMapOpen(false);
           setIsSpawnMenuOpen(false);
-          setIsQuickMenuOpen(false);
+          setIsRadialMenuOpen(false);
+          setIsVehicleBoardOpen(false);
           e.preventDefault();
           return;
         }
@@ -5448,7 +5450,7 @@ export default function App() {
     if (!p || !world) return;
 
     if (p.isInVehicle) {
-      setIsRadialMenuOpen(prev => !prev);
+      setIsVehicleBoardOpen(prev => !prev);
       return;
     }
 
@@ -6345,83 +6347,15 @@ export default function App() {
           <button
             id="quick-settings-toggle-btn"
             type="button"
-            className={`hud-btn ${isQuickMenuOpen ? 'on' : ''}`}
-            onClick={() => setIsQuickMenuOpen((prev) => !prev)}
-            title="Меню: время, погода, мир"
-            aria-expanded={isQuickMenuOpen}>
+            className={`hud-btn ${isRadialMenuOpen ? 'on' : ''}`}
+            onClick={() => setIsRadialMenuOpen((prev) => !prev)}
+            title="Центральное меню: окружение, авто, спавн, починка, трафик"
+            aria-expanded={isRadialMenuOpen}>
             <MenuIcon className="w-5 h-5" />
             <span>Меню</span>
           </button>
           <TimeScaleButton value={timeScale} onToggle={toggleSlowMotion} />
         </div>
-
-        {isQuickMenuOpen && (
-          <GameHudMenu
-            calendar={calendar}
-            timeHour={timeHour}
-            weather={weather}
-            isTimeAutoCycling={isTimeAutoCycling}
-            timeScale={timeScale}
-            onSetTimeScale={setTimeScale}
-            isMuted={isMuted}
-            isCreativeMode={isCreativeMode}
-            onlineStatus={onlineStatus}
-            onlinePlayerCount={onlinePlayerCount}
-            userLabel={currentUser ? (currentUser.displayName || 'Профиль') : 'Войти'}
-            isMobileTouch={isMobileTouch}
-            touchUiScale={touchUiScale}
-            onSetTime={setTimeOfDay}
-            onStepDay={handleStepGameDay}
-            onOpenCalendar={() => {
-              sound.playButtonPress();
-              setIsDateTimePickerOpen(true);
-              setIsQuickMenuOpen(false);
-            }}
-            onSetWeather={setWeatherType}
-            onToggleTimeAuto={() => {
-              setIsTimeAutoCycling((prev) => !prev);
-              const pl = playerRef.current;
-              if (pl) {
-                addPlayerNotification(pl, !isTimeAutoCycling ? 'Ход времени: ВКЛ' : 'Ход времени: ПАУЗА', 'info');
-              }
-            }}
-            onToggleMute={toggleSoundMute}
-            onOpenOnline={() => {
-              sound.playButtonPress();
-              setIsOnlineModalOpen((prev) => !prev);
-            }}
-            onOpenProfile={() => {
-              sound.playButtonPress();
-              setIsUserProfileModalOpen(true);
-            }}
-            onOpenSpawn={() => {
-              setIsSpawnMenuOpen(true);
-              setIsQuickMenuOpen(false);
-            }}
-            onRepairAll={handleResetAllVehiclesDamage}
-            onHealSelf={handleResetPlayerInjuries}
-            onToggleCreative={() => {
-              const newVal = !isCreativeMode;
-              setIsCreativeMode(newVal);
-              setIsFlying(newVal);
-              setIsInvincible(newVal);
-              if (!newVal) {
-                setActivePlacement(null);
-                activePlacementRef.current = null;
-              }
-              const pl = playerRef.current;
-              if (pl) {
-                addPlayerNotification(
-                  pl,
-                  newVal ? 'Режим Творчества ВКЛЮЧЕН! Открыта панель управления.' : 'Режим Творчества ВЫКЛЮЧЕН.',
-                  newVal ? 'info' : 'warning');
-              }
-            }}
-            onToggleTouch={() => setIsMobileTouch((prev) => !prev)}
-            onCycleTouchScale={handleCycleTouchScale}
-            onClose={() => setIsQuickMenuOpen(false)}
-          />
-        )}
       </div>
 
       {/* Slow-motion cue: small readout + soft vignette */}
@@ -6560,7 +6494,7 @@ export default function App() {
             onToggleTurnSignal={toggleTurnSignal}
             onToggleHeadlights={toggleHeadlights}
             onToggleEngine={handleToggleEngine}
-            onOpenRadialMenu={() => setIsRadialMenuOpen(true)}
+            onOpenRadialMenu={() => setIsVehicleBoardOpen(true)}
             onSelectGear={handleSelectGear}
             onTakeOutKey={() => {
               const world = worldRef.current;
@@ -6628,7 +6562,7 @@ export default function App() {
             onZoomOut={() => {
               userZoomFactorRef.current = Math.max(0.4, userZoomFactorRef.current - 0.15);
             }}
-            onOpenRadialMenu={() => setIsRadialMenuOpen(true)}
+            onOpenRadialMenu={() => setIsVehicleBoardOpen(true)}
             activeCarName={activeCarName}
             speedKmh={speedKmh}
             activeTurnSignal={playerTurnSignal}
@@ -7209,6 +7143,30 @@ export default function App() {
           } else {
             addPlayerNotification(p, 'Не удалось обнаружить автомобиль для тюнинга на площадке!', 'warning');
           }
+        }}
+      />
+
+      {/* IN-CAR VEHICLE BOARD RADIAL (приборка) */}
+      <VehicleBoardMenu
+        isOpen={isVehicleBoardOpen}
+        onClose={() => setIsVehicleBoardOpen(false)}
+        player={playerRef.current}
+        world={worldRef.current}
+        onToggleWipers={handleToggleWipers}
+        onToggleHeadlights={toggleHeadlights}
+        onToggleFrontFogLights={handleToggleFrontFogLights}
+        onToggleRearFogLights={handleToggleRearFogLights}
+        onToggleSiren={handleToggleSiren}
+        onToggleTurnSignal={toggleTurnSignal}
+        onChangeHeaterMode={handleChangeHeaterMode}
+        onToggleAC={handleToggleAC}
+        onToggleRecirc={handleToggleRecirc}
+        onToggleEngine={handleToggleEngine}
+        onToggleWindow={handleToggleWindow}
+        onToggleTrailerHitch={handleToggleTrailerHitch}
+        onToggleRoadTrainLights={handleToggleRoadTrainLights}
+        onCycleDiffLock={() => {
+          inputRef.current.diffLockToggle = true;
         }}
       />
 
