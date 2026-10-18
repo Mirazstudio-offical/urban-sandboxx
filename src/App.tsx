@@ -527,6 +527,45 @@ export default function App() {
   const [isInventoryOpen, setIsInventoryOpen] = useState<boolean>(false);
   const [isInspectionOpen, setIsInspectionOpen] = useState<boolean>(false);
   const [isRadialMenuOpen, setIsRadialMenuOpen] = useState<boolean>(false);
+
+  // Traffic city simulation master switch (AI cars + pedestrians freeze when OFF)
+  const [isAiTrafficOn, setIsAiTrafficOn] = useState<boolean>(true);
+  const aiTrafficOnRef = useRef<boolean>(true);
+  const handleSetAiTraffic = (on: boolean) => {
+    aiTrafficOnRef.current = on;
+    setIsAiTrafficOn(on);
+    const pl = playerRef.current;
+    if (pl) {
+      addPlayerNotification(pl, on ? 'Трафик города ВКЛЮЧЁН' : 'Трафик города ОСТАНОВЛЕН', on ? 'info' : 'warning');
+    }
+  };
+
+  // Live vehicle configurator (color + powertrain) from the radial menu tree
+  const handleApplyVehicleConfig = (cfg: {
+    color?: { name: string; hex: string; roofHex?: string };
+    powertrain?: { engineId?: string; transmissionId?: string; tuneId?: string; tireSetId?: string; turboKitId?: string };
+  }) => {
+    const w = worldRef.current;
+    const p = playerRef.current;
+    if (!w || !p || !cfg) return;
+    const veh = w.vehicles.find((v) => v.id === p.currentVehicleId);
+    if (!veh) return;
+    if (cfg.color) {
+      veh.color = cfg.color.hex;
+      if (cfg.color.roofHex) (veh as { roofColor?: string }).roofColor = cfg.color.roofHex;
+    }
+    if (cfg.powertrain) {
+      const es = veh.engineState;
+      const sel = {
+        engineId: cfg.powertrain.engineId ?? es?.engineId,
+        transmissionId: cfg.powertrain.transmissionId ?? es?.transmissionId,
+        tuneId: cfg.powertrain.tuneId ?? es?.tuneId,
+        tireSetId: cfg.powertrain.tireSetId ?? es?.tireSetId,
+        turboKitId: cfg.powertrain.turboKitId ?? es?.turboKitId ?? 'trb_none'
+      };
+      applyPowertrain(veh, buildPowertrainPick(veh.type, sel));
+    }
+  };
   const [treatmentModalItem, setTreatmentModalItem] = useState<{ index: number; item: InventoryItem } | null>(null);
   const [activePhoneItem, setActivePhoneItem] = useState<InventoryItem | null>(null);
   const activePhoneItemRef = useRef<InventoryItem | null>(null);
@@ -2581,12 +2620,16 @@ export default function App() {
         updateTrafficLights(world.intersections, dt);
         TrainSystem.update(world, dt, player.x, player.y, player);
         RailwaySignalingSystem.update(world, dt);
-        updateAITraffic(world, dt, vehGrid, pedGrid, { x: player.x, y: player.y }, player, spatialGridPropsRef.current);
+        if (aiTrafficOnRef.current) {
+          updateAITraffic(world, dt, vehGrid, pedGrid, { x: player.x, y: player.y }, player, spatialGridPropsRef.current);
+        }
         const tAiEnd = performance.now();
 
         // 4. Update Pedestrians (using spatial grids and player position)
         const tPedStart = performance.now();
-        updatePedestrians(world, dt, vehGrid, pedGrid, bldGrid, { x: player.x, y: player.y }, spatialGridPropsRef.current, player);
+        if (aiTrafficOnRef.current) {
+          updatePedestrians(world, dt, vehGrid, pedGrid, bldGrid, { x: player.x, y: player.y }, spatialGridPropsRef.current, player);
+        }
         const tPedEnd = performance.now();
 
         // 5. Update Player & Vehicles Physics
@@ -7141,12 +7184,31 @@ export default function App() {
         }}
       />
 
-      {/* GTA-STYLE VEHICLE CONTROLS RADIAL MENU */}
+      {/* IN-game RADIAL QUICK MENU (board / vehicle config / environment / spawn / repair / traffic) */}
       <RadialMenu
         isOpen={isRadialMenuOpen}
         onClose={() => setIsRadialMenuOpen(false)}
         player={playerRef.current}
         world={worldRef.current}
+        timeHour={timeHour}
+        weather={weather}
+        isTimeAutoCycling={isTimeAutoCycling}
+        isTrafficEnabled={isAiTrafficOn}
+        onSetTime={setTimeOfDay}
+        onSetWeather={setWeatherType}
+        onToggleTimeAuto={() => {
+          setIsTimeAutoCycling((prev) => !prev);
+          const pl = playerRef.current;
+          if (pl) {
+            addPlayerNotification(pl, !isTimeAutoCycling ? 'Ход времени: ВКЛ' : 'Ход времени: ПАУЗА', 'info');
+          }
+        }}
+        onSetTrafficEnabled={handleSetAiTraffic}
+        onApplyVehicleConfig={handleApplyVehicleConfig}
+        onRepairAllVehicles={handleResetAllVehiclesDamage}
+        onOpenSpawnMenu={() => {
+          setIsSpawnMenuOpen(true);
+        }}
         onToggleWipers={handleToggleWipers}
         onToggleHeadlights={toggleHeadlights}
         onToggleFrontFogLights={handleToggleFrontFogLights}

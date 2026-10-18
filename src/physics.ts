@@ -7642,7 +7642,16 @@ export function updateVehiclePhysics(
     (vehicle as any)._lastThrottle = throttle;
     
     // --- MODULE 1 & 2: POWERTRAIN, ENGINE RPM, FUEL COMBUSTION ---
+    // engineAccel — только тяга/торможение двигателем (НЕ тормоза, НЕ сопротивление
+    // и НЕ уклон: они приходят в пятна контакта отдельными силами). Раньше сюда
+    // складывалось всё сразу, а потом ещё раз применялось через шины и кузов —
+    // силы считались дважды, и машина «клевала»/дрожала при торможении.
     let engineAccel = 0;
+    // Требуемое замедление от рабочего тормоза и ручника (в px/s²). Превращается
+    // в силы на колёсах позже, где ограничивается сцеплением и не может
+    // развернуть колесо через ноль.
+    let brakeAccelDemand = 0;
+    let handbrakeAccelDemand = 0;
     let gearAccelMult = 1.0;
     let T_factor = 1.0;
     const eng = vehicle.engineState;
