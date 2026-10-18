@@ -135,11 +135,14 @@ export function createVehicleNodeBeamSystem(
     width?: number;
     mass?: number;
     customMeshConfig?: Partial<VehicleNodeBeamDefinition>;
+    /** true — полностью динамическая world-space сетка (PBD), без закреплённых узлов. */
+    softBody?: boolean;
   }
 ): NodeBeamStructure {
   const length = car.length || 42;
   const width = car.width || 20;
   const totalMass = car.mass || 1400;
+  const softBody = !!car.softBody;
 
   // Resolve custom or archetype definition from mesh preset registry
   const def = getVehicleNodeBeamDefinition(car.type, car.customMeshConfig);
@@ -185,7 +188,7 @@ export function createVehicleNodeBeamSystem(
       mass: Math.max(10, nodeMass),
       plasticStrain: 0,
       group: nt.group,
-      isFixed: nt.isFixed || isCore,
+      isFixed: softBody ? false : (nt.isFixed || isCore),
       isCore,
       name: nt.name
     };
@@ -196,7 +199,7 @@ export function createVehicleNodeBeamSystem(
   // мало, дополнительно фиксируем самые массивные узлы (двигатель/рама).
   let fixedCount = 0;
   for (const n of nodes) if (n.isFixed) fixedCount++;
-  if (fixedCount < 3) {
+  if (!softBody && fixedCount < 3) {
     const candidates = nodes
       .filter(n => !n.isFixed)
       .sort((a, b) => b.mass - a.mass);
@@ -243,12 +246,12 @@ export function createVehicleNodeBeamSystem(
       mass: Math.max(8, totalMass * 0.035),
       plasticStrain: 0,
       group: 'wheel',
-      isFixed: true,
+      isFixed: !softBody,
       isCore: true,
       name: w.name
     });
   }
-  fixedCount += wheelLayout.length;
+  if (!softBody) fixedCount += wheelLayout.length;
 
   // Нормируем массы узлов на реальную массу автомобиля. Раньше сумма
   // massFrac давала 1.1–1.2 массы, и инерция сетки не соответствовала
@@ -347,14 +350,25 @@ export function createVehicleNodeBeamSystem(
   // Без них оболочка держалась только за подрамник и при боковом ударе
   // уезжала относительно колеса.
   for (let wi = 0; wi < wheelLayout.length; wi++) {
+    // В soft-body подвеска силовая (softBodyVehicle.applySuspensionForces):
+    // ступица держится у своего места на ядре, а реакция идёт в кузов.
+    // Жёсткие балки к подрамнику тут только дублировали бы силу и гасили
+    // момент рыскания.
+    if (softBody) continue;
     const wheelIdx = wheelNodeStart + wi;
     const wheelNode = nodes[wheelIdx];
     if (!wheelNode) continue;
+    const wheelSide = Math.sign(wheelNode.origY);
     const nearest = nodes
       .map((n, idx) => ({ idx, n, d: Math.hypot(n.origX - wheelNode.origX, n.origY - wheelNode.origY) }))
-      .filter(o => !o.n.isFixed && o.n.group !== 'wheel')
+      .filter(o => {
+        if (o.n.group === 'wheel') return false;
+        if (!softBody) return !o.n.isFixed;
+        if (o.n.group === 'chassis_core') return true;
+        return o.n.isCore && Math.sign(o.n.origY) === wheelSide;
+      })
       .sort((a, b) => a.d - b.d)
-      .slice(0, 2);
+      .slice(0, softBody ? 3 : 2);
     for (const anchor of nearest) {
       const dx = anchor.n.origX - wheelNode.origX;
       const dy = anchor.n.origY - wheelNode.origY;
@@ -370,10 +384,57 @@ export function createVehicleNodeBeamSystem(
         yieldDist: 0.45 * yieldScale * YIELD_RANGE_SCALE,
         breakDist: 22 * breakScale,
         broken: false,
-        type: 'structural',
+        type: softBody ? 'chassis_rail' : 'structural',
         currentStress: 0,
         plasticDeform: 0
       });
+    }
+  }
+
+  const coreNodeIndices: number[] = [];
+  for (let i = 0; i < nodes.length; i++) {
+    if (nodes[i].isCore && nodes[i].group !== 'wheel') coreNodeIndices.push(i);
+  }
+  const wheelNodeIndices: number[] = [];
+  for (let i = 0; i < wheelLayout.length; i++) wheelNodeIndices.push(wheelNodeStart + i);
+
+  // Полный жёсткий тросс ядра: все пары подрамников/тоннеля соединяются
+  // диагоналями. Без этого PBD-ядро складывалось под шинными силами и
+  // машина поворачивала не туда. Это не kinematic-rigidbody: балки такие же
+  // упругопластические, просто очень жёсткие и с большим пределом разрыва.
+  if (softBody && coreNodeIndices.length >= 2) {
+    const existingPairs = new Set<number>();
+    for (const b of beams) {
+      const a = Math.min(b.nodeA, b.nodeB);
+      const c = Math.max(b.nodeA, b.nodeB);
+      existingPairs.add(a * 10000 + c);
+    }
+    for (let i = 0; i < coreNodeIndices.length; i++) {
+      for (let j = i + 1; j < coreNodeIndices.length; j++) {
+        const a = coreNodeIndices[i];
+        const b = coreNodeIndices[j];
+        const key = Math.min(a, b) * 10000 + Math.max(a, b);
+        if (existingPairs.has(key)) continue;
+        const nA = nodes[a];
+        const nB = nodes[b];
+        const dist = Math.hypot(nB.origX - nA.origX, nB.origY - nA.origY) || 1;
+        beams.push({
+          id: 2000 + beams.length,
+          nodeA: a,
+          nodeB: b,
+          origLength: dist,
+          restLength: dist,
+          spring: DEFAULT_K_CHASSIS * 2.0 * springScale * BEAM_FORCE_SCALE / YIELD_RANGE_SCALE,
+          damp: DEFAULT_C_CHASSIS * 1.5 * dampScale * BEAM_DAMP_SCALE,
+          yieldDist: 0.70 * yieldScale * YIELD_RANGE_SCALE,
+          breakDist: 50 * breakScale,
+          broken: false,
+          type: 'chassis_rail',
+          currentStress: 0,
+          plasticDeform: 0
+        });
+        existingPairs.add(key);
+      }
     }
   }
 
@@ -397,7 +458,14 @@ export function createVehicleNodeBeamSystem(
     nodeInertia,
     comX,
     comY,
-    fixedNodeCount: fixedCount,
+    fixedNodeCount: softBody ? 0 : fixedCount,
+    softBody,
+    coreNodeIndices,
+    wheelNodeIndices,
+    wheelForces: [0, 0, 0, 0, 0, 0, 0, 0],
+    bodyForceX: 0,
+    bodyForceY: 0,
+    bodyTorque: 0,
     needsSync: true
   };
 }
@@ -511,10 +579,13 @@ export function ensureVehicleNodeBeam(
   }
   const dmg = veh.damage;
   const existing = dmg.nodeBeam;
+  const isSoftBody = existing?.softBody === true;
   const meshOutdated = !!existing && (
     !Array.isArray(existing.nodes) ||
     !existing.nodes.some(n => n.group === 'wheel') ||
-    (existing.fixedNodeCount || 0) < 3
+    (isSoftBody
+      ? !Array.isArray(existing.coreNodeIndices) || existing.coreNodeIndices.length < 2
+      : (existing.fixedNodeCount || 0) < 3)
   );
   if (!existing || !Array.isArray(existing.nodes) || existing.nodes.length < 8 || meshOutdated) {
     dmg.nodeBeam = createVehicleNodeBeamSystem({
@@ -522,7 +593,8 @@ export function ensureVehicleNodeBeam(
       length: veh.length,
       width: veh.width,
       mass: veh.mass,
-      customMeshConfig: veh.customMeshConfig
+      customMeshConfig: veh.customMeshConfig,
+      softBody: isSoftBody
     });
   }
   migrateForceScale(dmg.nodeBeam);
@@ -1330,6 +1402,7 @@ export function applyNodeBeamImpact(
   crushLimitPx?: number
 ): void {
   const system = ensureVehicleNodeBeam(car);
+  if (system.softBody) return;
   const nodes = system.nodes;
   if (!nodes || nodes.length < 8) return;
 
@@ -1552,6 +1625,9 @@ export function stepNodeBeamContinuousContact(
 ): void {
   const c = car.activeCrumple;
   if (!c || c.timer <= 0) return;
+  // World-space PBD-сетка шагает в softBodyVehicle.stepSoftBody; старый
+  // локальный контактный солвер к ней не применяется.
+  if (car.damage?.nodeBeam?.softBody) return;
   if (!Number.isFinite(c.normalX) || !Number.isFinite(c.normalY) ||
       !Number.isFinite(c.contactX) || !Number.isFinite(c.contactY)) return;
 
