@@ -47,7 +47,7 @@ import {
   getVehicleTurnSignalDynamicState,
   getVehicleTurnSignalConfig
 } from './vehicleHelpers';
-import { applyPowertrain, describePowertrain, buildPowertrainPick } from './powertrainVariants';
+import { applyPowertrain, describePowertrain, buildPowertrainPick, pickPowertrain, getPowertrainPickByIds, makePowertrainRng } from './powertrainVariants';
 import { loadMap, sanitizeWorldVehicles } from './loadMap';
 import { SpatialGrid } from './spatialGrid';
 import { updateAITraffic, updatePedestrians, updateTrafficLights } from './aiTraffic';
@@ -1222,8 +1222,9 @@ export default function App() {
           if (sv.engineState) {
             v.engineState = { ...sv.engineState };
           } else {
-            // No persisted engine data: initialize a fresh randomized powertrain
-            applyPowertrain(v);
+            // No persisted engine data (legacy save): deterministic pick seeded by
+            // vehicle id so every reload gives the same build, never a fresh reroll
+            applyPowertrain(v, pickPowertrain(sv.type, makePowertrainRng(v.id)));
           }
           if (sv.damage) {
             v.damage = ensureVehicleDamage({ length: v.length, width: v.width, damage: sv.damage });
@@ -5733,6 +5734,7 @@ export default function App() {
     if (world && player.isInVehicle && player.currentVehicleId) {
       const veh = world.vehicles.find((v) => v.id === player.currentVehicleId);
       if (veh) {
+        const keepPick = getPowertrainPickByIds(veh.engineState);
         veh.speed = 0;
         veh.vx = 0;
         veh.vy = 0;
@@ -5740,7 +5742,7 @@ export default function App() {
         veh.damage = createDefaultVehicleDamage(veh.length, veh.width);
         veh.engineState = createDefaultEngineState(veh.type);
         veh.fuelSystem = createDefaultFuelSystem(veh.type);
-        applyPowertrain(veh);
+        if (keepPick) applyPowertrain(veh, keepPick);
         setDamageDetails({
           engineSmoking: false,
           engineFire: false,
@@ -5758,10 +5760,11 @@ export default function App() {
     const world = worldRef.current;
     if (!world) return;
     for (const veh of world.vehicles) {
+      const keepPick = getPowertrainPickByIds(veh.engineState);
       veh.damage = createDefaultVehicleDamage(veh.length, veh.width);
       veh.engineState = createDefaultEngineState(veh.type);
       veh.fuelSystem = createDefaultFuelSystem(veh.type);
-      applyPowertrain(veh);
+      if (keepPick) applyPowertrain(veh, keepPick);
     }
     setDamageDetails({
       engineSmoking: false,
@@ -5807,6 +5810,7 @@ export default function App() {
     if (player.isInVehicle && player.currentVehicleId) {
       const veh = world.vehicles.find((v) => v.id === player.currentVehicleId);
       if (veh) {
+        const keepPick = getPowertrainPickByIds(veh.engineState);
         veh.x = loc.x;
         veh.y = loc.y;
         veh.vx = 0;
@@ -5818,7 +5822,7 @@ export default function App() {
         veh.damage = createDefaultVehicleDamage(veh.length, veh.width);
         veh.engineState = createDefaultEngineState(veh.type);
         veh.fuelSystem = createDefaultFuelSystem(veh.type);
-        applyPowertrain(veh);
+        if (keepPick) applyPowertrain(veh, keepPick);
       }
     }
 
