@@ -184,7 +184,8 @@ export type BeamNodeType =
   | 'trunk'
   | 'engine'
   | 'subframe'
-  | 'chassis_core';
+  | 'chassis_core'
+  | 'wheel';
 
 export type BeamLinkType =
   | 'structural'
@@ -262,6 +263,8 @@ export interface BeamNode {
   plasticStrain: number;
   group: BeamNodeType;
   isFixed?: boolean;
+  /** Узел входит в жёсткое ядро кузова (подрамник/центральный тоннель). */
+  isCore?: boolean;
   name?: string;
 }
 
@@ -337,6 +340,20 @@ export interface NodeBeamStructure {
   /** Ускорение системы отсчёта кузова (локальные координаты, px/s²): инерционная сила узлов. */
   frameAx?: number;
   frameAy?: number;
+  /** Угловая скорость/ускорение кузова, рад/с и рад/с²: центробежная и эйлерова нагрузка узлов. */
+  bodyOmega?: number;
+  bodyAlpha?: number;
+  /** Массовые характеристики, посчитанные по узлам сетки (кг и кг·px²). */
+  coreMass?: number;
+  totalNodeMass?: number;
+  nodeInertia?: number;
+  comX?: number;
+  comY?: number;
+  fixedNodeCount?: number;
+  /** Реакция деформируемой оболочки на жёсткое ядро за последний шаг (локальные координаты). */
+  reactionFx?: number;
+  reactionFy?: number;
+  reactionTorque?: number;
   /** Диагностика: суммарная сила реакции контакта за последний шаг, mass·px/s². */
   lastContactForce?: number;
 }

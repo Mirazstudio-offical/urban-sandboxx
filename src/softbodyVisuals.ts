@@ -125,7 +125,10 @@ function createInternalDeformSolver(
 
     if (deform) {
       const [exX, exY] = deform(lx, ly);
-      return [exX + dx * 0.75, exY + dy * 0.75];
+      // Локальная IDW-деформация уже несёт вмятину. Глобальную «волну» от
+      // агрегатов оставляем только как слабый фон, иначе кузов складывался
+      // вдвое сильнее узлов и выглядел желейным.
+      return [exX + dx * 0.25, exY + dy * 0.25];
     }
     return [lx + dx, ly + dy];
   };

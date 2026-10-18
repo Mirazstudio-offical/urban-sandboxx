@@ -109,9 +109,13 @@ const MAX_STRETCH_FRACTION = 0.35;
 /** Трение металла о стену: узлы в контакте не скользят вдоль неё, пока хватает нормального импульса. */
 const WALL_FRICTION = 0.6;
 /** Верхний предел числа подшагов интегратора за кадр. */
-const MAX_SUBSTEPS = 64;
+const MAX_SUBSTEPS = 512;
 /** Внутреннее трение материала (множитель скорости за 1/60 с). */
-const NODE_DRAG_PER_FRAME = 0.985;
+const NODE_DRAG_PER_FRAME = 0.982;
+/** Абсолютный предохранитель скорости узла, px/s. */
+const MAX_NODE_SPEED = 4500;
+/** Предел реакции оболочки, передаваемой на кузов (чтобы не «выстрелить» машину). */
+const MAX_SHELL_REACTION = 1_200_000;
 
 export interface NodeBeamConfig {
   springScale: number;
@@ -148,10 +152,17 @@ export function createVehicleNodeBeamSystem(
   // -------------------------------------------------------------------------
   // 1. NODE LAYOUT (Dynamic per-model nodes)
   // -------------------------------------------------------------------------
+  // Жёсткое ядро кузова: подрамники, точки крепления подвески и центральный
+  // тоннель. Это не «один гвоздь» в центре, как раньше, а пространственная
+  // рама из нескольких узлов. Оболочка (крылья, двери, бамперы, крыша) крепится
+  // к ней балками и может мяться локально, но не может повернуть весь кузов
+  // относительно колёс — именно это давало эффект «краба».
+  const CORE_GROUPS: BeamNodeType[] = ['chassis_core', 'subframe'];
   const nodes: BeamNode[] = def.nodes.map((nt) => {
     const lx = nt.xFrac * length + (nt.xOffset || 0);
     const ly = nt.yFrac * width + (nt.yOffset || 0);
     const nodeMass = totalMass * (nt.massFrac || (1 / def.nodes.length));
+    const isCore = CORE_GROUPS.indexOf(nt.group) !== -1;
     return {
       id: nt.id,
       origX: lx,
@@ -164,13 +175,112 @@ export function createVehicleNodeBeamSystem(
       vy: 0,
       fx: 0,
       fy: 0,
+      // Инициализируем поля смещений сразу. Раньше они появлялись только после
+      // первого интегрирования; если сетка ещё спала, sync читал undefined и
+      // через Math.max/-undefined превращал damage.frontCrumple в NaN.
+      offsetX: 0,
+      offsetY: 0,
+      elasticX: 0,
+      elasticY: 0,
       mass: Math.max(10, nodeMass),
       plasticStrain: 0,
       group: nt.group,
-      isFixed: nt.isFixed,
+      isFixed: nt.isFixed || isCore,
+      isCore,
       name: nt.name
     };
   });
+
+  // Гарантируем минимум три жёстких анкера: два узла ещё допускают вращение
+  // оболочки вокруг оси, три — уже нет. Для мотоцикла/прицепа, где подрамников
+  // мало, дополнительно фиксируем самые массивные узлы (двигатель/рама).
+  let fixedCount = 0;
+  for (const n of nodes) if (n.isFixed) fixedCount++;
+  if (fixedCount < 3) {
+    const candidates = nodes
+      .filter(n => !n.isFixed)
+      .sort((a, b) => b.mass - a.mass);
+    for (const n of candidates) {
+      if (fixedCount >= 3) break;
+      n.isFixed = true;
+      n.isCore = true;
+      fixedCount++;
+    }
+  }
+
+  // Добавляем четыре ступицы колёс как часть жёсткого ядра. Это реальные
+  // точки приложения шинных сил: колесо больше не висит отдельно от кузова,
+  // а его масса и момент входят в общую инерцию машины. Оболочка (крылья,
+  // пороги) привязывается к ступицам балками, поэтому арки не могут «уехать»
+  // относительно колеса.
+  const wheelBase = length * 0.62;
+  const halfTrack = width * 0.42;
+  const wheelNodeStart = nodes.length;
+  const wheelLayout = [
+    { x: wheelBase * 0.52, y: -halfTrack, name: 'Front-Left Wheel Hub' },
+    { x: wheelBase * 0.52, y: halfTrack, name: 'Front-Right Wheel Hub' },
+    { x: -wheelBase * 0.48, y: -halfTrack, name: 'Rear-Left Wheel Hub' },
+    { x: -wheelBase * 0.48, y: halfTrack, name: 'Rear-Right Wheel Hub' }
+  ];
+  for (let i = 0; i < wheelLayout.length; i++) {
+    const w = wheelLayout[i];
+    nodes.push({
+      id: wheelNodeStart + i,
+      origX: w.x,
+      origY: w.y,
+      localX: w.x,
+      localY: w.y,
+      x: w.x,
+      y: w.y,
+      vx: 0,
+      vy: 0,
+      fx: 0,
+      fy: 0,
+      offsetX: 0,
+      offsetY: 0,
+      elasticX: 0,
+      elasticY: 0,
+      mass: Math.max(8, totalMass * 0.035),
+      plasticStrain: 0,
+      group: 'wheel',
+      isFixed: true,
+      isCore: true,
+      name: w.name
+    });
+  }
+  fixedCount += wheelLayout.length;
+
+  // Нормируем массы узлов на реальную массу автомобиля. Раньше сумма
+  // massFrac давала 1.1–1.2 массы, и инерция сетки не соответствовала
+  // настройкам машины. Теперь сумма узлов = totalMass, а инерция считается
+  // относительно центра масс — её и использует rigid-body интегратор.
+  let rawMassSum = 0;
+  for (const n of nodes) rawMassSum += n.mass;
+  const massScale = rawMassSum > 0 ? totalMass / rawMassSum : 1;
+  for (const n of nodes) {
+    n.mass = Math.max(8, n.mass * massScale);
+  }
+
+  let totalNodeMass = 0;
+  let coreMass = 0;
+  let comX = 0;
+  let comY = 0;
+  for (const n of nodes) {
+    totalNodeMass += n.mass;
+    comX += n.mass * n.origX;
+    comY += n.mass * n.origY;
+    if (n.isFixed) coreMass += n.mass;
+  }
+  if (totalNodeMass > 0) {
+    comX /= totalNodeMass;
+    comY /= totalNodeMass;
+  }
+  let nodeInertia = 0;
+  for (const n of nodes) {
+    const rx = n.origX - comX;
+    const ry = n.origY - comY;
+    nodeInertia += n.mass * (rx * rx + ry * ry);
+  }
 
   // -------------------------------------------------------------------------
   // 2. BEAM LAYOUT (Dynamic per-model beams)
@@ -233,6 +343,40 @@ export function createVehicleNodeBeamSystem(
     };
   });
 
+  // Балки «ступица — арка»: привязывают крылья/пороги к колёсным узлам.
+  // Без них оболочка держалась только за подрамник и при боковом ударе
+  // уезжала относительно колеса.
+  for (let wi = 0; wi < wheelLayout.length; wi++) {
+    const wheelIdx = wheelNodeStart + wi;
+    const wheelNode = nodes[wheelIdx];
+    if (!wheelNode) continue;
+    const nearest = nodes
+      .map((n, idx) => ({ idx, n, d: Math.hypot(n.origX - wheelNode.origX, n.origY - wheelNode.origY) }))
+      .filter(o => !o.n.isFixed && o.n.group !== 'wheel')
+      .sort((a, b) => a.d - b.d)
+      .slice(0, 2);
+    for (const anchor of nearest) {
+      const dx = anchor.n.origX - wheelNode.origX;
+      const dy = anchor.n.origY - wheelNode.origY;
+      const dist = Math.hypot(dx, dy) || 1;
+      beams.push({
+        id: 1000 + beams.length,
+        nodeA: wheelIdx,
+        nodeB: anchor.idx,
+        origLength: dist,
+        restLength: dist,
+        spring: DEFAULT_K_STRUCTURAL * 1.4 * springScale * BEAM_FORCE_SCALE / YIELD_RANGE_SCALE,
+        damp: DEFAULT_C_STRUCTURAL * 1.4 * dampScale * BEAM_DAMP_SCALE,
+        yieldDist: 0.45 * yieldScale * YIELD_RANGE_SCALE,
+        breakDist: 22 * breakScale,
+        broken: false,
+        type: 'structural',
+        currentStress: 0,
+        plasticDeform: 0
+      });
+    }
+  }
+
   return {
     nodes,
     beams,
@@ -248,6 +392,12 @@ export function createVehicleNodeBeamSystem(
     definition: def,
     forceScaleVersion: FORCE_SCALE_VERSION,
     stableDt: computeStableDt(nodes, beams),
+    coreMass,
+    totalNodeMass,
+    nodeInertia,
+    comX,
+    comY,
+    fixedNodeCount: fixedCount,
     needsSync: true
   };
 }
@@ -304,6 +454,46 @@ function migrateForceScale(system: NodeBeamStructure): void {
 }
 
 /**
+ * Приводит сетку в заведомо конечное состояние. Нужна для старых сохранений и
+ * для страховки после численных сбоев: лучше сбросить один узел, чем отдать
+ * NaN в рендер и физику кузова.
+ */
+function sanitizeNodeBeamSystem(system: NodeBeamStructure): void {
+  const nodes = system.nodes;
+  for (let i = 0; i < nodes.length; i++) {
+    const n = nodes[i];
+    if (!Number.isFinite(n.mass) || n.mass <= 0) n.mass = 10;
+    if (!Number.isFinite(n.origX)) n.origX = 0;
+    if (!Number.isFinite(n.origY)) n.origY = 0;
+    if (!Number.isFinite(n.x)) n.x = n.origX;
+    if (!Number.isFinite(n.y)) n.y = n.origY;
+    if (!Number.isFinite(n.vx)) n.vx = 0;
+    if (!Number.isFinite(n.vy)) n.vy = 0;
+    if (!Number.isFinite(n.offsetX)) n.offsetX = 0;
+    if (!Number.isFinite(n.offsetY)) n.offsetY = 0;
+    if (!Number.isFinite(n.elasticX)) n.elasticX = 0;
+    if (!Number.isFinite(n.elasticY)) n.elasticY = 0;
+    if (!Number.isFinite(n.localX)) n.localX = n.origX;
+    if (!Number.isFinite(n.localY)) n.localY = n.origY;
+  }
+  for (let i = 0; i < system.beams.length; i++) {
+    const b = system.beams[i];
+    if (!Number.isFinite(b.origLength) || b.origLength <= 0) b.origLength = 1;
+    if (!Number.isFinite(b.restLength) || b.restLength <= 0) b.restLength = b.origLength;
+    if (!Number.isFinite(b.spring) || b.spring <= 0) b.spring = 1;
+    if (!Number.isFinite(b.damp) || b.damp < 0) b.damp = 0;
+    if (!Number.isFinite(b.yieldDist) || b.yieldDist <= 0) b.yieldDist = 0.01;
+    if (!Number.isFinite(b.breakDist) || b.breakDist <= 0) b.breakDist = 1;
+  }
+  if (!Number.isFinite(system.stableDt as number) || (system.stableDt as number) <= 0) {
+    system.stableDt = computeStableDt(nodes, system.beams);
+  }
+  if (!Number.isFinite(system.stableDt as number) || (system.stableDt as number) <= 0) {
+    system.stableDt = 0.001;
+  }
+}
+
+/**
  * Ensures that a vehicle has a fully initialized Node-Beam structure.
  */
 export function ensureVehicleNodeBeam(
@@ -320,7 +510,13 @@ export function ensureVehicleNodeBeam(
     veh.damage = {} as VehicleDamage;
   }
   const dmg = veh.damage;
-  if (!dmg.nodeBeam || !Array.isArray(dmg.nodeBeam.nodes) || dmg.nodeBeam.nodes.length < 8) {
+  const existing = dmg.nodeBeam;
+  const meshOutdated = !!existing && (
+    !Array.isArray(existing.nodes) ||
+    !existing.nodes.some(n => n.group === 'wheel') ||
+    (existing.fixedNodeCount || 0) < 3
+  );
+  if (!existing || !Array.isArray(existing.nodes) || existing.nodes.length < 8 || meshOutdated) {
     dmg.nodeBeam = createVehicleNodeBeamSystem({
       type: veh.type || 'sedan',
       length: veh.length,
@@ -333,6 +529,7 @@ export function ensureVehicleNodeBeam(
   if (!dmg.nodeBeam.stableDt) {
     dmg.nodeBeam.stableDt = computeStableDt(dmg.nodeBeam.nodes, dmg.nodeBeam.beams);
   }
+  sanitizeNodeBeamSystem(dmg.nodeBeam);
   return dmg.nodeBeam;
 }
 
@@ -524,13 +721,25 @@ function integrateStructure(
   const beams = system.beams;
 
   const clampedDt = Math.max(0.0005, Math.min(0.05, dt));
-  const stable = system.stableDt || 0.002;
-  const subSteps = Math.max(1, Math.min(MAX_SUBSTEPS, Math.ceil(clampedDt / stable)));
-  const subDt = clampedDt / subSteps;
-  const penRate = (pen1 - pen0) / clampedDt;
+  const stable = Math.max(1e-6, system.stableDt || 0.002);
+  // Явный интегратор нельзя гнать быстрее устойчивого шага. Раньше здесь стоял
+  // жёсткий кап 64 подшага, а реальной сетке седана нужно 128 уже на 60 FPS и
+  // 384 на 20 FPS — интегратор работал за пределом устойчивости, отсюда «желе»
+  // и выбросы энергии. Теперь подшагов столько, сколько требует физика; если
+  // кап всё-таки достигнут, сетка честно симулирует меньше времени за кадр
+  // (лёгкое замедление деформации), но не взрывается.
+  const neededSubSteps = Math.max(1, Math.ceil(clampedDt / stable));
+  const subSteps = Math.min(MAX_SUBSTEPS, neededSubSteps);
+  const subDt = Math.min(stable, clampedDt / subSteps);
+  const simulatedDt = Math.max(1e-6, subDt * subSteps);
+  const penRate = (pen1 - pen0) / simulatedDt;
   const halfL = car.length / 2;
   const halfW = car.width / 2;
   const maxDisplacement = Math.max(halfL * 0.85, halfW * 0.85);
+
+  const omega = Math.max(-20, Math.min(20, system.bodyOmega || 0));
+  const alpha = Math.max(-250, Math.min(250, system.bodyAlpha || 0));
+  const omega2 = omega * omega;
 
   const drag = Math.pow(NODE_DRAG_PER_FRAME, subDt * 60);
   const plasticRelax = 1 - Math.exp(-PLASTIC_RATE * subDt);
@@ -538,13 +747,22 @@ function integrateStructure(
   let maxStress = 0;
   let plasticShiftTotal = 0;
   let contactForce = 0;
+  let reactionFx = 0;
+  let reactionFy = 0;
+  let reactionTorque = 0;
+  const comX = Number.isFinite(system.comX as number) ? (system.comX as number) : 0;
+  const comY = Number.isFinite(system.comY as number) ? (system.comY as number) : 0;
 
   for (let step = 0; step < subSteps; step++) {
-    // 1. Силы: инерция системы отсчёта кузова (кузов тормозится, узлы «едут» вперёд)
+    // 1. Силы: инерция системы отсчёта кузова. Помимо линейного торможения
+    // учитываем центробежную, эйлерову и кориолисову нагрузку — без них при
+    // вращении кузова оболочка «отставала» и выглядела как желе.
     for (let i = 0; i < nodes.length; i++) {
       const n = nodes[i];
-      n.fx = -n.mass * accelX;
-      n.fy = -n.mass * accelY;
+      const ax = -accelX + alpha * n.origY + omega2 * n.origX + 2 * omega * n.vy;
+      const ay = -accelY - alpha * n.origX + omega2 * n.origY - 2 * omega * n.vx;
+      n.fx = n.mass * ax;
+      n.fy = n.mass * ay;
     }
 
     // 2. Балки: упругость, пластика (только сжатие), разрушение
@@ -634,6 +852,25 @@ function integrateStructure(
       nA.fy -= fTotal * dirY;
       nB.fx += fTotal * dirX;
       nB.fy += fTotal * dirY;
+
+      // Реакция оболочки на жёсткое ядро: раньше силы на закреплённые узлы
+      // просто выбрасывались, и кузов «не чувствовал» смятую панель. Теперь
+      // суммарная сила и момент передаются в rigid-body кузова (двусторонняя
+      // связь), но с ограничением, чтобы удар не телепортировал машину.
+      if (nA.isFixed) {
+        const fxA = -fTotal * dirX;
+        const fyA = -fTotal * dirY;
+        reactionFx += fxA;
+        reactionFy += fyA;
+        reactionTorque += (nA.origX - comX) * fyA - (nA.origY - comY) * fxA;
+      }
+      if (nB.isFixed) {
+        const fxB = fTotal * dirX;
+        const fyB = fTotal * dirY;
+        reactionFx += fxB;
+        reactionFy += fyB;
+        reactionTorque += (nB.origX - comX) * fyB - (nB.origY - comY) * fxB;
+      }
     }
 
     // 3. Интегрирование узлов (semi-implicit Euler)
@@ -652,7 +889,23 @@ function integrateStructure(
       node.x += node.vx * subDt;
       node.y += node.vy * subDt;
 
-      // Защита от неустойчивости: узел не может уйти дальше разумного предела от исходной точки
+      // Предохранитель: ни один узел не должен улететь быстрее разумного.
+      // Именно здесь раньше рождался NaN: при curDisp = Infinity фактор
+      // maxDisplacement / Infinity = 0, а Infinity * 0 = NaN.
+      if (!Number.isFinite(node.x) || !Number.isFinite(node.y) ||
+          !Number.isFinite(node.vx) || !Number.isFinite(node.vy)) {
+        node.x = node.origX;
+        node.y = node.origY;
+        node.vx = 0;
+        node.vy = 0;
+        continue;
+      }
+      const sp2 = node.vx * node.vx + node.vy * node.vy;
+      if (sp2 > MAX_NODE_SPEED * MAX_NODE_SPEED) {
+        const k = MAX_NODE_SPEED / Math.sqrt(sp2);
+        node.vx *= k;
+        node.vy *= k;
+      }
       const curDisp = Math.hypot(node.x - node.origX, node.y - node.origY);
       if (curDisp > maxDisplacement) {
         const factor = maxDisplacement / curDisp;
@@ -675,12 +928,30 @@ function integrateStructure(
   system.totalPlasticDeform += plasticShiftTotal;
   system.lastContactForce = contactForce / subSteps;
 
+  // Убираем остаточные «жёсткие» моды оболочки: средний сдвиг и поворот всех
+  // свободных узлов относительно ядра. Локальные вмятины сохраняются, но кузов
+  // больше не может целиком уехать/повернуться относительно колёс.
+  projectShellRigidModes(system);
+
+  // Реакция усредняется по подшагам и ограничивается: это сила, а не импульс.
+  system.reactionFx = clampFinite(reactionFx / subSteps, -MAX_SHELL_REACTION, MAX_SHELL_REACTION);
+  system.reactionFy = clampFinite(reactionFy / subSteps, -MAX_SHELL_REACTION, MAX_SHELL_REACTION);
+  system.reactionTorque = clampFinite(reactionTorque / subSteps, -MAX_SHELL_REACTION * car.length, MAX_SHELL_REACTION * car.length);
+
   // Смещения узлов для рендера: пластическая часть (localX/Y) и упругое «дрожание»
   let maxSpeedSq = 0;
   for (let i = 0; i < nodes.length; i++) {
     const node = nodes[i];
-    const totalOffsetX = node.x - node.origX;
-    const totalOffsetY = node.y - node.origY;
+    let totalOffsetX = node.x - node.origX;
+    let totalOffsetY = node.y - node.origY;
+    if (!Number.isFinite(totalOffsetX) || !Number.isFinite(totalOffsetY)) {
+      node.x = node.origX;
+      node.y = node.origY;
+      node.vx = 0;
+      node.vy = 0;
+      totalOffsetX = 0;
+      totalOffsetY = 0;
+    }
     const plasticWeight = Math.min(1.0, (node.plasticStrain || 0) * 0.4);
     node.localX = node.origX + totalOffsetX * plasticWeight;
     node.localY = node.origY + totalOffsetY * plasticWeight;
@@ -689,9 +960,95 @@ function integrateStructure(
     node.elasticX = node.x - node.localX;
     node.elasticY = node.y - node.localY;
     const sp = node.vx * node.vx + node.vy * node.vy;
-    if (sp > maxSpeedSq) maxSpeedSq = sp;
+    if (Number.isFinite(sp) && sp > maxSpeedSq) maxSpeedSq = sp;
   }
   return Math.sqrt(maxSpeedSq);
+}
+
+function clampFinite(v: number, min: number, max: number): number {
+  if (!Number.isFinite(v)) return 0;
+  return v < min ? min : v > max ? max : v;
+}
+
+/**
+ * Проекция деформируемой оболочки на пространство без жёстких мод.
+ *
+ * Свободные узлы могут накопить общий сдвиг и поворот относительно ядра
+ * (именно это давало «краба»: кузов доворачивался, колёса оставались).
+ * Вычитаем средневзвешенное смещение и угловую составляющую, оставляя только
+ * локальные вмятины. То же делаем со скоростями, чтобы не внести ложный
+ * угловой момент.
+ */
+function projectShellRigidModes(system: NodeBeamStructure): void {
+  const nodes = system.nodes;
+  let M = 0;
+  let mx = 0;
+  let my = 0;
+  for (let i = 0; i < nodes.length; i++) {
+    const n = nodes[i];
+    if (n.isFixed) continue;
+    M += n.mass;
+    mx += n.mass * (n.x - n.origX);
+    my += n.mass * (n.y - n.origY);
+  }
+  if (M <= 1e-6) return;
+  mx /= M;
+  my /= M;
+
+  let L = 0;
+  let I = 0;
+  for (let i = 0; i < nodes.length; i++) {
+    const n = nodes[i];
+    if (n.isFixed) continue;
+    n.x -= mx;
+    n.y -= my;
+    const ox = n.x - n.origX;
+    const oy = n.y - n.origY;
+    L += n.mass * (n.origX * oy - n.origY * ox);
+    I += n.mass * (n.origX * n.origX + n.origY * n.origY);
+  }
+  if (I > 1e-6) {
+    const theta = L / I;
+    if (Number.isFinite(theta) && Math.abs(theta) > 1e-7) {
+      for (let i = 0; i < nodes.length; i++) {
+        const n = nodes[i];
+        if (n.isFixed) continue;
+        n.x += theta * n.origY;
+        n.y -= theta * n.origX;
+      }
+    }
+  }
+
+  // Скорости: убираем средний перенос и среднее вращение.
+  let mvx = 0;
+  let mvy = 0;
+  for (let i = 0; i < nodes.length; i++) {
+    const n = nodes[i];
+    if (n.isFixed) continue;
+    mvx += n.mass * n.vx;
+    mvy += n.mass * n.vy;
+  }
+  mvx /= M;
+  mvy /= M;
+  let Lv = 0;
+  for (let i = 0; i < nodes.length; i++) {
+    const n = nodes[i];
+    if (n.isFixed) continue;
+    n.vx -= mvx;
+    n.vy -= mvy;
+    Lv += n.mass * (n.origX * n.vy - n.origY * n.vx);
+  }
+  if (I > 1e-6) {
+    const omega = Lv / I;
+    if (Number.isFinite(omega) && Math.abs(omega) > 1e-7) {
+      for (let i = 0; i < nodes.length; i++) {
+        const n = nodes[i];
+        if (n.isFixed) continue;
+        n.vx += omega * n.origY;
+        n.vy -= omega * n.origX;
+      }
+    }
+  }
 }
 
 /** Последствия разрыва балки для навесных деталей (бампер, капот, двери, багажник). */
@@ -744,6 +1101,8 @@ export function stepNodeBeamSimulation(
   const hasContact = !!system.contact;
   if (system.isSleeping && !hasContact && !system.needsSync) return;
 
+  system.bodyOmega = Number.isFinite(car.angularVelocity) ? car.angularVelocity : 0;
+
   if (!system.isSleeping || hasContact) {
     const heldPen = system.contact ? system.contact.pen : 0;
     const pen0 = system.contactPen0 ?? heldPen;
@@ -755,7 +1114,32 @@ export function stepNodeBeamSimulation(
     system.contactPen1 = undefined;
     system.frameAx = 0;
     system.frameAy = 0;
+    system.bodyAlpha = 0;
     system.needsSync = true;
+
+    // Двусторонняя связь: оболочка через балки тянет/тормозит жёсткое ядро.
+    // Коэффициенты намеренно мягкие: основную энергию удара по-прежнему
+    // поглощает damageModel, а здесь важна асимметрия (подруливание/рывок
+    // вбок от смятого крыла), а не повторное торможение машины.
+    const rx = Number.isFinite(system.reactionFx) ? system.reactionFx! : 0;
+    const ry = Number.isFinite(system.reactionFy) ? system.reactionFy! : 0;
+    const tq = Number.isFinite(system.reactionTorque) ? system.reactionTorque! : 0;
+    if ((rx !== 0 || ry !== 0 || tq !== 0) && dt > 0) {
+      const mass = Math.max(300, car.mass || 1400);
+      const inertia = Math.max(
+        system.nodeInertia || 0,
+        mass * (car.length * car.length + car.width * car.width) / 12
+      );
+      const cosA = Math.cos(car.angle);
+      const sinA = Math.sin(car.angle);
+      const invMass = 1 / mass;
+      car.vx += (rx * cosA - ry * sinA) * invMass * dt * 0.08;
+      car.vy += (rx * sinA + ry * cosA) * invMass * dt * 0.08;
+      car.angularVelocity += (tq / Math.max(1, inertia)) * dt * 0.18;
+      if (!Number.isFinite(car.vx)) car.vx = 0;
+      if (!Number.isFinite(car.vy)) car.vy = 0;
+      if (!Number.isFinite(car.angularVelocity)) car.angularVelocity = 0;
+    }
 
     if (maxSpeed > 0.5 || hasContact) {
       system.activeTimer = Math.max(system.activeTimer || 0, 0.25);
@@ -785,6 +1169,31 @@ function syncNodeBeamToVehicle(system: NodeBeamStructure, car: Vehicle): void {
   const dmg = car.damage;
   if (!dmg) return;
 
+  // Жёсткая санитизация: ни одно смещение/агрегат не имеет права быть NaN.
+  // Иначе один нефинитный узел навсегда отравляет frontCrumple, а вслед за ним
+  // crushStartPx и скорость машины (именно этот путь давал «speed: NaN»).
+  const finiteOrZero = (v: number | undefined): number =>
+    typeof v === 'number' && Number.isFinite(v) ? v : 0;
+  for (let i = 0; i < nodes.length; i++) {
+    const n = nodes[i];
+    n.offsetX = finiteOrZero(n.offsetX);
+    n.offsetY = finiteOrZero(n.offsetY);
+    n.elasticX = finiteOrZero(n.elasticX);
+    n.elasticY = finiteOrZero(n.elasticY);
+    n.localX = finiteOrZero(n.localX);
+    n.localY = finiteOrZero(n.localY);
+    n.vx = finiteOrZero(n.vx);
+    n.vy = finiteOrZero(n.vy);
+  }
+  const damageKeys = [
+    'frontCrumple', 'rearCrumple', 'leftDent', 'rightDent',
+    'frontLeftDent', 'frontRightDent', 'rearLeftDent', 'rearRightDent',
+    'wheelRubResistance', 'steeringDrift', 'frameBentAngle'
+  ] as const;
+  for (const key of damageKeys) {
+    if (!Number.isFinite((dmg as any)[key])) (dmg as any)[key] = 0;
+  }
+
   const vertCount = Math.max(system.perimeterCount || 14, Math.min(nodes.length, 34));
 
   if (!dmg.deformedVertices || dmg.deformedVertices.length !== vertCount) {
@@ -812,10 +1221,10 @@ function syncNodeBeamToVehicle(system: NodeBeamStructure, car: Vehicle): void {
     const dv = dmg.deformedVertices[i];
     if (!n || !dv) continue;
 
-    dv.offsetX = n.offsetX;
-    dv.offsetY = n.offsetY;
-    dv.targetOffsetX = n.offsetX;
-    dv.targetOffsetY = n.offsetY;
+    dv.offsetX = finiteOrZero(n.offsetX);
+    dv.offsetY = finiteOrZero(n.offsetY);
+    dv.targetOffsetX = dv.offsetX;
+    dv.targetOffsetY = dv.offsetY;
     // offsetX/offsetY — это уже ПОЛНОЕ смещение узла (пластика + упругая часть). Потребители
     // (renderer.ts, physics.ts) складывают localX + offsetX + elasticX, поэтому упругую часть
     // отдаём нулём: иначе она учитывалась дважды и фигура рисовалась «растянутой/сжатой» сильнее узлов.
@@ -836,63 +1245,66 @@ function syncNodeBeamToVehicle(system: NodeBeamStructure, car: Vehicle): void {
   // damped elastic rebound erase damage already recorded by damageModel.ts.
   // Otherwise collisions, component damage and rendering diverge.
   if (tracking?.frontNodeIds && tracking.frontNodeIds.length > 0) {
-    const frontOffsets = tracking.frontNodeIds.map(id => nodes[id] ? -nodes[id].offsetX : 0);
-    dmg.frontCrumple = Math.max(dmg.frontCrumple || 0, 0, ...frontOffsets);
+    const frontOffsets = tracking.frontNodeIds.map(id => nodes[id] ? -finiteOrZero(nodes[id].offsetX) : 0);
+    dmg.frontCrumple = Math.max(finiteOrZero(dmg.frontCrumple), 0, ...frontOffsets);
     const leftCornerNode = nodes[tracking.frontNodeIds[tracking.frontNodeIds.length - 1]];
     const rightCornerNode = nodes[tracking.frontNodeIds[1] ?? tracking.frontNodeIds[0]];
-    dmg.frontLeftDent = Math.max(dmg.frontLeftDent || 0, leftCornerNode ? Math.hypot(leftCornerNode.offsetX, leftCornerNode.offsetY) : 0);
-    dmg.frontRightDent = Math.max(dmg.frontRightDent || 0, rightCornerNode ? Math.hypot(rightCornerNode.offsetX, rightCornerNode.offsetY) : 0);
+    dmg.frontLeftDent = Math.max(finiteOrZero(dmg.frontLeftDent), leftCornerNode ? Math.hypot(finiteOrZero(leftCornerNode.offsetX), finiteOrZero(leftCornerNode.offsetY)) : 0);
+    dmg.frontRightDent = Math.max(finiteOrZero(dmg.frontRightDent), rightCornerNode ? Math.hypot(finiteOrZero(rightCornerNode.offsetX), finiteOrZero(rightCornerNode.offsetY)) : 0);
   } else {
     const frontNode = nodes.reduce((prev, curr) => (curr.origX > prev.origX ? curr : prev), nodes[0]);
-    dmg.frontCrumple = Math.max(dmg.frontCrumple || 0, 0, -(frontNode.offsetX || 0));
-    dmg.frontLeftDent = Math.max(dmg.frontLeftDent || 0, Math.hypot(frontNode.offsetX, frontNode.offsetY));
-    dmg.frontRightDent = Math.max(dmg.frontRightDent || 0, dmg.frontLeftDent);
+    dmg.frontCrumple = Math.max(finiteOrZero(dmg.frontCrumple), 0, -finiteOrZero(frontNode.offsetX));
+    dmg.frontLeftDent = Math.max(finiteOrZero(dmg.frontLeftDent), Math.hypot(finiteOrZero(frontNode.offsetX), finiteOrZero(frontNode.offsetY)));
+    dmg.frontRightDent = Math.max(finiteOrZero(dmg.frontRightDent), dmg.frontLeftDent);
   }
 
   // Rear crumple:
   if (tracking?.rearNodeIds && tracking.rearNodeIds.length > 0) {
-    const rearOffsets = tracking.rearNodeIds.map(id => nodes[id] ? nodes[id].offsetX : 0);
-    dmg.rearCrumple = Math.max(dmg.rearCrumple || 0, 0, ...rearOffsets);
+    const rearOffsets = tracking.rearNodeIds.map(id => nodes[id] ? finiteOrZero(nodes[id].offsetX) : 0);
+    dmg.rearCrumple = Math.max(finiteOrZero(dmg.rearCrumple), 0, ...rearOffsets);
     const rearRightNode = nodes[tracking.rearNodeIds[0]];
     const rearLeftNode = nodes[tracking.rearNodeIds[tracking.rearNodeIds.length - 1]];
-    dmg.rearRightDent = Math.max(dmg.rearRightDent || 0, rearRightNode ? Math.hypot(rearRightNode.offsetX, rearRightNode.offsetY) : 0);
-    dmg.rearLeftDent = Math.max(dmg.rearLeftDent || 0, rearLeftNode ? Math.hypot(rearLeftNode.offsetX, rearLeftNode.offsetY) : 0);
+    dmg.rearRightDent = Math.max(finiteOrZero(dmg.rearRightDent), rearRightNode ? Math.hypot(finiteOrZero(rearRightNode.offsetX), finiteOrZero(rearRightNode.offsetY)) : 0);
+    dmg.rearLeftDent = Math.max(finiteOrZero(dmg.rearLeftDent), rearLeftNode ? Math.hypot(finiteOrZero(rearLeftNode.offsetX), finiteOrZero(rearLeftNode.offsetY)) : 0);
   } else {
     const rearNode = nodes.reduce((prev, curr) => (curr.origX < prev.origX ? curr : prev), nodes[0]);
-    dmg.rearCrumple = Math.max(dmg.rearCrumple || 0, 0, rearNode.offsetX || 0);
-    dmg.rearLeftDent = Math.max(dmg.rearLeftDent || 0, Math.hypot(rearNode.offsetX, rearNode.offsetY));
-    dmg.rearRightDent = Math.max(dmg.rearRightDent || 0, dmg.rearLeftDent);
+    dmg.rearCrumple = Math.max(finiteOrZero(dmg.rearCrumple), 0, finiteOrZero(rearNode.offsetX));
+    dmg.rearLeftDent = Math.max(finiteOrZero(dmg.rearLeftDent), Math.hypot(finiteOrZero(rearNode.offsetX), finiteOrZero(rearNode.offsetY)));
+    dmg.rearRightDent = Math.max(finiteOrZero(dmg.rearRightDent), dmg.rearLeftDent);
   }
 
   // Side flanks:
   if (tracking?.leftNodeIds && tracking.leftNodeIds.length > 0) {
-    dmg.leftDent = Math.max(dmg.leftDent || 0, 0, ...tracking.leftNodeIds.map(id => nodes[id] ? nodes[id].offsetY : 0));
+    dmg.leftDent = Math.max(finiteOrZero(dmg.leftDent), 0, ...tracking.leftNodeIds.map(id => nodes[id] ? finiteOrZero(nodes[id].offsetY) : 0));
   } else {
     const leftNode = nodes.reduce((prev, curr) => (curr.origY < prev.origY ? curr : prev), nodes[0]);
-    dmg.leftDent = Math.max(dmg.leftDent || 0, 0, -(leftNode.offsetY || 0));
+    dmg.leftDent = Math.max(finiteOrZero(dmg.leftDent), 0, -finiteOrZero(leftNode.offsetY));
   }
 
   if (tracking?.rightNodeIds && tracking.rightNodeIds.length > 0) {
-    dmg.rightDent = Math.max(dmg.rightDent || 0, 0, ...tracking.rightNodeIds.map(id => nodes[id] ? -nodes[id].offsetY : 0));
+    dmg.rightDent = Math.max(finiteOrZero(dmg.rightDent), 0, ...tracking.rightNodeIds.map(id => nodes[id] ? -finiteOrZero(nodes[id].offsetY) : 0));
   } else {
     const rightNode = nodes.reduce((prev, curr) => (curr.origY > prev.origY ? curr : prev), nodes[0]);
-    dmg.rightDent = Math.max(dmg.rightDent || 0, 0, rightNode.offsetY || 0);
+    dmg.rightDent = Math.max(finiteOrZero(dmg.rightDent), 0, finiteOrZero(rightNode.offsetY));
   }
 
   // Steering drift & frame twist:
   const flId = tracking?.subframeLeftFL;
   const frId = tracking?.subframeRightFR;
   if (flId !== undefined && frId !== undefined && nodes[flId] && nodes[frId]) {
-    const subframeAsym = (nodes[flId].offsetX - nodes[frId].offsetX) * 0.12;
-    dmg.steeringDrift = Math.max(-1.0, Math.min(1.0, subframeAsym));
-    dmg.frameBentAngle = subframeAsym * 0.08;
+    const subframeAsym = (finiteOrZero(nodes[flId].offsetX) - finiteOrZero(nodes[frId].offsetX)) * 0.12;
+    dmg.steeringDrift = Number.isFinite(subframeAsym) ? Math.max(-1.0, Math.min(1.0, subframeAsym)) : 0;
+    dmg.frameBentAngle = Number.isFinite(subframeAsym) ? subframeAsym * 0.08 : 0;
   }
 
   // Wheel rub resistance: check fender / wheel well nodes
   const fenderNodes = nodes.filter(n => n.group === 'fender' || n.group === 'quarter');
   if (fenderNodes.length > 0) {
-    const rubSum = fenderNodes.reduce((acc, fn) => acc + Math.max(0, Math.hypot(fn.offsetX, fn.offsetY) - 3.0), 0);
-    dmg.wheelRubResistance = rubSum * 3.5;
+    const rubSum = fenderNodes.reduce(
+      (acc, fn) => acc + Math.max(0, Math.hypot(finiteOrZero(fn.offsetX), finiteOrZero(fn.offsetY)) - 3.0),
+      0
+    );
+    dmg.wheelRubResistance = Number.isFinite(rubSum) ? rubSum * 3.5 : 0;
   }
 }
 
@@ -1063,6 +1475,9 @@ export function advanceCrashStroke(car: Vehicle, dt: number): number | undefined
   if (!c || !c.crushModel || c.preserveVelocity || c.initialNormalSpeed === undefined || !(dt > 0)) {
     return undefined;
   }
+  if (!Number.isFinite(c.normalX) || !Number.isFinite(c.normalY)) {
+    return undefined;
+  }
   const model = c.crushModel;
   let profile = crushProfileCache.get(model);
   if (!profile) {
@@ -1070,35 +1485,53 @@ export function advanceCrashStroke(car: Vehicle, dt: number): number | undefined
     crushProfileCache.set(model, profile);
   }
   const share = Math.max(0.05, Math.min(1, model.share));
+  const initialNormalSpeed = Number.isFinite(c.initialNormalSpeed) ? Math.abs(c.initialNormalSpeed!) : 0;
 
-  if (c.crushSpeed === undefined) {
-    c.crushSpeed = Math.abs(c.initialNormalSpeed) * share;
-    c.crushStartPx = c.crushStartPx ?? 0;
-    c.crushDepthPx = c.crushStartPx;
-  }
+  if (!Number.isFinite(c.crushStartPx as number)) c.crushStartPx = 0;
+  if (!Number.isFinite(c.crushDepthPx as number)) c.crushDepthPx = c.crushStartPx;
+  if (c.crushSpeed === undefined || !Number.isFinite(c.crushSpeed)) c.crushSpeed = initialNormalSpeed * share;
 
   const prevPhase = c.crushStopped ? (c.reboundSpeed || 0) : c.crushSpeed / share;
   let phase: number;
   if (!c.crushStopped) {
-    const r = advanceCrushStroke(profile, car.mass || 1400, c.crushDepthPx ?? 0, c.crushSpeed, dt);
-    c.crushDepthPx = r.depth;
-    c.crushSpeed = r.speed;
-    if (r.stopped) c.crushStopped = true;
-    phase = c.crushSpeed / share;
+    const r = advanceCrushStroke(
+      profile,
+      Math.max(300, car.mass || 1400),
+      Number.isFinite(c.crushDepthPx as number) ? (c.crushDepthPx as number) : 0,
+      Number.isFinite(c.crushSpeed as number) ? (c.crushSpeed as number) : 0,
+      dt
+    );
+    if (!Number.isFinite(r.depth) || !Number.isFinite(r.speed)) {
+      // Численный сбой внутри профиля: фиксируем остановку, но не пускаем NaN дальше.
+      c.crushStopped = true;
+      c.crushDepthPx = Number.isFinite(c.crushDepthPx as number) ? (c.crushDepthPx as number) : 0;
+      c.crushSpeed = 0;
+      phase = 0;
+    } else {
+      c.crushDepthPx = r.depth;
+      c.crushSpeed = r.speed;
+      if (r.stopped) c.crushStopped = true;
+      phase = c.crushSpeed / share;
+    }
   } else {
-    phase = c.reboundSpeed || 0;
+    phase = Number.isFinite(c.reboundSpeed) ? (c.reboundSpeed || 0) : 0;
   }
+  if (!Number.isFinite(phase)) phase = 0;
 
   // Ускорение системы отсчёта кузова (мировое → локальное) для инерционной нагрузки узлов
   const system = car.damage?.nodeBeam;
   if (system) {
-    const dPhase = phase - prevPhase;
+    const dPhase = phase - (Number.isFinite(prevPhase) ? prevPhase : 0);
     const aWx = -c.normalX * dPhase / dt;
     const aWy = -c.normalY * dPhase / dt;
     const cosA = Math.cos(car.angle);
     const sinA = Math.sin(car.angle);
-    system.frameAx = (system.frameAx || 0) + (aWx * cosA + aWy * sinA);
-    system.frameAy = (system.frameAy || 0) + (-aWx * sinA + aWy * cosA);
+    const ax = aWx * cosA + aWy * sinA;
+    const ay = -aWx * sinA + aWy * cosA;
+    system.frameAx = Number.isFinite(ax) ? (system.frameAx || 0) + ax : 0;
+    system.frameAy = Number.isFinite(ay) ? (system.frameAy || 0) + ay : 0;
+    if (!Number.isFinite(system.frameAx)) system.frameAx = 0;
+    if (!Number.isFinite(system.frameAy)) system.frameAy = 0;
   }
   return phase;
 }
@@ -1119,6 +1552,8 @@ export function stepNodeBeamContinuousContact(
 ): void {
   const c = car.activeCrumple;
   if (!c || c.timer <= 0) return;
+  if (!Number.isFinite(c.normalX) || !Number.isFinite(c.normalY) ||
+      !Number.isFinite(c.contactX) || !Number.isFinite(c.contactY)) return;
 
   const dmg = car.damage;
   if (!dmg) return;
@@ -1152,19 +1587,25 @@ export function stepNodeBeamContinuousContact(
 
   let pen1: number;
   if (c.crushModel && !c.preserveVelocity && c.crushDepthPx !== undefined) {
-    pen1 = Math.max(ct.pen, c.crushDepthPx - (c.crushStartPx ?? 0));
+    const depth = Number.isFinite(c.crushDepthPx) ? c.crushDepthPx : ct.pen;
+    const start = Number.isFinite(c.crushStartPx as number) ? (c.crushStartPx as number) : 0;
+    pen1 = Math.max(ct.pen, depth - start);
   } else {
     // Кинематический ход к целевой глубине (удары между машинами и препятствия без силовой модели)
     const progress = c.totalDuration > 0
       ? Math.max(0, Math.min(1.0, 1.0 - c.timer / c.totalDuration))
       : 1.0;
-    const target = c.targetCrushPx !== undefined && c.targetCrushPx > 0 ? c.targetCrushPx : halfL * 0.30;
+    const target = Number.isFinite(c.targetCrushPx) && (c.targetCrushPx as number) > 0
+      ? (c.targetCrushPx as number)
+      : halfL * 0.30;
     const rel = Math.max(0, target - ct.depth0);
     const t = Math.min(1, progress / 0.74);
     pen1 = Math.max(ct.pen, rel * t * t * (3 - 2 * t));
   }
+  if (!Number.isFinite(pen1)) pen1 = ct.pen;
+  if (!Number.isFinite(pen1)) pen1 = 0;
 
-  system.contactPen0 = ct.pen;
+  system.contactPen0 = Number.isFinite(ct.pen) ? ct.pen : 0;
   system.contactPen1 = pen1;
   ct.pen = pen1;
   system.isSleeping = false;

@@ -8457,7 +8457,7 @@ export class GameRenderer {
           let ey = isFinite(dv.elasticY) ? Math.max(-8.0, Math.min(8.0, dv.elasticY)) : 0;
 
           const dvLen = Math.hypot(dv.localX || bv.x, dv.localY || bv.y) || 1;
-          const maxAllowed = Math.min(28.0, Math.max(6.0, dvLen * 0.75));
+          const maxAllowed = Math.min(14.0, Math.max(4.0, dvLen * 0.60));
           const oDist = Math.hypot(ox, oy);
           if (oDist > maxAllowed) {
             ox = (ox / oDist) * maxAllowed;
@@ -10178,7 +10178,7 @@ export class GameRenderer {
           let ey = isFinite(dv.elasticY) ? Math.max(-8.0, Math.min(8.0, dv.elasticY)) : 0;
 
           const dvLen = Math.hypot(dv.localX || bv.x, dv.localY || bv.y) || 1;
-          const maxAllowed = Math.min(28.0, Math.max(6.0, dvLen * 0.75));
+          const maxAllowed = Math.min(14.0, Math.max(4.0, dvLen * 0.60));
           const oDist = Math.hypot(ox, oy);
           if (oDist > maxAllowed) {
             ox = (ox / oDist) * maxAllowed;

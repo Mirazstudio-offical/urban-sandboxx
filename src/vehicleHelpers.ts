@@ -16,6 +16,7 @@ import {
   VehicleDiffLockState 
 } from './types';
 import { createVehicleNodeBeamSystem } from './nodeBeamPhysics';
+import { getVehicleNodeBeamDefinition } from './vehicleMeshConfigs';
 import { getPowertrainPickByIds, TRANSMISSION_VARIANTS } from './powertrainVariants';
 
 export const SPEED_KMH_TO_PX_S = 4.4444; // 1.6x speedup for realistic screen motion (formerly 2.7778)
@@ -690,11 +691,40 @@ export function ensureVehicleDamage(veh: { length?: number; width?: number; dama
   const targetLen = veh.length || 42;
   const targetWid = veh.width || 20;
   if (!veh.damage) {
-    return createDefaultVehicleDamage(targetLen, targetWid);
+    const fresh = createDefaultVehicleDamage(targetLen, targetWid);
+    if (veh.type) {
+      fresh.nodeBeam = createVehicleNodeBeamSystem({
+        type: veh.type,
+        length: targetLen,
+        width: targetWid,
+        mass: veh.mass,
+        customMeshConfig: (veh as any).customMeshConfig
+      });
+    }
+    return fresh;
   }
 
   const dmg = veh.damage;
-  if (!dmg.nodeBeam || !Array.isArray(dmg.nodeBeam.nodes) || dmg.nodeBeam.nodes.length < 8) {
+  // Старые сохранения (и createDefaultVehicleDamage) могли создать сетку
+  // седана для грузовика/автобуса/мотоцикла. Проверяем presetId и при
+  // несовпадении пересобираем сетку под реальный тип и массу машины.
+  let expectedPresetId: string | undefined;
+  if (veh.type) {
+    try {
+      expectedPresetId = getVehicleNodeBeamDefinition(veh.type, (veh as any).customMeshConfig).presetId;
+    } catch {
+      expectedPresetId = undefined;
+    }
+  }
+  const presetMismatch = !!expectedPresetId && !!dmg.nodeBeam && dmg.nodeBeam.presetId !== expectedPresetId;
+  // Старые сохранения содержат сетку без колёсных узлов и с одним анкером —
+  // именно она давала «краба». Такие сетки пересобираем под новую версию.
+  const meshOutdated = !!dmg.nodeBeam && (
+    !Array.isArray(dmg.nodeBeam.nodes) ||
+    !dmg.nodeBeam.nodes.some(n => n.group === 'wheel') ||
+    (dmg.nodeBeam.fixedNodeCount || 0) < 3
+  );
+  if (!dmg.nodeBeam || !Array.isArray(dmg.nodeBeam.nodes) || dmg.nodeBeam.nodes.length < 8 || presetMismatch || meshOutdated) {
     dmg.nodeBeam = createVehicleNodeBeamSystem({
       type: veh.type || 'sedan',
       length: targetLen,

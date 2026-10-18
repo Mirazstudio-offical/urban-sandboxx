@@ -50,6 +50,64 @@ function angleDiff(a: number, b: number): number {
   return diff;
 }
 
+/**
+ * Последний рубеж защиты кинематики автомобиля.
+ *
+ * Любая ошибка в столкновениях, буксировке или сетке могла записать NaN в
+ * x/y/vx/vy/angle. После этого Math.max/min и cos/sin только размножали NaN,
+ * HUD показывал «NaN», а Canvas получал нефинитные координаты. Здесь мы
+ * восстанавливаем последнее корректное состояние и жёстко ограничиваем
+ * безразмерные выбросы.
+ */
+function sanitizeVehicleKinematics(vehicle: Vehicle): void {
+  const v = vehicle as any;
+  const finite = (x: unknown): x is number => typeof x === 'number' && Number.isFinite(x);
+  const last = v._lastGoodKinematics as { x: number; y: number; angle: number } | undefined;
+
+  if (!finite(vehicle.x) || !finite(vehicle.y) || !finite(vehicle.angle)) {
+    if (last) {
+      vehicle.x = last.x;
+      vehicle.y = last.y;
+      vehicle.angle = last.angle;
+    } else {
+      if (!finite(vehicle.x)) vehicle.x = 0;
+      if (!finite(vehicle.y)) vehicle.y = 0;
+      if (!finite(vehicle.angle)) vehicle.angle = 0;
+    }
+    if (!finite(vehicle.vx)) vehicle.vx = 0;
+    if (!finite(vehicle.vy)) vehicle.vy = 0;
+    if (!finite(vehicle.angularVelocity)) vehicle.angularVelocity = 0;
+  }
+
+  if (!finite(vehicle.vx)) vehicle.vx = 0;
+  if (!finite(vehicle.vy)) vehicle.vy = 0;
+  if (!finite(vehicle.angularVelocity)) vehicle.angularVelocity = 0;
+  if (!finite(vehicle.steerAngle)) vehicle.steerAngle = 0;
+  if (!finite(vehicle.lateralVelocity)) vehicle.lateralVelocity = 0;
+
+  // Абсолютные предохранители: даже без NaN машина не должна улетать
+  // со сверхзвуковой скоростью из-за накопленной ошибки импульса.
+  const speedAbs = Math.hypot(vehicle.vx, vehicle.vy);
+  const maxLinear = 3000;
+  if (speedAbs > maxLinear) {
+    const k = maxLinear / speedAbs;
+    vehicle.vx *= k;
+    vehicle.vy *= k;
+  }
+  if (vehicle.angularVelocity > 25) vehicle.angularVelocity = 25;
+  if (vehicle.angularVelocity < -25) vehicle.angularVelocity = -25;
+
+  if (!finite(vehicle.speed)) {
+    const cosA = Math.cos(vehicle.angle);
+    const sinA = Math.sin(vehicle.angle);
+    vehicle.speed = vehicle.vx * cosA + vehicle.vy * sinA;
+  }
+  if (!finite(vehicle.speed)) vehicle.speed = 0;
+
+  vehicle.angle = ((vehicle.angle + Math.PI) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2) - Math.PI;
+  v._lastGoodKinematics = { x: vehicle.x, y: vehicle.y, angle: vehicle.angle };
+}
+
 const GAS_STATION_STRUCTURAL_SUB_BOXES = [
   // Island 0 (West fuel island, pumps & support pillars)
   { x: 5003, y: 5190, width: 34, height: 180 },
@@ -302,7 +360,9 @@ export function getVehicleCollisionOBBs(car: Vehicle, extraMargin = 0.5): Vehicl
 
 export function checkOBBBoxCollision(
   obb: VehicleCollisionOBB,
-  box: { x: number; y: number; width: number; height: number }
+  box: { x: number; y: number; width: number; height: number },
+  velX: number = 0,
+  velY: number = 0
 ): CollisionResult {
   const cornersB = [
     { x: box.x, y: box.y },
@@ -318,9 +378,23 @@ export function checkOBBBoxCollision(
     { x: 0, y: 1 }
   ];
 
+  const bCenterX = box.x + box.width / 2;
+  const bCenterY = box.y + box.height / 2;
+  const dirX = obb.centerX - bCenterX;
+  const dirY = obb.centerY - bCenterY;
+
   let minOverlap = 999999;
   let smallestAxisX = 0;
   let smallestAxisY = 0;
+
+  // Ось удара выбирается не только по минимальному перекрытию, но и по
+  // направлению движения. Раньше при скорости 1500 px/s машина за один кадр
+  // заходила в стену глубже, чем её полширины, и SAT выбирал поперечную ось:
+  // машину выталкивало вбок, она не тормозила и проходила сквозь здание.
+  let impactOverlap = 0;
+  let impactAxisX = 0;
+  let impactAxisY = 0;
+  let bestApproach = -Infinity;
 
   for (const axis of axes) {
     let minA = 999999;
@@ -344,27 +418,47 @@ export function checkOBBBoxCollision(
       return { collided: false, normalX: 0, normalY: 0, depth: 0 };
     }
 
+    // Нормаль ориентируем от препятствия к машине.
+    let orientedX = axis.x;
+    let orientedY = axis.y;
+    if (dirX * orientedX + dirY * orientedY < 0) {
+      orientedX = -orientedX;
+      orientedY = -orientedY;
+    }
+
     if (overlap < minOverlap) {
       minOverlap = overlap;
-      smallestAxisX = axis.x;
-      smallestAxisY = axis.y;
+      smallestAxisX = orientedX;
+      smallestAxisY = orientedY;
+    }
+
+    // approach > 0 — машина движется в сторону препятствия по этой оси.
+    const approach = -(velX * orientedX + velY * orientedY);
+    if (approach > bestApproach) {
+      bestApproach = approach;
+      impactAxisX = orientedX;
+      impactAxisY = orientedY;
+      impactOverlap = overlap;
     }
   }
 
-  const bCenterX = box.x + box.width / 2;
-  const bCenterY = box.y + box.height / 2;
-  const dirX = obb.centerX - bCenterX;
-  const dirY = obb.centerY - bCenterY;
-  if (dirX * smallestAxisX + dirY * smallestAxisY < 0) {
-    smallestAxisX = -smallestAxisX;
-    smallestAxisY = -smallestAxisY;
-  }
+  const speedSq = velX * velX + velY * velY;
+  // Ось удара берём только если её перекрытие сопоставимо с минимальным.
+  // Иначе при скольжении вдоль стены «ось движения» (вдоль стены) имела бы
+  // огромное перекрытие и машину отбрасывало бы назад вместо бокового скольжения.
+  const impactAxisComparable = impactOverlap <= minOverlap * 2.5 + 2.0;
+  const useImpactAxis =
+    speedSq > 36 &&
+    bestApproach > 1.0 &&
+    impactOverlap > 0 &&
+    impactAxisComparable &&
+    Number.isFinite(impactOverlap);
 
   return {
     collided: true,
-    normalX: smallestAxisX,
-    normalY: smallestAxisY,
-    depth: minOverlap
+    normalX: useImpactAxis ? impactAxisX : smallestAxisX,
+    normalY: useImpactAxis ? impactAxisY : smallestAxisY,
+    depth: useImpactAxis ? impactOverlap : minOverlap
   };
 }
 
@@ -377,7 +471,7 @@ export function checkCarBoxCollision(
   let maxDepth = 0;
 
   for (const obb of obbs) {
-    const res = checkOBBBoxCollision(obb, box);
+    const res = checkOBBBoxCollision(obb, box, car.vx || 0, car.vy || 0);
     if (res.collided && res.depth > maxDepth) {
       maxDepth = res.depth;
       bestResult = res;
@@ -1937,7 +2031,9 @@ export function applyVehicleDamageAndDeformation(
   contactWidthPx?: number
 ) {
   car.damage = ensureVehicleDamage(car);
-  subdivideNodes(car);
+  // Сетка узлов теперь фиксированной топологии (включая колёсные узлы) и
+  // синхронизируется целиком; старый subdivideNodes только раздувал массив
+  // deformedVertices и ломал соответствие индексов.
   let spawnedMissingPowertrain = false;
   if (!car.engineState) {
     car.engineState = createDefaultEngineState(car.type);
@@ -2015,6 +2111,17 @@ export function applyVehicleDamageAndDeformation(
   const halfL = car.length / 2;
   const halfW = car.width / 2;
 
+  // Старые/повреждённые сохранения могли содержать NaN в агрегатах урона.
+  // Без этого existingDepthPx = NaN превращал весь ход смятия в NaN.
+  const damageScalars = [
+    'frontCrumple', 'rearCrumple', 'leftDent', 'rightDent',
+    'frontLeftDent', 'frontRightDent', 'rearLeftDent', 'rearRightDent',
+    'wheelRubResistance', 'steeringDrift'
+  ] as const;
+  for (const key of damageScalars) {
+    if (!Number.isFinite((dmg as any)[key])) (dmg as any)[key] = 0;
+  }
+
   // Local coordinates relative to car center & heading
   const dx = contactX - car.x;
   const dy = contactY - car.y;
@@ -2073,11 +2180,12 @@ export function applyVehicleDamageAndDeformation(
 
   // Уже накопленная глубина в зоне удара: повторный удар продолжает ход по кривой силы
   // (смятый металл не работает заново), см. crushFromEnergy.existingDepthPx.
-  const existingZoneDepth = impactZone === 'front'
+  const existingZoneDepthRaw = impactZone === 'front'
     ? dmg.frontCrumple
     : impactZone === 'rear'
       ? dmg.rearCrumple
       : (normY < 0 ? dmg.leftDent : dmg.rightDent);
+  const existingZoneDepth = Number.isFinite(existingZoneDepthRaw) ? existingZoneDepthRaw : 0;
 
   const crushZoneParams = {
     zone: impactZone,
@@ -2095,6 +2203,9 @@ export function applyVehicleDamageAndDeformation(
     ...crushZoneParams,
     existingDepthPx: existingZoneDepth
   });
+  if (!Number.isFinite(crush.depthPx)) crush.depthPx = 0;
+  if (!Number.isFinite(crush.totalCapPx)) crush.totalCapPx = 0;
+  if (!Number.isFinite(crush.zoneLengthPx)) crush.zoneLengthPx = 0;
 
   // Целевая глубина вмятины для многокадрового сжатия softbody (см. stepNodeBeamContinuousContact).
   // This is an absolute stroke from the intact body, not the stroke of only
@@ -7308,6 +7419,8 @@ export function updateVehiclePhysics(
   dt: number,
   player?: Player
 ) {
+  sanitizeVehicleKinematics(vehicle);
+  const prevAngularVelocity = vehicle.angularVelocity;
   // Update turn signal timer
   if (vehicle.turnSignal !== 'none') {
     vehicle.turnSignalTimer = (vehicle.turnSignalTimer || 0) + dt;
@@ -8769,7 +8882,23 @@ export function updateVehiclePhysics(
 
     // Mass properties & Moments of Inertia (includes powertrain variant hard-parts mass)
     const totalMass = Math.max(300, ((cfg.mass || 1400) + (vehicle.massBonusKg || 0)) * massRatio);
-    const Iz = (totalMass / 12) * ((cfg.length || 45) ** 2 + (cfg.width || 20) ** 2) * 1.15;
+    const fallbackIz = (totalMass / 12) * ((cfg.length || 45) ** 2 + (cfg.width || 20) ** 2) * 1.15;
+    // Инерция берётся из реальной массы узлов сетки (включая ступицы колёс),
+    // а не из прямоугольника. Так кузов с тяжёлым двигателем спереди и
+    // облегчённой кормой поворачивается иначе, чем однородная плита.
+    const nbSystem = vehicle.damage?.nodeBeam;
+    const nodeInertia = nbSystem?.nodeInertia;
+    const nodeMass = nbSystem?.totalNodeMass;
+    const inertiaScale = nodeMass && nodeMass > 1 ? totalMass / nodeMass : 1;
+    let Iz = fallbackIz;
+    if (typeof nodeInertia === 'number' && Number.isFinite(nodeInertia) && nodeInertia > 1e-3) {
+      const candidate = nodeInertia * inertiaScale * 1.05;
+      // Защита от вырожденной/повреждённой сетки: инерция не должна уходить
+      // на порядки от физически разумного прямоугольника.
+      if (candidate > fallbackIz * 0.45 && candidate < fallbackIz * 2.2) {
+        Iz = candidate;
+      }
+    }
 
     // Center of gravity distances to axles (52% front, 48% rear)
     const Lf = wheelBase * 0.52;
@@ -9988,8 +10117,61 @@ export function updateVehiclePhysics(
   // Update position with combined engine velocity and physical knockback momentum
   const totalVx = vehicle.vx + (vehicle.knockbackVx || 0);
   const totalVy = vehicle.vy + (vehicle.knockbackVy || 0);
-  vehicle.x += totalVx * dt;
-  vehicle.y += totalVy * dt;
+  const moveX = totalVx * dt;
+  const moveY = totalVy * dt;
+  const moveDist = Math.hypot(moveX, moveY);
+
+  // Swept building check: на 1500+ px/s машина за один кадр проходит больше
+  // половины своей ширины, и дискретный SAT может не увидеть стену вообще.
+  // Проходим отрезок пути с шагом 3–8 px и останавливаем машину на первом
+  // кадре касания — дальше обычный collision-блок считает удар и вмятину.
+  let sweptIntoBuilding = false;
+  if (
+    moveDist > Math.max(8, vehicle.width * 0.45) &&
+    !vehicle.activeCrumple &&
+    nearbyBuildings.length > 0 &&
+    Number.isFinite(moveX) &&
+    Number.isFinite(moveY)
+  ) {
+    const sampleStep = Math.max(3, Math.min(8, vehicle.width * 0.25));
+    const steps = Math.min(48, Math.ceil(moveDist / sampleStep));
+    if (steps > 1) {
+      const startX = vehicle.x;
+      const startY = vehicle.y;
+      for (let s = 1; s <= steps; s++) {
+        vehicle.x = startX + moveX * (s / steps);
+        vehicle.y = startY + moveY * (s / steps);
+        let hit = false;
+        for (const bld of nearbyBuildings) {
+          if (checkCarBuildingCollision(vehicle, bld).collided) {
+            hit = true;
+            break;
+          }
+        }
+        if (!hit && vehicle.x >= 4800 && vehicle.x <= 5500 && vehicle.y >= 4800 && vehicle.y <= 5500) {
+          for (const sub of GAS_STATION_STRUCTURAL_SUB_BOXES) {
+            if (checkCarBoxCollision(vehicle, sub).collided) {
+              hit = true;
+              break;
+            }
+          }
+        }
+        if (hit) {
+          sweptIntoBuilding = true;
+          break;
+        }
+      }
+      if (!sweptIntoBuilding) {
+        // Вернуть машину в начало отрезка: финальный += ниже переместит её один раз.
+        vehicle.x = startX;
+        vehicle.y = startY;
+      }
+    }
+  }
+  if (!sweptIntoBuilding) {
+    vehicle.x += moveX;
+    vehicle.y += moveY;
+  }
 
   // Smooth exponential decay of physics knockback & spin recoil (Cushioned tire friction dampening)
   if (vehicle.knockbackVx || vehicle.knockbackVy || vehicle.knockbackSpin) {
@@ -10736,6 +10918,16 @@ export function updateVehiclePhysics(
   }
 
   // World bounds clamp (full open-world size including northern wilderness)
+  {
+    const nb = vehicle.damage?.nodeBeam;
+    if (nb) {
+      const safeDt = Math.max(0.001, dt);
+      const alpha = (vehicle.angularVelocity - prevAngularVelocity) / safeDt;
+      nb.bodyAlpha = Number.isFinite(alpha) ? Math.max(-250, Math.min(250, alpha)) : 0;
+      nb.bodyOmega = Number.isFinite(vehicle.angularVelocity) ? vehicle.angularVelocity : 0;
+    }
+  }
+  sanitizeVehicleKinematics(vehicle);
   const minVehX = -4000;
   const maxVehX = Math.max(52000, world.width || 52000) - 15;
   const minVehY = -5000;
