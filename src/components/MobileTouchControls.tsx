@@ -53,6 +53,8 @@ interface MobileTouchControlsProps {
   onToggleTurnSignal?: (signal: 'left' | 'right' | 'hazard') => void;
   gear?: string;
   transmissionType?: 'AUTO' | 'MANUAL';
+  transmissionKind?: string;
+  gearCount?: number;
   onSelectGear?: (gear: 'P' | 'R' | 'N' | 'D' | number | string) => void;
   onToggleEngine?: () => void;
   isEngineRunning?: boolean;
@@ -316,6 +318,8 @@ const VehicleWindshieldGlanceZone: React.FC<VehicleWindshieldGlanceZoneProps> = 
 interface GearStickLeverProps {
   gear?: string;
   transmissionType?: 'AUTO' | 'MANUAL';
+  transmissionKind?: string;
+  gearCount?: number;
   carType?: string;
   tractorRange?: 1 | 2;
   onSelectGear?: (gear: 'P' | 'R' | 'N' | 'D' | number | string) => void;
@@ -324,6 +328,8 @@ interface GearStickLeverProps {
 const GearStickLever: React.FC<GearStickLeverProps> = ({
   gear = 'D',
   transmissionType = 'AUTO',
+  transmissionKind,
+  gearCount,
   carType,
   tractorRange = 1,
   onSelectGear,
@@ -335,14 +341,22 @@ const GearStickLever: React.FC<GearStickLeverProps> = ({
   const touchIdRef = useRef<number | null>(null);
 
   const isMachinery = (carType?.startsWith('roller_') || carType?.startsWith('paver_')) || false;
-  const isAuto = !isMachinery && transmissionType === 'AUTO';
+  const isAuto = !isMachinery && (transmissionType === 'AUTO' || ['CVT', 'DSG', 'AMT', 'HYDRO'].includes(transmissionKind || ''));
   const isTractor = !isAuto && !isMachinery && (carType?.startsWith('tractor_') || false);
-  const is6Speed = !isAuto && !isMachinery && !isTractor && [
-    'truck_semi', 'truck_box', 'truck_dump', 'truck_zil_dump', 'truck_tanker', 'truck_water', 'truck_flatbed', 'truck_covered', 
-    'cement_mixer', 'garbage_truck', 'bus', 'delivery_truck', 'truck_tow', 
-    'fire_engine', 'fire_ladder', 'fire_rescue', 'pickup_heavy', 'truck_armored', 
+
+  // Gate pattern follows the ACTUAL gearbox, not a fixed car-type list:
+  // gearCount (forward speeds) comes straight from the installed transmission
+  // (6 / 8-step MT, 5-step MT, etc.). Legacy cars without stored ratios fall
+  // back to the historical per-car-type list.
+  const legacy6SpeedTypes = [
+    'truck_semi', 'truck_box', 'truck_dump', 'truck_zil_dump', 'truck_tanker', 'truck_water', 'truck_flatbed', 'truck_covered',
+    'cement_mixer', 'garbage_truck', 'bus', 'delivery_truck', 'truck_tow',
+    'fire_engine', 'fire_ladder', 'fire_rescue', 'pickup_heavy', 'truck_armored',
     'supercar', 'sports', 'hatch_hot', 'coupe_gt', 'moto_sport'
-  ].includes(carType || '');
+  ];
+  const is6Speed = !isAuto && !isMachinery && !isTractor && (
+    gearCount !== undefined ? gearCount >= 6 : legacy6SpeedTypes.includes(carType || '')
+  );
 
   // Soviet MTZ Tractor Range: 1 (Slow / Low) or 2 (Speed / High)
   const [localRange, setLocalRange] = useState<1 | 2>(tractorRange || 1);
@@ -372,7 +386,7 @@ const GearStickLever: React.FC<GearStickLeverProps> = ({
   } else if (is6Speed) {
     if (rawGearStr === 'R' || rawGearStr === '-1') currentGearKey = 'R';
     else if (rawGearStr === 'N' || rawGearStr === '0') currentGearKey = 'N';
-    else if (['1', '2', '3', '4', '5', '6'].includes(rawGearStr)) currentGearKey = rawGearStr;
+    else if (['1', '2', '3', '4', '5', '6'].includes(rawGearStr) || (!isTractor && '789'.includes(rawGearStr))) currentGearKey = rawGearStr;
     else currentGearKey = '1';
   } else {
     // Standard 5-speed
@@ -1315,6 +1329,7 @@ export const MobileTouchControls: React.FC<MobileTouchControlsProps> = ({
   onToggleTurnSignal,
   gear = 'D',
   transmissionType = 'AUTO',
+  transmissionKind,
   onSelectGear,
   onToggleEngine,
   isEngineRunning = true,
@@ -1705,6 +1720,7 @@ export const MobileTouchControls: React.FC<MobileTouchControlsProps> = ({
             <GearStickLever
               gear={gear}
               transmissionType={transmissionType}
+              transmissionKind={transmissionKind}
               carType={carType}
               tractorRange={tractorRange}
               onSelectGear={onSelectGear}

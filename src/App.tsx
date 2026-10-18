@@ -6558,6 +6558,8 @@ export default function App() {
             onToggleTurnSignal={toggleTurnSignal}
             gear={gear}
             transmissionType={eng?.transmissionType || 'AUTO'}
+            transmissionKind={eng?.transmissionKind}
+            gearCount={eng?.gearRatios ? Math.max(1, eng.gearRatios.length - 2) : undefined}
             onSelectGear={handleSelectGear}
             onToggleEngine={handleToggleEngine}
             isEngineRunning={eng ? !!eng.engineRunning : true}
