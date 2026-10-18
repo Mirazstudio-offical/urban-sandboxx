@@ -719,15 +719,10 @@ export function ensureVehicleDamage(veh: { length?: number; width?: number; dama
   const presetMismatch = !!expectedPresetId && !!dmg.nodeBeam && dmg.nodeBeam.presetId !== expectedPresetId;
   // Старые сохранения содержат сетку без колёсных узлов и с одним анкером —
   // именно она давала «краба». Такие сетки пересобираем под новую версию.
-  // Soft-body сетка (PBD) намеренно не имеет закреплённых узлов, поэтому
-  // проверка fixedNodeCount к ней не применяется.
-  const isSoftBody = dmg.nodeBeam?.softBody === true;
   const meshOutdated = !!dmg.nodeBeam && (
     !Array.isArray(dmg.nodeBeam.nodes) ||
     !dmg.nodeBeam.nodes.some(n => n.group === 'wheel') ||
-    (isSoftBody
-      ? !Array.isArray(dmg.nodeBeam.coreNodeIndices) || dmg.nodeBeam.coreNodeIndices.length < 2
-      : (dmg.nodeBeam.fixedNodeCount || 0) < 3)
+    (dmg.nodeBeam.fixedNodeCount || 0) < 3
   );
   if (!dmg.nodeBeam || !Array.isArray(dmg.nodeBeam.nodes) || dmg.nodeBeam.nodes.length < 8 || presetMismatch || meshOutdated) {
     dmg.nodeBeam = createVehicleNodeBeamSystem({
@@ -735,8 +730,7 @@ export function ensureVehicleDamage(veh: { length?: number; width?: number; dama
       length: targetLen,
       width: targetWid,
       mass: veh.mass,
-      customMeshConfig: (veh as any).customMeshConfig,
-      softBody: isSoftBody
+      customMeshConfig: (veh as any).customMeshConfig
     });
   }
 

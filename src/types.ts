@@ -313,28 +313,6 @@ export interface NodeBeamStructure {
   stableDt?: number;
   /** Нужно ли синхронизировать deformedVertices/агрегаты урона после последнего шага. */
   needsSync?: boolean;
-  /** Полностью динамическая world-space сетка (PBD), а не rigid-core + локальная оболочка. */
-  softBody?: boolean;
-  /** World-space позиции инициализированы из позы кузова. */
-  worldInitialized?: boolean;
-  /** Поза кузова, из которой/в которую переводится world-space сетка. */
-  poseX?: number;
-  poseY?: number;
-  poseAngle?: number;
-  poseVx?: number;
-  poseVy?: number;
-  poseOmega?: number;
-  /** Аккумулятор фиксированного шага PBD. */
-  timeAccumulator?: number;
-  /** Индексы узлов жёсткого ядра (для вывода позы) и ступиц колёс. */
-  coreNodeIndices?: number[];
-  wheelNodeIndices?: number[];
-  /** Силы на ступицах за текущий кадр: [FLx,FLy,FRx,FRy,RLx,RLy,RRx,RRy]. */
-  wheelForces?: number[];
-  /** Внешняя сила/момент на кузов за кадр (аэродинамика, уклон). */
-  bodyForceX?: number;
-  bodyForceY?: number;
-  bodyTorque?: number;
   /**
    * Геометрия контакта с препятствием в системе координат кузова. Препятствие — односторонняя
    * связь: узлы не могут зайти за плоскость (стена) или окружность (столб), которые движутся

@@ -33,13 +33,6 @@ import {
   stepNodeBeamContinuousContact,
   advanceCrashStroke
 } from './nodeBeamPhysics';
-import {
-  ensureSoftBodyMesh,
-  isSoftBodyVehicle,
-  stepSoftBody,
-  applySoftBodyImpulse,
-  applyExternalVelocityDelta
-} from './softBodyVehicle';
 
 export { isWorldFreezing };
 
@@ -66,54 +59,6 @@ function angleDiff(a: number, b: number): number {
  * восстанавливаем последнее корректное состояние и жёстко ограничиваем
  * безразмерные выбросы.
  */
-/**
- * Свип-проверка быстрого перемещения по зданиям/островам АЗС. Оставляет
- * vehicle.x/y в точке первого касания и возвращает true; иначе ставит машину
- * в конец отрезка и возвращает false.
- */
-function sweepVehicleAgainstBuildings(
-  vehicle: Vehicle,
-  startX: number,
-  startY: number,
-  endX: number,
-  endY: number,
-  nearbyBuildings: Building[]
-): boolean {
-  const dx = endX - startX;
-  const dy = endY - startY;
-  const dist = Math.hypot(dx, dy);
-  if (!Number.isFinite(dist) || dist < Math.max(8, vehicle.width * 0.45)) {
-    vehicle.x = endX;
-    vehicle.y = endY;
-    return false;
-  }
-  const sampleStep = Math.max(3, Math.min(8, vehicle.width * 0.25));
-  const steps = Math.min(48, Math.ceil(dist / sampleStep));
-  for (let s = 1; s <= steps; s++) {
-    vehicle.x = startX + dx * (s / steps);
-    vehicle.y = startY + dy * (s / steps);
-    let hit = false;
-    for (const bld of nearbyBuildings) {
-      if (checkCarBuildingCollision(vehicle, bld).collided) {
-        hit = true;
-        break;
-      }
-    }
-    if (!hit && vehicle.x >= 4800 && vehicle.x <= 5500 && vehicle.y >= 4800 && vehicle.y <= 5500) {
-      for (const sub of GAS_STATION_STRUCTURAL_SUB_BOXES) {
-        if (checkCarBoxCollision(vehicle, sub).collided) {
-          hit = true;
-          break;
-        }
-      }
-    }
-    if (hit) return true;
-  }
-  vehicle.x = endX;
-  vehicle.y = endY;
-  return false;
-}
-
 function sanitizeVehicleKinematics(vehicle: Vehicle): void {
   const v = vehicle as any;
   const finite = (x: unknown): x is number => typeof x === 'number' && Number.isFinite(x);
@@ -2161,15 +2106,6 @@ export function applyVehicleDamageAndDeformation(
   car.lastDamageTime = now;
 
   const dmg = car.damage;
-  // World-space soft-body: удар прикладывается к узлам около контакта.
-  // Это даёт локальную вмятину и одновременно толкает машину через сетку.
-  if (dmg.nodeBeam?.softBody && impactSpeed > 5) {
-    const nd = Math.hypot(contactX - car.x, contactY - car.y) || 1;
-    const nx = (contactX - car.x) / nd;
-    const ny = (contactY - car.y) / nd;
-    const impulse = Math.min(3000, (car.mass || 1400) * impactSpeed * 0.06);
-    applySoftBodyImpulse(car, -nx * impulse, -ny * impulse, contactX, contactY);
-  }
   const eng = car.engineState;
   const fuel = car.fuelSystem;
   const halfL = car.length / 2;
@@ -2299,7 +2235,7 @@ export function applyVehicleDamageAndDeformation(
   }
 
   // 1. BEAMNG.DRIVE 2D NODE-BEAM PHYSICAL DEFORMATION ENGINE
-  if (dmg.deformedVertices && !dmg.nodeBeam?.softBody && (impactKmh > 5.0 || isExtremeStriker || scrapeKmh > 10.0)) {
+  if (dmg.deformedVertices && (impactKmh > 5.0 || isExtremeStriker || scrapeKmh > 10.0)) {
     const contactDist = Math.hypot(contactX - car.x, contactY - car.y) || 1;
     applyNodeBeamImpact(
       car,
@@ -3382,11 +3318,7 @@ export function updateVehicleSystems(car: Vehicle, dt: number, world: GameWorld)
   // Во время активного сжатия (stepNodeBeamContinuousContact) солвер уже сделал шаг в этом кадре —
   // второй шаг с тем же dt удваивал бы пластику и скорость отскока.
   if (dmg.nodeBeam) {
-    if (dmg.nodeBeam.softBody) {
-      // World-space PBD-сеткой владеет stepSoftBody (машина игрока).
-      // Старый локальный солвер её не трогает.
-      dmg.nodeBeam.steppedThisTick = false;
-    } else if (dmg.nodeBeam.steppedThisTick) {
+    if (dmg.nodeBeam.steppedThisTick) {
       dmg.nodeBeam.steppedThisTick = false;
     } else {
       stepNodeBeamSimulation(dmg.nodeBeam, dt, car);
@@ -7488,10 +7420,6 @@ export function updateVehiclePhysics(
   player?: Player
 ) {
   sanitizeVehicleKinematics(vehicle);
-  if (vehicle.isPlayerControlled) {
-    ensureSoftBodyMesh(vehicle);
-  }
-  const useSoftBody = vehicle.isPlayerControlled && isSoftBodyVehicle(vehicle);
   const prevAngularVelocity = vehicle.angularVelocity;
   // Update turn signal timer
   if (vehicle.turnSignal !== 'none') {
@@ -9286,14 +9214,6 @@ export function updateVehiclePhysics(
         }
       }
 
-      // На околонулевой скорости шина не может выдать полную боковую силу:
-      // пятно контакта ещё не катится. Без этого множителя полный выворот
-      // руля на месте рождал ~10^5 H боковой силы и раскачивал soft-body.
-      if (vFwd < 8) {
-        const lowSpeedGrip = Math.max(0.04, vFwd / 8);
-        fy *= lowSpeedGrip;
-      }
-
       // Calculate skid intensity for visuals, smoke, skid marks and tire screech
       const lateralSlideSpeed = Math.abs(vTireLat);
       const longSlideSpeed = Math.abs(vTireLong * slipRatio);
@@ -9393,88 +9313,52 @@ export function updateVehiclePhysics(
       Tau_z += artYawDemand * Iz * 8.5;
     }
 
-    // --- 6. SOFT-BODY FORCE HANDOFF ---
-    if (useSoftBody) {
-      const nb = vehicle.damage?.nodeBeam;
-      if (nb) {
-        const cosW = Math.cos(vehicle.angle);
-        const sinW = Math.sin(vehicle.angle);
-        const wf = nb.wheelForces || (nb.wheelForces = [0, 0, 0, 0, 0, 0, 0, 0]);
-        // Body-frame силы колёс → мировые силы на ступицах.
-        wf[0] = fbx_FL * cosW - fby_FL * sinW;
-        wf[1] = fbx_FL * sinW + fby_FL * cosW;
-        wf[2] = fbx_FR * cosW - fby_FR * sinW;
-        wf[3] = fbx_FR * sinW + fby_FR * cosW;
-        wf[4] = fbx_RL * cosW - fby_RL * sinW;
-        wf[5] = fbx_RL * sinW + fby_RL * cosW;
-        wf[6] = fbx_RR * cosW - fby_RR * sinW;
-        wf[7] = fbx_RR * sinW + fby_RR * cosW;
-
-        // Аэродинамика и уклон — на силовое ядро, без шинных сил (они уже на ступицах).
-        const bodyFx = -Math.sign(vLong) * centerDiffDrag - fAero + fSlopeLong;
-        const bodyFy = fSlopeLat;
-        nb.bodyForceX = bodyFx * cosW - bodyFy * sinW;
-        nb.bodyForceY = bodyFx * sinW + bodyFy * cosW;
-      }
-    }
-
     // --- 6. RIGID BODY NEWTON-EULER INTEGRATION ---
+    const aBodyX = F_body_x / totalMass;
+    const aBodyY = F_body_y / totalMass;
+    let alphaYaw = Tau_z / Iz;
+
+    // Stationary steering scrub resistance (preventing on-spot rotation when turning steering wheel at standstill)
     const vehSpeedKmh = Math.abs(vehicle.speed) * PX_S_TO_SPEED_KMH;
-    let newCosA: number;
-    let newSinA: number;
-
-    if (!useSoftBody) {
-      const aBodyX = F_body_x / totalMass;
-      const aBodyY = F_body_y / totalMass;
-      let alphaYaw = Tau_z / Iz;
-
-      // Stationary steering scrub resistance (preventing on-spot rotation when turning steering wheel at standstill)
-      if (vehSpeedKmh < 3.0 && throttle === 0) {
-        alphaYaw *= 0.15;
-        if (Math.abs(curYaw) < 0.25) curYaw *= 0.75;
-      }
-
-      // Transform body accelerations into world coordinates
-      const aWorldX = aBodyX * cosA - aBodyY * sinA;
-      const aWorldY = aBodyX * sinA + aBodyY * cosA;
-
-      curVx += aWorldX * dt;
-      curVy += aWorldY * dt;
-      curYaw += alphaYaw * dt;
-
-      // Robust low-speed static friction / stiction lock (prevents drifting, creeping, and rotation on the spot)
-      const groundSpeed = Math.hypot(curVx, curVy);
-      if ((groundSpeed < 2.8 && throttle === 0 && !isHandbrakePulled) || (vehSpeedKmh < 2.0 && throttle === 0)) {
-        curVx *= Math.pow(0.05, dt * 12);
-        curVy *= Math.pow(0.05, dt * 12);
-        curYaw *= Math.pow(0.05, dt * 12);
-        if (groundSpeed < 1.5) {
-          curVx = 0;
-          curVy = 0;
-          curYaw = 0;
-        }
-      }
-
-      // Update vehicle orientation and velocities
-      vehicle.angularVelocity = curYaw;
-      vehicle.angle += vehicle.angularVelocity * dt;
-      vehicle.angle = ((vehicle.angle + Math.PI) % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI) - Math.PI;
-
-      vehicle.vx = curVx;
-      vehicle.vy = curVy;
-
-      newCosA = Math.cos(vehicle.angle);
-      newSinA = Math.sin(vehicle.angle);
-      vehicle.speed = vehicle.vx * newCosA + vehicle.vy * newSinA;
-      vehicle.lateralVelocity = -vehicle.vx * newSinA + vehicle.vy * newCosA;
-    } else {
-      // Поза и скорости уже выведены из world-space сетки на прошлом шаге.
-      // Сам шаг сетки выполняется ниже, на месте старого vehicle.x += vx*dt.
-      newCosA = Math.cos(vehicle.angle);
-      newSinA = Math.sin(vehicle.angle);
-      vehicle.speed = vehicle.vx * newCosA + vehicle.vy * newSinA;
-      vehicle.lateralVelocity = -vehicle.vx * newSinA + vehicle.vy * newCosA;
+    if (vehSpeedKmh < 3.0 && throttle === 0) {
+      alphaYaw *= 0.15;
+      if (Math.abs(curYaw) < 0.25) curYaw *= 0.75;
     }
+
+    // Transform body accelerations into world coordinates
+    const aWorldX = aBodyX * cosA - aBodyY * sinA;
+    const aWorldY = aBodyX * sinA + aBodyY * cosA;
+
+    curVx += aWorldX * dt;
+    curVy += aWorldY * dt;
+    curYaw += alphaYaw * dt;
+
+    // Robust low-speed static friction / stiction lock (prevents drifting, creeping, and rotation on the spot)
+    const groundSpeed = Math.hypot(curVx, curVy);
+    if ((groundSpeed < 2.8 && throttle === 0 && !isHandbrakePulled) || (vehSpeedKmh < 2.0 && throttle === 0)) {
+      curVx *= Math.pow(0.05, dt * 12);
+      curVy *= Math.pow(0.05, dt * 12);
+      curYaw *= Math.pow(0.05, dt * 12);
+      if (groundSpeed < 1.5) {
+        curVx = 0;
+        curVy = 0;
+        curYaw = 0;
+      }
+    }
+
+    // Update vehicle orientation and velocities
+    vehicle.angularVelocity = curYaw;
+    vehicle.angle += vehicle.angularVelocity * dt;
+    vehicle.angle = ((vehicle.angle + Math.PI) % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI) - Math.PI;
+
+    vehicle.vx = curVx;
+    vehicle.vy = curVy;
+
+    // Scalar longitudinal & lateral speeds for dashboard, HUD, engine revs and transmission
+    const newCosA = Math.cos(vehicle.angle);
+    const newSinA = Math.sin(vehicle.angle);
+    vehicle.speed = vehicle.vx * newCosA + vehicle.vy * newSinA;
+    vehicle.lateralVelocity = -vehicle.vx * newSinA + vehicle.vy * newCosA;
     (vehicle as any).lateralSlip = vehicle.lateralVelocity;
 
     const vSpeedKmh = Math.abs(vehicle.speed) * PX_S_TO_SPEED_KMH;
@@ -10231,73 +10115,62 @@ export function updateVehiclePhysics(
   }
 
   // Update position with combined engine velocity and physical knockback momentum
-  if (useSoftBody) {
-    // Позиция/скорость выводятся из world-space сетки. Внешние дельты
-    // (коллизии, смятие, буксировка) сначала впрыскиваются в узлы, затем
-    // сетка делает PBD-шаг, и уже из неё берётся новая поза кузова.
-    const prevX = vehicle.x;
-    const prevY = vehicle.y;
-    applyExternalVelocityDelta(vehicle);
-    stepSoftBody(vehicle, dt);
-    sweepVehicleAgainstBuildings(vehicle, prevX, prevY, vehicle.x, vehicle.y, nearbyBuildings);
-  } else {
-    const totalVx = vehicle.vx + (vehicle.knockbackVx || 0);
-    const totalVy = vehicle.vy + (vehicle.knockbackVy || 0);
-    const moveX = totalVx * dt;
-    const moveY = totalVy * dt;
-    const moveDist = Math.hypot(moveX, moveY);
+  const totalVx = vehicle.vx + (vehicle.knockbackVx || 0);
+  const totalVy = vehicle.vy + (vehicle.knockbackVy || 0);
+  const moveX = totalVx * dt;
+  const moveY = totalVy * dt;
+  const moveDist = Math.hypot(moveX, moveY);
 
-    // Swept building check: на 1500+ px/s машина за один кадр проходит больше
-    // половины своей ширины, и дискретный SAT может не увидеть стену вообще.
-    // Проходим отрезок пути с шагом 3–8 px и останавливаем машину на первом
-    // кадре касания — дальше обычный collision-блок считает удар и вмятину.
-    let sweptIntoBuilding = false;
-    if (
-      moveDist > Math.max(8, vehicle.width * 0.45) &&
-      !vehicle.activeCrumple &&
-      nearbyBuildings.length > 0 &&
-      Number.isFinite(moveX) &&
-      Number.isFinite(moveY)
-    ) {
-      const sampleStep = Math.max(3, Math.min(8, vehicle.width * 0.25));
-      const steps = Math.min(48, Math.ceil(moveDist / sampleStep));
-      if (steps > 1) {
-        const startX = vehicle.x;
-        const startY = vehicle.y;
-        for (let s = 1; s <= steps; s++) {
-          vehicle.x = startX + moveX * (s / steps);
-          vehicle.y = startY + moveY * (s / steps);
-          let hit = false;
-          for (const bld of nearbyBuildings) {
-            if (checkCarBuildingCollision(vehicle, bld).collided) {
+  // Swept building check: на 1500+ px/s машина за один кадр проходит больше
+  // половины своей ширины, и дискретный SAT может не увидеть стену вообще.
+  // Проходим отрезок пути с шагом 3–8 px и останавливаем машину на первом
+  // кадре касания — дальше обычный collision-блок считает удар и вмятину.
+  let sweptIntoBuilding = false;
+  if (
+    moveDist > Math.max(8, vehicle.width * 0.45) &&
+    !vehicle.activeCrumple &&
+    nearbyBuildings.length > 0 &&
+    Number.isFinite(moveX) &&
+    Number.isFinite(moveY)
+  ) {
+    const sampleStep = Math.max(3, Math.min(8, vehicle.width * 0.25));
+    const steps = Math.min(48, Math.ceil(moveDist / sampleStep));
+    if (steps > 1) {
+      const startX = vehicle.x;
+      const startY = vehicle.y;
+      for (let s = 1; s <= steps; s++) {
+        vehicle.x = startX + moveX * (s / steps);
+        vehicle.y = startY + moveY * (s / steps);
+        let hit = false;
+        for (const bld of nearbyBuildings) {
+          if (checkCarBuildingCollision(vehicle, bld).collided) {
+            hit = true;
+            break;
+          }
+        }
+        if (!hit && vehicle.x >= 4800 && vehicle.x <= 5500 && vehicle.y >= 4800 && vehicle.y <= 5500) {
+          for (const sub of GAS_STATION_STRUCTURAL_SUB_BOXES) {
+            if (checkCarBoxCollision(vehicle, sub).collided) {
               hit = true;
               break;
             }
           }
-          if (!hit && vehicle.x >= 4800 && vehicle.x <= 5500 && vehicle.y >= 4800 && vehicle.y <= 5500) {
-            for (const sub of GAS_STATION_STRUCTURAL_SUB_BOXES) {
-              if (checkCarBoxCollision(vehicle, sub).collided) {
-                hit = true;
-                break;
-              }
-            }
-          }
-          if (hit) {
-            sweptIntoBuilding = true;
-            break;
-          }
         }
-        if (!sweptIntoBuilding) {
-          // Вернуть машину в начало отрезка: финальный += ниже переместит её один раз.
-          vehicle.x = startX;
-          vehicle.y = startY;
+        if (hit) {
+          sweptIntoBuilding = true;
+          break;
         }
       }
+      if (!sweptIntoBuilding) {
+        // Вернуть машину в начало отрезка: финальный += ниже переместит её один раз.
+        vehicle.x = startX;
+        vehicle.y = startY;
+      }
     }
-    if (!sweptIntoBuilding) {
-      vehicle.x += moveX;
-      vehicle.y += moveY;
-    }
+  }
+  if (!sweptIntoBuilding) {
+    vehicle.x += moveX;
+    vehicle.y += moveY;
   }
 
   // Smooth exponential decay of physics knockback & spin recoil (Cushioned tire friction dampening)
