@@ -8908,8 +8908,9 @@ export function updateVehiclePhysics(
 
     // Current vehicle orientation and velocity vectors
     const curAngle = vehicle.angle;
-    const cosA = Math.cos(curAngle);
-    const sinA = Math.sin(curAngle);
+    // cosA/sinA/vLong/vLat are refreshed on every tire sub-step (see TIRE SUB-STEPPING below)
+    let cosA = Math.cos(curAngle);
+    let sinA = Math.sin(curAngle);
 
     // Physical continuous velocities in world space (preserving ballistic momentum & collision impulses)
     let curVx = Number.isFinite(vehicle.vx) ? vehicle.vx : cosA * (vehicle.speed || 0);
@@ -8917,8 +8918,8 @@ export function updateVehiclePhysics(
     let curYaw = Number.isFinite(vehicle.angularVelocity) ? vehicle.angularVelocity : 0;
 
     // Body coordinate velocities: vLong (+ forward, - reverse), vLat (+ right, - left)
-    const vLong = curVx * cosA + curVy * sinA;
-    const vLat = -curVx * sinA + curVy * cosA;
+    let vLong = curVx * cosA + curVy * sinA;
+    let vLat = -curVx * sinA + curVy * cosA;
 
     // --- 1. DYNAMIC 3D WEIGHT TRANSFER (PACEJKA NORMAL LOAD Fz ON 4 WHEELS) ---
     const g_acc = 580.0; // px/s^2 equivalent to ~9.81 m/s^2 in world scale
@@ -9273,11 +9274,34 @@ export function updateVehiclePhysics(
       };
     };
 
+    // Hard-surface flag is constant within a frame (used by sub-steps and by tire audio/smoke below)
+    const onHardRoad = surfFL.type === 'asphalt' || surfFL.type === 'concrete' || surfFL.type === 'rock' ||
+                       surfRR.type === 'asphalt' || surfRR.type === 'concrete';
+
+    // --- TIRE SUB-STEPPING ---
+    // The brush tire model is very stiff at low speed (cornering stiffness ~ 1 / max(25, vFwd)).
+    // A single explicit Euler step per frame (dt up to 50 ms) is unstable there: lateral velocity
+    // overshoots every frame, which shows up as shaking, a permanent "isSlipping" flag and tire smoke
+    // below ~15 km/h even when driving straight or off the throttle. Integrating the tire forces and
+    // chassis with dt <= ~8 ms keeps it stable. Above 45 km/h stiffness is low enough for one step.
+    const SUBSTEP_MAX_DT = 0.008;
+    const MAX_TIRE_SUBSTEPS = 6;
+    const tireSubSteps = (Math.abs(vLong) * PX_S_TO_SPEED_KMH > 45.0 || dt <= SUBSTEP_MAX_DT)
+      ? 1
+      : Math.min(MAX_TIRE_SUBSTEPS, Math.ceil(dt / SUBSTEP_MAX_DT));
+    const subDt = dt / tireSubSteps;
+
+    let wheelFL!: WheelState;
+    let wheelFR!: WheelState;
+    let wheelRL!: WheelState;
+    let wheelRR!: WheelState;
+
+    for (let tireSub = 0; tireSub < tireSubSteps; tireSub++) {
     // Calculate forces on all 4 independent contact patches
-    const wheelFL = computeWheelForce(Lf, -halfTrack, true, true, Fz_FL, muFL, fDriveFL, fBrakeFL);
-    const wheelFR = isSoloMoto ? wheelFL : computeWheelForce(Lf, halfTrack, true, false, Fz_FR, muFR, fDriveFR, fBrakeFR);
-    const wheelRL = computeWheelForce(-Lr, -halfTrack, false, true, Fz_RL, muRL, fDriveRL, fBrakeRL);
-    const wheelRR = isSoloMoto ? wheelRL : computeWheelForce(-Lr, halfTrack, false, false, Fz_RR, muRR, fDriveRR, fBrakeRR);
+    wheelFL = computeWheelForce(Lf, -halfTrack, true, true, Fz_FL, muFL, fDriveFL, fBrakeFL);
+    wheelFR = isSoloMoto ? wheelFL : computeWheelForce(Lf, halfTrack, true, false, Fz_FR, muFR, fDriveFR, fBrakeFR);
+    wheelRL = computeWheelForce(-Lr, -halfTrack, false, true, Fz_RL, muRL, fDriveRL, fBrakeRL);
+    wheelRR = isSoloMoto ? wheelRL : computeWheelForce(-Lr, halfTrack, false, false, Fz_RR, muRR, fDriveRR, fBrakeRR);
 
     // Save wheel states directly onto vehicle
     vehicle.wheelFL = wheelFL;
@@ -9301,8 +9325,6 @@ export function updateVehiclePhysics(
     const fby_RR = wheelRR.fy;
 
     // Center differential binding resistance when locked on dry asphalt
-    const onHardRoad = surfFL.type === 'asphalt' || surfFL.type === 'concrete' || surfFL.type === 'rock' ||
-                       surfRR.type === 'asphalt' || surfRR.type === 'concrete';
     let centerDiffDrag = 0;
     if (isCenterLocked && onHardRoad && Math.abs(steerAngle) > 0.08) {
       centerDiffDrag = Math.abs(steerAngle) * 45.0 * totalMass / 1400.0;
@@ -9351,28 +9373,29 @@ export function updateVehiclePhysics(
     // Physical tire yaw damping (guarantees asymptotic stability and eliminates discrete-step shimmy/shaking)
     const vehSpeedKmh = Math.abs(vehicle.speed) * PX_S_TO_SPEED_KMH;
     const yawDampRate = 9.5 + Math.min(18.0, vehSpeedKmh * 0.22);
-    curYaw *= Math.max(0.65, 1.0 - yawDampRate * dt);
+    curYaw *= Math.max(0.65, 1.0 - yawDampRate * subDt);
 
     // Stationary steering scrub resistance (preventing on-spot rotation when turning steering wheel at standstill)
     if (vehSpeedKmh < 3.0 && activeThrottleEuler === 0) {
       alphaYaw *= 0.15;
-      if (Math.abs(curYaw) < 0.25) curYaw *= 0.75;
+      // 0.75 per 1/60 s, kept frame-rate independent across sub-steps
+      if (Math.abs(curYaw) < 0.25) curYaw *= Math.pow(0.75, subDt * 60);
     }
 
     // Transform body accelerations into world coordinates
     const aWorldX = aBodyX * cosA - aBodyY * sinA;
     const aWorldY = aBodyX * sinA + aBodyY * cosA;
 
-    curVx += aWorldX * dt;
-    curVy += aWorldY * dt;
-    curYaw += alphaYaw * dt;
+    curVx += aWorldX * subDt;
+    curVy += aWorldY * subDt;
+    curYaw += alphaYaw * subDt;
 
     // Robust low-speed static friction / stiction lock (prevents drifting, creeping, and rotation on the spot)
     const groundSpeed = Math.hypot(curVx, curVy);
     if ((groundSpeed < 2.8 && activeThrottleEuler === 0 && !isHandbrakePulled) || (vehSpeedKmh < 2.0 && activeThrottleEuler === 0)) {
-      curVx *= Math.pow(0.05, dt * 12);
-      curVy *= Math.pow(0.05, dt * 12);
-      curYaw *= Math.pow(0.05, dt * 12);
+      curVx *= Math.pow(0.05, subDt * 12);
+      curVy *= Math.pow(0.05, subDt * 12);
+      curYaw *= Math.pow(0.05, subDt * 12);
       if (groundSpeed < 1.5) {
         curVx = 0;
         curVy = 0;
@@ -9380,9 +9403,16 @@ export function updateVehiclePhysics(
       }
     }
 
+    // Advance heading inside the sub-step and refresh the body-frame velocities for the next one
+    vehicle.angle += curYaw * subDt;
+    cosA = Math.cos(vehicle.angle);
+    sinA = Math.sin(vehicle.angle);
+    vLong = curVx * cosA + curVy * sinA;
+    vLat = -curVx * sinA + curVy * cosA;
+    } // end of tire sub-step loop
+
     // Update vehicle orientation and velocities
     vehicle.angularVelocity = curYaw;
-    vehicle.angle += vehicle.angularVelocity * dt;
     vehicle.angle = ((vehicle.angle + Math.PI) % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI) - Math.PI;
 
     vehicle.vx = curVx;
