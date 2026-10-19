@@ -264,4 +264,83 @@
 .hud-row-val { font: 500 11px ui-monospace,monospace; letter-spacing: .06em; color: #a29e93; max-width: 45%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .hud-row.on .hud-row-val { color: #e0ab45; }
 
-@media (prefers-reduced-motion: reduce) { .hud-menu { animation: none; } .hud-btn, .hud-row { transition: none; } }
+/* ------------------------------------------------------------
+   Mini-map (top-right): same grey glass + amber accent as the rest
+   ------------------------------------------------------------ */
+.hud-map-stack { display: flex; align-items: flex-start; gap: 6px; }
+.hud-zoom { display: flex; flex-direction: column; gap: 4px; }
+.hud-map {
+  position: relative; flex: none; width: 84px; height: 84px; padding: 3px; overflow: hidden; cursor: pointer;
+  background: rgba(16,16,18,.84); border: 1px solid rgba(255,255,255,.16); border-radius: 8px;
+  -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); box-shadow: 0 8px 24px rgba(0,0,0,.4);
+  -webkit-tap-highlight-color: transparent; transition: border-color .15s, transform .1s;
+}
+@media (min-width: 640px) { .hud-map { width: 130px; height: 130px; } }
+.hud-map:hover { border-color: rgba(201,146,43,.75); }
+.hud-map:active { transform: scale(.97); }
+.hud-map canvas { display: block; width: 100%; height: 100%; border-radius: 5px; pointer-events: none; }
+.hud-map .hud-btn { position: absolute; top: 6px; right: 6px; min-width: 24px; width: 24px; height: 24px; padding: 0; }
+.hud-map-tag {
+  position: absolute; left: 6px; bottom: 6px; display: inline-flex; align-items: center; gap: 5px; padding: 2px 6px; pointer-events: none;
+  color: #e0ab45; background: rgba(16,16,18,.8); border: 1px solid rgba(255,255,255,.12); border-radius: 4px;
+  font: 700 10px 'Barlow Condensed','Arial Narrow',sans-serif; letter-spacing: .16em; text-transform: uppercase;
+}
+.hud-map-dot { width: 6px; height: 6px; border-radius: 50%; background: #c9922b; animation: hud-pulse 1.6s ease-in-out infinite; }
+@keyframes hud-pulse { 0%, 100% { opacity: 1; } 50% { opacity: .35; } }
+
+/* ------------------------------------------------------------
+   Chat. Desktop: bottom-left. Touch: collapsed button on the
+   right edge under the mini-map (bottom-left belongs to the joystick).
+   ------------------------------------------------------------ */
+.hud-chat {
+  position: fixed; left: 16px; bottom: 16px; z-index: 40; width: 340px; max-width: calc(100vw - 24px);
+  color: #e9e6df; pointer-events: auto; user-select: none; transition: width .2s;
+}
+.hud-chat.wide { width: 460px; }
+.hud-chat-panel {
+  display: flex; flex-direction: column; overflow: hidden;
+  background: rgba(16,16,18,.84); border: 1px solid rgba(255,255,255,.1); border-radius: 10px;
+  -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); box-shadow: 0 18px 50px rgba(0,0,0,.45);
+  animation: hud-in .16s cubic-bezier(.2,.8,.2,1) both;
+}
+.hud-chat-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 8px 6px 12px; border-bottom: 1px solid rgba(255,255,255,.1); }
+.hud-chat-title {
+  display: flex; align-items: center; gap: 8px; min-width: 0; color: #c9922b; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  font: 700 12px 'Barlow Condensed','Arial Narrow',sans-serif; letter-spacing: .19em; text-transform: uppercase;
+}
+.hud-chat-tools { display: flex; gap: 4px; flex: none; }
+.hud-chat-log {
+  display: flex; flex-direction: column; gap: 6px; max-height: 192px; overflow-y: auto; padding: 10px 12px;
+  font-size: 13px; line-height: 1.4; scrollbar-width: thin; scrollbar-color: #3a352b transparent;
+}
+.hud-chat-empty { padding: 6px 0; text-align: center; font-size: 12px; color: #8f8b81; }
+.hud-chat-msg { color: #e9e6df; word-break: break-word; white-space: pre-wrap; user-select: text; }
+.hud-chat-name { margin-right: 6px; font-weight: 700; color: #9ac985; }
+.hud-chat-name.me { color: #e0ab45; }
+.hud-chat-sys { display: flex; align-items: center; gap: 6px; padding: 5px 8px; font-size: 12px; color: #f0c264; background: rgba(201,146,43,.12); border-left: 3px solid #c9922b; border-radius: 4px; }
+.hud-chat-form { display: flex; flex-direction: column; gap: 6px; padding: 8px; border-top: 1px solid rgba(255,255,255,.1); }
+.hud-chat-draft { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 0 2px; color: #a29e93; font: 600 11px 'Barlow Condensed','Arial Narrow',sans-serif; letter-spacing: .1em; text-transform: uppercase; }
+.hud-chat-draft-r { display: flex; align-items: center; gap: 10px; }
+.hud-chat-link { display: inline-flex; align-items: center; gap: 4px; padding: 0; color: inherit; background: none; border: 0; font: inherit; letter-spacing: inherit; text-transform: inherit; cursor: pointer; transition: color .15s; }
+.hud-chat-link:hover { color: #f0c264; }
+.hud-chat-row { display: flex; align-items: flex-end; gap: 6px; }
+.hud-chat-input {
+  flex: 1; min-width: 0; min-height: 40px; max-height: 140px; resize: none; padding: 9px 10px; outline: 0;
+  color: #e9e6df; font-size: 13px; line-height: 1.4; user-select: text;
+  background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.14); border-radius: 6px; transition: border-color .15s;
+}
+.hud-chat-input:focus { border-color: #c9922b; }
+.hud-chat-input::placeholder { color: #8f8b81; }
+.hud-chat-hints { display: flex; justify-content: space-between; padding: 0 2px; color: #8f8b81; font: 500 10px ui-monospace,monospace; letter-spacing: .06em; }
+.hud-chat-hints span { display: inline-flex; align-items: center; gap: 4px; }
+.hud-chat-fab { position: relative; }
+.hud-chat-badge {
+  position: absolute; top: -6px; right: -6px; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px; pointer-events: none;
+  color: #1a1409; background: #c9922b; text-align: center; font: 700 11px/18px 'Barlow Condensed','Arial Narrow',sans-serif;
+}
+.hud-chat.touch { left: auto; right: 12px; bottom: auto; top: 104px; width: min(300px, calc(100vw - 24px)); }
+.hud-chat.touch.collapsed { width: auto; }
+.hud-chat.touch .hud-chat-log { max-height: min(120px, 28vh); padding: 8px 10px; }
+.hud-chat.touch .hud-chat-input { max-height: 84px; }
+
+@media (prefers-reduced-motion: reduce) { .hud-menu, .hud-chat-panel { animation: none; } .hud-map-dot { animation: none; } .hud-btn, .hud-row, .hud-map, .hud-chat { transition: none; } }

@@ -5932,7 +5932,7 @@ export default function App() {
     const w = canvas.width;
     const h = canvas.height;
 
-    ctx.fillStyle = '#060a12';
+    ctx.fillStyle = '#0d0e10';
     ctx.fillRect(0, 0, w, h);
 
     ctx.save();
@@ -6070,12 +6070,12 @@ export default function App() {
 
       // Vehicles
       for (const veh of world.vehicles) {
-        ctx.fillStyle = veh.isPlayerControlled ? '#38bdf8': (veh.isParked ? '#64748b': '#f59e0b');
+        ctx.fillStyle = veh.isPlayerControlled ? '#e0ab45': (veh.isParked ? '#64748b': '#a29e93');
         ctx.fillRect(veh.x - 12, veh.y - 12, 24, 24);
       }
 
       // Player Point
-      ctx.fillStyle = '#38bdf8';
+      ctx.fillStyle = '#e0ab45';
       ctx.strokeStyle = '#ffffff';
       ctx.lineWidth = 4;
       ctx.beginPath();
@@ -6302,7 +6302,7 @@ export default function App() {
       ctx.translate(player.x, player.y);
       ctx.rotate(player.angle);
 
-      ctx.fillStyle = '#38bdf8';
+      ctx.fillStyle = '#e0ab45';
       ctx.beginPath();
       ctx.moveTo(18, 0);
       ctx.lineTo(-12, -10);
@@ -6362,114 +6362,78 @@ export default function App() {
       {timeScale < 1.0 && !isMainMenuOpen && !isPauseMenuOpen && <SlowMotionIndicator value={timeScale} />}
 
       {/* TOP-RIGHT: GPS NAVIGATOR MINIMAP */}
-      <div id="hud-top-right"className="absolute top-3 right-3 sm:top-4 sm:right-4 z-40 flex flex-col items-end gap-1.5 pointer-events-auto select-none">
-        {isMinimapCollapsed ? (
-          <div className="flex items-center gap-1.5">
-            {/* Zoom Controls */}
-            <div className="flex flex-col bg-slate-900/90 backdrop-blur-md border border-slate-700/80 rounded-xl p-0.5 shadow-xl">
-              <button
-                type="button"onClick={() => {
-                  userZoomFactorRef.current = Math.min(3.0, userZoomFactorRef.current + 0.15);
-                }}
-                onTouchEnd={(e) => {
-                  e.preventDefault();
-                  userZoomFactorRef.current = Math.min(3.0, userZoomFactorRef.current + 0.15);
-                }}
-                className="w-7 h-7 flex items-center justify-center text-slate-300 hover:text-white active:bg-slate-800 rounded-lg transition"title="Приблизить камеру">
-                <ZoomIn className="w-3.5 h-3.5"/>
+      <div id="hud-top-right" className="absolute top-3 right-3 sm:top-4 sm:right-4 z-40 flex flex-col items-end gap-1.5 pointer-events-auto select-none">
+        {(() => {
+          type Ev = { preventDefault(): void; stopPropagation(): void };
+          const zoomIn = () => { userZoomFactorRef.current = Math.min(3.0, userZoomFactorRef.current + 0.15); };
+          const zoomOut = () => { userZoomFactorRef.current = Math.max(0.4, userZoomFactorRef.current - 0.15); };
+          // click + touchEnd (touch fires immediately, without the synthetic-click delay)
+          const tap = (fn: () => void, stop = false) => ({
+            onClick: (e: Ev) => { if (stop) e.stopPropagation(); fn(); },
+            onTouchEnd: (e: Ev) => { e.preventDefault(); if (stop) e.stopPropagation(); fn(); }
+          });
+
+          const zoomButtons = (
+            <div className="hud-zoom">
+              <button type="button" className="hud-btn hud-sm hud-sq" title="Приблизить камеру" aria-label="Приблизить камеру" {...tap(zoomIn)}>
+                <ZoomIn className="w-4 h-4" />
               </button>
-              <div className="h-px bg-slate-800 my-0.5"/>
-              <button
-                type="button"onClick={() => {
-                  userZoomFactorRef.current = Math.max(0.4, userZoomFactorRef.current - 0.15);
-                }}
-                onTouchEnd={(e) => {
-                  e.preventDefault();
-                  userZoomFactorRef.current = Math.max(0.4, userZoomFactorRef.current - 0.15);
-                }}
-                className="w-7 h-7 flex items-center justify-center text-slate-300 hover:text-white active:bg-slate-800 rounded-lg transition"title="Отдалить камеру">
-                <ZoomOut className="w-3.5 h-3.5"/>
+              <button type="button" className="hud-btn hud-sm hud-sq" title="Отдалить камеру" aria-label="Отдалить камеру" {...tap(zoomOut)}>
+                <ZoomOut className="w-4 h-4" />
               </button>
             </div>
+          );
 
-            {/* Expand Minimap Button */}
-            <button
-              id="expand-minimap-btn"onClick={() => setIsMinimapCollapsed(false)}
-              onTouchEnd={(e) => {
-                e.preventDefault();
-                setIsMinimapCollapsed(false);
-              }}
-              className="w-9 h-9 sm:w-10 sm:h-10 bg-slate-900/95 backdrop-blur-xl border border-sky-500/40 rounded-xl shadow-xl flex items-center justify-center text-sky-400 hover:text-sky-300 active:scale-95 transition"title="Развернуть миникарту [M]">
-              <Map className="w-4 h-4 sm:w-5 sm:h-5"/>
-            </button>
-          </div>
-        ) : (
-          <div className="flex items-start gap-1.5">
-            {/* Quick Zoom Buttons alongside minimap */}
-            <div className="flex flex-col bg-slate-900/90 backdrop-blur-md border border-slate-700/80 rounded-xl p-0.5 shadow-xl">
-              <button
-                type="button"onClick={() => {
-                  userZoomFactorRef.current = Math.min(3.0, userZoomFactorRef.current + 0.15);
-                }}
-                onTouchEnd={(e) => {
-                  e.preventDefault();
-                  userZoomFactorRef.current = Math.min(3.0, userZoomFactorRef.current + 0.15);
-                }}
-                className="w-6 h-6 sm:w-7 sm:h-7 flex items-center justify-center text-slate-300 hover:text-white active:bg-slate-800 rounded-lg transition"title="Приблизить камеру">
-                <ZoomIn className="w-3 h-3 sm:w-3.5 sm:h-3.5"/>
-              </button>
-              <div className="h-px bg-slate-800 my-0.5"/>
-              <button
-                type="button"onClick={() => {
-                  userZoomFactorRef.current = Math.max(0.4, userZoomFactorRef.current - 0.15);
-                }}
-                onTouchEnd={(e) => {
-                  e.preventDefault();
-                  userZoomFactorRef.current = Math.max(0.4, userZoomFactorRef.current - 0.15);
-                }}
-                className="w-6 h-6 sm:w-7 sm:h-7 flex items-center justify-center text-slate-300 hover:text-white active:bg-slate-800 rounded-lg transition"title="Отдалить камеру">
-                <ZoomOut className="w-3 h-3 sm:w-3.5 sm:h-3.5"/>
-              </button>
-            </div>
-
-            {/* Radar Minimap Box (Compact & Elegant) */}
-            <div 
-              id="minimap-radar-container"className="w-[84px] h-[84px] sm:w-[130px] sm:h-[130px] bg-slate-950/90 backdrop-blur-xl border border-white/15 rounded-xl p-1 shadow-2xl overflow-hidden relative group cursor-pointer active:scale-95 transition-all hover:border-sky-500/40"onClick={() => setIsFullMapOpen(true)}
-              onTouchEnd={(e) => {
-                e.preventDefault();
-                setIsFullMapOpen(true);
-              }}
-              title="Нажмите для открытия карты города на весь экран">
-              <canvas
-                id="minimap-canvas"ref={minimapCanvasRef}
-                width={200}
-                height={200}
-                className="w-full h-full rounded-lg block pointer-events-none"/>
-              {/* Top Buttons: Collapse & GPS label */}
-              <div className="absolute top-1.5 right-1.5 flex items-center gap-1">
+          if (isMinimapCollapsed) {
+            return (
+              <div className="hud-map-stack">
+                {zoomButtons}
                 <button
-                  id="collapse-minimap-btn"onClick={(e) => {
-                    e.stopPropagation();
-                    setIsMinimapCollapsed(true);
-                  }}
-                  onTouchEnd={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    setIsMinimapCollapsed(true);
-                  }}
-                  className="w-5 h-5 bg-slate-900/80 hover:bg-slate-800 text-slate-300 hover:text-white rounded flex items-center justify-center border border-white/10 active:scale-90 transition"title="Свернуть миникарту">
-                  <Minimize2 className="w-2.5 h-2.5 sm:w-3 sm:h-3"/>
+                  id="expand-minimap-btn"
+                  type="button"
+                  className="hud-btn hud-sq"
+                  title="Развернуть миникарту [M]"
+                  aria-label="Развернуть миникарту"
+                  {...tap(() => setIsMinimapCollapsed(false))}>
+                  <Map className="w-5 h-5" />
                 </button>
               </div>
+            );
+          }
 
-              {/* Bottom indicator badge */}
-              <div className="absolute bottom-1.5 left-1.5 bg-slate-900/80 backdrop-blur-md border border-white/10 text-sky-400 text-[8px] sm:text-[9px] font-bold px-1 py-0.5 rounded shadow pointer-events-none flex items-center gap-1">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping"/>
-                <span>GPS</span>
+          return (
+            <div className="hud-map-stack">
+              {zoomButtons}
+
+              {/* Radar minimap: tap to open the full-screen city map */}
+              <div
+                id="minimap-radar-container"
+                className="hud-map"
+                role="button"
+                tabIndex={0}
+                title="Открыть карту города на весь экран"
+                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setIsFullMapOpen(true); } }}
+                {...tap(() => setIsFullMapOpen(true))}>
+                <canvas id="minimap-canvas" ref={minimapCanvasRef} width={200} height={200} />
+
+                <button
+                  id="collapse-minimap-btn"
+                  type="button"
+                  className="hud-btn"
+                  title="Свернуть миникарту"
+                  aria-label="Свернуть миникарту"
+                  {...tap(() => setIsMinimapCollapsed(true), true)}>
+                  <Minimize2 className="w-3 h-3" />
+                </button>
+
+                <div className="hud-map-tag">
+                  <span className="hud-map-dot" />
+                  <span>GPS</span>
+                </div>
               </div>
             </div>
-          </div>
-        )}
+          );
+        })()}
       </div>
 
 
@@ -8047,6 +8011,7 @@ export default function App() {
         <ChatOverlay
           isChatFocused={isChatFocused}
           onSetChatFocused={setIsChatFocused}
+          isMobileTouch={isMobileTouch}
         />
       )}
 

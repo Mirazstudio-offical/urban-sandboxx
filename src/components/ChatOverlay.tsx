@@ -1,11 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { MessageSquare, Send, Minimize2, Maximize2, Zap, Trash2, Copy, Check, CornerDownLeft, Sparkles } from 'lucide-react';
+import { MessageSquare, Send, Minus, Maximize2, Minimize2, Zap, Trash2, Copy, Check, CornerDownLeft } from 'lucide-react';
 import { onlineManager, ChatMessage } from '../onlineSystem';
 import { sound } from '../audio';
 
 interface ChatOverlayProps {
   isChatFocused: boolean;
   onSetChatFocused: (focused: boolean) => void;
+  /** Touch devices: chat starts collapsed to a button on the right edge (bottom-left is the joystick). */
+  isMobileTouch?: boolean;
 }
 
 const STORAGE_KEY_DRAFT = 'm2d_chat_draft_prompt';
@@ -14,10 +16,11 @@ const MAX_PROMPT_LENGTH = 4000;
 
 export const ChatOverlay: React.FC<ChatOverlayProps> = ({
   isChatFocused,
-  onSetChatFocused
+  onSetChatFocused,
+  isMobileTouch = false
 }) => {
   const [messages, setMessages] = useState<ChatMessage[]>(onlineManager.chatMessages);
-  
+
   // Real-time auto-recovered draft (never lost across browser crashes, reloads or unmounts)
   const [inputText, setInputText] = useState<string>(() => {
     try {
@@ -27,13 +30,19 @@ export const ChatOverlay: React.FC<ChatOverlayProps> = ({
     }
   });
 
-  const [isMinimized, setIsMinimized] = useState<boolean>(false);
+  const [isMinimized, setIsMinimized] = useState<boolean>(isMobileTouch);
   const [isExpandedView, setIsExpandedView] = useState<boolean>(false);
   const [copiedDraft, setCopiedDraft] = useState<boolean>(false);
   const [historyIndex, setHistoryIndex] = useState<number>(-1);
+  const [unread, setUnread] = useState<number>(0);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const lastMessageIdRef = useRef<string | null>(
+    onlineManager.chatMessages.length ? onlineManager.chatMessages[onlineManager.chatMessages.length - 1].id : null
+  );
+  const isMinimizedRef = useRef<boolean>(isMinimized);
+  isMinimizedRef.current = isMinimized;
 
   // Auto-save draft on every change
   useEffect(() => {
@@ -46,34 +55,45 @@ export const ChatOverlay: React.FC<ChatOverlayProps> = ({
     } catch {}
   }, [inputText]);
 
-  // Subscribe to online room messages
+  // Subscribe to online room messages (and count unread while collapsed)
   useEffect(() => {
     const unsub = onlineManager.subscribe(() => {
-      setMessages([...onlineManager.chatMessages]);
+      const list = [...onlineManager.chatMessages];
+      setMessages(list);
+      const last = list.length ? list[list.length - 1] : null;
+      if (last && last.id !== lastMessageIdRef.current) {
+        lastMessageIdRef.current = last.id;
+        if (isMinimizedRef.current && last.senderPeerId !== onlineManager.localPeerId) {
+          setUnread((n) => n + 1);
+        }
+      }
     });
     return () => { unsub(); };
   }, []);
 
-  // Auto-focus when focus requested
+  // Auto-focus when focus requested (and open the panel if it was collapsed)
   useEffect(() => {
-    if (isChatFocused && textareaRef.current) {
-      textareaRef.current.focus();
+    if (!isChatFocused) return;
+    if (isMinimizedRef.current) {
+      setIsMinimized(false);
+      setUnread(0);
     }
+    if (textareaRef.current) textareaRef.current.focus();
   }, [isChatFocused]);
 
   // Auto-scroll message list
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages, isChatFocused]);
+  }, [messages, isChatFocused, isMinimized]);
 
   // Auto-adjust textarea height based on content
   useEffect(() => {
     const el = textareaRef.current;
     if (!el) return;
     el.style.height = 'auto';
-    const newH = Math.min(Math.max(el.scrollHeight, 36), 140);
+    const newH = Math.min(Math.max(el.scrollHeight, 40), isMobileTouch ? 84 : 140);
     el.style.height = `${newH}px`;
-  }, [inputText]);
+  }, [inputText, isMinimized, isMobileTouch]);
 
   // Read message history
   const getPromptHistory = (): string[] => {
@@ -183,6 +203,11 @@ export const ChatOverlay: React.FC<ChatOverlayProps> = ({
     } catch {}
   };
 
+  const openPanel = () => {
+    setIsMinimized(false);
+    setUnread(0);
+  };
+
   const hasMessages = messages.length > 0;
   const isOnline = onlineManager.status === 'connected';
   const hasDraft = inputText.trim().length > 0;
@@ -191,79 +216,89 @@ export const ChatOverlay: React.FC<ChatOverlayProps> = ({
     return null;
   }
 
+  const rootClass =
+    'hud-chat' +
+    (isMobileTouch ? ' touch' : '') +
+    (isMinimized ? ' collapsed' : '') +
+    (isExpandedView && !isMobileTouch ? ' wide' : '');
+
+  // Touch + collapsed: a single button, nothing else covers the playfield
+  if (isMobileTouch && isMinimized) {
+    return (
+      <div id="chat-overlay-container" className={rootClass}>
+        <button
+          type="button"
+          className="hud-btn hud-sq hud-chat-fab"
+          onClick={openPanel}
+          title="Открыть чат"
+          aria-label="Открыть чат"
+        >
+          <MessageSquare className="w-5 h-5" />
+          {unread > 0 && <span className="hud-chat-badge">{unread > 99 ? '99+' : unread}</span>}
+        </button>
+      </div>
+    );
+  }
+
   return (
-    <div 
-      id="chat-overlay-container"
-      className={`fixed bottom-4 left-4 z-40 transition-all duration-200 pointer-events-auto select-none ${
-        isMinimized 
-          ? 'w-72' 
-          : isExpandedView 
-          ? 'w-96 sm:w-[32rem]' 
-          : 'w-80 sm:w-96'
-      }`}
-    >
-      <div className="bg-slate-950/90 backdrop-blur-md border border-slate-800/90 rounded-2xl shadow-2xl overflow-hidden flex flex-col">
-        
-        {/* Chat Bar Header */}
-        <div className="px-3 py-2 bg-slate-900/80 border-b border-slate-800/70 flex items-center justify-between text-xs text-slate-300">
-          <div className="flex items-center gap-2">
-            <MessageSquare className="w-3.5 h-3.5 text-sky-400" />
-            <span className="font-bold tracking-wide text-[11px] uppercase">
-              Чат Комнаты {onlineManager.roomCode ? `(${onlineManager.roomCode})` : ''}
-            </span>
+    <div id="chat-overlay-container" className={rootClass}>
+      <div className="hud-chat-panel">
+
+        {/* Header */}
+        <div className="hud-chat-head">
+          <div className="hud-chat-title">
+            <MessageSquare className="w-4 h-4 shrink-0" />
+            <span>Чат{onlineManager.roomCode ? ` · ${onlineManager.roomCode}` : ''}</span>
           </div>
 
-          <div className="flex items-center gap-1">
+          <div className="hud-chat-tools">
+            {!isMobileTouch && (
+              <button
+                type="button"
+                className={`hud-btn hud-sm ${isExpandedView ? 'on' : ''}`}
+                onClick={() => setIsExpandedView(!isExpandedView)}
+                title={isExpandedView ? 'Обычный размер' : 'Широкий режим'}
+                aria-label={isExpandedView ? 'Обычный размер' : 'Широкий режим'}
+              >
+                {isExpandedView ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
+              </button>
+            )}
             <button
               type="button"
-              onClick={() => setIsExpandedView(!isExpandedView)}
-              className="p-1 hover:bg-slate-800 rounded text-slate-400 hover:text-white transition-colors cursor-pointer"
-              title={isExpandedView ? 'Обычный размер' : 'Широкий режим'}
-            >
-              <Sparkles className="w-3 h-3 text-sky-400" />
-            </button>
-            <button
-              type="button"
+              className="hud-btn hud-sm"
               onClick={() => setIsMinimized(!isMinimized)}
-              className="p-1 hover:bg-slate-800 rounded text-slate-400 hover:text-white transition-colors cursor-pointer"
               title={isMinimized ? 'Развернуть' : 'Свернуть'}
+              aria-label={isMinimized ? 'Развернуть' : 'Свернуть'}
             >
-              {isMinimized ? <Maximize2 className="w-3 h-3" /> : <Minimize2 className="w-3 h-3" />}
+              {isMinimized ? <Maximize2 className="w-4 h-4" /> : <Minus className="w-4 h-4" />}
             </button>
           </div>
         </div>
 
-        {/* Message Log */}
+        {/* Message log */}
         {!isMinimized && (
-          <div className="p-3 max-h-48 overflow-y-auto space-y-2 text-xs font-medium">
+          <div className="hud-chat-log">
             {messages.length === 0 ? (
-              <div className="text-[11px] text-slate-500 italic text-center py-2">
-                Сообщений пока нет. Нажмите Enter, чтобы написать!
+              <div className="hud-chat-empty">
+                {isMobileTouch ? 'Сообщений пока нет.' : 'Сообщений пока нет. Нажмите Enter, чтобы написать.'}
               </div>
             ) : (
               messages.slice(-40).map((msg) => {
                 const isLocal = msg.senderPeerId === onlineManager.localPeerId;
-                const isSys = msg.isSystem;
 
-                if (isSys) {
+                if (msg.isSystem) {
                   return (
-                    <div key={msg.id} className="text-[11px] text-amber-400/90 italic bg-amber-950/20 px-2 py-1 rounded border border-amber-500/20 flex items-center gap-1">
-                      <Zap className="w-3 h-3 text-amber-400 shrink-0" />
+                    <div key={msg.id} className="hud-chat-sys">
+                      <Zap className="w-3.5 h-3.5 shrink-0" />
                       <span>{msg.text}</span>
                     </div>
                   );
                 }
 
                 return (
-                  <div key={msg.id} className="break-words leading-relaxed">
-                    <span 
-                      className={`font-bold mr-1.5 ${
-                        isLocal ? 'text-sky-400' : 'text-emerald-400'
-                      }`}
-                    >
-                      {msg.senderName}:
-                    </span>
-                    <span className="text-slate-200 whitespace-pre-wrap">{msg.text}</span>
+                  <div key={msg.id} className="hud-chat-msg">
+                    <span className={`hud-chat-name ${isLocal ? 'me' : ''}`}>{msg.senderName}:</span>
+                    {msg.text}
                   </div>
                 );
               })
@@ -272,45 +307,31 @@ export const ChatOverlay: React.FC<ChatOverlayProps> = ({
           </div>
         )}
 
-        {/* Input Field & Draft Protection Bar */}
-        <form onSubmit={handleSendMessage} className="p-2.5 bg-slate-900/95 border-t border-slate-800/80 flex flex-col gap-1.5">
-          {/* Draft Status / Safety Toolbar (visible when text is entered) */}
-          {inputText.length > 0 && (
-            <div className="flex items-center justify-between text-[10px] text-slate-400 px-1">
-              <span className="flex items-center gap-1 text-emerald-400 font-medium">
-                <Check className="w-2.5 h-2.5" />
-                Черновик защищен в памяти
-              </span>
-              <div className="flex items-center gap-2">
-                <span>{inputText.length} / {MAX_PROMPT_LENGTH}</span>
-                <button
-                  type="button"
-                  onClick={handleCopyDraft}
-                  className="hover:text-sky-300 transition-colors cursor-pointer flex items-center gap-0.5"
-                  title="Скопировать черновик"
-                >
-                  {copiedDraft ? <Check className="w-2.5 h-2.5 text-emerald-400" /> : <Copy className="w-2.5 h-2.5" />}
+        {/* Input */}
+        <form onSubmit={handleSendMessage} className="hud-chat-form">
+          {!isMobileTouch && inputText.length > 0 && (
+            <div className="hud-chat-draft">
+              <span>{inputText.length} / {MAX_PROMPT_LENGTH}</span>
+              <div className="hud-chat-draft-r">
+                <button type="button" className="hud-chat-link" onClick={handleCopyDraft} title="Скопировать черновик">
+                  {copiedDraft ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
                   {copiedDraft ? 'Скопировано' : 'Копия'}
                 </button>
-                <button
-                  type="button"
-                  onClick={handleClearDraft}
-                  className="hover:text-red-400 transition-colors cursor-pointer flex items-center gap-0.5"
-                  title="Очистить поле ввода"
-                >
-                  <Trash2 className="w-2.5 h-2.5" />
+                <button type="button" className="hud-chat-link" onClick={handleClearDraft} title="Очистить поле ввода">
+                  <Trash2 className="w-3 h-3" />
                   Очистить
                 </button>
               </div>
             </div>
           )}
 
-          <div className="flex items-end gap-1.5">
+          <div className="hud-chat-row">
             <textarea
               ref={textareaRef}
               rows={1}
               value={inputText}
               maxLength={MAX_PROMPT_LENGTH}
+              className="hud-chat-input"
               onFocus={() => onSetChatFocused(true)}
               onBlur={() => {
                 setTimeout(() => {
@@ -322,26 +343,29 @@ export const ChatOverlay: React.FC<ChatOverlayProps> = ({
               onKeyDown={handleKeyDown}
               onKeyUp={(e) => e.stopPropagation()}
               onChange={(e) => setInputText(e.target.value)}
-              placeholder={isChatFocused ? 'Напишите сообщение или промпт (Enter — отправить, Shift+Enter — строка)...' : 'Нажмите Enter для чата...'}
-              className="flex-1 bg-slate-950 border border-slate-700/90 rounded-xl px-2.5 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-sky-500 resize-none transition-all max-h-36 leading-relaxed select-text"
+              placeholder={
+                isMobileTouch
+                  ? 'Сообщение...'
+                  : isChatFocused
+                  ? 'Сообщение (Enter — отправить, Shift+Enter — строка)'
+                  : 'Нажмите Enter для чата...'
+              }
             />
             <button
               type="submit"
-              className="p-2 bg-sky-600 hover:bg-sky-500 active:bg-sky-700 text-white rounded-xl transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
-              disabled={!inputText.trim()}
+              className={`hud-btn hud-sq ${hasDraft ? 'on' : ''}`}
+              disabled={!hasDraft}
               title="Отправить (Enter или Ctrl+Enter)"
+              aria-label="Отправить"
             >
-              <Send className="w-3.5 h-3.5" />
+              <Send className="w-4 h-4" />
             </button>
           </div>
 
-          {/* Quick usage hints */}
-          {isChatFocused && (
-            <div className="flex items-center justify-between text-[9.5px] text-slate-500 px-1 pt-0.5">
-              <span>Shift+Enter — перенос строки</span>
-              <span className="flex items-center gap-1">
-                <CornerDownLeft className="w-2.5 h-2.5" /> Enter — отправить
-              </span>
+          {!isMobileTouch && isChatFocused && (
+            <div className="hud-chat-hints">
+              <span>Shift+Enter — перенос</span>
+              <span><CornerDownLeft className="w-3 h-3" /> Enter — отправить</span>
             </div>
           )}
         </form>
