@@ -105,25 +105,85 @@ type PanelId = 'board' | 'config' | 'world' | 'traffic' | null;
 /* Radial wheel geometry: 6 sectors clockwise, starting from the top */
 const N = 6;
 const HALF = 360 / N;
-const GAP = 2.2;
+/* Linear gap between neighbouring sectors (viewBox units). The gap has the same width at the
+   inner and outer contour, so the wheel reads as one solid "donut" cut by parallel slits. */
+const GAP_PX = 8;
 const RI = 112;
 const RO = 262;
 const RL = 184;
 const C = 320;
+const WHEEL_BOX = 600; // design size of the wheel box in px; scaled down on small screens
 
 const pt = (r: number, deg: number) => {
   const a = (deg * Math.PI) / 180;
   return `${(C + r * Math.sin(a)).toFixed(1)} ${(C - r * Math.cos(a)).toFixed(1)}`;
 };
+/* Angle that shifts a sector edge sideways by GAP_PX / 2 at radius r: the edge stays parallel
+   to the radial boundary line, so the slit width is constant along the whole edge. */
+const edgeShift = (r: number) => (Math.asin(Math.min(1, GAP_PX / 2 / r)) * 180) / Math.PI;
 const sectorPath = (i: number) => {
-  const a0 = i * HALF - HALF / 2 + GAP;
-  const a1 = i * HALF + HALF / 2 - GAP;
-  return `M${pt(RO, a0)}A${RO} ${RO} 0 0 1 ${pt(RO, a1)}L${pt(RI, a1)}A${RI} ${RI} 0 0 0 ${pt(RI, a0)}Z`;
+  const mid = i * HALF;
+  const so = edgeShift(RO);
+  const si = edgeShift(RI);
+  const a0o = mid - HALF / 2 + so;
+  const a1o = mid + HALF / 2 - so;
+  const a0i = mid - HALF / 2 + si;
+  const a1i = mid + HALF / 2 - si;
+  return `M${pt(RO, a0o)}A${RO} ${RO} 0 0 1 ${pt(RO, a1o)}L${pt(RI, a1i)}A${RI} ${RI} 0 0 0 ${pt(RI, a0i)}Z`;
 };
 const labelPos = (i: number) => {
   const a = (i * HALF * Math.PI) / 180;
   return { x: C + RL * Math.sin(a), y: C - RL * Math.cos(a), px: Math.sin(a) * 10, py: -Math.cos(a) * 10 };
 };
+
+/* Responsive layout: the wheel is scaled to the viewport, an open panel takes the free side
+   (landscape) or the bottom part of the screen (portrait phones). */
+const PAD = 8;
+const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
+
+interface WheelLayout {
+  size: number;
+  cx: number;
+  cy: number;
+  panelStyle: React.CSSProperties;
+  wide: boolean;
+  showHints: boolean;
+}
+
+const computeLayout = (vw: number, vh: number, hasPanel: boolean): WheelLayout => {
+  const portrait = vw < 640 && vh > vw;
+  if (!hasPanel) {
+    const hintRoom = !portrait && vh >= 560 ? 36 : 0;
+    const size = clamp(Math.min(WHEEL_BOX, vw - 2 * PAD, vh - 2 * PAD - hintRoom), 160, WHEEL_BOX);
+    return { size, cx: vw / 2, cy: (vh - hintRoom) / 2, panelStyle: {}, wide: false, showHints: hintRoom > 0 };
+  }
+  if (portrait) {
+    const panelH = Math.round(vh * 0.56);
+    const size = clamp(Math.min(WHEEL_BOX, vw - 2 * PAD, vh - panelH - 3 * PAD), 120, WHEEL_BOX);
+    return {
+      size,
+      cx: vw / 2,
+      cy: PAD + size / 2,
+      panelStyle: { left: PAD, right: PAD, bottom: PAD, maxHeight: panelH },
+      wide: false,
+      showHints: false
+    };
+  }
+  const panelW = Math.round(Math.min(560, Math.max(300, vw * 0.46)));
+  const regionW = vw - panelW - 3 * PAD;
+  const size = clamp(Math.min(WHEEL_BOX, vh - 2 * PAD, regionW), 120, WHEEL_BOX);
+  return {
+    size,
+    cx: PAD + regionW / 2,
+    cy: vh / 2,
+    panelStyle: { top: '50%', right: PAD, width: panelW, maxHeight: vh - 2 * PAD, transform: 'translateY(-50%)' },
+    wide: panelW >= 480,
+    showHints: vh >= 560
+  };
+};
+
+const PanelLayoutContext = React.createContext<{ style: React.CSSProperties; wide: boolean }>({ style: {}, wide: true });
+const PANEL_BASE = 'fixed z-[110] rounded-[2px] border border-[#2a2e38] bg-[#14161a]/95 backdrop-blur-md shadow-2xl flex flex-col font-mono overflow-hidden';
 
 const WEATHER: { id: WeatherType; label: string; Icon: React.ComponentType<{ className?: string }> }[] = [
   { id: 'clear', label: 'Ясно', Icon: Sun },
@@ -159,21 +219,24 @@ const Panel: React.FC<{
   HeaderIcon: React.ComponentType<{ className?: string }>;
   onClose: () => void;
   children: React.ReactNode;
-}> = ({ title, sub, HeaderIcon, onClose, children }) => (
-  <section data-radial-panel className="fixed z-[110] top-1/2 right-4 sm:right-8 -translate-y-1/2 w-[560px] max-w-[min(560px,calc(100vw-120px))] max-h-[88vh] rounded-[2px] border border-[#2a2e38] bg-[#14161a]/95 backdrop-blur-md shadow-2xl flex flex-col font-mono overflow-hidden">
-    <div className="flex shrink-0 items-center justify-between p-3 border-b border-[#2a2e38] bg-[#0b0c0e]/95">
-      <div className="flex items-center gap-2.5">
-        <div className="w-8 h-8 rounded-[2px] border border-[#c68a35]/50 bg-[#c68a35]/10 flex items-center justify-center text-[#c68a35]"><HeaderIcon className="w-4 h-4" /></div>
-        <div>
-          <div className="text-sm font-black uppercase tracking-wider text-[#f0f3f6]">{title}</div>
-          <div className="text-[10px] text-[#9ba3af]">{sub}</div>
+}> = ({ title, sub, HeaderIcon, onClose, children }) => {
+  const { style } = React.useContext(PanelLayoutContext);
+  return (
+    <section data-radial-panel className={PANEL_BASE} style={style} onClick={(e) => e.stopPropagation()}>
+      <div className="flex shrink-0 items-center justify-between gap-2 p-3 border-b border-[#2a2e38] bg-[#0b0c0e]/95">
+        <div className="flex items-center gap-2.5 min-w-0">
+          <div className="w-8 h-8 flex-none rounded-[2px] border border-[#c68a35]/50 bg-[#c68a35]/10 flex items-center justify-center text-[#c68a35]"><HeaderIcon className="w-4 h-4" /></div>
+          <div className="min-w-0">
+            <div className="text-sm font-black uppercase tracking-wider text-[#f0f3f6] truncate">{title}</div>
+            <div className="text-[10px] text-[#9ba3af] truncate">{sub}</div>
+          </div>
         </div>
+        <button type="button" onClick={onClose} className="flex-none p-2 rounded-[2px] bg-[#0b0c0e] hover:bg-[#1c1f26] border border-[#2a2e38] text-[#9ba3af] hover:text-[#f0f3f6] hover:border-[#c68a35]/50 transition-all cursor-pointer"><X className="w-4 h-4" /></button>
       </div>
-      <button type="button" onClick={onClose} className="p-2 rounded-[2px] bg-[#0b0c0e] hover:bg-[#1c1f26] border border-[#2a2e38] text-[#9ba3af] hover:text-[#f0f3f6] hover:border-[#c68a35]/50 transition-all cursor-pointer"><X className="w-4 h-4" /></button>
-    </div>
-    <div className="overflow-y-auto p-3 grid grid-cols-1 gap-3" style={{ scrollbarWidth: 'thin' }}>{children}</div>
-  </section>
-);
+      <div className="min-h-0 overflow-y-auto p-3 grid grid-cols-1 gap-3" style={{ scrollbarWidth: 'thin' }}>{children}</div>
+    </section>
+  );
+};
 
 /* Toggle row used across panels */
 const ToggleRow: React.FC<{
@@ -298,6 +361,22 @@ export const RadialMenu: React.FC<RadialMenuProps> = ({
   const [panel, setPanel] = useState<PanelId>(null);
   const [trafficTick, setTrafficTick] = useState(0);
   const wheelRef = useRef<HTMLDivElement>(null);
+  const [vp, setVp] = useState(() => ({
+    w: typeof window !== 'undefined' ? window.innerWidth : 1280,
+    h: typeof window !== 'undefined' ? window.innerHeight : 720
+  }));
+
+  /* keep the wheel inside the screen on resize / rotation (mobile) */
+  useEffect(() => {
+    const onResize = () => setVp({ w: window.innerWidth, h: window.innerHeight });
+    onResize();
+    window.addEventListener('resize', onResize);
+    window.addEventListener('orientationchange', onResize);
+    return () => {
+      window.removeEventListener('resize', onResize);
+      window.removeEventListener('orientationchange', onResize);
+    };
+  }, []);
 
   /* Clockwise from the top: 1 Приборка · 2 Авто · 3 Окружение · 4 Спавн · 5 Починить · 6 Трафик */
   const SLOT = useMemo(() => ([
@@ -369,6 +448,35 @@ export const RadialMenu: React.FC<RadialMenuProps> = ({
     return (Math.floor(((ang + HALF / 2) % 360) / HALF)) % N;
   };
 
+  /* Distance from the wheel centre in wheel units (640 viewBox) for the pointer position */
+  const pointerRadius = (clientX: number, clientY: number): number => {
+    const el = wheelRef.current;
+    if (!el) return Infinity;
+    const r = el.getBoundingClientRect();
+    const k = r.width / 640;
+    if (!(k > 0)) return Infinity;
+    return Math.hypot(clientX - (r.left + r.width / 2), clientY - (r.top + r.height / 2)) / k;
+  };
+
+  /* One "step back": an open sub-panel closes first, then the whole wheel */
+  const stepBack = () => {
+    sound.playButtonPress();
+    if (panel) { setPanel(null); setHover(-1); } else onClose();
+  };
+
+  const onWheelClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    const i = slotFromPointer(e.clientX, e.clientY);
+    if (i >= 0) { activate(i); return; }
+    const d = pointerRadius(e.clientX, e.clientY);
+    if (d < RI - 20 || d > RO + 26) stepBack(); // hub (centre) or empty area around the ring
+  };
+
+  const layout = computeLayout(vp.w, vp.h, !!panel);
+  const wheelScale = layout.size / WHEEL_BOX;
+  /* keep labels readable when the whole wheel is scaled down */
+  const labelScale = wheelScale < 1 ? Math.min(1.5, Math.sqrt(1 / wheelScale)) : 1;
+
   const hovered = hover >= 0 ? SLOT[hover] : null;
   const hour = ((timeHour % 24) + 24) % 24;
 
@@ -411,19 +519,28 @@ export const RadialMenu: React.FC<RadialMenuProps> = ({
     <div
       id="radial-menu-backdrop"
       className="fixed inset-0 z-[100] bg-[#0b0c0e]/85 backdrop-blur-sm select-none overflow-hidden font-mono"
-      onClick={onClose}
+      onClick={(e) => {
+        /* only a tap on the empty backdrop steps back; taps inside panels never reach here */
+        if (e.target !== e.currentTarget) return;
+        stepBack();
+      }}
       onMouseMove={(e) => {
         if ((e.target as HTMLElement).closest('[data-radial-panel]')) return;
         const i = slotFromPointer(e.clientX, e.clientY);
         if (i !== hover) setHover(i);
       }}
     >
+      <PanelLayoutContext.Provider value={{ style: layout.panelStyle, wide: layout.wide }}>
       {/* ================= RADIANT WHEEL ================= */}
       <div
         ref={wheelRef}
-        className="absolute top-1/2 left-1/2 w-[600px] h-[600px] transition-transform duration-500 ease-out"
-        style={{ transform: `translate(calc(-50% ${panel ? '- 250px' : ''}), -50%)` }}
-        onClick={(e) => { e.stopPropagation(); activate(slotFromPointer(e.clientX, e.clientY)); }}
+        className="absolute top-0 left-0 transition-transform duration-300 ease-out"
+        style={{
+          width: WHEEL_BOX,
+          height: WHEEL_BOX,
+          transform: `translate(${(layout.cx - WHEEL_BOX / 2).toFixed(1)}px, ${(layout.cy - WHEEL_BOX / 2).toFixed(1)}px) scale(${wheelScale.toFixed(4)})`
+        }}
+        onClick={onWheelClick}
       >
         <svg width="600" height="600" viewBox="0 0 640 640" className="absolute inset-0 pointer-events-none">
           <circle cx="320" cy="320" r="296" fill="none" stroke="rgba(198,138,53,.18)" strokeDasharray="2 9" />
@@ -448,7 +565,7 @@ export const RadialMenu: React.FC<RadialMenuProps> = ({
             <div
               key={i}
               className="absolute w-0 flex-col items-center gap-1 pointer-events-none flex transition-transform duration-200"
-              style={{ left: p.x / 640 * 600, top: p.y / 640 * 600, transform: `translate(calc(-50% + ${on || act ? p.px : 0}px), calc(-50% + ${on || act ? p.py : 0}px))` }}
+              style={{ left: p.x / 640 * 600, top: p.y / 640 * 600, transform: `translate(calc(-50% + ${on || act ? p.px : 0}px), calc(-50% + ${on || act ? p.py : 0}px)) scale(${labelScale.toFixed(3)})` }}
             >
               <s.Icon className={`w-9 h-9 transition-colors ${on || act ? 'text-[#e0ab45]' : 'text-[#8b929e]'}`} strokeWidth={1.7} />
               <span className={`text-[13px] font-black uppercase tracking-[0.08em] whitespace-nowrap ${on || act ? 'text-white' : 'text-[#a29e93]'}`}>{s.n}</span>
@@ -459,17 +576,23 @@ export const RadialMenu: React.FC<RadialMenuProps> = ({
 
         {/* hub */}
         <div className="absolute pointer-events-none" style={{ left: '50%', top: '50%', transform: 'translate(-50%,-50%)' }}>
-          <div className="w-[200px] h-[200px] rounded-full border border-white/10 bg-[#0b0c0e] flex flex-col items-center justify-center text-center px-6">
-            {hovered ? <hovered.Icon className="w-10 h-10 text-[#e0ab45]" strokeWidth={1.6} /> : <Compass className="w-10 h-10 text-[#c68a35]" strokeWidth={1.6} />}
-            <div className={`mt-2 text-[15px] font-black uppercase tracking-wider ${hovered ? 'text-[#e9e6df]' : 'text-[#c68a35]'}`}>{hovered ? hovered.n : 'Быстрое меню'}</div>
-            <div className="mt-1 text-[10px] uppercase tracking-wider text-[#a29e93] leading-tight">{hovered ? hovered.desc : 'Выберите сектор'}</div>
+          <div className="w-[200px] h-[200px] rounded-full border border-[#c68a35]/40 bg-[#0b0c0e] flex items-center justify-center text-center">
+            <div className="flex flex-col items-center justify-center px-6" style={{ transform: `scale(${labelScale.toFixed(3)})` }}>
+              {hovered ? <hovered.Icon className="w-10 h-10 text-[#e0ab45]" strokeWidth={1.6} /> : <Compass className="w-10 h-10 text-[#c68a35]" strokeWidth={1.6} />}
+              <div className={`mt-2 text-[15px] font-black uppercase tracking-wider ${hovered ? 'text-[#e9e6df]' : 'text-[#c68a35]'}`}>{hovered ? hovered.n : 'Быстрое меню'}</div>
+              <div className="mt-1 text-[10px] uppercase tracking-wider text-[#a29e93] leading-tight">{hovered ? hovered.desc : 'Выберите сектор'}</div>
+              <div className="mt-2 inline-flex items-center gap-1 px-2 py-0.5 rounded-[2px] border border-white/20 text-[9px] font-bold uppercase tracking-wider text-[#a29e93]">
+                <X className="w-3 h-3" />
+                <span>{panel ? 'Закрыть панель' : 'Закрыть'}</span>
+              </div>
+            </div>
           </div>
         </div>
       </div>
 
       {/* ================= PANEL: ПРИБОРКА (bортовые панели, только реально существующие) ================= */}
       {panel === 'board' && veh && (
-        <section data-radial-panel className="fixed z-[110] top-1/2 right-4 sm:right-8 -translate-y-1/2 w-[560px] max-w-[min(560px,calc(100vw-120px))] max-h-[88vh] rounded-[2px] border border-[#2a2e38] bg-[#14161a]/95 backdrop-blur-md shadow-2xl flex flex-col font-mono overflow-hidden">
+        <section data-radial-panel className={PANEL_BASE} style={layout.panelStyle} onClick={(e) => e.stopPropagation()}>
           <div className="flex shrink-0 items-center justify-between gap-3 p-3 rounded-[2px] border-b border-[#2a2e38] bg-[#0b0c0e]/95">
             <div className="flex items-center gap-2.5 min-w-0">
               <div className="w-3 h-3 flex items-center justify-center border border-[#c68a35] bg-[#c68a35] flex-none"><div className="w-1.5 h-1.5 bg-[#0b0c0e]" /></div>
@@ -502,8 +625,8 @@ export const RadialMenu: React.FC<RadialMenuProps> = ({
             </div>
           </div>
 
-          <div className="overflow-y-auto p-3 scroll-smooth" style={{ scrollbarWidth: 'thin' }}>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div className="min-h-0 overflow-y-auto p-3 scroll-smooth" style={{ scrollbarWidth: 'thin' }}>
+            <div className={`grid gap-3 ${layout.wide ? 'grid-cols-2' : 'grid-cols-1'}`}>
               {/* 1. ENGINE */}
               <div className="flex flex-col justify-between p-3.5 rounded-[2px] border border-[#2a2e38] bg-[#14161a] shadow-lg">
                 <div className="flex items-center justify-between">
@@ -966,12 +1089,16 @@ export const RadialMenu: React.FC<RadialMenuProps> = ({
         </Panel>
       )}
 
-      {/* bottom hints */}
-      <div className="absolute bottom-4 left-0 right-0 flex items-center justify-center gap-3 text-[10px] font-mono uppercase tracking-wider text-[#9ba3af] pointer-events-none">
-        <span><kbd className="inline-flex items-center justify-center min-w-[22px] h-[20px] px-2 mr-1.5 rounded-[2px] border border-white/25 text-[10px] font-bold">1–6</kbd>Выбрать</span>
-        <span><kbd className="inline-flex items-center justify-center min-w-[22px] h-[20px] px-2 mr-1.5 rounded-[2px] border border-white/25 text-[10px] font-bold">Enter</kbd>Подтвердить</span>
-        <span><kbd className="inline-flex items-center justify-center min-w-[22px] h-[20px] px-2 mr-1.5 rounded-[2px] border border-white/25 text-[10px] font-bold">Esc</kbd>Закрыть</span>
-      </div>
+      </PanelLayoutContext.Provider>
+
+      {/* bottom hints (keyboard hints, hidden on small screens) */}
+      {layout.showHints && (
+        <div className="absolute bottom-4 left-0 right-0 flex items-center justify-center gap-3 text-[10px] font-mono uppercase tracking-wider text-[#9ba3af] pointer-events-none">
+          <span><kbd className="inline-flex items-center justify-center min-w-[22px] h-[20px] px-2 mr-1.5 rounded-[2px] border border-white/25 text-[10px] font-bold">1–6</kbd>Выбрать</span>
+          <span><kbd className="inline-flex items-center justify-center min-w-[22px] h-[20px] px-2 mr-1.5 rounded-[2px] border border-white/25 text-[10px] font-bold">Enter</kbd>Подтвердить</span>
+          <span><kbd className="inline-flex items-center justify-center min-w-[22px] h-[20px] px-2 mr-1.5 rounded-[2px] border border-white/25 text-[10px] font-bold">Esc</kbd>Закрыть</span>
+        </div>
+      )}
     </div>
   );
 };
@@ -1054,7 +1181,7 @@ const Configurator: React.FC<{
       ) : (
         <>
           {/* preview */}
-          <div className="flex items-center gap-3 p-2 rounded-[2px] border border-[#2a2e38] bg-[#0f1116]">
+          <div className="flex flex-wrap items-center gap-3 p-2 rounded-[2px] border border-[#2a2e38] bg-[#0f1116]">
             <VehiclePreviewCanvas carType={veh.type} color={previewColor} roofColor={selColor?.roofHex || undefined} width={220} height={130} showPedestal={false} />
             <div className="min-w-0">
               <div className="cn text-[16px] font-black uppercase tracking-wide text-[#f0f3f6] truncate">{entry ? entry.nameRu : (veh.nameRu || veh.type)}</div>
