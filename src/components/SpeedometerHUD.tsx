@@ -2,40 +2,39 @@ import React, { useState } from 'react';
 import { Vehicle, CarType, WeatherType, GameCalendarState } from '../types';
 import { getVehicleRequiredKeyType } from '../items';
 import { formatGameDate, getRussianSeasonName } from '../calendarSystem';
-import { 
-  Fuel, 
-  Thermometer, 
-  Droplet, 
-  ArrowLeft, 
-  ArrowRight, 
-  AlertTriangle, 
-  Lightbulb, 
-  Power, 
-  ChevronDown, 
+import {
+  Fuel,
+  Thermometer,
+  Droplet,
+  ArrowLeft,
+  ArrowRight,
+  AlertTriangle,
+  Lightbulb,
+  Power,
+  ChevronDown,
   ChevronUp,
   Gauge,
-  Zap,
   ShieldAlert,
   Clock,
   Compass,
-  Activity,
   Key,
   Lock,
   Unlock,
   Car,
   Calendar,
-  Snowflake
+  Snowflake,
+  Battery,
+  Wrench,
+  Cog
 } from 'lucide-react';
 import { sound } from '../audio';
 import { TaxiFleetSystem } from '../taxiSystem';
 import { getOutsideTemperature } from '../physics';
 import { getTerrainSlope } from '../terrainElevation';
-import { 
-  getVehicleDiffCapabilities, 
-  cycleVehicleDiffLock, 
-  toggleAxleDiffLock,
-  getVehicleTurnSignalDynamicState,
-  getVehicleTurnSignalConfig
+import {
+  getVehicleDiffCapabilities,
+  cycleVehicleDiffLock,
+  toggleAxleDiffLock
 } from '../vehicleHelpers';
 
 export type DashboardTheme = 'sport' | 'truck' | 'retro' | 'emergency' | 'luxury';
@@ -44,7 +43,7 @@ export type TripComputerMode = 'eco' | 'range' | 'trip' | 'sys' | 'tank' | 'gbo'
 
 export function getVehicleDashboardTheme(type?: CarType): DashboardTheme {
   if (!type) return 'luxury';
-  
+
   switch (type) {
     case 'supercar':
     case 'sports':
@@ -145,6 +144,237 @@ interface SpeedometerHUDProps {
   isMobileTouch?: boolean;
 }
 
+/* ------------------------------------------------------------------ */
+/*  Design tokens                                                      */
+/* ------------------------------------------------------------------ */
+
+const C = {
+  panel: 'rgba(13,15,19,0.94)',
+  surface: '#151922',
+  surfaceHi: '#1c212c',
+  line: '#272c38',
+  text: '#e9edf3',
+  muted: '#9099a8',
+  dim: '#5b6372',
+  red: '#ef4444',
+  amber: '#f59e0b',
+  green: '#22c55e',
+  blue: '#38bdf8'
+};
+
+// Accent color for the dial arcs / active controls depends on the vehicle theme.
+const THEME_ACCENT: Record<DashboardTheme, { acc: string; needle: string }> = {
+  sport: { acc: '#fb7185', needle: '#f43f5e' },
+  truck: { acc: '#fbbf24', needle: '#f59e0b' },
+  retro: { acc: '#fcd9a0', needle: '#f97316' },
+  emergency: { acc: '#38bdf8', needle: '#7dd3fc' },
+  luxury: { acc: '#60a5fa', needle: '#93c5fd' }
+};
+
+const ODOMETER_TOTAL = '014829';
+
+/* ------------------------------------------------------------------ */
+/*  Small building blocks                                              */
+/* ------------------------------------------------------------------ */
+
+const polar = (cx: number, cy: number, r: number, deg: number) => {
+  const a = (deg * Math.PI) / 180;
+  return [cx + r * Math.sin(a), cy - r * Math.cos(a)] as const;
+};
+
+const arcPath = (cx: number, cy: number, r: number, a0: number, a1: number) => {
+  const [x0, y0] = polar(cx, cy, r, a0);
+  const [x1, y1] = polar(cx, cy, r, a1);
+  const large = a1 - a0 > 180 ? 1 : 0;
+  return `M ${x0.toFixed(2)} ${y0.toFixed(2)} A ${r} ${r} 0 ${large} 1 ${x1.toFixed(2)} ${y1.toFixed(2)}`;
+};
+
+const SWEEP_START = -135;
+const SWEEP_END = 135;
+
+interface ArcGaugeProps {
+  value: number;
+  max: number;
+  major: number;
+  minor: number;
+  labelDiv?: number;
+  redFrom?: number;
+  accent: string;
+  needle: string;
+  children?: React.ReactNode;
+}
+
+/** 270-degree dial: progress arc, readable tick labels and a needle. Centre content is supplied as children. */
+const ArcGauge: React.FC<ArcGaugeProps> = ({ value, max, major, minor, labelDiv = 1, redFrom, accent, needle, children }) => {
+  const cx = 80;
+  const cy = 80;
+  const ratio = Math.max(0, Math.min(1, value / max));
+  const angle = SWEEP_START + ratio * (SWEEP_END - SWEEP_START);
+  const inRed = redFrom !== undefined && value >= redFrom;
+  const valueColor = inRed ? C.red : accent;
+
+  const ticks: React.ReactNode[] = [];
+  const count = Math.round(max / minor);
+  for (let i = 0; i <= count; i++) {
+    const v = i * minor;
+    const isMajor = Math.abs(v % major) < 1e-6;
+    const a = SWEEP_START + (v / max) * (SWEEP_END - SWEEP_START);
+    const red = redFrom !== undefined && v >= redFrom;
+    const [x1, y1] = polar(cx, cy, isMajor ? 53 : 58, a);
+    const [x2, y2] = polar(cx, cy, 62, a);
+    ticks.push(
+      <line
+        key={`t${i}`}
+        x1={x1}
+        y1={y1}
+        x2={x2}
+        y2={y2}
+        stroke={red ? C.red : isMajor ? C.text : C.dim}
+        strokeWidth={isMajor ? 2 : 1.2}
+        strokeLinecap="round"
+      />
+    );
+    if (isMajor) {
+      const [tx, ty] = polar(cx, cy, 41, a);
+      ticks.push(
+        <text
+          key={`l${i}`}
+          x={tx}
+          y={ty + 3.8}
+          textAnchor="middle"
+          fontSize="11"
+          fontWeight="700"
+          fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace"
+          fill={red ? '#fca5a5' : C.muted}
+        >
+          {Math.round(v / labelDiv)}
+        </text>
+      );
+    }
+  }
+
+  return (
+    <svg viewBox="0 0 160 146" className="w-full h-auto block" role="img">
+      {/* track */}
+      <path d={arcPath(cx, cy, 68, SWEEP_START, SWEEP_END)} fill="none" stroke="#1d222d" strokeWidth="6" strokeLinecap="round" />
+      {/* red zone */}
+      {redFrom !== undefined && redFrom < max && (
+        <path
+          d={arcPath(cx, cy, 68, SWEEP_START + (redFrom / max) * (SWEEP_END - SWEEP_START), SWEEP_END)}
+          fill="none"
+          stroke={C.red}
+          strokeOpacity="0.45"
+          strokeWidth="6"
+          strokeLinecap="round"
+        />
+      )}
+      {/* value arc */}
+      {ratio > 0.004 && (
+        <path d={arcPath(cx, cy, 68, SWEEP_START, angle)} fill="none" stroke={valueColor} strokeWidth="6" strokeLinecap="round" />
+      )}
+      {ticks}
+      {/* needle */}
+      <g transform={`rotate(${angle} ${cx} ${cy})`}>
+        <polygon points="78.4,86 81.6,86 80.7,32 79.3,32" fill={needle} />
+      </g>
+      <circle cx={cx} cy={cy} r="6.5" fill={C.surface} stroke={needle} strokeWidth="2" />
+      {children}
+    </svg>
+  );
+};
+
+type Tone = 'acc' | 'red' | 'amber' | 'green' | 'none';
+
+interface BtnProps {
+  accent: string;
+  onClick?: () => void;
+  title?: string;
+  active?: boolean;
+  tone?: Tone;
+  pulse?: boolean;
+  className?: string;
+  children: React.ReactNode;
+}
+
+const toneColor = (tone: Tone, accent: string) =>
+  tone === 'red' ? C.red : tone === 'amber' ? C.amber : tone === 'green' ? C.green : accent;
+
+/** One consistent button style for the whole panel (min. 32px tall, readable 12px text). */
+const Btn: React.FC<BtnProps> = ({ accent, onClick, title, active = false, tone = 'acc', pulse = false, className = '', children }) => {
+  const col = toneColor(tone, accent);
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title={title}
+      className={`inline-flex items-center justify-center gap-1.5 h-8 px-2.5 rounded-md border text-[12px] font-semibold font-mono whitespace-nowrap shrink-0 transition active:scale-95 cursor-pointer ${pulse && active ? 'animate-pulse' : ''} ${className}`}
+      style={
+        active
+          ? { background: `${col}26`, borderColor: `${col}99`, color: col }
+          : { background: C.surface, borderColor: C.line, color: C.muted }
+      }
+    >
+      {children}
+    </button>
+  );
+};
+
+interface StatBarProps {
+  icon: React.ReactNode;
+  label: string;
+  value: string;
+  ratio: number;
+  color: string;
+  warn?: boolean;
+}
+
+const StatBar: React.FC<StatBarProps> = ({ icon, label, value, ratio, color, warn }) => (
+  <div className="min-w-0 rounded-md px-2.5 py-1.5 border" style={{ background: C.surface, borderColor: warn ? `${color}88` : C.line }}>
+    <div className="flex items-center justify-between gap-1.5 mb-1">
+      <span className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider truncate" style={{ color: warn ? color : C.muted }}>
+        {icon}
+        {label}
+      </span>
+      <span className={`text-[13px] font-black font-mono leading-none ${warn ? 'animate-pulse' : ''}`} style={{ color: warn ? color : C.text }}>
+        {value}
+      </span>
+    </div>
+    <div className="h-1.5 rounded-full overflow-hidden" style={{ background: '#1d222d' }}>
+      <div className="h-full rounded-full transition-[width] duration-200" style={{ width: `${Math.max(2, Math.min(100, ratio * 100))}%`, background: color }} />
+    </div>
+  </div>
+);
+
+interface TelltaleProps {
+  icon: React.ReactNode;
+  label: string;
+  level: 'off' | 'amber' | 'red';
+  blink?: boolean;
+  title?: string;
+}
+
+const Telltale: React.FC<TelltaleProps> = ({ icon, label, level, blink, title }) => {
+  const col = level === 'red' ? C.red : level === 'amber' ? C.amber : C.dim;
+  return (
+    <span
+      title={title ?? label}
+      className={`inline-flex items-center gap-1 h-6 px-2 rounded-md border text-[10px] font-bold font-mono uppercase tracking-wide ${blink ? 'animate-pulse' : ''}`}
+      style={{
+        color: col,
+        borderColor: level === 'off' ? C.line : `${col}88`,
+        background: level === 'off' ? 'transparent' : `${col}1f`
+      }}
+    >
+      {icon}
+      {label}
+    </span>
+  );
+};
+
+/* ------------------------------------------------------------------ */
+/*  Main component                                                     */
+/* ------------------------------------------------------------------ */
+
 export const SpeedometerHUD: React.FC<SpeedometerHUDProps> = ({
   vehicle,
   speedKmh,
@@ -180,10 +410,11 @@ export const SpeedometerHUD: React.FC<SpeedometerHUDProps> = ({
 
   const carType = vehicle.type;
   const theme = getVehicleDashboardTheme(carType);
+  const { acc, needle } = THEME_ACCENT[theme];
   const eng = vehicle.engineState;
   const fuel = vehicle.fuelSystem;
 
-  // Real-time sensor values
+  // ---- Real-time sensor values -------------------------------------
   const currentRPM = eng?.engineRunning ? Math.round(eng.engineRPM || 800) : 0;
   const coolantTemp = Math.round(eng?.temperature ?? 88);
   const oilPressure = Math.round(eng?.oilPressure ?? (eng?.oilLevel ?? 90));
@@ -194,7 +425,7 @@ export const SpeedometerHUD: React.FC<SpeedometerHUDProps> = ({
   const isStalled = !!eng?.isStalled || !!eng?.engineStalled;
   const batteryCharge = Math.round(eng?.batteryCharge ?? 100);
 
-  // Modern On-Board Computer (Trip Computer / БК) Calculations
+  // ---- On-board computer ------------------------------------------
   let tankCapacityLiters = isLpgRunning ? (fuel?.gboCapacity ?? 42) : (fuel?.tankCapacity || 55);
   let baseAvgConsumption = isLpgRunning ? 9.2 : 7.8; // LPG consumption is ~18% higher by volume
   if (!isLpgRunning) {
@@ -212,7 +443,7 @@ export const SpeedometerHUD: React.FC<SpeedometerHUDProps> = ({
 
   const remainingFuelLiters = ((fuelLevel / 100) * tankCapacityLiters).toFixed(1);
 
-  // Differential Lock Capabilities & Current Axle State
+  // ---- Differential lock ------------------------------------------
   const diffCaps = getVehicleDiffCapabilities(vehicle.type);
   const dl = vehicle.diffLock;
   const isDiffLocked = !!(dl?.center || dl?.rear || dl?.front);
@@ -249,76 +480,63 @@ export const SpeedometerHUD: React.FC<SpeedometerHUDProps> = ({
     }
   };
 
-  // Compass Heading from vehicle angle
+  // ---- Compass / slope / clock / ambient --------------------------
   const headingDeg = (((vehicle.angle * 180) / Math.PI) % 360 + 360) % 360;
   const compassHeadings = ['E', 'SE', 'S', 'SW', 'W', 'NW', 'N', 'NE'];
-  const headingIndex = Math.round(headingDeg / 45) % 8;
-  const compassHeading = compassHeadings[headingIndex];
+  const compassHeading = compassHeadings[Math.round(headingDeg / 45) % 8];
 
-  // Slope / Incline Grade % calculation
   const currentSlope = getTerrainSlope(vehicle.x, vehicle.y);
-  const cosH = Math.cos(vehicle.angle);
-  const sinH = Math.sin(vehicle.angle);
-  const slopeAlongHeading = -(currentSlope.slopeX * cosH + currentSlope.slopeY * sinH);
+  const slopeAlongHeading = -(currentSlope.slopeX * Math.cos(vehicle.angle) + currentSlope.slopeY * Math.sin(vehicle.angle));
   const gradePercent = Math.round(slopeAlongHeading * 100 * 2.5);
 
-  // In-Game Clock calculation
   const safeTimeHour = ((timeHour % 24) + 24) % 24;
   const gameHours = Math.floor(safeTimeHour);
   const gameMinutes = Math.floor((safeTimeHour % 1) * 60);
   const gameTimeStr = `${String(gameHours).padStart(2, '0')}:${String(gameMinutes).padStart(2, '0')}`;
 
-  // In-Game Ambient Temperature calculation based on unified getOutsideTemperature function
   const currentTempC = Math.round(getOutsideTemperature({ weather, calendar } as any, safeTimeHour));
   const ambientTempStr = `${currentTempC >= 0 ? '+' : ''}${currentTempC}°C`;
   const isIcyRoad = currentTempC <= 0;
   const gameDateStr = calendar ? formatGameDate(calendar, 'dashboard') : '08.10.26';
   const seasonName = calendar ? getRussianSeasonName(calendar.season) : 'Осень';
 
-  // Instant fuel consumption logic (л/100км в движении, л/ч на холостом ходу, 0.0 при торможении двигателем ПХХ)
-  let instantConsumptionText = '0.0 L/100';
-  let instantConsumptionShort = '0.0 L/100';
-  let ecoBarRatio = 0; // 0 to 1
+  // ---- Instant fuel consumption -----------------------------------
+  // л/100км в движении, л/ч на холостом ходу, 0.0 при торможении двигателем (ПХХ)
+  let consValue = '0.0';
+  let consUnit = 'л/100км';
+  let isFuelCut = false;
+  let ecoBarRatio = 0;
 
   if (!isEngineRunning) {
-    instantConsumptionText = '0.0 L/h';
-    instantConsumptionShort = '0.0 L/h';
-    ecoBarRatio = 0;
+    consUnit = 'л/ч';
   } else if (speedKmh < 2) {
     const idleFlow = 0.8 + (currentRPM > 950 ? ((currentRPM - 950) / 1000) * 1.6 : 0);
-    instantConsumptionText = `${idleFlow.toFixed(1)} L/h`;
-    instantConsumptionShort = `${idleFlow.toFixed(1)} L/h`;
+    consValue = idleFlow.toFixed(1);
+    consUnit = 'л/ч';
     ecoBarRatio = Math.min(1, idleFlow / 3.5);
   } else {
-    // Check fuel cutoff (ПХХ) when coasting in gear with zero throttle
     const isDecelCutoff = speedKmh > 18 && (eng?.currentGear && eng.currentGear > 0) && currentRPM > 1300 && (!eng?.clutchPedal || eng.clutchPedal < 0.2);
     if (isDecelCutoff) {
-      instantConsumptionText = '0.0 L/100';
-      instantConsumptionShort = '0.0 L/100 (CUT)';
+      isFuelCut = true;
       ecoBarRatio = 0.05;
     } else {
       const loadRatio = Math.max(0.35, currentRPM / 2800);
       const calculatedL100 = baseAvgConsumption * loadRatio * (1 + Math.max(0, (speedKmh - 100) / 100) * 0.4);
       const clampedL100 = Math.min(39.9, Math.max(1.8, calculatedL100));
-      instantConsumptionText = `${clampedL100.toFixed(1)} L/100`;
-      instantConsumptionShort = `${clampedL100.toFixed(1)} L/100`;
+      consValue = clampedL100.toFixed(1);
       ecoBarRatio = Math.min(1, clampedL100 / 22);
     }
   }
 
-  // Distance to empty (Запас хода)
   const estimatedRangeKm = Math.max(0, Math.round((Number(remainingFuelLiters) / baseAvgConsumption) * 100));
 
-  // Vehicle on-board electrical system voltage
   const sysVoltageStr = isEngineRunning
     ? (14.0 + (batteryCharge / 100) * 0.4).toFixed(1)
     : (11.8 + (batteryCharge / 100) * 0.8).toFixed(1);
 
-  // Odometer & Trip distance
-  const totalOdoStr = '014829';
   const tripOdoKm = (((vehicle.distanceTraveled ?? 0) / 1000) % 1000).toFixed(1);
 
-  // Transmission & Gear display
+  // ---- Transmission / gear label ----------------------------------
   const isMachinery = carType.startsWith('roller_') || carType.startsWith('paver_');
   let currentGearLabel = String(gear);
   if (eng?.transmissionType === 'MANUAL') {
@@ -335,8 +553,22 @@ export const SpeedometerHUD: React.FC<SpeedometerHUDProps> = ({
       currentGearLabel = autoMode;
     }
   }
+  const gearColor = currentGearLabel.startsWith('R') ? C.amber : currentGearLabel === 'P' ? C.red : currentGearLabel === 'N' ? C.muted : acc;
 
-  // Max scales based on specific vehicle type & theme
+  const handleGearClick = () => {
+    if (eng?.transmissionType === 'AUTO') {
+      const ladder = ['P', 'R', 'N', 'D'] as const;
+      const curMode = eng.autoGearMode || 'D';
+      const nextIdx = (ladder.indexOf(curMode as any) + 1) % ladder.length;
+      onSelectGear?.(ladder[nextIdx]);
+    } else if (eng) {
+      const maxForwardGear = (eng.gearRatios?.length || 7) - 2;
+      const nextGear = eng.currentGear >= maxForwardGear ? -1 : eng.currentGear + 1;
+      onSelectGear?.(nextGear);
+    }
+  };
+
+  // ---- Dial scales per vehicle class ------------------------------
   let maxSpeed = 240;
   let maxRPM = 8000;
   let redlineRPM = 6200;
@@ -371,220 +603,56 @@ export const SpeedometerHUD: React.FC<SpeedometerHUDProps> = ({
     redlineRPM = 6200;
   }
 
-  // Dynamic Redline Arc path calculation for Tachometer
-  const redlineStartAngle = -125 + Math.min(1.0, Math.max(0, redlineRPM / maxRPM)) * 250;
-  const redlineEndAngle = 125;
-  const radStart = ((redlineStartAngle - 90) * Math.PI) / 180;
-  const radEnd = ((redlineEndAngle - 90) * Math.PI) / 180;
-  const rArc = 52;
-  const cxArc = 70;
-  const cyArc = 70;
-  const xStart = cxArc + rArc * Math.cos(radStart);
-  const yStart = cyArc + rArc * Math.sin(radStart);
-  const xEnd = cxArc + rArc * Math.cos(radEnd);
-  const yEnd = cyArc + rArc * Math.sin(radEnd);
-  const largeArcFlag = (redlineEndAngle - redlineStartAngle) > 180 ? 1 : 0;
-  const redlinePathD = `M ${xStart.toFixed(1)} ${yStart.toFixed(1)} A ${rArc} ${rArc} 0 ${largeArcFlag} 1 ${xEnd.toFixed(1)} ${yEnd.toFixed(1)}`;
-
-  // Calculate needle angles: -125deg to +125deg for circular main gauges
-  const speedRatio = Math.max(0, Math.min(1, speedKmh / maxSpeed));
-  const speedAngle = -125 + speedRatio * 250;
-
+  // Pick a major tick step that gives 5-9 labelled marks.
+  const speedMajor = [5, 10, 20, 25, 40, 50].find((s) => maxSpeed / s <= 9) ?? 50;
   const rpmRatio = Math.max(0, Math.min(1, currentRPM / maxRPM));
-  const rpmAngle = -125 + rpmRatio * 250;
 
-  // Small auxiliary gauges: -55deg to +55deg
-  const fuelRatio = Math.max(0, Math.min(1, fuelLevel / 100));
-  const fuelAngle = -55 + fuelRatio * 110;
-
-  const tempRatio = Math.max(0, Math.min(1, (coolantTemp - 40) / (130 - 40)));
-  const tempAngle = -55 + tempRatio * 110;
-
-  const oilRatio = Math.max(0, Math.min(1, oilPressure / 100));
-  const oilAngle = -55 + oilRatio * 110;
-
-  // Warning indicators
+  // ---- Warning state ----------------------------------------------
   const isOverheating = coolantTemp >= 105;
-  const isLowOil = oilPressure < 20 || (eng && eng.oilLevel < 15);
+  const isColdEngine = isEngineRunning && coolantTemp < 55;
+  const isLowOil = oilPressure < 20 || (!!eng && eng.oilLevel < 15);
   const isLowFuel = fuelLevel < 15;
-  const isBatteryLow = batteryCharge < 20 || (!isEngineRunning && batteryCharge < 100);
 
-  // Theme-specific color & style configurations
-  const themeStyles = {
-    sport: {
-      casingBg: 'bg-stone-950',
-      border: 'border-rose-900/60 shadow-[0_0_25px_rgba(225,29,72,0.15)]',
-      dialFace: '#09090b',
-      dialStroke: '#e11d48',
-      tickColor: '#e2e8f0',
-      subTickColor: '#475569',
-      needleColor: '#f43f5e',
-      needleGlow: '#fb7185',
-      hubColor: '#18181b',
-      hubBorder: '#f43f5e',
-      textColor: 'text-rose-400',
-      accentBadge: 'bg-rose-950/80 border-rose-600/50 text-rose-300',
-      title: 'SPORT GT / TRACK',
-    },
-    truck: {
-      casingBg: 'bg-slate-900',
-      border: 'border-amber-700/60 shadow-[0_0_20px_rgba(217,119,6,0.2)]',
-      dialFace: '#1c1917',
-      dialStroke: '#d97706',
-      tickColor: '#fbbf24',
-      subTickColor: '#78716c',
-      needleColor: '#f59e0b',
-      needleGlow: '#fbbf24',
-      hubColor: '#292524',
-      hubBorder: '#d97706',
-      textColor: 'text-amber-400',
-      accentBadge: 'bg-amber-950/80 border-amber-600/50 text-amber-300',
-      title: 'HEAVY DIESEL PRO',
-    },
-    retro: {
-      casingBg: 'bg-[#1c1917]',
-      border: 'border-amber-200/40 shadow-[0_0_20px_rgba(245,230,211,0.15)] ring-1 ring-amber-100/20',
-      dialFace: '#1e1c18',
-      dialStroke: '#a8a29e',
-      tickColor: '#fef3c7',
-      subTickColor: '#78716c',
-      needleColor: '#ea580c',
-      needleGlow: '#f97316',
-      hubColor: '#44403c',
-      hubBorder: '#fef3c7',
-      textColor: 'text-amber-200',
-      accentBadge: 'bg-amber-950/70 border-amber-300/40 text-amber-200 font-serif',
-      title: 'CLASSIC MOTOR CAR',
-    },
-    emergency: {
-      casingBg: 'bg-slate-950',
-      border: 'border-cyan-500/50 shadow-[0_0_25px_rgba(6,182,212,0.2)]',
-      dialFace: '#030712',
-      dialStroke: '#0284c7',
-      tickColor: '#e0f2fe',
-      subTickColor: '#334155',
-      needleColor: '#38bdf8',
-      needleGlow: '#7dd3fc',
-      hubColor: '#0f172a',
-      hubBorder: '#38bdf8',
-      textColor: 'text-cyan-400',
-      accentBadge: 'bg-sky-950/90 border-cyan-500/50 text-cyan-300',
-      title: 'TACTICAL INTERCEPTOR',
-    },
-    luxury: {
-      casingBg: 'bg-slate-900',
-      border: 'border-slate-700/80 shadow-[0_0_25px_rgba(56,189,248,0.12)]',
-      dialFace: '#020617',
-      dialStroke: '#3b82f6',
-      tickColor: '#f8fafc',
-      subTickColor: '#475569',
-      needleColor: '#38bdf8',
-      needleGlow: '#93c5fd',
-      hubColor: '#0f172a',
-      hubBorder: '#60a5fa',
-      textColor: 'text-sky-400',
-      accentBadge: 'bg-slate-900/90 border-slate-700 text-slate-300',
-      title: 'EXECUTIVE COCKPIT',
-    }
-  }[theme];
+  const isSeized = !!eng?.isSeized || (eng?.engineHealth ?? 100) <= 10;
+  const isBlinkingCheck = !!(isEngineRunning && (eng?.engineKnocking || fuel?.detonation));
+  const isDtcFault = !!(
+    isEngineRunning && (
+      coolantTemp > 105 ||
+      (eng?.engineHealth ?? 100) < 65 ||
+      eng?.radiatorPunctured ||
+      eng?.oilPunctured ||
+      (fuel && (fuel.fuelQuality < 50 || (vehicle.requiredFuel === 'ai95' && fuel.octaneNumber === 92)))
+    )
+  );
+  // Bulb-check: the MIL stays lit while the engine is off.
+  const isCheckEngine = !isEngineRunning || isSeized || isBlinkingCheck || isDtcFault;
+  const isBattLit = !isEngineRunning || batteryCharge < 20 || eng?.batteryInstalled === false || eng?.batteryPosConnected === false || eng?.batteryNegConnected === false;
+  const isTransWarn = !!(eng?.transmissionJammed || (eng?.transmissionHealth ?? 100) < 60);
+  const isOilLit = !isEngineRunning || isLowOil;
+  const isParkBrakeLit = isHandbraking || (eng?.transmissionType === 'AUTO' && eng?.autoGearMode === 'P');
 
-  // Helper for generating main circular dial tick marks
-  const renderDialTicks = (
-    cx: number, 
-    cy: number, 
-    r: number, 
-    maxVal: number, 
-    steps: number, 
-    labelMultiplier: number = 1,
-    redlineStartVal?: number
-  ) => {
-    const ticks = [];
-    for (let i = 0; i <= steps; i++) {
-      const val = (i / steps) * maxVal;
-      const angle = -125 + (i / steps) * 250;
-      const rad = ((angle - 90) * Math.PI) / 180;
-      const isMajor = i % 2 === 0;
-      const isRedline = redlineStartVal && val >= redlineStartVal;
-      
-      const tickLen = isMajor ? 8 : 4;
-      const x1 = cx + (r - tickLen) * Math.cos(rad);
-      const y1 = cy + (r - tickLen) * Math.sin(rad);
-      const x2 = cx + r * Math.cos(rad);
-      const y2 = cy + r * Math.sin(rad);
+  const leftSignalOn = playerTurnSignal === 'left' || playerTurnSignal === 'hazard';
+  const rightSignalOn = playerTurnSignal === 'right' || playerTurnSignal === 'hazard';
 
-      ticks.push(
-        <line
-          key={`tick-${i}`}
-          x1={x1}
-          y1={y1}
-          x2={x2}
-          y2={y2}
-          stroke={isRedline ? '#ef4444' : isMajor ? themeStyles.tickColor : themeStyles.subTickColor}
-          strokeWidth={isMajor ? 2 : 1}
-          strokeLinecap="round"
-        />
-      );
+  const engineLabel = isEngineRunning ? 'Мотор вкл' : isStalled ? 'Заглох' : 'Мотор выкл';
+  const engineColor = isEngineRunning ? C.green : isStalled ? C.amber : C.red;
 
-      if (isMajor) {
-        const textRad = r - 16;
-        const tx = cx + textRad * Math.cos(rad);
-        const ty = cy + textRad * Math.sin(rad);
-        ticks.push(
-          <text
-            key={`lbl-${i}`}
-            x={tx}
-            y={ty + 3}
-            textAnchor="middle"
-            fill={isRedline ? '#f87171' : themeStyles.tickColor}
-            fontSize={theme === 'truck' ? '8' : '7.5'}
-            fontWeight="bold"
-            fontFamily={theme === 'retro' ? 'serif' : 'monospace'}
-          >
-            {Math.round(val * labelMultiplier)}
-          </text>
-        );
-      }
-    }
-    return ticks;
-  };
+  const toggleEngineBtn = (
+    <button
+      type="button"
+      onClick={onToggleEngine}
+      title="Зажигание: запустить / заглушить двигатель [J]"
+      className={`inline-flex items-center justify-center gap-1.5 h-8 px-3 rounded-md border text-[12px] font-bold font-mono shrink-0 transition active:scale-95 cursor-pointer ${isStalled && !isEngineRunning ? 'animate-pulse' : ''}`}
+      style={{ background: `${engineColor}26`, borderColor: `${engineColor}aa`, color: engineColor }}
+    >
+      <Power className="w-4 h-4" />
+      <span>{isEngineRunning ? 'ЗАГЛУШИТЬ' : 'ЗАПУСК'}</span>
+    </button>
+  );
 
-  // Helper for rendering small auxiliary dial (Fuel, Temp, Oil)
-  const renderSmallDialTicks = (cx: number, cy: number, r: number, minLabel: string, midLabel: string, maxLabel: string, isDangerAtHigh: boolean) => {
-    const angles = [-55, -27.5, 0, 27.5, 55];
-    return (
-      <>
-        {angles.map((ang, i) => {
-          const rad = ((ang - 90) * Math.PI) / 180;
-          const isExtreme = i === 0 || i === 4;
-          const tickLen = isExtreme ? 5 : 3;
-          const x1 = cx + (r - tickLen) * Math.cos(rad);
-          const y1 = cy + (r - tickLen) * Math.sin(rad);
-          const x2 = cx + r * Math.cos(rad);
-          const y2 = cy + r * Math.sin(rad);
-          
-          let color = themeStyles.subTickColor;
-          if (i === 0 && !isDangerAtHigh) color = '#ef4444'; // E is red
-          if (i === 4 && isDangerAtHigh) color = '#ef4444';  // H is red
-
-          return (
-            <line
-              key={`sm-tick-${i}`}
-              x1={x1}
-              y1={y1}
-              x2={x2}
-              y2={y2}
-              stroke={color}
-              strokeWidth={isExtreme ? 1.8 : 1}
-            />
-          );
-        })}
-        {/* Labels */}
-        <text x={cx - 16} y={cy + 8} fontSize="7" fontWeight="bold" fill={!isDangerAtHigh ? '#ef4444' : themeStyles.tickColor} textAnchor="middle">{minLabel}</text>
-        <text x={cx} y={cy - 12} fontSize="6" fontWeight="bold" fill={themeStyles.subTickColor} textAnchor="middle">{midLabel}</text>
-        <text x={cx + 16} y={cy + 8} fontSize="7" fontWeight="bold" fill={isDangerAtHigh ? '#ef4444' : themeStyles.tickColor} textAnchor="middle">{maxLabel}</text>
-      </>
-    );
-  };
+  /* ================================================================ */
+  /*  RENDER                                                           */
+  /* ================================================================ */
 
   return (
     <div
@@ -592,1090 +660,511 @@ export const SpeedometerHUD: React.FC<SpeedometerHUDProps> = ({
       className="fixed bottom-1 sm:bottom-2 md:bottom-3 left-1/2 -translate-x-1/2 z-50 pointer-events-auto select-none transition-all duration-300 flex flex-col items-center"
       style={{ maxWidth: 'calc(100vw - 16px)' }}
     >
-      {/* MINIMIZE / EXPAND TOGGLE BAR */}
+      {/* Collapse / expand handle */}
       <button
         type="button"
         onClick={() => setIsMinimized((prev) => !prev)}
-        className="mb-0.5 sm:mb-1 px-3 py-1 rounded-[2px] bg-[#14161a]/95 hover:bg-[#1c1f26] border border-[#2a2e38] text-[9px] sm:text-[10px] text-[#f0f3f6] font-mono flex items-center gap-2 shadow-lg active:scale-98 transition backdrop-blur-md cursor-pointer"
-        title="Свернуть / Развернуть приборную панель"
+        className="mb-1 h-6 px-3 rounded-md border text-[11px] font-mono font-bold flex items-center gap-2 shadow-lg backdrop-blur-md cursor-pointer transition active:scale-95"
+        style={{ background: C.panel, borderColor: C.line, color: C.text }}
+        title="Свернуть / развернуть приборную панель"
       >
-        <span className="w-1.5 h-1.5 rounded-none bg-[#c68a35]" />
-        <span className="uppercase font-bold tracking-wider">ПРИБОРЫ</span>
-        {isMinimized ? <ChevronUp className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-[#c68a35]" /> : <ChevronDown className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-[#c68a35]" />}
+        <span className="w-1.5 h-1.5 rounded-full" style={{ background: acc }} />
+        <span className="uppercase tracking-wider">Приборы</span>
+        {isMinimized ? <ChevronUp className="w-3.5 h-3.5" style={{ color: acc }} /> : <ChevronDown className="w-3.5 h-3.5" style={{ color: acc }} />}
       </button>
 
-      {/* COMPACT MINIMALIST BAR (IF MINIMIZED) */}
       {isMinimized ? (
-        <div className="flex items-center gap-2 sm:gap-3 px-3 py-1.5 sm:px-4 sm:py-2 rounded-[2px] border border-[#2a2e38] bg-[#14161a]/95 backdrop-blur-md shadow-2xl text-[#f0f3f6] whitespace-nowrap overflow-x-auto max-w-full animate-in fade-in duration-100 text-xs sm:text-sm">
-          <div className="flex items-baseline gap-1 font-mono whitespace-nowrap shrink-0">
-            <span className="text-xl sm:text-2xl font-black text-[#c68a35]">{speedKmh}</span>
-            <span className="text-[8px] sm:text-[9px] text-[#9ba3af] font-bold uppercase">КМ/Ч</span>
+        /* ------------------------- COMPACT BAR ------------------------- */
+        <div
+          className="flex items-center gap-3 px-3 py-2 rounded-lg border backdrop-blur-md shadow-2xl whitespace-nowrap overflow-x-auto max-w-full animate-in fade-in duration-100"
+          style={{ background: C.panel, borderColor: C.line, color: C.text }}
+        >
+          {/* Speed */}
+          <div className="flex items-baseline gap-1 font-mono shrink-0">
+            <span className="text-3xl font-black leading-none tabular-nums" style={{ color: acc }}>{speedKmh}</span>
+            <span className="text-[11px] font-bold uppercase" style={{ color: C.muted }}>км/ч</span>
           </div>
-          <div className="h-3.5 w-px bg-[#2a2e38] shrink-0" />
-          <div className="flex items-center gap-1.5 font-mono text-[11px] sm:text-xs whitespace-nowrap shrink-0">
-            <span className="text-[#9ba3af] font-bold uppercase text-[8px] sm:text-[9px] tracking-wider">RPM:</span>
-            <span className={`font-bold ${currentRPM > redlineRPM ? 'text-red-400 animate-pulse' : 'text-[#f0f3f6]'}`}>{currentRPM}</span>
-          </div>
-          <div className="h-3.5 w-px bg-[#2a2e38] shrink-0" />
-          <span className="px-2 py-0.5 rounded-[2px] font-mono font-black text-xs bg-[#0b0c0e] border border-[#2a2e38] text-[#c68a35] shrink-0">
+
+          <span className="h-6 w-px shrink-0" style={{ background: C.line }} />
+
+          {/* Gear */}
+          <span
+            className="min-w-[34px] text-center px-2 py-0.5 rounded-md border font-mono font-black text-lg leading-tight shrink-0"
+            style={{ background: C.surface, borderColor: C.line, color: gearColor }}
+          >
             {currentGearLabel}
           </span>
-          {eng?.hasTransferCase && (
-            <div className="flex items-center px-1.5 py-0.5 bg-[#0b0c0e] border border-[#2a2e38] rounded-[2px] gap-1 shrink-0 ml-0.5" title="Делитель [X]">
-              <span className={`text-[9px] font-black uppercase ${eng.transferCaseMode === 'LOW' ? 'text-[#c68a35]' : 'text-[#9ba3af]'}`}>
-                {eng.transferCaseMode === 'LOW' ? 'LO' : 'HI'}
-              </span>
+
+          {/* RPM mini bar */}
+          <div className="flex flex-col gap-1 w-[84px] shrink-0">
+            <div className="flex items-baseline justify-between font-mono leading-none">
+              <span className="text-[10px] font-bold uppercase" style={{ color: C.muted }}>об/мин</span>
+              <span className="text-[13px] font-black tabular-nums" style={{ color: currentRPM > redlineRPM ? C.red : C.text }}>{currentRPM}</span>
             </div>
-          )}
-          {diffCaps.supported && (
-            <button
-              type="button"
-              onClick={handleCycleDiffLock}
-              className={`flex items-center px-1.5 py-0.5 border rounded-[2px] gap-1 shrink-0 ml-0.5 transition cursor-pointer active:scale-98 ${
-                isDiffLocked 
-                  ? 'bg-[#c68a35]/20 border-[#c68a35]/60 text-[#d99a41]'
-                  : 'bg-[#0b0c0e] border-[#2a2e38] text-[#9ba3af] hover:text-[#f0f3f6]'
-              }`}
-              title="Блокировка дифференциала [V]"
-            >
-              <ShieldAlert className={`w-3 h-3 ${isDiffLocked ? 'text-[#c68a35] animate-pulse' : 'text-[#9ba3af]'}`} />
-              <span className="text-[9px] font-black uppercase">
-                {diffLockDesc}
-              </span>
-            </button>
-          )}
-          <div className="h-3.5 w-px bg-[#2a2e38] shrink-0" />
-          {/* Quick Engine start/stop */}
-          <button
-            type="button"
-            onClick={onToggleEngine}
-            className={`p-1 sm:p-1.5 rounded-[2px] border flex items-center justify-center transition active:scale-98 cursor-pointer shrink-0 ${
-              isEngineRunning ? 'bg-[#c68a35]/20 border-[#c68a35] text-[#d99a41]' : 'bg-red-950/40 border-red-800/80 text-red-400'
-            }`}
-            title="Зажигание [J]"
+            <div className="h-1.5 rounded-full overflow-hidden" style={{ background: '#1d222d' }}>
+              <div className="h-full rounded-full" style={{ width: `${Math.max(2, rpmRatio * 100)}%`, background: currentRPM > redlineRPM ? C.red : acc }} />
+            </div>
+          </div>
+
+          {/* Fuel */}
+          <span
+            className={`flex items-center gap-1 font-mono text-[13px] font-black shrink-0 ${isLowFuel ? 'animate-pulse' : ''}`}
+            style={{ color: isLowFuel ? C.amber : C.text }}
+            title={isLpgRunning ? 'Газ (ГБО)' : 'Топливо'}
           >
-            <Power className="w-3.5 h-3.5" />
-          </button>
+            <Fuel className="w-4 h-4" />
+            {fuelLevel}%
+          </span>
+
+          {(isOverheating || isLowOil || isCheckEngine && isEngineRunning) && (
+            <span className="flex items-center gap-1 text-[11px] font-bold font-mono shrink-0 animate-pulse" style={{ color: C.red }}>
+              <AlertTriangle className="w-4 h-4" />
+              {isOverheating ? 'ПЕРЕГРЕВ' : isLowOil ? 'МАСЛО' : 'ДВС'}
+            </span>
+          )}
+
+          {eng?.hasTransferCase && (
+            <span
+              className="px-1.5 py-0.5 rounded-md border text-[11px] font-black font-mono shrink-0"
+              style={{ background: C.surface, borderColor: C.line, color: eng.transferCaseMode === 'LOW' ? acc : C.muted }}
+              title="Делитель [X]"
+            >
+              {eng.transferCaseMode === 'LOW' ? 'LO' : 'HI'}
+            </span>
+          )}
+
+          {diffCaps.supported && (
+            <Btn accent={acc} active={isDiffLocked} onClick={handleCycleDiffLock} title="Блокировка дифференциала [V]" tone="amber">
+              <ShieldAlert className="w-4 h-4" />
+              <span>{diffLockDesc}</span>
+            </Btn>
+          )}
+
+          <span className="h-6 w-px shrink-0" style={{ background: C.line }} />
+
+          {/* Signals */}
+          <div className="flex items-center gap-1 shrink-0">
+            <ArrowLeft className={`w-5 h-5 ${leftSignalOn ? 'animate-pulse' : ''}`} style={{ color: leftSignalOn ? C.green : C.dim }} />
+            <ArrowRight className={`w-5 h-5 ${rightSignalOn ? 'animate-pulse' : ''}`} style={{ color: rightSignalOn ? C.green : C.dim }} />
+          </div>
+
+          {toggleEngineBtn}
         </div>
       ) : (
-        /* FULL ANALOG INSTRUMENT CLUSTER (BENTO PANEL DESIGN) */
+        /* ------------------------- FULL CLUSTER ------------------------- */
         <div
-          className="relative bg-[#14161a]/95 border border-[#2a2e38] rounded-[2px] p-3 sm:p-4 md:p-5 shadow-2xl backdrop-blur-xl flex flex-col items-center gap-2.5 sm:gap-3.5 w-full max-w-[340px] sm:max-w-[420px] md:max-w-[480px] scale-[0.75] sm:scale-[0.88] md:scale-100 origin-bottom select-none animate-in fade-in duration-150"
+          className="relative rounded-xl border p-3 sm:p-4 shadow-2xl backdrop-blur-xl flex flex-col gap-3 w-[600px] max-w-[96vw] scale-[0.72] sm:scale-[0.86] md:scale-100 origin-bottom animate-in fade-in duration-150"
+          style={{ background: C.panel, borderColor: C.line, color: C.text }}
         >
-          {/* TOP ANNUNCIATOR STRIP & SHIFT LIGHTS */}
-          <div className="w-full flex items-center justify-between text-[#9ba3af] text-[9px] font-mono font-bold uppercase tracking-wider border-b border-[#2a2e38] pb-2.5 gap-2">
-            {/* Left: Signal & In-Game Telemetry (Time, Outside Temp, Compass) */}
-            <div className="flex items-center gap-1.5">
-              <span className={`p-1 rounded-[2px] ${playerTurnSignal === 'left' || playerTurnSignal === 'hazard' ? 'bg-[#c68a35]/20 text-[#d99a41] animate-pulse border border-[#c68a35]/40' : 'text-[#5a6272] border border-transparent'}`}>
-                <ArrowLeft className="w-3.5 h-3.5" />
+          {/* Status strip: environment on the left, engine and indicators on the right */}
+          <div className="flex items-center justify-between gap-2 flex-wrap font-mono text-[12px]">
+            <div className="flex items-center gap-x-3 gap-y-1 flex-wrap" style={{ color: C.text }}>
+              <span className="flex items-center gap-1.5 font-bold" title={`Дата (${seasonName})`}>
+                <Calendar className="w-3.5 h-3.5" style={{ color: acc }} />
+                {gameDateStr}
               </span>
-
-              {/* In-Game Date, Time, Outside Temp & Compass chips */}
-              <div className="flex items-center gap-1.5 text-[9px] font-mono text-[#cbd5e1] bg-[#0b0c0e]/80 px-2 py-1 rounded-[2px] border border-[#2a2e38]">
-                <span className="flex items-center gap-1 text-[#f0f3f6] font-bold" title="Календарная дата">
-                  <Calendar className="w-2.5 h-2.5 text-[#c68a35]" />
-                  {gameDateStr}
+              <span className="flex items-center gap-1.5 font-bold" title="Игровое время">
+                <Clock className="w-3.5 h-3.5" style={{ color: acc }} />
+                {gameTimeStr}
+              </span>
+              <span className="flex items-center gap-1.5 font-bold" title="Температура за бортом">
+                <Thermometer className="w-3.5 h-3.5" style={{ color: acc }} />
+                {ambientTempStr}
+              </span>
+              {isIcyRoad && (
+                <span className="flex items-center gap-1 font-extrabold animate-pulse" style={{ color: C.blue }} title="Внимание: гололёд, возможно обледенение дороги">
+                  <Snowflake className="w-3.5 h-3.5" />
+                  ГОЛОЛЁД
                 </span>
-                <span className="text-[#3a3f4d]">|</span>
-                <span className="flex items-center gap-1 text-[#f0f3f6] font-bold" title="Игровое время">
-                  <Clock className="w-2.5 h-2.5 text-[#c68a35]" />
-                  {gameTimeStr}
-                </span>
-                <span className="text-[#3a3f4d]">|</span>
-                <span className="flex items-center gap-1 text-[#f0f3f6] font-bold" title="Температура за бортом">
-                  <Thermometer className="w-2.5 h-2.5 text-[#c68a35]" />
-                  {ambientTempStr}
-                </span>
-                {isIcyRoad && (
-                  <>
-                    <span className="text-[#3a3f4d]">|</span>
-                    <span className="flex items-center gap-0.5 text-cyan-400 font-extrabold animate-pulse" title="Внимание: Гололёд / Обледенение дороги!">
-                      <Snowflake className="w-2.5 h-2.5" />
-                      <span>ГОЛОЛЁД</span>
-                    </span>
-                  </>
-                )}
-                <span className="text-[#3a3f4d]">|</span>
-                <span className="flex items-center gap-1 text-[#c68a35] font-bold" title="Компас / Курс">
-                  <Compass className="w-2.5 h-2.5" />
-                  {compassHeading}
-                </span>
-                {Math.abs(gradePercent) >= 2 && (
-                  <>
-                    <span className="text-[#3a3f4d]">|</span>
-                    <span
-                      className="flex items-center gap-0.5 font-mono font-extrabold text-[#c68a35]"
-                      title={gradePercent > 0 ? `Крутой подъём: +${gradePercent}%` : `Спуск: ${gradePercent}%`}
-                    >
-                      <span>{gradePercent > 0 ? '▲' : '▼'}</span>
-                      <span>{gradePercent > 0 ? `+${gradePercent}%` : `${gradePercent}%`}</span>
-                    </span>
-                  </>
-                )}
-              </div>
-            </div>
-
-            {/* Right / Center: Sport RPM Shift Lights or Range & Consumption + Engine State */}
-            <div className="flex items-center gap-2">
-              {theme === 'sport' ? (
-                <div className="flex items-center gap-1.5 bg-[#0b0c0e]/80 px-2 py-1 rounded-[2px] border border-[#2a2e38]">
-                  {[0.6, 0.7, 0.8, 0.88, 0.95].map((thresh, idx) => {
-                    const active = rpmRatio >= thresh;
-                    let dotColor = 'bg-[#c68a35]';
-                    if (idx >= 3) dotColor = 'bg-red-500';
-                    return (
-                      <span
-                        key={idx}
-                        className={`w-2 h-1 rounded-none transition-all ${active ? `${dotColor} shadow-[0_0_6px_currentColor] animate-pulse` : 'bg-[#2a2e38]'}`}
-                      />
-                    );
-                  })}
-                </div>
-              ) : (
-                <div className="hidden sm:flex items-center gap-1.5 bg-[#0b0c0e]/80 px-2.5 py-1 rounded-[2px] border border-[#2a2e38] text-[9px] font-mono text-[#cbd5e1]">
-                  <span className="flex items-center gap-1 text-[#c68a35] font-semibold" title="Запас хода">
-                    <Fuel className="w-2.5 h-2.5 text-[#c68a35]" />
-                    {estimatedRangeKm} км
-                  </span>
-                  <span className="text-[#3a3f4d]">|</span>
-                  <span className="flex items-center gap-1 text-[#9ba3af] font-semibold" title="Мгновенный расход">
-                    <Droplet className="w-2.5 h-2.5 text-[#c68a35]" />
-                    {instantConsumptionShort}
-                  </span>
-                </div>
               )}
-
-              <span className={`text-[9px] font-mono font-bold px-2 py-1 rounded-[2px] border ${
-                isEngineRunning 
-                  ? 'text-[#c68a35] bg-[#c68a35]/15 border-[#c68a35]/40' 
-                  : isStalled 
-                  ? 'text-amber-400 bg-amber-950/40 border-amber-500/20 animate-pulse' 
-                  : 'text-red-400 bg-red-950/40 border-red-800/40'
-              }`}>
-                {isEngineRunning ? 'МОТОР ВКЛ' : isStalled ? 'ЗАГЛОХ' : 'МОТОР ВЫКЛ'}
+              <span className="flex items-center gap-1.5 font-bold" title="Курс">
+                <Compass className="w-3.5 h-3.5" style={{ color: acc }} />
+                {compassHeading}
               </span>
-
-              {/* Headlights and Right Signal Indicator */}
-              <div className="flex items-center gap-1.5">
-                {playerHeadlightMode !== 'off' && (
-                  <span className="p-1 rounded-[2px] border bg-[#c68a35]/20 text-[#d99a41] border-[#c68a35]/40">
-                    <Lightbulb className="w-3.5 h-3.5" />
-                  </span>
-                )}
-                <span className={`p-1 rounded-[2px] ${playerTurnSignal === 'right' || playerTurnSignal === 'hazard' ? 'bg-[#c68a35]/20 text-[#d99a41] animate-pulse border border-[#c68a35]/40' : 'text-[#5a6272] border border-transparent'}`}>
-                  <ArrowRight className="w-3.5 h-3.5" />
+              {Math.abs(gradePercent) >= 2 && (
+                <span className="font-extrabold" style={{ color: acc }} title={gradePercent > 0 ? `Подъём: +${gradePercent}%` : `Спуск: ${gradePercent}%`}>
+                  {gradePercent > 0 ? '▲' : '▼'} {gradePercent > 0 ? `+${gradePercent}` : gradePercent}%
                 </span>
-              </div>
+              )}
+            </div>
+
+            <div className="flex items-center gap-2">
+              {isDrifting && (
+                <span className="px-2 h-6 inline-flex items-center rounded-md border text-[10px] font-black uppercase animate-pulse" style={{ color: C.amber, borderColor: `${C.amber}88`, background: `${C.amber}1f` }}>
+                  Занос
+                </span>
+              )}
+              <span
+                className={`px-2 h-6 inline-flex items-center gap-1.5 rounded-md border text-[11px] font-bold ${isStalled && !isEngineRunning ? 'animate-pulse' : ''}`}
+                style={{ color: engineColor, borderColor: `${engineColor}77`, background: `${engineColor}1a` }}
+              >
+                <span className="w-1.5 h-1.5 rounded-full" style={{ background: engineColor }} />
+                {engineLabel}
+              </span>
+              {playerHeadlightMode !== 'off' && (
+                <span title={playerHeadlightMode === 'high' ? 'Дальний свет' : 'Ближний свет'} className="inline-flex">
+                  <Lightbulb className="w-5 h-5" style={{ color: playerHeadlightMode === 'high' ? C.blue : C.green }} />
+                </span>
+              )}
+              <ArrowLeft className={`w-6 h-6 ${leftSignalOn ? 'animate-pulse' : ''}`} style={{ color: leftSignalOn ? C.green : C.dim }} />
+              <ArrowRight className={`w-6 h-6 ${rightSignalOn ? 'animate-pulse' : ''}`} style={{ color: rightSignalOn ? C.green : C.dim }} />
             </div>
           </div>
 
-          {/* MAIN GAUGES SVG CANVAS BENTO CELL */}
-          <div className="w-full bg-[#0b0c0e]/60 border border-[#2a2e38] rounded-[2px] p-2.5 sm:p-3 flex items-center justify-center relative shadow-inner">
-            <svg
-              viewBox="0 0 460 135"
-              className="w-[310px] sm:w-[380px] md:w-[440px] h-[95px] sm:h-[115px] md:h-[135px] overflow-visible"
-            >
-              <defs>
-                {/* Dial gradient filters */}
-                <radialGradient id="dialGrad" cx="50%" cy="50%" r="50%">
-                  <stop offset="65%" stopColor={themeStyles.dialFace} />
-                  <stop offset="100%" stopColor="#000000" />
-                </radialGradient>
-                <filter id="needleGlow" x="-20%" y="-20%" width="140%" height="140%">
-                  <feGaussianBlur stdDeviation="1.5" result="glow" />
-                  <feComposite in="SourceGraphic" in2="glow" operator="over" />
-                </filter>
-              </defs>
+          {/* Main row: tachometer | gear + on-board computer | speedometer */}
+          <div className="grid items-center gap-2 rounded-lg border p-2" style={{ gridTemplateColumns: '1fr 188px 1fr', background: '#0a0c10', borderColor: C.line }}>
+            {/* Tachometer */}
+            <ArcGauge value={currentRPM} max={maxRPM} major={1000} minor={500} labelDiv={1000} redFrom={redlineRPM} accent={acc} needle={needle}>
+              <text x="80" y="112" textAnchor="middle" fontSize="22" fontWeight="900" fill={currentRPM > redlineRPM ? C.red : C.text} fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace">
+                {currentRPM}
+              </text>
+              <text x="80" y="127" textAnchor="middle" fontSize="10" fontWeight="700" fill={C.muted} fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace">
+                об/мин ×1000
+              </text>
+            </ArcGauge>
 
-              {/* ================= GAUGE 1: TACHOMETER (RPM) ================= */}
-              <g id="tachometer-gauge" transform="translate(10, 0)">
-                {/* Outer Bezel */}
-                <circle cx="70" cy="70" r="58" fill="url(#dialGrad)" stroke={themeStyles.border.includes('amber') ? '#78350f' : '#1e293b'} strokeWidth="3" />
-                <circle cx="70" cy="70" r="56" fill="none" stroke={themeStyles.dialStroke} strokeWidth="1" strokeOpacity="0.4" />
+            {/* Centre: gear + MFD */}
+            <div className="flex flex-col gap-2 min-w-0">
+              <button
+                type="button"
+                onClick={handleGearClick}
+                title="Передача (клик: переключить)"
+                className="flex items-baseline justify-center gap-2 rounded-md border py-1 cursor-pointer transition active:scale-95"
+                style={{ background: C.surface, borderColor: C.line }}
+              >
+                <span className="text-[28px] leading-none font-black font-mono" style={{ color: gearColor }}>{currentGearLabel}</span>
+                <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: C.muted }}>
+                  {eng?.transmissionType === 'AUTO' ? 'авто' : 'мкпп'}
+                </span>
+              </button>
 
-                {/* Redline arc */}
-                <path
-                  d={redlinePathD}
-                  fill="none"
-                  stroke="#ef4444"
-                  strokeWidth="3.5"
-                  strokeOpacity="0.75"
-                />
+              {/* Trip computer */}
+              {(() => {
+                const availableModes: { id: TripComputerMode; label: string }[] = [
+                  { id: 'eco', label: 'РАСХ' },
+                  { id: 'range', label: 'ЗАПАС' },
+                  { id: 'trip', label: 'ПУТЬ' },
+                  { id: 'sys', label: 'СИСТ' }
+                ];
+                if (vehicle.fluidTank && vehicle.fluidTank.capacity > 0) availableModes.push({ id: 'tank', label: 'ЦИСТ' });
+                if (vehicle.hasGBO) availableModes.push({ id: 'gbo', label: 'ГБО' });
+                const mode = availableModes.some((m) => m.id === tripMode) ? tripMode : 'eco';
 
-                {/* Dial Ticks & Numbers */}
-                {renderDialTicks(70, 70, 52, maxRPM, maxRPM <= 5000 ? 8 : 10, 0.001, redlineRPM)}
+                let title = '';
+                let value = '';
+                let sub = '';
+                let subColor: string = C.muted;
+                let valueColor: string = C.text;
 
-                {/* Unit label */}
-                <text x="70" y="94" textAnchor="middle" fontSize="6.5" fill="#94a3b8" fontFamily="monospace" fontWeight="bold">
-                  RPM ×1000
-                </text>
+                if (mode === 'eco') {
+                  title = 'Расход';
+                  value = isFuelCut ? 'ПХХ' : `${consValue} ${consUnit}`;
+                  sub = isFuelCut ? 'топливо отсечено' : `средний ${baseAvgConsumption.toFixed(1)} л/100км`;
+                } else if (mode === 'range') {
+                  title = 'Запас хода';
+                  value = `${estimatedRangeKm} км`;
+                  sub = `${remainingFuelLiters} л из ${tankCapacityLiters} л`;
+                } else if (mode === 'trip') {
+                  title = 'Поездка А';
+                  value = `${tripOdoKm} км`;
+                  sub = `средний ${baseAvgConsumption.toFixed(1)} л/100км`;
+                } else if (mode === 'sys') {
+                  title = 'Бортсеть';
+                  value = `${sysVoltageStr} В`;
+                  sub = diffCaps.supported ? `Диффер.: ${diffLockDesc}` : `Заряд АКБ ${batteryCharge}%`;
+                  subColor = diffCaps.supported && isDiffLocked ? C.amber : C.muted;
+                } else if (mode === 'tank' && vehicle.fluidTank) {
+                  const ft = vehicle.fluidTank;
+                  title = `Цистерна: ${String(ft.liquidType).toUpperCase()}`;
+                  value = `${Math.round(ft.currentVolume ?? ft.currentAmount ?? 0)} л`;
+                  valueColor = ft.isPunctured ? C.red : C.text;
+                  sub = ft.drainValveOpen ? 'сливной клапан открыт' : ft.isPunctured ? 'пробоина цистерны!' : `ёмкость ${ft.capacity} л`;
+                  subColor = ft.drainValveOpen ? C.amber : ft.isPunctured ? C.red : C.muted;
+                } else if (mode === 'gbo') {
+                  const isGboOn = fuel?.gboActive !== false;
+                  const hasLpg = (fuel?.gboLevel ?? 0) > 0;
+                  const isWarm = coolantTemp >= 40;
+                  title = 'Система ГБО';
+                  value = !isGboOn ? 'ВЫКЛ (бенз.)' : !isWarm ? 'ПРОГРЕВ' : hasLpg ? 'ГАЗ' : 'НЕТ ГАЗА';
+                  valueColor = !isGboOn ? C.muted : !isWarm ? C.amber : hasLpg ? C.green : C.red;
+                  sub = `${Math.round(fuel?.gboLevel ?? 0)}% (${(((fuel?.gboLevel ?? 0) / 100) * (fuel?.gboCapacity ?? 42)).toFixed(1)} л), клик: вкл/выкл`;
+                }
 
-                {/* Rotating Needle */}
-                <g transform={`rotate(${rpmAngle} 70 70)`} filter="url(#needleGlow)">
-                  {/* Needle Counterweight & Pointer */}
-                  <polygon
-                    points="68.5,82 71.5,82 70.8,24 69.2,24"
-                    fill={themeStyles.needleColor}
-                  />
-                  <line x1="70" y1="24" x2="70" y2="70" stroke={themeStyles.needleGlow} strokeWidth="1" />
-                </g>
-
-                {/* Center Hub */}
-                <circle cx="70" cy="70" r="8" fill={themeStyles.hubColor} stroke={themeStyles.hubBorder} strokeWidth="2" />
-                <circle cx="70" cy="70" r="3" fill={themeStyles.needleColor} />
-
-                {/* Gear Display in Tachometer */}
-                <g
-                  className="cursor-pointer"
-                  onClick={() => {
-                    if (eng?.transmissionType === 'AUTO') {
-                      const ladder = ['P', 'R', 'N', 'D'] as const;
-                      const curMode = eng.autoGearMode || 'D';
-                      const nextIdx = (ladder.indexOf(curMode as any) + 1) % ladder.length;
-                      onSelectGear?.(ladder[nextIdx]);
-                    } else if (eng) {
-                      const maxForwardGear = (eng.gearRatios?.length || 7) - 2;
-                      const nextGear = eng.currentGear >= maxForwardGear ? -1 : eng.currentGear + 1;
-                      onSelectGear?.(nextGear);
-                    }
-                  }}
-                >
-                  <rect x="58" y="44" width="24" height="16" rx="3" fill="#020617" stroke="#334155" strokeWidth="1" />
-                  <text
-                    x="70"
-                    y="56"
-                    textAnchor="middle"
-                    fontSize="11"
-                    fontWeight="900"
-                    fill={currentGearLabel.startsWith('R') ? '#f59e0b' : currentGearLabel === 'P' ? '#ef4444' : '#38bdf8'}
-                    fontFamily="monospace"
-                  >
-                    {currentGearLabel}
-                  </text>
-                </g>
-              </g>
-
-              {/* ================= CENTER CLUSTER: AUX GAUGES & MULTI-FUNCTION DISPLAY ================= */}
-              <g id="aux-gauges" transform="translate(150, 0)">
-                {/* 1. OIL PRESSURE / LEVEL GAUGE (LEFT AUX) */}
-                <g transform="translate(25, 23)">
-                  <circle cx="0" cy="0" r="18" fill="url(#dialGrad)" stroke="#1e293b" strokeWidth="1.2" />
-                  {renderSmallDialTicks(0, 0, 16, 'L', 'NORM', 'H', false)}
-                  {/* Rotating Needle */}
-                  <g transform={`rotate(${oilAngle} 0 0)`}>
-                    <line x1="0" y1="3" x2="0" y2="-13" stroke={themeStyles.needleColor} strokeWidth="1.5" strokeLinecap="round" />
-                    <circle cx="0" cy="0" r="2.8" fill={themeStyles.hubColor} stroke={themeStyles.hubBorder} strokeWidth="0.8" />
-                  </g>
-                  {/* Oil Can Vector Icon */}
-                  <g transform="translate(0, 10) scale(0.8)">
-                    <path
-                      d="M-5,1 C-5,-1 -2.5,-2 0,-2 C2.5,-2 5,-1 5,1 C5,3 3,4 0,4 C-3,4 -5,3 -5,1 Z M-5,0 L-7,-1.5 L-7,1.5 L-5,0.5 M5,0 L7.5,-2.5"
-                      fill="none"
-                      stroke={isLowOil ? '#ef4444' : '#64748b'}
-                      strokeWidth="1.1"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                    <circle cx="8" cy="-1.5" r="0.7" fill={isLowOil ? '#ef4444' : '#64748b'} />
-                  </g>
-                  {isLowOil && <circle cx="9" cy="-9" r="1.8" fill="#ef4444" className="animate-ping" />}
-                </g>
-
-                {/* 2. COOLANT TEMPERATURE GAUGE (CENTER AUX) */}
-                <g transform="translate(80, 23)">
-                  <circle cx="0" cy="0" r="18" fill="url(#dialGrad)" stroke="#1e293b" strokeWidth="1.2" />
-                  {renderSmallDialTicks(0, 0, 16, '40°', '90°', '130°', true)}
-                  {/* Rotating Needle */}
-                  <g transform={`rotate(${tempAngle} 0 0)`}>
-                    <line x1="0" y1="3" x2="0" y2="-13" stroke={themeStyles.needleColor} strokeWidth="1.5" strokeLinecap="round" />
-                    <circle cx="0" cy="0" r="2.8" fill={themeStyles.hubColor} stroke={themeStyles.hubBorder} strokeWidth="0.8" />
-                  </g>
-                  {/* Coolant Thermometer Vector Icon */}
-                  <g transform="translate(0, 10) scale(0.8)">
-                    <path
-                      d="M-1,-5.5 L1,-5.5 L1,-0.8 C2,0 2.6,1.2 2.6,2.3 C2.6,3.8 1.4,5 0,5 C-1.4,5 -2.6,3.8 -2.6,2.3 C-2.6,1.2 -2,0 -1,-0.8 Z"
-                      fill={isOverheating ? '#ef4444' : '#64748b'}
-                    />
-                    <line x1="-5" y1="3.5" x2="-3.5" y2="3.5" stroke={isOverheating ? '#ef4444' : '#64748b'} strokeWidth="1" strokeLinecap="round" />
-                    <line x1="3.5" y1="3.5" x2="5" y2="3.5" stroke={isOverheating ? '#ef4444' : '#64748b'} strokeWidth="1" strokeLinecap="round" />
-                    <line x1="-5" y1="0.5" x2="-3.5" y2="0.5" stroke={isOverheating ? '#ef4444' : '#64748b'} strokeWidth="1" strokeLinecap="round" />
-                    <line x1="3.5" y1="0.5" x2="5" y2="0.5" stroke={isOverheating ? '#ef4444' : '#64748b'} strokeWidth="1" strokeLinecap="round" />
-                  </g>
-                  {isOverheating && <circle cx="9" cy="-9" r="1.8" fill="#ef4444" className="animate-ping" />}
-                  {isEngineRunning && coolantTemp < 55 && (
-                    <g transform="translate(-10, -10)">
-                      <circle cx="0" cy="0" r="2.5" fill="#0284c7" stroke="#38bdf8" strokeWidth="0.6" />
-                      <text x="0" y="1.2" textAnchor="middle" fontSize="3.8" fill="#f0f9ff" fontWeight="bold">C</text>
-                    </g>
-                  )}
-                </g>
-
-                {/* 3. FUEL LEVEL GAUGE (RIGHT AUX) */}
-                <g transform="translate(135, 23)">
-                  <circle cx="0" cy="0" r="18" fill="url(#dialGrad)" stroke="#1e293b" strokeWidth="1.2" />
-                  {renderSmallDialTicks(0, 0, 16, 'E', '1/2', 'F', false)}
-                  {/* Rotating Needle */}
-                  <g transform={`rotate(${fuelAngle} 0 0)`}>
-                    <line x1="0" y1="3" x2="0" y2="-13" stroke={themeStyles.needleColor} strokeWidth="1.5" strokeLinecap="round" />
-                    <circle cx="0" cy="0" r="2.8" fill={themeStyles.hubColor} stroke={themeStyles.hubBorder} strokeWidth="0.8" />
-                  </g>
-                  {/* Fuel Pump Vector Icon */}
-                  <g transform="translate(0, 10) scale(0.8)">
-                    <rect x="-4.5" y="-5" width="6" height="9.5" rx="1" fill="none" stroke={isLowFuel ? '#f59e0b' : '#64748b'} strokeWidth="1.1" />
-                    <rect x="-3.2" y="-3.5" width="3.4" height="3" fill={isLowFuel ? '#f59e0b' : '#64748b'} />
-                    <path d="M1.5,-2 L3.5,-2 C4.5,-2 5,-1.2 5,0.5 L5,2.5 C5,3.5 4,4 3.5,4 L3,4 L3,1.5" fill="none" stroke={isLowFuel ? '#f59e0b' : '#64748b'} strokeWidth="0.9" strokeLinecap="round" />
-                  </g>
-                  {isLowFuel && <circle cx="9" cy="-9" r="1.8" fill="#f59e0b" className="animate-ping" />}
-                  {vehicle?.hasGBO && (
-                    <g transform="translate(12, 9)">
-                      <rect x="-6" y="-3" width="12" height="6" rx="1" fill="#0f766e" stroke="#22d3ee" strokeWidth="0.5" />
-                      <text x="0" y="1.2" textAnchor="middle" fontSize="3.5" fill="#e0f2fe" fontWeight="black" fontFamily="sans-serif">GBO</text>
-                    </g>
-                  )}
-                </g>
-
-                {/* DIGITAL MULTI-FUNCTION DISPLAY SCREEN (MFD / БОРТОВОЙ КОМПЬЮТЕР) */}
-                <g id="mfd-screen" transform="translate(16, 45)">
-                  {/* Screen Glass Outer Frame */}
-                  <rect
-                    x="0"
-                    y="0"
-                    width="128"
-                    height="38"
-                    rx="3"
-                    fill="#020617"
-                    stroke="#1e293b"
-                    strokeWidth="1.2"
-                  />
-                  <rect
-                    x="1"
-                    y="1"
-                    width="126"
-                    height="36"
-                    rx="2"
-                    fill="#030712"
-                    stroke="#0f172a"
-                    strokeWidth="0.8"
-                  />
-
-                  {/* LCD Top Telemetry Header Bar: Clock | Outside Temp | Compass */}
-                  <g transform="translate(4, 7)">
-                    <text x="0" y="0" fontSize="5" fill="#38bdf8" fontWeight="bold" fontFamily="monospace">
-                      {gameTimeStr}
-                    </text>
-                    <text x="60" y="0" textAnchor="middle" fontSize="5" fill="#f59e0b" fontWeight="bold" fontFamily="monospace">
-                      {ambientTempStr}
-                    </text>
-                    <text x="120" y="0" textAnchor="end" fontSize="5" fill="#10b981" fontWeight="black" fontFamily="monospace">
-                      {compassHeading}
-                    </text>
-                    <line x1="0" y1="2" x2="120" y2="2" stroke="#1e293b" strokeWidth="0.6" />
-                  </g>
-
-                  {/* LCD Mode Tabs: [ECO] [RANGE] [TRIP] [SYS] (and [TANK] / [GBO] if equipped) */}
-                  {(() => {
-                    const availableModes: TripComputerMode[] = ['eco', 'range', 'trip', 'sys'];
-                    if (vehicle.fluidTank && vehicle.fluidTank.capacity > 0) {
-                      availableModes.push('tank');
-                    }
-                    if (vehicle.hasGBO) {
-                      availableModes.push('gbo');
-                    }
-                    const numTabs = availableModes.length;
-                    const tabWidth = numTabs === 6 ? 18 : (numTabs === 5 ? 22 : 28);
-                    const tabStep = numTabs === 6 ? 20.0 : (numTabs === 5 ? 24.2 : 30.5);
-
-                    return (
-                      <g transform="translate(4, 16)">
-                        {availableModes.map((m, idx) => {
-                          const isSelected = tripMode === m;
-                          const tabX = idx * tabStep;
-                          const label = m.toUpperCase();
-                          return (
-                            <g
-                              key={m}
-                              transform={`translate(${tabX}, 0)`}
-                              className="cursor-pointer"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setTripMode(m);
-                                try { sound.click(); } catch {}
-                              }}
-                            >
-                              <rect
-                                x="0"
-                                y="-4"
-                                width={tabWidth}
-                                height="7.5"
-                                rx="1.5"
-                                fill={isSelected ? '#0369a1' : '#0f172a'}
-                                stroke={isSelected ? '#38bdf8' : '#1e293b'}
-                                strokeWidth="0.6"
-                              />
-                              <text
-                                x={tabWidth / 2}
-                                y="1.2"
-                                textAnchor="middle"
-                                fontSize={numTabs === 6 ? "3.2" : (numTabs === 5 ? "3.8" : "4.2")}
-                                fontWeight="bold"
-                                fontFamily="monospace"
-                                fill={isSelected ? '#f0f9ff' : '#64748b'}
-                              >
-                                {label}
-                              </text>
-                            </g>
-                          );
-                        })}
-                      </g>
-                    );
-                  })()}
-
-                  {/* LCD Main Telemetry Content based on Selected Tab */}
-                  <g transform="translate(6, 29)">
-                    {tripMode === 'eco' && (
-                      <>
-                        <text x="0" y="0" fontSize="5.5" fill="#38bdf8" fontWeight="bold" fontFamily="monospace">
-                          INSTANT
-                        </text>
-                        <text x="116" y="0" textAnchor="end" fontSize="6.5" fill="#f8fafc" fontWeight="900" fontFamily="monospace">
-                          {instantConsumptionText}
-                        </text>
-                        {/* Dynamic ECO Consumption Meter Bar */}
-                        <g transform="translate(0, 3)">
-                          <rect x="0" y="0" width="116" height="2.5" rx="1" fill="#0f172a" stroke="#1e293b" strokeWidth="0.5" />
-                          <rect
-                            x="0.5"
-                            y="0.5"
-                            width={Math.max(2, 115 * Math.min(1, ecoBarRatio))}
-                            height="1.5"
-                            rx="0.7"
-                            fill={ecoBarRatio > 0.75 ? '#ef4444' : ecoBarRatio > 0.45 ? '#f59e0b' : '#10b981'}
+                return (
+                  <div className="rounded-md border overflow-hidden" style={{ background: '#05070a', borderColor: C.line }}>
+                    <div className="flex" style={{ borderBottom: `1px solid ${C.line}` }}>
+                      {availableModes.map((m) => {
+                        const on = m.id === mode;
+                        return (
+                          <button
+                            key={m.id}
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setTripMode(m.id);
+                              try { sound.click(); } catch {}
+                            }}
+                            className="flex-1 py-1 text-[9px] font-bold font-mono cursor-pointer transition"
+                            style={{ background: on ? `${acc}26` : 'transparent', color: on ? acc : C.dim }}
+                          >
+                            {m.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <div
+                      className={`px-2.5 py-1.5 ${mode === 'gbo' ? 'cursor-pointer' : ''}`}
+                      onClick={() => {
+                        if (mode === 'gbo' && fuel) {
+                          fuel.gboActive = !fuel.gboActive;
+                          try { sound.playButtonPress(); } catch {}
+                        }
+                      }}
+                    >
+                      <div className="text-[9px] font-bold uppercase tracking-wider truncate" style={{ color: C.muted }}>{title}</div>
+                      <div className="text-[17px] leading-tight font-black font-mono tabular-nums truncate" style={{ color: valueColor }}>{value}</div>
+                      {mode === 'eco' && (
+                        <div className="h-1 rounded-full overflow-hidden my-1" style={{ background: '#1d222d' }}>
+                          <div
+                            className="h-full rounded-full transition-[width] duration-200"
+                            style={{
+                              width: `${Math.max(2, ecoBarRatio * 100)}%`,
+                              background: ecoBarRatio > 0.75 ? C.red : ecoBarRatio > 0.45 ? C.amber : C.green
+                            }}
                           />
-                        </g>
-                      </>
-                    )}
+                        </div>
+                      )}
+                      <div className="text-[10px] font-mono truncate" style={{ color: subColor }}>{sub}</div>
+                    </div>
+                  </div>
+                );
+              })()}
+            </div>
 
-                    {tripMode === 'range' && (
-                      <>
-                        <text x="0" y="0" fontSize="5.5" fill="#f59e0b" fontWeight="bold" fontFamily="monospace">
-                          RANGE
-                        </text>
-                        <text x="116" y="0" textAnchor="end" fontSize="6.5" fill="#f8fafc" fontWeight="900" fontFamily="monospace">
-                          {estimatedRangeKm} KM
-                        </text>
-                        <text x="58" y="5" textAnchor="middle" fontSize="4.2" fill="#94a3b8" fontFamily="monospace">
-                          FUEL: {remainingFuelLiters} L / {tankCapacityLiters} L
-                        </text>
-                      </>
-                    )}
-
-                    {tripMode === 'trip' && (
-                      <>
-                        <text x="0" y="0" fontSize="5.5" fill="#10b981" fontWeight="bold" fontFamily="monospace">
-                          TRIP A
-                        </text>
-                        <text x="116" y="0" textAnchor="end" fontSize="6.5" fill="#f8fafc" fontWeight="900" fontFamily="monospace">
-                          {tripOdoKm} KM
-                        </text>
-                        <text x="58" y="5" textAnchor="middle" fontSize="4.2" fill="#94a3b8" fontFamily="monospace">
-                          AVG: {baseAvgConsumption.toFixed(1)} L/100
-                        </text>
-                      </>
-                    )}
-
-                    {tripMode === 'sys' && (
-                      <>
-                        <text x="0" y="0" fontSize="5.5" fill="#a855f7" fontWeight="bold" fontFamily="monospace">
-                          SYS VOLT
-                        </text>
-                        <text x="116" y="0" textAnchor="end" fontSize="6.5" fill="#f8fafc" fontWeight="900" fontFamily="monospace">
-                          {sysVoltageStr} V
-                        </text>
-                        <text x="58" y="5" textAnchor="middle" fontSize="3.8" fill={isDiffLocked ? '#f59e0b' : '#94a3b8'} fontFamily="monospace" fontWeight={isDiffLocked ? 'bold' : 'normal'}>
-                          {diffCaps.supported
-                            ? `DIFF: ${diffLockDesc} (МОБ:${dl?.center ? 'ВКЛ' : '0'} З:${dl?.rear ? 'ВКЛ' : '0'} П:${dl?.front ? 'ВКЛ' : '0'})`
-                            : `BATTERY HEALTH: ${batteryCharge}%`}
-                        </text>
-                      </>
-                    )}
-
-                    {tripMode === 'tank' && vehicle.fluidTank && (
-                      <>
-                        <text x="0" y="0" fontSize="5.5" fill="#38bdf8" fontWeight="bold" fontFamily="monospace">
-                          TANK: {vehicle.fluidTank.liquidType.toUpperCase()}
-                        </text>
-                        <text x="116" y="0" textAnchor="end" fontSize="6.5" fill={vehicle.fluidTank.isPunctured ? '#ef4444' : '#f8fafc'} fontWeight="900" fontFamily="monospace">
-                          {Math.round(vehicle.fluidTank.currentVolume ?? vehicle.fluidTank.currentAmount ?? 0)} L
-                        </text>
-                        <text x="58" y="5" textAnchor="middle" fontSize="4.2" fill={vehicle.fluidTank.drainValveOpen ? '#f59e0b' : vehicle.fluidTank.isPunctured ? '#ef4444' : '#94a3b8'} fontFamily="monospace">
-                          {vehicle.fluidTank.drainValveOpen ? 'СЛИВНОЙ КЛАПАН ОТКРЫТ' : vehicle.fluidTank.isPunctured ? 'ПРОБОИНА ЦИСТЕРНЫ!' : `ВМЕСТИМОСТЬ: ${vehicle.fluidTank.capacity} L`}
-                        </text>
-                      </>
-                    )}
-
-                    {tripMode === 'gbo' && (
-                      <>
-                        <text x="0" y="0" fontSize="5.5" fill="#eab308" fontWeight="bold" fontFamily="monospace">
-                          GBO SYSTEM
-                        </text>
-                        {(() => {
-                          const isGboOn = fuel?.gboActive !== false;
-                          const hasLpg = (fuel?.gboLevel ?? 0) > 0;
-                          const isWarm = coolantTemp >= 40;
-                          const gboStatusText = !isGboOn ? 'ВЫКЛ (БЕНЗ)' : (!isWarm ? 'ПРОГРЕВ...' : (hasLpg ? 'ГАЗ (АКТИВ)' : 'НЕТ ГАЗА'));
-                          const gboStatusColor = !isGboOn ? '#64748b' : (!isWarm ? '#f59e0b' : (hasLpg ? '#22c55e' : '#ef4444'));
-                          return (
-                            <g
-                              className="cursor-pointer"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                if (fuel) {
-                                  fuel.gboActive = !fuel.gboActive;
-                                  try { sound.playButtonPress(); } catch {}
-                                }
-                              }}
-                            >
-                              <rect
-                                x="68"
-                                y="-5.5"
-                                width="48"
-                                height="7"
-                                rx="1.5"
-                                fill={`${gboStatusColor}15`}
-                                stroke={gboStatusColor}
-                                strokeWidth="0.5"
-                              />
-                              <text
-                                x="92"
-                                y="-0.5"
-                                textAnchor="middle"
-                                fontSize="4.2"
-                                fill={gboStatusColor}
-                                fontWeight="bold"
-                                fontFamily="monospace"
-                              >
-                                {gboStatusText}
-                              </text>
-                            </g>
-                          );
-                        })()}
-                        <text x="58" y="5.2" textAnchor="middle" fontSize="4.2" fill="#94a3b8" fontFamily="monospace">
-                          ГАЗ: {Math.round(fuel?.gboLevel ?? 0)}% ({( ((fuel?.gboLevel ?? 0) / 100) * (fuel?.gboCapacity ?? 42) ).toFixed(1)} L)
-                        </text>
-                      </>
-                    )}
-                  </g>
-                </g>
-
-                {/* TELL-TALE WARNING LIGHTS IN CENTER BOTTOM */}
-                <g transform="translate(80, 96)">
-                  {(() => {
-                    // 1. Check Engine (MIL) logic:
-                    // - Bulb check when ignition ON / engine OFF: Solid Amber
-                    // - Engine Seized: Red KLIN
-                    // - Misfire / Detonation / Knocking: Flashing Amber (OBD-II standard)
-                    // - DTC Fault (Overheating, Low Oil/Coolant leak, Bad Fuel, damaged block): Solid Amber
-                    const isSeized = !!eng?.isSeized || (eng?.engineHealth ?? 100) <= 10;
-                    const isBlinkingCheck = isEngineRunning && (eng?.engineKnocking || fuel?.detonation);
-                    const isDtcFault = isEngineRunning && (
-                      coolantTemp > 105 ||
-                      (eng?.engineHealth ?? 100) < 65 ||
-                      eng?.radiatorPunctured ||
-                      eng?.oilPunctured ||
-                      (fuel && (fuel.fuelQuality < 50 || (vehicle.requiredFuel === 'ai95' && fuel.octaneNumber === 92)))
-                    );
-                    const isCheckEngine = !isEngineRunning || isSeized || isBlinkingCheck || isDtcFault;
-
-                    // 2. Battery Lamp (BATT):
-                    // - Ignition ON / engine OFF: Red (Alternator not turning)
-                    // - Engine ON: Red only if battery disconnected or discharged < 20%
-                    const isBattLit = !isEngineRunning || batteryCharge < 20 || eng?.batteryInstalled === false || eng?.batteryPosConnected === false || eng?.batteryNegConnected === false;
-
-                    // 3. Transmission Lamp (TRANS):
-                    const isTransWarn = (eng?.transmissionJammed || (eng?.transmissionHealth ?? 100) < 60);
-
-                    // 4. Oil Pressure Lamp (OIL):
-                    // - Ignition ON / engine OFF: Red (Zero oil pressure from stationary oil pump)
-                    // - Engine ON: Red only if oil pressure or oil level is critically low (<20)
-                    const isOilLit = !isEngineRunning || isLowOil;
-
-                    // 5. Handbrake / Park Lamp:
-                    const isParkBrakeLit = isHandbraking || (eng?.transmissionType === 'AUTO' && eng?.autoGearMode === 'P');
-
-                    return (
-                      <>
-                        {/* Check Engine Light */}
-                        <g transform="translate(-54, 0)">
-                          <rect
-                            x="-10"
-                            y="-8"
-                            width="20"
-                            height="15"
-                            rx="3"
-                            fill={
-                              isCheckEngine
-                                ? isSeized
-                                  ? '#7f1d1d'
-                                  : isBlinkingCheck
-                                  ? '#b45309'
-                                  : '#78350f'
-                                : '#0f172a'
-                            }
-                            stroke={
-                              isCheckEngine
-                                ? isSeized
-                                  ? '#ef4444'
-                                  : isBlinkingCheck
-                                  ? '#fbbf24'
-                                  : '#f59e0b'
-                                : '#334155'
-                            }
-                            strokeWidth="1"
-                            className={isBlinkingCheck ? 'animate-pulse' : ''}
-                          />
-                          <g transform="translate(0, -0.5) scale(0.85)">
-                            <path
-                              d="M-5.5,-1.5 L-3.5,-1.5 L-3.5,-3.5 L-1.5,-3.5 L-1.5,-1.5 L1.5,-1.5 L1.5,-3.5 L3.5,-3.5 L3.5,-1.5 L5.5,-1.5 C6,-1.5 6.5,-1 6.5,-0.5 L6.5,3 C6.5,3.5 6,4 5.5,4 L4,4 L4,5 L1.5,5 L1.5,4 L-4,4 L-4,2 L-5.5,2 C-6,2 -6.5,1.5 -6.5,1 L-6.5,-0.5 C-6.5,-1 -6,-1.5 -5.5,-1.5 Z"
-                              fill="none"
-                              stroke={
-                                isCheckEngine
-                                  ? isSeized
-                                    ? '#fca5a5'
-                                    : isBlinkingCheck
-                                    ? '#fef08a'
-                                    : '#f59e0b'
-                                  : '#475569'
-                              }
-                              strokeWidth="1.1"
-                              strokeLinejoin="round"
-                            />
-                            <circle
-                              cx="4"
-                              cy="1.2"
-                              r="0.7"
-                              fill={
-                                isCheckEngine
-                                  ? isSeized
-                                    ? '#fca5a5'
-                                    : isBlinkingCheck
-                                    ? '#fef08a'
-                                    : '#f59e0b'
-                                  : '#475569'
-                              }
-                            />
-                          </g>
-                        </g>
-
-                        {/* Battery Light (BATT) */}
-                        <g transform="translate(-27, 0)">
-                          <rect
-                            x="-10"
-                            y="-8"
-                            width="20"
-                            height="15"
-                            rx="3"
-                            fill={isBattLit ? '#7f1d1d' : '#0f172a'}
-                            stroke={isBattLit ? '#ef4444' : '#334155'}
-                            strokeWidth="1"
-                          />
-                          <g transform="translate(0, -0.5) scale(0.85)">
-                            <rect x="-6" y="-3.2" width="12" height="7.5" rx="1.2" fill="none" stroke={isBattLit ? '#ef4444' : '#475569'} strokeWidth="1.1" />
-                            <rect x="-4.5" y="-4.8" width="2.2" height="1.6" fill={isBattLit ? '#ef4444' : '#475569'} />
-                            <line x1="-3.5" y1="0.5" x2="-1.5" y2="0.5" stroke={isBattLit ? '#ef4444' : '#475569'} strokeWidth="1" strokeLinecap="round" />
-                            <rect x="2.3" y="-4.8" width="2.2" height="1.6" fill={isBattLit ? '#ef4444' : '#475569'} />
-                            <line x1="2.4" y1="0.5" x2="4.4" y2="0.5" stroke={isBattLit ? '#ef4444' : '#475569'} strokeWidth="1" strokeLinecap="round" />
-                            <line x1="3.4" y1="-0.5" x2="3.4" y2="1.5" stroke={isBattLit ? '#ef4444' : '#475569'} strokeWidth="1" strokeLinecap="round" />
-                          </g>
-                        </g>
-
-                        {/* Transmission Warning Light */}
-                        <g transform="translate(0, 0)">
-                          <rect
-                            x="-10"
-                            y="-8"
-                            width="20"
-                            height="15"
-                            rx="3"
-                            fill={isTransWarn ? '#7f1d1d' : '#0f172a'}
-                            stroke={isTransWarn ? '#ef4444' : '#334155'}
-                            strokeWidth="1"
-                          />
-                          <g transform="translate(0, -0.5) scale(0.85)">
-                            <path
-                              d="M-1.8,-5 L1.8,-5 L2.2,-3.5 L4.2,-2.5 L5.5,-3 L6.5,-1 L5,0.5 L5,2 L6.5,3.5 L5.5,5.5 L4.2,5 L2.2,6 L1.8,7.5 L-1.8,7.5 L-2.2,6 L-4.2,5 L-5.5,5.5 L-6.5,3.5 L-5,2 L-5,0.5 L-6.5,-1 L-5.5,-3 L-4.2,-2.5 L-2.2,-3.5 Z"
-                              fill="none"
-                              stroke={isTransWarn ? '#ef4444' : '#475569'}
-                              strokeWidth="1"
-                              strokeLinejoin="round"
-                            />
-                            <line x1="0" y1="-1" x2="0" y2="1.8" stroke={isTransWarn ? '#ef4444' : '#475569'} strokeWidth="1.2" strokeLinecap="round" />
-                            <circle cx="0" cy="3.5" r="0.6" fill={isTransWarn ? '#ef4444' : '#475569'} />
-                          </g>
-                        </g>
-
-                        {/* Oil Pressure Lamp (OIL) */}
-                        <g transform="translate(27, 0)">
-                          <rect
-                            x="-10"
-                            y="-8"
-                            width="20"
-                            height="15"
-                            rx="3"
-                            fill={isOilLit ? '#7f1d1d' : '#0f172a'}
-                            stroke={isOilLit ? '#ef4444' : '#334155'}
-                            strokeWidth="1"
-                          />
-                          <g transform="translate(0, -0.5) scale(0.85)">
-                            <path
-                              d="M-5,1 C-5,-1 -2.5,-2 0,-2 C2.5,-2 5,-1 5,1 C5,3 3,4 0,4 C-3,4 -5,3 -5,1 Z M-5,0 L-7,-1.5 L-7,1.5 L-5,0.5 M5,0 L7.5,-2.5"
-                              fill="none"
-                              stroke={isOilLit ? '#ef4444' : '#475569'}
-                              strokeWidth="1.1"
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                            />
-                            <circle cx="8" cy="-1.5" r="0.7" fill={isOilLit ? '#ef4444' : '#475569'} />
-                          </g>
-                        </g>
-
-                        {/* Handbrake / Park Lamp (P) */}
-                        <g transform="translate(54, 0)">
-                          <rect
-                            x="-10"
-                            y="-8"
-                            width="20"
-                            height="15"
-                            rx="3"
-                            fill={isParkBrakeLit ? '#7f1d1d' : '#0f172a'}
-                            stroke={isParkBrakeLit ? '#ef4444' : '#334155'}
-                            strokeWidth="1"
-                          />
-                          <g transform="translate(0, -0.5) scale(0.85)">
-                            <circle cx="0" cy="0" r="4.3" fill="none" stroke={isParkBrakeLit ? '#ef4444' : '#475569'} strokeWidth="1" />
-                            <path d="M-6.2,-3.2 C-7.5,-1.2 -7.5,1.2 -6.2,3.2" fill="none" stroke={isParkBrakeLit ? '#ef4444' : '#475569'} strokeWidth="1.1" strokeLinecap="round" />
-                            <path d="M6.2,-3.2 C7.5,-1.2 7.5,1.2 6.2,3.2" fill="none" stroke={isParkBrakeLit ? '#ef4444' : '#475569'} strokeWidth="1.1" strokeLinecap="round" />
-                            <text x="0" y="2.2" textAnchor="middle" fontSize="5.5" fill={isParkBrakeLit ? '#ef4444' : '#475569'} fontWeight="bold" fontFamily="sans-serif">
-                              P
-                            </text>
-                          </g>
-                        </g>
-                      </>
-                    );
-                  })()}
-                </g>
-
-                {/* Digital Speed & Odometer readout in center */}
-                <text x="80" y="122" textAnchor="middle" fontSize="13" fontWeight="900" fill="#f8fafc" fontFamily="monospace" letterSpacing="0.5">
-                  {speedKmh} <tspan fontSize="8" fill="#94a3b8">КМ/Ч</tspan>
-                </text>
-
-                {/* Differential Lock Schematic in Center Display for 4WD / Locked Vehicles */}
-                {diffCaps.supported && (
-                  <g transform="translate(80, 134)" className="cursor-pointer" onClick={handleCycleDiffLock}>
-                    {/* Front Axle */}
-                    <line x1="-10" y1="-3" x2="10" y2="-3" stroke={dl?.front ? '#f59e0b' : '#334155'} strokeWidth="1.2" />
-                    {/* Front Wheels */}
-                    <rect x="-12" y="-4.5" width="2.5" height="3.5" rx="0.5" fill={dl?.front ? '#f59e0b' : '#475569'} />
-                    <rect x="9.5" y="-4.5" width="2.5" height="3.5" rx="0.5" fill={dl?.front ? '#f59e0b' : '#475569'} />
-                    {/* Driveshaft */}
-                    <line x1="0" y1="-3" x2="0" y2="3" stroke={dl?.center ? '#f59e0b' : '#334155'} strokeWidth="1.2" />
-                    {/* Center Diff */}
-                    <circle cx="0" cy="0" r="1.6" fill={dl?.center ? '#f59e0b' : '#1e293b'} stroke={dl?.center ? '#fbbf24' : '#475569'} strokeWidth="0.7" />
-                    {/* Rear Axle */}
-                    <line x1="-10" y1="3" x2="10" y2="3" stroke={dl?.rear ? '#f59e0b' : '#334155'} strokeWidth="1.2" />
-                    {/* Rear Wheels */}
-                    <rect x="-12" y="1.5" width="2.5" height="3.5" rx="0.5" fill={dl?.rear ? '#f59e0b' : '#475569'} />
-                    <rect x="9.5" y="1.5" width="2.5" height="3.5" rx="0.5" fill={dl?.rear ? '#f59e0b' : '#475569'} />
-                    {/* Axle Lock Indicator Dots */}
-                    {dl?.front && <circle cx="0" cy="-3" r="1" fill="#fef08a" />}
-                    {dl?.rear && <circle cx="0" cy="3" r="1" fill="#fef08a" />}
-                    <text x="0" y="8" textAnchor="middle" fontSize="3.2" fill={isDiffLocked ? '#f59e0b' : '#475569'} fontWeight="bold" fontFamily="monospace">
-                      {isDiffLocked ? 'DIFF LOCK' : 'DIFF OPEN'}
-                    </text>
-                  </g>
-                )}
-              </g>
-
-              {/* ================= GAUGE 2: SPEEDOMETER ================= */}
-              <g id="speedometer-gauge" transform="translate(310, 0)">
-                {/* Outer Bezel */}
-                <circle cx="70" cy="70" r="58" fill="url(#dialGrad)" stroke={themeStyles.border.includes('amber') ? '#78350f' : '#1e293b'} strokeWidth="3" />
-                <circle cx="70" cy="70" r="56" fill="none" stroke={themeStyles.dialStroke} strokeWidth="1" strokeOpacity="0.4" />
-
-                {/* Dial Ticks & Numbers */}
-                {renderDialTicks(70, 70, 52, maxSpeed, 12, 1)}
-
-                {/* Unit label */}
-                <text x="70" y="94" textAnchor="middle" fontSize="6.5" fill="#94a3b8" fontFamily="monospace" fontWeight="bold">
-                  KM / H
-                </text>
-
-                {/* Rotating Needle */}
-                <g transform={`rotate(${speedAngle} 70 70)`} filter="url(#needleGlow)">
-                  <polygon
-                    points="68.5,82 71.5,82 70.8,24 69.2,24"
-                    fill={themeStyles.needleColor}
-                  />
-                  <line x1="70" y1="24" x2="70" y2="70" stroke={themeStyles.needleGlow} strokeWidth="1" />
-                </g>
-
-                {/* Center Hub */}
-                <circle cx="70" cy="70" r="8" fill={themeStyles.hubColor} stroke={themeStyles.hubBorder} strokeWidth="2" />
-                <circle cx="70" cy="70" r="3" fill={themeStyles.needleColor} />
-
-                {/* Odometer readout */}
-                <rect x="52" y="104" width="36" height="11" rx="2" fill="#020617" stroke="#334155" strokeWidth="0.8" />
-                <text x="70" y="112" textAnchor="middle" fontSize="7" fontWeight="bold" fill="#38bdf8" fontFamily="monospace">
-                  014829
-                </text>
-              </g>
-            </svg>
+            {/* Speedometer */}
+            <ArcGauge value={speedKmh} max={maxSpeed} major={speedMajor} minor={speedMajor / 2} accent={acc} needle={needle}>
+              <text x="80" y="114" textAnchor="middle" fontSize="30" fontWeight="900" fill={C.text} fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace">
+                {speedKmh}
+              </text>
+              <text x="80" y="128" textAnchor="middle" fontSize="10" fontWeight="700" fill={C.muted} fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace">
+                км/ч
+              </text>
+              <text x="80" y="142" textAnchor="middle" fontSize="9" fontWeight="600" fill={C.dim} fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace">
+                ODO {ODOMETER_TOTAL}
+              </text>
+            </ArcGauge>
           </div>
 
-          {/* BOTTOM QUICK CONTROLS BAR (LIGHTS, SIGNALS, IGNITION, RADIAL MENU) */}
-          <div className="w-full flex items-center justify-center gap-2 pt-2.5 border-t border-[#2a2e38]">
-            {/* Left Signal (Q) */}
-            <button
-              type="button"
-              onClick={() => onToggleTurnSignal?.('left')}
-              className={`px-3 py-1.5 rounded-[2px] border text-[10px] font-bold font-mono flex items-center gap-1 transition-all active:scale-98 cursor-pointer ${
-                playerTurnSignal === 'left' || playerTurnSignal === 'hazard'
-                  ? 'bg-[#c68a35]/30 border-[#c68a35] text-[#d99a41] animate-pulse font-extrabold'
-                  : 'bg-[#0b0c0e] border-[#2a2e38] text-[#9ba3af] hover:text-[#f0f3f6]'
-              }`}
-              title="Левый поворотник [Q]"
-            >
-              <ArrowLeft className="w-3.5 h-3.5" />
+          {/* Vital signs */}
+          <div className="grid grid-cols-4 gap-2">
+            <StatBar
+              icon={<Fuel className="w-3 h-3" />}
+              label={isLpgRunning ? 'Газ' : vehicle.hasGBO ? 'Бензин' : 'Топливо'}
+              value={`${fuelLevel}%`}
+              ratio={fuelLevel / 100}
+              color={isLowFuel ? C.amber : C.green}
+              warn={isLowFuel}
+            />
+            <StatBar
+              icon={<Thermometer className="w-3 h-3" />}
+              label="Двигатель"
+              value={`${coolantTemp}°`}
+              ratio={(coolantTemp - 40) / 90}
+              color={isOverheating ? C.red : isColdEngine ? C.blue : C.green}
+              warn={isOverheating}
+            />
+            <StatBar
+              icon={<Droplet className="w-3 h-3" />}
+              label="Масло"
+              value={`${oilPressure}`}
+              ratio={oilPressure / 100}
+              color={isLowOil ? C.red : C.green}
+              warn={isLowOil && isEngineRunning}
+            />
+            <StatBar
+              icon={<Battery className="w-3 h-3" />}
+              label="Бортсеть"
+              value={`${sysVoltageStr} В`}
+              ratio={batteryCharge / 100}
+              color={batteryCharge < 20 ? C.red : C.green}
+              warn={batteryCharge < 20}
+            />
+          </div>
+
+          {/* Warning lamps */}
+          <div className="flex items-center justify-center gap-1.5 flex-wrap">
+            <Telltale
+              icon={<Wrench className="w-3.5 h-3.5" />}
+              label="ДВС"
+              level={isCheckEngine ? (isSeized ? 'red' : 'amber') : 'off'}
+              blink={isBlinkingCheck}
+              title={isSeized ? 'Двигатель заклинил' : isBlinkingCheck ? 'Детонация / пропуски зажигания' : 'Check Engine'}
+            />
+            <Telltale icon={<Battery className="w-3.5 h-3.5" />} label="АКБ" level={isBattLit ? 'red' : 'off'} title="Зарядка аккумулятора" />
+            <Telltale icon={<Cog className="w-3.5 h-3.5" />} label="КПП" level={isTransWarn ? 'red' : 'off'} title="Неисправность трансмиссии" />
+            <Telltale icon={<Droplet className="w-3.5 h-3.5" />} label="Масло" level={isOilLit ? 'red' : 'off'} title="Давление масла" />
+            <Telltale
+              icon={<span className="inline-flex items-center justify-center w-3.5 h-3.5 rounded-full border text-[8px] font-black leading-none" style={{ borderColor: 'currentColor' }}>P</span>}
+              label="Стоянка"
+              level={isParkBrakeLit ? 'red' : 'off'}
+              title="Стояночный тормоз"
+            />
+            {isOverheating && <Telltale icon={<Thermometer className="w-3.5 h-3.5" />} label="Перегрев" level="red" blink title="Перегрев двигателя" />}
+            {isLowFuel && <Telltale icon={<Fuel className="w-3.5 h-3.5" />} label="Топливо" level="amber" blink title="Низкий уровень топлива" />}
+            {isColdEngine && <Telltale icon={<Snowflake className="w-3.5 h-3.5" />} label="Холодный" level="off" title="Двигатель не прогрет" />}
+          </div>
+
+          {/* Controls */}
+          <div className="flex items-center justify-center gap-1.5 flex-wrap pt-3 border-t" style={{ borderColor: C.line }}>
+            <Btn accent={acc} tone="green" active={leftSignalOn} pulse onClick={() => onToggleTurnSignal?.('left')} title="Левый поворотник [Q]">
+              <ArrowLeft className="w-4 h-4" />
               <span>Q</span>
-            </button>
-
-            {/* Hazard (Z) */}
-            <button
-              type="button"
-              onClick={() => onToggleTurnSignal?.('hazard')}
-              className={`px-3 py-1.5 rounded-[2px] border text-[10px] font-bold font-mono flex items-center gap-1 transition-all active:scale-98 cursor-pointer ${
-                playerTurnSignal === 'hazard'
-                  ? 'bg-red-950/40 border-red-500 text-red-300 animate-pulse font-extrabold'
-                  : 'bg-[#0b0c0e] border-[#2a2e38] text-[#9ba3af] hover:text-[#f0f3f6]'
-              }`}
-              title="Аварийка [Z]"
-            >
-              <AlertTriangle className="w-3.5 h-3.5" />
+            </Btn>
+            <Btn accent={acc} tone="red" active={playerTurnSignal === 'hazard'} pulse onClick={() => onToggleTurnSignal?.('hazard')} title="Аварийка [Z]">
+              <AlertTriangle className="w-4 h-4" />
               <span>Z</span>
-            </button>
-
-            {/* Right Signal (E) */}
-            <button
-              type="button"
-              onClick={() => onToggleTurnSignal?.('right')}
-              className={`px-3 py-1.5 rounded-[2px] border text-[10px] font-bold font-mono flex items-center gap-1 transition-all active:scale-98 cursor-pointer ${
-                playerTurnSignal === 'right' || playerTurnSignal === 'hazard'
-                  ? 'bg-[#c68a35]/30 border-[#c68a35] text-[#d99a41] animate-pulse font-extrabold'
-                  : 'bg-[#0b0c0e] border-[#2a2e38] text-[#9ba3af] hover:text-[#f0f3f6]'
-              }`}
-              title="Правый поворотник [E]"
-            >
+            </Btn>
+            <Btn accent={acc} tone="green" active={rightSignalOn} pulse onClick={() => onToggleTurnSignal?.('right')} title="Правый поворотник [E]">
               <span>E</span>
-              <ArrowRight className="w-3.5 h-3.5" />
-            </button>
+              <ArrowRight className="w-4 h-4" />
+            </Btn>
 
-            <div className="h-5 w-px bg-[#2a2e38] mx-1" />
+            <span className="h-6 w-px mx-0.5" style={{ background: C.line }} />
 
-            {/* Headlights Toggle (L) */}
-            <button
-              type="button"
+            <Btn
+              accent={acc}
+              tone={playerHeadlightMode === 'high' ? 'acc' : 'green'}
+              active={playerHeadlightMode !== 'off'}
               onClick={onToggleHeadlights}
-              className={`px-3 py-1.5 rounded-[2px] border text-[10px] font-bold font-mono flex items-center gap-1 transition-all active:scale-98 cursor-pointer ${
-                playerHeadlightMode === 'high'
-                  ? 'bg-[#c68a35]/40 border-[#c68a35] text-[#f0f3f6] font-extrabold shadow-[0_0_8px_rgba(198,138,53,0.3)]'
-                  : playerHeadlightMode === 'low'
-                  ? 'bg-[#c68a35]/20 border-[#c68a35]/60 text-[#d99a41] font-extrabold shadow-[0_0_8px_rgba(198,138,53,0.2)]'
-                  : 'bg-[#0b0c0e] border-[#2a2e38] text-[#9ba3af] hover:text-[#f0f3f6]'
-              }`}
-              title="Фары: Ближний / Дальний / Выкл [L]"
+              title="Фары: ближний / дальний / выкл [L]"
             >
-              <Lightbulb className="w-3.5 h-3.5" />
-              <span>L</span>
-            </button>
+              <Lightbulb className="w-4 h-4" />
+              <span>L {playerHeadlightMode === 'high' ? 'дальний' : playerHeadlightMode === 'low' ? 'ближний' : ''}</span>
+            </Btn>
 
-            {/* Water Truck PTO / Pump Drive Button (P) */}
-            {(vehicle?.type === 'truck_water' || vehicle?.type === 'fire_engine') && (
-              <button
-                type="button"
+            {(vehicle.type === 'truck_water' || vehicle.type === 'fire_engine') && (
+              <Btn
+                accent={acc}
+                tone={vehicle.isPtoActive && isEngineRunning ? 'acc' : 'amber'}
+                active={!!vehicle.isPtoActive}
+                pulse={!!(vehicle.isPtoActive && isEngineRunning)}
                 onClick={() => {
-                  if (vehicle) {
-                    vehicle.isPtoActive = !vehicle.isPtoActive;
-                    sound.playButtonPress();
-                  }
+                  vehicle.isPtoActive = !vehicle.isPtoActive;
+                  sound.playButtonPress();
                 }}
-                className={`px-3 py-1.5 rounded-xl border text-[10px] font-bold font-mono flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer ${
-                  vehicle.isPtoActive && isEngineRunning
-                    ? 'bg-blue-600/30 border-blue-400 text-blue-300 shadow-[0_0_10px_rgba(59,130,246,0.3)] animate-pulse font-extrabold'
+                title="КОМ (коробка отбора мощности / привод насоса) [P]"
+              >
+                <Gauge className="w-4 h-4" />
+                <span>
+                  КОМ [P]:{' '}
+                  {vehicle.isPtoActive && isEngineRunning
+                    ? `${(3.8 + Math.min(1.0, Math.max(0, ((vehicle.engineState?.engineRPM || 800) - 750) / 1850)) * 3.8).toFixed(1)} бар`
                     : vehicle.isPtoActive
-                    ? 'bg-amber-500/20 border-amber-500/40 text-amber-300 font-extrabold'
-                    : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-white'
-                }`}
-                title="КОМ (Коробка Отбора Мощности / Привод Насоса) [P]"
-              >
-                <Gauge className="w-3.5 h-3.5 text-blue-400" />
-                <span>
-                  КОМ [P]: {
-                    vehicle.isPtoActive && isEngineRunning
-                      ? `${(3.8 + Math.min(1.0, Math.max(0, ((vehicle.engineState?.engineRPM || 800) - 750) / 1850)) * 3.8).toFixed(1)} БАР`
-                      : (vehicle.isPtoActive ? 'НЕТ ДВС' : 'САМОТЁК')
-                  }
+                    ? 'нет ДВС'
+                    : 'самотёк'}
                 </span>
-              </button>
+              </Btn>
             )}
 
-            {/* Water Truck Washing Nozzles Button (G) */}
-            {vehicle?.type === 'truck_water' && (
-              <button
-                type="button"
+            {vehicle.type === 'truck_water' && (
+              <Btn
+                accent={acc}
+                tone={vehicle.isPtoActive && isEngineRunning ? 'acc' : 'amber'}
+                active={!!vehicle.isWashingNozzlesActive}
+                pulse={!!(vehicle.isWashingNozzlesActive && vehicle.isPtoActive && isEngineRunning)}
                 onClick={() => {
-                  if (vehicle) {
-                    vehicle.isWashingNozzlesActive = !vehicle.isWashingNozzlesActive;
-                    sound.playButtonPress();
-                  }
+                  vehicle.isWashingNozzlesActive = !vehicle.isWashingNozzlesActive;
+                  sound.playButtonPress();
                 }}
-                className={`px-3 py-1.5 rounded-xl border text-[10px] font-bold font-mono flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer ${
-                  vehicle.isWashingNozzlesActive
-                    ? vehicle.isPtoActive && isEngineRunning
-                      ? 'bg-cyan-500/30 border-cyan-400 text-cyan-300 animate-pulse shadow-[0_0_10px_rgba(6,182,212,0.2)] font-extrabold'
-                      : 'bg-amber-500/20 border-amber-500/40 text-amber-300 font-extrabold'
-                    : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-white'
-                }`}
-                title="Поливомоечные сопла: Смывать мусор [G / N]"
+                title="Поливомоечные сопла: смывать мусор [G / N]"
               >
-                <Droplet className="w-3.5 h-3.5 text-cyan-400" />
-                <span>СОПЛА [G]: {vehicle.isWashingNozzlesActive ? (vehicle.isPtoActive && isEngineRunning ? 'ВКЛ' : 'САМОТЁК') : 'ВЫКЛ'}</span>
-              </button>
+                <Droplet className="w-4 h-4" />
+                <span>Сопла [G]: {vehicle.isWashingNozzlesActive ? (vehicle.isPtoActive && isEngineRunning ? 'вкл' : 'самотёк') : 'выкл'}</span>
+              </Btn>
             )}
 
-            {/* MTZ Tractor Split Brakes Latch Toggle (B) */}
             {carType.startsWith('tractor_') && (
-              <button
-                type="button"
-                onClick={() => {
-                  if (vehicle) {
-                    const nextLatch = vehicle.tractorBrakeLatch === false;
-                    vehicle.tractorBrakeLatch = nextLatch;
+              <>
+                <Btn
+                  accent={acc}
+                  tone={vehicle.tractorBrakeLatch !== false ? 'green' : 'amber'}
+                  active
+                  onClick={() => {
+                    vehicle.tractorBrakeLatch = vehicle.tractorBrakeLatch === false;
                     sound.playButtonPress();
-                  }
-                }}
-                className={`px-3 py-1.5 rounded-xl border text-[10px] font-bold font-mono flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer ${
-                  vehicle.tractorBrakeLatch !== false
-                    ? 'bg-emerald-600/30 border-emerald-500/50 text-emerald-300 shadow-[0_0_8px_rgba(16,185,129,0.2)] font-extrabold'
-                    : 'bg-amber-500/20 border-amber-500/40 text-amber-300 font-extrabold'
-                }`}
-                title="Блокировка спаренных педалей тормоза МТЗ [B]"
-              >
-                {vehicle.tractorBrakeLatch !== false ? (
-                  <Lock className="w-3.5 h-3.5 text-emerald-400" />
-                ) : (
-                  <Unlock className="w-3.5 h-3.5 text-amber-400" />
-                )}
-                <span>
-                  ТОРМОЗА [B]: {vehicle.tractorBrakeLatch !== false ? 'СБЛОКИР.' : 'РАЗДЕЛЬН.'}
-                </span>
-              </button>
+                  }}
+                  title="Блокировка спаренных педалей тормоза МТЗ [B]"
+                >
+                  {vehicle.tractorBrakeLatch !== false ? <Lock className="w-4 h-4" /> : <Unlock className="w-4 h-4" />}
+                  <span>Тормоза [B]: {vehicle.tractorBrakeLatch !== false ? 'сблокир.' : 'раздельн.'}</span>
+                </Btn>
+                <div className="flex items-center gap-1 h-8 px-2 rounded-md border text-[11px] font-bold font-mono" style={{ background: C.surface, borderColor: C.line, color: C.muted }}>
+                  <span className="text-[9px] uppercase mr-0.5">Педали</span>
+                  <span
+                    className="px-1.5 rounded transition"
+                    style={{ background: (vehicle as any)?._brakeLeftVal > 0.1 ? C.red : '#1d222d', color: (vehicle as any)?._brakeLeftVal > 0.1 ? '#fff' : C.dim }}
+                  >
+                    Л [,]
+                  </span>
+                  <span
+                    className="px-1.5 rounded transition"
+                    style={{ background: (vehicle as any)?._brakeRightVal > 0.1 ? C.red : '#1d222d', color: (vehicle as any)?._brakeRightVal > 0.1 ? '#fff' : C.dim }}
+                  >
+                    П [.]
+                  </span>
+                </div>
+              </>
             )}
 
-            {/* MTZ Live Brake Pedal Indicators */}
-            {carType.startsWith('tractor_') && (
-              <div className="flex items-center gap-1 bg-slate-950/60 border border-slate-800/80 px-2.5 py-1.5 rounded-xl text-[10px] font-bold font-mono text-slate-300">
-                <span className="text-slate-500 text-[8px] mr-1">ПЕДАЛИ:</span>
-                <span className={`px-1.5 py-0.5 rounded transition-all ${((vehicle as any)?._brakeLeftVal > 0.1) ? 'bg-rose-600 text-white font-extrabold scale-105' : 'bg-slate-900 text-slate-500'}`}>
-                  Л [,]
-                </span>
-                <span className={`px-1.5 py-0.5 rounded transition-all ${((vehicle as any)?._brakeRightVal > 0.1) ? 'bg-rose-600 text-white font-extrabold scale-105' : 'bg-slate-900 text-slate-500'}`}>
-                  П [.]
-                </span>
-              </div>
-            )}
-
-            {/* DIFFERENTIAL LOCK AXLE CONTROLS [V] */}
             {diffCaps.supported && (
-              <div className="flex items-center gap-1 bg-slate-900/90 border border-slate-800 rounded-xl px-2 py-1 shadow-inner">
-                {/* Main Differential Cycle Button */}
+              <div className="flex items-center gap-1 rounded-md border pl-1 pr-1 h-8" style={{ background: C.surface, borderColor: C.line }}>
                 <button
                   type="button"
                   onClick={handleCycleDiffLock}
-                  className={`px-2.5 py-1 rounded-lg text-[10px] font-mono font-bold flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer ${
-                    isDiffLocked
-                      ? 'bg-amber-500/25 border border-amber-400 text-amber-300 shadow-[0_0_10px_rgba(245,158,11,0.25)] font-extrabold'
-                      : 'bg-slate-950/80 border border-slate-800 text-slate-400 hover:text-white'
-                  }`}
                   title="Циклическое переключение блокировок дифференциала [V]"
+                  className="inline-flex items-center gap-1.5 h-6 px-2 rounded text-[12px] font-mono font-bold cursor-pointer transition active:scale-95"
+                  style={{ color: isDiffLocked ? C.amber : C.muted, background: isDiffLocked ? `${C.amber}26` : 'transparent' }}
                 >
-                  <ShieldAlert className={`w-3.5 h-3.5 ${isDiffLocked ? 'text-amber-400 animate-pulse' : 'text-slate-500'}`} />
-                  <span>ДИФФ [V]:</span>
-                  <span className={`font-black ${isDiffLocked ? 'text-amber-300' : 'text-slate-500'}`}>
-                    {diffLockDesc}
-                  </span>
+                  <ShieldAlert className={`w-4 h-4 ${isDiffLocked ? 'animate-pulse' : ''}`} />
+                  <span>Дифф [V]</span>
+                  <span className="font-black">{diffLockDesc}</span>
                 </button>
-
-                {/* Per-Axle Direct Toggles */}
-                <div className="flex items-center gap-0.5 ml-1 border-l border-slate-800 pl-1.5">
-                  {diffCaps.hasCenter && (
-                    <button
-                      type="button"
-                      onClick={() => handleToggleAxle('center')}
-                      className={`px-1.5 py-0.5 rounded text-[9px] font-mono font-bold transition active:scale-90 cursor-pointer ${
-                        dl?.center
-                          ? 'bg-amber-500 text-slate-950 font-black shadow-sm'
-                          : 'bg-slate-950 text-slate-500 hover:text-slate-300 border border-slate-800'
-                      }`}
-                      title="Межосевая блокировка (МОБ) 50:50"
-                    >
-                      МОБ
-                    </button>
-                  )}
-                  {diffCaps.hasRear && (
-                    <button
-                      type="button"
-                      onClick={() => handleToggleAxle('rear')}
-                      className={`px-1.5 py-0.5 rounded text-[9px] font-mono font-bold transition active:scale-90 cursor-pointer ${
-                        dl?.rear
-                          ? 'bg-amber-500 text-slate-950 font-black shadow-sm'
-                          : 'bg-slate-950 text-slate-500 hover:text-slate-300 border border-slate-800'
-                      }`}
-                      title="Межколесная блокировка задней оси (МКБ-З)"
-                    >
-                      МКБ-З
-                    </button>
-                  )}
-                  {diffCaps.hasFront && (
-                    <button
-                      type="button"
-                      onClick={() => handleToggleAxle('front')}
-                      className={`px-1.5 py-0.5 rounded text-[9px] font-mono font-bold transition active:scale-90 cursor-pointer ${
-                        dl?.front
-                          ? 'bg-amber-500 text-slate-950 font-black shadow-sm'
-                          : 'bg-slate-950 text-slate-500 hover:text-slate-300 border border-slate-800'
-                      }`}
-                      title="Межколесная блокировка передней оси (МКБ-П)"
-                    >
-                      МКБ-П
-                    </button>
-                  )}
-                </div>
+                {([
+                  { axle: 'center' as const, has: diffCaps.hasCenter, label: 'МОБ', title: 'Межосевая блокировка (МОБ) 50:50', on: !!dl?.center },
+                  { axle: 'rear' as const, has: diffCaps.hasRear, label: 'МКБ-З', title: 'Межколесная блокировка задней оси (МКБ-З)', on: !!dl?.rear },
+                  { axle: 'front' as const, has: diffCaps.hasFront, label: 'МКБ-П', title: 'Межколесная блокировка передней оси (МКБ-П)', on: !!dl?.front }
+                ]).filter((a) => a.has).map((a) => (
+                  <button
+                    key={a.axle}
+                    type="button"
+                    onClick={() => handleToggleAxle(a.axle)}
+                    title={a.title}
+                    className="h-6 px-1.5 rounded text-[11px] font-mono font-bold cursor-pointer transition active:scale-90 border"
+                    style={
+                      a.on
+                        ? { background: C.amber, color: '#0d0f13', borderColor: C.amber }
+                        : { background: 'transparent', color: C.muted, borderColor: C.line }
+                    }
+                  >
+                    {a.label}
+                  </button>
+                ))}
               </div>
             )}
 
-            {/* Mechanical Ignition Slot */}
+            {/* Mechanical ignition lock */}
             {(() => {
               const t = vehicle.type || '';
-              const requiresMechKey = 
-                t === 'classic_compact' || 
-                t === 'retro_bubble' || 
-                t === 'sedan_classic' || 
-                t === 'wagon_classic' || 
+              const requiresMechKey =
+                t === 'classic_compact' ||
+                t === 'retro_bubble' ||
+                t === 'sedan_classic' ||
+                t === 'wagon_classic' ||
                 t === 'micro_car' ||
                 t === 'muscle_classic' ||
                 t === 'suv_classic_box' ||
                 t === 'offroad_hardcore' ||
-                t.startsWith('tractor_') || 
+                t.startsWith('tractor_') ||
                 t.startsWith('truck_') ||
                 t === 'van_cargo_old' ||
                 t === 'cement_mixer' ||
@@ -1689,48 +1178,45 @@ export const SpeedometerHUD: React.FC<SpeedometerHUDProps> = ({
               const keyName = isGoldKey ? 'Золотой' : 'Железный';
 
               return (
-                <div className="flex items-center gap-1.5 bg-slate-900 border border-slate-800 rounded-xl px-2.5 py-1.5 text-[10px] font-mono shrink-0">
-                  <span className="text-slate-500 font-bold">ЗАМОК:</span>
+                <div className="flex items-center gap-1.5 h-8 px-2.5 rounded-md border text-[12px] font-mono shrink-0" style={{ background: C.surface, borderColor: C.line }}>
+                  <span className="text-[10px] font-bold uppercase" style={{ color: C.muted }}>Замок</span>
                   {isInserted ? (
                     <button
                       type="button"
                       onClick={onTakeOutKey}
-                      className="flex items-center gap-1 text-amber-400 hover:text-amber-300 font-bold cursor-pointer transition active:scale-95 bg-amber-500/10 hover:bg-amber-500/20 px-1.5 py-0.5 rounded-md border border-amber-500/30"
-                      title="Кликните, чтобы вынуть ключ из зажигания"
+                      title="Вынуть ключ из зажигания"
+                      className="flex items-center gap-1 h-6 px-1.5 rounded border font-bold cursor-pointer transition active:scale-95"
+                      style={{ color: C.amber, borderColor: `${C.amber}66`, background: `${C.amber}1a` }}
                     >
-                      <Key className={`w-3 h-3 ${isGoldKey ? 'text-amber-400' : 'text-slate-300'}`} />
+                      <Key className="w-3.5 h-3.5" style={{ color: isGoldKey ? C.amber : C.text }} />
                       <span>{keyName}</span>
-                      <span className="text-[9px] text-slate-400 font-normal underline">(Вынуть)</span>
+                      <span className="text-[10px] font-normal underline" style={{ color: C.muted }}>вынуть</span>
                     </button>
                   ) : (
-                    <div className="flex items-center gap-1">
-                      <span className="text-rose-400 font-bold bg-rose-500/10 px-1.5 py-0.5 rounded border border-rose-500/30">
-                        Щель пуста
-                      </span>
+                    <div className="flex items-center gap-1.5">
+                      <span className="px-1.5 rounded border font-bold" style={{ color: C.red, borderColor: `${C.red}66`, background: `${C.red}1a` }}>Пусто</span>
                       {(() => {
                         const neededKeyType = getVehicleRequiredKeyType(vehicle);
                         if (!neededKeyType) return null;
-                        const hasThisKey = hasKeysInInventory.includes(neededKeyType);
-                        if (hasThisKey) {
+                        if (hasKeysInInventory.includes(neededKeyType)) {
                           return (
                             <button
                               type="button"
                               onClick={() => onInsertKey?.(neededKeyType)}
-                              className="flex items-center gap-1 text-emerald-400 hover:text-emerald-300 font-black cursor-pointer transition active:scale-95 bg-emerald-500/20 hover:bg-emerald-500/30 px-2 py-0.5 rounded-md border border-emerald-500/50 shadow-[0_0_8px_rgba(16,185,129,0.2)] animate-pulse"
-                              title="Кликните, чтобы вставить подходящий ключ"
+                              title="Вставить подходящий ключ"
+                              className="flex items-center gap-1 h-6 px-2 rounded border font-black cursor-pointer transition active:scale-95 animate-pulse"
+                              style={{ color: C.green, borderColor: `${C.green}88`, background: `${C.green}26` }}
                             >
-                              <Key className="w-3 h-3 text-emerald-400" />
+                              <Key className="w-3.5 h-3.5" />
                               <span>Вставить</span>
                             </button>
                           );
-                        } else {
-                          const isGold = neededKeyType === 'gold';
-                          return (
-                            <span className="text-slate-500 text-[9px] flex items-center gap-1">
-                              (Нужен {isGold ? 'Золотой' : 'Железный'} <Key className="w-2.5 h-2.5 inline" />)
-                            </span>
-                          );
                         }
+                        return (
+                          <span className="text-[10px] flex items-center gap-1" style={{ color: C.muted }}>
+                            нужен {neededKeyType === 'gold' ? 'золотой' : 'железный'} <Key className="w-3 h-3" />
+                          </span>
+                        );
                       })()}
                     </div>
                   )}
@@ -1738,12 +1224,12 @@ export const SpeedometerHUD: React.FC<SpeedometerHUDProps> = ({
               );
             })()}
 
-            {/* Electronic Taximeter Unit */}
+            {/* Taximeter */}
             {(() => {
               const taxi = TaxiFleetSystem.getInstance();
               const order = taxi.activeOrder;
               if (!order && !taxi.profile.isShiftActive) return null;
-              
+
               if (order) {
                 const currentFare = Math.round(
                   order.baseFare +
@@ -1751,61 +1237,40 @@ export const SpeedometerHUD: React.FC<SpeedometerHUDProps> = ({
                   order.paidWaitingFare
                 );
                 return (
-                  <div className="flex items-center gap-2 bg-amber-950/90 border border-amber-500/70 rounded-xl px-2.5 py-1 text-[10px] font-mono shrink-0 shadow-[0_0_12px_rgba(245,158,11,0.25)]">
-                    <div className="flex items-center gap-1 text-amber-400 font-bold">
-                      <Car className="w-3.5 h-3.5" />
-                      <span className="uppercase tracking-tight hidden sm:inline">ТАКСОМЕТР:</span>
-                    </div>
-                    <span className="text-amber-300 font-black text-xs font-mono">{currentFare} ₽</span>
-                    <span className="text-amber-500/80">|</span>
-                    <span className="text-zinc-300">
-                      {order.stage === 'driving_to_pickup' && 'ПОДАЧА'}
-                      {order.stage === 'waiting_for_passenger' && `ОЖИДАНИЕ (${Math.floor(order.waitingSeconds)}с)`}
-                      {order.stage === 'passenger_boarding' && 'ПОСАДКА'}
+                  <div className="flex items-center gap-2 h-8 px-2.5 rounded-md border text-[12px] font-mono shrink-0" style={{ background: `${C.amber}1f`, borderColor: `${C.amber}99`, color: C.amber }}>
+                    <Car className="w-4 h-4" />
+                    <span className="hidden sm:inline font-bold uppercase">Таксометр</span>
+                    <span className="font-black text-[14px]">{currentFare} ₽</span>
+                    <span style={{ color: `${C.amber}88` }}>|</span>
+                    <span style={{ color: C.text }}>
+                      {order.stage === 'driving_to_pickup' && 'подача'}
+                      {order.stage === 'waiting_for_passenger' && `ожидание (${Math.floor(order.waitingSeconds)} с)`}
+                      {order.stage === 'passenger_boarding' && 'посадка'}
                       {order.stage === 'in_transit' && `${(order.distanceDrivenMeters / 1000).toFixed(1)} км`}
-                      {order.stage === 'passenger_alighting' && 'ВЫСАДКА'}
+                      {order.stage === 'passenger_alighting' && 'высадка'}
                     </span>
                   </div>
                 );
               }
 
               return (
-                <div className="flex items-center gap-1.5 bg-slate-900 border border-emerald-500/40 rounded-xl px-2.5 py-1 text-[10px] font-mono shrink-0">
-                  <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                  <span className="text-emerald-400 font-bold hidden sm:inline">ТАКСИ: НА ЛИНИИ</span>
-                  <span className="text-emerald-400 font-bold sm:hidden">ТАКСИ</span>
+                <div className="flex items-center gap-1.5 h-8 px-2.5 rounded-md border text-[12px] font-bold font-mono shrink-0" style={{ background: C.surface, borderColor: `${C.green}66`, color: C.green }}>
+                  <span className="w-2 h-2 rounded-full animate-pulse" style={{ background: C.green }} />
+                  <span className="hidden sm:inline">Такси: на линии</span>
+                  <span className="sm:hidden">Такси</span>
                 </div>
               );
             })()}
 
-            {/* Engine Start / Stop (J) */}
-            <button
-              type="button"
-              onClick={onToggleEngine}
-              className={`px-3.5 py-1.5 rounded-xl border text-[10px] font-bold font-mono flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer ${
-                isEngineRunning
-                  ? 'bg-emerald-950/85 border-emerald-500 text-emerald-300 shadow-[0_0_10px_rgba(16,185,129,0.25)] font-extrabold'
-                  : isStalled
-                  ? 'bg-amber-950/85 border-amber-500 text-amber-300 animate-pulse font-extrabold'
-                  : 'bg-rose-950/85 border-rose-600 text-rose-300'
-              }`}
-              title="Зажигание: Запустить / Заглушить двигатель [J]"
-            >
-              <Power className="w-3.5 h-3.5" />
-              <span>{isEngineRunning ? 'СТАРТ' : 'ЗАПУСК'}</span>
-            </button>
+            <span className="h-6 w-px mx-0.5" style={{ background: C.line }} />
 
-            {/* Radial Menu Trigger Button */}
+            {toggleEngineBtn}
+
             {onOpenRadialMenu && (
-              <button
-                type="button"
-                onClick={onOpenRadialMenu}
-                className="px-3 py-1.5 rounded-xl border border-slate-800 bg-slate-900 text-slate-300 hover:text-white text-[10px] font-bold font-mono flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer"
-                title="Панель приборов автомобиля"
-              >
-                <Gauge className="w-3.5 h-3.5 text-emerald-400" />
-                <span className="hidden sm:inline">ПРИБОРЫ</span>
-              </button>
+              <Btn accent={acc} onClick={onOpenRadialMenu} title="Меню автомобиля">
+                <Gauge className="w-4 h-4" style={{ color: acc }} />
+                <span className="hidden sm:inline">Меню</span>
+              </Btn>
             )}
           </div>
         </div>
