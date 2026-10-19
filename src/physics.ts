@@ -7533,15 +7533,17 @@ export function updateVehiclePhysics(
                                     vehicle.type === 'roller_compact_sidewalk' || 
                                     vehicle.type === 'roller_pneumatic';
 
+    const isPerformanceCar = ['sports', 'supercar', 'muscle', 'muscle_classic', 'coupe_gt', 'hatch_hot', 'sedan_classic'].includes(cfg.type);
     const steerRateMultiplier = isCounterSteering ? 2.6 : (isFightingCaster ? 0.65 : 1.0);
-    let steerRate = cfg.turnSpeed * (isArticulatedMachinery ? 0.90 : 0.40) * steerRateMultiplier; 
+    let steerRate = cfg.turnSpeed * (isArticulatedMachinery ? 0.90 : (isPerformanceCar ? 1.05 : 0.65)) * steerRateMultiplier; 
     if (currentSpeedKmh < 10.0 && !isArticulatedMachinery) {
-      // Extremely heavy steering at standstill for standard cars
-      const standstillFactor = 0.4 + (currentSpeedKmh / 10.0) * 0.6;
+      // Standstill steering weight (hydraulic/electric power steering keeps sports cars responsive)
+      const standstillFactor = isPerformanceCar ? 0.75 : (0.4 + (currentSpeedKmh / 10.0) * 0.6);
       steerRate *= standstillFactor;
     } else if (!isCounterSteering && !isArticulatedMachinery) {
-      // At high speeds, drivers steer smoothly and caster fights back
-      steerRate *= Math.max(0.4, 1.0 - speedRatio * 0.65);
+      // Natural high-speed steering resistance and hydraulic caster centering
+      const speedDampFactor = isPerformanceCar ? 0.35 : 0.65;
+      steerRate *= Math.max(0.55, 1.0 - speedRatio * speedDampFactor);
     }
 
     if (hasAnalogSteer) {
@@ -8761,75 +8763,59 @@ export function updateVehiclePhysics(
       }
     } else {
       vehicle.brakeLightsOn = isHandbraking;
-      if (isHandbraking) {
-        // Handbrake: strong deceleration and wheel lock
-        let hBrakeForce = cfg.brakingForce * speedScaleFactor * 0.9;
-        
-        // Dilute handbrake force if towing a trailer
-        hBrakeForce *= massRatio;
+      // Natural rolling resistance, cold transmission viscous drag (-30°C frost) and aerodynamic drag (v^2)
+      // Note: Handbrake strictly applies physical braking torque to the REAR contact patches (fBrakeRL/fBrakeRR),
+      // where it authentically locks the rear tires and reduces lateral grip.
+      // It does NOT apply artificial linear deceleration to engineAccel!
+      const vAbs = Math.abs(vehicle.speed);
+      const tireRollingMult = eng?.tireRollingMult ?? 1.0;
+      let rollingResistance = (3.0 + vAbs * 0.008) * tireRollingMult;
+      
+      // Cold gear oil / ATF viscosity drag (< 15°C)
+      const transTemp = eng?.transmissionTemp ?? 20;
+      if (transTemp < 15) {
+        const coldViscousDrag = Math.min(18.0, (15 - transTemp) * 0.55);
+        rollingResistance += coldViscousDrag;
+      }
 
+      if (extraDrag > 0) {
+        rollingResistance += extraDrag * (0.55 + 0.45 * tireRollingMult);
+      }
+      
+      let aeroCoeff = 0.000045;
+      if (['truck_box', 'truck_dump', 'truck_zil_dump', 'truck_semi', 'truck_tanker', 'truck_water', 'truck_flatbed', 'truck_covered', 'cement_mixer', 'garbage_truck', 'bus', 'delivery_truck', 'truck_tow', 'fire_engine', 'fire_ladder', 'fire_rescue', 'pickup_heavy', 'truck_armored'].includes(cfg.type)) {
+        aeroCoeff = 0.000085;
+      } else if (cfg.type.startsWith('tractor_') || ['suv', 'suv_luxury', 'offroad_hardcore', 'suv_classic_box', 'van', 'van_camper', 'van_cargo_old'].includes(cfg.type)) {
+        aeroCoeff = 0.000065;
+      } else if (['supercar', 'sports', 'coupe_gt', 'hatch_hot', 'moto_sport'].includes(cfg.type)) {
+        aeroCoeff = 0.000032;
+      }
+      
+      const aeroDrag = aeroCoeff * vAbs * vAbs;
+      const totalDrag = rollingResistance + aeroDrag;
+
+      const isEngineActive = eng ? (eng.engineRunning || eng.isDieselRunaway) : false;
+      const activeThrottle = isEngineActive ? throttle : 0;
+
+      // Parking brake holds stationary vehicle (parking on hill or standstill)
+      if (isHandbraking && vAbs * PX_S_TO_SPEED_KMH < 2.0 && activeThrottle === 0) {
+        vehicle.speed = 0;
+        engineAccel = 0;
+      } else if (vAbs > 1) {
         const safeDt = Math.max(0.0001, dt);
         if (vehicle.speed > 0) {
-          // Limit handbrake force to prevent speed crossing zero
-          const maxHBForce = Math.max(0, vehicle.speed / safeDt + engineAccel);
-          const effectiveHBForce = Math.min(hBrakeForce, maxHBForce);
-          engineAccel -= effectiveHBForce;
-        } else if (vehicle.speed < 0) {
-          // Limit handbrake force to prevent speed crossing zero
-          const maxHBForce = Math.max(0, -vehicle.speed / safeDt - engineAccel);
-          const effectiveHBForce = Math.min(hBrakeForce, maxHBForce);
-          engineAccel += effectiveHBForce;
+          // Limit drag deceleration to prevent overshooting zero
+          const maxDrag = Math.max(0, vehicle.speed / safeDt + engineAccel);
+          const effectiveDrag = Math.min(totalDrag, maxDrag);
+          engineAccel -= effectiveDrag;
         } else {
-          vehicle.speed = 0;
+          // Limit drag deceleration to prevent overshooting zero
+          const maxDrag = Math.max(0, -vehicle.speed / safeDt - engineAccel);
+          const effectiveDrag = Math.min(totalDrag, maxDrag);
+          engineAccel += effectiveDrag;
         }
-      } else {
-        // Natural rolling resistance, cold transmission viscous drag (-30°C frost) and aerodynamic drag (v^2)
-        const vAbs = Math.abs(vehicle.speed);
-        const tireRollingMult = eng?.tireRollingMult ?? 1.0;
-        let rollingResistance = (3.0 + vAbs * 0.008) * tireRollingMult;
-        
-        // Cold gear oil / ATF viscosity drag (< 15°C)
-        const transTemp = eng?.transmissionTemp ?? 20;
-        if (transTemp < 15) {
-          const coldViscousDrag = Math.min(18.0, (15 - transTemp) * 0.55);
-          rollingResistance += coldViscousDrag;
-        }
-
-        if (extraDrag > 0) {
-          rollingResistance += extraDrag * (0.55 + 0.45 * tireRollingMult);
-        }
-        
-        let aeroCoeff = 0.000045;
-        if (['truck_box', 'truck_dump', 'truck_zil_dump', 'truck_semi', 'truck_tanker', 'truck_water', 'truck_flatbed', 'truck_covered', 'cement_mixer', 'garbage_truck', 'bus', 'delivery_truck', 'truck_tow', 'fire_engine', 'fire_ladder', 'fire_rescue', 'pickup_heavy', 'truck_armored'].includes(cfg.type)) {
-          aeroCoeff = 0.000085;
-        } else if (cfg.type.startsWith('tractor_') || ['suv', 'suv_luxury', 'offroad_hardcore', 'suv_classic_box', 'van', 'van_camper', 'van_cargo_old'].includes(cfg.type)) {
-          aeroCoeff = 0.000065;
-        } else if (['supercar', 'sports', 'coupe_gt', 'hatch_hot', 'moto_sport'].includes(cfg.type)) {
-          aeroCoeff = 0.000032;
-        }
-        
-        const aeroDrag = aeroCoeff * vAbs * vAbs;
-        const totalDrag = rollingResistance + aeroDrag;
-
-        const isEngineActive = eng ? (eng.engineRunning || eng.isDieselRunaway) : false;
-        const activeThrottle = isEngineActive ? throttle : 0;
-
-        if (vAbs > 1) {
-          const safeDt = Math.max(0.0001, dt);
-          if (vehicle.speed > 0) {
-            // Limit drag deceleration to prevent overshooting zero
-            const maxDrag = Math.max(0, vehicle.speed / safeDt + engineAccel);
-            const effectiveDrag = Math.min(totalDrag, maxDrag);
-            engineAccel -= effectiveDrag;
-          } else {
-            // Limit drag deceleration to prevent overshooting zero
-            const maxDrag = Math.max(0, -vehicle.speed / safeDt - engineAccel);
-            const effectiveDrag = Math.min(totalDrag, maxDrag);
-            engineAccel += effectiveDrag;
-          }
-        } else if (activeThrottle === 0 && (!eng || eng.transmissionType !== 'AUTO'|| eng.autoGearMode === 'P'|| eng.autoGearMode === 'N' || !isEngineActive)) {
-          vehicle.speed = 0;
-        }
+      } else if (activeThrottle === 0 && (!eng || eng.transmissionType !== 'AUTO'|| eng.autoGearMode === 'P'|| eng.autoGearMode === 'N' || !isEngineActive)) {
+        vehicle.speed = 0;
       }
     }
 
@@ -9065,9 +9051,31 @@ export function updateVehiclePhysics(
 
     if (driveType === 'RWD') {
       const halfDrive = totalPropulsionForce * 0.5;
+      const isPerformanceRwd = ['sports', 'supercar', 'muscle', 'muscle_classic', 'coupe_gt', 'hatch_hot', 'sedan_classic'].includes(cfg.type);
+
       if (isRearLocked || isSoloMoto) {
         fDriveRL = halfDrive;
         fDriveRR = halfDrive;
+      } else if (isPerformanceRwd) {
+        // Limited-Slip Differential (LSD / 1.5-way clutch pack / viscous differential):
+        // Under acceleration, clutch pack locks the two axle shafts together (locking coefficient 0.75).
+        // Prevents open-diff single-wheel torque evaporation and ensures both rear wheels
+        // spin up together under full throttle for controllable power oversteer.
+        const lsdLockCoeff = 0.75;
+        const maxTracRL = muRL * Fz_RL * (cfg.grip || 1.0);
+        const maxTracRR = muRR * Fz_RR * (cfg.grip || 1.0);
+        const totalAxleTraction = maxTracRL + maxTracRR;
+
+        if (Math.abs(totalPropulsionForce) > totalAxleTraction) {
+          // Engine exceeds combined axle grip: both wheels break into power wheelspin
+          fDriveRL = halfDrive;
+          fDriveRR = halfDrive;
+        } else {
+          // Distribute with LSD torque bias ratio (TBR ~ 3:1)
+          const diffTrac = maxTracRR - maxTracRL;
+          fDriveRL = halfDrive - diffTrac * lsdLockCoeff * 0.5;
+          fDriveRR = halfDrive + diffTrac * lsdLockCoeff * 0.5;
+        }
       } else {
         // Open differential: torque bias limited by wheel with lesser grip
         const maxTracRL = muRL * Fz_RL * (cfg.grip || 1.0);
@@ -9200,7 +9208,7 @@ export function updateVehiclePhysics(
         if (Math.abs(netDemand) > Fmax) {
           // Longitudinal traction broken (wheelspin under power or brake skid)
           isSlipping = true;
-          slipRatio = Math.sign(netDemand) * Math.min(2.0, Math.abs(netDemand) / Fmax);
+          slipRatio = Math.sign(netDemand) * Math.min(3.0, Math.abs(netDemand) / Fmax);
           fx = Math.sign(netDemand) * Fmax * 0.88; // dynamic kinetic friction
         } else {
           fx = netDemand;
@@ -9208,7 +9216,12 @@ export function updateVehiclePhysics(
         }
 
         // Available lateral cornering capacity per Kamm's friction circle: Fx^2 + Fy^2 <= Fmax^2
-        const fLatLimit = Math.sqrt(Math.max(0, Fmax * Fmax - fx * fx));
+        // In physical combined slip (Pacejka/brush model), severe longitudinal wheelspin (|slipRatio| > 1.0)
+        // dramatically derates the tire's lateral stiffness and peak cornering capacity:
+        // normalized lateral capacity = sqrt(max(0, 1 - (fx/Fmax)^2)) / sqrt(1 + (excess_spin * 1.8)^2)
+        const excessWheelspin = isSlipping ? Math.max(0, Math.abs(slipRatio) - 0.75) : 0;
+        const spinDerate = excessWheelspin > 0 ? 1.0 / Math.sqrt(1.0 + excessWheelspin * excessWheelspin * 3.5) : 1.0;
+        const fLatLimit = Math.sqrt(Math.max(0, Fmax * Fmax - fx * fx)) * spinDerate;
 
         // Smooth slip angle calculation with speed-dependent regularization
         // Below 25 px/s (~9 km/h), regularize the denominator to prevent high-frequency chatter
@@ -9236,8 +9249,10 @@ export function updateVehiclePhysics(
         const fyStatic = fLatLimit * Math.sin((absAlpha / alphaPeak) * (Math.PI * 0.5)) * Math.sign(slipAngle);
         // Kinetic slide regime: tire has broken traction into a drift or plow
         const fyKinetic = fLatLimit * 0.84 * Math.sign(slipAngle);
-        fy = (fyStatic * (1.0 - easedBlend) + fyKinetic * easedBlend) * speedGripFactor;
-        if (easedBlend > 0.5) {
+        // Under excess wheelspin, tire transitions immediately to kinetic sliding
+        const effectiveBlend = excessWheelspin > 0.4 ? Math.max(easedBlend, Math.min(1.0, excessWheelspin)) : easedBlend;
+        fy = (fyStatic * (1.0 - effectiveBlend) + fyKinetic * effectiveBlend) * speedGripFactor;
+        if (effectiveBlend > 0.5) {
           isSlipping = true;
         }
       }
@@ -9370,10 +9385,14 @@ export function updateVehiclePhysics(
     const isEngineActiveForEuler = eng ? (eng.engineRunning || eng.isDieselRunaway) : false;
     const activeThrottleEuler = isEngineActiveForEuler ? throttle : 0;
 
-    // Physical tire yaw damping (guarantees asymptotic stability and eliminates discrete-step shimmy/shaking)
+    // Physical chassis yaw damping:
+    // Replaces artificial ESP damper with authentic aerodynamic rotational drag and chassis torsional damping.
+    // True tire yaw damping is already generated naturally by the contact patches (-Lr * fby_RL, etc.).
+    // Gentle numerical damping (1.4 - 2.2 1/s) eliminates high-frequency integration chatter
+    // while allowing full, natural body rotation and drift angles.
     const vehSpeedKmh = Math.abs(vehicle.speed) * PX_S_TO_SPEED_KMH;
-    const yawDampRate = 9.5 + Math.min(18.0, vehSpeedKmh * 0.22);
-    curYaw *= Math.max(0.65, 1.0 - yawDampRate * subDt);
+    const yawDampRate = 1.4 + Math.min(1.2, vehSpeedKmh * 0.015);
+    curYaw *= Math.max(0.85, 1.0 - yawDampRate * subDt);
 
     // Stationary steering scrub resistance (preventing on-spot rotation when turning steering wheel at standstill)
     if (vehSpeedKmh < 3.0 && activeThrottleEuler === 0) {
