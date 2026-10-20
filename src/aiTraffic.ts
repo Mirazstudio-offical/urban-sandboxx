@@ -2268,9 +2268,7 @@ export function updateAITraffic(
   player?: any,
   propGrid?: SpatialGrid<StreetProp>
 ) {
-  if (world.gameMode === 'freeroam') {
-    return;
-  }
+  // Note: freeroam traffic is gated by the master switch in App.tsx (aiTrafficOnRef), not here.
   let totalSpeed = 0;
   let movingCars = 0;
   let deadlockedCars = 0;
@@ -4785,9 +4783,7 @@ export function updatePedestrians(
   propGrid?: SpatialGrid<StreetProp>,
   player?: any
 ) {
-  if (world.gameMode === 'freeroam') {
-    return;
-  }
+  // Note: freeroam pedestrians are gated by the master switch in App.tsx (aiTrafficOnRef), not here.
   const isRaining = world.weather === 'rain'|| world.weather === 'storm';
   const UMBRELLA_COLORS = ['#ef4444', '#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899', '#06b6d4'];
 

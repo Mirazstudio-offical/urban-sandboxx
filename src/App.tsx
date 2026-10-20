@@ -538,10 +538,29 @@ export default function App() {
   const handleSetAiTraffic = (on: boolean) => {
     aiTrafficOnRef.current = on;
     setIsAiTrafficOn(on);
+    const w = worldRef.current;
+    if (w && w.gameMode === 'freeroam' && !on) {
+      // Freeroam: switching traffic off removes dynamic AI cars and pedestrians (they respawn when it is switched on again)
+      w.pedestrians = [];
+      w.vehicles = w.vehicles.filter((v) =>
+        v.isPlayerControlled || (v as any).isRemoteControlled || v.isParked || v.isDerelict ||
+        (v as any).playerOwned || (v as any).isSpawnedByPlayer || v.ownerId === 'player' ||
+        Boolean(v.keyId) || v.id === 'evac_ambulance_special'
+      );
+      setTrafficCount(w.vehicles.length);
+    }
     const pl = playerRef.current;
     if (pl) {
       addPlayerNotification(pl, on ? 'Трафик города ВКЛЮЧЁН' : 'Трафик города ОСТАНОВЛЕН', on ? 'info' : 'warning');
     }
+  };
+
+  // Default traffic state per game mode: career = always on (no toggle in the radial menu),
+  // freeroam = off by default and switched on manually from the radial menu.
+  const applyTrafficDefaultForMode = (mode: 'career' | 'freeroam') => {
+    const on = mode !== 'freeroam';
+    aiTrafficOnRef.current = on;
+    setIsAiTrafficOn(on);
   };
 
   // Live vehicle configurator (color + powertrain) from the radial menu tree
@@ -1403,6 +1422,7 @@ export default function App() {
     }
 
     world.gameMode = save.mode || 'career';
+    applyTrafficDefaultForMode(world.gameMode);
     if (world.gameMode === 'freeroam') {
       setIsTimeAutoCycling(false);
       isTimeAutoCyclingRef.current = false;
@@ -1441,6 +1461,7 @@ export default function App() {
     resetSessionStats();
 
     world.gameMode = mode;
+    applyTrafficDefaultForMode(mode);
 
     inputRef.current.forward = false;
     inputRef.current.backward = false;

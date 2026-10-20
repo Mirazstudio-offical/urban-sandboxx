@@ -107,8 +107,6 @@ type PanelId = 'board' | 'config' | 'world' | 'traffic' | null;
 /* Wheel geometry (identical to radial-menu-v4.html): 6 equal sectors  */
 /* of 60 deg, a gap of constant width between them, viewBox 640        */
 /* ------------------------------------------------------------------ */
-const N = 6;
-const SPAN = 360 / N;
 const GAP = 7;
 const RI = 118;
 const RO = 262;
@@ -119,15 +117,15 @@ const pt = (r: number, a: number) => {
   return `${(320 + r * Math.sin(rad)).toFixed(1)} ${(320 - r * Math.cos(rad)).toFixed(1)}`;
 };
 const dl = (r: number) => (Math.asin(GAP / 2 / r) * 180) / Math.PI;
-const arc = (i: number) => {
-  const c = i * SPAN;
-  const h = SPAN / 2;
+const arc = (i: number, span: number) => {
+  const c = i * span;
+  const h = span / 2;
   const o = dl(RO);
   const n = dl(RI);
   return `M${pt(RO, c - h + o)}A${RO} ${RO} 0 0 1 ${pt(RO, c + h - o)}L${pt(RI, c + h - n)}A${RI} ${RI} 0 0 0 ${pt(RI, c - h + n)}Z`;
 };
-const push = (i: number): React.CSSProperties => {
-  const a = (i * SPAN * Math.PI) / 180;
+const push = (i: number, span: number): React.CSSProperties => {
+  const a = (i * span * Math.PI) / 180;
   return { ['--x' as string]: (9 * Math.sin(a)).toFixed(1) + 'px', ['--y' as string]: (-9 * Math.cos(a)).toFixed(1) + 'px' };
 };
 
@@ -311,15 +309,30 @@ const RadialStage: React.FC<RadialMenuProps & { player: Player; world: GameWorld
   useLayoutEffect(() => attachStageFit(() => wrapRef.current, () => gmRef.current), []);
   useEffect(() => { const t = window.setTimeout(() => setPop(false), 500); return () => window.clearTimeout(t); }, []);
 
-  /* Clockwise from the top: 1 Приборка · 2 Авто · 3 Окружение · 4 Спавн · 5 Починить · 6 Трафик */
-  const SLOT = useMemo(() => ([
-    { id: 'board', n: 'Приборка', desc: 'Борт-панели авто', Icon: Gauge, panel: 'board' as const },
-    { id: 'config', n: 'Авто', desc: 'Конфигуратор борта', Icon: SlidersHorizontal, panel: 'config' as const },
-    { id: 'world', n: 'Окружение', desc: 'Погода и время', Icon: CloudSun, panel: 'world' as const },
-    { id: 'spawn', n: 'Спавн', desc: 'Создать автомобиль', Icon: MapPin, panel: null },
-    { id: 'repair', n: 'Починить', desc: 'Вся техника в мире', Icon: Wrench, panel: null },
-    { id: 'traffic', n: 'Трафик', desc: 'Движение города', Icon: TrafficCone, panel: 'traffic' as const }
-  ]), []);
+  /* Traffic is always on in career (no toggle); it can be switched on/off only in freeroam */
+  const hasTrafficSlot = world.gameMode === 'freeroam';
+
+  /* Clockwise from the top: 1 Приборка · 2 Авто · 3 Окружение · 4 Спавн · 5 Починить · 6 Трафик (freeroam only) */
+  const SLOT = useMemo(() => {
+    const slots = [
+      { id: 'board', n: 'Приборка', desc: 'Борт-панели авто', Icon: Gauge, panel: 'board' as const },
+      { id: 'config', n: 'Авто', desc: 'Конфигуратор борта', Icon: SlidersHorizontal, panel: 'config' as const },
+      { id: 'world', n: 'Окружение', desc: 'Погода и время', Icon: CloudSun, panel: 'world' as const },
+      { id: 'spawn', n: 'Спавн', desc: 'Создать автомобиль', Icon: MapPin, panel: null },
+      { id: 'repair', n: 'Починить', desc: 'Вся техника в мире', Icon: Wrench, panel: null }
+    ] as { id: string; n: string; desc: string; Icon: LucideIcon; panel: PanelId }[];
+    if (hasTrafficSlot) {
+      slots.push({ id: 'traffic', n: 'Трафик', desc: 'Движение города', Icon: TrafficCone, panel: 'traffic' });
+    }
+    return slots;
+  }, [hasTrafficSlot]);
+  const N = SLOT.length;
+  const SPAN = 360 / N;
+
+  /* if the traffic panel is open but the slot disappeared (mode changed), close it */
+  useEffect(() => {
+    if (!hasTrafficSlot && panel === 'traffic') setPanel(null);
+  }, [hasTrafficSlot, panel]);
 
   const showPanel = (id: PanelId) => setPanel((prev) => (prev === id ? null : id));
 
@@ -344,7 +357,7 @@ const RadialStage: React.FC<RadialMenuProps & { player: Player; world: GameWorld
         return;
       }
       const d = ['1', '2', '3', '4', '5', '6'].indexOf(e.key);
-      if (d >= 0) { e.preventDefault(); activate(d); return; }
+      if (d >= 0 && d < N) { e.preventDefault(); activate(d); return; }
       if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
         e.preventDefault();
         setHover((h) => ((h < 0 ? (e.key === 'ArrowRight' ? -1 : 0) : h) + (e.key === 'ArrowRight' ? 1 : -1) + N) % N);
@@ -357,7 +370,7 @@ const RadialStage: React.FC<RadialMenuProps & { player: Player; world: GameWorld
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [panel, hover]);
+  }, [panel, hover, N]);
 
   /* live telemetry poll while a data panel is open */
   useEffect(() => {
@@ -469,8 +482,8 @@ const RadialStage: React.FC<RadialMenuProps & { player: Player; world: GameWorld
                 <circle cx="320" cy="320" r="292" fill="none" stroke="rgba(224,171,69,.2)" strokeDasharray="2 9" />
                 <g>
                   {SLOT.map((s, i) => (
-                    <g key={s.id} className={'sec' + (hover === i ? ' on' : '') + (activeIdx === i ? ' act' : '')} style={push(i)}>
-                      <path d={arc(i)} />
+                    <g key={s.id} className={'sec' + (hover === i ? ' on' : '') + (activeIdx === i ? ' act' : '')} style={push(i, SPAN)}>
+                      <path d={arc(i, SPAN)} />
                     </g>
                   ))}
                 </g>
@@ -482,7 +495,7 @@ const RadialStage: React.FC<RadialMenuProps & { player: Player; world: GameWorld
                     <div
                       key={s.id}
                       className={'lb' + (hover === i ? ' on' : '') + (activeIdx === i ? ' act' : '')}
-                      style={{ left: 320 + RL * Math.sin(a), top: 320 - RL * Math.cos(a), ...push(i) }}
+                      style={{ left: 320 + RL * Math.sin(a), top: 320 - RL * Math.cos(a), ...push(i, SPAN) }}
                     >
                       <s.Icon width={38} height={38} strokeWidth={1.7} />
                       <span className="cn nm">{s.n}</span>
