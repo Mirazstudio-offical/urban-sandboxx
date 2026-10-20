@@ -309,30 +309,33 @@ const RadialStage: React.FC<RadialMenuProps & { player: Player; world: GameWorld
   useLayoutEffect(() => attachStageFit(() => wrapRef.current, () => gmRef.current), []);
   useEffect(() => { const t = window.setTimeout(() => setPop(false), 500); return () => window.clearTimeout(t); }, []);
 
-  /* Traffic is always on in career (no toggle); it can be switched on/off only in freeroam */
-  const hasTrafficSlot = world.gameMode === 'freeroam';
+  /* Career is a realistic simulator: only the dashboard and car spawn are available there.
+     Vehicle configurator, environment, repair-all and traffic toggle are freeroam (sandbox) only. */
+  const isSandbox = world.gameMode === 'freeroam';
 
-  /* Clockwise from the top: 1 Приборка · 2 Авто · 3 Окружение · 4 Спавн · 5 Починить · 6 Трафик (freeroam only) */
+  /* Clockwise from the top. Freeroam: 1 Приборка · 2 Авто · 3 Окружение · 4 Спавн · 5 Починить · 6 Трафик. Career: 1 Приборка · 2 Спавн */
   const SLOT = useMemo(() => {
     const slots = [
-      { id: 'board', n: 'Приборка', desc: 'Борт-панели авто', Icon: Gauge, panel: 'board' as const },
-      { id: 'config', n: 'Авто', desc: 'Конфигуратор борта', Icon: SlidersHorizontal, panel: 'config' as const },
-      { id: 'world', n: 'Окружение', desc: 'Погода и время', Icon: CloudSun, panel: 'world' as const },
+      { id: 'board', n: 'Приборка', desc: 'Борт-панели авто', Icon: Gauge, panel: 'board' },
+      ...(isSandbox ? [
+        { id: 'config', n: 'Авто', desc: 'Конфигуратор борта', Icon: SlidersHorizontal, panel: 'config' },
+        { id: 'world', n: 'Окружение', desc: 'Погода и время', Icon: CloudSun, panel: 'world' }
+      ] : []),
       { id: 'spawn', n: 'Спавн', desc: 'Создать автомобиль', Icon: MapPin, panel: null },
-      { id: 'repair', n: 'Починить', desc: 'Вся техника в мире', Icon: Wrench, panel: null }
+      ...(isSandbox ? [
+        { id: 'repair', n: 'Починить', desc: 'Вся техника в мире', Icon: Wrench, panel: null },
+        { id: 'traffic', n: 'Трафик', desc: 'Движение города', Icon: TrafficCone, panel: 'traffic' }
+      ] : [])
     ] as { id: string; n: string; desc: string; Icon: LucideIcon; panel: PanelId }[];
-    if (hasTrafficSlot) {
-      slots.push({ id: 'traffic', n: 'Трафик', desc: 'Движение города', Icon: TrafficCone, panel: 'traffic' });
-    }
     return slots;
-  }, [hasTrafficSlot]);
+  }, [isSandbox]);
   const N = SLOT.length;
   const SPAN = 360 / N;
 
-  /* if the traffic panel is open but the slot disappeared (mode changed), close it */
+  /* close a panel whose slot is not available in the current mode */
   useEffect(() => {
-    if (!hasTrafficSlot && panel === 'traffic') setPanel(null);
-  }, [hasTrafficSlot, panel]);
+    if (panel && !SLOT.some((s) => s.panel === panel)) setPanel(null);
+  }, [SLOT, panel]);
 
   const showPanel = (id: PanelId) => setPanel((prev) => (prev === id ? null : id));
 
@@ -346,7 +349,7 @@ const RadialStage: React.FC<RadialMenuProps & { player: Player; world: GameWorld
     setHover(i);
   };
 
-  /* Escape closes the open panel first, then the wheel; digits 1..6 activate sectors; arrows walk the wheel */
+  /* Escape closes the open panel first, then the wheel; digits 1..N activate sectors; arrows walk the wheel */
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const el = e.target as HTMLElement | null;
@@ -364,7 +367,7 @@ const RadialStage: React.FC<RadialMenuProps & { player: Player; world: GameWorld
         return;
       }
       if (e.key === 'ArrowUp') { e.preventDefault(); setHover(0); return; }
-      if (e.key === 'ArrowDown') { e.preventDefault(); setHover(3); return; }
+      if (e.key === 'ArrowDown') { e.preventDefault(); setHover(Math.min(3, N - 1)); return; }
       if (e.key === 'Enter' && hover >= 0) { e.preventDefault(); activate(hover); }
     };
     window.addEventListener('keydown', onKey);
