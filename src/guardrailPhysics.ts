@@ -184,8 +184,16 @@ export class GuardrailPhysics {
     // MANDATORY SOLID POSITION CORRECTION (Clamps vehicle outside rail / buffer)
     // Guarantees zero clipping or passing through guardrails or sand barrels!
     // -----------------------------------------------------------------------
-    veh.x += pushNx * overlap;
-    veh.y += pushNy * overlap;
+    const pushDist = Math.min(4.5, overlap);
+    veh.x += pushNx * pushDist;
+    veh.y += pushNy * pushDist;
+
+    // Dissipate inward velocity into the barrier to prevent bouncing oscillations
+    const vIntoRail = (veh.vx || 0) * pushNx + (veh.vy || 0) * pushNy;
+    if (vIntoRail < 0) {
+      veh.vx = (veh.vx || 0) - pushNx * vIntoRail;
+      veh.vy = (veh.vy || 0) - pushNy * vIntoRail;
+    }
 
     // Check if collision is near terminal ends (Yellow Sand Barrels / Attenuators)
     const isStartTerminal = proj <= (rail.startAttenuatorLength || 32);

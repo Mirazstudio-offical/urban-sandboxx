@@ -119,11 +119,7 @@ function createInternalDeformSolver(
     }
 
     if (deform) {
-      const [exX, exY] = deform(lx, ly);
-      // Локальная IDW-деформация уже несёт вмятину. Глобальную «волну» от
-      // агрегатов оставляем только как слабый фон, иначе кузов складывался
-      // вдвое сильнее узлов и выглядел желейным.
-      return [exX + dx * 0.25, exY + dy * 0.25];
+      return deform(lx, ly);
     }
     return [lx + dx, ly + dy];
   };
@@ -1080,7 +1076,8 @@ export function renderBuckledHoodOverlay(
   car: Vehicle,
   bodyPoly: { x: number; y: number }[],
   halfL: number,
-  halfW: number
+  halfW: number,
+  deform?: (x: number, y: number) => [number, number]
 ): void {
   const dmg = car.damage;
   if (!dmg || dmg.hoodDetached) return;
@@ -1088,30 +1085,40 @@ export function renderBuckledHoodOverlay(
   const hoodAmount = dmg.hoodRaisedAmount || (dmg.hoodBuckled ? 0.5 : 0);
   if (hoodAmount <= 0) return;
 
-  const fc = dmg.frontCrumple || 0;
+  const fc = deform ? 0 : (dmg.frontCrumple || 0);
   const hoodApexX = halfL * 0.15 - fc * 0.5;
   const hoodWidth = halfW * 1.35;
   const liftY = Math.min(6, hoodAmount * 5);
+
+  const tr = deform || ((x: number, y: number): [number, number] => [x, y]);
+  const [p1x, p1y] = tr(halfL - fc - 2, -hoodWidth * 0.4);
+  const [p2x, p2y] = tr(hoodApexX, 0);
+  const [p3x, p3y] = tr(halfL - fc - 2, hoodWidth * 0.4);
+  const [p4x, p4y] = tr(hoodApexX - 3, 0);
 
   ctx.save();
 
   // Dark cast shadow under the buckled fold line
   ctx.fillStyle = 'rgba(15, 23, 42, 0.55)';
   ctx.beginPath();
-  ctx.moveTo(halfL - fc - 2, -hoodWidth * 0.4);
-  ctx.lineTo(hoodApexX, 0);
-  ctx.lineTo(halfL - fc - 2, hoodWidth * 0.4);
-  ctx.lineTo(hoodApexX - 3, 0);
+  ctx.moveTo(p1x, p1y);
+  ctx.lineTo(p2x, p2y);
+  ctx.lineTo(p3x, p3y);
+  ctx.lineTo(p4x, p4y);
   ctx.closePath();
   ctx.fill();
 
   // Raised V-shaped fold ridge with bright specular highlight
+  const [r1x, r1y] = tr(halfL - fc - 1, -hoodWidth * 0.38 - liftY * 0.2);
+  const [r2x, r2y] = tr(hoodApexX, -liftY);
+  const [r3x, r3y] = tr(halfL - fc - 1, hoodWidth * 0.38 + liftY * 0.2);
+
   ctx.strokeStyle = `rgba(255, 255, 255, ${Math.min(0.85, 0.35 + hoodAmount * 0.5)})`;
   ctx.lineWidth = 1.5;
   ctx.beginPath();
-  ctx.moveTo(halfL - fc - 1, -hoodWidth * 0.38 - liftY * 0.2);
-  ctx.lineTo(hoodApexX, -liftY);
-  ctx.lineTo(halfL - fc - 1, hoodWidth * 0.38 + liftY * 0.2);
+  ctx.moveTo(r1x, r1y);
+  ctx.lineTo(r2x, r2y);
+  ctx.lineTo(r3x, r3y);
   ctx.stroke();
 
   ctx.restore();
@@ -1243,7 +1250,8 @@ export function renderSaggingBumpers(
   car: Vehicle,
   bodyPoly: { x: number; y: number }[],
   halfL: number,
-  halfW: number
+  halfW: number,
+  deform?: (x: number, y: number) => [number, number]
 ): void {
   const dmg = car.damage;
   if (!dmg) return;
@@ -1253,43 +1261,59 @@ export function renderSaggingBumpers(
   const rSagL = dmg.rearBumperSagLeft || 0;
   const rSagR = dmg.rearBumperSagRight || 0;
 
+  const tr = deform || ((x: number, y: number): [number, number] => [x, y]);
+
   // Front Bumper Sagging (hanging from surviving clip)
   if ((sagL > 0 || sagR > 0) && !dmg.frontBumperDetached) {
-    const fc = dmg.frontCrumple || 0;
+    const fc = deform ? 0 : (dmg.frontCrumple || 0);
     const bumperX = halfL * 0.88 - fc * 0.8;
     const swingL = sagL > 0 ? (Math.sin(Date.now() * 0.012 + car.x) * 2.0 * sagL - sagL * 4.0) : 0;
     const swingR = sagR > 0 ? (Math.cos(Date.now() * 0.012 + car.y) * 2.0 * sagR + sagR * 4.0) : 0;
 
     ctx.save();
-    // Bumper bar hanging obliquely
     ctx.fillStyle = car.color;
     ctx.strokeStyle = '#0f172a';
     ctx.lineWidth = 1.2;
 
+    const [p1x, p1y] = tr(bumperX - (sagL > 0 ? 3.5 : 0), -halfW * 0.95 + swingL);
+    const [p2x, p2y] = tr(bumperX + 2.5, -halfW * 0.5);
+    const [p3x, p3y] = tr(bumperX + 2.5, halfW * 0.5);
+    const [p4x, p4y] = tr(bumperX - (sagR > 0 ? 3.5 : 0), halfW * 0.95 + swingR);
+    const [p5x, p5y] = tr(bumperX - 2.5 - (sagR > 0 ? 3.5 : 0), halfW * 0.90 + swingR);
+    const [p6x, p6y] = tr(bumperX, halfW * 0.45);
+    const [p7x, p7y] = tr(bumperX, -halfW * 0.45);
+    const [p8x, p8y] = tr(bumperX - 2.5 - (sagL > 0 ? 3.5 : 0), -halfW * 0.90 + swingL);
+
     ctx.beginPath();
-    ctx.moveTo(bumperX - (sagL > 0 ? 3.5 : 0), -halfW * 0.95 + swingL);
-    ctx.lineTo(bumperX + 2.5, -halfW * 0.5);
-    ctx.lineTo(bumperX + 2.5, halfW * 0.5);
-    ctx.lineTo(bumperX - (sagR > 0 ? 3.5 : 0), halfW * 0.95 + swingR);
-    ctx.lineTo(bumperX - 2.5 - (sagR > 0 ? 3.5 : 0), halfW * 0.90 + swingR);
-    ctx.lineTo(bumperX, halfW * 0.45);
-    ctx.lineTo(bumperX, -halfW * 0.45);
-    ctx.lineTo(bumperX - 2.5 - (sagL > 0 ? 3.5 : 0), -halfW * 0.90 + swingL);
+    ctx.moveTo(p1x, p1y);
+    ctx.lineTo(p2x, p2y);
+    ctx.lineTo(p3x, p3y);
+    ctx.lineTo(p4x, p4y);
+    ctx.lineTo(p5x, p5y);
+    ctx.lineTo(p6x, p6y);
+    ctx.lineTo(p7x, p7y);
+    ctx.lineTo(p8x, p8y);
     ctx.closePath();
     ctx.fill();
     ctx.stroke();
 
     // Severed clip fracture marks
     ctx.fillStyle = '#e2e8f0';
-    if (sagL > 0) ctx.fillRect(bumperX - 4, -halfW * 0.85 + swingL, 1.8, 1.8);
-    if (sagR > 0) ctx.fillRect(bumperX - 4, halfW * 0.85 + swingR, 1.8, 1.8);
+    if (sagL > 0) {
+      const [c1x, c1y] = tr(bumperX - 4, -halfW * 0.85 + swingL);
+      ctx.fillRect(c1x, c1y, 1.8, 1.8);
+    }
+    if (sagR > 0) {
+      const [c2x, c2y] = tr(bumperX - 4, halfW * 0.85 + swingR);
+      ctx.fillRect(c2x, c2y, 1.8, 1.8);
+    }
 
     ctx.restore();
   }
 
   // Rear Bumper Sagging
   if ((rSagL > 0 || rSagR > 0) && !dmg.rearBumperDetached) {
-    const rc = dmg.rearCrumple || 0;
+    const rc = deform ? 0 : (dmg.rearCrumple || 0);
     const rBumperX = -halfL * 0.88 + rc * 0.8;
     const swingL = rSagL > 0 ? (Math.sin(Date.now() * 0.012 + car.x) * 2.0 * rSagL - rSagL * 4.0) : 0;
     const swingR = rSagR > 0 ? (Math.cos(Date.now() * 0.012 + car.y) * 2.0 * rSagR + rSagR * 4.0) : 0;
@@ -1299,15 +1323,24 @@ export function renderSaggingBumpers(
     ctx.strokeStyle = '#0f172a';
     ctx.lineWidth = 1.2;
 
+    const [p1x, p1y] = tr(rBumperX + (rSagL > 0 ? 3.5 : 0), -halfW * 0.95 + swingL);
+    const [p2x, p2y] = tr(rBumperX - 2.5, -halfW * 0.5);
+    const [p3x, p3y] = tr(rBumperX - 2.5, halfW * 0.5);
+    const [p4x, p4y] = tr(rBumperX + (rSagR > 0 ? 3.5 : 0), halfW * 0.95 + swingR);
+    const [p5x, p5y] = tr(rBumperX + 2.5 + (rSagR > 0 ? 3.5 : 0), halfW * 0.90 + swingR);
+    const [p6x, p6y] = tr(rBumperX, halfW * 0.45);
+    const [p7x, p7y] = tr(rBumperX, -halfW * 0.45);
+    const [p8x, p8y] = tr(rBumperX + 2.5 + (rSagL > 0 ? 3.5 : 0), -halfW * 0.90 + swingL);
+
     ctx.beginPath();
-    ctx.moveTo(rBumperX + (rSagL > 0 ? 3.5 : 0), -halfW * 0.95 + swingL);
-    ctx.lineTo(rBumperX - 2.5, -halfW * 0.5);
-    ctx.lineTo(rBumperX - 2.5, halfW * 0.5);
-    ctx.lineTo(rBumperX + (rSagR > 0 ? 3.5 : 0), halfW * 0.95 + swingR);
-    ctx.lineTo(rBumperX + 2.5 + (rSagR > 0 ? 3.5 : 0), halfW * 0.90 + swingR);
-    ctx.lineTo(rBumperX, halfW * 0.45);
-    ctx.lineTo(rBumperX, -halfW * 0.45);
-    ctx.lineTo(rBumperX + 2.5 + (rSagL > 0 ? 3.5 : 0), -halfW * 0.90 + swingL);
+    ctx.moveTo(p1x, p1y);
+    ctx.lineTo(p2x, p2y);
+    ctx.lineTo(p3x, p3y);
+    ctx.lineTo(p4x, p4y);
+    ctx.lineTo(p5x, p5y);
+    ctx.lineTo(p6x, p6y);
+    ctx.lineTo(p7x, p7y);
+    ctx.lineTo(p8x, p8y);
     ctx.closePath();
     ctx.fill();
     ctx.stroke();

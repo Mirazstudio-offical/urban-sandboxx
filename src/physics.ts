@@ -1252,10 +1252,7 @@ export function checkVehicleVehicleCollision(carA: Vehicle, carB: Vehicle): Vehi
   const relVx = (carB.vx || 0) - (carA.vx || 0);
   const relVy = (carB.vy || 0) - (carA.vy || 0);
   const relSpeed = Math.hypot(relVx, relVy);
-  const hasSubstantialSpeed = relSpeed > 15; // > ~3.5 km/h
-  // Approach unit vector: direction carA plunges into carB
-  const appX = hasSubstantialSpeed ? -relVx / relSpeed : 0;
-  const appY = hasSubstantialSpeed ? -relVy / relSpeed : 0;
+  const cdDist = Math.hypot(cdx, cdy) || 1;
 
   let collided = false;
   let finalNormalX = 0;
@@ -1282,7 +1279,11 @@ export function checkVehicleVehicleCollision(carA: Vehicle, carB: Vehicle): Vehi
       let bestImpactAxisX = 0;
       let bestImpactAxisY = 0;
       let bestImpactOverlap = 0;
-      let maxApproachAlignment = -1;
+      let maxClosingSpeed = -999999;
+      let bestStaticScore = 999999;
+      let bestStaticAxisX = 0;
+      let bestStaticAxisY = 0;
+      let bestStaticOverlap = 0;
 
       for (const axis of candidateAxes) {
         let minA = 999999, maxA = -999999;
@@ -1313,32 +1314,44 @@ export function checkVehicleVehicleCollision(carA: Vehicle, carB: Vehicle): Vehi
           orientedY = -orientedY;
         }
 
-        // Standard minimal penetration axis (for static / resting contact)
+        // Physical closing speed along this oriented axis:
+        // v_close = (vA - vB) . n. Positive means A is closing into B along this axis.
+        const closingSpeed = -relVx * orientedX - relVy * orientedY;
+        if (closingSpeed > maxClosingSpeed) {
+          maxClosingSpeed = closingSpeed;
+          bestImpactAxisX = orientedX;
+          bestImpactAxisY = orientedY;
+          bestImpactOverlap = overlap;
+        }
+
+        // Static geometric score (prevents picking tangential axis with false low overlap when squeezing):
+        const centerAlignment = Math.max(0.12, (cdx * orientedX + cdy * orientedY) / cdDist);
+        const staticScore = overlap / centerAlignment;
+        if (staticScore < bestStaticScore) {
+          bestStaticScore = staticScore;
+          bestStaticAxisX = orientedX;
+          bestStaticAxisY = orientedY;
+          bestStaticOverlap = overlap;
+        }
+
         if (overlap < minOverlap) {
           minOverlap = overlap;
           minAxisX = orientedX;
           minAxisY = orientedY;
         }
-
-        // Physical impact axis: does this normal oppose relative approach motion?
-        if (hasSubstantialSpeed) {
-          const alignment = orientedX * appX + orientedY * appY;
-          if (alignment > 0.20 && alignment > maxApproachAlignment) {
-            maxApproachAlignment = alignment;
-            bestImpactAxisX = orientedX;
-            bestImpactAxisY = orientedY;
-            bestImpactOverlap = overlap;
-          }
-        }
       }
 
       if (obbCollided) {
         collided = true;
-        // If moving at speed and an impact plane aligned with the collision vector was identified:
-        if (hasSubstantialSpeed && maxApproachAlignment > 0.20) {
+        // If vehicles are actively moving toward each other along an impact face (e.g. truck T-boning car):
+        if (relSpeed > 10 && maxClosingSpeed > 5 && bestImpactOverlap > 0) {
           finalNormalX = bestImpactAxisX;
           finalNormalY = bestImpactAxisY;
           finalOverlap = Math.max(finalOverlap, bestImpactOverlap);
+        } else if (bestStaticOverlap > 0) {
+          finalNormalX = bestStaticAxisX;
+          finalNormalY = bestStaticAxisY;
+          finalOverlap = Math.max(finalOverlap, bestStaticOverlap);
         } else if (minOverlap < 999999) {
           finalNormalX = minAxisX;
           finalNormalY = minAxisY;
@@ -2206,32 +2219,6 @@ export function applyVehicleDamageAndDeformation(
   if (!Number.isFinite(crush.depthPx)) crush.depthPx = 0;
   if (!Number.isFinite(crush.totalCapPx)) crush.totalCapPx = 0;
   if (!Number.isFinite(crush.zoneLengthPx)) crush.zoneLengthPx = 0;
-
-  // Единая модель удара для ЛЮБОГО препятствия. Если машина ещё не в смятии (пропы, поезда,
-  // ограждения, слабые удары), ход начинается здесь. Тип препятствия не учитывается: дальше ход
-  // считается силой–смятием по массе и жёсткости (crushModel ниже), а не мгновенно и не по кривой.
-  if (!car.activeCrumple) {
-    const dist = Math.hypot(contactX - car.x, contactY - car.y) || 1;
-    const outX = (contactX - car.x) / dist;
-    const outY = (contactY - car.y) / dist;
-    const dur = 0.12 + Math.min(0.20, Math.max(0, impactSpeed) / 600);
-    car.activeCrumple = {
-      timer: dur,
-      totalDuration: dur,
-      normalX: -outX,
-      normalY: -outY,
-      initialSpeed: car.speed,
-      initialNormalSpeed: Math.max(0, impactSpeed),
-      initialTangentialSpeed: Math.max(0, scrapeSpeed),
-      reboundSpeed: 0,
-      contactX,
-      contactY,
-      preserveVelocity: false,
-      isNarrowImpact,
-      contactWidthPx: contactWidthPx ?? (isNarrowImpact ? 14 : car.width),
-      targetCrushPx: 0
-    };
-  }
 
   // Целевая глубина вмятины для многокадрового сжатия softbody (см. stepNodeBeamContinuousContact).
   // This is an absolute stroke from the intact body, not the stroke of only
@@ -10613,9 +10600,10 @@ export function updateVehiclePhysics(
       const ratioSelf = protectOther ? 1 : m2 / totalMass;
       const ratioOther = protectOther ? 0 : m1 / totalMass;
 
-      // 1. Position Separation: resolve penetration smoothly and proportionally without artificial 3.2px clamp
-      // Using Baumgarte position resolution factor (0.75 of overlap)
-      const sepMag = Math.max(0, col.overlap - 0.1) * 0.75;
+      // 1. Position Separation: resolve penetration smoothly with Baumgarte stabilization (max 3.2px per tick)
+      // Clamping prevents sudden 20px teleportations into open space when pressed against obstacles.
+      const rawSep = Math.max(0, col.overlap - 0.1) * 0.65;
+      const sepMag = Math.min(3.2, rawSep);
       vehicle.x -= col.normalX * sepMag * ratioSelf;
       vehicle.y -= col.normalY * sepMag * ratioSelf;
       other.x += col.normalX * sepMag * ratioOther;
@@ -10706,8 +10694,9 @@ export function updateVehiclePhysics(
 
         const scrapeSpeed = vTanSpeed;
 
-        // Active crumple zone for softbody continuous contact (любой контакт, без порога скорости)
-        {
+        // Active crumple zone for softbody continuous contact
+        const contactW = Math.max(12, Math.min(vehicle.width, other.width) * 0.85);
+        if (impactSpeed > 24) {
           const crumpleDuration = 0.12 + Math.min(0.20, impactSpeed / 600);
           if (!vehicle.activeCrumple) {
             vehicle.activeCrumple = {
@@ -10721,7 +10710,7 @@ export function updateVehiclePhysics(
               contactY: col.contactY,
               preserveVelocity: true,
               isNarrowImpact: false,
-              contactWidthPx: vehicle.width * 0.75
+              contactWidthPx: contactW
             };
           }
           if (!other.activeCrumple) {
@@ -10736,14 +10725,14 @@ export function updateVehiclePhysics(
               contactY: col.contactY,
               preserveVelocity: true,
               isNarrowImpact: false,
-              contactWidthPx: other.width * 0.75
+              contactWidthPx: contactW
             };
           }
         }
 
-        // Deform node-beam & body panels
-        applyVehicleDamageAndDeformation(vehicle, col.contactX, col.contactY, impactSpeed, scrapeSpeed, world, m2, false);
-        applyVehicleDamageAndDeformation(other, col.contactX, col.contactY, impactSpeed, scrapeSpeed, world, m1, false);
+        // Deform node-beam & body panels with physically authentic contact width
+        applyVehicleDamageAndDeformation(vehicle, col.contactX, col.contactY, impactSpeed, scrapeSpeed, world, m2, false, contactW);
+        applyVehicleDamageAndDeformation(other, col.contactX, col.contactY, impactSpeed, scrapeSpeed, world, m1, false, contactW);
 
         // Sound effect
         const impactIntensity = Math.min(1.0, impactSpeed / 140);

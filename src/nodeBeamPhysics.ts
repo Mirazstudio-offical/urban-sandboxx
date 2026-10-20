@@ -87,8 +87,8 @@ export const BEAM_FORCE_SCALE = 400;
  * k·yield (жёсткость растёт во столько же раз): металл сминается, а не отскакивает.
  */
 const YIELD_RANGE_SCALE = 0.25;
-/** Демпфирование балок растёт как sqrt(k): сохраняет коэффициент демпфирования ζ. */
-const BEAM_DAMP_SCALE = Math.sqrt(BEAM_FORCE_SCALE / YIELD_RANGE_SCALE) * 2.2;
+/** Демпфирование балок растёт как sqrt(k): сохраняет коэффициент демпфирования ζ (повышено для отсечения желейного звона металла). */
+const BEAM_DAMP_SCALE = Math.sqrt(BEAM_FORCE_SCALE / YIELD_RANGE_SCALE) * 7.5;
 /** Версия шкалы сил (для миграции старых сохранённых сеток). */
 const FORCE_SCALE_VERSION = 3;
 /** Скорость пластического течения (1/с): возврат к пределу текучести за ~1/RATE секунд. */
@@ -110,8 +110,8 @@ const MAX_STRETCH_FRACTION = 0.35;
 const WALL_FRICTION = 0.6;
 /** Верхний предел числа подшагов интегратора за кадр. */
 const MAX_SUBSTEPS = 512;
-/** Внутреннее трение материала (множитель скорости за 1/60 с). */
-const NODE_DRAG_PER_FRAME = 0.982;
+/** Внутреннее трение материала (множитель скорости за 1/60 с: критическое затухание, исключающее желейную болтанку). */
+const NODE_DRAG_PER_FRAME = 0.72;
 /** Абсолютный предохранитель скорости узла, px/s. */
 const MAX_NODE_SPEED = 4500;
 /** Предел реакции оболочки, передаваемой на кузов (чтобы не «выстрелить» машину). */
@@ -547,8 +547,13 @@ function enforceCrushLimit(system: NodeBeamStructure): void {
     if (n.isFixed) continue;
     if (Math.hypot(n.origX - lim.cx, n.origY - lim.cy) > lim.radius) continue;
     const depth = (n.x - n.origX) * lim.dirX + (n.y - n.origY) * lim.dirY;
-    if (depth > lim.depth) {
-      const excess = depth - lim.depth;
+    // CRITICAL: We only limit excessive penetration during the CURRENT impact stroke.
+    // If a node was ALREADY deformed beyond lim.depth before this impact,
+    // NEVER push the node back outward! A crash into another vehicle cannot pop out existing dents!
+    const priorDepth = typeof (n as any)._preImpactDepth === 'number' ? (n as any)._preImpactDepth : 0;
+    const effectiveLimit = Math.max(lim.depth, priorDepth);
+    if (depth > effectiveLimit) {
+      const excess = depth - effectiveLimit;
       n.x -= lim.dirX * excess;
       n.y -= lim.dirY * excess;
       const vIn = n.vx * lim.dirX + n.vy * lim.dirY;
@@ -595,6 +600,13 @@ function beginContact(
   const half = narrow ? Math.max(2.2, widthPx * 0.5) : Math.max(2.0, widthPx * 0.5) + 1.0;
   const reach = narrow ? half * 2.0 : half;
   const nodes = system.nodes;
+
+  // Record pre-impact depth for all nodes to prevent subsequent crashes from popping out old dents
+  for (let i = 0; i < nodes.length; i++) {
+    const n = nodes[i];
+    const curDep = (n.x - n.origX) * dirX + (n.y - n.origY) * dirY;
+    (n as any)._preImpactDepth = Math.max(0, curDep);
+  }
 
   let plane0 = Infinity;
   let depth0 = 0;
@@ -754,13 +766,14 @@ function integrateStructure(
   const comY = Number.isFinite(system.comY as number) ? (system.comY as number) : 0;
 
   for (let step = 0; step < subSteps; step++) {
-    // 1. Силы: инерция системы отсчёта кузова. Помимо линейного торможения
-    // учитываем центробежную, эйлерову и кориолисову нагрузку — без них при
-    // вращении кузова оболочка «отставала» и выглядела как желе.
+    // 1. Силы: инерция системы отсчёта кузова при линейном торможении удара.
+    // Автомобильный кузов — пространственный жёсткий монокок, центробежные и кориолисовы
+    // силы от обычного поворота или заноса НЕ деформируют металл наружу (иначе кузов
+    // колыхался и раздувался как желе при любом вращении).
     for (let i = 0; i < nodes.length; i++) {
       const n = nodes[i];
-      const ax = -accelX + alpha * n.origY + omega2 * n.origX + 2 * omega * n.vy;
-      const ay = -accelY - alpha * n.origX + omega2 * n.origY - 2 * omega * n.vx;
+      const ax = -accelX;
+      const ay = -accelY;
       n.fx = n.mass * ax;
       n.fy = n.mass * ay;
     }
@@ -811,8 +824,12 @@ function integrateStructure(
       }
 
       // Растяжение: пластическое вытягивание сверх повышенного порога (только настоящая конструкция,
-      // не опорные балки и не замки — те просто рвутся)
-      if (delta > 0 && beam.type !== 'latch' && beam.type !== 'support') {
+      // не опорные балки и не замки — те просто рвутся).
+      // КРИТИЧЕСКИ ВАЖНО: Текучесть на растяжение может удлинять балку ТОЛЬКО если балка реально растянута
+      // дальше своей исходной длины (restLength >= origLength * 0.98).
+      // Если балка была предварительно смята при ударе (restLength < origLength), натяжение НЕ ДОЛЖНО
+      // увеличивать restLength обратно, иначе смятый металл выправляется при повторных соударениях и вибрации!
+      if (delta > 0 && beam.type !== 'latch' && beam.type !== 'support' && beam.restLength >= beam.origLength * 0.98) {
         const maxRest = beam.origLength * (1 + MAX_STRETCH_FRACTION);
         if (beam.restLength < maxRest) {
           const stretched = Math.max(0, beam.restLength - beam.origLength) / (beam.origLength * MAX_STRETCH_FRACTION);
@@ -928,9 +945,10 @@ function integrateStructure(
   system.totalPlasticDeform += plasticShiftTotal;
   system.lastContactForce = contactForce / subSteps;
 
-  // Глобальную проекцию «жёстких мод» (вычитание среднего сдвига/поворота всех узлов)
-  // больше не делаем: она переносила вмятину спереди на бока и зад. Кузов удерживается
-  // закреплёнными узлами ядра (isFixed) и балками, поэтому целиком он не уедет.
+  // Убираем остаточные «жёсткие» моды оболочки: средний сдвиг и поворот всех
+  // свободных узлов относительно ядра. Локальные вмятины сохраняются, но кузов
+  // больше не может целиком уехать/повернуться относительно колёс.
+  projectShellRigidModes(system);
 
   // Реакция усредняется по подшагам и ограничивается: это сила, а не импульс.
   system.reactionFx = clampFinite(reactionFx / subSteps, -MAX_SHELL_REACTION, MAX_SHELL_REACTION);
@@ -978,6 +996,58 @@ function clampFinite(v: number, min: number, max: number): number {
  * локальные вмятины. То же делаем со скоростями, чтобы не внести ложный
  * угловой момент.
  */
+function projectShellRigidModes(system: NodeBeamStructure): void {
+  const nodes = system.nodes;
+  let M = 0;
+  for (let i = 0; i < nodes.length; i++) {
+    const n = nodes[i];
+    if (n.isFixed) continue;
+    M += n.mass;
+  }
+  if (M <= 1e-6) return;
+
+  // ВАЖНО: Коррекция жестких мод оболочки должна гасить ТОЛЬКО паразитный дрейф скоростей
+  // (линейный и угловой импульс несвязанных колебаний), но НИ В КОЕМ СЛУЧАЕ не вычитать среднее
+  // смещение из координат (n.x -= mx)! Вычитание mx сдвигало смятую зону наружу и выглаживало вмятины.
+  let I = 0;
+  for (let i = 0; i < nodes.length; i++) {
+    const n = nodes[i];
+    if (n.isFixed) continue;
+    I += n.mass * (n.origX * n.origX + n.origY * n.origY);
+  }
+
+  // Скорости: убираем средний перенос и среднее вращение.
+  let mvx = 0;
+  let mvy = 0;
+  for (let i = 0; i < nodes.length; i++) {
+    const n = nodes[i];
+    if (n.isFixed) continue;
+    mvx += n.mass * n.vx;
+    mvy += n.mass * n.vy;
+  }
+  mvx /= M;
+  mvy /= M;
+  let Lv = 0;
+  for (let i = 0; i < nodes.length; i++) {
+    const n = nodes[i];
+    if (n.isFixed) continue;
+    n.vx -= mvx;
+    n.vy -= mvy;
+    Lv += n.mass * (n.origX * n.vy - n.origY * n.vx);
+  }
+  if (I > 1e-6) {
+    const omega = Lv / I;
+    if (Number.isFinite(omega) && Math.abs(omega) > 1e-7) {
+      for (let i = 0; i < nodes.length; i++) {
+        const n = nodes[i];
+        if (n.isFixed) continue;
+        n.vx += omega * n.origY;
+        n.vy -= omega * n.origX;
+      }
+    }
+  }
+}
+
 /** Последствия разрыва балки для навесных деталей (бампер, капот, двери, багажник). */
 function breakBeamPart(car: Vehicle, beam: BeamLink): void {
   const dmg = car.damage;
@@ -1272,9 +1342,17 @@ export function applyNodeBeamImpact(
   const localContactX = dx * cosA + dy * sinA;
   const localContactY = -dx * sinA + dy * cosA;
 
-  // Направление удара внутрь кузова
-  let localImpulseX = -(normalX * cosA + normalY * sinA);
-  let localImpulseY = -(-normalX * sinA + normalY * cosA);
+  // Направление удара внутрь кузова: если есть активный контакт activeCrumple,
+  // используем строго его нормаль, чтобы направление удара не сбивалось между кадрами
+  let localImpulseX: number;
+  let localImpulseY: number;
+  if (car.activeCrumple && Number.isFinite(car.activeCrumple.normalX) && Number.isFinite(car.activeCrumple.normalY)) {
+    localImpulseX = car.activeCrumple.normalX * cosA + car.activeCrumple.normalY * sinA;
+    localImpulseY = -car.activeCrumple.normalX * sinA + car.activeCrumple.normalY * cosA;
+  } else {
+    localImpulseX = -(normalX * cosA + normalY * sinA);
+    localImpulseY = -(-normalX * sinA + normalY * cosA);
+  }
   const impLen = Math.hypot(localImpulseX, localImpulseY) || 1;
   localImpulseX /= impLen;
   localImpulseY /= impLen;
@@ -1313,12 +1391,36 @@ export function applyNodeBeamImpact(
     system.crushLimit = undefined;
   }
 
-  // Смятие для этого удара ведёт общий путь applyVehicleDamageAndDeformation (activeCrumple создаётся
-  // там для любого препятствия). Здесь только контакт и синхронизация — без мгновенного хода.
-  system.isSleeping = false;
-  system.activeTimer = Math.max(system.activeTimer || 0, 0.3);
-  if (!isContinuousCrush) syncNodeBeamToVehicle(system, car);
-  system.needsSync = true;
+  // Вне реального удара (диагностика, мгновенный удар) — короткий ход на расчётную глубину
+  if (!isContinuousCrush) {
+    let depth = crushLimitPx !== undefined && crushLimitPx > 0 ? crushLimitPx : 0;
+    if (depth <= 0) {
+      const zone = localContactX > halfL * 0.2 ? 'front' : (localContactX < -halfL * 0.25 ? 'rear' : 'side');
+      depth = crushFromEnergy({
+        energy: strikeEnergy(car.mass || 1400, strikerMass, normalSpeed),
+        zone,
+        length: car.length,
+        width: car.width,
+        contactWidthPx: effectiveContactWidth,
+        existingDepthPx: contact.depth0
+      }).depthPx;
+    }
+
+    const strokeSteps = 8;
+    const strokeDt = 0.004;
+    for (let i = 1; i <= strokeSteps; i++) {
+      integrateStructure(system, car, strokeDt, depth * (i - 1) / strokeSteps, depth * i / strokeSteps, 0, 0);
+      contact.pen = depth * i / strokeSteps;
+    }
+    system.contact = undefined;
+    for (let i = 0; i < 14; i++) {
+      integrateStructure(system, car, 0.01, 0, 0, 0, 0);
+    }
+    system.isSleeping = false;
+    system.activeTimer = Math.max(system.activeTimer || 0, 0.3);
+    syncNodeBeamToVehicle(system, car);
+    system.needsSync = true;
+  }
 
   // Powertrain and component mechanical damage consequences
   const eng = car.engineState;
@@ -1516,50 +1618,4 @@ export function stepNodeBeamContinuousContact(
   stepNodeBeamSimulation(system, dt, car);
   // Сообщаем updateVehicleSystems, что за этот кадр шаг уже сделан (иначе dt обрабатывался дважды)
   system.steppedThisTick = true;
-}
-
-/**
- * Смещения вершин контура кузова для рендера. Раньше вершины полигона связывались с узлами
- * физики по индексу (idx/len*16), что ломалось на конфигурациях с периметром 12–14 узлов.
- * Теперь каждая вершина берёт ближайший периметральный узел по его покою (origX/origY),
- * а клэмп одинаков для всех вершин (раньше зависел от каждой вершины отдельно → раздувание).
- */
-export function resolveOutlineOffsets(
-  car: Vehicle,
-  outline: { x: number; y: number }[]
-): { ox: number; oy: number; ex: number; ey: number }[] {
-  const nb = car.damage?.nodeBeam;
-  const nodes = nb?.nodes;
-  const perim = Math.min(nb?.perimeterCount ?? 16, nodes?.length ?? 0);
-  const maxAllowed = Math.min(14.0, Math.max(4.0, (car.width || 20) * 0.6));
-  const out: { ox: number; oy: number; ex: number; ey: number }[] = [];
-  for (const bv of outline) {
-    if (!nodes || perim <= 0) {
-      out.push({ ox: 0, oy: 0, ex: 0, ey: 0 });
-      continue;
-    }
-    let best = 0;
-    let bestD = Infinity;
-    for (let i = 0; i < perim; i++) {
-      const n = nodes[i];
-      const d = Math.hypot(n.origX - bv.x, n.origY - bv.y);
-      if (d < bestD) { bestD = d; best = i; }
-    }
-    const n = nodes[best];
-    let ox = finiteOrZero(n.offsetX);
-    let oy = finiteOrZero(n.offsetY);
-    const oDist = Math.hypot(ox, oy);
-    if (oDist > maxAllowed) {
-      ox = (ox / oDist) * maxAllowed;
-      oy = (oy / oDist) * maxAllowed;
-    }
-    const ex = Math.max(-8.0, Math.min(8.0, finiteOrZero(n.elasticX)));
-    const ey = Math.max(-8.0, Math.min(8.0, finiteOrZero(n.elasticY)));
-    out.push({ ox, oy, ex, ey });
-  }
-  return out;
-}
-
-function finiteOrZero(v: number | undefined): number {
-  return typeof v === 'number' && Number.isFinite(v) ? v : 0;
 }

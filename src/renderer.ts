@@ -66,7 +66,6 @@ import { RemotePlayerState, SpeechBubble } from './onlineSystem';
 import { InteractionTarget } from './interactionSystem';
 import { getCityApartments } from './propertySystem';
 import { getEffectiveWeatherWeights } from './weatherTransition';
-import { resolveOutlineOffsets } from './nodeBeamPhysics';
 
 interface CloudShadowLobe {
   relX: number;
@@ -8448,13 +8447,26 @@ export class GameRenderer {
 
       let bodyPoly = basePoly;
       if (hasSoftbody) {
-        const outlineOffs = resolveOutlineOffsets(car, basePoly);
         bodyPoly = basePoly.map((bv, idx) => {
-          const o = outlineOffs[idx];
-          if (!o) return bv;
+          const dvIdx = basePoly.length === 16 ? idx : Math.min(15, Math.floor((idx / basePoly.length) * 16));
+          const dv = dmg.deformedVertices![dvIdx];
+          if (!dv) return bv;
+          let ox = isFinite(dv.offsetX) ? dv.offsetX : 0;
+          let oy = isFinite(dv.offsetY) ? dv.offsetY : 0;
+          let ex = isFinite(dv.elasticX) ? Math.max(-8.0, Math.min(8.0, dv.elasticX)) : 0;
+          let ey = isFinite(dv.elasticY) ? Math.max(-8.0, Math.min(8.0, dv.elasticY)) : 0;
+
+          const dvLen = Math.hypot(dv.localX || bv.x, dv.localY || bv.y) || 1;
+          const maxAllowed = Math.min(14.0, Math.max(4.0, dvLen * 0.60));
+          const oDist = Math.hypot(ox, oy);
+          if (oDist > maxAllowed) {
+            ox = (ox / oDist) * maxAllowed;
+            oy = (oy / oDist) * maxAllowed;
+          }
+
           return {
-            x: bv.x + o.ox + o.ex,
-            y: bv.y + o.oy + o.ey
+            x: bv.x + ox,
+            y: bv.y + oy
           };
         });
       }
@@ -9186,27 +9198,33 @@ export class GameRenderer {
 
 
       // 2.5D buckled hood and sagging bumper attachments
-      renderBuckledHoodOverlay(ctx, car, bodyPoly, halfL, halfW);
-      renderSaggingBumpers(ctx, car, bodyPoly, halfL, halfW);
+      renderBuckledHoodOverlay(ctx, car, bodyPoly, halfL, halfW, deform);
+      renderSaggingBumpers(ctx, car, bodyPoly, halfL, halfW, deform);
       renderTornBodyLining(ctx, car, bodyPoly, dmg.deformedVertices);
 
-      // 4. Crease Lines & Scratches
+      // 4. Crease Lines & Scratches (now tightly aligned with mesh deformation)
       if (fc > 2 || fld > 2 || frd > 2 || dmg.hoodBuckled) {
         ctx.strokeStyle = 'rgba(15, 23, 42, 0.4)';
         ctx.lineWidth = 1.2;
         ctx.beginPath();
-        ctx.moveTo(halfL - fc - 2, -halfW * 0.35);
-        ctx.lineTo(halfL * 0.3, 0);
-        ctx.lineTo(halfL - fc - 2, halfW * 0.35);
+        const p1 = deform(halfL - effFc - 2, -halfW * 0.35);
+        const p2 = deform(halfL * 0.3, 0);
+        const p3 = deform(halfL - effFc - 2, halfW * 0.35);
+        ctx.moveTo(p1[0], p1[1]);
+        ctx.lineTo(p2[0], p2[1]);
+        ctx.lineTo(p3[0], p3[1]);
         ctx.stroke();
       }
       if (rc > 2 || rld > 2 || rrd > 2) {
         ctx.strokeStyle = 'rgba(15, 23, 42, 0.4)';
         ctx.lineWidth = 1.2;
         ctx.beginPath();
-        ctx.moveTo(-halfL + rc + 2, -halfW * 0.35);
-        ctx.lineTo(-halfL * 0.4, 0);
-        ctx.lineTo(-halfL + rc + 2, halfW * 0.35);
+        const p1 = deform(-halfL + effRc + 2, -halfW * 0.35);
+        const p2 = deform(-halfL * 0.4, 0);
+        const p3 = deform(-halfL + effRc + 2, halfW * 0.35);
+        ctx.moveTo(p1[0], p1[1]);
+        ctx.lineTo(p2[0], p2[1]);
+        ctx.lineTo(p3[0], p3[1]);
         ctx.stroke();
       }
       if (dmg.scratches && dmg.scratches.length > 0) {
@@ -10156,13 +10174,26 @@ export class GameRenderer {
 
       let bodyPoly = basePoly;
       if (hasSoftbody) {
-        const outlineOffs = resolveOutlineOffsets(car, basePoly);
         bodyPoly = basePoly.map((bv, idx) => {
-          const o = outlineOffs[idx];
-          if (!o) return bv;
+          const dvIdx = basePoly.length === 16 ? idx : Math.min(15, Math.floor((idx / basePoly.length) * 16));
+          const dv = dmg.deformedVertices![dvIdx];
+          if (!dv) return bv;
+          let ox = isFinite(dv.offsetX) ? dv.offsetX : 0;
+          let oy = isFinite(dv.offsetY) ? dv.offsetY : 0;
+          let ex = isFinite(dv.elasticX) ? Math.max(-8.0, Math.min(8.0, dv.elasticX)) : 0;
+          let ey = isFinite(dv.elasticY) ? Math.max(-8.0, Math.min(8.0, dv.elasticY)) : 0;
+
+          const dvLen = Math.hypot(dv.localX || bv.x, dv.localY || bv.y) || 1;
+          const maxAllowed = Math.min(14.0, Math.max(4.0, dvLen * 0.60));
+          const oDist = Math.hypot(ox, oy);
+          if (oDist > maxAllowed) {
+            ox = (ox / oDist) * maxAllowed;
+            oy = (oy / oDist) * maxAllowed;
+          }
+
           return {
-            x: bv.x + o.ox + o.ex,
-            y: bv.y + o.oy + o.ey
+            x: bv.x + ox + ex,
+            y: bv.y + oy + ey
           };
         });
       }
@@ -10247,8 +10278,8 @@ export class GameRenderer {
         car,
         halfL,
         halfW,
-        fc,
-        rc,
+        fc: effFc,
+        rc: effRc,
         cabinX,
         cabinL,
         cabinW,
