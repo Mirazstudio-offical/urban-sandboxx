@@ -2207,6 +2207,32 @@ export function applyVehicleDamageAndDeformation(
   if (!Number.isFinite(crush.totalCapPx)) crush.totalCapPx = 0;
   if (!Number.isFinite(crush.zoneLengthPx)) crush.zoneLengthPx = 0;
 
+  // Единая модель удара для ЛЮБОГО препятствия. Если машина ещё не в смятии (пропы, поезда,
+  // ограждения, слабые удары), ход начинается здесь. Тип препятствия не учитывается: дальше ход
+  // считается силой–смятием по массе и жёсткости (crushModel ниже), а не мгновенно и не по кривой.
+  if (!car.activeCrumple) {
+    const dist = Math.hypot(contactX - car.x, contactY - car.y) || 1;
+    const outX = (contactX - car.x) / dist;
+    const outY = (contactY - car.y) / dist;
+    const dur = 0.12 + Math.min(0.20, Math.max(0, impactSpeed) / 600);
+    car.activeCrumple = {
+      timer: dur,
+      totalDuration: dur,
+      normalX: -outX,
+      normalY: -outY,
+      initialSpeed: car.speed,
+      initialNormalSpeed: Math.max(0, impactSpeed),
+      initialTangentialSpeed: Math.max(0, scrapeSpeed),
+      reboundSpeed: 0,
+      contactX,
+      contactY,
+      preserveVelocity: false,
+      isNarrowImpact,
+      contactWidthPx: contactWidthPx ?? (isNarrowImpact ? 14 : car.width),
+      targetCrushPx: 0
+    };
+  }
+
   // Целевая глубина вмятины для многокадрового сжатия softbody (см. stepNodeBeamContinuousContact).
   // This is an absolute stroke from the intact body, not the stroke of only
   // this hit. Without the already absorbed depth, a repeated impact reset the
@@ -10680,8 +10706,8 @@ export function updateVehiclePhysics(
 
         const scrapeSpeed = vTanSpeed;
 
-        // Active crumple zone for softbody continuous contact
-        if (impactSpeed > 24) {
+        // Active crumple zone for softbody continuous contact (любой контакт, без порога скорости)
+        {
           const crumpleDuration = 0.12 + Math.min(0.20, impactSpeed / 600);
           if (!vehicle.activeCrumple) {
             vehicle.activeCrumple = {

@@ -1313,43 +1313,12 @@ export function applyNodeBeamImpact(
     system.crushLimit = undefined;
   }
 
-  // Удар без активного смятия (пропы, слабые удары, диагностика): раньше весь ход проигрывался
-  // синхронно в одном вызове (= мгновенное смятие за 1 кадр). Теперь создаём activeCrumple с той же
-  // глубиной и отдаём ход непрерывному солверу stepNodeBeamContinuousContact, как у остальных ударов.
-  if (!isContinuousCrush) {
-    let depth = crushLimitPx !== undefined && crushLimitPx > 0 ? crushLimitPx : 0;
-    if (depth <= 0) {
-      const zone = localContactX > halfL * 0.2 ? 'front' : (localContactX < -halfL * 0.25 ? 'rear' : 'side');
-      depth = crushFromEnergy({
-        energy: strikeEnergy(car.mass || 1400, strikerMass, normalSpeed),
-        zone,
-        length: car.length,
-        width: car.width,
-        contactWidthPx: effectiveContactWidth,
-        existingDepthPx: contact.depth0
-      }).depthPx;
-    }
-    const crumpleDuration = 0.12 + Math.min(0.20, normalSpeed / 600);
-    car.activeCrumple = {
-      timer: crumpleDuration,
-      totalDuration: crumpleDuration,
-      // Нормаль activeCrumple — от препятствия к машине, то есть внутрь кузова
-      normalX: -normalX,
-      normalY: -normalY,
-      initialSpeed: car.speed,
-      reboundSpeed: 0,
-      contactX,
-      contactY,
-      preserveVelocity: true,
-      isNarrowImpact,
-      contactWidthPx: effectiveContactWidth,
-      targetCrushPx: depth
-    };
-    system.isSleeping = false;
-    system.activeTimer = Math.max(system.activeTimer || 0, 0.3);
-    syncNodeBeamToVehicle(system, car);
-    system.needsSync = true;
-  }
+  // Смятие для этого удара ведёт общий путь applyVehicleDamageAndDeformation (activeCrumple создаётся
+  // там для любого препятствия). Здесь только контакт и синхронизация — без мгновенного хода.
+  system.isSleeping = false;
+  system.activeTimer = Math.max(system.activeTimer || 0, 0.3);
+  if (!isContinuousCrush) syncNodeBeamToVehicle(system, car);
+  system.needsSync = true;
 
   // Powertrain and component mechanical damage consequences
   const eng = car.engineState;

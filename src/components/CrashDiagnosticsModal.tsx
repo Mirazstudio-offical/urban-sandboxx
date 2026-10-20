@@ -27,9 +27,9 @@ import { sound } from '../audio';
 import { Vehicle } from '../types';
 import { 
   ensureVehicleNodeBeam, 
-  applyNodeBeamImpact, 
   createVehicleNodeBeamSystem 
 } from '../nodeBeamPhysics';
+import { applyVehicleDamageAndDeformation } from '../physics';
 import {
   listAllMeshPresets,
   getVehicleNodeBeamDefinition
@@ -850,12 +850,10 @@ export const CrashDiagnosticsModal: React.FC<CrashDiagnosticsModalProps> = ({
                       const cosA = Math.cos(activeVehicle.angle);
                       const sinA = Math.sin(activeVehicle.angle);
                       const halfL = activeVehicle.length / 2;
-                      applyNodeBeamImpact(
+                      applyVehicleDamageAndDeformation(
                         activeVehicle,
                         activeVehicle.x + cosA * halfL,
                         activeVehicle.y + sinA * halfL,
-                        cosA,
-                        sinA,
                         50 * 4.4444,
                         0,
                         {} as any,
@@ -877,12 +875,10 @@ export const CrashDiagnosticsModal: React.FC<CrashDiagnosticsModalProps> = ({
                       const cosA = Math.cos(activeVehicle.angle);
                       const sinA = Math.sin(activeVehicle.angle);
                       const halfW = activeVehicle.width / 2;
-                      applyNodeBeamImpact(
+                      applyVehicleDamageAndDeformation(
                         activeVehicle,
                         activeVehicle.x - sinA * halfW,
                         activeVehicle.y + cosA * halfW,
-                        -sinA,
-                        cosA,
                         45 * 4.4444,
                         0,
                         {} as any,
@@ -904,12 +900,10 @@ export const CrashDiagnosticsModal: React.FC<CrashDiagnosticsModalProps> = ({
                       const cosA = Math.cos(activeVehicle.angle);
                       const sinA = Math.sin(activeVehicle.angle);
                       const halfL = activeVehicle.length / 2;
-                      applyNodeBeamImpact(
+                      applyVehicleDamageAndDeformation(
                         activeVehicle,
                         activeVehicle.x - cosA * halfL,
                         activeVehicle.y - sinA * halfL,
-                        -cosA,
-                        -sinA,
                         40 * 4.4444,
                         0,
                         {} as any,
