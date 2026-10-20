@@ -313,6 +313,9 @@ export default function App() {
 
   // React State for HUD & Status
   const [speedKmh, setSpeedKmh] = useState<number>(0);
+  // Bumped on every throttled HUD update so the instrument cluster re-reads mutable
+  // engine data (RPM, coolant, oil, fuel) even when speed and gear are unchanged.
+  const [hudTick, setHudTick] = useState<number>(0);
   const [isInVehicle, setIsInVehicle] = useState<boolean>(false);
   const [activeCarName, setActiveCarName] = useState<string>('');
   const [gear, setGear] = useState<'P'| 'D'| 'R'| 'N'| string>('D');
@@ -3201,13 +3204,15 @@ export default function App() {
         }
 
         // 6. Throttled HUD State Updates (Run at ~12.5 Hz to prevent React re-render lag)
-        hudUpdateTimerRef.current += dt;
+        // Use real frame time so HUD refresh rate does not drop in slow motion
+        hudUpdateTimerRef.current += rawDt;
         if (hudUpdateTimerRef.current >= 0.08) {
           hudUpdateTimerRef.current = 0;
 
           if (playerCar) {
             const currentSpeedKmh = Math.round(Math.abs(playerCar.speed) * PX_S_TO_SPEED_KMH);
             setSpeedKmh(currentSpeedKmh);
+            setHudTick((t) => (t + 1) % 1000000);
             setIsDrifting(playerCar.isDrifting);
             setPlayerTurnSignal(playerCar.turnSignal);
             if (playerCar.damage) {
@@ -6447,6 +6452,7 @@ export default function App() {
           <SpeedometerHUD
             vehicle={playerCar}
             speedKmh={speedKmh}
+            hudTick={hudTick}
             gear={gear}
             isDrifting={isDrifting}
             isHandbraking={inputRef.current.handbrake}

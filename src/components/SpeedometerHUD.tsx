@@ -124,6 +124,8 @@ export function getVehicleDashboardTheme(type?: CarType): DashboardTheme {
 interface SpeedometerHUDProps {
   vehicle: Vehicle | null;
   speedKmh: number;
+  /** Changes on every throttled HUD update; forces a re-read of mutable engine data (RPM, temps, fuel). */
+  hudTick?: number;
   gear: 'P' | 'D' | 'R' | string;
   isDrifting?: boolean;
   isHandbraking?: boolean;
@@ -148,6 +150,7 @@ interface SpeedometerHUDProps {
 export const SpeedometerHUD: React.FC<SpeedometerHUDProps> = ({
   vehicle,
   speedKmh,
+  hudTick: _hudTick,
   gear,
   isDrifting = false,
   isHandbraking = false,
