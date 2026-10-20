@@ -66,6 +66,7 @@ import { RemotePlayerState, SpeechBubble } from './onlineSystem';
 import { InteractionTarget } from './interactionSystem';
 import { getCityApartments } from './propertySystem';
 import { getEffectiveWeatherWeights } from './weatherTransition';
+import { resolveOutlineOffsets } from './nodeBeamPhysics';
 
 interface CloudShadowLobe {
   relX: number;
@@ -8447,26 +8448,13 @@ export class GameRenderer {
 
       let bodyPoly = basePoly;
       if (hasSoftbody) {
+        const outlineOffs = resolveOutlineOffsets(car, basePoly);
         bodyPoly = basePoly.map((bv, idx) => {
-          const dvIdx = basePoly.length === 16 ? idx : Math.min(15, Math.floor((idx / basePoly.length) * 16));
-          const dv = dmg.deformedVertices![dvIdx];
-          if (!dv) return bv;
-          let ox = isFinite(dv.offsetX) ? dv.offsetX : 0;
-          let oy = isFinite(dv.offsetY) ? dv.offsetY : 0;
-          let ex = isFinite(dv.elasticX) ? Math.max(-8.0, Math.min(8.0, dv.elasticX)) : 0;
-          let ey = isFinite(dv.elasticY) ? Math.max(-8.0, Math.min(8.0, dv.elasticY)) : 0;
-
-          const dvLen = Math.hypot(dv.localX || bv.x, dv.localY || bv.y) || 1;
-          const maxAllowed = Math.min(14.0, Math.max(4.0, dvLen * 0.60));
-          const oDist = Math.hypot(ox, oy);
-          if (oDist > maxAllowed) {
-            ox = (ox / oDist) * maxAllowed;
-            oy = (oy / oDist) * maxAllowed;
-          }
-
+          const o = outlineOffs[idx];
+          if (!o) return bv;
           return {
-            x: bv.x + ox + ex,
-            y: bv.y + oy + ey
+            x: bv.x + o.ox + o.ex,
+            y: bv.y + o.oy + o.ey
           };
         });
       }
@@ -10168,26 +10156,13 @@ export class GameRenderer {
 
       let bodyPoly = basePoly;
       if (hasSoftbody) {
+        const outlineOffs = resolveOutlineOffsets(car, basePoly);
         bodyPoly = basePoly.map((bv, idx) => {
-          const dvIdx = basePoly.length === 16 ? idx : Math.min(15, Math.floor((idx / basePoly.length) * 16));
-          const dv = dmg.deformedVertices![dvIdx];
-          if (!dv) return bv;
-          let ox = isFinite(dv.offsetX) ? dv.offsetX : 0;
-          let oy = isFinite(dv.offsetY) ? dv.offsetY : 0;
-          let ex = isFinite(dv.elasticX) ? Math.max(-8.0, Math.min(8.0, dv.elasticX)) : 0;
-          let ey = isFinite(dv.elasticY) ? Math.max(-8.0, Math.min(8.0, dv.elasticY)) : 0;
-
-          const dvLen = Math.hypot(dv.localX || bv.x, dv.localY || bv.y) || 1;
-          const maxAllowed = Math.min(14.0, Math.max(4.0, dvLen * 0.60));
-          const oDist = Math.hypot(ox, oy);
-          if (oDist > maxAllowed) {
-            ox = (ox / oDist) * maxAllowed;
-            oy = (oy / oDist) * maxAllowed;
-          }
-
+          const o = outlineOffs[idx];
+          if (!o) return bv;
           return {
-            x: bv.x + ox + ex,
-            y: bv.y + oy + ey
+            x: bv.x + o.ox + o.ex,
+            y: bv.y + o.oy + o.ey
           };
         });
       }

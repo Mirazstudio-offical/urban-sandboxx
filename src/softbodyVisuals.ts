@@ -49,14 +49,9 @@ export function traceSoftbodyPath(
     const strain1 = deformedVertices ? (deformedVertices[idx1]?.plasticStrain || 0) : 0;
     const maxStrain = Math.max(strain0, strain1);
 
-    // If metal is crumpled, draw straight accordion creases (anti-ballooning)
-    if (maxStrain > 0.25) {
-      ctx.lineTo(p1.x, p1.y);
-      continue;
-    }
-
-    // Tight tension factor prevents wide bulging curves
-    const tension = Math.max(0.04, 0.12 - maxStrain * 0.08);
+    // Единый натяжение кривой для всех сегментов: раньше смятые сегменты рисовались прямыми,
+    // а соседние кривыми — отсюда изломы и «раздутые» дуги. Натяжение только уменьшается с деформацией.
+    const tension = Math.max(0.02, 0.12 - maxStrain * 0.08);
 
     const cp1x = p0.x + (p1.x - pPrev.x) * tension;
     const cp1y = p0.y + (p1.y - pPrev.y) * tension;
