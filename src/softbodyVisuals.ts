@@ -53,10 +53,37 @@ export function traceSoftbodyPath(
     // а соседние кривыми — отсюда изломы и «раздутые» дуги. Натяжение только уменьшается с деформацией.
     const tension = Math.max(0.02, 0.12 - maxStrain * 0.08);
 
-    const cp1x = p0.x + (p1.x - pPrev.x) * tension;
-    const cp1y = p0.y + (p1.y - pPrev.y) * tension;
-    const cp2x = p1.x - (pNext.x - p0.x) * tension;
-    const cp2y = p1.y - (pNext.y - p0.y) * tension;
+    let cp1x = p0.x + (p1.x - pPrev.x) * tension;
+    let cp1y = p0.y + (p1.y - pPrev.y) * tension;
+    let cp2x = p1.x - (pNext.x - p0.x) * tension;
+    let cp2y = p1.y - (pNext.y - p0.y) * tension;
+
+    // Strict non-overshooting (anti-ballooning) Bezier bounds:
+    // A metal panel boundary spline must never bow outward beyond its endpoint envelope.
+    const minX = Math.min(p0.x, p1.x);
+    const maxX = Math.max(p0.x, p1.x);
+    const minY = Math.min(p0.y, p1.y);
+    const maxY = Math.max(p0.y, p1.y);
+
+    // Front: cannot bow forward ahead of the highest endpoint
+    if (p0.x > 0 || p1.x > 0) {
+      cp1x = Math.min(cp1x, maxX);
+      cp2x = Math.min(cp2x, maxX);
+    }
+    // Rear: cannot bow backward behind the lowest endpoint
+    if (p0.x < 0 || p1.x < 0) {
+      cp1x = Math.max(cp1x, minX);
+      cp2x = Math.max(cp2x, minX);
+    }
+    // Flanks: cannot bow outwards to the right/left
+    if (p0.y > 0 || p1.y > 0) {
+      cp1y = Math.min(cp1y, maxY);
+      cp2y = Math.min(cp2y, maxY);
+    }
+    if (p0.y < 0 || p1.y < 0) {
+      cp1y = Math.max(cp1y, minY);
+      cp2y = Math.max(cp2y, minY);
+    }
 
     if (isFinite(cp1x) && isFinite(cp1y) && isFinite(cp2x) && isFinite(cp2y)) {
       ctx.bezierCurveTo(cp1x, cp1y, cp2x, cp2y, p1.x, p1.y);

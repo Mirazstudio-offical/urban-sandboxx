@@ -93,12 +93,12 @@ function buildStandardSedanBeams(): BeamTemplate[] {
     });
   }
 
-  // Diagonal shear braces
+  // Diagonal shear braces (braced into subframe towers rather than thin outer fender skins)
   const crosses: [number, number][] = [
-    [0, 2], [0, 14], [1, 3], [15, 13],
+    [0, 25], [0, 26], [1, 3], [15, 13],
     [2, 4], [14, 12], [3, 5], [13, 11],
     [4, 6], [12, 10], [5, 7], [11, 9],
-    [6, 8], [10, 8], [7, 9], [1, 15]
+    [8, 27], [8, 28]
   ];
   for (const [a, b] of crosses) {
     beams.push({
@@ -259,11 +259,11 @@ function buildHatchbackBeams(): BeamTemplate[] {
     });
   }
 
-  // Crosses
+  // Crosses (braced into subframe towers rather than thin outer skin)
   const crosses: [number, number][] = [
-    [0, 2], [0, 12], [1, 3], [13, 11],
+    [0, 21], [0, 22], [1, 3], [13, 11],
     [2, 4], [12, 10], [3, 5], [11, 9],
-    [4, 6], [10, 8], [5, 7], [9, 7], [1, 13]
+    [4, 6], [10, 8], [7, 23], [7, 24]
   ];
   for (const [a, b] of crosses) {
     beams.push({ nodeA: a, nodeB: b, type: 'cross', spring: DEFAULT_K_CROSS * 0.95, damp: DEFAULT_C_CROSS, yieldDist: 0.42, breakDist: 15.0 });
@@ -410,12 +410,12 @@ function buildSupercarBeams(): BeamTemplate[] {
     });
   }
 
-  // Cross bracing
+  // Cross bracing (braced into subframe structure)
   const crosses: [number, number][] = [
-    [0, 2], [0, 14], [1, 3], [15, 13],
+    [0, 25], [0, 26], [1, 3], [15, 13],
     [2, 4], [14, 12], [3, 5], [13, 11],
     [4, 6], [12, 10], [5, 7], [11, 9],
-    [6, 8], [10, 8], [7, 9], [1, 15]
+    [8, 27], [8, 28]
   ];
   for (const [a, b] of crosses) {
     beams.push({ nodeA: a, nodeB: b, type: 'cross', spring: DEFAULT_K_CROSS * 1.4, damp: DEFAULT_C_CROSS, yieldDist: 0.40, breakDist: 13.0 });
@@ -545,12 +545,12 @@ function buildTruckCaboverBeams(): BeamTemplate[] {
     });
   }
 
-  // Crosses
+  // Crosses (braced into heavy front ladder subframe)
   const crosses: [number, number][] = [
-    [0, 2], [0, 14], [1, 3], [15, 13],
+    [0, 25], [0, 26], [1, 3], [15, 13],
     [2, 4], [14, 12], [3, 5], [13, 11],
     [4, 6], [12, 10], [5, 7], [11, 9],
-    [6, 8], [10, 8], [7, 9], [1, 15]
+    [8, 32], [8, 33]
   ];
   for (const [a, b] of crosses) {
     beams.push({ nodeA: a, nodeB: b, type: 'cross', spring: DEFAULT_K_CROSS * 1.8, damp: DEFAULT_C_CROSS, yieldDist: 0.55, breakDist: 20.0 });

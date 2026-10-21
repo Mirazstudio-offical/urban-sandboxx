@@ -597,8 +597,8 @@ function beginContact(
     return;
   }
 
-  const half = narrow ? Math.max(2.2, widthPx * 0.5) : Math.max(2.0, widthPx * 0.5) + 1.0;
-  const reach = narrow ? half * 2.0 : half;
+  const half = narrow ? Math.max(2.2, widthPx * 0.5) : Math.max(car.width * 0.55, widthPx * 0.5) + 1.0;
+  const reach = narrow ? half * 2.0 : Math.max(car.length, car.width);
   const nodes = system.nodes;
 
   // Record pre-impact depth for all nodes to prevent subsequent crashes from popping out old dents
@@ -865,25 +865,34 @@ function integrateStructure(
         continue;
       }
 
-      nA.fx -= fTotal * dirX;
-      nA.fy -= fTotal * dirY;
-      nB.fx += fTotal * dirX;
-      nB.fy += fTotal * dirY;
+      let fxA = -fTotal * dirX;
+      let fyA = -fTotal * dirY;
+      let fxB = fTotal * dirX;
+      let fyB = fTotal * dirY;
+
+      // Anti-ballooning force dissipation:
+      // Internal compressed trusses/crossmembers must not push the front/rear perimeter nodes
+      // outward into empty space beyond their undeformed factory envelope.
+      if (nA.origX > 0 && nA.x >= nA.origX && fxA > 0) fxA = 0;
+      if (nA.origX < 0 && nA.x <= nA.origX && fxA < 0) fxA = 0;
+      if (nB.origX > 0 && nB.x >= nB.origX && fxB > 0) fxB = 0;
+      if (nB.origX < 0 && nB.x <= nB.origX && fxB < 0) fxB = 0;
+
+      nA.fx += fxA;
+      nA.fy += fyA;
+      nB.fx += fxB;
+      nB.fy += fyB;
 
       // Реакция оболочки на жёсткое ядро: раньше силы на закреплённые узлы
       // просто выбрасывались, и кузов «не чувствовал» смятую панель. Теперь
       // суммарная сила и момент передаются в rigid-body кузова (двусторонняя
       // связь), но с ограничением, чтобы удар не телепортировал машину.
       if (nA.isFixed) {
-        const fxA = -fTotal * dirX;
-        const fyA = -fTotal * dirY;
         reactionFx += fxA;
         reactionFy += fyA;
         reactionTorque += (nA.origX - comX) * fyA - (nA.origY - comY) * fxA;
       }
       if (nB.isFixed) {
-        const fxB = fTotal * dirX;
-        const fyB = fTotal * dirY;
         reactionFx += fxB;
         reactionFy += fyB;
         reactionTorque += (nB.origX - comX) * fyB - (nB.origY - comY) * fxB;
@@ -906,9 +915,44 @@ function integrateStructure(
       node.x += node.vx * subDt;
       node.y += node.vy * subDt;
 
+      // --- ANTI-BALLOONING KINEMATIC ENVELOPE CONSTRAINT ---
+      // Metal unibody panels and bumpers cannot expand/bulge outwards into thin air.
+      // An impact coming from outside compresses or crushes metal inward; it never creates
+      // an outward bulging horn or ballooning envelope in front or to the sides.
+      if (!node.isFixed) {
+        // 1. Frontal longitudinal limit:
+        if (node.origX > 0) {
+          if (node.x > node.origX) {
+            node.x = node.origX;
+            if (node.vx > 0) node.vx = 0;
+          }
+        }
+        // 2. Rear longitudinal limit:
+        else if (node.origX < 0) {
+          if (node.x < node.origX) {
+            node.x = node.origX;
+            if (node.vx < 0) node.vx = 0;
+          }
+        }
+
+        // 3. Lateral limit (flanks, doors, sills):
+        const lateralBulgeSlack = Math.max(0.4, halfW * 0.04);
+        if (node.origY > 0) {
+          const maxAllowedY = node.origY + lateralBulgeSlack;
+          if (node.y > maxAllowedY) {
+            node.y = maxAllowedY;
+            if (node.vy > 0) node.vy = 0;
+          }
+        } else if (node.origY < 0) {
+          const minAllowedY = node.origY - lateralBulgeSlack;
+          if (node.y < minAllowedY) {
+            node.y = minAllowedY;
+            if (node.vy < 0) node.vy = 0;
+          }
+        }
+      }
+
       // Предохранитель: ни один узел не должен улететь быстрее разумного.
-      // Именно здесь раньше рождался NaN: при curDisp = Infinity фактор
-      // maxDisplacement / Infinity = 0, а Infinity * 0 = NaN.
       if (!Number.isFinite(node.x) || !Number.isFinite(node.y) ||
           !Number.isFinite(node.vx) || !Number.isFinite(node.vy)) {
         node.x = node.origX;
@@ -970,6 +1014,14 @@ function integrateStructure(
       totalOffsetY = 0;
     }
     const plasticWeight = Math.min(1.0, (node.plasticStrain || 0) * 0.4);
+
+    // Anti-ballooning sanitization: offsets cannot expand outward past undeformed factory envelope
+    if (node.origX > 0 && totalOffsetX > 0) totalOffsetX = 0;
+    if (node.origX < 0 && totalOffsetX < 0) totalOffsetX = 0;
+    const lateralSlack = Math.max(0.4, halfW * 0.04);
+    if (node.origY > 0 && totalOffsetY > lateralSlack) totalOffsetY = lateralSlack;
+    if (node.origY < 0 && totalOffsetY < -lateralSlack) totalOffsetY = -lateralSlack;
+
     node.localX = node.origX + totalOffsetX * plasticWeight;
     node.localY = node.origY + totalOffsetY * plasticWeight;
     node.offsetX = totalOffsetX;
@@ -1218,8 +1270,19 @@ function syncNodeBeamToVehicle(system: NodeBeamStructure, car: Vehicle): void {
     const dv = dmg.deformedVertices[i];
     if (!n || !dv) continue;
 
-    dv.offsetX = finiteOrZero(n.offsetX);
-    dv.offsetY = finiteOrZero(n.offsetY);
+    let ox = finiteOrZero(n.offsetX);
+    let oy = finiteOrZero(n.offsetY);
+
+    // Strict anti-ballooning guard:
+    const halfW = car.width / 2;
+    const latSlack = Math.max(0.4, halfW * 0.04);
+    if (n.origX > 0 && ox > 0) ox = 0;
+    if (n.origX < 0 && ox < 0) ox = 0;
+    if (n.origY > 0 && oy > latSlack) oy = latSlack;
+    if (n.origY < 0 && oy < -latSlack) oy = -latSlack;
+
+    dv.offsetX = ox;
+    dv.offsetY = oy;
     dv.targetOffsetX = dv.offsetX;
     dv.targetOffsetY = dv.offsetY;
     // offsetX/offsetY — это уже ПОЛНОЕ смещение узла (пластика + упругая часть). Потребители

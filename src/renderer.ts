@@ -8464,6 +8464,13 @@ export class GameRenderer {
             oy = (oy / oDist) * maxAllowed;
           }
 
+          // Strict anti-ballooning guard: metal cannot bulge outward beyond undeformed factory envelope
+          if (bv.x > 0 && ox > 0) ox = 0;
+          if (bv.x < 0 && ox < 0) ox = 0;
+          const maxLat = Math.max(0.5, halfW * 0.04);
+          if (bv.y > 0 && oy > maxLat) oy = maxLat;
+          if (bv.y < 0 && oy < -maxLat) oy = -maxLat;
+
           return {
             x: bv.x + ox,
             y: bv.y + oy
@@ -10190,6 +10197,13 @@ export class GameRenderer {
             ox = (ox / oDist) * maxAllowed;
             oy = (oy / oDist) * maxAllowed;
           }
+
+          // Strict anti-ballooning guard: metal cannot bulge outward beyond undeformed factory envelope
+          if (bv.x > 0 && ox > 0) ox = 0;
+          if (bv.x < 0 && ox < 0) ox = 0;
+          const maxLat = Math.max(0.5, halfW * 0.04);
+          if (bv.y > 0 && oy > maxLat) oy = maxLat;
+          if (bv.y < 0 && oy < -maxLat) oy = -maxLat;
 
           return {
             x: bv.x + ox + ex,
