@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useRef, useLayoutEffect } from 'react';
 import { createPortal } from 'react-dom';
 import menuCss from './mainMenu.css?inline';
+import compactCss from './menuCompact.css?inline';
+import { stageMetrics, applyCompactState } from './ShadowHost';
 import { SPAWN_LOCATIONS } from '../spawnLocations';
 import { performanceConfig, savePerformanceConfig, DEFAULT_CONFIG, detectGraphicsPreset, PerformanceConfig, GraphicsPresetId } from '../performanceConfig';
 import { GFX_GROUPS, GFX_PRESET_OPTIONS, GfxItem, applyGfxPatch, applyGfxPreset } from '../graphicsSettings';
@@ -224,7 +226,7 @@ const ShadowHost: React.FC<{ children: React.ReactNode }> = ({ children }) => {
         padding: 'env(safe-area-inset-top,0px) env(safe-area-inset-right,0px) env(safe-area-inset-bottom,0px) env(safe-area-inset-left,0px)'
       }}
     >
-      {root && createPortal(<><style>{menuCss}</style>{children}</>, root)}
+      {root && createPortal(<><style>{menuCss}</style><style>{compactCss}</style>{children}</>, root)}
     </div>
   );
 };
@@ -301,7 +303,14 @@ export const MainMenu: React.FC<MainMenuProps> = ({
       const fit = () => {
         const W = w.clientWidth, H = w.clientHeight;
         if (!W || !H) return;
-        const k = Math.min(W / 1440, H / 900);
+        const m = stageMetrics(W, H);
+        applyCompactState(gm, m);
+        if (m.compact) {
+          gm.style.top = '0px';
+          gm.style.transform = 'scale(' + m.k + ')';
+          return;
+        }
+        const k = m.k;
         const sw = Math.max(1440, W / k);
         gm.style.width = sw + 'px';
         gm.style.setProperty('--sw', sw + 'px');
@@ -594,7 +603,7 @@ export const MainMenu: React.FC<MainMenuProps> = ({
                   <div className="row2">{AccountChip}</div>
                 </div>
 
-                <div className="a" style={{ left: 64, top: 156, width: 440, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <div className="a mc-mlist" style={{ left: 64, top: 156, width: 440, display: 'flex', flexDirection: 'column', gap: 6 }}>
                   {lastSave ? (
                     <button className="menu-i cn sl d1" onClick={() => onLoadSave(lastSave.id)}
                       style={{ background: 'rgba(201,146,43,.16)', borderLeftColor: '#c9922b', color: '#fff', flexDirection: 'column', alignItems: 'flex-start', justifyContent: 'center', gap: 2, height: 78 }}>
@@ -638,7 +647,7 @@ export const MainMenu: React.FC<MainMenuProps> = ({
                   )}
                 </div>
 
-                <div className="panel a st d3" style={{ left: 880, top: 156, width: 496, padding: 14 }}>
+                <div className="panel a st d3 mc-mpanel" style={{ left: 880, top: 156, width: 496, padding: 14 }}>
                   <div className={'th ' + thumbAt(lastSave?.mode === 'freeroam' ? 5 : 0)} style={{ height: 230, borderRadius: 10 }} />
                   <div style={{ padding: '16px 8px 6px' }}>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -679,13 +688,13 @@ export const MainMenu: React.FC<MainMenuProps> = ({
             {cur === 'account' && (
               <section className={scrCls}>
                 {Top('Аккаунт', () => go('main', true), <div className="chip"><span className="ava">{initial}</span><span style={{ fontWeight: 500 }}>{nickname}</span></div>)}
-                <div className="a" style={{ left: 64, top: 140, width: 290, display: 'flex', flexDirection: 'column', gap: 4 }}>
+                <div className="a mc-nav" style={{ left: 64, top: 140, width: 290, display: 'flex', flexDirection: 'column', gap: 4 }}>
                   <button className={'nav-i cn sl d1' + (accTab === 'profile' ? ' nav-on' : '')} onClick={() => switchSection(() => setAccTab('profile'))}>Профиль</button>
                   <button className={'nav-i cn sl d2' + (accTab === 'friends' ? ' nav-on' : '')} onClick={() => switchSection(() => setAccTab('friends'))}>Друзья</button>
                 </div>
 
                 {accTab === 'profile' && (
-                  <div className="a sec" key="acc-profile" style={{ left: 394, top: 140, width: 982, display: 'flex', flexDirection: 'column', gap: 20 }}>
+                  <div className="a sec mc-content" key="acc-profile" style={{ left: 394, top: 140, width: 982, display: 'flex', flexDirection: 'column', gap: 20 }}>
                     <div className="panel st d1" style={{ display: 'flex', alignItems: 'center', gap: 26, padding: '26px 30px' }}>
                       <div style={{ width: 104, height: 104, borderRadius: '50%', background: 'linear-gradient(135deg,#e0ab45,#a8741c)', display: 'flex', alignItems: 'center', justifyContent: 'center', font: "700 52px 'Barlow Condensed',sans-serif", color: '#1a1409' }}>{initial}</div>
                       <div style={{ flex: 1, minWidth: 0 }}>
@@ -759,7 +768,7 @@ export const MainMenu: React.FC<MainMenuProps> = ({
                 )}
 
                 {accTab === 'friends' && (
-                  <div className="a sec" key="acc-friends" style={{ left: 394, top: 140, width: 982 }}>
+                  <div className="a sec mc-content" key="acc-friends" style={{ left: 394, top: 140, width: 982 }}>
                     <div className="panel st d1" style={{ padding: '22px 24px' }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
                         <span className="cn" style={{ fontSize: 20, fontWeight: 700 }}>Друзья</span>
@@ -812,14 +821,14 @@ export const MainMenu: React.FC<MainMenuProps> = ({
                     </div>
                   </div>
                 </div>
-                <div className="a st d2" style={{ left: 64, top: 182, display: 'flex', gap: 10 }}>
+                <div className="a st d2 mc-pills" style={{ left: 64, top: 182, display: 'flex', gap: 10 }}>
                   <button className={'pill' + (modeFilter === 'all' ? ' pill-on' : '')} onClick={() => setModeFilter('all')}>Все режимы</button>
                   {Object.keys(MODE_NAME).map(m => (
                     <button key={m} className={'pill' + (modeFilter === m ? ' pill-on' : '')} onClick={() => setModeFilter(m)}>{MODE_NAME[m]}</button>
                   ))}
                   <button className={'pill' + (onlyFree ? ' pill-on' : '')} onClick={() => setOnlyFree(v => !v)}>Есть места</button>
                 </div>
-                <div className="panel a st d2" style={{ left: 64, top: 232, width: 850, height: 610, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+                <div className="panel a st d2 mc-list" style={{ left: 64, top: 232, width: 850, height: 610, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
                   <div className="row hd cn" style={{ borderBottom: '1px solid rgba(255,255,255,.08)', flex: 'none' }}><span /><span>Название</span><span>Режим</span><span>Игроки</span></div>
                   <div className="scroll" style={{ flex: 1 }}>
                     {filteredServers.length === 0 ? (
@@ -844,7 +853,7 @@ export const MainMenu: React.FC<MainMenuProps> = ({
                     })}
                   </div>
                 </div>
-                <div className="panel a st d4" style={{ left: 938, top: 232, width: 438, height: 610, padding: 14, display: 'flex', flexDirection: 'column' }}>
+                <div className="panel a st d4 mc-side2" style={{ left: 938, top: 232, width: 438, height: 610, padding: 14, display: 'flex', flexDirection: 'column' }}>
                   {selectedServer ? (
                     <>
                       <div className={'th ' + (MODE_THUMB[selectedServer.gameMode] || 'm5')} style={{ height: 200, borderRadius: 10, flex: 'none' }} />
@@ -879,13 +888,13 @@ export const MainMenu: React.FC<MainMenuProps> = ({
             {cur === 'settings' && (
               <section className={scrCls}>
                 {Top('Настройки', () => go('main', true))}
-                <div className="a" style={{ left: 64, top: 128, width: 260, display: 'flex', flexDirection: 'column', gap: 4 }}>
+                <div className="a mc-nav" style={{ left: 64, top: 128, width: 260, display: 'flex', flexDirection: 'column', gap: 4 }}>
                   {([['gfx', 'Графика'], ['sound', 'Звук'], ['ctrl', 'Управление'], ['game', 'Геймплей']] as [SetTab, string][]).map(([id, label], i) => (
                     <button key={id} className={'nav-i cn sl d' + (i + 1) + (setTab === id ? ' nav-on' : '')} onClick={() => switchSection(() => setSetTab(id))}>{label}</button>
                   ))}
                 </div>
 
-                <div className="panel a sec st d2 scroll" key={'panel-' + setTab} style={{ left: 350, top: 128, width: 700, maxHeight: 714 }}>
+                <div className="panel a sec st d2 scroll mc-content mc-has-aside" key={'panel-' + setTab} style={{ left: 350, top: 128, width: 700, maxHeight: 714 }}>
                   {setTab === 'gfx' && (
                     <>
                       <div className="grp cn" style={{ paddingTop: 18 }}>Пресет</div>
@@ -939,7 +948,7 @@ export const MainMenu: React.FC<MainMenuProps> = ({
                   )}
                 </div>
 
-                <div className="a sec" style={{ left: 1074, top: 128, width: 302, display: 'flex', flexDirection: 'column', gap: 16 }}>
+                <div className="a sec mc-aside" style={{ left: 1074, top: 128, width: 302, display: 'flex', flexDirection: 'column', gap: 16 }}>
                   <div className="panel st d3" style={{ padding: 12 }}>
                     <div className={'th ' + thumbAt(['gfx', 'sound', 'ctrl', 'game'].indexOf(setTab))} style={{ height: 176, borderRadius: 9 }} />
                     <div style={{ padding: '14px 6px 6px' }}>
@@ -980,7 +989,7 @@ export const MainMenu: React.FC<MainMenuProps> = ({
                   </div>
                   <div className="mut" style={{ paddingBottom: 12, fontSize: 13 }}>Показано: {filteredSaves.length}</div>
                 </div>
-                <div className="a scroll" style={{ left: 64, top: 182, width: 1312, height: 584, display: 'grid', gridTemplateColumns: 'repeat(4,minmax(0,1fr))', gridAutoRows: 280, gap: 20, alignContent: 'start' }}>
+                <div className="a scroll mc-saves" style={{ left: 64, top: 182, width: 1312, height: 584, display: 'grid', gridTemplateColumns: 'repeat(4,minmax(0,1fr))', gridAutoRows: 280, gap: 20, alignContent: 'start' }}>
                   {filteredSaves.map((v, i) => (
                     <button key={v.id} className={'card st d' + Math.min(i + 1, 9) + (v.id === selectedSave?.id ? ' card-on' : '')} onClick={() => setSelectedSaveId(v.id)} onDoubleClick={() => onLoadSave(v.id)}>
                       <div className={'th ' + thumbAt(v.mode === 'freeroam' ? 5 : i)} style={{ height: 166, position: 'relative' }}>
@@ -1012,7 +1021,7 @@ export const MainMenu: React.FC<MainMenuProps> = ({
                     </button>
                   </div>
                 </div>
-                <div className="a st d8" style={{ left: 64, right: 64, bottom: 76, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div className="a st d8 mc-savebar" style={{ left: 64, right: 64, bottom: 76, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                   <div className="mut" style={{ fontSize: 14 }}>
                     Выбрано: <span style={{ color: '#e9e6df', fontWeight: 600 }}>{selectedSave ? selectedSave.name : '—'}</span>
                     {selectedSave && (
@@ -1042,16 +1051,16 @@ export const MainMenu: React.FC<MainMenuProps> = ({
                     {AccountChip}
                   </div>
                 ))}
-                <div className="a" style={{ left: 64, top: 112, width: 880 }}>
-                  <div className="st d1" style={{ display: 'flex', gap: 10, marginBottom: 20, flexWrap: 'wrap' }}>
+                <div className="a mc-main" style={{ left: 64, top: 112, width: 880 }}>
+                  <div className="st d1 mc-filters" style={{ display: 'flex', gap: 10, marginBottom: 20, flexWrap: 'wrap' }}>
                     {[['all', 'Все локации'], ['city', 'Город'], ['highway', 'Трасса'], ['nature', 'Природа'], ['mountain', 'Горы'], ['industrial', 'Промзона']].map(([id, label]) => (
                       <button key={id} className={'pill' + (spawnCategory === id ? ' pill-on' : '')} onClick={() => setSpawnCategory(id)}>{label}</button>
                     ))}
                   </div>
-                  <div className="scroll" style={{ display: 'grid', gridTemplateColumns: 'repeat(4,minmax(0,1fr))', gridAutoRows: 262, gap: 20, alignContent: 'start', height: 650 }}>
+                  <div className="scroll mc-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4,minmax(0,1fr))', gridAutoRows: 262, gap: 20, alignContent: 'start', height: 650 }}>
                     {visibleSpawns.map(({ loc, i }, n) => (
                       <button key={loc.id} className={'card st d' + Math.min(n + 2, 9) + (i === spawnIndex ? ' card-on' : '')} onClick={() => pickSpawn(i)}>
-                        <div className={'th ' + (CATEGORY_THUMB[loc.category || ''] || thumbAt(i))} style={{ height: 150 }} />
+                        <div className={'th mc-th ' + (CATEGORY_THUMB[loc.category || ''] || thumbAt(i))} style={{ height: 150 }} />
                         <div style={{ padding: '12px 14px' }}>
                           <div className="cn" style={{ fontSize: 18, fontWeight: 700, lineHeight: 1.1, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>{loc.nameRu}</div>
                         </div>
@@ -1059,12 +1068,12 @@ export const MainMenu: React.FC<MainMenuProps> = ({
                     ))}
                   </div>
                 </div>
-                <div className="panel a st d3" style={{ left: 976, top: 112, width: 400, height: 730, padding: 14, display: 'flex', flexDirection: 'column' }}>
-                  <div className={'th ' + (CATEGORY_THUMB[spawn.category || ''] || thumbAt(spawnIndex))} style={{ height: 150, borderRadius: 9, flex: 'none' }} />
-                  <div style={{ padding: '16px 10px 0', flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+                <div className="panel a st d3 mc-side" style={{ left: 976, top: 112, width: 400, height: 730, padding: 14, display: 'flex', flexDirection: 'column' }}>
+                  <div className={'th mc-sth ' + (CATEGORY_THUMB[spawn.category || ''] || thumbAt(spawnIndex))} style={{ height: 150, borderRadius: 9, flex: 'none' }} />
+                  <div className="mc-sbody" style={{ padding: '16px 10px 0', flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
                     <div className="cn mut" style={{ fontSize: 12 }}>Точка старта</div>
-                    <div className="cn" style={{ fontSize: 26, fontWeight: 700, marginTop: 2, lineHeight: 1.1 }}>{spawn.nameRu}</div>
-                    <div className="mut" style={{ fontSize: 13, lineHeight: 1.45, marginTop: 8 }}>{spawn.description}</div>
+                    <div className="cn mc-name" style={{ fontSize: 26, fontWeight: 700, marginTop: 2, lineHeight: 1.1 }}>{spawn.nameRu}</div>
+                    <div className="mut mc-desc" style={{ fontSize: 13, lineHeight: 1.45, marginTop: 8 }}>{spawn.description}</div>
                     <div style={{ marginTop: 16 }}><div className="lbl">Название сохранения</div><input className="inp" value={newName} onChange={e => setNewName(e.target.value)} onKeyDown={e => e.stopPropagation()} /></div>
                     <div style={{ marginTop: 16 }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between' }}><span className="lbl">Время суток</span><span style={{ fontSize: 13, fontWeight: 600 }}>{fmtHour(newTime)}</span></div>
@@ -1074,7 +1083,7 @@ export const MainMenu: React.FC<MainMenuProps> = ({
                       <div className="lbl">Погода</div>
                       <Seg value={newWeather} onChange={setNewWeather} options={[{ v: 'clear', label: 'Ясно' }, { v: 'overcast', label: 'Пасмурно' }, { v: 'rain', label: 'Дождь' }, { v: 'fog', label: 'Туман' }]} />
                     </div>
-                    <div style={{ marginTop: 12, padding: '8px 10px', background: 'rgba(16,185,129,0.08)', borderRadius: 8, border: '1px solid rgba(16,185,129,0.25)', fontSize: 12, color: '#34d399', lineHeight: 1.45 }}>
+                    <div className="mc-note" style={{ marginTop: 12, padding: '8px 10px', background: 'rgba(16,185,129,0.08)', borderRadius: 8, border: '1px solid rgba(16,185,129,0.25)', fontSize: 12, color: '#34d399', lineHeight: 1.45 }}>
                       Живой мир: активный трафик, пешеходы, смена дня/ночи и погоды, заработок и выживание.
                     </div>
                     <div style={{ flex: 1 }} />
@@ -1099,16 +1108,16 @@ export const MainMenu: React.FC<MainMenuProps> = ({
                     {AccountChip}
                   </div>
                 ))}
-                <div className="a" style={{ left: 64, top: 112, width: 880 }}>
-                  <div className="st d1" style={{ display: 'flex', gap: 10, marginBottom: 20, flexWrap: 'wrap' }}>
+                <div className="a mc-main" style={{ left: 64, top: 112, width: 880 }}>
+                  <div className="st d1 mc-filters" style={{ display: 'flex', gap: 10, marginBottom: 20, flexWrap: 'wrap' }}>
                     {[['all', 'Все локации'], ['city', 'Город'], ['highway', 'Трасса'], ['nature', 'Природа'], ['mountain', 'Горы'], ['industrial', 'Промзона']].map(([id, label]) => (
                       <button key={id} className={'pill' + (spawnCategory === id ? ' pill-on' : '')} onClick={() => setSpawnCategory(id)}>{label}</button>
                     ))}
                   </div>
-                  <div className="scroll" style={{ display: 'grid', gridTemplateColumns: 'repeat(4,minmax(0,1fr))', gridAutoRows: 262, gap: 20, alignContent: 'start', height: 650 }}>
+                  <div className="scroll mc-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4,minmax(0,1fr))', gridAutoRows: 262, gap: 20, alignContent: 'start', height: 650 }}>
                     {visibleSpawns.map(({ loc, i }, n) => (
                       <button key={loc.id} className={'card st d' + Math.min(n + 2, 9) + (i === spawnIndex ? ' card-on' : '')} onClick={() => pickSpawn(i)}>
-                        <div className={'th ' + (CATEGORY_THUMB[loc.category || ''] || thumbAt(i))} style={{ height: 150 }} />
+                        <div className={'th mc-th ' + (CATEGORY_THUMB[loc.category || ''] || thumbAt(i))} style={{ height: 150 }} />
                         <div style={{ padding: '12px 14px' }}>
                           <div className="cn" style={{ fontSize: 18, fontWeight: 700, lineHeight: 1.1, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>{loc.nameRu}</div>
                         </div>
@@ -1116,12 +1125,12 @@ export const MainMenu: React.FC<MainMenuProps> = ({
                     ))}
                   </div>
                 </div>
-                <div className="panel a st d3" style={{ left: 976, top: 112, width: 400, height: 730, padding: 14, display: 'flex', flexDirection: 'column' }}>
-                  <div className={'th ' + (CATEGORY_THUMB[spawn.category || ''] || thumbAt(spawnIndex))} style={{ height: 150, borderRadius: 9, flex: 'none' }} />
-                  <div style={{ padding: '16px 10px 0', flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+                <div className="panel a st d3 mc-side" style={{ left: 976, top: 112, width: 400, height: 730, padding: 14, display: 'flex', flexDirection: 'column' }}>
+                  <div className={'th mc-sth ' + (CATEGORY_THUMB[spawn.category || ''] || thumbAt(spawnIndex))} style={{ height: 150, borderRadius: 9, flex: 'none' }} />
+                  <div className="mc-sbody" style={{ padding: '16px 10px 0', flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
                     <div className="cn mut" style={{ fontSize: 12 }}>Точка старта</div>
-                    <div className="cn" style={{ fontSize: 26, fontWeight: 700, marginTop: 2, lineHeight: 1.1 }}>{spawn.nameRu}</div>
-                    <div className="mut" style={{ fontSize: 13, lineHeight: 1.45, marginTop: 8 }}>{spawn.description}</div>
+                    <div className="cn mc-name" style={{ fontSize: 26, fontWeight: 700, marginTop: 2, lineHeight: 1.1 }}>{spawn.nameRu}</div>
+                    <div className="mut mc-desc" style={{ fontSize: 13, lineHeight: 1.45, marginTop: 8 }}>{spawn.description}</div>
                     <div style={{ marginTop: 16 }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between' }}><span className="lbl">Время суток</span><span style={{ fontSize: 13, fontWeight: 600 }}>{fmtHour(newTime)}</span></div>
                       <div style={{ marginRight: 9 }}><Track label="Время суток" value={newTime} min={0} max={23.5} step={0.5} onChange={setNewTime} /></div>
@@ -1130,7 +1139,7 @@ export const MainMenu: React.FC<MainMenuProps> = ({
                       <div className="lbl">Погода</div>
                       <Seg value={newWeather} onChange={setNewWeather} options={[{ v: 'clear', label: 'Ясно' }, { v: 'overcast', label: 'Пасмурно' }, { v: 'rain', label: 'Дождь' }, { v: 'fog', label: 'Туман' }]} />
                     </div>
-                    <div style={{ marginTop: 12, padding: '8px 10px', background: 'rgba(201,146,43,0.08)', borderRadius: 8, border: '1px solid rgba(201,146,43,0.25)', fontSize: 12, color: '#e0ab45', lineHeight: 1.45 }}>
+                    <div className="mc-note" style={{ marginTop: 12, padding: '8px 10px', background: 'rgba(201,146,43,0.08)', borderRadius: 8, border: '1px solid rgba(201,146,43,0.25)', fontSize: 12, color: '#e0ab45', lineHeight: 1.45 }}>
                       Свободная езда: без трафика и пешеходов. Выберите карту, затем настройте автомобиль.
                     </div>
                     <div style={{ flex: 1 }} />
@@ -1148,7 +1157,7 @@ export const MainMenu: React.FC<MainMenuProps> = ({
             {cur === 'create' && (
               <section className={scrCls}>
                 {Top('Создать сервер', () => go('servers', true))}
-                <div className="panel a stg st d2 scroll" style={{ left: 64, top: 112, width: 880, height: 740, padding: '28px 30px', display: 'flex', flexDirection: 'column', gap: 20 }}>
+                <div className="panel a stg st d2 scroll mc-form" style={{ left: 64, top: 112, width: 880, height: 740, padding: '28px 30px', display: 'flex', flexDirection: 'column', gap: 20 }}>
                   <div><div className="lbl">Название сервера</div><input className="inp" value={hostName} onChange={e => setHostName(e.target.value)} onKeyDown={e => e.stopPropagation()} /></div>
                   <div><div className="lbl">Код комнаты (его вводят друзья, чтобы подключиться)</div><input className="inp" value={hostCode} onChange={e => setHostCode(e.target.value)} onKeyDown={e => e.stopPropagation()} style={{ fontFamily: 'ui-monospace,monospace', borderColor: 'rgba(255,255,255,.14)' }} /></div>
                   <div>
@@ -1202,7 +1211,7 @@ export const MainMenu: React.FC<MainMenuProps> = ({
                     <button className="btn btn-p" style={{ flex: 1 }} onClick={createServer} disabled={creating}>{creating ? 'Регистрация...' : 'Создать сервер'}</button>
                   </div>
                 </div>
-                <div className="panel a st d4" style={{ left: 976, top: 112, width: 400, padding: '24px 26px' }}>
+                <div className="panel a st d4 mc-side mc-auto" style={{ left: 976, top: 112, width: 400, padding: '24px 26px' }}>
                   <div className="cn" style={{ fontSize: 20, fontWeight: 700 }}>Как это работает</div>
                   <div className="mut" style={{ fontSize: 14, lineHeight: 1.55, marginTop: 12 }}>
                     Сервер работает напрямую между игроками (P2P). Вы становитесь хостом и входите в игру сразу после создания.

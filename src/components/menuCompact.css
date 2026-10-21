@@ -1,0 +1,153 @@
+/*
+  Compact layout for phones and short windows (stage height <= 600 CSS px).
+
+  On desktop every menu is a fixed 1440x900 stage scaled to fit. On a phone that scale drops to ~0.43 and
+  text/buttons become tiny. In compact mode the stage instead takes the real aspect ratio of the screen
+  (~1200x560 logical px, see stageMetrics in ShadowHost.tsx), so everything renders ~1.6x larger.
+  The whole menu never scrolls: only long lists (cars, maps, settings rows) scroll inside their own block.
+
+  Everything below is scoped to `.gm[data-mob]`, so the desktop layout is untouched.
+  Inline positions from the markup are overridden with !important on purpose.
+*/
+
+.gm[data-mob]{font-size:16px}
+@media (pointer:coarse){.gm[data-mob] .hint{display:none}}
+.gm[data-mob] .hint{left:28px;right:28px;bottom:8px}
+
+/* ---- scene ---- */
+.gm[data-mob] .col{left:0;width:var(--sw);height:var(--sh)}
+.gm[data-mob] .glow{height:var(--sh)!important}
+.gm[data-mob] .lay{height:var(--sh)}
+.gm[data-mob]>svg.a{width:100%!important;height:100%!important}
+
+/* ---- shared chrome ---- */
+.gm[data-mob] .top{left:28px;right:28px;top:12px;height:46px}
+.gm[data-mob] .ttl{font-size:24px}
+.gm[data-mob] .chip{height:44px}
+.gm[data-mob] .back{width:46px}
+.gm[data-mob] .btn{height:50px;font-size:16px;padding:0 22px}
+.gm[data-mob] .btn-sm{height:42px}
+.gm[data-mob] .pill{height:40px;font-size:15px;padding:0 18px;border-radius:20px}
+.gm[data-mob] .seg>span{height:42px;font-size:15px;padding:0 14px}
+.gm[data-mob] .tab{height:44px;font-size:19px;padding:0 18px}
+.gm[data-mob] .nav-i{height:50px;font-size:21px}
+.gm[data-mob] .set{min-height:56px;height:auto!important;padding:0 20px}
+.gm[data-mob] .grp{padding:16px 20px 6px}
+.gm[data-mob] .lbl{font-size:13px}
+.gm[data-mob] .tg{width:54px;height:30px;border-radius:15px}
+.gm[data-mob] .tg::after{width:24px;height:24px}
+.gm[data-mob] .tg.on::after{left:27px}
+.gm[data-mob] .sld-t{height:8px}
+.gm[data-mob] .sld-k{top:-8px;width:24px;height:24px;margin-left:-12px}
+.gm[data-mob] .nh{height:48px}
+.gm[data-mob] .opt{padding:12px 14px;font-size:15px}
+
+/* ---- main menu ---- */
+.gm[data-mob] .mc-mlist{left:28px!important;top:72px!important;width:480px!important;gap:4px!important}
+.gm[data-mob] .mc-mlist .menu-i{height:auto!important;min-height:54px;padding:6px 18px;font-size:24px;gap:14px}
+.gm[data-mob] .mc-mlist .menu-i:hover{padding-left:24px}
+.gm[data-mob] .mc-mpanel{left:auto!important;right:28px;top:72px!important;width:430px!important}
+.gm[data-mob] .mc-mpanel .th{height:150px!important}
+
+/* ---- nav + content (account, settings) ---- */
+.gm[data-mob] .mc-nav{left:28px!important;top:72px!important;width:210px!important}
+.gm[data-mob] .mc-content{left:256px!important;top:72px!important;right:28px;width:auto!important;max-height:calc(var(--sh) - 86px)!important;overflow-y:auto;overflow-x:hidden;scrollbar-width:thin;scrollbar-color:#3a352b transparent}
+.gm[data-mob] .mc-content.mc-has-aside{right:304px}
+.gm[data-mob] .mc-aside{left:auto!important;right:28px;top:72px!important;width:260px!important}
+.gm[data-mob] .mc-aside .th{display:none}
+
+/* ---- servers / saves ---- */
+.gm[data-mob] .tabs{left:28px;top:66px;width:calc(100% - 56px)}
+.gm[data-mob] .mc-pills{left:28px!important;top:118px!important}
+.gm[data-mob] .mc-list{left:28px!important;top:164px!important;width:calc(100% - 56px - 394px)!important;height:auto!important;bottom:12px}
+.gm[data-mob] .mc-side2{left:auto!important;right:28px;top:164px!important;width:380px!important;height:auto!important;bottom:12px}
+.gm[data-mob] .mc-side2 .th{height:100px!important}
+.gm[data-mob] .row{height:58px}
+.gm[data-mob] .mc-saves{left:28px!important;top:118px!important;width:calc(100% - 56px)!important;height:calc(var(--sh) - 118px - 76px)!important;grid-template-columns:repeat(4,minmax(0,1fr))!important;grid-auto-rows:212px!important;gap:14px!important}
+.gm[data-mob] .mc-saves .th{height:100px!important}
+.gm[data-mob] .mc-saves .card{font-size:14px}
+.gm[data-mob] .mc-savebar{left:28px!important;right:28px!important;bottom:12px!important}
+
+/* ---- grid + side panel (maps, vehicles) ---- */
+.gm[data-mob] .mc-main{left:28px!important;top:68px!important;width:calc(100% - 56px - 356px)!important;bottom:12px}
+.gm[data-mob] .mc-filters{margin-bottom:10px!important;height:auto!important;gap:8px!important}
+.gm[data-mob] .mc-grid{grid-template-columns:repeat(3,minmax(0,1fr))!important;grid-auto-rows:206px!important;gap:12px!important;height:calc(100% - 52px)!important;max-height:none!important;padding:6px 6px 8px 0!important;margin-top:-6px!important}
+.gm[data-mob] .mc-grid .th,.gm[data-mob] .mc-grid .cth{height:124px!important}
+.gm[data-mob] .mc-grid .cth canvas,.gm[data-mob] .mc-grid .cth svg{max-height:116px;width:auto!important;height:auto;max-width:100%}
+.gm[data-mob] .mc-side{left:auto!important;right:28px!important;top:68px!important;width:340px!important;height:auto!important;bottom:12px;padding:12px!important}
+.gm[data-mob] .mc-side.mc-auto{bottom:auto;padding:18px 20px!important}
+.gm[data-mob] .mc-sth{display:none}
+.gm[data-mob] .mc-form{left:28px!important;top:68px!important;width:calc(100% - 56px - 356px)!important;height:auto!important;bottom:12px;padding:18px 22px!important;gap:14px!important}
+
+/* ---- refinements ---- */
+.gm[data-mob] .ttl{white-space:nowrap}
+.gm[data-mob] .mc-steps{display:none}
+.gm[data-mob] .mc-filters{flex-wrap:nowrap!important;overflow-x:auto;overflow-y:hidden;scrollbar-width:none}
+.gm[data-mob] .mc-filters::-webkit-scrollbar{display:none}
+.gm[data-mob] .mc-filters .pill{flex:none}
+.gm[data-mob] .mc-mlist{width:520px!important}
+.gm[data-mob] .mc-mlist .menu-i{font-size:22px}
+.gm[data-mob] .mc-side{width:360px!important}
+.gm[data-mob] .mc-main{width:calc(100% - 56px - 376px)!important}
+.gm[data-mob] .mc-form{width:calc(100% - 56px - 376px)!important}
+.gm[data-mob] .mc-name{font-size:22px!important;line-height:1.1!important}
+.gm[data-mob] .mc-desc{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;margin-top:6px!important}
+.gm[data-mob] .mc-note{display:none}
+.gm[data-mob] .mc-sbody{padding:4px 6px 0!important}
+.gm[data-mob] .mc-sbody>div:not(:first-child){margin-top:10px!important}
+.gm[data-mob] .mc-sbody .btn-p{margin-bottom:0!important;height:50px!important;white-space:nowrap;padding:0 10px}
+.gm[data-mob] .mc-side .seg>span{padding:0 6px;font-size:14px}
+.gm[data-mob] input.inp{height:46px;font-size:17px}
+.gm[data-mob] #pvbox{height:96px!important}
+.gm[data-mob] #lh{height:40px!important}
+.gm[data-mob] .mc-side .btn{white-space:nowrap}
+
+/* the stage must never be scrolled programmatically (focus / scrollIntoView on a sliding screen) */
+.gmw,#w{overflow:hidden;overflow:clip}
+
+/* ---- pause menu ---- */
+.gm[data-mob] nav.a{left:28px!important;top:72px!important;width:360px!important;gap:4px!important}
+.gm[data-mob] nav.a .menu-i{height:auto;min-height:52px;padding:6px 18px;font-size:22px;gap:14px}
+.gm[data-mob] nav.a .menu-i:hover{padding-left:24px}
+.gm[data-mob] nav.a .menu-i[style*="margin-top"]{margin-top:10px!important}
+.gm[data-mob] .pan{left:408px!important;right:28px;top:72px!important;width:auto!important}
+.gm[data-mob] .pan.panel{left:auto!important;width:440px!important}
+.gm[data-mob] .pan .th{height:130px!important}
+.gm[data-mob] .pan .th .car canvas{height:100%!important;width:auto!important;max-width:100%}
+.gm[data-mob] #rows{max-height:calc(var(--sh) - 72px - 76px - 14px)!important}
+.gm[data-mob] #frl{max-height:150px}
+.gm[data-mob] .btn-sm{height:42px}
+
+/* ---- quick (radial) menu ---- */
+.gm[data-mob] #sh{left:calc(50% - 320px)!important;top:-20px!important;scale:.82}
+.gm[data-mob] .side{left:auto!important;right:28px;top:68px!important;width:364px!important;height:auto!important;bottom:12px}
+.gm[data-mob] .tile{height:60px}
+.gm[data-mob] .tile.row{height:52px}
+.gm[data-mob] .xb{width:44px;height:44px}
+.gm[data-mob] .pan.panel .btn{padding:0 14px;white-space:nowrap}
+.gm[data-mob] .mc-search{width:190px!important}
+.gm[data-mob] .top .chip .nm{max-width:130px!important}
+.gm[data-mob] .side .ttl{font-size:20px;line-height:1.1}
+.gm[data-mob] .side .ph>div{min-width:0}
+.gm[data-mob] .side .btn{padding:0 10px;font-size:15px;line-height:1.1;height:50px}
+
+/* ---- narrow phones (stage narrower than ~1100 logical px, e.g. 667x375) ---- */
+.gm[data-mob]{container-type:inline-size}
+@container (max-width:1100px){
+  .gm[data-mob] .mc-search{width:150px!important}
+  .gm[data-mob] .top .chip .nm{display:none}
+  .gm[data-mob] .mc-mlist{width:430px!important}
+  .gm[data-mob] .mc-mlist .menu-i{font-size:20px!important}
+  .gm[data-mob] .mc-mpanel{width:380px!important}
+  .gm[data-mob] .mc-side{width:320px!important}
+  .gm[data-mob] .mc-main,.gm[data-mob] .mc-form{width:calc(100% - 56px - 336px)!important}
+  .gm[data-mob] .mc-list{width:calc(100% - 56px - 354px)!important}
+  .gm[data-mob] .mc-side2{width:340px!important}
+  .gm[data-mob] .mc-aside{width:220px!important}
+  .gm[data-mob] .mc-content.mc-has-aside{right:264px!important}
+  .gm[data-mob] .pan.panel{width:400px!important}
+  .gm[data-mob] nav.a{width:320px!important}
+  .gm[data-mob] .pan{left:372px!important}
+  .gm[data-mob] .side{width:320px!important}
+  .gm[data-mob] .mc-content .seg>span{padding:0 9px;font-size:14px}
+}

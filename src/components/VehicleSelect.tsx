@@ -241,21 +241,21 @@ export const VehicleSelect: React.FC<VehicleSelectProps> = ({ defaultSpawnId, on
               <span className="cn ttl">Выбор автомобиля</span>
             </div>
             {view === 'cars' && (
-              <div className="chip" style={{ width: 240 }}>
+              <div className="chip mc-search" style={{ width: 240 }}>
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#a29e93" strokeWidth="2"><circle cx="11" cy="11" r="7" /><path d="M16 16l5 5" /></svg>
                 <input value={query} onChange={e => setQuery(e.target.value)} onKeyDown={e => e.stopPropagation()} placeholder="Поиск авто..." aria-label="Поиск авто" />
               </div>
             )}
             <div className="row2" style={{ alignItems: 'center', gap: 22 }}>
-              <div className="mut" style={{ fontSize: 14, display: 'flex', alignItems: 'center', gap: 10 }}>
+              <div className="mut mc-steps" style={{ fontSize: 14, display: 'flex', alignItems: 'center', gap: 10 }}>
                 <b style={{ color: view === 'cars' ? '#e0ab45' : '#a29e93' }}>1</b> Автомобиль <span style={{ width: 28, height: 1, background: 'rgba(255,255,255,.25)' }} /> <b style={{ color: view === 'cfgs' ? '#e0ab45' : '#a29e93' }}>2</b> Комплектация
               </div>
               <div className="chip"><span className="cth g0" style={{ width: 28, height: 28, borderRadius: 7 }} /><span className="nm" style={{ fontWeight: 500, maxWidth: 210 }}>{shortSpawn(loc.nameRu)}</span></div>
             </div>
           </div>
 
-          <div className="a" style={{ left: 64, top: 112, width: 880 }}>
-            <div id="lh" style={{ display: 'flex', alignItems: 'center', gap: 10, height: 34, marginBottom: 20 }}>
+          <div className="a mc-main" style={{ left: 64, top: 112, width: 880 }}>
+            <div id="lh" className="mc-filters" style={{ display: 'flex', alignItems: 'center', gap: 10, height: 34, marginBottom: 20 }}>
               {view === 'cars' ? (
                 <>
                   {FILTERS.map(f => (
@@ -270,7 +270,7 @@ export const VehicleSelect: React.FC<VehicleSelectProps> = ({ defaultSpawnId, on
                 </>
               )}
             </div>
-            <div id="grid" className="scroll" style={{ display: 'grid', gridTemplateColumns: 'repeat(4,minmax(0,1fr))', gridAutoRows: 262, gap: 20, alignContent: 'start' }}>
+            <div id="grid" className="scroll mc-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4,minmax(0,1fr))', gridAutoRows: 262, gap: 20, alignContent: 'start' }}>
               {view === 'cars' ? (
                 vis.length === 0 ? (
                   <div className="mut" style={{ gridColumn: '1 / -1', padding: '40px 0', textAlign: 'center' }}>Ничего не найдено</div>
@@ -295,13 +295,13 @@ export const VehicleSelect: React.FC<VehicleSelectProps> = ({ defaultSpawnId, on
             </div>
           </div>
 
-          <aside className="panel a" style={{ left: 976, top: 112, width: 400, height: 730, padding: 14, display: 'flex', flexDirection: 'column' }}>
+          <aside className="panel a mc-side" style={{ left: 976, top: 112, width: 400, height: 730, padding: 14, display: 'flex', flexDirection: 'column' }}>
             <div className={'cth g' + (ci % 8)} id="pvbox" style={{ height: 150, borderRadius: 9, flex: 'none' }}>
               <div id="pv" style={{ width: '84%', display: 'flex', justifyContent: 'center' }}><Car c={car} color={colHex} roof={colRoof} w={340} h={200} /></div>
             </div>
             <div style={{ padding: '14px 10px 0' }}>
               <div className="cn mut" style={{ fontSize: 12 }}>Выбранный автомобиль</div>
-              <div className="cn" id="cName" style={{ fontSize: 28, fontWeight: 700, marginTop: 2, lineHeight: 1.1 }}>{car.nameRu}</div>
+              <div className="cn mc-name" id="cName" style={{ fontSize: 28, fontWeight: 700, marginTop: 2, lineHeight: 1.1 }}>{car.nameRu}</div>
               <div className="mut" id="cSub" style={{ fontSize: 13, marginTop: 4 }}>{col.name} · {car.powerHp} л.с. · {trans} · {drive}</div>
             </div>
             <div className="tree" id="tree">
