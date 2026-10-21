@@ -174,7 +174,7 @@ export const PauseMenu: React.FC<PauseMenuProps> = ({
   const later = (fn: () => void, ms: number) => { timers.current.push(window.setTimeout(fn, ms)); };
 
   /* масштаб фиксированной сцены 1440x900 под экран (как в макете) */
-  useLayoutEffect(() => attachStageFit(() => wrapRef.current, () => gmRef.current), []);
+  useLayoutEffect(() => attachStageFit(() => wrapRef.current, () => gmRef.current, true), []);
 
   useEffect(() => {
     const raf = requestAnimationFrame(() => requestAnimationFrame(() => setEntered(true)));
