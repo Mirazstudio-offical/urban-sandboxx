@@ -64,6 +64,8 @@ interface PauseMenuProps {
   onExitToMainMenu: () => void;
   /** Opens the in-game acceleration run tester. */
   onOpenPerformanceTest?: () => void;
+  /** Opens the collision and softbody physics telemetry analyzer. */
+  onOpenCollisionTest?: () => void;
   settings: PauseSettings;
   onUpdateSettings: (next: PauseSettings) => void;
   session: PauseSessionInfo;
@@ -157,7 +159,7 @@ const TABS: [TabId, string][] = [['gfx', 'Графика'], ['sound', 'Звук'
 /* ------------------------------------------------------------------ */
 
 export const PauseMenu: React.FC<PauseMenuProps> = ({
-  onResume, onSave, onExitToMainMenu, onOpenPerformanceTest, settings, onUpdateSettings, session, currentUser
+  onResume, onSave, onExitToMainMenu, onOpenPerformanceTest, onOpenCollisionTest, settings, onUpdateSettings, session, currentUser
 }) => {
   const [cur, setCur] = useState<'online' | 'settings' | null>(null);
   const [entered, setEntered] = useState(false);
@@ -412,6 +414,11 @@ export const PauseMenu: React.FC<PauseMenuProps> = ({
             {onOpenPerformanceTest && (
               <button className="menu-i cn" onClick={onOpenPerformanceTest}>
                 <Ic><path d="M4 18a9 9 0 0 1 17 0" /><path d="M12 18l4-6" /><path d="M12 3v2" /></Ic>Замер разгона
+              </button>
+            )}
+            {onOpenCollisionTest && (
+              <button className="menu-i cn" onClick={onOpenCollisionTest}>
+                <Ic><path d="M12 2l10 5v6c0 5.5-3.8 10.7-10 12-6.2-1.3-10-6.5-10-12V7l10-5z" /><path d="M12 8v8M8 12h8" /></Ic>Замер столкновений
               </button>
             )}
             <button className="menu-i cn" onClick={() => setConfirmExit(true)} style={{ marginTop: 14, color: '#a29e93' }}>

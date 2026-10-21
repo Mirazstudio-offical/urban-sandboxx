@@ -108,6 +108,7 @@ import { VehicleBoardMenu } from './components/VehicleBoardMenu';
 import { TimeScaleButton, SlowMotionIndicator, DEFAULT_SLOW_SCALE } from './components/TimeScaleControl';
 import { PauseMenu, type PauseSessionInfo } from './components/PauseMenu';
 import { PerformanceTest } from './components/PerformanceTest';
+import { CollisionTest } from './components/CollisionTest';
 import { getVehicleCatalogItem } from './vehicleCatalog';
 import { PlayerNeedsHUD } from './components/PlayerNeedsHUD';
 import { InventoryModal } from './components/InventoryModal';
@@ -477,6 +478,7 @@ export default function App() {
   const [isMainMenuOpen, setIsMainMenuOpen] = useState<boolean>(true);
   const [isPauseMenuOpen, setIsPauseMenuOpen] = useState<boolean>(false);
   const [isPerfTestOpen, setIsPerfTestOpen] = useState<boolean>(false);
+  const [isCollisionTestOpen, setIsCollisionTestOpen] = useState<boolean>(false);
   const isPauseMenuOpenRef = useRef<boolean>(false);
   isPauseMenuOpenRef.current = isPauseMenuOpen;
   // Which screen the main menu opens on (the pause menu can send the player straight to the server list)
@@ -7770,6 +7772,10 @@ export default function App() {
             setIsPauseMenuOpen(false);
             setIsPerfTestOpen(true);
           }}
+          onOpenCollisionTest={() => {
+            setIsPauseMenuOpen(false);
+            setIsCollisionTestOpen(true);
+          }}
         />
       )}
 
@@ -7821,6 +7827,15 @@ export default function App() {
           worldRef={worldRef}
           playerRef={playerRef}
           onClose={() => setIsPerfTestOpen(false)}
+        />
+      )}
+
+      {/* In-game collision & softbody physics telemetry analyzer */}
+      {isCollisionTestOpen && worldRef.current && (
+        <CollisionTest
+          worldRef={worldRef}
+          playerRef={playerRef}
+          onClose={() => setIsCollisionTestOpen(false)}
         />
       )}
 
