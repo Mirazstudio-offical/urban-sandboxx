@@ -3053,6 +3053,7 @@ export default function App() {
         }
 
         // Update all vehicles (both AI and player car)
+        (world as any)._physicsFrameId = ((world as any)._physicsFrameId || 0) + 1;
         const sleepMargin = Math.hypot(window.innerWidth, window.innerHeight) / (2 * Math.max(0.4, camera.zoom)) + 350;
         let playerCar: Vehicle | null = null;
         for (const veh of world.vehicles) {

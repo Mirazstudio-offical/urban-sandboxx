@@ -582,9 +582,13 @@ function beginContact(
   dirY: number,
   localContactX: number,
   localContactY: number,
-  narrow: boolean,
-  widthPx: number
+  widthPxOrNarrow: number | boolean,
+  contactWidthPx?: number
 ): void {
+  const widthPx = typeof widthPxOrNarrow === 'number'
+    ? widthPxOrNarrow
+    : (typeof contactWidthPx === 'number' ? contactWidthPx : (widthPxOrNarrow ? 6.5 : car.width));
+
   const lat0 = -localContactX * dirY + localContactY * dirX;
   const prev = system.contact;
   if (
@@ -592,13 +596,13 @@ function beginContact(
     car.activeCrumple && car.activeCrumple.timer > 0 &&
     prev.dirX * dirX + prev.dirY * dirY > 0.95 &&
     Math.abs(prev.lat0 - lat0) < 3.0 &&
-    prev.narrow === narrow
+    Math.abs(prev.half * 2 - widthPx) < 2.0
   ) {
     return;
   }
 
-  const half = narrow ? Math.max(2.2, widthPx * 0.5) : Math.max(car.width * 0.55, widthPx * 0.5) + 1.0;
-  const reach = narrow ? half * 2.0 : Math.max(car.length, car.width);
+  const half = Math.max(1.5, widthPx * 0.5);
+  const reach = Math.max(half * 2.0, car.width * 0.55);
   const nodes = system.nodes;
 
   // Record pre-impact depth for all nodes to prevent subsequent crashes from popping out old dents
@@ -624,91 +628,94 @@ function beginContact(
   }
   if (!isFinite(plane0)) plane0 = 0;
 
-  system.contact = { dirX, dirY, plane0, lat0, half, narrow, depth0, pen: 0 };
+  system.contact = { dirX, dirY, plane0, lat0, half, narrow: widthPx < car.width * 0.38, depth0, pen: 0 };
   system.isSleeping = false;
   system.activeTimer = Math.max(system.activeTimer || 0, 0.5);
 }
 
 /**
- * Односторонняя связь «препятствие»: узел не может зайти за плоскость (стена) либо внутрь
- * окружности (столб/дерево). Позиция проецируется на поверхность, а скорость сносится к
- * скорости препятствия — так же жёсткая стена работает в BeamNG. Возвращает силу реакции.
+ * Односторонняя связь «препятствие»: универсальный физический профиль контакта.
+ * Препятствие описывается непрерывным геометрическим контуром контактной грани шириной 2*half
+ * со скруглением кромок R = min(half, 5.0).
+ * - Узкий столб/дерево (half = 1.5..3.5 px): flatHalf = 0, R = half — чистый цилиндр/окружность.
+ * - Широкая стена или бампер (half = 12..50 px): центральная часть плоская, кромки плавно скруглены.
+ * Единая физическая модель, не зависящая от типа или названия объекта.
  */
 function enforceContact(system: NodeBeamStructure, pen: number, penRate: number, subDt: number): number {
   const ct = system.contact;
   if (!ct) return 0;
   const nodes = system.nodes;
-  const { dirX, dirY, plane0, lat0, half, narrow } = ct;
+  const { dirX, dirY, plane0, lat0, half } = ct;
   let reaction = 0;
 
-  if (!narrow) {
-    const planeH = plane0 + pen;
-    for (let i = 0; i < nodes.length; i++) {
-      const n = nodes[i];
-      if (n.isFixed) continue;
-      const l = -n.x * dirY + n.y * dirX;
-      if (Math.abs(l - lat0) > half) continue;
-      const h = n.x * dirX + n.y * dirY;
-      if (h >= planeH) continue;
-      const corr = planeH - h;
-      n.x += dirX * corr;
-      n.y += dirY * corr;
-      const vu = n.vx * dirX + n.vy * dirY;
-      let dvN = Math.max(0, corr / subDt) * 0.5;
-      if (vu < penRate) {
-        const dv = penRate - vu;
-        n.vx += dirX * dv;
-        n.vy += dirY * dv;
-        reaction += (n.mass * dv) / subDt;
-        dvN = Math.max(dvN, dv);
-      }
-      // Трение вдоль стены (кулон): гасим касательную скорость не больше μ·нормальной
-      const vl = -n.vx * dirY + n.vy * dirX;
-      const maxDvT = WALL_FRICTION * dvN;
-      const dvT = Math.min(Math.abs(vl), maxDvT);
-      if (dvT > 0) {
-        const sgn = vl > 0 ? -1 : 1;
-        n.vx += -dirY * sgn * dvT;
-        n.vy += dirX * sgn * dvT;
-      }
-    }
-    return reaction;
-  }
+  const planeH = plane0 + pen;
+  const R = Math.max(1.2, Math.min(half, 5.0));
+  const flatHalf = Math.max(0, half - R);
 
-  // Столб: окружность радиуса half, центр движется вглубь кузова вместе с ходом смятия.
-  const cH = plane0 - half + pen;
-  const cL = lat0;
   for (let i = 0; i < nodes.length; i++) {
     const n = nodes[i];
     if (n.isFixed) continue;
     const h = n.x * dirX + n.y * dirY;
     const l = -n.x * dirY + n.y * dirX;
-    const rh = h - cH;
-    const rl = l - cL;
-    const dist = Math.hypot(rh, rl);
-    if (dist >= half) continue;
-    let nh = -1;
-    let nl = 0;
-    if (dist > 1e-6) {
-      nh = rh / dist;
-      nl = rl / dist;
+
+    const lCore = Math.max(lat0 - flatHalf, Math.min(lat0 + flatHalf, l));
+    const dl = l - lCore;
+    const absDl = Math.abs(dl);
+
+    if (absDl >= R * 1.5) continue;
+
+    let hSurf = planeH;
+    let nh = 1.0;
+    let nl = 0.0;
+
+    if (absDl > 1e-4) {
+      if (absDl < R) {
+        const radTerm = Math.sqrt(Math.max(0, R * R - dl * dl));
+        hSurf = planeH - (R - radTerm);
+        nh = radTerm / R;
+        nl = dl / R;
+      } else {
+        const radTerm = Math.max(0.1, R * 0.3);
+        hSurf = planeH - (R - radTerm);
+        nh = 0.3;
+        nl = Math.sign(dl);
+      }
     }
-    const newH = cH + nh * half;
-    const newL = cL + nl * half;
-    n.x = newH * dirX - newL * dirY;
-    n.y = newH * dirY + newL * dirX;
-    // Относительная скорость узла к центру столба; гасим составляющую «внутрь окружности»
-    const vh = n.vx * dirX + n.vy * dirY - penRate;
-    const vl = -n.vx * dirY + n.vy * dirX;
-    const vn = vh * nh + vl * nl;
-    if (vn < 0) {
-      const dvh = -vn * nh;
-      const dvl = -vn * nl;
-      n.vx += dvh * dirX - dvl * dirY;
-      n.vy += dvh * dirY + dvl * dirX;
-      reaction += (n.mass * -vn) / subDt;
+
+    if (h >= hSurf) continue;
+
+    const corr = hSurf - h;
+    const nNormX = dirX * nh - dirY * nl;
+    const nNormY = dirY * nh + dirX * nl;
+
+    n.x += nNormX * corr;
+    n.y += nNormY * corr;
+
+    const vn = n.vx * nNormX + n.vy * nNormY;
+    const targetVn = penRate * nh;
+    let dvN = Math.max(0, corr / subDt) * 0.5;
+
+    if (vn < targetVn) {
+      const dv = targetVn - vn;
+      n.vx += nNormX * dv;
+      n.vy += nNormY * dv;
+      reaction += (n.mass * dv) / subDt;
+      dvN = Math.max(dvN, dv);
+    }
+
+    // Трение Кулона вдоль поверхности контакта
+    const nTanX = -nNormY;
+    const nTanY = nNormX;
+    const vt = n.vx * nTanX + n.vy * nTanY;
+    const maxDvT = WALL_FRICTION * dvN;
+    const dvT = Math.min(Math.abs(vt), maxDvT);
+    if (dvT > 0) {
+      const sgn = vt > 0 ? -1 : 1;
+      n.vx += nTanX * sgn * dvT;
+      n.vy += nTanY * sgn * dvT;
     }
   }
+
   return reaction;
 }
 
@@ -1384,7 +1391,7 @@ export function applyNodeBeamImpact(
   scrapeSpeed: number,
   world: GameWorld,
   strikerMass: number = 1400,
-  isNarrowImpact: boolean = false,
+  widthPxOrNarrow?: number | boolean,
   contactWidthPx?: number,
   /** Расчётная глубина вмятины от энергетической модели, px. Если задана — ограничивает проседание узлов. */
   crushLimitPx?: number
@@ -1424,16 +1431,16 @@ export function applyNodeBeamImpact(
   const normalSpeed = Math.max(12, impactSpeed);
 
   const carWidth = car.width;
-  const effectiveContactWidth = contactWidthPx !== undefined
-    ? Math.max(2.0, Math.min(carWidth, contactWidthPx))
-    : (isNarrowImpact ? 5.5 : carWidth);
+  const effectiveContactWidth: number = typeof widthPxOrNarrow === 'number'
+    ? Math.max(1.5, Math.min(carWidth, widthPxOrNarrow))
+    : (typeof contactWidthPx === 'number'
+        ? Math.max(1.5, Math.min(carWidth, contactWidthPx))
+        : (widthPxOrNarrow ? 5.5 : carWidth));
 
-  const spreadRadius = isNarrowImpact
-    ? Math.max(4.0, effectiveContactWidth * 0.85)
-    : Math.max(9.0, effectiveContactWidth * 0.45);
+  const spreadRadius = Math.max(4.0, effectiveContactWidth * 0.60);
 
   if (!isContinuousCrush) system.contact = undefined;
-  beginContact(system, car, localImpulseX, localImpulseY, localContactX, localContactY, isNarrowImpact, effectiveContactWidth);
+  beginContact(system, car, localImpulseX, localImpulseY, localContactX, localContactY, effectiveContactWidth);
   const contact = system.contact!;
 
   // Упор глубины: уже имеющаяся вмятина в зоне контакта + расчётная глубина этого удара
@@ -1665,7 +1672,7 @@ export function stepNodeBeamContinuousContact(
       : 1.0;
     const target = Number.isFinite(c.targetCrushPx) && (c.targetCrushPx as number) > 0
       ? (c.targetCrushPx as number)
-      : halfL * 0.30;
+      : (Number.isFinite(c.crushDepthPx) && (c.crushDepthPx as number) > 0 ? (c.crushDepthPx as number) : 0);
     const rel = Math.max(0, target - ct.depth0);
     const t = Math.min(1, progress / 0.74);
     pen1 = Math.max(ct.pen, rel * t * t * (3 - 2 * t));

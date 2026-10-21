@@ -1144,6 +1144,8 @@ export interface VehicleCollisionResult {
   overlap: number;
   contactX: number;
   contactY: number;
+  contactWidthPx?: number;
+  isNarrow?: boolean;
 }
 
 export function getCarCorners(car: Vehicle, extraMargin = 1.0) {
@@ -1233,6 +1235,139 @@ export function checkOBBOBBCollision(
   };
 }
 
+/**
+ * Вычисляет геометрическое пятно контакта между двумя сталкивающимися автомобилями.
+ * Проецирует внешние узлы/контуры кузовов вдоль нормали и касательной контакта,
+ * определяя точный центр контакта, ширину зоны смятия (widthPx) и флаг узкого удара (isNarrow).
+ */
+export function computeVehicleVehicleContactPatch(
+  carA: Vehicle,
+  carB: Vehicle,
+  nX: number,
+  nY: number
+): { contactX: number; contactY: number; widthPx: number; isNarrow: boolean } {
+  const tX = -nY;
+  const tY = nX;
+
+  // Точки внешнего периметра carA в мировых координатах
+  const ptsA: { x: number; y: number }[] = [];
+  const cosA = Math.cos(carA.angle);
+  const sinA = Math.sin(carA.angle);
+  const nodesA = carA.damage?.nodeBeam?.nodes;
+  if (nodesA && nodesA.length >= 8) {
+    const perim = carA.damage!.nodeBeam!.perimeterCount ?? 16;
+    for (let i = 0; i < Math.min(perim, nodesA.length); i++) {
+      const n = nodesA[i];
+      ptsA.push({
+        x: carA.x + n.x * cosA - n.y * sinA,
+        y: carA.y + n.x * sinA + n.y * cosA
+      });
+    }
+  } else {
+    const hlA = carA.length * 0.5;
+    const hwA = carA.width * 0.5;
+    for (const [lx, ly] of [
+      [hlA, -hwA], [hlA, hwA], [-hlA, -hwA], [-hlA, hwA],
+      [hlA, 0], [-hlA, 0], [0, -hwA], [0, hwA]
+    ]) {
+      ptsA.push({
+        x: carA.x + lx * cosA - ly * sinA,
+        y: carA.y + lx * sinA + ly * cosA
+      });
+    }
+  }
+
+  // Точки внешнего периметра carB в мировых координатах
+  const ptsB: { x: number; y: number }[] = [];
+  const cosB = Math.cos(carB.angle);
+  const sinB = Math.sin(carB.angle);
+  const nodesB = carB.damage?.nodeBeam?.nodes;
+  if (nodesB && nodesB.length >= 8) {
+    const perim = carB.damage!.nodeBeam!.perimeterCount ?? 16;
+    for (let i = 0; i < Math.min(perim, nodesB.length); i++) {
+      const n = nodesB[i];
+      ptsB.push({
+        x: carB.x + n.x * cosB - n.y * sinB,
+        y: carB.y + n.x * sinB + n.y * cosB
+      });
+    }
+  } else {
+    const hlB = carB.length * 0.5;
+    const hwB = carB.width * 0.5;
+    for (const [lx, ly] of [
+      [hlB, -hwB], [hlB, hwB], [-hlB, -hwB], [-hlB, hwB],
+      [hlB, 0], [-hlB, 0], [0, -hwB], [0, hwB]
+    ]) {
+      ptsB.push({
+        x: carB.x + lx * cosB - ly * sinB,
+        y: carB.y + lx * sinB + ly * cosB
+      });
+    }
+  }
+
+  // 1. Узлы фронта контакта carA вдоль +n
+  let maxProjA = -Infinity;
+  for (const p of ptsA) {
+    const proj = p.x * nX + p.y * nY;
+    if (proj > maxProjA) maxProjA = proj;
+  }
+  const frontA = ptsA.filter(p => p.x * nX + p.y * nY >= maxProjA - 3.5);
+
+  // 2. Узлы фронта контакта carB вдоль -n
+  let minProjB = Infinity;
+  for (const p of ptsB) {
+    const proj = p.x * nX + p.y * nY;
+    if (proj < minProjB) minProjB = proj;
+  }
+  const frontB = ptsB.filter(p => p.x * nX + p.y * nY <= minProjB + 3.5);
+
+  // Касательные проекции фронтов контакта
+  let sMinA = Infinity, sMaxA = -Infinity;
+  for (const p of (frontA.length > 0 ? frontA : ptsA)) {
+    const s = p.x * tX + p.y * tY;
+    if (s < sMinA) sMinA = s;
+    if (s > sMaxA) sMaxA = s;
+  }
+
+  let sMinB = Infinity, sMaxB = -Infinity;
+  for (const p of (frontB.length > 0 ? frontB : ptsB)) {
+    const s = p.x * tX + p.y * tY;
+    if (s < sMinB) sMinB = s;
+    if (s > sMaxB) sMaxB = s;
+  }
+
+  let sCenter: number;
+  let widthPx: number;
+  const sMin = Math.max(sMinA, sMinB);
+  const sMax = Math.min(sMaxA, sMaxB);
+
+  if (sMax >= sMin - 0.5) {
+    sCenter = (sMin + sMax) * 0.5;
+    widthPx = Math.max(4.0, sMax - sMin);
+  } else {
+    // Касательное/угловое соприкосновение
+    sCenter = (sMinA + sMaxA + sMinB + sMaxB) * 0.25;
+    const spanA = Math.max(4.0, sMaxA - sMinA);
+    const spanB = Math.max(4.0, sMaxB - sMinB);
+    widthPx = Math.min(spanA, spanB);
+  }
+
+  // Координата контакта вдоль нормали — плоскость соприкосновения
+  const hContact = (maxProjA + minProjB) * 0.5;
+  const contactX = hContact * nX + sCenter * tX;
+  const contactY = hContact * nY + sCenter * tY;
+
+  const minVehW = Math.min(carA.width, carB.width);
+  const isNarrow = widthPx < minVehW * 0.38;
+
+  return {
+    contactX,
+    contactY,
+    widthPx: Math.max(4.0, Math.min(Math.max(carA.width, carB.width), widthPx)),
+    isNarrow
+  };
+}
+
 export function checkVehicleVehicleCollision(carA: Vehicle, carB: Vehicle): VehicleCollisionResult {
   const obbsA = getVehicleCollisionOBBs(carA, 0.8);
   const obbsB = getVehicleCollisionOBBs(carB, 0.8);
@@ -1248,21 +1383,18 @@ export function checkVehicleVehicleCollision(carA: Vehicle, carB: Vehicle): Vehi
     return { collided: false, normalX: 0, normalY: 0, overlap: 0, contactX: 0, contactY: 0 };
   }
 
-  // Relative velocity & approach dynamics
+  // Относительная скорость сближения
   const relVx = (carB.vx || 0) - (carA.vx || 0);
   const relVy = (carB.vy || 0) - (carA.vy || 0);
-  const relSpeed = Math.hypot(relVx, relVy);
-  const cdDist = Math.hypot(cdx, cdy) || 1;
 
   let collided = false;
   let finalNormalX = 0;
   let finalNormalY = 0;
   let finalOverlap = 0;
 
-  // Test all pairs of OBBs between the two vehicles
+  // Проверяем все пары OBB между двумя автомобилями через Separating Axis Theorem (SAT)
   for (const obbA of obbsA) {
     for (const obbB of obbsB) {
-      // 4 candidate separating axes (longitudinal and lateral for each vehicle)
       const candidateAxes = [
         obbA.axes[0],
         obbA.axes[1],
@@ -1274,16 +1406,6 @@ export function checkVehicleVehicleCollision(carA: Vehicle, carB: Vehicle): Vehi
       let minOverlap = 999999;
       let minAxisX = 0;
       let minAxisY = 0;
-
-      // Variables for dynamic physical collision axis selection
-      let bestImpactAxisX = 0;
-      let bestImpactAxisY = 0;
-      let bestImpactOverlap = 0;
-      let maxClosingSpeed = -999999;
-      let bestStaticScore = 999999;
-      let bestStaticAxisX = 0;
-      let bestStaticAxisY = 0;
-      let bestStaticOverlap = 0;
 
       for (const axis of candidateAxes) {
         let minA = 999999, maxA = -999999;
@@ -1303,10 +1425,10 @@ export function checkVehicleVehicleCollision(carA: Vehicle, carB: Vehicle): Vehi
         const overlap = Math.min(maxA, maxB) - Math.max(minA, minB);
         if (overlap <= 0) {
           obbCollided = false;
-          break; // Separating axis found: these two OBBs do not touch
+          break; // Найдена разделяющая ось: OBB не пересекаются
         }
 
-        // Orient axis from A to B
+        // Ориентируем ось строго от carA к carB
         let orientedX = axis.x;
         let orientedY = axis.y;
         if (cdx * orientedX + cdy * orientedY < 0) {
@@ -1314,48 +1436,27 @@ export function checkVehicleVehicleCollision(carA: Vehicle, carB: Vehicle): Vehi
           orientedY = -orientedY;
         }
 
-        // Physical closing speed along this oriented axis:
-        // v_close = (vA - vB) . n. Positive means A is closing into B along this axis.
+        // Скорость сближения вдоль оси: v_close = (vA - vB) . n > 0
         const closingSpeed = -relVx * orientedX - relVy * orientedY;
-        if (closingSpeed > maxClosingSpeed) {
-          maxClosingSpeed = closingSpeed;
-          bestImpactAxisX = orientedX;
-          bestImpactAxisY = orientedY;
-          bestImpactOverlap = overlap;
-        }
 
-        // Static geometric score (prevents picking tangential axis with false low overlap when squeezing):
-        const centerAlignment = Math.max(0.12, (cdx * orientedX + cdy * orientedY) / cdDist);
-        const staticScore = overlap / centerAlignment;
-        if (staticScore < bestStaticScore) {
-          bestStaticScore = staticScore;
-          bestStaticAxisX = orientedX;
-          bestStaticAxisY = orientedY;
-          bestStaticOverlap = overlap;
-        }
+        // Выбираем ось минимального геометрического проникновения (MTV).
+        // При близких значениях перекрытия (в пределах 15%) отдаём предпочтение вектору сближения.
+        const isBetter = (overlap < minOverlap * 0.88) ||
+          (overlap < minOverlap * 1.15 && closingSpeed > 0 && minOverlap < 999999);
 
-        if (overlap < minOverlap) {
+        if (isBetter || minOverlap === 999999) {
           minOverlap = overlap;
           minAxisX = orientedX;
           minAxisY = orientedY;
         }
       }
 
-      if (obbCollided) {
+      if (obbCollided && minOverlap > 0 && minOverlap < 999999) {
         collided = true;
-        // If vehicles are actively moving toward each other along an impact face (e.g. truck T-boning car):
-        if (relSpeed > 10 && maxClosingSpeed > 5 && bestImpactOverlap > 0) {
-          finalNormalX = bestImpactAxisX;
-          finalNormalY = bestImpactAxisY;
-          finalOverlap = Math.max(finalOverlap, bestImpactOverlap);
-        } else if (bestStaticOverlap > 0) {
-          finalNormalX = bestStaticAxisX;
-          finalNormalY = bestStaticAxisY;
-          finalOverlap = Math.max(finalOverlap, bestStaticOverlap);
-        } else if (minOverlap < 999999) {
+        if (minOverlap > finalOverlap) {
+          finalOverlap = minOverlap;
           finalNormalX = minAxisX;
           finalNormalY = minAxisY;
-          finalOverlap = Math.max(finalOverlap, minOverlap);
         }
       }
     }
@@ -1365,46 +1466,18 @@ export function checkVehicleVehicleCollision(carA: Vehicle, carB: Vehicle): Vehi
     return { collided: false, normalX: 0, normalY: 0, overlap: 0, contactX: 0, contactY: 0 };
   }
 
-  // Find contact point from intersecting / penetrating corners
-  let contactX = 0;
-  let contactY = 0;
-  let count = 0;
-
-  for (const obbA of obbsA) {
-    for (const p of obbA.corners) {
-      if (isPointInsideCar(p.x, p.y, carB)) {
-        contactX += p.x;
-        contactY += p.y;
-        count++;
-      }
-    }
-  }
-  for (const obbB of obbsB) {
-    for (const p of obbB.corners) {
-      if (isPointInsideCar(p.x, p.y, carA)) {
-        contactX += p.x;
-        contactY += p.y;
-        count++;
-      }
-    }
-  }
-
-  if (count > 0) {
-    contactX /= count;
-    contactY /= count;
-  } else {
-    // Edge-edge or deep central intersection midpoint
-    contactX = (carA.x + carB.x) * 0.5;
-    contactY = (carA.y + carB.y) * 0.5;
-  }
+  // Расчёт физического пятна контакта по реальным узлам кузова
+  const patch = computeVehicleVehicleContactPatch(carA, carB, finalNormalX, finalNormalY);
 
   return {
     collided: true,
     normalX: finalNormalX,
     normalY: finalNormalY,
     overlap: finalOverlap,
-    contactX,
-    contactY
+    contactX: patch.contactX,
+    contactY: patch.contactY,
+    contactWidthPx: patch.widthPx,
+    isNarrow: patch.isNarrow
   };
 }
 
@@ -2039,10 +2112,17 @@ export function applyVehicleDamageAndDeformation(
   scrapeSpeed: number,
   world: GameWorld,
   strikerMass: number = 1400,
-  isNarrowImpact: boolean = false,
-  /** Ширина пятна контакта препятствия, px (узкий столб → глубже; стена — не передаётся). */
+  /** Физическая ширина пятна контакта (px) либо legacy-аргумент narrow */
+  contactWidthOrNarrow?: number | boolean,
+  /** Физическая ширина пятна контакта (px), если 8-й аргумент был boolean */
   contactWidthPx?: number
 ) {
+  const effContactWidth: number = typeof contactWidthOrNarrow === 'number'
+    ? Math.max(1.5, Math.min(car.width, contactWidthOrNarrow))
+    : (typeof contactWidthPx === 'number'
+        ? Math.max(1.5, Math.min(car.width, contactWidthPx))
+        : (contactWidthOrNarrow ? 4.5 : car.width));
+
   car.damage = ensureVehicleDamage(car);
   // Сетка узлов теперь фиксированной топологии (включая колёсные узлы) и
   // синхронизируется целиком; старый subdivideNodes только раздувал массив
@@ -2092,14 +2172,16 @@ export function applyVehicleDamageAndDeformation(
         impactSpeed: 0,
         scrapeSpeed,
         vehicleA: car,
-        isConcrete: isNarrowImpact
+        isConcrete: effContactWidth < Math.min(25, car.width * 0.40)
       });
     }
     return;
   }
 
-  // Damage Cooldown Protection (shortened so multi-car pileups or repeated hard wall impacts register properly)
-  if (car.lastDamageTime && now - car.lastDamageTime < 0.12) {
+  // Damage Cooldown Protection: prevent duplicate hits from trivial micro-scrapes,
+  // but NEVER drop a harder subsequent blow in multi-car pileups or sustained impact!
+  const prevImpactSpeed = (car as any).lastImpactSpeed || 0;
+  if (car.lastDamageTime && (now - car.lastDamageTime < 0.10) && (impactSpeed <= prevImpactSpeed * 1.15)) {
     // Continuous scraping during cooldown still emits directional sparks
     if (world.particles && scrapeSpeed > 14) {
       const normDist = Math.hypot(contactX - car.x, contactY - car.y) || 1;
@@ -2111,12 +2193,13 @@ export function applyVehicleDamageAndDeformation(
         impactSpeed: 0,
         scrapeSpeed,
         vehicleA: car,
-        isConcrete: isNarrowImpact
+        isConcrete: effContactWidth < Math.min(25, car.width * 0.40)
       });
     }
     return;
   }
   car.lastDamageTime = now;
+  (car as any).lastImpactSpeed = impactSpeed;
 
   const dmg = car.damage;
   const eng = car.engineState;
@@ -2204,7 +2287,7 @@ export function applyVehicleDamageAndDeformation(
     zone: impactZone,
     length: car.length,
     width: car.width,
-    contactWidthPx,
+    contactWidthPx: effContactWidth,
     structureStiffness,
     intrusionZoneFraction: isExtremeStriker ? 1.0 : 0.70,
     maxZoneLengthPx: (isMachinery || isHeavyRigidTrailer) ? 3.5 : undefined
@@ -2237,11 +2320,11 @@ export function applyVehicleDamageAndDeformation(
         zone: impactZone,
         length: car.length,
         width: car.width,
-        contactWidthPx,
+        contactWidthPx: effContactWidth,
         structureStiffness,
         intrusionZoneFraction: crushZoneParams.intrusionZoneFraction,
         maxZoneLengthPx: crushZoneParams.maxZoneLengthPx,
-        share: strikerMass > 0 ? strikerMass / (car.mass + strikerMass) : 1
+        share: (Number.isFinite(strikerMass) && strikerMass > 0) ? strikerMass / (car.mass + strikerMass) : 1
       };
       ac.crushStartPx = existingZoneDepth;
     }
@@ -2260,8 +2343,7 @@ export function applyVehicleDamageAndDeformation(
       scrapeSpeed,
       world,
       strikerMass,
-      isNarrowImpact,
-      contactWidthPx,
+      effContactWidth,
       crush.depthPx
     );
   }
@@ -2696,7 +2778,7 @@ export function applyVehicleDamageAndDeformation(
     // проп, отбойник — все они передают isNarrowImpact=true). Масса удара
     // для этого НЕ используется: «встречка» с грузовиком (mass>10000) или
     // царапание рейки отбойника не должны ронять бетонные сколы.
-    isConcrete: isNarrowImpact
+    isConcrete: effContactWidth < Math.min(25, car.width * 0.40)
   });
 
   // Physical Detachable Body Parts (Hood, Front Bumper, Rear Bumper, Left/Right Doors)
@@ -10546,9 +10628,10 @@ export function updateVehiclePhysics(
   }
 
   // --- VEHICLE-TO-VEHICLE COLLISION RESOLUTION ---
-  const currentTick = (world as any)._physicsTick = ((world as any)._physicsTick || 0) + 1;
-  if (!(world as any)._resolvedCollisionPairs || (world as any)._resolvedTick !== currentTick) {
-    (world as any)._resolvedTick = currentTick;
+  // Frame-level deduplication: resolved pairs are cleared when the simulation frame advances
+  const currentFrame = (world as any)._physicsFrameId || 0;
+  if ((world as any)._lastResolvedFrame !== currentFrame || !(world as any)._resolvedCollisionPairs) {
+    (world as any)._lastResolvedFrame = currentFrame;
     (world as any)._resolvedCollisionPairs = new Set<string>();
   }
   const resolvedPairs: Set<string> = (world as any)._resolvedCollisionPairs;
@@ -10695,8 +10778,10 @@ export function updateVehiclePhysics(
         const scrapeSpeed = vTanSpeed;
 
         // Active crumple zone for softbody continuous contact
-        const contactW = Math.max(12, Math.min(vehicle.width, other.width) * 0.85);
-        if (impactSpeed > 24) {
+        const contactW = col.contactWidthPx || Math.max(12, Math.min(vehicle.width, other.width) * 0.85);
+        const isNarrow = col.isNarrow ?? false;
+
+        if (impactSpeed > 16) {
           const crumpleDuration = 0.12 + Math.min(0.20, impactSpeed / 600);
           if (!vehicle.activeCrumple) {
             vehicle.activeCrumple = {
@@ -10709,9 +10794,17 @@ export function updateVehiclePhysics(
               contactX: col.contactX,
               contactY: col.contactY,
               preserveVelocity: true,
-              isNarrowImpact: false,
+              isNarrowImpact: isNarrow,
               contactWidthPx: contactW
             };
+          } else {
+            vehicle.activeCrumple.timer = Math.max(vehicle.activeCrumple.timer, crumpleDuration * 0.8);
+            vehicle.activeCrumple.normalX = -col.normalX;
+            vehicle.activeCrumple.normalY = -col.normalY;
+            vehicle.activeCrumple.contactX = col.contactX;
+            vehicle.activeCrumple.contactY = col.contactY;
+            vehicle.activeCrumple.contactWidthPx = contactW;
+            vehicle.activeCrumple.isNarrowImpact = isNarrow;
           }
           if (!other.activeCrumple) {
             other.activeCrumple = {
@@ -10724,15 +10817,23 @@ export function updateVehiclePhysics(
               contactX: col.contactX,
               contactY: col.contactY,
               preserveVelocity: true,
-              isNarrowImpact: false,
+              isNarrowImpact: isNarrow,
               contactWidthPx: contactW
             };
+          } else {
+            other.activeCrumple.timer = Math.max(other.activeCrumple.timer, crumpleDuration * 0.8);
+            other.activeCrumple.normalX = col.normalX;
+            other.activeCrumple.normalY = col.normalY;
+            other.activeCrumple.contactX = col.contactX;
+            other.activeCrumple.contactY = col.contactY;
+            other.activeCrumple.contactWidthPx = contactW;
+            other.activeCrumple.isNarrowImpact = isNarrow;
           }
         }
 
         // Deform node-beam & body panels with physically authentic contact width
-        applyVehicleDamageAndDeformation(vehicle, col.contactX, col.contactY, impactSpeed, scrapeSpeed, world, m2, false, contactW);
-        applyVehicleDamageAndDeformation(other, col.contactX, col.contactY, impactSpeed, scrapeSpeed, world, m1, false, contactW);
+        applyVehicleDamageAndDeformation(vehicle, col.contactX, col.contactY, impactSpeed, scrapeSpeed, world, m2, isNarrow, contactW);
+        applyVehicleDamageAndDeformation(other, col.contactX, col.contactY, impactSpeed, scrapeSpeed, world, m1, isNarrow, contactW);
 
         // Sound effect
         const impactIntensity = Math.min(1.0, impactSpeed / 140);
