@@ -1,7 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { X, ShieldAlert, Download, RotateCcw, Activity, Layers, Cpu, Zap, Box, FileText, Check } from 'lucide-react';
 import { GameWorld, Player, Vehicle } from '../types';
-import { PX_S_TO_SPEED_KMH } from '../vehicleHelpers';
 
 interface CollisionTestProps {
   worldRef: React.MutableRefObject<GameWorld | null>;
@@ -21,8 +20,6 @@ interface CollisionEventRecord {
 }
 
 export const CollisionTest: React.FC<CollisionTestProps> = ({ worldRef, playerRef, onClose }) => {
-  const [recording, setRecording] = useState<boolean>(true);
-  const [events, setEvents] = useState<CollisionEventRecord[]>([]);
   const [stats, setStats] = useState<{
     totalVehicles: number;
     totalProps: number;
@@ -44,7 +41,7 @@ export const CollisionTest: React.FC<CollisionTestProps> = ({ worldRef, playerRe
     return () => window.removeEventListener('keydown', onKey, true);
   }, [onClose]);
 
-  // Live telemetry polling and softbody history recording
+  // Live telemetry polling and softbody history recording & body rendering
   useEffect(() => {
     const iv = window.setInterval(() => {
       const world = worldRef.current;
@@ -56,6 +53,7 @@ export const CollisionTest: React.FC<CollisionTestProps> = ({ worldRef, playerRe
         : world.vehicles[0] || null;
 
       const nb = veh?.damage?.nodeBeam;
+      const defVerts = veh?.damage?.deformedVertices;
       const nodesCount = nb?.nodes?.length || 0;
       const beamsCount = nb?.beams?.length || 0;
       const brokenBeamsCount = nb?.brokenBeamCount || nb?.beams?.filter(b => b.broken).length || 0;
@@ -85,68 +83,106 @@ export const CollisionTest: React.FC<CollisionTestProps> = ({ worldRef, playerRe
         avgStress
       });
 
-      // Render wireframe & stress on canvas if active
+      // Render Car Body Silhouette + Deformed Panels + Node-Beam FEM Wireframe on canvas
       const canvas = canvasRef.current;
-      if (canvas && nb) {
+      if (canvas) {
         const ctx = canvas.getContext('2d');
         if (ctx) {
           ctx.clearRect(0, 0, canvas.width, canvas.height);
           const cx = canvas.width / 2;
           const cy = canvas.height / 2;
-          const scale = 5.5;
+          const scale = 5.2;
 
-          ctx.fillStyle = '#090d16';
+          // Background
+          ctx.fillStyle = '#060911';
           ctx.fillRect(0, 0, canvas.width, canvas.height);
 
           // Grid
-          ctx.strokeStyle = '#1e293b';
+          ctx.strokeStyle = '#111827';
           ctx.lineWidth = 1;
-          for (let x = 0; x < canvas.width; x += 30) {
+          for (let x = 0; x < canvas.width; x += 35) {
             ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, canvas.height); ctx.stroke();
           }
-          for (let y = 0; y < canvas.height; y += 30) {
+          for (let y = 0; y < canvas.height; y += 35) {
             ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(canvas.width, y); ctx.stroke();
           }
 
-          // Draw Beams
-          for (const b of nb.beams) {
-            const nA = nb.nodes[b.nodeA];
-            const nB = nb.nodes[b.nodeB];
-            if (!nA || !nB) continue;
-            const x1 = cx + nA.x * scale;
-            const y1 = cy + nA.y * scale;
-            const x2 = cx + nB.x * scale;
-            const y2 = cy + nB.y * scale;
+          if (veh) {
+            // 1. Render Car Body Skin & Deformed Panels from deformedVertices
+            if (Array.isArray(defVerts) && defVerts.length >= 16) {
+              // Draw outer perimeter outline (nodes 0 to 15)
+              ctx.beginPath();
+              for (let i = 0; i < 16; i++) {
+                const v = defVerts[i];
+                if (!v) continue;
+                const px = cx + (v.localX + (v.offsetX || 0)) * scale;
+                const py = cy + (v.localY + (v.offsetY || 0)) * scale;
+                if (i === 0) ctx.moveTo(px, py);
+                else ctx.lineTo(px, py);
+              }
+              ctx.closePath();
+              ctx.fillStyle = 'rgba(15, 23, 42, 0.9)';
+              ctx.fill();
+              ctx.lineWidth = 2.5;
+              ctx.strokeStyle = '#38bdf8';
+              ctx.stroke();
 
-            ctx.beginPath();
-            ctx.moveTo(x1, y1);
-            ctx.lineTo(x2, y2);
+              // Draw individual structural panels (bumpers, doors, roof, hood, trunk) with deformation heatmaps
+              for (const v of defVerts) {
+                const px = cx + (v.localX + (v.offsetX || 0)) * scale;
+                const py = cy + (v.localY + (v.offsetY || 0)) * scale;
+                const strain = v.plasticStrain || 0;
 
-            if (b.broken) {
-              ctx.strokeStyle = 'rgba(239, 68, 68, 0.7)';
-              ctx.setLineDash([3, 3]);
-              ctx.lineWidth = 1;
-            } else {
-              const stress = b.currentStress || 0;
-              if (stress > 0.15) ctx.strokeStyle = '#ef4444';
-              else if (stress > 0.08) ctx.strokeStyle = '#f97316';
-              else if (stress > 0.03) ctx.strokeStyle = '#eab308';
-              else ctx.strokeStyle = '#38bdf8';
-              ctx.lineWidth = 1.8;
-              ctx.setLineDash([]);
+                ctx.beginPath();
+                ctx.arc(px, py, strain > 0.1 ? 4.5 : 3, 0, Math.PI * 2);
+                if (strain > 0.2) ctx.fillStyle = '#ef4444';
+                else if (strain > 0.08) ctx.fillStyle = '#f97316';
+                else if (strain > 0.02) ctx.fillStyle = '#eab308';
+                else ctx.fillStyle = '#06b6d4';
+                ctx.fill();
+                ctx.lineWidth = 1;
+                ctx.strokeStyle = '#ffffff';
+                ctx.stroke();
+              }
             }
-            ctx.stroke();
-            ctx.setLineDash([]);
-          }
 
-          // Draw Nodes
-          for (const n of nb.nodes) {
-            const nx = cx + n.x * scale;
-            const ny = cy + n.y * scale;
-            ctx.fillStyle = (n.plasticStrain || 0) > 0.2 ? '#ef4444' : '#06b6d4';
-            ctx.beginPath();
-            ctx.arc(nx, ny, 3, 0, Math.PI * 2);
-            ctx.fill();
+            // 2. Render Node-Beam FEM Wireframe Overlay if available
+            if (nb && nb.beams && nb.nodes) {
+              for (const b of nb.beams) {
+                const nA = nb.nodes[b.nodeA];
+                const nB = nb.nodes[b.nodeB];
+                if (!nA || !nB) continue;
+                const x1 = cx + nA.x * scale;
+                const y1 = cy + nA.y * scale;
+                const x2 = cx + nB.x * scale;
+                const y2 = cy + nB.y * scale;
+
+                ctx.beginPath();
+                ctx.moveTo(x1, y1);
+                ctx.lineTo(x2, y2);
+
+                if (b.broken) {
+                  ctx.strokeStyle = 'rgba(239, 68, 68, 0.8)';
+                  ctx.setLineDash([2, 2]);
+                  ctx.lineWidth = 1;
+                } else {
+                  const stress = b.currentStress || 0;
+                  if (stress > 0.15) ctx.strokeStyle = '#ef4444';
+                  else if (stress > 0.07) ctx.strokeStyle = '#f97316';
+                  else if (stress > 0.02) ctx.strokeStyle = '#eab308';
+                  else ctx.strokeStyle = 'rgba(56, 189, 248, 0.4)';
+                  ctx.lineWidth = 1.2;
+                  ctx.setLineDash([]);
+                }
+                ctx.stroke();
+                ctx.setLineDash([]);
+              }
+            }
+          } else {
+            ctx.fillStyle = '#64748b';
+            ctx.font = '14px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText('Нет активного транспортного средства для рендеринга', canvas.width / 2, canvas.height / 2);
           }
         }
       }
@@ -159,10 +195,10 @@ export const CollisionTest: React.FC<CollisionTestProps> = ({ worldRef, playerRe
     const reportData = {
       timestamp: new Date().toISOString(),
       stats,
-      events,
       worldSnapshot: {
         vehicles: worldRef.current?.vehicles.map(v => ({
           type: v.type,
+          nameRu: v.nameRu,
           x: v.x,
           y: v.y,
           speed: v.speed,
@@ -195,10 +231,10 @@ export const CollisionTest: React.FC<CollisionTestProps> = ({ worldRef, playerRe
             </div>
             <div>
               <h2 className="text-base font-bold text-white tracking-wide">
-                Замер столкновений и мягких тел (Soft-Body & Collision Telemetry)
+                Замер столкновений и мягких тел (Soft-Body & Vehicle Body Telemetry)
               </h2>
               <p className="text-xs text-slate-400">
-                Полная история кинематики тел, пропов, узлов (Nodes) и стяжек (Beams) в реальном времени
+                Рендеринг формы кузова, панелей деформации и узлов (Nodes) / балок (Beams) в реальном времени
               </p>
             </div>
           </div>
@@ -275,32 +311,32 @@ export const CollisionTest: React.FC<CollisionTestProps> = ({ worldRef, playerRe
             </div>
           </div>
 
-          {/* Wireframe Deformation Preview Canvas */}
+          {/* Vehicle Body Skin & FEM Mesh Preview Canvas */}
           <div className="bg-slate-950 rounded-2xl border border-slate-800 p-4 flex flex-col items-center">
             <div className="w-full flex items-center justify-between mb-2">
               <span className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
                 <Layers className="w-4 h-4 text-cyan-400" />
-                Визуализация деформации мягкого тела (Soft-Body Node-Beam Wireframe)
+                Рендеринг кузова автомобиля и сетки мягкого тела (Vehicle Body & Soft-Body FEM Mesh)
               </span>
               <span className="text-[10px] font-mono text-slate-400 bg-slate-900 px-2 py-0.5 rounded border border-slate-800">
-                Частота опроса: 10 Гц
+                Частота обновления: 10 Гц
               </span>
             </div>
             <canvas
               ref={canvasRef}
               width={720}
-              height={280}
-              className="w-full max-w-[720px] h-[280px] rounded-xl shadow-inner bg-slate-950"
+              height={300}
+              className="w-full max-w-[720px] h-[300px] rounded-xl shadow-inner bg-slate-950"
             />
             <div className="flex flex-wrap items-center justify-center gap-4 text-[10px] text-slate-400 mt-3 font-mono">
               <span className="flex items-center gap-1.5">
-                <span className="w-2.5 h-2.5 rounded-full bg-cyan-400" /> Нормальное напряжение
+                <span className="w-2.5 h-2.5 rounded-full bg-cyan-400" /> Контур кузова (Панели)
               </span>
               <span className="flex items-center gap-1.5">
-                <span className="w-2.5 h-2.5 rounded-full bg-amber-500" /> Повышенное напряжение
+                <span className="w-2.5 h-2.5 rounded-full bg-amber-500" /> Вмятина / Деформация
               </span>
               <span className="flex items-center gap-1.5">
-                <span className="w-2.5 h-2.5 rounded-full bg-rose-500" /> Предел текучести / Разрыв
+                <span className="w-2.5 h-2.5 rounded-full bg-rose-500" /> Критический излом / Разрыв
               </span>
               <span className="flex items-center gap-1.5">
                 <span className="w-3 h-0.5 border-t border-dashed border-rose-500" /> Сломанная балка
@@ -308,14 +344,14 @@ export const CollisionTest: React.FC<CollisionTestProps> = ({ worldRef, playerRe
             </div>
           </div>
 
-          {/* Detailed Telemetry History & Physics Explanation */}
+          {/* Detailed Physics Explanation */}
           <div className="bg-slate-950/60 border border-slate-800 rounded-2xl p-5 space-y-3">
             <h3 className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-2">
               <FileText className="w-4 h-4 text-indigo-400" />
-              Физический анализ и устранение "спагетти-физики" (Clean Rigidbody & SoftBody Architecture)
+              Физический анализ формы и деформаций кузова
             </h3>
             <p className="text-xs text-slate-300 leading-relaxed">
-              Система рассчитывает упругопластические связи между узлами (Nodes) и стяжками (Beams) методом Эйлера-Верле с ограничением по пределу текучести (Yield Stress). При превышении предела прочности балки деформируются пластически или разрушаются (Snap), исключая нереалистичное растяжение («резиновую» спагетти-физику). Все кинематические параметры пропов, жестких тел и транспортных средств синхронизированы с шагом симуляции.
+              Инспектор теперь рендерит полную форму кузова автомобиля (периметр панелей, бамперов, крыши, капота и дверей на основе `deformedVertices`) в сочетании с сеткой упругопластических балок (Soft-Body Node-Beam FEM). Каждая точка отображает текущее смещение от ударов и пластическую деформацию в реальном времени.
             </p>
           </div>
 
@@ -324,7 +360,7 @@ export const CollisionTest: React.FC<CollisionTestProps> = ({ worldRef, playerRe
         {/* Footer */}
         <div className="px-6 py-4 bg-slate-950/80 border-t border-slate-800 flex items-center justify-between text-xs text-slate-400">
           <div>
-            Запись телеметрии столкновений и балок активна
+            Запись телеметрии кузова и балок активна
           </div>
           <button
             onClick={onClose}
