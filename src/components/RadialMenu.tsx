@@ -55,7 +55,7 @@ import {
   getVehiclePowertrainCategory
 } from '../powertrainVariants';
 import { VehiclePreviewCanvas } from './VehiclePreviewCanvas';
-import { ShadowHost, attachStageFit, useMobileViewport } from './ShadowHost';
+import { ShadowHost, attachStageFit } from './ShadowHost';
 import radialCss from './radialMenu.css?inline';
 
 interface VehicleConfigSelection {
@@ -111,22 +111,6 @@ const GAP = 7;
 const RI = 118;
 const RO = 262;
 const RL = 190;
-
-/* Масштаб колеса на мобильной раскладке: вписывается в ширину и примерно в половину высоты экрана. */
-const calcWheelZoom = () =>
-  Math.max(0.45, Math.min(1, (window.innerWidth - 40) / 640, (window.innerHeight * 0.5) / 640));
-
-const useWheelZoom = (enabled: boolean): number => {
-  const [z, setZ] = useState<number>(calcWheelZoom);
-  useEffect(() => {
-    if (!enabled) return;
-    const on = () => setZ(calcWheelZoom());
-    on();
-    window.addEventListener('resize', on);
-    return () => window.removeEventListener('resize', on);
-  }, [enabled]);
-  return z;
-};
 
 const pt = (r: number, a: number) => {
   const rad = (a * Math.PI) / 180;
@@ -322,9 +306,7 @@ const RadialStage: React.FC<RadialMenuProps & { player: Player; world: GameWorld
   const ringRef = useRef<SVGSVGElement>(null);
   const [pop, setPop] = useState(true);
 
-  const mobile = useMobileViewport();
-  const wheelZoom = useWheelZoom(mobile);
-  useLayoutEffect(() => attachStageFit(() => wrapRef.current, () => gmRef.current, true), []);
+  useLayoutEffect(() => attachStageFit(() => wrapRef.current, () => gmRef.current), []);
   useEffect(() => { const t = window.setTimeout(() => setPop(false), 500); return () => window.clearTimeout(t); }, []);
 
   /* Career is a realistic simulator: only the dashboard and car spawn are available there.
@@ -428,8 +410,6 @@ const RadialStage: React.FC<RadialMenuProps & { player: Player; world: GameWorld
   const onStageClick = (e: React.MouseEvent) => {
     const t = e.target as HTMLElement;
     if (t.closest('.side') || t.closest('.hc')) return;
-    // на телефоне страница прокручивается: тап по заголовку или подсказке не должен закрывать меню
-    if (mobile && !t.closest('#sh')) return;
     const i = sectorAt(e.clientX, e.clientY);
     if (i >= 0) { activate(i); return; }
     stepBack(); // hub centre or empty area around the ring
@@ -499,7 +479,7 @@ const RadialStage: React.FC<RadialMenuProps & { player: Player; world: GameWorld
           </div>
 
           {/* ================= WHEEL ================= */}
-          <div id="sh" className={panel ? 'shift' : ''} style={mobile ? { zoom: wheelZoom } : undefined}>
+          <div id="sh" className={panel ? 'shift' : ''}>
             <div className={'wheel' + (pop ? ' pop' : '')}>
               <svg ref={ringRef} width="640" height="640" viewBox="0 0 640 640" style={{ position: 'absolute', inset: 0 }}>
                 <circle cx="320" cy="320" r="292" fill="none" stroke="rgba(224,171,69,.2)" strokeDasharray="2 9" />

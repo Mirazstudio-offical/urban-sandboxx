@@ -1,4 +1,4 @@
-import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import React, { useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 
 interface ShadowHostProps {
@@ -47,36 +47,11 @@ export const ShadowHost: React.FC<ShadowHostProps> = ({ css, children, backgroun
   );
 };
 
-/** Должен совпадать с @media в pauseMenu.css / radialMenu.css: узкий экран или телефон в альбоме. */
-export const MOBILE_MEDIA = '(max-width: 900px), (max-height: 500px)';
-
-export const isMobileViewport = (): boolean =>
-  typeof matchMedia === 'function' && matchMedia(MOBILE_MEDIA).matches;
-
-/** Реактивный флаг мобильной раскладки. */
-export function useMobileViewport(): boolean {
-  const [mobile, setMobile] = useState<boolean>(isMobileViewport);
-  useEffect(() => {
-    if (typeof matchMedia !== 'function') return;
-    const mq = matchMedia(MOBILE_MEDIA);
-    const on = () => setMobile(mq.matches);
-    mq.addEventListener('change', on);
-    return () => mq.removeEventListener('change', on);
-  }, []);
-  return mobile;
-}
-
 /**
  * Fits the fixed 1440x900 stage into its wrapper (no page scroll on any screen size).
- * With mobileFlow, on mobile viewports the stage is not scaled: the CSS mobile layout stacks it
- * into a scrollable column so text stays readable.
  * Call from a layout effect; returns a cleanup function.
  */
-export function attachStageFit(
-  getWrap: () => HTMLElement | null,
-  getStage: () => HTMLElement | null,
-  mobileFlow = false
-): () => void {
+export function attachStageFit(getWrap: () => HTMLElement | null, getStage: () => HTMLElement | null): () => void {
   let ro: ResizeObserver | null = null;
   let raf = 0;
   let onResize: (() => void) | null = null;
@@ -85,7 +60,6 @@ export function attachStageFit(
     const gm = getStage();
     if (!w || !gm) { raf = requestAnimationFrame(attach); return; }
     const fit = () => {
-      if (mobileFlow && isMobileViewport()) { gm.style.transform = 'none'; return; }
       const W = w.clientWidth, H = w.clientHeight;
       if (!W || !H) return;
       const k = Math.min(W / 1440, H / 900);
