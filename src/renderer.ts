@@ -66,6 +66,7 @@ import { RemotePlayerState, SpeechBubble } from './onlineSystem';
 import { InteractionTarget } from './interactionSystem';
 import { getCityApartments } from './propertySystem';
 import { getEffectiveWeatherWeights } from './weatherTransition';
+import { mapPolyToDeformVerts } from './softbodyPolyMap';
 
 interface CloudShadowLobe {
   relX: number;
@@ -8445,11 +8446,15 @@ export class GameRenderer {
 
       const basePoly = getVehicleBasePolygon(car, halfL, halfW, effFc, effRc, effLd, effRd, effFld, effFrd, effRld, effRrd);
 
+      // Вершины контура сопоставляются с узлами по геометрии, а не по индексу (плотная сетка сдвигает индексы)
+      const polyDvs = hasSoftbody
+        ? mapPolyToDeformVerts(basePoly, dmg.deformedVertices!, dmg.nodeBeam?.perimeterCount ?? 0)
+        : dmg.deformedVertices;
+
       let bodyPoly = basePoly;
       if (hasSoftbody) {
         bodyPoly = basePoly.map((bv, idx) => {
-          const dvIdx = basePoly.length === 16 ? idx : Math.min(15, Math.floor((idx / basePoly.length) * 16));
-          const dv = dmg.deformedVertices![dvIdx];
+          const dv = polyDvs![idx];
           if (!dv) return bv;
           let ox = isFinite(dv.offsetX) ? dv.offsetX : 0;
           let oy = isFinite(dv.offsetY) ? dv.offsetY : 0;
@@ -9120,7 +9125,7 @@ export class GameRenderer {
           const dumpCol = car.dumpColor || '#d97706';
           ctx.save();
           ctx.beginPath();
-          traceSoftbodyPath(ctx, bodyPoly, dmg.deformedVertices);
+          traceSoftbodyPath(ctx, bodyPoly, polyDvs);
           ctx.closePath();
           ctx.clip();
 
@@ -9140,7 +9145,7 @@ export class GameRenderer {
         } else {
           ctx.fillStyle = car.color;
           ctx.beginPath();
-          traceSoftbodyPath(ctx, bodyPoly, dmg.deformedVertices);
+          traceSoftbodyPath(ctx, bodyPoly, polyDvs);
           ctx.closePath();
           ctx.fill();
         }
@@ -9151,7 +9156,7 @@ export class GameRenderer {
           const charAlpha = Math.min(0.92, fireProg * 0.85 + (dmg.isFullyBurnt ? 0.90 : 0));
           ctx.fillStyle = `rgba(15, 23, 42, ${charAlpha})`;
           ctx.beginPath();
-          traceSoftbodyPath(ctx, bodyPoly, dmg.deformedVertices);
+          traceSoftbodyPath(ctx, bodyPoly, polyDvs);
           ctx.closePath();
           ctx.fill();
 
@@ -9167,7 +9172,7 @@ export class GameRenderer {
             fireGlowGrad.addColorStop(1, 'rgba(239, 68, 68, 0)');
             ctx.fillStyle = fireGlowGrad;
             ctx.beginPath();
-            traceSoftbodyPath(ctx, bodyPoly, dmg.deformedVertices);
+            traceSoftbodyPath(ctx, bodyPoly, polyDvs);
             ctx.closePath();
             ctx.fill();
           }
@@ -9178,7 +9183,7 @@ export class GameRenderer {
         ctx.stroke();
 
         // Softbody metallic stress highlights and ambient crease shadow lines
-        renderSoftbodyStressLines(ctx, bodyPoly, dmg.deformedVertices);
+        renderSoftbodyStressLines(ctx, bodyPoly, polyDvs);
       }
 
       // Render specialized trailer attachments and truck_semi chassis & fifth-wheel saddle (on chassis layer under trailers)
@@ -9207,7 +9212,7 @@ export class GameRenderer {
       // 2.5D buckled hood and sagging bumper attachments
       renderBuckledHoodOverlay(ctx, car, bodyPoly, halfL, halfW, deform);
       renderSaggingBumpers(ctx, car, bodyPoly, halfL, halfW, deform);
-      renderTornBodyLining(ctx, car, bodyPoly, dmg.deformedVertices);
+      renderTornBodyLining(ctx, car, bodyPoly, polyDvs);
 
       // 4. Crease Lines & Scratches (now tightly aligned with mesh deformation)
       if (fc > 2 || fld > 2 || frd > 2 || dmg.hoodBuckled) {
@@ -9238,7 +9243,7 @@ export class GameRenderer {
         ctx.save();
         // Create clipping path matching the softbody car body polygon
         ctx.beginPath();
-        traceSoftbodyPath(ctx, bodyPoly, dmg.deformedVertices);
+        traceSoftbodyPath(ctx, bodyPoly, polyDvs);
         ctx.closePath();
         ctx.clip();
 
@@ -10179,11 +10184,15 @@ export class GameRenderer {
 
       const basePoly = getVehicleBasePolygon(car, halfL, halfW, effFc, effRc, effLd, effRd, effFld, effFrd, effRld, effRrd);
 
+      // Вершины контура сопоставляются с узлами по геометрии, а не по индексу (плотная сетка сдвигает индексы)
+      const polyDvs = hasSoftbody
+        ? mapPolyToDeformVerts(basePoly, dmg.deformedVertices!, dmg.nodeBeam?.perimeterCount ?? 0)
+        : dmg.deformedVertices;
+
       let bodyPoly = basePoly;
       if (hasSoftbody) {
         bodyPoly = basePoly.map((bv, idx) => {
-          const dvIdx = basePoly.length === 16 ? idx : Math.min(15, Math.floor((idx / basePoly.length) * 16));
-          const dv = dmg.deformedVertices![dvIdx];
+          const dv = polyDvs![idx];
           if (!dv) return bv;
           let ox = isFinite(dv.offsetX) ? dv.offsetX : 0;
           let oy = isFinite(dv.offsetY) ? dv.offsetY : 0;
