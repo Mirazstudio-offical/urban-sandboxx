@@ -1643,8 +1643,11 @@ export function checkPropVehicleCollision(
   if (hitbox.shape === 'circle') {
     const res = checkPedestrianVehicleCollision(prop.x, prop.y, hitbox.radius!, veh);
     if (res.collided) {
-      const pushX = res.x - prop.x;
-      const pushY = res.y - prop.y;
+      // Вектор от пропа к машине: машина выталкивается из препятствия, а нормаль удара
+      // (normalAndTangential) указывает на препятствие. Раньше знак был обратным, и
+      // круглые пропы (столбы, фонари) не деформировали машину — она проезжала их насквозь.
+      const pushX = prop.x - res.x;
+      const pushY = prop.y - res.y;
       const overlap = Math.hypot(pushX, pushY);
       return {
         collided: true,
