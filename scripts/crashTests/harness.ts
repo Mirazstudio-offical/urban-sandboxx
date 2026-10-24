@@ -31,6 +31,7 @@ const phys: typeof import('../../src/physics') = await import(`${SRC}/physics`);
 const vh: typeof import('../../src/vehicleHelpers') = await import(`${SRC}/vehicleHelpers`);
 const pw: typeof import('../../src/powertrainVariants') = await import(`${SRC}/powertrainVariants`);
 const dm: typeof import('../../src/damageModel') = await import(`${SRC}/damageModel`);
+const nbp: typeof import('../../src/nodeBeamPhysics') = await import(`${SRC}/nodeBeamPhysics`);
 
 /** Детерминированный ГСЧ (mulberry32): игра использует Math.random для искр/вероятностных отказов. */
 export function seedRandom(seed: number) {
@@ -105,6 +106,9 @@ export function makeVehicle(type: string, x: number, y: number, angleRad: number
     targetSpeed: 0, ghostingAlpha: 1.0, honkTimer: 0, isHonking: false, hornEffectTimer: 0,
     damage: vh.createDefaultVehicleDamage(cfg.length, cfg.width)
   };
+  // createDefaultVehicleDamage всегда строит меш седана; без этой подмены все типы (микро, грузовики,
+  // мотоцикл) в стенде получали бы седан-меш. Строим узловую систему по реальному типу машины.
+  car.damage.nodeBeam = nbp.createVehicleNodeBeamSystem({ type, length: cfg.length, width: cfg.width, mass: cfg.mass });
   pw.applyPowertrain(car);
   return car as Vehicle;
 }
