@@ -1,3 +1,4 @@
+import { densifyClosedPerimeter } from './perimeterDensify';
 import {
   BeamLinkType,
   BeamNodeType,
@@ -946,13 +947,13 @@ export const PRESET_TRAILER: VehicleNodeBeamDefinition = {
 const MESH_PRESET_REGISTRY = new Map<string, VehicleNodeBeamDefinition>();
 
 // Seed default presets
-MESH_PRESET_REGISTRY.set(PRESET_SEDAN.presetId, PRESET_SEDAN);
-MESH_PRESET_REGISTRY.set(PRESET_HATCHBACK_COMPACT.presetId, PRESET_HATCHBACK_COMPACT);
-MESH_PRESET_REGISTRY.set(PRESET_SUPERCAR.presetId, PRESET_SUPERCAR);
-MESH_PRESET_REGISTRY.set(PRESET_TRUCK_CABOVER.presetId, PRESET_TRUCK_CABOVER);
-MESH_PRESET_REGISTRY.set(PRESET_TRACTOR.presetId, PRESET_TRACTOR);
-MESH_PRESET_REGISTRY.set(PRESET_MOTORCYCLE.presetId, PRESET_MOTORCYCLE);
-MESH_PRESET_REGISTRY.set(PRESET_TRAILER.presetId, PRESET_TRAILER);
+MESH_PRESET_REGISTRY.set(PRESET_SEDAN.presetId, densifyClosedPerimeter(PRESET_SEDAN));
+MESH_PRESET_REGISTRY.set(PRESET_HATCHBACK_COMPACT.presetId, densifyClosedPerimeter(PRESET_HATCHBACK_COMPACT));
+MESH_PRESET_REGISTRY.set(PRESET_SUPERCAR.presetId, densifyClosedPerimeter(PRESET_SUPERCAR));
+MESH_PRESET_REGISTRY.set(PRESET_TRUCK_CABOVER.presetId, densifyClosedPerimeter(PRESET_TRUCK_CABOVER));
+MESH_PRESET_REGISTRY.set(PRESET_TRACTOR.presetId, densifyClosedPerimeter(PRESET_TRACTOR));
+MESH_PRESET_REGISTRY.set(PRESET_MOTORCYCLE.presetId, densifyClosedPerimeter(PRESET_MOTORCYCLE));
+MESH_PRESET_REGISTRY.set(PRESET_TRAILER.presetId, densifyClosedPerimeter(PRESET_TRAILER));
 
 /**
  * Maps game vehicle model types (`carType`) to their corresponding mesh preset.
@@ -1043,7 +1044,7 @@ export function getVehicleNodeBeamDefinition(
   customOverride?: Partial<VehicleNodeBeamDefinition>
 ): VehicleNodeBeamDefinition {
   const presetKey = carType ? VEHICLE_TYPE_TO_PRESET_MAP[carType] || carType : 'sedan_standard';
-  const baseDef = MESH_PRESET_REGISTRY.get(presetKey) || PRESET_SEDAN;
+  const baseDef = MESH_PRESET_REGISTRY.get(presetKey) || densifyClosedPerimeter(PRESET_SEDAN);
 
   if (!customOverride) {
     return baseDef;

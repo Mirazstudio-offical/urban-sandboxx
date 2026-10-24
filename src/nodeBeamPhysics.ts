@@ -109,7 +109,7 @@ const MAX_STRETCH_FRACTION = 0.35;
 /** Трение металла о стену: узлы в контакте не скользят вдоль неё, пока хватает нормального импульса. */
 const WALL_FRICTION = 0.6;
 /** Верхний предел числа подшагов интегратора за кадр. */
-const MAX_SUBSTEPS = 512;
+const MAX_SUBSTEPS = 1500;
 /** Внутреннее трение материала (множитель скорости за 1/60 с: критическое затухание, исключающее желейную болтанку). */
 const NODE_DRAG_PER_FRAME = 0.72;
 /** Абсолютный предохранитель скорости узла, px/s. */
@@ -1250,7 +1250,8 @@ function syncNodeBeamToVehicle(system: NodeBeamStructure, car: Vehicle): void {
     if (!Number.isFinite((dmg as any)[key])) (dmg as any)[key] = 0;
   }
 
-  const vertCount = Math.max(system.perimeterCount || 14, Math.min(nodes.length, 34));
+  // Контур кузова = периметр + интерьер, как раньше; потолок 64 не режет плотную сетку (до 46 узлов).
+  const vertCount = Math.max(system.perimeterCount || 14, Math.min(nodes.length, 64));
 
   if (!dmg.deformedVertices || dmg.deformedVertices.length !== vertCount) {
     dmg.deformedVertices = [];
