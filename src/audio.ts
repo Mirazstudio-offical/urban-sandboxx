@@ -38,8 +38,8 @@ class SoundEngine {
   private isHornPlaying: boolean = false;
 
   private distortionCurve: Float32Array | null = null;
-  private masterVolume: number = Number(localStorage.getItem('city_sim_master_volume') || '0.8');
-  private engineVolume: number = Number(localStorage.getItem('city_sim_engine_volume') || '0.8');
+  private masterVolume: number = typeof localStorage !== 'undefined' ? Number(localStorage.getItem('city_sim_master_volume') || '0.8') : 0.8;
+  private engineVolume: number = typeof localStorage !== 'undefined' ? Number(localStorage.getItem('city_sim_engine_volume') || '0.8') : 0.8;
   private mainMasterGain: GainNode | null = null;
 
   public init() {

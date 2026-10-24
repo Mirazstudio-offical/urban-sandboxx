@@ -153,10 +153,12 @@ export function detectGraphicsPreset(cfg: PerformanceConfig): GraphicsPresetId |
 
 export function loadPerformanceConfig(): PerformanceConfig {
   try {
-    const data = localStorage.getItem(STORAGE_KEY);
-    if (data) {
-      const parsed = JSON.parse(data);
-      return { ...DEFAULT_CONFIG, ...parsed };
+    if (typeof localStorage !== 'undefined') {
+      const data = localStorage.getItem(STORAGE_KEY);
+      if (data) {
+        const parsed = JSON.parse(data);
+        return { ...DEFAULT_CONFIG, ...parsed };
+      }
     }
   } catch (e) {
     console.error('Failed to load performance config', e);

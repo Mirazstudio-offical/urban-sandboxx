@@ -1,6 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { X, ShieldAlert, Download, RotateCcw, Activity, Layers, Cpu, Zap, Box, FileText, Check } from 'lucide-react';
+import { X, ShieldAlert, Download, RotateCcw, Activity, Layers, Cpu, Zap, Box, FileText, Check, Play, Gauge } from 'lucide-react';
 import { GameWorld, Player, Vehicle } from '../types';
+import { applyVehicleDamageAndDeformation } from '../physics';
+import { ensureVehicleNodeBeam } from '../nodeBeamPhysics';
+import { SPEED_KMH_TO_PX_S } from '../vehicleHelpers';
 
 interface CollisionTestProps {
   worldRef: React.MutableRefObject<GameWorld | null>;
@@ -31,6 +34,7 @@ export const CollisionTest: React.FC<CollisionTestProps> = ({ worldRef, playerRe
     avgStress: number;
   } | null>(null);
 
+  const [activeTab, setActiveTab] = useState<'live' | 'lab'>('live');
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
   useEffect(() => {
@@ -219,9 +223,91 @@ export const CollisionTest: React.FC<CollisionTestProps> = ({ worldRef, playerRe
     URL.revokeObjectURL(url);
   };
 
+  const getActiveVehicle = (): Vehicle | null => {
+    const world = worldRef.current;
+    const player = playerRef.current;
+    if (!world) return null;
+    return player?.isInVehicle && player.currentVehicleId
+      ? world.vehicles.find(v => v.id === player.currentVehicleId) || world.vehicles[0] || null
+      : world.vehicles[0] || null;
+  };
+
+  const resetVehicleDamage = () => {
+    const veh = getActiveVehicle();
+    if (!veh) return;
+    veh.damage = {
+      frontCrumple: 0,
+      rearCrumple: 0,
+      leftDent: 0,
+      rightDent: 0,
+      frontLeftDent: 0,
+      frontRightDent: 0,
+      rearLeftDent: 0,
+      rearRightDent: 0,
+      frontLeftSuspensionDamage: 0,
+      frontRightSuspensionDamage: 0,
+      rearLeftSuspensionDamage: 0,
+      rearRightSuspensionDamage: 0,
+      steeringDrift: 0,
+      wheelRubResistance: 0,
+      hoodBuckled: false,
+      windshieldCracked: false,
+      rearGlassCracked: false,
+      leftHeadlightBroken: false,
+      rightHeadlightBroken: false,
+      leftTaillightBroken: false,
+      rightTaillightBroken: false,
+      scratches: [],
+      deformedVertices: []
+    } as any;
+    if (veh.engineState) {
+      veh.engineState.engineHealth = 100;
+      veh.engineState.transmissionHealth = 100;
+      veh.engineState.radiatorPunctured = false;
+      veh.engineState.radiatorWater = 100;
+      veh.engineState.isStalled = false;
+      veh.engineState.engineRunning = true;
+    }
+    ensureVehicleNodeBeam(veh);
+  };
+
+  const triggerLiveCrashTest = (testType: 'wall_50' | 'offset_64' | 'pole_50' | 'side_32' | 'rear_50') => {
+    const veh = getActiveVehicle();
+    const world = worldRef.current;
+    if (!veh || !world) return;
+
+    const halfL = veh.length / 2;
+    const halfW = veh.width / 2;
+    const cosA = Math.cos(veh.angle);
+    const sinA = Math.sin(veh.angle);
+
+    if (testType === 'wall_50') {
+      const contactX = veh.x + halfL * cosA;
+      const contactY = veh.y + halfL * sinA;
+      applyVehicleDamageAndDeformation(veh, contactX, contactY, 50 * SPEED_KMH_TO_PX_S, 0, world, 14000, veh.width);
+    } else if (testType === 'offset_64') {
+      const offY = 5.5;
+      const contactX = veh.x + halfL * cosA - offY * sinA;
+      const contactY = veh.y + halfL * sinA + offY * cosA;
+      applyVehicleDamageAndDeformation(veh, contactX, contactY, 64 * SPEED_KMH_TO_PX_S, 0, world, 14000, 8);
+    } else if (testType === 'pole_50') {
+      const contactX = veh.x + halfL * cosA;
+      const contactY = veh.y + halfL * sinA;
+      applyVehicleDamageAndDeformation(veh, contactX, contactY, 50 * SPEED_KMH_TO_PX_S, 0, world, 14000, 3.2);
+    } else if (testType === 'side_32') {
+      const contactX = veh.x - halfW * sinA;
+      const contactY = veh.y + halfW * cosA;
+      applyVehicleDamageAndDeformation(veh, contactX, contactY, 32 * SPEED_KMH_TO_PX_S, 0, world, 14000, 3.5);
+    } else if (testType === 'rear_50') {
+      const contactX = veh.x - halfL * cosA;
+      const contactY = veh.y - halfL * sinA;
+      applyVehicleDamageAndDeformation(veh, contactX, contactY, 50 * SPEED_KMH_TO_PX_S, 0, world, 14000, veh.width);
+    }
+  };
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4">
-      <div className="bg-slate-900 border border-slate-700/80 rounded-2xl w-full max-w-4xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden text-slate-100 font-sans">
+      <div className={`bg-slate-900 border border-slate-700/80 rounded-2xl w-full ${activeTab === 'lab' ? 'max-w-6xl' : 'max-w-4xl'} max-h-[92vh] flex flex-col shadow-2xl overflow-hidden text-slate-100 font-sans transition-all duration-200`}>
         
         {/* Header */}
         <div className="px-6 py-4 bg-slate-950/80 border-b border-slate-800 flex items-center justify-between">
@@ -231,15 +317,37 @@ export const CollisionTest: React.FC<CollisionTestProps> = ({ worldRef, playerRe
             </div>
             <div>
               <h2 className="text-base font-bold text-white tracking-wide">
-                Замер столкновений и мягких тел (Soft-Body & Vehicle Body Telemetry)
+                Лаборатория столкновений и мягких тел (Soft-Body FEM Diagnostics)
               </h2>
               <p className="text-xs text-slate-400">
-                Рендеринг формы кузова, панелей деформации и узлов (Nodes) / балок (Beams) в реальном времени
+                Рендеринг формы кузова, панелей деформации, узлов и покадровая анимация краш-тестов
               </p>
             </div>
           </div>
 
           <div className="flex items-center gap-2">
+            {/* Tabs */}
+            <div className="flex items-center bg-slate-900 p-0.5 rounded-xl border border-slate-800 text-xs font-semibold">
+              <button
+                onClick={() => setActiveTab('live')}
+                className={`px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition cursor-pointer ${
+                  activeTab === 'live' ? 'bg-sky-600 text-white shadow' : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                <Activity className="w-3.5 h-3.5" />
+                <span>Текущая машина</span>
+              </button>
+              <button
+                onClick={() => setActiveTab('lab')}
+                className={`px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition cursor-pointer ${
+                  activeTab === 'lab' ? 'bg-sky-600 text-white shadow' : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                <Layers className="w-3.5 h-3.5 text-amber-300" />
+                <span>Все 22 теста (Анимация и рендеры)</span>
+              </button>
+            </div>
+
             <button
               onClick={exportReport}
               className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer"
@@ -258,7 +366,16 @@ export const CollisionTest: React.FC<CollisionTestProps> = ({ worldRef, playerRe
         </div>
 
         {/* Content Body */}
-        <div className="flex-1 overflow-y-auto p-6 space-y-6">
+        {activeTab === 'lab' ? (
+          <div className="flex-1 w-full h-[640px] bg-slate-950 flex flex-col overflow-hidden">
+            <iframe
+              src="/crash_visualizer.html"
+              className="w-full flex-1 border-0"
+              title="Студия покадровой анимации и рендеров краш-тестов"
+            />
+          </div>
+        ) : (
+          <div className="flex-1 overflow-y-auto p-6 space-y-6">
           
           {/* Top Status Cards */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
@@ -344,6 +461,78 @@ export const CollisionTest: React.FC<CollisionTestProps> = ({ worldRef, playerRe
             </div>
           </div>
 
+          {/* Interactive Crash Test Scenario Panel */}
+          <div className="bg-slate-950/80 border border-slate-800 rounded-2xl p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                <Play className="w-4 h-4 text-amber-400" />
+                Стендовые краш-тесты кузова (Live Crash Tests)
+              </span>
+              <button
+                onClick={resetVehicleDamage}
+                className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 text-[11px] font-semibold flex items-center gap-1.5 transition cursor-pointer"
+                title="Сбросить все повреждения и восстановить узлы кузова"
+              >
+                <RotateCcw className="w-3.5 h-3.5 text-cyan-400" />
+                <span>Восстановить кузов</span>
+              </button>
+            </div>
+            <p className="text-[11px] text-slate-400">
+              Запуск физических краш-тестов по протоколам Euro NCAP / IIHS непосредственно на активном автомобиле с расчетом пластических деформаций узлов и разрушением балок:
+            </p>
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 pt-1">
+              <button
+                onClick={() => triggerLiveCrashTest('wall_50')}
+                className="px-3 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700/80 hover:border-amber-500/50 text-left transition cursor-pointer group"
+              >
+                <div className="text-[11px] font-bold text-slate-200 group-hover:text-amber-400 flex items-center gap-1">
+                  <Gauge className="w-3 h-3 text-amber-400" /> 50 км/ч Стена
+                </div>
+                <div className="text-[9px] text-slate-500 mt-0.5">100% фронт ECE R94</div>
+              </button>
+
+              <button
+                onClick={() => triggerLiveCrashTest('offset_64')}
+                className="px-3 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700/80 hover:border-amber-500/50 text-left transition cursor-pointer group"
+              >
+                <div className="text-[11px] font-bold text-slate-200 group-hover:text-amber-400 flex items-center gap-1">
+                  <Gauge className="w-3 h-3 text-amber-400" /> 64 км/ч Офсет
+                </div>
+                <div className="text-[9px] text-slate-500 mt-0.5">40% перекрытие IIHS</div>
+              </button>
+
+              <button
+                onClick={() => triggerLiveCrashTest('pole_50')}
+                className="px-3 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700/80 hover:border-rose-500/50 text-left transition cursor-pointer group"
+              >
+                <div className="text-[11px] font-bold text-slate-200 group-hover:text-rose-400 flex items-center gap-1">
+                  <Gauge className="w-3 h-3 text-rose-400" /> 50 км/ч Столб
+                </div>
+                <div className="text-[9px] text-slate-500 mt-0.5">Узкий цилиндр (клинья)</div>
+              </button>
+
+              <button
+                onClick={() => triggerLiveCrashTest('side_32')}
+                className="px-3 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700/80 hover:border-purple-500/50 text-left transition cursor-pointer group"
+              >
+                <div className="text-[11px] font-bold text-slate-200 group-hover:text-purple-400 flex items-center gap-1">
+                  <Gauge className="w-3 h-3 text-purple-400" /> 32 км/ч Бок
+                </div>
+                <div className="text-[9px] text-slate-500 mt-0.5">Euro NCAP Pole B-стойка</div>
+              </button>
+
+              <button
+                onClick={() => triggerLiveCrashTest('rear_50')}
+                className="px-3 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700/80 hover:border-cyan-500/50 text-left transition cursor-pointer group"
+              >
+                <div className="text-[11px] font-bold text-slate-200 group-hover:text-cyan-400 flex items-center gap-1">
+                  <Gauge className="w-3 h-3 text-cyan-400" /> 50 км/ч Корма
+                </div>
+                <div className="text-[9px] text-slate-500 mt-0.5">Багажник и бак</div>
+              </button>
+            </div>
+          </div>
+
           {/* Detailed Physics Explanation */}
           <div className="bg-slate-950/60 border border-slate-800 rounded-2xl p-5 space-y-3">
             <h3 className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-2">
@@ -354,8 +543,8 @@ export const CollisionTest: React.FC<CollisionTestProps> = ({ worldRef, playerRe
               Инспектор теперь рендерит полную форму кузова автомобиля (периметр панелей, бамперов, крыши, капота и дверей на основе `deformedVertices`) в сочетании с сеткой упругопластических балок (Soft-Body Node-Beam FEM). Каждая точка отображает текущее смещение от ударов и пластическую деформацию в реальном времени.
             </p>
           </div>
-
         </div>
+      )}
 
         {/* Footer */}
         <div className="px-6 py-4 bg-slate-950/80 border-t border-slate-800 flex items-center justify-between text-xs text-slate-400">

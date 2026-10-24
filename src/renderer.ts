@@ -9264,7 +9264,7 @@ export class GameRenderer {
 
       // (Cabin, roof attachments and heavy utility compartments relocated to renderVehicleCabins)
 
-      // 7. Headlights (Symmetrical & inset to guarantee they are 100% inside body)
+      // 7. Authentic Forward-Facing Automotive Headlights (Directional optical blocks flush with bodywork)
       const isPlayer = car.isPlayerControlled;
       const hasHeadlightsOn = isPlayer 
         ? car.headlightsOn 
@@ -9272,55 +9272,330 @@ export class GameRenderer {
       const isHighBeam = car.headlightMode === 'high';
       const isLowBeam = car.headlightMode === 'low' || (hasHeadlightsOn && !isHighBeam);
 
-      let leftLampX = halfL - Math.max(fld, fc) - 3.2;
-      let leftLampY = -halfW + 3.2 + ld * 0.15;
-      let rightLampX = halfL - Math.max(frd, fc) - 3.2;
-      let rightLampY = halfW - 3.2 - rd * 0.15;
+      // Archetype classification for accurate top-down optical geometry
+      const isClassicRoundSingle = 
+        car.type === 'classic_compact' || 
+        car.type === 'retro_bubble' || 
+        car.type === 'offroad_hardcore' || 
+        car.type === 'tractor_mtz82' || 
+        car.type === 'tractor_mtz80' || 
+        car.type === 'tractor_mtz80_old';
 
-      if (isSoloMoto) {
-        leftLampX = halfL - fc - 2.5;
-        leftLampY = 0;
-        rightLampX = halfL - fc - 2.5;
-        rightLampY = 0;
+      const isClassicRoundTwin = 
+        car.type === 'sedan_classic' || 
+        car.type === 'muscle_classic';
+
+      const isAeroSwept = 
+        car.type === 'supercar' || 
+        car.type === 'sports' || 
+        car.type === 'coupe_gt' || 
+        car.type === 'sedan_luxury' || 
+        car.type === 'suv_luxury' || 
+        car.type === 'crossover_compact' || 
+        car.type === 'hatch_hot' || 
+        car.type === 'sedan_polo' || 
+        car.type === 'sedan_accent';
+
+      let leftLampX = halfL - Math.max(fld, fc) - 1.4;
+      let leftLampY = -halfW * 0.74 + ld * 0.15;
+      let rightLampX = halfL - Math.max(frd, fc) - 1.4;
+      let rightLampY = halfW * 0.74 - rd * 0.15;
+
+      if (isTractor) {
+        leftLampX = halfL - fc - 1.2;
+        leftLampY = -halfW * 0.24;
+        rightLampX = halfL - fc - 1.2;
+        rightLampY = halfW * 0.24;
       } else if (isUralSidecar) {
         leftLampX = halfL - fc - 2.5;
         leftLampY = -halfW * 0.45;
         rightLampX = halfL * 0.25;
         rightLampY = halfW * 0.78;
-      } else if (isTractor) {
-        leftLampX = halfL - fc - 2.0;
-        leftLampY = -halfW * 0.23;
-        rightLampX = halfL - fc - 2.0;
-        rightLampY = halfW * 0.23;
       }
 
-      const drawHeadlight = (lx: number, ly: number, broken: boolean) => {
-        if (broken) {
-          ctx.fillStyle = '#1e293b';
-          ctx.beginPath(); ctx.arc(lx, ly, 1.8, 0, Math.PI * 2); ctx.fill();
-        } else {
-          ctx.fillStyle = hasHeadlightsOn ? (isHighBeam ? '#ffffff' : '#fef08a') : '#cbd5e1';
-          ctx.beginPath(); ctx.arc(lx, ly, hasHeadlightsOn ? 2.2 : 1.8, 0, Math.PI * 2); ctx.fill();
-          if (hasHeadlightsOn) {
-            ctx.fillStyle = isHighBeam ? 'rgba(255, 255, 255, 0.95)' : 'rgba(254, 240, 138, 0.85)';
-            ctx.beginPath(); ctx.arc(lx, ly, 3.2, 0, Math.PI * 2); ctx.fill();
-          }
-          ctx.strokeStyle = 'rgba(0, 0, 0, 0.3)';
+      const drawHeadlight = (lx: number, ly: number, broken: boolean, isLeftLamp: boolean) => {
+        ctx.save();
+
+        const isSignaling = car.turnSignal === (isLeftLamp ? 'left' : 'right') || car.turnSignal === 'hazard';
+        const signalIntensity = isSignaling ? getVehicleTurnSignalDynamicState(car).intensity : 0;
+        const amberColor = signalIntensity > 0.05 
+          ? `rgba(245, 158, 11, ${0.45 + 0.55 * signalIntensity})` 
+          : '#92400e';
+
+        if (isClassicRoundSingle) {
+          // --- A. CLASSIC ROUND HEADLIGHT (Top-Down: Forward-facing chrome bucket & convex front glass) ---
+          // In top-down view, a forward-facing cylindrical headlight dome projects along +X.
+          // Depth along X is ~2.0px, width along Y is ~2.8px. Dimensions are strictly fixed (no ballooning!).
+          const diamY = isTractor ? 2.6 : 3.0;
+          const depthX = 2.0;
+          const noseX = lx;
+          const rearX = lx - depthX;
+
+          // Chrome / dark housing bucket behind (-X)
+          ctx.fillStyle = '#0f172a';
+          ctx.beginPath();
+          ctx.moveTo(rearX, ly - diamY * 0.5);
+          ctx.quadraticCurveTo(rearX - 0.7, ly, rearX, ly + diamY * 0.5);
+          ctx.lineTo(noseX, ly + diamY * 0.5);
+          ctx.lineTo(noseX, ly - diamY * 0.5);
+          ctx.closePath();
+          ctx.fill();
+
+          ctx.strokeStyle = '#cbd5e1';
           ctx.lineWidth = 0.5;
           ctx.stroke();
-        }
-      };
-      // Trailers and road machinery have no front passenger headlights!
-      if (!isTrailer && !isRoadMachinery(car.type)) {
-        if (isSoloMoto) {
-          drawHeadlight(leftLampX, leftLampY, dmg.leftHeadlightBroken);
+
+          if (broken) {
+            ctx.fillStyle = '#090d16';
+            ctx.fillRect(rearX + 0.3, ly - diamY * 0.4, depthX - 0.3, diamY * 0.8);
+            ctx.fillStyle = '#1e293b';
+            ctx.fillRect(rearX + 0.6, ly - 0.3, depthX * 0.4, 0.6);
+          } else {
+            const reflectorColor = hasHeadlightsOn 
+              ? (isHighBeam ? '#ffffff' : '#fef08a') 
+              : '#475569';
+
+            // Parabolic reflector cup
+            ctx.fillStyle = hasHeadlightsOn ? (isHighBeam ? '#f8fafc' : '#fffbeb') : '#334155';
+            ctx.beginPath();
+            ctx.moveTo(rearX + 0.4, ly - diamY * 0.38);
+            ctx.quadraticCurveTo(rearX + 0.1, ly, rearX + 0.4, ly + diamY * 0.38);
+            ctx.lineTo(noseX, ly + diamY * 0.38);
+            ctx.lineTo(noseX, ly - diamY * 0.38);
+            ctx.closePath();
+            ctx.fill();
+
+            // Forward-facing glass lens arc protruding slightly forward (+X)
+            ctx.fillStyle = reflectorColor;
+            ctx.beginPath();
+            ctx.moveTo(noseX - 0.4, ly - diamY * 0.42);
+            ctx.quadraticCurveTo(noseX + 0.5, ly, noseX - 0.4, ly + diamY * 0.42);
+            ctx.lineTo(noseX - 0.7, ly + diamY * 0.42);
+            ctx.quadraticCurveTo(noseX + 0.1, ly, noseX - 0.7, ly - diamY * 0.42);
+            ctx.closePath();
+            ctx.fill();
+
+            if (hasHeadlightsOn) {
+              // Internal filament/projector core (crisp focal point, NOT a giant expanding circle!)
+              ctx.fillStyle = '#ffffff';
+              ctx.fillRect(noseX - 0.7, ly - 0.35, 0.7, 0.7);
+            }
+          }
+
+        } else if (isClassicRoundTwin) {
+          // --- B. CLASSIC TWIN ROUND HEADLIGHTS (ВАЗ-2106 / Жигули "шестёрка" / Classic Muscle) ---
+          const rDiam = 2.2;
+          const rDepth = 1.6;
+          const outboardY = ly;
+          const inboardY = isLeftLamp ? (ly + rDiam * 1.25) : (ly - rDiam * 1.25);
+
+          const bezelMinY = Math.min(outboardY, inboardY) - rDiam * 0.6;
+          const bezelMaxY = Math.max(outboardY, inboardY) + rDiam * 0.6;
+          ctx.fillStyle = '#0f172a';
+          ctx.fillRect(lx - rDepth - 0.4, bezelMinY, rDepth + 0.8, bezelMaxY - bezelMinY);
+
+          const drawSingleTwinRound = (cx: number, cy: number, isHighOnly: boolean) => {
+            const rx = cx - rDepth;
+            ctx.strokeStyle = '#cbd5e1';
+            ctx.lineWidth = 0.5;
+            ctx.strokeRect(rx, cy - rDiam * 0.5, rDepth, rDiam);
+
+            if (broken) {
+              ctx.fillStyle = '#090d16';
+              ctx.fillRect(rx + 0.2, cy - rDiam * 0.4, rDepth - 0.2, rDiam * 0.8);
+              return;
+            }
+
+            const isOn = hasHeadlightsOn && (isHighBeam || !isHighOnly);
+            ctx.fillStyle = isOn ? (isHighBeam ? '#ffffff' : '#fef08a') : '#64748b';
+            ctx.fillRect(rx + 0.3, cy - rDiam * 0.4, rDepth - 0.3, rDiam * 0.8);
+
+            ctx.fillStyle = isOn ? '#ffffff' : '#cbd5e1';
+            ctx.fillRect(cx - 0.3, cy - rDiam * 0.45, 0.5, rDiam * 0.9);
+
+            if (isOn) {
+              ctx.fillStyle = '#ffffff';
+              ctx.fillRect(cx - 0.6, cy - 0.3, 0.6, 0.6);
+            }
+          };
+
+          drawSingleTwinRound(lx, outboardY, false);
+          drawSingleTwinRound(lx - 0.2, inboardY, true);
+
+        } else if (isAeroSwept) {
+          // --- C. AERODYNAMIC SWEPT-BACK PROJECTOR HEADLIGHTS (Modern Sports, Supercars & Luxury) ---
+          const lampW = Math.min(5.2, halfW * 0.30);
+          const lampD = 2.0;
+          const frontX = lx;
+          const backX = lx - lampD;
+
+          const inboardY = isLeftLamp ? (ly + lampW * 0.5) : (ly - lampW * 0.5);
+          const outboardY = isLeftLamp ? (ly - lampW * 0.5) : (ly + lampW * 0.5);
+          const sweepBack = 0.8;
+
+          ctx.fillStyle = '#0f172a';
+          ctx.beginPath();
+          ctx.moveTo(frontX, inboardY);
+          ctx.lineTo(frontX - sweepBack, outboardY);
+          ctx.lineTo(backX - sweepBack, outboardY);
+          ctx.lineTo(backX, inboardY);
+          ctx.closePath();
+          ctx.fill();
+
+          if (broken) {
+            ctx.fillStyle = '#020617';
+            ctx.beginPath();
+            ctx.moveTo(frontX - 0.3, inboardY);
+            ctx.lineTo(frontX - sweepBack - 0.3, outboardY);
+            ctx.lineTo(backX - sweepBack + 0.4, outboardY);
+            ctx.lineTo(backX + 0.4, inboardY);
+            ctx.closePath();
+            ctx.fill();
+          } else {
+            // Outboard amber turn signal / DRL edge
+            ctx.fillStyle = amberColor;
+            const sigX = frontX - sweepBack;
+            ctx.fillRect(sigX - 0.5, isLeftLamp ? (outboardY) : (outboardY - 1.2), 0.8, 1.2);
+
+            // Reflector & dual projector optics (strictly contained within housing)
+            ctx.fillStyle = hasHeadlightsOn ? (isHighBeam ? '#f8fafc' : '#fffbeb') : '#1e293b';
+            ctx.beginPath();
+            ctx.moveTo(frontX - 0.2, inboardY + (isLeftLamp ? -0.2 : 0.2));
+            ctx.lineTo(frontX - sweepBack - 0.2, outboardY + (isLeftLamp ? 1.2 : -1.2));
+            ctx.lineTo(backX - sweepBack + 0.4, outboardY + (isLeftLamp ? 1.2 : -1.2));
+            ctx.lineTo(backX + 0.4, inboardY + (isLeftLamp ? -0.2 : 0.2));
+            ctx.closePath();
+            ctx.fill();
+
+            const proj1Y = ly + (isLeftLamp ? 0.6 : -0.6);
+            const proj2Y = ly + (isLeftLamp ? -0.6 : 0.6);
+            const projColor = hasHeadlightsOn ? '#ffffff' : '#cbd5e1';
+
+            ctx.fillStyle = projColor;
+            ctx.fillRect(frontX - 1.1, proj1Y - 0.5, 0.8, 1.0);
+            ctx.fillRect(frontX - 1.3, proj2Y - 0.5, 0.8, 1.0);
+
+            // Forward-facing glass outer lens (+X edge)
+            ctx.fillStyle = hasHeadlightsOn 
+              ? (isHighBeam ? 'rgba(255, 255, 255, 0.95)' : 'rgba(254, 240, 138, 0.90)')
+              : 'rgba(226, 232, 240, 0.80)';
+            ctx.beginPath();
+            ctx.moveTo(frontX, inboardY);
+            ctx.lineTo(frontX - sweepBack, outboardY);
+            ctx.lineTo(frontX - sweepBack - 0.4, outboardY);
+            ctx.lineTo(frontX - 0.4, inboardY);
+            ctx.closePath();
+            ctx.fill();
+          }
+
+        } else if (car.type === 'moto_ural_sidecar' && !isLeftLamp) {
+          // --- D. URAL SIDECAR RUNNING LIGHT (Teardrop bullet pod on sidecar fender) ---
+          const pFront = lx + 1.2;
+          const pRear = lx - 1.6;
+          const pW = 1.4;
+          ctx.fillStyle = '#0f172a';
+          ctx.fillRect(pRear, ly - pW * 0.5, 2.8, pW);
+          ctx.fillStyle = hasHeadlightsOn ? '#fef08a' : '#cbd5e1';
+          ctx.fillRect(pFront - 0.6, ly - pW * 0.4, 0.6, pW * 0.8);
+
         } else {
-          drawHeadlight(leftLampX, leftLampY, dmg.leftHeadlightBroken);
-          drawHeadlight(rightLampX, rightLampY, dmg.rightHeadlightBroken);
+          // --- E. STANDARD COMPOSITE RECTANGULAR HEADLIGHTS (Cars, Trucks, Vans, Buses) ---
+          const isHeavy = car.type.startsWith('truck_') || car.type === 'bus' || car.type.startsWith('fire_');
+          const lampW = isHeavy ? 5.8 : Math.min(5.0, Math.max(3.8, halfW * 0.28));
+          const lampD = isHeavy ? 2.2 : 1.8;
+          const frontX = lx;
+          const backX = lx - lampD;
+
+          const inboardY = isLeftLamp ? (ly + lampW * 0.5) : (ly - lampW * 0.5);
+          const outboardY = isLeftLamp ? (ly - lampW * 0.5) : (ly + lampW * 0.5);
+          const minY = Math.min(inboardY, outboardY);
+          const maxY = Math.max(inboardY, outboardY);
+
+          // Matte dark housing bezel
+          ctx.fillStyle = '#0f172a';
+          ctx.fillRect(backX - 0.3, minY - 0.2, lampD + 0.6, lampW + 0.4);
+
+          if (broken) {
+            ctx.fillStyle = '#090d16';
+            ctx.fillRect(backX, minY + 0.2, lampD, lampW - 0.4);
+            ctx.fillStyle = '#1e293b';
+            ctx.fillRect(backX + 0.4, minY + lampW * 0.3, lampD * 0.4, lampW * 0.4);
+          } else {
+            // Outboard turn signal section
+            const sigWidth = 1.3;
+            const sigStartY = isLeftLamp ? minY : (maxY - sigWidth);
+            ctx.fillStyle = amberColor;
+            ctx.fillRect(backX + 0.2, sigStartY, lampD - 0.2, sigWidth);
+
+            // Main reflector cavity (Inboard of turn signal)
+            const refStartY = isLeftLamp ? (minY + sigWidth) : minY;
+            const refWidth = lampW - sigWidth;
+
+            ctx.fillStyle = hasHeadlightsOn ? (isHighBeam ? '#f8fafc' : '#fffbeb') : '#334155';
+            ctx.fillRect(backX + 0.3, refStartY + 0.2, lampD - 0.4, refWidth - 0.4);
+
+            if (!hasHeadlightsOn) {
+              ctx.fillStyle = '#64748b';
+              ctx.fillRect(backX + 0.5, refStartY + 0.4, lampD * 0.5, refWidth - 0.8);
+            }
+
+            // Forward-facing glass lens strip (+X edge)
+            ctx.fillStyle = hasHeadlightsOn
+              ? (isHighBeam ? '#ffffff' : '#fef08a')
+              : '#cbd5e1';
+            ctx.fillRect(frontX - 0.4, refStartY + 0.2, 0.5, refWidth - 0.4);
+
+            if (hasHeadlightsOn) {
+              ctx.fillStyle = '#ffffff';
+              const coreY = refStartY + refWidth * 0.5;
+              ctx.fillRect(frontX - 0.9, coreY - 0.35, 0.6, 0.7);
+            }
+          }
+        }
+
+        ctx.restore();
+      };
+
+      // Trailers, road machinery, and solo motorcycles have their own specialized lighting
+      if (!isTrailer && !isRoadMachinery(car.type) && !isSoloMoto) {
+        if (isUralSidecar) {
+          drawHeadlight(rightLampX, rightLampY, dmg.rightHeadlightBroken, false);
+        } else {
+          drawHeadlight(leftLampX, leftLampY, dmg.leftHeadlightBroken, true);
+          drawHeadlight(rightLampX, rightLampY, dmg.rightHeadlightBroken, false);
         }
       }
 
-      // 8. Taillights, Brake Lights & Reverse Lights
+      // 7b. Front Fog Lights (ПТФ передние - в нижних нишах переднего бампера)
+      if (car.frontFogLightsOn && !isTrailer && !isRoadMachinery(car.type)) {
+        const fogX = halfL - fc - 0.6;
+        const fogW = 2.4;
+        const fogD = 1.2;
+        const drawFrontFogLamp = (fy: number, broken: boolean) => {
+          if (broken) return;
+          ctx.save();
+          // Lower bumper recess bezel
+          ctx.fillStyle = '#0f172a';
+          ctx.fillRect(fogX - fogD - 0.3, fy - fogW * 0.5 - 0.2, fogD + 0.5, fogW + 0.4);
+          // Selective yellow / halogen reflector & forward lens
+          ctx.fillStyle = '#fde047';
+          ctx.fillRect(fogX - fogD, fy - fogW * 0.5, fogD, fogW);
+          // Crisp bulb emitter inside lens (strictly contained, no expanding circles!)
+          ctx.fillStyle = '#ffffff';
+          ctx.fillRect(fogX - 0.5, fy - 0.3, 0.5, 0.6);
+          ctx.restore();
+        };
+
+        if (isSoloMoto) {
+          drawFrontFogLamp(0, dmg.leftHeadlightBroken);
+        } else {
+          const fogSpanY = halfW * 0.62;
+          drawFrontFogLamp(-fogSpanY, dmg.leftHeadlightBroken);
+          drawFrontFogLamp(fogSpanY, dmg.rightHeadlightBroken);
+        }
+      }
+
+      // 8. Authentic Automotive Rear Light Clusters (Габариты, Стоп-сигналы, Задний ход, Задние ПТФ)
       const isReversing = isVehicleReverseGearActive(car);
       const isBraking = car.brakeLightsOn && !isReversing;
       let hasTaillightsActive = false;
@@ -9335,11 +9610,12 @@ export class GameRenderer {
         hasTaillightsActive = !!(car.positionLightsOn || hasHeadlightsOn) && !car.isParked;
       }
       const isNightRunning = hasTaillightsActive;
+      const isRearFogActive = !!car.rearFogLightsOn && (hasHeadlightsOn || isNightRunning);
 
-      let rearLeftX = -halfL + rc * 0.85 + rld * 0.4 + 2.5;
-      let rearLeftY = -halfW + 3.2 + ld * 0.15;
-      let rearRightX = -halfL + rc * 0.85 + rrd * 0.4 + 2.5;
-      let rearRightY = halfW - 3.2 - rd * 0.15;
+      let rearLeftX = -halfL + rc * 0.85 + rld * 0.4 + 1.2;
+      let rearLeftY = -halfW * 0.76 + ld * 0.15;
+      let rearRightX = -halfL + rc * 0.85 + rrd * 0.4 + 1.2;
+      let rearRightY = halfW * 0.76 - rd * 0.15;
 
       if (isSoloMoto) {
         rearLeftX = -halfL + rc + 2.0;
@@ -9353,9 +9629,9 @@ export class GameRenderer {
         rearRightY = halfW * 0.85;
       } else if (isTractor) {
         const cabBackX = car.type === 'tractor_mtz80_old' ? (-halfL * 0.72) : (-halfL * 0.74);
-        rearLeftX = cabBackX + 2.5;
+        rearLeftX = cabBackX + 2.2;
         rearLeftY = -halfW * 0.82;
-        rearRightX = cabBackX + 2.5;
+        rearRightX = cabBackX + 2.2;
         rearRightY = halfW * 0.82;
       } else if (car.type === 'trailer_vacuum') {
         const fenderX = -halfL + 5.2;
@@ -9366,39 +9642,129 @@ export class GameRenderer {
         rearRightY = barrelTrackY + 0.8;
       }
 
-      const drawTaillight = (rx: number, ry: number, broken: boolean) => {
-        if (broken) return;
-        if (isReversing) {
-          ctx.fillStyle = '#ffffff';
-          ctx.fillRect(rx - 1, ry - 1, 2, 2);
-          ctx.fillStyle = 'rgba(255, 255, 255, 0.65)';
-          ctx.beginPath(); ctx.arc(rx, ry, 7, 0, Math.PI * 2); ctx.fill();
-        } else if (isBraking) {
-          // Intense automotive brake light with rich glow and specular core
-          ctx.fillStyle = '#ffffff';
-          ctx.fillRect(rx - 1, ry - 1, 2, 2);
-          ctx.fillStyle = '#ef4444';
-          ctx.beginPath(); ctx.arc(rx, ry, 3.2, 0, Math.PI * 2); ctx.fill();
-          // High-contrast optical halo for instant driver reaction even in peripheral view
-          ctx.fillStyle = 'rgba(239, 68, 68, 0.72)';
-          ctx.beginPath(); ctx.arc(rx, ry, 9, 0, Math.PI * 2); ctx.fill();
-          ctx.fillStyle = 'rgba(254, 202, 202, 0.40)';
-          ctx.beginPath(); ctx.arc(rx, ry, 4.5, 0, Math.PI * 2); ctx.fill();
-        } else if (isNightRunning) {
-          ctx.fillStyle = '#ef4444';
-          ctx.fillRect(rx - 1, ry - 1, 2, 2);
-          ctx.fillStyle = 'rgba(220, 38, 38, 0.35)';
-          ctx.beginPath(); ctx.arc(rx, ry, 5.0, 0, Math.PI * 2); ctx.fill();
-        } else {
-          ctx.fillStyle = '#dc2626';
-          ctx.fillRect(rx - 1, ry - 1, 2, 2);
+      const drawTaillight = (rx: number, ry: number, broken: boolean, isLeftCluster: boolean) => {
+        if (broken) {
+          ctx.fillStyle = '#090d16';
+          ctx.fillRect(rx - 0.4, ry - 1.8, 1.4, 3.6);
+          return;
         }
+
+        ctx.save();
+        const isSignaling = car.turnSignal === (isLeftCluster ? 'left' : 'right') || car.turnSignal === 'hazard';
+        const signalIntensity = isSignaling ? getVehicleTurnSignalDynamicState(car).intensity : 0;
+        const isTurnLit = signalIntensity > 0.05;
+
+        if (isSoloMoto) {
+          // --- Solo Motorcycle Rear Mudguard Light & Stalk Pods ---
+          const mW = 2.4;
+          const mD = 1.6;
+          ctx.fillStyle = '#0f172a';
+          ctx.fillRect(rx - 0.3, -mW * 0.5 - 0.2, mD + 0.4, mW + 0.4);
+          ctx.fillStyle = isBraking ? '#ef4444' : (isNightRunning ? '#dc2626' : '#7f1d1d');
+          ctx.fillRect(rx, -mW * 0.5, mD, mW);
+          if (isBraking) {
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(rx + 0.4, -0.4, 0.6, 0.8);
+          }
+          ctx.restore();
+          return;
+        }
+
+        // --- Standard & Heavy Multi-Chamber Rear Light Cluster (ECE / ГОСТ) ---
+        const isHeavy = car.type.startsWith('truck_') || car.type === 'bus' || car.type.startsWith('fire_');
+        const lampW = isHeavy ? 5.8 : Math.min(5.2, Math.max(3.6, halfW * 0.28));
+        const lampD = isHeavy ? 2.0 : 1.6;
+
+        const inboardY = isLeftCluster ? (ry + lampW * 0.5) : (ry - lampW * 0.5);
+        const outboardY = isLeftCluster ? (ry - lampW * 0.5) : (ry + lampW * 0.5);
+        const minY = Math.min(inboardY, outboardY);
+        const maxY = Math.max(inboardY, outboardY);
+
+        // Dark perimeter housing border
+        ctx.fillStyle = '#0f172a';
+        ctx.fillRect(rx - 0.3, minY - 0.2, lampD + 0.5, lampW + 0.4);
+
+        // Section 1: Outboard Turn Indicator Chamber (~1.2px)
+        const sigW = 1.2;
+        const sigStartY = isLeftCluster ? minY : (maxY - sigW);
+        ctx.fillStyle = isTurnLit ? '#f59e0b' : '#92400e';
+        ctx.fillRect(rx, sigStartY, lampD - 0.2, sigW);
+        if (isTurnLit) {
+          ctx.fillStyle = '#fef08a';
+          ctx.fillRect(rx + 0.3, sigStartY + 0.2, 0.6, sigW - 0.4);
+        }
+
+        // Section 2: Main Running Taillight / Brake Light Chamber (Middle ~2.0px)
+        const brakeW = Math.max(1.8, lampW * 0.45);
+        const brakeStartY = isLeftCluster ? (minY + sigW) : (maxY - sigW - brakeW);
+
+        if (isBraking) {
+          // Brilliant high-candela brake light illumination (STRICTLY LOCKED DIMENSIONS, NO SWELLING!)
+          ctx.fillStyle = '#ef4444';
+          ctx.fillRect(rx, brakeStartY, lampD - 0.2, brakeW);
+          // Concentrated high-intensity filament core
+          ctx.fillStyle = '#ffffff';
+          ctx.fillRect(rx + 0.4, brakeStartY + 0.3, 0.6, brakeW - 0.6);
+        } else if (isNightRunning) {
+          // Running taillight (glowing ruby red)
+          ctx.fillStyle = '#dc2626';
+          ctx.fillRect(rx, brakeStartY, lampD - 0.2, brakeW);
+          ctx.fillStyle = '#f87171';
+          ctx.fillRect(rx + 0.5, brakeStartY + 0.4, 0.4, brakeW - 0.8);
+        } else {
+          // Off: deep ruby lens with reflector facets
+          ctx.fillStyle = '#7f1d1d';
+          ctx.fillRect(rx, brakeStartY, lampD - 0.2, brakeW);
+        }
+
+        // Section 3: Inboard Chamber (Reverse Light & Rear Fog Light)
+        const inbW = lampW - sigW - brakeW;
+        const inbStartY = isLeftCluster ? (minY + sigW + brakeW) : minY;
+
+        if (isReversing) {
+          // Brilliant crisp white reverse light
+          ctx.fillStyle = '#ffffff';
+          ctx.fillRect(rx, inbStartY, lampD - 0.2, inbW);
+          ctx.fillStyle = '#f8fafc';
+          ctx.fillRect(rx + 0.3, inbStartY + 0.2, 0.5, inbW - 0.4);
+        } else if (isRearFogActive) {
+          // ECE R38 saturated crimson rear fog lamp (intense penetrating red)
+          ctx.fillStyle = '#ef4444';
+          ctx.fillRect(rx, inbStartY, lampD - 0.2, inbW);
+          ctx.fillStyle = '#ff8080';
+          ctx.fillRect(rx + 0.3, inbStartY + 0.2, 0.6, inbW - 0.4);
+        } else {
+          // Off: clear reverse / ruby fog lens
+          ctx.fillStyle = isLeftCluster ? '#94a3b8' : '#7f1d1d';
+          ctx.fillRect(rx, inbStartY, lampD - 0.2, inbW);
+        }
+
+        ctx.restore();
       };
+
       if (isSoloMoto) {
-        drawTaillight(rearLeftX, rearLeftY, dmg.leftTaillightBroken);
-      } else if (car.type !== 'trailer_barrel' && !isRoadMachinery(car.type)) { // Barrels and machinery handled specially
-        drawTaillight(rearLeftX, rearLeftY, dmg.leftTaillightBroken);
-        drawTaillight(rearRightX, rearRightY, dmg.rightTaillightBroken);
+        drawTaillight(rearLeftX, rearLeftY, dmg.leftTaillightBroken, true);
+      } else if (car.type !== 'trailer_barrel' && !isRoadMachinery(car.type)) {
+        drawTaillight(rearLeftX, rearLeftY, dmg.leftTaillightBroken, true);
+        drawTaillight(rearRightX, rearRightY, dmg.rightTaillightBroken, false);
+      }
+
+      // Third High-Mounted Brake Light (CHMSL - Центральный стоп-сигнал на крышке багажника/заднем стекле)
+      if (isBraking && !isTrailer && !isSoloMoto && !isRoadMachinery(car.type)) {
+        const isNotchOrHatch = car.type.startsWith('sedan') || car.type.startsWith('hatch') || 
+                               car.type.startsWith('wagon') || 
+                               car.type === 'police' || car.type === 'taxi' || 
+                               car.type === 'supercar' || car.type === 'sports' || 
+                               car.type === 'coupe_gt' || car.type.startsWith('suv') || 
+                               car.type === 'crossover_compact';
+        if (isNotchOrHatch) {
+          const { cabinX, cabinL } = getVehicleCabinDimensions(car, halfL, halfW, ld, rd);
+          const chmslX = cabinX - cabinL * 0.44;
+          ctx.fillStyle = '#ef4444';
+          ctx.fillRect(chmslX - 0.4, -1.8, 0.8, 3.6);
+          ctx.fillStyle = '#ffffff';
+          ctx.fillRect(chmslX - 0.2, -1.2, 0.4, 2.4);
+        }
       }
 
       // Trailers: Authentic red reflective warning triangles (ECE R3 / ГОСТ 8769-75)
@@ -9477,12 +9843,6 @@ export class GameRenderer {
               const py = startY + dy * s;
 
               if (isSegLit) {
-                // Outer amber flare
-                ctx.fillStyle = 'rgba(245, 158, 11, 0.40)';
-                ctx.beginPath();
-                ctx.arc(px, py, 4.0, 0, Math.PI * 2);
-                ctx.fill();
-
                 // Saturated amber LED crystal
                 ctx.fillStyle = '#f59e0b';
                 ctx.fillRect(px - 0.7, py - 0.7, 1.4, 1.4);
@@ -9513,12 +9873,10 @@ export class GameRenderer {
               renderSequentialLedStrip(innerX, innerY, outerX, outerY, 7, turnState.sweepProgress, broken);
 
             } else if (cfg.type === 'led_crisp') {
-              // Crisp 3-dot LED matrix
+              // Crisp 3-dot LED matrix within amber chamber
               if (turnState.intensity > 0.5) {
-                ctx.fillStyle = 'rgba(245, 158, 11, 0.45)';
-                ctx.beginPath();
-                ctx.arc(tx, ty, 5.5, 0, Math.PI * 2);
-                ctx.fill();
+                ctx.fillStyle = 'rgba(245, 158, 11, 0.25)';
+                ctx.fillRect(tx - 1.2, ty - 1.2, 2.4, 2.4);
 
                 for (let d = -1; d <= 1; d++) {
                   const dx = tx + d * 0.9;
@@ -9534,16 +9892,9 @@ export class GameRenderer {
               // Incandescent / Halogen Bulb with filament thermal inertia glow
               const curIntensity = turnState.intensity;
               if (curIntensity > 0.05) {
-                // Volumetric ambient halo
-                const glowR = 3.5 + curIntensity * 4.5;
-                ctx.fillStyle = `rgba(245, 158, 11, ${0.45 * curIntensity})`;
-                ctx.beginPath();
-                ctx.arc(tx, ty, glowR, 0, Math.PI * 2);
-                ctx.fill();
-
-                // Amber lamp glass
-                ctx.fillStyle = '#d97706';
-                ctx.fillRect(tx - 1.0, ty - 1.0, 2.0, 2.0);
+                // Physical amber lens chamber (strictly rectangular corner housing, no circular blooming)
+                ctx.fillStyle = `rgba(217, 119, 6, ${0.4 + 0.6 * curIntensity})`;
+                ctx.fillRect(tx - 1.1, ty - 1.1, 2.2, 2.2);
 
                 // Heated tungsten filament core
                 ctx.fillStyle = `rgba(254, 240, 138, ${curIntensity})`;
@@ -9568,10 +9919,8 @@ export class GameRenderer {
 
             } else if (cfg.type === 'led_crisp') {
               if (turnState.intensity > 0.5) {
-                ctx.fillStyle = 'rgba(245, 158, 11, 0.48)';
-                ctx.beginPath();
-                ctx.arc(rx, ry, 6.0, 0, Math.PI * 2);
-                ctx.fill();
+                ctx.fillStyle = 'rgba(245, 158, 11, 0.30)';
+                ctx.fillRect(rx - 1.0, ry - 1.5, 2.0, 3.0);
 
                 for (let d = -1; d <= 1; d++) {
                   ctx.fillStyle = '#f59e0b';
@@ -9582,16 +9931,10 @@ export class GameRenderer {
               }
 
             } else {
-              // Incandescent / Halogen Rear Cluster
+              // Incandescent / Halogen Rear Cluster (amber outboard chamber, no circular swelling)
               const curIntensity = turnState.intensity;
               if (curIntensity > 0.05) {
-                const glowR = 4.0 + curIntensity * 5.0;
-                ctx.fillStyle = `rgba(245, 158, 11, ${0.48 * curIntensity})`;
-                ctx.beginPath();
-                ctx.arc(rx, ry, glowR, 0, Math.PI * 2);
-                ctx.fill();
-
-                ctx.fillStyle = '#d97706';
+                ctx.fillStyle = `rgba(217, 119, 6, ${0.4 + 0.6 * curIntensity})`;
                 ctx.fillRect(rx - 1.1, ry - 1.1, 2.2, 2.2);
 
                 ctx.fillStyle = `rgba(254, 240, 138, ${curIntensity})`;
@@ -9612,10 +9955,7 @@ export class GameRenderer {
                 const endY = (halfW + 2.6) * sideSign;
                 renderSequentialLedStrip(startX, startY, endX, endY, 4, turnState.sweepProgress, false);
               } else if (turnState.intensity > 0.5) {
-                ctx.fillStyle = 'rgba(245, 158, 11, 0.50)';
-                ctx.beginPath();
-                ctx.arc(mx, my, 3.2, 0, Math.PI * 2);
-                ctx.fill();
+                // Crisp linear LED strip on outer mirror housing
                 ctx.fillStyle = '#f59e0b';
                 ctx.fillRect(mx - 0.6, my - 1.2, 1.2, 2.4);
                 ctx.fillStyle = '#fef08a';
@@ -9626,19 +9966,23 @@ export class GameRenderer {
               if (curIntensity > 0.05) {
                 const fx = fenderX;
                 const fy = fenderY * sideSign;
-                ctx.fillStyle = `rgba(245, 158, 11, ${0.40 * curIntensity})`;
-                ctx.beginPath();
-                ctx.arc(fx, fy, 2.8, 0, Math.PI * 2);
-                ctx.fill();
 
                 if (cfg.repeaterStyle === 'fender_round') {
+                  // Authentic small round amber repeater crystal (1px radius, no halo bloom)
                   ctx.fillStyle = '#f59e0b';
                   ctx.beginPath();
                   ctx.arc(fx, fy, 1.0, 0, Math.PI * 2);
                   ctx.fill();
+                  ctx.fillStyle = `rgba(254, 240, 138, ${curIntensity})`;
+                  ctx.beginPath();
+                  ctx.arc(fx, fy, 0.5, 0, Math.PI * 2);
+                  ctx.fill();
                 } else {
+                  // Rectangular side crystal
                   ctx.fillStyle = '#f59e0b';
                   ctx.fillRect(fx - 0.8, fy - 0.5, 1.6, 1.0);
+                  ctx.fillStyle = `rgba(254, 240, 138, ${curIntensity})`;
+                  ctx.fillRect(fx - 0.4, fy - 0.25, 0.8, 0.5);
                 }
               }
             }
@@ -11485,10 +11829,10 @@ export class GameRenderer {
                          car.type === 'moto_sport' || car.type === 'moto_chopper' || car.type === 'moped_soviet';
       const isUralSidecar = car.type === 'moto_ural_sidecar';
 
-      let leftLampLX = halfL - Math.max(fld, fc) - 3.2;
-      let leftLampLY = -halfW + 3.2 + ld * 0.15;
-      let rightLampLX = halfL - Math.max(frd, fc) - 3.2;
-      let rightLampLY = halfW - 3.2 - rd * 0.15;
+      let leftLampLX = halfL - Math.max(fld, fc) - 1.4;
+      let leftLampLY = -halfW * 0.74 + ld * 0.15;
+      let rightLampLX = halfL - Math.max(frd, fc) - 1.4;
+      let rightLampLY = halfW * 0.74 - rd * 0.15;
 
       if (isSoloMoto) {
         leftLampLX = halfL - fc - 2.5;
@@ -11501,10 +11845,10 @@ export class GameRenderer {
         rightLampLX = halfL * 0.25;
         rightLampLY = halfW * 0.78;
       } else if (isTractor) {
-        leftLampLX = halfL - fc - 2.0;
-        leftLampLY = -halfW * 0.23;
-        rightLampLX = halfL - fc - 2.0;
-        rightLampLY = halfW * 0.23;
+        leftLampLX = halfL - fc - 1.2;
+        leftLampLY = -halfW * 0.24;
+        rightLampLX = halfL - fc - 1.2;
+        rightLampLY = halfW * 0.24;
       }
 
       const hasHeadlightsOn = getVehicleHeadlightOn(car);
@@ -12082,15 +12426,84 @@ export class GameRenderer {
         const trailerLightsActive = car.headlightsOn || car.positionLightsOn || car.brakeLightsOn || car.isReversing || (car.turnSignal && car.turnSignal !== 'none');
         if (!trailerLightsActive && nightAlpha <= 0.05) continue;
 
-        const drawTrailerAdditive = (lxOffset: number, lyOffset: number, radius: number, color: string) => {
+        const drawTrailerRearEmitter = (lxOffset: number, lyOffset: number, washLen: number, washSpread: number, color: string) => {
           const lx = car.x + cosA * lxOffset - sinA * lyOffset;
           const ly = car.y + sinA * lxOffset + cosA * lyOffset;
-          const targetRadius = radius * fogFactor;
-          const flare = ctx.createRadialGradient(0, 0, 0.3, 0, 0, targetRadius);
-          flare.addColorStop(0, color);
-          flare.addColorStop(1, 'rgba(0, 0, 0, 0)');
-          ctx.fillStyle = flare;
-          ctx.save(); ctx.translate(lx, ly); ctx.beginPath(); ctx.arc(0, 0, targetRadius, 0, Math.PI * 2); ctx.fill(); ctx.restore();
+          const rearAngle = car.angle + Math.PI;
+
+          ctx.save();
+          ctx.translate(lx, ly);
+          ctx.rotate(rearAngle);
+
+          // Physical luminous slit on the rear bumper facing backward
+          ctx.fillStyle = color;
+          ctx.fillRect(0, -2.2, 0.9, 4.4);
+
+          // Micro-bloom right at the rear lens face
+          const lensBloom = ctx.createRadialGradient(0.4, 0, 0.2, 0.4, 0, 2.8);
+          lensBloom.addColorStop(0.0, color);
+          lensBloom.addColorStop(1.0, 'rgba(0, 0, 0, 0)');
+          ctx.fillStyle = lensBloom;
+          ctx.beginPath();
+          ctx.ellipse(0.4, 0, 2.8, 3.2, 0, -Math.PI * 0.5, Math.PI * 0.5);
+          ctx.fill();
+
+          // Physical diffuse road reflectance on asphalt behind trailer (zero air triangles!)
+          if (washLen > 8) {
+            const effLen = washLen * fogFactor;
+            const effSpread = washSpread * fogFactor;
+            const groundDist = effLen * 0.45;
+            const groundRadiusX = effLen * 0.55;
+            const groundRadiusY = effSpread * 0.55;
+
+            const m = color.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*([\d\.]+))?\)/);
+            const r = m ? m[1] : '255';
+            const g = m ? m[2] : '255';
+            const b = m ? m[3] : '255';
+            const baseA = m ? parseFloat(m[4] ?? '1') : 0.8;
+
+            const groundGrad = ctx.createRadialGradient(groundDist, 0, 0, groundDist, 0, groundRadiusX);
+            groundGrad.addColorStop(0.0, `rgba(${r}, ${g}, ${b}, ${(baseA * 0.45).toFixed(3)})`);
+            groundGrad.addColorStop(0.4, `rgba(${r}, ${g}, ${b}, ${(baseA * 0.20).toFixed(3)})`);
+            groundGrad.addColorStop(0.8, `rgba(${r}, ${g}, ${b}, ${(baseA * 0.04).toFixed(3)})`);
+            groundGrad.addColorStop(1.0, `rgba(${r}, ${g}, ${b}, 0)`);
+
+            ctx.fillStyle = groundGrad;
+            ctx.beginPath();
+            ctx.ellipse(groundDist, 0, groundRadiusX, groundRadiusY, 0, 0, Math.PI * 2);
+            ctx.fill();
+          }
+
+          // Atmospheric scattering in fog/mist ONLY
+          if (isFog && weights.fog > 0.05 && washLen > 15) {
+            const mistAlpha = Math.min(0.20, (0.03 + 0.07 * weights.fog) * weatherTransition);
+            if (mistAlpha > 0.005) {
+              const m = color.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*([\d\.]+))?\)/);
+              const r = m ? m[1] : '255';
+              const g = m ? m[2] : '255';
+              const b = m ? m[3] : '255';
+              const mistLen = washLen * 0.65;
+              const mistSpread = washSpread * 0.55;
+              const mistGrad = ctx.createRadialGradient(0, 0, 0.4, mistLen * 0.4, 0, mistLen);
+              mistGrad.addColorStop(0.0, `rgba(${r}, ${g}, ${b}, ${(mistAlpha * 1.2).toFixed(3)})`);
+              mistGrad.addColorStop(0.5, `rgba(${r}, ${g}, ${b}, ${(mistAlpha * 0.4).toFixed(3)})`);
+              mistGrad.addColorStop(1.0, `rgba(${r}, ${g}, ${b}, 0)`);
+
+              ctx.fillStyle = mistGrad;
+              ctx.beginPath();
+              ctx.ellipse(mistLen * 0.4, 0, mistLen * 0.6, mistSpread * 0.5, 0, 0, Math.PI * 2);
+              ctx.fill();
+            }
+          }
+
+          ctx.restore();
+        };
+
+        const drawTrailerSideMarker = (lxOffset: number, sideY: number) => {
+          const mx = car.x + cosA * lxOffset - sinA * sideY;
+          const my = car.y + sinA * lxOffset + cosA * sideY;
+          ctx.fillStyle = 'rgba(255, 170, 20, 0.65)';
+          ctx.fillRect(mx - 0.7, my - 0.7, 1.4, 1.4);
         };
 
         let rLeftLX = -halfL * 0.94;
@@ -12128,17 +12541,17 @@ export class GameRenderer {
         const hasTrailerRunningLights = (car.positionLightsOn || car.headlightsOn) && (car.type !== 'trailer_barrel');
 
         if (car.isReversing && hasRev) {
-          drawTrailerAdditive(rLeftLX, rLeftLY, 9, 'rgba(255, 255, 255, 0.60)');
-          drawTrailerAdditive(rRightLX, rRightLY, 9, 'rgba(255, 255, 255, 0.60)');
+          drawTrailerRearEmitter(rLeftLX, rLeftLY, 32, 24, 'rgba(255, 255, 255, 0.65)');
+          drawTrailerRearEmitter(rRightLX, rRightLY, 32, 24, 'rgba(255, 255, 255, 0.65)');
         } else if (car.brakeLightsOn) {
-          drawTrailerAdditive(rLeftLX, rLeftLY, 14, 'rgba(255, 30, 30, 0.70)');
-          drawTrailerAdditive(rRightLX, rRightLY, 14, 'rgba(255, 30, 30, 0.70)');
+          drawTrailerRearEmitter(rLeftLX, rLeftLY, 26, 22, 'rgba(255, 30, 30, 0.75)');
+          drawTrailerRearEmitter(rRightLX, rRightLY, 26, 22, 'rgba(255, 30, 30, 0.75)');
         } else if (hasTrailerRunningLights) {
-          drawTrailerAdditive(rLeftLX, rLeftLY, 4.5, 'rgba(220, 20, 20, 0.40)');
-          drawTrailerAdditive(rRightLX, rRightLY, 4.5, 'rgba(220, 20, 20, 0.40)');
+          drawTrailerRearEmitter(rLeftLX, rLeftLY, 8, 10, 'rgba(220, 20, 20, 0.45)');
+          drawTrailerRearEmitter(rRightLX, rRightLY, 8, 10, 'rgba(220, 20, 20, 0.45)');
           for (const smx of sideMarkerXs) {
-            drawTrailerAdditive(smx, -halfW - 0.2, 2.5, 'rgba(255, 170, 20, 0.45)');
-            drawTrailerAdditive(smx, halfW + 0.2, 2.5, 'rgba(255, 170, 20, 0.45)');
+            drawTrailerSideMarker(smx, -halfW - 0.2);
+            drawTrailerSideMarker(smx, halfW + 0.2);
           }
         }
 
@@ -12147,8 +12560,9 @@ export class GameRenderer {
           if (signalState.intensity > 0.05) {
             const isLeft = car.turnSignal === 'left' || car.turnSignal === 'hazard';
             const isRight = car.turnSignal === 'right' || car.turnSignal === 'hazard';
-            if (isLeft) drawTrailerAdditive(rLeftLX, rLeftLY - 1.5, 7.5 * signalState.intensity, `rgba(255, 160, 0, ${0.70 * signalState.intensity})`);
-            if (isRight) drawTrailerAdditive(rRightLX, rRightLY + 1.5, 7.5 * signalState.intensity, `rgba(255, 160, 0, ${0.70 * signalState.intensity})`);
+            const amberColor = `rgba(255, 160, 0, ${0.75 * signalState.intensity})`;
+            if (isLeft) drawTrailerRearEmitter(rLeftLX, rLeftLY - 1.5, 16 * signalState.intensity, 14, amberColor);
+            if (isRight) drawTrailerRearEmitter(rRightLX, rRightLY + 1.5, 16 * signalState.intensity, 14, amberColor);
           }
         }
 
@@ -12179,10 +12593,10 @@ export class GameRenderer {
       const cosFA = Math.cos(frontAngle);
       const sinFA = Math.sin(frontAngle);
 
-      let leftLampLX = halfL - Math.max(fld, fc) - 3.2;
-      let leftLampLY = -halfW + 3.2 + ld * 0.15;
-      let rightLampLX = halfL - Math.max(frd, fc) - 3.2;
-      let rightLampLY = halfW - 3.2 - rd * 0.15;
+      let leftLampLX = halfL - Math.max(fld, fc) - 1.4;
+      let leftLampLY = -halfW * 0.74 + ld * 0.15;
+      let rightLampLX = halfL - Math.max(frd, fc) - 1.4;
+      let rightLampLY = halfW * 0.74 - rd * 0.15;
 
       if (isSoloMoto) {
         leftLampLX = halfL - fc - 2.5;
@@ -12195,10 +12609,10 @@ export class GameRenderer {
         rightLampLX = halfL * 0.25;
         rightLampLY = halfW * 0.78;
       } else if (isTractor) {
-        leftLampLX = halfL - fc - 2.0;
-        leftLampLY = -halfW * 0.23;
-        rightLampLX = halfL - fc - 2.0;
-        rightLampLY = halfW * 0.23;
+        leftLampLX = halfL - fc - 1.2;
+        leftLampLY = -halfW * 0.24;
+        rightLampLX = halfL - fc - 1.2;
+        rightLampLY = halfW * 0.24;
       } else if (car.type === 'roller_compact_sidewalk') {
         leftLampLX = halfL - fc - 2.5;
         leftLampLY = 0;
@@ -12225,15 +12639,120 @@ export class GameRenderer {
       const hasPositionLightsOn = !!(car.positionLightsOn || hasHeadlightsOn);
       const isIgnitionOn = !!(car.engineState?.engineRunning || car.engineState?.ignition || car.positionLightsOn || hasHeadlightsOn);
 
-      const drawRadialAdditive = (rxOffset: number, ryOffset: number, radius: number, color: string) => {
+      const drawRearLightAdditive = (rxOffset: number, ryOffset: number, washLen: number, washSpread: number, color: string, lensWidth: number = 3.6) => {
         const rx = car.x + cosA * rxOffset - sinA * ryOffset;
         const ry = car.y + sinA * rxOffset + cosA * ryOffset;
-        const targetRadius = radius * fogFactor;
-        const grad = ctx.createRadialGradient(0, 0, 0.5, 0, 0, targetRadius);
-        grad.addColorStop(0, color);
-        grad.addColorStop(1, 'rgba(0, 0, 0, 0)');
-        ctx.fillStyle = grad;
-        ctx.save(); ctx.translate(rx, ry); ctx.beginPath(); ctx.arc(0, 0, targetRadius, 0, Math.PI * 2); ctx.fill(); ctx.restore();
+        const rearAngle = car.angle + Math.PI;
+
+        ctx.save();
+        ctx.translate(rx, ry);
+        ctx.rotate(rearAngle);
+
+        const hw = lensWidth * 0.5;
+        // Directional physical lens face on rear bumper facing backwards away from body
+        ctx.fillStyle = color;
+        ctx.fillRect(0, -hw, 0.9, hw * 2);
+
+        // Luminous micro-bloom on the rear lens face (zero backward bleed onto vehicle trunk/cab)
+        const lensBloom = ctx.createRadialGradient(0.4, 0, 0.2, 0.4, 0, Math.max(2.5, hw * 0.9));
+        lensBloom.addColorStop(0.0, color);
+        lensBloom.addColorStop(1.0, 'rgba(0, 0, 0, 0)');
+        ctx.fillStyle = lensBloom;
+        ctx.beginPath();
+        ctx.ellipse(0.4, 0, 2.5, hw, 0, -Math.PI * 0.5, Math.PI * 0.5);
+        ctx.fill();
+
+        // Physical diffuse road surface illumination (asphalt wash)
+        // No fake transparent geometric triangles in the air!
+        // Only high-intensity lamps (brake 21W, reverse 21W, rear fog 21W) illuminate the ground plane behind the bumper.
+        if (washLen > 8) {
+          const effLen = washLen * fogFactor;
+          const effSpread = washSpread * fogFactor;
+          const groundDist = effLen * 0.45;
+          const groundRadiusX = effLen * 0.55;
+          const groundRadiusY = effSpread * 0.55;
+
+          const m = color.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*([\d\.]+))?\)/);
+          const r = m ? m[1] : '255';
+          const g = m ? m[2] : '255';
+          const b = m ? m[3] : '255';
+          const baseA = m ? parseFloat(m[4] ?? '1') : 0.8;
+
+          const groundGrad = ctx.createRadialGradient(groundDist, 0, 0, groundDist, 0, groundRadiusX);
+          groundGrad.addColorStop(0.0, `rgba(${r}, ${g}, ${b}, ${(baseA * 0.45).toFixed(3)})`);
+          groundGrad.addColorStop(0.4, `rgba(${r}, ${g}, ${b}, ${(baseA * 0.20).toFixed(3)})`);
+          groundGrad.addColorStop(0.8, `rgba(${r}, ${g}, ${b}, ${(baseA * 0.04).toFixed(3)})`);
+          groundGrad.addColorStop(1.0, `rgba(${r}, ${g}, ${b}, 0)`);
+
+          ctx.fillStyle = groundGrad;
+          ctx.beginPath();
+          ctx.ellipse(groundDist, 0, groundRadiusX, groundRadiusY, 0, 0, Math.PI * 2);
+          ctx.fill();
+        }
+
+        // Atmospheric Mie scattering in air ONLY during dense fog (zero fake air cones in clear weather)
+        if (isFog && weights.fog > 0.05 && washLen > 15) {
+          const mistAlpha = Math.min(0.20, (0.03 + 0.07 * weights.fog) * weatherTransition);
+          if (mistAlpha > 0.005) {
+            const m = color.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*([\d\.]+))?\)/);
+            const r = m ? m[1] : '255';
+            const g = m ? m[2] : '255';
+            const b = m ? m[3] : '255';
+            const mistLen = washLen * 0.65;
+            const mistSpread = washSpread * 0.55;
+            const mistGrad = ctx.createRadialGradient(0, 0, 0.4, mistLen * 0.4, 0, mistLen);
+            mistGrad.addColorStop(0.0, `rgba(${r}, ${g}, ${b}, ${(mistAlpha * 1.2).toFixed(3)})`);
+            mistGrad.addColorStop(0.5, `rgba(${r}, ${g}, ${b}, ${(mistAlpha * 0.4).toFixed(3)})`);
+            mistGrad.addColorStop(1.0, `rgba(${r}, ${g}, ${b}, 0)`);
+
+            ctx.fillStyle = mistGrad;
+            ctx.beginPath();
+            ctx.ellipse(mistLen * 0.4, 0, mistLen * 0.6, mistSpread * 0.5, 0, 0, Math.PI * 2);
+            ctx.fill();
+          }
+        }
+
+        ctx.restore();
+      };
+
+      const drawTurnSignalAdditive = (xOffset: number, yOffset: number, isFront: boolean, sideSign: number, intensity: number) => {
+        const wx = car.x + cosA * xOffset - sinA * yOffset;
+        const wy = car.y + sinA * xOffset + cosA * yOffset;
+        const baseAngle = isFront ? car.angle : (car.angle + Math.PI);
+        const emitAngle = baseAngle + sideSign * 0.28;
+
+        ctx.save();
+        ctx.translate(wx, wy);
+        ctx.rotate(emitAngle);
+
+        // Optical amber lens face on vehicle body corner
+        ctx.fillStyle = `rgba(255, 170, 20, ${(0.85 * intensity).toFixed(3)})`;
+        ctx.fillRect(0, -1.4, 0.8, 2.8);
+
+        // Tight micro-bloom at the amber glass face (zero mid-air geometric wedge)
+        const lensBloom = ctx.createRadialGradient(0.4, 0, 0.2, 0.4, 0, 3.0);
+        lensBloom.addColorStop(0.0, `rgba(255, 185, 40, ${(0.65 * intensity).toFixed(3)})`);
+        lensBloom.addColorStop(0.5, `rgba(255, 150, 0, ${(0.22 * intensity).toFixed(3)})`);
+        lensBloom.addColorStop(1.0, 'rgba(255, 150, 0, 0)');
+        ctx.fillStyle = lensBloom;
+        ctx.beginPath();
+        ctx.arc(0.4, 0, 3.0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Subtle local diffuse ground bounce on asphalt directly beneath vehicle corner (no air triangles!)
+        if (intensity > 0.15) {
+          const groundRadius = 9 * intensity * fogFactor;
+          const groundBounce = ctx.createRadialGradient(2.0, 0, 0, 2.0, 0, groundRadius);
+          groundBounce.addColorStop(0.0, `rgba(255, 160, 0, ${(0.28 * intensity).toFixed(3)})`);
+          groundBounce.addColorStop(0.5, `rgba(255, 140, 0, ${(0.10 * intensity).toFixed(3)})`);
+          groundBounce.addColorStop(1.0, 'rgba(255, 140, 0, 0)');
+          ctx.fillStyle = groundBounce;
+          ctx.beginPath();
+          ctx.ellipse(2.5, 0, groundRadius, groundRadius * 0.75, 0, 0, Math.PI * 2);
+          ctx.fill();
+        }
+
+        ctx.restore();
       };
 
       const drawHeadlightAdd = (lxOffset: number, lyOffset: number, broken: boolean, isLeftHeadlamp: boolean) => {
@@ -12241,19 +12760,30 @@ export class GameRenderer {
         const lx = car.x + cosFA * lxOffset - sinFA * lyOffset;
         const ly = car.y + sinFA * lxOffset + cosFA * lyOffset;
 
-        // Lens Flare / Source Glow (Crisp, high-intensity optical emitter directly on the lamp glass)
-        const flareSize = (isHighBeam ? 5.2 : 3.8);
-        const flare = ctx.createRadialGradient(lx, ly, 0, lx, ly, flareSize);
-        flare.addColorStop(0, isHighBeam ? 'rgba(255, 255, 255, 1.00)' : 'rgba(255, 252, 230, 0.95)');
-        flare.addColorStop(0.4, isHighBeam ? 'rgba(224, 242, 254, 0.65)' : 'rgba(255, 235, 175, 0.55)');
-        flare.addColorStop(1, 'rgba(255, 255, 255, 0)');
-        ctx.fillStyle = flare;
-        ctx.beginPath(); ctx.arc(lx, ly, flareSize, 0, Math.PI * 2); ctx.fill();
+        // Forward-Facing Lens Emitter (Strictly forward along frontAngle; NO backward circular swelling on hood)
+        ctx.save();
+        ctx.translate(lx, ly);
+        ctx.rotate(frontAngle);
 
-        // Photometric core micro-sparkle for authentic ignited bulb emitter in daylight & nighttime
-        ctx.fillStyle = isHighBeam ? 'rgba(255, 255, 255, 0.98)' : 'rgba(255, 250, 200, 0.92)';
-        ctx.fillRect(lx - 0.75, ly - 2.2, 1.5, 4.4);
-        ctx.fillRect(lx - 2.2, ly - 0.75, 4.4, 1.5);
+        const lensW = isSoloMoto ? 3.0 : 4.4;
+        const fwdColor = isHighBeam ? 'rgba(255, 255, 255, 0.90)' : 'rgba(255, 248, 210, 0.80)';
+
+        // Crisp luminous slit on the forward glass lens face (+X edge)
+        ctx.fillStyle = fwdColor;
+        ctx.fillRect(0, -lensW * 0.45, 0.8, lensW * 0.90);
+
+        // Forward-directed micro-bloom entering beam path (strictly forward dome at glass face, zero trapezoid corners)
+        const forwardReach = isHighBeam ? 3.5 : 2.5;
+        const lensBloom = ctx.createRadialGradient(0.4, 0, 0.2, 0.4, 0, forwardReach);
+        lensBloom.addColorStop(0.0, isHighBeam ? 'rgba(255, 255, 255, 0.85)' : 'rgba(255, 245, 205, 0.75)');
+        lensBloom.addColorStop(0.4, isHighBeam ? 'rgba(224, 242, 254, 0.35)' : 'rgba(255, 235, 170, 0.25)');
+        lensBloom.addColorStop(1.0, 'rgba(255, 255, 255, 0)');
+        ctx.fillStyle = lensBloom;
+        ctx.beginPath();
+        ctx.ellipse(0.4, 0, forwardReach, lensW * 0.55, 0, -Math.PI * 0.5, Math.PI * 0.5);
+        ctx.fill();
+
+        ctx.restore();
 
         // Wet Road Specular Reflection (Glistening sheen on rain / wet asphalt)
         if (isRaining) {
@@ -12283,79 +12813,84 @@ export class GameRenderer {
           ctx.fill();
         }
 
-        // Atmospheric Volumetric Mist & Mie Scattering
-        if (isFog || isRaining) {
-          if (isHighBeam && isFog) {
-            // HIGH BEAM IN FOG: Dense, blinding Mie backscatter "White Wall" directly ahead of car!
-            const mistAlpha = Math.min(0.40, (0.16 + 0.22 * weights.fog) * weatherTransition);
+        // Atmospheric Volumetric Mist & Mie Scattering (Strictly gated to real atmospheric fog; zero air cones in clear/dry air)
+        if (isFog && weights.fog > 0.04) {
+          if (isHighBeam) {
+            // HIGH BEAM IN FOG: Dense Mie backscatter "White Wall" directly ahead of car
+            const mistAlpha = Math.min(0.36, (0.14 + 0.20 * weights.fog) * weatherTransition);
             const hGlow = ctx.createRadialGradient(
-              lx, ly, 2,
-              lx + cosFA * (beamLen * 0.4),
-              ly + sinFA * (beamLen * 0.4),
-              beamLen
+              lx + cosFA * (beamLen * 0.3), ly + sinFA * (beamLen * 0.3), 3,
+              lx + cosFA * (beamLen * 0.4), ly + sinFA * (beamLen * 0.4), beamLen * 0.65
             );
-            hGlow.addColorStop(0, `rgba(240, 248, 255, ${mistAlpha})`);
-            hGlow.addColorStop(0.4, `rgba(224, 242, 254, ${mistAlpha * 0.5})`);
-            hGlow.addColorStop(1, 'rgba(224, 242, 254, 0)');
+            hGlow.addColorStop(0.0, `rgba(240, 248, 255, ${mistAlpha.toFixed(3)})`);
+            hGlow.addColorStop(0.4, `rgba(224, 242, 254, ${(mistAlpha * 0.5).toFixed(3)})`);
+            hGlow.addColorStop(0.85, `rgba(224, 242, 254, ${(mistAlpha * 0.08).toFixed(3)})`);
+            hGlow.addColorStop(1.0, 'rgba(224, 242, 254, 0)');
 
             ctx.fillStyle = hGlow;
             ctx.beginPath();
-            ctx.moveTo(lx, ly);
-            const endLX = lx + cosFA * beamLen;
-            const endLY = ly + sinFA * beamLen;
-            ctx.lineTo(endLX - sinFA * beamSpread, endLY + cosFA * beamSpread);
-            ctx.arc(lx, ly, beamLen, Math.atan2(sinFA * beamLen + cosFA * beamSpread, cosFA * beamLen - sinFA * beamSpread), Math.atan2(sinFA * beamLen - cosFA * beamSpread, cosFA * beamLen + sinFA * beamSpread), true);
-            ctx.lineTo(lx, ly);
-            ctx.closePath();
+            ctx.ellipse(
+              lx + cosFA * (beamLen * 0.45),
+              ly + sinFA * (beamLen * 0.45),
+              beamLen * 0.55,
+              beamSpread * 0.65,
+              frontAngle,
+              0,
+              Math.PI * 2
+            );
             ctx.fill();
 
-            // Dense impenetrable forward backscatter bank (the infamous blinding white fog wall)
+            // Blinding white fog wall bank in dense fog
             if (weights.fog > 0.08) {
               const wallDist = 115 * (1.0 - 0.25 * weights.fog);
               const wallSpread = beamSpread * 1.15;
-              const wallPeakAlpha = (0.36 + 0.36 * weights.fog) * weatherTransition;
+              const wallPeakAlpha = (0.32 + 0.32 * weights.fog) * weatherTransition;
               const wallGrad = ctx.createRadialGradient(
-                lx + cosFA * 15, ly + sinFA * 15, 3,
-                lx + cosFA * (wallDist * 0.5), ly + sinFA * (wallDist * 0.5), wallDist
+                lx + cosFA * 20, ly + sinFA * 20, 3,
+                lx + cosFA * (wallDist * 0.5), ly + sinFA * (wallDist * 0.5), wallDist * 0.6
               );
               wallGrad.addColorStop(0.0, `rgba(255, 255, 255, ${wallPeakAlpha.toFixed(3)})`);
-              wallGrad.addColorStop(0.35, `rgba(245, 250, 255, ${(wallPeakAlpha * 0.72).toFixed(3)})`);
-              wallGrad.addColorStop(0.70, `rgba(224, 242, 254, ${(wallPeakAlpha * 0.28).toFixed(3)})`);
+              wallGrad.addColorStop(0.35, `rgba(245, 250, 255, ${(wallPeakAlpha * 0.70).toFixed(3)})`);
+              wallGrad.addColorStop(0.75, `rgba(224, 242, 254, ${(wallPeakAlpha * 0.20).toFixed(3)})`);
               wallGrad.addColorStop(1.0, 'rgba(224, 242, 254, 0)');
 
               ctx.fillStyle = wallGrad;
               ctx.beginPath();
-              ctx.moveTo(lx, ly);
-              const wEndLX = lx + cosFA * wallDist;
-              const wEndLY = ly + sinFA * wallDist;
-              ctx.lineTo(wEndLX - sinFA * wallSpread, wEndLY + cosFA * wallSpread);
-              ctx.lineTo(wEndLX + sinFA * wallSpread, wEndLY - cosFA * wallSpread);
-              ctx.closePath();
+              ctx.ellipse(
+                lx + cosFA * (wallDist * 0.5),
+                ly + sinFA * (wallDist * 0.5),
+                wallDist * 0.55,
+                wallSpread * 0.65,
+                frontAngle,
+                0,
+                Math.PI * 2
+              );
               ctx.fill();
             }
           } else {
-            // LOW BEAM IN FOG / RAIN: Soft, clean, ground-hugging mist without self-blinding backscatter
-            const mistAlpha = (isFog ? (0.045 + 0.04 * weights.fog) : 0.025) * weatherTransition;
+            // LOW BEAM IN FOG: Soft, ground-hugging atmospheric haze without self-blinding backscatter
+            const mistAlpha = (0.040 + 0.035 * weights.fog) * weatherTransition;
             if (mistAlpha > 0.005) {
               const hGlow = ctx.createRadialGradient(
-                lx, ly, 2,
-                lx + cosFA * (beamLen * 0.4),
-                ly + sinFA * (beamLen * 0.4),
-                beamLen
+                lx + cosFA * (beamLen * 0.3), ly + sinFA * (beamLen * 0.3), 2,
+                lx + cosFA * (beamLen * 0.4), ly + sinFA * (beamLen * 0.4), beamLen * 0.55
               );
-              hGlow.addColorStop(0, `rgba(240, 248, 255, ${mistAlpha})`);
-              hGlow.addColorStop(0.4, `rgba(224, 242, 254, ${mistAlpha * 0.4})`);
-              hGlow.addColorStop(1, 'rgba(224, 242, 254, 0)');
+              hGlow.addColorStop(0.0, `rgba(240, 248, 255, ${mistAlpha.toFixed(3)})`);
+              hGlow.addColorStop(0.4, `rgba(224, 242, 254, ${(mistAlpha * 0.4).toFixed(3)})`);
+              hGlow.addColorStop(0.85, `rgba(224, 242, 254, ${(mistAlpha * 0.06).toFixed(3)})`);
+              hGlow.addColorStop(1.0, 'rgba(224, 242, 254, 0)');
 
               ctx.fillStyle = hGlow;
               ctx.beginPath();
-              ctx.moveTo(lx, ly);
-              const endLX = lx + cosFA * beamLen;
-              const endLY = ly + sinFA * beamLen;
-              ctx.lineTo(endLX - sinFA * beamSpread, endLY + cosFA * beamSpread);
-              ctx.arc(lx, ly, beamLen, Math.atan2(sinFA * beamLen + cosFA * beamSpread, cosFA * beamLen - sinFA * beamSpread), Math.atan2(sinFA * beamLen - cosFA * beamSpread, cosFA * beamLen + sinFA * beamSpread), true);
-              ctx.lineTo(lx, ly);
-              ctx.closePath();
+              ctx.ellipse(
+                lx + cosFA * (beamLen * 0.4),
+                ly + sinFA * (beamLen * 0.4),
+                beamLen * 0.45,
+                beamSpread * 0.55,
+                frontAngle,
+                0,
+                Math.PI * 2
+              );
               ctx.fill();
             }
           }
@@ -12441,24 +12976,26 @@ export class GameRenderer {
           }
         }
       } else if (isIgnitionOn) {
-        // Front position lights (габариты / ДХО) subtle optical glow
+        // Front position lights (габариты / ДХО) forward-facing optical lens slits (zero circular halos)
         if (!dmg.leftHeadlightBroken) {
           const px = car.x + cosFA * leftLampLX - sinFA * leftLampLY;
           const py = car.y + sinFA * leftLampLX + cosFA * leftLampLY;
-          const pGrad = ctx.createRadialGradient(px, py, 0, px, py, 3.5);
-          pGrad.addColorStop(0, 'rgba(255, 255, 240, 0.7)');
-          pGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
-          ctx.fillStyle = pGrad;
-          ctx.beginPath(); ctx.arc(px, py, 3.5, 0, Math.PI * 2); ctx.fill();
+          ctx.save();
+          ctx.translate(px, py);
+          ctx.rotate(frontAngle);
+          ctx.fillStyle = 'rgba(255, 255, 240, 0.75)';
+          ctx.fillRect(0, -1.8, 0.7, 3.6);
+          ctx.restore();
         }
         if (!isSoloMoto && car.type !== 'roller_compact_sidewalk' && !dmg.rightHeadlightBroken) {
           const px = car.x + cosFA * rightLampLX - sinFA * rightLampLY;
           const py = car.y + sinFA * rightLampLX + cosFA * rightLampLY;
-          const pGrad = ctx.createRadialGradient(px, py, 0, px, py, 3.5);
-          pGrad.addColorStop(0, 'rgba(255, 255, 240, 0.7)');
-          pGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
-          ctx.fillStyle = pGrad;
-          ctx.beginPath(); ctx.arc(px, py, 3.5, 0, Math.PI * 2); ctx.fill();
+          ctx.save();
+          ctx.translate(px, py);
+          ctx.rotate(frontAngle);
+          ctx.fillStyle = 'rgba(255, 255, 240, 0.75)';
+          ctx.fillRect(0, -1.8, 0.7, 3.6);
+          ctx.restore();
         }
       }
 
@@ -12495,7 +13032,7 @@ export class GameRenderer {
         }
       }
 
-      // Front Fog Lights (ПТФ передние) Additive Glow
+      // Front Fog Lights (ПТФ передние) Forward-Oriented Additive Optics
       if (car.frontFogLightsOn) {
         const fogLeftLX = halfL - fc - 2.0;
         const fogLeftLY = -halfW + 2.5;
@@ -12507,52 +13044,45 @@ export class GameRenderer {
           const lx = car.x + cosA * lxOffset - sinA * lyOffset;
           const ly = car.y + sinA * lxOffset + cosA * lyOffset;
 
-          // Warm yellow lens flare on bumper
-          const flareGrad = ctx.createRadialGradient(lx, ly, 0, lx, ly, 3.5);
-          flareGrad.addColorStop(0, 'rgba(255, 245, 180, 0.90)');
-          flareGrad.addColorStop(0.6, 'rgba(255, 215, 0, 0.40)');
-          flareGrad.addColorStop(1, 'rgba(255, 215, 0, 0)');
-          ctx.fillStyle = flareGrad;
-          ctx.beginPath(); ctx.arc(lx, ly, 3.5, 0, Math.PI * 2); ctx.fill();
+          // Forward-facing lens slit on lower bumper chin (zero circular flare)
+          ctx.save();
+          ctx.translate(lx, ly);
+          ctx.rotate(car.angle);
+          ctx.fillStyle = 'rgba(255, 245, 180, 0.85)';
+          ctx.fillRect(0, -1.8, 0.8, 3.6);
+          ctx.restore();
 
-          if (isFog || isRaining) {
+          // Atmospheric scattering in genuine particulate fog ONLY (zero air cones in clear/dry weather)
+          if (isFog && weights.fog > 0.05) {
             const fogSpreadMult = 1.0 + 0.20 * weights.fog;
-            const fogBeamLen = 140 * (1.0 - 0.25 * weights.fog);
-            const fogBeamSpread = 90 * fogSpreadMult;
-            const fogMistAlpha = (isFog ? 0.055 : 0.03) * weatherTransition;
+            const fogBeamLen = 130 * (1.0 - 0.25 * weights.fog);
+            const fogBeamSpread = 75 * fogSpreadMult;
+            const fogMistAlpha = (0.045 * weights.fog) * weatherTransition;
 
-            const fogGrad = ctx.createRadialGradient(lx, ly, 0, lx + cosA * (fogBeamLen * 0.4), ly + sinA * (fogBeamLen * 0.4), fogBeamLen);
-            fogGrad.addColorStop(0.00, `rgba(255, 235, 140, ${fogMistAlpha})`);
-            fogGrad.addColorStop(0.40, `rgba(255, 225, 100, ${fogMistAlpha * 0.35})`);
-            fogGrad.addColorStop(0.80, `rgba(255, 215, 80, ${fogMistAlpha * 0.08})`);
+            const fogGrad = ctx.createRadialGradient(
+              lx + cosA * (fogBeamLen * 0.3), ly + sinA * (fogBeamLen * 0.3), 2,
+              lx + cosA * (fogBeamLen * 0.45), ly + sinA * (fogBeamLen * 0.45), fogBeamLen * 0.55
+            );
+            fogGrad.addColorStop(0.00, `rgba(255, 235, 140, ${fogMistAlpha.toFixed(3)})`);
+            fogGrad.addColorStop(0.45, `rgba(255, 225, 100, ${(fogMistAlpha * 0.35).toFixed(3)})`);
+            fogGrad.addColorStop(0.85, `rgba(255, 215, 80, ${(fogMistAlpha * 0.06).toFixed(3)})`);
             fogGrad.addColorStop(1.00, 'rgba(0, 0, 0, 0)');
 
             ctx.fillStyle = fogGrad;
             ctx.beginPath();
-            ctx.moveTo(lx, ly);
-            const endLX = lx + cosA * fogBeamLen;
-            const endLY = ly + sinA * fogBeamLen;
-            ctx.quadraticCurveTo(
-              lx + cosA * (fogBeamLen * 0.4) - sinA * (fogBeamSpread * 0.55),
-              ly + sinA * (fogBeamLen * 0.4) + cosA * (fogBeamSpread * 0.55),
-              endLX - sinA * fogBeamSpread, endLY + cosA * fogBeamSpread
+            ctx.ellipse(
+              lx + cosA * (fogBeamLen * 0.4),
+              ly + sinA * (fogBeamLen * 0.4),
+              fogBeamLen * 0.45,
+              fogBeamSpread * 0.55,
+              car.angle,
+              0,
+              Math.PI * 2
             );
-            ctx.bezierCurveTo(
-              endLX + cosA * 15 - sinA * (fogBeamSpread * 0.5), endLY + sinA * 15 + cosA * (fogBeamSpread * 0.5),
-              endLX + cosA * 15 + sinA * (fogBeamSpread * 0.5), endLY + sinA * 15 - cosA * (fogBeamSpread * 0.5),
-              endLX + sinA * fogBeamSpread, endLY - cosA * fogBeamSpread
-            );
-            ctx.quadraticCurveTo(
-              lx + cosA * (fogBeamLen * 0.4) + sinA * (fogBeamSpread * 0.55),
-              ly + sinA * (fogBeamLen * 0.4) - cosA * (fogBeamSpread * 0.55),
-              lx, ly
-            );
-            ctx.closePath();
             ctx.fill();
           }
         };
 
-        const fogSpread = 90 * fogFactor;
         if (isSoloMoto) {
           drawFogAdd(fogLeftLX, 0, dmg.leftHeadlightBroken);
         } else {
@@ -12591,27 +13121,37 @@ export class GameRenderer {
       const isReversing = isVehicleReverseGearActive(car);
       const isBraking = car.brakeLightsOn && !isReversing;
 
-      // Rear Fog Lights (Задние ПТФ) Additive Glow
+      // Rear Fog Lights (Задние ПТФ) - intense crimson beam piercing backwards in fog/mist (zero forward bleed)
       if (car.rearFogLightsOn) {
-        drawRadialAdditive(rearLeftLX, rearLeftLY, 16, 'rgba(255, 30, 30, 0.85)');
-        if (!isSoloMoto) drawRadialAdditive(rearRightLX, rearRightLY, 16, 'rgba(255, 30, 30, 0.85)');
+        drawRearLightAdditive(rearLeftLX, rearLeftLY, 110, 36, 'rgba(255, 20, 20, 0.88)', 4.0);
+        if (!isSoloMoto) drawRearLightAdditive(rearRightLX, rearRightLY, 110, 36, 'rgba(255, 20, 20, 0.88)', 4.0);
       }
 
       if (isReversing) {
-        drawRadialAdditive(rearLeftLX, rearLeftLY, 9, 'rgba(255, 255, 255, 0.55)');
-        drawRadialAdditive(rearRightLX, rearRightLY, 9, 'rgba(255, 255, 255, 0.55)');
+        // Reverse lights: crisp neutral-white backward ground wash
+        drawRearLightAdditive(rearLeftLX, rearLeftLY, 42, 28, 'rgba(255, 255, 255, 0.65)', 3.6);
+        drawRearLightAdditive(rearRightLX, rearRightLY, 42, 28, 'rgba(255, 255, 255, 0.65)', 3.6);
         if (isTractor) {
+          // Tractor rear cab work floods
           const cabFloodLX = -halfL * 0.26;
           const cabFloodLY = halfW * 0.35;
-          drawRadialAdditive(cabFloodLX, -cabFloodLY, 14, 'rgba(255, 255, 220, 0.75)');
-          drawRadialAdditive(cabFloodLX, cabFloodLY, 14, 'rgba(255, 255, 220, 0.75)');
+          drawRearLightAdditive(cabFloodLX, -cabFloodLY, 55, 45, 'rgba(255, 255, 220, 0.75)', 4.8);
+          drawRearLightAdditive(cabFloodLX, cabFloodLY, 55, 45, 'rgba(255, 255, 220, 0.75)', 4.8);
         }
       } else if (isBraking) {
-        drawRadialAdditive(rearLeftLX, rearLeftLY, 14, 'rgba(255, 30, 30, 0.65)');
-        drawRadialAdditive(rearRightLX, rearRightLY, 14, 'rgba(255, 30, 30, 0.65)');
+        // High-intensity brake illumination
+        drawRearLightAdditive(rearLeftLX, rearLeftLY, 36, 30, 'rgba(255, 30, 30, 0.75)', 4.2);
+        drawRearLightAdditive(rearRightLX, rearRightLY, 36, 30, 'rgba(255, 30, 30, 0.75)', 4.2);
+
+        // Third Brake Light (CHMSL) on passenger cars, SUVs, vans
+        if (!isSoloMoto && !isUralSidecar && !isTractor && !car.type.startsWith('roller_') && car.type !== 'paver_asphalt_wheeled') {
+          const cabinBackX = -halfL * 0.25;
+          drawRearLightAdditive(cabinBackX, 0, 18, 14, 'rgba(255, 35, 35, 0.75)', 5.0);
+        }
       } else if (hasPositionLightsOn) {
-        drawRadialAdditive(rearLeftLX, rearLeftLY, 5, 'rgba(220, 20, 20, 0.35)');
-        drawRadialAdditive(rearRightLX, rearRightLY, 5, 'rgba(220, 20, 20, 0.35)');
+        // Ruby red running lights
+        drawRearLightAdditive(rearLeftLX, rearLeftLY, 8, 12, 'rgba(220, 20, 20, 0.40)', 3.6);
+        drawRearLightAdditive(rearRightLX, rearRightLY, 8, 12, 'rgba(220, 20, 20, 0.40)', 3.6);
       }
 
       if (car.turnSignal !== 'none') {
@@ -12620,18 +13160,17 @@ export class GameRenderer {
           const isLeft = car.turnSignal === 'left' || car.turnSignal === 'hazard';
           const isRight = car.turnSignal === 'right' || car.turnSignal === 'hazard';
           const intensity = signalState.intensity;
-          const amberColor = `rgba(255, 160, 0, ${0.65 * intensity})`;
 
           const frontTurnLX = isTractor ? (car.type === 'tractor_mtz80_old' ? 0.6 : (halfL * 0.10 + 0.6)) : leftLampLX;
           const frontTurnLY = isTractor ? (halfW * 0.76 * 0.48) : Math.abs(leftLampLY);
 
           if (isLeft) {
-            drawRadialAdditive(frontTurnLX, -frontTurnLY, 6 * intensity, amberColor);
-            drawRadialAdditive(rearLeftLX, rearLeftLY - 1.5, 7 * intensity, amberColor);
+            drawTurnSignalAdditive(frontTurnLX, -frontTurnLY, true, -1, intensity);
+            drawTurnSignalAdditive(rearLeftLX, rearLeftLY, false, -1, intensity);
           }
           if (isRight) {
-            drawRadialAdditive(frontTurnLX, frontTurnLY, 6 * intensity, amberColor);
-            drawRadialAdditive(rearRightLX, rearRightLY + 1.5, 7 * intensity, amberColor);
+            drawTurnSignalAdditive(frontTurnLX, frontTurnLY, true, 1, intensity);
+            drawTurnSignalAdditive(rearRightLX, rearRightLY, false, 1, intensity);
           }
         }
       }

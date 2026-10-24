@@ -213,13 +213,15 @@ export function renderMotoIzhJupiter(vCtx: VehicleRenderContext): void {
   drawDeformedLine(forkX - 1.0, barW * 0.40, forkX + 3.0, barW * 0.48, '#cbd5e1', 1.2);
   drawDeformedCircle(forkX + 3.2, barW * 0.48, 1.5, '#f8fafc', '#475569', 0.6);
 
-  // Classic Soviet Round/Square Chrome Headlight (Фара с рассеивателем)
+  // Classic Soviet Chrome Headlight (Фара с рассеивателем, ориентированная вперед)
   const headX = forkX + 3.2;
-  drawDeformedRect(headX - 1.2, -halfW * 0.38, 3.0, halfW * 0.76, '#0f172a');
-  drawDeformedRect(headX - 0.8, -halfW * 0.35, 2.6, halfW * 0.70, '#cbd5e1'); // Chrome rim
-  drawDeformedRect(headX, -halfW * 0.30, 1.8, halfW * 0.60, car.headlightsOn ? '#fef08a' : '#e2e8f0'); // Glass lens
+  const lampW = halfW * 0.70;
+  drawDeformedRect(headX - 1.2, -halfW * 0.38, 2.8, halfW * 0.76, '#0f172a'); // Housing bucket
+  drawDeformedRect(headX - 0.8, -halfW * 0.35, 2.4, lampW, '#cbd5e1');        // Chrome bezel
+  drawDeformedRect(headX - 0.4, -halfW * 0.30, 1.6, halfW * 0.60, car.headlightsOn ? '#fffbeb' : '#64748b');
+  drawDeformedRect(headX + 0.8, -halfW * 0.30, 0.6, halfW * 0.60, car.headlightsOn ? '#ffffff' : '#cbd5e1'); // Forward glass face
   if (car.headlightsOn) {
-    drawDeformedCircle(headX + 0.8, 0, 1.8, '#ffffff');
+    drawDeformedRect(headX + 0.2, -0.4, 0.7, 0.8, '#ffffff'); // Crisp filament focal core
   }
 
   // Instrument Console Pod (Приборная панель Иж-5: спидометр и контрольные лампы)
@@ -365,17 +367,22 @@ export function renderMotoUralSidecar(vCtx: VehicleRenderContext): void {
   drawDeformedLine(forkX - 2.0, bikeY - barW / 2 + 0.5, forkX + 1.5, bikeY - barW / 2 + 2.5, '#cbd5e1', 1.4);
   drawDeformedLine(forkX - 2.0, bikeY + barW / 2 - 0.5, forkX + 1.5, bikeY + barW / 2 - 2.5, '#cbd5e1', 1.4);
 
-  // Big Round Chrome Headlight Bowl with Top Ignition Switch (Большая круглая фара-ведро с замком зажигания)
-  const headX = forkX + 3.6;
-  drawDeformedCircle(headX, bikeY, 3.2, '#0f172a');
-  drawDeformedCircle(headX, bikeY, 2.6, '#cbd5e1');
-  drawDeformedCircle(headX + 0.5, bikeY, 2.0, car.headlightsOn ? '#fef08a' : '#f8fafc');
+  // Big Chrome Headlight Bucket facing forward with Top Ignition Switch (Фара-ведро Урал М-67)
+  const headX = forkX + 3.4;
+  const bucketDepth = 2.4;
+  const bucketW = 3.6;
+  // Housing bucket tapering backward (-X)
+  drawDeformedRect(headX - bucketDepth, bikeY - bucketW * 0.5, bucketDepth, bucketW, '#0f172a');
+  drawDeformedRect(headX - bucketDepth * 0.6, bikeY - bucketW * 0.45, bucketDepth * 0.6, bucketW * 0.9, '#cbd5e1'); // Chrome ring
+  // Forward-facing glass lens & parabolic reflector (strictly fixed size, no ballooning!)
+  drawDeformedRect(headX - 0.6, bikeY - bucketW * 0.38, 1.4, bucketW * 0.76, car.headlightsOn ? '#fffbeb' : '#475569');
+  drawDeformedRect(headX + 0.4, bikeY - bucketW * 0.38, 0.6, bucketW * 0.76, car.headlightsOn ? '#ffffff' : '#e2e8f0'); // Glass face (+X)
   if (car.headlightsOn) {
-    drawDeformedCircle(headX + 0.5, bikeY, 1.0, '#ffffff');
+    drawDeformedRect(headX - 0.2, bikeY - 0.4, 0.6, 0.8, '#ffffff'); // Internal bulb core
   }
-  // Top Ignition Key & Charge Telltale
-  drawDeformedCircle(headX - 1.5, bikeY, 0.7, '#0f172a');
-  drawDeformedCircle(headX - 1.5, bikeY, 0.4, '#cbd5e1');
+  // Top Ignition Key & Charge Telltale on top of headlight casing
+  drawDeformedRect(headX - 1.8, bikeY - 0.6, 0.8, 1.2, '#0f172a');
+  drawDeformedRect(headX - 1.6, bikeY - 0.3, 0.4, 0.6, '#cbd5e1');
 
   // =========================================================================
   // PART B: 4-POINT TUBULAR CHASSIS SUBFRAME (Крепления рамы коляски к мотоциклу)
@@ -597,12 +604,13 @@ export function renderMotoJawa350(vCtx: VehicleRenderContext): void {
   drawDeformedCircle(forkX - 0.7, 1.8, 1.3, '#334155');  // Speedometer
   drawDeformedCircle(forkX - 0.7, 1.8, 0.9, '#38bdf8');
 
-  // Rectangular Headlight with Black Visor Cowl (Фара с черным козырьком)
+  // Rectangular Headlight with Black Visor Cowl (Фара Ява с черным козырьком)
   const headX = forkX + 3.2;
-  drawDeformedRect(headX - 1.0, -halfW * 0.36, 2.8, halfW * 0.72, '#0f172a'); // Black visor cowl
-  drawDeformedRect(headX - 0.4, -halfW * 0.30, 2.2, halfW * 0.60, car.headlightsOn ? '#fef08a' : '#f8fafc');
+  drawDeformedRect(headX - 1.0, -halfW * 0.36, 2.6, halfW * 0.72, '#0f172a'); // Black visor cowl
+  drawDeformedRect(headX - 0.4, -halfW * 0.30, 1.8, halfW * 0.60, car.headlightsOn ? '#fffbeb' : '#475569');
+  drawDeformedRect(headX + 0.8, -halfW * 0.30, 0.6, halfW * 0.60, car.headlightsOn ? '#ffffff' : '#cbd5e1'); // Forward glass
   if (car.headlightsOn) {
-    drawDeformedCircle(headX + 0.6, 0, 1.6, '#ffffff');
+    drawDeformedRect(headX + 0.2, -0.4, 0.6, 0.8, '#ffffff');
   }
 }
 
@@ -714,11 +722,13 @@ export function renderMotoSport(vCtx: VehicleRenderContext): void {
 
   // Predatory Slanted Dual LED Projector Headlights (Хищные раскосые светодиодные фары)
   const lampX = fX + 2.5;
-  drawDeformedLine(lampX, -fW * 0.32, lampX + 2.0, -fW * 0.12, car.headlightsOn ? '#fef08a' : '#cbd5e1', 1.6);
-  drawDeformedLine(lampX, fW * 0.32, lampX + 2.0, fW * 0.12, car.headlightsOn ? '#fef08a' : '#cbd5e1', 1.6);
+  const ledColor = car.headlightsOn ? '#ffffff' : '#cbd5e1';
+  drawDeformedLine(lampX, -fW * 0.32, lampX + 2.0, -fW * 0.12, ledColor, 1.8);
+  drawDeformedLine(lampX, fW * 0.32, lampX + 2.0, fW * 0.12, ledColor, 1.8);
   if (car.headlightsOn) {
-    drawDeformedCircle(lampX + 1.2, -fW * 0.20, 1.2, '#ffffff');
-    drawDeformedCircle(lampX + 1.2, fW * 0.20, 1.2, '#ffffff');
+    // Sharp LED projector slits inside the headlight cutouts (no circular ballooning!)
+    drawDeformedLine(lampX + 0.6, -fW * 0.25, lampX + 1.6, -fW * 0.14, '#e0f2fe', 1.0);
+    drawDeformedLine(lampX + 0.6, fW * 0.25, lampX + 1.6, fW * 0.14, '#e0f2fe', 1.0);
   }
 
   // Low Clip-on Handlebars under top CNC Triple Clamp (Клипоны под верхней траверсой)
@@ -866,12 +876,16 @@ export function renderMotoChopper(vCtx: VehicleRenderContext): void {
   drawDeformedCircle(forkBaseX + 3.2, barW * 0.45, 1.4, '#f8fafc');
 
   // Bullet-Shaped Chrome Custom Headlight (Фара-пуля с хромированным корпусом)
-  const headX = forkBaseX + 4.5;
-  drawDeformedCircle(headX, 0, 2.4, '#0f172a');
-  drawDeformedCircle(headX, 0, 2.0, '#f8fafc');
-  drawDeformedCircle(headX + 0.6, 0, 1.5, car.headlightsOn ? '#fef08a' : '#ffffff');
+  const headX = forkBaseX + 4.2;
+  const bulletW = 2.6;
+  const bulletD = 2.2;
+  // Chrome bullet casing tapering backward (-X)
+  drawDeformedRect(headX - bulletD, -bulletW * 0.5, bulletD, bulletW, '#0f172a');
+  drawDeformedRect(headX - bulletD * 0.7, -bulletW * 0.45, bulletD * 0.7, bulletW * 0.9, '#cbd5e1'); // Chrome rim
+  drawDeformedRect(headX - 0.4, -bulletW * 0.38, 1.0, bulletW * 0.76, car.headlightsOn ? '#fffbeb' : '#64748b');
+  drawDeformedRect(headX + 0.4, -bulletW * 0.38, 0.5, bulletW * 0.76, car.headlightsOn ? '#ffffff' : '#e2e8f0'); // Convex lens (+X)
   if (car.headlightsOn) {
-    drawDeformedCircle(headX + 0.6, 0, 0.8, '#ffffff');
+    drawDeformedRect(headX - 0.1, -0.3, 0.5, 0.6, '#ffffff'); // Bulb focal point
   }
 }
 
@@ -971,13 +985,16 @@ export function renderMopedSoviet(vCtx: VehicleRenderContext): void {
   drawDeformedLine(forkX - 1.5, -barW / 2 + 0.3, forkX + 1.0, -barW / 2 + 1.8, '#cbd5e1', 1.0);
   drawDeformedLine(forkX - 1.5, barW / 2 - 0.3, forkX + 1.0, barW / 2 - 1.8, '#cbd5e1', 1.0);
 
-  // Round Small Chrome Headlight & SP-101 Speedometer (Круглая фары и спидометр СП-101)
+  // Round Small Chrome Headlight & SP-101 Speedometer (Круглая фара мопеда и спидометр СП-101)
   const headX = forkX + 2.8;
-  drawDeformedCircle(headX, 0, 2.0, '#0f172a');
-  drawDeformedCircle(headX, 0, 1.6, '#cbd5e1');
-  drawDeformedCircle(headX + 0.4, 0, 1.2, car.headlightsOn ? '#fef08a' : '#f8fafc');
+  const lampSizeW = 2.2;
+  const lampSizeD = 1.8;
+  drawDeformedRect(headX - lampSizeD, -lampSizeW * 0.5, lampSizeD, lampSizeW, '#0f172a'); // Black housing
+  drawDeformedRect(headX - lampSizeD * 0.6, -lampSizeW * 0.45, lampSizeD * 0.6, lampSizeW * 0.9, '#cbd5e1'); // Chrome bezel
+  drawDeformedRect(headX - 0.3, -lampSizeW * 0.36, 0.8, lampSizeW * 0.72, car.headlightsOn ? '#fffbeb' : '#64748b');
+  drawDeformedRect(headX + 0.3, -lampSizeW * 0.36, 0.4, lampSizeW * 0.72, car.headlightsOn ? '#ffffff' : '#f8fafc'); // Glass face
   if (car.headlightsOn) {
-    drawDeformedCircle(headX + 0.4, 0, 0.6, '#ffffff');
+    drawDeformedRect(headX, -0.25, 0.4, 0.5, '#ffffff');
   }
 
   // Small round speedometer
