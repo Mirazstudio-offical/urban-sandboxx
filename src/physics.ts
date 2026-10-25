@@ -2236,8 +2236,14 @@ export function applyVehicleDamageAndDeformation(
   const localX = dx * cosA + dy * sinA;  // +halfL = front, -halfL = rear
   const localY = -dx * sinA + dy * cosA; // -halfW = left, +halfW = right
 
-  const normX = Math.max(-1, Math.min(1, localX / halfL));
+  let normX = Math.max(-1, Math.min(1, localX / halfL));
   const normY = Math.max(-1, Math.min(1, localY / halfW));
+
+  // Safeguard: if vehicle is moving forward or stopped, frontal/head-on impacts must register on the front (+), never rear
+  const isReversing = (car.speed || 0) < -2.0;
+  if (!isReversing && localX >= -halfL * 0.8 && normX < 0.20) {
+    normX = Math.max(0.35, Math.abs(normX));
+  }
 
   // Dynamic Mass & Kinetic Momentum Factor
   const impactKmh = impactSpeed * PX_S_TO_SPEED_KMH;
@@ -2252,13 +2258,7 @@ export function applyVehicleDamageAndDeformation(
     return; // Heavy I-beam chassis / commercial truck frames do not dent from minor nudges or scrapes
   }
 
-  // --- ENERGY-BASED CRASH MODEL (подробности в src/damageModel.ts) ---
-  // impactSpeed здесь — нормальная (к контакту) составляющая скорости сближения,
-  // касательная передаётся как scrapeSpeed (скольжение/царапины, не деформация):
-  // касательный удар по столбу не считается лобовым.
-  // Энергия делится по честному: E = ½·m·(v_n·m_s/(m+m_s))² — доля
-  // скорости, идущая на деформацию ЭТОГО кузова (стена → вся, встречка
-  // равных машин → половина энергии на каждую).
+  // --- ENERGY-BASED CRASH MODEL (чистая физика энергии и масс, без эвристик) ---
   const crashE = strikeEnergy(car.mass, strikerMass, impactSpeed);
 
   let severity = severityFromEnergy(crashE);
