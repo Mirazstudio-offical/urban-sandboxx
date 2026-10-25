@@ -19,6 +19,7 @@ import { calculateClimateAtmosphere, createInitialCalendarState, isWorldFreezing
 import { getEffectiveWeatherWeights } from './weatherTransition';
 import {
   ImpactZone,
+  calculateStructureStiffness,
   crushFromEnergy,
   nodeZone,
   normalAndTangential,
@@ -2274,8 +2275,8 @@ export function applyVehicleDamageAndDeformation(
   // что и в блоках FRONT/REAR/SIDE ниже.
   const impactZone: ImpactZone = normX > 0.20 ? 'front' : (normX < -0.25 ? 'rear' : 'side');
 
-  // Жёсткость структуры: рамы грузовиков/техники сопротивляются сильнее.
-  const structureStiffness = isMachinery ? 6.0 : (isHeavyRigidTrailer ? 3.5 : (isCommercialHeavy ? 1.6 : 1.0));
+  // Жёсткость структуры: адаптируется под массу кузова и назначение ТС (грузовики/техника/пикапы жестче, малолитражки податливее).
+  const structureStiffness = calculateStructureStiffness(car);
 
   // Уже накопленная глубина в зоне удара: повторный удар продолжает ход по кривой силы
   // (смятый металл не работает заново), см. crushFromEnergy.existingDepthPx.
@@ -10732,8 +10733,8 @@ export function updateVehiclePhysics(
         // --- RIGID-BODY COLLISION IMPULSE ---
         const impactSpeed = Math.abs(velAlongNormal);
 
-        // Coefficient of restitution: elastic at parking speed, progressive plastic deformation at high speed
-        const restitution = impactSpeed < 25 ? 0.25 : Math.max(0.04, 0.22 - (impactSpeed - 25) / 350);
+        // Coefficient of restitution: elastic only at parking nudges, progressive plastic dissipation above 12 km/h
+        const restitution = impactSpeed < 18 ? 0.16 : Math.max(0.02, 0.15 - (impactSpeed - 18) / 300);
         const impulseNormalMag = -(1 + restitution) * velAlongNormal / Math.max(0.00001, invMassN);
 
         // Tangential friction impulse

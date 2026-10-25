@@ -103,9 +103,9 @@ const MIN_REST_FRACTION = 0.14;
  * поперёк бампера тащила дальний угол назад упругой силой, и «неударенная» сторона мялась так же
  * глубоко, как ударенная.
  */
-const TENSION_YIELD_MULT = 2.5;
-const TENSION_HARDENING = 4.0;
-const MAX_STRETCH_FRACTION = 0.35;
+const TENSION_YIELD_MULT = 1.15;
+const TENSION_HARDENING = 2.5;
+const MAX_STRETCH_FRACTION = 0.55;
 /** Трение металла о стену: узлы в контакте не скользят вдоль неё, пока хватает нормального импульса. */
 const WALL_FRICTION = 0.6;
 /** Верхний предел числа подшагов интегратора за кадр. */
@@ -865,6 +865,16 @@ function integrateStructure(
       if (nA.origX < 0 && nA.x <= nA.origX && fxA < 0) fxA = 0;
       if (nB.origX > 0 && nB.x >= nB.origX && fxB > 0) fxB = 0;
       if (nB.origX < 0 && nB.x <= nB.origX && fxB < 0) fxB = 0;
+
+      // Эффект Пуассона (сохранение площади/объема): при сильном продольном сжатии лонжеронов и капота
+      // листовой металл крыльев слегка выталкивается наружу в стороны, формируя реалистичное вспучивание
+      if (delta < -0.20 && Math.abs(dirX) > 0.65) {
+        const compMag = Math.min(22000, Math.abs(fSpring) * 0.12);
+        if (nA.origY > 0.4) fyA += compMag;
+        else if (nA.origY < -0.4) fyA -= compMag;
+        if (nB.origY > 0.4) fyB += compMag;
+        else if (nB.origY < -0.4) fyB -= compMag;
+      }
 
       nA.fx += fxA;
       nA.fy += fyA;

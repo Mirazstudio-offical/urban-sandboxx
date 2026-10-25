@@ -53,8 +53,11 @@ export const METERS_TO_PX = 1.0 / PX_TO_METERS;
  */
 const SEVERITY_ENERGY_REF = 64_000_000;
 
-/** Жёсткость кабины (перегородка, пороги, дверные балки) относительно зоны. */
-const CABIN_FORCE_MULT = 2.5;
+/** Базовая масса седана-эталона, кг */
+export const BASE_REFERENCE_MASS = 1400;
+
+/** Жёсткость кабины (перегородка, пороги, стойки A/B/C) относительно зоны капота. */
+const CABIN_FORCE_MULT = 4.8;
 
 /** Доля зоны деформации, доступная для вмятины кабины после исчерпания зоны. */
 const DEFAULT_INTRUSION_ZONE_FRACTION = 0.70;
@@ -64,17 +67,54 @@ const EXTREME_INTRUSION_ZONE_FRACTION = 1.0;
 /** Средние силы деформации структуры, игровые единицы.
  *  Вывод (калибровка на реальные данные):
  *    перед: 50 км/ч (E ≈ 28.5e6) в широкую стену → ≈ 0.49 м (4.6 px),
- *           в узкий столб (w=6.4) → ≈ 0.66 м (6.3 px) → F ≈ 6.0e6
+ *           в узкий столб (w=6.4) → ≈ 0.66 м (6.3 px) → F ≈ 6.8e6
  *           (реальная сила развала лонжеронов ≈ 200–250 кН);
- *    side:  F = 4.6e6: бок в стену на 50 км/ч ≈ 6.0 px (0.63 м),
- *           бок в столб ≈ 7.8 px (вмятина в кабину — столб входит
- *           в салон глубже широкого препятствия);
- *    зад:   багажник короче и чуть жёстче бампера. */
+ *    side:  F = 5.2e6: брус двери и пороги;
+ *    зад:   багажник короче и жестче бампера. */
 const MEAN_FORCE: Record<ImpactZone, number> = {
-  front: 6_000_000,
-  rear: 5_400_000,
-  side: 4_600_000
+  front: 6_800_000,
+  rear: 6_200_000,
+  side: 5_200_000
 };
+
+/**
+ * Вычисляет адаптивную жесткость структуры кузова на основе массы и типа автомобиля.
+ * В реальности силовая структура (толщина лонжеронов, сечение профилей, рама)
+ * проектируется под вес автомобиля: тяжелый пикап или внедорожник имеет гораздо
+ * более массивную раму, чем легкий хэтчбек.
+ */
+export function calculateStructureStiffness(car: {
+  mass?: number;
+  type?: string;
+  hasHeavySuspension?: boolean;
+}): number {
+  const type = car.type || 'sedan';
+  const isMachinery = type.startsWith('roller_') || type.startsWith('grader_') || type.startsWith('excavator_') || type.startsWith('asphalt_') || type.startsWith('bulldozer_') || type.startsWith('loader_');
+  if (isMachinery) return 6.0;
+
+  const isHeavyRigidTrailer = type.startsWith('trailer_semi');
+  if (isHeavyRigidTrailer) return 3.5;
+
+  const isCommercialHeavy = type.startsWith('truck_') || type === 'cement_mixer' || type === 'garbage_truck' || type === 'fire_ladder' || type === 'fire_engine' || type === 'bus' || type === 'bus_minibus' || type === 'truck_tow' || type === 'truck_armored';
+
+  const mass = Math.max(350, car.mass ?? BASE_REFERENCE_MASS);
+
+  // Масштабирование по массе: (m / 1400)^0.82
+  // Малолитражка (990 кг) -> ~0.75 (тоньше лонжероны, легче мнется до нормативных 45-50 см)
+  // Седан (1400 кг) -> 1.00
+  // Пикап (2521 кг) -> ~1.62 (мощная рама, не сминается в салон)
+  // Скорая помощь (3107 кг) -> ~1.92
+  let massFactor = Math.pow(mass / BASE_REFERENCE_MASS, 0.82);
+
+  if (isCommercialHeavy) {
+    massFactor = Math.max(massFactor, 1.8);
+  }
+  if (car.hasHeavySuspension) {
+    massFactor *= 1.25;
+  }
+
+  return Math.max(0.60, Math.min(8.0, massFactor));
+}
 
 /**
  * Скорость вовлечения соседней структуры при продавливании (конус ≈ ±56°).
@@ -127,9 +167,9 @@ export interface CrushInput {
  * Множитель силы после исчерпания зоны: перегородка/пороги/двигатель вступают в работу,
  * сила растёт от CABIN_FORCE_MULT до CABIN_FORCE_MULT·CABIN_HARDENING к концу хода кабины.
  */
-const CABIN_HARDENING = 2.0;
+const CABIN_HARDENING = 2.5;
 /** Множитель силы при полностью сжатой конструкции (блок двигателя, кабина): достигается на длине ещё одной зоны за потолком. */
-const RIGID_FORCE_MULT = 40.0;
+const RIGID_FORCE_MULT = 50.0;
 /** Шаг табличного интегрирования работы деформации, px. */
 const PROFILE_STEP_PX = 0.05;
 
@@ -169,14 +209,56 @@ export function createCrushProfile(input: Omit<CrushInput, 'energy'>): CrushProf
     // Конус вовлечения: узкое препятствие нагружает всё более широкую полосу кузова.
     const wFrac = Math.min(1, (contact + 2 * CONE_SPREAD * Math.max(0, d)) / carWidth);
     let stage = 1.0;
+
     if (d > cap) {
-      // Кабина и блок двигателя сжаты до предела: сила продолжает расти по мере «досжатия»
-      // (резкий скачок до «абсолютного» упора давал физически невозможные перегрузки).
+      // Предельное уплотнение спрессованного металла: экспоненциальный упор
       const t = Math.min(1, (d - cap) / Math.max(0.001, zoneLen));
       stage = CABIN_FORCE_MULT * CABIN_HARDENING * (1.0 + (RIGID_FORCE_MULT / (CABIN_FORCE_MULT * CABIN_HARDENING) - 1.0) * t);
     } else if (d > zoneLen) {
+      // Сверхвысокопрочная капсула салона (Safety Cage): стойки A/B/C, пороги и переборка
       const t = (d - zoneLen) / Math.max(0.001, cap - zoneLen);
       stage = CABIN_FORCE_MULT * (1.0 + (CABIN_HARDENING - 1.0) * t);
+    } else {
+      // Внутри зоны деформации (капот / багажник / бок):
+      const progress = d / Math.max(0.001, zoneLen);
+      if (input.zone === 'front') {
+        // 1. Фаза пластикового бампера и краш-боксов (0..16% хода зоны): мягкое энергопоглощение без отскока
+        if (progress <= 0.16) {
+          const u = progress / 0.16;
+          stage = 0.35 + 0.65 * u;
+        }
+        // 2. Фаза пластического плато лонжеронов (16..65% хода зоны): гармошка
+        else if (progress <= 0.65) {
+          stage = 1.0;
+        }
+        // 3. Фаза монолитного блока двигателя и подрамника (65..100% хода зоны): резкий прогрессивный упор
+        else {
+          const u = (progress - 0.65) / 0.35;
+          stage = 1.0 + (CABIN_FORCE_MULT - 1.0) * Math.pow(u, 1.6);
+        }
+      } else if (input.zone === 'rear') {
+        // Задний бампер (0..20%), затем пол багажника, затем арки и спинка сиденья
+        if (progress <= 0.20) {
+          const u = progress / 0.20;
+          stage = 0.38 + 0.62 * u;
+        } else if (progress <= 0.68) {
+          stage = 1.0;
+        } else {
+          const u = (progress - 0.68) / 0.32;
+          stage = 1.0 + (CABIN_FORCE_MULT - 1.0) * Math.pow(u, 1.5);
+        }
+      } else {
+        // Боковой удар: внешняя филенка двери (0..22%), затем брус безопасности и порог
+        if (progress <= 0.22) {
+          const u = progress / 0.22;
+          stage = 0.42 + 0.58 * u;
+        } else if (progress <= 0.70) {
+          stage = 1.0;
+        } else {
+          const u = (progress - 0.70) / 0.30;
+          stage = 1.0 + (CABIN_FORCE_MULT - 1.0) * Math.pow(u, 1.4);
+        }
+      }
     }
     return meanForce * wFrac * stage;
   };
