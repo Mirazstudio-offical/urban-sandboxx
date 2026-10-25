@@ -324,11 +324,15 @@ function runVehicleToVehicleCrash(
   let contactW = Math.min(vehA.width, vehB.width);
 
   if (options.type === 'head_on') {
+    vehA.x = 0;
+    vehA.y = 0;
     vehA.angle = 0;
     vehA.speed = vA_PxS;
     vehA.vx = vA_PxS;
     vehA.vy = 0;
 
+    vehB.x = (vehA.length + vehB.length) / 2;
+    vehB.y = 0;
     vehB.angle = Math.PI;
     vehB.speed = vB_PxS;
     vehB.vx = -vB_PxS;
@@ -342,11 +346,15 @@ function runVehicleToVehicleCrash(
     relSpeedTangential = 0;
   } else if (options.type === 't_bone') {
     // Veh A moves along +X and hits side of stationary or slowly moving Veh B facing +Y
+    vehA.x = 0;
+    vehA.y = 0;
     vehA.angle = 0;
     vehA.speed = vA_PxS;
     vehA.vx = vA_PxS;
     vehA.vy = 0;
 
+    vehB.x = vehA.length / 2;
+    vehB.y = 0;
     vehB.angle = Math.PI / 2;
     vehB.speed = vB_PxS;
     vehB.vx = 0;
@@ -361,11 +369,15 @@ function runVehicleToVehicleCrash(
     contactW = Math.min(vehA.width, 16);
   } else if (options.type === 'rear_end') {
     // Veh A moves along +X, Veh B also faces +X and is stationary/slower
+    vehA.x = 0;
+    vehA.y = 0;
     vehA.angle = 0;
     vehA.speed = vA_PxS;
     vehA.vx = vA_PxS;
     vehA.vy = 0;
 
+    vehB.x = (vehA.length + vehB.length) / 2;
+    vehB.y = 0;
     vehB.angle = 0;
     vehB.speed = vB_PxS;
     vehB.vx = vB_PxS;

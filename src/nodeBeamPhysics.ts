@@ -152,12 +152,12 @@ export function createVehicleNodeBeamSystem(
   // -------------------------------------------------------------------------
   // 1. NODE LAYOUT (Dynamic per-model nodes)
   // -------------------------------------------------------------------------
-  // Жёсткое ядро кузова: подрамники, точки крепления подвески и центральный
-  // тоннель. Это не «один гвоздь» в центре, как раньше, а пространственная
-  // рама из нескольких узлов. Оболочка (крылья, двери, бамперы, крыша) крепится
-  // к ней балками и может мяться локально, но не может повернуть весь кузов
-  // относительно колёс — именно это давало эффект «краба».
-  const CORE_GROUPS: BeamNodeType[] = ['chassis_core', 'subframe'];
+  // Жёсткое ядро кузова: центральный тоннель кузова (chassis_core).
+  // Подрамники, стаканы стоек и двигатель НЕ ДОЛЖНЫ быть зафиксированы,
+  // иначе моторный отсек превращается в железобетонную преграду,
+  // блокирующую как глубокое смятие переда, так и боковой перекос при косом ударе.
+  // Анкерами пространственной ориентации служат узлы шасси и ступицы колёс.
+  const CORE_GROUPS: BeamNodeType[] = ['chassis_core'];
   const nodes: BeamNode[] = def.nodes.map((nt) => {
     const lx = nt.xFrac * length + (nt.xOffset || 0);
     const ly = nt.yFrac * width + (nt.yOffset || 0);
@@ -175,9 +175,6 @@ export function createVehicleNodeBeamSystem(
       vy: 0,
       fx: 0,
       fy: 0,
-      // Инициализируем поля смещений сразу. Раньше они появлялись только после
-      // первого интегрирования; если сетка ещё спала, sync читал undefined и
-      // через Math.max/-undefined превращал damage.frontCrumple в NaN.
       offsetX: 0,
       offsetY: 0,
       elasticX: 0,
@@ -190,23 +187,7 @@ export function createVehicleNodeBeamSystem(
       name: nt.name
     };
   });
-
-  // Гарантируем минимум три жёстких анкера: два узла ещё допускают вращение
-  // оболочки вокруг оси, три — уже нет. Для мотоцикла/прицепа, где подрамников
-  // мало, дополнительно фиксируем самые массивные узлы (двигатель/рама).
-  let fixedCount = 0;
-  for (const n of nodes) if (n.isFixed) fixedCount++;
-  if (fixedCount < 3) {
-    const candidates = nodes
-      .filter(n => !n.isFixed)
-      .sort((a, b) => b.mass - a.mass);
-    for (const n of candidates) {
-      if (fixedCount >= 3) break;
-      n.isFixed = true;
-      n.isCore = true;
-      fixedCount++;
-    }
-  }
+  let fixedCount = nodes.filter(n => n.isFixed).length;
 
   // Добавляем четыре ступицы колёс как часть жёсткого ядра. Это реальные
   // точки приложения шинных сил: колесо больше не висит отдельно от кузова,
@@ -942,8 +923,11 @@ function integrateStructure(
           }
         }
 
-        // 3. Lateral limit (flanks, doors, sills):
-        const lateralBulgeSlack = Math.max(0.4, halfW * 0.04);
+        // 3. Lateral limit (flanks vs overhangs):
+        // Нос и корма при косом ударе (offset/oblique crash) должны свободно изгибаться вбок («бананом»),
+        // передавая перекос силовой структуры. Ограничение раздувания действует только для центральных дверей/порогов.
+        const isOverhang = Math.abs(node.origX) > halfL * 0.15;
+        const lateralBulgeSlack = isOverhang ? (halfW * 0.75) : Math.max(1.5, halfW * 0.15);
         if (node.origY > 0) {
           const maxAllowedY = node.origY + lateralBulgeSlack;
           if (node.y > maxAllowedY) {
@@ -1025,7 +1009,8 @@ function integrateStructure(
     // Anti-ballooning sanitization: offsets cannot expand outward past undeformed factory envelope
     if (node.origX > 0 && totalOffsetX > 0) totalOffsetX = 0;
     if (node.origX < 0 && totalOffsetX < 0) totalOffsetX = 0;
-    const lateralSlack = Math.max(0.4, halfW * 0.04);
+    const isOverhang = Math.abs(node.origX) > halfL * 0.15;
+    const lateralSlack = isOverhang ? (halfW * 0.75) : Math.max(1.5, halfW * 0.15);
     if (node.origY > 0 && totalOffsetY > lateralSlack) totalOffsetY = lateralSlack;
     if (node.origY < 0 && totalOffsetY < -lateralSlack) totalOffsetY = -lateralSlack;
 
@@ -1281,13 +1266,18 @@ function syncNodeBeamToVehicle(system: NodeBeamStructure, car: Vehicle): void {
     let ox = finiteOrZero(n.offsetX);
     let oy = finiteOrZero(n.offsetY);
 
-    // Strict anti-ballooning guard:
+    // Realistic structural bounds: prevent unphysical explosion while allowing deep crush & lateral twist
+    const halfL = car.length / 2;
     const halfW = car.width / 2;
-    const latSlack = Math.max(0.4, halfW * 0.04);
-    if (n.origX > 0 && ox > 0) ox = 0;
-    if (n.origX < 0 && ox < 0) ox = 0;
-    if (n.origY > 0 && oy > latSlack) oy = latSlack;
-    if (n.origY < 0 && oy < -latSlack) oy = -latSlack;
+    const isOverhang = Math.abs(n.origX) > halfL * 0.15;
+    const maxLatSlack = isOverhang ? halfW * 0.75 : halfW * 0.35;
+    if (n.origY > 0 && oy > maxLatSlack) oy = maxLatSlack;
+    if (n.origY < 0 && oy < -maxLatSlack) oy = -maxLatSlack;
+
+    // Longitudinal bounds: allow deep crumple inward; allow slight outward pivot on opposite side during offset crash
+    const maxFwdSlack = isOverhang ? halfL * 0.15 : 1.2;
+    if (n.origX > 0 && ox > maxFwdSlack) ox = maxFwdSlack;
+    if (n.origX < 0 && ox < -maxFwdSlack) ox = -maxFwdSlack;
 
     dv.offsetX = ox;
     dv.offsetY = oy;

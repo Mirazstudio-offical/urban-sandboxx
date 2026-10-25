@@ -2261,13 +2261,13 @@ export function applyVehicleDamageAndDeformation(
     severity *= 0.75;
   }
   if (isCommercialHeavy) {
-    severity *= 0.38; // Heavy steel channel frame rails absorb heavy impacts without cabin collapse at moderate speeds
+    severity *= 0.65; // Heavy steel channel frame rails absorb heavy impacts, but bumper and front fascia crumple realistically
   }
   if (isHeavyRigidTrailer) {
-    severity *= 0.22;
+    severity *= 0.30;
   }
   if (isMachinery) {
-    severity *= 0.10;
+    severity *= 0.15;
   }
 
   // Направление удара по точке контакта — тот же геометрический тест,
@@ -2275,7 +2275,7 @@ export function applyVehicleDamageAndDeformation(
   const impactZone: ImpactZone = normX > 0.20 ? 'front' : (normX < -0.25 ? 'rear' : 'side');
 
   // Жёсткость структуры: рамы грузовиков/техники сопротивляются сильнее.
-  const structureStiffness = isMachinery ? 10.0 : (isHeavyRigidTrailer ? 5.0 : (isCommercialHeavy ? 2.86 : 1.0));
+  const structureStiffness = isMachinery ? 6.0 : (isHeavyRigidTrailer ? 3.5 : (isCommercialHeavy ? 1.6 : 1.0));
 
   // Уже накопленная глубина в зоне удара: повторный удар продолжает ход по кривой силы
   // (смятый металл не работает заново), см. crushFromEnergy.existingDepthPx.

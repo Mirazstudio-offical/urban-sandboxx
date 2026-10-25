@@ -8456,34 +8456,19 @@ export class GameRenderer {
         bodyPoly = basePoly.map((bv, idx) => {
           const dv = polyDvs![idx];
           if (!dv) return bv;
-          let ox = isFinite(dv.offsetX) ? dv.offsetX : 0;
-          let oy = isFinite(dv.offsetY) ? dv.offsetY : 0;
-          let ex = isFinite(dv.elasticX) ? Math.max(-8.0, Math.min(8.0, dv.elasticX)) : 0;
-          let ey = isFinite(dv.elasticY) ? Math.max(-8.0, Math.min(8.0, dv.elasticY)) : 0;
-
-          const dvLen = Math.hypot(dv.localX || bv.x, dv.localY || bv.y) || 1;
-          const maxAllowed = Math.min(14.0, Math.max(4.0, dvLen * 0.60));
-          const oDist = Math.hypot(ox, oy);
-          if (oDist > maxAllowed) {
-            ox = (ox / oDist) * maxAllowed;
-            oy = (oy / oDist) * maxAllowed;
-          }
-
-          // Strict anti-ballooning guard: metal cannot bulge outward beyond undeformed factory envelope
-          if (bv.x > 0 && ox > 0) ox = 0;
-          if (bv.x < 0 && ox < 0) ox = 0;
-          const maxLat = Math.max(0.5, halfW * 0.04);
-          if (bv.y > 0 && oy > maxLat) oy = maxLat;
-          if (bv.y < 0 && oy < -maxLat) oy = -maxLat;
+          const ox = isFinite(dv.offsetX) ? dv.offsetX : 0;
+          const oy = isFinite(dv.offsetY) ? dv.offsetY : 0;
+          const ex = isFinite(dv.elasticX) ? Math.max(-10.0, Math.min(10.0, dv.elasticX)) : 0;
+          const ey = isFinite(dv.elasticY) ? Math.max(-10.0, Math.min(10.0, dv.elasticY)) : 0;
 
           return {
-            x: bv.x + ox,
-            y: bv.y + oy
+            x: bv.x + ox + ex,
+            y: bv.y + oy + ey
           };
         });
       }
 
-      // 3b. Inverse Distance Weighting deformation function for car attachments
+      // 3b. Inverse Distance Weighting deformation function for car attachments & interior
       let hasDeformation = false;
       const polyLen = Math.min(basePoly.length, bodyPoly.length);
       for (let i = 0; i < polyLen; i++) {
@@ -8496,6 +8481,31 @@ export class GameRenderer {
       }
 
       const deform = hasDeformation ? (px: number, py: number): [number, number] => {
+        const nbNodes = dmg.nodeBeam?.nodes;
+        if (nbNodes && nbNodes.length > 0) {
+          let totalWeight = 0;
+          let dx = 0;
+          let dy = 0;
+          for (let i = 0; i < nbNodes.length; i++) {
+            const n = nbNodes[i];
+            const ndx = isFinite(n.offsetX) ? n.offsetX : 0;
+            const ndy = isFinite(n.offsetY) ? n.offsetY : 0;
+            const distSq = (px - n.origX) * (px - n.origX) + (py - n.origY) * (py - n.origY);
+            if (distSq < 0.25) {
+              return [px + ndx, py + ndy];
+            }
+            const denom = distSq + 4;
+            const weight = 1 / (denom * denom);
+            totalWeight += weight;
+            dx += ndx * weight;
+            dy += ndy * weight;
+          }
+          if (totalWeight > 0) {
+            return [px + dx / totalWeight, py + dy / totalWeight];
+          }
+          return [px, py];
+        }
+
         let totalWeight = 0;
         let dx = 0;
         let dy = 0;
@@ -8503,10 +8513,12 @@ export class GameRenderer {
           const bp = basePoly[i];
           const bvp = bodyPoly[i];
           if (!bp || !bvp) continue;
-          const vx = bp.x;
-          const vy = bp.y;
-          const distSq = (px - vx) * (px - vx) + (py - vy) * (py - vy);
-          const weight = 1 / (distSq + 16);
+          const distSq = (px - bp.x) * (px - bp.x) + (py - bp.y) * (py - bp.y);
+          if (distSq < 0.25) {
+            return [bvp.x, bvp.y];
+          }
+          const denom = distSq + 4;
+          const weight = 1 / (denom * denom);
           totalWeight += weight;
           dx += (bvp.x - bp.x) * weight;
           dy += (bvp.y - bp.y) * weight;
@@ -9296,21 +9308,28 @@ export class GameRenderer {
         car.type === 'sedan_polo' || 
         car.type === 'sedan_accent';
 
-      let leftLampX = halfL - Math.max(fld, fc) - 1.4;
-      let leftLampY = -halfW * 0.74 + ld * 0.15;
-      let rightLampX = halfL - Math.max(frd, fc) - 1.4;
-      let rightLampY = halfW * 0.74 - rd * 0.15;
+      let [leftLampX, leftLampY] = deform(halfL - 1.4, -halfW * 0.74);
+      let [rightLampX, rightLampY] = deform(halfL - 1.4, halfW * 0.74);
+      if (!hasSoftbody) {
+        leftLampX -= Math.max(fld, fc);
+        leftLampY += ld * 0.15;
+        rightLampX -= Math.max(frd, fc);
+        rightLampY -= rd * 0.15;
+      }
 
       if (isTractor) {
-        leftLampX = halfL - fc - 1.2;
-        leftLampY = -halfW * 0.24;
-        rightLampX = halfL - fc - 1.2;
-        rightLampY = halfW * 0.24;
+        [leftLampX, leftLampY] = deform(halfL - 1.2, -halfW * 0.24);
+        [rightLampX, rightLampY] = deform(halfL - 1.2, halfW * 0.24);
+        if (!hasSoftbody) {
+          leftLampX -= fc;
+          rightLampX -= fc;
+        }
       } else if (isUralSidecar) {
-        leftLampX = halfL - fc - 2.5;
-        leftLampY = -halfW * 0.45;
-        rightLampX = halfL * 0.25;
-        rightLampY = halfW * 0.78;
+        [leftLampX, leftLampY] = deform(halfL - 2.5, -halfW * 0.45);
+        [rightLampX, rightLampY] = deform(halfL * 0.25, halfW * 0.78);
+        if (!hasSoftbody) {
+          leftLampX -= fc;
+        }
       }
 
       const drawHeadlight = (lx: number, ly: number, broken: boolean, isLeftLamp: boolean) => {
@@ -9568,21 +9587,24 @@ export class GameRenderer {
 
       // 7b. Front Fog Lights (ПТФ передние - в нижних нишах переднего бампера)
       if (car.frontFogLightsOn && !isTrailer && !isRoadMachinery(car.type)) {
-        const fogX = halfL - fc - 0.6;
         const fogW = 2.4;
         const fogD = 1.2;
-        const drawFrontFogLamp = (fy: number, broken: boolean) => {
+        const drawFrontFogLamp = (baseFy: number, broken: boolean) => {
           if (broken) return;
+          let [dfx, dfy] = deform(halfL - 0.6, baseFy);
+          if (!hasSoftbody) {
+            dfx -= fc;
+          }
           ctx.save();
           // Lower bumper recess bezel
           ctx.fillStyle = '#0f172a';
-          ctx.fillRect(fogX - fogD - 0.3, fy - fogW * 0.5 - 0.2, fogD + 0.5, fogW + 0.4);
+          ctx.fillRect(dfx - fogD - 0.3, dfy - fogW * 0.5 - 0.2, fogD + 0.5, fogW + 0.4);
           // Selective yellow / halogen reflector & forward lens
           ctx.fillStyle = '#fde047';
-          ctx.fillRect(fogX - fogD, fy - fogW * 0.5, fogD, fogW);
+          ctx.fillRect(dfx - fogD, dfy - fogW * 0.5, fogD, fogW);
           // Crisp bulb emitter inside lens (strictly contained, no expanding circles!)
           ctx.fillStyle = '#ffffff';
-          ctx.fillRect(fogX - 0.5, fy - 0.3, 0.5, 0.6);
+          ctx.fillRect(dfx - 0.5, dfy - 0.3, 0.5, 0.6);
           ctx.restore();
         };
 
@@ -9612,34 +9634,37 @@ export class GameRenderer {
       const isNightRunning = hasTaillightsActive;
       const isRearFogActive = !!car.rearFogLightsOn && (hasHeadlightsOn || isNightRunning);
 
-      let rearLeftX = -halfL + rc * 0.85 + rld * 0.4 + 1.2;
-      let rearLeftY = -halfW * 0.76 + ld * 0.15;
-      let rearRightX = -halfL + rc * 0.85 + rrd * 0.4 + 1.2;
-      let rearRightY = halfW * 0.76 - rd * 0.15;
+      let [rearLeftX, rearLeftY] = deform(-halfL + 1.2, -halfW * 0.76);
+      let [rearRightX, rearRightY] = deform(-halfL + 1.2, halfW * 0.76);
+      if (!hasSoftbody) {
+        rearLeftX += rc * 0.85 + rld * 0.4;
+        rearLeftY += ld * 0.15;
+        rearRightX += rc * 0.85 + rrd * 0.4;
+        rearRightY -= rd * 0.15;
+      }
 
       if (isSoloMoto) {
-        rearLeftX = -halfL + rc + 2.0;
-        rearLeftY = 0;
-        rearRightX = -halfL + rc + 2.0;
-        rearRightY = 0;
+        [rearLeftX, rearLeftY] = deform(-halfL + 2.0, 0);
+        [rearRightX, rearRightY] = deform(-halfL + 2.0, 0);
+        if (!hasSoftbody) {
+          rearLeftX += rc;
+          rearRightX += rc;
+        }
       } else if (isUralSidecar) {
-        rearLeftX = -halfL + rc + 2.0;
-        rearLeftY = -halfW * 0.45;
-        rearRightX = -halfL * 0.55;
-        rearRightY = halfW * 0.85;
+        [rearLeftX, rearLeftY] = deform(-halfL + 2.0, -halfW * 0.45);
+        [rearRightX, rearRightY] = deform(-halfL * 0.55, halfW * 0.85);
+        if (!hasSoftbody) {
+          rearLeftX += rc;
+        }
       } else if (isTractor) {
         const cabBackX = car.type === 'tractor_mtz80_old' ? (-halfL * 0.72) : (-halfL * 0.74);
-        rearLeftX = cabBackX + 2.2;
-        rearLeftY = -halfW * 0.82;
-        rearRightX = cabBackX + 2.2;
-        rearRightY = halfW * 0.82;
+        [rearLeftX, rearLeftY] = deform(cabBackX + 2.2, -halfW * 0.82);
+        [rearRightX, rearRightY] = deform(cabBackX + 2.2, halfW * 0.82);
       } else if (car.type === 'trailer_vacuum') {
         const fenderX = -halfL + 5.2;
         const barrelTrackY = halfW * 0.94;
-        rearLeftX = fenderX + 0.7;
-        rearLeftY = -barrelTrackY - 0.8;
-        rearRightX = fenderX + 0.7;
-        rearRightY = barrelTrackY + 0.8;
+        [rearLeftX, rearLeftY] = deform(fenderX + 0.7, -barrelTrackY - 0.8);
+        [rearRightX, rearRightY] = deform(fenderX + 0.7, barrelTrackY + 0.8);
       }
 
       const drawTaillight = (rx: number, ry: number, broken: boolean, isLeftCluster: boolean) => {
@@ -10538,25 +10563,10 @@ export class GameRenderer {
         bodyPoly = basePoly.map((bv, idx) => {
           const dv = polyDvs![idx];
           if (!dv) return bv;
-          let ox = isFinite(dv.offsetX) ? dv.offsetX : 0;
-          let oy = isFinite(dv.offsetY) ? dv.offsetY : 0;
-          let ex = isFinite(dv.elasticX) ? Math.max(-8.0, Math.min(8.0, dv.elasticX)) : 0;
-          let ey = isFinite(dv.elasticY) ? Math.max(-8.0, Math.min(8.0, dv.elasticY)) : 0;
-
-          const dvLen = Math.hypot(dv.localX || bv.x, dv.localY || bv.y) || 1;
-          const maxAllowed = Math.min(14.0, Math.max(4.0, dvLen * 0.60));
-          const oDist = Math.hypot(ox, oy);
-          if (oDist > maxAllowed) {
-            ox = (ox / oDist) * maxAllowed;
-            oy = (oy / oDist) * maxAllowed;
-          }
-
-          // Strict anti-ballooning guard: metal cannot bulge outward beyond undeformed factory envelope
-          if (bv.x > 0 && ox > 0) ox = 0;
-          if (bv.x < 0 && ox < 0) ox = 0;
-          const maxLat = Math.max(0.5, halfW * 0.04);
-          if (bv.y > 0 && oy > maxLat) oy = maxLat;
-          if (bv.y < 0 && oy < -maxLat) oy = -maxLat;
+          const ox = isFinite(dv.offsetX) ? dv.offsetX : 0;
+          const oy = isFinite(dv.offsetY) ? dv.offsetY : 0;
+          const ex = isFinite(dv.elasticX) ? Math.max(-10.0, Math.min(10.0, dv.elasticX)) : 0;
+          const ey = isFinite(dv.elasticY) ? Math.max(-10.0, Math.min(10.0, dv.elasticY)) : 0;
 
           return {
             x: bv.x + ox + ex,
@@ -10566,6 +10576,31 @@ export class GameRenderer {
       }
 
       const deform = (px: number, py: number): [number, number] => {
+        const nbNodes = dmg.nodeBeam?.nodes;
+        if (nbNodes && nbNodes.length > 0) {
+          let totalWeight = 0;
+          let dx = 0;
+          let dy = 0;
+          for (let i = 0; i < nbNodes.length; i++) {
+            const n = nbNodes[i];
+            const ndx = isFinite(n.offsetX) ? n.offsetX : 0;
+            const ndy = isFinite(n.offsetY) ? n.offsetY : 0;
+            const distSq = (px - n.origX) * (px - n.origX) + (py - n.origY) * (py - n.origY);
+            if (distSq < 0.25) {
+              return [px + ndx, py + ndy];
+            }
+            const denom = distSq + 4;
+            const weight = 1 / (denom * denom);
+            totalWeight += weight;
+            dx += ndx * weight;
+            dy += ndy * weight;
+          }
+          if (totalWeight > 0) {
+            return [px + dx / totalWeight, py + dy / totalWeight];
+          }
+          return [px, py];
+        }
+
         let totalWeight = 0;
         let dx = 0;
         let dy = 0;
@@ -10574,10 +10609,12 @@ export class GameRenderer {
           const bp = basePoly[i];
           const bvp = bodyPoly[i];
           if (!bp || !bvp) continue;
-          const vx = bp.x;
-          const vy = bp.y;
-          const distSq = (px - vx) * (px - vx) + (py - vy) * (py - vy);
-          const weight = 1 / (distSq + 16);
+          const distSq = (px - bp.x) * (px - bp.x) + (py - bp.y) * (py - bp.y);
+          if (distSq < 0.25) {
+            return [bvp.x, bvp.y];
+          }
+          const denom = distSq + 4;
+          const weight = 1 / (denom * denom);
           totalWeight += weight;
           dx += (bvp.x - bp.x) * weight;
           dy += (bvp.y - bp.y) * weight;
