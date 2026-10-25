@@ -1353,12 +1353,17 @@ export function computeVehicleVehicleContactPatch(
     widthPx = Math.min(spanA, spanB);
   }
 
+  const minVehW = Math.min(carA.width, carB.width);
+  // Prevent broad or head-on impacts from collapsing into a narrow central dent due to projection jitter
+  if (widthPx < minVehW * 0.5 && Math.abs(sMaxA - sMinA) > minVehW * 0.35 && Math.abs(sMaxB - sMinB) > minVehW * 0.35) {
+    widthPx = minVehW * 0.85;
+  }
+
   // Координата контакта вдоль нормали — плоскость соприкосновения
   const hContact = (maxProjA + minProjB) * 0.5;
   const contactX = hContact * nX + sCenter * tX;
   const contactY = hContact * nY + sCenter * tY;
 
-  const minVehW = Math.min(carA.width, carB.width);
   const isNarrow = widthPx < minVehW * 0.38;
 
   return {
