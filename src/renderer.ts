@@ -177,19 +177,47 @@ export function calculateAstronomicalAtmosphere(
   };
 }
 
+const darkenColorCache = new Map<string, string>();
+
 export function darkenHexColor(hex: string, factor: number): string {
   if (!hex || typeof hex !== 'string' || !hex.startsWith('#')) return hex;
+  const quantFactor = Math.max(0, Math.min(200, Math.round(factor * 100)));
+  const key = hex + '_' + quantFactor;
+  const cached = darkenColorCache.get(key);
+  if (cached !== undefined) return cached;
+
   let clean = hex.slice(1);
   if (clean.length === 3) {
-    clean = clean.split('').map(c => c + c).join('');
+    clean = clean[0] + clean[0] + clean[1] + clean[1] + clean[2] + clean[2];
   }
   if (clean.length !== 6) return hex;
   const num = parseInt(clean, 16);
   if (isNaN(num)) return hex;
-  const r = Math.max(0, Math.min(255, Math.round(((num >> 16) & 0xff) * factor)));
-  const g = Math.max(0, Math.min(255, Math.round(((num >> 8) & 0xff) * factor)));
-  const b = Math.max(0, Math.min(255, Math.round((num & 0xff) * factor)));
-  return `rgb(${r}, ${g}, ${b})`;
+  const f = quantFactor * 0.01;
+  const r = Math.max(0, Math.min(255, Math.round(((num >> 16) & 0xff) * f)));
+  const g = Math.max(0, Math.min(255, Math.round(((num >> 8) & 0xff) * f)));
+  const b = Math.max(0, Math.min(255, Math.round((num & 0xff) * f)));
+  const result = `rgb(${r}, ${g}, ${b})`;
+
+  if (darkenColorCache.size < 4096) {
+    darkenColorCache.set(key, result);
+  }
+  return result;
+}
+
+let scratchCurveLeftX = new Float64Array(512);
+let scratchCurveLeftY = new Float64Array(512);
+let scratchCurveRightX = new Float64Array(512);
+let scratchCurveRightY = new Float64Array(512);
+
+function ensureCurveScratchCapacity(n: number) {
+  if (scratchCurveLeftX.length < n) {
+    const sz = Math.max(n * 2, 512);
+    scratchCurveLeftX = new Float64Array(sz);
+    scratchCurveLeftY = new Float64Array(sz);
+    scratchCurveRightX = new Float64Array(sz);
+    scratchCurveRightY = new Float64Array(sz);
+  }
 }
 
 const hashString = (str: string): number => {
@@ -1261,8 +1289,11 @@ export class GameRenderer {
         const pts = road.curvePoints;
         const n = pts.length;
         const totalHalfW = road.width / 2 + shoulderW;
-        const leftEdge: { x: number; y: number }[] = [];
-        const rightEdge: { x: number; y: number }[] = [];
+        ensureCurveScratchCapacity(n);
+        const lx = scratchCurveLeftX;
+        const ly = scratchCurveLeftY;
+        const rx = scratchCurveRightX;
+        const ry = scratchCurveRightY;
 
         for (let i = 0; i < n; i++) {
           let dx = 0, dy = 0;
@@ -1272,14 +1303,16 @@ export class GameRenderer {
           const len = Math.hypot(dx, dy) || 1;
           const nx = -dy / len;
           const ny = dx / len;
-          leftEdge.push({ x: pts[i].x - nx * totalHalfW, y: pts[i].y - ny * totalHalfW });
-          rightEdge.push({ x: pts[i].x + nx * totalHalfW, y: pts[i].y + ny * totalHalfW });
+          lx[i] = pts[i].x - nx * totalHalfW;
+          ly[i] = pts[i].y - ny * totalHalfW;
+          rx[i] = pts[i].x + nx * totalHalfW;
+          ry[i] = pts[i].y + ny * totalHalfW;
         }
 
         ctx.beginPath();
-        ctx.moveTo(leftEdge[0].x, leftEdge[0].y);
-        for (let i = 1; i < n; i++) ctx.lineTo(leftEdge[i].x, leftEdge[i].y);
-        for (let i = n - 1; i >= 0; i--) ctx.lineTo(rightEdge[i].x, rightEdge[i].y);
+        ctx.moveTo(lx[0], ly[0]);
+        for (let i = 1; i < n; i++) ctx.lineTo(lx[i], ly[i]);
+        for (let i = n - 1; i >= 0; i--) ctx.lineTo(rx[i], ry[i]);
         ctx.closePath();
         ctx.fill();
 
@@ -1450,8 +1483,11 @@ export class GameRenderer {
           if (pts[i].y > maxPY) maxPY = pts[i].y;
         }
         if (maxPX + halfW >= minX && minPX - halfW <= maxX && maxPY + halfW >= minY && minPY - halfW <= maxY) {
-          const leftEdge: { x: number; y: number }[] = [];
-          const rightEdge: { x: number; y: number }[] = [];
+          ensureCurveScratchCapacity(n);
+          const lx = scratchCurveLeftX;
+          const ly = scratchCurveLeftY;
+          const rx = scratchCurveRightX;
+          const ry = scratchCurveRightY;
 
           for (let i = 0; i < n; i++) {
             let dx = 0, dy = 0;
@@ -1469,17 +1505,19 @@ export class GameRenderer {
             const nx = -dy / len;
             const ny = dx / len;
 
-            leftEdge.push({ x: pts[i].x - nx * halfW, y: pts[i].y - ny * halfW });
-            rightEdge.push({ x: pts[i].x + nx * halfW, y: pts[i].y + ny * halfW });
+            lx[i] = pts[i].x - nx * halfW;
+            ly[i] = pts[i].y - ny * halfW;
+            rx[i] = pts[i].x + nx * halfW;
+            ry[i] = pts[i].y + ny * halfW;
           }
 
           ctx.beginPath();
-          ctx.moveTo(leftEdge[0].x, leftEdge[0].y);
+          ctx.moveTo(lx[0], ly[0]);
           for (let i = 1; i < n; i++) {
-            ctx.lineTo(leftEdge[i].x, leftEdge[i].y);
+            ctx.lineTo(lx[i], ly[i]);
           }
           for (let i = n - 1; i >= 0; i--) {
-            ctx.lineTo(rightEdge[i].x, rightEdge[i].y);
+            ctx.lineTo(rx[i], ry[i]);
           }
           ctx.closePath();
           ctx.fill();
@@ -1496,24 +1534,24 @@ export class GameRenderer {
             ctx.beginPath();
             for (let i = 0; i < n; i++) {
               const p = pts[i];
-              const normX = leftEdge[i].x - p.x;
-              const normY = leftEdge[i].y - p.y;
-              const rx = p.x + normX * 0.56;
-              const ry = p.y + normY * 0.56;
-              if (i === 0) ctx.moveTo(rx, ry);
-              else ctx.lineTo(rx, ry);
+              const normX = lx[i] - p.x;
+              const normY = ly[i] - p.y;
+              const rxPos = p.x + normX * 0.56;
+              const ryPos = p.y + normY * 0.56;
+              if (i === 0) ctx.moveTo(rxPos, ryPos);
+              else ctx.lineTo(rxPos, ryPos);
             }
             ctx.stroke();
 
             ctx.beginPath();
             for (let i = 0; i < n; i++) {
               const p = pts[i];
-              const normX = rightEdge[i].x - p.x;
-              const normY = rightEdge[i].y - p.y;
-              const rx = p.x + normX * 0.56;
-              const ry = p.y + normY * 0.56;
-              if (i === 0) ctx.moveTo(rx, ry);
-              else ctx.lineTo(rx, ry);
+              const normX = rx[i] - p.x;
+              const normY = ry[i] - p.y;
+              const rxPos = p.x + normX * 0.56;
+              const ryPos = p.y + normY * 0.56;
+              if (i === 0) ctx.moveTo(rxPos, ryPos);
+              else ctx.lineTo(rxPos, ryPos);
             }
             ctx.stroke();
 
@@ -1530,24 +1568,24 @@ export class GameRenderer {
             ctx.beginPath();
             for (let i = 0; i < n; i++) {
               const p = pts[i];
-              const normX = leftEdge[i].x - p.x;
-              const normY = leftEdge[i].y - p.y;
-              const rx = p.x + normX * 0.45;
-              const ry = p.y + normY * 0.45;
-              if (i === 0) ctx.moveTo(rx, ry);
-              else ctx.lineTo(rx, ry);
+              const normX = lx[i] - p.x;
+              const normY = ly[i] - p.y;
+              const rxPos = p.x + normX * 0.45;
+              const ryPos = p.y + normY * 0.45;
+              if (i === 0) ctx.moveTo(rxPos, ryPos);
+              else ctx.lineTo(rxPos, ryPos);
             }
             ctx.stroke();
 
             ctx.beginPath();
             for (let i = 0; i < n; i++) {
               const p = pts[i];
-              const normX = rightEdge[i].x - p.x;
-              const normY = rightEdge[i].y - p.y;
-              const rx = p.x + normX * 0.45;
-              const ry = p.y + normY * 0.45;
-              if (i === 0) ctx.moveTo(rx, ry);
-              else ctx.lineTo(rx, ry);
+              const normX = rx[i] - p.x;
+              const normY = ry[i] - p.y;
+              const rxPos = p.x + normX * 0.45;
+              const ryPos = p.y + normY * 0.45;
+              if (i === 0) ctx.moveTo(rxPos, ryPos);
+              else ctx.lineTo(rxPos, ryPos);
             }
             ctx.stroke();
           }

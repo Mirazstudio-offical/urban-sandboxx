@@ -150,6 +150,10 @@ export function isArticulatedRoller(car: Vehicle): boolean {
  * правой половиной мял весь перед одинаково. Теперь пятно берётся по узлам живого контура,
  * которые зашли в препятствие: центр и ширина вдоль стены. Нормаль направлена от препятствия к машине.
  */
+const scratchPatchPtsX = new Float64Array(64);
+const scratchPatchPtsY = new Float64Array(64);
+const scratchInsideIndices = new Int32Array(64);
+
 function computeBoxContactPatch(
   car: Vehicle,
   box: { x: number; y: number; width: number; height: number },
@@ -162,53 +166,90 @@ function computeBoxContactPatch(
     widthPx: car.width
   };
   const nodes = car.damage?.nodeBeam?.nodes;
-  const pts: { x: number; y: number }[] = [];
   const cosA = Math.cos(car.angle);
   const sinA = Math.sin(car.angle);
+  let ptsCount = 0;
   if (nodes && nodes.length >= 8) {
-    const perim = car.damage!.nodeBeam!.perimeterCount ?? 16;
-    for (let i = 0; i < Math.min(perim, nodes.length); i++) {
+    const perim = Math.min(car.damage!.nodeBeam!.perimeterCount ?? 16, nodes.length, 64);
+    for (let i = 0; i < perim; i++) {
       const n = nodes[i];
-      pts.push({ x: car.x + n.x * cosA - n.y * sinA, y: car.y + n.x * sinA + n.y * cosA });
+      scratchPatchPtsX[ptsCount] = car.x + n.x * cosA - n.y * sinA;
+      scratchPatchPtsY[ptsCount] = car.y + n.x * sinA + n.y * cosA;
+      ptsCount++;
     }
   } else {
     const hl = car.length / 2;
     const hw = car.width / 2;
-    for (const [lx, ly] of [[hl, -hw], [hl, hw], [-hl, -hw], [-hl, hw], [hl, 0], [-hl, 0], [0, -hw], [0, hw]]) {
-      pts.push({ x: car.x + lx * cosA - ly * sinA, y: car.y + lx * sinA + ly * cosA });
+    const offsets = [hl, -hw, hl, hw, -hl, -hw, -hl, hw, hl, 0, -hl, 0, 0, -hw, 0, hw];
+    for (let i = 0; i < offsets.length; i += 2) {
+      const lx = offsets[i];
+      const ly = offsets[i + 1];
+      scratchPatchPtsX[ptsCount] = car.x + lx * cosA - ly * sinA;
+      scratchPatchPtsY[ptsCount] = car.y + lx * sinA + ly * cosA;
+      ptsCount++;
     }
   }
 
   const tX = -nY;
   const tY = nX;
   const margin = 1.0;
-  let inside = pts.filter(p =>
-    p.x >= box.x - margin && p.x <= box.x + box.width + margin &&
-    p.y >= box.y - margin && p.y <= box.y + box.height + margin
-  );
-  if (inside.length === 0) {
-    // Ни один узел не зашёл (касание рёбрами): берём ближайшие к препятствию вдоль нормали
-    let minProj = Infinity;
-    for (const p of pts) minProj = Math.min(minProj, p.x * nX + p.y * nY);
-    inside = pts.filter(p => p.x * nX + p.y * nY <= minProj + 1.5);
+  const minBoxX = box.x - margin;
+  const maxBoxX = box.x + box.width + margin;
+  const minBoxY = box.y - margin;
+  const maxBoxY = box.y + box.height + margin;
+
+  let insideCount = 0;
+  for (let i = 0; i < ptsCount; i++) {
+    const px = scratchPatchPtsX[i];
+    const py = scratchPatchPtsY[i];
+    if (px >= minBoxX && px <= maxBoxX && py >= minBoxY && py <= maxBoxY) {
+      scratchInsideIndices[insideCount++] = i;
+    }
   }
-  if (inside.length === 0) return fallback;
+
+  if (insideCount === 0) {
+    let minProj = Infinity;
+    for (let i = 0; i < ptsCount; i++) {
+      const proj = scratchPatchPtsX[i] * nX + scratchPatchPtsY[i] * nY;
+      if (proj < minProj) minProj = proj;
+    }
+    const thresh = minProj + 1.5;
+    for (let i = 0; i < ptsCount; i++) {
+      const proj = scratchPatchPtsX[i] * nX + scratchPatchPtsY[i] * nY;
+      if (proj <= thresh) {
+        scratchInsideIndices[insideCount++] = i;
+      }
+    }
+  }
+
+  if (insideCount === 0) return fallback;
 
   let minS = Infinity, maxS = -Infinity;
-  let deepest = inside[0];
+  let deepestIdx = scratchInsideIndices[0];
   let deepestProj = Infinity;
-  for (const p of inside) {
-    const sCoord = p.x * tX + p.y * tY;
+
+  for (let i = 0; i < insideCount; i++) {
+    const idx = scratchInsideIndices[i];
+    const px = scratchPatchPtsX[idx];
+    const py = scratchPatchPtsY[idx];
+    const sCoord = px * tX + py * tY;
     if (sCoord < minS) minS = sCoord;
     if (sCoord > maxS) maxS = sCoord;
-    const proj = p.x * nX + p.y * nY;
-    if (proj < deepestProj) { deepestProj = proj; deepest = p; }
+    const proj = px * nX + py * nY;
+    if (proj < deepestProj) {
+      deepestProj = proj;
+      deepestIdx = idx;
+    }
   }
+
   const sCenter = (minS + maxS) / 2;
-  const sDeep = deepest.x * tX + deepest.y * tY;
+  const deepX = scratchPatchPtsX[deepestIdx];
+  const deepY = scratchPatchPtsY[deepestIdx];
+  const sDeep = deepX * tX + deepY * tY;
+
   return {
-    x: deepest.x + tX * (sCenter - sDeep),
-    y: deepest.y + tY * (sCenter - sDeep),
+    x: deepX + tX * (sCenter - sDeep),
+    y: deepY + tY * (sCenter - sDeep),
     widthPx: Math.max(4, Math.min(car.width, maxS - minS + 3))
   };
 }
@@ -220,14 +261,15 @@ export function getVehicleCollisionOBBs(car: Vehicle, extraMargin = 0.5): Vehicl
   // that same live contour so a visibly crushed car cannot keep colliding as
   // its original rectangle. The energy damage record also bounds the hull while
   // a newly hit mesh is still settling. We retain an OBB for the SAT solver.
-  const perimeterCount = dmg?.nodeBeam?.perimeterCount ?? 16;
-  const perimeter = dmg?.deformedVertices?.slice(0, perimeterCount) ?? [];
+  const verts = dmg?.deformedVertices;
+  const count = verts ? Math.min(dmg?.nodeBeam?.perimeterCount ?? 16, verts.length) : 0;
   let minLocalX = Infinity;
   let maxLocalX = -Infinity;
   let minLocalY = Infinity;
   let maxLocalY = -Infinity;
 
-  for (const vertex of perimeter) {
+  for (let i = 0; i < count; i++) {
+    const vertex = verts![i];
     const x = vertex.localX + (Number.isFinite(vertex.offsetX) ? vertex.offsetX : 0);
     const y = vertex.localY + (Number.isFinite(vertex.offsetY) ? vertex.offsetY : 0);
     if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
@@ -237,7 +279,7 @@ export function getVehicleCollisionOBBs(car: Vehicle, extraMargin = 0.5): Vehicl
     maxLocalY = Math.max(maxLocalY, y);
   }
 
-  const hasLivePerimeter = perimeter.length >= 8 &&
+  const hasLivePerimeter = count >= 8 &&
     Number.isFinite(minLocalX) && Number.isFinite(maxLocalX) &&
     Number.isFinite(minLocalY) && Number.isFinite(maxLocalY) &&
     maxLocalX - minLocalX > car.length * 0.20 &&

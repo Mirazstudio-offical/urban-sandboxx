@@ -3056,6 +3056,8 @@ export default function App() {
         (world as any)._physicsFrameId = ((world as any)._physicsFrameId || 0) + 1;
         const sleepMargin = Math.hypot(window.innerWidth, window.innerHeight) / (2 * Math.max(0.4, camera.zoom)) + 350;
         let playerCar: Vehicle | null = null;
+        const scratchVehNearbyBuildings: Building[] = [];
+        const scratchVehNearbyCars: Vehicle[] = [];
         for (const veh of world.vehicles) {
           if (veh.isPlayerControlled) {
             playerCar = veh;
@@ -3084,12 +3086,14 @@ export default function App() {
           const vehNearbyBuildings = bldGrid.queryRadius(
             veh.x,
             veh.y,
-            250
+            250,
+            scratchVehNearbyBuildings
           );
           const vehNearbyCars = vehGrid.queryRadius(
             veh.x,
             veh.y,
-            180
+            180,
+            scratchVehNearbyCars
           );
 
           updateVehiclePhysics(

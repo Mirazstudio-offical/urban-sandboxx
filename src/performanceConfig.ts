@@ -182,17 +182,84 @@ export function capList<T>(list: T[], limit: number): T[] {
   return list.length > limit ? list.slice(0, Math.max(0, limit)) : list;
 }
 
+let scratchDistances = new Float64Array(4096);
+let scratchIndices = new Int32Array(4096);
+
+function ensureScratchCapacity(needed: number) {
+  if (scratchDistances.length < needed) {
+    const nextSize = Math.max(needed, scratchDistances.length * 2);
+    scratchDistances = new Float64Array(nextSize);
+    scratchIndices = new Int32Array(nextSize);
+  }
+}
+
+function quickselectIndices(k: number, left: number, right: number) {
+  while (left < right) {
+    const pivotIdx = (left + right) >> 1;
+    const pivotDist = scratchDistances[scratchIndices[pivotIdx]];
+
+    // Swap pivot to right
+    const tmpPivot = scratchIndices[pivotIdx];
+    scratchIndices[pivotIdx] = scratchIndices[right];
+    scratchIndices[right] = tmpPivot;
+
+    let storeIdx = left;
+    for (let i = left; i < right; i++) {
+      if (scratchDistances[scratchIndices[i]] < pivotDist) {
+        const tmp = scratchIndices[storeIdx];
+        scratchIndices[storeIdx] = scratchIndices[i];
+        scratchIndices[i] = tmp;
+        storeIdx++;
+      }
+    }
+
+    const tmp = scratchIndices[storeIdx];
+    scratchIndices[storeIdx] = scratchIndices[right];
+    scratchIndices[right] = tmp;
+
+    if (storeIdx === k) {
+      return;
+    } else if (storeIdx < k) {
+      left = storeIdx + 1;
+    } else {
+      right = storeIdx - 1;
+    }
+  }
+}
+
 /**
  * Keeps the `limit` objects nearest to (cx, cy). Returns the original array when it already fits,
- * so the common case costs nothing; sorting only happens when the cap actually bites.
+ * so the common case costs nothing. Uses reusable typed arrays and quickselect in O(N) time
+ * to eliminate GC pressure.
  */
 export function capNearest<T extends { x: number; y: number }>(list: T[], limit: number, cx: number, cy: number): T[] {
-  if (list.length <= limit) return list;
+  const len = list.length;
+  if (len <= limit) return list;
   const lim = Math.max(0, limit);
-  const scored = list.map(o => ({ o, d: (o.x - cx) * (o.x - cx) + (o.y - cy) * (o.y - cy) }));
-  scored.sort((a, b) => a.d - b.d);
-  const out: T[] = new Array(Math.min(lim, scored.length));
-  for (let i = 0; i < out.length; i++) out[i] = scored[i].o;
+  if (lim === 0) return [];
+
+  ensureScratchCapacity(len);
+
+  for (let i = 0; i < len; i++) {
+    const obj = list[i];
+    const dx = obj.x - cx;
+    const dy = obj.y - cy;
+    scratchDistances[i] = dx * dx + dy * dy;
+    scratchIndices[i] = i;
+  }
+
+  if (lim < len) {
+    quickselectIndices(lim, 0, len - 1);
+  }
+
+  // Sort only the first `lim` items nearest-first
+  const subIndices = scratchIndices.subarray(0, lim);
+  subIndices.sort((a, b) => scratchDistances[a] - scratchDistances[b]);
+
+  const out: T[] = new Array(lim);
+  for (let i = 0; i < lim; i++) {
+    out[i] = list[subIndices[i]];
+  }
   return out;
 }
 

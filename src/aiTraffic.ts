@@ -53,37 +53,32 @@ function getOBBCorners(obb: OBB) {
   ];
 }
 
-// Separating Axis Theorem (SAT)
+// High-performance Separating Axis Theorem (SAT) with zero allocations and O(1) early exit
 function isOBBOverlapping(obb1: OBB, obb2: OBB): boolean {
-  const axes = [
-    { x: obb1.cos, y: obb1.sin },
-    { x: -obb1.sin, y: obb1.cos },
-    { x: obb2.cos, y: obb2.sin },
-    { x: -obb2.sin, y: obb2.cos }
-  ];
+  const dx = obb2.x - obb1.x;
+  const dy = obb2.y - obb1.y;
 
-  const corners1 = getOBBCorners(obb1);
-  const corners2 = getOBBCorners(obb2);
+  // Dot products between orientation axes
+  const c = obb1.cos * obb2.cos + obb1.sin * obb2.sin;
+  const s = -obb1.sin * obb2.cos + obb1.cos * obb2.sin;
+  const absC = Math.abs(c);
+  const absS = Math.abs(s);
 
-  for (const axis of axes) {
-    let min1 = Infinity, max1 = -Infinity;
-    for (const p of corners1) {
-      const proj = p.x * axis.x + p.y * axis.y;
-      if (proj < min1) min1 = proj;
-      if (proj > max1) max1 = proj;
-    }
+  // Axis 1: obb1 forward
+  const d1 = Math.abs(dx * obb1.cos + dy * obb1.sin);
+  if (d1 > obb1.hl + obb2.hl * absC + obb2.hw * absS) return false;
 
-    let min2 = Infinity, max2 = -Infinity;
-    for (const p of corners2) {
-      const proj = p.x * axis.x + p.y * axis.y;
-      if (proj < min2) min2 = proj;
-      if (proj > max2) max2 = proj;
-    }
+  // Axis 2: obb1 lateral
+  const d2 = Math.abs(-dx * obb1.sin + dy * obb1.cos);
+  if (d2 > obb1.hw + obb2.hl * absS + obb2.hw * absC) return false;
 
-    if (max1 < min2 || max2 < min1) {
-      return false; // Separating axis found
-    }
-  }
+  // Axis 3: obb2 forward
+  const d3 = Math.abs(dx * obb2.cos + dy * obb2.sin);
+  if (d3 > obb2.hl + obb1.hl * absC + obb1.hw * absS) return false;
+
+  // Axis 4: obb2 lateral
+  const d4 = Math.abs(-dx * obb2.sin + dy * obb2.cos);
+  if (d4 > obb2.hw + obb1.hl * absS + obb1.hw * absC) return false;
 
   return true;
 }
@@ -106,15 +101,59 @@ function isPointInsideOBB(pt: {x: number, y: number}, obb: OBB): boolean {
   return Math.abs(localX) <= obb.hl && Math.abs(localY) <= obb.hw;
 }
 
+// Zero-allocation ray-OBB test via local coordinate frame and slab clipping
 function isRayIntersectingOBB(rayStart: {x: number, y: number}, rayEnd: {x: number, y: number}, obb: OBB): boolean {
-  const corners = getOBBCorners(obb);
-  for (let i = 0; i < 4; i++) {
-    const next = (i + 1) % 4;
-    if (isLineSegmentIntersecting(rayStart, rayEnd, corners[i], corners[next])) {
-      return true;
-    }
+  const dx0 = rayStart.x - obb.x;
+  const dy0 = rayStart.y - obb.y;
+  const lx0 = dx0 * obb.cos + dy0 * obb.sin;
+  const ly0 = -dx0 * obb.sin + dy0 * obb.cos;
+
+  const hl = obb.hl;
+  const hw = obb.hw;
+
+  // Fast check: start point inside OBB
+  if (Math.abs(lx0) <= hl && Math.abs(ly0) <= hw) {
+    return true;
   }
-  return isPointInsideOBB(rayStart, obb);
+
+  const dx1 = rayEnd.x - obb.x;
+  const dy1 = rayEnd.y - obb.y;
+  const lx1 = dx1 * obb.cos + dy1 * obb.sin;
+  const ly1 = -dx1 * obb.sin + dy1 * obb.cos;
+
+  const rx = lx1 - lx0;
+  const ry = ly1 - ly0;
+
+  let tEnter = 0;
+  let tExit = 1;
+
+  // Slab X
+  if (Math.abs(rx) < 1e-7) {
+    if (Math.abs(lx0) > hl) return false;
+  } else {
+    const invRx = 1 / rx;
+    let t1 = (-hl - lx0) * invRx;
+    let t2 = (hl - lx0) * invRx;
+    if (t1 > t2) { const tmp = t1; t1 = t2; t2 = tmp; }
+    if (t1 > tEnter) tEnter = t1;
+    if (t2 < tExit) tExit = t2;
+    if (tEnter > tExit) return false;
+  }
+
+  // Slab Y
+  if (Math.abs(ry) < 1e-7) {
+    if (Math.abs(ly0) > hw) return false;
+  } else {
+    const invRy = 1 / ry;
+    let t1 = (-hw - ly0) * invRy;
+    let t2 = (hw - ly0) * invRy;
+    if (t1 > t2) { const tmp = t1; t1 = t2; t2 = tmp; }
+    if (t1 > tEnter) tEnter = t1;
+    if (t2 < tExit) tExit = t2;
+    if (tEnter > tExit) return false;
+  }
+
+  return true;
 }
 
 // --- TELEMETRY & DIAGNOSTICS LOG BUFFER ---
