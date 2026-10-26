@@ -94,7 +94,7 @@ export class SpatialGrid<T extends SpatialItem> {
     const qId = this.currentQueryId;
     const curFrame = this.frameId;
 
-    const result: T[] = out ? (out.length = 0, out) : [];
+    const result: T[] = (out && Array.isArray(out)) ? (out.length = 0, out) : [];
 
     for (let cx = minCx; cx <= maxCx; cx++) {
       for (let cy = minCy; cy <= maxCy; cy++) {

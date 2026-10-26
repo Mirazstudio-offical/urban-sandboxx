@@ -12250,7 +12250,7 @@ export function updateSkidMarksAndParticles(world: GameWorld, player: Player, dt
   }
 }
 
-const scratchVehicleSet = new Set<Vehicle>();
+const scratchVehicleList: Vehicle[] = [];
 
 export function updateBreakablePropsAndLivingWorld(world: GameWorld, player: Player, dt: number, vehGrid?: any) {
   const weatherWeights = getEffectiveWeatherWeights(world);
@@ -12324,7 +12324,7 @@ export function updateBreakablePropsAndLivingWorld(world: GameWorld, player: Pla
       continue;
     }
 
-    const vehiclesToCheck = vehGrid ? vehGrid.queryRadius(prop.x, prop.y, 45, scratchVehicleSet) : world.vehicles;
+    const vehiclesToCheck = vehGrid ? vehGrid.queryRadius(prop.x, prop.y, 45, scratchVehicleList) : world.vehicles;
     // Check prop collision against vehicles using exact OBB & Circle Hitbox detection
     for (const veh of vehiclesToCheck) {
       const hitbox = getPropHitbox(prop);
@@ -12664,7 +12664,7 @@ export function updateBreakablePropsAndLivingWorld(world: GameWorld, player: Pla
       if (distToPlayer < 65) scare = true;
 
       if (!scare) {
-        const vehiclesToCheck = vehGrid ? vehGrid.queryRadius(bird.x, bird.y, 80, scratchVehicleSet) : world.vehicles;
+        const vehiclesToCheck = vehGrid ? vehGrid.queryRadius(bird.x, bird.y, 80, scratchVehicleList) : world.vehicles;
         for (const veh of vehiclesToCheck) {
           if (Math.abs(veh.speed) > 10 && Math.hypot(veh.x - bird.x, veh.y - bird.y) < 80) {
             scare = true;
