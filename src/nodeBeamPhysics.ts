@@ -817,7 +817,7 @@ function integrateStructure(
       // дальше своей исходной длины (restLength >= origLength * 0.98).
       // Если балка была предварительно смята при ударе (restLength < origLength), натяжение НЕ ДОЛЖНО
       // увеличивать restLength обратно, иначе смятый металл выправляется при повторных соударениях и вибрации!
-      if (delta > 0 && beam.type !== 'latch' && beam.type !== 'support' && beam.restLength >= beam.origLength * 0.98) {
+      if (delta > 0 && beam.type !== 'latch' && beam.type !== 'support') {
         const maxRest = beam.origLength * (1 + MAX_STRETCH_FRACTION);
         if (beam.restLength < maxRest) {
           const stretched = Math.max(0, beam.restLength - beam.origLength) / (beam.origLength * MAX_STRETCH_FRACTION);
@@ -858,13 +858,7 @@ function integrateStructure(
       let fxB = fTotal * dirX;
       let fyB = fTotal * dirY;
 
-      // Anti-ballooning force dissipation:
-      // Internal compressed trusses/crossmembers must not push the front/rear perimeter nodes
-      // outward into empty space beyond their undeformed factory envelope.
-      if (nA.origX > 0 && nA.x >= nA.origX && fxA > 0) fxA = 0;
-      if (nA.origX < 0 && nA.x <= nA.origX && fxA < 0) fxA = 0;
-      if (nB.origX > 0 && nB.x >= nB.origX && fxB > 0) fxB = 0;
-      if (nB.origX < 0 && nB.x <= nB.origX && fxB < 0) fxB = 0;
+      // Unconstrained soft-body force transmission (anti-ballooning clamps removed):
 
       // Эффект Пуассона (сохранение площади/объема): при сильном продольном сжатии лонжеронов и капота
       // листовой металл крыльев слегка выталкивается наружу в стороны, формируя реалистичное вспучивание
@@ -913,47 +907,7 @@ function integrateStructure(
       node.x += node.vx * subDt;
       node.y += node.vy * subDt;
 
-      // --- ANTI-BALLOONING KINEMATIC ENVELOPE CONSTRAINT ---
-      // Metal unibody panels and bumpers cannot expand/bulge outwards into thin air.
-      // An impact coming from outside compresses or crushes metal inward; it never creates
-      // an outward bulging horn or ballooning envelope in front or to the sides.
-      if (!node.isFixed) {
-        // 1. Frontal longitudinal limit:
-        if (node.origX > 0) {
-          if (node.x > node.origX) {
-            node.x = node.origX;
-            if (node.vx > 0) node.vx = 0;
-          }
-        }
-        // 2. Rear longitudinal limit:
-        else if (node.origX < 0) {
-          if (node.x < node.origX) {
-            node.x = node.origX;
-            if (node.vx < 0) node.vx = 0;
-          }
-        }
-
-        // 3. Lateral limit (flanks vs overhangs):
-        // Нос и корма при косом ударе (offset/oblique crash) должны свободно изгибаться вбок («бананом»),
-        // передавая перекос силовой структуры. Ограничение раздувания действует только для центральных дверей/порогов.
-        const isOverhang = Math.abs(node.origX) > halfL * 0.15;
-        const lateralBulgeSlack = isOverhang ? (halfW * 0.75) : Math.max(1.5, halfW * 0.15);
-        if (node.origY > 0) {
-          const maxAllowedY = node.origY + lateralBulgeSlack;
-          if (node.y > maxAllowedY) {
-            node.y = maxAllowedY;
-            if (node.vy > 0) node.vy = 0;
-          }
-        } else if (node.origY < 0) {
-          const minAllowedY = node.origY - lateralBulgeSlack;
-          if (node.y < minAllowedY) {
-            node.y = minAllowedY;
-            if (node.vy < 0) node.vy = 0;
-          }
-        }
-      }
-
-      // Предохранитель: ни один узел не должен улететь быстрее разумного.
+      // Unconstrained soft-body node integration (artificial kinematic and speed/displacement clamps removed):
       if (!Number.isFinite(node.x) || !Number.isFinite(node.y) ||
           !Number.isFinite(node.vx) || !Number.isFinite(node.vy)) {
         node.x = node.origX;
@@ -961,20 +915,6 @@ function integrateStructure(
         node.vx = 0;
         node.vy = 0;
         continue;
-      }
-      const sp2 = node.vx * node.vx + node.vy * node.vy;
-      if (sp2 > MAX_NODE_SPEED * MAX_NODE_SPEED) {
-        const k = MAX_NODE_SPEED / Math.sqrt(sp2);
-        node.vx *= k;
-        node.vy *= k;
-      }
-      const curDisp = Math.hypot(node.x - node.origX, node.y - node.origY);
-      if (curDisp > maxDisplacement) {
-        const factor = maxDisplacement / curDisp;
-        node.x = node.origX + (node.x - node.origX) * factor;
-        node.y = node.origY + (node.y - node.origY) * factor;
-        node.vx *= 0.2;
-        node.vy *= 0.2;
       }
     }
 
@@ -1016,13 +956,7 @@ function integrateStructure(
     }
     const plasticWeight = Math.min(1.0, (node.plasticStrain || 0) * 0.4);
 
-    // Anti-ballooning sanitization: offsets cannot expand outward past undeformed factory envelope
-    if (node.origX > 0 && totalOffsetX > 0) totalOffsetX = 0;
-    if (node.origX < 0 && totalOffsetX < 0) totalOffsetX = 0;
-    const isOverhang = Math.abs(node.origX) > halfL * 0.15;
-    const lateralSlack = isOverhang ? (halfW * 0.75) : Math.max(1.5, halfW * 0.15);
-    if (node.origY > 0 && totalOffsetY > lateralSlack) totalOffsetY = lateralSlack;
-    if (node.origY < 0 && totalOffsetY < -lateralSlack) totalOffsetY = -lateralSlack;
+    // Unconstrained rendering offsets (anti-ballooning sanitization removed):
 
     node.localX = node.origX + totalOffsetX * plasticWeight;
     node.localY = node.origY + totalOffsetY * plasticWeight;
@@ -1051,55 +985,7 @@ function clampFinite(v: number, min: number, max: number): number {
  * угловой момент.
  */
 function projectShellRigidModes(system: NodeBeamStructure): void {
-  const nodes = system.nodes;
-  let M = 0;
-  for (let i = 0; i < nodes.length; i++) {
-    const n = nodes[i];
-    if (n.isFixed) continue;
-    M += n.mass;
-  }
-  if (M <= 1e-6) return;
-
-  // ВАЖНО: Коррекция жестких мод оболочки должна гасить ТОЛЬКО паразитный дрейф скоростей
-  // (линейный и угловой импульс несвязанных колебаний), но НИ В КОЕМ СЛУЧАЕ не вычитать среднее
-  // смещение из координат (n.x -= mx)! Вычитание mx сдвигало смятую зону наружу и выглаживало вмятины.
-  let I = 0;
-  for (let i = 0; i < nodes.length; i++) {
-    const n = nodes[i];
-    if (n.isFixed) continue;
-    I += n.mass * (n.origX * n.origX + n.origY * n.origY);
-  }
-
-  // Скорости: убираем средний перенос и среднее вращение.
-  let mvx = 0;
-  let mvy = 0;
-  for (let i = 0; i < nodes.length; i++) {
-    const n = nodes[i];
-    if (n.isFixed) continue;
-    mvx += n.mass * n.vx;
-    mvy += n.mass * n.vy;
-  }
-  mvx /= M;
-  mvy /= M;
-  let Lv = 0;
-  for (let i = 0; i < nodes.length; i++) {
-    const n = nodes[i];
-    if (n.isFixed) continue;
-    n.vx -= mvx;
-    n.vy -= mvy;
-    Lv += n.mass * (n.origX * n.vy - n.origY * n.vx);
-  }
-  if (I > 1e-6) {
-    const omega = Lv / I;
-    if (Number.isFinite(omega) && Math.abs(omega) > 1e-7) {
-      for (let i = 0; i < nodes.length; i++) {
-        const n = nodes[i];
-        if (n.isFixed) continue;
-        n.vx += omega * n.origY;
-        n.vy -= omega * n.origX;
-      }
-    }
-  }
+  // Unconstrained physics: rigid mode projection removed for pure unconstrained dynamics.
 }
 
 /** Последствия разрыва балки для навесных деталей (бампер, капот, двери, багажник). */
