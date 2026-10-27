@@ -19,17 +19,10 @@ import { getVehicleNodeBeamDefinition } from './vehicleMeshConfigs';
 import { getPowertrainPickByIds, TRANSMISSION_VARIANTS } from './powertrainVariants';
 import { getVehicleCatalogItem } from './vehicleCatalog';
 import { isTrailerVehicle, isRoadMachinery, isMotorcycle, isTractorVehicle } from './vehicleArchetypes';
+import { createNodeBeamForVehicle, registerNodeBeamBuilder } from './nodeBeamRegistry';
 
 export { isTrailerVehicle, isRoadMachinery, isMotorcycle, isTractorVehicle };
-
-let _nodeBeamBuilder: ((car: any) => any) | null = null;
-export function registerNodeBeamBuilder(builder: (car: any) => any) {
-  _nodeBeamBuilder = builder;
-}
-export function createNodeBeamForVehicle(car: any) {
-  if (_nodeBeamBuilder) return _nodeBeamBuilder(car);
-  return null;
-}
+export { createNodeBeamForVehicle, registerNodeBeamBuilder };
 
 export const SPEED_KMH_TO_PX_S = 4.4444; // 1.6x speedup for realistic screen motion (formerly 2.7778)
 export const PX_S_TO_SPEED_KMH = 0.225;  // 1 / 4.4444 (formerly 0.36)

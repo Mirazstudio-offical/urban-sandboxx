@@ -16,7 +16,7 @@ import {
   isMotorcycle,
   isTractorVehicle
 } from './vehicleArchetypes';
-import { registerNodeBeamBuilder } from './vehicleHelpers';
+import { registerNodeBeamBuilder } from './nodeBeamRegistry';
 import {
   CrushProfile,
   advanceCrushStroke,
