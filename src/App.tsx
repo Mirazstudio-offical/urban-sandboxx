@@ -5945,7 +5945,7 @@ export default function App() {
         className="absolute inset-0 w-full h-full block cursor-crosshair"/>
 
       {/* TOP-LEFT: PAUSE BUTTON + GAME MENU + SIMULATION SPEED (BeamNG style) */}
-      <div id="hud-top-left" className="absolute top-3 left-3 sm:top-4 sm:left-4 z-50 flex flex-col items-start gap-2 pointer-events-none select-none">
+      <div id="hud-top-left" className="absolute z-50 flex flex-col items-start gap-2 pointer-events-none select-none" style={{ top: 'calc(env(safe-area-inset-top, 0px) + 12px)', left: 'calc(env(safe-area-inset-left, 0px) + 12px)' }}>
         <div className="flex items-center gap-2">
           <button
             id="hud-pause-btn"
@@ -5974,7 +5974,7 @@ export default function App() {
       {timeScale < 1.0 && !isMainMenuOpen && !isPauseMenuOpen && <SlowMotionIndicator value={timeScale} />}
 
       {/* TOP-RIGHT: MINI-MAP (BeamNG menu style) */}
-      <div id="hud-top-right" className="absolute top-3 right-3 sm:top-4 sm:right-4 z-40 flex flex-col items-end pointer-events-none select-none">
+      <div id="hud-top-right" className="absolute z-40 flex flex-col items-end pointer-events-none select-none" style={{ top: 'calc(env(safe-area-inset-top, 0px) + 12px)', right: 'calc(env(safe-area-inset-right, 0px) + 12px)' }}>
         <Minimap
           worldRef={worldRef}
           playerRef={playerRef}

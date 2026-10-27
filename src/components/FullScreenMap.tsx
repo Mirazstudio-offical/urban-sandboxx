@@ -288,7 +288,8 @@ const FullMapInner: React.FC<FullScreenMapProps> = ({
   const hitTest = (sx: number, sy: number): Landmark | null => {
     const { w, h } = size();
     const v = view.current;
-    let best: Landmark | null = null, bd = 16 * 16;
+    const hr = window.matchMedia && window.matchMedia('(pointer:coarse)').matches ? 24 : 16;
+    let best: Landmark | null = null, bd = hr * hr;
     for (const m of filteredRef.current) {
       const dx = (m.x - v.x) * v.zoom + w / 2 - sx, dy = (m.y - v.y) * v.zoom + h / 2 - sy;
       const d = dx * dx + dy * dy;
@@ -404,6 +405,16 @@ const FullMapInner: React.FC<FullScreenMapProps> = ({
       .filter(g => counts[g]).map(g => ({ id: g as Filter, label: GROUP_LABELS[g] })))
   ];
 
+  const pills = (cls: string) => (
+    <div className={cls}>
+      {cats.map(c => (
+        <button key={c.id} type="button" className={'pill' + (filter === c.id ? ' pill-on' : '')} onClick={() => setFilter(c.id)}>
+          {c.label}<i>{counts[c.id] ?? 0}</i>
+        </button>
+      ))}
+    </div>
+  );
+
   return (
     <div className="fm" ref={wrapRef}>
       <canvas
@@ -417,6 +428,7 @@ const FullMapInner: React.FC<FullScreenMapProps> = ({
         onWheel={onWheel}
       />
       <div className="fm-shade" />
+      <div className="fm-ui">
 
       {/* top bar */}
       <div className="fm-top">
@@ -463,14 +475,7 @@ const FullMapInner: React.FC<FullScreenMapProps> = ({
         )}
       </div>
 
-      {/* category pills */}
-      <div className="fm-pills">
-        {cats.map(c => (
-          <button key={c.id} type="button" className={'pill' + (filter === c.id ? ' pill-on' : '')} onClick={() => setFilter(c.id)}>
-            {c.label}<i>{counts[c.id] ?? 0}</i>
-          </button>
-        ))}
-      </div>
+      {pills('fm-pills')}
 
       {/* right panel */}
       <aside className={'fm-side' + (collapsed ? ' collapsed' : '') + (selected ? '' : ' nosel')}>
@@ -481,6 +486,7 @@ const FullMapInner: React.FC<FullScreenMapProps> = ({
             {selected.kind === 'poi'
               ? <p>{selected.lm.description}</p>
               : <p>X {selX} · Y {selY}</p>}
+            <div className="fm-meta">{formatDistance(selDist)} · {formatEta(selDist)}</div>
             <div className="fm-stats">
               <div><div className="stat-n">{formatDistance(selDist)}</div><div className="stat-l">Расстояние</div></div>
               <div><div className="stat-n">{formatEta(selDist)}</div><div className="stat-l">В пути</div></div>
@@ -495,6 +501,7 @@ const FullMapInner: React.FC<FullScreenMapProps> = ({
             <b>Выберите место</b> на карте или в списке, либо нажмите в любую точку, чтобы поставить метку. Колесо мыши — масштаб, перетаскивание — сдвиг.
           </div>
         )}
+        {pills('fm-pills-in')}
         <div className="fm-listhd cn">
           <span>Места рядом</span><span>{sorted.length}</span>
         </div>
@@ -536,6 +543,7 @@ const FullMapInner: React.FC<FullScreenMapProps> = ({
         <span><span className="key">WASD</span>Сдвиг</span>
         <span><span className="key">+ / −</span>Масштаб</span>
         <span className="sp"><span ref={coordRef}>{streetName}</span></span>
+      </div>
       </div>
     </div>
   );
