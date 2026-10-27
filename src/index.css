@@ -265,30 +265,6 @@
 .hud-row.on .hud-row-val { color: #e0ab45; }
 
 /* ------------------------------------------------------------
-   Mini-map (top-right): same grey glass + amber accent as the rest
-   ------------------------------------------------------------ */
-.hud-map-stack { display: flex; align-items: flex-start; gap: 6px; }
-.hud-zoom { display: flex; flex-direction: column; gap: 4px; }
-.hud-map {
-  position: relative; flex: none; width: 84px; height: 84px; padding: 3px; overflow: hidden; cursor: pointer;
-  background: rgba(16,16,18,.84); border: 1px solid rgba(255,255,255,.16); border-radius: 8px;
-  -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); box-shadow: 0 8px 24px rgba(0,0,0,.4);
-  -webkit-tap-highlight-color: transparent; transition: border-color .15s, transform .1s;
-}
-@media (min-width: 640px) { .hud-map { width: 130px; height: 130px; } }
-.hud-map:hover { border-color: rgba(201,146,43,.75); }
-.hud-map:active { transform: scale(.97); }
-.hud-map canvas { display: block; width: 100%; height: 100%; border-radius: 5px; pointer-events: none; }
-.hud-map .hud-btn { position: absolute; top: 6px; right: 6px; min-width: 24px; width: 24px; height: 24px; padding: 0; }
-.hud-map-tag {
-  position: absolute; left: 6px; bottom: 6px; display: inline-flex; align-items: center; gap: 5px; padding: 2px 6px; pointer-events: none;
-  color: #e0ab45; background: rgba(16,16,18,.8); border: 1px solid rgba(255,255,255,.12); border-radius: 4px;
-  font: 700 10px 'Barlow Condensed','Arial Narrow',sans-serif; letter-spacing: .16em; text-transform: uppercase;
-}
-.hud-map-dot { width: 6px; height: 6px; border-radius: 50%; background: #c9922b; animation: hud-pulse 1.6s ease-in-out infinite; }
-@keyframes hud-pulse { 0%, 100% { opacity: 1; } 50% { opacity: .35; } }
-
-/* ------------------------------------------------------------
    Chat. Desktop: bottom-left. Touch: collapsed button on the
    right edge under the mini-map (bottom-left belongs to the joystick).
    ------------------------------------------------------------ */
@@ -343,4 +319,4 @@
 .hud-chat.touch .hud-chat-log { max-height: min(120px, 28vh); padding: 8px 10px; }
 .hud-chat.touch .hud-chat-input { max-height: 84px; }
 
-@media (prefers-reduced-motion: reduce) { .hud-menu, .hud-chat-panel { animation: none; } .hud-map-dot { animation: none; } .hud-btn, .hud-row, .hud-map, .hud-chat { transition: none; } }
+@media (prefers-reduced-motion: reduce) { .hud-menu, .hud-chat-panel { animation: none; } .hud-btn, .hud-row, .hud-chat { transition: none; } }
