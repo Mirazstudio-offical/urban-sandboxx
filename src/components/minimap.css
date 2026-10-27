@@ -56,4 +56,14 @@
 
 @keyframes mm-pulse { 0%, 100% { opacity: 1; } 50% { opacity: .35; } }
 @media (prefers-reduced-motion: reduce) { .mm-dot { animation: none; } .mm-btn, .mm-panel { transition: none; } }
-@media (max-height: 480px) { .mm-panel { width: 150px; } .mm-btn { width: 28px; height: 28px; } }
+/* phones: small radar, no clutter, 40px+ tap targets stay on the buttons that matter */
+@media (pointer: coarse), (max-height: 520px) {
+  .mm { gap: 4px; }
+  .mm-panel { width: 104px; }
+  .mm-foot { display: none; }
+  .mm-head { height: 22px; padding-left: 8px; font-size: 11px; }
+  .mm-range, .mm-key { display: none; }
+  .mm-btn { width: 34px; height: 34px; }
+  .mm-sep { display: none; }
+  .mm-side .mm-btn:nth-child(n+4) { display: none; }
+}
