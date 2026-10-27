@@ -34,13 +34,6 @@ export function createNodeBeamForVehicle(car: any) {
 export const SPEED_KMH_TO_PX_S = 4.4444; // 1.6x speedup for realistic screen motion (formerly 2.7778)
 export const PX_S_TO_SPEED_KMH = 0.225;  // 1 / 4.4444 (formerly 0.36)
 
-export function isTrailerVehicle(car: Vehicle | { type?: string; isTrailer?: boolean } | null | undefined): boolean {
-  if (!car) return false;
-  if (car.isTrailer) return true;
-  const t = car.type;
-  if (!t) return false;
-  return t.startsWith('trailer_') || t === 'trailer_barrel' || t === 'trailer_flatbed_2axle';
-}
 
 export function createDefaultEngineState(
   type: CarType = 'sedan',
@@ -257,25 +250,6 @@ export function createDefaultFuelSystem(type: CarType = 'sedan', isParkedOnStree
   };
 }
 
-export function isRoadMachinery(type?: string): boolean {
-  if (!type) return false;
-  return (
-    type === 'paver_asphalt_wheeled' ||
-    type === 'roller_heavy_tandem' ||
-    type === 'roller_compact_sidewalk' ||
-    type === 'roller_pneumatic'
-  );
-}
-
-export function isMotorcycle(type?: string): boolean {
-  if (!type) return false;
-  return type.startsWith('moto_') || type === 'moped_soviet';
-}
-
-export function isTractorVehicle(type?: string): boolean {
-  if (!type) return false;
-  return type.startsWith('tractor_');
-}
 
 export interface VehicleBodyPanelsConfig {
   hasHood: boolean;           // Front hood / bonnet (passenger cars, trucks, vans)
