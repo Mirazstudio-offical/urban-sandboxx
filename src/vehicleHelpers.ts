@@ -15,10 +15,21 @@ import {
   VehicleDamage,
   VehicleDiffLockState 
 } from './types';
-import { createVehicleNodeBeamSystem } from './nodeBeamPhysics';
 import { getVehicleNodeBeamDefinition } from './vehicleMeshConfigs';
 import { getPowertrainPickByIds, TRANSMISSION_VARIANTS } from './powertrainVariants';
 import { getVehicleCatalogItem } from './vehicleCatalog';
+import { isTrailerVehicle, isRoadMachinery, isMotorcycle, isTractorVehicle } from './vehicleArchetypes';
+
+export { isTrailerVehicle, isRoadMachinery, isMotorcycle, isTractorVehicle };
+
+let _nodeBeamBuilder: ((car: any) => any) | null = null;
+export function registerNodeBeamBuilder(builder: (car: any) => any) {
+  _nodeBeamBuilder = builder;
+}
+export function createNodeBeamForVehicle(car: any) {
+  if (_nodeBeamBuilder) return _nodeBeamBuilder(car);
+  return null;
+}
 
 export const SPEED_KMH_TO_PX_S = 4.4444; // 1.6x speedup for realistic screen motion (formerly 2.7778)
 export const PX_S_TO_SPEED_KMH = 0.225;  // 1 / 4.4444 (formerly 0.36)
@@ -72,20 +83,11 @@ export function createDefaultEngineState(
   const engineRunning = isDrivingTraffic;
   const engineRPM = isDrivingTraffic ? 850 : 0;
 
-  const configTransmission = CAR_CONFIGS[type]?.transmission;
-  const isManual = configTransmission ? configTransmission === 'MANUAL' : [
-    'hatchback', 'pickup', 'wagon_classic', 'sedan_classic', 'sedan_compact',
-    'compact_matiz', 'sedan_logan', 'sedan_nexia', 'liftback_tavria', 'sedan_accent',
-    'hatch_samara', 'sedan_samara',
-    'hatch_hot', 'micro_car', 'classic_compact', 'retro_bubble', 'offroad_hardcore',
-    'suv_classic_box', 'muscle_classic', 'van_camper', 'van_cargo_old', 'truck_tow',
-    'delivery_truck', 'truck_box', 'truck_dump', 'truck_zil_dump', 'truck_semi', 'truck_tanker', 'truck_water',
-    'truck_flatbed', 'truck_covered', 'cement_mixer', 'garbage_truck', 'bus',
-    'tractor_mtz82', 'tractor_mtz80', 'tractor_mtz80_old',
-    'moto_izh_jupiter', 'moto_ural_sidecar', 'moto_jawa350', 'moto_sport', 'moto_chopper', 'moped_soviet'
-  ].includes(type);
-  const transmissionType: 'MANUAL' | 'AUTO' = configTransmission || (isManual ? 'MANUAL' : 'AUTO');
-  const hasTransferCase = type.startsWith('tractor_') || ['truck_box', 'truck_dump', 'truck_zil_dump', 'truck_semi', 'truck_tanker', 'truck_water', 'truck_flatbed', 'truck_covered', 'cement_mixer', 'garbage_truck', 'truck_armored', 'fire_engine', 'fire_ladder'].includes(type);
+  const catalogItem = getVehicleCatalogItem(type);
+  const transmissionType: 'AUTO' | 'MANUAL' = catalogItem?.transmissionType || 'AUTO';
+  const hasTransferCase = catalogItem?.hasTransferCase || false;
+  const gearRatios = catalogItem?.gearRatios || [-3.4, 0, 3.5, 2.05, 1.38, 1.00, 0.78];
+  const finalDriveRatio = catalogItem?.finalDriveRatio || 3.9;
 
   return {
     radiatorWater,
@@ -107,31 +109,8 @@ export function createDefaultEngineState(
     hasTransferCase,
     transferCaseMode: 'HIGH',
     tractorRange: type.startsWith('tractor_') ? 1 : undefined,
-    gearRatios: (function() {
-      if (['paver_asphalt_wheeled', 'roller_heavy_tandem', 'roller_compact_sidewalk', 'roller_pneumatic'].includes(type)) {
-        return [-3.6, 0, 5.2, 2.0]; // Hydrostatic 2-Range (R: Реверс, N: Нейтраль, 1: Рабочий режим 0-5 км/ч, 2: Транспортный 0-14 км/ч)
-      } else if (['truck_box', 'truck_dump', 'truck_zil_dump', 'truck_semi', 'truck_tanker', 'truck_water', 'truck_flatbed', 'truck_covered', 'cement_mixer', 'garbage_truck', 'bus', 'delivery_truck', 'truck_tow', 'fire_engine', 'fire_ladder', 'fire_rescue', 'pickup_heavy', 'truck_armored'].includes(type)) {
-        return [-4.5, 0, 4.8, 3.1, 2.0, 1.42, 1.00, 0.75]; // Heavy 6-speed commercial
-      } else if (type.startsWith('tractor_')) {
-        return [-4.5, 0, 5.5, 4.3, 3.3, 2.5, 1.9, 1.4, 1.0, 0.8, 0.65]; // Heavy tractor 9-speed base (18 total with multiplier)
-      } else if (['supercar', 'sports', 'hatch_hot', 'coupe_gt', 'moto_sport'].includes(type)) {
-        return [-3.2, 0, 3.1, 2.1, 1.55, 1.22, 1.00, 0.80]; // Sport 6-speed close-ratio
-      } else if (['retro_bubble', 'classic_compact', 'sedan_classic', 'wagon_classic', 'micro_car'].includes(type)) {
-        return [-3.5, 0, 3.6, 2.1, 1.36, 0.96]; // Vintage 4-speed
-      } else if (type === 'moped_soviet') {
-        return [-3.0, 0, 3.2, 1.8, 1.10]; // Soviet 3-speed moped
-      } else if (type.startsWith('moto_')) {
-        return [-2.8, 0, 2.7, 1.85, 1.35, 1.05, 0.85]; // Motorcycle 5-speed
-      }
-      return [-3.4, 0, 3.5, 2.05, 1.38, 1.00, 0.78]; // Standard passenger car 5-speed
-    })(),
-    finalDriveRatio: (function() {
-      if (['paver_asphalt_wheeled', 'roller_heavy_tandem', 'roller_compact_sidewalk', 'roller_pneumatic'].includes(type)) return 6.2;
-      if (['truck_box', 'truck_dump', 'truck_zil_dump', 'truck_semi', 'truck_tanker', 'truck_water', 'truck_flatbed', 'truck_covered', 'cement_mixer', 'garbage_truck', 'bus', 'fire_engine'].includes(type)) return 4.8;
-      if (type.startsWith('tractor_')) return 5.4;
-      if (['supercar', 'sports'].includes(type)) return 3.4;
-      return 3.9;
-    })(),
+    gearRatios,
+    finalDriveRatio,
     clutchPedal: 1.0,
     clutchTemperature: temperature,
     clutchWear: 0,
@@ -255,26 +234,8 @@ export function createDefaultFuelSystem(type: CarType = 'sedan', isParkedOnStree
   }
 
   const catalogItem = getVehicleCatalogItem(type);
-  const catalogFuel = catalogItem?.fuelType;
-  const catCategory = catalogItem?.category;
-
-  const isDiesel = catalogFuel === 'diesel' || catCategory === 'commercial' || [
-    'bus', 'fire_engine', 'fire_ladder', 'truck_box', 'truck_dump', 'truck_tanker', 
-    'truck_water', 'truck_flatbed', 'truck_covered', 'cement_mixer', 'garbage_truck', 'pickup_heavy', 
-    'truck_tow', 'truck_armored', 'delivery_truck', 'van_camper',
-    'tractor_mtz82', 'tractor_mtz80', 'tractor_mtz80_old', 'truck_semi',
-    'paver_asphalt_wheeled', 'roller_heavy_tandem', 'roller_compact_sidewalk', 'roller_pneumatic'
-  ].includes(type);
-  const isVintage92 = catalogFuel === 'ai92' || [
-    'wagon_classic', 'sedan_classic', 'classic_compact', 'retro_bubble', 
-    'van_cargo_old', 'muscle_classic', 'truck_zil_dump',
-    'compact_matiz', 'sedan_logan', 'sedan_nexia', 'liftback_tavria', 'sedan_accent',
-    'hatch_samara', 'sedan_samara', 'micro_car',
-    'moto_izh_jupiter', 'moto_ural_sidecar', 'moto_jawa350', 'moto_chopper', 'moped_soviet'
-  ].includes(type);
-  const isBike = catCategory === 'moto' || [
-    'moto_izh_jupiter', 'moto_ural_sidecar', 'moto_jawa350', 'moto_sport', 'moto_chopper', 'moped_soviet'
-  ].includes(type);
+  const fuelType = catalogItem?.fuelType || 'ai95';
+  const tankCapacity = catalogItem?.tankCapacity || 55;
 
   let tankLevel = 100;
   if (isParkedOnStreet) {
@@ -283,44 +244,8 @@ export function createDefaultFuelSystem(type: CarType = 'sedan', isParkedOnStree
     tankLevel = Math.round(35 + Math.random() * 55);
   }
 
-  let tankCapacity = 55;
-  if (catalogItem) {
-    if (catCategory === 'commercial' || catCategory === 'bus') {
-      tankCapacity = type === 'truck_semi' ? 350 : (type.startsWith('tractor_') ? 130 : 170);
-    } else if (catCategory === 'moto') {
-      tankCapacity = type === 'moped_soviet' ? 8 : (type === 'moto_ural_sidecar' ? 19 : 14);
-    } else if (catalogItem.weightKg > 2000) {
-      tankCapacity = 80;
-    } else if (catalogItem.weightKg < 1000) {
-      tankCapacity = 35;
-    } else {
-      tankCapacity = 50;
-    }
-  } else {
-    if (type === 'truck_zil_dump') {
-      tankCapacity = 170; // Authentic ZIL-130 170L steel tank
-    } else if (isDiesel) {
-      tankCapacity = type === 'truck_semi' ? 350 : (type.startsWith('tractor_') ? 130 : 120);
-    } else if (isBike) {
-      tankCapacity = type === 'moped_soviet' ? 8 : (type === 'moto_ural_sidecar' ? 19 : 14);
-    } else if (['supercar', 'suv_luxury', 'pickup_heavy', 'offroad_hardcore'].includes(type)) {
-      tankCapacity = 80;
-    } else if (type === 'compact_matiz') {
-      tankCapacity = 35;
-    } else if (type === 'liftback_tavria') {
-      tankCapacity = 39;
-    } else if (type === 'micro_car' || type === 'retro_bubble') {
-      tankCapacity = 30;
-    } else if (type === 'hatch_samara' || type === 'sedan_samara') {
-      tankCapacity = 43;
-    } else if (type === 'sedan_accent') {
-      tankCapacity = 45;
-    } else if (type === 'sedan_logan' || type === 'sedan_nexia' || type === 'sedan_compact' || type === 'hatchback') {
-      tankCapacity = 50;
-    }
-  }
+  const octaneNumber = fuelType === 'diesel' ? 45 : (fuelType === 'ai92' ? 92 : 95);
 
-  const fuelType = isDiesel ? 'diesel' : (isVintage92 ? 'ai92' : 'ai95');
   return {
     fuelType,
     tankLevel,
@@ -328,7 +253,7 @@ export function createDefaultFuelSystem(type: CarType = 'sedan', isParkedOnStree
     tankPunctured: false,
     fuelQuality: 100,
     detonation: false,
-    octaneNumber: isDiesel ? 45 : (isVintage92 ? 92 : 95)
+    octaneNumber
   };
 }
 
@@ -703,7 +628,7 @@ export function createDefaultVehicleDamage(length: number = 42, width: number = 
     isFullyBurnt: false,
     scratches: [],
     deformedVertices,
-    nodeBeam: createVehicleNodeBeamSystem({ type: 'sedan', length, width })
+    nodeBeam: createNodeBeamForVehicle({ type: 'sedan', length, width })
   };
 }
 
@@ -713,7 +638,7 @@ export function ensureVehicleDamage(veh: { length?: number; width?: number; dama
   if (!veh.damage) {
     const fresh = createDefaultVehicleDamage(targetLen, targetWid);
     if (veh.type) {
-      fresh.nodeBeam = createVehicleNodeBeamSystem({
+      fresh.nodeBeam = createNodeBeamForVehicle({
         type: veh.type,
         length: targetLen,
         width: targetWid,
@@ -745,7 +670,7 @@ export function ensureVehicleDamage(veh: { length?: number; width?: number; dama
     (dmg.nodeBeam.fixedNodeCount || 0) < 3
   );
   if (!dmg.nodeBeam || !Array.isArray(dmg.nodeBeam.nodes) || dmg.nodeBeam.nodes.length < 8 || presetMismatch || meshOutdated) {
-    dmg.nodeBeam = createVehicleNodeBeamSystem({
+    dmg.nodeBeam = createNodeBeamForVehicle({
       type: veh.type || 'sedan',
       length: targetLen,
       width: targetWid,

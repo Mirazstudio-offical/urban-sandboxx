@@ -1974,3 +1974,32 @@ export function renderVehicleGreenhouseAndBodyPanels(vCtx: VehicleRenderContext)
 export function getVehicleBasePolygon(car: Vehicle, halfL: number, halfW: number, fc: number, rc: number, ld: number, rd: number, fld: number, frd: number, rld: number, rrd: number): { x: number; y: number }[] {
   return getVehicleBasePolygonRaw(car, halfL, halfW, fc, rc, ld, rd, fld, frd, rld, rrd);
 }
+
+export function isTrailerVehicle(car: Vehicle | { type?: string; isTrailer?: boolean } | null | undefined): boolean {
+  if (!car) return false;
+  if (car.isTrailer) return true;
+  const t = car.type;
+  if (!t) return false;
+  return t.startsWith('trailer_') || t === 'trailer_barrel' || t === 'trailer_flatbed_2axle';
+}
+
+export function isRoadMachinery(type?: string): boolean {
+  if (!type) return false;
+  return (
+    type === 'paver_asphalt_wheeled' ||
+    type === 'roller_heavy_tandem' ||
+    type === 'roller_compact_sidewalk' ||
+    type === 'roller_pneumatic'
+  );
+}
+
+export function isMotorcycle(type?: string): boolean {
+  if (!type) return false;
+  return type.startsWith('moto_') || type === 'moped_soviet';
+}
+
+export function isTractorVehicle(type?: string): boolean {
+  if (!type) return false;
+  return type.startsWith('tractor_');
+}
+

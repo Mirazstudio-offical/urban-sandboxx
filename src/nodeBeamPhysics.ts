@@ -15,7 +15,8 @@ import {
   isTrailerVehicle,
   isMotorcycle,
   isTractorVehicle
-} from './vehicleHelpers';
+} from './vehicleArchetypes';
+import { registerNodeBeamBuilder } from './vehicleHelpers';
 import {
   CrushProfile,
   advanceCrushStroke,
@@ -1576,3 +1577,5 @@ export function stepNodeBeamContinuousContact(
   // Сообщаем updateVehicleSystems, что за этот кадр шаг уже сделан (иначе dt обрабатывался дважды)
   system.steppedThisTick = true;
 }
+
+registerNodeBeamBuilder(createVehicleNodeBeamSystem);

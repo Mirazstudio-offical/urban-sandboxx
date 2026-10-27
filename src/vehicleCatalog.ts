@@ -1,5 +1,4 @@
 import { CarType } from './types';
-import { CAR_CONFIGS } from './vehicleHelpers';
 import { DEALERSHIP_CARS } from './components/CarDealershipModal';
 
 export type VehicleCategory = 
@@ -29,6 +28,69 @@ export interface VehicleCatalogEntry {
   fuelTypeLabel: string;
   colors: { name: string; hex: string; roofHex?: string }[];
   descriptionRu: string;
+  gearRatios?: number[];
+  finalDriveRatio?: number;
+  transmissionType?: 'AUTO' | 'MANUAL';
+  hasTransferCase?: boolean;
+  tankCapacity?: number;
+}
+
+function getDefaultsForCatalogEntry(type: string, category: VehicleCategory, fuelType: 'ai92' | 'ai95' | 'diesel', weightKg: number) {
+  const isMachinery = ['paver_asphalt_wheeled', 'roller_heavy_tandem', 'roller_compact_sidewalk', 'roller_pneumatic'].includes(type);
+  const isTruckOrBus = category === 'commercial' || category === 'bus' || (category === 'emergency' && type !== 'police');
+  const isTractor = type.startsWith('tractor_');
+  const isMoto = category === 'moto';
+  const isSport = category === 'sport';
+  const isVintage = fuelType === 'ai92' || type.includes('classic') || type.includes('retro');
+
+  let gearRatios = [-3.4, 0, 3.5, 2.05, 1.38, 1.00, 0.78];
+  let finalDriveRatio = 3.9;
+  let transmissionType: 'AUTO' | 'MANUAL' = 'AUTO';
+  let hasTransferCase = isTractor || isTruckOrBus;
+  let tankCapacity = 55;
+
+  if (type.startsWith('trailer_') || type === 'trailer_barrel' || type === 'trailer_flatbed_2axle') {
+    gearRatios = [0];
+    finalDriveRatio = 1;
+    tankCapacity = 0;
+  } else if (isMachinery) {
+    gearRatios = [-3.6, 0, 5.2, 2.0];
+    finalDriveRatio = 6.2;
+    transmissionType = 'AUTO';
+    tankCapacity = 90;
+  } else if (isTractor) {
+    gearRatios = [-4.5, 0, 5.5, 4.3, 3.3, 2.5, 1.9, 1.4, 1.0, 0.8, 0.65];
+    finalDriveRatio = 5.4;
+    transmissionType = 'MANUAL';
+    tankCapacity = 130;
+  } else if (isTruckOrBus) {
+    gearRatios = [-4.5, 0, 4.8, 3.1, 2.0, 1.42, 1.00, 0.75];
+    finalDriveRatio = 4.8;
+    transmissionType = 'MANUAL';
+    tankCapacity = type === 'truck_semi' ? 350 : 170;
+  } else if (isSport) {
+    gearRatios = [-3.2, 0, 3.1, 2.1, 1.55, 1.22, 1.00, 0.80];
+    finalDriveRatio = 3.4;
+    transmissionType = 'AUTO';
+    tankCapacity = 75;
+  } else if (isMoto) {
+    gearRatios = type === 'moped_soviet' ? [-3.0, 0, 3.2, 1.8, 1.10] : [-2.8, 0, 2.7, 1.85, 1.35, 1.05, 0.85];
+    finalDriveRatio = 3.2;
+    transmissionType = 'MANUAL';
+    tankCapacity = type === 'moped_soviet' ? 8 : (type === 'moto_ural_sidecar' ? 19 : 14);
+  } else if (isVintage) {
+    gearRatios = [-3.5, 0, 3.6, 2.1, 1.36, 0.96];
+    finalDriveRatio = 4.1;
+    transmissionType = 'MANUAL';
+    tankCapacity = weightKg > 1500 ? 65 : 45;
+  } else {
+    gearRatios = [-3.4, 0, 3.5, 2.05, 1.38, 1.00, 0.78];
+    finalDriveRatio = 3.9;
+    transmissionType = 'AUTO';
+    tankCapacity = weightKg > 1800 ? 70 : 50;
+  }
+
+  return { gearRatios, finalDriveRatio, transmissionType, hasTransferCase, tankCapacity };
 }
 
 export const DEFAULT_PALETTE = [
@@ -62,12 +124,14 @@ const catalogMap = new Map<string, VehicleCatalogEntry>();
 
 // 1. Add all dealership cars
 for (const car of DEALERSHIP_CARS) {
+  const category = deduceCategory(car.type, car.classType);
+  const defaults = getDefaultsForCatalogEntry(car.type, category, car.fuelType, car.weightKg);
   catalogMap.set(car.type, {
     id: car.id,
     type: car.type,
     nameRu: car.nameRu,
     brand: car.brand,
-    category: deduceCategory(car.type, car.classType),
+    category,
     classType: car.classType,
     year: car.year,
     powerHp: car.powerHp,
@@ -77,7 +141,8 @@ for (const car of DEALERSHIP_CARS) {
     fuelType: car.fuelType,
     fuelTypeLabel: car.fuelTypeLabel,
     colors: car.availableColors && car.availableColors.length > 0 ? car.availableColors : DEFAULT_PALETTE,
-    descriptionRu: car.descriptionRu
+    descriptionRu: car.descriptionRu,
+    ...defaults
   });
 }
 
@@ -828,47 +893,27 @@ const EXTRA_VEHICLES: Partial<VehicleCatalogEntry>[] = [
 // Add extra items
 for (const extra of EXTRA_VEHICLES) {
   if (extra.type && !catalogMap.has(extra.type)) {
-    const cfg = CAR_CONFIGS[extra.type] || CAR_CONFIGS.sedan;
+    const category = extra.category || deduceCategory(extra.type, extra.classType);
+    const fuelType = extra.fuelType || 'ai95';
+    const weightKg = extra.weightKg || 1400;
+    const defaults = getDefaultsForCatalogEntry(extra.type, category, fuelType, weightKg);
     catalogMap.set(extra.type, {
       id: `cat_${extra.type}`,
       type: extra.type as CarType,
-      nameRu: extra.nameRu || cfg.name,
+      nameRu: extra.nameRu || extra.type,
       brand: extra.brand || 'Авто',
-      category: extra.category || deduceCategory(extra.type, extra.classType),
+      category,
       classType: extra.classType || 'Транспорт',
       year: extra.year || 2020,
       powerHp: extra.powerHp || 100,
-      topSpeedKmh: extra.topSpeedKmh || Math.round(cfg.maxSpeed),
-      weightKg: extra.weightKg || cfg.mass,
+      topSpeedKmh: extra.topSpeedKmh || 160,
+      weightKg,
       engineSpec: extra.engineSpec || 'ДВС',
-      fuelType: extra.fuelType || 'ai95',
+      fuelType,
       fuelTypeLabel: extra.fuelTypeLabel || 'АИ-95',
       colors: extra.colors && extra.colors.length > 0 ? extra.colors : DEFAULT_PALETTE,
-      descriptionRu: extra.descriptionRu || 'Надежный транспорт для любых дорог.'
-    });
-  }
-}
-
-// 3. Guaranteed completeness check: Ensure EVERY key in CAR_CONFIGS has an entry in VEHICLE_CATALOG
-for (const [key, cfg] of Object.entries(CAR_CONFIGS)) {
-  if (!catalogMap.has(key)) {
-    const deducedCat = deduceCategory(key, cfg.name);
-    catalogMap.set(key, {
-      id: `cat_${key}`,
-      type: key as CarType,
-      nameRu: cfg.name,
-      brand: 'Автопром',
-      category: deducedCat,
-      classType: deducedCat === 'special' ? 'Спецтехника' : (deducedCat === 'commercial' ? 'Грузовой' : 'Транспорт'),
-      year: 2020,
-      powerHp: Math.round(cfg.maxSpeed * 0.95),
-      topSpeedKmh: Math.round(cfg.maxSpeed),
-      weightKg: cfg.mass,
-      engineSpec: deducedCat === 'special' || deducedCat === 'commercial' ? 'Дизель' : 'Бензиновый ДВС',
-      fuelType: deducedCat === 'special' || deducedCat === 'commercial' ? 'diesel' : 'ai95',
-      fuelTypeLabel: deducedCat === 'special' || deducedCat === 'commercial' ? 'ДТ' : 'АИ-95',
-      colors: cfg.color ? [{ name: 'Стандартный', hex: cfg.color }, ...DEFAULT_PALETTE] : DEFAULT_PALETTE,
-      descriptionRu: `${cfg.name}. Надежная заводская конструкция для дорожных условий.`
+      descriptionRu: extra.descriptionRu || 'Надежный транспорт для любых дорог.',
+      ...defaults
     });
   }
 }
