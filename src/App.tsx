@@ -101,6 +101,7 @@ import {
 import { defaultBodyState } from './sensations';
 import { TrafficConsole } from './components/TrafficConsole';
 import { FullScreenMap } from './components/FullScreenMap';
+import { Minimap } from './components/Minimap';
 import { LandscapeGuard } from './components/LandscapeGuard';
 import { MobileTouchControls } from './components/MobileTouchControls';
 import { MainMenu } from './components/MainMenu';
@@ -310,7 +311,7 @@ function findStreetNameAtPosition(world: GameWorld | null, px: number, py: numbe
 
 export default function App() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const minimapCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const minimapFrameMsRef = useRef<number>(0);
 
   // React State for HUD & Status
   const [speedKmh, setSpeedKmh] = useState<number>(0);
@@ -347,7 +348,6 @@ export default function App() {
       return next;
     });
   }, []);
-  const [isMinimapCollapsed, setIsMinimapCollapsed] = useState<boolean>(false);
   const [timeScale, setTimeScale] = useState<number>(1.0);
   const timeScaleRef = useRef<number>(1.0);
   timeScaleRef.current = timeScale;
@@ -404,11 +404,7 @@ export default function App() {
   const [isDrifting, setIsDrifting] = useState<boolean>(false);
   const [trafficCount, setTrafficCount] = useState<number>(0);
   const [pedCount, setPedCount] = useState<number>(0);
-  const [minimapRange, setMinimapRange] = useState<number>(550);
-  const minimapRangeRef = useRef<number>(550);
-  minimapRangeRef.current = minimapRange;
 
-  const [isMinimapExpanded, setIsMinimapExpanded] = useState<boolean>(false);
   const [isFullMapOpen, setIsFullMapOpen] = useState<boolean>(false);
   const isFullMapOpenRef = useRef<boolean>(false);
   isFullMapOpenRef.current = isFullMapOpen;
@@ -723,8 +719,6 @@ export default function App() {
   const weatherTransitionRef = useRef<number>(1.0);
   weatherTransitionRef.current = weatherTransition;
 
-  const isMinimapExpandedRef = useRef<boolean>(false);
-  isMinimapExpandedRef.current = isMinimapExpanded;
 
   const isMainMenuOpenRef = useRef<boolean>(true);
   isMainMenuOpenRef.current = isMainMenuOpen;
@@ -2601,7 +2595,6 @@ export default function App() {
     let frameCount = 0;
     let fpsTimer = 0;
     let lastFrameAt = -Infinity;
-    let lastMinimapDrawAt = -Infinity;
 
     const gameLoop = (now: number) => {
       if (isMainMenuOpenRef.current || isPauseMenuOpenRef.current) {
@@ -3833,23 +3826,9 @@ export default function App() {
           }
         }
 
-        // 11. Render Minimap
-        const tMinimapStart = performance.now();
-        if (performanceConfig.enableMinimap) {
-          const mmInterval = performanceConfig.minimapUpdateMs;
-          if (mmInterval <= 0 || now - lastMinimapDrawAt >= mmInterval) {
-            lastMinimapDrawAt = now;
-            renderMinimap(world, player, camera, isMinimapExpandedRef.current);
-          }
-        } else {
-          // Clear minimap canvas to prevent visual residues
-          const mCanvas = document.getElementById('minimap-canvas') as HTMLCanvasElement;
-          if (mCanvas) {
-            const mCtx = mCanvas.getContext('2d');
-            mCtx?.clearRect(0, 0, mCanvas.width, mCanvas.height);
-          }
-        }
-        const tMinimapEnd = performance.now();
+        // 11. Mini-map draws itself (see components/Minimap.tsx); only its last frame time is read here
+        const tMinimapStart = 0;
+        const tMinimapEnd = minimapFrameMsRef.current;
 
         // Calculate final performance stats
         const totalFrameMs = performance.now() - frameStart;
@@ -5953,406 +5932,6 @@ export default function App() {
     sound.playCarDoor();
   };
 
-  const staticMinimapCanvasRef = useRef<HTMLCanvasElement | null>(null);
-
-  // --- MINIMAP RENDERER ---
-  const renderMinimap = (world: GameWorld, player: Player, camera: Camera, expanded: boolean) => {
-    const canvas = minimapCanvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
-    const w = canvas.width;
-    const h = canvas.height;
-
-    ctx.fillStyle = '#0d0e10';
-    ctx.fillRect(0, 0, w, h);
-
-    ctx.save();
-
-    if (expanded) {
-      // Whole City Map Overview Mode
-      const scaleX = w / (world.width || 52000);
-      const scaleY = h / (world.height || 30000);
-      const scale = Math.min(scaleX, scaleY);
-
-      // Pre-render static background into offscreen canvas at display resolution
-      if (!staticMinimapCanvasRef.current || staticMinimapCanvasRef.current.width !== w || staticMinimapCanvasRef.current.height !== h) {
-        if (staticMinimapCanvasRef.current) {
-          staticMinimapCanvasRef.current.width = 0;
-          staticMinimapCanvasRef.current.height = 0;
-        }
-        const offscreen = document.createElement('canvas');
-        offscreen.width = w;
-        offscreen.height = h;
-        const oCtx = offscreen.getContext('2d');
-        if (oCtx) {
-          oCtx.save();
-          oCtx.scale(scale, scale);
-
-          // Terrain / Parks
-          oCtx.fillStyle = '#064e3b30';
-          oCtx.fillRect(100, 100, 2600, 2600); // Forest
-          oCtx.fillRect(3700, 2100, 1400, 1400); // Central Park
-
-          // Buildings
-          oCtx.fillStyle = '#1e293b70';
-          for (const bld of world.buildings) {
-            if (bld.type !== 'park_monument') {
-              oCtx.fillRect(bld.x, bld.y, bld.width, bld.height);
-            }
-          }
-
-          // Roads
-          for (const road of world.roads) {
-            if (road.isRoundabout) continue;
-            const roadColor = road.isDirt ? '#855836' : (road.isGravel ? '#78716c' : '#383b42');
-            if (road.curvePoints && road.curvePoints.length > 1) {
-              oCtx.save();
-              oCtx.strokeStyle = roadColor;
-              oCtx.lineWidth = road.width;
-              oCtx.lineCap = 'round';
-              oCtx.lineJoin = 'round';
-              oCtx.beginPath();
-              oCtx.moveTo(road.curvePoints[0].x, road.curvePoints[0].y);
-              for (let i = 1; i < road.curvePoints.length; i++) {
-                oCtx.lineTo(road.curvePoints[i].x, road.curvePoints[i].y);
-              }
-              oCtx.stroke();
-              oCtx.restore();
-              continue;
-            }
-            const dx = road.x2 - road.x1;
-            const dy = road.y2 - road.y1;
-            const len = Math.hypot(dx, dy);
-            if (len < 0.5) continue;
-            oCtx.save();
-            oCtx.fillStyle = roadColor;
-            oCtx.translate(road.x1, road.y1);
-            oCtx.rotate(Math.atan2(dy, dx));
-            oCtx.fillRect(0, -road.width / 2, len, road.width);
-            oCtx.restore();
-          }
-          if (world.roundabouts) {
-            for (const rb of world.roundabouts) {
-              oCtx.fillStyle = '#32343a';
-              oCtx.beginPath();
-              oCtx.arc(rb.x, rb.y, rb.radius, 0, Math.PI * 2);
-              oCtx.fill();
-              oCtx.fillStyle = '#3a3b3f';
-              oCtx.beginPath();
-              oCtx.arc(rb.x, rb.y, rb.innerRadius, 0, Math.PI * 2);
-              oCtx.fill();
-            }
-          }
-
-          // Parkings
-          oCtx.fillStyle = 'rgba(30, 58, 138, 0.4)';
-          for (const pk of world.parkings) {
-            oCtx.fillRect(pk.x, pk.y, pk.width, pk.height);
-          }
-
-          // Fountain
-          oCtx.fillStyle = '#0284c7';
-          oCtx.beginPath();
-          oCtx.arc(4400, 2800, 45, 0, Math.PI * 2);
-          oCtx.fill();
-
-          oCtx.restore();
-        }
-        staticMinimapCanvasRef.current = offscreen;
-      }
-
-      if (staticMinimapCanvasRef.current) {
-        ctx.drawImage(staticMinimapCanvasRef.current, 0, 0);
-      }
-
-      ctx.save();
-      ctx.scale(scale, scale);
-
-      // GPS Route
-      if (world.gpsPath && world.gpsPath.length > 1) {
-        ctx.strokeStyle = '#06b6d4';
-        ctx.lineWidth = 18;
-        ctx.lineCap = 'round';
-        ctx.lineJoin = 'round';
-        ctx.beginPath();
-        ctx.moveTo(world.gpsPath[0].x, world.gpsPath[0].y);
-        for (let i = 1; i < world.gpsPath.length; i++) {
-          ctx.lineTo(world.gpsPath[i].x, world.gpsPath[i].y);
-        }
-        ctx.stroke();
-      }
-
-      if (world.gpsDestination) {
-        ctx.fillStyle = '#ef4444';
-        ctx.beginPath();
-        ctx.arc(world.gpsDestination.x, world.gpsDestination.y, 24, 0, Math.PI * 2);
-        ctx.fill();
-      }
-
-      // Traffic Lights
-      for (const inter of world.intersections) {
-        const phase = inter.phases?.[inter.currentPhaseIndex] || inter.phases?.[0];
-        const isGreen = phase ? (phase.nsState === 'green'|| phase.nsState === 'green_flashing') : false;
-        ctx.fillStyle = isGreen ? '#22c55e': '#ef4444';
-        ctx.beginPath();
-        ctx.arc(inter.x, inter.y, 14, 0, Math.PI * 2);
-        ctx.fill();
-      }
-
-      // Vehicles
-      for (const veh of world.vehicles) {
-        ctx.fillStyle = veh.isPlayerControlled ? '#e0ab45': (veh.isParked ? '#64748b': '#a29e93');
-        ctx.fillRect(veh.x - 12, veh.y - 12, 24, 24);
-      }
-
-      // Player Point
-      ctx.fillStyle = '#e0ab45';
-      ctx.strokeStyle = '#ffffff';
-      ctx.lineWidth = 4;
-      ctx.beginPath();
-      ctx.arc(player.x, player.y, 22, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.stroke();
-
-      ctx.restore();
-    } else {
-      // Tactical Radar Minimap (Centered on Player, Rotated with Camera)
-      const radarRange = minimapRangeRef.current || 550;
-      const scale = w / (radarRange * 2);
-
-      ctx.translate(w / 2, h / 2);
-      ctx.rotate(-camera.angle - Math.PI / 2);
-      ctx.scale(scale, scale);
-      ctx.translate(-player.x, -player.y);
-
-      const minX = player.x - radarRange - 50;
-      const maxX = player.x + radarRange + 50;
-      const minY = player.y - radarRange - 50;
-      const maxY = player.y + radarRange + 50;
-
-      // Parks & Terrain (Culled)
-      ctx.fillStyle = '#064e3b35';
-      if (maxX >= 100 && minX <= 2700 && maxY >= 100 && minY <= 2700) {
-        ctx.fillRect(100, 100, 2600, 2600); // Forest
-      }
-      if (maxX >= 3700 && minX <= 5100 && maxY >= 2100 && minY <= 3500) {
-        ctx.fillRect(3700, 2100, 1400, 1400); // Central Park
-      }
-
-      // Fountain (Culled)
-      if (Math.hypot(4400 - player.x, 2800 - player.y) <= radarRange + 60) {
-        ctx.fillStyle = '#0284c7';
-        ctx.beginPath();
-        ctx.arc(4400, 2800, 38, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.strokeStyle = '#bae6fd';
-        ctx.lineWidth = 3;
-        ctx.stroke();
-      }
-
-      // Buildings Footprints (Culled)
-      ctx.fillStyle = '#1e293b80';
-      ctx.strokeStyle = '#334155';
-      ctx.lineWidth = 2;
-      for (const bld of world.buildings) {
-        if (bld.type === 'park_monument') continue;
-        if (bld.x + bld.width < minX || bld.x > maxX || bld.y + bld.height < minY || bld.y > maxY) continue;
-        ctx.fillRect(bld.x, bld.y, bld.width, bld.height);
-        ctx.strokeRect(bld.x, bld.y, bld.width, bld.height);
-      }
-
-      // Parking Lots (Culled)
-      ctx.fillStyle = 'rgba(30, 58, 138, 0.35)';
-      ctx.strokeStyle = 'rgba(59, 130, 246, 0.5)';
-      ctx.lineWidth = 2;
-      for (const pk of world.parkings) {
-        if (pk.x + pk.width < minX || pk.x > maxX || pk.y + pk.height < minY || pk.y > maxY) continue;
-        ctx.fillRect(pk.x, pk.y, pk.width, pk.height);
-        ctx.strokeRect(pk.x, pk.y, pk.width, pk.height);
-      }
-
-      // Roads (Culled)
-      for (const road of world.roads) {
-        if (road.isRoundabout) continue;
-        const roadColor = road.isDirt ? '#855836' : (road.isGravel ? '#78716c' : '#383b42');
-
-        if (road.curvePoints && road.curvePoints.length > 1) {
-          const rMinX = (road._minX ?? Math.min(...road.curvePoints.map(p => p.x))) - road.width;
-          const rMaxX = (road._maxX ?? Math.max(...road.curvePoints.map(p => p.x))) + road.width;
-          const rMinY = (road._minY ?? Math.min(...road.curvePoints.map(p => p.y))) - road.width;
-          const rMaxY = (road._maxY ?? Math.max(...road.curvePoints.map(p => p.y))) + road.width;
-          if (rMaxX < minX || rMinX > maxX || rMaxY < minY || rMinY > maxY) continue;
-
-          ctx.save();
-          ctx.strokeStyle = roadColor;
-          ctx.lineWidth = road.width;
-          ctx.lineCap = 'round';
-          ctx.lineJoin = 'round';
-          ctx.beginPath();
-          ctx.moveTo(road.curvePoints[0].x, road.curvePoints[0].y);
-          for (let i = 1; i < road.curvePoints.length; i++) {
-            ctx.lineTo(road.curvePoints[i].x, road.curvePoints[i].y);
-          }
-          ctx.stroke();
-
-          // Centerline marking for highways on radar
-          if (!road.isDirt && !road.isGravel && road.width >= 40) {
-            ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
-            ctx.lineWidth = 2;
-            ctx.setLineDash([12, 10]);
-            ctx.beginPath();
-            ctx.moveTo(road.curvePoints[0].x, road.curvePoints[0].y);
-            for (let i = 1; i < road.curvePoints.length; i++) {
-              ctx.lineTo(road.curvePoints[i].x, road.curvePoints[i].y);
-            }
-            ctx.stroke();
-            ctx.setLineDash([]);
-          }
-          ctx.restore();
-          continue;
-        }
-
-        const rMinX = Math.min(road.x1, road.x2) - road.width;
-        const rMaxX = Math.max(road.x1, road.x2) + road.width;
-        const rMinY = Math.min(road.y1, road.y2) - road.width;
-        const rMaxY = Math.max(road.y1, road.y2) + road.width;
-        if (rMaxX < minX || rMinX > maxX || rMaxY < minY || rMinY > maxY) continue;
-
-        const dx = road.x2 - road.x1;
-        const dy = road.y2 - road.y1;
-        const len = Math.hypot(dx, dy);
-        if (len < 0.5) continue;
-        ctx.save();
-        ctx.fillStyle = roadColor;
-        ctx.translate(road.x1, road.y1);
-        ctx.rotate(Math.atan2(dy, dx));
-        ctx.fillRect(0, -road.width / 2, len, road.width);
-        ctx.restore();
-      }
-      if (world.roundabouts) {
-        for (const rb of world.roundabouts) {
-          if (rb.x + rb.radius < minX || rb.x - rb.radius > maxX || rb.y + rb.radius < minY || rb.y - rb.radius > maxY) continue;
-          ctx.fillStyle = '#32343a';
-          ctx.beginPath();
-          ctx.arc(rb.x, rb.y, rb.radius, 0, Math.PI * 2);
-          ctx.fill();
-          ctx.fillStyle = '#3a3b3f';
-          ctx.beginPath();
-          ctx.arc(rb.x, rb.y, rb.innerRadius, 0, Math.PI * 2);
-          ctx.fill();
-        }
-      }
-
-      // GPS Route Line on Radar
-      if (world.gpsPath && world.gpsPath.length > 1) {
-        ctx.strokeStyle = '#06b6d4'; // Glowing cyan
-        ctx.lineWidth = 14;
-        ctx.lineCap = 'round';
-        ctx.lineJoin = 'round';
-        ctx.beginPath();
-        ctx.moveTo(world.gpsPath[0].x, world.gpsPath[0].y);
-        for (let i = 1; i < world.gpsPath.length; i++) {
-          ctx.lineTo(world.gpsPath[i].x, world.gpsPath[i].y);
-        }
-        ctx.stroke();
-
-        ctx.strokeStyle = '#ffffff';
-        ctx.lineWidth = 4;
-        ctx.setLineDash([12, 12]);
-        ctx.stroke();
-        ctx.setLineDash([]);
-      }
-
-      // GPS Destination Flag (Culled)
-      if (world.gpsDestination) {
-        const dest = world.gpsDestination;
-        if (Math.abs(dest.x - player.x) <= radarRange + 60 && Math.abs(dest.y - player.y) <= radarRange + 60) {
-          ctx.save();
-          ctx.translate(dest.x, dest.y);
-          ctx.fillStyle = '#ef4444';
-          ctx.strokeStyle = '#ffffff';
-          ctx.lineWidth = 3;
-          ctx.beginPath();
-          ctx.arc(0, 0, 16, 0, Math.PI * 2);
-          ctx.fill();
-          ctx.stroke();
-          ctx.restore();
-        }
-      }
-
-      // Intersections & Traffic Lights (Culled)
-      for (const inter of world.intersections) {
-        if (Math.abs(inter.x - player.x) > radarRange + 60 || Math.abs(inter.y - player.y) > radarRange + 60) continue;
-        const phase = inter.phases?.[inter.currentPhaseIndex] || inter.phases?.[0];
-        const isGreen = phase ? (phase.nsState === 'green'|| phase.nsState === 'green_flashing') : false;
-        ctx.fillStyle = isGreen ? '#22c55e': '#ef4444';
-        ctx.beginPath();
-        ctx.arc(inter.x, inter.y, 12, 0, Math.PI * 2);
-        ctx.fill();
-      }
-
-      // City Establishments & Shops (Culled)
-      for (const shop of CITY_SHOPS) {
-        if (Math.abs(shop.x - player.x) > radarRange + 60 || Math.abs(shop.y - player.y) > radarRange + 60) continue;
-        ctx.fillStyle = shop.badgeColor;
-        ctx.beginPath();
-        ctx.arc(shop.x, shop.y, 18, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.strokeStyle = '#ffffff';
-        ctx.lineWidth = 2.5;
-        ctx.stroke();
-
-        ctx.font = 'bold 13px sans-serif';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText(shop.icon, shop.x, shop.y);
-      }
-
-      // NPC Cars (Culled)
-      for (const veh of world.vehicles) {
-        if (!veh.isPlayerControlled) {
-          if (Math.abs(veh.x - player.x) > radarRange + 60 || Math.abs(veh.y - player.y) > radarRange + 60) continue;
-          ctx.fillStyle = veh.isParked ? '#64748b': '#f59e0b';
-          ctx.beginPath();
-          ctx.arc(veh.x, veh.y, 8, 0, Math.PI * 2);
-          ctx.fill();
-        }
-      }
-
-      // Pedestrians (Culled)
-      ctx.fillStyle = '#c084fc';
-      for (const ped of world.pedestrians) {
-        if (Math.abs(ped.x - player.x) > radarRange + 60 || Math.abs(ped.y - player.y) > radarRange + 60) continue;
-        ctx.beginPath();
-        ctx.arc(ped.x, ped.y, 4, 0, Math.PI * 2);
-        ctx.fill();
-      }
-
-      // Player Heading Direction Arrow
-      ctx.save();
-      ctx.translate(player.x, player.y);
-      ctx.rotate(player.angle);
-
-      ctx.fillStyle = '#e0ab45';
-      ctx.beginPath();
-      ctx.moveTo(18, 0);
-      ctx.lineTo(-12, -10);
-      ctx.lineTo(-6, 0);
-      ctx.lineTo(-12, 10);
-      ctx.closePath();
-      ctx.fill();
-      ctx.strokeStyle = '#ffffff';
-      ctx.lineWidth = 2.5;
-      ctx.stroke();
-
-      ctx.restore();
-    }
-
-    ctx.restore();
-  };
-
   const toggleSoundMute = () => {
     const muted = sound.toggleMute();
     setIsMuted(muted);
@@ -6394,82 +5973,20 @@ export default function App() {
       {/* Slow-motion cue: small readout + soft vignette */}
       {timeScale < 1.0 && !isMainMenuOpen && !isPauseMenuOpen && <SlowMotionIndicator value={timeScale} />}
 
-      {/* TOP-RIGHT: GPS NAVIGATOR MINIMAP */}
-      <div id="hud-top-right" className="absolute top-3 right-3 sm:top-4 sm:right-4 z-40 flex flex-col items-end gap-1.5 pointer-events-auto select-none">
-        {(() => {
-          type Ev = { preventDefault(): void; stopPropagation(): void };
-          const zoomIn = () => { userZoomFactorRef.current = Math.min(3.0, userZoomFactorRef.current + 0.15); };
-          const zoomOut = () => { userZoomFactorRef.current = Math.max(0.4, userZoomFactorRef.current - 0.15); };
-          // click + touchEnd (touch fires immediately, without the synthetic-click delay)
-          const tap = (fn: () => void, stop = false) => ({
-            onClick: (e: Ev) => { if (stop) e.stopPropagation(); fn(); },
-            onTouchEnd: (e: Ev) => { e.preventDefault(); if (stop) e.stopPropagation(); fn(); }
-          });
-
-          const zoomButtons = (
-            <div className="hud-zoom">
-              <button type="button" className="hud-btn hud-sm hud-sq" title="Приблизить камеру" aria-label="Приблизить камеру" {...tap(zoomIn)}>
-                <ZoomIn className="w-4 h-4" />
-              </button>
-              <button type="button" className="hud-btn hud-sm hud-sq" title="Отдалить камеру" aria-label="Отдалить камеру" {...tap(zoomOut)}>
-                <ZoomOut className="w-4 h-4" />
-              </button>
-            </div>
-          );
-
-          if (isMinimapCollapsed) {
-            return (
-              <div className="hud-map-stack">
-                {zoomButtons}
-                <button
-                  id="expand-minimap-btn"
-                  type="button"
-                  className="hud-btn hud-sq"
-                  title="Развернуть миникарту [M]"
-                  aria-label="Развернуть миникарту"
-                  {...tap(() => setIsMinimapCollapsed(false))}>
-                  <Map className="w-5 h-5" />
-                </button>
-              </div>
-            );
-          }
-
-          return (
-            <div className="hud-map-stack">
-              {zoomButtons}
-
-              {/* Radar minimap: tap to open the full-screen city map */}
-              <div
-                id="minimap-radar-container"
-                className="hud-map"
-                role="button"
-                tabIndex={0}
-                title="Открыть карту города на весь экран"
-                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setIsFullMapOpen(true); } }}
-                {...tap(() => setIsFullMapOpen(true))}>
-                <canvas id="minimap-canvas" ref={minimapCanvasRef} width={200} height={200} />
-
-                <button
-                  id="collapse-minimap-btn"
-                  type="button"
-                  className="hud-btn"
-                  title="Свернуть миникарту"
-                  aria-label="Свернуть миникарту"
-                  {...tap(() => setIsMinimapCollapsed(true), true)}>
-                  <Minimize2 className="w-3 h-3" />
-                </button>
-
-                <div className="hud-map-tag">
-                  <span className="hud-map-dot" />
-                  <span>GPS</span>
-                </div>
-              </div>
-            </div>
-          );
-        })()}
+      {/* TOP-RIGHT: MINI-MAP (BeamNG menu style) */}
+      <div id="hud-top-right" className="absolute top-3 right-3 sm:top-4 sm:right-4 z-40 flex flex-col items-end pointer-events-none select-none">
+        <Minimap
+          worldRef={worldRef}
+          playerRef={playerRef}
+          cameraRef={cameraRef}
+          streetName={streetName}
+          paused={isFullMapOpen}
+          onOpenMap={() => setIsFullMapOpen(true)}
+          onCameraZoomIn={() => { userZoomFactorRef.current = Math.min(3.0, userZoomFactorRef.current + 0.15); }}
+          onCameraZoomOut={() => { userZoomFactorRef.current = Math.max(0.4, userZoomFactorRef.current - 0.15); }}
+          frameTimeRef={minimapFrameMsRef}
+        />
       </div>
-
-
 
       {/* BOTTOM-CENTER DETAILED VEHICLE INSTRUMENT CLUSTER */}
       {isInVehicle && (() => {
