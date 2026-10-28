@@ -57,12 +57,24 @@ export interface RoadBlockStatus {
  * Checks if a road segment corridor between (x1, y1) and (x2, y2) has an accident or traffic jam
  * in EITHER direction ("ни в одну ни в другую сторону").
  */
+export interface RoadBlockOptions {
+  /** Do not treat the player's own (stopped) vehicle as a jam participant (used by GPS routing). */
+  ignorePlayer?: boolean;
+  /**
+   * If set, slow/stopped vehicles only count as a jam when at least two of them are closer than this
+   * distance (px) to each other along the segment. Needed for long segments, where two unrelated
+   * slow cars kilometers apart are not a traffic jam.
+   */
+  jamClusterRadius?: number;
+}
+
 export function isRoadSegmentBlocked(
   world: GameWorld,
   x1: number,
   y1: number,
   x2: number,
-  y2: number
+  y2: number,
+  options?: RoadBlockOptions
 ): RoadBlockStatus {
   const minX = Math.min(x1, x2) - 45;
   const maxX = Math.max(x1, x2) + 45;
@@ -80,9 +92,12 @@ export function isRoadSegmentBlocked(
   let stoppedCount = 0;
   let hasAccident = false;
   let hasJam = false;
+  const segLen = Math.sqrt(lenSq);
+  const stoppedAlong: number[] = [];
 
   for (const v of world.vehicles) {
     if (v.isParked) continue;
+    if (options?.ignorePlayer && v.isPlayerControlled) continue;
 
     // Fast bounding box rejection
     if (v.x < minX || v.x > maxX || v.y < minY || v.y > maxY) continue;
@@ -112,8 +127,19 @@ export function isRoadSegmentBlocked(
     } else if (isCrawlingOrStopped) {
       stoppedCount++;
       blockedVehicles.push(v);
-      if (stoppedCount >= 2) {
-        hasJam = true;
+      if (options?.jamClusterRadius === undefined) {
+        if (stoppedCount >= 2) {
+          hasJam = true;
+        }
+      } else {
+        const along = t * segLen;
+        for (const other of stoppedAlong) {
+          if (Math.abs(other - along) <= options.jamClusterRadius) {
+            hasJam = true;
+            break;
+          }
+        }
+        stoppedAlong.push(along);
       }
     }
   }
@@ -185,10 +211,34 @@ export interface BuiltNavGraph {
  * Builds a complete road graph containing ALL road segments in world.roads,
  * automatically connecting endpoints, T-junctions, road crossings, and explicit intersections.
  */
-export function buildRoadNavGraph(world: GameWorld, ignoreBlocks: boolean = false): BuiltNavGraph {
+// Reference (maximum) speed used to turn road length into a travel-time based cost.
+const NAV_MAX_SPEED = 130;
+const NAV_MIN_SPEED = 20;
+
+/** Effective driving speed of a road: explicit limit if present, otherwise a default by road class. */
+function getRoadNavSpeed(road: RoadSegment): number {
+  let speed = road.speedLimit;
+  if (!speed || speed <= 0) {
+    if (road.isDirt) speed = 40;
+    else if (road.isGravel) speed = 45;
+    else if (road.isAvenue) speed = 60;
+    else speed = 50;
+  }
+  return Math.max(NAV_MIN_SPEED, Math.min(NAV_MAX_SPEED, speed));
+}
+
+/**
+ * Builds the STATIC road graph (topology + travel-time cost) of all road segments in world.roads.
+ * Traffic jams / accidents are NOT baked in here, they are applied lazily per route request
+ * (see getEdgeBlockPenalty), so the cached graph never goes stale.
+ */
+export function buildRoadNavGraph(world: GameWorld): BuiltNavGraph {
   const nodes = new Map<string, NavGraphNode>();
   const adj = new Map<string, NavGraphEdge[]>();
   const SNAP_DIST = 45; // max distance in px to snap nodes together into a unified junction
+  // Explicit intersections own a bigger snap radius: roads usually end at the edge of the
+  // intersection box (e.g. highway hubs 240x240 leave a 160 px gap between road segments).
+  const nodeSnapRadius = new Map<string, number>();
 
   let autoNodeIdCounter = 1;
 
@@ -197,7 +247,8 @@ export function buildRoadNavGraph(world: GameWorld, ignoreBlocks: boolean = fals
 
     // Look for existing node close by
     for (const [id, node] of nodes.entries()) {
-      if (getDistance(pt, node) < SNAP_DIST) {
+      const radius = Math.max(SNAP_DIST, nodeSnapRadius.get(id) ?? 0);
+      if (getDistance(pt, node) < radius) {
         return id;
       }
     }
@@ -210,8 +261,19 @@ export function buildRoadNavGraph(world: GameWorld, ignoreBlocks: boolean = fals
 
   // 1. Add explicit intersections from world
   if (world.intersections) {
+    // Pass 1: create all intersection nodes (the enlarged snap radius must not merge two intersections)
+    const interNodeIds: { nodeId: string; inter: Intersection }[] = [];
     for (const inter of world.intersections) {
-      getOrCreateNodeId({ x: inter.x, y: inter.y }, inter.id);
+      const nodeId = getOrCreateNodeId({ x: inter.x, y: inter.y }, inter.id);
+      interNodeIds.push({ nodeId, inter });
+    }
+    // Pass 2: let every intersection attract road endpoints lying within its box
+    for (const { nodeId, inter } of interNodeIds) {
+      const halfSize = Math.max(inter.width || 0, inter.height || 0) / 2;
+      if (halfSize > 0) {
+        const radius = Math.min(halfSize + 20, 160);
+        nodeSnapRadius.set(nodeId, Math.max(nodeSnapRadius.get(nodeId) ?? 0, radius));
+      }
     }
   }
 
@@ -318,7 +380,10 @@ export function buildRoadNavGraph(world: GameWorld, ignoreBlocks: boolean = fals
 
     splits.sort((a, b) => a.distParam - b.distParam);
 
+    // Cost is in "length-equivalent" units: travel time scaled so the fastest road costs exactly its
+    // length. This keeps the straight-line distance a valid (admissible) A* heuristic.
     const surfaceMultiplier = road.isDirt ? 1.15 : (road.isGravel ? 1.08 : 1.0);
+    const speedMultiplier = NAV_MAX_SPEED / getRoadNavSpeed(road);
 
     for (let i = 0; i < splits.length - 1; i++) {
       const sA = splits[i];
@@ -343,13 +408,7 @@ export function buildRoadNavGraph(world: GameWorld, ignoreBlocks: boolean = fals
 
       if (length <= 0) continue;
 
-      let blockPenalty = 0;
-      const roadBlock = isRoadSegmentBlocked(world, sA.pt.x, sA.pt.y, sB.pt.x, sB.pt.y);
-      if (roadBlock.isBlocked && !ignoreBlocks) {
-        blockPenalty = 500000;
-      }
-
-      const cost = length * surfaceMultiplier + blockPenalty;
+      const cost = length * surfaceMultiplier * speedMultiplier;
 
       const fwdEdge: NavGraphEdge = {
         from: sA.nodeId,
@@ -374,19 +433,69 @@ export function buildRoadNavGraph(world: GameWorld, ignoreBlocks: boolean = fals
   return { nodes, adj };
 }
 
-// Module-level graph cache
+// Module-level cache of the STATIC graph (topology does not depend on traffic)
 let cachedWorldRef: GameWorld | null = null;
 let cachedGraphObj: BuiltNavGraph | null = null;
-let cachedIgnoreBlocksState: boolean = false;
+let cachedRoadsRef: RoadSegment[] | null = null;
+let cachedRoadsLen = -1;
+let cachedIntersectionsLen = -1;
 
-function getNavGraph(world: GameWorld, ignoreBlocks: boolean): BuiltNavGraph {
-  if (cachedWorldRef === world && cachedGraphObj && cachedIgnoreBlocksState === ignoreBlocks) {
+function getNavGraph(world: GameWorld): BuiltNavGraph {
+  if (
+    cachedWorldRef === world &&
+    cachedGraphObj &&
+    cachedRoadsRef === world.roads &&
+    cachedRoadsLen === (world.roads?.length ?? 0) &&
+    cachedIntersectionsLen === (world.intersections?.length ?? 0)
+  ) {
     return cachedGraphObj;
   }
-  cachedGraphObj = buildRoadNavGraph(world, ignoreBlocks);
+  cachedGraphObj = buildRoadNavGraph(world);
   cachedWorldRef = world;
-  cachedIgnoreBlocksState = ignoreBlocks;
+  cachedRoadsRef = world.roads;
+  cachedRoadsLen = world.roads?.length ?? 0;
+  cachedIntersectionsLen = world.intersections?.length ?? 0;
+  edgePenaltyCache.clear();
   return cachedGraphObj;
+}
+
+// Traffic penalties (jam / accident) are evaluated lazily for the edges A* actually looks at and
+// are cached only for a short time, so they follow the real traffic situation.
+const PENALTY_TTL_MS = 3000;
+const ACCIDENT_PENALTY = 8000;
+const JAM_PENALTY = 4000;
+const MAX_EDGE_PENALTY = 24000;
+const PENALTY_CHORD_LEN = 600; // long (e.g. highway) edges are checked in chunks of about this length
+const edgePenaltyCache = new Map<NavGraphEdge, { t: number; penalty: number }>();
+
+function getEdgeBlockPenalty(world: GameWorld, edge: NavGraphEdge): number {
+  if (!edge.road) return 0;
+
+  const now = Date.now();
+  const cached = edgePenaltyCache.get(edge);
+  if (cached && now - cached.t < PENALTY_TTL_MS) return cached.penalty;
+
+  const wps = edge.waypoints;
+  let penalty = 0;
+  let chunkStart = wps[0];
+  let acc = 0;
+  for (let i = 1; i < wps.length && penalty < MAX_EDGE_PENALTY; i++) {
+    acc += getDistance(wps[i - 1], wps[i]);
+    if (acc >= PENALTY_CHORD_LEN || i === wps.length - 1) {
+      const block = isRoadSegmentBlocked(world, chunkStart.x, chunkStart.y, wps[i].x, wps[i].y, {
+        ignorePlayer: true,
+        jamClusterRadius: 350
+      });
+      if (block.hasAccident) penalty += ACCIDENT_PENALTY;
+      else if (block.hasJam) penalty += JAM_PENALTY;
+      chunkStart = wps[i];
+      acc = 0;
+    }
+  }
+  penalty = Math.min(penalty, MAX_EDGE_PENALTY);
+
+  edgePenaltyCache.set(edge, { t: now, penalty });
+  return penalty;
 }
 
 // Project point onto closest edge in graph
@@ -439,7 +548,7 @@ export function calculateGpsRoute(
     return [start, end];
   }
 
-  const graph = getNavGraph(world, ignoreBlocks);
+  const graph = getNavGraph(world);
 
   if (graph.nodes.size === 0) {
     return [start, end];
@@ -585,7 +694,8 @@ export function calculateGpsRoute(
     const edges = adjMap.get(currentId) || [];
     for (const edge of edges) {
       const neighborId = edge.to;
-      const tentativeG = (gScore.get(currentId) ?? Infinity) + edge.cost;
+      const blockPenalty = ignoreBlocks ? 0 : getEdgeBlockPenalty(world, edge);
+      const tentativeG = (gScore.get(currentId) ?? Infinity) + edge.cost + blockPenalty;
 
       if (tentativeG < (gScore.get(neighborId) ?? Infinity)) {
         cameFrom.set(neighborId, { prevNodeId: currentId, edge });
