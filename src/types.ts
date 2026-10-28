@@ -1110,6 +1110,7 @@ export interface RoadSegment {
   y2: number;
   lanes: number;          // Total lanes (e.g. 2 or 4)
   width: number;
+  speedLimit?: number;    // Speed limit (used by GPS navigation to prefer faster roads)
   isAvenue: boolean;
   isDirt?: boolean;
   isGravel?: boolean;
