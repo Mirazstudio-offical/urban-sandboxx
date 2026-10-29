@@ -294,7 +294,7 @@ export function renderWheeledAsphaltPaver(vCtx: VehicleRenderContext): void {
   const gamma = car.steerAngle || 0;
   const isLightsOn = car.headlightsOn || (nightAlpha > 0.05 && !car.isParked);
   const isReversing = isVehicleReverseGearActive(car);
-  const isBraking = car.brakeLightsOn && !isReversing;
+  const isBraking = !!car.brakeLightsOn;
 
   // --- A. UNDERCARRIAGE & REAR TRACTION DRIVE TIRES ---
   const rearTireX = -halfL * 0.28;
@@ -648,7 +648,13 @@ export function renderWheeledAsphaltPaver(vCtx: VehicleRenderContext): void {
 
   const rearLightX = screedX1;
   const drawScreedLight = (ly: number) => {
-    if (isReversing) {
+    if (isReversing && isBraking) {
+      // Dual-segment: white reverse on inner half, bright red brake on outer half
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(rearLightX - 0.8, ly - 1, 0.8, 2);
+      ctx.fillStyle = '#ef4444';
+      ctx.fillRect(rearLightX, ly - 1, 0.8, 2);
+    } else if (isReversing) {
       ctx.fillStyle = '#ffffff';
       ctx.fillRect(rearLightX - 0.8, ly - 1, 1.6, 2);
     } else if (isBraking) {
@@ -695,7 +701,7 @@ export function renderHeavyTandemRoller(vCtx: VehicleRenderContext): void {
   const gamma = car.steerAngle || 0;
   const isLightsOn = car.headlightsOn || (nightAlpha > 0.05 && !car.isParked);
   const isReversing = isVehicleReverseGearActive(car);
-  const isBraking = car.brakeLightsOn && !isReversing;
+  const isBraking = !!car.brakeLightsOn;
   const dmg = car.damage || {
     frontCrumple: 0, rearCrumple: 0, leftDent: 0, rightDent: 0,
     frontLeftDent: 0, frontRightDent: 0, rearLeftDent: 0, rearRightDent: 0,
@@ -938,7 +944,13 @@ export function renderHeavyTandemRoller(vCtx: VehicleRenderContext): void {
       ctx.fillRect(rBumpX - 1.2, ly - 1, 2.4, 2);
       return;
     }
-    if (isReversing) {
+    if (isReversing && isBraking) {
+      // Dual-segment: white reverse inner half, bright red brake outer half
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(rBumpX - 1.2, ly - 1, 1.2, 2);
+      ctx.fillStyle = '#ef4444';
+      ctx.fillRect(rBumpX, ly - 1, 1.2, 2);
+    } else if (isReversing) {
       ctx.fillStyle = '#ffffff';
       ctx.fillRect(rBumpX - 1.2, ly - 1, 2.4, 2);
     } else if (isBraking) {
@@ -1103,7 +1115,7 @@ export function renderCompactSidewalkRoller(vCtx: VehicleRenderContext): void {
   const gamma = car.steerAngle || 0;
   const isLightsOn = car.headlightsOn || (nightAlpha > 0.05 && !car.isParked);
   const isReversing = isVehicleReverseGearActive(car);
-  const isBraking = car.brakeLightsOn && !isReversing;
+  const isBraking = !!car.brakeLightsOn;
   const dmg = car.damage;
   const fLampsBroken = dmg ? (dmg.leftHeadlightBroken || dmg.rightHeadlightBroken) : false;
   const rLampsBroken = dmg ? (dmg.leftTaillightBroken || dmg.rightTaillightBroken) : false;
@@ -1249,7 +1261,12 @@ export function renderCompactSidewalkRoller(vCtx: VehicleRenderContext): void {
       ctx.fillRect(rBumpX - 0.8, ly - 0.8, 1.6, 1.6);
       return;
     }
-    if (isReversing) {
+    if (isReversing && isBraking) {
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(rBumpX - 0.8, ly - 0.8, 0.8, 1.6);
+      ctx.fillStyle = '#ef4444';
+      ctx.fillRect(rBumpX, ly - 0.8, 0.8, 1.6);
+    } else if (isReversing) {
       ctx.fillStyle = '#ffffff';
       ctx.fillRect(rBumpX - 0.8, ly - 0.8, 1.6, 1.6);
     } else if (isBraking) {
@@ -1328,7 +1345,7 @@ export function renderPneumaticRoller(vCtx: VehicleRenderContext): void {
   const gamma = car.steerAngle || 0;
   const isLightsOn = car.headlightsOn || (nightAlpha > 0.05 && !car.isParked);
   const isReversing = isVehicleReverseGearActive(car);
-  const isBraking = car.brakeLightsOn && !isReversing;
+  const isBraking = !!car.brakeLightsOn;
   const dmg = car.damage;
   const fLampsBroken = dmg ? (dmg.leftHeadlightBroken || dmg.rightHeadlightBroken) : false;
   const rLampsBroken = dmg ? (dmg.leftTaillightBroken || dmg.rightTaillightBroken) : false;
@@ -1589,7 +1606,12 @@ export function renderPneumaticRoller(vCtx: VehicleRenderContext): void {
       ctx.fillRect(rLampX, ly - 1, 1.6, 2);
       return;
     }
-    if (isReversing) {
+    if (isReversing && isBraking) {
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(rLampX, ly - 1, 0.8, 2);
+      ctx.fillStyle = '#ef4444';
+      ctx.fillRect(rLampX + 0.8, ly - 1, 0.8, 2);
+    } else if (isReversing) {
       ctx.fillStyle = '#ffffff';
       ctx.fillRect(rLampX, ly - 1, 1.6, 2);
     } else if (isBraking) {
