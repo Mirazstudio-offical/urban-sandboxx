@@ -9321,6 +9321,7 @@ export class GameRenderer {
         : (car.headlightsOn || (nightAlpha > 0.05 && !car.isParked));
       const isHighBeam = car.headlightMode === 'high';
       const isLowBeam = car.headlightMode === 'low' || (hasHeadlightsOn && !isHighBeam);
+      const isIgnitionActive = !!(car.engineState?.engineRunning || car.engineState?.ignition || car.positionLightsOn || hasHeadlightsOn);
 
       // Archetype classification for accurate top-down optical geometry
       const isClassicRoundSingle = 
@@ -9588,10 +9589,11 @@ export class GameRenderer {
             const refStartY = isLeftLamp ? (minY + sigWidth) : minY;
             const refWidth = lampW - sigWidth;
 
-            ctx.fillStyle = hasHeadlightsOn ? (isHighBeam ? '#f8fafc' : '#fffbeb') : '#334155';
+            const isPositionOrDrlOn = !!(car.positionLightsOn || (isIgnitionActive && !car.isParked));
+            ctx.fillStyle = hasHeadlightsOn ? (isHighBeam ? '#f8fafc' : '#fffbeb') : (isPositionOrDrlOn ? '#1e293b' : '#334155');
             ctx.fillRect(backX + 0.3, refStartY + 0.2, lampD - 0.4, refWidth - 0.4);
 
-            if (!hasHeadlightsOn) {
+            if (!hasHeadlightsOn && !isPositionOrDrlOn) {
               ctx.fillStyle = '#64748b';
               ctx.fillRect(backX + 0.5, refStartY + 0.4, lampD * 0.5, refWidth - 0.8);
             }
@@ -9599,13 +9601,17 @@ export class GameRenderer {
             // Forward-facing glass lens strip (+X edge)
             ctx.fillStyle = hasHeadlightsOn
               ? (isHighBeam ? '#ffffff' : '#fef08a')
-              : '#cbd5e1';
+              : (isPositionOrDrlOn ? '#f1f5f9' : '#cbd5e1');
             ctx.fillRect(frontX - 0.4, refStartY + 0.2, 0.5, refWidth - 0.4);
 
             if (hasHeadlightsOn) {
               ctx.fillStyle = '#ffffff';
               const coreY = refStartY + refWidth * 0.5;
               ctx.fillRect(frontX - 0.9, coreY - 0.35, 0.6, 0.7);
+            } else if (isPositionOrDrlOn) {
+              ctx.fillStyle = '#ffffff';
+              const coreY = refStartY + refWidth * 0.5;
+              ctx.fillRect(frontX - 0.6, coreY - 0.2, 0.3, 0.4);
             }
           }
         }
@@ -12543,19 +12549,6 @@ export class GameRenderer {
           ctx.translate(lx, ly);
           ctx.rotate(rearAngle);
 
-          // Physical luminous slit on the rear bumper facing backward
-          ctx.fillStyle = color;
-          ctx.fillRect(0, -2.2, 0.9, 4.4);
-
-          // Micro-bloom right at the rear lens face
-          const lensBloom = ctx.createRadialGradient(0.4, 0, 0.2, 0.4, 0, 2.8);
-          lensBloom.addColorStop(0.0, color);
-          lensBloom.addColorStop(1.0, 'rgba(0, 0, 0, 0)');
-          ctx.fillStyle = lensBloom;
-          ctx.beginPath();
-          ctx.ellipse(0.4, 0, 2.8, 3.2, 0, -Math.PI * 0.5, Math.PI * 0.5);
-          ctx.fill();
-
           // Physical diffuse road reflectance on asphalt behind trailer (anchored at bumper, active in dark/wet conditions)
           const darknessFactor = Math.max(nightAlpha, (weights.rain + weights.snow) * 0.35);
           if (washLen > 8 && darknessFactor > 0.05) {
@@ -12768,18 +12761,6 @@ export class GameRenderer {
         ctx.rotate(rearAngle);
 
         const hw = lensWidth * 0.5;
-        // Directional physical lens face on rear bumper facing backwards away from body
-        ctx.fillStyle = color;
-        ctx.fillRect(0, -hw, 0.9, hw * 2);
-
-        // Luminous micro-bloom strictly at the rear lens face
-        const lensBloom = ctx.createRadialGradient(0.4, 0, 0.2, 0.4, 0, Math.max(2.5, hw * 0.9));
-        lensBloom.addColorStop(0.0, color);
-        lensBloom.addColorStop(1.0, 'rgba(0, 0, 0, 0)');
-        ctx.fillStyle = lensBloom;
-        ctx.beginPath();
-        ctx.ellipse(0.4, 0, 2.5, hw, 0, -Math.PI * 0.5, Math.PI * 0.5);
-        ctx.fill();
 
         // Atmospheric Mie scattering in air ONLY during genuine dense particulate fog (zero fake air shapes in clear weather)
         if (isFog && weights.fog > 0.05) {
@@ -12849,10 +12830,6 @@ export class GameRenderer {
         ctx.translate(wx, wy);
         ctx.rotate(emitAngle);
 
-        // Optical amber lens face on vehicle body corner
-        ctx.fillStyle = `rgba(255, 170, 20, ${(0.85 * intensity).toFixed(3)})`;
-        ctx.fillRect(0, -1.4, 0.8, 2.8);
-
         // Tight micro-bloom at the amber glass face (zero mid-air geometric wedge)
         const lensBloom = ctx.createRadialGradient(0.4, 0, 0.2, 0.4, 0, 3.0);
         lensBloom.addColorStop(0.0, `rgba(255, 185, 40, ${(0.65 * intensity).toFixed(3)})`);
@@ -12884,19 +12861,12 @@ export class GameRenderer {
         const lx = car.x + cosFA * lxOffset - sinFA * lyOffset;
         const ly = car.y + sinFA * lxOffset + cosFA * lyOffset;
 
-        // Forward-Facing Lens Emitter (Strictly forward along frontAngle; NO backward circular swelling on hood)
+        // Forward-Facing Optical Lens Bloom entering beam path (headlight body is already drawn in step 7)
         ctx.save();
         ctx.translate(lx, ly);
         ctx.rotate(frontAngle);
 
         const lensW = isSoloMoto ? 3.0 : 4.4;
-        const fwdColor = isHighBeam ? 'rgba(255, 255, 255, 0.90)' : 'rgba(255, 248, 210, 0.80)';
-
-        // Crisp luminous slit on the forward glass lens face (+X edge)
-        ctx.fillStyle = fwdColor;
-        ctx.fillRect(0, -lensW * 0.45, 0.8, lensW * 0.90);
-
-        // Forward-directed micro-bloom entering beam path (strictly forward dome at glass face, zero trapezoid corners)
         const forwardReach = isHighBeam ? 3.5 : 2.5;
         const lensBloom = ctx.createRadialGradient(0.4, 0, 0.2, 0.4, 0, forwardReach);
         lensBloom.addColorStop(0.0, isHighBeam ? 'rgba(255, 255, 255, 0.85)' : 'rgba(255, 245, 205, 0.75)');
@@ -12904,7 +12874,7 @@ export class GameRenderer {
         lensBloom.addColorStop(1.0, 'rgba(255, 255, 255, 0)');
         ctx.fillStyle = lensBloom;
         ctx.beginPath();
-        ctx.ellipse(0.4, 0, forwardReach, lensW * 0.55, 0, -Math.PI * 0.5, Math.PI * 0.5);
+        ctx.arc(0.4, 0, forwardReach, -Math.PI * 0.5, Math.PI * 0.5);
         ctx.fill();
 
         ctx.restore();
@@ -13099,28 +13069,6 @@ export class GameRenderer {
             }
           }
         }
-      } else if (isIgnitionOn) {
-        // Front position lights (габариты / ДХО) forward-facing optical lens slits (zero circular halos)
-        if (!dmg.leftHeadlightBroken) {
-          const px = car.x + cosFA * leftLampLX - sinFA * leftLampLY;
-          const py = car.y + sinFA * leftLampLX + cosFA * leftLampLY;
-          ctx.save();
-          ctx.translate(px, py);
-          ctx.rotate(frontAngle);
-          ctx.fillStyle = 'rgba(255, 255, 240, 0.75)';
-          ctx.fillRect(0, -1.8, 0.7, 3.6);
-          ctx.restore();
-        }
-        if (!isSoloMoto && car.type !== 'roller_compact_sidewalk' && !dmg.rightHeadlightBroken) {
-          const px = car.x + cosFA * rightLampLX - sinFA * rightLampLY;
-          const py = car.y + sinFA * rightLampLX + cosFA * rightLampLY;
-          ctx.save();
-          ctx.translate(px, py);
-          ctx.rotate(frontAngle);
-          ctx.fillStyle = 'rgba(255, 255, 240, 0.75)';
-          ctx.fillRect(0, -1.8, 0.7, 3.6);
-          ctx.restore();
-        }
       }
 
       // Amber Strobe Beacons on Roof / ROPS Bar (Heavy Machinery & Service Vehicles)
@@ -13167,14 +13115,6 @@ export class GameRenderer {
           if (broken) return;
           const lx = car.x + cosA * lxOffset - sinA * lyOffset;
           const ly = car.y + sinA * lxOffset + cosA * lyOffset;
-
-          // Forward-facing lens slit on lower bumper chin (zero circular flare)
-          ctx.save();
-          ctx.translate(lx, ly);
-          ctx.rotate(car.angle);
-          ctx.fillStyle = 'rgba(255, 245, 180, 0.85)';
-          ctx.fillRect(0, -1.8, 0.8, 3.6);
-          ctx.restore();
 
           // Atmospheric scattering in genuine particulate fog ONLY (zero air cones in clear/dry weather)
           if (isFog && weights.fog > 0.05) {
