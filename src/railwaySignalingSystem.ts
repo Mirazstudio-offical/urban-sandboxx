@@ -1325,17 +1325,14 @@ export class RailwaySignalingSystem {
       }
     }
 
-    let crossingObstacle = false;
+    // Obstacle on the crossing deck is tracked per crossing (not one flag for the whole map)
+    const obstacleCrossingIds = new Set<string>();
     for (const cross of levelCrossings) {
       const minTY = Math.min(...cross.tracksY) - 30;
       const maxTY = Math.max(...cross.tracksY) + 30;
-      for (const v of vehicles) {
-        if (v.x >= cross.minX && v.x <= cross.maxX && v.y >= minTY && v.y <= maxTY) {
-          crossingObstacle = true;
-          break;
-        }
+      if (vehicles.some(v => v.x >= cross.minX && v.x <= cross.maxX && v.y >= minTY && v.y <= maxTY)) {
+        obstacleCrossingIds.add(cross.id);
       }
-      if (crossingObstacle) break;
     }
 
     // --- B. AUTO-BLOCK CASCADE (АВТОБЛОКИРОВКА НА ПЕРЕГОНАХ) ---
@@ -1854,9 +1851,13 @@ export class RailwaySignalingSystem {
         case 'sig_obst_Z1':
         case 'sig_obst_Z2':
         case 'sig_obst_Z3':
-        case 'sig_obst_Z4':
-          setDesired(sig, crossingObstacle ? 'red' : 'dark');
+        case 'sig_obst_Z4': {
+          // An obstacle signal protects only the crossing next to it
+          const protectsObstacle = levelCrossings.some(c =>
+            obstacleCrossingIds.has(c.id) && Math.hypot(c.centerX - sig.x, c.centerY - sig.y) < 400);
+          setDesired(sig, protectsObstacle ? 'red' : 'dark');
           break;
+        }
       }
     }
 
