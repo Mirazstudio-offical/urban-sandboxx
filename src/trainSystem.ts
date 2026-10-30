@@ -28,11 +28,9 @@ export interface TrainConsist {
   isParked?: boolean;
   inactiveTimer?: number;
   startSpeed?: number;
-  /** Turnout track change that is applied only once the head passes pendingCommitX (keeps the curve continuous). */
-  pendingTrackY?: number;
-  pendingCommitX?: number;
-  /** Smooth vertical offset (px) left over from a turnout track change; fades out with travel. */
-  yBlend?: number;
+  /** Turnout switch in progress: cars move to trackY one by one when they pass switchX. */
+  switchX?: number;
+  switchPass?: boolean;
 }
 
 export class TrainSystem {
@@ -637,14 +635,12 @@ export class TrainSystem {
   public static getTrackState(
     carX: number,
     routeType: string,
-    targetTrackY: number = 8740,
-    yBlend: number = 0
+    targetTrackY: number = 8740
   ): { y: number; slope: number } {
-    const g = this.trackGeometry(carX, routeType, targetTrackY);
-    return { y: g.y + yBlend, slope: g.slope };
+    return this.trackGeometry(carX, routeType, targetTrackY);
   }
 
-  /** Pure track geometry (no turnout blend). */
+  /** Track geometry for one track Y (turnout curves are continuous along x). */
   private static trackGeometry(
     carX: number,
     routeType: string,
@@ -738,8 +734,7 @@ export class TrainSystem {
     car: RollingStockCar,
     routeType: string,
     travelDirection: 1 | -1,
-    defaultY: number = 8740,
-    yBlend: number = 0
+    defaultY: number = 8740
   ): void {
     const bogieHalfBase = car.length * 0.32;
     const centerState = this.getTrackState(car.x, routeType, defaultY);
@@ -748,8 +743,8 @@ export class TrainSystem {
 
     const xEast = car.x + dxBogie;
     const xWest = car.x - dxBogie;
-    const yEast = this.getTrackState(xEast, routeType, defaultY, yBlend).y;
-    const yWest = this.getTrackState(xWest, routeType, defaultY, yBlend).y;
+    const yEast = this.getTrackState(xEast, routeType, defaultY).y;
+    const yWest = this.getTrackState(xWest, routeType, defaultY).y;
 
     car.y = (yEast + yWest) / 2;
 
@@ -804,16 +799,43 @@ export class TrainSystem {
   }
 
   /**
-   * Switches the consist to another track without jumping: the difference between the old and new geometry
-   * at the train's bogies is stored as a blend that fades out as the train moves on.
+   * Starts a track change: every car still on the old track keeps its geometry (railTrackY) until it passes the switch.
    */
-  private static commitTrackChange(consist: TrainConsist, headCar: RollingStockCar, newY: number): void {
-    const dxB = headCar.length * 0.32; // bogie half-base, same as updateCarBogieKinematics
-    const sampleY = (y: number) =>
-      (this.trackGeometry(headCar.x + dxB, consist.routeType, y).y + this.trackGeometry(headCar.x - dxB, consist.routeType, y).y) / 2;
-    const delta = sampleY(consist.trackY) - sampleY(newY);
-    consist.yBlend = (consist.yBlend || 0) + delta;
+  private static commitTrackChange(
+    consist: TrainConsist,
+    carMap: Map<string, RollingStockCar>,
+    newY: number,
+    switchX: number,
+    pass: boolean
+  ): void {
+    const oldY = consist.trackY;
+    for (const id of consist.carIds) {
+      const car = carMap.get(id);
+      if (car && car.railTrackY === undefined) car.railTrackY = oldY;
+    }
     consist.trackY = newY;
+    consist.switchX = switchX;
+    consist.switchPass = pass;
+  }
+
+  /**
+   * Moves each car to the new track once its bogie has passed the switch point.
+   * Exit (pass=true): the rear bogie must be past the curve end. Entry (pass=false): the front bogie reaches the curve first.
+   */
+  private static updateCarTracks(consist: TrainConsist, carMap: Map<string, RollingStockCar>): void {
+    if (consist.switchX === undefined) return;
+    let pending = false;
+    for (const id of consist.carIds) {
+      const car = carMap.get(id);
+      if (!car || car.railTrackY === undefined || car.railTrackY === consist.trackY) continue;
+      const reach = consist.switchPass ? 0.32 * car.length : -0.32 * car.length;
+      if (consist.direction * (car.x - consist.switchX) >= reach) {
+        car.railTrackY = consist.trackY;
+      } else {
+        pending = true;
+      }
+    }
+    if (!pending) consist.switchX = undefined;
   }
 
   /**
@@ -831,9 +853,7 @@ export class TrainSystem {
     consist.currentStepIndex = 0;
     consist.emergencyBrake = false;
     consist.emergencyBrakeTimer = 0;
-    consist.pendingTrackY = undefined;
-    consist.pendingCommitX = undefined;
-    consist.yBlend = 0;
+    consist.switchX = undefined;
   }
 
   /**
@@ -880,6 +900,8 @@ export class TrainSystem {
       }
 
       ordered.forEach((car, i) => { car.x = spawnXs[i]; });
+      for (const car of ordered) car.railTrackY = undefined;
+      consist.switchX = undefined;
       for (const car of ordered) {
         car.y = sched.spawnY;
         car.speed = consist.startSpeed ?? 0;
@@ -949,7 +971,7 @@ export class TrainSystem {
         const platformStopX = 12210; // Locomotive center so front nose stops right at sign «Остановка первого вагона» (X=12420)
 
         // Continuously obey signals ahead along the route
-        const signalSpeed = this.evaluateSignalsInFrontEastbound(headCar.x, signals, consist.maxSpeed, consist.trackY, headCar.length, isShunter, consist.deceleration);
+        const signalSpeed = this.evaluateSignalsInFrontEastbound(headCar.x, signals, consist.maxSpeed, (headCar.railTrackY ?? consist.trackY), headCar.length, isShunter, consist.deceleration);
         targetSpeed = Math.min(targetSpeed, signalSpeed);
 
         if (headCar.x < platformStopX && consist.stationDwellTimer >= 0) {
@@ -975,7 +997,7 @@ export class TrainSystem {
         // --- 2. HEAVY FREIGHT TRAIN №2418 (ВЛ80С) ---
         // Route: Runs straight through on Mainline II (Y=8880) heading West (-X)
         // Dynamically obeys 3-aspect automatic block signals across the open steppe and station
-        const signalSpeed = this.evaluateSignalsInFrontWestbound(headCar.x, signals, consist.maxSpeed, consist.trackY, headCar.length, isShunter, consist.deceleration);
+        const signalSpeed = this.evaluateSignalsInFrontWestbound(headCar.x, signals, consist.maxSpeed, (headCar.railTrackY ?? consist.trackY), headCar.length, isShunter, consist.deceleration);
         targetSpeed = Math.min(targetSpeed, signalSpeed);
       } else if (consist.routeType === 'scheduled' && consist.schedule) {
         // --- 3. CUSTOM SCHEDULED TRAIN CONSISTS ---
@@ -989,28 +1011,28 @@ export class TrainSystem {
             // Never overwrite the limit from the train ahead (trainAheadSpeed), only lower it
             targetSpeed = Math.min(trainAheadSpeed, (curStep.speedLimit && curStep.speedLimit > 0) ? Math.min(consist.maxSpeed, curStep.speedLimit) : consist.maxSpeed);
             const sigSpd = consist.direction === 1
-              ? this.evaluateSignalsInFrontEastbound(headCar.x, signals, targetSpeed, consist.trackY, headCar.length, isShunter, consist.deceleration)
-              : this.evaluateSignalsInFrontWestbound(headCar.x, signals, targetSpeed, consist.trackY, headCar.length, isShunter, consist.deceleration);
+              ? this.evaluateSignalsInFrontEastbound(headCar.x, signals, targetSpeed, (headCar.railTrackY ?? consist.trackY), headCar.length, isShunter, consist.deceleration)
+              : this.evaluateSignalsInFrontWestbound(headCar.x, signals, targetSpeed, (headCar.railTrackY ?? consist.trackY), headCar.length, isShunter, consist.deceleration);
             targetSpeed = Math.min(targetSpeed, sigSpd);
 
+            // Start the switch a little early when the next step is an entry into a turnout:
+            // the front bogie reaches the curve before the body centre does (see updateCarTracks)
+            const nextStepForSwitch = steps[stepIdx + 1];
+            const lookahead = nextStepForSwitch?.type === 'switch_branch' && nextStepForSwitch.targetY !== undefined
+              && nextStepForSwitch.targetY !== consist.trackY ? 0.32 * headCar.length : 0;
             const isPast = consist.direction === 1
-              ? headCar.x >= (curStep.targetX ?? 53000)
-              : headCar.x <= (curStep.targetX ?? -1500);
+              ? headCar.x >= (curStep.targetX ?? 53000) - lookahead
+              : headCar.x <= (curStep.targetX ?? -1500) + lookahead;
             if (isPast && steps.length > stepIdx + 1) {
               consist.currentStepIndex = stepIdx + 1;
             }
           } else if (curStep.type === 'switch_branch') {
             targetSpeed = Math.min(trainAheadSpeed, curStep.switchBranch === 'diverging' ? (curStep.speedLimit || 178) : (curStep.speedLimit || consist.maxSpeed));
 
-            // Change the track Y only where old and new geometry coincide, so the turnout curve stays continuous
-            if (curStep.targetY !== undefined && consist.trackY !== curStep.targetY && consist.pendingTrackY === undefined) {
+            // Track change: cars switch one by one when they pass the switch point (see updateCarTracks)
+            if (curStep.targetY !== undefined && consist.trackY !== curStep.targetY) {
               const commit = this.switchCommit(consist.direction, consist.trackY, curStep.targetY);
-              if (commit.pass) {
-                consist.pendingTrackY = curStep.targetY;
-                consist.pendingCommitX = commit.x;
-              } else {
-                this.commitTrackChange(consist, headCar, curStep.targetY);
-              }
+              this.commitTrackChange(consist, carMap, curStep.targetY, commit.x, commit.pass);
             }
 
             // Determine target exit point of turnout switch
@@ -1106,16 +1128,6 @@ export class TrainSystem {
         }
       }
 
-      // Apply a deferred turnout track change once the head has passed its commit point
-      if (consist.pendingTrackY !== undefined && consist.pendingCommitX !== undefined) {
-        const passedCommit = consist.direction === 1 ? headCar.x >= consist.pendingCommitX : headCar.x <= consist.pendingCommitX;
-        if (passedCommit) {
-          this.commitTrackChange(consist, headCar, consist.pendingTrackY);
-          consist.pendingTrackY = undefined;
-          consist.pendingCommitX = undefined;
-        }
-      }
-
       // 2. Physics & Speed Ramp (Multi-kiloton Train Inertia & Pneumatic Brake Dynamics)
       if (consist.speed < targetSpeed) {
         consist.speed = Math.min(targetSpeed, consist.speed + consist.acceleration * dt);
@@ -1145,12 +1157,10 @@ export class TrainSystem {
       }
 
       // 3. Move Lead Locomotive & Calculate Trajectory along Track
-      const centerState = this.getTrackState(headCar.x, consist.routeType, consist.trackY);
+      const centerState = this.getTrackState(headCar.x, consist.routeType, headCar.railTrackY ?? consist.trackY);
       const cosSlope = 1 / Math.sqrt(1 + centerState.slope * centerState.slope);
       const moveDelta = consist.speed * consist.direction * dt * cosSlope;
       headCar.x += moveDelta;
-      // The turnout blend fades out over ~250 px of travel
-      consist.yBlend = (consist.yBlend || 0) * Math.max(0, 1 - Math.abs(moveDelta) / 250);
       headCar.speed = consist.speed;
       headCar.direction = consist.direction;
 
@@ -1185,7 +1195,8 @@ export class TrainSystem {
         }
       }
 
-      this.updateCarBogieKinematics(headCar, consist.routeType, consist.direction, consist.trackY, consist.yBlend || 0);
+      this.updateCarTracks(consist, carMap);
+      this.updateCarBogieKinematics(headCar, consist.routeType, consist.direction, headCar.railTrackY ?? consist.trackY);
 
       // 4. Per-car Coupler Kinematics with Physical Arc-Length Compensation
       const relDir = consist.direction === -1 ? 1 : -1;
@@ -1195,16 +1206,16 @@ export class TrainSystem {
         if (!car) continue;
 
         const couplerDistance = prevCar.length / 2 + car.length / 2 + 10;
-        const prevSlope = this.getTrackState(prevCar.x, consist.routeType, consist.trackY).slope;
+        const prevSlope = this.getTrackState(prevCar.x, consist.routeType, prevCar.railTrackY ?? consist.trackY).slope;
         const approxStep = couplerDistance / Math.sqrt(1 + prevSlope * prevSlope);
-        const midSlope = this.getTrackState(prevCar.x + relDir * approxStep * 0.5, consist.routeType, consist.trackY).slope;
+        const midSlope = this.getTrackState(prevCar.x + relDir * approxStep * 0.5, consist.routeType, prevCar.railTrackY ?? consist.trackY).slope;
         const dxStep = couplerDistance / Math.sqrt(1 + midSlope * midSlope);
 
         car.x = prevCar.x + relDir * dxStep;
         car.speed = consist.speed;
         car.direction = consist.direction;
 
-        this.updateCarBogieKinematics(car, consist.routeType, consist.direction, consist.trackY, consist.yBlend || 0);
+        this.updateCarBogieKinematics(car, consist.routeType, consist.direction, car.railTrackY ?? consist.trackY);
         prevCar = car;
       }
 
