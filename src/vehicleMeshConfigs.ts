@@ -1,5 +1,7 @@
 import { densifyClosedPerimeter } from './perimeterDensify';
 import { VehicleNodeBeamDefinition } from './types';
+import { generateBodyMesh } from './meshes/bodyMeshGenerator';
+import { BODY_FAMILIES } from './meshes/bodyFamilies';
 
 // Re-export common stiffness factors
 export {
@@ -15,60 +17,13 @@ export {
   DEFAULT_C_LATCH
 } from './meshes/meshCommon';
 
-// Re-export all model-based presets
 export {
-  PRESET_SEDAN,
-  PRESET_WAGON,
-  PRESET_HATCHBACK_COMPACT,
-  PRESET_MUSCLE,
-  PRESET_SUPERCAR
-} from './meshes/meshPassenger';
-
-export {
-  PRESET_PICKUP,
-  PRESET_SUV_4X4,
-  PRESET_VAN,
-  PRESET_CAMPERVAN,
-  PRESET_TRUCK_HOODED_GAZ53,
-  PRESET_TRUCK_ZIL_DUMP,
-  PRESET_TRUCK_CABOVER,
-  PRESET_SEMI_TRACTOR,
-  PRESET_BUS
-} from './meshes/meshCommercial';
-
-export {
-  PRESET_TRACTOR,
-  PRESET_PAVER,
-  PRESET_ROLLER,
   PRESET_MOTO_SIDECAR,
   PRESET_MOTORCYCLE,
   PRESET_TRAILER
 } from './meshes/meshSpecial';
 
 import {
-  PRESET_SEDAN,
-  PRESET_WAGON,
-  PRESET_HATCHBACK_COMPACT,
-  PRESET_MUSCLE,
-  PRESET_SUPERCAR
-} from './meshes/meshPassenger';
-
-import {
-  PRESET_PICKUP,
-  PRESET_SUV_4X4,
-  PRESET_VAN,
-  PRESET_CAMPERVAN,
-  PRESET_TRUCK_HOODED_GAZ53,
-  PRESET_TRUCK_ZIL_DUMP,
-  PRESET_TRUCK_CABOVER,
-  PRESET_SEMI_TRACTOR,
-  PRESET_BUS
-} from './meshes/meshCommercial';
-
-import {
-  PRESET_TRACTOR,
-  PRESET_PAVER,
-  PRESET_ROLLER,
   PRESET_MOTO_SIDECAR,
   PRESET_MOTORCYCLE,
   PRESET_TRAILER
@@ -78,35 +33,25 @@ import {
  * ============================================================================
  * PRESET REGISTRY & VEHICLE TYPE RESOLVER
  * ============================================================================
+ *
+ * Кузова (легковые, фургоны, грузовики, автобусы, тягачи, катки) строятся генератором
+ * из контура модели (см. meshes/bodyMeshGenerator.ts). Мотоциклы и прицепы имеют открытый
+ * контур и остаются на рукописных пресетах.
  */
 const MESH_PRESET_REGISTRY = new Map<string, VehicleNodeBeamDefinition>();
 
-// Register all archetype presets
-const ALL_RAW_PRESETS: VehicleNodeBeamDefinition[] = [
-  PRESET_SEDAN,
-  PRESET_WAGON,
-  PRESET_HATCHBACK_COMPACT,
-  PRESET_MUSCLE,
-  PRESET_SUPERCAR,
-  PRESET_PICKUP,
-  PRESET_SUV_4X4,
-  PRESET_VAN,
-  PRESET_CAMPERVAN,
-  PRESET_TRUCK_HOODED_GAZ53,
-  PRESET_TRUCK_ZIL_DUMP,
-  PRESET_TRUCK_CABOVER,
-  PRESET_SEMI_TRACTOR,
-  PRESET_BUS,
-  PRESET_TRACTOR,
-  PRESET_PAVER,
-  PRESET_ROLLER,
-  PRESET_MOTO_SIDECAR,
-  PRESET_MOTORCYCLE,
-  PRESET_TRAILER
-];
-
-for (const preset of ALL_RAW_PRESETS) {
-  MESH_PRESET_REGISTRY.set(preset.presetId, densifyClosedPerimeter(preset));
+// Реестр строится при первом обращении, а не при загрузке модуля: генератор берёт контур из
+// vehicleArchetypes, и вычислять его во время инициализации модулей (в цикле импортов) нельзя.
+let registryReady = false;
+function ensureRegistry(): void {
+  if (registryReady) return;
+  registryReady = true;
+  for (const spec of BODY_FAMILIES) {
+    MESH_PRESET_REGISTRY.set(spec.presetId, generateBodyMesh(spec).def);
+  }
+  for (const preset of [PRESET_MOTO_SIDECAR, PRESET_MOTORCYCLE, PRESET_TRAILER]) {
+    MESH_PRESET_REGISTRY.set(preset.presetId, densifyClosedPerimeter(preset));
+  }
 }
 
 /**
@@ -237,6 +182,7 @@ export const VEHICLE_TYPE_TO_PRESET_MAP: Record<string, string> = {
  * Registers or updates a vehicle mesh preset in the runtime registry.
  */
 export function registerVehicleMeshPreset(presetId: string, definition: VehicleNodeBeamDefinition): void {
+  ensureRegistry();
   MESH_PRESET_REGISTRY.set(presetId, definition);
 }
 
@@ -244,6 +190,7 @@ export function registerVehicleMeshPreset(presetId: string, definition: VehicleN
  * Returns a list of all currently registered mesh presets.
  */
 export function listAllMeshPresets(): VehicleNodeBeamDefinition[] {
+  ensureRegistry();
   return Array.from(MESH_PRESET_REGISTRY.values());
 }
 
@@ -255,8 +202,9 @@ export function getVehicleNodeBeamDefinition(
   carType?: string,
   customOverride?: Partial<VehicleNodeBeamDefinition>
 ): VehicleNodeBeamDefinition {
+  ensureRegistry();
   const presetKey = carType ? VEHICLE_TYPE_TO_PRESET_MAP[carType] || carType : 'sedan_standard';
-  const baseDef = MESH_PRESET_REGISTRY.get(presetKey) || densifyClosedPerimeter(PRESET_SEDAN);
+  const baseDef = MESH_PRESET_REGISTRY.get(presetKey) || MESH_PRESET_REGISTRY.get('sedan_standard')!;
 
   if (!customOverride) {
     return baseDef;
