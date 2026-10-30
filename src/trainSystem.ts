@@ -969,7 +969,8 @@ export class TrainSystem {
         if (curStep) {
           if (curStep.type === 'travel') {
             // Step speedLimit (px/s, same units as maxSpeed) caps the line speed on this section
-            targetSpeed = (curStep.speedLimit && curStep.speedLimit > 0) ? Math.min(consist.maxSpeed, curStep.speedLimit) : consist.maxSpeed;
+            // Never overwrite the limit from the train ahead (trainAheadSpeed), only lower it
+            targetSpeed = Math.min(trainAheadSpeed, (curStep.speedLimit && curStep.speedLimit > 0) ? Math.min(consist.maxSpeed, curStep.speedLimit) : consist.maxSpeed);
             const sigSpd = consist.direction === 1
               ? this.evaluateSignalsInFrontEastbound(headCar.x, signals, targetSpeed, consist.trackY, headCar.length, isShunter, consist.deceleration)
               : this.evaluateSignalsInFrontWestbound(headCar.x, signals, targetSpeed, consist.trackY, headCar.length, isShunter, consist.deceleration);
@@ -982,7 +983,7 @@ export class TrainSystem {
               consist.currentStepIndex = stepIdx + 1;
             }
           } else if (curStep.type === 'switch_branch') {
-            targetSpeed = curStep.switchBranch === 'diverging' ? (curStep.speedLimit || 178) : (curStep.speedLimit || consist.maxSpeed);
+            targetSpeed = Math.min(trainAheadSpeed, curStep.switchBranch === 'diverging' ? (curStep.speedLimit || 178) : (curStep.speedLimit || consist.maxSpeed));
 
             // Change the track Y only where old and new geometry coincide, so the turnout curve stays continuous
             if (curStep.targetY !== undefined && consist.trackY !== curStep.targetY && consist.pendingTrackY === undefined) {
@@ -1695,26 +1696,47 @@ export class TrainSystem {
     carMap: Map<string, RollingStockCar>
   ): number {
     let safeSpeed = consist.maxSpeed;
+    const dirSign = consist.direction;
+    // Our leading nose (the point that must not reach another train)
+    const ourFront = headCar.x + dirSign * headCar.length / 2;
 
     for (const other of this.consists) {
       if (other.id === consist.id) continue;
-      const otherHead = carMap.get(other.headCarId);
-      if (!otherHead) continue;
+      const otherCars = other.carIds
+        .map(id => carMap.get(id))
+        .filter((c): c is RollingStockCar => !!c);
+      if (otherCars.length === 0) continue;
 
       // Check if both trains share the same track Y or are on merging switches
-      const sameTrack = Math.abs(otherHead.y - headCar.y) < 70 ||
+      const sameTrack = otherCars.some(c => Math.abs(c.y - headCar.y) < 70) ||
         (Math.abs(other.trackY - consist.trackY) < 70);
       if (!sameTrack) continue;
 
-      // Calculate relative position along track (+X direction for consist)
-      const dx = (otherHead.x - headCar.x) * consist.direction;
-      if (dx <= 0) continue; // Other train is behind us
-
-      const isOncoming = other.direction !== consist.direction;
+      // Gap from our nose to the nearest car of the other train that lies ahead of us.
+      // Using every car (not only the head) matters: a train that is stopped or moving slower
+      // ahead of us has its tail nearest to us when we come up from behind.
+      let gap = Infinity;
+      for (const c of otherCars) {
+        const half = c.length / 2;
+        const nearEdge = c.x - dirSign * half; // edge facing us
+        const farEdge = c.x + dirSign * half;
+        if ((farEdge - ourFront) * dirSign <= 0) continue; // car lies entirely behind us
+        const carGap = Math.max(0, (nearEdge - ourFront) * dirSign);
+        if (carGap < gap) gap = carGap;
+      }
+      if (gap === Infinity) continue;
 
       // Head-on ("лоб в лоб") needs a larger margin; both cases brake along the same curve
+      const isOncoming = other.direction !== consist.direction;
       const margin = isOncoming ? 150 : 100;
-      safeSpeed = Math.min(safeSpeed, this.brakingCurveSpeed(dx - margin, consist.deceleration));
+      safeSpeed = Math.min(safeSpeed, this.brakingCurveSpeed(gap - margin, consist.deceleration));
+
+      // Too close to stop with the service brake: apply the emergency brake
+      if (gap < 30) {
+        consist.emergencyBrake = true;
+        consist.emergencyBrakeTimer = Math.max(consist.emergencyBrakeTimer || 0, 5);
+        safeSpeed = 0;
+      }
     }
 
     return safeSpeed;
