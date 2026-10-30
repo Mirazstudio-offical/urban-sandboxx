@@ -56,6 +56,10 @@ export interface PauseSettings {
   mouseSensitivity: number;
   /** Player transmission preference: 'manual' shifts by keys/lever, 'auto' shifts by itself. */
   shiftMode: 'auto' | 'manual';
+  /** Show the softbody mesh (nodes and beams) over every vehicle. */
+  showSoftbodyMesh: boolean;
+  /** Smoke and exhaust density in percent (0 hides smoke so damage is visible). */
+  smokeDensity: number;
 }
 
 interface PauseMenuProps {
@@ -287,6 +291,9 @@ export const PauseMenu: React.FC<PauseMenuProps> = ({
       { t: 'seg', l: 'Автосохранение', v: local.autoSaveInterval, set: v => patchGame({ autoSaveInterval: v }),
         o: [{ v: 0, label: 'Выкл' }, { v: 15, label: '15 с' }, { v: 25, label: '25 с' }, { v: 60, label: '1 мин' }, { v: 120, label: '2 мин' }] },
       { t: 'tg', l: 'Смена дня и ночи', v: local.timeAutoCycle, set: v => patchGame({ timeAutoCycle: v }) },
+      { t: 'tg', l: 'Показывать сетку кузова', v: !!local.showSoftbodyMesh, set: v => patchGame({ showSoftbodyMesh: v }) },
+      { t: 'seg', l: 'Плотность дыма', v: local.smokeDensity ?? 100, set: v => patchGame({ smokeDensity: v }),
+        o: [{ v: 0, label: 'Выкл' }, { v: 35, label: 'Низкая' }, { v: 70, label: 'Средняя' }, { v: 100, label: 'Полная' }] },
       { t: 'seg', l: 'Лимит кадров', v: local.fpsLimit, set: v => patchGame({ fpsLimit: v }),
         o: [{ v: 30, label: '30' }, { v: 60, label: '60' }, { v: 120, label: '120' }, { v: 0, label: 'Max' }] }
     ];

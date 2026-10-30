@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
+import { setDisplaySettings } from './displaySettings';
 import { 
   Building, 
   Camera, 
@@ -491,7 +492,7 @@ export default function App() {
   };
 
   const [settings, setSettings] = useState(() => {
-    const base = { fpsLimit: 60, autoSaveInterval: 25, timeAutoCycle: true, mouseSensitivity: 1.0, shiftMode: 'manual' as 'auto' | 'manual' };
+    const base = { fpsLimit: 60, autoSaveInterval: 25, timeAutoCycle: true, mouseSensitivity: 1.0, shiftMode: 'manual' as 'auto' | 'manual', showSoftbodyMesh: false, smokeDensity: 100 };
     try {
       const raw = localStorage.getItem('city_sim_game_settings');
       if (raw) return { ...base, ...JSON.parse(raw) };
@@ -501,6 +502,11 @@ export default function App() {
   // Read by the game loop every frame (the loop is created once inside an effect)
   const fpsLimitRef = useRef<number>(settings.fpsLimit);
   fpsLimitRef.current = settings.fpsLimit;
+
+  // Display toggles read by the renderer every frame (mesh overlay, smoke density)
+  useEffect(() => {
+    setDisplaySettings({ showSoftbodyMesh: !!settings.showSoftbodyMesh, smokeDensity: settings.smokeDensity ?? 100 });
+  }, [settings.showSoftbodyMesh, settings.smokeDensity]);
 
   // Transmission preference for the sim (manual MT cars shift themselves in 'auto')
   useEffect(() => {
@@ -2382,7 +2388,7 @@ export default function App() {
           const cam = cameraRef.current;
           cam.gridMode = !cam.gridMode;
           setIsGridMode(!!cam.gridMode);
-          addPlayerNotification(playerRef.current, `Режим сетки (Grid Mode) ${cam.gridMode ? 'ВКЛ': 'ВЫКЛ'}`, 'info');
+          addPlayerNotification(playerRef.current, `Сетка кузова (G) ${cam.gridMode ? 'ВКЛ': 'ВЫКЛ'}`, 'info');
         }
       }
 
