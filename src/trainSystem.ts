@@ -857,12 +857,29 @@ export class TrainSystem {
 
       // Chain the cars behind the head exactly as at init
       const dir = sched.spawnDirection;
-      ordered[0].x = sched.spawnX;
+      const spawnXs: number[] = [sched.spawnX];
       for (let i = 1; i < ordered.length; i++) {
-        const prev = ordered[i - 1];
-        const car = ordered[i];
-        car.x = prev.x - dir * (prev.length / 2 + car.length / 2 + 10);
+        spawnXs.push(spawnXs[i - 1] - dir * (ordered[i - 1].length / 2 + ordered[i].length / 2 + 10));
       }
+
+      // Never spawn onto a track that another train occupies: wait and retry on the next tick.
+      // Block signals only protect entrances, so this check is what keeps two trains apart at spawn.
+      const CLEARANCE = 150;
+      const ownIds = new Set(consist.carIds);
+      const spawnBlocked = (world.rollingStock || []).some(other => {
+        if (ownIds.has(other.id) || Math.abs(other.y - sched.spawnY) >= 60) return false;
+        const oHalf = other.length / 2;
+        return spawnXs.some((x, i) => {
+          const half = ordered[i].length / 2;
+          return other.x + oHalf + CLEARANCE > x - half && other.x - oHalf - CLEARANCE < x + half;
+        });
+      });
+      if (spawnBlocked) {
+        consist.inactiveTimer = 0;
+        continue;
+      }
+
+      ordered.forEach((car, i) => { car.x = spawnXs[i]; });
       for (const car of ordered) {
         car.y = sched.spawnY;
         car.speed = consist.startSpeed ?? 0;
