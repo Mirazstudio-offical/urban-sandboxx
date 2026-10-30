@@ -20,9 +20,31 @@ import { getPowertrainPickByIds, TRANSMISSION_VARIANTS } from './powertrainVaria
 import { getVehicleCatalogItem } from './vehicleCatalog';
 import { isTrailerVehicle, isRoadMachinery, isMotorcycle, isTractorVehicle } from './vehicleArchetypes';
 import { createNodeBeamForVehicle, registerNodeBeamBuilder } from './nodeBeamRegistry';
+import {
+  MASTER_VEHICLE_CONFIGS,
+  type MasterVehicleConfig,
+  getMasterVehicleConfig,
+  type VehicleBodyPanelsConfig,
+  type VehicleDiffLockCapabilities,
+  type VehicleHeadlightConfig,
+  type HeadlightBulbType
+} from './vehicleMasterRegistry';
 
-export { isTrailerVehicle, isRoadMachinery, isMotorcycle, isTractorVehicle };
-export { createNodeBeamForVehicle, registerNodeBeamBuilder };
+export {
+  isTrailerVehicle,
+  isRoadMachinery,
+  isMotorcycle,
+  isTractorVehicle,
+  createNodeBeamForVehicle,
+  registerNodeBeamBuilder,
+  MASTER_VEHICLE_CONFIGS,
+  type MasterVehicleConfig,
+  getMasterVehicleConfig,
+  type VehicleBodyPanelsConfig,
+  type VehicleDiffLockCapabilities,
+  type VehicleHeadlightConfig,
+  type HeadlightBulbType
+};
 
 export const SPEED_KMH_TO_PX_S = 4.4444; // 1.6x speedup for realistic screen motion (formerly 2.7778)
 export const PX_S_TO_SPEED_KMH = 0.225;  // 1 / 4.4444 (formerly 0.36)
@@ -244,140 +266,30 @@ export function createDefaultFuelSystem(type: CarType = 'sedan', isParkedOnStree
 }
 
 
-export interface VehicleBodyPanelsConfig {
-  hasHood: boolean;           // Front hood / bonnet (passenger cars, trucks, vans)
-  hasFrontBumper: boolean;    // Front bumper fascia (cars, trucks, vans)
-  hasRearBumper: boolean;     // Rear bumper fascia (cars, trucks, vans)
-  hasFenders: boolean;        // Front left/right wings/fenders (cars, pickups, vans, trucks)
-  hasDoors: boolean;          // Cab/side passenger doors (cars, trucks, vans, tractors)
-  hasTrunk: boolean;          // Rear trunk lid / bootlid (sedans, coupes, compacts)
-  isTractorBonnet?: boolean;  // Tractor narrow engine cowl / bonnet
-  isTractorDoors?: boolean;   // Tractor cab left/right doors
-}
-
 export function getVehicleBodyPanelsConfig(type?: string): VehicleBodyPanelsConfig {
   if (!type) {
     return { hasHood: true, hasFrontBumper: true, hasRearBumper: true, hasFenders: true, hasDoors: true, hasTrunk: true };
   }
-  if (isTrailerVehicle({ type } as any)) {
-    return { hasHood: false, hasFrontBumper: false, hasRearBumper: false, hasFenders: false, hasDoors: false, hasTrunk: false };
-  }
-  if (isMotorcycle(type)) {
-    return { hasHood: false, hasFrontBumper: false, hasRearBumper: false, hasFenders: false, hasDoors: false, hasTrunk: false };
-  }
-  if (isRoadMachinery(type)) {
-    return { hasHood: false, hasFrontBumper: false, hasRearBumper: false, hasFenders: false, hasDoors: false, hasTrunk: false };
-  }
-  if (isTractorVehicle(type)) {
-    // Tractors have a narrow engine bonnet and cab doors, but NO car bumpers, NO car front fenders, NO car trunk!
-    return { hasHood: true, hasFrontBumper: false, hasRearBumper: false, hasFenders: false, hasDoors: true, hasTrunk: false, isTractorBonnet: true, isTractorDoors: true };
-  }
-  // Buses & Heavy trucks (ZIL, semi) have no car trunk
-  if (type === 'bus' || type === 'bus_minibus' || type === 'truck_semi' || type === 'truck_box' || type === 'truck_dump' || type === 'truck_zil_dump' || type === 'truck_tanker' || type === 'truck_water' || type === 'truck_flatbed' || type === 'truck_covered' || type === 'cement_mixer' || type === 'garbage_truck' || type === 'truck_tow' || type === 'fire_engine' || type === 'fire_ladder' || type === 'fire_rescue') {
-    return { hasHood: type !== 'bus' && type !== 'bus_minibus', hasFrontBumper: true, hasRearBumper: false, hasFenders: true, hasDoors: true, hasTrunk: false };
-  }
-  // Sedans, coupes, classic compacts have trunks
-  const hasTrunkLid = type.includes('sedan') || type === 'coupe_gt' || type === 'muscle' || type === 'muscle_classic' || type === 'classic_compact' || type === 'micro_car' || type === 'taxi' || type === 'police';
-
-  return {
+  const cfg = MASTER_VEHICLE_CONFIGS[type as CarType];
+  return cfg?.bodyPanels || {
     hasHood: true,
     hasFrontBumper: true,
     hasRearBumper: true,
     hasFenders: true,
     hasDoors: true,
-    hasTrunk: hasTrunkLid
+    hasTrunk: true
   };
 }
 
 export function getLPGDefaultCapacity(type: string): number {
-  if (['truck_semi', 'truck_dump', 'truck_zil_dump', 'truck_box', 'truck_tanker', 'truck_water', 'truck_flatbed', 'truck_covered', 'cement_mixer', 'garbage_truck', 'bus', 'fire_engine', 'fire_ladder'].includes(type) || type.includes('semi')) {
-    return 200;
-  }
-  if (['delivery_truck', 'van_cargo_old', 'van', 'bus_minibus', 'truck_armored', 'truck_tow'].includes(type)) {
-    return 120;
-  }
-  if (type.startsWith('tractor_')) {
-    return 100;
-  }
-  if (['pickup_heavy', 'pickup', 'suv_luxury', 'suv_classic_box', 'offroad_hardcore', 'crossover_compact', 'van_camper', 'ambulance_suv'].includes(type) || type.includes('suv') || type.includes('pickup')) {
-    return 85;
-  }
-  if (['sedan_luxury', 'wagon_allroad', 'classic_black', 'wagon_modern', 'coupe_gt', 'muscle', 'muscle_classic'].includes(type)) {
-    return 65;
-  }
-  if (['sedan', 'sedan_classic', 'wagon_classic', 'sedan_logan', 'sedan_nexia', 'sedan_polo', 'sedan_accent', 'sedan_samara', 'hatch_samara', 'liftback_tavria', 'taxi', 'police'].includes(type)) {
-    return 55;
-  }
-  if (['compact_matiz', 'micro_car', 'retro_bubble', 'sports', 'supercar', 'hatch_hot', 'hatchback'].includes(type)) {
-    return 45;
-  }
-  return 55;
+  const cfg = MASTER_VEHICLE_CONFIGS[type as CarType];
+  return cfg?.lpgCapacity ?? 55;
 }
 
 export function createDefaultFluidTank(type: CarType): FluidStorageTank | undefined {
-  if (type === 'truck_tanker') {
-    return {
-      capacity: 4800,
-      currentVolume: 4800,
-      currentAmount: 4800,
-      liquidType: 'fuel_ai95',
-      isHermetic: true,
-      leakProbabilityPerSec: 0,
-      dripRatePerSec: 0,
-      isPunctured: false,
-      punctureRatePerSec: 25.0,
-      drainValveOpen: false,
-      hasWaterHose: false,
-      isWaterHoseDeployed: false
-    };
-  }
-  if (type === 'truck_water') {
-    return {
-      capacity: 3000,
-      currentVolume: 3000,
-      currentAmount: 3000,
-      liquidType: 'water',
-      isHermetic: false, // Old municipal tanker with worn rubber seals
-      leakProbabilityPerSec: 0.20,
-      dripRatePerSec: 0.10,
-      isPunctured: false,
-      punctureRatePerSec: 16.0,
-      drainValveOpen: false,
-      hasWaterHose: true,
-      isWaterHoseDeployed: false
-    };
-  }
-  if (type === 'trailer_barrel') {
-    return {
-      capacity: 800,
-      currentVolume: 800,
-      currentAmount: 800,
-      liquidType: 'water',
-      isHermetic: false, // Vintage rural barrel trailer with leaky petcock
-      leakProbabilityPerSec: 0.25,
-      dripRatePerSec: 0.08,
-      isPunctured: false,
-      punctureRatePerSec: 12.0,
-      drainValveOpen: false,
-      hasWaterHose: true,
-      isWaterHoseDeployed: false
-    };
-  }
-  if (type === 'trailer_vacuum') {
-    return {
-      capacity: 800,
-      currentVolume: 800,
-      currentAmount: 800,
-      liquidType: 'water',
-      isHermetic: true, // Vacuum barrels are hermetically sealed (airtight) to hold vacuum!
-      leakProbabilityPerSec: 0,
-      dripRatePerSec: 0,
-      isPunctured: false,
-      punctureRatePerSec: 12.0,
-      drainValveOpen: false,
-      hasWaterHose: true,
-      isWaterHoseDeployed: false
-    };
+  const cfg = MASTER_VEHICLE_CONFIGS[type];
+  if (cfg?.fluidTank) {
+    return { ...cfg.fluidTank };
   }
   return undefined;
 }
@@ -677,37 +589,8 @@ export function ensureVehicleDamage(veh: { length?: number; width?: number; dama
 }
 
 export function getVehicleDriveType(type: string): 'FWD' | 'RWD' | 'AWD' {
-  const cfg = CAR_CONFIGS[type];
-  if (cfg && cfg.driveType) return cfg.driveType;
-
-  // Defaults based on type mapping
-  if (type.startsWith('moto_') || type === 'moped_soviet') {
-    return 'RWD';
-  }
-  if (type.startsWith('tractor_')) {
-    return type === 'tractor_mtz82' ? 'AWD' : 'RWD';
-  }
-  if (type.startsWith('trailer_')) {
-    return 'RWD'; // trailers are passive anyway
-  }
-  
-  const rwdTypes = [
-    'sports', 'supercar', 'sedan_luxury', 'coupe_gt', 'muscle_classic', 
-    'sedan_classic', 'classic_compact', 'retro_bubble', 'wagon_classic', 
-    'ambulance', 'bus', 'fire_engine', 'fire_ladder', 'truck_tow', 'van_camper', 
-    'truck_box', 'truck_dump', 'truck_zil_dump', 'truck_semi', 'truck_tanker', 'truck_water', 
-    'truck_flatbed', 'truck_covered', 'cement_mixer', 'garbage_truck'
-  ];
-  if (rwdTypes.includes(type)) return 'RWD';
-
-  const awdTypes = [
-    'pickup', 'pickup_heavy', 'suv', 'suv_luxury', 'offroad_hardcore', 
-    'suv_classic_box', 'van_cargo_old', 'truck_armored',
-    'paver_asphalt_wheeled', 'roller_heavy_tandem', 'roller_compact_sidewalk', 'roller_pneumatic'
-  ];
-  if (awdTypes.includes(type)) return 'AWD';
-
-  return 'FWD'; // default for sedan, hatchback, taxi, police, compacts, micro, delivery
+  const cfg = MASTER_VEHICLE_CONFIGS[type as CarType];
+  return cfg?.driveType || 'FWD';
 }
 
 export function getVehicleAxleGeometry(car: { type: string; length?: number }) {
@@ -751,91 +634,7 @@ export function getVehicleAxleGeometry(car: { type: string; length?: number }) {
   return { rearAxleDist, frontAxleDist, wheelBase };
 }
 
-export const CAR_CONFIGS: Record<string, CarConfig> = {
-  sedan: { type: 'sedan', width: 20, length: 42, wheelBase: 26, mass: 1400, maxSpeed: 180, reverseMaxSpeed: 45, acceleration: 30, brakingForce: 240, friction: 0.988, turnSpeed: 4.2, maxSteerAngle: 0.68, minSteerAngle: 0.14, grip: 0.985, driftGrip: 0.38, name: 'Vortex Solstice 1.6', transmission: 'AUTO' },
-  hatchback: { type: 'hatchback', width: 19, length: 38, wheelBase: 23, mass: 1150, maxSpeed: 175, reverseMaxSpeed: 45, acceleration: 32, brakingForce: 250, friction: 0.988, turnSpeed: 4.5, maxSteerAngle: 0.70, minSteerAngle: 0.15, grip: 0.988, driftGrip: 0.40, name: 'Vortex Nova 1.6', transmission: 'MANUAL' },
-  pickup: { type: 'pickup', width: 22, length: 48, wheelBase: 30, mass: 2200, maxSpeed: 150, reverseMaxSpeed: 40, acceleration: 24, brakingForce: 220, friction: 0.985, turnSpeed: 3.6, maxSteerAngle: 0.64, minSteerAngle: 0.12, grip: 0.975, driftGrip: 0.32, name: 'Bison Utility 4x4', transmission: 'MANUAL' },
-  sports: { type: 'sports', width: 21, length: 44, wheelBase: 27, mass: 1320, maxSpeed: 280, reverseMaxSpeed: 55, acceleration: 55, brakingForce: 290, friction: 0.990, turnSpeed: 4.6, maxSteerAngle: 0.65, minSteerAngle: 0.13, grip: 0.990, driftGrip: 0.44, name: 'Apex GT-Coupe 3.0', transmission: 'AUTO' },
-  suv: { type: 'suv', width: 21, length: 42, wheelBase: 26, mass: 1450, maxSpeed: 170, reverseMaxSpeed: 45, acceleration: 26, brakingForce: 230, friction: 0.986, turnSpeed: 3.8, maxSteerAngle: 0.65, minSteerAngle: 0.13, grip: 0.980, driftGrip: 0.36, name: 'Nordic Nomad 2.0', transmission: 'AUTO' },
-  taxi: { type: 'taxi', width: 21, length: 46, wheelBase: 28, mass: 1450, maxSpeed: 175, reverseMaxSpeed: 45, acceleration: 30, brakingForce: 245, friction: 0.988, turnSpeed: 4.2, maxSteerAngle: 0.68, minSteerAngle: 0.14, grip: 0.985, driftGrip: 0.38, name: 'Vortex Solstice Taxi', transmission: 'AUTO' },
-  police: { type: 'police', width: 21, length: 46, wheelBase: 28, mass: 1550, maxSpeed: 220, reverseMaxSpeed: 55, acceleration: 45, brakingForce: 275, friction: 0.989, turnSpeed: 4.4, maxSteerAngle: 0.68, minSteerAngle: 0.13, grip: 0.988, driftGrip: 0.40, name: 'Sentinel Patrol Cruiser', transmission: 'AUTO' },
-  ambulance: { type: 'ambulance', width: 24, length: 54, wheelBase: 32, mass: 2800, maxSpeed: 160, reverseMaxSpeed: 40, acceleration: 22, brakingForce: 210, friction: 0.984, turnSpeed: 3.6, maxSteerAngle: 0.64, minSteerAngle: 0.11, grip: 0.970, driftGrip: 0.30, name: 'Sentinel Medic Van', transmission: 'AUTO' },
-  bus: { type: 'bus', width: 26, length: 85, wheelBase: 52, mass: 9500, maxSpeed: 110, reverseMaxSpeed: 30, acceleration: 12, brakingForce: 180, friction: 0.980, turnSpeed: 3.2, maxSteerAngle: 0.60, minSteerAngle: 0.08, grip: 0.950, driftGrip: 0.22, name: 'Metro Linemaster CityBus', transmission: 'MANUAL' },
-  supercar: { type: 'supercar', width: 22, length: 45, wheelBase: 27, mass: 1250, maxSpeed: 320, reverseMaxSpeed: 60, acceleration: 70, brakingForce: 330, friction: 0.992, turnSpeed: 4.8, maxSteerAngle: 0.65, minSteerAngle: 0.12, grip: 0.994, driftGrip: 0.48, name: 'Apex Venom GT 4.0', transmission: 'AUTO' },
-  wagon_classic: { type: 'wagon_classic', width: 20, length: 44, wheelBase: 26, mass: 1350, maxSpeed: 155, reverseMaxSpeed: 40, acceleration: 24, brakingForce: 210, friction: 0.986, turnSpeed: 3.8, maxSteerAngle: 0.66, minSteerAngle: 0.13, grip: 0.980, driftGrip: 0.35, name: 'Kestrel Tour 1.5', transmission: 'MANUAL' },
-  wagon_modern: { type: 'wagon_modern', width: 20, length: 45, wheelBase: 27, mass: 1320, maxSpeed: 185, reverseMaxSpeed: 45, acceleration: 32, brakingForce: 250, friction: 0.988, turnSpeed: 4.2, maxSteerAngle: 0.68, minSteerAngle: 0.14, grip: 0.986, driftGrip: 0.38, name: 'Nordic Trail SW 2.0', transmission: 'AUTO' },
-  crossover_compact: { type: 'crossover_compact', width: 21, length: 43, wheelBase: 26, mass: 1420, maxSpeed: 180, reverseMaxSpeed: 45, acceleration: 30, brakingForce: 240, friction: 0.987, turnSpeed: 4.0, maxSteerAngle: 0.66, minSteerAngle: 0.13, grip: 0.984, driftGrip: 0.36, name: 'Nordic Scout 1.8', transmission: 'AUTO' },
-  sedan_classic: { type: 'sedan_classic', width: 19, length: 42, wheelBase: 25, mass: 1200, maxSpeed: 150, reverseMaxSpeed: 40, acceleration: 22, brakingForce: 200, friction: 0.986, turnSpeed: 3.9, maxSteerAngle: 0.68, minSteerAngle: 0.14, grip: 0.978, driftGrip: 0.34, name: 'Kestrel Aero 1.3', transmission: 'MANUAL' },
-  sedan_compact: { type: 'sedan_compact', width: 18, length: 39, wheelBase: 24, mass: 1050, maxSpeed: 165, reverseMaxSpeed: 42, acceleration: 28, brakingForce: 230, friction: 0.988, turnSpeed: 4.3, maxSteerAngle: 0.68, minSteerAngle: 0.15, grip: 0.985, driftGrip: 0.39, name: 'Kestrel Vector 1.4', transmission: 'MANUAL' },
-  compact_matiz: { type: 'compact_matiz', width: 17, length: 33, wheelBase: 21, mass: 770, maxSpeed: 145, reverseMaxSpeed: 35, acceleration: 26, brakingForce: 220, friction: 0.988, turnSpeed: 4.8, maxSteerAngle: 0.72, minSteerAngle: 0.16, grip: 0.984, driftGrip: 0.38, name: 'Micro Zest 0.8', transmission: 'MANUAL' },
-  sedan_logan: { type: 'sedan_logan', width: 19, length: 42, wheelBase: 26, mass: 980, maxSpeed: 165, reverseMaxSpeed: 42, acceleration: 28, brakingForce: 230, friction: 0.988, turnSpeed: 4.2, maxSteerAngle: 0.68, minSteerAngle: 0.14, grip: 0.985, driftGrip: 0.38, name: 'Kestrel Meridian 1.6', transmission: 'MANUAL' },
-  sedan_nexia: { type: 'sedan_nexia', width: 18, length: 44, wheelBase: 25, mass: 1020, maxSpeed: 170, reverseMaxSpeed: 45, acceleration: 29, brakingForce: 230, friction: 0.988, turnSpeed: 4.1, maxSteerAngle: 0.68, minSteerAngle: 0.14, grip: 0.985, driftGrip: 0.38, name: 'Kestrel Zenith 1.5', transmission: 'MANUAL' },
-  liftback_tavria: { type: 'liftback_tavria', width: 17, length: 35, wheelBase: 22, mass: 710, maxSpeed: 140, reverseMaxSpeed: 36, acceleration: 25, brakingForce: 200, friction: 0.987, turnSpeed: 4.6, maxSteerAngle: 0.70, minSteerAngle: 0.15, grip: 0.980, driftGrip: 0.36, name: 'Vortex Era 1.1', transmission: 'MANUAL' },
-  sedan_accent: { type: 'sedan_accent', width: 18, length: 41, wheelBase: 24, mass: 1030, maxSpeed: 180, reverseMaxSpeed: 45, acceleration: 32, brakingForce: 240, friction: 0.988, turnSpeed: 4.3, maxSteerAngle: 0.68, minSteerAngle: 0.14, grip: 0.986, driftGrip: 0.39, name: 'Kestrel Pulse 1.5', transmission: 'MANUAL' },
-  sedan_polo: { type: 'sedan_polo', width: 19, length: 43, wheelBase: 25, mass: 1160, maxSpeed: 190, reverseMaxSpeed: 48, acceleration: 33, brakingForce: 250, friction: 0.988, turnSpeed: 4.3, maxSteerAngle: 0.68, minSteerAngle: 0.14, grip: 0.987, driftGrip: 0.39, name: 'Kestrel Apex 1.6', transmission: 'AUTO' },
-  hatch_samara: { type: 'hatch_samara', width: 18, length: 39, wheelBase: 24, mass: 945, maxSpeed: 160, reverseMaxSpeed: 42, acceleration: 28, brakingForce: 220, friction: 0.988, turnSpeed: 4.4, maxSteerAngle: 0.69, minSteerAngle: 0.15, grip: 0.983, driftGrip: 0.38, name: 'Vortex Sprint 1.5', transmission: 'MANUAL' },
-  sedan_samara: { type: 'sedan_samara', width: 18, length: 42, wheelBase: 25, mass: 970, maxSpeed: 165, reverseMaxSpeed: 42, acceleration: 28, brakingForce: 220, friction: 0.988, turnSpeed: 4.2, maxSteerAngle: 0.68, minSteerAngle: 0.14, grip: 0.984, driftGrip: 0.38, name: 'Vortex Vesper 1.5', transmission: 'MANUAL' },
-  sedan_luxury: { type: 'sedan_luxury', width: 21, length: 46, wheelBase: 28, mass: 1650, maxSpeed: 230, reverseMaxSpeed: 50, acceleration: 45, brakingForce: 270, friction: 0.989, turnSpeed: 4.1, maxSteerAngle: 0.66, minSteerAngle: 0.13, grip: 0.988, driftGrip: 0.40, name: 'Zenith Sovereign V8', transmission: 'AUTO' },
-  suv_luxury: { type: 'suv_luxury', width: 23, length: 50, wheelBase: 31, mass: 2400, maxSpeed: 230, reverseMaxSpeed: 50, acceleration: 48, brakingForce: 280, friction: 0.989, turnSpeed: 4.0, maxSteerAngle: 0.64, minSteerAngle: 0.12, grip: 0.988, driftGrip: 0.41, name: 'Nordic Sovereign V8', transmission: 'AUTO' },
-  pickup_heavy: { type: 'pickup_heavy', width: 24, length: 54, wheelBase: 34, mass: 3100, maxSpeed: 160, reverseMaxSpeed: 40, acceleration: 32, brakingForce: 240, friction: 0.984, turnSpeed: 3.6, maxSteerAngle: 0.62, minSteerAngle: 0.10, grip: 0.972, driftGrip: 0.30, name: 'Bison Heavy Duty V8', transmission: 'AUTO' },
-  hatch_hot: { type: 'hatch_hot', width: 19, length: 39, wheelBase: 24, mass: 1220, maxSpeed: 240, reverseMaxSpeed: 50, acceleration: 52, brakingForce: 290, friction: 0.990, turnSpeed: 4.7, maxSteerAngle: 0.70, minSteerAngle: 0.15, grip: 0.990, driftGrip: 0.43, name: 'Apex Storm Turbo', transmission: 'MANUAL' },
-  micro_car: { type: 'micro_car', width: 16, length: 30, wheelBase: 19, mass: 800, maxSpeed: 135, reverseMaxSpeed: 35, acceleration: 26, brakingForce: 220, friction: 0.988, turnSpeed: 5.2, maxSteerAngle: 0.74, minSteerAngle: 0.18, grip: 0.982, driftGrip: 0.36, name: 'Micro Atom City', transmission: 'MANUAL' },
-  van: { type: 'van', width: 22, length: 50, wheelBase: 30, mass: 2100, maxSpeed: 160, reverseMaxSpeed: 40, acceleration: 22, brakingForce: 220, friction: 0.985, turnSpeed: 3.6, maxSteerAngle: 0.62, minSteerAngle: 0.11, grip: 0.975, driftGrip: 0.32, name: 'Bison Transporter Van', transmission: 'AUTO' },
-  coupe_gt: { type: 'coupe_gt', width: 21, length: 46, wheelBase: 28, mass: 1650, maxSpeed: 270, reverseMaxSpeed: 55, acceleration: 58, brakingForce: 300, friction: 0.991, turnSpeed: 4.5, maxSteerAngle: 0.66, minSteerAngle: 0.13, grip: 0.991, driftGrip: 0.45, name: 'Apex Grand Tourer 3.8', transmission: 'AUTO' },
-  fire_engine: { type: 'fire_engine', width: 27, length: 88, wheelBase: 50, mass: 11000, maxSpeed: 130, reverseMaxSpeed: 35, acceleration: 22, brakingForce: 220, friction: 0.982, turnSpeed: 3.2, maxSteerAngle: 0.60, minSteerAngle: 0.09, grip: 0.965, driftGrip: 0.25, name: 'Sentinel Fire Engine Pumper', transmission: 'AUTO' },
-  fire_ladder: { type: 'fire_ladder', width: 28, length: 98, wheelBase: 58, mass: 13500, maxSpeed: 120, reverseMaxSpeed: 30, acceleration: 18, brakingForce: 210, friction: 0.980, turnSpeed: 3.0, maxSteerAngle: 0.58, minSteerAngle: 0.08, grip: 0.955, driftGrip: 0.22, name: 'Sentinel 30m Aerial Ladder', transmission: 'AUTO' },
-  truck_tow: { type: 'truck_tow', width: 24, length: 62, wheelBase: 38, mass: 4200, maxSpeed: 140, reverseMaxSpeed: 38, acceleration: 20, brakingForce: 210, friction: 0.983, turnSpeed: 3.6, maxSteerAngle: 0.62, minSteerAngle: 0.10, grip: 0.968, driftGrip: 0.28, name: 'Bison TowMaster Platform', transmission: 'MANUAL' },
-  truck_armored: { type: 'truck_armored', width: 25, length: 58, wheelBase: 36, mass: 5500, maxSpeed: 140, reverseMaxSpeed: 35, acceleration: 20, brakingForce: 220, friction: 0.984, turnSpeed: 3.4, maxSteerAngle: 0.62, minSteerAngle: 0.09, grip: 0.970, driftGrip: 0.28, name: 'Bison Vault Guard', transmission: 'AUTO' },
-  delivery_truck: { type: 'delivery_truck', width: 23, length: 56, wheelBase: 35, mass: 3200, maxSpeed: 145, reverseMaxSpeed: 38, acceleration: 22, brakingForce: 220, friction: 0.984, turnSpeed: 3.8, maxSteerAngle: 0.64, minSteerAngle: 0.10, grip: 0.970, driftGrip: 0.30, name: 'Bison Express Stepvan', transmission: 'MANUAL' },
-  van_camper: { type: 'van_camper', width: 22, length: 52, wheelBase: 32, mass: 2600, maxSpeed: 140, reverseMaxSpeed: 38, acceleration: 18, brakingForce: 200, friction: 0.983, turnSpeed: 3.6, maxSteerAngle: 0.62, minSteerAngle: 0.10, grip: 0.968, driftGrip: 0.29, name: 'Bison Nomad Camper', transmission: 'MANUAL' },
-  classic_compact: { type: 'classic_compact', width: 18, length: 36, wheelBase: 22, mass: 900, maxSpeed: 140, reverseMaxSpeed: 38, acceleration: 22, brakingForce: 190, friction: 0.986, turnSpeed: 4.4, maxSteerAngle: 0.70, minSteerAngle: 0.15, grip: 0.975, driftGrip: 0.33, name: 'Kestrel Prime 1.2', transmission: 'MANUAL' },
-  retro_bubble: { type: 'retro_bubble', width: 17, length: 32, wheelBase: 20, mass: 750, maxSpeed: 120, reverseMaxSpeed: 32, acceleration: 20, brakingForce: 180, friction: 0.986, turnSpeed: 4.8, maxSteerAngle: 0.72, minSteerAngle: 0.16, grip: 0.972, driftGrip: 0.32, name: 'Micro Bubble 900', transmission: 'MANUAL' },
-  offroad_hardcore: { type: 'offroad_hardcore', width: 22, length: 44, wheelBase: 26, mass: 1950, maxSpeed: 150, reverseMaxSpeed: 40, acceleration: 28, brakingForce: 230, friction: 0.984, turnSpeed: 3.8, maxSteerAngle: 0.65, minSteerAngle: 0.12, grip: 0.982, driftGrip: 0.35, name: 'Nordic Taiga 4x4', transmission: 'MANUAL' },
-  suv_classic_box: { type: 'suv_classic_box', width: 21, length: 45, wheelBase: 27, mass: 1800, maxSpeed: 160, reverseMaxSpeed: 42, acceleration: 26, brakingForce: 220, friction: 0.985, turnSpeed: 3.8, maxSteerAngle: 0.65, minSteerAngle: 0.13, grip: 0.980, driftGrip: 0.34, name: 'Nordic Titan 4x4', transmission: 'MANUAL' },
-  muscle_classic: { type: 'muscle_classic', width: 21, length: 48, wheelBase: 29, mass: 1650, maxSpeed: 230, reverseMaxSpeed: 50, acceleration: 50, brakingForce: 240, friction: 0.988, turnSpeed: 3.9, maxSteerAngle: 0.64, minSteerAngle: 0.12, grip: 0.978, driftGrip: 0.42, name: 'Detroit Viper V8 1971', transmission: 'MANUAL' },
-  van_cargo_old: { type: 'van_cargo_old', width: 21, length: 46, wheelBase: 28, mass: 1700, maxSpeed: 135, reverseMaxSpeed: 35, acceleration: 18, brakingForce: 190, friction: 0.983, turnSpeed: 3.6, maxSteerAngle: 0.62, minSteerAngle: 0.11, grip: 0.968, driftGrip: 0.30, name: 'Bison Pathfinder Van', transmission: 'MANUAL' },
-  truck_box: { type: 'truck_box', width: 25, length: 68, wheelBase: 42, mass: 6200, maxSpeed: 125, reverseMaxSpeed: 32, acceleration: 15, brakingForce: 185, friction: 0.981, turnSpeed: 3.2, maxSteerAngle: 0.60, minSteerAngle: 0.09, grip: 0.958, driftGrip: 0.24, name: 'Titan Cargo Box 5T', transmission: 'MANUAL' },
-  truck_dump: { type: 'truck_dump', width: 26, length: 72, wheelBase: 44, mass: 8500, maxSpeed: 115, reverseMaxSpeed: 30, acceleration: 14, brakingForce: 180, friction: 0.980, turnSpeed: 3.2, maxSteerAngle: 0.60, minSteerAngle: 0.08, grip: 0.955, driftGrip: 0.23, name: 'Titan Dump 10T', transmission: 'MANUAL' },
-  truck_zil_dump: { type: 'truck_zil_dump', width: 25, length: 58, wheelBase: 35, mass: 4800, maxSpeed: 110, reverseMaxSpeed: 28, acceleration: 18, brakingForce: 195, friction: 0.981, turnSpeed: 3.6, maxSteerAngle: 0.64, minSteerAngle: 0.09, grip: 0.965, driftGrip: 0.25, name: 'Titan Quarry V8', transmission: 'MANUAL', color: '#0284c7', roofColor: '#f8fafc', dumpColor: '#d97706' },
-  truck_semi: { type: 'truck_semi', width: 26, length: 64, wheelBase: 38, mass: 7500, maxSpeed: 125, reverseMaxSpeed: 30, acceleration: 18, brakingForce: 210, friction: 0.980, turnSpeed: 3.4, maxSteerAngle: 0.62, minSteerAngle: 0.08, grip: 0.960, driftGrip: 0.25, name: 'Titan Atlas 6x4 Prime Mover', transmission: 'MANUAL', hitchOffset: -12, color: '#d94e16' },
-  trailer_semi: { type: 'trailer_semi', width: 26, length: 120, wheelBase: 80, mass: 6500, maxSpeed: 120, reverseMaxSpeed: 30, acceleration: 0, brakingForce: 300, friction: 0.980, turnSpeed: 3.0, maxSteerAngle: 0, minSteerAngle: 0, grip: 0.975, driftGrip: 0.30, name: 'IronForge Prime Flatbed Trailer', transmission: 'MANUAL', couplerOffset: 50, color: '#1e3a8a' },
-  trailer_semi_box: { type: 'trailer_semi_box', width: 26, length: 124, wheelBase: 82, mass: 7200, maxSpeed: 120, reverseMaxSpeed: 30, acceleration: 0, brakingForce: 320, friction: 0.980, turnSpeed: 3.0, maxSteerAngle: 0, minSteerAngle: 0, grip: 0.975, driftGrip: 0.30, name: 'IronForge Thermo Reefer Trailer', transmission: 'MANUAL', couplerOffset: 50, color: '#f8fafc' },
-  trailer_semi_tanker: { type: 'trailer_semi_tanker', width: 26, length: 120, wheelBase: 80, mass: 7800, massEmpty: 7800, maxSpeed: 115, reverseMaxSpeed: 30, acceleration: 0, brakingForce: 340, friction: 0.980, turnSpeed: 3.0, maxSteerAngle: 0, minSteerAngle: 0, grip: 0.970, driftGrip: 0.28, name: 'IronForge Hazmat Fuel Tanker 30m³', transmission: 'MANUAL', couplerOffset: 50, color: '#ea580c' },
-  trailer_semi_container: { type: 'trailer_semi_container', width: 26, length: 126, wheelBase: 82, mass: 8500, maxSpeed: 120, reverseMaxSpeed: 30, acceleration: 0, brakingForce: 330, friction: 0.980, turnSpeed: 3.0, maxSteerAngle: 0, minSteerAngle: 0, grip: 0.975, driftGrip: 0.30, name: 'IronForge Intermodal Container 40ft', transmission: 'MANUAL', couplerOffset: 50, color: '#991b1b' },
-  trailer_semi_lowboy: { type: 'trailer_semi_lowboy', width: 28, length: 130, wheelBase: 86, mass: 8900, maxSpeed: 110, reverseMaxSpeed: 30, acceleration: 0, brakingForce: 350, friction: 0.978, turnSpeed: 3.0, maxSteerAngle: 0, minSteerAngle: 0, grip: 0.970, driftGrip: 0.28, name: 'IronForge Titan Lowboy 40T', transmission: 'MANUAL', couplerOffset: 54, color: '#d97706' },
-  truck_tanker: { type: 'truck_tanker', width: 26, length: 76, wheelBase: 46, mass: 9200, maxSpeed: 110, reverseMaxSpeed: 30, acceleration: 12, brakingForce: 175, friction: 0.979, turnSpeed: 3.0, maxSteerAngle: 0.58, minSteerAngle: 0.08, grip: 0.950, driftGrip: 0.22, name: 'Titan Fuel Tanker Hazmat', transmission: 'MANUAL' },
-  truck_water: { type: 'truck_water', width: 25, length: 70, wheelBase: 43, mass: 8000, maxSpeed: 118, reverseMaxSpeed: 30, acceleration: 13, brakingForce: 180, friction: 0.980, turnSpeed: 3.2, maxSteerAngle: 0.60, minSteerAngle: 0.08, grip: 0.955, driftGrip: 0.23, name: 'Titan Aqua Sprinkler', transmission: 'MANUAL' },
-  truck_flatbed: { type: 'truck_flatbed', width: 25, length: 74, wheelBase: 45, mass: 7000, maxSpeed: 120, reverseMaxSpeed: 32, acceleration: 14, brakingForce: 185, friction: 0.981, turnSpeed: 3.2, maxSteerAngle: 0.60, minSteerAngle: 0.08, grip: 0.958, driftGrip: 0.24, name: 'Titan Flatbed Cargo', transmission: 'MANUAL', color: '#0284c7' },
-  truck_covered: { type: 'truck_covered', width: 25, length: 74, wheelBase: 45, mass: 7400, maxSpeed: 118, reverseMaxSpeed: 30, acceleration: 13, brakingForce: 180, friction: 0.981, turnSpeed: 3.1, maxSteerAngle: 0.60, minSteerAngle: 0.08, grip: 0.956, driftGrip: 0.23, name: 'Titan Canvas Transport', transmission: 'MANUAL', color: '#0284c7' },
-  cement_mixer: { type: 'cement_mixer', width: 26, length: 72, wheelBase: 44, mass: 9800, maxSpeed: 105, reverseMaxSpeed: 28, acceleration: 11, brakingForce: 170, friction: 0.978, turnSpeed: 3.0, maxSteerAngle: 0.58, minSteerAngle: 0.07, grip: 0.948, driftGrip: 0.21, name: 'Titan MixMaster 7m³', transmission: 'MANUAL' },
-  garbage_truck: { type: 'garbage_truck', width: 26, length: 78, wheelBase: 46, mass: 10500, maxSpeed: 100, reverseMaxSpeed: 28, acceleration: 10, brakingForce: 175, friction: 0.978, turnSpeed: 3.0, maxSteerAngle: 0.58, minSteerAngle: 0.07, grip: 0.945, driftGrip: 0.20, name: 'Titan EcoPress Compactor', transmission: 'MANUAL' },
-  // TRACTORS
-  tractor_mtz82: { type: 'tractor_mtz82', width: 27, length: 54, wheelBase: 29, mass: 4000, maxSpeed: 70, reverseMaxSpeed: 25, acceleration: 42, brakingForce: 250, friction: 0.982, turnSpeed: 4.8, maxSteerAngle: 0.72, minSteerAngle: 0.25, grip: 0.995, driftGrip: 0.45, name: 'AgriTech Fieldmaster 82 (4x4)', transmission: 'MANUAL' },
-  tractor_mtz80: { type: 'tractor_mtz80', width: 26, length: 52, wheelBase: 28, mass: 3800, maxSpeed: 70, reverseMaxSpeed: 25, acceleration: 38, brakingForce: 240, friction: 0.982, turnSpeed: 5.0, maxSteerAngle: 0.72, minSteerAngle: 0.25, grip: 0.988, driftGrip: 0.40, name: 'AgriTech Workhorse 80', transmission: 'MANUAL' },
-  tractor_mtz80_old: { type: 'tractor_mtz80_old', width: 25, length: 50, wheelBase: 27, mass: 3700, maxSpeed: 64, reverseMaxSpeed: 22, acceleration: 34, brakingForce: 220, friction: 0.980, turnSpeed: 4.8, maxSteerAngle: 0.72, minSteerAngle: 0.25, grip: 0.980, driftGrip: 0.38, name: 'AgriTech Veteran 80', transmission: 'MANUAL' },
-  // MOTORCYCLES
-  moto_izh_jupiter: { type: 'moto_izh_jupiter', width: 10, length: 24, wheelBase: 15, mass: 175, maxSpeed: 165, reverseMaxSpeed: 20, acceleration: 50, brakingForce: 260, friction: 0.990, turnSpeed: 6.2, maxSteerAngle: 0.72, minSteerAngle: 0.16, grip: 0.985, driftGrip: 0.40, name: 'Stellar Cruiser 350', transmission: 'MANUAL' },
-  moto_ural_sidecar: { type: 'moto_ural_sidecar', width: 19, length: 26, wheelBase: 16, mass: 350, maxSpeed: 145, reverseMaxSpeed: 25, acceleration: 42, brakingForce: 240, friction: 0.988, turnSpeed: 4.8, maxSteerAngle: 0.70, minSteerAngle: 0.15, grip: 0.978, driftGrip: 0.36, name: 'Stellar Outback Sidecar', transmission: 'MANUAL' },
-  moto_jawa350: { type: 'moto_jawa350', width: 10, length: 24, wheelBase: 15, mass: 160, maxSpeed: 175, reverseMaxSpeed: 20, acceleration: 55, brakingForce: 270, friction: 0.990, turnSpeed: 6.4, maxSteerAngle: 0.72, minSteerAngle: 0.16, grip: 0.988, driftGrip: 0.42, name: 'Stellar Classic 350', transmission: 'MANUAL' },
-  moto_sport: { type: 'moto_sport', width: 10, length: 23, wheelBase: 14, mass: 195, maxSpeed: 310, reverseMaxSpeed: 20, acceleration: 90, brakingForce: 350, friction: 0.994, turnSpeed: 7.2, maxSteerAngle: 0.65, minSteerAngle: 0.12, grip: 0.996, driftGrip: 0.50, name: 'Stellar Superbike 1000', transmission: 'MANUAL' },
-  moto_chopper: { type: 'moto_chopper', width: 12, length: 28, wheelBase: 19, mass: 310, maxSpeed: 190, reverseMaxSpeed: 20, acceleration: 52, brakingForce: 260, friction: 0.990, turnSpeed: 5.0, maxSteerAngle: 0.68, minSteerAngle: 0.14, grip: 0.982, driftGrip: 0.42, name: 'Stellar V-Twin Cruiser', transmission: 'MANUAL' },
-  moped_soviet: { type: 'moped_soviet', width: 8, length: 20, wheelBase: 13, mass: 55, maxSpeed: 95, reverseMaxSpeed: 15, acceleration: 24, brakingForce: 190, friction: 0.988, turnSpeed: 6.8, maxSteerAngle: 0.75, minSteerAngle: 0.20, grip: 0.975, driftGrip: 0.35, name: 'Stellar Cub Moped 50cc', transmission: 'MANUAL' },
-  trailer_barrel: { type: 'trailer_barrel', width: 22, length: 38, wheelBase: 16, mass: 1400, maxSpeed: 110, reverseMaxSpeed: 35, acceleration: 0, brakingForce: 140, friction: 0.986, turnSpeed: 3.5, maxSteerAngle: 0, minSteerAngle: 0, grip: 0.982, driftGrip: 0.36, name: 'AgriTech FarmTank 3.5m³', transmission: 'MANUAL' },
-  trailer_vacuum: { type: 'trailer_vacuum', width: 22, length: 45, wheelBase: 18, mass: 1480, maxSpeed: 110, reverseMaxSpeed: 35, acceleration: 0, brakingForce: 140, friction: 0.986, turnSpeed: 3.5, maxSteerAngle: 0, minSteerAngle: 0, grip: 0.982, driftGrip: 0.36, name: 'AgriTech SlurryVac Tanker', transmission: 'MANUAL' },
-  trailer_flatbed_2axle: { type: 'trailer_flatbed_2axle', width: 26, length: 68, wheelBase: 38, mass: 2400, maxSpeed: 110, reverseMaxSpeed: 35, acceleration: 0, brakingForce: 200, friction: 0.985, turnSpeed: 3.5, maxSteerAngle: 0.65, minSteerAngle: 0.1, grip: 0.980, driftGrip: 0.35, name: 'AgriTech AgriDump 4T', transmission: 'MANUAL' },
-  // ROAD CONSTRUCTION MACHINERY (Hydrostatic Transmission: Forward / Neutral / Reverse, no clutch)
-  paver_asphalt_wheeled: { type: 'paver_asphalt_wheeled', width: 32, length: 64, wheelBase: 36, mass: 18500, maxSpeed: 16, reverseMaxSpeed: 10, acceleration: 12, brakingForce: 360, friction: 0.985, turnSpeed: 2.0, maxSteerAngle: 0.65, minSteerAngle: 0.25, grip: 0.999, driftGrip: 0.995, name: 'IronForge PaveMaster Hydro', transmission: 'AUTO' },
-  roller_heavy_tandem: { type: 'roller_heavy_tandem', width: 28, length: 56, wheelBase: 34, mass: 12500, maxSpeed: 12, reverseMaxSpeed: 12, acceleration: 10, brakingForce: 380, friction: 0.988, turnSpeed: 1.8, maxSteerAngle: 0.70, minSteerAngle: 0.30, grip: 0.999, driftGrip: 0.995, name: 'IronForge Tandem Roll 12T', transmission: 'AUTO' },
-  roller_compact_sidewalk: { type: 'roller_compact_sidewalk', width: 18, length: 32, wheelBase: 18, mass: 2200, maxSpeed: 10, reverseMaxSpeed: 10, acceleration: 14, brakingForce: 320, friction: 0.990, turnSpeed: 2.4, maxSteerAngle: 0.75, minSteerAngle: 0.35, grip: 0.999, driftGrip: 0.995, name: 'IronForge Sidewalk Compactor', transmission: 'AUTO' },
-  roller_pneumatic: { type: 'roller_pneumatic', width: 28, length: 58, wheelBase: 36, mass: 14000, maxSpeed: 16, reverseMaxSpeed: 16, acceleration: 11, brakingForce: 350, friction: 0.988, turnSpeed: 1.9, maxSteerAngle: 0.65, minSteerAngle: 0.28, grip: 0.999, driftGrip: 0.995, name: 'IronForge Pneumatic Tire Roller', transmission: 'AUTO' },
-  // ADDITIONAL CATALOG & SPECIAL VEHICLE TYPES
-  wagon_allroad: { type: 'wagon_allroad', width: 21, length: 45, wheelBase: 27, mass: 1300, maxSpeed: 182, reverseMaxSpeed: 45, acceleration: 32, brakingForce: 250, friction: 0.988, turnSpeed: 4.2, maxSteerAngle: 0.68, minSteerAngle: 0.14, grip: 0.986, driftGrip: 0.38, name: 'Nordic Cross Country SW', transmission: 'MANUAL' },
-  bus_minibus: { type: 'bus_minibus', width: 24, length: 62, wheelBase: 38, mass: 2900, maxSpeed: 135, reverseMaxSpeed: 38, acceleration: 20, brakingForce: 220, friction: 0.984, turnSpeed: 3.6, maxSteerAngle: 0.64, minSteerAngle: 0.10, grip: 0.970, driftGrip: 0.28, name: 'Metro Shuttle 18-Seater', transmission: 'MANUAL' },
-  muscle: { type: 'muscle', width: 22, length: 49, wheelBase: 30, mass: 1650, maxSpeed: 230, reverseMaxSpeed: 50, acceleration: 52, brakingForce: 250, friction: 0.988, turnSpeed: 4.0, maxSteerAngle: 0.65, minSteerAngle: 0.12, grip: 0.980, driftGrip: 0.44, name: 'Detroit Rebel V8 1969', transmission: 'MANUAL' },
-  fire_rescue: { type: 'fire_rescue', width: 24, length: 58, wheelBase: 34, mass: 3500, maxSpeed: 150, reverseMaxSpeed: 40, acceleration: 26, brakingForce: 240, friction: 0.985, turnSpeed: 3.8, maxSteerAngle: 0.65, minSteerAngle: 0.11, grip: 0.975, driftGrip: 0.32, name: 'Sentinel Rapid Response Unit', transmission: 'MANUAL' },
-  ambulance_van: { type: 'ambulance_van', width: 23, length: 54, wheelBase: 32, mass: 2800, maxSpeed: 155, reverseMaxSpeed: 40, acceleration: 24, brakingForce: 220, friction: 0.984, turnSpeed: 3.7, maxSteerAngle: 0.64, minSteerAngle: 0.11, grip: 0.972, driftGrip: 0.30, name: 'Sentinel Critical Care Van', transmission: 'MANUAL' },
-  ambulance_suv: { type: 'ambulance_suv', width: 22, length: 48, wheelBase: 29, mass: 2200, maxSpeed: 165, reverseMaxSpeed: 42, acceleration: 28, brakingForce: 230, friction: 0.985, turnSpeed: 3.9, maxSteerAngle: 0.66, minSteerAngle: 0.12, grip: 0.978, driftGrip: 0.34, name: 'Sentinel Rescue 4x4', transmission: 'MANUAL' }
-};
+export const CAR_CONFIGS: Record<string, CarConfig> = MASTER_VEHICLE_CONFIGS;
 
 export const CAR_PALETTE = [
   '#dc2626', '#2563eb', '#16a34a', '#d97706', '#9333ea', 
@@ -942,36 +741,14 @@ export function getVehicleFuelCapPosition(veh: Vehicle): { x: number; y: number;
   }
 
   const type = veh.type || 'sedan';
+  const cfg = MASTER_VEHICLE_CONFIGS[type as CarType];
   const cosA = Math.cos(veh.angle);
   const sinA = Math.sin(veh.angle);
   const L = veh.length;
   const W = veh.width;
 
-  let localF = -0.35 * L;
-  let localR = 0.45 * W; // Default: passenger car rear-right quarter panel
-
-  const isTruck = type.startsWith('truck_') || type === 'cement_mixer' || type === 'garbage_truck' || type === 'pickup_heavy' || type === 'delivery_truck';
-  const isTractor = type.startsWith('tractor_');
-  const isBike = type.startsWith('moto_') || type.startsWith('moped_');
-  const isBus = type === 'bus' || type === 'bus_minibus';
-
-  if (isTruck) {
-    // Heavy trucks & pickups: Fuel cap is on the side fuel tank right behind cab
-    localF = 0.05 * L;
-    localR = 0.48 * W;
-  } else if (isTractor) {
-    // Tractors (MTZ style): Fuel tank & cap are behind/under rear window on rear fender casing
-    localF = -0.42 * L;
-    localR = 0.28 * W;
-  } else if (isBike) {
-    // Motorcycles: Center top of teardrop fuel tank in front of seat
-    localF = 0.08 * L;
-    localR = 0;
-  } else if (isBus) {
-    // Buses: Right side panel filler hatch
-    localF = -0.15 * L;
-    localR = 0.48 * W;
-  }
+  const localF = (cfg?.fuelCapOffset?.localFFrac ?? -0.35) * L;
+  const localR = (cfg?.fuelCapOffset?.localRFrac ?? 0.45) * W;
 
   const x = veh.x + cosA * localF - sinA * localR;
   const y = veh.y + sinA * localF + cosA * localR;
@@ -984,16 +761,8 @@ export function hasRoadTrainLights(car: Vehicle | CarType | string | null | unde
   const typeStr = typeof car === 'string' ? car : (car.type || '');
   if (typeStr.startsWith('trailer_')) return false;
 
-  const heavyTypes = [
-    'truck_water', 'truck_tanker', 'truck_flatbed', 'truck_covered', 'truck_dump', 'truck_zil_dump', 
-    'truck_box', 'truck_semi', 'truck_tow', 'truck_armored',
-    'cement_mixer', 'garbage_truck',
-    'fire_engine', 'fire_ladder', 'fire_rescue',
-    'tractor_mtz82', 'tractor_mtz80', 'tractor_mtz80_old',
-    'bus', 'bus_minibus', 'delivery_truck'
-  ];
-  if (heavyTypes.includes(typeStr)) return true;
-  if (typeStr.startsWith('tractor_')) return true;
+  const cfg = MASTER_VEHICLE_CONFIGS[typeStr as CarType];
+  if (cfg?.hasRoadTrainLights) return true;
 
   if (typeof car === 'object' && car !== null) {
     if (car.trailerId || car.roadTrainLightsOn) return true;
@@ -1001,122 +770,13 @@ export function hasRoadTrainLights(car: Vehicle | CarType | string | null | unde
   return false;
 }
 
-export interface VehicleDiffLockCapabilities {
-  supported: boolean;
-  hasCenter: boolean; // Межосевая блокировка (МОБ - раздатка 50:50)
-  hasRear: boolean;   // Межколесная блокировка задней оси (МКБ-З)
-  hasFront: boolean;  // Межколесная блокировка передней оси (МКБ-П)
-  systemNameRu: string;
-  driveLayoutRu: string;
-}
-
 /**
  * Returns differential lock capabilities by vehicle archetype.
  * Strictly available ONLY for supported real-world offroaders, heavy commercial trucks, and tractors.
  */
 export function getVehicleDiffCapabilities(carType: string): VehicleDiffLockCapabilities {
-  const type = carType || '';
-
-  // 1. Extreme Offroaders (UAZ, Hunter, G-Wagen, Defender): Full 3 Lockers (МОБ + МКБ-З + МКБ-П)
-  if (type === 'offroad_hardcore') {
-    return {
-      supported: true,
-      hasCenter: true,
-      hasRear: true,
-      hasFront: true,
-      systemNameRu: 'Тройная блокировка 4x4 (МОБ + МКБ-З + МКБ-П)',
-      driveLayoutRu: '4WD с жестким подключением и 3 принудительными блокировками'
-    };
-  }
-
-  // 2. Classic Boxy SUV (Lada Niva 4x4): Transfer case center diff lock + rear cross-axle locker
-  if (type === 'suv_classic_box') {
-    return {
-      supported: true,
-      hasCenter: true,
-      hasRear: true,
-      hasFront: false,
-      systemNameRu: 'Блокировка раздатки и заднего моста (МОБ + МКБ-З)',
-      driveLayoutRu: 'Постоянный полный привод (Full-time 4WD) с блокировкой МОБ и МКБ'
-    };
-  }
-
-  // 3. Full-size SUV & Luxury Offroaders (Land Cruiser, Patrol, Touareg)
-  if (type === 'suv' || type === 'suv_luxury' || type === 'crossover_compact' || type === 'truck_armored') {
-    return {
-      supported: true,
-      hasCenter: true,
-      hasRear: true,
-      hasFront: false,
-      systemNameRu: 'Блокировка межосевая и заднего дифференциала (МОБ + МКБ-З)',
-      driveLayoutRu: '4WD / AWD с электро-пневматической блокировкой мостов'
-    };
-  }
-
-  // 4. Heavy Duty Pickups (Part-time transfer lock + Rear axle E-Locker)
-  if (type === 'pickup' || type === 'pickup_heavy') {
-    return {
-      supported: true,
-      hasCenter: true,
-      hasRear: true,
-      hasFront: false,
-      systemNameRu: 'Блокировка раздатки и заднего моста (МОБ + МКБ-З)',
-      driveLayoutRu: 'Part-time 4WD с принудительной блокировкой заднего моста'
-    };
-  }
-
-  // 5. MTZ-82 Belarus Tractor (4x4): Rear axle hydraulic lock pedal + Front driving axle
-  if (type === 'tractor_mtz82') {
-    return {
-      supported: true,
-      hasCenter: true,
-      hasRear: true,
-      hasFront: true,
-      systemNameRu: 'Блокировка МТЗ-82 (МКБ-З педаль + ПВМ самоблок)',
-      driveLayoutRu: 'Сельхозтрактор 4x4: гидромеханическая блокировка заднего моста и ПВМ'
-    };
-  }
-
-  // 6. MTZ-80 Belarus Tractor (4x2): Rear axle mechanical/hydraulic lock pedal
-  if (type === 'tractor_mtz80' || type === 'tractor_mtz80_old') {
-    return {
-      supported: true,
-      hasCenter: false,
-      hasRear: true,
-      hasFront: false,
-      systemNameRu: 'Педаль блокировки заднего дифференциала МТЗ-80 (МКБ-З)',
-      driveLayoutRu: 'Заднеприводный трактор: педальная блокировка заднего моста'
-    };
-  }
-
-  // 7. Heavy Commercial Trucks & Construction Vehicles (KamAZ, MAZ, Ural, Dump, Tanker, Mixer, etc.)
-  if (
-    type === 'truck_dump' || 
-    type === 'truck_zil_dump' || 
-    type === 'truck_semi' || 
-    type === 'truck_box' || 
-    type === 'truck_tanker' || 
-    type === 'truck_water' || 
-    type === 'truck_flatbed' || 
-    type === 'truck_covered' || 
-    type === 'cement_mixer' || 
-    type === 'garbage_truck' || 
-    type === 'fire_engine' || 
-    type === 'fire_ladder' || 
-    type === 'fire_rescue'
-  ) {
-    return {
-      supported: true,
-      hasCenter: true,
-      hasRear: true,
-      hasFront: false,
-      systemNameRu: 'Пневмоблокировка грузовика (МОБ + МКБ)',
-      driveLayoutRu: 'Тяжелый грузовик: межосевая блокировка (МОБ) и межколесная задняя (МКБ)'
-    };
-  }
-
-  // Passenger sedans, hatchbacks, vans, sports cars, supercars, bikes, trailers: OPEN DIFF ONLY
-  return {
+  const cfg = MASTER_VEHICLE_CONFIGS[carType as CarType];
+  return cfg?.diffCapabilities || {
     supported: false,
     hasCenter: false,
     hasRear: false,
@@ -1319,64 +979,15 @@ export function toggleAxleDiffLock(
  */
 export function getVehicleTurnSignalConfig(type?: CarType): VehicleTurnSignalConfig {
   const t = type || 'sedan';
-
-  // 1. Dynamic Sequential Sweeping LED ("Светодиодная змейка") - Luxury & Modern High-End
-  if (['sedan_luxury', 'suv_luxury', 'wagon_modern', 'wagon_allroad', 'supercar', 'coupe_gt'].includes(t)) {
-    return {
-      type: 'dynamic_sequential_led',
-      baseFrequency: 1.30, // ~78 BPM luxury sweeping cadence
-      dutyCycle: 0.54,
-      sweepDuration: 0.28, // 280ms progressive outward cascade
-      hasSideMirrorRepeaters: true,
-      hasFenderRepeaters: false,
-      repeaterStyle: 'mirror_led_dynamic',
-      soundType: 'luxury_acoustic'
-    };
-  }
-
-  // 2. Crisp Instant Digital LED Matrix - Sports cars, modern crossovers, emergency vehicles
-  if (['sports', 'hatch_hot', 'police', 'ambulance', 'ambulance_van', 'ambulance_suv', 'suv', 'crossover_compact', 'sedan_compact', 'moto_sport'].includes(t)) {
-    return {
-      type: 'led_crisp',
-      baseFrequency: 1.62, // ~97 BPM modern crisp strobe
-      dutyCycle: 0.50,
-      sweepDuration: 0,
-      hasSideMirrorRepeaters: ['sports', 'police', 'ambulance_suv', 'crossover_compact', 'suv'].includes(t),
-      hasFenderRepeaters: ['ambulance', 'ambulance_van', 'sedan_compact'].includes(t),
-      repeaterStyle: ['sports', 'police', 'ambulance_suv', 'crossover_compact', 'suv'].includes(t) ? 'mirror_led_static' : 'fender_rect',
-      soundType: 'electronic_click'
-    };
-  }
-
-  // 3. Vintage / Classic Incandescent Filament Bulbs (Теплый нагрев и плавное угасание вольфрамовой нити, биметаллическое реле)
-  if ([
-    'sedan_classic', 'wagon_classic', 'classic_compact', 'retro_bubble', 'liftback_tavria',
-    'sedan_samara', 'hatch_samara', 'sedan_nexia', 'van_cargo_old', 'micro_car', 'muscle_classic',
-    'tractor_mtz80', 'tractor_mtz80_old', 'tractor_mtz82',
-    'moto_izh_jupiter', 'moto_ural_sidecar', 'moto_jawa350', 'moto_chopper'
-  ].includes(t)) {
-    const isTractorOrBike = t.startsWith('tractor_') || t.startsWith('moto_');
-    return {
-      type: 'incandescent_classic',
-      baseFrequency: isTractorOrBike ? 1.36 : 1.44, // ~82-86 BPM warm analog relay cadence
-      dutyCycle: 0.56, // Characteristic longer glow phase
-      sweepDuration: 0,
-      hasSideMirrorRepeaters: false,
-      hasFenderRepeaters: !isTractorOrBike,
-      repeaterStyle: ['classic_compact', 'retro_bubble', 'sedan_classic', 'wagon_classic'].includes(t) ? 'fender_round' : 'fender_rect',
-      soundType: 'bimetal_relay'
-    };
-  }
-
-  // 4. Modern Halogen/Incandescent with Electronic BCM Relay (Стандартные иномарки 2000-2015, коммерческие грузовики, автобусы)
-  return {
+  const cfg = MASTER_VEHICLE_CONFIGS[t];
+  return cfg?.turnSignalConfig || {
     type: 'incandescent_modern',
-    baseFrequency: 1.52, // ~91 BPM standard automotive cadence
+    baseFrequency: 1.52,
     dutyCycle: 0.50,
     sweepDuration: 0,
-    hasSideMirrorRepeaters: ['sedan_polo', 'taxi'].includes(t),
-    hasFenderRepeaters: !['sedan_polo'].includes(t) && !t.startsWith('trailer_'),
-    repeaterStyle: ['sedan_polo', 'taxi'].includes(t) ? 'mirror_led_static' : 'fender_rect',
+    hasSideMirrorRepeaters: false,
+    hasFenderRepeaters: true,
+    repeaterStyle: 'fender_rect',
     soundType: 'bcm_relay'
   };
 }
@@ -1500,15 +1111,7 @@ export function getVehicleTurnSignalDynamicState(
   };
 }
 
-export type HeadlightBulbType = 'vintage_sealed_beam' | 'halogen_standard' | 'hid_xenon' | 'led_matrix';
 
-export interface VehicleHeadlightConfig {
-  bulbType: HeadlightBulbType;
-  riseTime: number;   // seconds to warm up / fade in
-  decayTime: number;  // seconds to cool down / fade out
-  colorTemp: string;
-  hasIgnitionFlicker: boolean;
-}
 
 export interface VehicleHeadlightDynamicState {
   intensity: number;      // 0.0 to 1.0 optical brightness with thermal inertia
@@ -1518,34 +1121,8 @@ export interface VehicleHeadlightDynamicState {
 
 export function getVehicleHeadlightConfig(type?: CarType): VehicleHeadlightConfig {
   const t = type || 'sedan';
-  if (['tractor_mtz80', 'tractor_mtz80_old', 'tractor_mtz82', 'sedan_classic', 'classic_compact', 'retro_bubble', 'van_cargo_old', 'suv_classic_box', 'muscle_classic'].includes(t)) {
-    return {
-      bulbType: 'vintage_sealed_beam',
-      riseTime: 0.28,
-      decayTime: 0.40,
-      colorTemp: '#fef08a',
-      hasIgnitionFlicker: false
-    };
-  }
-  if (['sedan_luxury', 'supercar', 'sports', 'coupe_gt', 'police'].includes(t)) {
-    return {
-      bulbType: 'hid_xenon',
-      riseTime: 0.35,
-      decayTime: 0.22,
-      colorTemp: '#f0fdf4',
-      hasIgnitionFlicker: true
-    };
-  }
-  if (['hatch_hot', 'crossover_compact', 'suv', 'van', 'sedan_compact', 'wagon_allroad'].includes(t)) {
-    return {
-      bulbType: 'led_matrix',
-      riseTime: 0.04,
-      decayTime: 0.06,
-      colorTemp: '#ffffff',
-      hasIgnitionFlicker: false
-    };
-  }
-  return {
+  const cfg = MASTER_VEHICLE_CONFIGS[t];
+  return cfg?.headlightConfig || {
     bulbType: 'halogen_standard',
     riseTime: 0.18,
     decayTime: 0.26,

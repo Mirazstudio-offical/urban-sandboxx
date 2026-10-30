@@ -13,6 +13,7 @@
  */
 
 import { CarType, EngineState, FuelType, Vehicle } from './types';
+import { MASTER_VEHICLE_CONFIGS } from './vehicleMasterRegistry';
 
 // ============================================================================
 // CATEGORY OF VEHICLE FOR POWERTRAIN POPULATION PICKING
@@ -23,37 +24,10 @@ export type PwCategory =
   | 'van' | 'truck' | 'heavy' | 'bus' | 'emergency' | 'tractor'
   | 'moto' | 'moped' | 'machinery';
 
-const SPORT_TYPES = new Set<string>(['sports', 'supercar', 'hatch_hot', 'coupe_gt', 'moto_sport']);
-const MUSCLE_TYPES = new Set<string>(['muscle', 'muscle_classic']);
-const LUXURY_TYPES = new Set<string>(['sedan_luxury', 'suv_luxury', 'classic_black']);
-const RETRO_TYPES = new Set<string>(['wagon_classic', 'sedan_classic', 'classic_compact', 'retro_bubble', 'micro_car', 'hatch_samara', 'sedan_samara', 'liftback_tavria', 'van_cargo_old', 'truck_zil_dump']);
-const SUV_TYPES = new Set<string>(['suv', 'suv_classic_box', 'crossover_compact', 'wagon_allroad', 'wagon_modern', 'pickup', 'ambulance_suv']);
-const OFFROAD_TYPES = new Set<string>(['offroad_hardcore', 'suv_classic_box', 'pickup', 'pickup_heavy', 'truck_armored']);
-const VAN_TYPES = new Set<string>(['van', 'van_camper', 'bus_minibus', 'delivery_truck', 'ambulance_van', 'ambulance']);
-const TRUCK_TYPES = new Set<string>(['truck_box', 'truck_dump', 'truck_tanker', 'truck_water', 'truck_flatbed', 'truck_covered', 'cement_mixer', 'garbage_truck', 'truck_tow', 'truck_semi', 'truck_armored', 'fire_engine', 'fire_ladder', 'fire_rescue']);
-const BUS_TYPES = new Set<string>(['bus', 'bus_minibus']);
-const EMERGENCY_TYPES = new Set<string>(['police', 'ambulance', 'ambulance_van', 'ambulance_suv', 'fire_engine', 'fire_ladder', 'fire_rescue']);
-const MACHINERY_TYPES = new Set<string>(['paver_asphalt_wheeled', 'roller_heavy_tandem', 'roller_compact_sidewalk', 'roller_pneumatic']);
-const TRUCK_ZIL = 'truck_zil_dump';
-
 export function getVehiclePowertrainCategory(type?: CarType | string): PwCategory {
   if (!type) return 'city';
-  if (MACHINERY_TYPES.has(type)) return 'machinery';
-  if (type.startsWith('trailer_')) return 'machinery';
-  if (type.startsWith('tractor_')) return 'tractor';
-  if (type === 'moped_soviet') return 'moped';
-  if (type.startsWith('moto_')) return 'moto';
-  if (SPORT_TYPES.has(type)) return 'sport';
-  if (MUSCLE_TYPES.has(type)) return 'muscle';
-  if (EMERGENCY_TYPES.has(type)) return 'emergency';
-  if (LUXURY_TYPES.has(type)) return 'luxury';
-  if (TRUCK_TYPES.has(type)) return 'truck';
-  if (BUS_TYPES.has(type)) return 'bus';
-  if (type === TRUCK_ZIL) return 'retro';
-  if (OFFROAD_TYPES.has(type)) return 'offroad';
-  if (SUV_TYPES.has(type)) return 'suv';
-  if (VAN_TYPES.has(type)) return 'van';
-  if (RETRO_TYPES.has(type)) return 'retro';
+  const cfg = (MASTER_VEHICLE_CONFIGS as any)[type];
+  if (cfg?.powertrainCategory) return cfg.powertrainCategory as PwCategory;
   return 'city';
 }
 

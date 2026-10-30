@@ -3199,8 +3199,8 @@ export function drawGearToolItem(ctx: CanvasRenderingContext2D, itemId: string, 
       return true;
     }
 
-    // Grocery Carrier Bag (Пакет-майка)
-    case 'plastic_bag': {
+    // Grocery Carrier Bag (Пакет-майка / shopping_bag)
+    case 'shopping_bag': {
       drawShadow(ctx, 8, 3.5, 7.5, 0.22);
 
       // White/light blue shopping bag with handles

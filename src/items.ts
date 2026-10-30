@@ -21,7 +21,7 @@ import {
   applyValerianDrops
 } from './medicineSystem';
 import { soothePanic } from './bodySystem';
-import { isTrailerVehicle, CAR_CONFIGS } from './vehicleHelpers';
+import { isTrailerVehicle, CAR_CONFIGS, MASTER_VEHICLE_CONFIGS } from './vehicleHelpers';
 import { getCityApartments } from './propertySystem';
 import { clearInteriorCanvasCache } from './buildingInteriors';
 import {
@@ -7441,6 +7441,9 @@ export function removeItemFromPlayer(player: Player, itemIndex: number, count: n
 }
 
 export function getCarKeyTier(carType?: string, priceRub?: number): 'classic'| 'flip'| 'smart'| 'display'{
+  if (carType && (MASTER_VEHICLE_CONFIGS as any)[carType]?.keyTier) {
+    return (MASTER_VEHICLE_CONFIGS as any)[carType].keyTier;
+  }
   if (carType === 'supercar'|| carType === 'coupe_gt'|| (priceRub !== undefined && priceRub >= 2000000)) {
     return 'display';
   }
@@ -7752,16 +7755,8 @@ export function getVehicleRequiredKeyType(typeOrVehicle: string | Vehicle): 'gol
   }
   if (!type) return null;
   const t = type.toLowerCase();
-
-  // Tractors & heavy utility trucks
-  if (
-    t.startsWith('tractor_') || 
-    t.startsWith('truck_') ||
-    t === 'van_cargo_old'||
-    t === 'cement_mixer'||
-    t === 'garbage_truck'||
-    t === 'delivery_truck') {
-    return 'iron';
+  if ((MASTER_VEHICLE_CONFIGS as any)[t]?.requiredKeyType !== undefined) {
+    return (MASTER_VEHICLE_CONFIGS as any)[t].requiredKeyType;
   }
 
   // Classic/old passenger retro cars
