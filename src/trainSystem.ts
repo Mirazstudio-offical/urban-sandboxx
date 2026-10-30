@@ -10,7 +10,7 @@ export interface TrainConsist {
   trackY: number;
   direction: 1 | -1; // 1 = Eastbound (+X), -1 = Westbound (-X)
   speed: number;     // px/s
-  maxSpeed: number;  // px/s (~70-80 km/h is ~200 px/s)
+  maxSpeed: number;  // px/s (scale of the map, see PROJECT_STATE.md)
   acceleration: number;
   deceleration: number;
   headCarId: string;
@@ -23,6 +23,16 @@ export interface TrainConsist {
   scheduleSpawnTimer?: number;
   emergencyBrake?: boolean;
   emergencyBrakeTimer?: number;
+  /** Scheduled trains: cars kept aside while the train is parked (before spawnTime / between runs). */
+  storedCars?: RollingStockCar[];
+  isParked?: boolean;
+  inactiveTimer?: number;
+  startSpeed?: number;
+  /** Turnout track change that is applied only once the head passes pendingCommitX (keeps the curve continuous). */
+  pendingTrackY?: number;
+  pendingCommitX?: number;
+  /** Smooth vertical offset (px) left over from a turnout track change; fades out with travel. */
+  yBlend?: number;
 }
 
 export class TrainSystem {
@@ -75,7 +85,7 @@ export class TrainSystem {
         trackY: 8600,
         direction: 1,
         speed: 0,
-        maxSpeed: 480, // 108 km/h on open steppe mainline (formerly 47 km/h)
+        maxSpeed: 480, // px/s (scale: see PROJECT_STATE.md)
         acceleration: 28, // Realistic diesel-electric tractive effort (~6.3 km/h per sec)
         deceleration: 48, // Electro-pneumatic service brake
         headCarId: 'train_loco_1',
@@ -92,8 +102,8 @@ export class TrainSystem {
         routeType: 'mainline_west',
         trackY: 8880,
         direction: -1,
-        speed: 330, // 74 km/h heavy freight transit speed
-        maxSpeed: 340, // 76.5 km/h on open mainline II
+        speed: 330, // px/s
+        maxSpeed: 340, // px/s
         acceleration: 10, // Massive 5000-ton kinetic inertia
         deceleration: 20, // Heavy train pneumatic brake shoe friction
         headCarId: initialFreight.headCarId,
@@ -117,6 +127,7 @@ export class TrainSystem {
 
     world.trainSchedules?.forEach((sched) => {
       if (sched.enabled === false) return;
+      const startIdx = activeRollingStock.length;
 
       const isVL80 = sched.locomotive.type === 'locomotive_electric_vl80' || sched.locomotive.type.includes('vl80');
       const headId = `sched_${sched.id}_loco`;
@@ -246,6 +257,9 @@ export class TrainSystem {
 
       const isPassenger = sched.locomotive.type.includes('diesel') || sched.id.includes('pass') || (sched.cars && sched.cars.some(c => c.type.includes('coach')));
       const defaultMaxSpeed = isPassenger ? 480 : 340;
+      const startSpeed = sched.spawnSpeed || 0;
+      const ownCars = activeRollingStock.slice(startIdx);
+      const parkedAtStart = (sched.spawnTime || 0) > 0;
 
       this.consists.push({
         id: sched.id,
@@ -253,10 +267,12 @@ export class TrainSystem {
         routeType: 'scheduled',
         trackY: sched.spawnY,
         direction: sched.spawnDirection,
-        speed: Math.max(sched.spawnSpeed || 0, defaultMaxSpeed * 0.75),
-        maxSpeed: Math.max(sched.maxSpeed || 0, defaultMaxSpeed),
-        acceleration: isPassenger ? 28 : 10,
-        deceleration: isPassenger ? 48 : 20,
+        speed: startSpeed,
+        startSpeed,
+        // Values from the schedule are used as-is (only fall back to defaults when they are absent)
+        maxSpeed: sched.maxSpeed ?? defaultMaxSpeed,
+        acceleration: sched.acceleration ?? (isPassenger ? 28 : 10),
+        deceleration: sched.deceleration ?? (isPassenger ? 48 : 20),
         headCarId: headId,
         carIds: carIds,
         stationDwellTimer: 0,
@@ -264,12 +280,19 @@ export class TrainSystem {
         lastWheelClickTime: 0,
         schedule: sched,
         currentStepIndex: 0,
-        scheduleSpawnTimer: sched.spawnTime
+        scheduleSpawnTimer: sched.spawnTime,
+        storedCars: ownCars,
+        isParked: parkedAtStart,
+        inactiveTimer: parkedAtStart ? sched.spawnTime : 0
       });
     });
 
-    // Ensure rollingStock only contains active scheduled trains (removes unmanaged orphan duplicates)
-    world.rollingStock = activeRollingStock;
+    // Only trains that start right away are placed in the world; the others wait in storedCars
+    const parkedIds = new Set<string>();
+    for (const c of this.consists) {
+      if (c.isParked) for (const id of c.carIds) parkedIds.add(id);
+    }
+    world.rollingStock = activeRollingStock.filter(c => !parkedIds.has(c.id));
   }
 
   /**
@@ -614,6 +637,17 @@ export class TrainSystem {
   public static getTrackState(
     carX: number,
     routeType: string,
+    targetTrackY: number = 8740,
+    yBlend: number = 0
+  ): { y: number; slope: number } {
+    const g = this.trackGeometry(carX, routeType, targetTrackY);
+    return { y: g.y + yBlend, slope: g.slope };
+  }
+
+  /** Pure track geometry (no turnout blend). */
+  private static trackGeometry(
+    carX: number,
+    routeType: string,
     targetTrackY: number = 8740
   ): { y: number; slope: number } {
     // 1. Track 3 Platform Loop (North Passenger Platform #1 at Station building, nominal Y = 8600)
@@ -704,7 +738,8 @@ export class TrainSystem {
     car: RollingStockCar,
     routeType: string,
     travelDirection: 1 | -1,
-    defaultY: number = 8740
+    defaultY: number = 8740,
+    yBlend: number = 0
   ): void {
     const bogieHalfBase = car.length * 0.32;
     const centerState = this.getTrackState(car.x, routeType, defaultY);
@@ -713,8 +748,8 @@ export class TrainSystem {
 
     const xEast = car.x + dxBogie;
     const xWest = car.x - dxBogie;
-    const yEast = this.getTrackState(xEast, routeType, defaultY).y;
-    const yWest = this.getTrackState(xWest, routeType, defaultY).y;
+    const yEast = this.getTrackState(xEast, routeType, defaultY, yBlend).y;
+    const yWest = this.getTrackState(xWest, routeType, defaultY, yBlend).y;
 
     car.y = (yEast + yWest) / 2;
 
@@ -739,12 +774,125 @@ export class TrainSystem {
   }
 
   /**
+   * Max speed (px/s) from which a train with deceleration `decel` (px/s²) can still stop `dist` px ahead.
+   * Replaces step-wise speed ladders: the train starts braking early enough and the curve is continuous.
+   */
+  private static brakingCurveSpeed(dist: number, decel: number): number {
+    const STOP_MARGIN = 25; // nose stops this far before the stop point
+    const SAFETY = 0.8;     // use 80% of the nominal braking rate
+    if (dist <= STOP_MARGIN) return 0;
+    return Math.sqrt(2 * Math.max(1, decel) * SAFETY * (dist - STOP_MARGIN));
+  }
+
+  /**
+   * Where the turnout geometry on the new track coincides with the old one.
+   * pass=true: the track change must wait until the head passes x (curve end on the far side).
+   * pass=false: the change can be applied immediately (old and new geometry match there).
+   */
+  private static switchCommit(direction: 1 | -1, fromY: number, toY: number): { x: number; pass: boolean } {
+    const isMain = (y: number) => Math.abs(y - 8740) < 40 || Math.abs(y - 8880) < 40;
+    if (isMain(toY)) {
+      // Siding -> main line: the curve ends at the east throat (eastbound) or the west throat (westbound)
+      return direction === 1 ? { x: 13400, pass: true } : { x: 9100, pass: true };
+    }
+    if (isMain(fromY)) {
+      // Main line -> siding: the new geometry equals the main line outside the throat
+      return { x: direction === 1 ? 9100 : 13400, pass: false };
+    }
+    // Siding <-> siding (freight ramp <-> Track 4): the curve spans x 10600..11000
+    return { x: 10600, pass: direction === -1 };
+  }
+
+  /**
+   * Switches the consist to another track without jumping: the difference between the old and new geometry
+   * at the train's bogies is stored as a blend that fades out as the train moves on.
+   */
+  private static commitTrackChange(consist: TrainConsist, headCar: RollingStockCar, newY: number): void {
+    const dxB = headCar.length * 0.32; // bogie half-base, same as updateCarBogieKinematics
+    const sampleY = (y: number) =>
+      (this.trackGeometry(headCar.x + dxB, consist.routeType, y).y + this.trackGeometry(headCar.x - dxB, consist.routeType, y).y) / 2;
+    const delta = sampleY(consist.trackY) - sampleY(newY);
+    consist.yBlend = (consist.yBlend || 0) + delta;
+    consist.trackY = newY;
+  }
+
+  /**
+   * Scheduled train reached its end: remove its cars from the world and park it until the next run.
+   */
+  private static parkScheduledConsist(world: GameWorld, consist: TrainConsist): void {
+    const ids = new Set(consist.carIds);
+    const parked = (world.rollingStock || []).filter(c => ids.has(c.id));
+    if (parked.length > 0) consist.storedCars = parked;
+    world.rollingStock = (world.rollingStock || []).filter(c => !ids.has(c.id));
+    consist.isParked = true;
+    consist.inactiveTimer = Math.max(0, consist.schedule?.repeatInterval ?? 0);
+    consist.speed = 0;
+    consist.stationDwellTimer = 0;
+    consist.currentStepIndex = 0;
+    consist.emergencyBrake = false;
+    consist.emergencyBrakeTimer = 0;
+    consist.pendingTrackY = undefined;
+    consist.pendingCommitX = undefined;
+    consist.yBlend = 0;
+  }
+
+  /**
+   * Counts down parked trains and places them at their spawn point when they start.
+   */
+  private static updateScheduleActivation(world: GameWorld, dt: number): void {
+    for (const consist of this.consists) {
+      if (!consist.isParked || consist.routeType !== 'scheduled' || !consist.schedule) continue;
+      consist.inactiveTimer = (consist.inactiveTimer ?? 0) - dt;
+      if (consist.inactiveTimer > 0) continue;
+
+      const sched = consist.schedule;
+      const stored = consist.storedCars || [];
+      const ordered = consist.carIds
+        .map(id => stored.find(c => c.id === id))
+        .filter((c): c is RollingStockCar => !!c);
+      if (ordered.length === 0) {
+        consist.isParked = false;
+        continue;
+      }
+
+      // Chain the cars behind the head exactly as at init
+      const dir = sched.spawnDirection;
+      ordered[0].x = sched.spawnX;
+      for (let i = 1; i < ordered.length; i++) {
+        const prev = ordered[i - 1];
+        const car = ordered[i];
+        car.x = prev.x - dir * (prev.length / 2 + car.length / 2 + 10);
+      }
+      for (const car of ordered) {
+        car.y = sched.spawnY;
+        car.speed = consist.startSpeed ?? 0;
+        car.direction = dir;
+      }
+
+      consist.trackY = sched.spawnY;
+      consist.speed = consist.startSpeed ?? 0;
+      consist.stationDwellTimer = 0;
+      consist.currentStepIndex = 0;
+      consist.isParked = false;
+      consist.inactiveTimer = 0;
+
+      if (!world.rollingStock) world.rollingStock = [];
+      for (const car of ordered) {
+        if (!world.rollingStock.some(c => c.id === car.id)) world.rollingStock.push(car);
+      }
+    }
+  }
+
+  /**
    * Main simulation tick for all trains
    */
   public static update(world: GameWorld, dt: number, playerX: number, playerY: number, playerObj?: Player): void {
     if (!this.initialized) {
       this.init(world);
     }
+
+    this.gameElapsedTime += dt;
+    this.updateScheduleActivation(world, dt);
 
     const cars = world.rollingStock || [];
     const carMap = new Map<string, RollingStockCar>();
@@ -769,8 +917,9 @@ export class TrainSystem {
       targetSpeed = Math.min(targetSpeed, trainAheadSpeed);
 
       // Handle Emergency Braking from collision or track hazard
-      if (consist.emergencyBrake && (consist.emergencyBrakeTimer || 0) > 0) {
-        consist.emergencyBrakeTimer = (consist.emergencyBrakeTimer || 0) - dt;
+      if (consist.emergencyBrake) {
+        // Brake is held until the train has actually stopped and the hold timer has run out
+        consist.emergencyBrakeTimer = Math.max(0, (consist.emergencyBrakeTimer || 0) - dt);
         targetSpeed = 0;
         brakeEmergency = true;
         if (consist.emergencyBrakeTimer <= 0 && consist.speed <= 3) {
@@ -783,30 +932,21 @@ export class TrainSystem {
         const platformStopX = 12210; // Locomotive center so front nose stops right at sign «Остановка первого вагона» (X=12420)
 
         // Continuously obey signals ahead along the route
-        const signalSpeed = this.evaluateSignalsInFrontEastbound(headCar.x, signals, consist.maxSpeed, consist.trackY, headCar.length, isShunter);
+        const signalSpeed = this.evaluateSignalsInFrontEastbound(headCar.x, signals, consist.maxSpeed, consist.trackY, headCar.length, isShunter, consist.deceleration);
         targetSpeed = Math.min(targetSpeed, signalSpeed);
 
         if (headCar.x < platformStopX && consist.stationDwellTimer >= 0) {
           const distToStop = platformStopX - headCar.x;
-          if (distToStop < 25) {
+          targetSpeed = Math.min(targetSpeed, this.brakingCurveSpeed(distToStop, consist.deceleration));
+          if (distToStop < 25 && consist.stationDwellTimer === 0 && consist.speed < 12) {
+            consist.stationDwellTimer = 25; // Boarding time at Platform 1
             targetSpeed = 0;
-            if (consist.stationDwellTimer === 0 && consist.speed < 12) {
-              consist.stationDwellTimer = 25; // Boarding time at Platform 1
-              consist.speed = 0;
-              sound.playTrainBrakeAir(this.calcDistanceGain(headCar.x, headCar.y, playerX, playerY));
-            }
-          } else if (distToStop < 250) {
-            targetSpeed = Math.min(targetSpeed, 45); // Creep speed pulling up to OPV sign (10 km/h)
-          } else if (distToStop < 700) {
-            targetSpeed = Math.min(targetSpeed, 110); // Platform deceleration (25 km/h)
-          } else if (distToStop < 1600) {
-            targetSpeed = Math.min(targetSpeed, 178); // Speed limit on turnout Switch #1 / Station Throat (40 km/h)
+            sound.playTrainBrakeAir(this.calcDistanceGain(headCar.x, headCar.y, playerX, playerY));
           }
         }
 
         if (consist.stationDwellTimer > 0) {
           targetSpeed = 0;
-          consist.speed = 0;
           consist.stationDwellTimer -= dt;
           if (consist.stationDwellTimer <= 0) {
             consist.stationDwellTimer = -1; // Departed platform!
@@ -818,7 +958,7 @@ export class TrainSystem {
         // --- 2. HEAVY FREIGHT TRAIN №2418 (ВЛ80С) ---
         // Route: Runs straight through on Mainline II (Y=8880) heading West (-X)
         // Dynamically obeys 3-aspect automatic block signals across the open steppe and station
-        const signalSpeed = this.evaluateSignalsInFrontWestbound(headCar.x, signals, consist.maxSpeed, consist.trackY, headCar.length, isShunter);
+        const signalSpeed = this.evaluateSignalsInFrontWestbound(headCar.x, signals, consist.maxSpeed, consist.trackY, headCar.length, isShunter, consist.deceleration);
         targetSpeed = Math.min(targetSpeed, signalSpeed);
       } else if (consist.routeType === 'scheduled' && consist.schedule) {
         // --- 3. CUSTOM SCHEDULED TRAIN CONSISTS ---
@@ -828,10 +968,11 @@ export class TrainSystem {
 
         if (curStep) {
           if (curStep.type === 'travel') {
-            targetSpeed = (curStep.speedLimit && curStep.speedLimit > 250) ? curStep.speedLimit : consist.maxSpeed;
+            // Step speedLimit (px/s, same units as maxSpeed) caps the line speed on this section
+            targetSpeed = (curStep.speedLimit && curStep.speedLimit > 0) ? Math.min(consist.maxSpeed, curStep.speedLimit) : consist.maxSpeed;
             const sigSpd = consist.direction === 1
-              ? this.evaluateSignalsInFrontEastbound(headCar.x, signals, targetSpeed, consist.trackY, headCar.length, isShunter)
-              : this.evaluateSignalsInFrontWestbound(headCar.x, signals, targetSpeed, consist.trackY, headCar.length, isShunter);
+              ? this.evaluateSignalsInFrontEastbound(headCar.x, signals, targetSpeed, consist.trackY, headCar.length, isShunter, consist.deceleration)
+              : this.evaluateSignalsInFrontWestbound(headCar.x, signals, targetSpeed, consist.trackY, headCar.length, isShunter, consist.deceleration);
             targetSpeed = Math.min(targetSpeed, sigSpd);
 
             const isPast = consist.direction === 1
@@ -841,11 +982,17 @@ export class TrainSystem {
               consist.currentStepIndex = stepIdx + 1;
             }
           } else if (curStep.type === 'switch_branch') {
-            targetSpeed = curStep.switchBranch === 'diverging' ? 178 : (curStep.speedLimit || consist.maxSpeed);
+            targetSpeed = curStep.switchBranch === 'diverging' ? (curStep.speedLimit || 178) : (curStep.speedLimit || consist.maxSpeed);
 
-            // Set the target track Y immediately so getTrackState draws the smooth turnout curve
-            if (curStep.targetY !== undefined && consist.trackY !== curStep.targetY) {
-              consist.trackY = curStep.targetY;
+            // Change the track Y only where old and new geometry coincide, so the turnout curve stays continuous
+            if (curStep.targetY !== undefined && consist.trackY !== curStep.targetY && consist.pendingTrackY === undefined) {
+              const commit = this.switchCommit(consist.direction, consist.trackY, curStep.targetY);
+              if (commit.pass) {
+                consist.pendingTrackY = curStep.targetY;
+                consist.pendingCommitX = commit.x;
+              } else {
+                this.commitTrackChange(consist, headCar, curStep.targetY);
+              }
             }
 
             // Determine target exit point of turnout switch
@@ -876,23 +1023,17 @@ export class TrainSystem {
             const isApproaching = distNoseToOPV > -20;
 
             if (consist.stationDwellTimer === 0) {
-              if (distNoseToOPV <= 25 || !isApproaching) {
+              // Brake along the braking curve so the nose stops at the OPV sign (no speed ladder, no jumps)
+              targetSpeed = Math.min(targetSpeed, this.brakingCurveSpeed(distNoseToOPV, consist.deceleration));
+              // Dwell starts once the train is practically stopped at (or already past) the stop point
+              const atStop = distNoseToOPV <= 25 || !isApproaching;
+              if (atStop && consist.speed < 12) {
                 targetSpeed = 0;
-                if (consist.speed < 12 || !isApproaching) {
-                  consist.stationDwellTimer = curStep.dwellSeconds || 25;
-                  consist.speed = 0;
-                  sound.playTrainBrakeAir(this.calcDistanceGain(headCar.x, headCar.y, playerX, playerY));
-                }
-              } else if (distNoseToOPV < 250) {
-                targetSpeed = Math.min(targetSpeed, 20); // Creep speed pulling up to OPV sign (5-10 km/h)
-              } else if (distNoseToOPV < 650) {
-                targetSpeed = Math.min(targetSpeed, 45); // Smooth deceleration along platform length
-              } else if (distNoseToOPV < 1400) {
-                targetSpeed = Math.min(targetSpeed, 90); // Platform entry approach speed
+                consist.stationDwellTimer = curStep.dwellSeconds || 25;
+                sound.playTrainBrakeAir(this.calcDistanceGain(headCar.x, headCar.y, playerX, playerY));
               }
             } else if (consist.stationDwellTimer > 0) {
               targetSpeed = 0;
-              consist.speed = 0;
               consist.stationDwellTimer -= dt;
               if (consist.stationDwellTimer <= 0) {
                 consist.stationDwellTimer = -1;
@@ -926,16 +1067,7 @@ export class TrainSystem {
                 consist.currentStepIndex = stepIdx + 1;
               }
             } else if (isRed) {
-              if (distToSig <= 25) {
-                targetSpeed = 0;
-                consist.speed = 0;
-              } else if (distToSig <= 85) {
-                targetSpeed = Math.min(targetSpeed, 15);
-              } else if (distToSig <= 220) {
-                targetSpeed = Math.min(targetSpeed, 40);
-              } else {
-                targetSpeed = Math.min(targetSpeed, 80);
-              }
+              targetSpeed = Math.min(targetSpeed, this.brakingCurveSpeed(distToSig, consist.deceleration));
             } else {
               // Signal is clear (green, yellow, two_yellows, two_yellows_one_flashing)
               if (distToSig <= 25 && steps.length > stepIdx + 1) {
@@ -949,13 +1081,20 @@ export class TrainSystem {
               : headCar.x <= despawnX;
 
             if (reachedDespawn) {
-              headCar.x = consist.schedule.spawnX;
-              consist.trackY = consist.schedule.spawnY;
-              consist.currentStepIndex = 0;
-              consist.speed = 0;
-              consist.stationDwellTimer = 0;
+              this.parkScheduledConsist(world, consist);
+              continue;
             }
           }
+        }
+      }
+
+      // Apply a deferred turnout track change once the head has passed its commit point
+      if (consist.pendingTrackY !== undefined && consist.pendingCommitX !== undefined) {
+        const passedCommit = consist.direction === 1 ? headCar.x >= consist.pendingCommitX : headCar.x <= consist.pendingCommitX;
+        if (passedCommit) {
+          this.commitTrackChange(consist, headCar, consist.pendingTrackY);
+          consist.pendingTrackY = undefined;
+          consist.pendingCommitX = undefined;
         }
       }
 
@@ -992,6 +1131,8 @@ export class TrainSystem {
       const cosSlope = 1 / Math.sqrt(1 + centerState.slope * centerState.slope);
       const moveDelta = consist.speed * consist.direction * dt * cosSlope;
       headCar.x += moveDelta;
+      // The turnout blend fades out over ~250 px of travel
+      consist.yBlend = (consist.yBlend || 0) * Math.max(0, 1 - Math.abs(moveDelta) / 250);
       headCar.speed = consist.speed;
       headCar.direction = consist.direction;
 
@@ -1021,14 +1162,12 @@ export class TrainSystem {
         }
       } else if (consist.routeType === 'scheduled' && consist.schedule) {
         if ((consist.direction === 1 && headCar.x > 53000) || (consist.direction === -1 && headCar.x < -1500)) {
-          headCar.x = consist.schedule.spawnX;
-          consist.trackY = consist.schedule.spawnY;
-          consist.currentStepIndex = 0;
-          consist.stationDwellTimer = 0;
+          this.parkScheduledConsist(world, consist);
+          continue;
         }
       }
 
-      this.updateCarBogieKinematics(headCar, consist.routeType, consist.direction, consist.trackY);
+      this.updateCarBogieKinematics(headCar, consist.routeType, consist.direction, consist.trackY, consist.yBlend || 0);
 
       // 4. Per-car Coupler Kinematics with Physical Arc-Length Compensation
       const relDir = consist.direction === -1 ? 1 : -1;
@@ -1047,7 +1186,7 @@ export class TrainSystem {
         car.speed = consist.speed;
         car.direction = consist.direction;
 
-        this.updateCarBogieKinematics(car, consist.routeType, consist.direction, consist.trackY);
+        this.updateCarBogieKinematics(car, consist.routeType, consist.direction, consist.trackY, consist.yBlend || 0);
         prevCar = car;
       }
 
@@ -1068,7 +1207,8 @@ export class TrainSystem {
       }
 
       // Proactive Typhon Horn on Approach to All Railway Level Crossings
-      const crossingXs = [12600, 18300, 24000, 29900, 47140, 49800];
+      // Centres of the level crossings (see levelCrossingSystem.ts: station 42, canyon W/E, quarry, dunes, border)
+      const crossingXs = [12600, 18321, 24149, 29958, 47140, 49802];
       if ((headCar.hornTimer || 0) <= 0 && consist.speed > 20) {
         for (const cx of crossingXs) {
           const dist = (cx - headCar.x) * consist.direction;
@@ -1156,7 +1296,8 @@ export class TrainSystem {
 
     // 7. Level Crossing Bells (West Station Crossing at 12600 & East 14km Crossing at 14400)
     const westCrossingSignal = signals.find(s => s.id === 'sig_cross_north' || s.id === 'sig_cross_south');
-    const eastCrossingSignal = signals.find(s => s.id === 'sig_cross_east_north' || s.id === 'sig_cross_east_south');
+    // Second bell point: canyon crossing W (18 km). The signals with the "sig_cross_east_*" ids do not exist in map.json
+    const eastCrossingSignal = signals.find(s => s.id === 'sig_cross_canyon_w_n' || s.id === 'sig_cross_canyon_w_s');
     
     const isWestClosed = westCrossingSignal && (westCrossingSignal.currentAspect === 'red_alternating' || westCrossingSignal.currentAspect === 'red_alternating_flashing' || westCrossingSignal.currentAspect === 'red');
     const isEastClosed = eastCrossingSignal && (eastCrossingSignal.currentAspect === 'red_alternating' || eastCrossingSignal.currentAspect === 'red_alternating_flashing' || eastCrossingSignal.currentAspect === 'red');
@@ -1165,8 +1306,8 @@ export class TrainSystem {
       this.crossingBellTimer += dt;
       if (this.crossingBellTimer >= 0.35) {
         this.crossingBellTimer = 0;
-        const gainWest = isWestClosed ? this.calcDistanceGain(12600, 5800, playerX, playerY) : 0;
-        const gainEast = isEastClosed ? this.calcDistanceGain(15620, 5810, playerX, playerY) : 0;
+        const gainWest = isWestClosed ? this.calcDistanceGain(12600, 8700, playerX, playerY) : 0;
+        const gainEast = isEastClosed ? this.calcDistanceGain(18321, 8680, playerX, playerY) : 0;
         const maxGain = Math.max(gainWest, gainEast);
         if (maxGain > 0.02) {
           sound.playCrossingBell(maxGain);
@@ -1201,8 +1342,11 @@ export class TrainSystem {
         const isLeadLoco = (trainCar.id === consist.headCarId);
         const halfTL = trainCar.length / 2;
         const halfTW = trainCar.width / 2;
-        const cosTA = Math.cos(trainCar.angle);
-        const sinTA = Math.sin(trainCar.angle);
+        // Back-to-back (flipped) cars have their angle turned by PI. The body box is symmetric, so flipping
+        // the orientation keeps the box and makes "forward" the direction of travel for collision math.
+        const travelFlip = (trainCar.isSectionB || trainCar.isFlipped || trainCar.id.includes('_head_b') || trainCar.id.includes('_loco_b')) ? -1 : 1;
+        const cosTA = Math.cos(trainCar.angle) * travelFlip;
+        const sinTA = Math.sin(trainCar.angle) * travelFlip;
 
         // Train car oriented bounding box corners
         const tCorners = [
@@ -1568,18 +1712,9 @@ export class TrainSystem {
 
       const isOncoming = other.direction !== consist.direction;
 
-      if (isOncoming) {
-        // Head-on scenario ("лоб в лоб")
-        if (dx <= 120) safeSpeed = 0;
-        else if (dx <= 350) safeSpeed = Math.min(safeSpeed, 10);
-        else if (dx <= 700) safeSpeed = Math.min(safeSpeed, 25);
-        else if (dx <= 1200) safeSpeed = Math.min(safeSpeed, 45);
-      } else {
-        // Moving in same direction ahead
-        if (dx <= 150) safeSpeed = 0;
-        else if (dx <= 400) safeSpeed = Math.min(safeSpeed, 15);
-        else if (dx <= 800) safeSpeed = Math.min(safeSpeed, 35);
-      }
+      // Head-on ("лоб в лоб") needs a larger margin; both cases brake along the same curve
+      const margin = isOncoming ? 150 : 100;
+      safeSpeed = Math.min(safeSpeed, this.brakingCurveSpeed(dx - margin, consist.deceleration));
     }
 
     return safeSpeed;
@@ -1594,7 +1729,8 @@ export class TrainSystem {
     maxSpeed: number,
     trackY: number = 8740,
     locoLen: number = 270,
-    isShunter: boolean = false
+    isShunter: boolean = false,
+    decel: number = 20
   ): number {
     // Front leading nose / leading wheelset of train:
     const frontNoseX = locoX + locoLen / 2;
@@ -1618,12 +1754,8 @@ export class TrainSystem {
 
     // Red or Blue aspect (Запрещающий сигнал - полная остановка строго ПЕРЕД светофором)
     if (nextSig.currentAspect === 'red' || nextSig.currentAspect === 'blue') {
-      if (distToSig <= 25) return 0; // Stop with nose strictly 20-25px before signal mast
-      if (distToSig <= 85) return 15;
-      if (distToSig <= 220) return 40;
-      if (distToSig <= 550) return 80;
-      if (distToSig <= 1000) return 140;
-      return maxSpeed * 0.75;
+      // Braking curve: the train starts braking early enough to stop before the mast
+      return Math.min(maxSpeed, this.brakingCurveSpeed(distToSig, decel));
     }
 
     // Lunar white shunting signal (Маневровый разрешающий - не более 25 км/ч)
@@ -1633,19 +1765,19 @@ export class TrainSystem {
 
     // Two Yellows / Two Yellows One Flashing (-ж-ж- / -ж~ж- - отклонение по стрелочному переводу, не более 40 км/ч)
     if (nextSig.currentAspect === 'two_yellows' || nextSig.currentAspect === 'two_yellows_one_flashing') {
-      if (distToSig <= 500) return 178; // 40 km/h
-      if (distToSig <= 1000) return 240;
+      if (distToSig <= 500) return Math.min(maxSpeed, 178); // 40 km/h
+      if (distToSig <= 1000) return Math.min(maxSpeed, 240);
       return Math.min(maxSpeed, 280);
     }
 
     // Yellow / Yellow Flashing aspect (Предупредительный сигнал - следующий блок-участок занят)
-    // РЖД ПТЭ: Проследование желтого огня требует снижения скорости до 40 км/ч (178 px/s).
-    // Поезд снижает скорость до 40 км/ч, благодаря чему идущий впереди состав успевает уехать и освободить блок-участок.
+    // Проследование желтого: скорость снижается до 40 км/ч у следующего светофора (ПТЭ, см. PROJECT_STATE.md для нормы).
     if (nextSig.currentAspect === 'yellow' || nextSig.currentAspect === 'yellow_flashing') {
-      if (distToSig <= 250) return 90;  // 20 km/h при близком подходе к красному
-      if (distToSig <= 800) return 160; // 36 km/h
-      if (distToSig <= 1800) return 195; // 44 km/h
-      return Math.min(maxSpeed * 0.45, 210); // Ограничение не более 47 км/ч для отставания от попутного состава
+      // Speed limit (not a stop): slow down to 90 px/s by the signal, from 178 px/s further away
+      const yellowLimit = Math.min(maxSpeed, 178);
+      const yellowTarget = Math.min(yellowLimit, 90);
+      const toTarget = Math.sqrt(yellowTarget * yellowTarget + 2 * Math.max(1, decel) * 0.8 * Math.max(0, distToSig - 25));
+      return Math.min(yellowLimit, toTarget);
     }
 
     // Green aspect (Разрешающий сигнал - установленная скорость)
@@ -1661,7 +1793,8 @@ export class TrainSystem {
     maxSpeed: number,
     trackY: number = 8880,
     locoLen: number = 270,
-    isShunter: boolean = false
+    isShunter: boolean = false,
+    decel: number = 20
   ): number {
     // Front leading nose / leading wheelset of westbound train:
     const frontNoseX = locoX - locoLen / 2;
@@ -1685,12 +1818,8 @@ export class TrainSystem {
 
     // Red or Blue aspect (Запрещающий сигнал - полная остановка строго ПЕРЕД светофором)
     if (nextSig.currentAspect === 'red' || nextSig.currentAspect === 'blue') {
-      if (distToSig <= 25) return 0; // Stop with nose strictly 20-25px before signal mast
-      if (distToSig <= 85) return 15;
-      if (distToSig <= 220) return 40;
-      if (distToSig <= 550) return 80;
-      if (distToSig <= 1000) return 140;
-      return maxSpeed * 0.75;
+      // Braking curve: the train starts braking early enough to stop before the mast
+      return Math.min(maxSpeed, this.brakingCurveSpeed(distToSig, decel));
     }
 
     // Lunar white shunting signal (Маневровый разрешающий - не более 25 км/ч)
@@ -1700,18 +1829,19 @@ export class TrainSystem {
 
     // Two Yellows / Two Yellows One Flashing (-ж-ж- / -ж~ж- - отклонение по стрелочному переводу, не более 40 км/ч)
     if (nextSig.currentAspect === 'two_yellows' || nextSig.currentAspect === 'two_yellows_one_flashing') {
-      if (distToSig <= 500) return 178; // 40 km/h
-      if (distToSig <= 1000) return 240;
+      if (distToSig <= 500) return Math.min(maxSpeed, 178); // 40 km/h
+      if (distToSig <= 1000) return Math.min(maxSpeed, 240);
       return Math.min(maxSpeed, 280);
     }
 
     // Yellow / Yellow Flashing aspect (Предупредительный сигнал)
-    // РЖД ПТЭ: Проследование желтого огня требует снижения скорости до 40 км/ч.
+    // Проследование желтого: скорость снижается до 40 км/ч у следующего светофора (см. PROJECT_STATE.md для нормы).
     if (nextSig.currentAspect === 'yellow' || nextSig.currentAspect === 'yellow_flashing') {
-      if (distToSig <= 250) return 90;  // 20 km/h
-      if (distToSig <= 800) return 160; // 36 km/h
-      if (distToSig <= 1800) return 195; // 44 km/h
-      return Math.min(maxSpeed * 0.45, 210); // Ограничение не более 47 км/ч
+      // Speed limit (not a stop): slow down to 90 px/s by the signal, from 178 px/s further away
+      const yellowLimit = Math.min(maxSpeed, 178);
+      const yellowTarget = Math.min(yellowLimit, 90);
+      const toTarget = Math.sqrt(yellowTarget * yellowTarget + 2 * Math.max(1, decel) * 0.8 * Math.max(0, distToSig - 25));
+      return Math.min(yellowLimit, toTarget);
     }
 
     // Green aspect (Разрешающий сигнал - установленная скорость)
