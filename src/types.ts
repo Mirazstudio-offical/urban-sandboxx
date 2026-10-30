@@ -2162,6 +2162,7 @@ export interface RollingStockCar {
   wheelClickTimer?: number;
   isSectionB?: boolean;
   isFlipped?: boolean;
+  railTrackY?: number; // track Y the car is actually on (cars switch turnouts one by one)
   isPlayerInside?: boolean;
 }
 
