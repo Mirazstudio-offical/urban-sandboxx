@@ -11,7 +11,8 @@
  * 6. Оптика и электрика (фары, тепловая инерция, тип поворотников, автопоезд)
  * 7. Кузовные панели (капот, багажник, двери, бамперы)
  * 8. Ключи и безопасность (уровень чип-ключа, доступ)
- * 9. Специальное оборудование (цистерны, гидрорукава, сцепки)
+ * 9. Индивидуальная анатомия кузова и силовой клетки (chassisAnatomy)
+ * 10. Точные координаты оптики (opticsMounts: стопари, фары, CHMSL)
  * ============================================================================
  */
 
@@ -71,6 +72,43 @@ export interface FuelCapOffset {
   isTrailer: boolean;
 }
 
+export interface VehicleChassisAnatomy {
+  xNose?: number;
+  xCowl?: number;
+  xA?: number;
+  xB?: number;
+  xC?: number;
+  xRearHeader?: number;
+  xTail?: number;
+  xFrontAxle?: number;
+  xRearAxle?: number;
+  xEngine?: number;
+  xCore?: number;
+  frameRatio?: number;
+  railRatio?: number;
+  frameMaxHalfWidth?: number;
+  specialPreset?: 'moto_sidecar' | 'motorcycle' | 'trailer';
+}
+
+export interface VehicleThirdBrakeLight {
+  enabled: boolean;
+  xFrac: number;
+  yFrac: number;
+  width: number;
+  height: number;
+  type: 'led_strip' | 'incandescent' | 'oled_bar';
+}
+
+export interface VehicleOpticsMounts {
+  headlightLeft: { xFrac: number; yFrac: number };
+  headlightRight: { xFrac: number; yFrac: number };
+  taillightLeft: { xFrac: number; yFrac: number };
+  taillightRight: { xFrac: number; yFrac: number };
+  fogLightLeft?: { xFrac: number; yFrac: number };
+  fogLightRight?: { xFrac: number; yFrac: number };
+  thirdBrakeLight?: VehicleThirdBrakeLight;
+}
+
 export interface MasterVehicleConfig extends CarConfig {
   id: string;
   nameRu: string;
@@ -105,6 +143,8 @@ export interface MasterVehicleConfig extends CarConfig {
   requiredKeyType: 'gold' | 'iron' | null;
   availableColors?: { name: string; hex: string; roofHex?: string }[];
   fluidTank?: FluidStorageTank;
+  chassisAnatomy: VehicleChassisAnatomy;
+  opticsMounts: VehicleOpticsMounts;
 }
 
 export const MASTER_VEHICLE_CONFIGS: Record<CarType, MasterVehicleConfig> = {
@@ -227,7 +267,54 @@ export const MASTER_VEHICLE_CONFIGS: Record<CarType, MasterVehicleConfig> = {
         "name": "Песочный",
         "hex": "#ca8a04"
       }
-    ]
+    ],
+    "chassisAnatomy": {
+      "xNose": 0.5,
+      "xCowl": 0.15,
+      "xA": 0.07,
+      "xB": -0.03,
+      "xC": -0.12,
+      "xRearHeader": -0.21,
+      "xTail": -0.5,
+      "xFrontAxle": 0.29,
+      "xRearAxle": -0.28,
+      "xEngine": 0.21,
+      "xCore": -0.02
+    },
+    "opticsMounts": {
+      "headlightLeft": {
+        "xFrac": 0.47,
+        "yFrac": -0.74
+      },
+      "headlightRight": {
+        "xFrac": 0.47,
+        "yFrac": 0.74
+      },
+      "taillightLeft": {
+        "xFrac": -0.46,
+        "yFrac": -0.78
+      },
+      "taillightRight": {
+        "xFrac": -0.46,
+        "yFrac": 0.78
+      },
+      "fogLightLeft": {
+        "xFrac": 0.45,
+        "yFrac": -0.7
+      },
+      "fogLightRight": {
+        "xFrac": 0.45,
+        "yFrac": 0.7
+      },
+      "thirdBrakeLight": {
+        "enabled": true,
+        "xFrac": -0.28,
+        "yFrac": 0,
+        "width": 4,
+        "height": 1.2,
+        "type": "led_strip"
+      }
+    }
   },
   "hatchback": {
     "id": "deal_hatchback",
@@ -334,7 +421,54 @@ export const MASTER_VEHICLE_CONFIGS: Record<CarType, MasterVehicleConfig> = {
         "name": "Graphite Gray",
         "hex": "#64748b"
       }
-    ]
+    ],
+    "chassisAnatomy": {
+      "xNose": 0.5,
+      "xCowl": 0.2,
+      "xA": 0.08,
+      "xB": -0.06,
+      "xC": -0.2,
+      "xRearHeader": -0.3,
+      "xTail": -0.5,
+      "xFrontAxle": 0.3,
+      "xRearAxle": -0.3,
+      "xEngine": 0.25,
+      "xCore": -0.04
+    },
+    "opticsMounts": {
+      "headlightLeft": {
+        "xFrac": 0.47,
+        "yFrac": -0.74
+      },
+      "headlightRight": {
+        "xFrac": 0.47,
+        "yFrac": 0.74
+      },
+      "taillightLeft": {
+        "xFrac": -0.46,
+        "yFrac": -0.78
+      },
+      "taillightRight": {
+        "xFrac": -0.46,
+        "yFrac": 0.78
+      },
+      "fogLightLeft": {
+        "xFrac": 0.45,
+        "yFrac": -0.7
+      },
+      "fogLightRight": {
+        "xFrac": 0.45,
+        "yFrac": 0.7
+      },
+      "thirdBrakeLight": {
+        "enabled": true,
+        "xFrac": -0.4,
+        "yFrac": 0,
+        "width": 4.5,
+        "height": 1.2,
+        "type": "led_strip"
+      }
+    }
   },
   "pickup": {
     "id": "deal_pickup",
@@ -442,7 +576,55 @@ export const MASTER_VEHICLE_CONFIGS: Record<CarType, MasterVehicleConfig> = {
         "name": "Alpine White",
         "hex": "#f8fafc"
       }
-    ]
+    ],
+    "chassisAnatomy": {
+      "xNose": 0.5,
+      "xCowl": 0.25,
+      "xA": 0.14,
+      "xB": -0.07,
+      "xC": -0.09,
+      "xRearHeader": -0.12,
+      "xTail": -0.5,
+      "xFrontAxle": 0.3,
+      "xRearAxle": -0.3,
+      "xEngine": 0.21,
+      "xCore": -0.2,
+      "frameRatio": 0.8
+    },
+    "opticsMounts": {
+      "headlightLeft": {
+        "xFrac": 0.47,
+        "yFrac": -0.74
+      },
+      "headlightRight": {
+        "xFrac": 0.47,
+        "yFrac": 0.74
+      },
+      "taillightLeft": {
+        "xFrac": -0.46,
+        "yFrac": -0.78
+      },
+      "taillightRight": {
+        "xFrac": -0.46,
+        "yFrac": 0.78
+      },
+      "fogLightLeft": {
+        "xFrac": 0.45,
+        "yFrac": -0.7
+      },
+      "fogLightRight": {
+        "xFrac": 0.45,
+        "yFrac": 0.7
+      },
+      "thirdBrakeLight": {
+        "enabled": true,
+        "xFrac": -0.1,
+        "yFrac": 0,
+        "width": 4,
+        "height": 1.2,
+        "type": "led_strip"
+      }
+    }
   },
   "sports": {
     "id": "cat_sports",
@@ -548,7 +730,55 @@ export const MASTER_VEHICLE_CONFIGS: Record<CarType, MasterVehicleConfig> = {
         "name": "Midnight Graphite",
         "hex": "#0f172a"
       }
-    ]
+    ],
+    "chassisAnatomy": {
+      "xNose": 0.5,
+      "xCowl": 0.26,
+      "xA": 0.16,
+      "xB": -0.06,
+      "xC": -0.16,
+      "xRearHeader": -0.24,
+      "xTail": -0.5,
+      "xFrontAxle": 0.3,
+      "xRearAxle": -0.28,
+      "xEngine": -0.17,
+      "xCore": -0.02,
+      "frameRatio": 0.7
+    },
+    "opticsMounts": {
+      "headlightLeft": {
+        "xFrac": 0.47,
+        "yFrac": -0.74
+      },
+      "headlightRight": {
+        "xFrac": 0.47,
+        "yFrac": 0.74
+      },
+      "taillightLeft": {
+        "xFrac": -0.46,
+        "yFrac": -0.78
+      },
+      "taillightRight": {
+        "xFrac": -0.46,
+        "yFrac": 0.78
+      },
+      "fogLightLeft": {
+        "xFrac": 0.45,
+        "yFrac": -0.7
+      },
+      "fogLightRight": {
+        "xFrac": 0.45,
+        "yFrac": 0.7
+      },
+      "thirdBrakeLight": {
+        "enabled": true,
+        "xFrac": -0.28,
+        "yFrac": 0,
+        "width": 4,
+        "height": 1.2,
+        "type": "led_strip"
+      }
+    }
   },
   "suv": {
     "id": "cat_suv",
@@ -669,7 +899,55 @@ export const MASTER_VEHICLE_CONFIGS: Record<CarType, MasterVehicleConfig> = {
         "name": "Песочный",
         "hex": "#ca8a04"
       }
-    ]
+    ],
+    "chassisAnatomy": {
+      "xNose": 0.5,
+      "xCowl": 0.22,
+      "xA": 0.17,
+      "xB": -0.02,
+      "xC": -0.3,
+      "xRearHeader": -0.36,
+      "xTail": -0.5,
+      "xFrontAxle": 0.3,
+      "xRearAxle": -0.29,
+      "xEngine": 0.26,
+      "xCore": -0.06,
+      "frameRatio": 0.8
+    },
+    "opticsMounts": {
+      "headlightLeft": {
+        "xFrac": 0.47,
+        "yFrac": -0.74
+      },
+      "headlightRight": {
+        "xFrac": 0.47,
+        "yFrac": 0.74
+      },
+      "taillightLeft": {
+        "xFrac": -0.46,
+        "yFrac": -0.78
+      },
+      "taillightRight": {
+        "xFrac": -0.46,
+        "yFrac": 0.78
+      },
+      "fogLightLeft": {
+        "xFrac": 0.45,
+        "yFrac": -0.7
+      },
+      "fogLightRight": {
+        "xFrac": 0.45,
+        "yFrac": 0.7
+      },
+      "thirdBrakeLight": {
+        "enabled": true,
+        "xFrac": -0.42,
+        "yFrac": 0,
+        "width": 5,
+        "height": 1.4,
+        "type": "led_strip"
+      }
+    }
   },
   "taxi": {
     "id": "cat_taxi",
@@ -761,7 +1039,54 @@ export const MASTER_VEHICLE_CONFIGS: Record<CarType, MasterVehicleConfig> = {
         "name": "Taxi Yellow",
         "hex": "#facc15"
       }
-    ]
+    ],
+    "chassisAnatomy": {
+      "xNose": 0.5,
+      "xCowl": 0.15,
+      "xA": 0.07,
+      "xB": -0.03,
+      "xC": -0.12,
+      "xRearHeader": -0.21,
+      "xTail": -0.5,
+      "xFrontAxle": 0.29,
+      "xRearAxle": -0.28,
+      "xEngine": 0.21,
+      "xCore": -0.02
+    },
+    "opticsMounts": {
+      "headlightLeft": {
+        "xFrac": 0.47,
+        "yFrac": -0.74
+      },
+      "headlightRight": {
+        "xFrac": 0.47,
+        "yFrac": 0.74
+      },
+      "taillightLeft": {
+        "xFrac": -0.46,
+        "yFrac": -0.78
+      },
+      "taillightRight": {
+        "xFrac": -0.46,
+        "yFrac": 0.78
+      },
+      "fogLightLeft": {
+        "xFrac": 0.45,
+        "yFrac": -0.7
+      },
+      "fogLightRight": {
+        "xFrac": 0.45,
+        "yFrac": 0.7
+      },
+      "thirdBrakeLight": {
+        "enabled": true,
+        "xFrac": -0.28,
+        "yFrac": 0,
+        "width": 4,
+        "height": 1.2,
+        "type": "led_strip"
+      }
+    }
   },
   "police": {
     "id": "cat_police",
@@ -855,7 +1180,54 @@ export const MASTER_VEHICLE_CONFIGS: Record<CarType, MasterVehicleConfig> = {
         "hex": "#f8fafc",
         "roofHex": "#2563eb"
       }
-    ]
+    ],
+    "chassisAnatomy": {
+      "xNose": 0.5,
+      "xCowl": 0.15,
+      "xA": 0.07,
+      "xB": -0.03,
+      "xC": -0.12,
+      "xRearHeader": -0.21,
+      "xTail": -0.5,
+      "xFrontAxle": 0.29,
+      "xRearAxle": -0.28,
+      "xEngine": 0.21,
+      "xCore": -0.02
+    },
+    "opticsMounts": {
+      "headlightLeft": {
+        "xFrac": 0.47,
+        "yFrac": -0.74
+      },
+      "headlightRight": {
+        "xFrac": 0.47,
+        "yFrac": 0.74
+      },
+      "taillightLeft": {
+        "xFrac": -0.46,
+        "yFrac": -0.78
+      },
+      "taillightRight": {
+        "xFrac": -0.46,
+        "yFrac": 0.78
+      },
+      "fogLightLeft": {
+        "xFrac": 0.45,
+        "yFrac": -0.7
+      },
+      "fogLightRight": {
+        "xFrac": 0.45,
+        "yFrac": 0.7
+      },
+      "thirdBrakeLight": {
+        "enabled": true,
+        "xFrac": -0.34,
+        "yFrac": 0,
+        "width": 4,
+        "height": 1,
+        "type": "led_strip"
+      }
+    }
   },
   "ambulance": {
     "id": "cat_ambulance",
@@ -954,7 +1326,55 @@ export const MASTER_VEHICLE_CONFIGS: Record<CarType, MasterVehicleConfig> = {
         "name": "Medic White",
         "hex": "#f8fafc"
       }
-    ]
+    ],
+    "chassisAnatomy": {
+      "xNose": 0.5,
+      "xCowl": 0.46,
+      "xA": 0.44,
+      "xB": 0.05,
+      "xC": -0.25,
+      "xRearHeader": -0.36,
+      "xTail": -0.5,
+      "xFrontAxle": 0.36,
+      "xRearAxle": -0.22,
+      "xEngine": 0.3,
+      "xCore": -0.05,
+      "frameRatio": 0.86
+    },
+    "opticsMounts": {
+      "headlightLeft": {
+        "xFrac": 0.47,
+        "yFrac": -0.74
+      },
+      "headlightRight": {
+        "xFrac": 0.47,
+        "yFrac": 0.74
+      },
+      "taillightLeft": {
+        "xFrac": -0.46,
+        "yFrac": -0.78
+      },
+      "taillightRight": {
+        "xFrac": -0.46,
+        "yFrac": 0.78
+      },
+      "fogLightLeft": {
+        "xFrac": 0.45,
+        "yFrac": -0.7
+      },
+      "fogLightRight": {
+        "xFrac": 0.45,
+        "yFrac": 0.7
+      },
+      "thirdBrakeLight": {
+        "enabled": true,
+        "xFrac": -0.28,
+        "yFrac": 0,
+        "width": 4,
+        "height": 1.2,
+        "type": "led_strip"
+      }
+    }
   },
   "bus": {
     "id": "cat_bus",
@@ -1054,7 +1474,55 @@ export const MASTER_VEHICLE_CONFIGS: Record<CarType, MasterVehicleConfig> = {
         "hex": "#ea580c",
         "roofHex": "#f8fafc"
       }
-    ]
+    ],
+    "chassisAnatomy": {
+      "xNose": 0.5,
+      "xCowl": 0.46,
+      "xA": 0.42,
+      "xB": 0.1,
+      "xC": -0.35,
+      "xRearHeader": -0.42,
+      "xTail": -0.5,
+      "xFrontAxle": 0.42,
+      "xRearAxle": -0.3,
+      "xEngine": -0.38,
+      "xCore": -0.05,
+      "frameRatio": 0.9
+    },
+    "opticsMounts": {
+      "headlightLeft": {
+        "xFrac": 0.47,
+        "yFrac": -0.74
+      },
+      "headlightRight": {
+        "xFrac": 0.47,
+        "yFrac": 0.74
+      },
+      "taillightLeft": {
+        "xFrac": -0.46,
+        "yFrac": -0.78
+      },
+      "taillightRight": {
+        "xFrac": -0.46,
+        "yFrac": 0.78
+      },
+      "fogLightLeft": {
+        "xFrac": 0.45,
+        "yFrac": -0.7
+      },
+      "fogLightRight": {
+        "xFrac": 0.45,
+        "yFrac": 0.7
+      },
+      "thirdBrakeLight": {
+        "enabled": false,
+        "xFrac": 0,
+        "yFrac": 0,
+        "width": 0,
+        "height": 0,
+        "type": "incandescent"
+      }
+    }
   },
   "supercar": {
     "id": "cat_supercar",
@@ -1156,7 +1624,55 @@ export const MASTER_VEHICLE_CONFIGS: Record<CarType, MasterVehicleConfig> = {
         "name": "Blood Orange",
         "hex": "#ea580c"
       }
-    ]
+    ],
+    "chassisAnatomy": {
+      "xNose": 0.5,
+      "xCowl": 0.26,
+      "xA": 0.16,
+      "xB": -0.06,
+      "xC": -0.16,
+      "xRearHeader": -0.24,
+      "xTail": -0.5,
+      "xFrontAxle": 0.3,
+      "xRearAxle": -0.28,
+      "xEngine": -0.17,
+      "xCore": -0.02,
+      "frameRatio": 0.7
+    },
+    "opticsMounts": {
+      "headlightLeft": {
+        "xFrac": 0.47,
+        "yFrac": -0.74
+      },
+      "headlightRight": {
+        "xFrac": 0.47,
+        "yFrac": 0.74
+      },
+      "taillightLeft": {
+        "xFrac": -0.46,
+        "yFrac": -0.78
+      },
+      "taillightRight": {
+        "xFrac": -0.46,
+        "yFrac": 0.78
+      },
+      "fogLightLeft": {
+        "xFrac": 0.45,
+        "yFrac": -0.7
+      },
+      "fogLightRight": {
+        "xFrac": 0.45,
+        "yFrac": 0.7
+      },
+      "thirdBrakeLight": {
+        "enabled": true,
+        "xFrac": -0.28,
+        "yFrac": 0,
+        "width": 4,
+        "height": 1.2,
+        "type": "led_strip"
+      }
+    }
   },
   "wagon_classic": {
     "id": "deal_wagon_classic",
@@ -1263,7 +1779,54 @@ export const MASTER_VEHICLE_CONFIGS: Record<CarType, MasterVehicleConfig> = {
         "name": "Crystal Dark Gray",
         "hex": "#334155"
       }
-    ]
+    ],
+    "chassisAnatomy": {
+      "xNose": 0.5,
+      "xCowl": 0.15,
+      "xA": 0.07,
+      "xB": -0.04,
+      "xC": -0.22,
+      "xRearHeader": -0.26,
+      "xTail": -0.5,
+      "xFrontAxle": 0.28,
+      "xRearAxle": -0.3,
+      "xEngine": 0.2,
+      "xCore": -0.04
+    },
+    "opticsMounts": {
+      "headlightLeft": {
+        "xFrac": 0.47,
+        "yFrac": -0.74
+      },
+      "headlightRight": {
+        "xFrac": 0.47,
+        "yFrac": 0.74
+      },
+      "taillightLeft": {
+        "xFrac": -0.46,
+        "yFrac": -0.78
+      },
+      "taillightRight": {
+        "xFrac": -0.46,
+        "yFrac": 0.78
+      },
+      "fogLightLeft": {
+        "xFrac": 0.45,
+        "yFrac": -0.7
+      },
+      "fogLightRight": {
+        "xFrac": 0.45,
+        "yFrac": 0.7
+      },
+      "thirdBrakeLight": {
+        "enabled": true,
+        "xFrac": -0.44,
+        "yFrac": 0,
+        "width": 5.5,
+        "height": 1.4,
+        "type": "led_strip"
+      }
+    }
   },
   "wagon_modern": {
     "id": "deal_wagon_modern",
@@ -1371,7 +1934,54 @@ export const MASTER_VEHICLE_CONFIGS: Record<CarType, MasterVehicleConfig> = {
         "name": "Amazon Green",
         "hex": "#166534"
       }
-    ]
+    ],
+    "chassisAnatomy": {
+      "xNose": 0.5,
+      "xCowl": 0.15,
+      "xA": 0.07,
+      "xB": -0.04,
+      "xC": -0.22,
+      "xRearHeader": -0.26,
+      "xTail": -0.5,
+      "xFrontAxle": 0.28,
+      "xRearAxle": -0.3,
+      "xEngine": 0.2,
+      "xCore": -0.04
+    },
+    "opticsMounts": {
+      "headlightLeft": {
+        "xFrac": 0.47,
+        "yFrac": -0.74
+      },
+      "headlightRight": {
+        "xFrac": 0.47,
+        "yFrac": 0.74
+      },
+      "taillightLeft": {
+        "xFrac": -0.46,
+        "yFrac": -0.78
+      },
+      "taillightRight": {
+        "xFrac": -0.46,
+        "yFrac": 0.78
+      },
+      "fogLightLeft": {
+        "xFrac": 0.45,
+        "yFrac": -0.7
+      },
+      "fogLightRight": {
+        "xFrac": 0.45,
+        "yFrac": 0.7
+      },
+      "thirdBrakeLight": {
+        "enabled": true,
+        "xFrac": -0.44,
+        "yFrac": 0,
+        "width": 5.5,
+        "height": 1.4,
+        "type": "led_strip"
+      }
+    }
   },
   "crossover_compact": {
     "id": "deal_crossover_compact",
@@ -1479,7 +2089,55 @@ export const MASTER_VEHICLE_CONFIGS: Record<CarType, MasterVehicleConfig> = {
         "name": "Wet Asphalt",
         "hex": "#475569"
       }
-    ]
+    ],
+    "chassisAnatomy": {
+      "xNose": 0.5,
+      "xCowl": 0.22,
+      "xA": 0.17,
+      "xB": -0.02,
+      "xC": -0.3,
+      "xRearHeader": -0.36,
+      "xTail": -0.5,
+      "xFrontAxle": 0.3,
+      "xRearAxle": -0.29,
+      "xEngine": 0.26,
+      "xCore": -0.06,
+      "frameRatio": 0.8
+    },
+    "opticsMounts": {
+      "headlightLeft": {
+        "xFrac": 0.47,
+        "yFrac": -0.74
+      },
+      "headlightRight": {
+        "xFrac": 0.47,
+        "yFrac": 0.74
+      },
+      "taillightLeft": {
+        "xFrac": -0.46,
+        "yFrac": -0.78
+      },
+      "taillightRight": {
+        "xFrac": -0.46,
+        "yFrac": 0.78
+      },
+      "fogLightLeft": {
+        "xFrac": 0.45,
+        "yFrac": -0.7
+      },
+      "fogLightRight": {
+        "xFrac": 0.45,
+        "yFrac": 0.7
+      },
+      "thirdBrakeLight": {
+        "enabled": true,
+        "xFrac": -0.42,
+        "yFrac": 0,
+        "width": 5,
+        "height": 1.4,
+        "type": "led_strip"
+      }
+    }
   },
   "sedan_classic": {
     "id": "deal_sedan_classic",
@@ -1590,7 +2248,54 @@ export const MASTER_VEHICLE_CONFIGS: Record<CarType, MasterVehicleConfig> = {
         "name": "Jasper Wine",
         "hex": "#9f1239"
       }
-    ]
+    ],
+    "chassisAnatomy": {
+      "xNose": 0.5,
+      "xCowl": 0.15,
+      "xA": 0.07,
+      "xB": -0.03,
+      "xC": -0.12,
+      "xRearHeader": -0.21,
+      "xTail": -0.5,
+      "xFrontAxle": 0.29,
+      "xRearAxle": -0.28,
+      "xEngine": 0.21,
+      "xCore": -0.02
+    },
+    "opticsMounts": {
+      "headlightLeft": {
+        "xFrac": 0.47,
+        "yFrac": -0.74
+      },
+      "headlightRight": {
+        "xFrac": 0.47,
+        "yFrac": 0.74
+      },
+      "taillightLeft": {
+        "xFrac": -0.46,
+        "yFrac": -0.78
+      },
+      "taillightRight": {
+        "xFrac": -0.46,
+        "yFrac": 0.78
+      },
+      "fogLightLeft": {
+        "xFrac": 0.45,
+        "yFrac": -0.7
+      },
+      "fogLightRight": {
+        "xFrac": 0.45,
+        "yFrac": 0.7
+      },
+      "thirdBrakeLight": {
+        "enabled": false,
+        "xFrac": 0,
+        "yFrac": 0,
+        "width": 0,
+        "height": 0,
+        "type": "incandescent"
+      }
+    }
   },
   "sedan_compact": {
     "id": "deal_sedan_compact",
@@ -1701,7 +2406,54 @@ export const MASTER_VEHICLE_CONFIGS: Record<CarType, MasterVehicleConfig> = {
         "name": "Coriander Gold",
         "hex": "#d97706"
       }
-    ]
+    ],
+    "chassisAnatomy": {
+      "xNose": 0.5,
+      "xCowl": 0.15,
+      "xA": 0.07,
+      "xB": -0.03,
+      "xC": -0.12,
+      "xRearHeader": -0.21,
+      "xTail": -0.5,
+      "xFrontAxle": 0.29,
+      "xRearAxle": -0.28,
+      "xEngine": 0.21,
+      "xCore": -0.02
+    },
+    "opticsMounts": {
+      "headlightLeft": {
+        "xFrac": 0.47,
+        "yFrac": -0.74
+      },
+      "headlightRight": {
+        "xFrac": 0.47,
+        "yFrac": 0.74
+      },
+      "taillightLeft": {
+        "xFrac": -0.46,
+        "yFrac": -0.78
+      },
+      "taillightRight": {
+        "xFrac": -0.46,
+        "yFrac": 0.78
+      },
+      "fogLightLeft": {
+        "xFrac": 0.45,
+        "yFrac": -0.7
+      },
+      "fogLightRight": {
+        "xFrac": 0.45,
+        "yFrac": 0.7
+      },
+      "thirdBrakeLight": {
+        "enabled": true,
+        "xFrac": -0.32,
+        "yFrac": 0,
+        "width": 4,
+        "height": 1.2,
+        "type": "led_strip"
+      }
+    }
   },
   "compact_matiz": {
     "id": "deal_compact_matiz",
@@ -1816,7 +2568,54 @@ export const MASTER_VEHICLE_CONFIGS: Record<CarType, MasterVehicleConfig> = {
         "name": "Snow White",
         "hex": "#ffffff"
       }
-    ]
+    ],
+    "chassisAnatomy": {
+      "xNose": 0.5,
+      "xCowl": 0.2,
+      "xA": 0.08,
+      "xB": -0.06,
+      "xC": -0.2,
+      "xRearHeader": -0.3,
+      "xTail": -0.5,
+      "xFrontAxle": 0.3,
+      "xRearAxle": -0.3,
+      "xEngine": 0.25,
+      "xCore": -0.04
+    },
+    "opticsMounts": {
+      "headlightLeft": {
+        "xFrac": 0.47,
+        "yFrac": -0.74
+      },
+      "headlightRight": {
+        "xFrac": 0.47,
+        "yFrac": 0.74
+      },
+      "taillightLeft": {
+        "xFrac": -0.46,
+        "yFrac": -0.78
+      },
+      "taillightRight": {
+        "xFrac": -0.46,
+        "yFrac": 0.78
+      },
+      "fogLightLeft": {
+        "xFrac": 0.45,
+        "yFrac": -0.7
+      },
+      "fogLightRight": {
+        "xFrac": 0.45,
+        "yFrac": 0.7
+      },
+      "thirdBrakeLight": {
+        "enabled": true,
+        "xFrac": -0.4,
+        "yFrac": 0,
+        "width": 4.5,
+        "height": 1.2,
+        "type": "led_strip"
+      }
+    }
   },
   "sedan_logan": {
     "id": "deal_sedan_logan",
@@ -1927,7 +2726,54 @@ export const MASTER_VEHICLE_CONFIGS: Record<CarType, MasterVehicleConfig> = {
         "name": "Titanium Silver",
         "hex": "#94a3b8"
       }
-    ]
+    ],
+    "chassisAnatomy": {
+      "xNose": 0.5,
+      "xCowl": 0.15,
+      "xA": 0.07,
+      "xB": -0.03,
+      "xC": -0.12,
+      "xRearHeader": -0.21,
+      "xTail": -0.5,
+      "xFrontAxle": 0.29,
+      "xRearAxle": -0.28,
+      "xEngine": 0.21,
+      "xCore": -0.02
+    },
+    "opticsMounts": {
+      "headlightLeft": {
+        "xFrac": 0.47,
+        "yFrac": -0.74
+      },
+      "headlightRight": {
+        "xFrac": 0.47,
+        "yFrac": 0.74
+      },
+      "taillightLeft": {
+        "xFrac": -0.46,
+        "yFrac": -0.78
+      },
+      "taillightRight": {
+        "xFrac": -0.46,
+        "yFrac": 0.78
+      },
+      "fogLightLeft": {
+        "xFrac": 0.45,
+        "yFrac": -0.7
+      },
+      "fogLightRight": {
+        "xFrac": 0.45,
+        "yFrac": 0.7
+      },
+      "thirdBrakeLight": {
+        "enabled": true,
+        "xFrac": -0.28,
+        "yFrac": 0,
+        "width": 4,
+        "height": 1.2,
+        "type": "led_strip"
+      }
+    }
   },
   "sedan_nexia": {
     "id": "deal_sedan_nexia",
@@ -2038,7 +2884,54 @@ export const MASTER_VEHICLE_CONFIGS: Record<CarType, MasterVehicleConfig> = {
         "name": "Gloss White",
         "hex": "#f8fafc"
       }
-    ]
+    ],
+    "chassisAnatomy": {
+      "xNose": 0.5,
+      "xCowl": 0.15,
+      "xA": 0.07,
+      "xB": -0.03,
+      "xC": -0.12,
+      "xRearHeader": -0.21,
+      "xTail": -0.5,
+      "xFrontAxle": 0.29,
+      "xRearAxle": -0.28,
+      "xEngine": 0.21,
+      "xCore": -0.02
+    },
+    "opticsMounts": {
+      "headlightLeft": {
+        "xFrac": 0.47,
+        "yFrac": -0.74
+      },
+      "headlightRight": {
+        "xFrac": 0.47,
+        "yFrac": 0.74
+      },
+      "taillightLeft": {
+        "xFrac": -0.46,
+        "yFrac": -0.78
+      },
+      "taillightRight": {
+        "xFrac": -0.46,
+        "yFrac": 0.78
+      },
+      "fogLightLeft": {
+        "xFrac": 0.45,
+        "yFrac": -0.7
+      },
+      "fogLightRight": {
+        "xFrac": 0.45,
+        "yFrac": 0.7
+      },
+      "thirdBrakeLight": {
+        "enabled": true,
+        "xFrac": -0.28,
+        "yFrac": 0,
+        "width": 4,
+        "height": 1.2,
+        "type": "led_strip"
+      }
+    }
   },
   "liftback_tavria": {
     "id": "deal_liftback_tavria",
@@ -2149,7 +3042,54 @@ export const MASTER_VEHICLE_CONFIGS: Record<CarType, MasterVehicleConfig> = {
         "name": "Desert Sand",
         "hex": "#ca8a04"
       }
-    ]
+    ],
+    "chassisAnatomy": {
+      "xNose": 0.5,
+      "xCowl": 0.2,
+      "xA": 0.08,
+      "xB": -0.06,
+      "xC": -0.2,
+      "xRearHeader": -0.3,
+      "xTail": -0.5,
+      "xFrontAxle": 0.3,
+      "xRearAxle": -0.3,
+      "xEngine": 0.25,
+      "xCore": -0.04
+    },
+    "opticsMounts": {
+      "headlightLeft": {
+        "xFrac": 0.47,
+        "yFrac": -0.74
+      },
+      "headlightRight": {
+        "xFrac": 0.47,
+        "yFrac": 0.74
+      },
+      "taillightLeft": {
+        "xFrac": -0.46,
+        "yFrac": -0.78
+      },
+      "taillightRight": {
+        "xFrac": -0.46,
+        "yFrac": 0.78
+      },
+      "fogLightLeft": {
+        "xFrac": 0.45,
+        "yFrac": -0.7
+      },
+      "fogLightRight": {
+        "xFrac": 0.45,
+        "yFrac": 0.7
+      },
+      "thirdBrakeLight": {
+        "enabled": true,
+        "xFrac": -0.4,
+        "yFrac": 0,
+        "width": 4.5,
+        "height": 1.2,
+        "type": "led_strip"
+      }
+    }
   },
   "sedan_accent": {
     "id": "deal_sedan_accent",
@@ -2260,7 +3200,54 @@ export const MASTER_VEHICLE_CONFIGS: Record<CarType, MasterVehicleConfig> = {
         "name": "Pure White",
         "hex": "#ffffff"
       }
-    ]
+    ],
+    "chassisAnatomy": {
+      "xNose": 0.5,
+      "xCowl": 0.15,
+      "xA": 0.07,
+      "xB": -0.03,
+      "xC": -0.12,
+      "xRearHeader": -0.21,
+      "xTail": -0.5,
+      "xFrontAxle": 0.29,
+      "xRearAxle": -0.28,
+      "xEngine": 0.21,
+      "xCore": -0.02
+    },
+    "opticsMounts": {
+      "headlightLeft": {
+        "xFrac": 0.47,
+        "yFrac": -0.74
+      },
+      "headlightRight": {
+        "xFrac": 0.47,
+        "yFrac": 0.74
+      },
+      "taillightLeft": {
+        "xFrac": -0.46,
+        "yFrac": -0.78
+      },
+      "taillightRight": {
+        "xFrac": -0.46,
+        "yFrac": 0.78
+      },
+      "fogLightLeft": {
+        "xFrac": 0.45,
+        "yFrac": -0.7
+      },
+      "fogLightRight": {
+        "xFrac": 0.45,
+        "yFrac": 0.7
+      },
+      "thirdBrakeLight": {
+        "enabled": true,
+        "xFrac": -0.28,
+        "yFrac": 0,
+        "width": 4,
+        "height": 1.2,
+        "type": "led_strip"
+      }
+    }
   },
   "sedan_polo": {
     "id": "deal_sedan_polo",
@@ -2372,7 +3359,54 @@ export const MASTER_VEHICLE_CONFIGS: Record<CarType, MasterVehicleConfig> = {
         "name": "Toffee Brown",
         "hex": "#78350f"
       }
-    ]
+    ],
+    "chassisAnatomy": {
+      "xNose": 0.5,
+      "xCowl": 0.15,
+      "xA": 0.07,
+      "xB": -0.03,
+      "xC": -0.12,
+      "xRearHeader": -0.21,
+      "xTail": -0.5,
+      "xFrontAxle": 0.29,
+      "xRearAxle": -0.28,
+      "xEngine": 0.21,
+      "xCore": -0.02
+    },
+    "opticsMounts": {
+      "headlightLeft": {
+        "xFrac": 0.47,
+        "yFrac": -0.74
+      },
+      "headlightRight": {
+        "xFrac": 0.47,
+        "yFrac": 0.74
+      },
+      "taillightLeft": {
+        "xFrac": -0.46,
+        "yFrac": -0.78
+      },
+      "taillightRight": {
+        "xFrac": -0.46,
+        "yFrac": 0.78
+      },
+      "fogLightLeft": {
+        "xFrac": 0.45,
+        "yFrac": -0.7
+      },
+      "fogLightRight": {
+        "xFrac": 0.45,
+        "yFrac": 0.7
+      },
+      "thirdBrakeLight": {
+        "enabled": true,
+        "xFrac": -0.28,
+        "yFrac": 0,
+        "width": 4,
+        "height": 1.2,
+        "type": "led_strip"
+      }
+    }
   },
   "hatch_samara": {
     "id": "deal_hatch_samara",
@@ -2487,7 +3521,54 @@ export const MASTER_VEHICLE_CONFIGS: Record<CarType, MasterVehicleConfig> = {
         "name": "Deep Purple",
         "hex": "#4c1d95"
       }
-    ]
+    ],
+    "chassisAnatomy": {
+      "xNose": 0.5,
+      "xCowl": 0.2,
+      "xA": 0.08,
+      "xB": -0.06,
+      "xC": -0.2,
+      "xRearHeader": -0.3,
+      "xTail": -0.5,
+      "xFrontAxle": 0.3,
+      "xRearAxle": -0.3,
+      "xEngine": 0.25,
+      "xCore": -0.04
+    },
+    "opticsMounts": {
+      "headlightLeft": {
+        "xFrac": 0.47,
+        "yFrac": -0.74
+      },
+      "headlightRight": {
+        "xFrac": 0.47,
+        "yFrac": 0.74
+      },
+      "taillightLeft": {
+        "xFrac": -0.46,
+        "yFrac": -0.78
+      },
+      "taillightRight": {
+        "xFrac": -0.46,
+        "yFrac": 0.78
+      },
+      "fogLightLeft": {
+        "xFrac": 0.45,
+        "yFrac": -0.7
+      },
+      "fogLightRight": {
+        "xFrac": 0.45,
+        "yFrac": 0.7
+      },
+      "thirdBrakeLight": {
+        "enabled": true,
+        "xFrac": -0.4,
+        "yFrac": 0,
+        "width": 4.5,
+        "height": 1.2,
+        "type": "led_strip"
+      }
+    }
   },
   "sedan_samara": {
     "id": "deal_sedan_samara",
@@ -2598,7 +3679,54 @@ export const MASTER_VEHICLE_CONFIGS: Record<CarType, MasterVehicleConfig> = {
         "name": "Ice Blue",
         "hex": "#93c5fd"
       }
-    ]
+    ],
+    "chassisAnatomy": {
+      "xNose": 0.5,
+      "xCowl": 0.15,
+      "xA": 0.07,
+      "xB": -0.03,
+      "xC": -0.12,
+      "xRearHeader": -0.21,
+      "xTail": -0.5,
+      "xFrontAxle": 0.29,
+      "xRearAxle": -0.28,
+      "xEngine": 0.21,
+      "xCore": -0.02
+    },
+    "opticsMounts": {
+      "headlightLeft": {
+        "xFrac": 0.47,
+        "yFrac": -0.74
+      },
+      "headlightRight": {
+        "xFrac": 0.47,
+        "yFrac": 0.74
+      },
+      "taillightLeft": {
+        "xFrac": -0.46,
+        "yFrac": -0.78
+      },
+      "taillightRight": {
+        "xFrac": -0.46,
+        "yFrac": 0.78
+      },
+      "fogLightLeft": {
+        "xFrac": 0.45,
+        "yFrac": -0.7
+      },
+      "fogLightRight": {
+        "xFrac": 0.45,
+        "yFrac": 0.7
+      },
+      "thirdBrakeLight": {
+        "enabled": true,
+        "xFrac": -0.28,
+        "yFrac": 0,
+        "width": 4,
+        "height": 1.2,
+        "type": "led_strip"
+      }
+    }
   },
   "sedan_luxury": {
     "id": "cat_sedan_luxury",
@@ -2685,7 +3813,54 @@ export const MASTER_VEHICLE_CONFIGS: Record<CarType, MasterVehicleConfig> = {
       "hasTrunk": true
     },
     "keyTier": "smart",
-    "requiredKeyType": null
+    "requiredKeyType": null,
+    "chassisAnatomy": {
+      "xNose": 0.5,
+      "xCowl": 0.15,
+      "xA": 0.07,
+      "xB": -0.03,
+      "xC": -0.12,
+      "xRearHeader": -0.21,
+      "xTail": -0.5,
+      "xFrontAxle": 0.29,
+      "xRearAxle": -0.28,
+      "xEngine": 0.21,
+      "xCore": -0.02
+    },
+    "opticsMounts": {
+      "headlightLeft": {
+        "xFrac": 0.47,
+        "yFrac": -0.74
+      },
+      "headlightRight": {
+        "xFrac": 0.47,
+        "yFrac": 0.74
+      },
+      "taillightLeft": {
+        "xFrac": -0.46,
+        "yFrac": -0.78
+      },
+      "taillightRight": {
+        "xFrac": -0.46,
+        "yFrac": 0.78
+      },
+      "fogLightLeft": {
+        "xFrac": 0.45,
+        "yFrac": -0.7
+      },
+      "fogLightRight": {
+        "xFrac": 0.45,
+        "yFrac": 0.7
+      },
+      "thirdBrakeLight": {
+        "enabled": true,
+        "xFrac": -0.28,
+        "yFrac": 0,
+        "width": 4,
+        "height": 1.2,
+        "type": "led_strip"
+      }
+    }
   },
   "suv_luxury": {
     "id": "deal_suv_luxury",
@@ -2793,7 +3968,55 @@ export const MASTER_VEHICLE_CONFIGS: Record<CarType, MasterVehicleConfig> = {
         "name": "Pine Green",
         "hex": "#166534"
       }
-    ]
+    ],
+    "chassisAnatomy": {
+      "xNose": 0.5,
+      "xCowl": 0.22,
+      "xA": 0.17,
+      "xB": -0.02,
+      "xC": -0.3,
+      "xRearHeader": -0.36,
+      "xTail": -0.5,
+      "xFrontAxle": 0.3,
+      "xRearAxle": -0.29,
+      "xEngine": 0.26,
+      "xCore": -0.06,
+      "frameRatio": 0.8
+    },
+    "opticsMounts": {
+      "headlightLeft": {
+        "xFrac": 0.47,
+        "yFrac": -0.74
+      },
+      "headlightRight": {
+        "xFrac": 0.47,
+        "yFrac": 0.74
+      },
+      "taillightLeft": {
+        "xFrac": -0.46,
+        "yFrac": -0.78
+      },
+      "taillightRight": {
+        "xFrac": -0.46,
+        "yFrac": 0.78
+      },
+      "fogLightLeft": {
+        "xFrac": 0.45,
+        "yFrac": -0.7
+      },
+      "fogLightRight": {
+        "xFrac": 0.45,
+        "yFrac": 0.7
+      },
+      "thirdBrakeLight": {
+        "enabled": true,
+        "xFrac": -0.42,
+        "yFrac": 0,
+        "width": 5,
+        "height": 1.4,
+        "type": "led_strip"
+      }
+    }
   },
   "pickup_heavy": {
     "id": "cat_pickup_heavy",
@@ -2894,7 +4117,55 @@ export const MASTER_VEHICLE_CONFIGS: Record<CarType, MasterVehicleConfig> = {
         "name": "Arctic White",
         "hex": "#f8fafc"
       }
-    ]
+    ],
+    "chassisAnatomy": {
+      "xNose": 0.5,
+      "xCowl": 0.25,
+      "xA": 0.14,
+      "xB": -0.07,
+      "xC": -0.09,
+      "xRearHeader": -0.12,
+      "xTail": -0.5,
+      "xFrontAxle": 0.3,
+      "xRearAxle": -0.3,
+      "xEngine": 0.21,
+      "xCore": -0.2,
+      "frameRatio": 0.8
+    },
+    "opticsMounts": {
+      "headlightLeft": {
+        "xFrac": 0.47,
+        "yFrac": -0.74
+      },
+      "headlightRight": {
+        "xFrac": 0.47,
+        "yFrac": 0.74
+      },
+      "taillightLeft": {
+        "xFrac": -0.46,
+        "yFrac": -0.78
+      },
+      "taillightRight": {
+        "xFrac": -0.46,
+        "yFrac": 0.78
+      },
+      "fogLightLeft": {
+        "xFrac": 0.45,
+        "yFrac": -0.7
+      },
+      "fogLightRight": {
+        "xFrac": 0.45,
+        "yFrac": 0.7
+      },
+      "thirdBrakeLight": {
+        "enabled": true,
+        "xFrac": -0.1,
+        "yFrac": 0,
+        "width": 4,
+        "height": 1.2,
+        "type": "led_strip"
+      }
+    }
   },
   "hatch_hot": {
     "id": "deal_hatch_hot",
@@ -3003,7 +4274,54 @@ export const MASTER_VEHICLE_CONFIGS: Record<CarType, MasterVehicleConfig> = {
         "name": "Tuner Black",
         "hex": "#09090b"
       }
-    ]
+    ],
+    "chassisAnatomy": {
+      "xNose": 0.5,
+      "xCowl": 0.2,
+      "xA": 0.08,
+      "xB": -0.06,
+      "xC": -0.2,
+      "xRearHeader": -0.3,
+      "xTail": -0.5,
+      "xFrontAxle": 0.3,
+      "xRearAxle": -0.3,
+      "xEngine": 0.25,
+      "xCore": -0.04
+    },
+    "opticsMounts": {
+      "headlightLeft": {
+        "xFrac": 0.47,
+        "yFrac": -0.74
+      },
+      "headlightRight": {
+        "xFrac": 0.47,
+        "yFrac": 0.74
+      },
+      "taillightLeft": {
+        "xFrac": -0.46,
+        "yFrac": -0.78
+      },
+      "taillightRight": {
+        "xFrac": -0.46,
+        "yFrac": 0.78
+      },
+      "fogLightLeft": {
+        "xFrac": 0.45,
+        "yFrac": -0.7
+      },
+      "fogLightRight": {
+        "xFrac": 0.45,
+        "yFrac": 0.7
+      },
+      "thirdBrakeLight": {
+        "enabled": true,
+        "xFrac": -0.4,
+        "yFrac": 0,
+        "width": 4.5,
+        "height": 1.2,
+        "type": "led_strip"
+      }
+    }
   },
   "micro_car": {
     "id": "deal_micro_car",
@@ -3110,7 +4428,54 @@ export const MASTER_VEHICLE_CONFIGS: Record<CarType, MasterVehicleConfig> = {
         "name": "Snow White",
         "hex": "#ffffff"
       }
-    ]
+    ],
+    "chassisAnatomy": {
+      "xNose": 0.5,
+      "xCowl": 0.2,
+      "xA": 0.08,
+      "xB": -0.06,
+      "xC": -0.2,
+      "xRearHeader": -0.3,
+      "xTail": -0.5,
+      "xFrontAxle": 0.3,
+      "xRearAxle": -0.3,
+      "xEngine": 0.25,
+      "xCore": -0.04
+    },
+    "opticsMounts": {
+      "headlightLeft": {
+        "xFrac": 0.47,
+        "yFrac": -0.74
+      },
+      "headlightRight": {
+        "xFrac": 0.47,
+        "yFrac": 0.74
+      },
+      "taillightLeft": {
+        "xFrac": -0.46,
+        "yFrac": -0.78
+      },
+      "taillightRight": {
+        "xFrac": -0.46,
+        "yFrac": 0.78
+      },
+      "fogLightLeft": {
+        "xFrac": 0.45,
+        "yFrac": -0.7
+      },
+      "fogLightRight": {
+        "xFrac": 0.45,
+        "yFrac": 0.7
+      },
+      "thirdBrakeLight": {
+        "enabled": true,
+        "xFrac": -0.4,
+        "yFrac": 0,
+        "width": 4.5,
+        "height": 1.2,
+        "type": "led_strip"
+      }
+    }
   },
   "van": {
     "id": "deal_van",
@@ -3219,7 +4584,55 @@ export const MASTER_VEHICLE_CONFIGS: Record<CarType, MasterVehicleConfig> = {
         "name": "Executive Black",
         "hex": "#1e293b"
       }
-    ]
+    ],
+    "chassisAnatomy": {
+      "xNose": 0.5,
+      "xCowl": 0.46,
+      "xA": 0.44,
+      "xB": 0.05,
+      "xC": -0.25,
+      "xRearHeader": -0.36,
+      "xTail": -0.5,
+      "xFrontAxle": 0.36,
+      "xRearAxle": -0.22,
+      "xEngine": 0.3,
+      "xCore": -0.05,
+      "frameRatio": 0.86
+    },
+    "opticsMounts": {
+      "headlightLeft": {
+        "xFrac": 0.47,
+        "yFrac": -0.74
+      },
+      "headlightRight": {
+        "xFrac": 0.47,
+        "yFrac": 0.74
+      },
+      "taillightLeft": {
+        "xFrac": -0.46,
+        "yFrac": -0.78
+      },
+      "taillightRight": {
+        "xFrac": -0.46,
+        "yFrac": 0.78
+      },
+      "fogLightLeft": {
+        "xFrac": 0.45,
+        "yFrac": -0.7
+      },
+      "fogLightRight": {
+        "xFrac": 0.45,
+        "yFrac": 0.7
+      },
+      "thirdBrakeLight": {
+        "enabled": true,
+        "xFrac": -0.46,
+        "yFrac": 0,
+        "width": 5.5,
+        "height": 1.4,
+        "type": "led_strip"
+      }
+    }
   },
   "coupe_gt": {
     "id": "cat_coupe_gt",
@@ -3321,7 +4734,55 @@ export const MASTER_VEHICLE_CONFIGS: Record<CarType, MasterVehicleConfig> = {
         "name": "Gloss Black",
         "hex": "#09090b"
       }
-    ]
+    ],
+    "chassisAnatomy": {
+      "xNose": 0.5,
+      "xCowl": 0.26,
+      "xA": 0.16,
+      "xB": -0.06,
+      "xC": -0.16,
+      "xRearHeader": -0.24,
+      "xTail": -0.5,
+      "xFrontAxle": 0.3,
+      "xRearAxle": -0.28,
+      "xEngine": -0.17,
+      "xCore": -0.02,
+      "frameRatio": 0.7
+    },
+    "opticsMounts": {
+      "headlightLeft": {
+        "xFrac": 0.47,
+        "yFrac": -0.74
+      },
+      "headlightRight": {
+        "xFrac": 0.47,
+        "yFrac": 0.74
+      },
+      "taillightLeft": {
+        "xFrac": -0.46,
+        "yFrac": -0.78
+      },
+      "taillightRight": {
+        "xFrac": -0.46,
+        "yFrac": 0.78
+      },
+      "fogLightLeft": {
+        "xFrac": 0.45,
+        "yFrac": -0.7
+      },
+      "fogLightRight": {
+        "xFrac": 0.45,
+        "yFrac": 0.7
+      },
+      "thirdBrakeLight": {
+        "enabled": true,
+        "xFrac": -0.28,
+        "yFrac": 0,
+        "width": 4,
+        "height": 1.2,
+        "type": "led_strip"
+      }
+    }
   },
   "fire_engine": {
     "id": "cat_fire_engine",
@@ -3416,7 +4877,55 @@ export const MASTER_VEHICLE_CONFIGS: Record<CarType, MasterVehicleConfig> = {
         "hex": "#dc2626",
         "roofHex": "#ffffff"
       }
-    ]
+    ],
+    "chassisAnatomy": {
+      "xNose": 0.5,
+      "xCowl": 0.46,
+      "xA": 0.42,
+      "xB": 0.24,
+      "xC": 0.18,
+      "xRearHeader": 0.1,
+      "xTail": -0.5,
+      "xFrontAxle": 0.36,
+      "xRearAxle": -0.2,
+      "xEngine": 0.36,
+      "xCore": -0.1,
+      "frameRatio": 0.85
+    },
+    "opticsMounts": {
+      "headlightLeft": {
+        "xFrac": 0.47,
+        "yFrac": -0.74
+      },
+      "headlightRight": {
+        "xFrac": 0.47,
+        "yFrac": 0.74
+      },
+      "taillightLeft": {
+        "xFrac": -0.46,
+        "yFrac": -0.7
+      },
+      "taillightRight": {
+        "xFrac": -0.46,
+        "yFrac": 0.7
+      },
+      "fogLightLeft": {
+        "xFrac": 0.45,
+        "yFrac": -0.7
+      },
+      "fogLightRight": {
+        "xFrac": 0.45,
+        "yFrac": 0.7
+      },
+      "thirdBrakeLight": {
+        "enabled": false,
+        "xFrac": 0,
+        "yFrac": 0,
+        "width": 0,
+        "height": 0,
+        "type": "incandescent"
+      }
+    }
   },
   "fire_ladder": {
     "id": "cat_fire_ladder",
@@ -3511,7 +5020,55 @@ export const MASTER_VEHICLE_CONFIGS: Record<CarType, MasterVehicleConfig> = {
         "hex": "#dc2626",
         "roofHex": "#ffffff"
       }
-    ]
+    ],
+    "chassisAnatomy": {
+      "xNose": 0.5,
+      "xCowl": 0.46,
+      "xA": 0.42,
+      "xB": 0.24,
+      "xC": 0.18,
+      "xRearHeader": 0.1,
+      "xTail": -0.5,
+      "xFrontAxle": 0.36,
+      "xRearAxle": -0.2,
+      "xEngine": 0.36,
+      "xCore": -0.1,
+      "frameRatio": 0.85
+    },
+    "opticsMounts": {
+      "headlightLeft": {
+        "xFrac": 0.47,
+        "yFrac": -0.74
+      },
+      "headlightRight": {
+        "xFrac": 0.47,
+        "yFrac": 0.74
+      },
+      "taillightLeft": {
+        "xFrac": -0.46,
+        "yFrac": -0.7
+      },
+      "taillightRight": {
+        "xFrac": -0.46,
+        "yFrac": 0.7
+      },
+      "fogLightLeft": {
+        "xFrac": 0.45,
+        "yFrac": -0.7
+      },
+      "fogLightRight": {
+        "xFrac": 0.45,
+        "yFrac": 0.7
+      },
+      "thirdBrakeLight": {
+        "enabled": false,
+        "xFrac": 0,
+        "yFrac": 0,
+        "width": 0,
+        "height": 0,
+        "type": "incandescent"
+      }
+    }
   },
   "truck_tow": {
     "id": "cat_truck_tow",
@@ -3605,7 +5162,55 @@ export const MASTER_VEHICLE_CONFIGS: Record<CarType, MasterVehicleConfig> = {
         "name": "Warning Amber",
         "hex": "#eab308"
       }
-    ]
+    ],
+    "chassisAnatomy": {
+      "xNose": 0.5,
+      "xCowl": 0.24,
+      "xA": 0.22,
+      "xB": 0.2,
+      "xC": 0.18,
+      "xRearHeader": 0.14,
+      "xTail": -0.5,
+      "xFrontAxle": 0.28,
+      "xRearAxle": -0.27,
+      "xEngine": 0.37,
+      "xCore": -0.1,
+      "frameRatio": 0.8
+    },
+    "opticsMounts": {
+      "headlightLeft": {
+        "xFrac": 0.47,
+        "yFrac": -0.74
+      },
+      "headlightRight": {
+        "xFrac": 0.47,
+        "yFrac": 0.74
+      },
+      "taillightLeft": {
+        "xFrac": -0.46,
+        "yFrac": -0.7
+      },
+      "taillightRight": {
+        "xFrac": -0.46,
+        "yFrac": 0.7
+      },
+      "fogLightLeft": {
+        "xFrac": 0.45,
+        "yFrac": -0.7
+      },
+      "fogLightRight": {
+        "xFrac": 0.45,
+        "yFrac": 0.7
+      },
+      "thirdBrakeLight": {
+        "enabled": false,
+        "xFrac": 0,
+        "yFrac": 0,
+        "width": 0,
+        "height": 0,
+        "type": "incandescent"
+      }
+    }
   },
   "truck_armored": {
     "id": "cat_truck_armored",
@@ -3700,7 +5305,55 @@ export const MASTER_VEHICLE_CONFIGS: Record<CarType, MasterVehicleConfig> = {
         "hex": "#ca8a04",
         "roofHex": "#15803d"
       }
-    ]
+    ],
+    "chassisAnatomy": {
+      "xNose": 0.5,
+      "xCowl": 0.46,
+      "xA": 0.44,
+      "xB": 0.05,
+      "xC": -0.25,
+      "xRearHeader": -0.36,
+      "xTail": -0.5,
+      "xFrontAxle": 0.36,
+      "xRearAxle": -0.22,
+      "xEngine": 0.3,
+      "xCore": -0.05,
+      "frameRatio": 0.86
+    },
+    "opticsMounts": {
+      "headlightLeft": {
+        "xFrac": 0.47,
+        "yFrac": -0.74
+      },
+      "headlightRight": {
+        "xFrac": 0.47,
+        "yFrac": 0.74
+      },
+      "taillightLeft": {
+        "xFrac": -0.46,
+        "yFrac": -0.7
+      },
+      "taillightRight": {
+        "xFrac": -0.46,
+        "yFrac": 0.7
+      },
+      "fogLightLeft": {
+        "xFrac": 0.45,
+        "yFrac": -0.7
+      },
+      "fogLightRight": {
+        "xFrac": 0.45,
+        "yFrac": 0.7
+      },
+      "thirdBrakeLight": {
+        "enabled": false,
+        "xFrac": 0,
+        "yFrac": 0,
+        "width": 0,
+        "height": 0,
+        "type": "incandescent"
+      }
+    }
   },
   "delivery_truck": {
     "id": "cat_delivery_truck",
@@ -3798,7 +5451,55 @@ export const MASTER_VEHICLE_CONFIGS: Record<CarType, MasterVehicleConfig> = {
         "name": "Courier White",
         "hex": "#f8fafc"
       }
-    ]
+    ],
+    "chassisAnatomy": {
+      "xNose": 0.5,
+      "xCowl": 0.46,
+      "xA": 0.44,
+      "xB": 0.05,
+      "xC": -0.25,
+      "xRearHeader": -0.36,
+      "xTail": -0.5,
+      "xFrontAxle": 0.36,
+      "xRearAxle": -0.22,
+      "xEngine": 0.3,
+      "xCore": -0.05,
+      "frameRatio": 0.86
+    },
+    "opticsMounts": {
+      "headlightLeft": {
+        "xFrac": 0.47,
+        "yFrac": -0.74
+      },
+      "headlightRight": {
+        "xFrac": 0.47,
+        "yFrac": 0.74
+      },
+      "taillightLeft": {
+        "xFrac": -0.46,
+        "yFrac": -0.78
+      },
+      "taillightRight": {
+        "xFrac": -0.46,
+        "yFrac": 0.78
+      },
+      "fogLightLeft": {
+        "xFrac": 0.45,
+        "yFrac": -0.7
+      },
+      "fogLightRight": {
+        "xFrac": 0.45,
+        "yFrac": 0.7
+      },
+      "thirdBrakeLight": {
+        "enabled": true,
+        "xFrac": -0.46,
+        "yFrac": 0,
+        "width": 5.5,
+        "height": 1.4,
+        "type": "led_strip"
+      }
+    }
   },
   "van_camper": {
     "id": "deal_van_camper",
@@ -3907,7 +5608,55 @@ export const MASTER_VEHICLE_CONFIGS: Record<CarType, MasterVehicleConfig> = {
         "name": "Graphite Gray",
         "hex": "#334155"
       }
-    ]
+    ],
+    "chassisAnatomy": {
+      "xNose": 0.5,
+      "xCowl": 0.26,
+      "xA": 0.2,
+      "xB": -0.02,
+      "xC": -0.28,
+      "xRearHeader": -0.4,
+      "xTail": -0.5,
+      "xFrontAxle": 0.3,
+      "xRearAxle": -0.26,
+      "xEngine": 0.21,
+      "xCore": -0.04,
+      "frameRatio": 0.85
+    },
+    "opticsMounts": {
+      "headlightLeft": {
+        "xFrac": 0.47,
+        "yFrac": -0.74
+      },
+      "headlightRight": {
+        "xFrac": 0.47,
+        "yFrac": 0.74
+      },
+      "taillightLeft": {
+        "xFrac": -0.46,
+        "yFrac": -0.78
+      },
+      "taillightRight": {
+        "xFrac": -0.46,
+        "yFrac": 0.78
+      },
+      "fogLightLeft": {
+        "xFrac": 0.45,
+        "yFrac": -0.7
+      },
+      "fogLightRight": {
+        "xFrac": 0.45,
+        "yFrac": 0.7
+      },
+      "thirdBrakeLight": {
+        "enabled": true,
+        "xFrac": -0.46,
+        "yFrac": 0,
+        "width": 5.5,
+        "height": 1.4,
+        "type": "led_strip"
+      }
+    }
   },
   "classic_compact": {
     "id": "deal_classic_compact",
@@ -4014,7 +5763,54 @@ export const MASTER_VEHICLE_CONFIGS: Record<CarType, MasterVehicleConfig> = {
         "name": "Pearl Black",
         "hex": "#09090b"
       }
-    ]
+    ],
+    "chassisAnatomy": {
+      "xNose": 0.5,
+      "xCowl": 0.15,
+      "xA": 0.07,
+      "xB": -0.03,
+      "xC": -0.12,
+      "xRearHeader": -0.21,
+      "xTail": -0.5,
+      "xFrontAxle": 0.29,
+      "xRearAxle": -0.28,
+      "xEngine": 0.21,
+      "xCore": -0.02
+    },
+    "opticsMounts": {
+      "headlightLeft": {
+        "xFrac": 0.47,
+        "yFrac": -0.74
+      },
+      "headlightRight": {
+        "xFrac": 0.47,
+        "yFrac": 0.74
+      },
+      "taillightLeft": {
+        "xFrac": -0.46,
+        "yFrac": -0.78
+      },
+      "taillightRight": {
+        "xFrac": -0.46,
+        "yFrac": 0.78
+      },
+      "fogLightLeft": {
+        "xFrac": 0.45,
+        "yFrac": -0.7
+      },
+      "fogLightRight": {
+        "xFrac": 0.45,
+        "yFrac": 0.7
+      },
+      "thirdBrakeLight": {
+        "enabled": false,
+        "xFrac": 0,
+        "yFrac": 0,
+        "width": 0,
+        "height": 0,
+        "type": "incandescent"
+      }
+    }
   },
   "retro_bubble": {
     "id": "deal_retro_bubble",
@@ -4121,7 +5917,54 @@ export const MASTER_VEHICLE_CONFIGS: Record<CarType, MasterVehicleConfig> = {
         "name": "Cream Beige",
         "hex": "#fef08a"
       }
-    ]
+    ],
+    "chassisAnatomy": {
+      "xNose": 0.5,
+      "xCowl": 0.2,
+      "xA": 0.08,
+      "xB": -0.06,
+      "xC": -0.2,
+      "xRearHeader": -0.3,
+      "xTail": -0.5,
+      "xFrontAxle": 0.3,
+      "xRearAxle": -0.3,
+      "xEngine": 0.25,
+      "xCore": -0.04
+    },
+    "opticsMounts": {
+      "headlightLeft": {
+        "xFrac": 0.47,
+        "yFrac": -0.74
+      },
+      "headlightRight": {
+        "xFrac": 0.47,
+        "yFrac": 0.74
+      },
+      "taillightLeft": {
+        "xFrac": -0.46,
+        "yFrac": -0.78
+      },
+      "taillightRight": {
+        "xFrac": -0.46,
+        "yFrac": 0.78
+      },
+      "fogLightLeft": {
+        "xFrac": 0.45,
+        "yFrac": -0.7
+      },
+      "fogLightRight": {
+        "xFrac": 0.45,
+        "yFrac": 0.7
+      },
+      "thirdBrakeLight": {
+        "enabled": false,
+        "xFrac": 0,
+        "yFrac": 0,
+        "width": 0,
+        "height": 0,
+        "type": "incandescent"
+      }
+    }
   },
   "offroad_hardcore": {
     "id": "deal_offroad_hardcore",
@@ -4228,7 +6071,55 @@ export const MASTER_VEHICLE_CONFIGS: Record<CarType, MasterVehicleConfig> = {
         "name": "Nessie Navy",
         "hex": "#1e3a8a"
       }
-    ]
+    ],
+    "chassisAnatomy": {
+      "xNose": 0.5,
+      "xCowl": 0.22,
+      "xA": 0.17,
+      "xB": -0.02,
+      "xC": -0.3,
+      "xRearHeader": -0.36,
+      "xTail": -0.5,
+      "xFrontAxle": 0.3,
+      "xRearAxle": -0.29,
+      "xEngine": 0.26,
+      "xCore": -0.06,
+      "frameRatio": 0.8
+    },
+    "opticsMounts": {
+      "headlightLeft": {
+        "xFrac": 0.47,
+        "yFrac": -0.74
+      },
+      "headlightRight": {
+        "xFrac": 0.47,
+        "yFrac": 0.74
+      },
+      "taillightLeft": {
+        "xFrac": -0.46,
+        "yFrac": -0.78
+      },
+      "taillightRight": {
+        "xFrac": -0.46,
+        "yFrac": 0.78
+      },
+      "fogLightLeft": {
+        "xFrac": 0.45,
+        "yFrac": -0.7
+      },
+      "fogLightRight": {
+        "xFrac": 0.45,
+        "yFrac": 0.7
+      },
+      "thirdBrakeLight": {
+        "enabled": true,
+        "xFrac": -0.42,
+        "yFrac": 0,
+        "width": 5,
+        "height": 1.4,
+        "type": "led_strip"
+      }
+    }
   },
   "suv_classic_box": {
     "id": "deal_suv_classic_box",
@@ -4335,7 +6226,55 @@ export const MASTER_VEHICLE_CONFIGS: Record<CarType, MasterVehicleConfig> = {
         "name": "Deep Forest Green",
         "hex": "#14532d"
       }
-    ]
+    ],
+    "chassisAnatomy": {
+      "xNose": 0.5,
+      "xCowl": 0.22,
+      "xA": 0.17,
+      "xB": -0.02,
+      "xC": -0.3,
+      "xRearHeader": -0.36,
+      "xTail": -0.5,
+      "xFrontAxle": 0.3,
+      "xRearAxle": -0.29,
+      "xEngine": 0.26,
+      "xCore": -0.06,
+      "frameRatio": 0.8
+    },
+    "opticsMounts": {
+      "headlightLeft": {
+        "xFrac": 0.47,
+        "yFrac": -0.74
+      },
+      "headlightRight": {
+        "xFrac": 0.47,
+        "yFrac": 0.74
+      },
+      "taillightLeft": {
+        "xFrac": -0.46,
+        "yFrac": -0.78
+      },
+      "taillightRight": {
+        "xFrac": -0.46,
+        "yFrac": 0.78
+      },
+      "fogLightLeft": {
+        "xFrac": 0.45,
+        "yFrac": -0.7
+      },
+      "fogLightRight": {
+        "xFrac": 0.45,
+        "yFrac": 0.7
+      },
+      "thirdBrakeLight": {
+        "enabled": true,
+        "xFrac": -0.42,
+        "yFrac": 0,
+        "width": 5,
+        "height": 1.4,
+        "type": "led_strip"
+      }
+    }
   },
   "muscle_classic": {
     "id": "cat_muscle_classic",
@@ -4437,7 +6376,54 @@ export const MASTER_VEHICLE_CONFIGS: Record<CarType, MasterVehicleConfig> = {
         "name": "Racing Yellow",
         "hex": "#eab308"
       }
-    ]
+    ],
+    "chassisAnatomy": {
+      "xNose": 0.5,
+      "xCowl": 0.08,
+      "xA": 0.02,
+      "xB": -0.12,
+      "xC": -0.22,
+      "xRearHeader": -0.26,
+      "xTail": -0.5,
+      "xFrontAxle": 0.3,
+      "xRearAxle": -0.3,
+      "xEngine": 0.22,
+      "xCore": -0.08
+    },
+    "opticsMounts": {
+      "headlightLeft": {
+        "xFrac": 0.47,
+        "yFrac": -0.74
+      },
+      "headlightRight": {
+        "xFrac": 0.47,
+        "yFrac": 0.74
+      },
+      "taillightLeft": {
+        "xFrac": -0.46,
+        "yFrac": -0.78
+      },
+      "taillightRight": {
+        "xFrac": -0.46,
+        "yFrac": 0.78
+      },
+      "fogLightLeft": {
+        "xFrac": 0.45,
+        "yFrac": -0.7
+      },
+      "fogLightRight": {
+        "xFrac": 0.45,
+        "yFrac": 0.7
+      },
+      "thirdBrakeLight": {
+        "enabled": true,
+        "xFrac": -0.28,
+        "yFrac": 0,
+        "width": 4,
+        "height": 1.2,
+        "type": "led_strip"
+      }
+    }
   },
   "van_cargo_old": {
     "id": "cat_van_cargo_old",
@@ -4524,7 +6510,55 @@ export const MASTER_VEHICLE_CONFIGS: Record<CarType, MasterVehicleConfig> = {
       "hasTrunk": false
     },
     "keyTier": "classic",
-    "requiredKeyType": "iron"
+    "requiredKeyType": "iron",
+    "chassisAnatomy": {
+      "xNose": 0.5,
+      "xCowl": 0.46,
+      "xA": 0.44,
+      "xB": 0.05,
+      "xC": -0.25,
+      "xRearHeader": -0.36,
+      "xTail": -0.5,
+      "xFrontAxle": 0.36,
+      "xRearAxle": -0.22,
+      "xEngine": 0.3,
+      "xCore": -0.05,
+      "frameRatio": 0.86
+    },
+    "opticsMounts": {
+      "headlightLeft": {
+        "xFrac": 0.47,
+        "yFrac": -0.74
+      },
+      "headlightRight": {
+        "xFrac": 0.47,
+        "yFrac": 0.74
+      },
+      "taillightLeft": {
+        "xFrac": -0.46,
+        "yFrac": -0.78
+      },
+      "taillightRight": {
+        "xFrac": -0.46,
+        "yFrac": 0.78
+      },
+      "fogLightLeft": {
+        "xFrac": 0.45,
+        "yFrac": -0.7
+      },
+      "fogLightRight": {
+        "xFrac": 0.45,
+        "yFrac": 0.7
+      },
+      "thirdBrakeLight": {
+        "enabled": true,
+        "xFrac": -0.46,
+        "yFrac": 0,
+        "width": 5.5,
+        "height": 1.4,
+        "type": "led_strip"
+      }
+    }
   },
   "truck_box": {
     "id": "cat_truck_box",
@@ -4619,7 +6653,55 @@ export const MASTER_VEHICLE_CONFIGS: Record<CarType, MasterVehicleConfig> = {
         "hex": "#0284c7",
         "roofHex": "#f8fafc"
       }
-    ]
+    ],
+    "chassisAnatomy": {
+      "xNose": 0.5,
+      "xCowl": 0.46,
+      "xA": 0.42,
+      "xB": 0.24,
+      "xC": 0.18,
+      "xRearHeader": 0.1,
+      "xTail": -0.5,
+      "xFrontAxle": 0.36,
+      "xRearAxle": -0.2,
+      "xEngine": 0.36,
+      "xCore": -0.1,
+      "frameRatio": 0.85
+    },
+    "opticsMounts": {
+      "headlightLeft": {
+        "xFrac": 0.47,
+        "yFrac": -0.74
+      },
+      "headlightRight": {
+        "xFrac": 0.47,
+        "yFrac": 0.74
+      },
+      "taillightLeft": {
+        "xFrac": -0.46,
+        "yFrac": -0.7
+      },
+      "taillightRight": {
+        "xFrac": -0.46,
+        "yFrac": 0.7
+      },
+      "fogLightLeft": {
+        "xFrac": 0.45,
+        "yFrac": -0.7
+      },
+      "fogLightRight": {
+        "xFrac": 0.45,
+        "yFrac": 0.7
+      },
+      "thirdBrakeLight": {
+        "enabled": false,
+        "xFrac": 0,
+        "yFrac": 0,
+        "width": 0,
+        "height": 0,
+        "type": "incandescent"
+      }
+    }
   },
   "truck_dump": {
     "id": "cat_truck_dump",
@@ -4706,7 +6788,55 @@ export const MASTER_VEHICLE_CONFIGS: Record<CarType, MasterVehicleConfig> = {
       "hasTrunk": false
     },
     "keyTier": "flip",
-    "requiredKeyType": "iron"
+    "requiredKeyType": "iron",
+    "chassisAnatomy": {
+      "xNose": 0.5,
+      "xCowl": 0.46,
+      "xA": 0.42,
+      "xB": 0.24,
+      "xC": 0.18,
+      "xRearHeader": 0.1,
+      "xTail": -0.5,
+      "xFrontAxle": 0.36,
+      "xRearAxle": -0.2,
+      "xEngine": 0.36,
+      "xCore": -0.1,
+      "frameRatio": 0.85
+    },
+    "opticsMounts": {
+      "headlightLeft": {
+        "xFrac": 0.47,
+        "yFrac": -0.74
+      },
+      "headlightRight": {
+        "xFrac": 0.47,
+        "yFrac": 0.74
+      },
+      "taillightLeft": {
+        "xFrac": -0.46,
+        "yFrac": -0.7
+      },
+      "taillightRight": {
+        "xFrac": -0.46,
+        "yFrac": 0.7
+      },
+      "fogLightLeft": {
+        "xFrac": 0.45,
+        "yFrac": -0.7
+      },
+      "fogLightRight": {
+        "xFrac": 0.45,
+        "yFrac": 0.7
+      },
+      "thirdBrakeLight": {
+        "enabled": false,
+        "xFrac": 0,
+        "yFrac": 0,
+        "width": 0,
+        "height": 0,
+        "type": "incandescent"
+      }
+    }
   },
   "truck_zil_dump": {
     "id": "cat_truck_zil_dump",
@@ -4796,7 +6926,55 @@ export const MASTER_VEHICLE_CONFIGS: Record<CarType, MasterVehicleConfig> = {
     "requiredKeyType": "iron",
     "color": "#0284c7",
     "roofColor": "#f8fafc",
-    "dumpColor": "#d97706"
+    "dumpColor": "#d97706",
+    "chassisAnatomy": {
+      "xNose": 0.5,
+      "xCowl": 0.24,
+      "xA": 0.2,
+      "xB": 0.16,
+      "xC": 0.12,
+      "xRearHeader": 0.08,
+      "xTail": -0.5,
+      "xFrontAxle": 0.28,
+      "xRearAxle": -0.22,
+      "xEngine": 0.37,
+      "xCore": -0.02,
+      "frameRatio": 0.8
+    },
+    "opticsMounts": {
+      "headlightLeft": {
+        "xFrac": 0.47,
+        "yFrac": -0.74
+      },
+      "headlightRight": {
+        "xFrac": 0.47,
+        "yFrac": 0.74
+      },
+      "taillightLeft": {
+        "xFrac": -0.46,
+        "yFrac": -0.7
+      },
+      "taillightRight": {
+        "xFrac": -0.46,
+        "yFrac": 0.7
+      },
+      "fogLightLeft": {
+        "xFrac": 0.45,
+        "yFrac": -0.7
+      },
+      "fogLightRight": {
+        "xFrac": 0.45,
+        "yFrac": 0.7
+      },
+      "thirdBrakeLight": {
+        "enabled": false,
+        "xFrac": 0,
+        "yFrac": 0,
+        "width": 0,
+        "height": 0,
+        "type": "incandescent"
+      }
+    }
   },
   "truck_semi": {
     "id": "cat_truck_semi",
@@ -4900,7 +7078,56 @@ export const MASTER_VEHICLE_CONFIGS: Record<CarType, MasterVehicleConfig> = {
         "name": "Arctic White",
         "hex": "#f8fafc"
       }
-    ]
+    ],
+    "chassisAnatomy": {
+      "xNose": 0.5,
+      "xCowl": 0.44,
+      "xA": 0.42,
+      "xB": 0.24,
+      "xC": 0.1,
+      "xRearHeader": -0.02,
+      "xTail": -0.5,
+      "xFrontAxle": 0.4,
+      "xRearAxle": -0.1,
+      "xEngine": 0.32,
+      "xCore": -0.12,
+      "frameRatio": 0.8,
+      "frameMaxHalfWidth": 0.15
+    },
+    "opticsMounts": {
+      "headlightLeft": {
+        "xFrac": 0.47,
+        "yFrac": -0.74
+      },
+      "headlightRight": {
+        "xFrac": 0.47,
+        "yFrac": 0.74
+      },
+      "taillightLeft": {
+        "xFrac": -0.46,
+        "yFrac": -0.7
+      },
+      "taillightRight": {
+        "xFrac": -0.46,
+        "yFrac": 0.7
+      },
+      "fogLightLeft": {
+        "xFrac": 0.45,
+        "yFrac": -0.7
+      },
+      "fogLightRight": {
+        "xFrac": 0.45,
+        "yFrac": 0.7
+      },
+      "thirdBrakeLight": {
+        "enabled": false,
+        "xFrac": 0,
+        "yFrac": 0,
+        "width": 0,
+        "height": 0,
+        "type": "incandescent"
+      }
+    }
   },
   "trailer_semi": {
     "id": "cat_trailer_semi",
@@ -4993,7 +7220,44 @@ export const MASTER_VEHICLE_CONFIGS: Record<CarType, MasterVehicleConfig> = {
         "name": "Industrial Gray",
         "hex": "#475569"
       }
-    ]
+    ],
+    "chassisAnatomy": {
+      "specialPreset": "trailer"
+    },
+    "opticsMounts": {
+      "headlightLeft": {
+        "xFrac": 0,
+        "yFrac": 0
+      },
+      "headlightRight": {
+        "xFrac": 0,
+        "yFrac": 0
+      },
+      "taillightLeft": {
+        "xFrac": -0.46,
+        "yFrac": -0.75
+      },
+      "taillightRight": {
+        "xFrac": -0.46,
+        "yFrac": 0.75
+      },
+      "fogLightLeft": {
+        "xFrac": 0.45,
+        "yFrac": -0.7
+      },
+      "fogLightRight": {
+        "xFrac": 0.45,
+        "yFrac": 0.7
+      },
+      "thirdBrakeLight": {
+        "enabled": false,
+        "xFrac": 0,
+        "yFrac": 0,
+        "width": 0,
+        "height": 0,
+        "type": "incandescent"
+      }
+    }
   },
   "trailer_semi_box": {
     "id": "cat_trailer_semi_box",
@@ -5083,7 +7347,44 @@ export const MASTER_VEHICLE_CONFIGS: Record<CarType, MasterVehicleConfig> = {
         "hex": "#f8fafc",
         "roofHex": "#dc2626"
       }
-    ]
+    ],
+    "chassisAnatomy": {
+      "specialPreset": "trailer"
+    },
+    "opticsMounts": {
+      "headlightLeft": {
+        "xFrac": 0,
+        "yFrac": 0
+      },
+      "headlightRight": {
+        "xFrac": 0,
+        "yFrac": 0
+      },
+      "taillightLeft": {
+        "xFrac": -0.46,
+        "yFrac": -0.75
+      },
+      "taillightRight": {
+        "xFrac": -0.46,
+        "yFrac": 0.75
+      },
+      "fogLightLeft": {
+        "xFrac": 0.45,
+        "yFrac": -0.7
+      },
+      "fogLightRight": {
+        "xFrac": 0.45,
+        "yFrac": 0.7
+      },
+      "thirdBrakeLight": {
+        "enabled": false,
+        "xFrac": 0,
+        "yFrac": 0,
+        "width": 0,
+        "height": 0,
+        "type": "incandescent"
+      }
+    }
   },
   "trailer_semi_tanker": {
     "id": "cat_trailer_semi_tanker",
@@ -5173,7 +7474,44 @@ export const MASTER_VEHICLE_CONFIGS: Record<CarType, MasterVehicleConfig> = {
         "name": "Hazmat Orange",
         "hex": "#ea580c"
       }
-    ]
+    ],
+    "chassisAnatomy": {
+      "specialPreset": "trailer"
+    },
+    "opticsMounts": {
+      "headlightLeft": {
+        "xFrac": 0,
+        "yFrac": 0
+      },
+      "headlightRight": {
+        "xFrac": 0,
+        "yFrac": 0
+      },
+      "taillightLeft": {
+        "xFrac": -0.46,
+        "yFrac": -0.75
+      },
+      "taillightRight": {
+        "xFrac": -0.46,
+        "yFrac": 0.75
+      },
+      "fogLightLeft": {
+        "xFrac": 0.45,
+        "yFrac": -0.7
+      },
+      "fogLightRight": {
+        "xFrac": 0.45,
+        "yFrac": 0.7
+      },
+      "thirdBrakeLight": {
+        "enabled": false,
+        "xFrac": 0,
+        "yFrac": 0,
+        "width": 0,
+        "height": 0,
+        "type": "incandescent"
+      }
+    }
   },
   "trailer_semi_container": {
     "id": "cat_trailer_semi_container",
@@ -5262,7 +7600,44 @@ export const MASTER_VEHICLE_CONFIGS: Record<CarType, MasterVehicleConfig> = {
         "name": "Container Red",
         "hex": "#991b1b"
       }
-    ]
+    ],
+    "chassisAnatomy": {
+      "specialPreset": "trailer"
+    },
+    "opticsMounts": {
+      "headlightLeft": {
+        "xFrac": 0,
+        "yFrac": 0
+      },
+      "headlightRight": {
+        "xFrac": 0,
+        "yFrac": 0
+      },
+      "taillightLeft": {
+        "xFrac": -0.46,
+        "yFrac": -0.75
+      },
+      "taillightRight": {
+        "xFrac": -0.46,
+        "yFrac": 0.75
+      },
+      "fogLightLeft": {
+        "xFrac": 0.45,
+        "yFrac": -0.7
+      },
+      "fogLightRight": {
+        "xFrac": 0.45,
+        "yFrac": 0.7
+      },
+      "thirdBrakeLight": {
+        "enabled": false,
+        "xFrac": 0,
+        "yFrac": 0,
+        "width": 0,
+        "height": 0,
+        "type": "incandescent"
+      }
+    }
   },
   "trailer_semi_lowboy": {
     "id": "cat_trailer_semi_lowboy",
@@ -5351,7 +7726,44 @@ export const MASTER_VEHICLE_CONFIGS: Record<CarType, MasterVehicleConfig> = {
         "name": "Lowboy Amber",
         "hex": "#d97706"
       }
-    ]
+    ],
+    "chassisAnatomy": {
+      "specialPreset": "trailer"
+    },
+    "opticsMounts": {
+      "headlightLeft": {
+        "xFrac": 0,
+        "yFrac": 0
+      },
+      "headlightRight": {
+        "xFrac": 0,
+        "yFrac": 0
+      },
+      "taillightLeft": {
+        "xFrac": -0.46,
+        "yFrac": -0.75
+      },
+      "taillightRight": {
+        "xFrac": -0.46,
+        "yFrac": 0.75
+      },
+      "fogLightLeft": {
+        "xFrac": 0.45,
+        "yFrac": -0.7
+      },
+      "fogLightRight": {
+        "xFrac": 0.45,
+        "yFrac": 0.7
+      },
+      "thirdBrakeLight": {
+        "enabled": false,
+        "xFrac": 0,
+        "yFrac": 0,
+        "width": 0,
+        "height": 0,
+        "type": "incandescent"
+      }
+    }
   },
   "truck_tanker": {
     "id": "cat_truck_tanker",
@@ -5459,6 +7871,54 @@ export const MASTER_VEHICLE_CONFIGS: Record<CarType, MasterVehicleConfig> = {
       "drainValveOpen": false,
       "hasWaterHose": false,
       "isWaterHoseDeployed": false
+    },
+    "chassisAnatomy": {
+      "xNose": 0.5,
+      "xCowl": 0.46,
+      "xA": 0.42,
+      "xB": 0.24,
+      "xC": 0.18,
+      "xRearHeader": 0.1,
+      "xTail": -0.5,
+      "xFrontAxle": 0.36,
+      "xRearAxle": -0.2,
+      "xEngine": 0.36,
+      "xCore": -0.1,
+      "frameRatio": 0.85
+    },
+    "opticsMounts": {
+      "headlightLeft": {
+        "xFrac": 0.47,
+        "yFrac": -0.74
+      },
+      "headlightRight": {
+        "xFrac": 0.47,
+        "yFrac": 0.74
+      },
+      "taillightLeft": {
+        "xFrac": -0.46,
+        "yFrac": -0.7
+      },
+      "taillightRight": {
+        "xFrac": -0.46,
+        "yFrac": 0.7
+      },
+      "fogLightLeft": {
+        "xFrac": 0.45,
+        "yFrac": -0.7
+      },
+      "fogLightRight": {
+        "xFrac": 0.45,
+        "yFrac": 0.7
+      },
+      "thirdBrakeLight": {
+        "enabled": false,
+        "xFrac": 0,
+        "yFrac": 0,
+        "width": 0,
+        "height": 0,
+        "type": "incandescent"
+      }
     }
   },
   "truck_water": {
@@ -5568,6 +8028,54 @@ export const MASTER_VEHICLE_CONFIGS: Record<CarType, MasterVehicleConfig> = {
       "drainValveOpen": false,
       "hasWaterHose": true,
       "isWaterHoseDeployed": false
+    },
+    "chassisAnatomy": {
+      "xNose": 0.5,
+      "xCowl": 0.46,
+      "xA": 0.42,
+      "xB": 0.24,
+      "xC": 0.18,
+      "xRearHeader": 0.1,
+      "xTail": -0.5,
+      "xFrontAxle": 0.36,
+      "xRearAxle": -0.2,
+      "xEngine": 0.36,
+      "xCore": -0.1,
+      "frameRatio": 0.85
+    },
+    "opticsMounts": {
+      "headlightLeft": {
+        "xFrac": 0.47,
+        "yFrac": -0.74
+      },
+      "headlightRight": {
+        "xFrac": 0.47,
+        "yFrac": 0.74
+      },
+      "taillightLeft": {
+        "xFrac": -0.46,
+        "yFrac": -0.7
+      },
+      "taillightRight": {
+        "xFrac": -0.46,
+        "yFrac": 0.7
+      },
+      "fogLightLeft": {
+        "xFrac": 0.45,
+        "yFrac": -0.7
+      },
+      "fogLightRight": {
+        "xFrac": 0.45,
+        "yFrac": 0.7
+      },
+      "thirdBrakeLight": {
+        "enabled": false,
+        "xFrac": 0,
+        "yFrac": 0,
+        "width": 0,
+        "height": 0,
+        "type": "incandescent"
+      }
     }
   },
   "truck_flatbed": {
@@ -5656,7 +8164,55 @@ export const MASTER_VEHICLE_CONFIGS: Record<CarType, MasterVehicleConfig> = {
     },
     "keyTier": "flip",
     "requiredKeyType": "iron",
-    "color": "#0284c7"
+    "color": "#0284c7",
+    "chassisAnatomy": {
+      "xNose": 0.5,
+      "xCowl": 0.24,
+      "xA": 0.22,
+      "xB": 0.2,
+      "xC": 0.18,
+      "xRearHeader": 0.14,
+      "xTail": -0.5,
+      "xFrontAxle": 0.28,
+      "xRearAxle": -0.27,
+      "xEngine": 0.37,
+      "xCore": -0.1,
+      "frameRatio": 0.8
+    },
+    "opticsMounts": {
+      "headlightLeft": {
+        "xFrac": 0.47,
+        "yFrac": -0.74
+      },
+      "headlightRight": {
+        "xFrac": 0.47,
+        "yFrac": 0.74
+      },
+      "taillightLeft": {
+        "xFrac": -0.46,
+        "yFrac": -0.7
+      },
+      "taillightRight": {
+        "xFrac": -0.46,
+        "yFrac": 0.7
+      },
+      "fogLightLeft": {
+        "xFrac": 0.45,
+        "yFrac": -0.7
+      },
+      "fogLightRight": {
+        "xFrac": 0.45,
+        "yFrac": 0.7
+      },
+      "thirdBrakeLight": {
+        "enabled": false,
+        "xFrac": 0,
+        "yFrac": 0,
+        "width": 0,
+        "height": 0,
+        "type": "incandescent"
+      }
+    }
   },
   "truck_covered": {
     "id": "cat_truck_covered",
@@ -5744,7 +8300,55 @@ export const MASTER_VEHICLE_CONFIGS: Record<CarType, MasterVehicleConfig> = {
     },
     "keyTier": "flip",
     "requiredKeyType": "iron",
-    "color": "#0284c7"
+    "color": "#0284c7",
+    "chassisAnatomy": {
+      "xNose": 0.5,
+      "xCowl": 0.24,
+      "xA": 0.22,
+      "xB": 0.2,
+      "xC": 0.18,
+      "xRearHeader": 0.14,
+      "xTail": -0.5,
+      "xFrontAxle": 0.28,
+      "xRearAxle": -0.27,
+      "xEngine": 0.37,
+      "xCore": -0.1,
+      "frameRatio": 0.8
+    },
+    "opticsMounts": {
+      "headlightLeft": {
+        "xFrac": 0.47,
+        "yFrac": -0.74
+      },
+      "headlightRight": {
+        "xFrac": 0.47,
+        "yFrac": 0.74
+      },
+      "taillightLeft": {
+        "xFrac": -0.46,
+        "yFrac": -0.7
+      },
+      "taillightRight": {
+        "xFrac": -0.46,
+        "yFrac": 0.7
+      },
+      "fogLightLeft": {
+        "xFrac": 0.45,
+        "yFrac": -0.7
+      },
+      "fogLightRight": {
+        "xFrac": 0.45,
+        "yFrac": 0.7
+      },
+      "thirdBrakeLight": {
+        "enabled": false,
+        "xFrac": 0,
+        "yFrac": 0,
+        "width": 0,
+        "height": 0,
+        "type": "incandescent"
+      }
+    }
   },
   "cement_mixer": {
     "id": "cat_cement_mixer",
@@ -5839,7 +8443,55 @@ export const MASTER_VEHICLE_CONFIGS: Record<CarType, MasterVehicleConfig> = {
         "hex": "#f8fafc",
         "roofHex": "#ea580c"
       }
-    ]
+    ],
+    "chassisAnatomy": {
+      "xNose": 0.5,
+      "xCowl": 0.46,
+      "xA": 0.42,
+      "xB": 0.24,
+      "xC": 0.18,
+      "xRearHeader": 0.1,
+      "xTail": -0.5,
+      "xFrontAxle": 0.36,
+      "xRearAxle": -0.2,
+      "xEngine": 0.36,
+      "xCore": -0.1,
+      "frameRatio": 0.85
+    },
+    "opticsMounts": {
+      "headlightLeft": {
+        "xFrac": 0.47,
+        "yFrac": -0.74
+      },
+      "headlightRight": {
+        "xFrac": 0.47,
+        "yFrac": 0.74
+      },
+      "taillightLeft": {
+        "xFrac": -0.46,
+        "yFrac": -0.7
+      },
+      "taillightRight": {
+        "xFrac": -0.46,
+        "yFrac": 0.7
+      },
+      "fogLightLeft": {
+        "xFrac": 0.45,
+        "yFrac": -0.7
+      },
+      "fogLightRight": {
+        "xFrac": 0.45,
+        "yFrac": 0.7
+      },
+      "thirdBrakeLight": {
+        "enabled": false,
+        "xFrac": 0,
+        "yFrac": 0,
+        "width": 0,
+        "height": 0,
+        "type": "incandescent"
+      }
+    }
   },
   "garbage_truck": {
     "id": "cat_garbage_truck",
@@ -5933,7 +8585,55 @@ export const MASTER_VEHICLE_CONFIGS: Record<CarType, MasterVehicleConfig> = {
         "name": "Sanitation Orange",
         "hex": "#ea580c"
       }
-    ]
+    ],
+    "chassisAnatomy": {
+      "xNose": 0.5,
+      "xCowl": 0.46,
+      "xA": 0.42,
+      "xB": 0.24,
+      "xC": 0.18,
+      "xRearHeader": 0.1,
+      "xTail": -0.5,
+      "xFrontAxle": 0.36,
+      "xRearAxle": -0.2,
+      "xEngine": 0.36,
+      "xCore": -0.1,
+      "frameRatio": 0.85
+    },
+    "opticsMounts": {
+      "headlightLeft": {
+        "xFrac": 0.47,
+        "yFrac": -0.74
+      },
+      "headlightRight": {
+        "xFrac": 0.47,
+        "yFrac": 0.74
+      },
+      "taillightLeft": {
+        "xFrac": -0.46,
+        "yFrac": -0.7
+      },
+      "taillightRight": {
+        "xFrac": -0.46,
+        "yFrac": 0.7
+      },
+      "fogLightLeft": {
+        "xFrac": 0.45,
+        "yFrac": -0.7
+      },
+      "fogLightRight": {
+        "xFrac": 0.45,
+        "yFrac": 0.7
+      },
+      "thirdBrakeLight": {
+        "enabled": false,
+        "xFrac": 0,
+        "yFrac": 0,
+        "width": 0,
+        "height": 0,
+        "type": "incandescent"
+      }
+    }
   },
   "tractor_mtz82": {
     "id": "cat_tractor_mtz82",
@@ -6036,7 +8736,56 @@ export const MASTER_VEHICLE_CONFIGS: Record<CarType, MasterVehicleConfig> = {
         "name": "Agri Red",
         "hex": "#dc2626"
       }
-    ]
+    ],
+    "chassisAnatomy": {
+      "xNose": 0.5,
+      "xCowl": 0.02,
+      "xA": -0.02,
+      "xB": -0.14,
+      "xC": -0.22,
+      "xRearHeader": -0.3,
+      "xTail": -0.5,
+      "xFrontAxle": 0.3,
+      "xRearAxle": -0.34,
+      "xEngine": 0.35,
+      "xCore": -0.1,
+      "frameRatio": 0.75,
+      "railRatio": 0.36
+    },
+    "opticsMounts": {
+      "headlightLeft": {
+        "xFrac": 0.46,
+        "yFrac": -0.24
+      },
+      "headlightRight": {
+        "xFrac": 0.46,
+        "yFrac": 0.24
+      },
+      "taillightLeft": {
+        "xFrac": -0.34,
+        "yFrac": -0.82
+      },
+      "taillightRight": {
+        "xFrac": -0.34,
+        "yFrac": 0.82
+      },
+      "fogLightLeft": {
+        "xFrac": 0.45,
+        "yFrac": -0.7
+      },
+      "fogLightRight": {
+        "xFrac": 0.45,
+        "yFrac": 0.7
+      },
+      "thirdBrakeLight": {
+        "enabled": false,
+        "xFrac": 0,
+        "yFrac": 0,
+        "width": 0,
+        "height": 0,
+        "type": "incandescent"
+      }
+    }
   },
   "tractor_mtz80": {
     "id": "cat_tractor_mtz80",
@@ -6139,7 +8888,56 @@ export const MASTER_VEHICLE_CONFIGS: Record<CarType, MasterVehicleConfig> = {
         "name": "Agri Red",
         "hex": "#dc2626"
       }
-    ]
+    ],
+    "chassisAnatomy": {
+      "xNose": 0.5,
+      "xCowl": 0.02,
+      "xA": -0.02,
+      "xB": -0.14,
+      "xC": -0.22,
+      "xRearHeader": -0.3,
+      "xTail": -0.5,
+      "xFrontAxle": 0.3,
+      "xRearAxle": -0.34,
+      "xEngine": 0.35,
+      "xCore": -0.1,
+      "frameRatio": 0.75,
+      "railRatio": 0.36
+    },
+    "opticsMounts": {
+      "headlightLeft": {
+        "xFrac": 0.46,
+        "yFrac": -0.24
+      },
+      "headlightRight": {
+        "xFrac": 0.46,
+        "yFrac": 0.24
+      },
+      "taillightLeft": {
+        "xFrac": -0.34,
+        "yFrac": -0.82
+      },
+      "taillightRight": {
+        "xFrac": -0.34,
+        "yFrac": 0.82
+      },
+      "fogLightLeft": {
+        "xFrac": 0.45,
+        "yFrac": -0.7
+      },
+      "fogLightRight": {
+        "xFrac": 0.45,
+        "yFrac": 0.7
+      },
+      "thirdBrakeLight": {
+        "enabled": false,
+        "xFrac": 0,
+        "yFrac": 0,
+        "width": 0,
+        "height": 0,
+        "type": "incandescent"
+      }
+    }
   },
   "tractor_mtz80_old": {
     "id": "cat_tractor_mtz80_old",
@@ -6228,7 +9026,56 @@ export const MASTER_VEHICLE_CONFIGS: Record<CarType, MasterVehicleConfig> = {
       "isTractorDoors": true
     },
     "keyTier": "flip",
-    "requiredKeyType": "iron"
+    "requiredKeyType": "iron",
+    "chassisAnatomy": {
+      "xNose": 0.5,
+      "xCowl": 0.02,
+      "xA": -0.02,
+      "xB": -0.14,
+      "xC": -0.22,
+      "xRearHeader": -0.3,
+      "xTail": -0.5,
+      "xFrontAxle": 0.3,
+      "xRearAxle": -0.34,
+      "xEngine": 0.35,
+      "xCore": -0.1,
+      "frameRatio": 0.75,
+      "railRatio": 0.36
+    },
+    "opticsMounts": {
+      "headlightLeft": {
+        "xFrac": 0.46,
+        "yFrac": -0.24
+      },
+      "headlightRight": {
+        "xFrac": 0.46,
+        "yFrac": 0.24
+      },
+      "taillightLeft": {
+        "xFrac": -0.34,
+        "yFrac": -0.82
+      },
+      "taillightRight": {
+        "xFrac": -0.34,
+        "yFrac": 0.82
+      },
+      "fogLightLeft": {
+        "xFrac": 0.45,
+        "yFrac": -0.7
+      },
+      "fogLightRight": {
+        "xFrac": 0.45,
+        "yFrac": 0.7
+      },
+      "thirdBrakeLight": {
+        "enabled": false,
+        "xFrac": 0,
+        "yFrac": 0,
+        "width": 0,
+        "height": 0,
+        "type": "incandescent"
+      }
+    }
   },
   "moto_izh_jupiter": {
     "id": "cat_moto_izh_jupiter",
@@ -6329,7 +9176,44 @@ export const MASTER_VEHICLE_CONFIGS: Record<CarType, MasterVehicleConfig> = {
         "name": "Stellar Black",
         "hex": "#0f172a"
       }
-    ]
+    ],
+    "chassisAnatomy": {
+      "specialPreset": "motorcycle"
+    },
+    "opticsMounts": {
+      "headlightLeft": {
+        "xFrac": 0.46,
+        "yFrac": 0
+      },
+      "headlightRight": {
+        "xFrac": 0.46,
+        "yFrac": 0
+      },
+      "taillightLeft": {
+        "xFrac": -0.46,
+        "yFrac": 0
+      },
+      "taillightRight": {
+        "xFrac": -0.46,
+        "yFrac": 0
+      },
+      "fogLightLeft": {
+        "xFrac": 0.45,
+        "yFrac": -0.7
+      },
+      "fogLightRight": {
+        "xFrac": 0.45,
+        "yFrac": 0.7
+      },
+      "thirdBrakeLight": {
+        "enabled": false,
+        "xFrac": 0,
+        "yFrac": 0,
+        "width": 0,
+        "height": 0,
+        "type": "incandescent"
+      }
+    }
   },
   "moto_ural_sidecar": {
     "id": "cat_moto_ural_sidecar",
@@ -6426,7 +9310,44 @@ export const MASTER_VEHICLE_CONFIGS: Record<CarType, MasterVehicleConfig> = {
         "name": "Gloss Blue",
         "hex": "#1d4ed8"
       }
-    ]
+    ],
+    "chassisAnatomy": {
+      "specialPreset": "moto_sidecar"
+    },
+    "opticsMounts": {
+      "headlightLeft": {
+        "xFrac": 0.46,
+        "yFrac": -0.45
+      },
+      "headlightRight": {
+        "xFrac": 0.25,
+        "yFrac": 0.78
+      },
+      "taillightLeft": {
+        "xFrac": -0.46,
+        "yFrac": -0.45
+      },
+      "taillightRight": {
+        "xFrac": -0.27,
+        "yFrac": 0.85
+      },
+      "fogLightLeft": {
+        "xFrac": 0.45,
+        "yFrac": -0.7
+      },
+      "fogLightRight": {
+        "xFrac": 0.45,
+        "yFrac": 0.7
+      },
+      "thirdBrakeLight": {
+        "enabled": false,
+        "xFrac": 0,
+        "yFrac": 0,
+        "width": 0,
+        "height": 0,
+        "type": "incandescent"
+      }
+    }
   },
   "moto_jawa350": {
     "id": "cat_moto_jawa350",
@@ -6519,7 +9440,44 @@ export const MASTER_VEHICLE_CONFIGS: Record<CarType, MasterVehicleConfig> = {
         "name": "Cherry Red",
         "hex": "#881337"
       }
-    ]
+    ],
+    "chassisAnatomy": {
+      "specialPreset": "motorcycle"
+    },
+    "opticsMounts": {
+      "headlightLeft": {
+        "xFrac": 0.46,
+        "yFrac": 0
+      },
+      "headlightRight": {
+        "xFrac": 0.46,
+        "yFrac": 0
+      },
+      "taillightLeft": {
+        "xFrac": -0.46,
+        "yFrac": 0
+      },
+      "taillightRight": {
+        "xFrac": -0.46,
+        "yFrac": 0
+      },
+      "fogLightLeft": {
+        "xFrac": 0.45,
+        "yFrac": -0.7
+      },
+      "fogLightRight": {
+        "xFrac": 0.45,
+        "yFrac": 0.7
+      },
+      "thirdBrakeLight": {
+        "enabled": false,
+        "xFrac": 0,
+        "yFrac": 0,
+        "width": 0,
+        "height": 0,
+        "type": "incandescent"
+      }
+    }
   },
   "moto_sport": {
     "id": "cat_moto_sport",
@@ -6620,7 +9578,44 @@ export const MASTER_VEHICLE_CONFIGS: Record<CarType, MasterVehicleConfig> = {
         "name": "Acid Green",
         "hex": "#16a34a"
       }
-    ]
+    ],
+    "chassisAnatomy": {
+      "specialPreset": "motorcycle"
+    },
+    "opticsMounts": {
+      "headlightLeft": {
+        "xFrac": 0.46,
+        "yFrac": 0
+      },
+      "headlightRight": {
+        "xFrac": 0.46,
+        "yFrac": 0
+      },
+      "taillightLeft": {
+        "xFrac": -0.46,
+        "yFrac": 0
+      },
+      "taillightRight": {
+        "xFrac": -0.46,
+        "yFrac": 0
+      },
+      "fogLightLeft": {
+        "xFrac": 0.45,
+        "yFrac": -0.7
+      },
+      "fogLightRight": {
+        "xFrac": 0.45,
+        "yFrac": 0.7
+      },
+      "thirdBrakeLight": {
+        "enabled": false,
+        "xFrac": 0,
+        "yFrac": 0,
+        "width": 0,
+        "height": 0,
+        "type": "incandescent"
+      }
+    }
   },
   "moto_chopper": {
     "id": "cat_moto_chopper",
@@ -6713,7 +9708,44 @@ export const MASTER_VEHICLE_CONFIGS: Record<CarType, MasterVehicleConfig> = {
         "name": "Chrome Black",
         "hex": "#09090b"
       }
-    ]
+    ],
+    "chassisAnatomy": {
+      "specialPreset": "motorcycle"
+    },
+    "opticsMounts": {
+      "headlightLeft": {
+        "xFrac": 0.46,
+        "yFrac": 0
+      },
+      "headlightRight": {
+        "xFrac": 0.46,
+        "yFrac": 0
+      },
+      "taillightLeft": {
+        "xFrac": -0.46,
+        "yFrac": 0
+      },
+      "taillightRight": {
+        "xFrac": -0.46,
+        "yFrac": 0
+      },
+      "fogLightLeft": {
+        "xFrac": 0.45,
+        "yFrac": -0.7
+      },
+      "fogLightRight": {
+        "xFrac": 0.45,
+        "yFrac": 0.7
+      },
+      "thirdBrakeLight": {
+        "enabled": false,
+        "xFrac": 0,
+        "yFrac": 0,
+        "width": 0,
+        "height": 0,
+        "type": "incandescent"
+      }
+    }
   },
   "moped_soviet": {
     "id": "cat_moped_soviet",
@@ -6808,7 +9840,44 @@ export const MASTER_VEHICLE_CONFIGS: Record<CarType, MasterVehicleConfig> = {
         "name": "Cub Green",
         "hex": "#15803d"
       }
-    ]
+    ],
+    "chassisAnatomy": {
+      "specialPreset": "motorcycle"
+    },
+    "opticsMounts": {
+      "headlightLeft": {
+        "xFrac": 0.46,
+        "yFrac": 0
+      },
+      "headlightRight": {
+        "xFrac": 0.46,
+        "yFrac": 0
+      },
+      "taillightLeft": {
+        "xFrac": -0.46,
+        "yFrac": 0
+      },
+      "taillightRight": {
+        "xFrac": -0.46,
+        "yFrac": 0
+      },
+      "fogLightLeft": {
+        "xFrac": 0.45,
+        "yFrac": -0.7
+      },
+      "fogLightRight": {
+        "xFrac": 0.45,
+        "yFrac": 0.7
+      },
+      "thirdBrakeLight": {
+        "enabled": false,
+        "xFrac": 0,
+        "yFrac": 0,
+        "width": 0,
+        "height": 0,
+        "type": "incandescent"
+      }
+    }
   },
   "trailer_barrel": {
     "id": "cat_trailer_barrel",
@@ -6909,6 +9978,43 @@ export const MASTER_VEHICLE_CONFIGS: Record<CarType, MasterVehicleConfig> = {
       "drainValveOpen": false,
       "hasWaterHose": true,
       "isWaterHoseDeployed": false
+    },
+    "chassisAnatomy": {
+      "specialPreset": "trailer"
+    },
+    "opticsMounts": {
+      "headlightLeft": {
+        "xFrac": 0,
+        "yFrac": 0
+      },
+      "headlightRight": {
+        "xFrac": 0,
+        "yFrac": 0
+      },
+      "taillightLeft": {
+        "xFrac": -0.46,
+        "yFrac": -0.75
+      },
+      "taillightRight": {
+        "xFrac": -0.46,
+        "yFrac": 0.75
+      },
+      "fogLightLeft": {
+        "xFrac": 0.45,
+        "yFrac": -0.7
+      },
+      "fogLightRight": {
+        "xFrac": 0.45,
+        "yFrac": 0.7
+      },
+      "thirdBrakeLight": {
+        "enabled": false,
+        "xFrac": 0,
+        "yFrac": 0,
+        "width": 0,
+        "height": 0,
+        "type": "incandescent"
+      }
     }
   },
   "trailer_vacuum": {
@@ -7010,6 +10116,43 @@ export const MASTER_VEHICLE_CONFIGS: Record<CarType, MasterVehicleConfig> = {
       "drainValveOpen": false,
       "hasWaterHose": true,
       "isWaterHoseDeployed": false
+    },
+    "chassisAnatomy": {
+      "specialPreset": "trailer"
+    },
+    "opticsMounts": {
+      "headlightLeft": {
+        "xFrac": 0,
+        "yFrac": 0
+      },
+      "headlightRight": {
+        "xFrac": 0,
+        "yFrac": 0
+      },
+      "taillightLeft": {
+        "xFrac": -0.46,
+        "yFrac": -0.75
+      },
+      "taillightRight": {
+        "xFrac": -0.46,
+        "yFrac": 0.75
+      },
+      "fogLightLeft": {
+        "xFrac": 0.45,
+        "yFrac": -0.7
+      },
+      "fogLightRight": {
+        "xFrac": 0.45,
+        "yFrac": 0.7
+      },
+      "thirdBrakeLight": {
+        "enabled": false,
+        "xFrac": 0,
+        "yFrac": 0,
+        "width": 0,
+        "height": 0,
+        "type": "incandescent"
+      }
     }
   },
   "trailer_flatbed_2axle": {
@@ -7101,7 +10244,44 @@ export const MASTER_VEHICLE_CONFIGS: Record<CarType, MasterVehicleConfig> = {
         "name": "Flatbed Blue",
         "hex": "#1d4ed8"
       }
-    ]
+    ],
+    "chassisAnatomy": {
+      "specialPreset": "trailer"
+    },
+    "opticsMounts": {
+      "headlightLeft": {
+        "xFrac": 0,
+        "yFrac": 0
+      },
+      "headlightRight": {
+        "xFrac": 0,
+        "yFrac": 0
+      },
+      "taillightLeft": {
+        "xFrac": -0.46,
+        "yFrac": -0.75
+      },
+      "taillightRight": {
+        "xFrac": -0.46,
+        "yFrac": 0.75
+      },
+      "fogLightLeft": {
+        "xFrac": 0.45,
+        "yFrac": -0.7
+      },
+      "fogLightRight": {
+        "xFrac": 0.45,
+        "yFrac": 0.7
+      },
+      "thirdBrakeLight": {
+        "enabled": false,
+        "xFrac": 0,
+        "yFrac": 0,
+        "width": 0,
+        "height": 0,
+        "type": "incandescent"
+      }
+    }
   },
   "paver_asphalt_wheeled": {
     "id": "deal_paver_asphalt_wheeled",
@@ -7202,7 +10382,55 @@ export const MASTER_VEHICLE_CONFIGS: Record<CarType, MasterVehicleConfig> = {
         "name": "Industrial Gray",
         "hex": "#475569"
       }
-    ]
+    ],
+    "chassisAnatomy": {
+      "xNose": 0.5,
+      "xCowl": 0.28,
+      "xA": 0.24,
+      "xB": 0.05,
+      "xC": -0.05,
+      "xRearHeader": -0.32,
+      "xTail": -0.5,
+      "xFrontAxle": 0.33,
+      "xRearAxle": -0.36,
+      "xEngine": 0.2,
+      "xCore": 0,
+      "frameRatio": 0.75
+    },
+    "opticsMounts": {
+      "headlightLeft": {
+        "xFrac": 0.47,
+        "yFrac": -0.74
+      },
+      "headlightRight": {
+        "xFrac": 0.47,
+        "yFrac": 0.74
+      },
+      "taillightLeft": {
+        "xFrac": -0.46,
+        "yFrac": -0.7
+      },
+      "taillightRight": {
+        "xFrac": -0.46,
+        "yFrac": 0.7
+      },
+      "fogLightLeft": {
+        "xFrac": 0.45,
+        "yFrac": -0.7
+      },
+      "fogLightRight": {
+        "xFrac": 0.45,
+        "yFrac": 0.7
+      },
+      "thirdBrakeLight": {
+        "enabled": false,
+        "xFrac": 0,
+        "yFrac": 0,
+        "width": 0,
+        "height": 0,
+        "type": "incandescent"
+      }
+    }
   },
   "roller_heavy_tandem": {
     "id": "deal_roller_heavy_tandem",
@@ -7303,7 +10531,55 @@ export const MASTER_VEHICLE_CONFIGS: Record<CarType, MasterVehicleConfig> = {
         "name": "Industrial Green",
         "hex": "#15803d"
       }
-    ]
+    ],
+    "chassisAnatomy": {
+      "xNose": 0.5,
+      "xCowl": 0.3,
+      "xA": 0.25,
+      "xB": 0.05,
+      "xC": -0.1,
+      "xRearHeader": -0.3,
+      "xTail": -0.5,
+      "xFrontAxle": 0.32,
+      "xRearAxle": -0.34,
+      "xEngine": 0.18,
+      "xCore": 0,
+      "frameRatio": 0.6
+    },
+    "opticsMounts": {
+      "headlightLeft": {
+        "xFrac": 0.47,
+        "yFrac": -0.74
+      },
+      "headlightRight": {
+        "xFrac": 0.47,
+        "yFrac": 0.74
+      },
+      "taillightLeft": {
+        "xFrac": -0.46,
+        "yFrac": -0.7
+      },
+      "taillightRight": {
+        "xFrac": -0.46,
+        "yFrac": 0.7
+      },
+      "fogLightLeft": {
+        "xFrac": 0.45,
+        "yFrac": -0.7
+      },
+      "fogLightRight": {
+        "xFrac": 0.45,
+        "yFrac": 0.7
+      },
+      "thirdBrakeLight": {
+        "enabled": false,
+        "xFrac": 0,
+        "yFrac": 0,
+        "width": 0,
+        "height": 0,
+        "type": "incandescent"
+      }
+    }
   },
   "roller_compact_sidewalk": {
     "id": "deal_roller_compact_sidewalk",
@@ -7404,7 +10680,55 @@ export const MASTER_VEHICLE_CONFIGS: Record<CarType, MasterVehicleConfig> = {
         "name": "Snow White",
         "hex": "#ffffff"
       }
-    ]
+    ],
+    "chassisAnatomy": {
+      "xNose": 0.5,
+      "xCowl": 0.3,
+      "xA": 0.25,
+      "xB": 0.05,
+      "xC": -0.1,
+      "xRearHeader": -0.3,
+      "xTail": -0.5,
+      "xFrontAxle": 0.32,
+      "xRearAxle": -0.34,
+      "xEngine": 0.18,
+      "xCore": 0,
+      "frameRatio": 0.52
+    },
+    "opticsMounts": {
+      "headlightLeft": {
+        "xFrac": 0.47,
+        "yFrac": -0.74
+      },
+      "headlightRight": {
+        "xFrac": 0.47,
+        "yFrac": 0.74
+      },
+      "taillightLeft": {
+        "xFrac": -0.46,
+        "yFrac": -0.7
+      },
+      "taillightRight": {
+        "xFrac": -0.46,
+        "yFrac": 0.7
+      },
+      "fogLightLeft": {
+        "xFrac": 0.45,
+        "yFrac": -0.7
+      },
+      "fogLightRight": {
+        "xFrac": 0.45,
+        "yFrac": 0.7
+      },
+      "thirdBrakeLight": {
+        "enabled": false,
+        "xFrac": 0,
+        "yFrac": 0,
+        "width": 0,
+        "height": 0,
+        "type": "incandescent"
+      }
+    }
   },
   "roller_pneumatic": {
     "id": "deal_roller_pneumatic",
@@ -7505,7 +10829,55 @@ export const MASTER_VEHICLE_CONFIGS: Record<CarType, MasterVehicleConfig> = {
         "name": "Highway Gray",
         "hex": "#334155"
       }
-    ]
+    ],
+    "chassisAnatomy": {
+      "xNose": 0.5,
+      "xCowl": 0.3,
+      "xA": 0.25,
+      "xB": 0.05,
+      "xC": -0.1,
+      "xRearHeader": -0.3,
+      "xTail": -0.5,
+      "xFrontAxle": 0.32,
+      "xRearAxle": -0.34,
+      "xEngine": 0.18,
+      "xCore": 0,
+      "frameRatio": 0.6
+    },
+    "opticsMounts": {
+      "headlightLeft": {
+        "xFrac": 0.47,
+        "yFrac": -0.74
+      },
+      "headlightRight": {
+        "xFrac": 0.47,
+        "yFrac": 0.74
+      },
+      "taillightLeft": {
+        "xFrac": -0.46,
+        "yFrac": -0.7
+      },
+      "taillightRight": {
+        "xFrac": -0.46,
+        "yFrac": 0.7
+      },
+      "fogLightLeft": {
+        "xFrac": 0.45,
+        "yFrac": -0.7
+      },
+      "fogLightRight": {
+        "xFrac": 0.45,
+        "yFrac": 0.7
+      },
+      "thirdBrakeLight": {
+        "enabled": false,
+        "xFrac": 0,
+        "yFrac": 0,
+        "width": 0,
+        "height": 0,
+        "type": "incandescent"
+      }
+    }
   },
   "wagon_allroad": {
     "id": "deal_wagon_allroad",
@@ -7613,7 +10985,54 @@ export const MASTER_VEHICLE_CONFIGS: Record<CarType, MasterVehicleConfig> = {
         "name": "Platinum Silver",
         "hex": "#cbd5e1"
       }
-    ]
+    ],
+    "chassisAnatomy": {
+      "xNose": 0.5,
+      "xCowl": 0.15,
+      "xA": 0.07,
+      "xB": -0.04,
+      "xC": -0.22,
+      "xRearHeader": -0.26,
+      "xTail": -0.5,
+      "xFrontAxle": 0.28,
+      "xRearAxle": -0.3,
+      "xEngine": 0.2,
+      "xCore": -0.04
+    },
+    "opticsMounts": {
+      "headlightLeft": {
+        "xFrac": 0.47,
+        "yFrac": -0.74
+      },
+      "headlightRight": {
+        "xFrac": 0.47,
+        "yFrac": 0.74
+      },
+      "taillightLeft": {
+        "xFrac": -0.46,
+        "yFrac": -0.78
+      },
+      "taillightRight": {
+        "xFrac": -0.46,
+        "yFrac": 0.78
+      },
+      "fogLightLeft": {
+        "xFrac": 0.45,
+        "yFrac": -0.7
+      },
+      "fogLightRight": {
+        "xFrac": 0.45,
+        "yFrac": 0.7
+      },
+      "thirdBrakeLight": {
+        "enabled": true,
+        "xFrac": -0.44,
+        "yFrac": 0,
+        "width": 5.5,
+        "height": 1.4,
+        "type": "led_strip"
+      }
+    }
   },
   "bus_minibus": {
     "id": "deal_bus_minibus",
@@ -7722,7 +11141,55 @@ export const MASTER_VEHICLE_CONFIGS: Record<CarType, MasterVehicleConfig> = {
         "name": "Titanium Gray",
         "hex": "#64748b"
       }
-    ]
+    ],
+    "chassisAnatomy": {
+      "xNose": 0.5,
+      "xCowl": 0.46,
+      "xA": 0.44,
+      "xB": 0.05,
+      "xC": -0.25,
+      "xRearHeader": -0.36,
+      "xTail": -0.5,
+      "xFrontAxle": 0.36,
+      "xRearAxle": -0.22,
+      "xEngine": 0.3,
+      "xCore": -0.05,
+      "frameRatio": 0.86
+    },
+    "opticsMounts": {
+      "headlightLeft": {
+        "xFrac": 0.47,
+        "yFrac": -0.74
+      },
+      "headlightRight": {
+        "xFrac": 0.47,
+        "yFrac": 0.74
+      },
+      "taillightLeft": {
+        "xFrac": -0.46,
+        "yFrac": -0.78
+      },
+      "taillightRight": {
+        "xFrac": -0.46,
+        "yFrac": 0.78
+      },
+      "fogLightLeft": {
+        "xFrac": 0.45,
+        "yFrac": -0.7
+      },
+      "fogLightRight": {
+        "xFrac": 0.45,
+        "yFrac": 0.7
+      },
+      "thirdBrakeLight": {
+        "enabled": true,
+        "xFrac": -0.46,
+        "yFrac": 0,
+        "width": 5.5,
+        "height": 1.4,
+        "type": "led_strip"
+      }
+    }
   },
   "muscle": {
     "id": "cat_muscle",
@@ -7828,7 +11295,54 @@ export const MASTER_VEHICLE_CONFIGS: Record<CarType, MasterVehicleConfig> = {
         "name": "Dark Burgundy",
         "hex": "#881337"
       }
-    ]
+    ],
+    "chassisAnatomy": {
+      "xNose": 0.5,
+      "xCowl": 0.08,
+      "xA": 0.02,
+      "xB": -0.12,
+      "xC": -0.22,
+      "xRearHeader": -0.26,
+      "xTail": -0.5,
+      "xFrontAxle": 0.3,
+      "xRearAxle": -0.3,
+      "xEngine": 0.22,
+      "xCore": -0.08
+    },
+    "opticsMounts": {
+      "headlightLeft": {
+        "xFrac": 0.47,
+        "yFrac": -0.74
+      },
+      "headlightRight": {
+        "xFrac": 0.47,
+        "yFrac": 0.74
+      },
+      "taillightLeft": {
+        "xFrac": -0.46,
+        "yFrac": -0.78
+      },
+      "taillightRight": {
+        "xFrac": -0.46,
+        "yFrac": 0.78
+      },
+      "fogLightLeft": {
+        "xFrac": 0.45,
+        "yFrac": -0.7
+      },
+      "fogLightRight": {
+        "xFrac": 0.45,
+        "yFrac": 0.7
+      },
+      "thirdBrakeLight": {
+        "enabled": true,
+        "xFrac": -0.28,
+        "yFrac": 0,
+        "width": 4,
+        "height": 1.2,
+        "type": "led_strip"
+      }
+    }
   },
   "fire_rescue": {
     "id": "cat_fire_rescue",
@@ -7915,7 +11429,55 @@ export const MASTER_VEHICLE_CONFIGS: Record<CarType, MasterVehicleConfig> = {
       "hasTrunk": false
     },
     "keyTier": "flip",
-    "requiredKeyType": null
+    "requiredKeyType": null,
+    "chassisAnatomy": {
+      "xNose": 0.5,
+      "xCowl": 0.46,
+      "xA": 0.42,
+      "xB": 0.24,
+      "xC": 0.18,
+      "xRearHeader": 0.1,
+      "xTail": -0.5,
+      "xFrontAxle": 0.36,
+      "xRearAxle": -0.2,
+      "xEngine": 0.36,
+      "xCore": -0.1,
+      "frameRatio": 0.85
+    },
+    "opticsMounts": {
+      "headlightLeft": {
+        "xFrac": 0.47,
+        "yFrac": -0.74
+      },
+      "headlightRight": {
+        "xFrac": 0.47,
+        "yFrac": 0.74
+      },
+      "taillightLeft": {
+        "xFrac": -0.46,
+        "yFrac": -0.7
+      },
+      "taillightRight": {
+        "xFrac": -0.46,
+        "yFrac": 0.7
+      },
+      "fogLightLeft": {
+        "xFrac": 0.45,
+        "yFrac": -0.7
+      },
+      "fogLightRight": {
+        "xFrac": 0.45,
+        "yFrac": 0.7
+      },
+      "thirdBrakeLight": {
+        "enabled": false,
+        "xFrac": 0,
+        "yFrac": 0,
+        "width": 0,
+        "height": 0,
+        "type": "incandescent"
+      }
+    }
   },
   "ambulance_van": {
     "id": "cat_ambulance_van",
@@ -8002,7 +11564,55 @@ export const MASTER_VEHICLE_CONFIGS: Record<CarType, MasterVehicleConfig> = {
       "hasTrunk": false
     },
     "keyTier": "flip",
-    "requiredKeyType": null
+    "requiredKeyType": null,
+    "chassisAnatomy": {
+      "xNose": 0.5,
+      "xCowl": 0.46,
+      "xA": 0.44,
+      "xB": 0.05,
+      "xC": -0.25,
+      "xRearHeader": -0.36,
+      "xTail": -0.5,
+      "xFrontAxle": 0.36,
+      "xRearAxle": -0.22,
+      "xEngine": 0.3,
+      "xCore": -0.05,
+      "frameRatio": 0.86
+    },
+    "opticsMounts": {
+      "headlightLeft": {
+        "xFrac": 0.47,
+        "yFrac": -0.74
+      },
+      "headlightRight": {
+        "xFrac": 0.47,
+        "yFrac": 0.74
+      },
+      "taillightLeft": {
+        "xFrac": -0.46,
+        "yFrac": -0.78
+      },
+      "taillightRight": {
+        "xFrac": -0.46,
+        "yFrac": 0.78
+      },
+      "fogLightLeft": {
+        "xFrac": 0.45,
+        "yFrac": -0.7
+      },
+      "fogLightRight": {
+        "xFrac": 0.45,
+        "yFrac": 0.7
+      },
+      "thirdBrakeLight": {
+        "enabled": true,
+        "xFrac": -0.46,
+        "yFrac": 0,
+        "width": 5.5,
+        "height": 1.4,
+        "type": "led_strip"
+      }
+    }
   },
   "ambulance_suv": {
     "id": "cat_ambulance_suv",
@@ -8089,10 +11699,68 @@ export const MASTER_VEHICLE_CONFIGS: Record<CarType, MasterVehicleConfig> = {
       "hasTrunk": false
     },
     "keyTier": "flip",
-    "requiredKeyType": null
+    "requiredKeyType": null,
+    "chassisAnatomy": {
+      "xNose": 0.5,
+      "xCowl": 0.22,
+      "xA": 0.17,
+      "xB": -0.02,
+      "xC": -0.3,
+      "xRearHeader": -0.36,
+      "xTail": -0.5,
+      "xFrontAxle": 0.3,
+      "xRearAxle": -0.29,
+      "xEngine": 0.26,
+      "xCore": -0.06,
+      "frameRatio": 0.8
+    },
+    "opticsMounts": {
+      "headlightLeft": {
+        "xFrac": 0.47,
+        "yFrac": -0.74
+      },
+      "headlightRight": {
+        "xFrac": 0.47,
+        "yFrac": 0.74
+      },
+      "taillightLeft": {
+        "xFrac": -0.46,
+        "yFrac": -0.78
+      },
+      "taillightRight": {
+        "xFrac": -0.46,
+        "yFrac": 0.78
+      },
+      "fogLightLeft": {
+        "xFrac": 0.45,
+        "yFrac": -0.7
+      },
+      "fogLightRight": {
+        "xFrac": 0.45,
+        "yFrac": 0.7
+      },
+      "thirdBrakeLight": {
+        "enabled": true,
+        "xFrac": -0.42,
+        "yFrac": 0,
+        "width": 5,
+        "height": 1.4,
+        "type": "led_strip"
+      }
+    }
   }
-} as Record<CarType, MasterVehicleConfig>;
+};
 
-export function getMasterVehicleConfig(type: string): MasterVehicleConfig | undefined {
-  return (MASTER_VEHICLE_CONFIGS as any)[type];
+export function getMasterVehicleConfig(type: CarType | string): MasterVehicleConfig {
+  return MASTER_VEHICLE_CONFIGS[type as CarType] || MASTER_VEHICLE_CONFIGS['sedan'];
+}
+
+export function getVehicleOpticsMounts(typeOrCar: CarType | string | { type: CarType | string }): VehicleOpticsMounts {
+  const type = typeof typeOrCar === 'string' ? typeOrCar : (typeOrCar as any)?.type;
+  return getMasterVehicleConfig(type).opticsMounts;
+}
+
+export function getVehicleChassisAnatomy(typeOrCar: CarType | string | { type: CarType | string }): VehicleChassisAnatomy {
+  const type = typeof typeOrCar === 'string' ? typeOrCar : (typeOrCar as any)?.type;
+  return getMasterVehicleConfig(type).chassisAnatomy;
 }

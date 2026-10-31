@@ -1,4 +1,5 @@
 import { Vehicle } from './types';
+import { getVehicleOpticsMounts } from './vehicleHelpers';
 export {
   getVehicleBasePolygon,
   getVehicleCabinDimensions,
@@ -2203,10 +2204,9 @@ export function renderSpecializedVehicleAttachments(vCtx: VehicleRenderContext):
     // Aerodynamic shark fin antenna
     drawDeformedRect(cabinX - cabinL * 0.34, -0.6, 2.5, 1.2, '#0f172a');
 
-    // Tailgate spoiler lip with third brake light strip
+    // Tailgate spoiler lip
     const spoilerX = cabinX - cabinL * 0.46;
     drawDeformedRect(spoilerX, -cabinW * 0.38, 2.2, cabinW * 0.76, '#0f172a');
-    drawDeformedLine(spoilerX + 0.5, -cabinW * 0.2, spoilerX + 0.5, cabinW * 0.2, car.brakeLightsOn ? '#ef4444' : '#7f1d1d', 1.2);
 
     // Dual chrome oval exhaust tips in rear diffuser
     drawDeformedRect(-halfL + rc - 1.2, -halfW * 0.65, 2, 2.2, '#cbd5e1');
@@ -2304,9 +2304,6 @@ export function renderSpecializedVehicleAttachments(vCtx: VehicleRenderContext):
     // Color-matched aerodynamic door mirrors
     drawDeformedRect(cabinX + cabinL * 0.28, -halfW - 1.8, 2.0, 1.8, car.color);
     drawDeformedRect(cabinX + cabinL * 0.28, halfW, 2.0, 1.8, car.color);
-
-    // Sloped rear deck with third brake light
-    drawDeformedLine(cabinX - cabinL * 0.42, -cabinW * 0.2, cabinX - cabinL * 0.42, cabinW * 0.2, car.brakeLightsOn ? '#ef4444' : '#7f1d1d', 1.2);
   } else if (car.type === 'police') {
     // =========================================================================
     // POLICE PATROL INTERCEPTOR (ДПС / ППС ГОСТ Р 50574) - STRICT TOP-DOWN VIEW
@@ -2374,8 +2371,6 @@ export function renderSpecializedVehicleAttachments(vCtx: VehicleRenderContext):
     // Blue band across rear lip of trunk
     drawDeformedRect(trunkX1, -trunkW / 2, 2.2, trunkW, '#1d4ed8');
     drawDeformedLine(trunkX1 + 2.2, -trunkW / 2, trunkX1 + 2.2, trunkW / 2, '#ffffff', 0.8);
-    // Rear high-mount third brake light
-    drawDeformedRect(cabinX - cabinL * 0.36 - 0.5, -2.0, 1.0, 4.0, car.brakeLightsOn ? '#ef4444' : '#7f1d1d');
   } else if (car.type === 'taxi') {
     // Public City Taxi (Жёлтое Такси с шашечками)
     // 1. Classic black/white checkerboard stripes («шашечки») on both flanks
@@ -2602,10 +2597,9 @@ export function renderSpecializedVehicleAttachments(vCtx: VehicleRenderContext):
     drawDeformedLine(railX1, -cabinW * 0.44, railX2, -cabinW * 0.44, '#cbd5e1', 1.6);
     drawDeformedLine(railX1, cabinW * 0.44, railX2, cabinW * 0.44, '#cbd5e1', 1.6);
 
-    // 2. Rear roof tailgate spoiler with integrated third brake light
+    // 2. Rear roof tailgate spoiler
     const spoilerX = cabinX - cabinL * 0.46;
     drawDeformedRect(spoilerX, -cabinW * 0.42, 2.4, cabinW * 0.84, '#0f172a');
-    drawDeformedLine(spoilerX + 0.5, -cabinW * 0.22, spoilerX + 0.5, cabinW * 0.22, car.brakeLightsOn ? '#ef4444' : '#7f1d1d', 1.4);
 
     // 3. Front & Rear brushed aluminum chin skid plates
     drawDeformedRect(halfL - fc - 0.6, -halfW * 0.42, 2.2, halfW * 0.84, '#cbd5e1');
@@ -3815,4 +3809,16 @@ export function renderSpecializedVehicleAttachments(vCtx: VehicleRenderContext):
     drawDeformedRect(boxRear - 0.8, boxW * 0.42 - 2.4, 1.0, 2.4, '#1c2127');
     drawDeformedRect(boxRear - 0.8, boxW * 0.42 - 2.0, 0.8, 1.6, '#7f1d1d');
   }
+
+  // --- UNIFIED DATA-DRIVEN CHMSL (THIRD BRAKE LIGHT) ---
+  const optics = getVehicleOpticsMounts(car);
+  if (optics.thirdBrakeLight?.enabled) {
+    const tbl = optics.thirdBrakeLight;
+    const tblX = car.length * tbl.xFrac + rc * 0.7;
+    const tblY = car.width * tbl.yFrac;
+    const halfWidth = tbl.width / 2;
+    const col = car.brakeLightsOn ? '#ef4444' : '#7f1d1d';
+    drawDeformedLine(tblX, tblY - halfWidth, tblX, tblY + halfWidth, col, tbl.height);
+  }
 }
+

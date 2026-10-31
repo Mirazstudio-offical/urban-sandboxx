@@ -29,7 +29,8 @@ import {
   isRoadMachinery,
   getVehicleTurnSignalDynamicState,
   getVehicleTurnSignalConfig,
-  ensureVehicleDamage
+  ensureVehicleDamage,
+  getVehicleOpticsMounts
 } from './vehicleHelpers';
 import { trafficDiagnostics } from './aiTraffic';
 import {
@@ -11757,32 +11758,14 @@ export class GameRenderer {
       const fld = Math.min(9, dmg.frontLeftDent || 0);
       const frd = Math.min(9, dmg.frontRightDent || 0);
 
-      const isTractor = car.type === 'tractor_mtz82' || car.type === 'tractor_mtz80' || car.type === 'tractor_mtz80_old';
-      const isSoloMoto = car.type === 'moto_izh_jupiter' || car.type === 'moto_jawa350' || 
-                         car.type === 'moto_sport' || car.type === 'moto_chopper' || car.type === 'moped_soviet';
-      const isUralSidecar = car.type === 'moto_ural_sidecar';
+      const optics = getVehicleOpticsMounts(car);
+      const isSoloMoto = optics.headlightLeft.yFrac === 0 && optics.headlightRight.yFrac === 0;
+      const isTractor = car.type.startsWith('tractor_');
 
-      let leftLampLX = halfL - Math.max(fld, fc) - 1.4;
-      let leftLampLY = -halfW * 0.74 + ld * 0.15;
-      let rightLampLX = halfL - Math.max(frd, fc) - 1.4;
-      let rightLampLY = halfW * 0.74 - rd * 0.15;
-
-      if (isSoloMoto) {
-        leftLampLX = halfL - fc - 2.5;
-        leftLampLY = 0;
-        rightLampLX = halfL - fc - 2.5;
-        rightLampLY = 0;
-      } else if (isUralSidecar) {
-        leftLampLX = halfL - fc - 2.5;
-        leftLampLY = -halfW * 0.45;
-        rightLampLX = halfL * 0.25;
-        rightLampLY = halfW * 0.78;
-      } else if (isTractor) {
-        leftLampLX = halfL - fc - 1.2;
-        leftLampLY = -halfW * 0.24;
-        rightLampLX = halfL - fc - 1.2;
-        rightLampLY = halfW * 0.24;
-      }
+      const leftLampLX = car.length * optics.headlightLeft.xFrac - Math.max(fld, fc) - 1.4;
+      const leftLampLY = car.width * optics.headlightLeft.yFrac + ld * 0.15;
+      const rightLampLX = car.length * optics.headlightRight.xFrac - Math.max(frd, fc) - 1.4;
+      const rightLampLY = car.width * optics.headlightRight.yFrac - rd * 0.15;
 
       const hasHeadlightsOn = getVehicleHeadlightOn(car);
       const hasPositionLightsOn = !!(car.positionLightsOn || hasHeadlightsOn);
@@ -12075,28 +12058,10 @@ export class GameRenderer {
       const rld = Math.min(8, dmg.rearLeftDent || 0);
       const rrd = Math.min(8, dmg.rearRightDent || 0);
 
-      let rearLeftLX = -halfL + rc * 0.85 + rld * 0.4 + 2.5;
-      let rearLeftLY = -halfW + 3.2 + ld * 0.15;
-      let rearRightLX = -halfL + rc * 0.85 + rrd * 0.4 + 2.5;
-      let rearRightLY = halfW - 3.2 - rd * 0.15;
-
-      if (isSoloMoto) {
-        rearLeftLX = -halfL + rc + 2.0;
-        rearLeftLY = 0;
-        rearRightLX = -halfL + rc + 2.0;
-        rearRightLY = 0;
-      } else if (isUralSidecar) {
-        rearLeftLX = -halfL + rc + 2.0;
-        rearLeftLY = -halfW * 0.45;
-        rearRightLX = -halfL * 0.55;
-        rearRightLY = halfW * 0.85;
-      } else if (isTractor) {
-        const cabBackX = car.type === 'tractor_mtz80_old' ? (-halfL * 0.72) : (-halfL * 0.74);
-        rearLeftLX = cabBackX + 2.5;
-        rearLeftLY = -halfW * 0.82;
-        rearRightLX = cabBackX + 2.5;
-        rearRightLY = halfW * 0.82;
-      }
+      let rearLeftLX = car.length * optics.taillightLeft.xFrac + rc * 0.85 + rld * 0.4 + 2.5;
+      let rearLeftLY = car.width * optics.taillightLeft.yFrac + ld * 0.15;
+      let rearRightLX = car.length * optics.taillightRight.xFrac + rc * 0.85 + rrd * 0.4 + 2.5;
+      let rearRightLY = car.width * optics.taillightRight.yFrac - rd * 0.15;
 
       const cutSmoothRearLight = (rxOffset: number, ryOffset: number, radius: number, peakAlpha: number = 0.8) => {
         const rx = car.x + cosA * rxOffset - sinA * ryOffset;
@@ -12159,7 +12124,12 @@ export class GameRenderer {
       }
       if (isBraking) {
         cutRearBeamCone(rearLeftLX, rearLeftLY, 42, 32, 0.80);
-        cutRearBeamCone(rearRightLX, rearRightLY, 42, 32, 0.80);
+        if (!isSoloMoto) cutRearBeamCone(rearRightLX, rearRightLY, 42, 32, 0.80);
+        if (optics.thirdBrakeLight?.enabled) {
+          const tblLX = car.length * optics.thirdBrakeLight.xFrac + rc * 0.7;
+          const tblLY = car.width * optics.thirdBrakeLight.yFrac;
+          cutSmoothRearLight(tblLX, tblLY, 16, 0.65);
+        }
       } else if (!isReversing && hasPositionLightsOn) {
         cutSmoothRearLight(rearLeftLX, rearLeftLY, 10, 0.45);
         cutSmoothRearLight(rearRightLX, rearRightLY, 10, 0.45);
@@ -12538,57 +12508,19 @@ export class GameRenderer {
       const fld = Math.min(9, dmg.frontLeftDent || 0);
       const frd = Math.min(9, dmg.frontRightDent || 0);
 
-      const isTractor = car.type === 'tractor_mtz82' || car.type === 'tractor_mtz80' || car.type === 'tractor_mtz80_old';
-      const isSoloMoto = car.type === 'moto_izh_jupiter' || car.type === 'moto_jawa350' || 
-                         car.type === 'moto_sport' || car.type === 'moto_chopper' || car.type === 'moped_soviet';
-      const isUralSidecar = car.type === 'moto_ural_sidecar';
+      const optics = getVehicleOpticsMounts(car);
+      const isSoloMoto = optics.headlightLeft.yFrac === 0 && optics.headlightRight.yFrac === 0;
+      const isTractor = car.type.startsWith('tractor_');
 
       const isArticulated = car.type === 'roller_heavy_tandem' || car.type === 'roller_compact_sidewalk' || car.type === 'roller_pneumatic';
       const frontAngle = isArticulated ? (car.angle + (car.steerAngle || 0)) : car.angle;
       const cosFA = Math.cos(frontAngle);
       const sinFA = Math.sin(frontAngle);
 
-      let leftLampLX = halfL - Math.max(fld, fc) - 1.4;
-      let leftLampLY = -halfW * 0.74 + ld * 0.15;
-      let rightLampLX = halfL - Math.max(frd, fc) - 1.4;
-      let rightLampLY = halfW * 0.74 - rd * 0.15;
-
-      if (isSoloMoto) {
-        leftLampLX = halfL - fc - 2.5;
-        leftLampLY = 0;
-        rightLampLX = halfL - fc - 2.5;
-        rightLampLY = 0;
-      } else if (isUralSidecar) {
-        leftLampLX = halfL - fc - 2.5;
-        leftLampLY = -halfW * 0.45;
-        rightLampLX = halfL * 0.25;
-        rightLampLY = halfW * 0.78;
-      } else if (isTractor) {
-        leftLampLX = halfL - fc - 1.2;
-        leftLampLY = -halfW * 0.24;
-        rightLampLX = halfL - fc - 1.2;
-        rightLampLY = halfW * 0.24;
-      } else if (car.type === 'roller_compact_sidewalk') {
-        leftLampLX = halfL - fc - 2.5;
-        leftLampLY = 0;
-        rightLampLX = halfL - fc - 2.5;
-        rightLampLY = 0;
-      } else if (car.type === 'roller_heavy_tandem') {
-        leftLampLX = halfL - fc - 3.0;
-        leftLampLY = -halfW * 0.82;
-        rightLampLX = halfL - fc - 3.0;
-        rightLampLY = halfW * 0.82;
-      } else if (car.type === 'roller_pneumatic') {
-        leftLampLX = halfL - fc - 3.0;
-        leftLampLY = -halfW * 0.80;
-        rightLampLX = halfL - fc - 3.0;
-        rightLampLY = halfW * 0.80;
-      } else if (car.type === 'paver_asphalt_wheeled') {
-        leftLampLX = halfL * 0.92;
-        leftLampLY = -halfW * 0.85;
-        rightLampLX = halfL * 0.92;
-        rightLampLY = halfW * 0.85;
-      }
+      let leftLampLX = car.length * optics.headlightLeft.xFrac - Math.max(fld, fc) - 1.4;
+      let leftLampLY = car.width * optics.headlightLeft.yFrac + ld * 0.15;
+      let rightLampLX = car.length * optics.headlightRight.xFrac - Math.max(frd, fc) - 1.4;
+      let rightLampLY = car.width * optics.headlightRight.yFrac - rd * 0.15;
 
       const hasHeadlightsOn = getVehicleHeadlightOn(car);
       const hasPositionLightsOn = !!(car.positionLightsOn || hasHeadlightsOn);
@@ -13010,28 +12942,10 @@ export class GameRenderer {
       const rld = Math.min(8, dmg.rearLeftDent || 0);
       const rrd = Math.min(8, dmg.rearRightDent || 0);
 
-      let rearLeftLX = -halfL + rc * 0.85 + rld * 0.4 + 2.5;
-      let rearLeftLY = -halfW + 3.2 + ld * 0.15;
-      let rearRightLX = -halfL + rc * 0.85 + rrd * 0.4 + 2.5;
-      let rearRightLY = halfW - 3.2 - rd * 0.15;
-
-      if (isSoloMoto) {
-        rearLeftLX = -halfL + rc + 2.0;
-        rearLeftLY = 0;
-        rearRightLX = -halfL + rc + 2.0;
-        rearRightLY = 0;
-      } else if (isUralSidecar) {
-        rearLeftLX = -halfL + rc + 2.0;
-        rearLeftLY = -halfW * 0.45;
-        rearRightLX = -halfL * 0.55;
-        rearRightLY = halfW * 0.85;
-      } else if (isTractor) {
-        const cabBackX = car.type === 'tractor_mtz80_old' ? (-halfL * 0.72) : (-halfL * 0.74);
-        rearLeftLX = cabBackX + 2.5;
-        rearLeftLY = -halfW * 0.82;
-        rearRightLX = cabBackX + 2.5;
-        rearRightLY = halfW * 0.82;
-      }
+      let rearLeftLX = car.length * optics.taillightLeft.xFrac + rc * 0.85 + rld * 0.4 + 2.5;
+      let rearLeftLY = car.width * optics.taillightLeft.yFrac + ld * 0.15;
+      let rearRightLX = car.length * optics.taillightRight.xFrac + rc * 0.85 + rrd * 0.4 + 2.5;
+      let rearRightLY = car.width * optics.taillightRight.yFrac - rd * 0.15;
 
       const isReversing = isVehicleReverseGearActive(car);
       const isBraking = !!car.brakeLightsOn;
@@ -13062,10 +12976,11 @@ export class GameRenderer {
         drawRearLightAdditive(rearLeftLX, rearLeftLY, 26, 20, 'rgba(255, 30, 30, 0.75)', 4.2);
         drawRearLightAdditive(rearRightLX, rearRightLY, 26, 20, 'rgba(255, 30, 30, 0.75)', 4.2);
 
-        // Third Brake Light (CHMSL) on passenger cars, SUVs, vans
-        if (!isSoloMoto && !isUralSidecar && !isTractor && !car.type.startsWith('roller_') && car.type !== 'paver_asphalt_wheeled') {
-          const cabinBackX = -halfL * 0.25;
-          drawRearLightAdditive(cabinBackX, 0, 14, 10, 'rgba(255, 35, 35, 0.75)', 4.5);
+        // Third Brake Light (CHMSL) strictly driven by vehicle optics mounts
+        if (optics.thirdBrakeLight?.enabled) {
+          const tblLX = car.length * optics.thirdBrakeLight.xFrac + rc * 0.7;
+          const tblLY = car.width * optics.thirdBrakeLight.yFrac;
+          drawRearLightAdditive(tblLX, tblLY, 14, 10, 'rgba(255, 35, 35, 0.75)', 4.5);
         }
       } else if (!isReversing && hasPositionLightsOn) {
         // Ruby red running lights

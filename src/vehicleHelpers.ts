@@ -24,10 +24,15 @@ import {
   MASTER_VEHICLE_CONFIGS,
   type MasterVehicleConfig,
   getMasterVehicleConfig,
+  getVehicleOpticsMounts,
+  getVehicleChassisAnatomy,
   type VehicleBodyPanelsConfig,
   type VehicleDiffLockCapabilities,
   type VehicleHeadlightConfig,
-  type HeadlightBulbType
+  type HeadlightBulbType,
+  type VehicleOpticsMounts,
+  type VehicleChassisAnatomy,
+  type VehicleThirdBrakeLight
 } from './vehicleMasterRegistry';
 
 export {
@@ -40,10 +45,15 @@ export {
   MASTER_VEHICLE_CONFIGS,
   type MasterVehicleConfig,
   getMasterVehicleConfig,
+  getVehicleOpticsMounts,
+  getVehicleChassisAnatomy,
   type VehicleBodyPanelsConfig,
   type VehicleDiffLockCapabilities,
   type VehicleHeadlightConfig,
-  type HeadlightBulbType
+  type HeadlightBulbType,
+  type VehicleOpticsMounts,
+  type VehicleChassisAnatomy,
+  type VehicleThirdBrakeLight
 };
 
 export const SPEED_KMH_TO_PX_S = 4.4444; // 1.6x speedup for realistic screen motion (formerly 2.7778)
