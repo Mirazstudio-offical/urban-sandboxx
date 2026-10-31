@@ -9373,28 +9373,14 @@ export class GameRenderer {
         car.type === 'sedan_polo' || 
         car.type === 'sedan_accent';
 
-      let [leftLampX, leftLampY] = deform(halfL - 1.4, -halfW * 0.74);
-      let [rightLampX, rightLampY] = deform(halfL - 1.4, halfW * 0.74);
+      const optics = getVehicleOpticsMounts(car);
+      let [leftLampX, leftLampY] = deform(car.length * optics.headlightLeft.xFrac, car.width * optics.headlightLeft.yFrac);
+      let [rightLampX, rightLampY] = deform(car.length * optics.headlightRight.xFrac, car.width * optics.headlightRight.yFrac);
       if (!hasSoftbody) {
         leftLampX -= Math.max(fld, fc);
         leftLampY += ld * 0.15;
         rightLampX -= Math.max(frd, fc);
         rightLampY -= rd * 0.15;
-      }
-
-      if (isTractor) {
-        [leftLampX, leftLampY] = deform(halfL - 1.2, -halfW * 0.24);
-        [rightLampX, rightLampY] = deform(halfL - 1.2, halfW * 0.24);
-        if (!hasSoftbody) {
-          leftLampX -= fc;
-          rightLampX -= fc;
-        }
-      } else if (isUralSidecar) {
-        [leftLampX, leftLampY] = deform(halfL - 2.5, -halfW * 0.45);
-        [rightLampX, rightLampY] = deform(halfL * 0.25, halfW * 0.78);
-        if (!hasSoftbody) {
-          leftLampX -= fc;
-        }
       }
 
       const drawHeadlight = (lx: number, ly: number, broken: boolean, isLeftLamp: boolean) => {
@@ -9659,9 +9645,9 @@ export class GameRenderer {
       if (car.frontFogLightsOn && !isTrailer && !isRoadMachinery(car.type)) {
         const fogW = 2.4;
         const fogD = 1.2;
-        const drawFrontFogLamp = (baseFy: number, broken: boolean) => {
+        const drawFrontFogLamp = (baseFx: number, baseFy: number, broken: boolean) => {
           if (broken) return;
-          let [dfx, dfy] = deform(halfL - 0.6, baseFy);
+          let [dfx, dfy] = deform(baseFx, baseFy);
           if (!hasSoftbody) {
             dfx -= fc;
           }
@@ -9678,12 +9664,16 @@ export class GameRenderer {
           ctx.restore();
         };
 
+        const fogLeftX = car.length * (optics.fogLightLeft?.xFrac ?? 0.48);
+        const fogLeftY = car.width * (optics.fogLightLeft?.yFrac ?? -0.31);
+        const fogRightX = car.length * (optics.fogLightRight?.xFrac ?? 0.48);
+        const fogRightY = car.width * (optics.fogLightRight?.yFrac ?? 0.31);
+
         if (isSoloMoto) {
-          drawFrontFogLamp(0, dmg.leftHeadlightBroken);
+          drawFrontFogLamp(fogLeftX, 0, dmg.leftHeadlightBroken);
         } else {
-          const fogSpanY = halfW * 0.62;
-          drawFrontFogLamp(-fogSpanY, dmg.leftHeadlightBroken);
-          drawFrontFogLamp(fogSpanY, dmg.rightHeadlightBroken);
+          drawFrontFogLamp(fogLeftX, fogLeftY, dmg.leftHeadlightBroken);
+          drawFrontFogLamp(fogRightX, fogRightY, dmg.rightHeadlightBroken);
         }
       }
 
@@ -9704,37 +9694,13 @@ export class GameRenderer {
       const isNightRunning = hasTaillightsActive;
       const isRearFogActive = !!car.rearFogLightsOn && (hasHeadlightsOn || isNightRunning);
 
-      let [rearLeftX, rearLeftY] = deform(-halfL + 1.2, -halfW * 0.76);
-      let [rearRightX, rearRightY] = deform(-halfL + 1.2, halfW * 0.76);
+      let [rearLeftX, rearLeftY] = deform(car.length * optics.taillightLeft.xFrac, car.width * optics.taillightLeft.yFrac);
+      let [rearRightX, rearRightY] = deform(car.length * optics.taillightRight.xFrac, car.width * optics.taillightRight.yFrac);
       if (!hasSoftbody) {
         rearLeftX += rc * 0.85 + rld * 0.4;
         rearLeftY += ld * 0.15;
         rearRightX += rc * 0.85 + rrd * 0.4;
         rearRightY -= rd * 0.15;
-      }
-
-      if (isSoloMoto) {
-        [rearLeftX, rearLeftY] = deform(-halfL + 2.0, 0);
-        [rearRightX, rearRightY] = deform(-halfL + 2.0, 0);
-        if (!hasSoftbody) {
-          rearLeftX += rc;
-          rearRightX += rc;
-        }
-      } else if (isUralSidecar) {
-        [rearLeftX, rearLeftY] = deform(-halfL + 2.0, -halfW * 0.45);
-        [rearRightX, rearRightY] = deform(-halfL * 0.55, halfW * 0.85);
-        if (!hasSoftbody) {
-          rearLeftX += rc;
-        }
-      } else if (isTractor) {
-        const cabBackX = car.type === 'tractor_mtz80_old' ? (-halfL * 0.72) : (-halfL * 0.74);
-        [rearLeftX, rearLeftY] = deform(cabBackX + 2.2, -halfW * 0.82);
-        [rearRightX, rearRightY] = deform(cabBackX + 2.2, halfW * 0.82);
-      } else if (car.type === 'trailer_vacuum') {
-        const fenderX = -halfL + 5.2;
-        const barrelTrackY = halfW * 0.94;
-        [rearLeftX, rearLeftY] = deform(fenderX + 0.7, -barrelTrackY - 0.8);
-        [rearRightX, rearRightY] = deform(fenderX + 0.7, barrelTrackY + 0.8);
       }
 
       const drawTaillight = (rx: number, ry: number, broken: boolean, isLeftCluster: boolean) => {
@@ -9842,24 +9808,6 @@ export class GameRenderer {
       } else if (car.type !== 'trailer_barrel' && !isRoadMachinery(car.type)) {
         drawTaillight(rearLeftX, rearLeftY, dmg.leftTaillightBroken, true);
         drawTaillight(rearRightX, rearRightY, dmg.rightTaillightBroken, false);
-      }
-
-      // Third High-Mounted Brake Light (CHMSL - Центральный стоп-сигнал на крышке багажника/заднем стекле)
-      if (isBraking && !isTrailer && !isSoloMoto && !isRoadMachinery(car.type)) {
-        const isNotchOrHatch = car.type.startsWith('sedan') || car.type.startsWith('hatch') || 
-                               car.type.startsWith('wagon') || 
-                               car.type === 'police' || car.type === 'taxi' || 
-                               car.type === 'supercar' || car.type === 'sports' || 
-                               car.type === 'coupe_gt' || car.type.startsWith('suv') || 
-                               car.type === 'crossover_compact';
-        if (isNotchOrHatch) {
-          const { cabinX, cabinL } = getVehicleCabinDimensions(car, halfL, halfW, ld, rd);
-          const chmslX = cabinX - cabinL * 0.44;
-          ctx.fillStyle = '#ef4444';
-          ctx.fillRect(chmslX - 0.4, -1.8, 0.8, 3.6);
-          ctx.fillStyle = '#ffffff';
-          ctx.fillRect(chmslX - 0.2, -1.2, 0.4, 2.4);
-        }
       }
 
       // Trailers: Authentic red reflective warning triangles (ECE R3 / ГОСТ 8769-75)
@@ -11772,9 +11720,9 @@ export class GameRenderer {
       const isSoloMoto = optics.headlightLeft.yFrac === 0 && optics.headlightRight.yFrac === 0;
       const isTractor = car.type.startsWith('tractor_');
 
-      const leftLampLX = car.length * optics.headlightLeft.xFrac - Math.max(fld, fc) - 1.4;
+      const leftLampLX = car.length * optics.headlightLeft.xFrac - Math.max(fld, fc);
       const leftLampLY = car.width * optics.headlightLeft.yFrac + ld * 0.15;
-      const rightLampLX = car.length * optics.headlightRight.xFrac - Math.max(frd, fc) - 1.4;
+      const rightLampLX = car.length * optics.headlightRight.xFrac - Math.max(frd, fc);
       const rightLampLY = car.width * optics.headlightRight.yFrac - rd * 0.15;
 
       const hasHeadlightsOn = getVehicleHeadlightOn(car);
@@ -12011,10 +11959,10 @@ export class GameRenderer {
 
       // Front Fog Lights (ПТФ передние) Cutout
       if (car.frontFogLightsOn) {
-        const fogLeftLX = halfL - fc - 2.0;
-        const fogLeftLY = -halfW + 2.5;
-        const fogRightLX = halfL - fc - 2.0;
-        const fogRightLY = halfW - 2.5;
+        const fogLeftLX = car.length * (optics.fogLightLeft?.xFrac ?? 0.48) - fc;
+        const fogLeftLY = car.width * (optics.fogLightLeft?.yFrac ?? -0.31);
+        const fogRightLX = car.length * (optics.fogLightRight?.xFrac ?? 0.48) - fc;
+        const fogRightLY = car.width * (optics.fogLightRight?.yFrac ?? 0.31);
 
         const cutFogBeam = (lxOffset: number, lyOffset: number, broken: boolean) => {
           if (broken) return;
@@ -12068,9 +12016,9 @@ export class GameRenderer {
       const rld = Math.min(8, dmg.rearLeftDent || 0);
       const rrd = Math.min(8, dmg.rearRightDent || 0);
 
-      let rearLeftLX = car.length * optics.taillightLeft.xFrac + rc * 0.85 + rld * 0.4 + 2.5;
+      let rearLeftLX = car.length * optics.taillightLeft.xFrac + rc * 0.85 + rld * 0.4;
       let rearLeftLY = car.width * optics.taillightLeft.yFrac + ld * 0.15;
-      let rearRightLX = car.length * optics.taillightRight.xFrac + rc * 0.85 + rrd * 0.4 + 2.5;
+      let rearRightLX = car.length * optics.taillightRight.xFrac + rc * 0.85 + rrd * 0.4;
       let rearRightLY = car.width * optics.taillightRight.yFrac - rd * 0.15;
 
       const cutSmoothRearLight = (rxOffset: number, ryOffset: number, radius: number, peakAlpha: number = 0.8) => {
@@ -12527,9 +12475,9 @@ export class GameRenderer {
       const cosFA = Math.cos(frontAngle);
       const sinFA = Math.sin(frontAngle);
 
-      let leftLampLX = car.length * optics.headlightLeft.xFrac - Math.max(fld, fc) - 1.4;
+      let leftLampLX = car.length * optics.headlightLeft.xFrac - Math.max(fld, fc);
       let leftLampLY = car.width * optics.headlightLeft.yFrac + ld * 0.15;
-      let rightLampLX = car.length * optics.headlightRight.xFrac - Math.max(frd, fc) - 1.4;
+      let rightLampLX = car.length * optics.headlightRight.xFrac - Math.max(frd, fc);
       let rightLampLY = car.width * optics.headlightRight.yFrac - rd * 0.15;
 
       const hasHeadlightsOn = getVehicleHeadlightOn(car);
@@ -12899,10 +12847,10 @@ export class GameRenderer {
 
       // Front Fog Lights (ПТФ передние) Forward-Oriented Additive Optics
       if (car.frontFogLightsOn) {
-        const fogLeftLX = halfL - fc - 2.0;
-        const fogLeftLY = -halfW + 2.5;
-        const fogRightLX = halfL - fc - 2.0;
-        const fogRightLY = halfW - 2.5;
+        const fogLeftLX = car.length * (optics.fogLightLeft?.xFrac ?? 0.48) - fc;
+        const fogLeftLY = car.width * (optics.fogLightLeft?.yFrac ?? -0.31);
+        const fogRightLX = car.length * (optics.fogLightRight?.xFrac ?? 0.48) - fc;
+        const fogRightLY = car.width * (optics.fogLightRight?.yFrac ?? 0.31);
 
         const drawFogAdd = (lxOffset: number, lyOffset: number, broken: boolean) => {
           if (broken) return;
@@ -12952,9 +12900,9 @@ export class GameRenderer {
       const rld = Math.min(8, dmg.rearLeftDent || 0);
       const rrd = Math.min(8, dmg.rearRightDent || 0);
 
-      let rearLeftLX = car.length * optics.taillightLeft.xFrac + rc * 0.85 + rld * 0.4 + 2.5;
+      let rearLeftLX = car.length * optics.taillightLeft.xFrac + rc * 0.85 + rld * 0.4;
       let rearLeftLY = car.width * optics.taillightLeft.yFrac + ld * 0.15;
-      let rearRightLX = car.length * optics.taillightRight.xFrac + rc * 0.85 + rrd * 0.4 + 2.5;
+      let rearRightLX = car.length * optics.taillightRight.xFrac + rc * 0.85 + rrd * 0.4;
       let rearRightLY = car.width * optics.taillightRight.yFrac - rd * 0.15;
 
       const isReversing = isVehicleReverseGearActive(car);
