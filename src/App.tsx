@@ -257,6 +257,7 @@ import {
 } from 'lucide-react';
 
 import { SPAWN_LOCATIONS, getAllSpawnLocations, type SpawnLocation } from './spawnLocations';
+import { GpuPostFx } from './gpu/postFx';
 export { SPAWN_LOCATIONS, getAllSpawnLocations, type SpawnLocation };
 
 
@@ -312,6 +313,8 @@ function findStreetNameAtPosition(world: GameWorld | null, px: number, py: numbe
 
 export default function App() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const gpuCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const gpuFxRef = useRef<GpuPostFx | null>(null);
   const minimapFrameMsRef = useRef<number>(0);
 
   // React State for HUD & Status
@@ -2053,6 +2056,14 @@ export default function App() {
 
       rendererRef.current = new GameRenderer(ctx);
 
+      // GPU shader layer (bloom, grading, upscale, AA). Falls back silently to the plain 2D canvas.
+      const gpuCanvas = gpuCanvasRef.current;
+      if (gpuCanvas) {
+        gpuFxRef.current?.dispose();
+        const fx = new GpuPostFx(canvas, gpuCanvas);
+        gpuFxRef.current = fx.available ? fx : null;
+      }
+
       // --- HYPER-EFFICIENT BACKGROUND HIBERNATION ---
       // When user switches tabs, focuses studio chat, or minimizes window,
       // hibernate heavy canvas rendering, pause engine audio and throttle loop to 0-2 FPS.
@@ -2098,6 +2109,14 @@ export default function App() {
         canvas.style.width = cssW + 'px';
         canvas.style.height = cssH + 'px';
         rendererRef.current.resize(cssW, cssH, canvas.width / cssW);
+        // Output keeps full display resolution even when the 2D render scale is lowered: the GPU layer upscales it
+        const fx = gpuFxRef.current;
+        const gpuCanvas = gpuCanvasRef.current;
+        if (fx && gpuCanvas) {
+          fx.resize(cssW * dpr, cssH * dpr);
+          gpuCanvas.style.width = cssW + 'px';
+          gpuCanvas.style.height = cssH + 'px';
+        }
       };
 
       window.addEventListener('resize', handleResize);
@@ -2581,6 +2600,8 @@ export default function App() {
     window.addEventListener('open_phone_modal', handlePhoneModalEvent);
 
     cleanupListeners = () => {
+      gpuFxRef.current?.dispose();
+      gpuFxRef.current = null;
       window.removeEventListener('resize', handleResize);
       window.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener('blur', handleWindowBlur);
@@ -3809,6 +3830,44 @@ export default function App() {
             onlineManager.getSpeechBubbles(),
             activeInteractionRef.current
           );
+        }
+        // GPU post-processing of the finished 2D frame
+        {
+          const fx = gpuFxRef.current;
+          const gpuCanvas = gpuCanvasRef.current;
+          if (fx && gpuCanvas) {
+            if (performanceConfig.enableGpuPostFx && !isFullMapOpenRef.current) {
+              const cal = calendarRef.current;
+              const ok = fx.render(
+                {
+                  hour: displayTimeHourRef.current,
+                  weather: weatherRef.current,
+                  cameraAngle: camera.angle,
+                  timeSec: now / 1000,
+                  dt: rawDt,
+                  sunrise: cal.sunriseHour,
+                  sunset: cal.sunsetHour,
+                  lightmap: rendererRef.current.getFxLightmap(),
+                },
+                {
+                  bloom: performanceConfig.gpuBloom,
+                  grading: performanceConfig.gpuGrading,
+                  clarity: performanceConfig.gpuClarity,
+                  relief: performanceConfig.gpuRelief,
+                  sharpness: performanceConfig.gpuSharpness,
+                  vignette: performanceConfig.gpuVignette,
+                  grain: performanceConfig.gpuGrain,
+                  chromatic: performanceConfig.gpuChromatic,
+                  antiAlias: performanceConfig.gpuAntiAlias,
+                  gi: performanceConfig.gpuGi,
+                  wet: performanceConfig.gpuWet,
+                }
+              );
+              gpuCanvas.style.display = ok ? 'block' : 'none';
+            } else {
+              gpuCanvas.style.display = 'none';
+            }
+          }
         }
         const tRenderEnd = performance.now();
 
@@ -5949,6 +6008,11 @@ export default function App() {
       <canvas
         id="main-canvas"ref={canvasRef}
         className="absolute inset-0 w-full h-full block cursor-crosshair"/>
+      {/* GPU shader layer over the 2D canvas; clicks pass through to the canvas below */}
+      <canvas
+        id="gpu-canvas" ref={gpuCanvasRef}
+        className="absolute inset-0 w-full h-full pointer-events-none"
+        style={{ display: 'none' }}/>
 
       {/* TOP-LEFT: PAUSE BUTTON + GAME MENU + SIMULATION SPEED (BeamNG style) */}
       <div id="hud-top-left" className="absolute z-50 flex flex-col items-start gap-2 pointer-events-none select-none" style={{ top: 'calc(env(safe-area-inset-top, 0px) + 12px)', left: 'calc(env(safe-area-inset-left, 0px) + 12px)' }}>

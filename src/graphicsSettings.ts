@@ -19,6 +19,7 @@ export interface GfxGroup {
 }
 
 const pct = (v: number) => Math.round(v * 100) + '%';
+const pct100 = (v: number) => v + '%';
 const countOrAll = (max: number) => (v: number) => (v >= max ? 'Все' : String(v));
 
 export const GFX_GROUPS: GfxGroup[] = [
@@ -36,6 +37,23 @@ export const GFX_GROUPS: GfxGroup[] = [
       { kind: 'tg', key: 'enableMinimap', label: 'Мини-карта' },
       { kind: 'seg', key: 'minimapUpdateMs', label: 'Обновление мини-карты',
         options: [{ v: 0, label: 'Каждый кадр' }, { v: 100, label: '100 мс' }, { v: 250, label: '250 мс' }, { v: 500, label: '500 мс' }] },
+    ],
+  },
+  {
+    title: 'GPU-графика (шейдеры)',
+    items: [
+      { kind: 'tg', key: 'enableGpuPostFx', label: 'Шейдерная обработка кадра (WebGL2)' },
+      { kind: 'sld', key: 'gpuBloom', label: 'Свечение (bloom)', min: 0, max: 100, step: 5, fmt: pct100 },
+      { kind: 'sld', key: 'gpuGrading', label: 'Цветокоррекция и тон-кривая', min: 0, max: 100, step: 5, fmt: pct100 },
+      { kind: 'sld', key: 'gpuClarity', label: 'Локальный контраст и глубина', min: 0, max: 100, step: 5, fmt: pct100 },
+      { kind: 'sld', key: 'gpuRelief', label: 'Рельеф от солнца, фар и фонарей', min: 0, max: 100, step: 5, fmt: pct100 },
+      { kind: 'sld', key: 'gpuGi', label: 'Отражённый свет (GI) и туман в огнях', min: 0, max: 100, step: 5, fmt: pct100 },
+      { kind: 'sld', key: 'gpuWet', label: 'Мокрый асфальт и отражения', min: 0, max: 100, step: 5, fmt: pct100 },
+      { kind: 'sld', key: 'gpuSharpness', label: 'Резкость (апскейл)', min: 0, max: 100, step: 5, fmt: pct100 },
+      { kind: 'sld', key: 'gpuVignette', label: 'Виньетка', min: 0, max: 100, step: 5, fmt: pct100 },
+      { kind: 'sld', key: 'gpuGrain', label: 'Киношное зерно', min: 0, max: 100, step: 5, fmt: pct100 },
+      { kind: 'sld', key: 'gpuChromatic', label: 'Хроматические края линзы', min: 0, max: 100, step: 5, fmt: pct100 },
+      { kind: 'tg', key: 'gpuAntiAlias', label: 'Сглаживание краёв (FXAA)' },
     ],
   },
   {

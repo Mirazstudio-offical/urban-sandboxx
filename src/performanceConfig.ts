@@ -45,6 +45,20 @@ export interface PerformanceConfig {
   liquidReflectionLimit: number;    // Liquid surfaces that receive reflection & shadow effects per frame (default 200)
   enableLiquidShadows: boolean;     // Dynamic vehicle shadows falling across liquids, driven by time of day (default true)
   liquidShadowStrength: number;     // Shadow darkness in percent, 0..100 (default 50)
+
+  // --- GPU post-processing layer (WebGL2, see src/gpu/postFx.ts) ---
+  enableGpuPostFx: boolean;     // Run the frame through the GPU shader chain (default true)
+  gpuBloom: number;             // Glow around headlights, neon and fire, 0..100 (default 55)
+  gpuGrading: number;           // Tone curve and time-of-day / weather colour grading, 0..100 (default 60)
+  gpuClarity: number;           // Local contrast and depth in dark gaps, 0..100 (default 45)
+  gpuRelief: number;            // Sun-lit micro relief on surfaces, 0..100 (default 35)
+  gpuSharpness: number;         // Sharpening after upscale, 0..100 (default 35)
+  gpuVignette: number;          // Darkened screen edges, 0..100 (default 40)
+  gpuGrain: number;             // Film grain, 0..100 (default 20)
+  gpuChromatic: number;         // Lens colour fringing at the edges, 0..100 (default 15)
+  gpuAntiAlias: boolean;        // FXAA edge smoothing (default true)
+  gpuGi: number;                // Bounce light: surfaces pick up the colour of nearby lights, 0..100 (default 45)
+  gpuWet: number;               // Wet asphalt sheen and light reflections in rain, 0..100 (default 60)
 }
 
 export type GraphicsPresetId = 'low' | 'medium' | 'high' | 'ultra';
@@ -93,6 +107,19 @@ export const DEFAULT_CONFIG: PerformanceConfig = {
   liquidReflectionLimit: 200,
   enableLiquidShadows: true,
   liquidShadowStrength: 50,
+
+  enableGpuPostFx: true,
+  gpuBloom: 55,
+  gpuGrading: 60,
+  gpuClarity: 45,
+  gpuRelief: 35,
+  gpuSharpness: 35,
+  gpuVignette: 40,
+  gpuGrain: 20,
+  gpuChromatic: 15,
+  gpuAntiAlias: true,
+  gpuGi: 45,
+  gpuWet: 60,
 };
 
 /** One-click presets. Each one overrides only the keys listed here. */
@@ -110,6 +137,8 @@ export const GRAPHICS_PRESETS: Record<GraphicsPresetId, Partial<PerformanceConfi
     enableSpeechBubbles: true, enableNameTags: false,
     enableLiquidReflections: false, liquidReflectionStrength: 0, liquidReflectionLimit: 0,
     enableLiquidShadows: false, liquidShadowStrength: 0,
+    enableGpuPostFx: false, gpuBloom: 0, gpuGrading: 0, gpuClarity: 0, gpuRelief: 0, gpuSharpness: 0,
+    gpuVignette: 0, gpuGrain: 0, gpuChromatic: 0, gpuAntiAlias: false, gpuGi: 0, gpuWet: 0,
   },
   medium: {
     maxVehicles: 22, nearbyVehiclesTarget: 8, maxActivePedestrians: 90,
@@ -124,6 +153,8 @@ export const GRAPHICS_PRESETS: Record<GraphicsPresetId, Partial<PerformanceConfi
     enableSpeechBubbles: true, enableNameTags: true,
     enableLiquidReflections: true, liquidReflectionStrength: 50, liquidReflectionLimit: 100,
     enableLiquidShadows: true, liquidShadowStrength: 35,
+    enableGpuPostFx: true, gpuBloom: 40, gpuGrading: 55, gpuClarity: 30, gpuRelief: 0, gpuSharpness: 30,
+    gpuVignette: 30, gpuGrain: 0, gpuChromatic: 0, gpuAntiAlias: false, gpuGi: 30, gpuWet: 45,
   },
   high: { ...DEFAULT_CONFIG },
   ultra: {
@@ -139,6 +170,8 @@ export const GRAPHICS_PRESETS: Record<GraphicsPresetId, Partial<PerformanceConfi
     enableSpeechBubbles: true, enableNameTags: true,
     enableLiquidReflections: true, liquidReflectionStrength: 80, liquidReflectionLimit: 400,
     enableLiquidShadows: true, liquidShadowStrength: 70,
+    enableGpuPostFx: true, gpuBloom: 65, gpuGrading: 70, gpuClarity: 55, gpuRelief: 45, gpuSharpness: 40,
+    gpuVignette: 45, gpuGrain: 25, gpuChromatic: 20, gpuAntiAlias: true, gpuGi: 60, gpuWet: 75,
   },
 };
 

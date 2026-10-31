@@ -345,6 +345,7 @@ export class GameRenderer {
 
   // Offscreen buffer for the Lightmap (prevents punching holes in the world)
   private lightmapCanvas: HTMLCanvasElement;
+  private lightmapUsedThisFrame = false;
   private backingScale: number = 1;
 
   /** Canvas particles to draw this frame: keeps only the newest `renderParticleLimit`. */
@@ -797,6 +798,14 @@ export class GameRenderer {
    * width/height are CSS-pixel sizes of the viewport (the game's logical space).
    * backingScale is canvas-pixels per CSS-pixel (renderScale * devicePixelRatio), applied as a base transform in render().
    */
+  /**
+   * The darkness layer of this frame (alpha = how dark, so lit areas are transparent), or null when the frame
+   * had none. Read by the GPU shader layer for light-aware effects; do not draw into it.
+   */
+  public getFxLightmap(): HTMLCanvasElement | null {
+    return this.lightmapUsedThisFrame ? this.lightmapCanvas : null;
+  }
+
   public resize(width: number, height: number, backingScale: number = 1) {
     this.width = width;
     this.height = height;
@@ -11596,6 +11605,8 @@ export class GameRenderer {
     };
 
     const hasDarknessShroud = effectiveAlpha > 0.003 || weights.rain > 0.02 || weights.snow > 0.02 || weights.fog > 0.02 || weights.overcast > 0.02 || (world.lightningFlashTimer ?? 0) > 0;
+
+    this.lightmapUsedThisFrame = hasDarknessShroud;
 
     // --- PASS 1: Generate Cutout Darkness Layer Offscreen ---
     if (hasDarknessShroud) {
