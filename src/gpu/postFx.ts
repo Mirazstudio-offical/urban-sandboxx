@@ -244,11 +244,14 @@ void main() {
     c += wide * (c * 0.85 + 0.08) * uGi * mix(1.4, 0.45, uDay);
   }
 
-  // --- wet asphalt: dark, low-saturation pixels darken and mirror the glow of nearby lights ------------------
+  // --- wet asphalt, mud & soil: dark neutral and earthy pixels darken from pore moisture and mirror nearby lights ---
   if (uWet > 0.001) {
     float sat = max(c.r, max(c.g, c.b)) - min(c.r, min(c.g, c.b));
-    float mask = (1.0 - smoothstep(0.08, 0.22, sat)) * smoothstep(0.02, 0.10, l0) * (1.0 - smoothstep(0.32, 0.55, l0));
-    c = c * (1.0 - 0.12 * uWet * mask) + wide * mask * uWet * 1.7 + vec3(0.7, 0.8, 1.0) * mask * uWet * uDay * 0.035;
+    float neutralMask = 1.0 - smoothstep(0.08, 0.22, sat);
+    float earthHue = step(c.g, c.r) * step(c.b, c.g) * (1.0 - smoothstep(0.18, 0.42, sat));
+    float surfaceMask = max(neutralMask, earthHue * 0.85);
+    float mask = surfaceMask * smoothstep(0.015, 0.09, l0) * (1.0 - smoothstep(0.32, 0.54, l0));
+    c = c * (1.0 - 0.16 * uWet * mask) + wide * mask * uWet * 1.75 + vec3(0.70, 0.82, 1.0) * mask * uWet * uDay * 0.045;
   }
 
   // --- lights glowing in fog / rain / snow ------------------------------------------------------------------

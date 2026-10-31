@@ -136,15 +136,15 @@ export const LANDMARK_HILLS: LandmarkHill[] = [
   }
 ];
 
-// Defined realistic agricultural field plots in the countryside
+// Defined realistic agricultural field plots in the open countryside (strictly outside the 0..8000 x 0..8000 city & cottage settlement)
 export const AGRICULTURAL_FIELDS: AgriculturalField[] = [
-  // 1. Great Plowed Arable Field (Пашня с черными бороздами)
+  // 1. Great Plowed Arable Field East of Cottage Settlement (Пашня с черными бороздами)
   {
     id: 'field_plowed_north',
-    name: 'Северная Пашня (Чернозём)',
+    name: 'Восточная Пашня (Чернозём)',
     type: 'plowed',
-    bounds: { x: 3950, y: 3950, width: 1450, height: 1100 },
-    furrowAngle: 0.22, // Slight tilt for natural look
+    bounds: { x: 8200, y: 4950, width: 2550, height: 1400 },
+    furrowAngle: 0.22,
     furrowSpacing: 10,
     borderBermWidth: 14
   },
@@ -153,106 +153,106 @@ export const AGRICULTURAL_FIELDS: AgriculturalField[] = [
     id: 'field_wheat_central',
     name: 'Золотая Нива (Озимая пшеница)',
     type: 'wheat',
-    bounds: { x: 5600, y: 4000, width: 1800, height: 1250 },
+    bounds: { x: 8200, y: 6550, width: 2050, height: 1280 },
     furrowAngle: -0.15,
     furrowSpacing: 14,
     hasTramlines: true,
     tramlineSpacing: 160,
     hasHayBales: true,
     hayBalePositions: [
-      { x: 5850, y: 4250, angle: 0.3 },
-      { x: 6150, y: 4400, angle: -0.2 },
-      { x: 6480, y: 4200, angle: 0.7 },
-      { x: 6800, y: 4500, angle: 0.1 },
-      { x: 7100, y: 4300, angle: -0.4 },
-      { x: 5950, y: 4750, angle: 0.5 },
-      { x: 6350, y: 4900, angle: -0.1 },
-      { x: 6720, y: 4820, angle: 0.25 },
-      { x: 7180, y: 4950, angle: -0.6 }
+      { x: 8480, y: 6820, angle: 0.3 },
+      { x: 8820, y: 6960, angle: -0.2 },
+      { x: 9180, y: 6780, angle: 0.7 },
+      { x: 9540, y: 7040, angle: 0.1 },
+      { x: 9880, y: 6860, angle: -0.4 },
+      { x: 8620, y: 7340, angle: 0.5 },
+      { x: 9040, y: 7480, angle: -0.1 },
+      { x: 9460, y: 7380, angle: 0.25 },
+      { x: 9920, y: 7520, angle: -0.6 }
     ],
     borderBermWidth: 16
   },
-  // 3. Blooming Sunflower / Canola Field (Подсолнухи и рапс)
+  // 3. Blooming Sunflower Field in Southern Agrarian Valley (Подсолнухи)
   {
     id: 'field_sunflower_south',
     name: 'Солнечное Поле (Подсолнечник)',
     type: 'sunflower',
-    bounds: { x: 4000, y: 5300, width: 1350, height: 1300 },
-    furrowAngle: 0.35,
+    bounds: { x: 4200, y: 9120, width: 3500, height: 1700 },
+    furrowAngle: 0.32,
     furrowSpacing: 18,
     hasTramlines: true,
     tramlineSpacing: 180,
     borderBermWidth: 14
   },
-  // 4. Lush Clover / Alfalfa Hay Meadow (Люцерновый сенокос)
+  // 4. Lush Clover / Alfalfa Hay Meadow near Stepnaya (Люцерновый сенокос)
   {
     id: 'field_clover_east',
     name: 'Клеверный Сенокос (Люцерна)',
     type: 'clover',
-    bounds: { x: 5550, y: 5450, width: 1950, height: 1400 },
+    bounds: { x: 11500, y: 4300, width: 2350, height: 3100 },
     furrowAngle: -0.28,
-    furrowSpacing: 24, // Wide mowed bands
+    furrowSpacing: 24,
     hasHayBales: true,
     hayBalePositions: [
-      { x: 5750, y: 5650, angle: 0.1 },
-      { x: 6100, y: 5850, angle: -0.3 },
-      { x: 6450, y: 5680, angle: 0.4 },
-      { x: 6850, y: 5900, angle: 0.2 },
-      { x: 7200, y: 5720, angle: -0.5 },
-      { x: 5880, y: 6300, angle: 0.6 },
-      { x: 6300, y: 6450, angle: -0.15 },
-      { x: 6750, y: 6380, angle: 0.3 },
-      { x: 7150, y: 6520, angle: -0.4 }
+      { x: 11850, y: 4680, angle: 0.1 },
+      { x: 12280, y: 4920, angle: -0.3 },
+      { x: 12750, y: 4740, angle: 0.4 },
+      { x: 13220, y: 5020, angle: 0.2 },
+      { x: 13540, y: 4820, angle: -0.5 },
+      { x: 11980, y: 5650, angle: 0.6 },
+      { x: 12480, y: 5880, angle: -0.15 },
+      { x: 12960, y: 5760, angle: 0.3 },
+      { x: 13420, y: 6040, angle: -0.4 }
     ],
     borderBermWidth: 16
   },
-  // 5. Southern Undulating Pasture & Grassy Knolls (Холмистое пастбище)
+  // 5. Southern Undulating Pasture & Wildflower Meadow (Холмистое пастбище)
   {
     id: 'field_pasture_deep_south',
     name: 'Южные Холмистые Пастбища',
     type: 'pasture',
-    bounds: { x: 4100, y: 6850, width: 3400, height: 1200 },
+    bounds: { x: 1500, y: 11100, width: 6400, height: 1550 },
     furrowAngle: 0.1,
     furrowSpacing: 30,
     borderBermWidth: 18
   },
-  // 6. West Agricultural Buffer - Plowed Loam (Западная пашня)
+  // 6. Polynovka Western Arable Loam (Полыновская пашня)
   {
     id: 'field_west_plowed',
-    name: 'Западные Угодья (Пахота)',
+    name: 'Полыновские Угодья (Пахота)',
     type: 'plowed',
-    bounds: { x: 250, y: 4100, width: 1450, height: 1400 },
+    bounds: { x: 8250, y: 2250, width: 1950, height: 1450 },
     furrowAngle: -0.32,
     furrowSpacing: 10,
     borderBermWidth: 14
   },
-  // 7. West Agricultural Buffer - Golden Rye (Западная рожь)
+  // 7. South-West Agrarian Valley - Golden Rye (Юго-Западная рожь)
   {
     id: 'field_west_rye',
-    name: 'Западная Нива (Озимая рожь)',
+    name: 'Юго-Западная Нива (Озимая рожь)',
     type: 'wheat',
-    bounds: { x: 300, y: 5700, width: 1400, height: 1600 },
+    bounds: { x: 250, y: 9120, width: 3650, height: 1700 },
     furrowAngle: 0.18,
     furrowSpacing: 14,
     hasTramlines: true,
     tramlineSpacing: 150,
     hasHayBales: true,
     hayBalePositions: [
-      { x: 550, y: 5950, angle: 0.2 },
-      { x: 880, y: 6150, angle: -0.4 },
-      { x: 1250, y: 6020, angle: 0.5 },
-      { x: 620, y: 6650, angle: -0.1 },
-      { x: 980, y: 6850, angle: 0.35 },
-      { x: 1350, y: 6720, angle: -0.3 }
+      { x: 650, y: 9480, angle: 0.2 },
+      { x: 1280, y: 9680, angle: -0.4 },
+      { x: 1950, y: 9520, angle: 0.5 },
+      { x: 2620, y: 9850, angle: -0.1 },
+      { x: 3180, y: 9650, angle: 0.35 },
+      { x: 1550, y: 10320, angle: -0.3 }
     ],
     borderBermWidth: 16
   },
-  // 8. West Rolling Meadow Pastures (Западные луга)
+  // 8. South-East Steppe Clover & Wildflower Meadow (Юго-Восточные луга)
   {
     id: 'field_west_meadow',
-    name: 'Прибрежные Заливные Луга',
+    name: 'Привокзальные Заливные Луга',
     type: 'clover',
-    bounds: { x: 1850, y: 4000, width: 1750, height: 3800 },
+    bounds: { x: 8200, y: 9150, width: 2350, height: 1750 },
     furrowAngle: 0.45,
     furrowSpacing: 22,
     borderBermWidth: 15
@@ -433,41 +433,43 @@ function getRoadbedEmbankmentOffset(x: number, y: number): number {
   return maxEmbankment;
 }
 
-// Continuous mathematical elevation function Z(x, y)
-export function getTerrainElevation(x: number, y: number): number {
-  // 1. Broad regional baseline elevation
-  let baseZ = 4.0; // Strictly positive baseline elevation datum above sea level
+// Smooth macro-topographic elevation without roadbed micro-bumps (used for artifact-free hillshading)
+function getMacroTerrainElevation(x: number, y: number): number {
+  // 1. Broad regional baseline elevation with smooth C1 continuous transitions (no cliff steps at y=3800 or x=8000)
+  const urbanZ = 4.0 + Math.sin(x * 0.0006) * Math.cos(y * 0.0006) * 1.2;
 
-  // In urban zone (x: 0..8000, y: 0..3800), ground is leveled and graded (~3.5-5.5m above datum)
-  const inUrbanZone = x >= 0 && x <= 8000 && y >= 0 && y <= 3800;
-  if (inUrbanZone) {
-    baseZ = 4.0 + Math.sin(x * 0.0008) * Math.cos(y * 0.0008) * 1.5;
-  } else if (x <= 8000 && y >= 3800) {
-    // Countryside / Village / Meadows Zone (x: 0..8000, y: 3800..8200)
-    // Gentle rolling harmonic waves creating natural undulating topography
-    const w1 = Math.sin(x * 0.0018 + 0.4) * Math.cos(y * 0.0015 - 0.2) * 12.0;
-    const w2 = Math.sin(x * 0.0035 + y * 0.0028) * 6.5;
-    const w3 = Math.cos(x * 0.0009 - y * 0.0012) * 8.0;
-    baseZ = 12.0 + w1 + w2 + w3;
-  } 
-  // Vast Eastern Steppe & Highlands (x >= 8000)
-  else if (x > 8000) {
+  // Isotropic 2D rolling hills (strictly sin(ax)*cos(by) products — zero diagonal 1D stripes!)
+  const w1 = Math.sin(x * 0.00085 + 0.4) * Math.cos(y * 0.00080 - 0.2) * 8.5;
+  const w2 = Math.cos(x * 0.0014 - 0.6) * Math.sin(y * 0.0013 + 0.5) * 4.5;
+  const countryZ = 9.0 + w1 + w2;
+
+  // Smooth blend factor out of the leveled city core (x: 0..8000, y: 0..7900 including cottage settlement)
+  const ux = x <= 7400 ? 0 : Math.min(1, (x - 7400) / 1200);
+  const uy = y <= 7400 ? 0 : Math.min(1, (y - 7400) / 1200);
+  const outsideCity = Math.max(ux, uy);
+  // Smoothstep
+  const smoothOut = outsideCity * outsideCity * (3 - 2 * outsideCity);
+
+  let baseZ = urbanZ * (1 - smoothOut) + countryZ * smoothOut;
+
+  // Vast Eastern Steppe & Highlands (smoothly blended as x > 8000)
+  if (x > 7400) {
+    const eastBlend = Math.min(1, (x - 7400) / 1400);
+    const eb = eastBlend * eastBlend * (3 - 2 * eastBlend);
+    let eastZ = countryZ;
     if (y < 2600) {
-      // Northern Taiga & Rocky Alpine Ridge (rises up to 45-80m)
-      const taigaGrad = (2600 - y) / 2600;
-      baseZ = 22.0 + taigaGrad * 45 + Math.sin(x * 0.0012) * 14.0;
+      const taigaGrad = Math.max(0, (2600 - y) / 2600);
+      eastZ = 18.0 + taigaGrad * 36 + Math.sin(x * 0.0009) * Math.cos(y * 0.0008) * 10.0;
     } else if (y >= 7000 && y <= 12000 && x >= 13000 && x <= 42000) {
-      // Salt Lake Basin (low depression, gently sloping down to water level)
       const distFromCenter = Math.hypot((x - 27500) / 14500, (y - 8500) / 2500);
-      baseZ = Math.max(1.8, 22 * (distFromCenter - 0.35));
+      eastZ = Math.max(1.8, 18 * (distFromCenter - 0.35));
     } else if (y >= 14000) {
-      // Canyon & Dunes plateau with stepped terraces
       const canyonGrad = Math.min(1.0, (y - 14000) / 10000);
-      baseZ = 16.0 + canyonGrad * 40 + Math.sin(x * 0.0008 + y * 0.0006) * 16.0;
+      eastZ = 14.0 + canyonGrad * 32 + Math.sin(x * 0.0007) * Math.cos(y * 0.0006) * 12.0;
     } else {
-      // Broad undulating steppe plains
-      baseZ = 15.0 + Math.sin(x * 0.0007) * 15.0 + Math.cos(y * 0.001) * 10.0;
+      eastZ = 12.0 + Math.sin(x * 0.0006) * Math.cos(y * 0.0007) * 11.0;
     }
+    baseZ = baseZ * (1 - eb) + eastZ * eb;
   }
 
   // Carve riverbed valley depression along River "Быстрица"
@@ -485,8 +487,7 @@ export function getTerrainElevation(x: number, y: number): number {
   for (const hill of LANDMARK_HILLS) {
     const dx = x - hill.x;
     const dy = y - hill.y;
-    
-    // Rotate coordinates if hill has orientation angle
+
     let rx = dx;
     let ry = dy;
     if (hill.angle) {
@@ -498,28 +499,30 @@ export function getTerrainElevation(x: number, y: number): number {
 
     const normDistSq = (rx / hill.radiusX) ** 2 + (ry / hill.radiusY) ** 2;
     if (normDistSq < 1.0) {
-      // Smooth cosine bell-curve peak
       const factor = (1 + Math.cos(Math.sqrt(normDistSq) * Math.PI)) * 0.5;
       baseZ += hill.height * factor;
     }
   }
 
-  // 3. Add engineered roadbed embankment profile (дорожное полотно / насыпь / поперечный профиль)
-  const roadbedOffset = getRoadbedEmbankmentOffset(x, y);
-  baseZ += roadbedOffset;
-
   return Math.max(1.0, baseZ);
 }
 
-// Computes slope gradient and hillshading illumination
+// Continuous mathematical elevation function Z(x, y)
+export function getTerrainElevation(x: number, y: number): number {
+  const baseZ = getMacroTerrainElevation(x, y);
+  const roadbedOffset = getRoadbedEmbankmentOffset(x, y);
+  return Math.max(1.0, baseZ + roadbedOffset);
+}
+
+// Computes slope gradient and hillshading illumination from smooth macro topography (no roadbed stripe artifacts)
 // Light azimuth: NW (315 degrees, [-0.707, -0.707])
 export function getTerrainSlope(x: number, y: number): TerrainSlope {
-  const step = 8.0; // 8px sampling delta for smooth spatial gradient
-  const z = getTerrainElevation(x, y);
-  const zR = getTerrainElevation(x + step, y);
-  const zL = getTerrainElevation(x - step, y);
-  const zD = getTerrainElevation(x, y + step);
-  const zU = getTerrainElevation(x, y - step);
+  const step = 24.0; // Wide 24px sampling delta for silky-smooth hillshading without chunk aliasing
+  const z = getMacroTerrainElevation(x, y);
+  const zR = getMacroTerrainElevation(x + step, y);
+  const zL = getMacroTerrainElevation(x - step, y);
+  const zD = getMacroTerrainElevation(x, y + step);
+  const zU = getMacroTerrainElevation(x, y - step);
 
   const slopeX = (zR - zL) / (2 * step);
   const slopeY = (zD - zU) / (2 * step);

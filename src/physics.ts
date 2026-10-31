@@ -9659,6 +9659,7 @@ export function updateVehiclePhysics(
         rrX: rightRearX, rrY: rightRearY,
         flX: leftFrontX, flY: leftFrontY,
         frX: rightFrontX, frY: rightFrontY,
+        arcRL: 0, arcRR: 0, arcFL: 0, arcFR: 0,
         lastRearX: newRearX, lastRearY: newRearY,
         churnTimer: 0
       };
@@ -9667,20 +9668,42 @@ export function updateVehiclePhysics(
     const tracker = vAny._tireTracker;
     const dMoved = Math.hypot(newRearX - tracker.lastRearX, newRearY - tracker.lastRearY);
     const hasWheelSpin = isFrontSlipping || isRearSlipping || vehicle.isDrifting;
-    const minStep = hasWheelSpin ? 3.5 : 6.5;
+    const minStep = hasWheelSpin ? 3.2 : 5.5;
 
     if (dMoved >= minStep) {
-      // Helper function to deposit track for a tire
-      const depositTireTrack = (currX: number, currY: number, prevX: number, prevY: number, isFrontAxle: boolean) => {
+      // Helper function to deposit track for a specific wheel
+      const depositTireTrack = (
+        currX: number, currY: number,
+        prevX: number, prevY: number,
+        isFrontAxle: boolean,
+        wheel: WheelState,
+        arcKey: 'arcRL' | 'arcRR' | 'arcFL' | 'arcFR'
+      ) => {
+        const segLen = Math.hypot(currX - prevX, currY - prevY);
+        if (segLen < 0.5 || segLen > 85) return; // guard against teleport/respawn jumps
+
+        const prevArc = tracker[arcKey] || 0;
+        const nextArc = prevArc + segLen;
+        tracker[arcKey] = nextArc;
+
         const surf = getSurfaceTypeAt(world, currX, currY);
-        const offroad = getSurfaceOffroadProps(surf.type, isWetSurface, isStormWeather);
-        const isSlippingAxle = isFrontAxle ? isFrontSlipping : isRearSlipping;
+        const offroad = getSurfaceOffroadProps(surf.type, isWetSurface, isStormWeather, isSnowySurface);
+        const isWheelPowerSpin = !isHandbraking && !vehicle.isBrakeLocked && Math.abs(wheel.slipRatio) > 0.85;
+        const isWheelSkidding = wheel.isSlipping || wheel.skidIntensity > 0.18;
+        const wheelSlipAmt = Math.min(1.5, Math.max(
+          isWheelPowerSpin ? Math.abs(wheel.slipRatio) - 0.5 : 0,
+          wheel.skidIntensity
+        ));
 
         if (offroad.isOffroad) {
-          // Offroad soil deformation & rut digging
-          const tireDepth = offroad.baseSink * massFactor * clearanceFactor * (1.0 + (isSlippingAxle ? 0.45 : 0));
-          const rutWidth = baseTireWidth * (1.0 + Math.min(1.2, tireDepth) * 0.35);
-          const rutAlpha = Math.min(0.95, Math.max(0.24, 0.32 + tireDepth * 0.42 + (isSlippingAxle ? 0.25 : 0)));
+          // On dry compacted gravel roads without wheelspin, ruts are very shallow
+          if (surf.type === 'gravel_road' && !isWetSurface && !isSnowySurface && !isWheelSkidding) {
+            return;
+          }
+          // Offroad soil deformation & volumetric rut digging
+          const tireDepth = offroad.baseSink * massFactor * clearanceFactor * (1.0 + wheelSlipAmt * 0.48);
+          const rutWidth = baseTireWidth * (0.94 + Math.min(1.2, tireDepth) * 0.24);
+          const rutAlpha = Math.min(0.94, Math.max(0.28, 0.34 + tireDepth * 0.44 + wheelSlipAmt * 0.22));
           const wetRut = isWetSurface || surf.type === 'mud';
 
           world.skidMarks.push({
@@ -9695,16 +9718,21 @@ export function updateVehiclePhysics(
             surfaceType: surf.type,
             isWet: wetRut,
             bermColor: offroad.bermColor,
-            grooveColor: offroad.grooveColor
+            grooveColor: offroad.grooveColor,
+            slipRatio: wheelSlipAmt,
+            arcDist: prevArc
           });
         } else {
           // Asphalt or concrete: marks only appear on drift, power slip, hard braking or wheel lockup.
-          // Intentional scenarios (handbrake, burnout, brake lockup) mark even at
-          // crawl speed; ordinary slip marks require real speed so that low-speed
-          // integration noise cannot paint constant black tire marks.
-          const intentionalMark = isHandbraking || isBurnoutHolding || vehicle.isBrakeLocked;
-          if ((vSpeedKmh > 8.0 && (vehicle.isDrifting || isSlippingAxle)) || intentionalMark) {
-            const markAlpha = Math.max(0.12, Math.min(0.72, (slipMagnitude / 65) + (isHandbraking ? 0.28 : 0) + (isSlippingAxle ? 0.32 : 0) + (vehicle.isBrakeLocked ? 0.35 : 0)));
+          const isAxleLocked = (isHandbraking && !isFrontAxle) || vehicle.isBrakeLocked;
+          const intentionalMark = isAxleLocked || (isBurnoutHolding && (isFrontAxle ? isFrontSlipping : isRearSlipping));
+          if ((vSpeedKmh > 8.0 && (vehicle.isDrifting || isWheelSkidding)) || intentionalMark) {
+            const markAlpha = Math.max(0.10, Math.min(0.68,
+              wheel.skidIntensity * 0.52 +
+              (slipMagnitude / 85) +
+              (isAxleLocked ? 0.26 : 0) +
+              (isWheelPowerSpin ? 0.24 : 0)
+            ));
             const markColor = isSnowySurface ? 'rgba(235, 242, 250, 0.75)' : '#111827';
             world.skidMarks.push({
               x1: prevX,
@@ -9716,22 +9744,24 @@ export function updateVehiclePhysics(
               width: baseTireWidth,
               depth: 0,
               surfaceType: 'asphalt',
-              isWet: isWetSurface
+              isWet: isWetSurface,
+              slipRatio: wheelSlipAmt,
+              arcDist: prevArc
             });
           }
         }
       };
 
       // Deposit tracks for rear tires
-      depositTireTrack(leftRearX, leftRearY, tracker.rlX, tracker.rlY, false);
+      depositTireTrack(leftRearX, leftRearY, tracker.rlX, tracker.rlY, false, wheelRL, 'arcRL');
       if (!isSoloMoto) {
-        depositTireTrack(rightRearX, rightRearY, tracker.rrX, tracker.rrY, false);
+        depositTireTrack(rightRearX, rightRearY, tracker.rrX, tracker.rrY, false, wheelRR, 'arcRR');
       }
 
       // Deposit tracks for front tires
-      depositTireTrack(leftFrontX, leftFrontY, tracker.flX, tracker.flY, true);
+      depositTireTrack(leftFrontX, leftFrontY, tracker.flX, tracker.flY, true, wheelFL, 'arcFL');
       if (!isSoloMoto) {
-        depositTireTrack(rightFrontX, rightFrontY, tracker.frX, tracker.frY, true);
+        depositTireTrack(rightFrontX, rightFrontY, tracker.frX, tracker.frY, true, wheelFR, 'arcFR');
       }
 
       // Update tracker
@@ -9749,7 +9779,7 @@ export function updateVehiclePhysics(
         tracker.churnTimer = 0;
         const churnAxle = (currX: number, currY: number) => {
           const surf = getSurfaceTypeAt(world, currX, currY);
-          const offroad = getSurfaceOffroadProps(surf.type, isWetSurface, isStormWeather);
+          const offroad = getSurfaceOffroadProps(surf.type, isWetSurface, isStormWeather, isSnowySurface);
           if (offroad.isOffroad) {
             const digDepth = Math.min(1.4, offroad.baseSink * massFactor * clearanceFactor * 1.55);
             world.skidMarks.push({
@@ -9759,12 +9789,14 @@ export function updateVehiclePhysics(
               y2: currY + newHeadingSin * 2.5,
               alpha: 0.90,
               color: offroad.grooveColor,
-              width: baseTireWidth * 1.5,
+              width: baseTireWidth * 1.35,
               depth: digDepth,
               surfaceType: surf.type,
               isWet: isWetSurface || surf.type === 'mud',
               bermColor: offroad.bermColor,
-              grooveColor: offroad.grooveColor
+              grooveColor: offroad.grooveColor,
+              slipRatio: 1.35,
+              arcDist: (Date.now() * 0.05) % 100
             });
           }
         };
@@ -9780,12 +9812,12 @@ export function updateVehiclePhysics(
       }
     }
 
-    // 6. Dynamic Particles: Dust clouds and Mud clods ejected from drive wheels ("пыль и комки грязи из под ведущих колёс в зависимости от ситуации")
+    // 6. Dynamic Particles: Dust clouds and Mud clods ejected from wheels based on first-principles traction physics
     const has4WdActive = (vehicle.hasTransferCase && vehicle.transferCaseMode && vehicle.transferCaseMode !== '2H') || driveType === 'AWD';
     const isFrontDrive = driveType === 'FWD' || has4WdActive;
     const isRearDrive = driveType === 'RWD' || has4WdActive;
 
-    // Wheel thrust kickback vector: in forward gear, wheels fling backward; in reverse, wheels fling forward
+    // Wheel thrust kickback vector: in forward gear, spinning drive wheels fling backward; in reverse, forward
     const isReverseGear = eng ? (eng.currentGear === -1 || (eng.transmissionType === 'AUTO' && eng.autoGearMode === 'R')) : (throttle < -0.1 || vehicle.speed < -0.5);
     const kickDir = isReverseGear ? 1.0 : -1.0;
     const kickCos = Math.cos(vehicle.angle) * kickDir;
@@ -9796,16 +9828,22 @@ export function updateVehiclePhysics(
     const drivePedal = Math.abs(throttle);
     const isNeutral = !isInGear;
 
-    const emitDriveWheelParticles = (tireX: number, tireY: number, isFrontAxle: boolean) => {
+    const emitDriveWheelParticles = (tireX: number, tireY: number, isFrontAxle: boolean, wheel: WheelState) => {
       if (vSpeedKmh < 2.0 && !isBurnoutHolding) {
         return;
       }
 
       const isAxleDriven = isFrontAxle ? isFrontDrive : isRearDrive;
-      // Power is ONLY delivered if engine is running, gear is NOT neutral, and axle is driven
-      const isApplyingPower = isAxleDriven && !isNeutral && isEngineRunning && drivePedal > 0.05;
-      const isAxleSlipping = (isFrontAxle ? isFrontSlipping : isRearSlipping) && !isNeutral && isEngineRunning;
-      const isScrubbing = vehicle.isDrifting && slipMagnitude > 22.0;
+      const isWheelLocked = (isHandbrakePulled && !isFrontAxle) || (vehicle.isBrakeLocked && brake > 0.05);
+
+      // True longitudinal power wheelspin ONLY occurs when the axle is driven, in gear, engine running,
+      // wheel is NOT locked by brakes, throttle is applied, and net drive force exceeds Fmax (|slipRatio| > 0.85)
+      // or during stationary burnout holding.
+      const isPowerWheelspin = isAxleDriven && !isNeutral && isEngineRunning && !isWheelLocked && drivePedal > 0.22 && (
+        isBurnoutHolding || (wheel.isSlipping && Math.abs(wheel.slipRatio) > 0.85)
+      );
+      const isScrubbing = vehicle.isDrifting && slipMagnitude > 24.0;
+      const isTireSliding = isPowerWheelspin || isScrubbing || (isWheelLocked && vSpeedKmh > 14.0);
 
       const surf = getSurfaceTypeAt(world, tireX, tireY);
       const isHardPavement = surf.type === 'asphalt' || surf.type === 'concrete' || surf.type === 'rock';
@@ -9817,16 +9855,16 @@ export function updateVehiclePhysics(
       const isTireInWater = tireWaterDepth > 0.03 || surf.type === 'water';
 
       if (isTireInWater) {
-        const waterIntensity = Math.min(1.0, (drivePedal * 0.75 + (isAxleSlipping ? 0.7 : 0) + vSpeedKmh * 0.03));
-        if (waterIntensity > 0.05 && Math.random() < 0.70) {
-          const flingSpeed = (40 + drivePedal * 95 + (isAxleSlipping ? 75 : 0) + vSpeedKmh * 0.85) * (0.8 + Math.random() * 0.4);
+        const waterIntensity = Math.min(1.0, ((isPowerWheelspin ? 0.75 : 0) + vSpeedKmh * 0.03));
+        if (waterIntensity > 0.06 && Math.random() < 0.65) {
+          const flingSpeed = (35 + (isPowerWheelspin ? 80 * drivePedal : 0) + vSpeedKmh * 0.75) * (0.8 + Math.random() * 0.4);
           
           // Ejected water spray plume
           world.particles.push({
             x: tireX + (Math.random() * 6 - 3),
             y: tireY + (Math.random() * 6 - 3),
-            vx: kickCos * flingSpeed + latCos * (Math.random() - 0.5) * 35,
-            vy: kickSin * flingSpeed + latSin * (Math.random() - 0.5) * 35,
+            vx: vehicle.vx * 0.3 + kickCos * flingSpeed + latCos * (Math.random() - 0.5) * 32,
+            vy: vehicle.vy * 0.3 + kickSin * flingSpeed + latSin * (Math.random() - 0.5) * 32,
             radius: 1.8 + Math.random() * 2.4,
             color: Math.random() > 0.35 ? '#bae6fd' : '#e0f2fe',
             alpha: 0.80,
@@ -9859,12 +9897,11 @@ export function updateVehiclePhysics(
       // --- SITUATION A: ASPHALT & HARD PAVEMENT ---
       // ABSOLUTELY NEVER spawn mud clods or dirt on hard paved roads!
       if (isHardPavement) {
-        if (isAxleSlipping || (isScrubbing && vSpeedKmh > 18.0) || isBurnoutHolding) {
-          if (Math.random() < 0.45) {
+        if (isPowerWheelspin || (isScrubbing && vSpeedKmh > 18.0) || (isWheelLocked && vSpeedKmh > 22.0) || isBurnoutHolding) {
+          if (!isWetSurface && Math.random() < 0.45) {
             const atmo = getAtmosphereState(world, world.timeHour);
             const cond = atmo.condensationFactor;
             const isCold = atmo.isCold;
-            // Hot rubber vapor condenses violently against cold ambient air: brilliant white, denser, larger puffs
             const tireSmokeColor = isCold ? (atmo.outsideTemp < 4 ? '#ffffff' : '#f8fafc') : '#e2e8f0';
             const tireSmokeAlpha = (0.42 + (isCold ? 0.25 : 0)) * (1.0 + cond * 0.4);
             const tireSmokeRadius = (4.0 + Math.random() * 5.5) * (1.0 + cond * 0.45);
@@ -9888,18 +9925,33 @@ export function updateVehiclePhysics(
               buoyancy: 12,
               expansionRate: 8.5
             });
-          }
-        } else if (isWetSurface && (vSpeedKmh > 32.0 || isAxleSlipping)) {
-          if (Math.random() < 0.35) {
+          } else if (isWetSurface && Math.random() < 0.45) {
             world.particles.push({
               x: tireX + (Math.random() * 6 - 3),
               y: tireY + (Math.random() * 6 - 3),
-              vx: kickCos * 40 + (Math.random() - 0.5) * 25,
-              vy: kickSin * 40 + (Math.random() - 0.5) * 25,
+              vx: vehicle.vx * 0.35 + kickCos * 38 + (Math.random() - 0.5) * 24,
+              vy: vehicle.vy * 0.35 + kickSin * 38 + (Math.random() - 0.5) * 24,
               radius: 1.8 + Math.random() * 2.2,
               color: '#bae6fd',
               alpha: 0.55,
               initialAlpha: 0.55,
+              life: 0,
+              maxLife: 0.25 + Math.random() * 0.15,
+              type: 'water_spray',
+              underVehicle: false
+            });
+          }
+        } else if (isWetSurface && vSpeedKmh > 32.0) {
+          if (Math.random() < 0.30) {
+            world.particles.push({
+              x: tireX + (Math.random() * 6 - 3),
+              y: tireY + (Math.random() * 6 - 3),
+              vx: vehicle.vx * 0.35 + kickCos * 32 + (Math.random() - 0.5) * 20,
+              vy: vehicle.vy * 0.35 + kickSin * 32 + (Math.random() - 0.5) * 20,
+              radius: 1.6 + Math.random() * 2.0,
+              color: '#bae6fd',
+              alpha: 0.50,
+              initialAlpha: 0.50,
               life: 0,
               maxLife: 0.25 + Math.random() * 0.15,
               type: 'water_spray',
@@ -9911,74 +9963,89 @@ export function updateVehiclePhysics(
       }
 
       // --- SITUATION B: UNPAVED TERRAIN (грунтовка, грязь, трава, поле, песок, гравий) ---
-      // If vehicle is in neutral or engine off: wheels have NO drive torque!
-      // Revving in neutral produces ZERO mud or wheel spin.
-      if (isNeutral || !isEngineRunning) {
-        // Only passive rolling dust if rolling fast (> 28 km/h) down a slope
-        if (vSpeedKmh > 28.0 && Math.random() < 0.20) {
-          world.particles.push({
-            x: tireX + (Math.random() * 6 - 3),
-            y: tireY + (Math.random() * 6 - 3),
-            vx: kickCos * 12 + (Math.random() - 0.5) * 12,
-            vy: kickSin * 12 + (Math.random() - 0.5) * 12,
-            radius: 5.0 + Math.random() * 3.0,
-            targetRadius: 18.0 + Math.random() * 10.0,
-            color: '#a07b53',
-            alpha: 0.45,
-            initialAlpha: 0.45,
-            life: 0,
-            maxLife: 0.8 + Math.random() * 0.4,
-            type: 'dust',
-            underVehicle: false
-          });
+      // 1. MUD & SOIL CLODS (комья земли и грязи):
+      // Physically, solid clods are ONLY torn and flung when:
+      //  (a) A driven wheel breaks longitudinal traction under engine power (isPowerWheelspin),
+      //  (b) A driven wheel is churning deep wet mud under heavy throttle at speed, or
+      //  (c) A tire is plowing sideways in a high-speed lateral drift on soft soil (mud/dirt/sand).
+      // Pure rolling without wheelspin, coasting, or braking NEVER shoots mud clods backward!
+      const isDeepMudDrive = isAxleDriven && !isNeutral && isEngineRunning && !isWheelLocked &&
+        (surf.type === 'mud' || (surf.type === 'dirt_road' && isWetSurface)) &&
+        drivePedal > 0.58 && vSpeedKmh > 26.0;
+      const isLateralSoilPlow = !isPowerWheelspin && vehicle.isDrifting && slipMagnitude > 30.0 && vSpeedKmh > 25.0 &&
+        (surf.type === 'mud' || surf.type === 'dirt_road' || surf.type === 'sand' || (surf.type === 'grass' && isWetSurface));
+
+      // On dry grass, require strong wheelspin (drivePedal > 0.45) to tear through turf into soil.
+      // On dry gravel roads, never fling mud clods.
+      const canSurfaceYieldClods = surf.type !== 'gravel_road' &&
+        (surf.type !== 'grass' || isWetSurface || (isPowerWheelspin && drivePedal > 0.48));
+
+      let clodProb = 0;
+      if (canSurfaceYieldClods) {
+        if (isPowerWheelspin) {
+          const spinSeverity = Math.min(1.0, (Math.abs(wheel.slipRatio) - 0.80) * 0.75 + (isBurnoutHolding ? 0.5 : 0));
+          clodProb = (isWetOrMud ? 0.46 : 0.30) * (0.45 + spinSeverity * 0.55);
+        } else if (isDeepMudDrive) {
+          clodProb = 0.16;
+        } else if (isLateralSoilPlow) {
+          clodProb = 0.18;
         }
-        return;
       }
 
-      // 1. MUD & SOIL CLODS (комья земли и грязи из-под ведущих колес)
-      const isUnderTorque = isApplyingPower || isAxleSlipping;
-      const clodProb = isAxleSlipping ? 0.75 : (isApplyingPower ? 0.48 : (vSpeedKmh > 16.0 ? 0.22 : 0.0));
-
-      if (isUnderTorque && Math.random() < clodProb) {
-        const flingSpeed = (45 + drivePedal * 115 + (isAxleSlipping ? 85 : 0) + vSpeedKmh * 0.6) * (0.85 + Math.random() * 0.35);
-        const pVx = kickCos * flingSpeed + latCos * (Math.random() - 0.5) * 26;
-        const pVy = kickSin * flingSpeed + latSin * (Math.random() - 0.5) * 26;
-
-        // Choose soil/mud color based on wetness and terrain
-        let chosenColor: string;
-        if (isWetOrMud) {
-          const wetMudColors = ['#150a04', '#1f1006', '#2a1508', '#140802', '#231107'];
-          chosenColor = wetMudColors[Math.floor(Math.random() * wetMudColors.length)];
-        } else if (surf.type === 'sand') {
-          const sandColors = ['#9c723f', '#b3854c', '#7d592e', '#c4995c'];
-          chosenColor = sandColors[Math.floor(Math.random() * sandColors.length)];
+      if (clodProb > 0 && Math.random() < clodProb) {
+        let pVx = 0;
+        let pVy = 0;
+        if (isLateralSoilPlow) {
+          // Lateral slide plows soil sideways away from the sliding tire sidewall
+          const plowDir = vehicle.lateralVelocity > 0 ? 1.0 : -1.0;
+          const plowSpeed = (22 + Math.min(45, slipMagnitude * 0.55)) * (0.75 + Math.random() * 0.4);
+          pVx = vehicle.vx * 0.35 + latCos * plowDir * plowSpeed + (Math.random() - 0.5) * 14;
+          pVy = vehicle.vy * 0.35 + latSin * plowDir * plowSpeed + (Math.random() - 0.5) * 14;
         } else {
-          // Dry dirt road, plowed field, meadow loam, chernozen
-          const earthColors = ['#281609', '#381e0c', '#482710', '#1c0d04', '#331a0b', '#251307'];
-          chosenColor = earthColors[Math.floor(Math.random() * earthColors.length)];
+          // Spinning drive wheel kicks clods tangentially backward from the rear contact patch
+          const spinExcess = isPowerWheelspin ? Math.max(0.15, Math.min(1.8, Math.abs(wheel.slipRatio) - 0.75)) : 0.25;
+          const ejectSpeed = (26 + spinExcess * 48 + drivePedal * 32) * (0.78 + Math.random() * 0.38);
+          pVx = vehicle.vx * 0.32 + kickCos * ejectSpeed + latCos * (Math.random() - 0.5) * 16;
+          pVy = vehicle.vy * 0.32 + kickSin * ejectSpeed + latSin * (Math.random() - 0.5) * 16;
         }
 
-        // Heavy chunks vs medium clods vs fine soil granules
+        // Authentic soil/mud color & secondary shade based on wetness and terrain
+        let chosenColor: string;
+        let secondaryColor: string;
+        if (isWetOrMud) {
+          const wetMudColors = ['#1c1008', '#24140a', '#2c190d', '#170d06', '#28160b'];
+          chosenColor = wetMudColors[Math.floor(Math.random() * wetMudColors.length)];
+          secondaryColor = '#0c0603';
+        } else if (surf.type === 'sand') {
+          const sandColors = ['#9c723f', '#b3854c', '#8a6234', '#bd9156'];
+          chosenColor = sandColors[Math.floor(Math.random() * sandColors.length)];
+          secondaryColor = '#5e4120';
+        } else {
+          const earthColors = ['#362010', '#422714', '#4d2e18', '#2b180c', '#3c2312'];
+          chosenColor = earthColors[Math.floor(Math.random() * earthColors.length)];
+          secondaryColor = '#170c05';
+        }
+
+        // Compact 3D clod dimensions (no oversized flat pancakes!)
         const randSize = Math.random();
         let clodRadius: number;
         let initVz: number;
-        if (randSize < 0.25) {
-          // Large heavy clay/turf chunk
-          clodRadius = 3.6 + Math.random() * 2.8;
-          initVz = 35 + Math.random() * 40 + drivePedal * 20;
-        } else if (randSize < 0.70) {
+        if (randSize < 0.22) {
+          // Chunky 3D clay/turf clod
+          clodRadius = 2.4 + Math.random() * 1.2;
+          initVz = 28 + Math.random() * 32 + drivePedal * 16;
+        } else if (randSize < 0.68) {
           // Medium soil clump
-          clodRadius = 2.4 + Math.random() * 1.5;
-          initVz = 45 + Math.random() * 50 + drivePedal * 25;
+          clodRadius = 1.6 + Math.random() * 0.9;
+          initVz = 36 + Math.random() * 38 + drivePedal * 20;
         } else {
-          // Fine flying earth pebble/granule
-          clodRadius = 1.4 + Math.random() * 1.0;
-          initVz = 55 + Math.random() * 60 + drivePedal * 30;
+          // Fine flying earth granule
+          clodRadius = 1.0 + Math.random() * 0.7;
+          initVz = 42 + Math.random() * 44 + drivePedal * 22;
         }
 
-        // Spawn at the tire tread ejection exit point
-        const spawnX = tireX + kickCos * (6 + Math.random() * 6) + latCos * (Math.random() * 6 - 3);
-        const spawnY = tireY + kickSin * (6 + Math.random() * 6) + latSin * (Math.random() * 6 - 3);
+        const spawnX = tireX + kickCos * (5 + Math.random() * 5) + latCos * (Math.random() * 5 - 2.5);
+        const spawnY = tireY + kickSin * (5 + Math.random() * 5) + latSin * (Math.random() * 5 - 2.5);
 
         world.particles.push({
           x: spawnX,
@@ -9987,44 +10054,57 @@ export function updateVehiclePhysics(
           vy: pVy,
           radius: clodRadius,
           color: chosenColor,
-          alpha: 0.95,
-          initialAlpha: 0.95,
+          secondaryColor,
+          alpha: 0.96,
+          initialAlpha: 0.96,
           life: 0,
-          maxLife: 1.2 + Math.random() * 0.8, // Remains as a ground splat after landing
+          maxLife: 2.2 + Math.random() * 1.4,
           type: 'mud_clod',
           underVehicle: false,
-          z: 1.0 + Math.random() * 1.5,
+          z: 0.8 + Math.random() * 1.2,
           vz: initVz,
           splatted: false,
+          isWet: isWetOrMud,
           shapeSeed: Math.floor(Math.random() * 1000)
         });
 
-        // In wet mud conditions, also fling dirty liquid water droplets
-        if (isWetOrMud && (drivePedal > 0.15 || isAxleSlipping)) {
+        // In wet mud conditions under active wheelspin, also fling dirty liquid mud spray droplets
+        if (isWetOrMud && isPowerWheelspin && Math.random() < 0.55) {
           world.particles.push({
             x: spawnX,
             y: spawnY,
-            vx: kickCos * (flingSpeed * 1.05) + latCos * (Math.random() - 0.5) * 24,
-            vy: kickSin * (flingSpeed * 1.05) + latSin * (Math.random() - 0.5) * 24,
-            radius: 1.5 + Math.random() * 1.8,
+            vx: pVx * 1.08 + (Math.random() - 0.5) * 14,
+            vy: pVy * 1.08 + (Math.random() - 0.5) * 14,
+            radius: 1.2 + Math.random() * 1.4,
             color: Math.random() > 0.5 ? '#3b2212' : '#4a2c17',
-            alpha: 0.65,
-            initialAlpha: 0.65,
+            alpha: 0.62,
+            initialAlpha: 0.62,
             life: 0,
-            maxLife: 0.28 + Math.random() * 0.18,
+            maxLife: 0.26 + Math.random() * 0.16,
             type: 'water_spray',
             underVehicle: false
           });
         }
       }
 
-      // 2. ATMOSPHERIC DUST CLOUDS (густая клубящаяся пыль на сухом грунте)
-      if (!isWetOrMud) {
-        const dustProb = isAxleSlipping ? 0.85 : (isApplyingPower ? 0.60 : (vSpeedKmh > 12.0 ? 0.38 : 0.0));
-        if (Math.random() < dustProb) {
-          const dustSpeed = 16 + drivePedal * 40 + vSpeedKmh * 0.25;
-          const pVx = kickCos * dustSpeed + latCos * (Math.random() - 0.5) * 16;
-          const pVy = kickSin * dustSpeed + latSin * (Math.random() - 0.5) * 16;
+      // 2. ATMOSPHERIC DUST CLOUDS (клубящаяся пыль на сухом грунте, песке и гравии)
+      if (!isWetOrMud && !isSnowySurface) {
+        const isDustySurface = surf.type === 'dirt_road' || surf.type === 'sand' || surf.type === 'gravel_road';
+        let dustProb = 0;
+        if (isDustySurface) {
+          if (isPowerWheelspin) dustProb = 0.65;
+          else if (isTireSliding && vSpeedKmh > 18.0) dustProb = 0.45;
+          else if (vSpeedKmh > 24.0) dustProb = Math.min(0.32, (vSpeedKmh - 24.0) * 0.006);
+        } else if (surf.type === 'grass') {
+          // Lush grass only raises light dust under severe wheelspin or high-speed sliding
+          if (isPowerWheelspin && drivePedal > 0.5) dustProb = 0.25;
+          else if (isScrubbing && vSpeedKmh > 38.0) dustProb = 0.18;
+        }
+
+        if (dustProb > 0 && Math.random() < dustProb) {
+          const dustSpeed = 12 + (isPowerWheelspin ? drivePedal * 32 : 0) + vSpeedKmh * 0.18;
+          const pVx = kickCos * dustSpeed + latCos * (Math.random() - 0.5) * 14;
+          const pVy = kickSin * dustSpeed + latSin * (Math.random() - 0.5) * 14;
 
           let dustColor = '#a07b53'; // warm dirt brown
           if (surf.type === 'sand') {
@@ -10032,21 +10112,22 @@ export function updateVehiclePhysics(
           } else if (surf.type === 'gravel_road') {
             dustColor = Math.random() > 0.5 ? '#aba398' : '#beb7ad';
           } else if (surf.type === 'grass') {
-            dustColor = Math.random() > 0.5 ? '#8a9463' : '#9ca871';
+            dustColor = Math.random() > 0.5 ? '#8a795d' : '#968568';
           }
 
+          const initDustAlpha = surf.type === 'grass' ? 0.35 : 0.58;
           world.particles.push({
             x: tireX + kickCos * 4 + latCos * (Math.random() * 6 - 3),
             y: tireY + kickSin * 4 + latSin * (Math.random() * 6 - 3),
             vx: pVx,
             vy: pVy,
-            radius: 6.5 + Math.random() * 4.0,
-            targetRadius: 26.0 + Math.random() * 16.0,
+            radius: 5.5 + Math.random() * 3.5,
+            targetRadius: 22.0 + Math.random() * 14.0,
             color: dustColor,
-            alpha: 0.75,
-            initialAlpha: 0.75,
+            alpha: initDustAlpha,
+            initialAlpha: initDustAlpha,
             life: 0,
-            maxLife: 1.2 + Math.random() * 0.7,
+            maxLife: 1.0 + Math.random() * 0.6,
             type: 'dust',
             underVehicle: false
           });
@@ -10054,14 +10135,14 @@ export function updateVehiclePhysics(
       }
     };
 
-    // Emit drive wheel particles
-    emitDriveWheelParticles(leftRearX, leftRearY, false);
+    // Emit wheel particles per individual wheel state
+    emitDriveWheelParticles(leftRearX, leftRearY, false, wheelRL);
     if (!isSoloMoto) {
-      emitDriveWheelParticles(rightRearX, rightRearY, false);
+      emitDriveWheelParticles(rightRearX, rightRearY, false, wheelRR);
     }
-    emitDriveWheelParticles(leftFrontX, leftFrontY, true);
+    emitDriveWheelParticles(leftFrontX, leftFrontY, true, wheelFL);
     if (!isSoloMoto) {
-      emitDriveWheelParticles(rightFrontX, rightFrontY, true);
+      emitDriveWheelParticles(rightFrontX, rightFrontY, true, wheelFR);
     }
 
     if (eng && eng.engineRunning) {
@@ -10125,20 +10206,33 @@ export function updateVehiclePhysics(
         vehicle.vy *= speedRatio;
         vehicle.speed = newSpeed;
 
-        // Produce tire marks & smoke while spinning out at high speed
+        // Produce dual-wheel tire marks while spinning out at high speed
         if (curSpeed > 28 && world.skidMarks && Math.random() < 0.55) {
-          world.skidMarks.push({
-            x1: vehicle.x,
-            y1: vehicle.y,
-            x2: vehicle.x + vehicle.vx * dt * 2.5,
-            y2: vehicle.y + vehicle.vy * dt * 2.5,
-            alpha: Math.min(0.65, curSpeed / 130),
-            color: '#111827',
-            width: 14,
-            depth: 0,
-            surfaceType: 'asphalt',
-            isWet: false
-          });
+          const spCos = Math.cos(vehicle.angle);
+          const spSin = Math.sin(vehicle.angle);
+          const spRearX = vehicle.x - spCos * (vehicle.length * 0.34);
+          const spRearY = vehicle.y - spSin * (vehicle.length * 0.34);
+          const spHalfTrack = (vehicle.width || 18) * 0.40;
+          const stepDx = vehicle.vx * dt * 1.8;
+          const stepDy = vehicle.vy * dt * 1.8;
+          const spAlpha = Math.min(0.58, curSpeed / 140);
+          for (const side of [-1, 1]) {
+            const wx = spRearX + spSin * spHalfTrack * side;
+            const wy = spRearY - spCos * spHalfTrack * side;
+            world.skidMarks.push({
+              x1: wx,
+              y1: wy,
+              x2: wx + stepDx,
+              y2: wy + stepDy,
+              alpha: spAlpha,
+              color: '#111827',
+              width: 5.5,
+              depth: 0,
+              surfaceType: 'asphalt',
+              isWet: false,
+              slipRatio: 0.9
+            });
+          }
         }
       } else {
         vehicle.vx = 0;
@@ -10165,20 +10259,31 @@ export function updateVehiclePhysics(
           vehicle.lateralVelocity = -vehicle.vx * sinA + vehicle.vy * cosA;
           (vehicle as any).lateralSlip = vehicle.lateralVelocity;
 
-          // Deposit dramatic tire skid marks while spinning / skidding at speed
+          // Deposit dramatic dual-wheel tire skid marks while spinning / skidding at speed
           if (curSpeed > 35 && world.skidMarks && Math.random() < 0.45) {
-            world.skidMarks.push({
-              x1: vehicle.x,
-              y1: vehicle.y,
-              x2: vehicle.x + vehicle.vx * dt * 2.0,
-              y2: vehicle.y + vehicle.vy * dt * 2.0,
-              alpha: Math.min(0.65, curSpeed / 140),
-              color: '#111827',
-              width: 12,
-              depth: 0,
-              surfaceType: 'asphalt',
-              isWet: false
-            });
+            const spRearX = vehicle.x - cosA * (vehicle.length * 0.34);
+            const spRearY = vehicle.y - sinA * (vehicle.length * 0.34);
+            const spHalfTrack = (vehicle.width || 18) * 0.40;
+            const stepDx = vehicle.vx * dt * 1.6;
+            const stepDy = vehicle.vy * dt * 1.6;
+            const spAlpha = Math.min(0.58, curSpeed / 145);
+            for (const side of [-1, 1]) {
+              const wx = spRearX + sinA * spHalfTrack * side;
+              const wy = spRearY - cosA * spHalfTrack * side;
+              world.skidMarks.push({
+                x1: wx,
+                y1: wy,
+                x2: wx + stepDx,
+                y2: wy + stepDy,
+                alpha: spAlpha,
+                color: '#111827',
+                width: 5.5,
+                depth: 0,
+                surfaceType: 'asphalt',
+                isWet: false,
+                slipRatio: 0.85
+              });
+            }
           }
         } else {
           vehicle.vx = 0;
@@ -12195,29 +12300,29 @@ export function updateSkidMarksAndParticles(world: GameWorld, player: Player, dt
         p.alpha = p.initialAlpha ?? 0.90;
       }
     } else if (p.type === 'mud_clod') {
-      // Solid heavy earth projectile with 3D ballistic arc, gravity and ground splatter
+      // Solid 3D earth/mud clod with ballistic arc, gravity and volumetric ground settling
       p.life += dt;
       if (!p.splatted) {
         p.vz = (p.vz ?? 40) - 460 * dt; // Strong gravity pulling heavy mud chunk downward
-        p.z = (p.z ?? 1.5) + p.vz * dt;
-        p.vx *= Math.max(0, 1 - 1.5 * dt);
-        p.vy *= Math.max(0, 1 - 1.5 * dt);
+        p.z = (p.z ?? 1.2) + p.vz * dt;
+        p.vx *= Math.max(0, 1 - 1.6 * dt);
+        p.vy *= Math.max(0, 1 - 1.6 * dt);
 
         if (p.z <= 0) {
-          // Heavy mud clump smacks into the ground, flattens and splatters
+          // Clod impacts the ground, retaining its compact 3D lump form (no giant flat pancake!)
           p.z = 0;
           p.vz = 0;
           p.vx = 0;
           p.vy = 0;
           p.splatted = true;
-          p.radius = Math.min(9.0, p.radius * 1.35);
+          p.radius = Math.min(4.2, p.radius * 1.08);
         }
       } else {
-        // Splattered on the ground: stationary wet mud stain, slowly drying
+        // Resting 3D mud/earth lump on the ground, gradually weathering away
         p.vx = 0;
         p.vy = 0;
         const remain = Math.max(0, 1.0 - p.life / p.maxLife);
-        p.alpha = (p.initialAlpha ?? 0.95) * Math.min(1.0, remain * 1.5);
+        p.alpha = (p.initialAlpha ?? 0.96) * Math.min(1.0, remain * 1.6);
       }
     } else if (p.type === 'water_fountain'|| p.type === 'water_splash') {
       p.radius += dt * 5;

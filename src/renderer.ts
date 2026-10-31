@@ -375,6 +375,7 @@ export class GameRenderer {
   private static countryAsphaltPattern: CanvasPattern | null = null;
   private static gravelPattern: CanvasPattern | null = null;
   private static dirtPattern: CanvasPattern | null = null;
+  private static wetDirtPattern: CanvasPattern | null = null;
   private static shoulderPattern: CanvasPattern | null = null;
 
   private static roadNoisePRNG(x: number, y: number, seed: number = 0): number {
@@ -543,13 +544,13 @@ export class GameRenderer {
 
   public static getDirtPattern(ctx: CanvasRenderingContext2D): CanvasPattern | string {
     if (this.dirtPattern) return this.dirtPattern;
-    if (typeof document === 'undefined') return '#553d2c';
+    if (typeof document === 'undefined') return '#4b3626';
     const size = 256;
     const c = document.createElement('canvas');
     c.width = size;
     c.height = size;
     const pctx = c.getContext('2d');
-    if (!pctx) return '#553d2c';
+    if (!pctx) return '#4b3626';
 
     const imgData = pctx.createImageData(size, size);
     const d = imgData.data;
@@ -558,36 +559,146 @@ export class GameRenderer {
       for (let x = 0; x < size; x++) {
         const n1 = GameRenderer.roadNoisePRNG(x, y, 1601);
         const n2 = GameRenderer.roadNoisePRNG(x >> 1, y >> 1, 1702);
-        const delta = Math.round(((n1 * 0.65 + n2 * 0.35) - 0.5) * 20);
+        const n3 = GameRenderer.roadNoisePRNG(x >> 2, y >> 2, 1777);
+        const n4 = GameRenderer.roadNoisePRNG((x + 1) >> 1, (y + 1) >> 1, 1702);
+        // Micro-relief normal slope (NW light source)
+        const bevel = (n2 - n4) * 18;
+        const delta = Math.round(((n1 * 0.40 + n2 * 0.35 + n3 * 0.25) - 0.5) * 26 + bevel);
 
         const idx = (y * size + x) * 4;
-        d[idx] = Math.max(0, Math.min(255, 83 + delta));
-        d[idx + 1] = Math.max(0, Math.min(255, 59 + delta));
-        d[idx + 2] = Math.max(0, Math.min(255, 42 + delta));
+        d[idx] = Math.max(0, Math.min(255, 76 + delta));
+        d[idx + 1] = Math.max(0, Math.min(255, 54 + Math.round(delta * 0.78)));
+        d[idx + 2] = Math.max(0, Math.min(255, 38 + Math.round(delta * 0.58)));
         d[idx + 3] = 255;
       }
     }
     pctx.putImageData(imgData, 0, 0);
 
-    // Organic loam / humus flecks
-    for (let i = 0; i < 160; i++) {
-      const px = GameRenderer.roadNoisePRNG(i, 111, 1801) * (size - 6);
-      const py = GameRenderer.roadNoisePRNG(i, 122, 1902) * (size - 6);
+    // 3D Soil Clods & Embedded Stones (with SE shadow and NW sunlit crown)
+    for (let i = 0; i < 210; i++) {
+      const px = GameRenderer.roadNoisePRNG(i, 111, 1801) * (size - 8) + 4;
+      const py = GameRenderer.roadNoisePRNG(i, 122, 1902) * (size - 8) + 4;
       const prand = GameRenderer.roadNoisePRNG(i, 133, 2003);
-      const pradius = 1.0 + prand * 1.6;
+      const pradius = 0.9 + prand * 1.9;
+      const rot = GameRenderer.roadNoisePRNG(i, 144, 2104) * Math.PI;
 
-      if (prand < 0.5) {
-        pctx.fillStyle = '#3a271c'; // Damp earth
+      // SE crevice shadow
+      pctx.fillStyle = 'rgba(18, 10, 5, 0.52)';
+      pctx.beginPath();
+      pctx.ellipse(px + 0.65, py + 0.65, pradius * 1.1, pradius * 0.75, rot, 0, Math.PI * 2);
+      pctx.fill();
+
+      // Main clod or mineral stone body
+      if (prand < 0.45) {
+        pctx.fillStyle = '#382518'; // Damp compressed loam clod
+      } else if (prand < 0.82) {
+        pctx.fillStyle = '#634632'; // Dry clay crumb
       } else {
-        pctx.fillStyle = '#6f4f39'; // Dry clay crumb
+        pctx.fillStyle = '#736b60'; // Embedded limestone/flint pebble
       }
       pctx.beginPath();
-      safeArc(pctx, px, py, pradius, 0, Math.PI * 2);
+      pctx.ellipse(px, py, pradius, pradius * 0.72, rot, 0, Math.PI * 2);
+      pctx.fill();
+
+      // NW sunlit top bevel highlight
+      pctx.fillStyle = prand >= 0.82 ? 'rgba(215, 208, 195, 0.45)' : 'rgba(138, 104, 78, 0.42)';
+      pctx.beginPath();
+      pctx.ellipse(px - 0.35, py - 0.35, pradius * 0.55, pradius * 0.38, rot, 0, Math.PI * 2);
       pctx.fill();
     }
 
     this.dirtPattern = ctx.createPattern(c, 'repeat') || null;
-    return this.dirtPattern || '#553d2c';
+    return this.dirtPattern || '#4b3626';
+  }
+
+  public static getWetDirtPattern(ctx: CanvasRenderingContext2D): CanvasPattern | string {
+    if (this.wetDirtPattern) return this.wetDirtPattern;
+    if (typeof document === 'undefined') return '#24170e';
+    const size = 256;
+    const c = document.createElement('canvas');
+    c.width = size;
+    c.height = size;
+    const pctx = c.getContext('2d');
+    if (!pctx) return '#24170e';
+
+    const imgData = pctx.createImageData(size, size);
+    const d = imgData.data;
+
+    for (let y = 0; y < size; y++) {
+      for (let x = 0; x < size; x++) {
+        const n1 = GameRenderer.roadNoisePRNG(x, y, 2601);
+        const n2 = GameRenderer.roadNoisePRNG(x >> 1, y >> 1, 2702);
+        const n3 = GameRenderer.roadNoisePRNG(x >> 2, y >> 2, 2777);
+        const n4 = GameRenderer.roadNoisePRNG((x + 1) >> 1, (y + 1) >> 1, 2702);
+        const bevel = (n2 - n4) * 16;
+        const delta = Math.round(((n1 * 0.35 + n2 * 0.40 + n3 * 0.25) - 0.5) * 22 + bevel);
+
+        const idx = (y * size + x) * 4;
+        // Saturated wet mud is much darker due to internal pore water refraction
+        d[idx] = Math.max(0, Math.min(255, 38 + delta));
+        d[idx + 1] = Math.max(0, Math.min(255, 25 + Math.round(delta * 0.72)));
+        d[idx + 2] = Math.max(0, Math.min(255, 16 + Math.round(delta * 0.58)));
+        d[idx + 3] = 255;
+      }
+    }
+    pctx.putImageData(imgData, 0, 0);
+
+    // 1. Shallow rainwater-filled mud pockets (микро-лужицы в рытвинах грязи)
+    for (let i = 0; i < 65; i++) {
+      const px = GameRenderer.roadNoisePRNG(i, 311, 2801) * (size - 16) + 8;
+      const py = GameRenderer.roadNoisePRNG(i, 322, 2902) * (size - 16) + 8;
+      const rx = 2.5 + GameRenderer.roadNoisePRNG(i, 333, 3003) * 5.5;
+      const ry = 1.6 + GameRenderer.roadNoisePRNG(i, 344, 3104) * 3.2;
+      const rot = GameRenderer.roadNoisePRNG(i, 355, 3205) * Math.PI;
+
+      // Dark soaked mud basin
+      pctx.fillStyle = 'rgba(12, 7, 4, 0.55)';
+      pctx.beginPath();
+      pctx.ellipse(px, py, rx * 1.15, ry * 1.15, rot, 0, Math.PI * 2);
+      pctx.fill();
+
+      // Turbid water-film sky reflection
+      pctx.fillStyle = 'rgba(148, 178, 204, 0.22)';
+      pctx.beginPath();
+      pctx.ellipse(px, py, rx * 0.82, ry * 0.78, rot, 0, Math.PI * 2);
+      pctx.fill();
+
+      // Crisp specular highlight on wet mud rim
+      pctx.fillStyle = 'rgba(218, 236, 252, 0.34)';
+      pctx.beginPath();
+      pctx.ellipse(px - rx * 0.28, py - ry * 0.28, rx * 0.38, ry * 0.24, rot, 0, Math.PI * 2);
+      pctx.fill();
+    }
+
+    // 2. Glossy 3D wet mud clods with specular water-film sheen
+    for (let i = 0; i < 190; i++) {
+      const px = GameRenderer.roadNoisePRNG(i, 411, 3301) * (size - 8) + 4;
+      const py = GameRenderer.roadNoisePRNG(i, 422, 3402) * (size - 8) + 4;
+      const prand = GameRenderer.roadNoisePRNG(i, 433, 3503);
+      const pradius = 0.9 + prand * 1.9;
+      const rot = GameRenderer.roadNoisePRNG(i, 444, 3604) * Math.PI;
+
+      // Deep SE shadow in mud
+      pctx.fillStyle = 'rgba(6, 3, 1, 0.68)';
+      pctx.beginPath();
+      pctx.ellipse(px + 0.7, py + 0.7, pradius * 1.15, pradius * 0.8, rot, 0, Math.PI * 2);
+      pctx.fill();
+
+      // Wet mud lump body
+      pctx.fillStyle = prand < 0.55 ? '#1c110a' : '#2d1c11';
+      pctx.beginPath();
+      pctx.ellipse(px, py, pradius, pradius * 0.74, rot, 0, Math.PI * 2);
+      pctx.fill();
+
+      // Wet specular highlight on NW crown of mud lump
+      pctx.fillStyle = 'rgba(195, 220, 242, 0.32)';
+      pctx.beginPath();
+      pctx.ellipse(px - 0.35, py - 0.35, Math.max(0.45, pradius * 0.42), Math.max(0.35, pradius * 0.26), rot, 0, Math.PI * 2);
+      pctx.fill();
+    }
+
+    this.wetDirtPattern = ctx.createPattern(c, 'repeat') || null;
+    return this.wetDirtPattern || '#24170e';
   }
 
   public static getShoulderPattern(ctx: CanvasRenderingContext2D): CanvasPattern | string {
@@ -756,7 +867,11 @@ export class GameRenderer {
 
   private static readonly MAX_CHUNKS = 128;
   private getChunkCanvas(cx: number, cy: number, world: GameWorld): HTMLCanvasElement {
-    const seasonKey = world.calendar ? `${world.calendar.season}_${world.calendar.month}` : 'default';
+    const ww = getEffectiveWeatherWeights(world);
+    const isWet = ww.isWetSurface && !isWorldFreezing(world);
+    const seasonKey = world.calendar
+      ? `${world.calendar.season}_${world.calendar.month}_${isWet ? 'wet' : 'dry'}_${isWorldFreezing(world) ? 'frz' : 'thw'}`
+      : `default_${isWet ? 'wet' : 'dry'}`;
     if (this.lastChunkSeasonKey !== seasonKey) {
       for (const oldCanvas of this.chunkCache.values()) {
         oldCanvas.width = 0;
@@ -991,6 +1106,19 @@ export class GameRenderer {
 
           const isMirrorFreezing = isWorldFreezing(world, timeHour);
           this.renderPuddles(world.puddles, sMinX, sMinY, sMaxX, sMaxY, isMirrorFreezing);
+          TerrainRenderer.renderDynamicFieldGrass(
+            ctx,
+            world,
+            player,
+            visibleVehicles,
+            visiblePedestrians,
+            visibleBuildings,
+            sMinX,
+            sMinY,
+            sMaxX,
+            sMaxY,
+            camera.zoom * heightScale
+          );
           GuardrailRenderer.renderGuardrails(ctx, world, sMinX, sMinY, sMaxX, sMaxY, nightAlpha);
           this.renderPedestrians(visiblePedestrians, world);
           this.renderUnderVehicleParticles(this.capParticles(world.particles), world.cleanMode);
@@ -1095,6 +1223,21 @@ export class GameRenderer {
 
     // 6b. Fluid Stains (Oil, Coolant, Fuel on road surface - Layer 0)
     this.renderStains(world.stains, minX, minY, maxX, maxY, isFreezing);
+
+    // 6c. Continuous Wind-Reactive & Physically Trampled Field Grass, Meadow & Crops
+    TerrainRenderer.renderDynamicFieldGrass(
+      this.ctx,
+      world,
+      player,
+      visibleVehicles,
+      visiblePedestrians,
+      visibleBuildings,
+      minX,
+      minY,
+      maxX,
+      maxY,
+      camera.zoom
+    );
 
     // 8. Buildings Base Structure & Entrances
     this.renderBuildingBases(visibleBuildings, nightAlpha, player, timeHour);
@@ -1262,6 +1405,7 @@ export class GameRenderer {
     const isWinter = world.calendar?.season === 'winter';
     const isAutumn = world.calendar?.season === 'autumn';
     const isSpring = world.calendar?.season === 'spring';
+    const isWet = getEffectiveWeatherWeights(world).isWetSurface && !isWorldFreezing(world);
 
     // 1. First Pass: Country Road Shoulders (Широкие многослойные обочины загородных дорог и трасс)
     const shoulderPattern = isWinter ? 'rgba(232, 238, 245, 0.88)' : GameRenderer.getShoulderPattern(ctx);
@@ -1282,9 +1426,13 @@ export class GameRenderer {
         
         // 1a. Main wide crushed stone shoulder
         ctx.fillRect(road.x1, top - shoulderW, road.x2 - road.x1, road.width + shoulderW * 2);
+        if (isWet) {
+          ctx.fillStyle = 'rgba(14, 12, 9, 0.34)';
+          ctx.fillRect(road.x1, top - shoulderW, road.x2 - road.x1, road.width + shoulderW * 2);
+        }
 
         // 1b. Inner compacted dark edge strip adjacent to asphalt (прикромочная полоса 6px)
-        ctx.fillStyle = isWinter ? 'rgba(80, 90, 105, 0.40)' : 'rgba(42, 36, 26, 0.45)';
+        ctx.fillStyle = isWinter ? 'rgba(80, 90, 105, 0.40)' : (isWet ? 'rgba(22, 16, 10, 0.62)' : 'rgba(42, 36, 26, 0.45)');
         ctx.fillRect(road.x1, top - 6, road.x2 - road.x1, 6);
         ctx.fillRect(road.x1, top + road.width, road.x2 - road.x1, 6);
 
@@ -1300,9 +1448,13 @@ export class GameRenderer {
         
         // 1a. Main wide shoulder
         ctx.fillRect(left - shoulderW, road.y1, road.width + shoulderW * 2, road.y2 - road.y1);
+        if (isWet) {
+          ctx.fillStyle = 'rgba(14, 12, 9, 0.34)';
+          ctx.fillRect(left - shoulderW, road.y1, road.width + shoulderW * 2, road.y2 - road.y1);
+        }
 
         // 1b. Inner compacted edge strip (6px)
-        ctx.fillStyle = isWinter ? 'rgba(80, 90, 105, 0.40)' : 'rgba(42, 36, 26, 0.45)';
+        ctx.fillStyle = isWinter ? 'rgba(80, 90, 105, 0.40)' : (isWet ? 'rgba(22, 16, 10, 0.62)' : 'rgba(42, 36, 26, 0.45)');
         ctx.fillRect(left - 6, road.y1, 6, road.y2 - road.y1);
         ctx.fillRect(left + road.width, road.y1, 6, road.y2 - road.y1);
 
@@ -1373,7 +1525,9 @@ export class GameRenderer {
       const isCountry = road.y1 > 3500 || road.y2 > 3500 || road.x1 > 5400 || road.x2 > 5400 || road.x1 < 1200 || road.x2 < 1200 || (road.curvePoints && road.curvePoints.some(p => p.y > 3500 || p.x > 5400 || p.x < 1200));
       
       if (road.isDirt) {
-        ctx.fillStyle = GameRenderer.getDirtPattern(ctx);
+        ctx.fillStyle = (isWet || isSpring) && !isWinter
+          ? GameRenderer.getWetDirtPattern(ctx)
+          : GameRenderer.getDirtPattern(ctx);
       } else if (road.isGravel) {
         ctx.fillStyle = GameRenderer.getGravelPattern(ctx);
       } else if (isCountry) {
@@ -1386,26 +1540,97 @@ export class GameRenderer {
         const top = road.y1 - road.width / 2;
         if (road.x2 < minX || road.x1 > maxX || top + road.width < minY || top > maxY) continue;
         ctx.fillRect(road.x1, top, road.x2 - road.x1, road.width);
+        if (isWet && !road.isDirt) {
+          ctx.fillStyle = 'rgba(10, 14, 20, 0.24)';
+          ctx.fillRect(road.x1, top, road.x2 - road.x1, road.width);
+        }
 
-        // Detailed realistic dirt road texturing (overgrown center grass ridge & worn wheel ruts)
+        // Detailed realistic 3D dirt road texturing (extruded soil berms, sunken wheel ruts, water puddles, and organic crown)
         if (road.isDirt) {
-          // Worn muddy or frozen wheel ruts
-          ctx.fillStyle = isWinter ? '#334155' : (isSpring ? '#2a1a0f' : '#3d2b1f');
-          ctx.fillRect(road.x1, road.y1 - road.width * 0.28, road.x2 - road.x1, 6);
-          ctx.fillRect(road.x1, road.y1 + road.width * 0.16, road.x2 - road.x1, 6);
+          const rutY1 = road.y1 - road.width * 0.26;
+          const rutY2 = road.y1 + road.width * 0.16;
+          const rLen = road.x2 - road.x1;
 
-          // Overgrown center ridge (snow in winter, dry in autumn, fresh in spring)
-          ctx.fillStyle = isWinter ? '#cbd5e1' : (isAutumn ? '#78541a' : '#4f642f');
-          ctx.fillRect(road.x1, road.y1 - 4, road.x2 - road.x1, 8);
-          ctx.fillStyle = isWinter ? '#f1f5f9' : (isAutumn ? '#926a27' : '#5c7437');
-          ctx.fillRect(road.x1, road.y1 - 2, road.x2 - road.x1, 4);
+          // 1. Raised outer soil berms squeezed beside each wheel rut
+          ctx.fillStyle = isWinter ? '#64748b' : ((isWet || isSpring) ? '#322013' : '#5e432f');
+          ctx.fillRect(road.x1, rutY1 - 2.2, rLen, 2.2);
+          ctx.fillRect(road.x1, rutY1 + 7.0, rLen, 2.4);
+          ctx.fillRect(road.x1, rutY2 - 2.2, rLen, 2.2);
+          ctx.fillRect(road.x1, rutY2 + 7.0, rLen, 2.4);
 
-          // Ragged edge tufts along road edges
-          ctx.fillStyle = isWinter ? '#e2e8f0' : (isAutumn ? '#855b1a' : '#4f642f');
-          for (let rx = road.x1 + 10; rx < road.x2; rx += 38) {
+          // 2. Sunken compacted wheel rut floor
+          ctx.fillStyle = isWinter ? '#334155' : ((isWet || isSpring) ? '#150c06' : '#312116');
+          ctx.fillRect(road.x1, rutY1, rLen, 7);
+          ctx.fillRect(road.x1, rutY2, rLen, 7);
+
+          // 3. Directional 3D north-wall inner trench shadow (NW sun casts shadow onto top inner wall of rut)
+          ctx.fillStyle = 'rgba(6, 3, 1, 0.55)';
+          ctx.fillRect(road.x1, rutY1, rLen, 2.2);
+          ctx.fillRect(road.x1, rutY2, rLen, 2.2);
+
+          // 4. Sunlit south-wall rim of the rut
+          ctx.fillStyle = (isWet || isSpring) ? 'rgba(186, 218, 244, 0.22)' : 'rgba(128, 94, 68, 0.32)';
+          ctx.fillRect(road.x1, rutY1 + 5.6, rLen, 1.4);
+          ctx.fillRect(road.x1, rutY2 + 5.6, rLen, 1.4);
+
+          // 5. Standing turbid rainwater ribbons & glossy specular reflections inside ruts when wet
+          if ((isWet || isSpring) && !isWinter) {
+            for (let rx = road.x1 + 14; rx < road.x2 - 24; rx += 52) {
+              const pSeed = GameRenderer.roadNoisePRNG(Math.floor(rx), Math.floor(road.y1), 4101);
+              if (pSeed > 0.25) {
+                const pw = 16 + pSeed * 22;
+                const py = (pSeed > 0.62 ? rutY1 : rutY2) + 3.5;
+                // Turbid water body in rut
+                ctx.fillStyle = 'rgba(58, 74, 88, 0.52)';
+                ctx.beginPath();
+                ctx.ellipse(rx + pw * 0.5, py, pw * 0.5, 2.4, 0, 0, Math.PI * 2);
+                ctx.fill();
+                // Crisp sky reflection ribbon
+                ctx.fillStyle = 'rgba(186, 224, 250, 0.36)';
+                ctx.beginPath();
+                ctx.ellipse(rx + pw * 0.45, py - 0.5, pw * 0.34, 1.1, 0, 0, Math.PI * 2);
+                ctx.fill();
+              }
+            }
+          }
+
+          // 6. Organic broken center grass/soil crown between ruts (no longer a solid plastic rectangle)
+          const crownShadow = isWinter ? 'rgba(148, 163, 184, 0.5)' : 'rgba(20, 14, 8, 0.42)';
+          const crownBase = isWinter ? '#cbd5e1' : (isAutumn ? '#6e4e1c' : ((isWet || isSpring) ? '#2f3f1b' : '#465929'));
+          const crownTop = isWinter ? '#f1f5f9' : (isAutumn ? '#876226' : ((isWet || isSpring) ? '#3c5023' : '#556c33'));
+          for (let rx = road.x1 + 6; rx < road.x2 - 8; rx += 14) {
+            const cRand = GameRenderer.roadNoisePRNG(Math.floor(rx), Math.floor(road.y1), 4202);
+            if (cRand < 0.14) continue; // Natural bare-earth gaps where tires crossed the crown
+            const cw = 6 + cRand * 6;
+            const cy = road.y1 - 1 + (cRand - 0.5) * 2.2;
+            ctx.fillStyle = crownShadow;
             ctx.beginPath();
-            ctx.arc(rx, top + 1, 3.5, 0, Math.PI * 2);
-            ctx.arc(rx + 18, top + road.width - 1, 3.5, 0, Math.PI * 2);
+            ctx.ellipse(rx + 0.8, cy + 1.0, cw * 0.65, 3.4, 0, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = crownBase;
+            ctx.beginPath();
+            ctx.ellipse(rx, cy, cw * 0.6, 3.0, 0, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = crownTop;
+            ctx.beginPath();
+            ctx.ellipse(rx - 0.5, cy - 0.5, cw * 0.35, 1.6, 0, 0, Math.PI * 2);
+            ctx.fill();
+          }
+
+          // 7. Ragged 3D edge soil & grass tufts along road margins
+          for (let rx = road.x1 + 10; rx < road.x2; rx += 28) {
+            const eRand = GameRenderer.roadNoisePRNG(Math.floor(rx), Math.floor(top), 4303);
+            const r1 = 2.8 + eRand * 2.6;
+            ctx.fillStyle = 'rgba(15, 10, 5, 0.45)';
+            ctx.beginPath();
+            ctx.arc(rx + 0.8, top + 1.2, r1, 0, Math.PI * 2);
+            ctx.arc(rx + 14.8, top + road.width - 0.4, r1, 0, Math.PI * 2);
+            ctx.fill();
+
+            ctx.fillStyle = isWinter ? '#e2e8f0' : (isAutumn ? '#78521a' : ((isWet || isSpring) ? '#33441e' : '#4a5e2c'));
+            ctx.beginPath();
+            ctx.arc(rx, top + 0.5, r1, 0, Math.PI * 2);
+            ctx.arc(rx + 14, top + road.width - 1, r1, 0, Math.PI * 2);
             ctx.fill();
           }
         } else if (!road.isGravel) {
@@ -1443,26 +1668,95 @@ export class GameRenderer {
         const left = road.x1 - road.width / 2;
         if (left + road.width < minX || left > maxX || road.y2 < minY || road.y1 > maxY) continue;
         ctx.fillRect(left, road.y1, road.width, road.y2 - road.y1);
+        if (isWet && !road.isDirt) {
+          ctx.fillStyle = 'rgba(10, 14, 20, 0.24)';
+          ctx.fillRect(left, road.y1, road.width, road.y2 - road.y1);
+        }
 
-        // Detailed realistic dirt road texturing (vertical)
+        // Detailed realistic 3D dirt road texturing (vertical)
         if (road.isDirt) {
-          // Worn muddy or frozen wheel ruts
-          ctx.fillStyle = isWinter ? '#334155' : (isSpring ? '#2a1a0f' : '#3d2b1f');
-          ctx.fillRect(road.x1 - road.width * 0.28, road.y1, 6, road.y2 - road.y1);
-          ctx.fillRect(road.x1 + road.width * 0.16, road.y1, 6, road.y2 - road.y1);
+          const rutX1 = road.x1 - road.width * 0.26;
+          const rutX2 = road.x1 + road.width * 0.16;
+          const rLen = road.y2 - road.y1;
 
-          // Overgrown center ridge (snow in winter, dry in autumn, fresh in spring)
-          ctx.fillStyle = isWinter ? '#cbd5e1' : (isAutumn ? '#78541a' : '#4f642f');
-          ctx.fillRect(road.x1 - 4, road.y1, 8, road.y2 - road.y1);
-          ctx.fillStyle = isWinter ? '#f1f5f9' : (isAutumn ? '#926a27' : '#5c7437');
-          ctx.fillRect(road.x1 - 2, road.y1, 4, road.y2 - road.y1);
+          // 1. Raised outer soil berms squeezed beside each wheel rut
+          ctx.fillStyle = isWinter ? '#64748b' : ((isWet || isSpring) ? '#322013' : '#5e432f');
+          ctx.fillRect(rutX1 - 2.2, road.y1, 2.2, rLen);
+          ctx.fillRect(rutX1 + 7.0, road.y1, 2.4, rLen);
+          ctx.fillRect(rutX2 - 2.2, road.y1, 2.2, rLen);
+          ctx.fillRect(rutX2 + 7.0, road.y1, 2.4, rLen);
 
-          // Ragged edge tufts along road edges
-          ctx.fillStyle = isWinter ? '#e2e8f0' : (isAutumn ? '#855b1a' : '#4f642f');
-          for (let ry = road.y1 + 10; ry < road.y2; ry += 38) {
+          // 2. Sunken compacted wheel rut floor
+          ctx.fillStyle = isWinter ? '#334155' : ((isWet || isSpring) ? '#150c06' : '#312116');
+          ctx.fillRect(rutX1, road.y1, 7, rLen);
+          ctx.fillRect(rutX2, road.y1, 7, rLen);
+
+          // 3. Directional 3D west-wall inner trench shadow (NW sun casts shadow onto left inner wall of rut)
+          ctx.fillStyle = 'rgba(6, 3, 1, 0.55)';
+          ctx.fillRect(rutX1, road.y1, 2.2, rLen);
+          ctx.fillRect(rutX2, road.y1, 2.2, rLen);
+
+          // 4. Sunlit east-wall rim of the rut
+          ctx.fillStyle = (isWet || isSpring) ? 'rgba(186, 218, 244, 0.22)' : 'rgba(128, 94, 68, 0.32)';
+          ctx.fillRect(rutX1 + 5.6, road.y1, 1.4, rLen);
+          ctx.fillRect(rutX2 + 5.6, road.y1, 1.4, rLen);
+
+          // 5. Standing turbid rainwater ribbons & glossy specular reflections inside ruts when wet
+          if ((isWet || isSpring) && !isWinter) {
+            for (let ry = road.y1 + 14; ry < road.y2 - 24; ry += 52) {
+              const pSeed = GameRenderer.roadNoisePRNG(Math.floor(road.x1), Math.floor(ry), 4401);
+              if (pSeed > 0.25) {
+                const ph = 16 + pSeed * 22;
+                const px = (pSeed > 0.62 ? rutX1 : rutX2) + 3.5;
+                ctx.fillStyle = 'rgba(58, 74, 88, 0.52)';
+                ctx.beginPath();
+                ctx.ellipse(px, ry + ph * 0.5, 2.4, ph * 0.5, 0, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.fillStyle = 'rgba(186, 224, 250, 0.36)';
+                ctx.beginPath();
+                ctx.ellipse(px - 0.5, ry + ph * 0.45, 1.1, ph * 0.34, 0, 0, Math.PI * 2);
+                ctx.fill();
+              }
+            }
+          }
+
+          // 6. Organic broken center grass/soil crown between ruts
+          const crownShadow = isWinter ? 'rgba(148, 163, 184, 0.5)' : 'rgba(20, 14, 8, 0.42)';
+          const crownBase = isWinter ? '#cbd5e1' : (isAutumn ? '#6e4e1c' : ((isWet || isSpring) ? '#2f3f1b' : '#465929'));
+          const crownTop = isWinter ? '#f1f5f9' : (isAutumn ? '#876226' : ((isWet || isSpring) ? '#3c5023' : '#556c33'));
+          for (let ry = road.y1 + 6; ry < road.y2 - 8; ry += 14) {
+            const cRand = GameRenderer.roadNoisePRNG(Math.floor(road.x1), Math.floor(ry), 4502);
+            if (cRand < 0.14) continue;
+            const ch = 6 + cRand * 6;
+            const cx = road.x1 - 1 + (cRand - 0.5) * 2.2;
+            ctx.fillStyle = crownShadow;
             ctx.beginPath();
-            ctx.arc(left + 1, ry, 3.5, 0, Math.PI * 2);
-            ctx.arc(left + road.width - 1, ry + 18, 3.5, 0, Math.PI * 2);
+            ctx.ellipse(cx + 1.0, ry + 0.8, 3.4, ch * 0.65, 0, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = crownBase;
+            ctx.beginPath();
+            ctx.ellipse(cx, ry, 3.0, ch * 0.6, 0, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = crownTop;
+            ctx.beginPath();
+            ctx.ellipse(cx - 0.5, ry - 0.5, 1.6, ch * 0.35, 0, 0, Math.PI * 2);
+            ctx.fill();
+          }
+
+          // 7. Ragged 3D edge soil & grass tufts along road margins
+          for (let ry = road.y1 + 10; ry < road.y2; ry += 28) {
+            const eRand = GameRenderer.roadNoisePRNG(Math.floor(left), Math.floor(ry), 4603);
+            const r1 = 2.8 + eRand * 2.6;
+            ctx.fillStyle = 'rgba(15, 10, 5, 0.45)';
+            ctx.beginPath();
+            ctx.arc(left + 1.2, ry + 0.8, r1, 0, Math.PI * 2);
+            ctx.arc(left + road.width - 0.4, ry + 14.8, r1, 0, Math.PI * 2);
+            ctx.fill();
+
+            ctx.fillStyle = isWinter ? '#e2e8f0' : (isAutumn ? '#78521a' : ((isWet || isSpring) ? '#33441e' : '#4a5e2c'));
+            ctx.beginPath();
+            ctx.arc(left + 0.5, ry, r1, 0, Math.PI * 2);
+            ctx.arc(left + road.width - 1, ry + 14, r1, 0, Math.PI * 2);
             ctx.fill();
           }
         } else if (!road.isGravel) {
@@ -1556,15 +1850,14 @@ export class GameRenderer {
           ctx.fill();
 
           if (road.isDirt) {
-            ctx.strokeStyle = '#3d2b1f';
-            ctx.lineWidth = 6;
+            // 1. Extruded outer soil berms along curved wheel ruts
+            ctx.strokeStyle = isWinter ? '#64748b' : ((isWet || isSpring) ? '#322013' : '#5e432f');
+            ctx.lineWidth = 10.5;
             ctx.beginPath();
             for (let i = 0; i < n; i++) {
               const p = pts[i];
-              const normX = lx[i] - p.x;
-              const normY = ly[i] - p.y;
-              const rxPos = p.x + normX * 0.56;
-              const ryPos = p.y + normY * 0.56;
+              const rxPos = p.x + (lx[i] - p.x) * 0.54;
+              const ryPos = p.y + (ly[i] - p.y) * 0.54;
               if (i === 0) ctx.moveTo(rxPos, ryPos);
               else ctx.lineTo(rxPos, ryPos);
             }
@@ -1573,21 +1866,71 @@ export class GameRenderer {
             ctx.beginPath();
             for (let i = 0; i < n; i++) {
               const p = pts[i];
-              const normX = rx[i] - p.x;
-              const normY = ry[i] - p.y;
-              const rxPos = p.x + normX * 0.56;
-              const ryPos = p.y + normY * 0.56;
+              const rxPos = p.x + (rx[i] - p.x) * 0.54;
+              const ryPos = p.y + (ry[i] - p.y) * 0.54;
               if (i === 0) ctx.moveTo(rxPos, ryPos);
               else ctx.lineTo(rxPos, ryPos);
             }
             ctx.stroke();
 
-            ctx.strokeStyle = '#4f642f';
-            ctx.lineWidth = 8;
+            // 2. Sunken dark mud/soil wheel ruts
+            ctx.strokeStyle = isWinter ? '#334155' : ((isWet || isSpring) ? '#150c06' : '#312116');
+            ctx.lineWidth = 6.5;
+            ctx.beginPath();
+            for (let i = 0; i < n; i++) {
+              const p = pts[i];
+              const rxPos = p.x + (lx[i] - p.x) * 0.54;
+              const ryPos = p.y + (ly[i] - p.y) * 0.54;
+              if (i === 0) ctx.moveTo(rxPos, ryPos);
+              else ctx.lineTo(rxPos, ryPos);
+            }
+            ctx.stroke();
+
+            ctx.beginPath();
+            for (let i = 0; i < n; i++) {
+              const p = pts[i];
+              const rxPos = p.x + (rx[i] - p.x) * 0.54;
+              const ryPos = p.y + (ry[i] - p.y) * 0.54;
+              if (i === 0) ctx.moveTo(rxPos, ryPos);
+              else ctx.lineTo(rxPos, ryPos);
+            }
+            ctx.stroke();
+
+            // 3. Wet water sheen inside curved ruts
+            if ((isWet || isSpring) && !isWinter) {
+              ctx.strokeStyle = 'rgba(180, 218, 246, 0.28)';
+              ctx.lineWidth = 2.0;
+              ctx.setLineDash([14, 18]);
+              ctx.beginPath();
+              for (let i = 0; i < n; i++) {
+                const p = pts[i];
+                const rxPos = p.x + (lx[i] - p.x) * 0.54;
+                const ryPos = p.y + (ly[i] - p.y) * 0.54;
+                if (i === 0) ctx.moveTo(rxPos, ryPos);
+                else ctx.lineTo(rxPos, ryPos);
+              }
+              ctx.stroke();
+              ctx.beginPath();
+              for (let i = 0; i < n; i++) {
+                const p = pts[i];
+                const rxPos = p.x + (rx[i] - p.x) * 0.54;
+                const ryPos = p.y + (ry[i] - p.y) * 0.54;
+                if (i === 0) ctx.moveTo(rxPos, ryPos);
+                else ctx.lineTo(rxPos, ryPos);
+              }
+              ctx.stroke();
+              ctx.setLineDash([]);
+            }
+
+            // 4. Organic broken center grass ridge
+            ctx.strokeStyle = isWinter ? '#cbd5e1' : (isAutumn ? '#6e4e1c' : ((isWet || isSpring) ? '#2f3f1b' : '#465929'));
+            ctx.lineWidth = 6.5;
+            ctx.setLineDash([12, 5]);
             ctx.beginPath();
             ctx.moveTo(pts[0].x, pts[0].y);
             for (let i = 1; i < n; i++) ctx.lineTo(pts[i].x, pts[i].y);
             ctx.stroke();
+            ctx.setLineDash([]);
           } else if (!road.isGravel) {
             // Tire wear curves on asphalt bends
             ctx.strokeStyle = 'rgba(16, 18, 22, 0.25)';
@@ -1643,13 +1986,26 @@ export class GameRenderer {
         ctx.fill();
 
         if (road.isDirt) {
-          ctx.fillStyle = '#3d2b1f';
-          ctx.fillRect(0, -road.width * 0.28, len, 6);
-          ctx.fillRect(0, road.width * 0.16, len, 6);
-          ctx.fillStyle = '#4f642f';
-          ctx.fillRect(0, -4, len, 8);
-          ctx.fillStyle = '#5c7437';
-          ctx.fillRect(0, -2, len, 4);
+          const rutY1 = -road.width * 0.26;
+          const rutY2 = road.width * 0.16;
+          ctx.fillStyle = isWinter ? '#64748b' : ((isWet || isSpring) ? '#322013' : '#5e432f');
+          ctx.fillRect(0, rutY1 - 2.2, len, 11.4);
+          ctx.fillRect(0, rutY2 - 2.2, len, 11.4);
+          ctx.fillStyle = isWinter ? '#334155' : ((isWet || isSpring) ? '#150c06' : '#312116');
+          ctx.fillRect(0, rutY1, len, 7);
+          ctx.fillRect(0, rutY2, len, 7);
+          ctx.fillStyle = 'rgba(6, 3, 1, 0.55)';
+          ctx.fillRect(0, rutY1, len, 2.2);
+          ctx.fillRect(0, rutY2, len, 2.2);
+          if ((isWet || isSpring) && !isWinter) {
+            ctx.fillStyle = 'rgba(180, 218, 246, 0.28)';
+            ctx.fillRect(0, rutY1 + 2.5, len, 1.5);
+            ctx.fillRect(0, rutY2 + 2.5, len, 1.5);
+          }
+          ctx.fillStyle = isWinter ? '#cbd5e1' : (isAutumn ? '#6e4e1c' : ((isWet || isSpring) ? '#2f3f1b' : '#465929'));
+          ctx.fillRect(0, -3.5, len, 7);
+          ctx.fillStyle = isWinter ? '#f1f5f9' : (isAutumn ? '#876226' : ((isWet || isSpring) ? '#3c5023' : '#556c33'));
+          ctx.fillRect(0, -1.8, len, 3.6);
         } else if (!road.isGravel) {
           ctx.fillStyle = 'rgba(16, 18, 22, 0.26)';
           ctx.fillRect(0, -road.width * 0.22 - 3, len, 6);
@@ -1715,7 +2071,9 @@ export class GameRenderer {
       }
 
       if (isDirt) {
-        ctx.fillStyle = GameRenderer.getDirtPattern(ctx);
+        ctx.fillStyle = (isWet || isSpring) && !isWinter
+          ? GameRenderer.getWetDirtPattern(ctx)
+          : GameRenderer.getDirtPattern(ctx);
       } else if (isGravel) {
         ctx.fillStyle = GameRenderer.getGravelPattern(ctx);
       } else {
@@ -2504,12 +2862,12 @@ export class GameRenderer {
       // 3. Mud/Dust Drifts & Tire Tracks at Dirt-to-Asphalt Junctions
       if (road.isDirt) {
         const isHoriz = road.direction === 'horizontal';
-        const startX = isHoriz ? road.x1 : road.x1;
-        const startY = isHoriz ? road.y1 : road.y1;
+        const startX = road.x1;
+        const startY = road.y1;
         const endX = isHoriz ? road.x2 : road.x1;
         const endY = isHoriz ? road.y1 : road.y2;
 
-        const checkJunction = (jx: number, jy: number) => {
+        const checkJunction = (jx: number, jy: number, dirSign: number) => {
           if (jx < minX - 100 || jx > maxX + 100 || jy < minY - 100 || jy > maxY + 100) return;
 
           const nearAsphalt = roads.some(r => !r.isDirt && !r.isGravel && (
@@ -2519,25 +2877,59 @@ export class GameRenderer {
 
           if (nearAsphalt) {
             ctx.save();
-            ctx.fillStyle = 'rgba(85, 61, 44, 0.42)';
-            ctx.beginPath();
-            ctx.arc(jx, jy, 36, 0, Math.PI * 2);
-            ctx.fill();
+            const isWetJunc = getEffectiveWeatherWeights(world).isWetSurface && !isWorldFreezing(world);
+            // Organic multi-lobe tracked mud apron instead of a flat geometric circle
+            for (let lobe = 0; lobe < 5; lobe++) {
+              const lSeed = GameRenderer.roadNoisePRNG(Math.floor(jx) + lobe * 17, Math.floor(jy) + lobe * 31, 5101);
+              const lx = jx + (lSeed - 0.5) * 22 + (isHoriz ? dirSign * lobe * 5 : 0);
+              const ly = jy + (GameRenderer.roadNoisePRNG(lobe, Math.floor(jx), 5102) - 0.5) * 22 + (!isHoriz ? dirSign * lobe * 5 : 0);
+              const rx = 18 - lobe * 2.2 + lSeed * 6;
+              const ry = 13 - lobe * 1.6 + lSeed * 4;
+              const rot = lSeed * Math.PI;
+              ctx.fillStyle = isWetJunc ? 'rgba(28, 18, 10, 0.46)' : 'rgba(74, 52, 36, 0.34)';
+              ctx.beginPath();
+              ctx.ellipse(lx, ly, Math.max(4, rx), Math.max(3, ry), rot, 0, Math.PI * 2);
+              ctx.fill();
+            }
 
-            ctx.strokeStyle = 'rgba(45, 30, 20, 0.55)';
-            ctx.lineWidth = 3.5;
-            ctx.beginPath();
-            ctx.arc(jx - 6, jy - 6, 22, 0, Math.PI * 1.5);
-            ctx.stroke();
-            ctx.beginPath();
-            ctx.arc(jx + 6, jy + 6, 22, Math.PI * 0.5, Math.PI * 2);
-            ctx.stroke();
+            // Tapering dual wheel mud tracks dragged onto the asphalt
+            ctx.lineCap = 'butt';
+            for (const wheelOff of [-9, 9]) {
+              const wx = isHoriz ? jx : jx + wheelOff;
+              const wy = isHoriz ? jy + wheelOff : jy;
+              const tx = isHoriz ? wx + dirSign * 38 : wx + wheelOff * 0.35;
+              const ty = isHoriz ? wy + wheelOff * 0.35 : wy + dirSign * 38;
+              ctx.strokeStyle = isWetJunc ? 'rgba(20, 12, 6, 0.62)' : 'rgba(48, 32, 20, 0.48)';
+              ctx.lineWidth = 4.2;
+              ctx.beginPath();
+              ctx.moveTo(wx, wy);
+              ctx.lineTo(tx, ty);
+              ctx.stroke();
+            }
+
+            // 3D scattered mud clods dropped near the junction edge
+            for (let c = 0; c < 9; c++) {
+              const cRand = GameRenderer.roadNoisePRNG(Math.floor(jx) + c, Math.floor(jy) - c, 5203);
+              const ang = cRand * Math.PI * 2;
+              const dist = 6 + GameRenderer.roadNoisePRNG(c, Math.floor(jy), 5204) * 26;
+              const cx = jx + Math.cos(ang) * dist;
+              const cy = jy + Math.sin(ang) * dist;
+              const cr = 1.1 + (cRand * 1.6);
+              ctx.fillStyle = 'rgba(10, 5, 2, 0.55)';
+              ctx.beginPath();
+              ctx.arc(cx + 0.6, cy + 0.6, cr, 0, Math.PI * 2);
+              ctx.fill();
+              ctx.fillStyle = isWetJunc ? '#1f130b' : '#4a3322';
+              ctx.beginPath();
+              ctx.arc(cx, cy, cr, 0, Math.PI * 2);
+              ctx.fill();
+            }
             ctx.restore();
           }
         };
 
-        checkJunction(startX, startY);
-        checkJunction(endX, endY);
+        checkJunction(startX, startY, -1);
+        checkJunction(endX, endY, 1);
       }
     }
   }
@@ -2609,79 +3001,180 @@ export class GameRenderer {
   private renderSkidMarks(skidMarks: GameWorld['skidMarks'], minX: number, minY: number, maxX: number, maxY: number) {
     const ctx = this.ctx;
     ctx.save();
-    ctx.lineCap = 'round';
-    // Newest marks are appended last; keep only the newest `skidMarksLimit`
+    // Use butt caps with a micro tangent extension so connected segments form a seamless ribbon
+    // without overlapping round-cap "bead" blobs at every segment joint.
+    ctx.lineCap = 'butt';
+    ctx.lineJoin = 'round';
+
     for (let i = Math.max(0, skidMarks.length - performanceConfig.skidMarksLimit); i < skidMarks.length; i++) {
       const sm = skidMarks[i];
       if (Math.max(sm.x1, sm.x2) < minX || Math.min(sm.x1, sm.x2) > maxX ||
           Math.max(sm.y1, sm.y2) < minY || Math.min(sm.y1, sm.y2) > maxY) continue;
 
+      const dx = sm.x2 - sm.x1;
+      const dy = sm.y2 - sm.y1;
+      const segLen = Math.hypot(dx, dy);
+      if (segLen < 0.25) continue;
+
+      const tx = dx / segLen;
+      const ty = dy / segLen;
+      // Normal perpendicular to wheel path
+      const nx = -ty;
+      const ny = tx;
+
+      // Tiny 0.45px overlap along tangent prevents hairline gaps on curves without double-alpha blobs
+      const x1 = sm.x1 - tx * 0.45;
+      const y1 = sm.y1 - ty * 0.45;
+      const x2 = sm.x2 + tx * 0.45;
+      const y2 = sm.y2 + ty * 0.45;
+
       if (sm.depth && sm.depth > 0.04) {
         const depth = Math.max(0.05, Math.min(1.5, sm.depth));
         const w = sm.width;
-        const bermW = w * (1.30 + depth * 0.35);
+        const bermOffset = w * 0.56 + depth * 0.85;
+        const bermWidth = Math.max(1.2, w * (0.24 + depth * 0.18));
 
-        // Pass 1: Displaced soil berms on outer edges (выдавленный валик грунта)
-        ctx.strokeStyle = sm.bermColor || '#452a18';
-        ctx.globalAlpha = Math.max(0, Math.min(1.0, sm.alpha * 0.60));
-        ctx.lineWidth = bermW;
+        // 1. Two distinct lateral extruded soil berms (выдавленные боковые валики грунта по краям колеи)
+        // Outer shadow under the SE-facing berm
+        ctx.strokeStyle = 'rgba(8, 4, 1, 0.52)';
+        ctx.globalAlpha = Math.max(0, Math.min(0.85, sm.alpha * (0.45 + depth * 0.35)));
+        ctx.lineWidth = bermWidth * 1.15;
         ctx.beginPath();
-        ctx.moveTo(sm.x1, sm.y1);
-        ctx.lineTo(sm.x2, sm.y2);
+        ctx.moveTo(x1 - nx * bermOffset + 0.5, y1 - ny * bermOffset + 0.5);
+        ctx.lineTo(x2 - nx * bermOffset + 0.5, y2 - ny * bermOffset + 0.5);
+        ctx.moveTo(x1 + nx * bermOffset + 0.5, y1 + ny * bermOffset + 0.5);
+        ctx.lineTo(x2 + nx * bermOffset + 0.5, y2 + ny * bermOffset + 0.5);
         ctx.stroke();
 
-        // Pass 2: Compacted depressed rut trench / furrow (вдавленное дно колеи)
+        // Main extruded soil berm ridges (left & right)
+        ctx.strokeStyle = sm.bermColor || (sm.isWet ? '#2b1a0e' : '#4a301d');
+        ctx.globalAlpha = Math.max(0, Math.min(0.92, sm.alpha * (0.62 + depth * 0.25)));
+        ctx.lineWidth = bermWidth;
+        ctx.beginPath();
+        ctx.moveTo(x1 - nx * bermOffset, y1 - ny * bermOffset);
+        ctx.lineTo(x2 - nx * bermOffset, y2 - ny * bermOffset);
+        ctx.moveTo(x1 + nx * bermOffset, y1 + ny * bermOffset);
+        ctx.lineTo(x2 + nx * bermOffset, y2 + ny * bermOffset);
+        ctx.stroke();
+
+        // Sunlit NW crest or wet specular rim on the berm ridges
+        ctx.strokeStyle = sm.isWet ? 'rgba(195, 222, 245, 0.32)' : 'rgba(145, 108, 78, 0.34)';
+        ctx.globalAlpha = Math.max(0, Math.min(0.75, sm.alpha * (0.40 + depth * 0.25)));
+        ctx.lineWidth = Math.max(0.7, bermWidth * 0.42);
+        ctx.beginPath();
+        ctx.moveTo(x1 - nx * bermOffset - 0.35, y1 - ny * bermOffset - 0.35);
+        ctx.lineTo(x2 - nx * bermOffset - 0.35, y2 - ny * bermOffset - 0.35);
+        ctx.moveTo(x1 + nx * bermOffset - 0.35, y1 + ny * bermOffset - 0.35);
+        ctx.lineTo(x2 + nx * bermOffset - 0.35, y2 + ny * bermOffset - 0.35);
+        ctx.stroke();
+
+        // 2. Compacted depressed rut trench floor (вдавленное дно колеи)
         ctx.strokeStyle = sm.grooveColor || sm.color;
-        ctx.globalAlpha = Math.max(0, Math.min(1.0, sm.alpha * (0.85 + depth * 0.25)));
+        ctx.globalAlpha = Math.max(0, Math.min(0.96, sm.alpha * (0.78 + depth * 0.22)));
         ctx.lineWidth = w;
         ctx.beginPath();
-        ctx.moveTo(sm.x1, sm.y1);
-        ctx.lineTo(sm.x2, sm.y2);
+        ctx.moveTo(x1, y1);
+        ctx.lineTo(x2, y2);
         ctx.stroke();
 
-        // Pass 3: Deep ambient occlusion core crevice (глубокая тень впадины при сильном проседании)
-        if (depth > 0.28) {
-          ctx.strokeStyle = '#0a0604';
-          ctx.globalAlpha = Math.max(0, Math.min(0.85, sm.alpha * (depth - 0.2) * 0.8));
-          ctx.lineWidth = Math.max(1.2, w * 0.42);
+        // 3. Directional 3D NW inner trench wall shadow (падающая тень от стенки колеи внутрь желоба)
+        // Gives unmistakable 3D sunken depth instead of looking like a flat painted stripe
+        const wallShadowOff = w * 0.26;
+        const nwSign = (nx * -0.707 + ny * -0.707) >= 0 ? 1 : -1;
+        ctx.strokeStyle = '#070402';
+        ctx.globalAlpha = Math.max(0, Math.min(0.88, sm.alpha * (0.38 + depth * 0.55)));
+        ctx.lineWidth = Math.max(1.1, w * (0.32 + Math.min(0.25, depth * 0.2)));
+        ctx.beginPath();
+        ctx.moveTo(x1 + nx * nwSign * wallShadowOff, y1 + ny * nwSign * wallShadowOff);
+        ctx.lineTo(x2 + nx * nwSign * wallShadowOff, y2 + ny * nwSign * wallShadowOff);
+        ctx.stroke();
+
+        // 4. Phase-continuous chevron / lug tire tread imprints inside the rut
+        if (depth > 0.12 && w >= 4.0) {
+          const lugSpacing = 5.5;
+          const baseArc = sm.arcDist !== undefined ? sm.arcDist : (Math.abs(sm.x1 * 0.7 + sm.y1 * 0.7));
+          const firstLug = Math.ceil((baseArc - segLen) / lugSpacing) * lugSpacing;
+          ctx.strokeStyle = sm.isWet ? 'rgba(8, 4, 2, 0.65)' : 'rgba(18, 10, 5, 0.52)';
+          ctx.globalAlpha = Math.max(0, Math.min(0.68, sm.alpha * (0.35 + depth * 0.35)));
+          ctx.lineWidth = 1.25;
+          const halfLugW = w * 0.38;
+          const chevBack = tx * 1.1;
+          const chevBackY = ty * 1.1;
+
           ctx.beginPath();
-          ctx.moveTo(sm.x1, sm.y1);
-          ctx.lineTo(sm.x2, sm.y2);
+          for (let dArc = firstLug; dArc <= baseArc; dArc += lugSpacing) {
+            const t = Math.max(0, Math.min(1, 1 - (baseArc - dArc) / Math.max(0.5, segLen)));
+            const lx = sm.x1 + dx * t;
+            const ly = sm.y1 + dy * t;
+            // Angled V-chevron lug impression across tire footprint
+            ctx.moveTo(lx - nx * halfLugW - chevBack, ly - ny * halfLugW - chevBackY);
+            ctx.lineTo(lx + chevBack * 0.3, ly + chevBackY * 0.3);
+            ctx.lineTo(lx + nx * halfLugW - chevBack, ly + ny * halfLugW - chevBackY);
+          }
           ctx.stroke();
         }
 
-        // Pass 4: Tire tread ribbing profile (рельеф протектора)
-        if (depth > 0.20) {
-          ctx.setLineDash([3, 4]);
-          ctx.strokeStyle = sm.grooveColor ? sm.grooveColor : '#1a110a';
-          ctx.globalAlpha = Math.max(0, Math.min(0.5, sm.alpha * 0.40));
-          ctx.lineWidth = Math.max(1.0, w * 0.72);
+        // 5. Standing rainwater & wet mud specular reflection inside wet ruts
+        if (sm.isWet && depth > 0.14) {
+          // Dark water-saturated core
+          ctx.strokeStyle = 'rgba(10, 6, 3, 0.55)';
+          ctx.globalAlpha = Math.max(0, Math.min(0.75, sm.alpha * 0.65));
+          ctx.lineWidth = Math.max(1.2, w * 0.52);
           ctx.beginPath();
-          ctx.moveTo(sm.x1, sm.y1);
-          ctx.lineTo(sm.x2, sm.y2);
+          ctx.moveTo(x1, y1);
+          ctx.lineTo(x2, y2);
           ctx.stroke();
-          ctx.setLineDash([]);
-        }
 
-        // Pass 5: Wet water puddle sheen in rain / wet mud (водяной зеркальный отблеск в размытой колее)
-        if (sm.isWet && depth > 0.20) {
-          ctx.strokeStyle = 'rgba(186, 230, 253, 0.45)';
-          ctx.globalAlpha = Math.max(0, Math.min(0.65, sm.alpha * depth * 0.55));
-          ctx.lineWidth = Math.max(0.8, w * 0.24);
-          ctx.beginPath();
-          ctx.moveTo(sm.x1, sm.y1);
-          ctx.lineTo(sm.x2, sm.y2);
-          ctx.stroke();
+          // Sky-tinted specular water glint along the rut trough (modulated by spatial noise so it shimmers naturally)
+          const glintHash = ((Math.floor(sm.x1 * 0.12) * 73856093) ^ (Math.floor(sm.y1 * 0.12) * 19349663)) >>> 0;
+          if ((glintHash % 5) !== 0) {
+            ctx.strokeStyle = 'rgba(186, 226, 252, 0.52)';
+            ctx.globalAlpha = Math.max(0, Math.min(0.68, sm.alpha * (0.32 + depth * 0.42)));
+            ctx.lineWidth = Math.max(0.85, w * 0.22);
+            ctx.beginPath();
+            ctx.moveTo(x1 - nx * (w * 0.08), y1 - ny * (w * 0.08));
+            ctx.lineTo(x2 - nx * (w * 0.08), y2 - ny * (w * 0.08));
+            ctx.stroke();
+          }
         }
       } else {
-        // Standard asphalt tire skid mark / burnout line
+        // Standard asphalt / concrete / gravel tire mark:
+        // Render realistic dual-shoulder contact patch (two outer tire ribs + softer center band)
+        // instead of a single solid uniform line.
+        const w = sm.width;
+        const shoulderOff = w * 0.33;
+        const ribW = Math.max(1.0, w * 0.28);
+
+        // Soft inner contact patch band
         ctx.strokeStyle = sm.color;
-        ctx.globalAlpha = sm.alpha;
-        ctx.lineWidth = sm.width;
+        ctx.globalAlpha = Math.max(0, Math.min(1.0, sm.alpha * (sm.isWet ? 0.52 : 0.58)));
+        ctx.lineWidth = w * 0.92;
         ctx.beginPath();
-        ctx.moveTo(sm.x1, sm.y1);
-        ctx.lineTo(sm.x2, sm.y2);
+        ctx.moveTo(x1, y1);
+        ctx.lineTo(x2, y2);
         ctx.stroke();
+
+        // Outer left & right high-pressure tire shoulder ribs
+        ctx.strokeStyle = sm.color;
+        ctx.globalAlpha = Math.max(0, Math.min(1.0, sm.alpha * 0.95));
+        ctx.lineWidth = ribW;
+        ctx.beginPath();
+        ctx.moveTo(x1 - nx * shoulderOff, y1 - ny * shoulderOff);
+        ctx.lineTo(x2 - nx * shoulderOff, y2 - ny * shoulderOff);
+        ctx.moveTo(x1 + nx * shoulderOff, y1 + ny * shoulderOff);
+        ctx.lineTo(x2 + nx * shoulderOff, y2 + ny * shoulderOff);
+        ctx.stroke();
+
+        // Subtle displaced water-film sheen along edges of wet asphalt tire tracks
+        if (sm.isWet) {
+          ctx.strokeStyle = 'rgba(190, 222, 248, 0.26)';
+          ctx.globalAlpha = Math.max(0, Math.min(0.45, sm.alpha * 0.42));
+          ctx.lineWidth = 0.85;
+          ctx.beginPath();
+          ctx.moveTo(x1 - nx * (w * 0.48), y1 - ny * (w * 0.48));
+          ctx.lineTo(x2 - nx * (w * 0.48), y2 - ny * (w * 0.48));
+          ctx.stroke();
+        }
       }
     }
     ctx.restore();
@@ -3221,6 +3714,17 @@ export class GameRenderer {
           ctx.rect(innerX, innerY, innerW, innerH);
         }
         ctx.fill();
+
+        // Rich micro-relief grass blades, clover patches & wildflowers on courtyard lawn
+        TerrainRenderer.renderCourtyardLawnDetails(
+          ctx,
+          innerX,
+          innerY,
+          innerW,
+          innerH,
+          season,
+          getEffectiveWeatherWeights(world).isWetSurface && !isWinter
+        );
 
         // Lawn edging curb stone
         ctx.strokeStyle = 'rgba(15, 23, 42, 0.35)';
@@ -11019,74 +11523,142 @@ export class GameRenderer {
     }
   }
 
-  // Realistic heavy mud clod with contact shadow, 3D trajectory, tumbling, and ground splatter
+  // Realistic 3D irregular mud/soil clod with contact shadow, faceted relief, wet specular glint, and satellite crumbs
   private drawMudClodParticle(p: Particle) {
     const ctx = this.ctx;
     const a = Math.max(0, Math.min(1.0, p.alpha));
+    if (a < 0.01) return;
     const seed = p.shapeSeed || 1;
-    const r = p.radius;
+    // Clamp radius so clods always look like realistic soil lumps, never giant flat coins
+    const r = Math.max(0.9, Math.min(4.4, p.radius));
+    const isWet = !!p.isWet;
+    const darkCore = p.secondaryColor || (isWet ? '#120904' : '#26180d');
+
+    // Helper: trace a 6-vertex irregular jagged clod polygon around (cx, cy)
+    const traceClodPolygon = (cx: number, cy: number, radX: number, radY: number, rotAngle: number) => {
+      const cosR = Math.cos(rotAngle);
+      const sinR = Math.sin(rotAngle);
+      ctx.beginPath();
+      for (let v = 0; v < 6; v++) {
+        const baseAng = (v * Math.PI) / 3;
+        // Deterministic per-vertex jag factor (0.72 .. 1.24)
+        const vHash = ((seed * (v + 3) * 1103515245 + 12345) >>> 16) & 31;
+        const jag = 0.72 + (vHash / 31) * 0.52;
+        const lx = Math.cos(baseAng) * radX * jag;
+        const ly = Math.sin(baseAng) * radY * jag;
+        const wx = cx + lx * cosR - ly * sinR;
+        const wy = cy + lx * sinR + ly * cosR;
+        if (v === 0) ctx.moveTo(wx, wy);
+        else ctx.lineTo(wx, wy);
+      }
+      ctx.closePath();
+    };
 
     if (p.z !== undefined && p.z > 0 && !p.splatted) {
-      // 1. Soft contact shadow on the ground directly beneath the airborne chunk
-      const shadowAlpha = Math.max(0, Math.min(0.48, a * 0.55));
-      ctx.globalAlpha = shadowAlpha;
-      ctx.fillStyle = 'rgba(12, 6, 2, 0.50)';
+      // 1. Ground contact shadow (shrinks & softens with altitude p.z)
+      const heightFade = Math.max(0.18, 1.0 - p.z * 0.035);
+      ctx.globalAlpha = a * 0.45 * heightFade;
+      ctx.fillStyle = '#080401';
       ctx.beginPath();
-      ctx.ellipse(p.x, p.y, Math.max(1.0, r * 0.85), Math.max(0.6, r * 0.45), 0, 0, Math.PI * 2);
+      ctx.ellipse(p.x + p.z * 0.22, p.y + p.z * 0.18, Math.max(0.7, r * 0.78 * heightFade), Math.max(0.45, r * 0.48 * heightFade), 0, 0, Math.PI * 2);
       ctx.fill();
 
-      // 2. Chunky, organic airborne mud projectile elevated along Z axis
+      // 2. Airborne 3D tumbling jagged mud clod elevated along Z axis
       const drawY = p.y - p.z;
-      ctx.globalAlpha = a;
-      ctx.fillStyle = p.color;
-      ctx.beginPath();
+      const rot = (seed % 31) * 0.2 + p.life * 6.5;
+      const rx = r * (0.95 + ((seed % 5) - 2) * 0.07);
+      const ry = r * (0.76 + ((seed % 7) - 3) * 0.06);
 
-      const rot = (seed % 31) * 0.2 + p.life * 5.0; // tumbling rotation
-      const aspectW = 1.0 + ((seed % 7) - 3) * 0.08;
-      const aspectH = 0.80 + ((seed % 5) - 2) * 0.08;
-      ctx.ellipse(p.x, drawY, Math.max(1.0, r * aspectW), Math.max(0.7, r * aspectH), rot, 0, Math.PI * 2);
+      // Dark shaded underside of the airborne clod
+      ctx.globalAlpha = a;
+      ctx.fillStyle = darkCore;
+      traceClodPolygon(p.x + 0.45, drawY + 0.55, rx, ry, rot);
       ctx.fill();
 
-      // Darker rich core for medium and large chunks
-      if (r > 3.0) {
-        ctx.fillStyle = '#0f0703';
-        ctx.beginPath();
-        ctx.ellipse(p.x, drawY, r * 0.45, r * 0.35, rot, 0, Math.PI * 2);
-        ctx.fill();
-      }
+      // Main earthy body of the clod
+      ctx.fillStyle = p.color;
+      traceClodPolygon(p.x, drawY, rx * 0.90, ry * 0.88, rot);
+      ctx.fill();
 
-      // Micro-droplets trailing behind fast flying clod
+      // Top-left (NW) sunlit facet or wet specular highlight
+      ctx.fillStyle = isWet ? 'rgba(205, 230, 250, 0.52)' : 'rgba(156, 120, 90, 0.45)';
+      ctx.beginPath();
+      ctx.ellipse(p.x - rx * 0.24, drawY - ry * 0.24, Math.max(0.4, rx * 0.34), Math.max(0.3, ry * 0.24), rot, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Trailing micro-crumb behind fast-flying clods
       const vSq = p.vx * p.vx + p.vy * p.vy;
-      if (vSq > 220) {
+      if (vSq > 260) {
         const vLen = Math.sqrt(vSq);
         const nx = p.vx / vLen;
         const ny = p.vy / vLen;
-        ctx.fillStyle = p.color;
+        ctx.fillStyle = darkCore;
         ctx.beginPath();
-        ctx.arc(p.x - nx * (r * 1.5), drawY - ny * (r * 1.5), Math.max(0.6, r * 0.32), 0, Math.PI * 2);
+        ctx.arc(p.x - nx * (r * 1.45), drawY - ny * (r * 1.45), Math.max(0.45, r * 0.28), 0, Math.PI * 2);
         ctx.fill();
       }
     } else {
-      // Splatted on the ground: flattened wet earth stain with micro-satellite flecks
-      ctx.globalAlpha = a;
-      ctx.fillStyle = p.color;
-      ctx.beginPath();
+      // Landed 3D soil/mud lump on the ground (compact, volumetric, never a giant flat disk)
       const rot = (seed % 31) * 0.2;
-      ctx.ellipse(p.x, p.y, Math.max(1.2, r * 1.4), Math.max(0.8, r * 0.85), rot, 0, Math.PI * 2);
-      ctx.fill();
+      const rx = r * 1.05;
+      const ry = r * 0.82;
 
-      // Satellite micro-splatter fleck
-      const ang = (seed % 62) * 0.1;
-      const dist = r * 1.4;
-      ctx.beginPath();
-      ctx.arc(p.x + Math.cos(ang) * dist, p.y + Math.sin(ang) * dist, Math.max(0.5, r * 0.25), 0, Math.PI * 2);
-      ctx.fill();
-
-      if (r > 3.5) {
-        const ang2 = ang + 2.2;
-        const dist2 = r * 1.7;
+      // 1. Wet moisture seepage halo on the ground around wet mud clods
+      if (isWet) {
+        ctx.globalAlpha = a * 0.38;
+        ctx.fillStyle = '#0c0703';
         ctx.beginPath();
-        ctx.arc(p.x + Math.cos(ang2) * dist2, p.y + Math.sin(ang2) * dist2, Math.max(0.4, r * 0.20), 0, Math.PI * 2);
+        ctx.ellipse(p.x, p.y, rx * 1.38, ry * 1.32, rot, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      // 2. Crisp directional SE drop shadow on the ground
+      ctx.globalAlpha = a * 0.65;
+      ctx.fillStyle = '#070301';
+      traceClodPolygon(p.x + 0.75, p.y + 0.75, rx * 1.04, ry * 1.04, rot);
+      ctx.fill();
+
+      // 3. Dark base crust of the clod
+      ctx.globalAlpha = a;
+      ctx.fillStyle = darkCore;
+      traceClodPolygon(p.x, p.y, rx, ry, rot);
+      ctx.fill();
+
+      // 4. Raised upper soil body (offset slightly NW for 3D thickness)
+      ctx.fillStyle = p.color;
+      traceClodPolygon(p.x - 0.25, p.y - 0.25, rx * 0.80, ry * 0.78, rot + 0.25);
+      ctx.fill();
+
+      // 5. NW sunlit ridge or wet water-film glint on top of the lump
+      ctx.fillStyle = isWet ? 'rgba(198, 226, 248, 0.46)' : 'rgba(148, 112, 82, 0.38)';
+      ctx.beginPath();
+      ctx.ellipse(p.x - rx * 0.26, p.y - ry * 0.26, Math.max(0.4, rx * 0.32), Math.max(0.3, ry * 0.22), rot, 0, Math.PI * 2);
+      ctx.fill();
+
+      // 6. Compact 3D satellite soil crumbs scattered around impact point
+      const ang1 = (seed % 62) * 0.1;
+      const dist1 = r * 1.35 + 0.6;
+      const sx1 = p.x + Math.cos(ang1) * dist1;
+      const sy1 = p.y + Math.sin(ang1) * dist1;
+      const sr1 = Math.max(0.45, r * 0.26);
+      ctx.fillStyle = '#080401';
+      ctx.beginPath();
+      ctx.arc(sx1 + 0.4, sy1 + 0.4, sr1, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = darkCore;
+      ctx.beginPath();
+      ctx.arc(sx1, sy1, sr1, 0, Math.PI * 2);
+      ctx.fill();
+
+      if (r > 2.0) {
+        const ang2 = ang1 + 2.3;
+        const dist2 = r * 1.65 + 0.8;
+        const sx2 = p.x + Math.cos(ang2) * dist2;
+        const sy2 = p.y + Math.sin(ang2) * dist2;
+        const sr2 = Math.max(0.4, r * 0.20);
+        ctx.fillStyle = p.color;
+        ctx.beginPath();
+        ctx.arc(sx2, sy2, sr2, 0, Math.PI * 2);
         ctx.fill();
       }
     }

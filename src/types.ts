@@ -1480,6 +1480,8 @@ export interface SkidMark {
   isWet?: boolean;         // wet muddy rut reflection
   bermColor?: string;      // displaced outer soil berm color
   grooveColor?: string;    // dark inner trench shadow color
+  slipRatio?: number;      // wheel slip intensity for churned vs rolled tread profile
+  arcDist?: number;        // cumulative rolling distance for phase-continuous tread lugs
 }
 
 export type FluidStainType = 'oil' | 'coolant' | 'fuel' | 'sand' | 'water';
@@ -1520,6 +1522,7 @@ export interface Particle {
   splatted?: boolean;
   shapeSeed?: number;
   targetRadius?: number;
+  isWet?: boolean;
 
   // Thermodynamic, condensation & atmospheric simulation properties:
   isSteam?: boolean;          // True for water vapor / cold exhaust condensate / radiator steam / breath

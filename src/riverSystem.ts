@@ -516,11 +516,12 @@ export function renderRiverSystem(
   kStart = Math.max(0, kStart - 2);
   kEnd = Math.min(RIVER_SPLINE_POINTS.length - 1, kEnd + 2);
 
-  // --- PASS 1a: MARSHY EROSION & SOFT SILT MARGIN (Outer Shoreline Buffer) ---
+  // --- PASS 1a: MARSHY EROSION & SOFT SILT MARGIN (Outer Shoreline Buffer with organic undulations) ---
   ctx.beginPath();
   for (let k = kStart; k <= kEnd; k++) {
     const pt = RIVER_SPLINE_POINTS[k];
-    const bankExtra = 135 + pt.innerSandLeft * 0.5;
+    const wave = (riverHash(k * 3.17) - 0.5) * 18 + Math.sin(k * 0.45) * 9;
+    const bankExtra = 135 + pt.innerSandLeft * 0.5 + wave;
     const bx = pt.x + pt.nx * (pt.halfWidth + bankExtra);
     const by = pt.y + pt.ny * (pt.halfWidth + bankExtra);
     if (k === kStart) ctx.moveTo(bx, by);
@@ -528,20 +529,22 @@ export function renderRiverSystem(
   }
   for (let k = kEnd; k >= kStart; k--) {
     const pt = RIVER_SPLINE_POINTS[k];
-    const bankExtra = 135 + pt.innerSandRight * 0.5;
+    const wave = (riverHash(k * 4.73) - 0.5) * 18 + Math.cos(k * 0.45) * 9;
+    const bankExtra = 135 + pt.innerSandRight * 0.5 + wave;
     const bx = pt.x - pt.nx * (pt.halfWidth + bankExtra);
     const by = pt.y - pt.ny * (pt.halfWidth + bankExtra);
     ctx.lineTo(bx, by);
   }
   ctx.closePath();
-  ctx.fillStyle = '#382a1d'; // Damp earthy silt transition
+  ctx.fillStyle = isFreezing ? '#475569' : '#352518'; // Damp earthy silt transition
   ctx.fill();
 
   // --- PASS 1b: DEEP WET SILT & CLAY BELT (Вязкая глубокая грязь и ил) ---
   ctx.beginPath();
   for (let k = kStart; k <= kEnd; k++) {
     const pt = RIVER_SPLINE_POINTS[k];
-    const bankExtra = 85 + pt.innerSandLeft * 0.4;
+    const wave = (riverHash(k * 5.91) - 0.5) * 14;
+    const bankExtra = 85 + pt.innerSandLeft * 0.4 + wave;
     const bx = pt.x + pt.nx * (pt.halfWidth + bankExtra);
     const by = pt.y + pt.ny * (pt.halfWidth + bankExtra);
     if (k === kStart) ctx.moveTo(bx, by);
@@ -549,20 +552,22 @@ export function renderRiverSystem(
   }
   for (let k = kEnd; k >= kStart; k--) {
     const pt = RIVER_SPLINE_POINTS[k];
-    const bankExtra = 85 + pt.innerSandRight * 0.4;
+    const wave = (riverHash(k * 6.43) - 0.5) * 14;
+    const bankExtra = 85 + pt.innerSandRight * 0.4 + wave;
     const bx = pt.x - pt.nx * (pt.halfWidth + bankExtra);
     const by = pt.y - pt.ny * (pt.halfWidth + bankExtra);
     ctx.lineTo(bx, by);
   }
   ctx.closePath();
-  ctx.fillStyle = '#231810'; // Deep dark wet mud & silt
+  ctx.fillStyle = isFreezing ? '#334155' : '#1f140c'; // Deep dark wet mud & silt
   ctx.fill();
 
   // --- PASS 1c: GLOSSY WET MUD SHEEN (Мокрый блеск жидкой грязи) ---
   ctx.beginPath();
   for (let k = kStart; k <= kEnd; k++) {
     const pt = RIVER_SPLINE_POINTS[k];
-    const bankExtra = 55 + pt.innerSandLeft * 0.3;
+    const wave = (riverHash(k * 7.89) - 0.5) * 10;
+    const bankExtra = 55 + pt.innerSandLeft * 0.3 + wave;
     const bx = pt.x + pt.nx * (pt.halfWidth + bankExtra);
     const by = pt.y + pt.ny * (pt.halfWidth + bankExtra);
     if (k === kStart) ctx.moveTo(bx, by);
@@ -570,13 +575,14 @@ export function renderRiverSystem(
   }
   for (let k = kEnd; k >= kStart; k--) {
     const pt = RIVER_SPLINE_POINTS[k];
-    const bankExtra = 55 + pt.innerSandRight * 0.3;
+    const wave = (riverHash(k * 8.31) - 0.5) * 10;
+    const bankExtra = 55 + pt.innerSandRight * 0.3 + wave;
     const bx = pt.x - pt.nx * (pt.halfWidth + bankExtra);
     const by = pt.y - pt.ny * (pt.halfWidth + bankExtra);
     ctx.lineTo(bx, by);
   }
   ctx.closePath();
-  ctx.fillStyle = 'rgba(15, 23, 42, 0.25)'; // Wet water sheen over mud
+  ctx.fillStyle = isFreezing ? 'rgba(203, 213, 225, 0.25)' : 'rgba(12, 18, 28, 0.36)'; // Wet water sheen over mud
   ctx.fill();
 
   // --- PASS 2: INNER WET SAND & PEBBLE BEACHES (Песчаные косы) ---
@@ -595,11 +601,11 @@ export function renderRiverSystem(
     ctx.lineTo(sx, sy);
   }
   ctx.closePath();
-  ctx.fillStyle = '#5c4d3c'; // Wet river sand
+  ctx.fillStyle = isFreezing ? '#64748b' : '#4a3c2c'; // Wet dark river sand
   ctx.fill();
 
-  // Fine gravel speckles on sandy banks
-  renderBankGravelSpeckles(ctx, kStart, kEnd);
+  // 3D mud clods, water-filled bank hollows, and gravel speckles on banks
+  renderBankGravelSpeckles(ctx, kStart, kEnd, isFreezing, nightAlpha);
 
   // --- PASS 2b: RIVER ACCESS EXITS, CHURNED MUD APRONS, TIRE RUTS & WARNING SIGNS ---
   renderRiverAccessExits(ctx, minX, minY, maxX, maxY, nightAlpha);
@@ -852,30 +858,103 @@ export function renderRiverSystem(
 }
 
 /**
- * Organic bank gravel speckling for realistic texture on sandy shores
+ * Volumetric 3D bank mud clods, wet seepage hollows, and gravel pebbles on river shores
  */
-function renderBankGravelSpeckles(ctx: CanvasRenderingContext2D, kStart: number, kEnd: number) {
-  for (let k = kStart; k < kEnd; k += 4) {
+function renderBankGravelSpeckles(
+  ctx: CanvasRenderingContext2D,
+  kStart: number,
+  kEnd: number,
+  isFreezing: boolean = false,
+  nightAlpha: number = 0
+) {
+  for (let k = kStart; k < kEnd; k += 3) {
     const pt = RIVER_SPLINE_POINTS[k];
     const seed = k * 13.37;
-    const pebbleCount = 3 + Math.floor(riverHash(seed) * 4);
+    const tanAngle = Math.atan2(pt.ty, pt.tx);
 
+    // 1. 3D Wet Mud Clods & Water-Filled Bank Depressions in the Silt Belt (offset 20..115px outside water)
+    const mudCount = 2 + Math.floor(riverHash(seed * 1.9) * 3);
+    for (let m = 0; m < mudCount; m++) {
+      const mSeed = seed + m * 11.43;
+      const isLeft = riverHash(mSeed) > 0.5;
+      const bankSide = isLeft ? 1 : -1;
+      const bankSand = isLeft ? pt.innerSandLeft : pt.innerSandRight;
+      const offset = pt.halfWidth + bankSand + 12 + riverHash(mSeed * 2.1) * 85;
+      const along = (riverHash(mSeed * 3.3) - 0.5) * 28;
+
+      const mx = pt.x + pt.nx * (offset * bankSide) + pt.tx * along;
+      const my = pt.y + pt.ny * (offset * bankSide) + pt.ty * along;
+      const rx = 2.8 + riverHash(mSeed * 4.7) * 5.2;
+      const ry = rx * (0.48 + riverHash(mSeed * 5.9) * 0.32);
+      const rot = tanAngle + (riverHash(mSeed * 6.7) - 0.5) * 0.6;
+
+      if (m === 0 && !isFreezing && offset < pt.halfWidth + bankSand + 65) {
+        // Shallow water-filled mud depression with sky reflection & wet rim
+        ctx.fillStyle = 'rgba(10, 8, 5, 0.55)';
+        ctx.beginPath();
+        ctx.ellipse(mx, my, rx * 1.25, ry * 1.25, rot, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = nightAlpha > 0.6 ? 'rgba(30, 48, 68, 0.45)' : 'rgba(56, 118, 152, 0.38)';
+        ctx.beginPath();
+        ctx.ellipse(mx - 0.4, my - 0.4, rx * 0.85, ry * 0.78, rot, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Wet specular glint on the water film
+        ctx.fillStyle = `rgba(224, 242, 254, ${(0.28 * (1 - nightAlpha * 0.6)).toFixed(2)})`;
+        ctx.beginPath();
+        ctx.ellipse(mx - rx * 0.25, my - ry * 0.25, rx * 0.32, ry * 0.16, rot - 0.1, 0, Math.PI * 2);
+        ctx.fill();
+      } else {
+        // Raised 3D mud clod / ridge with SE drop shadow & NW wet specular highlight
+        ctx.fillStyle = 'rgba(6, 3, 1, 0.52)';
+        ctx.beginPath();
+        ctx.ellipse(mx + 1.2, my + 1.3, rx, ry, rot, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = isFreezing ? '#334155' : (riverHash(mSeed * 8.1) > 0.5 ? '#2b1c11' : '#23160d');
+        ctx.beginPath();
+        ctx.ellipse(mx, my, rx * 0.92, ry * 0.88, rot, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Sunlit NW wet mud bevel highlight
+        ctx.fillStyle = isFreezing
+          ? 'rgba(226, 232, 240, 0.28)'
+          : `rgba(186, 212, 235, ${(0.22 * (1 - nightAlpha * 0.5)).toFixed(2)})`;
+        ctx.beginPath();
+        ctx.ellipse(mx - rx * 0.22, my - ry * 0.22, rx * 0.45, ry * 0.32, rot, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+
+    // 2. Inner Sandy Beach 3D Pebbles
+    const pebbleCount = 3 + Math.floor(riverHash(seed) * 3);
     for (let p = 0; p < pebbleCount; p++) {
       const pSeed = seed + p * 7.19;
       const isLeft = riverHash(pSeed) > 0.5;
       const bankSide = isLeft ? 1 : -1;
       const bankWidth = isLeft ? pt.innerSandLeft : pt.innerSandRight;
-      const offset = pt.halfWidth + 2 + riverHash(pSeed * 2.3) * (bankWidth + 6);
-      
+      const offset = pt.halfWidth + 2 + riverHash(pSeed * 2.3) * (bankWidth + 8);
       const px = pt.x + pt.nx * (offset * bankSide);
       const py = pt.y + pt.ny * (offset * bankSide);
+      const sz = 1.2 + riverHash(pSeed * 3.7) * 2.0;
 
-      const sz = 1.2 + riverHash(pSeed * 3.7) * 2.2;
-      const shade = riverHash(pSeed * 5.1) > 0.5 ? '#473c2f' : '#6b5c4b';
-      
-      ctx.fillStyle = shade;
+      // Pebble shadow
+      ctx.fillStyle = 'rgba(10, 7, 4, 0.42)';
+      ctx.beginPath();
+      ctx.arc(px + 0.7, py + 0.8, sz, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Pebble body
+      ctx.fillStyle = riverHash(pSeed * 5.1) > 0.5 ? '#3d3226' : '#5e4f3e';
       ctx.beginPath();
       ctx.arc(px, py, sz, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Wet pebble highlight
+      ctx.fillStyle = 'rgba(226, 232, 240, 0.24)';
+      ctx.beginPath();
+      ctx.arc(px - sz * 0.28, py - sz * 0.28, sz * 0.42, 0, Math.PI * 2);
       ctx.fill();
     }
   }
@@ -1594,48 +1673,90 @@ function renderRiverAccessExits(
     ctx.fillStyle = 'rgba(56, 42, 29, 0.65)'; // Silt & washed out earth
     ctx.fill();
 
-    // 3. Deep Parallel Wheel Ruts (Раскатанная тяжелыми машинами колея в иле)
+    // 3. Deep Parallel Wheel Ruts with 3D Extruded Berms & Trench Shadows (Раскатанная колея в иле)
     const rutOffsets = [-halfW * 0.6, -halfW * 0.2, halfW * 0.2, halfW * 0.6];
-    ctx.lineWidth = 5.5;
-    ctx.strokeStyle = '#0e0a06'; // Dark rut groove
     for (const roff of rutOffsets) {
+      const x0 = exit.x + roff * 0.85;
+      const y0 = topY + 15;
+      const cx = exit.x + roff * 1.1 + Math.sin(exit.x + roff) * 12;
+      const cy = midY;
+      const x1 = exit.x + roff * 1.35;
+      const y1 = botY - 10;
+
+      // 3a. Outer extruded mud berms (dark SE shadow + warm NW sunlit ridge)
+      ctx.lineWidth = 3.2;
+      ctx.strokeStyle = 'rgba(8, 4, 1, 0.72)';
       ctx.beginPath();
-      ctx.moveTo(exit.x + roff * 0.85, topY + 15);
-      ctx.quadraticCurveTo(
-        exit.x + roff * 1.1 + Math.sin(exit.x + roff) * 12,
-        midY,
-        exit.x + roff * 1.35,
-        botY - 10
-      );
+      ctx.moveTo(x0 - 3.2, y0 + 1);
+      ctx.quadraticCurveTo(cx - 3.8, cy + 1, x1 - 4.2, y1 + 1);
+      ctx.moveTo(x0 + 4.4, y0 + 1);
+      ctx.quadraticCurveTo(cx + 5.0, cy + 1, x1 + 5.4, y1 + 1);
       ctx.stroke();
+
+      ctx.lineWidth = 2.6;
+      ctx.strokeStyle = '#3d2a1c';
+      ctx.beginPath();
+      ctx.moveTo(x0 - 4.0, y0);
+      ctx.quadraticCurveTo(cx - 4.6, cy, x1 - 5.0, y1);
+      ctx.moveTo(x0 + 3.6, y0);
+      ctx.quadraticCurveTo(cx + 4.2, cy, x1 + 4.6, y1);
+      ctx.stroke();
+
+      // Wet specular glint along the sunlit crest of the mud berms
+      ctx.lineWidth = 1.0;
+      ctx.strokeStyle = `rgba(186, 220, 248, ${(0.28 * (1 - nightAlpha * 0.6)).toFixed(2)})`;
+      ctx.setLineDash([10, 8, 5, 11]);
+      ctx.beginPath();
+      ctx.moveTo(x0 - 4.4, y0 - 0.5);
+      ctx.quadraticCurveTo(cx - 5.0, cy - 0.5, x1 - 5.4, y1 - 0.5);
+      ctx.moveTo(x0 + 3.2, y0 - 0.5);
+      ctx.quadraticCurveTo(cx + 3.8, cy - 0.5, x1 + 4.2, y1 - 0.5);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      // 3b. Sunken dark mud trench floor
+      ctx.lineWidth = 5.6;
+      ctx.strokeStyle = '#0c0704';
+      ctx.beginPath();
+      ctx.moveTo(x0, y0);
+      ctx.quadraticCurveTo(cx, cy, x1, y1);
+      ctx.stroke();
+
+      // 3c. Pooled water ribbon glistening inside the rut bottom
+      ctx.lineWidth = 2.0;
+      ctx.strokeStyle = nightAlpha > 0.6 ? 'rgba(30, 58, 82, 0.55)' : 'rgba(125, 190, 230, 0.36)';
+      ctx.setLineDash([16, 10, 8, 14]);
+      ctx.beginPath();
+      ctx.moveTo(x0, y0);
+      ctx.quadraticCurveTo(cx, cy, x1, y1);
+      ctx.stroke();
+      ctx.setLineDash([]);
     }
 
-    // Parallel churned mud ridges
-    ctx.lineWidth = 2.2;
-    ctx.strokeStyle = '#3a2b1f';
-    for (const roff of rutOffsets) {
-      ctx.beginPath();
-      ctx.moveTo(exit.x + roff * 0.85 - 3.5, topY + 15);
-      ctx.quadraticCurveTo(exit.x + roff * 1.1 - 4, midY, exit.x + roff * 1.35 - 4.5, botY - 10);
-      ctx.moveTo(exit.x + roff * 0.85 + 3.5, topY + 15);
-      ctx.quadraticCurveTo(exit.x + roff * 1.1 + 4, midY, exit.x + roff * 1.35 + 4.5, botY - 10);
-      ctx.stroke();
-    }
+    // 4. Water-Filled Deep Puddles & 3D Churned Mud Clods in Apron
+    for (let p = 0; p < 6; p++) {
+      const pY = topY + (botY - topY) * (0.22 + p * 0.14) + Math.sin(exit.x + p * 1.7) * 9;
+      const pX = exit.x + (p % 2 === 0 ? -1 : 1) * halfW * (0.16 + (p % 3) * 0.22);
+      const prx = 12 + (p % 3) * 4;
+      const pry = 5.5 + (p % 2) * 2.0;
 
-    // 4. Water-Filled Deep Puddles in Ruts
-    for (let p = 0; p < 4; p++) {
-      const pY = topY + (botY - topY) * (0.3 + p * 0.2) + Math.sin(exit.x + p) * 10;
-      const pX = exit.x + (p % 2 === 0 ? -1 : 1) * halfW * (0.2 + p * 0.15);
-      
-      ctx.fillStyle = (nightAlpha > 0.6) ? 'rgba(15, 23, 42, 0.75)' : 'rgba(20, 55, 68, 0.70)';
+      // Dark sunken puddle basin rim
+      ctx.fillStyle = 'rgba(8, 5, 2, 0.72)';
       ctx.beginPath();
-      ctx.ellipse(pX, pY, 14 + p * 3, 6 + (p % 2), 0.2, 0, Math.PI * 2);
+      ctx.ellipse(pX, pY, prx + 2.2, pry + 1.6, 0.18, 0, Math.PI * 2);
       ctx.fill();
 
-      // Sky reflection highlight edge
-      ctx.strokeStyle = 'rgba(186, 230, 253, 0.35)';
-      ctx.lineWidth = 0.8;
-      ctx.stroke();
+      // Turbid muddy water fill with sky reflection
+      ctx.fillStyle = (nightAlpha > 0.6) ? 'rgba(15, 28, 42, 0.78)' : 'rgba(28, 68, 88, 0.72)';
+      ctx.beginPath();
+      ctx.ellipse(pX, pY, prx, pry, 0.18, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Specular sky highlight on puddle surface
+      ctx.fillStyle = `rgba(224, 242, 254, ${(0.36 * (1 - nightAlpha * 0.65)).toFixed(2)})`;
+      ctx.beginPath();
+      ctx.ellipse(pX - prx * 0.25, pY - pry * 0.22, prx * 0.38, pry * 0.22, 0.12, 0, Math.PI * 2);
+      ctx.fill();
     }
 
     // 5. Safety Guide Posts & Hazard Markers
