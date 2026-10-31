@@ -3140,22 +3140,29 @@ export function addOrGrowFluidStain(
 
 // --- FLUID SPREADING: liquids flatten out into a thin film instead of staying round drops ---
 // Film growth slows as the fluid spreads (r grows ~ sqrt(t) like a real thin film) and as the spill ages.
-const FILM_SPREAD_RATE: Partial<Record<FluidStainType, number>> = { fuel: 2.6, water: 3.0, coolant: 1.8, oil: 0.9 };
-const FILM_CAP_MULT: Partial<Record<FluidStainType, number>> = { fuel: 3.4, water: 2.2, coolant: 2.8, oil: 2.6 };
+// Real spills: a drop of a few ml covers only a small area. The film grows fast at first, then
+// stalls as viscosity and the thinning film hold it back. Caps are kept close to the drop size
+// so a small spill stays a puddle instead of covering the street.
+const FILM_SPREAD_RATE: Partial<Record<FluidStainType, number>> = { fuel: 1.1, water: 1.3, coolant: 0.8, oil: 0.45 };
+const FILM_CAP_MULT: Partial<Record<FluidStainType, number>> = { fuel: 1.6, water: 1.4, coolant: 1.5, oil: 1.3 };
+const FILM_CAP_MAX: Partial<Record<FluidStainType, number>> = { fuel: 34, water: 30, coolant: 30, oil: 26 };
 
 export function updateFluidSpread(st: FluidStain, dt: number) {
   const rate = FILM_SPREAD_RATE[st.type];
   if (rate === undefined) return; // sand and other granular spills don't flow
   if (st.filmCap === undefined) {
-    const base = Math.max(st.maxRadius, 6);
-    st.filmCap = Math.min(90, base * (FILM_CAP_MULT[st.type] ?? 2.5) * (0.8 + Math.random() * 0.4));
-    st.spreadElong = 0.5 + Math.random() * 1.1;
+    const base = Math.max(st.maxRadius, 5);
+    const cap = FILM_CAP_MAX[st.type] ?? 28;
+    st.filmCap = Math.min(cap, base * (FILM_CAP_MULT[st.type] ?? 1.4) * (0.85 + Math.random() * 0.3));
+    st.spreadElong = 0.5 + Math.random() * 0.9;
     st.spreadAngle = Math.random() * Math.PI * 2;
   }
   if (st.radius >= st.filmCap) return;
   const ageFactor = Math.max(0, 1 - (st.life / Math.max(1, st.maxLife)) * 1.5);
   if (ageFactor <= 0) return;
-  const growth = (rate * ageFactor * dt) / (1 + st.radius * 0.12);
+  // Growth slows strongly as the film widens (rate drops off ~ 1/r^2 near the cap)
+  const slowdown = 1 / (1 + st.radius * st.radius * 0.02);
+  const growth = (rate * ageFactor * slowdown * dt);
   st.radius = Math.min(st.filmCap, st.radius + growth);
   // Let later merges grow the film up to its cap too
   if (st.maxRadius < st.filmCap) st.maxRadius = st.filmCap;

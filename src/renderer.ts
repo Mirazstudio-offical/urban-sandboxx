@@ -2834,9 +2834,11 @@ export class GameRenderer {
       const pad = 30 + stain.radius * 0.8 * grow;
       if (stain.x < minX - pad || stain.x > maxX + pad || stain.y < minY - pad || stain.y > maxY + pad) continue;
       // A spread film is thinner: the same fluid covers more ground, so it gets fainter as it grows
-      const thin = stain.radius > 3 ? Math.max(0.3, Math.sqrt(3 / stain.radius)) : 1;
+      // Thin film: the wider it spreads, the more transparent it gets (real films are sub-micron thick).
+      // Film colours are softened so they read as a sheen on asphalt, not as neon paint.
+      const thin = stain.radius > 2.5 ? Math.max(0.12, Math.pow(2.5 / stain.radius, 1.4)) : 1;
       const baseAlpha = typeof stain.alpha === 'number' && isFinite(stain.alpha) ? Math.max(0, Math.min(1, stain.alpha)) : 0.85;
-      const stainAlpha = baseAlpha * thin;
+      const stainAlpha = baseAlpha * thin * 0.7;
       if (stainAlpha <= 0.01) continue;
 
       ctx.save();
@@ -2854,11 +2856,10 @@ export class GameRenderer {
       if (stain.type === 'oil') {
         // Realistic dark oil stain with metallic gloss & amber rim
         const grad = safeRadialGradient(ctx, -rx * 0.15, -ry * 0.15, 0, 0, 0, rx);
-        grad.addColorStop(0, `rgba(2, 6, 23, ${stainAlpha * 0.98})`); // Heavy black core
-        grad.addColorStop(0.4, `rgba(15, 23, 42, ${stainAlpha * 0.92})`); // Dark viscous body
-        grad.addColorStop(0.75, `rgba(120, 53, 4, ${stainAlpha * 0.75})`); // Golden/amber outer ring
-        grad.addColorStop(0.9, `rgba(56, 189, 248, ${stainAlpha * 0.4})`); // Iridescent metallic sky sheen at edge
-        grad.addColorStop(1, `rgba(56, 189, 248, 0)`);
+        grad.addColorStop(0, `rgba(15, 18, 24, ${stainAlpha * 0.9})`); // Thick dark oil core
+        grad.addColorStop(0.5, `rgba(28, 30, 36, ${stainAlpha * 0.7})`);
+        grad.addColorStop(0.85, `rgba(70, 62, 50, ${stainAlpha * 0.4})`); // brownish thinning edge
+        grad.addColorStop(1, `rgba(70, 62, 50, 0)`);
 
         ctx.fillStyle = grad;
         this.drawOrganicBlob(ctx, rx, ry, seed, rough);
@@ -2873,10 +2874,10 @@ export class GameRenderer {
       } else if (stain.type === 'coolant') {
         // Bright fluorescent neon antifreeze puddle
         const grad = safeRadialGradient(ctx, -rx * 0.1, -ry * 0.1, 0, 0, 0, rx);
-        grad.addColorStop(0, `rgba(34, 197, 94, ${stainAlpha * 0.95})`); // Bright fluorescent green core
-        grad.addColorStop(0.55, `rgba(132, 204, 22, ${stainAlpha * 0.75})`); // Lime neon green
-        grad.addColorStop(0.85, `rgba(234, 179, 8, ${stainAlpha * 0.4})`); // Subtle yellowish tint at the boundary
-        grad.addColorStop(1, `rgba(234, 179, 8, 0)`);
+        grad.addColorStop(0, `rgba(74, 140, 96, ${stainAlpha * 0.75})`); // Muted green-grey core (wet, not neon)
+        grad.addColorStop(0.6, `rgba(92, 128, 84, ${stainAlpha * 0.5})`);
+        grad.addColorStop(0.9, `rgba(120, 113, 70, ${stainAlpha * 0.25})`); // dull tan edge
+        grad.addColorStop(1, `rgba(120, 113, 70, 0)`);
 
         ctx.fillStyle = grad;
         this.drawOrganicBlob(ctx, rx, ry, seed, rough);
@@ -2891,14 +2892,12 @@ export class GameRenderer {
       } else if (stain.type === 'fuel') {
         // Highly realistic gasoline spill: amber iridescent thin-film interference rainbow pattern
         const grad = safeRadialGradient(ctx, -rx * 0.15, -ry * 0.15, 0, 0, 0, rx);
-        grad.addColorStop(0, `rgba(15, 23, 42, ${stainAlpha * 0.3})`); // center thin wet film
-        grad.addColorStop(0.18, `rgba(239, 68, 68, ${stainAlpha * 0.65})`); // Red ring
-        grad.addColorStop(0.32, `rgba(234, 179, 8, ${stainAlpha * 0.6})`);  // Yellow ring
-        grad.addColorStop(0.48, `rgba(34, 197, 94, ${stainAlpha * 0.65})`); // Green ring
-        grad.addColorStop(0.65, `rgba(6, 182, 212, ${stainAlpha * 0.7})`);  // Cyan/blue ring
-        grad.addColorStop(0.82, `rgba(168, 85, 247, ${stainAlpha * 0.65})`); // Purple/magenta outer ring
-        grad.addColorStop(0.95, `rgba(236, 72, 153, ${stainAlpha * 0.35})`); // Pink edge
-        grad.addColorStop(1, `rgba(236, 72, 153, 0)`);
+        // Dark wet film with a faint, desaturated thin-film interference tint toward the edge
+        grad.addColorStop(0, `rgba(15, 23, 42, ${stainAlpha * 0.55})`); // centre: dark, slightly oily
+        grad.addColorStop(0.6, `rgba(30, 41, 59, ${stainAlpha * 0.45})`);
+        grad.addColorStop(0.85, `rgba(120, 113, 108, ${stainAlpha * 0.3})`); // muted grey-brown edge
+        grad.addColorStop(0.95, `rgba(148, 163, 184, ${stainAlpha * 0.2})`); // faint sheen rim
+        grad.addColorStop(1, `rgba(148, 163, 184, 0)`);
 
         ctx.fillStyle = grad;
         this.drawOrganicBlob(ctx, rx, ry, seed, rough);
