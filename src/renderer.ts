@@ -2845,9 +2845,9 @@ export class GameRenderer {
       // A spread film is thinner: the same fluid covers more ground, so it gets fainter as it grows
       // Thin film: the wider it spreads, the more transparent it gets (real films are sub-micron thick).
       // Film colours are softened so they read as a sheen on asphalt, not as neon paint.
-      const thin = stain.radius > 2.5 ? Math.max(0.12, Math.pow(2.5 / stain.radius, 1.4)) : 1;
+      const thin = stain.radius > 3 ? Math.max(0.5, Math.sqrt(3 / stain.radius)) : 1;
       const baseAlpha = typeof stain.alpha === 'number' && isFinite(stain.alpha) ? Math.max(0, Math.min(1, stain.alpha)) : 0.85;
-      const stainAlpha = baseAlpha * thin * 0.7;
+      const stainAlpha = baseAlpha * thin;
       if (stainAlpha <= 0.01) continue;
 
       ctx.save();
