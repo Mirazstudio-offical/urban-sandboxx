@@ -30,27 +30,26 @@ export function getOrganicBiomeNoise(x: number, y: number): number {
   return (n1 + n2 + n3) / 1.77; // Approx -1.0 to +1.0
 }
 
-// Smooth 2D isotropic patch variation for soil humus, clover cushions, and moss (strictly Nyquist-safe for 64x64 chunk sampling)
+// Smooth, low-frequency 2D patch variation for soil & turf (restful on the eyes at high driving speeds)
 export function getSoilMicroNoise(x: number, y: number): number {
-  const m1 = Math.sin(x * 0.0042 + 0.7) * Math.cos(y * 0.0038 - 0.3);
-  const m2 = Math.cos(x * 0.0085 - 1.1) * Math.sin(y * 0.0079 + 0.9) * 0.55;
-  const m3 = Math.sin(x * 0.014 + 2.1) * Math.cos(y * 0.015 - 1.4) * 0.30;
-  return (m1 + m2 + m3) / 1.85;
+  const m1 = Math.sin(x * 0.0018 + 0.7) * Math.cos(y * 0.0016 - 0.3);
+  const m2 = Math.cos(x * 0.0036 - 1.1) * Math.sin(y * 0.0034 + 0.9) * 0.45;
+  return (m1 + m2) / 1.45;
 }
 
-// Color palette constants for seamless blending
-const COLOR_DEEP_TAIGA = { r: 18, g: 68, b: 35 };      // #124423 - Deep pine & spruce moss base
-const COLOR_PINE_RESERVE = { r: 16, g: 60, b: 32 };    // #103c20 - Ancient pine heartwood floor
-const COLOR_MIXED_WOODLAND = { r: 24, g: 84, b: 42 };  // #18542a - Mixed birch/pine forest
-const COLOR_FOREST_STEPPE = { r: 36, g: 112, b: 48 };  // #247030 - Forest edge & birch groves
-const COLOR_PASTORAL_MEADOW = { r: 42, g: 126, b: 54 }; // #2a7e36 - Lush countryside grass
-const COLOR_MEADOW_STEPPE = { r: 68, g: 128, b: 52 };  // #448034 - Transitional meadow-steppe
-const COLOR_DRY_STEPPE = { r: 116, g: 142, b: 64 };    // #748e40 - Olive fescue & feather grass
-const COLOR_ARID_TRANSITION = { r: 128, g: 132, b: 78 };// #80844e - Semi-arid steppe scrub & wormwood
-const COLOR_CLAY_ESCARPMENT = { r: 122, g: 98, b: 76 }; // #7a624c - Weathered sedimentary clay & stone
-const COLOR_SALT_BASIN = { r: 173, g: 185, b: 154 };   // #adb99a - Saline clay & mineral silt
-const COLOR_URBAN_GROUND = { r: 34, g: 112, b: 48 };    // #227030 - Urban park & greenbelt turf base
-const COLOR_INDUSTRIAL = { r: 34, g: 41, b: 52 };       // #222934 - Heavy industrial concrete
+// Calm, natural, desaturated matte color palette (prevents retinal fatigue during fast camera scrolling)
+const COLOR_DEEP_TAIGA = { r: 24, g: 58, b: 36 };       // Deep restful pine & moss floor
+const COLOR_PINE_RESERVE = { r: 22, g: 54, b: 34 };     // Ancient pine forest floor
+const COLOR_MIXED_WOODLAND = { r: 30, g: 70, b: 42 };   // Mixed birch/pine woodland
+const COLOR_FOREST_STEPPE = { r: 38, g: 84, b: 48 };    // Soft forest-steppe edge
+const COLOR_PASTORAL_MEADOW = { r: 44, g: 94, b: 52 };  // Calm matte countryside meadow green
+const COLOR_MEADOW_STEPPE = { r: 58, g: 96, b: 52 };    // Muted meadow-steppe transition
+const COLOR_DRY_STEPPE = { r: 88, g: 104, b: 58 };      // Warm muted olive fescue steppe
+const COLOR_ARID_TRANSITION = { r: 104, g: 108, b: 68 };// Soft semi-arid steppe
+const COLOR_CLAY_ESCARPMENT = { r: 108, g: 88, b: 70 }; // Weathered sedimentary clay
+const COLOR_SALT_BASIN = { r: 156, g: 166, b: 142 };    // Saline mineral silt
+const COLOR_URBAN_GROUND = { r: 38, g: 86, b: 48 };     // Calm urban park & greenbelt turf
+const COLOR_INDUSTRIAL = { r: 34, g: 41, b: 52 };       // Heavy industrial concrete
 
 /**
  * Calculates continuous ecological moisture, biome weights, blended ground color,
@@ -227,13 +226,13 @@ export function getBiomeSampleAt(x: number, y: number): BiomeSample {
     b = b * (1 - industrialWeight) + COLOR_INDUSTRIAL.b * industrialWeight;
   }
 
-  // Multi-scale isotropic botanical & soil mottling in natural ground (clover patches, humus hollows, sun-warmed turf)
+  // Gentle macro-scale tonal warmth in natural ground (zero high-frequency blotchiness)
   if (natureFactor > 0.25) {
     const micro = getSoilMicroNoise(x, y);
-    const patchBlob = Math.sin(x * 0.0028 + 0.5) * Math.cos(y * 0.0026 - 0.4);
-    const microFactor = 1.0 + micro * 0.07;
-    const redShift = patchBlob * 3.5 * (meadowWeight + steppeWeight);
-    const greenShift = -patchBlob * 4.5 * (forestWeight + woodlandWeight + meadowWeight);
+    const patchBlob = Math.sin(x * 0.0014 + 0.5) * Math.cos(y * 0.0013 - 0.4);
+    const microFactor = 1.0 + micro * 0.028;
+    const redShift = patchBlob * 1.8 * (meadowWeight + steppeWeight);
+    const greenShift = -patchBlob * 2.2 * (forestWeight + woodlandWeight + meadowWeight);
     r = Math.min(255, Math.max(0, Math.round(r * microFactor + redShift)));
     g = Math.min(255, Math.max(0, Math.round(g * microFactor + greenShift)));
     b = Math.min(255, Math.max(0, Math.round(b * microFactor)));
