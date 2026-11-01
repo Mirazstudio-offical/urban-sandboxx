@@ -6,79 +6,122 @@ import { RailwaySignalingSystem } from './railwaySignalingSystem';
  * Every prop has detailed textures, physical materials, and realistic damage states.
  */
 
+// --- STATIONARY FOUNDATIONS (ОСТАЮТСЯ НА МЕСТЕ ПРИ СДВИГЕ ИЛИ ОТРЫВЕ ПРОПА) ---
+export function renderStreetPropFoundation(ctx: CanvasRenderingContext2D, prop: StreetProp) {
+  switch (prop.type as string) {
+    case 'bench': {
+      // Concrete foundation pad always stays embedded in the ground at (originX, originY)
+      ctx.fillStyle = prop.isBroken ? '#475569' : '#64748b';
+      ctx.fillRect(-13, -8, 26, 16);
+      ctx.strokeStyle = prop.isBroken ? '#334155' : '#94a3b8';
+      ctx.lineWidth = 1.1;
+      ctx.strokeRect(-13, -8, 26, 16);
+
+      // Expansion joint cut in concrete pad
+      ctx.strokeStyle = '#475569';
+      ctx.lineWidth = 0.8;
+      ctx.beginPath();
+      ctx.moveTo(0, -8);
+      ctx.lineTo(0, 8);
+      ctx.stroke();
+
+      if (prop.isBroken) {
+        // Sheared anchor bolt studs left in concrete slab
+        ctx.fillStyle = '#cbd5e1';
+        ctx.fillRect(-9.5, -5, 1.3, 1.3);
+        ctx.fillRect(-9.5, 4, 1.3, 1.3);
+        ctx.fillRect(8.2, -5, 1.3, 1.3);
+        ctx.fillRect(8.2, 4, 1.3, 1.3);
+      }
+      break;
+    }
+    case 'dumpster': {
+      // Concrete Waste Platform (Площадка ТБО) stays fixed in the ground while wheeled container rolls
+      ctx.fillStyle = '#475569';
+      ctx.fillRect(-18, -13, 36, 26);
+      ctx.strokeStyle = '#94a3b8';
+      ctx.lineWidth = 1.5;
+      ctx.strokeRect(-18, -13, 36, 26);
+
+      // Yellow safety boundary curb border
+      ctx.strokeStyle = '#eab308';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(-17, -12, 34, 24);
+      break;
+    }
+    case 'trash_can': {
+      // Bolted ground base flange stays fixed in pavement
+      ctx.fillStyle = '#1e293b';
+      ctx.beginPath();
+      ctx.arc(0, 0, 5.8, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#94a3b8';
+      ctx.fillRect(-3.5, -0.6, 1.2, 1.2);
+      ctx.fillRect(2.3, -0.6, 1.2, 1.2);
+      ctx.fillRect(-0.6, 2.8, 1.2, 1.2);
+      break;
+    }
+    case 'mailbox': {
+      // Bolted steel base flange pedestal stays in pavement
+      ctx.fillStyle = '#1e293b';
+      ctx.fillRect(-3.2, -1.5, 6.4, 3);
+      ctx.fillStyle = '#94a3b8';
+      ctx.fillRect(-2.4, -0.6, 1.0, 1.0);
+      ctx.fillRect(1.4, -0.6, 1.0, 1.0);
+      break;
+    }
+    case 'hydrant': {
+      // 8-bolt octagonal underground water main flange stays at (originX, originY)
+      ctx.fillStyle = '#7f1d1d';
+      ctx.beginPath();
+      ctx.arc(0, 0, 5.6, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.fillStyle = '#cbd5e1';
+      for (let b = 0; b < 8; b++) {
+        const bAngle = (b * Math.PI) / 4;
+        ctx.fillRect(Math.cos(bAngle) * 4.4 - 0.5, Math.sin(bAngle) * 4.4 - 0.5, 1, 1);
+      }
+
+      if (prop.isBroken) {
+        // Exposed open water main pipe bore
+        ctx.fillStyle = '#0f172a';
+        ctx.beginPath();
+        ctx.arc(0, 0, 3.2, 0, Math.PI * 2);
+        ctx.fill();
+
+        // High-pressure foaming water geyser plume erupts from the underground pipe while timer is active
+        if ((prop.waterFountainTimer ?? 0) > 0) {
+          const now = performance.now() * 0.005;
+          const pulse1 = Math.sin(now * 3) * 2;
+          const pulse2 = Math.cos(now * 4) * 2;
+
+          ctx.fillStyle = 'rgba(186, 230, 253, 0.45)';
+          ctx.beginPath();
+          ctx.arc(0, 0, 12 + pulse1, 0, Math.PI * 2);
+          ctx.fill();
+
+          ctx.fillStyle = 'rgba(56, 189, 248, 0.75)';
+          ctx.beginPath();
+          ctx.arc(0, 0, 7 + pulse2, 0, Math.PI * 2);
+          ctx.fill();
+
+          ctx.fillStyle = '#ffffff';
+          ctx.beginPath();
+          ctx.arc(0, 0, 4 + pulse1 * 0.5, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+      break;
+    }
+  }
+}
+
 // --- 1. BENCH (СКАМЕЙКА) ---
 export function renderPropBench(ctx: CanvasRenderingContext2D, prop: StreetProp) {
-  if (prop.isBroken) {
-    // Fractured concrete foundation slab
-    ctx.fillStyle = '#475569';
-    ctx.fillRect(-13, -8, 26, 16);
-    ctx.strokeStyle = '#334155';
-    ctx.lineWidth = 1;
-    ctx.strokeRect(-13, -8, 26, 16);
+  const dmg = prop.isBroken ? 1.0 : (prop.damageLevel ?? 0);
 
-    // Concrete crack line
-    ctx.strokeStyle = '#1e293b';
-    ctx.lineWidth = 1.2;
-    ctx.beginPath();
-    ctx.moveTo(-13, 2);
-    ctx.lineTo(-4, 0);
-    ctx.lineTo(2, 6);
-    ctx.lineTo(13, 3);
-    ctx.stroke();
-
-    // Snapped cast-iron armrest frame
-    ctx.fillStyle = '#0f172a';
-    ctx.fillRect(-10, -6, 3, 5);
-    ctx.fillRect(7, -3, 3, 8);
-
-    // Splintered wood planks lying askew
-    ctx.save();
-    ctx.rotate(0.25);
-    ctx.fillStyle = '#78350f';
-    ctx.fillRect(-9, -5, 11, 2.2);
-    ctx.fillStyle = '#92400e';
-    ctx.fillRect(-8, -2, 18, 2.2);
-    ctx.restore();
-
-    ctx.save();
-    ctx.rotate(-0.32);
-    ctx.fillStyle = '#b45309';
-    ctx.fillRect(-7, 2, 16, 2.2);
-    ctx.fillStyle = '#d97706';
-    ctx.fillRect(-10, 5, 12, 1.8);
-    ctx.restore();
-
-    // Scattered wooden splinters
-    ctx.fillStyle = '#b45309';
-    ctx.fillRect(-11, -7, 3, 1);
-    ctx.fillRect(8, -5, 2, 1);
-    ctx.fillRect(10, 6, 3, 1.2);
-    ctx.fillRect(-6, 7, 2, 1);
-
-    // Sheared carriage bolt heads
-    ctx.fillStyle = '#cbd5e1';
-    ctx.fillRect(-8, -7, 1.2, 1.2);
-    ctx.fillRect(9, 4, 1.2, 1.2);
-    return;
-  }
-
-  // Intact State:
-  // Concrete foundation pad (guarantees bench always rests on paved slab)
-  ctx.fillStyle = '#64748b';
-  ctx.fillRect(-13, -8, 26, 16);
-  ctx.strokeStyle = '#94a3b8';
-  ctx.lineWidth = 1.2;
-  ctx.strokeRect(-13, -8, 26, 16);
-
-  // Expansion joint cut in concrete pad
-  ctx.strokeStyle = '#475569';
-  ctx.lineWidth = 0.8;
-  ctx.beginPath();
-  ctx.moveTo(0, -8);
-  ctx.lineTo(0, 8);
-  ctx.stroke();
-
-  // Ambient ground shadow under bench
+  // Ambient ground shadow under bench body
   ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
   ctx.fillRect(-10, -4, 20, 9);
 
@@ -96,104 +139,41 @@ export function renderPropBench(ctx: CanvasRenderingContext2D, prop: StreetProp)
   ctx.fillStyle = '#1e293b';
   ctx.fillRect(-1, -5.5, 2, 11);
 
-  // Polished teak hardwood slats with distinct wood tones and grain
+  // Polished teak hardwood slats with progressive distortion when damaged
   const slatColors = ['#78350f', '#92400e', '#b45309', '#d97706'];
   const slatYs = [-5, -2, 1, 4];
   for (let s = 0; s < 4; s++) {
     const sy = slatYs[s];
-    // Main wood slat
+    const skew = dmg > 0.15 ? ((s % 2 === 0 ? 1 : -1) * dmg * 0.14) : 0;
+    ctx.save();
+    if (skew !== 0) ctx.rotate(skew);
+
     ctx.fillStyle = slatColors[s];
     ctx.fillRect(-8, sy, 16, 2.2);
 
-    // Subtle grain highlight line
     ctx.fillStyle = 'rgba(254, 243, 199, 0.2)';
     ctx.fillRect(-7, sy + 0.4, 14, 0.5);
 
-    // Slat edge bevel shadow
     ctx.fillStyle = 'rgba(0, 0, 0, 0.25)';
     ctx.fillRect(-8, sy + 1.8, 16, 0.4);
 
-    // Connecting carriage bolts (left, center, right)
     ctx.fillStyle = '#cbd5e1';
     ctx.fillRect(-8.5, sy + 0.6, 1, 1);
     ctx.fillRect(-0.5, sy + 0.6, 1, 1);
     ctx.fillRect(7.5, sy + 0.6, 1, 1);
+    ctx.restore();
   }
 }
 
-// --- 2. DUMPSTER (МУСОРНЫЙ КОНТЕЙНЕР ТБО 1100L) ---
+// --- 2. DUMPSTER (МУСОРНЫЙ КОНТЕЙНЕР ТБО 1100L НА КОЛЁСАХ) ---
 export function renderPropDumpster(ctx: CanvasRenderingContext2D, prop: StreetProp) {
-  if (prop.isBroken) {
-    // Crushed concrete pad
-    ctx.fillStyle = '#334155';
-    ctx.fillRect(-18, -13, 36, 26);
+  const dmg = prop.isBroken ? 0.85 : (prop.damageLevel ?? 0);
+  const dentX = Math.max(-10, Math.min(10, prop.dentLocalX ?? 0));
+  const dentY = Math.max(-7, Math.min(7, prop.dentLocalY ?? 0));
 
-    // Overturned, dented green container body
-    ctx.save();
-    ctx.rotate(0.3);
-    ctx.fillStyle = '#15803d';
-    ctx.fillRect(-13, -9, 26, 18);
-    ctx.strokeStyle = '#166534';
-    ctx.lineWidth = 1.2;
-    ctx.strokeRect(-13, -9, 26, 18);
-
-    // Dent crease lines
-    ctx.strokeStyle = '#0f172a';
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.moveTo(-8, -4);
-    ctx.lineTo(2, 6);
-    ctx.moveTo(5, -6);
-    ctx.lineTo(10, 2);
-    ctx.stroke();
-
-    // Detached plastic lid lying askew
-    ctx.fillStyle = '#1e293b';
-    ctx.fillRect(-10, 10, 20, 7);
-    ctx.restore();
-
-    // Spilled garbage bags and debris
-    ctx.fillStyle = '#0f172a'; // Black garbage bag
-    ctx.beginPath();
-    ctx.arc(-8, 12, 4.5, 0, Math.PI * 2);
-    ctx.fill();
-
-    ctx.fillStyle = '#1e293b'; // Second trash bag
-    ctx.beginPath();
-    ctx.arc(6, 11, 4, 0, Math.PI * 2);
-    ctx.fill();
-
-    // Cardboard boxes
-    ctx.fillStyle = '#92400e';
-    ctx.fillRect(-14, 8, 5, 4);
-    ctx.fillRect(10, 9, 6, 5);
-
-    // Crushed beverage cans
-    ctx.fillStyle = '#ef4444';
-    ctx.fillRect(-2, 13, 2.5, 1.5);
-    ctx.fillStyle = '#38bdf8';
-    ctx.fillRect(3, 14, 2, 1.5);
-    ctx.fillStyle = '#cbd5e1';
-    ctx.fillRect(1, 10, 1.8, 1.8);
-    return;
-  }
-
-  // Intact State:
-  // Concrete Waste Platform (Площадка ТБО)
-  ctx.fillStyle = '#475569';
-  ctx.fillRect(-18, -13, 36, 26);
-  ctx.strokeStyle = '#94a3b8';
-  ctx.lineWidth = 1.5;
-  ctx.strokeRect(-18, -13, 36, 26);
-
-  // Yellow safety boundary curb border
-  ctx.strokeStyle = '#eab308';
-  ctx.lineWidth = 1;
-  ctx.strokeRect(-17, -12, 34, 24);
-
-  // Container drop shadow
-  ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
-  ctx.fillRect(-15, -11, 30, 22);
+  // Contact shadow under the wheeled bin
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
+  ctx.fillRect(-13.5, -8.5, 28, 19);
 
   // 4 Caster Wheels with rubber tires & brake locks
   const wheelCoords = [
@@ -232,12 +212,15 @@ export function renderPropDumpster(ctx: CanvasRenderingContext2D, prop: StreetPr
   ctx.fillRect(-14.8, -1, 1.2, 2);
   ctx.fillRect(13.6, -1, 1.2, 2);
 
-  // Split Molded Plastic Lids (Top and Bottom hinged)
+  // Split Molded Plastic Lids (Top and Bottom hinged, skewing slightly when dented)
+  ctx.save();
+  if (dmg > 0.2) {
+    ctx.rotate(dmg * 0.08);
+  }
   ctx.fillStyle = '#1e293b';
   ctx.fillRect(-12, -8, 24, 7.5);
   ctx.fillRect(-12, 0.5, 24, 7.5);
 
-  // Plastic lid structural ribs
   ctx.strokeStyle = '#334155';
   ctx.lineWidth = 0.8;
   ctx.beginPath();
@@ -245,10 +228,23 @@ export function renderPropDumpster(ctx: CanvasRenderingContext2D, prop: StreetPr
   ctx.moveTo(-10, 4.2); ctx.lineTo(10, 4.2);
   ctx.stroke();
 
-  // Molded Lid Ergonomic Handles
   ctx.fillStyle = '#64748b';
   ctx.fillRect(-4, -6.5, 8, 1.5);
   ctx.fillRect(-4, 2, 8, 1.5);
+  ctx.restore();
+
+  // Localized impact dent & paint scrape when hit by a vehicle
+  if (dmg > 0.08) {
+    ctx.strokeStyle = '#0f172a';
+    ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    ctx.moveTo(dentX - 4 * dmg, dentY - 3 * dmg);
+    ctx.lineTo(dentX + 3 * dmg, dentY + 4 * dmg);
+    ctx.stroke();
+
+    ctx.fillStyle = 'rgba(203, 213, 225, 0.45)';
+    ctx.fillRect(dentX - 2, dentY - 1, 4 * dmg, 1.5);
+  }
 
   // Yellow Warning Hazard Triangle Decal
   ctx.fillStyle = '#f59e0b';
@@ -263,38 +259,10 @@ export function renderPropDumpster(ctx: CanvasRenderingContext2D, prop: StreetPr
   ctx.fillRect(-0.4, 1.2, 0.8, 0.6);
 }
 
-// --- 3. FLOWERBED (ГОРОДСКАЯ КЛУМБА) ---
+// --- 3. FLOWERBED (ГОРОДСКАЯ БЕТОННАЯ КЛУМБА) ---
 export function renderPropFlowerbed(ctx: CanvasRenderingContext2D, prop: StreetProp) {
-  if (prop.isBroken) {
-    // Fractured curb stones
-    ctx.fillStyle = '#64748b';
-    ctx.fillRect(-12, -8, 24, 16);
+  const dmg = prop.isBroken ? 1.0 : (prop.damageLevel ?? 0);
 
-    // Spilled fertile dark loam onto asphalt
-    ctx.fillStyle = '#271c19';
-    ctx.beginPath();
-    ctx.ellipse(3, 2, 14, 10, 0.2, 0, Math.PI * 2);
-    ctx.fill();
-
-    // Crushed foliage and petals
-    ctx.fillStyle = '#15803d';
-    ctx.beginPath();
-    ctx.arc(-4, 1, 4, 0, Math.PI * 2);
-    ctx.arc(4, 3, 3, 0, Math.PI * 2);
-    ctx.fill();
-
-    // Scattered petals
-    const petalColors = ['#ef4444', '#f59e0b', '#ec4899', '#ffffff'];
-    for (let p = 0; p < 8; p++) {
-      const px = -9 + Math.random() * 18;
-      const py = -6 + Math.random() * 12;
-      ctx.fillStyle = petalColors[p % petalColors.length];
-      ctx.fillRect(px, py, 1.5, 1.5);
-    }
-    return;
-  }
-
-  // Intact State:
   // Shadow
   ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
   ctx.fillRect(-13, -9, 26, 18);
@@ -327,20 +295,20 @@ export function renderPropFlowerbed(ctx: CanvasRenderingContext2D, prop: StreetP
   ctx.fillRect(-2, 3, 2, 2);
 
   // Multi-layered lush green foliage
-  ctx.fillStyle = '#15803d'; // Deep emerald undergrowth
+  ctx.fillStyle = '#15803d';
   ctx.beginPath();
   ctx.arc(-5, -2, 4.5, 0, Math.PI * 2);
   ctx.arc(5, -2, 4.5, 0, Math.PI * 2);
   ctx.arc(0, 2, 5, 0, Math.PI * 2);
   ctx.fill();
 
-  ctx.fillStyle = '#22c55e'; // Bright vibrant canopy
+  ctx.fillStyle = '#22c55e';
   ctx.beginPath();
   ctx.arc(-2, -1, 3.5, 0, Math.PI * 2);
   ctx.arc(3, 1, 3.5, 0, Math.PI * 2);
   ctx.fill();
 
-  // Colorful perennial flower blossoms (Tulips, Marigolds, Petunias, Daisies)
+  // Colorful perennial flower blossoms (deterministic positions — zero frame jitter)
   const blossomColors = ['#ef4444', '#f59e0b', '#ec4899', '#a855f7', '#ffffff', '#e11d48'];
   const blossomOffsets = [
     [-6, -3], [-2, -4], [3, -3], [6, -2],
@@ -350,141 +318,164 @@ export function renderPropFlowerbed(ctx: CanvasRenderingContext2D, prop: StreetP
     const [bx, by] = blossomOffsets[i];
     ctx.fillStyle = blossomColors[i % blossomColors.length];
     ctx.beginPath();
-    ctx.arc(bx, by, 1.8, 0, Math.PI * 2);
+    ctx.arc(bx, by, 1.8 * (1 - dmg * 0.25), 0, Math.PI * 2);
     ctx.fill();
 
-    // Central golden flower stamen dot
     ctx.fillStyle = '#fef08a';
     ctx.beginPath();
     ctx.arc(bx, by, 0.6, 0, Math.PI * 2);
     ctx.fill();
+  }
+
+  // Curb fracture cracks & spilled soil near impact point when damaged
+  if (dmg > 0.1) {
+    const dx = Math.max(-10, Math.min(10, prop.dentLocalX ?? 0));
+    const dy = Math.max(-6, Math.min(6, prop.dentLocalY ?? 5));
+    ctx.fillStyle = '#271c19';
+    ctx.beginPath();
+    ctx.ellipse(dx, dy, 4 + dmg * 4, 2.5 + dmg * 2.5, 0.2, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.strokeStyle = '#334155';
+    ctx.lineWidth = 1.1;
+    ctx.beginPath();
+    ctx.moveTo(dx - 4, dy - 2);
+    ctx.lineTo(dx + 3, dy + 3);
+    ctx.stroke();
   }
 }
 
 // --- 4. BOLLARD (СТОЛБИК ОГРАЖДЕНИЯ) ---
 export function renderPropBollard(ctx: CanvasRenderingContext2D, prop: StreetProp) {
   if (prop.isBroken) {
-    // Sheared base collar
+    // Sheared base collar stays anchored in ground
     ctx.fillStyle = '#0f172a';
     ctx.beginPath();
     ctx.arc(0, 0, 3.5, 0, Math.PI * 2);
     ctx.fill();
 
-    // Fallen scratched post lying on asphalt
+    // Fallen scratched post lying along impact direction
     ctx.save();
-    ctx.rotate(0.65);
+    ctx.rotate(prop.breakAngle ?? prop.tiltAngle ?? 0);
     ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
-    ctx.fillRect(1, 1, 14, 4);
+    ctx.fillRect(1, -1.5, 14, 4);
     ctx.fillStyle = '#334155';
-    ctx.fillRect(0, 0, 14, 4);
-    ctx.fillStyle = '#f8fafc'; // White reflective ring
-    ctx.fillRect(4, 0, 2.5, 4);
-    ctx.fillStyle = '#eab308'; // Amber ring
-    ctx.fillRect(8, 0, 2.5, 4);
+    ctx.fillRect(0, -2, 14, 4);
+    ctx.fillStyle = '#f8fafc';
+    ctx.fillRect(4, -2, 2.5, 4);
+    ctx.fillStyle = '#eab308';
+    ctx.fillRect(8, -2, 2.5, 4);
     ctx.restore();
     return;
   }
 
-  // Intact State:
+  const tilt = prop.tiltAmount ?? 0;
+  const tiltDir = prop.tiltAngle ?? 0;
+  const tipX = Math.cos(tiltDir) * tilt * 5.5;
+  const tipY = Math.sin(tiltDir) * tilt * 5.5;
+
   // Drop shadow
   ctx.fillStyle = 'rgba(0, 0, 0, 0.38)';
   ctx.beginPath();
-  ctx.arc(2, 2, 4, 0, Math.PI * 2);
+  ctx.arc(2 + tipX * 0.5, 2 + tipY * 0.5, 4, 0, Math.PI * 2);
   ctx.fill();
 
-  // Heavy stepped base flange
+  // Heavy stepped base flange at (0,0)
   ctx.fillStyle = '#1e293b';
   ctx.beginPath();
   ctx.arc(0, 0, 3.8, 0, Math.PI * 2);
   ctx.fill();
 
-  // Cylindrical main post body (dark graphite cast iron)
+  if (tilt > 0.05) {
+    // Leaning bollard shaft when plastically bent
+    ctx.strokeStyle = '#334155';
+    ctx.lineWidth = 5.2;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.lineTo(tipX, tipY);
+    ctx.stroke();
+  }
+
+  // Cylindrical post top (shifted by tilt)
   ctx.fillStyle = '#334155';
   ctx.beginPath();
-  ctx.arc(0, 0, 2.8, 0, Math.PI * 2);
+  ctx.arc(tipX, tipY, 2.8, 0, Math.PI * 2);
   ctx.fill();
 
-  // 3M Retroreflective white safety band
   ctx.fillStyle = '#f8fafc';
   ctx.beginPath();
-  ctx.arc(0, 0, 2.0, 0, Math.PI * 2);
+  ctx.arc(tipX, tipY, 2.0, 0, Math.PI * 2);
   ctx.fill();
 
-  // High-contrast amber secondary ring
   ctx.fillStyle = '#eab308';
   ctx.beginPath();
-  ctx.arc(0, 0, 1.4, 0, Math.PI * 2);
+  ctx.arc(tipX, tipY, 1.4, 0, Math.PI * 2);
   ctx.fill();
 
-  // Spherical cast iron top finial cap
   ctx.fillStyle = '#0f172a';
   ctx.beginPath();
-  ctx.arc(0, 0, 0.9, 0, Math.PI * 2);
+  ctx.arc(tipX, tipY, 0.9, 0, Math.PI * 2);
   ctx.fill();
 }
 
 // --- 5. TRAFFIC CONE (ДОРОЖНЫЙ КОНУС) ---
 export function renderPropCone(ctx: CanvasRenderingContext2D, prop: StreetProp) {
-  if (prop.isBroken) {
-    // Flattened squashed cone lying on its side
+  const dmg = prop.isBroken ? 1.0 : (prop.damageLevel ?? 0);
+  if (dmg > 0.65) {
+    // Tipped over rubber cone
     ctx.fillStyle = 'rgba(0, 0, 0, 0.28)';
     ctx.beginPath();
-    ctx.ellipse(3, 2, 7, 3, 0.3, 0, Math.PI * 2);
+    ctx.ellipse(2, 1.5, 6.5, 3, 0, 0, Math.PI * 2);
     ctx.fill();
 
-    ctx.save();
-    ctx.rotate(0.45);
-    ctx.fillStyle = '#1e293b'; // Separated rubber base
-    ctx.fillRect(-3, -2, 6, 2.5);
-    ctx.fillStyle = '#ea580c'; // Squashed orange body
+    ctx.fillStyle = '#1e293b';
+    ctx.fillRect(-3.5, -3.5, 3, 7);
+    ctx.fillStyle = '#ea580c';
     ctx.beginPath();
-    ctx.ellipse(4, 0, 6, 2.5, 0, 0, Math.PI * 2);
+    ctx.moveTo(-1, -3);
+    ctx.lineTo(7, -0.8);
+    ctx.lineTo(7, 0.8);
+    ctx.lineTo(-1, 3);
+    ctx.closePath();
     ctx.fill();
-    ctx.fillStyle = '#ffffff'; // Scuffed white stripe
-    ctx.fillRect(2, -1.8, 2.2, 3.6);
-    ctx.restore();
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(1.5, -2.1, 2.2, 4.2);
     return;
   }
 
-  // Intact State:
-  // Shadow
+  // Upright State:
   ctx.fillStyle = 'rgba(0, 0, 0, 0.32)';
   ctx.beginPath();
   ctx.arc(2, 2, 4.5, 0, Math.PI * 2);
   ctx.fill();
 
-  // Heavy square black anti-tip rubber base with corner bevels
   ctx.fillStyle = '#1e293b';
   ctx.fillRect(-4, -4, 8, 8);
   ctx.strokeStyle = '#0f172a';
   ctx.lineWidth = 0.8;
   ctx.strokeRect(-4, -4, 8, 8);
 
-  // Safety orange molded PVC cone body
   ctx.fillStyle = '#ea580c';
   ctx.beginPath();
   ctx.arc(0, 0, 3.2, 0, Math.PI * 2);
   ctx.fill();
 
-  // Outer micro-prismatic white reflective band
   ctx.fillStyle = '#ffffff';
   ctx.beginPath();
   ctx.arc(0, 0, 2.3, 0, Math.PI * 2);
   ctx.fill();
 
-  // Inner orange cone tier
   ctx.fillStyle = '#f97316';
   ctx.beginPath();
   ctx.arc(0, 0, 1.6, 0, Math.PI * 2);
   ctx.fill();
 
-  // Second micro-prismatic white reflective ring
   ctx.fillStyle = '#ffffff';
   ctx.beginPath();
   ctx.arc(0, 0, 1.1, 0, Math.PI * 2);
   ctx.fill();
 
-  // Top molded cable/grip hole
   ctx.fillStyle = '#9a3412';
   ctx.beginPath();
   ctx.arc(0, 0, 0.6, 0, Math.PI * 2);
@@ -494,189 +485,156 @@ export function renderPropCone(ctx: CanvasRenderingContext2D, prop: StreetProp) 
 // --- 6. TRASH CAN (УЛИЧНАЯ УРНА) ---
 export function renderPropTrashCan(ctx: CanvasRenderingContext2D, prop: StreetProp) {
   if (prop.isBroken) {
-    // Toppled cylindrical steel can lying on asphalt
+    // Toppled cylindrical steel can lying at its current position (prop.x, prop.y)
     ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
-    ctx.fillRect(-2, -3, 16, 7);
+    ctx.fillRect(-5, -2.5, 12, 6);
 
-    ctx.save();
-    ctx.rotate(0.35);
     ctx.fillStyle = '#334155';
-    ctx.fillRect(0, -3, 12, 6);
+    ctx.fillRect(-6, -3, 12, 6);
     ctx.strokeStyle = '#94a3b8';
     ctx.lineWidth = 1;
-    ctx.strokeRect(0, -3, 12, 6);
-    ctx.restore();
+    ctx.strokeRect(-6, -3, 12, 6);
 
-    // Spilled litter & cigarette butts
-    ctx.fillStyle = '#cbd5e1'; // Crumpled paper cups
+    // Dark open mouth at end of cylinder
+    ctx.fillStyle = '#0f172a';
     ctx.beginPath();
-    ctx.arc(11, 4, 1.6, 0, Math.PI * 2);
+    ctx.ellipse(6, 0, 1.4, 3, 0, 0, Math.PI * 2);
     ctx.fill();
-
-    ctx.fillStyle = '#ef4444'; // Crushed soda can
-    ctx.fillRect(8, -5, 2.4, 1.4);
-
-    ctx.fillStyle = '#3b82f6'; // Blue can
-    ctx.fillRect(13, 1, 2, 1.4);
-
-    ctx.fillStyle = '#fef08a'; // Cigarette butts
-    ctx.fillRect(6, 6, 1.2, 0.6);
-    ctx.fillRect(10, 7, 1.2, 0.6);
     return;
   }
 
-  // Intact State:
+  const tilt = prop.tiltAmount ?? 0;
+  const tiltDir = prop.tiltAngle ?? 0;
+  const offX = Math.cos(tiltDir) * tilt * 3;
+  const offY = Math.sin(tiltDir) * tilt * 3;
+
   // Directional shadow
   ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
   ctx.beginPath();
-  ctx.arc(2, 3, 6, 0, Math.PI * 2);
+  ctx.arc(2 + offX, 3 + offY, 6, 0, Math.PI * 2);
   ctx.fill();
-
-  // Ground base flange with anchor bolts
-  ctx.fillStyle = '#1e293b';
-  ctx.beginPath();
-  ctx.arc(0, 0, 5.8, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.fillStyle = '#94a3b8';
-  ctx.fillRect(-3.5, -0.6, 1.2, 1.2);
-  ctx.fillRect(2.3, -0.6, 1.2, 1.2);
-  ctx.fillRect(-0.6, 2.8, 1.2, 1.2);
 
   // Outer perforated/ribbed steel cylinder (graphite grey)
   ctx.fillStyle = '#334155';
   ctx.beginPath();
-  ctx.arc(0, 0, 5.2, 0, Math.PI * 2);
+  ctx.arc(offX, offY, 5.2, 0, Math.PI * 2);
   ctx.fill();
 
-  // Brushed stainless steel rim ring
   ctx.strokeStyle = '#cbd5e1';
   ctx.lineWidth = 1.2;
   ctx.stroke();
 
-  // Dark trash aperture opening
   ctx.fillStyle = '#0f172a';
   ctx.beginPath();
-  ctx.arc(0, 0, 3.4, 0, Math.PI * 2);
+  ctx.arc(offX, offY, 3.4, 0, Math.PI * 2);
   ctx.fill();
 
-  // Built-in center stub-out ashtray grid
   ctx.fillStyle = '#64748b';
   ctx.beginPath();
-  ctx.arc(0, 0, 1.8, 0, Math.PI * 2);
+  ctx.arc(offX, offY, 1.8, 0, Math.PI * 2);
   ctx.fill();
   ctx.strokeStyle = '#94a3b8';
   ctx.lineWidth = 0.6;
   ctx.beginPath();
-  ctx.moveTo(-1.4, 0); ctx.lineTo(1.4, 0);
-  ctx.moveTo(0, -1.4); ctx.lineTo(0, 1.4);
+  ctx.moveTo(offX - 1.4, offY); ctx.lineTo(offX + 1.4, offY);
+  ctx.moveTo(offX, offY - 1.4); ctx.lineTo(offX, offY + 1.4);
   ctx.stroke();
 
-  // Green mobius recycling chevron dot
   ctx.fillStyle = '#22c55e';
   ctx.beginPath();
-  ctx.arc(0, 0, 0.6, 0, Math.PI * 2);
+  ctx.arc(offX, offY, 0.6, 0, Math.PI * 2);
   ctx.fill();
 }
 
 // --- 7. FIRE HYDRANT (ПОЖАРНЫЙ ГИДРАНТ) ---
 export function renderPropHydrant(ctx: CanvasRenderingContext2D, prop: StreetProp) {
   if (prop.isBroken) {
-    // Sheared base flange with severed bolts
-    ctx.fillStyle = '#7f1d1d';
+    // Sheared cast-iron red hydrant barrel lying on its side at (prop.x, prop.y).
+    // (The underground pipe flange and water geyser are rendered at (originX, originY) via renderStreetPropFoundation!)
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.38)';
     ctx.beginPath();
-    ctx.arc(0, 0, 5.5, 0, Math.PI * 2);
+    ctx.ellipse(1, 1.5, 6.5, 4.2, 0, 0, Math.PI * 2);
     ctx.fill();
 
-    // High-pressure foaming water geyser plume (animated water jet)
-    const now = performance.now() * 0.005;
-    const pulse1 = Math.sin(now * 3) * 2;
-    const pulse2 = Math.cos(now * 4) * 2;
-
-    // Outer turbulent spray mist
-    ctx.fillStyle = 'rgba(186, 230, 253, 0.45)';
+    // Cylindrical red cast-iron barrel on its side
+    ctx.fillStyle = '#b91c1c';
     ctx.beginPath();
-    ctx.arc(0, 0, 12 + pulse1, 0, Math.PI * 2);
+    ctx.roundRect(-6, -3.6, 12, 7.2, 3);
+    ctx.fill();
+    ctx.strokeStyle = '#7f1d1d';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
+    // Brass side & steamer nozzles on fallen barrel
+    ctx.fillStyle = '#f59e0b';
+    ctx.fillRect(-1, -5.2, 2.6, 1.8);
+    ctx.fillRect(-1, 3.4, 2.6, 1.8);
+    ctx.beginPath();
+    ctx.arc(1.5, 0, 1.8, 0, Math.PI * 2);
     ctx.fill();
 
-    // Pressurized water geyser core
-    ctx.fillStyle = 'rgba(56, 189, 248, 0.75)';
+    // Domed bonnet & pentagon nut at barrel head
+    ctx.fillStyle = '#ef4444';
     ctx.beginPath();
-    ctx.arc(0, 0, 7 + pulse2, 0, Math.PI * 2);
+    ctx.arc(5, 0, 3.2, -Math.PI / 2, Math.PI / 2);
     ctx.fill();
-
-    // Frothing white foam surge
-    ctx.fillStyle = '#ffffff';
-    ctx.beginPath();
-    ctx.arc(0, 0, 4 + pulse1 * 0.5, 0, Math.PI * 2);
-    ctx.fill();
-
-    // Toppled sheared red hydrant barrel lying nearby
-    ctx.fillStyle = '#991b1b';
-    ctx.beginPath();
-    ctx.ellipse(8, 7, 5, 3.5, 0.6, 0, Math.PI * 2);
-    ctx.fill();
+    ctx.fillStyle = '#fef08a';
+    ctx.fillRect(6.5, -1.2, 1.5, 2.4);
     return;
   }
 
-  // Intact State:
+  const tilt = prop.tiltAmount ?? 0;
+  const tiltDir = prop.tiltAngle ?? 0;
+  const offX = Math.cos(tiltDir) * tilt * 3.5;
+  const offY = Math.sin(tiltDir) * tilt * 3.5;
+
   // Drop shadow
   ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
   ctx.beginPath();
-  ctx.arc(2, 3, 6, 0, Math.PI * 2);
+  ctx.arc(2 + offX, 3 + offY, 6, 0, Math.PI * 2);
   ctx.fill();
-
-  // 8-bolt octagonal base flange
-  ctx.fillStyle = '#991b1b';
-  ctx.beginPath();
-  ctx.arc(0, 0, 5.6, 0, Math.PI * 2);
-  ctx.fill();
-
-  // Zinc anchor bolts on flange
-  ctx.fillStyle = '#cbd5e1';
-  for (let b = 0; b < 8; b++) {
-    const bAngle = (b * Math.PI) / 4;
-    ctx.fillRect(Math.cos(bAngle) * 4.4 - 0.5, Math.sin(bAngle) * 4.4 - 0.5, 1, 1);
-  }
 
   // Fire-engine red cylindrical barrel body
   ctx.fillStyle = '#dc2626';
   ctx.beginPath();
-  ctx.arc(0, 0, 4.4, 0, Math.PI * 2);
+  ctx.arc(offX, offY, 4.4, 0, Math.PI * 2);
   ctx.fill();
 
   // Dual 2.5" side nozzle outlets with knurled brass caps & chains
   ctx.fillStyle = '#f59e0b';
-  ctx.fillRect(-6.5, -1.5, 2.2, 3);
-  ctx.fillRect(4.3, -1.5, 2.2, 3);
+  ctx.fillRect(offX - 6.5, offY - 1.5, 2.2, 3);
+  ctx.fillRect(offX + 4.3, offY - 1.5, 2.2, 3);
   ctx.fillStyle = '#78350f';
-  ctx.fillRect(-7.2, -0.8, 1, 1.6);
-  ctx.fillRect(6.2, -0.8, 1, 1.6);
+  ctx.fillRect(offX - 7.2, offY - 0.8, 1, 1.6);
+  ctx.fillRect(offX + 6.2, offY - 0.8, 1, 1.6);
 
   // Brass chain links to side caps
   ctx.strokeStyle = '#d97706';
   ctx.lineWidth = 0.6;
   ctx.beginPath();
-  ctx.moveTo(-5, 1.5); ctx.quadraticCurveTo(-3, 3, 0, 3); ctx.quadraticCurveTo(3, 3, 5, 1.5);
+  ctx.moveTo(offX - 5, offY + 1.5);
+  ctx.quadraticCurveTo(offX - 3, offY + 3, offX, offY + 3);
+  ctx.quadraticCurveTo(offX + 3, offY + 3, offX + 5, offY + 1.5);
   ctx.stroke();
 
   // Large front 4.5" steamer port cap
   ctx.fillStyle = '#f59e0b';
-  ctx.fillRect(-1.4, 4.2, 2.8, 1.8);
+  ctx.fillRect(offX - 1.4, offY + 4.2, 2.8, 1.8);
 
   // Domed red bonnet cap
   ctx.fillStyle = '#ef4444';
   ctx.beginPath();
-  ctx.arc(0, 0, 3.2, 0, Math.PI * 2);
+  ctx.arc(offX, offY, 3.2, 0, Math.PI * 2);
   ctx.fill();
 
   // Operating brass pentagon nut with silver washer
   ctx.fillStyle = '#fef08a';
   ctx.beginPath();
-  ctx.arc(0, 0, 1.6, 0, Math.PI * 2);
+  ctx.arc(offX, offY, 1.6, 0, Math.PI * 2);
   ctx.fill();
   ctx.fillStyle = '#78350f';
   ctx.beginPath();
-  ctx.arc(0, 0, 0.7, 0, Math.PI * 2);
+  ctx.arc(offX, offY, 0.7, 0, Math.PI * 2);
   ctx.fill();
 }
 
@@ -974,45 +932,9 @@ export function renderPropGarageDoor(ctx: CanvasRenderingContext2D, _prop: Stree
 
 // --- 13. BUS STOP (АВТОБУСНАЯ ОСТАНОВКА) ---
 export function renderPropBusStop(ctx: CanvasRenderingContext2D, prop: StreetProp) {
-  if (prop.isBroken) {
-    // Fractured concrete platform slab
-    ctx.fillStyle = '#475569';
-    ctx.fillRect(-22, -14, 44, 28);
+  const dmg = prop.isBroken ? 1.0 : (prop.damageLevel ?? 0);
+  const shattered = prop.glassShattered || dmg > 0.25;
 
-    // Shattered tempered safety glass field (granular glass pebble matrix)
-    ctx.fillStyle = '#e0f2fe';
-    for (let g = 0; g < 24; g++) {
-      const gx = -16 + (g % 8) * 4 + (Math.random() - 0.5) * 2;
-      const gy = -8 + Math.floor(g / 8) * 5 + (Math.random() - 0.5) * 2;
-      ctx.fillRect(gx, gy, 1.5, 1.5);
-    }
-
-    // Buckled steel columns bent sideways
-    ctx.strokeStyle = '#1e293b';
-    ctx.lineWidth = 2.4;
-    ctx.beginPath();
-    ctx.moveTo(-16, 2); ctx.lineTo(-10, 8);
-    ctx.moveTo(13, 2); ctx.lineTo(18, 6);
-    ctx.stroke();
-
-    // Sagging, twisted canopy roof
-    ctx.save();
-    ctx.rotate(-0.15);
-    ctx.fillStyle = '#0f172a';
-    ctx.fillRect(-18, -12, 34, 14);
-    ctx.restore();
-
-    // Tilted bus route sign pole
-    ctx.save();
-    ctx.translate(20, -4);
-    ctx.rotate(0.35);
-    ctx.fillStyle = '#1d4ed8';
-    ctx.fillRect(-4, -4, 8, 8);
-    ctx.restore();
-    return;
-  }
-
-  // Intact State:
   // Concrete platform slab with yellow tactile braille blister warning pavers along curb
   ctx.fillStyle = '#64748b';
   ctx.fillRect(-22, -14, 44, 28);
@@ -1028,42 +950,50 @@ export function renderPropBusStop(ctx: CanvasRenderingContext2D, prop: StreetPro
     ctx.fillRect(d, 10.5, 1.5, 1.5);
   }
 
-  // Shelter ground shadow
-  ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
-  ctx.fillRect(-18, -10, 36, 24);
+  if (shattered) {
+    // Deterministic tempered safety glass pebble field on platform (no Math.random flicker)
+    ctx.fillStyle = 'rgba(224, 242, 254, 0.78)';
+    for (let g = 0; g < 24; g++) {
+      const gx = -16 + (g % 8) * 4.2 + ((g * 7) % 3) - 1;
+      const gy = -9 + Math.floor(g / 8) * 4.5 + ((g * 5) % 3) - 1;
+      ctx.fillRect(gx, gy, 1.4, 1.4);
+    }
+  } else {
+    // 3-Sided tempered safety glass walls with silk-screened safety dots & reflection
+    ctx.fillStyle = 'rgba(186, 230, 253, 0.45)';
+    ctx.fillRect(-16, -10, 32, 6); // Back glass wall
+    ctx.fillRect(-16, -10, 3, 14); // Left side glass wall
+    ctx.fillRect(13, -10, 3, 14);  // Right side glass wall
 
-  // 3-Sided tempered safety glass walls with silk-screened safety dots & reflection
-  ctx.fillStyle = 'rgba(186, 230, 253, 0.45)';
-  ctx.fillRect(-16, -10, 32, 6); // Back glass wall
-  ctx.fillRect(-16, -10, 3, 14); // Left side glass wall
-  ctx.fillRect(13, -10, 3, 14);  // Right side glass wall
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(-14, -10); ctx.lineTo(-6, -4);
+    ctx.moveTo(2, -10); ctx.lineTo(10, -4);
+    ctx.stroke();
+  }
 
-  // Diagonal reflection gloss streak across glass
-  ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
-  ctx.lineWidth = 1;
-  ctx.beginPath();
-  ctx.moveTo(-14, -10); ctx.lineTo(-6, -4);
-  ctx.moveTo(2, -10); ctx.lineTo(10, -4);
-  ctx.stroke();
-
-  // Dark anthracite tubular steel frame pillars
+  // Dark anthracite tubular steel frame pillars (remain standing, bending slightly under heavy impact)
   ctx.fillStyle = '#1e293b';
-  ctx.fillRect(-17, -10, 3, 16);
-  ctx.fillRect(14, -10, 3, 16);
+  ctx.fillRect(-17 + dmg * 1.5, -10, 3, 16);
+  ctx.fillRect(14 - dmg * 1.5, -10, 3, 16);
   ctx.fillRect(-17, 4, 3, 3);
   ctx.fillRect(14, 4, 3, 3);
 
   // Varnished wooden passenger waiting bench inside shelter
+  ctx.save();
+  if (dmg > 0.3) ctx.rotate(dmg * 0.08);
   ctx.fillStyle = '#78350f';
   ctx.fillRect(-11, -3, 22, 3.2);
   ctx.fillStyle = '#92400e';
   ctx.fillRect(-11, -3, 22, 1.0);
-  ctx.fillStyle = '#1e293b'; // Cast iron bench supports
+  ctx.fillStyle = '#1e293b';
   ctx.fillRect(-8, -0.5, 2, 2);
   ctx.fillRect(6, -0.5, 2, 2);
+  ctx.restore();
 
   // Illuminated advertising / transit route poster lightbox
-  ctx.fillStyle = '#ffffff';
+  ctx.fillStyle = shattered ? '#94a3b8' : '#ffffff';
   ctx.fillRect(10, -9, 3.5, 8);
   ctx.strokeStyle = '#0284c7';
   ctx.lineWidth = 0.6;
@@ -1072,80 +1002,70 @@ export function renderPropBusStop(ctx: CanvasRenderingContext2D, prop: StreetPro
   ctx.fillRect(10.5, -8, 2.5, 1.2);
   ctx.fillRect(10.5, -5, 2.5, 3.0);
 
-  // Cantilevered curved metal canopy roof with aluminum drip fascia
+  // Cantilevered curved metal canopy roof with aluminum drip fascia (skews slightly when heavily dented)
+  ctx.save();
+  if (dmg > 0.15) {
+    ctx.rotate(-dmg * 0.11);
+  }
   ctx.fillStyle = '#0f172a';
   ctx.fillRect(-18, -12, 36, 16);
   ctx.strokeStyle = '#475569';
   ctx.lineWidth = 1.2;
   ctx.strokeRect(-18, -12, 36, 16);
 
-  // Aluminum drip edge highlight
+  if (dmg > 0.2) {
+    // Roof dent crease near impact point
+    const dx = Math.max(-15, Math.min(15, prop.dentLocalX ?? 0));
+    ctx.strokeStyle = '#334155';
+    ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    ctx.moveTo(dx - 5, -6);
+    ctx.lineTo(dx + 4, 2);
+    ctx.stroke();
+  }
+
   ctx.strokeStyle = '#94a3b8';
   ctx.lineWidth = 0.8;
   ctx.beginPath();
   ctx.moveTo(-18, 4); ctx.lineTo(18, 4);
   ctx.stroke();
+  ctx.restore();
 
   // Integrated Bus Stop Totem Signpost next to shelter
+  ctx.save();
+  ctx.translate(20, -4);
+  if (dmg > 0.2) ctx.rotate(dmg * 0.28);
   ctx.fillStyle = '#334155';
-  ctx.fillRect(20, -8, 2, 18);
-  // Blue transit emblem plate
+  ctx.fillRect(0, -4, 2, 18);
   ctx.fillStyle = '#1d4ed8';
-  ctx.fillRect(17, -14, 8, 8);
+  ctx.fillRect(-3, -10, 8, 8);
   ctx.strokeStyle = '#ffffff';
   ctx.lineWidth = 0.8;
-  ctx.strokeRect(17, -14, 8, 8);
-  // Bus silhouette icon
+  ctx.strokeRect(-3, -10, 8, 8);
   ctx.fillStyle = '#ffffff';
   ctx.font = 'bold 5.5px sans-serif';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.fillText('i', 21, -10);
+  ctx.fillText('i', 1, -6);
+  ctx.restore();
 }
 
 // --- 14. KIOSK (ТОРГОВЫЙ КИОСК / «ПРЕССА») ---
 export function renderPropKiosk(ctx: CanvasRenderingContext2D, prop: StreetProp) {
-  if (prop.isBroken) {
-    // Fractured foundation
-    ctx.fillStyle = '#475569';
-    ctx.fillRect(-16, -16, 32, 32);
+  const dmg = prop.isBroken ? 1.0 : (prop.damageLevel ?? 0);
+  const shattered = prop.glassShattered || dmg > 0.25;
 
-    // Crumpled composite panel facade
-    ctx.save();
-    ctx.rotate(0.2);
-    ctx.fillStyle = '#1e3a8a';
-    ctx.fillRect(-12, -12, 24, 24);
-    ctx.strokeStyle = '#1e40af';
-    ctx.lineWidth = 1.2;
-    ctx.strokeRect(-12, -12, 24, 24);
-
-    // Shattered vitrine glass & loose newspapers
-    ctx.fillStyle = '#93c5fd';
-    ctx.fillRect(-7, -3, 14, 6);
-    ctx.restore();
-
-    // Scattered newspapers & drink cans
-    ctx.fillStyle = '#f8fafc';
-    ctx.fillRect(-14, 10, 6, 4);
-    ctx.fillRect(8, 12, 5, 4);
-    ctx.fillStyle = '#ef4444';
-    ctx.fillRect(-2, 13, 2, 1.5);
-    ctx.fillStyle = '#3b82f6';
-    ctx.fillRect(4, 14, 2, 1.5);
-    return;
-  }
-
-  // Intact State:
-  // Concrete Paved Apron
+  // Concrete Paved Apron (always fixed in ground)
   ctx.fillStyle = '#64748b';
   ctx.fillRect(-16, -16, 32, 32);
   ctx.strokeStyle = '#94a3b8';
   ctx.lineWidth = 1.2;
   ctx.strokeRect(-16, -16, 32, 32);
 
-  // Directional shadow
-  ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
-  ctx.fillRect(-13, -13, 26, 26);
+  ctx.save();
+  if (dmg > 0.2) {
+    ctx.rotate(dmg * 0.06);
+  }
 
   // Modern composite architectural panel facade (deep municipal blue)
   ctx.fillStyle = '#1e3a8a';
@@ -1155,11 +1075,21 @@ export function renderPropKiosk(ctx: CanvasRenderingContext2D, prop: StreetProp)
   ctx.strokeRect(-12, -12, 24, 24);
 
   // Glazed display vitrine with illuminated magazine & drink shelves
-  ctx.fillStyle = '#93c5fd';
+  ctx.fillStyle = shattered ? '#1e293b' : '#93c5fd';
   ctx.fillRect(-8, -5, 16, 8);
   ctx.strokeStyle = '#60a5fa';
   ctx.lineWidth = 0.6;
   ctx.strokeRect(-8, -5, 16, 8);
+
+  if (shattered) {
+    // Jagged glass fracture lines in vitrine window
+    ctx.strokeStyle = '#e0f2fe';
+    ctx.lineWidth = 0.8;
+    ctx.beginPath();
+    ctx.moveTo(-7, -4); ctx.lineTo(-2, 2); ctx.lineTo(5, -3);
+    ctx.moveTo(-4, 2); ctx.lineTo(3, 1);
+    ctx.stroke();
+  }
 
   // Colorful magazine racks inside vitrine
   ctx.fillStyle = '#ef4444';
@@ -1189,6 +1119,18 @@ export function renderPropKiosk(ctx: CanvasRenderingContext2D, prop: StreetProp)
   ctx.fillStyle = '#1e293b';
   ctx.fillRect(-9, -6.5, 18, 1.5);
 
+  // Localized panel dent crease when hit
+  if (dmg > 0.1) {
+    const dx = Math.max(-10, Math.min(10, prop.dentLocalX ?? 0));
+    const dy = Math.max(-10, Math.min(10, prop.dentLocalY ?? 8));
+    ctx.strokeStyle = '#0f172a';
+    ctx.lineWidth = 1.4;
+    ctx.beginPath();
+    ctx.moveTo(dx - 4 * dmg, dy - 2 * dmg);
+    ctx.lineTo(dx + 4 * dmg, dy + 2 * dmg);
+    ctx.stroke();
+  }
+
   // Illuminated marquee fascia lightbox («ПРЕССА» / «КИОСК»)
   ctx.fillStyle = '#0f172a';
   ctx.fillRect(-14, -14, 28, 4);
@@ -1197,41 +1139,17 @@ export function renderPropKiosk(ctx: CanvasRenderingContext2D, prop: StreetProp)
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.fillText('ПРЕССА', 0, -12);
+
+  ctx.restore();
 }
 
 // --- 15. MAILBOX (ПОЧТОВЫЙ ЯЩИК) ---
 export function renderPropMailbox(ctx: CanvasRenderingContext2D, prop: StreetProp) {
-  if (prop.isBroken) {
-    // Dented mailbox knocked off its pedestal
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
-    ctx.fillRect(-6, -5, 12, 10);
+  const dmg = prop.isBroken ? 1.0 : (prop.damageLevel ?? 0);
 
-    ctx.save();
-    ctx.rotate(0.4);
-    ctx.fillStyle = '#1d4ed8';
-    ctx.fillRect(-5, -5, 10, 10);
-    ctx.strokeStyle = '#1e40af';
-    ctx.lineWidth = 1;
-    ctx.strokeRect(-5, -5, 10, 10);
-    ctx.restore();
-
-    // Spilled mail envelopes on pavement
-    ctx.fillStyle = '#f8fafc';
-    ctx.fillRect(-7, 6, 4, 2.5);
-    ctx.fillRect(3, 7, 4.5, 2.5);
-    ctx.fillStyle = '#fef3c7'; // Manila envelope
-    ctx.fillRect(-2, 8, 4, 3);
-    return;
-  }
-
-  // Intact State:
   // Drop shadow
   ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
   ctx.fillRect(-6, -5, 12, 10);
-
-  // Bolted base flange pedestal
-  ctx.fillStyle = '#1e293b';
-  ctx.fillRect(-3, -1, 6, 2);
 
   // Royal blue steel mailbox casing
   ctx.fillStyle = '#1d4ed8';
@@ -1267,6 +1185,15 @@ export function renderPropMailbox(ctx: CanvasRenderingContext2D, prop: StreetPro
   ctx.beginPath();
   ctx.arc(0, 3.2, 0.5, 0, Math.PI * 2);
   ctx.fill();
+
+  if (dmg > 0.25) {
+    ctx.strokeStyle = '#0f172a';
+    ctx.lineWidth = 1.0;
+    ctx.beginPath();
+    ctx.moveTo(-4, -2);
+    ctx.lineTo(3, 3);
+    ctx.stroke();
+  }
 }
 
 // --- 16. BROKEN LAMP / HIGHWAY LAMP / CONCRETE LAMP (НА ЗЕМЛЕ) ---
@@ -1287,9 +1214,9 @@ export function renderPropBrokenLamp(ctx: CanvasRenderingContext2D, prop: Street
     ctx.fillRect(-2.5, 1.3, 1.2, 1.2);
     ctx.fillRect(1.3, 1.3, 1.2, 1.2);
 
-    // Buckled galvanized steel pole lying on asphalt ("легко мнется")
+    // Buckled galvanized steel pole lying on asphalt
     ctx.save();
-    ctx.rotate(prop.breakAngle || prop.angle || 0.6);
+    ctx.rotate(prop.breakAngle ?? prop.tiltAngle ?? prop.angle ?? 0);
 
     // Ground shadow of buckled pole
     ctx.fillStyle = 'rgba(0, 0, 0, 0.28)';
@@ -1392,7 +1319,7 @@ export function renderPropBrokenLamp(ctx: CanvasRenderingContext2D, prop: Street
     ctx.fillRect(-1.5, -1.5, 3, 3);
 
     ctx.save();
-    ctx.rotate(prop.breakAngle || prop.angle || 0.8);
+    ctx.rotate(prop.breakAngle ?? prop.tiltAngle ?? prop.angle ?? 0);
 
     // Drop shadow of fallen iron post
     ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
@@ -1692,13 +1619,7 @@ export function renderPropShippingContainer(ctx: CanvasRenderingContext2D, prop:
     return;
   }
 
-  // 1. Soft Ambient Ground Drop Shadow with diffuse penumbra
-  ctx.fillStyle = 'rgba(0, 0, 0, 0.42)';
-  ctx.beginPath();
-  ctx.roundRect(-hl + 3, -hw + 4, length + 4, width + 4, 4);
-  ctx.fill();
-
-  // 2. Heavy Steel Bottom Frame & Corrugated Outer Shell
+  // 1. Heavy Steel Bottom Frame & Corrugated Outer Shell (3D shadow cast in unified shadow lightmap)
   ctx.fillStyle = style.base;
   ctx.fillRect(-hl, -hw, length, width);
   ctx.strokeStyle = style.rib;
@@ -2037,13 +1958,7 @@ export function renderPropIndustrialTank(ctx: CanvasRenderingContext2D, prop: St
     return;
   }
 
-  // 1. Soft Ambient Ground Drop Shadow
-  ctx.fillStyle = 'rgba(0, 0, 0, 0.42)';
-  ctx.beginPath();
-  ctx.roundRect(hx + 3, hy + 4, tw + 4, th + 4, 9);
-  ctx.fill();
-
-  // 2. Concrete Support Saddles (2 массивных ложемента)
+  // 1. Concrete Support Saddles (2 массивных ложемента — 3D shadow cast in unified shadow lightmap)
   ctx.fillStyle = '#475569';
   const saddleW = 7;
   const saddleH = th + 4;
@@ -2148,13 +2063,7 @@ export function renderPropIndustrialTank(ctx: CanvasRenderingContext2D, prop: St
 export function renderPropSiloTank(ctx: CanvasRenderingContext2D, _prop: StreetProp) {
   const radius = 16;
 
-  // 1. Soft Ground Drop Shadow
-  ctx.fillStyle = 'rgba(0, 0, 0, 0.42)';
-  ctx.beginPath();
-  ctx.arc(4, 4, radius + 2.5, 0, Math.PI * 2);
-  ctx.fill();
-
-  // 2. Heavy Octagonal Concrete Foundation Pad
+  // 1. Heavy Octagonal Concrete Foundation Pad (3D shadow cast in unified shadow lightmap)
   ctx.fillStyle = '#475569';
   ctx.beginPath();
   ctx.arc(0, 0, radius + 2.5, 0, Math.PI * 2);
@@ -2451,15 +2360,7 @@ export function renderPropConcreteFencePO2(ctx: CanvasRenderingContext2D, prop: 
   }
 
   // --- INTACT HIGH-FIDELITY 2.5D ПО-2 CONCRETE FENCE ---
-  // 1. Soft Ambient Ground Drop Shadow
-  ctx.fillStyle = 'rgba(0, 0, 0, 0.42)';
-  ctx.beginPath();
-  if (ctx.roundRect) {
-    ctx.roundRect(hx + 2, 5, fw + 1, 9, 3);
-  } else {
-    ctx.rect(hx + 2, 5, fw + 1, 9);
-  }
-  ctx.fill();
+  // (3D extruded fence shadow is rendered in unified shadow lightmap)
 
   // 2. Heavy Foundation Shoes ("Стаканы" ФО-2) at both joins
   renderConcreteShoe(ctx, hx - 1, -5.5, 7.5, 17, hash);
@@ -2707,11 +2608,7 @@ export function renderPropSecurityBarrier(ctx: CanvasRenderingContext2D, prop: S
     return;
   }
 
-  // 1. Ground Drop Shadow
-  ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
-  ctx.fillRect(-3, 3.5, 28, 4.5);
-
-  // 2. Control Pedestal (Тумба автоматического шлагбаума)
+  // 1. Control Pedestal (Тумба автоматического шлагбаума — 3D shadow cast in unified shadow lightmap)
   ctx.fillStyle = '#f59e0b';
   ctx.beginPath();
   ctx.roundRect(-4.5, -4.5, 9, 9, 2);
@@ -2785,11 +2682,7 @@ export function renderPropSecurityBarrier(ctx: CanvasRenderingContext2D, prop: S
 }
 
 export function renderPropIndustrialFloodlight(ctx: CanvasRenderingContext2D, _prop: StreetProp) {
-  // 1. Soft Ground Drop Shadow
-  ctx.fillStyle = 'rgba(0, 0, 0, 0.42)';
-  ctx.fillRect(-7, 3.5, 14, 7);
-
-  // 2. Concrete 4-Bolt Foundation Pad
+  // 1. Concrete 4-Bolt Foundation Pad (3D mast shadow cast in unified shadow lightmap)
   ctx.fillStyle = '#475569';
   ctx.fillRect(-6, -6, 12, 12);
   ctx.strokeStyle = '#1e293b';
@@ -3638,15 +3531,7 @@ export function renderPropConcreteBarrier(ctx: CanvasRenderingContext2D, prop: S
   }
 
   // Intact State:
-  // 1. Directional Ambient Ground Drop Shadow
-  ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
-  ctx.beginPath();
-  if (ctx.roundRect) {
-    ctx.roundRect(hx + 2, hy + 3.5, bw + 2, bh + 3, 2);
-  } else {
-    ctx.rect(hx + 2, hy + 3.5, bw + 2, bh + 3);
-  }
-  ctx.fill();
+  // (3D extruded barrier shadow is rendered in unified shadow lightmap)
 
   // 2. Heavy Flared Concrete Base Foot (Широкая подошва блока)
   ctx.fillStyle = '#475569';
@@ -3740,32 +3625,24 @@ export function renderPropPowerPoleBase(ctx: CanvasRenderingContext2D, prop: Str
   ctx.stroke();
 }
 
-// --- TALL PROPS (INTACT LAMPS) ---
+// --- TALL PROPS (INTACT & BENT LAMPS) ---
 export function renderTallStreetProp(ctx: CanvasRenderingContext2D, prop: StreetProp) {
+  const tilt = prop.tiltAmount ?? 0;
+  const tiltDir = prop.tiltAngle ?? 0;
+  // Convertworld-space tiltAngle into local offset if needed; renderTallStreetProp is called with ctx at (prop.x, prop.y) and unrotated
+  const leanX = Math.cos(tiltDir) * tilt * 10;
+  const leanY = Math.sin(tiltDir) * tilt * 10;
+
   if (prop.type === 'lamp_highway') {
     // 1. АВТОМОБИЛЬНЫЙ ФОНАРЬ (С ВЫНОСОМ ЛАМПЫ НАД ПРОЕЗЖЕЙ ЧАСТЬЮ)
-    const angle = prop.angle || 0;
+    const angle = (prop.angle || 0) + tilt * 0.18;
     const cosA = Math.cos(angle);
     const sinA = Math.sin(angle);
-    const reach = 22; // Extended cantilever arm reach out over roadway lane
-    const armTipX = cosA * reach;
-    const armTipY = sinA * reach;
+    const reach = 22;
+    const armTipX = leanX + cosA * reach;
+    const armTipY = leanY + sinA * reach;
 
-    // Ground shadow of tall pole and cantilever arm
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
-    ctx.beginPath();
-    ctx.ellipse(3, 4, 5, 4, 0, 0, Math.PI * 2);
-    ctx.fill();
-
-    ctx.strokeStyle = 'rgba(0, 0, 0, 0.22)';
-    ctx.lineWidth = 2.4;
-    ctx.lineCap = 'round';
-    ctx.beginPath();
-    ctx.moveTo(3, 4);
-    ctx.lineTo(armTipX + 3, armTipY + 4);
-    ctx.stroke();
-
-    // Heavy steel base plate with 4 galvanized anchor bolts
+    // Heavy steel base plate with 4 galvanized anchor bolts at ground (0,0)
     ctx.fillStyle = '#1e293b';
     ctx.beginPath();
     ctx.arc(0, 0, 4.6, 0, Math.PI * 2);
@@ -3784,10 +3661,21 @@ export function renderTallStreetProp(ctx: CanvasRenderingContext2D, prop: Street
     ctx.arc(0, 0, 3.2, 0, Math.PI * 2);
     ctx.fill();
 
-    // Vertical mast stem
+    // If bent by vehicle impact, draw the leaning vertical mast stem from (0,0) to (leanX, leanY)
+    if (tilt > 0.04) {
+      ctx.strokeStyle = '#64748b';
+      ctx.lineWidth = 4.2;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.lineTo(leanX, leanY);
+      ctx.stroke();
+    }
+
+    // Vertical mast stem top
     ctx.fillStyle = '#64748b';
     ctx.beginPath();
-    ctx.arc(0, 0, 2.4, 0, Math.PI * 2);
+    ctx.arc(leanX, leanY, 2.4, 0, Math.PI * 2);
     ctx.fill();
 
     // Cantilever arched mast arm ("вынос консоли над дорогой")
@@ -3795,7 +3683,7 @@ export function renderTallStreetProp(ctx: CanvasRenderingContext2D, prop: Street
     ctx.lineWidth = 2.6;
     ctx.lineCap = 'round';
     ctx.beginPath();
-    ctx.moveTo(0, 0);
+    ctx.moveTo(leanX, leanY);
     ctx.lineTo(armTipX, armTipY);
     ctx.stroke();
 
@@ -3803,16 +3691,16 @@ export function renderTallStreetProp(ctx: CanvasRenderingContext2D, prop: Street
     ctx.strokeStyle = '#94a3b8';
     ctx.lineWidth = 1.2;
     ctx.beginPath();
-    ctx.moveTo(-sinA * 0.6, cosA * 0.6);
+    ctx.moveTo(leanX - sinA * 0.6, leanY + cosA * 0.6);
     ctx.lineTo(armTipX - sinA * 0.6, armTipY + cosA * 0.6);
     ctx.stroke();
 
     // Strengthening gusset / triangular bracket at base of cantilever arm
     ctx.fillStyle = '#334155';
     ctx.beginPath();
-    ctx.moveTo(0, 0);
-    ctx.lineTo(cosA * 5, sinA * 5);
-    ctx.lineTo(cosA * 2 - sinA * 2, sinA * 2 + cosA * 2);
+    ctx.moveTo(leanX, leanY);
+    ctx.lineTo(leanX + cosA * 5, leanY + sinA * 5);
+    ctx.lineTo(leanX + cosA * 2 - sinA * 2, leanY + sinA * 2 + cosA * 2);
     ctx.closePath();
     ctx.fill();
 
@@ -3843,16 +3731,18 @@ export function renderTallStreetProp(ctx: CanvasRenderingContext2D, prop: Street
     ctx.fillStyle = '#38bdf8';
     ctx.fillRect(-1, -1, 1.2, 1.2);
 
-    // Downward-facing LED luminescent emitter lens
-    ctx.fillStyle = '#fef08a';
+    // Downward-facing LED luminescent emitter lens (dark if glass shattered)
+    ctx.fillStyle = prop.glassShattered ? '#334155' : '#fef08a';
     ctx.beginPath();
     ctx.ellipse(3, 0, 3, 1.8, 0, 0, Math.PI * 2);
     ctx.fill();
 
-    ctx.fillStyle = '#ffffff';
-    ctx.beginPath();
-    ctx.ellipse(3, 0, 1.8, 1.0, 0, 0, Math.PI * 2);
-    ctx.fill();
+    if (!prop.glassShattered) {
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.ellipse(3, 0, 1.8, 1.0, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
 
     ctx.restore();
 
@@ -3863,11 +3753,7 @@ export function renderTallStreetProp(ctx: CanvasRenderingContext2D, prop: Street
     const tx = Math.cos(perpAngle);
     const ty = Math.sin(perpAngle);
 
-    // Heavy ground shadow for rectangular concrete foundation
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.38)';
-    ctx.fillRect(-1, 2, 9, 9);
-
-    // Stepped reinforced concrete foundation footing pad
+    // Stepped reinforced concrete foundation footing pad (3D pole shadow cast in unified shadow lightmap)
     ctx.fillStyle = '#57534e';
     ctx.fillRect(-4.5, -4.5, 9, 9);
     ctx.strokeStyle = '#44403c';
@@ -3950,14 +3836,8 @@ export function renderTallStreetProp(ctx: CanvasRenderingContext2D, prop: Street
     ctx.restore();
 
   } else if (prop.type === 'lamp') {
-    // 3. СТАНДАРТНЫЙ ВЕЛИКОЛЕПНЫЙ ПАРКОВЫЙ ФОНАРЬ (VICTORIAN ORNATE LANTERN)
-    // Soft radial ground shadow
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
-    ctx.beginPath();
-    ctx.arc(3, 3, 5.5, 0, Math.PI * 2);
-    ctx.fill();
-
-    // Fluted stepped octagonal cast iron base with 8 relief facets
+    // 3. СТАНДАРТНЫЙ ПАРКОВЫЙ ФОНАРЬ (VICTORIAN ORNATE LANTERN)
+    // Fluted stepped octagonal cast iron base at ground (0,0)
     ctx.fillStyle = '#1e293b';
     ctx.beginPath();
     ctx.arc(0, 0, 4.8, 0, Math.PI * 2);
@@ -3976,35 +3856,53 @@ export function renderTallStreetProp(ctx: CanvasRenderingContext2D, prop: Street
     ctx.arc(0, 0, 3.4, 0, Math.PI * 2);
     ctx.fill();
 
-    // Symmetrical cast-iron curved filigree scrollwork brackets
+    // If bent by vehicle impact, draw the leaning cast-iron column from (0,0) to (leanX, leanY)
+    if (tilt > 0.04) {
+      ctx.strokeStyle = '#1e293b';
+      ctx.lineWidth = 3.6;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.lineTo(leanX, leanY);
+      ctx.stroke();
+    }
+
+    // Symmetrical cast-iron curved filigree scrollwork brackets at top
     ctx.strokeStyle = '#0f172a';
     ctx.lineWidth = 1.0;
     ctx.beginPath();
-    ctx.arc(0, 0, 4.0, 0, Math.PI * 2);
+    ctx.arc(leanX, leanY, 4.0, 0, Math.PI * 2);
     ctx.stroke();
 
     // Faceted glass lantern carriage with bronze ribs
     ctx.fillStyle = '#475569';
     ctx.beginPath();
-    ctx.arc(0, 0, 2.5, 0, Math.PI * 2);
+    ctx.arc(leanX, leanY, 2.5, 0, Math.PI * 2);
     ctx.fill();
 
-    // Warm luminous core with golden filament bloom
-    ctx.fillStyle = '#f59e0b';
-    ctx.beginPath();
-    ctx.arc(0, 0, 2.0, 0, Math.PI * 2);
-    ctx.fill();
+    if (!prop.glassShattered) {
+      // Warm luminous core with golden filament bloom
+      ctx.fillStyle = '#f59e0b';
+      ctx.beginPath();
+      ctx.arc(leanX, leanY, 2.0, 0, Math.PI * 2);
+      ctx.fill();
 
-    ctx.fillStyle = '#fef08a';
-    ctx.beginPath();
-    ctx.arc(0, 0, 1.2, 0, Math.PI * 2);
-    ctx.fill();
+      ctx.fillStyle = '#fef08a';
+      ctx.beginPath();
+      ctx.arc(leanX, leanY, 1.2, 0, Math.PI * 2);
+      ctx.fill();
 
-    // Bright incandescent white filament spark
-    ctx.fillStyle = '#ffffff';
-    ctx.beginPath();
-    ctx.arc(0, 0, 0.6, 0, Math.PI * 2);
-    ctx.fill();
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.arc(leanX, leanY, 0.6, 0, Math.PI * 2);
+      ctx.fill();
+    } else {
+      // Shattered dark lantern head
+      ctx.fillStyle = '#0f172a';
+      ctx.beginPath();
+      ctx.arc(leanX, leanY, 1.6, 0, Math.PI * 2);
+      ctx.fill();
+    }
   } else if (prop.type === 'power_pole') {
     // RURAL WOODEN TELEGRAPH / POWER TRANSMISSION POLE
     const angle = prop.angle || 0;
@@ -4015,20 +3913,7 @@ export function renderTallStreetProp(ctx: CanvasRenderingContext2D, prop: Street
     const perpX = -sinA;
     const perpY = cosA;
 
-    // Ground shadow of pole and crossarm
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
-    ctx.beginPath();
-    ctx.ellipse(4, 5, 6, 4.5, 0, 0, Math.PI * 2);
-    ctx.fill();
-
-    ctx.strokeStyle = 'rgba(0, 0, 0, 0.25)';
-    ctx.lineWidth = 2.5;
-    ctx.beginPath();
-    ctx.moveTo(4 - perpX * 14, 5 - perpY * 14);
-    ctx.lineTo(4 + perpX * 14, 5 + perpY * 14);
-    ctx.stroke();
-
-    // Wooden crossarm beam (траверса)
+    // Wooden crossarm beam (траверса — 3D pole & crossarm shadow cast in unified shadow lightmap)
     ctx.strokeStyle = '#3e2723';
     ctx.lineWidth = 3.2;
     ctx.lineCap = 'square';

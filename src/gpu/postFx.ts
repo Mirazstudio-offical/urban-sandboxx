@@ -15,6 +15,8 @@
  * untouched 2D canvas, so nothing here is ever required for the game to run.
  */
 
+import { getCurrentSunShadowState } from '../shadowSystem';
+
 export interface PostFxSettings {
   bloom: number;      // 0..100
   grading: number;    // 0..100 colour grading + tone curve strength
@@ -162,10 +164,10 @@ vec3 shoulder(vec3 x) {
   vec3 t = max(x - 0.8, 0.0);
   return min(x, vec3(0.8)) + 0.2 * (1.0 - exp(-t / 0.2));
 }
-// Gentle filmic S-curve that keeps mid-grey where it is (unlike ACES, which lifts SDR mid-tones)
+// Gentle natural rolloff that preserves true-to-life mid-tones and shadow detail without artificial contrast
 vec3 sCurve(vec3 x) {
   x = clamp(x, 0.0, 1.0);
-  return mix(x, x * x * (3.0 - 2.0 * x), 0.38);
+  return mix(x, x * x * (3.0 - 2.0 * x), 0.10);
 }
 
 float hash(vec2 p) {
@@ -555,31 +557,31 @@ export class GpuPostFx {
     const night = 1 - day;
 
     const shadow: [number, number, number] = [
-      -0.01 * night + 0.006 * golden + 0.01 * dusk,
-      -0.002 * night - 0.002 * golden,
-      0.026 * night - 0.008 * golden + 0.02 * dusk,
+      -0.005 * night + 0.003 * golden + 0.005 * dusk,
+      -0.001 * night - 0.001 * golden,
+      0.012 * night - 0.004 * golden + 0.01 * dusk,
     ];
     const high: [number, number, number] = [
-      0.045 * golden + 0.012 * day - 0.01 * night,
-      0.02 * golden + 0.006 * day,
-      -0.03 * golden - 0.004 * day + 0.012 * night,
+      0.022 * golden + 0.006 * day - 0.005 * night,
+      0.01 * golden + 0.003 * day,
+      -0.015 * golden - 0.002 * day + 0.006 * night,
     ];
-    let exposure = lerp(1.0, 1.0, day) + 0.02 * golden;
-    let contrast = lerp(1.08, 1.06, day);
-    let sat = lerp(0.94, 1.1, day) + 0.08 * golden;
+    let exposure = 1.0 + 0.01 * golden;
+    let contrast = 1.0;
+    let sat = lerp(0.97, 1.02, day) + 0.03 * golden;
     const haze: [number, number, number, number] = [lerp(0.08, 0.72, day), lerp(0.1, 0.76, day), lerp(0.16, 0.8, day), 0];
-    let bloomBoost = lerp(1.25, 0.8, day);
+    let bloomBoost = lerp(1.15, 0.8, day);
     let wet = 0;
     let fogGlow = 0;
 
     switch (weather) {
-      case 'overcast': sat *= 0.86; contrast *= 0.97; haze[3] = 0.04; fogGlow = 0.1; break;
-      case 'drizzle': sat *= 0.88; haze[3] = 0.05; bloomBoost *= 1.1; wet = 0.55; fogGlow = 0.3; break;
-      case 'rain': sat *= 0.82; exposure *= 0.96; haze[3] = 0.07; bloomBoost *= 1.2; wet = 0.9; fogGlow = 0.45; break;
-      case 'storm': sat *= 0.74; exposure *= 0.9; contrast *= 1.05; haze[3] = 0.1; bloomBoost *= 1.3; wet = 1; fogGlow = 0.55; break;
-      case 'fog': sat *= 0.72; contrast *= 0.9; haze[3] = 0.2; bloomBoost *= 1.25; fogGlow = 1; break;
-      case 'snow': sat *= 0.82; exposure *= 1.03; haze[3] = 0.07; wet = 0.15; fogGlow = 0.35; break;
-      case 'blizzard': sat *= 0.68; exposure *= 1.02; haze[3] = 0.16; fogGlow = 0.7; break;
+      case 'overcast': sat *= 0.90; contrast *= 0.98; haze[3] = 0.03; fogGlow = 0.1; break;
+      case 'drizzle': sat *= 0.92; haze[3] = 0.04; bloomBoost *= 1.08; wet = 0.55; fogGlow = 0.3; break;
+      case 'rain': sat *= 0.88; exposure *= 0.98; haze[3] = 0.06; bloomBoost *= 1.15; wet = 0.9; fogGlow = 0.45; break;
+      case 'storm': sat *= 0.82; exposure *= 0.94; contrast *= 1.0; haze[3] = 0.08; bloomBoost *= 1.2; wet = 1; fogGlow = 0.55; break;
+      case 'fog': sat *= 0.78; contrast *= 0.94; haze[3] = 0.18; bloomBoost *= 1.18; fogGlow = 1; break;
+      case 'snow': sat *= 0.88; exposure *= 1.02; haze[3] = 0.06; wet = 0.15; fogGlow = 0.35; break;
+      case 'blizzard': sat *= 0.76; exposure *= 1.01; haze[3] = 0.14; fogGlow = 0.7; break;
       default: break;
     }
     return { exposure, contrast, sat, shadow, high, haze, bloomBoost, day, wet, fogGlow };
@@ -721,13 +723,9 @@ export class GpuPostFx {
     gl.uniform1f(c.u.uTime, frame.timeSec);
 
     // light comes from the opposite side of the game's shadow direction, rotated into screen space
-    const dayLen = Math.max(1, sunset - sunrise);
-    const dayFrac = clamp01((frame.hour - sunrise) / dayLen);
-    let wx = Math.cos(Math.PI * dayFrac);
-    let wy = 0.35;
-    const wl = Math.hypot(wx, wy) || 1;
-    wx /= wl;
-    wy /= wl;
+    const sunState = getCurrentSunShadowState();
+    const wx = sunState.sunDirX;
+    const wy = sunState.sunDirY;
     const a = -frame.cameraAngle - Math.PI / 2;
     const sx = wx * Math.cos(a) - wy * Math.sin(a);
     const sy = wx * Math.sin(a) + wy * Math.cos(a);

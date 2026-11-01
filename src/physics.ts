@@ -1530,135 +1530,512 @@ export function checkVehicleVehicleCollision(carA: Vehicle, carB: Vehicle): Vehi
 }
 
 // --- STREET PROP HITBOX & COLLISION SYSTEM ---
+export type PropAnchorType =
+  | 'foundation_fixed'  // Cast concrete/granite/masonry structure permanently fixed to ground
+  | 'ground_anchored'   // Bolted or embedded into ground; bends first, shears at high energy
+  | 'movable_rigid'     // Free-standing or wheeled heavy object; slides/rolls with friction
+  | 'granular_mound'    // Bulk pile (sand, dirt, hay, scrap, wood); decelerates vehicle and slumps
+  | 'flush';            // Flush with road surface (manhole, drain grate, path tile)
+
+export type PropPostBreakMode =
+  | 'remain_solid'      // Never disappears or loses collision; deforms in place (kiosk, bus_stop, flowerbed, dumpster, barrier)
+  | 'detach_body'       // Shears off foundation bolts; body becomes movable_rigid while base pad/pipe stays at origin (hydrant, bench, trash_can, mailbox)
+  | 'topple_pole'       // Bends then topples at origin; leaves a wheel-bumping stump & fallen shaft (lamp, traffic_light, bollard)
+  | 'collapse_breach'   // Fence/gate section collapses in place when breached; leaves low rubble bump
+  | 'pedestal_only';    // Boom arm / sign board snaps; pedestal/post base remains solid
+
 export interface PropHitbox {
-  shape: 'circle'| 'box'| 'none';
+  shape: 'circle' | 'box' | 'none';
   radius?: number;
   halfWidth?: number;  // extent along prop.angle (local X)
   halfHeight?: number; // extent perpendicular to prop.angle (local Y)
   isIndestructible?: boolean;
   resistance: number;
   displayNameRu: string;
+  anchorType: PropAnchorType;
+  postBreakMode: PropPostBreakMode;
+  massKg: number;
+  frictionStatic: number;
+  frictionKinetic: number;
+  yieldEnergy: number; // Normal kinetic energy (0.5 * m * vn^2 in kg*(px/s)^2) to begin plastic deformation
+  breakEnergy: number; // Normal kinetic energy to shear anchor / breach structure
+  isWalkableWhenBroken?: boolean;
 }
 
 export function getPropHitbox(prop: StreetProp): PropHitbox {
   switch (prop.type as string) {
     case 'bench':
-      return { shape: 'box', halfWidth: 11, halfHeight: 5, resistance: 0.06, displayNameRu: 'скамейка'};
+      return {
+        shape: 'box', halfWidth: 11, halfHeight: 5, resistance: 0.14, displayNameRu: 'скамейка',
+        anchorType: prop.isBroken ? 'movable_rigid' : 'ground_anchored',
+        postBreakMode: 'detach_body',
+        massKg: 95, frictionStatic: 0.55, frictionKinetic: 0.65,
+        yieldEnergy: 1.6e6, breakEnergy: 5.2e6,
+        isWalkableWhenBroken: false
+      };
     case 'dumpster':
-      return { shape: 'box', halfWidth: 14, halfHeight: 10, resistance: 0.28, displayNameRu: 'мусорный контейнер'};
+      return {
+        shape: 'box', halfWidth: 14, halfHeight: 10, resistance: 0.34, displayNameRu: 'мусорный контейнер',
+        anchorType: 'movable_rigid',
+        postBreakMode: 'remain_solid',
+        massKg: 380, frictionStatic: 0.28, frictionKinetic: 0.42, // Heavy steel bin on caster wheels
+        yieldEnergy: 3.5e6, breakEnergy: 4.5e7,
+        isWalkableWhenBroken: false
+      };
     case 'flowerbed':
-      return { shape: 'box', halfWidth: 12, halfHeight: 8, resistance: 0.12, displayNameRu: 'клумба'};
+      return {
+        shape: 'box', halfWidth: 12, halfHeight: 8, resistance: 0.55, displayNameRu: 'бетонная клумба',
+        anchorType: 'foundation_fixed',
+        postBreakMode: 'remain_solid',
+        massKg: 1400, frictionStatic: 0.95, frictionKinetic: 0.90,
+        yieldEnergy: 3.0e6, breakEnergy: 3.8e7,
+        isWalkableWhenBroken: false
+      };
     case 'bus_stop':
-      return { shape: 'box', halfWidth: 19, halfHeight: 11, resistance: 0.24, displayNameRu: 'автобусная остановка'};
+      return {
+        shape: 'box', halfWidth: 19, halfHeight: 11, resistance: 0.52, displayNameRu: 'автобусная остановка',
+        anchorType: 'foundation_fixed',
+        postBreakMode: 'remain_solid',
+        massKg: 1650, frictionStatic: 0.95, frictionKinetic: 0.90,
+        yieldEnergy: 2.2e6, breakEnergy: 2.8e7,
+        isWalkableWhenBroken: false
+      };
     case 'kiosk':
-      return { shape: 'box', halfWidth: 13, halfHeight: 13, resistance: 0.38, displayNameRu: 'киоск'};
+      return {
+        shape: 'box', halfWidth: 13, halfHeight: 13, resistance: 0.68, displayNameRu: 'киоск',
+        anchorType: 'foundation_fixed',
+        postBreakMode: 'remain_solid',
+        massKg: 2400, frictionStatic: 0.98, frictionKinetic: 0.95,
+        yieldEnergy: 3.8e6, breakEnergy: 4.8e7,
+        isWalkableWhenBroken: false
+      };
     case 'mailbox':
-      return { shape: 'box', halfWidth: 5, halfHeight: 5, resistance: 0.06, displayNameRu: 'почтовый ящик'};
+      return {
+        shape: 'box', halfWidth: 5, halfHeight: 5, resistance: 0.12, displayNameRu: 'почтовый ящик',
+        anchorType: prop.isBroken ? 'movable_rigid' : 'ground_anchored',
+        postBreakMode: 'detach_body',
+        massKg: 55, frictionStatic: 0.50, frictionKinetic: 0.60,
+        yieldEnergy: 1.2e6, breakEnergy: 4.2e6,
+        isWalkableWhenBroken: false
+      };
     case 'playground_swing':
-      return { shape: 'box', halfWidth: 12, halfHeight: 6, resistance: 0.15, displayNameRu: 'детские качели'};
+      return {
+        shape: 'box', halfWidth: 12, halfHeight: 6, resistance: 0.35, displayNameRu: 'детские качели',
+        anchorType: 'foundation_fixed',
+        postBreakMode: 'remain_solid',
+        massKg: 320, frictionStatic: 0.90, frictionKinetic: 0.85,
+        yieldEnergy: 2.8e6, breakEnergy: 1.8e7,
+        isWalkableWhenBroken: false
+      };
     case 'garage_door':
-      return { shape: 'box', halfWidth: 11, halfHeight: 5, resistance: 10.0, isIndestructible: true, displayNameRu: 'гаражные ворота'};
+      return {
+        shape: 'box', halfWidth: 11, halfHeight: 5, resistance: 10.0, isIndestructible: true, displayNameRu: 'гаражные ворота',
+        anchorType: 'foundation_fixed', postBreakMode: 'remain_solid',
+        massKg: 5000, frictionStatic: 1.0, frictionKinetic: 1.0, yieldEnergy: 1e9, breakEnergy: 1e9
+      };
     case 'lamp':
-      return { shape: 'circle', radius: 3.5, resistance: 0.10, displayNameRu: 'парковый фонарь'};
+      return {
+        shape: 'circle', radius: prop.isBroken ? 2.6 : 3.5, resistance: 0.22, displayNameRu: 'парковый фонарь',
+        anchorType: 'ground_anchored',
+        postBreakMode: 'topple_pole',
+        massKg: 140, frictionStatic: 0.85, frictionKinetic: 0.80,
+        yieldEnergy: 1.8e6, breakEnergy: 6.8e6,
+        isWalkableWhenBroken: true
+      };
     case 'lamp_highway':
-      return { shape: 'circle', radius: 3.8, resistance: 0.04, displayNameRu: 'автодорожный фонарь'};
+      return {
+        shape: 'circle', radius: prop.isBroken ? 2.8 : 3.8, resistance: 0.28, displayNameRu: 'автодорожный фонарь',
+        anchorType: 'ground_anchored',
+        postBreakMode: 'topple_pole',
+        massKg: 260, frictionStatic: 0.85, frictionKinetic: 0.80,
+        yieldEnergy: 2.6e6, breakEnergy: 9.8e6,
+        isWalkableWhenBroken: true
+      };
     case 'lamp_concrete':
-      return { shape: 'box', halfWidth: 4.5, halfHeight: 4.5, resistance: 10.0, isIndestructible: true, displayNameRu: 'старый бетонный столб'};
+      return {
+        shape: 'box', halfWidth: 4.5, halfHeight: 4.5, resistance: 10.0, isIndestructible: true, displayNameRu: 'старый бетонный столб',
+        anchorType: 'foundation_fixed', postBreakMode: 'remain_solid',
+        massKg: 8000, frictionStatic: 1.0, frictionKinetic: 1.0, yieldEnergy: 1e9, breakEnergy: 1e9
+      };
     case 'hydrant':
-      return { shape: 'circle', radius: 4.2, resistance: 0.22, displayNameRu: 'пожарный гидрант'};
+      return {
+        shape: 'circle', radius: 4.2, resistance: 0.36, displayNameRu: 'пожарный гидрант',
+        anchorType: prop.isBroken ? 'movable_rigid' : 'ground_anchored',
+        postBreakMode: 'detach_body',
+        massKg: 135, frictionStatic: 0.65, frictionKinetic: 0.72,
+        yieldEnergy: 3.2e6, breakEnergy: 9.2e6,
+        isWalkableWhenBroken: false
+      };
     case 'trash_can':
-      return { shape: 'circle', radius: 4.0, resistance: 0.05, displayNameRu: 'урна'};
+      return {
+        shape: 'circle', radius: 4.0, resistance: 0.10, displayNameRu: 'урна',
+        anchorType: prop.isBroken ? 'movable_rigid' : 'ground_anchored',
+        postBreakMode: 'detach_body',
+        massKg: 45, frictionStatic: 0.45, frictionKinetic: 0.58,
+        yieldEnergy: 0.85e6, breakEnergy: 2.8e6,
+        isWalkableWhenBroken: false
+      };
     case 'bollard':
-      return { shape: 'circle', radius: 2.8, resistance: 0.03, displayNameRu: 'столбик ограждения'};
+      return {
+        shape: 'circle', radius: prop.isBroken ? 2.4 : 2.8, resistance: 0.30, displayNameRu: 'столбик ограждения',
+        anchorType: 'ground_anchored',
+        postBreakMode: 'topple_pole',
+        massKg: 110, frictionStatic: 0.85, frictionKinetic: 0.80,
+        yieldEnergy: 2.8e6, breakEnergy: 8.8e6,
+        isWalkableWhenBroken: true
+      };
     case 'cone':
-      return { shape: 'circle', radius: 3.0, resistance: 0.01, displayNameRu: 'дорожный конус'};
+      return {
+        shape: 'circle', radius: 3.0, resistance: 0.02, displayNameRu: 'дорожный конус',
+        anchorType: 'movable_rigid',
+        postBreakMode: 'remain_solid',
+        massKg: 5, frictionStatic: 0.35, frictionKinetic: 0.55,
+        yieldEnergy: 0.15e6, breakEnergy: 1.5e6,
+        isWalkableWhenBroken: true
+      };
     case 'tire_flowerbed':
-      return { shape: 'circle', radius: 7.5, resistance: 0.04, displayNameRu: 'клумба из покрышки'};
+      return {
+        shape: 'circle', radius: 7.5, resistance: 0.18, displayNameRu: 'клумба из покрышки',
+        anchorType: 'movable_rigid',
+        postBreakMode: 'remain_solid',
+        massKg: 120, frictionStatic: 0.72, frictionKinetic: 0.82,
+        yieldEnergy: 1.5e6, breakEnergy: 9.5e6,
+        isWalkableWhenBroken: false
+      };
     case 'traffic_light':
-      return { shape: 'circle', radius: 3.2, resistance: 0.08, displayNameRu: 'светофор'};
+      return {
+        shape: 'circle', radius: prop.isBroken ? 2.6 : 3.2, resistance: 0.25, displayNameRu: 'светофор',
+        anchorType: 'ground_anchored',
+        postBreakMode: 'topple_pole',
+        massKg: 190, frictionStatic: 0.85, frictionKinetic: 0.80,
+        yieldEnergy: 2.2e6, breakEnergy: 8.2e6,
+        isWalkableWhenBroken: true
+      };
     case 'manhole':
-      return { shape: 'none', resistance: 0, displayNameRu: 'канализационный люк'};
+      return {
+        shape: 'none', resistance: 0, displayNameRu: 'канализационный люк',
+        anchorType: 'flush', postBreakMode: 'remain_solid',
+        massKg: 80, frictionStatic: 1, frictionKinetic: 1, yieldEnergy: 1e9, breakEnergy: 1e9, isWalkableWhenBroken: true
+      };
     case 'drain_grate':
-      return { shape: 'none', resistance: 0, displayNameRu: 'ливневая решётка'};
+      return {
+        shape: 'none', resistance: 0, displayNameRu: 'ливневая решётка',
+        anchorType: 'flush', postBreakMode: 'remain_solid',
+        massKg: 60, frictionStatic: 1, frictionKinetic: 1, yieldEnergy: 1e9, breakEnergy: 1e9, isWalkableWhenBroken: true
+      };
     case 'village_well':
-      return { shape: 'circle', radius: 11, resistance: 10.0, isIndestructible: true, displayNameRu: 'деревенский колодец'};
+      return {
+        shape: 'circle', radius: 11, resistance: 10.0, isIndestructible: true, displayNameRu: 'деревенский колодец',
+        anchorType: 'foundation_fixed', postBreakMode: 'remain_solid',
+        massKg: 9000, frictionStatic: 1, frictionKinetic: 1, yieldEnergy: 1e9, breakEnergy: 1e9
+      };
     case 'village_sign':
-      return { shape: 'box', halfWidth: 10, halfHeight: 3, resistance: 0.15, displayNameRu: 'дорожный указатель'};
+      return {
+        shape: 'box', halfWidth: prop.isBroken ? 3.5 : 10, halfHeight: 3, resistance: 0.18, displayNameRu: 'дорожный указатель',
+        anchorType: 'ground_anchored',
+        postBreakMode: 'pedestal_only',
+        massKg: 85, frictionStatic: 0.85, frictionKinetic: 0.80,
+        yieldEnergy: 1.5e6, breakEnergy: 5.5e6,
+        isWalkableWhenBroken: false
+      };
     case 'haystack':
-      return { shape: 'circle', radius: 14, resistance: 0.05, displayNameRu: 'стог сена'};
+      return {
+        shape: 'circle', radius: 14, resistance: 0.22, displayNameRu: 'стог сена',
+        anchorType: 'granular_mound',
+        postBreakMode: 'remain_solid',
+        massKg: 450, frictionStatic: 0.90, frictionKinetic: 0.85,
+        yieldEnergy: 0.8e6, breakEnergy: 1.6e7,
+        isWalkableWhenBroken: false
+      };
     case 'woodpile':
-      return { shape: 'box', halfWidth: 12, halfHeight: 6, resistance: 0.18, displayNameRu: 'поленница дров'};
+      return {
+        shape: 'box', halfWidth: 12, halfHeight: 6, resistance: 0.38, displayNameRu: 'поленница дров',
+        anchorType: 'granular_mound',
+        postBreakMode: 'remain_solid',
+        massKg: 680, frictionStatic: 0.88, frictionKinetic: 0.82,
+        yieldEnergy: 2.0e6, breakEnergy: 1.8e7,
+        isWalkableWhenBroken: false
+      };
     case 'rustic_car_wreck':
-      return { shape: 'box', halfWidth: 20, halfHeight: 10, resistance: 10.0, isIndestructible: true, displayNameRu: 'ржавый остов машины'};
+      return {
+        shape: 'box', halfWidth: 20, halfHeight: 10, resistance: 10.0, isIndestructible: true, displayNameRu: 'ржавый остов машины',
+        anchorType: 'foundation_fixed', postBreakMode: 'remain_solid',
+        massKg: 1100, frictionStatic: 0.95, frictionKinetic: 0.90, yieldEnergy: 1e9, breakEnergy: 1e9
+      };
     case 'concrete_barrier':
-      return { shape: 'box', halfWidth: 16, halfHeight: 6, resistance: 10.0, isIndestructible: true, displayNameRu: 'бетонный блок'};
+      return {
+        shape: 'box', halfWidth: 16, halfHeight: 6, resistance: 0.85, displayNameRu: 'бетонный блок ФБС',
+        anchorType: 'movable_rigid',
+        postBreakMode: 'remain_solid',
+        massKg: 1850, frictionStatic: 0.78, frictionKinetic: 0.85,
+        yieldEnergy: 8.5e6, breakEnergy: 9.0e7,
+        isWalkableWhenBroken: false
+      };
     case 'concrete_fence_po2':
-      return { shape: 'box', halfWidth: 19, halfHeight: 6, resistance: 10.0, isIndestructible: true, displayNameRu: 'бетонный забор ПО-2'};
+      return {
+        shape: 'box', halfWidth: 19, halfHeight: 6, resistance: 10.0, isIndestructible: true, displayNameRu: 'бетонный забор ПО-2',
+        anchorType: 'foundation_fixed', postBreakMode: 'remain_solid',
+        massKg: 1600, frictionStatic: 1.0, frictionKinetic: 1.0, yieldEnergy: 1e9, breakEnergy: 1e9
+      };
     case 'power_pole':
-      return { shape: 'circle', radius: 3.2, resistance: 10.0, isIndestructible: true, displayNameRu: 'деревянный столб ЛЭП'};
-    case 'shipping_container':
-      return { shape: 'box', halfWidth: 26, halfHeight: 12, resistance: 10.0, isIndestructible: true, displayNameRu: 'грузовой контейнер'};
+      return {
+        shape: 'circle', radius: 3.2, resistance: 10.0, isIndestructible: true, displayNameRu: 'деревянный столб ЛЭП',
+        anchorType: 'foundation_fixed', postBreakMode: 'remain_solid',
+        massKg: 4500, frictionStatic: 1.0, frictionKinetic: 1.0, yieldEnergy: 1e9, breakEnergy: 1e9
+      };
+    case 'shipping_container': {
+      const is20ft = ((prop.variant ?? 0) % 2) === 1;
+      return {
+        shape: 'box', halfWidth: is20ft ? 29 : 57, halfHeight: 12, resistance: 10.0, isIndestructible: true, displayNameRu: 'грузовой контейнер',
+        anchorType: 'foundation_fixed', postBreakMode: 'remain_solid',
+        massKg: is20ft ? 4200 : 7800, frictionStatic: 1.0, frictionKinetic: 1.0, yieldEnergy: 1e9, breakEnergy: 1e9
+      };
+    }
     case 'pallet_stack':
-      return { shape: 'box', halfWidth: 10, halfHeight: 8, resistance: 0.12, displayNameRu: 'стопка деревянных поддонов'};
+      return {
+        shape: 'box', halfWidth: 10, halfHeight: 8, resistance: 0.24, displayNameRu: 'стопка деревянных поддонов',
+        anchorType: 'movable_rigid',
+        postBreakMode: 'remain_solid',
+        massKg: 210, frictionStatic: 0.58, frictionKinetic: 0.68,
+        yieldEnergy: 1.8e6, breakEnergy: 1.2e7,
+        isWalkableWhenBroken: false
+      };
     case 'industrial_tank':
-      return { shape: 'box', halfWidth: 22, halfHeight: 12, resistance: 10.0, isIndestructible: true, displayNameRu: 'резервуар ГСМ'};
+      return {
+        shape: 'box', halfWidth: 22, halfHeight: 12, resistance: 10.0, isIndestructible: true, displayNameRu: 'резервуар ГСМ',
+        anchorType: 'foundation_fixed', postBreakMode: 'remain_solid',
+        massKg: 12000, frictionStatic: 1.0, frictionKinetic: 1.0, yieldEnergy: 1e9, breakEnergy: 1e9
+      };
     case 'silo_tank':
-      return { shape: 'circle', radius: 16, resistance: 10.0, isIndestructible: true, displayNameRu: 'силосная башня'};
+      return {
+        shape: 'circle', radius: 16, resistance: 10.0, isIndestructible: true, displayNameRu: 'силосная башня',
+        anchorType: 'foundation_fixed', postBreakMode: 'remain_solid',
+        massKg: 15000, frictionStatic: 1.0, frictionKinetic: 1.0, yieldEnergy: 1e9, breakEnergy: 1e9
+      };
     case 'cable_spool':
-      return { shape: 'circle', radius: 9, resistance: 0.35, displayNameRu: 'кабельный барабан'};
+      return {
+        shape: 'circle', radius: 9, resistance: 0.42, displayNameRu: 'кабельный барабан',
+        anchorType: 'movable_rigid',
+        postBreakMode: 'remain_solid',
+        massKg: 520, frictionStatic: 0.45, frictionKinetic: 0.55,
+        yieldEnergy: 4.5e6, breakEnergy: 2.8e7,
+        isWalkableWhenBroken: false
+      };
     case 'security_barrier':
-      if (prop.isOpen) return { shape: 'none', resistance: 0, displayNameRu: 'открытый шлагбаум КПП' };
-      return { shape: 'box', halfWidth: 12, halfHeight: 3, resistance: 0.15, displayNameRu: 'шлагбаум КПП' };
+      if (prop.isOpen) {
+        return {
+          shape: 'box', halfWidth: 3.5, halfHeight: 3.5, resistance: 0.35, displayNameRu: 'тумба шлагбаума КПП',
+          anchorType: 'ground_anchored', postBreakMode: 'pedestal_only',
+          massKg: 180, frictionStatic: 0.90, frictionKinetic: 0.85, yieldEnergy: 3.5e6, breakEnergy: 1.5e7,
+          isWalkableWhenBroken: false
+        };
+      }
+      return {
+        shape: 'box', halfWidth: prop.isBroken ? 3.5 : 12, halfHeight: 3, resistance: 0.18, displayNameRu: 'шлагбаум КПП',
+        anchorType: 'ground_anchored',
+        postBreakMode: 'pedestal_only',
+        massKg: 160, frictionStatic: 0.85, frictionKinetic: 0.80,
+        yieldEnergy: 1.2e6, breakEnergy: 3.8e6,
+        isWalkableWhenBroken: false
+      };
     case 'industrial_floodlight':
-      return { shape: 'box', halfWidth: 5, halfHeight: 5, resistance: 10.0, isIndestructible: true, displayNameRu: 'прожекторная мачта' };
+      return {
+        shape: 'box', halfWidth: 5, halfHeight: 5, resistance: 10.0, isIndestructible: true, displayNameRu: 'прожекторная мачта',
+        anchorType: 'foundation_fixed', postBreakMode: 'remain_solid',
+        massKg: 9000, frictionStatic: 1.0, frictionKinetic: 1.0, yieldEnergy: 1e9, breakEnergy: 1e9
+      };
     case 'industrial_tires':
-      return { shape: 'circle', radius: 10, resistance: 0.45, displayNameRu: 'штабель карьерных шин' };
+      return {
+        shape: 'circle', radius: 10, resistance: 0.48, displayNameRu: 'штабель карьерных шин',
+        anchorType: 'movable_rigid',
+        postBreakMode: 'remain_solid',
+        massKg: 620, frictionStatic: 0.78, frictionKinetic: 0.86,
+        yieldEnergy: 4.0e6, breakEnergy: 3.5e7,
+        isWalkableWhenBroken: false
+      };
     case 'scrap_pile':
-      return { shape: 'circle', radius: 12, resistance: 0.60, displayNameRu: 'куча металлолома' };
+      return {
+        shape: 'circle', radius: 12, resistance: 0.62, displayNameRu: 'куча металлолома',
+        anchorType: 'granular_mound',
+        postBreakMode: 'remain_solid',
+        massKg: 1100, frictionStatic: 0.92, frictionKinetic: 0.88,
+        yieldEnergy: 3.5e6, breakEnergy: 3.2e7,
+        isWalkableWhenBroken: false
+      };
     case 'industrial_sign':
-      return { shape: 'box', halfWidth: 8, halfHeight: 3, resistance: 0.10, displayNameRu: 'щит-указатель' };
+      return {
+        shape: 'box', halfWidth: prop.isBroken ? 3.5 : 8, halfHeight: 3, resistance: 0.18, displayNameRu: 'щит-указатель',
+        anchorType: 'ground_anchored',
+        postBreakMode: 'pedestal_only',
+        massKg: 95, frictionStatic: 0.85, frictionKinetic: 0.80,
+        yieldEnergy: 1.6e6, breakEnergy: 5.8e6,
+        isWalkableWhenBroken: false
+      };
     case 'industrial_pipe':
-      return { shape: 'box', halfWidth: 16, halfHeight: 4, resistance: 10.0, isIndestructible: true, displayNameRu: 'эстакада трубопровода' };
+      return {
+        shape: 'box', halfWidth: 16, halfHeight: 4, resistance: 10.0, isIndestructible: true, displayNameRu: 'эстакада трубопровода',
+        anchorType: 'foundation_fixed', postBreakMode: 'remain_solid',
+        massKg: 9500, frictionStatic: 1.0, frictionKinetic: 1.0, yieldEnergy: 1e9, breakEnergy: 1e9
+      };
     case 'fence_wood_vertical':
-      return { shape: 'box', halfWidth: 18, halfHeight: 3.5, resistance: 0.85, displayNameRu: 'деревянный штакетник' };
+      return {
+        shape: 'box', halfWidth: 18, halfHeight: 3.5, resistance: 0.30, displayNameRu: 'деревянный штакетник',
+        anchorType: 'ground_anchored',
+        postBreakMode: 'collapse_breach',
+        massKg: 140, frictionStatic: 0.90, frictionKinetic: 0.85,
+        yieldEnergy: 1.8e6, breakEnergy: 6.2e6,
+        isWalkableWhenBroken: true
+      };
     case 'fence_metal_vertical':
-      return { shape: 'box', halfWidth: 18, halfHeight: 3.5, resistance: 1.80, displayNameRu: 'забор из профнастила' };
+      return {
+        shape: 'box', halfWidth: 18, halfHeight: 3.5, resistance: 0.45, displayNameRu: 'забор из профнастила',
+        anchorType: 'ground_anchored',
+        postBreakMode: 'collapse_breach',
+        massKg: 240, frictionStatic: 0.92, frictionKinetic: 0.88,
+        yieldEnergy: 2.8e6, breakEnergy: 1.05e7,
+        isWalkableWhenBroken: true
+      };
     case 'cottage_gate':
-      if (prop.isOpen) return { shape: 'none', resistance: 0, displayNameRu: 'открытые въездные ворота' };
-      return { shape: 'box', halfWidth: 36, halfHeight: 4.5, resistance: 2.20, displayNameRu: 'въездные ворота' };
+      if (prop.isOpen) {
+        return {
+          shape: 'none', resistance: 0, displayNameRu: 'открытые въездные ворота',
+          anchorType: 'flush', postBreakMode: 'remain_solid',
+          massKg: 350, frictionStatic: 1, frictionKinetic: 1, yieldEnergy: 1e9, breakEnergy: 1e9, isWalkableWhenBroken: true
+        };
+      }
+      return {
+        shape: 'box', halfWidth: 36, halfHeight: 4.5, resistance: 0.55, displayNameRu: 'въездные ворота',
+        anchorType: 'ground_anchored',
+        postBreakMode: 'collapse_breach',
+        massKg: 360, frictionStatic: 0.92, frictionKinetic: 0.88,
+        yieldEnergy: 3.5e6, breakEnergy: 1.4e7,
+        isWalkableWhenBroken: true
+      };
     case 'wicket_gate':
-      if (prop.isOpen) return { shape: 'none', resistance: 0, displayNameRu: 'открытая калитка' };
-      return { shape: 'box', halfWidth: 12, halfHeight: 2.5, resistance: 0.15, displayNameRu: 'калитка' };
+      if (prop.isOpen) {
+        return {
+          shape: 'none', resistance: 0, displayNameRu: 'открытая калитка',
+          anchorType: 'flush', postBreakMode: 'remain_solid',
+          massKg: 80, frictionStatic: 1, frictionKinetic: 1, yieldEnergy: 1e9, breakEnergy: 1e9, isWalkableWhenBroken: true
+        };
+      }
+      return {
+        shape: 'box', halfWidth: 12, halfHeight: 2.5, resistance: 0.22, displayNameRu: 'калитка',
+        anchorType: 'ground_anchored',
+        postBreakMode: 'collapse_breach',
+        massKg: 90, frictionStatic: 0.88, frictionKinetic: 0.82,
+        yieldEnergy: 1.5e6, breakEnergy: 5.5e6,
+        isWalkableWhenBroken: true
+      };
     case 'garden_path_tile':
-      return { shape: 'none', resistance: 0, displayNameRu: 'садовая дорожка'};
+      return {
+        shape: 'none', resistance: 0, displayNameRu: 'садовая дорожка',
+        anchorType: 'flush', postBreakMode: 'remain_solid',
+        massKg: 40, frictionStatic: 1, frictionKinetic: 1, yieldEnergy: 1e9, breakEnergy: 1e9, isWalkableWhenBroken: true
+      };
     case 'catenary_pole':
     case 'railway_catenary_mast':
-      return { shape: 'none', resistance: 0, displayNameRu: 'опора контактной сети'};
+      return {
+        shape: 'none', resistance: 0, displayNameRu: 'опора контактной сети',
+        anchorType: 'flush', postBreakMode: 'remain_solid',
+        massKg: 3000, frictionStatic: 1, frictionKinetic: 1, yieldEnergy: 1e9, breakEnergy: 1e9, isWalkableWhenBroken: true
+      };
     case 'railway_km_post':
-      return { shape: 'none', resistance: 0, displayNameRu: 'километровый столб'};
+      return {
+        shape: 'none', resistance: 0, displayNameRu: 'километровый столб',
+        anchorType: 'flush', postBreakMode: 'remain_solid',
+        massKg: 100, frictionStatic: 1, frictionKinetic: 1, yieldEnergy: 1e9, breakEnergy: 1e9, isWalkableWhenBroken: true
+      };
     case 'rail_switch':
-      return { shape: 'none', resistance: 0, displayNameRu: 'стрелочный перевод'};
+      return {
+        shape: 'none', resistance: 0, displayNameRu: 'стрелочный перевод',
+        anchorType: 'flush', postBreakMode: 'remain_solid',
+        massKg: 500, frictionStatic: 1, frictionKinetic: 1, yieldEnergy: 1e9, breakEnergy: 1e9, isWalkableWhenBroken: true
+      };
     case 'garage_sofa':
-      return { shape: 'box', halfWidth: 10, halfHeight: 6, resistance: 0.35, displayNameRu: 'гаражный диван' };
+      return {
+        shape: 'box', halfWidth: 10, halfHeight: 6, resistance: 0.25, displayNameRu: 'гаражный диван',
+        anchorType: 'movable_rigid',
+        postBreakMode: 'remain_solid',
+        massKg: 85, frictionStatic: 0.55, frictionKinetic: 0.68,
+        yieldEnergy: 1.2e6, breakEnergy: 8.5e6,
+        isWalkableWhenBroken: false
+      };
     case 'garage_workbench':
-      return { shape: 'box', halfWidth: 12, halfHeight: 6, resistance: 0.75, displayNameRu: 'верстак с тисками' };
+      return {
+        shape: 'box', halfWidth: 12, halfHeight: 6, resistance: 0.48, displayNameRu: 'верстак с тисками',
+        anchorType: 'movable_rigid',
+        postBreakMode: 'remain_solid',
+        massKg: 290, frictionStatic: 0.68, frictionKinetic: 0.78,
+        yieldEnergy: 3.5e6, breakEnergy: 2.2e7,
+        isWalkableWhenBroken: false
+      };
     case 'garage_dirt_pile':
     case 'garage_sand_pile':
-      return { shape: 'circle', radius: 10, resistance: 0.20, displayNameRu: 'куча грунта' };
+      return {
+        shape: 'circle', radius: 10, resistance: 0.35, displayNameRu: 'куча грунта',
+        anchorType: 'granular_mound',
+        postBreakMode: 'remain_solid',
+        massKg: 950, frictionStatic: 0.95, frictionKinetic: 0.90,
+        yieldEnergy: 1.0e6, breakEnergy: 2.5e7,
+        isWalkableWhenBroken: false
+      };
     case 'garage_tires_heap':
-      return { shape: 'circle', radius: 12, resistance: 0.40, displayNameRu: 'горка старых шин' };
+      return {
+        shape: 'circle', radius: 12, resistance: 0.32, displayNameRu: 'горка старых шин',
+        anchorType: 'movable_rigid',
+        postBreakMode: 'remain_solid',
+        massKg: 240, frictionStatic: 0.72, frictionKinetic: 0.80,
+        yieldEnergy: 2.2e6, breakEnergy: 1.8e7,
+        isWalkableWhenBroken: false
+      };
     case 'garage_scrap_metal':
-      return { shape: 'circle', radius: 13, resistance: 0.65, displayNameRu: 'свалка металлолома' };
+      return {
+        shape: 'circle', radius: 13, resistance: 0.62, displayNameRu: 'свалка металлолома',
+        anchorType: 'granular_mound',
+        postBreakMode: 'remain_solid',
+        massKg: 1150, frictionStatic: 0.92, frictionKinetic: 0.88,
+        yieldEnergy: 3.5e6, breakEnergy: 3.5e7,
+        isWalkableWhenBroken: false
+      };
     case 'tarp_covered_car':
-      return { shape: 'box', halfWidth: 20, halfHeight: 10, resistance: 1.80, isIndestructible: true, displayNameRu: 'машина под брезентом' };
+      return {
+        shape: 'box', halfWidth: 20, halfHeight: 10, resistance: 1.80, isIndestructible: true, displayNameRu: 'машина под брезентом',
+        anchorType: 'foundation_fixed', postBreakMode: 'remain_solid',
+        massKg: 1350, frictionStatic: 0.95, frictionKinetic: 0.90, yieldEnergy: 1e9, breakEnergy: 1e9
+      };
     case 'car_on_blocks':
-      return { shape: 'box', halfWidth: 19, halfHeight: 9, resistance: 1.80, isIndestructible: true, displayNameRu: 'автомобиль на колодках' };
+      return {
+        shape: 'box', halfWidth: 19, halfHeight: 9, resistance: 1.80, isIndestructible: true, displayNameRu: 'автомобиль на колодках',
+        anchorType: 'foundation_fixed', postBreakMode: 'remain_solid',
+        massKg: 1250, frictionStatic: 0.95, frictionKinetic: 0.90, yieldEnergy: 1e9, breakEnergy: 1e9
+      };
     case 'oil_barrel_cluster':
-      return { shape: 'circle', radius: 10, resistance: 0.45, displayNameRu: 'бочки из-под масел' };
+      return {
+        shape: 'circle', radius: 10, resistance: 0.38, displayNameRu: 'бочки из-под масел',
+        anchorType: 'movable_rigid',
+        postBreakMode: 'remain_solid',
+        massKg: 340, frictionStatic: 0.58, frictionKinetic: 0.68,
+        yieldEnergy: 2.5e6, breakEnergy: 1.9e7,
+        isWalkableWhenBroken: false
+      };
     case 'garage_trash_heap':
-      return { shape: 'circle', radius: 10, resistance: 0.25, displayNameRu: 'куча мусора' };
+      return {
+        shape: 'circle', radius: 10, resistance: 0.25, displayNameRu: 'куча мусора',
+        anchorType: 'granular_mound',
+        postBreakMode: 'remain_solid',
+        massKg: 320, frictionStatic: 0.85, frictionKinetic: 0.80,
+        yieldEnergy: 1.0e6, breakEnergy: 1.4e7,
+        isWalkableWhenBroken: false
+      };
     default:
-      return { shape: 'circle', radius: 3.0, resistance: 0.05, displayNameRu: 'уличный объект'};
+      return {
+        shape: 'circle', radius: 3.0, resistance: 0.15, displayNameRu: 'уличный объект',
+        anchorType: 'ground_anchored', postBreakMode: 'topple_pole',
+        massKg: 90, frictionStatic: 0.80, frictionKinetic: 0.75,
+        yieldEnergy: 1.5e6, breakEnergy: 5.5e6,
+        isWalkableWhenBroken: true
+      };
   }
 }
 
@@ -5622,12 +5999,12 @@ export function updatePlayerPedestrianPhysics(
     }
   }
 
-  // Collision with props (streetlamps, trash cans, benches, etc.)
+  // Collision with props (streetlamps, trash cans, benches, kiosks, etc.)
   if (world) {
     for (const prop of world.props) {
-      if (prop.isBroken) continue;
       const hitbox = getPropHitbox(prop);
       if (hitbox.shape === 'none') continue;
+      if (prop.isBroken && hitbox.isWalkableWhenBroken) continue;
 
       if (hitbox.shape === 'circle') {
         const propRadius = hitbox.radius!;
@@ -5639,7 +6016,15 @@ export function updatePlayerPedestrianPhysics(
         if (distSq < minDist * minDist) {
           const dist = Math.sqrt(distSq);
           const overlap = minDist - dist;
-          if (dist > 0.0001) {
+          if (prop.type === 'cone' && dist > 0.0001) {
+            // Lightweight rubber traffic cone can be nudged by a walking person
+            const nx = dx / dist;
+            const ny = dy / dist;
+            prop.x -= nx * overlap * 0.65;
+            prop.y -= ny * overlap * 0.65;
+            newX += nx * overlap * 0.35;
+            newY += ny * overlap * 0.35;
+          } else if (dist > 0.0001) {
             newX += (dx / dist) * overlap;
             newY += (dy / dist) * overlap;
           } else {
@@ -12401,82 +12786,163 @@ export function updateBreakablePropsAndLivingWorld(world: GameWorld, player: Pla
     }
   }
 
-  // 1. UPDATE BREAKABLE PROPS & WATER FOUNTAINS
+  // 1. UPDATE PROPS, RIGID-BODY SLIDING, STRUCTURAL DEFORMATION & WATER FOUNTAINS
   for (const prop of world.props) {
-    if (prop.isBroken) {
-      // Move detached prop with physics friction
-      if (prop.breakVX || prop.breakVY) {
-        prop.x += (prop.breakVX || 0) * dt;
-        prop.y += (prop.breakVY || 0) * dt;
-        prop.angle += (prop.breakSpin || 0) * dt;
-        prop.breakVX = (prop.breakVX || 0) * (1 - dt * 3);
-        prop.breakVY = (prop.breakVY || 0) * (1 - dt * 3);
-        prop.breakSpin = (prop.breakSpin || 0) * (1 - dt * 3);
+    // Capture original foundation coordinates once so foundations never slide with detached/pushed bodies
+    if (prop.originX === undefined) prop.originX = prop.x;
+    if (prop.originY === undefined) prop.originY = prop.y;
+    if (prop.originAngle === undefined) prop.originAngle = prop.angle ?? 0;
+
+    const hitbox = getPropHitbox(prop);
+    const canBodyMove =
+      hitbox.anchorType === 'movable_rigid' ||
+      (prop.isBroken && hitbox.postBreakMode === 'detach_body');
+
+    // Enforce strict foundation lock for anchored, fixed, toppled, or mound props
+    if (!canBodyMove) {
+      prop.x = prop.originX;
+      prop.y = prop.originY;
+      prop.breakVX = 0;
+      prop.breakVY = 0;
+      prop.breakSpin = 0;
+    } else if (prop.breakVX || prop.breakVY || prop.breakSpin) {
+      // Coulomb dry ground friction & building collision for movable rigid bodies (dumpsters, cones, sheared hydrants/benches)
+      const vx = prop.breakVX || 0;
+      const vy = prop.breakVY || 0;
+      const speed = Math.hypot(vx, vy);
+      if (speed > 0.5) {
+        const nextX = prop.x + vx * dt;
+        const nextY = prop.y + vy * dt;
+
+        // Prevent pushed props from penetrating building walls
+        let hitBuilding = false;
+        for (const b of world.buildings) {
+          if (
+            nextX >= b.x - 5 &&
+            nextX <= b.x + b.width + 5 &&
+            nextY >= b.y - 5 &&
+            nextY <= b.y + b.height + 5
+          ) {
+            hitBuilding = true;
+            break;
+          }
+        }
+        if (hitBuilding) {
+          prop.breakVX = -vx * 0.2;
+          prop.breakVY = -vy * 0.2;
+          prop.breakSpin = (prop.breakSpin || 0) * 0.3;
+        } else {
+          prop.x = nextX;
+          prop.y = nextY;
+        }
+
+        const decel = hitbox.frictionKinetic * 420 * dt;
+        const newSpeed = Math.max(0, speed - decel);
+        const ratio = newSpeed / speed;
+        prop.breakVX = (prop.breakVX || 0) * ratio;
+        prop.breakVY = (prop.breakVY || 0) * ratio;
+      } else {
+        prop.breakVX = 0;
+        prop.breakVY = 0;
       }
 
-      // Hydrant Water Fountain Spray (Shoots UPWARD into the air)
-      if (prop.type === 'hydrant'&& (prop.waterFountainTimer ?? 0) > 0) {
-        prop.waterFountainTimer = (prop.waterFountainTimer ?? 35) - dt;
-        if (Math.random() < 0.85) {
-          const fountainSpeed = 180 + Math.random() * 100;
-          const fountainAngle = -Math.PI / 2 + (Math.random() * 0.3 - 0.15); // Upward cone (-90 deg)
-          world.particles.push({
-            x: prop.x + (Math.random() * 4 - 2),
-            y: prop.y - 4,
-            vx: Math.cos(fountainAngle) * fountainSpeed * 0.3,
-            vy: Math.sin(fountainAngle) * fountainSpeed, // Strong upward velocity
-            radius: 3 + Math.random() * 4,
-            color: '#60a5fa',
-            alpha: 0.85,
-            life: 0,
-            maxLife: 0.6 + Math.random() * 0.4,
-            type: 'water_fountain'});
-        }
+      const spin = prop.breakSpin || 0;
+      if (Math.abs(spin) > 0.02) {
+        prop.angle = (prop.angle ?? 0) + spin * dt;
+        const spinDecel = hitbox.frictionKinetic * 14 * dt;
+        const newSpin = Math.max(0, Math.abs(spin) - spinDecel) * Math.sign(spin);
+        prop.breakSpin = newSpin;
+      } else {
+        prop.breakSpin = 0;
       }
-      continue;
     }
 
-    const vehiclesToCheck = vehGrid ? vehGrid.queryRadius(prop.x, prop.y, 45, scratchVehicleList) : world.vehicles;
-    // Check prop collision against vehicles using exact OBB & Circle Hitbox detection
-    for (const veh of vehiclesToCheck) {
-      const hitbox = getPropHitbox(prop);
-      if (hitbox.shape === 'none') {
-        // Non-blocking flush surface props (manhole, drain grate)
-        if (prop.type === 'manhole') {
+    // Hydrant Water Fountain Spray: ALWAYS erupts from the underground pipe at (originX, originY),
+    // never sliding across the street with the sheared iron barrel!
+    if (prop.type === 'hydrant' && (prop.waterFountainTimer ?? 0) > 0) {
+      prop.waterFountainTimer = (prop.waterFountainTimer ?? 35) - dt;
+      const pipeX = prop.originX ?? prop.x;
+      const pipeY = prop.originY ?? prop.y;
+      if (Math.random() < 0.85) {
+        const fountainSpeed = 180 + Math.random() * 100;
+        const fountainAngle = -Math.PI / 2 + (Math.random() * 0.3 - 0.15);
+        world.particles.push({
+          x: pipeX + (Math.random() * 4 - 2),
+          y: pipeY - 4,
+          vx: Math.cos(fountainAngle) * fountainSpeed * 0.3,
+          vy: Math.sin(fountainAngle) * fountainSpeed,
+          radius: 3 + Math.random() * 4,
+          color: '#60a5fa',
+          alpha: 0.85,
+          life: 0,
+          maxLife: 0.6 + Math.random() * 0.4,
+          type: 'water_fountain'
+        });
+      }
+    }
+
+    if (hitbox.shape === 'none') {
+      // Non-blocking flush surface props (manhole, drain grate)
+      if (prop.type === 'manhole') {
+        const nearVehs = vehGrid ? vehGrid.queryRadius(prop.x, prop.y, 35, scratchVehicleList) : world.vehicles;
+        for (const veh of nearVehs) {
           const dx = veh.x - prop.x;
           const dy = veh.y - prop.y;
           if (dx * dx + dy * dy < 144 && Math.abs(veh.speed) > 18) {
             sound.playManholeClank();
           }
         }
-        continue;
       }
+      continue;
+    }
 
+    // Query radius 110px covers wide gates (halfWidth 36), 40ft containers (halfWidth 57), and long trucks
+    const vehiclesToCheck = vehGrid ? vehGrid.queryRadius(prop.x, prop.y, 110, scratchVehicleList) : world.vehicles;
+
+    for (const veh of vehiclesToCheck) {
       const col = checkPropVehicleCollision(prop, veh);
       if (!col.collided) continue;
 
-      // Special case: indestructible props (e.g. old concrete lamppost, garage doors)
-      if (hitbox.isIndestructible) {
-        const contactX = col.contactX;
-        const contactY = col.contactY;
-        const pushDist = Math.hypot(col.pushX, col.pushY) || 1;
-        const normX = col.pushX / pushDist;
-        const normY = col.pushY / pushDist;
+      const contactX = col.contactX;
+      const contactY = col.contactY;
+      const pushDist = Math.hypot(col.pushX, col.pushY) || 1;
+      const normX = col.pushX / pushDist;
+      const normY = col.pushY / pushDist;
 
+      // CASE A: Toppled pole stump or collapsed fence breach on the ground —
+      // vehicle can drive over the rubble/stump, experiencing wheel drag and suspension jolt
+      if (
+        prop.isBroken &&
+        (hitbox.postBreakMode === 'topple_pole' || hitbox.postBreakMode === 'collapse_breach')
+      ) {
+        const vehSpeed = Math.hypot(veh.vx, veh.vy);
+        if (vehSpeed > 8) {
+          const rubbleDrag = Math.min(0.18, (hitbox.resistance * 0.25) * dt * 8);
+          veh.vx *= 1 - rubbleDrag;
+          veh.vy *= 1 - rubbleDrag;
+          veh.speed *= 1 - rubbleDrag;
+          if (vehSpeed > 32 && (!prop.lastImpactTime || Date.now() - prop.lastImpactTime > 380)) {
+            prop.lastImpactTime = Date.now();
+            sound.playManholeClank();
+          }
+        }
+        continue;
+      }
+
+      // CASE B: Indestructible heavy structures (concrete poles, wells, containers, fuel tanks, garage doors)
+      if (hitbox.isIndestructible) {
         if (veh.activeCrumple && veh.activeCrumple.timer > 0) {
           veh.x += col.pushX;
           veh.y += col.pushY;
         } else {
           const impactSpeed = Math.hypot(veh.vx, veh.vy);
+          const poleParts = normalAndTangential(veh.vx, veh.vy, normX, normY);
+          const poleNormalSpeed = poleParts.normalApproach;
+          const poleTangentialSpeed = Math.abs(poleParts.tangential);
 
-          if (impactSpeed > 16) {
+          if (poleNormalSpeed > 16) {
             const crumpleDuration = 0.10 + Math.min(0.08, impactSpeed / 800);
-
-            // Столб/дерево: в урон и травму идёт только нормальная составляющая
-            // (касательная — скольжение вдоль столба), см. damageModel.ts.
-            const poleParts = normalAndTangential(veh.vx, veh.vy, normX, normY);
-            const poleNormalSpeed = poleParts.normalApproach;
-            const poleTangentialSpeed = Math.abs(poleParts.tangential);
+            const cWidth = propContactWidthPx(hitbox, prop.angle || 0, normX, normY);
 
             veh.activeCrumple = {
               timer: crumpleDuration,
@@ -12486,26 +12952,24 @@ export function updateBreakablePropsAndLivingWorld(world: GameWorld, player: Pla
               initialSpeed: veh.speed,
               initialNormalSpeed: poleNormalSpeed,
               initialTangentialSpeed: poleParts.tangential,
-              reboundSpeed: 0, // Solid concrete pole / tree: plastic wrapping with zero bounceback
+              reboundSpeed: 0,
               contactX,
               contactY,
-              isNarrowImpact: true,
-              contactWidthPx: propContactWidthPx(hitbox, prop.angle || 0, normX, normY)
+              isNarrowImpact: cWidth < 14,
+              contactWidthPx: cWidth
             };
 
-            // First apply structural plastic deformation at contact point
-            applyVehicleDamageAndDeformation(veh, contactX, contactY, poleNormalSpeed, poleTangentialSpeed, world, 14000, true,
-              propContactWidthPx(hitbox, prop.angle || 0, normX, normY));
+            applyVehicleDamageAndDeformation(
+              veh, contactX, contactY, poleNormalSpeed, poleTangentialSpeed, world, 14000, true, cWidth
+            );
 
-            // Recheck collision against the freshly deformed metal so vehicle only clamps residual overlap,
-            // allowing the pole to remain deeply nestled inside the dent!
             const recheck = checkPropVehicleCollision(prop, veh);
             if (recheck.collided) {
               veh.x += recheck.pushX;
               veh.y += recheck.pushY;
             }
 
-            sound.playCollision(Math.min(1.0, impactSpeed / 80));
+            sound.playCollision(Math.min(1.0, poleNormalSpeed / 80));
 
             if (player && (veh.isPlayerControlled || (player.isInVehicle && player.currentVehicleId === veh.id))) {
               applyDriverVehicleCrashTrauma(player, poleNormalSpeed, hitbox.displayNameRu, 1.2, veh);
@@ -12521,45 +12985,48 @@ export function updateBreakablePropsAndLivingWorld(world: GameWorld, player: Pla
               }
             }
           } else {
-            veh.x += col.pushX;
-            veh.y += col.pushY;
-            veh.speed *= 0.4;
-            veh.vx *= 0.4;
-            veh.vy *= 0.4;
+            veh.x += col.pushX * 1.02;
+            veh.y += col.pushY * 1.02;
+            if (poleNormalSpeed > 0) {
+              veh.vx += normX * poleNormalSpeed;
+              veh.vy += normY * poleNormalSpeed;
+              veh.speed = Math.hypot(veh.vx, veh.vy) * Math.sign(veh.speed || 1);
+            }
           }
         }
 
-        // Concrete chip dust debris
-        for (let d = 0; d < 8; d++) {
-          const dAngle = Math.random() * Math.PI * 2;
-          const dSpeed = 25 + Math.random() * 70;
-          world.particles.push({
-            x: contactX,
-            y: contactY,
-            vx: Math.cos(dAngle) * dSpeed,
-            vy: Math.sin(dAngle) * dSpeed,
-            radius: 0.45 + Math.random() * 0.55,
-            aspect: 1.1 + Math.random() * 0.4,
-            color: '#a8a29e',
-            alpha: 0.90,
-            life: 0,
-            maxLife: 300.0,
-            type: 'debris',
-            debrisSubtype: 'concrete_chip',
-            angle: Math.random() * Math.PI * 2,
-            angularVelocity: (Math.random() - 0.5) * 20,
-            shapeSeed: Math.floor(Math.random() * 10000),
-            z: 0.8 + Math.random() * 1.0,
-            vz: 15 + Math.random() * 25,
-            bounces: 2,
-            splatted: false
-          });
+        if (Math.hypot(veh.vx, veh.vy) > 20) {
+          for (let d = 0; d < 6; d++) {
+            const dAngle = Math.random() * Math.PI * 2;
+            const dSpeed = 25 + Math.random() * 70;
+            world.particles.push({
+              x: contactX,
+              y: contactY,
+              vx: Math.cos(dAngle) * dSpeed,
+              vy: Math.sin(dAngle) * dSpeed,
+              radius: 0.45 + Math.random() * 0.55,
+              aspect: 1.1 + Math.random() * 0.4,
+              color: '#a8a29e',
+              alpha: 0.90,
+              life: 0,
+              maxLife: 300.0,
+              type: 'debris',
+              debrisSubtype: 'concrete_chip',
+              angle: Math.random() * Math.PI * 2,
+              angularVelocity: (Math.random() - 0.5) * 20,
+              shapeSeed: Math.floor(Math.random() * 10000),
+              z: 0.8 + Math.random() * 1.0,
+              vz: 15 + Math.random() * 25,
+              bounces: 2,
+              splatted: false
+            });
+          }
         }
-        continue; // Indestructible: remains standing and intact
+        continue;
       }
 
+      // Disabled / stopped AI vehicle clamp
       if (!veh.isPlayerControlled && (isVehicleDisabledOrCrashed(veh) || (veh.aiState === 'stopping_obstacle' && Math.abs(veh.speed) < 2.0))) {
-        // Stopped/crashed NPC cannot break props or gain speed from prop pushing
         veh.x += col.pushX * 1.02;
         veh.y += col.pushY * 1.02;
         if (Math.hypot(veh.vx, veh.vy) < 2.0) {
@@ -12572,40 +13039,274 @@ export function updateBreakablePropsAndLivingWorld(world: GameWorld, player: Pla
         }
       }
 
-      if (Math.abs(veh.speed) < 12) {
-        // Slow speed: push vehicle out of the prop so it cannot pass through it
-        veh.x += col.pushX * 1.02;
-        veh.y += col.pushY * 1.02;
-        
-        const pushLen = Math.hypot(col.pushX, col.pushY) || 1;
-        const nx = col.pushX / pushLen;
-        const ny = col.pushY / pushLen;
-        const velInto = veh.vx * -nx + veh.vy * -ny;
-        if (velInto > 0) {
-          veh.vx += nx * velInto;
-          veh.vy += ny * velInto;
-          if (!veh.isPlayerControlled && (isVehicleDisabledOrCrashed(veh) || veh.aiState === 'stopping_obstacle')) {
-            if (Math.hypot(veh.vx, veh.vy) < 2.0) {
-              veh.speed = 0;
-              veh.vx = 0;
-              veh.vy = 0;
-              veh.angularVelocity = 0;
-              veh.steerAngle = 0;
-            } else {
-              veh.speed = Math.hypot(veh.vx, veh.vy) * Math.sign(veh.speed || 1);
+      const vehMass = Math.max(400, (veh.mass || CAR_CONFIGS[veh.type]?.mass || 1400) + (veh.massBonusKg || 0));
+      const propMass = Math.max(5, hitbox.massKg);
+      const cWidth = propContactWidthPx(hitbox, prop.angle || 0, normX, normY);
+
+      // Relative velocity at contact point along collision normal (normX, normY points from prop to vehicle)
+      const propVX = prop.breakVX || 0;
+      const propVY = prop.breakVY || 0;
+      const relVX = veh.vx - propVX;
+      const relVY = veh.vy - propVY;
+      const velIntoNormal = -(relVX * normX + relVY * normY); // > 0 when vehicle is closing into prop
+      const tangentialVel = Math.abs(-relVX * normY + relVY * normX);
+
+      // Record local impact point on prop for localized visual denting
+      const pAngle = prop.angle ?? 0;
+      const cosP = Math.cos(pAngle);
+      const sinP = Math.sin(pAngle);
+      const dxC = contactX - prop.x;
+      const dyC = contactY - prop.y;
+      prop.dentLocalX = dxC * cosP + dyC * sinP;
+      prop.dentLocalY = -dxC * sinP + dyC * cosP;
+
+      // CASE C: Granular / bulk mounds (sand pile, dirt pile, haystack, woodpile, scrap pile)
+      // Mounds never slide away; they absorb kinetic energy through ploughing resistance and slump locally.
+      if (hitbox.anchorType === 'granular_mound') {
+        veh.x += col.pushX * 0.92;
+        veh.y += col.pushY * 0.92;
+
+        if (velIntoNormal > 0) {
+          const reducedMass = (vehMass * propMass) / (vehMass + propMass);
+          const normalEnergy = 0.5 * reducedMass * velIntoNormal * velIntoNormal;
+          const absorbFrac = Math.min(0.92, 0.55 + hitbox.resistance * 0.45);
+
+          veh.vx += normX * velIntoNormal * absorbFrac;
+          veh.vy += normY * velIntoNormal * absorbFrac;
+          veh.speed = Math.hypot(veh.vx, veh.vy) * Math.sign(veh.speed || 1);
+
+          const dmgDelta = Math.min(0.45, normalEnergy / Math.max(1e6, hitbox.breakEnergy));
+          prop.damageLevel = Math.min(0.85, (prop.damageLevel ?? 0) + dmgDelta);
+
+          if (velIntoNormal > 24) {
+            const effDamageSpeed = velIntoNormal * hitbox.resistance;
+            applyVehicleDamageAndDeformation(
+              veh, contactX, contactY, effDamageSpeed, tangentialVel, world, propMass * 3, true, cWidth
+            );
+            sound.playCollision(Math.min(0.85, velIntoNormal / 110));
+            if (player && (veh.isPlayerControlled || (player.isInVehicle && player.currentVehicleId === veh.id))) {
+              applyDriverVehicleCrashTrauma(player, effDamageSpeed, hitbox.displayNameRu, hitbox.resistance, veh);
             }
-          } else {
-            veh.speed = Math.hypot(veh.vx, veh.vy) * Math.sign(veh.speed || 1);
           }
         }
         continue;
       }
 
-      // Break prop!
-      prop.isBroken = true;
+      // CASE D: Movable rigid bodies (wheeled dumpsters, concrete barriers, cable spools, pallets, cones,
+      // or already-sheared benches/hydrants/trash cans/mailboxes)
+      if (canBodyMove) {
+        // Separate overlap proportionally to inverse mass so heavy dumpsters push back on cars
+        const invVeh = 1 / vehMass;
+        const invProp = 1 / propMass;
+        const invSum = invVeh + invProp;
+        const vehShare = invVeh / invSum;
+        const propShare = invProp / invSum;
 
-      // If this was a master traffic light, break the intersection signal!
-      if (prop.type === 'traffic_light'&& prop.isMasterLight && prop.intersectionId) {
+        veh.x += col.pushX * (0.45 + 0.55 * vehShare);
+        veh.y += col.pushY * (0.45 + 0.55 * vehShare);
+        prop.x -= col.pushX * (0.55 * propShare);
+        prop.y -= col.pushY * (0.55 * propShare);
+
+        if (velIntoNormal > 0) {
+          const reducedMass = 1 / invSum;
+          const normalEnergy = 0.5 * reducedMass * velIntoNormal * velIntoNormal;
+          const restitution = prop.type === 'cone' || prop.type === 'industrial_tires' || prop.type === 'garage_tires_heap' ? 0.25 : 0.10;
+          const impulseJ = (1 + restitution) * velIntoNormal * reducedMass;
+
+          // Static friction threshold before heavy stationary prop starts sliding
+          const staticThresholdVel = hitbox.frictionStatic * 18 * (propMass / (vehMass + propMass));
+
+          // Decelerate vehicle by impulse
+          const dvVeh = impulseJ * invVeh;
+          veh.vx += normX * dvVeh;
+          veh.vy += normY * dvVeh;
+          veh.speed = Math.hypot(veh.vx, veh.vy) * Math.sign(veh.speed || 1);
+
+          // Apply angular impulse to vehicle if hit off-center
+          const rVehX = contactX - veh.x;
+          const rVehY = contactY - veh.y;
+          const torqueArmVeh = rVehX * normY - rVehY * normX;
+          veh.angularVelocity = (veh.angularVelocity || 0) + (torqueArmVeh * dvVeh) / Math.max(180, veh.length * veh.width * 0.35);
+
+          // Accelerate prop if impact overcomes static ground friction
+          if (velIntoNormal > staticThresholdVel || Math.hypot(propVX, propVY) > 1.0) {
+            const dvProp = impulseJ * invProp;
+            prop.breakVX = propVX - normX * dvProp;
+            prop.breakVY = propVY - normY * dvProp;
+
+            const rPropX = contactX - prop.x;
+            const rPropY = contactY - prop.y;
+            const torqueArmProp = -(rPropX * normY - rPropY * normX);
+            const propInertiaRadiusSq =
+              hitbox.shape === 'box'
+                ? ((hitbox.halfWidth ?? 8) ** 2 + (hitbox.halfHeight ?? 8) ** 2) / 3
+                : ((hitbox.radius ?? 5) ** 2) * 0.6;
+            prop.breakSpin = (prop.breakSpin || 0) + (torqueArmProp * dvProp) / Math.max(12, propInertiaRadiusSq);
+          }
+
+          // Progressive denting of the prop body on hard impacts
+          if (normalEnergy > hitbox.yieldEnergy) {
+            const dentAdd = (normalEnergy - hitbox.yieldEnergy) / Math.max(1e6, hitbox.breakEnergy - hitbox.yieldEnergy);
+            prop.damageLevel = Math.min(1.0, (prop.damageLevel ?? 0) + dentAdd * 0.65);
+          }
+
+          // Vehicle body deformation & crash trauma scaled by actual impulse speed change
+          const effectiveImpactSpeed = Math.max(dvVeh, velIntoNormal * (propMass / (vehMass + propMass)) * 1.35);
+          if (effectiveImpactSpeed > 16 && prop.type !== 'cone') {
+            applyVehicleDamageAndDeformation(
+              veh, contactX, contactY, effectiveImpactSpeed, tangentialVel, world, propMass * 2.2, true, cWidth
+            );
+            sound.playCollision(Math.min(1.0, effectiveImpactSpeed / 95));
+            if (player && (veh.isPlayerControlled || (player.isInVehicle && player.currentVehicleId === veh.id))) {
+              applyDriverVehicleCrashTrauma(player, effectiveImpactSpeed, hitbox.displayNameRu, hitbox.resistance, veh);
+            }
+          } else if (velIntoNormal > 14 && (!prop.lastImpactTime || Date.now() - prop.lastImpactTime > 220)) {
+            prop.lastImpactTime = Date.now();
+            sound.playCollision(Math.min(0.45, velIntoNormal / 120));
+          }
+        }
+        continue;
+      }
+
+      // CASE E: Fixed & Ground-Anchored Props (kiosks, bus stops, flowerbeds, lamps, traffic lights,
+      // bollards, hydrants, benches, trash cans, mailboxes, fences, gates, barriers)
+      if (velIntoNormal <= 0) {
+        veh.x += col.pushX * 1.01;
+        veh.y += col.pushY * 1.01;
+        continue;
+      }
+
+      const normalEnergy = 0.5 * vehMass * velIntoNormal * velIntoNormal;
+      const impactDirAngle = Math.atan2(-normY, -normX);
+
+      // E1. Low-energy elastic contact (bump/scrape below structural yield limit)
+      if (normalEnergy < hitbox.yieldEnergy) {
+        veh.x += col.pushX * 1.02;
+        veh.y += col.pushY * 1.02;
+        veh.vx += normX * velIntoNormal * 1.08;
+        veh.vy += normY * velIntoNormal * 1.08;
+        veh.speed = Math.hypot(veh.vx, veh.vy) * Math.sign(veh.speed || 1);
+
+        // Slight cosmetic scuff if moderate bump
+        if (normalEnergy > hitbox.yieldEnergy * 0.35) {
+          prop.damageLevel = Math.min(0.25, (prop.damageLevel ?? 0) + 0.05);
+          if (velIntoNormal > 15 && (!prop.lastImpactTime || Date.now() - prop.lastImpactTime > 250)) {
+            prop.lastImpactTime = Date.now();
+            sound.playCollision(Math.min(0.35, velIntoNormal / 100));
+          }
+        }
+        continue;
+      }
+
+      // E2. Medium-energy plastic deformation (bends poles, dents kiosks/bus stops, shatters glass, stops car)
+      if (normalEnergy < hitbox.breakEnergy || hitbox.postBreakMode === 'remain_solid') {
+        const energyRatio = Math.min(1.0, (normalEnergy - hitbox.yieldEnergy) / Math.max(1e6, hitbox.breakEnergy - hitbox.yieldEnergy));
+        prop.damageLevel = Math.min(0.95, Math.max(prop.damageLevel ?? 0, 0.18 + energyRatio * 0.72));
+        prop.tiltAngle = impactDirAngle;
+        prop.tiltAmount = Math.min(0.65, Math.max(prop.tiltAmount ?? 0, 0.12 + energyRatio * 0.48));
+
+        // Shatter glass panels on bus stops, kiosks, or lamps when hit above yield energy
+        const hadGlass = !prop.glassShattered;
+        if (
+          hadGlass &&
+          (prop.type === 'bus_stop' || prop.type === 'kiosk' || prop.type === 'lamp' || prop.type === 'lamp_highway' || prop.type === 'traffic_light') &&
+          normalEnergy > hitbox.yieldEnergy * 1.15
+        ) {
+          prop.glassShattered = true;
+          const glassCount = prop.type === 'bus_stop' || prop.type === 'kiosk' ? 18 : 8;
+          for (let g = 0; g < glassCount; g++) {
+            const gAngle = Math.random() * Math.PI * 2;
+            const gSpeed = 35 + Math.random() * 75;
+            world.particles.push({
+              x: contactX + (Math.random() - 0.5) * 10,
+              y: contactY + (Math.random() - 0.5) * 10,
+              vx: Math.cos(gAngle) * gSpeed,
+              vy: Math.sin(gAngle) * gSpeed,
+              radius: 0.45 + Math.random() * 0.55,
+              aspect: 1.1 + Math.random() * 0.4,
+              color: 'rgba(224, 242, 254, 0.88)',
+              alpha: 0.95,
+              life: 0,
+              maxLife: 300.0,
+              type: 'glass_shard',
+              glassSubtype: prop.type === 'bus_stop' || prop.type === 'kiosk' ? 'safety_pebble' : 'headlight',
+              angle: Math.random() * Math.PI * 2,
+              angularVelocity: (Math.random() - 0.5) * 26,
+              shapeSeed: Math.floor(Math.random() * 10000),
+              z: 1.4 + Math.random() * 1.8,
+              vz: 24 + Math.random() * 40,
+              bounces: 2,
+              splatted: false
+            });
+          }
+        }
+
+        // Apply activeCrumple & real body deformation to the vehicle against the standing structure
+        const crumpleDuration = 0.09 + Math.min(0.08, velIntoNormal / 800);
+        veh.activeCrumple = {
+          timer: crumpleDuration,
+          totalDuration: crumpleDuration,
+          normalX: normX,
+          normalY: normY,
+          initialSpeed: veh.speed,
+          initialNormalSpeed: velIntoNormal,
+          initialTangentialSpeed: (-relVX * normY + relVY * normX),
+          reboundSpeed: 0,
+          contactX,
+          contactY,
+          isNarrowImpact: cWidth < 14,
+          contactWidthPx: cWidth
+        };
+
+        applyVehicleDamageAndDeformation(
+          veh, contactX, contactY, velIntoNormal * Math.max(0.45, hitbox.resistance), tangentialVel, world, 12000, true, cWidth
+        );
+
+        const recheck = checkPropVehicleCollision(prop, veh);
+        if (recheck.collided) {
+          veh.x += recheck.pushX * 1.02;
+          veh.y += recheck.pushY * 1.02;
+        }
+        // Remove normal approach velocity so the vehicle stops against the structure instead of phasing through
+        const residualInto = -(veh.vx * normX + veh.vy * normY);
+        if (residualInto > 0) {
+          veh.vx += normX * residualInto;
+          veh.vy += normY * residualInto;
+          veh.speed = Math.hypot(veh.vx, veh.vy) * Math.sign(veh.speed || 1);
+        }
+
+        sound.playCollision(Math.min(1.0, velIntoNormal / 85));
+        if (player && (veh.isPlayerControlled || (player.isInVehicle && player.currentVehicleId === veh.id))) {
+          applyDriverVehicleCrashTrauma(player, velIntoNormal * Math.max(0.45, hitbox.resistance), hitbox.displayNameRu, hitbox.resistance, veh);
+        } else if (!veh.isPlayerControlled) {
+          veh.aiState = isVehicleDisabledOrCrashed(veh) ? 'stopping_obstacle' : 'reversing';
+        }
+        continue;
+      }
+
+      // E3. High-energy structural shear / breach (normalEnergy >= hitbox.breakEnergy)
+      prop.isBroken = true;
+      prop.damageLevel = 1.0;
+      prop.tiltAngle = impactDirAngle;
+      prop.tiltAmount = 1.0;
+      prop.breakAngle = impactDirAngle + (Math.random() - 0.5) * 0.15;
+
+      // Energy conservation: vehicle loses normal kinetic energy equal to the structure's fracture work (breakEnergy)
+      const remainingEnergy = Math.max(0, normalEnergy - hitbox.breakEnergy);
+      const afterNormalVel = Math.sqrt((2 * remainingEnergy) / vehMass);
+      const absorbedNormalDeltaV = Math.max(0, velIntoNormal - afterNormalVel);
+
+      veh.vx += normX * absorbedNormalDeltaV;
+      veh.vy += normY * absorbedNormalDeltaV;
+      veh.speed = Math.hypot(veh.vx, veh.vy) * Math.sign(veh.speed || 1);
+
+      // Off-center impact imparts realistic yaw impulse to the vehicle
+      const rVehX = contactX - veh.x;
+      const rVehY = contactY - veh.y;
+      const torqueArmVeh = rVehX * normY - rVehY * normX;
+      veh.angularVelocity = (veh.angularVelocity || 0) + (torqueArmVeh * absorbedNormalDeltaV) / Math.max(200, veh.length * veh.width * 0.4);
+
+      if (prop.type === 'traffic_light' && prop.isMasterLight && prop.intersectionId) {
         const inter = world.intersections.find(i => i.id === prop.intersectionId);
         if (inter) {
           inter.isSignalLost = true;
@@ -12613,42 +13314,40 @@ export function updateBreakablePropsAndLivingWorld(world: GameWorld, player: Pla
         }
       }
 
-      const rawImpactSpeed = Math.abs(veh.speed);
-      const propResistance = hitbox.resistance;
-
-      // Нормальная составляющая — в урон/травму, касательная — скольжение
-      const propPushLen = Math.hypot(col.pushX, col.pushY) || 1;
-      const propParts = normalAndTangential(veh.vx, veh.vy, col.pushX / propPushLen, col.pushY / propPushLen);
-      const propNormalSpeed = propParts.normalApproach;
-      const propTangentialSpeed = Math.abs(propParts.tangential);
-
-      prop.breakVX = Math.cos(veh.angle) * Math.max(35, rawImpactSpeed) * 0.8;
-      prop.breakVY = Math.sin(veh.angle) * Math.max(35, rawImpactSpeed) * 0.8;
-      prop.breakAngle = veh.angle + (Math.random() - 0.5) * 0.4;
-      prop.breakSpin = (Math.random() - 0.5) * 10;
+      if (hitbox.postBreakMode === 'detach_body') {
+        // Bench, hydrant barrel, trash can, or mailbox shears off its foundation bolts and gets knocked forward
+        const launchSpeed = Math.max(28, afterNormalVel * 0.85 + absorbedNormalDeltaV * 0.35);
+        prop.breakVX = -normX * launchSpeed;
+        prop.breakVY = -normY * launchSpeed;
+        prop.breakSpin = (Math.random() - 0.5) * 7;
+      } else {
+        // Toppled poles, breached fences, and pedestals NEVER slide away from their origin!
+        prop.breakVX = 0;
+        prop.breakVY = 0;
+        prop.breakSpin = 0;
+      }
 
       sound.playPropBreak(prop.type);
 
-      // Vehicle damage & deformation scaled by prop resistance.
-      // Масса 12000 — проп стоит на грунте: его слабость задаётся
-      // множителем propResistance на скорость, а не фиктивной массой.
-      // contactWidthPx — «тень» хитбокса: узкий столбик продавливает глубже,
-      // чем широкий контейнер, на ту же энергию.
-      applyVehicleDamageAndDeformation(veh, col.contactX, col.contactY, propNormalSpeed * propResistance, propTangentialSpeed, world, 12000, true,
-        propContactWidthPx(hitbox, prop.angle || 0, col.pushX / propPushLen, col.pushY / propPushLen));
+      // Vehicle damage corresponds to the energy absorbed in shearing the structure
+      const damageSpeed = Math.max(absorbedNormalDeltaV * 1.35, velIntoNormal * hitbox.resistance);
+      applyVehicleDamageAndDeformation(
+        veh, contactX, contactY, damageSpeed, tangentialVel, world, 12000, true, cWidth
+      );
 
       if (player && (veh.isPlayerControlled || (player.isInVehicle && player.currentVehicleId === veh.id))) {
-        applyDriverVehicleCrashTrauma(player, propNormalSpeed, hitbox.displayNameRu, propResistance, veh);
+        applyDriverVehicleCrashTrauma(player, damageSpeed, hitbox.displayNameRu, hitbox.resistance, veh);
       }
 
       if (prop.type === 'hydrant') {
         prop.waterFountainTimer = 35;
         sound.playWaterSpray();
-        // Create puddle under hydrant
+        const pipeX = prop.originX ?? prop.x;
+        const pipeY = prop.originY ?? prop.y;
         world.puddles.push({
           id: `puddle_hydrant_${Date.now()}`,
-          x: prop.x,
-          y: prop.y,
+          x: pipeX,
+          y: pipeY,
           radiusX: 25,
           radiusY: 18,
           angle: 0,
@@ -12656,7 +13355,7 @@ export function updateBreakablePropsAndLivingWorld(world: GameWorld, player: Pla
         });
       }
 
-      // Spawn tailored debris particles
+      // Spawn tailored physical debris particles at contact point
       let debrisColor = '#64748b';
       let debrisCount = 8;
       let debrisSubtype: 'plastic_chunk' | 'metal_flake' | 'concrete_chip' = 'plastic_chunk';
@@ -12673,14 +13372,14 @@ export function updateBreakablePropsAndLivingWorld(world: GameWorld, player: Pla
       else if (prop.type === 'cone') { debrisColor = '#ea580c'; debrisCount = 6; }
       else if (prop.type === 'bollard') { debrisColor = '#334155'; debrisCount = 6; debrisSubtype = 'metal_flake'; }
       else if (prop.type === 'traffic_light') { debrisColor = '#eab308'; debrisCount = 10; debrisSubtype = 'metal_flake'; }
-      else if (prop.type === 'lamp_highway'|| prop.type === 'lamp') { debrisColor = '#94a3b8'; debrisCount = 10; debrisSubtype = 'metal_flake'; }
+      else if (prop.type === 'lamp_highway' || prop.type === 'lamp') { debrisColor = '#94a3b8'; debrisCount = 10; debrisSubtype = 'metal_flake'; }
 
       for (let d = 0; d < debrisCount; d++) {
         const dAngle = Math.random() * Math.PI * 2;
         const dSpeed = 40 + Math.random() * 85;
         world.particles.push({
-          x: col.contactX,
-          y: col.contactY,
+          x: contactX,
+          y: contactY,
           vx: Math.cos(dAngle) * dSpeed,
           vy: Math.sin(dAngle) * dSpeed,
           radius: 0.50 + Math.random() * 0.55,
@@ -12702,38 +13401,8 @@ export function updateBreakablePropsAndLivingWorld(world: GameWorld, player: Pla
         });
       }
 
-      // Shattered glass panels for bus stop shelters
-      if (prop.type === 'bus_stop') {
-        const glassCount = 18 + Math.floor(Math.random() * 12);
-        for (let g = 0; g < glassCount; g++) {
-          const gAngle = Math.random() * Math.PI * 2;
-          const gSpeed = 35 + Math.random() * 75;
-          world.particles.push({
-            x: col.contactX + (Math.random() - 0.5) * 12,
-            y: col.contactY + (Math.random() - 0.5) * 12,
-            vx: Math.cos(gAngle) * gSpeed,
-            vy: Math.sin(gAngle) * gSpeed,
-            radius: 0.40 + Math.random() * 0.45,
-            aspect: 1.1 + Math.random() * 0.4,
-            color: 'rgba(224, 242, 254, 0.88)',
-            alpha: 0.95,
-            life: 0,
-            maxLife: 300.0,
-            type: 'glass_shard',
-            glassSubtype: 'safety_pebble',
-            angle: Math.random() * Math.PI * 2,
-            angularVelocity: (Math.random() - 0.5) * 26,
-            shapeSeed: Math.floor(Math.random() * 10000),
-            z: 1.4 + Math.random() * 1.8,
-            vz: 24 + Math.random() * 40,
-            bounces: 2,
-            splatted: false
-          });
-        }
-      }
-
-      // Shattered lamp / traffic light lenses
-      if (prop.type === 'lamp_highway'|| prop.type === 'lamp'|| prop.type === 'traffic_light') {
+      if (prop.type === 'lamp_highway' || prop.type === 'lamp' || prop.type === 'traffic_light') {
+        prop.glassShattered = true;
         for (let g = 0; g < 8; g++) {
           const gAngle = Math.random() * Math.PI * 2;
           const gSpeed = 30 + Math.random() * 60;

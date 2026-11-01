@@ -50,7 +50,7 @@ import { performanceConfig } from './performanceConfig';
 import { getBuildingLayout, renderBuildingInterior } from './buildingInteriors';
 import { drawItemModel2D } from './itemGraphic';
 import { screenEffectsSystem } from './screenEffects';
-import { renderStreetProp, renderTallStreetProp } from './propRenderer';
+import { renderStreetProp, renderStreetPropFoundation, renderTallStreetProp } from './propRenderer';
 import { GasStationRenderer } from './gasStationRenderer';
 import { GarageCooperativeRenderer } from './garageCooperativeRenderer';
 import { RailwayRenderer } from './railwayRenderer';
@@ -70,6 +70,12 @@ import { getEffectiveWeatherWeights } from './weatherTransition';
 import { mapPolyToDeformVerts } from './softbodyPolyMap';
 import { renderSoftbodyMeshOverlay } from './softbodyOverlay';
 import { getDisplaySettings } from './displaySettings';
+import {
+  computeSunShadowState,
+  getCurrentSunShadowState,
+  getLocalShadowOffset,
+  renderUnifiedWorldShadows
+} from './shadowSystem';
 
 interface CloudShadowLobe {
   relX: number;
@@ -345,6 +351,7 @@ export class GameRenderer {
 
   // Offscreen buffer for the Lightmap (prevents punching holes in the world)
   private lightmapCanvas: HTMLCanvasElement;
+  private shadowCanvas: HTMLCanvasElement;
   private lightmapUsedThisFrame = false;
   private backingScale: number = 1;
 
@@ -364,6 +371,7 @@ export class GameRenderer {
     });
   }
   private lightmapCtx: CanvasRenderingContext2D;
+  private shadowCtx: CanvasRenderingContext2D;
 
   // Offscreen Chunk Cache for static world geometry (Ground, Sidewalks, Roads, Parkings)
   private chunkCache = new Map<string, HTMLCanvasElement>();
@@ -757,6 +765,8 @@ export class GameRenderer {
     this.ctx = ctx;
     this.lightmapCanvas = document.createElement('canvas');
     this.lightmapCtx = this.lightmapCanvas.getContext('2d')!;
+    this.shadowCanvas = document.createElement('canvas');
+    this.shadowCtx = this.shadowCanvas.getContext('2d')!;
     this.resize(this.width, this.height);
     
     this.cloudShadows = [];
@@ -927,6 +937,8 @@ export class GameRenderer {
     this.backingScale = backingScale > 0 ? backingScale : 1;
     this.lightmapCanvas.width = width;
     this.lightmapCanvas.height = height;
+    this.shadowCanvas.width = width;
+    this.shadowCanvas.height = height;
   }
 
   public render(
@@ -966,9 +978,10 @@ export class GameRenderer {
     const minY = camera.y - viewDiag;
     const maxY = camera.y + viewDiag;
 
-    // Calculate continuous astronomical lighting & chromatic sky atmosphere
+    // Calculate continuous astronomical lighting, solar shadow vector & chromatic sky atmosphere
     const atmo = calculateAstronomicalAtmosphere(timeHour, world.calendar);
     const nightAlpha = atmo.nightAlpha;
+    computeSunShadowState(world, timeHour);
     this.updateLiquidFx(timeHour, nightAlpha, visibleVehicles, world.calendar);
 
     const vpProps = visibleProps || world.props.filter(p => p.x >= minX - 120 && p.x <= maxX + 120 && p.y >= minY - 120 && p.y <= maxY + 120);
@@ -1204,9 +1217,6 @@ export class GameRenderer {
     // 3b. Garage Cooperative Ground Apron (Concrete slabs, gravel verges, weeds & oil stains)
     GarageCooperativeRenderer.renderGroundApron(this.ctx, world, minX, minY, maxX, maxY, nightAlpha);
 
-    // 3a. Cloud Shadows (Atmosphere)
-    this.renderCloudShadows(world, minX, minY, maxX, maxY, nightAlpha);
-
     // 4b. Post-Soviet Atmosphere & Cyrillic Signage
     this.renderPostSovietAtmosphereAndSignage(world, minX, minY, maxX, maxY);
 
@@ -1340,7 +1350,7 @@ export class GameRenderer {
     // 16d. Flying Birds
     this.renderBirds(world.birds.filter((b) => b.state === 'flying'), minX, minY, maxX, maxY, nightAlpha);
 
-    // 16e. Unified Night Shroud & Physical Lighting (Покров ночи и чистый свет)
+    // 16e. Unified Night Shroud, Extruded 3D World Shadows & Physical Lighting (Покров ночи, тени и чистый свет)
     this.renderLightmap(
       world,
       timeHour, 
@@ -1348,7 +1358,11 @@ export class GameRenderer {
       visibleVehicles, 
       vpProps, 
       minX, minY, maxX, maxY,
-      player
+      player,
+      visibleBuildings,
+      visiblePedestrians,
+      vpTrees,
+      remotePlayers
     );
 
     // 17. Overhead Particles (Tractor Stack Exhaust, Engine Bay Steam/Smoke, Flames, Sparks, Debris)
@@ -2959,13 +2973,7 @@ export class GameRenderer {
       const signX = inter.x + inter.width / 2 + 16;
       const signY = inter.y - inter.height / 2 - 16;
 
-      // Base shadow on sidewalk
-      ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
-      ctx.beginPath();
-      ctx.ellipse(signX, signY + 6, 5, 3, 0, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Vertical metal pole (3D upright pillar)
+      // Vertical metal pole (3D upright pillar; 3D shadow rendered via Unified Shadow System)
       ctx.fillStyle = '#334155';
       ctx.fillRect(signX - 2, signY - 24, 4, 30);
       ctx.fillStyle = '#64748b';
@@ -3193,22 +3201,12 @@ export class GameRenderer {
   } = { sunElev: 0, shadowDirX: 0, shadowDirY: 1, sky: { r: 186, g: 230, b: 253 }, vehicles: [], reflectBudget: 0, shadowBudget: 0 };
 
   private updateLiquidFx(timeHour: number, nightAlpha: number, vehicles: Vehicle[], calendar?: { sunriseHour?: number; sunsetHour?: number }) {
-    const sunrise = calendar?.sunriseHour ?? 6.0;
-    const sunset = calendar?.sunsetHour ?? 19.0;
-    const dayLen = Math.max(1, sunset - sunrise);
-    const dayFrac = Math.min(1, Math.max(0, (timeHour - sunrise) / dayLen));
-    const sunElev = timeHour > sunrise && timeHour < sunset ? Math.sin(Math.PI * dayFrac) : 0;
-    // Sun sweeps east to west: shadows start long toward the west at dawn, point north at noon, then flip east
-    let dx = -Math.cos(Math.PI * dayFrac);
-    let dy = -0.35;
-    const len = Math.hypot(dx, dy) || 1;
-    dx /= len;
-    dy /= len;
+    const sunState = getCurrentSunShadowState();
     const day = 1 - Math.min(1, nightAlpha * 1.25);
     const fx = this.liquidFx;
-    fx.sunElev = sunElev * day;
-    fx.shadowDirX = dx;
-    fx.shadowDirY = dy;
+    fx.sunElev = sunState.sunElevation * day;
+    fx.shadowDirX = sunState.shadowDirX;
+    fx.shadowDirY = sunState.shadowDirY;
     fx.sky = {
       r: Math.round(186 + (30 - 186) * nightAlpha),
       g: Math.round(230 + (41 - 230) * nightAlpha),
@@ -3412,18 +3410,10 @@ export class GameRenderer {
         ctx.fill();
 
       } else if (stain.type === 'sand') {
-        // --- 1. Soft bottom-right drop shadow (3D height projection) ---
-        ctx.save();
-        ctx.translate(rx * 0.08, ry * 0.12);
-        ctx.fillStyle = `rgba(15, 23, 42, ${stainAlpha * 0.5})`;
-        this.drawOrganicBlob(ctx, rx * 1.02, ry * 1.02, seed);
-        ctx.fill();
-        ctx.restore();
-
-        // --- 2. Main volumetric sand cone slope gradient (from shadow to light) ---
-        // Shifting peak center slightly top-left to simulate light from top-left
-        const peakX = -rx * 0.15;
-        const peakY = -ry * 0.15;
+        // --- Volumetric sand cone slope gradient oriented toward current sun direction ---
+        const sunState = getCurrentSunShadowState();
+        const peakX = sunState.sunDirX * rx * 0.18;
+        const peakY = sunState.sunDirY * ry * 0.18;
         const mainGrad = safeRadialGradient(ctx, peakX, peakY, 2, peakX, peakY, rx * 1.1);
         
         // Dark steep shadow side, mid-tones, lit golden peak
@@ -4209,11 +4199,7 @@ export class GameRenderer {
         continue;
       }
 
-      // 1. DROP SHADOW FOR BUILDING BLOCK
-      if (performanceConfig.enableShadows) {
-        ctx.fillStyle = 'rgba(15, 23, 42, 0.42)';
-        ctx.fillRect(bld.x + 9, bld.y + 9, bld.width, bld.height);
-      }
+      // 1. Building shadow is projected dynamically in 3D via unified shadow shroud (shadowSystem.ts)
 
       // 2. BASE WALL STRUCTURE & FACADE TEXTURE
       ctx.fillStyle = bld.color;
@@ -5153,13 +5139,7 @@ export class GameRenderer {
     const cy = bld.y + bld.height / 2;
     const outerR = bld.width / 2; // ~38px
 
-    // 1. Drop shadow of the grand stone basin onto park tiles
-    ctx.fillStyle = 'rgba(15, 23, 42, 0.45)';
-    ctx.beginPath();
-    ctx.arc(cx + 4, cy + 4, outerR + 2, 0, Math.PI * 2);
-    ctx.fill();
-
-    // 2. Base Tier: Outer Stepped Granite Plinth (Dark slate foundation)
+    // 1. Base Tier: Outer Stepped Granite Plinth (3D shadows rendered via Unified Shadow System)
     ctx.fillStyle = '#334155';
     ctx.beginPath();
     ctx.arc(cx, cy, outerR + 2, 0, Math.PI * 2);
@@ -5261,14 +5241,8 @@ export class GameRenderer {
     }
     ctx.restore();
 
-    // 7. Middle Elevated Stone Tier (Carved Chalice Bowl)
+    // 7. Middle Elevated Stone Tier (Carved Chalice Bowl; 3D shadow rendered via Unified Shadow System)
     const midR = 17;
-    // Shadow of middle tier into pool
-    ctx.fillStyle = 'rgba(8, 47, 73, 0.55)';
-    ctx.beginPath();
-    ctx.arc(cx + 2, cy + 2, midR + 1, 0, Math.PI * 2);
-    ctx.fill();
-
     // Chalice Outer Stone Pedestal
     const midStoneGrad = ctx.createLinearGradient(cx - midR, cy - midR, cx + midR, cy + midR);
     midStoneGrad.addColorStop(0, '#f8fafc');
@@ -5519,9 +5493,7 @@ export class GameRenderer {
             bh = bal.length;
           }
 
-          // Balcony Shadow
-          ctx.fillStyle = 'rgba(15, 23, 42, 0.35)';
-          ctx.fillRect(bx + 3, by + 3, bw, bh);
+          // Balcony shadow is projected dynamically in 3D via unified shadow shroud
 
           // Balcony Concrete Base Slab
           ctx.fillStyle = '#cbd5e1';
@@ -5624,9 +5596,7 @@ export class GameRenderer {
             feh = fe.length;
           }
 
-          // Fire Escape Shadow
-          ctx.fillStyle = 'rgba(15, 23, 42, 0.4)';
-          ctx.fillRect(fex + 3, fey + 3, few, feh);
+          // Fire escape shadow is projected dynamically in 3D via unified shadow shroud
 
           // Iron Framework Grating
           ctx.fillStyle = '#1e293b';
@@ -6045,18 +6015,6 @@ export class GameRenderer {
         RoofRenderer.renderFlatBuildingRoof(ctx, bld, nightAlpha, now);
       }
     }
-
-    // Night Tint for the buildings (since drawn above lightmap)
-    if (nightAlpha > 0.05) {
-      ctx.fillStyle = `rgba(0, 0, 15, ${nightAlpha * 0.72})`;
-      for (const bldToTint of buildings) {
-        if (bldToTint.type === 'suburban') {
-          ctx.fillRect(bldToTint.x - 4, bldToTint.y - 4, bldToTint.width + 8, bldToTint.height + 8);
-        } else {
-          ctx.fillRect(bldToTint.x, bldToTint.y, bldToTint.width, bldToTint.height);
-        }
-      }
-    }
   }
 
   // --- STREET LITTER & FLYING DEBRIS ---
@@ -6076,13 +6034,7 @@ export class GameRenderer {
       ctx.translate(lit.x, renderY);
       ctx.rotate(lit.angle);
 
-      // Ground Shadow if airborne
-      if (alt > 0) {
-        ctx.fillStyle = `rgba(0, 0, 0, ${Math.max(0.1, 0.35 - alt * 0.008)})`;
-        ctx.beginPath();
-        ctx.ellipse(0, alt, lit.size, lit.size * 0.5, 0, 0, Math.PI * 2);
-        ctx.fill();
-      }
+      // Airborne & ground litter shadows are projected in world space via unified shadow shroud
 
       if (lit.type === 'paper') {
         ctx.fillStyle = lit.color;
@@ -6211,11 +6163,7 @@ export class GameRenderer {
       ctx.save();
       ctx.translate(gi.x, gi.y);
 
-      // 1. Subtle, realistic flat shadow under the item
-      ctx.fillStyle = 'rgba(0, 0, 0, 0.25)';
-      ctx.beginPath();
-      ctx.ellipse(0, 2, 6, 3, 0, 0, Math.PI * 2);
-      ctx.fill();
+      // 1. Ground item shadow is projected dynamically in world space via unified shadow shroud
 
       if (!gi.item) {
         ctx.restore();
@@ -6240,7 +6188,31 @@ export class GameRenderer {
   ) {
     const ctx = this.ctx;
 
-    // Street Props (High-Detail Vector Rendering & Authentic Damage Textures)
+    // Pass 1: Stationary ground foundations (concrete pads, bolted flanges, underground hydrant pipes & geysers)
+    // Always rendered at (originX, originY, originAngle) so foundations never slide when a bin or bench moves!
+    for (const prop of props) {
+      if (
+        prop.type !== 'bench' &&
+        prop.type !== 'dumpster' &&
+        prop.type !== 'trash_can' &&
+        prop.type !== 'mailbox' &&
+        prop.type !== 'hydrant'
+      ) {
+        continue;
+      }
+      const ox = prop.originX ?? prop.x;
+      const oy = prop.originY ?? prop.y;
+      if (ox < minX - 120 || ox > maxX + 120 || oy < minY - 120 || oy > maxY + 120) continue;
+
+      ctx.save();
+      ctx.translate(ox, oy);
+      const oAngle = prop.originAngle ?? prop.angle ?? 0;
+      if (oAngle) ctx.rotate(oAngle);
+      renderStreetPropFoundation(ctx, prop);
+      ctx.restore();
+    }
+
+    // Pass 2: Street Prop Bodies (High-Detail Vector Rendering & Progressive Structural Deformation)
     for (const prop of props) {
       if ((prop.type === 'lamp' || prop.type === 'lamp_highway' || prop.type === 'lamp_concrete') && !prop.isBroken) continue;
       if (prop.type === 'traffic_light' || prop.type === 'railway_signal') continue;
@@ -6250,10 +6222,11 @@ export class GameRenderer {
       ctx.save();
       ctx.translate(prop.x, prop.y);
 
-      if (prop.angle && !prop.isBroken) {
-        ctx.rotate(prop.angle);
-      } else if (prop.isBroken && prop.type !== 'lamp_highway' && prop.type !== 'lamp' && prop.type !== 'lamp_concrete') {
-        ctx.rotate(prop.angle || 0.8);
+      if (prop.type !== 'lamp_highway' && prop.type !== 'lamp' && prop.type !== 'lamp_concrete') {
+        const bodyAngle = prop.angle ?? 0;
+        if (bodyAngle) {
+          ctx.rotate(bodyAngle);
+        }
       }
 
       renderStreetProp(ctx, prop);
@@ -6285,19 +6258,7 @@ export class GameRenderer {
         const r = tree.radius;
         const seed = Math.abs(Math.floor(tree.x * 12.9898 + tree.y * 78.233));
 
-        // 1. Soft Ground Shadow of bare branches and roots
-        if (performanceConfig.enableShadows) {
-          ctx.strokeStyle = 'rgba(0, 0, 0, 0.35)';
-          ctx.lineWidth = Math.max(2.0, r * 0.15);
-          for (let b = 0; b < 5; b++) {
-            const ang = (b / 5) * Math.PI * 2 + (seed % 10) * 0.12;
-            const len = r * (0.65 + ((seed + b) % 5) * 0.12);
-            ctx.beginPath();
-            ctx.moveTo(tree.x + tree.shadowOffset * 0.8, tree.y + tree.shadowOffset * 0.8);
-            ctx.lineTo(tree.x + tree.shadowOffset * 0.8 + Math.cos(ang) * len, tree.y + tree.shadowOffset * 0.8 + Math.sin(ang) * len);
-            ctx.stroke();
-          }
-        }
+        // 1. Dead tree branch shadow is projected dynamically in world space via unified shadow shroud
 
         // 2. Thick Gnarled Roots (Weathered dark-grey-brown anchoring base)
         ctx.strokeStyle = '#57534e';
@@ -6422,23 +6383,8 @@ export class GameRenderer {
           ctx.stroke();
         }
 
-        // 5. Night Tint (if darkness is active)
-        if (nightAlpha > 0.05) {
-          ctx.fillStyle = `rgba(0, 5, 20, ${nightAlpha * 0.75})`;
-          ctx.beginPath();
-          ctx.arc(tree.x, tree.y, r * 1.05, 0, Math.PI * 2);
-          ctx.fill();
-        }
       } else if (isPine) {
         const r = tree.radius;
-
-        // Pine Shadow
-        if (performanceConfig.enableShadows) {
-          ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
-          ctx.beginPath();
-          ctx.ellipse(tree.x + tree.shadowOffset, tree.y + tree.shadowOffset, r * 1.1, r * 0.9, Math.PI / 4, 0, Math.PI * 2);
-          ctx.fill();
-        }
 
         // Outer Needle Tier (Dark evergreen starburst)
         ctx.fillStyle = tree.color || '#124c2c';
@@ -6490,24 +6436,9 @@ export class GameRenderer {
         ctx.arc(tree.x, tree.y, Math.max(3, r * 0.12), 0, Math.PI * 2);
         ctx.fill();
 
-        // Night Tint for the pine tree
-        if (nightAlpha > 0.05) {
-          ctx.fillStyle = `rgba(0, 5, 20, ${nightAlpha * 0.75})`;
-          ctx.beginPath();
-          ctx.arc(tree.x, tree.y, tree.radius, 0, Math.PI * 2);
-          ctx.fill();
-        }
       } else if (isBirch) {
         // --- RUSSIAN BIRCH TREE (БЕРЁЗА: БЕЛЫЙ СТВОЛ С ЧЁРНЫМИ ЧЕЧЕВИЧКАМИ И СЕЗОННАЯ ЛИСТВА) ---
         const r = tree.radius;
-
-        // Birch Dappled Shadow
-        if (performanceConfig.enableShadows) {
-          ctx.fillStyle = 'rgba(0, 0, 0, 0.25)';
-          ctx.beginPath();
-          ctx.ellipse(tree.x + tree.shadowOffset, tree.y + tree.shadowOffset, r * 1.05, r * 0.85, 0.3, 0, Math.PI * 2);
-          ctx.fill();
-        }
 
         // Seasonal foliage palette for deciduous Russian birch
         let foliageColors = ['#4d7c0f', '#65a30d', '#84cc16'];
@@ -6559,13 +6490,6 @@ export class GameRenderer {
         ctx.fillStyle = '#0f172a';
         ctx.fillRect(tree.x - r * 0.1, tree.y - 1, r * 0.2, 1.5);
 
-        // Night Tint for birch
-        if (nightAlpha > 0.05) {
-          ctx.fillStyle = `rgba(0, 5, 20, ${nightAlpha * 0.75})`;
-          ctx.beginPath();
-          ctx.arc(tree.x, tree.y, tree.radius * 1.05, 0, Math.PI * 2);
-          ctx.fill();
-        }
       } else {
         // --- DECIDUOUS / OAK / MAPLE / AUTUMN BROADLEAF TREE ---
         const r = tree.radius;
@@ -6573,19 +6497,6 @@ export class GameRenderer {
 
         if (season === 'winter') {
           // --- BARE WINTER SKELETON (Deciduous broadleaf trees shed all leaves in Russian winter) ---
-          // 1. Bare Branch Ground Shadow
-          if (performanceConfig.enableShadows) {
-            ctx.strokeStyle = 'rgba(0, 0, 0, 0.22)';
-            ctx.lineWidth = Math.max(1.8, r * 0.12);
-            for (let b = 0; b < 5; b++) {
-              const ang = (b / 5) * Math.PI * 2 + (seed % 10) * 0.14;
-              const len = r * (0.65 + ((seed + b) % 5) * 0.08);
-              ctx.beginPath();
-              ctx.moveTo(tree.x + tree.shadowOffset * 0.8, tree.y + tree.shadowOffset * 0.8);
-              ctx.lineTo(tree.x + tree.shadowOffset * 0.8 + Math.cos(ang) * len, tree.y + tree.shadowOffset * 0.8 + Math.sin(ang) * len);
-              ctx.stroke();
-            }
-          }
 
           // 2. Main Spreading Woody Boughs
           const numBranches = 5;
@@ -6646,20 +6557,7 @@ export class GameRenderer {
           ctx.arc(tree.x - trunkR * 0.15, tree.y - trunkR * 0.15, trunkR * 0.65, 0, Math.PI * 2);
           ctx.fill();
 
-          if (nightAlpha > 0.05) {
-            ctx.fillStyle = `rgba(0, 5, 20, ${nightAlpha * 0.75})`;
-            ctx.beginPath();
-            ctx.arc(tree.x, tree.y, r * 1.05, 0, Math.PI * 2);
-            ctx.fill();
-          }
         } else {
-          // Foliage Shadow
-          if (performanceConfig.enableShadows) {
-            ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
-            ctx.beginPath();
-            ctx.ellipse(tree.x + tree.shadowOffset, tree.y + tree.shadowOffset, r * 1.1, r * 0.9, 0.2, 0, Math.PI * 2);
-            ctx.fill();
-          }
 
           // Seasonal Foliage Colors
           let baseColors: string[];
@@ -6718,14 +6616,6 @@ export class GameRenderer {
           ctx.beginPath();
           ctx.arc(tree.x, tree.y, Math.max(2.5, r * 0.14), 0, Math.PI * 2);
           ctx.fill();
-
-          // Night Tint
-          if (nightAlpha > 0.05) {
-            ctx.fillStyle = `rgba(0, 5, 20, ${nightAlpha * 0.75})`;
-            ctx.beginPath();
-            ctx.arc(tree.x, tree.y, tree.radius, 0, Math.PI * 2);
-            ctx.fill();
-          }
         }
       }
     }
@@ -6800,13 +6690,9 @@ export class GameRenderer {
       ctx.translate(prop.x, prop.y);
 
       if (isBroken) {
-        // Render broken traffic light lying on ground
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.25)';
-        ctx.beginPath();
-        ctx.ellipse(3, 3, 14, 5, prop.angle || 0.8, 0, Math.PI * 2);
-        ctx.fill();
+        // Broken traffic light shadow is projected in world space via unified shadow shroud
 
-        ctx.rotate(prop.angle || 0.8);
+        ctx.rotate(prop.breakAngle ?? prop.tiltAngle ?? prop.angle ?? 0);
 
         // Broken Pole / Column lying flat
         ctx.strokeStyle = '#334155';
@@ -6907,25 +6793,36 @@ export class GameRenderer {
         ctx.restore();
 
       } else {
-        // Intact assembly
+        // Intact or plastically bent assembly
+        const tilt = prop.tiltAmount ?? 0;
+        const tiltDir = prop.tiltAngle ?? 0;
+        const leanX = Math.cos(tiltDir) * tilt * 7;
+        const leanY = Math.sin(tiltDir) * tilt * 7;
+
+        // Ground base collar at (0, 0)
+        ctx.fillStyle = '#475569';
+        ctx.beginPath();
+        ctx.arc(0, 0, 4.5, 0, Math.PI * 2);
+        ctx.fill();
+
+        if (tilt > 0.04) {
+          ctx.strokeStyle = '#334155';
+          ctx.lineWidth = 3.2;
+          ctx.lineCap = 'round';
+          ctx.beginPath();
+          ctx.moveTo(0, 0);
+          ctx.lineTo(leanX, leanY);
+          ctx.stroke();
+          ctx.translate(leanX, leanY);
+        }
+
         const headX = Math.cos(facingAngle) * bracketLength;
         const headY = Math.sin(facingAngle) * bracketLength;
 
         const pedHeadX = Math.cos(pedFacingAngle) * pedBracketLen;
         const pedHeadY = Math.sin(pedFacingAngle) * pedBracketLen;
 
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
-        ctx.beginPath();
-        ctx.arc(3, 3, 4.5, 0, Math.PI * 2);
-        ctx.fill();
-
-        ctx.beginPath();
-        safeRoundRect(ctx, headX - 4 + 3, headY - 4 + 3, 8, 8, 2);
-        ctx.fill();
-
-        ctx.beginPath();
-        safeRoundRect(ctx, pedHeadX - 2.5 + 2, pedHeadY - 2.5 + 2, 5, 5, 1);
-        ctx.fill();
+        // Traffic light mast & head shadows are projected in 3D via unified shadow shroud
 
         ctx.strokeStyle = '#334155';
         ctx.lineWidth = 2.5;
@@ -6939,11 +6836,6 @@ export class GameRenderer {
         ctx.moveTo(0, 0);
         ctx.lineTo(pedHeadX, pedHeadY);
         ctx.stroke();
-
-        ctx.fillStyle = '#475569';
-        ctx.beginPath();
-        ctx.arc(0, 0, 4.5, 0, Math.PI * 2);
-        ctx.fill();
 
         ctx.fillStyle = '#1e293b';
         ctx.beginPath();
@@ -7245,13 +7137,8 @@ export class GameRenderer {
       if (b.x < minX || b.x > maxX || b.y < minY || b.y > maxY) continue;
       ctx.save();
 
-      // If flying, render ground shadow offset
+      // Flying & ground bird shadows are projected dynamically in world space via unified shadow shroud
       if (b.state === 'flying') {
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.25)';
-        ctx.beginPath();
-        ctx.ellipse(b.x, b.y + b.altitude * 0.4, 1.4, 0.8, 0, 0, Math.PI * 2);
-        ctx.fill();
-
         // Position bird in sky
         ctx.translate(b.x, b.y - b.altitude * 0.6);
       } else {
@@ -7371,11 +7258,7 @@ export class GameRenderer {
       ctx.save();
       ctx.rotate(ped.angle);
 
-      // Shadow
-      ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
-      ctx.beginPath();
-      ctx.ellipse(1.5, 2, 4.8, 3.4, 0, 0, Math.PI * 2);
-      ctx.fill();
+      // Pedestrian 3D body shadow is projected in world space via unified shadow shroud
 
       // Cyclist / Scooter base
       if (ped.isCyclist) {
@@ -7901,10 +7784,6 @@ export class GameRenderer {
           ctx.arc(2, 0, 7, -Math.PI * 0.4, Math.PI * 0.4);
           ctx.fill();
 
-          // Ground drop shadow under phone
-          ctx.fillStyle = 'rgba(0, 0, 0, 0.25)';
-          ctx.fillRect(-1.4, -1.2, 3.4, 2.8);
-
           // Phone outer casing (sleek dark rounded rectangle)
           ctx.fillStyle = '#0f172a';
           ctx.beginPath();
@@ -7937,12 +7816,6 @@ export class GameRenderer {
           // Top-down Fire Extinguisher held in hands at X = 5.0, Y = 0
           ctx.translate(5.0, 0);
 
-          // Ground shadow
-          ctx.fillStyle = 'rgba(0,0,0,0.25)';
-          ctx.beginPath();
-          ctx.arc(0, 0, 2.2, 0, Math.PI * 2);
-          ctx.fill();
-
           // Red cylinder body
           ctx.fillStyle = '#dc2626';
           ctx.beginPath();
@@ -7961,12 +7834,6 @@ export class GameRenderer {
         } else if (propType === 'coffee') {
           // Top-down Coffee Cup held in right hand at X = 5.4, Y = 4.8
           ctx.translate(5.4, 4.8);
-
-          // Ground shadow
-          ctx.fillStyle = 'rgba(0,0,0,0.22)';
-          ctx.beginPath();
-          ctx.arc(0.5, 0.5, 2.5, 0, Math.PI * 2);
-          ctx.fill();
 
           // White takeaway cup outer rim (top-down circle)
           ctx.fillStyle = '#f8fafc';
@@ -8000,10 +7867,6 @@ export class GameRenderer {
         } else if (propType === 'box') {
           // Top-down Cardboard Box held in front of chest at X = 7.0, Y = 0
           ctx.translate(7.0, 0);
-
-          // Ground shadow
-          ctx.fillStyle = 'rgba(0, 0, 0, 0.28)';
-          ctx.fillRect(-2.2, -3.2, 5.2, 7.2);
 
           // Cardboard top surface
           ctx.fillStyle = '#b45309';
@@ -8042,12 +7905,6 @@ export class GameRenderer {
           ctx.translate(bagArmSwing + 1.2, 7.2);
 
           const bagColor = ped.propColor || '#e11d48';
-
-          // Ground shadow under bag
-          ctx.fillStyle = 'rgba(0, 0, 0, 0.25)';
-          ctx.beginPath();
-          safeEllipse(ctx, 0.5, 0.5, 3.8, 2.2, 0, 0, Math.PI * 2);
-          ctx.fill();
 
           // Top-down bag body (open-top rectangular/elliptical tote bag)
           ctx.fillStyle = bagColor;
@@ -8088,13 +7945,6 @@ export class GameRenderer {
       // Janitor Broom (Pure Top-Down View: shaft extends forward from hands, broom head at front)
       if (ped.hasBroom) {
         ctx.save();
-
-        // Ground drop shadow under broom shaft and head
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.22)';
-        ctx.beginPath();
-        ctx.fillRect(4.5, -0.5, 12.0, 1.2); // Shaft shadow
-        ctx.fillRect(16.0, -5.5, 2.8, 12.0); // Head shadow
-        ctx.fill();
 
         // Broom Shaft: wooden pole extending forward from hands (X = 4.5 to 16.5)
         ctx.strokeStyle = '#78350f';
@@ -8265,11 +8115,7 @@ export class GameRenderer {
       ctx.fill();
     }
 
-    // Shadow
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
-    ctx.beginPath();
-    ctx.ellipse(1.5, 2, 5.2, 3.8, 0, 0, Math.PI * 2);
-    ctx.fill();
+    // Player 3D body shadow is projected in world space via unified shadow shroud
 
     // Determine colors based on equipped clothing
     let cSkin = player.skinColor;
@@ -9097,25 +8943,7 @@ export class GameRenderer {
         return [px, py];
       } : (px: number, py: number): [number, number] => [px, py];
 
-      // 1. Drop Shadow
-      ctx.fillStyle = 'rgba(0, 0, 0, 0.32)';
-      if (car.type === 'trailer_barrel' || car.type === 'trailer_vacuum' || isRoadMachinery(car.type)) {
-        ctx.beginPath();
-        const sPoly = bodyPoly.map(p => {
-          const [dx, dy] = deform(p.x + 1.5, p.y + 2.5);
-          return { x: dx, y: dy };
-        });
-        if (sPoly.length > 0) {
-          ctx.moveTo(sPoly[0].x, sPoly[0].y);
-          for (let i = 1; i < sPoly.length; i++) {
-            ctx.lineTo(sPoly[i].x, sPoly[i].y);
-          }
-          ctx.closePath();
-          ctx.fill();
-        }
-      } else {
-        ctx.fillRect(-halfL + 3, -halfW + 4, car.length, car.width);
-      }
+      // 1. Vehicle 3D extruded shadow is projected in world space via unified shadow shroud (shadowSystem.ts)
 
       const drawDeformedRect = hasDeformation ? (rx: number, ry: number, rw: number, rh: number, fillStyle: string | CanvasGradient) => {
         const p1 = deform(rx, ry);
@@ -11220,20 +11048,8 @@ export class GameRenderer {
       const isMachinery = isRoadMachinery(car.type);
 
       if (isTrailer || isMachinery) {
-        // Render specialized trailer attachments and machinery superstructure on top of lightmap
+        // Render specialized trailer attachments and machinery superstructure
         renderSpecializedVehicleAttachments(vCtx);
-
-        // Night/Weather Tint on top of lightmap
-        if (nightAlpha > 0.05) {
-          ctx.fillStyle = `rgba(0, 0, 15, ${nightAlpha * 0.72})`;
-          ctx.beginPath();
-          ctx.moveTo(bodyPoly[0].x, bodyPoly[0].y);
-          for (let i = 1; i < bodyPoly.length; i++) {
-            ctx.lineTo(bodyPoly[i].x, bodyPoly[i].y);
-          }
-          ctx.closePath();
-          ctx.fill();
-        }
         ctx.restore();
         continue;
       }
@@ -11353,18 +11169,6 @@ export class GameRenderer {
       // (skip truck_semi and trailers whose chassis and attachments are rendered on the lower chassis/body layer)
       if (car.type !== 'truck_semi' && !car.type.startsWith('trailer_') && !car.isTrailer) {
         renderSpecializedVehicleAttachments(vCtx);
-      }
-
-      // Night/Weather Tint for the cabins (since drawn above lightmap)
-      if (nightAlpha > 0.05) {
-        ctx.fillStyle = `rgba(0, 0, 15, ${nightAlpha * 0.72})`;
-        ctx.beginPath();
-        ctx.moveTo(bodyPoly[0].x, bodyPoly[0].y);
-        for (let i = 1; i < bodyPoly.length; i++) {
-          ctx.lineTo(bodyPoly[i].x, bodyPoly[i].y);
-        }
-        ctx.closePath();
-        ctx.fill();
       }
 
       ctx.restore();
@@ -12034,7 +11838,7 @@ export class GameRenderer {
     this.renderOverheadParticles(particles, cleanMode);
   }
 
-  // --- PROFESSIONAL TWO-PASS LIGHTMAP SYSTEM ---
+  // --- PROFESSIONAL TWO-PASS LIGHTMAP & UNIFIED SHADOW SHROUD SYSTEM ---
   private renderLightmap(
     world: GameWorld,
     timeHour: number,
@@ -12042,7 +11846,11 @@ export class GameRenderer {
     nearbyVehicles: Vehicle[],
     props: StreetProp[],
     minX: number, minY: number, maxX: number, maxY: number,
-    player?: Player | null
+    player?: Player | null,
+    visibleBuildings: Building[] = [],
+    visiblePedestrians: Pedestrian[] = [],
+    visibleTrees: Tree[] = [],
+    remotePlayers: RemotePlayerState[] = []
   ) {
     const atmo = calculateAstronomicalAtmosphere(timeHour, world.calendar);
     const nightAlpha = atmo.nightAlpha;
@@ -12080,7 +11888,7 @@ export class GameRenderer {
     );
 
     const getStreetLampOn = (prop: StreetProp) => {
-      if ((prop.type !== 'lamp' && prop.type !== 'lamp_highway' && prop.type !== 'lamp_concrete') || prop.isBroken) return false;
+      if ((prop.type !== 'lamp' && prop.type !== 'lamp_highway' && prop.type !== 'lamp_concrete') || prop.isBroken || prop.glassShattered) return false;
       const lampHash = Math.sin(prop.x * 12.9898 + prop.y * 78.233) * 43758.5453;
       const randVal = lampHash - Math.floor(lampHash);
       
@@ -12124,16 +11932,53 @@ export class GameRenderer {
       return (timeHour >= sunsetHour || timeHour < sunriseHour);
     };
 
+    const sunState = getCurrentSunShadowState();
+    const hasActiveShadows = performanceConfig.enableShadows && sunState.shadowOpacity > 0.005;
     const hasDarknessShroud = effectiveAlpha > 0.003 || weights.rain > 0.02 || weights.snow > 0.02 || weights.fog > 0.02 || weights.overcast > 0.02 || (world.lightningFlashTimer ?? 0) > 0;
+    const useLightmap = hasDarknessShroud || hasActiveShadows;
 
-    this.lightmapUsedThisFrame = hasDarknessShroud;
+    this.lightmapUsedThisFrame = useLightmap;
 
-    // --- PASS 1: Generate Cutout Darkness Layer Offscreen ---
-    if (hasDarknessShroud) {
+    // --- PASS 1: Generate Unified Darkness Shroud & 3D World Shadows Offscreen ---
+    if (useLightmap) {
       lCtx.clearRect(0, 0, this.width, this.height);
-      // Slightly reduced opacity for better nighttime texture visibility
-      lCtx.fillStyle = `${baseColor}${effectiveAlpha * 0.95})`;
-      lCtx.fillRect(0, 0, this.width, this.height);
+      if (effectiveAlpha > 0.003) {
+        // Ambient darkness veil (night, dusk, rain, fog, overcast)
+        lCtx.fillStyle = `${baseColor}${effectiveAlpha * 0.95})`;
+        lCtx.fillRect(0, 0, this.width, this.height);
+      }
+
+      // Render Unified 3D World Shadows into shadowCanvas and composite onto lightmapCanvas
+      // BEFORE destination-out light cutouts so every light source (headlights, flashlights,
+      // streetlamps, fires, signals) physically illuminates and pierces through shadows!
+      if (hasActiveShadows) {
+        renderUnifiedWorldShadows(
+          this.shadowCtx,
+          ctx,
+          this.width,
+          this.height,
+          this.backingScale,
+          world,
+          sunState,
+          visibleBuildings,
+          nearbyVehicles,
+          visiblePedestrians,
+          visibleTrees,
+          props,
+          minX, minY, maxX, maxY,
+          player,
+          remotePlayers,
+          this.cloudShadows
+        );
+
+        lCtx.save();
+        lCtx.setTransform(1, 0, 0, 1, 0, 0);
+        // Scale shadow opacity inversely with existing ambient night shroud so shadows merge seamlessly into night
+        const shadowCompositeAlpha = Math.max(0.04, sunState.shadowOpacity * (1.0 - effectiveAlpha * 0.80));
+        lCtx.globalAlpha = shadowCompositeAlpha;
+        lCtx.drawImage(this.shadowCanvas, 0, 0);
+        lCtx.restore();
+      }
 
       lCtx.save();
       // Synchronize offscreen transform with main camera
@@ -12820,10 +12665,106 @@ export class GameRenderer {
     }
 
     // G. Railway Signal Lights (ISI focused directional cones and optic glow cutouts)
-    RailwaySignalingSystem.renderLightmap(lCtx, world, minX, minY, maxX, maxY, nightAlpha);
+    RailwaySignalingSystem.renderLightmap(lCtx, world, minX, minY, maxX, maxY, Math.max(nightAlpha, sunState.shadowOpacity * 0.6));
 
     // H. Rolling Stock Dynamic Light Cutouts (Projector searchlights, buffer lights, and passenger windows)
-    RollingStockRenderer.renderLightmapCutouts(lCtx, world, minX, minY, maxX, maxY, effectiveAlpha, fogFactor);
+    RollingStockRenderer.renderLightmapCutouts(lCtx, world, minX, minY, maxX, maxY, Math.max(effectiveAlpha, sunState.shadowOpacity * 0.8), fogFactor);
+
+    // I. Garage Cooperative Gate & Guardhouse Light Cutouts
+    GarageCooperativeRenderer.renderLightmapCutouts(lCtx, world, nightAlpha, fogFactor);
+
+    // J. Remote Players' Handheld & Smartphone Flashlight Cutouts
+    if (remotePlayers && remotePlayers.length > 0) {
+      for (const rp of remotePlayers) {
+        const rpFlashOn = !rp.isInVehicle && ((rp as any).phoneFlashlightOn || (rp as any).flashlightOn);
+        if (rpFlashOn && rp.x >= minX - 300 && rp.x <= maxX + 300 && rp.y >= minY - 300 && rp.y <= maxY + 300) {
+          const aimAngle = (rp as any).aimAngle !== undefined ? (rp as any).aimAngle : rp.angle;
+          const fRange = 260 * fogFactor;
+          const fSpread = 0.50;
+          lCtx.save();
+          lCtx.translate(rp.x, rp.y);
+          lCtx.rotate(aimAngle);
+          const coneGrad = lCtx.createRadialGradient(0, 0, 2, fRange * 0.3, 0, fRange);
+          coneGrad.addColorStop(0.00, 'rgba(0, 0, 0, 0.95)');
+          coneGrad.addColorStop(0.30, 'rgba(0, 0, 0, 0.78)');
+          coneGrad.addColorStop(0.65, 'rgba(0, 0, 0, 0.35)');
+          coneGrad.addColorStop(1.00, 'rgba(0, 0, 0, 0)');
+          lCtx.fillStyle = coneGrad;
+          lCtx.beginPath();
+          lCtx.moveTo(0, 0);
+          lCtx.arc(0, 0, fRange, -fSpread, fSpread);
+          lCtx.closePath();
+          lCtx.fill();
+          lCtx.restore();
+        }
+      }
+    }
+
+    // K. Active Fires (Burning ground stains & burning vehicles) illuminate darkness and shadows!
+    const flicker = 0.92 + Math.sin(Date.now() * 0.023) * 0.08;
+    if (world.stains) {
+      for (const st of world.stains) {
+        if (!st.onFire) continue;
+        if (st.x < minX - 160 || st.x > maxX + 160 || st.y < minY - 160 || st.y > maxY + 160) continue;
+        const fireRad = Math.max(45, st.radius * 4.5) * flicker * fogFactor;
+        const fGrad = lCtx.createRadialGradient(st.x, st.y, 2, st.x, st.y, fireRad);
+        fGrad.addColorStop(0.0, 'rgba(0, 0, 0, 0.96)');
+        fGrad.addColorStop(0.35, 'rgba(0, 0, 0, 0.72)');
+        fGrad.addColorStop(0.70, 'rgba(0, 0, 0, 0.28)');
+        fGrad.addColorStop(1.0, 'rgba(0, 0, 0, 0)');
+        lCtx.fillStyle = fGrad;
+        lCtx.beginPath();
+        lCtx.arc(st.x, st.y, fireRad, 0, Math.PI * 2);
+        lCtx.fill();
+      }
+    }
+    for (const car of nearbyVehicles) {
+      const hasFire = car.damage?.engineFire || car.damage?.cabinFire;
+      if (hasFire) {
+        const fireIntensity = Math.max(0.4, car.damage?.fireIntensity || 0.75);
+        const fireRad = (85 + fireIntensity * 65) * flicker * fogFactor;
+        const fGrad = lCtx.createRadialGradient(car.x, car.y, 4, car.x, car.y, fireRad);
+        fGrad.addColorStop(0.0, 'rgba(0, 0, 0, 0.98)');
+        fGrad.addColorStop(0.4, 'rgba(0, 0, 0, 0.75)');
+        fGrad.addColorStop(0.75, 'rgba(0, 0, 0, 0.30)');
+        fGrad.addColorStop(1.0, 'rgba(0, 0, 0, 0)');
+        lCtx.fillStyle = fGrad;
+        lCtx.beginPath();
+        lCtx.arc(car.x, car.y, fireRad, 0, Math.PI * 2);
+        lCtx.fill();
+      }
+
+      // Emergency Vehicle Rotating/Flashing Strobe Bar Cutout
+      if (car.sirenOn) {
+        const strobePhase = Math.sin(Date.now() * 0.018 + car.x);
+        const strobeRad = (55 + Math.abs(strobePhase) * 35) * fogFactor;
+        const sGrad = lCtx.createRadialGradient(car.x, car.y, 2, car.x, car.y, strobeRad);
+        sGrad.addColorStop(0.0, 'rgba(0, 0, 0, 0.88)');
+        sGrad.addColorStop(0.45, 'rgba(0, 0, 0, 0.45)');
+        sGrad.addColorStop(1.0, 'rgba(0, 0, 0, 0)');
+        lCtx.fillStyle = sGrad;
+        lCtx.beginPath();
+        lCtx.arc(car.x, car.y, strobeRad, 0, Math.PI * 2);
+        lCtx.fill();
+      }
+    }
+
+    // L. Pedestrians' Glowing Smartphone Screens (subtle local cutout in shadows & night)
+    for (const ped of visiblePedestrians) {
+      if (ped.isInsideBuilding) continue;
+      if (ped.state === 'idle_phone' || ped.handheldProp === 'phone') {
+        const px = ped.x + Math.cos(ped.angle) * 6;
+        const py = ped.y + Math.sin(ped.angle) * 6;
+        const pGrad = lCtx.createRadialGradient(px, py, 0.5, px, py, 12 * fogFactor);
+        pGrad.addColorStop(0.0, 'rgba(0, 0, 0, 0.65)');
+        pGrad.addColorStop(0.5, 'rgba(0, 0, 0, 0.25)');
+        pGrad.addColorStop(1.0, 'rgba(0, 0, 0, 0)');
+        lCtx.fillStyle = pGrad;
+        lCtx.beginPath();
+        lCtx.arc(px, py, 12 * fogFactor, 0, Math.PI * 2);
+        lCtx.fill();
+      }
+    }
 
     lCtx.restore();
 
@@ -12900,8 +12841,8 @@ export class GameRenderer {
           ctx.translate(lx, ly);
           ctx.rotate(rearAngle);
 
-          // Physical diffuse road reflectance on asphalt behind trailer (anchored at bumper, active in dark/wet conditions)
-          const darknessFactor = Math.max(nightAlpha, (weights.rain + weights.snow) * 0.35);
+          // Physical diffuse road reflectance on asphalt behind trailer (active in night, shadow shroud, or wet conditions)
+          const darknessFactor = Math.max(nightAlpha, sunState.shadowOpacity * 0.45, (weights.rain + weights.snow) * 0.35);
           if (washLen > 8 && darknessFactor > 0.05) {
             const effLen = washLen * fogFactor;
             const effSpread = washSpread * fogFactor;
@@ -13100,7 +13041,7 @@ export class GameRenderer {
         // 1. Only active in darkness/night/dusk or wet conditions. In bright daylight, sunlight completely washes out road reflections from 21W lamps.
         // 2. Continuous fan originating AT the bumper (x=0), spreading backward onto the asphalt. NO detached floating ovals in mid-air!
         // 3. Fog warning lamps (ПТФ) are signaling lamps, they don't project ground washes.
-        const darknessFactor = Math.max(nightAlpha, (weights.rain + weights.snow) * 0.35);
+        const darknessFactor = Math.max(nightAlpha, sunState.shadowOpacity * 0.45, (weights.rain + weights.snow) * 0.35);
         if (!isFogWarningLamp && washLen > 8 && darknessFactor > 0.05) {
           const effLen = washLen * fogFactor;
           const effSpread = washSpread * fogFactor;

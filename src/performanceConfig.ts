@@ -48,14 +48,14 @@ export interface PerformanceConfig {
 
   // --- GPU post-processing layer (WebGL2, see src/gpu/postFx.ts) ---
   enableGpuPostFx: boolean;     // Run the frame through the GPU shader chain (default true)
-  gpuBloom: number;             // Glow around headlights, neon and fire, 0..100 (default 55)
-  gpuGrading: number;           // Tone curve and time-of-day / weather colour grading, 0..100 (default 60)
-  gpuClarity: number;           // Local contrast and depth in dark gaps, 0..100 (default 45)
+  gpuBloom: number;             // Natural optical glow around headlights, neon and fire, 0..100 (default 30)
+  gpuGrading: number;           // Subtle natural time-of-day / weather tone adaptation, 0..100 (default 15)
+  gpuClarity: number;           // Local contrast and depth in dark gaps, 0..100 (default 0)
   gpuRelief: number;            // Sun-lit micro relief on surfaces, 0..100 (default 35)
-  gpuSharpness: number;         // Sharpening after upscale, 0..100 (default 35)
-  gpuVignette: number;          // Darkened screen edges, 0..100 (default 40)
-  gpuGrain: number;             // Film grain, 0..100 (default 20)
-  gpuChromatic: number;         // Lens colour fringing at the edges, 0..100 (default 15)
+  gpuSharpness: number;         // Crispness compensation, 0..100 (default 15)
+  gpuVignette: number;          // Darkened screen edges, 0..100 (default 0)
+  gpuGrain: number;             // Film grain, 0..100 (default 0)
+  gpuChromatic: number;         // Lens colour fringing at the edges, 0..100 (default 0)
   gpuAntiAlias: boolean;        // FXAA edge smoothing (default true)
   gpuGi: number;                // Bounce light: surfaces pick up the colour of nearby lights, 0..100 (default 45)
   gpuWet: number;               // Wet asphalt sheen and light reflections in rain, 0..100 (default 60)
@@ -63,7 +63,7 @@ export interface PerformanceConfig {
 
 export type GraphicsPresetId = 'low' | 'medium' | 'high' | 'ultra';
 
-const STORAGE_KEY = 'city_sim_performance_config';
+const STORAGE_KEY = 'city_sim_performance_config_v2';
 
 export const DEFAULT_CONFIG: PerformanceConfig = {
   maxVehicles: 28,
@@ -109,14 +109,14 @@ export const DEFAULT_CONFIG: PerformanceConfig = {
   liquidShadowStrength: 50,
 
   enableGpuPostFx: true,
-  gpuBloom: 55,
-  gpuGrading: 60,
-  gpuClarity: 45,
+  gpuBloom: 30,
+  gpuGrading: 15,
+  gpuClarity: 0,
   gpuRelief: 35,
-  gpuSharpness: 35,
-  gpuVignette: 40,
-  gpuGrain: 20,
-  gpuChromatic: 15,
+  gpuSharpness: 15,
+  gpuVignette: 0,
+  gpuGrain: 0,
+  gpuChromatic: 0,
   gpuAntiAlias: true,
   gpuGi: 45,
   gpuWet: 60,
@@ -153,8 +153,8 @@ export const GRAPHICS_PRESETS: Record<GraphicsPresetId, Partial<PerformanceConfi
     enableSpeechBubbles: true, enableNameTags: true,
     enableLiquidReflections: true, liquidReflectionStrength: 50, liquidReflectionLimit: 100,
     enableLiquidShadows: true, liquidShadowStrength: 35,
-    enableGpuPostFx: true, gpuBloom: 40, gpuGrading: 55, gpuClarity: 30, gpuRelief: 0, gpuSharpness: 30,
-    gpuVignette: 30, gpuGrain: 0, gpuChromatic: 0, gpuAntiAlias: false, gpuGi: 30, gpuWet: 45,
+    enableGpuPostFx: true, gpuBloom: 25, gpuGrading: 15, gpuClarity: 0, gpuRelief: 25, gpuSharpness: 20,
+    gpuVignette: 0, gpuGrain: 0, gpuChromatic: 0, gpuAntiAlias: true, gpuGi: 35, gpuWet: 50,
   },
   high: { ...DEFAULT_CONFIG },
   ultra: {
@@ -170,8 +170,8 @@ export const GRAPHICS_PRESETS: Record<GraphicsPresetId, Partial<PerformanceConfi
     enableSpeechBubbles: true, enableNameTags: true,
     enableLiquidReflections: true, liquidReflectionStrength: 80, liquidReflectionLimit: 400,
     enableLiquidShadows: true, liquidShadowStrength: 70,
-    enableGpuPostFx: true, gpuBloom: 65, gpuGrading: 70, gpuClarity: 55, gpuRelief: 45, gpuSharpness: 40,
-    gpuVignette: 45, gpuGrain: 25, gpuChromatic: 20, gpuAntiAlias: true, gpuGi: 60, gpuWet: 75,
+    enableGpuPostFx: true, gpuBloom: 35, gpuGrading: 15, gpuClarity: 0, gpuRelief: 45, gpuSharpness: 15,
+    gpuVignette: 0, gpuGrain: 0, gpuChromatic: 0, gpuAntiAlias: true, gpuGi: 55, gpuWet: 75,
   },
 };
 

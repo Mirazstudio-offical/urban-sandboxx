@@ -1408,19 +1408,32 @@ export interface StreetProp {
   direction?: 'north' | 'south' | 'east' | 'west';
 
   isMasterLight?: boolean;
+  variant?: number;
   // Gate & Wicket Properties
   isOpen?: boolean;
   isLocked?: boolean;
   plotId?: string;
   lockCode?: string;
 
-  // Breakable Props Physics
+  // Breakable & Physical Props Simulation State
   isBroken?: boolean;
   breakVX?: number;
   breakVY?: number;
   breakAngle?: number;
   breakSpin?: number;
   waterFountainTimer?: number;
+
+  // First-Principles Structural & Anchor Physics
+  originX?: number;          // Fixed world X of concrete foundation / anchor base / underground pipe
+  originY?: number;          // Fixed world Y of concrete foundation / anchor base / underground pipe
+  originAngle?: number;      // Fixed world angle of foundation pad
+  damageLevel?: number;      // 0.0 (intact) to 1.0 (structurally failed / sheared / collapsed)
+  tiltAngle?: number;        // World angle (radians) toward which the prop is bent/leaning
+  tiltAmount?: number;       // 0.0 to 1.0 plastic bend/lean severity before full shear
+  dentLocalX?: number;       // Local X of primary impact dent on box/cylinder prop
+  dentLocalY?: number;       // Local Y of primary impact dent
+  glassShattered?: boolean;  // Tempered glass/lens shattered before steel frame yields
+  lastImpactTime?: number;   // Timestamp (s) of last impact for sound/particle debounce
 }
 
 export interface LitterItem {

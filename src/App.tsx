@@ -3729,11 +3729,12 @@ export default function App() {
         // 9. Query objects in Camera Viewport for high-performance rendering
         const tVpStart = performance.now();
         const vpMargin = (Math.hypot(window.innerWidth, window.innerHeight) / (2 * Math.max(0.4, camera.zoom)) + 150) * performanceConfig.drawDistance;
+        const bldMargin = vpMargin + 600;
         const vpBuildings = bldGrid.queryRect(
-          camera.x - vpMargin,
-          camera.y - vpMargin,
-          vpMargin * 2,
-          vpMargin * 2
+          camera.x - bldMargin,
+          camera.y - bldMargin,
+          bldMargin * 2,
+          bldMargin * 2
         );
         const vpVehicles = capNearest(vehGrid.queryRect(
           camera.x - vpMargin,

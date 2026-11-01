@@ -1799,9 +1799,8 @@ export function isLaneClearForMerge(
 
   // Check solid props on target lane
   for (const prop of world.props) {
-    if (prop.isBroken) continue;
     const hitbox = getPropHitbox(prop);
-    if (hitbox.shape === 'none') continue;
+    if (hitbox.shape === 'none' || (prop.isBroken && hitbox.isWalkableWhenBroken)) continue;
     const pPerp = Math.abs((prop.x - p0.x) * segDy - (prop.y - p0.y) * segDx) / segLen;
     if (pPerp < 16) {
       const relX = prop.x - car.x;
@@ -1960,9 +1959,8 @@ export function scanTrafficObstacles(
   // Also check solid street props on road
   const propsToCheck = propGrid ? propGrid.queryRadius(car.x, car.y, lookaheadDist + 15) : world.props;
   for (const prop of propsToCheck) {
-    if (prop.isBroken) continue;
     const hitbox = getPropHitbox(prop);
-    if (hitbox.shape === 'none') continue;
+    if (hitbox.shape === 'none' || (prop.isBroken && hitbox.isWalkableWhenBroken)) continue;
     const pRadius = hitbox.shape === 'circle' ? (hitbox.radius || 6) : Math.max(hitbox.halfWidth || 10, hitbox.halfHeight || 10);
 
     const relX = prop.x - car.x;
@@ -2060,9 +2058,8 @@ export function isBypassCorridorClear(
 
     const propsNear = propGrid ? propGrid.queryRadius(px, py, 25) : world.props;
     for (const prop of propsNear) {
-      if (prop.isBroken) continue;
       const hitbox = getPropHitbox(prop);
-      if (hitbox.shape === 'none') continue;
+      if (hitbox.shape === 'none' || (prop.isBroken && hitbox.isWalkableWhenBroken)) continue;
       const pr = hitbox.shape === 'circle' ? (hitbox.radius || 6) : Math.max(hitbox.halfWidth || 8, hitbox.halfHeight || 8);
       if (Math.hypot(px - prop.x, py - prop.y) < pr + car.width * 0.5) {
         return false;
@@ -6033,9 +6030,8 @@ export function updatePedestrians(
       const pedRadius = 6.0;
       const nearbyProps = propGrid ? propGrid.queryRadius(nextX, nextY, 40) : world.props;
       for (const prop of nearbyProps) {
-        if (prop.isBroken) continue;
-
-        if (prop.type === 'manhole'|| prop.type === 'drain_grate') continue;
+        const hitbox = getPropHitbox(prop);
+        if (hitbox.shape === 'none' || (prop.isBroken && hitbox.isWalkableWhenBroken)) continue;
 
         let propRadius = 5.0;
         if (prop.type === 'bench') propRadius = 9.0;

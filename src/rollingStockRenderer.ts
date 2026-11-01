@@ -89,17 +89,12 @@ export class RollingStockRenderer {
     halfL: number,
     halfW: number
   ): void {
+    // Full 3D extruded carriage shadow is projected onto tracks/platforms via unified shadow shroud (shadowSystem.ts).
+    // Here we only draw the dark mechanical under-frame recess between bogies directly beneath the car body.
     ctx.save();
-    // Soft ambient occlusion contact shadow directly under wheels and car body
-    ctx.fillStyle = 'rgba(5, 7, 12, 0.65)';
+    ctx.fillStyle = 'rgba(2, 3, 6, 0.42)';
     ctx.beginPath();
-    ctx.roundRect(-halfL - 4, -halfW - 3, car.length + 8, car.width + 6, 4);
-    ctx.fill();
-
-    // Darker core shadow under central machinery
-    ctx.fillStyle = 'rgba(2, 3, 6, 0.45)';
-    ctx.beginPath();
-    ctx.roundRect(-halfL + 12, -halfW + 1, car.length - 24, car.width - 2, 2);
+    ctx.roundRect(-halfL + 12, -halfW + 2, car.length - 24, car.width - 4, 2);
     ctx.fill();
     ctx.restore();
   }

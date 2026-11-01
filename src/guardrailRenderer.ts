@@ -52,15 +52,8 @@ export class GuardrailRenderer {
     ctx.save();
 
     // -----------------------------------------------------------------------
-    // 1. SOFT GROUND SHADOW (Тень от металлического отбойника на дорожном полотне)
+    // 1. Guardrail & post 3D extruded shadows are projected via unified shadow shroud (shadowSystem.ts)
     // -----------------------------------------------------------------------
-    ctx.beginPath();
-    ctx.strokeStyle = 'rgba(15, 23, 42, 0.45)';
-    ctx.lineWidth = rail.width + 4;
-    ctx.lineCap = 'round';
-    ctx.moveTo(rail.x1 + 3, rail.y1 + 4);
-    ctx.lineTo(rail.x2 + 3, rail.y2 + 4);
-    ctx.stroke();
 
     // -----------------------------------------------------------------------
     // 2. SUPPORT POSTS (Металлические двутавровые стойки с распорками)

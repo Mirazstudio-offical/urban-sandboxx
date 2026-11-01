@@ -742,11 +742,7 @@ export class RailwayRenderer {
 
       ctx.save();
 
-      // 1. Concrete platform foundation shadow cast on ballast
-      ctx.fillStyle = 'rgba(15, 23, 42, 0.45)';
-      ctx.fillRect(p.x - 2, p.y + p.height, p.width + 4, 3.5);
-
-      // 2. Concrete edging slabs (бордюрный камень платформы)
+      // 1. Concrete edging slabs (бордюрный камень платформы — 3D shadow cast in unified shadow lightmap)
       ctx.fillStyle = '#475569';
       ctx.fillRect(p.x, p.y, p.width, p.height);
 
@@ -820,13 +816,9 @@ export class RailwayRenderer {
         }
       }
 
-      // 6. Platform Canopies (навесы для пассажиров)
+      // 6. Platform Canopies (навесы для пассажиров — 3D shadow cast in unified shadow lightmap)
       if (p.hasCanopy && p.canopySegments) {
         for (const canopy of p.canopySegments) {
-          // Canopy roof cast shadow
-          ctx.fillStyle = 'rgba(15, 23, 42, 0.35)';
-          ctx.fillRect(canopy.x - 2, canopy.y - 2, canopy.w + 4, canopy.h + 4);
-
           // Structural steel frame
           ctx.fillStyle = '#1e293b';
           ctx.fillRect(canopy.x, canopy.y, canopy.w, canopy.h);
@@ -1099,11 +1091,7 @@ export class RailwayRenderer {
       const W = bld.width;
       const H = bld.height;
 
-      // 1. Foundation Drop Shadow
-      ctx.fillStyle = 'rgba(15, 23, 42, 0.45)';
-      ctx.fillRect(bld.x - 6, bld.y - 6, W + 12, H + 12);
-
-      // 2. Base Roof Cladding (Dark weathered zinc-slate / copper)
+      // 1. Base Roof Cladding (Dark weathered zinc-slate / copper — 3D building shadow cast in unified shadow lightmap)
       ctx.fillStyle = bld.roofColor || '#334155';
       ctx.fillRect(bld.x, bld.y, W, H);
 
@@ -1223,11 +1211,7 @@ export class RailwayRenderer {
       const W = bld.width;
       const H = bld.height;
 
-      // Drop shadow
-      ctx.fillStyle = 'rgba(15, 23, 42, 0.4)';
-      ctx.fillRect(bld.x - 3, bld.y - 3, W + 6, H + 6);
-
-      // Weathered corrugated metal roof
+      // Weathered corrugated metal roof (3D warehouse shadow cast in unified shadow lightmap)
       ctx.fillStyle = '#475569';
       ctx.fillRect(bld.x, bld.y, W, H);
 
@@ -1259,10 +1243,7 @@ export class RailwayRenderer {
       const W = bld.width;
       const H = bld.height;
 
-      ctx.fillStyle = 'rgba(15, 23, 42, 0.35)';
-      ctx.fillRect(bld.x - 2, bld.y - 2, W + 4, H + 4);
-
-      // Brown clay tile roof
+      // Brown clay tile roof (3D cabin shadow cast in unified shadow lightmap)
       ctx.fillStyle = '#9a3412';
       ctx.fillRect(bld.x, bld.y, W, H);
 

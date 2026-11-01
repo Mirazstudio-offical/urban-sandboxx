@@ -1,6 +1,7 @@
 import { Camera, FuelType, GameWorld, GasPumpDispenser, Player, Vehicle } from './types';
 import { FUEL_GRADES, GAS_STATION_CONFIG } from './gasStationSystem';
 import { getVehicleFuelCapPosition } from './vehicleHelpers';
+import { getCurrentSunShadowState } from './shadowSystem';
 
 export class GasStationRenderer {
   /**
@@ -331,13 +332,7 @@ export class GasStationRenderer {
 
     for (const p of poles) {
       ctx.save();
-      // Concrete Base Plinth Shadow
-      ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
-      ctx.beginPath();
-      ctx.arc(p.x + 2, p.y + 3, 8, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Concrete Plinth
+      // Concrete Plinth (3D extruded pole shadow is rendered in unified shadow lightmap)
       ctx.fillStyle = '#64748b';
       ctx.strokeStyle = '#334155';
       ctx.lineWidth = 1;
@@ -393,13 +388,7 @@ export class GasStationRenderer {
 
     for (const isl of islands) {
       ctx.save();
-      // Concrete island shadow
-      ctx.fillStyle = 'rgba(0, 0, 0, 0.25)';
-      ctx.beginPath();
-      ctx.roundRect(isl.x - isl.w / 2 + 3, isl.y - isl.h / 2 + 4, isl.w, isl.h, 12);
-      ctx.fill();
-
-      // Concrete island base
+      // Concrete island base (3D extruded island shadow is rendered in unified shadow lightmap)
       ctx.fillStyle = '#cbd5e1';
       ctx.strokeStyle = '#64748b';
       ctx.lineWidth = 2;
@@ -421,12 +410,6 @@ export class GasStationRenderer {
       if (isl.isLpg) {
         const bollardOffsetsX = [-isl.w / 2 + 14, isl.w / 2 - 14];
         for (const bx of bollardOffsetsX) {
-          // Bollard shadow
-          ctx.fillStyle = 'rgba(0,0,0,0.3)';
-          ctx.beginPath();
-          ctx.arc(isl.x + bx + 2, isl.y + 2, 6, 0, Math.PI * 2);
-          ctx.fill();
-
           // Bollard yellow metal cylinder
           ctx.fillStyle = '#eab308';
           ctx.strokeStyle = '#1e293b';
@@ -445,12 +428,6 @@ export class GasStationRenderer {
       } else {
         const bollardOffsetsY = [-isl.h / 2 + 14, isl.h / 2 - 14];
         for (const by of bollardOffsetsY) {
-          // Bollard shadow
-          ctx.fillStyle = 'rgba(0,0,0,0.3)';
-          ctx.beginPath();
-          ctx.arc(isl.x + 2, isl.y + by + 2, 6, 0, Math.PI * 2);
-          ctx.fill();
-
           // Bollard yellow metal cylinder
           ctx.fillStyle = '#eab308';
           ctx.strokeStyle = '#1e293b';
@@ -501,12 +478,6 @@ export class GasStationRenderer {
         const len = 56; // cylinder length
 
         ctx.save();
-        
-        // Shadow of the cylinder
-        ctx.fillStyle = 'rgba(0,0,0,0.25)';
-        ctx.beginPath();
-        ctx.roundRect(cx - len / 2 - 2, cy - r - 2, len + 4, (r + 2) * 2, r + 2);
-        ctx.fill();
 
         // Steel mounting legs (saddles) holding the cylinder
         ctx.fillStyle = '#475569';
@@ -631,12 +602,6 @@ export class GasStationRenderer {
       // ==========================================
       const lpgW = 26;
       const lpgH = 32;
-
-      // Island anchor shadow
-      ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
-      ctx.beginPath();
-      ctx.roundRect(-lpgW / 2 + 3, -lpgH / 2 + 4, lpgW, lpgH, 4);
-      ctx.fill();
 
       // Stainless steel pedestal base plate with corner hex bolts
       ctx.fillStyle = '#475569';
@@ -783,12 +748,6 @@ export class GasStationRenderer {
       // ==============================================================
       // 2. MODERN MULTI-PRODUCT GASOLINE & DIESEL DISPENSER (ТРК 1-4)
       // ==============================================================
-      // Dispenser drop shadow on concrete island
-      ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
-      ctx.beginPath();
-      ctx.roundRect(-pumpW / 2 + 2, -pumpH / 2 + 3, pumpW, pumpH, 5);
-      ctx.fill();
-
       // Island base mounting flange with corner anchor studs
       ctx.fillStyle = '#334155';
       ctx.strokeStyle = '#0f172a';
@@ -997,13 +956,7 @@ export class GasStationRenderer {
     const totemW = 20;
     const totemH = 64;
 
-    // Totem Shadow
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
-    ctx.beginPath();
-    ctx.roundRect(-totemW / 2 + 3, -totemH / 2 + 4, totemW, totemH, 4);
-    ctx.fill();
-
-    // Monolith Body
+    // Monolith Body (3D extruded totem shadow is rendered in unified shadow lightmap)
     ctx.fillStyle = '#0f172a';
     ctx.strokeStyle = '#1e293b';
     ctx.lineWidth = 1.5;
@@ -1117,12 +1070,15 @@ export class GasStationRenderer {
 
     ctx.save();
 
-    // Hose Drop Shadow on Asphalt
-    ctx.strokeStyle = 'rgba(0, 0, 0, 0.3)';
+    // Dynamic Hose Drop Shadow on Asphalt (driven by solar/lunar position)
+    const sun = getCurrentSunShadowState();
+    const hSx = sun.castX * 0.45;
+    const hSy = sun.castY * 0.45;
+    ctx.strokeStyle = `rgba(0, 0, 0, ${(0.14 + sun.shadowOpacity * 0.45).toFixed(2)})`;
     ctx.lineWidth = 3.5;
     ctx.beginPath();
-    ctx.moveTo(x1 + 3, y1 + 4);
-    ctx.quadraticCurveTo(midX + 3, midY + 5, x2 + 3, y2 + 4);
+    ctx.moveTo(x1 + hSx * 0.6, y1 + hSy * 0.6);
+    ctx.quadraticCurveTo(midX + hSx, midY + hSy, x2 + hSx * 0.6, y2 + hSy * 0.6);
     ctx.stroke();
 
     // Base Heavy Rubber Hose (Black)
@@ -1311,13 +1267,7 @@ export class GasStationRenderer {
     ];
 
     for (const col of columns) {
-      // Column base shadow
-      ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
-      ctx.beginPath();
-      ctx.roundRect(col.x - 7, col.y - 7 + 2, 14, 14, 3);
-      ctx.fill();
-
-      // Concrete plinth
+      // Concrete plinth (column shadow is cast in unified shadow lightmap)
       ctx.fillStyle = '#475569';
       ctx.strokeStyle = '#1e293b';
       ctx.lineWidth = 1.5;
@@ -1455,29 +1405,32 @@ export class GasStationRenderer {
     nightAlpha: number,
     fogFactor: number = 1.0
   ) {
-    if (nightAlpha < 0.05) return;
-
     const canopyX = GAS_STATION_CONFIG.canopyX;
     const canopyY = GAS_STATION_CONFIG.canopyY;
     const canopyW = GAS_STATION_CONFIG.canopyW;
     const canopyH = GAS_STATION_CONFIG.canopyH;
 
-    // 1. Under-Canopy Floodlight Cutout (Bright overhead light under canopy with soft perimeter)
+    // 1. Under-Canopy 24/7 LED Spotlight Cutout:
+    // The 8 overhead LED spotlights under the canopy are active 24/7, piercing both the daytime
+    // canopy roof shadow directly beneath the canopy and the nighttime shroud!
     const cCenterX = canopyX + canopyW / 2;
     const cCenterY = canopyY + canopyH / 2;
     const canopyRadius = Math.max(canopyW, canopyH) * 0.85;
+    const canopyCutoutStrength = Math.max(0.65, nightAlpha);
 
     const cGrad = lCtx.createRadialGradient(cCenterX, cCenterY, 30, cCenterX, cCenterY, canopyRadius);
-    cGrad.addColorStop(0, 'rgba(0, 0, 0, 1.0)');
-    cGrad.addColorStop(0.35, 'rgba(0, 0, 0, 0.92)');
-    cGrad.addColorStop(0.65, 'rgba(0, 0, 0, 0.60)');
-    cGrad.addColorStop(0.85, 'rgba(0, 0, 0, 0.25)');
+    cGrad.addColorStop(0, `rgba(0, 0, 0, ${(1.0 * canopyCutoutStrength).toFixed(2)})`);
+    cGrad.addColorStop(0.35, `rgba(0, 0, 0, ${(0.92 * canopyCutoutStrength).toFixed(2)})`);
+    cGrad.addColorStop(0.65, `rgba(0, 0, 0, ${(0.60 * canopyCutoutStrength).toFixed(2)})`);
+    cGrad.addColorStop(0.85, `rgba(0, 0, 0, ${(0.25 * canopyCutoutStrength).toFixed(2)})`);
     cGrad.addColorStop(1.0, 'rgba(0, 0, 0, 0)');
 
     lCtx.fillStyle = cGrad;
     lCtx.beginPath();
     lCtx.roundRect(canopyX - 50, canopyY - 50, canopyW + 100, canopyH + 100, 35);
     lCtx.fill();
+
+    if (nightAlpha < 0.05) return;
 
     // 2. Minimarket Shop Interior & Customer Plaza Cutout
     const shopX = 5230;

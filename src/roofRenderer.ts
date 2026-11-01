@@ -1,6 +1,7 @@
 import { Building, GameWorld, Player } from './types';
 import { performanceConfig } from './performanceConfig';
 import { getCityApartments } from './propertySystem';
+import { getCurrentSunShadowState } from './shadowSystem';
 
 /**
  * High-Fidelity First-Principles Simulation Roof Renderer:
@@ -104,11 +105,7 @@ export class RoofRenderer {
     const midY = eY + eH / 2;
     const slopeH = eH / 2;
 
-    // A. Overhang drop shadow onto ground / walls
-    if (performanceConfig.enableShadows) {
-      ctx.fillStyle = 'rgba(15, 23, 42, 0.42)';
-      ctx.fillRect(eX + 4, eY + 4, eW, eH);
-    }
+    // A. Building & eaves ground shadow is projected in 3D via unified shadow shroud (shadowSystem.ts)
 
     // Material selector based on building ID & seed:
     // - Most village izbas: Corrugated Asbestos Slate (волнистый шифер)
@@ -313,11 +310,7 @@ export class RoofRenderer {
       const chimW = 9;
       const chimH = 9;
 
-      // Chimney drop shadow onto roof slope
-      if (performanceConfig.enableShadows) {
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
-        ctx.fillRect(chimX + 2.5, chimY + 2.5, chimW, chimH);
-      }
+      // Chimney 3D shadow onto roof slope is projected via unified shadow shroud (shadowSystem.ts)
 
       // Galvanized metal collar flashing (фартук примыкания из оцинковки)
       ctx.fillStyle = '#64748b';
@@ -382,11 +375,7 @@ export class RoofRenderer {
     const rw = bld.width;
     const rh = bld.height;
 
-    // A. Drop shadow of building structure
-    if (performanceConfig.enableShadows) {
-      ctx.fillStyle = 'rgba(15, 23, 42, 0.42)';
-      ctx.fillRect(rx + 8, ry + 8, rw, rh);
-    }
+    // A. Building ground shadow is projected in 3D via unified shadow shroud (shadowSystem.ts)
 
     // B. Heavy industrial profiled trapezoidal steel sheets (Профнастил Н-75)
     ctx.fillStyle = bld.roofColor || '#2d3748';
@@ -452,11 +441,7 @@ export class RoofRenderer {
       const skyX = rx + (rw - skyW) / 2;
       const skyY = ry + (rh - skyH) / 2;
 
-      // Drop shadow of raised lantern structure
-      if (performanceConfig.enableShadows) {
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
-        ctx.fillRect(skyX + 3, skyY + 3, skyW, skyH);
-      }
+      // Skylight lantern 3D shadow is projected via unified shadow shroud (shadowSystem.ts)
 
       // Reinforced industrial wire-glass panes
       ctx.fillStyle = 'rgba(14, 116, 144, 0.9)';
@@ -495,13 +480,7 @@ export class RoofRenderer {
       const chimY = ry + Math.min(26, rh * 0.25);
       const chimR = 9;
 
-      // Smokestack projection shadow
-      if (performanceConfig.enableShadows) {
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.55)';
-        ctx.beginPath();
-        ctx.arc(chimX + 5, chimY + 5, chimR + 1, 0, Math.PI * 2);
-        ctx.fill();
-      }
+      // Smokestack 3D cylinder shadow is projected via unified shadow shroud (shadowSystem.ts)
 
       // Reinforced brick/concrete base
       ctx.fillStyle = '#7f1d1d';
@@ -619,9 +598,24 @@ export class RoofRenderer {
 
     if (rw <= 8 || rh <= 8) return;
 
-    // Parapet inner shadow (падающая внутренняя тень от парапета на плоскость кровли)
-    ctx.fillStyle = 'rgba(10, 15, 25, 0.45)';
+    // Parapet inner shadow driven by solar direction
+    const sun = getCurrentSunShadowState();
+    ctx.fillStyle = '#171a21';
     ctx.fillRect(rx, ry, rw, rh);
+    if (sun.shadowOpacity > 0.01) {
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(rx, ry, rw, rh);
+      ctx.clip();
+      ctx.fillStyle = `rgba(8, 12, 22, ${(sun.shadowOpacity * 0.75).toFixed(3)})`;
+      const pOffX = sun.castX * 2.5;
+      const pOffY = sun.castY * 2.5;
+      ctx.fillRect(rx, ry, rw, Math.max(0, pOffY));
+      ctx.fillRect(rx, ry + rh + Math.min(0, pOffY), rw, Math.max(0, -pOffY));
+      ctx.fillRect(rx, ry, Math.max(0, pOffX), rh);
+      ctx.fillRect(rx + rw + Math.min(0, pOffX), ry, Math.max(0, -pOffX), rh);
+      ctx.restore();
+    }
 
     if (isCommercial || isModernHighrise) {
       // --- СОВРЕМЕННАЯ ПВХ / ТПО КРОВЕЛЬНАЯ МЕМБРАНА ---
@@ -878,11 +872,7 @@ export class RoofRenderer {
     const penX = rx + (rw - penW) / 2;
     const penY = ry + (rh - penH) / 2;
 
-    // Drop shadow onto roof deck
-    if (performanceConfig.enableShadows) {
-      ctx.fillStyle = 'rgba(0, 0, 0, 0.55)';
-      ctx.fillRect(penX + 4, penY + 4, penW, penH);
-    }
+    // Penthouse 3D shadow is projected via unified shadow shroud (shadowSystem.ts)
 
     // Concrete/brick structural walls of penthouse
     ctx.fillStyle = bld.color || '#334155';
@@ -926,10 +916,7 @@ export class RoofRenderer {
     const hatchW = 8;
     const hatchH = 8;
 
-    if (performanceConfig.enableShadows) {
-      ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
-      ctx.fillRect(hatchX + 2, hatchY + 2, hatchW, hatchH);
-    }
+    // Hatch 3D shadow is projected via unified shadow shroud (shadowSystem.ts)
     ctx.fillStyle = '#475569';
     ctx.fillRect(hatchX, hatchY, hatchW, hatchH);
     ctx.strokeStyle = '#0f172a';
@@ -950,10 +937,7 @@ export class RoofRenderer {
 
       if (sx < rx + 15 || sy < ry + 15) continue;
 
-      if (performanceConfig.enableShadows) {
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
-        ctx.fillRect(sx + 2, sy + 2, sw, sh);
-      }
+      // Vent shaft 3D shadow is projected via unified shadow shroud (shadowSystem.ts)
 
       // Red/Yellow brick shaft base
       ctx.fillStyle = '#8b251e';
@@ -989,10 +973,7 @@ export class RoofRenderer {
     const hvacX = rx + (rw - hvacW) / 2;
     const hvacY = ry + (rh - hvacH) / 2;
 
-    if (performanceConfig.enableShadows) {
-      ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
-      ctx.fillRect(hvacX + 3, hvacY + 3, hvacW, hvacH);
-    }
+    // HVAC chiller 3D shadow is projected via unified shadow shroud (shadowSystem.ts)
 
     // Heavy steel frame & compressor casing
     ctx.fillStyle = '#334155';
@@ -1036,10 +1017,7 @@ export class RoofRenderer {
       const sY = ry + 8;
       const sH = rh - 16;
       [rx + 8, rx + rw - skylightW - 8].forEach(sx => {
-        if (performanceConfig.enableShadows) {
-          ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
-          ctx.fillRect(sx + 2, sY + 2, skylightW, sH);
-        }
+        // Skylight 3D shadow is projected via unified shadow shroud (shadowSystem.ts)
         ctx.fillStyle = 'rgba(56, 189, 248, 0.4)';
         ctx.fillRect(sx, sY, skylightW, sH);
         ctx.strokeStyle = '#38bdf8';
@@ -1073,11 +1051,7 @@ export class RoofRenderer {
       const dy = bld.y + bld.height * d.ry;
 
       if (d.type === 'ac') {
-        // Drop shadow
-        if (performanceConfig.enableShadows) {
-          ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
-          ctx.fillRect(dx + 2, dy + 2, d.rw, d.rh);
-        }
+        // AC unit 3D shadow is projected via unified shadow shroud (shadowSystem.ts)
 
         ctx.fillStyle = '#475569';
         ctx.fillRect(dx, dy, d.rw, d.rh);
@@ -1117,12 +1091,7 @@ export class RoofRenderer {
         const cx = dx + radius;
         const cy = dy + d.rh / 2;
 
-        if (performanceConfig.enableShadows) {
-          ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
-          ctx.beginPath();
-          ctx.arc(cx + 3, cy + 3, radius, 0, Math.PI * 2);
-          ctx.fill();
-        }
+        // Helipad 3D shadow is projected via unified shadow shroud (shadowSystem.ts)
 
         ctx.fillStyle = '#1e293b';
         ctx.beginPath();
@@ -1205,12 +1174,7 @@ export class RoofRenderer {
           const cx = dx + rad;
           const cy = dy + rad;
 
-          if (performanceConfig.enableShadows) {
-            ctx.fillStyle = 'rgba(15, 23, 42, 0.45)';
-            ctx.beginPath();
-            ctx.arc(cx + 4, cy + 4, rad, 0, Math.PI * 2);
-            ctx.fill();
-          }
+          // Water tower 3D shadow is projected via unified shadow shroud (shadowSystem.ts)
 
           // Structural steel support struts
           ctx.strokeStyle = '#475569';
@@ -1236,12 +1200,7 @@ export class RoofRenderer {
           ctx.fill();
           ctx.stroke();
         } else {
-          // Transmission antenna mast with projection shadow & flashing beacon
-          ctx.strokeStyle = 'rgba(15, 23, 42, 0.35)';
-          ctx.lineWidth = 1.5;
-          ctx.beginPath();
-          ctx.moveTo(dx + 2, dy + 2); ctx.lineTo(dx + 16, dy - 12);
-          ctx.stroke();
+          // Transmission antenna mast (shadow projected via unified shadow shroud)
 
           ctx.strokeStyle = '#cbd5e1';
           ctx.lineWidth = 2;

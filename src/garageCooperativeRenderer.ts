@@ -1,5 +1,6 @@
 import { Building, GameWorld, Player } from './types';
 import { performanceConfig } from './performanceConfig';
+import { getCurrentSunShadowState } from './shadowSystem';
 
 /**
  * High-fidelity volumetric renderer for old garage cooperatives (ГСК):
@@ -315,12 +316,7 @@ export class GarageCooperativeRenderer {
     const isSubstation = bld.type === 'garage_substation' || bld.garageSubtype === 'substation';
     const isWorkshop = bld.type === 'garage_workshop' || bld.garageSubtype === 'workshop';
 
-    // 1. VOLUMETRIC DIRECTIONAL DROP SHADOW
-    if (performanceConfig.enableShadows) {
-      ctx.fillStyle = 'rgba(15, 23, 42, 0.46)';
-      const shadowOffset = isWorkshop ? 9 : 6;
-      ctx.fillRect(bld.x + shadowOffset, bld.y + shadowOffset, bld.width, bld.height);
-    }
+    // 1. Garage building 3D extruded shadow is projected via unified shadow shroud (shadowSystem.ts)
 
     // 2. REINFORCED CONCRETE FOUNDATION APRON & PLINTH (Блоки ФБС)
     ctx.fillStyle = '#3f3f46';
@@ -698,10 +694,11 @@ export class GarageCooperativeRenderer {
     const ventX = rx + (side === 'north' ? rw * 0.75 : rw * 0.25);
     const ventY = ry + (side === 'north' ? rh * 0.75 : rh * 0.25);
 
-    // Pipe shadow
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+    // Pipe shadow driven by solar direction
+    const sun = getCurrentSunShadowState();
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
     ctx.beginPath();
-    ctx.arc(ventX + 2, ventY + 2, 3.5, 0, Math.PI * 2);
+    ctx.arc(ventX + sun.castX * 2.2, ventY + sun.castY * 2.2, 3.5, 0, Math.PI * 2);
     ctx.fill();
 
     // Galvanized pipe body
@@ -725,9 +722,9 @@ export class GarageCooperativeRenderer {
       const chimX = rx + (isGatehouse ? rw - 6 : rw * 0.75);
       const chimY = ry + (isGatehouse ? 6 : rh * 0.3);
 
-      // Chimney base shadow
-      ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
-      ctx.fillRect(chimX + 1.5, chimY + 1.5, 4.5, 4.5);
+      // Chimney base shadow driven by solar direction
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.52)';
+      ctx.fillRect(chimX + sun.castX * 3.0, chimY + sun.castY * 3.0, 4.5, 4.5);
 
       // Metal stove pipe with 90-degree elbow
       ctx.fillStyle = '#334155';
@@ -802,9 +799,7 @@ export class GarageCooperativeRenderer {
 
     ctx.save();
 
-    // 1. Ramp drop shadow
-    ctx.fillStyle = 'rgba(15, 23, 42, 0.45)';
-    ctx.fillRect(rx + 6, ry + 6, rw, rh);
+    // 1. Ramp 3D extruded shadow is projected via unified shadow shroud (shadowSystem.ts)
 
     // 2. Central concrete inspection trench (яма под эстакадой)
     const pitW = 12;
