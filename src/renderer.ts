@@ -61,7 +61,7 @@ import { TowRopeRenderer } from './towRopeRenderer';
 import { GuardrailRenderer } from './guardrailRenderer';
 import { TerrainRenderer } from './terrainRenderer';
 import { RoofRenderer } from './roofRenderer';
-import { renderRiverSystem } from './riverSystem';
+import { renderRiverSystem, renderWaterSurfaceOpticsAndWakes } from './riverSystem';
 import { isWorldFreezing } from './calendarSystem';
 import { RemotePlayerState, SpeechBubble } from './onlineSystem';
 import { InteractionTarget } from './interactionSystem';
@@ -71,6 +71,7 @@ import { mapPolyToDeformVerts } from './softbodyPolyMap';
 import { renderSoftbodyMeshOverlay } from './softbodyOverlay';
 import { getDisplaySettings } from './displaySettings';
 import {
+  classifyTreeSpecies,
   computeSunShadowState,
   getCurrentSunShadowState,
   getLocalShadowOffset,
@@ -1295,6 +1296,23 @@ export class GameRenderer {
 
     // 14. Vehicles (Cars with dynamic wheels, lights & wipers)
     this.renderVehicles(visibleVehicles, nightAlpha, camera.gridMode, player);
+
+    // 14a-water. Surface Water Optics, Dispersive Wakes, Kelvin V-Wakes & Contour-Clipped Hull Submersion
+    renderWaterSurfaceOpticsAndWakes(
+      this.ctx,
+      world,
+      minX,
+      minY,
+      maxX,
+      maxY,
+      timeHour,
+      nightAlpha,
+      visibleVehicles,
+      player,
+      remotePlayers,
+      visiblePedestrians,
+      isFreezing
+    );
 
     // 14-bus-player. Render Player inside bus saloon on top of bus interior floor & seats
     if (player.insideBusId) {
@@ -6235,6 +6253,64 @@ export class GameRenderer {
     }
   }
 
+  private fillBotanicalCluster(
+    ctx: CanvasRenderingContext2D,
+    cx: number,
+    cy: number,
+    rx: number,
+    ry: number,
+    rotAngle: number,
+    seed: number,
+    serration: number = 0.14,
+    pointsCount: number = 14
+  ) {
+    const cosR = Math.cos(rotAngle);
+    const sinR = Math.sin(rotAngle);
+    ctx.beginPath();
+    for (let i = 0; i < pointsCount; i++) {
+      const a = (i / pointsCount) * Math.PI * 2;
+      const wave1 = Math.sin(a * 5 + (seed & 31) * 0.45);
+      const wave2 = Math.cos(a * 3 - ((seed >> 4) & 31) * 0.35);
+      const tipAlt = (i & 1) === 0 ? 1 + serration * 0.52 : 1 - serration * 0.42;
+      const mod = tipAlt + (wave1 * 0.58 + wave2 * 0.42) * serration;
+      const lx = Math.cos(a) * rx * mod;
+      const ly = Math.sin(a) * ry * mod;
+      const px = cx + lx * cosR - ly * sinR;
+      const py = cy + lx * sinR + ly * cosR;
+      if (i === 0) ctx.moveTo(px, py);
+      else ctx.lineTo(px, py);
+    }
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  private drawTaperedLimb(
+    ctx: CanvasRenderingContext2D,
+    x0: number,
+    y0: number,
+    r0: number,
+    cx: number,
+    cy: number,
+    x1: number,
+    y1: number,
+    r1: number
+  ) {
+    const dx = x1 - x0;
+    const dy = y1 - y0;
+    const len = Math.hypot(dx, dy) || 1;
+    const nx = -dy / len;
+    const ny = dx / len;
+    const rMid = (r0 + r1) * 0.52;
+
+    ctx.beginPath();
+    ctx.moveTo(x0 + nx * r0, y0 + ny * r0);
+    ctx.quadraticCurveTo(cx + nx * rMid, cy + ny * rMid, x1 + nx * r1, y1 + ny * r1);
+    ctx.arc(x1, y1, r1, Math.atan2(ny, nx), Math.atan2(-ny, -nx), false);
+    ctx.quadraticCurveTo(cx - nx * rMid, cy - ny * rMid, x0 - nx * r0, y0 - ny * r0);
+    ctx.closePath();
+    ctx.fill();
+  }
+
   private renderTreesAndTallProps(
     trees: GameWorld['trees'],
     props: StreetProp[],
@@ -6243,379 +6319,941 @@ export class GameRenderer {
     season?: Season
   ) {
     const ctx = this.ctx;
+    const sunState = getCurrentSunShadowState();
+    const sunX = -sunState.shadowDirX;
+    const sunY = -sunState.shadowDirY;
 
     // Trees
     for (const tree of trees) {
-      if (tree.x + tree.radius < minX || tree.x - tree.radius > maxX ||
-          tree.y + tree.radius < minY || tree.y - tree.radius > maxY) continue;
+      const r = Math.max(8, tree.radius || 16);
+      if (tree.x + r * 1.25 < minX || tree.x - r * 1.25 > maxX ||
+          tree.y + r * 1.25 < minY || tree.y - r * 1.25 > maxY) continue;
 
-      const isDead = (tree as any).type === 'dead' || tree.color === '#57534e' || tree.color === '#78716c' || tree.color === '#44403c' || tree.color === '#3b3835' || tree.color === '#525252';
-      const isPine = !isDead && ((tree as any).type === 'pine' || tree.color === '#0f3e24' || tree.color === '#124c2c' || tree.color === '#165732' || tree.color === '#1b6138');
-      const isBirch = !isDead && ((tree as any).type === 'birch' || tree.color === '#84cc16' || tree.color === '#a3e635' || tree.color === '#65a30d');
+      const species = classifyTreeSpecies(tree);
+      const seed = Math.abs(Math.floor(tree.x * 12.9898 + tree.y * 78.233));
 
-      if (isDead) {
-        // --- DEAD TREE / SNAG / СУХОСТОЙ (WEATHERED LIGHT-GREY HIGH-VISIBILITY SNAG MODEL) ---
-        const r = tree.radius;
-        const seed = Math.abs(Math.floor(tree.x * 12.9898 + tree.y * 78.233));
+      if (species === 'dead') {
+        // ====================================================================
+        // 1. DEAD TREE / SNAG / СУХОСТОЙ (TAPERED GNARLED WOOD SKELETON)
+        // ====================================================================
+        // Subtle root-humus ground anchor
+        ctx.fillStyle = 'rgba(28, 25, 23, 0.28)';
+        this.fillBotanicalCluster(ctx, tree.x, tree.y, r * 0.42, r * 0.36, seed * 0.1, seed, 0.18, 10);
 
-        // 1. Dead tree branch shadow is projected dynamically in world space via unified shadow shroud
-
-        // 2. Thick Gnarled Roots (Weathered dark-grey-brown anchoring base)
-        ctx.strokeStyle = '#57534e';
-        ctx.lineWidth = Math.max(3.5, r * 0.22);
-        ctx.lineCap = 'round';
-        const numRoots = 4;
+        // Flared buttress roots tapering into the soil
+        const numRoots = 5;
         for (let ri = 0; ri < numRoots; ri++) {
-          const rootAngle = (ri / numRoots) * Math.PI * 2 + (seed % 8) * 0.15;
-          const rootLen = r * (0.35 + (ri % 2) * 0.1);
-          ctx.beginPath();
-          ctx.moveTo(tree.x, tree.y);
-          ctx.quadraticCurveTo(
-            tree.x + Math.cos(rootAngle + 0.4) * (rootLen * 0.5),
-            tree.y + Math.sin(rootAngle + 0.4) * (rootLen * 0.5),
-            tree.x + Math.cos(rootAngle) * rootLen,
-            tree.y + Math.sin(rootAngle) * rootLen
+          const rootAngle = (ri / numRoots) * Math.PI * 2 + (seed % 11) * 0.17;
+          const rootLen = r * (0.38 + (ri % 2) * 0.12);
+          const rx1 = tree.x + Math.cos(rootAngle) * rootLen;
+          const ry1 = tree.y + Math.sin(rootAngle) * rootLen;
+          const rcx = tree.x + Math.cos(rootAngle + 0.28) * (rootLen * 0.52);
+          const rcy = tree.y + Math.sin(rootAngle + 0.28) * (rootLen * 0.52);
+
+          ctx.fillStyle = '#44403c';
+          this.drawTaperedLimb(ctx, tree.x, tree.y, Math.max(2.2, r * 0.15), rcx, rcy, rx1, ry1, 0.7);
+          ctx.fillStyle = '#78716c';
+          this.drawTaperedLimb(
+            ctx,
+            tree.x + sunX * 0.5,
+            tree.y + sunY * 0.5,
+            Math.max(1.2, r * 0.09),
+            rcx + sunX * 0.5,
+            rcy + sunY * 0.5,
+            rx1,
+            ry1,
+            0.4
           );
-          ctx.stroke();
         }
 
-        // 3. Main Gnarled Skeleton Branches (Weathered wood color, thick & expressive)
+        // Main gnarled deadwood limbs (tapered from thick trunk collar to splintered tips)
         const numBranches = 6;
         for (let b = 0; b < numBranches; b++) {
           const ang = (b / numBranches) * Math.PI * 2 + ((seed * (b + 1)) % 10) * 0.15;
-          const len = r * (0.8 + ((seed + b * 7) % 6) * 0.1);
+          const len = r * (0.8 + ((seed + b * 7) % 6) * 0.09);
 
           const bx = tree.x + Math.cos(ang) * len;
           const by = tree.y + Math.sin(ang) * len;
+          const midX = tree.x + Math.cos(ang + 0.25) * (len * 0.52);
+          const midY = tree.y + Math.sin(ang + 0.25) * (len * 0.52);
 
-          const midX = tree.x + Math.cos(ang + 0.25) * (len * 0.5);
-          const midY = tree.y + Math.sin(ang + 0.25) * (len * 0.5);
+          const baseW = Math.max(2.2, r * 0.15);
+          const tipW = Math.max(0.8, r * 0.045);
 
-          // Render Branch Base (Darker bark texture)
-          ctx.strokeStyle = '#78716c';
-          ctx.lineWidth = Math.max(3.5, r * 0.25);
+          // Dark weathered bark underside
+          ctx.fillStyle = '#44403c';
+          this.drawTaperedLimb(ctx, tree.x, tree.y, baseW, midX, midY, bx, by, tipW);
+
+          // Bleached silver-taupe heartwood core
+          ctx.fillStyle = '#a8a29e';
+          this.drawTaperedLimb(
+            ctx,
+            tree.x + sunX * 0.4,
+            tree.y + sunY * 0.4,
+            baseW * 0.68,
+            midX + sunX * 0.4,
+            midY + sunY * 0.4,
+            bx,
+            by,
+            tipW * 0.65
+          );
+
+          // Sunlit silver-white ridge along sunward edge
+          ctx.strokeStyle = '#f1f5f9';
+          ctx.lineWidth = Math.max(0.9, r * 0.055);
           ctx.lineCap = 'round';
           ctx.beginPath();
-          ctx.moveTo(tree.x, tree.y);
-          ctx.quadraticCurveTo(midX, midY, bx, by);
+          ctx.moveTo(tree.x + sunX * 1.1, tree.y + sunY * 1.1);
+          ctx.quadraticCurveTo(midX + sunX * 1.0, midY + sunY * 1.0, bx + sunX * 0.6, by + sunY * 0.6);
           ctx.stroke();
 
-          // Render Bleached Wood Core (Lighter silver-grey inside)
-          ctx.strokeStyle = '#a8a29e';
-          ctx.lineWidth = Math.max(2.0, r * 0.16);
+          // Secondary fork A (near tip)
+          const twigAngA = ang + (b % 2 === 0 ? 0.46 : -0.46);
+          const twigLenA = r * 0.36;
+          const txA = bx + Math.cos(twigAngA) * twigLenA;
+          const tyA = by + Math.sin(twigAngA) * twigLenA;
+          const tMidXA = bx + Math.cos(twigAngA - 0.15) * (twigLenA * 0.5);
+          const tMidYA = by + Math.sin(twigAngA - 0.15) * (twigLenA * 0.5);
+
+          ctx.fillStyle = '#57534e';
+          this.drawTaperedLimb(ctx, bx, by, tipW * 1.15, tMidXA, tMidYA, txA, tyA, 0.55);
+          ctx.strokeStyle = '#e2e8f0';
+          ctx.lineWidth = Math.max(0.6, r * 0.035);
           ctx.beginPath();
-          ctx.moveTo(tree.x, tree.y);
-          ctx.quadraticCurveTo(midX, midY, bx, by);
+          ctx.moveTo(bx + sunX * 0.5, by + sunY * 0.5);
+          ctx.lineTo(txA + sunX * 0.4, tyA + sunY * 0.4);
           ctx.stroke();
 
-          // Render Sunlit Highlights (High-contrast bright silver top ridge)
-          ctx.strokeStyle = '#f1f5f9';
-          ctx.lineWidth = Math.max(1.0, r * 0.08);
-          ctx.beginPath();
-          ctx.moveTo(tree.x - 1, tree.y - 1);
-          ctx.quadraticCurveTo(midX - 1, midY - 1, bx - 1, by - 1);
-          ctx.stroke();
+          // Secondary fork B (from mid-bough)
+          const twigAngB = ang + (b % 2 === 0 ? -0.52 : 0.52);
+          const twigLenB = r * 0.28;
+          const txB = midX + Math.cos(twigAngB) * twigLenB;
+          const tyB = midY + Math.sin(twigAngB) * twigLenB;
+          ctx.fillStyle = '#57534e';
+          this.drawTaperedLimb(ctx, midX, midY, baseW * 0.52, (midX + txB) * 0.5, (midY + tyB) * 0.5, txB, tyB, 0.5);
 
-          // Sub-twigs
-          const twigAng = ang + ((b % 2 === 0) ? 0.48 : -0.48);
-          const twigLen = r * 0.38;
-          const tx = bx + Math.cos(twigAng) * twigLen;
-          const ty = by + Math.sin(twigAng) * twigLen;
-
-          ctx.strokeStyle = '#78716c';
-          ctx.lineWidth = Math.max(2.0, r * 0.12);
-          ctx.beginPath();
-          ctx.moveTo(bx, by);
-          ctx.lineTo(tx, ty);
-          ctx.stroke();
-
-          ctx.strokeStyle = '#f1f5f9';
-          ctx.lineWidth = Math.max(0.8, r * 0.05);
-          ctx.beginPath();
-          ctx.moveTo(bx - 0.5, by - 0.5);
-          ctx.lineTo(tx - 0.5, ty - 0.5);
-          ctx.stroke();
-
-          // Occasional dry colored leaves clinging to the twigs (or frost/snow in winter)
+          // Clinging dry russet leaf tuft or winter frost rime on outer twigs
           if ((seed + b) % 2 === 0) {
-            const leafColor = season === 'winter' ? '#f8fafc' : ((seed + b) % 3 === 0 ? '#ea580c' : (seed + b) % 3 === 1 ? '#ca8a04' : '#b45309');
-            ctx.fillStyle = leafColor;
-            ctx.beginPath();
-            ctx.arc(tx, ty, Math.max(2.5, r * 0.12), 0, Math.PI * 2);
-            ctx.fill();
-            if (season !== 'winter') {
-              ctx.strokeStyle = '#292524';
-              ctx.lineWidth = 0.5;
-              ctx.stroke();
-            }
+            ctx.fillStyle =
+              season === 'winter'
+                ? '#f1f5f9'
+                : (seed + b) % 3 === 0
+                ? '#c2410c'
+                : (seed + b) % 3 === 1
+                ? '#b45309'
+                : '#9a3412';
+            this.fillBotanicalCluster(
+              ctx,
+              txA,
+              tyA,
+              Math.max(2.2, r * 0.11),
+              Math.max(1.8, r * 0.085),
+              twigAngA,
+              seed + b * 19,
+              0.25,
+              8
+            );
           }
         }
 
-        // 4. Large Central Weathered Trunk (Bleached wooden stump base)
-        const stumpRadius = Math.max(4.5, r * 0.32);
-        
-        // Dark bark outline
-        ctx.fillStyle = '#44403c';
-        ctx.beginPath();
-        ctx.arc(tree.x, tree.y, stumpRadius, 0, Math.PI * 2);
-        ctx.fill();
+        // Fluted central snag trunk collar (organic lobed cross-section, not a geometric circle)
+        const stumpR = Math.max(4.0, r * 0.26);
+        ctx.fillStyle = '#292524';
+        this.fillBotanicalCluster(ctx, tree.x, tree.y, stumpR * 1.08, stumpR * 1.02, seed * 0.2, seed, 0.14, 10);
+        ctx.fillStyle = '#78716c';
+        this.fillBotanicalCluster(ctx, tree.x, tree.y, stumpR * 0.86, stumpR * 0.82, seed * 0.2, seed + 3, 0.12, 10);
+        ctx.fillStyle = '#d6d3d1';
+        this.fillBotanicalCluster(
+          ctx,
+          tree.x + sunX * (stumpR * 0.14),
+          tree.y + sunY * (stumpR * 0.14),
+          stumpR * 0.56,
+          stumpR * 0.52,
+          seed * 0.2,
+          seed + 7,
+          0.1,
+          8
+        );
 
-        // Inner bleached wood (silver-grey top)
-        ctx.fillStyle = '#cbd5e1';
-        ctx.beginPath();
-        ctx.arc(tree.x, tree.y, stumpRadius * 0.85, 0, Math.PI * 2);
-        ctx.fill();
-
-        // Sunlit bleached core highlight
-        ctx.fillStyle = '#f8fafc';
-        ctx.beginPath();
-        ctx.arc(tree.x - stumpRadius * 0.15, tree.y - stumpRadius * 0.15, stumpRadius * 0.48, 0, Math.PI * 2);
-        ctx.fill();
-
-        // Dark age rings & starburst splits (ancient weathered wood radial cracks)
-        ctx.strokeStyle = '#292524';
-        ctx.lineWidth = 0.8;
+        // Dark heartwood radial checks / splits
+        ctx.strokeStyle = '#1c1917';
+        ctx.lineWidth = 0.85;
         for (let c = 0; c < 4; c++) {
           const crackAngle = (c / 4) * Math.PI * 2 + (seed % 10) * 0.2;
           ctx.beginPath();
           ctx.moveTo(tree.x, tree.y);
-          ctx.lineTo(tree.x + Math.cos(crackAngle) * (stumpRadius * 0.75), tree.y + Math.sin(crackAngle) * (stumpRadius * 0.75));
+          ctx.lineTo(
+            tree.x + Math.cos(crackAngle) * (stumpR * 0.78),
+            tree.y + Math.sin(crackAngle) * (stumpR * 0.78)
+          );
           ctx.stroke();
         }
 
-      } else if (isPine) {
-        const r = tree.radius;
+      } else if (species === 'pine') {
+        // ====================================================================
+        // 2. PINE / SPRUCE (ЕЛЬ / СОСНА: МНОГОЯРУСНЫЕ ХВОЙНЫЕ ЛАПЫ И ХВОЯ)
+        // ====================================================================
+        // 1. Deep forest-floor needle litter & root-collar shadow under the lowest whorl
+        ctx.fillStyle = 'rgba(6, 24, 14, 0.42)';
+        this.fillBotanicalCluster(
+          ctx,
+          tree.x + sunState.shadowDirX * (r * 0.08),
+          tree.y + sunState.shadowDirY * (r * 0.08),
+          r * 0.92,
+          r * 0.88,
+          seed * 0.13,
+          seed,
+          0.22,
+          14
+        );
 
-        // Outer Needle Tier (Dark evergreen starburst)
-        ctx.fillStyle = tree.color || '#124c2c';
-        ctx.beginPath();
-        for (let a = 0; a < Math.PI * 2; a += Math.PI / 6) {
-          const pr = r * (0.82 + Math.sin(a * 5 + tree.x) * 0.18);
-          const px = tree.x + Math.cos(a) * pr;
-          const py = tree.y + Math.sin(a) * pr;
-          if (a === 0) ctx.moveTo(px, py);
-          else ctx.lineTo(px, py);
-        }
-        ctx.closePath();
-        ctx.fill();
-
-        // Middle Needle Tier
-        ctx.fillStyle = '#1e663d';
-        ctx.beginPath();
-        for (let a = 0; a < Math.PI * 2; a += Math.PI / 5) {
-          const pr = r * 0.65 * (0.85 + Math.cos(a * 4 + tree.y) * 0.15);
-          const px = tree.x + Math.cos(a + 0.2) * pr;
-          const py = tree.y + Math.sin(a + 0.2) * pr;
-          if (a === 0) ctx.moveTo(px, py);
-          else ctx.lineTo(px, py);
-        }
-        ctx.closePath();
-        ctx.fill();
-
-        // Snow deposits on pine tiers in winter
-        if (season === 'winter') {
-          ctx.fillStyle = 'rgba(241, 245, 249, 0.75)';
-          ctx.beginPath();
-          for (let a = 0; a < Math.PI * 2; a += Math.PI / 3) {
-            const px = tree.x + Math.cos(a + 0.25) * (r * 0.52);
-            const py = tree.y + Math.sin(a + 0.25) * (r * 0.52);
-            ctx.arc(px, py, r * 0.18, 0, Math.PI * 2);
-          }
-          ctx.fill();
+        // 2. Woody reddish-brown pine bark bough ribs in the lower crown (partially visible in deep whorl gaps)
+        const numLowerRibs = 7;
+        for (let rb = 0; rb < numLowerRibs; rb++) {
+          const rAng = (rb / numLowerRibs) * Math.PI * 2 + (seed % 13) * 0.19;
+          const rLen = r * 0.68;
+          ctx.fillStyle = '#3e2723';
+          this.drawTaperedLimb(
+            ctx,
+            tree.x,
+            tree.y,
+            Math.max(1.8, r * 0.11),
+            tree.x + Math.cos(rAng) * (rLen * 0.5),
+            tree.y + Math.sin(rAng) * (rLen * 0.5),
+            tree.x + Math.cos(rAng) * rLen,
+            tree.y + Math.sin(rAng) * rLen,
+            0.6
+          );
         }
 
-        // Top Apex Tier (Snow cap in winter)
-        ctx.fillStyle = season === 'winter' ? '#f8fafc' : '#2a8750';
-        ctx.beginPath();
-        ctx.arc(tree.x - r * 0.1, tree.y - r * 0.1, r * 0.35, 0, Math.PI * 2);
-        ctx.fill();
+        // 3. Multi-Tier Radiating Coniferous Whorls (5 stacked tiers of serrated needle boughs)
+        const baseTint = (tree.color || '#124c2c').toLowerCase();
+        const isDarkSpruce = baseTint === '#0f3e24' || baseTint === '#124c2c';
+        const tierShadowCols = isDarkSpruce
+          ? ['#071f12', '#0a2918', '#0e3620', '#124228', '#175232']
+          : ['#092616', '#0d331e', '#124227', '#175231', '#1e633c'];
+        const tierMidCols = isDarkSpruce
+          ? ['#0f3e24', '#144d2e', '#195e38', '#207043', '#288250']
+          : ['#14492b', '#195935', '#206b40', '#277d4b', '#309158'];
+        const tierSunCols = isDarkSpruce
+          ? ['#1d633b', '#247547', '#2d8754', '#389962', '#47ad73']
+          : ['#237043', '#2c8250', '#36965e', '#42ab6d', '#52bf7f'];
 
-        // Center Trunk Ring
-        ctx.fillStyle = '#23160c';
-        ctx.beginPath();
-        ctx.arc(tree.x, tree.y, Math.max(3, r * 0.12), 0, Math.PI * 2);
-        ctx.fill();
+        const numWhorls = 5;
+        for (let w = 0; w < numWhorls; w++) {
+          const frac = w / (numWhorls - 1);
+          const whorlR = r * (1.04 - frac * 0.66);
+          const numBoughs = 10 - w; // 10 boughs at bottom skirt -> 6 at top whorl
+          const whorlRot = (seed % 29) * 0.21 + w * 0.54;
+          // Slight parallax shift toward sun for higher tiers
+          const tierCx = tree.x + sunX * (r * 0.06 * frac);
+          const tierCy = tree.y + sunY * (r * 0.06 * frac);
 
-      } else if (isBirch) {
-        // --- RUSSIAN BIRCH TREE (БЕРЁЗА: БЕЛЫЙ СТВОЛ С ЧЁРНЫМИ ЧЕЧЕВИЧКАМИ И СЕЗОННАЯ ЛИСТВА) ---
-        const r = tree.radius;
+          for (let b = 0; b < numBoughs; b++) {
+            const bHash = ((seed + w * 37 + b * 13) * 2654435761) >>> 0;
+            const bAng = (b / numBoughs) * Math.PI * 2 + whorlRot + ((bHash & 7) - 3.5) * 0.035;
+            const bCos = Math.cos(bAng);
+            const bSin = Math.sin(bAng);
+            const pCos = -bSin;
+            const pSin = bCos;
 
-        // Seasonal foliage palette for deciduous Russian birch
-        let foliageColors = ['#4d7c0f', '#65a30d', '#84cc16'];
-        let highlight1 = '#a3e635';
-        let highlight2 = '#bef264';
-        if (season === 'autumn') {
-          foliageColors = ['#9a3412', '#c2410c', '#ea580c'];
-          highlight1 = '#f59e0b';
-          highlight2 = '#fbbf24';
-        } else if (season === 'winter') {
-          foliageColors = ['#94a3b8', '#cbd5e1', '#e2e8f0'];
-          highlight1 = '#f1f5f9';
-          highlight2 = '#ffffff';
-        } else if (season === 'spring') {
-          foliageColors = ['#3f6212', '#4d7c0f', '#84cc16'];
-          highlight1 = '#a3e635';
-          highlight2 = '#d9f99d';
-        }
+            const bLen = whorlR * (0.86 + ((bHash >> 3) & 7) * 0.038);
+            const bWidth = whorlR * (0.28 + (1 - frac) * 0.07);
 
-        // Outer Foliage Puffs (Layered organic clusters)
-        foliageColors.forEach((col, idx) => {
-          ctx.fillStyle = col;
-          const puffRadius = r * (0.85 - idx * 0.16);
-          for (let a = 0; a < Math.PI * 2; a += Math.PI / 3) {
-            const px = tree.x + Math.cos(a + idx * 0.5) * (r * 0.38);
-            const py = tree.y + Math.sin(a + idx * 0.5) * (r * 0.38);
+            // Solar illumination of this individual bough based on its orientation toward the sun
+            const sunDot = bCos * sunX + bSin * sunY;
+
+            // Feathered evergreen bough polygon (serrated lateral needle shoots along the bough)
+            const tipX = tierCx + bCos * bLen;
+            const tipY = tierCy + bSin * bLen;
+
+            ctx.fillStyle = sunDot > 0.18 ? tierMidCols[w] : tierShadowCols[w];
             ctx.beginPath();
-            ctx.arc(px, py, puffRadius * 0.72, 0, Math.PI * 2);
+            ctx.moveTo(tierCx + pCos * (bWidth * 0.32), tierCy + pSin * (bWidth * 0.32));
+            // Left serrated needle shoots (3 lateral barbs)
+            ctx.lineTo(
+              tierCx + bCos * (bLen * 0.34) + pCos * (bWidth * 0.95),
+              tierCy + bSin * (bLen * 0.34) + pSin * (bWidth * 0.95)
+            );
+            ctx.lineTo(
+              tierCx + bCos * (bLen * 0.30) + pCos * (bWidth * 0.58),
+              tierCy + bSin * (bLen * 0.30) + pSin * (bWidth * 0.58)
+            );
+            ctx.lineTo(
+              tierCx + bCos * (bLen * 0.64) + pCos * (bWidth * 0.78),
+              tierCy + bSin * (bLen * 0.64) + pSin * (bWidth * 0.78)
+            );
+            ctx.lineTo(
+              tierCx + bCos * (bLen * 0.58) + pCos * (bWidth * 0.44),
+              tierCy + bSin * (bLen * 0.58) + pSin * (bWidth * 0.44)
+            );
+            ctx.lineTo(
+              tierCx + bCos * (bLen * 0.86) + pCos * (bWidth * 0.46),
+              tierCy + bSin * (bLen * 0.86) + pSin * (bWidth * 0.46)
+            );
+            // Bough tip
+            ctx.lineTo(tipX, tipY);
+            // Right serrated needle shoots
+            ctx.lineTo(
+              tierCx + bCos * (bLen * 0.86) - pCos * (bWidth * 0.46),
+              tierCy + bSin * (bLen * 0.86) - pSin * (bWidth * 0.46)
+            );
+            ctx.lineTo(
+              tierCx + bCos * (bLen * 0.58) - pCos * (bWidth * 0.44),
+              tierCy + bSin * (bLen * 0.58) - pSin * (bWidth * 0.44)
+            );
+            ctx.lineTo(
+              tierCx + bCos * (bLen * 0.64) - pCos * (bWidth * 0.78),
+              tierCy + bSin * (bLen * 0.64) - pSin * (bWidth * 0.78)
+            );
+            ctx.lineTo(
+              tierCx + bCos * (bLen * 0.30) - pCos * (bWidth * 0.58),
+              tierCy + bSin * (bLen * 0.30) - pSin * (bWidth * 0.58)
+            );
+            ctx.lineTo(
+              tierCx + bCos * (bLen * 0.34) - pCos * (bWidth * 0.95),
+              tierCy + bSin * (bLen * 0.34) - pSin * (bWidth * 0.95)
+            );
+            ctx.lineTo(tierCx - pCos * (bWidth * 0.32), tierCy - pSin * (bWidth * 0.32));
+            ctx.closePath();
             ctx.fill();
+
+            // Upper sunlit needle ridge on each bough
+            ctx.fillStyle = sunDot > -0.15 ? tierSunCols[w] : tierMidCols[w];
+            const ridgeShiftX = sunX * (bWidth * 0.14);
+            const ridgeShiftY = sunY * (bWidth * 0.14);
+            ctx.beginPath();
+            ctx.moveTo(tierCx + ridgeShiftX, tierCy + ridgeShiftY);
+            ctx.lineTo(
+              tierCx + bCos * (bLen * 0.45) + pCos * (bWidth * 0.52) + ridgeShiftX,
+              tierCy + bSin * (bLen * 0.45) + pSin * (bWidth * 0.52) + ridgeShiftY
+            );
+            ctx.lineTo(
+              tierCx + bCos * (bLen * 0.76) + pCos * (bWidth * 0.34) + ridgeShiftX,
+              tierCy + bSin * (bLen * 0.76) + pSin * (bWidth * 0.34) + ridgeShiftY
+            );
+            ctx.lineTo(tipX, tipY);
+            ctx.lineTo(
+              tierCx + bCos * (bLen * 0.76) - pCos * (bWidth * 0.34) + ridgeShiftX,
+              tierCy + bSin * (bLen * 0.76) - pSin * (bWidth * 0.34) + ridgeShiftY
+            );
+            ctx.lineTo(
+              tierCx + bCos * (bLen * 0.45) - pCos * (bWidth * 0.52) + ridgeShiftX,
+              tierCy + bSin * (bLen * 0.45) - pSin * (bWidth * 0.52) + ridgeShiftY
+            );
+            ctx.closePath();
+            ctx.fill();
+
+            // Winter snow pillows resting on individual spruce boughs (leaving green needle tips exposed)
+            if (season === 'winter' && (bHash & 3) !== 0) {
+              ctx.fillStyle = sunDot >= 0 ? 'rgba(248, 250, 252, 0.90)' : 'rgba(203, 213, 225, 0.85)';
+              this.fillBotanicalCluster(
+                ctx,
+                tierCx + bCos * (bLen * 0.52) + sunX * 0.8,
+                tierCy + bSin * (bLen * 0.52) + sunY * 0.8,
+                bLen * 0.28,
+                bWidth * 0.46,
+                bAng,
+                bHash,
+                0.16,
+                8
+              );
+            }
           }
-        });
+        }
 
-        // Top Soft Leafy Canopy Highlights
-        ctx.fillStyle = highlight1;
-        ctx.beginPath();
-        ctx.arc(tree.x - r * 0.18, tree.y - r * 0.18, r * 0.42, 0, Math.PI * 2);
-        ctx.fill();
+        // 4. Apical Shoot Star-Tuft (молодая верхушечная мутовка, never a flat circle or brown dot!)
+        const apexX = tree.x + sunX * (r * 0.07);
+        const apexY = tree.y + sunY * (r * 0.07);
+        ctx.fillStyle = season === 'winter' ? '#f1f5f9' : '#52bf7f';
+        this.fillBotanicalCluster(ctx, apexX, apexY, r * 0.22, r * 0.20, seed * 0.3, seed + 99, 0.32, 10);
 
-        ctx.fillStyle = highlight2;
-        ctx.beginPath();
-        ctx.arc(tree.x - r * 0.26, tree.y - r * 0.26, r * 0.24, 0, Math.PI * 2);
-        ctx.fill();
-
-        // Birch White Trunk visible in center with black lenticels
-        ctx.fillStyle = '#f8fafc';
-        ctx.beginPath();
-        ctx.arc(tree.x, tree.y, Math.max(2.5, r * 0.16), 0, Math.PI * 2);
-        ctx.fill();
-        ctx.fillStyle = '#0f172a';
-        ctx.fillRect(tree.x - r * 0.1, tree.y - 1, r * 0.2, 1.5);
-
-      } else {
-        // --- DECIDUOUS / OAK / MAPLE / AUTUMN BROADLEAF TREE ---
-        const r = tree.radius;
-        const seed = Math.abs(Math.floor(tree.x * 12.9898 + tree.y * 78.233));
-
+      } else if (species === 'birch') {
+        // ====================================================================
+        // 3. RUSSIAN BIRCH (БЕРЁЗА: БЕЛАЯ БЕРЕСТА С ЧЕЧЕВИЧКАМИ И АЖУРНАЯ КРОНА)
+        // ====================================================================
         if (season === 'winter') {
-          // --- BARE WINTER SKELETON (Deciduous broadleaf trees shed all leaves in Russian winter) ---
+          // --- BARE WINTER BIRCH (Forked white birch trunk + delicate weeping reddish-brown twigs & frost) ---
+          ctx.fillStyle = 'rgba(15, 23, 42, 0.22)';
+          this.fillBotanicalCluster(ctx, tree.x, tree.y, r * 0.32, r * 0.28, seed * 0.1, seed, 0.15, 10);
 
-          // 2. Main Spreading Woody Boughs
-          const numBranches = 5;
+          const numBranches = 6;
           for (let b = 0; b < numBranches; b++) {
             const ang = (b / numBranches) * Math.PI * 2 + ((seed * (b + 1)) % 10) * 0.14;
-            const len = r * (0.75 + ((seed + b * 5) % 6) * 0.08);
+            const len = r * (0.78 + ((seed + b * 5) % 6) * 0.08);
+            const midX = tree.x + Math.cos(ang + 0.20) * (len * 0.48);
+            const midY = tree.y + Math.sin(ang + 0.20) * (len * 0.48);
+            const bx = tree.x + Math.cos(ang) * len;
+            const by = tree.y + Math.sin(ang) * len;
+
+            // Primary white birch limb tapering into dark reddish-brown weeping outer twigs
+            ctx.fillStyle = '#cbd5e1';
+            this.drawTaperedLimb(
+              ctx,
+              tree.x,
+              tree.y,
+              Math.max(2.0, r * 0.13),
+              midX,
+              midY,
+              (midX + bx) * 0.5,
+              (midY + by) * 0.5,
+              Math.max(1.0, r * 0.06)
+            );
+            ctx.fillStyle = '#f8fafc';
+            this.drawTaperedLimb(
+              ctx,
+              tree.x + sunX * 0.5,
+              tree.y + sunY * 0.5,
+              Math.max(1.4, r * 0.09),
+              midX + sunX * 0.4,
+              midY + sunY * 0.4,
+              (midX + bx) * 0.5,
+              (midY + by) * 0.5,
+              Math.max(0.7, r * 0.04)
+            );
+
+            // Black lenticel dashes along white primary boughs
+            ctx.fillStyle = '#1e293b';
+            ctx.fillRect(midX - 1.2, midY - 0.6, 2.4, 1.1);
+
+            // Outer weeping dark-brown birch twigs + hoarfrost
+            for (let tw = -1; tw <= 1; tw += 2) {
+              const twAng = ang + tw * 0.36;
+              const twLen = len * 0.52;
+              const tx = midX + Math.cos(twAng) * twLen;
+              const ty = midY + Math.sin(twAng) * twLen;
+              ctx.strokeStyle = '#3f2314';
+              ctx.lineWidth = Math.max(1.0, r * 0.06);
+              ctx.lineCap = 'round';
+              ctx.beginPath();
+              ctx.moveTo(midX, midY);
+              ctx.quadraticCurveTo(
+                midX + Math.cos(twAng + tw * 0.15) * (twLen * 0.5),
+                midY + Math.sin(twAng + tw * 0.15) * (twLen * 0.5),
+                tx,
+                ty
+              );
+              ctx.stroke();
+
+              // Frost rime highlight
+              ctx.strokeStyle = 'rgba(241, 245, 249, 0.85)';
+              ctx.lineWidth = Math.max(0.6, r * 0.035);
+              ctx.beginPath();
+              ctx.moveTo(midX + sunX * 0.5, midY + sunY * 0.5);
+              ctx.lineTo(tx + sunX * 0.5, ty + sunY * 0.5);
+              ctx.stroke();
+            }
+          }
+
+          // Central forked birch trunk collar (dark fissured base + chalk-white bark + black lenticels)
+          const trunkR = Math.max(3.0, r * 0.19);
+          ctx.fillStyle = '#1e293b';
+          this.fillBotanicalCluster(ctx, tree.x, tree.y, trunkR * 1.12, trunkR * 1.05, seed * 0.2, seed, 0.14, 8);
+          ctx.fillStyle = '#f8fafc';
+          this.fillBotanicalCluster(
+            ctx,
+            tree.x + sunX * 0.5,
+            tree.y + sunY * 0.5,
+            trunkR * 0.86,
+            trunkR * 0.82,
+            seed * 0.2,
+            seed + 5,
+            0.1,
+            8
+          );
+          ctx.fillStyle = '#0f172a';
+          ctx.fillRect(tree.x - trunkR * 0.45, tree.y - 0.8, trunkR * 0.9, 1.3);
+        } else {
+          // --- LEAFY BIRCH (SPRING / SUMMER / AUTUMN) ---
+          let deepShadowCol = '#2d4f0c';
+          let darkCol = '#3f6212';
+          let midCol = '#65a30d';
+          let brightCol = '#84cc16';
+          let sunTipCol = '#bef264';
+
+          if (season === 'autumn') {
+            deepShadowCol = '#78350f';
+            darkCol = '#b45309';
+            midCol = '#d97706';
+            brightCol = '#f59e0b';
+            sunTipCol = '#fde047';
+          } else if (season === 'spring') {
+            deepShadowCol = '#365314';
+            darkCol = '#4d7c0f';
+            midCol = '#84cc16';
+            brightCol = '#a3e635';
+            sunTipCol = '#d9f99d';
+          }
+
+          // 1. Deep under-canopy shadow foliage clusters (shifted slightly toward shadow direction)
+          const numDomes = 7;
+          ctx.fillStyle = deepShadowCol;
+          for (let i = 0; i < numDomes; i++) {
+            const ang = (i / numDomes) * Math.PI * 2 + (seed % 17) * 0.18;
+            const dist = r * (0.44 + ((seed + i * 3) % 4) * 0.05);
+            const lx = tree.x + Math.cos(ang) * dist + sunState.shadowDirX * (r * 0.08);
+            const ly = tree.y + Math.sin(ang) * dist + sunState.shadowDirY * (r * 0.08);
+            this.fillBotanicalCluster(
+              ctx,
+              lx,
+              ly,
+              r * 0.46,
+              r * 0.40,
+              ang,
+              seed + i * 31,
+              0.20,
+              12
+            );
+          }
+
+          // 2. Forked White Birch Trunk & Slender Weeping Boughs (drawn UNDER the upper leaf clusters so they peek through natural crown gaps!)
+          const trunkR = Math.max(2.6, r * 0.16);
+          // Dark rough basal collar (комель берёзы)
+          ctx.fillStyle = '#1e293b';
+          this.fillBotanicalCluster(ctx, tree.x, tree.y, trunkR * 1.15, trunkR * 1.08, seed * 0.1, seed, 0.14, 8);
+
+          // 4 primary forked white birch boughs radiating into the sub-crowns
+          const numForks = 4;
+          for (let f = 0; f < numForks; f++) {
+            const fAng = (f / numForks) * Math.PI * 2 + (seed % 11) * 0.25;
+            const fLen = r * 0.56;
+            const fMidX = tree.x + Math.cos(fAng + 0.16) * (fLen * 0.5);
+            const fMidY = tree.y + Math.sin(fAng + 0.16) * (fLen * 0.5);
+            const fx = tree.x + Math.cos(fAng) * fLen;
+            const fy = tree.y + Math.sin(fAng) * fLen;
+
+            // Shaded birch bark edge
+            ctx.fillStyle = '#cbd5e1';
+            this.drawTaperedLimb(ctx, tree.x, tree.y, trunkR * 0.82, fMidX, fMidY, fx, fy, Math.max(0.9, r * 0.045));
+            // Sunlit chalk-white birch bark
+            ctx.fillStyle = '#f8fafc';
+            this.drawTaperedLimb(
+              ctx,
+              tree.x + sunX * 0.5,
+              tree.y + sunY * 0.5,
+              trunkR * 0.62,
+              fMidX + sunX * 0.4,
+              fMidY + sunY * 0.4,
+              fx,
+              fy,
+              Math.max(0.6, r * 0.03)
+            );
+            // Black horizontal birch lenticels (чечевички на бересте)
+            ctx.fillStyle = '#0f172a';
+            const lx1 = tree.x + Math.cos(fAng) * (fLen * 0.28);
+            const ly1 = tree.y + Math.sin(fAng) * (fLen * 0.28);
+            const lx2 = tree.x + Math.cos(fAng) * (fLen * 0.52);
+            const ly2 = tree.y + Math.sin(fAng) * (fLen * 0.52);
+            ctx.fillRect(lx1 - 1.3, ly1 - 0.6, 2.6, 1.2);
+            ctx.fillRect(lx2 - 1.0, ly2 - 0.5, 2.0, 1.0);
+          }
+
+          // 3. Lacy Mid-Canopy & Sunlit Sub-Crowns (arranged around the bough tips, leaving airy fenestrations over the forked white trunk)
+          for (let i = 0; i < numDomes; i++) {
+            const ang = (i / numDomes) * Math.PI * 2 + (seed % 17) * 0.18 + 0.12;
+            const dist = r * (0.48 + ((seed + i * 5) % 4) * 0.055);
+            const cx = tree.x + Math.cos(ang) * dist;
+            const cy = tree.y + Math.sin(ang) * dist;
+            const domeRx = r * (0.42 + (i & 1) * 0.06);
+            const domeRy = r * (0.36 + ((i + 1) & 1) * 0.05);
+            const sunDot = Math.cos(ang) * sunX + Math.sin(ang) * sunY;
+
+            // Shaded lower part of sub-crown
+            ctx.fillStyle = sunDot > 0.1 ? midCol : darkCol;
+            this.fillBotanicalCluster(ctx, cx, cy, domeRx, domeRy, ang, seed + i * 43, 0.22, 12);
+
+            // Brighter mid-upper leaf cluster shifted toward sun
+            ctx.fillStyle = sunDot > -0.1 ? brightCol : midCol;
+            this.fillBotanicalCluster(
+              ctx,
+              cx + sunX * (r * 0.06),
+              cy + sunY * (r * 0.06),
+              domeRx * 0.80,
+              domeRy * 0.78,
+              ang + 0.3,
+              seed + i * 59,
+              0.24,
+              10
+            );
+          }
+
+          // 4. Upper Central Crown Bridge (partial airy cluster that lets glimpses of white bark show through)
+          ctx.fillStyle = midCol;
+          this.fillBotanicalCluster(
+            ctx,
+            tree.x + sunX * (r * 0.14),
+            tree.y + sunY * (r * 0.14),
+            r * 0.44,
+            r * 0.38,
+            seed * 0.4,
+            seed + 101,
+            0.22,
+            12
+          );
+          ctx.fillStyle = brightCol;
+          this.fillBotanicalCluster(
+            ctx,
+            tree.x + sunX * (r * 0.22),
+            tree.y + sunY * (r * 0.22),
+            r * 0.32,
+            r * 0.28,
+            seed * 0.4 + 0.5,
+            seed + 107,
+            0.22,
+            10
+          );
+
+          // 5. Fluttering Peripheral Leaf Tufts & Sun-Dappled Highlights (ажурная мелкая листва по краям)
+          const numTufts = 16;
+          for (let t = 0; t < numTufts; t++) {
+            const tHash = ((seed + t * 71) * 2654435761) >>> 0;
+            const tAng = (t / numTufts) * Math.PI * 2 + ((tHash & 15) * 0.04);
+            const tDist = r * (0.64 + ((tHash >> 4) & 7) * 0.04);
+            const tx = tree.x + Math.cos(tAng) * tDist;
+            const ty = tree.y + Math.sin(tAng) * tDist;
+            const sunDot = Math.cos(tAng) * sunX + Math.sin(tAng) * sunY;
+
+            ctx.fillStyle = sunDot > 0.15 ? sunTipCol : sunDot > -0.2 ? brightCol : midCol;
+            this.fillBotanicalCluster(
+              ctx,
+              tx,
+              ty,
+              r * 0.20,
+              r * 0.15,
+              tAng + 0.4,
+              tHash,
+              0.28,
+              8
+            );
+          }
+        }
+
+      } else {
+        // ====================================================================
+        // 4. BROADLEAF DECIDUOUS (OAK / MAPLE / LINDEN — ДУБ, КЛЁН, ЛИПА)
+        // ====================================================================
+        if (season === 'winter') {
+          // --- BARE WINTER BROADLEAF SKELETON (3-tier fractal woody branches + snow ridges) ---
+          ctx.fillStyle = 'rgba(28, 25, 23, 0.26)';
+          this.fillBotanicalCluster(ctx, tree.x, tree.y, r * 0.38, r * 0.34, seed * 0.1, seed, 0.16, 10);
+
+          // Root buttresses
+          const numRoots = 4;
+          for (let ri = 0; ri < numRoots; ri++) {
+            const rAng = (ri / numRoots) * Math.PI * 2 + (seed % 9) * 0.2;
+            const rLen = r * 0.36;
+            ctx.fillStyle = '#2d241e';
+            this.drawTaperedLimb(
+              ctx,
+              tree.x,
+              tree.y,
+              Math.max(2.0, r * 0.15),
+              tree.x + Math.cos(rAng + 0.2) * (rLen * 0.5),
+              tree.y + Math.sin(rAng + 0.2) * (rLen * 0.5),
+              tree.x + Math.cos(rAng) * rLen,
+              tree.y + Math.sin(rAng) * rLen,
+              0.7
+            );
+          }
+
+          // Primary spreading woody boughs + secondary forks + tertiary fine twigs
+          const numBranches = 5 + (seed & 1);
+          for (let b = 0; b < numBranches; b++) {
+            const ang = (b / numBranches) * Math.PI * 2 + ((seed * (b + 1)) % 10) * 0.14;
+            const len = r * (0.76 + ((seed + b * 5) % 6) * 0.08);
             const bx = tree.x + Math.cos(ang) * len;
             const by = tree.y + Math.sin(ang) * len;
             const midX = tree.x + Math.cos(ang + 0.22) * (len * 0.52);
             const midY = tree.y + Math.sin(ang + 0.22) * (len * 0.52);
 
-            // Dark bark bough
-            ctx.strokeStyle = '#3b2f2f';
-            ctx.lineWidth = Math.max(2.8, r * 0.22);
+            const baseW = Math.max(2.2, r * 0.15);
+            const tipW = Math.max(0.9, r * 0.05);
+
+            // Dark fissured bark limb
+            ctx.fillStyle = '#3b2f2f';
+            this.drawTaperedLimb(ctx, tree.x, tree.y, baseW, midX, midY, bx, by, tipW);
+
+            // Warm wood highlight
+            ctx.fillStyle = '#57443b';
+            this.drawTaperedLimb(
+              ctx,
+              tree.x + sunX * 0.4,
+              tree.y + sunY * 0.4,
+              baseW * 0.62,
+              midX + sunX * 0.4,
+              midY + sunY * 0.4,
+              bx,
+              by,
+              tipW * 0.6
+            );
+
+            // Snow ridge resting along sunward/upper edge of bough
+            ctx.strokeStyle = '#f8fafc';
+            ctx.lineWidth = Math.max(1.0, r * 0.075);
             ctx.lineCap = 'round';
             ctx.beginPath();
-            ctx.moveTo(tree.x, tree.y);
-            ctx.quadraticCurveTo(midX, midY, bx, by);
+            ctx.moveTo(tree.x + sunX * 0.9, tree.y + sunY * 0.9);
+            ctx.quadraticCurveTo(midX + sunX * 0.9, midY + sunY * 0.9, bx + sunX * 0.6, by + sunY * 0.6);
             ctx.stroke();
 
-            // Snow cap resting along top ridge of bough
-            ctx.strokeStyle = '#f8fafc';
-            ctx.lineWidth = Math.max(1.2, r * 0.10);
-            ctx.beginPath();
-            ctx.moveTo(tree.x - 0.8, tree.y - 0.8);
-            ctx.quadraticCurveTo(midX - 0.8, midY - 0.8, bx - 0.8, by - 0.8);
-            ctx.stroke();
+            // Secondary forks (left and right)
+            for (let side = -1; side <= 1; side += 2) {
+              const subAng = ang + side * (0.38 + ((seed + b + side) & 3) * 0.06);
+              const subLen = r * (side === 1 ? 0.36 : 0.28);
+              const originX = side === 1 ? bx : midX;
+              const originY = side === 1 ? by : midY;
+              const tx = originX + Math.cos(subAng) * subLen;
+              const ty = originY + Math.sin(subAng) * subLen;
 
-            // Sub-twigs with frost
-            const subAng = ang + (b % 2 === 0 ? 0.42 : -0.42);
-            const subLen = r * 0.34;
-            const tx = bx + Math.cos(subAng) * subLen;
-            const ty = by + Math.sin(subAng) * subLen;
-            ctx.strokeStyle = '#4a3b32';
-            ctx.lineWidth = Math.max(1.5, r * 0.10);
-            ctx.beginPath();
-            ctx.moveTo(bx, by);
-            ctx.lineTo(tx, ty);
-            ctx.stroke();
+              ctx.fillStyle = '#4a3b32';
+              this.drawTaperedLimb(
+                ctx,
+                originX,
+                originY,
+                side === 1 ? tipW * 1.1 : baseW * 0.55,
+                (originX + tx) * 0.5,
+                (originY + ty) * 0.5,
+                tx,
+                ty,
+                0.55
+              );
 
-            ctx.strokeStyle = '#e2e8f0';
-            ctx.lineWidth = Math.max(0.8, r * 0.05);
-            ctx.beginPath();
-            ctx.moveTo(bx - 0.5, by - 0.5);
-            ctx.lineTo(tx - 0.5, ty - 0.5);
-            ctx.stroke();
+              ctx.strokeStyle = '#e2e8f0';
+              ctx.lineWidth = Math.max(0.6, r * 0.04);
+              ctx.beginPath();
+              ctx.moveTo(originX + sunX * 0.5, originY + sunY * 0.5);
+              ctx.lineTo(tx + sunX * 0.5, ty + sunY * 0.5);
+              ctx.stroke();
+            }
           }
 
-          // 3. Central Trunk with Snow Cap
-          const trunkR = Math.max(3.5, r * 0.26);
+          // Central trunk collar with snow cap
+          const trunkR = Math.max(3.2, r * 0.22);
           ctx.fillStyle = '#2d241e';
-          ctx.beginPath();
-          ctx.arc(tree.x, tree.y, trunkR, 0, Math.PI * 2);
-          ctx.fill();
-
+          this.fillBotanicalCluster(ctx, tree.x, tree.y, trunkR * 1.08, trunkR * 1.02, seed * 0.2, seed, 0.14, 10);
           ctx.fillStyle = '#f8fafc';
-          ctx.beginPath();
-          ctx.arc(tree.x - trunkR * 0.15, tree.y - trunkR * 0.15, trunkR * 0.65, 0, Math.PI * 2);
-          ctx.fill();
+          this.fillBotanicalCluster(
+            ctx,
+            tree.x + sunX * (trunkR * 0.22),
+            tree.y + sunY * (trunkR * 0.22),
+            trunkR * 0.68,
+            trunkR * 0.62,
+            seed * 0.2,
+            seed + 11,
+            0.14,
+            8
+          );
 
         } else {
+          // --- LEAFY BROADLEAF CROWN (OAK & MAPLE IN SPRING / SUMMER / AUTUMN) ---
+          const isMaple = species === 'maple';
+          const serration = isMaple ? 0.21 : 0.15;
 
-          // Seasonal Foliage Colors
-          let baseColors: string[];
-          let highlightCol: string;
+          let shadowFoliage = '#092e18';
+          let darkFoliage = '#114224';
+          let midFoliage = '#166534';
+          let brightFoliage = '#15803d';
+          let sunCrownCol = '#22c55e';
 
           if (season === 'autumn') {
             const autumnPalette = seed % 4;
             if (autumnPalette === 0) {
               // Golden Oak / Linden
-              baseColors = ['#ca8a04', '#d97706', '#b45309'];
-              highlightCol = 'rgba(254, 240, 138, 0.35)';
+              shadowFoliage = '#451a03';
+              darkFoliage = '#78350f';
+              midFoliage = '#b45309';
+              brightFoliage = '#d97706';
+              sunCrownCol = '#f59e0b';
             } else if (autumnPalette === 1) {
-              // Flame Maple / Rowan
-              baseColors = ['#dc2626', '#b91c1c', '#991b1b'];
-              highlightCol = 'rgba(254, 202, 202, 0.35)';
+              // Crimson / Scarlet Maple
+              shadowFoliage = '#450a0a';
+              darkFoliage = '#7f1d1d';
+              midFoliage = '#b91c1c';
+              brightFoliage = '#dc2626';
+              sunCrownCol = '#f87171';
             } else if (autumnPalette === 2) {
-              // Amber Elm / Beech
-              baseColors = ['#ea580c', '#c2410c', '#9a3412'];
-              highlightCol = 'rgba(253, 186, 116, 0.35)';
+              // Flame Amber Elm / Beech
+              shadowFoliage = '#431407';
+              darkFoliage = '#7c2d12';
+              midFoliage = '#c2410c';
+              brightFoliage = '#ea580c';
+              sunCrownCol = '#fb923c';
             } else {
-              // Russet / Copper
-              baseColors = ['#b45309', '#9a3412', '#78350f'];
-              highlightCol = 'rgba(251, 191, 36, 0.32)';
+              // Bronze Russet Oak
+              shadowFoliage = '#3b1806';
+              darkFoliage = '#713f12';
+              midFoliage = '#a16207';
+              brightFoliage = '#ca8a04';
+              sunCrownCol = '#eab308';
             }
           } else if (season === 'spring') {
-            baseColors = ['#4d7c0f', '#65a30d', '#84cc16'];
-            highlightCol = 'rgba(217, 249, 157, 0.35)';
+            shadowFoliage = '#1a2e05';
+            darkFoliage = '#365314';
+            midFoliage = '#4d7c0f';
+            brightFoliage = '#65a30d';
+            sunCrownCol = '#a3e635';
           } else {
-            // Summer
-            const rawCol = tree.color || '#15803d';
-            baseColors = [rawCol, '#166534', '#15803d'];
-            highlightCol = 'rgba(255, 255, 255, 0.18)';
-          }
-
-          // Multi-cluster overlapping leafy canopy puffs
-          for (let idx = 0; idx < 3; idx++) {
-            ctx.fillStyle = baseColors[idx % baseColors.length];
-            const puffRad = r * (0.75 - idx * 0.10);
-            for (let a = 0; a < Math.PI * 2; a += Math.PI / 2) {
-              const px = tree.x + Math.cos(a + tree.x + idx * 0.6) * (r * 0.35);
-              const py = tree.y + Math.sin(a + tree.y + idx * 0.6) * (r * 0.35);
-              ctx.beginPath();
-              ctx.arc(px, py, puffRad, 0, Math.PI * 2);
-              ctx.fill();
+            // Summer palette variations based on tree.color and oak vs maple
+            const rawCol = (tree.color || '#15803d').toLowerCase();
+            if (rawCol === '#14532d' || rawCol === '#166534' || !isMaple) {
+              // Deep Mighty Oak / Linden
+              shadowFoliage = '#072413';
+              darkFoliage = '#0f3d21';
+              midFoliage = '#165930';
+              brightFoliage = '#1e753f';
+              sunCrownCol = '#349e5a';
+            } else {
+              // Vibrant Broadleaf Maple
+              shadowFoliage = '#0a2b16';
+              darkFoliage = '#124725';
+              midFoliage = '#176635';
+              brightFoliage = '#208245';
+              sunCrownCol = '#3eb068';
             }
           }
 
-          // Central canopy highlight
-          ctx.fillStyle = highlightCol;
-          ctx.beginPath();
-          ctx.arc(tree.x - r * 0.22, tree.y - r * 0.22, r * 0.48, 0, Math.PI * 2);
-          ctx.fill();
+          const numSubCrowns = 6;
 
-          // Visible woody trunk center
-          ctx.fillStyle = '#292524';
-          ctx.beginPath();
-          ctx.arc(tree.x, tree.y, Math.max(2.5, r * 0.14), 0, Math.PI * 2);
-          ctx.fill();
+          // 1. Deep Under-Canopy Shadow Layer (gives rich 3D depth underneath the boughs)
+          ctx.fillStyle = shadowFoliage;
+          this.fillBotanicalCluster(
+            ctx,
+            tree.x + sunState.shadowDirX * (r * 0.10),
+            tree.y + sunState.shadowDirY * (r * 0.10),
+            r * 0.84,
+            r * 0.78,
+            seed * 0.17,
+            seed,
+            serration,
+            16
+          );
+
+          for (let i = 0; i < numSubCrowns; i++) {
+            const ang = (i / numSubCrowns) * Math.PI * 2 + (seed % 19) * 0.16;
+            const dist = r * (0.46 + ((seed + i * 3) % 4) * 0.05);
+            const lx = tree.x + Math.cos(ang) * dist + sunState.shadowDirX * (r * 0.08);
+            const ly = tree.y + Math.sin(ang) * dist + sunState.shadowDirY * (r * 0.08);
+            this.fillBotanicalCluster(
+              ctx,
+              lx,
+              ly,
+              r * 0.52,
+              r * 0.45,
+              ang,
+              seed + i * 23,
+              serration,
+              12
+            );
+          }
+
+          // 2. Gnarled Wooden Trunk & Forked Boughs (drawn BETWEEN under-foliage and upper sub-crowns so wooden forks are naturally visible in canopy clefts!)
+          const trunkR = Math.max(3.0, r * 0.19);
+          ctx.fillStyle = '#261c15';
+          this.fillBotanicalCluster(ctx, tree.x, tree.y, trunkR * 1.12, trunkR * 1.06, seed * 0.2, seed, 0.14, 8);
+
+          for (let i = 0; i < numSubCrowns; i++) {
+            const ang = (i / numSubCrowns) * Math.PI * 2 + (seed % 19) * 0.16;
+            const bLen = r * 0.58;
+            const midX = tree.x + Math.cos(ang + 0.18) * (bLen * 0.5);
+            const midY = tree.y + Math.sin(ang + 0.18) * (bLen * 0.5);
+            const bx = tree.x + Math.cos(ang) * bLen;
+            const by = tree.y + Math.sin(ang) * bLen;
+
+            // Dark fissured oak/maple bark
+            ctx.fillStyle = '#2d2118';
+            this.drawTaperedLimb(ctx, tree.x, tree.y, trunkR * 0.78, midX, midY, bx, by, Math.max(1.1, r * 0.055));
+            // Sunlit warm bark ridge
+            ctx.fillStyle = '#4a3728';
+            this.drawTaperedLimb(
+              ctx,
+              tree.x + sunX * 0.5,
+              tree.y + sunY * 0.5,
+              trunkR * 0.48,
+              midX + sunX * 0.4,
+              midY + sunY * 0.4,
+              bx,
+              by,
+              Math.max(0.7, r * 0.035)
+            );
+          }
+
+          // 3. Billowy Asymmetric Sub-Crown Domes (with dark inter-dome valleys so the crown never looks like a single flat circle)
+          for (let i = 0; i < numSubCrowns; i++) {
+            const ang = (i / numSubCrowns) * Math.PI * 2 + (seed % 19) * 0.16;
+            const dist = r * (0.48 + ((seed + i * 7) % 4) * 0.055);
+            const cx = tree.x + Math.cos(ang) * dist;
+            const cy = tree.y + Math.sin(ang) * dist;
+            const domeRx = r * (0.48 + (i & 1) * 0.06);
+            const domeRy = r * (0.42 + ((i + 1) & 1) * 0.05);
+            const sunDot = Math.cos(ang) * sunX + Math.sin(ang) * sunY;
+
+            // Sub-crown base mass
+            ctx.fillStyle = sunDot > 0.05 ? midFoliage : darkFoliage;
+            this.fillBotanicalCluster(ctx, cx, cy, domeRx, domeRy, ang, seed + i * 41, serration, 14);
+
+            // Sub-crown upper sunlit dome (shifted toward the sun)
+            ctx.fillStyle = sunDot > -0.15 ? brightFoliage : midFoliage;
+            this.fillBotanicalCluster(
+              ctx,
+              cx + sunX * (r * 0.065),
+              cy + sunY * (r * 0.065),
+              domeRx * 0.78,
+              domeRy * 0.74,
+              ang + 0.35,
+              seed + i * 67,
+              serration * 1.1,
+              12
+            );
+          }
+
+          // 4. Upper Crown Foliage Clusters (offset slightly from center so a natural cleft reveals the primary wooden bough fork)
+          const upperClusters = 3;
+          for (let u = 0; u < upperClusters; u++) {
+            const uAng = (u / upperClusters) * Math.PI * 2 + (seed % 13) * 0.25 + 0.4;
+            const uDist = r * 0.22;
+            const ux = tree.x + Math.cos(uAng) * uDist + sunX * (r * 0.08);
+            const uy = tree.y + Math.sin(uAng) * uDist + sunY * (r * 0.08);
+            const uSun = Math.cos(uAng) * sunX + Math.sin(uAng) * sunY;
+
+            ctx.fillStyle = uSun >= 0 ? brightFoliage : midFoliage;
+            this.fillBotanicalCluster(
+              ctx,
+              ux,
+              uy,
+              r * 0.40,
+              r * 0.35,
+              uAng,
+              seed + u * 89,
+              serration,
+              12
+            );
+          }
+
+          // 5. Sun-Dappled Leaf Rosettes & Peripheral Serrated Tufts (микрорельеф листвы на солнечной стороне)
+          const numRosettes = 14;
+          for (let k = 0; k < numRosettes; k++) {
+            const kHash = ((seed + k * 97) * 2654435761) >>> 0;
+            const kAng = (k / numRosettes) * Math.PI * 2 + ((kHash & 15) * 0.045);
+            const kDist = r * (0.34 + ((kHash >> 4) & 15) * 0.032);
+            const kx = tree.x + Math.cos(kAng) * kDist + sunX * (r * 0.05);
+            const ky = tree.y + Math.sin(kAng) * kDist + sunY * (r * 0.05);
+            const kSun = Math.cos(kAng) * sunX + Math.sin(kAng) * sunY;
+
+            if (kSun > -0.25) {
+              ctx.fillStyle = kSun > 0.22 ? sunCrownCol : brightFoliage;
+              this.fillBotanicalCluster(
+                ctx,
+                kx,
+                ky,
+                r * (0.21 + (k & 1) * 0.04),
+                r * (0.17 + ((k + 1) & 1) * 0.03),
+                kAng + 0.25,
+                kHash,
+                serration * 1.2,
+                10
+              );
+            }
+          }
         }
       }
     }
@@ -7091,11 +7729,13 @@ export class GameRenderer {
         this.drawOrganicBlob(ctx, rX * 0.96, rY * 0.96, seed);
         ctx.stroke();
       } else {
-        // Deep sky reflection body with wet border transition
-        const grad = safeRadialGradient(ctx, -rX * 0.1, -rY * 0.1, 0, 0, 0, rX);
-        grad.addColorStop(0, 'rgba(56, 189, 248, 0.25)'); // Sky-blue reflection core
-        grad.addColorStop(0.55, 'rgba(30, 41, 59, 0.38)'); // Dark asphalt wet surface visible through water
-        grad.addColorStop(0.92, 'rgba(15, 23, 42, 0.52)'); // Edge refraction ring
+        // Deep sky reflection body with wet border transition (optical cyan-slate for WebGL2 water shader)
+        const sunState = getCurrentSunShadowState();
+        const dayVis = Math.max(0.18, 1 - this.currentNightAlpha * 0.78);
+        const grad = safeRadialGradient(ctx, -rX * 0.12 * sunState.sunDirX, -rY * 0.12 * sunState.sunDirY, 0, 0, 0, rX);
+        grad.addColorStop(0, `rgba(${Math.round(36 * dayVis)}, ${Math.round(138 * dayVis)}, ${Math.round(178 * dayVis)}, 0.34)`);
+        grad.addColorStop(0.58, `rgba(${Math.round(20 * dayVis)}, ${Math.round(68 * dayVis)}, ${Math.round(92 * dayVis)}, 0.42)`);
+        grad.addColorStop(0.92, 'rgba(15, 23, 42, 0.52)');
         grad.addColorStop(1, 'rgba(15, 23, 42, 0)');
 
         ctx.fillStyle = grad;
@@ -8090,32 +8730,38 @@ export class GameRenderer {
     ctx.save();
     ctx.translate(player.x, player.y);
 
-    // Ground Directional Indicator Ring
-    ctx.strokeStyle = isRemote ? 'rgba(34, 197, 94, 0.45)' : 'rgba(56, 189, 248, 0.4)';
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.arc(0, 0, 10, 0, Math.PI * 2);
-    ctx.stroke();
+    const waterDepth = !player.insideBuildingId && !player.isFlying ? ((player as Player).waterDepth || 0) : 0;
+    const isSwimming = !!(player as Player).isSwimming || waterDepth > 0.85;
+    const isWading = !isSwimming && waterDepth > 0.06;
+
+    // Ground Directional Indicator Ring (hidden in deep wading / swimming so water optics remain pure)
+    if (waterDepth < 0.30) {
+      ctx.strokeStyle = isRemote ? 'rgba(34, 197, 94, 0.45)' : 'rgba(56, 189, 248, 0.4)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.arc(0, 0, 10, 0, Math.PI * 2);
+      ctx.stroke();
+    }
 
     ctx.save();
     ctx.rotate(player.angle);
 
     // Directional facing dot on ground
-    ctx.fillStyle = isRemote ? '#22c55e' : '#38bdf8';
-    ctx.beginPath();
-    ctx.arc(12, 0, 2.2, 0, Math.PI * 2);
-    ctx.fill();
+    if (waterDepth < 0.30) {
+      ctx.fillStyle = isRemote ? '#22c55e' : '#38bdf8';
+      ctx.beginPath();
+      ctx.arc(12, 0, 2.2, 0, Math.PI * 2);
+      ctx.fill();
+    }
 
     // Dodge Roll Motion Trail
-    if (player.isDashing) {
+    if (player.isDashing && !isSwimming) {
       ctx.fillStyle = isRemote ? 'rgba(34, 197, 94, 0.25)' : 'rgba(56, 189, 248, 0.25)';
       ctx.beginPath();
       ctx.arc(-8, 0, 7, 0, Math.PI * 2);
       ctx.arc(-16, 0, 5, 0, Math.PI * 2);
       ctx.fill();
     }
-
-    // Player 3D body shadow is projected in world space via unified shadow shroud
 
     // Determine colors based on equipped clothing
     let cSkin = player.skinColor;
@@ -8146,8 +8792,8 @@ export class GameRenderer {
       if (player.equippedClothing.hands?.outerwear) cHands = player.equippedClothing.hands.outerwear.clothingStats?.color || cHands;
     }
 
-    // Wet fabric darkening: when clothing is soaked in rain or melting snow, fabrics absorb more light and darken
-    const wetness = (player as any).bodyState?.wetness || 0;
+    // Wet fabric darkening: when clothing is soaked in rain, river water, or melting snow, fabrics absorb more light and darken
+    const wetness = Math.max((player as any).bodyState?.wetness || 0, waterDepth > 0.15 ? Math.min(100, waterDepth * 85) : 0);
     if (wetness > 8) {
       const wetDarkenFactor = Math.max(0.55, 1.0 - (wetness / 100) * 0.40);
       cPants = darkenHexColor(cPants, wetDarkenFactor);
@@ -8161,11 +8807,111 @@ export class GameRenderer {
     const legSwing = isSeated ? 0 : Math.sin(player.walkCycle) * 3.2;
     const armSwing = isSeated ? 0 : Math.sin(player.walkCycle) * 2.8;
 
-    if (isSeated) {
+    if (isSwimming) {
+      // =====================================================================
+      // HORIZONTAL PRONE SWIMMING POSTURE (First-Principles Breaststroke / Crawl)
+      // =====================================================================
+      const strokePhase = (player as Player).swimStrokePhase ?? (player.walkCycle * 0.75);
+      const timeSec = performance.now() * 0.001;
+      const refrShift = Math.sin(timeSec * 3.8 + player.x * 0.06) * 0.85;
+      const kickL = Math.sin(strokePhase * 2.0) * 2.2;
+      const kickR = -kickL;
+      // Breaststroke arm trajectory: reach forward (+x), sweep wide (+/-y), pull back
+      const reachX = Math.cos(strokePhase) * 3.8 + 2.6;
+      const sweepY = Math.max(0, Math.sin(strokePhase)) * 4.2 + 4.0;
+
+      // 1. Submerged Kicking Legs & Feet (drawn with underwater refraction shift)
+      ctx.save();
+      ctx.globalAlpha = 0.58;
+      ctx.fillStyle = cShoes;
+      ctx.fillRect(-13.5 + kickL * 0.4, -3.6 + kickL * 0.5 + refrShift, 3.2, 2.1);
+      ctx.fillRect(-13.5 + kickR * 0.4, 1.5 + kickR * 0.5 + refrShift, 3.2, 2.1);
+
+      ctx.fillStyle = cPants;
+      ctx.beginPath();
+      safeEllipse(ctx, -8.5, -2.3 + kickL * 0.35 + refrShift * 0.7, 4.6, 1.85, -0.08 * kickL, 0, Math.PI * 2);
+      safeEllipse(ctx, -8.5, 2.3 + kickR * 0.35 + refrShift * 0.7, 4.6, 1.85, 0.08 * kickR, 0, Math.PI * 2);
+      ctx.fill();
+
+      // 2. Prone Horizontal Torso (partially submerged below the waterline)
+      ctx.globalAlpha = 0.78;
+      ctx.fillStyle = cShirt;
+      ctx.beginPath();
+      safeEllipse(ctx, -1.8, refrShift * 0.35, 6.2, 4.8, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      if (cBack) {
+        ctx.fillStyle = cBack;
+        ctx.fillRect(-5.2, -2.8 + refrShift * 0.3, 4.8, 5.6);
+      }
+      ctx.restore();
+
+      // 3. Underwater Beer-Lambert Teal Attenuation Veil over Submerged Lower Body & Back
+      const subGrad = ctx.createLinearGradient(-15, 0, 5, 0);
+      subGrad.addColorStop(0, 'rgba(10, 58, 74, 0.82)');
+      subGrad.addColorStop(0.55, 'rgba(14, 78, 96, 0.62)');
+      subGrad.addColorStop(0.88, 'rgba(20, 102, 120, 0.28)');
+      subGrad.addColorStop(1, 'rgba(20, 102, 120, 0.0)');
+      ctx.fillStyle = subGrad;
+      ctx.beginPath();
+      safeEllipse(ctx, -5.2, 0, 10.5, 6.4, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // 4. Sweeping Breaststroke / Freestyle Arms & Hands breaking the water surface
+      ctx.strokeStyle = cShirt;
+      ctx.lineWidth = 2.7;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(0.8, -3.8);
+      ctx.quadraticCurveTo(reachX * 0.55, -sweepY - 1.1, reachX, -sweepY * 0.72);
+      ctx.moveTo(0.8, 3.8);
+      ctx.quadraticCurveTo(reachX * 0.55, sweepY + 1.1, reachX, sweepY * 0.72);
+      ctx.stroke();
+
+      ctx.fillStyle = cHands;
+      ctx.beginPath();
+      ctx.arc(reachX + 0.8, -sweepY * 0.72, 1.35, 0, Math.PI * 2);
+      ctx.arc(reachX + 0.8, sweepY * 0.72, 1.35, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Hand stroke foam splashes when pulling through water
+      const pullFoamAlpha = Math.max(0, Math.sin(strokePhase)) * 0.55;
+      if (pullFoamAlpha > 0.05) {
+        ctx.strokeStyle = `rgba(226, 246, 255, ${pullFoamAlpha.toFixed(3)})`;
+        ctx.lineWidth = 1.1;
+        ctx.beginPath();
+        ctx.arc(reachX + 0.8, -sweepY * 0.72, 2.4 + (1 - pullFoamAlpha) * 2.2, 0, Math.PI * 2);
+        ctx.arc(reachX + 0.8, sweepY * 0.72, 2.4 + (1 - pullFoamAlpha) * 2.2, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+
+      // 5. Emergent Head tilted up to breathe above the waterline + collar foam meniscus
+      ctx.strokeStyle = 'rgba(224, 245, 254, 0.52)';
+      ctx.lineWidth = 1.25;
+      ctx.beginPath();
+      ctx.arc(2.6, 0, 4.6, -Math.PI * 0.68, Math.PI * 0.68);
+      ctx.stroke();
+
+      ctx.fillStyle = cSkin;
+      ctx.beginPath();
+      ctx.arc(3.0, 0, 3.4, 0, Math.PI * 2);
+      ctx.fill();
+
+      if (cHat) {
+        ctx.fillStyle = cHat;
+        ctx.beginPath();
+        ctx.arc(2.7, 0, 3.5, 0, Math.PI * 2);
+        ctx.fill();
+      } else {
+        ctx.fillStyle = cHair;
+        ctx.beginPath();
+        ctx.arc(1.9, 0, 3.25, Math.PI * 0.45, Math.PI * 1.55);
+        ctx.fill();
+      }
+    } else if (isSeated) {
       // Seated posture: thighs forward, knees bent, feet resting
       ctx.fillStyle = cPants;
       ctx.beginPath();
-      // Bent thighs extending forward
       ctx.fillRect(-1.5, -3.2, 5.5, 2.4);
       ctx.fillRect(-1.5, 0.8, 5.5, 2.4);
       ctx.fill();
@@ -8200,19 +8946,66 @@ export class GameRenderer {
       ctx.arc(3.5, -4.2, 1.2, 0, Math.PI * 2);
       ctx.arc(3.5, 4.2, 1.2, 0, Math.PI * 2);
       ctx.fill();
+
+      // Render items held in hands
+      if (player.leftHandItem) {
+        drawItemModel2D(ctx, player.leftHandItem.itemId, 2.5, -6.5, 9, player.leftHandItem);
+      }
+      if (player.rightHandItem) {
+        drawItemModel2D(ctx, player.rightHandItem.itemId, 2.5, 6.5, 9, player.rightHandItem);
+      }
+
+      // Head
+      ctx.fillStyle = cSkin;
+      ctx.beginPath();
+      ctx.arc(1.8, 0, 3.4, 0, Math.PI * 2);
+      ctx.fill();
+
+      if (cHat) {
+        ctx.fillStyle = cHat;
+        ctx.beginPath();
+        ctx.arc(1.5, 0, 3.5, 0, Math.PI * 2);
+        ctx.fill();
+      } else {
+        ctx.fillStyle = cHair;
+        ctx.beginPath();
+        ctx.arc(0.6, 0, 3.2, Math.PI * 0.5, Math.PI * 1.5);
+        ctx.fill();
+      }
     } else {
-      // Standard Standing / Walking posture
-      // Legs / Pants
+      // Standard Standing / Walking / Wading posture
+      const wadeRatio = isWading ? Math.min(1, waterDepth / 0.85) : 0;
+      const legStrideScale = 1 - wadeRatio * 0.42;
+      const effLegSwing = legSwing * legStrideScale;
+      const armOutBalance = wadeRatio > 0.35 ? (wadeRatio - 0.35) * 2.2 : 0;
+
+      // Legs / Pants (attenuated by water optical absorption when wading)
+      ctx.save();
+      if (wadeRatio > 0.12) {
+        ctx.globalAlpha = Math.max(0.28, 1 - wadeRatio * 0.72);
+      }
       ctx.fillStyle = cPants;
       ctx.beginPath();
-      ctx.arc(legSwing, -1.8, 2.2, 0, Math.PI * 2);
-      ctx.arc(-legSwing, 1.8, 2.2, 0, Math.PI * 2);
+      ctx.arc(effLegSwing, -1.8, 2.2, 0, Math.PI * 2);
+      ctx.arc(-effLegSwing, 1.8, 2.2, 0, Math.PI * 2);
       ctx.fill();
 
       // Shoes
-      ctx.fillStyle = cShoes;
-      ctx.fillRect(-1.5 + legSwing, -3.5, 3, 3.2);
-      ctx.fillRect(-1.5 - legSwing, 0.5, 3, 3.2);
+      if (wadeRatio < 0.65) {
+        ctx.globalAlpha = Math.max(0.15, 1 - wadeRatio * 1.35);
+        ctx.fillStyle = cShoes;
+        ctx.fillRect(-1.5 + effLegSwing, -3.5, 3, 3.2);
+        ctx.fillRect(-1.5 - effLegSwing, 0.5, 3, 3.2);
+      }
+      ctx.restore();
+
+      // Subtle underwater refraction veil over submerged legs when wading
+      if (wadeRatio > 0.15) {
+        ctx.fillStyle = `rgba(14, 78, 96, ${(wadeRatio * 0.52).toFixed(3)})`;
+        ctx.beginPath();
+        safeEllipse(ctx, 0, 0, 4.8, 5.2, 0, 0, Math.PI * 2);
+        ctx.fill();
+      }
 
       // Torso
       ctx.fillStyle = cShirt;
@@ -8220,52 +9013,62 @@ export class GameRenderer {
       ctx.ellipse(0, 0, 4.5, 6.0, 0, 0, Math.PI * 2);
       ctx.fill();
 
+      // Waist-deep waterline foam ring around torso if wading deep (0.45m .. 0.85m)
+      if (wadeRatio > 0.48) {
+        const waistAlpha = (wadeRatio - 0.48) * 0.75;
+        ctx.strokeStyle = `rgba(224, 245, 254, ${waistAlpha.toFixed(3)})`;
+        ctx.lineWidth = 1.1;
+        ctx.beginPath();
+        safeEllipse(ctx, 0, 0, 4.9, 6.4, 0, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+
       // Backpack
       if (cBack) {
         ctx.fillStyle = cBack;
         ctx.fillRect(-4.5, -3, 3.5, 6);
       }
 
-      // Arms swinging with walk cycle
+      // Arms swinging with walk cycle (held slightly wider for balance in deep water)
       ctx.fillStyle = cShirt;
       ctx.beginPath();
-      ctx.arc(armSwing, -5.2, 1.8, 0, Math.PI * 2);
-      ctx.arc(-armSwing, 5.2, 1.8, 0, Math.PI * 2);
+      ctx.arc(armSwing, -5.2 - armOutBalance, 1.8, 0, Math.PI * 2);
+      ctx.arc(-armSwing, 5.2 + armOutBalance, 1.8, 0, Math.PI * 2);
       ctx.fill();
 
       // Hands
       ctx.fillStyle = cHands;
       ctx.beginPath();
-      ctx.arc(armSwing + 1, -5.2, 1.2, 0, Math.PI * 2);
-      ctx.arc(-armSwing + 1, 5.2, 1.2, 0, Math.PI * 2);
+      ctx.arc(armSwing + 1, -5.2 - armOutBalance, 1.2, 0, Math.PI * 2);
+      ctx.arc(-armSwing + 1, 5.2 + armOutBalance, 1.2, 0, Math.PI * 2);
       ctx.fill();
-    }
 
-    // Render items held in hands
-    if (player.leftHandItem) {
-      drawItemModel2D(ctx, player.leftHandItem.itemId, armSwing + 2.5, -6.5, 9, player.leftHandItem);
-    }
-    if (player.rightHandItem) {
-      drawItemModel2D(ctx, player.rightHandItem.itemId, -armSwing + 2.5, 6.5, 9, player.rightHandItem);
-    }
+      // Render items held in hands
+      if (player.leftHandItem) {
+        drawItemModel2D(ctx, player.leftHandItem.itemId, armSwing + 2.5, -6.5 - armOutBalance, 9, player.leftHandItem);
+      }
+      if (player.rightHandItem) {
+        drawItemModel2D(ctx, player.rightHandItem.itemId, -armSwing + 2.5, 6.5 + armOutBalance, 9, player.rightHandItem);
+      }
 
-    // Head
-    ctx.fillStyle = cSkin;
-    ctx.beginPath();
-    ctx.arc(1.8, 0, 3.4, 0, Math.PI * 2);
-    ctx.fill();
-
-    // Hair or Hat
-    if (cHat) {
-      ctx.fillStyle = cHat;
+      // Head
+      ctx.fillStyle = cSkin;
       ctx.beginPath();
-      ctx.arc(1.5, 0, 3.5, 0, Math.PI * 2);
+      ctx.arc(1.8, 0, 3.4, 0, Math.PI * 2);
       ctx.fill();
-    } else {
-      ctx.fillStyle = cHair;
-      ctx.beginPath();
-      ctx.arc(0.6, 0, 3.2, Math.PI * 0.5, Math.PI * 1.5);
-      ctx.fill();
+
+      // Hair or Hat
+      if (cHat) {
+        ctx.fillStyle = cHat;
+        ctx.beginPath();
+        ctx.arc(1.5, 0, 3.5, 0, Math.PI * 2);
+        ctx.fill();
+      } else {
+        ctx.fillStyle = cHair;
+        ctx.beginPath();
+        ctx.arc(0.6, 0, 3.2, Math.PI * 0.5, Math.PI * 1.5);
+        ctx.fill();
+      }
     }
 
     ctx.restore(); // end rotated part
@@ -10832,22 +11635,19 @@ export class GameRenderer {
         ctx.restore();
       }
 
-      // --- WATER IMMERSION & WATERLINE SUBMERGED VISUAL OVERLAY ---
-      if (car.waterDepth && car.waterDepth > 0.08) {
-        const sub = Math.min(1.0, car.waterDepth / 1.4);
-        ctx.fillStyle = `rgba(12, 74, 96, ${Math.min(0.65, sub * 0.70)})`;
-        ctx.beginPath();
-        ctx.roundRect(-halfL - 1.5, -halfW - 1.5, car.length + 3, car.width + 3, 6);
-        ctx.fill();
-
-        // Dynamic waterline foam collar around hull
-        const timeSec = performance.now() * 0.003;
-        const waveOsc = Math.sin(timeSec + car.x * 0.01) * 1.2;
-        ctx.strokeStyle = `rgba(240, 249, 255, ${Math.min(0.85, 0.35 + sub * 0.5)})`;
-        ctx.lineWidth = 1.8;
-        ctx.beginPath();
-        ctx.roundRect(-halfL - 2.5 + waveOsc, -halfW - 2.5, car.length + 5, car.width + 5, 8);
-        ctx.stroke();
+      // --- WET BODYWORK CLEARCOAT SPECULAR SHEEN (after wading / rain / river splash) ---
+      const wetCoat = Math.max(car.wetCoatTimer ? Math.min(1, car.wetCoatTimer / 12) : 0, (car.waterDepth || 0) > 0.04 ? 0.9 : 0);
+      if (wetCoat > 0.04) {
+        ctx.save();
+        traceSoftbodyPath(ctx, basePoly, polyDvs);
+        ctx.clip();
+        const sheenGrad = ctx.createLinearGradient(-halfL * 0.7, -halfW, halfL * 0.7, halfW);
+        sheenGrad.addColorStop(0, `rgba(186, 230, 253, ${(wetCoat * 0.14).toFixed(3)})`);
+        sheenGrad.addColorStop(0.48, `rgba(255, 255, 255, ${(wetCoat * 0.20).toFixed(3)})`);
+        sheenGrad.addColorStop(1, `rgba(15, 23, 42, ${(wetCoat * 0.18).toFixed(3)})`);
+        ctx.fillStyle = sheenGrad;
+        ctx.fillRect(-halfL - 2, -halfW - 2, car.length + 4, car.width + 4);
+        ctx.restore();
       }
 
       ctx.restore();
@@ -11169,6 +11969,35 @@ export class GameRenderer {
       // (skip truck_semi and trailers whose chassis and attachments are rendered on the lower chassis/body layer)
       if (car.type !== 'truck_semi' && !car.type.startsWith('trailer_') && !car.isTrailer) {
         renderSpecializedVehicleAttachments(vCtx);
+      }
+
+      // Deep Water Greenhouse & Roof Submersion (when water rises past beltline > 0.72m)
+      const cDepth = car.waterDepth || 0;
+      const fDepth = car.frontWaterDepth ?? cDepth;
+      const rDepth = car.rearWaterDepth ?? cDepth;
+      const maxCabinWater = Math.max(cDepth, fDepth, rDepth);
+      if (maxCabinWater > 0.72) {
+        ctx.save();
+        traceSoftbodyPath(ctx, basePoly, polyDvs);
+        ctx.clip();
+
+        const roofSub = Math.min(1, (maxCabinWater - 0.72) / 0.85);
+        const fSub = Math.max(0, Math.min(1, (fDepth - 0.65) / 0.90));
+        const rSub = Math.max(0, Math.min(1, (rDepth - 0.65) / 0.90));
+        const cabWaterGrad = ctx.createLinearGradient(-halfL, 0, halfL, 0);
+        cabWaterGrad.addColorStop(0, `rgba(9, 54, 70, ${(rSub * 0.86).toFixed(3)})`);
+        cabWaterGrad.addColorStop(0.5, `rgba(11, 66, 84, ${(roofSub * 0.82).toFixed(3)})`);
+        cabWaterGrad.addColorStop(1, `rgba(9, 54, 70, ${(fSub * 0.86).toFixed(3)})`);
+        ctx.fillStyle = cabWaterGrad;
+        ctx.fillRect(-halfL - 4, -halfW - 4, car.length + 8, car.width + 8);
+
+        // Cabin flood interior darkening visible through windows when cabinWaterLevel > 0.2
+        if ((car.cabinWaterLevel || 0) > 0.2 && roofSub < 0.85) {
+          const floodAlpha = Math.min(0.55, (car.cabinWaterLevel || 0) * 0.55);
+          ctx.fillStyle = `rgba(8, 47, 62, ${floodAlpha.toFixed(3)})`;
+          ctx.fillRect(cabinX - cabinL * 0.45, -cabinW * 0.45, cabinL * 0.9, cabinW * 0.9);
+        }
+        ctx.restore();
       }
 
       ctx.restore();

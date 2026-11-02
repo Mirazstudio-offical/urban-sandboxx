@@ -13,7 +13,7 @@ import { updateMedicineSystem } from './medicineSystem';
 import { updateWorldItemsThermodynamics } from './itemThermalSystem';
 import { GuardrailPhysics } from './guardrailPhysics';
 import { AGRICULTURAL_FIELDS, getTerrainSlope } from './terrainElevation';
-import { getRiverWaterAt, getUniversalWaterDepthAt } from './riverSystem';
+import { getRiverWaterAt, getUniversalWaterDepthAt, emitWaterDisturbance } from './riverSystem';
 import { getBiomeSampleAt } from './biomeSystem';
 import { calculateClimateAtmosphere, createInitialCalendarState, isWorldFreezing } from './calendarSystem';
 import { getEffectiveWeatherWeights } from './weatherTransition';
@@ -5698,17 +5698,40 @@ export function updatePlayerPedestrianPhysics(
     const mobilityFactor = Math.max(0.2, 1.0 - (mPenalty * 0.01)) * weightPenalty;
     let targetSpeed = (canSprint ? 175 : 95) * legPenalty * mobilityFactor;
 
-    // Water Immersion, Wading & Swimming Physics
+    // Water Immersion, Wading & Swimming Physics (First-Principles Hydrodynamics)
     const pWaterDepth = world ? getUniversalWaterDepthAt(world, player.x, player.y) : 0;
     player.waterDepth = pWaterDepth;
     player.isWading = pWaterDepth > 0.12 && pWaterDepth <= 0.85;
     player.isSwimming = pWaterDepth > 0.85;
 
-    if (pWaterDepth > 0.08) {
+    let riverDriftVx = 0;
+    let riverDriftVy = 0;
+
+    if (pWaterDepth > 0.06) {
       if (player.isSwimming) {
-        targetSpeed = 46 * mobilityFactor; // Swimming stroke speed
+        // Advance rhythmic breaststroke / crawl stroke phase (treads water slowly when idle)
+        const strokeRate = len > 0.01 ? (canSprint ? 5.4 : 3.8) : 1.7;
+        player.swimStrokePhase = ((player.swimStrokePhase || 0) + dt * strokeRate) % (Math.PI * 2);
+        // Breaststroke propulsion surge: speed peaks during power pull phase
+        const strokeSurge = 1.0 + 0.24 * Math.max(-0.4, Math.sin(player.swimStrokePhase));
+        targetSpeed = (canSprint ? 58 : 44) * mobilityFactor * strokeSurge;
       } else {
-        targetSpeed *= Math.max(0.35, 1.0 - pWaterDepth * 0.55); // Fluid wading resistance
+        // Non-linear hydrodynamic drag proportional to submerged limb cross-section
+        const wadeResistance = Math.max(0.30, 1.0 - Math.pow(Math.min(1, pWaterDepth / 0.85), 1.15) * 0.64);
+        targetSpeed *= wadeResistance;
+      }
+
+      // Emit dispersive capillary-gravity wave rings into the water solver
+      if (!isWorldFreezing(world) && Math.random() < (len > 0.01 ? 0.35 : 0.08)) {
+        emitWaterDisturbance(
+          player.x,
+          player.y,
+          player.vx,
+          player.vy,
+          10,
+          Math.min(1, 0.32 + pWaterDepth * 0.45 + (len > 0.01 ? 0.25 : 0)),
+          player.isSwimming ? 'hull' : 'footstep'
+        );
       }
 
       // Wetness accumulation while in water
@@ -5718,19 +5741,21 @@ export function updatePlayerPedestrianPhysics(
       }
       player.wetFootstepCount = 30;
 
-      // Energy drain from wading and swimming against water
-      if (player.needs && len > 0.01) {
-        const swimStaminaDrain = (player.isSwimming ? 5.5 : 2.2) * dt;
+      // Energy drain from wading and swimming (treading deep water also expends baseline effort)
+      if (player.needs) {
+        const swimStaminaDrain = player.isSwimming
+          ? (len > 0.01 ? (canSprint ? 7.2 : 4.8) : 1.4) * dt
+          : (len > 0.01 ? 2.2 * pWaterDepth : 0) * dt;
         player.needs.energy = Math.max(0, player.needs.energy - swimStaminaDrain);
       }
 
-      // River current drift while in water
-      if (pWaterDepth > 0.15) {
+      // Compute river current advection velocity (applied whether moving or treading water)
+      if (pWaterDepth > 0.14 && !isWorldFreezing(world)) {
         const river = getRiverWaterAt(player.x, player.y);
         if (river.inWater && !river.isBridge) {
-          const currentPush = player.isSwimming ? 0.70 : Math.min(0.45, pWaterDepth * 0.40);
-          player.vx += river.currentVx * currentPush * dt;
-          player.vy += river.currentVy * currentPush * dt;
+          const currentCoupling = player.isSwimming ? 0.82 : Math.min(0.55, (pWaterDepth - 0.14) * 0.65);
+          riverDriftVx = river.currentVx * currentCoupling;
+          riverDriftVy = river.currentVy * currentCoupling;
         }
       }
 
@@ -5826,9 +5851,9 @@ export function updatePlayerPedestrianPhysics(
       const worldMoveX = moveX * cosM - moveY * sinM;
       const worldMoveY = moveX * sinM + moveY * cosM;
 
-      // Responsive acceleration lerp
-      const targetVx = worldMoveX * targetSpeed;
-      const targetVy = worldMoveY * targetSpeed;
+      // Responsive acceleration lerp (superimposed on moving river current if in water)
+      const targetVx = worldMoveX * targetSpeed + riverDriftVx;
+      const targetVy = worldMoveY * targetSpeed + riverDriftVy;
 
       let isStandingOnIce = false;
       if (isWorldFreezing(world)) {
@@ -5846,7 +5871,7 @@ export function updatePlayerPedestrianPhysics(
         }
       }
 
-      const accelRate = isStandingOnIce ? (canSprint ? 2.2 : 3.5) : 10;
+      const accelRate = isStandingOnIce ? (canSprint ? 2.2 : 3.5) : (player.isSwimming ? 4.8 : 10);
       player.vx += (targetVx - player.vx) * Math.min(1.0, accelRate * dt);
       player.vy += (targetVy - player.vy) * Math.min(1.0, accelRate * dt);
 
@@ -5862,13 +5887,13 @@ export function updatePlayerPedestrianPhysics(
       let angleDiff = (targetAngle - player.angle) % (Math.PI * 2);
       if (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
       if (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
-      player.angle += angleDiff * Math.min(1.0, 25 * dt);
+      player.angle += angleDiff * Math.min(1.0, (player.isSwimming ? 8 : 25) * dt);
 
       player.walkCycle += dt * (canSprint ? 18 : (hasLegInjury ? 7 : 10));
       player.speed = Math.hypot(player.vx, player.vy);
 
-      // Footstep dust particles when sprinting
-      if (canSprint && world && Math.random() < 0.25) {
+      // Footstep dust particles when sprinting on dry ground
+      if (canSprint && pWaterDepth <= 0.03 && world && Math.random() < 0.25) {
         world.particles.push({
           x: player.x,
           y: player.y,
@@ -5882,11 +5907,12 @@ export function updatePlayerPedestrianPhysics(
           type: 'tire_smoke'});
       }
     } else {
-      // Smooth deceleration with natural inertia
-      player.vx += (0 - player.vx) * Math.min(1.0, 8 * dt);
-      player.vy += (0 - player.vy) * Math.min(1.0, 8 * dt);
+      // Smooth deceleration towards the ambient fluid velocity (0 on land, riverDriftVx/Vy in river)
+      const settleRate = player.isSwimming ? 4.2 : 8;
+      player.vx += (riverDriftVx - player.vx) * Math.min(1.0, settleRate * dt);
+      player.vy += (riverDriftVy - player.vy) * Math.min(1.0, settleRate * dt);
       player.speed = Math.hypot(player.vx, player.vy);
-      if (player.speed < 1.5) {
+      if (player.speed < 1.5 && Math.hypot(riverDriftVx, riverDriftVy) < 0.5) {
         player.vx = 0;
         player.vy = 0;
         player.speed = 0;
@@ -5897,7 +5923,7 @@ export function updatePlayerPedestrianPhysics(
         let angleDiff = (player.aimAngle - player.angle) % (Math.PI * 2);
         if (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
         if (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
-        player.angle += angleDiff * Math.min(1.0, 20 * dt);
+        player.angle += angleDiff * Math.min(1.0, (player.isSwimming ? 7 : 20) * dt);
       }
     }
   }
@@ -10240,7 +10266,11 @@ export function updateVehiclePhysics(
       const isTireInWater = tireWaterDepth > 0.03 || surf.type === 'water';
 
       if (isTireInWater) {
+        vehicle.wetCoatTimer = Math.max(vehicle.wetCoatTimer || 0, 12.0);
         const waterIntensity = Math.min(1.0, ((isPowerWheelspin ? 0.75 : 0) + vSpeedKmh * 0.03));
+        if (waterIntensity > 0.08 && Math.random() < 0.32 && !isWorldFreezing(world)) {
+          emitWaterDisturbance(tireX, tireY, vehicle.vx, vehicle.vy, 9, waterIntensity * 0.75, 'wheel');
+        }
         if (waterIntensity > 0.06 && Math.random() < 0.65) {
           const flingSpeed = (35 + (isPowerWheelspin ? 80 * drivePedal : 0) + vSpeedKmh * 0.75) * (0.8 + Math.random() * 0.4);
           
@@ -10982,16 +11012,86 @@ export function updateVehiclePhysics(
     isHeavyCommercial = true;
   }
 
-  // Air intake sampling coordinates
+  // Air intake & 4-corner hydrodynamic sampling coordinates
+  const halfL = (cfg.length || 45) * 0.5;
+  const halfW = (cfg.width || 22) * 0.5;
+  const perpX = -vSin;
+  const perpY = vCos;
+
   const frontIntakeX = vehicle.x + vCos * intakeOffsetDist;
   const frontIntakeY = vehicle.y + vSin * intakeOffsetDist;
   const rawFrontWaterDepth = getUniversalWaterDepthAt(world, frontIntakeX, frontIntakeY);
-  
+
+  const rearX = vehicle.x - vCos * (halfL * 0.82);
+  const rearY = vehicle.y - vSin * (halfL * 0.82);
+  const rawRearWaterDepth = getUniversalWaterDepthAt(world, rearX, rearY);
+
+  // Sample left & right wheel tracks for asymmetric puddle / bank wedge pull
+  const flX = vehicle.x + vCos * (halfL * 0.68) - perpX * (halfW * 0.85);
+  const flY = vehicle.y + vSin * (halfL * 0.68) - perpY * (halfW * 0.85);
+  const frX = vehicle.x + vCos * (halfL * 0.68) + perpX * (halfW * 0.85);
+  const frY = vehicle.y + vSin * (halfL * 0.68) + perpY * (halfW * 0.85);
+  const rlX = vehicle.x - vCos * (halfL * 0.68) - perpX * (halfW * 0.85);
+  const rlY = vehicle.y - vSin * (halfL * 0.68) - perpY * (halfW * 0.85);
+  const rrX = vehicle.x - vCos * (halfL * 0.68) + perpX * (halfW * 0.85);
+  const rrY = vehicle.y - vSin * (halfL * 0.68) + perpY * (halfW * 0.85);
+
+  const flWater = getUniversalWaterDepthAt(world, flX, flY);
+  const frWater = getUniversalWaterDepthAt(world, frX, frY);
+  const rlWater = getUniversalWaterDepthAt(world, rlX, rlY);
+  const rrWater = getUniversalWaterDepthAt(world, rrX, rrY);
+
+  const leftWaterDepth = (flWater + rlWater) * 0.5;
+  const rightWaterDepth = (frWater + rrWater) * 0.5;
+  const maxWheelWater = Math.max(flWater, frWater, rlWater, rrWater);
+
   // Dynamic bow wave elevation (water climbs up front grille when driving into water at speed)
   const speedAbs = Math.abs(vehicle.speed);
+  const fwdSign = vehicle.speed >= 0 ? 1 : -1;
   const dynamicBowWave = Math.min(0.35, (speedAbs * 0.05) ** 2 * 1.2);
-  const frontWaterDepth = rawFrontWaterDepth + dynamicBowWave;
+  const frontWaterDepth = rawFrontWaterDepth + (fwdSign > 0 ? dynamicBowWave : 0);
+  const rearWaterDepth = rawRearWaterDepth + (fwdSign < 0 ? dynamicBowWave * 0.75 : 0);
+
   vehicle.frontWaterDepth = frontWaterDepth;
+  vehicle.rearWaterDepth = rearWaterDepth;
+  vehicle.leftWaterDepth = leftWaterDepth;
+  vehicle.rightWaterDepth = rightWaterDepth;
+
+  if (maxWheelWater > 0.03 || centerWaterDepth > 0.03) {
+    vehicle.wetCoatTimer = Math.max(vehicle.wetCoatTimer || 0, 12.0);
+  } else if ((vehicle.wetCoatTimer || 0) > 0) {
+    vehicle.wetCoatTimer = Math.max(0, (vehicle.wetCoatTimer || 0) - dt);
+  }
+
+  // Asymmetric Hydrodynamic Wedge Drag (driving one side through a deep puddle or river edge pulls steering toward deeper water)
+  const lateralWaterDiff = rightWaterDepth - leftWaterDepth; // + means right side is deeper
+  if (Math.abs(lateralWaterDiff) > 0.015 && speedAbs > 18 && !isWorldFreezing(world)) {
+    const wedgeAsymmetry = Math.max(-0.6, Math.min(0.6, lateralWaterDiff));
+    const massResistance = Math.min(1.0, 1450 / Math.max(600, vMass));
+    const hydroYawTorque = wedgeAsymmetry * (speedAbs / 120) * 1.35 * massResistance * fwdSign;
+    vehicle.angle += hydroYawTorque * dt;
+    vehicle.angularVelocity = (vehicle.angularVelocity || 0) + hydroYawTorque * 0.45 * dt;
+    // Asymmetric longitudinal drag from the water wedge
+    const wedgeDrag = Math.abs(lateralWaterDiff) * (speedAbs * 0.38) * massResistance * dt;
+    if (vehicle.speed > 0) vehicle.speed = Math.max(0, vehicle.speed - wedgeDrag);
+    else if (vehicle.speed < 0) vehicle.speed = Math.min(0, vehicle.speed + wedgeDrag);
+  }
+
+  // Tire Hydroplaning / Aquaplaning onset at high speed over standing water (> 2cm depth)
+  const speedKmh = speedAbs * PX_S_TO_SPEED_KMH;
+  if (maxWheelWater > 0.02 && speedKmh > 52 && !isHeavyCommercial && !isWorldFreezing(world)) {
+    const depthFactor = Math.min(1, (maxWheelWater - 0.02) / 0.14);
+    const speedFactor = Math.min(1, (speedKmh - 52) / 48);
+    vehicle.aquaplaneFactor = depthFactor * speedFactor;
+    // Aquaplaning causes loss of lateral cornering grip & slight directional drift
+    if (vehicle.aquaplaneFactor > 0.15) {
+      const slipLerp = Math.min(1, vehicle.aquaplaneFactor * 2.5 * dt);
+      vehicle.vx = vehicle.vx * (1 - slipLerp * 0.12);
+      vehicle.vy = vehicle.vy * (1 - slipLerp * 0.12);
+    }
+  } else {
+    vehicle.aquaplaneFactor = 0;
+  }
 
   // Progressive Hydrolock & Water Ingestion Physics
   const eng = vehicle.engineState;
@@ -11093,58 +11193,92 @@ export function updateVehiclePhysics(
     }
   }
 
-  // Fluid immersion dynamics: Drag, Buoyancy & River Current Drift
-  if (centerWaterDepth > 0.05) {
-    // 1. Hydrodynamic Drag (Smooth progressive fluid drag proportional to depth and speed)
+  // Fluid immersion dynamics: Drag, Progressive Cabin Flooding, Buoyancy & River Current Drift
+  const effectiveHullDepth = Math.max(centerWaterDepth, (frontWaterDepth + rearWaterDepth) * 0.45);
+  if (effectiveHullDepth > 0.05) {
+    // 1. Progressive Cabin Flooding (water seeps through door seals, faster if windows are open or body is deformed)
+    const doorSillHeight = groundClearance + 0.18;
+    if (effectiveHullDepth > doorSillHeight) {
+      const headPressure = effectiveHullDepth - doorSillHeight;
+      const sealLeakMultiplier = (vehicle.windowOpen ? 2.8 : 1.0) + ((vehicle.damage && vehicle.damage.health < 75) ? 1.4 : 0);
+      const targetCabinFill = Math.min(1.0, headPressure / 1.05);
+      const currentCabinFill = vehicle.cabinWaterLevel || 0;
+      if (currentCabinFill < targetCabinFill) {
+        vehicle.cabinWaterLevel = Math.min(targetCabinFill, currentCabinFill + headPressure * 0.11 * sealLeakMultiplier * dt);
+      }
+      // If player is seated inside a flooding cabin, cold river water physically soaks their clothing
+      if (player && (player.currentVehicleId === vehicle.id || (player as any).vehicleId === vehicle.id) && (vehicle.cabinWaterLevel || 0) > 0.15) {
+        if (player.bodyState) {
+          const cabinSoakRate = (vehicle.cabinWaterLevel || 0) * 38.0;
+          player.bodyState.wetness = Math.min(100, (player.bodyState.wetness || 0) + cabinSoakRate * dt);
+        }
+      }
+    } else if ((vehicle.cabinWaterLevel || 0) > 0) {
+      // Water slowly drains out through floor/door drains in shallow water
+      vehicle.cabinWaterLevel = Math.max(0, (vehicle.cabinWaterLevel || 0) - 0.04 * dt);
+    }
+
+    const cabinWater = vehicle.cabinWaterLevel || 0;
+
+    // 2. Hydrodynamic Drag (Smooth progressive fluid drag proportional to depth, cabin water mass, and speed)
     const submergedFraction = isHeavyCommercial
-      ? Math.min(1.0, Math.max(0, (centerWaterDepth - groundClearance) / 1.8))
-      : Math.min(1.0, Math.max(0, (centerWaterDepth - groundClearance) / 1.0));
+      ? Math.min(1.0, Math.max(0, (effectiveHullDepth - groundClearance) / 1.8))
+      : Math.min(1.0, Math.max(0, (effectiveHullDepth - groundClearance) / 1.0));
     vehicle.submergedFraction = submergedFraction;
 
-    const hydroDrag = (submergedFraction * 75 + centerWaterDepth * 35) * (1 + speedAbs * 0.035) * dt;
+    const hydroDrag = (submergedFraction * (75 + cabinWater * 45) + effectiveHullDepth * 35) * (1 + speedAbs * 0.035) * dt;
     if (vehicle.speed > 0) vehicle.speed = Math.max(0, vehicle.speed - hydroDrag);
     else if (vehicle.speed < 0) vehicle.speed = Math.min(0, vehicle.speed + hydroDrag);
 
-    // 2. Realistic Buoyancy & Tire Contact Normal Force
-    // Heavy commercial trucks (6-18 tons) need 2.2m+ of water to float, firmly gripping fords!
-    const floatDepthThreshold = isHeavyCommercial ? 2.35 : (groundClearance + 0.85);
-    const isFloating = centerWaterDepth >= floatDepthThreshold;
+    // 3. Realistic Buoyancy & Tire Contact Normal Force
+    // An unflooded passenger cabin traps air and floats at ~0.95m; as cabinWaterLevel fills to 1.0, buoyancy is lost and the car settles on the riverbed!
+    const baseFloatDepth = isHeavyCommercial ? 2.35 : (groundClearance + 0.78);
+    const floodedFloatPenalty = isHeavyCommercial ? cabinWater * 0.55 : cabinWater * 1.45;
+    const floatDepthThreshold = baseFloatDepth + floodedFloatPenalty;
+    const isFloating = effectiveHullDepth >= floatDepthThreshold && cabinWater < 0.88;
     vehicle.isFloating = isFloating;
 
-    const buoyantFraction = Math.min(1.0, centerWaterDepth / floatDepthThreshold);
-    const tireNormalForceRatio = Math.max(0, 1.0 - buoyantFraction);
+    const buoyantFraction = Math.min(1.0, effectiveHullDepth / Math.max(0.5, floatDepthThreshold));
+    const tireNormalForceRatio = Math.max(0, 1.0 - buoyantFraction * (1.0 - cabinWater * 0.55));
 
     if (isFloating) {
-      // Floating vehicle has reduced forward speed damping and high slide
       vehicle.speed *= Math.pow(0.92, dt * 60);
     }
 
-    // 3. River Current Drift & Hydrodynamic Alignment
-    const river = getRiverWaterAt(vehicle.x, vehicle.y);
-    if (river.inWater && !river.isBridge) {
-      // Heavy trucks with firm tire contact (tireNormalForceRatio ~ 0.8-1.0) resist current!
-      const currentDriftPush = isFloating
-        ? 1.0
-        : Math.max(0.04, (1.0 - tireNormalForceRatio) * 0.85 + (isHeavyCommercial ? 0.04 : 0.15) * Math.min(1.0, centerWaterDepth * 0.4));
-      
-      vehicle.x += river.currentVx * currentDriftPush * dt;
-      vehicle.y += river.currentVy * currentDriftPush * dt;
+    // 4. River Current Drift & Differential Bow/Stern Hydrodynamic Torque
+    const riverCenter = getRiverWaterAt(vehicle.x, vehicle.y);
+    const riverFront = getRiverWaterAt(frontIntakeX, frontIntakeY);
+    const riverRear = getRiverWaterAt(rearX, rearY);
 
-      // When floating, current exerts torque aligning vehicle longitudinally with river flow
-      if (isFloating) {
-        const riverAngle = Math.atan2(river.currentVy, river.currentVx);
-        let angleDiff = riverAngle - vehicle.angle;
-        while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
-        while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
-        vehicle.angle += angleDiff * 0.85 * dt;
+    if ((riverCenter.inWater || riverFront.inWater || riverRear.inWater) && !riverCenter.isBridge) {
+      const avgCurVx = (riverCenter.currentVx * 0.5 + riverFront.currentVx * 0.25 + riverRear.currentVx * 0.25);
+      const avgCurVy = (riverCenter.currentVy * 0.5 + riverFront.currentVy * 0.25 + riverRear.currentVy * 0.25);
+
+      const currentDriftPush = isFloating
+        ? 0.96
+        : Math.max(0.04, (1.0 - tireNormalForceRatio) * 0.85 + (isHeavyCommercial ? 0.04 : 0.16) * Math.min(1.0, effectiveHullDepth * 0.45));
+
+      vehicle.x += avgCurVx * currentDriftPush * dt;
+      vehicle.y += avgCurVy * currentDriftPush * dt;
+
+      // Differential current torque: if bow is in stronger current than stern (or vice versa), current rotates the hull!
+      const frontCrossCurrent = (riverFront.currentVx * perpX + riverFront.currentVy * perpY) * Math.min(1, frontWaterDepth);
+      const rearCrossCurrent = (riverRear.currentVx * perpX + riverRear.currentVy * perpY) * Math.min(1, rearWaterDepth);
+      const diffTorque = (frontCrossCurrent - rearCrossCurrent) * 0.014 * (isFloating ? 1.4 : (1.0 - tireNormalForceRatio * 0.75));
+      vehicle.angle += diffTorque * dt;
+
+      // When floating, current exerts longitudinal weathercocking torque aligning vehicle with river flow
+      if (isFloating && Math.hypot(avgCurVx, avgCurVy) > 1) {
+        const riverAngle = Math.atan2(avgCurVy, avgCurVx);
+        let aDiff = riverAngle - vehicle.angle;
+        while (aDiff > Math.PI) aDiff -= Math.PI * 2;
+        while (aDiff < -Math.PI) aDiff += Math.PI * 2;
+        vehicle.angle += aDiff * 0.78 * dt;
       }
     }
 
-    // 4. Hull Water Splash & Bow Wave Particles
+    // 5. Hull Water Splash & Bow Wave Particles
     if (speedAbs > 12 && world && world.particles && Math.random() < 0.50) {
-      const halfW = (cfg.width || 24) * 0.5;
-      const perpX = -vSin;
-      const perpY = vCos;
       world.particles.push({
         x: vehicle.x + perpX * halfW + (Math.random() * 8 - 4),
         y: vehicle.y + perpY * halfW + (Math.random() * 8 - 4),
@@ -11173,6 +11307,9 @@ export function updateVehiclePhysics(
   } else {
     vehicle.isFloating = false;
     vehicle.submergedFraction = 0;
+    if ((vehicle.cabinWaterLevel || 0) > 0) {
+      vehicle.cabinWaterLevel = Math.max(0, (vehicle.cabinWaterLevel || 0) - 0.06 * dt);
+    }
   }
 
   // --- VEHICLE-TO-VEHICLE COLLISION RESOLUTION ---

@@ -837,8 +837,14 @@ export interface Vehicle {
   isDerelict?: boolean;        // Totaled, crushed, or abandoned wreck
   waterDepth?: number;         // Water depth at vehicle center (meters)
   frontWaterDepth?: number;    // Water depth at front bumper / intake (meters)
+  rearWaterDepth?: number;     // Water depth at rear bumper / exhaust (meters)
+  leftWaterDepth?: number;     // Water depth along left side wheels (meters)
+  rightWaterDepth?: number;    // Water depth along right side wheels (meters)
   submergedFraction?: number;  // 0 to 1 ratio of vehicle height submerged
   isFloating?: boolean;        // Whether vehicle is bobbing/floating in deep water
+  cabinWaterLevel?: number;    // 0 to 1 progressive water flooding inside vehicle cabin
+  wetCoatTimer?: number;       // Remaining seconds of dripping wet hull & soaked tires after exiting water
+  aquaplaneFactor?: number;    // 0 to 1 dynamic hydroplaning intensity on water film
   targetSpeed: number;
   currentLaneId: string | null;
   targetWaypointIndex: number;
@@ -1987,6 +1993,7 @@ export interface Player {
   isWading?: boolean;
   waterDepth?: number;
   wetFootstepCount?: number;
+  swimStrokePhase?: number;
 
   // Survival Needs & Vitals
   needs: PlayerNeeds;

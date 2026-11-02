@@ -2402,6 +2402,128 @@ class SoundEngine {
       osc2.stop(now + 0.18);
     } catch {}
   }
+
+  /**
+   * Procedural Hydraulic Water Splash Synthesis
+   * Dual-band acoustic model: low-frequency mass water displacement thud +
+   * high-frequency droplet splatter and cavitation fizz.
+   */
+  public playWaterSplash(intensity: number = 0.5) {
+    if (!this.ctx || this.isMuted || intensity <= 0.02) return;
+    try {
+      const now = this.ctx.currentTime;
+      const pIntensity = Math.min(1.0, Math.max(0.05, intensity));
+      const masterVol = this.masterVolume * pIntensity;
+
+      // 1. Low-frequency hydraulic displacement thump (sweep 130 Hz -> 38 Hz)
+      const osc = this.ctx.createOscillator();
+      const oscGain = this.ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(130, now);
+      osc.frequency.exponentialRampToValueAtTime(38, now + 0.18);
+
+      oscGain.gain.setValueAtTime(0.35 * masterVol, now);
+      oscGain.gain.exponentialRampToValueAtTime(0.001, now + 0.22);
+
+      osc.connect(oscGain);
+      oscGain.connect(this.ctx.destination);
+      osc.start(now);
+      osc.stop(now + 0.24);
+
+      // 2. High-frequency water droplet splatter and aeration roar (filtered noise burst)
+      const bufferSize = Math.floor(this.ctx.sampleRate * 0.32);
+      const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+      const data = buffer.getChannelData(0);
+      for (let i = 0; i < bufferSize; i++) {
+        data[i] = (Math.random() * 2 - 1) * Math.exp(-i / (this.ctx.sampleRate * 0.08));
+      }
+      const noiseSource = this.ctx.createBufferSource();
+      noiseSource.buffer = buffer;
+
+      const bandFilter = this.ctx.createBiquadFilter();
+      bandFilter.type = 'bandpass';
+      bandFilter.frequency.setValueAtTime(1800, now);
+      bandFilter.frequency.exponentialRampToValueAtTime(650, now + 0.26);
+      bandFilter.Q.setValueAtTime(1.8, now);
+
+      const noiseGain = this.ctx.createGain();
+      noiseGain.gain.setValueAtTime(0.40 * masterVol, now);
+      noiseGain.gain.exponentialRampToValueAtTime(0.001, now + 0.28);
+
+      noiseSource.connect(bandFilter);
+      bandFilter.connect(noiseGain);
+      noiseGain.connect(this.ctx.destination);
+      noiseSource.start(now);
+    } catch {}
+  }
+
+  /**
+   * Procedural Water Wading Footstep Synthesis
+   * Soft rhythmic water slosh and fluid squelch for wading through shallow river water.
+   */
+  public playWadingStep(volume: number = 0.35) {
+    if (!this.ctx || this.isMuted || volume <= 0.02) return;
+    try {
+      const now = this.ctx.currentTime;
+      const masterVol = this.masterVolume * Math.min(1.0, Math.max(0.05, volume));
+
+      const bufferSize = Math.floor(this.ctx.sampleRate * 0.16);
+      const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+      const data = buffer.getChannelData(0);
+      for (let i = 0; i < bufferSize; i++) {
+        data[i] = (Math.random() * 2 - 1) * Math.exp(-i / (this.ctx.sampleRate * 0.045));
+      }
+      const noiseSource = this.ctx.createBufferSource();
+      noiseSource.buffer = buffer;
+
+      const lowFilter = this.ctx.createBiquadFilter();
+      lowFilter.type = 'lowpass';
+      lowFilter.frequency.setValueAtTime(850, now);
+      lowFilter.frequency.exponentialRampToValueAtTime(320, now + 0.14);
+
+      const gain = this.ctx.createGain();
+      gain.gain.setValueAtTime(0.28 * masterVol, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.15);
+
+      noiseSource.connect(lowFilter);
+      lowFilter.connect(gain);
+      gain.connect(this.ctx.destination);
+      noiseSource.start(now);
+    } catch {}
+  }
+
+  /**
+   * Procedural High-Velocity Water Spray Hiss (Tire roostertails cutting through river water)
+   */
+  public playWaterRoosterTail(intensity: number = 0.4) {
+    if (!this.ctx || this.isMuted || intensity <= 0.05) return;
+    try {
+      const now = this.ctx.currentTime;
+      const masterVol = this.masterVolume * Math.min(1.0, Math.max(0.05, intensity));
+
+      const bufferSize = Math.floor(this.ctx.sampleRate * 0.22);
+      const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+      const data = buffer.getChannelData(0);
+      for (let i = 0; i < bufferSize; i++) {
+        data[i] = (Math.random() * 2 - 1) * Math.exp(-i / (this.ctx.sampleRate * 0.09));
+      }
+      const noiseSource = this.ctx.createBufferSource();
+      noiseSource.buffer = buffer;
+
+      const highFilter = this.ctx.createBiquadFilter();
+      highFilter.type = 'highpass';
+      highFilter.frequency.setValueAtTime(1200, now);
+
+      const gain = this.ctx.createGain();
+      gain.gain.setValueAtTime(0.22 * masterVol, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.18);
+
+      noiseSource.connect(highFilter);
+      highFilter.connect(gain);
+      gain.connect(this.ctx.destination);
+      noiseSource.start(now);
+    } catch {}
+  }
 }
 
 export const sound = new SoundEngine();

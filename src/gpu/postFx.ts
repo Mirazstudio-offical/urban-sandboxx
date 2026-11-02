@@ -35,7 +35,11 @@ export interface PostFxFrame {
   hour: number;             // 0..24 time of day
   weather: string;          // WeatherType
   cameraAngle: number;      // radians, same convention as the renderer
-  timeSec: number;          // wall-clock seconds, drives grain
+  cameraX?: number;         // world X of camera center
+  cameraY?: number;         // world Y of camera center
+  cameraZoom?: number;      // camera zoom factor
+  isFreezing?: boolean;     // true when water is frozen into ice
+  timeSec: number;          // wall-clock seconds, drives grain & water waves
   dt: number;               // frame delta in seconds, for parameter smoothing
   sunrise?: number;
   sunset?: number;
@@ -113,6 +117,10 @@ uniform vec2 uOutSize;
 uniform float uUpscale;     // 1 when the source is smaller than the output
 uniform float uTime;
 uniform vec2 uSun;          // light direction in screen UV space
+uniform vec2 uCamPos;       // camera world position (px)
+uniform float uCamZoom;     // camera zoom
+uniform float uCamAngle;    // camera angle (rad)
+uniform float uFreezing;    // 1 when frozen ice, 0 when liquid water
 uniform float uRelief;
 uniform float uClarity;
 uniform float uBloomStr;
@@ -176,12 +184,69 @@ float hash(vec2 p) {
   return fract((p3.x + p3.y) * p3.z);
 }
 
+// Reconstruct world-space position (in game pixels) from screen UV
+vec2 screenUvToWorld(vec2 uv) {
+  vec2 screenPx = (vec2(uv.x, 1.0 - uv.y) - 0.5) * uOutSize / max(uCamZoom, 0.05);
+  float rot = uCamAngle + 1.57079632679;
+  float ca = cos(rot);
+  float sa = sin(rot);
+  return uCamPos + vec2(screenPx.x * ca - screenPx.y * sa, screenPx.x * sa + screenPx.y * ca);
+}
+
+// Compute 3-octave Gerstner-capillary wave slope normal in world space, rotated to screen UV space
+vec2 computeWaterWaveNormal(vec2 worldPos, float time) {
+  vec2 p = worldPos * 0.065;
+  // Octave 1: Primary downstream gravity-capillary swell
+  float ph1 = p.x * 0.85 + p.y * 0.52 - time * 2.4 + sin(p.x * 0.35 - p.y * 0.48 + time * 1.1) * 0.65;
+  vec2 g1 = vec2(cos(ph1) * 0.85, cos(ph1) * 0.52);
+  // Octave 2: Cross-channel interference chop
+  float ph2 = p.x * -0.62 + p.y * 1.18 - time * 3.1 + cos(p.x * 0.72 + p.y * 0.44 - time * 1.7) * 0.5;
+  vec2 g2 = vec2(-cos(ph2) * 0.62, cos(ph2) * 1.18) * 0.58;
+  // Octave 3: High-frequency wind micro-ripples
+  float ph3 = p.x * 1.95 - p.y * 1.45 + time * 4.6;
+  vec2 g3 = vec2(cos(ph3) * 1.95, -cos(ph3) * 1.45) * 0.28;
+
+  vec2 worldGrad = (g1 + g2 + g3) * 0.48;
+  // Rotate world gradient into screen UV space
+  float a = -uCamAngle - 1.57079632679;
+  float ca = cos(a);
+  float sa = sin(a);
+  return vec2(worldGrad.x * ca - worldGrad.y * sa, -(worldGrad.x * sa + worldGrad.y * ca));
+}
+
+// Optical classifier for liquid water pixels (river, ponds, puddles)
+float detectWaterMask(vec3 col) {
+  if (uFreezing > 0.5) return 0.0;
+  float lum = luma(col);
+  // River & pond water has distinct cyan-teal-blue absorption (g > r and b > r)
+  float tealExcess = min(col.g - col.r, col.b - col.r * 0.96);
+  float blueExcess = col.b - max(col.r, col.g * 0.72);
+  float chromaWater = smoothstep(0.012, 0.065, tealExcess) * smoothstep(0.01, 0.58, lum) * (1.0 - smoothstep(0.62, 0.85, lum));
+  float slatePuddle = smoothstep(0.018, 0.075, blueExcess) * smoothstep(0.02, 0.45, lum) * (1.0 - smoothstep(0.48, 0.72, lum));
+  return clamp(max(chromaWater, slatePuddle * 0.85), 0.0, 1.0);
+}
+
 void main() {
   vec2 uv = vUv;
   vec2 texel = 1.0 / uSrcSize;
 
+  // --- Initial sample & water optical wave normal / UV refraction -------------------------------------------
+  vec3 cRaw = fetchSrc(uv);
+  float waterMask = detectWaterMask(cRaw);
+  vec2 worldPos = screenUvToWorld(uv);
+  vec2 waveN = vec2(0.0);
+
+  if (waterMask > 0.01) {
+    waveN = computeWaterWaveNormal(worldPos, uTime);
+    // Subtle real-time UV refraction of submerged bed, stones, weeds, and submerged vehicle hulls
+    vec2 refrUv = clamp(uv + waveN * texel * 2.35 * waterMask, vec2(0.001), vec2(0.999));
+    vec3 cRefr = fetchSrc(refrUv);
+    float refrMask = detectWaterMask(cRefr);
+    cRaw = mix(cRaw, cRefr, waterMask * refrMask * 0.78);
+  }
+
   // --- colour fetch with optional lens fringing -------------------------------------------------------------
-  vec3 c = fetchSrc(uv);
+  vec3 c = cRaw;
   vec2 cen = uv - 0.5;
   float r2 = dot(cen * vec2(uOutSize.x / uOutSize.y, 1.0), cen * vec2(uOutSize.x / uOutSize.y, 1.0));
   if (uChroma > 0.001) {
@@ -212,7 +277,7 @@ void main() {
     float hr = luma(texture(uSrc, uv + vec2( texel.x * 1.5, 0.0)).rgb);
     float hd = luma(texture(uSrc, uv + vec2(0.0, -texel.y * 1.5)).rgb);
     float hu = luma(texture(uSrc, uv + vec2(0.0,  texel.y * 1.5)).rgb);
-    vec2 g = vec2(hr - hl, hu - hd);
+    vec2 g = vec2(hr - hl, hu - hd) + waveN * waterMask * 0.14;
     float shade = 1.0 - l0 * 0.55;
     // slopes that rise towards the light face away from it: n.L = -g.L
     float sunLit = clamp(-dot(g, uSun) * 3.2, -0.35, 0.35);
@@ -232,6 +297,37 @@ void main() {
     }
   }
 
+  // --- Water Surface Shader: Solar/Lunar Glints, Fresnel Sky & Dynamic Light Reflections --------------------
+  if (waterMask > 0.01) {
+    // 1. Fresnel sky dome reflection modulated by wave facets
+    float facetTilt = clamp(dot(waveN, uSun) * 0.65 + 0.35, 0.0, 1.0);
+    vec3 daySkyCol = mix(vec3(0.45, 0.68, 0.88), vec3(0.95, 0.78, 0.58), clamp(1.0 - uDay * 1.15, 0.0, 1.0));
+    vec3 nightSkyCol = vec3(0.05, 0.09, 0.16);
+    vec3 skyCol = mix(nightSkyCol, daySkyCol, uDay);
+    c = mix(c, skyCol, waterMask * (0.06 + 0.09 * facetTilt));
+
+    // 2. Solar / Lunar micro-facet specular glints (Cox-Munk wave slope distribution)
+    float sunAlign = dot(normalize(waveN + uSun * 0.52), uSun);
+    float glintSharp = pow(clamp(sunAlign, 0.0, 1.0), 22.0);
+    float sparkle = smoothstep(0.68, 0.96, sin(worldPos.x * 0.42 + uTime * 5.2) * cos(worldPos.y * 0.38 - uTime * 4.4));
+    vec3 sunGlintCol = mix(vec3(0.55, 0.70, 0.95) * 0.35, vec3(1.0, 0.95, 0.82), uDay);
+    c += sunGlintCol * waterMask * (glintSharp * 0.24 + glintSharp * sparkle * 0.38);
+
+    // 3. Dynamic lightmap & bloom reflections on water (headlights, taillights, sirens, streetlamps, flashlights)
+    vec2 reflUv = clamp(uv + waveN * 0.014, vec2(0.001), vec2(0.999));
+    vec3 reflBloom = texture(uBloom, reflUv).rgb + texture(uBloomWide, reflUv).rgb * 0.85;
+    float waveFacetHighlight = 0.65 + 0.75 * clamp(dot(waveN, vec2(0.707, -0.707)), -0.6, 1.0);
+    c += reflBloom * waterMask * waveFacetHighlight * mix(1.55, 0.65, uDay);
+
+    if (uLightOn > 0.5) {
+      float litPerturbed = 1.0 - texture(uLight, clamp(uv + waveN * 0.018, vec2(0.001), vec2(0.999))).a;
+      float litBase = 1.0 - texture(uLight, uv).a;
+      float specRipple = max(0.0, litPerturbed - litBase * 0.65) + litPerturbed * pow(max(0.0, length(waveN) * 0.75), 2.0);
+      vec3 artificialSpecCol = mix(vec3(1.0, 0.93, 0.78), reflBloom * 1.6 + vec3(0.45, 0.55, 0.70), 0.55);
+      c += artificialSpecCol * waterMask * specRipple * (0.28 + 0.55 * (1.0 - uDay));
+    }
+  }
+
   // --- clarity: local contrast, stronger on the dark side so gaps between objects gain depth -----------------
   if (uClarity > 0.001) {
     vec3 blur = texture(uBlur, uv).rgb;
@@ -246,14 +342,16 @@ void main() {
     c += wide * (c * 0.85 + 0.08) * uGi * mix(1.4, 0.45, uDay);
   }
 
-  // --- wet asphalt, mud & soil: dark neutral and earthy pixels darken from pore moisture and mirror nearby lights ---
+  // --- wet asphalt, mud, soil & water sheen: mirror nearby lights --------------------------------------------
   if (uWet > 0.001) {
     float sat = max(c.r, max(c.g, c.b)) - min(c.r, min(c.g, c.b));
     float neutralMask = 1.0 - smoothstep(0.08, 0.22, sat);
     float earthHue = step(c.g, c.r) * step(c.b, c.g) * (1.0 - smoothstep(0.18, 0.42, sat));
-    float surfaceMask = max(neutralMask, earthHue * 0.85);
-    float mask = surfaceMask * smoothstep(0.015, 0.09, l0) * (1.0 - smoothstep(0.32, 0.54, l0));
-    c = c * (1.0 - 0.16 * uWet * mask) + wide * mask * uWet * 1.75 + vec3(0.70, 0.82, 1.0) * mask * uWet * uDay * 0.045;
+    float surfaceMask = max(max(neutralMask, earthHue * 0.85), waterMask * 0.9);
+    float mask = surfaceMask * smoothstep(0.015, 0.09, l0) * (1.0 - smoothstep(0.32, 0.58, l0));
+    vec2 wetReflUv = clamp(uv + waveN * 0.01 * waterMask, vec2(0.001), vec2(0.999));
+    vec3 wetWide = texture(uBloomWide, wetReflUv).rgb;
+    c = c * (1.0 - 0.14 * uWet * mask * (1.0 - waterMask * 0.7)) + wetWide * mask * uWet * 1.85 + vec3(0.70, 0.82, 1.0) * mask * uWet * uDay * 0.045;
   }
 
   // --- lights glowing in fog / rain / snow ------------------------------------------------------------------
@@ -429,7 +527,9 @@ export class GpuPostFx {
     this.pDown = this.makeProgram(VS, FS_DOWN, ['uTex', 'uTexel', 'uThreshold', 'uKnee']);
     this.pUp = this.makeProgram(VS, FS_UP, ['uTex', 'uTexel', 'uScale']);
     this.pComposite = this.makeProgram(VS, FS_COMPOSITE, [
-      'uSrc', 'uBloom', 'uBlur', 'uBloomWide', 'uLight', 'uLightOn', 'uLightSize', 'uGi', 'uWet', 'uFogGlow', 'uSrcSize', 'uOutSize', 'uUpscale', 'uTime', 'uSun', 'uRelief', 'uClarity', 'uBloomStr',
+      'uSrc', 'uBloom', 'uBlur', 'uBloomWide', 'uLight', 'uLightOn', 'uLightSize', 'uGi', 'uWet', 'uFogGlow', 'uSrcSize', 'uOutSize', 'uUpscale', 'uTime', 'uSun',
+      'uCamPos', 'uCamZoom', 'uCamAngle', 'uFreezing',
+      'uRelief', 'uClarity', 'uBloomStr',
       'uSharp', 'uTone', 'uExposure', 'uContrast', 'uSat', 'uShadowTint', 'uHighTint', 'uHaze', 'uVig', 'uGrain', 'uChroma', 'uDay',
     ]);
     this.pFinal = this.makeProgram(VS, FS_FINAL, ['uTex', 'uTexel', 'uFxaa']);
@@ -721,6 +821,10 @@ export class GpuPostFx {
     gl.uniform2f(c.u.uOutSize, this.outW, this.outH);
     gl.uniform1f(c.u.uUpscale, sw < this.outW * 0.98 || sh < this.outH * 0.98 ? 1 : 0);
     gl.uniform1f(c.u.uTime, frame.timeSec);
+    gl.uniform2f(c.u.uCamPos, frame.cameraX ?? 0, frame.cameraY ?? 0);
+    gl.uniform1f(c.u.uCamZoom, frame.cameraZoom ?? 1);
+    gl.uniform1f(c.u.uCamAngle, frame.cameraAngle);
+    gl.uniform1f(c.u.uFreezing, frame.isFreezing ? 1 : 0);
 
     // light comes from the opposite side of the game's shadow direction, rotated into screen space
     const sunState = getCurrentSunShadowState();

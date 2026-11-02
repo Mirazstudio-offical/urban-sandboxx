@@ -1865,88 +1865,490 @@ function renderHumanShadow(
   sCtx.restore();
 }
 
+export type TreeSpecies = 'dead' | 'pine' | 'birch' | 'oak' | 'maple';
+
+export function classifyTreeSpecies(tree: Tree): TreeSpecies {
+  const rawType = (tree as any).type;
+  const col = (tree.color || '').toLowerCase();
+  if (
+    rawType === 'dead' ||
+    col === '#57534e' ||
+    col === '#78716c' ||
+    col === '#44403c' ||
+    col === '#3b3835' ||
+    col === '#525252'
+  ) {
+    return 'dead';
+  }
+  if (
+    rawType === 'pine' ||
+    col === '#0f3e24' ||
+    col === '#124c2c' ||
+    col === '#165732' ||
+    col === '#1b6138'
+  ) {
+    return 'pine';
+  }
+  if (
+    rawType === 'birch' ||
+    col === '#84cc16' ||
+    col === '#a3e635' ||
+    col === '#65a30d'
+  ) {
+    return 'birch';
+  }
+  const h = hashCoord(tree.x, tree.y);
+  return (h & 1) === 0 ? 'oak' : 'maple';
+}
+
 /**
- * Renders 3D tree shadows (tapered trunk from tree base + multi-lobed volumetric foliage crown)
- * along the solar shadow vector.
+ * Traces and fills an organic scalloped/serrated foliage cluster polygon at (cx, cy)
+ * so tree shadows have natural leafy edges rather than artificial geometric circles.
+ */
+function fillOrganicLeafClusterShadow(
+  ctx: CanvasRenderingContext2D,
+  cx: number,
+  cy: number,
+  rx: number,
+  ry: number,
+  rotAngle: number,
+  seed: number,
+  serrationAmp: number = 0.14,
+  pointsCount: number = 14
+) {
+  const cosR = Math.cos(rotAngle);
+  const sinR = Math.sin(rotAngle);
+  ctx.beginPath();
+  for (let i = 0; i < pointsCount; i++) {
+    const a = (i / pointsCount) * Math.PI * 2;
+    const wave1 = Math.sin(a * 5 + (seed & 31) * 0.45);
+    const wave2 = Math.cos(a * 3 - ((seed >> 4) & 31) * 0.35);
+    const jag = (i & 1) === 0 ? 1 + serrationAmp * 0.55 : 1 - serrationAmp * 0.45;
+    const mod = jag + (wave1 * 0.6 + wave2 * 0.4) * serrationAmp;
+    const lx = Math.cos(a) * rx * mod;
+    const ly = Math.sin(a) * ry * mod;
+    const px = cx + lx * cosR - ly * sinR;
+    const py = cy + lx * sinR + ly * cosR;
+    if (i === 0) ctx.moveTo(px, py);
+    else ctx.lineTo(px, py);
+  }
+  ctx.closePath();
+  ctx.fill();
+}
+
+/**
+ * Builds an organic polygon representing the sunlit upper crown of a tree so that
+ * clipping outside it preserves the bright sunlit leaves without leaving a circular
+ * "Pac-Man" cutout or dark ring around the tree's perimeter.
+ */
+function buildSunlitCrownClipPolygon(
+  tree: Tree,
+  species: TreeSpecies,
+  sunState: SunShadowState,
+  h: number
+): Point[] {
+  const r = Math.max(8, tree.radius || 16);
+  const shiftX = -sunState.shadowDirX * (r * 0.14);
+  const shiftY = -sunState.shadowDirY * (r * 0.14);
+  const cx = tree.x + shiftX;
+  const cy = tree.y + shiftY;
+  const poly: Point[] = [];
+
+  if (species === 'pine') {
+    const numTips = 12;
+    const baseRot = ((h & 63) / 64) * Math.PI * 2;
+    for (let i = 0; i < numTips * 2; i++) {
+      const a = (i / (numTips * 2)) * Math.PI * 2 + baseRot;
+      const isTip = (i & 1) === 0;
+      const rad = r * (isTip ? 0.86 : 0.64) * (0.92 + Math.sin(a * 3 + h) * 0.08);
+      poly.push({
+        x: cx + Math.cos(a) * rad,
+        y: cy + Math.sin(a) * rad,
+      });
+    }
+    return poly;
+  }
+
+  const numPts = 18;
+  const phase = (h & 31) * 0.2;
+  for (let i = 0; i < numPts; i++) {
+    const a = (i / numPts) * Math.PI * 2;
+    const lobeWave =
+      0.84 +
+      0.12 * Math.sin(a * 5 + phase) +
+      0.08 * Math.cos(a * 3 - phase * 0.7);
+    const rad = r * lobeWave;
+    poly.push({
+      x: cx + Math.cos(a) * rad,
+      y: cy + Math.sin(a) * rad,
+    });
+  }
+  return poly;
+}
+
+/**
+ * Renders 3D botanical tree shadows:
+ * - Dead snags & bare winter deciduous/birch trees cast true 3D branching skeleton shadows.
+ * - Pines cast serrated whorled coniferous cone shadows with radiating needle-bough tips.
+ * - Broadleaf (oak, maple) & birch trees cast multi-lobed scalloped foliage shadows anchored by forked boughs.
  */
 function renderTreeShadow(
   sCtx: CanvasRenderingContext2D,
   tree: Tree,
-  sunState: SunShadowState
+  sunState: SunShadowState,
+  season: string = 'summer'
 ) {
   const r = Math.max(8, tree.radius || 16);
-  const treeH =
-    tree.type === 'pine'
-      ? r * 3.4
-      : tree.type === 'birch'
-      ? r * 3.1
-      : r * 2.7;
-  const trunkH = treeH * 0.38;
+  const species = classifyTreeSpecies(tree);
+  const h = hashCoord(tree.x, tree.y);
+  const seed = Math.abs(Math.floor(tree.x * 12.9898 + tree.y * 78.233));
 
-  const trunkOff = getShadowOffset(trunkH, sunState);
-  const crownOff = getShadowOffset(treeH, sunState);
+  const isBareSkeleton =
+    species === 'dead' || (season === 'winter' && species !== 'pine');
 
-  // Clip out only the sunlit side of the tree's upper crown so the sunlit leaves stay vibrant,
-  // while the leeward side of the crown and the ground/road/cars underneath receive full shadow!
-  const sunSideX = tree.x - sunState.shadowDirX * (r * 0.22);
-  const sunSideY = tree.y - sunState.shadowDirY * (r * 0.22);
-
-  sCtx.save();
-  clipOutsideCircle(sCtx, sunSideX, sunSideY, r * 0.74, crownOff.dx, crownOff.dy);
-
-  // 1. Tapered Tree Trunk Shadow from root base (tree.x, tree.y) to crown base
   const perpX = -sunState.shadowDirY;
   const perpY = sunState.shadowDirX;
-  const trunkBaseR = Math.max(2.2, r * 0.18);
-  const trunkTopR = Math.max(1.5, r * 0.12);
+
+  // ==========================================================================
+  // CASE 1: BARE SKELETON SHADOW (Dead Trees & Winter Deciduous / Birch Trees)
+  // ==========================================================================
+  if (isBareSkeleton) {
+    const treeH = species === 'birch' ? r * 2.15 : r * 2.05;
+    const trunkTopZ = treeH * 0.44;
+    const trunkOff = getShadowOffset(trunkTopZ, sunState);
+    const maxOff = getShadowOffset(treeH * 1.1, sunState);
+
+    // Clip only the tiny sunlit central stump top so the full branching skeleton casts onto snow/ground
+    const stumpClipR = species === 'dead' ? Math.max(3.2, r * 0.24) : Math.max(2.6, r * 0.18);
+    const reach = r * 1.8 + Math.hypot(maxOff.dx, maxOff.dy) + 80;
+    const stumpPoly: Point[] = [];
+    for (let i = 0; i < 10; i++) {
+      const a = (i / 10) * Math.PI * 2;
+      stumpPoly.push({
+        x: tree.x - sunState.shadowDirX * 1.2 + Math.cos(a) * stumpClipR,
+        y: tree.y - sunState.shadowDirY * 1.2 + Math.sin(a) * stumpClipR,
+      });
+    }
+
+    sCtx.save();
+    clipOutsidePolygon(sCtx, stumpPoly, {
+      minX: tree.x - reach,
+      minY: tree.y - reach,
+      maxX: tree.x + reach,
+      maxY: tree.y + reach,
+    });
+
+    // 1. Root flare & tapered main trunk from ground (0) to primary fork (trunkTopZ)
+    const baseR = Math.max(2.2, r * (species === 'dead' ? 0.21 : 0.17));
+    const forkR = Math.max(1.4, r * 0.11);
+    const forkX = tree.x + trunkOff.dx;
+    const forkY = tree.y + trunkOff.dy;
+
+    sCtx.beginPath();
+    sCtx.moveTo(tree.x + perpX * baseR, tree.y + perpY * baseR);
+    sCtx.lineTo(tree.x - perpX * baseR, tree.y - perpY * baseR);
+    sCtx.lineTo(forkX - perpX * forkR, forkY - perpY * forkR);
+    sCtx.lineTo(forkX + perpX * forkR, forkY + perpY * forkR);
+    sCtx.closePath();
+    sCtx.fill();
+
+    // 2. Primary crooked boughs & secondary forked twigs projected from 3D height
+    const numBranches = species === 'dead' ? 6 : species === 'birch' ? 6 : 5;
+    for (let b = 0; b < numBranches; b++) {
+      const ang =
+        (b / numBranches) * Math.PI * 2 +
+        ((seed * (b + 1)) % 10) * (species === 'dead' ? 0.15 : 0.14);
+      const len =
+        r *
+        (species === 'dead'
+          ? 0.8 + ((seed + b * 7) % 6) * 0.09
+          : 0.76 + ((seed + b * 5) % 6) * 0.08);
+
+      const midZ = trunkTopZ + (treeH - trunkTopZ) * 0.48;
+      const tipZ = trunkTopZ + (treeH - trunkTopZ) * (0.82 + (b % 3) * 0.11);
+      const midOff = getShadowOffset(midZ, sunState);
+      const tipOff = getShadowOffset(tipZ, sunState);
+
+      const curveBend = species === 'dead' ? 0.25 : 0.22;
+      const mx = tree.x + Math.cos(ang + curveBend) * (len * 0.52) + midOff.dx;
+      const my = tree.y + Math.sin(ang + curveBend) * (len * 0.52) + midOff.dy;
+      const bx = tree.x + Math.cos(ang) * len + tipOff.dx;
+      const by = tree.y + Math.sin(ang) * len + tipOff.dy;
+
+      sCtx.lineWidth = Math.max(1.8, r * (species === 'birch' ? 0.12 : 0.16));
+      sCtx.beginPath();
+      sCtx.moveTo(forkX, forkY);
+      sCtx.quadraticCurveTo(mx, my, bx, by);
+      sCtx.stroke();
+
+      // Secondary fork A
+      const subAngA = ang + (b % 2 === 0 ? 0.44 : -0.44);
+      const subLenA = r * 0.36;
+      const subZA = tipZ + r * 0.18;
+      const subOffA = getShadowOffset(subZA, sunState);
+      const txA = tree.x + Math.cos(ang) * len + Math.cos(subAngA) * subLenA + subOffA.dx;
+      const tyA = tree.y + Math.sin(ang) * len + Math.sin(subAngA) * subLenA + subOffA.dy;
+
+      sCtx.lineWidth = Math.max(1.1, r * 0.085);
+      sCtx.beginPath();
+      sCtx.moveTo(bx, by);
+      sCtx.lineTo(txA, tyA);
+      sCtx.stroke();
+
+      // Secondary fork B (from mid-bough)
+      const subAngB = ang + (b % 2 === 0 ? -0.52 : 0.52);
+      const subLenB = r * 0.28;
+      const subZB = midZ + r * 0.22;
+      const subOffB = getShadowOffset(subZB, sunState);
+      const txB =
+        tree.x +
+        Math.cos(ang + curveBend) * (len * 0.52) +
+        Math.cos(subAngB) * subLenB +
+        subOffB.dx;
+      const tyB =
+        tree.y +
+        Math.sin(ang + curveBend) * (len * 0.52) +
+        Math.sin(subAngB) * subLenB +
+        subOffB.dy;
+
+      sCtx.lineWidth = Math.max(0.9, r * 0.065);
+      sCtx.beginPath();
+      sCtx.moveTo(mx, my);
+      sCtx.lineTo(txB, tyB);
+      sCtx.stroke();
+    }
+
+    sCtx.restore();
+    return;
+  }
+
+  // ==========================================================================
+  // CASE 2: PINE / SPRUCE (CONIFEROUS WHORLED EVERGREEN SHADOW)
+  // ==========================================================================
+  if (species === 'pine') {
+    const treeH = r * 2.42;
+    const skirtZ = r * 0.34;
+    const apexOff = getShadowOffset(treeH, sunState);
+    const reach = r * 2.2 + Math.hypot(apexOff.dx, apexOff.dy) + 96;
+
+    const sunlitPoly = buildSunlitCrownClipPolygon(tree, species, sunState, h);
+    sCtx.save();
+    clipOutsidePolygon(sCtx, sunlitPoly, {
+      minX: tree.x - reach,
+      minY: tree.y - reach,
+      maxX: tree.x + reach,
+      maxY: tree.y + reach,
+    });
+
+    // 1. Short sturdy lower trunk anchor from (tree.x, tree.y) to lower needle skirt
+    const skirtOff = getShadowOffset(skirtZ, sunState);
+    const trunkBaseR = Math.max(2.0, r * 0.16);
+    const trunkTopR = Math.max(1.5, r * 0.12);
+    sCtx.beginPath();
+    sCtx.moveTo(tree.x + perpX * trunkBaseR, tree.y + perpY * trunkBaseR);
+    sCtx.lineTo(tree.x - perpX * trunkBaseR, tree.y - perpY * trunkBaseR);
+    sCtx.lineTo(tree.x + skirtOff.dx - perpX * trunkTopR, tree.y + skirtOff.dy - perpY * trunkTopR);
+    sCtx.lineTo(tree.x + skirtOff.dx + perpX * trunkTopR, tree.y + skirtOff.dy + perpY * trunkTopR);
+    sCtx.closePath();
+    sCtx.fill();
+
+    // 2. Serrated Conical Whorls: 5 overlapping star-whorl layers tapering from wide skirt to sharp spire apex
+    const whorls = 5;
+    for (let w = 0; w < whorls; w++) {
+      const frac = w / (whorls - 1);
+      const z = skirtZ + (treeH - skirtZ) * Math.pow(frac, 0.92);
+      const off = getShadowOffset(z, sunState);
+      const wx = tree.x + off.dx;
+      const wy = tree.y + off.dy;
+      const whorlR = r * (1.02 - frac * 0.76);
+      const numBoughs = 9 - Math.floor(frac * 3); // 9 boughs at base -> 6 at spire
+      const rot = ((h & 31) * 0.12) + w * 0.58;
+
+      sCtx.beginPath();
+      for (let i = 0; i < numBoughs * 2; i++) {
+        const a = (i / (numBoughs * 2)) * Math.PI * 2 + rot;
+        const isTip = (i & 1) === 0;
+        const jitter = 0.92 + (((h >> (i & 7)) & 7) / 7) * 0.16;
+        const rad = whorlR * (isTip ? 1.08 : 0.62) * jitter;
+        const px = wx + Math.cos(a) * rad;
+        const py = wy + Math.sin(a) * rad;
+        if (i === 0) sCtx.moveTo(px, py);
+        else sCtx.lineTo(px, py);
+      }
+      sCtx.closePath();
+      sCtx.fill();
+    }
+
+    // 3. Continuous serrated flank Spine connecting the whorls into a cohesive spruce cone with jutting bough tips
+    const flankTiers = 6;
+    sCtx.beginPath();
+    for (let t = 0; t <= flankTiers; t++) {
+      const f = t / flankTiers;
+      const z = skirtZ + (treeH - skirtZ) * f;
+      const off = getShadowOffset(z, sunState);
+      const wRad = r * (0.94 - f * 0.82);
+      const boughOut = (t < flankTiers ? 1.08 : 0.35) * wRad;
+      const px = tree.x + off.dx + perpX * boughOut;
+      const py = tree.y + off.dy + perpY * boughOut;
+      if (t === 0) sCtx.moveTo(px, py);
+      else sCtx.lineTo(px, py);
+      if (t < flankTiers) {
+        const nextF = (t + 0.55) / flankTiers;
+        const nextZ = skirtZ + (treeH - skirtZ) * nextF;
+        const nOff = getShadowOffset(nextZ, sunState);
+        const valleyR = r * (0.94 - nextF * 0.82) * 0.64;
+        sCtx.lineTo(tree.x + nOff.dx + perpX * valleyR, tree.y + nOff.dy + perpY * valleyR);
+      }
+    }
+    // Spire tip
+    sCtx.lineTo(
+      tree.x + apexOff.dx + sunState.shadowDirX * (r * 0.18),
+      tree.y + apexOff.dy + sunState.shadowDirY * (r * 0.18)
+    );
+    // Opposite flank back down to skirt
+    for (let t = flankTiers; t >= 0; t--) {
+      const f = t / flankTiers;
+      const z = skirtZ + (treeH - skirtZ) * f;
+      const off = getShadowOffset(z, sunState);
+      const wRad = r * (0.94 - f * 0.82);
+      const boughOut = (t < flankTiers ? 1.08 : 0.35) * wRad;
+      if (t < flankTiers) {
+        const prevF = (t + 0.55) / flankTiers;
+        const prevZ = skirtZ + (treeH - skirtZ) * prevF;
+        const pOff = getShadowOffset(prevZ, sunState);
+        const valleyR = r * (0.94 - prevF * 0.82) * 0.64;
+        sCtx.lineTo(tree.x + pOff.dx - perpX * valleyR, tree.y + pOff.dy - perpY * valleyR);
+      }
+      sCtx.lineTo(tree.x + off.dx - perpX * boughOut, tree.y + off.dy - perpY * boughOut);
+    }
+    sCtx.closePath();
+    sCtx.fill();
+
+    sCtx.restore();
+    return;
+  }
+
+  // ==========================================================================
+  // CASE 3: BROADLEAF DECIDUOUS (OAK / MAPLE) & RUSSIAN BIRCH SHADOW
+  // ==========================================================================
+  const treeH = species === 'birch' ? r * 2.18 : species === 'oak' ? r * 2.04 : r * 2.12;
+  const trunkH = treeH * 0.34;
+  const trunkOff = getShadowOffset(trunkH, sunState);
+  const crownOff = getShadowOffset(treeH * 0.86, sunState);
+  const reach = r * 2.4 + Math.hypot(crownOff.dx, crownOff.dy) + 96;
+
+  const sunlitPoly = buildSunlitCrownClipPolygon(tree, species, sunState, h);
+  sCtx.save();
+  clipOutsidePolygon(sCtx, sunlitPoly, {
+    minX: tree.x - reach,
+    minY: tree.y - reach,
+    maxX: tree.x + reach,
+    maxY: tree.y + reach,
+  });
+
+  // 1. Tapered Main Trunk + Forked Primary Lower Boughs connecting ground base to crown
+  const trunkBaseR = Math.max(2.1, r * (species === 'birch' ? 0.14 : 0.19));
+  const trunkTopR = Math.max(1.4, r * (species === 'birch' ? 0.10 : 0.14));
+  const forkX = tree.x + trunkOff.dx;
+  const forkY = tree.y + trunkOff.dy;
 
   sCtx.beginPath();
   sCtx.moveTo(tree.x + perpX * trunkBaseR, tree.y + perpY * trunkBaseR);
   sCtx.lineTo(tree.x - perpX * trunkBaseR, tree.y - perpY * trunkBaseR);
-  sCtx.lineTo(tree.x + trunkOff.dx - perpX * trunkTopR, tree.y + trunkOff.dy - perpY * trunkTopR);
-  sCtx.lineTo(tree.x + trunkOff.dx + perpX * trunkTopR, tree.y + trunkOff.dy + perpY * trunkTopR);
+  sCtx.lineTo(forkX - perpX * trunkTopR, forkY - perpY * trunkTopR);
+  sCtx.lineTo(forkX + perpX * trunkTopR, forkY + perpY * trunkTopR);
   sCtx.closePath();
   sCtx.fill();
 
-  // 2. Volumetric Multi-Tier Foliage Canopy Shadow on the ground/cars/buildings below
-  if (tree.type === 'pine') {
-    const tiers = 4;
-    for (let t = 0; t < tiers; t++) {
-      const frac = t / (tiers - 1);
-      const tierZ = trunkH + (treeH - trunkH) * frac;
-      const tierOff = getShadowOffset(tierZ, sunState);
-      const tierR = r * (1.0 - frac * 0.58);
-      sCtx.beginPath();
-      sCtx.arc(tree.x + tierOff.dx, tree.y + tierOff.dy, tierR, 0, Math.PI * 2);
-      sCtx.fill();
-    }
-  } else {
-    const midOff = getShadowOffset((trunkH + treeH) * 0.52, sunState);
+  // Two diverging lower boughs from the trunk fork into the lower canopy flanks
+  const boughZ = treeH * 0.56;
+  const boughOff = getShadowOffset(boughZ, sunState);
+  for (let side = -1; side <= 1; side += 2) {
+    const bEndX = tree.x + boughOff.dx + perpX * side * (r * 0.38);
+    const bEndY = tree.y + boughOff.dy + perpY * side * (r * 0.38);
+    sCtx.lineWidth = Math.max(1.6, trunkTopR * 1.35);
     sCtx.beginPath();
-    sCtx.arc(tree.x + midOff.dx, tree.y + midOff.dy, r * 0.88, 0, Math.PI * 2);
-    sCtx.arc(tree.x + crownOff.dx, tree.y + crownOff.dy, r * 0.95, 0, Math.PI * 2);
+    sCtx.moveTo(forkX, forkY);
+    sCtx.lineTo(bEndX, bEndY);
+    sCtx.stroke();
+  }
 
-    const h = hashCoord(tree.x, tree.y);
-    const numLobes = 5;
-    for (let i = 0; i < numLobes; i++) {
-      const ang = (i / numLobes) * Math.PI * 2 + (h & 15) * 0.1;
-      const lobeDist = r * 0.42;
-      const lobeR = r * (0.54 + ((i & 1) ? 0.08 : -0.04));
-      const lobeZ = treeH * (0.78 + (i % 3) * 0.1);
-      const lOff = getShadowOffset(lobeZ, sunState);
-      sCtx.moveTo(
-        tree.x + Math.cos(ang) * lobeDist + lOff.dx + lobeR,
-        tree.y + Math.sin(ang) * lobeDist + lOff.dy
-      );
-      sCtx.arc(
-        tree.x + Math.cos(ang) * lobeDist + lOff.dx,
-        tree.y + Math.sin(ang) * lobeDist + lOff.dy,
-        lobeR,
-        0,
-        Math.PI * 2
-      );
-    }
-    sCtx.fill();
+  // 2. Lower & Mid Canopy Core (Organic scalloped foliage mass, NOT a plain circle!)
+  const midOff = getShadowOffset(treeH * 0.58, sunState);
+  const shadowAngle = Math.atan2(sunState.shadowDirY, sunState.shadowDirX);
+  fillOrganicLeafClusterShadow(
+    sCtx,
+    tree.x + midOff.dx,
+    tree.y + midOff.dy,
+    r * (species === 'birch' ? 0.72 : 0.82),
+    r * (species === 'birch' ? 0.68 : 0.76),
+    shadowAngle + 0.3,
+    h,
+    species === 'maple' ? 0.16 : 0.13,
+    16
+  );
+
+  // Upper main dome core
+  fillOrganicLeafClusterShadow(
+    sCtx,
+    tree.x + crownOff.dx,
+    tree.y + crownOff.dy,
+    r * (species === 'birch' ? 0.76 : 0.85),
+    r * (species === 'birch' ? 0.70 : 0.78),
+    shadowAngle - 0.25,
+    h ^ 0x5a5a,
+    species === 'maple' ? 0.17 : 0.14,
+    16
+  );
+
+  // 3. Asymmetric Bough Sub-Crowns (6 to 7 distinct organic leaf domes at varying 3D heights)
+  const numDomes = species === 'birch' ? 7 : 6;
+  for (let i = 0; i < numDomes; i++) {
+    const ang = (i / numDomes) * Math.PI * 2 + ((h & 31) * 0.09) + (i % 2) * 0.14;
+    const dist = r * (species === 'birch' ? 0.48 : 0.44) * (0.86 + ((h >> (i + 2)) & 3) * 0.08);
+    const domeR =
+      r *
+      (species === 'birch' ? 0.44 : 0.52) *
+      (0.88 + ((i & 1) ? 0.12 : -0.06));
+    const domeZ = treeH * (0.64 + ((i * 3 + (h & 3)) % 4) * 0.09);
+    const dOff = getShadowOffset(domeZ, sunState);
+
+    const dx = tree.x + Math.cos(ang) * dist + dOff.dx;
+    const dy = tree.y + Math.sin(ang) * dist + dOff.dy;
+
+    fillOrganicLeafClusterShadow(
+      sCtx,
+      dx,
+      dy,
+      domeR * 1.06,
+      domeR * 0.92,
+      ang,
+      h + i * 97,
+      species === 'maple' ? 0.18 : 0.15,
+      12
+    );
+  }
+
+  // 4. Peripheral Leaf Tufts / Feathered Edge Clusters (creates realistic dappled/lacy silhouette)
+  const numTufts = species === 'birch' ? 10 : 8;
+  for (let t = 0; t < numTufts; t++) {
+    const tAng = (t / numTufts) * Math.PI * 2 + ((h >> 3) & 15) * 0.13;
+    const tDist = r * (0.74 + ((t * 5 + h) & 3) * 0.06);
+    const tRad = r * (species === 'birch' ? 0.23 : 0.27);
+    const tZ = treeH * (0.60 + (t % 3) * 0.11);
+    const tOff = getShadowOffset(tZ, sunState);
+
+    fillOrganicLeafClusterShadow(
+      sCtx,
+      tree.x + Math.cos(tAng) * tDist + tOff.dx,
+      tree.y + Math.sin(tAng) * tDist + tOff.dy,
+      tRad * 1.1,
+      tRad * 0.85,
+      tAng,
+      h + t * 131,
+      0.18,
+      10
+    );
   }
 
   sCtx.restore();
@@ -2232,8 +2634,9 @@ export function renderUnifiedWorldShadows(
   }
 
   // 2E. Trees (z = 55 .. 95px — cast full canopy + trunk shadows over roads, cars, pedestrians, and low roofs!)
+  const currentSeason = world.calendar?.season ?? world.season ?? 'summer';
   for (const tree of visibleTrees) {
-    renderTreeShadow(sCtx, tree, sunState);
+    renderTreeShadow(sCtx, tree, sunState, currentSeason);
   }
 
   // 2F. Flying Birds (high-altitude soaring silhouettes cast far along the solar vector)
