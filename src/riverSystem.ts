@@ -1274,12 +1274,24 @@ function renderVehicleHydrodynamicSubmersion(
 
   // 2. CONTOUR-CLIPPED SUBMERGED HULL ABSORPTION & CAUSTIC REFRACTION
   // Trace the vehicle's actual deformed softbody perimeter polygon
-  const hullPoly = getVehicleBasePolygon(car.type, halfL, halfW);
   const dmg = car.damage;
+  const hullPoly = getVehicleBasePolygon(
+    car,
+    halfL,
+    halfW,
+    dmg?.frontCrumple || 0,
+    dmg?.rearCrumple || 0,
+    dmg?.leftDent || 0,
+    dmg?.rightDent || 0,
+    dmg?.frontLeftDent || 0,
+    dmg?.frontRightDent || 0,
+    dmg?.rearLeftDent || 0,
+    dmg?.rearRightDent || 0
+  );
   ctx.save();
   ctx.beginPath();
   if (dmg?.deformedVertices && dmg.deformedVertices.length >= 8) {
-    traceSoftbodyPath(ctx, hullPoly, dmg, halfL, halfW, 0.92);
+    traceSoftbodyPath(ctx, hullPoly, dmg.deformedVertices);
   } else {
     for (let p = 0; p < hullPoly.length; p++) {
       if (p === 0) ctx.moveTo(hullPoly[p].x, hullPoly[p].y);

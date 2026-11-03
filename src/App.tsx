@@ -3847,7 +3847,7 @@ export default function App() {
                   cameraX: camera.x,
                   cameraY: camera.y,
                   cameraZoom: camera.zoom,
-                  isFreezing: (calendarRef.current.ambientTempC ?? 15) <= -1.0,
+                  isFreezing: ((calendarRef.current as any).ambientTempC ?? 15) <= -1.0,
                   timeSec: now / 1000,
                   dt: rawDt,
                   sunrise: cal.sunriseHour,
@@ -3921,10 +3921,12 @@ export default function App() {
           particlesTotal: world.particles.length
         };
 
-        // Push frame data to ring buffer
-        perfHistoryRef.current.push({ ...performanceStatsRef.current });
-        if (perfHistoryRef.current.length > 300) {
-          perfHistoryRef.current.shift();
+        // Push frame data to ring buffer only when profiler is open
+        if (isPerfConsoleOpenRef.current) {
+          perfHistoryRef.current.push({ ...performanceStatsRef.current });
+          if (perfHistoryRef.current.length > 300) {
+            perfHistoryRef.current.shift();
+          }
         }
 
         // Trigger throttled state update for UI (only when profiler is open)

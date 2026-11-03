@@ -31,10 +31,21 @@ export function drawRoads(ctx: CanvasRenderingContext2D, world: GameWorld, v: Vi
       const pts = r.curvePoints && r.curvePoints.length > 1 ? r.curvePoints : null;
       let minX: number, maxX: number, minY: number, maxY: number;
       if (pts) {
-        minX = (r._minX ?? Math.min(...pts.map(p => p.x))) - pad;
-        maxX = (r._maxX ?? Math.max(...pts.map(p => p.x))) + pad;
-        minY = (r._minY ?? Math.min(...pts.map(p => p.y))) - pad;
-        maxY = (r._maxY ?? Math.max(...pts.map(p => p.y))) + pad;
+        if (r._minX === undefined) {
+          let mnx = Infinity, mxx = -Infinity, mny = Infinity, mxy = -Infinity;
+          for (let i = 0; i < pts.length; i++) {
+            const p = pts[i];
+            if (p.x < mnx) mnx = p.x;
+            if (p.x > mxx) mxx = p.x;
+            if (p.y < mny) mny = p.y;
+            if (p.y > mxy) mxy = p.y;
+          }
+          r._minX = mnx; r._maxX = mxx; r._minY = mny; r._maxY = mxy;
+        }
+        minX = r._minX! - pad;
+        maxX = r._maxX! + pad;
+        minY = r._minY! - pad;
+        maxY = r._maxY! + pad;
       } else {
         minX = Math.min(r.x1, r.x2) - pad; maxX = Math.max(r.x1, r.x2) + pad;
         minY = Math.min(r.y1, r.y2) - pad; maxY = Math.max(r.y1, r.y2) + pad;
@@ -72,8 +83,8 @@ export function drawRoads(ctx: CanvasRenderingContext2D, world: GameWorld, v: Vi
     const pts = r.curvePoints && r.curvePoints.length > 1 ? r.curvePoints : [{ x: r.x1, y: r.y1 }, { x: r.x2, y: r.y2 }];
     let mnX: number, mxX: number, mnY: number, mxY: number;
     if (r.curvePoints && r.curvePoints.length > 1) {
-      mnX = r._minX ?? Math.min(...pts.map(p => p.x)); mxX = r._maxX ?? Math.max(...pts.map(p => p.x));
-      mnY = r._minY ?? Math.min(...pts.map(p => p.y)); mxY = r._maxY ?? Math.max(...pts.map(p => p.y));
+      mnX = r._minX!; mxX = r._maxX!;
+      mnY = r._minY!; mxY = r._maxY!;
     } else {
       mnX = Math.min(r.x1, r.x2); mxX = Math.max(r.x1, r.x2); mnY = Math.min(r.y1, r.y2); mxY = Math.max(r.y1, r.y2);
     }
@@ -90,9 +101,16 @@ export function drawRails(ctx: CanvasRenderingContext2D, world: GameWorld, v: Vi
   for (let pass = 0; pass < 2; pass++) {
     for (const t of world.railwayTracks) {
       const pts = t.curvePoints && t.curvePoints.length > 1 ? t.curvePoints : [{ x: t.x1, y: t.y1 }, { x: t.x2, y: t.y2 }];
-      let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
-      for (const p of pts) { if (p.x < minX) minX = p.x; if (p.x > maxX) maxX = p.x; if (p.y < minY) minY = p.y; if (p.y > maxY) maxY = p.y; }
-      if (maxX + 30 < v.minX || minX - 30 > v.maxX || maxY + 30 < v.minY || minY - 30 > v.maxY) continue;
+      let minX = (t as any)._minX as number | undefined;
+      let maxX = (t as any)._maxX as number | undefined;
+      let minY = (t as any)._minY as number | undefined;
+      let maxY = (t as any)._maxY as number | undefined;
+      if (minX === undefined) {
+        minX = Infinity; maxX = -Infinity; minY = Infinity; maxY = -Infinity;
+        for (const p of pts) { if (p.x < minX) minX = p.x; if (p.x > maxX) maxX = p.x; if (p.y < minY) minY = p.y; if (p.y > maxY) maxY = p.y; }
+        (t as any)._minX = minX; (t as any)._maxX = maxX; (t as any)._minY = minY; (t as any)._maxY = maxY;
+      }
+      if (maxX! + 30 < v.minX || minX! - 30 > v.maxX || maxY! + 30 < v.minY || minY! - 30 > v.maxY) continue;
       if (pass === 0) { ctx.strokeStyle = C.railBed; ctx.lineWidth = Math.max(12, 3 * px); }
       else {
         ctx.strokeStyle = C.rail; ctx.lineWidth = Math.max(2.5, 1.2 * px);

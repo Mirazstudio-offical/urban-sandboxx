@@ -6311,6 +6311,62 @@ export class GameRenderer {
     ctx.fill();
   }
 
+  private traceBotanicalCluster(
+    ctx: CanvasRenderingContext2D,
+    cx: number,
+    cy: number,
+    rx: number,
+    ry: number,
+    rotAngle: number,
+    seed: number,
+    serrationAmp: number = 0.15,
+    pointsCount: number = 14
+  ) {
+    const cosR = Math.cos(rotAngle);
+    const sinR = Math.sin(rotAngle);
+    for (let i = 0; i < pointsCount; i++) {
+      const a = (i / pointsCount) * Math.PI * 2;
+      const wave1 = Math.sin(a * 5 + (seed & 31) * 0.45);
+      const wave2 = Math.cos(a * 3 - ((seed >> 4) & 31) * 0.35);
+      const jag = (i & 1) === 0 ? 1 + serrationAmp * 0.55 : 1 - serrationAmp * 0.45;
+      const mod = jag + (wave1 * 0.6 + wave2 * 0.4) * serrationAmp;
+      const lx = Math.cos(a) * rx * mod;
+      const ly = Math.sin(a) * ry * mod;
+      const px = cx + lx * cosR - ly * sinR;
+      const py = cy + lx * sinR + ly * cosR;
+      if (i === 0) ctx.moveTo(px, py);
+      else ctx.lineTo(px, py);
+    }
+    ctx.closePath();
+  }
+
+  private traceTaperedLimb(
+    ctx: CanvasRenderingContext2D,
+    x0: number,
+    y0: number,
+    r0: number,
+    cx: number,
+    cy: number,
+    x1: number,
+    y1: number,
+    r1: number
+  ) {
+    const dx = x1 - x0;
+    const dy = y1 - y0;
+    const len = Math.hypot(dx, dy) || 1;
+    const nx = -dy / len;
+    const ny = dx / len;
+    const rMid = (r0 + r1) * 0.52;
+
+    ctx.moveTo(x0 + nx * r0, y0 + ny * r0);
+    ctx.quadraticCurveTo(cx + nx * rMid, cy + ny * rMid, x1 + nx * r1, y1 + ny * r1);
+    ctx.arc(x1, y1, r1, Math.atan2(ny, nx), Math.atan2(-ny, -nx), false);
+    ctx.quadraticCurveTo(cx - nx * rMid, cy - ny * rMid, x0 - nx * r0, y0 - ny * r0);
+    ctx.closePath();
+  }
+
+  private treeSpriteCache = new Map<string, { canvas: HTMLCanvasElement; half: number }>();
+
   private renderTreesAndTallProps(
     trees: GameWorld['trees'],
     props: StreetProp[],
@@ -6322,6 +6378,9 @@ export class GameRenderer {
     const sunState = getCurrentSunShadowState();
     const sunX = -sunState.shadowDirX;
     const sunY = -sunState.shadowDirY;
+    const canUseOffscreenCache = typeof document !== 'undefined' && typeof document.createElement === 'function';
+    const sunKeyX = Math.round(sunX * 16);
+    const sunKeyY = Math.round(sunY * 16);
 
     // Trees
     for (const tree of trees) {
@@ -6331,6 +6390,63 @@ export class GameRenderer {
 
       const species = classifyTreeSpecies(tree);
       const seed = Math.abs(Math.floor(tree.x * 12.9898 + tree.y * 78.233));
+
+      if (canUseOffscreenCache) {
+        const qSeed = seed & 63;
+        const qRad = Math.round(r);
+        const cacheKey = `${species}_${qRad}_${tree.color || ''}_${qSeed}_${season || 'summer'}_${sunKeyX}_${sunKeyY}`;
+        let cached = this.treeSpriteCache.get(cacheKey);
+        if (!cached) {
+          if (this.treeSpriteCache.size > 512) {
+            this.treeSpriteCache.clear();
+          }
+          const half = Math.ceil(qRad * 1.32 + 6);
+          const offCanvas = document.createElement('canvas');
+          offCanvas.width = half * 2;
+          offCanvas.height = half * 2;
+          const offCtx = offCanvas.getContext('2d');
+          if (offCtx) {
+            this.renderSingleTreeGeometry(offCtx, tree, half, half, qRad, species, qSeed * 199 + 17, sunState, sunX, sunY, season);
+            cached = { canvas: offCanvas, half };
+            this.treeSpriteCache.set(cacheKey, cached);
+          }
+        }
+        if (cached) {
+          ctx.drawImage(cached.canvas, tree.x - cached.half, tree.y - cached.half);
+          continue;
+        }
+      }
+
+      this.renderSingleTreeGeometry(ctx, tree, tree.x, tree.y, r, species, seed, sunState, sunX, sunY, season);
+    }
+
+    // Tall Intact Lampposts & Power Poles
+    for (const prop of props) {
+      if ((prop.type !== 'lamp' && prop.type !== 'lamp_highway' && prop.type !== 'lamp_concrete' && prop.type !== 'power_pole') || prop.isBroken) continue;
+      if (prop.x < minX - 30 || prop.x > maxX + 30 || prop.y < minY - 30 || prop.y > maxY + 30) continue;
+
+      ctx.save();
+      ctx.translate(prop.x, prop.y);
+      renderTallStreetProp(ctx, prop);
+      ctx.restore();
+    }
+  }
+
+  private renderSingleTreeGeometry(
+    ctx: CanvasRenderingContext2D,
+    origTree: GameWorld['trees'][0],
+    treeX: number,
+    treeY: number,
+    r: number,
+    species: ReturnType<typeof classifyTreeSpecies>,
+    seed: number,
+    sunState: ReturnType<typeof getCurrentSunShadowState>,
+    sunX: number,
+    sunY: number,
+    season?: Season
+  ) {
+    {
+      const tree = { x: treeX, y: treeY, radius: r, color: origTree.color };
 
       if (species === 'dead') {
         // ====================================================================
@@ -6507,13 +6623,14 @@ export class GameRenderer {
           14
         );
 
-        // 2. Woody reddish-brown pine bark bough ribs in the lower crown (partially visible in deep whorl gaps)
+        // 2. Woody reddish-brown pine bark bough ribs in the lower crown (batched in a single fill!)
         const numLowerRibs = 7;
+        ctx.fillStyle = '#3e2723';
+        ctx.beginPath();
         for (let rb = 0; rb < numLowerRibs; rb++) {
           const rAng = (rb / numLowerRibs) * Math.PI * 2 + (seed % 13) * 0.19;
           const rLen = r * 0.68;
-          ctx.fillStyle = '#3e2723';
-          this.drawTaperedLimb(
+          this.traceTaperedLimb(
             ctx,
             tree.x,
             tree.y,
@@ -6525,6 +6642,7 @@ export class GameRenderer {
             0.6
           );
         }
+        ctx.fill();
 
         // 3. Multi-Tier Radiating Coniferous Whorls (5 stacked tiers of serrated needle boughs)
         const baseTint = (tree.color || '#124c2c').toLowerCase();
@@ -6785,15 +6903,16 @@ export class GameRenderer {
             sunTipCol = '#d9f99d';
           }
 
-          // 1. Deep under-canopy shadow foliage clusters (shifted slightly toward shadow direction)
+          // 1. Deep under-canopy shadow foliage clusters (batched into a SINGLE fill!)
           const numDomes = 7;
           ctx.fillStyle = deepShadowCol;
+          ctx.beginPath();
           for (let i = 0; i < numDomes; i++) {
             const ang = (i / numDomes) * Math.PI * 2 + (seed % 17) * 0.18;
             const dist = r * (0.44 + ((seed + i * 3) % 4) * 0.05);
             const lx = tree.x + Math.cos(ang) * dist + sunState.shadowDirX * (r * 0.08);
             const ly = tree.y + Math.sin(ang) * dist + sunState.shadowDirY * (r * 0.08);
-            this.fillBotanicalCluster(
+            this.traceBotanicalCluster(
               ctx,
               lx,
               ly,
@@ -6802,9 +6921,10 @@ export class GameRenderer {
               ang,
               seed + i * 31,
               0.20,
-              12
+              10
             );
           }
+          ctx.fill();
 
           // 2. Forked White Birch Trunk & Slender Weeping Boughs (drawn UNDER the upper leaf clusters so they peek through natural crown gaps!)
           const trunkR = Math.max(2.6, r * 0.16);
@@ -7114,9 +7234,10 @@ export class GameRenderer {
 
           const numSubCrowns = 6;
 
-          // 1. Deep Under-Canopy Shadow Layer (gives rich 3D depth underneath the boughs)
+          // 1. Deep Under-Canopy Shadow Layer (batched into a SINGLE fill!)
           ctx.fillStyle = shadowFoliage;
-          this.fillBotanicalCluster(
+          ctx.beginPath();
+          this.traceBotanicalCluster(
             ctx,
             tree.x + sunState.shadowDirX * (r * 0.10),
             tree.y + sunState.shadowDirY * (r * 0.10),
@@ -7125,7 +7246,7 @@ export class GameRenderer {
             seed * 0.17,
             seed,
             serration,
-            16
+            14
           );
 
           for (let i = 0; i < numSubCrowns; i++) {
@@ -7133,7 +7254,7 @@ export class GameRenderer {
             const dist = r * (0.46 + ((seed + i * 3) % 4) * 0.05);
             const lx = tree.x + Math.cos(ang) * dist + sunState.shadowDirX * (r * 0.08);
             const ly = tree.y + Math.sin(ang) * dist + sunState.shadowDirY * (r * 0.08);
-            this.fillBotanicalCluster(
+            this.traceBotanicalCluster(
               ctx,
               lx,
               ly,
@@ -7142,15 +7263,18 @@ export class GameRenderer {
               ang,
               seed + i * 23,
               serration,
-              12
+              10
             );
           }
+          ctx.fill();
 
-          // 2. Gnarled Wooden Trunk & Forked Boughs (drawn BETWEEN under-foliage and upper sub-crowns so wooden forks are naturally visible in canopy clefts!)
+          // 2. Gnarled Wooden Trunk & Forked Boughs (batched by color into 2 fills instead of 13!)
           const trunkR = Math.max(3.0, r * 0.19);
           ctx.fillStyle = '#261c15';
           this.fillBotanicalCluster(ctx, tree.x, tree.y, trunkR * 1.12, trunkR * 1.06, seed * 0.2, seed, 0.14, 8);
 
+          ctx.fillStyle = '#2d2118';
+          ctx.beginPath();
           for (let i = 0; i < numSubCrowns; i++) {
             const ang = (i / numSubCrowns) * Math.PI * 2 + (seed % 19) * 0.16;
             const bLen = r * 0.58;
@@ -7158,13 +7282,20 @@ export class GameRenderer {
             const midY = tree.y + Math.sin(ang + 0.18) * (bLen * 0.5);
             const bx = tree.x + Math.cos(ang) * bLen;
             const by = tree.y + Math.sin(ang) * bLen;
+            this.traceTaperedLimb(ctx, tree.x, tree.y, trunkR * 0.78, midX, midY, bx, by, Math.max(1.1, r * 0.055));
+          }
+          ctx.fill();
 
-            // Dark fissured oak/maple bark
-            ctx.fillStyle = '#2d2118';
-            this.drawTaperedLimb(ctx, tree.x, tree.y, trunkR * 0.78, midX, midY, bx, by, Math.max(1.1, r * 0.055));
-            // Sunlit warm bark ridge
-            ctx.fillStyle = '#4a3728';
-            this.drawTaperedLimb(
+          ctx.fillStyle = '#4a3728';
+          ctx.beginPath();
+          for (let i = 0; i < numSubCrowns; i++) {
+            const ang = (i / numSubCrowns) * Math.PI * 2 + (seed % 19) * 0.16;
+            const bLen = r * 0.58;
+            const midX = tree.x + Math.cos(ang + 0.18) * (bLen * 0.5);
+            const midY = tree.y + Math.sin(ang + 0.18) * (bLen * 0.5);
+            const bx = tree.x + Math.cos(ang) * bLen;
+            const by = tree.y + Math.sin(ang) * bLen;
+            this.traceTaperedLimb(
               ctx,
               tree.x + sunX * 0.5,
               tree.y + sunY * 0.5,
@@ -7176,6 +7307,7 @@ export class GameRenderer {
               Math.max(0.7, r * 0.035)
             );
           }
+          ctx.fill();
 
           // 3. Billowy Asymmetric Sub-Crown Domes (with dark inter-dome valleys so the crown never looks like a single flat circle)
           for (let i = 0; i < numSubCrowns; i++) {
@@ -7189,7 +7321,7 @@ export class GameRenderer {
 
             // Sub-crown base mass
             ctx.fillStyle = sunDot > 0.05 ? midFoliage : darkFoliage;
-            this.fillBotanicalCluster(ctx, cx, cy, domeRx, domeRy, ang, seed + i * 41, serration, 14);
+            this.fillBotanicalCluster(ctx, cx, cy, domeRx, domeRy, ang, seed + i * 41, serration, 12);
 
             // Sub-crown upper sunlit dome (shifted toward the sun)
             ctx.fillStyle = sunDot > -0.15 ? brightFoliage : midFoliage;
@@ -7202,7 +7334,7 @@ export class GameRenderer {
               ang + 0.35,
               seed + i * 67,
               serration * 1.1,
-              12
+              10
             );
           }
 
@@ -7225,23 +7357,23 @@ export class GameRenderer {
               uAng,
               seed + u * 89,
               serration,
-              12
+              10
             );
           }
 
-          // 5. Sun-Dappled Leaf Rosettes & Peripheral Serrated Tufts (микрорельеф листвы на солнечной стороне)
+          // 5. Sun-Dappled Leaf Rosettes & Peripheral Serrated Tufts (batched into 2 fills by brightness!)
           const numRosettes = 14;
+          ctx.fillStyle = brightFoliage;
+          ctx.beginPath();
           for (let k = 0; k < numRosettes; k++) {
             const kHash = ((seed + k * 97) * 2654435761) >>> 0;
             const kAng = (k / numRosettes) * Math.PI * 2 + ((kHash & 15) * 0.045);
-            const kDist = r * (0.34 + ((kHash >> 4) & 15) * 0.032);
-            const kx = tree.x + Math.cos(kAng) * kDist + sunX * (r * 0.05);
-            const ky = tree.y + Math.sin(kAng) * kDist + sunY * (r * 0.05);
             const kSun = Math.cos(kAng) * sunX + Math.sin(kAng) * sunY;
-
-            if (kSun > -0.25) {
-              ctx.fillStyle = kSun > 0.22 ? sunCrownCol : brightFoliage;
-              this.fillBotanicalCluster(
+            if (kSun > -0.25 && kSun <= 0.22) {
+              const kDist = r * (0.34 + ((kHash >> 4) & 15) * 0.032);
+              const kx = tree.x + Math.cos(kAng) * kDist + sunX * (r * 0.05);
+              const ky = tree.y + Math.sin(kAng) * kDist + sunY * (r * 0.05);
+              this.traceBotanicalCluster(
                 ctx,
                 kx,
                 ky,
@@ -7250,23 +7382,38 @@ export class GameRenderer {
                 kAng + 0.25,
                 kHash,
                 serration * 1.2,
-                10
+                8
               );
             }
           }
+          ctx.fill();
+
+          ctx.fillStyle = sunCrownCol;
+          ctx.beginPath();
+          for (let k = 0; k < numRosettes; k++) {
+            const kHash = ((seed + k * 97) * 2654435761) >>> 0;
+            const kAng = (k / numRosettes) * Math.PI * 2 + ((kHash & 15) * 0.045);
+            const kSun = Math.cos(kAng) * sunX + Math.sin(kAng) * sunY;
+            if (kSun > 0.22) {
+              const kDist = r * (0.34 + ((kHash >> 4) & 15) * 0.032);
+              const kx = tree.x + Math.cos(kAng) * kDist + sunX * (r * 0.05);
+              const ky = tree.y + Math.sin(kAng) * kDist + sunY * (r * 0.05);
+              this.traceBotanicalCluster(
+                ctx,
+                kx,
+                ky,
+                r * (0.21 + (k & 1) * 0.04),
+                r * (0.17 + ((k + 1) & 1) * 0.03),
+                kAng + 0.25,
+                kHash,
+                serration * 1.2,
+                8
+              );
+            }
+          }
+          ctx.fill();
         }
       }
-    }
-
-    // Tall Intact Lampposts & Power Poles
-    for (const prop of props) {
-      if ((prop.type !== 'lamp' && prop.type !== 'lamp_highway' && prop.type !== 'lamp_concrete' && prop.type !== 'power_pole') || prop.isBroken) continue;
-      if (prop.x < minX - 30 || prop.x > maxX + 30 || prop.y < minY - 30 || prop.y > maxY + 30) continue;
-
-      ctx.save();
-      ctx.translate(prop.x, prop.y);
-      renderTallStreetProp(ctx, prop);
-      ctx.restore();
     }
   }
 
@@ -7731,7 +7878,7 @@ export class GameRenderer {
       } else {
         // Deep sky reflection body with wet border transition (optical cyan-slate for WebGL2 water shader)
         const sunState = getCurrentSunShadowState();
-        const dayVis = Math.max(0.18, 1 - this.currentNightAlpha * 0.78);
+        const dayVis = Math.max(0.18, 1 - (sunState.isNight ? 0.85 : 0) * 0.78);
         const grad = safeRadialGradient(ctx, -rX * 0.12 * sunState.sunDirX, -rY * 0.12 * sunState.sunDirY, 0, 0, 0, rX);
         grad.addColorStop(0, `rgba(${Math.round(36 * dayVis)}, ${Math.round(138 * dayVis)}, ${Math.round(178 * dayVis)}, 0.34)`);
         grad.addColorStop(0.58, `rgba(${Math.round(20 * dayVis)}, ${Math.round(68 * dayVis)}, ${Math.round(92 * dayVis)}, 0.42)`);

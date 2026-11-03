@@ -5730,7 +5730,7 @@ export function updatePlayerPedestrianPhysics(
           player.vy,
           10,
           Math.min(1, 0.32 + pWaterDepth * 0.45 + (len > 0.01 ? 0.25 : 0)),
-          player.isSwimming ? 'hull' : 'footstep'
+          Boolean(player.isSwimming)
         );
       }
 
@@ -10269,7 +10269,7 @@ export function updateVehiclePhysics(
         vehicle.wetCoatTimer = Math.max(vehicle.wetCoatTimer || 0, 12.0);
         const waterIntensity = Math.min(1.0, ((isPowerWheelspin ? 0.75 : 0) + vSpeedKmh * 0.03));
         if (waterIntensity > 0.08 && Math.random() < 0.32 && !isWorldFreezing(world)) {
-          emitWaterDisturbance(tireX, tireY, vehicle.vx, vehicle.vy, 9, waterIntensity * 0.75, 'wheel');
+          emitWaterDisturbance(tireX, tireY, vehicle.vx, vehicle.vy, 9, waterIntensity * 0.75, true);
         }
         if (waterIntensity > 0.06 && Math.random() < 0.65) {
           const flingSpeed = (35 + (isPowerWheelspin ? 80 * drivePedal : 0) + vSpeedKmh * 0.75) * (0.8 + Math.random() * 0.4);
@@ -11200,7 +11200,7 @@ export function updateVehiclePhysics(
     const doorSillHeight = groundClearance + 0.18;
     if (effectiveHullDepth > doorSillHeight) {
       const headPressure = effectiveHullDepth - doorSillHeight;
-      const sealLeakMultiplier = (vehicle.windowOpen ? 2.8 : 1.0) + ((vehicle.damage && vehicle.damage.health < 75) ? 1.4 : 0);
+      const sealLeakMultiplier = (vehicle.windowOpen ? 2.8 : 1.0) + ((vehicle.damage && ((vehicle.damage.leftDent || 0) + (vehicle.damage.rightDent || 0) + (vehicle.damage.frontCrumple || 0) > 3)) ? 1.4 : 0);
       const targetCabinFill = Math.min(1.0, headPressure / 1.05);
       const currentCabinFill = vehicle.cabinWaterLevel || 0;
       if (currentCabinFill < targetCabinFill) {

@@ -384,39 +384,48 @@ export class RoofRenderer {
     const isHorizontalProfile = rw >= rh;
     const ribStep = 7;
 
-    // 3D Trapezoidal flute ribs (трапециевидная волна: глубокая тень + яркий гребень)
-    ctx.beginPath();
+    // 3D Trapezoidal flute ribs (batched into 2 fill calls instead of hundreds of fillRects)
     if (isHorizontalProfile) {
+      ctx.fillStyle = 'rgba(15, 23, 42, 0.42)';
+      ctx.beginPath();
       for (let gx = rx + 6; gx < rx + rw - 4; gx += ribStep) {
-        // Shaded flute depression
-        ctx.fillStyle = 'rgba(15, 23, 42, 0.42)';
-        ctx.fillRect(gx, ry + 1, 2.5, rh - 2);
-
-        // Highlighted crown rib
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.14)';
-        ctx.fillRect(gx + 2.5, ry + 1, 1.8, rh - 2);
+        ctx.rect(gx, ry + 1, 2.5, rh - 2);
       }
+      ctx.fill();
+
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.14)';
+      ctx.beginPath();
+      for (let gx = rx + 6; gx < rx + rw - 4; gx += ribStep) {
+        ctx.rect(gx + 2.5, ry + 1, 1.8, rh - 2);
+      }
+      ctx.fill();
     } else {
+      ctx.fillStyle = 'rgba(15, 23, 42, 0.42)';
+      ctx.beginPath();
       for (let gy = ry + 6; gy < ry + rh - 4; gy += ribStep) {
-        ctx.fillStyle = 'rgba(15, 23, 42, 0.42)';
-        ctx.fillRect(rx + 1, gy, rw - 2, 2.5);
-
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.14)';
-        ctx.fillRect(rx + 1, gy + 2.5, rw - 2, 1.8);
+        ctx.rect(rx + 1, gy, rw - 2, 2.5);
       }
+      ctx.fill();
+
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.14)';
+      ctx.beginPath();
+      for (let gy = ry + 6; gy < ry + rh - 4; gy += ribStep) {
+        ctx.rect(rx + 1, gy + 2.5, rw - 2, 1.8);
+      }
+      ctx.fill();
     }
 
-    // Purlin fastener rows (саморезы с уплотнительными шайбами по прогонам)
-    if (!performanceConfig.lowQualityRendering) {
+    // Purlin fastener rows (batched into a single fill call)
+    if (!performanceConfig.lowQualityRendering && isHorizontalProfile) {
       ctx.fillStyle = '#0f172a';
       const purlinStep = 32;
-      if (isHorizontalProfile) {
-        for (let py = ry + 12; py < ry + rh - 8; py += purlinStep) {
-          for (let gx = rx + 6; gx < rx + rw - 6; gx += ribStep * 2) {
-            ctx.fillRect(gx + 1, py, 1.4, 1.4);
-          }
+      ctx.beginPath();
+      for (let py = ry + 12; py < ry + rh - 8; py += purlinStep) {
+        for (let gx = rx + 6; gx < rx + rw - 6; gx += ribStep * 2) {
+          ctx.rect(gx + 1, py, 1.4, 1.4);
         }
       }
+      ctx.fill();
     }
 
     // Natural atmospheric weathering & oxidized runoff streaks
@@ -573,22 +582,20 @@ export class RoofRenderer {
     ctx.lineWidth = isCommercial ? 3.0 : 2.4;
     ctx.strokeRect(bx + 3, by + 3, bw - 6, bh - 6);
 
-    // Parapet expansion joint cuts (стыки защитных металлических фартуков парапета)
+    // Parapet expansion joint cuts (batched into a single stroke call)
     ctx.strokeStyle = 'rgba(15, 23, 42, 0.45)';
     ctx.lineWidth = 1.0;
     const jointStep = 28;
+    ctx.beginPath();
     for (let jx = bx + 16; jx < bx + bw - 16; jx += jointStep) {
-      ctx.beginPath();
       ctx.moveTo(jx, by + 1.5); ctx.lineTo(jx, by + 4.5);
       ctx.moveTo(jx, by + bh - 4.5); ctx.lineTo(jx, by + bh - 1.5);
-      ctx.stroke();
     }
     for (let jy = by + 16; jy < by + bh - 16; jy += jointStep) {
-      ctx.beginPath();
       ctx.moveTo(bx + 1.5, jy); ctx.lineTo(bx + 4.5, jy);
       ctx.moveTo(bx + bw - 4.5, jy); ctx.lineTo(bx + bw - 1.5, jy);
-      ctx.stroke();
     }
+    ctx.stroke();
 
     // 2. Inner Roof Bed (Основной ковёр кровли: Рубероид vs ПВХ-мембрана)
     const rx = bx + 5;
@@ -598,23 +605,26 @@ export class RoofRenderer {
 
     if (rw <= 8 || rh <= 8) return;
 
-    // Parapet inner shadow driven by solar direction
+    // Parapet inner shadow driven by solar direction (clamped analytically without save/clip/restore)
     const sun = getCurrentSunShadowState();
     ctx.fillStyle = '#171a21';
     ctx.fillRect(rx, ry, rw, rh);
     if (sun.shadowOpacity > 0.01) {
-      ctx.save();
-      ctx.beginPath();
-      ctx.rect(rx, ry, rw, rh);
-      ctx.clip();
       ctx.fillStyle = `rgba(8, 12, 22, ${(sun.shadowOpacity * 0.75).toFixed(3)})`;
       const pOffX = sun.castX * 2.5;
       const pOffY = sun.castY * 2.5;
-      ctx.fillRect(rx, ry, rw, Math.max(0, pOffY));
-      ctx.fillRect(rx, ry + rh + Math.min(0, pOffY), rw, Math.max(0, -pOffY));
-      ctx.fillRect(rx, ry, Math.max(0, pOffX), rh);
-      ctx.fillRect(rx + rw + Math.min(0, pOffX), ry, Math.max(0, -pOffX), rh);
-      ctx.restore();
+      if (pOffY > 0) {
+        ctx.fillRect(rx, ry, rw, Math.min(rh, pOffY));
+      } else if (pOffY < 0) {
+        const sh = Math.min(rh, -pOffY);
+        ctx.fillRect(rx, ry + rh - sh, rw, sh);
+      }
+      if (pOffX > 0) {
+        ctx.fillRect(rx, ry, Math.min(rw, pOffX), rh);
+      } else if (pOffX < 0) {
+        const sw = Math.min(rw, -pOffX);
+        ctx.fillRect(rx + rw - sw, ry, sw, rh);
+      }
     }
 
     if (isCommercial || isModernHighrise) {
@@ -669,25 +679,28 @@ export class RoofRenderer {
       for (let y = ry; y < ry + rh; y += rollWidth) {
         const curH = Math.min(rollWidth, ry + rh - y);
         const rollSeed = roofNoise(rx, y, 17);
-        // Subtle micro-tone variance per roll strip
         const tone = 20 + Math.floor(rollSeed * 7);
         ctx.fillStyle = `rgb(${tone}, ${tone + 2}, ${tone + 5})`;
         ctx.fillRect(rx, y, rw, curH);
-
-        // Melted bitumen welded overlap seam line (наплавленный битумный шов)
-        ctx.strokeStyle = '#0b0d11';
-        ctx.lineWidth = 1.4;
-        ctx.beginPath();
-        ctx.moveTo(rx, y + curH); ctx.lineTo(rx + rw, y + curH);
-        ctx.stroke();
-
-        // Slight bitumen sheen edge
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.08)';
-        ctx.lineWidth = 0.6;
-        ctx.beginPath();
-        ctx.moveTo(rx, y + curH - 1); ctx.lineTo(rx + rw, y + curH - 1);
-        ctx.stroke();
       }
+
+      ctx.strokeStyle = '#0b0d11';
+      ctx.lineWidth = 1.4;
+      ctx.beginPath();
+      for (let y = ry; y < ry + rh; y += rollWidth) {
+        const curH = Math.min(rollWidth, ry + rh - y);
+        ctx.moveTo(rx, y + curH); ctx.lineTo(rx + rw, y + curH);
+      }
+      ctx.stroke();
+
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.08)';
+      ctx.lineWidth = 0.6;
+      ctx.beginPath();
+      for (let y = ry; y < ry + rh; y += rollWidth) {
+        const curH = Math.min(rollWidth, ry + rh - y);
+        ctx.moveTo(rx, y + curH - 1); ctx.lineTo(rx + rw, y + curH - 1);
+      }
+      ctx.stroke();
     } else {
       for (let x = rx; x < rx + rw; x += rollWidth) {
         const curW = Math.min(rollWidth, rx + rw - x);
@@ -695,33 +708,53 @@ export class RoofRenderer {
         const tone = 20 + Math.floor(rollSeed * 7);
         ctx.fillStyle = `rgb(${tone}, ${tone + 2}, ${tone + 5})`;
         ctx.fillRect(x, ry, curW, rh);
-
-        ctx.strokeStyle = '#0b0d11';
-        ctx.lineWidth = 1.4;
-        ctx.beginPath();
-        ctx.moveTo(x + curW, ry); ctx.lineTo(x + curW, ry + rh);
-        ctx.stroke();
-
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.08)';
-        ctx.lineWidth = 0.6;
-        ctx.beginPath();
-        ctx.moveTo(x + curW - 1, ry); ctx.lineTo(x + curW - 1, ry + rh);
-        ctx.stroke();
       }
+
+      ctx.strokeStyle = '#0b0d11';
+      ctx.lineWidth = 1.4;
+      ctx.beginPath();
+      for (let x = rx; x < rx + rw; x += rollWidth) {
+        const curW = Math.min(rollWidth, rx + rw - x);
+        ctx.moveTo(x + curW, ry); ctx.lineTo(x + curW, ry + rh);
+      }
+      ctx.stroke();
+
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.08)';
+      ctx.lineWidth = 0.6;
+      ctx.beginPath();
+      for (let x = rx; x < rx + rw; x += rollWidth) {
+        const curW = Math.min(rollWidth, rx + rw - x);
+        ctx.moveTo(x + curW - 1, ry); ctx.lineTo(x + curW - 1, ry + rh);
+      }
+      ctx.stroke();
     }
 
-    // Mineral slate ballast sprinkling (посыпка каменной крошкой)
+    // Mineral slate ballast sprinkling (batched into 2 Path fills instead of ~400 fillRects per building)
     if (!performanceConfig.lowQualityRendering) {
-      const step = 6;
+      const step = 8;
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
+      ctx.beginPath();
       for (let gx = rx + 3; gx < rx + rw - 3; gx += step) {
         for (let gy = ry + 3; gy < ry + rh - 3; gy += step) {
           const gn = roofNoise(gx, gy, 89);
-          if (gn > 0.62) {
-            ctx.fillStyle = gn > 0.85 ? 'rgba(203, 213, 225, 0.18)' : 'rgba(0, 0, 0, 0.35)';
-            ctx.fillRect(gx + ((gn * 5) % 3), gy + ((gn * 7) % 3), 1.2, 1.2);
+          if (gn > 0.62 && gn <= 0.85) {
+            ctx.rect(gx + ((gn * 5) % 3), gy + ((gn * 7) % 3), 1.2, 1.2);
           }
         }
       }
+      ctx.fill();
+
+      ctx.fillStyle = 'rgba(203, 213, 225, 0.18)';
+      ctx.beginPath();
+      for (let gx = rx + 3; gx < rx + rw - 3; gx += step) {
+        for (let gy = ry + 3; gy < ry + rh - 3; gy += step) {
+          const gn = roofNoise(gx, gy, 89);
+          if (gn > 0.85) {
+            ctx.rect(gx + ((gn * 5) % 3), gy + ((gn * 7) % 3), 1.2, 1.2);
+          }
+        }
+      }
+      ctx.fill();
     }
 
     // Internal roof drainage scuppers / hoppers (водоприёмные воронки внутреннего водостока)
@@ -771,23 +804,25 @@ export class RoofRenderer {
     ctx.fillStyle = '#262b35';
     ctx.fillRect(rx, ry, rw, rh);
 
-    // Hot-air welded joint bands (термосварные швы между рулонами 20px)
+    // Hot-air welded joint bands (batched into 2 strokes)
     const bandW = 20;
     ctx.strokeStyle = '#1b1f26';
     ctx.lineWidth = 1.5;
+    ctx.beginPath();
     for (let x = rx + bandW; x < rx + rw; x += bandW) {
-      ctx.beginPath();
       ctx.moveTo(x, ry); ctx.lineTo(x, ry + rh);
-      ctx.stroke();
-      // Heat-weld shiny micro-line
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.12)';
-      ctx.lineWidth = 0.6;
-      ctx.beginPath();
-      ctx.moveTo(x - 0.8, ry); ctx.lineTo(x - 0.8, ry + rh);
-      ctx.stroke();
     }
+    ctx.stroke();
 
-    // Non-slip maintenance walkway tracks (технологические дорожки обслуживания желтовато-серые)
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.12)';
+    ctx.lineWidth = 0.6;
+    ctx.beginPath();
+    for (let x = rx + bandW; x < rx + rw; x += bandW) {
+      ctx.moveTo(x - 0.8, ry); ctx.lineTo(x - 0.8, ry + rh);
+    }
+    ctx.stroke();
+
+    // Non-slip maintenance walkway tracks
     if (rw > 45 && rh > 35) {
       const walkW = 10;
       const walkX = rx + rw * 0.3;
@@ -800,14 +835,14 @@ export class RoofRenderer {
       ctx.lineWidth = 0.8;
       ctx.strokeRect(walkX, walkY, walkW, walkH);
 
-      // Diamond tread pattern on walkway
+      // Diamond tread pattern on walkway (batched into 1 stroke)
       ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)';
       ctx.lineWidth = 0.6;
+      ctx.beginPath();
       for (let wy = walkY + 3; wy < walkY + walkH; wy += 4) {
-        ctx.beginPath();
         ctx.moveTo(walkX + 1, wy); ctx.lineTo(walkX + walkW - 1, wy);
-        ctx.stroke();
       }
+      ctx.stroke();
     }
   }
 
@@ -1357,9 +1392,21 @@ export class RoofRenderer {
       return;
     }
 
-    const apartments = getCityApartments();
-    const apt = apartments.find(a => a.buildingId === bld.id);
-    if (!apt) return;
+    let label = (bld as any)._cachedPlaqueLabel;
+    if (label === undefined) {
+      const apartments = getCityApartments();
+      const apt = apartments.find(a => a.buildingId === bld.id);
+      if (!apt) {
+        (bld as any)._cachedPlaqueLabel = null;
+        return;
+      }
+      const parts = apt.address.split(',');
+      const cleanAddr = (parts[0] || '').replace('ул. ', '').replace('пр. ', '').trim();
+      const houseNum = (parts[1] || '').replace(' д. ', '').replace('д. ', '').trim();
+      label = `${cleanAddr}, ${houseNum}`;
+      (bld as any)._cachedPlaqueLabel = label;
+    }
+    if (!label) return;
 
     ctx.save();
     const plaqueW = 76;
@@ -1377,10 +1424,6 @@ export class RoofRenderer {
     ctx.strokeStyle = '#e2e8f0';
     ctx.lineWidth = 1;
     ctx.strokeRect(px, py, plaqueW, plaqueH);
-
-    let cleanAddr = apt.address.split(',')[0].replace('ул. ', '').replace('пр. ', '').trim();
-    const houseNum = apt.address.split(',')[1].replace(' д. ', '').replace('д. ', '').trim();
-    const label = `${cleanAddr}, ${houseNum}`;
 
     ctx.fillStyle = '#facc15';
     ctx.font = 'bold 8.5px "Courier New", monospace';

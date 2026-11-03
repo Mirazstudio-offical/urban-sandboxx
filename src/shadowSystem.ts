@@ -315,6 +315,10 @@ function clipOutsideCircle(
 /**
  * Extrudes a 2D convex or concave polygon along (dx, dy) to form its true 3D cast shadow volume.
  */
+/**
+ * Extrudes a 2D convex or concave polygon along (dx, dy) to form its true 3D cast shadow volume
+ * in a SINGLE batched beginPath/fill call using consistent clockwise winding for all subpaths.
+ */
 export function extrudePolygonShadow(
   ctx: CanvasRenderingContext2D,
   poly: Point[],
@@ -326,37 +330,80 @@ export function extrudePolygonShadow(
   const n = poly.length;
   if (n < 3) return;
 
-  // 1. Base footprint at zBottom
-  ctx.beginPath();
-  ctx.moveTo(poly[0].x + baseDx, poly[0].y + baseDy);
-  for (let i = 1; i < n; i++) {
-    ctx.lineTo(poly[i].x + baseDx, poly[i].y + baseDy);
-  }
-  ctx.closePath();
-  ctx.fill();
-
-  // 2. Top footprint at zTop
-  ctx.beginPath();
-  ctx.moveTo(poly[0].x + topDx, poly[0].y + topDy);
-  for (let i = 1; i < n; i++) {
-    ctx.lineTo(poly[i].x + topDx, poly[i].y + topDy);
-  }
-  ctx.closePath();
-  ctx.fill();
-
-  // 3. Side wall quads connecting base to top (filled individually to prevent opposite-winding cancellation)
+  // Determine polygon signed area so base and top footprints are traced with positive (CW) winding
+  let area2 = 0;
   for (let i = 0; i < n; i++) {
     const p0 = poly[i];
     const p1 = poly[(i + 1) % n];
-    ctx.beginPath();
-    ctx.moveTo(p0.x + baseDx, p0.y + baseDy);
-    ctx.lineTo(p1.x + baseDx, p1.y + baseDy);
-    ctx.lineTo(p1.x + topDx, p1.y + topDy);
-    ctx.lineTo(p0.x + topDx, p0.y + topDy);
-    ctx.closePath();
-    ctx.fill();
+    area2 += p0.x * p1.y - p1.x * p0.y;
   }
+  const isCW = area2 >= 0;
+
+  ctx.beginPath();
+
+  // 1. Base footprint at zBottom (always CW)
+  if (isCW) {
+    ctx.moveTo(poly[0].x + baseDx, poly[0].y + baseDy);
+    for (let i = 1; i < n; i++) {
+      ctx.lineTo(poly[i].x + baseDx, poly[i].y + baseDy);
+    }
+  } else {
+    ctx.moveTo(poly[n - 1].x + baseDx, poly[n - 1].y + baseDy);
+    for (let i = n - 2; i >= 0; i--) {
+      ctx.lineTo(poly[i].x + baseDx, poly[i].y + baseDy);
+    }
+  }
+  ctx.closePath();
+
+  // 2. Top footprint at zTop (always CW)
+  const extDx = topDx - baseDx;
+  const extDy = topDy - baseDy;
+  if (Math.abs(extDx) > 0.05 || Math.abs(extDy) > 0.05) {
+    if (isCW) {
+      ctx.moveTo(poly[0].x + topDx, poly[0].y + topDy);
+      for (let i = 1; i < n; i++) {
+        ctx.lineTo(poly[i].x + topDx, poly[i].y + topDy);
+      }
+    } else {
+      ctx.moveTo(poly[n - 1].x + topDx, poly[n - 1].y + topDy);
+      for (let i = n - 2; i >= 0; i--) {
+        ctx.lineTo(poly[i].x + topDx, poly[i].y + topDy);
+      }
+    }
+    ctx.closePath();
+
+    // 3. Side wall quads connecting base to top (oriented with positive CW winding so nonzero rule never cancels)
+    for (let i = 0; i < n; i++) {
+      const p0 = poly[i];
+      const p1 = poly[(i + 1) % n];
+      const edgeDx = p1.x - p0.x;
+      const edgeDy = p1.y - p0.y;
+      const cross = edgeDx * extDy - edgeDy * extDx;
+      if (Math.abs(cross) < 0.001) continue;
+      if (cross > 0) {
+        ctx.moveTo(p0.x + baseDx, p0.y + baseDy);
+        ctx.lineTo(p1.x + baseDx, p1.y + baseDy);
+        ctx.lineTo(p1.x + topDx, p1.y + topDy);
+        ctx.lineTo(p0.x + topDx, p0.y + topDy);
+      } else {
+        ctx.moveTo(p0.x + baseDx, p0.y + baseDy);
+        ctx.lineTo(p0.x + topDx, p0.y + topDy);
+        ctx.lineTo(p1.x + topDx, p1.y + topDy);
+        ctx.lineTo(p1.x + baseDx, p1.y + baseDy);
+      }
+      ctx.closePath();
+    }
+  }
+
+  ctx.fill();
 }
+
+const _rectPolyScratch: Point[] = [
+  { x: 0, y: 0 },
+  { x: 0, y: 0 },
+  { x: 0, y: 0 },
+  { x: 0, y: 0 },
+];
 
 /**
  * Extrudes an axis-aligned rectangle (x, y, w, h) from zBottom to zTop along the sun shadow vector.
@@ -373,14 +420,23 @@ export function extrudeRectShadow(
 ) {
   const bOff = getShadowOffset(zBottom, state);
   const tOff = getShadowOffset(zTop, state);
-  const poly: Point[] = [
-    { x, y },
-    { x: x + w, y },
-    { x: x + w, y: y + h },
-    { x, y: y + h },
-  ];
-  extrudePolygonShadow(ctx, poly, bOff.dx, bOff.dy, tOff.dx, tOff.dy);
+  _rectPolyScratch[0].x = x;
+  _rectPolyScratch[0].y = y;
+  _rectPolyScratch[1].x = x + w;
+  _rectPolyScratch[1].y = y;
+  _rectPolyScratch[2].x = x + w;
+  _rectPolyScratch[2].y = y + h;
+  _rectPolyScratch[3].x = x;
+  _rectPolyScratch[3].y = y + h;
+  extrudePolygonShadow(ctx, _rectPolyScratch, bOff.dx, bOff.dy, tOff.dx, tOff.dy);
 }
+
+const _rotRectPolyScratch: Point[] = [
+  { x: 0, y: 0 },
+  { x: 0, y: 0 },
+  { x: 0, y: 0 },
+  { x: 0, y: 0 },
+];
 
 /**
  * Extrudes a rotated rectangle centered at (cx, cy) with size (w, h) and rotation `angle`
@@ -401,15 +457,17 @@ export function extrudeRotatedRectShadow(
   const sin = Math.sin(angle);
   const hw = w * 0.5;
   const hh = h * 0.5;
-  const corners: Point[] = [
-    { x: cx + (-hw * cos - -hh * sin), y: cy + (-hw * sin + -hh * cos) },
-    { x: cx + (hw * cos - -hh * sin), y: cy + (hw * sin + -hh * cos) },
-    { x: cx + (hw * cos - hh * sin), y: cy + (hw * sin + hh * cos) },
-    { x: cx + (-hw * cos - hh * sin), y: cy + (-hw * sin + hh * cos) },
-  ];
+  _rotRectPolyScratch[0].x = cx + (-hw * cos - -hh * sin);
+  _rotRectPolyScratch[0].y = cy + (-hw * sin + -hh * cos);
+  _rotRectPolyScratch[1].x = cx + (hw * cos - -hh * sin);
+  _rotRectPolyScratch[1].y = cy + (hw * sin + -hh * cos);
+  _rotRectPolyScratch[2].x = cx + (hw * cos - hh * sin);
+  _rotRectPolyScratch[2].y = cy + (hw * sin + hh * cos);
+  _rotRectPolyScratch[3].x = cx + (-hw * cos - hh * sin);
+  _rotRectPolyScratch[3].y = cy + (-hw * sin + hh * cos);
   const bOff = getShadowOffset(zBottom, state);
   const tOff = getShadowOffset(zTop, state);
-  extrudePolygonShadow(ctx, corners, bOff.dx, bOff.dy, tOff.dx, tOff.dy);
+  extrudePolygonShadow(ctx, _rotRectPolyScratch, bOff.dx, bOff.dy, tOff.dx, tOff.dy);
 }
 
 /**
@@ -1905,7 +1963,11 @@ export function classifyTreeSpecies(tree: Tree): TreeSpecies {
  * Traces and fills an organic scalloped/serrated foliage cluster polygon at (cx, cy)
  * so tree shadows have natural leafy edges rather than artificial geometric circles.
  */
-function fillOrganicLeafClusterShadow(
+/**
+ * Appends an organic scalloped/serrated foliage cluster polygon at (cx, cy) to the active path
+ * with clockwise winding so multiple foliage clusters can be filled in a single ctx.fill() call.
+ */
+function traceOrganicLeafClusterShadow(
   ctx: CanvasRenderingContext2D,
   cx: number,
   cy: number,
@@ -1918,7 +1980,6 @@ function fillOrganicLeafClusterShadow(
 ) {
   const cosR = Math.cos(rotAngle);
   const sinR = Math.sin(rotAngle);
-  ctx.beginPath();
   for (let i = 0; i < pointsCount; i++) {
     const a = (i / pointsCount) * Math.PI * 2;
     const wave1 = Math.sin(a * 5 + (seed & 31) * 0.45);
@@ -1933,6 +1994,25 @@ function fillOrganicLeafClusterShadow(
     else ctx.lineTo(px, py);
   }
   ctx.closePath();
+}
+
+/**
+ * Traces and fills an organic scalloped/serrated foliage cluster polygon at (cx, cy)
+ * so tree shadows have natural leafy edges rather than artificial geometric circles.
+ */
+function fillOrganicLeafClusterShadow(
+  ctx: CanvasRenderingContext2D,
+  cx: number,
+  cy: number,
+  rx: number,
+  ry: number,
+  rotAngle: number,
+  seed: number,
+  serrationAmp: number = 0.14,
+  pointsCount: number = 14
+) {
+  ctx.beginPath();
+  traceOrganicLeafClusterShadow(ctx, cx, cy, rx, ry, rotAngle, seed, serrationAmp, pointsCount);
   ctx.fill();
 }
 
@@ -1987,11 +2067,16 @@ function buildSunlitCrownClipPolygon(
 }
 
 /**
- * Renders 3D botanical tree shadows:
+ * Renders 3D botanical tree shadows with batched path subpaths:
  * - Dead snags & bare winter deciduous/birch trees cast true 3D branching skeleton shadows.
  * - Pines cast serrated whorled coniferous cone shadows with radiating needle-bough tips.
  * - Broadleaf (oak, maple) & birch trees cast multi-lobed scalloped foliage shadows anchored by forked boughs.
  */
+const treeShadowSpriteCache = new Map<
+  string,
+  { canvas: HTMLCanvasElement; half: number }
+>();
+
 function renderTreeShadow(
   sCtx: CanvasRenderingContext2D,
   tree: Tree,
@@ -2001,7 +2086,55 @@ function renderTreeShadow(
   const r = Math.max(8, tree.radius || 16);
   const species = classifyTreeSpecies(tree);
   const h = hashCoord(tree.x, tree.y);
+
+  if (typeof document !== 'undefined' && typeof document.createElement === 'function') {
+    const qRad = Math.round(r);
+    const qHash = h & 31;
+    const cxKey = Math.round(sunState.castX * 18);
+    const cyKey = Math.round(sunState.castY * 18);
+    const cacheKey = `${species}_${qRad}_${qHash}_${season}_${cxKey}_${cyKey}`;
+    let cached = treeShadowSpriteCache.get(cacheKey);
+    if (!cached) {
+      if (treeShadowSpriteCache.size > 512) {
+        treeShadowSpriteCache.clear();
+      }
+      const maxShadowReach = Math.ceil(qRad * 2.5 * Math.hypot(sunState.castX, sunState.castY) + qRad * 1.6 + 12);
+      const half = Math.max(48, Math.min(220, maxShadowReach));
+      const offCanvas = document.createElement('canvas');
+      offCanvas.width = half * 2;
+      offCanvas.height = half * 2;
+      const offCtx = offCanvas.getContext('2d');
+      if (offCtx) {
+        offCtx.fillStyle = 'rgb(4, 8, 22)';
+        offCtx.strokeStyle = 'rgb(4, 8, 22)';
+        offCtx.lineCap = 'round';
+        offCtx.lineJoin = 'round';
+        const localTree: Tree = { ...tree, x: half, y: half, radius: qRad };
+        renderTreeShadowGeometry(offCtx, localTree, qRad, species, qHash * 97 + 13, qHash * 199 + 17, sunState, season);
+        cached = { canvas: offCanvas, half };
+        treeShadowSpriteCache.set(cacheKey, cached);
+      }
+    }
+    if (cached) {
+      sCtx.drawImage(cached.canvas, tree.x - cached.half, tree.y - cached.half);
+      return;
+    }
+  }
+
   const seed = Math.abs(Math.floor(tree.x * 12.9898 + tree.y * 78.233));
+  renderTreeShadowGeometry(sCtx, tree, r, species, h, seed, sunState, season);
+}
+
+function renderTreeShadowGeometry(
+  sCtx: CanvasRenderingContext2D,
+  tree: Tree,
+  r: number,
+  species: TreeSpecies,
+  h: number,
+  seed: number,
+  sunState: SunShadowState,
+  season: string = 'summer'
+) {
 
   const isBareSkeleton =
     species === 'dead' || (season === 'winter' && species !== 'pine');
@@ -2018,7 +2151,6 @@ function renderTreeShadow(
     const trunkOff = getShadowOffset(trunkTopZ, sunState);
     const maxOff = getShadowOffset(treeH * 1.1, sunState);
 
-    // Clip only the tiny sunlit central stump top so the full branching skeleton casts onto snow/ground
     const stumpClipR = species === 'dead' ? Math.max(3.2, r * 0.24) : Math.max(2.6, r * 0.18);
     const reach = r * 1.8 + Math.hypot(maxOff.dx, maxOff.dy) + 80;
     const stumpPoly: Point[] = [];
@@ -2052,8 +2184,10 @@ function renderTreeShadow(
     sCtx.closePath();
     sCtx.fill();
 
-    // 2. Primary crooked boughs & secondary forked twigs projected from 3D height
+    // 2. Primary crooked boughs & secondary forked twigs batched into 2 stroke passes
     const numBranches = species === 'dead' ? 6 : species === 'birch' ? 6 : 5;
+    sCtx.lineWidth = Math.max(1.8, r * (species === 'birch' ? 0.12 : 0.16));
+    sCtx.beginPath();
     for (let b = 0; b < numBranches; b++) {
       const ang =
         (b / numBranches) * Math.PI * 2 +
@@ -2075,13 +2209,34 @@ function renderTreeShadow(
       const bx = tree.x + Math.cos(ang) * len + tipOff.dx;
       const by = tree.y + Math.sin(ang) * len + tipOff.dy;
 
-      sCtx.lineWidth = Math.max(1.8, r * (species === 'birch' ? 0.12 : 0.16));
-      sCtx.beginPath();
       sCtx.moveTo(forkX, forkY);
       sCtx.quadraticCurveTo(mx, my, bx, by);
-      sCtx.stroke();
+    }
+    sCtx.stroke();
 
-      // Secondary fork A
+    sCtx.lineWidth = Math.max(1.0, r * 0.075);
+    sCtx.beginPath();
+    for (let b = 0; b < numBranches; b++) {
+      const ang =
+        (b / numBranches) * Math.PI * 2 +
+        ((seed * (b + 1)) % 10) * (species === 'dead' ? 0.15 : 0.14);
+      const len =
+        r *
+        (species === 'dead'
+          ? 0.8 + ((seed + b * 7) % 6) * 0.09
+          : 0.76 + ((seed + b * 5) % 6) * 0.08);
+
+      const midZ = trunkTopZ + (treeH - trunkTopZ) * 0.48;
+      const tipZ = trunkTopZ + (treeH - trunkTopZ) * (0.82 + (b % 3) * 0.11);
+      const midOff = getShadowOffset(midZ, sunState);
+      const tipOff = getShadowOffset(tipZ, sunState);
+
+      const curveBend = species === 'dead' ? 0.25 : 0.22;
+      const mx = tree.x + Math.cos(ang + curveBend) * (len * 0.52) + midOff.dx;
+      const my = tree.y + Math.sin(ang + curveBend) * (len * 0.52) + midOff.dy;
+      const bx = tree.x + Math.cos(ang) * len + tipOff.dx;
+      const by = tree.y + Math.sin(ang) * len + tipOff.dy;
+
       const subAngA = ang + (b % 2 === 0 ? 0.44 : -0.44);
       const subLenA = r * 0.36;
       const subZA = tipZ + r * 0.18;
@@ -2089,13 +2244,9 @@ function renderTreeShadow(
       const txA = tree.x + Math.cos(ang) * len + Math.cos(subAngA) * subLenA + subOffA.dx;
       const tyA = tree.y + Math.sin(ang) * len + Math.sin(subAngA) * subLenA + subOffA.dy;
 
-      sCtx.lineWidth = Math.max(1.1, r * 0.085);
-      sCtx.beginPath();
       sCtx.moveTo(bx, by);
       sCtx.lineTo(txA, tyA);
-      sCtx.stroke();
 
-      // Secondary fork B (from mid-bough)
       const subAngB = ang + (b % 2 === 0 ? -0.52 : 0.52);
       const subLenB = r * 0.28;
       const subZB = midZ + r * 0.22;
@@ -2111,12 +2262,10 @@ function renderTreeShadow(
         Math.sin(subAngB) * subLenB +
         subOffB.dy;
 
-      sCtx.lineWidth = Math.max(0.9, r * 0.065);
-      sCtx.beginPath();
       sCtx.moveTo(mx, my);
       sCtx.lineTo(txB, tyB);
-      sCtx.stroke();
     }
+    sCtx.stroke();
 
     sCtx.restore();
     return;
@@ -2140,19 +2289,19 @@ function renderTreeShadow(
       maxY: tree.y + reach,
     });
 
-    // 1. Short sturdy lower trunk anchor from (tree.x, tree.y) to lower needle skirt
+    // Batch trunk + 5 star-whorls + serrated flank spine into a SINGLE beginPath/fill call
     const skirtOff = getShadowOffset(skirtZ, sunState);
     const trunkBaseR = Math.max(2.0, r * 0.16);
     const trunkTopR = Math.max(1.5, r * 0.12);
     sCtx.beginPath();
-    sCtx.moveTo(tree.x + perpX * trunkBaseR, tree.y + perpY * trunkBaseR);
-    sCtx.lineTo(tree.x - perpX * trunkBaseR, tree.y - perpY * trunkBaseR);
-    sCtx.lineTo(tree.x + skirtOff.dx - perpX * trunkTopR, tree.y + skirtOff.dy - perpY * trunkTopR);
+    // 1. Trunk (CW winding)
+    sCtx.moveTo(tree.x - perpX * trunkBaseR, tree.y - perpY * trunkBaseR);
+    sCtx.lineTo(tree.x + perpX * trunkBaseR, tree.y + perpY * trunkBaseR);
     sCtx.lineTo(tree.x + skirtOff.dx + perpX * trunkTopR, tree.y + skirtOff.dy + perpY * trunkTopR);
+    sCtx.lineTo(tree.x + skirtOff.dx - perpX * trunkTopR, tree.y + skirtOff.dy - perpY * trunkTopR);
     sCtx.closePath();
-    sCtx.fill();
 
-    // 2. Serrated Conical Whorls: 5 overlapping star-whorl layers tapering from wide skirt to sharp spire apex
+    // 2. Serrated Conical Whorls (5 overlapping star-whorl layers, all CW winding)
     const whorls = 5;
     for (let w = 0; w < whorls; w++) {
       const frac = w / (whorls - 1);
@@ -2161,10 +2310,9 @@ function renderTreeShadow(
       const wx = tree.x + off.dx;
       const wy = tree.y + off.dy;
       const whorlR = r * (1.02 - frac * 0.76);
-      const numBoughs = 9 - Math.floor(frac * 3); // 9 boughs at base -> 6 at spire
+      const numBoughs = 9 - Math.floor(frac * 3);
       const rot = ((h & 31) * 0.12) + w * 0.58;
 
-      sCtx.beginPath();
       for (let i = 0; i < numBoughs * 2; i++) {
         const a = (i / (numBoughs * 2)) * Math.PI * 2 + rot;
         const isTip = (i & 1) === 0;
@@ -2176,20 +2324,18 @@ function renderTreeShadow(
         else sCtx.lineTo(px, py);
       }
       sCtx.closePath();
-      sCtx.fill();
     }
 
-    // 3. Continuous serrated flank Spine connecting the whorls into a cohesive spruce cone with jutting bough tips
+    // 3. Continuous serrated flank spine (traced in CW order so it unions cleanly with whorls)
     const flankTiers = 6;
-    sCtx.beginPath();
     for (let t = 0; t <= flankTiers; t++) {
       const f = t / flankTiers;
       const z = skirtZ + (treeH - skirtZ) * f;
       const off = getShadowOffset(z, sunState);
       const wRad = r * (0.94 - f * 0.82);
       const boughOut = (t < flankTiers ? 1.08 : 0.35) * wRad;
-      const px = tree.x + off.dx + perpX * boughOut;
-      const py = tree.y + off.dy + perpY * boughOut;
+      const px = tree.x + off.dx - perpX * boughOut;
+      const py = tree.y + off.dy - perpY * boughOut;
       if (t === 0) sCtx.moveTo(px, py);
       else sCtx.lineTo(px, py);
       if (t < flankTiers) {
@@ -2197,15 +2343,13 @@ function renderTreeShadow(
         const nextZ = skirtZ + (treeH - skirtZ) * nextF;
         const nOff = getShadowOffset(nextZ, sunState);
         const valleyR = r * (0.94 - nextF * 0.82) * 0.64;
-        sCtx.lineTo(tree.x + nOff.dx + perpX * valleyR, tree.y + nOff.dy + perpY * valleyR);
+        sCtx.lineTo(tree.x + nOff.dx - perpX * valleyR, tree.y + nOff.dy - perpY * valleyR);
       }
     }
-    // Spire tip
     sCtx.lineTo(
       tree.x + apexOff.dx + sunState.shadowDirX * (r * 0.18),
       tree.y + apexOff.dy + sunState.shadowDirY * (r * 0.18)
     );
-    // Opposite flank back down to skirt
     for (let t = flankTiers; t >= 0; t--) {
       const f = t / flankTiers;
       const z = skirtZ + (treeH - skirtZ) * f;
@@ -2217,9 +2361,9 @@ function renderTreeShadow(
         const prevZ = skirtZ + (treeH - skirtZ) * prevF;
         const pOff = getShadowOffset(prevZ, sunState);
         const valleyR = r * (0.94 - prevF * 0.82) * 0.64;
-        sCtx.lineTo(tree.x + pOff.dx - perpX * valleyR, tree.y + pOff.dy - perpY * valleyR);
+        sCtx.lineTo(tree.x + pOff.dx + perpX * valleyR, tree.y + pOff.dy + perpY * valleyR);
       }
-      sCtx.lineTo(tree.x + off.dx - perpX * boughOut, tree.y + off.dy - perpY * boughOut);
+      sCtx.lineTo(tree.x + off.dx + perpX * boughOut, tree.y + off.dy + perpY * boughOut);
     }
     sCtx.closePath();
     sCtx.fill();
@@ -2246,37 +2390,38 @@ function renderTreeShadow(
     maxY: tree.y + reach,
   });
 
-  // 1. Tapered Main Trunk + Forked Primary Lower Boughs connecting ground base to crown
   const trunkBaseR = Math.max(2.1, r * (species === 'birch' ? 0.14 : 0.19));
   const trunkTopR = Math.max(1.4, r * (species === 'birch' ? 0.10 : 0.14));
   const forkX = tree.x + trunkOff.dx;
   const forkY = tree.y + trunkOff.dy;
 
-  sCtx.beginPath();
-  sCtx.moveTo(tree.x + perpX * trunkBaseR, tree.y + perpY * trunkBaseR);
-  sCtx.lineTo(tree.x - perpX * trunkBaseR, tree.y - perpY * trunkBaseR);
-  sCtx.lineTo(forkX - perpX * trunkTopR, forkY - perpY * trunkTopR);
-  sCtx.lineTo(forkX + perpX * trunkTopR, forkY + perpY * trunkTopR);
-  sCtx.closePath();
-  sCtx.fill();
-
-  // Two diverging lower boughs from the trunk fork into the lower canopy flanks
+  // Two diverging lower boughs from the trunk fork into the lower canopy flanks (single batched stroke)
   const boughZ = treeH * 0.56;
   const boughOff = getShadowOffset(boughZ, sunState);
+  sCtx.lineWidth = Math.max(1.6, trunkTopR * 1.35);
+  sCtx.beginPath();
   for (let side = -1; side <= 1; side += 2) {
     const bEndX = tree.x + boughOff.dx + perpX * side * (r * 0.38);
     const bEndY = tree.y + boughOff.dy + perpY * side * (r * 0.38);
-    sCtx.lineWidth = Math.max(1.6, trunkTopR * 1.35);
-    sCtx.beginPath();
     sCtx.moveTo(forkX, forkY);
     sCtx.lineTo(bEndX, bEndY);
-    sCtx.stroke();
   }
+  sCtx.stroke();
 
-  // 2. Lower & Mid Canopy Core (Organic scalloped foliage mass, NOT a plain circle!)
+  // Batch Trunk + Lower/Upper Canopy Core + 6-7 Sub-Crowns + 8-10 Peripheral Leaf Tufts into ONE fill() call!
+  sCtx.beginPath();
+
+  // 1. Tapered Main Trunk (CW winding)
+  sCtx.moveTo(tree.x - perpX * trunkBaseR, tree.y - perpY * trunkBaseR);
+  sCtx.lineTo(tree.x + perpX * trunkBaseR, tree.y + perpY * trunkBaseR);
+  sCtx.lineTo(forkX + perpX * trunkTopR, forkY + perpY * trunkTopR);
+  sCtx.lineTo(forkX - perpX * trunkTopR, forkY - perpY * trunkTopR);
+  sCtx.closePath();
+
+  // 2. Lower & Mid Canopy Core
   const midOff = getShadowOffset(treeH * 0.58, sunState);
   const shadowAngle = Math.atan2(sunState.shadowDirY, sunState.shadowDirX);
-  fillOrganicLeafClusterShadow(
+  traceOrganicLeafClusterShadow(
     sCtx,
     tree.x + midOff.dx,
     tree.y + midOff.dy,
@@ -2285,11 +2430,11 @@ function renderTreeShadow(
     shadowAngle + 0.3,
     h,
     species === 'maple' ? 0.16 : 0.13,
-    16
+    14
   );
 
   // Upper main dome core
-  fillOrganicLeafClusterShadow(
+  traceOrganicLeafClusterShadow(
     sCtx,
     tree.x + crownOff.dx,
     tree.y + crownOff.dy,
@@ -2298,10 +2443,10 @@ function renderTreeShadow(
     shadowAngle - 0.25,
     h ^ 0x5a5a,
     species === 'maple' ? 0.17 : 0.14,
-    16
+    14
   );
 
-  // 3. Asymmetric Bough Sub-Crowns (6 to 7 distinct organic leaf domes at varying 3D heights)
+  // 3. Asymmetric Bough Sub-Crowns
   const numDomes = species === 'birch' ? 7 : 6;
   for (let i = 0; i < numDomes; i++) {
     const ang = (i / numDomes) * Math.PI * 2 + ((h & 31) * 0.09) + (i % 2) * 0.14;
@@ -2316,7 +2461,7 @@ function renderTreeShadow(
     const dx = tree.x + Math.cos(ang) * dist + dOff.dx;
     const dy = tree.y + Math.sin(ang) * dist + dOff.dy;
 
-    fillOrganicLeafClusterShadow(
+    traceOrganicLeafClusterShadow(
       sCtx,
       dx,
       dy,
@@ -2325,11 +2470,11 @@ function renderTreeShadow(
       ang,
       h + i * 97,
       species === 'maple' ? 0.18 : 0.15,
-      12
+      10
     );
   }
 
-  // 4. Peripheral Leaf Tufts / Feathered Edge Clusters (creates realistic dappled/lacy silhouette)
+  // 4. Peripheral Leaf Tufts / Feathered Edge Clusters
   const numTufts = species === 'birch' ? 10 : 8;
   for (let t = 0; t < numTufts; t++) {
     const tAng = (t / numTufts) * Math.PI * 2 + ((h >> 3) & 15) * 0.13;
@@ -2338,7 +2483,7 @@ function renderTreeShadow(
     const tZ = treeH * (0.60 + (t % 3) * 0.11);
     const tOff = getShadowOffset(tZ, sunState);
 
-    fillOrganicLeafClusterShadow(
+    traceOrganicLeafClusterShadow(
       sCtx,
       tree.x + Math.cos(tAng) * tDist + tOff.dx,
       tree.y + Math.sin(tAng) * tDist + tOff.dy,
@@ -2347,10 +2492,11 @@ function renderTreeShadow(
       tAng,
       h + t * 131,
       0.18,
-      10
+      8
     );
   }
 
+  sCtx.fill();
   sCtx.restore();
 }
 
@@ -2635,7 +2781,16 @@ export function renderUnifiedWorldShadows(
 
   // 2E. Trees (z = 55 .. 95px — cast full canopy + trunk shadows over roads, cars, pedestrians, and low roofs!)
   const currentSeason = world.calendar?.season ?? world.season ?? 'summer';
+  const treePad = 140;
   for (const tree of visibleTrees) {
+    if (
+      tree.x < minX - treePad ||
+      tree.x > maxX + treePad ||
+      tree.y < minY - treePad ||
+      tree.y > maxY + treePad
+    ) {
+      continue;
+    }
     renderTreeShadow(sCtx, tree, sunState, currentSeason);
   }
 

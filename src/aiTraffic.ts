@@ -1390,28 +1390,47 @@ export class IntersectionReservationManager {
 
 export const intersectionArbiter = new IntersectionReservationManager();
 
-// Find lane object by ID
-export function findLaneById(world: GameWorld, laneId: string | null): RoadSegment['lanePaths'][0] | null {
-  if (!laneId) return null;
-  for (const road of world.roads) {
-    if (!road.lanePaths) continue;
-    for (const lane of road.lanePaths) {
-      if (lane.laneId === laneId) return lane;
-    }
-  }
-  return null;
+interface WorldRoadLaneIndex {
+  roadCount: number;
+  laneMap: Map<string, RoadSegment['lanePaths'][0]>;
+  roadByLaneMap: Map<string, RoadSegment>;
+  roadByIdMap: Map<string, RoadSegment>;
 }
 
-// Find RoadSegment by lane ID
+const worldRoadLaneIndexCache = new WeakMap<GameWorld, WorldRoadLaneIndex>();
+
+function getWorldRoadLaneIndex(world: GameWorld): WorldRoadLaneIndex {
+  let idx = worldRoadLaneIndexCache.get(world);
+  if (!idx || idx.roadCount !== world.roads.length) {
+    const laneMap = new Map<string, RoadSegment['lanePaths'][0]>();
+    const roadByLaneMap = new Map<string, RoadSegment>();
+    const roadByIdMap = new Map<string, RoadSegment>();
+    for (let i = 0; i < world.roads.length; i++) {
+      const road = world.roads[i];
+      if (road.id) roadByIdMap.set(road.id, road);
+      if (!road.lanePaths) continue;
+      for (let j = 0; j < road.lanePaths.length; j++) {
+        const lane = road.lanePaths[j];
+        laneMap.set(lane.laneId, lane);
+        roadByLaneMap.set(lane.laneId, road);
+      }
+    }
+    idx = { roadCount: world.roads.length, laneMap, roadByLaneMap, roadByIdMap };
+    worldRoadLaneIndexCache.set(world, idx);
+  }
+  return idx;
+}
+
+// Find lane object by ID in O(1)
+export function findLaneById(world: GameWorld, laneId: string | null): RoadSegment['lanePaths'][0] | null {
+  if (!laneId) return null;
+  return getWorldRoadLaneIndex(world).laneMap.get(laneId) || null;
+}
+
+// Find RoadSegment by lane ID in O(1)
 export function findRoadByLaneId(world: GameWorld, laneId: string | null): RoadSegment | null {
   if (!laneId) return null;
-  for (const road of world.roads) {
-    if (!road.lanePaths) continue;
-    for (const lane of road.lanePaths) {
-      if (lane.laneId === laneId) return road;
-    }
-  }
-  return null;
+  return getWorldRoadLaneIndex(world).roadByLaneMap.get(laneId) || null;
 }
 
 /**
@@ -2370,6 +2389,25 @@ export function updateAITraffic(
   const nowSec = performance.now() / 1000;
   globalMutualYieldArbiter.update(nowSec);
 
+  // Precompute whether any vehicle or stain in the world is currently on fire (avoids O(N) radius queries per vehicle when no fire exists)
+  let hasAnyWorldFire = false;
+  for (let i = 0; i < world.vehicles.length; i++) {
+    const d = world.vehicles[i].damage;
+    if (d && !d.isFullyBurnt && (d.engineFire || d.fuelTankFire || d.cabinFire || d.underHoodSmolder || (d.fireIntensity || 0) > 0)) {
+      hasAnyWorldFire = true;
+      break;
+    }
+  }
+  if (!hasAnyWorldFire && world.stains) {
+    for (let i = 0; i < world.stains.length; i++) {
+      const st = world.stains[i];
+      if (st.onFire && (st.fireIntensity || 0) > 0) {
+        hasAnyWorldFire = true;
+        break;
+      }
+    }
+  }
+
   for (const car of world.vehicles) {
     const distToPlayer = Math.hypot(car.x - targetPos.x, car.y - targetPos.y);
     const isPlayerOrSpecial = car.isPlayerControlled || (car as any).isRemoteControlled || car.id === 'evac_ambulance_special' || (car as any).isFireDispatch;
@@ -2396,7 +2434,7 @@ export function updateAITraffic(
 
     // --- PASSING FIRE VEHICLE FIRE SPOTTING ---
     const isAnyFireVehicle = car.type === 'fire_engine'|| car.type === 'fire_ladder'|| car.type === 'fire_rescue'|| car.type.startsWith('fire_');
-    if (isAnyFireVehicle && !(car as any).isFireDispatch && !car.isParked && !car.isPlayerControlled && !(car as any).isRemoteControlled) {
+    if (hasAnyWorldFire && isAnyFireVehicle && !(car as any).isFireDispatch && !car.isParked && !car.isPlayerControlled && !(car as any).isRemoteControlled) {
       let nearestFirePos: Vector2D | null = null;
 
       // 1. Check vehicles on fire
@@ -2625,7 +2663,7 @@ export function updateAITraffic(
     }
 
     // --- NPC FIRE REACTION ---
-    if (!car.driverExitedForFire) {
+    if (hasAnyWorldFire && !car.driverExitedForFire) {
       let nearestFirePos: Vector2D | null = null;
       let targetCar: Vehicle | null = null;
       let targetStain: any = null;
@@ -3622,8 +3660,11 @@ export function updateAITraffic(
               if (distToLine < stopLineLookahead && longitudinalDist >= -25) {
                 const headingToLine = Math.atan2(dy, dx);
                 if (Math.abs(angleDiff(headingToLine, car.angle)) < 0.7) {
-                  // A. Traffic Light Check
-                  const isLightBroken = inter.isSignalLost || world.props.some(
+                  // A. Traffic Light Check (use spatial grid if available instead of scanning all 6,900 props)
+                  const nearbyLightProps = propGrid
+                    ? propGrid.queryRadius(inter.x, inter.y, Math.max(inter.width, inter.height) + 60)
+                    : world.props;
+                  const isLightBroken = inter.isSignalLost || nearbyLightProps.some(
                     (p) => p.type === 'traffic_light'&&
                            p.intersectionId === inter.id &&
                            p.direction === candidateConn.stopLineDirection &&
@@ -3650,33 +3691,34 @@ export function updateAITraffic(
                     } else {
                       // C. Map-Based Priority / Yield Rules Check (ПДД Главная дорога / Уступи дорогу)
                       let mustYieldToMainRoad = false;
+                      const nearbyInterCars = vehGrid ? vehGrid.queryRadius(inter.x, inter.y, inter.width / 2 + 450) : world.vehicles;
 
                       // 1. Check explicit yieldToLaneId or yieldToLaneIds on candidate connection
                       if (candidateConn.yieldToLaneId) {
-                        const mainCars = world.vehicles.filter(
-                          (v) => !v.isParked && v.id !== car.id && (v.currentLaneId === candidateConn.yieldToLaneId || v.currentConnection?.targetLaneId === candidateConn.yieldToLaneId)
-                        );
-                        for (const mCar of mainCars) {
-                          const distToMerge = Math.hypot(mCar.x - car.x, mCar.y - car.y);
-                          const yieldScanDist = Math.max(260, 80 + Math.max(0, mCar.speed) * 2.2);
-                          if (distToMerge < yieldScanDist) {
-                            mustYieldToMainRoad = true;
-                            break;
+                        for (const mCar of nearbyInterCars) {
+                          if (mCar.isParked || mCar.id === car.id) continue;
+                          if (mCar.currentLaneId === candidateConn.yieldToLaneId || mCar.currentConnection?.targetLaneId === candidateConn.yieldToLaneId) {
+                            const distToMerge = Math.hypot(mCar.x - car.x, mCar.y - car.y);
+                            const yieldScanDist = Math.max(260, 80 + Math.max(0, mCar.speed) * 2.2);
+                            if (distToMerge < yieldScanDist) {
+                              mustYieldToMainRoad = true;
+                              break;
+                            }
                           }
                         }
                       }
 
                       if (!mustYieldToMainRoad && candidateConn.yieldToLaneIds && candidateConn.yieldToLaneIds.length > 0) {
                         for (const targetYieldId of candidateConn.yieldToLaneIds) {
-                          const mainCars = world.vehicles.filter(
-                            (v) => !v.isParked && v.id !== car.id && (v.currentLaneId === targetYieldId || v.currentConnection?.targetLaneId === targetYieldId)
-                          );
-                          for (const mCar of mainCars) {
-                            const distToMerge = Math.hypot(mCar.x - car.x, mCar.y - car.y);
-                            const yieldScanDist = Math.max(260, 80 + Math.max(0, mCar.speed) * 2.2);
-                            if (distToMerge < yieldScanDist) {
-                              mustYieldToMainRoad = true;
-                              break;
+                          for (const mCar of nearbyInterCars) {
+                            if (mCar.isParked || mCar.id === car.id) continue;
+                            if (mCar.currentLaneId === targetYieldId || mCar.currentConnection?.targetLaneId === targetYieldId) {
+                              const distToMerge = Math.hypot(mCar.x - car.x, mCar.y - car.y);
+                              const yieldScanDist = Math.max(260, 80 + Math.max(0, mCar.speed) * 2.2);
+                              if (distToMerge < yieldScanDist) {
+                                mustYieldToMainRoad = true;
+                                break;
+                              }
                             }
                           }
                           if (mustYieldToMainRoad) break;
@@ -3687,15 +3729,15 @@ export function updateAITraffic(
                       if (!mustYieldToMainRoad && (candidateConn.priority === 'yield' || candidateConn.priority === 'stop' || candidateConn.yieldRule === 'yield_to_main' || candidateConn.isSecondaryMerge)) {
                         const targetL = findLaneById(world, candidateConn.targetLaneId);
                         if (targetL) {
-                          const mainCars = world.vehicles.filter(
-                            (v) => !v.isParked && v.id !== car.id && (v.currentLaneId === candidateConn.targetLaneId || v.currentConnection?.targetLaneId === candidateConn.targetLaneId)
-                          );
-                          for (const mCar of mainCars) {
-                            const distToMerge = Math.hypot(mCar.x - car.x, mCar.y - car.y);
-                            const yieldScanDist = Math.max(260, 80 + Math.max(0, mCar.speed) * 2.2);
-                            if (distToMerge < yieldScanDist) {
-                              mustYieldToMainRoad = true;
-                              break;
+                          for (const mCar of nearbyInterCars) {
+                            if (mCar.isParked || mCar.id === car.id) continue;
+                            if (mCar.currentLaneId === candidateConn.targetLaneId || mCar.currentConnection?.targetLaneId === candidateConn.targetLaneId) {
+                              const distToMerge = Math.hypot(mCar.x - car.x, mCar.y - car.y);
+                              const yieldScanDist = Math.max(260, 80 + Math.max(0, mCar.speed) * 2.2);
+                              if (distToMerge < yieldScanDist) {
+                                mustYieldToMainRoad = true;
+                                break;
+                              }
                             }
                           }
                         }
@@ -3708,15 +3750,15 @@ export function updateAITraffic(
 
                         if (yieldingLanes.includes(currentLane.laneId)) {
                           for (const mLaneId of mainLanes) {
-                            const mainCars = world.vehicles.filter(
-                              (v) => !v.isParked && v.id !== car.id && (v.currentLaneId === mLaneId || v.currentConnection?.targetLaneId === mLaneId)
-                            );
-                            for (const mCar of mainCars) {
-                              const distToInter = Math.hypot(mCar.x - inter.x, mCar.y - inter.y);
-                              const yieldScanDist = Math.max(260, 80 + Math.max(0, mCar.speed) * 2.2);
-                              if (distToInter < inter.width / 2 + yieldScanDist) {
-                                mustYieldToMainRoad = true;
-                                break;
+                            for (const mCar of nearbyInterCars) {
+                              if (mCar.isParked || mCar.id === car.id) continue;
+                              if (mCar.currentLaneId === mLaneId || mCar.currentConnection?.targetLaneId === mLaneId) {
+                                const distToInter = Math.hypot(mCar.x - inter.x, mCar.y - inter.y);
+                                const yieldScanDist = Math.max(260, 80 + Math.max(0, mCar.speed) * 2.2);
+                                if (distToInter < inter.width / 2 + yieldScanDist) {
+                                  mustYieldToMainRoad = true;
+                                  break;
+                                }
                               }
                             }
                             if (mustYieldToMainRoad) break;
@@ -3726,33 +3768,34 @@ export function updateAITraffic(
                         if (!mustYieldToMainRoad) {
                           const ruleMatch = inter.priorityRules.rules?.find((r) => r.fromLaneId === currentLane.laneId);
                           if (ruleMatch && ruleMatch.yieldToLaneId) {
-                            const mainCars = world.vehicles.filter(
-                              (v) => !v.isParked && v.id !== car.id && v.currentLaneId === ruleMatch.yieldToLaneId
-                            );
-                            for (const mCar of mainCars) {
-                              const distToMerge = Math.hypot(mCar.x - car.x, mCar.y - car.y);
-                              const yieldScanDist = Math.max(260, 80 + Math.max(0, mCar.speed) * 2.2);
-                              if (distToMerge < yieldScanDist) {
-                                mustYieldToMainRoad = true;
-                                break;
+                            for (const mCar of nearbyInterCars) {
+                              if (mCar.isParked || mCar.id === car.id) continue;
+                              if (mCar.currentLaneId === ruleMatch.yieldToLaneId) {
+                                const distToMerge = Math.hypot(mCar.x - car.x, mCar.y - car.y);
+                                const yieldScanDist = Math.max(260, 80 + Math.max(0, mCar.speed) * 2.2);
+                                if (distToMerge < yieldScanDist) {
+                                  mustYieldToMainRoad = true;
+                                  break;
+                                }
                               }
                             }
                           } else if (inter.priorityRules.yieldRoads) {
                             const road = findRoadByLaneId(world, currentLane.laneId);
                             if (road && inter.priorityRules.yieldRoads.includes(road.id)) {
+                              const roadIdx = getWorldRoadLaneIndex(world);
                               for (const pRoadId of inter.priorityRules.priorityRoads || []) {
-                                const pRoad = world.roads.find((r) => r.id === pRoadId);
-                                if (pRoad) {
+                                const pRoad = roadIdx.roadByIdMap.get(pRoadId);
+                                if (pRoad && pRoad.lanePaths) {
                                   for (const pLane of pRoad.lanePaths) {
-                                    const priorityCars = world.vehicles.filter(
-                                      (v) => !v.isParked && v.id !== car.id && v.currentLaneId === pLane.laneId
-                                    );
-                                    for (const mCar of priorityCars) {
-                                      const distToInter = Math.hypot(mCar.x - inter.x, mCar.y - inter.y);
-                                      const yieldScanDist = Math.max(260, 80 + Math.max(0, mCar.speed) * 2.2);
-                                      if (distToInter < inter.width / 2 + yieldScanDist) {
-                                        mustYieldToMainRoad = true;
-                                        break;
+                                    for (const mCar of nearbyInterCars) {
+                                      if (mCar.isParked || mCar.id === car.id) continue;
+                                      if (mCar.currentLaneId === pLane.laneId) {
+                                        const distToInter = Math.hypot(mCar.x - inter.x, mCar.y - inter.y);
+                                        const yieldScanDist = Math.max(260, 80 + Math.max(0, mCar.speed) * 2.2);
+                                        if (distToInter < inter.width / 2 + yieldScanDist) {
+                                          mustYieldToMainRoad = true;
+                                          break;
+                                        }
                                       }
                                     }
                                     if (mustYieldToMainRoad) break;
@@ -4864,6 +4907,24 @@ export function updatePedestrians(
   }
 
   let updatedPedCount = 0;
+  let hasAnyWorldFire = false;
+  for (let i = 0; i < world.vehicles.length; i++) {
+    const d = world.vehicles[i].damage;
+    if (d && !d.isFullyBurnt && (d.engineFire || d.fuelTankFire || d.cabinFire || d.underHoodSmolder || (d.fireIntensity || 0) > 0)) {
+      hasAnyWorldFire = true;
+      break;
+    }
+  }
+  if (!hasAnyWorldFire && world.stains) {
+    for (let i = 0; i < world.stains.length; i++) {
+      const st = world.stains[i];
+      if (st.onFire && (st.fireIntensity || 0) > 0) {
+        hasAnyWorldFire = true;
+        break;
+      }
+    }
+  }
+
   for (const ped of world.pedestrians) {
     // Despawn invalid coordinates or out-of-bounds entities immediately
     if (!Number.isFinite(ped.x) || !Number.isFinite(ped.y) || ped.x < 0 || ped.y < 0 || ped.x > world.width || ped.y > world.height) {
@@ -5132,7 +5193,7 @@ export function updatePedestrians(
     }
 
     // --- PEDESTRIAN FIRE DETECTION & CALL ---
-    if (!ped.isInsideBuilding && !(ped as any).isFirefighter && ped.state !== 'extinguishing_fire'&& ped.x > 0) {
+    if (hasAnyWorldFire && !ped.isInsideBuilding && !(ped as any).isFirefighter && ped.state !== 'extinguishing_fire'&& ped.x > 0) {
       let nearestFirePos: Vector2D | null = null;
       let targetCar: Vehicle | null = null;
       let targetStain: any = null;

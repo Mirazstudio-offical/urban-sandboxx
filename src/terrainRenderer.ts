@@ -1381,6 +1381,9 @@ export class TerrainRenderer {
    *   незабудки и подсолнухи)
    * - Batched into hardware-accelerated Path2D layers for ultra-fast GPU execution.
    */
+  private static grassSurfaceCache = new Map<number, number>();
+  private static grassSurfaceCacheWorldKey = '';
+
   public static renderDynamicFieldGrass(
     ctx: CanvasRenderingContext2D,
     world: GameWorld,
@@ -1467,44 +1470,53 @@ export class TerrainRenderer {
       return tx2 >= minX && tx1 <= maxX && ty2 >= minY && ty1 <= maxY;
     });
 
-    // Ultra-fast analytical surface classifier
-    const classifyGrassSurfaceFast = (
+    const worldCacheKey = `${world.buildings.length}_${world.roads.length}_${world.sidewalks?.length || 0}_${world.parkings?.length || 0}`;
+    if (this.grassSurfaceCacheWorldKey !== worldCacheKey) {
+      this.grassSurfaceCache.clear();
+      this.grassSurfaceCacheWorldKey = worldCacheKey;
+    } else if (this.grassSurfaceCache.size > 260000) {
+      this.grassSurfaceCache.clear();
+    }
+
+    // Ultra-fast analytical surface classifier with 4x4px spatial memoization
+    const classifyGrassSurfaceRaw = (
       px: number,
       py: number
-    ): 'none' | 'meadow' | 'lawn' | 'wheat' | 'clover' | 'sunflower' => {
+    ): number => {
+      // 0: 'none', 1: 'meadow', 2: 'lawn', 3: 'wheat', 4: 'clover', 5: 'sunflower'
       // Industrial concrete apron & southern badlands/salt basin
-      if (px >= 5595 && px <= 8005 && py >= -5 && py <= 3305) return 'none';
-      if (py > 13500) return 'none';
-      if (px >= 12500 && px <= 42500 && py >= 7000 && py <= 11800) return 'none';
+      if (px >= 5595 && px <= 8005 && py >= -5 && py <= 3305) return 0;
+      if (py > 13500) return 0;
+      if (px >= 12500 && px <= 42500 && py >= 7000 && py <= 11800) return 0;
       // Gas stations & garage cooperative aprons
-      if (px >= 4870 && px <= 5470 && py >= 4870 && py <= 5530) return 'none';
-      if (px >= 2295 && px <= 2605 && py >= 1845 && py <= 2125) return 'none';
-      if (px >= 14750 && px <= 15350 && py >= 3650 && py <= 4050) return 'none';
-      if (px >= 5600 && px <= 6490 && py >= 3260 && py <= 3840) return 'none';
+      if (px >= 4870 && px <= 5470 && py >= 4870 && py <= 5530) return 0;
+      if (px >= 2295 && px <= 2605 && py >= 1845 && py <= 2125) return 0;
+      if (px >= 14750 && px <= 15350 && py >= 3650 && py <= 4050) return 0;
+      if (px >= 5600 && px <= 6490 && py >= 3260 && py <= 3840) return 0;
       // River channel
       if (py <= -1800 && py >= -4200 && px >= -3500 && px <= 50500) {
         const riv = getRiverWaterAt(px, py);
-        if (riv.distToCenter < riv.halfWidth + 16) return 'none';
+        if (riv.distToCenter < riv.halfWidth + 16) return 0;
       }
 
       for (let i = 0; i < visibleBuildings.length; i++) {
         const b = visibleBuildings[i];
         if (px >= b.x - 4 && px <= b.x + b.width + 4 && py >= b.y - 4 && py <= b.y + b.height + 4) {
-          return 'none';
+          return 0;
         }
       }
 
       for (let i = 0; i < activeParkings.length; i++) {
         const pk = activeParkings[i];
         if (px >= pk.x - 3 && px <= pk.x + pk.width + 3 && py >= pk.y - 3 && py <= pk.y + pk.height + 3) {
-          return 'none';
+          return 0;
         }
       }
 
       for (let i = 0; i < activeDriveways.length; i++) {
         const dw = activeDriveways[i];
         if (px >= dw.x - 2 && px <= dw.x + dw.width + 2 && py >= dw.y - 2 && py <= dw.y + dw.height + 2) {
-          return 'none';
+          return 0;
         }
       }
 
@@ -1513,7 +1525,7 @@ export class TerrainRenderer {
         const hw = inter.width / 2 + 6;
         const hh = inter.height / 2 + 6;
         if (px >= inter.x - hw && px <= inter.x + hw && py >= inter.y - hh && py <= inter.y + hh) {
-          return 'none';
+          return 0;
         }
       }
 
@@ -1528,13 +1540,13 @@ export class TerrainRenderer {
             py < sw.y + swW + 3 ||
             py > sw.y + sw.height - swW - 3
           ) {
-            return 'none';
+            return 0;
           }
           if (sw.plazas) {
             for (let p = 0; p < sw.plazas.length; p++) {
               const pl = sw.plazas[p];
               if (px >= pl.x - 3 && px <= pl.x + pl.width + 3 && py >= pl.y - 3 && py <= pl.y + pl.height + 3) {
-                return 'none';
+                return 0;
               }
             }
           }
@@ -1542,7 +1554,7 @@ export class TerrainRenderer {
             for (let w = 0; w < sw.walkways.length; w++) {
               const wk = sw.walkways[w];
               if (px >= wk.x - 3 && px <= wk.x + wk.width + 3 && py >= wk.y - 3 && py <= wk.y + wk.height + 3) {
-                return 'none';
+                return 0;
               }
             }
           }
@@ -1564,11 +1576,11 @@ export class TerrainRenderer {
         if (road.direction === 'horizontal') {
           const xMin = Math.min(road.x1, road.x2) - 4;
           const xMax = Math.max(road.x1, road.x2) + 4;
-          if (px >= xMin && px <= xMax && Math.abs(py - road.y1) <= halfClear) return 'none';
+          if (px >= xMin && px <= xMax && Math.abs(py - road.y1) <= halfClear) return 0;
         } else if (road.direction === 'vertical') {
           const yMin = Math.min(road.y1, road.y2) - 4;
           const yMax = Math.max(road.y1, road.y2) + 4;
-          if (py >= yMin && py <= yMax && Math.abs(px - road.x1) <= halfClear) return 'none';
+          if (py >= yMin && py <= yMax && Math.abs(px - road.x1) <= halfClear) return 0;
         } else if (road.curvePoints && road.curvePoints.length > 1) {
           const pts = road.curvePoints;
           const rSq = halfClear * halfClear;
@@ -1582,7 +1594,7 @@ export class TerrainRenderer {
             const u = Math.max(0, Math.min(1, ((px - p1.x) * sdx + (py - p1.y) * sdy) / lenSq));
             const dx = px - (p1.x + u * sdx);
             const dy = py - (p1.y + u * sdy);
-            if (dx * dx + dy * dy <= rSq) return 'none';
+            if (dx * dx + dy * dy <= rSq) return 0;
           }
         } else {
           const sdx = road.x2 - road.x1;
@@ -1592,7 +1604,7 @@ export class TerrainRenderer {
             const u = Math.max(0, Math.min(1, ((px - road.x1) * sdx + (py - road.y1) * sdy) / lenSq));
             const dx = px - (road.x1 + u * sdx);
             const dy = py - (road.y1 + u * sdy);
-            if (dx * dx + dy * dy <= halfClear * halfClear) return 'none';
+            if (dx * dx + dy * dy <= halfClear * halfClear) return 0;
           }
         }
       }
@@ -1607,7 +1619,7 @@ export class TerrainRenderer {
           const u = Math.max(0, Math.min(1, ((px - tr.x1) * sdx + (py - tr.y1) * sdy) / lenSq));
           const dx = px - (tr.x1 + u * sdx);
           const dy = py - (tr.y1 + u * sdy);
-          if (dx * dx + dy * dy <= halfB * halfB) return 'none';
+          if (dx * dx + dy * dy <= halfB * halfB) return 0;
         }
       }
 
@@ -1615,19 +1627,43 @@ export class TerrainRenderer {
         const f = AGRICULTURAL_FIELDS[i];
         const b = f.bounds;
         if (px >= b.x && px <= b.x + b.width && py >= b.y && py <= b.y + b.height) {
-          if (f.type === 'plowed') return 'none';
-          if (f.type === 'wheat') return 'wheat';
-          if (f.type === 'clover') return 'clover';
-          if (f.type === 'sunflower') return 'sunflower';
-          return 'meadow';
+          if (f.type === 'plowed') return 0;
+          if (f.type === 'wheat') return 3;
+          if (f.type === 'clover') return 4;
+          if (f.type === 'sunflower') return 5;
+          return 1;
         }
       }
 
-      if (inCourtyardLawn) return 'lawn';
-      if (px >= 4200 && px <= 5000 && py >= 1800 && py <= 2600) return 'lawn';
-      if (px >= 4880 && px <= 7860 && py >= 4880 && py <= 7860) return 'lawn';
+      if (inCourtyardLawn) return 2;
+      if (px >= 4200 && px <= 5000 && py >= 1800 && py <= 2600) return 2;
+      if (px >= 4880 && px <= 7860 && py >= 4880 && py <= 7860) return 2;
 
-      return 'meadow';
+      return 1;
+    };
+
+    const SURFACE_NAMES: ('none' | 'meadow' | 'lawn' | 'wheat' | 'clover' | 'sunflower')[] = [
+      'none',
+      'meadow',
+      'lawn',
+      'wheat',
+      'clover',
+      'sunflower',
+    ];
+
+    const classifyGrassSurfaceFast = (
+      px: number,
+      py: number
+    ): 'none' | 'meadow' | 'lawn' | 'wheat' | 'clover' | 'sunflower' => {
+      const qx = Math.floor(px) >> 2;
+      const qy = Math.floor(py) >> 2;
+      const cKey = ((qx & 0xffff) << 16) | (qy & 0xffff);
+      let code = this.grassSurfaceCache.get(cKey);
+      if (code === undefined) {
+        code = classifyGrassSurfaceRaw((qx << 2) + 2, (qy << 2) + 2);
+        this.grassSurfaceCache.set(cKey, code);
+      }
+      return SURFACE_NAMES[code];
     };
 
     ctx.save();
@@ -1799,6 +1835,24 @@ export class TerrainRenderer {
       }
     };
 
+    // Pre-filter vehicles in viewport with bounding box so grass cells far from vehicles skip the loop
+    let vehBoxMinX = Infinity;
+    let vehBoxMaxX = -Infinity;
+    let vehBoxMinY = Infinity;
+    let vehBoxMaxY = -Infinity;
+    const activeGrassVehicles: { x: number; y: number; maxR: number; maxRSq: number }[] = [];
+    for (let vIdx = 0; vIdx < visibleVehicles.length; vIdx++) {
+      const v = visibleVehicles[vIdx];
+      const maxR = (v.length || 46) * 0.58 + 12;
+      if (v.x + maxR < minX || v.x - maxR > maxX || v.y + maxR < minY || v.y - maxR > maxY) continue;
+      activeGrassVehicles.push({ x: v.x, y: v.y, maxR, maxRSq: maxR * maxR });
+      if (v.x - maxR < vehBoxMinX) vehBoxMinX = v.x - maxR;
+      if (v.x + maxR > vehBoxMaxX) vehBoxMaxX = v.x + maxR;
+      if (v.y - maxR < vehBoxMinY) vehBoxMinY = v.y - maxR;
+      if (v.y + maxR > vehBoxMaxY) vehBoxMaxY = v.y + maxR;
+    }
+    const hasGrassVehicles = activeGrassVehicles.length > 0;
+
     for (let gy = startY; gy <= maxY; gy += step) {
       for (let gx = startX; gx <= maxX; gx += step) {
         const jx = (this.prng(gx, gy, 3101) - 0.5) * (step * 0.82);
@@ -1818,16 +1872,18 @@ export class TerrainRenderer {
         // Mechanical parting around nearby vehicles & player
         let pushX = 0;
         let pushY = 0;
-        for (let vIdx = 0; vIdx < visibleVehicles.length; vIdx++) {
-          const v = visibleVehicles[vIdx];
-          const dx = px - v.x;
-          const dy = py - v.y;
-          const maxR = (v.length || 46) * 0.58 + 12;
-          if (dx * dx + dy * dy > maxR * maxR) continue;
-          const dLen = Math.hypot(dx, dy) || 1;
-          const pf = Math.max(0, 1.0 - dLen / maxR) * 4.8;
-          pushX += (dx / dLen) * pf;
-          pushY += (dy / dLen) * pf;
+        if (hasGrassVehicles && px >= vehBoxMinX && px <= vehBoxMaxX && py >= vehBoxMinY && py <= vehBoxMaxY) {
+          for (let vIdx = 0; vIdx < activeGrassVehicles.length; vIdx++) {
+            const v = activeGrassVehicles[vIdx];
+            const dx = px - v.x;
+            const dy = py - v.y;
+            const dSq = dx * dx + dy * dy;
+            if (dSq > v.maxRSq) continue;
+            const dLen = Math.sqrt(dSq) || 1;
+            const pf = Math.max(0, 1.0 - dLen / v.maxR) * 4.8;
+            pushX += (dx / dLen) * pf;
+            pushY += (dy / dLen) * pf;
+          }
         }
 
         if (player && !player.isInVehicle && !player.isInsideBuilding) {
