@@ -2227,7 +2227,7 @@ export function emitBeamNGCrashParticles(
       ty = -ty;
     }
 
-    const sparkCount = Math.min(48, Math.floor(6 + totalFriction * 0.32));
+    const sparkCount = Math.min(20, Math.floor(4 + totalFriction * 0.14));
     for (let i = 0; i < sparkCount; i++) {
       // BeamNG sparks eject backward along scraping tangent + rebound outward from collision normal
       const cone = (Math.random() - 0.5) * 0.95;
@@ -2251,14 +2251,15 @@ export function emitBeamNGCrashParticles(
         y: contactY + (Math.random() - 0.5) * 5,
         vx: dirX * spd + sparkInheritVx,
         vy: dirY * spd + sparkInheritVy,
-        radius: 0.8 + Math.random() * 1.3, // Micro-scaled filings
+        radius: 1.0 + Math.random() * 1.4,
         color: '#ffffff', // Blackbody thermal cooling calculated by renderer
         secondaryColor: Math.random() < 0.6 ? '#fef08a' : '#fbbf24',
         alpha: 1.0,
         life: 0,
-        maxLife: 0.12 + Math.random() * 0.22,
+        maxLife: 0.14 + Math.random() * 0.24,
         type: 'spark',
-        streakLength: 0.035 + Math.random() * 0.035,
+        streakLength: 0.040 + Math.random() * 0.038,
+        shapeSeed: Math.floor(Math.random() * 10000),
         z: 0.6 + Math.random() * 1.2,
         vz: 12 + Math.random() * 30,
         bounces: 1
@@ -2268,23 +2269,23 @@ export function emitBeamNGCrashParticles(
 
   // 2. TEMPERED SAFETY GLASS SHARDS & POLYCARBONATE LENS SPLINTERS
   if (hasWindshieldCrack || hasHeadlightBreak || hasTaillightBreak) {
-    // Front windshield / side tempered glass nuggets (crystalline granules)
+    // Front windshield / side tempered glass nuggets (visible crystalline fragments, no sub-pixel spam)
     if (hasWindshieldCrack) {
-      const pebbleCount = Math.floor(18 + Math.min(26, impactSpeed * 0.25));
+      const pebbleCount = Math.floor(6 + Math.min(9, impactSpeed * 0.08));
       for (let g = 0; g < pebbleCount; g++) {
         const spreadAngle = Math.atan2(normalY, normalX) + (Math.random() - 0.5) * 1.8;
-        const spd = 45 + Math.random() * (impactSpeed * 2.2 + 80);
+        const spd = 45 + Math.random() * (impactSpeed * 2.0 + 75);
         pList.push({
           x: contactX + (Math.random() - 0.5) * 8,
           y: contactY + (Math.random() - 0.5) * 8,
           vx: Math.cos(spreadAngle) * spd + vehicleA.vx * 0.25,
           vy: Math.sin(spreadAngle) * spd + vehicleA.vy * 0.25,
-          radius: 0.35 + Math.random() * 0.40, // Micro safety glass nuggets (0.35 - 0.75px)
-          aspect: 1.1 + Math.random() * 0.4,
+          radius: 1.25 + Math.random() * 1.15,
+          aspect: 1.2 + Math.random() * 0.55,
           color: 'rgba(224, 242, 254, 0.88)',
           alpha: 0.95,
           life: 0,
-          maxLife: 300.0,
+          maxLife: 24.0 + Math.random() * 12.0,
           type: 'glass_shard',
           glassSubtype: 'safety_pebble',
           z: 1.4 + Math.random() * 1.8,
@@ -2301,22 +2302,22 @@ export function emitBeamNGCrashParticles(
 
     // Headlight clear & amber polycarbonate splinters
     if (hasHeadlightBreak) {
-      const hlCount = 10 + Math.floor(Math.random() * 8);
+      const hlCount = 4 + Math.floor(Math.random() * 4);
       for (let h = 0; h < hlCount; h++) {
         const spreadAngle = Math.atan2(normalY, normalX) + (Math.random() - 0.5) * 1.5;
-        const spd = 50 + Math.random() * (impactSpeed * 2.0 + 70);
+        const spd = 50 + Math.random() * (impactSpeed * 1.9 + 65);
         const isAmber = (h % 3 === 0);
         pList.push({
           x: contactX + (Math.random() - 0.5) * 6,
           y: contactY + (Math.random() - 0.5) * 6,
           vx: Math.cos(spreadAngle) * spd + vehicleA.vx * 0.25,
           vy: Math.sin(spreadAngle) * spd + vehicleA.vy * 0.25,
-          radius: 0.45 + Math.random() * 0.50,
-          aspect: 1.2 + Math.random() * 0.5,
+          radius: 1.35 + Math.random() * 1.20,
+          aspect: 1.3 + Math.random() * 0.6,
           color: isAmber ? '#fbbf24' : '#f8fafc',
           alpha: 0.92,
           life: 0,
-          maxLife: 300.0,
+          maxLife: 24.0 + Math.random() * 12.0,
           type: 'glass_shard',
           glassSubtype: 'headlight',
           z: 1.2 + Math.random() * 1.6,
@@ -2333,21 +2334,21 @@ export function emitBeamNGCrashParticles(
 
     // Taillight ruby red splinters
     if (hasTaillightBreak) {
-      const tlCount = 10 + Math.floor(Math.random() * 8);
+      const tlCount = 4 + Math.floor(Math.random() * 4);
       for (let t = 0; t < tlCount; t++) {
         const spreadAngle = Math.atan2(normalY, normalX) + (Math.random() - 0.5) * 1.5;
-        const spd = 45 + Math.random() * (impactSpeed * 2.0 + 60);
+        const spd = 45 + Math.random() * (impactSpeed * 1.9 + 55);
         pList.push({
           x: contactX + (Math.random() - 0.5) * 6,
           y: contactY + (Math.random() - 0.5) * 6,
           vx: Math.cos(spreadAngle) * spd + vehicleA.vx * 0.25,
           vy: Math.sin(spreadAngle) * spd + vehicleA.vy * 0.25,
-          radius: 0.45 + Math.random() * 0.50,
-          aspect: 1.2 + Math.random() * 0.5,
+          radius: 1.35 + Math.random() * 1.20,
+          aspect: 1.3 + Math.random() * 0.6,
           color: '#ef4444',
           alpha: 0.92,
           life: 0,
-          maxLife: 300.0,
+          maxLife: 24.0 + Math.random() * 12.0,
           type: 'glass_shard',
           glassSubtype: 'taillight',
           z: 1.2 + Math.random() * 1.6,
@@ -2366,22 +2367,22 @@ export function emitBeamNGCrashParticles(
   // 3. BODY PANEL DEBRIS: TORN PAINT FLAKES & DARK PLASTIC BUMPER CLIPS
   if (impactSpeed > 22 || scrapeSpeed > 20) {
     // Paint flakes (thin sheet metal flakes, matching vehicle body color with primer back)
-    const flakeCount = Math.min(18, Math.floor(4 + impactSpeed * 0.16));
+    const flakeCount = Math.min(7, Math.floor(2 + impactSpeed * 0.06));
     for (let f = 0; f < flakeCount; f++) {
       const ang = Math.atan2(normalY, normalX) + (Math.random() - 0.5) * 2.0;
-      const spd = 30 + Math.random() * (impactSpeed * 1.6 + 50);
+      const spd = 30 + Math.random() * (impactSpeed * 1.5 + 45);
       pList.push({
         x: contactX + (Math.random() - 0.5) * 6,
         y: contactY + (Math.random() - 0.5) * 6,
         vx: Math.cos(ang) * spd + vehicleA.vx * 0.2,
         vy: Math.sin(ang) * spd + vehicleA.vy * 0.2,
-        radius: 0.50 + Math.random() * 0.55,
-        aspect: 1.3 + Math.random() * 0.5,
+        radius: 1.45 + Math.random() * 1.35,
+        aspect: 1.35 + Math.random() * 0.65,
         color: vehicleA.color,
         secondaryColor: '#475569', // Bare metal / dark primer
-        alpha: 0.90,
+        alpha: 0.92,
         life: 0,
-        maxLife: 300.0,
+        maxLife: 28.0 + Math.random() * 12.0,
         type: 'debris',
         debrisSubtype: 'metal_flake',
         z: 1.0 + Math.random() * 1.5,
@@ -2396,7 +2397,7 @@ export function emitBeamNGCrashParticles(
     }
 
     // Plastic bumper clips & black fascia fragments
-    const clipCount = Math.min(10, Math.floor(2 + impactSpeed * 0.1));
+    const clipCount = Math.min(5, Math.floor(1 + impactSpeed * 0.04));
     for (let c = 0; c < clipCount; c++) {
       const ang = Math.atan2(normalY, normalX) + (Math.random() - 0.5) * 1.8;
       const spd = 25 + Math.random() * (impactSpeed * 1.4 + 40);
@@ -2405,12 +2406,12 @@ export function emitBeamNGCrashParticles(
         y: contactY + (Math.random() - 0.5) * 6,
         vx: Math.cos(ang) * spd + vehicleA.vx * 0.2,
         vy: Math.sin(ang) * spd + vehicleA.vy * 0.2,
-        radius: 0.55 + Math.random() * 0.60,
-        aspect: 1.2 + Math.random() * 0.5,
+        radius: 1.40 + Math.random() * 1.25,
+        aspect: 1.3 + Math.random() * 0.6,
         color: '#1e293b', // Dark ABS plastic
-        alpha: 0.92,
+        alpha: 0.94,
         life: 0,
-        maxLife: 300.0,
+        maxLife: 28.0 + Math.random() * 12.0,
         type: 'debris',
         debrisSubtype: 'plastic_chunk',
         z: 1.0 + Math.random() * 1.4,
@@ -2426,7 +2427,7 @@ export function emitBeamNGCrashParticles(
 
     // Concrete chips if hitting concrete building, curb or post
     if (isConcrete) {
-      const chipCount = 6 + Math.floor(Math.random() * 6);
+      const chipCount = 3 + Math.floor(Math.random() * 4);
       for (let k = 0; k < chipCount; k++) {
         const ang = Math.atan2(normalY, normalX) + (Math.random() - 0.5) * 1.6;
         const spd = 20 + Math.random() * 65;
@@ -2435,12 +2436,13 @@ export function emitBeamNGCrashParticles(
           y: contactY + (Math.random() - 0.5) * 6,
           vx: Math.cos(ang) * spd,
           vy: Math.sin(ang) * spd,
-          radius: 0.45 + Math.random() * 0.55,
-          aspect: 1.1 + Math.random() * 0.5,
+          radius: 1.50 + Math.random() * 1.40,
+          aspect: 1.15 + Math.random() * 0.5,
           color: '#94a3b8',
-          alpha: 0.88,
+          secondaryColor: '#64748b',
+          alpha: 0.92,
           life: 0,
-          maxLife: 300.0,
+          maxLife: 28.0 + Math.random() * 12.0,
           type: 'debris',
           debrisSubtype: 'concrete_chip',
           z: 0.8 + Math.random() * 1.2,
@@ -2458,20 +2460,20 @@ export function emitBeamNGCrashParticles(
 
   // 4. UNDERCARRIAGE DISLODGED ROAD DUST (BeamNG crash puff)
   if (impactSpeed > 36) {
-    const dustPuffCount = 2 + Math.floor(Math.random() * 3);
+    const dustPuffCount = 1 + Math.floor(Math.random() * 2);
     for (let d = 0; d < dustPuffCount; d++) {
       pList.push({
         x: contactX + (Math.random() - 0.5) * 10,
         y: contactY + (Math.random() - 0.5) * 10,
         vx: vehicleA.vx * 0.25 + (Math.random() - 0.5) * 20,
         vy: vehicleA.vy * 0.25 + (Math.random() - 0.5) * 20,
-        radius: 12 + Math.random() * 14,
-        targetRadius: 28 + Math.random() * 16,
+        radius: 14 + Math.random() * 12,
+        targetRadius: 30 + Math.random() * 16,
         color: '#78716c',
-        alpha: 0.35,
-        initialAlpha: 0.35,
+        alpha: 0.42,
+        initialAlpha: 0.42,
         life: 0,
-        maxLife: 0.7 + Math.random() * 0.5,
+        maxLife: 0.75 + Math.random() * 0.45,
         type: 'dust'
       });
     }
@@ -2479,7 +2481,7 @@ export function emitBeamNGCrashParticles(
 
   // 5. RADIATOR COOLANT AEROSOL BURST (BeamNG pressurized radiator punch)
   if (hasRadiatorPuncture && impactSpeed > 28) {
-    const steamCount = 5 + Math.floor(Math.random() * 5);
+    const steamCount = 3 + Math.floor(Math.random() * 3);
     for (let s = 0; s < steamCount; s++) {
       const ang = Math.atan2(normalY, normalX) + (Math.random() - 0.5) * 1.2;
       const spd = 30 + Math.random() * 60;
@@ -2488,12 +2490,12 @@ export function emitBeamNGCrashParticles(
         y: contactY + (Math.random() - 0.5) * 8,
         vx: Math.cos(ang) * spd + vehicleA.vx * 0.3,
         vy: Math.sin(ang) * spd + vehicleA.vy * 0.3,
-        radius: 6 + Math.random() * 8,
+        radius: 7 + Math.random() * 8,
         color: '#f8fafc',
-        alpha: 0.65,
-        initialAlpha: 0.65,
+        alpha: 0.68,
+        initialAlpha: 0.68,
         life: 0,
-        maxLife: 1.0 + Math.random() * 0.8,
+        maxLife: 1.0 + Math.random() * 0.7,
         type: 'engine_smoke',
         isSteam: true,
         tempC: 108,
@@ -4165,23 +4167,23 @@ export function updateVehicleSystems(car: Vehicle, dt: number, world: GameWorld)
         wCamera.shakeIntensity = 26.0;
       }
 
-      //  PHYSICAL SHRAPNEL & METAL DEBRIS SPRAY (45+ Flying engine fragments)
+      //  PHYSICAL SHRAPNEL & METAL DEBRIS SPRAY (18 large jagged engine block fragments)
       const debrisColors = ['#1e293b', '#334155', '#475569', '#64748b', '#0f172a', '#b45309', '#ea580c', '#d97706'];
-      for (let i = 0; i < 45; i++) {
+      for (let i = 0; i < 18; i++) {
         const spreadAngle = Math.random() * Math.PI * 2;
-        const speed = 90 + Math.random() * 310;
+        const speed = 90 + Math.random() * 290;
         world.particles.push({
           x: radAnchor.x + (Math.random() * 16 - 8),
           y: radAnchor.y + (Math.random() * 16 - 8),
           vx: Math.cos(spreadAngle) * speed + car.vx * 0.4,
           vy: Math.sin(spreadAngle) * speed + car.vy * 0.4,
-          radius: 0.60 + Math.random() * 0.70,
-          aspect: 1.2 + Math.random() * 0.4,
+          radius: 1.65 + Math.random() * 1.55,
+          aspect: 1.3 + Math.random() * 0.65,
           color: debrisColors[Math.floor(Math.random() * debrisColors.length)],
           secondaryColor: '#334155',
           alpha: 1.0,
           life: 0,
-          maxLife: 300.0,
+          maxLife: 32.0,
           type: 'debris',
           debrisSubtype: 'metal_flake',
           angle: Math.random() * Math.PI * 2,
@@ -4194,8 +4196,8 @@ export function updateVehicleSystems(car: Vehicle, dt: number, world: GameWorld)
         });
       }
 
-      //  FIERY SPARKS & MOLTEN SPLATTERS (35+ sparks)
-      for (let i = 0; i < 35; i++) {
+      //  FIERY SPARKS & MOLTEN SPLATTERS (18 branched sparks)
+      for (let i = 0; i < 18; i++) {
         const spreadAngle = Math.random() * Math.PI * 2;
         const speed = 130 + Math.random() * 340;
         world.particles.push({
@@ -4203,34 +4205,35 @@ export function updateVehicleSystems(car: Vehicle, dt: number, world: GameWorld)
           y: radAnchor.y,
           vx: Math.cos(spreadAngle) * speed,
           vy: Math.sin(spreadAngle) * speed,
-          radius: 0.9 + Math.random() * 1.3,
+          radius: 1.1 + Math.random() * 1.4,
           color: '#ffffff',
           secondaryColor: Math.random() < 0.6 ? '#fef08a' : '#fbbf24',
           alpha: 1.0,
           life: 0,
           maxLife: 0.45 + Math.random() * 0.55,
           type: 'spark',
-          streakLength: 0.045,
+          streakLength: 0.048,
+          shapeSeed: Math.floor(Math.random() * 10000),
           z: 0.8 + Math.random() * 1.2,
           vz: 18 + Math.random() * 32,
           bounces: 1
         });
       }
 
-      //  EXPLOSION FIREBALL CLOUD (22+ flame particles)
-      for (let i = 0; i < 22; i++) {
+      //  EXPLOSION FIREBALL CLOUD (12 multi-tongued flame plumes)
+      for (let i = 0; i < 12; i++) {
         const spreadAngle = Math.random() * Math.PI * 2;
-        const speed = 35 + Math.random() * 130;
+        const speed = 30 + Math.random() * 115;
         world.particles.push({
-          x: radAnchor.x + Math.cos(spreadAngle) * 12,
-          y: radAnchor.y + Math.sin(spreadAngle) * 12,
+          x: radAnchor.x + Math.cos(spreadAngle) * 10,
+          y: radAnchor.y + Math.sin(spreadAngle) * 10,
           vx: Math.cos(spreadAngle) * speed,
           vy: Math.sin(spreadAngle) * speed,
-          radius: 14 + Math.random() * 16,
+          radius: 16 + Math.random() * 18,
           color: Math.random() < 0.5 ? '#f97316': '#dc2626',
           alpha: 0.95,
           life: 0,
-          maxLife: 0.9 + Math.random() * 0.7,
+          maxLife: 0.85 + Math.random() * 0.65,
           type: 'flame'});
       }
 
@@ -4630,7 +4633,7 @@ export function updateVehicleSystems(car: Vehicle, dt: number, world: GameWorld)
       }
 
       // Droplet particles
-      if (isMajorSpill && world.particles && Math.random() < 0.35) {
+      if (isMajorSpill && world.particles && Math.random() < 0.30) {
         const pColor = targetStainType === 'water'? (Math.random() < 0.6 ? '#38bdf8': '#e0f2fe') :
                        (targetStainType === 'fuel'? (Math.random() < 0.7 ? '#f59e0b': '#ca8a04') :
                        (targetStainType === 'oil'? '#0f172a': '#22c55e'));
@@ -4639,12 +4642,13 @@ export function updateVehicleSystems(car: Vehicle, dt: number, world: GameWorld)
           y: wy,
           vx: (Math.random() - 0.5) * 30,
           vy: (Math.random() - 0.5) * 30,
-          radius: 1.2 + Math.random() * 1.5,
+          radius: 1.5 + Math.random() * 1.4,
           color: pColor,
           alpha: 0.85,
           life: 0,
-          maxLife: 0.28,
-          type: 'debris'});
+          maxLife: 0.32,
+          type: 'debris',
+          debrisSubtype: 'liquid_drop'});
       }
     };
 
@@ -5612,18 +5616,20 @@ export function updatePlayerPedestrianPhysics(
     player.walkCycle += dt * 26;
 
     // Dust particles on dodge roll
-    if (world && Math.random() < 0.65) {
+    if (world && Math.random() < 0.45) {
       world.particles.push({
         x: player.x + (Math.random() * 8 - 4),
         y: player.y + (Math.random() * 8 - 4),
-        vx: -Math.cos(dAngle) * 35 + (Math.random() * 20 - 10),
-        vy: -Math.sin(dAngle) * 35 + (Math.random() * 20 - 10),
-        radius: 2.5 + Math.random() * 2.5,
-        color: '#cbd5e1',
-        alpha: 0.6,
+        vx: -Math.cos(dAngle) * 32 + (Math.random() * 16 - 8),
+        vy: -Math.sin(dAngle) * 32 + (Math.random() * 16 - 8),
+        radius: 3.5 + Math.random() * 2.5,
+        targetRadius: 11 + Math.random() * 5,
+        color: '#a8a29e',
+        alpha: 0.48,
+        initialAlpha: 0.48,
         life: 0,
-        maxLife: 0.3,
-        type: 'tire_smoke'});
+        maxLife: 0.38,
+        type: 'dust'});
     }
 
     if ((player.dashTimer || 0) <= 0) {
@@ -5893,18 +5899,20 @@ export function updatePlayerPedestrianPhysics(
       player.speed = Math.hypot(player.vx, player.vy);
 
       // Footstep dust particles when sprinting on dry ground
-      if (canSprint && pWaterDepth <= 0.03 && world && Math.random() < 0.25) {
+      if (canSprint && pWaterDepth <= 0.03 && world && Math.random() < 0.18) {
         world.particles.push({
           x: player.x,
           y: player.y,
-          vx: (Math.random() * 16 - 8),
-          vy: (Math.random() * 16 - 8),
-          radius: 1.8 + Math.random() * 1.5,
-          color: '#94a3b8',
-          alpha: 0.35,
+          vx: (Math.random() * 14 - 7),
+          vy: (Math.random() * 14 - 7),
+          radius: 2.6 + Math.random() * 1.8,
+          targetRadius: 8.5 + Math.random() * 4.0,
+          color: '#a8a29e',
+          alpha: 0.36,
+          initialAlpha: 0.36,
           life: 0,
-          maxLife: 0.25,
-          type: 'tire_smoke'});
+          maxLife: 0.32,
+          type: 'dust'});
       }
     } else {
       // Smooth deceleration towards the ambient fluid velocity (0 on land, riverDriftVx/Vy in river)
@@ -11045,12 +11053,16 @@ export function updateVehiclePhysics(
   const rightWaterDepth = (frWater + rrWater) * 0.5;
   const maxWheelWater = Math.max(flWater, frWater, rlWater, rrWater);
 
-  // Dynamic bow wave elevation (water climbs up front grille when driving into water at speed)
+  // Dynamic bow wave elevation (water climbs up front grille ONLY when actually driving in water)
   const speedAbs = Math.abs(vehicle.speed);
   const fwdSign = vehicle.speed >= 0 ? 1 : -1;
   const dynamicBowWave = Math.min(0.35, (speedAbs * 0.05) ** 2 * 1.2);
-  const frontWaterDepth = rawFrontWaterDepth + (fwdSign > 0 ? dynamicBowWave : 0);
-  const rearWaterDepth = rawRearWaterDepth + (fwdSign < 0 ? dynamicBowWave * 0.75 : 0);
+  const frontWaterDepth = rawFrontWaterDepth > 0.02
+    ? rawFrontWaterDepth + (fwdSign > 0 ? dynamicBowWave * Math.min(1, rawFrontWaterDepth / 0.18) : 0)
+    : 0;
+  const rearWaterDepth = rawRearWaterDepth > 0.02
+    ? rawRearWaterDepth + (fwdSign < 0 ? dynamicBowWave * 0.75 * Math.min(1, rawRearWaterDepth / 0.18) : 0)
+    : 0;
 
   vehicle.frontWaterDepth = frontWaterDepth;
   vehicle.rearWaterDepth = rearWaterDepth;
@@ -12498,11 +12510,30 @@ export function updateSkidMarksAndParticles(world: GameWorld, player: Player, dt
           p.splatted = item.splatted;
           p.z = item.z;
           p.vz = item.vz;
-          p.shapeSeed = item.shapeSeed;
+          p.shapeSeed = item.shapeSeed !== undefined ? item.shapeSeed : ((Math.random() * 16384) | 0);
+          p.angle = item.angle !== undefined ? item.angle : (p.shapeSeed & 63) * 0.1;
+          p.angularVelocity = item.angularVelocity !== undefined ? item.angularVelocity : (((p.shapeSeed >> 6) & 15) - 7.5) * 0.18;
+          p.aspect = item.aspect;
+          p.secondaryColor = item.secondaryColor;
+          p.bounces = item.bounces;
+          p.streakLength = item.streakLength;
+          p.debrisSubtype = item.debrisSubtype;
+          p.glassSubtype = item.glassSubtype;
+          p.isGrounded = item.isGrounded;
+          p.isWet = item.isWet;
           originalPush.call(this, p);
         } else {
           if (item.initialAlpha === undefined) {
             item.initialAlpha = item.alpha;
+          }
+          if (item.shapeSeed === undefined) {
+            item.shapeSeed = (Math.random() * 16384) | 0;
+          }
+          if (item.angle === undefined) {
+            item.angle = (item.shapeSeed & 63) * 0.1;
+          }
+          if (item.angularVelocity === undefined) {
+            item.angularVelocity = (((item.shapeSeed >> 6) & 15) - 7.5) * 0.18;
           }
           originalPush.call(this, item);
         }
@@ -12641,7 +12672,8 @@ export function updateSkidMarksAndParticles(world: GameWorld, player: Player, dt
       p.x += perpX * flutter;
       p.y += perpY * flutter;
 
-      // 5. Dissipation speed: wind shear and dry warm air accelerate dissipation; cold calm air preserves steam!
+      // 5. Vortex eddy rotation & dissipation speed
+      p.angle = (p.angle ?? 0) + (p.angularVelocity ?? 0.4) * dt;
       const windShearDispersal = 1.0 + (windSpeed / 75.0) * 0.85;
       const tempEvap = isCondensing
         ? Math.max(0.35, Math.min(2.4, (outsideTemp + 8.0) / 18.0))
@@ -12652,8 +12684,6 @@ export function updateSkidMarksAndParticles(world: GameWorld, player: Player, dt
       // 6. Volumetric dispersion & distinctness curve:
       const baseAlpha = p.initialAlpha ?? 0.50;
       const progress = Math.min(1.0, Math.max(0, p.life / p.maxLife));
-      // In cold calm air, steam droplets form a cohesive distinct plume (lower decay exponent)
-      // In high wind or hot dry air, smoke diffuses softly and disappears quickly (higher decay exponent)
       const falloffPower = (isCondensing && windSpeed < 50) ? 0.75 : (windSpeed > 100 ? 1.35 : 0.95);
       p.alpha = baseAlpha * Math.pow(Math.max(0, 1.0 - progress), falloffPower);
     } else if (p.type === 'tire_smoke'|| p.type === 'engine_smoke') {
@@ -12674,6 +12704,7 @@ export function updateSkidMarksAndParticles(world: GameWorld, player: Player, dt
       const perpY = Math.cos(wind.angle);
       p.x += perpX * (Math.sin(p.life * 5.0 + p.y * 0.04) * (4.0 * dt));
       p.y += perpY * (Math.sin(p.life * 5.0 + p.y * 0.04) * (4.0 * dt));
+      p.angle = (p.angle ?? 0) + (p.angularVelocity ?? 0.5) * dt;
 
       // Dissipation speed: wind shear + temperature evaporation
       const windShearDispersal = 1.0 + (windSpeed / 70.0) * 0.85;
@@ -12694,15 +12725,17 @@ export function updateSkidMarksAndParticles(world: GameWorld, player: Player, dt
       p.radius += (targetR - p.radius) * Math.min(1.0, 3.2 * dt);
       p.x += Math.sin(p.life * 2.0 + p.y * 0.04) * (2.0 * dt);
       p.y += Math.cos(p.life * 1.8 + p.x * 0.04) * (1.5 * dt);
+      p.angle = (p.angle ?? 0) + (p.angularVelocity ?? 0.35) * dt;
       const windShear = 1.0 + (windSpeed / 80.0) * 0.5;
       p.life += dt * windShear;
       const baseAlpha = p.initialAlpha ?? 0.75;
       const progress = Math.min(1.0, Math.max(0, p.life / p.maxLife));
       p.alpha = baseAlpha * Math.pow(Math.max(0, 1.0 - progress), 1.1);
     } else if (p.type === 'flame') {
-      // Flame tongues tilt downwind under wind force
+      // Flame tongues tilt downwind under wind force and stretch/narrow as they rise
       p.vx += wind.vx * (0.35 * dt);
-      p.vy += wind.vy * (0.35 * dt) - 15 * dt;
+      p.vy += wind.vy * (0.35 * dt) - 18 * dt;
+      p.angle = (p.angle ?? 0) + (p.angularVelocity ?? 0.6) * dt;
       p.life += dt * (1.0 + (windSpeed / 100.0) * 0.4);
       p.alpha = Math.max(0, 1 - (p.life / p.maxLife));
     } else if (p.type === 'spark') {
@@ -12769,16 +12802,17 @@ export function updateSkidMarksAndParticles(world: GameWorld, player: Player, dt
         const progress = Math.min(1.0, p.life / Math.min(2.5, p.maxLife));
         p.alpha = Math.max(0, (p.initialAlpha ?? 0.95) * (1.0 - Math.pow(progress, 2.0)));
       } else {
-        // Resting permanently on the asphalt ground
+        // Resting on the asphalt ground, fading smoothly near end of life
         p.z = 0;
         p.vz = 0;
         p.vx = 0;
         p.vy = 0;
         p.angularVelocity = 0;
-        p.alpha = p.initialAlpha ?? 0.92;
+        const remain = Math.max(0, 1.0 - p.life / (p.maxLife || 30));
+        p.alpha = (p.initialAlpha ?? 0.92) * Math.min(1.0, remain * 3.0);
       }
     } else if (p.type === 'debris') {
-      // BeamNG-grade vehicle body debris: torn sheet metal flakes, plastic clips, concrete chips
+      // BeamNG-grade vehicle body debris: torn sheet metal flakes, plastic clips, concrete chips, wood splinters, sand/liquid
       p.life += dt;
 
       if (!p.splatted) {
@@ -12790,7 +12824,7 @@ export function updateSkidMarksAndParticles(world: GameWorld, player: Player, dt
 
         if (p.z <= 0) {
           p.z = 0;
-          if ((p.bounces ?? 2) > 0) {
+          if ((p.bounces ?? 2) > 0 && p.debrisSubtype !== 'sand_grain' && p.debrisSubtype !== 'liquid_drop') {
             p.bounces = (p.bounces ?? 2) - 1;
             p.vz = -p.vz * 0.24;
             p.vx *= 0.60;
@@ -12813,13 +12847,14 @@ export function updateSkidMarksAndParticles(world: GameWorld, player: Player, dt
         const progress = Math.min(1.0, p.life / Math.min(2.5, p.maxLife));
         p.alpha = Math.max(0, (p.initialAlpha ?? 0.90) * (1.0 - Math.pow(progress, 2.2)));
       } else {
-        // Resting permanently on the asphalt ground
+        // Resting on the asphalt ground, fading smoothly near end of life
         p.z = 0;
         p.vz = 0;
         p.vx = 0;
         p.vy = 0;
         p.angularVelocity = 0;
-        p.alpha = p.initialAlpha ?? 0.90;
+        const remain = Math.max(0, 1.0 - p.life / (p.maxLife || 30));
+        p.alpha = (p.initialAlpha ?? 0.90) * Math.min(1.0, remain * 3.0);
       }
     } else if (p.type === 'mud_clod') {
       // Solid 3D earth/mud clod with ballistic arc, gravity and volumetric ground settling
@@ -12846,10 +12881,22 @@ export function updateSkidMarksAndParticles(world: GameWorld, player: Player, dt
         const remain = Math.max(0, 1.0 - p.life / p.maxLife);
         p.alpha = (p.initialAlpha ?? 0.96) * Math.min(1.0, remain * 1.6);
       }
-    } else if (p.type === 'water_fountain'|| p.type === 'water_splash') {
-      p.radius += dt * 5;
+    } else if (p.type === 'water_fountain'|| p.type === 'water_splash' || p.type === 'water_spray') {
+      // Aerodynamic drag & spray expansion as liquid ligaments break up into atomized mist
+      const airDrag = Math.pow(0.92, dt * 60);
+      p.vx = (p.vx + wind.vx * 0.15 * dt) * airDrag;
+      p.vy = (p.vy + wind.vy * 0.15 * dt) * airDrag;
+      p.radius += dt * (p.type === 'water_fountain' ? 5.5 : 3.2);
+      p.angle = (p.angle ?? 0) + (p.angularVelocity ?? 0.8) * dt;
       p.life += dt;
-      p.alpha = Math.max(0, 1 - (p.life / p.maxLife));
+      p.alpha = (p.initialAlpha ?? 0.82) * Math.max(0, 1 - Math.pow(p.life / p.maxLife, 1.15));
+    } else if (p.type === 'leaf' || p.type === 'feather') {
+      // Botanical leaf / bird feather fluttering in turbulent wind
+      p.vx += (wind.vx - p.vx) * Math.min(1.0, 2.5 * dt) + Math.sin(p.life * 7.0 + (p.shapeSeed || 0)) * 18 * dt;
+      p.vy += (wind.vy - p.vy) * Math.min(1.0, 2.5 * dt) + Math.cos(p.life * 5.5 + (p.shapeSeed || 0)) * 18 * dt;
+      p.angle = (p.angle ?? 0) + (p.angularVelocity ?? 2.4) * dt;
+      p.life += dt;
+      p.alpha = (p.initialAlpha ?? 0.95) * Math.max(0, 1 - (p.life / p.maxLife));
     } else {
       p.life += dt;
       p.alpha = Math.max(0, 1 - (p.life / p.maxLife));
@@ -13133,7 +13180,7 @@ export function updateBreakablePropsAndLivingWorld(world: GameWorld, player: Pla
         }
 
         if (Math.hypot(veh.vx, veh.vy) > 20) {
-          for (let d = 0; d < 6; d++) {
+          for (let d = 0; d < 4; d++) {
             const dAngle = Math.random() * Math.PI * 2;
             const dSpeed = 25 + Math.random() * 70;
             world.particles.push({
@@ -13141,12 +13188,13 @@ export function updateBreakablePropsAndLivingWorld(world: GameWorld, player: Pla
               y: contactY,
               vx: Math.cos(dAngle) * dSpeed,
               vy: Math.sin(dAngle) * dSpeed,
-              radius: 0.45 + Math.random() * 0.55,
-              aspect: 1.1 + Math.random() * 0.4,
+              radius: 1.50 + Math.random() * 1.35,
+              aspect: 1.2 + Math.random() * 0.5,
               color: '#a8a29e',
-              alpha: 0.90,
+              secondaryColor: '#57534e',
+              alpha: 0.92,
               life: 0,
-              maxLife: 300.0,
+              maxLife: 25.0,
               type: 'debris',
               debrisSubtype: 'concrete_chip',
               angle: Math.random() * Math.PI * 2,
@@ -13350,7 +13398,7 @@ export function updateBreakablePropsAndLivingWorld(world: GameWorld, player: Pla
           normalEnergy > hitbox.yieldEnergy * 1.15
         ) {
           prop.glassShattered = true;
-          const glassCount = prop.type === 'bus_stop' || prop.type === 'kiosk' ? 18 : 8;
+          const glassCount = prop.type === 'bus_stop' || prop.type === 'kiosk' ? 10 : 5;
           for (let g = 0; g < glassCount; g++) {
             const gAngle = Math.random() * Math.PI * 2;
             const gSpeed = 35 + Math.random() * 75;
@@ -13359,12 +13407,12 @@ export function updateBreakablePropsAndLivingWorld(world: GameWorld, player: Pla
               y: contactY + (Math.random() - 0.5) * 10,
               vx: Math.cos(gAngle) * gSpeed,
               vy: Math.sin(gAngle) * gSpeed,
-              radius: 0.45 + Math.random() * 0.55,
-              aspect: 1.1 + Math.random() * 0.4,
+              radius: 1.35 + Math.random() * 1.25,
+              aspect: 1.25 + Math.random() * 0.55,
               color: 'rgba(224, 242, 254, 0.88)',
               alpha: 0.95,
               life: 0,
-              maxLife: 300.0,
+              maxLife: 25.0 + Math.random() * 10.0,
               type: 'glass_shard',
               glassSubtype: prop.type === 'bus_stop' || prop.type === 'kiosk' ? 'safety_pebble' : 'headlight',
               angle: Math.random() * Math.PI * 2,
@@ -13494,22 +13542,22 @@ export function updateBreakablePropsAndLivingWorld(world: GameWorld, player: Pla
 
       // Spawn tailored physical debris particles at contact point
       let debrisColor = '#64748b';
-      let debrisCount = 8;
-      let debrisSubtype: 'plastic_chunk' | 'metal_flake' | 'concrete_chip' = 'plastic_chunk';
+      let debrisCount = 6;
+      let debrisSubtype: 'plastic_chunk' | 'metal_flake' | 'concrete_chip' | 'wood_splinter' = 'plastic_chunk';
 
-      if (prop.type === 'hydrant') { debrisColor = '#ef4444'; debrisCount = 10; debrisSubtype = 'metal_flake'; }
-      else if (prop.type === 'bench') { debrisColor = '#b45309'; debrisCount = 10; }
-      else if (prop.type === 'bus_stop') { debrisColor = '#94a3b8'; debrisCount = 12; debrisSubtype = 'metal_flake'; }
-      else if (prop.type === 'dumpster') { debrisColor = '#15803d'; debrisCount = 12; debrisSubtype = 'metal_flake'; }
-      else if (prop.type === 'trash_can') { debrisColor = '#475569'; debrisCount = 8; debrisSubtype = 'metal_flake'; }
-      else if (prop.type === 'kiosk') { debrisColor = '#0284c7'; debrisCount = 14; debrisSubtype = 'metal_flake'; }
-      else if (prop.type === 'mailbox') { debrisColor = '#2563eb'; debrisCount = 8; debrisSubtype = 'metal_flake'; }
-      else if (prop.type === 'flowerbed') { debrisColor = '#15803d'; debrisCount = 10; }
-      else if (prop.type === 'tire_flowerbed') { debrisColor = '#1e293b'; debrisCount = 10; }
-      else if (prop.type === 'cone') { debrisColor = '#ea580c'; debrisCount = 6; }
-      else if (prop.type === 'bollard') { debrisColor = '#334155'; debrisCount = 6; debrisSubtype = 'metal_flake'; }
-      else if (prop.type === 'traffic_light') { debrisColor = '#eab308'; debrisCount = 10; debrisSubtype = 'metal_flake'; }
-      else if (prop.type === 'lamp_highway' || prop.type === 'lamp') { debrisColor = '#94a3b8'; debrisCount = 10; debrisSubtype = 'metal_flake'; }
+      if (prop.type === 'hydrant') { debrisColor = '#ef4444'; debrisCount = 7; debrisSubtype = 'metal_flake'; }
+      else if (prop.type === 'bench') { debrisColor = '#b45309'; debrisCount = 8; debrisSubtype = 'wood_splinter'; }
+      else if (prop.type === 'bus_stop') { debrisColor = '#94a3b8'; debrisCount = 8; debrisSubtype = 'metal_flake'; }
+      else if (prop.type === 'dumpster') { debrisColor = '#15803d'; debrisCount = 8; debrisSubtype = 'metal_flake'; }
+      else if (prop.type === 'trash_can') { debrisColor = '#475569'; debrisCount = 6; debrisSubtype = 'metal_flake'; }
+      else if (prop.type === 'kiosk') { debrisColor = '#0284c7'; debrisCount = 9; debrisSubtype = 'metal_flake'; }
+      else if (prop.type === 'mailbox') { debrisColor = '#2563eb'; debrisCount = 6; debrisSubtype = 'metal_flake'; }
+      else if (prop.type === 'flowerbed') { debrisColor = '#78350f'; debrisCount = 7; debrisSubtype = 'concrete_chip'; }
+      else if (prop.type === 'tire_flowerbed') { debrisColor = '#1e293b'; debrisCount = 6; debrisSubtype = 'plastic_chunk'; }
+      else if (prop.type === 'cone') { debrisColor = '#ea580c'; debrisCount = 5; debrisSubtype = 'plastic_chunk'; }
+      else if (prop.type === 'bollard') { debrisColor = '#334155'; debrisCount = 5; debrisSubtype = 'metal_flake'; }
+      else if (prop.type === 'traffic_light') { debrisColor = '#eab308'; debrisCount = 7; debrisSubtype = 'metal_flake'; }
+      else if (prop.type === 'lamp_highway' || prop.type === 'lamp') { debrisColor = '#94a3b8'; debrisCount = 7; debrisSubtype = 'metal_flake'; }
 
       for (let d = 0; d < debrisCount; d++) {
         const dAngle = Math.random() * Math.PI * 2;
@@ -13519,13 +13567,13 @@ export function updateBreakablePropsAndLivingWorld(world: GameWorld, player: Pla
           y: contactY,
           vx: Math.cos(dAngle) * dSpeed,
           vy: Math.sin(dAngle) * dSpeed,
-          radius: 0.50 + Math.random() * 0.55,
-          aspect: 1.2 + Math.random() * 0.4,
+          radius: 1.45 + Math.random() * 1.35,
+          aspect: debrisSubtype === 'wood_splinter' ? (2.2 + Math.random() * 1.2) : (1.3 + Math.random() * 0.5),
           color: debrisColor,
-          secondaryColor: '#334155',
-          alpha: 0.92,
+          secondaryColor: debrisSubtype === 'wood_splinter' ? '#fde68a' : '#334155',
+          alpha: 0.94,
           life: 0,
-          maxLife: 300.0,
+          maxLife: 28.0 + Math.random() * 12.0,
           type: 'debris',
           debrisSubtype,
           angle: Math.random() * Math.PI * 2,
@@ -13540,7 +13588,7 @@ export function updateBreakablePropsAndLivingWorld(world: GameWorld, player: Pla
 
       if (prop.type === 'lamp_highway' || prop.type === 'lamp' || prop.type === 'traffic_light') {
         prop.glassShattered = true;
-        for (let g = 0; g < 8; g++) {
+        for (let g = 0; g < 6; g++) {
           const gAngle = Math.random() * Math.PI * 2;
           const gSpeed = 30 + Math.random() * 60;
           world.particles.push({
@@ -13548,12 +13596,12 @@ export function updateBreakablePropsAndLivingWorld(world: GameWorld, player: Pla
             y: prop.y,
             vx: Math.cos(gAngle) * gSpeed,
             vy: Math.sin(gAngle) * gSpeed,
-            radius: 1.2 + Math.random() * 1.8,
-            aspect: 1.3 + Math.random() * 0.8,
+            radius: 1.35 + Math.random() * 1.25,
+            aspect: 1.3 + Math.random() * 0.6,
             color: (prop.type === 'traffic_light' && g % 2 === 0) ? '#fbbf24' : '#f8fafc',
             alpha: 0.95,
             life: 0,
-            maxLife: 300.0,
+            maxLife: 25.0 + Math.random() * 10.0,
             type: 'glass_shard',
             glassSubtype: 'headlight',
             angle: Math.random() * Math.PI * 2,

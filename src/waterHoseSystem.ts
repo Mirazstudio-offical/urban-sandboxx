@@ -301,12 +301,13 @@ export function updateWaterHosePhysics(player: Player, world: GameWorld, dt: num
             y: segNode.y + (Math.random() - 0.5) * 2,
             vx: normX * squirtSpeed * side + (Math.random() - 0.5) * 6,
             vy: normY * squirtSpeed * side + (Math.random() - 0.5) * 6,
-            radius: 1.0 + Math.random() * 1.0,
+            radius: 1.2 + Math.random() * 1.1,
             color: Math.random() < 0.7 ? '#38bdf8' : '#e0f2fe',
-            alpha: 0.80,
+            alpha: 0.82,
+            initialAlpha: 0.82,
             life: 0,
-            maxLife: isHighPressure ? 0.30 : 0.15,
-            type: 'debris'
+            maxLife: isHighPressure ? 0.30 : 0.16,
+            type: 'water_spray'
           });
         }
 

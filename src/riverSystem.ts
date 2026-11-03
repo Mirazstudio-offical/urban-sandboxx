@@ -52,6 +52,8 @@ export interface RiverFloatingDebris {
   seed: number;
   wobbleFreq: number;
   wobbleAmp: number;
+  splinePos: number;
+  latFrac: number;
 }
 
 // Persistent dispersive water wave ring / wake packet in world space
@@ -170,7 +172,7 @@ function buildRiverSpline(): RiverSplinePoint[] {
       const depth = w1.depth + smoothT * (w2.depth - w1.depth);
       const currentSpeed = w1.currentSpeed + smoothT * (w2.currentSpeed - w1.currentSpeed);
       const isFord = Boolean(w1.isFord || w2.isFord) && Math.abs(x - 12400) < 260;
-      const isBridge = Boolean(w1.isBridge || w2.isBridge) || Math.abs(x - 9400) < 160 || (x >= 23500 && x <= 24100);
+      const isBridge = Math.abs(x - 9400) <= 34;
 
       // Froude number proxy: v_m_s / sqrt(g * depth)
       const vMs = currentSpeed * 0.055;
@@ -323,11 +325,14 @@ const DEBRIS_TYPES: Array<RiverFloatingDebris['type']> = [
 
 function initFloatingDebris(): RiverFloatingDebris[] {
   const debris: RiverFloatingDebris[] = [];
-  const count = 110;
+  const count = 135;
+  const maxSpline = RIVER_SPLINE_POINTS.length - 6;
   for (let i = 0; i < count; i++) {
-    const ptIdx = Math.floor((i / count) * (RIVER_SPLINE_POINTS.length - 20)) + 5;
+    const splinePos = 3 + (i / count) * (maxSpline - 3);
+    const ptIdx = Math.floor(splinePos);
     const pt = RIVER_SPLINE_POINTS[ptIdx];
-    const latOffset = (riverHash(i * 19.3) * 2 - 1) * 0.75 * pt.halfWidth;
+    const latFrac = (riverHash(i * 19.3) * 2 - 1) * 0.72;
+    const latOffset = latFrac * pt.halfWidth;
     const type = DEBRIS_TYPES[Math.floor(riverHash(i * 7.7) * DEBRIS_TYPES.length)];
     debris.push({
       x: pt.x + pt.nx * latOffset,
@@ -335,12 +340,14 @@ function initFloatingDebris(): RiverFloatingDebris[] {
       vx: pt.tx * pt.currentSpeed,
       vy: pt.ty * pt.currentSpeed,
       angle: riverHash(i * 3.1) * Math.PI * 2,
-      spinSpeed: (riverHash(i * 5.3) - 0.5) * 0.8,
-      size: 3 + riverHash(i * 11.2) * 5,
+      spinSpeed: (riverHash(i * 5.3) - 0.5) * 0.55,
+      size: 2.6 + riverHash(i * 11.2) * 3.8,
       type,
       seed: i,
-      wobbleFreq: 1.5 + riverHash(i * 13.7) * 2.5,
-      wobbleAmp: 3 + riverHash(i * 17.1) * 4
+      wobbleFreq: 1.2 + riverHash(i * 13.7) * 1.8,
+      wobbleAmp: 1.5 + riverHash(i * 17.1) * 2.5,
+      splinePos,
+      latFrac
     });
   }
   return debris;
@@ -352,30 +359,53 @@ let lastDebrisUpdate = Date.now();
 export function updateRiverDebris(dt: number) {
   updateWaterDisturbances(dt);
 
+  const maxIdx = RIVER_SPLINE_POINTS.length - 2;
+  const nowSec = performance.now() * 0.001;
+
   for (let i = 0; i < floatingDebrisList.length; i++) {
     const d = floatingDebrisList[i];
-    const water = getRiverWaterAt(d.x, d.y);
+    const idx0 = Math.max(0, Math.min(maxIdx - 1, Math.floor(d.splinePos)));
+    const frac = d.splinePos - idx0;
+    const p0 = RIVER_SPLINE_POINTS[idx0];
+    const p1 = RIVER_SPLINE_POINTS[idx0 + 1];
 
-    if (water.inWater) {
-      d.vx = water.currentVx;
-      d.vy = water.currentVy;
-      d.x += d.vx * dt;
-      d.y += d.vy * dt;
-      d.angle += (d.spinSpeed + (water.turbulence || 0) * 0.6) * dt;
-    } else {
-      d.x += (d.vx || 20) * dt;
-      d.y += (d.vy || 0) * dt;
+    const segDx = p1.x - p0.x;
+    const segDy = p1.y - p0.y;
+    const segLen = Math.max(12, Math.hypot(segDx, segDy));
+
+    // Parabolic velocity profile across channel width (faster near thalweg, slower near banks)
+    const speedProfile = Math.max(0.38, 1.0 - 0.45 * d.latFrac * d.latFrac);
+    const localSpeed = (p0.currentSpeed + (p1.currentSpeed - p0.currentSpeed) * frac) * speedProfile;
+
+    d.splinePos += (localSpeed * dt) / segLen;
+    if (d.splinePos >= maxIdx - 1) {
+      d.splinePos = 2 + (d.splinePos - (maxIdx - 1)) % (maxIdx - 4);
+      d.latFrac = (riverHash(d.seed * 43.1 + Math.floor(nowSec * 0.1)) * 2 - 1) * 0.72;
     }
 
-    if (d.x > RIVER_MAX_X - 200 || d.x < RIVER_MIN_X - 100 || (!water.inWater && d.x > 8000)) {
-      const respawnIdx = 5 + Math.floor(riverHash(d.seed * 31.7 + Date.now() * 0.0001) * 30);
-      const pt = RIVER_SPLINE_POINTS[Math.min(RIVER_SPLINE_POINTS.length - 1, respawnIdx)];
-      const latOffset = (riverHash(d.seed * 43.1) * 2 - 1) * 0.65 * pt.halfWidth;
-      d.x = pt.x + pt.nx * latOffset;
-      d.y = pt.y + pt.ny * latOffset;
-      d.vx = pt.tx * pt.currentSpeed;
-      d.vy = pt.ty * pt.currentSpeed;
-    }
+    // Gentle secondary helicoidal drift & eddy meander kept strictly within [-0.76, +0.76] of halfWidth
+    const eddySway = Math.sin(nowSec * d.wobbleFreq + d.seed * 4.7) * 0.035 * dt;
+    const thalwegPull = (p0.thalwegBias * 0.5 - d.latFrac) * 0.04 * dt;
+    d.latFrac = Math.max(-0.76, Math.min(0.76, d.latFrac + eddySway + thalwegPull));
+
+    const curIdx = Math.max(0, Math.min(maxIdx - 1, Math.floor(d.splinePos)));
+    const curFrac = d.splinePos - curIdx;
+    const c0 = RIVER_SPLINE_POINTS[curIdx];
+    const c1 = RIVER_SPLINE_POINTS[curIdx + 1];
+
+    const cx = c0.x + (c1.x - c0.x) * curFrac;
+    const cy = c0.y + (c1.y - c0.y) * curFrac;
+    const nx = c0.nx + (c1.nx - c0.nx) * curFrac;
+    const ny = c0.ny + (c1.ny - c0.ny) * curFrac;
+    const tx = c0.tx + (c1.tx - c0.tx) * curFrac;
+    const ty = c0.ty + (c1.ty - c0.ty) * curFrac;
+    const hw = c0.halfWidth + (c1.halfWidth - c0.halfWidth) * curFrac;
+
+    d.x = cx + nx * (hw * d.latFrac);
+    d.y = cy + ny * (hw * d.latFrac);
+    d.vx = tx * localSpeed;
+    d.vy = ty * localSpeed;
+    d.angle += (d.spinSpeed + c0.bendCurvature * 12) * dt;
   }
 }
 
@@ -529,28 +559,28 @@ export function getRiverWaterAt(x: number, y: number): RiverWaterInfo {
     };
   }
 
-  // Bridge deck safe zones (Old Logging Bridge x: 9400 & Mountain Pass Bridge x: 23800)
-  const isLoggingBridgeDeck = Math.abs(x - 9400) <= 88 && Math.abs(y - (-3300)) <= 120;
-  const isMountainBridgeDeck = Math.abs(x - 23800) <= 240 && Math.abs(y - (-2520)) <= 75;
+  // Bridge & pier deck safe zones (Old Logging Bridge deck x: 9400 +/- 33, Fishing Piers x: 14160 & 14240)
+  const isLoggingBridgeDeck = Math.abs(x - 9400) <= 33 && Math.abs(y - (-3300)) <= 92;
+  const isFishingPierDeck =
+    (Math.abs(x - 14160) <= 14 && Math.abs(y - (-3020)) <= 40) ||
+    (Math.abs(x - 14240) <= 14 && Math.abs(y - (-2880)) <= 42);
 
-  if (isBridge || isLoggingBridgeDeck || isMountainBridgeDeck) {
-    if (isLoggingBridgeDeck || isMountainBridgeDeck || Math.abs(x - 9400) <= 88) {
-      return {
-        inWater: false,
-        depth: 0,
-        distToCenter: bestDist,
-        signedLateral,
-        halfWidth: bestHalfWidth,
-        currentVx: 0,
-        currentVy: 0,
-        isFord: false,
-        isBridge: true,
-        surfaceType: 'land',
-        turbulence: 0,
-        bottomSlopeX: 0,
-        bottomSlopeY: 0
-      };
-    }
+  if (isLoggingBridgeDeck || isFishingPierDeck) {
+    return {
+      inWater: false,
+      depth: 0,
+      distToCenter: bestDist,
+      signedLateral,
+      halfWidth: bestHalfWidth,
+      currentVx: 0,
+      currentVy: 0,
+      isFord: false,
+      isBridge: true,
+      surfaceType: 'land',
+      turbulence: 0,
+      bottomSlopeX: 0,
+      bottomSlopeY: 0
+    };
   }
 
   // Asymmetric helicoidal riverbed cross-section:
@@ -754,7 +784,7 @@ export function renderRiverSystem(
     ctx.lineTo(bx, by);
   }
   ctx.closePath();
-  ctx.fillStyle = isFreezing ? 'rgba(203, 213, 225, 0.25)' : 'rgba(12, 22, 34, 0.40)';
+  ctx.fillStyle = isFreezing ? 'rgba(203, 213, 225, 0.25)' : 'rgba(18, 12, 8, 0.42)';
   ctx.fill();
 
   // --- PASS 2: INNER WET SAND & PEBBLE POINT-BARS (Песчаные косы на излучинах) ---
@@ -817,11 +847,11 @@ export function renderRiverSystem(
     traceChannelBand(1.0, 0);
     ctx.clip();
 
-    // Crystalline stress fractures & river ice cracks
+    // Crystalline stress fractures & river ice cracks (stride-aligned to prevent camera-pan teleportation)
     ctx.strokeStyle = 'rgba(241, 245, 249, 0.72)';
     ctx.lineWidth = 1.3;
     ctx.beginPath();
-    for (let k = kStart; k <= kEnd; k += 4) {
+    for (let k = Math.ceil(kStart / 4) * 4; k <= kEnd; k += 4) {
       const pt = RIVER_SPLINE_POINTS[k];
       const crackSeed = Math.sin(k * 13.7);
       const startDist = pt.halfWidth * (0.2 + crackSeed * 0.6);
@@ -839,7 +869,7 @@ export function renderRiverSystem(
     ctx.stroke();
 
     ctx.fillStyle = 'rgba(255, 255, 255, 0.45)';
-    for (let k = kStart; k <= kEnd; k += 3) {
+    for (let k = Math.ceil(kStart / 3) * 3; k <= kEnd; k += 3) {
       const pt = RIVER_SPLINE_POINTS[k];
       for (let b = 0; b < 5; b++) {
         const bOff = Math.sin(k * 19.3 + b * 5.7) * (pt.halfWidth * 0.7);
@@ -853,7 +883,7 @@ export function renderRiverSystem(
     }
 
     ctx.fillStyle = 'rgba(255, 255, 255, 0.22)';
-    for (let k = kStart; k <= kEnd; k += 5) {
+    for (let k = Math.ceil(kStart / 5) * 5; k <= kEnd; k += 5) {
       const pt = RIVER_SPLINE_POINTS[k];
       const driftOff = Math.cos(k * 11.2) * (pt.halfWidth * 0.55);
       const dx = pt.x + pt.nx * driftOff;
@@ -867,29 +897,19 @@ export function renderRiverSystem(
     // =========================================================================
     // REALISTIC MULTI-BAND BEER-LAMBERT OPTICAL BATHYMETRY & ASYMMETRIC THALWEG
     // =========================================================================
-    // Band 0 (1.00 width): Translucent amber-sand & olive shoreline meniscus (0.0m - 0.25m)
+    // Band 0 (1.00 width): Translucent boreal teal shoreline meniscus (0.0m - 0.25m)
     traceChannelBand(1.0, 0.0);
-    ctx.fillStyle = nightAlpha > 0.65 ? '#122229' : '#2d4b43';
+    ctx.fillStyle = nightAlpha > 0.65 ? '#0f2632' : '#1b5662';
     ctx.fill();
 
-    // Band 1 (0.91 width): Shallow littoral zone — warm sandy olive-teal (0.25m - 0.60m)
+    // Band 1 (0.91 width): Shallow littoral zone — clear cyan-teal (0.25m - 0.60m)
     traceChannelBand(0.91, 0.20);
-    ctx.fillStyle = nightAlpha > 0.65 ? 'rgba(13, 30, 38, 0.78)' : 'rgba(28, 74, 74, 0.74)';
+    ctx.fillStyle = nightAlpha > 0.65 ? 'rgba(12, 34, 46, 0.80)' : 'rgba(20, 86, 102, 0.80)';
     ctx.fill();
 
     // Band 2 (0.78 width): Mid-shallow boreal emerald-cyan (0.60m - 1.10m)
     traceChannelBand(0.78, 0.42);
-    ctx.fillStyle = nightAlpha > 0.65 ? 'rgba(10, 25, 35, 0.80)' : 'rgba(20, 64, 70, 0.78)';
-    ctx.fill();
-
-    // Band 3 (0.60 width): Deep channel — rich northern teal-slate (1.10m - 1.65m)
-    traceChannelBand(0.60, 0.68);
-    ctx.fillStyle = nightAlpha > 0.65 ? 'rgba(7, 19, 30, 0.82)' : 'rgba(14, 48, 58, 0.80)';
-    ctx.fill();
-
-    // Band 4 (0.38 width): Abyssal Thalweg Core — shifted toward outer bend (1.65m - 2.80m)
-    traceChannelBand(0.38, 0.92);
-    ctx.fillStyle = nightAlpha > 0.65 ? 'rgba(4, 12, 22, 0.88)' : 'rgba(9, 32, 42, 0.85)';
+    ctx.fillStyle = nightAlpha > 0.65 ? 'rgba(9, 28, 40, 0.80)' : 'rgba(16, 72, 92, 0.78)';
     ctx.fill();
 
     // Clip to River Water Surface for all internal underwater & surface fluid rendering
@@ -897,8 +917,21 @@ export function renderRiverSystem(
     traceChannelBand(1.0, 0.0);
     ctx.clip();
 
+    // --- PASS 4a: SUBMERGED RIVERBED STONES & DYNAMIC RIVERWEED (drawn BEFORE deep water absorption overlay) ---
+    renderOrganicRiverbedStones(ctx, kStart, kEnd, animTime, sunState.sunDirX, sunState.sunDirY, dayFactor, false);
+    renderDynamicRiverweed(ctx, kStart, kEnd, animTime, vehicles);
+
+    // Band 3 (0.62 width): Deep channel optical water column submerging deep bed features (1.10m - 1.65m)
+    traceChannelBand(0.62, 0.68);
+    ctx.fillStyle = nightAlpha > 0.65 ? 'rgba(7, 21, 34, 0.72)' : 'rgba(12, 56, 76, 0.68)';
+    ctx.fill();
+
+    // Band 4 (0.38 width): Abyssal Thalweg Core — shifted toward outer bend (1.65m - 2.80m)
+    traceChannelBand(0.38, 0.92);
+    ctx.fillStyle = nightAlpha > 0.65 ? 'rgba(4, 14, 26, 0.78)' : 'rgba(8, 40, 58, 0.74)';
+    ctx.fill();
+
     // --- PASS 3d: DIRECTIONAL SOLAR BANK OVERHANG SHADOWS ON WATER ---
-    // The bank facing away from the sun casts a cool deep shadow shelf across the nearshore water
     if (sunState.sunElevation > 0.05) {
       const shadowReach = Math.min(28, 8 + sunState.lengthFactor * 11);
       ctx.beginPath();
@@ -916,15 +949,12 @@ export function renderRiverSystem(
         ctx.lineTo(bx, by);
       }
       ctx.closePath();
-      ctx.fillStyle = `rgba(4, 12, 20, ${(0.28 * dayFactor).toFixed(2)})`;
+      ctx.fillStyle = `rgba(4, 14, 22, ${(0.24 * dayFactor).toFixed(2)})`;
       ctx.fill();
     }
 
-    // --- PASS 4: ORGANIC PROCEDURAL RIVERBED STONES, RIFFLE BARS & SUNKEN LOGS ---
-    renderOrganicRiverbedStones(ctx, kStart, kEnd, animTime, sunState.sunDirX, sunState.sunDirY, dayFactor);
-
-    // --- PASS 5: DYNAMIC SWAYING UNDERWATER RIVERWEED & ALGAE (Perturbed by passing vehicles) ---
-    renderDynamicRiverweed(ctx, kStart, kEnd, animTime, vehicles);
+    // --- PASS 4b: EMERGENT RIFFLE BOULDERS & SURFACE WAKES (only shallow/ford emergent rocks) ---
+    renderOrganicRiverbedStones(ctx, kStart, kEnd, animTime, sunState.sunDirX, sunState.sunDirY, dayFactor, true);
 
     // --- PASS 6: CELLULAR SUNLIGHT CAUSTICS NETWORK & MULTI-HARMONIC CURRENT FILAMENTS ---
     renderFluidCurrentStreamlinesAndCaustics(ctx, kStart, kEnd, animTime, nightAlpha, weather, sunState.sunDirX, sunState.sunDirY);
@@ -1405,7 +1435,8 @@ function renderVehicleHydrodynamicSubmersion(
 }
 
 /**
- * Volumetric 3D bank mud clods, wet seepage hollows, and gravel pebbles on river shores
+ * Natural Alluvial Bank Gravel, Shingle Pebbles & Driftwood along River Shores
+ * (Stride-aligned to global spline index k so nothing ever teleports when moving/zooming camera)
  */
 function renderBankGravelSpeckles(
   ctx: CanvasRenderingContext2D,
@@ -1414,92 +1445,109 @@ function renderBankGravelSpeckles(
   isFreezing: boolean = false,
   nightAlpha: number = 0
 ) {
-  for (let k = kStart; k < kEnd; k += 3) {
+  const firstK = Math.ceil(kStart / 3) * 3;
+  const lightScale = Math.max(0.35, 1 - nightAlpha * 0.65);
+
+  for (let k = firstK; k < kEnd; k += 3) {
     const pt = RIVER_SPLINE_POINTS[k];
     const seed = k * 13.37;
     const tanAngle = Math.atan2(pt.ty, pt.tx);
 
-    const mudCount = 2 + Math.floor(riverHash(seed * 1.9) * 3);
-    for (let m = 0; m < mudCount; m++) {
+    // 1. Fine alluvial wet silt & shingle patches close to the waterline (no cartoon cyan/white ovals)
+    const patchCount = 2 + Math.floor(riverHash(seed * 1.9) * 2);
+    for (let m = 0; m < patchCount; m++) {
       const mSeed = seed + m * 11.43;
       const isLeft = riverHash(mSeed) > 0.5;
       const bankSide = isLeft ? 1 : -1;
       const bankSand = isLeft ? pt.innerSandLeft : pt.innerSandRight;
-      const offset = pt.halfWidth + bankSand + 12 + riverHash(mSeed * 2.1) * 85;
-      const along = (riverHash(mSeed * 3.3) - 0.5) * 28;
+      const offset = pt.halfWidth + 3 + riverHash(mSeed * 2.1) * (bankSand + 26);
+      const along = (riverHash(mSeed * 3.3) - 0.5) * 26;
 
       const mx = pt.x + pt.nx * (offset * bankSide) + pt.tx * along;
       const my = pt.y + pt.ny * (offset * bankSide) + pt.ty * along;
-      const rx = 2.8 + riverHash(mSeed * 4.7) * 5.2;
-      const ry = rx * (0.48 + riverHash(mSeed * 5.9) * 0.32);
-      const rot = tanAngle + (riverHash(mSeed * 6.7) - 0.5) * 0.6;
+      const rx = 2.0 + riverHash(mSeed * 4.7) * 3.2;
+      const ry = rx * (0.45 + riverHash(mSeed * 5.9) * 0.28);
+      const rot = tanAngle + (riverHash(mSeed * 6.7) - 0.5) * 0.45;
 
-      if (m === 0 && !isFreezing && offset < pt.halfWidth + bankSand + 65) {
-        ctx.fillStyle = 'rgba(10, 8, 5, 0.55)';
-        ctx.beginPath();
-        ctx.ellipse(mx, my, rx * 1.25, ry * 1.25, rot, 0, Math.PI * 2);
-        ctx.fill();
-
-        ctx.fillStyle = nightAlpha > 0.6 ? 'rgba(30, 48, 68, 0.45)' : 'rgba(56, 118, 152, 0.38)';
-        ctx.beginPath();
-        ctx.ellipse(mx - 0.4, my - 0.4, rx * 0.85, ry * 0.78, rot, 0, Math.PI * 2);
-        ctx.fill();
-
-        ctx.fillStyle = `rgba(224, 242, 254, ${(0.28 * (1 - nightAlpha * 0.6)).toFixed(2)})`;
-        ctx.beginPath();
-        ctx.ellipse(mx - rx * 0.25, my - ry * 0.25, rx * 0.32, ry * 0.16, rot - 0.1, 0, Math.PI * 2);
-        ctx.fill();
-      } else {
-        ctx.fillStyle = 'rgba(6, 3, 1, 0.52)';
-        ctx.beginPath();
-        ctx.ellipse(mx + 1.2, my + 1.3, rx, ry, rot, 0, Math.PI * 2);
-        ctx.fill();
-
-        ctx.fillStyle = isFreezing ? '#334155' : (riverHash(mSeed * 8.1) > 0.5 ? '#2b1c11' : '#23160d');
-        ctx.beginPath();
-        ctx.ellipse(mx, my, rx * 0.92, ry * 0.88, rot, 0, Math.PI * 2);
-        ctx.fill();
-
-        ctx.fillStyle = isFreezing
-          ? 'rgba(226, 232, 240, 0.28)'
-          : `rgba(186, 212, 235, ${(0.22 * (1 - nightAlpha * 0.5)).toFixed(2)})`;
-        ctx.beginPath();
-        ctx.ellipse(mx - rx * 0.22, my - ry * 0.22, rx * 0.45, ry * 0.32, rot, 0, Math.PI * 2);
-        ctx.fill();
-      }
+      ctx.fillStyle = isFreezing
+        ? 'rgba(51, 65, 85, 0.48)'
+        : (riverHash(mSeed * 8.1) > 0.5 ? 'rgba(34, 24, 16, 0.52)' : 'rgba(46, 33, 22, 0.46)');
+      ctx.beginPath();
+      ctx.ellipse(mx, my, rx, ry, rot, 0, Math.PI * 2);
+      ctx.fill();
     }
 
-    const pebbleCount = 3 + Math.floor(riverHash(seed) * 3);
+    // 2. Natural multi-faceted river shingle & rounded alluvial cobbles on point bars
+    const pebbleCount = 4 + Math.floor(riverHash(seed) * 4);
     for (let p = 0; p < pebbleCount; p++) {
       const pSeed = seed + p * 7.19;
       const isLeft = riverHash(pSeed) > 0.5;
       const bankSide = isLeft ? 1 : -1;
       const bankWidth = isLeft ? pt.innerSandLeft : pt.innerSandRight;
-      const offset = pt.halfWidth + 2 + riverHash(pSeed * 2.3) * (bankWidth + 8);
-      const px = pt.x + pt.nx * (offset * bankSide);
-      const py = pt.y + pt.ny * (offset * bankSide);
-      const sz = 1.2 + riverHash(pSeed * 3.7) * 2.0;
+      const offset = pt.halfWidth + 1.5 + riverHash(pSeed * 2.3) * (bankWidth + 14);
+      const along = (riverHash(pSeed * 4.1) - 0.5) * 24;
+      const px = pt.x + pt.nx * (offset * bankSide) + pt.tx * along;
+      const py = pt.y + pt.ny * (offset * bankSide) + pt.ty * along;
+      const rx = 1.0 + riverHash(pSeed * 3.7) * 1.9;
+      const ry = rx * (0.65 + riverHash(pSeed * 6.1) * 0.30);
+      const rot = tanAngle + (riverHash(pSeed * 2.9) - 0.5) * 1.2;
 
-      ctx.fillStyle = 'rgba(10, 7, 4, 0.42)';
+      ctx.fillStyle = 'rgba(10, 7, 4, 0.36)';
       ctx.beginPath();
-      ctx.arc(px + 0.7, py + 0.8, sz, 0, Math.PI * 2);
+      ctx.ellipse(px + 0.5, py + 0.6, rx, ry, rot, 0, Math.PI * 2);
       ctx.fill();
 
-      ctx.fillStyle = riverHash(pSeed * 5.1) > 0.5 ? '#3d3226' : '#5e4f3e';
+      const toneRoll = riverHash(pSeed * 5.1);
+      ctx.fillStyle = isFreezing
+        ? (toneRoll > 0.5 ? '#64748b' : '#475569')
+        : (toneRoll < 0.35 ? '#44382c' : toneRoll < 0.7 ? '#5c4d3c' : '#6b5b49');
       ctx.beginPath();
-      ctx.arc(px, py, sz, 0, Math.PI * 2);
+      ctx.ellipse(px, py, rx, ry, rot, 0, Math.PI * 2);
       ctx.fill();
 
-      ctx.fillStyle = 'rgba(226, 232, 240, 0.24)';
-      ctx.beginPath();
-      ctx.arc(px - sz * 0.28, py - sz * 0.28, sz * 0.42, 0, Math.PI * 2);
-      ctx.fill();
+      if (rx > 1.8) {
+        ctx.fillStyle = `rgba(214, 202, 186, ${(0.18 * lightScale).toFixed(2)})`;
+        ctx.beginPath();
+        ctx.arc(px - rx * 0.22, py - ry * 0.22, rx * 0.38, 0, Math.PI * 2);
+        ctx.fill();
+      }
     }
   }
 }
 
 /**
- * Organic Procedural Riverbed Stones, Riffle Bars & Boulders with sun-oriented highlights & wakes
+ * Helper to trace an organic 6-vertex faceted river cobble/boulder polygon
+ */
+function traceFacetedStonePolygon(
+  ctx: CanvasRenderingContext2D,
+  cx: number,
+  cy: number,
+  radX: number,
+  radY: number,
+  angle: number,
+  seed: number
+) {
+  const ca = Math.cos(angle);
+  const sa = Math.sin(angle);
+  const verts = 6;
+  ctx.beginPath();
+  for (let v = 0; v < verts; v++) {
+    const a = (v / verts) * Math.PI * 2 + (riverHash(seed + v * 3.1) - 0.5) * 0.28;
+    const rScale = 0.84 + riverHash(seed + v * 7.3) * 0.26;
+    const lx = Math.cos(a) * radX * rScale;
+    const ly = Math.sin(a) * radY * rScale;
+    const wx = cx + lx * ca - ly * sa;
+    const wy = cy + lx * sa + ly * ca;
+    if (v === 0) ctx.moveTo(wx, wy);
+    else ctx.lineTo(wx, wy);
+  }
+  ctx.closePath();
+}
+
+/**
+ * Organic Procedural Riverbed Stones, Riffle Bars & Boulders with Beer-Lambert underwater submergence.
+ * When `emergentPass === false`, draws submerged riverbed cobbles (tinted into the teal water column).
+ * When `emergentPass === true`, draws only shallow/emergent riffle boulders that break the surface with wakes.
  */
 function renderOrganicRiverbedStones(
   ctx: CanvasRenderingContext2D,
@@ -1508,98 +1556,131 @@ function renderOrganicRiverbedStones(
   animTime: number,
   sunDirX: number,
   sunDirY: number,
-  dayFactor: number
+  dayFactor: number,
+  emergentPass: boolean = false
 ) {
-  for (let k = kStart; k < kEnd; k += 2) {
+  const firstK = Math.ceil(kStart / 2) * 2;
+
+  for (let k = firstK; k < kEnd; k += 2) {
     const pt = RIVER_SPLINE_POINTS[k];
     const seed = k * 17.83;
 
     const isFordZone = pt.isFord || Math.abs(pt.x - 12400) < 280;
-    const stoneDensity = isFordZone ? 6 : (pt.depth < 1.1 ? 3 : (riverHash(seed) < 0.42 ? 1 : 0));
+    const stoneDensity = isFordZone ? 6 : (pt.depth < 1.35 ? 3 : (riverHash(seed) < 0.45 ? 2 : 0));
 
     if (stoneDensity === 0) continue;
 
     for (let s = 0; s < stoneDensity; s++) {
       const sSeed = seed + s * 9.41;
       const latFraction = (riverHash(sSeed) * 2 - 1) * 0.86;
-      const rx = pt.x + pt.nx * (pt.halfWidth * latFraction) + (riverHash(sSeed * 1.7) * 14 - 7);
-      const ry = pt.y + pt.ny * (pt.halfWidth * latFraction) + (riverHash(sSeed * 2.3) * 14 - 7);
+      // Offset along local tangent/normal so stone position is 100% locked to world river geometry
+      const alongOff = (riverHash(sSeed * 1.7) - 0.5) * 16;
+      const crossOff = (riverHash(sSeed * 2.3) - 0.5) * 10;
+      const rx = pt.x + pt.nx * (pt.halfWidth * latFraction + crossOff) + pt.tx * alongOff;
+      const ry = pt.y + pt.ny * (pt.halfWidth * latFraction + crossOff) + pt.ty * alongOff;
 
-      const stoneRadX = (isFordZone ? 3.5 : 2.5) + riverHash(sSeed * 3.1) * (isFordZone ? 5.8 : 3.6);
-      const stoneRadY = stoneRadX * (0.62 + riverHash(sSeed * 4.3) * 0.35);
-      const stoneAngle = (riverHash(sSeed * 5.7) * 2 - 1) * 0.6 + Math.atan2(pt.ty, pt.tx);
+      const stoneRadX = (isFordZone ? 3.2 : 2.2) + riverHash(sSeed * 3.1) * (isFordZone ? 5.2 : 3.4);
+      const stoneRadY = stoneRadX * (0.64 + riverHash(sSeed * 4.3) * 0.32);
+      const stoneAngle = (riverHash(sSeed * 5.7) * 2 - 1) * 0.65 + Math.atan2(pt.ty, pt.tx);
 
-      // Beer-Lambert depth visibility attenuation for submerged rocks
-      const localDepth = pt.depth * Math.max(0.15, 1 - latFraction * latFraction);
-      const visibility = Math.max(0.22, Math.exp(-localDepth * 0.65));
+      // Local depth at the stone's lateral position
+      const localDepth = pt.depth * Math.max(0.14, 1 - latFraction * latFraction * 0.88);
+      const isEmergentBoulder = (localDepth < 0.44 && stoneRadX > 4.2) || (isFordZone && stoneRadX > 4.8 && riverHash(sSeed * 6.3) > 0.35);
 
-      const colorRoll = riverHash(sSeed * 7.9);
-      let stoneColor = `rgba(51, 65, 85, ${visibility.toFixed(2)})`;
-      if (colorRoll < 0.28) stoneColor = `rgba(30, 41, 59, ${visibility.toFixed(2)})`;
-      else if (colorRoll < 0.55) stoneColor = `rgba(71, 85, 105, ${visibility.toFixed(2)})`;
-      else if (colorRoll < 0.78) stoneColor = `rgba(68, 64, 60, ${visibility.toFixed(2)})`;
-      else stoneColor = `rgba(36, 56, 38, ${visibility.toFixed(2)})`;
+      if (emergentPass !== isEmergentBoulder) continue;
 
-      // Sun-aligned underwater drop shadow
-      ctx.fillStyle = `rgba(4, 10, 15, ${(0.48 * visibility).toFixed(2)})`;
-      ctx.beginPath();
-      ctx.ellipse(rx - sunDirX * 2.2, ry - sunDirY * 2.2, stoneRadX, stoneRadY, stoneAngle, 0, Math.PI * 2);
-      ctx.fill();
+      if (!emergentPass) {
+        // SUBMERGED RIVERBED STONE: Beer-Lambert teal water absorption & soft refractive attenuation
+        const visibility = Math.max(0.12, Math.exp(-localDepth * 0.85)) * (0.45 + 0.55 * dayFactor);
+        const colorRoll = riverHash(sSeed * 7.9);
+        // Submerged rocks shift toward deep teal-slate due to red/orange wavelength absorption in water
+        let stoneColor = `rgba(18, 58, 72, ${(visibility * 0.72).toFixed(2)})`;
+        if (colorRoll < 0.30) stoneColor = `rgba(14, 48, 62, ${(visibility * 0.76).toFixed(2)})`;
+        else if (colorRoll < 0.62) stoneColor = `rgba(24, 68, 80, ${(visibility * 0.68).toFixed(2)})`;
+        else stoneColor = `rgba(20, 62, 66, ${(visibility * 0.70).toFixed(2)})`;
 
-      // Main rock body
-      ctx.fillStyle = stoneColor;
-      ctx.beginPath();
-      ctx.ellipse(rx, ry, stoneRadX, stoneRadY, stoneAngle, 0, Math.PI * 2);
-      ctx.fill();
+        // Soft underwater basal shadow on the riverbed
+        ctx.fillStyle = `rgba(4, 16, 24, ${(0.36 * visibility).toFixed(2)})`;
+        traceFacetedStonePolygon(ctx, rx - sunDirX * 1.6, ry - sunDirY * 1.6, stoneRadX * 1.04, stoneRadY * 1.04, stoneAngle, sSeed);
+        ctx.fill();
 
-      // Sunlit crown on the side facing the sun
-      ctx.fillStyle = `rgba(226, 232, 240, ${(0.32 * visibility * (0.4 + 0.6 * dayFactor)).toFixed(2)})`;
-      ctx.beginPath();
-      ctx.ellipse(
-        rx + sunDirX * (stoneRadX * 0.28),
-        ry + sunDirY * (stoneRadY * 0.28),
-        stoneRadX * 0.60,
-        stoneRadY * 0.42,
-        stoneAngle,
-        0,
-        Math.PI * 2
-      );
-      ctx.fill();
+        // Faceted submerged cobble body
+        ctx.fillStyle = stoneColor;
+        traceFacetedStonePolygon(ctx, rx, ry, stoneRadX, stoneRadY, stoneAngle, sSeed);
+        ctx.fill();
 
-      // Emergent boulder / shallow ford riffle standing wave & whitewater wake
-      if (stoneRadX > 4.2 || isFordZone) {
+        // Subtle refracted underwater caustics/sunlight bevel on sun-facing facet
+        ctx.fillStyle = `rgba(125, 195, 215, ${(0.16 * visibility * dayFactor).toFixed(2)})`;
+        traceFacetedStonePolygon(
+          ctx,
+          rx + sunDirX * (stoneRadX * 0.22),
+          ry + sunDirY * (stoneRadY * 0.22),
+          stoneRadX * 0.55,
+          stoneRadY * 0.45,
+          stoneAngle,
+          sSeed + 1.5
+        );
+        ctx.fill();
+      } else {
+        // EMERGENT RIFFLE / FORD BOULDER: breaks the water surface with wet rock crown & hydraulic wake
+        const lightScale = 0.42 + 0.58 * dayFactor;
+
+        // Underwater submerged base skirt around the boulder
+        ctx.fillStyle = 'rgba(8, 32, 44, 0.65)';
+        traceFacetedStonePolygon(ctx, rx - sunDirX * 1.8, ry - sunDirY * 1.8, stoneRadX * 1.15, stoneRadY * 1.15, stoneAngle, sSeed);
+        ctx.fill();
+
+        // Wet dark granite/basalt emergent rock body
+        const colorRoll = riverHash(sSeed * 7.9);
+        ctx.fillStyle = colorRoll < 0.5 ? '#2d3748' : '#3b4252';
+        traceFacetedStonePolygon(ctx, rx, ry, stoneRadX, stoneRadY, stoneAngle, sSeed);
+        ctx.fill();
+
+        // Sunlit dry/wet rock facet highlight
+        ctx.fillStyle = `rgba(182, 194, 206, ${(0.34 * lightScale).toFixed(2)})`;
+        traceFacetedStonePolygon(
+          ctx,
+          rx + sunDirX * (stoneRadX * 0.24),
+          ry + sunDirY * (stoneRadY * 0.24),
+          stoneRadX * 0.56,
+          stoneRadY * 0.42,
+          stoneAngle,
+          sSeed + 2.1
+        );
+        ctx.fill();
+
+        // Upstream stagnation bow wave & downstream V-wake around emergent boulder
         const flowDirX = pt.tx;
         const flowDirY = pt.ty;
-        const wakePulse = Math.sin(animTime * 4.8 + sSeed) * 0.16 + 0.84;
-        const lightScale = 0.45 + 0.55 * dayFactor;
+        const wakePulse = Math.sin(animTime * 4.4 + sSeed) * 0.14 + 0.86;
 
-        ctx.strokeStyle = `rgba(240, 249, 255, ${(0.46 * wakePulse * lightScale).toFixed(3)})`;
-        ctx.lineWidth = 1.2;
+        ctx.strokeStyle = `rgba(224, 242, 254, ${(0.38 * wakePulse * lightScale).toFixed(3)})`;
+        ctx.lineWidth = 1.1;
         ctx.beginPath();
         ctx.arc(
-          rx - flowDirX * (stoneRadX * 0.82),
-          ry - flowDirY * (stoneRadX * 0.82),
-          stoneRadY * 0.92,
-          Math.atan2(-flowDirY, -flowDirX) - 0.78,
-          Math.atan2(-flowDirY, -flowDirX) + 0.78
+          rx - flowDirX * (stoneRadX * 0.78),
+          ry - flowDirY * (stoneRadX * 0.78),
+          stoneRadY * 0.88,
+          Math.atan2(-flowDirY, -flowDirX) - 0.72,
+          Math.atan2(-flowDirY, -flowDirX) + 0.72
         );
         ctx.stroke();
 
-        const wakeLength = stoneRadX * 3.1;
-        ctx.strokeStyle = `rgba(186, 230, 253, ${(0.42 * wakePulse * lightScale).toFixed(3)})`;
-        ctx.lineWidth = 1.0;
+        const wakeLength = stoneRadX * 2.6;
+        ctx.strokeStyle = `rgba(186, 230, 253, ${(0.30 * wakePulse * lightScale).toFixed(3)})`;
+        ctx.lineWidth = 0.9;
         ctx.beginPath();
-        ctx.moveTo(rx + pt.nx * (stoneRadY * 0.75), ry + pt.ny * (stoneRadY * 0.75));
+        ctx.moveTo(rx + pt.nx * (stoneRadY * 0.72), ry + pt.ny * (stoneRadY * 0.72));
         ctx.quadraticCurveTo(
-          rx + flowDirX * (wakeLength * 0.5) + pt.nx * (stoneRadY * 0.4),
-          ry + flowDirY * (wakeLength * 0.5) + pt.ny * (stoneRadY * 0.4),
+          rx + flowDirX * (wakeLength * 0.5) + pt.nx * (stoneRadY * 0.38),
+          ry + flowDirY * (wakeLength * 0.5) + pt.ny * (stoneRadY * 0.38),
           rx + flowDirX * wakeLength,
           ry + flowDirY * wakeLength
         );
-        ctx.moveTo(rx - pt.nx * (stoneRadY * 0.75), ry - pt.ny * (stoneRadY * 0.75));
+        ctx.moveTo(rx - pt.nx * (stoneRadY * 0.72), ry - pt.ny * (stoneRadY * 0.72));
         ctx.quadraticCurveTo(
-          rx + flowDirX * (wakeLength * 0.5) - pt.nx * (stoneRadY * 0.4),
-          ry + flowDirY * (wakeLength * 0.5) - pt.ny * (stoneRadY * 0.4),
+          rx + flowDirX * (wakeLength * 0.5) - pt.nx * (stoneRadY * 0.38),
+          ry + flowDirY * (wakeLength * 0.5) - pt.ny * (stoneRadY * 0.38),
           rx + flowDirX * wakeLength,
           ry + flowDirY * wakeLength
         );
@@ -1611,7 +1692,7 @@ function renderOrganicRiverbedStones(
 
 /**
  * Dynamic Swaying Underwater Riverweed & Algae Beds
- * Bends with current AND parts aside when a vehicle passes through!
+ * Submerged beneath the deep water column, aligned to global spline stride so it never teleports.
  */
 function renderDynamicRiverweed(
   ctx: CanvasRenderingContext2D,
@@ -1620,7 +1701,11 @@ function renderDynamicRiverweed(
   animTime: number,
   vehicles?: Vehicle[]
 ) {
-  for (let k = kStart; k < kEnd; k += 4) {
+  const firstK = Math.ceil(kStart / 4) * 4;
+  ctx.save();
+  ctx.lineCap = 'round';
+
+  for (let k = firstK; k < kEnd; k += 4) {
     const pt = RIVER_SPLINE_POINTS[k];
     const seed = k * 23.41;
 
@@ -1630,9 +1715,14 @@ function renderDynamicRiverweed(
     const weedPatches = 1 + Math.floor(riverHash(seed * 2.1) * 2);
     for (let p = 0; p < weedPatches; p++) {
       const pSeed = seed + p * 13.7;
-      const latFraction = (riverHash(pSeed) * 2 - 1) * 0.68;
+      // Keep riverweed in littoral / mid-shallow zones where rooted aquatic macrophytes grow
+      const side = riverHash(pSeed * 1.3) > 0.5 ? 1 : -1;
+      const latFraction = side * (0.32 + riverHash(pSeed) * 0.48);
       const rootX = pt.x + pt.nx * (pt.halfWidth * latFraction);
       const rootY = pt.y + pt.ny * (pt.halfWidth * latFraction);
+
+      const localDepth = pt.depth * Math.max(0.18, 1 - latFraction * latFraction * 0.85);
+      const submergenceAlpha = Math.max(0.22, Math.min(0.62, Math.exp(-localDepth * 0.55)));
 
       // Check if a vehicle is pushing through this weed patch
       let pushX = 0;
@@ -1652,42 +1742,50 @@ function renderDynamicRiverweed(
         }
       }
 
-      const bladeCount = 3 + Math.floor(riverHash(pSeed * 3.3) * 3);
+      // Soft basal root shadow on riverbed
+      ctx.fillStyle = `rgba(6, 24, 30, ${(submergenceAlpha * 0.45).toFixed(2)})`;
+      ctx.beginPath();
+      ctx.arc(rootX, rootY, 3.2, 0, Math.PI * 2);
+      ctx.fill();
+
+      const bladeCount = 4 + Math.floor(riverHash(pSeed * 3.3) * 3);
       for (let b = 0; b < bladeCount; b++) {
         const bSeed = pSeed + b * 5.71;
-        const bladeLength = 16 + riverHash(bSeed * 1.9) * 24;
+        const bladeLength = 14 + riverHash(bSeed * 1.9) * 20;
         const phaseOffset = riverHash(bSeed * 4.3) * Math.PI * 2;
-        const swayFreq = 2.4 + (pt.currentSpeed / 30) * 1.2;
+        const swayFreq = 2.0 + (pt.currentSpeed / 32) * 1.1;
 
-        const sway1 = Math.sin(animTime * swayFreq + phaseOffset) * 6.5;
-        const sway2 = Math.sin(animTime * (swayFreq * 1.7) + phaseOffset * 1.4) * 3.0;
+        const sway1 = Math.sin(animTime * swayFreq + phaseOffset) * 4.8;
+        const sway2 = Math.cos(animTime * (swayFreq * 1.6) + phaseOffset * 1.3) * 2.2;
         const totalSway = sway1 + sway2;
 
-        const tipX = rootX + pt.tx * bladeLength + pt.nx * totalSway + pushX;
-        const tipY = rootY + pt.ty * bladeLength + pt.ny * totalSway + pushY;
-        const midX = rootX + pt.tx * (bladeLength * 0.5) + pt.nx * (totalSway * 0.45) + pushX * 0.5;
-        const midY = rootY + pt.ty * (bladeLength * 0.5) + pt.ny * (totalSway * 0.45) + pushY * 0.5;
+        const rootSpread = (b - (bladeCount - 1) * 0.5) * 1.3;
+        const rx = rootX + pt.nx * rootSpread;
+        const ry = rootY + pt.ny * rootSpread;
 
-        ctx.strokeStyle = (b % 2 === 0) ? 'rgba(20, 83, 45, 0.78)' : 'rgba(22, 101, 52, 0.78)';
-        ctx.lineWidth = 1.4 + riverHash(bSeed * 7.1) * 0.8;
+        const midX = rx + pt.tx * (bladeLength * 0.52) + pt.nx * (totalSway * 0.45) + pushX * 0.5;
+        const midY = ry + pt.ty * (bladeLength * 0.52) + pt.ny * (totalSway * 0.45) + pushY * 0.5;
+        const tipX = rx + pt.tx * bladeLength + pt.nx * totalSway + pushX;
+        const tipY = ry + pt.ty * bladeLength + pt.ny * totalSway + pushY;
+
+        // Underwater teal-shifted aquatic olive-emerald color (avoids bright neon green stickers)
+        ctx.strokeStyle = (b % 2 === 0)
+          ? `rgba(14, 68, 62, ${submergenceAlpha.toFixed(2)})`
+          : `rgba(18, 82, 70, ${(submergenceAlpha * 0.92).toFixed(2)})`;
+        ctx.lineWidth = 1.2 + riverHash(bSeed * 7.1) * 0.6;
         ctx.beginPath();
-        ctx.moveTo(rootX + b * 1.5 - 2, rootY);
+        ctx.moveTo(rx, ry);
         ctx.quadraticCurveTo(midX, midY, tipX, tipY);
         ctx.stroke();
-
-        ctx.fillStyle = 'rgba(74, 222, 128, 0.28)';
-        ctx.beginPath();
-        ctx.arc(tipX, tipY, 1.0, 0, Math.PI * 2);
-        ctx.fill();
       }
     }
   }
+  ctx.restore();
 }
 
 /**
- * Cellular Sunlight Caustic Network & Multi-Harmonic Surface Flow Filaments.
- * Replaces old circular arcs with realistic refracted polygonal caustic light meshes
- * and Froude-modulated whitewater riffle chevrons.
+ * Organic Non-Repeating Sunlight Caustic Network & Multi-Directional Wavelet Ripples.
+ * All loops are stride-aligned to global spline index `k` so nothing teleports on camera move/zoom.
  */
 function renderFluidCurrentStreamlinesAndCaustics(
   ctx: CanvasRenderingContext2D,
@@ -1702,106 +1800,136 @@ function renderFluidCurrentStreamlinesAndCaustics(
   const dayFactor = Math.max(0, 1 - nightAlpha * 1.2);
   const sunState = getCurrentSunShadowState();
 
-  // 1. Woven Cellular Caustics Network on Shallow-to-Mid Riverbed (during daylight)
+  // 1. Organic Warped Sunlight Caustics on Shallow-to-Mid Riverbed (during daylight)
   if (dayFactor > 0.12 && weather !== 'storm' && weather !== 'fog') {
-    const causticBaseAlpha = 0.16 * dayFactor * Math.min(1.0, sunState.sunElevation * 1.4);
-    ctx.strokeStyle = `rgba(186, 230, 253, ${causticBaseAlpha.toFixed(3)})`;
-    ctx.lineWidth = 1.0;
+    const causticBaseAlpha = 0.13 * dayFactor * Math.min(1.0, sunState.sunElevation * 1.4);
+    ctx.strokeStyle = `rgba(165, 232, 248, ${causticBaseAlpha.toFixed(3)})`;
+    ctx.lineWidth = 0.95;
     ctx.beginPath();
 
-    for (let k = kStart; k < kEnd; k += 3) {
+    const firstCausticK = Math.ceil(kStart / 3) * 3;
+    for (let k = firstCausticK; k < kEnd; k += 3) {
       const pt = RIVER_SPLINE_POINTS[k];
-      if (pt.depth > 2.1) continue; // Caustics attenuate in deep abyssal pools
-      const flowPhase = animTime * (pt.currentSpeed * 0.45) + k * 9.3;
+      if (pt.depth > 2.1) continue;
 
-      for (let cell = -2; cell <= 2; cell++) {
-        const latBase = (cell * 0.34) * pt.halfWidth;
-        const w1 = Math.sin(animTime * 2.1 + k * 0.7 + cell * 1.9) * 8;
-        const w2 = Math.cos(animTime * 1.7 - k * 0.5 + cell * 2.3) * 8;
+      const cellCount = 3 + (k % 2);
+      for (let c = 0; c < cellCount; c++) {
+        const cSeed = k * 19.7 + c * 31.3;
+        // Irregular organic distribution across channel instead of a rigid -2..2 grid
+        const latNorm = (riverHash(cSeed) * 2 - 1) * 0.78;
+        const lonBase = (riverHash(cSeed * 2.3) - 0.5) * 48;
 
-        const cx = pt.x + pt.nx * (latBase + w1) + pt.tx * ((flowPhase % 42) - 21);
-        const cy = pt.y + pt.ny * (latBase + w2) + pt.ty * ((flowPhase % 42) - 21);
+        // Multi-directional orbital drift so caustic cells morph & travel along curving trajectories
+        const driftA = animTime * (1.3 + riverHash(cSeed * 3.1) * 0.9) + cSeed;
+        const driftB = animTime * (1.7 + riverHash(cSeed * 4.7) * 0.8) - cSeed * 0.7;
+        const warpCross = Math.sin(driftA) * 9.5 + Math.cos(driftB * 0.8) * 5.5;
+        const warpAlong = Math.cos(driftB) * 11.0 + Math.sin(driftA * 0.9) * 6.5;
 
-        // Draw a 5-sided refracted caustic cell filament with solar offset
-        const rCell = 9 + Math.sin(animTime * 3.0 + k + cell) * 3.5;
-        for (let v = 0; v <= 3; v++) {
-          const a = (v / 5) * Math.PI * 2 + (k * 0.3 + cell * 0.8);
-          const vx = cx + Math.cos(a) * rCell * 1.3 + sunDirX * 2;
-          const vy = cy + Math.sin(a) * rCell * 0.8 + sunDirY * 2;
-          if (v === 0) ctx.moveTo(vx, vy);
-          else ctx.lineTo(vx, vy);
-        }
+        const cx = pt.x + pt.nx * (latNorm * pt.halfWidth + warpCross) + pt.tx * (lonBase + warpAlong);
+        const cy = pt.y + pt.ny * (latNorm * pt.halfWidth + warpCross) + pt.ty * (lonBase + warpAlong);
+
+        // Organic curved caustic cusp arc with varied orientation and aspect ratio
+        const baseAngle = riverHash(cSeed * 5.9) * Math.PI * 2 + Math.sin(driftA * 0.6) * 0.85;
+        const r1 = 6.5 + riverHash(cSeed * 7.1) * 6.5 + Math.sin(driftB) * 2.5;
+        const r2 = r1 * (0.55 + riverHash(cSeed * 8.3) * 0.45);
+
+        const x0 = cx + Math.cos(baseAngle) * r1 + sunDirX * 1.5;
+        const y0 = cy + Math.sin(baseAngle) * r1 + sunDirY * 1.5;
+        const xMid = cx + Math.cos(baseAngle + 1.15) * r2 * 0.65 + sunDirX * 1.5;
+        const yMid = cy + Math.sin(baseAngle + 1.15) * r2 * 0.65 + sunDirY * 1.5;
+        const x1 = cx + Math.cos(baseAngle + 2.3) * r1 * 0.9 + sunDirX * 1.5;
+        const y1 = cy + Math.sin(baseAngle + 2.3) * r1 * 0.9 + sunDirY * 1.5;
+
+        ctx.moveTo(x0, y0);
+        ctx.quadraticCurveTo(xMid, yMid, x1, y1);
       }
     }
     ctx.stroke();
   }
 
-  // 2. Multi-pass surface flow filaments & shear ripples
+  // 2. Multi-directional curved wave crests & shear ripples (no uniform dashed lines)
   const passes = [
-    { speedMult: 1.0, width: 1.5, alpha: nightAlpha > 0.6 ? 0.12 : 0.22 },
-    { speedMult: 1.35, width: 1.0, alpha: nightAlpha > 0.6 ? 0.09 : 0.17 },
-    { speedMult: 0.75, width: 2.1, alpha: nightAlpha > 0.6 ? 0.07 : 0.13 }
+    { speedMult: 0.92, width: 1.3, alpha: nightAlpha > 0.6 ? 0.10 : 0.18, seedOff: 0.0 },
+    { speedMult: 1.28, width: 0.95, alpha: nightAlpha > 0.6 ? 0.08 : 0.14, seedOff: 17.3 },
+    { speedMult: 0.68, width: 1.7, alpha: nightAlpha > 0.6 ? 0.06 : 0.11, seedOff: 41.9 }
   ];
 
+  const firstWaveK = Math.ceil(kStart / 2) * 2;
   for (const pass of passes) {
     ctx.lineWidth = pass.width;
-    ctx.strokeStyle = `rgba(224, 242, 254, ${pass.alpha.toFixed(3)})`;
+    ctx.strokeStyle = `rgba(216, 240, 252, ${pass.alpha.toFixed(3)})`;
     ctx.beginPath();
 
-    for (let k = kStart; k < kEnd; k += 2) {
+    for (let k = firstWaveK; k < kEnd; k += 2) {
       const pt = RIVER_SPLINE_POINTS[k];
-      const kSeed = k * 11.19 + pass.speedMult * 7.3;
-      const streamCycle = 140;
-      const streamOffset = (animTime * pt.currentSpeed * pass.speedMult + kSeed * 17) % streamCycle;
+      const kSeed = k * 11.19 + pass.seedOff;
+      const filamentCount = pt.isFord ? 4 : 2;
 
-      const filamentCount = pt.isFord ? 5 : 3;
       for (let f = 0; f < filamentCount; f++) {
-        const fSeed = kSeed + f * 5.31;
-        const latNorm = (riverHash(fSeed) * 2 - 1) * 0.80;
-        const waveWiggle = Math.sin(animTime * 3.0 + k * 0.3 + f) * 3.8;
+        const fSeed = kSeed + f * 7.83;
+        const latNorm = (riverHash(fSeed) * 2 - 1) * 0.82;
+        const speedProfile = Math.max(0.42, 1.0 - 0.45 * latNorm * latNorm);
+        const localCycle = 95 + riverHash(fSeed * 1.9) * 75;
+        const phase = (animTime * pt.currentSpeed * pass.speedMult * speedProfile + riverHash(fSeed * 3.1) * localCycle) % localCycle;
+        const normPhase = phase / localCycle; // 0..1
+        // Smooth fade envelope so wavelets appear and dissolve smoothly instead of popping at cycle boundaries
+        if (normPhase < 0.12 || normPhase > 0.88) continue;
 
-        const curX = pt.x + pt.tx * (streamOffset - 70) + pt.nx * (pt.halfWidth * latNorm + waveWiggle);
-        const curY = pt.y + pt.ty * (streamOffset - 70) + pt.ny * (pt.halfWidth * latNorm + waveWiggle);
+        const alongPos = (normPhase - 0.5) * localCycle;
+        // Varied oblique wave angle: combines downstream flow, cross-channel bank reflection, and local bend eddy
+        const obliqueAngle = Math.atan2(pt.ty, pt.tx)
+          + (riverHash(fSeed * 4.7) - 0.5) * 1.15
+          + Math.sin(animTime * 1.6 + fSeed) * 0.38
+          - latNorm * 0.35;
 
-        const filamentLen = 20 + riverHash(fSeed * 2.7) * 26;
-        const endX = curX + pt.tx * filamentLen;
-        const endY = curY + pt.ty * filamentLen;
+        const dirX = Math.cos(obliqueAngle);
+        const dirY = Math.sin(obliqueAngle);
+        const perpX = -dirY;
+        const perpY = dirX;
 
-        ctx.moveTo(curX, curY);
+        const waveWiggle = Math.sin(animTime * 2.3 + fSeed * 1.7) * 4.5;
+        const curX = pt.x + pt.tx * alongPos + pt.nx * (pt.halfWidth * latNorm + waveWiggle);
+        const curY = pt.y + pt.ty * alongPos + pt.ny * (pt.halfWidth * latNorm + waveWiggle);
+
+        const crestSpan = 10 + riverHash(fSeed * 2.7) * 16;
+        const archCam = (riverHash(fSeed * 6.1) - 0.3) * 4.2;
+
+        ctx.moveTo(curX - perpX * crestSpan * 0.5, curY - perpY * crestSpan * 0.5);
         ctx.quadraticCurveTo(
-          curX + pt.tx * (filamentLen * 0.5) + pt.nx * (waveWiggle * 0.6),
-          curY + pt.ty * (filamentLen * 0.5) + pt.ny * (waveWiggle * 0.6),
-          endX,
-          endY
+          curX + dirX * archCam,
+          curY + dirY * archCam,
+          curX + perpX * crestSpan * 0.5,
+          curY + perpY * crestSpan * 0.5
         );
       }
     }
     ctx.stroke();
   }
 
-  // 3. Direct Solar / Lunar Specular Glitter Track across River Wave Crests
-  const glintAlpha = nightAlpha > 0.6 ? 0.22 : (0.38 * dayFactor);
+  // 3. Direct Solar / Lunar Specular Glitter Track across Multi-Directional Wave Facets
+  const glintAlpha = nightAlpha > 0.6 ? 0.20 : (0.34 * dayFactor);
   ctx.fillStyle = nightAlpha > 0.6
     ? `rgba(186, 230, 253, ${glintAlpha.toFixed(3)})`
     : `rgba(255, 252, 235, ${glintAlpha.toFixed(3)})`;
 
-  for (let k = kStart; k < kEnd; k += 2) {
+  for (let k = firstWaveK; k < kEnd; k += 2) {
     const pt = RIVER_SPLINE_POINTS[k];
-    // Sun glints cluster along the sunward reflection band of the channel
-    const sunLatBias = (pt.nx * sunDirX + pt.ny * sunDirY) * 0.35;
+    const sunLatBias = (pt.nx * sunDirX + pt.ny * sunDirY) * 0.32;
     for (let g = 0; g < 3; g++) {
-      const gPhase = animTime * 4.2 + k * 1.7 + g * 2.3;
-      const sparkle = Math.sin(gPhase) * Math.cos(gPhase * 1.37);
-      if (sparkle < 0.45) continue;
+      const gSeed = k * 7.1 + g * 13.9;
+      const gPhase = animTime * (3.2 + riverHash(gSeed) * 2.1) + gSeed;
+      const sparkle = Math.sin(gPhase) * Math.cos(gPhase * 1.29 + riverHash(gSeed * 2.3) * 3.0);
+      if (sparkle < 0.48) continue;
 
-      const lat = (sunLatBias + (riverHash(k * 7.1 + g * 3.9) - 0.5) * 0.85) * pt.halfWidth;
-      const lon = (riverHash(k * 3.7 + g * 11.3) - 0.5) * 45;
+      const lat = (sunLatBias + (riverHash(gSeed * 1.7) - 0.5) * 0.82) * pt.halfWidth;
+      const lon = (riverHash(gSeed * 3.7) - 0.5) * 44 + Math.sin(gPhase * 0.5) * 6;
       const gx = pt.x + pt.nx * lat + pt.tx * lon;
       const gy = pt.y + pt.ny * lat + pt.ty * lon;
-      const gw = 2.2 + (sparkle - 0.45) * 6.5;
+      const gw = 1.8 + (sparkle - 0.48) * 5.2;
+      const facetAngle = Math.atan2(pt.ty, pt.tx) + (riverHash(gSeed * 5.3) - 0.5) * 1.4 + Math.sin(gPhase * 0.7) * 0.4;
 
       ctx.beginPath();
-      ctx.ellipse(gx, gy, gw, 0.9, Math.atan2(pt.ty, pt.tx), 0, Math.PI * 2);
+      ctx.ellipse(gx, gy, gw, 0.85 + (sparkle - 0.48) * 1.2, facetAngle, 0, Math.PI * 2);
       ctx.fill();
     }
   }
@@ -1822,12 +1950,12 @@ function renderShorelineLappingWaves(
   for (const side of [-1, 1]) {
     const lapWave = Math.sin(animTime * 2.2 + (side > 0 ? 0 : Math.PI)) * 2.2;
 
-    ctx.strokeStyle = `rgba(224, 242, 254, ${(0.28 * lightScale).toFixed(3)})`;
-    ctx.lineWidth = 1.4;
+    ctx.strokeStyle = `rgba(224, 242, 254, ${(0.26 * lightScale).toFixed(3)})`;
+    ctx.lineWidth = 1.3;
     ctx.beginPath();
     for (let k = kStart; k <= kEnd; k++) {
       const pt = RIVER_SPLINE_POINTS[k];
-      const localOsc = Math.sin(animTime * 2.8 + k * 0.55 + side) * 1.8 + lapWave;
+      const localOsc = Math.sin(animTime * 2.4 + k * 0.48 + side * 1.7) * 1.6 + lapWave;
       const dist = pt.halfWidth - 2.5 + localOsc;
       const sx = pt.x + pt.nx * (dist * side);
       const sy = pt.y + pt.ny * (dist * side);
@@ -1837,12 +1965,12 @@ function renderShorelineLappingWaves(
     ctx.stroke();
 
     // Secondary inner capillary ripple parallel to bank
-    ctx.strokeStyle = `rgba(186, 230, 253, ${(0.15 * lightScale).toFixed(3)})`;
-    ctx.lineWidth = 0.9;
+    ctx.strokeStyle = `rgba(186, 230, 253, ${(0.14 * lightScale).toFixed(3)})`;
+    ctx.lineWidth = 0.85;
     ctx.beginPath();
     for (let k = kStart; k <= kEnd; k++) {
       const pt = RIVER_SPLINE_POINTS[k];
-      const localOsc = Math.cos(animTime * 2.8 + k * 0.55 + side) * 1.5 - lapWave * 0.6;
+      const localOsc = Math.cos(animTime * 2.4 + k * 0.48 + side * 1.7) * 1.4 - lapWave * 0.6;
       const dist = pt.halfWidth - 8.5 + localOsc;
       const sx = pt.x + pt.nx * (dist * side);
       const sy = pt.y + pt.ny * (dist * side);
@@ -1855,6 +1983,7 @@ function renderShorelineLappingWaves(
 
 /**
  * Water Lilies & Duckweed in calm river bays (Тихий Плёс)
+ * Stride-aligned to `k` so lily pads never teleport when camera moves or zooms.
  */
 function renderWaterLilies(
   ctx: CanvasRenderingContext2D,
@@ -1862,40 +1991,56 @@ function renderWaterLilies(
   kEnd: number,
   animTime: number
 ) {
-  for (let k = kStart; k < kEnd; k += 8) {
+  const firstK = Math.ceil(kStart / 8) * 8;
+  for (let k = firstK; k < kEnd; k += 8) {
     const pt = RIVER_SPLINE_POINTS[k];
     if (pt.currentSpeed < 26) {
-      const seed = Math.floor(pt.x + pt.y);
-      const bobY = Math.sin(animTime * 2.0 + seed) * 1.2;
-      const lx = pt.x + pt.nx * (pt.halfWidth * 0.65) + Math.sin(seed) * 12;
-      const ly = pt.y + pt.ny * (pt.halfWidth * 0.65) + Math.cos(seed) * 12 + bobY;
+      const seed = k * 37.1;
+      const side = riverHash(seed * 1.9) > 0.5 ? 1 : -1;
+      const padCount = 2 + Math.floor(riverHash(seed * 2.7) * 3);
 
-      ctx.fillStyle = 'rgba(5, 15, 20, 0.35)';
-      ctx.beginPath();
-      ctx.arc(lx + 1.5, ly + 1.5, 5.0, 0.2, Math.PI * 1.8);
-      ctx.fill();
+      for (let p = 0; p < padCount; p++) {
+        const pSeed = seed + p * 11.3;
+        const bobX = Math.cos(animTime * 1.6 + pSeed) * 0.7;
+        const bobY = Math.sin(animTime * 1.8 + pSeed) * 0.7;
+        const latDist = pt.halfWidth * (0.58 + riverHash(pSeed * 3.1) * 0.26) * side;
+        const lonDist = (riverHash(pSeed * 4.3) - 0.5) * 28;
+        const lx = pt.x + pt.nx * latDist + pt.tx * lonDist + bobX;
+        const ly = pt.y + pt.ny * latDist + pt.ty * lonDist + bobY;
+        const padRad = 3.2 + riverHash(pSeed * 5.7) * 2.2;
+        const notchAngle = riverHash(pSeed * 6.9) * Math.PI * 2;
 
-      ctx.fillStyle = '#15803d';
-      ctx.beginPath();
-      ctx.arc(lx, ly, 4.8, 0.2, Math.PI * 1.8);
-      ctx.fill();
-
-      if (k % 16 === 0) {
-        ctx.fillStyle = '#f472b6';
+        ctx.fillStyle = 'rgba(4, 16, 22, 0.38)';
         ctx.beginPath();
-        ctx.arc(lx, ly, 2.2, 0, Math.PI * 2);
+        ctx.arc(lx + 0.8, ly + 0.8, padRad, notchAngle + 0.25, notchAngle + Math.PI * 1.88);
+        ctx.lineTo(lx + 0.8, ly + 0.8);
+        ctx.closePath();
         ctx.fill();
-        ctx.fillStyle = '#fef08a';
+
+        ctx.fillStyle = p % 2 === 0 ? '#166534' : '#15803d';
         ctx.beginPath();
-        ctx.arc(lx, ly, 0.9, 0, Math.PI * 2);
+        ctx.arc(lx, ly, padRad, notchAngle + 0.25, notchAngle + Math.PI * 1.88);
+        ctx.lineTo(lx, ly);
+        ctx.closePath();
         ctx.fill();
+
+        if (p === 0 && k % 16 === 0) {
+          ctx.fillStyle = '#f8fafc';
+          ctx.beginPath();
+          ctx.arc(lx, ly, 1.9, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.fillStyle = '#fde047';
+          ctx.beginPath();
+          ctx.arc(lx, ly, 0.8, 0, Math.PI * 2);
+          ctx.fill();
+        }
       }
     }
   }
 }
 
 /**
- * Dynamic Floating River Debris
+ * Dynamic Floating River Debris (Organic top-down waterlogged twigs, autumn leaves, bark & foam clusters)
  */
 function renderFloatingRiverDebris(
   ctx: CanvasRenderingContext2D,
@@ -1905,13 +2050,16 @@ function renderFloatingRiverDebris(
   maxY: number,
   animTime: number
 ) {
+  ctx.save();
+  ctx.lineCap = 'round';
+
   for (let i = 0; i < floatingDebrisList.length; i++) {
     const d = floatingDebrisList[i];
     if (d.x < minX - 40 || d.x > maxX + 40 || d.y < minY - 40 || d.y > maxY + 40) {
       continue;
     }
 
-    const bobOffset = Math.sin(animTime * d.wobbleFreq + d.seed) * 1.2;
+    const bobOffset = Math.sin(animTime * d.wobbleFreq + d.seed) * 0.8;
     const drawX = d.x;
     const drawY = d.y + bobOffset;
 
@@ -1921,78 +2069,83 @@ function renderFloatingRiverDebris(
 
     switch (d.type) {
       case 'branch_pine': {
-        ctx.fillStyle = 'rgba(5, 15, 22, 0.40)';
-        ctx.fillRect(-d.size * 0.5 + 1.5, 1.5, d.size, 2.2);
-
-        ctx.fillStyle = '#451a03';
-        ctx.fillRect(-d.size * 0.5, -1, d.size, 2.0);
-
-        ctx.strokeStyle = '#451a03';
-        ctx.lineWidth = 1.2;
+        // Subtle water meniscus halo around floating branch
+        ctx.strokeStyle = 'rgba(186, 230, 253, 0.20)';
+        ctx.lineWidth = 2.6;
         ctx.beginPath();
-        ctx.moveTo(-d.size * 0.1, 0);
-        ctx.lineTo(d.size * 0.25, -4);
+        ctx.moveTo(-d.size * 0.7, 0);
+        ctx.quadraticCurveTo(0, d.size * 0.18, d.size * 0.7, -d.size * 0.08);
         ctx.stroke();
 
-        ctx.strokeStyle = '#14532d';
+        // Curved organic waterlogged branch
+        ctx.strokeStyle = '#3b2313';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(-d.size * 0.75, 0.2);
+        ctx.quadraticCurveTo(-d.size * 0.1, d.size * 0.22, d.size * 0.75, -0.3);
+        ctx.stroke();
+
+        // Forked side shoot & damp pine needles
         ctx.lineWidth = 1.0;
         ctx.beginPath();
-        ctx.moveTo(d.size * 0.25, -4);
-        ctx.lineTo(d.size * 0.4, -6);
-        ctx.moveTo(d.size * 0.25, -4);
-        ctx.lineTo(d.size * 0.35, -2);
+        ctx.moveTo(0, d.size * 0.08);
+        ctx.lineTo(d.size * 0.35, -d.size * 0.48);
+        ctx.stroke();
+
+        ctx.strokeStyle = '#1e4620';
+        ctx.lineWidth = 0.85;
+        ctx.beginPath();
+        ctx.moveTo(d.size * 0.22, -d.size * 0.32);
+        ctx.lineTo(d.size * 0.48, -d.size * 0.58);
+        ctx.moveTo(d.size * 0.28, -d.size * 0.38);
+        ctx.lineTo(d.size * 0.52, -d.size * 0.26);
         ctx.stroke();
         break;
       }
 
       case 'twig': {
-        ctx.fillStyle = 'rgba(5, 15, 22, 0.35)';
-        ctx.fillRect(-d.size * 0.5 + 1.2, 1.2, d.size, 1.6);
-
-        ctx.fillStyle = '#54361e';
-        ctx.fillRect(-d.size * 0.5, -0.8, d.size, 1.6);
+        ctx.strokeStyle = '#4a2f1b';
+        ctx.lineWidth = 1.25;
+        ctx.beginPath();
+        ctx.moveTo(-d.size * 0.65, 0);
+        ctx.quadraticCurveTo(0, d.size * 0.18, d.size * 0.65, -0.2);
+        ctx.stroke();
         break;
       }
 
       case 'leaf_yellow':
       case 'leaf_red':
       case 'leaf_orange': {
-        const leafColor = d.type === 'leaf_yellow' ? '#eab308' : (d.type === 'leaf_red' ? '#dc2626' : '#ea580c');
-        ctx.fillStyle = 'rgba(5, 15, 22, 0.35)';
-        ctx.beginPath();
-        ctx.ellipse(1.5, 1.5, d.size * 0.65, d.size * 0.35, 0.2, 0, Math.PI * 2);
-        ctx.fill();
-
+        const leafColor = d.type === 'leaf_yellow' ? '#ca8a04' : (d.type === 'leaf_red' ? '#b91c1c' : '#c2410c');
+        // Pointed birch/alder leaf silhouette floating flush on water surface
         ctx.fillStyle = leafColor;
         ctx.beginPath();
-        ctx.ellipse(0, 0, d.size * 0.65, d.size * 0.35, 0.2, 0, Math.PI * 2);
-        ctx.fill();
-
-        ctx.strokeStyle = 'rgba(67, 20, 7, 0.45)';
-        ctx.lineWidth = 0.6;
-        ctx.beginPath();
         ctx.moveTo(-d.size * 0.6, 0);
-        ctx.lineTo(d.size * 0.6, 0);
-        ctx.stroke();
+        ctx.quadraticCurveTo(0, -d.size * 0.42, d.size * 0.65, 0);
+        ctx.quadraticCurveTo(0, d.size * 0.42, -d.size * 0.6, 0);
+        ctx.closePath();
+        ctx.fill();
         break;
       }
 
       case 'bark_chip': {
-        ctx.fillStyle = '#78350f';
+        ctx.fillStyle = '#5c3419';
         ctx.beginPath();
-        ctx.ellipse(0, 0, d.size * 0.55, d.size * 0.4, 0.4, 0, Math.PI * 2);
+        ctx.moveTo(-d.size * 0.5, -d.size * 0.2);
+        ctx.lineTo(d.size * 0.45, -d.size * 0.28);
+        ctx.lineTo(d.size * 0.55, d.size * 0.22);
+        ctx.lineTo(-d.size * 0.4, d.size * 0.3);
+        ctx.closePath();
         ctx.fill();
-        ctx.fillStyle = '#451a03';
-        ctx.fillRect(-d.size * 0.25, -d.size * 0.15, d.size * 0.5, d.size * 0.3);
         break;
       }
 
       case 'foam_patch': {
-        ctx.fillStyle = 'rgba(240, 249, 255, 0.62)';
+        ctx.fillStyle = 'rgba(226, 244, 253, 0.45)';
         ctx.beginPath();
-        ctx.arc(0, 0, d.size * 0.45, 0, Math.PI * 2);
-        ctx.arc(d.size * 0.3, d.size * 0.2, d.size * 0.35, 0, Math.PI * 2);
-        ctx.arc(-d.size * 0.25, d.size * 0.15, d.size * 0.3, 0, Math.PI * 2);
+        ctx.arc(0, 0, d.size * 0.38, 0, Math.PI * 2);
+        ctx.arc(d.size * 0.28, d.size * 0.14, d.size * 0.26, 0, Math.PI * 2);
+        ctx.arc(-d.size * 0.24, d.size * 0.12, d.size * 0.22, 0, Math.PI * 2);
         ctx.fill();
         break;
       }
@@ -2000,6 +2153,7 @@ function renderFloatingRiverDebris(
 
     ctx.restore();
   }
+  ctx.restore();
 }
 
 /**
@@ -2062,7 +2216,9 @@ function renderObstacleWakes(
 }
 
 /**
- * Shoreline Reeds & Cattails along banks
+ * Top-Down Shoreline Reed & Sedge Tussocks (Камыш и осока) along both riverbanks.
+ * Replaces old side-view vertical sticks (`ry - 8`) with realistic radial top-down tussocks
+ * anchored to global spline index `k` so they never teleport on camera move/zoom.
  */
 function renderShorelineReeds(
   ctx: CanvasRenderingContext2D,
@@ -2070,26 +2226,69 @@ function renderShorelineReeds(
   kEnd: number,
   animTime: number
 ) {
-  for (let k = kStart; k < kEnd; k += 5) {
-    const pt = RIVER_SPLINE_POINTS[k];
-    const seed = Math.floor(pt.x * 0.1 + pt.y * 0.1);
-    if (seed % 3 === 0) {
-      const rx = pt.x + pt.nx * (pt.halfWidth + 4);
-      const ry = pt.y + pt.ny * (pt.halfWidth + 4);
+  const firstK = Math.ceil(kStart / 4) * 4;
+  ctx.save();
+  ctx.lineCap = 'round';
 
-      ctx.strokeStyle = '#3a6629';
-      ctx.lineWidth = 1.2;
-      for (let r = -2; r <= 2; r++) {
-        const windSway = Math.sin(animTime * 2.5 + r + k) * 2.5;
+  for (let k = firstK; k < kEnd; k += 4) {
+    const pt = RIVER_SPLINE_POINTS[k];
+    if (pt.isBridge || pt.isFord) continue;
+
+    for (const side of [-1, 1]) {
+      const sideSeed = k * 19.3 + (side > 0 ? 7.1 : 31.7);
+      if (riverHash(sideSeed) > 0.58) continue;
+
+      const clumpCount = 1 + Math.floor(riverHash(sideSeed * 2.3) * 2);
+      for (let c = 0; c < clumpCount; c++) {
+        const cSeed = sideSeed + c * 13.7;
+        // Rooted right at the shallow waterline / wet littoral edge
+        const radialDist = pt.halfWidth + (riverHash(cSeed * 1.7) * 8 - 3);
+        const alongOff = (riverHash(cSeed * 2.9) - 0.5) * 22;
+        const rx = pt.x + pt.nx * (radialDist * side) + pt.tx * alongOff;
+        const ry = pt.y + pt.ny * (radialDist * side) + pt.ty * alongOff;
+
+        // Basal tussock shadow in shallow water/mud
+        ctx.fillStyle = 'rgba(8, 16, 12, 0.42)';
         ctx.beginPath();
-        ctx.moveTo(rx + r * 3, ry);
-        ctx.lineTo(rx + r * 3 + windSway, ry - 8 - Math.abs(r) * 2);
-        ctx.stroke();
+        ctx.arc(rx + 0.8, ry + 0.9, 3.6, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Radial top-down sedge & reed blades swaying gently in the wind
+        const bladeCount = 6 + Math.floor(riverHash(cSeed * 4.1) * 4);
+        const windX = Math.cos(animTime * 2.1 + k * 0.4 + c) * 1.8;
+        const windY = Math.sin(animTime * 1.8 + k * 0.4 + c) * 1.8;
+
+        for (let b = 0; b < bladeCount; b++) {
+          const bSeed = cSeed + b * 5.3;
+          const angle = (b / bladeCount) * Math.PI * 2 + (riverHash(bSeed) - 0.5) * 0.5;
+          const len = 4.2 + riverHash(bSeed * 2.1) * 4.5;
+          const tipX = rx + Math.cos(angle) * len + windX;
+          const tipY = ry + Math.sin(angle) * len + windY;
+          const midX = rx + Math.cos(angle) * (len * 0.55) + windX * 0.4;
+          const midY = ry + Math.sin(angle) * (len * 0.55) + windY * 0.4;
+
+          ctx.strokeStyle = (b % 2 === 0) ? '#2f5225' : '#3f6a32';
+          ctx.lineWidth = 1.05;
+          ctx.beginPath();
+          ctx.moveTo(rx, ry);
+          ctx.quadraticCurveTo(midX, midY, tipX, tipY);
+          ctx.stroke();
+        }
+
+        // Top-down dark brown cattail seed head (рогоз) on mature clumps
+        if (riverHash(cSeed * 6.7) > 0.45) {
+          const headAngle = riverHash(cSeed * 8.1) * Math.PI * 2;
+          const hx = rx + Math.cos(headAngle) * 2.2 + windX * 0.6;
+          const hy = ry + Math.sin(headAngle) * 2.2 + windY * 0.6;
+          ctx.fillStyle = '#3e2412';
+          ctx.beginPath();
+          ctx.ellipse(hx, hy, 2.1, 1.1, headAngle, 0, Math.PI * 2);
+          ctx.fill();
+        }
       }
-      ctx.fillStyle = '#3d2817';
-      ctx.fillRect(rx - 1, ry - 11, 2.2, 5);
     }
   }
+  ctx.restore();
 }
 
 function renderLoggingBridge(ctx: CanvasRenderingContext2D, nightAlpha: number) {
@@ -2264,7 +2463,7 @@ function renderRiverAccessExits(
       ctx.stroke();
 
       ctx.lineWidth = 1.0;
-      ctx.strokeStyle = `rgba(186, 220, 248, ${(0.28 * (1 - nightAlpha * 0.6)).toFixed(2)})`;
+      ctx.strokeStyle = `rgba(196, 178, 158, ${(0.22 * (1 - nightAlpha * 0.6)).toFixed(2)})`;
       ctx.setLineDash([10, 8, 5, 11]);
       ctx.beginPath();
       ctx.moveTo(x0 - 4.4, y0 - 0.5);
@@ -2282,7 +2481,7 @@ function renderRiverAccessExits(
       ctx.stroke();
 
       ctx.lineWidth = 2.0;
-      ctx.strokeStyle = nightAlpha > 0.6 ? 'rgba(30, 58, 82, 0.55)' : 'rgba(125, 190, 230, 0.36)';
+      ctx.strokeStyle = nightAlpha > 0.6 ? 'rgba(38, 28, 20, 0.55)' : 'rgba(92, 74, 56, 0.36)';
       ctx.setLineDash([16, 10, 8, 14]);
       ctx.beginPath();
       ctx.moveTo(x0, y0);
@@ -2294,22 +2493,17 @@ function renderRiverAccessExits(
     for (let p = 0; p < 6; p++) {
       const pY = topY + (botY - topY) * (0.22 + p * 0.14) + Math.sin(exit.x + p * 1.7) * 9;
       const pX = exit.x + (p % 2 === 0 ? -1 : 1) * halfW * (0.16 + (p % 3) * 0.22);
-      const prx = 12 + (p % 3) * 4;
-      const pry = 5.5 + (p % 2) * 2.0;
+      const prx = 7.5 + (p % 3) * 2.5;
+      const pry = 3.5 + (p % 2) * 1.5;
 
-      ctx.fillStyle = 'rgba(8, 5, 2, 0.72)';
+      ctx.fillStyle = 'rgba(12, 8, 4, 0.62)';
       ctx.beginPath();
-      ctx.ellipse(pX, pY, prx + 2.2, pry + 1.6, 0.18, 0, Math.PI * 2);
+      ctx.ellipse(pX, pY, prx + 1.5, pry + 1.0, 0.18, 0, Math.PI * 2);
       ctx.fill();
 
-      ctx.fillStyle = (nightAlpha > 0.6) ? 'rgba(15, 28, 42, 0.78)' : 'rgba(28, 68, 88, 0.72)';
+      ctx.fillStyle = (nightAlpha > 0.6) ? 'rgba(24, 18, 12, 0.72)' : 'rgba(44, 32, 22, 0.68)';
       ctx.beginPath();
       ctx.ellipse(pX, pY, prx, pry, 0.18, 0, Math.PI * 2);
-      ctx.fill();
-
-      ctx.fillStyle = `rgba(224, 242, 254, ${(0.36 * (1 - nightAlpha * 0.65)).toFixed(2)})`;
-      ctx.beginPath();
-      ctx.ellipse(pX - prx * 0.25, pY - pry * 0.22, prx * 0.38, pry * 0.22, 0.12, 0, Math.PI * 2);
       ctx.fill();
     }
 

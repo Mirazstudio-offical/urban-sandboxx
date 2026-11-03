@@ -1493,10 +1493,10 @@ export class TerrainRenderer {
       if (px >= 2295 && px <= 2605 && py >= 1845 && py <= 2125) return 0;
       if (px >= 14750 && px <= 15350 && py >= 3650 && py <= 4050) return 0;
       if (px >= 5600 && px <= 6490 && py >= 3260 && py <= 3840) return 0;
-      // River channel
-      if (py <= -1800 && py >= -4200 && px >= -3500 && px <= 50500) {
+      // River channel, sandbars, and wet silt banks
+      if (py <= -1750 && py >= -4250 && px >= -3500 && px <= 50500) {
         const riv = getRiverWaterAt(px, py);
-        if (riv.distToCenter < riv.halfWidth + 16) return 0;
+        if (riv.inWater || riv.isBridge || riv.surfaceType !== 'land' || riv.distToCenter < riv.halfWidth + 85) return 0;
       }
 
       for (let i = 0; i < visibleBuildings.length; i++) {

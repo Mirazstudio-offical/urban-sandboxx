@@ -1558,7 +1558,7 @@ export interface Particle {
   secondaryColor?: string;    // Reverse side / primer / dark edge / ember core color
   bounces?: number;           // Remaining ballistic bounces upon ground impact
   streakLength?: number;      // High-velocity streak length multiplier
-  debrisSubtype?: 'metal_flake' | 'plastic_chunk' | 'concrete_chip' | 'wood_splinter';
+  debrisSubtype?: 'metal_flake' | 'plastic_chunk' | 'concrete_chip' | 'wood_splinter' | 'sand_grain' | 'liquid_drop';
   glassSubtype?: 'safety_pebble' | 'headlight' | 'taillight' | 'mirror';
   isGrounded?: boolean;
 }

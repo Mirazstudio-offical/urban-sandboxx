@@ -7880,8 +7880,8 @@ export class GameRenderer {
         const sunState = getCurrentSunShadowState();
         const dayVis = Math.max(0.18, 1 - (sunState.isNight ? 0.85 : 0) * 0.78);
         const grad = safeRadialGradient(ctx, -rX * 0.12 * sunState.sunDirX, -rY * 0.12 * sunState.sunDirY, 0, 0, 0, rX);
-        grad.addColorStop(0, `rgba(${Math.round(36 * dayVis)}, ${Math.round(138 * dayVis)}, ${Math.round(178 * dayVis)}, 0.34)`);
-        grad.addColorStop(0.58, `rgba(${Math.round(20 * dayVis)}, ${Math.round(68 * dayVis)}, ${Math.round(92 * dayVis)}, 0.42)`);
+        grad.addColorStop(0, `rgba(${Math.round(24 * dayVis)}, ${Math.round(128 * dayVis)}, ${Math.round(168 * dayVis)}, 0.48)`);
+        grad.addColorStop(0.58, `rgba(${Math.round(16 * dayVis)}, ${Math.round(82 * dayVis)}, ${Math.round(112 * dayVis)}, 0.52)`);
         grad.addColorStop(0.92, 'rgba(15, 23, 42, 0.52)');
         grad.addColorStop(1, 'rgba(15, 23, 42, 0)');
 
@@ -12151,16 +12151,45 @@ export class GameRenderer {
     }
   }
 
-  // --- PARTICLES & SOFT VOLUMETRIC GAS ENGINE ---
+  // --- PARTICLES & VOLUMETRIC FLUID / MATERIAL ENGINE ---
 
-  // Offscreen cached radial-gradient sprites for soft volumetric gas / exhaust puffs.
-  // Replaces hard-edged solid circles with realistic feather-edged gas clouds and avoids per-frame CPU gradients.
+  // Offscreen cached multi-lobed volumetric gas / exhaust / steam cloud sprites.
+  // Composites 9 asymmetric turbulent eddies, cellular curl wisps, sunlit top-left crest, and self-shadowed bottom-right curl.
   private static gasPuffCache = new Map<string, HTMLCanvasElement>();
+  private static dustPuffCache = new Map<string, HTMLCanvasElement>();
+  private static flameSpriteCache = new Map<number, HTMLCanvasElement>();
+  private static snowCrystalCache: HTMLCanvasElement[] = [];
 
-  private static getGasPuffSprite(color: string): HTMLCanvasElement {
-    let cached = GameRenderer.gasPuffCache.get(color);
+  private static parseRgbColor(color: string): [number, number, number] {
+    let r = 71, g = 85, b = 105;
+    if (color.startsWith('#')) {
+      let hex = color.slice(1);
+      if (hex.length === 3) {
+        hex = hex[0] + hex[0] + hex[1] + hex[1] + hex[2] + hex[2];
+      }
+      const val = parseInt(hex, 16);
+      if (!isNaN(val)) {
+        r = (val >> 16) & 255;
+        g = (val >> 8) & 255;
+        b = val & 255;
+      }
+    } else if (color.startsWith('rgb')) {
+      const parts = color.match(/\d+/g);
+      if (parts && parts.length >= 3) {
+        r = parseInt(parts[0], 10);
+        g = parseInt(parts[1], 10);
+        b = parseInt(parts[2], 10);
+      }
+    }
+    return [r, g, b];
+  }
+
+  private static getGasPuffSprite(color: string, variant: number = 0): HTMLCanvasElement {
+    const v = variant & 3;
+    const key = `${color}|${v}`;
+    let cached = GameRenderer.gasPuffCache.get(key);
     if (!cached) {
-      if (GameRenderer.gasPuffCache.size >= 32) {
+      if (GameRenderer.gasPuffCache.size >= 64) {
         const firstKey = GameRenderer.gasPuffCache.keys().next().value;
         if (firstKey !== undefined) {
           const old = GameRenderer.gasPuffCache.get(firstKey);
@@ -12172,56 +12201,304 @@ export class GameRenderer {
         }
       }
       cached = document.createElement('canvas');
+      const size = 72;
+      cached.width = size;
+      cached.height = size;
+      const cctx = cached.getContext('2d');
+      if (cctx) {
+        const half = size * 0.5;
+        const [r, g, b] = GameRenderer.parseRgbColor(color);
+        const lightR = Math.min(255, Math.round(r * 1.18 + 20));
+        const lightG = Math.min(255, Math.round(g * 1.18 + 20));
+        const lightB = Math.min(255, Math.round(b * 1.18 + 22));
+        const darkR = Math.max(0, Math.round(r * 0.68));
+        const darkG = Math.max(0, Math.round(g * 0.68));
+        const darkB = Math.max(0, Math.round(b * 0.72));
+
+        // 1. Multi-lobed billowy turbulent eddy geometry (4 distinct organic variants)
+        const lobeCount = 9;
+        for (let i = 0; i < lobeCount; i++) {
+          const hash = ((v * 19 + i * 37 + 11) * 1103515245 + 12345) >>> 16;
+          const baseAng = (i / lobeCount) * Math.PI * 2 + ((hash & 15) - 7) * 0.04;
+          const dist = (i === 0 ? 0 : 0.16 + ((hash >> 4) & 15) / 15 * 0.25) * size;
+          const lx = half + Math.cos(baseAng) * dist;
+          const ly = half + Math.sin(baseAng) * dist * (0.82 + (v & 1) * 0.14);
+          const lobeR = (i === 0 ? 0.34 : 0.19 + ((hash >> 8) & 15) / 15 * 0.15) * size;
+
+          // Directional lighting within the turbulent cloud: NW lobes brighter, SE lobes self-shadowed
+          const isLit = (lx - half) + (ly - half) < 0;
+          const cr = i === 0 ? r : (isLit ? lightR : darkR);
+          const cg = i === 0 ? g : (isLit ? lightG : darkG);
+          const cb = i === 0 ? b : (isLit ? lightB : darkB);
+
+          const grad = cctx.createRadialGradient(
+            lx - lobeR * 0.14,
+            ly - lobeR * 0.14,
+            lobeR * 0.05,
+            lx,
+            ly,
+            lobeR
+          );
+          const coreAlpha = i === 0 ? 0.68 : 0.42;
+          grad.addColorStop(0, `rgba(${cr}, ${cg}, ${cb}, ${coreAlpha})`);
+          grad.addColorStop(0.48, `rgba(${cr}, ${cg}, ${cb}, ${coreAlpha * 0.68})`);
+          grad.addColorStop(0.80, `rgba(${r}, ${g}, ${b}, ${coreAlpha * 0.26})`);
+          grad.addColorStop(1.0, `rgba(${r}, ${g}, ${b}, 0.0)`);
+
+          cctx.fillStyle = grad;
+          cctx.beginPath();
+          // Organic uneven polygon lobe instead of a perfect circle
+          const verts = 10;
+          for (let k = 0; k < verts; k++) {
+            const a = (k / verts) * Math.PI * 2;
+            const jag = 0.86 + (((hash + k * 13) & 7) / 7) * 0.26;
+            const px = lx + Math.cos(a) * lobeR * jag;
+            const py = ly + Math.sin(a) * lobeR * jag;
+            if (k === 0) cctx.moveTo(px, py);
+            else cctx.lineTo(px, py);
+          }
+          cctx.closePath();
+          cctx.fill();
+        }
+
+        // 2. Internal turbulent curl veins & wisps for realistic fibrous smoke/steam texture
+        cctx.lineCap = 'round';
+        for (let w = 0; w < 4; w++) {
+          const wAng = v * 0.8 + w * 1.57;
+          const rIn = size * 0.12;
+          const rOut = size * 0.34;
+          cctx.strokeStyle = w % 2 === 0
+            ? `rgba(${lightR}, ${lightG}, ${lightB}, 0.22)`
+            : `rgba(${darkR}, ${darkG}, ${darkB}, 0.20)`;
+          cctx.lineWidth = 2.6;
+          cctx.beginPath();
+          cctx.moveTo(half + Math.cos(wAng) * rIn, half + Math.sin(wAng) * rIn);
+          cctx.quadraticCurveTo(
+            half + Math.cos(wAng + 0.65) * ((rIn + rOut) * 0.62),
+            half + Math.sin(wAng + 0.65) * ((rIn + rOut) * 0.62),
+            half + Math.cos(wAng + 1.25) * rOut,
+            half + Math.sin(wAng + 1.25) * rOut
+          );
+          cctx.stroke();
+        }
+      }
+      GameRenderer.gasPuffCache.set(key, cached);
+    }
+    return cached;
+  }
+
+  private static getDustPuffSprite(color: string, variant: number = 0): HTMLCanvasElement {
+    const v = variant & 3;
+    const key = `${color}|${v}`;
+    let cached = GameRenderer.dustPuffCache.get(key);
+    if (!cached) {
+      if (GameRenderer.dustPuffCache.size >= 32) {
+        const firstKey = GameRenderer.dustPuffCache.keys().next().value;
+        if (firstKey !== undefined) {
+          const old = GameRenderer.dustPuffCache.get(firstKey);
+          if (old) {
+            old.width = 0;
+            old.height = 0;
+          }
+          GameRenderer.dustPuffCache.delete(firstKey);
+        }
+      }
+      cached = document.createElement('canvas');
       const size = 64;
       cached.width = size;
       cached.height = size;
       const cctx = cached.getContext('2d');
       if (cctx) {
-        const half = size / 2;
-        const grad = cctx.createRadialGradient(half, half, 0, half, half, half);
+        const half = size * 0.5;
+        const [r, g, b] = GameRenderer.parseRgbColor(color);
+        const lightR = Math.min(255, r + 26);
+        const lightG = Math.min(255, g + 22);
+        const lightB = Math.min(255, b + 16);
+        const darkR = Math.max(0, r - 28);
+        const darkG = Math.max(0, g - 26);
+        const darkB = Math.max(0, b - 22);
 
-        let r = 71, g = 85, b = 105;
-        if (color.startsWith('#')) {
-          let hex = color.slice(1);
-          if (hex.length === 3) {
-            hex = hex[0] + hex[0] + hex[1] + hex[1] + hex[2] + hex[2];
+        // Wind-sheared asymmetric soil/sand cloud lobes
+        for (let i = 0; i < 7; i++) {
+          const hash = ((v * 29 + i * 43 + 7) * 1103515245 + 12345) >>> 16;
+          const ang = (i / 7) * Math.PI * 2 + v * 0.45;
+          const dist = (i === 0 ? 0 : 0.14 + ((hash & 15) / 15) * 0.22) * size;
+          const lx = half + Math.cos(ang) * dist * 1.08;
+          const ly = half + Math.sin(ang) * dist * 0.86;
+          const lobeR = (i === 0 ? 0.33 : 0.18 + (((hash >> 4) & 15) / 15) * 0.14) * size;
+
+          const cr = (lx < half && ly < half) ? lightR : (lx > half && ly > half ? darkR : r);
+          const cg = (lx < half && ly < half) ? lightG : (lx > half && ly > half ? darkG : g);
+          const cb = (lx < half && ly < half) ? lightB : (lx > half && ly > half ? darkB : b);
+
+          const grad = cctx.createRadialGradient(lx, ly, lobeR * 0.08, lx, ly, lobeR);
+          grad.addColorStop(0, `rgba(${cr}, ${cg}, ${cb}, 0.58)`);
+          grad.addColorStop(0.55, `rgba(${r}, ${g}, ${b}, 0.34)`);
+          grad.addColorStop(1.0, `rgba(${darkR}, ${darkG}, ${darkB}, 0.0)`);
+
+          cctx.fillStyle = grad;
+          cctx.beginPath();
+          const verts = 8;
+          for (let k = 0; k < verts; k++) {
+            const ka = (k / verts) * Math.PI * 2;
+            const jag = 0.80 + (((hash + k * 17) & 7) / 7) * 0.34;
+            const px = lx + Math.cos(ka) * lobeR * jag;
+            const py = ly + Math.sin(ka) * lobeR * jag;
+            if (k === 0) cctx.moveTo(px, py);
+            else cctx.lineTo(px, py);
           }
-          const val = parseInt(hex, 16);
-          if (!isNaN(val)) {
-            r = (val >> 16) & 255;
-            g = (val >> 8) & 255;
-            b = val & 255;
-          }
-        } else if (color.startsWith('rgb')) {
-          const parts = color.match(/\d+/g);
-          if (parts && parts.length >= 3) {
-            r = parseInt(parts[0], 10);
-            g = parseInt(parts[1], 10);
-            b = parseInt(parts[2], 10);
-          }
+          cctx.closePath();
+          cctx.fill();
         }
 
-        // Smooth volumetric gas falloff:
-        // Broad dense core ensures rich opacity, feathered outer rim prevents hard polygon edges
-        grad.addColorStop(0, `rgba(${r}, ${g}, ${b}, 1.0)`);
-        grad.addColorStop(0.50, `rgba(${r}, ${g}, ${b}, 0.95)`);
-        grad.addColorStop(0.75, `rgba(${r}, ${g}, ${b}, 0.70)`);
-        grad.addColorStop(0.90, `rgba(${r}, ${g}, ${b}, 0.30)`);
-        grad.addColorStop(1.0, `rgba(${r}, ${g}, ${b}, 0.0)`);
-
-        cctx.fillStyle = grad;
-        cctx.fillRect(0, 0, size, size);
+        // Embedded particulate sand/soil grains inside the dust plume
+        for (let s = 0; s < 16; s++) {
+          const sh = ((v * 53 + s * 97 + 19) * 1103515245 + 12345) >>> 16;
+          const sAng = (s / 16) * Math.PI * 2 + (sh & 7) * 0.12;
+          const sDist = (0.08 + ((sh >> 4) & 31) / 31 * 0.32) * size;
+          const sx = half + Math.cos(sAng) * sDist;
+          const sy = half + Math.sin(sAng) * sDist;
+          const gw = 1.2 + ((sh >> 9) & 3) * 0.45;
+          const gh = 0.9 + ((sh >> 11) & 3) * 0.35;
+          cctx.fillStyle = (s & 1) === 0
+            ? `rgba(${darkR}, ${darkG}, ${darkB}, 0.52)`
+            : `rgba(${lightR}, ${lightG}, ${lightB}, 0.48)`;
+          cctx.fillRect(sx - gw * 0.5, sy - gh * 0.5, gw, gh);
+        }
       }
-      GameRenderer.gasPuffCache.set(color, cached);
+      GameRenderer.dustPuffCache.set(key, cached);
+    }
+    return cached;
+  }
+
+  private static getFlameTongueSprite(variant: number = 0): HTMLCanvasElement {
+    const v = variant & 3;
+    let cached = GameRenderer.flameSpriteCache.get(v);
+    if (!cached) {
+      cached = document.createElement('canvas');
+      const size = 64;
+      cached.width = size;
+      cached.height = size;
+      const cctx = cached.getContext('2d');
+      if (cctx) {
+        const cx = size * 0.5;
+        const cy = size * 0.58;
+        const sway = (v - 1.5) * 3.2;
+
+        // 1. Soft crimson-orange outer thermal aura (irregular teardrop polygon)
+        const outerGrad = cctx.createLinearGradient(cx, cy + 16, cx + sway, 6);
+        outerGrad.addColorStop(0.0, 'rgba(185, 28, 28, 0.55)');
+        outerGrad.addColorStop(0.45, 'rgba(234, 88, 12, 0.72)');
+        outerGrad.addColorStop(0.85, 'rgba(249, 115, 22, 0.35)');
+        outerGrad.addColorStop(1.0, 'rgba(220, 38, 38, 0.0)');
+        cctx.fillStyle = outerGrad;
+        cctx.beginPath();
+        cctx.moveTo(cx, cy + 15);
+        cctx.bezierCurveTo(cx - 20, cy + 12, cx - 22, cy - 6, cx - 10 + sway * 0.5, 14);
+        cctx.lineTo(cx - 4 + sway, 22);
+        cctx.lineTo(cx + sway * 1.1, 5);
+        cctx.lineTo(cx + 5 + sway * 0.7, 20);
+        cctx.lineTo(cx + 12 - sway * 0.4, 12);
+        cctx.bezierCurveTo(cx + 22, cy - 4, cx + 19, cy + 12, cx, cy + 15);
+        cctx.closePath();
+        cctx.fill();
+
+        // 2. Jagged middle orange-amber licking flame tongues
+        const midGrad = cctx.createLinearGradient(cx, cy + 11, cx + sway * 0.8, 12);
+        midGrad.addColorStop(0.0, 'rgba(245, 158, 11, 0.92)');
+        midGrad.addColorStop(0.55, 'rgba(251, 191, 36, 0.88)');
+        midGrad.addColorStop(1.0, 'rgba(249, 115, 22, 0.0)');
+        cctx.fillStyle = midGrad;
+        cctx.beginPath();
+        cctx.moveTo(cx, cy + 11);
+        cctx.bezierCurveTo(cx - 13, cy + 8, cx - 14, cy - 5, cx - 6 + sway * 0.4, 19);
+        cctx.lineTo(cx - 2 + sway * 0.6, 26);
+        cctx.lineTo(cx + sway * 0.9, 11);
+        cctx.lineTo(cx + 4 + sway * 0.5, 24);
+        cctx.lineTo(cx + 8 - sway * 0.3, 18);
+        cctx.bezierCurveTo(cx + 14, cy - 4, cx + 13, cy + 8, cx, cy + 11);
+        cctx.closePath();
+        cctx.fill();
+
+        // 3. Incandescent white-yellow combustion core
+        const coreGrad = cctx.createLinearGradient(cx, cy + 8, cx + sway * 0.4, cy - 12);
+        coreGrad.addColorStop(0.0, 'rgba(255, 255, 255, 0.98)');
+        coreGrad.addColorStop(0.55, 'rgba(254, 240, 138, 0.92)');
+        coreGrad.addColorStop(1.0, 'rgba(251, 191, 36, 0.0)');
+        cctx.fillStyle = coreGrad;
+        cctx.beginPath();
+        cctx.moveTo(cx, cy + 8);
+        cctx.bezierCurveTo(cx - 7, cy + 5, cx - 7, cy - 3, cx + sway * 0.35, cy - 13);
+        cctx.bezierCurveTo(cx + 7, cy - 3, cx + 7, cy + 5, cx, cy + 8);
+        cctx.closePath();
+        cctx.fill();
+      }
+      GameRenderer.flameSpriteCache.set(v, cached);
+    }
+    return cached;
+  }
+
+  private static getSnowCrystalSprite(variant: number = 0): HTMLCanvasElement {
+    const v = variant & 1;
+    let cached = GameRenderer.snowCrystalCache[v];
+    if (!cached) {
+      cached = document.createElement('canvas');
+      const size = 20;
+      cached.width = size;
+      cached.height = size;
+      const cctx = cached.getContext('2d');
+      if (cctx) {
+        const half = size * 0.5;
+        cctx.strokeStyle = 'rgba(255, 255, 255, 0.95)';
+        cctx.lineWidth = 1.35;
+        cctx.lineCap = 'round';
+        // 6-pointed dendritic ice crystal
+        for (let i = 0; i < 3; i++) {
+          const ang = (i * Math.PI) / 3 + v * 0.26;
+          const dx = Math.cos(ang) * 7.5;
+          const dy = Math.sin(ang) * 7.5;
+          cctx.beginPath();
+          cctx.moveTo(half - dx, half - dy);
+          cctx.lineTo(half + dx, half + dy);
+          cctx.stroke();
+
+          // Micro-dendrite branches near crystal tips
+          for (const dir of [-1, 1]) {
+            const bx = half + dx * 0.58 * dir;
+            const by = half + dy * 0.58 * dir;
+            const bAng1 = ang + 0.55;
+            const bAng2 = ang - 0.55;
+            cctx.beginPath();
+            cctx.moveTo(bx + Math.cos(bAng1) * 2.6 * dir, by + Math.sin(bAng1) * 2.6 * dir);
+            cctx.lineTo(bx, by);
+            cctx.lineTo(bx + Math.cos(bAng2) * 2.6 * dir, by + Math.sin(bAng2) * 2.6 * dir);
+            cctx.stroke();
+          }
+        }
+      }
+      GameRenderer.snowCrystalCache[v] = cached;
     }
     return cached;
   }
 
   private drawGasSmokeParticle(p: Particle) {
-    const sprite = GameRenderer.getGasPuffSprite(p.color);
-    this.ctx.globalAlpha = Math.max(0, Math.min(1.0, p.alpha));
+    const seed = p.shapeSeed ?? 0;
+    const sprite = GameRenderer.getGasPuffSprite(p.color, seed & 3);
+    const ctx = this.ctx;
+    ctx.globalAlpha = Math.max(0, Math.min(1.0, p.alpha));
     const r = p.radius;
-    this.ctx.drawImage(sprite, p.x - r, p.y - r, r * 2, r * 2);
+    const rot = p.angle ?? ((seed & 31) * 0.2 + p.life * 0.8);
+    const aspect = p.aspect ?? (1.08 + (seed & 3) * 0.07);
+    const spdSq = p.vx * p.vx + p.vy * p.vy;
+    const stretch = spdSq > 160 ? Math.min(1.45, 1.0 + Math.sqrt(spdSq) * 0.0028) : aspect;
+
+    ctx.save();
+    ctx.translate(p.x, p.y);
+    ctx.rotate(rot);
+    const rx = r * stretch;
+    const ry = r * (1.92 - stretch * 0.45);
+    ctx.drawImage(sprite, -rx, -ry, rx * 2, ry * 2);
+    ctx.restore();
   }
 
   // 13c. Under-Vehicle Ground Particles: Under-car exhaust gas, flat splatted mud stains, and grounded glass & debris
@@ -12235,13 +12512,10 @@ export class GameRenderer {
       if (p.type === 'exhaust' && p.underVehicle !== false) {
         this.drawGasSmokeParticle(p);
       } else if (p.type === 'mud_clod' && p.splatted) {
-        // Mud that has already landed: stationary flat ground stain
         this.drawMudClodParticle(p);
       } else if (p.type === 'glass_shard' && (p.splatted || (p.z !== undefined && p.z <= 0.05))) {
-        // Glass shards resting on the asphalt under vehicle wheels & body
         this.drawGlassShardParticle(p);
       } else if (p.type === 'debris' && (p.splatted || (p.z !== undefined && p.z <= 0.05))) {
-        // Plastic, metal and concrete debris resting on the asphalt under vehicle wheels & body
         this.drawDebrisParticle(p);
       }
     }
@@ -12253,75 +12527,132 @@ export class GameRenderer {
   private renderWheelGroundParticles(particles: GameWorld['particles'], cleanMode?: boolean) {
     if (cleanMode || !particles || particles.length === 0) return;
     const len = particles.length;
-    const ctx = this.ctx;
 
     for (let i = 0; i < len; i++) {
       const p = particles[i];
       if (p.type === 'dust') {
         this.drawDustParticle(p);
       } else if (p.type === 'mud_clod' && !p.splatted) {
-        // Mud clod in airborne 3D ballistic trajectory with contact shadow
         this.drawMudClodParticle(p);
       } else if (p.type === 'tire_smoke' && !p.underVehicle) {
         this.drawGasSmokeParticle(p);
       } else if (p.type === 'water_spray') {
-        ctx.globalAlpha = Math.max(0, Math.min(1.0, p.alpha));
-        ctx.fillStyle = p.color;
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
-        ctx.fill();
+        this.drawWaterParticle(p);
       }
     }
     this.ctx.globalAlpha = 1.0;
   }
 
-  // Volumetric billowy ground dust cloud puff
+  // Volumetric multi-lobed ground dust cloud with embedded soil grains
   private drawDustParticle(p: Particle) {
     const ctx = this.ctx;
     const a = Math.max(0, Math.min(1.0, p.alpha));
+    if (a < 0.01) return;
+    const seed = p.shapeSeed ?? 0;
+    const sprite = GameRenderer.getDustPuffSprite(p.color, seed & 3);
     const rad = p.radius;
+    const rot = p.angle ?? ((seed & 15) * 0.35 + p.life * 0.7);
+    const rx = rad * (p.aspect ?? 1.16);
+    const ry = rad * 0.90;
 
-    // Outer soft atmospheric puff
-    ctx.globalAlpha = a * 0.42;
-    ctx.fillStyle = p.color;
-    ctx.beginPath();
-    ctx.arc(p.x, p.y, rad, 0, Math.PI * 2);
-    ctx.fill();
+    ctx.globalAlpha = a;
+    ctx.save();
+    ctx.translate(p.x, p.y);
+    ctx.rotate(rot);
+    ctx.drawImage(sprite, -rx, -ry, rx * 2, ry * 2);
+    ctx.restore();
+  }
 
-    // Intermediate billowy body
-    ctx.globalAlpha = a * 0.68;
-    ctx.beginPath();
-    ctx.arc(p.x + (Math.sin(p.life * 2.5) * rad * 0.14), p.y + (Math.cos(p.life * 2.5) * rad * 0.14), rad * 0.60, 0, Math.PI * 2);
-    ctx.fill();
+  // Aerodynamic sheared liquid ligament, atomized V-mist fan, and frothy splash crest (zero circles)
+  private drawWaterParticle(p: Particle) {
+    const ctx = this.ctx;
+    const a = Math.max(0, Math.min(1.0, p.alpha));
+    if (a < 0.01) return;
+    ctx.globalAlpha = a;
 
-    // Dense inner dusty core
-    if (rad > 6.0) {
-      ctx.globalAlpha = a * 0.88;
+    const vSq = p.vx * p.vx + p.vy * p.vy;
+    const r = Math.max(0.9, p.radius);
+    const seed = p.shapeSeed ?? 0;
+
+    if (vSq > 180) {
+      // High-velocity aerodynamic water ligament / sheared spray sheet
+      const vLen = Math.sqrt(vSq);
+      const nx = p.vx / vLen;
+      const ny = p.vy / vLen;
+      const px = -ny;
+      const py = nx;
+      const tailLen = Math.min(16, Math.max(r * 2.1, vLen * 0.036));
+      const headW = Math.max(0.75, r * 0.58);
+      const tailW = Math.max(0.25, r * 0.16);
+
+      // Tapered aerodynamic liquid ligament
+      ctx.fillStyle = p.color;
       ctx.beginPath();
-      ctx.arc(p.x, p.y, rad * 0.30, 0, Math.PI * 2);
+      ctx.moveTo(p.x + nx * headW, p.y + ny * headW);
+      ctx.lineTo(p.x + px * headW, p.y + py * headW);
+      ctx.lineTo(p.x - nx * tailLen + px * tailW, p.y - ny * tailLen + py * tailW);
+      ctx.lineTo(p.x - nx * (tailLen * 1.12), p.y - ny * (tailLen * 1.12));
+      ctx.lineTo(p.x - nx * tailLen - px * tailW, p.y - ny * tailLen - py * tailW);
+      ctx.lineTo(p.x - px * headW, p.y - py * headW);
+      ctx.closePath();
       ctx.fill();
+
+      // Refractive white foam spine along leading edge
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.78)';
+      ctx.lineWidth = Math.max(0.55, r * 0.28);
+      ctx.beginPath();
+      ctx.moveTo(p.x + nx * (headW * 0.6), p.y + ny * (headW * 0.6));
+      ctx.lineTo(p.x - nx * (tailLen * 0.52), p.y - ny * (tailLen * 0.52));
+      ctx.stroke();
+    } else {
+      // Atomized splash crown / irregular liquid sheet on impact or low-speed drift
+      const rot = p.angle ?? ((seed & 31) * 0.2);
+      const cosR = Math.cos(rot);
+      const sinR = Math.sin(rot);
+      const rx = r * (p.aspect ?? 1.25);
+      const ry = r * 0.78;
+
+      ctx.fillStyle = p.color;
+      ctx.beginPath();
+      for (let v = 0; v < 7; v++) {
+        const ang = (v / 7) * Math.PI * 2;
+        const jag = 0.74 + (((seed + v * 11) & 7) / 7) * 0.44;
+        const lx = Math.cos(ang) * rx * jag;
+        const ly = Math.sin(ang) * ry * jag;
+        const wx = p.x + lx * cosR - ly * sinR;
+        const wy = p.y + lx * sinR + ly * cosR;
+        if (v === 0) ctx.moveTo(wx, wy);
+        else ctx.lineTo(wx, wy);
+      }
+      ctx.closePath();
+      ctx.fill();
+
+      // Specular liquid crescent highlight on NW rim
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.68)';
+      ctx.lineWidth = Math.max(0.5, r * 0.24);
+      ctx.beginPath();
+      ctx.moveTo(p.x - rx * 0.45 * cosR, p.y - ry * 0.45 * sinR);
+      ctx.lineTo(p.x + rx * 0.25 * sinR, p.y - ry * 0.25 * cosR);
+      ctx.stroke();
     }
   }
 
-  // Realistic 3D irregular mud/soil clod with contact shadow, faceted relief, wet specular glint, and satellite crumbs
+  // Realistic 3D irregular mud/soil clod with faceted polygon relief, wet specular glint, and angular soil crumbs
   private drawMudClodParticle(p: Particle) {
     const ctx = this.ctx;
     const a = Math.max(0, Math.min(1.0, p.alpha));
     if (a < 0.01) return;
     const seed = p.shapeSeed || 1;
-    // Clamp radius so clods always look like realistic soil lumps, never giant flat coins
-    const r = Math.max(0.9, Math.min(4.4, p.radius));
+    const r = Math.max(1.0, Math.min(4.6, p.radius));
     const isWet = !!p.isWet;
     const darkCore = p.secondaryColor || (isWet ? '#120904' : '#26180d');
 
-    // Helper: trace a 6-vertex irregular jagged clod polygon around (cx, cy)
     const traceClodPolygon = (cx: number, cy: number, radX: number, radY: number, rotAngle: number) => {
       const cosR = Math.cos(rotAngle);
       const sinR = Math.sin(rotAngle);
       ctx.beginPath();
       for (let v = 0; v < 6; v++) {
         const baseAng = (v * Math.PI) / 3;
-        // Deterministic per-vertex jag factor (0.72 .. 1.24)
         const vHash = ((seed * (v + 3) * 1103515245 + 12345) >>> 16) & 31;
         const jag = 0.72 + (vHash / 31) * 0.52;
         const lx = Math.cos(baseAng) * radX * jag;
@@ -12335,265 +12666,349 @@ export class GameRenderer {
     };
 
     if (p.z !== undefined && p.z > 0 && !p.splatted) {
-      // 1. Ground contact shadow (shrinks & softens with altitude p.z)
       const heightFade = Math.max(0.18, 1.0 - p.z * 0.035);
-      ctx.globalAlpha = a * 0.45 * heightFade;
+      const rot = p.angle ?? ((seed % 31) * 0.2 + p.life * 6.5);
+      const rx = r * (0.95 + ((seed % 5) - 2) * 0.07);
+      const ry = r * (0.76 + ((seed % 7) - 3) * 0.06);
+
+      // 1. Ground contact shadow polygon
+      ctx.globalAlpha = a * 0.42 * heightFade;
       ctx.fillStyle = '#080401';
-      ctx.beginPath();
-      ctx.ellipse(p.x + p.z * 0.22, p.y + p.z * 0.18, Math.max(0.7, r * 0.78 * heightFade), Math.max(0.45, r * 0.48 * heightFade), 0, 0, Math.PI * 2);
+      traceClodPolygon(
+        p.x + p.z * 0.22,
+        p.y + p.z * 0.18,
+        Math.max(0.7, rx * 0.78 * heightFade),
+        Math.max(0.45, ry * 0.55 * heightFade),
+        rot
+      );
       ctx.fill();
 
       // 2. Airborne 3D tumbling jagged mud clod elevated along Z axis
       const drawY = p.y - p.z;
-      const rot = (seed % 31) * 0.2 + p.life * 6.5;
-      const rx = r * (0.95 + ((seed % 5) - 2) * 0.07);
-      const ry = r * (0.76 + ((seed % 7) - 3) * 0.06);
-
-      // Dark shaded underside of the airborne clod
       ctx.globalAlpha = a;
       ctx.fillStyle = darkCore;
       traceClodPolygon(p.x + 0.45, drawY + 0.55, rx, ry, rot);
       ctx.fill();
 
-      // Main earthy body of the clod
       ctx.fillStyle = p.color;
       traceClodPolygon(p.x, drawY, rx * 0.90, ry * 0.88, rot);
       ctx.fill();
 
-      // Top-left (NW) sunlit facet or wet specular highlight
-      ctx.fillStyle = isWet ? 'rgba(205, 230, 250, 0.52)' : 'rgba(156, 120, 90, 0.45)';
-      ctx.beginPath();
-      ctx.ellipse(p.x - rx * 0.24, drawY - ry * 0.24, Math.max(0.4, rx * 0.34), Math.max(0.3, ry * 0.24), rot, 0, Math.PI * 2);
+      // Top-left (NW) angular sunlit facet or wet specular ridge
+      ctx.fillStyle = isWet ? 'rgba(205, 230, 250, 0.55)' : 'rgba(156, 120, 90, 0.45)';
+      traceClodPolygon(p.x - rx * 0.22, drawY - ry * 0.22, Math.max(0.45, rx * 0.36), Math.max(0.32, ry * 0.26), rot + 0.4);
       ctx.fill();
 
-      // Trailing micro-crumb behind fast-flying clods
+      // Trailing angular soil crumb behind fast-flying clods
       const vSq = p.vx * p.vx + p.vy * p.vy;
       if (vSq > 260) {
         const vLen = Math.sqrt(vSq);
         const nx = p.vx / vLen;
         const ny = p.vy / vLen;
+        const cr = Math.max(0.5, r * 0.30);
         ctx.fillStyle = darkCore;
-        ctx.beginPath();
-        ctx.arc(p.x - nx * (r * 1.45), drawY - ny * (r * 1.45), Math.max(0.45, r * 0.28), 0, Math.PI * 2);
+        traceClodPolygon(p.x - nx * (r * 1.45), drawY - ny * (r * 1.45), cr, cr * 0.8, rot + 0.8);
         ctx.fill();
       }
     } else {
-      // Landed 3D soil/mud lump on the ground (compact, volumetric, never a giant flat disk)
+      // Landed 3D soil/mud lump on the ground
       const rot = (seed % 31) * 0.2;
       const rx = r * 1.05;
       const ry = r * 0.82;
 
-      // 1. Wet moisture seepage halo on the ground around wet mud clods
       if (isWet) {
-        ctx.globalAlpha = a * 0.38;
+        ctx.globalAlpha = a * 0.36;
         ctx.fillStyle = '#0c0703';
-        ctx.beginPath();
-        ctx.ellipse(p.x, p.y, rx * 1.38, ry * 1.32, rot, 0, Math.PI * 2);
+        traceClodPolygon(p.x, p.y, rx * 1.36, ry * 1.30, rot);
         ctx.fill();
       }
 
-      // 2. Crisp directional SE drop shadow on the ground
       ctx.globalAlpha = a * 0.65;
       ctx.fillStyle = '#070301';
       traceClodPolygon(p.x + 0.75, p.y + 0.75, rx * 1.04, ry * 1.04, rot);
       ctx.fill();
 
-      // 3. Dark base crust of the clod
       ctx.globalAlpha = a;
       ctx.fillStyle = darkCore;
       traceClodPolygon(p.x, p.y, rx, ry, rot);
       ctx.fill();
 
-      // 4. Raised upper soil body (offset slightly NW for 3D thickness)
       ctx.fillStyle = p.color;
       traceClodPolygon(p.x - 0.25, p.y - 0.25, rx * 0.80, ry * 0.78, rot + 0.25);
       ctx.fill();
 
-      // 5. NW sunlit ridge or wet water-film glint on top of the lump
-      ctx.fillStyle = isWet ? 'rgba(198, 226, 248, 0.46)' : 'rgba(148, 112, 82, 0.38)';
-      ctx.beginPath();
-      ctx.ellipse(p.x - rx * 0.26, p.y - ry * 0.26, Math.max(0.4, rx * 0.32), Math.max(0.3, ry * 0.22), rot, 0, Math.PI * 2);
+      ctx.fillStyle = isWet ? 'rgba(198, 226, 248, 0.48)' : 'rgba(148, 112, 82, 0.40)';
+      traceClodPolygon(p.x - rx * 0.24, p.y - ry * 0.24, Math.max(0.45, rx * 0.34), Math.max(0.32, ry * 0.24), rot + 0.5);
       ctx.fill();
 
-      // 6. Compact 3D satellite soil crumbs scattered around impact point
+      // Angular satellite soil crumbs
       const ang1 = (seed % 62) * 0.1;
       const dist1 = r * 1.35 + 0.6;
       const sx1 = p.x + Math.cos(ang1) * dist1;
       const sy1 = p.y + Math.sin(ang1) * dist1;
-      const sr1 = Math.max(0.45, r * 0.26);
-      ctx.fillStyle = '#080401';
-      ctx.beginPath();
-      ctx.arc(sx1 + 0.4, sy1 + 0.4, sr1, 0, Math.PI * 2);
-      ctx.fill();
+      const sr1 = Math.max(0.5, r * 0.28);
       ctx.fillStyle = darkCore;
-      ctx.beginPath();
-      ctx.arc(sx1, sy1, sr1, 0, Math.PI * 2);
+      traceClodPolygon(sx1, sy1, sr1, sr1 * 0.78, rot + 1.1);
       ctx.fill();
-
-      if (r > 2.0) {
-        const ang2 = ang1 + 2.3;
-        const dist2 = r * 1.65 + 0.8;
-        const sx2 = p.x + Math.cos(ang2) * dist2;
-        const sy2 = p.y + Math.sin(ang2) * dist2;
-        const sr2 = Math.max(0.4, r * 0.20);
-        ctx.fillStyle = p.color;
-        ctx.beginPath();
-        ctx.arc(sx2, sy2, sr2, 0, Math.PI * 2);
-        ctx.fill();
-      }
     }
   }
 
-  // Micro-scaled crystalline glass shard (safety glass pebble / lens splinter)
+  // Crystalline safety-glass shard / lens splinter with internal refraction facet and bevel glint
   private drawGlassShardParticle(p: Particle) {
     const ctx = this.ctx;
-    ctx.globalAlpha = Math.max(0, Math.min(1.0, p.alpha));
+    const a = Math.max(0, Math.min(1.0, p.alpha));
+    if (a < 0.01) return;
+    ctx.globalAlpha = a;
 
-    // Airborne 3D drop shadow on asphalt
-    const isAirborne = (!p.splatted && p.z !== undefined && p.z > 0.05);
+    const r = Math.min(2.8, Math.max(1.0, p.radius));
+    const rot = p.angle ?? ((p.x + p.y) * 0.1);
+    const tumbleScale = Math.max(0.34, Math.abs(Math.cos(rot * 1.6)));
+    const aspect = Math.min(1.85, p.aspect ?? 1.35);
+    const rx = r * aspect;
+    const ry = r * tumbleScale;
+
+    // Airborne directional shadow polygon
+    const isAirborne = (!p.splatted && p.z !== undefined && p.z > 0.15);
     if (isAirborne) {
-      const shadowAlpha = p.alpha * Math.max(0, 0.45 - p.z * 0.04);
+      const shadowAlpha = a * Math.max(0, 0.42 - p.z * 0.035);
       if (shadowAlpha > 0.02) {
-        ctx.fillStyle = `rgba(15, 23, 42, ${shadowAlpha * 0.45})`;
-        ctx.beginPath();
-        ctx.ellipse(p.x, p.y + p.z * 1.6, Math.max(0.6, p.radius * 0.6), Math.max(0.3, p.radius * 0.3), 0, 0, Math.PI * 2);
-        ctx.fill();
+        ctx.fillStyle = `rgba(15, 23, 42, ${shadowAlpha * 0.5})`;
+        ctx.fillRect(p.x - rx * 0.5, p.y + p.z * 1.4 - ry * 0.4, rx, ry * 0.8);
       }
     }
 
     ctx.save();
-    ctx.translate(p.x, p.y);
-    const rot = p.angle ?? ((p.x + p.y) * 0.1);
+    ctx.translate(p.x, p.y - (isAirborne ? (p.z ?? 0) * 0.35 : 0));
     ctx.rotate(rot);
-
-    // Micro-scaled bounds: glass shard diameter between 0.8px and 2.4px total width
-    const tumbleScale = Math.max(0.30, Math.abs(Math.cos(rot * 1.6)));
-    const r = Math.min(0.9, Math.max(0.4, p.radius));
-    const aspect = Math.min(1.4, p.aspect ?? 1.2);
-    const rx = Math.min(1.3, r * aspect);
-    const ry = Math.min(1.1, r * tumbleScale);
 
     const seed = p.shapeSeed ?? 0;
     const subtype = p.glassSubtype ?? (p.color === '#ef4444' ? 'taillight' : (p.color === '#fbbf24' || p.color === '#fef08a' ? 'headlight' : 'safety_pebble'));
 
-    // Shard polygon based on shape seed: 4 varied crystalline safety facets
-    const pattern = seed % 4;
+    // 4 distinct crystalline fracture geometries (5-sided safety cube, needle splinter, trapezoid prism, diamond shard)
+    const pattern = seed & 3;
     ctx.beginPath();
     if (pattern === 0) {
-      ctx.moveTo(-rx * 0.85, -ry * 0.45);
-      ctx.lineTo(rx * 0.75, -ry * 0.85);
-      ctx.lineTo(rx * 0.95, ry * 0.55);
-      ctx.lineTo(-rx * 0.65, ry * 0.85);
+      ctx.moveTo(-rx * 0.88, -ry * 0.42);
+      ctx.lineTo(-rx * 0.15, -ry * 0.96);
+      ctx.lineTo(rx * 0.82, -ry * 0.65);
+      ctx.lineTo(rx * 0.95, ry * 0.52);
+      ctx.lineTo(-rx * 0.62, ry * 0.88);
     } else if (pattern === 1) {
-      ctx.moveTo(-rx * 0.9, -ry * 0.7);
-      ctx.lineTo(rx * 0.95, -ry * 0.2);
-      ctx.lineTo(-rx * 0.2, ry * 0.9);
+      ctx.moveTo(-rx * 1.05, -ry * 0.55);
+      ctx.lineTo(rx * 1.08, -ry * 0.12);
+      ctx.lineTo(rx * 0.35, ry * 0.68);
+      ctx.lineTo(-rx * 0.45, ry * 0.85);
     } else if (pattern === 2) {
-      ctx.moveTo(-rx * 0.7, -ry * 0.8);
-      ctx.lineTo(rx * 0.65, -ry * 0.6);
-      ctx.lineTo(rx * 0.85, ry * 0.75);
-      ctx.lineTo(-rx * 0.9, ry * 0.4);
+      ctx.moveTo(-rx * 0.72, -ry * 0.85);
+      ctx.lineTo(rx * 0.68, -ry * 0.62);
+      ctx.lineTo(rx * 0.92, ry * 0.78);
+      ctx.lineTo(-rx * 0.94, ry * 0.44);
     } else {
-      ctx.moveTo(0, -ry * 0.95);
-      ctx.lineTo(rx * 0.9, 0);
-      ctx.lineTo(0, ry * 0.95);
-      ctx.lineTo(-rx * 0.9, 0);
+      ctx.moveTo(0, -ry * 0.98);
+      ctx.lineTo(rx * 0.94, -ry * 0.12);
+      ctx.lineTo(rx * 0.18, ry * 0.96);
+      ctx.lineTo(-rx * 0.92, ry * 0.14);
     }
     ctx.closePath();
 
     if (subtype === 'taillight') {
-      ctx.fillStyle = 'rgba(239, 68, 68, 0.88)';
-      ctx.strokeStyle = 'rgba(254, 202, 202, 0.92)';
-      ctx.lineWidth = 0.4;
+      ctx.fillStyle = 'rgba(220, 38, 38, 0.86)';
+      ctx.strokeStyle = 'rgba(254, 202, 202, 0.94)';
     } else if (subtype === 'headlight') {
-      ctx.fillStyle = (seed % 3 === 0) ? 'rgba(251, 191, 36, 0.90)' : 'rgba(240, 249, 255, 0.90)';
-      ctx.strokeStyle = '#ffffff';
-      ctx.lineWidth = 0.4;
+      ctx.fillStyle = (seed % 3 === 0) ? 'rgba(251, 191, 36, 0.88)' : 'rgba(224, 242, 254, 0.88)';
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.96)';
     } else {
-      ctx.fillStyle = 'rgba(224, 242, 254, 0.85)';
-      ctx.strokeStyle = '#ffffff';
-      ctx.lineWidth = 0.4;
+      // Tempered automotive glass with realistic subtle cyan-emerald tint
+      ctx.fillStyle = (seed & 1) === 0 ? 'rgba(186, 230, 253, 0.82)' : 'rgba(209, 250, 229, 0.80)';
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.92)';
     }
+    ctx.lineWidth = 0.55;
     ctx.fill();
     ctx.stroke();
 
-    // Specular gleam glint
-    const glintPhase = Math.sin(rot * 2.0 + seed);
-    if (glintPhase > 0.70) {
-      ctx.fillStyle = '#ffffff';
-      ctx.fillRect(-0.3, -0.3, 0.6, 0.6);
-    }
+    // Internal refractive cleavage plane & specular edge glint
+    const glintPhase = Math.sin(rot * 2.2 + seed);
+    ctx.strokeStyle = glintPhase > 0.45 ? '#ffffff' : 'rgba(255, 255, 255, 0.55)';
+    ctx.lineWidth = glintPhase > 0.45 ? 0.75 : 0.45;
+    ctx.beginPath();
+    ctx.moveTo(-rx * 0.55, -ry * 0.25);
+    ctx.lineTo(rx * 0.15, ry * 0.15);
+    ctx.lineTo(rx * 0.62, -ry * 0.35);
+    ctx.stroke();
 
     ctx.restore();
   }
 
-  // Micro-scaled body panel debris (sheet metal flake / plastic clip / concrete chip)
+  // Physical material debris (sheet metal shard, ABS plastic trim, concrete aggregate, wood splinter, silica sand, fluid drop)
   private drawDebrisParticle(p: Particle) {
     const ctx = this.ctx;
-    ctx.globalAlpha = Math.max(0, Math.min(1.0, p.alpha));
+    const a = Math.max(0, Math.min(1.0, p.alpha));
+    if (a < 0.01) return;
+    ctx.globalAlpha = a;
 
-    const isAirborne = (!p.splatted && p.z !== undefined && p.z > 0.05);
+    const subtype = p.debrisSubtype ?? (p.secondaryColor ? 'metal_flake' : 'plastic_chunk');
+    const seed = p.shapeSeed ?? 0;
+    const rot = p.angle ?? ((p.x * 0.07 + p.y * 0.13));
+
+    // Special fast path for silica sand grains (clustered angular mineral crystals)
+    if (subtype === 'sand_grain') {
+      const sr = Math.max(0.85, Math.min(2.1, p.radius));
+      ctx.save();
+      ctx.translate(p.x, p.y);
+      ctx.rotate(rot);
+      ctx.fillStyle = p.color;
+      ctx.beginPath();
+      ctx.moveTo(-sr * 0.9, -sr * 0.4);
+      ctx.lineTo(sr * 0.3, -sr * 0.95);
+      ctx.lineTo(sr * 0.95, sr * 0.25);
+      ctx.lineTo(-sr * 0.2, sr * 0.85);
+      ctx.closePath();
+      ctx.fill();
+      ctx.fillStyle = p.secondaryColor || '#b45309';
+      ctx.fillRect(sr * 0.55, -sr * 0.65, sr * 0.7, sr * 0.6);
+      ctx.restore();
+      return;
+    }
+
+    // Special fast path for viscous liquid drops (oil, fuel, coolant, chemical spills)
+    if (subtype === 'liquid_drop') {
+      const lr = Math.max(0.95, Math.min(2.8, p.radius));
+      const vSq = p.vx * p.vx + p.vy * p.vy;
+      const dropAng = vSq > 25 ? Math.atan2(p.vy, p.vx) : rot;
+      const stretch = vSq > 25 ? Math.min(2.2, 1.15 + Math.sqrt(vSq) * 0.012) : 1.15;
+      ctx.save();
+      ctx.translate(p.x, p.y);
+      ctx.rotate(dropAng);
+      ctx.fillStyle = p.color;
+      ctx.beginPath();
+      ctx.moveTo(lr * stretch, 0);
+      ctx.quadraticCurveTo(lr * 0.2, lr * 0.85, -lr * stretch, 0);
+      ctx.quadraticCurveTo(lr * 0.2, -lr * 0.85, lr * stretch, 0);
+      ctx.closePath();
+      ctx.fill();
+      // Wet specular highlight streak
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.55)';
+      ctx.fillRect(-lr * 0.2, -lr * 0.42, lr * 0.75, lr * 0.28);
+      ctx.restore();
+      return;
+    }
+
+    const r = Math.min(3.4, Math.max(1.1, p.radius));
+    const aspect = Math.min(2.2, p.aspect ?? (subtype === 'wood_splinter' ? 2.1 : 1.4));
+    const rx = r * aspect;
+    const flip = Math.sin(rot * 2.2);
+    const scaleY = Math.max(0.32, Math.abs(flip));
+    const ry = r * (subtype === 'wood_splinter' ? 0.52 : scaleY);
+
+    const isAirborne = (!p.splatted && p.z !== undefined && p.z > 0.15);
     if (isAirborne) {
-      const shadowAlpha = p.alpha * Math.max(0, 0.45 - p.z * 0.04);
+      const shadowAlpha = a * Math.max(0, 0.42 - p.z * 0.035);
       if (shadowAlpha > 0.02) {
-        ctx.fillStyle = `rgba(15, 23, 42, ${shadowAlpha * 0.45})`;
-        ctx.beginPath();
-        ctx.ellipse(p.x, p.y + p.z * 1.6, Math.max(0.7, p.radius * 0.6), Math.max(0.3, p.radius * 0.3), 0, 0, Math.PI * 2);
-        ctx.fill();
+        ctx.fillStyle = `rgba(15, 23, 42, ${shadowAlpha * 0.5})`;
+        ctx.fillRect(p.x - rx * 0.55, p.y + p.z * 1.4 - ry * 0.45, rx * 1.1, ry * 0.9);
       }
     }
 
     ctx.save();
-    ctx.translate(p.x, p.y);
-    const rot = p.angle ?? ((p.x * 0.07 + p.y * 0.13));
+    ctx.translate(p.x, p.y - (isAirborne ? (p.z ?? 0) * 0.35 : 0));
     ctx.rotate(rot);
 
-    // Micro-scaled bounds: debris total diameter between 1.0px and 2.8px
-    const r = Math.min(1.1, Math.max(0.5, p.radius));
-    const aspect = Math.min(1.4, p.aspect ?? 1.3);
-    const rx = Math.min(1.5, r * aspect);
-    const flip = Math.sin(rot * 2.2);
-    const scaleY = Math.max(0.30, Math.abs(flip));
-    const ry = Math.min(1.3, r * scaleY);
-    const seed = p.shapeSeed ?? 0;
-    const subtype = p.debrisSubtype ?? (p.secondaryColor ? 'metal_flake' : 'plastic_chunk');
+    if (subtype === 'wood_splinter') {
+      // Jagged timber splinter with fibrous ends and grain line
+      ctx.fillStyle = p.color;
+      ctx.beginPath();
+      ctx.moveTo(-rx * 1.15, -ry * 0.25);
+      ctx.lineTo(-rx * 0.45, -ry * 0.85);
+      ctx.lineTo(rx * 0.85, -ry * 0.65);
+      ctx.lineTo(rx * 1.20, 0);
+      ctx.lineTo(rx * 0.55, ry * 0.85);
+      ctx.lineTo(-rx * 0.85, ry * 0.65);
+      ctx.lineTo(-rx * 0.60, ry * 0.10);
+      ctx.closePath();
+      ctx.fill();
 
-    let fillColor = p.color;
-    if (subtype === 'metal_flake') {
-      fillColor = flip >= 0 ? p.color : (p.secondaryColor || '#475569');
+      ctx.strokeStyle = p.secondaryColor || '#78350f';
+      ctx.lineWidth = 0.55;
+      ctx.beginPath();
+      ctx.moveTo(-rx * 0.75, 0);
+      ctx.lineTo(rx * 0.75, -ry * 0.15);
+      ctx.stroke();
+      ctx.restore();
+      return;
     }
+
+    if (subtype === 'concrete_chip') {
+      // Multi-faceted broken masonry / asphalt chunk with light & shadow cleavage faces
+      ctx.fillStyle = p.secondaryColor || '#475569';
+      ctx.beginPath();
+      ctx.moveTo(-rx * 0.88, -ry * 0.45);
+      ctx.lineTo(-rx * 0.12, -ry * 0.95);
+      ctx.lineTo(rx * 0.85, -ry * 0.52);
+      ctx.lineTo(rx * 0.92, ry * 0.48);
+      ctx.lineTo(rx * 0.10, ry * 0.95);
+      ctx.lineTo(-rx * 0.82, ry * 0.55);
+      ctx.closePath();
+      ctx.fill();
+
+      // Sunlit upper-left fractured face
+      ctx.fillStyle = p.color;
+      ctx.beginPath();
+      ctx.moveTo(-rx * 0.88, -ry * 0.45);
+      ctx.lineTo(-rx * 0.12, -ry * 0.95);
+      ctx.lineTo(rx * 0.55, -ry * 0.25);
+      ctx.lineTo(-rx * 0.15, ry * 0.20);
+      ctx.closePath();
+      ctx.fill();
+      ctx.restore();
+      return;
+    }
+
+    // Metal flake (painted outer coat + primer underside + bare steel edge) or ABS plastic bumper clip
+    const fillColor = subtype === 'metal_flake'
+      ? (flip >= 0 ? p.color : (p.secondaryColor || '#475569'))
+      : p.color;
 
     const polyType = seed % 3;
     ctx.beginPath();
     if (polyType === 0) {
-      ctx.moveTo(-rx * 0.9, -ry * 0.3);
-      ctx.lineTo(rx * 0.8, -ry * 0.8);
-      ctx.lineTo(rx * 0.95, ry * 0.5);
-      ctx.lineTo(-rx * 0.4, ry * 0.85);
+      ctx.moveTo(-rx * 0.92, -ry * 0.35);
+      ctx.lineTo(rx * 0.78, -ry * 0.85);
+      ctx.lineTo(rx * 0.96, ry * 0.52);
+      ctx.lineTo(-rx * 0.42, ry * 0.88);
     } else if (polyType === 1) {
-      ctx.moveTo(-rx * 0.95, -ry * 0.6);
-      ctx.lineTo(rx * 0.85, 0);
-      ctx.lineTo(-rx * 0.7, ry * 0.9);
-      ctx.lineTo(-rx * 0.2, 0);
+      ctx.moveTo(-rx * 0.96, -ry * 0.62);
+      ctx.lineTo(rx * 0.88, -ry * 0.18);
+      ctx.lineTo(rx * 0.52, ry * 0.82);
+      ctx.lineTo(-rx * 0.72, ry * 0.90);
+      ctx.lineTo(-rx * 0.32, 0);
     } else {
-      ctx.moveTo(-rx * 0.75, -ry * 0.85);
-      ctx.lineTo(rx * 0.9, -ry * 0.45);
-      ctx.lineTo(rx * 0.7, ry * 0.8);
-      ctx.lineTo(-rx * 0.85, ry * 0.4);
+      ctx.moveTo(-rx * 0.78, -ry * 0.86);
+      ctx.lineTo(rx * 0.92, -ry * 0.45);
+      ctx.lineTo(rx * 0.72, ry * 0.82);
+      ctx.lineTo(-rx * 0.88, ry * 0.42);
     }
     ctx.closePath();
 
     ctx.fillStyle = fillColor;
     ctx.fill();
 
-    ctx.strokeStyle = subtype === 'metal_flake' ? 'rgba(255, 255, 255, 0.40)' : 'rgba(0, 0, 0, 0.30)';
-    ctx.lineWidth = 0.4;
+    // Bare sheared steel edge on metal flakes or dark molded rib on plastic chunks
+    ctx.strokeStyle = subtype === 'metal_flake' ? 'rgba(226, 232, 240, 0.78)' : 'rgba(15, 23, 42, 0.55)';
+    ctx.lineWidth = 0.55;
+    ctx.stroke();
+
+    // Internal crease / stamped panel ridge line
+    ctx.strokeStyle = subtype === 'metal_flake' ? 'rgba(255, 255, 255, 0.45)' : (p.secondaryColor || 'rgba(148, 163, 184, 0.45)');
+    ctx.lineWidth = 0.45;
+    ctx.beginPath();
+    ctx.moveTo(-rx * 0.55, -ry * 0.18);
+    ctx.lineTo(rx * 0.55, ry * 0.22);
     ctx.stroke();
 
     ctx.restore();
   }
 
-  // Overhead Particles: Tractor hood stack exhaust (shoots UPWARDS into sky), Engine bay fire/steam, Sparks, Flames, Debris
+  // Overhead Particles: Tractor hood stack exhaust, Engine bay fire/steam, Sparks, Flames, Debris, Water Splash/Fountain, Leaves/Feathers
   private renderOverheadParticles(particles: GameWorld['particles'], cleanMode?: boolean) {
     const len = particles.length;
     if (len === 0) return;
@@ -12603,18 +13018,14 @@ export class GameRenderer {
     const flames: typeof particles = [];
     const sparks: typeof particles = [];
 
-    // O(N) single-pass categorization to avoid multiple array scans
     for (let i = 0; i < len; i++) {
       const p = particles[i];
-      // Skip all ground and wheel particles (dust, mud clods, tire water spray)
-      // so they are NEVER drawn above vehicle roofs, buildings, or trees!
       if (p.underVehicle || p.type === 'dust' || p.type === 'mud_clod' || p.type === 'water_spray') {
         continue;
       }
 
       const t = p.type;
       if (t === 'exhaust') {
-        // Only overhead exhaust (TRACTORS where p.underVehicle === false)
         if (p.underVehicle === false) {
           overheadSmoke.push(p);
         }
@@ -12631,15 +13042,14 @@ export class GameRenderer {
 
     const ctx = this.ctx;
 
-    // Pass 1: Render volumetric overhead smoke (Tractor vertical stack exhaust, Engine bay steam/smoke, Tire smoke)
-    // Completely bypass in Clean Mode (cleanMode === true)
+    // Pass 1: Render volumetric multi-lobed overhead smoke & steam
     if (!cleanMode) {
       for (let i = 0; i < overheadSmoke.length; i++) {
         this.drawGasSmokeParticle(overheadSmoke[i]);
       }
     }
 
-    // Pass 2: Render neutral physics elements (glass shards, debris, water, etc.)
+    // Pass 2: Render neutral physical elements (glass shards, debris, water splash/fountain, leaves, feathers)
     for (let i = 0; i < neutral.length; i++) {
       const p = neutral[i];
       ctx.globalAlpha = Math.max(0, Math.min(1.0, p.alpha));
@@ -12653,159 +13063,181 @@ export class GameRenderer {
         if (isAirborne) {
           this.drawDebrisParticle(p);
         }
-      } else if (p.type === 'water_spray' || p.type === 'water_splash') {
-        // High-velocity elongated water droplet streak or soft mist droplet
-        const vSq = p.vx * p.vx + p.vy * p.vy;
-        if (vSq > 900) {
-          // Fast-moving water streak
-          const vLen = Math.sqrt(vSq);
-          const streakLen = Math.min(10, Math.max(3, vLen * 0.04));
-          const nx = p.vx / vLen;
-          const ny = p.vy / vLen;
-
-          ctx.strokeStyle = p.color;
-          ctx.lineWidth = Math.max(1.0, p.radius * 0.85);
-          ctx.lineCap = 'round';
-          ctx.beginPath();
-          ctx.moveTo(p.x - nx * streakLen, p.y - ny * streakLen);
-          ctx.lineTo(p.x, p.y);
-          ctx.stroke();
-
-          // Droplet highlight head
-          ctx.fillStyle = '#ffffff';
-          ctx.beginPath();
-          ctx.arc(p.x, p.y, Math.max(0.7, p.radius * 0.45), 0, Math.PI * 2);
-          ctx.fill();
-        } else {
-          // Ground splash / mist droplet
-          ctx.fillStyle = p.color;
-          ctx.beginPath();
-          ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
-          ctx.fill();
-        }
-      } else {
-        // Other neutral (rain droplets, water fountains, etc.)
+      } else if (p.type === 'water_splash' || p.type === 'water_fountain') {
+        this.drawWaterParticle(p);
+      } else if (p.type === 'leaf') {
+        // Botanical pointed leaf blade with central midrib vein
+        const lr = Math.max(1.6, p.radius);
+        const rot = p.angle ?? (p.life * 3.2);
+        ctx.save();
+        ctx.translate(p.x, p.y);
+        ctx.rotate(rot);
         ctx.fillStyle = p.color;
         ctx.beginPath();
-        ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+        ctx.moveTo(-lr * 1.25, 0);
+        ctx.quadraticCurveTo(0, -lr * 0.78, lr * 1.35, 0);
+        ctx.quadraticCurveTo(0, lr * 0.78, -lr * 1.25, 0);
+        ctx.closePath();
         ctx.fill();
+        ctx.strokeStyle = p.secondaryColor || 'rgba(20, 83, 45, 0.65)';
+        ctx.lineWidth = 0.5;
+        ctx.beginPath();
+        ctx.moveTo(-lr * 1.35, 0);
+        ctx.lineTo(lr * 1.15, 0);
+        ctx.stroke();
+        ctx.restore();
+      } else if (p.type === 'feather') {
+        // Curved avian feather vane with central rachis quill
+        const fr = Math.max(1.6, p.radius);
+        const rot = p.angle ?? (p.life * 2.4);
+        ctx.save();
+        ctx.translate(p.x, p.y);
+        ctx.rotate(rot);
+        ctx.fillStyle = p.color;
+        ctx.beginPath();
+        ctx.moveTo(-fr * 1.3, 0);
+        ctx.quadraticCurveTo(0, -fr * 0.55, fr * 1.4, -fr * 0.1);
+        ctx.quadraticCurveTo(0, fr * 0.45, -fr * 1.3, 0);
+        ctx.closePath();
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.85)';
+        ctx.lineWidth = 0.5;
+        ctx.beginPath();
+        ctx.moveTo(-fr * 1.45, 0.1);
+        ctx.lineTo(fr * 1.25, -0.1);
+        ctx.stroke();
+        ctx.restore();
+      } else {
+        this.drawWaterParticle(p);
       }
     }
 
-    // Pass 3: Render glowing flames on top of smoke and debris
-    const isLowQuality = performanceConfig.lowQualityRendering;
+    // Pass 3: Render turbulent multi-tongued licking flames (pre-baked offscreen fire sprites)
     for (let i = 0; i < flames.length; i++) {
       const p = flames[i];
-      ctx.globalAlpha = Math.max(0, Math.min(1.0, p.alpha));
+      const a = Math.max(0, Math.min(1.0, p.alpha));
+      if (a < 0.01) continue;
+      ctx.globalAlpha = a;
+      const seed = p.shapeSeed ?? i;
+      const sprite = GameRenderer.getFlameTongueSprite(seed & 3);
       const rad = p.radius;
+      const vSq = p.vx * p.vx + p.vy * p.vy;
+      // Align flame tongue with velocity / thermal draft + dynamic flicker sway
+      const draftAng = vSq > 25
+        ? Math.atan2(p.vy, p.vx) + Math.PI * 0.5
+        : (p.angle ?? 0) * 0.25 + Math.sin(p.life * 14 + seed) * 0.22;
+      const stretchY = 1.18 + Math.sin(p.life * 18 + seed) * 0.18 + Math.min(0.45, Math.sqrt(vSq) * 0.004);
+      const rx = rad * 1.05;
+      const ry = rad * stretchY;
 
-      if (isLowQuality) {
-        // High-performance double-circle approach bypasses CPU-heavy radial gradients completely
-        ctx.fillStyle = '#ef4444';
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, rad, 0, Math.PI * 2);
-        ctx.fill();
-
-        ctx.fillStyle = '#f59e0b';
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, rad * 0.5, 0, Math.PI * 2);
-        ctx.fill();
-      } else {
-        // Standard high-quality radial gradient
-        const grad = ctx.createRadialGradient(p.x, p.y, rad * 0.2, p.x, p.y, rad);
-        grad.addColorStop(0, '#fef08a');
-        grad.addColorStop(0.4, '#f97316');
-        grad.addColorStop(1, 'rgba(239, 68, 68, 0)');
-        ctx.fillStyle = grad;
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, rad, 0, Math.PI * 2);
-        ctx.fill();
-      }
+      ctx.save();
+      ctx.translate(p.x, p.y);
+      ctx.rotate(draftAng);
+      ctx.drawImage(sprite, -rx, -ry * 1.15, rx * 2, ry * 2.1);
+      ctx.restore();
     }
 
-    // Pass 4: Render bright flying sparks/embers on the absolute top layer (BeamNG high-velocity incandescent streaks)
+    // Pass 4: Render high-velocity incandescent metal sparks & carbon-steel branching forks (zero circles)
     for (let i = 0; i < sparks.length; i++) {
       const p = sparks[i];
       const alpha = Math.max(0, Math.min(1.0, p.alpha));
+      if (alpha < 0.01) continue;
       ctx.globalAlpha = alpha;
 
       const spdSq = p.vx * p.vx + p.vy * p.vy;
       const progress = Math.min(1.0, Math.max(0, p.life / p.maxLife));
 
-      // BeamNG-grade Blackbody thermal cooling progression:
-      // White-hot incandescence -> golden flame -> fiery orange-red -> dull cooling cherry ember -> dark cinder
       let outerColor: string;
       let coreColor: string;
       if (progress < 0.22) {
-        outerColor = '#fef08a'; // Radiant incandescent lemon
-        coreColor = '#ffffff';  // Blinding white-hot core
+        outerColor = '#fef08a';
+        coreColor = '#ffffff';
       } else if (progress < 0.52) {
-        outerColor = '#f97316'; // Fiery golden orange
-        coreColor = '#fbbf24';  // Glowing electric amber
+        outerColor = '#f97316';
+        coreColor = '#fbbf24';
       } else if (progress < 0.80) {
-        outerColor = '#dc2626'; // Deep ember red
-        coreColor = '#ea580c';  // Fiery crimson orange
+        outerColor = '#dc2626';
+        coreColor = '#ea580c';
       } else {
-        outerColor = '#78350f'; // Dark cooling cinder
-        coreColor = '#991b1b';  // Dull cherry ember
+        outerColor = '#78350f';
+        coreColor = '#991b1b';
       }
 
+      const pRadius = p.radius ?? 1.0;
+      const seed = p.shapeSeed ?? i;
+
       if (spdSq > 25) {
-        // High-velocity elongated needle streak aligned with motion vector
         const spd = Math.sqrt(spdSq);
-        const streakMul = p.streakLength ?? 0.030;
-        const streakLen = Math.min(14, Math.max(1.5, spd * streakMul));
+        const streakMul = p.streakLength ?? 0.032;
+        const streakLen = Math.min(16, Math.max(2.0, spd * streakMul));
         const nx = p.vx / spd;
         const ny = p.vy / spd;
+        const px = -ny;
+        const py = nx;
         const tailX = p.x - nx * streakLen;
         const tailY = p.y - ny * streakLen;
+        const headW = Math.max(0.45, pRadius * 0.55);
 
-        const pRadius = p.radius ?? 1.0;
-
-        // 1. Soft glowing outer streak (fine & sharp)
-        ctx.strokeStyle = outerColor;
-        ctx.lineWidth = Math.max(0.35, pRadius * 0.6);
-        ctx.lineCap = 'round';
+        // 1. Tapered glowing outer metal-filing needle polygon
+        ctx.fillStyle = outerColor;
         ctx.beginPath();
-        ctx.moveTo(tailX, tailY);
-        ctx.lineTo(p.x, p.y);
-        ctx.stroke();
+        ctx.moveTo(p.x + nx * (headW * 1.6), p.y + ny * (headW * 1.6));
+        ctx.lineTo(p.x + px * headW, p.y + py * headW);
+        ctx.lineTo(tailX, tailY);
+        ctx.lineTo(p.x - px * headW, p.y - py * headW);
+        ctx.closePath();
+        ctx.fill();
 
-        // 2. White-hot incandescent needle core
+        // 2. White-hot incandescent inner core spine
         if (progress < 0.78) {
           ctx.strokeStyle = coreColor;
-          ctx.lineWidth = Math.max(0.2, pRadius * 0.3);
+          ctx.lineWidth = Math.max(0.35, pRadius * 0.35);
           ctx.beginPath();
-          ctx.moveTo(p.x - nx * (streakLen * 0.65), p.y - ny * (streakLen * 0.65));
-          ctx.lineTo(p.x, p.y);
+          ctx.moveTo(p.x - nx * (streakLen * 0.62), p.y - ny * (streakLen * 0.62));
+          ctx.lineTo(p.x + nx * headW, p.y + ny * headW);
           ctx.stroke();
         }
 
-        // 3. Incandescent head point
-        if (progress < 0.40) {
-          ctx.fillStyle = '#ffffff';
+        // 3. Carbon-steel micro-branching fork on hot high-speed sparks
+        if (progress < 0.55 && streakLen > 4.5 && (seed & 1) === 0) {
+          const forkSign = (seed & 2) === 0 ? 1 : -1;
+          const forkLen = streakLen * 0.38;
+          const fx = p.x - nx * (streakLen * 0.35);
+          const fy = p.y - ny * (streakLen * 0.35);
+          ctx.strokeStyle = outerColor;
+          ctx.lineWidth = Math.max(0.3, pRadius * 0.32);
           ctx.beginPath();
-          ctx.arc(p.x, p.y, Math.max(0.3, pRadius * 0.3), 0, Math.PI * 2);
-          ctx.fill();
+          ctx.moveTo(fx, fy);
+          ctx.lineTo(
+            fx - nx * forkLen + px * forkLen * 0.48 * forkSign,
+            fy - ny * forkLen + py * forkLen * 0.48 * forkSign
+          );
+          ctx.stroke();
         }
       } else {
-        // Slow or resting spark / ember: glowing point
-        const pRadius = p.radius ?? 1.0;
+        // Slow or resting hot metal sliver / diamond ember (no circle)
+        const rot = p.angle ?? (seed * 0.5);
+        const cosR = Math.cos(rot);
+        const sinR = Math.sin(rot);
+        const rx = Math.max(0.7, pRadius * 0.85);
+        const ry = Math.max(0.4, pRadius * 0.42);
+
         ctx.fillStyle = outerColor;
         ctx.beginPath();
-        ctx.arc(p.x, p.y, Math.max(0.3, pRadius * 0.5), 0, Math.PI * 2);
+        ctx.moveTo(p.x + cosR * rx, p.y + sinR * rx);
+        ctx.lineTo(p.x - sinR * ry, p.y + cosR * ry);
+        ctx.lineTo(p.x - cosR * rx, p.y - sinR * rx);
+        ctx.lineTo(p.x + sinR * ry, p.y - cosR * ry);
+        ctx.closePath();
         ctx.fill();
 
         if (progress < 0.70) {
           ctx.fillStyle = coreColor;
-          ctx.beginPath();
-          ctx.arc(p.x, p.y, Math.max(0.2, pRadius * 0.3), 0, Math.PI * 2);
-          ctx.fill();
+          ctx.fillRect(p.x - 0.35, p.y - 0.35, 0.7, 0.7);
         }
       }
     }
 
-    // Safely restore global alpha
     ctx.globalAlpha = 1.0;
   }
 
@@ -14938,12 +15370,15 @@ export class GameRenderer {
       }
 
       if (weights.snow > 0.02) {
-        // Multi-depth snowflake layers (low terminal descent, horizontal wind dominance)
+        // Multi-depth crystalline snowflake layers (reduced loop count + viewport culling, dendritic crystal sprites)
         const snowLayers = [
-          { count: Math.max(1, Math.round(performanceConfig.rainDensity / 100 * (180 + weights.blizzard * 180) * weights.snow)), fallSpeed: 45 + weights.blizzard * 40, r: 1.2, swayAmp: 8, swayFreq: 1.8, alpha: 0.35 * weights.snow, windMult: 0.85 },
-          { count: Math.max(1, Math.round(performanceConfig.rainDensity / 100 * (120 + weights.blizzard * 120) * weights.snow)), fallSpeed: 65 + weights.blizzard * 55, r: 1.8, swayAmp: 16, swayFreq: 2.3, alpha: 0.50 * weights.snow, windMult: 0.95 },
-          { count: Math.max(1, Math.round(performanceConfig.rainDensity / 100 * (40 + weights.blizzard * 40) * weights.snow)), fallSpeed: 90 + weights.blizzard * 75, r: 2.6, swayAmp: 24, swayFreq: 3.1, alpha: 0.65 * weights.snow, windMult: 1.00 }
+          { count: Math.max(1, Math.round(performanceConfig.rainDensity / 100 * (105 + weights.blizzard * 95) * weights.snow)), fallSpeed: 45 + weights.blizzard * 40, r: 1.5, swayAmp: 8, swayFreq: 1.8, alpha: 0.42 * weights.snow, windMult: 0.85 },
+          { count: Math.max(1, Math.round(performanceConfig.rainDensity / 100 * (72 + weights.blizzard * 68) * weights.snow)), fallSpeed: 65 + weights.blizzard * 55, r: 2.2, swayAmp: 16, swayFreq: 2.3, alpha: 0.58 * weights.snow, windMult: 0.95 },
+          { count: Math.max(1, Math.round(performanceConfig.rainDensity / 100 * (28 + weights.blizzard * 26) * weights.snow)), fallSpeed: 90 + weights.blizzard * 75, r: 3.1, swayAmp: 24, swayFreq: 3.1, alpha: 0.76 * weights.snow, windMult: 1.00 }
         ];
+
+        const crystal0 = GameRenderer.getSnowCrystalSprite(0);
+        const crystal1 = GameRenderer.getSnowCrystalSprite(1);
 
         for (let l = 0; l < snowLayers.length; l++) {
           const layer = snowLayers[l];
@@ -14951,7 +15386,6 @@ export class GameRenderer {
             const seed = (s * 137.49 + l * 83.71);
             const sX = (seed % 1) * WORLD_CELL;
             const sY = ((seed * 1.618) % 1) * WORLD_CELL;
-            // Micro-turbulence flutter perpendicular to the prevailing wind vector
             const sway = Math.sin(timeSec * layer.swayFreq + s) * layer.swayAmp;
             const swayX = perpWx * sway;
             const swayY = perpWy * sway;
@@ -14964,7 +15398,11 @@ export class GameRenderer {
             let flakeY = baseTileY + localY;
             if (flakeY < minY - 100) flakeY += WORLD_CELL;
 
-            // Headlight illumination test
+            // Fast viewport frustum cull to avoid drawing off-camera crystals
+            if (flakeX < minX - 24 || flakeX > maxX + 24 || flakeY < minY - 24 || flakeY > maxY + 24) {
+              continue;
+            }
+
             let inHeadlight = false;
             for (let h = 0; h < activeHeadlights.length; h++) {
               const hl = activeHeadlights[h];
@@ -14982,19 +15420,19 @@ export class GameRenderer {
               }
             }
 
-            const flakeAlpha = inHeadlight ? 0.95 : layer.alpha;
-            const flakeR = inHeadlight ? layer.r * 1.25 : layer.r;
+            const flakeAlpha = inHeadlight ? 0.96 : layer.alpha;
+            const flakeR = (inHeadlight ? layer.r * 1.3 : layer.r) * 1.45;
+            const sprite = (s & 1) === 0 ? crystal0 : crystal1;
 
-            ctx.fillStyle = inHeadlight ? 'rgba(255, 255, 255, 0.98)' : `rgba(255, 255, 255, ${flakeAlpha})`;
-            ctx.beginPath();
-            ctx.arc(flakeX, flakeY, flakeR, 0, Math.PI * 2);
-            ctx.fill();
+            ctx.globalAlpha = flakeAlpha;
+            ctx.drawImage(sprite, flakeX - flakeR, flakeY - flakeR, flakeR * 2, flakeR * 2);
 
             // Blizzard horizontal snow wind streaks (tail streaming strictly downwind)
             if (weights.blizzard > 0.15 && (s % 3 === 0)) {
               const blizzardStreakLen = (12 + Math.min(38, windSpeed * 0.22)) * weights.blizzard;
-              ctx.strokeStyle = `rgba(240, 249, 255, ${(flakeAlpha * 0.55 * weights.blizzard).toFixed(3)})`;
-              ctx.lineWidth = 1.0;
+              ctx.strokeStyle = 'rgba(240, 249, 255, 0.65)';
+              ctx.globalAlpha = flakeAlpha * 0.55 * weights.blizzard;
+              ctx.lineWidth = 0.9;
               ctx.beginPath();
               ctx.moveTo(flakeX, flakeY);
               ctx.lineTo(flakeX - normWx * blizzardStreakLen, flakeY - normWy * blizzardStreakLen);
@@ -15002,6 +15440,7 @@ export class GameRenderer {
             }
           }
         }
+        ctx.globalAlpha = 1.0;
       }
     }
 

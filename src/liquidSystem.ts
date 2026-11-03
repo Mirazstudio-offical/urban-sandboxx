@@ -2382,22 +2382,26 @@ export function handlePourSandFromContainer(
   if (world) {
     if (!world.stains) world.stains = [];
 
-    // 1. Spawn flying sand particle arc
-    for (let i = 0; i < 20; i++) {
-      const pAngle = angle + (Math.random() * 0.8 - 0.4);
-      const pSpeed = 25 + Math.random() * 50;
+    // 1. Spawn flying sand particle arc (multi-grain silica clusters)
+    for (let i = 0; i < 12; i++) {
+      const pAngle = angle + (Math.random() * 0.75 - 0.375);
+      const pSpeed = 26 + Math.random() * 52;
       const colors = ['#eab308', '#d97706', '#fef08a', '#b45309'];
       world.particles.push({
         x: player.x,
         y: player.y,
         vx: Math.cos(pAngle) * pSpeed,
         vy: Math.sin(pAngle) * pSpeed,
-        radius: 1.8 + Math.random() * 2,
+        radius: 1.8 + Math.random() * 1.8,
         color: colors[Math.floor(Math.random() * colors.length)],
+        secondaryColor: '#92400e',
         alpha: 0.95,
         life: 0,
-        maxLife: 0.35 + Math.random() * 0.2,
-        type: 'debris'
+        maxLife: 0.38 + Math.random() * 0.22,
+        type: 'debris',
+        debrisSubtype: 'sand_grain',
+        z: 0.9 + Math.random() * 0.7,
+        vz: 10 + Math.random() * 18
       });
     }
 
@@ -2583,21 +2587,24 @@ export function handlePourNonDrinkableFluid(
         });
       }
 
-      // Splash particles
-      for (let i = 0; i < 10; i++) {
-        const pAngle = angle + (Math.random() * 0.8 - 0.4);
+      // Splash liquid droplets
+      for (let i = 0; i < 8; i++) {
+        const pAngle = angle + (Math.random() * 0.75 - 0.375);
         const pSpeed = 30 + Math.random() * 50;
         world.particles.push({
           x: player.x,
           y: player.y,
           vx: Math.cos(pAngle) * pSpeed,
           vy: Math.sin(pAngle) * pSpeed,
-          radius: 2 + Math.random() * 2.5,
+          radius: 1.8 + Math.random() * 1.8,
           color: liquid.color || '#eab308',
           alpha: 0.9,
           life: 0,
-          maxLife: 0.35,
-          type: 'debris'
+          maxLife: 0.36,
+          type: 'debris',
+          debrisSubtype: 'liquid_drop',
+          z: 0.8 + Math.random() * 0.6,
+          vz: 8 + Math.random() * 14
         });
       }
 

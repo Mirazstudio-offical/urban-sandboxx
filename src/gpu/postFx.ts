@@ -184,6 +184,28 @@ float hash(vec2 p) {
   return fract((p3.x + p3.y) * p3.z);
 }
 
+// 2D smooth value noise returningvec3(value, dValue/dx, dValue/dy)
+vec3 noise2DAndGrad(vec2 p) {
+  vec2 i = floor(p);
+  vec2 f = fract(p);
+  vec2 u = f * f * f * (f * (f * 6.0 - 15.0) + 10.0);
+  vec2 du = 30.0 * f * f * (f * (f - 2.0) + 1.0);
+
+  float a = hash(i + vec2(0.0, 0.0));
+  float b = hash(i + vec2(1.0, 0.0));
+  float c = hash(i + vec2(0.0, 1.0));
+  float d = hash(i + vec2(1.0, 1.0));
+
+  float k0 = a;
+  float k1 = b - a;
+  float k2 = c - a;
+  float k3 = a - b - c + d;
+
+  float val = k0 + k1 * u.x + k2 * u.y + k3 * u.x * u.y;
+  vec2 grad = du * (vec2(k1, k2) + k3 * u.yx);
+  return vec3(val, grad);
+}
+
 // Reconstruct world-space position (in game pixels) from screen UV
 vec2 screenUvToWorld(vec2 uv) {
   vec2 screenPx = (vec2(uv.x, 1.0 - uv.y) - 0.5) * uOutSize / max(uCamZoom, 0.05);
@@ -193,20 +215,46 @@ vec2 screenUvToWorld(vec2 uv) {
   return uCamPos + vec2(screenPx.x * ca - screenPx.y * sa, screenPx.x * sa + screenPx.y * ca);
 }
 
-// Compute 3-octave Gerstner-capillary wave slope normal in world space, rotated to screen UV space
+// Domain-warped, multi-directional capillary-gravity wave slope normal in world space
 vec2 computeWaterWaveNormal(vec2 worldPos, float time) {
-  vec2 p = worldPos * 0.065;
-  // Octave 1: Primary downstream gravity-capillary swell
-  float ph1 = p.x * 0.85 + p.y * 0.52 - time * 2.4 + sin(p.x * 0.35 - p.y * 0.48 + time * 1.1) * 0.65;
-  vec2 g1 = vec2(cos(ph1) * 0.85, cos(ph1) * 0.52);
-  // Octave 2: Cross-channel interference chop
-  float ph2 = p.x * -0.62 + p.y * 1.18 - time * 3.1 + cos(p.x * 0.72 + p.y * 0.44 - time * 1.7) * 0.5;
-  vec2 g2 = vec2(-cos(ph2) * 0.62, cos(ph2) * 1.18) * 0.58;
-  // Octave 3: High-frequency wind micro-ripples
-  float ph3 = p.x * 1.95 - p.y * 1.45 + time * 4.6;
-  vec2 g3 = vec2(cos(ph3) * 1.95, -cos(ph3) * 1.45) * 0.28;
+  // Large-scale spatial flow & eddy curl field so wave directions vary organically across bends and pools
+  vec3 macroField = noise2DAndGrad(worldPos * 0.0028);
+  vec3 mesoField  = noise2DAndGrad(worldPos * 0.0095 + vec2(time * 0.08, -time * 0.06));
 
-  vec2 worldGrad = (g1 + g2 + g3) * 0.48;
+  // Local flow angle bends smoothly around meanders and eddies instead of pointing in a single global direction
+  float flowAngle = (macroField.x - 0.5) * 2.4 + (mesoField.x - 0.5) * 1.15;
+  vec2 flowDir = vec2(cos(flowAngle), sin(flowAngle));
+  vec2 crossDir = vec2(-flowDir.y, flowDir.x);
+
+  // Domain warp coordinates so waves never form straight parallel stripes or repeating grids
+  vec2 warp = vec2(macroField.y - mesoField.z, macroField.z + mesoField.y) * 18.0;
+  vec2 p = (worldPos + warp) * 0.042;
+
+  // Octave 1: Primary curving swell advected along local flow trajectory
+  vec2 uv1 = vec2(dot(p, flowDir), dot(p, crossDir) * 0.72) - vec2(time * 0.95, time * 0.22);
+  vec3 n1 = noise2DAndGrad(uv1);
+  vec2 g1 = (flowDir * n1.y + crossDir * n1.z * 0.72);
+
+  // Octave 2: Oblique bank-reflected cross-chop at rotated non-orthogonal angle
+  const mat2 rot2 = mat2(0.58, -0.814, 0.814, 0.58);
+  vec2 uv2 = rot2 * (p * 1.85 + n1.yz * 0.35) + vec2(-time * 1.28, time * 0.84);
+  vec3 n2 = noise2DAndGrad(uv2);
+  vec2 g2 = (vec2(0.58 * n2.y + 0.814 * n2.z, -0.814 * n2.y + 0.58 * n2.z)) * 0.65;
+
+  // Octave 3: Counter-propagating turbulent eddy ripples
+  const mat2 rot3 = mat2(-0.42, 0.907, -0.907, -0.42);
+  vec2 uv3 = rot3 * (p * 3.4 - n2.yz * 0.28) + vec2(time * 1.75, -time * 1.42);
+  vec3 n3 = noise2DAndGrad(uv3);
+  vec2 g3 = (vec2(-0.42 * n3.y - 0.907 * n3.z, 0.907 * n3.y - 0.42 * n3.z)) * 0.42;
+
+  // Octave 4: Fine isotropic wind capillary wavelets
+  const mat2 rot4 = mat2(0.866, 0.5, -0.5, 0.866);
+  vec2 uv4 = rot4 * (worldPos * 0.22 + warp * 0.4) - vec2(time * 2.4, -time * 2.1);
+  vec3 n4 = noise2DAndGrad(uv4);
+  vec2 g4 = (vec2(0.866 * n4.y - 0.5 * n4.z, 0.5 * n4.y + 0.866 * n4.z)) * 0.24;
+
+  vec2 worldGrad = (g1 + g2 + g3 + g4) * 0.85;
+
   // Rotate world gradient into screen UV space
   float a = -uCamAngle - 1.57079632679;
   float ca = cos(a);
@@ -214,16 +262,65 @@ vec2 computeWaterWaveNormal(vec2 worldPos, float time) {
   return vec2(worldGrad.x * ca - worldGrad.y * sa, -(worldGrad.x * sa + worldGrad.y * ca));
 }
 
-// Optical classifier for liquid water pixels (river, ponds, puddles)
-float detectWaterMask(vec3 col) {
+// Reconstruct approximate unshadowed surface color by undoing the midnight-navy shadow overlay (rgb(4,8,22))
+// from uLight so that shadowed grass/trees/roads are never misclassified as cyan water.
+vec3 recoverUnshadowedColor(vec3 col, vec2 uv) {
+  if (uLightOn < 0.5) return col;
+  vec4 lm = texture(uLight, uv);
+  float lmLum = luma(lm.rgb);
+  // Shadow regions in lightmap have dark navy RGB (rgb(4,8,22) -> luma ~0.03) and alpha 0.25..0.75
+  float shadowMask = smoothstep(0.18, 0.04, lmLum) * smoothstep(0.08, 0.35, lm.a);
+  float shadowAlpha = clamp(lm.a * shadowMask, 0.0, 0.78);
+  if (shadowAlpha < 0.02) return col;
+  return clamp((col - lm.rgb * shadowAlpha) / max(1.0 - shadowAlpha, 0.20), 0.0, 1.0);
+}
+
+// Optical classifier for liquid water pixels (river, salt lakes, ponds, puddles)
+// Strictly excludes shadowed grass/foliage (where unshadowed G >= B) and navy shadows / slate asphalt / roofs.
+float detectWaterMask(vec3 col, vec3 unshadowedCol, vec2 worldPos) {
   if (uFreezing > 0.5) return 0.0;
   float lum = luma(col);
-  // River & pond water has distinct cyan-teal-blue absorption (g > r and b > r)
-  float tealExcess = min(col.g - col.r, col.b - col.r * 0.96);
-  float blueExcess = col.b - max(col.r, col.g * 0.72);
-  float chromaWater = smoothstep(0.012, 0.065, tealExcess) * smoothstep(0.01, 0.58, lum) * (1.0 - smoothstep(0.62, 0.85, lum));
-  float slatePuddle = smoothstep(0.018, 0.075, blueExcess) * smoothstep(0.02, 0.45, lum) * (1.0 - smoothstep(0.48, 0.72, lum));
-  return clamp(max(chromaWater, slatePuddle * 0.85), 0.0, 1.0);
+
+  // 1. Reject green grass, moss, and pine foliage on both raw AND unshadowed color!
+  // When midnight-navy shadow rgb(4,8,22) is blended over green grass, raw B can slightly exceed raw G,
+  // but unshadowedCol still has G > B, and even in raw color B barely exceeds G.
+  float notGreenRaw = 1.0 - smoothstep(-0.006, 0.012, col.g - col.b);
+  float notGreenUnshadowed = 1.0 - smoothstep(-0.008, 0.010, unshadowedCol.g - unshadowedCol.b);
+  float notGreenGrass = notGreenRaw * notGreenUnshadowed;
+  if (notGreenGrass <= 0.001) return 0.0;
+
+  // 2. Reject midnight-navy shadows (rgb(4,8,22)), slate-grey asphalt (#1e293b), roofs (#334155), and wet mud.
+  // In genuine teal-cyan water, BOTH G and B are strongly elevated above R, with B distinctly above G,
+  // and G positioned in the upper-middle of the [R, B] interval: (G - R) / (B - R) in [0.60, 0.90].
+  // In navy shadows and slate greys, G sits in the lower half of [R, B] ((G - R) / (B - R) < 0.50).
+  // In shadowed grass, B and G are nearly equal so (G - R) / (B - R) > 0.92.
+  float blueOverRed = unshadowedCol.b - unshadowedCol.r;
+  float greenOverRed = unshadowedCol.g - unshadowedCol.r;
+  float blueOverGreen = unshadowedCol.b - unshadowedCol.g;
+  float greenPosInRB = greenOverRed / max(blueOverRed, 0.004);
+  float greenOverRedRatio = unshadowedCol.g / max(unshadowedCol.r, 0.008);
+
+  bool inRiverCorridor = (worldPos.y >= -4250.0 && worldPos.y <= -1750.0 && worldPos.x >= -3500.0 && worldPos.x <= 50500.0);
+  bool inSaltLakeZone = (worldPos.y >= 7250.0 && worldPos.y <= 8250.0 && worldPos.x >= 16950.0 && worldPos.x <= 35050.0);
+
+  // Teal spectral window: G must be well above R+0.54*(B-R) (excludes navy shadows/asphalt)
+  // AND B must be distinctly above G (excludes shadowed grass/olive foliage)
+  float minGreenPos = (inRiverCorridor || inSaltLakeZone) ? 0.56 : 0.62;
+  float tealBand = smoothstep(minGreenPos, minGreenPos + 0.10, greenPosInRB)
+                 * (1.0 - smoothstep(0.89, 0.96, greenPosInRB));
+
+  float minRatio = (inRiverCorridor || inSaltLakeZone) ? 1.62 : 1.85;
+  float minBlueRed = (inRiverCorridor || inSaltLakeZone) ? 0.048 : 0.068;
+
+  float cyanGate = tealBand
+                 * smoothstep(minRatio, minRatio + 0.45, greenOverRedRatio)
+                 * smoothstep(minBlueRed, minBlueRed + 0.055, blueOverRed)
+                 * smoothstep(0.008, 0.026, blueOverGreen);
+
+  float minLum = inRiverCorridor ? 0.026 : 0.038;
+  float lumGate = smoothstep(minLum, minLum + 0.035, lum) * (1.0 - smoothstep(0.68, 0.88, lum));
+
+  return clamp(notGreenGrass * cyanGate * lumGate, 0.0, 1.0);
 }
 
 void main() {
@@ -232,16 +329,18 @@ void main() {
 
   // --- Initial sample & water optical wave normal / UV refraction -------------------------------------------
   vec3 cRaw = fetchSrc(uv);
-  float waterMask = detectWaterMask(cRaw);
+  vec3 cUnshadowed = recoverUnshadowedColor(cRaw, uv);
   vec2 worldPos = screenUvToWorld(uv);
+  float waterMask = detectWaterMask(cRaw, cUnshadowed, worldPos);
   vec2 waveN = vec2(0.0);
 
   if (waterMask > 0.01) {
     waveN = computeWaterWaveNormal(worldPos, uTime);
     // Subtle real-time UV refraction of submerged bed, stones, weeds, and submerged vehicle hulls
-    vec2 refrUv = clamp(uv + waveN * texel * 2.35 * waterMask, vec2(0.001), vec2(0.999));
+    vec2 refrUv = clamp(uv + waveN * texel * 2.25 * waterMask, vec2(0.001), vec2(0.999));
     vec3 cRefr = fetchSrc(refrUv);
-    float refrMask = detectWaterMask(cRefr);
+    vec3 cRefrUnshadowed = recoverUnshadowedColor(cRefr, refrUv);
+    float refrMask = detectWaterMask(cRefr, cRefrUnshadowed, worldPos);
     cRaw = mix(cRaw, cRefr, waterMask * refrMask * 0.78);
   }
 
@@ -299,19 +398,21 @@ void main() {
 
   // --- Water Surface Shader: Solar/Lunar Glints, Fresnel Sky & Dynamic Light Reflections --------------------
   if (waterMask > 0.01) {
-    // 1. Fresnel sky dome reflection modulated by wave facets
+    // 1. Fresnel sky dome reflection modulated by organic wave facets
     float facetTilt = clamp(dot(waveN, uSun) * 0.65 + 0.35, 0.0, 1.0);
     vec3 daySkyCol = mix(vec3(0.45, 0.68, 0.88), vec3(0.95, 0.78, 0.58), clamp(1.0 - uDay * 1.15, 0.0, 1.0));
     vec3 nightSkyCol = vec3(0.05, 0.09, 0.16);
     vec3 skyCol = mix(nightSkyCol, daySkyCol, uDay);
-    c = mix(c, skyCol, waterMask * (0.06 + 0.09 * facetTilt));
+    c = mix(c, skyCol, waterMask * (0.05 + 0.08 * facetTilt));
 
-    // 2. Solar / Lunar micro-facet specular glints (Cox-Munk wave slope distribution)
-    float sunAlign = dot(normalize(waveN + uSun * 0.52), uSun);
-    float glintSharp = pow(clamp(sunAlign, 0.0, 1.0), 22.0);
-    float sparkle = smoothstep(0.68, 0.96, sin(worldPos.x * 0.42 + uTime * 5.2) * cos(worldPos.y * 0.38 - uTime * 4.4));
+    // 2. Solar / Lunar micro-facet specular glints (non-repeating warped Cox-Munk slope distribution)
+    float sunAlign = dot(normalize(waveN + uSun * 0.48), uSun);
+    float glintSharp = pow(clamp(sunAlign, 0.0, 1.0), 20.0);
+    float sparkleNoise1 = noise2DAndGrad(worldPos * 0.14 + waveN * 3.2 + vec2(uTime * 1.9, -uTime * 1.5)).x;
+    float sparkleNoise2 = noise2DAndGrad(worldPos * 0.23 - waveN * 2.4 + vec2(-uTime * 2.3, uTime * 1.8)).x;
+    float sparkle = smoothstep(0.52, 0.82, sparkleNoise1 * sparkleNoise2 * 2.2);
     vec3 sunGlintCol = mix(vec3(0.55, 0.70, 0.95) * 0.35, vec3(1.0, 0.95, 0.82), uDay);
-    c += sunGlintCol * waterMask * (glintSharp * 0.24 + glintSharp * sparkle * 0.38);
+    c += sunGlintCol * waterMask * (glintSharp * 0.22 + glintSharp * sparkle * 0.42);
 
     // 3. Dynamic lightmap & bloom reflections on water (headlights, taillights, sirens, streetlamps, flashlights)
     vec2 reflUv = clamp(uv + waveN * 0.014, vec2(0.001), vec2(0.999));
@@ -821,8 +922,9 @@ export class GpuPostFx {
     gl.uniform2f(c.u.uOutSize, this.outW, this.outH);
     gl.uniform1f(c.u.uUpscale, sw < this.outW * 0.98 || sh < this.outH * 0.98 ? 1 : 0);
     gl.uniform1f(c.u.uTime, frame.timeSec);
+    const dprScale = this.target.clientWidth > 0 ? this.outW / this.target.clientWidth : 1;
     gl.uniform2f(c.u.uCamPos, frame.cameraX ?? 0, frame.cameraY ?? 0);
-    gl.uniform1f(c.u.uCamZoom, frame.cameraZoom ?? 1);
+    gl.uniform1f(c.u.uCamZoom, (frame.cameraZoom ?? 1) * dprScale);
     gl.uniform1f(c.u.uCamAngle, frame.cameraAngle);
     gl.uniform1f(c.u.uFreezing, frame.isFreezing ? 1 : 0);
 

@@ -5102,21 +5102,22 @@ export function updatePedestrians(
         }
 
         // Spray water-foam particles (водно-пенная смесь)
-        if (Math.random() < 30.0 * dt) {
+        if (Math.random() < 24.0 * dt) {
           for (let p = 0; p < 2; p++) {
-            const spreadAngle = ped.angle + (Math.random() * 0.3 - 0.15);
-            const pSpeed = 160 + Math.random() * 110;
+            const spreadAngle = ped.angle + (Math.random() * 0.28 - 0.14);
+            const pSpeed = 165 + Math.random() * 115;
             world.particles.push({
-              x: ped.x + Math.cos(ped.angle) * 12 + (Math.random() * 6 - 3),
-              y: ped.y + Math.sin(ped.angle) * 12 + (Math.random() * 6 - 3),
+              x: ped.x + Math.cos(ped.angle) * 12 + (Math.random() * 5 - 2.5),
+              y: ped.y + Math.sin(ped.angle) * 12 + (Math.random() * 5 - 2.5),
               vx: Math.cos(spreadAngle) * pSpeed,
               vy: Math.sin(spreadAngle) * pSpeed,
-              radius: 4 + Math.random() * 5, // larger bubbles for water-foam
-              color: '#e0f2fe',
-              alpha: 0.9,
+              radius: 2.8 + Math.random() * 3.2,
+              color: Math.random() < 0.65 ? '#f8fafc' : '#e0f2fe',
+              alpha: 0.88,
+              initialAlpha: 0.88,
               life: 0,
-              maxLife: 0.35 + Math.random() * 0.25,
-              type: 'spark'});
+              maxLife: 0.36 + Math.random() * 0.22,
+              type: 'water_spray'});
           }
         }
 
@@ -5338,18 +5339,19 @@ export function updatePedestrians(
           ped.extinguisherCharges = Math.max(0, ped.extinguisherCharges - 18 * dt);
         }
 
-        if (Math.random() < 18.0 * dt) {
+        if (Math.random() < 16.0 * dt) {
           world.particles.push({
-            x: ped.x + Math.cos(ped.angle) * 12 + (Math.random() * 8 - 4),
-            y: ped.y + Math.sin(ped.angle) * 12 + (Math.random() * 8 - 4),
-            vx: Math.cos(ped.angle) * (60 + Math.random() * 40),
-            vy: Math.sin(ped.angle) * (60 + Math.random() * 40),
-            radius: 3 + Math.random() * 4,
+            x: ped.x + Math.cos(ped.angle) * 12 + (Math.random() * 6 - 3),
+            y: ped.y + Math.sin(ped.angle) * 12 + (Math.random() * 6 - 3),
+            vx: Math.cos(ped.angle) * (75 + Math.random() * 45),
+            vy: Math.sin(ped.angle) * (75 + Math.random() * 45),
+            radius: 2.6 + Math.random() * 2.8,
             color: '#f8fafc',
-            alpha: 0.85,
+            alpha: 0.86,
+            initialAlpha: 0.86,
             life: 0,
-            maxLife: 0.25 + Math.random() * 0.2,
-            type: 'spark'});
+            maxLife: 0.28 + Math.random() * 0.18,
+            type: 'water_spray'});
         }
 
         if (targetCar && targetCar.damage) {

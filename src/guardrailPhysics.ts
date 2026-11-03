@@ -250,23 +250,25 @@ export class GuardrailPhysics {
         sound.playCollision(Math.min(0.8, rawSpeed / 50));
       }
 
-      // Spawn yellow plastic shards and silica sand dust particles
-      for (let p = 0; p < 8; p++) {
+      // Spawn yellow plastic shards and silica sand grains
+      for (let p = 0; p < 6; p++) {
         const pAngle = Math.random() * Math.PI * 2;
-        const pSpeed = 20 + Math.random() * 55;
+        const pSpeed = 22 + Math.random() * 58;
+        const isSandGrain = p >= 4;
         world.particles.push({
           x: closestX + (Math.random() - 0.5) * 6,
           y: closestY + (Math.random() - 0.5) * 6,
           vx: Math.cos(pAngle) * pSpeed,
           vy: Math.sin(pAngle) * pSpeed,
-          radius: 1.2 + Math.random() * 1.6,
-          aspect: 1.3 + Math.random() * 0.8,
-          color: p % 3 === 0 ? '#facc15' : p % 3 === 1 ? '#eab308' : '#1e293b',
-          alpha: 0.92,
+          radius: 1.5 + Math.random() * 1.4,
+          aspect: 1.35 + Math.random() * 0.7,
+          color: isSandGrain ? '#eab308' : (p % 2 === 0 ? '#facc15' : '#1e293b'),
+          secondaryColor: isSandGrain ? '#92400e' : '#ca8a04',
+          alpha: 0.94,
           life: 0,
-          maxLife: 300.0,
+          maxLife: isSandGrain ? 0.55 : 26.0,
           type: 'debris',
-          debrisSubtype: 'plastic_chunk',
+          debrisSubtype: isSandGrain ? 'sand_grain' : 'plastic_chunk',
           angle: Math.random() * Math.PI * 2,
           angularVelocity: (Math.random() - 0.5) * 22,
           shapeSeed: Math.floor(Math.random() * 10000),
@@ -278,19 +280,19 @@ export class GuardrailPhysics {
       }
 
       // Silica sand dust puff dislodged from impact attenuator barrel
-      for (let s = 0; s < 3; s++) {
+      for (let s = 0; s < 2; s++) {
         world.particles.push({
           x: closestX + (Math.random() - 0.5) * 8,
           y: closestY + (Math.random() - 0.5) * 8,
           vx: (Math.random() - 0.5) * 35,
           vy: (Math.random() - 0.5) * 35,
-          radius: 10 + Math.random() * 12,
-          targetRadius: 22 + Math.random() * 14,
+          radius: 11 + Math.random() * 10,
+          targetRadius: 24 + Math.random() * 14,
           color: '#d97706',
-          alpha: 0.38,
-          initialAlpha: 0.38,
+          alpha: 0.42,
+          initialAlpha: 0.42,
           life: 0,
-          maxLife: 0.65 + Math.random() * 0.45,
+          maxLife: 0.70 + Math.random() * 0.40,
           type: 'dust'
         });
       }
