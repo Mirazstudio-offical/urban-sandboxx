@@ -3853,6 +3853,7 @@ export default function App() {
                   sunrise: cal.sunriseHour,
                   sunset: cal.sunsetHour,
                   lightmap: rendererRef.current.getFxLightmap(),
+                  fires: rendererRef.current.getActivePostFxFires(),
                 },
                 {
                   bloom: performanceConfig.gpuBloom,

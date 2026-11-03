@@ -63,6 +63,8 @@ import { TerrainRenderer } from './terrainRenderer';
 import { RoofRenderer } from './roofRenderer';
 import { renderRiverSystem, renderWaterSurfaceOpticsAndWakes } from './riverSystem';
 import { isWorldFreezing } from './calendarSystem';
+import { GpuFireRenderer, FireEmitter, FireEmitterKind } from './gpu/fireShader';
+import type { PostFxFireSource } from './gpu/postFx';
 import { RemotePlayerState, SpeechBubble } from './onlineSystem';
 import { InteractionTarget } from './interactionSystem';
 import { getCityApartments } from './propertySystem';
@@ -355,6 +357,9 @@ export class GameRenderer {
   private shadowCanvas: HTMLCanvasElement;
   private lightmapUsedThisFrame = false;
   private backingScale: number = 1;
+  private fireRenderer: GpuFireRenderer = new GpuFireRenderer();
+  private fireEmittersScratch: FireEmitter[] = [];
+  private activePostFxFires: PostFxFireSource[] = [];
 
   /** Canvas particles to draw this frame: keeps only the newest `renderParticleLimit`. */
   private capParticles(particles: GameWorld['particles']): GameWorld['particles'] {
@@ -932,6 +937,10 @@ export class GameRenderer {
     return this.lightmapUsedThisFrame ? this.lightmapCanvas : null;
   }
 
+  public getActivePostFxFires(): PostFxFireSource[] {
+    return this.activePostFxFires;
+  }
+
   public resize(width: number, height: number, backingScale: number = 1) {
     this.width = width;
     this.height = height;
@@ -961,6 +970,7 @@ export class GameRenderer {
     activeInteraction?: InteractionTarget | null
   ) {
     const ctx = this.ctx;
+    this.activePostFxFires.length = 0;
 
     // Base transform: map logical CSS-pixel space onto the (possibly scaled) backing store
     const k = this.backingScale;
@@ -1138,6 +1148,12 @@ export class GameRenderer {
           this.renderUnderVehicleParticles(this.capParticles(world.particles), world.cleanMode);
           this.renderVehicles(visibleVehicles, nightAlpha, camera.gridMode);
           this.renderTreesAndTallProps(vpTrees, vpProps, sMinX, sMinY, sMaxX, sMaxY, nightAlpha, world.calendar?.season);
+          this.renderActiveWorldFires(
+            world,
+            visibleVehicles,
+            { x: camera.x, y: camera.y, zoom: camera.zoom * heightScale, angle: camera.angle },
+            sMinX, sMinY, sMaxX, sMaxY
+          );
           this.renderOverheadParticles(this.capParticles(world.particles), world.cleanMode);
 
           if (nightAlpha > 0) {
@@ -1383,7 +1399,15 @@ export class GameRenderer {
       remotePlayers
     );
 
-    // 17. Overhead Particles (Tractor Stack Exhaust, Engine Bay Steam/Smoke, Flames, Sparks, Debris)
+    // 16f. Procedural WebGL2 Volumetric Blackbody Fires (Ground fuel/oil pools, Engine Bay, Cabin, Fuel Tank & Flash lobes)
+    this.renderActiveWorldFires(
+      world,
+      visibleVehicles,
+      camera,
+      minX, minY, maxX, maxY
+    );
+
+    // 17. Overhead Particles (Tractor Stack Exhaust, Engine Bay Steam/Smoke, Sparks, Debris)
     this.renderOverheadParticles(this.capParticles(world.particles), world.cleanMode);
 
     // 18. Optional AI Telemetry & Debug Visualizer
@@ -3561,18 +3585,33 @@ export class GameRenderer {
       }
 
       if ((stain as any).onFire) {
-        // Draw an intense flickering ground ember layer on top of the fluid surface
-        const fireInt = (stain as any).fireIntensity || 0.1;
-        const flicker = 1.0 + Math.sin(Date.now() * 0.022 + rx) * 0.12;
-        const glowRad = rx * 1.1 * flicker;
-        const glowGrad = safeRadialGradient(ctx, 0, 0, 0, 0, 0, glowRad);
-        glowGrad.addColorStop(0, `rgba(254, 240, 138, ${stainAlpha * 0.95 * fireInt})`); // Bright yellow core
-        glowGrad.addColorStop(0.25, `rgba(249, 115, 22, ${stainAlpha * 0.8 * fireInt})`); // Bright orange
-        glowGrad.addColorStop(0.65, `rgba(220, 38, 38, ${stainAlpha * 0.45 * fireInt})`); // Deep red rim
-        glowGrad.addColorStop(1.0, `rgba(220, 38, 38, 0)`);
+        // Physical carbonized asphalt scorch bed & boiling hydrocarbon capillary meniscus underneath the WebGL2 shader flames
+        const fireInt = Math.max(0.1, (stain as any).fireIntensity || 0.25);
+        const burnRatio = Math.min(1.0, stain.life / Math.max(1.0, stain.maxLife));
+        const scorchRx = rx * (1.06 + burnRatio * 0.16);
+        const scorchRy = ry * (1.06 + burnRatio * 0.16);
+
+        // 1. Carbonized pyrolysis soot ring on pavement
+        const scorchGrad = safeRadialGradient(ctx, 0, 0, rx * 0.15, 0, 0, scorchRx);
+        scorchGrad.addColorStop(0.0, `rgba(10, 12, 16, ${Math.min(0.88, 0.35 + burnRatio * 0.52)})`);
+        scorchGrad.addColorStop(0.72, `rgba(15, 18, 24, ${Math.min(0.75, 0.25 + burnRatio * 0.42)})`);
+        scorchGrad.addColorStop(1.0, 'rgba(15, 18, 24, 0)');
+        ctx.fillStyle = scorchGrad;
+        this.drawOrganicBlob(ctx, scorchRx, scorchRy, seed + 2, rough);
+        ctx.fill();
+
+        // 2. Incandescent boiling liquid meniscus bed
+        const nowSec = performance.now() * 0.001;
+        const flicker = 0.90 + 0.06 * Math.sin(nowSec * 14.3 + seed) + 0.04 * Math.cos(nowSec * 23.7 - seed);
+        const glowRad = rx * 1.04 * flicker;
+        const glowGrad = safeRadialGradient(ctx, 0, 0, rx * 0.1, 0, 0, glowRad);
+        glowGrad.addColorStop(0.0, `rgba(255, 238, 150, ${stainAlpha * 0.65 * fireInt})`);
+        glowGrad.addColorStop(0.55, `rgba(249, 115, 22, ${stainAlpha * 0.55 * fireInt})`);
+        glowGrad.addColorStop(0.88, `rgba(185, 28, 28, ${stainAlpha * 0.32 * fireInt})`);
+        glowGrad.addColorStop(1.0, 'rgba(120, 20, 10, 0)');
 
         ctx.fillStyle = glowGrad;
-        this.drawOrganicBlob(ctx, glowRad, glowRad * 0.85, seed + 1);
+        this.drawOrganicBlob(ctx, glowRad, ry * 1.04 * flicker, seed + 1, rough);
         ctx.fill();
       }
 
@@ -10508,32 +10547,55 @@ export class GameRenderer {
           ctx.fill();
         }
 
-        // Soot charring & fire heat glow overlays
+        // Localized thermal paint blistering, oxidized rust-ash & carbon soot charring on chassis
         const fireProg = dmg.fireProgress || (dmg.isFullyBurnt ? 1.0 : (dmg.cabinFire ? 0.65 : ((dmg.engineFire || dmg.fuelTankFire) ? 0.28 : (dmg.underHoodSmolder ? 0.08 : 0))));
         if (fireProg > 0 || dmg.isFullyBurnt) {
-          const charAlpha = Math.min(0.92, fireProg * 0.85 + (dmg.isFullyBurnt ? 0.90 : 0));
-          ctx.fillStyle = `rgba(15, 23, 42, ${charAlpha})`;
+          ctx.save();
           ctx.beginPath();
           traceSoftbodyPath(ctx, bodyPoly, polyDvs);
           ctx.closePath();
-          ctx.fill();
 
-          // Fire heat glow flicker on vehicle
-          if ((dmg.engineFire || dmg.fuelTankFire || dmg.cabinFire) && !dmg.isFullyBurnt) {
-            const glowPulse = 0.6 + Math.sin(Date.now() * 0.012) * 0.4;
+          if (dmg.isFullyBurnt || fireProg > 0.72) {
+            const charAlpha = Math.min(0.94, fireProg * 0.88 + (dmg.isFullyBurnt ? 0.92 : 0));
+            ctx.fillStyle = `rgba(14, 18, 26, ${charAlpha})`;
+            ctx.fill();
+            // Oxidized iron-oxide scale patches on burnt steel panels
+            const rustGrad = ctx.createLinearGradient(-halfL, -halfW * 0.5, halfL, halfW * 0.5);
+            rustGrad.addColorStop(0.0, `rgba(68, 32, 18, ${charAlpha * 0.34})`);
+            rustGrad.addColorStop(0.5, `rgba(28, 25, 23, ${charAlpha * 0.25})`);
+            rustGrad.addColorStop(1.0, `rgba(76, 35, 20, ${charAlpha * 0.38})`);
+            ctx.fillStyle = rustGrad;
+            ctx.fill();
+          } else {
+            // Localized soot gradient anchored at the active combustion zone(s)
             const isRearOnly = dmg.fuelTankFire && !dmg.cabinFire && !dmg.engineFire;
-            const glowCenter = dmg.cabinFire ? 0 : (isRearOnly ? -halfL * 0.35 : halfL * 0.22);
-            const glowRadius = dmg.cabinFire ? halfL * 0.95 : halfL * 0.75;
-            const fireGlowGrad = ctx.createRadialGradient(glowCenter, 0, 2, glowCenter, 0, glowRadius);
-            fireGlowGrad.addColorStop(0, `rgba(254, 240, 138, ${0.9 * glowPulse})`);
-            fireGlowGrad.addColorStop(0.4, `rgba(249, 115, 22, ${0.75 * glowPulse})`);
-            fireGlowGrad.addColorStop(1, 'rgba(239, 68, 68, 0)');
-            ctx.fillStyle = fireGlowGrad;
-            ctx.beginPath();
-            traceSoftbodyPath(ctx, bodyPoly, polyDvs);
-            ctx.closePath();
+            const charCenter = dmg.cabinFire ? 0 : (isRearOnly ? -halfL * 0.34 : halfL * 0.28);
+            const charRad = dmg.cabinFire ? halfL * 1.15 : halfL * 0.88;
+            const charPeak = Math.min(0.90, 0.32 + fireProg * 0.75);
+            const charGrad = ctx.createRadialGradient(charCenter, 0, 2, charCenter, 0, charRad);
+            charGrad.addColorStop(0.0, `rgba(12, 15, 22, ${charPeak})`);
+            charGrad.addColorStop(0.55, `rgba(18, 23, 34, ${charPeak * 0.65})`);
+            charGrad.addColorStop(1.0, `rgba(15, 23, 42, ${Math.min(0.35, fireProg * 0.35)})`);
+            ctx.fillStyle = charGrad;
             ctx.fill();
           }
+
+          // Sub-hood / chassis seam incandescent thermal glow
+          if ((dmg.engineFire || dmg.fuelTankFire || dmg.cabinFire) && !dmg.isFullyBurnt) {
+            const nowSec = performance.now() * 0.001;
+            const glowPulse = 0.82 + 0.11 * Math.sin(nowSec * 14.5 + car.x * 0.05) + 0.07 * Math.cos(nowSec * 23.3 + car.y * 0.05);
+            const isRearOnly = dmg.fuelTankFire && !dmg.cabinFire && !dmg.engineFire;
+            const glowCenter = dmg.cabinFire ? 0 : (isRearOnly ? -halfL * 0.34 : halfL * 0.28);
+            const glowRadius = dmg.cabinFire ? halfL * 0.82 : halfL * 0.58;
+            const fireInt = Math.max(0.35, dmg.fireIntensity || 0.65);
+            const fireGlowGrad = ctx.createRadialGradient(glowCenter, 0, 1, glowCenter, 0, glowRadius);
+            fireGlowGrad.addColorStop(0.0, `rgba(255, 235, 140, ${0.58 * glowPulse * fireInt})`);
+            fireGlowGrad.addColorStop(0.45, `rgba(249, 115, 22, ${0.42 * glowPulse * fireInt})`);
+            fireGlowGrad.addColorStop(1.0, 'rgba(185, 28, 28, 0)');
+            ctx.fillStyle = fireGlowGrad;
+            ctx.fill();
+          }
+          ctx.restore();
         }
 
         ctx.strokeStyle = 'rgba(0, 0, 0, 0.42)';
@@ -12004,6 +12066,40 @@ export class GameRenderer {
       // Accurate greenhouse (windshield, roof, side glass, pillars, sedan trunk deck, wagon roof, pickup bed, supercar mid-engine, etc.)
       renderVehicleGreenhouseAndBodyPanels(vCtx);
 
+      // Greenhouse & roof thermal charring + interior cabin furnace glow when burning or burnt out
+      const cabFireProg = dmg.fireProgress || (dmg.isFullyBurnt ? 1.0 : (dmg.cabinFire ? 0.68 : ((dmg.engineFire || dmg.fuelTankFire) ? 0.24 : 0)));
+      if (cabFireProg > 0.08 || dmg.isFullyBurnt || dmg.cabinFire) {
+        ctx.save();
+        ctx.beginPath();
+        traceSoftbodyPath(ctx, bodyPoly, polyDvs);
+        ctx.closePath();
+        ctx.clip();
+
+        if (dmg.isFullyBurnt || cabFireProg > 0.35 || dmg.cabinFire) {
+          const roofCharAlpha = dmg.isFullyBurnt
+            ? 0.88
+            : Math.min(0.84, (dmg.cabinFire ? 0.48 : 0.12) + cabFireProg * 0.58);
+          ctx.fillStyle = `rgba(14, 18, 25, ${roofCharAlpha.toFixed(3)})`;
+          ctx.fillRect(cabinX - cabinL * 0.56, -cabinW * 0.56, cabinL * 1.12, cabinW * 1.12);
+        }
+
+        // Interior furnace glow visible through cabin glass and roof seams during active cabin fire
+        if (dmg.cabinFire && !dmg.isFullyBurnt) {
+          const nowSec = performance.now() * 0.001;
+          const fPulse = 0.84 + 0.10 * Math.sin(nowSec * 15.7 + car.x * 0.07) + 0.06 * Math.cos(nowSec * 24.3 + car.y * 0.07);
+          const fInt = Math.max(0.45, dmg.fireIntensity || 0.8);
+          const cabGlowR = Math.max(cabinL, cabinW) * 0.62;
+          const cabGrad = ctx.createRadialGradient(cabinX, 0, 1.5, cabinX, 0, cabGlowR);
+          cabGrad.addColorStop(0.0, `rgba(255, 240, 160, ${(0.72 * fPulse * fInt).toFixed(3)})`);
+          cabGrad.addColorStop(0.45, `rgba(255, 130, 20, ${(0.55 * fPulse * fInt).toFixed(3)})`);
+          cabGrad.addColorStop(0.82, `rgba(200, 35, 10, ${(0.28 * fPulse * fInt).toFixed(3)})`);
+          cabGrad.addColorStop(1.0, 'rgba(120, 15, 5, 0)');
+          ctx.fillStyle = cabGrad;
+          ctx.fillRect(cabinX - cabinL * 0.62, -cabinW * 0.62, cabinL * 1.24, cabinW * 1.24);
+        }
+        ctx.restore();
+      }
+
       // Glass crack damage effect if windshield is broken
       if (car.type !== 'bus' && car.type !== 'ambulance' && car.type !== 'ambulance_van') {
         const roofL = cabinL * 0.66;
@@ -13008,19 +13104,249 @@ export class GameRenderer {
     ctx.restore();
   }
 
-  // Overhead Particles: Tractor hood stack exhaust, Engine bay fire/steam, Sparks, Flames, Debris, Water Splash/Fountain, Leaves/Feathers
+  /**
+   * Collects all visible world-space fire sources (burning fuel/oil puddles, vehicle engine/cabin/tank fires,
+   * and transient deflagration fireballs) and renders them in a single instanced WebGL2 shader pass.
+   * Also populates `this.activePostFxFires` for thermal heat shimmer and normal-mapped surface relief lighting.
+   */
+  private renderActiveWorldFires(
+    world: GameWorld,
+    visibleVehicles: Vehicle[],
+    camera: { x: number; y: number; zoom: number; angle: number },
+    minX: number,
+    minY: number,
+    maxX: number,
+    maxY: number
+  ) {
+    const emitters = this.fireEmittersScratch;
+    emitters.length = 0;
+
+    const windVx = world.wind ? world.wind.vx * (world.wind.gust ?? 1.0) : 14;
+    const windVy = world.wind ? world.wind.vy * (world.wind.gust ?? 1.0) : 4;
+    const nowSec = performance.now() * 0.001;
+
+    // 1. Burning Ground Fluid Stains (Fuel & Heavy Oil Pools)
+    const stains = world.stains;
+    if (stains && stains.length > 0) {
+      const stainStart = Math.max(0, stains.length - performanceConfig.stainsLimit);
+      for (let si = stainStart; si < stains.length; si++) {
+        const st = stains[si];
+        if (!st.onFire || st.radius <= 0.2) continue;
+        const margin = st.radius * 2.5 + 40;
+        if (st.x + margin < minX || st.x - margin > maxX || st.y + margin < minY || st.y - margin > maxY) {
+          continue;
+        }
+
+        let idSum = 0;
+        for (let c = 0; c < st.id.length; c++) {
+          idSum = ((idSum << 5) - idSum + st.id.charCodeAt(c)) | 0;
+        }
+        const seedInt = Math.abs(idSum) + Math.floor(st.x * 13 + st.y * 31);
+        const aspect = 0.72 + (seedInt % 50) * 0.01;
+        const filmAngle = ((seedInt % 360) * Math.PI) / 180;
+        const rx = st.radius * (1.0 / Math.sqrt(aspect));
+        const ry = st.radius * Math.sqrt(aspect);
+        const fireInt = Math.max(0.15, st.fireIntensity || 0.5) * Math.min(1.0, (st.alpha ?? 0.6) * 2.1);
+        const burnRatio = Math.min(1.0, st.life / Math.max(1.0, st.maxLife));
+
+        emitters.push({
+          x: st.x,
+          y: st.y,
+          radiusX: rx * 1.12,
+          radiusY: ry * 1.12,
+          angle: filmAngle,
+          intensity: fireInt,
+          kind: st.type === 'oil' ? FireEmitterKind.OilPool : FireEmitterKind.FuelPool,
+          seed: (seedInt % 997) * 0.013,
+          windVx,
+          windVy,
+          burnRatio,
+        });
+
+        // Merge nearby stain fires into compact PostFX heat/light clusters (max 16)
+        this.pushOrMergePostFxFire(st.x, st.y, st.radius * 1.25, fireInt * 0.85, windVx, windVy);
+      }
+    }
+
+    // 2. Burning Vehicles (Engine Bay, Cabin Greenhouse & Rear Fuel Tank)
+    for (let vi = 0; vi < visibleVehicles.length; vi++) {
+      const car = visibleVehicles[vi];
+      const dmg = car.damage;
+      if (!dmg || dmg.isFullyBurnt) continue;
+      if (!dmg.engineFire && !dmg.cabinFire && !dmg.fuelTankFire) continue;
+
+      const cosA = Math.cos(car.angle);
+      const sinA = Math.sin(car.angle);
+      const halfL = car.length * 0.5;
+      const halfW = car.width * 0.5;
+
+      // Relative aerodynamic slipstream combines ambient wind with opposite of vehicle velocity vector
+      const carVx = cosA * (car.speed || 0);
+      const carVy = sinA * (car.speed || 0);
+      const slipVx = windVx - carVx * 0.85;
+      const slipVy = windVy - carVy * 0.85;
+
+      let idHash = 0;
+      const cid = car.id || 'veh';
+      for (let c = 0; c < cid.length; c++) {
+        idHash = ((idHash << 5) - idHash + cid.charCodeAt(c)) | 0;
+      }
+      const baseSeed = (Math.abs(idHash) % 991) * 0.017;
+      const fireProg = Math.min(1.0, Math.max(0.1, dmg.fireProgress || 0.25));
+      const baseInt = Math.max(0.45, dmg.fireIntensity || 0.78);
+
+      if (dmg.engineFire) {
+        const hoodOffset = halfL * 0.30;
+        const ex = car.x + cosA * hoodOffset;
+        const ey = car.y + sinA * hoodOffset;
+        const engInt = baseInt * (0.78 + 0.22 * Math.min(1.0, fireProg * 1.8));
+        emitters.push({
+          x: ex,
+          y: ey,
+          radiusX: halfL * 0.44,
+          radiusY: halfW * 0.86,
+          angle: car.angle,
+          intensity: engInt,
+          kind: FireEmitterKind.VehicleEngine,
+          seed: baseSeed + 1.13,
+          windVx: slipVx,
+          windVy: slipVy,
+          burnRatio: fireProg,
+        });
+        this.pushOrMergePostFxFire(ex, ey, Math.max(halfW, halfL * 0.45), engInt, slipVx, slipVy);
+      }
+
+      if (dmg.cabinFire) {
+        const ld = Math.min(halfW * 0.65, dmg.leftDent || 0);
+        const rd = Math.min(halfW * 0.65, dmg.rightDent || 0);
+        const { cabinL, cabinW, cabinX } = getVehicleCabinDimensions(car, halfL, halfW, ld, rd);
+        const cx = car.x + cosA * cabinX;
+        const cy = car.y + sinA * cabinX;
+        const cabInt = Math.max(0.65, baseInt * 1.08);
+        emitters.push({
+          x: cx,
+          y: cy,
+          radiusX: cabinL * 0.54,
+          radiusY: cabinW * 0.68,
+          angle: car.angle,
+          intensity: cabInt,
+          kind: FireEmitterKind.VehicleCabin,
+          seed: baseSeed + 3.47,
+          windVx: slipVx,
+          windVy: slipVy,
+          burnRatio: fireProg,
+        });
+        this.pushOrMergePostFxFire(cx, cy, Math.max(cabinW * 0.7, cabinL * 0.5), cabInt * 1.1, slipVx, slipVy);
+      }
+
+      if (dmg.fuelTankFire) {
+        const tankOffset = -halfL * 0.34;
+        const tx = car.x + cosA * tankOffset;
+        const ty = car.y + sinA * tankOffset;
+        const tankInt = baseInt * 0.95;
+        emitters.push({
+          x: tx,
+          y: ty,
+          radiusX: halfL * 0.42,
+          radiusY: halfW * 0.84,
+          angle: car.angle,
+          intensity: tankInt,
+          kind: FireEmitterKind.VehicleTank,
+          seed: baseSeed + 6.89,
+          windVx: slipVx,
+          windVy: slipVy,
+          burnRatio: fireProg,
+        });
+        this.pushOrMergePostFxFire(tx, ty, Math.max(halfW, halfL * 0.42), tankInt, slipVx, slipVy);
+      }
+    }
+
+    // 3. Transient Deflagration / Ignition Flash Lobes (from explosions or lighter/match strikes)
+    const particles = world.particles;
+    if (particles && particles.length > 0 && !world.cleanMode) {
+      for (let i = 0; i < particles.length; i++) {
+        const p = particles[i];
+        if (p.type !== 'flame' || p.alpha <= 0.01) continue;
+        if (p.x + p.radius * 2 < minX || p.x - p.radius * 2 > maxX || p.y + p.radius * 2 < minY || p.y - p.radius * 2 > maxY) {
+          continue;
+        }
+        const prog = Math.min(1.0, Math.max(0.0, p.life / Math.max(0.01, p.maxLife)));
+        const r = p.radius * (0.85 + 0.45 * prog);
+        const fInt = Math.max(0.05, (1.0 - prog) * p.alpha * 1.25);
+        emitters.push({
+          x: p.x,
+          y: p.y,
+          radiusX: r,
+          radiusY: r,
+          angle: p.angle ?? 0,
+          intensity: fInt,
+          kind: FireEmitterKind.TransientFlash,
+          seed: ((p.shapeSeed ?? i) % 997) * 0.019,
+          windVx: p.vx * 0.5 + windVx,
+          windVy: p.vy * 0.5 + windVy,
+          burnRatio: prog,
+        });
+        this.pushOrMergePostFxFire(p.x, p.y, r * 1.2, fInt, windVx, windVy);
+      }
+    }
+
+    if (emitters.length > 0) {
+      this.fireRenderer.renderEmitters(
+        this.ctx,
+        emitters,
+        camera,
+        this.width,
+        this.height,
+        this.backingScale,
+        nowSec
+      );
+    }
+  }
+
+  private pushOrMergePostFxFire(
+    x: number,
+    y: number,
+    radius: number,
+    intensity: number,
+    windVx: number,
+    windVy: number
+  ) {
+    const list = this.activePostFxFires;
+    for (let i = 0; i < list.length; i++) {
+      const existing = list[i];
+      const dx = existing.x - x;
+      const dy = existing.y - y;
+      const mergeDist = Math.max(38, (existing.radius + radius) * 0.85);
+      if (dx * dx + dy * dy < mergeDist * mergeDist) {
+        const w1 = existing.intensity;
+        const w2 = intensity;
+        const wSum = Math.max(0.01, w1 + w2);
+        existing.x = (existing.x * w1 + x * w2) / wSum;
+        existing.y = (existing.y * w1 + y * w2) / wSum;
+        existing.radius = Math.min(95, Math.max(existing.radius, radius) + Math.min(existing.radius, radius) * 0.22);
+        existing.intensity = Math.min(1.45, Math.max(existing.intensity, intensity) + Math.min(existing.intensity, intensity) * 0.25);
+        existing.windVx = (existing.windVx * w1 + windVx * w2) / wSum;
+        existing.windVy = (existing.windVy * w1 + windVy * w2) / wSum;
+        return;
+      }
+    }
+    if (list.length < 16) {
+      list.push({ x, y, radius, intensity, windVx, windVy });
+    }
+  }
+
+  // Overhead Particles: Tractor hood stack exhaust, Engine bay steam/smoke, Sparks, Debris, Water Splash/Fountain, Leaves/Feathers
   private renderOverheadParticles(particles: GameWorld['particles'], cleanMode?: boolean) {
     const len = particles.length;
     if (len === 0) return;
 
     const overheadSmoke: typeof particles = [];
     const neutral: typeof particles = [];
-    const flames: typeof particles = [];
     const sparks: typeof particles = [];
 
     for (let i = 0; i < len; i++) {
       const p = particles[i];
-      if (p.underVehicle || p.type === 'dust' || p.type === 'mud_clod' || p.type === 'water_spray') {
+      if (p.underVehicle || p.type === 'dust' || p.type === 'mud_clod' || p.type === 'water_spray' || p.type === 'flame') {
         continue;
       }
 
@@ -13031,8 +13357,6 @@ export class GameRenderer {
         }
       } else if (t === 'engine_smoke' || t === 'tire_smoke') {
         overheadSmoke.push(p);
-      } else if (t === 'flame') {
-        flames.push(p);
       } else if (t === 'spark') {
         sparks.push(p);
       } else {
@@ -13042,7 +13366,7 @@ export class GameRenderer {
 
     const ctx = this.ctx;
 
-    // Pass 1: Render volumetric multi-lobed overhead smoke & steam
+    // Pass 1: Render volumetric multi-lobed overhead smoke & steam (billowing above shader flames)
     if (!cleanMode) {
       for (let i = 0; i < overheadSmoke.length; i++) {
         this.drawGasSmokeParticle(overheadSmoke[i]);
@@ -13112,32 +13436,7 @@ export class GameRenderer {
       }
     }
 
-    // Pass 3: Render turbulent multi-tongued licking flames (pre-baked offscreen fire sprites)
-    for (let i = 0; i < flames.length; i++) {
-      const p = flames[i];
-      const a = Math.max(0, Math.min(1.0, p.alpha));
-      if (a < 0.01) continue;
-      ctx.globalAlpha = a;
-      const seed = p.shapeSeed ?? i;
-      const sprite = GameRenderer.getFlameTongueSprite(seed & 3);
-      const rad = p.radius;
-      const vSq = p.vx * p.vx + p.vy * p.vy;
-      // Align flame tongue with velocity / thermal draft + dynamic flicker sway
-      const draftAng = vSq > 25
-        ? Math.atan2(p.vy, p.vx) + Math.PI * 0.5
-        : (p.angle ?? 0) * 0.25 + Math.sin(p.life * 14 + seed) * 0.22;
-      const stretchY = 1.18 + Math.sin(p.life * 18 + seed) * 0.18 + Math.min(0.45, Math.sqrt(vSq) * 0.004);
-      const rx = rad * 1.05;
-      const ry = rad * stretchY;
-
-      ctx.save();
-      ctx.translate(p.x, p.y);
-      ctx.rotate(draftAng);
-      ctx.drawImage(sprite, -rx, -ry * 1.15, rx * 2, ry * 2.1);
-      ctx.restore();
-    }
-
-    // Pass 4: Render high-velocity incandescent metal sparks & carbon-steel branching forks (zero circles)
+    // Pass 3: Render high-velocity incandescent metal sparks & carbon-steel branching forks (zero circles)
     for (let i = 0; i < sparks.length; i++) {
       const p = sparks[i];
       const alpha = Math.max(0, Math.min(1.0, p.alpha));
@@ -14108,37 +14407,64 @@ export class GameRenderer {
       }
     }
 
-    // K. Active Fires (Burning ground stains & burning vehicles) illuminate darkness and shadows!
-    const flicker = 0.92 + Math.sin(Date.now() * 0.023) * 0.08;
+    // K. Active Fires (Burning ground stains & burning vehicles) illuminate darkness and shadows with chaotic combustion flicker!
+    const nowFireSec = performance.now() * 0.001;
     if (world.stains) {
-      for (const st of world.stains) {
+      const stainStart = Math.max(0, world.stains.length - performanceConfig.stainsLimit);
+      for (let si = stainStart; si < world.stains.length; si++) {
+        const st = world.stains[si];
         if (!st.onFire) continue;
-        if (st.x < minX - 160 || st.x > maxX + 160 || st.y < minY - 160 || st.y > maxY + 160) continue;
-        const fireRad = Math.max(45, st.radius * 4.5) * flicker * fogFactor;
-        const fGrad = lCtx.createRadialGradient(st.x, st.y, 2, st.x, st.y, fireRad);
-        fGrad.addColorStop(0.0, 'rgba(0, 0, 0, 0.96)');
-        fGrad.addColorStop(0.35, 'rgba(0, 0, 0, 0.72)');
-        fGrad.addColorStop(0.70, 'rgba(0, 0, 0, 0.28)');
+        if (st.x < minX - 180 || st.x > maxX + 180 || st.y < minY - 180 || st.y > maxY + 180) continue;
+        const stPhase = (st.x * 0.13 + st.y * 0.31) % 62.8;
+        const stFlicker = 0.91 + 0.055 * Math.sin(nowFireSec * 13.7 + stPhase) + 0.035 * Math.cos(nowFireSec * 23.3 - stPhase * 1.7);
+        const jx = Math.sin(nowFireSec * 16.5 + stPhase) * 1.6;
+        const jy = Math.cos(nowFireSec * 19.1 - stPhase) * 1.6;
+        const fInt = Math.max(0.25, st.fireIntensity || 0.65);
+        const fireRad = Math.max(52, st.radius * 5.2) * (0.55 + 0.45 * fInt) * stFlicker * fogFactor;
+        const fGrad = lCtx.createRadialGradient(st.x + jx, st.y + jy, 2, st.x + jx, st.y + jy, fireRad);
+        fGrad.addColorStop(0.0, 'rgba(0, 0, 0, 0.98)');
+        fGrad.addColorStop(0.32, 'rgba(0, 0, 0, 0.80)');
+        fGrad.addColorStop(0.68, 'rgba(0, 0, 0, 0.34)');
         fGrad.addColorStop(1.0, 'rgba(0, 0, 0, 0)');
         lCtx.fillStyle = fGrad;
         lCtx.beginPath();
-        lCtx.arc(st.x, st.y, fireRad, 0, Math.PI * 2);
+        lCtx.arc(st.x + jx, st.y + jy, fireRad, 0, Math.PI * 2);
         lCtx.fill();
       }
     }
     for (const car of nearbyVehicles) {
-      const hasFire = car.damage?.engineFire || car.damage?.cabinFire;
-      if (hasFire) {
-        const fireIntensity = Math.max(0.4, car.damage?.fireIntensity || 0.75);
-        const fireRad = (85 + fireIntensity * 65) * flicker * fogFactor;
-        const fGrad = lCtx.createRadialGradient(car.x, car.y, 4, car.x, car.y, fireRad);
-        fGrad.addColorStop(0.0, 'rgba(0, 0, 0, 0.98)');
-        fGrad.addColorStop(0.4, 'rgba(0, 0, 0, 0.75)');
-        fGrad.addColorStop(0.75, 'rgba(0, 0, 0, 0.30)');
+      const dmg = car.damage;
+      const hasFire = dmg && !dmg.isFullyBurnt && (dmg.engineFire || dmg.cabinFire || dmg.fuelTankFire);
+      if (hasFire && dmg) {
+        const cosA = Math.cos(car.angle);
+        const sinA = Math.sin(car.angle);
+        const halfL = car.length * 0.5;
+        const cPhase = (car.x * 0.09 + car.y * 0.17) % 62.8;
+        const cFlicker = 0.90 + 0.06 * Math.sin(nowFireSec * 14.9 + cPhase) + 0.04 * Math.cos(nowFireSec * 24.7 - cPhase * 1.4);
+        const jx = Math.sin(nowFireSec * 17.8 + cPhase) * 2.2;
+        const jy = Math.cos(nowFireSec * 21.2 - cPhase) * 2.2;
+
+        // Position light cutout at actual burning zone(s) along vehicle body
+        let offsetL = 0;
+        if (dmg.cabinFire) {
+          offsetL = 0;
+        } else if (dmg.engineFire && !dmg.fuelTankFire) {
+          offsetL = halfL * 0.28;
+        } else if (dmg.fuelTankFire && !dmg.engineFire) {
+          offsetL = -halfL * 0.34;
+        }
+        const fx = car.x + cosA * offsetL + jx;
+        const fy = car.y + sinA * offsetL + jy;
+        const fireIntensity = Math.max(0.45, dmg.fireIntensity || 0.78);
+        const fireRad = (95 + fireIntensity * 75 + (dmg.cabinFire ? 25 : 0)) * cFlicker * fogFactor;
+        const fGrad = lCtx.createRadialGradient(fx, fy, 4, fx, fy, fireRad);
+        fGrad.addColorStop(0.0, 'rgba(0, 0, 0, 0.99)');
+        fGrad.addColorStop(0.36, 'rgba(0, 0, 0, 0.82)');
+        fGrad.addColorStop(0.72, 'rgba(0, 0, 0, 0.34)');
         fGrad.addColorStop(1.0, 'rgba(0, 0, 0, 0)');
         lCtx.fillStyle = fGrad;
         lCtx.beginPath();
-        lCtx.arc(car.x, car.y, fireRad, 0, Math.PI * 2);
+        lCtx.arc(fx, fy, fireRad, 0, Math.PI * 2);
         lCtx.fill();
       }
 
@@ -15080,6 +15406,71 @@ export class GameRenderer {
 
     // G. Rolling Stock Dynamic Light Optics (Additive volumetric projector beam, lenses, and warm windows)
     RollingStockRenderer.renderLightmapOptics(ctx, world, minX, minY, maxX, maxY, effectiveAlpha, fogFactor);
+
+    // H. Active Fires Photometric Blackbody Radiance (Warm flickering firelight pool on asphalt, cars & walls)
+    {
+      const nowAddSec = performance.now() * 0.001;
+      const ambientBoost = 0.32 + 0.68 * Math.max(effectiveAlpha, sunState.shadowOpacity * 0.65);
+
+      const drawWarmFirePool = (fx: number, fy: number, coreR: number, outerR: number, peakAlpha: number) => {
+        if (peakAlpha <= 0.004 || outerR <= 2) return;
+        const poolGrad = ctx.createRadialGradient(fx, fy, coreR, fx, fy, outerR);
+        poolGrad.addColorStop(0.00, `rgba(255, 225, 130, ${(peakAlpha * 0.95).toFixed(3)})`);
+        poolGrad.addColorStop(0.28, `rgba(255, 140, 32, ${(peakAlpha * 0.62).toFixed(3)})`);
+        poolGrad.addColorStop(0.64, `rgba(235, 58, 12, ${(peakAlpha * 0.24).toFixed(3)})`);
+        poolGrad.addColorStop(1.00, 'rgba(180, 28, 6, 0)');
+        ctx.fillStyle = poolGrad;
+        ctx.beginPath();
+        ctx.arc(fx, fy, outerR, 0, Math.PI * 2);
+        ctx.fill();
+      };
+
+      if (world.stains) {
+        const stainStart = Math.max(0, world.stains.length - performanceConfig.stainsLimit);
+        for (let si = stainStart; si < world.stains.length; si++) {
+          const st = world.stains[si];
+          if (!st.onFire) continue;
+          if (st.x < minX - 180 || st.x > maxX + 180 || st.y < minY - 180 || st.y > maxY + 180) continue;
+          const stPhase = (st.x * 0.13 + st.y * 0.31) % 62.8;
+          const flick = 0.88 + 0.07 * Math.sin(nowAddSec * 14.1 + stPhase) + 0.05 * Math.cos(nowAddSec * 23.9 - stPhase * 1.6);
+          const jx = Math.sin(nowAddSec * 16.5 + stPhase) * 1.5;
+          const jy = Math.cos(nowAddSec * 19.1 - stPhase) * 1.5;
+          const fInt = Math.max(0.2, st.fireIntensity || 0.6) * Math.min(1.0, (st.alpha ?? 0.6) * 2.0);
+          const rad = Math.max(46, st.radius * 4.8) * flick * fogFactor;
+          const peakA = Math.min(0.34, 0.24 * fInt * ambientBoost * flick);
+          drawWarmFirePool(st.x + jx, st.y + jy, Math.max(1.5, st.radius * 0.35), rad, peakA);
+        }
+      }
+
+      for (const car of nearbyVehicles) {
+        const dmg = car.damage;
+        if (!dmg || dmg.isFullyBurnt || (!dmg.engineFire && !dmg.cabinFire && !dmg.fuelTankFire)) continue;
+        const cosA = Math.cos(car.angle);
+        const sinA = Math.sin(car.angle);
+        const halfL = car.length * 0.5;
+        const cPhase = (car.x * 0.09 + car.y * 0.17) % 62.8;
+        const flick = 0.88 + 0.07 * Math.sin(nowAddSec * 15.3 + cPhase) + 0.05 * Math.cos(nowAddSec * 25.1 - cPhase * 1.3);
+        const jx = Math.sin(nowAddSec * 17.8 + cPhase) * 2.0;
+        const jy = Math.cos(nowAddSec * 21.2 - cPhase) * 2.0;
+        const fInt = Math.max(0.45, dmg.fireIntensity || 0.78);
+
+        if (dmg.engineFire) {
+          const ex = car.x + cosA * (halfL * 0.30) + jx;
+          const ey = car.y + sinA * (halfL * 0.30) + jy;
+          drawWarmFirePool(ex, ey, 3.0, (82 + fInt * 55) * flick * fogFactor, Math.min(0.36, 0.26 * fInt * ambientBoost * flick));
+        }
+        if (dmg.cabinFire) {
+          const cx = car.x + jx;
+          const cy = car.y + jy;
+          drawWarmFirePool(cx, cy, 4.0, (105 + fInt * 68) * flick * fogFactor, Math.min(0.40, 0.30 * fInt * ambientBoost * flick));
+        }
+        if (dmg.fuelTankFire) {
+          const tx = car.x - cosA * (halfL * 0.34) + jx;
+          const ty = car.y - sinA * (halfL * 0.34) + jy;
+          drawWarmFirePool(tx, ty, 3.0, (78 + fInt * 52) * flick * fogFactor, Math.min(0.35, 0.25 * fInt * ambientBoost * flick));
+        }
+      }
+    }
 
     ctx.restore();
   }

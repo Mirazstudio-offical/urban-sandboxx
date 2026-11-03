@@ -31,6 +31,15 @@ export interface PostFxSettings {
   wet: number;        // 0..100 wet asphalt sheen in rain
 }
 
+export interface PostFxFireSource {
+  x: number;         // World X (px)
+  y: number;         // World Y (px)
+  radius: number;    // World radius of fire core (px)
+  intensity: number; // 0..1+ combustion intensity
+  windVx: number;    // World wind + slipstream X (px/s)
+  windVy: number;    // World wind + slipstream Y (px/s)
+}
+
 export interface PostFxFrame {
   hour: number;             // 0..24 time of day
   weather: string;          // WeatherType
@@ -44,6 +53,7 @@ export interface PostFxFrame {
   sunrise?: number;
   sunset?: number;
   lightmap?: HTMLCanvasElement | null; // darkness layer (alpha = dark), null when the frame had none
+  fires?: PostFxFireSource[];          // active world-space fire sources for heat haze & normal relief lighting
 }
 
 const VS = `#version 300 es
@@ -136,6 +146,9 @@ uniform float uVig;
 uniform float uGrain;
 uniform float uChroma;
 uniform float uDay;         // 0 night .. 1 day
+uniform int uFireCount;
+uniform vec4 uFirePosRad[16]; // xy = world pos, z = radius, w = intensity
+uniform vec2 uFireWind[16];   // xy = world wind + slipstream
 
 float luma(vec3 c) { return dot(c, vec3(0.2126, 0.7152, 0.0722)); }
 
@@ -215,6 +228,14 @@ vec2 screenUvToWorld(vec2 uv) {
   return uCamPos + vec2(screenPx.x * ca - screenPx.y * sa, screenPx.x * sa + screenPx.y * ca);
 }
 
+// Rotate world-space direction vector into screen UV space (X right, Y up)
+vec2 worldDirToScreenUv(vec2 worldDir) {
+  float a = -uCamAngle - 1.57079632679;
+  float ca = cos(a);
+  float sa = sin(a);
+  return vec2(worldDir.x * ca - worldDir.y * sa, -(worldDir.x * sa + worldDir.y * ca));
+}
+
 // Domain-warped, multi-directional capillary-gravity wave slope normal in world space
 vec2 computeWaterWaveNormal(vec2 worldPos, float time) {
   // Large-scale spatial flow & eddy curl field so wave directions vary organically across bends and pools
@@ -254,12 +275,7 @@ vec2 computeWaterWaveNormal(vec2 worldPos, float time) {
   vec2 g4 = (vec2(0.866 * n4.y - 0.5 * n4.z, 0.5 * n4.y + 0.866 * n4.z)) * 0.24;
 
   vec2 worldGrad = (g1 + g2 + g3 + g4) * 0.85;
-
-  // Rotate world gradient into screen UV space
-  float a = -uCamAngle - 1.57079632679;
-  float ca = cos(a);
-  float sa = sin(a);
-  return vec2(worldGrad.x * ca - worldGrad.y * sa, -(worldGrad.x * sa + worldGrad.y * ca));
+  return worldDirToScreenUv(worldGrad);
 }
 
 // Reconstruct approximate unshadowed surface color by undoing the midnight-navy shadow overlay (rgb(4,8,22))
@@ -326,11 +342,52 @@ float detectWaterMask(vec3 col, vec3 unshadowedCol, vec2 worldPos) {
 void main() {
   vec2 uv = vUv;
   vec2 texel = 1.0 / uSrcSize;
+  vec2 worldPos = screenUvToWorld(uv);
+
+  // --- Thermal Heat Shimmer (Refractive Index Gradient Distortion around Active Fires) ----------------------
+  if (uFireCount > 0) {
+    float camRot = -uCamAngle - 1.57079632679;
+    vec2 upWorld = vec2(-sin(camRot), -cos(camRot));
+    float totalHeat = 0.0;
+    vec2 netDraftWorld = upWorld * 24.0;
+
+    for (int i = 0; i < 16; i++) {
+      if (i >= uFireCount) break;
+      vec4 fp = uFirePosRad[i];
+      vec2 fw = uFireWind[i];
+      vec2 draftW = upWorld * 24.0 + fw * 0.85;
+      float draftLen = length(draftW);
+      vec2 draftDir = draftLen > 0.001 ? (draftW / draftLen) : upWorld;
+      vec2 rel = worldPos - fp.xy;
+      float along = dot(rel, draftDir);
+      vec2 perp = rel - draftDir * along;
+      // Elongate thermal shimmer zone along the rising/downwind plume
+      float effAlong = along > 0.0 ? along / (1.45 + min(1.2, draftLen * 0.015)) : along * 1.15;
+      float dist = length(perp + draftDir * effAlong);
+      float heatRad = max(18.0, fp.z * 2.85);
+      if (dist < heatRad) {
+        // Shimmer is strongest in the warm air sheath around and downwind of the flame core
+        float coreSuppress = smoothstep(fp.z * 0.25, fp.z * 0.85, dist);
+        float falloff = 1.0 - smoothstep(fp.z * 0.45, heatRad, dist);
+        float w = falloff * (0.45 + 0.55 * coreSuppress) * clamp(fp.w, 0.0, 1.2);
+        totalHeat += w;
+        netDraftWorld += fw * w;
+      }
+    }
+
+    if (totalHeat > 0.01) {
+      float heatAmt = min(1.0, totalHeat);
+      vec2 advect = normalize(netDraftWorld) * (uTime * 8.5);
+      vec3 hNoise1 = noise2DAndGrad(worldPos * 0.14 - advect);
+      vec3 hNoise2 = noise2DAndGrad(worldPos * 0.29 - advect * 1.45 + hNoise1.yz * 0.35);
+      vec2 shimmerGrad = worldDirToScreenUv(hNoise1.yz * 0.6 + hNoise2.yz * 0.4);
+      uv = clamp(uv + shimmerGrad * texel * (2.15 * heatAmt), vec2(0.001), vec2(0.999));
+    }
+  }
 
   // --- Initial sample & water optical wave normal / UV refraction -------------------------------------------
   vec3 cRaw = fetchSrc(uv);
   vec3 cUnshadowed = recoverUnshadowedColor(cRaw, uv);
-  vec2 worldPos = screenUvToWorld(uv);
   float waterMask = detectWaterMask(cRaw, cUnshadowed, worldPos);
   vec2 waveN = vec2(0.0);
 
@@ -370,29 +427,70 @@ void main() {
 
   float l0 = luma(c);
 
-  // --- micro relief: luminance read as height, lit by the sun and by the game's real lights (headlights, lamps) --
-  if (uRelief > 0.001) {
+  // --- micro relief: luminance read as height, lit by the sun, lamps, and real-time flickering fires --------
+  if (uRelief > 0.001 || uFireCount > 0) {
     float hl = luma(texture(uSrc, uv + vec2(-texel.x * 1.5, 0.0)).rgb);
     float hr = luma(texture(uSrc, uv + vec2( texel.x * 1.5, 0.0)).rgb);
     float hd = luma(texture(uSrc, uv + vec2(0.0, -texel.y * 1.5)).rgb);
     float hu = luma(texture(uSrc, uv + vec2(0.0,  texel.y * 1.5)).rgb);
     vec2 g = vec2(hr - hl, hu - hd) + waveN * waterMask * 0.14;
     float shade = 1.0 - l0 * 0.55;
-    // slopes that rise towards the light face away from it: n.L = -g.L
-    float sunLit = clamp(-dot(g, uSun) * 3.2, -0.35, 0.35);
-    c *= 1.0 + sunLit * uRelief * mix(0.5, 1.0, uDay) * shade;
-    if (uLightOn > 0.5) {
-      vec2 lt = vec2(12.0) / uLightSize;
-      float lL = 1.0 - texture(uLight, uv + vec2(-lt.x, 0.0)).a;
-      float lR = 1.0 - texture(uLight, uv + vec2( lt.x, 0.0)).a;
-      float lD = 1.0 - texture(uLight, uv + vec2(0.0, -lt.y)).a;
-      float lU = 1.0 - texture(uLight, uv + vec2(0.0,  lt.y)).a;
-      vec2 lg = vec2(lR - lL, lU - lD);
-      float lm = length(lg);
-      float here = 1.0 - texture(uLight, uv).a;
-      vec2 toLight = lg / max(lm, 1e-4);
-      float lampLit = clamp(-dot(g, toLight) * 4.0, -0.5, 0.5);
-      c *= 1.0 + lampLit * uRelief * smoothstep(0.0, 0.05, lm) * smoothstep(0.05, 0.5, here) * (0.4 + 0.6 * (1.0 - uDay)) * shade;
+
+    if (uRelief > 0.001) {
+      // slopes that rise towards the light face away from it: n.L = -g.L
+      float sunLit = clamp(-dot(g, uSun) * 3.2, -0.35, 0.35);
+      c *= 1.0 + sunLit * uRelief * mix(0.5, 1.0, uDay) * shade;
+      if (uLightOn > 0.5) {
+        vec2 lt = vec2(12.0) / uLightSize;
+        float lL = 1.0 - texture(uLight, uv + vec2(-lt.x, 0.0)).a;
+        float lR = 1.0 - texture(uLight, uv + vec2( lt.x, 0.0)).a;
+        float lD = 1.0 - texture(uLight, uv + vec2(0.0, -lt.y)).a;
+        float lU = 1.0 - texture(uLight, uv + vec2(0.0,  lt.y)).a;
+        vec2 lg = vec2(lR - lL, lU - lD);
+        float lm = length(lg);
+        float here = 1.0 - texture(uLight, uv).a;
+        vec2 toLight = lg / max(lm, 1e-4);
+        float lampLit = clamp(-dot(g, toLight) * 4.0, -0.5, 0.5);
+        c *= 1.0 + lampLit * uRelief * smoothstep(0.0, 0.05, lm) * smoothstep(0.05, 0.5, here) * (0.4 + 0.6 * (1.0 - uDay)) * shade;
+      }
+    }
+
+    // Dynamic per-fire normal-mapped surface relief & warm blackbody ground bounce
+    if (uFireCount > 0) {
+      vec3 fireBounceAccum = vec3(0.0);
+      float effRelief = max(uRelief, 0.35);
+      for (int i = 0; i < 16; i++) {
+        if (i >= uFireCount) break;
+        vec4 fp = uFirePosRad[i];
+        vec2 toFireWorld = fp.xy - worldPos;
+        float dist = length(toFireWorld);
+        float lightReach = max(65.0, fp.z * 5.2);
+        if (dist < lightReach && dist > 0.5) {
+          float fi = float(i);
+          float flick = 1.0
+            + 0.09 * sin(uTime * 13.7 + fi * 2.31 + fp.x * 0.05)
+            + 0.06 * cos(uTime * 22.9 - fi * 1.73 + fp.y * 0.05);
+          float normDist = dist / lightReach;
+          float atten = pow(max(0.0, 1.0 - normDist), 2.15) * clamp(fp.w, 0.0, 1.3) * flick;
+
+          vec2 toFireUv = worldDirToScreenUv(toFireWorld / dist);
+          float slopeLit = clamp(-dot(g, toFireUv) * 5.2, -0.25, 0.75);
+          vec3 fireTint = mix(vec3(0.96, 0.32, 0.05), vec3(1.0, 0.76, 0.32), smoothstep(0.55, 0.08, normDist));
+
+          // Micro-slope rim highlights on nearby cars, curbs, walls, and road grain
+          float rimBoost = max(0.0, slopeLit) * effRelief * 1.35;
+          // Subtle warm diffuse radiance on surrounding surfaces (stronger at dusk/night)
+          float diffuseWarm = (0.10 + 0.22 * (1.0 - uDay)) * (0.65 + 0.35 * slopeLit);
+          // Wet road / water specular reflection of dancing flames
+          float wetSpec = 0.0;
+          if (uWet > 0.01 || waterMask > 0.01) {
+            float waveFacet = 0.5 + 0.5 * clamp(dot(waveN + g * 2.0, toFireUv), -1.0, 1.0);
+            wetSpec = max(uWet * 0.45, waterMask * 0.85) * waveFacet * 0.42;
+          }
+          fireBounceAccum += fireTint * atten * ((rimBoost + diffuseWarm) * shade + wetSpec);
+        }
+      }
+      c += fireBounceAccum * (c * 0.65 + 0.35);
     }
   }
 
@@ -591,6 +689,8 @@ export class GpuPostFx {
   };
   private graded = false;
   private lost = false;
+  private firePosRadBuf = new Float32Array(16 * 4);
+  private fireWindBuf = new Float32Array(16 * 2);
 
   constructor(source: HTMLCanvasElement, target: HTMLCanvasElement) {
     this.source = source;
@@ -632,6 +732,7 @@ export class GpuPostFx {
       'uCamPos', 'uCamZoom', 'uCamAngle', 'uFreezing',
       'uRelief', 'uClarity', 'uBloomStr',
       'uSharp', 'uTone', 'uExposure', 'uContrast', 'uSat', 'uShadowTint', 'uHighTint', 'uHaze', 'uVig', 'uGrain', 'uChroma', 'uDay',
+      'uFireCount', 'uFirePosRad[0]', 'uFireWind[0]',
     ]);
     this.pFinal = this.makeProgram(VS, FS_FINAL, ['uTex', 'uTexel', 'uFxaa']);
 
@@ -927,6 +1028,26 @@ export class GpuPostFx {
     gl.uniform1f(c.u.uCamZoom, (frame.cameraZoom ?? 1) * dprScale);
     gl.uniform1f(c.u.uCamAngle, frame.cameraAngle);
     gl.uniform1f(c.u.uFreezing, frame.isFreezing ? 1 : 0);
+
+    // Upload active world-space fire sources (max 16) for thermal heat shimmer & normal-mapped relief lighting
+    const fires = frame.fires;
+    const fireCount = fires ? Math.min(16, fires.length) : 0;
+    gl.uniform1i(c.u.uFireCount, fireCount);
+    if (fireCount > 0 && fires) {
+      for (let i = 0; i < fireCount; i++) {
+        const fSrc = fires[i];
+        const b4 = i * 4;
+        this.firePosRadBuf[b4] = fSrc.x;
+        this.firePosRadBuf[b4 + 1] = fSrc.y;
+        this.firePosRadBuf[b4 + 2] = fSrc.radius;
+        this.firePosRadBuf[b4 + 3] = fSrc.intensity;
+        const b2 = i * 2;
+        this.fireWindBuf[b2] = fSrc.windVx;
+        this.fireWindBuf[b2 + 1] = fSrc.windVy;
+      }
+      gl.uniform4fv(c.u['uFirePosRad[0]'], this.firePosRadBuf, 0, fireCount * 4);
+      gl.uniform2fv(c.u['uFireWind[0]'], this.fireWindBuf, 0, fireCount * 2);
+    }
 
     // light comes from the opposite side of the game's shadow direction, rotated into screen space
     const sunState = getCurrentSunShadowState();

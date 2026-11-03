@@ -8630,22 +8630,38 @@ export function useItemOnPlayer(
     const maxPortions = item.maxPortions || def?.biteCount || 10;
     const currentPortions = item.portions !== undefined ? item.portions : maxPortions;
 
-    // Spawn sparks / flame particles
+    // Spawn flint sparks and compact ignition flash
     if (world) {
-      for (let i = 0; i < 10; i++) {
-        const pAngle = Math.random() * Math.PI * 2;
-        const pSpeed = 15 + Math.random() * 40;
+      const handAng = player.aimAngle ?? player.angle ?? 0;
+      const hx = player.x + Math.cos(handAng) * 7;
+      const hy = player.y + Math.sin(handAng) * 7;
+      world.particles.push({
+        x: hx,
+        y: hy,
+        vx: Math.cos(handAng) * 6,
+        vy: Math.sin(handAng) * 6 - 8,
+        radius: 5.5,
+        color: '#f97316',
+        alpha: 0.95,
+        life: 0,
+        maxLife: 0.28,
+        type: 'flame'
+      });
+      for (let i = 0; i < 5; i++) {
+        const pAngle = handAng + (Math.random() - 0.5) * 1.4;
+        const pSpeed = 25 + Math.random() * 45;
         world.particles.push({
-          x: player.x + (Math.random() * 10 - 5),
-          y: player.y + (Math.random() * 10 - 5),
+          x: hx,
+          y: hy,
           vx: Math.cos(pAngle) * pSpeed,
-          vy: Math.sin(pAngle) * pSpeed - 15,
-          radius: 2 + Math.random() * 3,
-          color: Math.random() < 0.6 ? '#f97316': '#ef4444',
+          vy: Math.sin(pAngle) * pSpeed - 10,
+          radius: 0.9 + Math.random() * 1.1,
+          color: '#fef08a',
           alpha: 0.95,
           life: 0,
-          maxLife: 0.25 + Math.random() * 0.2,
-          type: 'flame'});
+          maxLife: 0.16 + Math.random() * 0.14,
+          type: 'spark'
+        });
       }
     }
 
@@ -8661,23 +8677,8 @@ export function useItemOnPlayer(
           if (!st.onFire && Math.hypot(st.x - player.x, st.y - player.y) < 120) {
             if (st.type === 'fuel'|| st.type === 'oil') {
               st.onFire = true;
-              st.fireIntensity = 1.0;
+              st.fireIntensity = 0.35;
               ignitedStainsCount++;
-
-              // Burst of flames
-              for (let f = 0; f < 12; f++) {
-                world.particles.push({
-                  x: st.x + (Math.random() * st.radius - st.radius / 2),
-                  y: st.y + (Math.random() * st.radius - st.radius / 2),
-                  vx: (Math.random() - 0.5) * 35,
-                  vy: -25 - Math.random() * 35,
-                  radius: 3 + Math.random() * 4,
-                  color: '#f97316',
-                  alpha: 0.9,
-                  life: 0,
-                  maxLife: 0.45,
-                  type: 'flame'});
-              }
             }
           }
         }
@@ -9743,22 +9744,38 @@ export function useHandItemOnPlayer(
     const maxPortions = item.maxPortions || def?.biteCount || 10;
     const currentPortions = item.portions !== undefined ? item.portions : maxPortions;
 
-    // Spawn sparks / flame particles
+    // Spawn flint sparks and compact ignition flash
     if (world) {
-      for (let i = 0; i < 10; i++) {
-        const pAngle = Math.random() * Math.PI * 2;
-        const pSpeed = 15 + Math.random() * 40;
+      const handAng = player.aimAngle ?? player.angle ?? 0;
+      const hx = player.x + Math.cos(handAng) * 7;
+      const hy = player.y + Math.sin(handAng) * 7;
+      world.particles.push({
+        x: hx,
+        y: hy,
+        vx: Math.cos(handAng) * 6,
+        vy: Math.sin(handAng) * 6 - 8,
+        radius: 5.5,
+        color: '#f97316',
+        alpha: 0.95,
+        life: 0,
+        maxLife: 0.28,
+        type: 'flame'
+      });
+      for (let i = 0; i < 5; i++) {
+        const pAngle = handAng + (Math.random() - 0.5) * 1.4;
+        const pSpeed = 25 + Math.random() * 45;
         world.particles.push({
-          x: player.x + (Math.random() * 10 - 5),
-          y: player.y + (Math.random() * 10 - 5),
+          x: hx,
+          y: hy,
           vx: Math.cos(pAngle) * pSpeed,
-          vy: Math.sin(pAngle) * pSpeed - 15,
-          radius: 2 + Math.random() * 3,
-          color: Math.random() < 0.6 ? '#f97316': '#ef4444',
+          vy: Math.sin(pAngle) * pSpeed - 10,
+          radius: 0.9 + Math.random() * 1.1,
+          color: '#fef08a',
           alpha: 0.95,
           life: 0,
-          maxLife: 0.25 + Math.random() * 0.2,
-          type: 'flame'});
+          maxLife: 0.16 + Math.random() * 0.14,
+          type: 'spark'
+        });
       }
     }
 
@@ -9774,23 +9791,8 @@ export function useHandItemOnPlayer(
           if (!st.onFire && Math.hypot(st.x - player.x, st.y - player.y) < 120) {
             if (st.type === 'fuel'|| st.type === 'oil') {
               st.onFire = true;
-              st.fireIntensity = 1.0;
+              st.fireIntensity = 0.35;
               ignitedStainsCount++;
-
-              // Burst of flames
-              for (let f = 0; f < 12; f++) {
-                world.particles.push({
-                  x: st.x + (Math.random() * st.radius - st.radius / 2),
-                  y: st.y + (Math.random() * st.radius - st.radius / 2),
-                  vx: (Math.random() - 0.5) * 35,
-                  vy: -25 - Math.random() * 35,
-                  radius: 3 + Math.random() * 4,
-                  color: '#f97316',
-                  alpha: 0.9,
-                  life: 0,
-                  maxLife: 0.45,
-                  type: 'flame'});
-              }
             }
           }
         }

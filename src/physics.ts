@@ -4220,21 +4220,23 @@ export function updateVehicleSystems(car: Vehicle, dt: number, world: GameWorld)
         });
       }
 
-      //  EXPLOSION FIREBALL CLOUD (12 multi-tongued flame plumes)
-      for (let i = 0; i < 12; i++) {
-        const spreadAngle = Math.random() * Math.PI * 2;
-        const speed = 30 + Math.random() * 115;
+      // EXPLOSION FIREBALL CLOUD (4 cohesive shader deflagration lobes)
+      for (let i = 0; i < 4; i++) {
+        const spreadAngle = (i / 4) * Math.PI * 2 + (Math.random() - 0.5) * 0.6;
+        const speed = 18 + Math.random() * 55;
         world.particles.push({
-          x: radAnchor.x + Math.cos(spreadAngle) * 10,
-          y: radAnchor.y + Math.sin(spreadAngle) * 10,
+          x: radAnchor.x + Math.cos(spreadAngle) * 6,
+          y: radAnchor.y + Math.sin(spreadAngle) * 6,
           vx: Math.cos(spreadAngle) * speed,
           vy: Math.sin(spreadAngle) * speed,
-          radius: 16 + Math.random() * 18,
-          color: Math.random() < 0.5 ? '#f97316': '#dc2626',
-          alpha: 0.95,
+          radius: 22 + Math.random() * 14,
+          color: '#f97316',
+          alpha: 0.98,
           life: 0,
-          maxLife: 0.85 + Math.random() * 0.65,
-          type: 'flame'});
+          maxLife: 0.65 + Math.random() * 0.45,
+          shapeSeed: Math.floor(Math.random() * 1000),
+          type: 'flame'
+        });
       }
 
       //  GROUND STAINS (Burn mark & hot oil spill on asphalt)
@@ -12017,54 +12019,41 @@ export function updateSkidMarksAndParticles(world: GameWorld, player: Player, dt
         st.fireIntensity = 0;
       }
 
-      // Spawn flame and smoke particles (throttled/scaled with dt to prevent pool saturation)
+      // Flames are rendered via GpuFireRenderer WebGL2 volumetric shader (zero flame particle spam).
+      // Emit only sparse, slow-billowing pyrolysis soot plumes and occasional incandescent micro-embers.
       if (isStainNear) {
-        const stainSpawnChance = (st.type === 'fuel'? 12.0 : 8.0) * dt;
-        if (Math.random() < stainSpawnChance) {
-          // Flame particle
+        const stainSmokeChance = (st.type === 'fuel' ? 3.2 : 2.6) * dt * (0.4 + 0.6 * (st.fireIntensity || 0.5));
+        if (Math.random() < stainSmokeChance) {
           world.particles.push({
-            x: st.x + (Math.random() * st.radius * 1.4 - st.radius * 0.7),
-            y: st.y + (Math.random() * st.radius * 1.4 - st.radius * 0.7),
-            vx: (Math.random() * 20 - 10) + wind.vx * 0.35,
-            vy: -25 - Math.random() * 25 + wind.vy * 0.35,
-            radius: 2.5 + st.radius * 0.35 + Math.random() * 4,
-            color: Math.random() < 0.55 ? '#f59e0b': '#ef4444',
-            alpha: 0.9,
+            x: st.x + (Math.random() * st.radius * 0.9 - st.radius * 0.45),
+            y: st.y + (Math.random() * st.radius * 0.9 - st.radius * 0.45),
+            vx: (Math.random() * 12 - 6) + wind.vx * 0.42,
+            vy: -28 - Math.random() * 22 + wind.vy * 0.42,
+            radius: 6.0 + st.radius * 0.55 + Math.random() * 5.5,
+            color: st.type === 'oil' ? '#090d16' : '#182232',
+            alpha: 0.78,
+            initialAlpha: 0.78,
             life: 0,
-            maxLife: 0.3 + Math.random() * 0.35,
-            type: 'flame'});
-
-          // Dense soot smoke particle
-          world.particles.push({
-            x: st.x + (Math.random() * st.radius * 1.4 - st.radius * 0.7),
-            y: st.y + (Math.random() * st.radius * 1.4 - st.radius * 0.7),
-            vx: (Math.random() * 16 - 8) + wind.vx * 0.38,
-            vy: -35 - Math.random() * 30 + wind.vy * 0.38,
-            radius: 4.5 + st.radius * 0.5 + Math.random() * 6,
-            color: st.type === 'oil'? '#090d16': '#1e293b',
-            alpha: 0.85,
-            initialAlpha: 0.85,
-            life: 0,
-            maxLife: 0.8 + Math.random() * 0.5,
+            maxLife: 1.05 + Math.random() * 0.55,
             type: 'engine_smoke',
-            tempC: 320,
-            buoyancy: 28,
-            expansionRate: 11
+            tempC: 340,
+            buoyancy: 30,
+            expansionRate: 13
           });
         }
 
-        // Occasional flying sparks
-        if (Math.random() < 3.0 * dt) {
+        // Occasional rising incandescent carbon embers
+        if (Math.random() < 1.6 * dt * (st.fireIntensity || 0.5)) {
           world.particles.push({
             x: st.x + (Math.random() * st.radius - st.radius * 0.5),
             y: st.y + (Math.random() * st.radius - st.radius * 0.5),
-            vx: (Math.random() * 80 - 40) + wind.vx * 0.55,
-            vy: -15 - Math.random() * 20 + wind.vy * 0.55,
-            radius: 1 + Math.random() * 2,
+            vx: (Math.random() * 65 - 32.5) + wind.vx * 0.55,
+            vy: -18 - Math.random() * 24 + wind.vy * 0.55,
+            radius: 0.9 + Math.random() * 1.4,
             color: '#fef08a',
             alpha: 0.95,
             life: 0,
-            maxLife: 0.15 + Math.random() * 0.2,
+            maxLife: 0.18 + Math.random() * 0.22,
             type: 'spark'});
         }
       }
@@ -12204,7 +12193,7 @@ export function updateSkidMarksAndParticles(world: GameWorld, player: Player, dt
   updateTowingRopesPhysics(world, dt, player);
 
 
-  // Spawn smoke/steam/flame for damaged vehicles
+  // Spawn smoke/steam/embers for damaged vehicles (flames are rendered directly via GpuFireRenderer shader)
   for (const car of world.vehicles) {
     if (isTrailerVehicle(car)) continue; // Trailers do not emit engine smoke, steam or flames!
     
@@ -12215,8 +12204,8 @@ export function updateSkidMarksAndParticles(world: GameWorld, player: Player, dt
 
     if (car.damage && (car.damage.engineSmoking || car.damage.underHoodSmolder || car.damage.engineFire || car.damage.fuelTankFire || car.damage.cabinFire)) {
       const hasActiveFlame = car.damage.engineFire || car.damage.cabinFire || car.damage.fuelTankFire;
-      // Convert raw probability to frame-rate independent spawn rate (scaled with dt)
-      const spawnChance = (hasActiveFlame ? 40.0 : 15.0) * dt;
+      // Low-frequency billowing smoke plume rate (88% fewer particles than legacy sprite fire)
+      const spawnChance = (hasActiveFlame ? 9.5 : 14.0) * dt;
       if (Math.random() < spawnChance) {
         const cosA = Math.cos(car.angle);
         const sinA = Math.sin(car.angle);
@@ -12244,52 +12233,40 @@ export function updateSkidMarksAndParticles(world: GameWorld, player: Player, dt
           }
 
           const offL = fireOffsets[Math.floor(Math.random() * fireOffsets.length)];
-          const fireX = car.x + cosA * offL + (Math.random() * 8 - 4);
-          const fireY = car.y + sinA * offL + (Math.random() * 8 - 4);
+          const offW = (Math.random() - 0.5) * (car.width * 0.55);
+          const fireX = car.x + cosA * offL - sinA * offW;
+          const fireY = car.y + sinA * offL + cosA * offW;
 
-          // 1. Turbulent roaring flame tongue
+          // 1. Dense billowing black pyrolysis soot smoke column rising above the shader flames
           world.particles.push({
             x: fireX,
             y: fireY,
-            vx: -cosA * 15 + (Math.random() * 24 - 12) + wind.vx * 0.35,
-            vy: -sinA * 15 - 20 + (Math.random() * 24 - 12) + wind.vy * 0.35,
-            radius: 5 + fireProgress * 8 + Math.random() * 5,
-            color: Math.random() < 0.55 ? '#f59e0b': '#ef4444',
-            alpha: 0.88,
+            vx: -cosA * 6 + (Math.random() * 14 - 7) + wind.vx * 0.42,
+            vy: -sinA * 6 - 26 + (Math.random() * 14 - 7) + wind.vy * 0.42,
+            radius: 9 + fireProgress * 13 + Math.random() * 7,
+            color: '#0b111e',
+            alpha: 0.80,
+            initialAlpha: 0.80,
             life: 0,
-            maxLife: 0.35 + Math.random() * 0.35,
-            type: 'flame'});
-
-          // 2. Dense black soot smoke
-          world.particles.push({
-            x: fireX,
-            y: fireY,
-            vx: -cosA * 8 + (Math.random() * 16 - 8) + wind.vx * 0.40,
-            vy: -sinA * 8 - 25 + (Math.random() * 16 - 8) + wind.vy * 0.40,
-            radius: 8 + fireProgress * 12 + Math.random() * 8,
-            color: '#0f172a',
-            alpha: 0.82,
-            initialAlpha: 0.82,
-            life: 0,
-            maxLife: 0.85 + Math.random() * 0.5,
+            maxLife: 1.15 + Math.random() * 0.65,
             type: 'engine_smoke',
-            tempC: 350,
-            buoyancy: 28,
-            expansionRate: 11
+            tempC: 380,
+            buoyancy: 32,
+            expansionRate: 13
           });
 
-          // 3. Flying sparks / embers
-          if (Math.random() < 0.55) {
+          // 2. Sparse incandescent carbon-steel sparks / rising embers
+          if (Math.random() < 0.38) {
             world.particles.push({
               x: fireX,
               y: fireY,
-              vx: (Math.random() * 90 - 45) + wind.vx * 0.55,
-              vy: (Math.random() * 90 - 45) + wind.vy * 0.55,
-              radius: 1.5 + Math.random() * 2.0,
+              vx: (Math.random() * 75 - 37.5) + wind.vx * 0.55,
+              vy: (Math.random() * 75 - 37.5) - 18 + wind.vy * 0.55,
+              radius: 1.0 + Math.random() * 1.6,
               color: '#fef08a',
               alpha: 0.95,
               life: 0,
-              maxLife: 0.2 + Math.random() * 0.25,
+              maxLife: 0.22 + Math.random() * 0.28,
               type: 'spark'});
           }
         } else {
